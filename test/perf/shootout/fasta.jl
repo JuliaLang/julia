@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 const line_width = 60
 
 const alu = string(
@@ -20,7 +22,7 @@ const IA  =   3877.0
 const IC  =  29573.0
 
 function gen_random()
-    global rng_state::Float64 = ((rng_state::Float64 * IA + IC) % IM) / IM
+    global rng_state = ((rng_state::Float64 * IA + IC) % IM) / IM
 end
 function repeat_fasta(src, n)
     k = length(src)
@@ -40,7 +42,7 @@ function choose_char(cs)
 end
 function random_fasta(symb, pr, n)
     cs = cumsum(pr)
-    line = Array(UInt8, line_width)
+    line = Array{UInt8}(line_width)
     k = n
     while k > 0
         m = min(k, line_width)
@@ -53,7 +55,7 @@ end
 
 rng_state = 42.0
 function fasta(n=25000000)
-  repeat_fasta(alu, 2n)
-  random_fasta(iub1, iub2, 3n)
-  random_fasta(homosapiens1, homosapiens2, 5n)
+    repeat_fasta(alu, 2n)
+    random_fasta(iub1, iub2, 3n)
+    random_fasta(homosapiens1, homosapiens2, 5n)
 end

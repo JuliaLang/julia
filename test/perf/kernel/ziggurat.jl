@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Based on http://m.seehuhn.de/data/ziggurat/gauss.c
 
 const PARAM_R = 3.44428647676

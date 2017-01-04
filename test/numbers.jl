@@ -1,3 +1,7 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
+const ≣ = isequal # convenient for comparing NaNs
+
 # basic booleans
 @test true
 @test !false
@@ -22,10 +26,14 @@
 @test false | true  == true
 @test true  | true  == true
 
-@test false $ false == false
-@test true  $ false == true
-@test false $ true  == true
-@test true  $ true  == false
+@test false ⊻ false == false
+@test true  ⊻ false == true
+@test false ⊻ true  == true
+@test true  ⊻ true  == false
+@test xor(false, false) == false
+@test xor(true,  false) == true
+@test xor(false, true)  == true
+@test xor(true,  true)  == false
 
 # the bool operator
 @test Bool(false) == false
@@ -53,31 +61,38 @@
 @test min(1.0,1) == 1
 
 # min, max and minmax
+@test min(1) === 1
+@test max(1) === 1
+@test minmax(1) === (1, 1)
 @test minmax(5, 3) == (3, 5)
 @test minmax(3., 5.) == (3., 5.)
 @test minmax(5., 3.) == (3., 5.)
-@test minmax(3., NaN) == (3., 3.)
-@test minmax(NaN, 3.) == (3., 3.)
-@test isequal(minmax(NaN, NaN), (NaN, NaN))
+@test minmax(3., NaN) ≣ (NaN, NaN)
+@test minmax(NaN, 3) ≣ (NaN, NaN)
+@test minmax(Inf, NaN) ≣ (NaN, NaN)
+@test minmax(NaN, Inf) ≣ (NaN, NaN)
+@test minmax(-Inf, NaN) ≣ (NaN, NaN)
+@test minmax(NaN, -Inf) ≣ (NaN, NaN)
+@test minmax(NaN, NaN) ≣ (NaN, NaN)
 @test min(-0.0,0.0) === min(0.0,-0.0)
 @test max(-0.0,0.0) === max(0.0,-0.0)
 @test minmax(-0.0,0.0) === minmax(0.0,-0.0)
 @test max(-3.2, 5.1) == max(5.1, -3.2) == 5.1
 @test min(-3.2, 5.1) == min(5.1, -3.2) == -3.2
 @test max(-3.2, Inf) == max(Inf, -3.2) == Inf
-@test max(-3.2, NaN) == max(NaN, -3.2) == -3.2
+@test max(-3.2, NaN) ≣ max(NaN, -3.2) ≣ NaN
 @test min(5.1, Inf) == min(Inf, 5.1) == 5.1
 @test min(5.1, -Inf) == min(-Inf, 5.1) == -Inf
-@test min(5.1, NaN) == min(NaN, 5.1) == 5.1
-@test min(5.1, -NaN) == min(-NaN, 5.1) == 5.1
+@test min(5.1, NaN) ≣ min(NaN, 5.1) ≣ NaN
+@test min(5.1, -NaN) ≣ min(-NaN, 5.1) ≣ NaN
 @test minmax(-3.2, 5.1) == (min(-3.2, 5.1), max(-3.2, 5.1))
 @test minmax(-3.2, Inf) == (min(-3.2, Inf), max(-3.2, Inf))
-@test minmax(-3.2, NaN) == (min(-3.2, NaN), max(-3.2, NaN))
-@test (max(Inf,NaN), max(-Inf,NaN), max(Inf,-NaN), max(-Inf,-NaN)) == (Inf, -Inf, Inf, -Inf)
-@test (max(NaN,Inf), max(NaN,-Inf), max(-NaN,Inf), max(-NaN,-Inf)) == (Inf, -Inf, Inf, -Inf)
-@test (min(Inf,NaN), min(-Inf,NaN), min(Inf,-NaN), min(-Inf,-NaN)) == (Inf, -Inf, Inf, -Inf)
-@test (min(NaN,Inf), min(NaN,-Inf), min(-NaN,Inf), min(-NaN,-Inf)) == (Inf, -Inf, Inf, -Inf)
-@test minmax(-Inf,NaN) == (min(-Inf,NaN), max(-Inf,NaN))
+@test minmax(-3.2, NaN) ≣ (min(-3.2, NaN), max(-3.2, NaN))
+@test (max(Inf,NaN), max(-Inf,NaN), max(Inf,-NaN), max(-Inf,-NaN)) ≣ (NaN,NaN,NaN,NaN)
+@test (max(NaN,Inf), max(NaN,-Inf), max(-NaN,Inf), max(-NaN,-Inf)) ≣ (NaN,NaN,NaN,NaN)
+@test (min(Inf,NaN), min(-Inf,NaN), min(Inf,-NaN), min(-Inf,-NaN)) ≣ (NaN,NaN,NaN,NaN)
+@test (min(NaN,Inf), min(NaN,-Inf), min(-NaN,Inf), min(-NaN,-Inf)) ≣ (NaN,NaN,NaN,NaN)
+@test minmax(-Inf,NaN) ≣ (min(-Inf,NaN), max(-Inf,NaN))
 
 # fma
 let x = Int64(7)^7
@@ -115,11 +130,9 @@ end
 let eps = 1//BigInt(2)^7, one_eps = 1+eps,
     eps16 = Float16(Float32(eps)), one_eps16 = Float16(Float32(one_eps))
     @test eps16 == Float16(Float32(eps))
-    # Currently broken in Julia -- enable when "rationalize" is fixed;
-    # see <https://github.com/JuliaLang/julia/issues/9897>
-    # @test rationalize(BigInt, eps16, tol=0) == eps
+    @test rationalize(BigInt, eps16, tol=0) == eps
     @test one_eps16 == Float16(Float32(one_eps))
-    # @test rationalize(BigInt, one_eps16, tol=0) == one_eps
+    @test rationalize(BigInt, one_eps16, tol=0) == one_eps
     @test one_eps16 * one_eps16 - 1 != Float16(Float32(one_eps * one_eps - 1))
     @test (fma(one_eps16, one_eps16, -1) ==
            Float16(Float32(one_eps * one_eps - 1)))
@@ -446,6 +459,9 @@ end
 @test sign(-0//1) == 0
 @test sign(1//0) == 1
 @test sign(-1//0) == -1
+@test isa(sign(2//3), Rational{Int})
+@test isa(2//3 + 2//3im, Complex{Rational{Int}})
+@test isa(sign(2//3 + 2//3im), Complex{Float64})
 @test sign(one(UInt)) == 1
 @test sign(zero(UInt)) == 0
 
@@ -468,6 +484,120 @@ end
 @test signbit(-0//1) == 0
 @test signbit(1//0) == 0
 @test signbit(-1//0) == 1
+
+@test copysign(big(1.0),big(-2.0)) == big(-1.0)
+
+#copysign
+@test copysign(-1,1) == 1
+@test copysign(1,-1) == -1
+
+@test copysign(-1,1.0) == 1
+@test copysign(1,-1.0) == -1
+
+@test copysign(-1,1//2) == 1
+@test copysign(1,-1//2) == -1
+
+@test copysign(1.0,-1) == -1.0
+@test copysign(-1.0,1) == 1.0
+
+@test copysign(1.0,-1.0) == -1.0
+@test copysign(-1.0,1.0) == 1.0
+
+@test copysign(1.0,-1//2) == -1.0
+@test copysign(-1.0,1//2) == 1.0
+
+@test copysign(1//2,-1) == -1//2
+@test copysign(-1//2,1) == 1//2
+
+@test copysign(1//2,-1//2) == -1//2
+@test copysign(-1//2,1//2) == 1//2
+
+@test copysign(1//2,-1.0) == -1//2
+@test copysign(-1//2,1.0) == 1//2
+
+# verify type stability with integer (x is negative)
+@test eltype(copysign(-1,1)) <: Integer
+@test eltype(copysign(-1,BigInt(1))) <: Integer
+@test eltype(copysign(-1,1.0)) <: Integer
+@test eltype(copysign(-1,1//2)) <: Integer
+@test eltype(copysign(-BigInt(1),1)) <: Integer
+@test eltype(copysign(-BigInt(1),1.0)) <: Integer
+@test eltype(copysign(-BigInt(1),1//2)) <: Integer
+@test eltype(copysign(-BigInt(1),BigInt(1))) <: Integer
+@test eltype(copysign(-1,-1)) <: Integer
+@test eltype(copysign(-1,-BigInt(1))) <: Integer
+@test eltype(copysign(-1,-1.0)) <: Integer
+@test eltype(copysign(-1,-1//2)) <: Integer
+@test eltype(copysign(-BigInt(1),-1)) <: Integer
+@test eltype(copysign(-BigInt(1),-1.0)) <: Integer
+@test eltype(copysign(-BigInt(1),-1//2)) <: Integer
+@test eltype(copysign(-BigInt(1),-BigInt(1))) <: Integer
+
+# verify type stability with integer (x is positive)
+@test eltype(copysign(1,1)) <: Integer
+@test eltype(copysign(1,BigInt(1))) <: Integer
+@test eltype(copysign(1,1.0)) <: Integer
+@test eltype(copysign(1,1//2)) <: Integer
+@test eltype(copysign(BigInt(1),1)) <: Integer
+@test eltype(copysign(BigInt(1),1.0)) <: Integer
+@test eltype(copysign(BigInt(1),1//2)) <: Integer
+@test eltype(copysign(BigInt(1),BigInt(1))) <: Integer
+@test eltype(copysign(1,-1)) <: Integer
+@test eltype(copysign(1,-BigInt(1))) <: Integer
+@test eltype(copysign(1,-1.0)) <: Integer
+@test eltype(copysign(1,-1//2)) <: Integer
+@test eltype(copysign(BigInt(1),-1)) <: Integer
+@test eltype(copysign(BigInt(1),-1.0)) <: Integer
+@test eltype(copysign(BigInt(1),-1//2)) <: Integer
+@test eltype(copysign(BigInt(1),-BigInt(1))) <: Integer
+
+# verify type stability with real (x is negative)
+@test eltype(copysign(-1.0,1)) <: Real
+@test eltype(copysign(-1.0,BigInt(1))) <: Real
+@test eltype(copysign(-1.0,1.0)) <: Real
+@test eltype(copysign(-1.0,1//2)) <: Real
+@test eltype(copysign(-1.0,-1)) <: Real
+@test eltype(copysign(-1.0,-BigInt(1))) <: Real
+@test eltype(copysign(-1.0,-1.0)) <: Real
+@test eltype(copysign(-1.0,-1//2)) <: Real
+
+# Verify type stability with real (x is positive)
+@test eltype(copysign(1.0,1)) <: Real
+@test eltype(copysign(1.0,BigInt(1))) <: Real
+@test eltype(copysign(1.0,1.0)) <: Real
+@test eltype(copysign(1.0,1//2)) <: Real
+@test eltype(copysign(1.0,-1)) <: Real
+@test eltype(copysign(1.0,-BigInt(1))) <: Real
+@test eltype(copysign(1.0,-1.0)) <: Real
+@test eltype(copysign(1.0,-1//2)) <: Real
+
+# Verify type stability with rational (x is negative)
+@test eltype(copysign(-1//2,1)) <: Rational
+@test eltype(copysign(-1//2,BigInt(1))) <: Rational
+@test eltype(copysign(-1//2,1.0)) <: Rational
+@test eltype(copysign(-1//2,1//2)) <: Rational
+@test eltype(copysign(-1//2,-1)) <: Rational
+@test eltype(copysign(-1//2,-BigInt(1))) <: Rational
+@test eltype(copysign(-1//2,-1.0)) <: Rational
+@test eltype(copysign(-1//2,-1//2)) <: Rational
+
+# Verify type stability with rational (x is positive)
+@test eltype(copysign(-1//2,1)) <: Rational
+@test eltype(copysign(-1//2,BigInt(1))) <: Rational
+@test eltype(copysign(-1//2,1.0)) <: Rational
+@test eltype(copysign(-1//2,1//2)) <: Rational
+@test eltype(copysign(-1//2,-1)) <: Rational
+@test eltype(copysign(-1//2,-BigInt(1))) <: Rational
+@test eltype(copysign(-1//2,-1.0)) <: Rational
+@test eltype(copysign(-1//2,-1//2)) <: Rational
+
+# test x = NaN
+@test isnan(copysign(0/0,1))
+@test isnan(copysign(0/0,-1))
+
+# test x = Inf
+@test isinf(copysign(1/0,1))
+@test isinf(copysign(1/0,-1))
 
 @test isnan(1)     == false
 @test isnan(1.0)   == false
@@ -501,6 +631,7 @@ end
 @test isfinite(-2//3) == true
 @test isfinite(5//0)  == false
 @test isfinite(-3//0) == false
+@test isfinite(pi)    == true
 
 @test isequal(-Inf,-Inf)
 @test isequal(-1.0,-1.0)
@@ -644,7 +775,7 @@ for x=-5:5, y=-5:5
     end
 end
 
-function _cmp_(x::Union(Int64,UInt64), y::Float64)
+function _cmp_(x::Union{Int64,UInt64}, y::Float64)
     if x==Int64(2)^53-2 && y==2.0^53-2; return  0; end
     if x==Int64(2)^53-2 && y==2.0^53-1; return -1; end
     if x==Int64(2)^53-2 && y==2.0^53  ; return -1; end
@@ -813,6 +944,9 @@ end
 @test 2.0^63 != UInt64(2)^63+1
 
 @test typemax(UInt64) != 2.0^64
+# issue #9085
+f9085() = typemax(UInt64) != 2.0^64
+@test f9085()
 
 @test typemax(UInt64) < Float64(typemax(UInt64))
 @test typemax(Int64) < Float64(typemax(Int64))
@@ -887,6 +1021,10 @@ end
 @test (typemax(Int)//1) / (typemax(Int)//1) == 1
 @test (1//typemax(Int)) / (1//typemax(Int)) == 1
 @test_throws OverflowError (1//2)^63
+
+@test @inferred(rationalize(Int, 3.0, 0.0)) === 3//1
+@test @inferred(rationalize(Int, 3.0, 0)) === 3//1
+@test_throws ArgumentError rationalize(Int, big(3.0), -1.)
 
 for a = -5:5, b = -5:5
     if a == b == 0; continue; end
@@ -992,7 +1130,7 @@ end
 @test 1+1.5 == 2.5
 @test 1.5+1 == 2.5
 @test 1+1.5+2 == 4.5
-@test is(typeof(convert(Complex{Int16},1)),Complex{Int16})
+@test isa(convert(Complex{Int16},1), Complex{Int16})
 @test Complex(1,2)+1 == Complex(2,2)
 @test Complex(1,2)+1.5 == Complex(2.5,2.0)
 @test 1/Complex(2,2) == Complex(.25,-.25)
@@ -1002,10 +1140,10 @@ end
 @test Complex(1,2) + 1//2 == Complex(3//2,2//1)
 @test Complex(1,2) + 1//2 * 0.5 == Complex(1.25,2.0)
 @test (Complex(1,2) + 1//2) * 0.5 == Complex(0.75,1.0)
-@test_approx_eq (Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) Complex(1,2)
+@test (Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) ≈ Complex(1,2)
 @test 0.7 < real(sqrt(Complex(0,1))) < 0.707107
 
-for T in [Int8, Int16, Int32, Int64, Int128]
+for T in Base.BitSigned_types
     @test abs(typemin(T)) == -typemin(T)
     #for x in (typemin(T),convert(T,-1),zero(T),one(T),typemax(T))
     #    @test signed(unsigned(x)) == x
@@ -1017,8 +1155,8 @@ end
 #    @test unsigned(signed(x)) == x
 #end
 
-for S = [Int8,  Int16,  Int32,  Int64],
-    U = [UInt8, UInt16, UInt32, UInt64]
+for S = Base.BitSigned64_types,
+    U = Base.BitUnsigned64_types
     @test !(-one(S) == typemax(U))
     @test -one(S) != typemax(U)
     @test -one(S) < typemax(U)
@@ -1026,7 +1164,7 @@ for S = [Int8,  Int16,  Int32,  Int64],
 end
 
 # check type of constructed rationals
-int_types = [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64]
+int_types = Base.BitInteger64_types
 for N = int_types, D = int_types
     T = promote_type(N,D)
     @test typeof(convert(N,2)//convert(D,3)) <: Rational{T}
@@ -1036,9 +1174,9 @@ end
 @test typeof(convert(Rational{Integer},1)) === Rational{Integer}
 
 # check type of constructed complexes
-real_types = [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float32, Float64,
-              Rational{Int8}, Rational{UInt8}, Rational{Int16}, Rational{UInt16},
-              Rational{Int32}, Rational{UInt32}, Rational{Int64}, Rational{UInt64}]
+real_types = [Base.BitInteger64_types...,
+              [Rational{T} for T in Base.BitInteger64_types]...,
+              Float32, Float64]
 for A = real_types, B = real_types
     T = promote_type(A,B)
     @test typeof(Complex(convert(A,2),convert(B,3))) <: Complex{T}
@@ -1165,9 +1303,9 @@ for yr = Any[
         f2, m2 = fldmod(x,y)
 
         t1 = isa(x,Rational) && isa(y,Rational) ?
-                               promote_type(typeof(num(x)),typeof(num(y))) :
-             isa(x,Rational) ? promote_type(typeof(num(x)),typeof(y)) :
-             isa(y,Rational) ? promote_type(typeof(x),typeof(num(y))) :
+                               promote_type(typeof(numerator(x)),typeof(numerator(y))) :
+             isa(x,Rational) ? promote_type(typeof(numerator(x)),typeof(y)) :
+             isa(y,Rational) ? promote_type(typeof(x),typeof(numerator(y))) :
                                promote_type(typeof(x),typeof(y))
 
         t2 = promote_type(typeof(x),typeof(y))
@@ -1473,6 +1611,41 @@ end
 @test signed(cld(typemax(UInt),typemin(Int)>>1))     == -3
 @test signed(cld(typemax(UInt),(typemin(Int)>>1)+1)) == -4
 
+# Test exceptions and special cases
+for T in (Int8,Int16,Int32,Int64,Int128, UInt8,UInt16,UInt32,UInt64,UInt128)
+    @test_throws DivideError div(T(1), T(0))
+    @test_throws DivideError fld(T(1), T(0))
+    @test_throws DivideError cld(T(1), T(0))
+    @test_throws DivideError rem(T(1), T(0))
+    @test_throws DivideError mod(T(1), T(0))
+end
+for T in (Int8,Int16,Int32,Int64,Int128)
+    @test_throws DivideError div(typemin(T), T(-1))
+    @test_throws DivideError fld(typemin(T), T(-1))
+    @test_throws DivideError cld(typemin(T), T(-1))
+    @test rem(typemin(T), T(-1)) === T(0)
+    @test mod(typemin(T), T(-1)) === T(0)
+end
+
+# Test return types
+for T in (Int8,Int16,Int32,Int64,Int128, UInt8,UInt16,UInt32,UInt64,UInt128)
+    z, o = T(0), T(1)
+    @test typeof(+z) === T
+    @test typeof(-z) === T
+    @test typeof(abs(z)) === T
+    @test typeof(sign(z)) === T
+    @test typeof(copysign(z,z)) === T
+    @test typeof(flipsign(z,z)) === T
+    @test typeof(z+z) === T
+    @test typeof(z-z) === T
+    @test typeof(z*z) === T
+    @test typeof(z÷o) === T
+    @test typeof(z%o) === T
+    @test typeof(fld(z,o)) === T
+    @test typeof(mod(z,o)) === T
+    @test typeof(cld(z,o)) === T
+end
+
 # issue #4156
 @test fld(1.4,0.35667494393873234) == 3.0
 @test div(1.4,0.35667494393873234) == 3.0
@@ -1505,10 +1678,10 @@ end
 @test isnan(eps(-Inf))
 
 @test .1+.1+.1 != .3
-# TODO: uncomment when isapprox() becomes part of base.
-# @test isapprox(.1+.1+.1, .3)
-# @test !isapprox(.1+.1+.1-.3, 0)
-# @test isapprox(.1+.1+.1-.3, 0, eps(.3))
+@test isapprox(.1+.1+.1, .3)
+@test !isapprox(.1+.1+.1-.3, 0)
+@test isapprox(.1+.1+.1-.3, 0, atol=eps(.3))
+@test isapprox(1.1,1.1f0)
 
 @test div(1e50,1) == 1e50
 @test fld(1e50,1) == 1e50
@@ -1548,12 +1721,12 @@ let ≈(x,y) = x==y && typeof(x)==typeof(y)
         for n in [0,3,255,256]
             r = (1:n)-div(n,2)
             y = t[x/4 for x in r]
-            @test trunc(y) ≈ t[div(i,4) for i in r]
-            @test floor(y) ≈ t[i>>2 for i in r]
-            @test ceil(y)  ≈ t[(i+3)>>2 for i in r]
-            @test round(y) ≈ t[(i+1+isodd(i>>2))>>2 for i in r]
-            @test round(y,RoundNearestTiesAway) ≈ t[(i+1+(i>=0))>>2 for i in r]
-            @test round(y,RoundNearestTiesUp) ≈ t[(i+2)>>2 for i in r]
+            @test trunc.(y) ≈ t[div(i,4) for i in r]
+            @test floor.(y) ≈ t[i>>2 for i in r]
+            @test ceil.(y)  ≈ t[(i+3)>>2 for i in r]
+            @test round.(y) ≈ t[(i+1+isodd(i>>2))>>2 for i in r]
+            @test broadcast(x -> round(x, RoundNearestTiesAway), y) ≈ t[(i+1+(i>=0))>>2 for i in r]
+            @test broadcast(x -> round(x, RoundNearestTiesUp), y) ≈ t[(i+2)>>2 for i in r]
         end
     end
 end
@@ -1586,13 +1759,6 @@ end
 @test_throws InexactError round(UInt32, 4.2949673f9)
 @test       round(UInt32, 4.294967f9) == 0xffffff00
 
-for n = 1:100
-    m = 1
-    for (p,k) in factor(n)
-        m *= p^k
-    end
-    @test n == m
-end
 
 for Ti in [Int,UInt]
     for Tf in [Float16,Float32,Float64]
@@ -1650,7 +1816,8 @@ end
 @test isa(0b0000000000000000000000000000000000000000000000000000000000000000,UInt64)
 @test isa(0b00000000000000000000000000000000000000000000000000000000000000000,UInt128)
 @test isa(0b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,UInt128)
-@test isa(0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,BigInt)
+# remove BigInt unsigned integer literals #11105
+@test_throws ParseError parse("0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
 @test isa(0b11111111,UInt8)
 @test isa(0b111111111,UInt16)
 @test isa(0b1111111111111111,UInt16)
@@ -1660,7 +1827,8 @@ end
 @test isa(0b1111111111111111111111111111111111111111111111111111111111111111,UInt64)
 @test isa(0b11111111111111111111111111111111111111111111111111111111111111111,UInt128)
 @test isa(0b11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111,UInt128)
-@test isa(0b111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111,BigInt)
+# remove BigInt unsigned integer literals #11105
+@test_throws ParseError parse("0b111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111")
 
 # octal literals
 
@@ -1678,7 +1846,8 @@ end
 @test isa(0o000000000000000000000,UInt64)
 @test isa(0o0000000000000000000000,UInt128)
 @test isa(0o000000000000000000000000000000000000000000,UInt128)
-@test isa(0o0000000000000000000000000000000000000000000,BigInt)
+# remove BigInt unsigned integer literals #11105
+@test_throws ParseError parse("0o0000000000000000000000000000000000000000000")
 @test isa(0o11,UInt8)
 @test isa(0o111,UInt8)
 @test isa(0o11111,UInt16)
@@ -1689,9 +1858,8 @@ end
 @test isa(0o1111111111111111111111,UInt64)
 @test isa(0o111111111111111111111111111111111111111111,UInt128)
 @test isa(0o1111111111111111111111111111111111111111111,UInt128)
-@test isa(0o11111111111111111111111111111111111111111111,BigInt)
-@test 0o4000000000000000000000000000000000000000000 ==
-    340282366920938463463374607431768211456
+# remove BigInt unsigned integer literals #11105
+@test_throws ParseError parse("0o11111111111111111111111111111111111111111111")
 
 # hexadecimal literals
 
@@ -1704,7 +1872,9 @@ end
 @test isa(0x0000000000000000,UInt64)
 @test isa(0x00000000000000000,UInt128)
 @test isa(0x00000000000000000000000000000000,UInt128)
-@test isa(0x000000000000000000000000000000000,BigInt)
+# remove BigInt unsigned integer literals #11105
+@test_throws ParseError parse("0x000000000000000000000000000000000")
+
 @test isa(0x11,UInt8)
 @test isa(0x111,UInt16)
 @test isa(0x1111,UInt16)
@@ -1714,7 +1884,8 @@ end
 @test isa(0x1111111111111111,UInt64)
 @test isa(0x11111111111111111,UInt128)
 @test isa(0x11111111111111111111111111111111,UInt128)
-@test isa(0x111111111111111111111111111111111,BigInt)
+# remove BigInt unsigned integer literals #11105
+@test_throws ParseError parse("0x111111111111111111111111111111111")
 
 # "-" is not part of unsigned literals
 @test -0x10 == -(0x10)
@@ -1727,17 +1898,13 @@ end
 @test -0o0000000000000000000001 == -(0o0000000000000000000001)
 @test -0b00000000000000000000000000000000000000000000000000000000000000001 ==
     -(0b00000000000000000000000000000000000000000000000000000000000000001)
-@test -0x000000000000000000000000000000001 == -(0x000000000000000000000000000000001)
-@test -0o0000000000000000000000000000000000000000001 ==
-    -(0o0000000000000000000000000000000000000000001)
-@test -0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001 ==
-    -(0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001)
 
 @test isa(-0x00,UInt8)
 @test isa(-0x0000000000000000,UInt64)
 @test isa(-0x00000000000000000,UInt128)
 @test isa(-0x00000000000000000000000000000000,UInt128)
-@test isa(-0x000000000000000000000000000000000,BigInt)
+# remove BigInt unsigned integer literals #11105
+@test_throws ParseError parse("-0x000000000000000000000000000000000")
 
 # Float32 literals
 @test isa(1f0,Float32)
@@ -1830,10 +1997,43 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @test approx_eq(ceil(-123.456,1), -123.4)
 @test approx_eq(floor(123.456,1), 123.4)
 @test approx_eq(floor(-123.456,1), -123.5)
+# rounding with too much (or too few) precision
+for x in (12345.6789, 0, -12345.6789)
+    y = float(x)
+    @test y == trunc(x, 1000)
+    @test y == round(x, 1000)
+    @test y == floor(x, 1000)
+    @test y == ceil(x, 1000)
+end
+x = 12345.6789
+@test 0.0 == trunc(x, -1000)
+@test 0.0 == round(x, -1000)
+@test 0.0 == floor(x, -1000)
+@test Inf == ceil(x, -1000)
+x = -12345.6789
+@test -0.0 == trunc(x, -1000)
+@test -0.0 == round(x, -1000)
+@test -Inf == floor(x, -1000)
+@test -0.0 == ceil(x, -1000)
+x = 0.0
+@test 0.0 == trunc(x, -1000)
+@test 0.0 == round(x, -1000)
+@test 0.0 == floor(x, -1000)
+@test 0.0 == ceil(x, -1000)
 # rounding in other bases
 @test approx_eq(round(pi,2,2), 3.25)
 @test approx_eq(round(pi,3,2), 3.125)
 @test approx_eq(round(pi,3,5), 3.144)
+# vectorized trunc/round/floor/ceil with digits/base argument
+a = rand(2, 2, 2)
+for f in (round, trunc, floor, ceil)
+    @test f.(a[:, 1, 1], 2) == map(x->f(x, 2), a[:, 1, 1])
+    @test f.(a[:, :, 1], 2) == map(x->f(x, 2), a[:, :, 1])
+    @test f.(a, 9, 2) == map(x->f(x, 9, 2), a)
+    @test f.(a[:, 1, 1], 9, 2) == map(x->f(x, 9, 2), a[:, 1, 1])
+    @test f.(a[:, :, 1], 9, 2) == map(x->f(x, 9, 2), a[:, :, 1])
+    @test f.(a, 9, 2) == map(x->f(x, 9, 2), a)
+end
 # significant digits (would be nice to have a smart vectorized
 # version of signif)
 @test approx_eq(signif(123.456,1), 100.)
@@ -1894,6 +2094,12 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 
 @test isa(convert(Float64, big(1)//2), Float64)
 
+# issue 16513
+@test convert(Rational{Int32}, pi) == 1068966896 // 340262731
+@test convert(Rational{Int64}, pi) == 2646693125139304345 // 842468587426513207
+@test convert(Rational{Int128}, pi) == 60728338969805745700507212595448411044 // 19330430665609526556707216376512714945
+@test_throws ArgumentError convert(Rational{BigInt}, pi)
+
 # issue 5935
 @test rationalize(Int8,  nextfloat(0.1)) == 1//10
 @test rationalize(Int64, nextfloat(0.1)) == 300239975158034//3002399751580339
@@ -1907,7 +2113,7 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @test rationalize(Int64, nextfloat(0.1),tol=1.5eps(0.1)) == 1//10
 @test rationalize(Int128,nextfloat(0.1),tol=1.5eps(0.1)) == 1//10
 @test rationalize(BigInt,nextfloat(0.1),tol=1.5eps(0.1)) == 1//10
-@test rationalize(BigInt,nextfloat(BigFloat("0.1")),tol=1.5eps(big(0.1))) == 1//10
+@test rationalize(BigInt,nextfloat(parse(BigFloat,"0.1")),tol=1.5eps(big(0.1))) == 1//10
 @test rationalize(Int64, nextfloat(0.1),tol=0) == 7205759403792795//72057594037927936
 @test rationalize(Int128,nextfloat(0.1),tol=0) == 7205759403792795//72057594037927936
 @test rationalize(BigInt,nextfloat(0.1),tol=0) == 7205759403792795//72057594037927936
@@ -1916,12 +2122,12 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @test rationalize(Int64, prevfloat(0.1)) == 1//10
 @test rationalize(Int128,prevfloat(0.1)) == 1//10
 @test rationalize(BigInt,prevfloat(0.1)) == 1//10
-@test rationalize(BigInt,prevfloat(BigFloat("0.1"))) == 1//10
+@test rationalize(BigInt,prevfloat(parse(BigFloat,"0.1"))) == 1//10
 @test rationalize(Int64, prevfloat(0.1),tol=0) == 7205759403792793//72057594037927936
 @test rationalize(Int128,prevfloat(0.1),tol=0) == 7205759403792793//72057594037927936
 @test rationalize(BigInt,prevfloat(0.1),tol=0) == 7205759403792793//72057594037927936
 
-@test rationalize(BigInt,nextfloat(BigFloat("0.1")),tol=0) == 46316835694926478169428394003475163141307993866256225615783033603165251855975//463168356949264781694283940034751631413079938662562256157830336031652518559744
+@test rationalize(BigInt,nextfloat(parse(BigFloat,"0.1")),tol=0) == 46316835694926478169428394003475163141307993866256225615783033603165251855975//463168356949264781694283940034751631413079938662562256157830336031652518559744
 
 
 @test rationalize(Int8, 200f0) == 1//0
@@ -1939,155 +2145,14 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
          103993//33102
          312689//99532 ]
 
-# primes
-
-@test Base.primes(10000) == [
-    2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71,
-    73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151,
-    157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229, 233,
-    239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307, 311, 313, 317,
-    331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397, 401, 409, 419,
-    421, 431, 433, 439, 443, 449, 457, 461, 463, 467, 479, 487, 491, 499, 503,
-    509, 521, 523, 541, 547, 557, 563, 569, 571, 577, 587, 593, 599, 601, 607,
-    613, 617, 619, 631, 641, 643, 647, 653, 659, 661, 673, 677, 683, 691, 701,
-    709, 719, 727, 733, 739, 743, 751, 757, 761, 769, 773, 787, 797, 809, 811,
-    821, 823, 827, 829, 839, 853, 857, 859, 863, 877, 881, 883, 887, 907, 911,
-    919, 929, 937, 941, 947, 953, 967, 971, 977, 983, 991, 997, 1009, 1013,
-    1019, 1021, 1031, 1033, 1039, 1049, 1051, 1061, 1063, 1069, 1087, 1091,
-    1093, 1097, 1103, 1109, 1117, 1123, 1129, 1151, 1153, 1163, 1171, 1181,
-    1187, 1193, 1201, 1213, 1217, 1223, 1229, 1231, 1237, 1249, 1259, 1277,
-    1279, 1283, 1289, 1291, 1297, 1301, 1303, 1307, 1319, 1321, 1327, 1361,
-    1367, 1373, 1381, 1399, 1409, 1423, 1427, 1429, 1433, 1439, 1447, 1451,
-    1453, 1459, 1471, 1481, 1483, 1487, 1489, 1493, 1499, 1511, 1523, 1531,
-    1543, 1549, 1553, 1559, 1567, 1571, 1579, 1583, 1597, 1601, 1607, 1609,
-    1613, 1619, 1621, 1627, 1637, 1657, 1663, 1667, 1669, 1693, 1697, 1699,
-    1709, 1721, 1723, 1733, 1741, 1747, 1753, 1759, 1777, 1783, 1787, 1789,
-    1801, 1811, 1823, 1831, 1847, 1861, 1867, 1871, 1873, 1877, 1879, 1889,
-    1901, 1907, 1913, 1931, 1933, 1949, 1951, 1973, 1979, 1987, 1993, 1997,
-    1999, 2003, 2011, 2017, 2027, 2029, 2039, 2053, 2063, 2069, 2081, 2083,
-    2087, 2089, 2099, 2111, 2113, 2129, 2131, 2137, 2141, 2143, 2153, 2161,
-    2179, 2203, 2207, 2213, 2221, 2237, 2239, 2243, 2251, 2267, 2269, 2273,
-    2281, 2287, 2293, 2297, 2309, 2311, 2333, 2339, 2341, 2347, 2351, 2357,
-    2371, 2377, 2381, 2383, 2389, 2393, 2399, 2411, 2417, 2423, 2437, 2441,
-    2447, 2459, 2467, 2473, 2477, 2503, 2521, 2531, 2539, 2543, 2549, 2551,
-    2557, 2579, 2591, 2593, 2609, 2617, 2621, 2633, 2647, 2657, 2659, 2663,
-    2671, 2677, 2683, 2687, 2689, 2693, 2699, 2707, 2711, 2713, 2719, 2729,
-    2731, 2741, 2749, 2753, 2767, 2777, 2789, 2791, 2797, 2801, 2803, 2819,
-    2833, 2837, 2843, 2851, 2857, 2861, 2879, 2887, 2897, 2903, 2909, 2917,
-    2927, 2939, 2953, 2957, 2963, 2969, 2971, 2999, 3001, 3011, 3019, 3023,
-    3037, 3041, 3049, 3061, 3067, 3079, 3083, 3089, 3109, 3119, 3121, 3137,
-    3163, 3167, 3169, 3181, 3187, 3191, 3203, 3209, 3217, 3221, 3229, 3251,
-    3253, 3257, 3259, 3271, 3299, 3301, 3307, 3313, 3319, 3323, 3329, 3331,
-    3343, 3347, 3359, 3361, 3371, 3373, 3389, 3391, 3407, 3413, 3433, 3449,
-    3457, 3461, 3463, 3467, 3469, 3491, 3499, 3511, 3517, 3527, 3529, 3533,
-    3539, 3541, 3547, 3557, 3559, 3571, 3581, 3583, 3593, 3607, 3613, 3617,
-    3623, 3631, 3637, 3643, 3659, 3671, 3673, 3677, 3691, 3697, 3701, 3709,
-    3719, 3727, 3733, 3739, 3761, 3767, 3769, 3779, 3793, 3797, 3803, 3821,
-    3823, 3833, 3847, 3851, 3853, 3863, 3877, 3881, 3889, 3907, 3911, 3917,
-    3919, 3923, 3929, 3931, 3943, 3947, 3967, 3989, 4001, 4003, 4007, 4013,
-    4019, 4021, 4027, 4049, 4051, 4057, 4073, 4079, 4091, 4093, 4099, 4111,
-    4127, 4129, 4133, 4139, 4153, 4157, 4159, 4177, 4201, 4211, 4217, 4219,
-    4229, 4231, 4241, 4243, 4253, 4259, 4261, 4271, 4273, 4283, 4289, 4297,
-    4327, 4337, 4339, 4349, 4357, 4363, 4373, 4391, 4397, 4409, 4421, 4423,
-    4441, 4447, 4451, 4457, 4463, 4481, 4483, 4493, 4507, 4513, 4517, 4519,
-    4523, 4547, 4549, 4561, 4567, 4583, 4591, 4597, 4603, 4621, 4637, 4639,
-    4643, 4649, 4651, 4657, 4663, 4673, 4679, 4691, 4703, 4721, 4723, 4729,
-    4733, 4751, 4759, 4783, 4787, 4789, 4793, 4799, 4801, 4813, 4817, 4831,
-    4861, 4871, 4877, 4889, 4903, 4909, 4919, 4931, 4933, 4937, 4943, 4951,
-    4957, 4967, 4969, 4973, 4987, 4993, 4999, 5003, 5009, 5011, 5021, 5023,
-    5039, 5051, 5059, 5077, 5081, 5087, 5099, 5101, 5107, 5113, 5119, 5147,
-    5153, 5167, 5171, 5179, 5189, 5197, 5209, 5227, 5231, 5233, 5237, 5261,
-    5273, 5279, 5281, 5297, 5303, 5309, 5323, 5333, 5347, 5351, 5381, 5387,
-    5393, 5399, 5407, 5413, 5417, 5419, 5431, 5437, 5441, 5443, 5449, 5471,
-    5477, 5479, 5483, 5501, 5503, 5507, 5519, 5521, 5527, 5531, 5557, 5563,
-    5569, 5573, 5581, 5591, 5623, 5639, 5641, 5647, 5651, 5653, 5657, 5659,
-    5669, 5683, 5689, 5693, 5701, 5711, 5717, 5737, 5741, 5743, 5749, 5779,
-    5783, 5791, 5801, 5807, 5813, 5821, 5827, 5839, 5843, 5849, 5851, 5857,
-    5861, 5867, 5869, 5879, 5881, 5897, 5903, 5923, 5927, 5939, 5953, 5981,
-    5987, 6007, 6011, 6029, 6037, 6043, 6047, 6053, 6067, 6073, 6079, 6089,
-    6091, 6101, 6113, 6121, 6131, 6133, 6143, 6151, 6163, 6173, 6197, 6199,
-    6203, 6211, 6217, 6221, 6229, 6247, 6257, 6263, 6269, 6271, 6277, 6287,
-    6299, 6301, 6311, 6317, 6323, 6329, 6337, 6343, 6353, 6359, 6361, 6367,
-    6373, 6379, 6389, 6397, 6421, 6427, 6449, 6451, 6469, 6473, 6481, 6491,
-    6521, 6529, 6547, 6551, 6553, 6563, 6569, 6571, 6577, 6581, 6599, 6607,
-    6619, 6637, 6653, 6659, 6661, 6673, 6679, 6689, 6691, 6701, 6703, 6709,
-    6719, 6733, 6737, 6761, 6763, 6779, 6781, 6791, 6793, 6803, 6823, 6827,
-    6829, 6833, 6841, 6857, 6863, 6869, 6871, 6883, 6899, 6907, 6911, 6917,
-    6947, 6949, 6959, 6961, 6967, 6971, 6977, 6983, 6991, 6997, 7001, 7013,
-    7019, 7027, 7039, 7043, 7057, 7069, 7079, 7103, 7109, 7121, 7127, 7129,
-    7151, 7159, 7177, 7187, 7193, 7207, 7211, 7213, 7219, 7229, 7237, 7243,
-    7247, 7253, 7283, 7297, 7307, 7309, 7321, 7331, 7333, 7349, 7351, 7369,
-    7393, 7411, 7417, 7433, 7451, 7457, 7459, 7477, 7481, 7487, 7489, 7499,
-    7507, 7517, 7523, 7529, 7537, 7541, 7547, 7549, 7559, 7561, 7573, 7577,
-    7583, 7589, 7591, 7603, 7607, 7621, 7639, 7643, 7649, 7669, 7673, 7681,
-    7687, 7691, 7699, 7703, 7717, 7723, 7727, 7741, 7753, 7757, 7759, 7789,
-    7793, 7817, 7823, 7829, 7841, 7853, 7867, 7873, 7877, 7879, 7883, 7901,
-    7907, 7919, 7927, 7933, 7937, 7949, 7951, 7963, 7993, 8009, 8011, 8017,
-    8039, 8053, 8059, 8069, 8081, 8087, 8089, 8093, 8101, 8111, 8117, 8123,
-    8147, 8161, 8167, 8171, 8179, 8191, 8209, 8219, 8221, 8231, 8233, 8237,
-    8243, 8263, 8269, 8273, 8287, 8291, 8293, 8297, 8311, 8317, 8329, 8353,
-    8363, 8369, 8377, 8387, 8389, 8419, 8423, 8429, 8431, 8443, 8447, 8461,
-    8467, 8501, 8513, 8521, 8527, 8537, 8539, 8543, 8563, 8573, 8581, 8597,
-    8599, 8609, 8623, 8627, 8629, 8641, 8647, 8663, 8669, 8677, 8681, 8689,
-    8693, 8699, 8707, 8713, 8719, 8731, 8737, 8741, 8747, 8753, 8761, 8779,
-    8783, 8803, 8807, 8819, 8821, 8831, 8837, 8839, 8849, 8861, 8863, 8867,
-    8887, 8893, 8923, 8929, 8933, 8941, 8951, 8963, 8969, 8971, 8999, 9001,
-    9007, 9011, 9013, 9029, 9041, 9043, 9049, 9059, 9067, 9091, 9103, 9109,
-    9127, 9133, 9137, 9151, 9157, 9161, 9173, 9181, 9187, 9199, 9203, 9209,
-    9221, 9227, 9239, 9241, 9257, 9277, 9281, 9283, 9293, 9311, 9319, 9323,
-    9337, 9341, 9343, 9349, 9371, 9377, 9391, 9397, 9403, 9413, 9419, 9421,
-    9431, 9433, 9437, 9439, 9461, 9463, 9467, 9473, 9479, 9491, 9497, 9511,
-    9521, 9533, 9539, 9547, 9551, 9587, 9601, 9613, 9619, 9623, 9629, 9631,
-    9643, 9649, 9661, 9677, 9679, 9689, 9697, 9719, 9721, 9733, 9739, 9743,
-    9749, 9767, 9769, 9781, 9787, 9791, 9803, 9811, 9817, 9829, 9833, 9839,
-    9851, 9857, 9859, 9871, 9883, 9887, 9901, 9907, 9923, 9929, 9931, 9941,
-    9949, 9967, 9973 ]
-
-for T in [Int,BigInt], n = [1:1000;1000000]
-    n = convert(T,n)
-    f = factor(n)
-    @test n == prod(T[p^k for (p,k)=f])
-    prime = n!=1 && length(f)==1 && get(f,n,0)==1
-    @test isprime(n) == prime
-
-    s = Base.primesmask(n)
-    for k = 1:n
-        @test s[k] == isprime(k)
-    end
-end
-
-@test !isprime(1000000003)
-@test !isprime(1000000005)
-@test  isprime(1000000007)
-@test  isprime(1000000009)
-@test !isprime(1000000011)
-@test !isprime(1000000013)
-
-@test !isprime(10000000015)
-@test !isprime(10000000017)
-@test  isprime(10000000019)
-@test !isprime(10000000021)
-@test !isprime(10000000023)
-
-@test !isprime(9223372036854775779)
-@test !isprime(9223372036854775781)
-@test  isprime(9223372036854775783)
-@test !isprime(9223372036854775785)
-@test !isprime(9223372036854775787)
-
-@test !isprime(0xffffffffffffffc1)
-@test !isprime(0xffffffffffffffc3)
-@test  isprime(0xffffffffffffffc5)
-@test !isprime(0xffffffffffffffc7)
-@test !isprime(0xffffffffffffffc9)
-
-# issue #5210
-@test prod([ k^v for (k,v) in factor(typemax(UInt32)) ]) == typemax(UInt32)
-@test prod([ k^v for (k,v) in factor(typemax(Int8)) ]) == typemax(Int8)
+# issue 16311
+rationalize(nextfloat(0.0)) == 0//1
 
 # rational-exponent promotion rules (issue #3155):
 @test 2.0f0^(1//3) == 2.0f0^(1.0f0/3)
 @test 2^(1//3) == 2^(1/3)
+# no loss of precision for rational powers (issue #18114)
+@test BigFloat(2)^(BigFloat(1)/BigFloat(3)) == BigFloat(2)^(1//3)
 
 # large shift amounts
 @test Int32(-1)>>31 == -1
@@ -2115,35 +2180,58 @@ for T in (Int32,Int64), ii = -20:20, jj = -20:20
     @test d == gcd(ib,jb)
     @test lcm(i,j) == lcm(ib,jb)
     @test gcdx(i,j) == gcdx(ib,jb)
-    if j == 0
-        @test_throws ErrorException invmod(i,j)
-        @test_throws ErrorException invmod(ib,jb)
-    elseif d == 1
+    if j == 0 || d != 1
+        @test_throws DomainError invmod(i,j)
+        @test_throws DomainError invmod(ib,jb)
+    else
         n = invmod(i,j)
+        @test div(n, j) == 0
         @test n == invmod(ib,jb)
         @test mod(n*i,j) == mod(1,j)
     end
 end
 
-# check powermod function against GMP
+# check powermod function against few types (in particular [U]Int128 and BigInt)
 for i = -10:10, p = 0:5, m = -10:10
-    if m != 0
-        @test powermod(i,p,m) == powermod(i,p,big(m)) == powermod(big(i),big(p),big(m))
-        @test mod(i^p,m) == powermod(i,p,m) == mod(big(i)^p,big(m))
+    m == 0 && continue
+    x = powermod(i, p, m)
+    for T in [Int32, Int64, Int128, UInt128, BigInt]
+        T <: Unsigned && m < 0 && continue
+        let xT = powermod(i, p, T(m))
+            @test x == xT
+            @test isa(xT, T)
+        end
+        T <: Unsigned && i < 0 && continue
+        @test x == mod(T(i)^p, T(m))
     end
 end
 
 # with m==1 should give 0
 @test powermod(1,0,1) == 0
-@test powermod(big(1),0,1) == 0
+@test powermod(1,0,big(1)) == 0
 @test powermod(1,0,-1) == 0
-@test powermod(big(1),0,-1) == 0
+@test powermod(1,0,big(-1)) == 0
 # divide by zero error
 @test_throws DivideError powermod(1,0,0)
-@test_throws DivideError powermod(big(1),0,0)
-# negative power domain error
-@test_throws DomainError powermod(1,-2,1)
-@test_throws DomainError powermod(big(1),-2,1)
+@test_throws DivideError powermod(1,0,big(0))
+# negative powers perform modular inversion before exponentiation
+@test powermod(1, -1, 1) == 0
+@test powermod(1, -1, big(1)) == 0
+# additional BigInt powermod tests
+@test powermod(0, 1, big(6)) == 0
+@test powermod(1, 0, big(6)) == 1
+@test powermod(big(6), big(6), big(6)) == 0
+@test powermod(10, 50, big(10)^50 - 1) == 1
+
+@test powermod(-1, 1, big(6)) == 5
+@test powermod(-1, 0, big(6)) == 1
+@test powermod(-1, -1, big(6)) == 5
+@test powermod(-1, 1, big(-6)) == -1
+@test powermod(-1, 0, big(-6)) == -5
+@test powermod(-1, -1, big(-6)) == -1
+
+@test_throws DivideError powermod(2, -1, big(6))
+@test_throws DivideError powermod(-2, -1, big(6))
 
 # other divide-by-zero errors
 @test_throws DivideError div(1,0)
@@ -2189,6 +2277,14 @@ for i = -100:100
     @test nextpow2(i) == nextpow2(big(i))
     @test prevpow2(i) == prevpow2(big(i))
 end
+for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64)
+    @test nextpow2(T(42)) === T(64)
+    @test prevpow2(T(42)) === T(32)
+end
+
+@test  ispow2(64)
+@test !ispow2(42)
+@test !ispow2(~typemax(Int))
 
 @test nextpow(2,1) == 1
 @test prevpow(2,1) == 1
@@ -2203,6 +2299,7 @@ end
 @test_throws DomainError nextpow(2,0)
 @test_throws DomainError prevpow(2,0)
 
+@test_throws ArgumentError nextprod([2,3,5],Int128(typemax(Int))+1)
 @test nextprod([2,3,5],30) == 30
 @test nextprod([2,3,5],33) == 36
 
@@ -2218,8 +2315,29 @@ end
 @test nextfloat(prevfloat(0.0), 2) ==  5.0e-324
 @test nextfloat(Inf) === Inf
 @test prevfloat(-Inf) === -Inf
+@test isequal(nextfloat(NaN), NaN)
 @test nextfloat(Inf32) === Inf32
 @test prevfloat(-Inf32) === -Inf32
+@test isequal(nextfloat(NaN32), NaN32)
+
+# issue #16206
+@test prevfloat(Inf) == 1.7976931348623157e308
+@test prevfloat(Inf32) == 3.4028235f38
+@test nextfloat(prevfloat(Inf)) == Inf
+@test nextfloat(prevfloat(Inf),2) == Inf
+@test nextfloat(1.0,typemax(Int64)) == Inf
+@test nextfloat(0.0,typemin(Int64)) == -Inf
+@test nextfloat(1f0,typemin(Int64)) == -Inf32
+@test nextfloat(1.0,typemax(UInt64)) == Inf
+@test nextfloat(1.0,typemax(UInt128)) == Inf
+@test nextfloat(1.0,big(2)^67) == Inf
+@test nextfloat(1.0,-big(2)^67) == -Inf
+
+for F in (Float16,Float32,Float64)
+    @test reinterpret(Unsigned,one(F)) === Base.exponent_one(F)
+    @test reinterpret(Signed,one(F)) === signed(Base.exponent_one(F))
+end
+
 
 @test eps(realmax(Float64)) == 1.99584030953472e292
 @test eps(-realmax(Float64)) == 1.99584030953472e292
@@ -2238,6 +2356,9 @@ end
 @test pi*false === 0.0
 @test true*pi === Float64(pi)
 @test pi*true === Float64(pi)
+
+# issue #5492
+@test -0.0 + false === -0.0
 
 # issue #5881
 @test bits(true) == "00000001"
@@ -2258,8 +2379,10 @@ end
 # widen
 @test widen(1.5f0) === 1.5
 @test widen(Int32(42)) === Int64(42)
-@test widen(Int8) === Int
+@test widen(Int8) === Int32
+@test widen(Int64) === Int128
 @test widen(Float32) === Float64
+@test widen(Float16) === Float32
 ## Note: this should change to e.g. Float128 at some point
 @test widen(Float64) === BigFloat
 @test widen(BigInt) === BigInt
@@ -2287,6 +2410,12 @@ end
 
 # issue #7508
 @test_throws ErrorException reinterpret(Int, 0x01)
+
+# issue #12832
+@test_throws ErrorException reinterpret(Float64, Complex{Int64}(1))
+@test_throws ErrorException reinterpret(Float64, Complex64(1))
+@test_throws ErrorException reinterpret(Complex64, Float64(1))
+@test_throws ErrorException reinterpret(Int32, false)
 
 # issue #41
 ndigf(n) = Float64(log(Float32(n)))
@@ -2317,7 +2446,7 @@ end
 # Fill a pre allocated 2x4 matrix
 let a = zeros(Int,(2,4))
     for i in 0:3
-        digits!(sub(a,:,i+1),i,2)
+        digits!(view(a,:,i+1),i,2)
     end
     @test a == [0 1 0 1;
                 0 0 1 1]
@@ -2333,16 +2462,21 @@ end
 @test_throws InexactError convert(Int16, typemax(UInt64))
 @test_throws InexactError convert(Int, typemax(UInt64))
 
+# issue #14549
+for T in (Int8, Int16, UInt8, UInt16)
+    for F in (Float32,Float64)
+        @test_throws InexactError convert(T, F(200000.0))
+    end
+end
+
 let x = big(-0.0)
     @test signbit(x) && !signbit(abs(x))
 end
 
-# issue #9611
-@test factor(Int128(2)^101+1) == Dict(3=>1,845100400152152934331135470251=>1)
 
-# test second branch, after all small primes in list have been searched
-@test factor(10009 * Int128(1000000000000037)) == Dict(10009=>1,1000000000000037=>1)
-
+@test all(x -> (m=mod1(x,3); 0<m<=3), -5:+5)
+@test all(x -> x == (fld1(x,3)-1)*3 + mod1(x,3), -5:+5)
+@test all(x -> fldmod1(x,3) == (fld1(x,3), mod1(x,3)), -5:+5)
 #Issue #5570
 @test map(x -> Int(mod1(UInt(x),UInt(5))), 0:15) == [5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5]
 
@@ -2360,36 +2494,74 @@ end
 @test bswap(reinterpret(Float32,0x0000c03f)) === 1.5f0
 
 #isreal(x::Real) = true
-for x in [1.23, 7, e, 4//5] #[FP, Int, MathConst, Rat]
+for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
     @test isreal(x) == true
 end
 
-#eltype{T<:Number}(::Type{T}) = T
-for T in [subtypes(Complex); subtypes(Real)]
-    @test eltype(T) == T
+function allsubtypes!(m::Module, x::DataType, sts::Set)
+    for s in names(m, true)
+        if isdefined(m, s) && !Base.isdeprecated(m, s)
+            t = getfield(m, s)
+            if isa(t, Type) && t <: x
+                push!(sts, t)
+            elseif isa(t, Module) && t !== m && module_name(t) === s && module_parent(t) === m
+                allsubtypes!(t, x, sts)
+            end
+        end
+    end
 end
 
-#ndims{T<:Number}(::Type{T}) = 0
-for x in [subtypes(Complex); subtypes(Real)]
-    @test ndims(x) == 0
+let number_types = Set()
+    allsubtypes!(Base, Number, number_types)
+    allsubtypes!(Core, Number, number_types)
+
+    @test !isempty(number_types)
+
+    #eltype{T<:Number}(::Type{T}) = T
+    for T in number_types
+        @test eltype(T) == T
+    end
+
+    #ndims{T<:Number}(::Type{T}) = 0
+    for x in number_types
+        @test ndims(x) == 0
+    end
 end
 
 #getindex(x::Number) = x
-for x in [1.23, 7, e, 4//5] #[FP, Int, MathConst, Rat]
+for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
     @test getindex(x) == x
+    @test getindex(x, 1, 1) == x
 end
 
-#copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
-#same sign
-for x in [1.23, 7, e, 4//5]
-    for y in [1.23, 7, e, 4//5]
-        @test copysign(x,y) == x
-    end
+#getindex(x::Number,-1) throws BoundsError
+#getindex(x::Number,0) throws BoundsError
+#getindex(x::Number,2) throws BoundsError
+#getindex(x::Array,-1) throws BoundsError
+#getindex(x::Array,0 throws BoundsError
+#getindex(x::Array,length(x::Array)+1) throws BoundsError
+for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
+    @test_throws BoundsError getindex(x,-1)
+    @test_throws BoundsError getindex(x,0)
+    @test_throws BoundsError getindex(x,2)
+    @test_throws BoundsError getindex([x x],-1)
+    @test_throws BoundsError getindex([x x],0)
+    @test_throws BoundsError getindex([x x],length([x,x])+1)
+    @test_throws BoundsError getindex(x, 1, 0)
 end
-#different sign
+
+# copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
+# flipsign(x::Real, y::Real) = ifelse(signbit(y), -x, x)
 for x in [1.23, 7, e, 4//5]
     for y in [1.23, 7, e, 4//5]
+        @test copysign(x, y) == x
         @test copysign(x, -y) == -x
+        @test copysign(-x, y) == x
+        @test copysign(-x, -y) == -x
+        @test flipsign(x, y) == x
+        @test flipsign(x, -y) == -x
+        @test flipsign(-x, y) == -x
+        @test flipsign(-x, -y) == x
     end
 end
 
@@ -2406,11 +2578,13 @@ end
 @test in(1+2im, 1+2im) == true #Imag
 @test in(3, 3.0) == true #mixed
 
-#map(f::Callable, x::Number) = f(x)
+#map(f::Callable, x::Number, ys::Number...) = f(x)
 @test map(sin, 3) == sin(3)
 @test map(cos, 3) == cos(3)
 @test map(tan, 3) == tan(3)
 @test map(log, 3) == log(3)
+@test map(copysign, 1.0, -2.0) == -1.0
+@test map(muladd, 2, 3, 4) == 10
 
 @test_throws InexactError convert(UInt8, big(300))
 
@@ -2446,3 +2620,247 @@ for T in (Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128)
     @test_throws InexactError T(big(typemax(T))+1)
     @test_throws InexactError T(big(typemin(T))-1)
 end
+
+for (d,B) in ((4//2+1im,Rational{BigInt}),(3.0+1im,BigFloat),(2+1im,BigInt))
+    @test typeof(big(d)) == Complex{B}
+    @test big(d) == d
+    @test typeof(big.([d])) == Vector{Complex{B}}
+    @test big.([d]) == [d]
+end
+
+# issue #12536
+@test Rational{Int16}(1,2) === Rational(Int16(1),Int16(2))
+@test Rational{Int16}(500000,1000000) === Rational(Int16(1),Int16(2))
+
+
+rand_int = rand(Int8)
+
+for T in [Int8, Int16, Int32, Int128, BigInt]
+    @test numerator(convert(T, rand_int)) == rand_int
+    @test denominator(convert(T, rand_int)) == 1
+
+    @test typemin(Rational{T}) == -one(T)//zero(T)
+    @test typemax(Rational{T}) == one(T)//zero(T)
+    @test widen(Rational{T}) == Rational{widen(T)}
+end
+
+@test Rational(Float32(rand_int)) == Rational(rand_int)
+
+@test Rational(Rational(rand_int)) == Rational(rand_int)
+
+@test begin
+    var = -Rational(UInt32(0))
+    var == UInt32(0)
+end
+
+@test Rational(rand_int, 3)/Complex(3, 2) == Complex(Rational(rand_int, 13), -Rational(rand_int*2, 39))
+
+@test Complex(rand_int, 0) == Rational(rand_int)
+@test Rational(rand_int) == Complex(rand_int, 0)
+
+@test (Complex(rand_int, 4) == Rational(rand_int)) == false
+@test (Rational(rand_int) == Complex(rand_int, 4)) == false
+
+@test trunc(Rational(BigInt(rand_int), BigInt(3))) == Rational(trunc(BigInt, Rational(BigInt(rand_int),BigInt(3))))
+@test  ceil(Rational(BigInt(rand_int), BigInt(3))) == Rational( ceil(BigInt, Rational(BigInt(rand_int),BigInt(3))))
+@test round(Rational(BigInt(rand_int), BigInt(3))) == Rational(round(BigInt, Rational(BigInt(rand_int),BigInt(3))))
+
+
+for a = -3:3
+    @test Rational(Float32(a)) == Rational(a)
+    @test Rational(a)//2 == a//2
+    @test a//Rational(2) == Rational(a/2)
+    @test a.//[-2, -1, 1, 2] == [-a//2, -a//1, a//1, a//2]
+    for b=-3:3, c=1:3
+        @test b//(a+c*im) == b*a//(a^2+c^2)-(b*c//(a^2+c^2))*im
+        for d=-3:3
+            @test (a+b*im)//(c+d*im) == (a*c+b*d+(b*c-a*d)*im)//(c^2+d^2)
+            @test Complex(Rational(a)+b*im)//Complex(Rational(c)+d*im) == Complex(a+b*im)//Complex(c+d*im)
+        end
+    end
+end
+
+# issue #15205
+let T = Rational
+    x = Complex{T}(1//3 + 1//4*im)
+    y = Complex{T}(1//2 + 1//5*im)
+    xf = Complex{BigFloat}(1//3 + 1//4*im)
+    yf = Complex{BigFloat}(1//2 + 1//5*im)
+    yi = 4
+
+    @test x^y ≈ xf^yf
+    @test x^yi ≈ xf^yi
+    @test x^true ≈ xf^true
+    @test x^false == xf^false
+    @test x^1 ≈ xf^1
+    @test xf^Rational(2, 1) ≈ xf*xf
+    @test Complex(1., 1.)^Rational(2,1) == Complex(1., 1.)*Complex(1.,1.) == Complex(0., 2.)
+end
+
+for Tf = (Float16, Float32, Float64), Ti = (Int16, Int32, Int64)
+    almost_half  = Rational(div(typemax(Ti),Ti(2))  , typemax(Ti))
+    over_half    = Rational(div(typemax(Ti),Ti(2))+one(Ti), typemax(Ti))
+    exactly_half = Rational(one(Ti)  , Ti(2))
+
+    @test round( almost_half) == 0//1
+    @test round(-almost_half) == 0//1
+    @test round(Tf,  almost_half, RoundNearestTiesUp) == 0.0
+    @test round(Tf, -almost_half, RoundNearestTiesUp) == 0.0
+    @test round(Tf,  almost_half, RoundNearestTiesAway) == 0.0
+    @test round(Tf, -almost_half, RoundNearestTiesAway) == 0.0
+
+    @test round( exactly_half) == 0//1 # rounds to closest _even_ integer
+    @test round(-exactly_half) == 0//1 # rounds to closest _even_ integer
+    @test round(Tf,  exactly_half, RoundNearestTiesUp) == 1.0
+    @test round(Tf, -exactly_half, RoundNearestTiesUp) == 0.0
+    @test round(Tf,  exactly_half, RoundNearestTiesAway) == 1.0
+    @test round(Tf, -exactly_half, RoundNearestTiesAway) == -1.0
+
+
+    @test round(over_half) == 1//1
+    @test round(-over_half) == -1//1
+    @test round(Tf,  over_half, RoundNearestTiesUp) == 1.0
+    @test round(Tf,  over_half, RoundNearestTiesAway) == 1.0
+    @test round(Tf, -over_half, RoundNearestTiesUp) == -1.0
+    @test round(Tf, -over_half, RoundNearestTiesAway) == -1.0
+
+    @test round(Tf, 11//2, RoundNearestTiesUp) == 6.0
+    @test round(Tf, -11//2, RoundNearestTiesUp) == -5.0
+    @test round(Tf, 11//2, RoundNearestTiesAway) == 6.0
+    @test round(Tf, -11//2, RoundNearestTiesAway) == -6.0
+
+    @test round(Tf, Ti(-1)//zero(Ti)) == -Inf
+    @test round(Tf, one(1)//zero(Ti)) == Inf
+    @test round(Tf, Ti(-1)//zero(Ti), RoundNearestTiesUp) == -Inf
+    @test round(Tf, one(1)//zero(Ti), RoundNearestTiesUp) == Inf
+    @test round(Tf, Ti(-1)//zero(Ti), RoundNearestTiesAway) == -Inf
+    @test round(Tf, one(1)//zero(Ti), RoundNearestTiesAway) == Inf
+
+    @test round(Tf, zero(Ti)//one(Ti)) == 0
+    @test round(Tf, zero(Ti)//one(Ti), RoundNearestTiesUp) == 0
+    @test round(Tf, zero(Ti)//one(Ti), RoundNearestTiesAway) == 0
+end
+
+let
+    io = IOBuffer()
+    rational1 = Rational(1465, 8593)
+    rational2 = Rational(-4500, 9000)
+    @test sprint(io -> show(io, rational1)) == "1465//8593"
+    @test sprint(io -> show(io, rational2)) == "-1//2"
+    let
+        io1 = IOBuffer()
+        write(io1, rational1)
+        io1.ptr = 1
+        @test read(io1, typeof(rational1)) == rational1
+
+        io2 = IOBuffer()
+        write(io2, rational2)
+        io2.ptr = 1
+        @test read(io2, typeof(rational2)) == rational2
+    end
+end
+
+@test round(11//2) == 6//1 # rounds to closest _even_ integer
+@test round(-11//2) == -6//1 # rounds to closest _even_ integer
+@test round(11//3) == 4//1 # rounds to closest _even_ integer
+@test round(-11//3) == -4//1 # rounds to closest _even_ integer
+
+for T in (Float16, Float32, Float64)
+    @test round(T, true//false) === convert(T, Inf)
+    @test round(T, true//true) === one(T)
+    @test round(T, false//true) === zero(T)
+end
+
+for T in (Int8, Int16, Int32, Int64, Bool)
+    @test_throws DivideError round(T, true//false)
+    @test round(T, true//true) === one(T)
+    @test round(T, false//true) === zero(T)
+end
+
+# multiplicative inverses
+function testmi(numrange, denrange)
+    for d in denrange
+        d == 0 && continue
+        fastd = Base.multiplicativeinverse(d)
+        for n in numrange
+            @test div(n,d) == div(n,fastd)
+        end
+    end
+end
+testmi(-1000:1000, -100:100)
+testmi(typemax(Int)-1000:typemax(Int), -100:100)
+testmi(typemin(Int)+1:typemin(Int)+1000, -100:100)
+@test_throws ArgumentError Base.multiplicativeinverse(0)
+testmi(map(UInt32, 0:1000), map(UInt32, 1:100))
+testmi(typemax(UInt32)-UInt32(1000):typemax(UInt32), map(UInt32, 1:100))
+
+@test ndims(1) == 0
+@test ndims(Integer) == 0
+@test size(1,1) == 1
+@test_throws BoundsError size(1,-1)
+@test indices(1) == ()
+@test indices(1,1) == 1:1
+@test_throws BoundsError indices(1,-1)
+@test isinteger(Integer(2)) == true
+@test size(1) == ()
+@test length(1) == 1
+@test endof(1) == 1
+@test eltype(Integer) == Integer
+
+# issue #15920
+@test Rational(0, 1) / Complex(3, 2) == 0
+
+# issue #16282
+@test_throws MethodError 3 // 4.5im
+
+# PR #16995
+let types = (Base.BitInteger_types..., BigInt, Bool,
+             Rational{Int}, Rational{BigInt},
+             Float16, Float32, Float64, BigFloat,
+             Complex{Int}, Complex{UInt}, Complex32, Complex64, Complex128)
+    for S in types
+        for op in (+, -)
+            T = @inferred Base.promote_op(op, S)
+            t = @inferred op(one(S))
+            @test T === typeof(t)
+        end
+
+        for R in types
+            for op in (+, -, *, /, ^)
+                T = @inferred Base.promote_op(op, S, R)
+                t = @inferred op(one(S), one(R))
+                @test T === typeof(t)
+            end
+        end
+    end
+
+    @test @inferred(Base.promote_op(!, Bool)) === Bool
+end
+
+let types = (Base.BitInteger_types..., BigInt, Bool,
+             Rational{Int}, Rational{BigInt},
+             Float16, Float32, Float64, BigFloat)
+    for S in types, T in types
+        for op in (<, >, <=, >=, (==))
+            @test @inferred(Base.promote_op(op, S, T)) === Bool
+        end
+    end
+end
+
+let types = (Base.BitInteger_types..., BigInt, Bool)
+    for S in types
+        T = @inferred Base.promote_op(~, S)
+        t = @inferred ~one(S)
+        @test T === typeof(t)
+
+        for R in types
+            for op in (&, |, <<, >>, (>>>), %, ÷)
+                T = @inferred Base.promote_op(op, S, R)
+                t = @inferred op(one(S), one(R))
+                @test T === typeof(t)
+            end
+        end
+    end
+end
+
+@test !isempty(complex(1,2))

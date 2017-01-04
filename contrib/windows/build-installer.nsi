@@ -33,9 +33,6 @@ Function createDesktopLink
   ${EndIf}
 FunctionEnd
 
-# Icon settings
-!define MUI_ICON "contrib\windows\julia.ico"
-
 # Variable definitions used in installer pages
 InstallDir "$LOCALAPPDATA\Julia-${Version}"
 !define JuliaStartMenuFolder "Julia ${Version}"
@@ -148,8 +145,8 @@ SectionEnd
 # Helper function to create Start Menu folder and shortcuts
 Function AddToStartMenu
     CreateDirectory "$SMPROGRAMS\${JuliaStartMenuFolder}"
-    CreateShortcut "$SMPROGRAMS\${JuliaStartMenuFolder}\julia.lnk" "$INSTDIR\julia.lnk" "" "" "" "" "" "The Julia Language"
-    CreateShortcut "$SMPROGRAMS\${JuliaStartMenuFolder}\Uninstall.lnk" "$instdir\Uninstall.exe"
+    CreateShortcut "$SMPROGRAMS\${JuliaStartMenuFolder}\julia-${Version}.lnk" "$INSTDIR\julia.lnk" "" "" "" "" "" "The Julia Language"
+    CreateShortcut "$SMPROGRAMS\${JuliaStartMenuFolder}\Uninstall-Julia-${Version}.lnk" "$instdir\Uninstall.exe"
 FunctionEnd
 
 # Opens the installation folder

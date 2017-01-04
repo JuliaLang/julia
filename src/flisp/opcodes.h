@@ -36,8 +36,8 @@ enum {
 
 #ifdef USE_COMPUTED_GOTO
 #define VM_LABELS                                                       \
-    static void *vm_labels[] = {                                        \
-NULL, &&L_OP_DUP, &&L_OP_POP, &&L_OP_CALL, &&L_OP_TCALL, &&L_OP_JMP, \
+    static const void *vm_labels[] = {                                  \
+    NULL, &&L_OP_DUP, &&L_OP_POP, &&L_OP_CALL, &&L_OP_TCALL, &&L_OP_JMP,\
     &&L_OP_BRF, &&L_OP_BRT,                                             \
     &&L_OP_JMPL, &&L_OP_BRFL, &&L_OP_BRTL, &&L_OP_RET,                  \
                                                                         \

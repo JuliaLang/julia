@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Mapping from LaTeX math symbol to the corresponding Unicode codepoint.
 # This is used for tab substitution in the REPL.
 
@@ -15,14 +17,14 @@ for c in child_nodes(root(xdoc))
         latex = nothing
         for el in ("AMS", "IEEE", "mathlatex", "latex")
             latex = find_element(ce, el)
-            latex != nothing && break
+            latex !== nothing && break
         end
-        if latex != nothing
+        if latex !== nothing
             L = strip(content(latex))
             id = attribute(ce, "id")
             U = string(map(s -> Char(parse(Int, s, 16)),
                            split(id[2:end], "-"))...)
-            if ismatch(r"^\\[A-Za-z]+$",L) && !isa(U,ASCIIString)
+            if ismatch(r"^\\[A-Za-z]+$",L) && !isa(U,String)
                 if L in Ls
                     println("# duplicated symbol $L ($id)")
                 else
@@ -45,16 +47,21 @@ end
 # Additional symbols were generated from the unicode-math LaTeX package
 # symbol listing, using the following script:
 #=
-# download("http://mirror.math.ku.edu/tex-archive/macros/latex/contrib/unicode-math/unicode-math-table.tex", "unicode-math-table.tex")
+fname = "unicode-math-table.tex"
+isfile(fname) || download("http://mirror.math.ku.edu/tex-archive/macros/latex/contrib/unicode-math/$fname", fname)
 const latex_strings = Set(values(Base.REPLCompletions.latex_symbols))
-open("unicode-math-table.tex") do f
+open(fname) do f
     for L in eachline(f)
         x = map(s -> rstrip(s, [' ','\t','\n']),
                 split(replace(L, r"[{}\"]+", "\t"), "\t"))
         c = Char(parse(Int, x[2], 16))
-        if (Base.is_id_char(c) || Base.isoperator(symbol(c))) &&
+        if (Base.is_id_char(c) || Base.isoperator(Symbol(c))) &&
            string(c) ∉ latex_strings && !isascii(c)
-            println("    \"", escape_string(x[3]), "\" => \"",
+            tabcomname = escape_string(x[3])
+            if startswith(tabcomname, "\\\\math")
+                tabcomname = string("\\\\", tabcomname[7:end])
+            end
+            println("    \"", tabcomname, "\" => \"",
                     escape_string("$c"), "\",  # ", x[5])
         end
     end
@@ -76,6 +83,7 @@ const latex_symbols = Dict(
     "\\pppprime" => "⁗",
     "\\backpprime" => "‶",
     "\\backppprime" => "‷",
+    "\\xor" => "⊻",
 
     # Superscripts
     "\\^0" => "⁰",
@@ -189,6 +197,7 @@ const latex_symbols = Dict(
     "\\_chi" => "ᵪ",
 
     # Misc. Math and Physics
+    "\\ldots" => "…",
     "\\hbar" => "ħ",
     "\\del" => "∇",
 
@@ -2540,5 +2549,22 @@ const latex_symbols = Dict(
     "\\mttseven" => "𝟽",  # mathematical monospace digit 7
     "\\mtteight" => "𝟾",  # mathematical monospace digit 8
     "\\mttnine" => "𝟿",  # mathematical monospace digit 9
+
+    "\\triangleright" => "▷",  # (large) right triangle, open; z notation range restriction
+    "\\triangleleft" => "◁",  # (large) left triangle, open; z notation domain restriction
+    "\\leftouterjoin" => "⟕",  # left outer join
+    "\\rightouterjoin" => "⟖",  # right outer join
+    "\\fullouterjoin" => "⟗",  # full outer join
+    "\\Join" => "⨝",  # join
+    "\\underbar" => "̲",  # combining low line
+    "\\underleftrightarrow" => "͍",  # underleftrightarrow accent
+    "\\leftwavearrow" => "↜",  # left arrow-wavy
+    "\\rightwavearrow" => "↝",  # right arrow-wavy
+    "\\varbarwedge" => "⌅",  # /barwedge b: logical and, bar above [projective (bar over small wedge)]
+    "\\smallblacktriangleright" => "▸",  # right triangle, filled
+    "\\smallblacktriangleleft" => "◂",  # left triangle, filled
+    "\\leftmoon" => "☾",  # last quarter moon
+    "\\smalltriangleright" => "▹",  # right triangle, open
+    "\\smalltriangleleft" => "◃",  # left triangle, open
 
 )

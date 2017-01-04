@@ -1,3 +1,4 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Basic goto tests
 
@@ -75,7 +76,7 @@ function goto_test6()
     @label a
 end
 
-@test goto_test6() == nothing
+@test goto_test6() === nothing
 
 
 function goto_test7(x)
@@ -85,7 +86,7 @@ function goto_test7(x)
     end
 end
 
-@test goto_test7(false) == nothing
+@test goto_test7(false) === nothing
 
 module GotoMacroTest
     macro goto_test8_macro()
@@ -100,3 +101,27 @@ end
 
 GotoMacroTest.@goto_test8_macro
 
+# issue #15600
+function t0_15600(flag)
+    flag && @goto return2
+    return 1
+    @label return2
+    return 2
+end
+@test t0_15600(true) == 2
+@test t0_15600(false) == 1
+function t1_15600(flag)
+    flag || @goto return2
+    return 1
+    @label return2
+    return 2
+end
+@test t1_15600(true) == 1
+@test t1_15600(false) == 2
+
+# issue #15561
+function f15561()
+    a = @goto crater
+    @label crater
+end
+@test f15561() === nothing

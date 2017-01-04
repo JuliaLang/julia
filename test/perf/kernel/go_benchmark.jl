@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Benchmark implementing the board logic for the game of go and
 # exercising it by playing random games. Derived from
 # http://www.lysator.liu.se/~gunnar/gtp/brown-1.0.tar.gz
@@ -267,7 +269,7 @@ function play_move(board::Board, i::Int, j::Int, color::Int)
     # may happen if the same string neighbors the new stone in more
     # than one direction.
     if on_board(board, ai, aj) && board[pos2] == color && !same_string(board, pos, pos2)
-      # The strings are linked together simply by swapping the the
+      # The strings are linked together simply by swapping the
       # next_stone pointers.
       (board.next_stone[pos], board.next_stone[pos2]) = (board.next_stone[pos2], board.next_stone[pos])
     end
@@ -476,7 +478,7 @@ end
 function main(args)
   n = 10
   if length(args) > 0
-    n = parseint(args[1])
+    n = parse(Int, args[1])
   end
   @time benchmark(n)
 end

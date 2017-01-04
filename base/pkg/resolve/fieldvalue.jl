@@ -1,6 +1,9 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module FieldValues
 
 using ...VersionWeights
+importall .....Base.Operators
 
 export FieldValue, Field, validmax, secondmax
 
@@ -37,8 +40,8 @@ Base.zero(::Type{FieldValue}) = FieldValue()
 
 Base.typemin(::Type{FieldValue}) = (x=typemin(Int); y=typemin(VersionWeight); FieldValue(x,y,y,x,typemin(Int128)))
 
-Base.(:-)(a::FieldValue, b::FieldValue) = FieldValue(a.l0-b.l0, a.l1-b.l1, a.l2-b.l2, a.l3-b.l3, a.l4-b.l4)
-Base.(:+)(a::FieldValue, b::FieldValue) = FieldValue(a.l0+b.l0, a.l1+b.l1, a.l2+b.l2, a.l3+b.l3, a.l4+b.l4)
+Base.:-(a::FieldValue, b::FieldValue) = FieldValue(a.l0-b.l0, a.l1-b.l1, a.l2-b.l2, a.l3-b.l3, a.l4-b.l4)
+Base.:+(a::FieldValue, b::FieldValue) = FieldValue(a.l0+b.l0, a.l1+b.l1, a.l2+b.l2, a.l3+b.l3, a.l4+b.l4)
 
 function Base.isless(a::FieldValue, b::FieldValue)
     a.l0 < b.l0 && return true
@@ -59,7 +62,6 @@ end
     a.l0 == b.l0 && a.l1 == b.l1 && a.l2 == b.l2 && a.l3 == b.l3 && a.l4 == b.l4
 
 Base.abs(a::FieldValue) = FieldValue(abs(a.l0), abs(a.l1), abs(a.l2), abs(a.l3), abs(a.l4))
-Base.abs(f::Field) = FieldValue[abs(a) for a in f]
 
 # if the maximum field has l0 < 0, it means that
 # some hard constraint is being violated

@@ -1,6 +1,9 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 using Base.REPLCompletions
 
-module CompletionFoo
+ex = quote
+    module CompletionFoo
     type Test_y
         yy
     end
@@ -8,6 +11,7 @@ module CompletionFoo
         xx :: Test_y
     end
     type_test = Test_x(Test_y(1))
+    (::Test_y)() = "", ""
     module CompletionFoo2
 
     end
@@ -16,6 +20,14 @@ module CompletionFoo
     macro foobar()
         :()
     end
+
+    # Support non-Dict Associatives, #19441
+    type CustomDict{K, V} <: Associative{K, V}
+        mydict::Dict{K, V}
+    end
+
+    Base.keys(d::CustomDict) = collect(keys(d.mydict))
+    Base.length(d::CustomDict) = length(d.mydict)
 
     test{T<:Real}(x::T, y::T) = pass
     test(x::Real, y::Real) = pass
@@ -26,24 +38,54 @@ module CompletionFoo
 
     test2(x::AbstractString) = pass
     test2(x::Char) = pass
+    test2(x::Cmd) = pass
 
     test3(x::AbstractArray{Int}, y::Int) = pass
     test3(x::AbstractArray{Float64}, y::Float64) = pass
 
-    array = [1, 1]
-end
+    test4(x::AbstractString, y::AbstractString) = pass
+    test4(x::AbstractString, y::Regex) = pass
 
-function temp_pkg_dir(fn::Function)
-  # Used in tests below to setup and teardown a sandboxed package directory
-  const tmpdir = ENV["JULIA_PKGDIR"] = joinpath(tempdir(),randstring())
-  @test !isdir(Pkg.dir())
-  try
-    mkpath(Pkg.dir())
-    @test isdir(Pkg.dir())
-    fn()
-  finally
-    rm(tmpdir, recursive=true)
-  end
+    test5(x::Array{Bool,1}) = pass
+    test5(x::BitArray{1}) = pass
+    test5(x::Float64) = pass
+    const a=x->x
+    test6()=[a, a]
+
+    kwtest(; x=1, y=2, w...) = pass
+
+    array = [1, 1]
+    varfloat = 0.1
+
+    const tuple = (1, 2)
+
+    test_y_array=[CompletionFoo.Test_y(rand()) for i in 1:10]
+    test_dict = Dict("abc"=>1, "abcd"=>10, :bar=>2, :bar2=>9, Base=>3,
+                     contains=>4, `ls`=>5, 66=>7, 67=>8, ("q",3)=>11,
+                     "α"=>12, :α=>13)
+    test_customdict = CustomDict(test_dict)
+    end
+    test_repl_comp_dict = CompletionFoo.test_dict
+    test_repl_comp_customdict = CompletionFoo.test_customdict
+end
+ex.head = :toplevel
+eval(Main, ex)
+
+function temp_pkg_dir_noinit(fn::Function)
+    # Used in tests below to set up and tear down a sandboxed package directory
+    # Unlike the version in test/pkg.jl, this does not run Pkg.init so does not
+    # clone METADATA (only pkg and libgit2-online tests should need internet access)
+    const tmpdir = joinpath(tempdir(),randstring())
+    withenv("JULIA_PKGDIR" => tmpdir) do
+        @test !isdir(Pkg.dir())
+        try
+            mkpath(Pkg.dir())
+            @test isdir(Pkg.dir())
+            fn()
+        finally
+            rm(tmpdir, recursive=true)
+        end
+    end
 end
 
 test_complete(s) = completions(s,endof(s))
@@ -95,6 +137,14 @@ c,r = test_complete(s)
 @test r == 30:30
 @test s[r] == "x"
 
+s = "Main.CompletionFoo.bar.no_val_available"
+c,r = test_complete(s)
+@test length(c)==0
+#cannot do dot completion on infix operator
+s = "+."
+c,r = test_complete(s)
+@test length(c)==0
+
 # To complete on a variable of a type, the type T of the variable
 # must be a concrete type, hence Base.isstructtype(T) returns true,
 # for the completion to succeed. That why `xx :: Test_y` of `Test_x`.
@@ -137,6 +187,10 @@ c,r = test_bslashcomplete(s)
 @test r == 1:sizeof(s)
 @test length(c) == 1
 
+s = "\\:ko"
+c,r = test_bslashcomplete(s)
+@test "\\:koala:" in c
+
 # test emoji symbol completions after unicode #9209
 s = "α\\:koala:"
 c,r = test_bslashcomplete(s)
@@ -171,15 +225,22 @@ c,r,res = test_complete(s)
 s = "max("
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(start(methods(max)))
+@test let found = false
+    for m in methods(max)
+        if !found
+            found = (c[1] == string(m))
+        end
+    end
+    found
+end
 @test r == 1:3
 @test s[r] == "max"
 
-# Test completion of methods with input args
+# Test completion of methods with input concrete args and args where typeinference determine their type
 s = "CompletionFoo.test(1,1, "
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(methods(CompletionFoo.test, Tuple{Int, Int})[1])
+@test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Int, Int})))
 @test length(c) == 3
 @test r == 1:18
 @test s[r] == "CompletionFoo.test"
@@ -187,7 +248,7 @@ c, r, res = test_complete(s)
 s = "CompletionFoo.test(CompletionFoo.array,"
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(methods(CompletionFoo.test, Tuple{Array{Int, 1}, Any})[1])
+@test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Array{Int, 1}, Any})))
 @test length(c) == 2
 @test r == 1:18
 @test s[r] == "CompletionFoo.test"
@@ -195,7 +256,7 @@ c, r, res = test_complete(s)
 s = "CompletionFoo.test(1,1,1,"
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(methods(CompletionFoo.test, Tuple{Any, Any, Any})[1])
+@test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Any, Any, Any})))
 @test r == 1:18
 @test s[r] == "CompletionFoo.test"
 
@@ -215,30 +276,115 @@ c, r, res = test_complete(s)
 
 s = "prevind(\"θ\",1,"
 c, r, res = test_complete(s)
-@test c[1] == string(methods(prevind, Tuple{UTF8String, Int})[1])
+@test c[1] == string(first(methods(prevind, Tuple{String, Int})))
 @test r == 1:7
 @test s[r] == "prevind"
 
-for (T, arg) in [(ASCIIString,"\")\""),(Char, "')'")]
+for (T, arg) in [(String,"\")\""),(Char, "')'")]
     s = "(1, CompletionFoo.test2($arg,"
     c, r, res = test_complete(s)
     @test length(c) == 1
-    @test c[1] == string(methods(CompletionFoo.test2, Tuple{T,})[1])
+    @test c[1] == string(first(methods(Main.CompletionFoo.test2, Tuple{T,})))
     @test r == 5:23
     @test s[r] == "CompletionFoo.test2"
 end
 
-s = "CompletionFoo.test3([1.,2.],"
+s = "(1, CompletionFoo.test2(`')'`,"
+c, r, res = test_complete(s)
+@test c[1] == string(first(methods(Main.CompletionFoo.test2, Tuple{Cmd})))
+@test length(c) == 1
+
+s = "CompletionFoo.test3([1, 2] + CompletionFoo.varfloat,"
 c, r, res = test_complete(s)
 @test !res
-@test length(c) == 2
+@test c[1] == string(first(methods(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
+@test length(c) == 1
 
 s = "CompletionFoo.test3([1.,2.], 1.,"
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(methods(CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})[1])
+@test c[1] == string(first(methods(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
 @test r == 1:19
+@test length(c) == 1
 @test s[r] == "CompletionFoo.test3"
+
+s = "CompletionFoo.test4(\"e\",r\" \","
+c, r, res = test_complete(s)
+@test !res
+@test c[1] == string(first(methods(Main.CompletionFoo.test4, Tuple{String, Regex})))
+@test r == 1:19
+@test length(c) == 1
+@test s[r] == "CompletionFoo.test4"
+
+s = "CompletionFoo.test5(push!(Base.split(\"\",' '),\"\",\"\").==\"\","
+c, r, res = test_complete(s)
+@test !res
+@test length(c) == 1
+@test c[1] == string(first(methods(Main.CompletionFoo.test5, Tuple{BitArray{1}})))
+
+s = "CompletionFoo.test4(CompletionFoo.test_y_array[1]()[1], CompletionFoo.test_y_array[1]()[2], "
+c, r, res = test_complete(s)
+@test !res
+@test length(c) == 1
+@test c[1] == string(first(methods(Main.CompletionFoo.test4, Tuple{String, String})))
+
+# Test that string escaption is handled correct
+s = """CompletionFoo.test4("\\"","""
+c, r, res = test_complete(s)
+@test !res
+@test length(c) == 2
+
+########## Test where the current inference logic fails ########
+# Fails due to inferrence fails to determine a concrete type for arg 1
+# But it returns AbstractArray{T,N} and hence is able to remove test5(x::Float64) from the suggestions
+s = "CompletionFoo.test5(AbstractArray[[]][1],"
+c, r, res = test_complete(s)
+@test !res
+@test length(c) == 2
+
+# equivalent to above but due to the time macro the completion fails to find the concrete type
+s = "CompletionFoo.test3(@time([1, 2] + CompletionFoo.varfloat),"
+c, r, res = test_complete(s)
+@test !res
+@test length(c) == 2
+#################################################################
+
+s = "CompletionFoo.kwtest( "
+c, r, res = test_complete(s)
+@test !res
+@test length(c) == 1
+@test contains(c[1], "x, y, w...")
+
+# Test of inference based getfield completion
+s = "\"\"."
+c,r = test_complete(s)
+@test length(c)==1
+@test r == (endof(s)+1):endof(s)
+@test c[1] == "data"
+
+s = "(\"\"*\"\")."
+c,r = test_complete(s)
+@test length(c)==1
+@test r == (endof(s)+1):endof(s)
+@test c[1] == "data"
+
+s = "CompletionFoo.test_y_array[1]."
+c,r = test_complete(s)
+@test length(c)==1
+@test r == (endof(s)+1):endof(s)
+@test c[1] == "yy"
+
+s = "CompletionFoo.Test_y(rand()).y"
+c,r = test_complete(s)
+@test length(c)==1
+@test r == endof(s):endof(s)
+@test c[1] == "yy"
+
+s = "CompletionFoo.test6()[1](CompletionFoo.Test_y(rand())).y"
+c,r = test_complete(s)
+@test length(c)==1
+@test r == endof(s):endof(s)
+@test c[1] == "yy"
 
 # Test completion in multi-line comments
 s = "#=\n\\alpha"
@@ -254,7 +400,7 @@ c, r, res = test_complete(s)
 
 # Test completion of packages
 mkp(p) = ((@assert !isdir(p)); mkpath(p))
-temp_pkg_dir() do
+temp_pkg_dir_noinit() do
     # Complete <Mod>/src/<Mod>.jl and <Mod>.jl/src/<Mod>.jl
     # but not <Mod>/ if no corresponding .jl file is found
     pkg_dir = Pkg.dir("CompletionFooPackage", "src")
@@ -320,9 +466,9 @@ c, r, res = test_scomplete(s)
 
 # The return type is of importance, before #8995 it would return nothing
 # which would raise an error in the repl code.
-@test (UTF8String[], 0:-1, false) == test_scomplete("\$a")
+@test (String[], 0:-1, false) == test_scomplete("\$a")
 
-@unix_only begin
+if is_unix()
     #Assume that we can rely on the existence and accessibility of /tmp
 
     # Tests path in Julia code and closing " if it's a file
@@ -375,6 +521,94 @@ c, r, res = test_scomplete(s)
     @test "Pkg" in c
     @test r == 6:7
     @test s[r] == "Pk"
+
+    # Pressing tab after having entered "/tmp " should not
+    # attempt to complete "/tmp" but rather work on the current
+    # working directory again.
+    let
+        file = joinpath(path, "repl completions")
+        s = "/tmp "
+        c,r = test_scomplete(s)
+        @test r == 6:5
+    end
+
+    # Test completing paths with an escaped trailing space
+    let
+        file = joinpath(tempdir(), "repl completions")
+        touch(file)
+        s = string(tempdir(), "/repl\\ ")
+        c,r = test_scomplete(s)
+        @test ["repl\\ completions"] == c
+        @test s[r] == "repl\\ "
+        rm(file)
+    end
+
+    # Tests homedir expansion
+    let
+        path = homedir()
+        dir = joinpath(path, "tmpfoobar")
+        mkdir(dir)
+        s = "\"~/tmpfoob"
+        c,r = test_complete(s)
+        @test "tmpfoobar/" in c
+        @test r == 4:10
+        @test s[r] == "tmpfoob"
+        s = "\"~"
+        @test "tmpfoobar/" in c
+        c,r = test_complete(s)
+        rm(dir)
+    end
+
+    # Tests detecting of files in the env path (in shell mode)
+    let
+        oldpath = ENV["PATH"]
+        path = tempdir()
+        # PATH can also contain folders which we aren't actually allowed to read.
+        unreadable = joinpath(tempdir(), "replcompletion-unreadable")
+        ENV["PATH"] = string(path, ":", unreadable)
+
+        file = joinpath(path, "tmp-executable")
+        touch(file)
+        chmod(file, 0o755)
+        mkdir(unreadable)
+        chmod(unreadable, 0o000)
+
+        s = "tmp-execu"
+        c,r = test_scomplete(s)
+        @test "tmp-executable" in c
+        @test r == 1:9
+        @test s[r] == "tmp-execu"
+
+        rm(file)
+        rm(unreadable)
+        ENV["PATH"] = oldpath
+    end
+
+    # Make sure completion results are unique in case things are in the env path twice.
+    let
+        file0 = joinpath(tempdir(), "repl-completion")
+        dir = joinpath(tempdir(), "repl-completion-subdir")
+        file1 = joinpath(dir, "repl-completion")
+
+        try
+            # Create /tmp/repl-completion and /tmp/repl-completion-subdir/repl-completion
+            mkdir(dir)
+            touch(file0)
+            touch(file1)
+
+            withenv("PATH" => string(tempdir(), ":", dir)) do
+                s = string("repl-completio")
+                c,r = test_scomplete(s)
+                @test ["repl-completion"] == c
+                @test s[r] == "repl-completio"
+            end
+
+        finally
+            rm(file0)
+            rm(file1)
+            rm(dir)
+        end
+    end
 end
 
 let #test that it can auto complete with spaces in file/path
@@ -385,12 +619,12 @@ let #test that it can auto complete with spaces in file/path
     mkdir(dir)
     cd(path) do
         open(joinpath(space_folder, "space .file"),"w") do f
-            s = @windows? "rm $dir_space\\\\space" : "cd $dir_space/space"
+            s = is_windows() ? "rm $dir_space\\\\space" : "cd $dir_space/space"
             c,r = test_scomplete(s)
             @test r == endof(s)-4:endof(s)
             @test "space\\ .file" in c
 
-            s = @windows? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
+            s = is_windows() ? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
             c,r = test_complete(s)
             @test r == endof(s)-4:endof(s)
             @test "space\\ .file\"" in c
@@ -404,7 +638,11 @@ let #test that it can auto complete with spaces in file/path
     rm(dir, recursive=true)
 end
 
-@windows_only begin
+# Test the completion returns nothing when the folder do not exist
+c,r = test_complete("cd(\"folder_do_not_exist_77/file")
+@test length(c) == 0
+
+if is_windows()
     tmp = tempname()
     path = dirname(tmp)
     file = basename(tmp)
@@ -428,7 +666,82 @@ end
         s = "cd(\"$(file[1:2])"
         c,r = test_complete(s)
         @test r == length(s) - 1:length(s)
-        @test file  in c
+        @test (length(c) > 1 && file in c) || (["$file\""] == c)
     end
     rm(tmp)
 end
+
+# auto completions of true and false... issue #14101
+s = "tru"
+c, r, res = test_complete(s)
+@test "true" in c
+s = "fals"
+c, r, res = test_complete(s)
+@test "false" in c
+
+# Don't crash when attempting to complete a tuple, #15329
+s = "CompletionFoo.tuple."
+c, r, res = test_complete(s)
+@test isempty(c)
+
+# test Dicts
+function test_dict_completion(dict_name)
+    s = "$dict_name[\"ab"
+    c, r = test_complete(s)
+    @test c == Any["\"abc\"", "\"abcd\""]
+    s = "$dict_name[\"abcd"
+    c, r = test_complete(s)
+    @test c == Any["\"abcd\"]"]
+    s = "$dict_name[ \"abcd"  # leading whitespace
+    c, r = test_complete(s)
+    @test c == Any["\"abcd\"]"]
+    s = "$dict_name[\"abcd]"  # trailing close bracket
+    c, r = completions(s, endof(s) - 1)
+    @test c == Any["\"abcd\""]
+    s = "$dict_name[:b"
+    c, r = test_complete(s)
+    @test c == Any[":bar", ":bar2"]
+    s = "$dict_name[:bar2"
+    c, r = test_complete(s)
+    @test c == Any[":bar2]"]
+    s = "$dict_name[Ba"
+    c, r = test_complete(s)
+    @test c == Any["Base]"]
+    s = "$dict_name[co"
+    c, r = test_complete(s)
+    @test c == Any["contains]"]
+    s = "$dict_name[`l"
+    c, r = test_complete(s)
+    @test c == Any["`ls`]"]
+    s = "$dict_name[6"
+    c, r = test_complete(s)
+    @test c == Any["66", "67"]
+    s = "$dict_name[66"
+    c, r = test_complete(s)
+    @test c == Any["66]"]
+    s = "$dict_name[("
+    c, r = test_complete(s)
+    @test c == Any["(\"q\",3)]"]
+    s = "$dict_name[\"\\alp"
+    c, r = test_complete(s)
+    @test c == String["\\alpha"]
+    s = "$dict_name[\"\\alpha"
+    c, r = test_complete(s)
+    @test c == String["α"]
+    s = "$dict_name[\"α"
+    c, r = test_complete(s)
+    @test c == Any["\"α\"]"]
+    s = "$dict_name[:\\alp"
+    c, r = test_complete(s)
+    @test c == String["\\alpha"]
+    s = "$dict_name[:\\alpha"
+    c, r = test_complete(s)
+    @test c == String["α"]
+    s = "$dict_name[:α"
+    c, r = test_complete(s)
+    @test c == Any[":α]"]
+end
+test_dict_completion("CompletionFoo.test_dict")
+test_dict_completion("CompletionFoo.test_customdict")
+test_dict_completion("test_repl_comp_dict")
+test_dict_completion("test_repl_comp_customdict")

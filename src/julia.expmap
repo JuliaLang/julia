@@ -2,11 +2,8 @@
   global:
     __asan*;
     __stack_chk_guard;
-    alloc_*w;
-    allocobj;
     asprintf;
     bitvector_*;
-    clock_now;
     ev_break;
     get_exename;
     getlocalip;
@@ -32,9 +29,12 @@
     uv_*;
     add_library_mapping;
     utf8proc_*;
-    gc_queue_root;
-    gc_wb_slow;
     jlbacktrace;
+    julia_type_to_llvm;
+    _IO_stdin_used;
+    __ZN4llvm23createLowerSimdLoopPassEv;
+    LLVMAddLowerGCFramePass;
+    LLVMAddLowerPTLSPass;
 
     /* freebsd */
     environ;

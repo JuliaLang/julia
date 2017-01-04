@@ -1,3 +1,4 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 ## IP ADDRESS HANDLING ##
 abstract IPAddr
@@ -20,6 +21,11 @@ immutable IPv4 <: IPAddr
     end
 end
 
+"""
+    IPv4(host::Integer) -> IPv4
+
+Returns an IPv4 object from ip address `host` formatted as an `Integer`.
+"""
 function IPv4(host::Integer)
     if host < 0
         throw(ArgumentError("IPv4 address must be positive"))
@@ -31,7 +37,7 @@ function IPv4(host::Integer)
 end
 
 # constructor: ("1.2.3.4")
-IPv4(ipstr::AbstractString) = parseipv4(ipstr)
+IPv4(str::AbstractString) = parse(IPv4, str)
 
 show(io::IO,ip::IPv4) = print(io,"ip\"",ip,"\"")
 print(io::IO,ip::IPv4) = print(io,dec((ip.host&(0xFF000000))>>24),".",
@@ -62,6 +68,11 @@ immutable IPv6 <: IPAddr
     end
 end
 
+"""
+    IPv6(host::Integer) -> IPv6
+
+Returns an IPv6 object from ip address `host` formatted as an `Integer`.
+"""
 function IPv6(host::Integer)
     if host < 0
         throw(ArgumentError("IPv6 address must be positive"))
@@ -74,7 +85,7 @@ function IPv6(host::Integer)
     end
 end
 
-IPv6(ipstr::AbstractString) = parseipv6(ipstr)
+IPv6(str::AbstractString) = parse(IPv6, str)
 
 # Suppress leading '0's and "0x"
 print_ipv6_field(io,field::UInt16) = print(io,hex(field))
@@ -137,12 +148,12 @@ end
 
 # Parsing
 
-function parseipv4(str)
+function parse(::Type{IPv4}, str::AbstractString)
     fields = split(str,'.')
     i = 1
     ret = 0
     for f in fields
-        if length(f) == 0
+        if isempty(f)
             throw(ArgumentError("empty field in IPv4 address"))
         end
         if f[1] == '0'
@@ -198,7 +209,7 @@ function parseipv6fields(fields,num_fields)
 end
 parseipv6fields(fields) = parseipv6fields(fields,8)
 
-function parseipv6(str)
+function parse(::Type{IPv6}, str::AbstractString)
     fields = split(str,':')
     if length(fields) > 8
         throw(ArgumentError("too many fields in IPv6 address"))
@@ -206,7 +217,7 @@ function parseipv6(str)
         return IPv6(parseipv6fields(fields))
     elseif in('.',fields[end])
         return IPv6((parseipv6fields(fields[1:(end-1)],6))
-            | parseipv4(fields[end]).host )
+            | parse(IPv4, fields[end]).host )
     else
         return IPv6(parseipv6fields(fields))
     end
@@ -218,186 +229,140 @@ end
 # of the appropriate size and should use the appropriate constructor
 #
 
-function parseip(str)
-    if in(':',str)
-        # IPv6 Address
-        return parseipv6(str)
+function parse(::Type{IPAddr}, str::AbstractString)
+    if ':' in str
+        return parse(IPv6, str)
     else
-        # IPv4 Address
-        return parseipv4(str)
+        return parse(IPv4, str)
     end
 end
 
 macro ip_str(str)
-    return parseip(str)
+    return parse(IPAddr, str)
 end
 
-type InetAddr
-    host::IPAddr
+immutable InetAddr{T<:IPAddr}
+    host::T
     port::UInt16
-
-    function InetAddr(host, port::Integer)
-        if !(0 <= port <= typemax(UInt16))
-            throw(ArgumentError("port out of range, must be 0 ≤ port ≤ 65535, got $port"))
-        end
-        new(host,UInt16(port))
-    end
 end
 
+InetAddr(ip::IPAddr, port) = InetAddr{typeof(ip)}(ip, port)
 
 ## SOCKETS ##
 
-abstract Socket <: AsyncStream
-
-type TCPSocket <: Socket
+type TCPSocket <: LibuvStream
     handle::Ptr{Void}
     status::Int
-    line_buffered::Bool
     buffer::IOBuffer
-    readcb::Callback
     readnotify::Condition
-    ccb::Callback
     connectnotify::Condition
-    closecb::Callback
     closenotify::Condition
     sendbuf::Nullable{IOBuffer}
     lock::ReentrantLock
+    throttle::Int
 
-    TCPSocket(handle) = new(
-        handle,
-        StatusUninit,
-        true,
-        PipeBuffer(),
-        false, Condition(),
-        false, Condition(),
-        false, Condition(),
-        nothing,
-        ReentrantLock()
-    )
+    function TCPSocket(handle::Ptr{Void}, status)
+        tcp = new(
+                handle,
+                status,
+                PipeBuffer(),
+                Condition(),
+                Condition(),
+                Condition(),
+                nothing,
+                ReentrantLock(),
+                DEFAULT_READ_BUFFER_SZ)
+        associate_julia_struct(tcp.handle, tcp)
+        finalizer(tcp, uvfinalize)
+        return tcp
+    end
 end
 function TCPSocket()
-    this = TCPSocket(Libc.malloc(_sizeof_uv_tcp))
-    associate_julia_struct(this.handle,this)
-    finalizer(this,uvfinalize)
-    err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
-                  eventloop(),this.handle)
-    if err != 0
-        #TODO: this codepath is not currently tested
-        Libc.free(this.handle)
-        this.handle = C_NULL
-        throw(UVError("failed to create tcp socket",err))
-    end
-    this.status = StatusInit
-    this
+    tcp = TCPSocket(Libc.malloc(_sizeof_uv_tcp), StatusUninit)
+    err = ccall(:uv_tcp_init, Cint, (Ptr{Void}, Ptr{Void}),
+                eventloop(), tcp.handle)
+    uv_error("failed to create tcp socket", err)
+    tcp.status = StatusInit
+    return tcp
 end
 
-type TCPServer <: UVServer
+type TCPServer <: LibuvServer
     handle::Ptr{Void}
     status::Int
-    ccb::Callback
     connectnotify::Condition
-    closecb::Callback
     closenotify::Condition
 
-    TCPServer(handle) = new(
-        handle,
-        StatusUninit,
-        false, Condition(),
-        false, Condition()
-    )
+    function TCPServer(handle::Ptr{Void}, status)
+        tcp = new(
+            handle,
+            status,
+            Condition(),
+            Condition())
+        associate_julia_struct(tcp.handle, tcp)
+        finalizer(tcp, uvfinalize)
+        return tcp
+    end
 end
 function TCPServer()
-    this = TCPServer(Libc.malloc(_sizeof_uv_tcp))
-    associate_julia_struct(this.handle, this)
-    finalizer(this,uvfinalize)
-    err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
-                  eventloop(),this.handle)
-    if err != 0
-        #TODO: this codepath is not currently tested
-        Libc.free(this.handle)
-        this.handle = C_NULL
-        throw(UVError("failed to create tcp server",err))
-    end
-    this.status = StatusInit
-    this
+    tcp = TCPServer(Libc.malloc(_sizeof_uv_tcp), StatusUninit)
+    err = ccall(:uv_tcp_init, Cint, (Ptr{Void}, Ptr{Void}),
+                eventloop(), tcp.handle)
+    uv_error("failed to create tcp server", err)
+    tcp.status = StatusInit
+    return tcp
 end
 
-function uvfinalize(uv)
-    close(uv)
-    disassociate_julia_struct(uv)
-    uv.handle = C_NULL
-end
-
-isreadable(io::TCPSocket) = true
-iswritable(io::TCPSocket) = true
-
-show(io::IO,sock::TCPSocket) = print(io,"TCPSocket(",uv_status_string(sock),", ",
-    nb_available(sock.buffer)," bytes waiting)")
-
-show(io::IO,sock::TCPServer) = print(io,"TCPServer(",uv_status_string(sock),")")
+isreadable(io::TCPSocket) = isopen(io) || nb_available(io) > 0
+iswritable(io::TCPSocket) = isopen(io) && io.status != StatusClosing
 
 ## VARIOUS METHODS TO BE MOVED TO BETTER LOCATION
 
-_jl_connect_raw(sock::TCPSocket,sockaddr::Ptr{Void}) =
-    ccall(:jl_connect_raw,Int32,(Ptr{Void},Ptr{Void}),sock.handle,sockaddr)
+_jl_connect_raw(sock::TCPSocket, sockaddr::Ptr{Void}) =
+    ccall(:jl_connect_raw, Int32, (Ptr{Void}, Ptr{Void}, Ptr{Void}), sock.handle, sockaddr, uv_jl_connectcb::Ptr{Void})
 _jl_sockaddr_from_addrinfo(addrinfo::Ptr{Void}) =
-    ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
-_jl_sockaddr_set_port(ptr::Ptr{Void},port::UInt16) =
-    ccall(:jl_sockaddr_set_port,Void,(Ptr{Void},UInt16),ptr,port)
+    ccall(:jl_sockaddr_from_addrinfo, Ptr{Void}, (Ptr{Void}, ), addrinfo)
+_jl_sockaddr_set_port(ptr::Ptr{Void}, port::UInt16) =
+    ccall(:jl_sockaddr_set_port, Void, (Ptr{Void}, UInt16), ptr, port)
 
 accept(server::TCPServer) = accept(server, TCPSocket())
-accept(server::PipeServer) = accept(server, Pipe())
 
-##
-
-bind(sock::TCPServer, addr::InetAddr) = bind(sock,addr.host,addr.port)
-
-_bind(sock::TCPServer, host::IPv4, port::UInt16) = ccall(:jl_tcp_bind, Int32, (Ptr{Void}, UInt16, UInt32, Cuint),
-            sock.handle, hton(port), hton(host.host), 0)
-
-_bind(sock::TCPServer, host::IPv6, port::UInt16) = ccall(:jl_tcp_bind6, Int32, (Ptr{Void}, UInt16, Ptr{UInt128}, Cuint),
-            sock.handle, hton(port), &hton(host.host), 0)
+# Libuv will internally reset the readable and writable flags on
+# this pipe after it has successfully accepted the connection, to
+# remember that before that this is an invalid pipe
+accept(server::PipeServer) = accept(server, init_pipe!(PipeEndpoint();
+    readable=false, writable=false, julia_only=true))
 
 # UDP
 
-type UDPSocket <: Socket
+type UDPSocket <: LibuvStream
     handle::Ptr{Void}
     status::Int
     recvnotify::Condition
     sendnotify::Condition
     closenotify::Condition
 
-    UDPSocket(handle::Ptr) = new(
-        handle,
-        StatusUninit,
-        Condition(),
-        Condition(),
-        Condition()
-    )
+    function UDPSocket(handle::Ptr{Void}, status)
+        udp = new(
+            handle,
+            status,
+            Condition(),
+            Condition(),
+            Condition())
+        associate_julia_struct(udp.handle, udp)
+        finalizer(udp, uvfinalize)
+        return udp
+    end
 end
 function UDPSocket()
-    this = UDPSocket(Libc.malloc(_sizeof_uv_udp))
-    associate_julia_struct(this.handle, this)
-    err = ccall(:uv_udp_init,Cint,(Ptr{Void},Ptr{Void}),
-                  eventloop(),this.handle)
-    finalizer(this, uvfinalize)
-    if err != 0
-        #TODO: this codepath is not currently tested
-        Libc.free(this.handle)
-        this.handle = C_NULL
-        throw(UVError("failed to create udp socket",err))
-    end
+    this = UDPSocket(Libc.malloc(_sizeof_uv_udp), StatusUninit)
+    err = ccall(:uv_udp_init, Cint, (Ptr{Void}, Ptr{Void}),
+                eventloop(), this.handle)
+    uv_error("failed to create udp socket", err)
     this.status = StatusInit
-    this
+    return this
 end
 
-function uvfinalize(uv::Union(TTY,Pipe,PipeServer,TCPServer,TCPSocket,UDPSocket))
-    if (uv.status != StatusUninit && uv.status != StatusInit)
-        close(uv)
-    end
-    disassociate_julia_struct(uv)
-    uv.handle = C_NULL
-end
+show(io::IO, stream::UDPSocket) = print(io, typeof(stream), "(", uv_status_string(stream), ")")
 
 function _uv_hook_close(sock::UDPSocket)
     sock.handle = C_NULL
@@ -407,6 +372,9 @@ function _uv_hook_close(sock::UDPSocket)
     notify_error(sock.recvnotify,EOFError())
 end
 
+# Disables dual stack mode.
+const UV_TCP_IPV6ONLY = 1
+
 # Disables dual stack mode. Only available when using ipv6 binf
 const UV_UDP_IPV6ONLY = 1
 
@@ -414,50 +382,77 @@ const UV_UDP_IPV6ONLY = 1
 # remainder was discarded by the OS.
 const UV_UDP_PARTIAL = 2
 
-function bind(sock::Union(TCPServer,UDPSocket), host::IPv4, port::Integer)
-    if sock.status != StatusInit
-        error("$(typeof(sock)) is not initialized")
-    end
-    err = _bind(sock,host,UInt16(port))
-    if err < 0
-        if err != UV_EADDRINUSE && err != UV_EACCES
-            #TODO: this codepath is not currently tested
-            throw(UVError("bind",err))
-        else
-            return false
-        end
-    end
-    sock.status = StatusOpen
-    true
-end
+# Indicates if SO_REUSEADDR will be set when binding the handle in uv_udp_bind. This sets
+# the SO_REUSEPORT socket flag on the BSDs and OS X. On other Unix platforms, it sets the
+# SO_REUSEADDR flag. What that means is that multiple threads or processes can bind to the
+# same address without error (provided they all set the flag) but only the last one to bind
+# will receive any traffic, in effect "stealing" the port from the previous listener.
+const UV_UDP_REUSEADDR = 4
 
-_bind(sock::UDPSocket, host::IPv4, port::UInt16) = ccall(:jl_udp_bind, Int32, (Ptr{Void}, UInt16, UInt32, UInt32),
-            sock.handle, hton(port), hton(host.host), 0)
+##
+
+_bind(sock::TCPServer, host::IPv4, port::UInt16, flags::UInt32 = UInt32(0)) = ccall(:jl_tcp_bind, Int32, (Ptr{Void}, UInt16, UInt32, Cuint),
+            sock.handle, hton(port), hton(host.host), flags)
+
+_bind(sock::TCPServer, host::IPv6, port::UInt16, flags::UInt32 = UInt32(0)) = ccall(:jl_tcp_bind6, Int32, (Ptr{Void}, UInt16, Ptr{UInt128}, Cuint),
+            sock.handle, hton(port), Ref(hton(host.host)), flags)
+
+_bind(sock::UDPSocket, host::IPv4, port::UInt16, flags::UInt32 = UInt32(0)) = ccall(:jl_udp_bind, Int32, (Ptr{Void}, UInt16, UInt32, UInt32),
+            sock.handle, hton(port), hton(host.host), flags)
 
 _bind(sock::UDPSocket, host::IPv6, port::UInt16, flags::UInt32 = UInt32(0)) = ccall(:jl_udp_bind6, Int32, (Ptr{Void}, UInt16, Ptr{UInt128}, UInt32),
-            sock.handle, hton(port), &hton(host.host), flags)
+            sock.handle, hton(port), Ref(hton(host.host)), flags)
 
-function bind(sock::UDPSocket, host::IPv6, port::UInt16; ipv6only = false)
+"""
+    bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)
+
+Bind `socket` to the given `host:port`. Note that `0.0.0.0` will listen on all devices.
+
+* The `ipv6only` parameter disables dual stack mode. If `ipv6only=true`, only an IPv6 stack is created.
+* If `reuseaddr=true`, multiple threads or processes can bind to the same address without error
+  if they all set `reuseaddr=true`, but only the last to bind will receive any traffic.
+"""
+function bind(sock::Union{TCPServer, UDPSocket}, host::IPAddr, port::Integer; ipv6only = false, reuseaddr = false, kws...)
     if sock.status != StatusInit
-        error("UDPSocket is not initialized")
+        error("$(typeof(sock)) is not in initialization state")
     end
-    err = _bind(sock,host,port, UInt32(ipv6only ? UV_UDP_IPV6ONLY : 0))
+    flags = 0
+    if isa(host,IPv6) && ipv6only
+        flags |= isa(sock, UDPSocket) ? UV_UDP_IPV6ONLY : UV_TCP_IPV6ONLY
+    end
+    if isa(sock, UDPSocket) && reuseaddr
+        flags |= UV_UDP_REUSEADDR
+    end
+    err = _bind(sock, host, UInt16(port), UInt32(flags))
     if err < 0
-        if err != UV_EADDRINUSE && err != UV_EACCES
+        if err != UV_EADDRINUSE && err != UV_EACCES && err != UV_EADDRNOTAVAIL
             #TODO: this codepath is not currently tested
-            throw(UVError("bind",err))
+            throw(UVError("bind", err))
         else
             return false
         end
     end
     sock.status = StatusOpen
-    true
+    isa(sock, UDPSocket) && setopt(sock; kws...)
+    return true
 end
 
+bind(sock::TCPServer, addr::InetAddr) = bind(sock, addr.host, addr.port)
 
+"""
+    setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing, enable_broadcast=nothing, ttl=nothing)
+
+Set UDP socket options.
+
+* `multicast_loop`: loopback for multicast packets (default: `true`).
+* `multicast_ttl`: TTL for multicast packets (default: `nothing`).
+* `enable_broadcast`: flag must be set to `true` if socket will be used for broadcast messages,
+  or else the UDP system will return an access error (default: `false`).
+* `ttl`: Time-to-live of packets sent on the socket (default: `nothing`).
+"""
 function setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing, enable_broadcast=nothing, ttl=nothing)
     if sock.status == StatusUninit
-        error("Cannot set options on unitialized socket")
+        error("Cannot set options on uninitialized socket")
     end
     if multicast_loop !== nothing
         uv_error("multicast_loop",ccall(:uv_udp_set_multicast_loop,Cint,(Ptr{Void},Cint),sock.handle,multicast_loop) < 0)
@@ -473,253 +468,404 @@ function setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing
     end
 end
 
-_uv_hook_alloc_buf(sock::UDPSocket,size::UInt) = (Libc.malloc(size),size)
+"""
+    recv(socket::UDPSocket)
 
-function _recv_start(sock::UDPSocket)
-    if ccall(:uv_is_active,Cint,(Ptr{Void},),sock.handle) == 0
-        uv_error("recv_start",ccall(:uv_udp_recv_start,Cint,(Ptr{Void},Ptr{Void},Ptr{Void}),
-                                        sock.handle,cglobal(:jl_uv_alloc_buf),cglobal(:jl_uv_recvcb)))
-    end
-end
-
-_recv_stop(sock::UDPSocket) = uv_error("recv_stop",ccall(:uv_udp_recv_stop,Cint,(Ptr{Void},),sock.handle))
-
+Read a UDP packet from the specified socket, and return the bytes received. This call blocks.
+"""
 function recv(sock::UDPSocket)
     addr, data = recvfrom(sock)
-    data
+    return data
 end
 
+"""
+    recvfrom(socket::UDPSocket) -> (address, data)
+
+Read a UDP packet from the specified socket, returning a tuple of `(address, data)`, where
+`address` will be either IPv4 or IPv6 as appropriate.
+"""
 function recvfrom(sock::UDPSocket)
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
-    if sock.status != StatusInit && sock.status != StatusOpen
+    if sock.status != StatusInit && sock.status != StatusOpen && sock.status != StatusActive
         error("UDPSocket is not initialized and open")
     end
-    _recv_start(sock)
-    stream_wait(sock,sock.recvnotify)::Tuple{Union(IPv4, IPv6), Vector{UInt8}}
+    if ccall(:uv_is_active, Cint, (Ptr{Void},), sock.handle) == 0
+        uv_error("recv_start", ccall(:uv_udp_recv_start, Cint, (Ptr{Void}, Ptr{Void}, Ptr{Void}),
+                                    sock.handle, uv_jl_alloc_buf::Ptr{Void}, uv_jl_recvcb::Ptr{Void}))
+    end
+    sock.status = StatusActive
+    return stream_wait(sock, sock.recvnotify)::Tuple{Union{IPv4, IPv6}, Vector{UInt8}}
 end
 
+alloc_buf_hook(sock::UDPSocket, size::UInt) = (Libc.malloc(size), size)
 
-function _uv_hook_recv(sock::UDPSocket, nread::Int, buf_addr::Ptr{Void}, buf_size::UInt, addr::Ptr{Void}, flags::Int32)
+function uv_recvcb(handle::Ptr{Void}, nread::Cssize_t, buf::Ptr{Void}, addr::Ptr{Void}, flags::Cuint)
     # C signature documented as (*uv_udp_recv_cb)(...)
-    if flags & UV_UDP_PARTIAL > 0
+    sock = @handle_as handle UDPSocket
+    if nread < 0
         Libc.free(buf_addr)
-        notify_error(sock.recvnotify,"Partial message received")
+        notify_error(sock.recvnotify, UVError("recv", nread))
+    elseif flags & UV_UDP_PARTIAL > 0
+        Libc.free(buf_addr)
+        notify_error(sock.recvnotify, "Partial message received")
+    else
+        buf_addr = ccall(:jl_uv_buf_base, Ptr{Void}, (Ptr{Void},), buf)
+        buf_size = ccall(:jl_uv_buf_len, Csize_t, (Ptr{Void},), buf)
+        # need to check the address type in order to convert to a Julia IPAddr
+        addrout = if addr == C_NULL
+                      IPv4(0)
+                  elseif ccall(:jl_sockaddr_in_is_ip4, Cint, (Ptr{Void},), addr) == 1
+                      IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Void},), addr)))
+                  else
+                      tmp = [UInt128(0)]
+                      ccall(:jl_sockaddr_host6, UInt32, (Ptr{Void}, Ptr{UInt8}), addr, pointer(tmp))
+                      IPv6(ntoh(tmp[1]))
+                  end
+        buf = unsafe_wrap(Array, convert(Ptr{UInt8}, buf_addr), Int(nread), true)
+        notify(sock.recvnotify, (addrout, buf))
     end
-
-    # need to check the address type in order to convert to a Julia IPAddr
-    addrout = if (addr == C_NULL)
-                  IPv4(0)
-              elseif ccall(:jl_sockaddr_in_is_ip4, Cint, (Ptr{Void},), addr) == 1
-                  IPv4(ntoh(ccall(:jl_sockaddr_host4, Uint32, (Ptr{Void},), addr)))
-              else
-                  tmp = [UInt128(0)]
-                  ccall(:jl_sockaddr_host6, Uint32, (Ptr{Void}, Ptr{Uint8}), addr, pointer(tmp))
-                  IPv6(ntoh(tmp[1]))
-              end
-    buf = pointer_to_array(convert(Ptr{UInt8},buf_addr),Int(buf_size),true)
-    notify(sock.recvnotify,(addrout,buf[1:nread]))
-end
-
-function _send(sock::UDPSocket,ipaddr::IPv4,port::UInt16,buf)
-    ccall(:jl_udp_send,Cint,(Ptr{Void},UInt16,UInt32,Ptr{UInt8},Csize_t),sock.handle,hton(port),hton(ipaddr.host),buf,sizeof(buf))
-end
-
-function _send(sock::UDPSocket,ipaddr::IPv6,port::UInt16,buf)
-    ccall(:jl_udp_send6,Cint,(Ptr{Void},UInt16,Ptr{UInt128},Ptr{UInt8},Csize_t),sock.handle,hton(port),&hton(ipaddr.host),buf,sizeof(buf))
-end
-
-function send(sock::UDPSocket,ipaddr,port,msg)
-    # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
-    if sock.status != StatusInit && sock.status != StatusOpen
-        error("UDPSocket is not initialized and open")
-    end
-    uv_error("send",_send(sock,ipaddr,UInt16(port),msg))
-    stream_wait(sock,sock.sendnotify)
+    ccall(:uv_udp_recv_stop, Cint, (Ptr{Void},), sock.handle)
+    sock.status = StatusOpen
     nothing
 end
 
-function _uv_hook_send(sock::UDPSocket,status::Cint)
+function _send(sock::UDPSocket, ipaddr::IPv4, port::UInt16, buf)
+    ccall(:jl_udp_send, Cint, (Ptr{Void}, UInt16, UInt32, Ptr{UInt8}, Csize_t, Ptr{Void}),
+          sock.handle, hton(port), hton(ipaddr.host), buf, sizeof(buf), uv_jl_sendcb::Ptr{Void})
+end
+
+function _send(sock::UDPSocket, ipaddr::IPv6, port::UInt16, buf)
+    ccall(:jl_udp_send6, Cint, (Ptr{Void}, UInt16, Ptr{UInt128}, Ptr{UInt8}, Csize_t, Ptr{Void}),
+          sock.handle, hton(port), &hton(ipaddr.host), buf, sizeof(buf), uv_jl_sendcb::Ptr{Void})
+end
+
+"""
+    send(socket::UDPSocket, host, port::Integer, msg)
+
+Send `msg` over `socket` to `host:port`.
+"""
+function send(sock::UDPSocket,ipaddr,port,msg)
+    # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
+    if sock.status != StatusInit && sock.status != StatusOpen && sock.status != StatusActive
+        error("UDPSocket is not initialized and open")
+    end
+    uv_error("send", _send(sock, ipaddr, UInt16(port), msg))
+    stream_wait(sock, sock.sendnotify)
+    nothing
+end
+
+function uv_sendcb(handle::Ptr{Void}, status::Cint)
+    sock = @handle_as handle UDPSocket
     if status < 0
-        notify_error(sock.sendnotify,UVError("UDP send failed",status))
+        notify_error(sock.sendnotify, UVError("UDP send failed", status))
     end
     notify(sock.sendnotify)
+    Libc.free(handle)
+    nothing
 end
 
 ##
 
+type DNSError <: Exception
+    host::AbstractString
+    code::Int32
+end
+
+function show(io::IO, err::DNSError)
+    print(io, "DNSError: ", err.host, ", ", struverror(err.code),
+                                      " (", uverrorname(err.code), ")")
+end
+
 callback_dict = ObjectIdDict()
 
-function _uv_hook_getaddrinfo(cb::Function, addrinfo::Ptr{Void}, status::Int32)
+function uv_getaddrinfocb(req::Ptr{Void}, status::Cint, addrinfo::Ptr{Void})
+    data = ccall(:jl_uv_getaddrinfo_data, Ptr{Void}, (Ptr{Void},), req)
+    data == C_NULL && return
+    cb = unsafe_pointer_to_objref(data)::Function
     pop!(callback_dict,cb) # using pop forces an error if cb not in callback_dict
     if status != 0 || addrinfo == C_NULL
-        cb(UVError("getaddrinfo callback",status))
-        return
-    end
-    freeaddrinfo = addrinfo
-    while addrinfo != C_NULL
-        sockaddr = ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
-        if ccall(:jl_sockaddr_is_ip4,Int32,(Ptr{Void},),sockaddr) == 1
-            cb(IPv4(ntoh(ccall(:jl_sockaddr_host4,UInt32,(Ptr{Void},),sockaddr))))
-            break
-        #elseif ccall(:jl_sockaddr_is_ip6,Int32,(Ptr{Void},),sockaddr) == 1
-        #    host = Array(UInt128,1)
-        #    scope_id = ccall(:jl_sockaddr_host6,UInt32,(Ptr{Void},Ptr{UInt128}),sockaddr,host)
-        #    cb(IPv6(ntoh(host[1])))
-        #    break
+        cb(UVError("uv_getaddrinfocb received an unexpected status code", status))
+    else
+        freeaddrinfo = addrinfo
+        while addrinfo != C_NULL
+            sockaddr = ccall(:jl_sockaddr_from_addrinfo, Ptr{Void}, (Ptr{Void},), addrinfo)
+            if ccall(:jl_sockaddr_is_ip4, Int32, (Ptr{Void},), sockaddr) == 1
+                cb(IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Void},), sockaddr))))
+                break
+            #elseif ccall(:jl_sockaddr_is_ip6, Int32, (Ptr{Void},), sockaddr) == 1
+            #    host = Array{UInt128}(1)
+            #    scope_id = ccall(:jl_sockaddr_host6, UInt32, (Ptr{Void}, Ptr{UInt128}), sockaddr, host)
+            #    cb(IPv6(ntoh(host[1])))
+            #    break
+            end
+            addrinfo = ccall(:jl_next_from_addrinfo, Ptr{Void}, (Ptr{Void},), addrinfo)
         end
-        addrinfo = ccall(:jl_next_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
+        ccall(:uv_freeaddrinfo, Void, (Ptr{Void},), freeaddrinfo)
     end
-    ccall(:uv_freeaddrinfo,Void,(Ptr{Void},),freeaddrinfo)
+    Libc.free(req)
+    nothing
 end
 
-function getaddrinfo(cb::Function, host::ASCIIString)
+function getaddrinfo(cb::Function, host::String)
+    isascii(host) || error("non-ASCII hostname: $host")
     callback_dict[cb] = cb
-    uv_error("getaddrinfo",ccall(:jl_getaddrinfo, Int32, (Ptr{Void}, Ptr{UInt8}, Ptr{UInt8}, Any),
-        eventloop(), host, C_NULL, cb))
+    status = ccall(:jl_getaddrinfo, Int32, (Ptr{Void}, Cstring, Ptr{UInt8}, Any, Ptr{Void}),
+                   eventloop(), host, C_NULL, cb, uv_jl_getaddrinfocb::Ptr{Void})
+    if status == UV_EINVAL
+        throw(ArgumentError("Invalid uv_getaddrinfo() agument"))
+    elseif status in [UV_ENOMEM, UV_ENOBUFS]
+        throw(OutOfMemoryError())
+    elseif status < 0
+        throw(UVError("uv_getaddrinfo returned an unexpected error code", status))
+    end
+    return nothing
 end
-getaddrinfo(cb::Function, host::AbstractString) = getaddrinfo(cb,ascii(host))
+getaddrinfo(cb::Function, host::AbstractString) = getaddrinfo(cb, String(host))
 
-function getaddrinfo(host::ASCIIString)
+"""
+    getaddrinfo(host::AbstractString) -> IPAddr
+
+Gets the IP address of the `host` (may have to do a DNS lookup)
+"""
+function getaddrinfo(host::String)
     c = Condition()
     getaddrinfo(host) do IP
         notify(c,IP)
     end
-    ip = wait(c)
-    isa(ip,UVError) && throw(ip)
-    return ip::IPAddr
+    r = wait(c)
+    if isa(r, UVError)
+        r = r::UVError
+        code = r.code
+        if code in (UV_EAI_ADDRFAMILY, UV_EAI_AGAIN, UV_EAI_BADFLAGS,
+                    UV_EAI_BADHINTS, UV_EAI_CANCELED, UV_EAI_FAIL,
+                    UV_EAI_FAMILY, UV_EAI_NODATA, UV_EAI_NONAME,
+                    UV_EAI_OVERFLOW, UV_EAI_PROTOCOL, UV_EAI_SERVICE,
+                    UV_EAI_SOCKTYPE)
+            throw(DNSError(host, code))
+        elseif code == UV_EAI_MEMORY
+            throw(OutOfMemoryError())
+        else
+            throw(SystemError("uv_getaddrinfocb", -code))
+        end
+    end
+    return r::IPAddr
 end
-getaddrinfo(host::AbstractString) = getaddrinfo(ascii(host))
+getaddrinfo(host::AbstractString) = getaddrinfo(String(host))
 
 const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32,())
 
+"""
+    getipaddr() -> IPAddr
+
+Get the IP address of the local machine.
+"""
 function getipaddr()
-    addr = Array(Ptr{UInt8},1)
-    addr[1] = C_NULL
-    count = zeros(Int32,1)
+    addr_ref = Ref{Ptr{UInt8}}(C_NULL)
+    count_ref = Ref{Int32}(1)
     lo_present = false
-    err = ccall(:jl_uv_interface_addresses,Int32,(Ptr{Ptr{UInt8}},Ptr{Int32}),addr,count)
-    addr, count = addr[1],count[1]
+    err = ccall(:jl_uv_interface_addresses, Int32, (Ref{Ptr{UInt8}}, Ref{Int32}), addr_ref, count_ref)
+    addr, count = addr_ref[], count_ref[]
     if err != 0
-        ccall(:uv_free_interface_addresses,Void,(Ptr{UInt8},Int32),addr,count)
-        throw(UVError("getlocalip",err))
+        ccall(:uv_free_interface_addresses, Void, (Ptr{UInt8}, Int32), addr, count)
+        throw(UVError("getlocalip", err))
     end
     for i = 0:(count-1)
         current_addr = addr + i*_sizeof_uv_interface_address
-        if 1 == ccall(:jl_uv_interface_address_is_internal,Int32,(Ptr{UInt8},),current_addr)
+        if 1 == ccall(:jl_uv_interface_address_is_internal, Int32, (Ptr{UInt8},), current_addr)
             lo_present = true
             continue
         end
-        sockaddr = ccall(:jl_uv_interface_address_sockaddr,Ptr{Void},(Ptr{UInt8},),current_addr)
-        if ccall(:jl_sockaddr_in_is_ip4,Int32,(Ptr{Void},),sockaddr) == 1
-            rv = IPv4(ntoh(ccall(:jl_sockaddr_host4,UInt32,(Ptr{Void},),sockaddr)))
-            ccall(:uv_free_interface_addresses,Void,(Ptr{UInt8},Int32),addr,count)
+        sockaddr = ccall(:jl_uv_interface_address_sockaddr, Ptr{Void}, (Ptr{UInt8},), current_addr)
+        if ccall(:jl_sockaddr_in_is_ip4, Int32, (Ptr{Void},), sockaddr) == 1
+            rv = IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Void},), sockaddr)))
+            ccall(:uv_free_interface_addresses, Void, (Ptr{UInt8}, Int32), addr, count)
             return rv
         # Uncomment to enbable IPv6
-        #elseif ccall(:jl_sockaddr_in_is_ip6,Int32,(Ptr{Void},),sockaddr) == 1
-        #   host = Array(UInt128,1)
-        #   ccall(:jl_sockaddr_host6,UInt32,(Ptr{Void},Ptr{UInt128}),sockaddrr,host)
+        #elseif ccall(:jl_sockaddr_in_is_ip6, Int32, (Ptr{Void},), sockaddr) == 1
+        #   host = Array{UInt128}(1)
+        #   ccall(:jl_sockaddr_host6, UInt32, (Ptr{Void}, Ptr{UInt128}), sockaddrr, host)
         #   return IPv6(ntoh(host[1]))
         end
     end
-    ccall(:uv_free_interface_addresses,Void,(Ptr{UInt8},Int32),addr,count)
-    lo_present ? ip"127.0.0.1" : error("No networking interface available")
+    ccall(:uv_free_interface_addresses, Void, (Ptr{UInt8}, Int32), addr, count)
+    return lo_present ? ip"127.0.0.1" : error("No networking interface available")
 end
 
 ##
 
 function connect!(sock::TCPSocket, host::IPv4, port::Integer)
     if sock.status != StatusInit
-        error("TCPSocket is not initialized")
+        error("TCPSocket is not in initialization state")
     end
     if !(0 <= port <= typemax(UInt16))
         throw(ArgumentError("port out of range, must be 0 ≤ port ≤ 65535, got $port"))
     end
-    uv_error("connect",ccall(:jl_tcp4_connect,Int32,(Ptr{Void},UInt32,UInt16),
-                 sock.handle,hton(host.host),hton(UInt16(port))))
+    uv_error("connect", ccall(:jl_tcp4_connect, Int32, (Ptr{Void}, UInt32, UInt16, Ptr{Void}),
+                             sock.handle, hton(host.host), hton(UInt16(port)), uv_jl_connectcb::Ptr{Void}))
     sock.status = StatusConnecting
+    nothing
 end
 
 function connect!(sock::TCPSocket, host::IPv6, port::Integer)
     if sock.status != StatusInit
-        error("TCPSocket is not initialized")
+        error("TCPSocket is not in initialization state")
     end
     if !(0 <= port <= typemax(UInt16))
         throw(ArgumentError("port out of range, must be 0 ≤ port ≤ 65535, got $port"))
     end
-    uv_error("connect",ccall(:jl_tcp6_connect,Int32,(Ptr{Void},Ptr{UInt128},UInt16),
-                 sock.handle,&hton(host.host),hton(UInt16(port))))
+    uv_error("connect", ccall(:jl_tcp6_connect, Int32, (Ptr{Void}, Ptr{UInt128}, UInt16, Ptr{Void}),
+                             sock.handle, &hton(host.host), hton(UInt16(port)), uv_jl_connectcb::Ptr{Void}))
     sock.status = StatusConnecting
+    nothing
 end
 
+connect!(sock::TCPSocket, addr::InetAddr) = connect!(sock, addr.host, addr.port)
+
 # Default Host to localhost
-connect(sock::TCPSocket, port::Integer) = connect(sock,IPv4(127,0,0,1),port)
-connect(port::Integer) = connect(IPv4(127,0,0,1),port)
+
+"""
+    connect([host], port::Integer) -> TCPSocket
+
+Connect to the host `host` on port `port`.
+"""
+connect(sock::TCPSocket, port::Integer) = connect(sock,IPv4(127,0,0,1), port)
+connect(port::Integer) = connect(IPv4(127,0,0,1), port)
 
 # Valid connect signatures for TCP
-connect(host::AbstractString, port::Integer) = connect(TCPSocket(),host,port)
-connect(addr::IPAddr, port::Integer) = connect(TCPSocket(),addr,port)
-connect(addr::InetAddr) = connect(TCPSocket(),addr)
+connect(host::AbstractString, port::Integer) = connect(TCPSocket(), host, port)
+connect(addr::IPAddr, port::Integer) = connect(TCPSocket(), addr, port)
+connect(addr::InetAddr) = connect(TCPSocket(), addr)
 
 default_connectcb(sock,status) = nothing
 
 function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
     if sock.status != StatusInit
-        error("TCPSocket is not initialized")
+        error("TCPSocket is not in initialization state")
     end
     ipaddr = getaddrinfo(host)
     sock.status = StatusInit
     connect!(sock,ipaddr,port)
     sock.status = StatusConnecting
-    sock
+    return sock
 end
 
 ##
 
-listen(sock::UVServer; backlog::Integer=BACKLOG_DEFAULT) = (uv_error("listen",_listen(sock;backlog=backlog)); sock)
+"""
+    listen([addr, ]port::Integer; backlog::Integer=BACKLOG_DEFAULT) -> TCPServer
 
+Listen on port on the address specified by `addr`.
+By default this listens on `localhost` only.
+To listen on all interfaces pass `IPv4(0)` or `IPv6(0)` as appropriate.
+`backlog` determines how many connections can be pending (not having
+called [`accept`](@ref)) before the server will begin to
+reject them. The default value of `backlog` is 511.
+"""
 function listen(addr; backlog::Integer=BACKLOG_DEFAULT)
     sock = TCPServer()
-    !bind(sock,addr) && error("cannot bind to port; may already be in use or access denied")
-    uv_error("listen",_listen(sock;backlog=backlog))
-    sock
+    !bind(sock, addr) && error("cannot bind to port; may already be in use or access denied")
+    listen(sock; backlog=backlog)
+    return sock
 end
-listen(port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(IPv4(UInt32(0)),port;backlog=backlog)
-listen(host::IPAddr, port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(InetAddr(host,port);backlog=backlog)
+listen(port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(IPv4(UInt32(0)), port; backlog=backlog)
+listen(host::IPAddr, port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(InetAddr(host, port); backlog=backlog)
 
-listen(cb::Callback,args...; backlog::Integer=BACKLOG_DEFAULT) = (sock=listen(args...;backlog=backlog);sock.ccb=cb;sock)
-listen(cb::Callback,sock::Socket; backlog::Integer=BACKLOG_DEFAULT) = (sock.ccb=cb;listen(sock;backlog=backlog))
+function listen(callback, server::Union{TCPSocket, UDPSocket})
+    @async begin
+        local client = TCPSocket()
+        while isopen(server)
+            err = accept_nonblock(server, client)
+            if err == 0
+                callback(client)
+                client = TCPSocket()
+            elseif err != UV_EAGAIN
+                uv_error("accept", err)
+            else
+                stream_wait(server, server.connectnotify)
+            end
+        end
+    end
+    return sock
+end
 
 ##
 
-function accept_nonblock(server::TCPServer,client::TCPSocket)
+function accept_nonblock(server::TCPServer, client::TCPSocket)
     if client.status != StatusInit
-        error("client TCPSocket is not initialized")
+        error("client TCPSocket is not in initialization state")
     end
-    err = ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server.handle,client.handle)
+    err = ccall(:uv_accept, Int32, (Ptr{Void}, Ptr{Void}), server.handle, client.handle)
     if err == 0
         client.status = StatusOpen
     end
-    err
+    return err
 end
+
 function accept_nonblock(server::TCPServer)
     client = TCPSocket()
     uv_error("accept", accept_nonblock(server, client))
-    client
+    return client
 end
 
 ## Utility functions
 
-function listenany(default_port)
-    addr = InetAddr(IPv4(UInt32(0)),default_port)
+"""
+    listenany([host::IPAddr,] port_hint) -> (UInt16, TCPServer)
+
+Create a `TCPServer` on any port, using hint as a starting point. Returns a tuple of the
+actual port that the server was created on and the server itself.
+"""
+function listenany(host::IPAddr, default_port)
+    addr = InetAddr(host, default_port)
     while true
         sock = TCPServer()
-        if bind(sock,addr) && _listen(sock) == 0
-            return (addr.port,sock)
+        if bind(sock, addr) && trylisten(sock) == 0
+            return (addr.port, sock)
         end
         close(sock)
-        addr.port += 1
-        if addr.port==default_port
+        addr = InetAddr(addr.host, addr.port + 1)
+        if addr.port == default_port
             error("no ports available")
         end
     end
+end
+
+listenany(default_port) = listenany(IPv4(UInt32(0)), default_port)
+
+"""
+    getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr, UInt16)
+
+Get the IP address and the port that the given `TCPSocket` is connected to
+(or bound to, in the case of `TCPServer`).
+"""
+function getsockname(sock::Union{TCPServer,TCPSocket})
+    rport = Ref{Cushort}(0)
+    raddress = zeros(UInt8, 16)
+    rfamily = Ref{Cuint}(0)
+    r = if isa(sock, TCPServer)
+        ccall(:jl_tcp_getsockname, Int32,
+                (Ptr{Void}, Ref{Cushort}, Ptr{Void}, Ref{Cuint}),
+                sock.handle, rport, raddress, rfamily)
+    else
+        ccall(:jl_tcp_getpeername, Int32,
+                (Ptr{Void}, Ref{Cushort}, Ptr{Void}, Ref{Cuint}),
+                sock.handle, rport, raddress, rfamily)
+    end
+    uv_error("cannot obtain socket name", r)
+    if r == 0
+        port = ntoh(rport[])
+        if rfamily[] == 2 # AF_INET
+            addrv4 = raddress[1:4]
+            naddr = ntoh(unsafe_load(Ptr{Cuint}(pointer(addrv4)), 1))
+            addr = IPv4(naddr)
+        elseif rfamily[] == @static is_windows() ? 23 : (@static is_apple() ? 30 : 10) # AF_INET6
+            naddr = ntoh(unsafe_load(Ptr{UInt128}(pointer(raddress)), 1))
+            addr = IPv6(naddr)
+        else
+            error("unsupported address family: $(getindex(rfamily))")
+        end
+    else
+        error("cannot obtain socket name")
+    end
+    return addr, port
 end

@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #ifndef BUILTIN_PROTO_H
 #define BUILTIN_PROTO_H
 
@@ -7,34 +9,28 @@ extern "C" {
 
 // declarations for julia-callable builtin functions
 
-JL_CALLABLE(jl_f_throw);
-JL_CALLABLE(jl_f_is);
-JL_CALLABLE(jl_f_typeof);
-JL_CALLABLE(jl_f_sizeof);
-JL_CALLABLE(jl_f_subtype);
-JL_CALLABLE(jl_f_isa);
-JL_CALLABLE(jl_f_typeassert);
-JL_CALLABLE(jl_f_apply);
-JL_CALLABLE(jl_f_kwcall);
-JL_CALLABLE(jl_f_top_eval);
-JL_CALLABLE(jl_f_isdefined);
-JL_CALLABLE(jl_f_tuple);
-JL_CALLABLE(jl_f_svec);
-JL_CALLABLE(jl_f_get_field);
-JL_CALLABLE(jl_f_set_field);
-JL_CALLABLE(jl_f_field_type);
-JL_CALLABLE(jl_f_arraylen);
-JL_CALLABLE(jl_f_arrayref);
-JL_CALLABLE(jl_f_arrayset);
-JL_CALLABLE(jl_f_arraysize);
-JL_CALLABLE(jl_f_instantiate_type);
-JL_CALLABLE(jl_f_typevar);
-JL_CALLABLE(jl_f_union);
-JL_CALLABLE(jl_f_methodexists);
-JL_CALLABLE(jl_f_applicable);
-JL_CALLABLE(jl_f_invoke);
-JL_CALLABLE(jl_f_new_expr);
-JL_CALLABLE(jl_f_nfields);
+#ifdef DEFINE_BUILTIN_GLOBALS
+#define DECLARE_BUILTIN(name) \
+    JL_CALLABLE(jl_f_##name); \
+    jl_value_t *jl_builtin_##name
+#else
+#define DECLARE_BUILTIN(name) \
+    JL_CALLABLE(jl_f_##name); \
+    extern jl_value_t *jl_builtin_##name
+#endif
+
+DECLARE_BUILTIN(throw);      DECLARE_BUILTIN(is);
+DECLARE_BUILTIN(typeof);     DECLARE_BUILTIN(sizeof);
+DECLARE_BUILTIN(issubtype);  DECLARE_BUILTIN(isa);
+DECLARE_BUILTIN(_apply);     DECLARE_BUILTIN(_apply_pure);
+DECLARE_BUILTIN(isdefined);  DECLARE_BUILTIN(nfields);
+DECLARE_BUILTIN(tuple);      DECLARE_BUILTIN(svec);
+DECLARE_BUILTIN(getfield);   DECLARE_BUILTIN(setfield);
+DECLARE_BUILTIN(fieldtype);  DECLARE_BUILTIN(arrayref);
+DECLARE_BUILTIN(arrayset);   DECLARE_BUILTIN(arraysize);
+DECLARE_BUILTIN(apply_type); DECLARE_BUILTIN(applicable);
+DECLARE_BUILTIN(invoke);     DECLARE_BUILTIN(_expr);
+DECLARE_BUILTIN(typeassert);
 
 #ifdef __cplusplus
 }

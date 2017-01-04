@@ -1,5 +1,17 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 using Base.LineEdit
+isdefined(Main, :TestHelpers) || eval(Main, :(include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))))
 using TestHelpers
+
+function run_test(d,buf)
+    global a_foo, b_foo, a_bar, b_bar
+    a_foo = b_foo = a_bar = b_bar = 0
+    while !eof(buf)
+        LineEdit.match_input(d, nothing, buf)(nothing,nothing)
+    end
+end
+
 
 a_foo = 0
 
@@ -22,14 +34,6 @@ const bar_keymap = Dict(
 )
 
 test1_dict = LineEdit.keymap([foo_keymap])
-
-function run_test(d,buf)
-    global a_foo, a_bar, b_bar
-    a_foo = a_bar = b_bar = 0
-    while !eof(buf)
-        LineEdit.match_input(d, nothing, buf)(nothing,nothing)
-    end
-end
 
 run_test(test1_dict,IOBuffer("aa"))
 @test a_foo == 2
@@ -273,25 +277,25 @@ seekend(buf)
 @test LineEdit.edit_delete_prev_word(buf)
 @test position(buf) == 5
 @test buf.size == 5
-@test bytestring(buf.data[1:buf.size]) == "type "
+@test String(buf.data[1:buf.size]) == "type "
 
 buf = IOBuffer("4 +aaa+ x")
 seek(buf,8)
 @test LineEdit.edit_delete_prev_word(buf)
 @test position(buf) == 3
 @test buf.size == 4
-@test bytestring(buf.data[1:buf.size]) == "4 +x"
+@test String(buf.data[1:buf.size]) == "4 +x"
 
 buf = IOBuffer("x = func(arg1,arg2 , arg3)")
 seekend(buf)
 LineEdit.char_move_word_left(buf)
 @test position(buf) == 21
 @test LineEdit.edit_delete_prev_word(buf)
-@test bytestring(buf.data[1:buf.size]) == "x = func(arg1,arg3)"
+@test String(buf.data[1:buf.size]) == "x = func(arg1,arg3)"
 @test LineEdit.edit_delete_prev_word(buf)
-@test bytestring(buf.data[1:buf.size]) == "x = func(arg3)"
+@test String(buf.data[1:buf.size]) == "x = func(arg3)"
 @test LineEdit.edit_delete_prev_word(buf)
-@test bytestring(buf.data[1:buf.size]) == "x = arg3)"
+@test String(buf.data[1:buf.size]) == "x = arg3)"
 
 # Unicode combining characters
 let buf = IOBuffer()
@@ -301,7 +305,7 @@ let buf = IOBuffer()
     LineEdit.edit_move_right(buf)
     @test nb_available(buf) == 0
     LineEdit.edit_backspace(buf)
-    @test bytestring(buf.data[1:buf.size]) == "a"
+    @test String(buf.data[1:buf.size]) == "a"
 end
 
 ## edit_transpose ##
@@ -309,34 +313,34 @@ let buf = IOBuffer()
     LineEdit.edit_insert(buf, "abcde")
     seek(buf,0)
     LineEdit.edit_transpose(buf)
-    @test bytestring(buf.data[1:buf.size]) == "abcde"
+    @test String(buf.data[1:buf.size]) == "abcde"
     LineEdit.char_move_right(buf)
     LineEdit.edit_transpose(buf)
-    @test bytestring(buf.data[1:buf.size]) == "bacde"
+    @test String(buf.data[1:buf.size]) == "bacde"
     LineEdit.edit_transpose(buf)
-    @test bytestring(buf.data[1:buf.size]) == "bcade"
+    @test String(buf.data[1:buf.size]) == "bcade"
     seekend(buf)
     LineEdit.edit_transpose(buf)
-    @test bytestring(buf.data[1:buf.size]) == "bcaed"
+    @test String(buf.data[1:buf.size]) == "bcaed"
     LineEdit.edit_transpose(buf)
-    @test bytestring(buf.data[1:buf.size]) == "bcade"
+    @test String(buf.data[1:buf.size]) == "bcade"
 
     seek(buf, 0)
     LineEdit.edit_clear(buf)
     LineEdit.edit_insert(buf, "αβγδε")
     seek(buf,0)
     LineEdit.edit_transpose(buf)
-    @test bytestring(buf.data[1:buf.size]) == "αβγδε"
+    @test String(buf.data[1:buf.size]) == "αβγδε"
     LineEdit.char_move_right(buf)
     LineEdit.edit_transpose(buf)
-    @test bytestring(buf.data[1:buf.size]) == "βαγδε"
+    @test String(buf.data[1:buf.size]) == "βαγδε"
     LineEdit.edit_transpose(buf)
-    @test bytestring(buf.data[1:buf.size]) == "βγαδε"
+    @test String(buf.data[1:buf.size]) == "βγαδε"
     seekend(buf)
     LineEdit.edit_transpose(buf)
-    @test bytestring(buf.data[1:buf.size]) == "βγαεδ"
+    @test String(buf.data[1:buf.size]) == "βγαεδ"
     LineEdit.edit_transpose(buf)
-    @test bytestring(buf.data[1:buf.size]) == "βγαδε"
+    @test String(buf.data[1:buf.size]) == "βγαδε"
 end
 
 let
@@ -345,7 +349,7 @@ let
     buf = LineEdit.buffer(s)
 
     LineEdit.edit_insert(s,"first line\nsecond line\nthird line")
-    @test bytestring(buf.data[1:buf.size]) == "first line\nsecond line\nthird line"
+    @test String(buf.data[1:buf.size]) == "first line\nsecond line\nthird line"
 
     ## edit_move_line_start/end ##
     seek(buf, 0)
@@ -374,11 +378,11 @@ let
     s.key_repeats = 1 # Manually flag a repeated keypress
     LineEdit.edit_kill_line(s)
     s.key_repeats = 0
-    @test bytestring(buf.data[1:buf.size]) == "second line\nthird line"
+    @test String(buf.data[1:buf.size]) == "second line\nthird line"
     LineEdit.move_line_end(s)
     LineEdit.edit_move_right(s)
     LineEdit.edit_yank(s)
-    @test bytestring(buf.data[1:buf.size]) == "second line\nfirst line\nthird line"
+    @test String(buf.data[1:buf.size]) == "second line\nfirst line\nthird line"
 end
 
 # Issue 7845

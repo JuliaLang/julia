@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 const mintrials = 5
 const mintime = 2000.0
 print_output = isempty(ARGS)
@@ -19,7 +21,7 @@ if codespeed
     csdata["project"] = "Julia"
     csdata["branch"] = Base.GIT_VERSION_INFO.branch
     csdata["executable"] = ENV["JULIA_FLAVOR"]
-    csdata["environment"] = chomp(readall(`hostname`))
+    csdata["environment"] = chomp(readstring(`hostname`))
     csdata["result_date"] = join( split(Base.GIT_VERSION_INFO.date_string)[1:2], " " )    #Cut the timezone out
 end
 
@@ -42,7 +44,7 @@ function submit_to_codespeed(vals,name,desc,unit,test_group,lessisbetter=true)
     ret = post( "http://$codespeed_host/result/add/json/", Dict("json" => json([csdata])) )
     println( json([csdata]) )
     if ret.http_code != 200 && ret.http_code != 202
-        error("Error submitting $name [HTTP code $(ret.http_code)], dumping headers and text: $(ret.headers)\n$(bytestring(ret.body))\n\n")
+        error("Error submitting $name [HTTP code $(ret.http_code)], dumping headers and text: $(ret.headers)\n$(String(ret.body))\n\n")
         return false
     end
     return true
@@ -81,8 +83,8 @@ end
 
 macro timeit_init(ex,init,name,desc,group...)
     quote
-        t = zeros(ntrials)
-        for i=0:ntrials
+        t = zeros(mintrials)
+        for i=0:mintrials
             $(esc(init))
             e = 1000*(@elapsed $(esc(ex)))
             if i > 0
@@ -95,8 +97,9 @@ macro timeit_init(ex,init,name,desc,group...)
 end
 
 function maxrss(name)
-    @linux_only begin
-        rus = Array(Int64, div(144,8))
+    # FIXME: call uv_getrusage instead here
+    @static if is_linux()
+        rus = Array{Int64}(div(144,8))
         fill!(rus, 0x0)
         res = ccall(:getrusage, Int32, (Int32, Ptr{Void}), 0, rus)
         if res == 0

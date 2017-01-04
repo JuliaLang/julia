@@ -1,17 +1,15 @@
-JULIAHOME = $(abspath ../..)
+JULIAHOME := $(abspath ../..)
+BUILDDIR := .
 include $(JULIAHOME)/Make.inc
 
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 override CPPFLAGS += $(JCPPFLAGS)
 
-BUILDDIR ?= .
-
-SRCS = hashing timefuncs ptrhash operators \
-	utf8 ios htable bitvector \
-	int2str libsupportinit arraylist strtod
+SRCS := hashing timefuncs ptrhash operators utf8 ios htable bitvector \
+	int2str libsupportinit arraylist strtod crc32c
 ifeq ($(OS),WINNT)
-SRCS += asprintf
+SRCS += asprintf wsasocketpair strptime
 ifeq ($(ARCH),i686)
 SRCS += _setjmp.win32 _longjmp.win32
 else ifeq ($(ARCH),i386)
@@ -20,15 +18,19 @@ else ifeq ($(ARCH),x86_64)
 SRCS += _setjmp.win64 _longjmp.win64
 endif
 endif
+ifeq ($(USEMSVC), 1)
+SRCS += dirname
+endif
 
-HEADERS = $(wildcard *.h) $(LIBUV_INC)/uv.h
+HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h
 
-OBJS = $(SRCS:%=$(BUILDDIR)/%.o)
-DOBJS = $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
+OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
+DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 
-FLAGS = $(CFLAGS) $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) -I$(UTF8PROC_INC) -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
+FLAGS := $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) -I$(UTF8PROC_INC) -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
 ifneq ($(USEMSVC), 1)
-FLAGS += -Wall -Wno-strict-aliasing -fvisibility=hidden
+FLAGS += -Wall -Wno-strict-aliasing -fvisibility=hidden -Wpointer-arith -Wundef
+override CFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 endif
 
 DEBUGFLAGS += $(FLAGS)
@@ -37,12 +39,12 @@ SHIPFLAGS += $(FLAGS)
 default: release
 
 $(BUILDDIR):
-	mkdir $(BUILDDIR)
+	mkdir -p $(BUILDDIR)
 
 $(BUILDDIR)/%.o: %.c $(HEADERS) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) -DNDEBUG -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: %.c $(HEADERS) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 ifneq ($(USEMSVC), 1)
 $(BUILDDIR)/%.o: %.S | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) -c $< -o $@)

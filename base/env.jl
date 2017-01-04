@@ -1,157 +1,128 @@
-@unix_only begin
-    _getenv(var::AbstractString) = ccall(:getenv, Ptr{UInt8}, (Ptr{UInt8},), var)
-    _hasenv(s::AbstractString) = _getenv(s) != C_NULL
-end
-@windows_only begin
-const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
-const FORMAT_MESSAGE_ALLOCATE_BUFFER = UInt32(0x100)
-const FORMAT_MESSAGE_FROM_SYSTEM = UInt32(0x1000)
-const FORMAT_MESSAGE_IGNORE_INSERTS = UInt32(0x200)
-const FORMAT_MESSAGE_MAX_WIDTH_MASK = UInt32(0xFF)
-GetLastError() = ccall(:GetLastError,stdcall,UInt32,())
-function FormatMessage(e=GetLastError())
-    lpMsgBuf = Array(Ptr{UInt16})
-    lpMsgBuf[1] = 0
-    len = ccall(:FormatMessageW,stdcall,UInt32,(Cint, Ptr{Void}, Cint, Cint, Ptr{Ptr{UInt16}}, Cint, Ptr{Void}),
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
-        C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
-    p = lpMsgBuf[1]
-    len == 0 && return utf8("")
-    len = len + 1
-    buf = Array(UInt16, len)
-    unsafe_copy!(pointer(buf), p, len)
-    ccall(:LocalFree,stdcall,Ptr{Void},(Ptr{Void},),p)
-    return utf8(UTF16String(buf))
-end
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
-_getenvlen(var::UTF16String) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt8},UInt32),utf16(var),C_NULL,0)
-_hasenv(s::UTF16String) = _getenvlen(s)!=0 || GetLastError()!=ERROR_ENVVAR_NOT_FOUND
-_hasenv(s::AbstractString) = _hasenv(utf16(s))
-function _jl_win_getenv(s::UTF16String,len::UInt32)
-    val=zeros(UInt16,len)
-    ret=ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),s,val,len)
-    if ret==0 || ret != len-1 || val[end] != 0
-        error(string("getenv: ", s, ' ', len, "-1 != ", ret, ": ", FormatMessage()))
-    end
-    val
-end
-end
+if is_windows()
+    const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
 
-macro accessEnv(var,errorcase)
-    @unix_only return quote
-         val=_getenv($(esc(var)))
-         if val == C_NULL
-            $(esc(errorcase))
-         end
-         bytestring(val)
-    end
-    @windows_only return quote
-        let var = utf16($(esc(var)))
-            len=_getenvlen(var)
-            if len == 0
-                if GetLastError() != ERROR_ENVVAR_NOT_FOUND
-                    return utf8("")
-                else
-                    $(esc(errorcase))
-                end
-            end
-            utf8(UTF16String(_jl_win_getenv(var,len)))
+    _getenvlen(var::Vector{UInt16}) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),var,C_NULL,0)
+    _hasenv(s::Vector{UInt16}) = _getenvlen(s) != 0 || Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND
+    _hasenv(s::AbstractString) = _hasenv(cwstring(s))
+
+    function access_env(onError::Function, str::AbstractString)
+        var = cwstring(str)
+        len = _getenvlen(var)
+        if len == 0
+            return Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND ? "" : onError(str)
         end
+        val = zeros(UInt16,len)
+        ret = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),var,val,len)
+        if (ret == 0 && len != 1) || ret != len-1 || val[end] != 0
+            error(string("getenv: ", str, ' ', len, "-1 != ", ret, ": ", Libc.FormatMessage()))
+        end
+        pop!(val) # NUL
+        return transcode(String, val)
     end
-end
 
-function _setenv(var::AbstractString, val::AbstractString, overwrite::Bool)
-    @unix_only begin
-        ret = ccall(:setenv, Int32, (Ptr{UInt8},Ptr{UInt8},Int32), var, val, overwrite)
-        systemerror(:setenv, ret != 0)
-    end
-    @windows_only begin
-        var = utf16(var)
+    function _setenv(svar::AbstractString, sval::AbstractString, overwrite::Bool=true)
+        var = cwstring(svar)
+        val = cwstring(sval)
         if overwrite || !_hasenv(var)
-            ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),utf16(var),utf16(val))
+            ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),var,val)
             systemerror(:setenv, ret == 0)
         end
     end
-end
 
-_setenv(var::AbstractString, val::AbstractString) = _setenv(var, val, true)
-
-function _unsetenv(var::AbstractString)
-    @unix_only begin
-        ret = ccall(:unsetenv, Int32, (Ptr{UInt8},), var)
-        systemerror(:unsetenv, ret != 0)
-    end
-    @windows_only begin
-        ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),utf16(var),C_NULL)
+    function _unsetenv(svar::AbstractString)
+        var = cwstring(svar)
+        ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),var,C_NULL)
         systemerror(:setenv, ret == 0)
     end
-end
+else # !windows
+    _getenv(var::AbstractString) = ccall(:getenv, Cstring, (Cstring,), var)
+    _hasenv(s::AbstractString) = _getenv(s) != C_NULL
+
+    function access_env(onError::Function, var::AbstractString)
+        val = _getenv(var)
+        val == C_NULL ? onError(var) : unsafe_string(val)
+    end
+
+    function _setenv(var::AbstractString, val::AbstractString, overwrite::Bool=true)
+        ret = ccall(:setenv, Int32, (Cstring,Cstring,Int32), var, val, overwrite)
+        systemerror(:setenv, ret != 0)
+    end
+
+    function _unsetenv(var::AbstractString)
+        ret = ccall(:unsetenv, Int32, (Cstring,), var)
+        systemerror(:unsetenv, ret != 0)
+    end
+end # os test
 
 ## ENV: hash interface ##
 
-type EnvHash <: Associative{ByteString,ByteString}; end
+"""
+    EnvHash() -> EnvHash
+
+A singleton of this type provides a hash table interface to environment variables.
+"""
+type EnvHash <: Associative{String,String}; end
+
+"""
+    ENV
+
+Reference to the singleton `EnvHash`, providing a dictionary interface to system environment
+variables.
+"""
 const ENV = EnvHash()
 
-similar(::EnvHash) = Dict{ByteString,ByteString}()
+similar(::EnvHash) = Dict{String,String}()
 
-getindex(::EnvHash, k::AbstractString) = @accessEnv k throw(KeyError(k))
-get(::EnvHash, k::AbstractString, def) = @accessEnv k (return def)
+getindex(::EnvHash, k::AbstractString) = access_env(k->throw(KeyError(k)), k)
+get(::EnvHash, k::AbstractString, def) = access_env(k->def, k)
 in(k::AbstractString, ::KeyIterator{EnvHash}) = _hasenv(k)
 pop!(::EnvHash, k::AbstractString) = (v = ENV[k]; _unsetenv(k); v)
 pop!(::EnvHash, k::AbstractString, def) = haskey(ENV,k) ? pop!(ENV,k) : def
-function delete!(::EnvHash, k::AbstractString)
-    warn_once("""
-        delete!(ENV,key) now returns the modified environment.
-        Use pop!(ENV,key) to retrieve the value instead.
-        """)
-    _unsetenv(k)
-    ENV
-end
-delete!(::EnvHash, k::AbstractString, def) = haskey(ENV,k) ? delete!(ENV,k) : def
+delete!(::EnvHash, k::AbstractString) = (_unsetenv(k); ENV)
 setindex!(::EnvHash, v, k::AbstractString) = _setenv(k,string(v))
 push!(::EnvHash, k::AbstractString, v) = setindex!(ENV, v, k)
 
-@unix_only begin
-start(::EnvHash) = 0
-done(::EnvHash, i) = (ccall(:jl_environ, Any, (Int32,), i) == nothing)
+if is_windows()
+    start(hash::EnvHash) = (pos = ccall(:GetEnvironmentStringsW,stdcall,Ptr{UInt16},()); (pos,pos))
+    function done(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
+        if unsafe_load(block[1]) == 0
+            ccall(:FreeEnvironmentStringsW, stdcall, Int32, (Ptr{UInt16},), block[2])
+            return true
+        end
+        return false
+    end
+    function next(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
+        pos = block[1]
+        blk = block[2]
+        len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)
+        buf = Array{UInt16}(len)
+        unsafe_copy!(pointer(buf), pos, len)
+        env = transcode(String, buf)
+        m = match(r"^(=?[^=]+)=(.*)$"s, env)
+        if m === nothing
+            error("malformed environment entry: $env")
+        end
+        return (Pair{String,String}(m.captures[1], m.captures[2]), (pos+(len+1)*2, blk))
+    end
+else # !windows
+    start(::EnvHash) = 0
+    done(::EnvHash, i) = (ccall(:jl_environ, Any, (Int32,), i) === nothing)
 
-function next(::EnvHash, i)
-    env = ccall(:jl_environ, Any, (Int32,), i)
-    if env == nothing
-        throw(BoundsError())
+    function next(::EnvHash, i)
+        env = ccall(:jl_environ, Any, (Int32,), i)
+        if env === nothing
+            throw(BoundsError())
+        end
+        env = env::String
+        m = match(r"^(.*?)=(.*)$"s, env)
+        if m === nothing
+            error("malformed environment entry: $env")
+        end
+        return (Pair{String,String}(m.captures[1], m.captures[2]), i+1)
     end
-    env::ByteString
-    m = match(r"^(.*?)=(.*)$"s, env)
-    if m == nothing
-        error("malformed environment entry: $env")
-    end
-    (ByteString[convert(typeof(env),x) for x in m.captures], i+1)
-end
-end
-
-@windows_only begin
-start(hash::EnvHash) = (pos = ccall(:GetEnvironmentStringsW,stdcall,Ptr{UInt16},()); (pos,pos))
-function done(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
-    if unsafe_load(block[1])==0
-        ccall(:FreeEnvironmentStringsW,stdcall,Int32,(Ptr{UInt16},),block[2])
-        return true
-    end
-    false
-end
-function next(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
-    pos = block[1]
-    blk = block[2]
-    len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)+1
-    buf = Array(UInt16, len)
-    unsafe_copy!(pointer(buf), pos, len)
-    env = utf8(UTF16String(buf))
-    m = match(r"^(=?[^=]+)=(.*)$"s, env)
-    if m == nothing
-        error("malformed environment entry: $env")
-    end
-    (ByteString[convert(typeof(env),x) for x in m.captures], (pos+len*2, blk))
-end
-end
+end # os-test
 
 #TODO: Make these more efficent
 function length(::EnvHash)
@@ -168,31 +139,26 @@ function show(io::IO, ::EnvHash)
     end
 end
 
-# temporarily set and then restore an environment value
+"""
+    withenv(f::Function, kv::Pair...)
+
+Execute `f()` in an environment that is temporarily modified (not replaced as in `setenv`)
+by zero or more `"var"=>val` arguments `kv`. `withenv` is generally used via the
+`withenv(kv...) do ... end` syntax. A value of `nothing` can be used to temporarily unset an
+environment variable (if it is set). When `withenv` returns, the original environment has
+been restored.
+"""
 function withenv{T<:AbstractString}(f::Function, keyvals::Pair{T}...)
     old = Dict{T,Any}()
     for (key,val) in keyvals
         old[key] = get(ENV,key,nothing)
-        val != nothing ? (ENV[key]=val) : _unsetenv(key)
+        val !== nothing ? (ENV[key]=val) : delete!(ENV, key)
     end
     try f()
     finally
         for (key,val) in old
-            val != nothing ? (ENV[key]=val) : _unsetenv(key)
+            val !== nothing ? (ENV[key]=val) : delete!(ENV, key)
         end
     end
 end
 withenv(f::Function) = f() # handle empty keyvals case; see #10853
-
-## misc environment-related functionality ##
-
-function tty_size()
-    if isdefined(Base, :active_repl)
-        os = REPL.outstream(Base.active_repl)
-        if isa(os, Terminals.TTYTerminal)
-            return size(os)
-        end
-    end
-    return (parse(Int,get(ENV,"LINES","24")),
-            parse(Int,get(ENV,"COLUMNS","80")))
-end

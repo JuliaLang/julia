@@ -1,9 +1,11 @@
-#! /bin/bash
+#!/bin/sh
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Check for trailing white space in source files;
 # report an error if so
 
 # Files to check:
+set -f # disable glob expansion in this script
 file_patterns='
 *.1
 *.c
@@ -14,6 +16,7 @@ file_patterns='
 *.scm
 *.inc
 *.make
+*.mk
 *.md
 *.rst
 *.sh

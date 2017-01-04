@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Date internal algorithms
 @test Dates.totaldays(0,2,28) == -307
 @test Dates.totaldays(0,2,29) == -306
@@ -112,12 +114,7 @@ b = Dates.Date(2000)
 @test typemax(Dates.DateTime) - typemin(Dates.DateTime) == Dates.Millisecond(9223372017043199000)
 @test string(typemax(Dates.Date)) == "252522163911149-12-31"
 @test string(typemin(Dates.Date)) == "-252522163911150-01-01"
-@test convert(Real,b) == 730120
-@test convert(Float64,b) == 730120.0
-@test convert(Int32,b) == 730120
-@test convert(Real,a) == 63082368000000
-@test convert(Float64,a) == 63082368000000.0
-@test convert(Int64,a) == 63082368000000
+
 # Date-DateTime conversion/promotion
 @test Dates.DateTime(a) == a
 @test Dates.Date(a) == b
@@ -145,7 +142,7 @@ b = Dates.Date(2001)
 @test a != b
 @test Dates.Date(Dates.DateTime(Dates.Date(2012,7,1))) == Dates.Date(2012,7,1)
 
-#=y = Dates.Year(1)
+y = Dates.Year(1)
 m = Dates.Month(1)
 w = Dates.Week(1)
 d = Dates.Day(1)
@@ -171,4 +168,6 @@ ms = Dates.Millisecond(1)
 @test Dates.Date(d,y) == Dates.Date(1,1,1)
 @test Dates.Date(d,m) == Dates.Date(1,1,1)
 @test Dates.Date(m,y) == Dates.Date(1,1,1)
-=#
+
+@test isfinite(Dates.Date)
+@test isfinite(Dates.DateTime)

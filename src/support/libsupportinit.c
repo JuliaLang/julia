@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #include <locale.h>
 #include "libsupport.h"
 
@@ -17,6 +19,8 @@ void libsupport_init(void)
         setlocale(LC_NUMERIC, "C"); // use locale-independent numeric formats
 
         ios_init_stdstreams();
+
+        jl_crc32c_init(0);
 
         isInitialized=1;
     }

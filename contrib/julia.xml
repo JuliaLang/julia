@@ -37,7 +37,6 @@
       <item> do </item>
       <item> for </item>
       <item> function </item>
-      <item> stagedfunction </item>
       <item> if </item>
       <item> immutable </item>
       <item> let </item>
@@ -78,13 +77,12 @@
     <list name="types">
       <item> AbstractArray </item>
       <item> AbstractMatrix </item>
+      <item> AbstractRemoteRef </item>
       <item> AbstractSparseMatrix </item>
       <item> AbstractVector </item>
       <item> Any </item>
       <item> Array </item>
-      <item> ASCIIString </item>
       <item> Associative </item>
-      <item> AsyncStream </item>
       <item> Bidiagonal </item>
       <item> BitArray </item>
       <item> BigFloat </item>
@@ -92,7 +90,6 @@
       <item> BitMatrix </item>
       <item> BitVector </item>
       <item> Bool </item>
-      <item> ByteString </item>
       <item> Char </item>
       <item> CharString </item>
       <item> Cholesky </item>
@@ -114,9 +111,8 @@
       <item> Exception </item>
       <item> Expr </item>
       <item> FileMonitor </item>
-      <item> FileOffset </item>
       <item> Filter </item>
-      <item> FloatingPoint </item>
+      <item> AbstractFloat </item>
       <item> Float16 </item>
       <item> Float32 </item>
       <item> Float64 </item>
@@ -140,7 +136,7 @@
       <item> IOStream </item>
       <item> LocalProcess </item>
       <item> LU </item>
-      <item> MathConst </item>
+      <item> Irrational </item>
       <item> Matrix </item>
       <item> NTuple </item>
       <item> Number </item>
@@ -161,11 +157,9 @@
       <item> Regex </item>
       <item> RegexMatch </item>
       <item> RegexMatchIterator </item>
-      <item> RemoteRef </item>
       <item> RepString </item>
       <item> RevString </item>
       <item> Reverse </item>
-      <item> RopeString </item>
       <item> Schur </item>
       <item> Set </item>
       <item> Signed </item>
@@ -184,8 +178,8 @@
       <item> Symbol </item>
       <item> Symmetric </item>
       <item> SymTridiagonal </item>
+      <item> TCPSocket </item>
       <item> Task </item>
-      <item> TcpSocket </item>
       <item> TimeoutAsyncWork </item>
       <item> TmStruct </item>
       <item> Triangular </item>
@@ -200,7 +194,6 @@
       <item> UInt128 </item>
       <item> Union </item>
       <item> Unsigned </item>
-      <item> UTF8String </item>
       <item> UVError </item>
       <item> VecOrMat </item>
       <item> Vector </item>
@@ -253,7 +246,6 @@
       <item> Culonglong </item>
       <item> Cintmax_t </item>
       <item> Cuintmax_t </item>
-      <item> Coff_t </item>
       <item> Cfloat </item>
       <item> Cdouble </item>
       <item> Cwchar_t </item>
@@ -287,7 +279,6 @@
       <item> C_NULL </item>
       <item> CPU_CORES </item>
       <item> DL_LOAD_PATH </item>
-      <item> OS_NAME </item>
       <item> ENDIAN_BOM </item>
       <item> ENV </item>
       <item> Inf </item>

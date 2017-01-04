@@ -1,4 +1,6 @@
 #!/bin/sh
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Run as: fixup-libgfortran.sh <$private_libdir>
 
 if [ -z "$1" ]; then
@@ -78,7 +80,7 @@ LIBGFORTRAN_DIRS=$(echo "$LIBGFORTRAN_DIRS" | tr " " "\n" | sort | uniq | grep -
 echo "Found traces of libgfortran/libgcc in $LIBGFORTRAN_DIRS"
 
 
-# Do the private_libdir libraries...
+# Do the private_libdir libraries
 if [ "$UNAME" = "Darwin" ]; then
     cd $private_libdir
     for file in openlibm quadmath.0 gfortran.3 openblas arpack lapack openspecfun; do
@@ -88,6 +90,15 @@ if [ "$UNAME" = "Darwin" ]; then
                 install_name_tool -change "$dir/libquadmath.0.dylib" @rpath/libquadmath.0.dylib $dylib
                 install_name_tool -change "$dir/libgcc_s.1.dylib" @rpath/libgcc_s.1.dylib $dylib
             done
+        done
+    done
+fi
+
+if [ "$UNAME" = "Linux" ]; then
+    cd $private_libdir
+    for file in openlibm quadmath gfortran openblas arpack lapack openspecfun; do
+        for dylib in $(ls lib$file*.so* 2>/dev/null); do
+            patchelf --set-rpath \$ORIGIN $dylib
         done
     done
 fi

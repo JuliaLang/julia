@@ -1,0 +1,14 @@
+--- SuiteSparse_config/SuiteSparse_config.h	2015-07-15 03:26:41.000000000 +0000
++++ SuiteSparse_config/SuiteSparse_config.h	2016-07-01 00:55:57.157465600 +0000
+@@ -54,7 +54,11 @@
+ #ifdef _WIN64
+ 
+ #define SuiteSparse_long __int64
++#ifdef _MSVC_VER
+ #define SuiteSparse_long_max _I64_MAX
++#else
++#define SuiteSparse_long_max LLONG_MAX
++#endif
+ #define SuiteSparse_long_idd "I64d"
+ 
+ #else

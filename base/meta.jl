@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Meta
 #
 # convenience functions for metaprogramming
@@ -39,7 +41,7 @@ function show_sexpr(io::IO, ex::Expr, indent::Int)
         print(io, ex.head === :block ? ",\n"*" "^inner : ", ")
         show_sexpr(io, arg, inner)
     end
-    if length(ex.args) == 0; print(io, ",)")
+    if isempty(ex.args); print(io, ",)")
     else print(io, (ex.head === :block ? "\n"*" "^indent : ""), ')')
     end
 end

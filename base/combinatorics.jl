@@ -1,3 +1,7 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
+# Factorials
+
 const _fact_table64 =
     Int64[1,2,6,24,120,720,5040,40320,362880,3628800,39916800,479001600,6227020800,
           87178291200,1307674368000,20922789888000,355687428096000,6402373705728000,
@@ -32,16 +36,16 @@ end
 
 factorial(n::Int128) = factorial_lookup(n, _fact_table128, 33)
 factorial(n::UInt128) = factorial_lookup(n, _fact_table128, 34)
-factorial(n::Union(Int64,UInt64)) = factorial_lookup(n, _fact_table64, 20)
+factorial(n::Union{Int64,UInt64}) = factorial_lookup(n, _fact_table64, 20)
 
 if Int === Int32
-factorial(n::Union(Int8,UInt8,Int16,UInt16)) = factorial(Int32(n))
-factorial(n::Union(Int32,UInt32)) = factorial_lookup(n, _fact_table64, 12)
+    factorial(n::Union{Int8,UInt8,Int16,UInt16}) = factorial(Int32(n))
+    factorial(n::Union{Int32,UInt32}) = factorial_lookup(n, _fact_table64, 12)
 else
-factorial(n::Union(Int8,UInt8,Int16,UInt16,Int32,UInt32)) = factorial(Int64(n))
+    factorial(n::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32}) = factorial(Int64(n))
 end
 
-function gamma(n::Union(Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64))
+function gamma(n::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64})
     n < 0 && throw(DomainError())
     n == 0 && return Inf
     n <= 2 && return 1.0
@@ -49,75 +53,34 @@ function gamma(n::Union(Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64))
     @inbounds return Float64(_fact_table64[n-1])
 end
 
-# computes n!/k!
-function factorial{T<:Integer}(n::T, k::T)
-    if k < 0 || n < 0 || k > n
-        throw(DomainError())
-    end
-    f = one(T)
-    while n > k
-        f = Base.checked_mul(f,n)
-        n -= 1
-    end
-    return f
-end
-factorial(n::Integer, k::Integer) = factorial(promote(n, k)...)
 
-## other ordering related functions ##
-function nthperm!(a::AbstractVector, k::Integer)
-    k -= 1 # make k 1-indexed
-    k < 0 && throw(ArgumentError("permutation k must be ≥ 0, got $k"))
-    n = length(a)
-    n == 0 && return a
-    f = factorial(oftype(k, n-1))
-    for i=1:n-1
-        j = div(k, f) + 1
-        k = k % f
-        f = div(f, n-i)
+# Basic functions for working with permutations
 
-        j = j+i-1
-        elt = a[j]
-        for d = j:-1:i+1
-            a[d] = a[d-1]
-        end
-        a[i] = elt
-    end
-    a
-end
-nthperm(a::AbstractVector, k::Integer) = nthperm!(copy(a),k)
+"""
+    isperm(v) -> Bool
 
-function nthperm{T<:Integer}(p::AbstractVector{T})
-    isperm(p) || throw(ArgumentError("argument is not a permutation"))
-    k, n = 1, length(p)
-    for i = 1:n-1
-        f = factorial(n-i)
-        for j = i+1:n
-            k += ifelse(p[j] < p[i], f, 0)
-        end
-    end
-    return k
-end
+Returns `true` if `v` is a valid permutation.
 
-function invperm(a::AbstractVector)
-    b = zero(a) # similar vector of zeros
-    n = length(a)
-    for i = 1:n
-        j = a[i]
-        ((1 <= j <= n) && b[j] == 0) ||
-            throw(ArgumentError("argument is not a permutation"))
-        b[j] = i
-    end
-    b
-end
+```jldoctest
+julia> isperm([1; 2])
+true
 
+julia> isperm([1; 3])
+false
+```
+"""
 function isperm(A)
     n = length(A)
     used = falses(n)
     for a in A
-        (0 < a <= n) && (used[a] $= true) || return false
+        (0 < a <= n) && (used[a] ⊻= true) || return false
     end
     true
 end
+
+isperm(p::Tuple{}) = true
+isperm(p::Tuple{Int}) = p[1] == 1
+isperm(p::Tuple{Int,Int}) = ((p[1] == 1) & (p[2] == 2)) | ((p[1] == 2) & (p[2] == 1))
 
 function permute!!{T<:Integer}(a, p::AbstractVector{T})
     count = 0
@@ -140,7 +103,16 @@ function permute!!{T<:Integer}(a, p::AbstractVector{T})
     a
 end
 
-permute!(a, p::AbstractVector) = permute!!(a, copy(p))
+"""
+    permute!(v, p)
+
+Permute vector `v` in-place, according to permutation `p`. No checking is done
+to verify that `p` is a permutation.
+
+To return a new permutation, use `v[p]`. Note that this is generally faster than
+`permute!(v,p)` for large vectors.
+"""
+permute!(a, p::AbstractVector) = permute!!(a, copymutable(p))
 
 function ipermute!!{T<:Integer}(a, p::AbstractVector{T})
     count = 0
@@ -165,359 +137,70 @@ function ipermute!!{T<:Integer}(a, p::AbstractVector{T})
     a
 end
 
-ipermute!(a, p::AbstractVector) = ipermute!!(a, copy(p))
+"""
+    ipermute!(v, p)
 
-immutable Combinations{T}
-    a::T
-    t::Int
-end
+Like `permute!`, but the inverse of the given permutation is applied.
+"""
+ipermute!(a, p::AbstractVector) = ipermute!!(a, copymutable(p))
 
-eltype{T}(::Type{Combinations{T}}) = Vector{eltype(T)}
+"""
+    invperm(v)
 
-length(c::Combinations) = binomial(length(c.a),c.t)
+Return the inverse permutation of `v`.
+If `B = A[v]`, then `A == B[invperm(v)]`.
 
-function combinations(a, t::Integer)
-    if t < 0
-        # generate 0 combinations for negative argument
-        t = length(a)+1
+```jldoctest
+julia> v = [2; 4; 3; 1];
+
+julia> invperm(v)
+4-element Array{Int64,1}:
+ 4
+ 1
+ 3
+ 2
+
+julia> A = ['a','b','c','d'];
+
+julia> B = A[v]
+4-element Array{Char,1}:
+ 'b'
+ 'd'
+ 'c'
+ 'a'
+
+julia> B[invperm(v)]
+4-element Array{Char,1}:
+ 'a'
+ 'b'
+ 'c'
+ 'd'
+```
+"""
+function invperm(a::AbstractVector)
+    b = zero(a) # similar vector of zeros
+    n = length(a)
+    @inbounds for (i, j) in enumerate(a)
+        ((1 <= j <= n) && b[j] == 0) ||
+            throw(ArgumentError("argument is not a permutation"))
+        b[j] = i
     end
-    Combinations(a, t)
+    b
 end
 
-start(c::Combinations) = [1:c.t;]
-function next(c::Combinations, s)
-    comb = [c.a[si] for si in s]
-    if c.t == 0
-        # special case to generate 1 result for t==0
-        return (comb,[length(c.a)+2])
-    end
-    s = copy(s)
-    for i = length(s):-1:1
-        s[i] += 1
-        if s[i] > (length(c.a) - (length(s)-i))
-            continue
-        end
-        for j = i+1:endof(s)
-            s[j] = s[j-1]+1
-        end
-        break
-    end
-    (comb,s)
+function invperm(p::Union{Tuple{},Tuple{Int},Tuple{Int,Int}})
+    isperm(p) || throw(ArgumentError("argument is not a permutation"))
+    p  # in dimensions 0-2, every permutation is its own inverse
 end
-done(c::Combinations, s) = !isempty(s) && s[1] > length(c.a)-c.t+1
+invperm(a::Tuple) = (invperm([a...])...,)
 
-immutable Permutations{T}
-    a::T
-end
+#XXX This function should be moved to Combinatorics.jl but is currently used by Base.DSP.
+"""
+    nextprod([k_1,k_2,...], n)
 
-eltype{T}(::Type{Permutations{T}}) = Vector{eltype(T)}
-
-length(p::Permutations) = factorial(length(p.a))
-
-permutations(a) = Permutations(a)
-
-start(p::Permutations) = [1:length(p.a);]
-function next(p::Permutations, s)
-    perm = [p.a[si] for si in s]
-    if length(p.a) == 0
-        # special case to generate 1 result for len==0
-        return (perm,[1])
-    end
-    s = copy(s)
-    k = length(s)-1
-    while k > 0 && s[k] > s[k+1];  k -= 1;  end
-    if k == 0
-        s[1] = length(s)+1   # done
-    else
-        l = length(s)
-        while s[k] >= s[l];  l -= 1;  end
-        s[k],s[l] = s[l],s[k]
-        reverse!(s,k+1)
-    end
-    (perm,s)
-end
-done(p::Permutations, s) = !isempty(s) && s[1] > length(p.a)
-
-
-# Integer Partitions
-
-immutable IntegerPartitions
-    n::Int
-end
-
-length(p::IntegerPartitions) = npartitions(p.n)
-
-partitions(n::Integer) = IntegerPartitions(n)
-
-start(p::IntegerPartitions) = Int[]
-done(p::IntegerPartitions, xs) = length(xs) == p.n
-next(p::IntegerPartitions, xs) = (xs = nextpartition(p.n,xs); (xs,xs))
-
-function nextpartition(n, as)
-    if isempty(as);  return Int[n];  end
-
-    xs = similar(as,0)
-    sizehint!(xs,length(as)+1)
-
-    for i = 1:length(as)-1
-        if as[i+1] == 1
-            x = as[i]-1
-            push!(xs, x)
-            n -= x
-            while n > x
-                push!(xs, x)
-                n -= x
-            end
-            push!(xs, n)
-
-            return xs
-        end
-        push!(xs, as[i])
-        n -= as[i]
-    end
-    push!(xs, as[end]-1)
-    push!(xs, 1)
-
-    xs
-end
-
-let _npartitions = Dict{Int,Int}()
-    global npartitions
-    function npartitions(n::Int)
-        if n < 0
-            0
-        elseif n < 2
-            1
-        elseif (np = get(_npartitions, n, 0)) > 0
-            np
-        else
-            np = 0
-            sgn = 1
-            for k = 1:n
-                np += sgn * (npartitions(n-k*(3k-1)>>1) + npartitions(n-k*(3k+1)>>1))
-                sgn = -sgn
-            end
-            _npartitions[n] = np
-        end
-    end
-end
-
-# Algorithm H from TAoCP 7.2.1.4
-# Partition n into m parts
-# in colex order (lexicographic by reflected sequence)
-
-immutable FixedPartitions
-    n::Int
-    m::Int
-end
-
-length(f::FixedPartitions) = npartitions(f.n,f.m)
-
-partitions(n::Integer, m::Integer) = n >= 1 && m >= 1 ? FixedPartitions(n,m) : throw(DomainError())
-
-start(f::FixedPartitions) = Int[]
-function done(f::FixedPartitions, s::Vector{Int})
-    f.m <= f.n || return true
-    isempty(s) && return false
-    return f.m == 1 || s[1]-1 <= s[end]
-end
-next(f::FixedPartitions, s::Vector{Int}) = (xs = nextfixedpartition(f.n,f.m,s); (xs,xs))
-
-function nextfixedpartition(n, m, bs)
-    as = copy(bs)
-    if isempty(as)
-        # First iteration
-        as = [n-m+1; ones(Int, m-1)]
-    elseif as[2] < as[1]-1
-        # Most common iteration
-        as[1] -= 1
-        as[2] += 1
-    else
-        # Iterate
-        local j
-        s = as[1]+as[2]-1
-        for j = 3:m
-            if as[j] < as[1]-1; break; end
-            s += as[j]
-        end
-        x = as[j] += 1
-        for k = j-1:-1:2
-            as[k] = x
-            s -= x
-        end
-        as[1] = s
-    end
-
-    return as
-end
-
-let _nipartitions = Dict{Tuple{Int,Int},Int}()
-    global npartitions
-    function npartitions(n::Int,m::Int)
-        if n < m || m == 0
-            0
-        elseif n == m
-            1
-        elseif (np = get(_nipartitions, (n,m), 0)) > 0
-            np
-        else
-            _nipartitions[(n,m)] = npartitions(n-1,m-1) + npartitions(n-m,m)
-        end
-    end
-end
-
-# Algorithm H from TAoCP 7.2.1.5
-# Set partitions
-
-immutable SetPartitions{T<:AbstractVector}
-    s::T
-end
-
-length(p::SetPartitions) = nsetpartitions(length(p.s))
-
-partitions(s::AbstractVector) = SetPartitions(s)
-
-start(p::SetPartitions) = (n = length(p.s); (zeros(Int32, n), ones(Int32, n-1), n, 1))
-done(p::SetPartitions, s) = s[1][1] > 0
-next(p::SetPartitions, s) = nextsetpartition(p.s, s...)
-
-function nextsetpartition(s::AbstractVector, a, b, n, m)
-    function makeparts(s, a, m)
-        temp = [ similar(s,0) for k = 0:m ]
-        for i = 1:n
-            push!(temp[a[i]+1], s[i])
-        end
-        filter!(x->!isempty(x), temp)
-    end
-
-    if isempty(s);  return ([s], ([1], Int[], n, 1));  end
-
-    part = makeparts(s,a,m)
-
-    if a[end] != m
-        a[end] += 1
-    else
-        local j
-        for j = n-1:-1:1
-            if a[j] != b[j]
-                break
-            end
-        end
-        a[j] += 1
-        m = b[j] + (a[j] == b[j])
-        for k = j+1:n-1
-            a[k] = 0
-            b[k] = m
-        end
-        a[end] = 0
-    end
-
-    return (part, (a,b,n,m))
-
-end
-
-let _nsetpartitions = Dict{Int,Int}()
-    global nsetpartitions
-    function nsetpartitions(n::Int)
-        if n < 0
-            0
-        elseif n < 2
-            1
-        elseif (wn = get(_nsetpartitions, n, 0)) > 0
-            wn
-        else
-            wn = 0
-            for k = 0:n-1
-                wn += binomial(n-1,k)*nsetpartitions(n-1-k)
-            end
-            _nsetpartitions[n] = wn
-        end
-    end
-end
-
-immutable FixedSetPartitions{T<:AbstractVector}
-    s::T
-    m::Int
-end
-
-length(p::FixedSetPartitions) = nfixedsetpartitions(length(p.s),p.m)
-
-partitions(s::AbstractVector,m::Int) = length(s) >= 1 && m >= 1 ? FixedSetPartitions(s,m) : throw(DomainError())
-
-function start(p::FixedSetPartitions)
-    n = length(p.s)
-    m = p.m
-    m <= n ? (vcat(ones(Int, n-m),1:m), vcat(1,n-m+2:n), n) : (Int[], Int[], n)
-end
-# state consists of:
-# vector a of length n describing to which partition every element of s belongs
-# vector b of length n describing the first index b[i] that belongs to partition i
-# integer n
-
-done(p::FixedSetPartitions, s) = length(s[1]) == 0 || s[1][1] > 1
-next(p::FixedSetPartitions, s) = nextfixedsetpartition(p.s,p.m, s...)
-
-function nextfixedsetpartition(s::AbstractVector, m, a, b, n)
-    function makeparts(s, a)
-        part = [ similar(s,0) for k = 1:m ]
-        for i = 1:n
-            push!(part[a[i]], s[i])
-        end
-        return part
-    end
-
-    part = makeparts(s,a)
-
-    if m == 1
-        a[1] = 2
-        return (part, (a, b, n))
-    end
-
-    if a[end] != m
-        a[end] += 1
-    else
-        local j, k
-        for j = n-1:-1:1
-            if a[j]<m && b[a[j]+1]<j
-                break
-            end
-        end
-        if j>1
-            a[j]+=1
-            for p=j+1:n
-                if b[a[p]]!=p
-                    a[p]=1
-                end
-            end
-        else
-            for k=m:-1:2
-                if b[k-1]<b[k]-1
-                    break
-                end
-            end
-            b[k]=b[k]-1
-            b[k+1:m]=n-m+k+1:n
-            a[1:n]=1
-            a[b]=1:m
-        end
-    end
-
-    return (part, (a,b,n))
-end
-
-function nfixedsetpartitions(n::Int,m::Int)
-    numpart=0
-    for k=0:m
-        numpart+=(-1)^(m-k)*binomial(m,k)*(k^n)
-    end
-    numpart=div(numpart,factorial(m))
-    return numpart
-end
-
-
-# For a list of integers i1, i2, i3, find the smallest
-#     i1^n1 * i2^n2 * i3^n3 >= x
-# for integer n1, n2, n3
+Next integer not less than `n` that can be written as ``\\prod k_i^{p_i}`` for integers
+``p_1``, ``p_2``, etc.
+"""
 function nextprod(a::Vector{Int}, x)
     if x > typemax(Int)
         throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
@@ -552,92 +235,6 @@ function nextprod(a::Vector{Int}, x)
             end
         end
     end
-    best = mx[end] < best ? mx[end] : best
-    return Int(best)  # could overflow, but best to have predictable return type
-end
-
-# For a list of integers i1, i2, i3, find the largest
-#     i1^n1 * i2^n2 * i3^n3 <= x
-# for integer n1, n2, n3
-function prevprod(a::Vector{Int}, x)
-    if x > typemax(Int)
-        throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
-    end
-    k = length(a)
-    v = ones(Int, k)                  # current value of each counter
-    mx = [nextpow(ai,x) for ai in a]  # allow each counter to exceed p (sentinel)
-    first = Int(prevpow(a[1], x))     # start at best case in first factor
-    v[1] = first
-    p::widen(Int) = first
-    best = p
-    icarry = 1
-
-    while v[end] < mx[end]
-        while p <= x
-            best = p > best ? p : best
-            p *= a[1]
-            v[1] *= a[1]
-        end
-        if p > x
-            carrytest = true
-            while carrytest
-                p = div(p, v[icarry])
-                v[icarry] = 1
-                icarry += 1
-                p *= a[icarry]
-                v[icarry] *= a[icarry]
-                carrytest = v[icarry] > mx[icarry] && icarry < k
-            end
-            if p <= x
-                icarry = 1
-            end
-        end
-    end
-    best = x >= p > best ? p : best
-    return Int(best)
-end
-
-const levicivita_lut = cat(3, [0 0  0;  0 0 1; 0 -1 0],
-                              [0 0 -1;  0 0 0; 1  0 0],
-                              [0 1  0; -1 0 0; 0  0 0])
-
-# Levi-Civita symbol of a permutation.
-# The parity is computed by using the fact that a permutation is odd if and
-# only if the number of even-length cycles is odd.
-# Returns 1 is the permutarion is even, -1 if it is odd and 0 otherwise.
-function levicivita{T<:Integer}(p::AbstractVector{T})
-    n = length(p)
-
-    if n == 3
-        @inbounds valid = (0 < p[1] <= 3) * (0 < p[2] <= 3) * (0 < p[3] <= 3)
-        return valid ? levicivita_lut[p[1], p[2], p[3]] : 0
-    end
-
-    todo = trues(n)
-    first = 1
-    cycles = flips = 0
-
-    while cycles + flips < n
-        first = findnext(todo, first)
-        (todo[first] $= true) && return 0
-        j = p[first]
-        (0 < j <= n) || return 0
-        cycles += 1
-        while j ≠ first
-            (todo[j] $= true) && return 0
-            j = p[j]
-            (0 < j <= n) || return 0
-            flips += 1
-        end
-    end
-
-    return iseven(flips) ? 1 : -1
-end
-
-# Computes the parity of a permutation using the levicivita function,
-# so you can ask iseven(parity(p)). If p is not a permutation throws an error.
-function parity{T<:Integer}(p::AbstractVector{T})
-    epsilon = levicivita(p)
-    epsilon == 0 && throw(ArgumentError("Not a permutation"))
-    epsilon == 1 ? 0 : 1
+    # might overflow, but want predictable return type
+    return mx[end] < best ? Int(mx[end]) : Int(best)
 end

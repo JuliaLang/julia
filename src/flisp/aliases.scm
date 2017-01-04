@@ -12,7 +12,6 @@
 (define char>? >)
 (define char<=? <=)
 (define char>=? >=)
-(define (char-whitespace? c) (not (not (string.find *whitespace* c))))
 (define (char-numeric? c) (not (not (string.find "0123456789" c))))
 
 (define string-append string)

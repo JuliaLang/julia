@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # ranges
 @test size(10:1:0) == (0,)
 @test length(1:.2:2) == 6
@@ -42,6 +44,11 @@ r = 5:-1:1
 
 @test isempty((1:4)[5:4])
 @test_throws BoundsError (1:10)[8:-1:-2]
+
+r = typemax(Int)-5:typemax(Int)-1
+@test_throws BoundsError r[7]
+
+@test findin([5.2, 3.3], 3:20) == findin([5.2, 3.3], collect(3:20))
 
 let
     span = 5:20
@@ -106,8 +113,20 @@ end
 @test intersect(reverse(typemin(Int):2:typemax(Int)),typemin(Int):2:typemax(Int)) == reverse(typemin(Int):2:typemax(Int))
 @test intersect(typemin(Int):2:typemax(Int),reverse(typemin(Int):2:typemax(Int))) == typemin(Int):2:typemax(Int)
 
-@test 0 in UInt(0):100:typemax(Uint)
-@test last(UInt(0):100:typemax(Uint)) in UInt(0):100:typemax(Uint)
+@test intersect(UnitRange(1,2),3) == UnitRange(3,2)
+@test intersect(UnitRange(1,2), UnitRange(1,5), UnitRange(3,7), UnitRange(4,6)) == UnitRange(4,3)
+
+@test intersect(1:3, 2) === intersect(2, 1:3) === 2:2
+@test intersect(1.0:3.0, 2) == intersect(2, 1.0:3.0) == [2.0]
+
+@test sort(UnitRange(1,2)) == UnitRange(1,2)
+@test sort!(UnitRange(1,2)) == UnitRange(1,2)
+@test sort(1:10, rev=true) == collect(10:-1:1)
+@test sort(-3:3, by=abs) == [0,-1,1,-2,2,-3,3]
+@test select(1:10, 4) == 4
+
+@test 0 in UInt(0):100:typemax(UInt)
+@test last(UInt(0):100:typemax(UInt)) in UInt(0):100:typemax(UInt)
 @test -9223372036854775790 in -9223372036854775790:100:9223372036854775710
 @test -9223372036854775690 in -9223372036854775790:100:9223372036854775710
 @test -90 in -9223372036854775790:100:9223372036854775710
@@ -125,7 +144,7 @@ end
 
 r = 0.0:0.01:1.0
 @test (r[30] in r)
-r = (-4*Int64(maxintfloat(is(Int,Int32) ? Float32 : Float64))):5
+r = (-4*Int64(maxintfloat(Int === Int32 ? Float32 : Float64))):5
 @test (3 in r)
 @test (3.0 in r)
 
@@ -181,6 +200,12 @@ let s = 0
     end
     @test s == 256
 
+    s = 0
+    for i = typemin(UInt8):one(UInt8):typemax(UInt8)
+        s += 1
+    end
+    @test s == 256
+
     # loops past typemax(Int)
     n = 0
     s = Int128(0)
@@ -212,7 +237,7 @@ end
 @test sum(0:2:100) == 2550
 
 # overflowing sums (see #5798)
-if WORD_SIZE == 64
+if Sys.WORD_SIZE == 64
     @test sum(Int128(1):10^18) == div(10^18 * (Int128(10^18)+1), 2)
     @test sum(Int128(1):10^18-1) == div(10^18 * (Int128(10^18)-1), 2)
 else
@@ -235,6 +260,7 @@ end
 @test (1:2:6) + 0.3 == 1+0.3:2:5+0.3
 @test (1:2:6) - 1 == 0:2:4
 @test (1:2:6) - 0.3 == 1-0.3:2:5-0.3
+@test 2 - (1:3) == 1:-1:-1
 
 # operations between ranges and arrays
 @test all(([1:5;] + (5:-1:1)) .== 6)
@@ -260,6 +286,8 @@ end
 @test [0.1:1.3:4.0;]   == [linspace(0.1,4.0,4);]     == [1:13:40;]./10
 @test [1.1:1.1:3.3;]   == [linspace(1.1,3.3,3);]     == [11:11:33;]./10
 @test [0.3:0.1:1.1;]   == [linspace(0.3,1.1,9);]     == [3:1:11;]./10
+@test [0.0:1.0:0.0;]   == [linspace(0.0,0.0,1);]     == [0.0]
+@test [0.0:-1.0:0.0;]  == [linspace(0.0,0.0,1);]     == [0.0]
 
 @test [0.0:1.0:5.5;]   == [0:10:55;]./10
 @test [0.0:-1.0:0.5;]  == []
@@ -363,13 +391,18 @@ for T = (Float32, Float64)
     end
 end
 
+# linspace with 1 or 0 elements (whose step length is NaN)
+@test issorted(linspace(1,1,0))
+@test issorted(linspace(1,1,1))
+
 # near-equal ranges
 @test 0.0:0.1:1.0 != 0.0f0:0.1f0:1.0f0
 
 # comparing and hashing ranges
 let
     Rs = Range[1:2, map(Int32,1:3:17), map(Int64,1:3:17), 1:0, 17:-3:0,
-               0.0:0.1:1.0, map(Float32,0.0:0.1:1.0)]
+               0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),
+               linspace(0, 1, 20), map(Float32, linspace(0, 1, 20))]
     for r in Rs
         ar = collect(r)
         @test r != ar
@@ -381,6 +414,12 @@ let
         end
     end
 end
+
+
+@test 1:2:10 == 1:2:10 != 1:3:10 != 1:3:13 != 2:3:13 == 2:3:11 != 2:11
+@test 1:1:10 == 1:10 == 1:10 == Base.OneTo(10) == Base.OneTo(10)
+@test 1:10 != 2:10 != 2:11 != Base.OneTo(11)
+@test Base.OneTo(10) != Base.OneTo(11) != 1:10
 
 # issue #2959
 @test 1.0:1.5 == 1.0:1.0:1.5 == 1.0:1.0
@@ -425,8 +464,8 @@ end
 r = -0.004532318104333742:1.2597349521122731e-5:0.008065031416788989
 @test length(r[1:end-1]) == length(r) - 1
 @test isa(r[1:2:end],Range) && length(r[1:2:end]) == div(length(r)+1, 2)
-@test_approx_eq r[3:5][2] r[4]
-@test_approx_eq r[5:-2:1][2] r[3]
+@test r[3:5][2] ≈ r[4]
+@test r[5:-2:1][2] ≈ r[3]
 @test_throws BoundsError r[0:10]
 @test_throws BoundsError r[1:10000]
 
@@ -436,7 +475,7 @@ r = linspace(1/3,5/7,6)
 @test abs(r[end] - 5/7) <= eps(5/7)
 r = linspace(0.25,0.25,1)
 @test length(r) == 1
-@test_throws Exception linspace(0.25,0.5,1)
+@test_throws ErrorException linspace(0.25,0.5,1)
 
 # issue #7426
 @test [typemax(Int):1:typemax(Int);] == [typemax(Int)]
@@ -463,7 +502,7 @@ end
 for f in (mean, median)
     for n = 2:5
         @test f(2:n) == f([2:n;])
-        @test_approx_eq f(2:0.1:n) f([2:0.1:n;])
+        @test f(2:0.1:n) ≈ f([2:0.1:n;])
     end
 end
 
@@ -478,6 +517,9 @@ end
 
 # issue #8584
 @test (0:1//2:2)[1:2:3] == 0:1//1:1
+
+# issue #12278
+@test length(1:UInt(0)) == 0
 
 # zip
 let i = 0
@@ -494,3 +536,253 @@ end
 @test eltype(0:1//3:10) <: Rational
 @test (0:1//3:10)[1] == 0
 @test (0:1//3:10)[2] == 1//3
+
+# converting ranges (issue #10965)
+@test promote(0:1, UInt8(2):UInt8(5)) === (0:1, 2:5)
+@test convert(UnitRange{Int}, 0:5) === 0:5
+@test convert(UnitRange{Int128}, 0:5) === Int128(0):Int128(5)
+
+@test promote(0:1:1, UInt8(2):UInt8(1):UInt8(5)) === (0:1:1, 2:1:5)
+@test convert(StepRange{Int,Int}, 0:1:1) === 0:1:1
+@test convert(StepRange{Int128,Int128}, 0:1:1) === Int128(0):Int128(1):Int128(1)
+
+@test promote(0:1:1, 2:5) === (0:1:1, 2:1:5)
+@test convert(StepRange{Int128,Int128}, 0:5) === Int128(0):Int128(1):Int128(5)
+@test convert(StepRange, 0:5) === 0:1:5
+@test convert(StepRange{Int128,Int128}, 0.:5) === Int128(0):Int128(1):Int128(5)
+
+@test_throws ArgumentError StepRange(1.1,1,5.1)
+
+@test promote(0f0:inv(3f0):1f0, 0.:2.:5.) === (0:1/3:1, 0.:2.:5.)
+@test convert(FloatRange{Float64}, 0:1/3:1) === 0:1/3:1
+@test convert(FloatRange{Float64}, 0f0:inv(3f0):1f0) === 0:1/3:1
+
+@test promote(0:1/3:1, 0:5) === (0:1/3:1, 0.:1.:5.)
+@test convert(FloatRange{Float64}, 0:5) === 0.:1.:5.
+@test convert(FloatRange{Float64}, 0:1:5) === 0.:1.:5.
+@test convert(FloatRange, 0:5) === 0.:1.:5.
+@test convert(FloatRange, 0:1:5) === 0.:1.:5.
+
+# Issue #11245
+let io = IOBuffer()
+    show(io, linspace(1, 2, 3))
+    str = String(take!(io))
+    @test str == "linspace(1.0,2.0,3)"
+end
+
+# issue 10950
+r = 1//2:3
+@test length(r) == 3
+i = 1
+for x in r
+    @test x == i//2
+    i += 2
+end
+@test i == 7
+
+# stringmime/show should display the range or linspace nicely
+# to test print_range in range.jl
+replstrmime(x) = sprint((io,x) -> show(IOContext(io, limit=true), MIME("text/plain"), x), x)
+@test replstrmime(1:4) == "1:4"
+@test stringmime("text/plain", 1:4) == "1:4"
+@test stringmime("text/plain", linspace(1,5,7)) == "7-element LinSpace{Float64}:\n 1.0,1.66667,2.33333,3.0,3.66667,4.33333,5.0"
+@test repr(linspace(1,5,7)) == "linspace(1.0,5.0,7)"
+@test replstrmime(0:100.) == "0.0:1.0:100.0"
+# next is to test a very large range, which should be fast because print_range
+# only examines spacing of the left and right edges of the range, sufficient
+# to cover the designated screen size.
+@test replstrmime(linspace(0,100, 10000)) == "10000-element LinSpace{Float64}:\n 0.0,0.010001,0.020002,0.030003,0.040004,…,99.95,99.96,99.97,99.98,99.99,100.0"
+
+@test sprint(io -> show(io,UnitRange(1,2))) == "1:2"
+@test sprint(io -> show(io,StepRange(1,2,5))) == "1:2:5"
+
+
+# Issue 11049 and related
+@test promote(linspace(0f0, 1f0, 3), linspace(0., 5., 2)) ===
+    (linspace(0., 1., 3), linspace(0., 5., 2))
+@test convert(LinSpace{Float64}, linspace(0., 1., 3)) === linspace(0., 1., 3)
+@test convert(LinSpace{Float64}, linspace(0f0, 1f0, 3)) === linspace(0., 1., 3)
+
+@test promote(linspace(0., 1., 3), 0:5) === (linspace(0., 1., 3),
+                                             linspace(0., 5., 6))
+@test convert(LinSpace{Float64}, 0:5) === linspace(0., 5., 6)
+@test convert(LinSpace{Float64}, 0:1:5) === linspace(0., 5., 6)
+@test convert(LinSpace, 0:5) === linspace(0., 5., 6)
+@test convert(LinSpace, 0:1:5) === linspace(0., 5., 6)
+
+function test_range_index(r, s)
+    @test typeof(r[s]) == typeof(r)
+    @test [r;][s] == [r[s];]
+end
+test_range_index(linspace(0.1, 0.3, 3), 1:2)
+test_range_index(linspace(0.1, 0.3, 3), 1:0)
+test_range_index(linspace(1.0, 1.0, 1), 1:1)
+test_range_index(linspace(1.0, 1.0, 1), 1:0)
+test_range_index(linspace(1.0, 2.0, 0), 1:0)
+
+function test_linspace_identity{T}(r::LinSpace{T}, mr::LinSpace{T})
+    @test -r == mr
+    @test -collect(r) == collect(mr)
+    @test isa(-r, LinSpace)
+
+    @test 1 + r + (-1) == r
+    @test 1 + collect(r) == collect(1 + r) == collect(r + 1)
+    @test isa(1 + r + (-1), LinSpace)
+    @test 1 - r - 1 == mr
+    @test 1 - collect(r) == collect(1 - r) == collect(1 + mr)
+    @test collect(r) - 1 == collect(r - 1) == -collect(mr + 1)
+    @test isa(1 - r - 1, LinSpace)
+
+    @test 1 * r * 1 == r
+    @test 2 * r * T(0.5) == r
+    @test isa(1 * r * 1, LinSpace)
+    @test r / 1 == r
+    @test r / 2 * 2 == r
+    @test r / T(0.5) * T(0.5) == r
+    @test isa(r / 1, LinSpace)
+
+    @test (2 * collect(r) == collect(r * 2) == collect(2 * r) ==
+           collect(r * T(2.0)) == collect(T(2.0) * r) ==
+           collect(r / T(0.5)) == -collect(mr * T(2.0)))
+end
+
+test_linspace_identity(linspace(1.0, 27.0, 10), linspace(-1.0, -27.0, 10))
+test_linspace_identity(linspace(1f0, 27f0, 10), linspace(-1f0, -27f0, 10))
+
+test_linspace_identity(linspace(1.0, 27.0, 0), linspace(-1.0, -27.0, 0))
+test_linspace_identity(linspace(1f0, 27f0, 0), linspace(-1f0, -27f0, 0))
+
+test_linspace_identity(linspace(1.0, 1.0, 1), linspace(-1.0, -1.0, 1))
+test_linspace_identity(linspace(1f0, 1f0, 1), linspace(-1f0, -1f0, 1))
+
+@test reverse(linspace(1.0, 27.0, 1275)) == linspace(27.0, 1.0, 1275)
+@test [reverse(linspace(1.0, 27.0, 1275));] ==
+    reverse([linspace(1.0, 27.0, 1275);])
+
+# PR 12200 and related
+for _r in (1:2:100, 1:100, 1f0:2f0:100f0, 1.0:2.0:100.0,
+           linspace(1, 100, 10), linspace(1f0, 100f0, 10))
+    float_r = float(_r)
+    big_r = big.(_r)
+    @test typeof(big_r).name === typeof(_r).name
+    if eltype(_r) <: AbstractFloat
+        @test isa(float_r, typeof(_r))
+        @test eltype(big_r) === BigFloat
+    else
+        @test isa(float_r, Range)
+        @test eltype(float_r) <: AbstractFloat
+        @test eltype(big_r) === BigInt
+    end
+end
+
+@test_throws DimensionMismatch linspace(1.,5.,5) + linspace(1.,5.,6)
+@test_throws DimensionMismatch linspace(1.,5.,5) - linspace(1.,5.,6)
+@test_throws DimensionMismatch linspace(1.,5.,5) .* linspace(1.,5.,6)
+@test_throws DimensionMismatch linspace(1.,5.,5) ./ linspace(1.,5.,6)
+
+@test_throws DimensionMismatch (1:5) + (1:6)
+@test_throws DimensionMismatch (1:5) - (1:6)
+@test_throws DimensionMismatch (1:5) .* (1:6)
+@test_throws DimensionMismatch (1:5) ./ (1:6)
+
+@test_throws DimensionMismatch (1.:5.) + (1.:6.)
+@test_throws DimensionMismatch (1.:5.) - (1.:6.)
+@test_throws DimensionMismatch (1.:5.) .* (1.:6.)
+@test_throws DimensionMismatch (1.:5.) ./ (1.:6.)
+
+function test_range_sum_diff(r1, r2, r_sum, r_diff)
+    @test r1 + r2 == r_sum
+    @test r2 + r1 == r_sum
+    @test r1 - r2 == r_diff
+    @test r2 - r1 == -r_diff
+
+    @test collect(r1) + collect(r2) == collect(r_sum)
+    @test collect(r2) + collect(r1) == collect(r_sum)
+    @test collect(r1) - collect(r2) == collect(r_diff)
+    @test collect(r2) - collect(r1) == collect(-r_diff)
+end
+
+test_range_sum_diff(1:5, 0:2:8, 1:3:13, 1:-1:-3)
+test_range_sum_diff(1.:5., 0.:2.:8., 1.:3.:13., 1.:-1.:-3.)
+test_range_sum_diff(linspace(1.,5.,5), linspace(0.,-4.,5),
+                    linspace(1.,1.,5), linspace(1.,9.,5))
+
+test_range_sum_diff(1:5, 0.:2.:8., 1.:3.:13., 1.:-1.:-3.)
+test_range_sum_diff(1:5, linspace(0, 8, 5),
+                    linspace(1, 13, 5), linspace(1, -3, 5))
+test_range_sum_diff(1.:5., linspace(0, 8, 5),
+                    linspace(1, 13, 5), linspace(1, -3, 5))
+
+# Issue #12388
+let r = 0x02:0x05
+    @test r[2:3] == 0x03:0x04
+end
+
+# Issue #13738
+for r in (big(1):big(2), UInt128(1):UInt128(2), 0x1:0x2)
+    rr = r[r]
+    @test typeof(rr) == typeof(r)
+    @test r[r] == r
+    # these calls to similar must not throw:
+    @test size(similar(r, size(r))) == size(similar(r, length(r)))
+end
+
+# sign, conj, ~ (Issue #16067)
+let A = -1:1, B = -1.0:1.0
+    @test sign(A) == [-1,0,1]
+    @test sign(B) == [-1,0,1]
+    @test typeof(sign(A)) === Vector{Int}
+    @test typeof(sign(B)) === Vector{Float64}
+
+    @test conj(A) === A
+    @test conj(B) === B
+
+    @test ~A == [0,-1,-2]
+    @test typeof(~A) == Vector{Int}
+end
+
+# conversion to Array
+let r = 1:3, a = [1,2,3]
+    @test convert(Array, r) == a
+    @test convert(Array{Int}, r) == a
+    @test convert(Array{Float64}, r) == a
+    @test convert(Array{Int,1}, r) == a
+    @test convert(Array{Float64,1}, r) == a
+end
+
+# OneTo
+r = Base.OneTo(-5)
+@test isempty(r)
+@test length(r) == 0
+@test size(r) == (0,)
+r = Base.OneTo(3)
+@test !isempty(r)
+@test length(r) == 3
+@test size(r) == (3,)
+@test step(r) == 1
+@test first(r) == 1
+@test last(r) == 3
+@test minimum(r) == 1
+@test maximum(r) == 3
+@test r[2] == 2
+@test r[2:3] === 2:3
+@test_throws BoundsError r[4]
+@test_throws BoundsError r[0]
+@test r+1 === 2:4
+@test 2*r === 2:2:6
+@test r+r === 2:2:6
+k = 0
+for i in r
+    @test i == (k+=1)
+end
+@test intersect(r, Base.OneTo(2)) == Base.OneTo(2)
+@test intersect(r, 0:5) == 1:3
+@test intersect(r, 2) === intersect(2, r) === 2:2
+@test findin(r, r) === findin(r, 1:length(r)) === findin(1:length(r), r) === 1:length(r)
+r2 = Base.OneTo(7)
+@test findin(r2, 2:length(r2)-1) === 2:length(r2)-1
+@test findin(2:length(r2)-1, r2) === 1:length(r2)-2
+io = IOBuffer()
+show(io, r)
+str = String(take!(io))
+@test str == "Base.OneTo(3)"

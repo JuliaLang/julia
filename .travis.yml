@@ -1,14 +1,50 @@
 language: cpp
-os:
-    - linux
-    #- osx # this build is running out of time frequently now, disable it until we can make the tests it runs faster / fewer
-env:
-    - ARCH="i686"
-    - ARCH="x86_64"
+sudo: false
 matrix:
-  exclude:
-    - os: osx
+  include:
+    - os: linux
       env: ARCH="i686"
+      compiler: "g++-5 -m32"
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - bar
+            - time
+            - binutils
+            - gcc-5
+            - g++-5
+            - gcc-5-multilib
+            - g++-5-multilib
+            - make:i386
+            - libssl-dev:i386
+            - gfortran-5
+            - gfortran-5-multilib
+    - os: linux
+      env: ARCH="x86_64"
+      compiler: "g++-5 -m64"
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - bar
+            - time
+            - g++-5
+            - gfortran-5
+    - os: osx
+      env: ARCH="x86_64"
+      osx_image: xcode8
+cache:
+  directories:
+    - $TRAVIS_BUILD_DIR/deps/srccache
+    - $TRAVIS_BUILD_DIR/deps/scratch
+    - $TRAVIS_BUILD_DIR/deps/usr-staging
+branches:
+  only:
+    - master
+    - /release-.*/
 notifications:
     email: false
     irc:
@@ -21,47 +57,78 @@ notifications:
           - http://status.julialang.org/put/travis
           - http://julia.mit.edu:8000/travis-hook
 before_install:
+    - make check-whitespace
     - if [ `uname` = "Linux" ]; then
-        BUILDOPTS="USEGCC=1 LLVM_CONFIG=llvm-config-3.3 LLVM_LLC=llc-3.3 VERBOSE=1 USE_BLAS64=0";
-        for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND OPENLIBM RMATH; do
-            export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
-        done;
-        sudo add-apt-repository ppa:staticfloat/julia-deps -y;
-        sudo apt-get update -qq -y;
-        if [ "$ARCH" = "i686" ]; then
-          sudo apt-get remove libblas3gf liblapack3gf libarmadillo2 -y;
-          sudo apt-get install binutils:i386 -y;
-          sudo apt-get install gcc:i386 g++:i386 make:i386 cpp:i386 g++-4.6:i386 gcc-4.6:i386 libssl-dev:i386 zlib1g-dev:i386 patchelf:i386 gfortran:i386 llvm-3.3-dev:i386 libsuitesparse-dev:i386 libopenblas-dev:i386 libopenblas-base:i386 libblas-dev:i386 liblapack-dev:i386 liblapack3:i386 libarpack2-dev:i386 libarpack2:i386 libfftw3-dev:i386 libgmp-dev:i386 libpcre3-dev:i386 libunwind7-dev:i386 libopenlibm-dev:i386 librmath-dev:i386 libmpfr-dev:i386 -y;
-        else
-          sudo apt-get install zlib1g-dev patchelf gfortran llvm-3.3-dev libsuitesparse-dev libopenblas-dev liblapack-dev libarpack2-dev libfftw3-dev libgmp-dev libpcre3-dev libunwind7-dev libopenlibm-dev librmath-dev libmpfr-dev -y;
-        fi;
+        contrib/travis_fastfail.sh || exit 1;
+        mkdir -p $HOME/bin;
+        ln -s /usr/bin/gcc-5 $HOME/bin/gcc;
+        ln -s /usr/bin/g++-5 $HOME/bin/g++;
+        ln -s /usr/bin/gfortran-5 $HOME/bin/gfortran;
+        ln -s /usr/bin/gcc-5 $HOME/bin/x86_64-linux-gnu-gcc;
+        ln -s /usr/bin/g++-5 $HOME/bin/x86_64-linux-gnu-g++;
+        gcc --version;
+        BAR="bar -i 30";
+        BUILDOPTS="-j3 VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1";
+        echo "override ARCH=$ARCH" >> Make.user;
+        TESTSTORUN="all";
       elif [ `uname` = "Darwin" ]; then
+        brew update;
+        brew install -v jq pv;
+        BAR="pv -i 30";
+        contrib/travis_fastfail.sh || exit 1;
         brew tap staticfloat/julia;
         brew rm --force $(brew deps --HEAD julia);
-        brew update;
-        sed -i '' -e "s@https://downloads.sf.net/project/machomebrew/Bottles@https://cache.e.ip.saba.us/https://downloads.sf.net/project/machomebrew/Bottles@" /usr/local/Library/Homebrew/software_spec.rb;
-        sed -i '' -e "s@https://homebrew.bintray.com@https://cache.e.ip.saba.us/https://homebrew.bintray.com@" /usr/local/Library/Homebrew/software_spec.rb;
         brew install -v --only-dependencies --HEAD julia;
-        BUILDOPTS="USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm33-julia)/bin/llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include";
+        brew install -v staticfloat/juliadeps/libgfortran llvm39-julia;
+        BUILDOPTS="-j3 USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm39-julia)/bin/llvm-config LLVM_SIZE=$(brew --prefix llvm39-julia)/bin/llvm-size";
+        BUILDOPTS="$BUILDOPTS VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include FORCE_ASSERTIONS=1";
         BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
-        for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND LIBGIT2; do
+        for lib in LLVM SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND; do
             export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
         done;
         export LDFLAGS="-L$(brew --prefix openblas-julia)/lib -L$(brew --prefix suite-sparse-julia)/lib";
         export DYLD_FALLBACK_LIBRARY_PATH="/usr/local/lib:/lib:/usr/lib:$(brew --prefix openblas-julia)/lib:$(brew --prefix suite-sparse-julia)/lib:$(brew --prefix arpack-julia)/lib";
+        export JULIA_MACOS_SPAWN="DYLD_FALLBACK_LIBRARY_PATH=\"$DYLD_FALLBACK_LIBRARY_PATH\" \$1";
+        export BUILDOPTS="$BUILDOPTS spawn=\$(JULIA_MACOS_SPAWN)";
         make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
-      fi
+        TESTSTORUN="all --skip linalg/triangular subarray"; fi # TODO: re enable these if possible without timing out
+    - git clone -q git://git.kitenet.net/moreutils
 script:
-    - make check-whitespace || exit 1
-    - make $BUILDOPTS prefix=/tmp/julia install
+    - echo $BUILDOPTS
+    - contrib/download_cmake.sh
+    - make -C moreutils mispipe
+    - make $BUILDOPTS -C base version_git.jl.phony
+    # capture the log, but only print it if `make deps` fails
+    # try to show the end of the log first, because this log might be very long (> 4MB)
+    # and thus be truncated by travis
+    - moreutils/mispipe "make $BUILDOPTS NO_GIT=1 -C deps 2> deps-err.log" "$BAR" > deps.log ||
+        { echo "-- deps build log stderr tail 100 --------------------------------------";
+          tail -n 100 deps-err.log;
+          echo "-- deps build log stdout tail 100 --------------------------------------";
+          tail -n 100 deps.log;
+          echo "-- deps build log stderr all -------------------------------------------";
+          cat deps-err.log;
+          echo "-- deps build log stdout all -------------------------------------------";
+          cat deps.log;
+          echo "-- end of deps build log -----------------------------------------------";
+          false; }
+    - make $BUILDOPTS NO_GIT=1 prefix=/tmp/julia install | moreutils/ts -s "%.s"
+    - make $BUILDOPTS NO_GIT=1 build-stats
+    - du -sk /tmp/julia/*
     - if [ `uname` = "Darwin" ]; then
-        for name in spqr umfpack colamd cholmod amd suitesparse_wrapper; do
+        for name in suitesparseconfig spqr umfpack colamd cholmod amd suitesparse_wrapper; do
             install -pm755 usr/lib/lib${name}*.dylib* /tmp/julia/lib/julia/;
         done;
       fi
     - cd .. && mv julia julia2
-    - cp /tmp/julia/lib/julia/sys.ji local.ji && /tmp/julia/bin/julia-debug -J local.ji -e 'true' && rm local.ji
-    - /tmp/julia/bin/julia-debug -e 'versioninfo()'
-    - cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl pkg
-    - cd - && mv julia2 julia
-    - echo "Ready for packaging..."
+    - /tmp/julia/bin/julia --precompiled=no -e 'true' &&
+        /tmp/julia/bin/julia-debug --precompiled=no -e 'true'
+    - /tmp/julia/bin/julia -e 'versioninfo()'
+    - export JULIA_CPU_CORES=2 && export JULIA_TEST_MAXRSS_MB=600 &&
+        cd /tmp/julia/share/julia/test &&
+        /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
+        /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online pkg
+    - cd `dirname $TRAVIS_BUILD_DIR` && mv julia2 julia &&
+        rm -f julia/deps/scratch/libgit2-*/CMakeFiles/CMakeOutput.log
+# uncomment the following if failures are suspected to be due to the out-of-memory killer
+#    - dmesg

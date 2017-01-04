@@ -1,39 +1,50 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #define hash_size(h) (jl_array_len(h)/2)
 
 // compute empirical max-probe for a given size
 #define max_probe(size) ((size)<=1024 ? 16 : (size)>>6)
 
 #define keyhash(k)     jl_object_id(k)
-#define h2index(hv,sz) (index_t)(((hv) & ((sz)-1))*2)
+#define h2index(hv,sz) (size_t)(((hv) & ((sz)-1))*2)
 
 static void **jl_table_lookup_bp(jl_array_t **pa, void *key);
 
-void jl_idtable_rehash(jl_array_t **pa, size_t newsz)
+JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz)
 {
-    size_t sz = jl_array_len(*pa);
+    // Assume *pa don't need a write barrier
+    // pa doesn't have to be a GC slot but *pa needs to be rooted
+    size_t sz = jl_array_len(a);
     size_t i;
-    void **ol = (void**)(*pa)->data;
-    *pa = jl_alloc_cell_1d(newsz);
-    // we do not check the write barrier here
-    // because pa always points to a C stack location
-    // (see eqtable_put)
-    // it should be changed if this assumption no longer holds
+    void **ol = (void**)a->data;
+    jl_array_t *newa = jl_alloc_vec_any(newsz);
+    // keep the original array in the original slot since we need `ol`
+    // to be valid in the loop below.
+    JL_GC_PUSH1(&newa);
     for(i=0; i < sz; i+=2) {
         if (ol[i+1] != NULL) {
-            (*jl_table_lookup_bp(pa, ol[i])) = ol[i+1];
-            gc_wb(*pa, ol[i+1]);
-             // it is however necessary here because allocation
+            (*jl_table_lookup_bp(&newa, ol[i])) = ol[i+1];
+            jl_gc_wb(newa, ol[i+1]);
+            // it is however necessary here because allocation
             // can (and will) occur in a recursive call inside table_lookup_bp
         }
     }
+    // we do not check the write barrier here
+    // because pa always points to a C stack location
+    // (see jl_eqtable_put and jl_finalize_deserializer)
+    // it should be changed if this assumption no longer holds
+    JL_GC_POP();
+    return newa;
 }
 
 static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
 {
+    // pa points to a **rooted** gc frame slot
     uint_t hv;
     jl_array_t *a = *pa;
     size_t orig, index, iter;
     size_t newsz, sz = hash_size(a);
+    assert(sz >= 1);
     size_t maxprobe = max_probe(sz);
     void **tab = (void**)a->data;
 
@@ -47,7 +58,7 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
     do {
         if (tab[index+1] == NULL) {
             tab[index] = key;
-            gc_wb(a, key);
+            jl_gc_wb(a, key);
             return &tab[index+1];
         }
 
@@ -71,7 +82,7 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
         newsz = HT_N_INLINE;
     else
         newsz = sz<<2;
-    jl_idtable_rehash(pa, newsz);
+    *pa = jl_idtable_rehash(*pa, newsz);
 
     a = *pa;
     tab = (void**)a->data;
@@ -88,6 +99,7 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
 static void **jl_table_peek_bp(jl_array_t *a, void *key)
 {
     size_t sz = hash_size(a);
+    assert(sz >= 1);
     size_t maxprobe = max_probe(sz);
     void **tab = (void**)a->data;
     uint_t hv = keyhash((jl_value_t*)key);
@@ -111,16 +123,19 @@ static void **jl_table_peek_bp(jl_array_t *a, void *key)
     return NULL;
 }
 
-DLLEXPORT
+JL_DLLEXPORT
 jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val)
 {
+    JL_GC_PUSH1(&h);
+    // &h may be assigned to in jl_idtable_rehash so it need to be rooted
     void **bp = jl_table_lookup_bp(&h, key);
     *bp = val;
-    gc_wb(h, val);
+    jl_gc_wb(h, val);
+    JL_GC_POP();
     return h;
 }
 
-DLLEXPORT
+JL_DLLEXPORT
 jl_value_t *jl_eqtable_get(jl_array_t *h, void *key, jl_value_t *deflt)
 {
     void **bp = jl_table_peek_bp(h, key);
@@ -129,18 +144,19 @@ jl_value_t *jl_eqtable_get(jl_array_t *h, void *key, jl_value_t *deflt)
     return (jl_value_t*)*bp;
 }
 
-DLLEXPORT
+JL_DLLEXPORT
 jl_value_t *jl_eqtable_pop(jl_array_t *h, void *key, jl_value_t *deflt)
 {
     void **bp = jl_table_peek_bp(h, key);
     if (bp == NULL || *bp == NULL)
         return deflt;
     jl_value_t *val = (jl_value_t*)*bp;
+    *(bp-1) = jl_nothing; // clear the key
     *bp = NULL;
     return val;
 }
 
-DLLEXPORT
+JL_DLLEXPORT
 size_t jl_eqtable_nextind(jl_array_t *t, size_t i)
 {
     if (i&1) i++;

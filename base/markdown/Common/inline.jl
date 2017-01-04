@@ -1,5 +1,7 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # ––––––––
-# Emphasis
+# Emphasis
 # ––––––––
 
 type Italic
@@ -9,7 +11,7 @@ end
 @trigger '*' ->
 function asterisk_italic(stream::IO, md::MD)
     result = parse_inline_wrapper(stream, "*")
-    return result == nothing ? nothing : Italic(parseinline(result, md))
+    return result === nothing ? nothing : Italic(parseinline(result, md))
 end
 
 type Bold
@@ -19,26 +21,42 @@ end
 @trigger '*' ->
 function asterisk_bold(stream::IO, md::MD)
     result = parse_inline_wrapper(stream, "**")
-    return result == nothing ? nothing : Bold(parseinline(result, md))
+    return result === nothing ? nothing : Bold(parseinline(result, md))
 end
 
 # ––––
-# Code
+# Code
 # ––––
 
 @trigger '`' ->
 function inline_code(stream::IO, md::MD)
-    result = parse_inline_wrapper(stream, "`"; rep=true)
-    return result == nothing ? nothing : Code(result)
+    withstream(stream) do
+        ticks = startswith(stream, r"^(`+)")
+        result = readuntil(stream, ticks)
+        if result === nothing
+            nothing
+        else
+            result = strip(result)
+            # An odd number of backticks wrapping the text will produce a `Code` node, while
+            # an even number will result in a `LaTeX` node. This allows for arbitary
+            # backtick combinations to be embedded inside the resulting node, i.e.
+            #
+            # `a`, ``a``, `` `a` ``, ``` ``a`` ```, ``` `a` ```, etc.
+            #  ^     ^        ^            ^             ^
+            #  C     L        L            C             C       with C=Code and L=LaTeX.
+            #
+            isodd(length(ticks)) ? Code(result) : LaTeX(result)
+        end
+    end
 end
 
-# ––––––––––––––
-# Images & Links
-# ––––––––––––––
+# ––––––––––––––
+# Images & Links
+# ––––––––––––––
 
 type Image
-    url::UTF8String
-    alt::UTF8String
+    url::String
+    alt::String
 end
 
 @trigger '!' ->
@@ -57,7 +75,7 @@ end
 
 type Link
     text
-    url::UTF8String
+    url::String
 end
 
 @trigger '[' ->
@@ -74,9 +92,23 @@ function link(stream::IO, md::MD)
     end
 end
 
-# –––––––––––
+@trigger '[' ->
+function footnote_link(stream::IO, md::MD)
+    withstream(stream) do
+        regex = r"^\[\^(\w+)\]"
+        str = startswith(stream, regex)
+        if isempty(str)
+            return
+        else
+            ref = match(regex, str).captures[1]
+            return Footnote(ref, nothing)
+        end
+    end
+end
+
+# –––––––––––
 # Punctuation
-# –––––––––––
+# –––––––––––
 
 type LineBreak end
 
@@ -94,7 +126,7 @@ function en_dash(stream::IO, md::MD)
     end
 end
 
-const escape_chars = "\\`*_#+-.!{[(\$"
+const escape_chars = "\\`*_#+-.!{}[]()\$"
 
 @trigger '\\' ->
 function escapes(stream::IO, md::MD)

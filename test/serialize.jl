@@ -1,4 +1,11 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 using Base.Test
+
+# Check that serializer hasn't gone out-of-frame
+@test Serializer.sertag(Symbol) == 2
+@test Serializer.sertag(()) == 44
+@test Serializer.sertag(false) == 120
 
 function create_serialization_stream(f::Function)
     s = IOBuffer()
@@ -8,20 +15,20 @@ end
 
 # Tags
 create_serialization_stream() do s
-    Base.writetag(s, Bool)
-    @test takebuf_array(s)[end] == UInt8(Base.ser_tag[Bool])
+    Serializer.writetag(s, Serializer.sertag(Bool))
+    @test take!(s)[end] == UInt8(Serializer.sertag(Bool))
 end
 
 create_serialization_stream() do s
-    Base.write_as_tag(s, Bool)
-    @test takebuf_array(s)[end] == UInt8(Base.ser_tag[Bool])
+    Serializer.write_as_tag(s, Serializer.sertag(Bool))
+    @test take!(s)[end] == UInt8(Serializer.sertag(Bool))
 end
 
 create_serialization_stream() do s
-    Base.write_as_tag(s, Symbol)
-    data = takebuf_array(s)
+    Serializer.write_as_tag(s, Serializer.sertag(Symbol))
+    data = take!(s)
     @test data[end-1] == 0x00
-    @test data[end] == UInt8(Base.ser_tag[Symbol])
+    @test data[end] == UInt8(Serializer.sertag(Symbol))
 end
 
 # Boolean & Empty & Nothing
@@ -37,7 +44,9 @@ end
 
 # Ptr
 create_serialization_stream() do s
-    @test_throws ErrorException serialize(s, C_NULL)
+    serialize(s, C_NULL)
+    seekstart(s)
+    @test deserialize(s) === C_NULL
 end
 
 # Integer
@@ -57,17 +66,28 @@ create_serialization_stream() do s
     serialize(s, tpl)
 
     len = 257
-    lt = ntuple(len, i->0x1)
+    lt = ntuple(i->0x1, len)
     serialize(s, lt)
+
+    serialize(s, Tuple{})
 
     seek(s, 0)
     @test deserialize(s) === tpl
     @test deserialize(s) === lt
+    @test deserialize(s) === Tuple{}
+end
+
+# Dict
+create_serialization_stream() do s
+    dct = Dict("A"=>1, "B"=>2)
+    serialize(s, dct)
+    seek(s, 0)
+    @test deserialize(s) == dct
 end
 
 # Symbol
 create_serialization_stream() do s
-    gensym(len) = symbol(repeat("A", len))
+    gensym(len) = Symbol(repeat("A", len))
 
     smbl = gensym(1)
     serialize(s, smbl)
@@ -87,7 +107,7 @@ end
 # Module
 create_serialization_stream() do s # user-defined module
     mod = b"SomeModule"
-    modstring = bytestring(mod)
+    modstring = String(mod)
     eval(parse("module $(modstring); end"))
     modtype = eval(parse("$(modstring)"))
     serialize(s, modtype)
@@ -197,7 +217,7 @@ create_serialization_stream() do s # small 1d array
     arr4 = reshape([true, false, false, false, true, false, false, false, true], 3, 3)
     serialize(s, arr4)       # boolean array
 
-    arr5 = Array(TA1, 3)
+    arr5 = Array{TA1}(3)
     arr5[2] = TA1(0x01)
     serialize(s, arr5)
 
@@ -208,21 +228,46 @@ create_serialization_stream() do s # small 1d array
     @test deserialize(s) == arr4
 
     result = deserialize(s)
-    @test !isdefined(result,1)
-    @test !isdefined(result,3)
+    @test !isassigned(result,1)
+    @test !isassigned(result,3)
     @test result[2].v == arr5[2].v
 end
 
 # SubArray
 create_serialization_stream() do s # slices
-    slc1 = slice(ones(UInt8, 4), 2:3)
+    slc1 = view(ones(UInt8, 4), 2:3)
     serialize(s, slc1)
-    slc2 = slice(ones(UInt8, 4, 4) .+ [0x00, 0x01, 0x02, 0x03], 1, 2:4)
+    slc2 = view(ones(UInt8, 4, 4) .+ [0x00, 0x01, 0x02, 0x03], 1, 2:4)
     serialize(s, slc2)
 
     seek(s, 0)
     @test deserialize(s) == slc1
     @test deserialize(s) == slc2
+end
+
+# Objects that have a SubArray as a type in a type-parameter list
+module ArrayWrappers
+
+immutable ArrayWrapper{T,N,A<:AbstractArray} <: AbstractArray{T,N}
+    data::A
+end
+ArrayWrapper{T,N}(data::AbstractArray{T,N}) = ArrayWrapper{T,N,typeof(data)}(data)
+Base.size(A::ArrayWrapper) = size(A.data)
+Base.size(A::ArrayWrapper, d) = size(A.data, d)
+Base.getindex(A::ArrayWrapper, i::Real...) = getindex(A.data, i...)
+
+end
+
+let A = rand(3,4)
+    for B in (view(A, :, 2:4), view(A, 2, 1:3))
+        C = ArrayWrappers.ArrayWrapper(B)
+        io = IOBuffer()
+        serialize(io, C)
+        seek(io, 0)
+        Cd = deserialize(io)
+        @test size(Cd) == size(C)
+        @test Cd == B
+    end
 end
 
 # Function
@@ -237,32 +282,50 @@ create_serialization_stream() do s # Base generic function
     seek(s, 0)
     @test deserialize(s) === sin
     @test deserialize(s) === typeof
-    @test deserialize(s) == serialize_test_function
-    @test deserialize(s).code.ast == Base.uncompressed_ast(serialize_test_function2.code)
+    @test deserialize(s)() === 1
+    @test deserialize(s)() === 1
 end
+
+# Anonymous Functions
+main_ex = quote
+    $create_serialization_stream() do s
+        local g() = :magic_token_anon_fun_test
+        serialize(s, g)
+        serialize(s, g)
+
+        seekstart(s)
+        local g2 = deserialize(s)
+        $Test.@test g2 !== g
+        $Test.@test g2() == :magic_token_anon_fun_test
+        $Test.@test g2() == :magic_token_anon_fun_test
+        $Test.@test deserialize(s) === g2
+    end
+end
+# This needs to be run on `Main` since the serializer treats it differently.
+eval(Main, main_ex)
 
 # Task
 create_serialization_stream() do s # user-defined type array
     f = () -> begin task_local_storage(:v, 2); return 1+1 end
     t = Task(f)
-    yieldto(t)
+    wait(schedule(t))
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
-    @test r.code.code.ast == Base.uncompressed_ast(f.code)
     @test r.storage[:v] == 2
     @test r.state == :done
-    @test r.exception == nothing
+    @test r.exception === nothing
 end
 
+immutable MyErrorTypeTest <: Exception end
 create_serialization_stream() do s # user-defined type array
-    t = Task(()->error("Test"))
-    @test_throws ErrorException yieldto(t)
+    t = Task(()->throw(MyErrorTypeTest()))
+    @test_throws MyErrorTypeTest wait(schedule(t))
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
     @test r.state == :failed
-    @test isa(t.exception, ErrorException)
+    @test isa(t.exception, MyErrorTypeTest)
 end
 
 # corner case: undefined inside immutable type
@@ -272,4 +335,106 @@ create_serialization_stream() do s
     n = deserialize(s)
     @test isa(n, Nullable)
     @test !isdefined(n, :value)
+end
+
+# cycles
+module CycleFoo
+    echo(x)=x
+end
+create_serialization_stream() do s
+    echo(x) = x
+    afunc = (x)->x
+    A = Any[1,2,3,abs,abs,afunc,afunc,echo,echo,CycleFoo.echo,CycleFoo.echo,4,5]
+    A[3] = A
+    serialize(s, A)
+    seekstart(s)
+    b = deserialize(s)
+    @test b[3] === b
+    @test b[1] == 1
+    @test b[4] === abs
+    @test b[5] === b[4]
+    @test b[5](-1) == 1
+
+    @test b[6] === b[7]
+    @test b[6]("Hello") == "Hello"
+
+    @test b[8] === b[9]
+    @test b[8]("World") == "World"
+
+    @test b[10] === b[11]
+    @test b[10]("foobar") == "foobar"
+
+    @test b[end] == 5
+    @test length(b) == length(A)
+    @test isa(b,Vector{Any})
+end
+
+# Regex
+create_serialization_stream() do s
+    r1 = r"a?b.*"
+    serialize(s, r1)
+    seekstart(s)
+    r2 = deserialize(s)
+    @test r1 == r2
+end
+
+# issue #13452
+module Test13452
+using Base.Test
+
+module Shell
+export foo
+foo(x) = error("Instances must implement foo")
+end
+
+module Instance1
+using ..Shell
+Shell.foo(x::Int) = "This is an Int"
+end
+
+using .Shell, .Instance1
+io = IOBuffer()
+serialize(io, foo)
+str = String(take!(io))
+@test isempty(search(str, "Instance1"))
+@test !isempty(search(str, "Shell"))
+
+end  # module Test13452
+
+# issue #15163
+type B15163{T}
+    x::Array{T}
+end
+let b = IOBuffer()
+    serialize(b,B15163([1]))
+    seekstart(b)
+    c = deserialize(b)
+    @test isa(c,B15163) && c.x == [1]
+end
+
+# issue #15849
+let b = IOBuffer()
+    vt = Tuple[(1,)]
+    serialize(b, vt)
+    seekstart(b)
+    @test deserialize(b) == vt
+end
+
+# issue #1770
+let
+    a = ['T', 'e', 's', 't']
+    f = IOBuffer()
+    serialize(f, a)
+    seek(f, 0)
+    @test deserialize(f) == a
+    f = IOBuffer()
+    serialize(f, a)
+    seek(f, 0)
+    @test deserialize(f) == a
+
+    # issue #4414
+    seek(f,0)
+    serialize(f, :β)
+    seek(f,0)
+    @test deserialize(f) === :β
 end

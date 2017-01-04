@@ -1,0 +1,101 @@
+commit 99ca52276f9ee1386866d6dff6179cfa64824621
+Author: Keno Fischer <kfischer@college.harvard.edu>
+Date:   Mon Dec 5 21:25:03 2016 +0000
+
+    [LAA] Prevent invalid IR for loop-invariant bound in loop body
+    
+    Summary:
+    If LAA expands a bound that is loop invariant, but not hoisted out
+    of the loop body, it used to use that value anyway, causing a
+    non-domination error, because the memcheck block is of course not
+    dominated by the scalar loop body. Detect this situation and expand
+    the SCEV expression instead.
+    
+    Fixes PR31251
+    
+    Reviewers: anemet
+    Subscribers: mzolotukhin, llvm-commits
+    
+    Differential Revision: https://reviews.llvm.org/D27397
+    
+    git-svn-id: https://llvm.org/svn/llvm-project/llvm/trunk@288705 91177308-0d34-0410-b5e6-96231b3b80d8
+
+diff --git a/lib/Analysis/LoopAccessAnalysis.cpp b/lib/Analysis/LoopAccessAnalysis.cpp
+index 01a2f46..2f3dca3 100644
+--- a/lib/Analysis/LoopAccessAnalysis.cpp
++++ b/lib/Analysis/LoopAccessAnalysis.cpp
+@@ -1870,18 +1870,24 @@ expandBounds(const RuntimePointerChecking::CheckingPtrGroup *CG, Loop *TheLoop,
+   Value *Ptr = PtrRtChecking.Pointers[CG->Members[0]].PointerValue;
+   const SCEV *Sc = SE->getSCEV(Ptr);
+ 
++  unsigned AS = Ptr->getType()->getPointerAddressSpace();
++  LLVMContext &Ctx = Loc->getContext();
++
++  // Use this type for pointer arithmetic.
++  Type *PtrArithTy = Type::getInt8PtrTy(Ctx, AS);
++
+   if (SE->isLoopInvariant(Sc, TheLoop)) {
+     DEBUG(dbgs() << "LAA: Adding RT check for a loop invariant ptr:" << *Ptr
+                  << "\n");
+-    return {Ptr, Ptr};
++    // Ptr could be in the loop body. If so, expand a new one at the correct
++    // location.
++    Instruction *Inst = dyn_cast<Instruction>(Ptr);
++    Value *NewPtr = (Inst && TheLoop->contains(Inst))
++                        ? Exp.expandCodeFor(Sc, PtrArithTy, Loc)
++                        : Ptr;
++    return {NewPtr, NewPtr};
+   } else {
+-    unsigned AS = Ptr->getType()->getPointerAddressSpace();
+-    LLVMContext &Ctx = Loc->getContext();
+-
+-    // Use this type for pointer arithmetic.
+-    Type *PtrArithTy = Type::getInt8PtrTy(Ctx, AS);
+     Value *Start = nullptr, *End = nullptr;
+-
+     DEBUG(dbgs() << "LAA: Adding RT check for range:\n");
+     Start = Exp.expandCodeFor(CG->Low, PtrArithTy, Loc);
+     End = Exp.expandCodeFor(CG->High, PtrArithTy, Loc);
+diff --git a/test/Transforms/LoopVersioning/loop-invariant-bound.ll b/test/Transforms/LoopVersioning/loop-invariant-bound.ll
+new file mode 100644
+index 0000000..3411adb
+--- /dev/null
++++ b/test/Transforms/LoopVersioning/loop-invariant-bound.ll
+@@ -0,0 +1,37 @@
++; RUN: opt -loop-versioning -S < %s | FileCheck %s
++; Checks that when introducing check, we don't accidentally introduce non-dominating instructions
++target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
++
++%Dual.212 = type { %Dual.213, %Partials.215 }
++%Dual.213 = type { double, %Partials.214 }
++%Partials.214 = type { [2 x double] }
++%Partials.215 = type { [2 x %Dual.213] }
++
++; Function Attrs: sspreq
++define void @"julia_axpy!_65480"(%Dual.212*) {
++top:
++  br label %if24
++
++; CHECK-NOT: %bc = bitcast i64* %v2.sroa.0.0..sroa_cast
++; CHECK: %bound0
++
++if24:                                             ; preds = %if24, %top
++  %"#temp#1.sroa.3.02" = phi i64 [ undef, %top ], [ %2, %if24 ]
++  %"#temp#1.sroa.0.01" = phi i64 [ undef, %top ], [ %1, %if24 ]
++  %1 = add i64 %"#temp#1.sroa.0.01", 1
++  %2 = add i64 %"#temp#1.sroa.3.02", 1
++  ; This pointer is loop invariant. LAA used to re-use it from memcheck, even though it didn't dominate.
++  %v2.sroa.0.0..sroa_cast = bitcast %Dual.212* %0 to i64*
++  %v2.sroa.0.0.copyload = load i64, i64* %v2.sroa.0.0..sroa_cast, align 1
++  %3 = add i64 %"#temp#1.sroa.0.01", -1
++  %4 = getelementptr inbounds %Dual.212, %Dual.212* undef, i64 %3, i32 1, i32 0, i64 0, i32 1, i32 0, i64 0
++  %5 = bitcast double* %4 to i64*
++  store i64 undef, i64* %5, align 8
++  %notlhs27 = icmp eq i64 %2, undef
++  %notrhs28 = icmp eq i64 %1, undef
++  %6 = or i1 %notrhs28, %notlhs27
++  br i1 %6, label %L41.L335_crit_edge, label %if24
++
++L41.L335_crit_edge:                               ; preds = %if24
++  ret void
++}

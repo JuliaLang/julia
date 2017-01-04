@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Small sanity tests to ensure changing the rounding of float functions work
 using Base.Test
 
@@ -16,7 +18,7 @@ d = prevfloat(1.)
 @test b - a === c
 
 # RoundToZero
-with_rounding(Float64,RoundToZero) do
+setrounding(Float64,RoundToZero) do
     @test a + b === d
     @test - a - b === -d
     @test a - b === -c
@@ -30,7 +32,7 @@ end
 @test b - a == c
 
 # RoundUp
-with_rounding(Float64,RoundUp) do
+setrounding(Float64,RoundUp) do
     @test a + b === 1.
     @test - a - b === -d
     @test a - b === -c
@@ -38,7 +40,7 @@ with_rounding(Float64,RoundUp) do
 end
 
 # RoundDown
-with_rounding(Float64,RoundDown) do
+setrounding(Float64,RoundDown) do
     @test a + b === d
     @test - a - b === -1.
     @test a - b === -c
@@ -59,7 +61,7 @@ d32 = prevfloat(1.0f0)
 @test b32 - a32 === c32
 
 # RoundToZero
-with_rounding(Float32,RoundToZero) do
+setrounding(Float32,RoundToZero) do
     @test a32 + b32 === d32
     @test - a32 - b32 === -d32
     @test a32 - b32 === -c32
@@ -73,7 +75,7 @@ end
 @test b32 - a32 == c32
 
 # RoundUp
-with_rounding(Float32,RoundUp) do
+setrounding(Float32,RoundUp) do
     @test a32 + b32 === 1.0f0
     @test - a32 - b32 === -d32
     @test a32 - b32 === -c32
@@ -81,7 +83,7 @@ with_rounding(Float32,RoundUp) do
 end
 
 # RoundDown
-with_rounding(Float32,RoundDown) do
+setrounding(Float32,RoundDown) do
     @test a32 + b32 === d32
     @test - a32 - b32 === -1.0f0
     @test a32 - b32 === -c32
@@ -94,11 +96,11 @@ for v = [sqrt(2),-1/3,nextfloat(1.0),prevfloat(1.0),nextfloat(-1.0),
     pn = Float32(v,RoundNearest)
     @test pn == convert(Float32,v)
     pz = Float32(v,RoundToZero)
-    @test pz == with_rounding(()->convert(Float32,v), Float64, RoundToZero)
+    @test pz == setrounding(()->convert(Float32,v), Float64, RoundToZero)
     pd = Float32(v,RoundDown)
-    @test pd == with_rounding(()->convert(Float32,v), Float64, RoundDown)
+    @test pd == setrounding(()->convert(Float32,v), Float64, RoundDown)
     pu = Float32(v,RoundUp)
-    @test pu == with_rounding(()->convert(Float32,v), Float64, RoundUp)
+    @test pu == setrounding(()->convert(Float32,v), Float64, RoundUp)
 
     @test pn == pd || pn == pu
     @test v > 0 ? pz == pd : pz == pu
@@ -113,14 +115,25 @@ for T in [Float32,Float64]
         pn = T(v,RoundNearest)
         @test pn == convert(T,BigFloat(v))
         pz = T(v,RoundToZero)
-        @test pz == with_rounding(()->convert(T,BigFloat(v)), BigFloat, RoundToZero)
+        @test pz == setrounding(()->convert(T,BigFloat(v)), BigFloat, RoundToZero)
         pd = T(v,RoundDown)
-        @test pd == with_rounding(()->convert(T,BigFloat(v)), BigFloat, RoundDown)
+        @test pd == setrounding(()->convert(T,BigFloat(v)), BigFloat, RoundDown)
         pu = T(v,RoundUp)
-        @test pu == with_rounding(()->convert(T,BigFloat(v)), BigFloat, RoundUp)
+        @test pu == setrounding(()->convert(T,BigFloat(v)), BigFloat, RoundUp)
 
         @test pn == pd || pn == pu
         @test v > 0 ? pz == pd : pz == pu
         @test isinf(pu) || pu - pd == eps(pz)
     end
 end
+
+#fenv
+@test Base.Rounding.from_fenv(Base.Rounding.to_fenv(RoundNearest)) == RoundNearest
+@test Base.Rounding.from_fenv(Base.Rounding.to_fenv(RoundToZero)) == RoundToZero
+@test Base.Rounding.from_fenv(Base.Rounding.to_fenv(RoundUp)) == RoundUp
+@test Base.Rounding.from_fenv(Base.Rounding.to_fenv(RoundDown)) == RoundDown
+@test_throws ArgumentError Base.Rounding.from_fenv(-99)
+
+badness = 1//0
+@test_throws DivideError round(Int64,badness,RoundNearestTiesAway)
+@test_throws DivideError round(Int64,badness,RoundNearestTiesUp)

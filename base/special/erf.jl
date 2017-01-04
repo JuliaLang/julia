@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 for f in (:erf, :erfc, :erfcx, :erfi, :Dawson)
     fname = (f === :Dawson) ? :dawson : f
     @eval begin
@@ -12,7 +14,6 @@ for f in (:erfcx, :erfi, :Dawson)
         ($fname)(x::Float64) = ccall(($(string("Faddeeva_",f,"_re")),openspecfun), Float64, (Float64,), x)
         ($fname)(x::Float32) = Float32(ccall(($(string("Faddeeva_",f,"_re")),openspecfun), Float64, (Float64,), Float64(x)))
         ($fname)(x::Integer) = ($fname)(float(x))
-        @vectorize_1arg Number $fname
     end
 end
 
@@ -135,7 +136,6 @@ function erfinv(x::Float32)
 end
 
 erfinv(x::Integer) = erfinv(float(x))
-@vectorize_1arg Real erfinv
 
 # Inverse complementary error function: use Blair tables for y = 1-x,
 # exploiting the greater accuracy of y (vs. x) when y is small.
@@ -215,5 +215,3 @@ function erfcinv(y::Float32)
 end
 
 erfcinv(x::Integer) = erfcinv(float(x))
-@vectorize_1arg Real erfcinv
-

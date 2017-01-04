@@ -1,13 +1,17 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## semantic version numbers (http://semver.org)
 
 immutable VersionNumber
     major::Int
     minor::Int
     patch::Int
-    prerelease::Tuple{Vararg{Union(Int,ASCIIString)}}
-    build::Tuple{Vararg{Union(Int,ASCIIString)}}
+    prerelease::Tuple{Vararg{Union{Int,String}}}
+    build::Tuple{Vararg{Union{Int,String}}}
 
-    function VersionNumber(major::Integer, minor::Integer, patch::Integer, pre::Tuple{Vararg{Union(Int,ASCIIString)}}, bld::Tuple{Vararg{Union(Int,ASCIIString)}})
+    function VersionNumber(major::Int, minor::Int, patch::Int,
+            pre::Tuple{Vararg{Union{Int,String}}},
+            bld::Tuple{Vararg{Union{Int,String}}})
         major >= 0 || throw(ArgumentError("invalid negative major version: $major"))
         minor >= 0 || throw(ArgumentError("invalid negative minor version: $minor"))
         patch >= 0 || throw(ArgumentError("invalid negative patch version: $patch"))
@@ -34,9 +38,12 @@ immutable VersionNumber
         new(major, minor, patch, pre, bld)
     end
 end
-VersionNumber(x::Integer, y::Integer, z::Integer) = VersionNumber(x, y, z, (), ())
-VersionNumber(x::Integer, y::Integer)             = VersionNumber(x, y, 0, (), ())
-VersionNumber(x::Integer)                         = VersionNumber(x, 0, 0, (), ())
+VersionNumber(major::Integer, minor::Integer = 0, patch::Integer = 0,
+        pre::Tuple{Vararg{Union{Integer,AbstractString}}} = (),
+        bld::Tuple{Vararg{Union{Integer,AbstractString}}} = ()) =
+    VersionNumber(Int(major), Int(minor), Int(patch),
+        map(x->isa(x,Integer) ? Int(x) : String(x), pre),
+        map(x->isa(x,Integer) ? Int(x) : String(x), bld))
 
 function print(io::IO, v::VersionNumber)
     v == typemax(VersionNumber) && return print(io, "∞")
@@ -47,11 +54,11 @@ function print(io::IO, v::VersionNumber)
     print(io, v.patch)
     if !isempty(v.prerelease)
         print(io, '-')
-        print_joined(io, v.prerelease,'.')
+        join(io, v.prerelease,'.')
     end
     if !isempty(v.build)
         print(io, '+')
-        print_joined(io, v.build,'.')
+        join(io, v.build,'.')
     end
 end
 show(io::IO, v::VersionNumber) = print(io, "v\"", v, "\"")
@@ -75,22 +82,22 @@ function split_idents(s::AbstractString)
     idents = split(s, '.')
     ntuple(length(idents)) do i
         ident = idents[i]
-        ismatch(r"^\d+$", ident) ? parse(Int, ident) : bytestring(ident)
+        ismatch(r"^\d+$", ident) ? parse(Int, ident) : String(ident)
     end
 end
 
-VersionNumber(v::AbstractString) = begin
+function VersionNumber(v::AbstractString)
     m = match(VERSION_REGEX, v)
-    m == nothing && throw(ArgumentError("invalid version string: $v"))
+    m === nothing && throw(ArgumentError("invalid version string: $v"))
     major, minor, patch, minus, prerl, plus, build = m.captures
     major = parse(Int, major)
-    minor = minor != nothing ? parse(Int, minor) : 0
-    patch = patch != nothing ? parse(Int, patch) : 0
-    if prerl != nothing && !isempty(prerl) && prerl[1] == '-'
+    minor = minor !== nothing ? parse(Int, minor) : 0
+    patch = patch !== nothing ? parse(Int, patch) : 0
+    if prerl !== nothing && !isempty(prerl) && prerl[1] == '-'
         prerl = prerl[2:end] # strip leading '-'
     end
-    prerl = prerl != nothing ? split_idents(prerl) : minus == "-" ? ("",) : ()
-    build = build != nothing ? split_idents(build) : plus  == "+" ? ("",) : ()
+    prerl = prerl !== nothing ? split_idents(prerl) : minus !== nothing ? ("",) : ()
+    build = build !== nothing ? split_idents(build) : plus  !== nothing ? ("",) : ()
     VersionNumber(major, minor, patch, prerl, build)
 end
 
@@ -102,12 +109,12 @@ typemin(::Type{VersionNumber}) = v"0-"
 typemax(::Type{VersionNumber}) = VersionNumber(typemax(Int),typemax(Int),typemax(Int),(),("",))
 
 ident_cmp(a::Int, b::Int) = cmp(a,b)
-ident_cmp(a::Int, b::ASCIIString) = isempty(b) ? +1 : -1
-ident_cmp(a::ASCIIString, b::Int) = isempty(a) ? -1 : +1
-ident_cmp(a::ASCIIString, b::ASCIIString) = cmp(a,b)
+ident_cmp(a::Int, b::String) = isempty(b) ? +1 : -1
+ident_cmp(a::String, b::Int) = isempty(a) ? -1 : +1
+ident_cmp(a::String, b::String) = cmp(a,b)
 
-function ident_cmp(A::Tuple{Vararg{Union(Int,ASCIIString)}},
-                   B::Tuple{Vararg{Union(Int,ASCIIString)}})
+function ident_cmp(A::Tuple{Vararg{Union{Int,String}}},
+                   B::Tuple{Vararg{Union{Int,String}}})
     i = start(A)
     j = start(B)
     while !done(A,i) && !done(B,i)
@@ -192,13 +199,28 @@ end
 
 ## julia version info
 
-# Include build number if we've got at least some distance from a tag (e.g. a release)
-try
-    build_number = GIT_VERSION_INFO.build_number != 0 ? "+$(GIT_VERSION_INFO.build_number)" : ""
-    global const VERSION = convert(VersionNumber, "$(VERSION_STRING)$(build_number)")
+"""
+    VERSION
+
+A `VersionNumber` object describing which version of Julia is in use. For details see
+[Version Number Literals](@ref man-version-number-literals).
+"""
+const VERSION = try
+    ver = convert(VersionNumber, VERSION_STRING)
+    if !isempty(ver.prerelease)
+        if GIT_VERSION_INFO.build_number >= 0
+            ver = VersionNumber(ver.major, ver.minor, ver.patch, (ver.prerelease..., GIT_VERSION_INFO.build_number), ver.build)
+        else
+            println("WARNING: no build number found for pre-release version")
+            ver = VersionNumber(ver.major, ver.minor, ver.patch, (ver.prerelease..., "unknown"), ver.build)
+        end
+    elseif GIT_VERSION_INFO.build_number > 0
+        println("WARNING: ignoring non-zero build number for VERSION")
+    end
+    ver
 catch e
     println("while creating Base.VERSION, ignoring error $e")
-    global const VERSION = VersionNumber(0)
+    VersionNumber(0)
 end
 
 function banner(io::IO = STDOUT)
@@ -207,7 +229,8 @@ function banner(io::IO = STDOUT)
     elseif GIT_VERSION_INFO.commit == ""
         commit_string = ""
     else
-        days = Int(floor((ccall(:clock_now, Float64, ()) - GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
+        days = Int(floor((ccall(:jl_clock_now, Float64, ()) - GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
+        days = max(0, days)
         unit = days == 1 ? "day" : "days"
         distance = GIT_VERSION_INFO.fork_master_distance
         commit = GIT_VERSION_INFO.commit_short
@@ -232,7 +255,7 @@ function banner(io::IO = STDOUT)
         print(io,"""\033[1m               $(d3)_$(tx)
            $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  A fresh approach to technical computing
           $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: http://docs.julialang.org
-           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"help()\" for help.
+           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?help\" for help.
           $(jl)| | | | | | |/ _` |$(tx)  |
           $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
          $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
@@ -244,7 +267,7 @@ function banner(io::IO = STDOUT)
                        _
            _       _ _(_)_     |  A fresh approach to technical computing
           (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
-           _ _   _| |_  __ _   |  Type \"help()\" for help.
+           _ _   _| |_  __ _   |  Type \"?help\" for help.
           | | | | | | |/ _` |  |
           | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
          _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)

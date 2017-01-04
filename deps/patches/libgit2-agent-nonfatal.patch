@@ -1,0 +1,21 @@
+commit 70020247d1903c7a1262d967cf205a44dc6f6ebe
+Author: Keno Fischer <kfischer@college.harvard.edu>
+Date:   Wed Jul 20 19:59:00 2016 -0400
+
+    Make failure to connect to ssh-agent non-fatal
+
+diff --git a/src/transports/ssh.c b/src/transports/ssh.c
+index cfd5736..82d2c63 100644
+--- a/src/transports/ssh.c
++++ b/src/transports/ssh.c
+@@ -296,8 +296,10 @@ static int ssh_agent_auth(LIBSSH2_SESSION *session, git_cred_ssh_key *c) {
+ 
+ 	rc = libssh2_agent_connect(agent);
+ 
+-	if (rc != LIBSSH2_ERROR_NONE)
++	if (rc != LIBSSH2_ERROR_NONE) {
++		rc = LIBSSH2_ERROR_AUTHENTICATION_FAILED;
+ 		goto shutdown;
++        }
+ 
+ 	rc = libssh2_agent_list_identities(agent);

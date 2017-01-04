@@ -1,19 +1,23 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Enums
 
+import Core.Intrinsics.box
 export Enum, @enum
 
-abstract Enum
+function basetype end
 
-Base.convert{T<:Integer}(::Type{T},x::Enum) = convert(T, x.val)
-Base.convert{T<:Enum}(::Type{T},x::Integer) = T(x)
-Base.start{T<:Enum}(::Type{T}) = 1
-# next, done defined per Enum
+abstract Enum{T<:Integer}
+
+Base.convert{T<:Integer}(::Type{Integer}, x::Enum{T}) = box(T, x)
+Base.convert{T<:Integer,T2<:Integer}(::Type{T}, x::Enum{T2}) = convert(T, box(T2, x))
+Base.write{T<:Integer}(io::IO, x::Enum{T}) = write(io, T(x))
+Base.read{T<:Enum}(io::IO, ::Type{T}) = T(read(io, Enums.basetype(T)))
 
 # generate code to test whether expr is in the given set of values
 function membershiptest(expr, values)
     lo, hi = extrema(values)
-    sv = sort(values)
-    if sv == [lo:hi;]
+    if length(values) == hi - lo + 1
         :($lo <= $expr <= $hi)
     elseif length(values) < 20
         foldl((x1,x2)->:($x1 || ($expr == $x2)), :($expr == $(values[1])), values[2:end])
@@ -24,96 +28,124 @@ end
 
 @noinline enum_argument_error(typename, x) = throw(ArgumentError(string("invalid value for Enum $(typename): $x")))
 
+"""
+    @enum EnumName[::BaseType] EnumValue1[=x] EnumValue2[=y]
+
+Create an `Enum{BaseType}` subtype with name `EnumName` and enum member values of
+`EnumValue1` and `EnumValue2` with optional assigned values of `x` and `y`, respectively.
+`EnumName` can be used just like other types and enum member values as regular values, such as
+
+```jldoctest
+julia> @enum Fruit apple=1 orange=2 kiwi=3
+
+julia> f(x::Fruit) = "I'm a Fruit with value: \$(Int(x))"
+f (generic function with 1 method)
+
+julia> f(apple)
+"I'm a Fruit with value: 1"
+```
+
+`BaseType`, which defaults to `Int32`, must be a bitstype subtype of Integer. Member values can be converted between
+the enum type and `BaseType`. `read` and `write` perform these conversions automatically.
+"""
 macro enum(T,syms...)
     if isempty(syms)
         throw(ArgumentError("no arguments given for Enum $T"))
     end
-    if isa(T,Symbol)
-        typename = T
-    elseif isa(T,Expr) && T.head === :curly
+    basetype = Int32
+    typename = T
+    if isa(T,Expr) && T.head == :(::) && length(T.args) == 2 && isa(T.args[1], Symbol)
         typename = T.args[1]
-    else
+        basetype = eval(current_module(),T.args[2])
+        if !isa(basetype, DataType) || !(basetype <: Integer) || !isbits(basetype)
+            throw(ArgumentError("invalid base type for Enum $typename, $T=::$basetype; base type must be an integer bitstype"))
+        end
+    elseif !isa(T,Symbol)
         throw(ArgumentError("invalid type expression for enum $T"))
     end
-    vals = Array(Tuple{Symbol,Integer},0)
+    vals = Array{Tuple{Symbol,Integer}}(0)
     lo = hi = 0
-    i = -1
-    enumT = typeof(i)
+    i = zero(basetype)
     hasexpr = false
     for s in syms
         if isa(s,Symbol)
-            if i == typemax(typeof(i))
-                i = widen(i) + one(i)
-            else
-                i += one(i)
+            if i == typemin(basetype) && !isempty(vals)
+                throw(ArgumentError("overflow in value \"$s\" of Enum $typename"))
             end
         elseif isa(s,Expr) &&
                (s.head == :(=) || s.head == :kw) &&
                length(s.args) == 2 && isa(s.args[1],Symbol)
-            i = eval(s.args[2]) # allow exprs, e.g. uint128"1"
+            i = eval(current_module(),s.args[2]) # allow exprs, e.g. uint128"1"
+            if !isa(i, Integer)
+                throw(ArgumentError("invalid value for Enum $typename, $s=$i; values must be integers"))
+            end
+            i = convert(basetype, i)
             s = s.args[1]
             hasexpr = true
         else
             throw(ArgumentError(string("invalid argument for Enum ", typename, ": ", s)))
         end
-        if !isa(i, Integer)
-            throw(ArgumentError("invalid value for Enum $typename, $s=$i; values must be integers"))
-        end
         if !Base.isidentifier(s)
             throw(ArgumentError("invalid name for Enum $typename; \"$s\" is not a valid identifier."))
         end
         push!(vals, (s,i))
-        I = typeof(i)
         if length(vals) == 1
-            enumT = I
             lo = hi = i
         else
-            enumT = promote_type(enumT,I)
             lo = min(lo, i)
             hi = max(hi, i)
         end
+        i += one(i)
     end
-    if !hasexpr
-        n = length(vals)
-        enumT = n <= typemax(Int8) ? Int8 :
-                n <= typemax(Int16) ? Int16 :
-                n <= typemax(Int32) ? Int32 : Int64
-    end
-    values = enumT[i[2] for i in vals]
+    values = basetype[i[2] for i in vals]
     if hasexpr && values != unique(values)
         throw(ArgumentError("values for Enum $typename are not unique"))
     end
-    lo = convert(enumT, lo)
-    hi = convert(enumT, hi)
-    vals = map(x->(x[1],convert(enumT,x[2])), vals)
     blk = quote
         # enum definition
-        immutable $(esc(T)) <: Enum
-            val::$enumT
-            function $(esc(typename))(x::Integer)
-                $(membershiptest(:x, values)) || enum_argument_error($(Meta.quot(typename)), x)
-                new(x)
-            end
+        Base.@__doc__(bitstype $(sizeof(basetype) * 8) $(esc(typename)) <: Enum{$(basetype)})
+        function Base.convert(::Type{$(esc(typename))}, x::Integer)
+            $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x)
+            box($(esc(typename)), convert($(basetype), x))
         end
-        Base.typemin{E<:$(esc(typename))}(x::Type{E}) = E($lo)
-        Base.typemax{E<:$(esc(typename))}(x::Type{E}) = E($hi)
-        Base.length{E<:$(esc(typename))}(x::Type{E}) = $(length(vals))
-        Base.next{E<:$(esc(typename))}(x::Type{E},s) = (E($values[s]),s+1)
-        Base.done{E<:$(esc(typename))}(x::Type{E},s) = s > $(length(values))
-        Base.names{E<:$(esc(typename))}(x::Type{E}) = [$(map(x->Meta.quot(x[1]), vals)...)]
-        Base.isless{E<:$(esc(typename))}(x::E, y::E) = isless(x.val, y.val)
-        function Base.print{E<:$(esc(typename))}(io::IO,x::E)
+        Enums.basetype(::Type{$(esc(typename))}) = $(esc(basetype))
+        Base.typemin(x::Type{$(esc(typename))}) = $(esc(typename))($lo)
+        Base.typemax(x::Type{$(esc(typename))}) = $(esc(typename))($hi)
+        Base.isless(x::$(esc(typename)), y::$(esc(typename))) = isless($basetype(x), $basetype(y))
+        let insts = ntuple(i->$(esc(typename))($values[i]), $(length(vals)))
+            Base.instances(::Type{$(esc(typename))}) = insts
+        end
+        function Base.print(io::IO, x::$(esc(typename)))
             for (sym, i) in $vals
-                if i == x.val
+                if i == $(basetype)(x)
                     print(io, sym); break
                 end
             end
         end
-        Base.show{E<:$(esc(typename))}(io::IO,x::E) = print(io, x, "::", E)
+        function Base.show(io::IO, x::$(esc(typename)))
+            if get(io, :compact, false)
+                print(io, x)
+            else
+                print(io, x, "::")
+                showcompact(io, typeof(x))
+                print(io, " = ", $basetype(x))
+            end
+        end
+        function Base.show(io::IO, t::Type{$(esc(typename))})
+            Base.show_datatype(io, t)
+        end
+        function Base.show(io::IO, ::MIME"text/plain", t::Type{$(esc(typename))})
+            print(io, "Enum ")
+            Base.show_datatype(io, t)
+            print(io, ":")
+            for (sym, i) in $vals
+                print(io, "\n", sym, " = ", i)
+            end
+        end
     end
-    if isa(T,Symbol)
+    if isa(typename,Symbol)
         for (sym,i) in vals
-            push!(blk.args, :(const $(esc(sym)) = $(esc(T))($i)))
+            push!(blk.args, :(const $(esc(sym)) = $(esc(typename))($i)))
         end
     end
     push!(blk.args, :nothing)

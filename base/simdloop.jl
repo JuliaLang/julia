@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Support for @simd for
 
 module SimdLoop
@@ -6,7 +8,7 @@ export @simd, simd_outer_range, simd_inner_length, simd_index
 
 # Error thrown from ill-formed uses of @simd
 type SimdError <: Exception
-    msg::ASCIIString
+    msg::String
 end
 
 # Parse iteration space expression
@@ -23,7 +25,7 @@ end
 function check_body!(x::Expr)
     if x.head === :break || x.head == :continue
         throw(SimdError("$(x.head) is not allowed inside a @simd loop body"))
-    elseif x.head === :macrocall && x.args[1] === symbol("@goto")
+    elseif x.head === :macrocall && x.args[1] === Symbol("@goto")
         throw(SimdError("$(x.args[1]) is not allowed inside a @simd loop body"))
     end
     for arg in x.args
@@ -42,10 +44,10 @@ check_body!(x) = true
 simd_outer_range(r) = 0:0
 
 # Get trip count for inner loop.
-simd_inner_length(r,j::Int) = length(r)
+@inline simd_inner_length(r,j::Int) = length(r)
 
-# Construct user-level index from original range, outer loop index j, and inner loop index i.
-simd_index(r,j::Int,i) = first(r)+i*step(r)
+# Construct user-level element from original range, outer loop index j, and inner loop index i.
+@inline simd_index(r,j::Int,i) = (@inbounds ret = r[i+1]; ret)
 
 # Compile Expr x in context of @simd.
 function compile(x)

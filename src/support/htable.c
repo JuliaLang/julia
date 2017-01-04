@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 /*
   functions common to all hash table instantiations
 */
@@ -23,7 +25,7 @@ htable_t *htable_new(htable_t *h, size_t size)
         h->table = &h->_space[0];
     }
     else {
-        size = nextipow2(size);
+        size = next_power_of_two(size);
         size *= 2;  // 2 pointers per key/value pair
         size *= 2;  // aim for 50% occupancy
         h->size = size;
@@ -45,7 +47,7 @@ void htable_free(htable_t *h)
 // empty and reduce size
 void htable_reset(htable_t *h, size_t sz)
 {
-    sz = nextipow2(sz);
+    sz = next_power_of_two(sz);
     if (h->size > sz*4 && h->size > HT_N_INLINE) {
         size_t newsz = sz*4;
         void **newtab = (void**)LLT_REALLOC(h->table, newsz*sizeof(void*));

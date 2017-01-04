@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Base64
 import Base: read, write, close, eof, empty!
 export Base64EncodePipe, Base64DecodePipe, base64encode, base64decode
@@ -12,6 +14,14 @@ export Base64EncodePipe, Base64DecodePipe, base64encode, base64decode
 # , while function base64decode is useful for decoding strings
 #############################################################################
 
+"""
+    Base64EncodePipe(ostream)
+
+Returns a new write-only I/O stream, which converts any bytes written to it into
+base64-encoded ASCII bytes written to `ostream`.
+Calling [`close`](@ref) on the `Base64EncodePipe` stream
+is necessary to complete the encoding (but does not close `ostream`).
+"""
 type Base64EncodePipe <: IO
     io::IO
     # writing works in groups of 3, so we need to cache last two bytes written
@@ -59,8 +69,8 @@ for (val, ch) in enumerate(b64chars)
     revb64chars[UInt8(ch)] = UInt8(val - 1)
 end
 
-#Decode a block of at least 2 and at most 4 bytes, received in encvec
-#Returns the first decoded byte and stores up to two more in cache
+# Decode a block of at least 2 and at most 4 bytes, received in encvec
+# Returns the first decoded byte and stores up to two more in cache
 function b64decode!(encvec::Vector{UInt8}, cache::Vector{UInt8})
     if length(encvec) < 2
         throw(ArgumentError("incorrect base64 format, block must be at least 2 and at most 4 bytes"))
@@ -83,16 +93,15 @@ end
 
 #############################################################################
 
-function write(b::Base64EncodePipe, x::AbstractVector{UInt8})
-    n = length(x)
+function unsafe_write(b::Base64EncodePipe, x::Ptr{UInt8}, n::UInt)
     s = 1 # starting index
     # finish any cached data to write:
     if b.nb == 1
         if n >= 2
-            write(b.io, b64(b.b0, x[1], x[2])...)
+            write(b.io, b64(b.b0, unsafe_load(x, 1), unsafe_load(x, 2))...)
             s = 3
         elseif n == 1
-            b.b1 = x[1]
+            b.b1 = unsafe_load(x, 1)
             b.nb = 2
             return
         else
@@ -100,7 +109,7 @@ function write(b::Base64EncodePipe, x::AbstractVector{UInt8})
         end
     elseif b.nb == 2
         if n >= 1
-            write(b.io, b64(b.b0, b.b1, x[1])...)
+            write(b.io, b64(b.b0, b.b1, unsafe_load(x, 1))...)
             s = 2
         else
             return
@@ -108,20 +117,21 @@ function write(b::Base64EncodePipe, x::AbstractVector{UInt8})
     end
     # write all groups of three bytes:
     while s + 2 <= n
-        write(b.io, b64(x[s], x[s+1], x[s+2])...)
+        write(b.io, b64(unsafe_load(x, s), unsafe_load(x, s + 1), unsafe_load(x, s + 2))...)
         s += 3
     end
     # cache any leftover bytes:
     if s + 1 == n
-        b.b0 = x[s]
-        b.b1 = x[s+1]
+        b.b0 = unsafe_load(x, s)
+        b.b1 = unsafe_load(x, s + 1)
         b.nb = 2
     elseif s == n
-        b.b0 = x[s]
+        b.b0 = unsafe_load(x, s)
         b.nb = 1
     else
         b.nb = 0
     end
+    n
 end
 
 function write(b::Base64EncodePipe, x::UInt8)
@@ -135,6 +145,7 @@ function write(b::Base64EncodePipe, x::UInt8)
         write(b.io, b64(b.b0,b.b1,x)...)
         b.nb = 0
     end
+    1
 end
 
 function close(b::Base64EncodePipe)
@@ -147,24 +158,36 @@ function close(b::Base64EncodePipe)
         end
         b.nb = 0
     end
+    nothing
 end
 
 # like sprint, but returns base64 string
+"""
+    base64encode(writefunc, args...)
+    base64encode(args...)
+
+Given a [`write`](@ref)-like function `writefunc`, which takes an I/O stream as its first argument,
+`base64encode(writefunc, args...)` calls `writefunc` to write `args...` to a base64-encoded
+string, and returns the string. `base64encode(args...)` is equivalent to `base64encode(write, args...)`:
+it converts its arguments into bytes using the standard [`write`](@ref) functions and returns the
+base64-encoded string.
+"""
 function base64encode(f::Function, args...)
     s = IOBuffer()
     b = Base64EncodePipe(s)
     f(b, args...)
     close(b)
-    takebuf_string(s)
+    String(take!(s))
 end
 base64encode(x...) = base64encode(write, x...)
 
 #############################################################################
 
-# read(b::Base64Pipe, ::Type{UInt8}) = # TODO: decode base64
+"""
+    Base64DecodePipe(istream)
 
-#############################################################################
-
+Returns a new read-only I/O stream, which decodes base64-encoded data read from `istream`.
+"""
 type Base64DecodePipe <: IO
     io::IO
     # reading works in blocks of 4 characters that are decoded into 3 bytes and 2 of them cached
@@ -179,8 +202,8 @@ type Base64DecodePipe <: IO
 end
 
 function read(b::Base64DecodePipe, t::Type{UInt8})
-    if length(b.cache) > 0
-        val = shift!(b.cache)
+    if !isempty(b.cache)
+        return shift!(b.cache)
     else
         empty!(b.encvec)
         while !eof(b.io) && length(b.encvec) < 4
@@ -189,24 +212,27 @@ function read(b::Base64DecodePipe, t::Type{UInt8})
                 push!(b.encvec, c)
             end
         end
-        val = b64decode!(b.encvec,b.cache)
+        return b64decode!(b.encvec,b.cache)
     end
-    val
 end
 
-function eof(b::Base64DecodePipe)
-    return length(b.cache) == 0 && eof(b.io)
-end
-
-function close(b::Base64DecodePipe)
-end
+eof(b::Base64DecodePipe) = isempty(b.cache) && eof(b.io)
+close(b::Base64DecodePipe) = nothing
 
 # Decodes a base64-encoded string
+
+"""
+    base64decode(string)
+
+Decodes the base64-encoded `string` and returns a `Vector{UInt8}` of the decoded bytes.
+"""
 function base64decode(s)
     b = IOBuffer(s)
-    decoded = readall(Base64DecodePipe(b))
-    close(b)
-    decoded
+    try
+        return read(Base64DecodePipe(b))
+    finally
+        close(b)
+    end
 end
 
 end # module

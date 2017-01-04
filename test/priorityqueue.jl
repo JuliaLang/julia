@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 using Base.Collections
 
 # Test dequeing in sorted order.
@@ -36,7 +38,18 @@ ks, vs = 1:n, rand(1:pmax, n)
 pq = PriorityQueue(ks, vs)
 priorities = Dict(zip(ks, vs))
 test_issorted!(pq, priorities)
+pq = PriorityQueue(ks, vs)
+lowpri = findmin(vs)
+@test peek(pq)[2] == pq[ks[lowpri[2]]]
 
+# building from two lists - error throw
+ks, vs = 1:n+1, rand(1:pmax, n)
+@test_throws ArgumentError PriorityQueue(ks, vs)
+
+#enqueue error throw
+ks, vs = 1:n, rand(1:pmax, n)
+pq = PriorityQueue(ks, vs)
+@test_throws ArgumentError enqueue!(pq, 1, 10)
 
 # enqueing via enqueue!
 pq = PriorityQueue()
@@ -86,8 +99,14 @@ end
 xs = heapify!([v for v in values(priorities)])
 @test issorted([heappop!(xs) for _ in length(priorities)])
 
-xs = Array(Int, 0)
+xs = heapify(10:-1:1)
+@test issorted([heappop!(xs) for _ in 1:10])
+
+xs = Array{Int,1}(0)
 for priority in values(priorities)
     heappush!(xs, priority)
 end
 @test issorted([heappop!(xs) for _ in length(priorities)])
+
+@test Base.Collections.isheap([1, 2, 3], Base.Order.Forward)
+@test !Base.Collections.isheap([1, 2, 3], Base.Order.Reverse)

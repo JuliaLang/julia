@@ -1,11 +1,13 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 type Node
-    name::UTF8String
+    name::String
     n::Set{Node}
 
     Node(name) = new(name, Set{Node}())
 end
 
-typealias Graph Dict{UTF8String, Node}
+typealias Graph Dict{String, Node}
 
 function get(G::Graph, name)
     if haskey(G, name)
@@ -39,7 +41,7 @@ function read_graph()
     G = Graph()
     actors = Set()
 
-    open(joinpath(JULIA_HOME,"..","..","test","perf","kernel","imdb-1.tsv"), "r") do io
+    open(joinpath(@__DIR__, "imdb-1.tsv"), "r") do io
         while !eof(io)
             k = split(strip(readline(io)), "\t")
             actor, movie = k[1], join(k[2:3], "_")
@@ -54,7 +56,7 @@ end
 
 function actor_centrality()
     G, actors = read_graph()
-    d = Dict{UTF8String, Float64}()
+    d = Dict{String, Float64}()
 
     for a in actors[1:50]
         d[a] = centrality_mean(G, a)

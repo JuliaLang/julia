@@ -1,3 +1,4 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 function collect_eachmatch(re, str, overlap=false)
     [m.match for m in collect(eachmatch(re, str, overlap))]
@@ -28,4 +29,21 @@ match(pat, target)
 # Issue 9545 (32 bit)
 buf = PipeBuffer()
 show(buf, r"")
-@test readall(buf) == "r\"\""
+@test readstring(buf) == "r\"\""
+
+# see #10994, #11447: PCRE2 allows NUL chars in the pattern
+@test ismatch(Regex("^a\0b\$"), "a\0b")
+
+# regex match / search string must be a String
+@test_throws ArgumentError match(r"test", GenericString("this is a test"))
+@test_throws ArgumentError search(GenericString("this is a test"), r"test")
+
+# Named subpatterns
+let m = match(r"(?<a>.)(.)(?<b>.)", "xyz")
+    @test (m[:a], m[2], m["b"]) == ("x", "y", "z")
+    @test sprint(show, m) == "RegexMatch(\"xyz\", a=\"x\", 2=\"y\", b=\"z\")"
+end
+
+# Backcapture reference in substitution string
+@test replace("abcde", r"(..)(?P<byname>d)", s"\g<byname>xy\\\1") == "adxy\\bce"
+@test_throws ErrorException replace("a", r"(?P<x>)", s"\g<y>")

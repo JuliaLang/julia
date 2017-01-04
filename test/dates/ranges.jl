@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function test_all_combos()
     for T in (Dates.Date,Dates.DateTime)
         f1 = T(2014); l1 = T(2013,12,31)
@@ -12,7 +14,7 @@ function test_all_combos()
                 @test length(dr) == 0
                 @test isempty(dr)
                 @test first(dr) == f1
-                @test last(dr) == f1-one(l1 - f1)
+                @test last(dr) < f1
                 @test length([i for i in dr]) == 0
                 @test_throws ArgumentError minimum(dr)
                 @test_throws ArgumentError maximum(dr)
@@ -21,8 +23,8 @@ function test_all_combos()
                 @test [dr;] == T[]
                 @test isempty(reverse(dr))
                 @test length(reverse(dr)) == 0
-                @test first(reverse(dr)) == f1-one(l1 - f1)
-                @test last(reverse(dr)) == f1
+                @test first(reverse(dr)) < f1
+                @test last(reverse(dr)) >= f1
                 @test issorted(dr)
                 @test sortperm(dr) == 1:1:0
                 @test !(f1 in dr)
@@ -64,7 +66,7 @@ function test_all_combos()
                 @test length(dr) == 0
                 @test isempty(dr)
                 @test first(dr) == l1
-                @test last(dr) == l1+one(l1 - f1)
+                @test last(dr) > l1
                 @test length([i for i in dr]) == 0
                 @test_throws ArgumentError minimum(dr)
                 @test_throws ArgumentError maximum(dr)
@@ -73,10 +75,10 @@ function test_all_combos()
                 @test [dr;] == T[]
                 @test isempty(reverse(dr))
                 @test length(reverse(dr)) == 0
-                @test first(reverse(dr)) == l1+one(l1 - f1)
-                @test last(reverse(dr)) == l1
-                @test !issorted(dr)
-                @test sortperm(dr) == 0:-1:1
+                @test first(reverse(dr)) > l1
+                @test last(reverse(dr)) <= l1
+                @test issorted(dr)
+                @test sortperm(dr) == 1:1:0
                 @test !(l1 in dr)
                 @test !(l1 in dr)
                 @test !(l1-neg_step in dr)
@@ -104,7 +106,7 @@ function test_all_combos()
                     end
                     @test !isempty(reverse(dr))
                     @test length(reverse(dr)) == len
-                    @test !issorted(dr)
+                    @test issorted(dr) == (len <= 1)
                     @test l in dr
                 end
             end
@@ -117,7 +119,7 @@ function test_all_combos()
                     @test length(dr) == 0
                     @test isempty(dr)
                     @test first(dr) == f1
-                    @test last(dr) == f1-one(l1 - f1)
+                    @test last(dr) < f1
                     @test length([i for i in dr]) == 0
                     @test_throws ArgumentError minimum(dr)
                     @test_throws ArgumentError maximum(dr)
@@ -126,8 +128,8 @@ function test_all_combos()
                     @test [dr;] == T[]
                     @test isempty(reverse(dr))
                     @test length(reverse(dr)) == 0
-                    @test first(reverse(dr)) == f1-one(l1 - f1)
-                    @test last(reverse(dr)) == f1
+                    @test first(reverse(dr)) < f1
+                    @test last(reverse(dr)) >= f1
                     @test issorted(dr)
                     @test sortperm(dr) == 1:1:0
                     @test !(f1 in dr)
@@ -169,7 +171,7 @@ function test_all_combos()
                     @test length(dr) == 0
                     @test isempty(dr)
                     @test first(dr) == l1
-                    @test last(dr) == l1+one(l1 - f1)
+                    @test last(dr) > l1
                     @test length([i for i in dr]) == 0
                     @test_throws ArgumentError minimum(dr)
                     @test_throws ArgumentError maximum(dr)
@@ -178,10 +180,10 @@ function test_all_combos()
                     @test [dr;] == T[]
                     @test isempty(reverse(dr))
                     @test length(reverse(dr)) == 0
-                    @test first(reverse(dr)) == l1+one(l1 - f1)
+                    @test first(reverse(dr)) > l1
                     @test last(reverse(dr)) <= l1
-                    @test !issorted(dr)
-                    @test sortperm(dr) == 0:-1:1
+                    @test issorted(dr)
+                    @test sortperm(dr) == 1:1:0
                     @test !(l1 in dr)
                     @test !(l1 in dr)
                     @test !(l1-neg_step in dr)
@@ -210,7 +212,7 @@ function test_all_combos()
                         @test !isempty(reverse(dr))
                         @test length(reverse(dr)) == len
                         @test last(reverse(dr)) >= l
-                        @test !issorted(dr)
+                        @test issorted(dr) == (len <= 1)
                         @test l in dr
 
                     end
@@ -256,21 +258,21 @@ drs2 = map(x->Dates.Date(first(x)):step(x):Dates.Date(last(x)),drs)
 @test map(length,drs) == map(x->size(x)[1],drs)
 @test map(length,drs) == map(x->length(Dates.Date(first(x)):step(x):Dates.Date(last(x))),drs)
 @test map(length,drs) == map(x->length(reverse(x)),drs)
-@test all(map(x->findin(x,x)==[1:length(x);],drs[1:4]))
+@test all(x->findin(x,x)==[1:length(x);],drs[1:4])
 @test isempty(dr2)
-@test all(map(x->reverse(x) == range(last(x), -step(x), length(x)),drs))
-@test all(map(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)),drs[4:end]))
-@test all(map(x->maximum(x) == (step(x) < zero(step(x)) ? first(x) : last(x)),drs[4:end]))
-@test all(map(drs[1:3]) do dd
+@test all(x->reverse(x) == range(last(x), -step(x), length(x)),drs)
+@test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)),drs[4:end])
+@test all(x->maximum(x) == (step(x) < zero(step(x)) ? first(x) : last(x)),drs[4:end])
+@test all(drs[1:3]) do dd
     for (i,d) in enumerate(dd)
         @test d == (first(dd) + Dates.Day(i-1))
     end
     true
-end)
+end
 @test_throws MethodError dr + 1
 a = Dates.DateTime(2013,1,1)
 b = Dates.DateTime(2013,2,1)
-@test map!(x->x+Dates.Day(1),Array(Dates.DateTime,32),dr) == [(a+Dates.Day(1)):(b+Dates.Day(1));]
+@test map!(x->x+Dates.Day(1),Array{Dates.DateTime}(32),dr) == [(a+Dates.Day(1)):(b+Dates.Day(1));]
 @test map(x->x+Dates.Day(1),dr) == [(a+Dates.Day(1)):(b+Dates.Day(1));]
 
 @test map(x->a in x,drs[1:4]) == [true,true,false,true]
@@ -281,8 +283,8 @@ b = Dates.DateTime(2013,2,1)
 @test Dates.DateTime(2013,1,26) in dr
 @test !(Dates.DateTime(2012,1,1) in dr)
 
-@test all(map(x->sort(x) == (step(x) < zero(step(x)) ? reverse(x) : x),drs))
-@test all(map(x->step(x) < zero(step(x)) ? issorted(reverse(x)) : issorted(x),drs))
+@test all(x->sort(x) == (step(x) < zero(step(x)) ? reverse(x) : x),drs)
+@test all(x->step(x) < zero(step(x)) ? issorted(reverse(x)) : issorted(x),drs)
 
 @test length(b:Dates.Day(-1):a) == 32
 @test length(b:a) == 0
@@ -334,21 +336,21 @@ drs = Any[dr,dr1,dr2,dr3,dr4,dr5,dr6,dr7,dr8,dr9,dr10,
           dr11,dr12,dr13,dr14,dr15,dr16,dr17,dr18,dr19,dr20]
 
 @test map(length,drs) == map(x->size(x)[1],drs)
-@test all(map(x->findin(x,x) == [1:length(x);], drs[1:4]))
+@test all(x->findin(x,x) == [1:length(x);], drs[1:4])
 @test isempty(dr2)
-@test all(map(x->reverse(x) == last(x):-step(x):first(x),drs))
-@test all(map(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)),drs[4:end]))
-@test all(map(x->maximum(x) == (step(x) < zero(step(x)) ? first(x) : last(x)),drs[4:end]))
-@test all(map(drs[1:3]) do dd
+@test all(x->reverse(x) == last(x):-step(x):first(x),drs)
+@test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)),drs[4:end])
+@test all(x->maximum(x) == (step(x) < zero(step(x)) ? first(x) : last(x)),drs[4:end])
+@test all(drs[1:3]) do dd
     for (i,d) in enumerate(dd)
         @test d == (first(dd) + Dates.Day(i-1))
     end
     true
-end)
+end
 @test_throws MethodError dr + 1
 a = Dates.Date(2013,1,1)
 b = Dates.Date(2013,2,1)
-@test map!(x->x+Dates.Day(1),Array(Dates.Date,32),dr) == [(a+Dates.Day(1)):(b+Dates.Day(1));]
+@test map!(x->x+Dates.Day(1),Array{Dates.Date}(32),dr) == [(a+Dates.Day(1)):(b+Dates.Day(1));]
 @test map(x->x+Dates.Day(1),dr) == [(a+Dates.Day(1)):(b+Dates.Day(1));]
 
 @test map(x->a in x,drs[1:4]) == [true,true,false,true]
@@ -359,8 +361,8 @@ b = Dates.Date(2013,2,1)
 @test Dates.Date(2013,1,26) in dr
 @test !(Dates.Date(2012,1,1) in dr)
 
-@test all(map(x->sort(x) == (step(x) < zero(step(x)) ? reverse(x) : x),drs))
-@test all(map(x->step(x) < zero(step(x)) ? issorted(reverse(x)) : issorted(x),drs))
+@test all(x->sort(x) == (step(x) < zero(step(x)) ? reverse(x) : x),drs)
+@test all(x->step(x) < zero(step(x)) ? issorted(reverse(x)) : issorted(x),drs)
 
 @test length(b:Dates.Day(-1):a) == 32
 @test length(b:a) == 0
@@ -417,6 +419,8 @@ testlengths(100000)
 # Custom definition to override default step of DateTime ranges
 @test typeof(step(Dates.DateTime(2000):Dates.DateTime(2001))) == Dates.Day
 
+a = Dates.Date(2013,1,1)
+b = Dates.Date(2013,2,1)
 d = Dates.Date(2020,1,1)
 @test length(a:Dates.Year(1):d) == 8
 @test first(a:Dates.Year(1):d) == a
@@ -431,6 +435,8 @@ d = Dates.Date(2020,1,1)
 @test first(a:Dates.Day(365):d) == a
 @test last(a:Dates.Day(365):d) == Dates.Date(2019,12,31)
 
+a = Dates.Date(2013,1,1)
+b = Dates.Date(2013,2,1)
 @test length(a:Dates.Year(1):Dates.Date(2020,2,1)) == 8
 @test length(a:Dates.Year(1):Dates.Date(2020,6,1)) == 8
 @test length(a:Dates.Year(1):Dates.Date(2020,11,1)) == 8

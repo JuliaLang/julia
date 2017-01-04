@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # commented-out definitions are implemented in C
 
 #abstract Any <: Any
@@ -28,7 +30,7 @@
 #    pointerfree::Bool
 #end
 
-#type UnionType <: Type
+#type Union <: Type
 #    types::Tuple
 #end
 
@@ -57,20 +59,19 @@
 #    name::Symbol
 #end
 
-#type LambdaStaticData
-#    ast::Expr
-#    sparams::Tuple
-#    tfunc
-#    name::Symbol
-#    specializations
-#    inferred
-#    file::Symbol
-#    line::Int
-#    module::Module
+#type Method
 #end
 
-#type Box{T}
-#    contents::T
+#type MethodInstance
+#end
+
+#type CodeInfo
+#end
+
+#type TypeMapLevel
+#end
+
+#type TypeMapEntry
 #end
 
 #abstract Ref{T}
@@ -100,13 +101,13 @@
 #    value
 #end
 
-#immutable TopNode
+#immutable GlobalRef
+#    mod::Module
 #    name::Symbol
 #end
 
 # type Task
 #     parent::Task
-#     last::Task
 #     storage::Any
 #     consumers
 #     started::Bool
@@ -119,68 +120,47 @@ import Core.Intrinsics.ccall
 export
     # key types
     Any, DataType, Vararg, ANY, NTuple,
-    Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, UnionType, Void,
+    Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, Void,
     SimpleVector, AbstractArray, DenseArray,
     # special objects
-    Box, Function, IntrinsicFunction, LambdaStaticData, Method, MethodTable,
-    Module, Symbol, Task, Array, WeakRef,
+    Function, CodeInfo, Method, MethodTable, TypeMapEntry, TypeMapLevel,
+    Module, Symbol, Task, Array, WeakRef, VecElement,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
-    FloatingPoint, Float16, Float32, Float64,
+    AbstractFloat, Float16, Float32, Float64,
     Signed, Int, Int8, Int16, Int32, Int64, Int128,
     Unsigned, UInt, UInt8, UInt16, UInt32, UInt64, UInt128,
     # string types
-    Char, ASCIIString, ByteString, DirectIndexString, AbstractString, UTF8String,
+    Char, DirectIndexString, AbstractString, String, IO,
     # errors
-    BoundsError, DivideError, DomainError, Exception,
-    InexactError, InterruptException, OutOfMemoryError, OverflowError,
-    StackOverflowError, UndefRefError, UndefVarError,
+    ErrorException, BoundsError, DivideError, DomainError, Exception, InexactError,
+    InterruptException, OutOfMemoryError, ReadOnlyMemoryError, OverflowError,
+    StackOverflowError, SegmentationFault, UndefRefError, UndefVarError, TypeError,
     # AST representation
-    Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, SymbolNode, TopNode,
-    GlobalRef, NewvarNode, GenSym,
+    Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode,
+    GlobalRef, NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
     # object model functions
-    fieldtype, getfield, setfield!, nfields, throw, tuple, is, ===, isdefined,
-    # arraylen, arrayref, arrayset, arraysize,
-    # _apply, kwcall,
+    fieldtype, getfield, setfield!, nfields, throw, tuple, ===, isdefined, eval,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
-    issubtype, typeof, isa,
-    # typeassert, apply_type,
+    issubtype, typeof, isa, typeassert,
     # method reflection
-    applicable, invoke, method_exists,
+    applicable, invoke,
     # constants
-    nothing, Main,
-    # intrinsics module
-    Intrinsics
-    #ccall, cglobal, llvmcall, abs_float, add_float, add_int, and_int, ashr_int,
-    #box, bswap_int, checked_fptosi, checked_fptoui, checked_sadd,
-    #checked_smul, checked_ssub, checked_uadd, checked_umul, checked_usub,
-    #checked_trunc_sint, checked_trunc_uint, check_top_bit,
-    #nan_dom_err, copysign_float, ctlz_int, ctpop_int, cttz_int,
-    #div_float, eq_float, eq_int, eqfsi64, eqfui64, flipsign_int, select_value,
-    #sqrt_llvm, powi_llvm,
-    #sqrt_llvm_fast,
-    #fpext, fpiseq, fpislt, fpsiround, fpuiround, fptosi, fptoui,
-    #fptrunc, le_float, lefsi64, lefui64, lesif64,
-    #leuif64, lshr_int, lt_float, ltfsi64, ltfui64, ltsif64, ltuif64, mul_float,
-    #mul_int, ne_float, ne_int, neg_float, neg_int, not_int, or_int, rem_float,
-    #sdiv_int, shl_int, sitofp, sle_int, slt_int, smod_int,
-    #srem_int, sub_float, sub_int, trunc_int, udiv_int, uitofp,
-    #ule_int, ult_int, unbox, urem_int, xor_int, sext_int, zext_int
+    nothing, Main
 
-
-const (===) = is
+typealias AnyVector Array{Any,1}
 
 abstract Number
 abstract Real     <: Number
-abstract FloatingPoint <: Real
+abstract AbstractFloat <: Real
 abstract Integer  <: Real
 abstract Signed   <: Integer
 abstract Unsigned <: Integer
 
-bitstype 16 Float16 <: FloatingPoint
-bitstype 32 Float32 <: FloatingPoint
-bitstype 64 Float64 <: FloatingPoint
+bitstype 16 Float16 <: AbstractFloat
+bitstype 32 Float32 <: AbstractFloat
+bitstype 64 Float64 <: AbstractFloat
 
 bitstype 8  Bool <: Integer
 bitstype 32 Char
@@ -196,14 +176,22 @@ bitstype 64  UInt64  <: Unsigned
 bitstype 128 Int128  <: Signed
 bitstype 128 UInt128 <: Unsigned
 
-if is(Int,Int64)
+if Int === Int64
     typealias UInt UInt64
 else
     typealias UInt UInt32
 end
 
-abstract Exception
+abstract AbstractString
 
+function Typeof end
+(f::typeof(Typeof))(x::ANY) = isa(x,Type) ? Type{x} : typeof(x)
+
+abstract Exception
+type ErrorException <: Exception
+    msg::AbstractString
+    ErrorException(msg::AbstractString) = new(msg)
+end
 immutable BoundsError        <: Exception
     a::Any
     i::Any
@@ -216,79 +204,195 @@ immutable DomainError        <: Exception end
 immutable OverflowError      <: Exception end
 immutable InexactError       <: Exception end
 immutable OutOfMemoryError   <: Exception end
+immutable ReadOnlyMemoryError<: Exception end
+immutable SegmentationFault  <: Exception end
 immutable StackOverflowError <: Exception end
 immutable UndefRefError      <: Exception end
 immutable UndefVarError      <: Exception
     var::Symbol
 end
 immutable InterruptException <: Exception end
+type TypeError <: Exception
+    func::Symbol
+    context::AbstractString
+    expected::Type
+    got
+end
 
-abstract AbstractString
 abstract DirectIndexString <: AbstractString
 
-type SymbolNode
-    name::Symbol
-    typ
-    SymbolNode(name::Symbol, t::ANY) = new(name, t)
-end
-
-immutable GlobalRef
-    mod::Module
-    name::Symbol
-end
-
-immutable ASCIIString <: DirectIndexString
+immutable String <: AbstractString
     data::Array{UInt8,1}
+    # required to make String("foo") work (#15120):
+    String(d::Array{UInt8,1}) = new(d)
 end
 
-immutable UTF8String <: AbstractString
-    data::Array{UInt8,1}
+# This should always be inlined
+getptls() = ccall(:jl_get_ptls_states, Ptr{Void}, ())
+
+include(fname::String) = ccall(:jl_load_, Any, (Any,), fname)
+
+eval(e::ANY) = eval(Main, e)
+eval(m::Module, e::ANY) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
+
+kwfunc(f::ANY) = ccall(:jl_get_keyword_sorter, Any, (Any,), f)
+
+kwftype(t::ANY) = typeof(ccall(:jl_get_kwsorter, Any, (Any,), t.name))
+
+type Box
+    contents::Any
+    Box(x::ANY) = new(x)
+    Box() = new()
 end
-
-typealias ByteString Union(ASCIIString,UTF8String)
-
-include(fname::ByteString) = ccall(:jl_load_, Any, (Any,), fname)
 
 # constructors for built-in types
 
 type WeakRef
     value
     WeakRef() = WeakRef(nothing)
-    WeakRef(v::ANY) = ccall(:jl_gc_new_weakref, Any, (Any,), v)::WeakRef
+    WeakRef(v::ANY) = ccall(:jl_gc_new_weakref_th, Ref{WeakRef},
+                            (Ptr{Void}, Any), getptls(), v)
 end
 
 TypeVar(n::Symbol) =
-    ccall(:jl_new_typevar, Any, (Any, Any, Any), n, Union(), Any)::TypeVar
+    ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, Any)
 TypeVar(n::Symbol, ub::ANY) =
     (isa(ub,Bool) ?
-     ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, Union(), Any, ub)::TypeVar :
-     ccall(:jl_new_typevar, Any, (Any, Any, Any), n, Union(), ub::Type)::TypeVar)
+     ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, Union{}, Any, ub) :
+     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, ub::Type))
 TypeVar(n::Symbol, lb::ANY, ub::ANY) =
     (isa(ub,Bool) ?
-     ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, Union(), lb::Type, ub)::TypeVar :
-     ccall(:jl_new_typevar, Any, (Any, Any, Any), n, lb::Type, ub::Type)::TypeVar)
+     ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, Union{}, lb::Type, ub) :
+     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, lb::Type, ub::Type))
 TypeVar(n::Symbol, lb::ANY, ub::ANY, b::Bool) =
-    ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, lb::Type, ub::Type, b)::TypeVar
+    ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, lb::Type, ub::Type, b)
 
-TypeConstructor(p::ANY, t::ANY) = ccall(:jl_new_type_constructor, Any, (Any, Any), p::SimpleVector, t::Type)
+TypeConstructor(p::ANY, t::ANY) =
+    ccall(:jl_new_type_constructor, Ref{TypeConstructor}, (Any, Any), p::SimpleVector, t::Type)
+
+Void() = nothing
+
+immutable VecElement{T}
+    value::T
+    VecElement(value::T) = new(value) # disable converting constructor in Core
+end
+VecElement{T}(arg::T) = VecElement{T}(arg)
 
 Expr(args::ANY...) = _expr(args...)
 
-_new(typ::Symbol, argty::Symbol) = eval(:(Core.call(::Type{$typ}, n::$argty) = $(Expr(:new, typ, :n))))
-_new(:LineNumberNode, :Int)
+# used by lowering of splicing unquote
+splicedexpr(hd::Symbol, args::Array{Any,1}) = (e=Expr(hd); e.args=args; e)
+
+_new(typ::Symbol, argty::Symbol) = eval(:((::Type{$typ})(n::$argty) = $(Expr(:new, typ, :n))))
 _new(:LabelNode, :Int)
 _new(:GotoNode, :Int)
-_new(:TopNode, :Symbol)
-_new(:NewvarNode, :Symbol)
+_new(:NewvarNode, :SlotNumber)
 _new(:QuoteNode, :ANY)
-_new(:GenSym, :Int)
+_new(:SSAValue, :Int)
+eval(:((::Type{LineNumberNode})(l::Int) = $(Expr(:new, :LineNumberNode, :l))))
+eval(:((::Type{GlobalRef})(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
+eval(:((::Type{SlotNumber})(n::Int) = $(Expr(:new, :SlotNumber, :n))))
+eval(:((::Type{TypedSlot})(n::Int, t::ANY) = $(Expr(:new, :TypedSlot, :n, :t))))
 
-Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Any, (Any, Int32), name, std_imports)::Module
+Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
-Task(f::ANY) = ccall(:jl_new_task, Any, (Any, Int), f::Function, 0)::Task
+Task(f::ANY) = ccall(:jl_new_task, Ref{Task}, (Any, Int), f, 0)
 
 # simple convert for use by constructors of types in Core
+# note that there is no actual conversion defined here,
+# so the methods and ccall's in Core aren't permitted to use convert
 convert(::Type{Any}, x::ANY) = x
 convert{T}(::Type{T}, x::T) = x
-cconvert(T::Type, x) = convert(T, x)
+cconvert{T}(::Type{T}, x) = convert(T, x)
 unsafe_convert{T}(::Type{T}, x::T) = x
+
+typealias NTuple{N,T} Tuple{Vararg{T,N}}
+
+
+# primitive array constructors
+(::Type{Array{T,N}}){T,N}(d::NTuple{N,Int}) =
+    ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
+(::Type{Array{T,1}}){T}(d::NTuple{1,Int}) = Array{T,1}(getfield(d,1))
+(::Type{Array{T,2}}){T}(d::NTuple{2,Int}) = Array{T,2}(getfield(d,1), getfield(d,2))
+(::Type{Array{T,3}}){T}(d::NTuple{3,Int}) = Array{T,3}(getfield(d,1), getfield(d,2), getfield(d,3))
+(::Type{Array{T,N}}){T,N}(d::Vararg{Int, N}) = ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
+(::Type{Array{T,1}}){T}(m::Int) =
+    ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
+(::Type{Array{T,2}}){T}(m::Int, n::Int) =
+    ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2}, m, n)
+(::Type{Array{T,3}}){T}(m::Int, n::Int, o::Int) =
+    ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3}, m, n, o)
+
+(::Type{Array{T}}){T,N}(d::NTuple{N,Int}) = Array{T,N}(d)
+(::Type{Array{T}}){T}(m::Int) = Array{T,1}(m)
+(::Type{Array{T}}){T}(m::Int, n::Int) = Array{T,2}(m, n)
+(::Type{Array{T}}){T}(m::Int, n::Int, o::Int) = Array{T,3}(m, n, o)
+
+(::Type{Array{T,1}}){T}() = Array{T,1}(0)
+(::Type{Array{T,2}}){T}() = Array{T,2}(0, 0)
+
+# TODO: possibly turn these into deprecations
+Array{T,N}(::Type{T}, d::NTuple{N,Int})   = Array{T,N}(d)
+Array{T}(::Type{T}, d::Int...)            = Array(T, d)
+Array{T}(::Type{T}, m::Int)               = Array{T,1}(m)
+Array{T}(::Type{T}, m::Int,n::Int)        = Array{T,2}(m,n)
+Array{T}(::Type{T}, m::Int,n::Int,o::Int) = Array{T,3}(m,n,o)
+
+
+# primitive Symbol constructors
+Symbol(s::String) = Symbol(s.data)
+function Symbol(a::Array{UInt8,1})
+    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
+          ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
+          Intrinsics.arraylen(a))
+end
+
+
+# docsystem basics
+macro doc(x...)
+    atdoc(x...)
+end
+macro __doc__(x)
+    Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
+end
+macro doc_str(s)
+    Expr(:escape, s)
+end
+atdoc     = (str, expr) -> Expr(:escape, expr)
+atdoc!(λ) = global atdoc = λ
+
+
+# simple stand-alone print definitions for debugging
+abstract IO
+type CoreSTDOUT <: IO end
+type CoreSTDERR <: IO end
+const STDOUT = CoreSTDOUT()
+const STDERR = CoreSTDERR()
+io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout, Ptr{Void}), 1, 1)
+io_pointer(::CoreSTDERR) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stderr, Ptr{Void}), 1, 1)
+
+unsafe_write(io::IO, x::Ptr{UInt8}, nb::UInt) =
+    (ccall(:jl_uv_puts, Void, (Ptr{Void}, Ptr{UInt8}, UInt), io_pointer(io), x, nb); nb)
+unsafe_write(io::IO, x::Ptr{UInt8}, nb::Int) =
+    (ccall(:jl_uv_puts, Void, (Ptr{Void}, Ptr{UInt8}, Int), io_pointer(io), x, nb); nb)
+write(io::IO, x::UInt8) =
+    (ccall(:jl_uv_putb, Void, (Ptr{Void}, UInt8), io_pointer(io), x); 1)
+function write(io::IO, x::String)
+    nb = sizeof(x.data)
+    unsafe_write(io, ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), x.data), nb)
+    return nb
+end
+
+show(io::IO, x::ANY) = ccall(:jl_static_show, Void, (Ptr{Void}, Any), io_pointer(io), x)
+print(io::IO, x::Char) = ccall(:jl_uv_putc, Void, (Ptr{Void}, Char), io_pointer(io), x)
+print(io::IO, x::String) = write(io, x)
+print(io::IO, x::ANY) = show(io, x)
+print(io::IO, x::ANY, a::ANY...) = (print(io, x); print(io, a...))
+println(io::IO) = write(io, 0x0a) # 0x0a = '\n'
+println(io::IO, x::ANY...) = (print(io, x...); println(io))
+
+show(a::ANY) = show(STDOUT, a)
+print(a::ANY...) = print(STDOUT, a...)
+println(a::ANY...) = println(STDOUT, a...)
+
+ccall(:jl_set_istopmod, Void, (Bool,), true)

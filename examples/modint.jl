@@ -1,5 +1,9 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module ModInts
 export ModInt
+
+import Base: +, -, *
 
 immutable ModInt{n} <: Integer
     k::Int

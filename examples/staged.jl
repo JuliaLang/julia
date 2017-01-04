@@ -1,5 +1,7 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function add_method(gf, an, at, body)
-    argexs = [Expr(symbol("::"), an[i], at[i]) for i=1:length(an)]
+    argexs = [Expr(Symbol("::"), an[i], at[i]) for i=1:length(an)]
     def = quote
         let __F__=($gf)
             function __F__($(argexs...))
@@ -11,7 +13,7 @@ function add_method(gf, an, at, body)
 end
 
 macro staged(fdef)
-    if !isa(fdef,Expr) || !is(fdef.head,:function)
+    if !isa(fdef,Expr) || fdef.head !== :function
         error("@staged: expected method definition")
     end
     fname = fdef.args[1].args[1]

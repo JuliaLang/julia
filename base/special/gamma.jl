@@ -1,59 +1,136 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 gamma(x::Float64) = nan_dom_err(ccall((:tgamma,libm),  Float64, (Float64,), x), x)
 gamma(x::Float32) = nan_dom_err(ccall((:tgammaf,libm),  Float32, (Float32,), x), x)
+
+"""
+    gamma(x)
+
+Compute the gamma function of `x`.
+"""
 gamma(x::Real) = gamma(float(x))
-@vectorize_1arg Number gamma
 
 function lgamma_r(x::Float64)
-    signp = Array(Int32, 1)
+    signp = Array{Int32}(1)
     y = ccall((:lgamma_r,libm),  Float64, (Float64, Ptr{Int32}), x, signp)
     return y, signp[1]
 end
 function lgamma_r(x::Float32)
-    signp = Array(Int32, 1)
+    signp = Array{Int32}(1)
     y = ccall((:lgammaf_r,libm),  Float32, (Float32, Ptr{Int32}), x, signp)
     return y, signp[1]
 end
 lgamma_r(x::Real) = lgamma_r(float(x))
+lgamma_r(x::Number) = lgamma(x), 1 # lgamma does not take abs for non-real x
+"`lgamma_r(x)`: return L,s such that `gamma(x) = s * exp(L)`" lgamma_r
 
+"""
+    lfact(x)
+
+Compute the logarithmic factorial of `x`
+"""
 lfact(x::Real) = (x<=1 ? zero(float(x)) : lgamma(x+one(x)))
-@vectorize_1arg Number lfact
 
-const clg_coeff = [76.18009172947146,
-                   -86.50532032941677,
-                   24.01409824083091,
-                   -1.231739572450155,
-                   0.1208650973866179e-2,
-                   -0.5395239384953e-5]
+"""
+    lgamma(x)
 
-function clgamma_lanczos(z)
-    const sqrt2pi = 2.5066282746310005
+Compute the logarithm of the absolute value of [`gamma`](@ref) for
+`Real` `x`, while for `Complex` `x` it computes the
+principal branch cut of the logarithm of `gamma(x)` (defined for negative `real(x)`
+by analytic continuation from positive `real(x)`).
+"""
+function lgamma end
 
-    y = x = z
-    temp = x + 5.5
-    zz = log(temp)
-    zz = zz * (x+0.5)
-    temp -= zz
-    ser = complex(1.000000000190015, 0)
-    for j=1:6
-        y += 1.0
-        zz = clg_coeff[j]/y
-        ser += zz
-    end
-    zz = sqrt2pi*ser / x
-    return log(zz) - temp
+# asymptotic series for log(gamma(z)), valid for sufficiently large real(z) or |imag(z)|
+@inline function lgamma_asymptotic(z::Complex{Float64})
+    zinv = inv(z)
+    t = zinv*zinv
+    # coefficients are bernoulli[2:n+1] .// (2*(1:n).*(2*(1:n) - 1))
+    return (z-0.5)*log(z) - z + 9.1893853320467274178032927e-01 + # <-- log(2pi)/2
+       zinv*@evalpoly(t, 8.3333333333333333333333368e-02,-2.7777777777777777777777776e-03,
+                         7.9365079365079365079365075e-04,-5.9523809523809523809523806e-04,
+                         8.4175084175084175084175104e-04,-1.9175269175269175269175262e-03,
+                         6.4102564102564102564102561e-03,-2.9550653594771241830065352e-02)
 end
 
-function lgamma(z::Complex)
-    if real(z) <= 0.5
-        a = clgamma_lanczos(1-z)
-        b = log(sinpi(z))
-        const logpi = 1.14472988584940017
-        z = logpi - b - a
+# Compute the logΓ(z) function using a combination of the asymptotic series,
+# the Taylor series around z=1 and z=2, the reflection formula, and the shift formula.
+# Many details of these techniques are discussed in D. E. G. Hare,
+# "Computing the principal branch of log-Gamma," J. Algorithms 25, pp. 221-236 (1997),
+# and similar techniques are used (in a somewhat different way) by the
+# SciPy loggamma function.  The key identities are also described
+# at http://functions.wolfram.com/GammaBetaErf/LogGamma/
+function lgamma(z::Complex{Float64})
+    x = real(z)
+    y = imag(z)
+    yabs = abs(y)
+    if !isfinite(x) || !isfinite(y) # Inf or NaN
+        if isinf(x) && isfinite(y)
+            return Complex(x, x > 0 ? (y == 0 ? y : copysign(Inf, y)) : copysign(Inf, -y))
+        elseif isfinite(x) && isinf(y)
+            return Complex(-Inf, y)
+        else
+            return Complex(NaN, NaN)
+        end
+    elseif x > 7 || yabs > 7 # use the Stirling asymptotic series for sufficiently large x or |y|
+        return lgamma_asymptotic(z)
+    elseif x < 0.1 # use reflection formula to transform to x > 0
+        if x == 0 && y == 0 # return Inf with the correct imaginary part for z == 0
+            return Complex(Inf, signbit(x) ? copysign(oftype(x, pi), -y) : -y)
+        end
+        # the 2pi * floor(...) stuff is to choose the correct branch cut for log(sinpi(z))
+        return Complex(1.1447298858494001741434262, # log(pi)
+                       copysign(6.2831853071795864769252842, y) # 2pi
+                       * floor(0.5*x+0.25)) -
+               log(sinpi(z)) - lgamma(1-z)
+    elseif abs(x - 1) + yabs < 0.1
+        # taylor series around zero at z=1
+        # ... coefficients are [-eulergamma; [(-1)^k * zeta(k)/k for k in 2:15]]
+        w = Complex(x - 1, y)
+        return w * @evalpoly(w, -5.7721566490153286060651188e-01,8.2246703342411321823620794e-01,
+                                -4.0068563438653142846657956e-01,2.705808084277845478790009e-01,
+                                -2.0738555102867398526627303e-01,1.6955717699740818995241986e-01,
+                                -1.4404989676884611811997107e-01,1.2550966952474304242233559e-01,
+                                -1.1133426586956469049087244e-01,1.000994575127818085337147e-01,
+                                -9.0954017145829042232609344e-02,8.3353840546109004024886499e-02,
+                                -7.6932516411352191472827157e-02,7.1432946295361336059232779e-02,
+                                -6.6668705882420468032903454e-02)
+    elseif abs(x - 2) + yabs < 0.1
+        # taylor series around zero at z=2
+        # ... coefficients are [1-eulergamma; [(-1)^k * (zeta(k)-1)/k for k in 2:12]]
+        w = Complex(x - 2, y)
+        return w * @evalpoly(w, 4.2278433509846713939348812e-01,3.2246703342411321823620794e-01,
+                               -6.7352301053198095133246196e-02,2.0580808427784547879000897e-02,
+                               -7.3855510286739852662729527e-03,2.8905103307415232857531201e-03,
+                               -1.1927539117032609771139825e-03,5.0966952474304242233558822e-04,
+                               -2.2315475845357937976132853e-04,9.9457512781808533714662972e-05,
+                               -4.4926236738133141700224489e-05,2.0507212775670691553131246e-05)
+    end
+    # use recurrence relation lgamma(z) = lgamma(z+1) - log(z) to shift to x > 7 for asymptotic series
+    shiftprod = Complex(x,yabs)
+    x += 1
+    sb = false # == signbit(imag(shiftprod)) == signbit(yabs)
+    # To use log(product of shifts) rather than sum(logs of shifts),
+    # we need to keep track of the number of + to - sign flips in
+    # imag(shiftprod), as described in Hare (1997), proposition 2.2.
+    signflips = 0
+    while x <= 7
+        shiftprod *= Complex(x,yabs)
+        sb′ = signbit(imag(shiftprod))
+        signflips += sb′ & (sb′ != sb)
+        sb = sb′
+        x += 1
+    end
+    shift = log(shiftprod)
+    if signbit(y) # if y is negative, conjugate the shift
+        shift = Complex(real(shift), signflips*-6.2831853071795864769252842 - imag(shift))
     else
-        z = clgamma_lanczos(z)
+        shift = Complex(real(shift), imag(shift) + signflips*6.2831853071795864769252842)
     end
-    complex(real(z), angle_restrict_symm(imag(z)))
+    return lgamma_asymptotic(Complex(x,y)) - shift
 end
+lgamma{T<:Union{Integer,Rational}}(z::Complex{T}) = lgamma(float(z))
+lgamma{T<:Union{Float32,Float16}}(z::Complex{T}) = Complex{T}(lgamma(Complex{Float64}(z)))
 
 gamma(z::Complex) = exp(lgamma(z))
 
@@ -65,7 +142,12 @@ gamma(z::Complex) = exp(lgamma(z))
 #   const A002445 = [1,6,30,42,30,66,2730,6,510,798,330,138,2730,6,870,14322,510,6,1919190,6,13530]
 #   const bernoulli = A000367 .// A002445 # even-index Bernoulli numbers
 
-function digamma(z::Union(Float64,Complex{Float64}))
+"""
+    digamma(x)
+
+Compute the digamma function of `x` (the logarithmic derivative of [`gamma(x)`](@ref)).
+"""
+function digamma(z::Union{Float64,Complex{Float64}})
     # Based on eq. (12), without looking at the accompanying source
     # code, of: K. S. Kölbig, "Programs for computing the logarithm of
     # the gamma function, and the digamma function, for complex
@@ -94,7 +176,12 @@ function digamma(z::Union(Float64,Complex{Float64}))
     ψ -= t * @evalpoly(t,0.08333333333333333,-0.008333333333333333,0.003968253968253968,-0.004166666666666667,0.007575757575757576,-0.021092796092796094,0.08333333333333333,-0.4432598039215686)
 end
 
-function trigamma(z::Union(Float64,Complex{Float64}))
+"""
+    trigamma(x)
+
+Compute the trigamma function of `x` (the logarithmic second derivative of [`gamma(x)`](@ref)).
+"""
+function trigamma(z::Union{Float64,Complex{Float64}})
     # via the derivative of the Kölbig digamma formulation
     x = real(z)
     if x <= 0 # reflection formula
@@ -137,13 +224,13 @@ function cotderiv_q(m::Int)
     q₋ = cotderiv_q(m-1)
     d = length(q₋) - 1 # degree of q₋
     if isodd(m-1)
-        q = Array(Float64, length(q₋))
+        q = Array{Float64}(length(q₋))
         q[end] = d * q₋[end] * 2/m
         for i = 1:length(q)-1
             q[i] = ((i-1)*q₋[i] + i*q₋[i+1]) * 2/m
         end
     else # iseven(m-1)
-        q = Array(Float64, length(q₋) + 1)
+        q = Array{Float64}(length(q₋) + 1)
         q[1] = q₋[1] / m
         q[end] = (1 + 2d) * q₋[end] / m
         for i = 2:length(q)-1
@@ -216,15 +303,21 @@ macro pg_horner(x, m, p...)
     :(($me + 1) * ($(p[1]) + $xe * $ex))
 end
 
-# compute inv(oftype(x, y)) efficiently, choosing the correct branch cut
-inv_oftype(x::Complex, y::Complex) = oftype(x, inv(y))
-function inv_oftype(x::Complex, y::Real)
-    yi = inv(y) # using real arithmetic for efficiency
-    oftype(x, Complex(yi, -zero(yi))) # get correct sign of zero!
+# compute oftype(x, y)^p efficiently, choosing the correct branch cut
+pow_oftype(x, y, p) = oftype(x, y)^p
+pow_oftype(x::Complex, y::Real, p::Complex) = oftype(x, y^p)
+function pow_oftype(x::Complex, y::Real, p::Real)
+    if p >= 0
+        # note: this will never be called for y < 0,
+        # which would throw an error for non-integer p here
+        return oftype(x, y^p)
+    else
+        yp = y^-p # use real power for efficiency
+        return oftype(x, Complex(yp, -zero(yp))) # get correct sign of zero!
+    end
 end
-inv_oftype(x::Real, y::Real) = oftype(x, inv(y))
 
-# Hurwitz zeta function, which is related to polygamma
+# Generalized zeta function, which is related to polygamma
 # (at least for integer m > 0 and real(z) > 0) by:
 #    polygamma(m, z) = (-1)^(m+1) * gamma(m+1) * zeta(m+1, z).
 # Our algorithm for the polygamma is just the m-th derivative
@@ -234,15 +327,27 @@ inv_oftype(x::Real, y::Real) = oftype(x, inv(y))
 # So identifying the (something) with the -zeta function, we get
 # the zeta function for free and might as well export it, especially
 # since this is a common generalization of the Riemann zeta function
-# (which Julia already exports).
-function zeta(s::Union(Int,Float64,Complex{Float64}),
-              z::Union(Float64,Complex{Float64}))
+# (which Julia already exports).   Note that this geneneralization
+# is equivalent to Mathematica's Zeta[s,z], and is equivalent to the
+# Hurwitz zeta function for real(z) > 0.
+
+"""
+    zeta(s, z)
+
+Generalized zeta function ``\\zeta(s, z)``, defined
+by the sum ``\\sum_{k=0}^\\infty ((k+z)^2)^{-s/2}``, where
+any term with ``k+z=0`` is excluded.  For ``\\Re z > 0``,
+this definition is equivalent to the Hurwitz zeta function
+``\\sum_{k=0}^\\infty (k+z)^{-s}``.   For ``z=1``, it yields
+the Riemann zeta function ``\\zeta(s)``.
+"""
+zeta(s,z)
+
+function zeta(s::Union{Int,Float64,Complex{Float64}},
+              z::Union{Float64,Complex{Float64}})
     ζ = zero(promote_type(typeof(s), typeof(z)))
 
-    # like sqrt, require complex inputs to get complex outputs
-    !isa(s,Integer) && isa(ζ, Real) && z < 0 && throw(DomainError())
-
-    z == 1 && return oftype(ζ, zeta(s))
+    (z == 1 || z == 0) && return oftype(ζ, zeta(s))
     s == 2 && return oftype(ζ, trigamma(z))
 
     x = real(z)
@@ -259,9 +364,13 @@ function zeta(s::Union(Int,Float64,Complex{Float64}),
         end
         throw(DomainError()) # nothing clever to return
     end
-
-    # We need a different algorithm for the real(s) < 1 domain
-    real(s) < 1 && throw(ArgumentError("order $s < 1 is not implemented (issue #7228)"))
+    if isnan(x)
+        if imag(z)==0 && imag(s)==0
+            return oftype(ζ, x)
+        else
+            return oftype(ζ, Complex(x,x))
+        end
+    end
 
     m = s - 1
 
@@ -271,32 +380,55 @@ function zeta(s::Union(Int,Float64,Complex{Float64}),
     # Note: we multiply by -(-1)^m m! in polygamma below, so this factor is
     #       pulled out of all of our derivatives.
 
-    isnan(x) && return oftype(ζ, imag(z)==0 && isa(s,Int) ? x : Complex(x,x))
-
-    cutoff = 7 + real(m) + imag(m) # TODO: this cutoff is too conservative?
+    cutoff = 7 + real(m) + abs(imag(m)) # TODO: this cutoff is too conservative?
     if x < cutoff
         # shift using recurrence formula
         xf = floor(x)
-        if x <= 0 && xf == z
-            if isa(s, Int)
-                iseven(s) && return oftype(ζ, Inf)
-                x == 0 && return oftype(ζ, inv(x))
-            end
-            throw(DomainError()) # or return NaN?
-        end
         nx = Int(xf)
         n = ceil(Int,cutoff - nx)
-        ζ += inv_oftype(ζ, z)^s
-        for ν = -nx:-1:1
-            ζₒ= ζ
-            ζ += inv_oftype(ζ, z + ν)^s
-            ζ == ζₒ && break # prevent long loop for large -x > 0
-                             # FIXME: still slow for small m, large Im(z)
+        minus_s = -s
+        if nx < 0 # x < 0
+            # need to use (-z)^(-s) recurrence to be correct for real z < 0
+            # [the general form of the recurrence term is (z^2)^(-s/2)]
+            minus_z = -z
+            ζ += pow_oftype(ζ, minus_z, minus_s) # ν = 0 term
+            if xf != z
+                ζ += pow_oftype(ζ, z - nx, minus_s) # real(z - nx) > 0, so use correct branch cut
+                # otherwise, if xf==z, then the definition skips this term
+            end
+            # do loop in different order, depending on the sign of s,
+            # so that we are looping from largest to smallest summands and
+            # can halt the loop early if possible; see issue #15946
+            # FIXME: still slow for small m, large Im(z)
+            if real(s) > 0
+                for ν in -nx-1:-1:1
+                    ζₒ= ζ
+                    ζ += pow_oftype(ζ, minus_z - ν, minus_s)
+                    ζ == ζₒ && break # prevent long loop for large -x > 0
+                end
+            else
+                for ν in 1:-nx-1
+                    ζₒ= ζ
+                    ζ += pow_oftype(ζ, minus_z - ν, minus_s)
+                    ζ == ζₒ && break # prevent long loop for large -x > 0
+                end
+            end
+        else # x ≥ 0 && z != 0
+            ζ += pow_oftype(ζ, z, minus_s)
         end
-        for ν = max(1,1-nx):n-1
-            ζₒ= ζ
-            ζ += inv_oftype(ζ, z + ν)^s
-            ζ == ζₒ && break # prevent long loop for large m
+        # loop order depends on sign of s, as above
+        if real(s) > 0
+            for ν in max(1,1-nx):n-1
+                ζₒ= ζ
+                ζ += pow_oftype(ζ, z + ν, minus_s)
+                ζ == ζₒ && break # prevent long loop for large m
+            end
+        else
+            for ν in n-1:-1:max(1,1-nx)
+                ζₒ= ζ
+                ζ += pow_oftype(ζ, z + ν, minus_s)
+                ζ == ζₒ && break # prevent long loop for large m
+            end
         end
         z += n
     end
@@ -311,8 +443,13 @@ function zeta(s::Union(Int,Float64,Complex{Float64}),
     return ζ
 end
 
-function polygamma(m::Integer, z::Union(Float64,Complex{Float64}))
+"""
+    polygamma(m, x)
 
+Compute the polygamma function of order `m` of argument `x` (the `(m+1)th` derivative of the
+logarithm of [`gamma(x)`](@ref))
+"""
+function polygamma(m::Integer, z::Union{Float64,Complex{Float64}})
     m == 0 && return digamma(z)
     m == 1 && return trigamma(z)
 
@@ -350,12 +487,12 @@ f16(z::Complex) = Complex32(z)
 # Float32 version by truncating the Stirling series at a smaller cutoff.
 for (f,T) in ((:f32,Float32),(:f16,Float16))
     @eval begin
-        zeta(s::Integer, z::Union($T,Complex{$T})) = $f(zeta(Int(s), f64(z)))
-        zeta(s::Union(Float64,Complex128), z::Union($T,Complex{$T})) = zeta(s, f64(z))
-        zeta(s::Number, z::Union($T,Complex{$T})) = $f(zeta(f64(s), f64(z)))
-        polygamma(m::Integer, z::Union($T,Complex{$T})) = $f(polygamma(Int(m), f64(z)))
-        digamma(z::Union($T,Complex{$T})) = $f(digamma(f64(z)))
-        trigamma(z::Union($T,Complex{$T})) = $f(trigamma(f64(z)))
+        zeta(s::Integer, z::Union{$T,Complex{$T}}) = $f(zeta(Int(s), f64(z)))
+        zeta(s::Union{Float64,Complex128}, z::Union{$T,Complex{$T}}) = zeta(s, f64(z))
+        zeta(s::Number, z::Union{$T,Complex{$T}}) = $f(zeta(f64(s), f64(z)))
+        polygamma(m::Integer, z::Union{$T,Complex{$T}}) = $f(polygamma(Int(m), f64(z)))
+        digamma(z::Union{$T,Complex{$T}}) = $f(digamma(f64(z)))
+        trigamma(z::Union{$T,Complex{$T}}) = $f(trigamma(f64(z)))
     end
 end
 
@@ -364,12 +501,9 @@ zeta(s::Number, z::Number) = zeta(f64(s), f64(z))
 for f in (:digamma, :trigamma)
     @eval begin
         $f(z::Number) = $f(f64(z))
-        @vectorize_1arg Number $f
     end
 end
 polygamma(m::Integer, z::Number) = polygamma(m, f64(z))
-@vectorize_2arg Number polygamma
-@vectorize_2arg Number zeta
 
 # Inverse digamma function:
 # Implementation of fixed point algorithm described in
@@ -397,22 +531,37 @@ function invdigamma(y::Float64)
     return x_new
 end
 invdigamma(x::Float32) = Float32(invdigamma(Float64(x)))
-invdigamma(x::Real) = invdigamma(Float64(x))
-@vectorize_1arg Real invdigamma
 
+"""
+    invdigamma(x)
+
+Compute the inverse [`digamma`](@ref) function of `x`.
+"""
+invdigamma(x::Real) = invdigamma(Float64(x))
+
+"""
+    beta(x, y)
+
+Euler integral of the first kind ``\\operatorname{B}(x,y) = \\Gamma(x)\\Gamma(y)/\\Gamma(x+y)``.
+"""
 function beta(x::Number, w::Number)
     yx, sx = lgamma_r(x)
     yw, sw = lgamma_r(w)
     yxw, sxw = lgamma_r(x+w)
-    return copysign(exp(yx + yw - yxw), sx*sw*sxw)
+    return exp(yx + yw - yxw) * (sx*sw*sxw)
 end
+
+"""
+    lbeta(x, y)
+
+Natural logarithm of the absolute value of the [`beta`](@ref)
+function ``\\log(|\\operatorname{B}(x,y)|)``.
+"""
 lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)
-@vectorize_2arg Number beta
-@vectorize_2arg Number lbeta
 
 # Riemann zeta function; algorithm is based on specializing the Hurwitz
 # zeta function above for z==1.
-function zeta(s::Union(Float64,Complex{Float64}))
+function zeta(s::Union{Float64,Complex{Float64}})
     # blows up to ±Inf, but get correct sign of imaginary zero
     s == 1 && return NaN + zero(s) * imag(s)
 
@@ -459,10 +608,15 @@ end
 
 zeta(x::Integer) = zeta(Float64(x))
 zeta(x::Real)    = oftype(float(x),zeta(Float64(x)))
-zeta(z::Complex) = oftype(float(z),zeta(Complex128(z)))
-@vectorize_1arg Number zeta
 
-function eta(z::Union(Float64,Complex{Float64}))
+"""
+    zeta(s)
+
+Riemann zeta function ``\\zeta(s)``.
+"""
+zeta(z::Complex) = oftype(float(z),zeta(Complex128(z)))
+
+function eta(z::Union{Float64,Complex{Float64}})
     δz = 1 - z
     if abs(real(δz)) + abs(imag(δz)) < 7e-3 # Taylor expand around z==1
         return 0.6931471805599453094172321214581765 *
@@ -478,5 +632,10 @@ function eta(z::Union(Float64,Complex{Float64}))
 end
 eta(x::Integer) = eta(Float64(x))
 eta(x::Real)    = oftype(float(x),eta(Float64(x)))
+
+"""
+    eta(x)
+
+Dirichlet eta function ``\\eta(s) = \\sum^\\infty_{n=1}(-1)^{n-1}/n^{s}``.
+"""
 eta(z::Complex) = oftype(float(z),eta(Complex128(z)))
-@vectorize_1arg Number eta

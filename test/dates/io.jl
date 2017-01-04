@@ -1,5 +1,8 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Test string/show representation of Date
 @test string(Dates.Date(1,1,1)) == "0001-01-01" # January 1st, 1 AD/CE
+@test sprint(show, Dates.Date(1,1,1)) == "0001-01-01"
 @test string(Dates.Date(0,12,31)) == "0000-12-31" # December 31, 1 BC/BCE
 @test Dates.Date(1,1,1) - Dates.Date(0,12,31) == Dates.Day(1)
 @test Dates.Date(Dates.UTD(-306)) == Dates.Date(0,2,29)
@@ -8,6 +11,7 @@
 @test string(Dates.Date(-1000000,1,1)) == "-1000000-01-01"
 @test string(Dates.Date(1000000,1,1)) == "1000000-01-01"
 @test string(Dates.DateTime(2000,1,1,0,0,0,1)) == "2000-01-01T00:00:00.001"
+@test sprint(show,Dates.DateTime(2000,1,1,0,0,0,1)) == "2000-01-01T00:00:00.001"
 @test string(Dates.DateTime(2000,1,1,0,0,0,2)) == "2000-01-01T00:00:00.002"
 @test string(Dates.DateTime(2000,1,1,0,0,0,500)) == "2000-01-01T00:00:00.5"
 @test string(Dates.DateTime(2000,1,1,0,0,0,998)) == "2000-01-01T00:00:00.998"
@@ -15,6 +19,16 @@
 
 # DateTime parsing
 # Useful reference for different locales: http://library.princeton.edu/departments/tsd/katmandu/reference/months.html
+
+# Using parse directly allows for more flexibility.
+let str = "1996/02/15 24:00", format = "yyyy/mm/dd HH:MM"
+    expected = [Dates.Year(1996), Dates.Month(2), Dates.Day(15), Dates.Hour(24), Dates.Minute(0)]
+    @test Dates.parse(str, Dates.DateFormat(format)) == expected
+    @test_throws ArgumentError Dates.DateTime(str, Dates.DateFormat(format))
+end
+
+# Issue #13644: Ensure that Dates.parse returns a Period array when no custom slots are used.
+@test eltype(Dates.parse("1942-12-25T01:23:45", Dates.DateFormat("yyyy-mm-ddTHH:MM:SS", "english"))) == Dates.Period
 
 # Common Parsing Patterns
 #'1996-January-15'
@@ -174,6 +188,17 @@ gg = "Jan-1996-15"
 f = "uuu-yyyy-dd"
 @test Dates.DateTime(gg,f) == dt
 @test Dates.format(dt,f) == gg
+hh = "1996#1#15"
+f = "yyyy#m#d"
+@test Dates.DateTime(hh,f) == dt
+@test Dates.format(dt,f) == hh
+
+# test prefix.
+s = "/1996/1/15"
+f = "/yyyy/m/d"
+@test Dates.DateTime(s,f) == dt
+@test Dates.format(dt,f) == s
+@test Dates.DateTime("1996/1/15",f) == dt
 
 # from Jiahao
 @test Dates.Date("2009年12月01日","yyyy年mm月dd日") == Dates.Date(2009,12,1)
@@ -188,7 +213,7 @@ f2 = "dd/mm/yy"
 
 const french = Dict("janv"=>1,"févr"=>2,"mars"=>3,"avril"=>4,"mai"=>5,"juin"=>6,"juil"=>7,"août"=>8,"sept"=>9,"oct"=>10,"nov"=>11,"déc"=>12)
 Dates.MONTHTOVALUEABBR["french"] = french
-Dates.VALUETOMONTHABBR["french"] = [v=>k for (k,v) in french]
+Dates.VALUETOMONTHABBR["french"] = Dict(v=>k for (k,v) in french)
 
 f = "dd uuuuu yyyy"
 @test Dates.Date("28 mai 2014",f;locale="french") == Dates.Date(2014,5,28)
@@ -217,7 +242,7 @@ f = "duy"
 const globex = Dict("f"=>Dates.Jan,"g"=>Dates.Feb,"h"=>Dates.Mar,"j"=>Dates.Apr,"k"=>Dates.May,"m"=>Dates.Jun,
                     "n"=>Dates.Jul,"q"=>Dates.Aug,"u"=>Dates.Sep,"v"=>Dates.Oct,"x"=>Dates.Nov,"z"=>Dates.Dec)
 Dates.MONTHTOVALUEABBR["globex"] = globex
-Dates.VALUETOMONTHABBR["globex"] = [v=>uppercase(k) for (k,v) in globex]
+Dates.VALUETOMONTHABBR["globex"] = Dict(v=>uppercase(k) for (k,v) in globex)
 @test Dates.Date("1F4",f;locale="globex") + Dates.Year(2010) == Dates.Date(2014,1,1)
 @test Dates.format(Dates.Date(2014,1,1),f;locale="globex") == "1F4"
 
@@ -259,8 +284,8 @@ dr = ["2000-01-01","2000-01-02","2000-01-03","2000-01-04","2000-01-05"
 dr2 = [Dates.Date(2000):Dates.Date(2000,1,10);]
 @test Dates.Date(dr) == dr2
 @test Dates.Date(dr,"yyyy-mm-dd") == dr2
-@test Dates.DateTime(dr) == Dates.DateTime(dr2)
-@test Dates.DateTime(dr,"yyyy-mm-dd") == Dates.DateTime(dr2)
+@test Dates.DateTime.(dr) == Dates.DateTime.(dr2)
+@test Dates.DateTime(dr,"yyyy-mm-dd") == Dates.DateTime.(dr2)
 
 @test Dates.format(dr2) == dr
 @test Dates.format(dr2,"yyyy-mm-dd") == dr
@@ -298,3 +323,44 @@ dt = Dates.DateTime(2014,8,23,17,22,15)
 @test Dates.format(Dates.DateTime(2014,10,31,0,0,0,9),Dates.RFC1123Format) == "Fri, 31 Oct 2014 00:00:00"
 @test Dates.format(Dates.DateTime(2014,11,2,0,0,0,9),Dates.RFC1123Format) == "Sun, 02 Nov 2014 00:00:00"
 @test Dates.format(Dates.DateTime(2014,12,5,0,0,0,9),Dates.RFC1123Format) == "Fri, 05 Dec 2014 00:00:00"
+
+# Issue 15195
+let f = "YY"
+    @test Dates.format(Dates.Date(1999), f) == "1999"
+    @test Dates.format(Dates.Date(9), f) == "09"
+    @test Dates.format(typemax(Dates.Date), f) == "252522163911149"
+end
+
+# Issue: https://github.com/quinnj/TimeZones.jl/issues/19
+let
+    ds = "2015-07-24T05:38:19.591Z"
+    dt = Dates.DateTime(2015,7,24,5,38,19,591)
+
+    format = "yyyy-mm-ddTHH:MM:SS.sssZ"
+    escaped_format = "yyyy-mm-dd\\THH:MM:SS.sss\\Z"
+
+    # Typically 'Z' isn't treated as a slot so it doesn't have to be escaped
+    @test DateTime(ds, format) == dt
+    @test DateTime(ds, escaped_format) == dt
+
+    try
+        # Make 'Z' into a slot
+        Dates.SLOT_RULE['Z'] = Dates.TimeZone
+        slotparse(slot::Dates.Slot{Dates.TimeZone},x,locale) = throw(ArgumentError("Invalid slot"))
+
+        @test_throws ArgumentError DateTime(ds, format)
+        @test DateTime(ds, escaped_format) == dt
+    finally
+        # Ideally we would be able to set SLOT_RULE['Z'] back to being undefined
+        Dates.SLOT_RULE['Z'] = Void
+    end
+
+    # Ensure that the default behaviour has been restored
+    @test DateTime(ds, format) == dt
+    @test DateTime(ds, escaped_format) == dt
+end
+
+# Issue 10817
+@test Dates.Date("Apr 01 2014", "uuu dd yyyy") == Dates.Date(2014,4,1)
+@test_throws ArgumentError Dates.Date("Apr 01 xx 2014", "uuu dd zz yyyy")
+@test_throws ArgumentError Dates.Date("Apr 01 xx 2014", "uuu dd    yyyy")

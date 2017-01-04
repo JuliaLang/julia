@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # yearmonthday is the opposite of totaldays
 # taking Rata Die Day # and returning proleptic Gregorian date
 @test Dates.yearmonthday(-306) == (0,2,29)
@@ -38,7 +40,7 @@
 # test_dates(-10000,10000) takes about 15 seconds
 # test_dates(year(typemin(Date)),year(typemax(Date))) is full range
 # and would take.......a really long time
-function test_dates(from,to)
+function test_dates1(from,to)
     y = m = d = 0
     test_day = Dates.totaldays(from,1,1)
     for y in from:to
@@ -52,10 +54,10 @@ function test_dates(from,to)
         end
     end
 end
-test_dates(0,2100)
+test_dates1(0,2100)
 
 # Test year, month, day, hour, minute
-function test_dates()
+function test_dates1()
     y = m = d = h = mi = 0
     for m = 1:12
         for d = 1:Dates.daysinmonth(y,m)
@@ -68,6 +70,7 @@ function test_dates()
                     @test d == Dates.dayofmonth(dt)
                     @test h == Dates.hour(dt)
                     @test mi == Dates.minute(dt)
+                    @test (m,d) == Dates.monthday(dt)
                     #@test s == Dates.second(dt)
                     #@test ms == Dates.millisecond(dt)
                 end
@@ -75,10 +78,10 @@ function test_dates()
         end
     end
 end
-test_dates()
+test_dates1()
 
 # Test second, millisecond
-function test_dates()
+function test_dates2()
     y = m = d = h = mi = s = ms = 0
     for y in [-2013,-1,0,1,2013]
         for m in [1,6,12]
@@ -100,9 +103,9 @@ function test_dates()
         end
     end
 end
-test_dates()
+test_dates2()
 
-function test_dates(from,to)
+function test_dates2(from,to)
     y = m = d = 0
     for y in from:to
         for m = 1:12
@@ -115,10 +118,10 @@ function test_dates(from,to)
         end
     end
 end
-test_dates(0,2100)
+test_dates2(0,2100)
 
 # week function
-# Tests from http://en.wikipedia.org/wiki/ISO_week_date
+# Tests from https://en.wikipedia.org/wiki/ISO_week_date
 @test Dates.week(Dates.Date(2005,1,1)) == 53
 @test Dates.week(Dates.Date(2005,1,2)) == 53
 @test Dates.week(Dates.Date(2005,12,31)) == 52
@@ -177,16 +180,16 @@ end
 # Vectorized accessors
 a = Dates.Date(2014,1,1)
 dr = [a,a,a,a,a,a,a,a,a,a]
-@test Dates.year(dr) == repmat([2014],10)
-@test Dates.month(dr) == repmat([1],10)
-@test Dates.day(dr) == repmat([1],10)
+@test Dates.year.(dr) == repmat([2014],10)
+@test Dates.month.(dr) == repmat([1],10)
+@test Dates.day.(dr) == repmat([1],10)
 
 a = Dates.DateTime(2014,1,1)
 dr = [a,a,a,a,a,a,a,a,a,a]
-@test Dates.year(dr) == repmat([2014],10)
-@test Dates.month(dr) == repmat([1],10)
-@test Dates.day(dr) == repmat([1],10)
-@test Dates.hour(dr) == repmat([0],10)
-@test Dates.minute(dr) == repmat([0],10)
-@test Dates.second(dr) == repmat([0],10)
-@test Dates.millisecond(dr) == repmat([0],10)
+@test Dates.year.(dr) == repmat([2014],10)
+@test Dates.month.(dr) == repmat([1],10)
+@test Dates.day.(dr) == repmat([1],10)
+@test Dates.hour.(dr) == repmat([0],10)
+@test Dates.minute.(dr) == repmat([0],10)
+@test Dates.second.(dr) == repmat([0],10)
+@test Dates.millisecond.(dr) == repmat([0],10)

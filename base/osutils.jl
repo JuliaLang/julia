@@ -1,68 +1,86 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
+"""
+    is_unix([os])
+
+Predicate for testing if the OS provides a Unix-like interface.
+See documentation in [Handling Operating System Variation](@ref).
+"""
 function is_unix(os::Symbol)
-    if (os==:Windows) return false;
-    elseif (os==:Linux) return true;
-    elseif (os==:FreeBSD) return true;
-    elseif (os==:Darwin) return true;
-    else throw(ArgumentError("unknown operating system, $(repr(os))"))
-    end
-end
-
-function _os_test(qm,ex,test)
-    @assert qm == :?
-    @assert isa(ex,Expr)
-    @assert ex.head == :(:)
-    @assert length(ex.args) == 2
-    if test
-        return esc(ex.args[1])
+    if is_windows(os)
+        return false
+    elseif is_linux(os) || is_bsd(os)
+        return true
     else
-        return esc(ex.args[2])
+        throw(ArgumentError("unknown operating system \"$os\""))
     end
 end
 
-macro windows(qm,ex)
-    _os_test(qm, ex, OS_NAME===:Windows)
-end
-macro unix(qm,ex)
-    _os_test(qm, ex, is_unix(OS_NAME))
-end
-macro osx(qm,ex)
-    _os_test(qm, ex, OS_NAME===:Darwin)
-end
-macro linux(qm,ex)
-    _os_test(qm, ex, OS_NAME===:Linux)
+"""
+    is_linux([os])
+
+Predicate for testing if the OS is a derivative of Linux.
+See documentation in [Handling Operating System Variation](@ref).
+"""
+is_linux(os::Symbol) = (os == :Linux)
+
+"""
+    is_bsd([os])
+
+Predicate for testing if the OS is a derivative of BSD.
+See documentation in [Handling Operating System Variation](@ref).
+"""
+is_bsd(os::Symbol) = (os == :FreeBSD || os == :OpenBSD || os == :NetBSD || os == :Darwin || os == :Apple)
+
+"""
+    is_windows([os])
+
+Predicate for testing if the OS is a derivative of Microsoft Windows NT.
+See documentation in [Handling Operating System Variation](@ref).
+"""
+is_windows(os::Symbol) = (os == :Windows || os == :NT)
+
+"""
+    is_apple([os])
+
+Predicate for testing if the OS is a derivative of Apple Macintosh OS X or Darwin.
+See documentation in [Handling Operating System Variation](@ref).
+"""
+is_apple(os::Symbol) = (os == :Apple || os == :Darwin)
+
+"""
+    @static
+
+Partially evaluates an expression at parse time.
+
+For example, `@static is_windows() ? foo : bar` will evaluate `is_windows()` and insert either `foo` or `bar` into the expression.
+This is useful in cases where a construct would be invalid on other platforms,
+such as a `ccall` to a non-existent function.
+`@static if is_apple() foo end` and `@static foo <&&,||> bar` are also valid syntax.
+"""
+macro static(ex)
+    if isa(ex, Expr)
+        if ex.head === :if || ex.head === :&& || ex.head === :||
+            cond = eval(current_module(), ex.args[1])
+            if xor(cond, ex.head === :||)
+                return esc(ex.args[2])
+            elseif length(ex.args) == 3
+                return esc(ex.args[3])
+            elseif ex.head === :if
+                return nothing
+            else
+                return cond
+            end
+        end
+    end
+    throw(ArgumentError("invalid @static macro"))
 end
 
-macro windows_only(ex)
-    @windows? esc(ex) : nothing
-end
-macro unix_only(ex)
-    @unix? esc(ex) : nothing
-end
-macro osx_only(ex)
-    @osx? esc(ex) : nothing
-end
-macro linux_only(ex)
-    @linux? esc(ex) : nothing
-end
-
-# Windows version macros
-
-@windows_only function windows_version()
-    verinfo = ccall(:GetVersion, UInt32, ())
-    (verinfo & 0xFF, (verinfo >> 8) & 0xFF)
-end
-@unix_only windows_version() = (0,0)
-
-WINDOWS_XP_VER = (5,1)
-
-macro windowsxp(qm,ex)
-    _os_test(qm, ex, OS_NAME===:Windows && windows_version() <= WINDOWS_XP_VER)
-end
-
-macro windowsxp_only(ex)
-    @windowsxp? esc(ex) : nothing
-end
-
-macro non_windowsxp_only(ex)
-    @windowsxp? nothing : esc(ex)
+let KERNEL = ccall(:jl_get_UNAME, Any, ())
+    # evaluate the zero-argument form of each of these functions
+    # as a function returning a static constant based on the build-time
+    # operating-system kernel
+    for f in (:is_unix, :is_linux, :is_bsd, :is_apple, :is_windows)
+        @eval $f() = $(getfield(current_module(),f)(KERNEL))
+    end
 end

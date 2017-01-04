@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #ifndef LIBSUPPORT_H
 #define LIBSUPPORT_H
 
@@ -16,12 +18,13 @@
 #include "bitvector.h"
 #include "dirpath.h"
 #include "strtod.h"
+#include "crc32c.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-DLLEXPORT void libsupport_init(void);
+JL_DLLEXPORT void libsupport_init(void);
 
 #ifdef __cplusplus
 }

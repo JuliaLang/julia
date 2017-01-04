@@ -1,7 +1,9 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 include("formatting.jl")
 
 const margin = 2
-cols() = Base.tty_size()[2]
+cols(io) = displaysize(io)[2]
 
 function term(io::IO, content::Vector, cols)
     isempty(content) && return
@@ -12,7 +14,7 @@ function term(io::IO, content::Vector, cols)
     term(io, content[end], cols)
 end
 
-term(io::IO, md::MD, columns = cols()) = term(io, md.content, columns)
+term(io::IO, md::MD, columns = cols(io)) = term(io, md.content, columns)
 
 function term(io::IO, md::Paragraph, columns)
     print(io, " "^margin)
@@ -26,15 +28,34 @@ function term(io::IO, md::BlockQuote, columns)
     for line in split(rstrip(s), "\n")
         println(io, " "^margin, "|", line)
     end
-    println(io)
+end
+
+function term(io::IO, md::Admonition, columns)
+    print(io, " "^margin, "| ")
+    with_output_format(:bold, print, io, isempty(md.title) ? md.category : md.title)
+    println(io, "\n", " "^margin, "|")
+    s = sprint(io -> term(io, md.content, columns - 10))
+    for line in split(rstrip(s), "\n")
+        println(io, " "^margin, "|", line)
+    end
+end
+
+function term(io::IO, f::Footnote, columns)
+    print(io, " "^margin, "| ")
+    with_output_format(:bold, print, io, "[^$(f.id)]")
+    println(io, "\n", " "^margin, "|")
+    s = sprint(io -> term(io, f.text, columns - 10))
+    for line in split(rstrip(s), "\n")
+        println(io, " "^margin, "|", line)
+    end
 end
 
 function term(io::IO, md::List, columns)
     for (i, point) in enumerate(md.items)
-        print(io, " "^2margin, md.ordered ? "$i. " : "•  ")
+        print(io, " "^2margin, isordered(md) ? "$(i + md.ordered - 1). " : "•  ")
         print_wrapped(io, width = columns-(4margin+2), pre = " "^(2margin+2),
                           i = 2margin+2) do io
-            terminline(io, point)
+            term(io, point, columns - 10)
         end
     end
 end
@@ -78,7 +99,7 @@ function term(io::IO, br::HorizontalRule, columns)
    println(io, " " ^ margin, "-" ^ (columns - 2margin))
 end
 
-term(io::IO, x, _) = writemime(io, MIME"text/plain"(), x)
+term(io::IO, x, _) = show(io, MIME"text/plain"(), x)
 
 # Inline Content
 
@@ -90,8 +111,8 @@ function terminline(io::IO, content::Vector)
     end
 end
 
-function terminline(io::IO, md::String)
-    print(io, md)
+function terminline(io::IO, md::AbstractString)
+    print(io, replace(md, r"[\s\t\n]+", " "))
 end
 
 function terminline(io::IO, md::Bold)
@@ -102,9 +123,15 @@ function terminline(io::IO, md::Italic)
     with_output_format(:underline, terminline, io, md.text)
 end
 
-function terminline(io::IO, md::Image)
-    print(io, "(Image: $(md.alt))")
+function terminline(io::IO, md::LineBreak)
+    println(io)
 end
+
+function terminline(io::IO, md::Image)
+    terminline(io, "(Image: $(md.alt))")
+end
+
+terminline(io::IO, f::Footnote) = with_output_format(:bold, terminline, io, "[^$(f.id)]")
 
 function terminline(io::IO, md::Link)
     terminline(io, md.text)
@@ -114,7 +141,7 @@ function terminline(io::IO, code::Code)
     print_with_format(:cyan, io, code.code)
 end
 
-terminline(io::IO, x) = writemime(io, MIME"text/plain"(), x)
+terminline(io::IO, x) = show(io, MIME"text/plain"(), x)
 
 # Show in terminal
 

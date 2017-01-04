@@ -108,7 +108,6 @@
       <keyword>ARGS</keyword>
       <keyword>LOAD_PATH</keyword>
       <keyword>CPU_CORES</keyword>
-      <keyword>OS_NAME</keyword>
       <keyword>C_NULL</keyword>
       <keyword>WORD_SIZE</keyword>
       <keyword>VERSION</keyword>
@@ -234,12 +233,12 @@
       <keyword>Any|Void</keyword>
       <keyword>Type(Constructor|Name|Var|_Array)?|(Union|Data|NonTuple)Type</keyword>
       <keyword>(Abstract|Strided|Bit)?(Array|Matrix|Vector)</keyword>
-      <keyword>Abstract(Cmd|RNG|SparseMatrix)</keyword>
+      <keyword>Abstract(Cmd|RNG|RemoteRef|SparseMatrix)</keyword>
       <keyword>(Abstract|Strided)?VecOrMat</keyword>
       <keyword>SparseMatrixCSC</keyword>
       <keyword>(D|Sub((Or)?D)?)Array</keyword>
       <keyword>Chars?</keyword>
-      <keyword>(ASCII|Byte|Char|DirectIndex|Generic|Rep|Rev|Rope|Sub|UTF8)?String</keyword>
+      <keyword>(Abstract|ASCII|Byte|Char|DirectIndex|Generic|Rep|Rev|Rope|Sub|UTF8)String</keyword>
       <keyword>Bool</keyword>
       <keyword>Number</keyword>
       <keyword>Real</keyword>
@@ -256,7 +255,6 @@
       <keyword>(Error|Interrupt|Disconnect)?Exception</keyword>
       <keyword>Algorithm</keyword>
       <keyword>Associative</keyword>
-      <keyword>AsyncStream</keyword>
       <keyword>Box</keyword>
       <keyword>BunchKaufman</keyword>
       <keyword>CPUinfo</keyword>
@@ -285,10 +283,10 @@
       <keyword>Hermitian</keyword>
       <keyword>Hessenberg</keyword>
       <keyword>IO(Buffer|Stream)?</keyword>
+      <keyword>IPAddr|IPv[46]</keyword>
       <keyword>InetAddr</keyword>
-      <keyword>IpAddr|IPv[46]</keyword>
       <keyword>(Key|Value)Iterator</keyword>
-      <keyword>LambdaStaticData</keyword>
+      <keyword>LambdaInfo</keyword>
       <keyword>LocalProcess</keyword>
       <keyword>Long(Expr|Symbol|Tuple)</keyword>
       <keyword>MersenneTwister</keyword>
@@ -309,7 +307,6 @@
       <keyword>RawOrBoxedHandle</keyword>
       <keyword>Redirectable</keyword>
       <keyword>Regex(Match(Iterator)?)?</keyword>
-      <keyword>RemoteRef</keyword>
       <keyword>Rest</keyword>
       <keyword>Reverse</keyword>
       <keyword>(Generalized)?(SVD|Schur)</keyword>
@@ -321,14 +318,14 @@
       <keyword>StateUpdate</keyword>
       <keyword>StaticVarInfo</keyword>
       <keyword>Symbol(Node)?</keyword>
+      <keyword>TCPSocket</keyword>
       <keyword>TTY</keyword>
       <keyword>Task</keyword>
-      <keyword>TcpSocket</keyword>
       <keyword>TmStruct</keyword>
       <keyword>Top(Node)?</keyword>
       <keyword>Triangular</keyword>
       <keyword>UV(Handle|PollingWatcher|Stream)</keyword>
-      <keyword>UdpSocket</keyword>
+      <keyword>UDPSocket</keyword>
       <keyword>Undef(RefTag)?</keyword>
       <keyword>VarTable</keyword>
       <keyword>Vararg</keyword>

@@ -1,4 +1,6 @@
-type IntSet
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
+type IntSet <: AbstractSet{Int}
     bits::Array{UInt32,1}
     limit::Int
     fill1s::Bool
@@ -53,8 +55,12 @@ function push!(s::IntSet, n::Integer)
             lim = Int(n + div(n,2))
             sizehint!(s, lim)
         end
-    elseif n < 0
-        throw(ArgumentError("IntSet elements cannot be negative"))
+    elseif n <= 0
+        if n < 0
+            throw(ArgumentError("IntSet elements cannot be negative"))
+        else
+            depwarn("storing zero in IntSets is deprecated", :push!)
+        end
     end
     s.bits[n>>5 + 1] |= (UInt32(1)<<(n&31))
     return s
@@ -74,6 +80,13 @@ function pop!(s::IntSet, n::Integer, deflt)
             sizehint!(s, lim)
         else
             return deflt
+        end
+    end
+    if n <= 0
+        if n < 0
+            return deflt
+        else
+            depwarn("stored zeros in IntSet is deprecated", :pop!)
         end
     end
     mask = UInt32(1)<<(n&31)
@@ -111,21 +124,31 @@ symdiff(s1::IntSet, s2::IntSet) =
     (s1.limit >= s2.limit ? symdiff!(copy(s1), s2) : symdiff!(copy(s2), s1))
 
 function empty!(s::IntSet)
-    s.bits[:] = 0
+    fill!(s.bits, 0)
     return s
 end
 
+"""
+    symdiff!(s, n)
+
+The set `s` is destructively modified to toggle the inclusion of integer `n`.
+"""
 function symdiff!(s::IntSet, n::Integer)
     if n >= s.limit
-        lim = Int(n + dim(n,2))
+        lim = Int(n + div(n,2))
         sizehint!(s, lim)
     elseif n < 0
         throw(ArgumentError("IntSet elements cannot be negative"))
     end
-    s.bits[n>>5 + 1] $= (UInt32(1)<<(n&31))
+    s.bits[n>>5 + 1] ⊻= UInt32(1)<<(n&31)
     return s
 end
 
+"""
+    symdiff!(s, itr)
+
+For each element in `itr`, destructively toggle its inclusion in set `s`.
+"""
 function symdiff!(s::IntSet, ns)
    for n in ns
        symdiff!(s, n)
@@ -134,20 +157,28 @@ function symdiff!(s::IntSet, ns)
 end
 
 function copy!(to::IntSet, from::IntSet)
-    empty!(to)
-    union!(to, from)
+    if to === from
+        return to
+    else
+        empty!(to)
+        return union!(to, from)
+    end
 end
 
-function in(n::Integer, s::IntSet)
+in(n, s::IntSet) = n < 0 ? false : (n > typemax(Int) ? s.fill1s : in(convert(Int, n), s))
+function in(n::Int, s::IntSet)
     if n >= s.limit
         # max IntSet length is typemax(Int), so highest possible element is
         # typemax(Int)-1
-        s.fill1s && n >= 0 && n < typemax(Int)
-    elseif n < 0
-        return false
-    else
-        (s.bits[n>>5 + 1] & (UInt32(1)<<(n&31))) != 0
+        return s.fill1s && n >= 0 && n < typemax(Int)
+    elseif n <= 0
+        if n < 0
+            return false
+        else
+            depwarn("stored zeros in IntSet is deprecated", :in)
+        end
     end
+    (s.bits[n>>5 + 1] & (UInt32(1)<<(n&31))) != 0
 end
 
 start(s::IntSet) = Int64(0)
@@ -212,6 +243,12 @@ union(s1::IntSet) = copy(s1)
 union(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? union!(copy(s1), s2) : union!(copy(s2), s1))
 union(s1::IntSet, ss::IntSet...) = union(s1, union(ss...))
 
+"""
+    intersect!(s1::IntSet, s2::IntSet)
+
+Intersects sets `s1` and `s2` and overwrites the set `s1` with the result. If needed, `s1`
+will be expanded to the size of `s2`.
+"""
 function intersect!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
         sizehint!(s, s2.limit)
@@ -234,30 +271,25 @@ intersect(s1::IntSet, s2::IntSet) =
     (s1.limit >= s2.limit ? intersect!(copy(s1), s2) : intersect!(copy(s2), s1))
 intersect(s1::IntSet, ss::IntSet...) = intersect(s1, intersect(ss...))
 
-function complement!(s::IntSet)
-    for n = 1:length(s.bits)
-        s.bits[n] = ~s.bits[n]
-    end
-    s.fill1s = !s.fill1s
-    s
-end
+"""
+    symdiff!(s1, s2)
 
-complement(s::IntSet) = complement!(copy(s))
-
+Construct the symmetric difference of sets `s1` and `s2`, storing the result in `s1`.
+"""
 function symdiff!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
         sizehint!(s, s2.limit)
     end
     lim = length(s2.bits)
     for n = 1:lim
-        s.bits[n] $= s2.bits[n]
+        s.bits[n] ⊻= s2.bits[n]
     end
     if s2.fill1s
         for n=lim+1:length(s.bits)
             s.bits[n] = ~s.bits[n]
         end
     end
-    s.fill1s $= s2.fill1s
+    s.fill1s ⊻= s2.fill1s
     s
 end
 
@@ -272,7 +304,7 @@ function ==(s1::IntSet, s2::IntSet)
             return false
         end
     end
-    filln = s1.fill1s ? UInt32(-1) : UInt32(0)
+    filln = s1.fill1s ? reinterpret(UInt32, Int32(-1)) : UInt32(0)
     if lim1 > lim2
         for i = lim2:lim1
             if s1.bits[i] != filln
@@ -287,6 +319,19 @@ function ==(s1::IntSet, s2::IntSet)
         end
     end
     return true
+end
+
+const hashis_seed = UInt === UInt64 ? 0x88989f1fc7dea67d : 0xc7dea67d
+function hash(s::IntSet, h::UInt)
+    h += hashis_seed
+    h += hash(s.fill1s)
+    filln = s.fill1s ? ~zero(eltype(s.bits)) : zero(eltype(s.bits))
+    for x in s.bits
+        if x != filln
+            h = hash(x, h)
+        end
+    end
+    return h
 end
 
 issubset(a::IntSet, b::IntSet) = isequal(a, intersect(a,b))

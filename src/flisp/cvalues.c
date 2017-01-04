@@ -4,63 +4,45 @@
 #define NWORDS(sz) (((sz)+3)>>2)
 #endif
 
-static int ALIGN2, ALIGN4, ALIGN8, ALIGNPTR;
+struct prim_int16{ char a; int16_t i; };
+struct prim_int32{ char a; int32_t i; };
+struct prim_int64{ char a; int64_t i; };
+struct prim_ptr{ char a;  void   *i; };
 
-value_t int8sym, uint8sym, int16sym, uint16sym, int32sym, uint32sym;
-value_t int64sym, uint64sym;
-value_t ptrdiffsym, sizesym, bytesym, wcharsym;
-value_t floatsym, doublesym;
-value_t gftypesym, stringtypesym, wcstringtypesym;
-value_t emptystringsym;
+// compute struct field alignment required for primitives
+static const int ALIGN2   = sizeof(struct prim_int16) - 2;
+static const int ALIGN4   = sizeof(struct prim_int32) - 4;
+static const int ALIGN8   = sizeof(struct prim_int64) - 8;
+static const int ALIGNPTR = sizeof(struct prim_ptr) - sizeof(void*);
 
-value_t arraysym, cfunctionsym, voidsym, pointersym;
-
-static htable_t TypeTable;
-static htable_t reverse_dlsym_lookup_table;
-static fltype_t *int8type, *uint8type;
-static fltype_t *int16type, *uint16type;
-static fltype_t *int32type, *uint32type;
-static fltype_t *int64type, *uint64type;
-static fltype_t *ptrdifftype, *sizetype;
-static fltype_t *floattype, *doubletype;
-       fltype_t *bytetype, *wchartype;
-       fltype_t *stringtype, *wcstringtype;
-       fltype_t *builtintype;
-
-static void cvalue_init(fltype_t *type, value_t v, void *dest);
+static void cvalue_init(fl_context_t *fl_ctx, fltype_t *type, value_t v, void *dest);
 
 // cvalues-specific builtins
-value_t cvalue_new(value_t *args, u_int32_t nargs);
-value_t cvalue_sizeof(value_t *args, u_int32_t nargs);
-value_t cvalue_typeof(value_t *args, u_int32_t nargs);
+value_t cvalue_new(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
+value_t cvalue_sizeof(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
+value_t cvalue_typeof(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
 
 // trigger unconditional GC after this many bytes are allocated
 #define ALLOC_LIMIT_TRIGGER 67108864
 
-static size_t malloc_pressure = 0;
-
-static cvalue_t **Finalizers = NULL;
-static size_t nfinalizers=0;
-static size_t maxfinalizers=0;
-
-void add_finalizer(cvalue_t *cv)
+void add_finalizer(fl_context_t *fl_ctx, cvalue_t *cv)
 {
-    if (nfinalizers == maxfinalizers) {
-        size_t nn = (maxfinalizers==0 ? 256 : maxfinalizers*2);
-        cvalue_t **temp = (cvalue_t**)realloc(Finalizers, nn*sizeof(value_t));
+    if (fl_ctx->nfinalizers == fl_ctx->maxfinalizers) {
+        size_t nn = (fl_ctx->maxfinalizers==0 ? 256 : fl_ctx->maxfinalizers*2);
+        cvalue_t **temp = (cvalue_t**)realloc(fl_ctx->Finalizers, nn*sizeof(value_t));
         if (temp == NULL)
-            lerror(OutOfMemoryError, "out of memory");
-        Finalizers = temp;
-        maxfinalizers = nn;
+            lerror(fl_ctx, fl_ctx->OutOfMemoryError, "out of memory");
+        fl_ctx->Finalizers = temp;
+        fl_ctx->maxfinalizers = nn;
     }
-    Finalizers[nfinalizers++] = cv;
+    fl_ctx->Finalizers[fl_ctx->nfinalizers++] = cv;
 }
 
 // remove dead objects from finalization list in-place
-static void sweep_finalizers(void)
+static void sweep_finalizers(fl_context_t *fl_ctx)
 {
-    cvalue_t **lst = Finalizers;
-    size_t n=0, ndel=0, l=nfinalizers;
+    cvalue_t **lst = fl_ctx->Finalizers;
+    size_t n=0, ndel=0, l=fl_ctx->nfinalizers;
     cvalue_t *tmp;
 #define SWAP_sf(a,b) (tmp=a,a=b,b=tmp,1)
     if (l == 0)
@@ -75,7 +57,7 @@ static void sweep_finalizers(void)
         else {
             fltype_t *t = cv_class(tmp);
             if (t->vtable != NULL && t->vtable->finalize != NULL) {
-                t->vtable->finalize(tagptr(tmp, TAG_CVALUE));
+                t->vtable->finalize(fl_ctx, tagptr(tmp, TAG_CVALUE));
             }
             if (!isinlined(tmp) && owned(tmp)) {
 #ifdef DEBUG
@@ -87,75 +69,75 @@ static void sweep_finalizers(void)
         }
     } while ((n < l-ndel) && SWAP_sf(lst[n],lst[n+ndel]));
 
-    nfinalizers -= ndel;
+    fl_ctx->nfinalizers -= ndel;
 #ifdef VERBOSEGC
     if (ndel > 0)
         printf("GC: finalized %d objects\n", ndel);
 #endif
 
-    malloc_pressure = 0;
+    fl_ctx->malloc_pressure = 0;
 }
 
 // compute the size of the metadata object for a cvalue
-static size_t cv_nwords(cvalue_t *cv)
+static size_t cv_nwords(fl_context_t *fl_ctx, cvalue_t *cv)
 {
     if (isinlined(cv)) {
         size_t n = cv_len(cv);
-        if (n==0 || cv_isstr(cv))
+        if (n==0 || cv_isstr(fl_ctx, cv))
             n++;
         return CVALUE_NWORDS - 1 + NWORDS(n);
     }
     return CVALUE_NWORDS;
 }
 
-static void autorelease(cvalue_t *cv)
+static void autorelease(fl_context_t *fl_ctx, cvalue_t *cv)
 {
-    cv->type = (fltype_t*)(((uptrint_t)cv->type) | CV_OWNED_BIT);
-    add_finalizer(cv);
+    cv->type = (fltype_t*)(((uintptr_t)cv->type) | CV_OWNED_BIT);
+    add_finalizer(fl_ctx, cv);
 }
 
-void cv_autorelease(cvalue_t *cv)
+void cv_autorelease(fl_context_t *fl_ctx, cvalue_t *cv)
 {
-    autorelease(cv);
+    autorelease(fl_ctx, cv);
 }
 
-static value_t cprim(fltype_t *type, size_t sz)
+static value_t cprim(fl_context_t *fl_ctx, fltype_t *type, size_t sz)
 {
-    cprim_t *pcp = (cprim_t*)alloc_words(CPRIM_NWORDS-1+NWORDS(sz));
+    cprim_t *pcp = (cprim_t*)alloc_words(fl_ctx, CPRIM_NWORDS-1+NWORDS(sz));
     pcp->type = type;
     return tagptr(pcp, TAG_CPRIM);
 }
 
-value_t cvalue(fltype_t *type, size_t sz)
+value_t cvalue(fl_context_t *fl_ctx, fltype_t *type, size_t sz)
 {
     cvalue_t *pcv;
     int str=0;
 
     if (valid_numtype(type->numtype)) {
-        return cprim(type, sz);
+        return cprim(fl_ctx, type, sz);
     }
-    if (type->eltype == bytetype) {
+    if (type->eltype == fl_ctx->bytetype) {
         if (sz == 0)
-            return symbol_value(emptystringsym);
+            return symbol_value(fl_ctx->emptystringsym);
         sz++;
         str=1;
     }
     if (sz <= MAX_INL_SIZE) {
         size_t nw = CVALUE_NWORDS - 1 + NWORDS(sz) + (sz==0 ? 1 : 0);
-        pcv = (cvalue_t*)alloc_words(nw);
+        pcv = (cvalue_t*)alloc_words(fl_ctx, nw);
         pcv->type = type;
         pcv->data = &pcv->_space[0];
         if (type->vtable != NULL && type->vtable->finalize != NULL)
-            add_finalizer(pcv);
+            add_finalizer(fl_ctx, pcv);
     }
     else {
-        if (malloc_pressure > ALLOC_LIMIT_TRIGGER)
-            gc(0);
-        pcv = (cvalue_t*)alloc_words(CVALUE_NWORDS);
+        if (fl_ctx->malloc_pressure > ALLOC_LIMIT_TRIGGER)
+            gc(fl_ctx, 0);
+        pcv = (cvalue_t*)alloc_words(fl_ctx, CVALUE_NWORDS);
         pcv->type = type;
         pcv->data = malloc(sz);
-        autorelease(pcv);
-        malloc_pressure += sz;
+        autorelease(fl_ctx, pcv);
+        fl_ctx->malloc_pressure += sz;
     }
     if (str) {
         sz--;
@@ -165,10 +147,10 @@ value_t cvalue(fltype_t *type, size_t sz)
     return tagptr(pcv, TAG_CVALUE);
 }
 
-value_t cvalue_from_data(fltype_t *type, void *data, size_t sz)
+value_t cvalue_from_data(fl_context_t *fl_ctx, fltype_t *type, void *data, size_t sz)
 {
     value_t cv;
-    cv = cvalue(type, sz);
+    cv = cvalue(fl_ctx, type, sz);
     memcpy(cptr(cv), data, sz);
     return cv;
 }
@@ -180,83 +162,88 @@ value_t cvalue_from_data(fltype_t *type, void *data, size_t sz)
 // ptr is user-managed; we don't autorelease it unless the
 // user explicitly calls (autorelease ) on the result of this function.
 // 'parent' is an optional cvalue that this pointer is known to point
-// into; NIL if none.
-value_t cvalue_from_ref(fltype_t *type, void *ptr, size_t sz, value_t parent)
+// into; fl_ctx->NIL if none.
+value_t cvalue_from_ref(fl_context_t *fl_ctx, fltype_t *type, void *ptr, size_t sz, value_t parent)
 {
     cvalue_t *pcv;
     value_t cv;
 
-    pcv = (cvalue_t*)alloc_words(CVALUE_NWORDS);
+    pcv = (cvalue_t*)alloc_words(fl_ctx, CVALUE_NWORDS);
     pcv->data = ptr;
     pcv->len = sz;
     pcv->type = type;
-    if (parent != NIL) {
-        pcv->type = (fltype_t*)(((uptrint_t)pcv->type) | CV_PARENT_BIT);
+    if (parent != fl_ctx->NIL) {
+        pcv->type = (fltype_t*)(((uintptr_t)pcv->type) | CV_PARENT_BIT);
         pcv->parent = parent;
     }
     cv = tagptr(pcv, TAG_CVALUE);
     return cv;
 }
 
-value_t cvalue_string(size_t sz)
+value_t cvalue_string(fl_context_t *fl_ctx, size_t sz)
 {
-    return cvalue(stringtype, sz);
+    return cvalue(fl_ctx, fl_ctx->stringtype, sz);
 }
 
-value_t cvalue_static_cstring(const char *str)
+value_t cvalue_static_cstrn(fl_context_t *fl_ctx, const char *str, size_t n)
 {
-    return cvalue_from_ref(stringtype, (char*)str, strlen(str), NIL);
+    return cvalue_from_ref(fl_ctx, fl_ctx->stringtype, (char*)str, n, fl_ctx->NIL);
 }
 
-value_t string_from_cstrn(char *str, size_t n)
+value_t cvalue_static_cstring(fl_context_t *fl_ctx, const char *str)
 {
-    value_t v = cvalue_string(n);
+    return cvalue_static_cstrn(fl_ctx, str, strlen(str));
+}
+
+value_t string_from_cstrn(fl_context_t *fl_ctx, char *str, size_t n)
+{
+    value_t v = cvalue_string(fl_ctx, n);
     memcpy(cvalue_data(v), str, n);
     return v;
 }
 
-value_t string_from_cstr(char *str)
+value_t string_from_cstr(fl_context_t *fl_ctx, char *str)
 {
-    return string_from_cstrn(str, strlen(str));
+    return string_from_cstrn(fl_ctx, str, strlen(str));
 }
 
-int fl_isstring(value_t v)
+int fl_isstring(fl_context_t *fl_ctx, value_t v)
 {
-    return (iscvalue(v) && cv_isstr((cvalue_t*)ptr(v)));
+    return (iscvalue(v) && cv_isstr(fl_ctx, (cvalue_t*)ptr(v)));
 }
 
 // convert to malloc representation (fixed address)
-void cv_pin(cvalue_t *cv)
+void cv_pin(fl_context_t *fl_ctx, cvalue_t *cv)
 {
     if (!isinlined(cv))
         return;
     size_t sz = cv_len(cv);
-    if (cv_isstr(cv)) sz++;
+    if (cv_isstr(fl_ctx, cv)) sz++;
     void *data = malloc(sz);
     memcpy(data, cv_data(cv), sz);
     cv->data = data;
-    autorelease(cv);
+    autorelease(fl_ctx, cv);
 }
 
-#define num_init(ctype, cnvt, tag)                              \
-static int cvalue_##ctype##_init(fltype_t *type, value_t arg,   \
-                                 void *dest)                    \
-{                                                               \
-    fl_##ctype##_t n=0;                                         \
-    (void)type;                                                 \
-    if (isfixnum(arg)) {                                        \
-        n = numval(arg);                                        \
-    }                                                           \
-    else if (iscprim(arg)) {                                    \
-        cprim_t *cp = (cprim_t*)ptr(arg);                       \
-        void *p = cp_data(cp);                                  \
-        n = (fl_##ctype##_t)conv_to_##cnvt(p, cp_numtype(cp));  \
-    }                                                           \
-    else {                                                      \
-        return 1;                                               \
-    }                                                           \
-    *((fl_##ctype##_t*)dest) = n;                               \
-    return 0;                                                   \
+#define num_init(ctype, cnvt, tag)                                     \
+static int cvalue_##ctype##_init(fl_context_t *fl_ctx, fltype_t *type, \
+                                 value_t arg, void *dest)              \
+{                                                                      \
+    fl_##ctype##_t n=0;                                                \
+    (void)type;                                                        \
+    if (isfixnum(arg)) {                                               \
+        n = numval(arg);                                               \
+    }                                                                  \
+    else if (iscprim(arg)) {                                           \
+        cprim_t *cp = (cprim_t*)ptr(arg);                              \
+        void *p = cp_data(cp);                                         \
+        n = (fl_##ctype##_t)conv_to_##cnvt(p, cp_numtype(cp));         \
+    }                                                                  \
+    else {                                                             \
+        return 1;                                                      \
+    }                                                                  \
+    *((fl_##ctype##_t*)dest) = n;                                      \
+    return 0;                                                          \
 }
 num_init(int8, int32, T_INT8)
 num_init(uint8, uint32, T_UINT8)
@@ -270,25 +257,25 @@ num_init(float, double, T_FLOAT)
 num_init(double, double, T_DOUBLE)
 
 #define num_ctor_init(typenam, ctype, tag)                              \
-value_t cvalue_##typenam(value_t *args, u_int32_t nargs)                \
+value_t cvalue_##typenam(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) \
 {                                                                       \
-    if (nargs==0) { PUSH(fixnum(0)); args = &Stack[SP-1]; }             \
-    value_t cp = cprim(typenam##type, sizeof(fl_##ctype##_t));          \
-    if (cvalue_##ctype##_init(typenam##type,                            \
+    if (nargs==0) { PUSH(fl_ctx, fixnum(0)); args = &fl_ctx->Stack[fl_ctx->SP-1]; } \
+    value_t cp = cprim(fl_ctx, fl_ctx->typenam##type, sizeof(fl_##ctype##_t)); \
+    if (cvalue_##ctype##_init(fl_ctx, fl_ctx->typenam##type,            \
                               args[0], cp_data((cprim_t*)ptr(cp))))     \
-        type_error(#typenam, "number", args[0]);                        \
+        type_error(fl_ctx, #typenam, "number", args[0]);                \
     return cp;                                                          \
 }
 
 #define num_ctor_ctor(typenam, ctype, tag)                              \
-value_t mk_##typenam(fl_##ctype##_t n)                                  \
+value_t mk_##typenam(fl_context_t *fl_ctx, fl_##ctype##_t n)            \
 {                                                                       \
-    value_t cp = cprim(typenam##type, sizeof(fl_##ctype##_t));          \
+    value_t cp = cprim(fl_ctx, fl_ctx->typenam##type, sizeof(fl_##ctype##_t)); \
     *(fl_##ctype##_t*)cp_data((cprim_t*)ptr(cp)) = n;                   \
     return cp;                                                          \
 }
 
-#define num_ctor(typenam, ctype, tag) \
+#define num_ctor(typenam, ctype, tag)  \
     num_ctor_init(typenam, ctype, tag) \
     num_ctor_ctor(typenam, ctype, tag)
 
@@ -312,15 +299,15 @@ num_ctor(size, uint32, T_UINT32)
 num_ctor(float, float, T_FLOAT)
 num_ctor(double, double, T_DOUBLE)
 
-value_t size_wrap(size_t sz)
+value_t size_wrap(fl_context_t *fl_ctx, size_t sz)
 {
     if (fits_fixnum(sz))
         return fixnum(sz);
     assert(sizeof(void*) == sizeof(size_t));
-    return mk_size(sz);
+    return mk_size(fl_ctx, sz);
 }
 
-size_t tosize(value_t n, char *fname)
+size_t tosize(fl_context_t *fl_ctx, value_t n, const char *fname)
 {
     if (isfixnum(n))
         return numval(n);
@@ -328,7 +315,7 @@ size_t tosize(value_t n, char *fname)
         cprim_t *cp = (cprim_t*)ptr(n);
         return conv_to_size(cp_data(cp), cp_numtype(cp));
     }
-    type_error(fname, "number", n);
+    type_error(fl_ctx, fname, "number", n);
     return 0;
 }
 
@@ -337,54 +324,54 @@ static int isarray(value_t v)
     return iscvalue(v) && cv_class((cvalue_t*)ptr(v))->eltype != NULL;
 }
 
-static size_t predict_arraylen(value_t arg)
+static size_t predict_arraylen(fl_context_t *fl_ctx, value_t arg)
 {
     if (isvector(arg))
         return vector_size(arg);
     else if (iscons(arg))
         return llength(arg);
-    else if (arg == NIL)
+    else if (arg == fl_ctx->NIL)
         return 0;
     if (isarray(arg))
         return cvalue_arraylen(arg);
     return 1;
 }
 
-static int cvalue_array_init(fltype_t *ft, value_t arg, void *dest)
+static int cvalue_array_init(fl_context_t *fl_ctx, fltype_t *ft, value_t arg, void *dest)
 {
     value_t type = ft->type;
     size_t elsize, i, cnt, sz;
     fltype_t *eltype = ft->eltype;
 
     elsize = ft->elsz;
-    cnt = predict_arraylen(arg);
+    cnt = predict_arraylen(fl_ctx, arg);
 
     if (iscons(cdr_(cdr_(type)))) {
-        size_t tc = tosize(car_(cdr_(cdr_(type))), "array");
+        size_t tc = tosize(fl_ctx, car_(cdr_(cdr_(type))), "array");
         if (tc != cnt)
-            lerror(ArgError, "array: size mismatch");
+            lerror(fl_ctx, fl_ctx->ArgError, "array: size mismatch");
     }
 
     sz = elsize * cnt;
 
     if (isvector(arg)) {
         for(i=0; i < cnt; i++) {
-            cvalue_init(eltype, vector_elt(arg,i), dest);
+            cvalue_init(fl_ctx, eltype, vector_elt(arg,i), dest);
             dest = (char *)dest + elsize;
         }
         return 0;
     }
-    else if (iscons(arg) || arg==NIL) {
+    else if (iscons(arg) || arg==fl_ctx->NIL) {
         i = 0;
         while (iscons(arg)) {
             if (i == cnt) { i++; break; } // trigger error
-            cvalue_init(eltype, car_(arg), dest);
+            cvalue_init(fl_ctx, eltype, car_(arg), dest);
             i++;
             dest = (char *)dest + elsize;
             arg = cdr_(arg);
         }
         if (i != cnt)
-            lerror(ArgError, "array: size mismatch");
+            lerror(fl_ctx, fl_ctx->ArgError, "array: size mismatch");
         return 0;
     }
     else if (iscvalue(arg)) {
@@ -395,39 +382,39 @@ static int cvalue_array_init(fltype_t *ft, value_t arg, void *dest)
                 if (cv_len(cv) == sz)
                     memcpy(dest, cv_data(cv), sz);
                 else
-                    lerror(ArgError, "array: size mismatch");
+                    lerror(fl_ctx, fl_ctx->ArgError, "array: size mismatch");
                 return 0;
             }
             else {
                 // TODO: initialize array from different type elements
-                lerror(ArgError, "array: element type mismatch");
+                lerror(fl_ctx, fl_ctx->ArgError, "array: element type mismatch");
             }
         }
     }
     if (cnt == 1)
-        cvalue_init(eltype, arg, dest);
+        cvalue_init(fl_ctx, eltype, arg, dest);
     else
-        type_error("array", "sequence", arg);
+        type_error(fl_ctx, "array", "sequence", arg);
     return 0;
 }
 
-value_t cvalue_array(value_t *args, u_int32_t nargs)
+value_t cvalue_array(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     size_t elsize, cnt, sz, i;
     value_t arg;
 
     if (nargs < 1)
-        argcount("array", nargs, 1);
+        argcount(fl_ctx, "array", nargs, 1);
 
     cnt = nargs - 1;
-    fltype_t *type = get_array_type(args[0]);
+    fltype_t *type = get_array_type(fl_ctx, args[0]);
     elsize = type->elsz;
     sz = elsize * cnt;
 
-    value_t cv = cvalue(type, sz);
+    value_t cv = cvalue(fl_ctx, type, sz);
     char *dest = (char*)cv_data((cvalue_t*)ptr(cv));
     FOR_ARGS(i,1,arg,args) {
-        cvalue_init(type->eltype, arg, dest);
+        cvalue_init(fl_ctx, type->eltype, arg, dest);
         dest += elsize;
     }
     return cv;
@@ -441,26 +428,26 @@ size_t cvalue_arraylen(value_t v)
 }
 
 // *palign is an output argument giving the alignment required by type
-size_t ctype_sizeof(value_t type, int *palign)
+size_t ctype_sizeof(fl_context_t *fl_ctx, value_t type, int *palign)
 {
-    if (type == int8sym || type == uint8sym || type == bytesym) {
+    if (type == fl_ctx->int8sym || type == fl_ctx->uint8sym || type == fl_ctx->bytesym) {
         *palign = 1;
         return 1;
     }
-    if (type == int16sym || type == uint16sym) {
+    if (type == fl_ctx->int16sym || type == fl_ctx->uint16sym) {
         *palign = ALIGN2;
         return 2;
     }
-    if (type == int32sym || type == uint32sym || type == wcharsym ||
-        type == floatsym) {
+    if (type == fl_ctx->int32sym || type == fl_ctx->uint32sym || type == fl_ctx->wcharsym ||
+        type == fl_ctx->floatsym) {
         *palign = ALIGN4;
         return 4;
     }
-    if (type == int64sym || type == uint64sym || type == doublesym) {
+    if (type == fl_ctx->int64sym || type == fl_ctx->uint64sym || type == fl_ctx->doublesym) {
         *palign = ALIGN8;
         return 8;
     }
-    if (type == ptrdiffsym || type == sizesym) {
+    if (type == fl_ctx->ptrdiffsym || type == fl_ctx->sizesym) {
 #ifdef _P64
         *palign = ALIGN8;
         return 8;
@@ -471,34 +458,32 @@ size_t ctype_sizeof(value_t type, int *palign)
     }
     if (iscons(type)) {
         value_t hed = car_(type);
-        if (hed == pointersym || hed == cfunctionsym) {
+        if (hed == fl_ctx->pointersym || hed == fl_ctx->cfunctionsym) {
             *palign = ALIGNPTR;
             return sizeof(void*);
         }
-        if (hed == arraysym) {
-            value_t t = car(cdr_(type));
+        if (hed == fl_ctx->arraysym) {
+            value_t t = car(fl_ctx, cdr_(type));
             if (!iscons(cdr_(cdr_(type))))
-                lerror(ArgError, "sizeof: incomplete type");
+                lerror(fl_ctx, fl_ctx->ArgError, "sizeof: incomplete type");
             value_t n = car_(cdr_(cdr_(type)));
-            size_t sz = tosize(n, "sizeof");
-            return sz * ctype_sizeof(t, palign);
+            size_t sz = tosize(fl_ctx, n, "sizeof");
+            return sz * ctype_sizeof(fl_ctx, t, palign);
         }
     }
-    lerror(ArgError, "sizeof: invalid c type");
+    lerror(fl_ctx, fl_ctx->ArgError, "sizeof: invalid c type");
     return 0;
 }
 
-extern fltype_t *iostreamtype;
-
 // get pointer and size for any plain-old-data value
-void to_sized_ptr(value_t v, char *fname, char **pdata, size_t *psz)
+void to_sized_ptr(fl_context_t *fl_ctx, value_t v, const char *fname, char **pdata, size_t *psz)
 {
     if (iscvalue(v)) {
         cvalue_t *pcv = (cvalue_t*)ptr(v);
         ios_t *x = value2c(ios_t*,v);
-        if (cv_class(pcv) == iostreamtype && (x->bm == bm_mem)) {
+        if (cv_class(pcv) == fl_ctx->iostreamtype && (x->bm == bm_mem)) {
             *pdata = x->buf;
-            *psz = x->size;
+            *psz = (size_t)x->size;
             return;
         }
         else if (cv_isPOD(pcv)) {
@@ -513,82 +498,82 @@ void to_sized_ptr(value_t v, char *fname, char **pdata, size_t *psz)
         *psz = cp_class(pcp)->size;
         return;
     }
-    type_error(fname, "plain-old-data", v);
+    type_error(fl_ctx, fname, "plain-old-data", v);
 }
 
-value_t cvalue_sizeof(value_t *args, u_int32_t nargs)
+value_t cvalue_sizeof(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
-    argcount("sizeof", nargs, 1);
+    argcount(fl_ctx, "sizeof", nargs, 1);
     if (issymbol(args[0]) || iscons(args[0])) {
         int a;
-        return size_wrap(ctype_sizeof(args[0], &a));
+        return size_wrap(fl_ctx, ctype_sizeof(fl_ctx, args[0], &a));
     }
     size_t n; char *data;
-    to_sized_ptr(args[0], "sizeof", &data, &n);
-    return size_wrap(n);
+    to_sized_ptr(fl_ctx, args[0], "sizeof", &data, &n);
+    return size_wrap(fl_ctx, n);
 }
 
-value_t cvalue_typeof(value_t *args, u_int32_t nargs)
+value_t cvalue_typeof(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
-    argcount("typeof", nargs, 1);
+    argcount(fl_ctx, "typeof", nargs, 1);
     switch(tag(args[0])) {
-    case TAG_CONS: return pairsym;
+    case TAG_CONS: return fl_ctx->pairsym;
     case TAG_NUM1:
-    case TAG_NUM:  return fixnumsym;
-    case TAG_SYM:  return symbolsym;
-    case TAG_VECTOR: return vectorsym;
+    case TAG_NUM:  return fl_ctx->fixnumsym;
+    case TAG_SYM:  return fl_ctx->symbolsym;
+    case TAG_VECTOR: return fl_ctx->vectorsym;
     case TAG_FUNCTION:
-        if (args[0] == FL_T || args[0] == FL_F)
-            return booleansym;
-        if (args[0] == NIL)
-            return nullsym;
-        if (args[0] == FL_EOF)
-            return symbol("eof-object");
+        if (args[0] == fl_ctx->T || args[0] == fl_ctx->F)
+            return fl_ctx->booleansym;
+        if (args[0] == fl_ctx->NIL)
+            return fl_ctx->nullsym;
+        if (args[0] == fl_ctx->FL_EOF)
+            return symbol(fl_ctx, "eof-object");
         if (isbuiltin(args[0]))
-            return builtinsym;
-        return FUNCTION;
+            return fl_ctx->builtinsym;
+        return fl_ctx->FUNCTION;
     }
     return cv_type((cvalue_t*)ptr(args[0]));
 }
 
-static value_t cvalue_relocate(value_t v)
+static value_t cvalue_relocate(fl_context_t *fl_ctx, value_t v)
 {
     size_t nw;
     cvalue_t *cv = (cvalue_t*)ptr(v);
     cvalue_t *nv;
     value_t ncv;
 
-    nw = cv_nwords(cv);
-    nv = (cvalue_t*)alloc_words(nw);
+    nw = cv_nwords(fl_ctx, cv);
+    nv = (cvalue_t*)alloc_words(fl_ctx, nw);
     memcpy(nv, cv, nw*sizeof(value_t));
     if (isinlined(cv))
         nv->data = &nv->_space[0];
     ncv = tagptr(nv, TAG_CVALUE);
     fltype_t *t = cv_class(cv);
     if (t->vtable != NULL && t->vtable->relocate != NULL)
-        t->vtable->relocate(v, ncv);
+        t->vtable->relocate(fl_ctx, v, ncv);
     forward(v, ncv);
     return ncv;
 }
 
-value_t cvalue_copy(value_t v)
+value_t cvalue_copy(fl_context_t *fl_ctx, value_t v)
 {
     assert(iscvalue(v));
-    PUSH(v);
+    PUSH(fl_ctx, v);
     cvalue_t *cv = (cvalue_t*)ptr(v);
-    size_t nw = cv_nwords(cv);
-    cvalue_t *ncv = (cvalue_t*)alloc_words(nw);
-    v = POP(); cv = (cvalue_t*)ptr(v);
+    size_t nw = cv_nwords(fl_ctx, cv);
+    cvalue_t *ncv = (cvalue_t*)alloc_words(fl_ctx, nw);
+    v = POP(fl_ctx); cv = (cvalue_t*)ptr(v);
     memcpy(ncv, cv, nw * sizeof(value_t));
     if (!isinlined(cv)) {
         size_t len = cv_len(cv);
-        if (cv_isstr(cv)) len++;
+        if (cv_isstr(fl_ctx, cv)) len++;
         ncv->data = malloc(len);
         memcpy(ncv->data, cv_data(cv), len);
-        autorelease(ncv);
+        autorelease(fl_ctx, ncv);
         if (hasparent(cv)) {
-            ncv->type = (fltype_t*)(((uptrint_t)ncv->type) & ~CV_PARENT_BIT);
-            ncv->parent = NIL;
+            ncv->type = (fltype_t*)(((uintptr_t)ncv->type) & ~CV_PARENT_BIT);
+            ncv->parent = fl_ctx->NIL;
         }
     }
     else {
@@ -598,73 +583,73 @@ value_t cvalue_copy(value_t v)
     return tagptr(ncv, TAG_CVALUE);
 }
 
-value_t fl_copy(value_t *args, u_int32_t nargs)
+value_t fl_copy(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
-    argcount("copy", nargs, 1);
+    argcount(fl_ctx, "copy", nargs, 1);
     if (iscons(args[0]) || isvector(args[0]))
-        lerror(ArgError, "copy: argument must be a leaf atom");
+        lerror(fl_ctx, fl_ctx->ArgError, "copy: argument must be a leaf atom");
     if (!iscvalue(args[0]))
         return args[0];
     if (!cv_isPOD((cvalue_t*)ptr(args[0])))
-        lerror(ArgError, "copy: argument must be a plain-old-data type");
-    return cvalue_copy(args[0]);
+        lerror(fl_ctx, fl_ctx->ArgError, "copy: argument must be a plain-old-data type");
+    return cvalue_copy(fl_ctx, args[0]);
 }
 
-value_t fl_podp(value_t *args, u_int32_t nargs)
+value_t fl_podp(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
-    argcount("plain-old-data?", nargs, 1);
+    argcount(fl_ctx, "plain-old-data?", nargs, 1);
     return (iscprim(args[0]) ||
             (iscvalue(args[0]) && cv_isPOD((cvalue_t*)ptr(args[0])))) ?
-        FL_T : FL_F;
+        fl_ctx->T : fl_ctx->F;
 }
 
-static void cvalue_init(fltype_t *type, value_t v, void *dest)
+static void cvalue_init(fl_context_t *fl_ctx, fltype_t *type, value_t v, void *dest)
 {
     cvinitfunc_t f=type->init;
 
     if (f == NULL)
-        lerror(ArgError, "c-value: invalid c type");
+        lerror(fl_ctx, fl_ctx->ArgError, "c-value: invalid c type");
 
-    f(type, v, dest);
+    f(fl_ctx, type, v, dest);
 }
 
-static numerictype_t sym_to_numtype(value_t type)
+static numerictype_t sym_to_numtype(fl_context_t *fl_ctx, value_t type)
 {
-    if (type == int8sym)
+    if (type == fl_ctx->int8sym)
         return T_INT8;
-    else if (type == uint8sym || type == bytesym)
+    else if (type == fl_ctx->uint8sym || type == fl_ctx->bytesym)
         return T_UINT8;
-    else if (type == int16sym)
+    else if (type == fl_ctx->int16sym)
         return T_INT16;
-    else if (type == uint16sym)
+    else if (type == fl_ctx->uint16sym)
         return T_UINT16;
 #ifdef _P64
-    else if (type == int32sym || type == wcharsym)
+    else if (type == fl_ctx->int32sym || type == fl_ctx->wcharsym)
 #else
-    else if (type == int32sym || type == wcharsym || type == ptrdiffsym)
+    else if (type == fl_ctx->int32sym || type == fl_ctx->wcharsym || type == fl_ctx->ptrdiffsym)
 #endif
         return T_INT32;
 #ifdef _P64
-    else if (type == uint32sym)
+    else if (type == fl_ctx->uint32sym)
 #else
-    else if (type == uint32sym || type == sizesym)
+    else if (type == fl_ctx->uint32sym || type == fl_ctx->sizesym)
 #endif
         return T_UINT32;
 #ifdef _P64
-    else if (type == int64sym || type == ptrdiffsym)
+    else if (type == fl_ctx->int64sym || type == fl_ctx->ptrdiffsym)
 #else
-    else if (type == int64sym)
+    else if (type == fl_ctx->int64sym)
 #endif
         return T_INT64;
 #ifdef _P64
-    else if (type == uint64sym || type == sizesym)
+    else if (type == fl_ctx->uint64sym || type == fl_ctx->sizesym)
 #else
-    else if (type == uint64sym)
+    else if (type == fl_ctx->uint64sym)
 #endif
         return T_UINT64;
-    else if (type == floatsym)
+    else if (type == fl_ctx->floatsym)
         return T_FLOAT;
-    else if (type == doublesym)
+    else if (type == fl_ctx->doublesym)
         return T_DOUBLE;
     return (numerictype_t)N_NUMTYPES;
 }
@@ -673,12 +658,12 @@ static numerictype_t sym_to_numtype(value_t type)
 // this provides (1) a way to allocate values with a shared type for
 // efficiency, (2) a uniform interface for allocating cvalues of any
 // type, including user-defined.
-value_t cvalue_new(value_t *args, u_int32_t nargs)
+value_t cvalue_new(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     if (nargs < 1 || nargs > 2)
-        argcount("c-value", nargs, 2);
+        argcount(fl_ctx, "c-value", nargs, 2);
     value_t type = args[0];
-    fltype_t *ft = get_type(type);
+    fltype_t *ft = get_type(fl_ctx, type);
     value_t cv;
     if (ft->eltype != NULL) {
         // special case to handle incomplete array types bla[]
@@ -686,19 +671,19 @@ value_t cvalue_new(value_t *args, u_int32_t nargs)
         size_t cnt;
 
         if (iscons(cdr_(cdr_(type))))
-            cnt = tosize(car_(cdr_(cdr_(type))), "array");
+            cnt = tosize(fl_ctx, car_(cdr_(cdr_(type))), "array");
         else if (nargs == 2)
-            cnt = predict_arraylen(args[1]);
+            cnt = predict_arraylen(fl_ctx, args[1]);
         else
             cnt = 0;
-        cv = cvalue(ft, elsz * cnt);
+        cv = cvalue(fl_ctx, ft, elsz * cnt);
         if (nargs == 2)
-            cvalue_array_init(ft, args[1], cv_data((cvalue_t*)ptr(cv)));
+            cvalue_array_init(fl_ctx, ft, args[1], cv_data((cvalue_t*)ptr(cv)));
     }
     else {
-        cv = cvalue(ft, ft->size);
+        cv = cvalue(fl_ctx, ft, ft->size);
         if (nargs == 2)
-            cvalue_init(ft, args[1], cptr(cv));
+            cvalue_init(fl_ctx, ft, args[1], cptr(cv));
     }
     return cv;
 }
@@ -723,27 +708,27 @@ value_t cvalue_compare(value_t a, value_t b)
     return fixnum(diff);
 }
 
-static void check_addr_args(char *fname, value_t arr, value_t ind,
-                            char **data, size_t *index)
+static void check_addr_args(fl_context_t *fl_ctx, const char *fname, value_t arr,
+                            value_t ind, char **data, size_t *index)
 {
     size_t numel;
     cvalue_t *cv = (cvalue_t*)ptr(arr);
     *data = (char*)cv_data(cv);
     numel = cv_len(cv)/(cv_class(cv)->elsz);
-    *index = tosize(ind, fname);
+    *index = tosize(fl_ctx, ind, fname);
     if (*index >= numel)
-        bounds_error(fname, arr, ind);
+        bounds_error(fl_ctx, fname, arr, ind);
 }
 
-static value_t cvalue_array_aref(value_t *args)
+static value_t cvalue_array_aref(fl_context_t *fl_ctx, value_t *args)
 {
     char *data; size_t index;
     fltype_t *eltype = cv_class((cvalue_t*)ptr(args[0]))->eltype;
     value_t el = 0;
     numerictype_t nt = eltype->numtype;
     if (nt >= T_INT32)
-        el = cvalue(eltype, eltype->size);
-    check_addr_args("aref", args[0], args[1], &data, &index);
+        el = cvalue(fl_ctx, eltype, eltype->size);
+    check_addr_args(fl_ctx, "aref", args[0], args[1], &data, &index);
     if (nt < T_INT32) {
         if (nt == T_INT8)
             return fixnum((int8_t)data[index]);
@@ -768,49 +753,49 @@ static value_t cvalue_array_aref(value_t *args)
     return el;
 }
 
-static value_t cvalue_array_aset(value_t *args)
+static value_t cvalue_array_aset(fl_context_t *fl_ctx, value_t *args)
 {
     char *data; size_t index;
     fltype_t *eltype = cv_class((cvalue_t*)ptr(args[0]))->eltype;
-    check_addr_args("aset!", args[0], args[1], &data, &index);
+    check_addr_args(fl_ctx, "aset!", args[0], args[1], &data, &index);
     char *dest = data + index*eltype->size;
-    cvalue_init(eltype, args[2], dest);
+    cvalue_init(fl_ctx, eltype, args[2], dest);
     return args[2];
 }
 
-value_t fl_builtin(value_t *args, u_int32_t nargs)
+value_t fl_builtin(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
-    argcount("builtin", nargs, 1);
-    symbol_t *name = tosymbol(args[0], "builtin");
+    argcount(fl_ctx, "builtin", nargs, 1);
+    symbol_t *name = tosymbol(fl_ctx, args[0], "builtin");
     cvalue_t *cv;
-    if (ismanaged(args[0]) || (cv=(cvalue_t*)name->dlcache) == NULL) {
-        lerrorf(ArgError, "builtin: function %s not found", name->name);
+    if (ismanaged(fl_ctx, args[0]) || (cv=(cvalue_t*)name->dlcache) == NULL) {
+        lerrorf(fl_ctx, fl_ctx->ArgError, "builtin: function %s not found", name->name);
     }
     return tagptr(cv, TAG_CVALUE);
 }
 
-value_t cbuiltin(char *name, builtin_t f)
+value_t cbuiltin(fl_context_t *fl_ctx, const char *name, builtin_t f)
 {
     cvalue_t *cv = (cvalue_t*)malloc(CVALUE_NWORDS * sizeof(value_t));
-    cv->type = builtintype;
+    cv->type = fl_ctx->builtintype;
     cv->data = &cv->_space[0];
     cv->len = sizeof(value_t);
     *(void**)cv->data = (void*)f;
 
-    value_t sym = symbol(name);
+    value_t sym = symbol(fl_ctx, name);
     ((symbol_t*)ptr(sym))->dlcache = cv;
-    ptrhash_put(&reverse_dlsym_lookup_table, cv, (void*)sym);
+    ptrhash_put(&fl_ctx->reverse_dlsym_lookup_table, cv, (void*)sym);
 
     return tagptr(cv, TAG_CVALUE);
 }
 
-static value_t fl_logand(value_t *args, u_int32_t nargs);
-static value_t fl_logior(value_t *args, u_int32_t nargs);
-static value_t fl_logxor(value_t *args, u_int32_t nargs);
-static value_t fl_lognot(value_t *args, u_int32_t nargs);
-static value_t fl_ash(value_t *args, u_int32_t nargs);
+static value_t fl_logand(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
+static value_t fl_logior(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
+static value_t fl_logxor(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
+static value_t fl_lognot(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
+static value_t fl_ash(fl_context_t *fl_ctx, value_t *args, uint32_t nargs);
 
-static builtinspec_t cvalues_builtin_info[] = {
+static const builtinspec_t cvalues_builtin_info[] = {
     { "c-value", cvalue_new },
     { "typeof", cvalue_typeof },
     { "sizeof", cvalue_sizeof },
@@ -827,123 +812,120 @@ static builtinspec_t cvalues_builtin_info[] = {
     { NULL, NULL }
 };
 
-#define cv_intern(tok) tok##sym = symbol(#tok)
-#define ctor_cv_intern(tok) \
-    cv_intern(tok);set(tok##sym, cbuiltin(#tok, cvalue_##tok))
+#define cv_intern(fl_ctx, tok) fl_ctx->tok##sym = symbol(fl_ctx, #tok)
+#define ctor_cv_intern(fl_ctx, tok)                             \
+    cv_intern(fl_ctx, tok);                                     \
+    set(fl_ctx->tok##sym, cbuiltin(fl_ctx, #tok, cvalue_##tok))
 
-#define mk_primtype(name) \
-  name##type=get_type(name##sym);name##type->init = &cvalue_##name##_init
+#define mk_primtype(fl_ctx, name)                               \
+    fl_ctx->name##type = get_type(fl_ctx, fl_ctx->name##sym);   \
+    fl_ctx->name##type->init = &cvalue_##name##_init
 
-#define mk_primtype_(name,ctype) \
-  name##type=get_type(name##sym);name##type->init = &cvalue_##ctype##_init
+#define mk_primtype_(fl_ctx, name, ctype)                       \
+    fl_ctx->name##type = get_type(fl_ctx, fl_ctx->name##sym);   \
+    fl_ctx->name##type->init = &cvalue_##ctype##_init
 
-struct prim_int16{ char a; int16_t i; };
-struct prim_int32{ char a; int32_t i; };
-struct prim_int64{ char a; int64_t i; };
-struct prim_ptr{ char a;  void   *i; };
-
-static void cvalues_init(void)
+static void cvalues_init(fl_context_t *fl_ctx)
 {
-    htable_new(&TypeTable, 256);
-    htable_new(&reverse_dlsym_lookup_table, 256);
+    fl_ctx->malloc_pressure = 0;
+    fl_ctx->Finalizers = NULL;
+    fl_ctx->nfinalizers = 0;
+    fl_ctx->maxfinalizers = 0;
 
-    // compute struct field alignment required for primitives
-    ALIGN2   = sizeof(struct prim_int16) - 2;
-    ALIGN4   = sizeof(struct prim_int32) - 4;
-    ALIGN8   = sizeof(struct prim_int64) - 8;
-    ALIGNPTR = sizeof(struct prim_ptr) - sizeof(void*);
+    htable_new(&fl_ctx->TypeTable, 256);
+    htable_new(&fl_ctx->reverse_dlsym_lookup_table, 256);
 
-    builtintype = define_opaque_type(builtinsym, sizeof(builtin_t), NULL, NULL);
+    fl_ctx->builtintype = define_opaque_type(fl_ctx->builtinsym, sizeof(builtin_t), NULL, NULL);
 
-    ctor_cv_intern(int8);
-    ctor_cv_intern(uint8);
-    ctor_cv_intern(int16);
-    ctor_cv_intern(uint16);
-    ctor_cv_intern(int32);
-    ctor_cv_intern(uint32);
-    ctor_cv_intern(int64);
-    ctor_cv_intern(uint64);
-    ctor_cv_intern(byte);
-    ctor_cv_intern(wchar);
-    ctor_cv_intern(ptrdiff);
-    ctor_cv_intern(size);
-    ctor_cv_intern(float);
-    ctor_cv_intern(double);
+    ctor_cv_intern(fl_ctx, int8);
+    ctor_cv_intern(fl_ctx, uint8);
+    ctor_cv_intern(fl_ctx, int16);
+    ctor_cv_intern(fl_ctx, uint16);
+    ctor_cv_intern(fl_ctx, int32);
+    ctor_cv_intern(fl_ctx, uint32);
+    ctor_cv_intern(fl_ctx, int64);
+    ctor_cv_intern(fl_ctx, uint64);
+    ctor_cv_intern(fl_ctx, byte);
+    ctor_cv_intern(fl_ctx, wchar);
+    ctor_cv_intern(fl_ctx, ptrdiff);
+    ctor_cv_intern(fl_ctx, size);
+    ctor_cv_intern(fl_ctx, float);
+    ctor_cv_intern(fl_ctx, double);
 
-    ctor_cv_intern(array);
-    cv_intern(pointer);
-    cv_intern(void);
-    cfunctionsym = symbol("c-function");
+    ctor_cv_intern(fl_ctx, array);
+    cv_intern(fl_ctx, pointer);
+    cv_intern(fl_ctx, void);
+    fl_ctx->cfunctionsym = symbol(fl_ctx, "c-function");
 
-    assign_global_builtins(cvalues_builtin_info);
+    assign_global_builtins(fl_ctx, cvalues_builtin_info);
 
-    stringtypesym = symbol("*string-type*");
-    setc(stringtypesym, fl_list2(arraysym, bytesym));
+    fl_ctx->stringtypesym = symbol(fl_ctx, "*string-type*");
+    setc(fl_ctx->stringtypesym, fl_list2(fl_ctx, fl_ctx->arraysym, fl_ctx->bytesym));
 
-    wcstringtypesym = symbol("*wcstring-type*");
-    setc(wcstringtypesym, fl_list2(arraysym, wcharsym));
+    fl_ctx->wcstringtypesym = symbol(fl_ctx, "*wcstring-type*");
+    setc(fl_ctx->wcstringtypesym, fl_list2(fl_ctx, fl_ctx->arraysym, fl_ctx->wcharsym));
 
-    mk_primtype(int8);
-    mk_primtype(uint8);
-    mk_primtype(int16);
-    mk_primtype(uint16);
-    mk_primtype(int32);
-    mk_primtype(uint32);
-    mk_primtype(int64);
-    mk_primtype(uint64);
+    mk_primtype(fl_ctx, int8);
+    mk_primtype(fl_ctx, uint8);
+    mk_primtype(fl_ctx, int16);
+    mk_primtype(fl_ctx, uint16);
+    mk_primtype(fl_ctx, int32);
+    mk_primtype(fl_ctx, uint32);
+    mk_primtype(fl_ctx, int64);
+    mk_primtype(fl_ctx, uint64);
 #ifdef _P64
-    mk_primtype_(ptrdiff,int64);
-    mk_primtype_(size,uint64);
+    mk_primtype_(fl_ctx, ptrdiff, int64);
+    mk_primtype_(fl_ctx, size, uint64);
 #else
-    mk_primtype_(ptrdiff,int32);
-    mk_primtype_(size,uint32);
+    mk_primtype_(fl_ctx, ptrdiff, int32);
+    mk_primtype_(fl_ctx, size, uint32);
 #endif
-    mk_primtype_(byte,uint8);
-    mk_primtype_(wchar,int32);
-    mk_primtype(float);
-    mk_primtype(double);
+    mk_primtype_(fl_ctx, byte, uint8);
+    mk_primtype_(fl_ctx, wchar, int32);
+    mk_primtype(fl_ctx, float);
+    mk_primtype(fl_ctx, double);
 
-    stringtype = get_type(symbol_value(stringtypesym));
-    wcstringtype = get_type(symbol_value(wcstringtypesym));
+    fl_ctx->stringtype = get_type(fl_ctx, symbol_value(fl_ctx->stringtypesym));
+    fl_ctx->wcstringtype = get_type(fl_ctx, symbol_value(fl_ctx->wcstringtypesym));
 
-    emptystringsym = symbol("*empty-string*");
-    setc(emptystringsym, cvalue_static_cstring(""));
+    fl_ctx->emptystringsym = symbol(fl_ctx, "*empty-string*");
+    setc(fl_ctx->emptystringsym, cvalue_static_cstring(fl_ctx, ""));
 }
 
-#define RETURN_NUM_AS(var, type) return(mk_##type((fl_##type##_t)var))
+#define RETURN_NUM_AS(fl_ctx, var, type) return(mk_##type(fl_ctx, (fl_##type##_t)var))
 
-value_t return_from_uint64(uint64_t Uaccum)
+value_t return_from_uint64(fl_context_t *fl_ctx, uint64_t Uaccum)
 {
     if (fits_fixnum(Uaccum)) {
         return fixnum((fixnum_t)Uaccum);
     }
     if (Uaccum > (uint64_t)S64_MAX) {
-        RETURN_NUM_AS(Uaccum, uint64);
+        RETURN_NUM_AS(fl_ctx, Uaccum, uint64);
     }
     else if (Uaccum > (uint64_t)INT_MAX) {
-        RETURN_NUM_AS(Uaccum, int64);
+        RETURN_NUM_AS(fl_ctx, Uaccum, int64);
     }
-    RETURN_NUM_AS(Uaccum, int32);
+    RETURN_NUM_AS(fl_ctx, Uaccum, int32);
 }
 
-value_t return_from_int64(int64_t Saccum)
+value_t return_from_int64(fl_context_t *fl_ctx, int64_t Saccum)
 {
     if (fits_fixnum(Saccum)) {
         return fixnum((fixnum_t)Saccum);
     }
     if (Saccum > (int64_t)INT_MAX || Saccum < (int64_t)INT_MIN) {
-        RETURN_NUM_AS(Saccum, int64);
+        RETURN_NUM_AS(fl_ctx, Saccum, int64);
     }
-    RETURN_NUM_AS(Saccum, int32);
+    RETURN_NUM_AS(fl_ctx, Saccum, int32);
 }
 
-static value_t fl_add_any(value_t *args, u_int32_t nargs, fixnum_t carryIn)
+static value_t fl_add_any(fl_context_t *fl_ctx, value_t *args, uint32_t nargs, fixnum_t carryIn)
 {
     uint64_t Uaccum=0;
     int64_t Saccum = carryIn;
     double Faccum=0;
     uint32_t i;
-    value_t arg=NIL;
+    value_t arg=fl_ctx->NIL;
 
     FOR_ARGS(i,0,arg,args) {
         if (isfixnum(arg)) {
@@ -977,12 +959,12 @@ static value_t fl_add_any(value_t *args, u_int32_t nargs, fixnum_t carryIn)
             continue;
         }
     add_type_error:
-        type_error("+", "number", arg);
+        type_error(fl_ctx, "+", "number", arg);
     }
     if (Faccum != 0) {
         Faccum += Uaccum;
         Faccum += Saccum;
-        return mk_double(Faccum);
+        return mk_double(fl_ctx, Faccum);
     }
     else if (Saccum < 0) {
         uint64_t negpart = (uint64_t)(-Saccum);
@@ -993,9 +975,9 @@ static value_t fl_add_any(value_t *args, u_int32_t nargs, fixnum_t carryIn)
                 if (fits_fixnum(Saccum)) {
                     return fixnum((fixnum_t)Saccum);
                 }
-                RETURN_NUM_AS(Saccum, int32);
+                RETURN_NUM_AS(fl_ctx, Saccum, int32);
             }
-            RETURN_NUM_AS(Saccum, int64);
+            RETURN_NUM_AS(fl_ctx, Saccum, int64);
         }
         Uaccum -= negpart;
     }
@@ -1003,10 +985,10 @@ static value_t fl_add_any(value_t *args, u_int32_t nargs, fixnum_t carryIn)
         Uaccum += (uint64_t)Saccum;
     }
     // return value in Uaccum
-    return return_from_uint64(Uaccum);
+    return return_from_uint64(fl_ctx, Uaccum);
 }
 
-static value_t fl_neg(value_t n)
+static value_t fl_neg(fl_context_t *fl_ctx, value_t n)
 {
     if (isfixnum(n)) {
         return fixnum(-numval(n));
@@ -1025,32 +1007,32 @@ static value_t fl_neg(value_t n)
         case T_INT32:
             i32 = *(int32_t*)a;
             if (i32 == (int32_t)BIT31)
-                return mk_uint32((uint32_t)BIT31);
-            return mk_int32(-i32);
+                return mk_uint32(fl_ctx, (uint32_t)BIT31);
+            return mk_int32(fl_ctx, -i32);
         case T_UINT32:
             ui32 = *(uint32_t*)a;
-            if (ui32 <= ((uint32_t)INT_MAX)+1) return mk_int32(-(int32_t)ui32);
-            return mk_int64(-(int64_t)ui32);
+            if (ui32 <= ((uint32_t)INT_MAX)+1) return mk_int32(fl_ctx, -(int32_t)ui32);
+            return mk_int64(fl_ctx, -(int64_t)ui32);
         case T_INT64:
             i64 = *(int64_t*)a;
             if (i64 == (int64_t)BIT63)
-                return mk_uint64((uint64_t)BIT63);
-            return mk_int64(-i64);
-        case T_UINT64: return mk_int64(-(int64_t)*(uint64_t*)a);
-        case T_FLOAT:  return mk_float(-*(float*)a);
-        case T_DOUBLE: return mk_double(-*(double*)a);
+                return mk_uint64(fl_ctx, (uint64_t)BIT63);
+            return mk_int64(fl_ctx, -i64);
+        case T_UINT64: return mk_int64(fl_ctx, -(int64_t)*(uint64_t*)a);
+        case T_FLOAT:  return mk_float(fl_ctx, -*(float*)a);
+        case T_DOUBLE: return mk_double(fl_ctx, -*(double*)a);
             break;
         }
     }
-    type_error("-", "number", n);
+    type_error(fl_ctx, "-", "number", n);
 }
 
-static value_t fl_mul_any(value_t *args, u_int32_t nargs, int64_t Saccum)
+static value_t fl_mul_any(fl_context_t *fl_ctx, value_t *args, uint32_t nargs, int64_t Saccum)
 {
     uint64_t Uaccum=1;
     double Faccum=1;
     uint32_t i;
-    value_t arg=NIL;
+    value_t arg=fl_ctx->NIL;
 
     FOR_ARGS(i,0,arg,args) {
         if (isfixnum(arg)) {
@@ -1084,12 +1066,12 @@ static value_t fl_mul_any(value_t *args, u_int32_t nargs, int64_t Saccum)
             continue;
         }
     mul_type_error:
-        type_error("*", "number", arg);
+        type_error(fl_ctx, "*", "number", arg);
     }
     if (Faccum != 1) {
         Faccum *= Uaccum;
         Faccum *= Saccum;
-        return mk_double(Faccum);
+        return mk_double(fl_ctx, Faccum);
     }
     else if (Saccum < 0) {
         Saccum *= (int64_t)Uaccum;
@@ -1097,14 +1079,14 @@ static value_t fl_mul_any(value_t *args, u_int32_t nargs, int64_t Saccum)
             if (fits_fixnum(Saccum)) {
                 return fixnum((fixnum_t)Saccum);
             }
-            RETURN_NUM_AS(Saccum, int32);
+            RETURN_NUM_AS(fl_ctx, Saccum, int32);
         }
-        RETURN_NUM_AS(Saccum, int64);
+        RETURN_NUM_AS(fl_ctx, Saccum, int64);
     }
     else {
         Uaccum *= (uint64_t)Saccum;
     }
-    return return_from_uint64(Uaccum);
+    return return_from_uint64(fl_ctx, Uaccum);
 }
 
 static int num_to_ptr(value_t a, fixnum_t *pi, numerictype_t *pt, void **pp)
@@ -1134,7 +1116,7 @@ static int num_to_ptr(value_t a, fixnum_t *pi, numerictype_t *pt, void **pp)
           inexact not considered equal to exact
   fname: if not NULL, throws type errors, else returns 2 for type errors
 */
-int numeric_compare(value_t a, value_t b, int eq, int eqnans, char *fname)
+int numeric_compare(fl_context_t *fl_ctx, value_t a, value_t b, int eq, int eqnans, char *fname)
 {
     int_t ai, bi;
     numerictype_t ta, tb;
@@ -1146,10 +1128,10 @@ int numeric_compare(value_t a, value_t b, int eq, int eqnans, char *fname)
         return 1;
     }
     if (!num_to_ptr(a, &ai, &ta, &aptr)) {
-        if (fname) type_error(fname, "number", a); else return 2;
+        if (fname) type_error(fl_ctx, fname, "number", a); else return 2;
     }
     if (!num_to_ptr(b, &bi, &tb, &bptr)) {
-        if (fname) type_error(fname, "number", b); else return 2;
+        if (fname) type_error(fl_ctx, fname, "number", b); else return 2;
     }
     if (eq && eqnans && ((ta >= T_FLOAT) != (tb >= T_FLOAT)))
         return 1;
@@ -1162,17 +1144,17 @@ int numeric_compare(value_t a, value_t b, int eq, int eqnans, char *fname)
 }
 
 #if defined(_OS_WINDOWS_)
-__declspec(noreturn) static void DivideByZeroError();
+__declspec(noreturn) static void DivideByZeroError(fl_context_t *fl_ctx);
 #else
-static void DivideByZeroError() __attribute__ ((__noreturn__));
+static void DivideByZeroError(fl_context_t *fl_ctx) __attribute__ ((__noreturn__));
 #endif
 
-static void DivideByZeroError(void)
+static void DivideByZeroError(fl_context_t *fl_ctx)
 {
-    lerror(DivideError, "/: division by zero");
+    lerror(fl_ctx, fl_ctx->DivideError, "/: division by zero");
 }
 
-static value_t fl_div2(value_t a, value_t b)
+static value_t fl_div2(fl_context_t *fl_ctx, value_t a, value_t b)
 {
     double da, db;
     int_t ai, bi;
@@ -1180,24 +1162,24 @@ static value_t fl_div2(value_t a, value_t b)
     void *aptr, *bptr;
 
     if (!num_to_ptr(a, &ai, &ta, &aptr))
-        type_error("/", "number", a);
+        type_error(fl_ctx, "/", "number", a);
     if (!num_to_ptr(b, &bi, &tb, &bptr))
-        type_error("/", "number", b);
+        type_error(fl_ctx, "/", "number", b);
 
     da = conv_to_double(aptr, ta);
     db = conv_to_double(bptr, tb);
 
     if (db == 0 && tb < T_FLOAT)  // exact 0
-        DivideByZeroError();
+        DivideByZeroError(fl_ctx);
 
     da = da/db;
 
     if (ta < T_FLOAT && tb < T_FLOAT && (double)(int64_t)da == da)
-        return return_from_int64((int64_t)da);
-    return mk_double(da);
+        return return_from_int64(fl_ctx, (int64_t)da);
+    return mk_double(fl_ctx, da);
 }
 
-static value_t fl_idiv2(value_t a, value_t b)
+static value_t fl_idiv2(fl_context_t *fl_ctx, value_t a, value_t b)
 {
     int_t ai, bi;
     numerictype_t ta, tb;
@@ -1205,43 +1187,43 @@ static value_t fl_idiv2(value_t a, value_t b)
     int64_t a64, b64;
 
     if (!num_to_ptr(a, &ai, &ta, &aptr))
-        type_error("div0", "number", a);
+        type_error(fl_ctx, "div0", "number", a);
     if (!num_to_ptr(b, &bi, &tb, &bptr))
-        type_error("div0", "number", b);
+        type_error(fl_ctx, "div0", "number", b);
 
     if (ta == T_UINT64) {
         if (tb == T_UINT64) {
             if (*(uint64_t*)bptr == 0) goto div_error;
-            return return_from_uint64(*(uint64_t*)aptr / *(uint64_t*)bptr);
+            return return_from_uint64(fl_ctx, *(uint64_t*)aptr / *(uint64_t*)bptr);
         }
         b64 = conv_to_int64(bptr, tb);
         if (b64 < 0) {
-            return return_from_int64(-(int64_t)(*(uint64_t*)aptr /
-                                                (uint64_t)(-b64)));
+            return return_from_int64(fl_ctx, -(int64_t)(*(uint64_t*)aptr /
+                                                        (uint64_t)(-b64)));
         }
         if (b64 == 0)
             goto div_error;
-        return return_from_uint64(*(uint64_t*)aptr / (uint64_t)b64);
+        return return_from_uint64(fl_ctx, *(uint64_t*)aptr / (uint64_t)b64);
     }
     if (tb == T_UINT64) {
         if (*(uint64_t*)bptr == 0) goto div_error;
         a64 = conv_to_int64(aptr, ta);
         if (a64 < 0) {
-            return return_from_int64(-((int64_t)((uint64_t)(-a64) /
-                                                 *(uint64_t*)bptr)));
+            return return_from_int64(fl_ctx, -((int64_t)((uint64_t)(-a64) /
+                                                         *(uint64_t*)bptr)));
         }
-        return return_from_uint64((uint64_t)a64 / *(uint64_t*)bptr);
+        return return_from_uint64(fl_ctx, (uint64_t)a64 / *(uint64_t*)bptr);
     }
 
     b64 = conv_to_int64(bptr, tb);
     if (b64 == 0) goto div_error;
 
-    return return_from_int64(conv_to_int64(aptr, ta) / b64);
+    return return_from_int64(fl_ctx, conv_to_int64(aptr, ta) / b64);
  div_error:
-    DivideByZeroError();
+    DivideByZeroError(fl_ctx);
 }
 
-static value_t fl_bitwise_op(value_t a, value_t b, int opcode, char *fname)
+static value_t fl_bitwise_op(fl_context_t *fl_ctx, value_t a, value_t b, int opcode, char *fname)
 {
     int_t ai, bi;
     numerictype_t ta, tb, itmp;
@@ -1249,9 +1231,9 @@ static value_t fl_bitwise_op(value_t a, value_t b, int opcode, char *fname)
     int64_t b64;
 
     if (!num_to_ptr(a, &ai, &ta, &aptr) || ta >= T_FLOAT)
-        type_error(fname, "integer", a);
+        type_error(fl_ctx, fname, "integer", a);
     if (!num_to_ptr(b, &bi, &tb, &bptr) || tb >= T_FLOAT)
-        type_error(fname, "integer", b);
+        type_error(fl_ctx, fname, "integer", b);
 
     if (ta < tb) {
         itmp = ta; ta = tb; tb = itmp;
@@ -1266,10 +1248,10 @@ static value_t fl_bitwise_op(value_t a, value_t b, int opcode, char *fname)
     case T_UINT8:  return fixnum(   *(uint8_t *)aptr & (uint8_t )b64);
     case T_INT16:  return fixnum(   *(int16_t*)aptr  & (int16_t )b64);
     case T_UINT16: return fixnum(   *(uint16_t*)aptr & (uint16_t)b64);
-    case T_INT32:  return mk_int32( *(int32_t*)aptr  & (int32_t )b64);
-    case T_UINT32: return mk_uint32(*(uint32_t*)aptr & (uint32_t)b64);
-    case T_INT64:  return mk_int64( *(int64_t*)aptr  & (int64_t )b64);
-    case T_UINT64: return mk_uint64(*(uint64_t*)aptr & (uint64_t)b64);
+    case T_INT32:  return mk_int32(fl_ctx,  *(int32_t*)aptr  & (int32_t )b64);
+    case T_UINT32: return mk_uint32(fl_ctx, *(uint32_t*)aptr & (uint32_t)b64);
+    case T_INT64:  return mk_int64(fl_ctx,  *(int64_t*)aptr  & (int64_t )b64);
+    case T_UINT64: return mk_uint64(fl_ctx, *(uint64_t*)aptr & (uint64_t)b64);
     case T_FLOAT:
     case T_DOUBLE: assert(0);
     }
@@ -1280,10 +1262,10 @@ static value_t fl_bitwise_op(value_t a, value_t b, int opcode, char *fname)
     case T_UINT8:  return fixnum(   *(uint8_t *)aptr | (uint8_t )b64);
     case T_INT16:  return fixnum(   *(int16_t*)aptr  | (int16_t )b64);
     case T_UINT16: return fixnum(   *(uint16_t*)aptr | (uint16_t)b64);
-    case T_INT32:  return mk_int32( *(int32_t*)aptr  | (int32_t )b64);
-    case T_UINT32: return mk_uint32(*(uint32_t*)aptr | (uint32_t)b64);
-    case T_INT64:  return mk_int64( *(int64_t*)aptr  | (int64_t )b64);
-    case T_UINT64: return mk_uint64(*(uint64_t*)aptr | (uint64_t)b64);
+    case T_INT32:  return mk_int32(fl_ctx,  *(int32_t*)aptr  | (int32_t )b64);
+    case T_UINT32: return mk_uint32(fl_ctx, *(uint32_t*)aptr | (uint32_t)b64);
+    case T_INT64:  return mk_int64(fl_ctx,  *(int64_t*)aptr  | (int64_t )b64);
+    case T_UINT64: return mk_uint64(fl_ctx, *(uint64_t*)aptr | (uint64_t)b64);
     case T_FLOAT:
     case T_DOUBLE: assert(0);
     }
@@ -1294,19 +1276,19 @@ static value_t fl_bitwise_op(value_t a, value_t b, int opcode, char *fname)
     case T_UINT8:  return fixnum(   *(uint8_t *)aptr ^ (uint8_t )b64);
     case T_INT16:  return fixnum(   *(int16_t*)aptr  ^ (int16_t )b64);
     case T_UINT16: return fixnum(   *(uint16_t*)aptr ^ (uint16_t)b64);
-    case T_INT32:  return mk_int32( *(int32_t*)aptr  ^ (int32_t )b64);
-    case T_UINT32: return mk_uint32(*(uint32_t*)aptr ^ (uint32_t)b64);
-    case T_INT64:  return mk_int64( *(int64_t*)aptr  ^ (int64_t )b64);
-    case T_UINT64: return mk_uint64(*(uint64_t*)aptr ^ (uint64_t)b64);
+    case T_INT32:  return mk_int32(fl_ctx,  *(int32_t*)aptr  ^ (int32_t )b64);
+    case T_UINT32: return mk_uint32(fl_ctx, *(uint32_t*)aptr ^ (uint32_t)b64);
+    case T_INT64:  return mk_int64(fl_ctx,  *(int64_t*)aptr  ^ (int64_t )b64);
+    case T_UINT64: return mk_uint64(fl_ctx, *(uint64_t*)aptr ^ (uint64_t)b64);
     case T_FLOAT:
     case T_DOUBLE: assert(0);
     }
     }
     assert(0);
-    return NIL;
+    return fl_ctx->NIL;
 }
 
-static value_t fl_logand(value_t *args, u_int32_t nargs)
+static value_t fl_logand(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     value_t v, e;
     int i;
@@ -1317,12 +1299,12 @@ static value_t fl_logand(value_t *args, u_int32_t nargs)
         if (bothfixnums(v, e))
             v = v & e;
         else
-            v = fl_bitwise_op(v, e, 0, "logand");
+            v = fl_bitwise_op(fl_ctx, v, e, 0, "logand");
     }
     return v;
 }
 
-static value_t fl_logior(value_t *args, u_int32_t nargs)
+static value_t fl_logior(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     value_t v, e;
     int i;
@@ -1333,12 +1315,12 @@ static value_t fl_logior(value_t *args, u_int32_t nargs)
         if (bothfixnums(v, e))
             v = v | e;
         else
-            v = fl_bitwise_op(v, e, 1, "logior");
+            v = fl_bitwise_op(fl_ctx, v, e, 1, "logior");
     }
     return v;
 }
 
-static value_t fl_logxor(value_t *args, u_int32_t nargs)
+static value_t fl_logxor(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     value_t v, e;
     int i;
@@ -1349,14 +1331,14 @@ static value_t fl_logxor(value_t *args, u_int32_t nargs)
         if (bothfixnums(v, e))
             v = fixnum(numval(v) ^ numval(e));
         else
-            v = fl_bitwise_op(v, e, 2, "logxor");
+            v = fl_bitwise_op(fl_ctx, v, e, 2, "logxor");
     }
     return v;
 }
 
-static value_t fl_lognot(value_t *args, u_int32_t nargs)
+static value_t fl_lognot(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
-    argcount("lognot", nargs, 1);
+    argcount(fl_ctx, "lognot", nargs, 1);
     value_t a = args[0];
     if (isfixnum(a))
         return fixnum(~numval(a));
@@ -1373,22 +1355,22 @@ static value_t fl_lognot(value_t *args, u_int32_t nargs)
         case T_UINT8:  return fixnum(~*(uint8_t *)aptr);
         case T_INT16:  return fixnum(~*(int16_t *)aptr);
         case T_UINT16: return fixnum(~*(uint16_t*)aptr);
-        case T_INT32:  return mk_int32(~*(int32_t *)aptr);
-        case T_UINT32: return mk_uint32(~*(uint32_t*)aptr);
-        case T_INT64:  return mk_int64(~*(int64_t *)aptr);
-        case T_UINT64: return mk_uint64(~*(uint64_t*)aptr);
+        case T_INT32:  return mk_int32(fl_ctx, ~*(int32_t *)aptr);
+        case T_UINT32: return mk_uint32(fl_ctx, ~*(uint32_t*)aptr);
+        case T_INT64:  return mk_int64(fl_ctx, ~*(int64_t *)aptr);
+        case T_UINT64: return mk_uint64(fl_ctx, ~*(uint64_t*)aptr);
         }
     }
-    type_error("lognot", "integer", a);
+    type_error(fl_ctx, "lognot", "integer", a);
 }
 
-static value_t fl_ash(value_t *args, u_int32_t nargs)
+static value_t fl_ash(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     fixnum_t n;
     int64_t accum;
-    argcount("ash", nargs, 2);
+    argcount(fl_ctx, "ash", nargs, 2);
     value_t a = args[0];
-    n = tofixnum(args[1], "ash");
+    n = tofixnum(fl_ctx, args[1], "ash");
     if (isfixnum(a)) {
         if (n <= 0)
             return fixnum(numval(a)>>(-n));
@@ -1396,7 +1378,7 @@ static value_t fl_ash(value_t *args, u_int32_t nargs)
         if (fits_fixnum(accum))
             return fixnum(accum);
         else
-            return return_from_int64(accum);
+            return return_from_int64(fl_ctx, accum);
     }
     cprim_t *cp;
     int ta;
@@ -1413,21 +1395,21 @@ static value_t fl_ash(value_t *args, u_int32_t nargs)
             case T_UINT8:  return fixnum((*(uint8_t *)aptr) >> n);
             case T_INT16:  return fixnum((*(int16_t *)aptr) >> n);
             case T_UINT16: return fixnum((*(uint16_t*)aptr) >> n);
-            case T_INT32:  return mk_int32((*(int32_t *)aptr) >> n);
-            case T_UINT32: return mk_uint32((*(uint32_t*)aptr) >> n);
-            case T_INT64:  return mk_int64((*(int64_t *)aptr) >> n);
-            case T_UINT64: return mk_uint64((*(uint64_t*)aptr) >> n);
+            case T_INT32:  return mk_int32(fl_ctx, (*(int32_t *)aptr) >> n);
+            case T_UINT32: return mk_uint32(fl_ctx, (*(uint32_t*)aptr) >> n);
+            case T_INT64:  return mk_int64(fl_ctx, (*(int64_t *)aptr) >> n);
+            case T_UINT64: return mk_uint64(fl_ctx, (*(uint64_t*)aptr) >> n);
             }
         }
         else {
             if (ta == T_UINT64)
-                return return_from_uint64((*(uint64_t*)aptr)<<n);
+                return return_from_uint64(fl_ctx, (*(uint64_t*)aptr)<<n);
             else if (ta < T_FLOAT) {
                 int64_t i64 = conv_to_int64(aptr, (numerictype_t)ta);
-                return return_from_int64(i64<<n);
+                return return_from_int64(fl_ctx, i64<<n);
             }
         }
     }
-    type_error("ash", "integer", a);
-    return NIL;
+    type_error(fl_ctx, "ash", "integer", a);
+    return fl_ctx->NIL;
 }

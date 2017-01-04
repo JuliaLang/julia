@@ -1,16 +1,29 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+# givensAlgorithm functions are derived from LAPACK, see below
+
 abstract AbstractRotation{T}
 
 transpose(R::AbstractRotation) = error("transpose not implemented for $(typeof(R)). Consider using conjugate transpose (') instead of transpose (.').")
 
-function *{T,S}(R::AbstractRotation{T}, A::AbstractMatrix{S})
+function *{T,S}(R::AbstractRotation{T}, A::AbstractVecOrMat{S})
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     A_mul_B!(convert(AbstractRotation{TS}, R), TS == S ? copy(A) : convert(AbstractArray{TS}, A))
 end
-function A_mul_Bc{T,S}(A::AbstractMatrix{T}, R::AbstractRotation{S})
+function A_mul_Bc{T,S}(A::AbstractVecOrMat{T}, R::AbstractRotation{S})
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     A_mul_Bc!(TS == T ? copy(A) : convert(AbstractArray{TS}, A), convert(AbstractRotation{TS}, R))
 end
+"""
+    LinAlg.Givens(i1,i2,c,s) -> G
 
+A Givens rotation linear operator. The fields `c` and `s` represent the cosine and sine of
+the rotation angle, respectively. The `Givens` type supports left multiplication `G*A` and
+conjugated transpose right multiplication `A*G'`. The type doesn't have a `size` and can
+therefore be multiplied with matrices of arbitrary size as long as `i2<=size(A,2)` for
+`G*A` or `i2<=size(A,1)` for `A*G'`.
+
+See also: [`givens`](@ref)
+"""
 immutable Givens{T} <: AbstractRotation{T}
     i1::Int
     i2::Int
@@ -41,7 +54,7 @@ realmin2{T}(::Type{T}) = (twopar = 2one(T); twopar^trunc(Integer,log(realmin(T)/
 # Univ. of California Berkeley
 # Univ. of Colorado Denver
 # NAG Ltd.
-function givensAlgorithm{T<:FloatingPoint}(f::T, g::T)
+function givensAlgorithm{T<:AbstractFloat}(f::T, g::T)
     zeropar = zero(T)
     onepar = one(T)
     twopar = 2one(T)
@@ -113,7 +126,7 @@ end
 # Univ. of California Berkeley
 # Univ. of Colorado Denver
 # NAG Ltd.
-function givensAlgorithm{T<:FloatingPoint}(f::Complex{T}, g::Complex{T})
+function givensAlgorithm{T<:AbstractFloat}(f::Complex{T}, g::Complex{T})
     twopar, onepar, zeropar = 2one(T), one(T), zero(T)
     czero = zero(Complex{T})
 
@@ -156,8 +169,8 @@ function givensAlgorithm{T<:FloatingPoint}(f::Complex{T}, g::Complex{T})
      # This is a rare case: F is very small.
 
         if f == 0
-            cs = zero
-            r = hypot(real(g), imag(g))
+            cs = zero(T)
+            r = complex(hypot(real(g), imag(g)))
         # do complex/real division explicitly with two real divisions
             d = hypot(real(gs), imag(gs))
             sn = complex(real(gs)/d, -imag(gs)/d)
@@ -217,38 +230,116 @@ function givensAlgorithm{T<:FloatingPoint}(f::Complex{T}, g::Complex{T})
     return cs, sn, r
 end
 
+"""
+
+    givens{T}(f::T, g::T, i1::Integer, i2::Integer) -> (G::Givens, r::T)
+
+Computes the Givens rotation `G` and scalar `r` such that for any vector `x` where
+```
+x[i1] = f
+x[i2] = g
+```
+the result of the multiplication
+```
+y = G*x
+```
+has the property that
+```
+y[i1] = r
+y[i2] = 0
+```
+
+See also: [`LinAlg.Givens`](@ref)
+"""
 function givens{T}(f::T, g::T, i1::Integer, i2::Integer)
-    i1 < i2 || throw(ArgumentError("second index must be larger than the first"))
+    if i1 == i2
+        throw(ArgumentError("Indices must be distinct."))
+    end
     c, s, r = givensAlgorithm(f, g)
+    if i1 > i2
+        s = -conj(s)
+        i1,i2 = i2,i1
+    end
     Givens(i1, i2, convert(T, c), convert(T, s)), r
 end
+"""
+    givens(A::AbstractArray, i1::Integer, i2::Integer, j::Integer) -> (G::Givens, r)
 
-function givens{T}(A::AbstractMatrix{T}, i1::Integer, i2::Integer, col::Integer)
-    i1 < i2 || throw(ArgumentError("second index must be larger than the first"))
-    c, s, r = givensAlgorithm(A[i1,col], A[i2,col])
-    Givens(i1, i2, convert(T, c), convert(T, s)), r
+Computes the Givens rotation `G` and scalar `r` such that the result of the multiplication
+```
+B = G*A
+```
+has the property that
+```
+B[i1,j] = r
+B[i2,j] = 0
+```
+
+See also: [`LinAlg.Givens`](@ref)
+"""
+givens(A::AbstractMatrix, i1::Integer, i2::Integer, j::Integer) =
+    givens(A[i1,j], A[i2,j],i1,i2)
+
+
+"""
+    givens(x::AbstractVector, i1::Integer, i2::Integer) -> (G::Givens, r)
+
+Computes the Givens rotation `G` and scalar `r` such that the result of the multiplication
+```
+B = G*x
+```
+has the property that
+```
+B[i1] = r
+B[i2] = 0
+```
+
+See also: [`LinAlg.Givens`](@ref)
+"""
+givens(x::AbstractVector, i1::Integer, i2::Integer) =
+    givens(x[i1], x[i2], i1, i2)
+
+
+function getindex(G::Givens, i::Integer, j::Integer)
+    if i == j
+        if i == G.i1 || i == G.i2
+            G.c
+        else
+            one(G.c)
+        end
+    elseif i == G.i1 && j == G.i2
+        G.s
+    elseif i == G.i2 && j == G.i1
+        -conj(G.s)
+    else
+        zero(G.s)
+    end
 end
 
-getindex(G::Givens, i::Integer, j::Integer) = i == j ? (i == G.i1 || i == G.i2 ? G.c : one(G.c)) : (i == G.i1 && j == G.i2 ? G.s : (i == G.i2 && j == G.i1 ? -G.s : zero(G.s)))
 
 A_mul_B!(G1::Givens, G2::Givens) = error("Operation not supported. Consider *")
-function A_mul_B!(G::Givens, A::AbstractMatrix)
-    m, n = size(A)
-    G.i2 <= m || throw(DimensionMismatch("column indices for rotation are outside the matrix"))
+
+function A_mul_B!(G::Givens, A::AbstractVecOrMat)
+    m, n = size(A, 1), size(A, 2)
+    if G.i2 > m
+        throw(DimensionMismatch("column indices for rotation are outside the matrix"))
+    end
     @inbounds @simd for i = 1:n
-        tmp = G.c*A[G.i1,i] + G.s*A[G.i2,i]
-        A[G.i2,i] = G.c*A[G.i2,i] - conj(G.s)*A[G.i1,i]
-        A[G.i1,i] = tmp
+        a1, a2 = A[G.i1,i], A[G.i2,i]
+        A[G.i1,i] =       G.c *a1 + G.s*a2
+        A[G.i2,i] = -conj(G.s)*a1 + G.c*a2
     end
     return A
 end
 function A_mul_Bc!(A::AbstractMatrix, G::Givens)
-    m, n = size(A)
-    G.i2 <= n || throw(DimensionMismatch("column indices for rotation are outside the matrix"))
+    m, n = size(A, 1), size(A, 2)
+    if G.i2 > n
+        throw(DimensionMismatch("column indices for rotation are outside the matrix"))
+    end
     @inbounds @simd for i = 1:m
-        tmp = G.c*A[i,G.i1] + conj(G.s)*A[i,G.i2]
-        A[i,G.i2] = G.c*A[i,G.i2] - G.s*A[i,G.i1]
-        A[i,G.i1] = tmp
+        a1, a2 = A[i,G.i1], A[i,G.i2]
+        A[i,G.i1] =  a1*G.c + a2*conj(G.s)
+        A[i,G.i2] = -a1*G.s + a2*G.c
     end
     return A
 end

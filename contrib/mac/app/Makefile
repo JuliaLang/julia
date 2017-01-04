@@ -2,38 +2,62 @@
 # You may have to wipe your openblas build to ensure that it is built
 # with support for all architectures, or else performance may suffer.
 
-JULIAHOME = $(abspath ../../..)
+JULIAHOME := $(abspath ../../..)
 include ../../../Make.inc
 
-JULIA_PKGDIR=$(shell echo $$JULIA_PKGDIR)
-ifeq ($(JULIA_PKGDIR),)
-	JULIA_PKGDIR=$(shell echo ~)/.julia
+# X.Y.Z or X.Y.Z-hash
+JULIA_VERSION_OPT_COMMIT:=$(shell [ $$(git describe --tags --exact-match 2>/dev/null) ] && echo $(JULIA_VERSION) || echo $(JULIA_VERSION)-$(JULIA_COMMIT))
+
+# X.Y
+JULIA_VERSION_MAJOR_MINOR:=$(shell echo $(JULIA_VERSION) | grep -o '^[0-9]\+.[0-9]\+')
+JULIA_VERSION_MAJOR_MINOR_PATCH:=$(shell echo $(JULIA_VERSION) | grep -o '^[0-9]\+.[0-9]\+.[0-9]\+')
+
+DMG_NAME:=Julia-$(JULIA_VERSION_OPT_COMMIT).dmg
+APP_NAME:=Julia-$(JULIA_VERSION_MAJOR_MINOR).app
+VOL_NAME:=Julia-$(JULIA_VERSION_OPT_COMMIT)
+
+APP_ID:=org.julialang.launcherapp
+APP_COPYRIGHT:=© 2016 The Julia Project
+
+
+all: clean $(DMG_NAME)
+
+$(DMG_NAME): dmg/$(APP_NAME) dmg/.VolumeIcon.icns dmg/Applications
+	hdiutil create $@ -size 500m -ov -volname "$(VOL_NAME)" -imagekey zlib-level=9 -srcfolder dmg
+
+dmg/.VolumeIcon.icns: julia.icns
+	-mkdir -p dmg
+	cp -f julia.icns $@
+
+dmg/Applications:
+	-mkdir -p dmg
+	ln -fs /Applications $@
+
+dmg/$(APP_NAME): startup.applescript julia.icns
+	-mkdir -p dmg
+	osacompile -o $@ startup.applescript
+	rm $@/Contents/Resources/applet.icns
+	cp julia.icns $@/Contents/Resources/
+	plutil -replace CFBundleDevelopmentRegion  -string "en" $@/Contents/Info.plist
+	plutil -insert  CFBundleDisplayName        -string "Julia" $@/Contents/Info.plist
+	plutil -replace CFBundleIconFile           -string "julia.icns" $@/Contents/Info.plist
+	plutil -insert  CFBundleIdentifier         -string "$(APP_ID)" $@/Contents/Info.plist
+	plutil -replace CFBundleName               -string "Julia" $@/Contents/Info.plist
+	plutil -insert  CFBundleShortVersionString -string "$(JULIA_VERSION_MAJOR_MINOR_PATCH)" $@/Contents/Info.plist
+	plutil -insert  CFBundleVersion            -string "$(JULIA_VERSION_OPT_COMMIT)" $@/Contents/Info.plist
+	plutil -insert  NSHumanReadableCopyright   -string "$(APP_COPYRIGHT)" $@/Contents/Info.plist
+	-mkdir -p $@/Contents/Resources/julia
+	make -C $(JULIAHOME) binary-dist
+	tar zxf $(JULIAHOME)/julia-*.tar.gz -C $@/Contents/Resources/julia --strip-components 1
+	-codesign -s "AFB379C0B4CBD9DB9A762797FC2AB5460A2B0DBE" --deep $@
+
+ROOTFILES := $(shell ls -ld dmg/*.app *.dmg 2> /dev/null | awk '{print $$3}')
+clean:
+ifneq ($(filter root,$(ROOTFILES)),)
+	@echo "We have to use sudo here to clean out folders owned by root.  You may be asked for your password"
+	sudo rm -rf dmg *.dmg
+else
+	rm -rf dmg *.dmg
 endif
 
-VERSION_SUFFIX=$(shell [ $$(git describe --tags --exact-match 2>/dev/null) ] && echo $(JULIA_VERSION) || echo $(JULIA_VERSION)-$(JULIA_COMMIT))
-
-all: clean dmg
-
-dmg:
-	make -C ../../../deps install-git
-	make -C ../../.. dist
-	tar zxf ../../../julia-*.tar.gz
-	mv julia-* julia
-	-mkdir -p ./julia/libexec ./julia/share
-	-cp -a $(build_libexecdir)/git* ./julia/libexec
-	-cp -a $(build_datarootdir)/git* ./julia/share
-	rm -f julia/lib/*.{a,la}
-	-mkdir dmg
-	platypus -a Julia -p /bin/bash -V $(JULIA_VERSION) -R -u "The Julia Project" -i julia.icns -Q julia.icns -o "None" -I org.julialang -x -f julia script ./dmg/Julia-$(VERSION_SUFFIX).app
-	-codesign -s "AFB379C0B4CBD9DB9A762797FC2AB5460A2B0DBE" --deep ./dmg/Julia-$(VERSION_SUFFIX).app
-	-cp -f Julia.icns dmg/.VolumeIcon.icns
-	-ln -fs /Applications ./dmg/Applications
-	-chmod 755 ./dmg/Julia-$(VERSION_SUFFIX).app/Contents/MacOS/Julia
-	@echo "We're going to chown the .app file to root:admin now, which requires sudo.  You may be asked for your password:"
-	sudo chown -R root:admin ./dmg/Julia-$(VERSION_SUFFIX).app
-	sudo hdiutil create Julia-$(VERSION_SUFFIX).dmg -size 200m -ov -volname "Julia" -imagekey zlib-level=9 -srcfolder dmg
-
-
-clean:
-	@echo "We have to use sudo here to clean out folders owned by root.  You may be asked for your password"
-	sudo rm -fr julia dmg *.dmg
+.PHONY: clean all

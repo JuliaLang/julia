@@ -54,7 +54,6 @@ If a Julia source file is given as a \fIprogram\fP (optionally followed by
 
 .\" This section was taken nearly verbatim from the output of `julia --help`
 .SH "COMMAND-LINE OPTIONS"
-.TP 25
 
 .TP
 -v, --version
@@ -65,12 +64,24 @@ Display version information
 Print help message
 
 .TP
--q, --quiet
-Quiet startup without banner
+-J, --sysimage <file>
+Start up with the given system image file
+
+.TP
+--precompiled={yes|no}
+Use precompiled code from system image if available
 
 .TP
 -H, --home <dir>
 Set location of julia executable
+
+.TP
+--startup-file={yes|no}
+Load ~/.juliarc.jl
+
+.TP
+--handle-signals={yes|no}
+Enable or disable Julia's default signal handlers
 
 .TP
 -e, --eval <expr>
@@ -81,20 +92,8 @@ Evaluate <expr>
 Evaluate and show <expr>
 
 .TP
--P, --post-boot <expr>
-Evaluate <expr>, but don't disable interactive mode
-
-.TP
 -L, --load <file>
 Load <file> immediately on all processors
-
-.TP
--J, --sysimage <file>
-Start up with the given system image file
-
-.TP
--C, --cpu-target <target>
-Limit usage of cpu features up to <target>
 
 .TP
 -p, --procs <n>
@@ -106,7 +105,11 @@ Run processes on hosts listed in <file>
 
 .TP
 -i
-Force isinteractive() to be true
+Interactive mode; REPL runs and isinteractive() is true
+
+.TP
+-q, --quiet
+Quiet startup without banner
 
 .TP
 --color={yes|no}
@@ -117,12 +120,61 @@ Enable or disable color text
 Load or save history
 
 .TP
---startup-file={yes|no}
-Load ~/.juliarc.jl
-
-.TP
 --compile={yes|no|all}
 Enable or disable compiler, or request exhaustive compilation
+
+.TP
+-C, --cpu-target=<target>
+Limit usage of cpu features up to <target>
+
+.TP
+-O, --optimize
+Run time-intensive code optimizations
+
+.TP
+-O <n>, --optimize=<n>
+Set the optimization level to <n>
+
+.TP
+-g
+Enable generation of full debug info
+
+.TP
+-g <n>
+Set the level of debug info generation to <n>
+
+.TP
+--inline={yes|no}
+Control whether inlining is permitted (overrides functions declared as @inline)
+
+.TP
+--check-bounds={yes|no}
+Emit bounds checks always or never (ignoring declarations)
+
+.TP
+--math-mode={ieee|user}
+Always use IEEE semantics for math (ignoring declarations),
+or adhere to declarations in source code
+
+.TP
+--depwarn={yes|no|error}
+Enable or disable syntax and method deprecation warnings ('error' turns warnings into errors)
+
+.TP
+--output-o <name>
+Generate an object file (including system image data)
+
+.TP
+--output-ji <name>
+Generate a system image data file (.ji)
+
+.TP
+--output-bc <name>
+Generate LLVM bitcode (.bc)
+
+.TP
+--output-incremental={yes|no}
+Generate an incremental output file (rather than complete)
 
 .TP
 --code-coverage={none|user|all}, --code-coverage
@@ -131,31 +183,6 @@ Count executions of source lines (omitting setting is equivalent to 'user')
 .TP
 --track-allocation={none|user|all}, --track-allocation
 Count bytes allocated by each source line
-
-.TP
--O, --optimize
-Run time-intensive code optimizations
-
-.TP
---check-bounds={yes|no}
-Emit bounds checks always or never (ignoring declarations)
-
-.TP
---dump-bitcode={yes|no}
-Dump bitcode for the system image (used with --build)
-
-.TP
---depwarn={yes|no}
-Enable or disable syntax and method deprecation warnings
-
-.TP
---inline={yes|no}
-Control whether inlining is permitted (overrides functions declared as @inline)
-
-.TP
---math-mode={ieee|user}
-Always use IEEE semantics for math (ignoring declarations),
-or adhere to declarations in source code
 
 .SH FILES
 .I ~/.juliarc.jl

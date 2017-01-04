@@ -37,44 +37,42 @@
 //
 //===----------------------------------------------------------------------===//
 
-
-struct AbiState {
-};
-
-const AbiState default_abi_state = {};
-
-
-bool use_sret(AbiState *state, jl_value_t *ty)
+// whether the argument can be passed in register
+static bool win64_reg_size(size_t size)
 {
-    if(!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
+    return size <= 2 || size == 4 || size == 8;
+}
+
+struct ABI_Win64Layout : AbiLayout {
+int nargs;
+ABI_Win64Layout() : nargs(0) { }
+
+bool use_sret(jl_datatype_t *dt) override
+{
+    size_t size = jl_datatype_size(dt);
+    if (win64_reg_size(size) || is_native_simd_type(dt))
         return false;
-    size_t size = jl_datatype_size(ty);
-    if (size <= 8)
-        return false;
+    nargs++;
     return true;
 }
 
-void needPassByRef(AbiState *state, jl_value_t *ty, bool *byRef, bool *inReg, bool *byRefAttr)
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
 {
-    if(!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
-        return;
-    size_t size = jl_datatype_size(ty);
-    if (size > 8)
-        *byRefAttr = *byRef = true;
+    nargs++;
+    size_t size = jl_datatype_size(dt);
+    if (win64_reg_size(size))
+        return false;
+    if (nargs <= 4)
+        ab.addAttribute(Attribute::ByVal);
+    return true;
 }
 
-Type *preferred_llvm_type(jl_value_t *ty, bool isret)
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
 {
-    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
-        return NULL;
-    size_t size = jl_datatype_size(ty);
-    if (size > 0 && size <= 8 && !jl_is_bitstype(ty))
-        return Type::getIntNTy(getGlobalContext(), size*8);
+    size_t size = jl_datatype_size(dt);
+    if (size > 0 && win64_reg_size(size) && !jl_is_bitstype(dt))
+        return Type::getIntNTy(jl_LLVMContext, jl_datatype_nbits(dt));
     return NULL;
 }
 
-// Windows needs all types pased byRef to be passed in caller allocated memory
-bool need_private_copy(jl_value_t *ty, bool byRef)
-{
-    return byRef;
-}
+};

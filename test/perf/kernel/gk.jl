@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Grigoriadis Khachiyan Matrix Games.
 #
 # Example run: gk(10000, [0.1])
@@ -8,7 +10,7 @@
 function myunifskew(n)
     A = zeros(n, n)
 
-    #print("A[i,j] initialized with zeros \n");
+    #print("A[i,j] initialized with zeros \n")
 
     for i=1:n
         for j=1:i-1
@@ -18,12 +20,12 @@ function myunifskew(n)
                 temp = rand()
                 A[i,j]= temp
                 A[j,i]= -A[i,j]
-                #print("welcome");
+                #print("welcome")
             else
                 temp = rand()
                 A[j,i]= temp
                 A[i,j]= -A[j,i]
-                #print("welcome");
+                #print("welcome")
             end
 
         end
@@ -40,7 +42,6 @@ end
 ############ GK Algorithm starts ##################
 #@profile begin
 function gk(n, myeps)
-
     A = myunifskew(n)
 
     g = length(myeps)
@@ -122,7 +123,7 @@ function gk(n, myeps)
 
         AX=A*X
         Ax = A*x
-        error=abs(AX)-abs(U)
+        error=abs.(AX)-abs.(U)
         #print(Ax)
 
         Axepse=0
@@ -180,6 +181,5 @@ function gk(n, myeps)
     #print("Epsilon-Time-Iteration tradeoff \n")
     #print(out)
     #print("\n \n")
-
 end
 #end # @profile begin

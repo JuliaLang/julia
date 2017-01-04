@@ -1,27 +1,30 @@
 #!/bin/sh
-# Run as: fixup-libstdc++.sh <$private_libdir>
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
+# Run as: fixup-libstdc++.sh <libdir> <private_libdir>
 
 if [ -z "$1" ]; then
-    echo "Usage: $0 <private_libdir>"
+    echo "Usage: $0 <libdir> <private_libdir>"
     exit 1
 fi
 
-private_libdir=$1
+libdir="$1"
+private_libdir="$2"
 
-if [ ! -f "$private_libdir/libjulia.so" ]; then
-    echo "ERROR: Could not open $private_libdir/libjulia.so" >&2
+if [ ! -f "$libdir/libjulia.so" ]; then
+    echo "ERROR: Could not open $libdir/libjulia.so" >&2
     exit 2
 fi
 
 find_shlib ()
 {
-    if [ -f "$private_libdir/lib$1.so" ]; then
-        ldd "$private_libdir/lib$1.so" | grep $2 | cut -d' ' -f3 | xargs
+    if [ -f "$1" ]; then
+        ldd "$1" | grep $2 | cut -d' ' -f3 | xargs
     fi
 }
 
 # Discover libstdc++ location and name
-LIBSTD=$(find_shlib "julia" "libstdc++.so")
+LIBSTD=$(find_shlib "$libdir/libjulia.so" "libstdc++.so")
 LIBSTD_NAME=$(basename $LIBSTD)
 LIBSTD_DIR=$(dirname $LIBSTD)
 

@@ -1,3 +1,6 @@
+# This file is a part of Julia. Except for the *_kernel functions (see below),
+# license is MIT: http://julialang.org/license
+
 immutable DoubleFloat64
     hi::Float64
     lo::Float64
@@ -6,7 +9,7 @@ immutable DoubleFloat32
     hi::Float64
 end
 
-# kernel_* functions are only valid for |x| < pi/4 = 0.7854
+# *_kernel functions are only valid for |x| < pi/4 = 0.7854
 # translated from openlibm code: k_sin.c, k_cos.c, k_sinf.c, k_cosf.c
 # which are made available under the following licence:
 
@@ -95,8 +98,12 @@ mulpi_ext(x::Float32) = DoubleFloat32(pi*Float64(x))
 mulpi_ext(x::Rational) = mulpi_ext(float(x))
 mulpi_ext(x::Real) = pi*x # Fallback
 
+"""
+    sinpi(x)
 
-function sinpi{T<:FloatingPoint}(x::T)
+Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large `x`.
+"""
+function sinpi{T<:AbstractFloat}(x::T)
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError())
@@ -154,7 +161,12 @@ function sinpi{T<:Real}(x::T)
     end
 end
 
-function cospi{T<:FloatingPoint}(x::T)
+"""
+    cospi(x)
+
+Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large `x`.
+"""
+function cospi{T<:AbstractFloat}(x::T)
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError())
@@ -206,60 +218,114 @@ end
 sinpi(x::Integer) = x >= 0 ? zero(float(x)) : -zero(float(x))
 cospi(x::Integer) = isodd(x) ? -one(float(x)) : one(float(x))
 
-function sinpi(z::Complex)
+function sinpi{T}(z::Complex{T})
+    F = float(T)
     zr, zi = reim(z)
-    if !isfinite(zi) && zr == 0 return complex(zr, zi) end
-    if isnan(zr) && !isfinite(zi) return complex(zr, zi) end
-    if !isfinite(zr) && zi == 0 return complex(oftype(zr, NaN), zi) end
-    if !isfinite(zr) && isfinite(zi) return complex(oftype(zr, NaN), oftype(zi, NaN)) end
-    if !isfinite(zr) && !isfinite(zi) return complex(zr, oftype(zi, NaN)) end
-    pizi = pi*zi
-    complex(sinpi(zr)*cosh(pizi), cospi(zr)*sinh(pizi))
+    if isinteger(zr)
+        # zr = ...,-2,-1,0,1,2,...
+        # sin(pi*zr) == ±0
+        # cos(pi*zr) == ±1
+        # cosh(pi*zi) > 0
+        s = copysign(zero(F),zr)
+        c_pos = isa(zr,Integer) ? iseven(zr) : isinteger(zr/2)
+        sh = sinh(pi*zi)
+        Complex(s, c_pos ? sh : -sh)
+    elseif isinteger(2*zr)
+        # zr = ...,-1.5,-0.5,0.5,1.5,2.5,...
+        # sin(pi*zr) == ±1
+        # cos(pi*zr) == +0
+        # sign(sinh(pi*zi)) == sign(zi)
+        s_pos = isinteger((2*zr-1)/4)
+        ch = cosh(pi*zi)
+        Complex(s_pos ? ch : -ch, isnan(zi) ? zero(F) : copysign(zero(F),zi))
+    elseif !isfinite(zr)
+        if zi == 0 || isinf(zi)
+            Complex(F(NaN), F(zi))
+        else
+            Complex(F(NaN), F(NaN))
+        end
+    else
+        pizi = pi*zi
+        Complex(sinpi(zr)*cosh(pizi), cospi(zr)*sinh(pizi))
+    end
 end
 
-function cospi(z::Complex)
+function cospi{T}(z::Complex{T})
+    F = float(T)
     zr, zi = reim(z)
-    if !isfinite(zi) && zr == 0
-        return complex(isnan(zi) ? zi : oftype(zi, Inf),
-                       isnan(zi) ? zr : zr*-sign(zi))
+    if isinteger(zr)
+        # zr = ...,-2,-1,0,1,2,...
+        # sin(pi*zr) == ±0
+        # cos(pi*zr) == ±1
+        # sign(sinh(pi*zi)) == sign(zi)
+        # cosh(pi*zi) > 0
+        s = copysign(zero(F),zr)
+        c_pos = isa(zr,Integer) ? iseven(zr) : isinteger(zr/2)
+        ch = cosh(pi*zi)
+        Complex(c_pos ? ch : -ch, isnan(zi) ? s : -flipsign(s,zi))
+    elseif isinteger(2*zr)
+        # zr = ...,-1.5,-0.5,0.5,1.5,2.5,...
+        # sin(pi*zr) == ±1
+        # cos(pi*zr) == +0
+        # sign(sinh(pi*zi)) == sign(zi)
+        s_pos = isinteger((2*zr-1)/4)
+        sh = sinh(pi*zi)
+        Complex(zero(F), s_pos ? -sh : sh)
+    elseif !isfinite(zr)
+        if zi == 0
+            Complex(F(NaN), isnan(zr) ? zero(F) : -flipsign(F(zi),zr))
+        elseif isinf(zi)
+            Complex(F(Inf), F(NaN))
+        else
+            Complex(F(NaN), F(NaN))
+        end
+    else
+        pizi = pi*zi
+        Complex(cospi(zr)*cosh(pizi), -sinpi(zr)*sinh(pizi))
     end
-    if !isfinite(zr) && isinf(zi)
-        return complex(oftype(zr, Inf), oftype(zi, NaN))
-    end
-    if isinf(zr)
-        return complex(oftype(zr, NaN), zi==0 ? -copysign(zi, zr) : oftype(zi, NaN))
-    end
-    if isnan(zr) && zi==0 return complex(zr, abs(zi)) end
-    pizi = pi*zi
-    complex(cospi(zr)*cosh(pizi), -sinpi(zr)*sinh(pizi))
 end
-@vectorize_1arg Number sinpi
-@vectorize_1arg Number cospi
 
+"""
+    sinc(x)
 
+Compute ``\\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
+"""
 sinc(x::Number) = x==0 ? one(x)  : oftype(x,sinpi(x)/(pi*x))
 sinc(x::Integer) = x==0 ? one(x) : zero(x)
 sinc{T<:Integer}(x::Complex{T}) = sinc(float(x))
-@vectorize_1arg Number sinc
+sinc(x::Real) = x==0 ? one(x) : isinf(x) ? zero(x) : sinpi(x)/(pi*x)
+
+"""
+    cosc(x)
+
+Compute ``\\cos(\\pi x) / x - \\sin(\\pi x) / (\\pi x^2)`` if ``x \\neq 0``, and ``0`` if
+``x = 0``. This is the derivative of `sinc(x)`.
+"""
 cosc(x::Number) = x==0 ? zero(x) : oftype(x,(cospi(x)-sinpi(x)/(pi*x))/x)
 cosc(x::Integer) = cosc(float(x))
 cosc{T<:Integer}(x::Complex{T}) = cosc(float(x))
-@vectorize_1arg Number cosc
+cosc(x::Real) = x==0 || isinf(x) ? zero(x) : (cospi(x)-sinpi(x)/(pi*x))/x
 
 for (finv, f) in ((:sec, :cos), (:csc, :sin), (:cot, :tan),
                   (:sech, :cosh), (:csch, :sinh), (:coth, :tanh),
                   (:secd, :cosd), (:cscd, :sind), (:cotd, :tand))
     @eval begin
         ($finv){T<:Number}(z::T) = one(T) / (($f)(z))
-        ($finv){T<:Number}(z::AbstractArray{T}) = one(T) ./ (($f)(z))
     end
 end
 
-for (fa, fainv) in ((:asec, :acos), (:acsc, :asin), (:acot, :atan),
-                    (:asech, :acosh), (:acsch, :asinh), (:acoth, :atanh))
+for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
+                                       (:acsc, :asin, :acsch, :asinh, "cosecant"),
+                                       (:acot, :atan, :acoth, :atanh, "cotangent"))
+    tname = string(tfa)
+    hname = string(hfa)
     @eval begin
-        ($fa){T<:Number}(y::T) = ($fainv)(one(T) / y)
-        ($fa){T<:Number}(y::AbstractArray{T}) = ($fainv)(one(T) ./ y)
+        @doc """
+            $($tname)(x)
+        Compute the inverse $($fn) of `x`, where the output is in radians. """ ($tfa){T<:Number}(y::T) = ($tfainv)(one(T) / y)
+        @doc """
+            $($hname)(x)
+        Compute the inverse hyperbolic $($fn) of `x`. """ ($hfa){T<:Number}(y::T) = ($hfainv)(one(T) / y)
     end
 end
 
@@ -312,7 +378,6 @@ function sind(x::Real)
         return sin_kernel(y)
     end
 end
-@vectorize_1arg Real sind
 
 function cosd(x::Real)
     if isinf(x)
@@ -339,21 +404,25 @@ function cosd(x::Real)
         return cos_kernel(y)
     end
 end
-@vectorize_1arg Real cosd
 
 tand(x::Real) = sind(x) / cosd(x)
-@vectorize_1arg Real tand
 
-for (fd, f) in ((:sind, :sin), (:cosd, :cos), (:tand, :tan))
+for (fd, f, fn) in ((:sind, :sin, "sine"), (:cosd, :cos, "cosine"), (:tand, :tan, "tangent"))
+    name = string(fd)
     @eval begin
-        ($fd)(z) = ($f)(deg2rad(z))
+        @doc """
+            $($name)(x)
+        Compute $($fn) of `x`, where `x` is in degrees. """ ($fd)(z) = ($f)(deg2rad(z))
     end
 end
 
-for (fd, f) in ((:asind, :asin), (:acosd, :acos), (:atand, :atan),
-                (:asecd, :asec), (:acscd, :acsc), (:acotd, :acot))
+for (fd, f, fn) in ((:asind, :asin, "sine"), (:acosd, :acos, "cosine"), (:atand, :atan, "tangent"),
+                    (:asecd, :asec, "secant"), (:acscd, :acsc, "cosecant"), (:acotd, :acot, "cotangent"))
+    name = string(fd)
     @eval begin
-        ($fd)(y) = rad2deg(($f)(y))
-        @vectorize_1arg Real $fd
+        @doc """
+            $($name)(x)
+
+        Compute the inverse $($fn) of `x`, where the output is in degrees. """ ($fd)(y) = rad2deg(($f)(y))
     end
 end

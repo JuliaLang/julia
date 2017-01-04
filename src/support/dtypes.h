@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #ifndef DTYPES_H
 #define DTYPES_H
 
@@ -58,13 +60,13 @@
 #ifdef _OS_WINDOWS_
 #define STDCALL __stdcall
 # ifdef LIBRARY_EXPORTS
-#  define DLLEXPORT __declspec(dllexport)
+#  define JL_DLLEXPORT __declspec(dllexport)
 # else
-#  define DLLEXPORT __declspec(dllimport)
+#  define JL_DLLEXPORT __declspec(dllimport)
 # endif
 #else
 #define STDCALL
-#define DLLEXPORT __attribute__ ((visibility("default")))
+#define JL_DLLEXPORT __attribute__ ((visibility("default")))
 #endif
 
 #ifdef _OS_LINUX_
@@ -95,23 +97,6 @@
 #define BYTE_ORDER         __BYTE_ORDER
 #endif
 
-#if (__STDC_VERSION__ >= 199901L) || defined(__GNUG__)
-// argument counting macros for C99
-#define VA_ARG_N(_1, _2, _3, _4, _5, _6, _7, _8, _9,_10,  \
-                 _11,_12,_13,_14,_15,_16,_17,_18,_19,_20, \
-                 _21,_22,_23,_24,_25,_26,_27,_28,_29,_30, \
-                 _31,_32,_33,_34,_35,_36,_37,_38,_39,_40, \
-                 _41,_42,_43,_44,_45,_46,_47,_48,_49,_50, \
-                 _51,_52,_53,_54,_55,_56,_57,_58,_59,_60, \
-                 _61,_62,_63,N,...) N
-#define VA_RSEQ_N() 63,62,61,60,59,58,57,56,55,54,53,52,51,50, \
-                    49,48,47,46,45,44,43,42,41,40,39,38,37,36, \
-                    35,34,33,32,31,30,29,28,27,26,25,24,23,22, \
-                    21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0
-#define VA_NARG_(...) VA_ARG_N(__VA_ARGS__)
-#define VA_NARG(...) VA_NARG_(__VA_ARGS__,VA_RSEQ_N())
-#endif
-
 #define LLT_ALLOC(n) malloc(n)
 #define LLT_REALLOC(p,n) realloc((p),(n))
 #define LLT_FREE(x) free(x)
@@ -135,6 +120,18 @@
 #  define NOINLINE_DECL(f) f __attribute__((noinline))
 #endif
 
+#ifdef _COMPILER_MICROSOFT_
+# ifdef _P64
+#  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) __declspec(align(8)) x
+# else
+#  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) __declspec(align(4)) x
+# endif
+#elif defined(__GNUC__)
+#  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) x __attribute__ ((aligned (sizeof(void*))))
+#else
+#  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x)
+#endif
+
 typedef int bool_t;
 typedef unsigned char  byte_t;   /* 1 byte */
 
@@ -149,18 +146,21 @@ typedef int64_t int_t;
 typedef uint32_t uint_t;
 typedef int32_t int_t;
 #endif
-typedef ptrdiff_t ptrint_t; // pointer-size int
-typedef size_t uptrint_t;
-typedef ptrdiff_t offset_t;
-typedef size_t index_t;
 
-typedef uint8_t  u_int8_t;
-typedef uint16_t u_int16_t;
-typedef uint32_t u_int32_t;
-typedef uint64_t u_int64_t;
-typedef uptrint_t u_ptrint_t;
+STATIC_INLINE unsigned int next_power_of_two(unsigned int val)
+{
+    /* this function taken from libuv src/unix/core.c */
+    val -= 1;
+    val |= val >> 1;
+    val |= val >> 2;
+    val |= val >> 4;
+    val |= val >> 8;
+    val |= val >> 16;
+    val += 1;
+    return val;
+}
 
-#define LLT_ALIGN(x, sz) (((x) + (sz-1)) & (-sz))
+#define LLT_ALIGN(x, sz) (((x) + (sz)-1) & -(sz))
 
 // branch prediction annotations
 #ifdef __GNUC__

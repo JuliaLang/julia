@@ -1,16 +1,17 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # https://github.com/JuliaLang/julia/issues/4707
 
 #----------------- Get the A matrix
 function getDivGrad(n1,n2,n3)
+    # the Divergence
+    D1 = kron(speye(n3),kron(speye(n2),ddx(n1)))
+    D2 = kron(speye(n3),kron(ddx(n2),speye(n1)))
+    D3 = kron(ddx(n3),kron(speye(n2),speye(n1)))
+    # DIV from faces to cell-centers
+    Div = [D1 D2 D3]
 
-        # the Divergence
-        D1 = kron(speye(n3),kron(speye(n2),ddx(n1)))
-        D2 = kron(speye(n3),kron(ddx(n2),speye(n1)))
-        D3 = kron(ddx(n3),kron(speye(n2),speye(n1)))
-        # DIV from faces to cell-centers
-        Div = [D1 D2 D3]
-
-        return Div*Div';
+    return Div*Div'
 end
 
 #----------------- 1D finite difference on staggered grid
@@ -23,7 +24,6 @@ end
 function spdiags(B,d,m,n)
 #   spdiags(B,d,m,n)
 # creates a sparse matrix from its diagonals
-
     d = d[:]
     p = length(d)
 
@@ -41,6 +41,4 @@ function spdiags(B,d,m,n)
     A = sparse(a[:,1],a[:,2],a[:,3],m,n)
 
     return A
-
 end
-

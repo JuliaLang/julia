@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # The Computer Language Benchmarks Game
 # http://shootout.alioth.debian.org/
 #
@@ -38,7 +40,7 @@ function isless(x::KNuc, y::KNuc)
 end
 
 function sorted_array(m::Dict{AbstractString, Int})
-    kn = Array(KNuc, length(m))
+    kn = Array{KNuc}(length(m))
     i = 1
     for elem in m
         kn[i] = KNuc(elem...)
@@ -67,7 +69,7 @@ function k_nucleotide(infile="knucleotide-input.txt")
             break
         end
     end
-    data = collect(readall(input))
+    data = collect(readstring(input))
     # delete the newlines and convert to upper case
     i, j = 1, 1
     while i <= length(data)

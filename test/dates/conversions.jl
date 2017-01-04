@@ -1,8 +1,10 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Test conversion to and from unix
 @test Dates.unix2datetime(Dates.datetime2unix(DateTime(2000,1,1))) == DateTime(2000,1,1)
 @test Dates.value(Dates.DateTime(1970)) == Dates.UNIXEPOCH
 
-# Tests from here: http://en.wikipedia.org/wiki/Unix_time
+# Tests from here: https://en.wikipedia.org/wiki/Unix_time
 @test string(Dates.unix2datetime(1095379198.75)) == string("2004-09-16T23:59:58.75")
 @test string(Dates.unix2datetime(1095379199.00)) == string("2004-09-16T23:59:59")
 @test string(Dates.unix2datetime(1095379199.25)) == string("2004-09-16T23:59:59.25")
@@ -26,6 +28,7 @@
 @test string(Dates.unix2datetime(915148801.00)) == string("1999-01-01T00:00:01")
 @test string(Dates.unix2datetime(915148801.25)) == string("1999-01-01T00:00:01.25")
 
+# Test conversion to and from Rata Die
 @test Date(Dates.rata2datetime(734869)) == Dates.Date(2013,1,1)
 @test Dates.datetime2rata(Dates.rata2datetime(734869)) == 734869
 
@@ -44,6 +47,13 @@
 @test typeof(Dates.now()) <: Dates.DateTime
 @test typeof(Dates.today()) <: Dates.Date
 @test typeof(Dates.now(Dates.UTC)) <: Dates.DateTime
+
+if is_apple()
+    withenv("TZ" => "UTC") do
+        @test abs(Dates.now() - now(Dates.UTC)) < Dates.Second(1)
+    end
+end
+@test abs(Dates.now() - now(Dates.UTC)) < Dates.Hour(16)
 
 # Issue #9171, #9169
 let t = Dates.Period[Dates.Week(2), Dates.Day(14), Dates.Hour(14*24), Dates.Minute(14*24*60), Dates.Second(14*24*60*60), Dates.Millisecond(14*24*60*60*1000)]
@@ -69,3 +79,28 @@ end
 @test Dates.Year(3) < Dates.Month(37)
 @test_throws InexactError convert(Dates.Year, Dates.Month(37))
 @test_throws InexactError Dates.Month(Dates.Year(typemax(Int64)))
+
+# Ensure that conversion of 32-bit integers work
+let dt = DateTime(1915,1,1,12)
+    unix = Int32(Dates.datetime2unix(dt))
+    julian = Int32(Dates.datetime2julian(dt))
+
+    @test Dates.unix2datetime(unix) == dt
+    @test Dates.julian2datetime(julian) == dt
+end
+
+# Conversions to/from numbers
+a = Dates.DateTime(2000)
+b = Dates.Date(2000)
+@test convert(Real,b) == 730120
+@test convert(Float64,b) == 730120.0
+@test convert(Int32,b) == 730120
+@test convert(Real,a) == 63082368000000
+@test convert(Float64,a) == 63082368000000.0
+@test convert(Int64,a) == 63082368000000
+@test convert(DateTime,63082368000000) == a
+@test convert(DateTime,63082368000000.0) == a
+@test convert(Date,730120) == b
+@test convert(Date,730120.0) == b
+@test convert(Date,Int32(730120)) == b
+

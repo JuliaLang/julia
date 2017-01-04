@@ -1,31 +1,29 @@
-JULIAHOME = $(abspath ..)
+SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+JULIAHOME := $(abspath $(SRCDIR)/..)
+BUILDDIR ?= .
 include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/Make.inc
+include $(JULIAHOME)/deps/llvm-ver.make
 
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 override CPPFLAGS += $(JCPPFLAGS)
 
-SRCS = repl
-ifeq ($(USEMSVC), 1)
-SRCS += getopt
-endif
+SRCS := repl
 
-FLAGS = -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir)
+HEADERS := $(addprefix $(JULIAHOME)/src/,julia.h julia_threads.h julia_internal.h options.h) \
+	$(BUILDDIR)/../src/julia_version.h $(wildcard $(JULIAHOME)/src/support/*.h) $(LIBUV_INC)/uv.h
+
+FLAGS := -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir)
 ifneq ($(USEMSVC), 1)
-FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer
+FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -Wc++-compat
 endif
 
-OBJS = $(SRCS:%=%.o)
-DOBJS = $(SRCS:%=%.dbg.obj)
+OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
+DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
-ifeq ($(USE_LLVM_SHLIB),1)
-LLVMLINK = $(call exec,$(LLVM_CONFIG) --ldflags) -lLLVM-$(call exec,$(LLVM_CONFIG) --version)
-else
-LLVMLINK =
-endif
-JLDFLAGS += $(LDFLAGS) $(NO_WHOLE_ARCHIVE) $(OSLIBS) $(LLVMLINK) $(RPATH)
+JLDFLAGS += $(LDFLAGS) $(NO_WHOLE_ARCHIVE) $(OSLIBS) $(RPATH)
 
 ifeq ($(USE_SYSTEM_LIBM),0)
 ifneq ($(UNTRUSTED_SYSTEM_LIBM),0)
@@ -37,20 +35,18 @@ ifeq ($(OS),WINNT)
 JLDFLAGS += -municode
 endif
 
-release debug:
-	$(MAKE) julia-$@
+default: release
+all: release debug
+release debug :  % : julia-%
 
-%.o: %.c
+$(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@)
-%.dbg.obj: %.c
+$(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.c $(HEADERS)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 ifeq ($(OS),WINNT)
-$(build_bindir)/julia.bat: $(JULIAHOME)/contrib/windows/*.bat
-	cp $(JULIAHOME)/contrib/windows/*.bat $(build_bindir)
-julia-release julia-debug: $(build_bindir)/julia.bat
 ifneq ($(USEMSVC), 1)
-julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc
+$(BUILDDIR)/julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc
 	JLVER=`cat $(JULIAHOME)/VERSION` && \
 	JLVERi=`echo $$JLVER | perl -nle \
 		'/^(\d+)\.?(\d*)\.?(\d*)/ && \
@@ -65,9 +61,9 @@ julia-release: $(build_bindir)/julia$(EXE)
 julia-debug: $(build_bindir)/julia-debug$(EXE)
 
 ifneq ($(USEMSVC), 1)
-CXXLD = $(CXX)
+CXXLD := $(CXX)
 else
-CXXLD = $(LD)
+CXXLD := $(LD)
 endif
 
 $(build_bindir)/julia$(EXE): $(OBJS)
@@ -80,4 +76,3 @@ clean: | $(CLEAN_TARGETS)
 	rm -f $(build_bindir)/julia*
 
 .PHONY: clean release debug julia-release julia-debug
-

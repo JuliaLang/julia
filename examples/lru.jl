@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module LRUExample
 # An LRU (Least Recently Used) cache is an associative data structure which
 # maintains its contents in an order such that the most recently used item
@@ -37,7 +39,7 @@ type UnboundedLRU{K,V} <: LRU{K,V}
     ht::Dict
     q::Vector{CacheItem}
 
-    UnboundedLRU() = new(Dict(), similar(Array(CacheItem,1), 0))
+    UnboundedLRU() = new(Dict(), similar(Array{CacheItem}(1), 0))
 end
 UnboundedLRU() = UnboundedLRU{Any, Any}()
 
@@ -46,7 +48,7 @@ type BoundedLRU{K,V} <: LRU{K,V}
     q::Vector{CacheItem}
     maxsize::Int
 
-    BoundedLRU(m) = new(Dict(), similar(Array(CacheItem,1), 0), m)
+    BoundedLRU(m) = new(Dict(), similar(Array{CacheItem}(1), 0), m)
     BoundedLRU() = BoundedLRU(__MAXCACHE)
 end
 BoundedLRU(m) = BoundedLRU{Any, Any}(m)
@@ -56,7 +58,6 @@ BoundedLRU() = BoundedLRU{Any, Any}()
 
 isempty(lru::LRU) = isempty(lru.q)
 length(lru::LRU) = length(lru.q)
-haskey(lru::LRU, key) = haskey(lru.ht, key)
 
 ## associative ##
 

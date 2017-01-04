@@ -1,4 +1,8 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module VersionWeights
+
+importall ....Base.Operators
 
 export VersionWeight
 
@@ -7,15 +11,15 @@ immutable HierarchicalValue{T}
     rest::T
 end
 
-HierarchicalValue{T}(v::Vector{T}, rest::T = zero(T)) = HierarchicalValue{T}(v, rest)
+HierarchicalValue{T}(v::Vector{T}) = HierarchicalValue{T}(v, zero(T))
 HierarchicalValue(T::Type) = HierarchicalValue(T[])
 
 Base.zero{T}(::Type{HierarchicalValue{T}}) = HierarchicalValue(T)
 
 Base.typemin{T}(::Type{HierarchicalValue{T}}) = HierarchicalValue(T[], typemin(T))
 
-for (bf,f) in ((:(:-), :-), (:(:+),:+))
-    @eval function Base.($bf){T}(a::HierarchicalValue{T}, b::HierarchicalValue{T})
+for f in (:-, :+)
+    @eval function Base.$f{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T})
         av = a.v
         bv = b.v
         la = length(a.v)
@@ -23,7 +27,7 @@ for (bf,f) in ((:(:-), :-), (:(:+),:+))
         l0 = min(la, lb)
         l1 = max(la, lb)
         ld = la - lb
-        rv = Array(T, l1)
+        rv = Array{T}(l1)
         rf = ($f)(a.rest, b.rest)
         @inbounds for i = 1:l0
             rv[i] = ($f)(av[i], bv[i])
@@ -38,7 +42,7 @@ for (bf,f) in ((:(:-), :-), (:(:+),:+))
     end
 end
 
-Base.(:-){T}(a::HierarchicalValue{T}) = HierarchicalValue(-a.v, -a.rest)
+Base.:-{T}(a::HierarchicalValue{T}) = HierarchicalValue(-a.v, -a.rest)
 
 function Base.cmp{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T})
     av = a.v
@@ -71,16 +75,16 @@ immutable VWPreBuildItem
 end
 VWPreBuildItem() = VWPreBuildItem(0, HierarchicalValue(Int), 0)
 VWPreBuildItem(i::Int) = VWPreBuildItem(1, HierarchicalValue(Int), i)
-VWPreBuildItem(s::ASCIIString) = VWPreBuildItem(1, HierarchicalValue(Int[s...]), 0)
+VWPreBuildItem(s::String) = VWPreBuildItem(1, HierarchicalValue(Int[s...]), 0)
 
 Base.zero(::Type{VWPreBuildItem}) = VWPreBuildItem()
 
 Base.typemin(::Type{VWPreBuildItem}) = (x=typemin(Int); VWPreBuildItem(x, typemin(HierarchicalValue{Int}), x))
 
-Base.(:-)(a::VWPreBuildItem, b::VWPreBuildItem) = VWPreBuildItem(a.nonempty-b.nonempty, a.s-b.s, a.i-b.i)
-Base.(:+)(a::VWPreBuildItem, b::VWPreBuildItem) = VWPreBuildItem(a.nonempty+b.nonempty, a.s+b.s, a.i+b.i)
+Base.:-(a::VWPreBuildItem, b::VWPreBuildItem) = VWPreBuildItem(a.nonempty-b.nonempty, a.s-b.s, a.i-b.i)
+Base.:+(a::VWPreBuildItem, b::VWPreBuildItem) = VWPreBuildItem(a.nonempty+b.nonempty, a.s+b.s, a.i+b.i)
 
-Base.(:-)(a::VWPreBuildItem) = VWPreBuildItem(-a.nonempty, -a.s, -a.i)
+Base.:-(a::VWPreBuildItem) = VWPreBuildItem(-a.nonempty, -a.s, -a.i)
 
 function Base.cmp(a::VWPreBuildItem, b::VWPreBuildItem)
     c = cmp(a.nonempty, b.nonempty); c != 0 && return c
@@ -99,11 +103,11 @@ end
 
 const _vwprebuild_zero = VWPreBuild(0, HierarchicalValue(VWPreBuildItem))
 
-function VWPreBuild(ispre::Bool, desc::Tuple{Vararg{Union(Int,ASCIIString)}})
+function VWPreBuild(ispre::Bool, desc::Tuple{Vararg{Union{Int,String}}})
     isempty(desc) && return _vwprebuild_zero
     desc == ("",) && return VWPreBuild(ispre ? -1 : 1, HierarchicalValue(VWPreBuildItem[]))
     nonempty = ispre ? -1 : 0
-    w = Array(VWPreBuildItem, length(desc))
+    w = Array{VWPreBuildItem}(length(desc))
     i = 1
     @inbounds for item in desc
         w[i] = VWPreBuildItem(item)
@@ -118,18 +122,18 @@ Base.zero(::Type{VWPreBuild}) = VWPreBuild()
 const _vwprebuild_min = VWPreBuild(typemin(Int), typemin(HierarchicalValue{VWPreBuildItem}))
 Base.typemin(::Type{VWPreBuild}) = _vwprebuild_min
 
-function Base.(:-)(a::VWPreBuild, b::VWPreBuild)
+function Base.:-(a::VWPreBuild, b::VWPreBuild)
     b === _vwprebuild_zero && return a
     a === _vwprebuild_zero && return -b
     VWPreBuild(a.nonempty-b.nonempty, a.w-b.w)
 end
-function Base.(:+)(a::VWPreBuild, b::VWPreBuild)
+function Base.:+(a::VWPreBuild, b::VWPreBuild)
     b === _vwprebuild_zero && return a
     a === _vwprebuild_zero && return b
     VWPreBuild(a.nonempty+b.nonempty, a.w+b.w)
 end
 
-function Base.(:-)(a::VWPreBuild)
+function Base.:-(a::VWPreBuild)
     a === _vwprebuild_zero && return a
     VWPreBuild(-a.nonempty, -a.w)
 end
@@ -173,17 +177,17 @@ Base.zero(::Type{VersionWeight}) = VersionWeight()
 
 Base.typemin(::Type{VersionWeight}) = (x=typemin(Int); y=typemin(VWPreBuild); VersionWeight(x,x,x,y,y,x))
 
-Base.(:-)(a::VersionWeight, b::VersionWeight) =
+Base.:-(a::VersionWeight, b::VersionWeight) =
     VersionWeight(a.major-b.major, a.minor-b.minor, a.patch-b.patch,
                   a.prerelease-b.prerelease, a.build-b.build,
                   a.uninstall-b.uninstall)
 
-Base.(:+)(a::VersionWeight, b::VersionWeight) =
+Base.:+(a::VersionWeight, b::VersionWeight) =
     VersionWeight(a.major+b.major, a.minor+b.minor, a.patch+b.patch,
                   a.prerelease+b.prerelease, a.build+b.build,
                   a.uninstall+b.uninstall)
 
-Base.(:-)(a::VersionWeight) =
+Base.:-(a::VersionWeight) =
     VersionWeight(-a.major, -a.minor, -a.patch,
                   -a.prerelease, -a.build,
                   -a.uninstall)

@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
@@ -43,6 +45,10 @@
  */
 #if defined(__clang__)
 #define _COMPILER_CLANG_
+// Clang can also be used as a MinGW compiler
+#if defined(__MINGW32__)
+#define _COMPILER_MINGW_
+#endif
 #elif defined(__INTEL_COMPILER) || defined(__ICC)
 #define _COMPILER_INTEL_
 #elif defined(__MINGW32__)
@@ -75,6 +81,8 @@
 #define _CPU_X86_64_
 #elif defined(i386) || defined(__i386) || defined(__i386__) || defined(_M_IX86) || defined(_X86_)
 #define _CPU_X86_
+#elif defined(__aarch64__)
+#define _CPU_AARCH64_
 #elif defined(__arm__) || defined(_M_ARM)
 #define _CPU_ARM_
 #elif defined(__PPC64__)

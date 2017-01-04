@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function laplace_iter_devec(u, dx2, dy2, Niter, N)
     uout = copy(u)
     for iter = 1:Niter
@@ -38,7 +40,7 @@ end
 
 function laplace_iter_vec_sub(u, dx2, dy2, Niter, N)
     for i = 1:Niter
-        u[2:N-1, 2:N-1] = ((sub(u, 1:N-2, 2:N-1) + sub(u,3:N, 2:N-1))*dy2 + (sub(u,2:N-1,1:N-2) + sub(u,2:N-1, 3:N))*dx2) * (1./ (2*(dx2+dy2)))
+        u[2:N-1, 2:N-1] = ((view(u, 1:N-2, 2:N-1) + view(u,3:N, 2:N-1))*dy2 + (view(u,2:N-1,1:N-2) + view(u,2:N-1, 3:N))*dx2) * (1./ (2*(dx2+dy2)))
     end
     return u
 end

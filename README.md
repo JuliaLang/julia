@@ -7,7 +7,9 @@
 
 Linux, OSX: [![Build Status](https://api.travis-ci.org/JuliaLang/julia.svg?branch=master)](https://travis-ci.org/JuliaLang/julia)
 
-Windows: [![Build status](https://ci.appveyor.com/api/projects/status/4vr88cmgo7u02644/branch/master?svg=true)](https://ci.appveyor.com/project/StefanKarpinski/julia/branch/master)
+Windows: [![Build status](https://ci.appveyor.com/api/projects/status/dvial98s5vi6ealt/branch/master?svg=true)](https://ci.appveyor.com/project/JuliaLang/julia/branch/master)
+
+Code Coverage: [![Coverage Status](https://coveralls.io/repos/JuliaLang/julia/badge.svg?branch=master)](https://coveralls.io/r/JuliaLang/julia?branch=master) [![codecov.io](http://codecov.io/github/JuliaLang/julia/coverage.svg?branch=master)](http://codecov.io/github/JuliaLang/julia?branch=master)
 
 <a name="The-Julia-Language"/>
 ## The Julia Language
@@ -25,13 +27,13 @@ This is the GitHub repository of Julia source code, including instructions for c
 - **Packages:** <http://pkg.julialang.org/>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
+- **Discussion forum:** <https://discourse.julialang.org>
 - **Mailing lists:** <http://julialang.org/community/>
+- **Gitter:** <https://gitter.im/JuliaLang/julia>
 - **IRC:** <http://webchat.freenode.net/?channels=julia>
+- **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
-The mailing list for developer discussion is
-<http://groups.google.com/group/julia-dev/>. All are welcome, but the volume
-of messages is higher, and the discussions tend to be more esoteric. New
-developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md) helpful to start contributing to the Julia codebase.
+New developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md) helpful to start contributing to the Julia codebase.
 
 ### External Resources
 <a name="External-Resources"/>
@@ -39,23 +41,23 @@ developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/jul
 - [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
 - [**Youtube**](https://www.youtube.com/channel/UC9IuUwwE2xdjQUT_LMLONoA)
 - [**Twitter**](https://twitter.com/JuliaLanguage)
-- [**Google+**](https://plus.google.com/communities/111295162646766639102)
 - [**Meetup**](http://julia.meetup.com/)
 
 <a name="Currently-Supported-Platforms"/>
 ## Currently Supported Platforms
 
-- **GNU/Linux**
-- **Darwin/OS X**
+- **Linux**
+- **MacOS**
 - **FreeBSD**
 - **Windows**
 
-All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. Experimental and early support for [ARM](https://github.com/JuliaLang/julia/blob/master/README.arm.md) is available too.
+All systems are supported with both x86/64 (64-bit) and x86 (32-bit, except MacOS) architectures. Support for [ARM](https://github.com/JuliaLang/julia/blob/master/README.arm.md), AARCH64, and POWER8 (little-endian) has been added recently.
 
 <a name="Source-Download-and-Compilation"/>
 ## Source Download and Compilation
 
-First, acquire the source code by cloning the git repository:
+First, make sure you have all the [required dependencies](#Required-Build-Tools-External-Libraries) installed.
+Then, acquire the source code by cloning the git repository:
 
     git clone git://github.com/JuliaLang/julia.git
 
@@ -65,18 +67,20 @@ First, acquire the source code by cloning the git repository:
 
 Be sure to also configure your system to use the appropriate proxy settings, e.g. by setting the `https_proxy` and `http_proxy` variables.)
 
-By default you will be building the latest unstable version of Julia. However, most users should use the most recent stable version of Julia, which is currently the `0.3` series of releases. You can get this version by changing to the Julia directory and running
+By default you will be building the latest unstable version of Julia. However, most users should use the most recent stable version of Julia, which is currently the `0.5` series of releases. You can get this version by changing to the Julia directory and running
 
-    git checkout release-0.3
+    git checkout release-0.5
 
-Now run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes.
+Now run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes. (See [Platform Specific Build Notes](https://github.com/JuliaLang/julia#platform-specific-build-notes) for details.)
 When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
 This takes a while, but only has to be done once. If the defaults in the build do not work for you, and you need to set specific make parameters, you can save them in `Make.user`. The build will automatically check for the existence of `Make.user` and use it if it exists.
 Building Julia requires 1.5GiB of disk space and approximately 700MiB of virtual memory.
 
+For builds of julia starting with 0.5.0-dev, you can create out-of-tree builds of Julia by specifying `make O=<build-directory> configure` on the command line. This will create a directory mirror, with all of the necessary Makefiles to build Julia, in the specified directory. These builds will share the source files in Julia and `deps/srccache`. Each out-of-tree build directory can have its own `Make.user` file to override the global `Make.user` file in the top-level folder.
+
 If you need to build Julia in an environment that does not allow access to the outside world, use `make -C deps getall` to download all the necessary files. Then, copy the `julia` directory over to the target environment and build with `make`.
 
-**Note:** the build process will not work if any of the build directory's parent directories have spaces in their names (this is due to a limitation in GNU make).
+**Note:** the build process fail badly if any of the build directory's parent directories have spaces or other shell meta-characters such as `$` or `:` in their names (this is due to a limitation in GNU make).
 
 Once it is built, you can run the `julia` executable using its full path in the directory created above (the `julia` directory), or, to run it from anywhere, either
 
@@ -101,7 +105,7 @@ the `julia` source directory, type `make testall`. You should see output
 that lists a series of tests being run; if they complete without
 error, you should be in good shape to start using Julia.
 
-You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.
+You can read about [getting started](http://docs.julialang.org/en/stable/manual/getting-started/) in the manual.
 
 If you are building a Julia package for distribution on Linux, OS X,
 or Windows, take a look at the detailed notes in
@@ -147,8 +151,9 @@ latest version.
    b. To delete existing binaries of `julia` and all its dependencies,
       delete the `./usr` directory _in the source tree_.
 
-3. If you've upgraded OS X recently and you get an error that looks like
-    ```ld: library not found for -lcrt1.10.6.o```, run `xcode-select --install`.
+3. If you've updated OS X recently, be sure to run `xcode-select --install` to update the command line tools.
+   Otherwise, you could run into errors for missing headers and libraries, such as
+   ```ld: library not found for -lcrt1.10.6.o```.
 
 4. If you've moved the source directory, you might get errors such as
     ```CMake Error: The current CMakeCache.txt directory ... is different than the directory ... where     CMakeCache.txt was created.```, in which case you may delete the offending dependency under `deps`
@@ -179,7 +184,7 @@ Julia does not install anything outside the directory it was cloned into. Julia 
 #### General
 
 * GCC version 4.7 or later is required to build Julia.
-* To use external shared libraries not in the system library search path, set `USE_SYSTEM_XXX=1` and `LDFLAGS=-Wl,-rpath /path/to/dir/contains/libXXX.so` in `Make.user`.
+* To use external shared libraries not in the system library search path, set `USE_SYSTEM_XXX=1` and `LDFLAGS=-Wl,-rpath,/path/to/dir/contains/libXXX.so` in `Make.user`.
   * Instead of setting `LDFLAGS`, putting the library directory into the environment variable `LD_LIBRARY_PATH` (at both compile and run time) also works.
 * See also the [external dependencies](#Required-Build-Tools-External-Libraries).
 
@@ -196,50 +201,52 @@ You can also set `MARCH=native` for a maximum-performance build customized for t
 
 The [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/) contains updated packages for Julia dependencies if you want to use system libraries instead of having them downloaded and built during the build process.  See [System Provided Libraries](#System-Provided-Libraries).
 
-For a fast and easy current installation, the `before_install` section of [travis.yml](https://github.com/JuliaLang/julia/blob/master/.travis.yml) is a great resource.  Note that those instructions are for Ubuntu 12.04, and for later versions you may need to install newer versions of dependencies, such as `libunwind8-dev` instead of `libunwind7-dev`.
-
 #### RHEL/CentOS 6
 
 On RHEL/CentOS 6 systems, the default compiler (`gcc` 4.4) is too old to build Julia.
 
 Install or contact your systems administrator to install a more recent version of `gcc`. The [Scientific Linux Developer Toolset](http://linux.web.cern.ch/linux/devtoolset/) works well.
 
-#### Google Compute Engine
-
-Google Compute Engine is evolving rapidly, as is Julia.  This section is current as of March 2014 and assumes working knowledge of Google Cloud Services.
-
-These notes apply to the Debian 7 image currently available on Google Compute Engine and Julia pre-0.3.  There are only two things you need to do:
-
-1. Install packages required to build on your instance:
-  ```
-  apt-get install bzip2 gcc gfortran git g++ make m4 ncurses-dev cmake
-  ```
-
-2. Now clone `JuliaLang:master`; you should be able to build using the generic Linux instructions. These instructions were tested on a `g1-small` instance on 2014-03-28. Other resources include [information on Google Compute Engine](https://cloud.google.com/products/compute-engine/) and a series of [tutorials by Julia Ferraioli](http://www.blog.juliaferraioli.com/2013/12/julia-on-google-compute-engine.html).
 
 #### Linux Build Troubleshooting
 
  Problem              | Possible Solution
 ------------------------|---------------------
  OpenBLAS build failure | Set one of the following build options in `Make.user` and build again: <ul><li> `OPENBLAS_TARGET_ARCH=BARCELONA` (AMD CPUs) or `OPENBLAS_TARGET_ARCH=NEHALEM` (Intel CPUs)<ul>Set `OPENBLAS_DYNAMIC_ARCH = 0` to disable compiling multiple architectures in a single binary.</ul></li><li> `OPENBLAS_NO_AVX2 = 1` disables AVX2 instructions, allowing OpenBLAS to compile with `OPENBLAS_DYNAMIC_ARCH = 1` using old versions of binutils </li><li> `USE_SYSTEM_BLAS=1` uses the system provided `libblas` <ul><li>Set `LIBBLAS=-lopenblas` and `LIBBLASNAME=libopenblas` to force the use of the system provided OpenBLAS when multiple BLAS versions are installed. </li></ul></li></ul><p> If you get an error that looks like ```../kernel/x86_64/dgemm_kernel_4x4_haswell.S:1709: Error: no such instruction: `vpermpd $ 0xb1,%ymm0,%ymm0'```, then you need to set `OPENBLAS_DYNAMIC_ARCH = 0` or `OPENBLAS_NO_AVX2 = 1`, or you need a newer version of `binutils` (2.18 or newer). ([Issue #7653](https://github.com/JuliaLang/julia/issues/7653))
-Illegal Instruction error | Check if your CPU supports AVX while your OS does not (e.g. through virtualization, as described in [this issue](https://github.com/JuliaLang/julia/issues/3263)), and try installing LLVM 3.3 instead of LLVM 3.2.
+Illegal Instruction error | Check if your CPU supports AVX while your OS does not (e.g. through virtualization, as described in [this issue](https://github.com/JuliaLang/julia/issues/3263)).
+LibGit2 build failure | If LibGit2 configuration step reports `CMake Error at /usr/share/cmake-3.0/Modules/FindOpenSSL.cmake:294 (list):` then the versions of [OpenSSL and CMake are probably incompatible](https://cmake.org/Bug/view.php?id=15386). The recommended solution is to upgrade the version of CMake to 3.1.2 or above.
 
 ### OS X
 
-It is essential to use a 64-bit gfortran to compile Julia dependencies. The gfortran-4.7 (and newer) compilers in brew and MacPorts work for building Julia.
-Clang is now used by default to build Julia on OS X (10.7 and above). It is recommended that you upgrade to the latest version of Xcode (at least 4.3.3.). You need to have the Xcode command line utilities installed (and updated): run `xcode-select --install` in the terminal (in Xcode prior to v5.0, you can alternatively go to Preferences -> Downloads and select the Command Line Utilities). This will ensure that clang v3.1 is installed, which is the minimum version of `clang` required to build Julia. On OS X 10.6, the Julia build will automatically use `gcc`.
+You need to have the current Xcode command line utilities installed: run `xcode-select --install` in the terminal.
+You will need to rerun this terminal command after each OS X update, otherwise you may run into errors involving missing libraries or headers.
+You will also need a 64-bit gfortran to compile Julia dependencies. The gfortran-4.7 (and newer) compilers in Brew, Fink, and MacPorts work for building Julia.
+
+Clang is now used by default to build Julia on OS X 10.7 and above. On OS X 10.6, the Julia build will automatically use `gcc`.
+On current systems, we recommend that you install the command line tools as described above. Older systems do not have a separate command line tools package from Apple, and will require a full Xcode install.  On these, you will need at least Xcode 4.3.3.  In Xcode prior to v5.0, you can alternatively go to Preferences -> Downloads and select the Command Line Utilities. These steps will ensure that clang v3.1 is installed, which is the minimum version of `clang` required to build Julia.
 
 If you have set `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` in your `.bashrc` or equivalent, Julia may be unable to find various libraries that come bundled with it. These environment variables need to be unset for Julia to work.
 
 If you see build failures in OpenBLAS or if you prefer to experiment, you can use the Apple provided BLAS in vecLib by building with `USE_SYSTEM_BLAS=1`. Julia does not use the Apple provided LAPACK, as it is too old.
 
+When building Julia, or its dependencies, libraries installed by third party package managers can redirect the compiler to use an incompatible version of the software it is looking for. One example of this happening is when a piece of software called the "linker" gives an error involving "Undefined symbols." If that happens, you can usually figure out what software package is causing the error from the names in the error text. This sort of error can be bypassed by, temporarily, uninstalling the offending package. If the offending package cannot be uninstalled by itself, it may be possible to just uninstall the development headers (for example: a package ending in "-dev" in Fink).
+
 ### FreeBSD
 
-On *FreeBSD Release 9.0*, install the `gcc47`, `git`, and `gmake` packages/ports, and compile Julia with the command:
+On *FreeBSD Release 11.0*, install the gfortran, git, cmake, and gmake packages/ports (`pkg install gcc6 gmake git cmake`), and compile Julia with the command:
 
-    $ gmake FC=gfortran47
+    $ echo 'FC=gfortran6' >> Make.user
+    $ gmake
 
 You must use the `gmake` command on FreeBSD instead of `make`.
+
+Note that Julia is community-supported and we have little control over our upstream dependencies, you may still run into issues with dependencies and YMMV. Current known issues include:
+
+ - The x86 arch doesn't support threading due to lack of compiler runtime library support (set `JULIA_THREADS=0`).
+ - OpenBLAS patches in pkg haven't been upstreamed.
+ - gfortran can't link binaries. Set `FFLAGS=-Wl,-rpath,/usr/local/lib/gcc6` to work around this (upstream bug submitted to FreeBSD pkg maintainers).
+ - System libraries installed by pkg are not on the compiler path by default. You may need to add `LDFLAGS=-L/usr/local/lib` and `CPPFLAGS=-I/usr/local/include` to your environment or `Make.user` file to build successfully.
+
 
 ### Windows
 
@@ -256,38 +263,39 @@ Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
 - **[gcc & g++][gcc]** (>= 4.7) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on OS X) — compiling and linking C, C++
-- **[gfortran][gcc]**           — compiling and linking Fortran libraries
-- **[git]**                     — version control and package management (version 1.7.3+ required)
+- **[python]** (>=2.7)          - needed to build LLVM.
+- **[gfortran]**                — compiling and linking Fortran libraries
 - **[perl]**                    — preprocessing of header files of libraries.
 - **[wget]**, **[curl]**, or **[fetch]** (FreeBSD) — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
 - **[patch]**                   — for modifying source code.
 - **[cmake]**                   — needed to build `libgit2`.
+- **[pkg-config]**              - needed to build `libgit2` correctly, especially for proxy support
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
-- **[LLVM]** (3.3)           — compiler infrastructure. (3.4 not supported; 3.5+ mostly supported, [with caveats](https://github.com/JuliaLang/julia/issues/9336))
+- **[LLVM]** (3.9)           — compiler infrastructure.
 - **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
 - **[libuv]**                — portable, high-performance event-based I/O library
 - **[OpenLibm]**             — portable libm library containing elementary math functions.
 - **[OpenSpecFun]** (>= 0.4) — library containing Bessel and error functions of complex arguments.
 - **[DSFMT]**                — fast Mersenne Twister pseudorandom number generator library.
-- **[OpenBLAS]**             — fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](https://www.tacc.utexas.edu/research-development/tacc-software/gotoblas2).
-- **[LAPACK]** (>= 3.4)      — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
+- **[OpenBLAS]**             — fast, open, and maintained [basic linear algebra subprograms (BLAS)](https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](https://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](https://www.tacc.utexas.edu/research-development/tacc-software/gotoblas2).
+- **[LAPACK]** (>= 3.5)      — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
 - **[MKL]** (optional)       – OpenBLAS and LAPACK may be replaced by Intel's MKL library.
 - **[AMOS]**                 — subroutines for computing Bessel and Airy functions.
 - **[SuiteSparse]** (>= 4.1) — library of linear algebra routines for sparse matrices.
 - **[ARPACK]**               — collection of subroutines designed to solve large, sparse eigenvalue problems.
 - **[FFTW]** (>= 3.3)        — library for computing fast Fourier transforms very quickly and efficiently.
-- **[PCRE]** (>= 8.31)       — Perl-compatible regular expressions library.
+- **[PCRE]** (>= 10.00)      — Perl-compatible regular expressions library.
 - **[GMP]** (>= 5.0)         — GNU multiple precision arithmetic library, needed for `BigInt` support.
 - **[MPFR]** (>= 3.0)        — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
-- **[libgit2]** (>= 0.21)    — Git linkable library, used by Julia's package manager
-- **[utf8proc]** (>= 1.2)    — a library for processing UTF-8 encoded Unicode strings
+- **[libgit2]** (>= 0.23)    — Git linkable library, used by Julia's package manager
+- **[curl]** (>= 7.50)       — libcurl provides download and proxy support for Julia's package manager
+- **[libssh2]** (>= 1.7)     — library for SSH transport, used by libgit2 for packages with SSH remotes
+- **[mbedtls]** (>= 2.2)     — library used for cryptography and transport layer security, used by libssh2
+- **[utf8proc]** (>= 2.0)    — a library for processing UTF-8 encoded Unicode strings
 - **[libosxunwind]**         — clone of [libunwind], a library that determines the call-chain of a program
-- **[Rmath-julia]**          — library for commonly used statistical functions from the R project.
-
-For a longer overview of Julia's dependencies, see these [slides](https://github.com/tkelman/BAJUtalk-Dec2014/blob/master/BAJUtalkDec2014.pdf?raw=true).
 
 [GNU make]:     http://www.gnu.org/software/make
 [patch]:        http://www.gnu.org/software/patch
@@ -295,9 +303,10 @@ For a longer overview of Julia's dependencies, see these [slides](https://github
 [m4]:           http://www.gnu.org/software/m4
 [gcc]:          http://gcc.gnu.org
 [clang]:        http://clang.llvm.org
+[python]:       https://www.python.org/
+[gfortran]:     https://gcc.gnu.org/fortran/
 [curl]:         http://curl.haxx.se
 [fetch]:        http://www.freebsd.org/cgi/man.cgi?fetch(1)
-[git]:          http://git-scm.com
 [perl]:         http://www.perl.org
 [cmake]:        http://www.cmake.org
 [OpenLibm]:     https://github.com/JuliaLang/openlibm
@@ -321,7 +330,9 @@ For a longer overview of Julia's dependencies, see these [slides](https://github
 [utf8proc]:     http://julialang.org/utf8proc/
 [libosxunwind]: https://github.com/JuliaLang/libosxunwind
 [libunwind]:    http://www.nongnu.org/libunwind
-[Rmath-julia]:  https://github.com/JuliaLang/Rmath-julia
+[libssh2]:      https://www.libssh2.org
+[mbedtls]:      https://tls.mbed.org/
+[pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
 
 <a name="System-Provided-Libraries">
 ### System Provided Libraries
@@ -334,16 +345,17 @@ Please be aware that this procedure is not officially supported, as it introduce
 
 SuiteSparse is a special case, since it is typically only installed as a static library, while `USE_SYSTEM_SUITESPARSE=1` requires that it is a shared library. Running the script `contrib/repackage_system_suitesparse4.make` will copy your static system SuiteSparse installation into the shared library format required by Julia. `make USE_SYSTEM_SUITESPARSE=1` will then use the SuiteSparse that has been copied into Julia's directory, but will not build a new SuiteSparse library from scratch.
 
-### Intel compilers and Math Kernel Libraries
+### Intel compilers and Math Kernel Library (MKL)
 
-To use the Intel [MKL] BLAS and LAPACK libraries, make sure that MKL version 10.3.6 or higher is installed.
+To build Julia using the Intel compilers (icc, icpc, ifort), and link against
+the [MKL] BLAS and LAPACK libraries, first make sure you have a recent version
+of the compiler suite (version 15 or later).
+
 For a 64-bit architecture, the environment should be set up as follows:
 
     # bash
-    source /path/to/mkl/bin/mklvars.sh intel64 ilp64
-    export MKL_INTERFACE_LAYER=ILP64
+    source /path/to/intel/bin/compilervars.sh intel64
 
-It is recommended that Intel compilers be used to build Julia when using MKL.
 Add the following to the `Make.user` file:
 
     USEICC = 1
@@ -374,7 +386,7 @@ The Julia source code is organized as follows:
 <a name="Binary-Installation"/>
 ## Binary Installation
 
-Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with pre-compiled binaries are also [available for download](http://julialang.org/downloads/).
+If you would rather not compile the latest Julia from source, platform-specific tarballs with pre-compiled binaries are also [available for download](http://julialang.org/downloads/).
 
 You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the Julia program from anywhere (in the current shell session):
 
@@ -391,6 +403,7 @@ You can read about [getting started](http://julialang.org/manual/getting-started
 
 The following distributions include julia, but the versions may be out of date due to rapid development:
 
+* [Alpine Linux](http://pkgs.alpinelinux.org/package/edge/testing/x86_64/julia)
 * [Arch Linux](https://www.archlinux.org/packages/community/i686/julia/)
 * [Debian GNU/Linux](http://packages.debian.org/sid/julia)
 * [Fedora Linux](https://admin.fedoraproject.org/pkgdb/package/julia/), RHEL/CentOS/OEL/Scientific Linux (EPEL)
@@ -403,20 +416,29 @@ The following distributions include julia, but the versions may be out of date d
   * Git package for openSUSE: [OBS page](https://build.opensuse.org/package/show/science/julia-unstable), [1 Click Install](http://software.opensuse.org/download.html?project=science&package=julia-unstable)
 * [NixOS](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/compilers/julia)
 * Ubuntu
-  * [Ubuntu 13.04 (Raring Ringtail)](http://packages.ubuntu.com/raring/julia)
+  * [Ubuntu](http://packages.ubuntu.com/search?keywords=julia)
   * [Nightly builds PPA](https://launchpad.net/~staticfloat/+archive/julianightlies) (depends on the [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/))
+* [MacPorts](https://trac.macports.org/browser/trunk/dports/lang/julia/Portfile)
 * [OS X Homebrew Tap](https://github.com/staticfloat/homebrew-julia/)
 
 <a name="Editor-Terminal-Setup"/>
 ## Editor and Terminal Setup
 
-Currently, Julia editing mode support is available for Emacs, Vim, Textmate,
-Sublime Text, Notepad++, and Kate, in `contrib/`. There is early support for
-IDEs such as [Juno](http://junolab.org/),
-[Eclipse (LiClipse)](http://brainwy.github.io/liclipse/). A notebook interface
-is available through [IJulia](https://github.com/JuliaLang/IJulia.jl), which
-adds Julia support to [IPython](http://ipython.org). The
-[Sublime-IJulia](https://github.com/quinnj/Sublime-IJulia) plugin enables
-interaction between IJulia and Sublime Text.
+Currently, Julia editing mode support is available for a number of
+editors. While Julia modes for
+[Emacs](https://github.com/JuliaLang/julia-emacs),
+[Sublime Text](https://github.com/JuliaEditorSupport/Julia-sublime), and
+[Vim](https://github.com/JuliaLang/julia-vim) have their own repos,
+others such as Textmate, Notepad++, and Kate, are in
+`contrib/`.
+
+Two major IDEs are supported for Julia: [Juno](http://junolab.org/),
+which is based on [Atom](https://atom.io/), and
+[JuliaDT](https://github.com/JuliaComputing/JuliaDT), which is an
+[Eclipse](http://eclipse.org) plugin. A [Jupyter](http://jupyter.org/) notebooks interface
+is available through
+[IJulia](https://github.com/JuliaLang/IJulia.jl). The
+[Sublime-IJulia](https://github.com/quinnj/Sublime-IJulia) plugin
+enables interaction between IJulia and Sublime Text.
 
 In the terminal, Julia makes great use of both control-key and meta-key bindings. To make the meta-key bindings more accessible, many terminal emulator programs (e.g., `Terminal`, `iTerm`, `xterm`, etc.) allow you to use the alt or option key as meta.  See the section in the manual on [interacting with Julia](http://docs.julialang.org/en/latest/manual/interacting-with-julia/) for more details.

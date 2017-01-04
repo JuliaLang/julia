@@ -12,8 +12,8 @@ separated most of the notes by OS.
 Note that while the code for Julia is
 [MIT-licensed, with a few exceptions](https://github.com/JuliaLang/julia/blob/master/LICENSE.md),
 the distribution created by the techniques described herein will be
-GPL licensed, as various dependent libraries such as `FFTW`, `Rmath`,
-`SuiteSparse`, and `git` are GPL licensed. We do hope to have a
+GPL licensed, as various dependent libraries such as `FFTW` and
+`SuiteSparse` are GPL licensed. We do hope to have a
 non-GPL distribution of Julia in the future.
 
 Versioning and Git
@@ -29,10 +29,10 @@ pregenerate the `base/version_git.jl` file with:
 Julia has lots of build dependencies where we use patched versions that has not
 yet been included by the popular package managers. These dependencies will usually
 be automatically downloaded when you build, but if you want to be able to build
-Julia on a computer without internet access you should create a source-dist archive
-with the special make target
+Julia on a computer without internet access you should create a full-source-dist
+archive with the special make target
 
-    make source-dist
+    make full-source-dist
 
 that creates a julia-version-commit.tar.gz archive with all required dependencies.
 
@@ -66,10 +66,10 @@ The full list of CPU targets supported by LLVM can be obtained by running
 Linux
 -----
 
-On Linux, `make dist` creates a tarball that contains a fully functional Julia
-installation. If you wish to create a distribution package such as a
-`.deb`, or `.rpm`, some extra effort is needed. See the
-[julia-debian](http://github.com/staticfloat/julia-debian) repository
+On Linux, `make binary-dist` creates a tarball that contains a fully
+functional Julia installation. If you wish to create a distribution
+package such as a `.deb`, or `.rpm`, some extra effort is needed. See the
+[julia-debian](https://github.com/staticfloat/julia-debian) repository
 for an example of what metadata is needed for creating `.deb` packages
 for Debian and Ubuntu-based systems. See the
 [Fedora package](https://admin.fedoraproject.org/pkgdb/package/julia/)
@@ -84,9 +84,8 @@ to force the installation into a temporary directory.
 
 By default, Julia loads `$prefix/etc/julia/juliarc.jl` as an
 installation-wide initialization file. This file can be used by
-distribution managers to provide paths to various binaries such as a
-bundled `git` executable (as we do on OS X), or to setup paths (as
-we do on Windows).  For Linux distribution packages, if `$prefix` is
+distribution managers to set up custom paths or initialization code.
+For Linux distribution packages, if `$prefix` is
 set to `/usr`, there is no `/usr/etc` to look into. This requires
 the path to Julia's private `etc` directory to be changed.  This can
 be done via the `sysconfdir` make variable when building.  Simply
@@ -105,10 +104,10 @@ completely self-contained Julia.app.
 
 Note that if you want your `.app` to be able to run on OSX 10.6 Snow
 Leopard, you must pass `USE_SYSTEM_LIBUNWIND=1` as one of the make
-variables passed to both `make` processes.  This disables the use of
+variables passed to both `make` processes. This disables the use of
 `libosxunwind`, a more modern libunwind that relies on OS features
-available only in 10.7+.  This is the reason why we offer [separate
-downloads](http://julialang.org/downloads/) for OS X 10.6 and 10.7+.
+available only in 10.7+. Furthermore, support for OSX 10.6 and 10.7
+requires that Julia is built with `USE_LIBCPP=0`.
 
 Windows
 -------
@@ -118,7 +117,7 @@ is to cross-compile from a Linux distribution such as Ubuntu. In-depth
 compilation instructions [are
 available](https://github.com/JuliaLang/julia/blob/master/README.windows.md).
 However the important steps for redistribution are to ensure to `make
-win-extras` in between `make` and `make dist`.  After that process is
+win-extras` in between `make` and `make binary-dist`.  After that process is
 completed, the `.zip` file created in the head Julia directory will
 hold a completely self-contained Julia.
 
@@ -161,19 +160,6 @@ Finally, OpenBLAS includes its own optimized version of LAPACK. If you
 set `USE_SYSTEM_BLAS=1` and `USE_SYSTEM_LAPACK=1`, you should also set
 `LIBLAPACK=-l$(YOURBLAS)` and `LIBLAPACKNAME=lib$(YOURBLAS)`. Else, the
 reference LAPACK will be used and performance will typically be much lower.
-
-Notes on Rmath
-==============
-
-Rmath is a library from R, which includes basic statistical
-functions. Julia uses a patched version of Rmath, which uses DSFMT as
-its underlying generator, and faster normal random number
-generators. If the stock Rmath provided by various linux distributions
-is used, the underlying random streams will not be the same for
-different RNGs in Base and Distributions.jl.
-
-It is highly recommended that the patched Rmath provided by Julia is
-used.
 
 Compilation scripts
 ===================

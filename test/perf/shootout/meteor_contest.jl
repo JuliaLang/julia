@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # The Computer Language Benchmarks Game
 # http://shootout.alioth.debian.org/
 #
@@ -42,7 +44,7 @@ const pieces = (
 
 const solutions = Any[]
 const masks = zeros(UInt64, 10)
-const masksAtCell = Array(Any, width*height, height)
+const masksAtCell = Array{Any}(width*height, height)
 
 valid(x, y) = (0 <= x < width) && (0 <= y < height)
 legal(mask::UInt64, board::UInt64) = (mask & board) == 0

@@ -34,7 +34,8 @@ OBJECTS = \
 	int2str.obj \
 	libsupportinit.obj \
 	arraylist.obj \
-	asprintf.obj
+	asprintf.obj \
+	dirname.obj
 
 INCLUDE = $(INCLUDE);$(MAKEDIR)\..\..\deps\libuv\include
 CFLAGS = $(CFLAGS) -D_CRT_SECURE_NO_WARNINGS -DLIBRARY_EXPORTS
