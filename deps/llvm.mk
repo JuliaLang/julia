@@ -504,6 +504,7 @@ $(eval $(call LLVM_PATCH,llvm-D27389)) # Julia issue #19792, Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D27397)) # Julia issue #19792, Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D28009)) # Julia issue #19792, Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D28215_FreeBSD_shlib))
+$(eval $(call LLVM_PATCH,llvm-D28221-avx512)) # mentioned in issue #19797
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
