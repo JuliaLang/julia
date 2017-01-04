@@ -179,8 +179,6 @@ type CompoundPeriod <: AbstractTime
     end
 end
 
-CompoundPeriod{P<:Period}(p::Vector{P}) = CompoundPeriod(Array{Period}(p))
-
 """
     CompoundPeriod(periods) -> CompoundPeriod
 
@@ -202,6 +200,8 @@ julia> Dates.CompoundPeriod(Dates.Minute(50000))
 50000 minutes
 ```
 """
+CompoundPeriod{P<:Period}(p::Vector{P}) = CompoundPeriod(Array{Period}(p))
+
 CompoundPeriod(p::Period...) = CompoundPeriod(Period[p...])
 
 
