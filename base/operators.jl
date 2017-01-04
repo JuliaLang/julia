@@ -645,6 +645,14 @@ For associative collection types, this will be a `Pair{KeyType,ValType}`. The de
 `eltype(x) = eltype(typeof(x))` is provided for convenience so that instances can be passed
 instead of types. However the form that accepts a type argument should be defined for new
 types.
+
+```jldoctest
+julia> eltype(ones(Float32,2,2))
+Float32
+
+julia> eltype(ones(Int8,2,2))
+Int8
+```
 """
 eltype(::Type) = Any
 eltype(::Type{Any}) = Any
