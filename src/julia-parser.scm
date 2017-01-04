@@ -1167,6 +1167,7 @@
             (if (and (length= ex 2) (pair? (cadr ex)) (eq? (caadr ex) 'line))
                 `(let (block) ,@binds)
                 `(let ,ex ,@binds)))))
+
        ((global local)
         (let* ((lno (input-port-line (ts:port s)))
                (const (and (eq? (peek-token s) 'const)
@@ -1176,6 +1177,15 @@
           (if const
               `(const ,expr)
               expr)))
+       ((const)
+        (let ((assgn (parse-eq s)))
+          (if (not (and (pair? assgn)
+                        (or (eq? (car assgn) '=)
+                            (eq? (car assgn) 'global)
+                            (eq? (car assgn) 'local))))
+              (error "expected assignment after \"const\"")
+              `(const ,assgn))))
+
        ((function macro)
         (let* ((paren (eqv? (require-token s) #\())
                (sig   (parse-def s (not (eq? word 'macro)))))
@@ -1285,14 +1295,6 @@
               (list word)
               (error (string "unexpected \"" t "\" after " word)))))
 
-       ((const)
-        (let ((assgn (parse-eq s)))
-          (if (not (and (pair? assgn)
-                        (or (eq? (car assgn) '=)
-                            (eq? (car assgn) 'global)
-                            (eq? (car assgn) 'local))))
-              (error "expected assignment after \"const\"")
-              `(const ,assgn))))
        ((module baremodule)
         (let* ((name (parse-unary-prefix s))
                (loc  (line-number-node s))
