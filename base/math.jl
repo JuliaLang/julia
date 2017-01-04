@@ -32,7 +32,7 @@ using Base: sign_mask, exponent_mask, exponent_one, exponent_bias,
             exponent_half, exponent_max, exponent_raw_max, fpinttype,
             significand_mask, significand_bits, exponent_bits
 
-using Core.Intrinsics: sqrt_llvm, box, powi_llvm
+using Core.Intrinsics: sqrt_llvm, powi_llvm
 
 # non-type specific math functions
 
@@ -420,8 +420,8 @@ for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
     end
 end
 
-sqrt(x::Float64) = box(Float64, sqrt_llvm(x))
-sqrt(x::Float32) = box(Float32, sqrt_llvm(x))
+sqrt(x::Float64) = sqrt_llvm(x)
+sqrt(x::Float32) = sqrt_llvm(x)
 
 """
     sqrt(x)
@@ -645,9 +645,9 @@ end
 ^(x::Float32, y::Float32) = nan_dom_err(ccall((:powf,libm), Float32, (Float32,Float32), x, y), x+y)
 
 ^(x::Float64, y::Integer) = x^Int32(y)
-^(x::Float64, y::Int32) = box(Float64, powi_llvm(x, y))
+^(x::Float64, y::Int32) = powi_llvm(x, y)
 ^(x::Float32, y::Integer) = x^Int32(y)
-^(x::Float32, y::Int32) = box(Float32, powi_llvm(x, y))
+^(x::Float32, y::Int32) = powi_llvm(x, y)
 ^(x::Float16, y::Integer) = Float16(Float32(x)^y)
 
 function angle_restrict_symm(theta)

@@ -36,8 +36,8 @@ end
 
 # test functionality of non-power-of-2 bitstype constants
 bitstype 24 Int24
-Int24(x::Int) = Core.Intrinsics.box(Int24, Core.Intrinsics.trunc_int(Int24, x))
-Int(x::Int24) = Core.Intrinsics.box(Int, Core.Intrinsics.zext_int(Int, x))
+Int24(x::Int) = Core.Intrinsics.trunc_int(Int24, x)
+Int(x::Int24) = Core.Intrinsics.zext_int(Int, x)
 let x, y, f
     x = Int24(Int(0x12345678)) # create something (via truncation)
     @test Int(0x345678) === Int(x)
@@ -70,11 +70,11 @@ compiled_addf(x, y) = Core.Intrinsics.add_float(x, y)
 @test_throws ErrorException compiled_addf(true, true)
 
 function compiled_conv{T}(::Type{T}, x)
-    t = Core.Intrinsics.box(T, Core.Intrinsics.trunc_int(T, x))
-    z = Core.Intrinsics.box(typeof(x), Core.Intrinsics.zext_int(typeof(x), t))
-    s = Core.Intrinsics.box(typeof(x), Core.Intrinsics.sext_int(typeof(x), t))
-    fpt = Core.Intrinsics.box(T, Core.Intrinsics.fptrunc(T, x))
-    fpe = Core.Intrinsics.box(typeof(x), Core.Intrinsics.fpext(typeof(x), fpt))
+    t = Core.Intrinsics.trunc_int(T, x)
+    z = Core.Intrinsics.zext_int(typeof(x), t)
+    s = Core.Intrinsics.sext_int(typeof(x), t)
+    fpt = Core.Intrinsics.fptrunc(T, x)
+    fpe = Core.Intrinsics.fpext(typeof(x), fpt)
     return (t, z, s, fpt, fpe)
 end
 @test compiled_conv(UInt32, Int64(0x8000_0000)) ==

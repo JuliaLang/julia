@@ -2,8 +2,8 @@
 
 ## floating-point functions ##
 
-copysign(x::Float64, y::Float64) = box(Float64, copysign_float(x, y))
-copysign(x::Float32, y::Float32) = box(Float32, copysign_float(x, y))
+copysign(x::Float64, y::Float64) = copysign_float(x, y)
+copysign(x::Float32, y::Float32) = copysign_float(x, y)
 copysign(x::Float32, y::Real) = copysign(x, Float32(y))
 copysign(x::Float64, y::Real) = copysign(x, Float64(y))
 
@@ -206,10 +206,8 @@ fma_libm(x::Float32, y::Float32, z::Float32) =
     ccall(("fmaf", libm_name), Float32, (Float32,Float32,Float32), x, y, z)
 fma_libm(x::Float64, y::Float64, z::Float64) =
     ccall(("fma", libm_name), Float64, (Float64,Float64,Float64), x, y, z)
-fma_llvm(x::Float32, y::Float32, z::Float32) =
-    box(Float32, fma_float(x, y, z))
-fma_llvm(x::Float64, y::Float64, z::Float64) =
-    box(Float64, fma_float(x, y, z))
+fma_llvm(x::Float32, y::Float32, z::Float32) = fma_float(x, y, z)
+fma_llvm(x::Float64, y::Float64, z::Float64) = fma_float(x, y, z)
 # Disable LLVM's fma if it is incorrect, e.g. because LLVM falls back
 # onto a broken system libm; if so, use openlibm's fma instead
 # 1.0000305f0 = 1 + 1/2^15

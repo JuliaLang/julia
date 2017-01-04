@@ -27,10 +27,10 @@ typealias BitUnsigned64T Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UIn
 
 <{T<:BitSigned}(x::T, y::T)  = slt_int(x, y)
 
--{T<:BitInteger}(x::T)       = box(T, neg_int(x))
--{T<:BitInteger}(x::T, y::T) = box(T, sub_int(x, y))
-+{T<:BitInteger}(x::T, y::T) = box(T, add_int(x, y))
-*{T<:BitInteger}(x::T, y::T) = box(T, mul_int(x, y))
+-{T<:BitInteger}(x::T)       = neg_int(x)
+-{T<:BitInteger}(x::T, y::T) = sub_int(x, y)
++{T<:BitInteger}(x::T, y::T) = add_int(x, y)
+*{T<:BitInteger}(x::T, y::T) = mul_int(x, y)
 
 inv(x::Integer) = float(one(x)) / float(x)
 /{T<:Integer}(x::T, y::T) = float(x) / float(y)
@@ -70,7 +70,7 @@ iseven(n::Integer) = !isodd(n)
 signbit(x::Integer) = x < 0
 signbit(x::Unsigned) = false
 
-flipsign{T<:BitSigned}(x::T, y::T) = box(T, flipsign_int(x, y))
+flipsign{T<:BitSigned}(x::T, y::T) = flipsign_int(x, y)
 
 flipsign(x::Signed, y::Signed)  = convert(typeof(x), flipsign(promote_noncircular(x, y)...))
 flipsign(x::Signed, y::Float16) = flipsign(x, box(Int16, y))
@@ -141,10 +141,10 @@ cld(x::Unsigned, y::Signed) = div(x, y) + (!signbit(y) & (rem(x, y) != 0))
 
 # Don't promote integers for div/rem/mod since there is no danger of overflow,
 # while there is a substantial performance penalty to 64-bit promotion.
-div{T<:BitSigned64}(x::T, y::T) = box(T, checked_sdiv_int(x, y))
-rem{T<:BitSigned64}(x::T, y::T) = box(T, checked_srem_int(x, y))
-div{T<:BitUnsigned64}(x::T, y::T) = box(T, checked_udiv_int(x, y))
-rem{T<:BitUnsigned64}(x::T, y::T) = box(T, checked_urem_int(x, y))
+div{T<:BitSigned64}(x::T, y::T) = checked_sdiv_int(x, y)
+rem{T<:BitSigned64}(x::T, y::T) = checked_srem_int(x, y)
+div{T<:BitUnsigned64}(x::T, y::T) = checked_udiv_int(x, y)
+rem{T<:BitUnsigned64}(x::T, y::T) = checked_urem_int(x, y)
 
 
 # fld(x,y) == div(x,y) - ((x>=0) != (y>=0) && rem(x,y) != 0 ? 1 : 0)
@@ -166,14 +166,14 @@ end
 
 ## integer bitwise operations ##
 
-(~){T<:BitInteger}(x::T)       = box(T, not_int(x))
-(&){T<:BitInteger}(x::T, y::T) = box(T, and_int(x, y))
-(|){T<:BitInteger}(x::T, y::T) = box(T, or_int(x, y))
-xor{T<:BitInteger}(x::T, y::T) = box(T, xor_int(x, y))
+(~){T<:BitInteger}(x::T)       = not_int(x)
+(&){T<:BitInteger}(x::T, y::T) = and_int(x, y)
+(|){T<:BitInteger}(x::T, y::T) = or_int(x, y)
+xor{T<:BitInteger}(x::T, y::T) = xor_int(x, y)
 
-bswap{T<:Union{Int8,UInt8}}(x::T) = x
+bswap{T<:Union{Int8, UInt8}}(x::T) = x
 bswap{T<:Union{Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}}(x::T) =
-    box(T, bswap_int(x))
+    bswap_int(x)
 
 """
     count_ones(x::Integer) -> Integer
@@ -185,7 +185,7 @@ julia> count_ones(7)
 3
 ```
 """
-count_ones{T<:BitInteger}(x::T) = Int(box(T, ctpop_int(x)))
+count_ones{T<:BitInteger}(x::T) = Int(ctpop_int(x))
 
 """
     leading_zeros(x::Integer) -> Integer
@@ -197,7 +197,7 @@ julia> leading_zeros(Int32(1))
 31
 ```
 """
-leading_zeros{T<:BitInteger}(x::T) = Int(box(T, ctlz_int(x)))
+leading_zeros{T<:BitInteger}(x::T) = Int(ctlz_int(x))
 
 """
     trailing_zeros(x::Integer) -> Integer
@@ -209,7 +209,7 @@ julia> trailing_zeros(2)
 1
 ```
 """
-trailing_zeros{T<:BitInteger}(x::T) = Int(box(T, cttz_int(x)))
+trailing_zeros{T<:BitInteger}(x::T) = Int(cttz_int(x))
 
 """
     count_zeros(x::Integer) -> Integer
@@ -263,14 +263,10 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 ## integer shifts ##
 
 # unsigned shift counts always shift in the same direction
->>{T<:BitSigned,S<:BitUnsigned}(x::T, y::S) =
-    box(T, ashr_int(x, y))
->>{T<:BitUnsigned,S<:BitUnsigned}(x::T, y::S) =
-    box(T, lshr_int(x, y))
-<<{T<:BitInteger,S<:BitUnsigned}(x::T,  y::S) =
-    box(T, shl_int(x, y))
->>>{T<:BitInteger,S<:BitUnsigned}(x::T, y::S) =
-    box(T, lshr_int(x, y))
+>>{T<:BitSigned,S<:BitUnsigned}(x::T, y::S) = ashr_int(x, y)
+>>{T<:BitUnsigned,S<:BitUnsigned}(x::T, y::S) = lshr_int(x, y)
+<<{T<:BitInteger,S<:BitUnsigned}(x::T,  y::S) = shl_int(x, y)
+>>>{T<:BitInteger,S<:BitUnsigned}(x::T, y::S) = lshr_int(x, y)
 # signed shift counts can shift in either direction
 # note: this early during bootstrap, `>=` is not yet available
 # note: we only define Int shift counts here; the generic case is handled later
@@ -289,28 +285,28 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
             if issubtype(to, Signed)
                 if issubtype(from, Unsigned)
                     @eval convert(::Type{$to}, x::($from)) =
-                        box($to, checked_trunc_sint($to, check_top_bit(x)))
+                        checked_trunc_sint($to, check_top_bit(x))
                 else
                     @eval convert(::Type{$to}, x::($from)) =
-                        box($to, checked_trunc_sint($to, x))
+                        checked_trunc_sint($to, x)
                 end
             else
                 @eval convert(::Type{$to}, x::($from)) =
-                    box($to, checked_trunc_uint($to, x))
+                    checked_trunc_uint($to, x)
             end
-            @eval rem(x::($from), ::Type{$to}) = box($to, trunc_int($to, x))
+            @eval rem(x::($from), ::Type{$to}) = trunc_int($to, x)
         elseif from.size < to.size || from === Bool
             if issubtype(from, Signed)
                 if issubtype(to, Unsigned)
                     @eval convert(::Type{$to}, x::($from)) =
-                        box($to, sext_int($to, check_top_bit(x)))
+                        sext_int($to, check_top_bit(x))
                 else
                     @eval convert(::Type{$to}, x::($from)) =
-                        box($to, sext_int($to, x))
+                        sext_int($to, x)
                 end
-                @eval rem(x::($from), ::Type{$to}) = box($to, sext_int($to, x))
+                @eval rem(x::($from), ::Type{$to}) = sext_int($to, x)
             else
-                @eval convert(::Type{$to}, x::($from)) = box($to, zext_int($to, x))
+                @eval convert(::Type{$to}, x::($from)) = zext_int($to, x)
                 @eval rem(x::($from), ::Type{$to}) = convert($to, x)
             end
         else
@@ -509,11 +505,11 @@ if Core.sizeof(Int) == 4
         return Int128(mod(BigInt(x), BigInt(y)))
     end
 else
-    *{T<:Union{Int128,UInt128}}(x::T, y::T)  = box(T, mul_int(x, y))
+    *{T<:Union{Int128,UInt128}}(x::T, y::T)  = mul_int(x, y)
 
-    div(x::Int128,  y::Int128)  = box(Int128, checked_sdiv_int(x, y))
-    div(x::UInt128, y::UInt128) = box(UInt128, checked_udiv_int(x, y))
+    div(x::Int128,  y::Int128)  = checked_sdiv_int(x, y)
+    div(x::UInt128, y::UInt128) = checked_udiv_int(x, y)
 
-    rem(x::Int128,  y::Int128)  = box(Int128, checked_srem_int(x, y))
-    rem(x::UInt128, y::UInt128) = box(UInt128, checked_urem_int(x, y))
+    rem(x::Int128,  y::Int128)  = checked_srem_int(x, y)
+    rem(x::UInt128, y::UInt128) = checked_urem_int(x, y)
 end
