@@ -89,7 +89,6 @@ export
     Regex,
     RegexMatch,
     RemoteChannel,
-    RepString,
     RevString,
     RoundFromZero,
     RoundDown,
