@@ -424,3 +424,17 @@ end
 let f() = (a = 1; Base.Broadcast._broadcast_eltype((x, y) -> x + y + a, 1.0, 1.0))
     @test @inferred(f()) == Float64
 end
+
+@testset "broadcast resulting in BitArray" begin
+    let f(x) = x ? true : "false"
+        ba = f.([true])
+        @test ba isa BitArray
+        @test ba == [true]
+        a = f.([false])
+        @test a isa Array{String}
+        @test a == ["false"]
+        a = f.([true, false])
+        @test a isa Array
+        @test a == [true, "false"]
+    end
+end
