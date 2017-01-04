@@ -1239,7 +1239,7 @@ for (Bsig, A1sig, A2sig, gbb, funcname) in
     end  # let broadcast_cache
 end
 _broadcast_zpreserving!(args...) = broadcast!(args...)
-_broadcast_zpreserving(args...) = Base.Broadcast.broadcast_elwise_op(args...)
+_broadcast_zpreserving(f, As...) = broadcast!(f, similar(Array{promote_op(f, map(eltype, As)...)}, Base.Broadcast.broadcast_indices(As...)), As...)
 _broadcast_zpreserving{Tv1,Ti1,Tv2,Ti2}(f::Function, A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) =
     _broadcast_zpreserving!(f, spzeros(promote_type(Tv1, Tv2), promote_type(Ti1, Ti2), Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
 _broadcast_zpreserving{Tv,Ti}(f::Function, A_1::SparseMatrixCSC{Tv,Ti}, A_2::Union{Array,BitArray,Number}) =
@@ -1469,5 +1469,8 @@ end
 @deprecate (|)(a::Number, B::AbstractArray)         a .| B
 @deprecate (|)(A::AbstractArray, b::Number)         A .| b
 @deprecate (|)(A::AbstractArray, B::AbstractArray)  A .| B
+
+# Calling promote_op is likely a bad idea, so deprecate its convenience wrapper promote_eltype_op
+@deprecate promote_eltype_op(op, As...) promote_op(op, map(eltype, As)...)
 
 # End deprecations scheduled for 0.6

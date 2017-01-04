@@ -3,7 +3,7 @@
 module Broadcast
 
 using Base.Cartesian
-using Base: promote_eltype_op, linearindices, tail, OneTo, to_shape,
+using Base: linearindices, tail, OneTo, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
             nullable_returntype, null_safe_eltype_op, hasvalue
 import Base: broadcast, broadcast!
@@ -266,11 +266,6 @@ function broadcast_t(f, ::Type{Bool}, shape, iter, As...)
     _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter)
     return B
 end
-
-# broadcast method that uses inference to find the type, but preserves abstract
-# container types when possible (used by binary elementwise operators)
-@inline broadcast_elwise_op(f, As...) =
-    broadcast!(f, similar(Array{promote_eltype_op(f, As...)}, broadcast_indices(As...)), As...)
 
 eltypestuple(a) = (Base.@_pure_meta; Tuple{eltype(a)})
 eltypestuple(T::Type) = (Base.@_pure_meta; Tuple{Type{T}})
