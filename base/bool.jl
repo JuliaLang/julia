@@ -34,12 +34,12 @@ julia> ![true false true]
 function !(x::Bool)
     ## We need a better heuristic to detect this automatically
     @_pure_meta
-    return box(Bool, not_int(x))
+    return not_int(x)
 end
 
 (~)(x::Bool) = !x
-(&)(x::Bool, y::Bool) = box(Bool, and_int(x, y))
-(|)(x::Bool, y::Bool) = box(Bool, or_int(x, y))
+(&)(x::Bool, y::Bool) = and_int(x, y)
+(|)(x::Bool, y::Bool) = or_int(x, y)
 
 """
     xor(x, y)
