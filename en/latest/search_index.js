@@ -6509,7 +6509,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Function",
-    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\nMerge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\n"
+    "text": "Merge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\nmerge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\n"
 },
 
 {
@@ -9537,6 +9537,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/numbers.html#Base.precision-Tuple{Type{BigFloat}}",
+    "page": "Numbers",
+    "title": "Base.precision",
+    "category": "Method",
+    "text": "precision(BigFloat)\n\nGet the precision (in bits) currently used for BigFloat arithmetic.\n\n\n\n"
+},
+
+{
     "location": "stdlib/numbers.html#Base.MPFR.setprecision",
     "page": "Numbers",
     "title": "Base.MPFR.setprecision",
@@ -9549,7 +9557,47 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "BigFloats",
     "category": "section",
-    "text": "The BigFloat type implements arbitrary-precision floating-point arithmetic using the GNU MPFR library.Base.precision\nBase.MPFR.setprecision"
+    "text": "The BigFloat type implements arbitrary-precision floating-point arithmetic using the GNU MPFR library.Base.precision\nBase.MPFR.precision(::Type{BigFloat})\nBase.MPFR.setprecision"
+},
+
+{
+    "location": "stdlib/numbers.html#Base.MPFR.BigFloat-Tuple{Any,Int64}",
+    "page": "Numbers",
+    "title": "Base.MPFR.BigFloat",
+    "category": "Method",
+    "text": "BigFloat(x, prec::Int)\n\nCreate a representation of x as a BigFloat with precision prec.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/numbers.html#Base.MPFR.BigFloat-Tuple{Union{AbstractFloat,Integer,String},RoundingMode}",
+    "page": "Numbers",
+    "title": "Base.MPFR.BigFloat",
+    "category": "Method",
+    "text": "BigFloat(x, rounding::RoundingMode)\n\nCreate a representation of x as a BigFloat with the current global precision and rounding mode rounding.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/numbers.html#Base.MPFR.BigFloat-Tuple{Any,Int64,RoundingMode}",
+    "page": "Numbers",
+    "title": "Base.MPFR.BigFloat",
+    "category": "Method",
+    "text": "BigFloat(x, prec::Int, rounding::RoundingMode)\n\nCreate a representation of x as a BigFloat with precision prec and rounding mode rounding.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/numbers.html#Base.MPFR.BigFloat-Tuple{String}",
+    "page": "Numbers",
+    "title": "Base.MPFR.BigFloat",
+    "category": "Method",
+    "text": "BigFloat(x::String)\n\nCreate a representation of the string x as a BigFloat.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/numbers.html#Additional-constructors-for-BigFloat-1",
+    "page": "Numbers",
+    "title": "Additional constructors for BigFloat",
+    "category": "section",
+    "text": "Base.MPFR.BigFloat(x, prec::Int)\nBigFloat(x::Union{Integer, AbstractFloat, String}, rounding::RoundingMode)\nBase.MPFR.BigFloat(x, prec::Int, rounding::RoundingMode)\nBase.MPFR.BigFloat(x::String)"
 },
 
 {
