@@ -2,8 +2,7 @@ Julia performance monitoring
 ============================
 
 This directory contains tests and related utilities to monitor Julia's
-performance over time.  The results are presented on
-[http://speed.julialang.org/](http://speed.julialang.org/).
+performance over time.
 
 Running the performance tests
 -----------------------------
@@ -12,10 +11,6 @@ In `test/perf` run `make`.  It will run the `perf.jl` script in all
 the sub-directories and display the test name with the minimum,
 maximum, mean and standard deviation of the wall-time of five repeated
 test runs in micro seconds.
-
-Calling `make codespeed` is for generating the results displayed on
-[http://speed.julialang.org/](http://speed.julialang.org/), probably
-not what you want.
 
 There is also a `perfcomp.jl` script but it may not be working with
 the rest at the moment.
@@ -61,7 +56,7 @@ Using the framework for your own tests
 
 Just include `perfutil.jl`, use `@timeit` on the functions to be
 benchmarked. Alternatively have a look at the
-[Benchmark package](https://github.com/johnmyleswhite/Benchmark.jl).
+[Benchmark package](https://github.com/JuliaCI/BenchmarkTools.jl).
 
 
 Package dependencies
