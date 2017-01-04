@@ -984,7 +984,7 @@
     ((#\") '_str)
     ((#\`) '_cmd)))
 
-(define (parse-call-chain s ex one-call)
+(define (parse-call-chain s ex macrocall?)
   (let loop ((ex ex))
     (let ((t (peek-token s)))
       (if (or (and space-sensitive (ts:space? s)
@@ -997,20 +997,27 @@
             ((#\( )
              (if (ts:space? s) (disallowed-space ex t))
              (take-token s)
-             (let ((c (let ((al (parse-arglist s #\) )))
-                        (receive
-                         (params args) (separate (lambda (x)
-                                                   (and (pair? x)
-                                                        (eq? (car x) 'parameters)))
-                                                 al)
-                         (if (eq? (peek-token s) 'do)
-                             (begin
-                               (take-token s)
-                               `(call ,ex ,@params ,(parse-do s) ,@args))
-                             `(call ,ex ,@al))))))
-               (if one-call
-                   c
-                   (loop c))))
+             (if macrocall?
+                 (let ((args (if (eqv? (require-token s) #\) )
+                                 (begin (take-token s) '())
+                                 (begin0 (with-normal-ops
+                                          (with-whitespace-newline
+                                           (parse-comma-separated s parse-eq* #t)))
+                                         (if (not (eqv? (require-token s) #\) ))
+                                             (error "missing ) in argument list"))
+                                         (take-token s)))))
+                   `(call ,ex ,@args))
+                 (loop (let ((al (parse-arglist s #\) )))
+                         (receive
+                          (params args) (separate (lambda (x)
+                                                    (and (pair? x)
+                                                         (eq? (car x) 'parameters)))
+                                                  al)
+                          (if (eq? (peek-token s) 'do)
+                              (begin
+                                (take-token s)
+                                `(call ,ex ,@params ,(parse-do s) ,@args))
+                              `(call ,ex ,@al)))))))
             ((#\[ )
              (if (ts:space? s) (disallowed-space ex t))
              (take-token s)
@@ -1400,11 +1407,15 @@
         `(,word ,@(reverse path)))))))
 
 ;; parse comma-separated assignments, like "i=1:n,j=1:m,..."
-(define (parse-comma-separated s what)
+(define (parse-comma-separated s what (in-parens #f))
   (let loop ((exprs '()))
     (let ((r (what s)))
       (case (peek-token s)
-        ((#\,)  (take-token s) (loop (cons r exprs)))
+        ((#\,)
+         (take-token s)
+         (if (and in-parens (eqv? (require-token s) #\) ))
+             (reverse! (cons r exprs))
+             (loop (cons r exprs))))
         (else   (reverse! (cons r exprs)))))))
 
 (define (parse-comma-separated-assignments s)
