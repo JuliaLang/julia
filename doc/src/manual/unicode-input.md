@@ -1,5 +1,11 @@
 # Unicode Input
 
+The following table lists Unicode characters that can be entered via
+tab completion of LaTeX-like abbreviations in the Julia REPL (and
+in various other editing environments).  You can also get information on how to
+type a symbol by entering it in the REPL help, i.e. by typing `?` and then the
+symbol in the REPL.
+
 !!! warning
 
     This table may appear to contain missing characters in the second column, or even
@@ -28,7 +34,7 @@ function unicode_data()
         for line in readlines(unidata)
             id, name, desc = split(line, ";")[[1, 2, 11]]
             codepoint = parse(UInt32, "0x$id")
-            names[codepoint] = name == "" ? desc : desc == "" ? name : "$name / $desc"
+            names[codepoint] = titlecase(lowercase(name == "" ? desc : desc == "" ? name : "$name / $desc"))
         end
     end
     return names
