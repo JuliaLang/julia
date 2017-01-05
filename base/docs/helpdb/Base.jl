@@ -644,9 +644,9 @@ julia> exp10(0.2)
 exp10
 
 """
-    &(x, y)
+    x & y
 
-Bitwise and.
+Bitwise and. Add parenthesis for function application form: (&)(x, y) 
 
 ```jldoctest
 julia> 4 & 10
