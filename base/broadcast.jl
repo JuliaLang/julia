@@ -20,7 +20,7 @@ typealias ScalarType Union{Type{Any}, Type{Nullable}}
 broadcast!(::typeof(identity), X::AbstractArray, x::Number) = fill!(X, x)
 broadcast!(f, X::AbstractArray, x::Number...) = (@inbounds for I in eachindex(X); X[I] = f(x...); end; X)
 function broadcast!{T,S,N}(::typeof(identity), x::AbstractArray{T,N}, y::AbstractArray{S,N})
-    check_broadcast_shape(broadcast_indices(x), broadcast_indices(y))
+    @boundscheck check_broadcast_shape(broadcast_indices(x), broadcast_indices(y))
     copy!(x, y)
 end
 
@@ -122,6 +122,11 @@ map_newindexer(shape, ::Tuple{}) = (), ()
     keep, Idefault = newindexer(shape, A1)
     (keep, keeps...), (Idefault, Idefaults...)
 end
+@inline function map_newindexer(shape, A, Bs)
+    keeps, Idefaults = map_newindexer(shape, Bs)
+    keep, Idefault = newindexer(shape, A)
+    (keep, keeps...), (Idefault, Idefaults...)
+end
 
 Base.@propagate_inbounds _broadcast_getindex(A, I) = _broadcast_getindex(containertype(A), A, I)
 Base.@propagate_inbounds _broadcast_getindex(::Type{Array}, A::Ref, I) = A[]
@@ -131,11 +136,13 @@ Base.@propagate_inbounds _broadcast_getindex(::Any, A, I) = A[I]
 ## Broadcasting core
 # nargs encodes the number of As arguments (which matches the number
 # of keeps). The first two type parameters are to ensure specialization.
-@generated function _broadcast!{K,ID,AT,nargs}(f, B::AbstractArray, keeps::K, Idefaults::ID, As::AT, ::Type{Val{nargs}}, iter)
+@generated function _broadcast!{K,ID,AT,BT,N}(f, B::AbstractArray, keeps::K, Idefaults::ID, A::AT, Bs::BT, ::Type{Val{N}}, iter)
+    nargs = N + 1
     quote
         $(Expr(:meta, :inline))
         # destructure the keeps and As tuples
-        @nexprs $nargs i->(A_i = As[i])
+        A_1 = A
+        @nexprs $N i->(A_{i+1} = Bs[i])
         @nexprs $nargs i->(keep_i = keeps[i])
         @nexprs $nargs i->(Idefault_i = Idefaults[i])
         @simd for I in iter
@@ -152,11 +159,13 @@ end
 
 # For BitArray outputs, we cache the result in a "small" Vector{Bool},
 # and then copy in chunks into the output
-@generated function _broadcast!{K,ID,AT,nargs}(f, B::BitArray, keeps::K, Idefaults::ID, As::AT, ::Type{Val{nargs}}, iter)
+@generated function _broadcast!{K,ID,AT,BT,N}(f, B::BitArray, keeps::K, Idefaults::ID, A::AT, Bs::BT, ::Type{Val{N}}, iter)
+    nargs = N + 1
     quote
         $(Expr(:meta, :inline))
         # destructure the keeps and As tuples
-        @nexprs $nargs i->(A_i = As[i])
+        A_1 = A
+        @nexprs $N i->(A_{i+1} = Bs[i])
         @nexprs $nargs i->(keep_i = keeps[i])
         @nexprs $nargs i->(Idefault_i = Idefaults[i])
         C = Vector{Bool}(bitcache_size)
@@ -193,13 +202,13 @@ Note that `dest` is only used to store the result, and does not supply
 arguments to `f` unless it is also listed in the `As`,
 as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
 """
-@inline function broadcast!{nargs}(f, B::AbstractArray, As::Vararg{Any,nargs})
-    shape = indices(B)
-    check_broadcast_indices(shape, As...)
-    keeps, Idefaults = map_newindexer(shape, As)
+@inline function broadcast!{N}(f, C::AbstractArray, A, Bs::Vararg{Any,N})
+    shape = indices(C)
+    @boundscheck check_broadcast_indices(shape, A, Bs...)
+    keeps, Idefaults = map_newindexer(shape, A, Bs)
     iter = CartesianRange(shape)
-    _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter)
-    return B
+    _broadcast!(f, C, keeps, Idefaults, A, Bs, Val{N}, iter)
+    return C
 end
 
 # broadcast with computed element type
@@ -252,23 +261,22 @@ function broadcast_t(f, ::Type{Any}, shape, iter, As...)
     B[I] = val
     return _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter, st, 1)
 end
-@inline function broadcast_t{nargs}(f, T, shape, iter, As::Vararg{Any,nargs})
-    B = similar(Array{T}, shape)
-    keeps, Idefaults = map_newindexer(shape, As)
-    _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter)
-    return B
+@inline function broadcast_t{N}(f, T, shape, iter, A, Bs::Vararg{Any,N})
+    C = similar(Array{T}, shape)
+    keeps, Idefaults = map_newindexer(shape, A, Bs)
+    _broadcast!(f, C, keeps, Idefaults, A, Bs, Val{N}, iter)
+    return C
 end
 
 # default to BitArray for broadcast operations producing Bool, to save 8x space
 # in the common case where this is used for logical array indexing; in
 # performance-critical cases where Array{Bool} is desired, one can always
 # use broadcast! instead.
-function broadcast_t(f, ::Type{Bool}, shape, iter, As...)
-    B = similar(BitArray, shape)
-    nargs = length(As)
-    keeps, Idefaults = map_newindexer(shape, As)
-    _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter)
-    return B
+@inline function broadcast_t{N}(f, ::Type{Bool}, shape, iter, A, Bs::Vararg{Any,N})
+    C = similar(BitArray, shape)
+    keeps, Idefaults = map_newindexer(shape, A, Bs)
+    _broadcast!(f, C, keeps, Idefaults, A, Bs, Val{N}, iter)
+    return C
 end
 
 eltypestuple(a) = (Base.@_pure_meta; Tuple{eltype(a)})
