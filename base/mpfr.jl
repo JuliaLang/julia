@@ -12,7 +12,7 @@ import
         bessely0, bessely1, ceil, cmp, convert, copysign, div,
         exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
-        nextfloat, prevfloat, promote_rule, rem, round, show,
+        nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show,
         sum, sqrt, string, print, trunc, precision, exp10, expm1,
         gamma, lgamma, digamma, erf, erfc, zeta, eta, log1p, airyai,
         eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
@@ -662,6 +662,8 @@ function rem(x::BigFloat, y::BigFloat, ::RoundingMode{:Nearest})
     return z
 end
 
+# TODO: use a higher-precision BigFloat(pi) here?
+rem2pi(x::BigFloat, r::RoundingMode) = rem(x, 2*BigFloat(pi), r)
 
 function sum(arr::AbstractArray{BigFloat})
     z = BigFloat(0)
