@@ -460,6 +460,12 @@ JL_DLLEXPORT uint64_t jl_cpuid_tag(void)
 }
 #elif defined(CPUID_SPECIFIC_BINARIES)
 #error "CPUID not available on this CPU. Turn off CPUID_SPECIFIC_BINARIES"
+#else
+// For architectures that don't have CPUID
+JL_DLLEXPORT uint64_t jl_cpuid_tag(void)
+{
+    return 0;
+}
 #endif
 
 JL_DLLEXPORT int jl_uses_cpuid_tag()

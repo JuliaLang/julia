@@ -96,7 +96,7 @@ julia-inference : julia-base julia-ui-$(JULIA_BUILD_MODE) $(build_prefix)/.examp
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/inference.ji JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 ifneq ($(CPUID_SPECIFIC_BINARIES), 0)
-CPUID_TAG = _$(call spawn,$(JULIA_EXECUTABLE) --cpuid)
+CPUID_TAG = _$(call exec,$(JULIA_EXECUTABLE) --cpuid)
 else
 CPUID_TAG =
 endif
