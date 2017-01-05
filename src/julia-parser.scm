@@ -8,7 +8,7 @@
 ;; be an operator.
 (define prec-assignment
   (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻=))
-           '(:= => ~ $=)))
+           '(:= => ~ $= <-)))
 (define prec-conditional '(?))
 (define prec-arrow       (append!
                           '(-- -->)
@@ -727,7 +727,9 @@
                        (let ((args (parse-chain s down '~)))
                          `(macrocall @~ ,ex ,@(butlast args)
                                      ,(loop (last args) (peek-token s)))))
-                   (list t ex (parse-assignment s down)))))))
+                   (if (syntactic-op? t)
+                       (list t ex (parse-assignment s down))
+                       (list 'call t ex (parse-assignment s down))))))))
 
 (define (parse-eq s)
   (let ((lno (input-port-line (ts:port s))))
