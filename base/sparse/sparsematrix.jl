@@ -963,16 +963,16 @@ function _checkargs_sourcecompatworkcolptr_permute!{Tv,Ti}(A::SparseMatrixCSC{Tv
     end
 end
 """
-    permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
-        p::AbstractVector{Tp}, q::AbstractVector{Tq}[, C::SparseMatrixCSC{Tv,Ti}])
+    permute!(X::SparseMatrixCSC, A::SparseMatrixCSC,
+        p::AbstractVector, q::AbstractVector[, C::SparseMatrixCSC])
 
 Bilaterally permute `A`, storing result `PAQ` (`A[p,q]`) in `X`. Stores intermediate result
 `(AQ)^T` (`transpose(A[:,q])`) in optional argument `C` if present. Requires that none of
 `X`, `A`, and, if present, `C` alias each other; to store result `PAQ` back into `A`, use
 the following method lacking `X`:
 
-    permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp},
-        q::AbstractVector{Tq}[, C::SparseMatrixCSC{Tv,Ti}[, workcolptr::Vector{Ti}]])
+    permute!(A::SparseMatrixCSC, p::AbstractVector,
+        q::AbstractVector[, C::SparseMatrixCSC[, workcolptr::Vector]])
 
 `X`'s dimensions must match those of `A` (`X.m == A.m` and `X.n == A.n`), and `X` must
 have enough storage to accommodate all allocated entries in `A` (`length(X.rowval) >= nnz(A)`
@@ -1033,8 +1033,7 @@ function permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(A::SparseMatrixCSC{Tv,Ti},
     unchecked_aliasing_permute!(A, p, q, C, workcolptr)
 end
 """
-    permute{Tv,Ti,Tp<:Integer,Tq<:Integer}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp},
-        q::AbstractVector{Tq})
+    permute(A::SparseMatrixCSC, p::AbstractVector, q::AbstractVector)
 
 Bilaterally permute `A`, returning `PAQ` (`A[p,q]`). Column-permutation `q`'s length must
 match `A`'s column count (`length(q) == A.n`). Row-permutation `p`'s length must match `A`'s
