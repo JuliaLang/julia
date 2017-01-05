@@ -16,7 +16,7 @@ module Test
 export @test, @test_throws, @test_broken, @test_skip
 export @testset
 # Legacy approximate testing functions, yet to be included
-export @test_approx_eq, @test_approx_eq_eps, @inferred
+export @test_approx_eq_eps, @inferred
 export detect_ambiguities
 export GenericString
 
@@ -952,12 +952,15 @@ end
 """
     @test_approx_eq(a, b)
 
-Test two floating point numbers `a` and `b` for equality taking into account
-small numerical errors.
+Deprecated. Test two floating point numbers `a` and `b` for equality taking into
+account small numerical errors.
 """
 macro test_approx_eq(a, b)
+    Base.depwarn(string("@test_approx_eq is deprecated, use `@test ", a, " ≈ ", b, "` instead"),
+                 Symbol("@test_approx_eq"))
     :(test_approx_eq($(esc(a)), $(esc(b)), $(string(a)), $(string(b))))
 end
+export @test_approx_eq
 
 _args_and_call(args...; kwargs...) = (args[1:end-1], kwargs, args[end](args[1:end-1]...; kwargs...))
 """
