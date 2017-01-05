@@ -158,6 +158,12 @@ include("io.jl")
 include("iostream.jl")
 include("iobuffer.jl")
 
+# define MIME"foo/bar" early so that we can overload 3-arg show
+immutable MIME{mime} end
+macro MIME_str(s)
+    :(MIME{$(Expr(:quote, Symbol(s)))})
+end
+
 # strings & printing
 include("char.jl")
 include("intfuncs.jl")
