@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# SubString, RevString, and RepString types
+# SubString and RevString types
 
 ## substrings reference original strings ##
 
@@ -133,46 +133,12 @@ reverseind(s::RevString, i::Integer) = endof(s) - i + 1
 reverseind(s::SubString{String}, i::Integer) =
     reverseind(s.string, nextind(s.string, endof(s.string))-s.offset-s.endof+i-1) - s.offset
 
-## efficient representation of repeated strings ##
-
-immutable RepString <: AbstractString
-    string::AbstractString
-    repeat::Integer
-end
-
-function endof(s::RepString)
-    e = endof(s.string)
-    (next(s.string,e)[2]-1) * (s.repeat-1) + e
-end
-length(s::RepString) = length(s.string)*s.repeat
-sizeof(s::RepString) = sizeof(s.string)*s.repeat
-
-function next(s::RepString, i::Int)
-    if i < 1
-        throw(BoundsError(s, i))
-    end
-    e = endof(s.string)
-    sz = next(s.string,e)[2]-1
-
-    r, j = divrem(i-1, sz)
-    j += 1
-
-    if r >= s.repeat || j > e
-        throw(BoundsError(s, i))
-    end
-
-    c, k = next(s.string, j)
-    c, k-j+i
-end
-
 function repeat(s::AbstractString, r::Integer)
     r <  0 ? throw(ArgumentError("can't repeat a string $r times")) :
     r == 0 ? "" :
     r == 1 ? s  :
-    RepString(s,r)
+    repeat(convert(String, s), r)
 end
-
-convert(::Type{RepString}, s::AbstractString) = RepString(s,1)
 
 function repeat(s::String, r::Integer)
     r < 0 && throw(ArgumentError("can't repeat a string $r times"))

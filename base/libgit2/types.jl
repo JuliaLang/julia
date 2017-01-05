@@ -140,6 +140,23 @@ function RemoteCallbacks(credentials::Ptr{Void}, payload::Ref{Nullable{AbstractC
 end
 
 """
+    LibGit2.ProxyOptions
+
+Options for connecting through a proxy.
+
+Matches the [`git_proxy_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_proxy_options) struct.
+"""
+@kwdef immutable ProxyOptions
+    version::Cuint             = 1
+    proxytype::Cint
+    url::Cstring
+    credential_cb::Ptr{Void}
+    certificate_cb::Ptr{Void}
+    payload::Ptr{Void}
+end
+
+
+"""
     LibGit2.FetchOptions
 
 Matches the [`git_fetch_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_fetch_options) struct.
@@ -150,6 +167,9 @@ Matches the [`git_fetch_options`](https://libgit2.github.com/libgit2/#HEAD/type/
     prune::Cint                     = Consts.FETCH_PRUNE_UNSPECIFIED
     update_fetchhead::Cint          = 1
     download_tags::Cint             = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
+    @static if LibGit2.VERSION >= v"0.25.0"
+        proxy_opts::ProxyOptions
+    end
     @static if LibGit2.VERSION >= v"0.24.0"
         custom_headers::StrArrayStruct
     end
@@ -212,6 +232,9 @@ immutable DiffFile
     size::Int64
     flags::UInt32
     mode::UInt16
+    @static if LibGit2.VERSION >= v"0.25.0"
+        id_abbrev::UInt16
+    end
 end
 
 """
@@ -229,7 +252,6 @@ immutable DiffDelta
     new_file::DiffFile
 end
 
-# TODO: double check this when libgit2 v0.25.0 is released
 """
     LibGit2.MergeOptions
 
@@ -260,6 +282,9 @@ Matches the [`git_push_options`](https://libgit2.github.com/libgit2/#HEAD/type/g
     version::Cuint                     = 1
     parallelism::Cint                  = 1
     callbacks::RemoteCallbacks
+    @static if LibGit2.VERSION >= v"0.25.0"
+        proxy_opts::ProxyOptions
+    end
     @static if LibGit2.VERSION >= v"0.24.0"
         custom_headers::StrArrayStruct
     end

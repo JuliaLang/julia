@@ -144,7 +144,7 @@ doesn't return C functions, but this can be enabled.) When called without specif
 trace, `stacktrace` first calls `backtrace`.
 """
 function stacktrace(trace::Vector{Ptr{Void}}, c_funcs::Bool=false)
-    stack = vcat(map(lookup, trace)...)::StackTrace
+    stack = vcat(StackTrace(), map(lookup, trace)...)::StackTrace
 
     # Remove frames that come from C calls.
     if !c_funcs
@@ -153,6 +153,13 @@ function stacktrace(trace::Vector{Ptr{Void}}, c_funcs::Bool=false)
 
     # Remove frame for this function (and any functions called by this function).
     remove_frames!(stack, :stacktrace)
+
+    # is there a better way?  the func symbol has a number suffix which changes.
+    # it's possible that no test is needed and we could just shift! all the time.
+    # this line was added to PR #16213 because otherwise stacktrace() != stacktrace(false).
+    # not sure why.  possibly b/c of re-ordering of base/sysimg.jl
+    !isempty(stack) && startswith(string(stack[1].func),"jlcall_stacktrace") && shift!(stack)
+    stack
 end
 
 stacktrace(c_funcs::Bool=false) = stacktrace(backtrace(), c_funcs)

@@ -110,16 +110,6 @@ function ip_matches_func(ip, func::Symbol)
     return false
 end
 
-function display_error(io::IO, er, bt)
-    print_with_color(Base.error_color(), io, "ERROR: "; bold = true)
-    # remove REPL-related frames from interactive printing
-    eval_ind = findlast(addr->Base.REPL.ip_matches_func(addr, :eval), bt)
-    if eval_ind != 0
-        bt = bt[1:eval_ind-1]
-    end
-    showerror(IOContext(io, :limit => true), er, bt)
-end
-
 immutable REPLDisplay{R<:AbstractREPL} <: Display
     repl::R
 end
@@ -144,8 +134,7 @@ function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::B
         try
             Base.sigatomic_end()
             if bt !== nothing
-                display_error(errio, val, bt)
-                println(errio)
+                Base.display_error(errio, val, bt)
                 iserr, lasterr = false, ()
             else
                 if val !== nothing && show_value
@@ -898,6 +887,26 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                 oldpos = pos
                 firstline = false
             end
+        end,
+
+        # Open the editor at the location of a stackframe
+        # This is accessing a global variable that gets set in
+        # the show_backtrace function.
+        "^Q" => (s, o...) -> begin
+            linfos = Base.LAST_BACKTRACE_LINE_INFOS
+            str = String(take!(LineEdit.buffer(s)))
+            n = tryparse(Int, str)
+            isnull(n) && @goto writeback
+            n = get(n)
+            if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "./REPL")
+                @goto writeback
+            end
+            Base.edit(linfos[n][1], linfos[n][2])
+            Base.LineEdit.refresh_line(s)
+            return
+            @label writeback
+            write(Base.LineEdit.buffer(s), str)
+            return
         end,
     )
 

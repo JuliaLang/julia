@@ -484,7 +484,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
     jl_expr_t *ex = NULL;
     jl_value_t *linenum = NULL;
     jl_svec_t *sparam_vals = env;
-    jl_method_instance_t *generator = linfo->def->unspecialized;
+    jl_method_instance_t *generator = linfo->def->generator;
     assert(linfo != generator);
     assert(linfo->def->isstaged);
     jl_code_info_t *func = NULL;
@@ -509,7 +509,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         jl_array_t *argnames = jl_alloc_vec_any(nargs);
         jl_array_ptr_set(ex->args, 0, argnames);
         for (i = 0; i < nargs; i++)
-            jl_array_ptr_set(argnames, i, jl_array_ptr_ref(((jl_code_info_t*)generator->inferred)->slotnames, i));
+            jl_array_ptr_set(argnames, i, jl_array_ptr_ref(linfo->def->source->slotnames, i));
 
         jl_expr_t *scopeblock = jl_exprn(jl_symbol("scope-block"), 1);
         jl_array_ptr_set(ex->args, 1, scopeblock);
@@ -642,6 +642,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
     m->module = ptls->current_module;
     m->source = NULL;
     m->unspecialized = NULL;
+    m->generator = NULL;
     m->name = NULL;
     m->file = empty_sym;
     m->line = 0;
@@ -689,12 +690,10 @@ jl_method_t *jl_new_method(jl_code_info_t *definition,
     root = (jl_value_t*)m;
     jl_method_set_source(m, definition);
     if (isstaged) {
-        // remove the code from `->source` (since generic source isn't present)
-        // and use the `->unspecialized` field to be the source generator
-        m->unspecialized = jl_get_specialized(m, jl_anytuple_type, jl_emptysvec);
-        jl_gc_wb(m, m->unspecialized);
-        m->unspecialized->inferred = (jl_value_t*)m->source;
-        m->source = NULL;
+        // create and store generator for generated functions
+        m->generator = jl_get_specialized(m, jl_anytuple_type, jl_emptysvec);
+        jl_gc_wb(m, m->generator);
+        m->generator->inferred = (jl_value_t*)m->source;
     }
 
 #ifdef RECORD_METHOD_ORDER

@@ -123,7 +123,7 @@ if [ -z "$USEMSVC" ]; then
   fi
   export AR=${CROSS_COMPILE}ar
 
-  f=llvm-3.9.1-$ARCH-w64-mingw32-juliadeps-r02.7z
+  f=llvm-3.9.1-$ARCH-w64-mingw32-juliadeps-r04.7z
 else
   echo "override USEMSVC = 1" >> Make.user
   echo "override ARCH = $ARCH" >> Make.user

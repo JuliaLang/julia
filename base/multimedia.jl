@@ -11,16 +11,15 @@ export Display, display, pushdisplay, popdisplay, displayable, redisplay,
 # that Julia's dispatch and overloading mechanisms can be used to
 # dispatch show and to add conversions for new types.
 
-immutable MIME{mime} end
+# defined in sysimg.jl for bootstrapping:
+# immutable MIME{mime} end
+# macro MIME_str(s)
+import Base: MIME, @MIME_str
 
 import Base: show, print, string, convert
 MIME(s) = MIME{Symbol(s)}()
 show{mime}(io::IO, ::MIME{mime}) = print(io, "MIME type ", string(mime))
 print{mime}(io::IO, ::MIME{mime}) = print(io, mime)
-
-macro MIME_str(s)
-    :(MIME{$(Expr(:quote, Symbol(s)))})
-end
 
 ###########################################################################
 # For any type T one can define show(io, ::MIME"type", x::T) = ...

@@ -4,6 +4,9 @@ Julia v0.6.0 Release Notes
 New language features
 ---------------------
 
+  * `<-` is now a valid operator that can be defined for custom purposes.
+    It has assignment precedence. ([#19765])
+
 Language changes
 ----------------
 
@@ -75,6 +78,12 @@ This section lists changes that do not have deprecation warnings.
 
   * `quadgk` has been moved from Base into a separate package. ([#19741])
 
+  * The `RepString` type has been moved to the
+    [LegacyStrings.jl package](https://github.com/JuliaArchive/LegacyStrings.jl).
+
+  * In macro calls with parentheses, e.g. `@m(a=1)`, assignments are now parsed as
+    `=` expressions, instead of as `kw` expressions. ([#7669])
+
   * (µ "micro" and ɛ "latin epsilon") are considered equivalent to
     the corresponding Greek characters in identifiers.  `\varepsilon`
     now tab-completes to U+03B5 (greek small letter epsilon) ([#19464]).
@@ -85,6 +94,8 @@ Library improvements
   * `max`, `min`, and related functions (`minmax`, `maximum`, `minimum`, `extrema`) now return `NaN` for `NaN` arguments ([#12563]).
 
   * The `chop` and `chomp` functions now return a `SubString` ([#18339]).
+
+  * Numbered stackframes printed in stacktraces can be opened in an editor by entering the corresponding number in the REPL and pressing `^Q` ([#19680]).
 
   * The REPL now supports something called *prompt pasting* ([#17599]).
     This activates when pasting text that starts with `julia> ` into the REPL.
@@ -134,6 +145,9 @@ Library improvements
   * Methods for `map` and `filter` with `Nullable` arguments have been
     implemented; the semantics are as if the `Nullable` were a container with
     zero or one elements ([#16961]).
+
+  * `logging` can be used to redirect `info`, `warn`, and `error` messages
+    either universally or on a per-module/function basis ([#16213]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -805,4 +819,5 @@ Language tooling improvements
 [#19543]: https://github.com/JuliaLang/julia/issues/19543
 [#19598]: https://github.com/JuliaLang/julia/issues/19598
 [#19635]: https://github.com/JuliaLang/julia/issues/19635
+[#19680]: https://github.com/JuliaLang/julia/issues/19680
 [#19787]: https://github.com/JuliaLang/julia/issues/19787
