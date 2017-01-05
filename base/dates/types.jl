@@ -12,6 +12,8 @@ abstract AbstractTime
     Minute
     Second
     Millisecond
+    Microsecond
+    Nanosecond
 
 `Period` types represent discrete, human representations of time.
 """
@@ -25,7 +27,7 @@ for T in (:Year,:Month,:Week,:Day)
         $T(v::Number) = new(v)
     end
 end
-for T in (:Hour,:Minute,:Second,:Millisecond)
+for T in (:Hour,:Minute,:Second,:Millisecond,:Microsecond,:Nanosecond)
     @eval immutable $T <: TimePeriod
         value::Int64
         $T(v::Number) = new(v)
@@ -41,6 +43,8 @@ end
     Minute(v)
     Second(v)
     Millisecond(v)
+    Microsecond(v)
+    Nanosecond(v)
 
 Construct a `Period` type with the given `v` value. Input must be losslessly convertible
 to an `Int64`.
@@ -111,10 +115,13 @@ immutable Date <: TimeType
     Date(instant::UTInstant{Day}) = new(instant)
 end
 
-# Fallback constructors
-_c(x) = convert(Int64,x)
-DateTime(y,m=1,d=1,h=0,mi=0,s=0,ms=0) = DateTime(_c(y),_c(m),_c(d),_c(h),_c(mi),_c(s),_c(ms))
-Date(y,m=1,d=1) = Date(_c(y),_c(m),_c(d))
+"""
+
+"""
+immutable Time <: TimeType
+    instant::Nanosecond
+    Time(instant::Nanosecond) = new(instant)
+end
 
 # Convert y,m,d to # of Rata Die days
 # Works by shifting the beginning of the year to March 1,
@@ -165,15 +172,36 @@ function Date(y::Int64,m::Int64=1,d::Int64=1)
     return Date(UTD(totaldays(y,m,d)))
 end
 
-# Convenience constructors from Periods
-function DateTime(y::Year,m::Month=Month(1),d::Day=Day(1),
-                  h::Hour=Hour(0),mi::Minute=Minute(0),
-                  s::Second=Second(0),ms::Millisecond=Millisecond(0))
-    return DateTime(value(y),value(m),value(d),
-                        value(h),value(mi),value(s),value(ms))
+"""
+    Time(h, [mi, s, ms, us, ns]) -> Time
+
+Construct a `Time` type by parts. Arguments must be convertible to `Int64`.
+"""
+function Time(h::Int64, mi::Int64=0, s::Int64=0, ms::Int64=0, us::Int64=0, ns::Int64=0)
+    -1 < h < 24 || throw(ArgumentError("Hour: $h out of range (0:23)"))
+    -1 < mi < 60 || throw(ArgumentError("Minute: $mi out of range (0:59)"))
+    -1 < s < 60 || throw(ArgumentError("Second: $s out of range (0:59)"))
+    -1 < ms < 1000 || throw(ArgumentError("Millisecond: $ms out of range (0:999)"))
+    -1 < us < 1000 || throw(ArgumentError("Microsecond: $us out of range (0:999)"))
+    -1 < ns < 1000 || throw(ArgumentError("Nanosecond: $ns out of range (0:999)"))
+    return Time(Nanosecond(ns + 1000us + 1000000ms + 1000000000s + 60000000000mi + 3600000000000h))
 end
 
-Date(y::Year,m::Month=Month(1),d::Day=Day(1)) = Date(value(y),value(m),value(d))
+# Convenience constructors from Periods
+function DateTime(y::Year, m::Month=Month(1), d::Day=Day(1),
+                  h::Hour=Hour(0), mi::Minute=Minute(0),
+                  s::Second=Second(0), ms::Millisecond=Millisecond(0))
+    return DateTime(value(y), value(m), value(d),
+                        value(h), value(mi), value(s), value(ms))
+end
+
+Date(y::Year, m::Month=Month(1), d::Day=Day(1)) = Date(value(y), value(m), value(d))
+
+function Time(h::Hour, mi::Minute=Minute(0), s::Second=Second(0),
+              ms::Millisecond=Millisecond(0),
+              us::Microsecond=Microsecond(0), ns::Nanosecond=Nanosecond(0))
+    return Time(value(h), value(mi), value(s), value(ms), value(us), value(ns))
+end
 
 # To allow any order/combination of Periods
 
@@ -214,6 +242,31 @@ function Date(periods::Period...)
     return Date(y,m,d)
 end
 
+"""
+    Time(period::TimePeriod...) -> Time
+
+Construct a `Time` type by `Period` type parts. Arguments may be in any order. `Time` parts
+not provided will default to the value of `Dates.default(period)`.
+"""
+function Time(periods::TimePeriod...)
+    h = Hour(0); mi = Minute(0); s = Second(0)
+    ms = Millisecond(0); us = Microsecond(0); ns = Nanosecond(0)
+    for p in periods
+        isa(p, Hour) && (h = p::Hour)
+        isa(p, Minute) && (mi = p::Minute)
+        isa(p, Second) && (s = p::Second)
+        isa(p, Millisecond) && (ms = p::Millisecond)
+        isa(p, Microsecond) && (us = p::Microsecond)
+        isa(p, Nanosecond) && (ns = p::Nanosecond)
+    end
+    return Time(h, mi, s, ms, us, ns)
+end
+
+# Fallback constructors
+DateTime(y,m=1,d=1,h=0,mi=0,s=0,ms=0) = DateTime(Int64(y), Int64(m), Int64(d), Int64(h), Int64(mi), Int64(s), Int64(ms))
+Date(y,m=1,d=1) = Date(Int64(y), Int64(m), Int64(d))
+Time(h,mi=0,s=0,ms=0,us=0,ns=0) = Time(Int64(h), Int64(mi), Int64(s), Int64(ms), Int64(us), Int64(ns))
+
 # Traits, Equality
 Base.isfinite{T<:TimeType}(::Union{Type{T},T}) = true
 calendar(dt::DateTime) = ISOCalendar
@@ -222,27 +275,36 @@ calendar(dt::Date) = ISOCalendar
 """
     eps(::DateTime) -> Millisecond
     eps(::Date) -> Day
+    eps(::Time) -> Nanosecond
 
-Returns `Millisecond(1)` for `DateTime` values and `Day(1)` for `Date` values.
+Returns `Millisecond(1)` for `DateTime` values, `Day(1)` for `Date` values, and `Nanosecond(1)` for `Time` values.
 """
 Base.eps
 
 Base.eps(dt::DateTime) = Millisecond(1)
 Base.eps(dt::Date) = Day(1)
+Base.eps(t::Time) = Nanosecond(1)
 
-Base.typemax(::Union{DateTime,Type{DateTime}}) = DateTime(146138512,12,31,23,59,59)
-Base.typemin(::Union{DateTime,Type{DateTime}}) = DateTime(-146138511,1,1,0,0,0)
-Base.typemax(::Union{Date,Type{Date}}) = Date(252522163911149,12,31)
-Base.typemin(::Union{Date,Type{Date}}) = Date(-252522163911150,1,1)
+Base.typemax(::Union{DateTime, Type{DateTime}}) = DateTime(146138512, 12, 31, 23, 59, 59)
+Base.typemin(::Union{DateTime, Type{DateTime}}) = DateTime(-146138511, 1, 1, 0, 0, 0)
+Base.typemax(::Union{Date, Type{Date}}) = Date(252522163911149, 12, 31)
+Base.typemin(::Union{Date, Type{Date}}) = Date(-252522163911150, 1, 1)
+Base.typemax(::Union{Time, Type{Time}}) = Time(23, 59, 59, 999, 999, 999)
+Base.typemin(::Union{Time, Type{Time}}) = Time(0)
 # Date-DateTime promotion, isless, ==
 Base.eltype{T<:Period}(::Type{T}) = T
-Base.promote_rule(::Type{Date},x::Type{DateTime}) = DateTime
-Base.isless(x::Date,y::Date) = isless(value(x),value(y))
-Base.isless(x::DateTime,y::DateTime) = isless(value(x),value(y))
+Base.promote_rule(::Type{Date}, x::Type{DateTime}) = DateTime
+Base.isless{T<:TimeType}(x::T, y::T) = isless(value(x), value(y))
 Base.isless(x::TimeType,y::TimeType) = isless(Base.promote_noncircular(x,y)...)
-==(x::TimeType,y::TimeType) = ===(promote(x,y)...)
+=={T<:TimeType}(x::T, y::T) = ==(value(x), value(y))
+function ==(a::Time,b::Time)
+    return hour(a) == hour(b) && minute(a) == minute(b) &&
+        second(a) == second(b) && millisecond(a) == millisecond(b) &&
+        microsecond(a) == microsecond(b) && nanosecond(a) == nanosecond(b)
+end
+==(x::TimeType, y::TimeType) = ===(promote(x, y)...)
 
-import Base: sleep,Timer,timedwait
+import Base: sleep, Timer, timedwait
 sleep(time::Period) = sleep(toms(time) / 1000)
-Timer(time::Period, repeat::Period=Second(0)) = Timer(toms(time) / 1000,toms(repeat) / 1000)
+Timer(time::Period, repeat::Period=Second(0)) = Timer(toms(time) / 1000, toms(repeat) / 1000)
 timedwait(testcb::Function, time::Period) = timedwait(testcb, toms(time) / 1000)

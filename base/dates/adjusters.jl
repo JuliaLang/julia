@@ -13,6 +13,13 @@ Base.trunc(dt::DateTime, p::Type{Minute}) = dt - Second(dt) - Millisecond(dt)
 Base.trunc(dt::DateTime, p::Type{Second}) = dt - Millisecond(dt)
 Base.trunc(dt::DateTime, p::Type{Millisecond}) = dt
 
+Base.trunc(t::Time, p::Type{Hour}) = Time(Hour(t))
+Base.trunc(t::Time, p::Type{Minute}) = Time(Hour(t), Minute(t))
+Base.trunc(t::Time, p::Type{Second}) = Time(Hour(t), Minute(t), Second(t))
+Base.trunc(t::Time, p::Type{Millisecond}) = t - Microsecond(t) - Nanosecond(t)
+Base.trunc(t::Time, p::Type{Microsecond}) = t - Nanosecond(t)
+Base.trunc(t::Time, p::Type{Nanosecond})  = t
+
 """
     trunc(dt::TimeType, ::Type{Period}) -> TimeType
 
@@ -182,6 +189,31 @@ function DateTime(func::Function, y, m, d, h, mi; step::Period=Second(1), negate
 end
 function DateTime(func::Function, y, m, d, h, mi, s; step::Period=Millisecond(1), negate::Bool=false, limit::Int=10000)
     return adjust(DateFunction(func, negate, DateTime(y)), DateTime(y, m, d, h, mi, s), step, limit)
+end
+
+"""
+    Time(f::Function, h[, mi, s, ms, us]; step=Second(1), negate=false, limit=10000) -> Time
+
+Create a `Time` through the adjuster API. The starting point will be constructed from the
+provided `h, mi, s, ms, us` arguments, and will be adjusted until `f::Function` returns `true`. The step
+size in adjusting can be provided manually through the `step` keyword. If `negate=true`,
+then the adjusting will stop when `f::Function` returns `false` instead of `true`. `limit`
+provides a limit to the max number of iterations the adjustment API will pursue before
+throwing an error (in the case that `f::Function` is never satisfied).
+"""
+Time(::Function, args...)
+
+function Time(func::Function, h, mi=0; step::Period=Second(1), negate::Bool=false, limit::Int=10000)
+    return adjust(DateFunction(func, negate, Time(h, mi)), Time(h, mi), step, limit)
+end
+function Time(func::Function, h, mi, s; step::Period=Millisecond(1), negate::Bool=false, limit::Int=10000)
+    return adjust(DateFunction(func, negate, Time(h, mi, s)), Time(h, mi, s), step, limit)
+end
+function Time(func::Function, h, mi, s, ms; step::Period=Microsecond(1), negate::Bool=false, limit::Int=10000)
+    return adjust(DateFunction(func, negate,Time(h, mi, s, ms)),Time(h, mi, s, ms), step, limit)
+end
+function Time(func::Function, h, mi, s, ms, us; step::Period=Nanosecond(1), negate::Bool=false, limit::Int=10000)
+    return adjust(DateFunction(func, negate, Time(h, mi, s, ms, us)), Time(h, mi, s, ms, us), step, limit)
 end
 
 # Return the next TimeType that falls on dow

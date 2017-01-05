@@ -104,3 +104,11 @@ b = Dates.Date(2000)
 @test convert(Date,730120.0) == b
 @test convert(Date,Int32(730120)) == b
 
+dt = Dates.DateTime(2000,1,1,23,59,59,50)
+t = Dates.Time(dt)
+@test Dates.hour(t) == 23
+@test Dates.minute(t) == 59
+@test Dates.second(t) == 59
+@test Dates.millisecond(t) == 50
+@test Dates.microsecond(t) == 0
+@test Dates.nanosecond(t) == 0
