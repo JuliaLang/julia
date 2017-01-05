@@ -244,7 +244,11 @@ function broadcast_t(f, ::Type{Any}, shape, iter, As...)
     st = start(iter)
     I, st = next(iter, st)
     val = f([ _broadcast_getindex(As[i], newindex(I, keeps[i], Idefaults[i])) for i=1:nargs ]...)
-    B = similar(Array{typeof(val)}, shape)
+    if val isa Bool
+        B = similar(BitArray, shape)
+    else
+        B = similar(Array{typeof(val)}, shape)
+    end
     B[I] = val
     return _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter, st, 1)
 end
