@@ -1377,7 +1377,7 @@ if not specified.
 `sparse(α*I, m, n)` can be used to efficiently create a sparse
 multiple `α` of the identity matrix.
 """
-speye(T::Type, m::Integer, n::Integer) = speye_scaled(one(T), m, n)
+speye(T::Type, m::Integer, n::Integer) = speye_scaled(T, one(T), m, n)
 
 function one{T}(S::SparseMatrixCSC{T})
     m,n = size(S)
@@ -1385,13 +1385,15 @@ function one{T}(S::SparseMatrixCSC{T})
     speye(T, m)
 end
 
-function speye_scaled(diag, m::Integer, n::Integer)
+speye_scaled(diag, m::Integer, n::Integer) = speye_scaled(typeof(diag), diag, m, n)
+
+function speye_scaled(T, diag, m::Integer, n::Integer)
     ((m < 0) || (n < 0)) && throw(ArgumentError("invalid array dimensions"))
     nnz = min(m,n)
     colptr = Array(Int, 1+n)
     colptr[1:nnz+1] = 1:nnz+1
     colptr[nnz+2:end] = nnz+1
-    SparseMatrixCSC(Int(m), Int(n), colptr, Vector{Int}(1:nnz), fill(diag, nnz))
+    SparseMatrixCSC(Int(m), Int(n), colptr, Vector{Int}(1:nnz), fill!(Vector{T}(nnz), diag))
 end
 
 sparse(S::UniformScaling, m::Integer, n::Integer=m) = speye_scaled(S.λ, m, n)
