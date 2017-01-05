@@ -8,9 +8,9 @@ function GitRevWalker(r::GitRepo)
 end
 
 function Base.start(w::GitRevWalker)
-    id_ptr = Ref(Oid())
+    id_ptr = Ref(GitHash())
     err = ccall((:git_revwalk_next, :libgit2), Cint,
-                (Ptr{Oid}, Ptr{Void}), id_ptr, w.ptr)
+                (Ptr{GitHash}, Ptr{Void}), id_ptr, w.ptr)
     err != Int(Error.GIT_OK) && return (nothing, true)
     return (id_ptr[], false)
 end
@@ -18,9 +18,9 @@ end
 Base.done(w::GitRevWalker, state) = Bool(state[2])
 
 function Base.next(w::GitRevWalker, state)
-    id_ptr = Ref(Oid())
+    id_ptr = Ref(GitHash())
     err = ccall((:git_revwalk_next, :libgit2), Cint,
-                (Ptr{Oid}, Ptr{Void}), id_ptr, w.ptr)
+                (Ptr{GitHash}, Ptr{Void}), id_ptr, w.ptr)
     err != Int(Error.GIT_OK) && return (state[1], (nothing, true))
     return (state[1], (id_ptr[], false))
 end
@@ -32,8 +32,8 @@ function push_head!(w::GitRevWalker)
     return w
 end
 
-function Base.push!(w::GitRevWalker, cid::Oid)
-    @check ccall((:git_revwalk_push, :libgit2), Cint, (Ptr{Void}, Ptr{Oid}), w.ptr, Ref(cid))
+function Base.push!(w::GitRevWalker, cid::GitHash)
+    @check ccall((:git_revwalk_push, :libgit2), Cint, (Ptr{Void}, Ptr{GitHash}), w.ptr, Ref(cid))
     return w
 end
 
@@ -55,7 +55,7 @@ function repository(w::GitRevWalker)
 end
 
 function Base.map(f::Function, walker::GitRevWalker;
-                  oid::Oid=Oid(),
+                  oid::GitHash=GitHash(),
                   range::AbstractString="",
                   by::Cint = Consts.SORT_NONE,
                   rev::Bool=false,
@@ -84,7 +84,7 @@ function Base.map(f::Function, walker::GitRevWalker;
 end
 
 function Base.count(f::Function, walker::GitRevWalker;
-                  oid::Oid=Oid(),
+                  oid::GitHash=GitHash(),
                   by::Cint = Consts.SORT_NONE,
                   rev::Bool=false)
     c = 0

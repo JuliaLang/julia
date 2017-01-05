@@ -8,11 +8,11 @@ function GitReference(repo::GitRepo, refname::AbstractString)
     return GitReference(ref_ptr_ptr[])
 end
 
-function GitReference(repo::GitRepo, obj_oid::Oid, refname::AbstractString = Consts.HEAD_FILE;
+function GitReference(repo::GitRepo, obj_oid::GitHash, refname::AbstractString = Consts.HEAD_FILE;
                       force::Bool=false, msg::AbstractString="")
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_reference_create, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{Oid}, Cint, Cstring),
+                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{GitHash}, Cint, Cstring),
                    ref_ptr_ptr, repo.ptr, refname, Ref(obj_oid), Cint(force),
                    isempty(msg) ? C_NULL : msg)
     return GitReference(ref_ptr_ptr[])
@@ -105,7 +105,7 @@ function peel{T <: GitObject}(::Type{T}, ref::GitReference)
     err = ccall((:git_reference_peel, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Ptr{Void}, Cint), obj_ptr_ptr, ref.ptr, git_otype)
     if err == Int(Error.ENOTFOUND)
-        return Oid()
+        return GitHash()
     elseif err != Int(Error.GIT_OK)
         if obj_ptr_ptr[] != C_NULL
             finalize(GitAnyObject(obj_ptr_ptr[]))
@@ -187,10 +187,10 @@ function owner(ref::GitReference)
     return GitRepo(repo_ptr)
 end
 
-function target!(ref::GitReference, new_oid::Oid; msg::AbstractString="")
+function target!(ref::GitReference, new_oid::GitHash; msg::AbstractString="")
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_reference_set_target, :libgit2), Cint,
-             (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}, Cstring),
+             (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{GitHash}, Cstring),
              ref_ptr_ptr, ref.ptr, Ref(new_oid), isempty(msg) ? C_NULL : msg)
     return GitReference(ref_ptr_ptr[])
 end
