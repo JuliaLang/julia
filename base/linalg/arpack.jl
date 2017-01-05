@@ -171,7 +171,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::String,
         if info[1] != 0
             throw(ARPACKException(info[1]))
         end
-        evec = complex(Array{T}(n, nev+1), Array{T}(n, nev+1))
+        evec = complex.(Array{T}(n, nev+1), Array{T}(n, nev+1))
 
         j = 1
         while j <= nev
@@ -193,7 +193,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::String,
             end
         end
 
-        d = complex(dr,di)
+        d = complex.(dr, di)
 
         if j == nev+1
             p = sortperm(dmap(d[1:nev]), rev=true)

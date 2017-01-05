@@ -66,6 +66,7 @@ Base.println
 Base.print_with_color
 Base.info
 Base.warn
+Base.logging
 Base.Printf.@printf
 Base.Printf.@sprintf
 Base.sprint
@@ -94,16 +95,16 @@ Base.displaysize
 
 ## Multimedia I/O
 
-Just as text output is performed by `print` and user-defined types can indicate their textual
-representation by overloading `show`, Julia provides a standardized mechanism for rich multimedia
+Just as text output is performed by [`print`](@ref) and user-defined types can indicate their textual
+representation by overloading [`show`](@ref), Julia provides a standardized mechanism for rich multimedia
 output (such as images, formatted text, or even audio and video), consisting of three parts:
 
-  * A function `display(x)` to request the richest available multimedia display of a Julia object
+  * A function [`display(x)`](@ref) to request the richest available multimedia display of a Julia object
     `x` (with a plain-text fallback).
-  * Overloading `show` allows one to indicate arbitrary multimedia representations (keyed by standard
+  * Overloading [`show`](@ref) allows one to indicate arbitrary multimedia representations (keyed by standard
     MIME types) of user-defined types.
   * Multimedia-capable display backends may be registered by subclassing a generic `Display` type
-    and pushing them onto a stack of display backends via `pushdisplay`.
+    and pushing them onto a stack of display backends via [`pushdisplay`](@ref).
 
 The base Julia runtime provides only plain-text display, but richer displays may be enabled by
 loading external modules or by using graphical Julia environments (such as the IPython-based IJulia
@@ -120,21 +121,21 @@ Base.Multimedia.stringmime
 ```
 
 As mentioned above, one can also define new display backends. For example, a module that can display
-PNG images in a window can register this capability with Julia, so that calling `display(x)` on
+PNG images in a window can register this capability with Julia, so that calling [`display(x)`](@ref) on
 types with PNG representations will automatically display the image using the module's window.
 
 In order to define a new display backend, one should first create a subtype `D` of the abstract
 class `Display`.  Then, for each MIME type (`mime` string) that can be displayed on `D`, one should
 define a function `display(d::D, ::MIME"mime", x) = ...` that displays `x` as that MIME type,
-usually by calling `reprmime(mime, x)`.  A `MethodError` should be thrown if `x` cannot be displayed
-as that MIME type; this is automatic if one calls `reprmime`. Finally, one should define a function
-`display(d::D, x)` that queries `mimewritable(mime, x)` for the `mime` types supported by `D`
+usually by calling [`reprmime(mime, x)`](@ref).  A `MethodError` should be thrown if `x` cannot be displayed
+as that MIME type; this is automatic if one calls [`reprmime`](@ref). Finally, one should define a function
+`display(d::D, x)` that queries [`mimewritable(mime, x)`](@ref) for the `mime` types supported by `D`
 and displays the "best" one; a `MethodError` should be thrown if no supported MIME types are found
-for `x`.  Similarly, some subtypes may wish to override `redisplay(d::D, ...)`.  (Again, one should
+for `x`.  Similarly, some subtypes may wish to override [`redisplay(d::D, ...)`](@ref Base.Multimedia.redisplay). (Again, one should
 `import Base.display` to add new methods to `display`.) The return values of these functions are
 up to the implementation (since in some cases it may be useful to return a display "handle" of
 some type).  The display functions for `D` can then be called directly, but they can also be invoked
-automatically from `display(x)` simply by pushing a new display onto the display-backend stack
+automatically from [`display(x)`](@ref) simply by pushing a new display onto the display-backend stack
 with:
 
 ```@docs

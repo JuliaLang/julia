@@ -3,11 +3,13 @@
 module Broadcast
 
 using Base.Cartesian
-using Base: promote_eltype_op, linearindices, tail, OneTo, to_shape,
+using Base: linearindices, tail, OneTo, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
-            nullable_returntype, null_safe_eltype_op, hasvalue, is_nullable_array
+            nullable_returntype, null_safe_eltype_op, hasvalue
 import Base: broadcast, broadcast!
 export broadcast_getindex, broadcast_setindex!, dotview
+
+typealias ScalarType Union{Type{Any}, Type{Nullable}}
 
 ## Broadcasting utilities ##
 # fallbacks for some special cases
@@ -16,7 +18,7 @@ export broadcast_getindex, broadcast_setindex!, dotview
 
 # special cases for "X .= ..." (broadcast!) assignments
 broadcast!(::typeof(identity), X::AbstractArray, x::Number) = fill!(X, x)
-broadcast!(f, X::AbstractArray, x::Number...) = fill!(X, f(x...))
+broadcast!(f, X::AbstractArray, x::Number...) = (@inbounds for I in eachindex(X); X[I] = f(x...); end; X)
 function broadcast!{T,S,N}(::typeof(identity), x::AbstractArray{T,N}, y::AbstractArray{S,N})
     check_broadcast_shape(broadcast_indices(x), broadcast_indices(y))
     copy!(x, y)
@@ -28,8 +30,7 @@ containertype(::Type) = Any
 containertype{T<:Ptr}(::Type{T}) = Any
 containertype{T<:Tuple}(::Type{T}) = Tuple
 containertype{T<:Ref}(::Type{T}) = Array
-containertype{T<:AbstractArray}(::Type{T}) =
-    is_nullable_array(T) ? Array{Nullable} : Array
+containertype{T<:AbstractArray}(::Type{T}) = Array
 containertype{T<:Nullable}(::Type{T}) = Nullable
 containertype(ct1, ct2) = promote_containertype(containertype(ct1), containertype(ct2))
 @inline containertype(ct1, ct2, cts...) = promote_containertype(containertype(ct1), containertype(ct2, cts...))
@@ -37,28 +38,20 @@ containertype(ct1, ct2) = promote_containertype(containertype(ct1), containertyp
 promote_containertype(::Type{Array}, ::Type{Array}) = Array
 promote_containertype(::Type{Array}, ct) = Array
 promote_containertype(ct, ::Type{Array}) = Array
-promote_containertype(::Type{Tuple}, ::Type{Any}) = Tuple
-promote_containertype(::Type{Any}, ::Type{Tuple}) = Tuple
+promote_containertype(::Type{Tuple}, ::ScalarType) = Tuple
+promote_containertype(::ScalarType, ::Type{Tuple}) = Tuple
 promote_containertype(::Type{Any}, ::Type{Nullable}) = Nullable
 promote_containertype(::Type{Nullable}, ::Type{Any}) = Nullable
-promote_containertype(::Type{Nullable}, ::Type{Array}) = Array{Nullable}
-promote_containertype(::Type{Array}, ::Type{Nullable}) = Array{Nullable}
-promote_containertype(::Type{Array{Nullable}}, ::Type{Array{Nullable}}) =
-    Array{Nullable}
-promote_containertype(::Type{Array{Nullable}}, ::Type{Array}) = Array{Nullable}
-promote_containertype(::Type{Array}, ::Type{Array{Nullable}}) = Array{Nullable}
-promote_containertype(::Type{Array{Nullable}}, ct) = Array{Nullable}
-promote_containertype(ct, ::Type{Array{Nullable}}) = Array{Nullable}
 promote_containertype{T}(::Type{T}, ::Type{T}) = T
 
 ## Calculate the broadcast indices of the arguments, or error if incompatible
 # array inputs
 broadcast_indices() = ()
 broadcast_indices(A) = broadcast_indices(containertype(A), A)
-broadcast_indices(::Union{Type{Any}, Type{Nullable}}, A) = ()
+broadcast_indices(::ScalarType, A) = ()
 broadcast_indices(::Type{Tuple}, A) = (OneTo(length(A)),)
 broadcast_indices(::Type{Array}, A::Ref) = ()
-broadcast_indices{T<:Array}(::Type{T}, A) = indices(A)
+broadcast_indices(::Type{Array}, A) = indices(A)
 @inline broadcast_indices(A, B...) = broadcast_shape((), broadcast_indices(A), map(broadcast_indices, B)...)
 # shape (i.e., tuple-of-indices) inputs
 broadcast_shape(shape::Tuple) = shape
@@ -132,9 +125,7 @@ end
 
 Base.@propagate_inbounds _broadcast_getindex(A, I) = _broadcast_getindex(containertype(A), A, I)
 Base.@propagate_inbounds _broadcast_getindex(::Type{Array}, A::Ref, I) = A[]
-Base.@propagate_inbounds _broadcast_getindex(::Type{Any}, A, I) = A
-Base.@propagate_inbounds _broadcast_getindex(::Union{Type{Any},
-                                              Type{Nullable}}, A, I) = A
+Base.@propagate_inbounds _broadcast_getindex(::ScalarType, A, I) = A
 Base.@propagate_inbounds _broadcast_getindex(::Any, A, I) = A[I]
 
 ## Broadcasting core
@@ -253,7 +244,11 @@ function broadcast_t(f, ::Type{Any}, shape, iter, As...)
     st = start(iter)
     I, st = next(iter, st)
     val = f([ _broadcast_getindex(As[i], newindex(I, keeps[i], Idefaults[i])) for i=1:nargs ]...)
-    B = similar(Array{typeof(val)}, shape)
+    if val isa Bool
+        B = similar(BitArray, shape)
+    else
+        B = similar(Array{typeof(val)}, shape)
+    end
     B[I] = val
     return _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter, st, 1)
 end
@@ -276,37 +271,14 @@ function broadcast_t(f, ::Type{Bool}, shape, iter, As...)
     return B
 end
 
-# broadcast method that uses inference to find the type, but preserves abstract
-# container types when possible (used by binary elementwise operators)
-@inline broadcast_elwise_op(f, As...) =
-    broadcast!(f, similar(Array{promote_eltype_op(f, As...)}, broadcast_indices(As...)), As...)
-
-ftype(f, A) = typeof(f)
-ftype(f, A...) = typeof(a -> f(a...))
-ftype(T::Type, A...) = Type{T}
-
-# nullables need to be treated like scalars sometimes and like containers
-# other times, so there are two variants of typestuple.
-
-# if the first argument is Any, then Nullable should be treated like a
-# scalar; if the first argument is Array, then Nullable should be treated
-# like a container.
-typestuple(::Type, a) = (Base.@_pure_meta; Tuple{eltype(a)})
-typestuple(::Type{Any}, a::Nullable) = (Base.@_pure_meta; Tuple{typeof(a)})
-typestuple(::Type, T::Type) = (Base.@_pure_meta; Tuple{Type{T}})
-typestuple{T}(::Type{T}, a, b...) = (Base.@_pure_meta; Tuple{typestuple(T, a).types..., typestuple(T, b...).types...})
-
-# these functions take the variant of typestuple to be used as first argument
-ziptype{T}(::Type{T}, A) = typestuple(T, A)
-ziptype{T}(::Type{T}, A, B) = (Base.@_pure_meta; Iterators.Zip2{typestuple(T, A), typestuple(T, B)})
-@inline ziptype{T}(::Type{T}, A, B, C, D...) = Iterators.Zip{typestuple(T, A), ziptype(T, B, C, D...)}
-
-_broadcast_type{S}(::Type{S}, f, T::Type, As...) = Base._return_type(f, typestuple(S, T, As...))
-_broadcast_type{T}(::Type{T}, f, A, Bs...) = Base._default_eltype(Base.Generator{ziptype(T, A, Bs...), ftype(f, A, Bs...)})
+eltypestuple(a) = (Base.@_pure_meta; Tuple{eltype(a)})
+eltypestuple(T::Type) = (Base.@_pure_meta; Tuple{Type{T}})
+eltypestuple(a, b...) = (Base.@_pure_meta; Tuple{eltypestuple(a).types..., eltypestuple(b...).types...})
+_broadcast_eltype(f, A, Bs...) = Base._return_type(f, eltypestuple(A, Bs...))
 
 # broadcast methods that dispatch on the type of the final container
 @inline function broadcast_c(f, ::Type{Array}, A, Bs...)
-    T = _broadcast_type(Any, f, A, Bs...)
+    T = _broadcast_eltype(f, A, Bs...)
     shape = broadcast_indices(A, Bs...)
     iter = CartesianRange(shape)
     if isleaftype(T)
@@ -317,13 +289,6 @@ _broadcast_type{T}(::Type{T}, f, A, Bs...) = Base._default_eltype(Base.Generator
     end
     return broadcast_t(f, Any, shape, iter, A, Bs...)
 end
-@inline function broadcast_c(f, ::Type{Array{Nullable}}, A, Bs...)
-    @inline rec(x) = broadcast(f, x)
-    @inline rec(x, y) = broadcast(f, x, y)
-    @inline rec(x, y, z) = broadcast(f, x, y, z)
-    @inline rec(xs...) = broadcast(f, xs...)
-    broadcast_c(rec, Array, A, Bs...)
-end
 function broadcast_c(f, ::Type{Tuple}, As...)
     shape = broadcast_indices(As...)
     n = length(shape[1])
@@ -331,7 +296,7 @@ function broadcast_c(f, ::Type{Tuple}, As...)
 end
 @inline function broadcast_c(f, ::Type{Nullable}, a...)
     nonnull = all(hasvalue, a)
-    S = _broadcast_type(Array, f, a...)
+    S = _broadcast_eltype(f, a...)
     if isleaftype(S) && null_safe_eltype_op(f, a...)
         Nullable{S}(f(map(unsafe_get, a)...), nonnull)
     else
@@ -347,28 +312,21 @@ end
 """
     broadcast(f, As...)
 
-Broadcasts the arrays, tuples, `Ref`, nullables, and/or scalars `As` to a
+Broadcasts the arrays, tuples, `Ref`s, nullables, and/or scalars `As` to a
 container of the appropriate type and dimensions. In this context, anything
-that is not a subtype of `AbstractArray`, `Ref` (except for `Ptr`s) or `Tuple`,
+that is not a subtype of `AbstractArray`, `Ref` (except for `Ptr`s), `Tuple`,
 or `Nullable` is considered a scalar. The resulting container is established by
 the following rules:
 
  - If all the arguments are scalars, it returns a scalar.
  - If the arguments are tuples and zero or more scalars, it returns a tuple.
- - If there is at least an array or a `Ref` in the arguments, it returns an array
-   (and treats any `Ref` as a 0-dimensional array of its contents and any tuple
-   as a 1-dimensional array) expanding singleton dimensions.
+ - If the arguments contain at least one array or `Ref`, it returns an array
+   (expanding singleton dimensions), and treats `Ref`s as 0-dimensional arrays,
+   and tuples as a 1-dimensional arrays.
 
-The following additional rules apply to `Nullable` arguments:
-
- - If there is at least a `Nullable`, and all the arguments are scalars or
-   `Nullable`, it returns a `Nullable`.
- - If there is at least an array or a `Ref` with `Nullable` entries, or there
-   is at least an array or a `Ref` (perhaps with scalar entries instead of
-   `Nullable` entries) and a nullable, then the result is an array of
-   `Nullable` entries.
- - If there is a tuple and a nullable, the result is an error, as this case is
-   not currently supported.
+The following additional rule applies to `Nullable` arguments: If there is at
+least one `Nullable`, and all the arguments are scalars or `Nullable`, it
+returns a `Nullable` treating `Nullable`s as "containers".
 
 A special syntax exists for broadcasting: `f.(args...)` is equivalent to
 `broadcast(f, args...)`, and nested `f.(g.(args...))` calls are fused into a
@@ -433,21 +391,8 @@ Nullable{String}("XY")
 julia> broadcast(/, 1.0, Nullable(2.0))
 Nullable{Float64}(0.5)
 
-julia> [Nullable(1), Nullable(2), Nullable()] .* 3
-3-element Array{Nullable{Int64},1}:
- 3
- 6
- #NULL
-
-julia> [1+im, 2+2im, 3+3im] ./ Nullable{Int}()
-3-element Array{Nullable{Complex{Float64}},1}:
- #NULL
- #NULL
- #NULL
-
-julia> Ref(7) .+ Nullable(3)
-0-dimensional Array{Nullable{Int64},0}:
-10
+julia> (1 + im) ./ Nullable{Int}()
+Nullable{Complex{Float64}}()
 ```
 """
 @inline broadcast(f, A, Bs...) = broadcast_c(f, containertype(A, Bs...), A, Bs...)

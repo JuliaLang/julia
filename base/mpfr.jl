@@ -66,14 +66,16 @@ type BigFloat <: AbstractFloat
     sign::Cint
     exp::Clong
     d::Ptr{Limb}
+
     function BigFloat()
-        N = precision(BigFloat)
+        prec = precision(BigFloat)
         z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)
-        ccall((:mpfr_init2,:libmpfr), Void, (Ptr{BigFloat}, Clong), &z, N)
+        ccall((:mpfr_init2,:libmpfr), Void, (Ptr{BigFloat}, Clong), &z, prec)
         finalizer(z, cglobal((:mpfr_clear, :libmpfr)))
         return z
     end
-    # Not recommended for general use
+
+    # Not recommended for general use:
     function BigFloat(prec::Clong, sign::Cint, exp::Clong, d::Ptr{Void})
         new(prec, sign, exp, d)
     end
@@ -117,6 +119,46 @@ end
 
 convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)
 convert(::Type{AbstractFloat}, x::BigInt) = BigFloat(x)
+
+# generic constructor with arbitrary precision:
+"""
+    BigFloat(x, prec::Int)
+
+Create a representation of `x` as a `BigFloat` with precision `prec`.
+"""
+function BigFloat(x, prec::Int)
+    setprecision(BigFloat, prec) do
+        BigFloat(x)
+    end
+end
+
+"""
+    BigFloat(x, prec::Int, rounding::RoundingMode)
+
+Create a representation of `x` as a `BigFloat` with precision `prec` and rounding mode `rounding`.
+"""
+function BigFloat(x, prec::Int, rounding::RoundingMode)
+    setrounding(BigFloat, rounding) do
+        BigFloat(x, prec)
+    end
+end
+
+"""
+    BigFloat(x, rounding::RoundingMode)
+
+Create a representation of `x` as a `BigFloat` with the current global precision and rounding mode `rounding`.
+"""
+function BigFloat(x::Union{Integer, AbstractFloat, String}, rounding::RoundingMode)
+    BigFloat(x, precision(BigFloat), rounding)
+end
+
+"""
+    BigFloat(x::String)
+
+Create a representation of the string `x` as a `BigFloat`.
+"""
+BigFloat(x::String) = parse(BigFloat, x)
+
 
 ## BigFloat -> Integer
 function unsafe_cast(::Type{Int64}, x::BigFloat, ri::Cint)

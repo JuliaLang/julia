@@ -1423,7 +1423,8 @@ end
 
 reverse(v::BitVector) = reverse!(copy(v))
 
-function (<<)(B::BitVector, i::Int)
+
+function (<<)(B::BitVector, i::UInt)
     n = length(B)
     i == 0 && return copy(B)
     A = falses(n)
@@ -1431,7 +1432,7 @@ function (<<)(B::BitVector, i::Int)
     return A
 end
 
-function (>>>)(B::BitVector, i::Int)
+function (>>>)(B::BitVector, i::UInt)
     n = length(B)
     i == 0 && return copy(B)
     A = falses(n)
@@ -1439,7 +1440,11 @@ function (>>>)(B::BitVector, i::Int)
     return A
 end
 
-(>>)(B::BitVector, i::Int) = B >>> i
+(>>)(B::BitVector, i::Union{Int, UInt}) = B >>> i
+
+# signed integer version of shift operators with handling of negative values
+(<<)(B::BitVector, i::Int) = (i >=0 ? B << unsigned(i) : B >> unsigned(-i))
+(>>>)(B::BitVector, i::Int) = (i >=0 ? B >> unsigned(i) : B << unsigned(-i))
 
 """
     rol!(dest::BitVector, src::BitVector, i::Integer) -> BitVector

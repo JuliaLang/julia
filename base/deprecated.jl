@@ -831,6 +831,9 @@ function convert(::Type{UpperTriangular}, A::Bidiagonal)
     end
 end
 
+# Deprecate three-arg SubArray since the constructor doesn't need the dims tuple
+@deprecate SubArray(parent::AbstractArray, indexes::Tuple, dims::Tuple) SubArray(parent, indexes)
+
 # Deprecate vectorized unary functions over sparse matrices in favor of compact broadcast syntax (#17265).
 for f in (:sin, :sinh, :sind, :asin, :asinh, :asind,
         :tan, :tanh, :tand, :atan, :atanh, :atand,
@@ -1239,7 +1242,7 @@ for (Bsig, A1sig, A2sig, gbb, funcname) in
     end  # let broadcast_cache
 end
 _broadcast_zpreserving!(args...) = broadcast!(args...)
-_broadcast_zpreserving(args...) = Base.Broadcast.broadcast_elwise_op(args...)
+_broadcast_zpreserving(f, As...) = broadcast!(f, similar(Array{promote_op(f, map(eltype, As)...)}, Base.Broadcast.broadcast_indices(As...)), As...)
 _broadcast_zpreserving{Tv1,Ti1,Tv2,Ti2}(f::Function, A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) =
     _broadcast_zpreserving!(f, spzeros(promote_type(Tv1, Tv2), promote_type(Ti1, Ti2), Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
 _broadcast_zpreserving{Tv,Ti}(f::Function, A_1::SparseMatrixCSC{Tv,Ti}, A_2::Union{Array,BitArray,Number}) =
@@ -1366,6 +1369,23 @@ export Collections
 @deprecate map!{F}(f::F, A::AbstractArray) map!(f, A, A)
 @deprecate asyncmap!(f, c; ntasks=0, batch_size=nothing) asyncmap!(f, c, c; ntasks=ntasks, batch_size=batch_size)
 
+# Not exported, but used outside Base
+_promote_array_type(F, ::Type, ::Type, T::Type) = T
+_promote_array_type{S<:Real, A<:AbstractFloat}(F, ::Type{S}, ::Type{A}, ::Type) = A
+_promote_array_type{S<:Integer, A<:Integer}(F, ::Type{S}, ::Type{A}, ::Type) = A
+_promote_array_type{S<:Integer, A<:Integer}(::typeof(/), ::Type{S}, ::Type{A}, T::Type) = T
+_promote_array_type{S<:Integer, A<:Integer}(::typeof(\), ::Type{S}, ::Type{A}, T::Type) = T
+_promote_array_type{S<:Integer}(::typeof(/), ::Type{S}, ::Type{Bool}, T::Type) = T
+_promote_array_type{S<:Integer}(::typeof(\), ::Type{S}, ::Type{Bool}, T::Type) = T
+_promote_array_type{S<:Integer}(F, ::Type{S}, ::Type{Bool}, T::Type) = T
+_promote_array_type{S<:Union{Complex, Real}, T<:AbstractFloat}(F, ::Type{S}, ::Type{Complex{T}}, ::Type) = Complex{T}
+function promote_array_type(F, R, S, T)
+    Base.depwarn("`promote_array_type` is deprecated as it is no longer needed " *
+                 "in Base. See https://github.com/JuliaLang/julia/issues/19669 " *
+                 "for more information.", :promote_array_type)
+    _promote_array_type(F, R, S, T)
+end
+
 # Deprecate manually vectorized abs2 methods in favor of compact broadcast syntax
 @deprecate abs2(x::AbstractSparseVector) abs2.(x)
 
@@ -1375,6 +1395,11 @@ for f in (:sec, :sech, :secd, :asec, :asech,
             :cot, :coth, :cotd, :acot, :acoth)
     @eval @deprecate $f{T<:Number}(A::AbstractArray{T}) $f.(A)
 end
+
+# Deprecate vectorized two-argument complex in favor of compact broadcast syntax
+@deprecate complex(A::AbstractArray, b::Real)           complex.(A, b)
+@deprecate complex(a::Real, B::AbstractArray)           complex.(a, B)
+@deprecate complex(A::AbstractArray, B::AbstractArray)  complex.(A, B)
 
 # Deprecate manually vectorized clamp methods in favor of compact broadcast syntax
 @deprecate clamp(A::AbstractArray, lo, hi) clamp.(A, lo, hi)
@@ -1434,6 +1459,12 @@ end
 @deprecate rem(A::Number, B::AbstractArray) rem.(A, B)
 @deprecate rem(A::AbstractArray, B::Number) rem.(A, B)
 
+# Deprecate manually vectorized div, mod, and % methods for dates
+@deprecate div{P<:Dates.Period}(X::StridedArray{P}, y::P)         div.(X, y)
+@deprecate div{P<:Dates.Period}(X::StridedArray{P}, y::Integer)   div.(X, y)
+@deprecate (%){P<:Dates.Period}(X::StridedArray{P}, y::P)         X .% y
+@deprecate mod{P<:Dates.Period}(X::StridedArray{P}, y::P)         mod.(X, y)
+
 # Deprecate manually vectorized mod methods in favor of compact broadcast syntax
 @deprecate mod(B::BitArray, x::Bool) mod.(B, x)
 @deprecate mod(x::Bool, B::BitArray) mod.(x, B)
@@ -1454,5 +1485,18 @@ end
 @deprecate (|)(a::Number, B::AbstractArray)         a .| B
 @deprecate (|)(A::AbstractArray, b::Number)         A .| b
 @deprecate (|)(A::AbstractArray, B::AbstractArray)  A .| B
+
+function frexp{T<:AbstractFloat}(A::Array{T})
+    depwarn("`frexp(x::Array)` is discontinued.", :frexp)
+    F = similar(A)
+    E = Array{Int}(size(A))
+    for (iF, iE, iA) in zip(eachindex(F), eachindex(E), eachindex(A))
+        F[iF], E[iE] = frexp(A[iA])
+    end
+    return (F, E)
+end
+
+# Calling promote_op is likely a bad idea, so deprecate its convenience wrapper promote_eltype_op
+@deprecate promote_eltype_op(op, As...) promote_op(op, map(eltype, As)...)
 
 # End deprecations scheduled for 0.6

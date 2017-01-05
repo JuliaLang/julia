@@ -302,10 +302,6 @@ hasvalue(x) = true
 all(f::typeof(hasvalue), t::Tuple) = f(t[1]) & all(f, tail(t))
 all(f::typeof(hasvalue), t::Tuple{}) = true
 
-is_nullable_array(::Any) = false
-is_nullable_array{T}(::Type{T}) = eltype(T) <: Nullable
-is_nullable_array(A::AbstractArray) = eltype(A) <: Nullable
-
 # Overloads of null_safe_op
 # Unary operators
 

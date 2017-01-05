@@ -10,7 +10,7 @@ end
 end
 
 @testset "sparse matrix construction" begin
-    @test isequal(Array(sparse(complex(ones(5,5),ones(5,5)))), complex(ones(5,5),ones(5,5)))
+    @test isequal(Array(sparse(complex.(ones(5,5), ones(5,5)))), complex.(ones(5,5), ones(5,5)))
     @test_throws ArgumentError sparse([1,2,3], [1,2], [1,2,3], 3, 3)
     @test_throws ArgumentError sparse([1,2,3], [1,2,3], [1,2], 3, 3)
     @test_throws ArgumentError sparse([1,2,3], [1,2,3], [1,2,3], 0, 1)
@@ -1215,6 +1215,7 @@ end
     @test eye(A) == speye(5)
     @test one(A) == speye(5)
     @test_throws DimensionMismatch one(sprand(5,6,0.2))
+    @test eltype(speye(Real, 5, 5)) === Real
 end
 
 @testset "istriu/istril" begin

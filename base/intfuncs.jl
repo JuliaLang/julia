@@ -274,7 +274,12 @@ false
 """
 ispow2(x::Integer) = x > 0 && count_ones(x) == 1
 
-# smallest a^n >= x, with integer n
+"""
+    nextpow(a, x)
+
+The smallest `a^n` not less than `x`, where `n` is a non-negative integer. `a` must be
+greater than 1, and `x` must be greater than 0.
+"""
 function nextpow(a::Real, x::Real)
     (a <= 1 || x <= 0) && throw(DomainError())
     x <= 1 && return one(a)
@@ -283,7 +288,13 @@ function nextpow(a::Real, x::Real)
     # guard against roundoff error, e.g., with a=5 and x=125
     p >= x ? p : a^n
 end
-# largest a^n <= x, with integer n
+
+"""
+    prevpow(a, x)
+
+The largest `a^n` not greater than `x`, where `n` is a non-negative integer.
+`a` must be greater than 1, and `x` must not be less than 1.
+"""
 function prevpow(a::Real, x::Real)
     (a <= 1 || x < 1) && throw(DomainError())
     n = floor(Integer,log(a, x))

@@ -384,6 +384,12 @@ end
 @test parse("x<:y<:z").head === :comparison
 @test parse("x>:y<:z").head === :comparison
 
+# PR #19765
+let <-(x,y) = 2x + y
+    @test (3<-10) == 16
+end
+@test parse("x<-y<-z") == Expr(:call, :(<-), :x, Expr(:call, :(<-), :y, :z))
+
 # issue #11169
 uncalled(x) = @test false
 fret() = uncalled(return true)
@@ -867,3 +873,24 @@ end
 let ..(x,y) = x + y
     @test 3 .. 4 === 7
 end
+
+# issue #7669
+@test parse("@a(b=1, c=2)") == Expr(:macrocall, Symbol("@a"), :(b=1), :(c=2))
+
+# issue #19685
+let f = function (x; kw...)
+            return (x, kw)
+        end,
+    g = function (x; a = 2)
+            return (x, a)
+        end
+    @test f(1) == (1, Any[])
+    @test g(1) == (1, 2)
+end
+
+# issue #8925
+let
+    global const (c8925, d8925) = (3, 4)
+end
+@test c8925 == 3 && isconst(:c8925)
+@test d8925 == 4 && isconst(:d8925)

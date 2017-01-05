@@ -330,6 +330,10 @@ add_tfunc(lt_float, 2, 2, cmp_tfunc)
 add_tfunc(le_float, 2, 2, cmp_tfunc)
 add_tfunc(fpiseq, 2, 2, cmp_tfunc)
 add_tfunc(fpislt, 2, 2, cmp_tfunc)
+add_tfunc(eq_float_fast, 2, 2, cmp_tfunc)
+add_tfunc(ne_float_fast, 2, 2, cmp_tfunc)
+add_tfunc(lt_float_fast, 2, 2, cmp_tfunc)
+add_tfunc(le_float_fast, 2, 2, cmp_tfunc)
 
 chk_tfunc = (x,y) -> Tuple{widenconst(x),Bool}
 add_tfunc(checked_sadd_int, 2, 2, chk_tfunc)
