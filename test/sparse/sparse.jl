@@ -1215,6 +1215,7 @@ end
     @test eye(A) == speye(5)
     @test one(A) == speye(5)
     @test_throws DimensionMismatch one(sprand(5,6,0.2))
+    @test eltype(speye(Real, 5, 5)) === Real
 end
 
 @testset "istriu/istril" begin
