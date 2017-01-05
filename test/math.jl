@@ -878,14 +878,10 @@ end
 end
 
 @testset "frexp" begin
-    @testset "$elty" for elty in (Float32, Float64)
-        @test frexp( convert(elty,0.5) ) == (convert(elty,0.5),0)
-        @test frexp( convert(elty,4.0) ) == (convert(elty,0.5),3)
-        @test frexp( convert(elty,10.5) )[1] ≈ convert(elty,0.65625)
-        @test frexp( convert(elty,10.5) )[2] == 4
-        @test frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[1][1] ≈ convert(elty,0.5)
-        @test frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[1][2] ≈ convert(elty,0.65625)
-        @test frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[2] == [ 3 4 ]
+    @testset "$elty" for elty in (Float16, Float32, Float64)
+        @test frexp( convert(elty,0.5) ) == (0.5, 0)
+        @test frexp( convert(elty,4.0) ) == (0.5, 3)
+        @test frexp( convert(elty,10.5) ) == (0.65625, 4)
     end
 end
 

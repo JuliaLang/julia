@@ -480,7 +480,7 @@ se = SharedArray(Int,10)
     sd[i] = i
     se[i] = i
 end
-sc = complex(sd,se)
+sc = convert(SharedArray, complex.(sd,se))
 for (x,i) in enumerate(sc)
     @test i == complex(x,x)
 end

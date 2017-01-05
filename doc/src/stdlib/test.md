@@ -167,10 +167,10 @@ ERROR: Some tests did not pass: 3 passed, 1 failed, 0 errored, 0 broken.
 
 As calculations on floating-point values can be imprecise, you can perform approximate equality
 checks using either `@test a ≈ b` (where `≈`, typed via tab completion of `\approx`, is the
-`isapprox()` function) or use `isapprox()` directly.
+[`isapprox()`](@ref) function) or use [`isapprox()`](@ref) directly.
 
-An alternative is the `@test_approx_eq` macro (which differs from `isapprox` in that it treats
-NaN values as equal and has a smaller default tolerance) or `@test_approx_eq_eps` (which takes
+An alternative is the `@test_approx_eq` macro (which differs from [`isapprox`](@ref) in that it treats
+`NaN` values as equal and has a smaller default tolerance) or `@test_approx_eq_eps` (which takes
 an extra argument indicating the relative tolerance):
 
 ```julia
@@ -223,7 +223,7 @@ Base.Test.@test_broken
 ```
 
 `@test_skip()` is also available to skip a test without evaluation, but counting the skipped test
-in the test set reporting. The test will not run but gives a `Broken``Result`.
+in the test set reporting. The test will not run but gives a `Broken` `Result`.
 
 ```@docs
 Base.Test.@test_skip

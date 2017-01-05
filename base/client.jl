@@ -125,14 +125,24 @@ function repl_cmd(cmd, out)
     nothing
 end
 
-display_error(er) = display_error(er, [])
-function display_error(er, bt)
-    print_with_color(Base.error_color(), STDERR, "ERROR: "; bold = true)
-    with_output_color(Base.error_color(), STDERR) do io
-        showerror(io, er, bt)
-        println(io)
+function display_error(io::IO, er, bt)
+    if !isempty(bt)
+        st = stacktrace(bt)
+        if !isempty(st)
+            io = redirect(io, log_error_to, st[1])
+        end
     end
+    print_with_color(Base.error_color(), io, "ERROR: "; bold = true)
+    # remove REPL-related frames from interactive printing
+    eval_ind = findlast(addr->Base.REPL.ip_matches_func(addr, :eval), bt)
+    if eval_ind != 0
+        bt = bt[1:eval_ind-1]
+    end
+    showerror(IOContext(io, :limit => true), er, bt)
+    println(io)
 end
+display_error(er, bt) = display_error(STDERR, er, bt)
+display_error(er) = display_error(er, [])
 
 function eval_user_input(ast::ANY, show_value)
     errcount, lasterr, bt = 0, (), nothing

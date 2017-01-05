@@ -106,6 +106,8 @@ julia> "Hello " * "world"
 """
 (*)(s1::AbstractString, ss::AbstractString...) = string(s1, ss...)
 
+one{T<:AbstractString}(::Union{T,Type{T}}) = convert(T, "")
+
 length(s::DirectIndexString) = endof(s)
 
 """

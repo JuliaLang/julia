@@ -1426,15 +1426,3 @@ conveniently using `.`-prefixed operators:
 julia> Nullable(2) ./ Nullable(3) .+ Nullable(1.0)
 Nullable{Float64}(1.66667)
 ```
-
-[`broadcast()`](@ref) also allows one to work with multiple data at the same
-time, without manually writing for loops. This enables performing the same
-operation to arrays where the data is possibly missing; for example
-
-```julia
-julia> [Nullable(2), Nullable(), Nullable(3)] .+ 3
-3-element Array{Nullable{Int64},1}:
- 5
- #NULL
- 6
-```

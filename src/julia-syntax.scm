@@ -920,7 +920,7 @@
                (error (string "invalid function name \"" name "\"")))
            `(method ,name))
           ((not (pair? name))                  e)
-          ((eq? (car name) 'tuple)
+          ((memq (car name) '(tuple block))
            (expand-forms `(-> ,name ,(caddr e))))
           ((eq? (car name) 'call)
            (let* ((head    (cadr name))
@@ -1219,43 +1219,23 @@
 
 ;; take apart e.g. `const a::Int = 0` into `const a; a::Int = 0`
 (define (expand-const-decl e)
-  (if (atom? (cadr e))
-      e
-      (case (car (cadr e))
-        ((global local local-def)
-         (expand-forms
-          (qualified-const-expr (cdr (cadr e)) e)))
-        ((=)
-         (let ((lhs (cadr (cadr e)))
-               (rhs (caddr (cadr e))))
-           (let ((vars (if (and (pair? lhs) (eq? (car lhs) 'tuple))
-                           (cdr lhs)
-                           (list lhs))))
-             `(block
-               ,.(map (lambda (v)
-                        `(const ,(const-check-symbol (decl-var v))))
-                      vars)
-               ,(expand-forms `(= ,lhs ,rhs))))))
-        (else e))))
-
-(define (const-check-symbol s)
-  (if (not (symbol? s))
-      (error "expected identifier after \"const\"")
-      s))
-
-(define (qualified-const-expr binds __)
-  (let ((vs (map (lambda (b)
-                   (if (assignment? b)
-                       (const-check-symbol (decl-var (cadr b)))
-                       (error "expected assignment after \"const\"")))
-                 binds)))
-    `(block ,@(map (lambda (v) `(const ,v)) vs)
-            ,(cadr __))))
+  (let ((arg (cadr e)))
+    (if (atom? arg)
+        e
+        (case (car arg)
+          ((global local local-def)
+           (for-each (lambda (b) (if (not (assignment? b))
+                                     (error "expected assignment after \"const\"")))
+                     (cdr arg))
+           (expand-forms (expand-decls (car arg) (cdr arg) #t)))
+          ((= |::|)
+           (expand-forms (expand-decls 'const (cdr e) #f)))
+          (else e)))))
 
 (define (expand-local-or-global-decl e)
   (if (and (symbol? (cadr e)) (length= e 2))
       e
-      (expand-forms (expand-decls (car e) (cdr e)))))
+      (expand-forms (expand-decls (car e) (cdr e) #f))))
 
 (define (assigned-name e)
   (if (and (pair? e) (memq (car e) '(call curly)))
@@ -1263,24 +1243,24 @@
       e))
 
 ;; local x, y=2, z => local x;local y;local z;y = 2
-(define (expand-decls what binds)
+(define (expand-decls what binds const?)
   (if (not (list? binds))
       (error (string "invalid \"" what "\" declaration")))
   (let loop ((b       binds)
              (vars    '())
              (assigns '()))
     (if (null? b)
-        (if (and (null? assigns)
-                 (length= vars 1))
-            `(,what ,(car vars))
-            `(block
-              ,.(map (lambda (x) `(,what ,x)) vars)
-              ,.(reverse assigns)))
+        `(block
+          ,.(if const?
+                (map (lambda (x) `(const ,x)) vars)
+                '())
+          ,.(map (lambda (x) `(,what ,x)) vars)
+          ,.(reverse assigns))
         (let ((x (car b)))
           (cond ((or (assignment-like? x) (function-def? x))
                  (loop (cdr b)
-                       (cons (assigned-name (cadr x)) vars)
-                       (cons `(,(car x) ,(decl-var (cadr x)) ,(caddr x))
+                       (append (lhs-decls (assigned-name (cadr x))) vars)
+                       (cons `(,(car x) ,(all-decl-vars (cadr x)) ,(caddr x))
                              assigns)))
                 ((and (pair? x) (eq? (car x) '|::|))
                  (loop (cdr b)
@@ -1704,9 +1684,7 @@
                    (else
                     (cf (cdr old-fargs) (cdr old-args)
                         (cons farg new-fargs) (cons arg new-args) renames varfarg vararg))))))
-          (if (and (= (length args) 1) (integer? (car args)))
-              e ; hack: don't compress e.g. f.(1) so that deprecation for getfield works
-              (cf (cdadr f) args '() '() '() '() '())))
+          (cf (cdadr f) args '() '() '() '() '()))
         e)) ; (not (fuse? e))
   (let ((e (compress-fuse (dot-to-fuse rhs))) ; an expression '(fuse func args) if expr is a dot call
         (lhs-view (ref-to-view lhs))) ; x[...] expressions on lhs turn in to view(x, ...) to update x in-place
@@ -2275,6 +2253,19 @@
         ((and (pair? e) (eq? (car e) 'tuple))
          (apply append (map lhs-vars (cdr e))))
         (else '())))
+
+(define (lhs-decls e)
+  (cond ((symbol? e) (list e))
+        ((decl? e)   (list e))
+        ((and (pair? e) (eq? (car e) 'tuple))
+         (apply append (map lhs-decls (cdr e))))
+        (else '())))
+
+(define (all-decl-vars e)  ;; map decl-var over every level of an assignment LHS
+  (cond ((decl? e)   (decl-var e))
+        ((and (pair? e) (eq? (car e) 'tuple))
+         (cons 'tuple (map all-decl-vars (cdr e))))
+        (else e)))
 
 ;; pass 2: identify and rename local vars
 

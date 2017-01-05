@@ -260,6 +260,8 @@ for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
     end
 end
 
+/(x::BigInt, y::BigInt) = float(x)/float(y)
+
 function invmod(x::BigInt, y::BigInt)
     z = zero(BigInt)
     ya = abs(y)
@@ -341,6 +343,9 @@ function *(x::BigInt, c::ClongMax)
     return z
 end
 *(c::ClongMax, x::BigInt) = x * c
+
+/(x::BigInt, y::Union{ClongMax,CulongMax}) = float(x)/y
+/(x::Union{ClongMax,CulongMax}, y::BigInt) = x/float(y)
 
 # unary ops
 for (fJ, fC) in ((:-, :neg), (:~, :com))
@@ -581,6 +586,9 @@ Base.checked_rem(a::BigInt, b::BigInt) = rem(a, b)
 Base.checked_fld(a::BigInt, b::BigInt) = fld(a, b)
 Base.checked_mod(a::BigInt, b::BigInt) = mod(a, b)
 Base.checked_cld(a::BigInt, b::BigInt) = cld(a, b)
+Base.add_with_overflow(a::BigInt, b::BigInt) = a + b, false
+Base.sub_with_overflow(a::BigInt, b::BigInt) = a - b, false
+Base.mul_with_overflow(a::BigInt, b::BigInt) = a * b, false
 
 function Base.deepcopy_internal(x::BigInt, stackdict::ObjectIdDict)
     if haskey(stackdict, x)

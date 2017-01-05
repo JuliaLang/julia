@@ -193,6 +193,15 @@ end
     end
 end
 
+@testset "sparse map/broadcast with result eltype not a concrete subtype of Number (#19561/#19589)" begin
+    intoneorfloatzero(x) = x != 0.0 ? Int(1) : Float64(x)
+    stringorfloatzero(x) = x != 0.0 ? "Hello" : Float64(x)
+    @test map(intoneorfloatzero, speye(4)) == sparse(map(intoneorfloatzero, eye(4)))
+    @test map(stringorfloatzero, speye(4)) == sparse(map(stringorfloatzero, eye(4)))
+    @test broadcast(intoneorfloatzero, speye(4)) == sparse(broadcast(intoneorfloatzero, eye(4)))
+    @test broadcast(stringorfloatzero, speye(4)) == sparse(broadcast(stringorfloatzero, eye(4)))
+end
+
 # Older tests of sparse broadcast, now largely covered by the tests above
 @testset "assorted tests of sparse broadcast over two input arguments" begin
     N, p = 10, 0.3

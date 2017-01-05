@@ -235,7 +235,7 @@ conjugating the first vector.
 
 # Example:
 ```jldoctest
-julia> Base.BLAS.dotc(10, im*ones(10), 1, complex(ones(20), ones(20)), 2)
+julia> Base.BLAS.dotc(10, im*ones(10), 1, complex.(ones(20), ones(20)), 2)
 10.0 - 10.0im
 ```
 """
@@ -249,7 +249,7 @@ with stride `incx` and `n` elements of array `Y` with stride `incy`.
 
 # Example:
 ```jldoctest
-julia> Base.BLAS.dotu(10, im*ones(10), 1, complex(ones(20), ones(20)), 2)
+julia> Base.BLAS.dotu(10, im*ones(10), 1, complex.(ones(20), ones(20)), 2)
 -10.0 + 10.0im
 ```
 """

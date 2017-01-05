@@ -241,3 +241,8 @@ Base.isless(x::Date,y::Date) = isless(value(x),value(y))
 Base.isless(x::DateTime,y::DateTime) = isless(value(x),value(y))
 Base.isless(x::TimeType,y::TimeType) = isless(promote(x,y)...)
 ==(x::TimeType,y::TimeType) = ===(promote(x,y)...)
+
+import Base: sleep,Timer,timedwait
+sleep(time::Period) = sleep(toms(time) / 1000)
+Timer(time::Period, repeat::Period=Second(0)) = Timer(toms(time) / 1000,toms(repeat) / 1000)
+timedwait(testcb::Function, time::Period) = timedwait(testcb, toms(time) / 1000)
