@@ -263,7 +263,7 @@ showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: $(ex.msg)")
 showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: $(ex.msg)")
 
 function showerror(io::IO, ex::UndefVarError)
-    if ex.var in [:UTF16String, :UTF32String, :WString, :utf16, :utf32, :wstring]
+    if ex.var in [:UTF16String, :UTF32String, :WString, :utf16, :utf32, :wstring, :RepString]
         return showerror(io, ErrorException("""
         `$(ex.var)` has been moved to the package LegacyStrings.jl:
         Run Pkg.add("LegacyStrings") to install LegacyStrings on Julia v0.5-;
