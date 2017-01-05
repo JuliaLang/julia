@@ -630,13 +630,13 @@ according to the rounding mode `r`. In other words, the quantity
 without any intermediate rounding.
 
 - if `r == RoundNearest`, then the result is exact, and in the interval
-  `[-abs(y)/2, abs(y)/2]`.
+  ``[-|y|/2, |y|/2]``.
 
 - if `r == RoundToZero` (default), then the result is exact, and in the interval
-  `[0,abs(y))` if `x` is positive, or `(abs(y),0]` otherwise.
+  ``[0, |y|)`` if `x` is positive, or ``(-|y|, 0]`` otherwise.
 
-- if `r == RoundDown`, then the result is in the interval `[0,y)` if `y` is positive, or
-  `(y,0]` otherwise. The result may not be exact if `x` and `y` have different signs, and
+- if `r == RoundDown`, then the result is in the interval ``[0, y)`` if `y` is positive, or
+  ``(y, 0]`` otherwise. The result may not be exact if `x` and `y` have different signs, and
   `abs(x) < abs(y)`.
 
 - if `r == RoundUp`, then the result is in the interval `(-y,0]` if `y` is positive, or
@@ -753,17 +753,17 @@ according to the rounding mode `r`. In other words, the quantity
     x - 2π*round(x/(2π),r)
 
 without any intermediate rounding. This internally uses a high precision approximation of
-2π, and so will give a more `rem(x,2π,r)`
+2π, and so will give a more accurate result than `rem(x,2π,r)`
 
-- if `r == RoundNearest`, then the result is in the interval `[-π,π]`. This will generally
+- if `r == RoundNearest`, then the result is in the interval ``[-π, π]``. This will generally
   be the most accurate result.
 
-- if `r == RoundToZero`, then the result is in the interval `[0,2π]` if `x` is positive,.
-  or `[2π,0]` otherwise.
+- if `r == RoundToZero`, then the result is in the interval ``[0, 2π]`` if `x` is positive,.
+  or ``[-2π, 0]`` otherwise.
 
-- if `r == RoundDown`, then the result is in the interval `[0,2π]`.
+- if `r == RoundDown`, then the result is in the interval ``[0, 2π]``.
 
-- if `r == RoundUp`, then the result is in the interval `[-2π,0]`.
+- if `r == RoundUp`, then the result is in the interval ``[-2π, 0]``.
 
 ```jldoctest
 julia> rem2pi(7pi/4, RoundNearest)
