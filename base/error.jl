@@ -19,6 +19,14 @@
 ## native julia error handling ##
 
 error(s::AbstractString) = throw(ErrorException(s))
+
+"""
+    error(msg...)
+
+Raise an `ErrorException` with the given message.
+
+See also [`logging`](@ref).
+"""
 error(s...) = throw(ErrorException(Main.Base.string(s...)))
 
 """

@@ -311,6 +311,10 @@ include("REPLCompletions.jl")
 include("REPL.jl")
 include("client.jl")
 
+# Stack frames and traces
+include("stacktraces.jl")
+importall .StackTraces
+
 # misc useful functions & macros
 include("util.jl")
 
@@ -341,10 +345,6 @@ include("libgit2/libgit2.jl")
 
 # package manager
 include("pkg/pkg.jl")
-
-# Stack frames and traces
-include("stacktraces.jl")
-importall .StackTraces
 
 # profiler
 include("profile.jl")
