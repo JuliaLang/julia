@@ -433,8 +433,6 @@ end
         a = f.([false])
         @test a isa Array{String}
         @test a == ["false"]
-        a = f.([true, false])
-        @test a isa Array
-        @test a == [true, "false"]
+        @test f.([true, false]) == [true, "false"]
     end
 end
