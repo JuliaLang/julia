@@ -174,9 +174,9 @@ Read a single line of text, including a trailing newline character (if one is re
 the end of the input), from the given I/O stream or file (defaults to `STDIN`).
 When reading from a file, the text is assumed to be encoded in UTF-8.
 """
-function readline(filename::AbstractString, chomp = false; nl2lf = false)
+function readline(filename::AbstractString, chomp = false)
     open(filename) do f
-          readline(f, chomp, nl2lf = nl2lf)
+          readline(f, chomp)
     end
 end
 
@@ -188,9 +188,9 @@ end
 Read all lines of an I/O stream or a file as a vector of strings.
 The text is assumed to be encoded in UTF-8.
 """
-function readlines(filename::AbstractString, chomp = false; nl2lf = false)
+function readlines(filename::AbstractString, chomp = false)
     open(filename) do f
-          readlines(f, chomp, nl2lf = nl2lf)
+          readlines(f, chomp)
     end
 end
 
@@ -457,20 +457,38 @@ end
 
 readline() = readline(STDIN)
 
-function readline(s::IO, chomp = false; nl2lf=false)
-    nl2lf && (chomp = false)
+function readline(s::IO, chomp::Bool = false)
+    out = UInt8[]
+    while !eof(s)
+        c = read(s, UInt8)
+        if c == 0x0d && !eof(s) && Base.peek(s) == 0x0a
+            !chomp && push!(out, c)
+            c = read(s, UInt8)
+            !chomp && push!(out, c)
+            break
+        elseif c == 0x0a
+            !chomp && push!(out, c)
+            break
+        else
+            push!(out, c)
+        end
+    end
 
-    linefeeds = ['\n', '\r', '\u85', '\u0B', '\u0c', '\u2028', '\u2029']
+    return String(out)
+end
+
+const linefeeds = ['\n', '\r', '\u85', '\u0B', '\u0c', '\u2028', '\u2029']
+
+function readline(s::IO, chomp = false, newlines::Vector{Char}=linefeeds)
     out = IOBuffer()
     while !eof(s)
         c = read(s, Char)
-        if c in linefeeds
+        if c in newlines
             if c == '\r' && !eof(s) && Base.peek(s) == 0x0a
-                !(nl2lf || chomp) && write(out, c)
+                !chomp && write(out, c)
                 c = read(s, Char)
                 !chomp && write(out, c)
             else
-                nl2lf && (c = '\n')
                 !chomp && write(out, c)
             end
 
@@ -547,9 +565,8 @@ type EachLine
     stream::IO
     ondone::Function
     chomp::Bool
-    nl2lf::Bool
-    EachLine(stream, chomp, nl2lf) = EachLine(stream, ()->nothing, chomp, nl2lf)
-    EachLine(stream, ondone, chomp, nl2lf) = new(stream, ondone, chomp, nl2lf)
+    EachLine(stream, chomp) = EachLine(stream, ()->nothing, chomp)
+    EachLine(stream, ondone, chomp) = new(stream, ondone, chomp)
 end
 
 """
@@ -559,12 +576,12 @@ end
 Create an iterable object that will yield each line from an I/O stream or a file.
 The text is assumed to be encoded in UTF-8.
 """
-eachline(stream::IO, chomp = false; nl2lf=false) = EachLine(stream, chomp, nl2lf)
+eachline(stream::IO, chomp::Bool = false) = EachLine(stream, chomp)
 
 
-function eachline(filename::AbstractString, chomp = false; nl2lf=false)
+function eachline(filename::AbstractString, chomp::Bool = false)
     s = open(filename)
-    EachLine(s, chomp, nl2lf, ()->close(s))
+    EachLine(s, ()->close(s), chomp)
 end
 
 start(itr::EachLine) = nothing
@@ -575,10 +592,11 @@ function done(itr::EachLine, nada)
     itr.ondone()
     true
 end
-next(itr::EachLine, nada) = (readline(itr.stream, itr.chomp, nl2lf = itr.nl2lf), nothing)
+
+next(itr::EachLine, nada) = (readline(itr.stream, itr.chomp), nothing)
 eltype(::Type{EachLine}) = String
 
-readlines(s=STDIN, chomp = false; nl2lf = false) = collect(eachline(s, chomp, nl2lf = nl2lf))
+readlines(s=STDIN, chomp = false) = collect(eachline(s, chomp))
 
 iteratorsize(::Type{EachLine}) = SizeUnknown()
 
