@@ -78,6 +78,9 @@ This section lists changes that do not have deprecation warnings.
   * The `RepString` type has been moved to the
     [LegacyStrings.jl package](https://github.com/JuliaArchive/LegacyStrings.jl).
 
+  * In macro calls with parentheses, e.g. `@m(a=1)`, assignments are now parsed as
+    `=` expressions, instead of as `kw` expressions. ([#7669])
+
 Library improvements
 --------------------
 

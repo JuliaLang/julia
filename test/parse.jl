@@ -868,6 +868,9 @@ let ..(x,y) = x + y
     @test 3 .. 4 === 7
 end
 
+# issue #7669
+@test parse("@a(b=1, c=2)") == Expr(:macrocall, Symbol("@a"), :(b=1), :(c=2))
+
 # issue #19685
 let f = function (x; kw...)
             return (x, kw)
