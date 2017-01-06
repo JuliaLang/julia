@@ -361,6 +361,7 @@ end
 
 ismatch_warn(s::AbstractString, output) = contains(output, s)
 ismatch_warn(s::Regex, output) = ismatch(s, output)
+ismatch_warn(s::Function, output) = s(output)
 ismatch_warn(S::Union{AbstractArray,Tuple}, output) = all(s -> ismatch_warn(s, output), S)
 
 """
@@ -368,7 +369,9 @@ ismatch_warn(S::Union{AbstractArray,Tuple}, output) = all(s -> ismatch_warn(s, o
 
 Test whether evaluating `expr` results in [`STDERR`](@ref) output that contains
 the `msg` string or matches the `msg` regular expression.  If `msg` is
-a tuple or array, checks that the error output contains/matches each item in `msg`.
+a boolean function, tests whether `msg(output)` returns `true`.  If `msg` is a
+tuple or array, checks that the error output contains/matches each item in `msg`.
+
 Returns the result of evaluating `expr`.
 
 See also [`@test_nowarn`](@ref) to check for the absence of error output.

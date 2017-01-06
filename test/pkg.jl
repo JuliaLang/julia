@@ -470,7 +470,7 @@ temp_pkg_dir() do
 
         @test_warn (r"INFO: Upgrading ColorTypes: v0\.2\.2 => v\d+\.\d+\.\d+",
                     r"INFO: Upgrading Compat: v0\.7\.18 => v\d+\.\d+\.\d+",
-                    r"INFO: Upgrading Color[^s]") Pkg.update("ColorTypes")
+                    s -> !contains(s, "INFO: Upgrading Colors: ")) Pkg.update("ColorTypes")
         @test Pkg.installed("Colors") == v"0.6.4"
 
         @test_warn nothingtodomsg Pkg.update("FixedPointNumbers")
