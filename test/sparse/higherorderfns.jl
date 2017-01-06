@@ -86,6 +86,8 @@ end
     @test broadcast(sin, A) == sparse(broadcast(sin, fA))
     @test broadcast!(sin, copy(a), a) == sparse(broadcast!(sin, copy(fa), fa))
     @test broadcast!(sin, copy(A), A) == sparse(broadcast!(sin, copy(fA), fA))
+    @test broadcast!(identity, copy(a), a) == sparse(broadcast!(identity, copy(fa), fa))
+    @test broadcast!(identity, copy(A), A) == sparse(broadcast!(identity, copy(fA), fA))
 end
 
 @testset "broadcast[!] implementation specialized for pairs of (input) sparse vectors/matrices" begin
