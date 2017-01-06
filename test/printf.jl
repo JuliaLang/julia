@@ -223,6 +223,15 @@ end
 @test (@sprintf "%#8s" :test) == "   :test"
 @test (@sprintf "%#-8s" :test) == ":test   "
 
+@test (@sprintf "%8.3s" "test") == "     tes"
+@test (@sprintf "%#8.3s" "test") == "     \"te"
+@test (@sprintf "%-8.3s" "test") == "tes     "
+@test (@sprintf "%#-8.3s" "test") == "\"te     "
+@test (@sprintf "%.3s" "test") == "tes"
+@test (@sprintf "%#.3s" "test") == "\"te"
+@test (@sprintf "%-.3s" "test") == "tes"
+@test (@sprintf "%#-.3s" "test") == "\"te"
+
 # reasonably complex
 @test (@sprintf "Test: %s%c%C%c%#-.0f." "t" 65 66 67 -42) == "Test: tABC-42.."
 
