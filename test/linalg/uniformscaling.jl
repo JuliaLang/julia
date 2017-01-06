@@ -49,6 +49,8 @@ J = UniformScaling(λ)
     @test I + I === UniformScaling(2) # +
     @test inv(I) == I
     @test inv(J) == UniformScaling(inv(λ))
+    @test cond(I) == 1
+    @test cond(J) == (λ ≠ zero(λ) ? one(λ) : convert(typeof(λ), Inf))
 end
 
 B = bitrand(2,2)
