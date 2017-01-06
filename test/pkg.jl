@@ -253,6 +253,9 @@ temp_pkg_dir() do
 
         @test_warn (r"^INFO: Creating Example branch pinned\.[0-9a-f]{8}\.tmp$") Pkg.pin("Example")
         vers = Pkg.installed("Example")
+        branch = LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example")) do repo
+          LibGit2.branch(repo)
+       end
 
         @test_warn "INFO: Freeing Example" Pkg.free("Example")
 
@@ -281,7 +284,7 @@ temp_pkg_dir() do
                     "INFO: No packages to install, update or remove") Pkg.free("Example")
         @test Pkg.installed("Example") == vers
 
-        @test_warn r"^INFO: Package Example: checking out existing branch pinned\.[0-9a-f]{8}\.tmp$" Pkg.pin("Example")
+        @test_warn Regex("^INFO: Package Example: checking out existing branch $branch\$") Pkg.pin("Example")
         @test Pkg.installed("Example") == vers
 
         @test_warn "INFO: Freeing Example" Pkg.free("Example")
