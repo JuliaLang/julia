@@ -345,7 +345,7 @@ Returns an array of lowered ASTs for the methods matching the given generic func
 function code_lowered(f::ANY, t::ANY=Tuple)
     asts = map(methods(f, t)) do m
         m = m::Method
-        return uncompressed_ast(m, m.isstaged ? m.unspecialized.inferred : m.source)
+        return uncompressed_ast(m, m.source)
     end
     return asts
 end
