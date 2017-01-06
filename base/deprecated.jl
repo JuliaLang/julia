@@ -462,31 +462,16 @@ macro linux(qm,ex)
     depwarn("`@linux` is deprecated, use `@static is_linux()` instead", Symbol("@linux"))
     return @static is_linux() ? esc(ex.args[1]) : esc(ex.args[2])
 end
-macro windows_only(ex)
-    depwarn("`@windows_only` is deprecated, use `@static if is_windows()` instead", Symbol("@windows_only"))
-    return @static if is_windows() esc(ex) end
-end
-macro unix_only(ex)
-    depwarn("`@unix_only` is deprecated, use `@static if is_unix()` instead", Symbol("@unix_only"))
-    return @static if is_unix() esc(ex) end
-end
 macro osx_only(ex)
-    depwarn("`@osx_only` is deprecated, use `@static if is_apple()` instead", Symbol("@osx_only"))
+    depwarn("`@osx_only` is deprecated, use `@apple_only` instead", Symbol("@osx_only"))
     return @static if is_apple() esc(ex) end
-end
-macro linux_only(ex)
-    depwarn("`@linux_only` is deprecated, use `@static if is_linux()` instead", Symbol("@linux_only"))
-    return @static if is_linux() esc(ex) end
 end
 export
     @windows,
     @unix,
     @osx,
     @linux,
-    @windows_only,
-    @unix_only,
-    @osx_only,
-    @linux_only
+    @osx_only
 
 export OS_NAME
 const OS_NAME =

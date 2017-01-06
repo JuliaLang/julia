@@ -84,3 +84,48 @@ let KERNEL = ccall(:jl_get_UNAME, Any, ())
         @eval $f() = $(getfield(current_module(),f)(KERNEL))
     end
 end
+
+"""
+    @windows_only
+
+Convenenience macro for executing code only on Windows
+"""
+macro windows_only(ex)
+    return @static if is_windows() esc(ex) end
+end
+
+"""
+    @unix_only
+
+Convenenience macro for executing code only on unix-based operating systems
+"""
+macro unix_only(ex)
+    return @static if is_unix() esc(ex) end
+end
+
+"""
+    @apple_only
+
+Convenenience macro for executing code only on OSX
+"""
+macro apple_only(ex)
+    return @static if is_apple() esc(ex) end
+end
+
+"""
+    @linux_only
+
+Convenenience macro for executing code only on linux-based operating systems
+"""
+macro linux_only(ex)
+    return @static if is_linux() esc(ex) end
+end
+
+"""
+    @bsd_only
+
+Convenenience macro for executing code only on bsd-based operating systems
+"""
+macro bsd_only(ex)
+    return @static if is_bsd() esc(ex) end
+end

@@ -1345,6 +1345,11 @@ export
     is_apple,
     is_bsd,
     is_unix,
+    @windows_only,
+    @linux_only,
+    @apple_only,
+    @bsd_only,
+    @unix_only,
 
     # tasks
     @schedule,
