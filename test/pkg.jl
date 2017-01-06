@@ -251,7 +251,7 @@ temp_pkg_dir() do
     begin
         @test_warn "INFO: Freeing Example" Pkg.free("Example")
 
-        @test_warn (r"^INFO: Creating Example branch pinned\.[0-9a-f]{8}\.tmp$") Pkg.pin("Example")
+        @test_warn r"^INFO: Creating Example branch pinned\.[0-9a-f]{8}\.tmp$" Pkg.pin("Example")
         vers = Pkg.installed("Example")
         branch = LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example")) do repo
           LibGit2.branch(repo)
