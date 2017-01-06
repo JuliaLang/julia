@@ -381,7 +381,7 @@ macro test_warn(msg, expr)
                         $(esc(expr))
                     end
                 end
-                @test ismatch_warn($(esc(msg)), chomp(readstring(fname)))
+                @test ismatch_warn($(esc(msg)), readstring(fname))
             finally
                 eval(Base, Expr(:(=), :have_color, have_color))
                 rm(fname, force=true)
@@ -398,7 +398,7 @@ Test whether evaluating `expr` results in empty [`STDERR`](@ref) output
 """
 macro test_nowarn(expr)
     quote
-        @test_warn r"^$" $expr
+        @test_warn r"^(?!.)"s $expr
     end
 end
 
