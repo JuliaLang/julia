@@ -11,7 +11,14 @@ url(pkg::AbstractString) = readstrip(Dir.path("METADATA"), pkg, "url")
 sha1(pkg::AbstractString, ver::VersionNumber) =
     readstrip(Dir.path("METADATA"), pkg, "versions", string(ver), "sha1")
 
-function available(names=readdir("METADATA"))
+type AvailableCache
+    sha::LibGit2.Oid
+    pkgs::Dict{String, Dict{VersionNumber, Available}}
+end
+
+PKG_AVAILABLE_CACHE = AvailableCache(LibGit2.Oid(), Dict{String, Dict{VersionNumber, Available}}())
+
+function available(names)
     pkgs = Dict{String,Dict{VersionNumber,Available}}()
     for pkg in names
         isfile("METADATA", pkg, "url") || continue
@@ -30,6 +37,36 @@ function available(names=readdir("METADATA"))
     return pkgs
 end
 available(pkg::AbstractString) = get(available([pkg]),pkg,Dict{VersionNumber,Available}())
+
+# Uses cached data if not outdated
+function available(cache::AvailableCache = PKG_AVAILABLE_CACHE)
+    names = readdir("METADATA")
+    # Not a git repo so just bail on using cache
+    if in(".git", names) && !haskey(ENV, "JULIA_PKG_DISABLE_CACHE")
+        pkgs, usecache = LibGit2.with(LibGit2.GitRepo("METADATA")) do repo
+            LibGit2.with(LibGit2.head(repo)) do head
+                sha = Base.LibGit2.Oid(head)
+                # Only use cache if nothing funky is going on.
+                # This should be true in the majority of cases
+                # Note that GitStatus is unfortunately quite slow due to the way METADATA
+                # is currently structured with so many files.
+                LibGit2.with(LibGit2.GitStatus(repo)) do gitstatus
+                    if length(gitstatus) == 0
+                        # Sha does not match, update the cache with the new pkgs
+                        if cache.sha != sha
+                            cache.pkgs = available(names)
+                            cache.sha = sha
+                        end
+                        return cache.pkgs, true
+                    end
+                    nothing, false
+                end
+            end
+        end
+        usecache && return pkgs
+    end
+    return available(names)
+end
 
 function latest(names=readdir("METADATA"))
     pkgs = Dict{String,Available}()
