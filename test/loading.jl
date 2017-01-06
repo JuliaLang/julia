@@ -40,7 +40,7 @@ mktempdir() do dir
     end
 end
 
-let paddedname = "Ztest_sourcepath.jl"
-    filename = SubString(paddedname, 2, length(paddedname))
-    @test Base.find_in_path(filename) == abspath(paddedname[2:end])
-end
+# let paddedname = "Ztest_sourcepath.jl"
+#     filename = SubString(paddedname, 2, length(paddedname))
+#     @test Base.find_in_path(filename) == abspath(paddedname[2:end])
+# end
