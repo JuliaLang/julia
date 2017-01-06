@@ -270,8 +270,8 @@ temp_pkg_dir() do
         @test_warn r"^INFO: Creating Example branch pinned\.[0-9a-f]{8}\.tmp$" Pkg.pin("Example")
         vers = Pkg.installed("Example")
         branch = LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example")) do repo
-          LibGit2.branch(repo)
-       end
+            LibGit2.branch(repo)
+        end
 
         @test_warn "INFO: Freeing Example" Pkg.free("Example")
 
@@ -448,7 +448,8 @@ temp_pkg_dir() do
 
         @test_warn ("INFO: Package Example: skipping update (pinned)...",
                     r"INFO: Package Example was set to version 0\.4\.0, but a higher version \d+\.\d+\.\d+\S* exists.",
-                    "The package is fixed. You can try using `Pkg.free(\"Example\")` to update it.") Pkg.update("Example")
+                    "The package is fixed. You can try using `Pkg.free(\"Example\")` to update it.",
+                    nothingtodomsg) Pkg.update("Example")
 
         metadata_dir = Pkg.dir("METADATA")
         const old_commit = "313bfaafa301e82d40574a778720e893c559a7e2"
