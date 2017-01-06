@@ -15,7 +15,6 @@ using .ConflictingBindings
 # so we disable it for the tests below
 withenv( "JULIA_DEBUG_LOADING" => nothing ) do
 
-olderr = STDERR
 dir = mktempdir()
 dir2 = mktempdir()
 insert!(LOAD_PATH, 1, dir)
@@ -285,10 +284,6 @@ try
         !isempty(search(exc.msg, "ERROR: LoadError: break me")) && rethrow(exc)
     end
 finally
-    if STDERR != olderr
-        close(STDERR)
-        redirect_stderr(olderr)
-    end
     splice!(Base.LOAD_CACHE_PATH, 1:2)
     splice!(LOAD_PATH, 1)
     rm(dir, recursive=true)
