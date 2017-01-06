@@ -237,14 +237,14 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         if !(elty1 in (BigFloat, Complex{BigFloat})) # Not handled yet
             vals, vecs = eig(A1)
             if (t1 == UpperTriangular || t1 == LowerTriangular) && elty1 != Int # Cannot really handle degenerate eigen space and Int matrices will probably have repeated eigenvalues.
-                @test_approx_eq_eps vecs*diagm(vals)/vecs full(A1) sqrt(eps(float(real(one(vals[1])))))*(norm(A1, Inf)*n)^2
+                @test_approx_eq_eps vecs*diagm(vals)/vecs full(A1) sqrt(eps(float(real(one(vals[1])))))*(norm(A1,Inf)*n)^2
             end
         end
 
         # Condition number tests - can be VERY approximate
         if elty1 <:BlasFloat
             for p in (1.0, Inf)
-                @test_approx_eq_eps cond(A1, p) cond(A1, p) (cond(A1, p) + cond(A1, p))
+                @test_approx_eq_eps cond(A1,p) cond(A1,p) (cond(A1,p)+cond(A1,p))
             end
             @test cond(A1,2) == cond(full(A1),2)
         end

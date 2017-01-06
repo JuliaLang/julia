@@ -47,7 +47,7 @@ srand(1)
         end
 
         for func in (det, trace)
-            @test_approx_eq_eps func(D) func(DM) n^2*eps(relty)*(elty<:Complex ? 2:1)
+            @test_approx_eq_eps func(D) func(DM) n^2*eps(relty)*(1+(elty<:Complex))
         end
         if relty <: BlasFloat
             for func in (expm,)
@@ -73,18 +73,18 @@ srand(1)
                     U = view(UU, 1:n, 1:2)
                 end
 
-                @test_approx_eq_eps D*v DM*v n*eps(relty)*(elty<:Complex ? 2:1)
-                @test_approx_eq_eps D*U DM*U n^2*eps(relty)*(elty<:Complex ? 2:1)
+                @test_approx_eq_eps D*v DM*v n*eps(relty)*(1+(elty<:Complex))
+                @test_approx_eq_eps D*U DM*U n^2*eps(relty)*(1+(elty<:Complex))
 
                 @test U.'*D ≈ U.'*Array(D)
                 @test U'*D ≈ U'*Array(D)
 
                 if relty != BigFloat
-                    @test_approx_eq_eps D\v DM\v 2n^2*eps(relty)*(elty<:Complex ? 2:1)
-                    @test_approx_eq_eps D\U DM\U 2n^3*eps(relty)*(elty<:Complex ? 2:1)
-                    @test_approx_eq_eps A_ldiv_B!(D,copy(v)) DM\v 2n^2*eps(relty)*(elty<:Complex ? 2:1)
-                    @test_approx_eq_eps A_ldiv_B!(D,copy(U)) DM\U 2n^3*eps(relty)*(elty<:Complex ? 2:1)
-                    @test_approx_eq_eps A_ldiv_B!(D,eye(D)) D\eye(D) 2n^3*eps(relty)*(elty<:Complex ? 2:1)
+                    @test_approx_eq_eps D\v DM\v 2n^2*eps(relty)*(1+(elty<:Complex))
+                    @test_approx_eq_eps D\U DM\U 2n^3*eps(relty)*(1+(elty<:Complex))
+                    @test_approx_eq_eps A_ldiv_B!(D,copy(v)) DM\v 2n^2*eps(relty)*(1+(elty<:Complex))
+                    @test_approx_eq_eps A_ldiv_B!(D,copy(U)) DM\U 2n^3*eps(relty)*(1+(elty<:Complex))
+                    @test_approx_eq_eps A_ldiv_B!(D,eye(D)) D\eye(D) 2n^3*eps(relty)*(1+(elty<:Complex))
                     @test_throws DimensionMismatch A_ldiv_B!(D, ones(elty, n + 1))
                     @test_throws SingularException A_ldiv_B!(Diagonal(zeros(relty,n)),copy(v))
                     b = rand(elty,n,n)

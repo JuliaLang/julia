@@ -92,7 +92,7 @@ function test_pinv(a,m,n,tol1,tol2,tol3)
     debug && println("=== julia/matlab pinv, default tol=eps(1.0)*max(size(a)) ===")
     apinv = @inferred pinv(a)
 
-    @test_approx_eq_eps vecnorm(a*apinv*a - a)/vecnorm(a) 0 tol1
+    @test_approx_eq_eps vecnorm(a*apinv*a-a)/vecnorm(a) 0 tol1
     x0 = randn(n); b = a*x0; x = apinv*b
     @test_approx_eq_eps vecnorm(a*x-b)/vecnorm(b) 0 tol1
     debug && println(vecnorm(a*apinv*a - a)/vecnorm(a))
@@ -102,7 +102,7 @@ function test_pinv(a,m,n,tol1,tol2,tol3)
     debug && println("=== julia pinv, tol=sqrt(eps(1.0)) ===")
     apinv = pinv(a,sqrt(eps(real(one(eltype(a))))))
 
-    @test_approx_eq_eps vecnorm(a*apinv*a - a)/vecnorm(a) 0 tol2
+    @test_approx_eq_eps vecnorm(a*apinv*a-a)/vecnorm(a) 0 tol2
     x0 = randn(n); b = a*x0; x = apinv*b
     @test_approx_eq_eps vecnorm(a*x-b)/vecnorm(b) 0 tol2
     debug && println(vecnorm(a*apinv*a - a)/vecnorm(a))
