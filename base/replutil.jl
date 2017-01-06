@@ -109,7 +109,7 @@ function show(io::IO, ::MIME"text/plain", f::Function)
         name = mt.name
         isself = isdefined(ft.name.module, name) &&
                  ft == typeof(getfield(ft.name.module, name))
-        n = length(mt)
+        n = length(methods(f))
         m = n==1 ? "method" : "methods"
         ns = isself ? string(name) : string("(::", name, ")")
         what = startswith(ns, '@') ? "macro" : "generic function"
