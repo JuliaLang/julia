@@ -908,5 +908,17 @@ for (line, expr) in Pair[
     "\"...\""      => "...",
     "r\"...\""     => :(r"..."),
     ]
-    @test Docs.helpmode(line) == :(Base.Docs.@repl($expr))
+    @test Docs.helpmode(line) == :(Base.Docs.@repl($STDOUT, $expr))
+    buf = IOBuffer()
+    @test eval(Base, Docs.helpmode(buf, line)) isa Union{Base.Markdown.MD,Void}
+end
+
+let save_color = Base.have_color
+    try
+        eval(Base, :(have_color = false))
+        @test sprint(Base.Docs.repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
+        @test sprint(Base.Docs.repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
+    finally
+        eval(Base, :(have_color = $save_color))
+    end
 end
