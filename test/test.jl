@@ -24,8 +24,8 @@
 @test_skip gobbeldygook
 
 # Test @test_warn
-@test_nowarn nothing
-@test_warn "WARNING: foo" warn("foo")
+@test 1234 === @test_nowarn(1234)
+@test 5678 === @test_warn("WARNING: foo", begin warn("foo"); 5678; end)
 
 a = Array(Float64, 2, 2, 2, 2, 2)
 a[1,1,1,1,1] = 10

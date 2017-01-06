@@ -369,6 +369,8 @@ ismatch_warn(S::Union{AbstractArray,Tuple}, output) = all(s -> ismatch_warn(s, o
 Test whether evaluating `expr` results in [`STDERR`](@ref) output that contains
 the `msg` string or matches the `msg` regular expression.  If `msg` is
 a tuple or array, checks that the error output contains/matches each item in `msg`.
+Returns the result of evaluating `expr`.
+
 See also [`@test_nowarn`](@ref) to check for the absence of error output.
 """
 macro test_warn(msg, expr)
@@ -376,12 +378,13 @@ macro test_warn(msg, expr)
         let fname = tempname(), have_color = Base.have_color
             try
                 eval(Base, :(have_color = false))
-                open(fname, "w") do f
+                ret = open(fname, "w") do f
                     redirect_stderr(f) do
                         $(esc(expr))
                     end
                 end
                 @test ismatch_warn($(esc(msg)), readstring(fname))
+                ret
             finally
                 eval(Base, Expr(:(=), :have_color, have_color))
                 rm(fname, force=true)
@@ -394,7 +397,7 @@ end
     @test_nowarn expr
 
 Test whether evaluating `expr` results in empty [`STDERR`](@ref) output
-(no warnings or other messages).
+(no warnings or other messages).  Returns the result of evaluating `expr`.
 """
 macro test_nowarn(expr)
     quote
