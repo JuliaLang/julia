@@ -244,7 +244,6 @@ include("reducedim.jl")  # macros in this file relies on string.jl
 # basic data structures
 include("ordering.jl")
 importall .Order
-include("collections.jl")
 
 # Combinatorics
 include("sort.jl")

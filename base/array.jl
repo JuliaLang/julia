@@ -560,6 +560,24 @@ function append!{T}(a::Array{T,1}, items::AbstractVector)
     return a
 end
 
+append!(a::Vector, iter) = _append!(a, iteratorsize(iter), iter)
+
+function _append!(a, ::HasLength, iter)
+    n = length(a)
+    resize!(a, n+length(iter))
+    @inbounds for (i,item) in zip(n+1:length(a), iter)
+        a[i] = item
+    end
+    a
+end
+
+function _append!(a, ::IteratorSize, iter)
+    for item in iter
+        push!(a, item)
+    end
+    a
+end
+
 """
     prepend!(a::Vector, items) -> collection
 

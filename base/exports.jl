@@ -2,7 +2,6 @@
 
 export
 # Modules
-    Collections,
     FFTW,
     Meta,
     Operators,
