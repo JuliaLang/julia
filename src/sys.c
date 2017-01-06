@@ -468,7 +468,7 @@ JL_DLLEXPORT uint64_t jl_cpuid_tag(void)
 }
 #endif
 
-JL_DLLEXPORT int jl_uses_cpuid_tag()
+JL_DLLEXPORT int jl_uses_cpuid_tag(void)
 {
 #ifdef CPUID_SPECIFIC_BINARIES
     return 1;

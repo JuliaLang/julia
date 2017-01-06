@@ -20,7 +20,7 @@ char *shlib_ext = ".so";
 #endif
 
 static char system_image_path[256] = "\0" JL_SYSTEM_IMAGE_PATH;
-static const char *get_default_sysimg_path()
+static const char *get_default_sysimg_path(void)
 {
 #ifdef CPUID_SPECIFIC_BINARIES
     char *path = &system_image_path[1];
