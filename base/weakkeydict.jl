@@ -1,21 +1,77 @@
 # weak key dictionaries
 
 type WeakKeyDict{K,V} <: Associative{K,V}
-    ht::Dict{Any,V}
+    ht::Dict{WeakRef,V}
     lock::Threads.RecursiveSpinLock
     finalizer::Function
 
+    # Constructors mirror Dict's
     function WeakKeyDict()
         t = new(Dict{Any,V}(), Threads.RecursiveSpinLock(), identity)
-        t.finalizer = function(k)
+        t.finalizer = function (k)
             # when a weak key is finalized, remove from dictionary if it is still there
             islocked(t) && return finalizer(k, t.finalizer)
             delete!(t, k)
         end
         return t
     end
+    function WeakKeyDict(kv)
+        h = WeakKeyDict{K,V}()
+        for (k,v) in kv
+            h[k] = v
+        end
+        return h
+    end
+    WeakKeyDict(p::Pair) = setindex!(WeakKeyDict{K,V}(), p.second, p.first)
+    function WeakKeyDict(ps::Pair...)
+        h = WeakKeyDict{K,V}()
+        sizehint!(h, length(ps))
+        for p in ps
+            h[p.first] = p.second
+        end
+        return h
+    end
 end
 WeakKeyDict() = WeakKeyDict{Any,Any}()
+
+WeakKeyDict(kv::Tuple{}) = WeakKeyDict()
+copy(d::WeakKeyDict) = WeakKeyDict(d)
+
+WeakKeyDict{K,V}(ps::Pair{K,V}...)            = WeakKeyDict{K,V}(ps)
+WeakKeyDict{K  }(ps::Pair{K}...,)             = WeakKeyDict{K,Any}(ps)
+WeakKeyDict{V  }(ps::Pair{TypeVar(:K),V}...,) = WeakKeyDict{Any,V}(ps)
+WeakKeyDict(     ps::Pair...)                 = WeakKeyDict{Any,Any}(ps)
+
+function WeakKeyDict(kv)
+    try
+        Base.associative_with_eltype(WeakKeyDict, kv, eltype(kv))
+    catch e
+        if any(x->isempty(methods(x, (typeof(kv),))), [start, next, done]) ||
+            !all(x->isa(x,Union{Tuple,Pair}),kv)
+            throw(ArgumentError("WeakKeyDict(kv): kv needs to be an iterator of tuples or pairs"))
+        else
+            rethrow(e)
+        end
+    end
+end
+
+similar{K,V}(d::WeakKeyDict{K,V}) = WeakKeyDict{K,V}()
+similar{K,V}(d::WeakKeyDict, ::Type{Pair{K,V}}) = WeakKeyDict{K,V}()
+
+# conversion between Dict types
+function convert{K,V}(::Type{WeakKeyDict{K,V}},d::Associative)
+    h = WeakKeyDict{K,V}()
+    for (k,v) in d
+        ck = convert(K,k)
+        if !haskey(h,ck)
+            h[ck] = convert(V,v)
+        else
+            error("key collision during dictionary conversion")
+        end
+    end
+    return h
+end
+convert{K,V}(::Type{WeakKeyDict{K,V}},d::WeakKeyDict{K,V}) = d
 
 islocked(wkh::WeakKeyDict) = islocked(wkh.lock)
 lock(f, wkh::WeakKeyDict) = lock(f, wkh.lock)
