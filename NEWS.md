@@ -4,9 +4,6 @@ Julia v0.6.0 Release Notes
 New language features
 ---------------------
 
-  * `<-` is now a valid operator that can be defined for custom purposes.
-    It has assignment precedence. ([#19765])
-
 Language changes
 ----------------
 
