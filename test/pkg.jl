@@ -2,6 +2,22 @@
 
 import Base.Pkg.PkgError
 
+function capture_stdout(f::Function)
+    let fname = tempname()
+        try
+            open(fname, "w") do fout
+                redirect_stdout(fout) do
+                    f()
+                end
+            end
+            return readstring(fname)
+        finally
+            rm(fname, force=true)
+        end
+    end
+end
+
+
 function temp_pkg_dir(fn::Function, remove_tmp_dir::Bool=true)
     # Used in tests below to set up and tear down a sandboxed package directory
     const tmpdir = joinpath(tempdir(),randstring())
@@ -248,7 +264,7 @@ temp_pkg_dir() do
     end
 
     # Various pin/free/re-pin/change-pin patterns (issue #17176)
-    begin
+    @test "" == capture_stdout() do
         @test_warn "INFO: Freeing Example" Pkg.free("Example")
 
         @test_warn r"^INFO: Creating Example branch pinned\.[0-9a-f]{8}\.tmp$" Pkg.pin("Example")
@@ -405,7 +421,7 @@ temp_pkg_dir() do
     end
 
     # partial Pkg.update
-    begin
+    @test "" == capture_stdout() do
         nothingtodomsg = "INFO: No packages to install, update or remove"
 
         @test_warn "INFO: Installing Example v" begin
