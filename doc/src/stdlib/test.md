@@ -163,6 +163,16 @@ ERROR: Some tests did not pass: 3 passed, 1 failed, 0 errored, 0 broken.
  in finish at test.jl:362
 ```
 
+## Other Test Macros
+
+As calculations on floating-point values can be imprecise, you can perform approximate equality
+checks using either `@test a ≈ b` (where `≈`, typed via tab completion of `\approx`, is the
+[`isapprox()`](@ref) function) or use [`isapprox()`](@ref) directly.
+
+```@docs
+Base.Test.@inferred
+```
+
 ## Broken Tests
 
 If a test fails consistently it can be changed to use the `@test_broken()` macro. This will denote
