@@ -173,7 +173,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         end
 
     # issue #1490
-    @test_approx_eq_eps det(ones(elty, 3,3)) zero(elty) 3*eps(real(one(elty)))
+    @test_approx_eq_eps det(ones(elty,3,3)) zero(elty) 3*eps(real(one(elty)))
 
     @test det(SymTridiagonal(elty[],elty[])) == one(elty)
 

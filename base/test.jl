@@ -1125,7 +1125,7 @@ function test_approx_eq_modphase{S<:Real,T<:Real}(
     err === nothing && (err=m^3*(eps(S)+eps(T)))
     for i in indices(a,2)
         v1, v2 = a[:, i], b[:, i]
-        @test_approx_eq_eps min(abs(norm(v1-v2)), abs(norm(v1+v2))) 0.0 err
+        @test_approx_eq_eps min(abs(norm(v1-v2)),abs(norm(v1+v2))) 0.0 err
     end
 end
 

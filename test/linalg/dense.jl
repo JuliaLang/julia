@@ -26,9 +26,9 @@ for elty in (Float32, Float64, Complex64, Complex128)
             a = view(ainit, 1:n, 1:n)
         end
         # cond
-        @test_approx_eq_eps cond(a, 1) 4.837320054554436e+02 0.01
-        @test_approx_eq_eps cond(a, 2) 1.960057871514615e+02 0.01
-        @test_approx_eq_eps cond(a, Inf) 3.757017682707787e+02 0.01
+        @test_approx_eq_eps cond(a,1) 4.837320054554436e+02 0.01
+        @test_approx_eq_eps cond(a,2) 1.960057871514615e+02 0.01
+        @test_approx_eq_eps cond(a,Inf) 3.757017682707787e+02 0.01
         @test_approx_eq_eps cond(a[:,1:5]) 10.233059337453463 0.01
         @test_throws ArgumentError cond(a,3)
     end
@@ -75,8 +75,8 @@ debug && println("Solve square general system of equations")
 debug && println("Test nullspace")
             a15null = nullspace(a[:,1:n1]')
             @test rank([a[:,1:n1] a15null]) == 10
-            @test_approx_eq_eps norm(a[:,1:n1]'a15null, Inf) zero(eltya) 300ε
-            @test_approx_eq_eps norm(a15null'a[:,1:n1], Inf) zero(eltya) 400ε
+            @test_approx_eq_eps norm(a[:,1:n1]'a15null,Inf) zero(eltya) 300ε
+            @test_approx_eq_eps norm(a15null'a[:,1:n1],Inf) zero(eltya) 400ε
             @test size(nullspace(b), 2) == 0
             @test nullspace(zeros(eltya,n)) == eye(eltya,1)
         end
