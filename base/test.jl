@@ -361,13 +361,15 @@ end
 
 ismatch_warn(s::AbstractString, output) = contains(output, s)
 ismatch_warn(s::Regex, output) = ismatch(s, output)
+ismatch_warn(S::Union{AbstractArray,Tuple}, output) = all(s -> ismatch_warn(s, output), S)
 
 """
     @test_warn msg expr
 
 Test whether evaluating `expr` results in [`STDERR`](@ref) output that contains
-the `msg` string or matches the `msg` regular expression.  See also
-[`@test_nowarn`](@ref) to check for the absence of error output.
+the `msg` string or matches the `msg` regular expression.  If `msg` is
+a tuple or array, checks that the error output contains/matches each item in `msg`.
+See also [`@test_nowarn`](@ref) to check for the absence of error output.
 """
 macro test_warn(msg, expr)
     quote
@@ -379,7 +381,7 @@ macro test_warn(msg, expr)
                         $(esc(expr))
                     end
                 end
-                @test ismatch_warn($msg, chomp(readstring(fname)))
+                @test ismatch_warn($(esc(msg)), chomp(readstring(fname)))
             finally
                 eval(Base, Expr(:(=), :have_color, have_color))
                 rm(fname, force=true)
