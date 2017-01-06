@@ -294,7 +294,7 @@ end
 
 function show(io::IO, l::Core.MethodInstance)
     if isdefined(l, :def)
-        if l.def.isstaged && l === l.def.unspecialized
+        if l.def.isstaged && l === l.def.generator
             print(io, "MethodInstance generator for ")
             show(io, l.def)
         else
