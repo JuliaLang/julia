@@ -13,7 +13,7 @@ and summarize them at the end of the test set with `@testset`.
 """
 module Test
 
-export @test, @test_throws, @test_broken, @test_skip
+export @test, @test_throws, @test_broken, @test_skip, @test_warn, @test_nowarn
 export @testset
 # Legacy approximate testing functions, yet to be included
 export @test_approx_eq_eps, @inferred
@@ -354,6 +354,49 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
         testres = Fail(:test_throws_nothing, orig_expr, extype, nothing)
     end
     record(get_testset(), testres)
+end
+
+#-----------------------------------------------------------------------
+# Test for warning messages
+
+ismatch_warn(s::AbstractString, output) = contains(output, s)
+ismatch_warn(s::Regex, output) = ismatch(s, output)
+
+"""
+    @test_warn msg expr
+
+Test whether evaluating `expr` results in `stderr` output that contains
+the `msg` string or matches the `msg` regular expression.
+"""
+macro test_warn(msg, expr)
+    quote
+        let fname = tempname(), have_color = Base.have_color
+            try
+                eval(Base, :(have_color = false))
+                open(fname, "w") do f
+                    redirect_stderr(f) do
+                        $(esc(expr))
+                    end
+                end
+                @test ismatch_warn($msg, chomp(readstring(fname)))
+            finally
+                eval(Base, Expr(:(=), :have_color, have_color))
+                rm(fname, force=true)
+            end
+        end
+    end
+end
+
+"""
+    @test_nowarn expr
+
+Test whether evaluating `expr` results in empty `stderr` output
+(no warnings or other messages).
+"""
+macro test_nowarn(expr)
+    quote
+        @test_warn r"^$" $expr
+    end
 end
 
 #-----------------------------------------------------------------------

@@ -149,6 +149,9 @@ Library improvements
     implemented; the semantics are as if the `Nullable` were a container with
     zero or one elements ([#16961]).
 
+  * New `@test_warn` and `@test_nowarn` macros in the `Base.Test` module to
+    test for the presence or absence of warning messages ([#19903]).
+
   * `logging` can be used to redirect `info`, `warn`, and `error` messages
     either universally or on a per-module/function basis ([#16213]).
 

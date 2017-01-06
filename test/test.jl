@@ -23,6 +23,10 @@
 @test_skip false
 @test_skip gobbeldygook
 
+# Test @test_warn
+@test_nowarn nothing
+@test_warn "WARNING: foo" warn("foo")
+
 a = Array(Float64, 2, 2, 2, 2, 2)
 a[1,1,1,1,1] = 10
 @test a[1,1,1,1,1] == 10
