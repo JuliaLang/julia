@@ -43,6 +43,7 @@ typedef struct {
     jl_svec_t     *args;
     jl_value_t    *ret;
     jl_module_t   *current_module;
+    size_t        world_age;
 } ti_threadwork_t;
 
 // thread function
