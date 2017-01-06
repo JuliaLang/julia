@@ -1181,6 +1181,18 @@
                            (take-token s)))
                (expr  (cons word
 			    (parse-comma-separated-assignments s))))
+          ;; issue #7314
+          (if (and (length> expr 2) (any assignment? (cdr expr)))
+              (if (every assignment? (cdr expr))
+                  (syntax-deprecation s (deparse expr)
+                                      (string word " "
+                                              (string.join (map deparse (map cadr (cdr expr))) ", ")
+                                              " = "
+                                              (string.join (map deparse (map caddr (cdr expr))) ", ")))
+                  (syntax-deprecation s (deparse expr)
+                                      (string.join (map (lambda (x) (string word " " (deparse x)))
+                                                        (cdr expr))
+                                                   "; "))))
           (if const
               `(const ,expr)
               expr)))
