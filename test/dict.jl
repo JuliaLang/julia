@@ -49,7 +49,7 @@ for i=1:10000
 end
 @test isempty(h)
 h[77] = 100
-@test h[77]==100
+@test h[77] == 100
 for i=1:10000
     h[i] = i+1
 end
@@ -60,10 +60,10 @@ for i=10001:20000
     h[i] = i+1
 end
 for i=2:2:10000
-    @test h[i]==i+1
+    @test h[i] == i+1
 end
 for i=10000:20000
-    @test h[i]==i+1
+    @test h[i] == i+1
 end
 h = Dict{Any,Any}("a" => 3)
 @test h["a"] == 3
@@ -609,10 +609,21 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     finalizer(A, a->(x+=1))
     finalizer(B, b->(y+=1))
     finalizer(C, c->(z+=1))
+
+    # construction
     wkd = WeakKeyDict()
     wkd[A] = 2
     wkd[B] = 3
     wkd[C] = 4
+    dd = convert(Dict{Any,Any},wkd)
+    @test WeakKeyDict(dd) == wkd
+    @test isa(WeakKeyDict(dd), WeakKeyDict{Any,Any})
+    @test WeakKeyDict(A=>2, B=>3, C=>4) == wkd
+    @test isa(WeakKeyDict(A=>2, B=>3, C=>4), WeakKeyDict{Array{Int,1},Int})
+    @test WeakKeyDict(a=>i+1 for (i,a) in enumerate([A,B,C]) ) == wkd
+    @test WeakKeyDict([(A,2), (B,3), (C,4)]) == wkd
+
+
     @test length(wkd) == 3
     @test !isempty(wkd)
     res = pop!(wkd, C)
@@ -628,6 +639,8 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test !isempty(wkd)
 
     wkd = empty!(wkd)
+    @test wkd == similar(wkd)
+    @test typeof(wkd) == typeof(similar(wkd))
     @test length(wkd) == 0
     @test isempty(wkd)
     @test isa(wkd, WeakKeyDict)
