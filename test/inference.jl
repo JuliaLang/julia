@@ -491,3 +491,21 @@ tpara18457{I}(::Type{AbstractMyType18457{I}}) = I
 tpara18457{A<:AbstractMyType18457}(::Type{A}) = tpara18457(supertype(A))
 @test tpara18457(MyType18457{true}) === true
 
+randT_inferred_union() = rand(Bool) ? rand(Bool) ? 1 : 2.0 : nothing
+function f_inferred_union()
+    b = randT_inferred_union()
+    if !(nothing !== b) === true
+        return f_inferred_union_nothing(b)
+    elseif (isa(b, Float64) === true) !== false
+        return f_inferred_union_float(b)
+    else
+        return f_inferred_union_int(b)
+    end
+end
+f_inferred_union_nothing(::Void) = 1
+f_inferred_union_nothing(::Any) = "broken"
+f_inferred_union_float(::Float64) = 2
+f_inferred_union_float(::Any) = "broken"
+f_inferred_union_int(::Int) = 3
+f_inferred_union_int(::Any) = "broken"
+@test @inferred(f_inferred_union()) in (1, 2, 3)
