@@ -55,13 +55,6 @@ Calling `Ref(array[, index])` is generally preferable to this function.
 pointer
 
 """
-    cummin(A, [dim])
-
-Cumulative minimum along a dimension. The dimension defaults to 1.
-"""
-cummin
-
-"""
     precision(num::AbstractFloat)
 
 Get the precision of a floating point number, as defined by the effective number of bits in
@@ -541,13 +534,6 @@ Receive the next value passed to `produce` by the specified task. Additional arg
 be passed, to be returned from the last `produce` call in the producer.
 """
 consume
-
-"""
-    cummax(A, [dim])
-
-Cumulative maximum along a dimension. The dimension defaults to 1.
-"""
-cummax
 
 """
     isinteractive() -> Bool
