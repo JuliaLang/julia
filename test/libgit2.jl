@@ -242,11 +242,12 @@ mktempdir() do dir
             end
         end
         @testset "normal" begin
-            repo = LibGit2.clone(cache_repo, test_repo, remote_cb = LibGit2.mirror_cb())
+            repo = LibGit2.clone(cache_repo, test_repo)
             try
                 @test isdir(test_repo)
                 @test isdir(joinpath(test_repo, ".git"))
                 @test LibGit2.isattached(repo)
+                @test LibGit2.isorphan(repo)
             finally
                 finalize(repo)
             end
@@ -460,6 +461,7 @@ mktempdir() do dir
 
             # Try rebasing on master instead
             LibGit2.rebase!(repo, master_branch)
+            @test LibGit2.head_oid(repo) == head_oid
 
             # Switch to the master branch
             LibGit2.branch!(repo, master_branch)
