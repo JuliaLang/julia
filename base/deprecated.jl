@@ -1349,6 +1349,19 @@ function quadgk(args...; kwargs...)
 end
 export quadgk
 
+# Collections functions moved to a package (#19800)
+module Collections
+    export PriorityQueue, enqueue!, dequeue!, heapify!, heapify, heappop!, heappush!, isheap, peek
+    for f in (:PriorityQueue, :enqueue!, :dequeue!, :heapify!, :heapify, :heappop!, :heappush!, :isheap, :peek)
+        @eval function ($f)(args...; kwargs...)
+            error(string($f, args, " has been moved to the package DataStructures.jl.\n",
+                         "Run Pkg.add(\"DataStructures\") to install DataStructures on Julia v0.6 and later, ",
+                         "and then run `using DataStructures`."))
+        end
+    end
+end
+export Collections
+
 # Broadcast now returns a BitArray when the resulting eltype is Bool (#17623)
 @deprecate bitbroadcast broadcast
 
