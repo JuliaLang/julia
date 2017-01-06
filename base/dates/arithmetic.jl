@@ -76,10 +76,10 @@ end
 (-)(x::Date, y::Week) = return Date(UTD(value(x) - 7*value(y)))
 (+)(x::Date, y::Day)  = return Date(UTD(value(x) + value(y)))
 (-)(x::Date, y::Day)  = return Date(UTD(value(x) - value(y)))
-(+)(x::DateTime, y::Period)   = return DateTime(UTM(value(x) + toms(y)))
-(-)(x::DateTime, y::Period)   = return DateTime(UTM(value(x) - toms(y)))
-(+)(x::Time, y::TimePeriod)   = return Time(Nanosecond(value(x) + tons(y)))
-(-)(x::Time, y::TimePeriod)   = return Time(Nanosecond(value(x) - tons(y)))
+(+)(x::DateTime, y::Period) = return DateTime(UTM(value(x) + toms(y)))
+(-)(x::DateTime, y::Period) = return DateTime(UTM(value(x) - toms(y)))
+(+)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) + tons(y)))
+(-)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) - tons(y)))
 (+)(y::Period, x::TimeType) = x + y
 (-)(y::Period, x::TimeType) = x - y
 

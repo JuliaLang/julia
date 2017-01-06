@@ -16,24 +16,25 @@ for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond
     # AbstractString parsing (mainly for IO code)
     @eval $period(x::AbstractString) = $period(Base.parse(Int64,x))
     # Period accessors
-    typs = period in (:Microsecond, :Nanosecond) ? ["Time"] : (period in (:Hour, :Minute, :Second, :Millisecond) ? ["DateTime","Time"] : ["TimeType"])
-    description = typs == ["TimeType"] ? "`Date` or `DateTime`" : (typs == ["Time"] ? "`Time`" : "`Time` or `DateTime`")
-    reference = period == :Week ? " For details see [`$accessor_str(::TimeType)`](:func:`$accessor_str`)." : ""
+    typs = period in (:Microsecond, :Nanosecond) ? ["Time"] :
+           period in (:Hour, :Minute, :Second, :Millisecond) ? ["Time", "DateTime"] : ["Date","DateTime"]
+    reference = period == :Week ? " For details see [`$accessor_str(::Union{Date,DateTime})`](:func:`$accessor_str`)." : ""
     for typ_str in typs
         @eval begin
             @doc """
                 $($period_str)(dt::$($typ_str)) -> $($period_str)
 
-            The $($accessor_str) part of a $($description) as a `$($period_str)`.$($reference)
+            The $($accessor_str) part of a $($typ_str) as a `$($period_str)`.$($reference)
             """ $period(dt::$(Symbol(typ_str))) = $period($(Symbol(accessor_str))(dt))
-
-            @doc """
-                $($period_str)(v)
-
-            Construct a `$($period_str)` object with the given `v` value. Input must be
-            losslessly convertible to an `Int64`.
-            """ $period(v)
         end
+    end
+    @eval begin
+        @doc """
+            $($period_str)(v)
+
+        Construct a `$($period_str)` object with the given `v` value. Input must be
+        losslessly convertible to an `Int64`.
+        """ $period(v)
     end
 end
 # Now we're safe to define Period-Number conversions
@@ -449,6 +450,8 @@ Base.promote_rule(::Type{Year}, ::Type{Month}) = Month
 Base.isless{T<:OtherPeriod,S<:OtherPeriod}(x::T,y::S) = isless(promote(x,y)...)
 
 # truncating conversions to milliseconds and days:
+toms(c::Nanosecond)  = div(value(c), 1000000)
+toms(c::Microsecond) = div(value(c), 1000)
 toms(c::Millisecond) = value(c)
 toms(c::Second)      = 1000*value(c)
 toms(c::Minute)      = 60000*value(c)
