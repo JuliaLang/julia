@@ -203,15 +203,47 @@ end
 
 const comparison_prec = Base.operator_precedence(:(==))
 
+"""
+    test_expr!(ex, kws...)
+
+Preprocess test expressions of function calls with trailing keyword arguments
+so that e.g. `@test a ≈ b atol=ε` means `@test ≈(a, b, atol=ε)`.
+"""
+test_expr!(m, ex) = ex
+
+function test_expr!(m, ex, kws...)
+    ex isa Expr && ex.head == :call || @goto fail
+    for kw in kws
+        kw isa Expr && kw.head == :(=) || @goto fail
+        kw.head = :kw
+        push!(ex.args, kw)
+    end
+    return ex
+@label fail
+    error("invalid test macro call: $m $ex $(join(kws," "))")
+end
+
 # @test - check if the expression evaluates to true
 """
     @test ex
+    @test f(args...) key=val ...
 
 Tests that the expression `ex` evaluates to `true`.
 Returns a `Pass` `Result` if it does, a `Fail` `Result` if it is
 `false`, and an `Error` `Result` if it could not be evaluated.
+
+The `@test f(args...) key=val...` form is equivalent to writing
+`@test f(args..., key=val...)` which can be useful when the expression
+is a call using infix syntax such as approximate comparisons:
+
+    @test a ≈ b atol=ε
+
+This is equivalent to the uglier test `@test ≈(a, b, atol=ε)`.
+It is an error to supply more than one expression unless the first
+is a call expression and the rest are assignments (`k=v`).
 """
-macro test(ex)
+macro test(ex, kws...)
+    test_expr!("@test", ex, kws...)
     orig_ex = Expr(:inert, ex)
     result = get_test_result(ex)
     :(do_test($result, $orig_ex))
@@ -219,13 +251,17 @@ end
 
 """
     @test_broken ex
+    @test_broken f(args...) key=val ...
 
 Indicates a test that should pass but currently consistently fails.
 Tests that the expression `ex` evaluates to `false` or causes an
 exception. Returns a `Broken` `Result` if it does, or an `Error` `Result`
 if the expression evaluates to `true`.
+
+The `@test_broken f(args...) key=val...` form works as for the `@test` macro.
 """
-macro test_broken(ex)
+macro test_broken(ex, kws...)
+    test_expr!("@test_broken", ex, kws...)
     orig_ex = Expr(:inert, ex)
     result = get_test_result(ex)
     # code to call do_test with execution result and original expr
@@ -234,12 +270,16 @@ end
 
 """
     @test_skip ex
+    @test_skip f(args...) key=val ...
 
 Marks a test that should not be executed but should be included in test
 summary reporting as `Broken`. This can be useful for tests that intermittently
 fail, or tests of not-yet-implemented functionality.
+
+The `@test_skip f(args...) key=val...` form works as for the `@test` macro.
 """
-macro test_skip(ex)
+macro test_skip(ex, kws...)
+    test_expr!("@test_skip", ex, kws...)
     orig_ex = Expr(:inert, ex)
     testres = :(Broken(:skipped, $orig_ex))
     :(record(get_testset(), $testres))
@@ -326,6 +366,7 @@ end
     @test_throws extype ex
 
 Tests that the expression `ex` throws an exception of type `extype`.
+Note that `@test_throws` does not support a trailing keyword form.
 """
 macro test_throws(extype, ex)
     orig_ex = Expr(:inert, ex)
