@@ -371,7 +371,6 @@ Test whether evaluating `expr` results in [`STDERR`](@ref) output that contains
 the `msg` string or matches the `msg` regular expression.  If `msg` is
 a boolean function, tests whether `msg(output)` returns `true`.  If `msg` is a
 tuple or array, checks that the error output contains/matches each item in `msg`.
-
 Returns the result of evaluating `expr`.
 
 See also [`@test_nowarn`](@ref) to check for the absence of error output.
