@@ -635,7 +635,7 @@ function resize!(a::Vector, nl::Integer)
     l = length(a)
     if nl > l
         ccall(:jl_array_grow_end, Void, (Any, UInt), a, nl-l)
-    else
+    elseif nl != l
         if nl < 0
             throw(ArgumentError("new length must be ≥ 0"))
         end
