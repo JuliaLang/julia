@@ -340,11 +340,7 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.nargs)
     serialize(s, meth.isva)
     serialize(s, meth.isstaged)
-    if meth.isstaged
-        serialize(s, uncompressed_ast(meth, meth.unspecialized.inferred))
-    else
-        serialize(s, uncompressed_ast(meth, meth.source))
-    end
+    serialize(s, uncompressed_ast(meth, meth.source))
     nothing
 end
 
@@ -642,13 +638,12 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.nargs = nargs
         meth.isva = isva
         # TODO: compress template
+        meth.source = template
         if isstaged
             linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ())
             linfo.specTypes = Tuple
             linfo.inferred = template
-            meth.unspecialized = linfo
-        else
-            meth.source = template
+            meth.generator = linfo
         end
         ftype = ccall(:jl_first_argument_datatype, Any, (Any,), sig)::DataType
         if isdefined(ftype.name, :mt) && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), ftype.name.mt, sig, typemax(UInt))
