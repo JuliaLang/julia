@@ -108,8 +108,6 @@ Base.cumprod!
 Base.cumsum
 Base.cumsum!
 Base.cumsum_kbn
-Base.cummin
-Base.cummax
 Base.LinAlg.diff
 Base.LinAlg.gradient
 Base.rot180

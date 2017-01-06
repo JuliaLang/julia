@@ -579,10 +579,10 @@ function cumsum{T}(A::AbstractArray{T}, axis::Integer=1)
 end
 
 """
-    cumsum!(B, A, [dim])
+    cumsum!(B, A, dim::Integer=1)
 
 Cumulative sum of `A` along a dimension, storing the result in `B`. The dimension defaults
-to 1.
+to 1. See also [`cumsum`](@ref).
 """
 cumsum!(B, A, axis::Integer=1) = accumulate!(+, B, A, axis)
 
@@ -613,9 +613,10 @@ julia> cumprod(a,2)
 cumprod(A::AbstractArray, axis::Integer=1) = accumulate(*, A, axis)
 
 """
-    cumprod!(B, A, [dim])
+    cumprod!(B, A, dim::Integer=1)
 
 Cumulative product of `A` along a dimension, storing the result in `B`. The dimension defaults to 1.
+See also [`cumprod`](@ref).
 """
 cumprod!(B, A, axis::Integer=1) = accumulate!(*, B, A, axis)
 
