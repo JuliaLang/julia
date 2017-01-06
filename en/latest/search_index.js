@@ -6525,7 +6525,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Function",
-    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\nMerge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\n"
+    "text": "Merge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\nmerge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\n"
 },
 
 {
@@ -12517,7 +12517,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.qrfact",
     "category": "Function",
-    "text": "qrfact(A, pivot=Val{false}) -> F\n\nComputes the QR factorization of A. The return type of F depends on the element type of A and whether pivoting is specified (with pivot==Val{true}).\n\nReturn type eltype(A) pivot Relationship between F and A\nQR not BlasFloat either A==F[:Q]*F[:R]\nQRCompactWY BlasFloat Val{false} A==F[:Q]*F[:R]\nQRPivoted BlasFloat Val{true} A[:,F[:p]]==F[:Q]*F[:R]\n\nBlasFloat refers to any of: Float32, Float64, Complex64 or Complex128.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description QR QRCompactWY QRPivoted\nF[:Q] Q (orthogonal/unitary) part of QR ✓ (QRPackedQ) ✓ (QRCompactWYQ) ✓ (QRPackedQ)\nF[:R] R (upper right triangular) part of QR ✓ ✓ ✓\nF[:p] pivot Vector   ✓\nF[:P] (pivot) permutation Matrix   ✓\n\nThe following functions are available for the QR objects: size and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.The data contained in QR or QRPivoted can be used to construct the QRPackedQ type, which is a compact representation of the rotation matrix:Q = prod_i=1^min(mn) (I - tau_i v_i v_i^T)where tau_i is the scale factor and v_i is the projection vector associated with the i^th Householder elementary reflector.The data contained in QRCompactWY can be used to construct the QRCompactWYQ type, which is a compact representation of the rotation matrixQ = I + Y T Y^Twhere Y is m times r lower trapezoidal and T is r times r upper triangular. The compact WY representation [Schreiber1989] is not to be confused with the older, WY representation [Bischof1987]. (The LAPACK documentation uses V in lieu of Y.)[Bischof1987]: C Bischof and C Van Loan, \"The WY representation for products of Householder matrices\", SIAM J Sci Stat Comput 8 (1987), s2-s13. doi:10.1137/0908009[Schreiber1989]: R Schreiber and C Van Loan, \"A storage-efficient WY representation for products of Householder transformations\", SIAM J Sci Stat Comput 10 (1989), 53-57. doi:10.1137/0910005\n\n\n\nqrfact(A) -> SPQR.Factorization\n\nCompute the QR factorization of a sparse matrix A. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with \\. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.\n\n\n\n"
+    "text": "qrfact(A) -> SPQR.Factorization\n\nCompute the QR factorization of a sparse matrix A. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with \\. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.\n\n\n\nqrfact(A, pivot=Val{false}) -> F\n\nComputes the QR factorization of A. The return type of F depends on the element type of A and whether pivoting is specified (with pivot==Val{true}).\n\nReturn type eltype(A) pivot Relationship between F and A\nQR not BlasFloat either A==F[:Q]*F[:R]\nQRCompactWY BlasFloat Val{false} A==F[:Q]*F[:R]\nQRPivoted BlasFloat Val{true} A[:,F[:p]]==F[:Q]*F[:R]\n\nBlasFloat refers to any of: Float32, Float64, Complex64 or Complex128.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description QR QRCompactWY QRPivoted\nF[:Q] Q (orthogonal/unitary) part of QR ✓ (QRPackedQ) ✓ (QRCompactWYQ) ✓ (QRPackedQ)\nF[:R] R (upper right triangular) part of QR ✓ ✓ ✓\nF[:p] pivot Vector   ✓\nF[:P] (pivot) permutation Matrix   ✓\n\nThe following functions are available for the QR objects: size and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.The data contained in QR or QRPivoted can be used to construct the QRPackedQ type, which is a compact representation of the rotation matrix:Q = prod_i=1^min(mn) (I - tau_i v_i v_i^T)where tau_i is the scale factor and v_i is the projection vector associated with the i^th Householder elementary reflector.The data contained in QRCompactWY can be used to construct the QRCompactWYQ type, which is a compact representation of the rotation matrixQ = I + Y T Y^Twhere Y is m times r lower trapezoidal and T is r times r upper triangular. The compact WY representation [Schreiber1989] is not to be confused with the older, WY representation [Bischof1987]. (The LAPACK documentation uses V in lieu of Y.)[Bischof1987]: C Bischof and C Van Loan, \"The WY representation for products of Householder matrices\", SIAM J Sci Stat Comput 8 (1987), s2-s13. doi:10.1137/0908009[Schreiber1989]: R Schreiber and C Van Loan, \"A storage-efficient WY representation for products of Householder transformations\", SIAM J Sci Stat Comput 10 (1989), 53-57. doi:10.1137/0910005\n\n\n\n"
 },
 
 {
@@ -17321,22 +17321,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/test.html#Base.Test.@test_approx_eq",
-    "page": "Unit Testing",
-    "title": "Base.Test.@test_approx_eq",
-    "category": "Macro",
-    "text": "@test_approx_eq(a, b)\n\nTest two floating point numbers a and b for equality taking into account small numerical errors.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/test.html#Base.Test.@test_approx_eq_eps",
-    "page": "Unit Testing",
-    "title": "Base.Test.@test_approx_eq_eps",
-    "category": "Macro",
-    "text": "@test_approx_eq_eps(a, b, tol)\n\nTest two floating point numbers a and b for equality taking into account a margin of tolerance given by tol.\n\n\n\n"
-},
-
-{
     "location": "stdlib/test.html#Base.Test.@inferred",
     "page": "Unit Testing",
     "title": "Base.Test.@inferred",
@@ -17349,7 +17333,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Unit Testing",
     "title": "Other Test Macros",
     "category": "section",
-    "text": "As calculations on floating-point values can be imprecise, you can perform approximate equality checks using either @test a ≈ b (where ≈, typed via tab completion of \\approx, is the isapprox() function) or use isapprox() directly.An alternative is the @test_approx_eq macro (which differs from isapprox in that it treats NaN values as equal and has a smaller default tolerance) or @test_approx_eq_eps (which takes an extra argument indicating the relative tolerance):julia> @test 1 ≈ 0.999999999\n\njulia> @test 1 ≈ 0.999999\nERROR: test failed: 1 isapprox 0.999999\n in expression: 1 ≈ 0.999999\n in error at error.jl:21\n in default_handler at test.jl:30\n in do_test at test.jl:53\n\njulia> @test_approx_eq 1. 0.999999999\nERROR: assertion failed: |1.0 - 0.999999999| < 2.220446049250313e-12\n  1.0 = 1.0\n  0.999999999 = 0.999999999\n in test_approx_eq at test.jl:75\n in test_approx_eq at test.jl:80\n\njulia> @test_approx_eq 1. 0.9999999999999\n\njulia> @test_approx_eq_eps 1. 0.999 1e-2\n\njulia> @test_approx_eq_eps 1. 0.999 1e-3\nERROR: assertion failed: |1.0 - 0.999| <= 0.001\n  1.0 = 1.0\n  0.999 = 0.999\n  difference = 0.0010000000000000009 > 0.001\n in error at error.jl:22\n in test_approx_eq at test.jl:68Note that these macros will fail immediately, and are not compatible with @testset(), so using @test isapprox is encouraged when writing new tests.Base.Test.@test_approx_eq\nBase.Test.@test_approx_eq_eps\nBase.Test.@inferred"
+    "text": "As calculations on floating-point values can be imprecise, you can perform approximate equality checks using either @test a ≈ b (where ≈, typed via tab completion of \\approx, is the isapprox() function) or use isapprox() directly.Base.Test.@inferred"
 },
 
 {
