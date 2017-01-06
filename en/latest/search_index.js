@@ -6509,7 +6509,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Function",
-    "text": "Merge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\nmerge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\n"
+    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\nMerge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\n"
 },
 
 {
@@ -6742,94 +6742,6 @@ var documenterSearchIndex = {"docs": [
     "title": "Dequeues",
     "category": "section",
     "text": "Base.push!\nBase.pop!(::Any)\nBase.unshift!\nBase.shift!\nBase.insert!\nBase.deleteat!\nBase.splice!\nBase.resize!\nBase.append!\nBase.prepend!Fully implemented by:Vector (a.k.a. 1-dimensional Array)\nBitVector (a.k.a. 1-dimensional BitArray)"
-},
-
-{
-    "location": "stdlib/collections.html#Base.Collections.PriorityQueue",
-    "page": "Collections and Data Structures",
-    "title": "Base.Collections.PriorityQueue",
-    "category": "Type",
-    "text": "PriorityQueue(K, V, [ord])\n\nConstruct a new PriorityQueue, with keys of type K and values/priorites of type V. If an order is not given, the priority queue is min-ordered using the default comparison for V.\n\nA PriorityQueue acts like a Dict, mapping values to their priorities, with the addition of a dequeue! function to remove the lowest priority element.\n\njulia> a = Base.Collections.PriorityQueue([\"a\",\"b\",\"c\"],[2,3,1],Base.Order.Forward)\nBase.Collections.PriorityQueue{String,Int64,Base.Order.ForwardOrdering} with 3 entries:\n  \"c\" => 1\n  \"b\" => 3\n  \"a\" => 2\n\n\n\n"
-},
-
-{
-    "location": "stdlib/collections.html#Base.Collections.enqueue!",
-    "page": "Collections and Data Structures",
-    "title": "Base.Collections.enqueue!",
-    "category": "Function",
-    "text": "enqueue!(pq, k, v)\n\nInsert the a key k into a priority queue pq with priority v.\n\njulia> a = Base.Collections.PriorityQueue([\"a\",\"b\",\"c\"],[2,3,1],Base.Order.Forward)\nBase.Collections.PriorityQueue{String,Int64,Base.Order.ForwardOrdering} with 3 entries:\n  \"c\" => 1\n  \"b\" => 3\n  \"a\" => 2\n\njulia> Base.Collections.enqueue!(a, \"d\", 4)\nBase.Collections.PriorityQueue{String,Int64,Base.Order.ForwardOrdering} with 4 entries:\n  \"c\" => 1\n  \"b\" => 3\n  \"a\" => 2\n  \"d\" => 4\n\n\n\n"
-},
-
-{
-    "location": "stdlib/collections.html#Base.Collections.dequeue!",
-    "page": "Collections and Data Structures",
-    "title": "Base.Collections.dequeue!",
-    "category": "Function",
-    "text": "dequeue!(pq)\n\nRemove and return the lowest priority key from a priority queue.\n\njulia> a = Base.Collections.PriorityQueue([\"a\",\"b\",\"c\"],[2,3,1],Base.Order.Forward)\nBase.Collections.PriorityQueue{String,Int64,Base.Order.ForwardOrdering} with 3 entries:\n  \"c\" => 1\n  \"b\" => 3\n  \"a\" => 2\n\njulia> Base.Collections.dequeue!(a)\n\"c\"\n\njulia> a\nBase.Collections.PriorityQueue{String,Int64,Base.Order.ForwardOrdering} with 2 entries:\n  \"b\" => 3\n  \"a\" => 2\n\n\n\n"
-},
-
-{
-    "location": "stdlib/collections.html#Base.Collections.peek",
-    "page": "Collections and Data Structures",
-    "title": "Base.Collections.peek",
-    "category": "Function",
-    "text": "peek(pq)\n\nReturn the lowest priority key from a priority queue without removing that key from the queue.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/collections.html#PriorityQueue-1",
-    "page": "Collections and Data Structures",
-    "title": "PriorityQueue",
-    "category": "section",
-    "text": "The PriorityQueue type is available from the Collections module. It provides a basic priority queue implementation allowing for arbitrary key and priority types. Multiple identical keys are not permitted, but the priority of existing keys can be changed efficiently.Base.Collections.PriorityQueue\nBase.Collections.enqueue!\nBase.Collections.dequeue!\nBase.Collections.peekPriorityQueue also behaves similarly to a Dict in that keys can be inserted and priorities accessed or changed using indexing notation.julia> # Julia code\n       pq = Collections.PriorityQueue();\n\njulia> # Insert keys with associated priorities\n       pq[\"a\"] = 10; pq[\"b\"] = 5; pq[\"c\"] = 15; pq\nBase.Collections.PriorityQueue{Any,Any,Base.Order.ForwardOrdering} with 3 entries:\n  \"c\" => 15\n  \"b\" => 5\n  \"a\" => 10\n\njulia> # Change the priority of an existing key\n       pq[\"a\"] = 0; pq\nBase.Collections.PriorityQueue{Any,Any,Base.Order.ForwardOrdering} with 3 entries:\n  \"c\" => 15\n  \"b\" => 5\n  \"a\" => 0"
-},
-
-{
-    "location": "stdlib/collections.html#Base.Collections.heapify",
-    "page": "Collections and Data Structures",
-    "title": "Base.Collections.heapify",
-    "category": "Function",
-    "text": "heapify(v, ord::Ordering=Forward)\n\nReturns a new vector in binary heap order, optionally using the given ordering.\n\njulia> a = [1,3,4,5,2];\n\njulia> Base.Collections.heapify(a)\n5-element Array{Int64,1}:\n 1\n 2\n 4\n 5\n 3\n\njulia> Base.Collections.heapify(a, Base.Order.Reverse)\n5-element Array{Int64,1}:\n 5\n 3\n 4\n 1\n 2\n\n\n\n"
-},
-
-{
-    "location": "stdlib/collections.html#Base.Collections.heapify!",
-    "page": "Collections and Data Structures",
-    "title": "Base.Collections.heapify!",
-    "category": "Function",
-    "text": "heapify!(v, ord::Ordering=Forward)\n\nIn-place heapify.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/collections.html#Base.Collections.isheap",
-    "page": "Collections and Data Structures",
-    "title": "Base.Collections.isheap",
-    "category": "Function",
-    "text": "isheap(v, ord::Ordering=Forward)\n\nReturn true if an array is heap-ordered according to the given order.\n\njulia> a = [1,2,3]\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> Base.Collections.isheap(a,Base.Order.Forward)\ntrue\n\njulia> Base.Collections.isheap(a,Base.Order.Reverse)\nfalse\n\n\n\n"
-},
-
-{
-    "location": "stdlib/collections.html#Base.Collections.heappush!",
-    "page": "Collections and Data Structures",
-    "title": "Base.Collections.heappush!",
-    "category": "Function",
-    "text": "heappush!(v, x, [ord])\n\nGiven a binary heap-ordered array, push a new element x, preserving the heap property. For efficiency, this function does not check that the array is indeed heap-ordered.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/collections.html#Base.Collections.heappop!",
-    "page": "Collections and Data Structures",
-    "title": "Base.Collections.heappop!",
-    "category": "Function",
-    "text": "heappop!(v, [ord])\n\nGiven a binary heap-ordered array, remove and return the lowest ordered element. For efficiency, this function does not check that the array is indeed heap-ordered.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/collections.html#Heap-Functions-1",
-    "page": "Collections and Data Structures",
-    "title": "Heap Functions",
-    "category": "section",
-    "text": "Along with the PriorityQueue type, the Collections module provides lower level functions for performing binary heap operations on arrays. Each function takes an optional ordering argument. If not given, default ordering is used, so that elements popped from the heap are given in ascending order.Base.Collections.heapify\nBase.Collections.heapify!\nBase.Collections.isheap\nBase.Collections.heappush!\nBase.Collections.heappop!"
 },
 
 {
