@@ -365,8 +365,9 @@ ismatch_warn(s::Regex, output) = ismatch(s, output)
 """
     @test_warn msg expr
 
-Test whether evaluating `expr` results in `stderr` output that contains
-the `msg` string or matches the `msg` regular expression.
+Test whether evaluating `expr` results in [`STDERR`](@ref) output that contains
+the `msg` string or matches the `msg` regular expression.  See also
+[`@test_nowarn`](@ref) to check for the absence of error output.
 """
 macro test_warn(msg, expr)
     quote
@@ -390,7 +391,7 @@ end
 """
     @test_nowarn expr
 
-Test whether evaluating `expr` results in empty `stderr` output
+Test whether evaluating `expr` results in empty [`STDERR`](@ref) output
 (no warnings or other messages).
 """
 macro test_nowarn(expr)
