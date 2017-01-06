@@ -267,11 +267,11 @@ am = map(identity, a)
 
 # other functions
 v = OffsetArray(v0, (-3,))
-@test_approx_eq v v
+@test v ≈ v
 @test parent(v') == v0'
 @test indices(v') === (1:1,-2:1)
 A = OffsetArray(rand(4,4), (-3,5))
-@test_approx_eq A A
+@test A ≈ A
 @test maximum(A) == maximum(parent(A))
 @test minimum(A) == minimum(parent(A))
 @test extrema(A) == extrema(parent(A))
@@ -321,9 +321,9 @@ I,J,N = findnz(z)
 @test std(A_3_3, 2) == OffsetArray([3,3,3]'', (A_3_3.offsets[1],0))
 @test sum(OffsetArray(ones(Int,3000), -1000)) == 3000
 
-@test_approx_eq vecnorm(v) vecnorm(parent(v))
-@test_approx_eq vecnorm(A) vecnorm(parent(A))
-@test_approx_eq vecdot(v, v) vecdot(v0, v0)
+@test vecnorm(v) ≈ vecnorm(parent(v))
+@test vecnorm(A) ≈ vecnorm(parent(A))
+@test vecdot(v, v) ≈ vecdot(v0, v0)
 
 v  = OffsetArray([1,1e100,1,-1e100], (-3,))*1000
 v2 = OffsetArray([1,-1e100,1,1e100], (5,))*1000
@@ -384,14 +384,14 @@ for s = -5:5
     for i = 1:5
         thisa = OffsetArray(a[i], (s,))
         thisc = c[mod1(i+s+5,5)]
-        @test_approx_eq fft(thisa) thisc
-        @test_approx_eq fft(thisa, 1) thisc
-        @test_approx_eq ifft(fft(thisa)) circcopy!(a1, thisa)
-        @test_approx_eq ifft(fft(thisa, 1), 1) circcopy!(a1, thisa)
-        @test_approx_eq rfft(thisa) thisc[1:3]
-        @test_approx_eq rfft(thisa, 1) thisc[1:3]
-        @test_approx_eq irfft(rfft(thisa, 1), 5, 1) a1
-        @test_approx_eq irfft(rfft(thisa, 1), 5, 1) a1
+        @test fft(thisa) ≈ thisc
+        @test fft(thisa, 1) ≈ thisc
+        @test ifft(fft(thisa)) ≈ circcopy!(a1, thisa)
+        @test ifft(fft(thisa, 1), 1) ≈ circcopy!(a1, thisa)
+        @test rfft(thisa) ≈ thisc[1:3]
+        @test rfft(thisa, 1) ≈ thisc[1:3]
+        @test irfft(rfft(thisa, 1), 5, 1) ≈ a1
+        @test irfft(rfft(thisa, 1), 5, 1) ≈ a1
     end
 end
 
