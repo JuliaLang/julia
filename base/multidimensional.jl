@@ -259,37 +259,45 @@ size(L::LogicalIndex) = (L.sum,)
 length(L::LogicalIndex) = L.sum
 collect(L::LogicalIndex) = [i for i in L]
 show(io::IO, r::LogicalIndex) = print(io, "Base.LogicalIndex(", r.mask, ")")
-# Simple linear logical indices. It'd be nice to simply punt to find, but that
-# doesn't support OffsetArrays
+# Iteration over LogicalIndex is very performance-critical, but it also must
+# support arbitrary AbstractArray{Bool}s with both Int and CartesianIndex.
+# Thus the iteration state contains an index iterator and its state. We also
+# keep track of the count of elements since we already know how many there
+# should be -- this way we don't need to look at future indices to check done.
 @inline function start(L::LogicalIndex{Int})
     r = linearindices(L.mask)
-    next(L, (1, r, start(r), false))[2]
+    return (r, start(r), 1)
 end
-# Support for LogicalIndex with CartesianIndex
 @inline function start{C<:CartesianIndex}(L::LogicalIndex{C})
     r = CartesianRange(indices(L.mask))
-    next(L, (one(C), r, start(r), false))[2]
+    return (r, start(r), 1)
 end
 @inline function next(L::LogicalIndex, s)
-    idx, r, state, isdone = s
-    while !done(r, state)
-        nextidx, state = next(r, state)
-        L.mask[nextidx] && return (idx, (nextidx, r, state, false))
+    # We're looking for the n-th true element, using iterator r at state i
+    r, i, n = s
+    while true
+        done(r, i) # Call done(r, i) for the iteration protocol, but trust done(L, s) was called
+        idx, i = next(r, i)
+        L.mask[idx] && return (idx, (r, i, n+1))
     end
-    return (idx, (nextidx, r, state, true))
 end
-done(L::LogicalIndex, s) = s[end]
-# When wrapped in a BitArray we can lean upon the internal iterator state
-@inline start{B<:BitArray}(L::LogicalIndex{Int, B}) = next(L, (0, false))[2]
+done(L::LogicalIndex, s) = s[3] > length(L)
+# When wrapping a BitArray, lean heavily upon its internals -- this is a common
+# case. Just use the Int index and count as its state.
+@inline start{B<:BitArray}(L::LogicalIndex{Int, B}) = (0, 1)
 @inline function next{B<:BitArray}(L::LogicalIndex{Int, B}, s)
-    idx = state = s[1]
-    while !done(L.mask, state)
-        b, state = next(L.mask, state)
-        b && return (idx, (state, false))
+    i, n = s
+    Bc = L.mask.chunks
+    while true
+        if Bc[_div64(i)+1] & (UInt64(1)<<_mod64(i)) != 0
+            i += 1
+            return (i, (i, n+1))
+        end
+        i += 1
     end
-    return (idx, (state, true))
 end
-@inline done{B<:BitArray}(L::LogicalIndex{Int, B}, s) = s[2]
+@inline done{B<:BitArray}(L::LogicalIndex{Int, B}, s) = s[2] > length(L)
+
 
 checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex) = checkbounds(Bool, A, I.mask)
 checkindex(::Type{Bool}, indx::AbstractUnitRange, I::LogicalIndex) = checkindex(Bool, indx, I.mask)
