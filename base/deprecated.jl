@@ -1127,34 +1127,35 @@ end)
 
 # Index conversions revamp; #19730
 function getindex(A::LogicalIndex, i::Int)
-    depwarn("indexing into logical indices is deprecated; use iteration or collect the indices into an array instead.", :getindex)
+    depwarn("getindex(A::LogicalIndex, i) is deprecated; use iteration or index into the result of `collect(A)` instead.", :getindex)
     checkbounds(A, i)
     first(Iterators.drop(A, i-1))
 end
 function to_indexes(I...)
-    depwarn("to_indexes is deprecated; pass both the source array and tuple of indices to `to_indices(A, I)` instead.", :to_indexes)
+    depwarn("to_indexes is deprecated; pass both the source array `A` and indices as `to_indices(A, $(I...))` instead.", :to_indexes)
     map(_to_index, I)
 end
 _to_index(i) = to_index(I)
 _to_index(c::Colon) = c
+const _colon_usage_msg = "convert Colons to a set of indices for indexing into array `A` by passing them in a complete tuple of indices `I` to `to_indices(A, I)`"
 function getindex(::Colon, i)
-    depwarn("indexing into Colons is deprecated; convert Colons to Slices with to_indices", :getindex)
+    depwarn("getindex(::Colon, i) is deprecated; $_colon_usage_msg", :getindex)
     to_index(i)
 end
 function unsafe_getindex(::Colon, i::Integer)
-    depwarn("indexing into Colons is deprecated; convert Colons to Slices with to_indices", :unsafe_getindex)
+    depwarn("getindex(::Colon, i) is deprecated; $_colon_usage_msg", :unsafe_getindex)
     to_index(i)
 end
 function step(::Colon)
-    depwarn("step(::Colon) is deprecated; convert Colons to Slices with to_indices", :step)
+    depwarn("step(::Colon) is deprecated; $_colon_usage_msg", :step)
     1
 end
 function isempty(::Colon)
-    depwarn("isempty(::Colon) is deprecated; convert Colons to Slices with to_indices", :isempty)
+    depwarn("isempty(::Colon) is deprecated; $_colon_usage_msg", :isempty)
     false
 end
 function in(::Integer, ::Colon)
-    depwarn("in(::Integer, ::Colon) is deprecated; convert Colons to Slices with to_indices", :in)
+    depwarn("in(::Integer, ::Colon) is deprecated; $_colon_usage_msg", :in)
     true
 end
 
