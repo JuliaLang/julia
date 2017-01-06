@@ -1400,7 +1400,7 @@ sparse(S::UniformScaling, m::Integer, n::Integer=m) = speye_scaled(S.λ, m, n)
 
 
 # TODO: More appropriate location?
-conj!(A::SparseMatrixCSC) = (broadcast!(conj, A.nzval, A.nzval); A)
+conj!(A::SparseMatrixCSC) = (@inbounds broadcast!(conj, A.nzval, A.nzval); A)
 (-)(A::SparseMatrixCSC) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), map(-, A.nzval))
 
 
