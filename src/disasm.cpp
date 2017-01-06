@@ -235,13 +235,13 @@ void SymbolTable::insertAddress(uint64_t addr)
 // Create symbols for all addresses
 void SymbolTable::createSymbols()
 {
-    uint64_t Fptr = (uint64_t)MemObj.data();
-    uint64_t Fsize = MemObj.size();
+    uintptr_t Fptr = (uintptr_t)MemObj.data();
+    uintptr_t Fsize = MemObj.size();
     for (TableType::iterator isymb = Table.begin(), esymb = Table.end();
          isymb != esymb; ++isymb) {
         std::ostringstream name;
-        uint64_t rel = isymb->first - ip;
-        uint64_t addr = isymb->first;
+        uintptr_t rel = isymb->first - ip;
+        uintptr_t addr = isymb->first;
         if (Fptr <= addr && addr < Fptr + Fsize) {
             name << "L" << rel;
         }
