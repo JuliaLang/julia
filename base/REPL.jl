@@ -134,7 +134,8 @@ function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::B
         try
             Base.sigatomic_end()
             if bt !== nothing
-                Base.display_error(errio, val, bt)
+                eval(Main, Expr(:body, Expr(:return, Expr(:call, Base.display_error,
+                                                          errio, QuoteNode(val), bt))))
                 iserr, lasterr = false, ()
             else
                 if val !== nothing && show_value
