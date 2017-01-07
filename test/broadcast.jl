@@ -386,7 +386,7 @@ end
 Base.getindex(A::Array19745, i::Integer...) = A.data[i...]
 Base.size(A::Array19745) = size(A.data)
 
-Base.Broadcast.containertype{T<:Array19745}(::Type{T}) = Array19745
+Base.Broadcast._containertype{T<:Array19745}(::Type{T}) = Array19745
 
 Base.Broadcast.promote_containertype(::Type{Array19745}, ::Type{Array19745}) = Array19745
 Base.Broadcast.promote_containertype(::Type{Array19745}, ::Type{Array})      = Array19745
@@ -435,4 +435,12 @@ end
         @test a == ["false"]
         @test f.([true, false]) == [true, "false"]
     end
+end
+
+# Test that broadcast treats type arguments as scalars, i.e. containertype yields Any,
+# even for subtypes of abstract array. (https://github.com/JuliaStats/DataArrays.jl/issues/229)
+let
+    @test Base.Broadcast.containertype(AbstractArray) == Any
+    @test broadcast(==, [1], AbstractArray) == BitArray([false])
+    @test broadcast(==, 1, AbstractArray) == false
 end

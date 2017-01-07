@@ -25,13 +25,13 @@ function broadcast!{T,S,N}(::typeof(identity), x::AbstractArray{T,N}, y::Abstrac
 end
 
 # logic for deciding the resulting container type
-containertype(x) = containertype(typeof(x))
-containertype(::Type) = Any
-containertype{T<:Ptr}(::Type{T}) = Any
-containertype{T<:Tuple}(::Type{T}) = Tuple
-containertype{T<:Ref}(::Type{T}) = Array
-containertype{T<:AbstractArray}(::Type{T}) = Array
-containertype{T<:Nullable}(::Type{T}) = Nullable
+_containertype(::Type) = Any
+_containertype{T<:Ptr}(::Type{T}) = Any
+_containertype{T<:Tuple}(::Type{T}) = Tuple
+_containertype{T<:Ref}(::Type{T}) = Array
+_containertype{T<:AbstractArray}(::Type{T}) = Array
+_containertype{T<:Nullable}(::Type{T}) = Nullable
+containertype(x) = _containertype(typeof(x))
 containertype(ct1, ct2) = promote_containertype(containertype(ct1), containertype(ct2))
 @inline containertype(ct1, ct2, cts...) = promote_containertype(containertype(ct1), containertype(ct2, cts...))
 
