@@ -46,7 +46,7 @@ cd(dirname(@__FILE__)) do
     @everywhere include("testdefs.jl")
 
     #pretty print the information about gc and mem usage
-    name_align    = max(length("Test (Worker)"), maximum(map(x -> length(x) + 3 + ndigits(nworkers()), tests)))
+    name_align    = maximum([length("Test (Worker)"); map(x -> length(x) + 3 + ndigits(nworkers()), tests)])
     elapsed_align = length("Time (s)")
     gc_align      = length("GC (s)")
     percent_align = length("GC %")

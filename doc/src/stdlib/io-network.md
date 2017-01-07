@@ -66,6 +66,7 @@ Base.println
 Base.print_with_color
 Base.info
 Base.warn
+Base.logging
 Base.Printf.@printf
 Base.Printf.@sprintf
 Base.sprint

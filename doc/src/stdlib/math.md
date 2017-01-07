@@ -9,7 +9,7 @@ Base.:-(::Any, ::Any)
 Base.:*(::Any, ::Any...)
 Base.:(/)
 Base.:\(::Any, ::Any)
-Base.:^(::Any, ::Any)
+Base.:^(::Number, ::Number)
 Base.fma
 Base.muladd
 Base.div

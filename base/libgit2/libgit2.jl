@@ -386,51 +386,91 @@ function merge!(repo::GitRepo;
                 merge_opts::MergeOptions = MergeOptions(),
                 checkout_opts::CheckoutOptions = CheckoutOptions())
     # merge into head branch
-    with(head(repo)) do head_ref
-        upst_anns = if !isempty(committish) # merge committish into HEAD
-            if committish == Consts.FETCH_HEAD # merge FETCH_HEAD
-                fheads = fetchheads(repo)
-                filter!(fh->fh.ismerge, fheads)
-                if isempty(fheads)
-                    throw(GitError(Error.Merge, Error.ERROR,
-                                   "There is no fetch reference for this branch."))
-                end
-                map(fh->GitAnnotated(repo,fh), fheads)
-            else # merge commitish
-                [GitAnnotated(repo, committish)]
+    upst_anns = if !isempty(committish) # merge committish into HEAD
+        if committish == Consts.FETCH_HEAD # merge FETCH_HEAD
+            fheads = fetchheads(repo)
+            filter!(fh->fh.ismerge, fheads)
+            if isempty(fheads)
+                throw(GitError(Error.Merge, Error.ERROR,
+                               "There is no fetch reference for this branch."))
             end
-        else
-            if !isempty(branch) # merge provided branch into HEAD
-                with(GitReference(repo, branch)) do brn_ref
-                    [GitAnnotated(repo, brn_ref)]
-                end
-            else # try to get tracking remote branch for the head
-                if !isattached(repo)
-                    throw(GitError(Error.Merge, Error.ERROR,
-                                   "Repository HEAD is detached. Remote tracking branch cannot be used."))
-                end
-                with(upstream(head_ref)) do tr_brn_ref
-                    if tr_brn_ref === nothing
-                        throw(GitError(Error.Merge, Error.ERROR,
-                                       "There is no tracking information for the current branch."))
-                    end
-                    [GitAnnotated(repo, tr_brn_ref)]
-                end
-            end
+            map(fh->GitAnnotated(repo,fh), fheads)
+        else # merge commitish
+            [GitAnnotated(repo, committish)]
         end
+    else
+        if !isempty(branch) # merge provided branch into HEAD
+            with(GitReference(repo, branch)) do brn_ref
+                [GitAnnotated(repo, brn_ref)]
+            end
+        else # try to get tracking remote branch for the head
+            if !isattached(repo)
+                throw(GitError(Error.Merge, Error.ERROR,
+                               "Repository HEAD is detached. Remote tracking branch cannot be used."))
+            end
+            if isorphan(repo)
+                # this isn't really a merge, but really moving HEAD
+                # https://github.com/libgit2/libgit2/issues/2135#issuecomment-35997764
+                # try to figure out remote tracking of orphan head
 
-        try
-            merge!(repo, upst_anns, fastforward,
-                   merge_opts=merge_opts,
-                   checkout_opts=checkout_opts)
-        finally
-            map(finalize, upst_anns)
+                m = with(GitReference(repo, Consts.HEAD_FILE)) do head_sym_ref
+                    match(r"refs/heads/(.*)", fullname(head_sym_ref))
+                end
+                if m === nothing
+                    throw(GitError(Error.Merge, Error.ERROR,
+                                   "Unable to determine name of orphan branch."))
+                end
+                branchname = m.captures[1]
+                remotename = with(GitConfig, repo) do cfg
+                    LibGit2.get(String, cfg, "branch.$branchname.remote")
+                end
+                obj = with(GitReference(repo, "refs/remotes/$remotename/$branchname")) do ref
+                    LibGit2.Oid(ref)
+                end
+                with(get(GitCommit, repo, obj)) do cmt
+                    LibGit2.create_branch(repo, branchname, cmt)
+                end
+                return true
+            else
+                with(head(repo)) do head_ref
+                    with(upstream(head_ref)) do tr_brn_ref
+                        if tr_brn_ref === nothing
+                            throw(GitError(Error.Merge, Error.ERROR,
+                                           "There is no tracking information for the current branch."))
+                        end
+                        [GitAnnotated(repo, tr_brn_ref)]
+                    end
+                end
+            end
         end
+    end
+
+    try
+        merge!(repo, upst_anns, fastforward,
+               merge_opts=merge_opts,
+               checkout_opts=checkout_opts)
+    finally
+        map(finalize, upst_anns)
     end
 end
 
-""" git rebase --merge [--onto <newbase>] [<upstream>] """
-function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractString="")
+"""
+    LibGit2.rebase!(repo::GitRepo[, upstream::AbstractString])
+
+Attempt an automatic merge rebase of the current branch, from `upstream` if provided, or
+otherwise from the upstream tracking branch.
+
+If any conflicts arise which cannot be automatically resolved, the rebase will abort,
+leaving the repository and working tree in its original state, and the function will throw
+a `GitError`. This is roughly equivalent to the following command line statement:
+
+    git rebase --merge [<upstream>]
+    if [ -d ".git/rebase-merge" ]; then
+        git rebase --abort
+    fi
+
+"""
+function rebase!(repo::GitRepo, upstream::AbstractString="")
     with(head(repo)) do head_ref
         head_ann = GitAnnotated(repo, head_ref)
         upst_ann  = if isempty(upstream)
@@ -455,6 +495,7 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
                     finish(rbs, sig)
                 catch err
                     abort(rbs)
+                    rethrow(err)
                 finally
                     finalize(rbs)
                 end

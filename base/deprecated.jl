@@ -831,6 +831,9 @@ function convert(::Type{UpperTriangular}, A::Bidiagonal)
     end
 end
 
+# Deprecate three-arg SubArray since the constructor doesn't need the dims tuple
+@deprecate SubArray(parent::AbstractArray, indexes::Tuple, dims::Tuple) SubArray(parent, indexes)
+
 # Deprecate vectorized unary functions over sparse matrices in favor of compact broadcast syntax (#17265).
 for f in (:sin, :sinh, :sind, :asin, :asinh, :asind,
         :tan, :tanh, :tand, :atan, :atanh, :atand,
@@ -1345,6 +1348,19 @@ function quadgk(args...; kwargs...)
                  "Run Pkg.add(\"QuadGK\") to install QuadGK on Julia v0.6 and later, and then run `using QuadGK`."))
 end
 export quadgk
+
+# Collections functions moved to a package (#19800)
+module Collections
+    export PriorityQueue, enqueue!, dequeue!, heapify!, heapify, heappop!, heappush!, isheap, peek
+    for f in (:PriorityQueue, :enqueue!, :dequeue!, :heapify!, :heapify, :heappop!, :heappush!, :isheap, :peek)
+        @eval function ($f)(args...; kwargs...)
+            error(string($f, args, " has been moved to the package DataStructures.jl.\n",
+                         "Run Pkg.add(\"DataStructures\") to install DataStructures on Julia v0.6 and later, ",
+                         "and then run `using DataStructures`."))
+        end
+    end
+end
+export Collections
 
 # Broadcast now returns a BitArray when the resulting eltype is Bool (#17623)
 @deprecate bitbroadcast broadcast

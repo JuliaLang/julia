@@ -273,7 +273,7 @@ temp_pkg_dir() do
             Pkg.test("IDoNotExist")
             error("unexpected")
         catch ex
-            @test isa(ex,Pkg.PkgError)
+            @test isa(ex,Pkg.Entry.PkgTestError)
             @test ex.msg == "IDoNotExist is not an installed package"
         end
 
@@ -281,7 +281,7 @@ temp_pkg_dir() do
             Pkg.test("IDoNotExist1", "IDoNotExist2")
             error("unexpected")
         catch ex
-            @test isa(ex,Pkg.PkgError)
+            @test isa(ex,Pkg.Entry.PkgTestError)
             @test ex.msg == "IDoNotExist1 and IDoNotExist2 are not installed packages"
         end
     end
@@ -560,4 +560,10 @@ temp_pkg_dir() do
             "redirect_stderr(STDOUT); using Example; Pkg.update(\"$package\")"`))
         @test contains(msg, "- $package\nRestart Julia to use the updated versions.")
     end
+end
+
+let
+    io = IOBuffer()
+    Base.showerror(io, Base.Pkg.Entry.PkgTestError("ppp"), backtrace())
+    @test !contains(String(take!(io)), "backtrace()")
 end

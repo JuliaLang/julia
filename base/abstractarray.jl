@@ -127,11 +127,41 @@ _length(A) = length(A)
 endof(a::AbstractArray) = length(a)
 first(a::AbstractArray) = a[first(eachindex(a))]
 
+"""
+    first(coll)
+
+Get the first element of an iterable collection. Returns the start point of a
+`Range` even if it is empty.
+
+```jldoctest
+julia> first(2:2:10)
+2
+
+julia> first([1; 2; 3; 4])
+1
+```
+"""
 function first(itr)
     state = start(itr)
     done(itr, state) && throw(ArgumentError("collection must be non-empty"))
     next(itr, state)[1]
 end
+
+"""
+    last(coll)
+
+Get the last element of an ordered collection, if it can be computed in O(1) time. This is
+accomplished by calling [`endof`](@ref) to get the last index. Returns the end
+point of a `Range` even if it is empty.
+
+```jldoctest
+julia> last(1:2:10)
+9
+
+julia> last([1; 2; 3; 4])
+4
+```
+"""
 last(a) = a[end]
 
 """

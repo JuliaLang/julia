@@ -873,3 +873,26 @@ let b = IOBuffer()
 end
 
 @test isnan(sqrt(BigFloat(NaN)))
+
+# PR 17217 -- BigFloat constructors with given precision and rounding mode
+
+# test constructors and `big` with additional precision and rounding mode:
+
+for prec in (10, 100, 1000)
+    for val in ("3.1", pi, "-1.3", 3.1)
+        let
+            a = BigFloat(val)
+            b = BigFloat(val, prec)
+            c = BigFloat(val, RoundUp)
+            d = BigFloat(val, prec, RoundDown)
+            e = BigFloat(val, prec, RoundUp)
+
+            @test precision(a) == precision(BigFloat)
+            @test precision(b) == prec
+            @test precision(c) == precision(BigFloat)
+            @test precision(d) == prec
+            @test precision(e) == prec
+            (val != 3.1) && @test e > d     # rounding has no effect when constructing from Float64
+        end
+    end
+end

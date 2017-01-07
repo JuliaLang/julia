@@ -275,6 +275,15 @@ push!(t::Associative, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q
 
 # hashing objects by identity
 
+"""
+    ObjectIdDict([itr])
+
+`ObjectIdDict()` constructs a hash table where the keys are (always)
+object identities.  Unlike `Dict` it is not parameterized on its key
+and value type and thus its `eltype` is always `Pair{Any,Any}`.
+
+See [`Dict`](@ref) for further help.
+"""
 type ObjectIdDict <: Associative{Any,Any}
     ht::Vector{Any}
     ndel::Int

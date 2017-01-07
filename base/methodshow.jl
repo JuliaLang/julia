@@ -39,9 +39,7 @@ function arg_decl_parts(m::Method)
     else
         tv = Any[tv...]
     end
-    if m.isstaged
-        src = m.unspecialized.inferred
-    elseif isdefined(m, :source)
+    if isdefined(m, :source)
         src = m.source
     else
         src = nothing
@@ -63,7 +61,7 @@ function kwarg_decl(m::Method, kwtype::DataType)
     kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, max_world(m))
     if kwli !== nothing
         kwli = kwli::Method
-        src = kwli.isstaged ? kwli.unspecialized.inferred : kwli.source
+        src = kwli.source
         kws = filter(x->!('#' in string(x)), src.slotnames[kwli.nargs+1:end])
         # ensure the kwarg... is always printed last. The order of the arguments are not
         # necessarily the same as defined in the function

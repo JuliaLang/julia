@@ -471,3 +471,16 @@ foo19641() = let a = 1.0
     Core.Inference.return_type(x -> x + a, Tuple{Float64})
 end
 @inferred foo19641()
+
+test_fast_eq(a, b) = @fastmath a == b
+test_fast_ne(a, b) = @fastmath a != b
+test_fast_lt(a, b) = @fastmath a < b
+test_fast_le(a, b) = @fastmath a <= b
+@inferred test_fast_eq(1f0, 1f0)
+@inferred test_fast_ne(1f0, 1f0)
+@inferred test_fast_lt(1f0, 1f0)
+@inferred test_fast_le(1f0, 1f0)
+@inferred test_fast_eq(1.0, 1.0)
+@inferred test_fast_ne(1.0, 1.0)
+@inferred test_fast_lt(1.0, 1.0)
+@inferred test_fast_le(1.0, 1.0)

@@ -158,6 +158,12 @@ include("io.jl")
 include("iostream.jl")
 include("iobuffer.jl")
 
+# define MIME"foo/bar" early so that we can overload 3-arg show
+immutable MIME{mime} end
+macro MIME_str(s)
+    :(MIME{$(Expr(:quote, Symbol(s)))})
+end
+
 # strings & printing
 include("char.jl")
 include("intfuncs.jl")
@@ -238,7 +244,6 @@ include("reducedim.jl")  # macros in this file relies on string.jl
 # basic data structures
 include("ordering.jl")
 importall .Order
-include("collections.jl")
 
 # Combinatorics
 include("sort.jl")
@@ -311,6 +316,10 @@ include("REPLCompletions.jl")
 include("REPL.jl")
 include("client.jl")
 
+# Stack frames and traces
+include("stacktraces.jl")
+importall .StackTraces
+
 # misc useful functions & macros
 include("util.jl")
 
@@ -341,10 +350,6 @@ include("libgit2/libgit2.jl")
 
 # package manager
 include("pkg/pkg.jl")
-
-# Stack frames and traces
-include("stacktraces.jl")
-importall .StackTraces
 
 # profiler
 include("profile.jl")

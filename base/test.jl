@@ -16,7 +16,7 @@ module Test
 export @test, @test_throws, @test_broken, @test_skip
 export @testset
 # Legacy approximate testing functions, yet to be included
-export @test_approx_eq, @test_approx_eq_eps, @inferred
+export @test_approx_eq_eps, @inferred
 export detect_ambiguities
 export GenericString
 
@@ -406,6 +406,10 @@ function Base.show(io::IO, ex::TestSetException)
     print(io, ex.broken, " broken.")
 end
 
+function Base.showerror(io::IO, ex::TestSetException, bt; backtrace=true)
+    print_with_color(Base.error_color(), io, string(ex))
+end
+
 #-----------------------------------------------------------------------
 
 """
@@ -417,12 +421,20 @@ immutable FallbackTestSet <: AbstractTestSet
 end
 fallback_testset = FallbackTestSet()
 
+type FallbackTestSetException <: Exception
+    msg::String
+end
+
+function Base.showerror(io::IO, ex::FallbackTestSetException, bt; backtrace=true)
+    print_with_color(Base.error_color(), io, ex.msg)
+end
+
 # Records nothing, and throws an error immediately whenever a Fail or
 # Error occurs. Takes no action in the event of a Pass or Broken result
 record(ts::FallbackTestSet, t::Union{Pass,Broken}) = t
 function record(ts::FallbackTestSet, t::Union{Fail,Error})
     println(t)
-    error("There was an error during testing")
+    throw(FallbackTestSetException("There was an error during testing"))
 end
 # We don't need to do anything as we don't record anything
 finish(ts::FallbackTestSet) = ts
@@ -952,12 +964,15 @@ end
 """
     @test_approx_eq(a, b)
 
-Test two floating point numbers `a` and `b` for equality taking into account
-small numerical errors.
+Deprecated. Test two floating point numbers `a` and `b` for equality taking into
+account small numerical errors.
 """
 macro test_approx_eq(a, b)
+    Base.depwarn(string("@test_approx_eq is deprecated, use `@test ", a, " ≈ ", b, "` instead"),
+                 Symbol("@test_approx_eq"))
     :(test_approx_eq($(esc(a)), $(esc(b)), $(string(a)), $(string(b))))
 end
+export @test_approx_eq
 
 _args_and_call(args...; kwargs...) = (args[1:end-1], kwargs, args[end](args[1:end-1]...; kwargs...))
 """

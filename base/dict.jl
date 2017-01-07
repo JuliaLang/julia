@@ -128,6 +128,7 @@ type Dict{K,V} <: Associative{K,V}
             d.maxprobe)
     end
 end
+# Note the constructors of WeakKeyDict mirror these here, keep in sync.
 Dict() = Dict{Any,Any}()
 Dict(kv::Tuple{}) = Dict()
 copy(d::Dict) = Dict(d)
@@ -141,7 +142,7 @@ Dict(     ps::Pair...)                 = Dict{Any,Any}(ps)
 
 function Dict(kv)
     try
-        Base.dict_with_eltype(kv, eltype(kv))
+        Base.associative_with_eltype(Dict, kv, eltype(kv))
     catch e
         if any(x->isempty(methods(x, (typeof(kv),))), [start, next, done]) ||
             !all(x->isa(x,Union{Tuple,Pair}),kv)
@@ -154,17 +155,17 @@ end
 
 typealias TP{K,V} Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
 
-dict_with_eltype{K,V}(kv, ::TP{K,V}) = Dict{K,V}(kv)
-dict_with_eltype{K,V}(kv::Generator, ::TP{K,V}) = Dict{K,V}(kv)
-dict_with_eltype{K,V}(::Type{Pair{K,V}}) = Dict{K,V}()
-dict_with_eltype(::Type) = Dict()
-dict_with_eltype(kv, t) = grow_to!(dict_with_eltype(_default_eltype(typeof(kv))), kv)
-function dict_with_eltype(kv::Generator, t)
+associative_with_eltype{K,V}(DT, kv, ::TP{K,V}) = DT{K,V}(kv)
+associative_with_eltype{K,V}(DT, kv::Generator, ::TP{K,V}) = DT{K,V}(kv)
+associative_with_eltype{K,V}(DT, ::Type{Pair{K,V}}) = DT{K,V}()
+associative_with_eltype(DT, ::Type) = DT()
+associative_with_eltype(DT, kv, t) = grow_to!(associative_with_eltype(DT, _default_eltype(typeof(kv))), kv)
+function associative_with_eltype(DT, kv::Generator, t)
     T = _default_eltype(typeof(kv))
     if T <: Union{Pair,NTuple{2}} && isleaftype(T)
-        return dict_with_eltype(kv, T)
+        return associative_with_eltype(DT, kv, T)
     end
-    return grow_to!(dict_with_eltype(T), kv)
+    return grow_to!(associative_with_eltype(DT, T), kv)
 end
 
 # this is a special case due to (1) allowing both Pairs and Tuples as elements,
@@ -283,6 +284,23 @@ function sizehint!(d::Dict, newsz)
     rehash!(d, newsz)
 end
 
+"""
+    empty!(collection) -> collection
+
+Remove all elements from a `collection`.
+
+```jldoctest
+julia> A = Dict("a" => 1, "b" => 2)
+Dict{String,Int64} with 2 entries:
+  "b" => 2
+  "a" => 1
+
+julia> empty!(A);
+
+julia> A
+Dict{String,Int64} with 0 entries
+```
+"""
 function empty!{K,V}(h::Dict{K,V})
     fill!(h.slots, 0x0)
     sz = length(h.slots)

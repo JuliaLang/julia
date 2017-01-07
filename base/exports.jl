@@ -2,7 +2,6 @@
 
 export
 # Modules
-    Collections,
     FFTW,
     Meta,
     Operators,
@@ -89,7 +88,6 @@ export
     Regex,
     RegexMatch,
     RemoteChannel,
-    RepString,
     RevString,
     RoundFromZero,
     RoundDown,
@@ -810,6 +808,7 @@ export
     isxdigit,
     join,
     lcfirst,
+    logging,
     lowercase,
     lpad,
     lstrip,
