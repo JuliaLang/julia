@@ -3083,7 +3083,12 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
             T_prjlvalue,
             ctx.spvals_ptr,
             i + sizeof(jl_svec_t) / sizeof(jl_value_t*));
-    return mark_julia_type(ctx, tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(bp)), true, jl_any_type, false);
+    Value *sp = tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(bp));
+    Value *isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp),
+            maybe_decay_untracked(literal_pointer_val(ctx, (jl_value_t*)jl_tvar_type)));
+    jl_sym_t *name = (jl_sym_t*)jl_svecref(ctx.linfo->def.method->sparam_syms, i);
+    undef_var_error_ifnot(ctx, isnull, name);
+    return mark_julia_type(ctx, sp, true, jl_any_type, false);
 }
 
 static jl_cgval_t emit_global(jl_codectx_t &ctx, jl_sym_t *sym)
@@ -3134,8 +3139,20 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
     else if (jl_is_expr(sym)) {
         assert(((jl_expr_t*)sym)->head == static_parameter_sym && "malformed isdefined expression");
         size_t i = jl_unbox_long(jl_exprarg(sym, 0)) - 1;
-        (void)i;
-        return mark_julia_const(jl_true);
+        if (jl_svec_len(ctx.linfo->sparam_vals) > 0) {
+            jl_value_t *e = jl_svecref(ctx.linfo->sparam_vals, i);
+            if (!jl_is_typevar(e)) {
+                return mark_julia_const(jl_true);
+            }
+        }
+        assert(ctx.spvals_ptr != NULL);
+        Value *bp = ctx.builder.CreateConstInBoundsGEP1_32(
+                T_prjlvalue,
+                ctx.spvals_ptr,
+                i + sizeof(jl_svec_t) / sizeof(jl_value_t*));
+        Value *sp = tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(bp));
+        isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp),
+            maybe_decay_untracked(literal_pointer_val(ctx, (jl_value_t*)jl_tvar_type)));
     }
     else {
         jl_module_t *modu;
@@ -4431,10 +4448,10 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
     // check the cache
     jl_typemap_entry_t *sf = NULL;
     if (jl_cfunction_list.unknown != jl_nothing) {
-        sf = jl_typemap_assoc_by_type(jl_cfunction_list, (jl_tupletype_t*)cfunc_sig, NULL, 1, /*subtype*/0, /*offs*/0, /*world*/1);
-        if (sf != NULL) {
+        sf = jl_typemap_assoc_by_type(jl_cfunction_list, (jl_tupletype_t*)cfunc_sig, NULL, /*subtype*/0, /*offs*/0, /*world*/1);
+        if (sf) {
             jl_value_t *v = sf->func.value;
-            if (v != NULL) {
+            if (v) {
                 if (jl_is_svec(v))
                     v = jl_svecref(v, 0);
                 Function *f = (Function*)jl_unbox_voidpointer(v);

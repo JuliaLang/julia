@@ -897,7 +897,8 @@ jl_value_t *jl_parse_eval_all(const char *fname,
             jl_get_ptls_states()->world_age = jl_world_counter;
             form = scm_to_julia(fl_ctx, expansion, 0);
             jl_sym_t *head = NULL;
-            if (jl_is_expr(form)) head = ((jl_expr_t*)form)->head;
+            if (jl_is_expr(form))
+                head = ((jl_expr_t*)form)->head;
             JL_SIGATOMIC_END();
             jl_get_ptls_states()->world_age = jl_world_counter;
             if (head == jl_incomplete_sym)

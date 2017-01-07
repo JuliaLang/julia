@@ -9,8 +9,59 @@ struct BitPerm_19352
     BitPerm_19352(xs::Vararg{Any,8}) = BitPerm(map(UInt8, xs))
 end
 
+# ntuples
+nttest1(x::NTuple{n, Int}) where {n} = n
+@test nttest1(()) == 0
+@test nttest1((1, 2)) == 2
+@test NTuple <: Tuple
+@test (NTuple{T, Int32} where T) <: Tuple{Vararg{Int32}}
+@test !((NTuple{T, Int32} where T) <: Tuple{Int32, Vararg{Int32}})
+@test Tuple{Vararg{Int32}} <: (NTuple{T, Int32} where T)
+@test Tuple{Int32, Vararg{Int32}} <: (NTuple{T, Int32} where T)
+
+# #17198
+@test_throws BoundsError convert(Tuple{Int}, (1.0, 2.0, 3.0))
+# #21238
+@test_throws MethodError convert(Tuple{Int, Int, Int}, (1, 2))
+
 @testset "conversion and construction" begin
-    @test convert(Tuple, (1,2)) == (1,2)
+    @test convert(Tuple, ()) === ()
+    @test convert(Tuple, (1, 2)) === (1, 2)
+    @test convert(Tuple, (1.0, 2)) === (1.0, 2)
+
+    @test convert(NTuple, ()) === ()
+    @test convert(Tuple{}, ()) === ()
+    @test convert(Tuple{Vararg{Int}}, ()) === ()
+    @test convert(Tuple{Vararg{T}} where T<:Integer, ()) === ()
+
+    @test convert(NTuple{3, Int}, (1, 2, 3)) === (1, 2, 3)
+    @test convert(NTuple, (1, 2, 3)) === (1, 2, 3)
+    @test convert(Tuple{Vararg{Int}}, (1, 2, 3)) === (1, 2, 3)
+    @test convert(Tuple{Int, Vararg{Int}}, (1, 2, 3)) === (1, 2, 3)
+    @test convert(Tuple{Vararg{T}} where T<:Integer, (1, 2, 3)) === (1, 2, 3)
+    @test convert(Tuple{T, Vararg{T}} where T<:Integer, (1, 2, 3)) === (1, 2, 3)
+    @test convert(Tuple{Int, Int, Float64}, (1, 2, 3)) === (1, 2, 3.0)
+
+    @test convert(Tuple{Float64, Int, UInt8}, (1.0, 2, 0x3)) === (1.0, 2, 0x3)
+    @test convert(NTuple, (1.0, 2, 0x3)) === (1.0, 2, 0x3)
+    @test convert(Tuple{Vararg{Int}}, (1.0, 2, 0x3)) === (1, 2, 3)
+    @test convert(Tuple{Int, Vararg{Int}}, (1.0, 2, 0x3)) === (1, 2, 3)
+    @test convert(Tuple{Vararg{T}} where T<:Integer, (1.0, 2, 0x3)) === (1, 2, 0x3)
+    @test convert(Tuple{T, Vararg{T}} where T<:Integer, (1.0, 2, 0x3)) === (1, 2, 0x3)
+    @test convert(NTuple{3, Int}, (1.0, 2, 0x3)) === (1, 2, 3)
+    @test convert(Tuple{Int, Int, Float64}, (1.0, 2, 0x3)) === (1, 2, 3.0)
+
+    # TODO: seems like these all should throw BoundsError?
+    @test_throws MethodError convert(Tuple{Int}, ())
+    @test_throws MethodError convert(Tuple{Int, Vararg{Int}}, ())
+    @test_throws BoundsError convert(Tuple{}, (1, 2, 3))
+    @test_throws BoundsError convert(Tuple{}, (1.0, 2, 3))
+    @test_throws MethodError convert(NTuple{3, Int}, ())
+    @test_throws MethodError convert(NTuple{3, Int}, (1, 2))
+    @test_throws BoundsError convert(NTuple{3, Int}, (1, 2, 3, 4))
+    @test_throws MethodError convert(Tuple{Int, Int, Float64}, ())
+    @test_throws MethodError convert(Tuple{Int, Int, Float64}, (1, 2))
+    @test_throws BoundsError convert(Tuple{Int, Int, Float64}, (1, 2, 3, 4))
 
     # PR #15516
     @test Tuple{Char,Char}("za") === ('z','a')
@@ -295,3 +346,12 @@ end
 # https://github.com/JuliaLang/julia/issues/21026#issuecomment-317113307
 const VecTuple21026{T} = Tuple{VecElement{T}}
 @test convert(VecTuple21026, (1,)) === (VecElement(1),)
+
+@test convert(Tuple{Complex{T}, Complex{T}} where T<:Real, (1, 2)) ===
+    (Complex(1), Complex(2))
+@test convert(Tuple{Complex{T}, Complex{T}} where T<:Real, (1, 2.0)) ===
+    (Complex(1), Complex(2.0))
+@test convert(Tuple{Complex, Complex}, (1, 2)) ===
+    (Complex(1), Complex(2))
+@test convert(Tuple{Complex, Complex}, (1, 2.0)) ===
+    (Complex(1), Complex(2.0))

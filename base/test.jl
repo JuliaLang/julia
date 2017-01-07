@@ -19,7 +19,7 @@ export @test, @test_throws, @test_broken, @test_skip, @test_warn, @test_nowarn
 export @testset
 # Legacy approximate testing functions, yet to be included
 export @inferred
-export detect_ambiguities
+export detect_ambiguities, detect_unbound_args
 export GenericString, GenericSet, GenericDict, GenericArray
 
 #-----------------------------------------------------------------------
@@ -1256,6 +1256,107 @@ function detect_ambiguities(mods...;
     end
     return collect(ambs)
 end
+
+"""
+    detect_unbound_args(mod1, mod2...; imported=false, recursive=false)
+
+Returns a vector of `Method`s which may have unbound type parameters.
+Use `imported=true` if you wish to also test functions that were
+imported into these modules from elsewhere.
+Use `recursive=true` to test in all submodules.
+"""
+function detect_unbound_args(mods...;
+                             imported::Bool = false,
+                             recursive::Bool = false)
+    ambs = Set{Method}()
+    for mod in mods
+        for n in names(mod, true, imported)
+            Base.isdeprecated(mod, n) && continue
+            if !isdefined(mod, n)
+                println("Skipping ", mod, '.', n)  # typically stale exports
+                continue
+            end
+            f = Base.unwrap_unionall(getfield(mod, n))
+            if recursive && isa(f, Module) && module_parent(f) === mod && module_name(f) === n
+                subambs = detect_unbound_args(f, imported=imported, recursive=recursive)
+                union!(ambs, subambs)
+            elseif isa(f, DataType) && isdefined(f.name, :mt)
+                mt = Base.MethodList(f.name.mt)
+                for m in mt
+                    if has_unbound_vars(m.sig)
+                        tuple_sig = Base.unwrap_unionall(m.sig)::DataType
+                        if Base.isvatuple(tuple_sig)
+                            params = tuple_sig.parameters[1:(end - 1)]
+                            tuple_sig = Base.rewrap_unionall(Tuple{params...}, m.sig)
+                            mf = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tuple_sig, typemax(UInt))
+                            if mf != nothing && mf.func !== m && mf.func.sig <: tuple_sig
+                                continue
+                            end
+                        end
+                        push!(ambs, m)
+                    end
+                end
+            end
+        end
+    end
+    return collect(ambs)
+end
+
+# find if var will be constrained to have a definite value
+# in any concrete leaftype subtype of typ
+function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool)
+    typ === var && return true
+    while typ isa UnionAll
+        covariant && constrains_param(var, typ.var.ub, covariant) && return true
+        # typ.var.lb doesn't constrain var
+        typ = typ.body
+    end
+    if typ isa Union
+        # for unions, verify that both options would constrain var
+        ba = constrains_param(var, typ.a, covariant)
+        bb = constrains_param(var, typ.b, covariant)
+        (ba && bb) && return true
+    elseif typ isa DataType
+        # return true if any param constrains var
+        fc = length(typ.parameters)
+        if fc > 0
+            if typ.name === Tuple.name
+                # vararg tuple needs special handling
+                for i in 1:(fc - 1)
+                    p = typ.parameters[i]
+                    constrains_param(var, p, covariant) && return true
+                end
+                lastp = typ.parameters[fc]
+                vararg = Base.unwrap_unionall(lastp)
+                if vararg isa DataType && vararg.name === Base._va_typename
+                    N = vararg.parameters[2]
+                    constrains_param(var, N, covariant) && return true
+                    # T = vararg.parameters[1] doesn't constrain var
+                else
+                    constrains_param(var, lastp, covariant) && return true
+                end
+            else
+                for i in 1:fc
+                    p = typ.parameters[i]
+                    constrains_param(var, p, false) && return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+function has_unbound_vars(@nospecialize sig)
+    while sig isa UnionAll
+        var = sig.var
+        sig = sig.body
+        if !constrains_param(var, sig, true)
+            return true
+        end
+    end
+    return false
+end
+
 
 """
 The `GenericString` can be used to test generic string APIs that program to

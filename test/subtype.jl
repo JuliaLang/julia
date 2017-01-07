@@ -14,7 +14,7 @@ notequal_type(@nospecialize(x),@nospecialize(y)) = !isequal_type(x, y)
 
 _type_intersect(@nospecialize(x), @nospecialize(y)) = ccall(:jl_intersect_types, Any, (Any, Any), x, y)
 
-intersection_env(@nospecialize(x), @nospecialize(y)) = ccall(:jl_env_from_type_intersection, Any, (Any,Any), x, y)
+intersection_env(@nospecialize(x), @nospecialize(y)) = ccall(:jl_type_intersection_with_env, Any, (Any,Any), x, y)
 
 # level 1: no varags, union, UnionAll
 function test_1()

@@ -64,12 +64,6 @@ end
 convert(::Type{Any}, @nospecialize(x)) = x
 convert(::Type{T}, x::T) where {T} = x
 
-convert(::Type{Tuple{}}, ::Tuple{}) = ()
-convert(::Type{Tuple}, x::Tuple) = x
-convert(::Type{Tuple{Vararg{T}}}, x::Tuple) where {T} = cnvt_all(T, x...)
-cnvt_all(T) = ()
-cnvt_all(T, x, rest...) = tuple(convert(T,x), cnvt_all(T, rest...)...)
-
 """
     @eval [mod,] ex
 
@@ -86,13 +80,24 @@ end
 argtail(x, rest...) = rest
 tail(x::Tuple) = argtail(x...)
 
+# TODO: a better / more infer-able definition would pehaps be
+#   tuple_type_head(T::Type) = fieldtype(T::Type{<:Tuple}, 1)
 tuple_type_head(T::UnionAll) = (@_pure_meta; UnionAll(T.var, tuple_type_head(T.body)))
+function tuple_type_head(T::Union)
+    @_pure_meta
+    return Union{tuple_type_head(T.a), tuple_type_head(T.b)}
+end
 function tuple_type_head(T::DataType)
     @_pure_meta
     T.name === Tuple.name || throw(MethodError(tuple_type_head, (T,)))
     return unwrapva(T.parameters[1])
 end
+
 tuple_type_tail(T::UnionAll) = (@_pure_meta; UnionAll(T.var, tuple_type_tail(T.body)))
+function tuple_type_tail(T::Union)
+    @_pure_meta
+    return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
+end
 function tuple_type_tail(T::DataType)
     @_pure_meta
     T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
@@ -159,11 +164,44 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-convert(::Type{T}, x::Tuple{Any,Vararg{Any}}) where {T<:Tuple{Any,Vararg{Any}}} =
-    tuple(convert(tuple_type_head(T),x[1]), convert(tuple_type_tail(T), tail(x))...)
-convert(::Type{T}, x::T) where {T<:Tuple{Any,Vararg{Any}}} = x
+convert(::Type{T}, x::T) where {T<:Tuple{Any, Vararg{Any}}} = x
+convert(::Type{T}, x::Tuple{Any, Vararg{Any}}) where {T<:Tuple} =
+    (convert(tuple_type_head(T), x[1]), convert(tuple_type_tail(T), tail(x))...)
 
-oftype(x,c) = convert(typeof(x),c)
+# TODO: the following definitions are equivalent (behaviorally) to the above method
+# I think they may be faster / more efficient for inference,
+# if we could enable them, but are they?
+# TODO: These currently can't be used (#21026, #23017) since with
+#     z(::Type{<:Tuple{Vararg{T}}}) where {T} = T
+#   calling
+#     z(Tuple{Val{T}} where T)
+#   fails, even though `Type{Tuple{Val}} == Type{Tuple{Val{S}} where S}`
+#   and so T should be `Val` (aka `Val{S} where S`)
+#convert(_::Type{Tuple{S}}, x::Tuple{S}) where {S} = x
+#convert(_::Type{Tuple{S}}, x::Tuple{Any}) where {S} = (convert(S, x[1]),)
+#convert(_::Type{T}, x::T) where {S, N, T<:Tuple{S, Vararg{S, N}}} = x
+#convert(_::Type{Tuple{S, Vararg{S, N}}},
+#        x::Tuple{Any, Vararg{Any, N}}) where
+#       {S, N} = cnvt_all(S, x...)
+#convert(_::Type{Tuple{Vararg{S, N}}},
+#        x::Tuple{Vararg{Any, N}}) where
+#       {S, N} = cnvt_all(S, x...)
+# TODO: These currently can't be used since
+#   Type{NTuple} <: (Type{Tuple{Vararg{S}}} where S) is true
+#   even though the value S doesn't exist
+#convert(_::Type{Tuple{Vararg{S}}},
+#        x::Tuple{Any, Vararg{Any}}) where
+#       {S} = cnvt_all(S, x...)
+#convert(_::Type{Tuple{Vararg{S}}},
+#        x::Tuple{Vararg{Any}}) where
+#       {S} = cnvt_all(S, x...)
+#cnvt_all(T) = ()
+#cnvt_all(T, x, rest...) = (convert(T, x), cnvt_all(T, rest...)...)
+# TODO: These may be necessary if the above are enabled
+#convert(::Type{Tuple{}}, ::Tuple{}) = ()
+#convert(::Type{Tuple{Vararg{S}}} where S, ::Tuple{}) = ()
+
+oftype(x, c) = convert(typeof(x), c)
 
 unsigned(x::Int) = reinterpret(UInt, x)
 signed(x::UInt) = reinterpret(Int, x)

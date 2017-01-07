@@ -2178,15 +2178,38 @@ JL_DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b)
     return jl_type_intersection_env(a, b, NULL);
 }
 
-JL_DLLEXPORT jl_svec_t *jl_env_from_type_intersection(jl_value_t *a, jl_value_t *b)
+JL_DLLEXPORT jl_svec_t *jl_type_intersection_with_env(jl_value_t *a, jl_value_t *b)
 {
     jl_svec_t *env = jl_emptysvec;
-    JL_GC_PUSH1(&env);
-    jl_value_t *ti = jl_type_intersection_env(a, b, &env);
+    jl_value_t *ti = NULL;
+    JL_GC_PUSH2(&env, &ti);
+    ti = jl_type_intersection_env(a, b, &env);
     jl_svec_t *pair = jl_svec2(ti, env);
     JL_GC_POP();
     return pair;
 }
+
+int jl_subtype_matching(jl_value_t *a, jl_value_t *b, jl_svec_t **penv)
+{
+    int szb = penv ? jl_subtype_env_size(b) : 0;
+    if (szb == 0)
+        return jl_subtype_env(a, b, NULL, szb);
+
+    jl_value_t **env;
+    JL_GC_PUSHARGS(env, szb);
+    int sub = jl_subtype_env(a, b, env, szb);
+    if (sub) {
+        // copy env to svec for return
+        int i = 0;
+        jl_svec_t *e = jl_alloc_svec(szb);
+        *penv = e;
+        for (i = 0; i < szb; i++)
+            jl_svecset(e, i, env[i]);
+    }
+    JL_GC_POP();
+    return sub;
+}
+
 
 // specificity comparison
 
@@ -2573,8 +2596,10 @@ JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b)
 {
     if (obviously_disjoint(a, b, 1))
         return 0;
-    if (jl_subtype(b, a)) return 0;
-    if (jl_subtype(a, b)) return 1;
+    if (jl_subtype(b, a))
+        return 0;
+    if (jl_subtype(a, b))
+        return 1;
     return type_morespecific_(a, b, 0, NULL);
 }
 
