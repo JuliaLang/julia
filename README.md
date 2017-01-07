@@ -294,7 +294,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[curl]** (>= 7.50)       — libcurl provides download and proxy support for Julia's package manager
 - **[libssh2]** (>= 1.7)     — library for SSH transport, used by libgit2 for packages with SSH remotes
 - **[mbedtls]** (>= 2.2)     — library used for cryptography and transport layer security, used by libssh2
-- **[utf8proc]** (>= 2.0)    — a library for processing UTF-8 encoded Unicode strings
+- **[utf8proc]** (>= 2.1)    — a library for processing UTF-8 encoded Unicode strings
 - **[libosxunwind]**         — clone of [libunwind], a library that determines the call-chain of a program
 
 [GNU make]:     http://www.gnu.org/software/make
