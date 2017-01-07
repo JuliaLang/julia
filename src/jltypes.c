@@ -881,10 +881,13 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
         size_t i;
         for(i=0; i < ntp; i++) {
             jl_value_t *pi = iparams[i];
-            jl_value_t *tw = extract_wrapper(pi);
-            if (tw && jl_types_equal(pi, tw)) {
-                iparams[i] = tw;
-                if (p) jl_gc_wb(p, tw);
+            if (!jl_is_leaf_type(pi) || ((jl_datatype_t*)pi)->abstract) {
+                // normalize types equal to wrappers
+                jl_value_t *tw = extract_wrapper(pi);
+                if (tw && tw != pi && jl_types_equal(pi, tw)) {
+                    iparams[i] = tw;
+                    if (p) jl_gc_wb(p, tw);
+                }
             }
         }
         jl_value_t *lkup = (jl_value_t*)lookup_type(tn, iparams, ntp);
