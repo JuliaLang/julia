@@ -92,7 +92,8 @@ end
 
 # Stream Redirection
 if !is_windows() # WINNT reports operation not supported on socket (ENOTSUP) for this test
-    local r = Channel(1), port, server, sock, client, t1, t2
+    local r = Channel(1)
+    local port, server, sock, client, t1, t2
     t1 = @async begin
         port, server = listenany(2326)
         put!(r, port)
