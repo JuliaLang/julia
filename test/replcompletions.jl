@@ -319,11 +319,11 @@ c, r, res = test_complete(s)
 # (As discussed in #19829, the Base.REPLCompletions.get_type function isn't
 #  powerful enough to analyze general dot calls because it can't handle
 #  anonymous-function evaluation.)
-# s = "CompletionFoo.test5(push!(Base.split(\"\",' '),\"\",\"\").==\"\","
-# c, r, res = test_complete(s)
-# @test !res
-# @test length(c) == 1
-# @test c[1] == string(first(methods(Main.CompletionFoo.test5, Tuple{BitArray{1}})))
+s = "CompletionFoo.test5(push!(Base.split(\"\",' '),\"\",\"\").==\"\","
+c, r, res = test_complete(s)
+@test !res
+@test_broken length(c) == 1
+@test_broken c[1] == string(first(methods(Main.CompletionFoo.test5, Tuple{BitArray{1}})))
 
 s = "CompletionFoo.test4(CompletionFoo.test_y_array[1]()[1], CompletionFoo.test_y_array[1]()[2], "
 c, r, res = test_complete(s)
