@@ -831,7 +831,7 @@ size_t ios_copyuntil(ios_t *to, ios_t *from, char delim)
     return total;
 }
 
-//Copy until '\r', '\n' or '\r\n'
+// Copy until '\r', '\n' or '\r\n'
 size_t ios_copyline(ios_t *to, ios_t *from, int chomp)
 {
     size_t nchomp = 0;
@@ -851,7 +851,7 @@ size_t ios_copyline(ios_t *to, ios_t *from, int chomp)
         for (size_t i = 0; i < avail; i++){
             char *p = (char*)from->buf+from->bpos+i;
             char ch = from->buf[from->bpos+i];
-            
+
             if (ch == '\n'){
                 n = p;
                 if (chomp) nchomp = 1;
@@ -861,8 +861,8 @@ size_t ios_copyline(ios_t *to, ios_t *from, int chomp)
             if (ch == '\r'){
                 r = p;
                 if (chomp) nchomp = 1;
-                ntowrite = r - (from->buf+from->bpos) + 1 - nchomp;    
-                if (i <= avail){
+                ntowrite = r - (from->buf+from->bpos) + 1 - nchomp;
+                if (i < avail){
                     char ch2 = from->buf[from->bpos+i+1];
                     if (ch2 == '\n'){
                         if (chomp) nchomp = 2;

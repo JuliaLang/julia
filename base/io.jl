@@ -542,10 +542,10 @@ readstring(filename::AbstractString) = open(readstring, filename)
 
 type EachLine
     stream::IO
-    ondone::Function
     chomp::Bool
-    EachLine(stream, chomp) = EachLine(stream, ()->nothing, chomp)
-    EachLine(stream, ondone, chomp) = new(stream, ondone, chomp)
+    ondone::Function
+    EachLine(stream, chomp) = EachLine(stream, chomp, ()->nothing)
+    EachLine(stream, chomp, ondone) = new(stream, chomp, ondone)
 end
 
 """
@@ -555,12 +555,12 @@ end
 Create an iterable object that will yield each line from an I/O stream or a file.
 The text is assumed to be encoded in UTF-8.
 """
-eachline(stream::IO, chomp::Bool = false) = EachLine(stream, chomp)
+eachline(stream::IO, chomp::Bool=false) = EachLine(stream, chomp)
 
 
-function eachline(filename::AbstractString, chomp::Bool = false)
+function eachline(filename::AbstractString, chomp::Bool=false)
     s = open(filename)
-    EachLine(s, ()->close(s), chomp)
+    EachLine(s, chomp, ()->close(s))
 end
 
 start(itr::EachLine) = nothing
@@ -575,7 +575,7 @@ end
 next(itr::EachLine, nada) = (readline(itr.stream, itr.chomp), nothing)
 eltype(::Type{EachLine}) = String
 
-readlines(s=STDIN, chomp = false) = collect(eachline(s, chomp))
+readlines(s=STDIN, chomp::Bool=false) = collect(eachline(s, chomp))
 
 iteratorsize(::Type{EachLine}) = SizeUnknown()
 
