@@ -1002,6 +1002,24 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         write_int32(s->s, jl_string_len(v));
         ios_write(s->s, jl_string_data(v), jl_string_len(v));
     }
+    else if (jl_typeis(v, jl_typemap_entry_type)) {
+        writetag(s->s, jl_typemap_entry_type);
+        size_t n = 0;
+        jl_typemap_entry_t *te = (jl_typemap_entry_t*)v;
+        while ((jl_value_t*)te != jl_nothing) {
+            n++; te = te->next;
+        }
+        write_int32(s->s, n);
+        te = (jl_typemap_entry_t*)v;
+        size_t i, nf = jl_datatype_nfields(jl_typemap_entry_type);
+        while ((jl_value_t*)te != jl_nothing) {
+            for (i = 1; i < nf; i++) {
+                if (jl_field_size(jl_typemap_entry_type, i) > 0)
+                    jl_serialize_value(s, jl_get_nth_field((jl_value_t*)te, i));
+            }
+            te = te->next;
+        }
+    }
     else {
         jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
         void *data = jl_data_ptr(v);
@@ -1821,6 +1839,59 @@ static jl_value_t *jl_deserialize_value_singleton(jl_serializer_state *s, jl_val
     return v;
 }
 
+static void jl_deserialize_struct(jl_serializer_state *s, jl_value_t *v, size_t startfield)
+{
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(v);
+    size_t i, nf = jl_datatype_nfields(dt);
+    char *data = (char*)jl_data_ptr(v);
+    for (i = startfield; i < nf; i++) {
+        if (jl_field_size(dt, i) > 0) {
+            if (jl_field_isptr(dt, i)) {
+                jl_value_t **fld = (jl_value_t**)(data+jl_field_offset(dt, i));
+                *fld = jl_deserialize_value(s, fld);
+            }
+            else {
+                jl_set_nth_field(v, i, jl_deserialize_value(s, NULL));
+            }
+        }
+    }
+    if (s->mode == MODE_MODULE) {
+        if (dt == jl_typename_type) {
+            jl_typename_t *tn = (jl_typename_t*)v;
+            tn->cache = jl_emptysvec; // the cache is refilled later (tag 5)
+            tn->linearcache = jl_emptysvec; // the cache is refilled later (tag 5)
+        }
+        if (dt == jl_typemap_entry_type) {
+            if (((jl_typemap_entry_t*)v)->max_world == ~(size_t)0) {
+                // update world validity to reflect current state of the counter
+                ((jl_typemap_entry_t*)v)->min_world = jl_world_counter;
+            }
+            else {
+                // garbage entry - delete it :(
+                ((jl_typemap_entry_t*)v)->min_world = ((jl_typemap_entry_t*)v)->max_world - 1;
+            }
+        }
+    }
+}
+
+static jl_value_t *jl_deserialize_typemap_entry(jl_serializer_state *s)
+{
+    int N = read_int32(s->s); int n = N;
+    jl_value_t *te = jl_nothing;
+    jl_value_t **pn = &te;
+    while (n > 0) {
+        jl_value_t *v = jl_gc_alloc(s->ptls, jl_datatype_size(jl_typemap_entry_type), jl_typemap_entry_type);
+        if (n == N && s->mode != MODE_AST)
+            arraylist_push(&backref_list, v);
+        jl_deserialize_struct(s, v, 1);
+        ((jl_typemap_entry_t*)v)->next = (jl_typemap_entry_t*)jl_nothing;
+        *pn = v;
+        pn = (jl_value_t**)&((jl_typemap_entry_t*)v)->next;
+        n--;
+    }
+    return te;
+}
+
 static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, jl_value_t *vtag, jl_value_t **loc)
 {
     int usetable = (s->mode != MODE_AST);
@@ -1849,41 +1920,12 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, jl_value_t *
         }
     }
     jl_set_typeof(v, dt);
-    size_t i, nf = jl_datatype_nfields(dt);
-    if (nf == 0 && jl_datatype_size(dt)>0) {
+    if (jl_datatype_nfields(dt) == 0 && jl_datatype_size(dt)>0) {
         int nby = jl_datatype_size(dt);
         ios_read(s->s, (char*)jl_data_ptr(v), nby);
     }
     else {
-        char *data = (char*)jl_data_ptr(v);
-        for (i = 0; i < nf; i++) {
-            if (jl_field_size(dt, i) > 0) {
-                if (jl_field_isptr(dt, i)) {
-                    jl_value_t **fld = (jl_value_t**)(data+jl_field_offset(dt, i));
-                    *fld = jl_deserialize_value(s, fld);
-                }
-                else {
-                    jl_set_nth_field(v, i, jl_deserialize_value(s, NULL));
-                }
-            }
-        }
-        if (s->mode == MODE_MODULE) {
-            if (dt == jl_typename_type) {
-                jl_typename_t *tn = (jl_typename_t*)v;
-                tn->cache = jl_emptysvec; // the cache is refilled later (tag 5)
-                tn->linearcache = jl_emptysvec; // the cache is refilled later (tag 5)
-            }
-            if (dt == jl_typemap_entry_type) {
-                if (((jl_typemap_entry_t*)v)->max_world == ~(size_t)0) {
-                    // update world validity to reflect current state of the counter
-                    ((jl_typemap_entry_t*)v)->min_world = jl_world_counter;
-                }
-                else {
-                    // garbage entry - delete it :(
-                    ((jl_typemap_entry_t*)v)->min_world = ((jl_typemap_entry_t*)v)->max_world - 1;
-                }
-            }
-        }
+        jl_deserialize_struct(s, v, 0);
     }
     return v;
 }
@@ -1975,6 +2017,9 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
             arraylist_push(&backref_list, str);
         ios_read(s->s, jl_string_data(str), n);
         return str;
+    }
+    else if (vtag == (jl_value_t*)jl_typemap_entry_type) {
+        return jl_deserialize_typemap_entry(s);
     }
     else {
         assert(vtag == (jl_value_t*)jl_datatype_type || vtag == (jl_value_t*)SmallDataType_tag);
@@ -2952,7 +2997,7 @@ void jl_init_serializer(void)
                      jl_simplevector_type, jl_array_type, jl_typedslot_type,
                      jl_expr_type, (void*)LongSymbol_tag, (void*)LongSvec_tag,
                      (void*)LongExpr_tag, (void*)LiteralVal_tag, jl_string_type,
-                     (void*)SmallInt64_tag, (void*)SmallDataType_tag,
+                     (void*)SmallInt64_tag, (void*)SmallDataType_tag, jl_typemap_entry_type,
                      (void*)Int32_tag, (void*)Array1d_tag, (void*)Singleton_tag,
                      jl_module_type, jl_tvar_type, jl_method_instance_type, jl_method_type,
                      (void*)CommonSym_tag, (void*)NearbyGlobal_tag, jl_globalref_type,
@@ -3005,7 +3050,7 @@ void jl_init_serializer(void)
                      jl_typector_type, jl_typename_type, jl_builtin_type, jl_code_info_type,
                      jl_task_type, jl_uniontype_type, jl_typetype_type, jl_typetype_tvar,
                      jl_ANY_flag, jl_array_any_type, jl_intrinsic_type, jl_abstractslot_type,
-                     jl_methtable_type, jl_typemap_level_type, jl_typemap_entry_type,
+                     jl_methtable_type, jl_typemap_level_type,
                      jl_voidpointer_type, jl_newvarnode_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
                      jl_typeof(jl_emptytuple), jl_array_uint8_type,
