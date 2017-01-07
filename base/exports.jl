@@ -580,6 +580,7 @@ export
     vcat,
     vec,
     view,
+    zero!,
     zeros,
 
 # linear algebra

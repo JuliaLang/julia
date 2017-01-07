@@ -32,6 +32,7 @@ Base.trues
 Base.falses
 Base.fill
 Base.fill!
+Base.zero!
 Base.reshape
 Base.similar(::AbstractArray)
 Base.similar(::Any, ::Tuple)

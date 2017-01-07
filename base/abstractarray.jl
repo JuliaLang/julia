@@ -683,6 +683,25 @@ copymutable(itr) = collect(itr)
 
 zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
 
+"""
+    zero!(x::AbstractArray)
+
+Sets all elements of array `x` to 0. Equivalent to `fill!(x, 0)`.
+
+```jldoctest
+julia> A = ones(2,2)
+2×2 Array{Float64,2}:
+ 1.0  1.0
+ 1.0  1.0
+
+julia> zero!(A)
+2×2 Array{Float64,2}:
+ 0.0  0.0
+ 0.0  0.0
+```
+"""
+zero!{T}(x::AbstractArray{T}) = fill!(x, zero(T))
+
 ## iteration support for arrays by iterating over `eachindex` in the array ##
 # Allows fast iteration by default for both LinearFast and LinearSlow arrays
 

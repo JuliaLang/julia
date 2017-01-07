@@ -1978,6 +1978,13 @@ end
     test_zeros(oarr.parent, Matrix{UInt16}, (3, 2))
 end
 
+@testset "zero!" begin
+    A = ones(2,2)
+    B = zero(A)
+    zero!(A)
+    @test A == B
+end
+
 # issue #11053
 type T11053
     a::Float64
