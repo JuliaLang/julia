@@ -166,13 +166,17 @@ The text is assumed to be encoded in UTF-8.
 """
 readuntil(filename::AbstractString, args...) = open(io->readuntil(io, args...), filename)
 
-"""
-    readline(stream::IO=STDIN)
-    readline(filename::AbstractString)
+If true, newline characters and character combinations are stripped from the result; otherwise, newline characters or character combinations are preserved.
 
-Read a single line of text, including a trailing newline character (if one is reached before
-the end of the input), from the given I/O stream or file (defaults to `STDIN`).
-When reading from a file, the text is assumed to be encoded in UTF-8.
+"""
+    readline(stream::IO=STDIN, chomp::Bool=false)
+    readline(filename::AbstractString, chomp::Bool=false)
+
+Read a single line of text including from the given I/O stream or file (defaults to `STDIN`).
+Lines in the input can end in '\n', '\r', or '\r\n'. When reading from a file, the text is 
+assumed to be encoded in UTF-8. If `chomp=false` trailing newline character(s) will be included
+in the output (if reached before the end of the input); otherwise newline characters(s) 
+are stripped from result.
 """
 function readline(filename::AbstractString, chomp = false)
     open(filename) do f
@@ -182,13 +186,16 @@ end
 
 
 """
-    readlines(stream::IO)
-    readlines(filename::AbstractString)
+    readlines(stream::IO, chomp::Bool=false)
+    readlines(filename::AbstractString, chomp::Bool=false)
 
-Read all lines of an I/O stream or a file as a vector of strings.
-The text is assumed to be encoded in UTF-8.
+Read all lines (delimited ) of an I/O stream or a file as a vector of strings.
+Lines in the input can end in '\n', '\r', or '\r\n'.
+The text is assumed to be encoded in UTF-8. If `chomp=false` 
+trailing newline character(s) will be included in the output;
+otherwise newline characters(s) are stripped from result.
 """
-function readlines(filename::AbstractString, chomp = false)
+function readlines(filename::AbstractString, chomp::Bool=false)
     open(filename) do f
           readlines(f, chomp)
     end
@@ -549,11 +556,14 @@ type EachLine
 end
 
 """
-    eachline(stream::IO)
-    eachline(filename::AbstractString)
+    eachline(stream::IO,  chomp::Bool=false)
+    eachline(filename::AbstractString,  chomp::Bool=false)
 
 Create an iterable object that will yield each line from an I/O stream or a file.
-The text is assumed to be encoded in UTF-8.
+Lines in the input can end in '\n', '\r', or '\r\n'.
+The text is assumed to be encoded in UTF-8. If `chomp=false` 
+trailing newline character(s) will be included in the output;
+otherwise newline characters(s) are stripped from result.
 """
 eachline(stream::IO, chomp::Bool=false) = EachLine(stream, chomp)
 
@@ -575,7 +585,7 @@ end
 next(itr::EachLine, nada) = (readline(itr.stream, itr.chomp), nothing)
 eltype(::Type{EachLine}) = String
 
-readlines(s=STDIN, chomp::Bool=false) = collect(eachline(s, chomp))
+readlines(s::IO=STDIN, chomp::Bool=false) = collect(eachline(s, chomp))
 
 iteratorsize(::Type{EachLine}) = SizeUnknown()
 
