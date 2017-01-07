@@ -384,6 +384,9 @@ end
 @test parse("x<:y<:z").head === :comparison
 @test parse("x>:y<:z").head === :comparison
 
+# reason PR #19765, <- operator, was reverted
+@test -2<-1 # DO NOT ADD SPACES
+
 # issue #11169
 uncalled(x) = @test false
 fret() = uncalled(return true)
