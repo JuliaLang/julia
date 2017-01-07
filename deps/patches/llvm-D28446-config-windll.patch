@@ -1,0 +1,57 @@
+diff --git a/tools/llvm-config/llvm-config.cpp b/tools/llvm-config/llvm-config.cpp
+index 94d426b..a9dfc38 100644
+--- a/tools/llvm-config/llvm-config.cpp
++++ b/tools/llvm-config/llvm-config.cpp
+@@ -345,7 +345,7 @@ int main(int argc, char **argv) {
+   const Triple HostTriple(Triple::normalize(LLVM_HOST_TRIPLE));
+   if (HostTriple.isOSWindows()) {
+     SharedExt = "dll";
+-    SharedVersionedExt = LLVM_DYLIB_VERSION ".dll";
++    SharedVersionedExt = ".dll";
+     if (HostTriple.isOSCygMing()) {
+       StaticExt = "a";
+       StaticPrefix = "lib";
+@@ -363,14 +363,14 @@ int main(int argc, char **argv) {
+     StaticDir = ActiveLibDir;
+   } else if (HostTriple.isOSDarwin()) {
+     SharedExt = "dylib";
+-    SharedVersionedExt = LLVM_DYLIB_VERSION ".dylib";
++    SharedVersionedExt = "-" LLVM_DYLIB_VERSION ".dylib";
+     StaticExt = "a";
+     StaticDir = SharedDir = ActiveLibDir;
+     StaticPrefix = SharedPrefix = "lib";
+   } else {
+     // default to the unix values:
+     SharedExt = "so";
+-    SharedVersionedExt = LLVM_DYLIB_VERSION ".so";
++    SharedVersionedExt = "-" LLVM_DYLIB_VERSION ".so";
+     StaticExt = "a";
+     StaticDir = SharedDir = ActiveLibDir;
+     StaticPrefix = SharedPrefix = "lib";
+@@ -383,7 +383,7 @@ int main(int argc, char **argv) {
+ 
+   bool DyLibExists = false;
+   const std::string DyLibName =
+-      (SharedPrefix + "LLVM-" + SharedVersionedExt).str();
++      (SharedPrefix + "LLVM" + SharedVersionedExt).str();
+ 
+   // If LLVM_LINK_DYLIB is ON, the single shared library will be returned
+   // for "--libs", etc, if they exist. This behaviour can be overridden with
+@@ -409,7 +409,7 @@ int main(int argc, char **argv) {
+   /// extension. Returns true if Lib is in a recognized format.
+   auto GetComponentLibraryNameSlice = [&](const StringRef &Lib,
+                                           StringRef &Out) {
+-    if (Lib.startswith("lib")) {
++    if (Lib.startswith(SharedPrefix)) {
+       unsigned FromEnd;
+       if (Lib.endswith(StaticExt)) {
+         FromEnd = StaticExt.size() + 1;
+@@ -420,7 +420,7 @@ int main(int argc, char **argv) {
+       }
+ 
+       if (FromEnd != 0) {
+-        Out = Lib.slice(3, Lib.size() - FromEnd);
++        Out = Lib.slice(SharedPrefix.size(), Lib.size() - FromEnd);
+         return true;
+       }
+     }
