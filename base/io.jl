@@ -187,7 +187,7 @@ end
     readlines(stream::IO, chomp::Bool=false)
     readlines(filename::AbstractString, chomp::Bool=false)
 
-Read all lines (delimited ) of an I/O stream or a file as a vector of strings.
+Read all lines of an I/O stream or a file as a vector of strings.
 Lines in the input can end in `'\\n'`, `'\\r'`, or `'\\r\\n'`.
 The text is assumed to be encoded in UTF-8. If `chomp=false` 
 trailing newline character(s) will be included in the output;
