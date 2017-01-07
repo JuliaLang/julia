@@ -189,6 +189,12 @@ static int obviously_egal(jl_value_t *a, jl_value_t *b)
 
 static int obviously_unequal(jl_value_t *a, jl_value_t *b)
 {
+    if (a == b)
+        return 0;
+    if (jl_is_leaf_type(a) && !((jl_datatype_t*)a)->abstract)
+        return 1;
+    if (jl_is_leaf_type(b) && !((jl_datatype_t*)b)->abstract)
+        return 1;
     if (jl_is_unionall(a)) a = jl_unwrap_unionall(a);
     if (jl_is_unionall(b)) b = jl_unwrap_unionall(b);
     if (jl_is_datatype(a)) {
