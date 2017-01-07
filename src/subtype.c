@@ -1831,3 +1831,32 @@ JL_DLLEXPORT jl_svec_t *jl_type_intersection_env(jl_value_t *a, jl_value_t *b)
     JL_GC_POP();
     return pair;
 }
+
+int jl_subtype_matching(jl_value_t *a, jl_value_t *b, jl_svec_t **penv)
+{
+    int szb = penv ? jl_subtype_env_size(b) : 0;
+    if (szb == 0)
+        return jl_subtype_env(a, b, NULL, szb);
+
+    jl_value_t **env;
+    JL_GC_PUSHARGS(env, szb);
+    int sub = jl_subtype_env(a, b, env, szb);
+    if (sub) {
+        // copy env to svec for return
+        int i = 0;
+        jl_svec_t *e = jl_alloc_svec(szb);
+        *penv = e;
+        for (i = 0; i < szb; i++)
+            jl_svecset(e, i, env[i]);
+    }
+    JL_GC_POP();
+    return sub;
+}
+
+JL_DLLEXPORT jl_value_t *jl_match_method(jl_value_t *type, jl_value_t *sig)
+{
+    jl_svec_t *env = jl_emptysvec;
+    if (jl_subtype_matching(type, (jl_value_t*)sig, &env))
+        return (jl_value_t*)env;
+    return jl_false;
+}
