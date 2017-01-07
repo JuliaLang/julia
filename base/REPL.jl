@@ -267,7 +267,7 @@ terminal(r::LineEditREPL) = r.t
 
 LineEditREPL(t::TextTerminal, envcolors = false) =  LineEditREPL(t,
                                               true,
-                                              julia_green,
+                                              Base.text_colors[:light_green],
                                               Base.input_color(),
                                               Base.answer_color(),
                                               Base.text_colors[:red],
@@ -597,8 +597,6 @@ function history_reset_state(hist::REPLHistoryProvider)
     end
 end
 LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
-
-const julia_green = "\033[1m\033[32m"
 
 function return_callback(s)
     ast = Base.syntax_deprecation_warnings(false) do
@@ -958,7 +956,7 @@ type StreamREPL <: AbstractREPL
     waserror::Bool
     StreamREPL(stream,pc,ic,ac) = new(stream,pc,ic,ac,false)
 end
-StreamREPL(stream::IO) = StreamREPL(stream, julia_green, Base.input_color(), Base.answer_color())
+StreamREPL(stream::IO) = StreamREPL(stream, Base.text_colors[:light_green], Base.input_color(), Base.answer_color())
 run_repl(stream::IO) = run_repl(StreamREPL(stream))
 
 outstream(s::StreamREPL) = s.stream

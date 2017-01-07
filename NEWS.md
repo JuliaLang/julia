@@ -116,10 +116,13 @@ Library improvements
     Therefore, light versions of the colors are now supported.
     For the available colors see the help entry on `print_with_color`.
 
-  * The default color for info messages has been changed from blue to cyan and for warning messages from red to yellow.
+  * The default text style for REPL input and answers has been changed from bold to normal ([#11250]).
+    They can be changed back to bold by setting the environment variables `JULIA_INPUT_COLOR` and `JULIA_ANSWER_COLOR` to `"bold"`.
+    For example, one way of doing this is adding `ENV["JULIA_INPUT_COLOR"] = :bold` and `ENV["JULIA_ANSWER_COLOR"] = :bold` to the `.juliarc.jl` file.
+    See the [manual section on customizing colors](http://docs.julialang.org/en/latest/manual/interacting-with-julia/#customizing-colors) for more information.
+
+  * The default color for info messages has been changed from blue to cyan, and for warning messages from red to yellow.
     This can be changed back to the original colors by setting the environment variables `JULIA_INFO_COLOR` to `"blue"` and `JULIA_WARN_COLOR` to `"red"`.
-    One way of doing this is by adding for example `ENV["JULIA_INFO_COLOR"] = :blue` and `ENV["JULIA_WARN_COLOR"] = :red` to the `.juliarc.jl` file.
-    For more information regarding customizing colors in the REPL, see this [manual section]( http://docs.julialang.org/en/latest/manual/interacting-with-julia/#customizing-colors).
 
   * Iteration utilities that wrap iterators and return other iterators (`enumerate`, `zip`, `rest`,
     `countfrom`, `take`, `drop`, `cycle`, `repeated`, `product`, `flatten`, `partition`) have been
@@ -690,6 +693,7 @@ Language tooling improvements
 [#10548]: https://github.com/JuliaLang/julia/issues/10548
 [#11196]: https://github.com/JuliaLang/julia/issues/11196
 [#11242]: https://github.com/JuliaLang/julia/issues/11242
+[#11250]: https://github.com/JuliaLang/julia/issues/11250
 [#11688]: https://github.com/JuliaLang/julia/issues/11688
 [#12231]: https://github.com/JuliaLang/julia/issues/12231
 [#12563]: https://github.com/JuliaLang/julia/issues/12563

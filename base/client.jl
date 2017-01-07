@@ -61,13 +61,8 @@ have_color = false
 default_color_warn = :yellow
 default_color_error = :light_red
 default_color_info = :cyan
-if is_windows()
-    default_color_input = :normal
-    default_color_answer = :normal
-else
-    default_color_input = :bold
-    default_color_answer = :bold
-end
+default_color_input = :normal
+default_color_answer = :normal
 color_normal = text_colors[:normal]
 
 function repl_color(key, default)
@@ -81,9 +76,8 @@ error_color() = repl_color("JULIA_ERROR_COLOR", default_color_error)
 warn_color()  = repl_color("JULIA_WARN_COLOR" , default_color_warn)
 info_color()  = repl_color("JULIA_INFO_COLOR" , default_color_info)
 
-# Print input and answer in bold.
-input_color()  = text_colors[:bold] * text_colors[repl_color("JULIA_INPUT_COLOR", default_color_input)]
-answer_color() = text_colors[:bold] * text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answer)]
+input_color()  = text_colors[repl_color("JULIA_INPUT_COLOR", default_color_input)]
+answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answer)]
 
 stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bold)
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
