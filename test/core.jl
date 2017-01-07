@@ -4823,11 +4823,11 @@ end
 @test M14893.f14893() == 14893
 
 # issue #18725
-@test_nowarn begin
+@test_nowarn eval(Main, :(begin
     f18725(x) = 1
     f18725(x) = 2
-    @test f18725(0) == 2
-end
+end))
+@test Main.f18725(0) == 2
 @test_warn "WARNING: Method definition f18725(Any) in module Module18725" eval(Main, :(module Module18725
     f18725(x) = 1
     f18725(x) = 2
