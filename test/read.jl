@@ -7,6 +7,7 @@ tasks = []
 # Create test file
 filename = joinpath(dir, "file.txt")
 text = "C1,C2\n1,2\na,b\n"
+text2 = "line1\rline2\nline\r\nline4"
 
 # List of IO producers
 l = Vector{Tuple{AbstractString,Function}}()
@@ -44,6 +45,10 @@ s = io(text)
 close(s)
 push!(l, ("IOBuffer", io))
 
+# Readlines
+write(filename, text2)
+readlines(filename) == String["line1\r","line2\n","line\r\n","line4"]
+readlines(filename, true) == String["line1","line2","line","line4"]
 
 function run_test_server(srv, text)
     push!(tasks, @async begin
@@ -243,12 +248,19 @@ for (name, f) in l
         verbose && println("$name readline...")
         @test readline(io()) == readline(IOBuffer(text))
         @test readline(io()) == readline(filename)
+        @test readline(io(), true) == readline(IOBuffer(text), true)
+        @test readline(io(), true) == readline(filename, true)
 
         verbose && println("$name readlines...")
         @test readlines(io()) == readlines(IOBuffer(text))
         @test readlines(io()) == readlines(filename)
+        @test readlines(io(), true) == readlines(IOBuffer(text), true)
+        @test readlines(io(), true) == readlines(filename, true)
+        
         @test collect(eachline(io())) == collect(eachline(IOBuffer(text)))
         @test collect(eachline(io())) == collect(eachline(filename))
+        @test collect(eachline(io(), true)) == collect(eachline(IOBuffer(text), true))
+        @test collect(eachline(io(), true)) == collect(eachline(filename, true))
 
         cleanup()
 
