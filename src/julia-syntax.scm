@@ -1658,7 +1658,7 @@
                       (nargs (if (null? vararg) new-args (cons vararg new-args))))
                   `(fuse (-> (tuple ,@(reverse nfargs)) ,(replace-vars (caddr f) renames))
                          ,(reverse nargs)))
-                (let ((farg (car old-fargs)) (arg (car old-args)))
+                (let ((farg (car old-fargs)) (arg (ref-to-view (car old-args))))
                   (cond
                    ((and (vararg? farg) (vararg? arg)) ; arg... must be the last argument
                     (if (null? varfarg)
