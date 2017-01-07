@@ -1,8 +1,29 @@
-Index: lib/Support/Host.cpp
-===================================================================
+commit 6974a461b485113b4e6c6ffc668b8fbc9ce45c6e
+Author: Craig Topper <craig.topper@gmail.com>
+Date:   Thu Jan 5 05:47:29 2017 +0000
+
+    [X86] Change getHostCPUName to report Intel model 0x4e as "skylake" instead of "skylake-avx512". Add the proper 0x55 model for "skylake-avx512".
+    
+    Summary:
+    Intel's i5-6300U CPU is reporting to have a model id of 78 (4e).
+    The Host detection assumes that to be Skylake Xeon (with AVX512 support),
+    instead of a normal Skylake machine.
+    
+    Patch by: Valentin Churavy
+    
+    Reviewers: nalimilan, craig.topper
+    
+    Subscribers: hfinkel, tkelman, craig.topper, nalimilan, llvm-commits
+    
+    Differential Revision: https://reviews.llvm.org/D28221
+    
+    git-svn-id: https://llvm.org/svn/llvm-project/llvm/trunk@291084 91177308-0d34-0410-b5e6-96231b3b80d8
+
+diff --git a/lib/Support/Host.cpp b/lib/Support/Host.cpp
+index 49d0ed5..7593cfc 100644
 --- a/lib/Support/Host.cpp
 +++ b/lib/Support/Host.cpp
-@@ -475,13 +475,14 @@
+@@ -475,14 +475,22 @@ getIntelProcessorTypeAndSubtype(unsigned int Family, unsigned int Model,
  
      // Skylake:
      case 0x4e:
@@ -13,10 +34,18 @@ Index: lib/Support/Host.cpp
        *Type = INTEL_COREI7; // "skylake"
        *Subtype = INTEL_COREI7_SKYLAKE;
        break;
-+    case 0x55:
-+      *Type = INTEL_COREI7; // "skylake-avx512"
-+      *Subtype = INTEL_COREI7_SKYLAKE_AVX512;
-+      break;
  
++    // Skylake Xeon:
++    case 0x55:
++      *Type = INTEL_COREI7;
++      // Check that we really have AVX512
++      if (Features & (1 << FEATURE_AVX512)) {
++        *Subtype = INTEL_COREI7_SKYLAKE_AVX512; // "skylake-avx512"
++      } else {
++        *Subtype = INTEL_COREI7_SKYLAKE; // "skylake"
++      }
++      break;
++
      case 0x1c: // Most 45 nm Intel Atom processors
      case 0x26: // 45 nm Atom Lincroft
+     case 0x27: // 32 nm Atom Medfield
