@@ -2478,6 +2478,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
     else if (f==jl_builtin_arraysize && nargs==2) {
         jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
         jl_value_t *ity = expr_type(args[2], ctx); rt2 = ity;
+        aty = jl_unwrap_unionall(aty);
         if (jl_is_array_type(aty) && ity == (jl_value_t*)jl_long_type) {
             jl_value_t *ndp = jl_tparam1(aty);
             if (jl_is_long(ndp)) {
@@ -2532,15 +2533,17 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         bool indexes_ok = true;
         for (size_t i=2; i <= nargs; i++) {
             if (expr_type(args[i], ctx) != (jl_value_t*)jl_long_type) {
-                indexes_ok = false; break;
+                indexes_ok = false;
+                break;
             }
         }
-        if (jl_is_array_type(aty) && indexes_ok) {
-            jl_value_t *ety = jl_tparam0(aty);
-            if (!jl_is_typevar(ety)) {
+        jl_value_t *aty_dt = jl_unwrap_unionall(aty);
+        if (jl_is_array_type(aty_dt) && indexes_ok) {
+            jl_value_t *ety = jl_tparam0(aty_dt);
+            if (!jl_has_free_typevars(ety)) { // TODO: jn/foreigncall branch has a better predicate
                 if (!jl_array_store_unboxed(ety))
                     ety = (jl_value_t*)jl_any_type;
-                jl_value_t *ndp = jl_tparam1(aty);
+                jl_value_t *ndp = jl_tparam1(aty_dt);
                 if (jl_is_long(ndp) || nargs==2) {
                     jl_cgval_t ary = emit_expr(args[1], ctx);
                     ssize_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : -1;
@@ -2567,15 +2570,17 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         bool indexes_ok = true;
         for (size_t i=3; i <= nargs; i++) {
             if (expr_type(args[i], ctx) != (jl_value_t*)jl_long_type) {
-                indexes_ok = false; break;
+                indexes_ok = false;
+                break;
             }
         }
-        if (jl_is_array_type(aty) && indexes_ok) {
-            jl_value_t *ety = jl_tparam0(aty);
-            if (!jl_is_typevar(ety) && jl_subtype(vty, ety)) {
+        jl_value_t *aty_dt = jl_unwrap_unionall(aty);
+        if (jl_is_array_type(aty_dt) && indexes_ok) {
+            jl_value_t *ety = jl_tparam0(aty_dt);
+            if (!jl_has_free_typevars(ety) && jl_subtype(vty, ety)) { // TODO: jn/foreigncall branch has a better predicate
                 if (!jl_array_store_unboxed(ety))
                     ety = (jl_value_t*)jl_any_type;
-                jl_value_t *ndp = jl_tparam1(aty);
+                jl_value_t *ndp = jl_tparam1(aty_dt);
                 if (jl_is_long(ndp) || nargs==3) {
                     jl_cgval_t ary = emit_expr(args[1], ctx);
                     ssize_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : -1;
@@ -2775,18 +2780,19 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
     }
 
     else if (f==jl_builtin_sizeof && nargs == 1) {
-        jl_datatype_t *sty = (jl_datatype_t*)expr_type(args[1], ctx);
-        rt1 = (jl_value_t*)sty;
-        if (jl_is_type_type((jl_value_t*)sty) && !jl_is_typevar(jl_tparam0(sty))) {
-            sty = (jl_datatype_t*)jl_tparam0(sty);
+        jl_value_t *sty = expr_type(args[1], ctx); rt1 = sty;
+        sty = jl_unwrap_unionall(sty);
+        if (jl_is_type_type(sty) && !jl_is_typevar(jl_tparam0(sty))) {
+            sty = jl_tparam0(sty);
         }
-        if (jl_is_datatype(sty) && sty != jl_symbol_type && sty->name != jl_array_typename &&
-            sty != jl_simplevector_type && sty != jl_string_type &&
+        if (jl_is_datatype(sty) && sty != (jl_value_t*)jl_symbol_type &&
+            ((jl_datatype_t*)sty)->name != jl_array_typename &&
+            sty != (jl_value_t*)jl_simplevector_type && sty != (jl_value_t*)jl_string_type &&
             // exclude DataType, since each DataType has its own size, not sizeof(DataType).
             // this is issue #8798
-            sty != jl_datatype_type) {
-            if (jl_is_leaf_type((jl_value_t*)sty) ||
-                (sty->name->names == jl_emptysvec && jl_datatype_size(sty) > 0)) {
+            sty != (jl_value_t*)jl_datatype_type) {
+            if (jl_is_leaf_type(sty) ||
+                (((jl_datatype_t*)sty)->name->names == jl_emptysvec && jl_datatype_size(sty) > 0)) {
                 *ret = mark_julia_type(ConstantInt::get(T_size, jl_datatype_size(sty)), false, jl_long_type, ctx);
                 JL_GC_POP();
                 return true;
