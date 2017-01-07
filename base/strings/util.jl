@@ -77,18 +77,23 @@ chop(s::AbstractString) = SubString(s, 1, endof(s)-1)
     chomp(s::AbstractString)
 
 Remove a single trailing newline from a string.
+Lines in the input can end in `'\\n'`, `'\\r'`, or `'\\r\\n'`.
 """
 function chomp(s::AbstractString)
     i = endof(s)
-    if (i < 1 || s[i] != '\n') return SubString(s, 1, i) end
+    if (i < 1 || (s[i] != '\n' &&  s[i] != '\r')) return SubString(s, 1, i) end
+    if (s[i] == '\r') return SubString(s, 1, i-1) end
     j = prevind(s,i)
-    if (j < 1 || s[j] != '\r') return SubString(s, 1, i-1) end
+    if (j < 1 || (s[j] != '\r' && s[i] == '\n')) return SubString(s, 1, i-1) end
     return SubString(s, 1, j-1)
 end
+
 function chomp(s::String)
     i = endof(s)
-    if i < 1 || s.data[i] != 0x0a
+    if i < 1 || (s.data[i] != 0x0a && s.data[i] != 0x0d)
         SubString(s, 1, i)
+    elseif s.data[i] == 0x0d 
+        SubString(s, 1, i-1)
     elseif i < 2 || s.data[i-1] != 0x0d
         SubString(s, 1, i-1)
     else
@@ -98,9 +103,11 @@ end
 
 # NOTE: use with caution -- breaks the immutable string convention!
 function chomp!(s::String)
-    if !isempty(s) && s.data[end] == 0x0a
+    if !isempty(s) && s.data[end] == 0x0a 
         n = (endof(s) < 2 || s.data[end-1] != 0x0d) ? 1 : 2
         ccall(:jl_array_del_end, Void, (Any, UInt), s.data, n)
+    elseif s.data[end] == 0x0d
+        ccall(:jl_array_del_end, Void, (Any, UInt), s.data, 1)
     end
     return s
 end
