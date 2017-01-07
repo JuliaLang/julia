@@ -872,21 +872,25 @@ setindex_shape_check(X, I...) = nothing # Non-arrays broadcast to all idxs
 """
     to_index(A, i)
 
-Convert index `i` for use in indexing into array `A`. Custom array types
-should specialize `to_index(::CustomArray, i)` to provide special indexing
-behaviors. Note that some index types (like `Colon`) require more context in
-order to transform them into an array of indices; those get converted in the
-more complicated `to_indices` function. By default, this simply calls the
-generic `to_index(i)`.
+Convert index `i` to an `Int` or array of indices to be used as an index into array `A`.
+
+Custom array types may specialize `to_index(::CustomArray, i)` to provide
+special indexing behaviors. Note that some index types (like `Colon`) require
+more context in order to transform them into an array of indices; those get
+converted in the more complicated `to_indices` function. By default, this
+simply calls the generic `to_index(i)`. This must return either an `Int` or an
+`AbstractArray` of scalar indices that are supported by `A`.
 """
 to_index(A, i) = to_index(i)
 
 """
     to_index(i)
 
-Convert index `i` to an `Int` or array of indices to be used as an index for all
-arrays.  Custom index types should specialize `to_index(::CustomIndex)` to
-provide special indexing behaviors.
+Convert index `i` to an `Int` or array of `Int`s to be used as an index for all arrays.
+
+Custom index types may specialize `to_index(::CustomIndex)` to provide special
+indexing behaviors. This must return either an `Int` or an `AbstractArray` of
+`Int`s.
 """
 to_index(i::Integer) = convert(Int,i)::Int
 to_index(I::AbstractArray{Bool}) = LogicalIndex(I)
@@ -900,16 +904,22 @@ to_index(i) = throw(ArgumentError("invalid index: $i"))
 """
     to_indices(A, I::Tuple)
 
-Convert a tuple of indices `I` for use in indexing into array `A`, where the
-returned indices are either `Int`s or `AbstractArray`s of `Int` or
-`CartesianIndex`. This function accepts any index types and must return a tuple
-containing `Int`s and `AbstractArray`s.
+Convert the tuple `I` to a tuple of indices for use in indexing into array `A`.
 
-For simple index types, this simply ends up calling `to_index(A, i)` for each
-index `i`. More complicated index types, however, require more context about
-the dimension into which they index. To support those cases, `to_indices(A, I)`
-calls `to_indices(A, indices(A), I)`, which then recursively walks through both
-the given tuple of indices and the dimensional indices of `A` in tandem.
+The returned tuple must only contain either `Int`s or `AbstractArray`s of
+scalar indices that are supported by array `A`. It will error upon encountering
+a novel index type that it does not know how to process.
+
+For simple index types, it defers to the unexported `Base.to_index(A, i)` to
+process each index `i`. While this internal function is not intended to be
+called directly, `Base.to_index` may be extended by custom array or index types
+to provide custom indexing behaviors.
+
+More complicated index types may require more context about the dimension into
+which they index. To support those cases, `to_indices(A, I)` calls
+`to_indices(A, indices(A), I)`, which then recursively walks through both the
+given tuple of indices and the dimensional indices of `A` in tandem. As such,
+not all index types are guaranteed to propagate to `Base.to_index`.
 """
 to_indices(A, I::Tuple) = (@_inline_meta; to_indices(A, indices(A), I))
 to_indices(A, inds, ::Tuple{}) = ()
@@ -922,11 +932,13 @@ _maybetail(t::Tuple) = tail(t)
 """
    Slice(indices)
 
-Upon calling to_indices(), colons are converted to Slice objects that wrap the
-indices over which the colon spans. Slice objects are themselves unit ranges
-with the same indices as those they wrap. This means that indexing into
-a Slice object with an integer always returns that exact integer, but they
-iterate over all indices in the array, even supporting OffsetArrays.
+Represent an AbstractUnitRange of indices as a vector of the indices themselves.
+
+Upon calling `to_indices()`, Colons are converted to Slice objects to represent
+the indices over which the Colon spans. Slice objects are themselves unit
+ranges with the same indices as those they wrap. This means that indexing into
+Slice objects with an integer always returns that exact integer, and they
+iterate over all the wrapped indices, even supporting offset indices.
 """
 immutable Slice{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
     indices::T
