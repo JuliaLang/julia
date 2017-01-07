@@ -84,7 +84,7 @@ before_install:
         BUILDOPTS="$BUILDOPTS VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include FORCE_ASSERTIONS=1";
         BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
         for lib in LLVM SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND; do
-            export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
+            BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
         done;
         export LDFLAGS="-L$(brew --prefix openblas-julia)/lib -L$(brew --prefix suite-sparse-julia)/lib";
         export DYLD_FALLBACK_LIBRARY_PATH="/usr/local/lib:/lib:/usr/lib:$(brew --prefix openblas-julia)/lib:$(brew --prefix suite-sparse-julia)/lib:$(brew --prefix arpack-julia)/lib";
@@ -94,7 +94,8 @@ before_install:
         TESTSTORUN="all --skip linalg/triangular subarray"; fi # TODO: re enable these if possible without timing out
     - git clone -q git://git.kitenet.net/moreutils
 script:
-    - echo $BUILDOPTS
+    - echo BUILDOPTS=$BUILDOPTS
+    - export BUILDOPTS
     - contrib/download_cmake.sh
     - make -C moreutils mispipe
     - make $BUILDOPTS -C base version_git.jl.phony
