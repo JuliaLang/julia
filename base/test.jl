@@ -13,7 +13,7 @@ and summarize them at the end of the test set with `@testset`.
 """
 module Test
 
-export @test, @test_throws, @test_broken, @test_skip
+export @test, @test_throws, @test_broken, @test_skip, @test_warn, @test_nowarn
 export @testset
 # Legacy approximate testing functions, yet to be included
 export @test_approx_eq_eps, @inferred
@@ -354,6 +354,57 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
         testres = Fail(:test_throws_nothing, orig_expr, extype, nothing)
     end
     record(get_testset(), testres)
+end
+
+#-----------------------------------------------------------------------
+# Test for warning messages
+
+ismatch_warn(s::AbstractString, output) = contains(output, s)
+ismatch_warn(s::Regex, output) = ismatch(s, output)
+ismatch_warn(s::Function, output) = s(output)
+ismatch_warn(S::Union{AbstractArray,Tuple}, output) = all(s -> ismatch_warn(s, output), S)
+
+"""
+    @test_warn msg expr
+
+Test whether evaluating `expr` results in [`STDERR`](@ref) output that contains
+the `msg` string or matches the `msg` regular expression.  If `msg` is
+a boolean function, tests whether `msg(output)` returns `true`.  If `msg` is a
+tuple or array, checks that the error output contains/matches each item in `msg`.
+Returns the result of evaluating `expr`.
+
+See also [`@test_nowarn`](@ref) to check for the absence of error output.
+"""
+macro test_warn(msg, expr)
+    quote
+        let fname = tempname(), have_color = Base.have_color
+            try
+                eval(Base, :(have_color = false))
+                ret = open(fname, "w") do f
+                    redirect_stderr(f) do
+                        $(esc(expr))
+                    end
+                end
+                @test ismatch_warn($(esc(msg)), readstring(fname))
+                ret
+            finally
+                eval(Base, Expr(:(=), :have_color, have_color))
+                rm(fname, force=true)
+            end
+        end
+    end
+end
+
+"""
+    @test_nowarn expr
+
+Test whether evaluating `expr` results in empty [`STDERR`](@ref) output
+(no warnings or other messages).  Returns the result of evaluating `expr`.
+"""
+macro test_nowarn(expr)
+    quote
+        @test_warn r"^(?!.)"s $expr
+    end
 end
 
 #-----------------------------------------------------------------------
