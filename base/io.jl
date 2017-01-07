@@ -457,14 +457,17 @@ end
 
 readline() = readline(STDIN)
 
-function readline(s::IO, chomp::Bool = false)
+function readline(s::IO, chomp::Bool=false)
     out = UInt8[]
     while !eof(s)
         c = read(s, UInt8)
-        if c == 0x0d && !eof(s) && Base.peek(s) == 0x0a
+        if c == 0x0d 
             !chomp && push!(out, c)
-            c = read(s, UInt8)
-            !chomp && push!(out, c)
+            if !eof(s) && Base.peek(s) == 0x0a
+                c = read(s, UInt8)
+                !chomp && push!(out, c)
+            end
+
             break
         elseif c == 0x0a
             !chomp && push!(out, c)
@@ -475,30 +478,6 @@ function readline(s::IO, chomp::Bool = false)
     end
 
     return String(out)
-end
-
-const linefeeds = ['\n', '\r', '\u85', '\u0B', '\u0c', '\u2028', '\u2029']
-
-function readline(s::IO, chomp = false, newlines::Vector{Char}=linefeeds)
-    out = IOBuffer()
-    while !eof(s)
-        c = read(s, Char)
-        if c in newlines
-            if c == '\r' && !eof(s) && Base.peek(s) == 0x0a
-                !chomp && write(out, c)
-                c = read(s, Char)
-                !chomp && write(out, c)
-            else
-                !chomp && write(out, c)
-            end
-
-            break
-        else
-            write(out, c)
-        end
-    end
-
-    return String(take!(out))
 end
 
 """

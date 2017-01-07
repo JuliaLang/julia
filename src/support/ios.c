@@ -831,6 +831,66 @@ size_t ios_copyuntil(ios_t *to, ios_t *from, char delim)
     return total;
 }
 
+//Copy until '\r', '\n' or '\r\n'
+size_t ios_copyline(ios_t *to, ios_t *from, int chomp)
+{
+    size_t nchomp = 0;
+    size_t total = 0, avail = (size_t)(from->size - from->bpos);
+    size_t ntowrite;
+    while (!ios_eof(from)) {
+        if (avail == 0) {
+            avail = ios_readprep(from, LINE_CHUNK_SIZE);
+            if (avail == 0)
+                break;
+        }
+        size_t written;
+
+        char *r = NULL;
+        char *n = NULL;
+
+        for (size_t i = 0; i < avail; i++){
+            char *p = (char*)from->buf+from->bpos+i;
+            char ch = from->buf[from->bpos+i];
+            
+            if (ch == '\n'){
+                n = p;
+                if (chomp) nchomp = 1;
+                ntowrite = n - (from->buf+from->bpos) + 1 - nchomp;
+                break;
+            }
+            if (ch == '\r'){
+                r = p;
+                if (chomp) nchomp = 1;
+                ntowrite = r - (from->buf+from->bpos) + 1 - nchomp;    
+                if (i <= avail){
+                    char ch2 = from->buf[from->bpos+i+1];
+                    if (ch2 == '\n'){
+                        if (chomp) nchomp = 2;
+                        ntowrite = r - (from->buf+from->bpos) + 2 - nchomp;
+                    }
+                }
+                break;
+            }
+        }
+
+        if (r == NULL && n == NULL) {
+            written = ios_write(to, from->buf+from->bpos, avail);
+            from->bpos += avail;
+            total += written;
+            avail = 0;
+        }
+        else {
+            written = ios_write(to, from->buf+from->bpos, ntowrite);
+            from->bpos += ntowrite + nchomp;
+            total += written;
+            return total;
+        }
+    }
+    from->_eof = 1;
+    return total;
+}
+
+
 static void _ios_init(ios_t *s)
 {
     // put all fields in a sane initial state
