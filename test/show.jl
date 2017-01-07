@@ -211,6 +211,13 @@ export A, B, C
 export D, E, F
 end"
 
+# issue #19840
+@test_repr "Array{Int}(0)"
+@test_repr "Array{Int}(0,0)"
+@test_repr "Array{Int}(0,0,0)"
+@test_repr "Array{Int}(0,1)"
+@test_repr "Array{Int}(0,0,1)"
+
 # issue #8994
 @test_repr "get! => 2"
 @test_repr "(<) : 2"
