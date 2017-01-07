@@ -151,11 +151,11 @@ function convert(::Type{Float16}, val::Float32)
 end
 
 function convert(::Type{Float32}, val::Float16)
-    local ival::UInt32 = reinterpret(UInt16, val),
-          sign::UInt32 = (ival & 0x8000) >> 15,
-          exp::UInt32  = (ival & 0x7c00) >> 10,
-          sig::UInt32  = (ival & 0x3ff) >> 0,
-          ret::UInt32
+    local ival::UInt32 = reinterpret(UInt16, val)
+    local sign::UInt32 = (ival & 0x8000) >> 15
+    local exp::UInt32  = (ival & 0x7c00) >> 10
+    local sig::UInt32  = (ival & 0x3ff) >> 0
+    local ret::UInt32
 
     if exp == 0
         if sig == 0
