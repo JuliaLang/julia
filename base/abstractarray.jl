@@ -1171,7 +1171,6 @@ function cat_t(dims, T::Type, X...)
 end
 
 function _cat{N}(A, shape::NTuple{N}, catdims, X...)
-    N = length(shape)
     offsets = zeros(Int, N)
     inds = Vector{UnitRange{Int}}(N)
     concat = copy!(zeros(Bool, N), catdims)
