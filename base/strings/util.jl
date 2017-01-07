@@ -92,7 +92,7 @@ function chomp(s::String)
     i = endof(s)
     if i < 1 || (s.data[i] != 0x0a && s.data[i] != 0x0d)
         SubString(s, 1, i)
-    elseif s.data[i] == 0x0d 
+    elseif s.data[i] == 0x0d
         SubString(s, 1, i-1)
     elseif i < 2 || s.data[i-1] != 0x0d
         SubString(s, 1, i-1)
@@ -103,7 +103,7 @@ end
 
 # NOTE: use with caution -- breaks the immutable string convention!
 function chomp!(s::String)
-    if !isempty(s) && s.data[end] == 0x0a 
+    if !isempty(s) && s.data[end] == 0x0a
         n = (endof(s) < 2 || s.data[end-1] != 0x0d) ? 1 : 2
         ccall(:jl_array_del_end, Void, (Any, UInt), s.data, n)
     elseif s.data[end] == 0x0d

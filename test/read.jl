@@ -256,7 +256,7 @@ for (name, f) in l
         @test readlines(io()) == readlines(filename)
         @test readlines(io(), true) == readlines(IOBuffer(text), true)
         @test readlines(io(), true) == readlines(filename, true)
-        
+
         @test collect(eachline(io())) == collect(eachline(IOBuffer(text)))
         @test collect(eachline(io())) == collect(eachline(filename))
         @test collect(eachline(io(), true)) == collect(eachline(IOBuffer(text), true))
