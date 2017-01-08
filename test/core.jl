@@ -4652,6 +4652,21 @@ catch e
     (e::ErrorException).msg
 end == "generated function body is not pure. this likely means it contains a closure or comprehension."
 
+let x = 1
+    global g18444
+    @noinline g18444(a) = (x += 1; a[])
+    f18444_1(a) = invoke(sin, Tuple{Int}, g18444(a))
+    f18444_2(a) = invoke(sin, Tuple{Integer}, g18444(a))
+    @test_throws ErrorException f18444_1(Ref{Any}(1.0))
+    @test x == 2
+    @test_throws ErrorException f18444_2(Ref{Any}(1.0))
+    @test x == 3
+    @test f18444_1(Ref{Any}(1)) === sin(1)
+    @test x == 4
+    @test f18444_2(Ref{Any}(1)) === sin(1)
+    @test x == 5
+end
+
 # issue #10981, long argument lists
 let a = fill(["sdf"], 2*10^6), temp_vcat(x...) = vcat(x...)
     # we introduce a new function `temp_vcat` to make sure there is no existing
