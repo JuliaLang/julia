@@ -296,7 +296,7 @@ for (name, f) in l
     @test readstring("$filename.to") == text
 
     verbose && println("$name write(::IOBuffer, ...)")
-    to = IOBuffer(copy(text.data), false, true)
+    to = IOBuffer(copy(Vector{UInt8}(text)), false, true)
     write(to, io())
     @test String(take!(to)) == text
 
@@ -365,14 +365,14 @@ test_read_nbyte()
 
 
 let s = "qwerty"
-    @test read(IOBuffer(s)) == s.data
-    @test read(IOBuffer(s), 10) == s.data
-    @test read(IOBuffer(s), 1) == s.data[1:1]
+    @test read(IOBuffer(s)) == Vector{UInt8}(s)
+    @test read(IOBuffer(s), 10) == Vector{UInt8}(s)
+    @test read(IOBuffer(s), 1) == Vector{UInt8}(s)[1:1]
 
     # Test growing output array
     x = UInt8[]
     n = readbytes!(IOBuffer(s), x, 10)
-    @test x == s.data
+    @test x == Vector{UInt8}(s)
     @test n == length(x)
 end
 

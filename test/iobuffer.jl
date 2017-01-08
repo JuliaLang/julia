@@ -103,7 +103,7 @@ write(io,[1,2,3])
 skip(io,1)
 @test write(io,UInt8(104)) == 1
 skip(io,3)
-@test write(io,"apples".data) == 3
+@test write(io,b"apples") == 3
 skip(io,71)
 @test write(io,'y') == 1
 @test readstring(io) == "happy"

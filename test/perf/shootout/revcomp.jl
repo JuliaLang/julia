@@ -43,7 +43,7 @@ function revcomp(infile="revcomp-input.txt")
     input = open(infile, "r")
     buff = UInt8[]
     while true
-        line = readline(input).data
+        line = readuntil(input, UInt8('\n'))
         if isempty(line)
 #            print_buff(buff)
             return

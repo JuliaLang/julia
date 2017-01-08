@@ -536,7 +536,7 @@ will always be called.
 """
 function securezero! end
 @noinline securezero!{T<:Number}(a::AbstractArray{T}) = fill!(a, 0)
-securezero!(s::String) = securezero!(s.data)
+securezero!(s::String) = unsafe_securezero!(pointer(s), sizeof(s))
 @noinline unsafe_securezero!{T}(p::Ptr{T}, len::Integer=1) =
     ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
 unsafe_securezero!(p::Ptr{Void}, len::Integer=1) = Ptr{Void}(unsafe_securezero!(Ptr{UInt8}(p), len))
@@ -669,8 +669,8 @@ a starting `crc` integer to be mixed in with the checksum.
 (Technically, a little-endian checksum is computed.)
 """
 function crc32c end
-crc32c(a::Array{UInt8}, crc::UInt32=0x00000000) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, sizeof(a))
-crc32c(s::String, crc::UInt32=0x00000000) = crc32c(s.data, crc)
+crc32c(a::Union{Array{UInt8},String}, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, sizeof(a))
 
 """
     @kwdef typedef

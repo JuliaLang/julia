@@ -360,13 +360,13 @@ s = "\"\"."
 c,r = test_complete(s)
 @test length(c)==1
 @test r == (endof(s)+1):endof(s)
-@test c[1] == "data"
+@test c[1] == "len"
 
 s = "(\"\"*\"\")."
 c,r = test_complete(s)
 @test length(c)==1
 @test r == (endof(s)+1):endof(s)
-@test c[1] == "data"
+@test c[1] == "len"
 
 s = "CompletionFoo.test_y_array[1]."
 c,r = test_complete(s)

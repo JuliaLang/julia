@@ -64,12 +64,12 @@ elseif is_apple()
             break
         end
         # Hack to compensate for inability to create a string from a subarray with no allocations.
-        path_basename.data == casepreserved_basename && return true
+        Vector{UInt8}(path_basename) == casepreserved_basename && return true
 
         # If there is no match, it's possible that the file does exist but HFS+
         # performed unicode normalization. See  https://developer.apple.com/library/mac/qa/qa1235/_index.html.
         isascii(path_basename) && return false
-        normalize_string(path_basename, :NFD).data == casepreserved_basename
+        Vector{UInt8}(normalize_string(path_basename, :NFD)) == casepreserved_basename
     end
 else
     # Generic fallback that performs a slow directory listing.
