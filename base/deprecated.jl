@@ -1512,4 +1512,7 @@ unsafe_wrap(::Type{String}, p::Cstring, own::Bool=false) = unsafe_wrap(String, c
 unsafe_wrap(::Type{String}, p::Cstring, len::Integer, own::Bool=false) =
     unsafe_wrap(String, convert(Ptr{UInt8}, p), len, own)
 
+# Rename LibGit2.GitAnyObject to LibGit2.GitUnknownObject (part of #19839)
+eval(LibGit2, :(Base.@deprecate_binding GitAnyObject GitUnknownObject))
+
 # End deprecations scheduled for 0.6

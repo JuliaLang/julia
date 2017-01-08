@@ -284,7 +284,7 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
     end
 
     # search for commit to get a commit object
-    obj = get(GitAnyObject, repo, Oid(commit))
+    obj = get(GitUnknownObject, repo, Oid(commit))
     obj === nothing && return
     try
         peeled = peel(obj, Consts.OBJ_COMMIT)
@@ -341,7 +341,7 @@ end
 
 """ git reset [--soft | --mixed | --hard] <commit> """
 function reset!(repo::GitRepo, commit::Oid, mode::Cint = Consts.RESET_MIXED)
-    obj = get(GitAnyObject, repo, commit)
+    obj = get(GitUnknownObject, repo, commit)
     # object must exist for reset
     obj === nothing && throw(GitError(Error.Object, Error.ERROR, "Commit `$(string(commit))` object not found"))
     try

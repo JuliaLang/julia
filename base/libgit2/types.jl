@@ -407,24 +407,24 @@ end
 
 # Common types
 for (typ, ref, sup, fnc) in (
-            (:GitRemote,     :Void, :AbstractGitObject, :(:git_remote_free)),
-            (:GitRevWalker,  :Void, :AbstractGitObject, :(:git_revwalk_free)),
-            (:GitConfig,     :Void, :AbstractGitObject, :(:git_config_free)),
-            (:GitReference,  :Void, :AbstractGitObject, :(:git_reference_free)),
-            (:GitDiff,       :Void, :AbstractGitObject, :(:git_diff_free)),
-            (:GitIndex,      :Void, :AbstractGitObject, :(:git_index_free)),
-            (:GitRepo,       :Void, :AbstractGitObject, :(:git_repository_free)),
-            (:GitAnnotated,  :Void, :AbstractGitObject, :(:git_annotated_commit_free)),
-            (:GitRebase,     :Void, :AbstractGitObject, :(:git_rebase_free)),
-            (:GitStatus,     :Void, :AbstractGitObject, :(:git_status_list_free)),
-            (:GitBranchIter, :Void, :AbstractGitObject, :(:git_branch_iterator_free)),
-            (:GitTreeEntry,  :Void, :AbstractGitObject, :(:git_tree_entry_free)),
-            (:GitSignature,  :SignatureStruct, :AbstractGitObject, :(:git_signature_free)),
-            (:GitAnyObject,  :Void, :GitObject, nothing),
-            (:GitCommit,     :Void, :GitObject, nothing),
-            (:GitBlob,       :Void, :GitObject, nothing),
-            (:GitTree,       :Void, :GitObject, nothing),
-            (:GitTag,        :Void, :GitObject, nothing)
+            (:GitRemote,        :Void, :AbstractGitObject, :(:git_remote_free)),
+            (:GitRevWalker,     :Void, :AbstractGitObject, :(:git_revwalk_free)),
+            (:GitConfig,        :Void, :AbstractGitObject, :(:git_config_free)),
+            (:GitReference,     :Void, :AbstractGitObject, :(:git_reference_free)),
+            (:GitDiff,          :Void, :AbstractGitObject, :(:git_diff_free)),
+            (:GitIndex,         :Void, :AbstractGitObject, :(:git_index_free)),
+            (:GitRepo,          :Void, :AbstractGitObject, :(:git_repository_free)),
+            (:GitAnnotated,     :Void, :AbstractGitObject, :(:git_annotated_commit_free)),
+            (:GitRebase,        :Void, :AbstractGitObject, :(:git_rebase_free)),
+            (:GitStatus,        :Void, :AbstractGitObject, :(:git_status_list_free)),
+            (:GitBranchIter,    :Void, :AbstractGitObject, :(:git_branch_iterator_free)),
+            (:GitTreeEntry,     :Void, :AbstractGitObject, :(:git_tree_entry_free)),
+            (:GitSignature,     :SignatureStruct, :AbstractGitObject, :(:git_signature_free)),
+            (:GitUnknownObject, :Void, :GitObject, nothing),
+            (:GitCommit,        :Void, :GitObject, nothing),
+            (:GitBlob,          :Void, :GitObject, nothing),
+            (:GitTree,          :Void, :GitObject, nothing),
+            (:GitTag,           :Void, :GitObject, nothing)
         )
 
     @eval type $typ <: $sup
@@ -486,8 +486,8 @@ function getobjecttype{T<:GitObject}(::Type{T})
         Consts.OBJ_BLOB
     elseif T == GitTag
         Consts.OBJ_TAG
-    elseif T == GitAnyObject
-        Consts.OBJ_ANY
+    elseif T == GitUnknownObject
+        Consts.OBJ_ANY # this name comes from the header
     else
         throw(GitError(Error.Object, Error.ENOTFOUND, "Type $T is not supported"))
     end
@@ -502,8 +502,8 @@ function getobjecttype(obj_type::Cint)
         GitBlob
     elseif obj_type == Consts.OBJ_TAG
         GitTag
-    elseif obj_type == Consts.OBJ_ANY
-        GitAnyObject
+    elseif obj_type == Consts.OBJ_ANY #this name comes from the header
+        GitUnknownObject
     else
         throw(GitError(Error.Object, Error.ENOTFOUND, "Object type $obj_type is not supported"))
     end
