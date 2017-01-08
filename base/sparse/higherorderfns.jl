@@ -854,7 +854,7 @@ promote_containertype(::Type{Tuple}, ::Type{AbstractSparseArray}) = Array
 promote_containertype(::Type{AbstractSparseArray}, ::Type{Array}) = Array
 promote_containertype(::Type{AbstractSparseArray}, ::Type{Tuple}) = Array
 
-# broadcast[!] entry points for combinations of sparse arrays and other types
+# broadcast[!] entry points for combinations of sparse arrays and other (scalar) types
 @inline function broadcast_c{N}(f, ::Type{AbstractSparseArray}, mixedargs::Vararg{Any,N})
     parevalf, passedargstup = capturescalars(f, mixedargs)
     return broadcast(parevalf, passedargstup...)
@@ -914,7 +914,12 @@ promote_containertype(::Type{Tuple}, ::Type{StructuredArray}) = Array
 
 # for combinations involving sparse/structured arrays and scalars only,
 # promote all structured arguments to sparse and then rebroadcast
-broadcast_c{N,Tf}(f::Tf, ::Type{StructuredArray}, As::Vararg{Any,N}) = broadcast(f, map(_sparsifystructured, As)...)
+@inline broadcast_c{N}(f, ::Type{StructuredArray}, As::Vararg{Any,N}) =
+    broadcast(f, map(_sparsifystructured, As)...)
+@inline broadcast_c!{N}(f, ::Type{AbstractSparseArray}, ::Type{StructuredArray}, C, B, As::Vararg{Any,N}) =
+    broadcast!(f, C, _sparsifystructured(B), map(_sparsifystructured, As)...)
+@inline broadcast_c!{N}(f, CT::Type, ::Type{StructuredArray}, C, B, As::Vararg{Any,N}) =
+    broadcast_c!(f, CT, Array, C, B, As...)
 @inline _sparsifystructured(S::SymTridiagonal) = SparseMatrixCSC(S)
 @inline _sparsifystructured(T::Tridiagonal) = SparseMatrixCSC(T)
 @inline _sparsifystructured(B::Bidiagonal) = SparseMatrixCSC(B)

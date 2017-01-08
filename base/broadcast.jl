@@ -203,8 +203,8 @@ arguments to `f` unless it is also listed in the `As`,
 as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
 """
 @inline broadcast!{N}(f, C::AbstractArray, A, Bs::Vararg{Any,N}) =
-    broadcast_c!(f, containertype(C, A, Bs...), C, A, Bs...)
-@inline function broadcast_c!{N}(f, ::Type, C::AbstractArray, A, Bs::Vararg{Any,N})
+    broadcast_c!(f, containertype(C), containertype(A, Bs...), C, A, Bs...)
+@inline function broadcast_c!{N}(f, ::Type, ::Type, C, A, Bs::Vararg{Any,N})
     shape = indices(C)
     @boundscheck check_broadcast_indices(shape, A, Bs...)
     keeps, Idefaults = map_newindexer(shape, A, Bs)
