@@ -1677,15 +1677,6 @@ by `show` generally includes Julia-specific formatting and type information.
 show(x)
 
 """
-    Array(dims)
-
-`Array{T}(dims)` constructs an uninitialized dense array with element type `T`. `dims` may
-be a tuple or a series of integer arguments. The syntax `Array(T, dims)` is also available,
-but deprecated.
-"""
-Array
-
-"""
     issubtype(type1, type2)
 
 Return `true` if and only if all values of `type1` are also of `type2`. Can also be written

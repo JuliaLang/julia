@@ -35,7 +35,7 @@ let a
     @test a === 1
 end
 
-a = Array(Float64, 2, 2, 2, 2, 2)
+a = Array{Float64,5}(2, 2, 2, 2, 2)
 a[1,1,1,1,1] = 10
 @test a[1,1,1,1,1] == 10
 @test a[1,1,1,1,1] != 2
