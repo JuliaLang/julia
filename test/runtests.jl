@@ -1552,3 +1552,10 @@ let s = "Koala test: 🐨"
         @test transcode(T, s) == transcode(T, s.data) == transcode(T, transcode(T, s))
     end
 end
+
+# julia#17155, tests from Base Julia
+@test (uppercase∘hex)(239487) == "3A77F"
+let str = randstring(20)
+    @test filter(!isupper, str) == replace(str, r"[A-Z]", "")
+    @test filter(!islower, str) == replace(str, r"[a-z]", "")
+end

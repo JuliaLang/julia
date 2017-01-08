@@ -1739,4 +1739,11 @@ if VERSION < v"0.5.0-dev+5380"
     end
 end
 
+# julia #17155 function composition and negation
+if VERSION < v"0.6.0-dev.1883"
+    export ∘
+    ∘(f, g) = (x...)->f(g(x...))
+    @compat Base.:!(f::Function) = (x...)->!f(x...)
+end
+
 end # module

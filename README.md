@@ -95,6 +95,10 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `transcode` converts between UTF-xx string encodings in Julia 0.5 (as a lightweight
    alternative to the LegacyStrings package), [#17323](https://github.com/JuliaLang/julia/pull/17323).
 
+* `∘` (typically used infix as `f ∘ g`) for function composition can be used in 0.5 and earlier. [#17155](https://github.com/JuliaLang/julia/pull/17155)
+
+* The method of `!` to negate functions (typically used as a unary operator, as in `!isinteger`) can be used in 0.5 and earlier. [#17155](https://github.com/JuliaLang/julia/pull/17155)
+
 ## Renamed functions
 
 * `pointer_to_array` and `pointer_to_string` have been replaced with `unsafe_wrap(Array, ...)` and `unsafe_wrap(String, ...)` respectively.
