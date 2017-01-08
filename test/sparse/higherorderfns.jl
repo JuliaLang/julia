@@ -283,6 +283,32 @@ end
     end
 end
 
+@testset "broadcast over combinations of scalars, structured matrices, and sparse vectors/matrices" begin
+    N, p = 10, 0.4
+    s = rand()
+    V = sprand(N, p)
+    A = sprand(N, N, p)
+    sparsearrays = (V, A)
+    fV, fA = map(Array, sparsearrays)
+    D = Diagonal(rand(N))
+    B = Bidiagonal(rand(N), rand(N - 1), true)
+    T = Tridiagonal(rand(N - 1), rand(N), rand(N - 1))
+    S = SymTridiagonal(rand(N), rand(N - 1))
+    structuredarrays = (D, B, T, S)
+    fstructuredarrays = map(Array, structuredarrays)
+    for (X, fX) in zip(structuredarrays, fstructuredarrays)
+        @test broadcast(sin, X) == sparse(broadcast(sin, fX))
+        @test broadcast(cos, X) == sparse(broadcast(cos, fX))
+        @test broadcast(*, s, X) == sparse(broadcast(*, s, fX))
+        @test broadcast(+, V, A, X) == sparse(broadcast(+, V, A, X))
+        @test broadcast(*, s, V, A, X) == sparse(broadcast(*, s, fV, fA, fX))
+        for (Y, fY) in zip(structuredarrays, fstructuredarrays)
+            @test broadcast(+, X, Y) == sparse(broadcast(+, fX, fY))
+            @test broadcast(*, X, Y) == sparse(broadcast(*, fX, fY))
+        end
+    end
+end
+
 # Older tests of sparse broadcast, now largely covered by the tests above
 @testset "assorted tests of sparse broadcast over two input arguments" begin
     N, p = 10, 0.3
