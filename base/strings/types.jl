@@ -76,7 +76,7 @@ prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
 convert{T<:AbstractString}(::Type{SubString{T}}, s::T) = SubString(s, 1, endof(s))
 
 String(p::SubString{String}) =
-    String(p.string.data[1+p.offset:p.offset+nextind(p, p.endof)-1])
+    unsafe_string(pointer(p.string, p.offset+1), nextind(p, p.endof)-1)
 
 function getindex(s::AbstractString, r::UnitRange{Int})
     checkbounds(s, r) || throw(BoundsError(s, r))
@@ -95,7 +95,7 @@ end
 cconvert(::Type{Ptr{UInt8}}, s::SubString{String}) = s
 cconvert(::Type{Ptr{Int8}}, s::SubString{String}) = s
 function unsafe_convert{R<:Union{Int8, UInt8}}(::Type{Ptr{R}}, s::SubString{String})
-    unsafe_convert(Ptr{R}, s.string.data) + s.offset
+    convert(Ptr{R}, pointer(s.string)) + s.offset
 end
 
 ## reversed strings without data movement ##
@@ -140,16 +140,6 @@ function repeat(s::AbstractString, r::Integer)
     repeat(convert(String, s), r)
 end
 
-function repeat(s::String, r::Integer)
-    r < 0 && throw(ArgumentError("can't repeat a string $r times"))
-    d = s.data; n = length(d)
-    out = Array{UInt8}(n*r)
-    for i=1:r
-        copy!(out, 1+(i-1)*n, d, 1, n)
-    end
-    convert(typeof(s), out)
-end
-
 """
     ^(s::AbstractString, n::Integer)
 
@@ -163,5 +153,5 @@ julia> "Test "^3
 """
 (^)(s::AbstractString, r::Integer) = repeat(s,r)
 
-pointer(x::SubString{String}) = pointer(x.string.data) + x.offset
-pointer(x::SubString{String}, i::Integer) = pointer(x.string.data) + x.offset + (i-1)
+pointer(x::SubString{String}) = pointer(x.string) + x.offset
+pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)

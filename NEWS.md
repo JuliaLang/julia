@@ -33,6 +33,13 @@ Breaking changes
 
 This section lists changes that do not have deprecation warnings.
 
+  * `String`s no longer have a `.data` field (as part of a significant performance
+    improvement). Use `Vector{UInt8}(str)` to access a string as a byte array.
+    However, allocating the `Vector` object has overhead. You can also use
+    `codeunit(str, i)` to access the `i`th byte of a `String`.
+    Use `sizeof(str)` instead of `length(str.data)`, and `pointer(str)` instead of
+    `pointer(str.data)`. ([#19449])
+
   * Operations between `Float16` and `Integers` now return `Float16` instead of `Float32`. ([#17261])
 
   * Keyword arguments are processed left-to-right: if the same keyword is specified more than
@@ -145,6 +152,9 @@ Library improvements
   * Methods for `map` and `filter` with `Nullable` arguments have been
     implemented; the semantics are as if the `Nullable` were a container with
     zero or one elements ([#16961]).
+
+  * New `@test_warn` and `@test_nowarn` macros in the `Base.Test` module to
+    test for the presence or absence of warning messages ([#19903]).
 
   * `logging` can be used to redirect `info`, `warn`, and `error` messages
     either universally or on a per-module/function basis ([#16213]).
@@ -815,6 +825,7 @@ Language tooling improvements
 [#19233]: https://github.com/JuliaLang/julia/issues/19233
 [#19288]: https://github.com/JuliaLang/julia/issues/19288
 [#19305]: https://github.com/JuliaLang/julia/issues/19305
+[#19449]: https://github.com/JuliaLang/julia/issues/19449
 [#19469]: https://github.com/JuliaLang/julia/issues/19469
 [#19543]: https://github.com/JuliaLang/julia/issues/19543
 [#19598]: https://github.com/JuliaLang/julia/issues/19598

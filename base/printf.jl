@@ -870,8 +870,8 @@ function decode_hex(d::Integer, symbols::Array{UInt8,1})
     return Int32(pt), Int32(pt), neg
 end
 
-const hex_symbols = "0123456789abcdef".data
-const HEX_symbols = "0123456789ABCDEF".data
+const hex_symbols = b"0123456789abcdef"
+const HEX_symbols = b"0123456789ABCDEF"
 
 decode_hex(x::Integer) = decode_hex(x,hex_symbols)
 decode_HEX(x::Integer) = decode_hex(x,HEX_symbols)

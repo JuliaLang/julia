@@ -171,6 +171,8 @@ checks using either `@test a ≈ b` (where `≈`, typed via tab completion of `\
 
 ```@docs
 Base.Test.@inferred
+Base.Test.@test_warn
+Base.Test.@test_nowarn
 ```
 
 ## Broken Tests

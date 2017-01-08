@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 include("strings/errors.jl")
-include("strings/string.jl")
 include("strings/types.jl")
 include("strings/basic.jl")
 include("strings/search.jl")

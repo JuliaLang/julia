@@ -64,12 +64,12 @@ elseif is_apple()
             break
         end
         # Hack to compensate for inability to create a string from a subarray with no allocations.
-        path_basename.data == casepreserved_basename && return true
+        Vector{UInt8}(path_basename) == casepreserved_basename && return true
 
         # If there is no match, it's possible that the file does exist but HFS+
         # performed unicode normalization. See  https://developer.apple.com/library/mac/qa/qa1235/_index.html.
         isascii(path_basename) && return false
-        normalize_string(path_basename, :NFD).data == casepreserved_basename
+        Vector{UInt8}(normalize_string(path_basename, :NFD)) == casepreserved_basename
     end
 else
     # Generic fallback that performs a slow directory listing.
@@ -545,22 +545,16 @@ function include_from_node1(_path::String)
 end
 
 """
-    include(path::AbstractString...)
+    include(path::AbstractString)
 
-Evaluate the contents of the input source file(s) in the current context. Returns the result
-of the last evaluated argument (of the last input file). During including, a
-task-local include path is set to the directory containing the file. Nested calls to
-`include` will search relative to that path. All paths refer to files on node 1 when running
-in parallel, and files will be fetched from node 1. This function is typically used to load
-source interactively, or to combine files in packages that are broken into multiple source files.
+Evaluate the contents of the input source file in the current context. Returns the result
+of the last evaluated expression of the input file. During including, a task-local include
+path is set to the directory containing the file. Nested calls to `include` will search
+relative to that path. All paths refer to files on node 1 when running in parallel, and
+files will be fetched from node 1. This function is typically used to load source
+interactively, or to combine files in packages that are broken into multiple source files.
 """
-function include(_path::AbstractString...)
-    local result
-    for path in _path
-        result = include(path)
-    end
-    result
-end
+include # defined in sysimg.jl
 
 """
     evalfile(path::AbstractString, args::Vector{String}=String[])

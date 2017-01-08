@@ -636,10 +636,6 @@ let
     @test !isdefined(a, :foo)
     @test !isdefined(2, :a)
 
-    @test  isdefined("a",:data)
-    @test  isdefined("a", 1)
-    @test !isdefined("a", 2)
-
     @test_throws TypeError isdefined(2)
 end
 
@@ -4007,7 +4003,7 @@ b = "aaa"
 c = [0x2, 0x1, 0x3]
 
 @test check_nul(a)
-@test check_nul(b.data)
+@test check_nul(Vector{UInt8}(b))
 @test check_nul(c)
 d = [0x2, 0x1, 0x3]
 @test check_nul(d)
@@ -4821,6 +4817,17 @@ end
 
 @test f14893() == 14893
 @test M14893.f14893() == 14893
+
+# issue #18725
+@test_nowarn eval(Main, :(begin
+    f18725(x) = 1
+    f18725(x) = 2
+end))
+@test Main.f18725(0) == 2
+@test_warn "WARNING: Method definition f18725(Any) in module Module18725" eval(Main, :(module Module18725
+    f18725(x) = 1
+    f18725(x) = 2
+end))
 
 # issue #19599
 f19599{T}(x::((S)->Vector{S})(T)...) = 1

@@ -73,21 +73,15 @@ pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)
 ==(x::Union{Cstring,Cwstring}, y::Ptr) = pointer(x) == y
 ==(x::Ptr, y::Union{Cstring,Cwstring}) = x == pointer(y)
 
-# here, not in pointer.jl, to avoid bootstrapping problems in coreimg.jl
-unsafe_wrap(::Type{String}, p::Cstring, own::Bool=false) = unsafe_wrap(String, convert(Ptr{UInt8}, p), own)
-unsafe_wrap(::Type{String}, p::Cstring, len::Integer, own::Bool=false) =
-    unsafe_wrap(String, convert(Ptr{UInt8}, p), len, own)
 unsafe_string(s::Cstring) = unsafe_string(convert(Ptr{UInt8}, s))
 
 # convert strings to String etc. to pass as pointers
-cconvert(::Type{Cstring}, s::String) =
-    ccall(:jl_array_cconvert_cstring, Ref{Vector{UInt8}},
-          (Vector{UInt8},), s.data)
+cconvert(::Type{Cstring}, s::String) = s
 cconvert(::Type{Cstring}, s::AbstractString) =
     cconvert(Cstring, String(s)::String)
 
 function cconvert(::Type{Cwstring}, s::AbstractString)
-    v = transcode(Cwchar_t, String(s).data)
+    v = transcode(Cwchar_t, Vector{UInt8}(String(s)))
     !isempty(v) && v[end] == 0 || push!(v, 0)
     return v
 end
@@ -100,7 +94,7 @@ containsnul(p::Ptr, len) =
 containsnul(s::String) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
 containsnul(s::AbstractString) = '\0' in s
 
-function unsafe_convert(::Type{Cstring}, s::Vector{UInt8})
+function unsafe_convert(::Type{Cstring}, s::Union{String,Vector{UInt8}})
     p = unsafe_convert(Ptr{Cchar}, s)
     containsnul(p, sizeof(s)) &&
         throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
@@ -133,7 +127,7 @@ same argument.
 This is only available on Windows.
 """
 function cwstring(s::AbstractString)
-    bytes = String(s).data
+    bytes = Vector{UInt8}(String(s))
     0 in bytes && throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
     return push!(transcode(UInt16, bytes), 0)
 end
@@ -170,7 +164,7 @@ function transcode{S<:Union{Int32,UInt32}}(::Type{UInt8}, src::Vector{S})
     take!(buf)
 end
 transcode(::Type{String}, src::String) = src
-transcode(T, src::String) = transcode(T, src.data)
+transcode(T, src::String) = transcode(T, Vector{UInt8}(src))
 transcode(::Type{String}, src) = String(transcode(UInt8, src))
 
 function transcode(::Type{UInt16}, src::Vector{UInt8})
@@ -257,7 +251,7 @@ function transcode(::Type{UInt8}, src::Vector{UInt16})
         a = src[i += 1]
     end
 
-    dst = Array{UInt8}(m)
+    dst = StringVector(m)
     a = src[1]
     i, j = 1, 0
     while true
