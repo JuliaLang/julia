@@ -36,7 +36,6 @@ function resolve(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}
                 end
                 throw(PkgError(msg))
             end
-            rethrow(err)
         end
 
         # verify solution (debug code) and enforce its optimality
