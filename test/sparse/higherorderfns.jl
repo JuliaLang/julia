@@ -283,11 +283,12 @@ end
     end
 end
 
-@testset "broadcast over combinations of scalars, structured matrices, and sparse vectors/matrices" begin
+@testset "broadcast[!] over combinations of scalars, structured matrices, and sparse vectors/matrices" begin
     N, p = 10, 0.4
     s = rand()
     V = sprand(N, p)
     A = sprand(N, N, p)
+    Z = copy(A)
     sparsearrays = (V, A)
     fV, fA = map(Array, sparsearrays)
     D = Diagonal(rand(N))
@@ -298,13 +299,20 @@ end
     fstructuredarrays = map(Array, structuredarrays)
     for (X, fX) in zip(structuredarrays, fstructuredarrays)
         @test broadcast(sin, X) == sparse(broadcast(sin, fX))
+        @test broadcast!(sin, Z, X) == sparse(broadcast(sin, fX))
         @test broadcast(cos, X) == sparse(broadcast(cos, fX))
+        @test broadcast!(cos, Z, X) == sparse(broadcast(cos, fX))
         @test broadcast(*, s, X) == sparse(broadcast(*, s, fX))
+        @test broadcast!(*, Z, s, X) == sparse(broadcast(*, s, fX))
         @test broadcast(+, V, A, X) == sparse(broadcast(+, V, A, X))
+        @test broadcast!(+, Z, V, A, X) == sparse(broadcast(+, V, A, X))
         @test broadcast(*, s, V, A, X) == sparse(broadcast(*, s, fV, fA, fX))
+        @test broadcast!(*, Z, s, V, A, X) == sparse(broadcast(*, s, fV, fA, fX))
         for (Y, fY) in zip(structuredarrays, fstructuredarrays)
             @test broadcast(+, X, Y) == sparse(broadcast(+, fX, fY))
+            @test broadcast!(+, Z, X, Y) == sparse(broadcast(+, fX, fY))
             @test broadcast(*, X, Y) == sparse(broadcast(*, fX, fY))
+            @test broadcast!(*, Z, X, Y) == sparse(broadcast(*, fX, fY))
         end
     end
 end
