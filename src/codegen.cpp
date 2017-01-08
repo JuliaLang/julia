@@ -4450,7 +4450,7 @@ static std::unique_ptr<Module> emit_function(
             std::vector<Value*> ditypes(0);
 #endif
             for (size_t i = 0; i < jl_nparams(lam->specTypes); i++) { // assumes !va
-                if (i < ctx.nargs && ctx.slots[i].value.isghost)
+                if (i < (size_t)(ctx.nargs) && ctx.slots[i].value.isghost)
                     continue;
                 ditypes.push_back(julia_type_to_di(jl_tparam(lam->specTypes,i),&dbuilder,false));
             }
