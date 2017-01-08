@@ -1242,7 +1242,9 @@ for (Bsig, A1sig, A2sig, gbb, funcname) in
     end  # let broadcast_cache
 end
 _broadcast_zpreserving!(args...) = broadcast!(args...)
-_broadcast_zpreserving(f, As...) = broadcast!(f, similar(Array{promote_op(f, map(eltype, As)...)}, Base.Broadcast.broadcast_indices(As...)), As...)
+# note: promote_eltype_op also deprecated, defined later in this file
+_broadcast_zpreserving(f, As...) =
+    broadcast!(f, similar(Array{_promote_eltype_op(f, As...)}, Base.Broadcast.broadcast_indices(As...)), As...)
 _broadcast_zpreserving{Tv1,Ti1,Tv2,Ti2}(f::Function, A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) =
     _broadcast_zpreserving!(f, spzeros(promote_type(Tv1, Tv2), promote_type(Ti1, Ti2), Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
 _broadcast_zpreserving{Tv,Ti}(f::Function, A_1::SparseMatrixCSC{Tv,Ti}, A_2::Union{Array,BitArray,Number}) =
@@ -1496,8 +1498,18 @@ function frexp{T<:AbstractFloat}(A::Array{T})
     return (F, E)
 end
 
-# Calling promote_op is likely a bad idea, so deprecate its convenience wrapper promote_eltype_op
-@deprecate promote_eltype_op(op, As...) promote_op(op, map(eltype, As)...)
+# Deprecate promote_eltype_op (#19814, #19937)
+_promote_eltype_op(::Any) = Any
+_promote_eltype_op(op, A) = (@_inline_meta; promote_op(op, eltype(A)))
+_promote_eltype_op(op, A, B) = (@_inline_meta; promote_op(op, eltype(A), eltype(B)))
+_promote_eltype_op(op, A, B, C, D...) = (@_inline_meta; _promote_eltype_op(op, eltype(A), _promote_eltype_op(op, B, C, D...)))
+@inline function promote_eltype_op(args...)
+    depwarn("""
+            `promote_eltype_op` is deprecated and should not be used.
+            See https://github.com/JuliaLang/julia/issues/19669.""",
+            :promote_eltype_op)
+    _promote_eltype_op(args...)
+end
 
 function unsafe_wrap(::Type{String}, p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer, own::Bool=false)
     Base.depwarn("unsafe_wrap(String, ...) is deprecated; use `unsafe_string` instead.", :unsafe_wrap)
