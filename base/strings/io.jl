@@ -312,6 +312,8 @@ unescape_string(s::AbstractString) = sprint(endof(s), unescape_string, s)
 
 macro b_str(s); :(Vector{UInt8}($(unescape_string(s)))); end
 
+macro raw_str(s); s; end
+
 ## multiline strings ##
 
 """
