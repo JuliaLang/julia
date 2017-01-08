@@ -1104,32 +1104,40 @@ for (Fun, func) in [(:IdFun,                   :identity),
     end
 end
 
-for (Fun, func) in [(:AndFun,              :&),
-                    (:OrFun,               :|),
-                    (:XorFun,              :⊻),
-                    (:AddFun,              :+),
-                    (:DotAddFun,           :.+),
-                    (:SubFun,              :-),
-                    (:DotSubFun,           :.-),
-                    (:MulFun,              :*),
-                    (:DotMulFun,           :.*),
-                    (:RDivFun,             :/),
-                    (:DotRDivFun,          :./),
-                    (:LDivFun,             :\ ),
-                    (:IDivFun,             :div),
-                    (:DotIDivFun,          @compat(Symbol(".÷"))),
-                    (:ModFun,              :mod),
-                    (:RemFun,              :rem),
-                    (:DotRemFun,           :.%),
-                    (:PowFun,              :^),
-                    (:MaxFun,              :scalarmax),
-                    (:MinFun,              :scalarmin),
-                    (:LessFun,             :<),
-                    (:MoreFun,             :>),
-                    (:DotLSFun,            :.<<),
-                    (:DotRSFun,            :.>>),
-                    (:ElementwiseMaxFun,   :max),
-                    (:ElementwiseMinFun,   :min)]
+dotfunctors = [(:DotAddFun,           :.+),
+               (:DotSubFun,           :.-),
+               (:DotMulFun,           :.*),
+               (:DotRDivFun,          :./),
+               (:DotIDivFun,          @compat(Symbol(".÷"))),
+               (:DotRemFun,           :.%),
+               (:DotLSFun,            :.<<),
+               (:DotRSFun,            :.>>)]
+
+functors    = [(:AndFun,              :&),
+               (:OrFun,               :|),
+               (:XorFun,              :⊻),
+               (:AddFun,              :+),
+               (:SubFun,              :-),
+               (:MulFun,              :*),
+               (:RDivFun,             :/),
+               (:LDivFun,             :\ ),
+               (:IDivFun,             :div),
+               (:ModFun,              :mod),
+               (:RemFun,              :rem),
+               (:PowFun,              :^),
+               (:MaxFun,              :scalarmax),
+               (:MinFun,              :scalarmin),
+               (:LessFun,             :<),
+               (:MoreFun,             :>),
+               (:ElementwiseMaxFun,   :max),
+               (:ElementwiseMinFun,   :min)]
+
+# since #17623, dot functions are no longer function objects
+if VERSION < v"0.6.0-dev.1614"
+    append!(functors, dotfunctors)
+end
+
+for (Fun, func) in functors
     begin
         if isdefined(Base, func) && (func !== :.>> || VERSION >= v"0.4.0-dev+553") && (func !== :.% || VERSION >= v"0.5.0-dev+1472")
             checkfunc(Fun, func)
