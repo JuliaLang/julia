@@ -122,7 +122,7 @@ try
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
     @test_warn "WARNING: replacing module Foo4b3a94a1a081a8cb.\nWARNING: Method definition " begin
-        @test isa(Base._require_from_serialized(myid(), Foo_module, cachefile, #=broadcast-load=#false), Array{Any,1})
+        @test isa(Base._require_from_serialized(cachefile), Array{Any,1})
     end
 
     let Foo = getfield(Main, Foo_module)
