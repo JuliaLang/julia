@@ -432,15 +432,17 @@ function merge!(repo::GitRepo;
                 end
                 return true
             else
-                tr_brn_ref = upstream(head_ref)
-                if tr_brn_ref === nothing
-                    throw(GitError(Error.Merge, Error.ERROR,
-                                   "There is no tracking information for the current branch."))
-                end
-                try
-                    [GitAnnotated(repo, tr_brn_ref)]
-                finally
-                    close(tr_brn_ref)
+                with(head(repo)) do head_ref
+                    tr_brn_ref = upstream(head_ref)
+                    if tr_brn_ref === nothing
+                        throw(GitError(Error.Merge, Error.ERROR,
+                                       "There is no tracking information for the current branch."))
+                    end
+                    try
+                        [GitAnnotated(repo, tr_brn_ref)]
+                    finally
+                        close(tr_brn_ref)
+                    end
                 end
             end
         end
