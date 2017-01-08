@@ -9,9 +9,8 @@ Generates a symbol which will not conflict with other variable names.
 """
 gensym() = ccall(:jl_gensym, Ref{Symbol}, ())
 
-gensym(s::String) = gensym(s.data)
-gensym(a::Array{UInt8,1}) =
-    ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), a, length(a))
+gensym(s::String) = ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), s, sizeof(s))
+
 gensym(ss::String...) = map(gensym, ss)
 gensym(s::Symbol) =
     ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), s, ccall(:strlen, Csize_t, (Ptr{UInt8},), s))

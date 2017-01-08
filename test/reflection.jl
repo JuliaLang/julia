@@ -160,7 +160,6 @@ not_const = 1
 
 @test isimmutable(1) == true
 @test isimmutable([]) == false
-@test isimmutable("abc") == true
 
 ## find bindings tests
 @test ccall(:jl_get_module_of_binding, Any, (Any, Any), Base, :sin)==Base

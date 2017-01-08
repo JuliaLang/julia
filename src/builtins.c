@@ -358,7 +358,8 @@ JL_CALLABLE(jl_f_sizeof)
     jl_value_t *x = args[0];
     if (jl_is_datatype(x)) {
         jl_datatype_t *dx = (jl_datatype_t*)x;
-        if (dx->name == jl_array_typename || dx == jl_symbol_type || dx == jl_simplevector_type)
+        if (dx->name == jl_array_typename || dx == jl_symbol_type || dx == jl_simplevector_type ||
+            dx == jl_string_type)
             jl_error("type does not have a canonical binary representation");
         if (!(dx->name->names == jl_emptysvec && jl_datatype_size(dx) > 0)) {
             // names===() and size > 0  =>  bitstype, size always known
@@ -367,9 +368,10 @@ JL_CALLABLE(jl_f_sizeof)
         }
         return jl_box_long(jl_datatype_size(x));
     }
-    if (jl_is_array(x)) {
+    if (jl_is_array(x))
         return jl_box_long(jl_array_len(x) * ((jl_array_t*)x)->elsize);
-    }
+    if (jl_is_string(x))
+        return jl_box_long(jl_string_len(x));
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
     assert(jl_is_datatype(dt));
     assert(!dt->abstract);
@@ -1228,6 +1230,9 @@ void jl_init_primitives(void)
     add_builtin("Int", (jl_value_t*)jl_int32_type);
 #endif
 
+    add_builtin("AbstractString", (jl_value_t*)jl_abstractstring_type);
+    add_builtin("String", (jl_value_t*)jl_string_type);
+
     add_builtin("ANY", jl_ANY_flag);
 }
 
@@ -1371,7 +1376,9 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, "nothing");
     }
     else if (vt == jl_string_type) {
-        n += jl_printf(out, "\"%s\"", jl_iostr_data(v));
+        n += jl_printf(out, "\"");
+        jl_uv_puts(out, jl_string_data(v), jl_string_len(v)); n += jl_string_len(v);
+        n += jl_printf(out, "\"");
     }
     else if (vt == jl_uniontype_type) {
         n += jl_show_svec(out, ((jl_uniontype_t*)v)->types, "Union", "{", "}");

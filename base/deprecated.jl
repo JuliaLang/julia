@@ -430,7 +430,7 @@ end
                 endn += 1
             end
             (endn > idx) && (endn -= 1)
-            splice!(a, idx:endn, invalids_as.data)
+            splice!(a, idx:endn, Vector{UInt8}(invalids_as))
             l = length(a)
         end
         String(a)
@@ -1498,5 +1498,18 @@ end
 
 # Calling promote_op is likely a bad idea, so deprecate its convenience wrapper promote_eltype_op
 @deprecate promote_eltype_op(op, As...) promote_op(op, map(eltype, As)...)
+
+function unsafe_wrap(::Type{String}, p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer, own::Bool=false)
+    Base.depwarn("unsafe_wrap(String, ...) is deprecated; use `unsafe_string` instead.", :unsafe_wrap)
+    #ccall(:jl_array_to_string, Ref{String}, (Any,),
+    #      ccall(:jl_ptr_to_array_1d, Vector{UInt8}, (Any, Ptr{UInt8}, Csize_t, Cint),
+    #            Vector{UInt8}, p, len, own))
+    unsafe_string(p, len)
+end
+unsafe_wrap(::Type{String}, p::Union{Ptr{UInt8},Ptr{Int8}}, own::Bool=false) =
+    unsafe_wrap(String, p, ccall(:strlen, Csize_t, (Ptr{UInt8},), p), own)
+unsafe_wrap(::Type{String}, p::Cstring, own::Bool=false) = unsafe_wrap(String, convert(Ptr{UInt8}, p), own)
+unsafe_wrap(::Type{String}, p::Cstring, len::Integer, own::Bool=false) =
+    unsafe_wrap(String, convert(Ptr{UInt8}, p), len, own)
 
 # End deprecations scheduled for 0.6

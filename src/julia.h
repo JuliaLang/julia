@@ -130,7 +130,7 @@ typedef struct {
       0 = data is inlined, or a foreign pointer we don't manage
       1 = julia-allocated buffer that needs to be marked
       2 = malloc-allocated pointer this array object manages
-      3 = has a pointer to the Array that owns the data
+      3 = has a pointer to the object that owns the data
     */
     uint16_t how:2;
     uint16_t ndims:10;
@@ -515,6 +515,7 @@ extern JL_DLLEXPORT jl_datatype_t *jl_densearray_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_array_type;
 extern JL_DLLEXPORT jl_typename_t *jl_array_typename;
 extern JL_DLLEXPORT jl_datatype_t *jl_weakref_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_abstractstring_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_string_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_errorexception_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_argumenterror_type;
@@ -763,9 +764,8 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x)
 #define jl_data_ptr(v)  ((jl_value_t**)v)
 
 #define jl_array_ptr_data(a)   ((jl_value_t**)((jl_array_t*)a)->data)
-#define jl_string_data(s) ((char*)((jl_array_t*)jl_data_ptr(s)[0])->data)
-#define jl_string_len(s)  (jl_array_len((jl_array_t*)(jl_data_ptr(s)[0])))
-#define jl_iostr_data(s)  ((char*)((jl_array_t*)jl_data_ptr(s)[0])->data)
+#define jl_string_data(s) ((char*)s + sizeof(void*))
+#define jl_string_len(s)  (*(size_t*)s)
 
 #define jl_gf_mtable(f) (((jl_datatype_t*)jl_typeof(f))->name->mt)
 #define jl_gf_name(f)   (jl_gf_mtable(f)->name)
@@ -1156,6 +1156,7 @@ JL_DLLEXPORT jl_array_t *jl_alloc_array_3d(jl_value_t *atype, size_t nr,
 JL_DLLEXPORT jl_array_t *jl_pchar_to_array(const char *str, size_t len);
 JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len);
 JL_DLLEXPORT jl_value_t *jl_cstr_to_string(const char *str);
+JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len);
 JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a);
 JL_DLLEXPORT jl_array_t *jl_alloc_vec_any(size_t n);
 JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
@@ -1600,7 +1601,6 @@ JL_DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, uint32_t host,
 JL_DLLEXPORT int jl_sizeof_ios_t(void);
 
 JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s);
-JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim);
 
 typedef struct {
     void *data;
@@ -1616,6 +1616,7 @@ typedef struct {
 #define _JL_FORMAT_ATTR(type, str, arg)
 #endif
 
+JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n);
 JL_DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...)
     _JL_FORMAT_ATTR(printf, 2, 3);
 JL_DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args)

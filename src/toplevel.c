@@ -678,12 +678,8 @@ JL_DLLEXPORT jl_value_t *jl_load(const char *fname)
 // load from filename given as a String object
 JL_DLLEXPORT jl_value_t *jl_load_(jl_value_t *str)
 {
-    jl_array_t *ary =
-        jl_array_cconvert_cstring((jl_array_t*)(jl_data_ptr(str)[0]));
-    JL_GC_PUSH1(&ary);
-    jl_value_t *res = jl_load((const char*)ary->data);
-    JL_GC_POP();
-    return res;
+    // assume String has a hidden '\0' at the end
+    return jl_load((const char*)jl_string_data(str));
 }
 
 // method definition ----------------------------------------------------------

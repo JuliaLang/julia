@@ -923,17 +923,17 @@ function string(x::BigFloat)
     # is, excluding the most significant, ceil(log(10, 2^precision(x)))
     k = ceil(Int32, precision(x) * 0.3010299956639812)
     lng = k + Int32(8) # Add space for the sign, the most significand digit, the dot and the exponent
-    buf = Array{UInt8}(lng + 1)
+    buf = Base.StringVector(lng + 1)
     # format strings are guaranteed to contain no NUL, so we don't use Cstring
     lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
     if lng < k + 5 # print at least k decimal places
         lng = ccall((:mpfr_sprintf,:libmpfr), Int32, (Ptr{UInt8}, Ptr{UInt8}, Ptr{BigFloat}...), buf, "%.$(k)Re", &x)
     elseif lng > k + 8
-        buf = Array{UInt8}(lng + 1)
+        buf = Base.StringVector(lng + 1)
         lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
     end
     n = (1 <= x < 10 || -10 < x <= -1 || x == 0) ? lng - 4 : lng
-    return String(buf[1:n])
+    return String(resize!(buf,n))
 end
 
 print(io::IO, b::BigFloat) = print(io, string(b))
