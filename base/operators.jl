@@ -931,24 +931,6 @@ for f in (:+, :-)
     end
 end
 
-# vectorized ifelse
-
-function ifelse(c::AbstractArray{Bool}, x, y)
-    [ifelse(ci, x, y) for ci in c]
-end
-
-function ifelse(c::AbstractArray{Bool}, x::AbstractArray, y::AbstractArray)
-    [ifelse(c_elem, x_elem, y_elem) for (c_elem, x_elem, y_elem) in zip(c, x, y)]
-end
-
-function ifelse(c::AbstractArray{Bool}, x::AbstractArray, y)
-    [ifelse(c_elem, x_elem, y) for (c_elem, x_elem) in zip(c, x)]
-end
-
-function ifelse(c::AbstractArray{Bool}, x, y::AbstractArray)
-    [ifelse(c_elem, x, y_elem) for (c_elem, y_elem) in zip(c, y)]
-end
-
 # Pair
 
 immutable Pair{A,B}
