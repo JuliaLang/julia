@@ -81,6 +81,19 @@ function _noshapecheck_map{Tf,N}(f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseVecO
 end
 # (3) broadcast[!] entry points
 broadcast{Tf}(f::Tf, A::SparseVecOrMat) = _noshapecheck_map(f, A)
+function broadcast!{Tf}(f::Tf, C::SparseVecOrMat)
+    isempty(C) && return _finishempty!(C)
+    fofnoargs = f()
+    if _iszero(fofnoargs) # f() is zero, so empty C
+        trimstorage!(C, 0)
+        _finishempty!(C)
+    else # f() is nonzero, so densify C and fill with independent calls to f()
+        _densestructure!(C)
+        storedvals(C)[1] = fofnoargs
+        broadcast!(f, view(storedvals(C), 2:length(storedvals(C))))
+    end
+    return C
+end
 broadcast!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat) = map!(f, C, A)
 function broadcast!{Tf,N}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N})
     _aresameshape(C, A, Bs...) && return _noshapecheck_map!(f, C, A, Bs...)
