@@ -6525,7 +6525,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Function",
-    "text": "Merge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\nmerge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\n"
+    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\nMerge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\n"
 },
 
 {
@@ -9701,15 +9701,15 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.unsafe_string",
     "category": "Function",
-    "text": "unsafe_string(p::Ptr{UInt8}, [length::Integer])\n\nCopy a string from the address of a C-style (NUL-terminated) string encoded as UTF-8. (The pointer can be safely freed afterwards.) If length is specified (the length of the data in bytes), the string does not have to be NUL-terminated.\n\nThis function is labelled \"unsafe\" because it will crash if p is not a valid memory address to data of the requested length.\n\nSee also unsafe_wrap(String, p, [length]), which takes a pointer and wraps a string object around it without making a copy.\n\n\n\n"
+    "text": "unsafe_string(p::Ptr{UInt8}, [length::Integer])\n\nCopy a string from the address of a C-style (NUL-terminated) string encoded as UTF-8. (The pointer can be safely freed afterwards.) If length is specified (the length of the data in bytes), the string does not have to be NUL-terminated.\n\nThis function is labelled \"unsafe\" because it will crash if p is not a valid memory address to data of the requested length.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/strings.html#Base.unsafe_wrap-Tuple{Type{String},Union{Ptr{Int8},Ptr{UInt8}},Integer,Bool}",
+    "location": "stdlib/strings.html#Base.codeunit-Tuple{AbstractString,Integer}",
     "page": "Strings",
-    "title": "Base.unsafe_wrap",
+    "title": "Base.codeunit",
     "category": "Method",
-    "text": "unsafe_wrap(String, p::Ptr{UInt8}, [length,] own=false)\n\nWrap a pointer p to an array of bytes in a String object, interpreting the bytes as UTF-8 encoded characters without making a copy. The optional length argument indicates the length in bytes of the pointer's data; if it is omitted, the data is assumed to be NUL-terminated.  The own argument optionally specifies whether Julia should take ownership of the memory, calling free on the pointer when the array is no longer referenced.\n\nThis function is labelled \"unsafe\" because it will crash if p is not a valid memory address to data of the requested length.\n\nSee also unsafe_string, which takes a pointer and makes a copy of the data.\n\n\n\n"
+    "text": "codeunit(s::AbstractString, i::Integer)\n\nGet the ith code unit of an encoded string. For example, returns the ith byte of the representation of a UTF-8 string.\n\n\n\n"
 },
 
 {
@@ -10205,7 +10205,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Strings",
     "category": "section",
-    "text": "Base.length(::AbstractString)\nBase.sizeof(::AbstractString)\nBase.:*(::AbstractString, ::Any...)\nBase.:^(::AbstractString, ::Integer)\nBase.string\nBase.repr\nCore.String(::AbstractString)\nBase.transcode\nBase.unsafe_string\nBase.unsafe_wrap(::Type{String}, ::Union{Ptr{Int8}, Ptr{UInt8}}, ::Integer, ::Bool)\nBase.ascii\nBase.@r_str\nBase.Docs.@html_str\nBase.Docs.@text_str\nBase.UTF8proc.normalize_string\nBase.UTF8proc.graphemes\nBase.isvalid(::Any)\nBase.isvalid(::Any, ::Any)\nBase.isvalid(::AbstractString, ::Integer)\nBase.UTF8proc.is_assigned_char\nBase.ismatch\nBase.match\nBase.eachmatch\nBase.matchall\nBase.lpad\nBase.rpad\nBase.search\nBase.rsearch\nBase.searchindex\nBase.rsearchindex\nBase.contains\nBase.reverse(::AbstractString)\nBase.replace\nBase.split\nBase.rsplit\nBase.strip\nBase.lstrip\nBase.rstrip\nBase.startswith\nBase.endswith\nBase.uppercase\nBase.lowercase\nBase.titlecase\nBase.ucfirst\nBase.lcfirst\nBase.join\nBase.chop\nBase.chomp\nBase.ind2chr\nBase.chr2ind\nBase.nextind\nBase.prevind\nBase.Random.randstring\nBase.UTF8proc.charwidth\nBase.strwidth\nBase.UTF8proc.isalnum\nBase.UTF8proc.isalpha\nBase.isascii\nBase.UTF8proc.iscntrl\nBase.UTF8proc.isdigit\nBase.UTF8proc.isgraph\nBase.UTF8proc.islower\nBase.UTF8proc.isnumber\nBase.UTF8proc.isprint\nBase.UTF8proc.ispunct\nBase.UTF8proc.isspace\nBase.UTF8proc.isupper\nBase.isxdigit\nCore.Symbol\nBase.escape_string\nBase.unescape_string"
+    "text": "Base.length(::AbstractString)\nBase.sizeof(::AbstractString)\nBase.:*(::AbstractString, ::Any...)\nBase.:^(::AbstractString, ::Integer)\nBase.string\nBase.repr\nCore.String(::AbstractString)\nBase.transcode\nBase.unsafe_string\nBase.codeunit(::AbstractString, ::Integer)\nBase.ascii\nBase.@r_str\nBase.Docs.@html_str\nBase.Docs.@text_str\nBase.UTF8proc.normalize_string\nBase.UTF8proc.graphemes\nBase.isvalid(::Any)\nBase.isvalid(::Any, ::Any)\nBase.isvalid(::AbstractString, ::Integer)\nBase.UTF8proc.is_assigned_char\nBase.ismatch\nBase.match\nBase.eachmatch\nBase.matchall\nBase.lpad\nBase.rpad\nBase.search\nBase.rsearch\nBase.searchindex\nBase.rsearchindex\nBase.contains\nBase.reverse(::AbstractString)\nBase.replace\nBase.split\nBase.rsplit\nBase.strip\nBase.lstrip\nBase.rstrip\nBase.startswith\nBase.endswith\nBase.uppercase\nBase.lowercase\nBase.titlecase\nBase.ucfirst\nBase.lcfirst\nBase.join\nBase.chop\nBase.chomp\nBase.ind2chr\nBase.chr2ind\nBase.nextind\nBase.prevind\nBase.Random.randstring\nBase.UTF8proc.charwidth\nBase.strwidth\nBase.UTF8proc.isalnum\nBase.UTF8proc.isalpha\nBase.isascii\nBase.UTF8proc.iscntrl\nBase.UTF8proc.isdigit\nBase.UTF8proc.isgraph\nBase.UTF8proc.islower\nBase.UTF8proc.isnumber\nBase.UTF8proc.isprint\nBase.UTF8proc.ispunct\nBase.UTF8proc.isspace\nBase.UTF8proc.isupper\nBase.isxdigit\nCore.Symbol\nBase.escape_string\nBase.unescape_string"
 },
 
 {
