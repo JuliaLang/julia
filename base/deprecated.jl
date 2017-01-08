@@ -1507,6 +1507,9 @@ function frexp{T<:AbstractFloat}(A::Array{T})
     return (F, E)
 end
 
+# Deprecate array-reducing isreal
+@deprecate isreal(A::AbstractArray) all(isreal, A)
+
 # Deprecate promote_eltype_op (#19814, #19937)
 _promote_eltype_op(::Any) = Any
 _promote_eltype_op(op, A) = (@_inline_meta; promote_op(op, eltype(A)))

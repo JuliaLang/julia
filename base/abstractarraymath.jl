@@ -4,9 +4,8 @@
 
 isinteger(x::AbstractArray) = all(isinteger,x)
 isinteger{T<:Integer,n}(x::AbstractArray{T,n}) = true
-isreal(x::AbstractArray) = all(isreal,x)
 iszero(x::AbstractArray) = all(iszero,x)
-isreal{T<:Real,n}(x::AbstractArray{T,n}) = true
+all{T<:Real}(::typeof(isreal), ::AbstractArray{T}) = true
 ctranspose(a::AbstractArray) = error("ctranspose not implemented for $(typeof(a)). Consider adding parentheses, e.g. A*(B*C') instead of A*B*C' to avoid explicit calculation of the transposed matrix.")
 transpose(a::AbstractArray) = error("transpose not implemented for $(typeof(a)). Consider adding parentheses, e.g. A*(B*C.') instead of A*B*C' to avoid explicit calculation of the transposed matrix.")
 

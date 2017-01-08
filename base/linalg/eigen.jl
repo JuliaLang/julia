@@ -23,7 +23,7 @@ function getindex(A::Union{Eigen,GeneralizedEigen}, d::Symbol)
     throw(KeyError(d))
 end
 
-isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(x -> x > 0, A.values)
+isposdef(A::Union{Eigen,GeneralizedEigen}) = all(isreal, A.values) && all(x -> x > 0, A.values)
 
 """
     eigfact!(A, [B])

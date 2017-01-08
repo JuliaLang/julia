@@ -1828,7 +1828,7 @@ logm(A::LowerTriangular) = logm(A.').'
 function sqrtm{T}(A::UpperTriangular{T})
     n = checksquare(A)
     realmatrix = false
-    if isreal(A)
+    if all(isreal, A)
         realmatrix = true
         for i = 1:n
             if real(A[i,i]) < 0
