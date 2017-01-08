@@ -395,6 +395,7 @@ export
     reim,
     reinterpret,
     rem,
+    rescale,
     round,
     sec,
     secd,
