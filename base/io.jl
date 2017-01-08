@@ -167,24 +167,37 @@ The text is assumed to be encoded in UTF-8.
 readuntil(filename::AbstractString, args...) = open(io->readuntil(io, args...), filename)
 
 """
-    readline(stream::IO=STDIN)
-    readline(filename::AbstractString)
+    readline(stream::IO=STDIN, chomp::Bool=false)
+    readline(filename::AbstractString, chomp::Bool=false)
 
-Read a single line of text, including a trailing newline character (if one is reached before
-the end of the input), from the given I/O stream or file (defaults to `STDIN`).
-When reading from a file, the text is assumed to be encoded in UTF-8.
+Read a single line of text including from the given I/O stream or file (defaults to `STDIN`).
+Lines in the input can end in `'\\n'`, `'\\r'`, or `'\\r\\n'`. When reading from a file, the text is
+assumed to be encoded in UTF-8. If `chomp=false` trailing newline character(s) will be included
+in the output (if reached before the end of the input); otherwise newline characters(s)
+are stripped from result.
 """
-readline(filename::AbstractString) = open(readline, filename)
+function readline(filename::AbstractString, chomp = false)
+    open(filename) do f
+          readline(f, chomp)
+    end
+end
+
 
 """
-    readlines(stream::IO)
-    readlines(filename::AbstractString)
+    readlines(stream::IO, chomp::Bool=false)
+    readlines(filename::AbstractString, chomp::Bool=false)
 
 Read all lines of an I/O stream or a file as a vector of strings.
-The text is assumed to be encoded in UTF-8.
+Lines in the input can end in `'\\n'`, `'\\r'`, or `'\\r\\n'`.
+The text is assumed to be encoded in UTF-8. If `chomp=false`
+trailing newline character(s) will be included in the output;
+otherwise newline characters(s) are stripped from result.
 """
-readlines(filename::AbstractString) = open(readlines, filename)
-
+function readlines(filename::AbstractString, chomp::Bool=false)
+    open(filename) do f
+          readlines(f, chomp)
+    end
+end
 
 ## byte-order mark, ntoh & hton ##
 
@@ -448,7 +461,29 @@ function readuntil(s::IO, t::AbstractString)
 end
 
 readline() = readline(STDIN)
-readline(s::IO) = readuntil(s, '\n')
+
+function readline(s::IO, chomp::Bool=false)
+    out = UInt8[]
+    while !eof(s)
+        c = read(s, UInt8)
+        if c == 0x0d
+            !chomp && push!(out, c)
+            if !eof(s) && Base.peek(s) == 0x0a
+                c = read(s, UInt8)
+                !chomp && push!(out, c)
+            end
+
+            break
+        elseif c == 0x0a
+            !chomp && push!(out, c)
+            break
+        else
+            push!(out, c)
+        end
+    end
+
+    return String(out)
+end
 
 """
     readchomp(x)
@@ -512,22 +547,28 @@ readstring(filename::AbstractString) = open(readstring, filename)
 
 type EachLine
     stream::IO
+    chomp::Bool
     ondone::Function
-    EachLine(stream) = EachLine(stream, ()->nothing)
-    EachLine(stream, ondone) = new(stream, ondone)
+    EachLine(stream, chomp) = EachLine(stream, chomp, ()->nothing)
+    EachLine(stream, chomp, ondone) = new(stream, chomp, ondone)
 end
 
 """
-    eachline(stream::IO)
-    eachline(filename::AbstractString)
+    eachline(stream::IO,  chomp::Bool=false)
+    eachline(filename::AbstractString,  chomp::Bool=false)
 
 Create an iterable object that will yield each line from an I/O stream or a file.
-The text is assumed to be encoded in UTF-8.
+Lines in the input can end in `'\\n'`, `'\\r'`, or `'\\r\\n'`.
+The text is assumed to be encoded in UTF-8. If `chomp=false`
+trailing newline character(s) will be included in the output;
+otherwise newline characters(s) are stripped from result.
 """
-eachline(stream::IO) = EachLine(stream)
-function eachline(filename::AbstractString)
+eachline(stream::IO, chomp::Bool=false) = EachLine(stream, chomp)
+
+
+function eachline(filename::AbstractString, chomp::Bool=false)
     s = open(filename)
-    EachLine(s, ()->close(s))
+    EachLine(s, chomp, ()->close(s))
 end
 
 start(itr::EachLine) = nothing
@@ -538,10 +579,11 @@ function done(itr::EachLine, nada)
     itr.ondone()
     true
 end
-next(itr::EachLine, nada) = (readline(itr.stream), nothing)
+
+next(itr::EachLine, nada) = (readline(itr.stream, itr.chomp), nothing)
 eltype(::Type{EachLine}) = String
 
-readlines(s=STDIN) = collect(eachline(s))
+readlines(s::IO=STDIN, chomp::Bool=false) = collect(eachline(s, chomp))
 
 iteratorsize(::Type{EachLine}) = SizeUnknown()
 

@@ -213,6 +213,12 @@ end
 @test chop("fooε") == "foo"
 @test isa(chomp("foo"), SubString)
 @test isa(chop("foo"), SubString)
+@test chomp("foo\r\n") == "foo"
+@test chomp("foo\r") == "foo"
+@test chomp("foo\r\r") == "foo\r"
+@test Base.chomp!("foo\r\n") == "foo"
+@test Base.chomp!("foo\r") == "foo"
+@test Base.chomp!("foo\r\r") == "foo\r"
 
 # bytes2hex and hex2bytes
 hex_str = "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"

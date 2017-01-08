@@ -225,6 +225,10 @@ function readuntil(s::IOStream, delim::UInt8)
     ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Void}, UInt8), s.ios, delim)
 end
 
+function readline(s::IOStream, chomp::Bool=false)
+    String(ccall(:jl_readline, Array{UInt8,1}, (Ptr{Void}, Cint), s.ios, chomp))
+end
+
 function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
     olb = lb = length(b)
     nr = 0

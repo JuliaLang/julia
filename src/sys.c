@@ -281,6 +281,27 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
     return (jl_value_t*)a;
 }
 
+JL_DLLEXPORT jl_value_t *jl_readline(ios_t *s, int chomp)
+{
+    jl_array_t *a;
+    a = jl_alloc_array_1d(jl_array_uint8_type, 80);
+    ios_t dest;
+    ios_mem(&dest, 0);
+    ios_setbuf(&dest, (char*)a->data, 80, 0);
+    size_t n = ios_copyline(&dest, s, chomp);
+    if (dest.buf != a->data) {
+        a = jl_take_buffer(&dest);
+    }
+    else {
+#ifdef STORE_ARRAY_LEN
+        a->length = n;
+#endif
+        a->nrows = n;
+        ((char*)a->data)[n] = '\0';
+    }
+    return (jl_value_t*)a;
+}
+
 JL_DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
 {
     assert(n <= 8);
