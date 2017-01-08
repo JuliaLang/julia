@@ -1,31 +1,35 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Pair
-p = Pair(1,2)
-@test p == (1=>2)
-@test isequal(p,1=>2)
+p = Pair(10,20)
+@test p == (10=>20)
+@test isequal(p,10=>20)
 @test start(p) == 1
-@test next(p, 1) == (1,2)
+@test next(p, 1) == (10,2)
 @test !done(p, 1)
 @test !done(p,2)
 @test done(p,3)
 @test !done(p,0)
 @test endof(p) == length(p) == 2
-@test Base.indexed_next(p, 1, (1,2)) == (1,2)
-@test Base.indexed_next(p, 2, (1,2)) == (2,3)
+@test Base.indexed_next(p, 1, (1,2)) == (10,2)
+@test Base.indexed_next(p, 2, (1,2)) == (20,3)
 @test (1=>2) < (2=>3)
 @test (2=>2) < (2=>3)
 @test !((2=>3) < (2=>3))
 @test (2=>3) < (4=>3)
 @test (1=>100) < (4=>1)
-@test p[1] == 1
-@test p[2] == 2
+@test p[1] == 10
+@test p[2] == 20
 @test_throws BoundsError p[3]
 @test_throws BoundsError p[false]
-@test p[true] == 1
-@test p[2.0] == 2
-@test p[0x01] == 1
+@test p[true] == 10
+@test p[2.0] == 20
+@test p[0x01] == 10
 @test_throws InexactError p[2.3]
+@test first(p) == 10
+@test last(p) == 20
+@test eltype(p) == Int
+@test eltype(4 => 5.6) == Union{Int,Float64}
 
 # Dict
 h = Dict()
