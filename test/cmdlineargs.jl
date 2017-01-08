@@ -366,12 +366,12 @@ end
 for precomp in ("yes", "no")
     bt = readstring(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --precompiled=$precomp
         -E 'include("____nonexistent_file")'`), stderr=catcmd))
-    @test contains(bt, "include_from_node1")
+    @test contains(bt, "_include")
     if is_windows() && Sys.WORD_SIZE == 32 && precomp == "yes"
         # fixme, issue #17251
-        @test_broken contains(bt, "include_from_node1(::String) at $(joinpath(".","loading.jl"))")
+        @test_broken contains(bt, "_include(::String) at $(joinpath(".","loading.jl"))")
     else
-        @test contains(bt, "include_from_node1(::String) at $(joinpath(".","loading.jl"))")
+        @test contains(bt, "_include(::String) at $(joinpath(".","loading.jl"))")
     end
     lno = match(r"at \.[\/\\]loading\.jl:(\d+)", bt)
     @test length(lno.captures) == 1
