@@ -1993,10 +1993,9 @@ void jl_init_types(void)
 
     jl_typemap_entry_type =
         jl_new_datatype(jl_symbol("TypeMapEntry"), jl_any_type, jl_emptysvec,
-                        jl_svec(11,
+                        jl_svec(10,
                             jl_symbol("next"),
                             jl_symbol("sig"),
-                            jl_symbol("tvars"),
                             jl_symbol("simplesig"),
                             jl_symbol("guardsigs"),
                             jl_symbol("min_world"),
@@ -2005,10 +2004,9 @@ void jl_init_types(void)
                             jl_symbol("isleafsig"),
                             jl_symbol("issimplesig"),
                             jl_symbol("va")),
-                        jl_svec(11,
+                        jl_svec(10,
                             jl_any_type, // Union{TypeMapEntry, Void}
                             jl_type_type, // TupleType
-                            jl_any_type, // Union{SimpleVector{TypeVar}, TypeVar}
                             jl_any_type, // TupleType
                             jl_any_type, // SimpleVector{TupleType}
                             jl_long_type, // Int
@@ -2017,7 +2015,7 @@ void jl_init_types(void)
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type),
-                        0, 1, 5);
+                        0, 1, 4);
 
     jl_function_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Function"), jl_any_type, jl_emptysvec);
     jl_builtin_type  = jl_new_abstracttype((jl_value_t*)jl_symbol("Builtin"), jl_function_type, jl_emptysvec);

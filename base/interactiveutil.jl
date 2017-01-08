@@ -853,7 +853,6 @@ function summarysize(m::TypeMapEntry, seen, excl)
             size += summarysize(m.func, seen, excl)::Int
         end
         size += summarysize(m.sig, seen, excl)::Int
-        size += summarysize(m.tvars, seen, excl)::Int
         m.next === nothing && break
         m = m.next::TypeMapEntry
     end

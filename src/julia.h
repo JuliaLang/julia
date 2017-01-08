@@ -419,7 +419,6 @@ typedef struct _jl_typemap_entry_t {
     JL_DATA_TYPE
     struct _jl_typemap_entry_t *next; // invasive linked list
     jl_tupletype_t *sig; // the type signature for this entry
-    jl_svec_t *tvars; // the bound type variables for sig
     jl_tupletype_t *simplesig; // a simple signature for fast rejection
     jl_svec_t *guardsigs;
     size_t min_world;

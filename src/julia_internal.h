@@ -746,7 +746,7 @@ struct jl_typemap_info {
 };
 
 jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *parent,
-                                      jl_tupletype_t *type, jl_svec_t *tvars,
+                                      jl_tupletype_t *type,
                                       jl_tupletype_t *simpletype, jl_svec_t *guardsigs,
                                       jl_value_t *newvalue, int8_t offs,
                                       const struct jl_typemap_info *tparams,

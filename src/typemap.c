@@ -461,10 +461,15 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
         if (closure->type == (jl_value_t*)ml->sig) {
             // fast-path for the intersection of a type with itself
             if (closure->env) {
-                if (jl_is_typevar(ml->tvars))
-                    closure->env = jl_svec1(ml->tvars);
-                else
-                    closure->env = ml->tvars;
+                int i, n = jl_subtype_env_size((jl_value_t*)ml->sig);
+                closure->env = jl_alloc_svec_uninit(n);
+                jl_value_t *t = (jl_value_t*)ml->sig;
+                for (i = 0; i < n; i++) {
+                    assert(jl_is_unionall(t));
+                    jl_svecset(closure->env, i, ((jl_unionall_t*)t)->var);
+                    t = ((jl_unionall_t*)t)->body;
+                }
+                assert(!jl_is_unionall(t));
             }
             closure->ti = closure->type;
             if (!fptr(ml, closure))
@@ -982,7 +987,7 @@ static void jl_typemap_level_insert_(jl_typemap_level_t *cache, jl_typemap_entry
 }
 
 jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *parent,
-                                      jl_tupletype_t *type, jl_svec_t *tvars,
+                                      jl_tupletype_t *type,
                                       jl_tupletype_t *simpletype, jl_svec_t *guardsigs,
                                       jl_value_t *newvalue, int8_t offs,
                                       const struct jl_typemap_info *tparams,
@@ -1013,7 +1018,6 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
                                          jl_typemap_entry_type);
     newrec->sig = type;
     newrec->simplesig = simpletype;
-    newrec->tvars = tvars;
     newrec->func.value = newvalue;
     newrec->guardsigs = guardsigs;
     newrec->next = (jl_typemap_entry_t*)jl_nothing;
@@ -1021,7 +1025,7 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
     newrec->max_world = max_world;
     // compute the complexity of this type signature
     newrec->va = jl_is_va_tuple((jl_datatype_t*)ttype);
-    newrec->issimplesig = (tvars == jl_emptysvec); // a TypeVar environment needs an complex matching test
+    newrec->issimplesig = jl_is_tuple_type(type); // a TypeVar environment needs an complex matching test
     newrec->isleafsig = newrec->issimplesig && !newrec->va; // entirely leaf types don't need to be sorted
     JL_GC_PUSH1(&newrec);
     assert(jl_is_tuple_type(ttype));

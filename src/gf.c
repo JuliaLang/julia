@@ -169,7 +169,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m, 
     else {
         li->max_world = world;
     }
-    jl_typemap_insert(&m->specializations, (jl_value_t*)m, (jl_tupletype_t*)type, jl_emptysvec,
+    jl_typemap_insert(&m->specializations, (jl_value_t*)m, (jl_tupletype_t*)type,
             NULL, jl_emptysvec, (jl_value_t*)li, 0, &tfunc_cache,
             li->min_world, li->max_world, NULL);
     JL_UNLOCK(&m->writelock);
@@ -225,7 +225,7 @@ void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_t fptr)
     li->def->sparam_syms = jl_emptysvec;
 
     jl_methtable_t *mt = dt->name->mt;
-    jl_typemap_insert(&mt->cache, (jl_value_t*)mt, jl_anytuple_type, jl_emptysvec,
+    jl_typemap_insert(&mt->cache, (jl_value_t*)mt, jl_anytuple_type,
         NULL, jl_emptysvec, (jl_value_t*)li, 0, &lambda_cache, 1, ~(size_t)0, NULL);
 }
 
@@ -397,7 +397,7 @@ JL_DLLEXPORT jl_method_instance_t* jl_set_method_inferred(
                 li->min_world = min_world;
                 li->max_world = max_world;
                 jl_typemap_insert(&li->def->specializations, (jl_value_t*)li->def,
-                        (jl_tupletype_t*)li->specTypes, jl_emptysvec, NULL, jl_emptysvec,
+                        (jl_tupletype_t*)li->specTypes, NULL, jl_emptysvec,
                         (jl_value_t*)li, 0, &tfunc_cache,
                         li->min_world, li->max_world, NULL);
             }
@@ -878,10 +878,10 @@ static jl_method_instance_t *cache_method(jl_methtable_t *mt, union jl_typemap_t
                 jl_svec_t *env = jl_alloc_svec_uninit(2 * nsp);
                 temp2 = (jl_value_t*)env;
                 for (j = 0; j < nsp; j++) {
-                    if (j == 0 && jl_is_typevar(m->tvars))
-                        jl_svecset(env, 0, m->tvars);
+                    if (j == 0 && jl_is_typevar(definition->tvars))
+                        jl_svecset(env, 0, definition->tvars);
                     else
-                        jl_svecset(env, j * 2, jl_svecref(m->tvars, j));
+                        jl_svecset(env, j * 2, jl_svecref(definition->tvars, j));
                     jl_svecset(env, j * 2 + 1, jl_svecref(sparams, j));
                 }
                 lastdeclt = (jl_value_t*)jl_instantiate_type_with((jl_value_t*)lastdeclt,
@@ -956,7 +956,7 @@ static jl_method_instance_t *cache_method(jl_methtable_t *mt, union jl_typemap_t
                     jl_svecset(guardsigs, guards, (jl_tupletype_t*)jl_svecref(m, 0));
                     guards++;
                     //jl_typemap_insert(cache, parent, (jl_tupletype_t*)jl_svecref(m, 0),
-                    //        jl_emptysvec, NULL, jl_emptysvec, /*guard*/NULL, jl_cachearg_offset(mt), &lambda_cache, other->min_world, other->max_world, NULL);
+                    //        NULL, jl_emptysvec, /*guard*/NULL, jl_cachearg_offset(mt), &lambda_cache, other->min_world, other->max_world, NULL);
                 }
             }
         }
@@ -1005,7 +1005,7 @@ static jl_method_instance_t *cache_method(jl_methtable_t *mt, union jl_typemap_t
         }
     }
 
-    jl_typemap_insert(cache, parent, origtype, jl_emptysvec, type, guardsigs,
+    jl_typemap_insert(cache, parent, origtype, type, guardsigs,
             (jl_value_t*)newmeth, jl_cachearg_offset(mt), &lambda_cache,
             min_valid, max_valid, NULL);
 
@@ -1331,14 +1331,13 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     assert(jl_is_method(method));
     assert(jl_is_mtable(mt));
     jl_value_t *type = method->sig;
-    jl_svec_t *tvars = method->tvars;
     jl_value_t *oldvalue = NULL;
     struct invalidate_conflicting_env env;
     env.max_world = method->min_world - 1;
     JL_GC_PUSH1(&oldvalue);
     JL_LOCK(&mt->writelock);
     jl_typemap_entry_t *newentry = jl_typemap_insert(&mt->defs, (jl_value_t*)mt,
-            (jl_tupletype_t*)type, tvars, simpletype, jl_emptysvec, (jl_value_t*)method, 0, &method_defs,
+            (jl_tupletype_t*)type, simpletype, jl_emptysvec, (jl_value_t*)method, 0, &method_defs,
             method->min_world, method->max_world, &oldvalue);
     if (oldvalue) {
         method->ambig = ((jl_method_t*)oldvalue)->ambig;
@@ -2267,7 +2266,7 @@ jl_value_t *jl_gf_invoke(jl_tupletype_t *types0, jl_value_t **args, size_t nargs
         }
         else {
             tt = arg_type_tuple(args, nargs);
-            if (entry->tvars != jl_emptysvec) {
+            if (method->tvars != jl_emptysvec) {
                 int sub = jl_subtype_matching((jl_value_t*)tt, (jl_value_t*)entry->sig, &tpenv);
                 assert(sub); (void)sub;
             }
@@ -2442,10 +2441,10 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
         size_t l = jl_svec_len(closure->match.env);
         for (i = 0; i < l; i++) {
             jl_value_t *tv;
-            if (jl_is_typevar(ml->tvars))
-                tv = (jl_value_t*)ml->tvars;
+            if (jl_is_typevar(meth->tvars))
+                tv = (jl_value_t*)meth->tvars;
             else
-                tv = jl_svecref(ml->tvars, i);
+                tv = jl_svecref(meth->tvars, i);
             if (jl_is_typevar(jl_svecref(closure->match.env, i)) &&
                 // if tvar is at the top level it will definitely be matched.
                 // see issue #5575
