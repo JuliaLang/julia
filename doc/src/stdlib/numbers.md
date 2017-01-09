@@ -72,7 +72,6 @@ Base.nextfloat
 Base.prevfloat
 Base.isinteger
 Base.isreal
-Base.isimag
 Core.Float32
 Core.Float64
 Base.GMP.BigInt
