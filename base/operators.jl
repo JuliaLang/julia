@@ -927,7 +927,7 @@ for f in (:+, :-)
 
         $f(r1::Union{FloatRange, OrdinalRange, LinSpace},
            r2::Union{FloatRange, OrdinalRange, LinSpace}) =
-               $f(promote(r1, r2)...)
+               $f(promote_noncircular(r1, r2)...)
     end
 end
 
