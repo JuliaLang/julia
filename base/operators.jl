@@ -943,6 +943,7 @@ const => = Pair
 start(p::Pair) = 1
 done(p::Pair, i) = i>2
 next(p::Pair, i) = (getfield(p,i), i+1)
+eltype{A,B}(p::Pair{A,B}) = Union{A,B}
 
 indexed_next(p::Pair, i::Int, state) = (getfield(p,i), i+1)
 
@@ -959,6 +960,8 @@ reverse{A,B}(p::Pair{A,B}) = Pair{B,A}(p.second, p.first)
 
 endof(p::Pair) = 2
 length(p::Pair) = 2
+first(p::Pair) = p.first
+last(p::Pair) = p.second
 
 convert{A,B}(::Type{Pair{A,B}}, x::Pair{A,B}) = x
 function convert{A,B}(::Type{Pair{A,B}}, x::Pair)
