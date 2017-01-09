@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license" begin
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 import Base.MPFR
 
