@@ -196,6 +196,41 @@ promote_to_supertype{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type{S}) = (@_
 promote_to_supertype{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type) =
     error("no promotion exists for ", T, " and ", S)
 
+# promotion with a check for circularity. Can be used to catch what
+# would otherwise become StackOverflowErrors.
+function promote_noncircular(x, y)
+    @_inline_meta
+    px, py = promote(x, y)
+    not_all_sametype((x,px), (y,py))
+    px, py
+end
+function promote_noncircular(x, y, z)
+    @_inline_meta
+    px, py, pz = promote(x, y, z)
+    not_all_sametype((x,px), (y,py), (z,pz))
+    px, py, pz
+end
+function promote_noncircular(x, y, z, a...)
+    p = promote(x, y, z, a...)
+    not_all_sametype(map(identity, (x, y, z, a...), p))
+    p
+end
+not_all_sametype(x, y) = nothing
+not_all_sametype(x, y, z) = nothing
+not_all_sametype{S,T}(x::Tuple{S,S}, y::Tuple{T,T}) = sametype_error(x[1], y[1])
+not_all_sametype{R,S,T}(x::Tuple{R,R}, y::Tuple{S,S}, z::Tuple{T,T}) = sametype_error(x[1], y[1], z[1])
+function not_all_sametype{R,S,T}(::Tuple{R,R}, y::Tuple{S,S}, z::Tuple{T,T}, args...)
+    @_inline_meta
+    not_all_sametype(y, z, args...)
+end
+not_all_sametype() = error("promotion failed to change any input types")
+function sametype_error(input...)
+    @_noinline_meta
+    error("circular method definition: promotion of types ",
+          join(map(x->string(typeof(x)), input), ", ", " and "),
+          " failed to change any input types")
+end
+
 +(x::Number, y::Number) = +(promote(x,y)...)
 *(x::Number, y::Number) = *(promote(x,y)...)
 -(x::Number, y::Number) = -(promote(x,y)...)
