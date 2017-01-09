@@ -2224,13 +2224,6 @@ f9520c(::Any, ::Any, ::Any, ::Any, ::Any, ::Any, args...) = 46
 @test invoke(f9520b, Tuple{Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6) == 23
 @test invoke(f9520c, Tuple{Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6) == 46
 @test invoke(f9520c, Tuple{Any, Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6, 7) == 46
-# Keep until the old signature of invoke is dropped.
-@test invoke(f9520a, (Any, Any), 1, 2) == 15
-@test invoke(f9520a, (Any, Any, Any), 1, 2, 3) == 15
-@test invoke(f9520b, (Any, Any, Any), 1, 2, 3) == 23
-@test invoke(f9520b, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 23
-@test invoke(f9520c, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 46
-@test invoke(f9520c, (Any, Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6, 7) == 46
 
 call_lambda1() = (()->x)(1)
 call_lambda2() = ((x)->x)()
@@ -3672,7 +3665,7 @@ f14245() = (v = []; push!(v, length(v)); v)
         return y
     end
 end
-foo9677(x::Array) = invoke(foo9677,(AbstractArray,),x)
+foo9677(x::Array) = invoke(foo9677, Tuple{AbstractArray}, x)
 @test foo9677(1:5) == foo9677(randn(3))
 
 # issue #6846
@@ -4191,7 +4184,7 @@ end
 
 # issue #8712
 type Issue8712; end
-@test isa(invoke(Issue8712, ()), Issue8712)
+@test isa(invoke(Issue8712, Tuple{}), Issue8712)
 
 # issue #16089
 f16089(args...) = typeof(args)
@@ -4658,6 +4651,21 @@ gVararg(a::fVararg(Int)) = length(a)
 catch e
     (e::ErrorException).msg
 end == "generated function body is not pure. this likely means it contains a closure or comprehension."
+
+let x = 1
+    global g18444
+    @noinline g18444(a) = (x += 1; a[])
+    f18444_1(a) = invoke(sin, Tuple{Int}, g18444(a))
+    f18444_2(a) = invoke(sin, Tuple{Integer}, g18444(a))
+    @test_throws ErrorException f18444_1(Ref{Any}(1.0))
+    @test x == 2
+    @test_throws ErrorException f18444_2(Ref{Any}(1.0))
+    @test x == 3
+    @test f18444_1(Ref{Any}(1)) === sin(1)
+    @test x == 4
+    @test f18444_2(Ref{Any}(1)) === sin(1)
+    @test x == 5
+end
 
 # issue #10981, long argument lists
 let a = fill(["sdf"], 2*10^6), temp_vcat(x...) = vcat(x...)
