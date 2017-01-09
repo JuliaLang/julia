@@ -119,6 +119,19 @@ end
 convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)
 convert(::Type{AbstractFloat}, x::BigInt) = BigFloat(x)
 
+"""
+    BigFloat(x::BigFloat)
+
+Create a `BigFloat` with the current global precision from the `BigFloat` `x`.
+
+Note that `convert(BigFloat, x)` still just returns `x`.
+"""
+function BigFloat(x::BigFloat)
+    z = BigFloat()  # global precision
+    ccall((:mpfr_set, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
+    return z
+end
+
 # generic constructor with arbitrary precision:
 """
     BigFloat(x, prec::Int)
