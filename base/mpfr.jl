@@ -919,7 +919,6 @@ end
 setprecision(f::Function, precision::Integer) = setprecision(f, BigFloat, precision)
 
 function string(x::BigFloat)
-
     if isnan(x) || isinf(x)
         return string("BigFloat(", Float64(x), ", ", precision(x), ")")
     end

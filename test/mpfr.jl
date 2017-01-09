@@ -900,5 +900,5 @@ end
 setprecision(256) do
     @test string(big(Inf)) == "BigFloat(Inf, 256)"
     @test string(big(-Inf)) == "BigFloat(-Inf, 256)"
-    @test string(big(NaN)) == "BigFloat(Inf, 256)"
+    @test string(big(NaN)) == "BigFloat(NaN, 256)"
 end
