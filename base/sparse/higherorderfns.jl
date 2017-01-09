@@ -5,7 +5,7 @@ module HigherOrderFns
 # This module provides higher order functions specialized for sparse arrays,
 # particularly map[!]/broadcast[!] for SparseVectors and SparseMatrixCSCs at present.
 import Base: map, map!, broadcast, broadcast!
-import Base.Broadcast: containertype, promote_containertype,
+import Base.Broadcast: _containertype, promote_containertype,
     broadcast_indices, broadcast_c, broadcast_c!
 
 using Base: front, tail, to_shape
@@ -843,7 +843,7 @@ end
 # broadcast shape promotion for combinations of sparse arrays and other types
 broadcast_indices(::Type{AbstractSparseArray}, A) = indices(A)
 # broadcast container type promotion for combinations of sparse arrays and other types
-containertype{T<:SparseVecOrMat}(::Type{T}) = AbstractSparseArray
+_containertype{T<:SparseVecOrMat}(::Type{T}) = AbstractSparseArray
 # combinations of sparse arrays with broadcast scalars should yield sparse arrays
 promote_containertype(::Type{Any}, ::Type{AbstractSparseArray}) = AbstractSparseArray
 promote_containertype(::Type{AbstractSparseArray}, ::Type{Any}) = AbstractSparseArray
