@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-function GitAnnotated(repo::GitRepo, commit_id::Oid)
+function GitAnnotated(repo::GitRepo, commit_id::GitHash)
     ann_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_annotated_commit_lookup, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}),
+                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{GitHash}),
                    ann_ptr_ptr, repo.ptr, Ref(commit_id))
     return GitAnnotated(repo, ann_ptr_ptr[])
 end
@@ -19,7 +19,7 @@ end
 function GitAnnotated(repo::GitRepo, fh::FetchHead)
     ann_ref_ref = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_annotated_commit_from_fetchhead, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring, Ptr{Oid}),
+                  (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring, Ptr{GitHash}),
                    ann_ref_ref, repo.ptr, fh.name, fh.url, Ref(fh.oid))
     return GitAnnotated(repo, ann_ref_ref[])
 end
@@ -29,14 +29,14 @@ function GitAnnotated(repo::GitRepo, comittish::AbstractString)
     try
         cmt = peel(obj, Consts.OBJ_COMMIT)
         cmt === nothing && return nothing
-        return GitAnnotated(repo, Oid(cmt))
+        return GitAnnotated(repo, GitHash(cmt))
     finally
         close(obj)
     end
 end
 
 function commit(ann::GitAnnotated)
-    return Oid(ccall((:git_annotated_commit_id, :libgit2), Ptr{Oid}, (Ptr{Void},), ann.ptr))
+    return GitHash(ccall((:git_annotated_commit_id, :libgit2), Ptr{GitHash}, (Ptr{Void},), ann.ptr))
 end
 
 function merge_analysis(repo::GitRepo, anns::Vector{GitAnnotated})
@@ -58,7 +58,7 @@ function ffmerge!(repo::GitRepo, ann::GitAnnotated)
     try
         checkout_tree(repo, cmt)
         with(head(repo)) do head_ref
-            cmt_oid = Oid(cmt)
+            cmt_oid = GitHash(cmt)
             msg = "libgit2.merge: fastforward $(string(cmt_oid)) into $(name(head_ref))"
             new_head_ref = if reftype(head_ref) == Consts.REF_OID
                 target!(head_ref, cmt_oid, msg=msg)
@@ -148,17 +148,17 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool;
 end
 
 function merge_base(repo::GitRepo, one::AbstractString, two::AbstractString)
-    oid1_ptr = Ref(Oid(one))
-    oid2_ptr = Ref(Oid(two))
-    moid_ptr = Ref(Oid())
+    oid1_ptr = Ref(GitHash(one))
+    oid2_ptr = Ref(GitHash(two))
+    moid_ptr = Ref(GitHash())
     moid = try
         @check ccall((:git_merge_base, :libgit2), Cint,
-                (Ptr{Oid}, Ptr{Void}, Ptr{Oid}, Ptr{Oid}),
+                (Ptr{GitHash}, Ptr{Void}, Ptr{GitHash}, Ptr{GitHash}),
                 moid_ptr, repo.ptr, oid1_ptr, oid2_ptr)
         moid_ptr[]
     catch e
         #warn("Pkg:",path(repo),"=>",e.msg)
-        Oid()
+        GitHash()
     end
     return moid
 end

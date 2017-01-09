@@ -21,18 +21,18 @@ end
 end
 
 @testset "OID" begin
-    z = LibGit2.Oid()
+    z = LibGit2.GitHash()
     @test LibGit2.iszero(z)
-    @test z == zero(LibGit2.Oid)
-    @test z == LibGit2.Oid(z)
+    @test z == zero(LibGit2.GitHash)
+    @test z == LibGit2.GitHash(z)
     rs = string(z)
     rr = LibGit2.raw(z)
-    @test z == LibGit2.Oid(rr)
-    @test z == LibGit2.Oid(rs)
-    @test z == LibGit2.Oid(pointer(rr))
+    @test z == LibGit2.GitHash(rr)
+    @test z == LibGit2.GitHash(rs)
+    @test z == LibGit2.GitHash(pointer(rr))
     for i in 11:length(rr); rr[i] = 0; end
-    @test LibGit2.Oid(rr) == LibGit2.Oid(rs[1:20])
-    @test_throws ArgumentError LibGit2.Oid(Ptr{UInt8}(C_NULL))
+    @test LibGit2.GitHash(rr) == LibGit2.GitHash(rs[1:20])
+    @test_throws ArgumentError LibGit2.GitHash(Ptr{UInt8}(C_NULL))
 end
 
 @testset "StrArrayStruct" begin
@@ -135,9 +135,9 @@ mktempdir() do dir
     config_file = "testconfig"
     commit_msg1 = randstring(10)
     commit_msg2 = randstring(10)
-    commit_oid1 = LibGit2.Oid()
-    commit_oid2 = LibGit2.Oid()
-    commit_oid3 = LibGit2.Oid()
+    commit_oid1 = LibGit2.GitHash()
+    commit_oid2 = LibGit2.GitHash()
+    commit_oid3 = LibGit2.GitHash()
     master_branch = "master"
     test_branch = "test_branch"
     tag1 = "tag1"
@@ -290,7 +290,7 @@ mktempdir() do dir
                 # lookup commits
                 cmt = LibGit2.get(LibGit2.GitCommit, repo, commit_oid1)
                 try
-                    @test commit_oid1 == LibGit2.Oid(cmt)
+                    @test commit_oid1 == LibGit2.GitHash(cmt)
                     auth = LibGit2.author(cmt)
                     @test isa(auth, LibGit2.Signature)
                     @test auth.name == test_sig.name
@@ -577,7 +577,7 @@ mktempdir() do dir
             @test get(st_uns) == get(st_mod)
 
             # reset repo
-            @test_throws LibGit2.Error.GitError LibGit2.reset!(repo, LibGit2.Oid(), LibGit2.Consts.RESET_HARD)
+            @test_throws LibGit2.Error.GitError LibGit2.reset!(repo, LibGit2.GitHash(), LibGit2.Consts.RESET_HARD)
 
             LibGit2.reset!(repo, LibGit2.head_oid(repo), LibGit2.Consts.RESET_HARD)
             open(joinpath(test_repo, test_file), "r") do io
