@@ -447,9 +447,10 @@ done(a::Array,i) = (@_inline_meta; i == length(a)+1)
 
 ## Indexing: getindex ##
 
-# This is more complicated than it needs to be in order to get Win64 through bootstrap
 getindex(A::Array, i1::Int) = arrayref(A, i1)
-getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref(A, i1, i2, I...)) # TODO: REMOVE FOR #14770
+getindex{T}(A::Array{T,1}, i1::Int) = arrayref(A, i1)
+getindex{T,N}(A::Array{T,N}, I::Vararg{Int,N}) = (@_inline_meta; arrayref(A, I...))
+getindex{T}(A::Array{T,0}) = (@_inline_meta; arrayref(A, 1))
 
 # Faster contiguous indexing using copy! for UnitRange and Colon
 function getindex(A::Array, I::UnitRange{Int})
@@ -477,8 +478,15 @@ function getindex{S}(A::Array{S}, I::Range{Int})
 end
 
 ## Indexing: setindex! ##
-setindex!{T}(A::Array{T}, x, i1::Int) = arrayset(A, convert(T,x)::T, i1)
-setindex!{T}(A::Array{T}, x, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayset(A, convert(T,x)::T, i1, i2, I...)) # TODO: REMOVE FOR #14770
+setindex!{T}(A::Array{T}, x, i::Int) = arrayset(A, convert(T,x)::T, i)
+setindex!{T}(A::Array{T,1}, x, i::Int) = arrayset(A, convert(T,x)::T, i)
+setindex!{T,N}(A::Array{T,N}, x, I::Vararg{Int,N}) = (@_inline_meta; arrayset(A, convert(T,x)::T, I...))
+setindex!{T}(A::Array{T,0}, x) = (@_inline_meta; arrayset(A, convert(T,x)::T, 1))
+
+# These are needed for ambiguity with a method in essentials.jl for bootstrap
+setindex!(A::Array{Any,1}, x::ANY, i::Int) = arrayset(A, x, i)
+setindex!(A::Array{Any,0}, x::ANY) = arrayset(A, x, 1)
+setindex!{N}(A::Array{Any,N}, x::ANY, I::Vararg{Int,N}) = arrayset(A, x, I...)
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})
@@ -525,7 +533,8 @@ function setindex!{T}(A::Array{T}, X::Array{T}, c::Colon)
 end
 
 setindex!(A::Array, x::Number, ::Colon) = fill!(A, x)
-setindex!{T, N}(A::Array{T, N}, x::Number, ::Vararg{Colon, N}) = fill!(A, x)
+# This causes a ton of ambiguities
+# setindex!{T, N}(A::Array{T, N}, x::Number, ::Vararg{Colon, N}) = fill!(A, x)
 
 # efficiently grow an array
 

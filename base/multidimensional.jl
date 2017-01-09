@@ -180,6 +180,11 @@ using .IteratorsMD
     A[to_indices(A, (i1, I...))...]
 @propagate_inbounds setindex!(A::Array, v, i1::Union{Integer, CartesianIndex}, I::Union{Integer, CartesianIndex}...) =
     (A[to_indices(A, (i1, I...))...] = v; A)
+# But they may not expand to 1 or N indices; ensure the above doesn't shadow the general indexing fallbacks
+@propagate_inbounds getindex{T}(A::Array{T}, i1::Int, I::Int...) =
+    _getindex(LinearFast(), A, i1, I...)
+@propagate_inbounds setindex!{T}(A::Array{T}, v, i1::Int, I::Int...) =
+    _setindex!(LinearFast(), A, v, i1, I...)
 
 # Support indexing with an array of CartesianIndex{N}s
 # Here we try to consume N of the indices (if there are that many available)
