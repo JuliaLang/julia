@@ -5,7 +5,7 @@ function GitReference(repo::GitRepo, refname::AbstractString)
     @check ccall((:git_reference_lookup, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Cstring),
                    ref_ptr_ptr, repo.ptr, refname)
-    return GitReference(ref_ptr_ptr[])
+    return GitReference(repo, ref_ptr_ptr[])
 end
 
 function GitReference(repo::GitRepo, obj_oid::Oid, refname::AbstractString = Consts.HEAD_FILE;
@@ -15,7 +15,7 @@ function GitReference(repo::GitRepo, obj_oid::Oid, refname::AbstractString = Con
                   (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{Oid}, Cint, Cstring),
                    ref_ptr_ptr, repo.ptr, refname, Ref(obj_oid), Cint(force),
                    isempty(msg) ? C_NULL : msg)
-    return GitReference(ref_ptr_ptr[])
+    return GitReference(repo, ref_ptr_ptr[])
 end
 
 """
@@ -34,7 +34,7 @@ function head(repo::GitRepo)
     head_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_repository_head, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}), head_ptr_ptr, repo.ptr)
-    return GitReference(head_ptr_ptr[])
+    return GitReference(repo, head_ptr_ptr[])
 end
 
 function shortname(ref::GitReference)
@@ -108,11 +108,11 @@ function peel{T <: GitObject}(::Type{T}, ref::GitReference)
         return Oid()
     elseif err != Int(Error.GIT_OK)
         if obj_ptr_ptr[] != C_NULL
-            finalize(GitAnyObject(obj_ptr_ptr[]))
+            close(GitAnyObject(ref.repo, obj_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
-    return T(obj_ptr_ptr[])
+    return T(ref.repo, obj_ptr_ptr[])
 end
 
 function ref_list(repo::GitRepo)
@@ -132,7 +132,7 @@ function create_branch(repo::GitRepo,
     @check ccall((:git_branch_create, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Ptr{Void}, Cint),
                    ref_ptr_ptr, repo.ptr, bname, commit_obj.ptr, Cint(force))
-    return GitReference(ref_ptr_ptr[])
+    return GitReference(repo, ref_ptr_ptr[])
 end
 
 function delete_branch(branch::GitReference)
@@ -158,11 +158,11 @@ function lookup_branch(repo::GitRepo,
         return nothing
     elseif err != Int(Error.GIT_OK)
         if ref_ptr_ptr[] != C_NULL
-            finalize(GitReference(ref_ptr_ptr[]))
+            close(GitReference(repo, ref_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
-    return GitReference(ref_ptr_ptr[])
+    return GitReference(repo, ref_ptr_ptr[])
 end
 
 function upstream(ref::GitReference)
@@ -174,32 +174,28 @@ function upstream(ref::GitReference)
         return nothing
     elseif err != Int(Error.GIT_OK)
         if ref_ptr_ptr[] != C_NULL
-            finalize(GitReference(ref_ptr_ptr[]))
+            close(GitReference(ref.repo, ref_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
-    return GitReference(ref_ptr_ptr[])
+    return GitReference(ref.repo, ref_ptr_ptr[])
 end
 
-function owner(ref::GitReference)
-    repo_ptr = ccall((:git_reference_owner, :libgit2), Ptr{Void},
-                      (Ptr{Void},), ref.ptr)
-    return GitRepo(repo_ptr)
-end
+owner(ref::GitReference) = ref.repo
 
 function target!(ref::GitReference, new_oid::Oid; msg::AbstractString="")
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_reference_set_target, :libgit2), Cint,
              (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}, Cstring),
              ref_ptr_ptr, ref.ptr, Ref(new_oid), isempty(msg) ? C_NULL : msg)
-    return GitReference(ref_ptr_ptr[])
+    return GitReference(ref.repo, ref_ptr_ptr[])
 end
 
-function GitBranchIter(r::GitRepo, flags::Cint=Cint(Consts.BRANCH_LOCAL))
+function GitBranchIter(repo::GitRepo, flags::Cint=Cint(Consts.BRANCH_LOCAL))
     bi_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_branch_iterator_new, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}, Cint), bi_ptr, r.ptr, flags)
-    return GitBranchIter(bi_ptr[])
+                  (Ptr{Ptr{Void}}, Ptr{Void}, Cint), bi_ptr, repo.ptr, flags)
+    return GitBranchIter(repo, bi_ptr[])
 end
 
 function Base.start(bi::GitBranchIter)
@@ -209,7 +205,7 @@ function Base.start(bi::GitBranchIter)
                  (Ptr{Ptr{Void}}, Ptr{Cint}, Ptr{Void}),
                   ref_ptr_ptr, btype, bi.ptr)
     err != Int(Error.GIT_OK) && return (nothing, -1, true)
-    return (GitReference(ref_ptr_ptr[]), btype[], false)
+    return (GitReference(bi.repo, ref_ptr_ptr[]), btype[], false)
 end
 
 Base.done(bi::GitBranchIter, state) = Bool(state[3])
@@ -221,7 +217,7 @@ function Base.next(bi::GitBranchIter, state)
                  (Ptr{Ptr{Void}}, Ptr{Cint}, Ptr{Void}),
                   ref_ptr_ptr, btype, bi.ptr)
     err != Int(Error.GIT_OK) && return (state[1:2], (nothing, -1, true))
-    return (state[1:2], (GitReference(ref_ptr_ptr[]), btype[], false))
+    return (state[1:2], (GitReference(bi.repo, ref_ptr_ptr[]), btype[], false))
 end
 
 Base.iteratorsize(::Type{GitBranchIter}) = Base.SizeUnknown()

@@ -32,5 +32,5 @@ function object(repo::GitRepo, te::GitTreeEntry)
     @check ccall((:git_tree_entry_to_object, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Ref{Void}),
                    obj_ptr_ptr, repo.ptr, te.ptr)
-    return GitAnyObject(obj_ptr_ptr[])
+    return GitAnyObject(repo, obj_ptr_ptr[])
 end
