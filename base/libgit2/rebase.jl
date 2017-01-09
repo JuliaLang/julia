@@ -9,7 +9,7 @@ function GitRebase(repo::GitRepo, branch::GitAnnotated, upstream::GitAnnotated;
                    Ptr{Void}, Ptr{RebaseOptions}),
                    rebase_ptr_ptr, repo.ptr, branch.ptr, upstream.ptr,
                    isnull(onto) ? C_NULL : Base.get(onto).ptr, Ref(opts))
-    return GitRebase(rebase_ptr_ptr[])
+    return GitRebase(repo, rebase_ptr_ptr[])
 end
 
 function Base.count(rb::GitRebase)

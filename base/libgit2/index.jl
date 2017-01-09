@@ -4,7 +4,7 @@ function GitIndex(repo::GitRepo)
     idx_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_repository_index, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Ptr{Void}), idx_ptr_ptr, repo.ptr)
-    return GitIndex(idx_ptr_ptr[])
+    return GitIndex(repo, idx_ptr_ptr[])
 end
 
 function read!(idx::GitIndex, force::Bool = false)
@@ -25,9 +25,8 @@ function write_tree!(idx::GitIndex)
 end
 
 function owner(idx::GitIndex)
-    repo_ptr = ccall((:git_index_owner, :libgit2), Ptr{Void},
-                     (Ptr{Void},), idx.ptr)
-    return GitRepo(repo_ptr)
+    isnull(idx.nrepo) && throw(GitError(Error.Index, Error.ENOTFOUND, "Index does not have an owning repository."))
+    return Base.get(idx.nrepo)
 end
 
 function read_tree!(idx::GitIndex, tree_id::GitHash)
@@ -37,7 +36,7 @@ function read_tree!(idx::GitIndex, tree_id::GitHash)
         @check ccall((:git_index_read_tree, :libgit2), Cint,
                      (Ptr{Void}, Ptr{Void}), idx.ptr, tree.ptr)
     finally
-        finalize(tree)
+        close(tree)
     end
 end
 
@@ -49,7 +48,7 @@ function add!{T<:AbstractString}(idx::GitIndex, files::T...;
                      (Ptr{Void}, Ptr{StrArrayStruct}, Cuint, Ptr{Void}, Ptr{Void}),
                       idx.ptr, Ref(sa), flags, C_NULL, C_NULL)
     finally
-        finalize(sa)
+        close(sa)
     end
 end
 
@@ -60,7 +59,7 @@ function update!{T<:AbstractString}(idx::GitIndex, files::T...)
                      (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
                       idx.ptr, Ref(sa), C_NULL, C_NULL)
     finally
-        finalize(sa)
+        close(sa)
     end
 end
 
@@ -71,7 +70,7 @@ function remove!{T<:AbstractString}(idx::GitIndex, files::T...)
                      (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
                       idx.ptr, Ref(sa), C_NULL, C_NULL)
     finally
-        finalize(sa)
+        close(sa)
     end
 end
 

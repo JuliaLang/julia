@@ -1486,6 +1486,12 @@ end
 @deprecate (|)(A::AbstractArray, b::Number)         A .| b
 @deprecate (|)(A::AbstractArray, B::AbstractArray)  A .| B
 
+# Deprecate vectorized ifelse
+@deprecate ifelse(c::AbstractArray{Bool}, x, y) ifelse.(c, x, y)
+@deprecate ifelse(c::AbstractArray{Bool}, x, y::AbstractArray) ifelse.(c, x, y)
+@deprecate ifelse(c::AbstractArray{Bool}, x::AbstractArray, y) ifelse.(c, x, y)
+@deprecate ifelse(c::AbstractArray{Bool}, x::AbstractArray, y::AbstractArray) ifelse.(c, x, y)
+
 function frexp{T<:AbstractFloat}(A::Array{T})
     depwarn("`frexp(x::Array)` is discontinued.", :frexp)
     F = similar(A)
@@ -1514,5 +1520,9 @@ unsafe_wrap(::Type{String}, p::Union{Ptr{UInt8},Ptr{Int8}}, own::Bool=false) =
 unsafe_wrap(::Type{String}, p::Cstring, own::Bool=false) = unsafe_wrap(String, convert(Ptr{UInt8}, p), own)
 unsafe_wrap(::Type{String}, p::Cstring, len::Integer, own::Bool=false) =
     unsafe_wrap(String, convert(Ptr{UInt8}, p), len, own)
+
+# #19660
+@deprecate finalize(sa::LibGit2.StrArrayStruct) close(sa)
+@deprecate finalize(sa::LibGit2.Buffer) close(sa)
 
 # End deprecations scheduled for 0.6

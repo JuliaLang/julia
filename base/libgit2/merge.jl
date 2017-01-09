@@ -5,7 +5,7 @@ function GitAnnotated(repo::GitRepo, commit_id::GitHash)
     @check ccall((:git_annotated_commit_lookup, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{GitHash}),
                    ann_ptr_ptr, repo.ptr, Ref(commit_id))
-    return GitAnnotated(ann_ptr_ptr[])
+    return GitAnnotated(repo, ann_ptr_ptr[])
 end
 
 function GitAnnotated(repo::GitRepo, ref::GitReference)
@@ -13,7 +13,7 @@ function GitAnnotated(repo::GitRepo, ref::GitReference)
     @check ccall((:git_annotated_commit_from_ref, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}),
                    ann_ref_ref, repo.ptr, ref.ptr)
-    return GitAnnotated(ann_ref_ref[])
+    return GitAnnotated(repo, ann_ref_ref[])
 end
 
 function GitAnnotated(repo::GitRepo, fh::FetchHead)
@@ -21,7 +21,7 @@ function GitAnnotated(repo::GitRepo, fh::FetchHead)
     @check ccall((:git_annotated_commit_from_fetchhead, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring, Ptr{GitHash}),
                    ann_ref_ref, repo.ptr, fh.name, fh.url, Ref(fh.oid))
-    return GitAnnotated(ann_ref_ref[])
+    return GitAnnotated(repo, ann_ref_ref[])
 end
 
 function GitAnnotated(repo::GitRepo, comittish::AbstractString)
@@ -31,7 +31,7 @@ function GitAnnotated(repo::GitRepo, comittish::AbstractString)
         cmt === nothing && return nothing
         return GitAnnotated(repo, GitHash(cmt))
     finally
-        finalize(obj)
+        close(obj)
     end
 end
 
@@ -65,10 +65,10 @@ function ffmerge!(repo::GitRepo, ann::GitAnnotated)
             else
                 GitReference(repo, cmt_oid, fullname(head_ref), msg=msg)
             end
-            finalize(new_head_ref)
+            close(new_head_ref)
         end
     finally
-        finalize(cmt)
+        close(cmt)
     end
     return true
 end

@@ -79,11 +79,11 @@ function commit(repo::GitRepo, msg::AbstractString;
         commit_id = commit(repo, refname, msg, auth_sig, comm_sig, tree, parents...)
     finally
         for parent in parents
-            finalize(parent)
+            close(parent)
         end
-        finalize(tree)
-        finalize(auth_sig)
-        finalize(comm_sig)
+        close(tree)
+        close(auth_sig)
+        close(comm_sig)
     end
     return commit_id
 end
