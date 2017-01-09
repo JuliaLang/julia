@@ -941,7 +941,6 @@ function string(x::BigFloat)
 
     n = (1 <= x < 10 || -10 < x <= -1 || x == 0) ? lng - 4 : lng
     return String(resize!(buf,n))
-
 end
 
 print(io::IO, b::BigFloat) = print(io, string(b))
