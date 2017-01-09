@@ -30,11 +30,11 @@ function commit(repo::GitRepo,
                 committer::GitSignature,
                 tree::GitTree,
                 parents::GitCommit...)
-    commit_id_ptr = Ref(Oid())
+    commit_id_ptr = Ref(GitHash())
     nparents = length(parents)
     parentptrs = Ptr{Void}[c.ptr for c in parents]
     @check ccall((:git_commit_create, :libgit2), Cint,
-                 (Ptr{Oid}, Ptr{Void}, Ptr{UInt8},
+                 (Ptr{GitHash}, Ptr{Void}, Ptr{UInt8},
                   Ptr{SignatureStruct}, Ptr{SignatureStruct},
                   Ptr{UInt8}, Ptr{UInt8}, Ptr{Void},
                   Csize_t, Ptr{Ptr{Void}}),
@@ -50,8 +50,8 @@ function commit(repo::GitRepo, msg::AbstractString;
                 refname::AbstractString=Consts.HEAD_FILE,
                 author::Signature = Signature(repo),
                 committer::Signature = Signature(repo),
-                tree_id::Oid = Oid(),
-                parent_ids::Vector{Oid}=Oid[])
+                tree_id::GitHash = GitHash(),
+                parent_ids::Vector{GitHash}=GitHash[])
     # Retrieve tree identifier
     if iszero(tree_id)
         tree_id = with(GitIndex, repo) do idx; write_tree!(idx) end
@@ -60,12 +60,12 @@ function commit(repo::GitRepo, msg::AbstractString;
     # Retrieve parents from HEAD
     if isempty(parent_ids)
         try # if throws then HEAD not found -> empty repo
-            push!(parent_ids, Oid(repo, refname))
+            push!(parent_ids, GitHash(repo, refname))
         end
     end
 
     # return commit id
-    commit_id  = Oid()
+    commit_id  = GitHash()
 
     # get necessary objects
     tree = get(GitTree, repo, tree_id)

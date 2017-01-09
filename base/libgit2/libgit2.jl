@@ -35,12 +35,12 @@ include("callbacks.jl")
 using .Error
 
 immutable State
-    head::Oid
-    index::Oid
-    work::Oid
+    head::GitHash
+    index::GitHash
+    work::GitHash
 end
 
-"""Return HEAD Oid as string"""
+"""Return HEAD GitHash as string"""
 function head(pkg::AbstractString)
     with(GitRepo, pkg) do repo
         string(head_oid(repo))
@@ -213,18 +213,18 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
             if branch_rmt_ref === nothing
                 with(head(repo)) do head_ref
                     with(peel(GitCommit, head_ref)) do hrc
-                        Oid(hrc)
+                        GitHash(hrc)
                     end
                 end
             else
                 tmpcmt = with(peel(GitCommit, branch_rmt_ref)) do hrc
-                    Oid(hrc)
+                    GitHash(hrc)
                 end
                 close(branch_rmt_ref)
                 tmpcmt
             end
         else
-            Oid(commit)
+            GitHash(commit)
         end
         iszero(commit_id) && return
         cmt =  get(GitCommit, repo, commit_id)
@@ -278,13 +278,13 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
             head_name = shortname(head_ref)
             # if it is HEAD use short OID instead
             if head_name == Consts.HEAD_FILE
-                head_name = string(Oid(head_ref))
+                head_name = string(GitHash(head_ref))
             end
         end
     end
 
     # search for commit to get a commit object
-    obj = get(GitUnknownObject, repo, Oid(commit))
+    obj = get(GitUnknownObject, repo, GitHash(commit))
     obj === nothing && return
     try
         peeled = peel(obj, Consts.OBJ_COMMIT)
@@ -293,7 +293,7 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
                        CheckoutOptions()
         try
             # detach commit
-            obj_oid = Oid(peeled)
+            obj_oid = GitHash(peeled)
             ref = GitReference(repo, obj_oid, force=force,
                 msg="libgit2.checkout: moving from $head_name to $(string(obj_oid))")
             close(ref)
@@ -340,7 +340,7 @@ function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractSt
 end
 
 """ git reset [--soft | --mixed | --hard] <commit> """
-function reset!(repo::GitRepo, commit::Oid, mode::Cint = Consts.RESET_MIXED)
+function reset!(repo::GitRepo, commit::GitHash, mode::Cint = Consts.RESET_MIXED)
     obj = get(GitUnknownObject, repo, commit)
     # object must exist for reset
     obj === nothing && throw(GitError(Error.Object, Error.ERROR, "Commit `$(string(commit))` object not found"))
@@ -425,7 +425,7 @@ function merge!(repo::GitRepo;
                     LibGit2.get(String, cfg, "branch.$branchname.remote")
                 end
                 obj = with(GitReference(repo, "refs/remotes/$remotename/$branchname")) do ref
-                    LibGit2.Oid(ref)
+                    LibGit2.GitHash(ref)
                 end
                 with(get(GitCommit, repo, obj)) do cmt
                     LibGit2.create_branch(repo, branchname, cmt)
@@ -528,7 +528,7 @@ function authors(repo::GitRepo)
 end
 
 function snapshot(repo::GitRepo)
-    head = Oid(repo, Consts.HEAD_FILE)
+    head = GitHash(repo, Consts.HEAD_FILE)
     index = with(GitIndex, repo) do idx; write_tree!(idx) end
     work = try
         with(GitIndex, repo) do idx

@@ -18,9 +18,9 @@ function write!(idx::GitIndex)
 end
 
 function write_tree!(idx::GitIndex)
-    oid_ptr = Ref(Oid())
+    oid_ptr = Ref(GitHash())
     @check ccall((:git_index_write_tree, :libgit2), Cint,
-                 (Ptr{Oid}, Ptr{Void}), oid_ptr, idx.ptr)
+                 (Ptr{GitHash}, Ptr{Void}), oid_ptr, idx.ptr)
     return oid_ptr[]
 end
 
@@ -29,7 +29,7 @@ function owner(idx::GitIndex)
     return Base.get(idx.nrepo)
 end
 
-function read_tree!(idx::GitIndex, tree_id::Oid)
+function read_tree!(idx::GitIndex, tree_id::GitHash)
     repo = owner(idx)
     tree = get(GitTree, repo, tree_id)
     try

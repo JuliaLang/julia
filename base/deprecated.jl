@@ -1517,6 +1517,9 @@ _promote_eltype_op(op, A, B, C, D...) = (@_inline_meta; _promote_eltype_op(op, e
     _promote_eltype_op(args...)
 end
 
+# Rename LibGit2.Oid to LibGit2.GitHash (part of #19839)
+eval(Base.LibGit2, :(Base.@deprecate_binding Oid GitHash))
+
 function unsafe_wrap(::Type{String}, p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer, own::Bool=false)
     Base.depwarn("unsafe_wrap(String, ...) is deprecated; use `unsafe_string` instead.", :unsafe_wrap)
     #ccall(:jl_array_to_string, Ref{String}, (Any,),

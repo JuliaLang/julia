@@ -44,7 +44,7 @@ end
 function head_oid(repo::GitRepo)
     head_ref = head(repo)
     try
-        return Oid(head_ref)
+        return GitHash(head_ref)
     finally
         close(head_ref)
     end
@@ -55,7 +55,7 @@ function headname(repo::GitRepo)
         if isattached(repo)
             shortname(href)
         else
-            "(detached from $(string(Oid(href))[1:7]))"
+            "(detached from $(string(GitHash(href))[1:7]))"
         end
     end
 end
@@ -80,24 +80,24 @@ end
 """ Returns id of a found object """
 function revparseid(repo::GitRepo, objname::AbstractString)
     obj = revparse(repo, objname)
-    obj === nothing && return Oid()
-    oid = Oid(obj.ptr)
+    obj === nothing && return GitHash()
+    oid = GitHash(obj.ptr)
     close(obj)
     return oid
 end
 
-function get{T <: GitObject}(::Type{T}, repo::GitRepo, oid::Oid, oid_size::Int=OID_HEXSZ)
+function get{T <: GitObject}(::Type{T}, repo::GitRepo, oid::GitHash, oid_size::Int=OID_HEXSZ)
     id_ptr  = Ref(oid)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     git_otype = getobjecttype(T)
 
     err = if oid_size != OID_HEXSZ
         ccall((:git_object_lookup_prefix, :libgit2), Cint,
-              (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}, Csize_t, Cint),
+              (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{GitHash}, Csize_t, Cint),
               obj_ptr_ptr, repo.ptr, id_ptr, Csize_t(oid_size), git_otype)
     else
         ccall((:git_object_lookup, :libgit2), Cint,
-              (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}, Cint),
+              (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{GitHash}, Cint),
               obj_ptr_ptr, repo.ptr, id_ptr, git_otype)
     end
     if err == Int(Error.ENOTFOUND)
@@ -112,7 +112,7 @@ function get{T <: GitObject}(::Type{T}, repo::GitRepo, oid::Oid, oid_size::Int=O
 end
 
 function get{T <: GitObject}(::Type{T}, repo::GitRepo, oid::AbstractString)
-    return get(T, repo, Oid(oid), length(oid))
+    return get(T, repo, GitHash(oid), length(oid))
 end
 
 function gitdir(repo::GitRepo)
@@ -131,7 +131,7 @@ function peel(obj::GitObject, obj_type::Cint)
     err = ccall((:git_object_peel, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{Void}, Cint), peeled_ptr_ptr, obj.ptr, obj_type)
     if err == Int(Error.ENOTFOUND)
-        return Oid()
+        return GitHash()
     elseif err != Int(Error.GIT_OK)
         if peeled_ptr_ptr[] != C_NULL
             close(GitUnknownObject(obj.repo, peeled_ptr_ptr[]))
