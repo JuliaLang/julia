@@ -703,10 +703,30 @@ end
     realmin() = realmin(Float64)
     realmax() = realmax(Float64)
 
-    eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= realmin(x) ? ldexp(eps(typeof(x)),exponent(x)) : nextfloat(zero(x)) : oftype(x,NaN)
-    eps(::Type{Float16}) = $(box(Float16,unbox(UInt16,0x1400)))
-    eps(::Type{Float32}) = $(box(Float32,unbox(UInt32,0x34000000)))
-    eps(::Type{Float64}) = $(box(Float64,unbox(UInt64,0x3cb0000000000000)))
+    #eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= realmin(x) ? ldexp(eps(typeof(x)),exponent(x)) : nextfloat(zero(x)) : oftype(x,NaN)
+    # eps(::Type{Float16}) = $(box(Float16,unbox(UInt16,0x1400)))
+    # eps(::Type{Float32}) = $(box(Float32,unbox(UInt32,0x34000000)))
+    # eps(::Type{Float64}) = $(box(Float64,unbox(UInt64,0x3cb0000000000000)))
+
+    function myeps(x::AbstractFloat)
+    if isfinite(x)
+
+        if abs(x) >= realmin(x)
+            # ldexp(eps(typeof(x)), exponent(x))
+
+            ldexp(2.0, -precision(x) + exponent(x))
+
+        else
+            nextfloat(zero(x))
+        end
+
+    else
+        oftype(x, NaN)
+
+    end
+end
+
+
     eps() = eps(Float64)
 end
 
