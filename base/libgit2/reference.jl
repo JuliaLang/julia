@@ -108,7 +108,7 @@ function peel{T <: GitObject}(::Type{T}, ref::GitReference)
         return GitHash()
     elseif err != Int(Error.GIT_OK)
         if obj_ptr_ptr[] != C_NULL
-            close(GitAnyObject(ref.repo, obj_ptr_ptr[]))
+            close(GitUnknownObject(ref.repo, obj_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end

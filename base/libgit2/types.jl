@@ -412,7 +412,7 @@ for (typ, reporef, sup, cname) in [
     (:GitRebase,     :GitRepo,  :AbstractGitObject, :git_rebase),
     (:GitStatus,     :GitRepo,  :AbstractGitObject, :git_status_list),
     (:GitBranchIter, :GitRepo,  :AbstractGitObject, :git_branch_iterator),
-    (:GitAnyObject,  :GitRepo,  :GitObject,         :git_object),
+    (:GitUnknownObject,  :GitRepo,  :GitObject,         :git_object),
     (:GitCommit,     :GitRepo,  :GitObject,         :git_commit),
     (:GitBlob,       :GitRepo,  :GitObject,         :git_blob),
     (:GitTree,       :GitRepo,  :GitObject,         :git_tree),
@@ -527,8 +527,8 @@ function getobjecttype{T<:GitObject}(::Type{T})
         Consts.OBJ_BLOB
     elseif T == GitTag
         Consts.OBJ_TAG
-    elseif T == GitAnyObject
-        Consts.OBJ_ANY
+    elseif T == GitUnknownObject
+        Consts.OBJ_ANY # this name comes from the header
     else
         throw(GitError(Error.Object, Error.ENOTFOUND, "Type $T is not supported"))
     end
@@ -543,8 +543,8 @@ function getobjecttype(obj_type::Cint)
         GitBlob
     elseif obj_type == Consts.OBJ_TAG
         GitTag
-    elseif obj_type == Consts.OBJ_ANY
-        GitAnyObject
+    elseif obj_type == Consts.OBJ_ANY #this name comes from the header
+        GitUnknownObject
     else
         throw(GitError(Error.Object, Error.ENOTFOUND, "Object type $obj_type is not supported"))
     end
