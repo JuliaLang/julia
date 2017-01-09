@@ -35,7 +35,13 @@ end
 function url(rmt::GitRemote)
     url_ptr = ccall((:git_remote_url, :libgit2), Cstring, (Ptr{Void}, ), rmt.ptr)
     url_ptr == C_NULL && return ""
-    return  unsafe_string(url_ptr)
+    return unsafe_string(url_ptr)
+end
+
+function name(rmt::GitRemote)
+    name_ptr = ccall((:git_remote_name, :libgit2), Cstring, (Ptr{Void}, ), rmt.ptr)
+    name_ptr == C_NULL && return ""
+    return unsafe_string(name_ptr)
 end
 
 function fetch_refspecs(rmt::GitRemote)
@@ -88,3 +94,5 @@ function push{T<:AbstractString}(rmt::GitRemote, refspecs::Vector{T};
         !no_refs && close(sa)
     end
 end
+
+Base.show(io::IO, rmt::GitRemote) = print(io, "GitRemote:\nRemote name: ", name(rmt), " url: ", url(rmt))
