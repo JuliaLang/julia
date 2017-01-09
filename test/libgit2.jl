@@ -302,6 +302,14 @@ mktempdir() do dir
                     @test cmtr.time == test_sig.time
                     @test cmtr.email == test_sig.email
                     @test LibGit2.message(cmt) == commit_msg1
+                    showstr = split(sprint(show, cmt), "\n")
+                    # the time of the commit will vary so just test the first two parts
+                    @test contains(showstr[1], "Git Commit:")
+                    @test contains(showstr[2], "Commit Author: Name: TEST, Email: TEST@TEST.COM, Time:")
+                    @test contains(showstr[3], "Committer: Name: TEST, Email: TEST@TEST.COM, Time:")
+                    @test contains(showstr[4], "SHA:")
+                    @test showstr[5] == "Message:"
+                    @test showstr[6] == commit_msg1
                 finally
                     close(cmt)
                 end
