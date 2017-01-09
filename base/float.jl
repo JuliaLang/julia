@@ -738,9 +738,18 @@ exponent_one(::Type{Float16}) =     0x3c00
 exponent_half(::Type{Float16}) =    0x3800
 significand_mask(::Type{Float16}) = 0x03ff
 
+# integer size of float
+fpinttype(::Type{Float64}) = UInt64
+fpinttype(::Type{Float32}) = UInt32
+fpinttype(::Type{Float16}) = UInt16
+
 @pure significand_bits{T<:AbstractFloat}(::Type{T}) = trailing_ones(significand_mask(T))
 @pure exponent_bits{T<:AbstractFloat}(::Type{T}) = sizeof(T)*8 - significand_bits(T) - 1
 @pure exponent_bias{T<:AbstractFloat}(::Type{T}) = Int(exponent_one(T) >> significand_bits(T))
+# maximum float exponent
+@pure exponent_max{T<:AbstractFloat}(::Type{T}) = Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T)
+# maximum float exponent without bias
+@pure exponent_raw_max{T<:AbstractFloat}(::Type{T}) = Int(exponent_mask(T) >> significand_bits(T))
 
 ## Array operations on floating point numbers ##
 

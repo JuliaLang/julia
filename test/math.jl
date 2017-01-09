@@ -23,8 +23,8 @@
 end
 
 @testset "constants" begin
-    @test !(pi == e)
-    @test !(e == 1//2)
+    @test pi != e
+    @test e != 1//2
     @test 1//2 <= e
     @test e <= 15//3
     @test big(1//2) < e
@@ -34,8 +34,8 @@ end
     @test e^2.4 == exp(2.4)
     @test e^(2//3) == exp(2//3)
 
-    @test Float16(3.) < pi
-    @test pi < Float16(4.)
+    @test Float16(3.0) < pi
+    @test pi < Float16(4.0)
     @test contains(sprint(show,π),"3.14159")
 end
 
@@ -71,37 +71,51 @@ end
         @test isnan(x)
         @test y == 0
 
-        # more ldexp tests
-        @test ldexp(T(0.8), 4) === T(12.8)
-        @test ldexp(T(-0.854375), 5) === T(-27.34)
-        @test ldexp(T(1.0), typemax(Int)) === T(Inf)
-        @test ldexp(T(1.0), typemin(Int)) === T(0.0)
-        @test ldexp(prevfloat(realmin(T)), typemax(Int)) === T(Inf)
-        @test ldexp(prevfloat(realmin(T)), typemin(Int)) === T(0.0)
+        @testset "ldexp function" begin
+            @test ldexp(T(0.0), 0) === T(0.0)
+            @test ldexp(T(-0.0), 0) === T(-0.0)
+            @test ldexp(T(Inf), 1) === T(Inf)
+            @test ldexp(T(Inf), 10000) === T(Inf)
+            @test ldexp(T(-Inf), 1) === T(-Inf)
+            @test ldexp(T(NaN), 10) === T(NaN)
+            @test ldexp(T(1.0), 0) === T(1.0)
+            @test ldexp(T(0.8), 4) === T(12.8)
+            @test ldexp(T(-0.854375), 5) === T(-27.34)
+            @test ldexp(T(1.0), typemax(Int)) === T(Inf)
+            @test ldexp(T(1.0), typemin(Int)) === T(0.0)
+            @test ldexp(prevfloat(realmin(T)), typemax(Int)) === T(Inf)
+            @test ldexp(prevfloat(realmin(T)), typemin(Int)) === T(0.0)
 
-        @test ldexp(T(0.8), Int128(4)) === T(12.8)
-        @test ldexp(T(-0.854375), Int128(5)) === T(-27.34)
-        @test ldexp(T(1.0), typemax(Int128)) === T(Inf)
-        @test ldexp(T(1.0), typemin(Int128)) === T(0.0)
-        @test ldexp(prevfloat(realmin(T)), typemax(Int128)) === T(Inf)
-        @test ldexp(prevfloat(realmin(T)), typemin(Int128)) === T(0.0)
+            @test ldexp(T(0.0), Int128(0)) === T(0.0)
+            @test ldexp(T(-0.0), Int128(0)) === T(-0.0)
+            @test ldexp(T(1.0), Int128(0)) === T(1.0)
+            @test ldexp(T(0.8), Int128(4)) === T(12.8)
+            @test ldexp(T(-0.854375), Int128(5)) === T(-27.34)
+            @test ldexp(T(1.0), typemax(Int128)) === T(Inf)
+            @test ldexp(T(1.0), typemin(Int128)) === T(0.0)
+            @test ldexp(prevfloat(realmin(T)), typemax(Int128)) === T(Inf)
+            @test ldexp(prevfloat(realmin(T)), typemin(Int128)) === T(0.0)
 
-        @test ldexp(T(0.8), BigInt(4)) === T(12.8)
-        @test ldexp(T(-0.854375), BigInt(5)) === T(-27.34)
-        @test ldexp(T(1.0), BigInt(typemax(Int128))) === T(Inf)
-        @test ldexp(T(1.0), BigInt(typemin(Int128))) === T(0.0)
-        @test ldexp(prevfloat(realmin(T)), BigInt(typemax(Int128))) === T(Inf)
-        @test ldexp(prevfloat(realmin(T)), BigInt(typemin(Int128))) === T(0.0)
+            @test ldexp(T(0.0), BigInt(0)) === T(0.0)
+            @test ldexp(T(-0.0), BigInt(0)) === T(-0.0)
+            @test ldexp(T(1.0), BigInt(0)) === T(1.0)
+            @test ldexp(T(0.8), BigInt(4)) === T(12.8)
+            @test ldexp(T(-0.854375), BigInt(5)) === T(-27.34)
+            @test ldexp(T(1.0), BigInt(typemax(Int128))) === T(Inf)
+            @test ldexp(T(1.0), BigInt(typemin(Int128))) === T(0.0)
+            @test ldexp(prevfloat(realmin(T)), BigInt(typemax(Int128))) === T(Inf)
+            @test ldexp(prevfloat(realmin(T)), BigInt(typemin(Int128))) === T(0.0)
 
-        # Test also against BigFloat reference. Needs to be exactly rounded.
-        @test ldexp(realmin(T), -1) == T(ldexp(big(realmin(T)), -1))
-        @test ldexp(realmin(T), -2) == T(ldexp(big(realmin(T)), -2))
-        @test ldexp(realmin(T)/2, 0) == T(ldexp(big(realmin(T)/2), 0))
-        @test ldexp(realmin(T)/3, 0) == T(ldexp(big(realmin(T)/3), 0))
-        @test ldexp(realmin(T)/3, -1) == T(ldexp(big(realmin(T)/3), -1))
-        @test ldexp(realmin(T)/3, 11) == T(ldexp(big(realmin(T)/3), 11))
-        @test ldexp(realmin(T)/11, -10) == T(ldexp(big(realmin(T)/11), -10))
-        @test ldexp(-realmin(T)/11, -10) == T(ldexp(big(-realmin(T)/11), -10))
+            # Test also against BigFloat reference. Needs to be exactly rounded.
+            @test ldexp(realmin(T), -1) == T(ldexp(big(realmin(T)), -1))
+            @test ldexp(realmin(T), -2) == T(ldexp(big(realmin(T)), -2))
+            @test ldexp(realmin(T)/2, 0) == T(ldexp(big(realmin(T)/2), 0))
+            @test ldexp(realmin(T)/3, 0) == T(ldexp(big(realmin(T)/3), 0))
+            @test ldexp(realmin(T)/3, -1) == T(ldexp(big(realmin(T)/3), -1))
+            @test ldexp(realmin(T)/3, 11) == T(ldexp(big(realmin(T)/3), 11))
+            @test ldexp(realmin(T)/11, -10) == T(ldexp(big(realmin(T)/11), -10))
+            @test ldexp(-realmin(T)/11, -10) == T(ldexp(big(-realmin(T)/11), -10))
+        end
     end
 end
 
@@ -234,6 +248,24 @@ end
 @test exp10(5) ≈ exp10(5.0)
 @test exp2(Float16(2.)) ≈ exp2(2.)
 @test log(e) == 1
+
+@testset "exp function" for T in (Float64, Float32)
+    @testset "$T accuracy" begin
+        X = map(T, vcat(-10:0.0002:10, -80:0.001:80, 2.0^-27, 2.0^-28, 2.0^-14, 2.0^-13))
+        for x in X
+            y, yb = exp(x), exp(big(x))
+            @test abs(y-yb) <= 1.0*eps(T(yb))
+        end
+    end
+    @testset "$T edge cases" begin
+        @test isnan(exp(T(NaN)))
+        @test exp(T(-Inf)) === T(0.0)
+        @test exp(T(Inf)) === T(Inf)
+        @test exp(T(0.0)) === T(1.0) # exact
+        @test exp(T(5000.0)) === T(Inf)
+        @test exp(T(-5000.0)) === T(0.0)
+    end
+end
 
 @testset "test abstractarray trig fxns" begin
     TAA = rand(2,2)
