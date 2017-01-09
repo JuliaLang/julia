@@ -291,6 +291,8 @@ import Base.Meta: isexpr
 @test isexpr(expand(:(f.(x,1))), :thunk)
 @test isexpr(expand(:(f.(x,1.0))), :thunk)
 @test isexpr(expand(:(f.(x,$π))), :thunk)
+@test isexpr(expand(:(f.(x,"hello"))), :thunk)
+@test isexpr(expand(:(f.(x,$("hello")))), :thunk)
 
 # PR #17623: Fused binary operators
 @test [true] .* [true] == [true]
