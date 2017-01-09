@@ -215,6 +215,16 @@ end
 end
 index_ndims() = ()
 
+# combined dimensionality of all indices
+# rather than returning N, it returns an NTuple{N,Bool} so the result is inferrable
+@inline index_dimsum(i1, I...) = (index_dimsum(I...)...)
+@inline index_dimsum(::Colon, I...) = (true, index_dimsum(I...)...)
+@inline index_dimsum(::AbstractArray{Bool}, I...) = (true, index_dimsum(I...)...)
+@inline function index_dimsum{_,N}(::AbstractArray{_,N}, I...)
+    (ntuple(x->true, Val{N})..., index_dimsum(I...)...)
+end
+index_dimsum() = ()
+
 # Recursively compute the lengths of a list of indices, without dropping scalars
 # These need to be inlined for more than 3 indexes
 # Trailing CartesianIndex{0}s and arrays thereof are strange when used as
@@ -569,10 +579,10 @@ function cumsum{T}(A::AbstractArray{T}, axis::Integer=1)
 end
 
 """
-    cumsum!(B, A, [dim])
+    cumsum!(B, A, dim::Integer=1)
 
 Cumulative sum of `A` along a dimension, storing the result in `B`. The dimension defaults
-to 1.
+to 1. See also [`cumsum`](@ref).
 """
 cumsum!(B, A, axis::Integer=1) = accumulate!(+, B, A, axis)
 
@@ -603,9 +613,10 @@ julia> cumprod(a,2)
 cumprod(A::AbstractArray, axis::Integer=1) = accumulate(*, A, axis)
 
 """
-    cumprod!(B, A, [dim])
+    cumprod!(B, A, dim::Integer=1)
 
 Cumulative product of `A` along a dimension, storing the result in `B`. The dimension defaults to 1.
+See also [`cumprod`](@ref).
 """
 cumprod!(B, A, axis::Integer=1) = accumulate!(*, B, A, axis)
 

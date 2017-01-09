@@ -109,7 +109,7 @@ function show(io::IO, ::MIME"text/plain", f::Function)
         name = mt.name
         isself = isdefined(ft.name.module, name) &&
                  ft == typeof(getfield(ft.name.module, name))
-        n = length(mt)
+        n = length(methods(f))
         m = n==1 ? "method" : "methods"
         ns = isself ? string(name) : string("(::", name, ")")
         what = startswith(ns, '@') ? "macro" : "generic function"
@@ -147,7 +147,7 @@ function show(io::IO, ::MIME"text/plain", s::String)
         show(io, s)
     else
         println(io, sizeof(s), "-byte String of invalid UTF-8 data:")
-        showarray(io, s.data, false; header=false)
+        showarray(io, Vector{UInt8}(s), false; header=false)
     end
 end
 
@@ -256,14 +256,20 @@ showerror(io::IO, ::DivideError) = print(io, "DivideError: integer division erro
 showerror(io::IO, ::StackOverflowError) = print(io, "StackOverflowError:")
 showerror(io::IO, ::UndefRefError) = print(io, "UndefRefError: access to undefined reference")
 showerror(io::IO, ::EOFError) = print(io, "EOFError: read end of file")
-showerror(io::IO, ex::ErrorException) = print(io, ex.msg)
+function showerror(io::IO, ex::ErrorException)
+    print(io, ex.msg)
+    if ex.msg == "type String has no field data"
+        println(io)
+        print(io, "Use `Vector{UInt8}(str)` instead.")
+    end
+end
 showerror(io::IO, ex::KeyError) = print(io, "KeyError: key $(repr(ex.key)) not found")
 showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
 showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: $(ex.msg)")
 showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: $(ex.msg)")
 
 function showerror(io::IO, ex::UndefVarError)
-    if ex.var in [:UTF16String, :UTF32String, :WString, :utf16, :utf32, :wstring]
+    if ex.var in [:UTF16String, :UTF32String, :WString, :utf16, :utf32, :wstring, :RepString]
         return showerror(io, ErrorException("""
         `$(ex.var)` has been moved to the package LegacyStrings.jl:
         Run Pkg.add("LegacyStrings") to install LegacyStrings on Julia v0.5-;

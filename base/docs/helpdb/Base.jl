@@ -55,13 +55,6 @@ Calling `Ref(array[, index])` is generally preferable to this function.
 pointer
 
 """
-    cummin(A, [dim])
-
-Cumulative minimum along a dimension. The dimension defaults to 1.
-"""
-cummin
-
-"""
     precision(num::AbstractFloat)
 
 Get the precision of a floating point number, as defined by the effective number of bits in
@@ -541,13 +534,6 @@ Receive the next value passed to `produce` by the specified task. Additional arg
 be passed, to be returned from the last `produce` call in the producer.
 """
 consume
-
-"""
-    cummax(A, [dim])
-
-Cumulative maximum along a dimension. The dimension defaults to 1.
-"""
-cummax
 
 """
     isinteractive() -> Bool
@@ -1052,9 +1038,9 @@ An indexing operation into an array, `a`, tried to access an out-of-bounds eleme
 BoundsError
 
 """
-    invoke(f, (types...), args...)
+    invoke(f, types <: Tuple, args...)
 
-Invoke a method for the given generic function matching the specified types (as a tuple), on
+Invoke a method for the given generic function matching the specified types, on
 the specified arguments. The arguments must be compatible with the specified types. This
 allows invoking a method other than the most specific matching method, which is useful when
 the behavior of a more general definition is explicitly needed (often as part of the

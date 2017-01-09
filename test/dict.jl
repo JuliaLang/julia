@@ -1,31 +1,35 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Pair
-p = Pair(1,2)
-@test p == (1=>2)
-@test isequal(p,1=>2)
+p = Pair(10,20)
+@test p == (10=>20)
+@test isequal(p,10=>20)
 @test start(p) == 1
-@test next(p, 1) == (1,2)
+@test next(p, 1) == (10,2)
 @test !done(p, 1)
 @test !done(p,2)
 @test done(p,3)
 @test !done(p,0)
 @test endof(p) == length(p) == 2
-@test Base.indexed_next(p, 1, (1,2)) == (1,2)
-@test Base.indexed_next(p, 2, (1,2)) == (2,3)
+@test Base.indexed_next(p, 1, (1,2)) == (10,2)
+@test Base.indexed_next(p, 2, (1,2)) == (20,3)
 @test (1=>2) < (2=>3)
 @test (2=>2) < (2=>3)
 @test !((2=>3) < (2=>3))
 @test (2=>3) < (4=>3)
 @test (1=>100) < (4=>1)
-@test p[1] == 1
-@test p[2] == 2
+@test p[1] == 10
+@test p[2] == 20
 @test_throws BoundsError p[3]
 @test_throws BoundsError p[false]
-@test p[true] == 1
-@test p[2.0] == 2
-@test p[0x01] == 1
+@test p[true] == 10
+@test p[2.0] == 20
+@test p[0x01] == 10
 @test_throws InexactError p[2.3]
+@test first(p) == 10
+@test last(p) == 20
+@test eltype(p) == Int
+@test eltype(4 => 5.6) == Union{Int,Float64}
 
 # Dict
 h = Dict()
@@ -49,7 +53,7 @@ for i=1:10000
 end
 @test isempty(h)
 h[77] = 100
-@test h[77]==100
+@test h[77] == 100
 for i=1:10000
     h[i] = i+1
 end
@@ -60,10 +64,10 @@ for i=10001:20000
     h[i] = i+1
 end
 for i=2:2:10000
-    @test h[i]==i+1
+    @test h[i] == i+1
 end
 for i=10000:20000
-    @test h[i]==i+1
+    @test h[i] == i+1
 end
 h = Dict{Any,Any}("a" => 3)
 @test h["a"] == 3
@@ -509,7 +513,7 @@ end
 # filtering
 let d = Dict(zip(1:1000,1:1000)), f = (k,v) -> iseven(k)
     @test filter(f, d) == filter!(f, copy(d)) ==
-          invoke(filter!, (Function, Associative), f, copy(d)) ==
+          invoke(filter!, Tuple{Function,Associative}, f, copy(d)) ==
           Dict(zip(2:2:1000, 2:2:1000))
 end
 
@@ -609,10 +613,21 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     finalizer(A, a->(x+=1))
     finalizer(B, b->(y+=1))
     finalizer(C, c->(z+=1))
+
+    # construction
     wkd = WeakKeyDict()
     wkd[A] = 2
     wkd[B] = 3
     wkd[C] = 4
+    dd = convert(Dict{Any,Any},wkd)
+    @test WeakKeyDict(dd) == wkd
+    @test isa(WeakKeyDict(dd), WeakKeyDict{Any,Any})
+    @test WeakKeyDict(A=>2, B=>3, C=>4) == wkd
+    @test isa(WeakKeyDict(A=>2, B=>3, C=>4), WeakKeyDict{Array{Int,1},Int})
+    @test WeakKeyDict(a=>i+1 for (i,a) in enumerate([A,B,C]) ) == wkd
+    @test WeakKeyDict([(A,2), (B,3), (C,4)]) == wkd
+
+
     @test length(wkd) == 3
     @test !isempty(wkd)
     res = pop!(wkd, C)
@@ -628,6 +643,8 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test !isempty(wkd)
 
     wkd = empty!(wkd)
+    @test wkd == similar(wkd)
+    @test typeof(wkd) == typeof(similar(wkd))
     @test length(wkd) == 0
     @test isempty(wkd)
     @test isa(wkd, WeakKeyDict)

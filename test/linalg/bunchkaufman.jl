@@ -72,8 +72,8 @@ bimg  = randn(n,2)/2
                 @testset "Bunch-Kaufman factors of a pos-def matrix" begin
                     @testset for rook in (false, true)
                         bc2 = bkfact(apd, :U, issymmetric(apd), rook)
-                        @test_approx_eq logdet(bc2) log(det(bc2))
-                        @test_approx_eq logabsdet(bc2)[1] log(abs(det(bc2)))
+                        @test logdet(bc2) ≈ log(det(bc2))
+                        @test logabsdet(bc2)[1] ≈ log(abs(det(bc2)))
                         @test logabsdet(bc2)[2] == sign(det(bc2))
                         @test inv(bc2)*apd ≈ eye(n)
                         @test_approx_eq_eps apd * (bc2\b) b 150000ε

@@ -13,10 +13,10 @@ and summarize them at the end of the test set with `@testset`.
 """
 module Test
 
-export @test, @test_throws, @test_broken, @test_skip
+export @test, @test_throws, @test_broken, @test_skip, @test_warn, @test_nowarn
 export @testset
 # Legacy approximate testing functions, yet to be included
-export @test_approx_eq, @test_approx_eq_eps, @inferred
+export @test_approx_eq_eps, @inferred
 export detect_ambiguities
 export GenericString
 
@@ -357,6 +357,57 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
 end
 
 #-----------------------------------------------------------------------
+# Test for warning messages
+
+ismatch_warn(s::AbstractString, output) = contains(output, s)
+ismatch_warn(s::Regex, output) = ismatch(s, output)
+ismatch_warn(s::Function, output) = s(output)
+ismatch_warn(S::Union{AbstractArray,Tuple}, output) = all(s -> ismatch_warn(s, output), S)
+
+"""
+    @test_warn msg expr
+
+Test whether evaluating `expr` results in [`STDERR`](@ref) output that contains
+the `msg` string or matches the `msg` regular expression.  If `msg` is
+a boolean function, tests whether `msg(output)` returns `true`.  If `msg` is a
+tuple or array, checks that the error output contains/matches each item in `msg`.
+Returns the result of evaluating `expr`.
+
+See also [`@test_nowarn`](@ref) to check for the absence of error output.
+"""
+macro test_warn(msg, expr)
+    quote
+        let fname = tempname(), have_color = Base.have_color
+            try
+                eval(Base, :(have_color = false))
+                ret = open(fname, "w") do f
+                    redirect_stderr(f) do
+                        $(esc(expr))
+                    end
+                end
+                @test ismatch_warn($(esc(msg)), readstring(fname))
+                ret
+            finally
+                eval(Base, Expr(:(=), :have_color, have_color))
+                rm(fname, force=true)
+            end
+        end
+    end
+end
+
+"""
+    @test_nowarn expr
+
+Test whether evaluating `expr` results in empty [`STDERR`](@ref) output
+(no warnings or other messages).  Returns the result of evaluating `expr`.
+"""
+macro test_nowarn(expr)
+    quote
+        @test_warn r"^(?!.)"s $expr
+    end
+end
+
+#-----------------------------------------------------------------------
 
 # The AbstractTestSet interface is defined by two methods:
 # record(AbstractTestSet, Result)
@@ -406,6 +457,10 @@ function Base.show(io::IO, ex::TestSetException)
     print(io, ex.broken, " broken.")
 end
 
+function Base.showerror(io::IO, ex::TestSetException, bt; backtrace=true)
+    print_with_color(Base.error_color(), io, string(ex))
+end
+
 #-----------------------------------------------------------------------
 
 """
@@ -417,12 +472,20 @@ immutable FallbackTestSet <: AbstractTestSet
 end
 fallback_testset = FallbackTestSet()
 
+type FallbackTestSetException <: Exception
+    msg::String
+end
+
+function Base.showerror(io::IO, ex::FallbackTestSetException, bt; backtrace=true)
+    print_with_color(Base.error_color(), io, ex.msg)
+end
+
 # Records nothing, and throws an error immediately whenever a Fail or
 # Error occurs. Takes no action in the event of a Pass or Broken result
 record(ts::FallbackTestSet, t::Union{Pass,Broken}) = t
 function record(ts::FallbackTestSet, t::Union{Fail,Error})
     println(t)
-    error("There was an error during testing")
+    throw(FallbackTestSetException("There was an error during testing"))
 end
 # We don't need to do anything as we don't record anything
 finish(ts::FallbackTestSet) = ts
@@ -952,12 +1015,15 @@ end
 """
     @test_approx_eq(a, b)
 
-Test two floating point numbers `a` and `b` for equality taking into account
-small numerical errors.
+Deprecated. Test two floating point numbers `a` and `b` for equality taking into
+account small numerical errors.
 """
 macro test_approx_eq(a, b)
+    Base.depwarn(string("@test_approx_eq is deprecated, use `@test ", a, " ≈ ", b, "` instead"),
+                 Symbol("@test_approx_eq"))
     :(test_approx_eq($(esc(a)), $(esc(b)), $(string(a)), $(string(b))))
 end
+export @test_approx_eq
 
 _args_and_call(args...; kwargs...) = (args[1:end-1], kwargs, args[end](args[1:end-1]...; kwargs...))
 """

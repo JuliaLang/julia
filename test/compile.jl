@@ -2,20 +2,6 @@
 
 using Base.Test
 
-function redirected_stderr(expected)
-    rd, wr = redirect_stderr()
-    t = @async begin
-        read = readstring(rd) # also makes sure the kernel isn't being forced to buffer the output
-        if !contains(read, expected)
-            @show expected
-            @show read
-            @test false
-        end
-        nothing
-    end
-    return t
-end
-
 Foo_module = :Foo4b3a94a1a081a8cb
 FooBase_module = :FooBase4b3a94a1a081a8cb
 @eval module ConflictingBindings
@@ -29,7 +15,6 @@ using .ConflictingBindings
 # so we disable it for the tests below
 withenv( "JULIA_DEBUG_LOADING" => nothing ) do
 
-olderr = STDERR
 dir = mktempdir()
 dir2 = mktempdir()
 insert!(LOAD_PATH, 1, dir)
@@ -136,14 +121,9 @@ try
 
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
-    t = redirected_stderr("WARNING: replacing module Foo4b3a94a1a081a8cb.\nWARNING: Method definition ")
-    try
+    @test_warn "WARNING: replacing module Foo4b3a94a1a081a8cb.\nWARNING: Method definition " begin
         @test isa(Base._require_from_serialized(myid(), Foo_module, cachefile, #=broadcast-load=#false), Array{Any,1})
-    finally
-        close(STDERR)
-        redirect_stderr(olderr)
     end
-    wait(t)
 
     let Foo = getfield(Main, Foo_module)
         @test_throws MethodError Foo.foo(17) # world shouldn't be visible yet
@@ -217,17 +197,13 @@ try
           end
           """)
 
-    t = redirected_stderr("ERROR: LoadError: Declaring __precompile__(false) is not allowed in files that are being precompiled.\nStacktrace:\n [1] __precompile__")
-    try
+    @test_warn "ERROR: LoadError: Declaring __precompile__(false) is not allowed in files that are being precompiled.\nStacktrace:\n [1] __precompile__" try
         Base.compilecache("Baz") # from __precompile__(false)
         error("__precompile__ disabled test failed")
     catch exc
-        close(STDERR)
-        redirect_stderr(olderr)
         isa(exc, ErrorException) || rethrow(exc)
         !isempty(search(exc.msg, "__precompile__(false)")) && rethrow(exc)
     end
-    wait(t)
 
     # Issue #12720
     FooBar1_file = joinpath(dir, "FooBar1.jl")
@@ -273,14 +249,7 @@ try
     fb_uuid1 = Base.module_uuid(Main.FooBar1)
     @test fb_uuid != fb_uuid1
 
-    t = redirected_stderr("WARNING: replacing module FooBar.")
-    try
-        reload("FooBar")
-    finally
-        close(STDERR)
-        redirect_stderr(olderr)
-    end
-    wait(t)
+    @test_warn "WARNING: replacing module FooBar." reload("FooBar")
     @test fb_uuid != Base.module_uuid(Main.FooBar)
     @test fb_uuid1 == Base.module_uuid(Main.FooBar1)
     fb_uuid = Base.module_uuid(Main.FooBar)
@@ -289,14 +258,7 @@ try
     @test !Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji"))
     @test !Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji"))
 
-    t = redirected_stderr("WARNING: replacing module FooBar1.")
-    try
-        reload("FooBar1")
-    finally
-        close(STDERR)
-        redirect_stderr(olderr)
-    end
-    wait(t)
+    @test_warn "WARNING: replacing module FooBar1." reload("FooBar1")
     @test fb_uuid == Base.module_uuid(Main.FooBar)
     @test fb_uuid1 != Base.module_uuid(Main.FooBar1)
 
@@ -314,22 +276,14 @@ try
           error("break me")
           end
           """)
-    t = redirected_stderr("ERROR: LoadError: break me\nStacktrace:\n [1] error")
-    try
+    @test_warn "ERROR: LoadError: break me\nStacktrace:\n [1] error" try
         Base.require(:FooBar)
         error("\"LoadError: break me\" test failed")
     catch exc
-        close(STDERR)
-        redirect_stderr(olderr)
         isa(exc, ErrorException) || rethrow(exc)
         !isempty(search(exc.msg, "ERROR: LoadError: break me")) && rethrow(exc)
     end
-    wait(t)
 finally
-    if STDERR != olderr
-        close(STDERR)
-        redirect_stderr(olderr)
-    end
     splice!(Base.LOAD_CACHE_PATH, 1:2)
     splice!(LOAD_PATH, 1)
     rm(dir, recursive=true)

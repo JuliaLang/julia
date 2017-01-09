@@ -129,7 +129,7 @@ function readdlm_auto(input::AbstractString, dlm::Char, T::Type, eol::Char, auto
         # TODO: It would be nicer to use String(a) without making a copy,
         # but because the mmap'ed array is not NUL-terminated this causes
         # jl_try_substrtod to segfault below.
-        return readdlm_string(String(copy(a)), dlm, T, eol, auto, optsd)
+        return readdlm_string(unsafe_string(pointer(a),length(a)), dlm, T, eol, auto, optsd)
     else
         return readdlm_string(readstring(input), dlm, T, eol, auto, optsd)
     end
@@ -153,7 +153,7 @@ type DLMOffsets <: DLMHandler
         offsets = Array{Array{Int,1}}(1)
         offsets[1] = Array{Int}(offs_chunk_size)
         thresh = ceil(min(typemax(UInt), Base.Sys.total_memory()) / sizeof(Int) / 5)
-        new(offsets, 1, thresh, length(sbuff.data))
+        new(offsets, 1, thresh, sizeof(sbuff))
     end
 end
 
@@ -220,7 +220,7 @@ end
 
 _chrinstr(sbuff::String, chr::UInt8, startpos::Int, endpos::Int) =
     (endpos >= startpos) && (C_NULL != ccall(:memchr, Ptr{UInt8},
-    (Ptr{UInt8}, Int32, Csize_t), pointer(sbuff.data)+startpos-1, chr, endpos-startpos+1))
+    (Ptr{UInt8}, Int32, Csize_t), pointer(sbuff)+startpos-1, chr, endpos-startpos+1))
 
 function store_cell{T}(dlmstore::DLMStore{T}, row::Int, col::Int,
         quoted::Bool, startpos::Int, endpos::Int)
@@ -463,17 +463,9 @@ function colval{T<:Char}(sbuff::String, startpos::Int, endpos::Int, cells::Array
 end
 colval(sbuff::String, startpos::Int, endpos::Int, cells::Array, row::Int, col::Int) = true
 
-function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D,
-                        ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool,
-                        skipstart::Int, skipblanks::Bool, dh::DLMHandler)
-    all_ascii = (D <: UInt8) || (isascii(eol) &&
-                                 isascii(dlm) &&
-                                 (!allow_quote || isascii(qchar)) &&
-                                 (!allow_comments || isascii(cchar)))
-    if T === String && all_ascii
-        return dlm_parse(dbuff.data, eol % UInt8, dlm % UInt8, qchar % UInt8, cchar % UInt8,
-                         ign_adj_dlm, allow_quote, allow_comments, skipstart, skipblanks, dh)
-    end
+function dlm_parse{D}(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
+                      ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool,
+                      skipstart::Int, skipblanks::Bool, dh::DLMHandler)
     ncols = nrows = col = 0
     is_default_dlm = (dlm == invalid_dlm(D))
     error_str = ""

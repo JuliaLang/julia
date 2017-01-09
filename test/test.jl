@@ -23,6 +23,10 @@
 @test_skip false
 @test_skip gobbeldygook
 
+# Test @test_warn
+@test 1234 === @test_nowarn(1234)
+@test 5678 === @test_warn("WARNING: foo", begin warn("foo"); 5678; end)
+
 a = Array(Float64, 2, 2, 2, 2, 2)
 a[1,1,1,1,1] = 10
 @test a[1,1,1,1,1] == 10
@@ -401,3 +405,24 @@ io = IOBuffer()
 str = String(take!(io))
 @test contains(str, "test.jl")
 @test !contains(str, "boot.jl")
+
+let
+    io = IOBuffer()
+    exc = Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}())
+    Base.showerror(io, exc, backtrace())
+    @test !contains(String(take!(io)), "backtrace()")
+end
+
+# 19750
+let
+    io = IOBuffer()
+    exc = Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}())
+    Base.showerror(io, exc, backtrace())
+    @test !contains(String(take!(io)), "backtrace()")
+
+    exc = Test.FallbackTestSetException("msg")
+    Base.showerror(io, exc, backtrace())
+    str = String(take!(io))
+    @test contains(str, "msg")
+    @test !contains(str, "backtrace()")
+end

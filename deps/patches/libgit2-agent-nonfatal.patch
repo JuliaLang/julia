@@ -16,6 +16,7 @@ index cfd5736..82d2c63 100644
 +	if (rc != LIBSSH2_ERROR_NONE) {
 +		rc = LIBSSH2_ERROR_AUTHENTICATION_FAILED;
  		goto shutdown;
-+        }
++	}
  
  	rc = libssh2_agent_list_identities(agent);
+ 

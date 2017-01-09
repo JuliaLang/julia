@@ -31,6 +31,7 @@ function skipblank(io::IO)
     while !eof(io)
         c = read(io, Char)
         c == '\n' && (start = position(io); i+=1; continue)
+        c == '\r' && (start = position(io); i+=1; continue)
         c in whitespace || break
     end
     seek(io, start)

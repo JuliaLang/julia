@@ -773,6 +773,8 @@ function summarysize(obj::Array, seen, excl)
     return size
 end
 
+summarysize(s::String, seen, excl) = sizeof(Int) + sizeof(s)
+
 function summarysize(obj::SimpleVector, seen, excl)
     key = pointer_from_objref(obj)
     haskey(seen, key) ? (return 0) : (seen[key] = true)

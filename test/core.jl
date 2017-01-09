@@ -636,10 +636,6 @@ let
     @test !isdefined(a, :foo)
     @test !isdefined(2, :a)
 
-    @test  isdefined("a",:data)
-    @test  isdefined("a", 1)
-    @test !isdefined("a", 2)
-
     @test_throws TypeError isdefined(2)
 end
 
@@ -2228,13 +2224,6 @@ f9520c(::Any, ::Any, ::Any, ::Any, ::Any, ::Any, args...) = 46
 @test invoke(f9520b, Tuple{Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6) == 23
 @test invoke(f9520c, Tuple{Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6) == 46
 @test invoke(f9520c, Tuple{Any, Any, Any, Any, Any, Any, Any}, 1, 2, 3, 4, 5, 6, 7) == 46
-# Keep until the old signature of invoke is dropped.
-@test invoke(f9520a, (Any, Any), 1, 2) == 15
-@test invoke(f9520a, (Any, Any, Any), 1, 2, 3) == 15
-@test invoke(f9520b, (Any, Any, Any), 1, 2, 3) == 23
-@test invoke(f9520b, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 23
-@test invoke(f9520c, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 46
-@test invoke(f9520c, (Any, Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6, 7) == 46
 
 call_lambda1() = (()->x)(1)
 call_lambda2() = ((x)->x)()
@@ -3676,7 +3665,7 @@ f14245() = (v = []; push!(v, length(v)); v)
         return y
     end
 end
-foo9677(x::Array) = invoke(foo9677,(AbstractArray,),x)
+foo9677(x::Array) = invoke(foo9677, Tuple{AbstractArray}, x)
 @test foo9677(1:5) == foo9677(randn(3))
 
 # issue #6846
@@ -4007,7 +3996,7 @@ b = "aaa"
 c = [0x2, 0x1, 0x3]
 
 @test check_nul(a)
-@test check_nul(b.data)
+@test check_nul(Vector{UInt8}(b))
 @test check_nul(c)
 d = [0x2, 0x1, 0x3]
 @test check_nul(d)
@@ -4195,7 +4184,7 @@ end
 
 # issue #8712
 type Issue8712; end
-@test isa(invoke(Issue8712, ()), Issue8712)
+@test isa(invoke(Issue8712, Tuple{}), Issue8712)
 
 # issue #16089
 f16089(args...) = typeof(args)
@@ -4663,6 +4652,21 @@ catch e
     (e::ErrorException).msg
 end == "generated function body is not pure. this likely means it contains a closure or comprehension."
 
+let x = 1
+    global g18444
+    @noinline g18444(a) = (x += 1; a[])
+    f18444_1(a) = invoke(sin, Tuple{Int}, g18444(a))
+    f18444_2(a) = invoke(sin, Tuple{Integer}, g18444(a))
+    @test_throws ErrorException f18444_1(Ref{Any}(1.0))
+    @test x == 2
+    @test_throws ErrorException f18444_2(Ref{Any}(1.0))
+    @test x == 3
+    @test f18444_1(Ref{Any}(1)) === sin(1)
+    @test x == 4
+    @test f18444_2(Ref{Any}(1)) === sin(1)
+    @test x == 5
+end
+
 # issue #10981, long argument lists
 let a = fill(["sdf"], 2*10^6), temp_vcat(x...) = vcat(x...)
     # we introduce a new function `temp_vcat` to make sure there is no existing
@@ -4821,6 +4825,17 @@ end
 
 @test f14893() == 14893
 @test M14893.f14893() == 14893
+
+# issue #18725
+@test_nowarn eval(Main, :(begin
+    f18725(x) = 1
+    f18725(x) = 2
+end))
+@test Main.f18725(0) == 2
+@test_warn "WARNING: Method definition f18725(Any) in module Module18725" eval(Main, :(module Module18725
+    f18725(x) = 1
+    f18725(x) = 2
+end))
 
 # issue #19599
 f19599{T}(x::((S)->Vector{S})(T)...) = 1

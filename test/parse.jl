@@ -868,6 +868,9 @@ let ..(x,y) = x + y
     @test 3 .. 4 === 7
 end
 
+# issue #7669
+@test parse("@a(b=1, c=2)") == Expr(:macrocall, Symbol("@a"), :(b=1), :(c=2))
+
 # issue #19685
 let f = function (x; kw...)
             return (x, kw)
@@ -878,3 +881,23 @@ let f = function (x; kw...)
     @test f(1) == (1, Any[])
     @test g(1) == (1, 2)
 end
+
+# normalization of Unicode symbols (#19464)
+let ε=1, μ=2, x=3, î=4
+    # issue #5434 (mu vs micro):
+    @test parse("\u00b5") === parse("\u03bc")
+    @test µ == μ == 2
+    # NFC normalization of identifiers:
+    @test parse("\u0069\u0302") === parse("\u00ee")
+    @test î == 4
+    # latin vs greek ε (#14751)
+    @test parse("\u025B") === parse("\u03B5")
+    @test ɛ == ε == 1
+end
+
+# issue #8925
+let
+    global const (c8925, d8925) = (3, 4)
+end
+@test c8925 == 3 && isconst(:c8925)
+@test d8925 == 4 && isconst(:d8925)

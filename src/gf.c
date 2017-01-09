@@ -1181,16 +1181,18 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
     jl_method_t *method = (jl_method_t*)newentry->func.method;
     jl_module_t *newmod = method->module;
     jl_module_t *oldmod = oldvalue->module;
-    JL_STREAM *s = JL_STDERR;
-    jl_printf(s, "WARNING: Method definition ");
-    jl_static_show_func_sig(s, (jl_value_t*)newentry->sig);
-    jl_printf(s, " in module %s", jl_symbol_name(oldmod->name));
-    print_func_loc(s, oldvalue);
-    jl_printf(s, " overwritten");
-    if (oldmod != newmod)
-        jl_printf(s, " in module %s", jl_symbol_name(newmod->name));
-    print_func_loc(s, method);
-    jl_printf(s, ".\n");
+    if (newmod != jl_main_module || oldmod != jl_main_module) {
+        JL_STREAM *s = JL_STDERR;
+        jl_printf(s, "WARNING: Method definition ");
+        jl_static_show_func_sig(s, (jl_value_t*)newentry->sig);
+        jl_printf(s, " in module %s", jl_symbol_name(oldmod->name));
+        print_func_loc(s, oldvalue);
+        jl_printf(s, " overwritten");
+        if (oldmod != newmod)
+            jl_printf(s, " in module %s", jl_symbol_name(newmod->name));
+        print_func_loc(s, method);
+        jl_printf(s, ".\n");
+    }
 }
 
 static void update_max_args(jl_methtable_t *mt, jl_tupletype_t *type)
@@ -2220,11 +2222,10 @@ jl_value_t *jl_gf_invoke(jl_tupletype_t *types0, jl_value_t **args, size_t nargs
 {
     size_t world = jl_get_ptls_states()->world_age;
     jl_svec_t *tpenv = jl_emptysvec;
-    jl_tupletype_t *newsig = NULL;
     jl_tupletype_t *tt = NULL;
     jl_tupletype_t *types = NULL;
     jl_tupletype_t *sig = NULL;
-    JL_GC_PUSH5(&types, &tpenv, &newsig, &sig, &tt);
+    JL_GC_PUSH4(&types, &tpenv, &sig, &tt);
     jl_value_t *gf = args[0];
     types = (jl_datatype_t*)jl_argtype_with_function(gf, (jl_tupletype_t*)types0);
     jl_methtable_t *mt = jl_gf_mtable(gf);
@@ -2273,6 +2274,88 @@ jl_value_t *jl_gf_invoke(jl_tupletype_t *types0, jl_value_t **args, size_t nargs
     }
     JL_GC_POP();
     return jl_call_method_internal(mfunc, args, nargs);
+}
+
+typedef struct _tupletype_stack_t {
+    struct _tupletype_stack_t *parent;
+    jl_tupletype_t *tt;
+} tupletype_stack_t;
+
+static int tupletype_on_stack(jl_tupletype_t *tt, tupletype_stack_t *stack)
+{
+    while (stack) {
+        if (tt == stack->tt)
+            return 1;
+        stack = stack->parent;
+    }
+    return 0;
+}
+
+static int tupletype_has_datatype(jl_tupletype_t *tt, tupletype_stack_t *stack)
+{
+    for (int i = 0; i < jl_nparams(tt); i++) {
+        jl_value_t *ti = jl_tparam(tt, i);
+        if (ti == (jl_value_t*)jl_datatype_type)
+            return 1;
+        if (jl_is_tuple_type(ti)) {
+            jl_tupletype_t *tt1 = (jl_tupletype_t*)ti;
+            if (!tupletype_on_stack(tt1, stack) &&
+                tupletype_has_datatype(tt1, stack)) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+JL_DLLEXPORT jl_value_t *jl_get_invoke_lambda(jl_methtable_t *mt,
+                                              jl_typemap_entry_t *entry,
+                                              jl_tupletype_t *tt,
+                                              size_t world)
+{
+    if (!jl_is_leaf_type((jl_value_t*)tt) || tupletype_has_datatype(tt, NULL))
+        return jl_nothing;
+
+    jl_method_t *method = entry->func.method;
+    jl_typemap_entry_t *tm = NULL;
+    if (method->invokes.unknown != NULL) {
+        tm = jl_typemap_assoc_by_type(method->invokes, tt, NULL, 0, 1,
+                                      jl_cachearg_offset(mt), world);
+        if (tm) {
+            return (jl_value_t*)tm->func.linfo;
+        }
+    }
+
+    JL_LOCK(&method->writelock);
+    if (method->invokes.unknown != NULL) {
+        tm = jl_typemap_assoc_by_type(method->invokes, tt, NULL, 0, 1,
+                                      jl_cachearg_offset(mt), world);
+        if (tm) {
+            jl_method_instance_t *mfunc = tm->func.linfo;
+            JL_UNLOCK(&method->writelock);
+            return (jl_value_t*)mfunc;
+        }
+    }
+    jl_svec_t *tpenv = jl_emptysvec;
+    jl_tupletype_t *sig = NULL;
+    JL_GC_PUSH2(&tpenv, &sig);
+    if (entry->tvars != jl_emptysvec) {
+        jl_value_t *ti =
+            jl_lookup_match((jl_value_t*)tt, (jl_value_t*)entry->sig, &tpenv, entry->tvars);
+        assert(ti != (jl_value_t*)jl_bottom_type);
+        (void)ti;
+    }
+    sig = join_tsig(tt, entry->sig);
+    jl_method_t *func = entry->func.method;
+
+    if (func->invokes.unknown == NULL)
+        func->invokes.unknown = jl_nothing;
+
+    jl_method_instance_t *mfunc = cache_method(mt, &func->invokes, entry->func.value,
+                                               sig, tt, entry, world, tpenv, 1);
+    JL_GC_POP();
+    JL_UNLOCK(&method->writelock);
+    return (jl_value_t*)mfunc;
 }
 
 static jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, int iskw)

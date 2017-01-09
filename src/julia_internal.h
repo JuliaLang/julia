@@ -192,6 +192,8 @@ STATIC_INLINE void *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz)
     return jl_gc_alloc(ptls, sz, (void*)jl_buff_tag);
 }
 
+jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz);
+
 jl_code_info_t *jl_type_infer(jl_method_instance_t **li, size_t world, int force);
 jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, void *F, size_t world);
 jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t *src, size_t world, const jl_cgparams_t *params);
@@ -827,6 +829,7 @@ STATIC_INLINE void *jl_get_frame_addr(void)
 }
 
 JL_DLLEXPORT jl_array_t *jl_array_cconvert_cstring(jl_array_t *a);
+void jl_depwarn(const char *msg, jl_sym_t *sym);
 
 int isabspath(const char *in);
 

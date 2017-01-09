@@ -358,7 +358,8 @@ JL_CALLABLE(jl_f_sizeof)
     jl_value_t *x = args[0];
     if (jl_is_datatype(x)) {
         jl_datatype_t *dx = (jl_datatype_t*)x;
-        if (dx->name == jl_array_typename || dx == jl_symbol_type || dx == jl_simplevector_type)
+        if (dx->name == jl_array_typename || dx == jl_symbol_type || dx == jl_simplevector_type ||
+            dx == jl_string_type)
             jl_error("type does not have a canonical binary representation");
         if (!(dx->name->names == jl_emptysvec && jl_datatype_size(dx) > 0)) {
             // names===() and size > 0  =>  bitstype, size always known
@@ -367,9 +368,10 @@ JL_CALLABLE(jl_f_sizeof)
         }
         return jl_box_long(jl_datatype_size(x));
     }
-    if (jl_is_array(x)) {
+    if (jl_is_array(x))
         return jl_box_long(jl_array_len(x) * ((jl_array_t*)x)->elsize);
-    }
+    if (jl_is_string(x))
+        return jl_box_long(jl_string_len(x));
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
     assert(jl_is_datatype(dt));
     assert(!dt->abstract);
@@ -1021,7 +1023,9 @@ JL_CALLABLE(jl_f_invoke)
     jl_value_t *argtypes = args[1];
     JL_GC_PUSH1(&argtypes);
     if (jl_is_tuple(args[1])) {
-        // TODO: maybe deprecation warning, better checking
+        jl_depwarn("`invoke(f, (types...), ...)` is deprecated, "
+                   "use `invoke(f, Tuple{types...}, ...)` instead",
+                   jl_symbol("invoke"));
         argtypes = (jl_value_t*)jl_apply_tuple_type_v((jl_value_t**)jl_data_ptr(argtypes),
                                                       jl_nfields(argtypes));
     }
@@ -1228,6 +1232,9 @@ void jl_init_primitives(void)
     add_builtin("Int", (jl_value_t*)jl_int32_type);
 #endif
 
+    add_builtin("AbstractString", (jl_value_t*)jl_abstractstring_type);
+    add_builtin("String", (jl_value_t*)jl_string_type);
+
     add_builtin("ANY", jl_ANY_flag);
 }
 
@@ -1371,7 +1378,9 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, "nothing");
     }
     else if (vt == jl_string_type) {
-        n += jl_printf(out, "\"%s\"", jl_iostr_data(v));
+        n += jl_printf(out, "\"");
+        jl_uv_puts(out, jl_string_data(v), jl_string_len(v)); n += jl_string_len(v);
+        n += jl_printf(out, "\"");
     }
     else if (vt == jl_uniontype_type) {
         n += jl_show_svec(out, ((jl_uniontype_t*)v)->types, "Union", "{", "}");
@@ -1631,6 +1640,25 @@ JL_DLLEXPORT void jl_(void *jl_value)
 JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)
 {
     // put a breakpoint in your debugger here
+}
+
+void jl_depwarn(const char *msg, jl_sym_t *sym)
+{
+    static jl_value_t *depwarn_func = NULL;
+    if (!depwarn_func && jl_base_module) {
+        depwarn_func = jl_get_global(jl_base_module, jl_symbol("depwarn"));
+    }
+    if (!depwarn_func) {
+        jl_safe_printf("WARNING: %s\n", msg);
+        return;
+    }
+    jl_value_t **depwarn_args;
+    JL_GC_PUSHARGS(depwarn_args, 3);
+    depwarn_args[0] = depwarn_func;
+    depwarn_args[1] = jl_cstr_to_string(msg);
+    depwarn_args[2] = (jl_value_t*)sym;
+    jl_apply(depwarn_args, 3);
+    JL_GC_POP();
 }
 
 #ifdef __cplusplus

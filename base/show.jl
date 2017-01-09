@@ -294,7 +294,7 @@ end
 
 function show(io::IO, l::Core.MethodInstance)
     if isdefined(l, :def)
-        if l.def.isstaged && l === l.def.unspecialized
+        if l.def.isstaged && l === l.def.generator
             print(io, "MethodInstance generator for ")
             show(io, l.def)
         else
@@ -1630,6 +1630,9 @@ end
 
 show(io::IO, X::AbstractArray) = showarray(io, X, true)
 
+repremptyarray{T}(io::IO, X::Array{T}) = print(io, "Array{$T}(", join(size(X),','), ')')
+repremptyarray(io, X) = nothing # by default, we don't know this constructor
+
 function showarray(io::IO, X::AbstractArray, repr::Bool = true; header = true)
     if repr && ndims(X) == 1
         return show_vector(io, X, "[", "]")
@@ -1667,6 +1670,8 @@ function showarray(io::IO, X::AbstractArray, repr::Bool = true; header = true)
                         !repr)
             end
         end
+    elseif repr
+        repremptyarray(io, X)
     end
 end
 

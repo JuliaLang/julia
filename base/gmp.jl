@@ -532,8 +532,10 @@ hex(n::BigInt, pad::Int) = base(16, n, pad)
 
 function base(b::Integer, n::BigInt)
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
-    p = ccall((:__gmpz_get_str,:libgmp), Ptr{UInt8}, (Ptr{UInt8}, Cint, Ptr{BigInt}), C_NULL, b, &n)
-    unsafe_wrap(String, p, true)
+    nd = ndigits(n, b)
+    str = Base._string_n(n < 0 ? nd+1 : nd)
+    ccall((:__gmpz_get_str,:libgmp), Ptr{UInt8}, (Ptr{UInt8}, Cint, Ptr{BigInt}), str, b, &n)
+    return str
 end
 
 function base(b::Integer, n::BigInt, pad::Integer)
@@ -586,6 +588,9 @@ Base.checked_rem(a::BigInt, b::BigInt) = rem(a, b)
 Base.checked_fld(a::BigInt, b::BigInt) = fld(a, b)
 Base.checked_mod(a::BigInt, b::BigInt) = mod(a, b)
 Base.checked_cld(a::BigInt, b::BigInt) = cld(a, b)
+Base.add_with_overflow(a::BigInt, b::BigInt) = a + b, false
+Base.sub_with_overflow(a::BigInt, b::BigInt) = a - b, false
+Base.mul_with_overflow(a::BigInt, b::BigInt) = a * b, false
 
 function Base.deepcopy_internal(x::BigInt, stackdict::ObjectIdDict)
     if haskey(stackdict, x)
