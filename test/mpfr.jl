@@ -28,11 +28,11 @@ end
 
 @testset "Arithmetic" begin
     @testset "+" begin
-            x = BigFloat(12)
-            y = BigFloat(30)
-            @test x + y == BigFloat(42)
-            @test x + typemax(UInt128) == x + BigInt(typemax(UInt128))
-            @test x + typemax(Int128) == x + BigInt(typemax(Int128))
+        x = BigFloat(12)
+        y = BigFloat(30)
+        @test x + y == BigFloat(42)
+        @test x + typemax(UInt128) == x + BigInt(typemax(UInt128))
+        @test x + typemax(Int128) == x + BigInt(typemax(Int128))
     end
 
     @testset "-" begin
