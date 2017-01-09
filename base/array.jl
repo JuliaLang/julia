@@ -554,15 +554,17 @@ function push!(a::Array{Any,1}, item::ANY)
 end
 
 function append!{T}(a::Array{T,1}, items::AbstractVector)
-    n = length(items)
+    itemindices = eachindex(items)
+    n = length(itemindices)
     ccall(:jl_array_grow_end, Void, (Any, UInt), a, n)
-    copy!(a, length(a)-n+1, items, 1, n)
+    copy!(a, length(a)-n+1, items, first(itemindices), n)
     return a
 end
 
 append!(a::Vector, iter) = _append!(a, iteratorsize(iter), iter)
+push!(a::Vector, iter...) = append!(a, iter)
 
-function _append!(a, ::HasLength, iter)
+function _append!(a, ::Union{HasLength,HasShape}, iter)
     n = length(a)
     resize!(a, n+length(iter))
     @inbounds for (i,item) in zip(n+1:length(a), iter)
@@ -591,15 +593,40 @@ julia> prepend!([3],[1,2])
  3
 ```
 """
+function prepend! end
+
 function prepend!{T}(a::Array{T,1}, items::AbstractVector)
-    n = length(items)
+    itemindices = eachindex(items)
+    n = length(itemindices)
     ccall(:jl_array_grow_beg, Void, (Any, UInt), a, n)
     if a === items
         copy!(a, 1, items, n+1, n)
     else
-        copy!(a, 1, items, 1, n)
+        copy!(a, 1, items, first(itemindices), n)
     end
     return a
+end
+
+prepend!(a::Vector, iter) = _prepend!(a, iteratorsize(iter), iter)
+unshift!(a::Vector, iter...) = prepend!(a, iter)
+
+function _prepend!(a, ::Union{HasLength,HasShape}, iter)
+    n = length(iter)
+    ccall(:jl_array_grow_beg, Void, (Any, UInt), a, n)
+    i = 0
+    for item in iter
+        @inbounds a[i += 1] = item
+    end
+    a
+end
+function _prepend!(a, ::IteratorSize, iter)
+    n = 0
+    for item in iter
+        n += 1
+        unshift!(a, item)
+    end
+    reverse!(a, 1, n)
+    a
 end
 
 
