@@ -1522,4 +1522,7 @@ unsafe_wrap(::Type{String}, p::Cstring, len::Integer, own::Bool=false) =
 @deprecate finalize(sa::LibGit2.StrArrayStruct) close(sa)
 @deprecate finalize(sa::LibGit2.Buffer) close(sa)
 
+# Rename LibGit2.GitAnyObject to LibGit2.GitUnknownObject (part of #19839)
+eval(LibGit2, :(Base.@deprecate_binding GitAnyObject GitUnknownObject))
+
 # End deprecations scheduled for 0.6
