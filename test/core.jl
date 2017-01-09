@@ -4629,10 +4629,6 @@ using Base.Test
 io = IOBuffer()
 @test_throws ErrorException show(io, Sgnd(1))  #12007
 
-@test_throws ErrorException convert(Union{}, 1) #10326
-
-@test_throws ErrorException permutedims(rand(()), ()) #15736
-
 immutable MyTime <: Dates.TimeType
     value::Int
 end
