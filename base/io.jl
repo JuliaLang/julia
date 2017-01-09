@@ -171,9 +171,11 @@ readuntil(filename::AbstractString, args...) = open(io->readuntil(io, args...), 
     readline(filename::AbstractString, chomp::Bool=false)
 
 Read a single line of text from the given I/O stream or file (defaults to `STDIN`).
-Lines in the input can end in `'\\n'` or `'\\r\\n'`. When reading from a file, the text is
-assumed to be encoded in UTF-8. If `chomp=false` trailing newline character(s) will be included
-in the output (if reached before the end of the input); otherwise newline characters(s)
+Lines in the input can end in `'\\n'` or `"\\r\\n"`. When reading from a file, the text is
+assumed to be encoded in UTF-8.
+
+If `chomp=false` trailing newline character(s) will be included in the output
+(if reached before the end of the input); otherwise newline characters(s)
 are stripped from result.
 """
 function readline(filename::AbstractString, chomp = false)
@@ -187,12 +189,12 @@ function readline(s::IO=STDIN, chomp::Bool=false)
 
     line = readuntil(s, 0x0a)
     i = length(line)
-    if i < 1 || line[i] != 0x0a
-        return String(line[1:i])
+    if i == 0 || line[i] != 0x0a
+        return String(line)
     elseif i < 2 || line[i-1] != 0x0d
-        return String(line[1:i-1])
+        return String(resize!(line,i-1))
     else
-        return String(line[1:i-2])
+        return String(resize!(line,i-2))
     end
 end
 
@@ -201,9 +203,10 @@ end
     readlines(filename::AbstractString, chomp::Bool=false)
 
 Read all lines of an I/O stream or a file as a vector of strings.
-Lines in the input can end in `'\\n'` or `'\\r\\n'`.
-The text is assumed to be encoded in UTF-8. If `chomp=false`
-trailing newline character(s) will be included in the output;
+Lines in the input can end in `'\\n'` or `"\\r\\n"`.
+The text is assumed to be encoded in UTF-8.
+
+If `chomp=false` trailing newline character(s) will be included in the output;
 otherwise newline characters(s) are stripped from result.
 """
 function readlines(filename::AbstractString, chomp::Bool=false)
@@ -546,9 +549,10 @@ end
     eachline(filename::AbstractString,  chomp::Bool=false)
 
 Create an iterable object that will yield each line from an I/O stream or a file.
-Lines in the input can end in `'\\n'` or `'\\r\\n'`.
-The text is assumed to be encoded in UTF-8. If `chomp=false`
-trailing newline character(s) will be included in the output;
+Lines in the input can end in `'\\n'` or `"\\r\\n"`.
+The text is assumed to be encoded in UTF-8.
+
+If `chomp=false` trailing newline character(s) will be included in the output;
 otherwise newline characters(s) are stripped from result.
 """
 eachline(stream::IO, chomp::Bool=false) = EachLine(stream, chomp)
