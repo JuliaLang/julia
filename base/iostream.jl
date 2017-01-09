@@ -226,17 +226,7 @@ function readuntil(s::IOStream, delim::UInt8)
 end
 
 function readline(s::IOStream, chomp::Bool=false)
-    chomp || return ccall(:jl_readuntil, Ref{String}, (Ptr{Void}, UInt8, UInt8), s.ios, '\n', 1)
-
-    s = ccall(:jl_readuntil, Ref{String}, (Ptr{Void}, UInt8, UInt8), s.ios, '\n', 1)
-    i = endof(s)
-    if i < 1 || codeunit(s,i) != 0x0a
-        return s[1:i]
-    elseif i < 2 || codeunit(s,i-1) != 0x0d
-        return s[1:i-1]
-    else
-        return s[1:i-2]
-    end
+    ccall(:jl_readline, Ref{String}, (Ptr{Void}, UInt8), s.ios, chomp)
 end
 
 function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
