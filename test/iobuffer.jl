@@ -74,6 +74,12 @@ Base.compact(io)
 @test_throws ArgumentError seek(io,0)
 @test_throws ArgumentError truncate(io,0)
 @test readline(io) == "whipped cream\n"
+@test write(io,"pancakes\nwaffles\nblueberries\n") > 0
+@test readlines(io, true) == String["pancakes", "waffles", "blueberries"]
+write(io,"\n\r\n\n\r \n") > 0
+@test readlines(io, false) == String["\n", "\r\n", "\n", "\r \n"]
+write(io,"\n\r\n\n\r \n") > 0
+@test readlines(io, true) == String["", "", "", "\r "]
 Base.compact(io)
 @test position(io) == 0
 @test ioslength(io) == 0
