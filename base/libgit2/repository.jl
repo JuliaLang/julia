@@ -6,7 +6,7 @@ function GitRepo(path::AbstractString)
                 (Ptr{Ptr{Void}}, Cstring), repo_ptr_ptr, path)
     if err != Int(Error.GIT_OK)
         if repo_ptr_ptr[] != C_NULL
-            finalize(GitRepo(repo_ptr_ptr[]))
+            close(GitRepo(repo_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
@@ -21,7 +21,7 @@ function GitRepoExt(path::AbstractString, flags::Cuint = Cuint(Consts.REPOSITORY
                  repo_ptr_ptr, path, flags, separator)
     if err != Int(Error.GIT_OK)
         if repo_ptr_ptr[] != C_NULL
-            finalize(GitRepo(repo_ptr_ptr[]))
+            close(GitRepo(repo_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
@@ -46,7 +46,7 @@ function head_oid(repo::GitRepo)
     try
         return Oid(head_ref)
     finally
-        finalize(head_ref)
+        close(head_ref)
     end
 end
 
@@ -74,7 +74,7 @@ function revparse(repo::GitRepo, objname::AbstractString)
     err = ccall((:git_revparse_single, :libgit2), Cint,
             (Ptr{Ptr{Void}}, Ptr{Void}, Cstring), obj_ptr_ptr, repo.ptr, objname)
     err != 0 && return nothing
-    return GitUnknownObject(obj_ptr_ptr[])
+    return GitUnknownObject(repo, obj_ptr_ptr[])
 end
 
 """ Returns id of a found object """
@@ -82,11 +82,11 @@ function revparseid(repo::GitRepo, objname::AbstractString)
     obj = revparse(repo, objname)
     obj === nothing && return Oid()
     oid = Oid(obj.ptr)
-    finalize(obj)
+    close(obj)
     return oid
 end
 
-function get{T <: GitObject}(::Type{T}, r::GitRepo, oid::Oid, oid_size::Int=OID_HEXSZ)
+function get{T <: GitObject}(::Type{T}, repo::GitRepo, oid::Oid, oid_size::Int=OID_HEXSZ)
     id_ptr  = Ref(oid)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     git_otype = getobjecttype(T)
@@ -94,25 +94,25 @@ function get{T <: GitObject}(::Type{T}, r::GitRepo, oid::Oid, oid_size::Int=OID_
     err = if oid_size != OID_HEXSZ
         ccall((:git_object_lookup_prefix, :libgit2), Cint,
               (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}, Csize_t, Cint),
-              obj_ptr_ptr, r.ptr, id_ptr, Csize_t(oid_size), git_otype)
+              obj_ptr_ptr, repo.ptr, id_ptr, Csize_t(oid_size), git_otype)
     else
         ccall((:git_object_lookup, :libgit2), Cint,
               (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}, Cint),
-              obj_ptr_ptr, r.ptr, id_ptr, git_otype)
+              obj_ptr_ptr, repo.ptr, id_ptr, git_otype)
     end
     if err == Int(Error.ENOTFOUND)
         return nothing
     elseif err != Int(Error.GIT_OK)
         if obj_ptr_ptr[] != C_NULL
-            finalize(GitUnknownObject(obj_ptr_ptr[]))
+            close(GitUnknownObject(repo, obj_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
-    return T(obj_ptr_ptr[])
+    return T(repo, obj_ptr_ptr[])
 end
 
-function get{T <: GitObject}(::Type{T}, r::GitRepo, oid::AbstractString)
-    return get(T, r, Oid(oid), length(oid))
+function get{T <: GitObject}(::Type{T}, repo::GitRepo, oid::AbstractString)
+    return get(T, repo, Oid(oid), length(oid))
 end
 
 function gitdir(repo::GitRepo)
@@ -134,11 +134,11 @@ function peel(obj::GitObject, obj_type::Cint)
         return Oid()
     elseif err != Int(Error.GIT_OK)
         if peeled_ptr_ptr[] != C_NULL
-            finalize(GitUnknownObject(peeled_ptr_ptr[]))
+            close(GitUnknownObject(obj.repo, peeled_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
-    return git_otype(peeled_ptr_ptr[])
+    return git_otype(obj.repo, peeled_ptr_ptr[])
 end
 
 peel{T <: GitObject}(::Type{T}, obj::GitObject) = peel(obj, getobjecttype(T))

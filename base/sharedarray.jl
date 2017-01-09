@@ -411,14 +411,14 @@ function serialize(s::AbstractSerializer, S::SharedArray)
 end
 
 function deserialize{T,N}(s::AbstractSerializer, t::Type{SharedArray{T,N}})
-    S = invoke(deserialize, Tuple{AbstractSerializer, DataType}, s, t)
+    S = invoke(deserialize, Tuple{AbstractSerializer,DataType}, s, t)
     init_loc_flds(S, true)
     S
 end
 
 function show(io::IO, S::SharedArray)
     if length(S.s) > 0
-        invoke(show, (IO, DenseArray), io, S)
+        invoke(show, Tuple{IO,DenseArray}, io, S)
     else
         show(io, remotecall_fetch(sharr->sharr.s, S.pids[1], S))
     end
@@ -426,7 +426,7 @@ end
 
 function show(io::IO, mime::MIME"text/plain", S::SharedArray)
     if length(S.s) > 0
-        invoke(show, (IO, MIME"text/plain", DenseArray), io, MIME"text/plain"(), S)
+        invoke(show, Tuple{IO,MIME"text/plain",DenseArray}, io, MIME"text/plain"(), S)
     else
         # retrieve from the first worker mapping the array.
         println(io, summary(S), ":")

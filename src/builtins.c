@@ -1023,7 +1023,9 @@ JL_CALLABLE(jl_f_invoke)
     jl_value_t *argtypes = args[1];
     JL_GC_PUSH1(&argtypes);
     if (jl_is_tuple(args[1])) {
-        // TODO: maybe deprecation warning, better checking
+        jl_depwarn("`invoke(f, (types...), ...)` is deprecated, "
+                   "use `invoke(f, Tuple{types...}, ...)` instead",
+                   jl_symbol("invoke"));
         argtypes = (jl_value_t*)jl_apply_tuple_type_v((jl_value_t**)jl_data_ptr(argtypes),
                                                       jl_nfields(argtypes));
     }
@@ -1638,6 +1640,25 @@ JL_DLLEXPORT void jl_(void *jl_value)
 JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)
 {
     // put a breakpoint in your debugger here
+}
+
+void jl_depwarn(const char *msg, jl_sym_t *sym)
+{
+    static jl_value_t *depwarn_func = NULL;
+    if (!depwarn_func && jl_base_module) {
+        depwarn_func = jl_get_global(jl_base_module, jl_symbol("depwarn"));
+    }
+    if (!depwarn_func) {
+        jl_safe_printf("WARNING: %s\n", msg);
+        return;
+    }
+    jl_value_t **depwarn_args;
+    JL_GC_PUSHARGS(depwarn_args, 3);
+    depwarn_args[0] = depwarn_func;
+    depwarn_args[1] = jl_cstr_to_string(msg);
+    depwarn_args[2] = (jl_value_t*)sym;
+    jl_apply(depwarn_args, 3);
+    JL_GC_POP();
 }
 
 #ifdef __cplusplus

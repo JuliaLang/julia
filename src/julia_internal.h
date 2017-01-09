@@ -829,6 +829,7 @@ STATIC_INLINE void *jl_get_frame_addr(void)
 }
 
 JL_DLLEXPORT jl_array_t *jl_array_cconvert_cstring(jl_array_t *a);
+void jl_depwarn(const char *msg, jl_sym_t *sym);
 
 int isabspath(const char *in);
 
