@@ -26,12 +26,13 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
 import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
              max, min, minmax, ^, exp2, muladd,
-             exp10, expm1, log1p,
-             sign_mask, exponent_mask, exponent_one, exponent_half,
-             significand_mask, significand_bits, exponent_bits, exponent_bias
+             exp10, expm1, log1p
 
+using Base: sign_mask, exponent_mask, exponent_one, exponent_bias,
+            exponent_half, exponent_max, exponent_raw_max, fpinttype,
+            significand_mask, significand_bits, exponent_bits
 
-import Core.Intrinsics: sqrt_llvm, box, unbox, powi_llvm
+using Core.Intrinsics: sqrt_llvm, box, unbox, powi_llvm
 
 # non-type specific math functions
 
@@ -223,13 +224,6 @@ Compute the inverse hyperbolic sine of `x`.
 asinh(x)
 
 """
-    exp(x)
-
-Compute ``e^x``.
-"""
-exp(x)
-
-"""
     erf(x)
 
 Compute the error function of `x`, defined by ``\\frac{2}{\\sqrt{\\pi}} \\int_0^x e^{-t^2} dt``
@@ -250,13 +244,16 @@ erfc(x)
 Accurately compute ``e^x-1``.
 """
 expm1(x)
-for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2, :expm1)
+for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :erf, :erfc, :exp2, :expm1)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
         ($f)(x::Real) = ($f)(float(x))
     end
 end
+# pure julia exp function
+include("special/exp.jl")
+exp(x::Real) = exp(float(x))
 
 # fallback definitions to prevent infinite loop from $f(x::Real) def above
 
@@ -530,11 +527,11 @@ function ldexp{T<:AbstractFloat}(x::T, e::Integer)
     n = e % Int
     k += n
     # overflow, if k is larger than maximum posible exponent
-    if k >= Int(exponent_mask(T) >> significand_bits(T))
+    if k >= exponent_raw_max(T)
         return flipsign(T(Inf), x)
     end
     if k > 0 # normal case
-        xu = (xu & ~exponent_mask(T)) | (k % typeof(xu) << significand_bits(T))
+        xu = (xu & ~exponent_mask(T)) | (rem(k, fpinttype(T)) << significand_bits(T))
         return reinterpret(T, xu)
     else # subnormal case
         if k <= -significand_bits(T) # underflow
@@ -544,7 +541,7 @@ function ldexp{T<:AbstractFloat}(x::T, e::Integer)
         end
         k += significand_bits(T)
         z = T(2.0)^-significand_bits(T)
-        xu = (xu & ~exponent_mask(T)) | (k % typeof(xu) << significand_bits(T))
+        xu = (xu & ~exponent_mask(T)) | (rem(k, fpinttype(T)) << significand_bits(T))
         return z*reinterpret(T, xu)
     end
 end
