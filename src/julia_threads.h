@@ -182,6 +182,8 @@ static inline unsigned long JL_CONST_FUNC jl_thread_self(void)
     __sync_val_compare_and_swap(obj, expected, desired)
 #  define jl_atomic_exchange(obj, desired)              \
     __atomic_exchange_n(obj, desired, __ATOMIC_SEQ_CST)
+#  define jl_atomic_exchange_relaxed(obj, desired)      \
+    __atomic_exchange_n(obj, desired, __ATOMIC_RELAXED)
 // TODO: Maybe add jl_atomic_compare_exchange_weak for spin lock
 #  define jl_atomic_store(obj, val)                     \
     __atomic_store_n(obj, val, __ATOMIC_SEQ_CST)
@@ -283,6 +285,7 @@ jl_atomic_exchange(volatile T *obj, T2 val)
 {
     return _InterlockedExchange64((volatile __int64*)obj, (__int64)val);
 }
+#define jl_atomic_exchange_relaxed(obj, val) jl_atomic_exchange(obj, val)
 // atomic stores
 template<typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 1>::type
