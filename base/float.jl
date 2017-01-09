@@ -703,32 +703,22 @@ end
     realmin() = realmin(Float64)
     realmax() = realmax(Float64)
 
-    #eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= realmin(x) ? ldexp(eps(typeof(x)),exponent(x)) : nextfloat(zero(x)) : oftype(x,NaN)
-    # eps(::Type{Float16}) = $(box(Float16,unbox(UInt16,0x1400)))
-    # eps(::Type{Float32}) = $(box(Float32,unbox(UInt32,0x34000000)))
-    # eps(::Type{Float64}) = $(box(Float64,unbox(UInt64,0x3cb0000000000000)))
+end
 
-    function myeps(x::AbstractFloat)
+function eps(x::AbstractFloat)
     if isfinite(x)
-
-        if abs(x) >= realmin(x)
-            # ldexp(eps(typeof(x)), exponent(x))
-
-            ldexp(2.0, -precision(x) + exponent(x))
-
+        if abs(x) >= realmin(x)  # normal
+            oftype(x, ldexp(2.0, exponent(x) - precision(x)))
         else
-            nextfloat(zero(x))
+            oftype(x, nextfloat(zero(x)))   # subnormal
         end
-
     else
         oftype(x, NaN)
-
     end
 end
 
-
-    eps() = eps(Float64)
-end
+eps{T<:AbstractFloat}(::Type{T}) = eps(one(T))
+eps() = eps(Float64)
 
 ## byte order swaps for arbitrary-endianness serialization/deserialization ##
 bswap(x::Float32) = box(Float32,bswap_int(unbox(Float32,x)))
