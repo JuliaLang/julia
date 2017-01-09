@@ -229,6 +229,17 @@ function readline(s::IOStream)
     ccall(:jl_readuntil, Ref{String}, (Ptr{Void}, UInt8, UInt8), s.ios, '\n', 1)
 end
 
+"""
+    readuntil_string(s::IO, delim::UInt8)
+
+Like `readuntil(s, delim)`, but returns a `String` rather than
+a `Vector{UInt8}`.
+"""
+readuntil_string(s::IO, delim::UInt8) = String(readuntil(s, delim))
+function readuntil_string(s::IOStream, delim::UInt8)
+    ccall(:jl_readuntil, Ref{String}, (Ptr{Void}, UInt8, UInt8), s.ios, delim, 1)
+end
+
 function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
     olb = lb = length(b)
     nr = 0
