@@ -919,6 +919,11 @@ end
 setprecision(f::Function, precision::Integer) = setprecision(f, BigFloat, precision)
 
 function string(x::BigFloat)
+
+    if isnan(x) || isinf(x)
+        return string("BigFloat(", Float64(x), ", ", precision(x), ")")
+    end
+
     # In general, the number of decimal places needed to read back the number exactly
     # is, excluding the most significant, ceil(log(10, 2^precision(x)))
     k = ceil(Int32, precision(x) * 0.3010299956639812)

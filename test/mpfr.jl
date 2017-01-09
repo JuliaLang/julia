@@ -896,3 +896,9 @@ for prec in (10, 100, 1000)
         end
     end
 end
+
+setprecision(256) do
+    @test string(big(Inf)) == "BigFloat(Inf, 256)"
+    @test string(big(-Inf)) == "BigFloat(-Inf, 256)"
+    @test string(big(NaN)) == "BigFloat(Inf, 256)"
+end
