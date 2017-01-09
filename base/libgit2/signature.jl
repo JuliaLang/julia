@@ -16,14 +16,14 @@ function Signature(name::AbstractString, email::AbstractString)
                  (Ptr{Ptr{SignatureStruct}}, Cstring, Cstring), sig_ptr_ptr, name, email)
     sig = GitSignature(sig_ptr_ptr[])
     s = Signature(sig.ptr)
-    finalize(sig)
+    close(sig)
     return s
 end
 
 function Signature(repo::GitRepo)
     sig = default_signature(repo)
     s = Signature(sig.ptr)
-    finalize(sig)
+    close(sig)
     return s
 end
 

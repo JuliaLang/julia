@@ -176,7 +176,7 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
         catch err
             print_with_color(Base.error_color(), io, " broken-repo (unregistered)")
         finally
-            finalize(prepo)
+            close(prepo)
         end
     else
         print_with_color(Base.warn_color(), io, "non-repo (unregistered)")
@@ -330,10 +330,10 @@ function pin(pkg::AbstractString, head::AbstractString)
                 # switch head to the branch
                 LibGit2.head!(repo, ref)
             finally
-                finalize(ref)
+                close(ref)
             end
         finally
-            finalize(commit)
+            close(commit)
         end
     end
     should_resolve && resolve()
