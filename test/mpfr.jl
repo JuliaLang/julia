@@ -1,35 +1,43 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 import Base.MPFR
-# constructors
-setprecision(53) do
-    x = BigFloat()
-    x = BigFloat(12)
-end
-x = BigFloat(12)
-y = BigFloat(x)
-@test x ≈ y
-y = BigFloat(0xc)
-@test x ≈ y
-y = BigFloat(12.)
-@test x ≈ y
-y = BigFloat(BigInt(12))
-@test x ≈ y
-y = BigFloat(BigFloat(12))
-@test x ≈ y
-y = parse(BigFloat,"12")
-@test x ≈ y
-y = BigFloat(Float32(12.))
-@test x ≈ y
-y = BigFloat(12//1)
-@test x ≈ y
 
-# +
-x = BigFloat(12)
-y = BigFloat(30)
-@test x + y == BigFloat(42)
-@test x + typemax(UInt128) == x + BigInt(typemax(UInt128))
-@test x + typemax(Int128) == x + BigInt(typemax(Int128))
+
+@testset "BigFloat constructors" begin
+    setprecision(53) do
+        x = BigFloat()
+        x = BigFloat(12)
+    end
+    x = BigFloat(12)
+    y = BigFloat(x)
+    @test x ≈ y
+    y = BigFloat(0xc)
+    @test x ≈ y
+    y = BigFloat(12.)
+    @test x ≈ y
+    y = BigFloat(BigInt(12))
+    @test x ≈ y
+    y = BigFloat(BigFloat(12))
+    @test x ≈ y
+    y = parse(BigFloat,"12")
+    @test x ≈ y
+    y = BigFloat(Float32(12.))
+    @test x ≈ y
+    y = BigFloat(12//1)
+    @test x ≈ y
+end
+
+@testset "Arithmetic" begin
+    @testset "+" begin
+        x = BigFloat(12)
+        y = BigFloat(30)
+        @test x + y == BigFloat(42)
+        @test x + typemax(UInt128) == x + BigInt(typemax(UInt128))
+        @test x + typemax(Int128) == x + BigInt(typemax(Int128))
+
+        #@test x + x == 10
+    end
+end
 
 # -
 x = BigFloat(12)
