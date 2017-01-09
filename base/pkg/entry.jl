@@ -158,15 +158,14 @@ status(io::IO, pkg::AbstractString) = status(io, pkgname = pkg)
 function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
     @printf io " - %-29s " pkg
     fix || return println(io,ver)
-    @printf io "%-19s" ver
+    @printf io "%-9s" ver
     if ispath(pkg,".git")
         prepo = GitRepo(pkg)
         try
             with(LibGit2.head(prepo)) do phead
+                print(io, string(LibGit2.Oid(phead))[1:8], "  ")
                 if LibGit2.isattached(prepo)
                     print(io, LibGit2.shortname(phead))
-                else
-                    print(io, string(LibGit2.Oid(phead))[1:8])
                 end
             end
             attrs = AbstractString[]
