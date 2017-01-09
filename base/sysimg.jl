@@ -23,6 +23,7 @@ eval(x) = Core.eval(Base, x)
 eval(m, x) = Core.eval(m, x)
 (::Type{T}){T}(arg) = convert(T, arg)::T
 (::Type{VecElement{T}}){T}(arg) = VecElement{T}(convert(T, arg))
+(::Type{Union{}})(arg) = error("cannot convert type ", typeof(arg), " to Union{}")
 convert{T<:VecElement}(::Type{T}, arg) = T(arg)
 convert{T<:VecElement}(::Type{T}, arg::T) = arg
 

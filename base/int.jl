@@ -72,7 +72,7 @@ signbit(x::Unsigned) = false
 
 flipsign{T<:BitSigned}(x::T, y::T) = box(T,flipsign_int(unbox(T,x),unbox(T,y)))
 
-flipsign(x::Signed, y::Signed)  = convert(typeof(x), flipsign(promote(x,y)...))
+flipsign(x::Signed, y::Signed)  = convert(typeof(x), flipsign(promote_noncircular(x,y)...))
 flipsign(x::Signed, y::Float16) = flipsign(x, reinterpret(Int16,y))
 flipsign(x::Signed, y::Float32) = flipsign(x, reinterpret(Int32,y))
 flipsign(x::Signed, y::Float64) = flipsign(x, reinterpret(Int64,y))
