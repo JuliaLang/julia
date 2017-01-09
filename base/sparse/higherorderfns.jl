@@ -21,8 +21,9 @@ using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseArray, indtyp
 # (6) Define general _map_[not]zeropres! capable of handling >2 (input) sparse vectors/matrices.
 # (7) Define _broadcast_[not]zeropres! specialized for a pair of (input) sparse vectors/matrices.
 # (8) Define general _broadcast_[not]zeropres! capable of handling >2 (input) sparse vectors/matrices.
-# (9) Define methods handling combinations of broadcast scalars and sparse vectors/matrices.
-# (10) Define methods handling combinations of scalars, sparse vectors/matrices, and structured matrices.
+# (9) Define (broadcast[!]) methods handling combinations of broadcast scalars and sparse vectors/matrices.
+# (10) Define (broadcast[!]) methods handling combinations of scalars, sparse vectors/matrices, and structured matrices.
+# (11) Define (map[!]) methods handling combinations of sparse and structured matrices.
 
 
 # (1) The definitions below provide a common interface to sparse vectors and matrices
@@ -926,5 +927,15 @@ promote_containertype(::Type{Tuple}, ::Type{StructuredArray}) = Array
 @inline _sparsifystructured(D::Diagonal) = SparseMatrixCSC(D)
 @inline _sparsifystructured(A::AbstractSparseArray) = A
 @inline _sparsifystructured(x) = x
+
+
+# (11) map[!] over combinations of sparse and structured matrices
+StructuredMatrix = Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}
+SparseOrStructuredMatrix = Union{SparseMatrixCSC,StructuredMatrix}
+map{Tf}(f::Tf, A::StructuredMatrix) = _noshapecheck_map(f, _sparsifystructured(A))
+map{Tf,N}(f::Tf, A::SparseOrStructuredMatrix, Bs::Vararg{SparseOrStructuredMatrix,N}) =
+    (_checksameshape(A, Bs...); _noshapecheck_map(f, _sparsifystructured(A), map(_sparsifystructured, Bs)...))
+map!{Tf,N}(f::Tf, C::SparseMatrixCSC, A::SparseOrStructuredMatrix, Bs::Vararg{SparseOrStructuredMatrix,N}) =
+    (_checksameshape(C, A, Bs...); _noshapecheck_map!(f, C, _sparsifystructured(A), map(_sparsifystructured, Bs)...))
 
 end
