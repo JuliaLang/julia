@@ -112,7 +112,7 @@ function get{T <: GitObject}(::Type{T}, repo::GitRepo, oid::GitHash, oid_size::I
 end
 
 function get{T <: GitObject}(::Type{T}, repo::GitRepo, oid::AbstractString)
-    return get(T, r, GitHash(oid), length(oid))
+    return get(T, repo, GitHash(oid), length(oid))
 end
 
 function gitdir(repo::GitRepo)
