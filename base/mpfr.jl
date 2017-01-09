@@ -67,8 +67,7 @@ type BigFloat <: AbstractFloat
     exp::Clong
     d::Ptr{Limb}
 
-    function BigFloat()
-        prec = precision(BigFloat)
+    function BigFloat(; prec=precision(BigFloat))
         z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)
         ccall((:mpfr_init2,:libmpfr), Void, (Ptr{BigFloat}, Clong), &z, prec)
         finalizer(z, cglobal((:mpfr_clear, :libmpfr)))
@@ -873,7 +872,7 @@ iszero(x::BigFloat) = x == Clong(0)
 @eval typemin(::Type{BigFloat}) = $(BigFloat(-Inf))
 
 function nextfloat(x::BigFloat)
-    z = BigFloat()
+    z = BigFloat(prec=precision(x))
     ccall((:mpfr_set, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32),
           &z, &x, ROUNDING_MODE[])
     ccall((:mpfr_nextabove, :libmpfr), Int32, (Ptr{BigFloat},), &z) != 0
@@ -881,7 +880,7 @@ function nextfloat(x::BigFloat)
 end
 
 function prevfloat(x::BigFloat)
-    z = BigFloat()
+    z = BigFloat(prec=precision(x))
     ccall((:mpfr_set, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32),
           &z, &x, ROUNDING_MODE[])
     ccall((:mpfr_nextbelow, :libmpfr), Int32, (Ptr{BigFloat},), &z) != 0
