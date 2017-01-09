@@ -48,11 +48,11 @@ Please check the list below for the specific syntax you need.
 
 Currently, the `@compat` macro supports the following syntaxes:
 
-* `@compat foo.:bar` - `foo.(:bar)` in 0.4 ([#15032]).
+* `@compat foo.:bar` — `foo.(:bar)` in 0.4 ([#15032])
 
-* `@compat f.(args...)` - `broadcast(f, args...)` in 0.4 ([#15032]).
+* `@compat f.(args...)` — `broadcast(f, args...)` in 0.4 ([#15032])
 
-* `@compat (a::B{T}){T}(c) = d` - the Julia 0.5-style call overload.
+* `@compat (a::B{T}){T}(c) = d` — the Julia 0.5-style call overload
 
 * `@compat(get(io, s, false))`, with `s` equal to `:limit`, `:compact` or `:multiline`, to detect the corresponding print settings (performs useful work only on Julia 0.5, defaults to `false` otherwise)
 
@@ -60,40 +60,43 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@compat @boundscheck checkbounds(...)` rewrites to unconditionally call `checkbounds(...)` in 0.4.  The 0.4-style two-argument form of `@boundscheck` is left unchanged.
 
-* `@compat Nullable(value, hasvalue)` to handle the switch from the `Nullable` `:isnull` field to `:hasvalue` field. [#18510](https://github.com/JuliaLang/julia/pull/18510)
+* `@compat Nullable(value, hasvalue)` to handle the switch from the `Nullable` `:isnull` field to `:hasvalue` field ([#18510])
 
-* `@compat x .= y` converts to an in-place assignment to `x` (via `broadcast!`) [#17510](https://github.com/JuliaLang/julia/pull/17510).
+* `@compat x .= y` converts to an in-place assignment to `x` (via `broadcast!`) ([#17510]).
   However, beware that `.=` in Julia 0.4 has the precedence of `==`, not of assignment `=`, so if the right-hand-side `y`
   includes expressions with lower precedence than `==` you should enclose it in parentheses `x .= (y)` to ensure the
   correct order of evaluation.
 
 ## Type Aliases
 
-* `String` has undergone multiple changes: in Julia 0.3 it was an abstract type and then got renamed to `AbstractString` in 0.4; in 0.5, `ASCIIString` and `ByteString` were deprecated, and `UTF8String` was renamed to the (now concrete) type `String`.
+* In 0.5, `ASCIIString` and `ByteString` were deprecated, and `UTF8String` was renamed to the (now concrete) type `String`.
 
-    Compat provides unexported `Compat.UTF8String` and `Compat.ASCIIString` type aliases which are equivalent to the same types from Base on Julia 0.4, but to `String` on Julia 0.5. In most cases, using these types by calling `import Compat: UTF8String, ASCIIString` should be enough. Though note that `Compat.ASCIIString` does **not** guarantee that the string only contains ASCII characters on Julia 0.5: call `isascii` to check if the string is pure ASCII if needed.
+    Compat provides unexported `Compat.UTF8String` and `Compat.ASCIIString` type aliases which are equivalent to the same types from Base on Julia 0.4, but to `String` on Julia 0.5. In most cases, using these types by calling `import Compat: UTF8String, ASCIIString` should be enough. Note that `Compat.ASCIIString` does **not** guarantee that the string only contains ASCII characters on Julia 0.5: call `isascii` to check if the string is pure ASCII if needed.
 
     Compat also provides an unexported `Compat.String` type which is equivalent to `ByteString` on Julia 0.4, and to `String` on Julia 0.5. This type should be used only in places where `ByteString` was used on Julia 0.4, i.e. where either `ASCIIString` or `UTF8String` should be accepted. It should **not** be used as the default type for variables or fields holding strings, as it introduces type-instability in Julia 0.4: use `Compat.UTF8String` or `Compat.ASCIIString` instead.
 
 * `bytestring` has been replaced in most cases with additional `String` construction methods; for 0.4 compatibility, the usage involves replacing `bytestring(args...)` with `Compat.String(args...)`. However, for converting a `Ptr{UInt8}` to a string, use the new `unsafe_string(...)` method to make a copy or `unsafe_wrap(String, ...)` to avoid a copy.
 
-## New functions
+## New functions and methods
 
-* `foreach`, similar to `map` but when the return value is not needed ([#13744](https://github.com/JuliaLang/julia/pull/13774)).
+* `foreach`, similar to `map` but when the return value is not needed ([#13744])
 
-* `walkdir`, returns an iterator that walks the directory tree of a directory. ([#13707](https://github.com/JuliaLang/julia/pull/13707))
+* `walkdir`, returns an iterator that walks the directory tree of a directory ([#13707])
 
-* `allunique`, checks whether all elements in an iterable appear only once ([#15914](https://github.com/JuliaLang/julia/pull/15914)).
-* `Base.promote_eltype_op` is available as `Compat.promote_eltype_op`; however, in Julia 0.3, results may be inaccurate.
+* `allunique`, checks whether all elements in an iterable appear only once ([#15914])
 
-* [`normalize`](http://docs.julialang.org/en/latest/stdlib/linalg/?highlight=normalize#Base.normalize) and [`normalize!`](http://docs.julialang.org/en/latest/stdlib/linalg/?highlight=normalize#Base.normalize!), normalizes a vector with respect to the p-norm ([#13681](https://github.com/JuliaLang/julia/pull/13681))
+* `Base.promote_eltype_op` is available as `Compat.promote_eltype_op`
 
-* `redirect_stdout`, `redirect_stderr`, and `redirect_stdin` take an optional function as a first argument, `redirect_std*(f, stream)`, so that one may use `do` block syntax (as first available for Julia 0.6).
+* [`normalize`](http://docs.julialang.org/en/latest/stdlib/linalg/?highlight=normalize#Base.normalize) and [`normalize!`](http://docs.julialang.org/en/latest/stdlib/linalg/?highlight=normalize#Base.normalize!), normalizes a vector with respect to the p-norm ([#13681])
 
-* `unsafe_get` returns the `:value` field of a `Nullable` object without any null-check and has a generic fallback for non-`Nullable` argument. [#18484](https://github.com/JuliaLang/julia/pull/18484) (Also, `isnull` has a generic fallback for non-`Nullable` argument.)
+* `redirect_stdout`, `redirect_stderr`, and `redirect_stdin` take an optional function as a first argument, `redirect_std*(f, stream)`, so that one may use `do` block syntax (as first available for Julia 0.6)
+
+* `unsafe_get` returns the `:value` field of a `Nullable` object without any null-check and has a generic fallback for non-`Nullable` argument ([#18484])
+
+* `isnull` has a generic fallback for non-`Nullable` argument
 
 * `transcode` converts between UTF-xx string encodings in Julia 0.5 (as a lightweight
-   alternative to the LegacyStrings package), [#17323](https://github.com/JuliaLang/julia/pull/17323).
+   alternative to the LegacyStrings package) ([#17323])
 
 * `∘` (typically used infix as `f ∘ g`) for function composition can be used in 0.5 and earlier. [#17155](https://github.com/JuliaLang/julia/pull/17155)
 
@@ -101,79 +104,76 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 ## Renamed functions
 
-* `pointer_to_array` and `pointer_to_string` have been replaced with `unsafe_wrap(Array, ...)` and `unsafe_wrap(String, ...)` respectively.
+* `pointer_to_array` and `pointer_to_string` have been replaced with `unsafe_wrap(Array, ...)` and `unsafe_wrap(String, ...)` respectively
 
-* `bytestring(::Ptr, ...)` has been replaced with `unsafe_string`.
+* `bytestring(::Ptr, ...)` has been replaced with `unsafe_string`
 
-* `super` is now `supertype` [#14338](https://github.com/JuliaLang/julia/pull/14338)
+* `super` is now `supertype` ([#14338])
 
 * `qr(A, pivot=b)` is now `qr(A, Val{b})`, likewise for `qrfact` and `qrfact!`
 
-* `readall` and `readbytes` are now `readstring` and `read` [#14660](https://github.com/JuliaLang/julia/pull/14660)
+* `readall` and `readbytes` are now `readstring` and `read` ([#14660])
 
 * `get_bigfloat_precision` is now `precision(BigFloat)`, `set_precision` is `setprecision` and `with_bigfloat_precision` is now also `setprecision`
-[#13232](https://github.com/JuliaLang/julia/pull/13232)
+([#13232])
 
-* `get_rounding` is now `rounding`. `set_rounding` and `with_rounding` are now `setrounding` [#13232](https://github.com/JuliaLang/julia/pull/13232)
+* `get_rounding` is now `rounding`. `set_rounding` and `with_rounding` are now `setrounding` ([#13232])
 
-*  `Base.tty_size` (which was not exported) is now `displaysize` in Julia 0.5.
+*  `Base.tty_size` (which was not exported) is now `displaysize` in Julia 0.5
 
-* `Compat.LinAlg.checksquare` [#14601](https://github.com/JuliaLang/julia/pull/14601)
+* `Compat.LinAlg.checksquare` ([#14601])
 
-* `issym` is now `issymmetric` [#15192](https://github.com/JuliaLang/julia/pull/15192)
+* `issym` is now `issymmetric` ([#15192])
 
-* `istext` is now `istextmime` [#15708](https://github.com/JuliaLang/julia/pull/15708)
+* `istext` is now `istextmime` ([#15708])
 
-* `symbol` is now `Symbol` [#16154](https://github.com/JuliaLang/julia/pull/16154); use `@compat Symbol(...)` if you need Julia 0.3 compatibility.
+* `symbol` is now `Symbol` ([#16154])
 
-* `write(::IO, ::Ptr, len)` is now `unsafe_write` [#14766](https://github.com/JuliaLang/julia/pull/14766).
+* `write(::IO, ::Ptr, len)` is now `unsafe_write` ([#14766])
 
-* `slice` is now `view`[#16972](https://github.com/JuliaLang/julia/pull/16972) do `import Compat.view` and then use `view` normally without the `@compat` macro.
+* `slice` is now `view` ([#16972]); do `import Compat.view` and then use `view` normally without the `@compat` macro
 
-* `fieldoffsets` has been deprecated in favor of `fieldoffset`[#14777](https://github.com/JuliaLang/julia/pull/14777).
+* `fieldoffsets` has been deprecated in favor of `fieldoffset` ([#14777])
 
-* `print_escaped` is now another method of `escape_string`, `print_unescaped` a method of `unescape_string`, and `print_joined` a method of `join`. [#16603](https://github.com/JuliaLang/julia/pull/16603)
+* `print_escaped` is now another method of `escape_string`, `print_unescaped` a method of `unescape_string`, and `print_joined` a method of `join` ([#16603])
 
-* `writemime` has been merged into `show` [#16563](https://github.com/JuliaLang/julia/pull/16563). Note that to extend this function requires `@compat`; see the [Supported Syntax](#supported-syntax) section for more information.
+* `writemime` has been merged into `show` ([#16563]). Note that to extend this function requires `@compat`; see the [Supported Syntax](#supported-syntax) section for more information
 
-* `$` is now `xor` or `⊻` [#18977](https://github.com/JuliaLang/julia/pull/18977).
+* `$` is now `xor` or `⊻` ([#18977])
 
-* `num` and `den` are now `numerator` and `denominator` [#19246](https://github.com/JuliaLang/julia/pull/19246).
+* `num` and `den` are now `numerator` and `denominator` ([#19246])
 
-* `takebuf_array` is now a method of `take!`. `takebuf_string(io)` becomes `String(take!(io))` [#19088](https://github.com/JuliaLang/julia/pull/19088).
+* `takebuf_array` is now a method of `take!`. `takebuf_string(io)` becomes `String(take!(io))` ([#19088])
 
 ## New macros
 
-* `@static` has been added [#16219](https://github.com/JuliaLang/julia/pull/16219).
+* `@static` has been added ([#16219])
 
 * `@functorize` (not present in any Julia version) takes a function (or operator) and turns it into a functor object if one is available in the used Julia version. E.g. something like `mapreduce(Base.AbsFun(), Base.MulFun(), x)` can now be written as `mapreduce(@functorize(abs), @functorize(*), x)`, and `f(::Base.AbsFun())` as `f(::typeof(@functorize(abs)))`, to work across different Julia versions. `Func{1}` can be written as `supertype(typeof(@functorize(abs)))` (and so on for `Func{2}`), which will fall back to `Function` on Julia 0.5.
 
 * `Compat.@blasfunc` makes functionality of `Base.LinAlg.BLAS.@blasfunc` available on older Julia versions
 
-* `@__DIR__` has been added [#18380](https://github.com/JuliaLang/julia/pull/18380)
+* `@__DIR__` has been added ([#18380])
 
 * `@vectorize_1arg` and `@vectorize_2arg` are deprecated on Julia 0.6 in favor
-  of the broadcast syntax [#17302](https://github.com/JuliaLang/julia/pull/17302).
-  `Compat.@dep_vectorize_1arg` and `Compat.@dep_vectorize_2arg` are provided
-  so that packages can still provide the deprecated definitions
-  without causing a depwarn in the package itself before all the users
-  are upgraded.
+  of the broadcast syntax ([#17302]). `Compat.@dep_vectorize_1arg` and
+  `Compat.@dep_vectorize_2arg` are provided so that packages can still provide
+  the deprecated definitions without causing a depwarn in the package itself
+  before all the users are upgraded.
 
   Packages are expected to use this until all users of the deprecated
-  vectorized function have migrated. These macros will be dropped when
-  the support for `0.6` is dropped from `Compat`.
+  vectorized function have migrated. These macros will be dropped when the
+  support for `0.6` is dropped from `Compat`.
 
 ## Other changes
 
-* `remotecall`, `remotecall_fetch`, `remotecall_wait`, and `remote_do` have the function to be executed remotely as the first argument in Julia 0.5. Loading `Compat` defines the same methods in older versions of Julia. [#13338](https://github.com/JuliaLang/julia/pull/13338)
+* `remotecall`, `remotecall_fetch`, `remotecall_wait`, and `remote_do` have the function to be executed remotely as the first argument in Julia 0.5. Loading `Compat` defines the same methods in older versions of Julia ([#13338])
 
-* `Base.FS` is now `Base.Filesystem` [#12819](https://github.com/JuliaLang/julia/pull/12819).
+* `Base.FS` is now `Base.Filesystem` ([#12819])
   Compat provides an unexported `Compat.Filesystem` module that is aliased to
   `Base.FS` on Julia 0.4 and `Base.Filesystem` on Julia 0.5.
 
-* `mktemp` and `mktempdir` now have variants which take a function as their first argument for automated cleanup. [#9017](https://github.com/JuliaLang/julia/pull/9017)
-
-* `cov` and `cor` don't allow keyword arguments anymore. Loading Compat defines compatibility methods for the new API. [#13465](https://github.com/JuliaLang/julia/pull/13465)
+* `cov` and `cor` don't allow keyword arguments anymore. Loading Compat defines compatibility methods for the new API ([#13465])
 
 * On versions of Julia that do not contain a Base.Threads module, Compat defines a Threads module containing a no-op `@threads` macro.
 
@@ -183,7 +183,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `repeat` now accepts any `AbstractArray` [#14082](https://github.com/JuliaLang/julia/pull/14082): `Compat.repeat` supports this new API on Julia 0.4, and calls `Base.repeat` on 0.5.
 
-* `OS_NAME` is now `Sys.KERNEL`. OS information available as `is_apple`, `is_bsd`, `is_linux`, `is_unix`, and `is_windows`. [16219](https://github.com/JuliaLang/julia/pull/16219)
+* `OS_NAME` is now `Sys.KERNEL`. OS information available as `is_apple`, `is_bsd`, `is_linux`, `is_unix`, and `is_windows` ([#16219])
 
 * `cholfact`, `cholfact!`, and `chol` require that input is either `Hermitian`, `Symmetric`
 or that the elements are perfectly symmetric or Hermitian on 0.5. Compat now defines methods
@@ -218,8 +218,6 @@ This prints a version number corresponding to the specified commit of the form
 `X.Y.Z-aaa+NNNN`, and you can then test whether Julia
 is at least this version by `VERSION >= v"X.Y.Z-aaa+NNNN"`.
 
-[#15032]: https://github.com/JuliaLang/julia/issues/15032
-
 ### Tagging the correct minimum version of Compat
 
 One of the most frequent problems package developers encounter is finding the right
@@ -243,3 +241,35 @@ includes this fix. Find the minimum version from there.
 
 * Now specify the correct minimum version for Compat in your REQUIRE file by
 `Compat <version>`
+
+[#12819]: https://github.com/JuliaLang/julia/issues/12819
+[#13232]: https://github.com/JuliaLang/julia/issues/13232
+[#13338]: https://github.com/JuliaLang/julia/issues/13338
+[#13465]: https://github.com/JuliaLang/julia/issues/13465
+[#13681]: https://github.com/JuliaLang/julia/issues/13681
+[#13707]: https://github.com/JuliaLang/julia/issues/13707
+[#13744]: https://github.com/JuliaLang/julia/issues/13744
+[#14082]: https://github.com/JuliaLang/julia/issues/14082
+[#14338]: https://github.com/JuliaLang/julia/issues/14338
+[#14601]: https://github.com/JuliaLang/julia/issues/14601
+[#14660]: https://github.com/JuliaLang/julia/issues/14660
+[#14766]: https://github.com/JuliaLang/julia/issues/14766
+[#14777]: https://github.com/JuliaLang/julia/issues/14777
+[#15032]: https://github.com/JuliaLang/julia/issues/15032
+[#15192]: https://github.com/JuliaLang/julia/issues/15192
+[#15708]: https://github.com/JuliaLang/julia/issues/15708
+[#15914]: https://github.com/JuliaLang/julia/issues/15914
+[#16154]: https://github.com/JuliaLang/julia/issues/16154
+[#16219]: https://github.com/JuliaLang/julia/issues/16219
+[#16563]: https://github.com/JuliaLang/julia/issues/16563
+[#16603]: https://github.com/JuliaLang/julia/issues/16603
+[#16972]: https://github.com/JuliaLang/julia/issues/16972
+[#17302]: https://github.com/JuliaLang/julia/issues/17302
+[#17323]: https://github.com/JuliaLang/julia/issues/17323
+[#17510]: https://github.com/JuliaLang/julia/issues/17510
+[#18380]: https://github.com/JuliaLang/julia/issues/18380
+[#18484]: https://github.com/JuliaLang/julia/issues/18484
+[#18510]: https://github.com/JuliaLang/julia/issues/18510
+[#18977]: https://github.com/JuliaLang/julia/issues/18977
+[#19088]: https://github.com/JuliaLang/julia/issues/19088
+[#19246]: https://github.com/JuliaLang/julia/issues/19246
