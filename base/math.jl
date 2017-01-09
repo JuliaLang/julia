@@ -652,7 +652,7 @@ rem(x::Float64, y::Float64, ::RoundingMode{:Nearest}) =
     ccall((:remainder, libm),Float64,(Float64,Float64),x,y)
 rem(x::Float32, y::Float32, ::RoundingMode{:Nearest}) =
     ccall((:remainderf, libm),Float32,(Float32,Float32),x,y)
-
+rem(x::Float16, y::Float16, r::RoundingMode{:Nearest}) = Float16(rem(Float32(x), Float32(y), r))
 
 
 """
@@ -882,6 +882,7 @@ function rem2pi(x::Float64, ::RoundingMode{:Up})
 end
 
 rem2pi(x::Float32, r::RoundingMode) = Float32(rem2pi(Float64(x), r))
+rem2pi(x::Float16, r::RoundingMode) = Float16(rem2pi(Float64(x), r))
 rem2pi(x::Int32, r::RoundingMode) = rem2pi(Float64(x), r)
 function rem2pi(x::Int64, r::RoundingMode)
     fx = Float64(x)

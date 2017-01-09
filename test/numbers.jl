@@ -2864,3 +2864,41 @@ let types = (Base.BitInteger_types..., BigInt, Bool)
 end
 
 @test !isempty(complex(1,2))
+
+for T in (Float16, Float32, Float64, BigFloat)
+    @test rem(T(1), T(2), RoundToZero)  == 1
+    @test rem(T(1), T(2), RoundNearest) == 1
+    @test rem(T(1), T(2), RoundDown)    == 1
+    @test rem(T(1), T(2), RoundUp)      == -1
+    @test rem(T(1.5), T(2), RoundToZero)  == 1.5
+    @test rem(T(1.5), T(2), RoundNearest) == -0.5
+    @test rem(T(1.5), T(2), RoundDown)    == 1.5
+    @test rem(T(1.5), T(2), RoundUp)      == -0.5
+    @test rem(T(-1), T(2), RoundToZero)  == -1
+    @test rem(T(-1), T(2), RoundNearest) == -1
+    @test rem(T(-1), T(2), RoundDown)    == 1
+    @test rem(T(-1), T(2), RoundUp)      == -1
+    @test rem(T(-1.5), T(2), RoundToZero)  == -1.5
+    @test rem(T(-1.5), T(2), RoundNearest) == 0.5
+    @test rem(T(-1.5), T(2), RoundDown)    == 0.5
+    @test rem(T(-1.5), T(2), RoundUp)      == -1.5
+end
+
+for T in (Float16, Float32, Float64, BigFloat)
+    @test rem2pi(T(1), RoundToZero)  == 1
+    @test rem2pi(T(1), RoundNearest) == 1
+    @test rem2pi(T(1), RoundDown)    == 1
+    @test rem2pi(T(1), RoundUp)      ≈ 1-2pi
+    @test rem2pi(T(2), RoundToZero)  == 2
+    @test rem2pi(T(2), RoundNearest) == 2
+    @test rem2pi(T(2), RoundDown)    == 2
+    @test rem2pi(T(2), RoundUp)      ≈ 2-2pi
+    @test rem2pi(T(4), RoundToZero)  == 4
+    @test rem2pi(T(4), RoundNearest) ≈ 4-2pi
+    @test rem2pi(T(4), RoundDown)    == 4
+    @test rem2pi(T(4), RoundUp)      ≈ 4-2pi
+    @test rem2pi(T(-4), RoundToZero)  == -4
+    @test rem2pi(T(-4), RoundNearest) ≈ 2pi-4
+    @test rem2pi(T(-4), RoundDown)    ≈ 2pi-4
+    @test rem2pi(T(-4), RoundUp)      == -4
+end
