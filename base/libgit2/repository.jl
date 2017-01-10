@@ -167,13 +167,11 @@ end
 
 """Updates some entries, determined by the `pathspecs`, in the index from the target commit tree."""
 function reset!{T<:AbstractString, S<:GitObject}(repo::GitRepo, obj::Nullable{S}, pathspecs::T...)
-    with(StrArrayStruct(pathspecs...)) do sa
-        @check ccall((:git_reset_default, :libgit2), Cint,
-                (Ptr{Void}, Ptr{Void}, Ptr{StrArrayStruct}),
-                repo.ptr,
-                isnull(obj) ? C_NULL: Base.get(obj).ptr,
-                Ref(sa))
-    end
+    @check ccall((:git_reset_default, :libgit2), Cint,
+                 (Ptr{Void}, Ptr{Void}, Ptr{StrArrayStruct}),
+                 repo.ptr,
+                 isnull(obj) ? C_NULL: Base.get(obj).ptr,
+                 collect(pathspecs))
 end
 
 """Sets the current head to the specified commit oid and optionally resets the index and working tree to match."""
@@ -203,9 +201,16 @@ function fetchheads(repo::GitRepo)
     return fhr[]
 end
 
+"""
+    LibGit2.remotes(repo::GitRepo)
+
+Returns a vector of the names of the remotes of `repo`.
+"""
 function remotes(repo::GitRepo)
-    out = Ref(StrArrayStruct())
+    sa_ref = Ref(StrArrayStruct())
     @check ccall((:git_remote_list, :libgit2), Cint,
-                  (Ptr{Void}, Ptr{Void}), out, repo.ptr)
-    return convert(Vector{AbstractString}, out[])
+                  (Ptr{StrArrayStruct}, Ptr{Void}), sa_ref, repo.ptr)
+    res = Base.unsafe_convert(Vector{String}, sa_ref[])
+    free(sa_ref)
+    return res
 end

@@ -38,17 +38,34 @@ end
 """
     LibGit2.StrArrayStruct
 
-Array of strings.
+A LibGit2 representation of an array of strings.
 Matches the [`git_strarray`](https://libgit2.github.com/libgit2/#HEAD/type/git_strarray) struct.
+
+When fetching data from LibGit2, a typical usage would look like:
+```
+sa_ref = Ref(StrArrayStruct())
+@check ccall(..., (Ptr{StrArrayStruct},), sa_ref)
+res = Base.unsafe_convert(Vector{String}, sa_ref[])
+free(sa_ref)
+```
+In particular, note that `LibGit2.free` should be called afterward on the `Ref` object.
+
+Conversely, when a vector of strings to LibGit2, it is generally simplest to rely on
+implicit conversion:
+```
+strs = String[...]
+@check ccall(..., (Ptr{StrArrayStruct},), strs)
+```
+Note that no call to `free` is required as the data is allocated by Julia.
 """
-@kwdef immutable StrArrayStruct
+immutable StrArrayStruct
    strings::Ptr{Cstring}
    count::Csize_t
 end
-function Base.close(sa::StrArrayStruct)
-    sa_ptr = Ref(sa)
-    ccall((:git_strarray_free, :libgit2), Void, (Ptr{StrArrayStruct},), sa_ptr)
-    return sa_ptr[]
+StrArrayStruct() = StrArrayStruct(C_NULL, 0)
+
+function free(sa_ref::Base.RefValue{StrArrayStruct})
+    ccall((:git_strarray_free, :libgit2), Void, (Ptr{StrArrayStruct},), sa_ref)
 end
 
 """
