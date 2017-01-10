@@ -9273,6 +9273,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/numbers.html#Base.iszero",
+    "page": "Numbers",
+    "title": "Base.iszero",
+    "category": "Function",
+    "text": "iszero(x)\n\nReturn true if x == zero(x); if x is an array, this checks whether all of the elements of x are zero.\n\n\n\n"
+},
+
+{
     "location": "stdlib/numbers.html#Base.nextfloat",
     "page": "Numbers",
     "title": "Base.nextfloat",
@@ -9389,7 +9397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "General Number Functions and Constants",
     "category": "section",
-    "text": "Base.one\nBase.zero\nBase.pi\nBase.im\nBase.eu\nBase.catalan\nBase.eulergamma\nBase.golden\nBase.Inf\nBase.Inf32\nBase.Inf16\nBase.NaN\nBase.NaN32\nBase.NaN16\nBase.issubnormal\nBase.isfinite\nBase.isinf\nBase.isnan\nBase.nextfloat\nBase.prevfloat\nBase.isinteger\nBase.isreal\nBase.isimag\nCore.Float32\nCore.Float64\nBase.GMP.BigInt\nBase.MPFR.BigFloat\nBase.Rounding.rounding\nBase.Rounding.setrounding(::Type, ::Any)\nBase.Rounding.setrounding(::Function, ::Type, ::RoundingMode)\nBase.Rounding.get_zero_subnormals\nBase.Rounding.set_zero_subnormals"
+    "text": "Base.one\nBase.zero\nBase.pi\nBase.im\nBase.eu\nBase.catalan\nBase.eulergamma\nBase.golden\nBase.Inf\nBase.Inf32\nBase.Inf16\nBase.NaN\nBase.NaN32\nBase.NaN16\nBase.issubnormal\nBase.isfinite\nBase.isinf\nBase.isnan\nBase.iszero\nBase.nextfloat\nBase.prevfloat\nBase.isinteger\nBase.isreal\nBase.isimag\nCore.Float32\nCore.Float64\nBase.GMP.BigInt\nBase.MPFR.BigFloat\nBase.Rounding.rounding\nBase.Rounding.setrounding(::Type, ::Any)\nBase.Rounding.setrounding(::Function, ::Type, ::RoundingMode)\nBase.Rounding.get_zero_subnormals\nBase.Rounding.set_zero_subnormals"
 },
 
 {
