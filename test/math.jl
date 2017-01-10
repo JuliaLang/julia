@@ -426,8 +426,8 @@ end
 end
 
 @testset "airy" begin
-    @test_throws Base.SpecFun.AmosException airyai(200im)
-    @test_throws Base.SpecFun.AmosException airybi(200)
+    @test_throws Base.SpecialFunctions.AmosException airyai(200im)
+    @test_throws Base.SpecialFunctions.AmosException airybi(200)
 
     for T in [Float32, Float64, Complex64,Complex128]
         @test airyai(T(1.8)) ≈ 0.0470362168668458052247
@@ -484,7 +484,7 @@ end
         @test besselh(3,2,3) ≈ conj(true_h133)
         @test besselh(-3,2,3) ≈ -conj(true_h133)
         @testset "Error throwing" begin
-            @test_throws Base.SpecFun.AmosException besselh(1,0)
+            @test_throws Base.SpecialFunctions.AmosException besselh(1,0)
             @test_throws MethodError besselh(1,big(1.0))
             @test_throws MethodError besselh(1,complex(big(1.0)))
             @test_throws MethodError besselhx(1,big(1.0))
@@ -499,7 +499,7 @@ end
         @test besseli(-3,-3) ≈ -true_i33
         @test besseli(Float32(-3),Complex64(-3,0)) ≈ -true_i33
         @testset "Error throwing" begin
-            @test_throws Base.SpecFun.AmosException besseli(1,1000)
+            @test_throws Base.SpecialFunctions.AmosException besseli(1,1000)
             @test_throws DomainError besseli(0.4,-1.0)
             @test_throws MethodError besseli(1,big(1.0))
             @test_throws MethodError besseli(1,complex(big(1.0)))
@@ -544,7 +544,7 @@ end
         @test besselj(1.0,3im) ≈ besselj(1,3im)
         @testset "Error throwing" begin
             @test_throws DomainError    besselj(0.1, -0.4)
-            @test_throws Base.SpecFun.AmosException besselj(20,1000im)
+            @test_throws Base.SpecialFunctions.AmosException besselj(20,1000im)
             @test_throws MethodError besselj(big(1.0),3im)
         end
     end
@@ -559,7 +559,7 @@ end
         # issue #6564
         @test besselk(1.0,0.0) == Inf
         @testset "Error throwing" begin
-            @test_throws Base.SpecFun.AmosException besselk(200,0.01)
+            @test_throws Base.SpecialFunctions.AmosException besselk(200,0.01)
             @test_throws DomainError besselk(3,-3)
             @test_throws MethodError besselk(1,big(1.0))
             @test_throws MethodError besselk(1,complex(big(1.0)))
@@ -577,7 +577,7 @@ end
         @test y33 ≈ -0.53854161610503161800
         @test bessely(3,complex(-3)) ≈ 0.53854161610503161800 - 0.61812544451050328724im
         @testset "Error throwing" begin
-            @test_throws Base.SpecFun.AmosException bessely(200.5,0.1)
+            @test_throws Base.SpecialFunctions.AmosException bessely(200.5,0.1)
             @test_throws DomainError bessely(3,-3)
             @test_throws DomainError bessely(0.4,-1.0)
             @test_throws DomainError bessely(0.4,Float32(-1.0))
@@ -617,11 +617,11 @@ end
         end
         @test besselkx(1, 0) == Inf
         @testset "Error throwing" begin
-            @test_throws Base.SpecFun.AmosException hankelh1x(1, 0)
-            @test_throws Base.SpecFun.AmosException hankelh2x(1, 0)
-            @test_throws Base.SpecFun.AmosException besselix(-1, 0)
-            @test_throws Base.SpecFun.AmosException besseljx(-1, 0)
-            @test_throws Base.SpecFun.AmosException besselyx(1, 0)
+            @test_throws Base.SpecialFunctions.AmosException hankelh1x(1, 0)
+            @test_throws Base.SpecialFunctions.AmosException hankelh2x(1, 0)
+            @test_throws Base.SpecialFunctions.AmosException besselix(-1, 0)
+            @test_throws Base.SpecialFunctions.AmosException besseljx(-1, 0)
+            @test_throws Base.SpecialFunctions.AmosException besselyx(1, 0)
             @test_throws DomainError besselix(0.4,-1.0)
             @test_throws DomainError besseljx(0.4, -1.0)
             @test_throws DomainError besselkx(0.4,-1.0)
@@ -996,8 +996,8 @@ end
     end
 end
 
-@test Base.SpecFun.f32(complex(1.0,1.0)) == complex(Float32(1.),Float32(1.))
-@test Base.SpecFun.f16(complex(1.0,1.0)) == complex(Float16(1.),Float16(1.))
+@test Base.SpecialFunctions.f32(complex(1.0,1.0)) == complex(Float32(1.),Float32(1.))
+@test Base.SpecialFunctions.f16(complex(1.0,1.0)) == complex(Float16(1.),Float16(1.))
 
 # no domain error is thrown for negative values
 @test invoke(cbrt, Tuple{AbstractFloat}, -1.0) == -1.0

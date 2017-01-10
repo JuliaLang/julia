@@ -13,16 +13,16 @@ export exp, exp2, exp10, expm1,
        cotd, cscd, secd, acotd, acscd, asecd,
        rad2deg, deg2rad,
        exponent, significand, ldexp, frexp,
-       sqrt, cbrt, ^, hypot, modf,
+       sqrt, cbrt, ^, hypot, clamp, clamp!,
        max, min, minmax,
-       clamp, clamp!, mod2pi, @evalpoly
+       modf, mod2pi, rem2pi, @evalpoly
 
 import Base: exp, exp2, exp10, expm1,
        log, log2, log10, log1p,
        sin, cos, tan, asin, acos, atan,
        sinh, cosh, tanh, asinh, acosh, atanh,
        sqrt, ^,
-       max, min, minmax, muladd
+       max, min, minmax, rem, muladd
 
 using Base: sign_mask, exponent_mask, exponent_one, exponent_bias,
       exponent_half, exponent_max, exponent_raw_max, fpinttype,

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-module SpecFun
+module SpecialFunctions
 
 export erf, erfc, erfcx, erfi, dawson,
        lgamma, gamma, lfact,
@@ -13,7 +13,7 @@ export erf, erfc, erfcx, erfi, dawson,
        beta, lbeta, eta, zeta, polygamma, invdigamma, digamma, trigamma,
        erfinv, erfcinv
 
-import Base.Math: @horner
+using Base.Math: @horner
 
 const libm = Base.libm_name
 const openspecfun = "libopenspecfun"

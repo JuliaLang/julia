@@ -238,7 +238,7 @@ const (∛)=cbrt
 
 # special math functions
 include("special/special.jl")
-importall .SpecFun
+importall .SpecialFunctions
 
 # reduction along dims
 include("reducedim.jl")  # macros in this file relies on string.jl

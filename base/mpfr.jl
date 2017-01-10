@@ -24,7 +24,7 @@ import Base.Rounding: rounding_raw, setrounding_raw
 
 import Base.GMP: ClongMax, CulongMax, CdoubleMax, Limb
 
-import Base.SpecFun.lgamma_r
+import Base.SpecialFunctions.lgamma_r
 
 function __init__()
     try
