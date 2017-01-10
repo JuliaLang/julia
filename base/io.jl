@@ -389,7 +389,7 @@ end
 
 function readuntil(s::IO, delim::Char)
     if delim < Char(0x80)
-        return readuntil_string(s::IO, delim % UInt8)
+        return readuntil_string(s, delim % UInt8)
     end
     out = IOBuffer()
     while !eof(s)
