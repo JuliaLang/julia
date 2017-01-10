@@ -774,7 +774,235 @@ JL_DLLEXPORT jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes)
     return first_arg_datatype(argtypes, 0);
 }
 
+// compute if a transform is needed to form the type-equal equivalent to sig-equal for param
+// where sig-equal adds the additional constraint that all type-variables
+// must be matched by a value when intersected successfully with a leaftype
+static int jl_constrains_param(jl_value_t *param, jl_tvar_t *tv, int env)
+{
+    if (param == (jl_value_t*)tv)
+        return 1;
+    int vabound = 0;
+    int envbound = 0;
+    while (jl_is_unionall(param)) {
+        jl_tvar_t *var = ((jl_unionall_t*)param)->var;
+        if (tv != var) {
+           int bvar = jl_constrains_param(var->ub, tv, 0);
+           if (bvar > 0)
+               return 1;
+           if (bvar < 0)
+               vabound = -1;
+        }
+        param = ((jl_unionall_t*)param)->body;
+        if (env) {
+            envbound = vabound;
+            env -= 1;
+        }
+    }
+    assert(!env);
+    if (jl_is_uniontype(param)) {
+        // for unions, may need to restrict a Tuple{Vararg} inside either a or b,
+        // so return the less restrictive
+        jl_value_t *a = ((jl_uniontype_t*)param)->a;
+        jl_value_t *b = ((jl_uniontype_t*)param)->b;
+        int ba = jl_constrains_param(a, tv, 0);
+        int bb = jl_constrains_param(b, tv, 0);
+        if (ba > 0 && bb > 0)
+            return 1;
+        if (ba < 0 || bb < 0)
+            vabound = -1;
+        return vabound;
+    }
+    if (jl_is_tuple_type(param)) {
+        // for tuples, return the value for the most-constraining param
+        size_t i, n = jl_field_count(param);
+        if (n == 0)
+            return vabound;
+        for (i = 0; i < n - 1; i++) {
+            jl_value_t *a = jl_tparam(param, i);
+            int ba = jl_constrains_param(a, tv, 0);
+            if (ba > 0)
+                return 1;
+            if (ba < 0)
+                vabound = -1;
+        }
+        jl_value_t *lastt = jl_tparam(param, n - 1);
+        jl_value_t *vararg = jl_unwrap_unionall(lastt);
+        if (jl_is_vararg_type(vararg)) {
+            jl_value_t *T = jl_tparam0(vararg);
+            jl_value_t *N = jl_tparam1(vararg);
+            if (jl_constrains_param(N, tv, 0) > 0)
+                return 1;
+            int ba = jl_constrains_param(T, tv, 0);
+            if (ba)
+                vabound = -1;
+        }
+        else {
+            int ba = jl_constrains_param(lastt, tv, 0);
+            if (ba > 0)
+                return 1;
+            if (ba < 0)
+                vabound = -1;
+        }
+        return vabound;
+    }
+    int bparam = jl_has_typevar(param, tv);
+    if (bparam > 0)
+        return 1;
+    if (bparam < 0) {
+        if (envbound) {
+            // XXX: we don't handle this case of `Tuple{S, Vararg{T}} where S <: Tuple{Vararg{T}} where T
+            //      maybe we'll try in the future, but right now, we can't express that
+            //      Tuple{S, T, Vararg{T}} where S <: Tuple{Vararg{T}} where T
+            //      and
+            //      Tuple{S, Vararg{T}} where S <: Tuple{T, Vararg{T}} where T
+            //      are both valid signature-to-type expansions, but with the sparam-env S variable copied
+            return 0;
+        }
+        return -1;
+    }
+    return vabound;
+}
+
+jl_value_t *jl_signature_to_type(jl_value_t *param, jl_tvar_t *tv, int env)
+{
+    if (param == (jl_value_t*)tv)
+        return param;
+    if (jl_is_unionall(param)) {
+        jl_tvar_t *var = ((jl_unionall_t*)param)->var;
+        jl_value_t *body = ((jl_unionall_t*)param)->body;
+        int bvar = (var != tv) ? jl_constrains_param(var->ub, tv, 0) : 0;
+        jl_value_t *root = jl_signature_to_type(body, tv, env ? env - 1 : 0);
+        if (bvar || root != body) {
+            jl_value_t *u = jl_bottom_type;
+            JL_GC_PUSH3(&u, &root, &body);
+            if (root != body)
+                u = jl_new_struct(jl_unionall_type, var, root);
+            if (bvar) {
+                root = jl_signature_to_type(var->ub, tv, 0);
+                if (!env) {
+                    root = (jl_value_t*)jl_new_typevar(var->name, var->lb, root);
+                    body = jl_instantiate_unionall((jl_unionall_t*)param, root);
+                    root = jl_new_struct(jl_unionall_type, root, body);
+                    if (u == jl_bottom_type)
+                        u = root;
+                    else
+                        u = jl_new_struct(jl_uniontype_type, root, u);
+                }
+                else {
+                    // for now, just mutate `var` for UnionAll bounds from the environment
+                    assert(u == jl_bottom_type && "TODO: can't handle this case");
+                    var->ub = root;
+                    u = param;
+                }
+            }
+            param = u;
+            JL_GC_POP();
+        }
+        return param;
+    }
+    if (jl_is_uniontype(param)) {
+        // for unions, may need to restrict Tuple{Vararg} inside both a or b
+        jl_value_t *a = ((jl_uniontype_t*)param)->a;
+        jl_value_t *b = ((jl_uniontype_t*)param)->b;
+        int ba = jl_constrains_param(a, tv, 0);
+        int bb = jl_constrains_param(b, tv, 0);
+        if (ba < 0 || bb < 0) {
+            JL_GC_PUSH2(&a, &b);
+            if (ba < 0)
+                a = jl_signature_to_type(a, tv, 0);
+            if (bb < 0)
+                b = jl_signature_to_type(b, tv, 0);
+            param = jl_new_struct(jl_uniontype_type, a, b);
+            JL_GC_POP();
+        }
+        return param;
+    }
+    if (jl_is_tuple_type(param)) {
+        // for tuples, constrain one param
+        size_t i, n = jl_field_count(param);
+        if (n == 0)
+            return param;
+        jl_value_t *u = jl_bottom_type;
+        jl_value_t *root = NULL;
+        JL_GC_PUSH2(&u, &root);
+        for (i = 0; i < n - 1; i++) {
+            jl_value_t *a = jl_tparam(param, i);
+            int ba = jl_constrains_param(a, tv, 0);
+            if (ba < 0) {
+                root = jl_signature_to_type(a, tv, 0);
+                jl_svec_t *newparam = jl_svec_copy(((jl_datatype_t*)param)->parameters);
+                jl_svecset(newparam, i, root);
+                root = (jl_value_t*)newparam;
+                root = (jl_value_t*)jl_apply_tuple_type(newparam);
+                if (u == jl_bottom_type)
+                    u = root;
+                else
+                    u = jl_new_struct(jl_uniontype_type, root, u);
+            }
+        }
+
+        jl_value_t *lastt = jl_tparam(param, n - 1);
+        jl_value_t *vararg = jl_unwrap_unionall(lastt);
+        root = NULL;
+        if (jl_is_vararg_type(vararg)) {
+            jl_value_t *T = jl_tparam0(vararg);
+            jl_value_t *N = jl_tparam1(vararg);
+            int bN = jl_constrains_param(N, tv, 0);
+            if (bN < 0) {
+                N = jl_signature_to_type(N, tv, 0);
+                root = jl_wrap_vararg(T, N);
+                root = jl_rewrap_unionall(root, lastt);
+                jl_svec_t *newparam = jl_svec_copy(((jl_datatype_t*)param)->parameters);
+                jl_svecset(newparam, n - 1, root);
+                root = (jl_value_t*)newparam;
+                root = (jl_value_t*)jl_apply_tuple_type(newparam);
+            }
+            else {
+                // this is the heart of the change required here:
+                // this rewrites `Tuple{..., Vararg{T}}` as `Tuple{..., T, Vararg{T}}`
+                // to reflect the fact that `Vararg{T}` must match N > 1 for a type-signature to match
+                // while it only needed to match N > 0 for a type-equal match
+                // TODO: verify that N is unbound
+                int bT = jl_constrains_param(T, tv, 0);
+                if (bT < 0)
+                    T = jl_signature_to_type(T, tv, 0);
+                root = jl_wrap_vararg(T, N);
+                jl_svec_t *newparam = jl_alloc_svec(n + 1);
+                for (i = 0; i < n - 1; i++)
+                    jl_svecset(newparam, i, jl_tparam(param, i));
+                jl_svecset(newparam, i, T);
+                jl_svecset(newparam, n, root);
+                root = (jl_value_t*)newparam;
+                root = (jl_value_t*)jl_apply_tuple_type(newparam);
+                root = jl_rewrap_unionall(root, lastt);
+            }
+        }
+        else {
+            int ba = jl_constrains_param(lastt, tv, 0);
+            if (ba < 0) {
+                root = jl_signature_to_type(lastt, tv, 0);
+                jl_svec_t *newparam = jl_svec_copy(((jl_datatype_t*)param)->parameters);
+                jl_svecset(newparam, n - 1, root);
+                root = (jl_value_t*)newparam;
+                root = (jl_value_t*)jl_apply_tuple_type(newparam);
+            }
+        }
+        if (root) {
+            if (u == jl_bottom_type)
+                u = root;
+            else
+                u = jl_new_struct(jl_uniontype_type, root, u);
+        }
+        if (u != jl_bottom_type)
+            param = u;
+        JL_GC_POP();
+        return param;
+    }
+    return param;
+}
+
 extern tracer_cb jl_newmeth_tracer;
+
 JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                                 jl_code_info_t *f,
                                 jl_value_t *isstaged)
@@ -792,18 +1020,12 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     jl_methtable_t *mt;
     jl_sym_t *name;
     jl_method_t *m = NULL;
-    jl_value_t *argtype = (jl_value_t*)jl_apply_tuple_type(atypes);
+    jl_value_t *argtype = NULL;
     JL_GC_PUSH3(&f, &m, &argtype);
 
-    if (!jl_is_code_info(f)) {
-        // this occurs when there is a closure being added to an out-of-scope function
-        // the user should only do this at the toplevel
-        // the result is that the closure variables get interpolated directly into the AST
-        f = jl_new_code_info_from_ast((jl_expr_t*)f);
-    }
-
-    assert(jl_is_code_info(f));
-    jl_datatype_t *ftype = jl_first_argument_datatype(argtype);
+    jl_datatype_t *ftype = first_arg_datatype(jl_svecref(atypes, 0), 1);
+    if (jl_subtype((jl_value_t*)ftype, (jl_value_t*)jl_builtin_type))
+        jl_error("cannot add methods to a builtin function");
     if (ftype == NULL ||
         !(jl_is_type_type((jl_value_t*)ftype) ||
           (jl_is_datatype(ftype) &&
@@ -813,31 +1035,15 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     mt = ftype->name->mt;
     name = mt->name;
 
-    if (jl_subtype((jl_value_t*)ftype, (jl_value_t*)jl_builtin_type))
-        jl_error("cannot add methods to a builtin function");
-
-    int j;
-    for(j=(int)jl_svec_len(tvars)-1; j >= 0 ; j--) {
-        jl_value_t *tv = jl_svecref(tvars,j);
-        if (!jl_is_typevar(tv))
-            jl_type_error_rt(jl_symbol_name(name), "method definition", (jl_value_t*)jl_tvar_type, tv);
-        argtype = jl_new_struct(jl_unionall_type, tv, argtype);
+    if (!jl_is_code_info(f)) {
+        // this occurs when there is a closure being added to an out-of-scope function
+        // the user should only do this at the toplevel
+        // the result is that the closure variables get interpolated directly into the AST
+        f = jl_new_code_info_from_ast((jl_expr_t*)f);
     }
 
-    m = jl_new_method(f, name, (jl_tupletype_t*)argtype, nargs, isva, tvars, isstaged == jl_true);
-
-    if (jl_has_free_typevars(argtype)) {
-        jl_exceptionf(jl_argumenterror_type,
-                      "method definition for %s at %s:%d has free type variables",
-                      jl_symbol_name(name),
-                      jl_symbol_name(m->file),
-                      m->line);
-    }
-
-    jl_check_static_parameter_conflicts(m, tvars);
-
-    size_t i, na = jl_svec_len(atypes);
-    for (i = 0; i < na; i++) {
+    size_t i;
+    for (i = 0; i < nargs; i++) {
         jl_value_t *elt = jl_svecref(atypes, i);
         if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
             jl_sym_t *argname = (jl_sym_t*)jl_array_ptr_ref(f->slotnames, i);
@@ -846,32 +1052,59 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                               "invalid type for argument number %d in method definition for %s at %s:%d",
                               i,
                               jl_symbol_name(name),
-                              jl_symbol_name(m->file),
-                              m->line);
+                              "", //jl_symbol_name(m->file),
+                              0); //m->line);
             else
                 jl_exceptionf(jl_argumenterror_type,
                               "invalid type for argument %s in method definition for %s at %s:%d",
                               jl_symbol_name(argname),
                               jl_symbol_name(name),
-                              jl_symbol_name(m->file),
-                              m->line);
+                              "", //jl_symbol_name(m->file),
+                              0); //m->line);
         }
     }
 
     int ishidden = !!strchr(jl_symbol_name(name), '#');
-    jl_value_t *atemp = argtype;
-    while (jl_is_unionall(atemp)) {
-        jl_unionall_t *ua = (jl_unionall_t*)atemp;
-        jl_tvar_t *tv = ua->var;
-        if (!ishidden && !jl_has_typevar(ua->body, tv)) {
-            jl_printf(JL_STDERR, "WARNING: static parameter %s does not occur in signature for %s",
-                      jl_symbol_name(tv->name), jl_symbol_name(name));
-            print_func_loc(JL_STDERR, m);
-            jl_printf(JL_STDERR, ".\nThe method will not be callable.\n");
-        }
-        atemp = ua->body;
+    argtype = (jl_value_t*)jl_apply_tuple_type(atypes);
+    int j, nenv = (int)jl_svec_len(tvars);
+    for (j = nenv - 1; j >= 0 ; j--) {
+        jl_value_t *tv = jl_svecref(tvars, j);
+        argtype = jl_new_struct(jl_unionall_type, tv, argtype);
     }
 
+    // make sure that every type-variable will be bound when matched with a leaftype
+    // by ensuring that every type-variable appears in at least one tuple parameter
+    // and in all branches of a union in covariant position
+    for (j = nenv - 1; j >= 0 ; j--) {
+        jl_tvar_t *tv = (jl_tvar_t*)jl_svecref(tvars, j);
+        if (!jl_is_typevar(tv))
+            jl_type_error_rt(jl_symbol_name(name), "method definition", (jl_value_t*)jl_tvar_type, (jl_value_t*)tv);
+        int bound = jl_constrains_param(argtype, tv, nenv);
+        if (bound < 0) {
+            argtype = jl_signature_to_type(argtype, tv, nenv);
+            //jl_(argtype);
+        }
+        else if (!bound && !ishidden) {
+            jl_printf(JL_STDERR, "WARNING: static parameter %s does not occur in signature for %s",
+                      jl_symbol_name(tv->name), jl_symbol_name(name));
+            //jl_(argtype);
+            //print_func_loc(JL_STDERR, m);
+            jl_printf(JL_STDERR, ".\nThe method will not be callable.\n");
+        }
+    }
+
+    if (jl_has_free_typevars(argtype)) {
+        jl_exceptionf(jl_argumenterror_type,
+                      "method definition for %s at %s:%d has free type variables",
+                      jl_symbol_name(name),
+                      "", //jl_symbol_name(m->file),
+                      0); //m->line);
+    }
+
+    assert(jl_is_code_info(f));
+
+    m = jl_new_method(f, name, (jl_tupletype_t*)argtype, nargs, isva, tvars, isstaged == jl_true);
+    jl_check_static_parameter_conflicts(m, tvars);
     jl_method_table_insert(mt, m, NULL);
     if (jl_newmeth_tracer)
         jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)m);

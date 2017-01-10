@@ -1350,7 +1350,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
         method_overwrite(newentry, (jl_method_t*)oldvalue);
     }
     else {
-        oldvalue = check_ambiguous_matches(mt->defs, newentry);
+        oldvalue = NULL; //check_ambiguous_matches(mt->defs, newentry);
         if (mt->backedges) {
             jl_value_t **backedges = (jl_value_t**)jl_array_data(mt->backedges);
             size_t i, na = jl_array_len(mt->backedges);

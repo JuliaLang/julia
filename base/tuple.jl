@@ -49,7 +49,7 @@ first(t::Tuple) = t[1]
 # eltype
 
 eltype(::Type{Tuple{}}) = Bottom
-eltype{E, T <: Tuple{Vararg{E}}}(::Type{T}) = E
+eltype{E}(::Type{T} where T <: Tuple{Vararg{E}}) = E
 
 # version of tail that doesn't throw on empty tuples (used in array indexing)
 safe_tail(t::Tuple) = tail(t)
