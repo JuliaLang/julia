@@ -1547,8 +1547,8 @@ eval(LibGit2, :(Base.@deprecate_binding GitAnyObject GitUnknownObject))
 @deprecate readlines(s::IO) readlines(s, false)
 @deprecate readlines(s::IOStream) readlines(s, false)
 @deprecate readlines(filename::AbstractString) readlines(filename, false)
-@deprecate eachline(s::IO) readlines(s, false)
-@deprecate eachline(s::IOStream) readlines(s, false)
+@deprecate eachline(s::IO) eachline(s, false)
+@deprecate eachline(s::IOStream) eachline(s, false)
 @deprecate eachline(filename::AbstractString) eachline(filename, false)
 
 # End deprecations scheduled for 0.6
