@@ -222,11 +222,11 @@ take!(s::IOStream) =
     ccall(:jl_take_buffer, Vector{UInt8}, (Ptr{Void},), s.ios)
 
 function readuntil(s::IOStream, delim::UInt8)
-    ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Void}, UInt8, UInt8), s.ios, delim, 0)
+    ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Void}, UInt8, UInt8, UInt8), s.ios, delim, 0, 0)
 end
 
 function readline(s::IOStream, chomp::Bool=false)
-    ccall(:jl_readline, Ref{String}, (Ptr{Void}, UInt8), s.ios, chomp)
+    ccall(:jl_readuntil, Ref{String}, (Ptr{Void}, UInt8, UInt8, UInt8), s.ios, '\n', 1, chomp)
 end
 
 function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)

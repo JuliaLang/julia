@@ -802,7 +802,7 @@ size_t ios_copyall(ios_t *to, ios_t *from)
 
 #define LINE_CHUNK_SIZE 160
 
-size_t ios_copyuntil(ios_t *to, ios_t *from, char delim)
+size_t ios_copyuntil(ios_t *to, ios_t *from, char delim, uint8_t chomp)
 {
     size_t total = 0, avail = (size_t)(from->size - from->bpos);
     while (!ios_eof(from)) {
@@ -821,49 +821,7 @@ size_t ios_copyuntil(ios_t *to, ios_t *from, char delim)
         }
         else {
             size_t ntowrite = pd - (from->buf+from->bpos) + 1;
-            written = ios_write(to, from->buf+from->bpos, ntowrite);
-            from->bpos += ntowrite;
-            total += written;
-            return total;
-        }
-    }
-    from->_eof = 1;
-    return total;
-}
-
-size_t ios_copyline(ios_t *to, ios_t *from, uint8_t chomp)
-{
-
-    size_t total = 0, avail = (size_t)(from->size - from->bpos);
-
-    while (!ios_eof(from)) {
-        if (avail == 0) {
-            avail = ios_readprep(from, LINE_CHUNK_SIZE);
-            if (avail == 0)
-                break;
-        }
-        size_t written;
-        char *n = (char*)memchr(from->buf+from->bpos, '\n', avail);
-
-        if (n == NULL) {
-            written = ios_write(to, from->buf+from->bpos, avail);
-            from->bpos += avail;
-            total += written;
-            avail = 0;
-        }
-        else {
-            size_t nchomp = 0;
-            size_t ntowrite = n - (from->buf+from->bpos) + 1;
-
-            if (chomp) {
-                if (ntowrite > 1 && from->buf[from->bpos+ntowrite - 2] == '\r') {
-                    nchomp = 2;
-                }
-                else {
-                    nchomp = 1;
-                }
-            }
-
+            size_t nchomp = ios_nchomp(from, ntowrite, chomp);
             written = ios_write(to, from->buf+from->bpos, ntowrite - nchomp);
             from->bpos += ntowrite;
             total += written;
@@ -874,6 +832,19 @@ size_t ios_copyline(ios_t *to, ios_t *from, uint8_t chomp)
     return total;
 }
 
+size_t ios_nchomp(ios_t *from, size_t ntowrite, uint8_t chomp)
+{
+    size_t nchomp = 0;
+    if (chomp) {
+        if (ntowrite > 1 && from->buf[from->bpos+ntowrite - 2] == '\r') {
+            nchomp = 2;
+        }
+        else {
+            nchomp = 1;
+        }
+    }
+    return nchomp;
+}
 
 static void _ios_init(ios_t *s)
 {
@@ -1179,7 +1150,7 @@ char *ios_readline(ios_t *s)
 {
     ios_t dest;
     ios_mem(&dest, 0);
-    ios_copyuntil(&dest, s, '\n');
+    ios_copyuntil(&dest, s, '\n', 0);
     size_t n;
     return ios_take_buffer(&dest, &n);
 }

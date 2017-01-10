@@ -250,7 +250,7 @@ JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s)
     return a;
 }
 
-JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str)
+JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint8_t chomp)
 {
     jl_array_t *a;
     // manually inlined common case
@@ -258,7 +258,8 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str)
     if (pd) {
         size_t n = pd-(s->buf+s->bpos)+1;
         if (str) {
-            jl_value_t *str = jl_pchar_to_string(s->buf + s->bpos, n);
+            size_t nchomp = ios_nchomp(s, n, chomp);
+            jl_value_t *str = jl_pchar_to_string(s->buf + s->bpos, n - nchomp);
             s->bpos += n;
             return str;
         }
@@ -271,7 +272,7 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str)
         ios_t dest;
         ios_mem(&dest, 0);
         ios_setbuf(&dest, (char*)a->data, 80, 0);
-        size_t n = ios_copyuntil(&dest, s, delim);
+        size_t n = ios_copyuntil(&dest, s, delim, chomp);
         if (dest.buf != a->data) {
             a = jl_take_buffer(&dest);
         }
@@ -290,51 +291,6 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str)
         }
     }
     return (jl_value_t*)a;
-}
-
-JL_DLLEXPORT jl_value_t *jl_readline(ios_t *s, uint8_t chomp)
-{
-    jl_array_t *a;
-    // manually inlined common case
-    char *n = (char*)memchr(s->buf+s->bpos, '\n', (size_t)(s->size - s->bpos));
-    if (n) {
-        size_t ntowrite = n-(s->buf+s->bpos)+1;
-        size_t nchomp = 0;
-        if (chomp)
-        {
-            if (ntowrite > 1 && s->buf[s->bpos+ntowrite - 2] == '\r') {
-                nchomp = 2;
-            }
-            else {
-                nchomp = 1;
-            }
-        }
-        jl_value_t *str = jl_pchar_to_string(s->buf + s->bpos, ntowrite - nchomp);
-        s->bpos += ntowrite;
-        return str;
-    }
-    else {
-        a = jl_alloc_array_1d(jl_array_uint8_type, 80);
-        ios_t dest;
-        ios_mem(&dest, 0);
-        ios_setbuf(&dest, (char*)a->data, 80, 0);
-        size_t n = ios_copyline(&dest, s, chomp);
-        if (dest.buf != a->data) {
-            a = jl_take_buffer(&dest);
-        }
-        else {
-#ifdef STORE_ARRAY_LEN
-            a->length = n;
-#endif
-            a->nrows = n;
-            ((char*)a->data)[n] = '\0';
-        }
-
-        JL_GC_PUSH1(&a);
-        jl_value_t *st = jl_array_to_string(a);
-        JL_GC_POP();
-        return st;
-    }
 }
 
 JL_DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
