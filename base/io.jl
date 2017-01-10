@@ -387,6 +387,10 @@ function read(s::IO, ::Type{Char})
     return Char(c)
 end
 
+# readuntil_string is useful below since it has
+# an optimized method for s::IOStream
+readuntil_string(s::IO, delim::UInt8) = String(readuntil(s, delim))
+
 function readuntil(s::IO, delim::Char)
     if delim < Char(0x80)
         return readuntil_string(s, delim % UInt8)
