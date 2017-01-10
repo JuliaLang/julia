@@ -179,7 +179,7 @@ function copy!(A::AbstractMatrix, J::UniformScaling)
 end
 
 function cond{T}(J::UniformScaling{T})
-    onereal = one(real(J.λ))
+    onereal = inv(one(real(J.λ)))
     return J.λ ≠ zero(T) ? onereal : oftype(onereal, Inf)
 end
 
