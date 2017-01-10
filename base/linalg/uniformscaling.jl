@@ -178,7 +178,10 @@ function copy!(A::AbstractMatrix, J::UniformScaling)
     return A
 end
 
-cond{T}(J::UniformScaling{T}) = J.λ ≠ zero(T) ? one(real(J.λ)) : oftype(real(J.λ), Inf)
+function cond{T}(J::UniformScaling{T})
+    onereal = one(real(J.λ))
+    return J.λ ≠ zero(T) ? onereal : oftype(onereal, Inf)
+end
 
 # promote_to_arrays(n,k, T, A...) promotes any UniformScaling matrices
 # in A to matrices of type T and sizes given by n[k:end].  n is an array
