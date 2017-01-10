@@ -708,7 +708,7 @@ end
 function eps(x::AbstractFloat)
     if isfinite(x)
         if abs(x) >= realmin(x)  # normal
-            oftype(x, ldexp(2.0, exponent(x) - precision(x)))
+            oftype(x, ldexp(one(x), exponent(x) - precision(x) + 1))
         else
             oftype(x, nextfloat(zero(x)))   # subnormal
         end
