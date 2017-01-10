@@ -2,17 +2,14 @@
 
 # TODO: make this a general purpose solution
 function Base.cconvert(::Type{Ptr{DiffOptionsStruct}}, pathspecs::AbstractString)
-    cs = Base.cconvert(Cstring, pathspecs)
-    data = [Base.unsafe_convert(Cstring, cs)]
-    sa = StrArrayStruct(pointer(data), 1)
+    str_ref = Base.cconvert(Ref{Cstring}, [pathspecs])
+    sa = StrArrayStruct(Base.unsafe_convert(Ref{Cstring}, str_ref), 1)
     do_ref = Ref(DiffOptions(pathspec = sa))
-    return do_ref, data, cs
+    do_ref, str_ref
 end
-function Base.unsafe_convert(::Type{Ptr{DiffOptionsStruct}}, tup::Tuple)
-    Base.unsafe_convert(Ptr{DiffOptionStruct}, first(tup))
+function Base.unsafe_convert(::Type{Ptr{DiffOptionsStruct}}, rr::Tuple{Ref{DiffOptionsStruct}, Ref{Cstring}})
+    Base.unsafe_convert(Ptr{DiffOptionStruct}, first(rr))
 end
-
-
 
 
 function diff_tree(repo::GitRepo, tree::GitTree, pathspecs::AbstractString=""; cached::Bool=false)

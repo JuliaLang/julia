@@ -92,7 +92,7 @@ end
 Buffer() = Buffer(C_NULL, 0, 0)
 
 function free(buf_ref::Base.Ref{Buffer})
-    ccall((:git_buf_free, :libgit2), Void, (Ptr{Buffer},), buf_ptr)
+    ccall((:git_buf_free, :libgit2), Void, (Ptr{Buffer},), buf_ref)
 end
 
 "Abstract credentials payload"

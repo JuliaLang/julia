@@ -1,13 +1,13 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-function Base.cconvert{T<:AbstractString}(::Type{Ptr{StrArrayStruct}}, strs::Vector{T})
-    data = [Base.cconvert(Cstring, s) for s in strs]
-    ptrs = [Base.unsafe_convert(Cstring, d) for d in data]
-    sa = Ref(StrArrayStruct(pointer(ptrs), length(ptrs)))
-    sa, data, ptrs
+
+function Base.cconvert(::Type{Ptr{StrArrayStruct}}, x::Vector)
+    str_ref = Base.cconvert(Ref{Cstring}, x)
+    sa_ref = Ref(StrArrayStruct(Base.unsafe_convert(Ref{Cstring}, str_ref), length(x)))
+    sa_ref, str_ref
 end
-function Base.unsafe_convert(::Type{Ptr{StrArrayStruct}}, tup::Tuple)
-    Base.unsafe_convert(Ptr{StrArrayStruct}, first(tup))
+function Base.unsafe_convert(::Type{Ptr{StrArrayStruct}}, rr::Tuple{Ref{StrArrayStruct}, Ref{Cstring}})
+    Base.unsafe_convert(Ptr{StrArrayStruct}, first(rr))
 end
 
 function Base.unsafe_convert(::Type{Vector{String}}, sa::StrArrayStruct)
