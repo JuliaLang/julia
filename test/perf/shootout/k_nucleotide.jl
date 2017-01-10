@@ -46,7 +46,7 @@ function sorted_array(m::Dict{AbstractString, Int})
         kn[i] = KNuc(elem...)
         i += 1
     end
-    sort(kn)
+    sort!(kn)
 end
 
 function print_knucs(a::Array{KNuc, 1})
