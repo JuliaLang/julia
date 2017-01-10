@@ -1541,6 +1541,7 @@ unsafe_wrap(::Type{String}, p::Cstring, len::Integer, own::Bool=false) =
 eval(LibGit2, :(Base.@deprecate_binding GitAnyObject GitUnknownObject))
 
 # Deprecate one argument method in order to make chomp=true the new default  #19944
+# NOTE remember to add the chomp=true default to function definitions when removing these
 @deprecate readline(s::IO) readline(s, false)
 @deprecate readline(s::IOStream) readline(s, false)
 @deprecate readline(filename::AbstractString) readline(filename, false)
