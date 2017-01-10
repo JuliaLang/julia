@@ -110,23 +110,22 @@ let x = BigFloat[1:1000;], y, z, v
 end
 
 # issue #19921
-type Foo
+type Foo19921
     a::String
 end
 
-type Bar
-    foo::Foo
-    fooDict::Dict{Foo, Int64}
+type Bar19921
+    foo::Foo19921
+    fooDict::Dict{Foo19921, Int64}
 end
 
 @testset "issue 19921" begin
     for i = 1 : 100
-        foo = Foo("foo")
-        bar = Bar(foo, Dict(foo => 3))
+        foo = Foo19921("foo")
+        bar = Bar19921(foo, Dict(foo => 3))
         bar2 = deepcopy(bar)
         @test bar2.foo ∈ keys(bar2.fooDict)
         @test bar2.fooDict[bar2.foo] != nothing
     end
 end
-
 
