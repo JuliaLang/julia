@@ -165,7 +165,7 @@ Compiler/Runtime improvements
 Deprecated or removed
 ---------------------
 
-  * One argument methods to `readline`, `readlines` and `eachline` have been depracated in
+  * One argument methods to `readline`, `readlines` and `eachline` have been deprecated in
     order to add new `chomp::Bool` argument which will default to `true` in future versions ([#19944]).
 
   * `isdefined(a::Array, i::Int)` has been deprecated in favor of `isassigned` ([#18346]).

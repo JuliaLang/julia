@@ -821,7 +821,10 @@ size_t ios_copyuntil(ios_t *to, ios_t *from, char delim, uint8_t chomp)
         }
         else {
             size_t ntowrite = pd - (from->buf+from->bpos) + 1;
-            size_t nchomp = ios_nchomp(from, ntowrite, chomp);
+            size_t nchomp = 0;
+            if (chomp) {
+                nchomp = ios_nchomp(from, ntowrite);
+            }
             written = ios_write(to, from->buf+from->bpos, ntowrite - nchomp);
             from->bpos += ntowrite;
             total += written;
@@ -832,16 +835,14 @@ size_t ios_copyuntil(ios_t *to, ios_t *from, char delim, uint8_t chomp)
     return total;
 }
 
-size_t ios_nchomp(ios_t *from, size_t ntowrite, uint8_t chomp)
+size_t ios_nchomp(ios_t *from, size_t ntowrite)
 {
-    size_t nchomp = 0;
-    if (chomp) {
-        if (ntowrite > 1 && from->buf[from->bpos+ntowrite - 2] == '\r') {
-            nchomp = 2;
-        }
-        else {
-            nchomp = 1;
-        }
+    size_t nchomp;
+    if (ntowrite > 1 && from->buf[from->bpos+ntowrite - 2] == '\r') {
+        nchomp = 2;
+    }
+    else {
+        nchomp = 1;
     }
     return nchomp;
 }

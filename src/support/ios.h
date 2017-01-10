@@ -95,7 +95,7 @@ JL_DLLEXPORT void ios_set_readonly(ios_t *s);
 JL_DLLEXPORT size_t ios_copy(ios_t *to, ios_t *from, size_t nbytes);
 JL_DLLEXPORT size_t ios_copyall(ios_t *to, ios_t *from);
 JL_DLLEXPORT size_t ios_copyuntil(ios_t *to, ios_t *from, char delim, uint8_t chomp);
-JL_DLLEXPORT size_t ios_nchomp(ios_t *from, size_t ntowrite, uint8_t chomp);
+JL_DLLEXPORT size_t ios_nchomp(ios_t *from, size_t ntowrite);
 // ensure at least n bytes are buffered if possible. returns # available.
 JL_DLLEXPORT size_t ios_readprep(ios_t *from, size_t n);
 

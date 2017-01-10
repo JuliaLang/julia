@@ -353,7 +353,7 @@ let fname = tempname()
             cmd = pipeline(`busybox echo asdf`,`busybox cat`)
         end
     end
-    for line in eachline(STDIN)
+    for line in eachline(STDIN, false)
         run(cmd)
     end
     """

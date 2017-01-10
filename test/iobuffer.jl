@@ -80,6 +80,11 @@ write(io,"\n\r\n\n\r \n") > 0
 @test readlines(io, false) == String["\n", "\r\n", "\n", "\r \n"]
 write(io,"\n\r\n\n\r \n") > 0
 @test readlines(io, true) == String["", "", "", "\r "]
+@test write(io,"α\nβ\nγ\nδ") > 0
+readlines(io, true) == String["α", "β", "γ", "δ"]
+@test write(io,"α\nβ\nγ\nδ") > 0
+readlines(io, false) == String["α", "β", "γ", "δ"]
+String["α\n","β\n","γ\n","δ"]
 Base.compact(io)
 @test position(io) == 0
 @test ioslength(io) == 0

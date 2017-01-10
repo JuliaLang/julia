@@ -558,7 +558,6 @@ otherwise newline characters(s) are stripped from result.
 """
 eachline(stream::IO, chomp::Bool=true) = EachLine(stream, chomp)
 
-
 function eachline(filename::AbstractString, chomp::Bool=true)
     s = open(filename)
     EachLine(s, chomp, ()->close(s))

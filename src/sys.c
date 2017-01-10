@@ -258,7 +258,10 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
     if (pd) {
         size_t n = pd-(s->buf+s->bpos)+1;
         if (str) {
-            size_t nchomp = ios_nchomp(s, n, chomp);
+            size_t nchomp = 0;
+            if (chomp) {
+                nchomp = ios_nchomp(s, n);
+            }
             jl_value_t *str = jl_pchar_to_string(s->buf + s->bpos, n - nchomp);
             s->bpos += n;
             return str;
