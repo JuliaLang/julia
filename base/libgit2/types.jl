@@ -64,7 +64,7 @@ immutable StrArrayStruct
 end
 StrArrayStruct() = StrArrayStruct(C_NULL, 0)
 
-function free(sa_ref::Base.RefValue{StrArrayStruct})
+function free(sa_ref::Base.Ref{StrArrayStruct})
     ccall((:git_strarray_free, :libgit2), Void, (Ptr{StrArrayStruct},), sa_ref)
 end
 
@@ -73,16 +73,26 @@ end
 
 A data buffer for exporting data from libgit2.
 Matches the [`git_buf`](https://libgit2.github.com/libgit2/#HEAD/type/git_buf) struct.
+
+When fetching data from LibGit2, a typical usage would look like:
+```
+buf_ref = Ref(Buffer())
+@check ccall(..., (Ptr{Buffer},), buf_ref)
+# operation on buf_ref
+free(buf_ref)
+```
+In particular, note that `LibGit2.free` should be called afterward on the `Ref` object.
+
 """
-@kwdef immutable Buffer
+immutable Buffer
     ptr::Ptr{Cchar}
     asize::Csize_t
     size::Csize_t
 end
-function Base.close(buf::Buffer)
-    buf_ptr = Ref(buf)
+Buffer() = Buffer(C_NULL, 0, 0)
+
+function free(buf_ref::Base.Ref{Buffer})
     ccall((:git_buf_free, :libgit2), Void, (Ptr{Buffer},), buf_ptr)
-    return buf_ptr[]
 end
 
 "Abstract credentials payload"
