@@ -265,7 +265,7 @@ void jl_gc_count_allocd(size_t sz);
 void jl_gc_run_all_finalizers(jl_ptls_t ptls);
 
 void gc_queue_binding(jl_binding_t *bnd);
-void gc_setmark_buf(jl_ptls_t ptls, void *buf, int, size_t);
+void gc_setmark_buf(jl_ptls_t ptls, void *buf, int8_t, size_t);
 
 STATIC_INLINE void jl_gc_wb_binding(jl_binding_t *bnd, void *val) // val isa jl_value_t*
 {
