@@ -159,6 +159,8 @@ Library improvements
   * `logging` can be used to redirect `info`, `warn`, and `error` messages
     either universally or on a per-module/function basis ([#16213]).
 
+  * New `iszero(x)` function to quickly check whether `x` is zero (or is all zeros, for an array) ([#19950]).
+
 Compiler/Runtime improvements
 -----------------------------
 

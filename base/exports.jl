@@ -360,6 +360,7 @@ export
     isreal,
     isimag,
     issubnormal,
+    iszero,
     lcm,
     ldexp,
     leading_ones,

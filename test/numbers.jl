@@ -2864,3 +2864,19 @@ let types = (Base.BitInteger_types..., BigInt, Bool)
 end
 
 @test !isempty(complex(1,2))
+
+@testset "iszero" begin
+    # Numeric scalars
+    for T in Iterators.flatten(subtypes.([AbstractFloat, Signed, Unsigned]))
+        @test iszero(T(0))
+        @test iszero(Complex{T}(0))
+    end
+    @test iszero(BigFloat(0))
+    @test !iszero(nextfloat(BigFloat(0)))
+    @test iszero(BigInt(0))
+    @test iszero(0//1)
+
+    # Array reduction
+    @test !iszero([0, 1, 2, 3])
+    @test iszero(zeros(Int, 5))
+end
