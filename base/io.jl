@@ -212,7 +212,7 @@ otherwise newline characters(s) are stripped from result.
 """
 function readlines(filename::AbstractString, chomp::Bool=true)
     open(filename) do f
-          readlines(f, chomp)
+        readlines(f, chomp)
     end
 end
 
