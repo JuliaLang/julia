@@ -27,7 +27,7 @@ end
 
 # enumerate (issue #6284)
 let b = IOBuffer("1\n2\n3\n"), a = []
-    for (i,x) in enumerate(eachline(b))
+    for (i,x) in enumerate(eachline(b, false))
         push!(a, (i,x))
     end
     @test a == [(1,"1\n"),(2,"2\n"),(3,"3\n")]
@@ -37,7 +37,7 @@ end
 let zeb     = IOBuffer("1\n2\n3\n4\n5\n"),
     letters = ['a', 'b', 'c', 'd', 'e'],
     res     = []
-    for (number, letter) in zip(eachline(zeb), letters)
+    for (number, letter) in zip(eachline(zeb, false), letters)
         push!(res, (parse(Int,strip(number)), letter))
     end
     @test res == [(1, 'a'), (2, 'b'), (3, 'c'), (4, 'd'), (5, 'e')]

@@ -320,7 +320,7 @@ function skipchars(s::IOStream, pred; linecomment::Char=Char(0xffffffff))
     ch = peekchar(s); status = Int(ch)
     while status >= 0 && (pred(ch) || ch == linecomment)
         if ch == linecomment
-            readline(s)
+            readline(s, false)
         else
             read(s, Char)  # advance one character
         end

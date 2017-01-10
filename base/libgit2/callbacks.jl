@@ -99,7 +99,7 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
         else
             # In encrypted private keys, the second line is "Proc-Type: 4,ENCRYPTED"
             open(privatekey) do f
-                passphrase_required = (readline(f); chomp(readline(f)) == "Proc-Type: 4,ENCRYPTED")
+                passphrase_required = (readline(f, false); readline(f, true) == "Proc-Type: 4,ENCRYPTED")
             end
         end
 

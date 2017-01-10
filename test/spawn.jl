@@ -182,8 +182,8 @@ let r, t, sock
     sock = connect(fetch(r))
     mark(sock)
     @test ismarked(sock)
-    @test readline(sock) == "Hello, world!\n"
-    @test readline(sock) == "Goodbye, world...\n"
+    @test readline(sock, false) == "Hello, world!\n"
+    @test readline(sock, false) == "Goodbye, world...\n"
     @test reset(sock) == 0
     @test !ismarked(sock)
     mark(sock)

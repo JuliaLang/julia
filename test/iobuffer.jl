@@ -49,7 +49,7 @@ end
 
 let io = IOBuffer("hamster\nguinea pig\nturtle")
 @test position(io) == 0
-@test readline(io) == "hamster\n"
+@test readline(io, false) == "hamster\n"
 @test readstring(io) == "guinea pig\nturtle"
 @test_throws EOFError read(io,UInt8)
 seek(io,0)
@@ -66,14 +66,14 @@ let io = PipeBuffer()
 @test_throws EOFError read(io,UInt8)
 @test write(io,"pancakes\nwaffles\nblueberries\n") > 0
 @test position(io) == 0
-@test readline(io) == "pancakes\n"
+@test readline(io, false) == "pancakes\n"
 Base.compact(io)
-@test readline(io) == "waffles\n"
+@test readline(io, false) == "waffles\n"
 @test write(io,"whipped cream\n") > 0
-@test readline(io) == "blueberries\n"
+@test readline(io, false) == "blueberries\n"
 @test_throws ArgumentError seek(io,0)
 @test_throws ArgumentError truncate(io,0)
-@test readline(io) == "whipped cream\n"
+@test readline(io, false) == "whipped cream\n"
 @test write(io,"pancakes\nwaffles\nblueberries\n") > 0
 @test readlines(io, true) == String["pancakes", "waffles", "blueberries"]
 write(io,"\n\r\n\n\r \n") > 0
@@ -139,7 +139,7 @@ a = Array{UInt8}(1024)
 @test eof(io)
 end
 
-@test isempty(readlines(IOBuffer()))
+@test isempty(readlines(IOBuffer(), false))
 
 # issue #8193
 let io=IOBuffer("asdf")
