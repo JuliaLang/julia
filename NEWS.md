@@ -159,6 +159,8 @@ Library improvements
   * `logging` can be used to redirect `info`, `warn`, and `error` messages
     either universally or on a per-module/function basis ([#16213]).
 
+  * `iszero` is now exported from `Base` ([#19950]).
+
 Compiler/Runtime improvements
 -----------------------------
 
