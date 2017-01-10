@@ -108,3 +108,25 @@ let x = BigFloat[1:1000;], y, z, v
     # Check that the setprecision indeed does something
     @test z != x
 end
+
+# issue #19921
+type Foo
+    a::String
+end
+
+type Bar
+    foo::Foo
+    fooDict::Dict{Foo, Int64}
+end
+
+@testset "issue 19921" begin
+    for i = 1 : 100
+        foo = Foo("foo")
+        bar = Bar(foo, Dict(foo => 3))
+        bar2 = deepcopy(bar)
+        @test bar2.foo ∈ keys(bar2.fooDict)
+        @test bar2.fooDict[bar2.foo] != nothing
+    end
+end
+
+
