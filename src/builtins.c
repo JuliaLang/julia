@@ -1115,6 +1115,11 @@ static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
     }
     if (dt == jl_typename_type)
         return ((jl_typename_t*)v)->hash;
+#ifdef _P64
+    if (v == jl_ANY_flag) return 0x31c472f68ee30bddULL;
+#else
+    if (v == jl_ANY_flag) return 0x8ee30bdd;
+#endif
     if (dt->mutabl) return inthash((uintptr_t)v);
     size_t sz = jl_datatype_size(tv);
     uintptr_t h = jl_object_id(tv);
