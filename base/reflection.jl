@@ -301,7 +301,7 @@ function _subtypes(m::Module, x::DataType, sts=Set{DataType}(), visited=Set{Modu
     end
     return sts
 end
-subtypes(m::Module, x::DataType) = sort(collect(_subtypes(m, x)), by=string)
+subtypes(m::Module, x::DataType) = x.abstract ? sort(collect(_subtypes(m, x)), by=string) : DataType[]
 
 """
     subtypes(T::DataType)
