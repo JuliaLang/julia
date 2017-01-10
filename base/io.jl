@@ -186,11 +186,9 @@ end
 readline() = readline(STDIN, false)
 
 function readline(s::IO, chomp::Bool=true)
-    chomp || return String(readuntil(s, 0x0a))
-
     line = readuntil(s, 0x0a)
     i = length(line)
-    if i == 0 || line[i] != 0x0a
+    if !chomp || i == 0 || line[i] != 0x0a
         return String(line)
     elseif i < 2 || line[i-1] != 0x0d
         return String(resize!(line,i-1))
