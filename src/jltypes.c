@@ -150,7 +150,7 @@ JL_DLLEXPORT int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env)
         return ans;
     }
     if (jl_is_datatype(v)) {
-        if (!((jl_datatype_t*)v)->hasfreetypevars)
+        if (!((jl_datatype_t*)v)->hasfreetypevars && !(env && env->var == (jl_tvar_t*)jl_ANY_flag))
             return 0;
         size_t i;
         for (i=0; i < jl_nparams(v); i++) {
@@ -334,8 +334,7 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
 
 static int contains_unions(jl_value_t *type)
 {
-    if (jl_is_uniontype(type)) return 1;
-    if (jl_is_unionall(type)) return contains_unions(((jl_unionall_t*)type)->body);
+    if (jl_is_uniontype(type) || jl_is_unionall(type)) return 1;
     if (!jl_is_datatype(type)) return 0;
     int i;
     for(i=0; i < jl_nparams(type); i++) {
@@ -384,31 +383,20 @@ static int typekey_compare(jl_datatype_t *tt, jl_value_t **key, size_t n)
     for(j=0; j < n; j++) {
         jl_value_t *kj = key[j], *tj = jl_svecref(tt->parameters,j);
         if (tj != kj) {
-            uint32_t tid=0, kid=0;
             int dtk = jl_is_datatype(kj);
             if (!jl_is_datatype(tj)) {
-                tid = wrapper_id(tj);
-                if (tid) {
-                    kid = wrapper_id(kj);
-                }
-                else if (!dtk) {
-                    if (jl_egal(tj, kj))
-                        continue;
-                    return (jl_object_id(kj) < jl_object_id(tj) ? -1 : 1);
-                }
-                else {
-                    return 1;
-                }
-            }
-            else if (!dtk) {
-                kid = wrapper_id(kj);
-                if (!kid)
-                    return -1;
-            }
-            if (tid || kid) {
+                if (dtk) return 1;
+                uint32_t tid = wrapper_id(tj), kid = wrapper_id(kj);
                 if (kid != tid)
                     return kid < tid ? -1 : 1;
-                continue;
+                if (tid)
+                    continue;
+                if (jl_egal(tj, kj))
+                    continue;
+                return (jl_object_id(kj) < jl_object_id(tj) ? -1 : 1);
+            }
+            else if (!dtk) {
+                return -1;
             }
             assert(dtk && jl_is_datatype(tj));
             jl_datatype_t *dt = (jl_datatype_t*)tj;
@@ -535,6 +523,8 @@ static int is_cacheable(jl_datatype_t *type)
     assert(jl_is_datatype(type));
     jl_svec_t *t = type->parameters;
     if (jl_svec_len(t) == 0) return 0;
+    if (jl_has_typevar((jl_value_t*)type, (jl_tvar_t*)jl_ANY_flag))
+        return 0;
     // cache abstract types with no free type vars
     if (jl_is_abstracttype(type))
         return !jl_has_free_typevars((jl_value_t*)type);
