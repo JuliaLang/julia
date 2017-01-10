@@ -50,8 +50,8 @@ free(sa_ref)
 ```
 In particular, note that `LibGit2.free` should be called afterward on the `Ref` object.
 
-Conversely, when a vector of strings to LibGit2, it is generally simplest to rely on
-implicit conversion:
+Conversely, when passing a vector of strings to LibGit2, it is generally simplest to rely
+on implicit conversion:
 ```julia
 strs = String[...]
 @check ccall(..., (Ptr{StrArrayStruct},), strs)
