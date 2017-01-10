@@ -42,7 +42,7 @@ A LibGit2 representation of an array of strings.
 Matches the [`git_strarray`](https://libgit2.github.com/libgit2/#HEAD/type/git_strarray) struct.
 
 When fetching data from LibGit2, a typical usage would look like:
-```
+```julia
 sa_ref = Ref(StrArrayStruct())
 @check ccall(..., (Ptr{StrArrayStruct},), sa_ref)
 res = Base.unsafe_convert(Vector{String}, sa_ref[])
@@ -52,7 +52,7 @@ In particular, note that `LibGit2.free` should be called afterward on the `Ref` 
 
 Conversely, when a vector of strings to LibGit2, it is generally simplest to rely on
 implicit conversion:
-```
+```julia
 strs = String[...]
 @check ccall(..., (Ptr{StrArrayStruct},), strs)
 ```
@@ -75,7 +75,7 @@ A data buffer for exporting data from libgit2.
 Matches the [`git_buf`](https://libgit2.github.com/libgit2/#HEAD/type/git_buf) struct.
 
 When fetching data from LibGit2, a typical usage would look like:
-```
+```julia
 buf_ref = Ref(Buffer())
 @check ccall(..., (Ptr{Buffer},), buf_ref)
 # operation on buf_ref
