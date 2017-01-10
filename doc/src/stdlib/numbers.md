@@ -67,6 +67,7 @@ Base.issubnormal
 Base.isfinite
 Base.isinf
 Base.isnan
+Base.iszero
 Base.nextfloat
 Base.prevfloat
 Base.isinteger
