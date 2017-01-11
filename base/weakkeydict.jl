@@ -53,7 +53,7 @@ WeakKeyDict(     ps::Pair...)                 = WeakKeyDict{Any,Any}(ps)
 
 function WeakKeyDict(kv)
     try
-        Base.associative_with_eltype(WeakKeyDict, kv, eltype(kv))
+        Base.associative_with_eltype((K, V) -> WeakKeyDict{K, V}, kv, eltype(kv))
     catch e
         if any(x->isempty(methods(x, (typeof(kv),))), [start, next, done]) ||
             !all(x->isa(x,Union{Tuple,Pair}),kv)
