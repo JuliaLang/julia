@@ -90,13 +90,7 @@ stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bol
 
 function repl_cmd(cmd, out)
     shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
-    # Note that we can't support the fish shell due to its lack of subshells
-    #   See this for details: https://github.com/JuliaLang/julia/issues/4918
-    if Base.basename(shell[1]) == "fish"
-        warn_once("cannot use the fish shell, defaulting to /bin/sh\
-         set the JULIA_SHELL environment variable to silence this warning")
-        shell = "/bin/sh"
-    end
+    shell_name = Base.basename(shell[1])
 
     if isempty(cmd.exec)
         throw(ArgumentError("no cmd to execute"))
@@ -120,9 +114,17 @@ function repl_cmd(cmd, out)
         ENV["OLDPWD"] = new_oldpwd
         println(out, pwd())
     else
-        run(ignorestatus(@static is_windows() ? cmd : (isa(STDIN, TTY) ? `$shell -i -c "($(shell_escape(cmd))) && true"` : `$shell -c "($(shell_escape(cmd))) && true"`)))
+        run(ignorestatus(@static is_windows() ? cmd : (isa(STDIN, TTY) ? `$shell -i -c "$(shell_wrap_true(shell_name, cmd))"` : `$shell -c "$(shell_wrap_true(shell_name, cmd))"`)))
     end
     nothing
+end
+
+function shell_wrap_true(shell_name, cmd)
+    if shell_name == "fish"
+        "begin; $(shell_escape(cmd)); and true; end"
+    else
+        "($(shell_escape(cmd))) && true"
+    end
 end
 
 function display_error(io::IO, er, bt)
