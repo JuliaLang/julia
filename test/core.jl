@@ -4629,3 +4629,10 @@ gc_enable(true)
 bad_tvars{T}() = 1
 @test isa(@which(bad_tvars()), Method)
 @test_throws MethodError bad_tvars()
+
+# issue #15240
+p15240 = ccall(:jl_realloc, Ptr{Void}, (Ptr{Void}, Csize_t), C_NULL, 10)
+ccall(:jl_free, Void, (Ptr{Void}, ), p15240)
+
+# issue #19963
+ccall(:jl_free, Void, (Ptr{Void}, ), C_NULL)
