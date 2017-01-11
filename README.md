@@ -83,7 +83,7 @@ If you need to build Julia in an environment that does not allow access to the o
 **Note:** the build process fail badly if any of the build directory's parent directories have spaces or other shell meta-characters such as `$` or `:` in their names (this is due to a limitation in GNU make).
 
 Once it is built, you can run the `julia` executable using its full path in the directory created above (the `julia` directory), or, to run it from anywhere, either
-- add an alias (in `bash`: `echo "alias julia='/path/to/install/folder/usr/bin/julia'" >> ~/.bashrc && source ~/.bashrc`), or
+- add an alias (in `bash`: `echo "alias julia='/path/to/install/folder/bin/julia'" >> ~/.bashrc && source ~/.bashrc`), or 
 - add a soft link to the `julia` executable in the `julia` directory to `/usr/local/bin` (or any suitable directory already in your path), or
 
 - add the `julia` directory to your executable path for this shell session (in `bash`: `export PATH="$(pwd):$PATH"` ; in `csh` or `tcsh`:
