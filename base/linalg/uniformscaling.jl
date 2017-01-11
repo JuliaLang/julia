@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-import Base: copy, ctranspose, getindex, show, transpose, one, zero, inv,
+import Base: cond, copy, ctranspose, getindex, show, transpose, one, zero, inv,
              @_pure_meta, hcat, vcat, hvcat
 import Base.LinAlg: SingularException
 
@@ -176,6 +176,11 @@ function copy!(A::AbstractMatrix, J::UniformScaling)
         @inbounds A[i,i] = λ
     end
     return A
+end
+
+function cond{T}(J::UniformScaling{T})
+    onereal = inv(one(real(J.λ)))
+    return J.λ ≠ zero(T) ? onereal : oftype(onereal, Inf)
 end
 
 # promote_to_arrays(n,k, T, A...) promotes any UniformScaling matrices
