@@ -7,7 +7,7 @@
 
 Determines the editor to use when running functions like `edit`. Returns an Array compatible
 for use within backticks. You can change the editor by setting `JULIA_EDITOR`, `VISUAL` or
-`EDITOR` as an environmental variable.
+`EDITOR` as an environment variable.
 """
 function editor()
     if is_windows() || is_apple()
@@ -28,7 +28,7 @@ end
 
 Edit a file or directory optionally providing a line number to edit the file at.
 Returns to the `julia` prompt when you quit the editor. The editor can be changed
-by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environmental variable.
+by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 """
 function edit(path::AbstractString, line::Integer=0)
     command = editor()
@@ -76,7 +76,7 @@ end
 
 Edit the definition of a function, optionally specifying a tuple of types to
 indicate which method to edit. The editor can be changed by setting `JULIA_EDITOR`,
-`VISUAL` or `EDITOR` as an environmental variable.
+`VISUAL` or `EDITOR` as an environment variable.
 """
 edit(f)          = edit(functionloc(f)...)
 edit(f, t::ANY)  = edit(functionloc(f,t)...)
