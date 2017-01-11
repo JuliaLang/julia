@@ -13,6 +13,7 @@ end
 
 
 function diff_tree(repo::GitRepo, tree::GitTree, pathspecs::AbstractString=""; cached::Bool=false)
+    diff_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     if cached
         @check ccall((:git_diff_tree_to_index, :libgit2), Cint,
                      (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{DiffOptionsStruct}),
