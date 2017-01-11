@@ -2088,9 +2088,11 @@ JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
 
 JL_DLLEXPORT void jl_free(void *p)
 {
-    int64_t *pp = (int64_t *)p - 2;
-    size_t sz = pp[0];
-    jl_gc_counted_free(pp, sz);
+    if (p != NULL) {
+        int64_t *pp = (int64_t *)p - 2;
+        size_t sz = pp[0];
+        jl_gc_counted_free(pp, sz);
+    }
 }
 
 JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
