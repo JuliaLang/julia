@@ -167,7 +167,7 @@ end
             @test s1_left ≈ s2_left
 
             ## 1st right singular vector
-            s1_right = sign(S1[1][:Vt][3,1]) * S1[1][:Vt][:,1]
+            s1_right = sign(S1[1][:V][3,1]) * S1[1][:V][:,1]
             s2_right = sign(S2[3][3,1]) * S2[3][:,1]
             @test s1_right ≈ s2_right
         end
@@ -212,7 +212,7 @@ end
             @test s1_left ≈ s2_left
 
             ## right singular vectors
-            s1_right = abs.(S1[1][:Vt][:,1:2])
+            s1_right = abs.(S1[1][:V][:,1:2])
             s2_right = abs.(S2[3][:,1:2])
             @test s1_right ≈ s2_right
         end
