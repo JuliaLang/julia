@@ -291,14 +291,7 @@ For example, when reading all of the output from a command, call `readstring(out
 since the former will actively consume all of the data written by the process, whereas the latter
 will attempt to store the data in the kernel's buffers while waiting for a reader to be connected.
 
-Another common solution is to separate the reader and writer of the pipeline into separate Tasks:
 
-```julia
-writer = @async writeall(process, "data")
-reader = @async do_compute(readstring(process))
-wait(process)
-fetch(reader)
-```
 
 ### Complex Example
 
