@@ -285,6 +285,68 @@ end
     end
 end
 
+@testset "broadcast[!] over combinations of scalars, structured matrices, and sparse vectors/matrices" begin
+    N, p = 10, 0.4
+    s = rand()
+    V = sprand(N, p)
+    A = sprand(N, N, p)
+    Z = copy(A)
+    sparsearrays = (V, A)
+    fV, fA = map(Array, sparsearrays)
+    D = Diagonal(rand(N))
+    B = Bidiagonal(rand(N), rand(N - 1), true)
+    T = Tridiagonal(rand(N - 1), rand(N), rand(N - 1))
+    S = SymTridiagonal(rand(N), rand(N - 1))
+    structuredarrays = (D, B, T, S)
+    fstructuredarrays = map(Array, structuredarrays)
+    for (X, fX) in zip(structuredarrays, fstructuredarrays)
+        @test (Q = broadcast(sin, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(sin, fX)))
+        @test broadcast!(sin, Z, X) == sparse(broadcast(sin, fX))
+        @test (Q = broadcast(cos, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(cos, fX)))
+        @test broadcast!(cos, Z, X) == sparse(broadcast(cos, fX))
+        @test (Q = broadcast(*, s, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(*, s, fX)))
+        @test broadcast!(*, Z, s, X) == sparse(broadcast(*, s, fX))
+        @test (Q = broadcast(+, V, A, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(+, fV, fA, fX)))
+        @test broadcast!(+, Z, V, A, X) == sparse(broadcast(+, fV, fA, fX))
+        @test (Q = broadcast(*, s, V, A, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(*, s, fV, fA, fX)))
+        @test broadcast!(*, Z, s, V, A, X) == sparse(broadcast(*, s, fV, fA, fX))
+        for (Y, fY) in zip(structuredarrays, fstructuredarrays)
+            @test (Q = broadcast(+, X, Y); Q isa SparseMatrixCSC && Q == sparse(broadcast(+, fX, fY)))
+            @test broadcast!(+, Z, X, Y) == sparse(broadcast(+, fX, fY))
+            @test (Q = broadcast(*, X, Y); Q isa SparseMatrixCSC && Q == sparse(broadcast(*, fX, fY)))
+            @test broadcast!(*, Z, X, Y) == sparse(broadcast(*, fX, fY))
+        end
+    end
+end
+
+@testset "map[!] over combinations of sparse and structured matrices" begin
+    N, p = 10, 0.4
+    A = sprand(N, N, p)
+    Z, fA = copy(A), Array(A)
+    D = Diagonal(rand(N))
+    B = Bidiagonal(rand(N), rand(N - 1), true)
+    T = Tridiagonal(rand(N - 1), rand(N), rand(N - 1))
+    S = SymTridiagonal(rand(N), rand(N - 1))
+    structuredarrays = (D, B, T, S)
+    fstructuredarrays = map(Array, structuredarrays)
+    for (X, fX) in zip(structuredarrays, fstructuredarrays)
+        @test (Q = map(sin, X); Q isa SparseMatrixCSC && Q == sparse(map(sin, fX)))
+        @test map!(sin, Z, X) == sparse(map(sin, fX))
+        @test (Q = map(cos, X); Q isa SparseMatrixCSC && Q == sparse(map(cos, fX)))
+        @test map!(cos, Z, X) == sparse(map(cos, fX))
+        @test (Q = map(+, A, X); Q isa SparseMatrixCSC && Q == sparse(map(+, fA, fX)))
+        @test map!(+, Z, A, X) == sparse(map(+, fA, fX))
+        for (Y, fY) in zip(structuredarrays, fstructuredarrays)
+            @test (Q = map(+, X, Y); Q isa SparseMatrixCSC && Q == sparse(map(+, fX, fY)))
+            @test map!(+, Z, X, Y) == sparse(map(+, fX, fY))
+            @test (Q = map(*, X, Y); Q isa SparseMatrixCSC && Q == sparse(map(*, fX, fY)))
+            @test map!(*, Z, X, Y) == sparse(map(*, fX, fY))
+            @test (Q = map(+, X, A, Y); Q isa SparseMatrixCSC && Q == sparse(map(+, fX, fA, fY)))
+            @test map!(+, Z, X, A, Y) == sparse(map(+, fX, fA, fY))
+        end
+    end
+end
+
 # Older tests of sparse broadcast, now largely covered by the tests above
 @testset "assorted tests of sparse broadcast over two input arguments" begin
     N, p = 10, 0.3
