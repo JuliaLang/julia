@@ -39,7 +39,7 @@ end
     p = ["XXX","YYY"]
     a = Base.cconvert(Ptr{LibGit2.StrArrayStruct}, p)
     b = Base.unsafe_convert(Ptr{LibGit2.StrArrayStruct}, a)
-    @test p == Base.unsafe_convert(Vector{String}, unsafe_load(b))
+    @test p == convert(Vector{String}, unsafe_load(b))
 end
 
 @testset "Signature" begin
