@@ -19,11 +19,12 @@ using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseArray, indtyp
 # (4) Define _map_[not]zeropres! specialized for a single (input) sparse vector/matrix.
 # (5) Define _map_[not]zeropres! specialized for a pair of (input) sparse vectors/matrices.
 # (6) Define general _map_[not]zeropres! capable of handling >2 (input) sparse vectors/matrices.
-# (7) Define _broadcast_[not]zeropres! specialized for a pair of (input) sparse vectors/matrices.
-# (8) Define general _broadcast_[not]zeropres! capable of handling >2 (input) sparse vectors/matrices.
-# (9) Define (broadcast[!]) methods handling combinations of broadcast scalars and sparse vectors/matrices.
-# (10) Define (broadcast[!]) methods handling combinations of scalars, sparse vectors/matrices, and structured matrices.
-# (11) Define (map[!]) methods handling combinations of sparse and structured matrices.
+# (7) Define _broadcast_zeropres! specialized for a single (input) sparse vector/matrix.
+# (8) Define _broadcast_[not]zeropres! specialized for a pair of (input) sparse vectors/matrices.
+# (9) Define general _broadcast_[not]zeropres! capable of handling >2 (input) sparse vectors/matrices.
+# (10) Define (broadcast[!]) methods handling combinations of broadcast scalars and sparse vectors/matrices.
+# (11) Define (broadcast[!]) methods handling combinations of scalars, sparse vectors/matrices, and structured matrices.
+# (12) Define (map[!]) methods handling combinations of sparse and structured matrices.
 
 
 # (1) The definitions below provide a common interface to sparse vectors and matrices
@@ -149,7 +150,8 @@ _maxnnzfrom(shape::NTuple{2}, A::SparseVector) = nnz(A) * div(shape[1], A.n) * s
 _maxnnzfrom(shape::NTuple{2}, A::SparseMatrixCSC) = nnz(A) * div(shape[1], A.m) * div(shape[2], A.n)
 @inline _maxnnzfrom_each(shape, ::Tuple{}) = ()
 @inline _maxnnzfrom_each(shape, As) = (_maxnnzfrom(shape, first(As)), _maxnnzfrom_each(shape, tail(As))...)
-@inline _unchecked_maxnnzbcres(shape, As) = min(_densennz(shape), sum(_maxnnzfrom_each(shape, As)))
+@inline _unchecked_maxnnzbcres(shape, As::Tuple) = min(_densennz(shape), sum(_maxnnzfrom_each(shape, As)))
+@inline _unchecked_maxnnzbcres(shape, As...) = _unchecked_maxnnzbcres(shape, As)
 @inline _checked_maxnnzbcres(shape::NTuple{1}, As...) = shape[1] != 0 ? _unchecked_maxnnzbcres(shape, As) : 0
 @inline _checked_maxnnzbcres(shape::NTuple{2}, As...) = shape[1] != 0 && shape[2] != 0 ? _unchecked_maxnnzbcres(shape, As) : 0
 @inline function _allocres(shape::NTuple{1}, indextype, entrytype, maxnnz)
@@ -424,7 +426,61 @@ end
 end
 
 
-# (7) _broadcast_zeropres!/_broadcast_notzeropres! specialized for a pair of (input) sparse vectors/matrices
+# (7) _broadcast_zeropres! specialized for a single (input) sparse vector/matrix
+function _broadcast_zeropres!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat)
+    isempty(C) && return _finishempty!(C)
+    spaceC::Int = min(length(storedinds(C)), length(storedvals(C)))
+    # C and A cannot have the same shape, as we directed that case to map in broadcast's
+    # entry point; here we need efficiently handle only heterogeneous C-A combinations where
+    # one or both of C and A has at least one singleton dimension.
+    #
+    # We first divide the cases into two groups: those in which the input argument does not
+    # expand vertically, and those in which the input argument expands vertically.
+    #
+    # Cases without vertical expansion
+    Ck = 1
+    if numrows(A) == numrows(C)
+        @inbounds for j in columns(C)
+            setcolptr!(C, j, Ck)
+            bccolrangejA = numcols(A) == 1 ? colrange(A, 1) : colrange(A, j)
+            for Ak in bccolrangejA
+                Cx = f(storedvals(A)[Ak])
+                if !_iszero(Cx)
+                    Ck > spaceC && (spaceC = expandstorage!(C, _unchecked_maxnnzbcres(size(C), A)))
+                    storedinds(C)[Ck] = storedinds(A)[Ak]
+                    storedvals(C)[Ck] = Cx
+                    Ck += 1
+                end
+            end
+        end
+    # Cases with vertical expansion
+    else # numrows(A) != numrows(C) (=> numrows(A) == 1)
+        @inbounds for j in columns(C)
+            setcolptr!(C, j, Ck)
+            Ak, stopAk = numcols(A) == 1 ? (colstartind(A, 1), colboundind(A, 1)) : (colstartind(A, j), colboundind(A, j))
+            Ax = Ak < stopAk ? storedvals(A)[Ak] : zero(eltype(A))
+            fofAx = f(Ax)
+            # if fofAx is zero, then either A's jth column is empty, or A's jth column
+            # contains a nonzero value x but f(Ax) is nonetheless zero, so we need store
+            # nothing in C's jth column. if to the contrary fofAx is nonzero, then we must
+            # densely populate C's jth column with fofAx.
+            if !_iszero(fofAx)
+                for Ci::indtype(C) in 1:numrows(C)
+                    Ck > spaceC && (spaceC = expandstorage!(C, _unchecked_maxnnzbcres(size(C), A)))
+                    storedinds(C)[Ck] = Ci
+                    storedvals(C)[Ck] = fofAx
+                    Ck += 1
+                end
+            end
+        end
+    end
+    @inbounds setcolptr!(C, numcols(C) + 1, Ck)
+    trimstorage!(C, Ck - 1)
+    return C
+end
+
+
+# (8) _broadcast_zeropres!/_broadcast_notzeropres! specialized for a pair of (input) sparse vectors/matrices
 function _broadcast_zeropres!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B::SparseVecOrMat)
     isempty(C) && return _finishempty!(C)
     spaceC::Int = min(length(storedinds(C)), length(storedvals(C)))
@@ -667,7 +723,7 @@ _finishempty!(C::SparseVector) = C
 _finishempty!(C::SparseMatrixCSC) = (fill!(C.colptr, 1); C)
 
 
-# (8) _broadcast_zeropres!/_broadcast_notzeropres! for more than two (input) sparse vectors/matrices
+# (9) _broadcast_zeropres!/_broadcast_notzeropres! for more than two (input) sparse vectors/matrices
 function _broadcast_zeropres!{Tf,N}(f::Tf, C::SparseVecOrMat, As::Vararg{SparseVecOrMat,N})
     isempty(C) && return _finishempty!(C)
     spaceC::Int = min(length(storedinds(C)), length(storedvals(C)))
@@ -853,7 +909,7 @@ end
 end
 
 
-# (9) broadcast[!] over combinations of broadcast scalars and sparse vectors/matrices
+# (10) broadcast[!] over combinations of broadcast scalars and sparse vectors/matrices
 
 # broadcast shape promotion for combinations of sparse arrays and other types
 broadcast_indices(::Type{AbstractSparseArray}, A) = indices(A)
@@ -904,7 +960,7 @@ broadcast{Tf,T}(f::Tf, ::Type{T}, A::SparseMatrixCSC) = broadcast(y -> f(T, y), 
 broadcast{Tf,T}(f::Tf, A::SparseMatrixCSC, ::Type{T}) = broadcast(x -> f(x, T), A)
 
 
-# (10) broadcast[!] over combinations of scalars, sparse vectors/matrices, and structured matrices
+# (11) broadcast[!] over combinations of scalars, sparse vectors/matrices, and structured matrices
 
 # structured array container type promotion
 immutable StructuredArray end
@@ -942,7 +998,7 @@ promote_containertype(::Type{Tuple}, ::Type{StructuredArray}) = Array
 @inline _sparsifystructured(x) = x
 
 
-# (11) map[!] over combinations of sparse and structured matrices
+# (12) map[!] over combinations of sparse and structured matrices
 StructuredMatrix = Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}
 SparseOrStructuredMatrix = Union{SparseMatrixCSC,StructuredMatrix}
 map{Tf}(f::Tf, A::StructuredMatrix) = _noshapecheck_map(f, _sparsifystructured(A))
