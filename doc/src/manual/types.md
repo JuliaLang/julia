@@ -1236,12 +1236,12 @@ about the proper (and improper) uses of `Val`, please read the more extensive di
 ## [Nullable Types: Representing Missing Values](@id man-nullable-types)
 
 In many settings, you need to interact with a value of type `T` that may or may not exist. To
-handle these settings, Julia provides a parametric type called `Nullable{T}`, which can be thought
+handle these settings, Julia provides a parametric type called [`Nullable{T}`](@ref), which can be thought
 of as a specialized container type that can contain either zero or one values. `Nullable{T}` provides
 a minimal interface designed to ensure that interactions with missing values are safe. At present,
 the interface consists of several possible interactions:
 
-  * Construct a [`Nullable`](@ref) object.
+  * Construct a `Nullable` object.
   * Check if a `Nullable` object has a missing value.
   * Access the value of a `Nullable` object with a guarantee that a [`NullException`](@ref)
     will be thrown if the object's value is missing.
@@ -1252,8 +1252,7 @@ the interface consists of several possible interactions:
   * Performing a test on the value (if it exists) of a `Nullable`
     object, getting a result that is missing if either the `Nullable`
     itself was missing, or the test failed.
-  * Perform general operations on single or multiple `Nullable`
-    objects, propagating the missing data.
+  * Perform general operations on single `Nullable` objects, propagating the missing data.
 
 ### Constructing [`Nullable`](@ref) objects
 
