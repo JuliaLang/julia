@@ -42,7 +42,7 @@ function fetch_refspecs(rmt::GitRemote)
     sa_ref = Ref(StrArrayStruct())
     @check ccall((:git_remote_get_fetch_refspecs, :libgit2), Cint,
                  (Ptr{StrArrayStruct}, Ptr{Void}), sa_ref, rmt.ptr)
-    res = Base.unsafe_convert(Vector{String}, sa_ref[])
+    res = convert(Vector{String}, sa_ref[])
     free(sa_ref)
     res
 end
@@ -51,7 +51,7 @@ function push_refspecs(rmt::GitRemote)
     sa_ref = Ref(StrArrayStruct())
     @check ccall((:git_remote_get_push_refspecs, :libgit2), Cint,
                  (Ptr{StrArrayStruct}, Ptr{Void}), sa_ref, rmt.ptr)
-    res = Base.unsafe_convert(Vector{String}, sa_ref[])
+    res = convert(Vector{String}, sa_ref[])
     free(sa_ref)
     res
 end

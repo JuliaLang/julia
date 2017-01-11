@@ -10,6 +10,6 @@ function Base.unsafe_convert(::Type{Ptr{StrArrayStruct}}, rr::Tuple{Ref{StrArray
     Base.unsafe_convert(Ptr{StrArrayStruct}, first(rr))
 end
 
-function Base.unsafe_convert(::Type{Vector{String}}, sa::StrArrayStruct)
+function Base.convert(::Type{Vector{String}}, sa::StrArrayStruct)
     [unsafe_string(unsafe_load(sa.strings, i)) for i = 1:sa.count]
 end

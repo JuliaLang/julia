@@ -210,7 +210,7 @@ function remotes(repo::GitRepo)
     sa_ref = Ref(StrArrayStruct())
     @check ccall((:git_remote_list, :libgit2), Cint,
                   (Ptr{StrArrayStruct}, Ptr{Void}), sa_ref, repo.ptr)
-    res = Base.unsafe_convert(Vector{String}, sa_ref[])
+    res = convert(Vector{String}, sa_ref[])
     free(sa_ref)
     return res
 end
