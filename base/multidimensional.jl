@@ -255,6 +255,7 @@ immutable LogicalIndex{T, A<:AbstractArray{Bool}} <: AbstractVector{T}
 end
 LogicalIndex(mask::AbstractVector{Bool}) = LogicalIndex{Int, typeof(mask)}(mask)
 LogicalIndex{N}(mask::AbstractArray{Bool, N}) = LogicalIndex{CartesianIndex{N}, typeof(mask)}(mask)
+(::Type{LogicalIndex{Int}})(mask::AbstractArray) = LogicalIndex{Int, typeof(mask)}(mask)
 size(L::LogicalIndex) = (L.sum,)
 length(L::LogicalIndex) = L.sum
 collect(L::LogicalIndex) = [i for i in L]
@@ -298,12 +299,22 @@ done(L::LogicalIndex, s) = s[3] > length(L)
 end
 @inline done{B<:BitArray}(L::LogicalIndex{Int, B}, s) = s[2] > length(L)
 
+# Checking bounds with LogicalIndex{Int} is tricky since we allow linear indexing over trailing dimensions
+@inline checkbounds_indices{N}(::Type{Bool},IA::Tuple{},I::Tuple{LogicalIndex{Int,AbstractArray{Bool,N}}}) =
+    checkindex(Bool, IA, I[1])
+@inline checkbounds_indices{N}(::Type{Bool},IA::Tuple{Any},I::Tuple{LogicalIndex{Int,AbstractArray{Bool,N}}}) =
+    checkindex(Bool, IA[1], I[1])
+@inline function checkbounds_indices{N}(::Type{Bool}, IA::Tuple, I::Tuple{LogicalIndex{Int,AbstractArray{Bool,N}}})
+    IA1, IArest = IteratorsMD.split(IA, Val{N})
+    checkindex(Bool, IA1, I[1])
+end
+@inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex) = indices(A) == indices(I.mask)
+@inline checkindex(::Type{Bool}, indx::AbstractUnitRange, I::LogicalIndex) = (indx,) == indices(I.mask)
+checkindex(::Type{Bool}, inds::Tuple, I::LogicalIndex) = false
 
-checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex) = checkbounds(Bool, A, I.mask)
-checkindex(::Type{Bool}, indx::AbstractUnitRange, I::LogicalIndex) = checkindex(Bool, indx, I.mask)
 ensure_indexable(I::Tuple{}) = ()
-ensure_indexable(I::Tuple{Any, Vararg{Any}}) = (I[1], ensure_indexable(tail(I))...)
-ensure_indexable(I::Tuple{LogicalIndex, Vararg{Any}}) = (collect(I[1]), ensure_indexable(tail(I))...)
+@inline ensure_indexable(I::Tuple{Any, Vararg{Any}}) = (I[1], ensure_indexable(tail(I))...)
+@inline ensure_indexable(I::Tuple{LogicalIndex, Vararg{Any}}) = (collect(I[1]), ensure_indexable(tail(I))...)
 
 # In simple cases, we know that we don't need to use indices(A). Optimize those
 # until Julia gets smart enough to elide the call on its own:
@@ -316,8 +327,20 @@ to_indices(A, I::Tuple{}) = ()
 # But for arrays of CartesianIndex, we just skip the appropriate number of inds
 @inline function to_indices{N}(A, inds, I::Tuple{AbstractArray{CartesianIndex{N}}, Vararg{Any}})
     _, indstail = IteratorsMD.split(inds, Val{N})
-    (I[1], to_indices(A, indstail, tail(I))...)
+    (to_index(A, I[1]), to_indices(A, indstail, tail(I))...)
 end
+# And boolean arrays behave similarly; they also skip their number of dimensions
+@inline function to_indices{N}(A, inds, I::Tuple{AbstractArray{Bool, N}, Vararg{Any}})
+    _, indstail = IteratorsMD.split(inds, Val{N})
+    (to_index(A, I[1]), to_indices(A, indstail, tail(I))...)
+end
+# As an optimization, we allow trailing Array{Bool} and BitArray to be linear over trailing dimensions
+@inline to_indices{N}(A, inds, I::Tuple{Union{Array{Bool,N}, BitArray{N}}}) =
+    (_maybe_linear_logical_index(linearindexing(A), A, I[1]),)
+_maybe_linear_logical_index(::LinearIndexing, A, i) = to_index(A, i)
+_maybe_linear_logical_index(::LinearFast, A, i) = LogicalIndex{Int}(i)
+
+# Colons get converted to slices by `uncolon`
 @inline to_indices(A, inds, I::Tuple{Colon, Vararg{Any}}) =
     (uncolon(inds, I), to_indices(A, _maybetail(inds), tail(I))...)
 
