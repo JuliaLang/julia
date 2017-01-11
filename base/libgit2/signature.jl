@@ -35,6 +35,8 @@ function Base.convert(::Type{GitSignature}, sig::Signature)
     return GitSignature(sig_ptr_ptr[])
 end
 
+Base.show(io::IO, sig::Signature) = print(io, "Name: $(sig.name), Email: $(sig.email), Time: $(Dates.unix2datetime(sig.time + sig.time_offset))")
+
 """Return signature object. Free it after use."""
 function default_signature(repo::GitRepo)
     sig_ptr_ptr = Ref{Ptr{SignatureStruct}}(C_NULL)

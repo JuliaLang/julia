@@ -22,6 +22,12 @@ function committer(c::GitCommit)
     return Signature(ptr)
 end
 
+function Base.show(io::IO, c::GitCommit)
+    authstr = sprint(show, author(c))
+    cmtrstr = sprint(show, committer(c))
+    print(io, "Git Commit:\nCommit Author: $authstr\nCommitter: $cmtrstr\nSHA: $(GitHash(c))\nMessage:\n$(message(c))")
+end
+
 """ Wrapper around `git_commit_create` """
 function commit(repo::GitRepo,
                 refname::AbstractString,
