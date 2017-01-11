@@ -1364,11 +1364,9 @@ In this way, `filter` can be thought of as selecting only allowable
 values, and converting non-allowable values to missing values.
 
 While `map` and `filter` are useful in specific cases, by far the most useful
-higher-order function is [`broadcast`](@ref), which can handle a wide variety of cases.
-
-`broadcast` can be thought of as a way to make existing operations work
-on multiple data simultaneously and propagate nulls. An example will motivate
-the need for `broadcast`. Suppose we have a function that computes the
+higher-order function is [`broadcast`](@ref), which can handle a wide variety of cases,
+including making existing operations work and propagate `Nullable`s. An example
+will motivate the need for `broadcast`. Suppose we have a function that computes the
 greater of two real roots of a quadratic equation, using the quadratic formula:
 
 ```julia
