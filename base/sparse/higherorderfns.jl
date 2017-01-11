@@ -102,7 +102,6 @@ function broadcast!{Tf}(f::Tf, C::SparseVecOrMat)
     end
     return C
 end
-broadcast!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat) = map!(f, C, A)
 function broadcast!{Tf,N}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N})
     _aresameshape(C, A, Bs...) && return _noshapecheck_map!(f, C, A, Bs...)
     Base.Broadcast.check_broadcast_indices(indices(C), A, Bs...)
