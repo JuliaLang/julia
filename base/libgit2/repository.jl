@@ -145,7 +145,7 @@ repositories.
 
     This will typically be the parent directory of `gitdir(repo)`, but can be different in
     some cases: e.g. if either the `core.worktree` configuration variable or the
-    `GIT_WORK_TREE` environmental variable is set.
+    `GIT_WORK_TREE` environment variable is set.
 
 See also `gitdir`, `path`
 """
