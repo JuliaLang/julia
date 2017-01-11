@@ -119,14 +119,7 @@ end
         # --> test broadcast! entry point / not-zero-preserving op
         broadcast!(cos, fZ, fX); Z = sparse(fZ)
         broadcast!(cos, Z, X); Z = sparse(fZ) # warmup for @allocated
-        if Xo === first(mats)
-            @test (@allocated broadcast!(cos, Z, X)) == 0
-        else
-            @test_broken (@allocated broadcast!(cos, Z, X)) == 0
-            # broken: allocates 16 bytes in calling generic _broadcast_notzeropres!
-            # see note in the related tests for broadcast[!] over >2 input arrays below
-            # only allocates those 16 bytes when Z and X are not the same shape
-        end
+        @test (@allocated broadcast!(cos, Z, X)) == 0
         @test broadcast!(cos, Z, X) == sparse(broadcast!(cos, fZ, fX))
         # --> test shape checks for broadcast! entry point
         # TODO strengthen this test, avoiding dependence on checking whether
@@ -150,14 +143,7 @@ end
         # --> test broadcast! entry point / not-zero-preserving
         broadcast!(cos, fV, fX); V = sparse(fV)
         broadcast!(cos, V, X); V = sparse(fV) # warmup for @allocated
-        if Xo === first(vecs)
-            @test (@allocated broadcast!(cos, V, X)) == 0
-        else
-            @test_broken (@allocated broadcast!(cos, V, X)) == 0
-            # broken: allocates 16 bytes in calling generic _broadcast_notzeropres!
-            # see note in the related tests for broadcast[!] over >2 input arrays below
-            # only allocates those 16 bytes when V and X are not the same shape
-        end
+        @test (@allocated broadcast!(cos, V, X)) == 0
         @test broadcast!(cos, V, X) == sparse(broadcast!(cos, fV, fX))
         # --> test shape checks for broadcast! entry point
         # TODO strengthen this test, avoiding dependence on checking whether

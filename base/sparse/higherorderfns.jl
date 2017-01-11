@@ -19,7 +19,7 @@ using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseArray, indtyp
 # (4) Define _map_[not]zeropres! specialized for a single (input) sparse vector/matrix.
 # (5) Define _map_[not]zeropres! specialized for a pair of (input) sparse vectors/matrices.
 # (6) Define general _map_[not]zeropres! capable of handling >2 (input) sparse vectors/matrices.
-# (7) Define _broadcast_zeropres! specialized for a single (input) sparse vector/matrix.
+# (7) Define _broadcast_[not]zeropres! specialized for a single (input) sparse vector/matrix.
 # (8) Define _broadcast_[not]zeropres! specialized for a pair of (input) sparse vectors/matrices.
 # (9) Define general _broadcast_[not]zeropres! capable of handling >2 (input) sparse vectors/matrices.
 # (10) Define (broadcast[!]) methods handling combinations of broadcast scalars and sparse vectors/matrices.
@@ -426,7 +426,7 @@ end
 end
 
 
-# (7) _broadcast_zeropres! specialized for a single (input) sparse vector/matrix
+# (7) _broadcast_zeropres!/_broadcast_notzeropres! specialized for a single (input) sparse vector/matrix
 function _broadcast_zeropres!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat)
     isempty(C) && return _finishempty!(C)
     spaceC::Int = min(length(storedinds(C)), length(storedvals(C)))
@@ -476,6 +476,32 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat)
     end
     @inbounds setcolptr!(C, numcols(C) + 1, Ck)
     trimstorage!(C, Ck - 1)
+    return C
+end
+function _broadcast_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseVecOrMat, A::SparseVecOrMat)
+    # For information on this code, see comments in similar code in _broadcast_zeropres! above
+    # Build dense matrix structure in C, expanding storage if necessary
+    _densestructure!(C)
+    # Populate values
+    fill!(storedvals(C), fillvalue)
+    # Cases without vertical expansion
+    if numrows(A) == numrows(C)
+        @inbounds for (j, jo) in zip(columns(C), _densecoloffsets(C))
+            bccolrangejA = numcols(A) == 1 ? colrange(A, 1) : colrange(A, j)
+            for Ak in bccolrangejA
+                Cx, Ci = f(storedvals(A)[Ak]), storedinds(A)[Ak]
+                Cx != fillvalue && (storedvals(C)[jo + Ci] = Cx)
+            end
+        end
+    # Cases with vertical expansion
+    else # numrows(A) != numrows(C) (=> numrows(A) == 1)
+        @inbounds for (j, jo) in zip(columns(C), _densecoloffsets(C))
+            Ak, stopAk = numcols(A) == 1 ? (colstartind(A, 1), colboundind(A, 1)) : (colstartind(A, j), colboundind(A, j))
+            Ax = Ak < stopAk ? storedvals(A)[Ak] : zero(eltype(A))
+            fofAx = f(Ax)
+            fofAx != fillvalue && (storedvals(C)[(jo + 1):(jo + numrows(C))] = fofAx)
+        end
+    end
     return C
 end
 
