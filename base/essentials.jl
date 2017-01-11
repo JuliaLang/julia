@@ -229,13 +229,14 @@ function isassigned(v::SimpleVector, i::Int)
     return x != C_NULL
 end
 
-# index colon
 """
     Colon()
 
 Colons (:) are used to signify indexing entire objects or dimensions at once.
+
 Very few operations are defined on Colons directly; instead they are converted
-to `Slice`s upon indexing (within `to_indices`).
+by `to_indices` to an internal vector type (`Base.Slice`) to represent the
+collection of indices they span before being used.
 """
 immutable Colon
 end
