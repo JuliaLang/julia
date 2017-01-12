@@ -1559,3 +1559,11 @@ let str = randstring(20)
     @test filter(!isupper, str) == replace(str, r"[A-Z]", "")
     @test filter(!islower, str) == replace(str, r"[a-z]", "")
 end
+
+x = view(1:10, 2:4)
+D = Diagonal(x)
+@test D[1,1] == 2
+@test D[3,3] == 4
+A = view(rand(5,5), 1:3, 1:3)
+@test D*A == Diagonal(copy(x)) * copy(A)
+@test A*D == copy(A) * Diagonal(copy(x))
