@@ -144,11 +144,12 @@ fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
 fieldnames{T<:Tuple}(t::Type{T}) = Int[n for n in 1:nfields(t)]
 
 """
-    Base.datatype_name(t::DataType) -> Symbol
+    Base.datatype_name(t) -> Symbol
 
-Get the name of a `DataType` (without its parent module) as a symbol.
+Get the name of a (potentially UnionAll-wrapped) `DataType` (without its parent module) as a symbol.
 """
 datatype_name(t::DataType) = t.name.name
+datatype_name(t::UnionAll) = datatype_name(unwrap_unionall(t))
 
 """
     Base.datatype_module(t::DataType) -> Module
@@ -231,6 +232,39 @@ Determine whether `T`'s only subtypes are itself and `Union{}`. This means `T` i
 a concrete type that can have instances.
 """
 isleaftype(t::ANY) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
+
+"""
+    Base.isabstract(T)
+
+Determine whether `T` was declared as an abstract type (i.e. using the
+`abstract` keyword).
+"""
+function isabstract(t::ANY)
+    @_pure_meta
+    t = unwrap_unionall(t)
+    isa(t,DataType) && t.abstract
+end
+
+"""
+    Base.parameter_upper_bound(t::UnionAll, idx)
+
+Determine the upper bound of a type parameter in the underlying type. E.g.:
+```jldoctest
+julia> immutable Foo{T<:AbstractFloat, N}
+           x::Tuple{T, N}
+       end
+
+julia> Base.parameter_upper_bound(Foo, 1)
+AbstractFloat
+
+julia> Base.parameter_upper_bound(Foo, 2)
+Any
+```
+"""
+function parameter_upper_bound(t::UnionAll, idx)
+    @_pure_meta
+    rewrap_unionall(unwrap_unionall(t).parameters[idx], t)
+end
 
 """
     typeintersect(T, S)

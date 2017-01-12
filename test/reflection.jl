@@ -615,3 +615,23 @@ end
 
 # PR #19964
 @test isempty(subtypes(Float64))
+
+# New reflection methods in 0.6
+immutable ReflectionExample{T<:AbstractFloat, N}
+    x::Tuple{T, N}
+end
+
+@test Base.isabstract(AbstractArray)
+@test !Base.isabstract(ReflectionExample)
+@test !Base.isabstract(Int)
+
+@test Base.parameter_upper_bound(ReflectionExample, 1) === AbstractFloat
+@test Base.parameter_upper_bound(ReflectionExample, 2) === Any
+@test Base.parameter_upper_bound(ReflectionExample{T, N} where T where N <: Real, 2) === Real
+
+@test Base.typename(ReflectionExample{Float64, Int64}).wrapper === ReflectionExample
+@test Base.typename(ReflectionExample{Float64, N} where N).wrapper === ReflectionExample
+@test Base.typename(ReflectionExample{T, Int64} where T).wrapper === ReflectionExample
+@test Base.typename(ReflectionExample).wrapper === ReflectionExample
+@test Base.typename(Union{ReflectionExample{Union{},1},ReflectionExample{Float64,1}}).wrapper === ReflectionExample
+@test_throws ErrorException Base.typename(Union{Int, Float64})
