@@ -90,12 +90,6 @@ false
 """
 isreal(x::Real) = true
 isreal(z::Complex) = iszero(imag(z))
-"""
-    isimag(z) -> Bool
-
-Test whether `z` is purely imaginary, i.e. has a real part equal to 0.
-"""
-isimag(z::Number) = iszero(real(z))
 isinteger(z::Complex) = isreal(z) & isinteger(real(z))
 isfinite(z::Complex) = isfinite(real(z)) & isfinite(imag(z))
 isnan(z::Complex) = isnan(real(z)) | isnan(imag(z))

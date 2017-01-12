@@ -147,9 +147,9 @@ end
     end
 end
 
-@testset "isimag and isinf" begin
-    @test isimag(complex(0.0,1.0))
-    @test !isimag(complex(1.0,1.0))
+@testset "isinf" begin
+    @test iszero(real(complex(0.0,1.0))) # isimag deprecated
+    @test !iszero(real(complex(1.0,1.0))) # isimag deprecated
     @test isinf(complex(Inf,0))
     @test isinf(complex(-Inf,0))
     @test isinf(complex(0,Inf))
