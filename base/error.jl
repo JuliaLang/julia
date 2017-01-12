@@ -115,7 +115,7 @@ done(ebo::ExponentialBackOff, state) = state[1]<1
 length(ebo::ExponentialBackOff) = ebo.n
 
 """
-    retry(f::Function;  delays=Base.ExponentialBackOff(), check=nothing) -> Function
+    retry(f::Function;  delays=ExponentialBackOff(), check=nothing) -> Function
 
 Returns an anonymous function that calls function `f`.  If an exception arises,
 `f` is repeatedly called again, each time `check` returns `true`, after waiting the
