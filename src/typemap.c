@@ -132,9 +132,8 @@ static inline int sig_match_simple(jl_value_t **args, size_t n, jl_value_t **sig
             */
             continue;
         }
-        jl_value_t *unw = jl_is_unionall(decl) ? ((jl_unionall_t*)decl)->body : decl;
-        if (jl_is_type_type(unw) && jl_is_type(a)) {
-            jl_value_t *tp0 = jl_tparam0(unw);
+        if (jl_is_type_type(decl) && jl_is_type(a)) {
+            jl_value_t *tp0 = jl_tparam0(decl);
             if (tp0 == (jl_value_t*)jl_typetype_tvar) {
                 // in the case of Type{T}, the types don't have
                 // to match exactly either. this is cached as Type{T}.

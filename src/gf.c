@@ -615,9 +615,9 @@ static void jl_cacheable_sig(
                                     decl_i == (jl_value_t*)jl_function_type ||
                                     (jl_is_uniontype(decl_i) &&
                                      ((((jl_uniontype_t*)decl_i)->a == (jl_value_t*)jl_function_type &&
-                                       ((jl_uniontype_t*)decl_i)->b == (jl_value_t*)jl_datatype_type) ||
+                                       ((jl_uniontype_t*)decl_i)->b == (jl_value_t*)jl_type_type) ||
                                       (((jl_uniontype_t*)decl_i)->b == (jl_value_t*)jl_function_type &&
-                                       ((jl_uniontype_t*)decl_i)->a == (jl_value_t*)jl_datatype_type))))) {
+                                       ((jl_uniontype_t*)decl_i)->a == (jl_value_t*)jl_type_type))))) {
             // and attempt to despecialize types marked Function, Callable, or Any
             // when called with a subtype of Function but is not called
             if (!*newparams) *newparams = jl_svec_copy(type->parameters);
@@ -740,9 +740,9 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
                                decl_i == (jl_value_t*)jl_function_type ||
                                (jl_is_uniontype(decl_i) &&
                                 ((((jl_uniontype_t*)decl_i)->a == (jl_value_t*)jl_function_type &&
-                                  ((jl_uniontype_t*)decl_i)->b == (jl_value_t*)jl_datatype_type) ||
+                                  ((jl_uniontype_t*)decl_i)->b == (jl_value_t*)jl_type_type) ||
                                  (((jl_uniontype_t*)decl_i)->b == (jl_value_t*)jl_function_type &&
-                                  ((jl_uniontype_t*)decl_i)->a == (jl_value_t*)jl_datatype_type))))) {
+                                  ((jl_uniontype_t*)decl_i)->a == (jl_value_t*)jl_type_type))))) {
             // and attempt to despecialize types marked Function, Callable, or Any
             // when called with a subtype of Function but is not called
             if (elt != (jl_value_t*)jl_function_type)
