@@ -1731,7 +1731,7 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
         foundm = true
     end
 
-    while ~foundm
+    while !foundm
         more = false
         if s > s0
             d3 = cbrt(norm(AmI^3, 1))
@@ -1753,7 +1753,7 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
            end
         end
 
-        if ~more
+        if !more
             d5 = norm(AmI^5, 1)^(1/5)
             alpha4 = max(d4, d5)
             eta = min(alpha3, alpha4)
