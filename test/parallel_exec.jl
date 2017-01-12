@@ -683,9 +683,8 @@ pmap_args = [
                 (:distributed, [:default, false]),
                 (:batch_size, [:default,2]),
                 (:on_error, [:default, e -> unmangle_exception(e).msg == "foobar"]),
-                (:retry_on, [:default, e -> unmangle_exception(e).msg == "foobar"]),
-                (:retry_n, [:default, typemax(Int)-1]),
-                (:retry_max_delay, [0, 0.001])
+                (:retry_delays, [:default, fill(0.01, 1000)]),
+                (:retry_check, [:default, (s,e) -> (s,unmangle_exception(e).msg == "foobar")]),
             ]
 
 kwdict = Dict()
@@ -702,7 +701,7 @@ function walk_args(i)
 
         testw = kwdict[:distributed] === false ? [1] : workers()
 
-        if (kwdict[:on_error] === :default) && (kwdict[:retry_n] === :default)
+        if (kwdict[:on_error] === :default) && (kwdict[:retry_delays] === :default)
             mapf = x -> (x*2, myid())
             results_test = pmap_res -> begin
                 results = [x[1] for x in pmap_res]
@@ -712,7 +711,7 @@ function walk_args(i)
                     @test p in pids
                 end
             end
-        elseif kwdict[:retry_n] !== :default
+        elseif kwdict[:retry_delays] !== :default
             mapf = x -> iseven(myid()) ? error("foobar") : (x*2, myid())
             results_test = pmap_res -> begin
                 results = [x[1] for x in pmap_res]
@@ -726,7 +725,7 @@ function walk_args(i)
                     end
                 end
             end
-        else (kwdict[:on_error] !== :default) && (kwdict[:retry_n] === :default)
+        else (kwdict[:on_error] !== :default) && (kwdict[:retry_delays] === :default)
             mapf = x -> iseven(x) ? error("foobar") : (x*2, myid())
             results_test = pmap_res -> begin
                 w = testw

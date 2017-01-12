@@ -59,6 +59,7 @@ export
     EachLine,
     Enum,
     Enumerate,
+    ExponentialBackOff,
     Factorization,
     FileMonitor,
     FloatRange,
