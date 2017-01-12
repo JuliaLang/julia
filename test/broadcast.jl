@@ -291,6 +291,8 @@ import Base.Meta: isexpr
 @test isexpr(expand(:(f.(x,1))), :thunk)
 @test isexpr(expand(:(f.(x,1.0))), :thunk)
 @test isexpr(expand(:(f.(x,$π))), :thunk)
+@test isexpr(expand(:(f.(x,"hello"))), :thunk)
+@test isexpr(expand(:(f.(x,$("hello")))), :thunk)
 
 # PR #17623: Fused binary operators
 @test [true] .* [true] == [true]
@@ -339,6 +341,9 @@ end
 @test broadcast(+, 1.0, (0, -2.0)) == (1.0,-1.0)
 @test broadcast(+, 1.0, (0, -2.0), [1]) == [2.0, 0.0]
 @test broadcast(*, ["Hello"], ", ", ["World"], "!") == ["Hello, World!"]
+let s = "foo"
+    @test s .* ["bar", "baz"] == ["foobar", "foobaz"] == "foo" .* ["bar", "baz"]
+end
 
 # Ensure that even strange constructors that break `T(x)::T` work with broadcast
 immutable StrangeType18623 end
