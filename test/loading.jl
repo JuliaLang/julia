@@ -40,9 +40,23 @@ mktempdir() do dir
     end
 end
 
+empty!(LOAD_PATH)
 push!(LOAD_PATH, @__DIR__)
 let paddedname = "Atest_sourcepathZ"
     filename = SubString(paddedname, 2, length(paddedname)-1)
     @test Base.find_in_path(filename) == abspath("$(paddedname[2:end-1]).jl")
 end
-pop!(LOAD_PATH)
+
+immutable CustomLoader
+    path::String
+end
+push!(LOAD_PATH, CustomLoader("abc"))
+let name = randstring(20)
+    @test_throws ArgumentError Base.find_in_path(name)
+    Base.load_hook(prefix::CustomLoader, name::String, found) = joinpath(prefix.path, name)
+    @test Base.find_in_path(name) == joinpath("abc", name)
+end
+@test Base.find_in_path("test_sourcepath") == joinpath("abc", "test_sourcepath")
+Base.load_hook(prefix::CustomLoader, name::String, found::String) = found
+@test Base.find_in_path("test_sourcepath") == abspath("test_sourcepath.jl")
+empty!(LOAD_PATH)

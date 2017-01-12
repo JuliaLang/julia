@@ -80,7 +80,7 @@ else
     end
 end
 
-function load_hook(prefix::String, name::String, found::Void=nothing)
+function load_hook(prefix::String, name::String, found::Void)
     name_jl = "$name.jl"
     path = joinpath(prefix, name_jl)
     isfile_casesensitive(path) && return abspath(path)
@@ -91,9 +91,12 @@ function load_hook(prefix::String, name::String, found::Void=nothing)
     return nothing
 end
 load_hook(prefix::String, name::String, found::String) = found
+load_hook(prefix, name::String, found) =
+    throw(ArgumentError("unrecognized custom loader in LOAD_PATH: $prefix"))
 
 function find_in_path(name::String)
-    path = load_hook(Pkg.dir(), name)
+    path = nothing
+    path = load_hook(Pkg.dir(), name, path)
     for dir in LOAD_PATH
         path = load_hook(dir, name, path)
     end
