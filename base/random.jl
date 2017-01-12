@@ -1441,6 +1441,13 @@ function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real
     end
     return S
 end
+
+"""
+    randsubseq!(S, A, p::Real)
+
+Like [`randsubseq`](@ref), but the results are stored in `S`
+(which is resized as needed).
+"""
 randsubseq!(S::AbstractArray, A::AbstractArray, p::Real) = randsubseq!(GLOBAL_RNG, S, A, p)
 
 randsubseq{T}(r::AbstractRNG, A::AbstractArray{T}, p::Real) = randsubseq!(r, T[], A, p)

@@ -114,7 +114,7 @@ notebook).
 Base.Multimedia.display
 Base.Multimedia.redisplay
 Base.Multimedia.displayable
-Base.show(::Any, ::Any, ::Any)
+Base.Multimedia.show
 Base.Multimedia.mimewritable
 Base.Multimedia.reprmime
 Base.Multimedia.stringmime
@@ -149,8 +149,7 @@ Base.Multimedia.istextmime
 
 ```@docs
 Base.Mmap.Anonymous
-Base.Mmap.mmap(::Any, ::Type, ::Any, ::Any)
-Base.Mmap.mmap(::Any, ::BitArray, ::Any, ::Any)
+Base.Mmap.mmap
 Base.Mmap.sync!
 ```
 

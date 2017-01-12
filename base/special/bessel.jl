@@ -124,6 +124,34 @@ end
 ## Bessel functions
 
 # besselj0, besselj1, bessely0, bessely1
+"""
+    bessely0(x)
+
+Bessel function of the second kind of order 0, ``Y_0(x)``.
+"""
+function bessely0 end
+
+"""
+    bessely1(x)
+
+Bessel function of the second kind of order 1, ``Y_1(x)``.
+"""
+function bessely1 end
+
+"""
+    besselj0(x)
+
+Bessel function of the first kind of order 0, ``J_0(x)``.
+"""
+function besselj0 end
+
+"""
+    besselj1(x)
+
+Bessel function of the first kind of order 1, ``J_1(x)``.
+"""
+function besselj1 end
+
 for jy in ("j","y"), nu in (0,1)
     jynu = Expr(:quote, Symbol(jy,nu))
     jynuf = Expr(:quote, Symbol(jy,nu,"f"))

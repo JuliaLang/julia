@@ -36,6 +36,35 @@ mimewritable{mime}(::MIME{mime}, x) =
   method_exists(show, Tuple{IO, MIME{mime}, typeof(x)})
 
 # it is convenient to accept strings instead of ::MIME
+"""
+    show(stream, mime, x)
+
+The [`display`](@ref) functions ultimately call `show` in order to write an object `x` as a
+given `mime` type to a given I/O `stream` (usually a memory buffer), if possible. In order
+to provide a rich multimedia representation of a user-defined type `T`, it is only necessary
+to define a new `show` method for `T`, via: `show(stream, ::MIME"mime", x::T) = ...`,
+where `mime` is a MIME-type string and the function body calls `write` (or similar) to write
+that representation of `x` to `stream`. (Note that the `MIME""` notation only supports
+literal strings; to construct `MIME` types in a more flexible manner use
+`MIME{Symbol("")}`.)
+
+For example, if you define a `MyImage` type and know how to write it to a PNG file, you
+could define a function `show(stream, ::MIME"image/png", x::MyImage) = ...` to allow
+your images to be displayed on any PNG-capable `Display` (such as IJulia). As usual, be sure
+to `import Base.show` in order to add new methods to the built-in Julia function
+`show`.
+
+The default MIME type is `MIME"text/plain"`. There is a fallback definition for `text/plain`
+output that calls `show` with 2 arguments. Therefore, this case should be handled by
+defining a 2-argument `show(stream::IO, x::MyType)` method.
+
+Technically, the `MIME"mime"` macro defines a singleton type for the given `mime` string,
+which allows us to exploit Julia's dispatch mechanisms in determining how to display objects
+of any given type.
+
+The first argument to `show` can be an [`IOContext`](@ref) specifying output format properties.
+See [`IOContext`](@ref) for details.
+"""
 show(io::IO, m::AbstractString, x) = show(io, MIME(m), x)
 mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
 
@@ -46,7 +75,7 @@ verbose_show(io, m, x) = show(IOContext(io,limit=false), m, x)
 
 Returns an `AbstractString` or `Vector{UInt8}` containing the representation of
 `x` in the requested `mime` type, as written by `show` (throwing a
-`MethodError` if no appropriate `show` is available). An `AbstractString` is
+[`MethodError`](@ref) if no appropriate `show` is available). An `AbstractString` is
 returned for MIME types with textual representations (such as `"text/html"` or
 `"application/postscript"`), whereas binary data is returned as
 `Vector{UInt8}`. (The function `istextmime(mime)` returns whether or not Julia
@@ -160,10 +189,24 @@ close(d::TextDisplay) = close(d.io)
 # Display that is capable of displaying x (doesn't throw an error)
 
 const displays = Display[]
+"""
+    pushdisplay(d::Display)
+
+Pushes a new display `d` on top of the global display-backend stack. Calling [`display(x)`](@ref) or
+[`display(mime, x)`](@ref) will display `x` on the topmost compatible backend in the stack (i.e.,
+the topmost backend that does not throw a [`MethodError`](@ref)).
+"""
 function pushdisplay(d::Display)
     global displays
     push!(displays, d)
 end
+"""
+    popdisplay()
+    popdisplay(d::Display)
+
+Pop the topmost backend off of the display-backend stack, or the topmost copy of `d` in the
+second variant.
+"""
 popdisplay() = pop!(displays)
 function popdisplay(d::Display)
     for i = length(displays):-1:1
@@ -190,6 +233,24 @@ end
 
 xdisplayable(D::Display, args...) = applicable(display, D, args...)
 
+"""
+    display(x)
+    display(d::Display, x)
+    display(mime, x)
+    display(d::Display, mime, x)
+
+Display `x` using the topmost applicable display in the display stack, typically using the
+richest supported multimedia output for `x`, with plain-text [`STDOUT`](@ref) output as a fallback.
+The `display(d, x)` variant attempts to display `x` on the given display `d` only, throwing
+a [`MethodError`](@ref) if `d` cannot display objects of this type.
+
+There are also two variants with a `mime` argument (a MIME type string, such as
+`"image/png"`), which attempt to display `x` using the requested MIME type *only*, throwing
+a [`MethodError`](@ref) if this type is not supported by either the display(s) or by `x`.
+With these variants, one can also supply the "raw" data in the requested MIME type by passing
+`x::AbstractString` (for MIME types with text-based storage, such as `"text/html"` or
+`"application/postscript"`) or `x::Vector{UInt8}` (for binary MIME types).
+"""
 function display(x)
     for i = length(displays):-1:1
         xdisplayable(displays[i], x) &&
@@ -224,6 +285,19 @@ end
 # for Matlab/Pylab-like stateful plotting interfaces, where
 # a plot is created and then modified many times (xlabel, title, etc.).
 
+"""
+    redisplay(x)
+    redisplay(d::Display, x)
+    redisplay(mime, x)
+    redisplay(d::Display, mime, x)
+
+By default, the `redisplay` functions simply call [`display`](@ref).
+However, some display backends may override `redisplay` to modify an existing
+display of `x` (if any).
+Using `redisplay` is also a hint to the backend that `x` may be redisplayed
+several times, and the backend may choose to defer the display until
+(for example) the next interactive prompt.
+"""
 function redisplay(x)
     for i = length(displays):-1:1
         xdisplayable(displays[i], x) &&
