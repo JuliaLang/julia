@@ -185,7 +185,8 @@ JL_DLLEXPORT int (jl_is_leaf_type)(jl_value_t *v)
         size_t l = jl_svec_len(t);
         if (((jl_datatype_t*)v)->name == jl_tuple_typename) {
             for(int i=0; i < l; i++) {
-                if (!jl_is_leaf_type(jl_svecref(t,i))) {
+                jl_value_t *p = jl_svecref(t,i);
+                if (!jl_is_leaf_type(p) && p != jl_bottom_type) {
                     assert(!isleaf);
                     return 0;
                 }
@@ -193,8 +194,7 @@ JL_DLLEXPORT int (jl_is_leaf_type)(jl_value_t *v)
         }
         else {
             for(int i=0; i < l; i++) {
-                jl_value_t *p = jl_svecref(t, i);
-                if (jl_has_free_typevars(p)) {
+                if (jl_has_free_typevars(jl_svecref(t, i))) {
                     assert(!isleaf);
                     return 0;
                 }
@@ -790,7 +790,8 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt)
         if (!dt->hasfreetypevars)
             dt->hasfreetypevars = jl_has_free_typevars(p);
         if (dt->isleaftype)
-            dt->isleaftype = (istuple ? jl_is_leaf_type(p) : !dt->hasfreetypevars);
+            dt->isleaftype = (istuple ? (jl_is_leaf_type(p) || p == jl_bottom_type) :
+                                        !dt->hasfreetypevars);
     }
 }
 
