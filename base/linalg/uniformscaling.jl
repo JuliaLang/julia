@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-import Base: cond, copy, ctranspose, getindex, show, transpose, one, zero, inv,
+import Base: copy, ctranspose, getindex, show, transpose, one, zero, inv,
              @_pure_meta, hcat, vcat, hvcat
 import Base.LinAlg: SingularException
 
