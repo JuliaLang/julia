@@ -4,8 +4,8 @@
 
 const shell_special = "#{}()[]<>|&*?~;"
 
- # needs to be factored out so depwarn only warns once
- @noinline warn_shell_special(special) =
+# needs to be factored out so depwarn only warns once
+@noinline warn_shell_special(special) =
     depwarn("special characters \"$special\" should now be quoted in commands", :warn_shell_special)
 
 function shell_parse(
