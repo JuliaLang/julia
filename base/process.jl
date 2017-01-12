@@ -97,14 +97,14 @@ end
 hash(x::AndCmds, h::UInt) = hash(x.a, hash(x.b, h))
 ==(x::AndCmds, y::AndCmds) = x.a == y.a && x.b == y.b
 
-shell_escape(cmd::Cmd; special::AbstractString=shell_special) =
+shell_escape(cmd::Cmd; special::AbstractString="") =
     shell_escape(cmd.exec..., special=special)
 
 function show(io::IO, cmd::Cmd)
     print_env = cmd.env !== nothing
     print_dir = !isempty(cmd.dir)
     (print_env || print_dir) && print(io, "setenv(")
-    esc = shell_escape(cmd)
+    esc = shell_escape(cmd, special=shell_special)
     print(io, '`')
     for c in esc
         if c == '`'
@@ -797,7 +797,7 @@ function cmd_gen(parsed)
 end
 
 macro cmd(str)
-    return :(cmd_gen($(shell_parse(str)[1])))
+    return :(cmd_gen($(shell_parse(str, special=shell_special)[1])))
 end
 
 wait(x::Process)      = if !process_exited(x); stream_wait(x, x.exitnotify); end
