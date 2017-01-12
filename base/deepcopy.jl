@@ -88,7 +88,7 @@ function deepcopy_internal(x::Dict, stackdict::ObjectIdDict)
     dest = similar(x)
     stackdict[x] = dest
     for (k, v) in x
-        dest[Base.deepcopy_internal(k, stackdict)] = Base.deepcopy_internal(v, stackdict)
+        dest[deepcopy_internal(k, stackdict)] = deepcopy_internal(v, stackdict)
     end
     dest
 end
