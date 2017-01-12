@@ -875,9 +875,6 @@ end
 @test isnan(sqrt(BigFloat(NaN)))
 
 # PR 17217 -- BigFloat constructors with given precision and rounding mode
-
-# test constructors and `big` with additional precision and rounding mode:
-
 for prec in (10, 100, 1000)
     for val in ("3.1", pi, "-1.3", 3.1)
         let
@@ -895,4 +892,11 @@ for prec in (10, 100, 1000)
             (val != 3.1) && @test e > d     # rounding has no effect when constructing from Float64
         end
     end
+end
+
+# string representations of infinity and NaN
+setprecision(BigFloat, 256) do
+    @test string(BigFloat(Inf)) == "BigFloat(Inf, 256)"
+    @test string(BigFloat(-Inf)) == "BigFloat(-Inf, 256)"
+    @test string(BigFloat(NaN)) == "BigFloat(NaN, 256)"
 end
