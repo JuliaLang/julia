@@ -94,11 +94,6 @@ end
     fa, fA = Array(a), Array(A)
     @test broadcast(sin, a) == sparse(broadcast(sin, fa))
     @test broadcast(sin, A) == sparse(broadcast(sin, fA))
-    # The two following tests are from #19895, and check the absence of an ambiguity
-    # between a pair of specializations, but #19895 removed both of those specializations,
-    # so perhaps these tests should be nixed?
-    @test broadcast!(identity, copy(a), a) == sparse(broadcast!(identity, copy(fa), fa))
-    @test broadcast!(identity, copy(A), A) == sparse(broadcast!(identity, copy(fA), fA))
 end
 
 @testset "broadcast! implementation specialized for a single (input) sparse vector/matrix" begin
@@ -153,6 +148,13 @@ end
         catch
             @test_throws DimensionMismatch broadcast!(sin, V, spzeros((shapeX .- 1)...))
         end
+    end
+    # Tests specific to #19895, i.e. for broadcast!(identity, C, A) specializations
+    Z = copy(first(mats)); fZ = Array(Z)
+    V = copy(first(vecs)); fV = Array(V)
+    for X in (mats..., vecs...)
+        @test broadcast!(identity, Z, X) == sparse(broadcast!(identity, fZ, Array(X)))
+        X isa SparseVector && @test broadcast!(identity, V, X) == sparse(broadcast!(identity, fV, Array(X)))
     end
 end
 
