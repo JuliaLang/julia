@@ -837,6 +837,7 @@ size_t ios_copyuntil(ios_t *to, ios_t *from, char delim, uint8_t chomp)
 
 size_t ios_nchomp(ios_t *from, size_t ntowrite)
 {
+    assert(ntowrite > 0);
     size_t nchomp;
     if (ntowrite > 1 && from->buf[from->bpos+ntowrite - 2] == '\r') {
         nchomp = 2;
