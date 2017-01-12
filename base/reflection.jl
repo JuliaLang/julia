@@ -227,8 +227,8 @@ isbits(x) = (@_pure_meta; isbits(typeof(x)))
 """
     isleaftype(T)
 
-Determine whether `T` is a concrete type that can have instances, meaning its only subtypes
-are itself and `Union{}` (but `T` itself is not `Union{}`).
+Determine whether `T`'s only subtypes are itself and `Union{}`. This means `T` is
+a concrete type that can have instances.
 """
 isleaftype(t::ANY) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
 
