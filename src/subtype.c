@@ -919,6 +919,26 @@ int jl_tuple_isa(jl_value_t **child, size_t cl, jl_datatype_t *pdt)
     return ans;
 }
 
+// returns true if the intersection of `t` and `Type` is non-empty and not a kind
+static int has_intersect_type_not_kind(jl_value_t *t)
+{
+    t = jl_unwrap_unionall(t);
+    if (t == (jl_value_t*)jl_any_type)
+        return 1;
+    if (jl_is_uniontype(t)) {
+        return has_intersect_type_not_kind(((jl_uniontype_t*)t)->a) ||
+               has_intersect_type_not_kind(((jl_uniontype_t*)t)->b);
+    }
+    if (jl_is_typevar(t)) {
+        return has_intersect_type_not_kind(((jl_tvar_t*)t)->ub);
+    }
+    if (jl_is_datatype(t)) {
+        if (((jl_datatype_t*)t)->name == jl_type_typename)
+            return 1;
+    }
+    return 0;
+}
+
 JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
 {
     if (jl_typeis(x,t) || t == (jl_value_t*)jl_any_type)
@@ -939,18 +959,24 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
                     if (jl_is_typevar(tp)) {
                         while (jl_is_typevar(tp))
                             tp = ((jl_tvar_t*)tp)->ub;
-                        return jl_subtype(x, tp);
+                        if (!jl_has_free_typevars(tp))
+                            return jl_subtype(x, tp);
                     }
                 }
                 else {
                     return 0;
                 }
             }
-            JL_GC_PUSH1(&x);
-            x = (jl_value_t*)jl_wrap_Type(x);  // TODO jb/subtype avoid jl_wrap_Type
-            int ans = jl_subtype(x, t);
-            JL_GC_POP();
-            return ans;
+            if (jl_subtype(jl_typeof(x), t))
+                return 1;
+            if (has_intersect_type_not_kind(t2)) {
+                JL_GC_PUSH1(&x);
+                x = (jl_value_t*)jl_wrap_Type(x);  // TODO jb/subtype avoid jl_wrap_Type
+                int ans = jl_subtype(x, t);
+                JL_GC_POP();
+                return ans;
+            }
+            return 0;
         }
     }
     if (jl_is_leaf_type(t))
