@@ -1122,10 +1122,31 @@ A = [[i i; i i] for i=1:2]
 @test cumsum(A) == Any[[1 1; 1 1], [3 3; 3 3]]
 @test cumprod(A) == Any[[1 1; 1 1], [4 4; 4 4]]
 
-# PR #4627
-A = [1,2]
-@test append!(A, A) == [1,2,1,2]
-@test prepend!(A, A) == [1,2,1,2,1,2,1,2]
+isdefined(Main, :TestHelpers) || eval(Main, :(include("TestHelpers.jl")))
+using TestHelpers.OAs
+
+@testset "prepend/append" begin
+    # PR #4627
+    A = [1,2]
+    @test append!(A, A) == [1,2,1,2]
+    @test prepend!(A, A) == [1,2,1,2,1,2,1,2]
+
+    # iterators with length:
+    @test append!([1,2], (9,8)) == [1,2,9,8] == push!([1,2], (9,8)...)
+    @test prepend!([1,2], (9,8)) == [9,8,1,2] == unshift!([1,2], (9,8)...)
+    @test append!([1,2], ()) == [1,2] == prepend!([1,2], ())
+    # iterators without length:
+    g = (i for i = 1:10 if iseven(i))
+    @test append!([1,2], g) == [1,2,2,4,6,8,10] == push!([1,2], g...)
+    @test prepend!([1,2], g) == [2,4,6,8,10,1,2] == unshift!([1,2], g...)
+    g = (i for i = 1:2:10 if iseven(i)) # isempty(g) == true
+    @test append!([1,2], g) == [1,2] == push!([1,2], g...)
+    @test prepend!([1,2], g) == [1,2] == unshift!([1,2], g...)
+
+    # offset array
+    @test append!([1,2], OffsetArray([9,8], (-3,))) == [1,2,9,8]
+    @test prepend!([1,2], OffsetArray([9,8], (-3,))) == [9,8,1,2]
+end
 
 A = [1,2]
 s = Set([1,2,3])
@@ -1879,9 +1900,6 @@ end
         @test size(a) == size(b)
     end
 end
-
-isdefined(Main, :TestHelpers) || eval(Main, :(include("TestHelpers.jl")))
-using TestHelpers.OAs
 
 @testset "accumulate, accumulate!" begin
 
