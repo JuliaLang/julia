@@ -95,14 +95,20 @@ This section lists changes that do not have deprecation warnings.
     the corresponding Greek characters in identifiers.  `\varepsilon`
     now tab-completes to U+03B5 (greek small letter epsilon) ([#19464]).
 
+  * `retry` now inputs the keyword arguments `delays` and `check` instead of
+    `n` and `max_delay`.  The previous functionality can be achieved setting
+    `delays` to `ExponentialBackOff`. ([#19331])
+
 Library improvements
 --------------------
 
-  * `max`, `min`, and related functions (`minmax`, `maximum`, `minimum`, `extrema`) now return `NaN` for `NaN` arguments ([#12563]).
+  * `max`, `min`, and related functions (`minmax`, `maximum`, `minimum`,
+    `extrema`) now return `NaN` for `NaN` arguments ([#12563]).
 
   * The `chop` and `chomp` functions now return a `SubString` ([#18339]).
 
-  * Numbered stackframes printed in stacktraces can be opened in an editor by entering the corresponding number in the REPL and pressing `^Q` ([#19680]).
+  * Numbered stackframes printed in stacktraces can be opened in an editor by
+    entering the corresponding number in the REPL and pressing `^Q` ([#19680]).
 
   * The REPL now supports something called *prompt pasting* ([#17599]).
     This activates when pasting text that starts with `julia> ` into the REPL.
@@ -111,22 +117,32 @@ Library improvements
     without having to scrub away prompts and outputs.
     This can be disabled or enabled at will with `Base.REPL.enable_promptpaste(::Bool)`.
 
-  * The function `print_with_color` can now take a color represented by an integer between 0 and 255 inclusive as its first argument ([#18473]).
-    For a number to color mapping please refer to [this chart](https://upload.wikimedia.org/wikipedia/en/1/15/Xterm_256color_chart.svg).
-    It is also possible to use numbers as colors in environment variables that customizes colors in the REPL.
-    For example, to get orange warning messages, simply set `ENV["JULIA_WARN_COLOR"] = 208`.
-    Please note that not all terminals support 256 colors.
+  * The function `print_with_color` can now take a color represented by an
+    integer between 0 and 255 inclusive as its first argument ([#18473]).  For
+    a number to color mapping please refer to [this
+    chart](https://upload.wikimedia.org/wikipedia/en/1/15/Xterm_256color_chart.svg).
+    It is also possible to use numbers as colors in environment variables that
+    customizes colors in the REPL.  For example, to get orange warning
+    messages, simply set `ENV["JULIA_WARN_COLOR"] = 208`.  Please note that not
+    all terminals support 256 colors.
 
-  * The function `print_with_color` no longer prints text in bold by default ([#18628]).
-    Instead, the function now take a keyword argument `bold::Bool` which determines whether to print in bold or not.
-    On some terminals, printing a color in non bold results in slightly darker colors being printed than when printing in bold.
-    Therefore, light versions of the colors are now supported.
-    For the available colors see the help entry on `print_with_color`.
+  * The function `print_with_color` no longer prints text in bold by default
+    ([#18628]).  Instead, the function now take a keyword argument `bold::Bool`
+    which determines whether to print in bold or not.  On some terminals,
+    printing a color in non bold results in slightly darker colors being
+    printed than when printing in bold.  Therefore, light versions of the
+    colors are now supported.  For the available colors see the help entry on
+    `print_with_color`.
 
-  * The default color for info messages has been changed from blue to cyan and for warning messages from red to yellow.
-    This can be changed back to the original colors by setting the environment variables `JULIA_INFO_COLOR` to `"blue"` and `JULIA_WARN_COLOR` to `"red"`.
-    One way of doing this is by adding for example `ENV["JULIA_INFO_COLOR"] = :blue` and `ENV["JULIA_WARN_COLOR"] = :red` to the `.juliarc.jl` file.
-    For more information regarding customizing colors in the REPL, see this [manual section]( http://docs.julialang.org/en/latest/manual/interacting-with-julia/#customizing-colors).
+  * The default color for info messages has been changed from blue to cyan and
+    for warning messages from red to yellow.  This can be changed back to the
+    original colors by setting the environment variables `JULIA_INFO_COLOR` to
+    `"blue"` and `JULIA_WARN_COLOR` to `"red"`.  One way of doing this is by
+    adding for example `ENV["JULIA_INFO_COLOR"] = :blue` and
+    `ENV["JULIA_WARN_COLOR"] = :red` to the `.juliarc.jl` file.  For more
+    information regarding customizing colors in the REPL, see this [manual
+    section](
+    http://docs.julialang.org/en/latest/manual/interacting-with-julia/#customizing-colors).
 
   * Iteration utilities that wrap iterators and return other iterators (`enumerate`, `zip`, `rest`,
     `countfrom`, `take`, `drop`, `cycle`, `repeated`, `product`, `flatten`, `partition`) have been
@@ -139,7 +155,9 @@ Library improvements
     you can now do e.g. `[A I]` and it will concatenate an appropriately sized
     identity matrix ([#19305]).
 
-  * New `accumulate` and `accumulate!` functions, which generalize `cumsum` and `cumprod`. Also known as a [scan](https://en.wikipedia.org/wiki/Prefix_sum) operation ([#18931]).
+  * New `accumulate` and `accumulate!` functions, which generalize `cumsum` and
+  `cumprod`. Also known as a [scan](https://en.wikipedia.org/wiki/Prefix_sum)
+  operation ([#18931]).
 
   * New `titlecase` function, which capitalizes the first character of each word within a string ([#19469]).
 
