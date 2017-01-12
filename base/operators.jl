@@ -508,44 +508,28 @@ for f in (:+, :-)
             range($f(first(r1),first(r2)), $f(step(r1),step(r2)), r1l)
         end
 
-        function $f{T<:AbstractFloat}(r1::FloatRange{T}, r2::FloatRange{T})
+        function $f{T}(r1::LinSpace{T}, r2::LinSpace{T})
             len = r1.len
             (len == r2.len ||
              throw(DimensionMismatch("argument dimensions must match")))
-            divisor1, divisor2 = r1.divisor, r2.divisor
-            if divisor1 == divisor2
-                FloatRange{T}($f(r1.start,r2.start), $f(r1.step,r2.step),
-                              len, divisor1)
-            else
-                d1 = Int(divisor1)
-                d2 = Int(divisor2)
-                d = lcm(d1,d2)
-                s1 = div(d,d1)
-                s2 = div(d,d2)
-                FloatRange{T}($f(r1.start*s1, r2.start*s2),
-                              $f(r1.step*s1, r2.step*s2),  len, d)
-            end
+            linspace(convert(T, $f(first(r1), first(r2))),
+                     convert(T, $f(last(r1), last(r2))), len)
         end
 
-        function $f{T<:AbstractFloat}(r1::LinSpace{T}, r2::LinSpace{T})
-            len = r1.len
-            (len == r2.len ||
-             throw(DimensionMismatch("argument dimensions must match")))
-            divisor1, divisor2 = r1.divisor, r2.divisor
-            if divisor1 == divisor2
-                LinSpace{T}($f(r1.start, r2.start), $f(r1.stop, r2.stop),
-                            len, divisor1)
-            else
-                linspace(convert(T, $f(first(r1), first(r2))),
-                         convert(T, $f(last(r1), last(r2))), len)
-            end
-        end
-
-        $f(r1::Union{FloatRange, OrdinalRange, LinSpace},
-           r2::Union{FloatRange, OrdinalRange, LinSpace}) =
+        $f(r1::Union{StepRangeLen, OrdinalRange, LinSpace},
+           r2::Union{StepRangeLen, OrdinalRange, LinSpace}) =
                $f(promote(r1, r2)...)
     end
 end
+
+function +{T,S}(r1::StepRangeLen{T,S}, r2::StepRangeLen{T,S})
+    len = length(r1)
+    (len == length(r2) ||
+        throw(DimensionMismatch("argument dimensions must match")))
+    StepRangeLen(first(r1)+first(r2), step(r1)+step(r2), len)
+end
+
+-(r1::StepRangeLen, r2::StepRangeLen) = +(r1, -r2)
 
 # vectorization
 

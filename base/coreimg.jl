@@ -22,6 +22,7 @@ typealias Cint Int32
 typealias Csize_t UInt
 include("promotion.jl")
 include("tuple.jl")
+include("traits.jl")
 include("range.jl")
 include("expr.jl")
 include("error.jl")

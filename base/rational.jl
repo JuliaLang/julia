@@ -382,3 +382,7 @@ end
 function ^{T<:Rational}(z::Complex{T}, n::Integer)
     n >= 0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
 end
+
+function lerpi(j::Integer, d::Integer, a::Rational, b::Rational)
+    ((d-j)*a)/d + (j*b)/d
+end

@@ -61,7 +61,7 @@ export
     Factorization,
     FileMonitor,
     Filter,
-    FloatRange,
+    StepRangeLen,
     Future,
     Hermitian,
     UniformScaling,

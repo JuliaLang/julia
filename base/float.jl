@@ -525,6 +525,29 @@ significand_mask(::Type{Float32}) = 0x007f_ffff
 @pure exponent_bits{T<:AbstractFloat}(::Type{T}) = sizeof(T)*8 - significand_bits(T) - 1
 @pure exponent_bias{T<:AbstractFloat}(::Type{T}) = Int(exponent_one(T) >> significand_bits(T))
 
+## TwicePrecision utilities
+# The numeric constants are half the number of bits in the mantissa
+for (F, T, n) in ((Float16, UInt16, 5), (Float32, UInt32, 12), (Float64, UInt64, 26))
+    @eval begin
+        function truncbits(x::$F, nb)
+            @_inline_meta
+            truncmask(x, typemax($T) << nb)
+        end
+        function truncmask(x::$F, mask)
+            @_inline_meta
+            box($F, unbox($T, mask & box($T, unbox($F, x))))
+        end
+        function splitprec(x::$F)
+            @_inline_meta
+            hi = truncmask(x, typemax($T) << $n)
+            hi, x-hi
+        end
+    end
+end
+
+truncbits(x, nb) = x
+truncmask(x, mask) = x
+
 ## Array operations on floating point numbers ##
 
 float{T<:AbstractFloat}(A::AbstractArray{T}) = A
@@ -540,11 +563,9 @@ for fn in (:float,:big)
     @eval begin
         $fn(r::StepRange) = $fn(r.start):$fn(r.step):$fn(last(r))
         $fn(r::UnitRange) = $fn(r.start):$fn(last(r))
-        $fn(r::FloatRange) = FloatRange($fn(r.start), $fn(r.step), r.len, $fn(r.divisor))
+        $fn(r::StepRangeLen) = StepRangeLen($fn(r.ref), $fn(r.step), length(r), r.offset)
         function $fn(r::LinSpace)
-            new_len = $fn(r.len)
-            new_len == r.len || error(string(r, ": too long for ", $fn))
-            LinSpace($fn(r.start), $fn(r.stop), new_len, $fn(r.divisor))
+            LinSpace($fn(r.start), $fn(r.stop), length(r))
         end
     end
 end

@@ -785,4 +785,5 @@ const _oldstyle_array_vcat_ = false
 
 Filesystem.stop_watching(stream::Filesystem._FDWatcher) = depwarn("stop_watching(::_FDWatcher) should not be used.", :stop_watching)
 
-# End deprecations scheduled for 0.6
+# FloatRange replaced by StepRangeLen
+@deprecate FloatRange{T}(start::T, step, len, den) Base.floatrange(T, start, step, len, den)
