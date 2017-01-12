@@ -178,7 +178,7 @@ function isexecutable(st::Filesystem.StatStruct)
 end
 export isreadable, iswritable, isexecutable
 
-@deprecate RemoteRef RemoteChannel
+@deprecate_binding RemoteRef RemoteChannel
 
 function tty_size()
     depwarn("tty_size is deprecated. use `displaysize(io)` as a replacement", :tty_size)
