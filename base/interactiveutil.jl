@@ -667,7 +667,7 @@ Print information about exported global variables in a module, optionally restri
 
 The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
 """
-function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
+function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"^(?!.*(Base|Main|Core)).*$")
     maxline = displaysize(io)[2]
     line = zeros(UInt8, maxline)
     head = PipeBuffer(maxline + 1)
