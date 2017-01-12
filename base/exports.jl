@@ -358,7 +358,6 @@ export
     ispow2,
     isqrt,
     isreal,
-    isimag,
     issubnormal,
     iszero,
     lcm,

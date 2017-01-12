@@ -1278,6 +1278,9 @@ eval(SparseArrays, :(broadcast_zpreserving!(f, C::SparseMatrixCSC, A::Union{Arra
 @deprecate getindex(t::Tuple, r::AbstractArray)       getindex(t, vec(r))
 @deprecate getindex(t::Tuple, b::AbstractArray{Bool}) getindex(t, vec(b))
 
+# Deprecate isimag (#19947).
+@deprecate isimag(z::Number) iszero(real(z))
+
 @deprecate airy(z::Number) airyai(z)
 @deprecate airyx(z::Number) airyaix(z)
 @deprecate airyprime(z::Number) airyaiprime(z)
