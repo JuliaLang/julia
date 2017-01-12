@@ -75,3 +75,21 @@ function _deepcopy_array_t(x::ANY, T, stackdict::ObjectIdDict)
     end
     return dest
 end
+
+function deepcopy_internal(x::Dict, stackdict::ObjectIdDict)
+    if haskey(stackdict, x)
+        return stackdict[x]::typeof(x)
+    end
+
+    if isbits(eltype(x))
+        return (stackdict[x] = copy(x))
+    end
+
+    dest = similar(x)
+    stackdict[x] = dest
+    for (k, v) in x
+        dest[Base.deepcopy_internal(k, stackdict)] = Base.deepcopy_internal(v, stackdict)
+    end
+    dest
+end
+
