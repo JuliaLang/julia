@@ -204,7 +204,7 @@ JL_DLLEXPORT int (jl_is_leaf_type)(jl_value_t *v)
         return 1;
 #endif
     }
-    return 0;
+    return v == jl_bottom_type;
 }
 
 // Return true for any type (Integer or Unsigned) that can fit in a

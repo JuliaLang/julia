@@ -291,7 +291,7 @@ _broadcast_eltype(f, A, Bs...) = Base._return_type(f, eltypestuple(A, Bs...))
     T = _broadcast_eltype(f, A, Bs...)
     shape = broadcast_indices(A, Bs...)
     iter = CartesianRange(shape)
-    if isleaftype(T)
+    if isleaftype(T) && T !== Union{}
         return broadcast_t(f, T, shape, iter, A, Bs...)
     end
     if isempty(iter)
@@ -307,7 +307,7 @@ end
 @inline function broadcast_c(f, ::Type{Nullable}, a...)
     nonnull = all(hasvalue, a)
     S = _broadcast_eltype(f, a...)
-    if isleaftype(S) && null_safe_eltype_op(f, a...)
+    if isleaftype(S) && S !== Union{} && null_safe_eltype_op(f, a...)
         Nullable{S}(f(map(unsafe_get, a)...), nonnull)
     else
         if nonnull

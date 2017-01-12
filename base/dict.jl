@@ -162,7 +162,7 @@ associative_with_eltype(DT_apply, ::Type) = DT_apply(Any, Any)()
 associative_with_eltype{F}(DT_apply::F, kv, t) = grow_to!(associative_with_eltype(DT_apply, _default_eltype(typeof(kv))), kv)
 function associative_with_eltype{F}(DT_apply::F, kv::Generator, t)
     T = _default_eltype(typeof(kv))
-    if T <: Union{Pair, Tuple{Any, Any}} && isleaftype(T)
+    if T <: TP && isleaftype(T) && T !== Union{}
         return associative_with_eltype(DT_apply, kv, T)
     end
     return grow_to!(associative_with_eltype(DT_apply, T), kv)

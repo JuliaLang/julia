@@ -541,7 +541,7 @@ function show_expr_type(io::IO, ty, emph)
     elseif ty === Core.IntrinsicFunction
         print(io, "::I")
     else
-        if emph && (!isleaftype(ty) || ty == Core.Box)
+        if emph && (!isleaftype(ty) || ty == Core.Box || ty == Union{})
             emphasize(io, "::$ty")
         else
             print(io, "::$ty")

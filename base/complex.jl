@@ -871,7 +871,7 @@ big{T<:Integer}(z::Complex{T}) = Complex{BigInt}(z)
 complex{T<:Complex}(A::AbstractArray{T}) = A
 
 function complex{T}(A::AbstractArray{T})
-    if !isleaftype(T)
+    if !isleaftype(T) || T === Union{}
         error("`complex` not defined on abstractly-typed arrays; please convert to a more specific type")
     end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)

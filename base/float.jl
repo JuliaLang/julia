@@ -757,7 +757,7 @@ fpinttype(::Type{Float16}) = UInt16
 float{T<:AbstractFloat}(A::AbstractArray{T}) = A
 
 function float{T}(A::AbstractArray{T})
-    if !isleaftype(T)
+    if !isleaftype(T) || T == Union{}
         error("`float` not defined on abstractly-typed arrays; please convert to a more specific type")
     end
     convert(AbstractArray{typeof(float(zero(T)))}, A)
