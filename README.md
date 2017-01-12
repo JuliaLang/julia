@@ -271,6 +271,7 @@ Building Julia requires that the following software be installed:
 - **[patch]**                   — for modifying source code.
 - **[cmake]**                   — needed to build `libgit2`.
 - **[pkg-config]**              - needed to build `libgit2` correctly, especially for proxy support
+- **[openssl-devel]**           
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
