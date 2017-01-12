@@ -208,7 +208,7 @@ end
 """
     remote([::AbstractWorkerPool], f) -> Function
 
-Returns a lambda that executes function `f` on an available worker
+Returns an anonymous function that executes function `f` on an available worker
 using [`remotecall_fetch`](@ref).
 """
 remote(f) = (args...; kwargs...)->remotecall_fetch(f, default_worker_pool(), args...; kwargs...)
