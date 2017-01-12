@@ -842,52 +842,55 @@ them. The consumer cannot simply call a producer function to get a value, becaus
 may have more values to generate and so might not yet be ready to return. With tasks, the producer
 and consumer can both run as long as they need to, passing values back and forth as necessary.
 
-Julia provides the functions [`produce()`](@ref) and [`consume()`](@ref) for solving this problem.
-A producer is a function that calls [`produce()`](@ref) on each value it needs to produce:
+Julia provides a [`Channel`](@ref) mechanism for solving this problem.
+A [`Channel`](@ref) is a waitable FIFO queue which can have multiple tasks reading and writing to it.
+
+Let's define a producer task, which produces values via the [`put!`](@ref) call.
 
 ```julia
-julia> function producer()
-         produce("start")
+julia> function producer(c::Channel)
+         put!(c, "start")
          for n=1:4
-           produce(2n)
+           put!(c, 2n)
          end
-         produce("stop")
+         put!(c, "stop")
        end;
 ```
 
-To consume values, first the producer is wrapped in a [`Task`](@ref), then [`consume()`](@ref)
-is called repeatedly on that object:
+To consume values, we need to schedule the producer to run in a new task. A special [`Channel`](@ref)
+constructor which accepts a 1-arg function as an argument can be used to run a task bound to a channel.
+We can then [`take!()`](@ref) values repeatedly from the channel object:
 
-```julia
-julia> p = Task(producer);
+```jldoctest
+julia> chnl = Channel(producer);
 
-julia> consume(p)
+julia> take!(chnl)
 "start"
 
-julia> consume(p)
+julia> take!(chnl)
 2
 
-julia> consume(p)
+julia> take!(chnl)
 4
 
-julia> consume(p)
+julia> take!(chnl)
 6
 
-julia> consume(p)
+julia> take!(chnl)
 8
 
-julia> consume(p)
+julia> take!(chnl)
 "stop"
 ```
 
 One way to think of this behavior is that `producer` was able to return multiple times. Between
-calls to [`produce()`](@ref), the producer's execution is suspended and the consumer has control.
+calls to [`put!()`](@ref), the producer's execution is suspended and the consumer has control.
 
-A [`Task`](@ref) can be used as an iterable object in a `for` loop, in which case the loop variable takes
-on all the produced values:
+The returned [`Channel`](@ref) can be used as an iterable object in a `for` loop, in which case the
+loop variable takes on all the produced values. The loop is terminated when the channel is closed.
 
-```julia
-julia> for x in Task(producer)
+```jldoctest
+julia> for x in Channel(producer)
          println(x)
        end
 start
@@ -898,10 +901,17 @@ start
 stop
 ```
 
-Note that the [`Task()`](@ref) constructor expects a 0-argument function. A common pattern is
-for the producer to be parameterized, in which case a partial function application is needed to
-create a 0-argument [anonymous function](@ref man-anonymous-functions). This can be done either directly or by use of
-a convenience macro:
+Note that we did not have to explcitly close the channel in the producer. This is because
+the act of binding a [`Channel`](@ref) to a [`Task()`](@ref) associates the open lifetime of
+a channel with that of the bound task. The channel object is closed automatically when the task
+terminates. Multiple channels can be bound to a task, and vice-versa.
+
+While the [`Task()`](@ref) constructor expects a 0-argument function, the [`Channel()`](@ref)
+method which creates a channel bound task expects a function that accepts a single argument of
+type [`Channel`](@ref). A common pattern is for the producer to be parameterized, in which case a partial
+function application is needed to create a 0 or 1 argument [anonymous function](@ref man-anonymous-functions).
+
+For [`Task()`](@ref) objects this can be done either directly or by use of a convenience macro:
 
 ```
 function mytask(myarg)
@@ -913,13 +923,16 @@ taskHdl = Task(() -> mytask(7))
 taskHdl = @task mytask(7)
 ```
 
-[`produce()`](@ref) and [`consume()`](@ref) do not launch threads that can run on separate CPUs.
+To orchestrate more advanced work distribution patterns, [`bind()`](@ref) and [`schedule()`](@ref)
+can be used in conjunction with [`Task()`](@ref) and [`Channel()`](@ref)
+constructors to explicitly link a set of channels with a set of producer/consumer tasks.
+
+Note that currently Julia tasks are not scheduled to run on separate CPU cores.
 True kernel threads are discussed under the topic of [Parallel Computing](@ref).
 
 ### Core task operations
 
-While [`produce()`](@ref) and [`consume()`](@ref) illustrate the essential nature of tasks, they
-are actually implemented as library functions using a more primitive function, [`yieldto()`](@ref).
+Let us explore the low level construct [`yieldto()`](@ref) to underestand how task switching works.
 `yieldto(task,value)` suspends the current task, switches to the specified `task`, and causes
 that task's last [`yieldto()`](@ref) call to return the specified `value`. Notice that [`yieldto()`](@ref)
 is the only operation required to use task-style control flow; instead of calling and returning
@@ -929,9 +942,10 @@ coroutines"; each task is switched to and from using the same mechanism.
 [`yieldto()`](@ref) is powerful, but most uses of tasks do not invoke it directly. Consider why
 this might be. If you switch away from the current task, you will probably want to switch back
 to it at some point, but knowing when to switch back, and knowing which task has the responsibility
-of switching back, can require considerable coordination. For example, [`produce()`](@ref) needs
-to maintain some state to remember who the consumer is. Not needing to manually keep track of
-the consuming task is what makes [`produce()`](@ref) easier to use than [`yieldto()`](@ref).
+of switching back, can require considerable coordination. For example, [`put!()`](@ref) and [`take!()`](@ref)
+are blocking operations, which, when used in the context of channels maintain state to remember
+who the consumers is. Not needing to manually keep track of the consuming task is what makes [`put!()`](@ref)
+easier to use than the low-level [`yieldto()`](@ref).
 
 In addition to [`yieldto()`](@ref), a few other basic functions are needed to use tasks effectively.
 

@@ -217,14 +217,6 @@ end
 # issue #5904
 @test run(pipeline(ignorestatus(falsecmd), truecmd)) === nothing
 
-
-# issue #6010
-# TODO: should create separate set of task tests
-ducer = @async for i=1:100; produce(i); end
-yield()
-@test consume(ducer) == 1
-@test consume(ducer) == 2
-
 @testset "redirect_*" begin
     let OLD_STDOUT = STDOUT,
         fname = tempname(),

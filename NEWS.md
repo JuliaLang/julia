@@ -161,6 +161,8 @@ Library improvements
 
   * New `iszero(x)` function to quickly check whether `x` is zero (or is all zeros, for an array) ([#19950]).
 
+  * `notify` now returns a count of tasks woken up ([#19841]).
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -186,6 +188,9 @@ Deprecated or removed
   * `airy`, `airyx` and `airyprime` have been deprecated in favor of more specific
     functions (`airyai`, `airybi`, `airyaiprime`, `airybiprimex`, `airyaix`, `airybix`,
     `airyaiprimex`, `airybiprimex`) ([#18050]).
+
+  * `produce`, `consume` and iteration over a Task object has been deprecated in favor of
+    using Channels for inter-task communication  ([#19841]).
 
 Julia v0.5.0 Release Notes
 ==========================

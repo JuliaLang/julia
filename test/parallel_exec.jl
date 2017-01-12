@@ -998,16 +998,6 @@ if is_unix() # aka have ssh
 end # unix-only
 end # full-test
 
-# issue #7727
-let A = [], B = []
-    t = @task produce(11)
-    @sync begin
-        @async for x in t; push!(A,x); end
-        @async for x in t; push!(B,x); end
-    end
-    @test (A == [11]) != (B == [11])
-end
-
 let t = @task 42
     schedule(t, ErrorException(""), error=true)
     @test_throws ErrorException wait(t)

@@ -1543,4 +1543,99 @@ unsafe_wrap(::Type{String}, p::Cstring, len::Integer, own::Bool=false) =
 # Rename LibGit2.GitAnyObject to LibGit2.GitUnknownObject (part of #19839)
 eval(LibGit2, :(Base.@deprecate_binding GitAnyObject GitUnknownObject))
 
+## produce, consume, and task iteration
+# NOTE: When removing produce/consume, also remove field Task.consumers and related code in
+# task.jl and event.jl
+
+function produce(v)
+    depwarn("produce is now deprecated. Use Channels for inter-task communication.", :produce)
+
+    ct = current_task()
+    local empty, t, q
+    while true
+        q = ct.consumers
+        if isa(q,Task)
+            t = q
+            ct.consumers = nothing
+            empty = true
+            break
+        elseif isa(q,Condition) && !isempty(q.waitq)
+            t = shift!(q.waitq)
+            empty = isempty(q.waitq)
+            break
+        end
+        wait()
+    end
+
+    t.state == :runnable || throw(AssertionError("producer.consumer.state == :runnable"))
+    if empty
+        schedule_and_wait(t, v)
+        while true
+            # wait until there are more consumers
+            q = ct.consumers
+            if isa(q,Task)
+                return q.result
+            elseif isa(q,Condition) && !isempty(q.waitq)
+                return q.waitq[1].result
+            end
+            wait()
+        end
+    else
+        schedule(t, v)
+        # make sure `t` runs before us. otherwise, the producer might
+        # finish before `t` runs again, causing it to see the producer
+        # as done, causing done(::Task, _) to miss the value `v`.
+        # see issue #7727
+        yield()
+        return q.waitq[1].result
+    end
+end
+produce(v...) = produce(v)
+
+function consume(P::Task, values...)
+    depwarn("consume is now deprecated. Use Channels for inter-task communication.", :consume)
+
+    if istaskdone(P)
+        return wait(P)
+    end
+
+    ct = current_task()
+    ct.result = length(values)==1 ? values[1] : values
+
+    #### un-optimized version
+    #if P.consumers === nothing
+    #    P.consumers = Condition()
+    #end
+    #push!(P.consumers.waitq, ct)
+    # optimized version that avoids the queue for 1 consumer
+    if P.consumers === nothing || (isa(P.consumers,Condition)&&isempty(P.consumers.waitq))
+        P.consumers = ct
+    else
+        if isa(P.consumers, Task)
+            t = P.consumers
+            P.consumers = Condition()
+            push!(P.consumers.waitq, t)
+        end
+        push!(P.consumers.waitq, ct)
+    end
+
+    P.state == :runnable ? schedule_and_wait(P) : wait() # don't attempt to queue it twice
+end
+
+function start(t::Task)
+    depwarn(string("Task iteration is now deprecated.",
+                   " Use Channels for inter-task communication. ",
+                   " A for-loop on a Channel object is terminated by calling `close` on the object."), :taskfor)
+    nothing
+end
+function done(t::Task, val)
+    t.result = consume(t)
+    istaskdone(t)
+end
+next(t::Task, val) = (t.result, nothing)
+iteratorsize(::Type{Task}) = SizeUnknown()
+iteratoreltype(::Type{Task}) = EltypeUnknown()
+
+isempty(::Task) = error("isempty not defined for Tasks")
+
 # End deprecations scheduled for 0.6
