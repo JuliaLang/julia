@@ -230,7 +230,7 @@ isbits(x) = (@_pure_meta; isbits(typeof(x)))
 Determine whether `T` is a concrete type that can have instances, meaning its only subtypes
 are itself and `Union{}` (but `T` itself is not `Union{}`).
 """
-isleaftype(t::ANY) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
+isleaftype(t::ANY) = (@_pure_meta; (isa(t, DataType) && t.isleaftype) || t === Union{})
 
 """
     typeintersect(T, S)

@@ -448,7 +448,7 @@ function typeof_tfunc(t::ANY)
         if !isleaftype(tp)
             return DataType # typeof(Kind::Type)::DataType
         else
-            return Const(typeof(tp))
+            return Const(typeof(tp)) # XXX: this is not necessarily true
         end
     elseif isa(t, DataType)
         if isleaftype(t) || isvarargtype(t)
@@ -1188,35 +1188,44 @@ function abstract_apply(af::ANY, fargs, aargtypes::Vector{Any}, vtypes::VarTable
     return abstract_call(af, (), Any[Const(af), Vararg{Any}], vtypes, sv)
 end
 
-function pure_eval_call(f::ANY, argtypes::ANY, atype::ANY, vtypes::VarTable, sv::InferenceState)
-    if f === return_type && length(argtypes) == 3
+function return_type_tfunc(argtypes::ANY, vtypes::VarTable, sv::InferenceState)
+    if length(argtypes) == 3
         tt = argtypes[3]
-        if isa(tt, Const) || isconstType(tt)
-            af = argtypes[2]
-            af_isconst = isa(af, Const) || isconstType(af)
-            if (af_isconst || (isleaftype(af) &&
-                               !(af <: Builtin) && !(af <: IntrinsicFunction)))
+        if isa(tt, Const) || (isType(tt) && !has_free_typevars(tt))
+            aft = argtypes[2]
+            if isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
+                   (isleaftype(aft) && !(aft <: Builtin) && !(aft <: IntrinsicFunction))
                 af_argtype = isa(tt, Const) ? tt.val : tt.parameters[1]
-                if af_argtype <: Tuple && isa(af_argtype, DataType)
-                    argtypes_vec = Any[af, af_argtype.parameters...]
-                    if af_isconst
-                        rt = abstract_call(isa(af,Const) ? af.val : af.parameters[1],
-                                           (), argtypes_vec, vtypes, sv)
+                if isa(af_argtype, DataType) && af_argtype <: Tuple
+                    argtypes_vec = Any[aft, af_argtype.parameters...]
+                    if isa(aft, Const)
+                        rt = abstract_call(aft.val, (), argtypes_vec, vtypes, sv)
+                    elseif isconstType(aft)
+                        rt = abstract_call(aft.parameters[1], (), argtypes_vec, vtypes, sv)
                     else
                         rt = abstract_call_gf_by_type(nothing, argtypes_to_type(argtypes_vec), sv)
                     end
-                    if isa(rt,Const)
-                        return Type{widenconst(rt)}
-                    elseif isleaftype(rt) || isleaftype(af_argtype) || rt === Bottom
-                        return Type{rt}
+                    if isa(rt, Const)
+                        # output was computed to be constant
+                        return Const(typeof(rt.val))
+                    elseif isleaftype(rt)
+                        # output type was known for certain
+                        return Const(rt)
+                    elseif (isa(tt, Const) || isconstType(tt)) &&
+                           (isa(aft, Const) || isconstType(aft))
+                        # input arguments were known for certain
+                        return Const(rt)
                     else
-                        return Type{R} where R<:rt
+                        return Type{R} where R <: rt
                     end
                 end
             end
         end
     end
+    return NF
+end
 
+function pure_eval_call(f::ANY, argtypes::ANY, atype::ANY, vtypes::VarTable, sv::InferenceState)
     for i = 2:length(argtypes)
         a = argtypes[i]
         if !(isa(a,Const) || isconstType(a))
@@ -1309,6 +1318,11 @@ function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes::VarTable, s
             end
         end
         return Any
+    elseif f === return_type
+        rt_rt = return_type_tfunc(argtypes, vtypes, sv)
+        if rt_rt !== NF
+            return rt_rt
+        end
     end
 
     tm = _topmod(sv)
@@ -1810,7 +1824,7 @@ function code_for_method(method::Method, atypes::ANY, sparams::SimpleVector, wor
         # don't call staged functions on abstract types.
         # (see issues #8504, #10230)
         # we can't guarantee that their type behavior is monotonic.
-        # XXX: this test is wrong if Types (such as DataType) are present
+        # XXX: this test is wrong if Types (such as DataType or Bottom) are present
         return nothing
     end
     if preexisting
@@ -4293,9 +4307,8 @@ function is_allocation(e::ANY, sv::InferenceState)
         return (length(e.args)-1,())
     elseif e.head === :new
         typ = widenconst(exprtype(e, sv.src, sv.mod))
-        if isleaftype(typ)
-            @assert(isa(typ,DataType))
-            nf = length(e.args)-1
+        if isa(typ, DataType) && isleaftype(typ)
+            nf = length(e.args) - 1
             names = fieldnames(typ)
             @assert(nf <= nfields(typ))
             if nf < nfields(typ)
