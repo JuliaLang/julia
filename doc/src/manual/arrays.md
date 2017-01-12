@@ -73,8 +73,8 @@ or a series of dimension sizes passed as a variable number of arguments.
 [^1]: *iid*, independently and identically distributed.
 
 The syntax `[A, B, C, ...]` constructs a 1-d array (vector) of its arguments. If all
-arguments have a common promotion type then they get converted to that type using
-`convert()`.
+arguments have a common [promotion type](@ref conversion-and-promotion) then they get
+converted to that type using `convert()`.
 
 ### Concatenation
 
