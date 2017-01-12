@@ -37,19 +37,24 @@ end
 Wake up tasks waiting for a condition, passing them `val`. If `all` is `true` (the default),
 all waiting tasks are woken, otherwise only one is. If `error` is `true`, the passed value
 is raised as an exception in the woken tasks.
+
+Returns the count of tasks woken up. Returns 0 if no tasks are waiting on `condition`.
 """
 notify(c::Condition, arg::ANY=nothing; all=true, error=false) = notify(c, arg, all, error)
 function notify(c::Condition, arg, all, error)
+    cnt = 0
     if all
+        cnt = length(c.waitq)
         for t in c.waitq
             error ? schedule(t, arg, error=error) : schedule(t, arg)
         end
         empty!(c.waitq)
     elseif !isempty(c.waitq)
+        cnt = 1
         t = shift!(c.waitq)
         error ? schedule(t, arg, error=error) : schedule(t, arg)
     end
-    nothing
+    cnt
 end
 
 notify_error(c::Condition, err) = notify(c, err, true, true)
