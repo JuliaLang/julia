@@ -59,7 +59,7 @@ Channel(sz) = Channel{Any}(sz)
     Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
 
 Creates a new task from `func`, binds it to a new channel of type
-`ctype` and size `csize` and schedules the task, all in a single call.
+`ctype` and size `csize`, and schedules the task, all in a single call.
 
 `func` must accept the bound channel as its only argument.
 
