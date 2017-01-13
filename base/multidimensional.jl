@@ -308,6 +308,7 @@ end
     IA1, IArest = IteratorsMD.split(IA, Val{N})
     checkindex(Bool, IA1, I[1])
 end
+@inline checkbounds{T,B<:AbstractArray{Bool,1}}(::Type{Bool}, A::AbstractArray, I::LogicalIndex{T,B}) = linearindices(A) == linearindices(I.mask)
 @inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex) = indices(A) == indices(I.mask)
 @inline checkindex(::Type{Bool}, indx::AbstractUnitRange, I::LogicalIndex) = (indx,) == indices(I.mask)
 checkindex(::Type{Bool}, inds::Tuple, I::LogicalIndex) = false
