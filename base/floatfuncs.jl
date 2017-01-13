@@ -170,10 +170,11 @@ end
 
 # isapprox: approximate equality of numbers
 """
-    isapprox(x, y; rtol::Real=sqrt(eps), atol::Real=0)
+    isapprox(x, y; rtol::Real=sqrt(eps), atol::Real=0, nans::Bool=false)
 
 Inexact equality comparison: `true` if `norm(x-y) <= atol + rtol*max(norm(x), norm(y))`. The
-default `atol` is zero and the default `rtol` depends on the types of `x` and `y`.
+default `atol` is zero and the default `rtol` depends on the types of `x` and `y`. The default
+`nans` is false, meaning `isapprox(NaN,NaN) == false`; call with `nans=true` to have `isapprox(NaN,NaN) == true`.
 
 For real or complex floating-point values, `rtol` defaults to
 `sqrt(eps(typeof(real(x-y))))`. This corresponds to requiring equality of about half of the
@@ -188,8 +189,8 @@ approximately equal component-wise.
 The binary operator `≈` is equivalent to `isapprox` with the default arguments, and `x ≉ y`
 is equivalent to `!isapprox(x,y)`.
 """
-function isapprox(x::Number, y::Number; rtol::Real=rtoldefault(x,y), atol::Real=0)
-    x == y || (isfinite(x) && isfinite(y) && abs(x-y) <= atol + rtol*max(abs(x), abs(y)))
+function isapprox(x::Number, y::Number; rtol::Real=rtoldefault(x,y), atol::Real=0, nans::Bool=false)
+    x == y || (isfinite(x) && isfinite(y) && abs(x-y) <= atol + rtol*max(abs(x), abs(y))) || (nans && (isnan(x) & isnan(y)))
 end
 
 const ≈ = isapprox
