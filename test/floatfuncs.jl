@@ -71,7 +71,10 @@ end
 
 # isapprox
 for nan in (Float16,Float32,Float64)
-    nan = elty(NaN)
+    nan  = elty(NaN)
+    half = elty(0.5)
     @test isapprox(nan, nan) == false
     @test isapprox(nan, nan, nans=true) == true
+    @test isapprox([half, nan, half], [half, nan, half]) == false
+    @test isapprox([half, nan, half], [half, nan, half], nans=true) == true    
 end
