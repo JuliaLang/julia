@@ -748,7 +748,7 @@ end
 
 # isinteger and isreal
 @test isinteger(Diagonal(rand(1:5,5)))
-@test isreal(Diagonal(rand(5)))
+@test all(isreal, Diagonal(rand(5))) # reducing isreal(...) deprecated
 
 # unary ops
 let A = Diagonal(rand(1:5,5))

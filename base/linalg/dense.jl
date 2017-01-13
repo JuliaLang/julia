@@ -509,7 +509,7 @@ function logm(A::StridedMatrix)
         end
     end
 
-    if isreal(A) && ~np_real_eigs
+    if all(isreal, A) && ~np_real_eigs
         return real(retmat)
     else
         return retmat

@@ -78,14 +78,11 @@ real{T<:Real}(::Type{Complex{T}}) = T
 """
     isreal(x) -> Bool
 
-Test whether `x` or all its elements are numerically equal to some real number.
+Test whether `x` is numerically equal to some real number.
 
 ```jldoctest
 julia> isreal(5.)
 true
-
-julia> isreal([4.; complex(0,1)])
-false
 ```
 """
 isreal(x::Real) = true

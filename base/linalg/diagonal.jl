@@ -101,7 +101,7 @@ end
 parent(D::Diagonal) = D.diag
 
 ishermitian{T<:Real}(D::Diagonal{T}) = true
-ishermitian(D::Diagonal) = isreal(D.diag)
+ishermitian(D::Diagonal) = all(isreal, D.diag)
 issymmetric(D::Diagonal) = true
 isposdef(D::Diagonal) = all(x -> x > 0, D.diag)
 
