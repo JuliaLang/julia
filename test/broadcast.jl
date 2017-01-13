@@ -395,8 +395,12 @@ Base.Broadcast._containertype{T<:Array19745}(::Type{T}) = Array19745
 
 Base.Broadcast.promote_containertype(::Type{Array19745}, ::Type{Array19745}) = Array19745
 Base.Broadcast.promote_containertype(::Type{Array19745}, ::Type{Array})      = Array19745
+Base.Broadcast.promote_containertype(::Type{Array19745}, ::Type{Matrix})      = Array19745
+Base.Broadcast.promote_containertype(::Type{Array19745}, ::Type{Vector})      = Array19745
 Base.Broadcast.promote_containertype(::Type{Array19745}, ct)                 = Array19745
 Base.Broadcast.promote_containertype(::Type{Array}, ::Type{Array19745})      = Array19745
+Base.Broadcast.promote_containertype(::Type{Matrix}, ::Type{Array19745})      = Array19745
+Base.Broadcast.promote_containertype(::Type{Vector}, ::Type{Array19745})      = Array19745
 Base.Broadcast.promote_containertype(ct, ::Type{Array19745})                 = Array19745
 
 Base.Broadcast.broadcast_indices(::Type{Array19745}, A)      = indices(A)
