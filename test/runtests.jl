@@ -1604,3 +1604,11 @@ end
 # julia#20022
 @test !Compat.isapprox(NaN, NaN)
 @test Compat.isapprox(NaN, NaN, nans=true)
+
+# julia#20006
+abstract AbstractFoo20006
+immutable ConcreteFoo20006{T<:Int} <: AbstractFoo20006
+end
+@test Compat.TypeUtils.isabstract(AbstractFoo20006)
+@test Compat.TypeUtils.parameter_upper_bound(ConcreteFoo20006, 1) == Int
+@test isa(Compat.TypeUtils.typename(Array), TypeName)
