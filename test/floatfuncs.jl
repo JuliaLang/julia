@@ -70,7 +70,7 @@ for elty in (Float32,Float64)
 end
 
 # isapprox
-for nan in (Float16,Float32,Float64)
+for elty in (Float16,Float32,Float64)
     nan  = elty(NaN)
     half = elty(0.5)
     @test isapprox(nan, nan) == false
