@@ -268,10 +268,11 @@ am = map(identity, a)
 # other functions
 v = OffsetArray(v0, (-3,))
 @test v ≈ v
-@test parent(v') == v0'
-@test indices(v') === (1:1,-2:1)
+@test indices(v') === (Base.OneTo(1),-2:1)
 A = OffsetArray(rand(4,4), (-3,5))
 @test A ≈ A
+@test indices(A') === (6:9, -2:1)
+@test parent(A') == parent(A)'
 @test maximum(A) == maximum(parent(A))
 @test minimum(A) == minimum(parent(A))
 @test extrema(A) == extrema(parent(A))
@@ -315,10 +316,10 @@ I,J,N = findnz(z)
 @test mean(A_3_3) == median(A_3_3) == 5
 @test mean(x->2x, A_3_3) == 10
 @test mean(A_3_3, 1) == median(A_3_3, 1) == OffsetArray([2 5 8], (0,A_3_3.offsets[2]))
-@test mean(A_3_3, 2) == median(A_3_3, 2) == OffsetArray([4,5,6]'', (A_3_3.offsets[1],0))
+@test mean(A_3_3, 2) == median(A_3_3, 2) == OffsetArray(reshape([4,5,6],(3,1)), (A_3_3.offsets[1],0))
 @test var(A_3_3) == 7.5
 @test std(A_3_3, 1) == OffsetArray([1 1 1], (0,A_3_3.offsets[2]))
-@test std(A_3_3, 2) == OffsetArray([3,3,3]'', (A_3_3.offsets[1],0))
+@test std(A_3_3, 2) == OffsetArray(reshape([3,3,3], (3,1)), (A_3_3.offsets[1],0))
 @test sum(OffsetArray(ones(Int,3000), -1000)) == 3000
 
 @test vecnorm(v) ≈ vecnorm(parent(v))

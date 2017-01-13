@@ -1570,6 +1570,7 @@ function (\)(L::FactorComponent, B::SparseVecOrMat)
 end
 
 Ac_ldiv_B(L::FactorComponent, B) = ctranspose(L)\B
+Ac_ldiv_B(L::FactorComponent, B::RowVector) = ctranspose(L)\B # ambiguity
 
 (\){T<:VTypes}(L::Factor{T}, B::Dense{T}) = solve(CHOLMOD_A, L, B)
 (\)(L::Factor{Float64}, B::VecOrMat{Complex{Float64}}) = complex.(L\real(B), L\imag(B))

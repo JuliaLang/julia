@@ -591,13 +591,13 @@ end
         @test R == [1, 1, 2, 2, 1, 1, 2, 2]
 
         R = repeat([1, 2], inner = (1, 1), outer = (1, 1))
-        @test R == [1, 2]''
+        @test R == reshape([1, 2], (2,1))
         R = repeat([1, 2], inner = (2, 1), outer = (1, 1))
-        @test R == [1, 1, 2, 2]''
+        @test R == reshape([1, 1, 2, 2], (4,1))
         R = repeat([1, 2], inner = (1, 2), outer = (1, 1))
         @test R == [1 1; 2 2]
         R = repeat([1, 2], inner = (1, 1), outer = (2, 1))
-        @test R == [1, 2, 1, 2]''
+        @test R == reshape([1, 2, 1, 2], (4,1))
         R = repeat([1, 2], inner = (1, 1), outer = (1, 2))
         @test R == [1 1; 2 2]
 
