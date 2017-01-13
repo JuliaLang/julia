@@ -388,9 +388,12 @@ function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxite
         # calculating singular vectors
         left_sv  = sqrt(2) * ex[2][ 1:size(X,1),     ind ] .* sign(ex[1][ind]')
         right_sv = sqrt(2) * ex[2][ size(X,1)+1:end, ind ]
-        return (SVD(left_sv, sval, right_sv), ex[3], ex[4], ex[5], ex[6])
+        return (SVD(left_sv, sval, right_sv'), ex[3], ex[4], ex[5], ex[6])
     else
         #The sort is necessary to work around #10329
-        return (SVD(zeros(eltype(sval),n,0),sort!(sval, by=real, rev=true),zeros(eltype(sval),0,m)), ex[2], ex[3], ex[4], ex[5])
+        return (SVD(zeros(eltype(sval), n, 0),
+                    sort!(sval, by=real, rev=true),
+                    zeros(eltype(sval), 0, m)),
+                    ex[2], ex[3], ex[4], ex[5])
     end
 end
