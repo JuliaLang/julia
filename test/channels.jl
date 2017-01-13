@@ -115,13 +115,13 @@ for N in [0,10]
         @test_throws ErrorException fetch(cs[i])
     end
 
-    # Multiple tasks, first one to terminate, closes the channel
+    # Multiple tasks, first one to terminate closes the channel
     nth = rand(1:5)
     ref = Ref(0)
     cond = Condition()
     tf3(i) = begin
         if i == nth
-            ref.x = i
+            ref[] = i
         else
             sleep(2.0)
         end
@@ -130,10 +130,10 @@ for N in [0,10]
     tasks = [Task(()->tf3(i)) for i in 1:5]
     c = Channel(N)
     foreach(t->bind(c,t), tasks)
-    foreach(t->schedule(t), tasks)
+    foreach(schedule, tasks)
     @test_throws InvalidStateException wait(c)
     @test !isopen(c)
-    @test ref.x == nth
+    @test ref[] == nth
 
     # channeled_tasks
     for T in [Any, Int]

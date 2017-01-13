@@ -1625,6 +1625,7 @@ function produce(v)
     end
 end
 produce(v...) = produce(v)
+export produce
 
 function consume(P::Task, values...)
     depwarn("consume is now deprecated. Use Channels for inter-task communication.", :consume)
@@ -1655,6 +1656,7 @@ function consume(P::Task, values...)
 
     P.state == :runnable ? schedule_and_wait(P) : wait() # don't attempt to queue it twice
 end
+export consume
 
 function start(t::Task)
     depwarn(string("Task iteration is now deprecated.",
