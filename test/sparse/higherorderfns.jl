@@ -355,7 +355,7 @@ end
     end
 end
 
-@testset "broadcast[!] over combinations of scalars, structured matrices, and sparse vectors/matrices" begin
+@testset "broadcast[!] over combinations of scalars, sparse arrays, structured matrices, and dense vectors/matrices" begin
     N, p = 10, 0.4
     s = rand()
     V = sprand(N, p)
@@ -386,6 +386,22 @@ end
             @test (Q = broadcast(*, X, Y); Q isa SparseMatrixCSC && Q == sparse(broadcast(*, fX, fY)))
             @test broadcast!(*, Z, X, Y) == sparse(broadcast(*, fX, fY))
         end
+    end
+    C = Array(sprand(N, 0.4))
+    M = Array(sprand(N, N, 0.4))
+    densearrays = (C, M)
+    fD, fB = Array(D), Array(B)
+    for X in densearrays
+        @test (Q = broadcast(+, D, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(+, fD, X)))
+        @test broadcast!(+, Z, D, X) == sparse(broadcast(+, fD, X))
+        @test (Q = broadcast(*, s, B, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(*, s, fB, X)))
+        @test broadcast!(*, Z, s, B, X) == sparse(broadcast(*, s, fB, X))
+        @test (Q = broadcast(+, V, B, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(+, fV, fB, X)))
+        @test broadcast!(+, Z, V, B, X) == sparse(broadcast(+, fV, fB, X))
+        @test (Q = broadcast(+, V, A, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(+, fV, fA, X)))
+        @test broadcast!(+, Z, V, A, X) == sparse(broadcast(+, fV, fA, X))
+        @test (Q = broadcast(*, s, V, A, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(*, s, fV, fA, X)))
+        @test broadcast!(*, Z, s, V, A, X) == sparse(broadcast(*, s, fV, fA, X))
     end
 end
 
