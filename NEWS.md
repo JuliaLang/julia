@@ -207,7 +207,7 @@ Deprecated or removed
     functions (`airyai`, `airybi`, `airyaiprime`, `airybiprimex`, `airyaix`, `airybix`,
     `airyaiprimex`, `airybiprimex`) ([#18050]).
 
-  * `produce`, `consume` and iteration over a Task object has been deprecated in favor of
+  * `produce`, `consume` and iteration over a Task object have been deprecated in favor of
     using Channels for inter-task communication  ([#19841]).
 
 Julia v0.5.0 Release Notes
