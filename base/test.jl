@@ -1123,7 +1123,7 @@ defined in the specified modules. Use `imported=true` if you wish to
 also test functions that were imported into these modules from
 elsewhere.
 """
-function detect_ambiguities(mods...; imported::Bool=false)
+function detect_ambiguities(mods...; imported::Bool=false, allow_bottom::Bool=true)
     function sortdefs(m1, m2)
         ord12 = m1.file < m2.file
         if !ord12 && (m1.file == m2.file)
@@ -1145,7 +1145,7 @@ function detect_ambiguities(mods...; imported::Bool=false)
                 for m in mt
                     if m.ambig !== nothing
                         for m2 in m.ambig
-                            if Base.isambiguous(m, m2)
+                            if Base.isambiguous(m, m2, allow_bottom)
                                 push!(ambs, sortdefs(m, m2))
                             end
                         end

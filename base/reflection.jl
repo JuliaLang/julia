@@ -850,9 +850,14 @@ function method_exists(f::ANY, t::ANY)
         typemax(UInt)) != 0
 end
 
-function isambiguous(m1::Method, m2::Method)
+function isambiguous(m1::Method, m2::Method, allow_bottom_tparams::Bool=true)
     ti = typeintersect(m1.sig, m2.sig)
     ti === Bottom && return false
+    if !allow_bottom_tparams
+        (_, env) = ccall(:jl_match_method, Ref{SimpleVector}, (Any, Any),
+                         ti, m1.sig)
+        any(x->x === Bottom, env) && return false
+    end
     ml = _methods_by_ftype(ti, -1, typemax(UInt))
     isempty(ml) && return true
     for m in ml
