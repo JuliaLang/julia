@@ -189,6 +189,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 or that the elements are perfectly symmetric or Hermitian on 0.5. Compat now defines methods
 for `HermOrSym` such that using the new methods are backward compatible.
 
+* `Diagonal` and `*` methods support `SubArray`s even on 0.4.
+
 ## New types
 
 Currently, no new exported types are introduced by Compat.

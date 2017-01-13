@@ -1746,4 +1746,17 @@ if VERSION < v"0.6.0-dev.1883"
     @compat Base.:!(f::Function) = (x...)->!f(x...)
 end
 
+if VERSION < v"0.5.0-dev+1450"
+    Base.Diagonal(v::AbstractVector) = Diagonal(collect(v))
+end
+if VERSION < v"0.5.0-dev+3669"
+    using Base: promote_op
+    import Base: *
+    typealias SubMatrix{T} SubArray{T,2}
+    (*)(A::SubMatrix, D::Diagonal) =
+        scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A, D.diag)
+    (*)(D::Diagonal, A::SubMatrix) =
+        scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), D.diag, A)
+end
+
 end # module
