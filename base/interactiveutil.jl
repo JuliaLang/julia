@@ -677,7 +677,7 @@ function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
             value = getfield(m, v)
             @printf head "%30s " s
             try
-                if s ∈ ("Base", "Main", "Core")
+                if value ∈ (Base, Main, Core)
                     print(head, "              ")
                 else
                     bytes = summarysize(value)
