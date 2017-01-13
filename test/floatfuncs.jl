@@ -73,5 +73,5 @@ end
 for nan in (Float16,Float32,Float64)
     nan = elty(NaN)
     @test isapprox(nan, nan) == false
-    @test isapprox(nan, nan, nans=true) == true7
+    @test isapprox(nan, nan, nans=true) == true
 end
