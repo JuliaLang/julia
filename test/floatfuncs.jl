@@ -68,3 +68,10 @@ for elty in (Float32,Float64)
         @test round.(elty2,A) == fill(round(elty2,x),(10,10,10))
     end
 end
+
+# isapprox
+for nan in (Float16,Float32,Float64)
+    nan = elty(NaN)
+    @test isapprox(nan, nan) == false
+    @test isapprox(nan, nan, nans=true) == true7
+end
