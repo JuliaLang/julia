@@ -403,7 +403,7 @@ Test whether evaluating `expr` results in empty [`STDERR`](@ref) output
 """
 macro test_nowarn(expr)
     quote
-        @test_warn r"^(?!.)"s $expr
+        @test_warn r"^(?!.)"s $(esc(expr))
     end
 end
 
