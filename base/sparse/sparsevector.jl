@@ -1316,18 +1316,8 @@ vecnorm(x::AbstractSparseVector, p::Real=2) = vecnorm(nonzeros(x), p)
 
 # Transpose
 # (The only sparse matrix structure in base is CSC, so a one-row sparse matrix is worse than dense)
-transpose(x::SparseVector) = _ct(identity, x)
-ctranspose(x::SparseVector) = _ct(conj, x)
-function _ct{T}(f, x::SparseVector{T})
-    isempty(x) && return Array{T}(1, 0)
-    A = zeros(T, 1, length(x))
-    xnzind = nonzeroinds(x)
-    xnzval = nonzeros(x)
-    for (i,v) in zip(xnzind, xnzval)
-        @inbounds A[i] = f(v)
-    end
-    A
-end
+@inline transpose(sv::SparseVector) = RowVector(sv)
+@inline ctranspose(sv::SparseVector) = RowVector(conj(sv))
 
 ### BLAS Level-1
 

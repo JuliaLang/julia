@@ -392,7 +392,7 @@ let
 end
 
 # similar issue for Array{Real}
-@test Real[1 2] * Real[1.5; 2.0] == [5.5]
+@test Real[1 2] * Real[1.5; 2.0] == Real[5.5]
 
 # Matrix exponential
 for elty in (Float32, Float64, Complex64, Complex128)

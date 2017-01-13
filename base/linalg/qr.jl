@@ -543,6 +543,8 @@ function A_mul_Bc(A::AbstractMatrix, B::Union{QRCompactWYQ,QRPackedQ})
         throw(DimensionMismatch("matrix A has dimensions $(size(A)) but matrix B has dimensions $(size(B))"))
     end
 end
+@inline A_mul_Bc(rowvec::RowVector, B::Union{LinAlg.QRCompactWYQ,LinAlg.QRPackedQ}) = ctranspose(B*ctranspose(rowvec))
+
 
 ### AcQ/AcQc
 for (f1, f2) in ((:Ac_mul_B, :A_mul_B!),

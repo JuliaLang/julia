@@ -7,6 +7,7 @@ using Base: findprevnot, findnextnot
 
 tc{N}(r1::NTuple{N}, r2::NTuple{N}) = all(x->tc(x...), [zip(r1,r2)...])
 tc{N}(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) = true
+tc(r1::RowVector{Bool,BitVector}, r2::Union{RowVector{Bool,BitVector},RowVector{Bool,Vector{Bool}}}) = true
 tc{T}(r1::T, r2::T) = true
 tc(r1,r2) = false
 
@@ -781,7 +782,7 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(|, b0, b0)  BitVector
         @check_bit_operation broadcast(xor, b0, b0)  BitVector
         @check_bit_operation broadcast(*, b0, b0) BitVector
-        @check_bit_operation (*)(b0, b0') Matrix{Int}
+        @check_bit_operation (*)(b0, b0') BitMatrix
     end
 
     @testset "Matrix{Bool}/Matrix{Int}" begin
@@ -1284,7 +1285,7 @@ end
 
 @testset "Transpose" begin
     b1 = bitrand(v1)
-    @check_bit_operation transpose(b1) BitMatrix
+    @check_bit_operation transpose(b1) RowVector{Bool,BitVector}
 
     for m1 = 0:n1, m2 = 0:n2
         b1 = bitrand(m1, m2)
