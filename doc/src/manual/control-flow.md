@@ -846,8 +846,11 @@ Julia provides a [`Channel`](@ref) mechanism for solving this problem.
 A [`Channel`](@ref) is a waitable FIFO queue which can have multiple tasks reading and writing to it.
 
 Let's define a producer task, which produces values via the [`put!`](@ref) call.
+To consume values, we need to schedule the producer to run in a new task. A special [`Channel`](@ref)
+constructor which accepts a 1-arg function as an argument can be used to run a task bound to a channel.
+We can then [`take!()`](@ref) values repeatedly from the channel object:
 
-```julia
+```jldoctest
 julia> function producer(c::Channel)
          put!(c, "start")
          for n=1:4
@@ -855,13 +858,7 @@ julia> function producer(c::Channel)
          end
          put!(c, "stop")
        end;
-```
 
-To consume values, we need to schedule the producer to run in a new task. A special [`Channel`](@ref)
-constructor which accepts a 1-arg function as an argument can be used to run a task bound to a channel.
-We can then [`take!()`](@ref) values repeatedly from the channel object:
-
-```jldoctest
 julia> chnl = Channel(producer);
 
 julia> take!(chnl)
@@ -901,7 +898,7 @@ start
 stop
 ```
 
-Note that we did not have to explcitly close the channel in the producer. This is because
+Note that we did not have to explicitly close the channel in the producer. This is because
 the act of binding a [`Channel`](@ref) to a [`Task()`](@ref) associates the open lifetime of
 a channel with that of the bound task. The channel object is closed automatically when the task
 terminates. Multiple channels can be bound to a task, and vice-versa.
@@ -944,7 +941,7 @@ this might be. If you switch away from the current task, you will probably want 
 to it at some point, but knowing when to switch back, and knowing which task has the responsibility
 of switching back, can require considerable coordination. For example, [`put!()`](@ref) and [`take!()`](@ref)
 are blocking operations, which, when used in the context of channels maintain state to remember
-who the consumers is. Not needing to manually keep track of the consuming task is what makes [`put!()`](@ref)
+who the consumers are. Not needing to manually keep track of the consuming task is what makes [`put!()`](@ref)
 easier to use than the low-level [`yieldto()`](@ref).
 
 In addition to [`yieldto()`](@ref), a few other basic functions are needed to use tasks effectively.

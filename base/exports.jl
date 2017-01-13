@@ -954,14 +954,12 @@ export
 
 # tasks and conditions
     Condition,
-    consume,
     current_task,
     islocked,
     istaskdone,
     istaskstarted,
     lock,
     notify,
-    produce,
     ReentrantLock,
     schedule,
     task_local_storage,
