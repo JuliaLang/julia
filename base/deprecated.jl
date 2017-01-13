@@ -1125,6 +1125,40 @@ eval(Base.Dates, quote
      recur{T<:TimeType}(fun::Function, start::T, stop::T; step::Period=Day(1), negate::Bool=false, limit::Int=10000) = recur(fun, start:step:stop; negate=negate)
 end)
 
+# Index conversions revamp; #19730
+function getindex(A::LogicalIndex, i::Int)
+    depwarn("getindex(A::LogicalIndex, i) is deprecated; use iteration or index into the result of `collect(A)` instead.", :getindex)
+    checkbounds(A, i)
+    first(Iterators.drop(A, i-1))
+end
+function to_indexes(I...)
+    depwarn("to_indexes is deprecated; pass both the source array `A` and indices as `to_indices(A, $(I...))` instead.", :to_indexes)
+    map(_to_index, I)
+end
+_to_index(i) = to_index(I)
+_to_index(c::Colon) = c
+const _colon_usage_msg = "convert Colons to a set of indices for indexing into array `A` by passing them in a complete tuple of indices `I` to `to_indices(A, I)`"
+function getindex(::Colon, i)
+    depwarn("getindex(::Colon, i) is deprecated; $_colon_usage_msg", :getindex)
+    to_index(i)
+end
+function unsafe_getindex(::Colon, i::Integer)
+    depwarn("getindex(::Colon, i) is deprecated; $_colon_usage_msg", :unsafe_getindex)
+    to_index(i)
+end
+function step(::Colon)
+    depwarn("step(::Colon) is deprecated; $_colon_usage_msg", :step)
+    1
+end
+function isempty(::Colon)
+    depwarn("isempty(::Colon) is deprecated; $_colon_usage_msg", :isempty)
+    false
+end
+function in(::Integer, ::Colon)
+    depwarn("in(::Integer, ::Colon) is deprecated; $_colon_usage_msg", :in)
+    true
+end
+
 # #18931
 @deprecate cummin(A, dim=1) accumulate(min, A, dim)
 @deprecate cummax(A, dim=1) accumulate(max, A, dim)

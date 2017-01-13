@@ -4,7 +4,7 @@ module Serializer
 
 import Base: GMP, Bottom, unsafe_convert, uncompressed_ast, datatype_pointerfree
 import Core: svec
-using Base: ViewIndex, index_lengths
+using Base: ViewIndex, Slice, index_lengths
 
 export serialize, deserialize, SerializationState
 
@@ -233,7 +233,7 @@ function trimmedsubarray{T,N,A<:Array}(V::SubArray{T,N,A})
     _trimmedsubarray(dest, V, (), V.indexes...)
 end
 
-trimmedsize(V) = index_lengths(V.parent, V.indexes...)
+trimmedsize(V) = index_lengths(V.indexes...)
 
 function _trimmedsubarray{T,N,P,I,LD}(A, V::SubArray{T,N,P,I,LD}, newindexes)
     LD && return SubArray{T,N,P,I,LD}(A, newindexes, Base.compute_offset1(A, 1, newindexes), 1)
@@ -243,6 +243,7 @@ _trimmedsubarray(A, V, newindexes, index::ViewIndex, indexes...) = _trimmedsubar
 
 trimmedindex(P, d, i::Real) = oftype(i, 1)
 trimmedindex(P, d, i::Colon) = i
+trimmedindex(P, d, i::Slice) = i
 trimmedindex(P, d, i::AbstractArray) = oftype(i, reshape(linearindices(i), indices(i)))
 
 function serialize(s::AbstractSerializer, ss::String)

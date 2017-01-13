@@ -578,6 +578,7 @@ export
     sum!,
     sum,
     sum_kbn,
+    to_indices,
     vcat,
     vec,
     view,
