@@ -1489,9 +1489,9 @@ end
     Ar = sprandn(20,20,.5)
     Ari = ceil.(Int64, 100*Ar)
     if Base.USE_GPL_LIBS
-        @test_approx_eq_eps Base.SparseArrays.normestinv(Ac,3) norm(inv(Array(Ac)),1) 1e-4
-        @test_approx_eq_eps Base.SparseArrays.normestinv(Aci,3) norm(inv(Array(Aci)),1) 1e-4
-        @test_approx_eq_eps Base.SparseArrays.normestinv(Ar) norm(inv(Array(Ar)),1) 1e-4
+        @test Base.SparseArrays.normestinv(Ac,3) ≈ norm(inv(Array(Ac)),1) atol=1e-4
+        @test Base.SparseArrays.normestinv(Aci,3) ≈ norm(inv(Array(Aci)),1) atol=1e-4
+        @test Base.SparseArrays.normestinv(Ar) ≈ norm(inv(Array(Ar)),1) atol=1e-4
         @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,0)
         @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,21)
     end

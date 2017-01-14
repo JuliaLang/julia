@@ -34,7 +34,7 @@ using Base.Test
             @test a*v[:,2] ≈ d[2]*v[:,2]
             @test norm(v) > testtol # eigenvectors cannot be null vectors
             # (d,v) = eigs(a, b, nev=3, tol=1e-8) # not handled yet
-            # @test_approx_eq_eps a*v[:,2] d[2]*b*v[:,2] testtol
+            # @test a*v[:,2] ≈ d[2]*b*v[:,2] atol=testtol
             # @test norm(v) > testtol # eigenvectors cannot be null vectors
 
             (d,v) = eigs(asym, nev=3)
@@ -47,7 +47,7 @@ using Base.Test
             @test eigs(apd; nev=1, sigma=d[3])[1][1] ≈ d[3]
 
             (d,v) = eigs(apd, bpd, nev=3, tol=1e-8)
-            @test_approx_eq_eps apd*v[:,2] d[2]*bpd*v[:,2] testtol
+            @test apd*v[:,2] ≈ d[2]*bpd*v[:,2] atol=testtol
             @test norm(v) > testtol # eigenvectors cannot be null vectors
 
             @testset "(shift-and-)invert mode" begin
@@ -56,7 +56,7 @@ using Base.Test
                 @test norm(v) > testtol # eigenvectors cannot be null vectors
 
                 (d,v) = eigs(apd, bpd, nev=3, sigma=0, tol=1e-8)
-                @test_approx_eq_eps apd*v[:,1] d[1]*bpd*v[:,1] testtol
+                @test apd*v[:,1] ≈ d[1]*bpd*v[:,1] atol=testtol
                 @test norm(v) > testtol # eigenvectors cannot be null vectors
             end
 
@@ -99,7 +99,7 @@ let A6965 = [
     #          0.8  0.1   0.1
     #          0.7  0.1   0.2 ]
     #d,v,nconv = eigs(T6965,nev=1,which=:LM)
-    #@test_approx_eq_eps T6965*v d[1]*v 1e-6
+    # @test T6965*v ≈ d[1]*v atol=1e-6
 end
 
 # Example from Quantum Information Theory
