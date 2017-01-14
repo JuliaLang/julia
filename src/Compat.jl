@@ -1708,6 +1708,14 @@ if !isdefined(Base, :numerator)
     export numerator, denominator
 end
 
+# julia #19950
+if !isdefined(Base, :iszero)
+    iszero(x) = x == zero(x)
+    iszero(x::Number) = x == 0
+    iszero(x::AbstractArray) = all(iszero, x)
+    export iszero
+end
+
 # julia#19088
 if VERSION < v"0.6.0-dev.1256"
     Base.take!(io::Base.AbstractIOBuffer) = takebuf_array(io)

@@ -98,9 +98,11 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `transcode` converts between UTF-xx string encodings in Julia 0.5 (as a lightweight
    alternative to the LegacyStrings package) ([#17323])
 
-* `∘` (typically used infix as `f ∘ g`) for function composition can be used in 0.5 and earlier. [#17155](https://github.com/JuliaLang/julia/pull/17155)
+* `∘` (typically used infix as `f ∘ g`) for function composition can be used in 0.5 and earlier ([#17155])
 
-* The method of `!` to negate functions (typically used as a unary operator, as in `!isinteger`) can be used in 0.5 and earlier. [#17155](https://github.com/JuliaLang/julia/pull/17155)
+* The method of `!` to negate functions (typically used as a unary operator, as in `!isinteger`) can be used in 0.5 and earlier ([#17155]).
+
+* `iszero(x)` efficiently checks whether `x == zero(x)` (including arrays) can be used in 0.5 and earlier ([#19950]).
 
 ## Renamed functions
 
@@ -266,6 +268,7 @@ includes this fix. Find the minimum version from there.
 [#16563]: https://github.com/JuliaLang/julia/issues/16563
 [#16603]: https://github.com/JuliaLang/julia/issues/16603
 [#16972]: https://github.com/JuliaLang/julia/issues/16972
+[#17155]: https://github.com/JuliaLang/julia/issues/17155
 [#17302]: https://github.com/JuliaLang/julia/issues/17302
 [#17323]: https://github.com/JuliaLang/julia/issues/17323
 [#17510]: https://github.com/JuliaLang/julia/issues/17510
@@ -275,3 +278,4 @@ includes this fix. Find the minimum version from there.
 [#18977]: https://github.com/JuliaLang/julia/issues/18977
 [#19088]: https://github.com/JuliaLang/julia/issues/19088
 [#19246]: https://github.com/JuliaLang/julia/issues/19246
+[#19950]: https://github.com/JuliaLang/julia/issues/19950
