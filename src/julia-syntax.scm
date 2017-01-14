@@ -80,7 +80,7 @@
 ;; && sequences.
 (define (expand-vector-compare e)
   (comp-accum e
-              (lambda (a b) `(call & ,a ,b))
+              (lambda (a b) `(call .& ,a ,b))
               (lambda (x) (not (length> x 2)))
               (lambda (e)
                 (if (dotop? (cadr e))
