@@ -60,7 +60,7 @@
 @test [0,Inf] ≈ [0,Inf]
 @test [0,Inf] ≉ [0,-Inf]
 
-# issue #19936 
+# issue #19936
 for elty in (Float16,Float32,Float64)
     nan  = elty(NaN)
     half = elty(0.5)
