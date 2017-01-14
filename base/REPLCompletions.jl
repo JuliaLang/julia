@@ -438,7 +438,7 @@ function completions(string, pos)
         if partial_key !== nothing
             matches = find_dict_matches(identifier, partial_key)
             length(matches)==1 && (length(string) <= pos || string[pos+1] != ']') && (matches[1]*="]")
-            length(matches)>0 && return sort(matches), loc:pos, true
+            length(matches)>0 && return sort!(matches), loc:pos, true
         else
             return String[], 0:-1, false
         end
@@ -457,7 +457,7 @@ function completions(string, pos)
             paths[1] *= "\""
         end
         #Latex symbols can be completed for strings
-        (success || inc_tag==:cmd) && return sort(paths), r, success
+        (success || inc_tag==:cmd) && return sort!(paths), r, success
     end
 
     ok, ret = bslash_completions(string, pos)
@@ -550,7 +550,7 @@ function completions(string, pos)
         end
     end
     append!(suggestions, complete_symbol(s, ffunc))
-    return sort(unique(suggestions)), (dotpos+1):pos, true
+    return sort!(unique(suggestions)), (dotpos+1):pos, true
 end
 
 function shell_completions(string, pos)
