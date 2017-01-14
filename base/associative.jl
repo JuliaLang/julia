@@ -249,11 +249,11 @@ end
 
 const hasha_seed = UInt === UInt64 ? 0x6d35bb51952d5539 : 0x952d5539
 function hash(a::Associative, h::UInt)
-    h = hash(hasha_seed, h)
+    hv = hasha_seed
     for (k,v) in a
-        h ⊻= hash(k, hash(v))
+        hv ⊻= hash(k, hash(v))
     end
-    return h
+    hash(hv, h)
 end
 
 function getindex(t::Associative, key)
