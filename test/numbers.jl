@@ -2867,14 +2867,19 @@ end
 
 @testset "iszero" begin
     # Numeric scalars
-    for T in Iterators.flatten(subtypes.([AbstractFloat, Signed, Unsigned]))
+    for T in [Float16, Float32, Float64, BigFloat,
+              Int8, Int16, Int32, Int64, Int128, BigInt,
+              UInt8, UInt16, UInt32, UInt64, UInt128]
         @test iszero(T(0))
         @test iszero(Complex{T}(0))
+        if T <: Integer
+            @test iszero(Rational{T}(0))
+        elseif T <: AbstractFloat
+            @test iszero(T(-0.0))
+            @test iszero(Complex{T}(-0.0))
+        end
     end
-    @test iszero(BigFloat(0))
     @test !iszero(nextfloat(BigFloat(0)))
-    @test iszero(BigInt(0))
-    @test iszero(0//1)
 
     # Array reduction
     @test !iszero([0, 1, 2, 3])
