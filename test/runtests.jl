@@ -402,19 +402,19 @@ end
 # qr, qrfact, qrfact!
 let A = [1.0 2.0; 3.0 4.0]
     Q, R = qr(A, Val{false})
-    @test_approx_eq Q*R A
+    @test Q*R ≈ A
     Q, R, p = qr(A, Val{true})
-    @test_approx_eq Q*R A[:,p]
+    @test Q*R ≈ A[:,p]
     F = qrfact(A, Val{false})
-    @test_approx_eq F[:Q]*F[:R] A
+    @test F[:Q]*F[:R] ≈ A
     F = qrfact(A, Val{true})
-    @test_approx_eq F[:Q]*F[:R] A[:,F[:p]]
+    @test F[:Q]*F[:R] ≈ A[:,F[:p]]
     A_copy = copy(A)
     F = qrfact!(A_copy, Val{false})
-    @test_approx_eq F[:Q]*F[:R] A
+    @test F[:Q]*F[:R] ≈ A
     A_copy = copy(A)
     F = qrfact!(A_copy, Val{true})
-    @test_approx_eq F[:Q]*F[:R] A[:,F[:p]]
+    @test F[:Q]*F[:R] ≈ A[:,F[:p]]
 end
 
 # Cstring
@@ -460,7 +460,7 @@ if VERSION < v"0.5.0-dev+907"
     let A = rand(2,2)
         B = A'*A
         U = @compat chol(B, Val{:U})
-        @test_approx_eq U'*U B
+        @test U'*U ≈ B
     end
 end
 
@@ -1268,11 +1268,11 @@ else
 end
 
 let io = IOBuffer(), s = "hello"
-    @test @compat String(s.data) == s
+    @test @compat String(Vector{UInt8}(s)) == s
     write(io, s)
     @test @compat String(io) == s
-    @test unsafe_string(pointer(s.data)) == s
-    @test unsafe_string(pointer(s.data),length(s.data)) == s
+    @test unsafe_string(pointer(s)) == s
+    @test unsafe_string(pointer(s),sizeof(s)) == s
     @test string(s, s, s) == "hellohellohello"
     @test @compat(String(s)) == s
     @test String == @compat(Union{Compat.UTF8String,Compat.ASCIIString})
@@ -1304,19 +1304,29 @@ io = IOBuffer()
 
 let
     test_str = "test"
-    ptr = pointer(test_str.data)
-    wrapped_str = unsafe_wrap(Compat.String, ptr)
+    ptr = pointer(test_str)
+    wrapped_str = if VERSION < v"0.6.0-dev.1988"
+        unsafe_wrap(Compat.String, ptr)
+    else
+        unsafe_string(ptr)
+    end
     new_str = unsafe_string(ptr)
     cstr = convert(Cstring, ptr)
     new_str2 = unsafe_string(cstr)
     @test wrapped_str == "test"
     @test new_str == "test"
     @test new_str2 == "test"
-    @test ptr == pointer(wrapped_str)  # Test proper pointer aliasing behavior
+    if VERSION < v"0.6.0-dev.1988"
+        # Test proper pointer aliasing behavior, which is not possible in 0.6
+        # with the new String representation
+        @test ptr == pointer(wrapped_str)
+    end
     @test ptr ≠ pointer(new_str)
     @test ptr ≠ pointer(new_str2)
     @test unsafe_string(convert(Ptr{Int8}, ptr)) == "test"
-    @test unsafe_wrap(Compat.String, convert(Ptr{Int8}, ptr)) == "test"
+    if VERSION < v"0.6.0-dev.1988"
+        @test unsafe_wrap(Compat.String, convert(Ptr{Int8}, ptr)) == "test"
+    end
     x = [1, 2]
     @test unsafe_wrap(Array, pointer(x), 2) == [1, 2]
 end
@@ -1548,8 +1558,8 @@ let s = "Koala test: 🐨"
     @test transcode(UInt32, s) == UInt32[75,111,97,108,97,32,116,101,115,116,58,32,128040]
     for T in (UInt8,UInt16,UInt32,Cwchar_t)
         @test transcode(Compat.String, transcode(T, s)) == s
-        @test transcode(UInt8, transcode(T, s)) == s.data
-        @test transcode(T, s) == transcode(T, s.data) == transcode(T, transcode(T, s))
+        @test transcode(UInt8, transcode(T, s)) == Vector{UInt8}(s)
+        @test transcode(T, s) == transcode(T, Vector{UInt8}(s)) == transcode(T, transcode(T, s))
     end
 end
 
