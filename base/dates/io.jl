@@ -133,12 +133,14 @@ function format(io, d::DatePart{'y'}, dt)
 
     # the last `n` digits of `y`
     # will be 0 padded if `y` has less than `n` digits
-    str = dec(y,n)[end-(n-1):end]
-    write(io, str)
+    str = dec(y,n)
+    l = endof(str)
+    write(io, SubString(str,l-(n-1),l))
 end
 
 function format(io, d::DatePart{'s'}, dt)
-    write(io, string(millisecond(dt)/1000)[3:end])
+    str = string(millisecond(dt)/1000)
+    write(io, SubString(str, 3, endof(str)))
 end
 
 

@@ -84,7 +84,12 @@ function Base.tryparse{T<:TimeType}(::Type{T}, str::AbstractString, df::DateForm
     end
 end
 
-function Base.parse{T<:TimeType}(::Type{T}, str::AbstractString, df::DateFormat)
+default_format(::Type{Date}) = ISODateFormat
+default_format(::Type{DateTime}) = ISODateTimeFormat
+
+function Base.parse{T<:TimeType}(::Type{T},
+                                 str::AbstractString,
+                                 df::DateFormat=default_format(T))
     nt = tryparse_internal(T, str, df, true)
     T(unsafe_get(nt)...)
 end
@@ -129,7 +134,7 @@ end
     end
 end
 
-function Base.parse(::Type{DateTime}, s::AbstractString, df::DateFormat{Symbol("yyyy-mm-dd\\THH:MM:SS.s")})
+function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeFormat))
     i, end_pos = start(s), endof(s)
 
     dm = dd = Int64(1)

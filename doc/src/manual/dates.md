@@ -116,10 +116,12 @@ julia> dt2 = Date("2015-01-02",df)
 2015-01-02
 ```
 
-You can also use the `datetime""` string macro. This macro creates the `DateFormat` object once when the macro is expanded and uses the same `DateFormat` object even if a code snippet is run multiple times.
+You can also use the `dateformat""` string macro. This macro creates the `DateFormat` object once when the macro is expanded and uses the same `DateFormat` object even if a code snippet is run multiple times.
 
 ```julia
-julia> for i=1:10^5 Date("2015-01-01",dateformat"y-m-d") end
+julia> for i=1:10^5
+           Date("2015-01-01",dateformat"y-m-d")
+       end
 ```
 
 A full suite of parsing and formatting tests and examples is available in [tests/dates/io.jl](https://github.com/JuliaLang/julia/blob/master/test/dates/io.jl).

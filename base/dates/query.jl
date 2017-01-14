@@ -28,13 +28,20 @@ function locale_dict{S<:AbstractString}(names::Vector{S})
 end
 
 """
-    DateLocale(["January, "February",...], ["Jan", "Feb",...],
+    DateLocale(["January", "February",...], ["Jan", "Feb",...],
                ["Monday", "Tuesday",...], ["Mon", "Tue",...])
 
-Create a locale for parsing textual month names. First argument is
-a vector of 12 month names, the second is a vector of 12 abbreviated
-month names.  This object is passed as the last argument to
-`tryparsenext` and `format` defined for each `AbstractDateToken` type.
+Create a locale for parsing or printing textual month names.
+
+Arguments:
+
+- `months::Vector`: 12 month names
+- `months_abbr::Vector`: 12 abbreviated month names
+- `days_of_week::Vector`: 7 days of week
+- `days_of_week_abbr::Vector`: 7 days of week abbreviated
+
+This object is passed as the last argument to `tryparsenext` and `format`
+methods defined for each `AbstractDateToken` type.
 """
 function DateLocale(months::Vector, months_abbr::Vector,
                     days_of_week::Vector, days_of_week_abbr::Vector)
