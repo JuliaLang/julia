@@ -246,7 +246,7 @@ end
 
 # Special handling for some types.
 function asyncmap(f, s::AbstractString; kwargs...)
-    s2=Array(Char, length(s))
+    s2 = Array{Char,1}(length(s))
     asyncmap!(f, s2, s; kwargs...)
     return convert(String, s2)
 end

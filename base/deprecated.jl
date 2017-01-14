@@ -1741,4 +1741,23 @@ end
 export @test_approx_eq
 # END code from base/test.jl
 
+# Deprecate Array(T, dims...) in favor of proper type constructors
+@deprecate Array{T,N}(::Type{T}, d::NTuple{N,Int})               Array{T,N}(d)
+@deprecate Array{T}(::Type{T}, d::Int...)                        Array{T,length(d)}(d...)
+@deprecate Array{T}(::Type{T}, m::Int)                           Array{T,1}(m)
+@deprecate Array{T}(::Type{T}, m::Int,n::Int)                    Array{T,2}(m,n)
+@deprecate Array{T}(::Type{T}, m::Int,n::Int,o::Int)             Array{T,3}(m,n,o)
+@deprecate Array{T}(::Type{T}, d::Integer...)                    Array{T,length(d)}(convert(Tuple{Vararg{Int}}, d))
+@deprecate Array{T}(::Type{T}, m::Integer)                       Array{T,1}(Int(m))
+@deprecate Array{T}(::Type{T}, m::Integer,n::Integer)            Array{T,2}(Int(m),Int(n))
+@deprecate Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) Array{T,3}(Int(m),Int(n),Int(o))
+
+# Likewise for SharedArrays
+@deprecate SharedArray{T,N}(::Type{T}, dims::Dims{N}; kwargs...) SharedArray{T,N}(dims; kwargs...)
+@deprecate SharedArray{T}(::Type{T}, dims::Int...; kwargs...)    SharedArray{T,length(dims)}(dims...; kwargs...)
+@deprecate(SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,Int}, offset; kwargs...),
+           SharedArray{T,N}(filename, dims, offset; kwargs...))
+@deprecate(SharedArray{T}(filename::AbstractString, ::Type{T}, dims::NTuple, offset; kwargs...),
+           SharedArray{T,length(dims)}(filename, dims, offset; kwargs...))
+
 # End deprecations scheduled for 0.6

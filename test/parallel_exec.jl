@@ -231,11 +231,11 @@ test_indexing(RemoteChannel(id_other))
 dims = (20,20,20)
 
 if is_linux()
-    S = SharedArray(Int64, dims)
+    S = SharedArray{Int64,3}(dims)
     @test startswith(S.segname, "/jl")
     @test !ispath("/dev/shm" * S.segname)
 
-    S = SharedArray(Int64, dims; pids=[id_other])
+    S = SharedArray{Int64,3}(dims; pids=[id_other])
     @test startswith(S.segname, "/jl")
     @test !ispath("/dev/shm" * S.segname)
 end
@@ -298,7 +298,7 @@ copy!(s, sdata(d))
 a = rand(dims)
 @test sdata(a) == a
 
-d = SharedArray(Int, dims, init = D->fill!(D.loc_subarr_1d, myid()))
+d = SharedArray{Int}(dims, init = D->fill!(D.loc_subarr_1d, myid()))
 for p in procs(d)
     idxes_in_p = remotecall_fetch(p, d) do D
         parentindexes(D.loc_subarr_1d)[1]
@@ -309,7 +309,7 @@ for p in procs(d)
     @test d[idxl] == p
 end
 
-d = @inferred(SharedArray(Float64, (2,3)))
+d = @inferred(SharedArray{Float64,2}((2,3)))
 @test isa(d[:,2], Vector{Float64})
 
 ### SharedArrays from a file
@@ -320,7 +320,7 @@ write(fn, 1:30)
 sz = (6,5)
 Atrue = reshape(1:30, sz)
 
-S = @inferred(SharedArray(fn, Int, sz))
+S = @inferred(SharedArray{Int,2}(fn, sz))
 @test S == Atrue
 @test length(procs(S)) > 1
 @sync begin
@@ -338,14 +338,14 @@ read!(fn, filedata)
 finalize(S)
 
 # Error for write-only files
-@test_throws ArgumentError SharedArray(fn, Int, sz, mode="w")
+@test_throws ArgumentError SharedArray{Int,2}(fn, sz, mode="w")
 
 # Error for file doesn't exist, but not allowed to create
-@test_throws ArgumentError SharedArray(joinpath(tempdir(),randstring()), Int, sz, mode="r")
+@test_throws ArgumentError SharedArray{Int,2}(joinpath(tempdir(),randstring()), sz, mode="r")
 
 # Creating a new file
 fn2 = tempname()
-S = SharedArray(fn2, Int, sz, init=D->D[localindexes(D)] = myid())
+S = SharedArray{Int,2}(fn2, sz, init=D->D[localindexes(D)] = myid())
 @test S == filedata
 filedata2 = similar(Atrue)
 read!(fn2, filedata2)
@@ -355,7 +355,7 @@ finalize(S)
 # Appending to a file
 fn3 = tempname()
 write(fn3, ones(UInt8, 4))
-S = SharedArray(fn3, UInt8, sz, 4, mode="a+", init=D->D[localindexes(D)]=0x02)
+S = SharedArray{UInt8}(fn3, sz, 4, mode="a+", init=D->D[localindexes(D)]=0x02)
 len = prod(sz)+4
 @test filesize(fn3) == len
 filedata = Array{UInt8}(len)
@@ -438,7 +438,7 @@ A = @inferred(convert(SharedArray, AA))
 B = @inferred(convert(SharedArray, AA'))
 @test B*A == ctranspose(AA)*AA
 
-d=SharedArray(Int64, (10,10); init = D->fill!(D.loc_subarr_1d, myid()), pids=[id_me, id_other])
+d=SharedArray{Int64,2}((10,10); init = D->fill!(D.loc_subarr_1d, myid()), pids=[id_me, id_other])
 d2 = map(x->1, d)
 @test reduce(+, d2) == 100
 
@@ -459,12 +459,12 @@ map!(x->1, d, d)
 # Shared arrays of singleton immutables
 @everywhere immutable ShmemFoo end
 for T in [Void, ShmemFoo]
-    s = @inferred(SharedArray(T, 10))
+    s = @inferred(SharedArray{T}(10))
     @test T() === remotecall_fetch(x->x[3], workers()[1], s)
 end
 
 # Issue #14664
-d = SharedArray(Int,10)
+d = SharedArray{Int}(10)
 @sync @parallel for i=1:10
     d[i] = i
 end
@@ -474,8 +474,8 @@ for (x,i) in enumerate(d)
 end
 
 # complex
-sd = SharedArray(Int,10)
-se = SharedArray(Int,10)
+sd = SharedArray{Int}(10)
+se = SharedArray{Int}(10)
 @sync @parallel for i=1:10
     sd[i] = i
     se[i] = i
@@ -498,7 +498,7 @@ for id in [id_me, id_other]
     finalize_and_test((r=RemoteChannel(id); put!(r, 1); r))
 end
 
-d = SharedArray(Int,10)
+d = SharedArray{Int}(10)
 finalize(d)
 @test_throws BoundsError d[1]
 
