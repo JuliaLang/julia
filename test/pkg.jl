@@ -19,15 +19,19 @@ end
 
 
 function temp_pkg_dir(fn::Function, tmp_dir=joinpath(tempdir(), randstring()),
-        remove_tmp_dir::Bool=true)
+        remove_tmp_dir::Bool=true; initialize::Bool=true)
 
     # Used in tests below to set up and tear down a sandboxed package directory
     withenv("JULIA_PKGDIR" => tmp_dir) do
         @test !isdir(Pkg.dir())
         try
-            Pkg.init()
-            @test isdir(Pkg.dir())
-            Pkg.resolve()
+            if initialize
+                Pkg.init()
+                @test isdir(Pkg.dir())
+                Pkg.resolve()
+            else
+                mkpath(Pkg.dir())
+            end
             fn()
         finally
             remove_tmp_dir && rm(tmp_dir, recursive=true)
@@ -576,5 +580,35 @@ end
             Pkg.add("Example")
             @test [keys(Pkg.installed())...] == ["Example"]
         end
+    end
+end
+
+temp_pkg_dir(initialize=false) do
+    function write_build(pkg, content)
+        build_filename = Pkg.dir(pkg, "deps", "build.jl")
+        mkpath(dirname(build_filename))
+        write(build_filename, content)
+    end
+
+    write_build("Normal", "")
+    write_build("Error", "error(\"An error has occurred while building a package\")")
+    write_build("Exit", "exit()")
+
+    cd(Pkg.dir()) do
+        errors = Dict()
+
+        empty!(errors)
+        @test_warn ("INFO: Building Error",
+                    "INFO: Building Normal") Pkg.Entry.build!(["Error", "Normal"], errors)
+
+        empty!(errors)
+        @test_warn ("INFO: Building Exit",
+                    "INFO: Building Normal") Pkg.Entry.build!(["Exit", "Normal"], errors)
+
+        empty!(errors)
+        @test_warn ("INFO: Building Exit",
+                    "INFO: Building Normal",
+                    "INFO: Building Exit",
+                    "INFO: Building Normal") Pkg.Entry.build!(["Exit", "Normal", "Exit", "Normal"], errors)
     end
 end
