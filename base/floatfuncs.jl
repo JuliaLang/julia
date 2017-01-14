@@ -190,7 +190,7 @@ The binary operator `≈` is equivalent to `isapprox` with the default arguments
 is equivalent to `!isapprox(x,y)`.
 """
 function isapprox(x::Number, y::Number; rtol::Real=rtoldefault(x,y), atol::Real=0, nans::Bool=false)
-    x == y || (isfinite(x) && isfinite(y) && abs(x-y) <= atol + rtol*max(abs(x), abs(y))) || (nans && (isnan(x) & isnan(y)))
+    x == y || (isfinite(x) && isfinite(y) && abs(x-y) <= atol + rtol*max(abs(x), abs(y))) || (nans && isnan(x) && isnan(y))
 end
 
 const ≈ = isapprox
