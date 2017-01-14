@@ -277,7 +277,7 @@ if is_windows()
         const FORMAT_MESSAGE_FROM_SYSTEM = UInt32(0x1000)
         const FORMAT_MESSAGE_IGNORE_INSERTS = UInt32(0x200)
         const FORMAT_MESSAGE_MAX_WIDTH_MASK = UInt32(0xFF)
-        lpMsgBuf = Array(Ptr{UInt16})
+        lpMsgBuf = Array{Ptr{UInt16},0}()
         lpMsgBuf[1] = 0
         len = ccall(:FormatMessageW,stdcall,UInt32,(Cint, Ptr{Void}, Cint, Cint, Ptr{Ptr{UInt16}}, Cint, Ptr{Void}),
                     FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,

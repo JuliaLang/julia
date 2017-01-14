@@ -563,7 +563,7 @@ end
 
 function find{Tv,Ti}(x::SparseVector{Tv,Ti})
     numnz = nnz(x)
-    I = Array(Ti, numnz)
+    I = Array{Ti,1}(numnz)
 
     nzind = x.nzind
     nzval = x.nzval
@@ -587,8 +587,8 @@ end
 function findnz{Tv,Ti}(x::SparseVector{Tv,Ti})
     numnz = nnz(x)
 
-    I = Array(Ti, numnz)
-    V = Array(Tv, numnz)
+    I = Array{Ti,1}(numnz)
+    V = Array{Tv,1}(numnz)
 
     nzind = x.nzind
     nzval = x.nzval

@@ -2242,7 +2242,7 @@
       ,.(map (lambda (v r) `(= ,v (call (top length) ,r))) lengths rv)
       (scope-block
        (block
-        (= ,result (call (core Array) ,atype ,@lengths))
+        (= ,result (call (curly Array ,atype ,(length lengths)) ,@lengths))
         (= ,ri 1)
         ,(construct-loops (reverse ranges) (reverse rv) is states (reverse lengths))
         ,result)))))
