@@ -173,8 +173,8 @@ end
     isapprox(x, y; rtol::Real=sqrt(eps), atol::Real=0, nans::Bool=false)
 
 Inexact equality comparison: `true` if `norm(x-y) <= atol + rtol*max(norm(x), norm(y))`. The
-default `atol` is zero and the default `rtol` depends on the types of `x` and `y`. The default
-`nans` is false, meaning `isapprox(NaN,NaN) == false`; call with `nans=true` to have `isapprox(NaN,NaN) == true`.
+default `atol` is zero and the default `rtol` depends on the types of `x` and `y`. The keyword
+argument `nans` determines whether or not NaN values are considered equal (defaults to false).
 
 For real or complex floating-point values, `rtol` defaults to
 `sqrt(eps(typeof(real(x-y))))`. This corresponds to requiring equality of about half of the
