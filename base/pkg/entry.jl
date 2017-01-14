@@ -609,19 +609,25 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
         empty!(Base.DL_LOAD_PATH)
         append!(Base.DL_LOAD_PATH, $(repr(Base.DL_LOAD_PATH)))
         open("$(escape_string(errfile))", "a") do f
-            for path in eachline(STDIN)
-                pkg = basename(dirname(dirname(path)))
-                try
-                    info("Building \$pkg")
-                    cd(dirname(path)) do
-                        evalfile(path)
+            pkg = ""
+            atexit(() -> !isempty(pkg) && run_build())
+            function run_build()
+                for path in eachline(STDIN)
+                    pkg = basename(dirname(dirname(path)))
+                    try
+                        info("Building \$pkg")
+                        cd(dirname(path)) do
+                            evalfile(path)
+                        end
+                    catch err
+                        Base.Pkg.Entry.warnbanner(err, label="[ ERROR: \$pkg ]")
+                        serialize(f, pkg)
+                        serialize(f, err)
                     end
-                catch err
-                    Base.Pkg.Entry.warnbanner(err, label="[ ERROR: \$pkg ]")
-                    serialize(f, pkg)
-                    serialize(f, err)
                 end
             end
+            run_build()
+            pkg = ""
         end
     """
     io, pobj = open(pipeline(detach(`$(Base.julia_cmd()) -O0
