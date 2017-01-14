@@ -488,9 +488,7 @@ julia> for i = 1:1000
 4
 5
 ```
-
-The above `while` loop would never terminate on its own, and the `for` loop would iterate up to 1000.
-These loops are both exited early by using the `break` keyword.
+Without the `break` keyword, the above `while` loop would never terminate on its own, and the `for` loop would iterate up to 1000. These loops are both exited early by using `break`.
 
 In other circumstances, it is handy to be able to stop an iteration and move on to the next one
 immediately. The `continue` keyword accomplishes this:
