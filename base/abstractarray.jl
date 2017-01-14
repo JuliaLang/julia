@@ -837,11 +837,22 @@ function _getindex(::LinearFast, A::AbstractArray, I::Int...)
     @inbounds r = getindex(A, _to_linear_index(A, I...))
     r
 end
+######################### TODO: MOVE TO DEPRECATED.JL #########################
+function _to_linear_index(A::AbstractArray)
+    depwarn("general linear indexing is deprecated; use reshape(A, Val{0}) before indexing", (:getindex, :setindex!, :view))
+    1
+end
+function _to_linear_index(A::AbstractArray, I::Int...)
+    depwarn("general linear indexing is deprecated; use reshape(A, Val{$(length(I))}) before indexing", (:getindex, :setindex!, :view))
+    sub2ind(A, I...)
+end
+function _to_linear_index(A::AbstractArray, i::Int, I::Int...)
+    depwarn("general linear indexing is deprecated; use reshape(A, Val{$(length(I))}) before indexing", (:getindex, :setindex!, :view))
+    i
+end
+###############################################################################
 _to_linear_index(A::AbstractArray, i::Int) = i
-_to_linear_index(A::AbstractVector, i::Int, I::Int...) = i # TODO: DEPRECATE FOR #14770
 _to_linear_index{T,N}(A::AbstractArray{T,N}, I::Vararg{Int,N}) = (@_inline_meta; sub2ind(A, I...))
-_to_linear_index(A::AbstractArray) = 1 # TODO: DEPRECATE FOR #14770
-_to_linear_index(A::AbstractArray, I::Int...) = (@_inline_meta; sub2ind(A, I...)) # TODO: DEPRECATE FOR #14770
 
 ## LinearSlow Scalar indexing: Canonical method is full dimensionality of Ints
 _getindex(::LinearSlow, A::AbstractArray) = (@_propagate_inbounds_meta; getindex(A, _to_subscript_indices(A)...))
@@ -852,20 +863,29 @@ function _getindex(::LinearSlow, A::AbstractArray, I::Int...)
     r
 end
 _getindex{T,N}(::LinearSlow, A::AbstractArray{T,N}, I::Vararg{Int, N}) = (@_propagate_inbounds_meta; getindex(A, I...))
-_to_subscript_indices(A::AbstractArray, i::Int) = (@_inline_meta; _unsafe_ind2sub(A, i))
-_to_subscript_indices{T,N}(A::AbstractArray{T,N}) = (@_inline_meta; fill_to_length((), 1, Val{N})) # TODO: DEPRECATE FOR #14770
-_to_subscript_indices{T}(A::AbstractArray{T,0}) = () # TODO: REMOVE FOR #14770
-_to_subscript_indices{T}(A::AbstractArray{T,0}, i::Int) = () # TODO: REMOVE FOR #14770
-_to_subscript_indices{T}(A::AbstractArray{T,0}, I::Int...) = () # TODO: DEPRECATE FOR #14770
-function _to_subscript_indices{T,N}(A::AbstractArray{T,N}, I::Int...) # TODO: DEPRECATE FOR #14770
-    @_inline_meta
+
+######################### TODO: MOVE TO DEPRECATED.JL #########################
+function _to_subscript_indices{T,N}(A::AbstractArray{T,N})
+    depwarn("general linear indexing is deprecated; use reshape(A, Val{0}) before indexing", (:getindex, :setindex!, :view))
+    fill_to_length((), 1, Val{N})
+end
+_to_subscript_indices{T}(A::AbstractArray{T,0}) = () # Ambiguity
+_to_subscript_indices{T}(A::AbstractArray{T,0}, i::Int) = () # Ambiguity
+function _to_subscript_indices{T}(A::AbstractArray{T,0}, I::Int...)
+    depwarn("general linear indexing is deprecated; use reshape(A, Val{$(length(I))}) before indexing", (:getindex, :setindex!, :view))
+    ()
+end
+function _to_subscript_indices{T,N}(A::AbstractArray{T,N}, I::Int...)
+    depwarn("general linear indexing is deprecated; use reshape(A, Val{$(length(I))}) before indexing", (:getindex, :setindex!, :view))
     J, _ = IteratorsMD.split(I, Val{N})    # (maybe) drop any trailing indices
     sz = _remaining_size(J, size(A))       # compute trailing size (overlapping the final index)
     (front(J)..., _unsafe_ind2sub(sz, last(J))...) # (maybe) extend the last index
 end
-_to_subscript_indices{T,N}(A::AbstractArray{T,N}, I::Vararg{Int,N}) = I
 _remaining_size(::Tuple{Any}, t::Tuple) = t
 _remaining_size(h::Tuple, t::Tuple) = (@_inline_meta; _remaining_size(tail(h), tail(t)))
+###############################################################################
+_to_subscript_indices(A::AbstractArray, i::Int) = (@_inline_meta; _unsafe_ind2sub(A, i))
+_to_subscript_indices{T,N}(A::AbstractArray{T,N}, I::Vararg{Int,N}) = I
 _unsafe_ind2sub(::Tuple{}, i) = () # ind2sub may throw(BoundsError()) in this case
 _unsafe_ind2sub(sz, i) = (@_inline_meta; ind2sub(sz, i))
 

@@ -376,11 +376,10 @@ getindex(t::Tuple, I...) = getindex(t, IteratorsMD.flatten(I)...)
     end
 end
 # But we can speed up LinearSlow arrays by reshaping them to the appropriate dimensionality:
-_maybe_reshape(::LinearFast, A::AbstractArray, I...) = A
-_maybe_reshape(::LinearSlow, A::AbstractVector, I...) = A
-@inline _maybe_reshape(::LinearSlow, A::AbstractArray, I...) = __maybe_reshape(A, index_ndims(I...))
-@inline __maybe_reshape{T,N}(A::AbstractArray{T,N}, ::NTuple{N}) = A
-@inline __maybe_reshape{N}(A::AbstractArray, ::NTuple{N}) = reshape(A, Val{N})
+@inline _maybe_reshape(l::LinearIndexing, A::AbstractArray, I...) = __maybe_reshape(l, A, index_ndims(I...))
+@inline __maybe_reshape{T,N}(::LinearSlow, A::AbstractArray{T,N}, ::NTuple{N}) = A
+@inline __maybe_reshape{T,N}(::LinearSlow, A::AbstractArray{T,N}, ::NTuple{1}) = reshape(A, Val{1})
+@inline __maybe_reshape{T,N}(::LinearFast, A::AbstractArray{T,N}, ::Any) = A
 
 @generated function _unsafe_getindex(::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray}...)
     N = length(I)
