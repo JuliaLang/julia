@@ -40,6 +40,7 @@ mktempdir() do dir
     end
 end
 
+SAVED_LOAD_PATH = copy(LOAD_PATH)
 empty!(LOAD_PATH)
 push!(LOAD_PATH, @__DIR__)
 let paddedname = "Atest_sourcepathZ"
@@ -60,3 +61,5 @@ end
 Base.load_hook(prefix::CustomLoader, name::String, found::String) = found
 @test Base.find_in_path("test_sourcepath") == abspath("test_sourcepath.jl")
 empty!(LOAD_PATH)
+append!(LOAD_PATH, SAVED_LOAD_PATH)
+@test LOAD_PATH == SAVED_LOAD_PATH
