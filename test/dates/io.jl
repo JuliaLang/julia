@@ -235,7 +235,7 @@ Dates.LOCALES["french"] = Dates.DateLocale(
      "juillet", "août", "septembre", "octobre", "novembre", "décembre"],
     ["janv","févr","mars","avril","mai","juin",
      "juil","août","sept","oct","nov","déc"],
-    ["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"],
+    ["lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"],
     [""],
 )
 

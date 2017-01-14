@@ -41,16 +41,16 @@ Dates.LOCALES["french"] = Dates.DateLocale(
      "juillet", "août", "septembre", "octobre", "novembre", "décembre"],
     ["janv","févr","mars","avril","mai","juin",
      "juil","août","sept","oct","nov","déc"],
-    ["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"],
+    ["lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"],
     [""],
 )
-@test Dates.dayname(Nov;locale="french") == "Lundi"
-@test Dates.dayname(Jan;locale="french") == "Mardi"
-@test Dates.dayname(Dec;locale="french") == "Mercredi"
-@test Dates.dayname(Apr;locale="french") == "Jeudi"
-@test Dates.dayname(Jun;locale="french") == "Vendredi"
-@test Dates.dayname(Feb;locale="french") == "Samedi"
-@test Dates.dayname(May;locale="french") == "Dimanche"
+@test Dates.dayname(Nov;locale="french") == "lundi"
+@test Dates.dayname(Jan;locale="french") == "mardi"
+@test Dates.dayname(Dec;locale="french") == "mercredi"
+@test Dates.dayname(Apr;locale="french") == "jeudi"
+@test Dates.dayname(Jun;locale="french") == "vendredi"
+@test Dates.dayname(Feb;locale="french") == "samedi"
+@test Dates.dayname(May;locale="french") == "dimanche"
 
 @test Dates.monthname(Jan;locale="french") == "janvier"
 @test Dates.monthname(Feb;locale="french") == "février"
