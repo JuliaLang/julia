@@ -2750,6 +2750,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                 sz = emit_datatype_nfields(boxed(arg1, ctx));
             }
             else {
+                assert(jl_is_datatype(aty));
                 sz = ConstantInt::get(T_size, jl_datatype_nfields(aty));
             }
             *ret = mark_julia_type(sz, false, jl_long_type, ctx);
@@ -2832,6 +2833,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             JL_GC_POP();
             return false;
         }
+        assert(jl_is_datatype(stt));
 
         ssize_t fieldidx = -1;
         if (jl_is_quotenode(args[2]) && jl_is_symbol(jl_fieldref(args[2], 0))) {
