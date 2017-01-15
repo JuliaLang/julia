@@ -31,7 +31,7 @@ function prompt(msg::AbstractString; default::AbstractString="", password::Bool=
         Base.getpass(msg)
     else
         print(msg)
-        readline(STDIN, true)
+        readline(STDIN)
     end
     isempty(uinput) ? default : uinput
 end

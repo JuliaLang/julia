@@ -193,7 +193,7 @@ let r, t, sock
     @test !ismarked(sock)
     @test_throws ArgumentError reset(sock)
     @test !unmark(sock)
-    @test readline(sock, true) == "Goodbye, world..."
+    @test readline(sock) == "Goodbye, world..."
     #@test eof(sock) ## doesn't work
     close(sock)
     @test wait(t)

@@ -247,12 +247,12 @@ for (name, f) in l
         verbose && println("$name readlines...")
         @test readlines(io(), false) == readlines(IOBuffer(text), false)
         @test readlines(io(), false) == readlines(filename, false)
-        @test readlines(io(), true) == readlines(IOBuffer(text), true)
-        @test readlines(io(), true) == readlines(filename, true)
+        @test readlines(io()) == readlines(IOBuffer(text))
+        @test readlines(io()) == readlines(filename)
         @test collect(eachline(io(), false)) == collect(eachline(IOBuffer(text), false))
         @test collect(eachline(io(), false)) == collect(eachline(filename, false))
-        @test collect(eachline(io(), true)) == collect(eachline(IOBuffer(text), true))
-        @test collect(eachline(io(), true)) == collect(eachline(filename, true))
+        @test collect(eachline(io())) == collect(eachline(IOBuffer(text)))
+        @test collect(eachline(io())) == collect(eachline(filename))
 
         cleanup()
 

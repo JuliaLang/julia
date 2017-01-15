@@ -7,7 +7,7 @@ end
 
 function parserow(stream::IO)
     withstream(stream) do
-        line = readline(stream, true)
+        line = readline(stream)
         row = split(line, r"(?<!\\)\|")
         length(row) == 1 && return
         row[1] == "" && shift!(row)
