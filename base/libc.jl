@@ -277,12 +277,12 @@ if is_windows()
         const FORMAT_MESSAGE_FROM_SYSTEM = UInt32(0x1000)
         const FORMAT_MESSAGE_IGNORE_INSERTS = UInt32(0x200)
         const FORMAT_MESSAGE_MAX_WIDTH_MASK = UInt32(0xFF)
-        lpMsgBuf = Array{Ptr{UInt16},0}()
-        lpMsgBuf[1] = 0
+        lpMsgBuf = Ref{Ptr{UInt16}}()
+        lpMsgBuf[] = 0
         len = ccall(:FormatMessageW,stdcall,UInt32,(Cint, Ptr{Void}, Cint, Cint, Ptr{Ptr{UInt16}}, Cint, Ptr{Void}),
                     FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
                     C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
-        p = lpMsgBuf[1]
+        p = lpMsgBuf[]
         len == 0 && return ""
         buf = Array{UInt16}(len)
         unsafe_copy!(pointer(buf), p, len)
