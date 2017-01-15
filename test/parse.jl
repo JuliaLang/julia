@@ -928,3 +928,8 @@ end
 # issue #18754: parse ccall as a regular function
 @test parse("ccall([1], 2)[3]") == Expr(:ref, Expr(:call, :ccall, Expr(:vect, 1), 2), 3)
 @test parse("ccall(a).member") == Expr(:., Expr(:call, :ccall, :a), QuoteNode(:member))
+
+# Check that the body of a `where`-qualified short form function definition gets
+# a :block for its body
+short_where_call = :(f(x::T) where T = T)
+@test short_where_call.args[2].head == :block
