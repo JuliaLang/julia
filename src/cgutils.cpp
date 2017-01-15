@@ -212,6 +212,7 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
         return ct;
     }
     else {
+        assert(jl_is_datatype(jt));
         jdt->ditype = dbuilder->createTypedef(jl_pvalue_dillvmt,
             jl_symbol_name(jdt->name->name), NULL, 0, NULL);
         return (llvm::DIType*)jdt->ditype;
