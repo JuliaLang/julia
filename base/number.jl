@@ -4,14 +4,11 @@
 """
     isinteger(x) -> Bool
 
-Test whether `x` or all its elements are numerically equal to some integer.
+Test whether `x` is numerically equal to some integer.
 
 ```jldoctest
 julia> isinteger(4.0)
 true
-
-julia> isinteger([1; 2; 5.5])
-false
 ```
 """
 isinteger(x::Integer) = true

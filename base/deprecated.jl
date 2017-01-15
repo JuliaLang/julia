@@ -1541,6 +1541,9 @@ function frexp{T<:AbstractFloat}(A::Array{T})
     return (F, E)
 end
 
+# Deprecate reducing isinteger over arrays
+@deprecate isinteger(A::AbstractArray) all(isinteger, A)
+
 # Deprecate promote_eltype_op (#19814, #19937)
 _promote_eltype_op(::Any) = Any
 _promote_eltype_op(op, A) = (@_inline_meta; promote_op(op, eltype(A)))

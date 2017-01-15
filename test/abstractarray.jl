@@ -747,7 +747,7 @@ let
 end
 
 # isinteger and isreal
-@test isinteger(Diagonal(rand(1:5,5)))
+@test all(isinteger, Diagonal(rand(1:5, 5))) # reducing isinteger(...) deprecated
 @test isreal(Diagonal(rand(5)))
 
 # unary ops
