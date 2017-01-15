@@ -394,6 +394,9 @@ mktempdir() do dir
                 @test tag1 in tags
                 tag1ref = LibGit2.GitReference(repo, "refs/tags/$tag1")
                 @test isempty(LibGit2.fullname(tag1ref)) #because this is a reference to an OID
+                show_strs = split(sprint(show, tag1ref), "\n")
+                @test show_strs[1] == "GitReference:"
+                @test show_strs[2] == "Tag with name refs/tags/$tag1"
                 tag1tag = LibGit2.peel(LibGit2.GitTag,tag1ref)
                 @test LibGit2.name(tag1tag) == tag1
                 @test LibGit2.target(tag1tag) == commit_oid1
