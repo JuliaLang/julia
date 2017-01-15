@@ -2,11 +2,10 @@
 
  ## Basic functions ##
 
-isinteger(x::AbstractArray) = all(isinteger,x)
-isinteger{T<:Integer,n}(x::AbstractArray{T,n}) = true
 isreal(x::AbstractArray) = all(isreal,x)
 iszero(x::AbstractArray) = all(iszero,x)
 isreal{T<:Real,n}(x::AbstractArray{T,n}) = true
+all{T<:Integer}(::typeof(isinteger), ::AbstractArray{T}) = true
 
 ## Constructors ##
 
