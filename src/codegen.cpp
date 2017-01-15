@@ -4420,14 +4420,17 @@ static std::unique_ptr<Module> emit_function(
 
     if (ctx.debug_enabled) {
         // TODO: Fix when moving to new LLVM version
-        #if JL_LLVM_VERSION < 30400
+#if JL_LLVM_VERSION < 30400
         dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
-        #elif JL_LLVM_VERSION >= 30700
+#elif JL_LLVM_VERSION >= 40000
+        DIFile *difile = dbuilder.createFile(filename, ".");
+        DICompileUnit *CU = dbuilder.createCompileUnit(0x01, difile, "julia", true, "", 0);
+#elif JL_LLVM_VERSION >= 30700
         DICompileUnit *CU = dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
-        #else
+#else
         DICompileUnit CU = dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
         assert(CU.Verify());
-        #endif
+#endif
 
 #if JL_LLVM_VERSION >= 30700
         DISubroutineType *subrty;

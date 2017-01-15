@@ -154,7 +154,11 @@ static Value *uint_cnvt(Type *to, Value *x)
     return builder.CreateZExt(x, to);
 }
 
+#if JL_LLVM_VERSION >= 40000
+#define LLVM_FP(a,b) APFloat(a(),b)
+#else
 #define LLVM_FP(a,b) APFloat(a,b)
+#endif
 static Constant *julia_const_to_llvm(void *ptr, jl_value_t *bt)
 {
     // assume `jl_isbits(bt)`.
