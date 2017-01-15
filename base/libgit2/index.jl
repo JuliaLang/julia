@@ -127,3 +127,7 @@ function Base.find(path::String, idx::GitIndex)
 end
 
 stage(ie::IndexEntry) = ccall((:git_index_entry_stage, :libgit2), Cint, (Ptr{IndexEntry},), Ref(ie))
+
+function Base.show(io::IO, idx::GitIndex)
+    println(io, "GitIndex:\nOwner: ", owner(idk), "\nNumber of elements: ", count(idx))
+end
