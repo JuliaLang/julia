@@ -41,3 +41,5 @@ function target(tag::GitTag)
     oid_ptr == C_NULL && throw(Error.GitError(Error.ERROR))
     return GitHash(oid_ptr)
 end
+
+Base.show(io::IO, tag::GitTag) = print(io, "GitTag:\nTag name: $(name(tag)) target: $(target(tag))")
