@@ -398,3 +398,5 @@ end
 function ^{T<:Rational}(z::Complex{T}, n::Integer)
     n >= 0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
 end
+
+iszero(x::Rational) = iszero(numerator(x))
