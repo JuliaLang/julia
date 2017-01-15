@@ -437,6 +437,24 @@ mktempdir() do dir
                 close(repo)
             end
         end
+
+        @testset "blobs" begin
+            repo = LibGit2.GitRepo(cache_repo)
+            try
+                # clear out the "GitHash( )" part
+                hash_string = sprint(show, commit_oid1)[9:end]
+                hash_string = strip(hash_string, ')')
+                blob_file   = joinpath(cache_repo,".git/objects", hash_string[1:2], hash_string[3:end])
+                blob = LibGit2.GitBlob(repo, blob_file)
+                @test LibGit2.isbinary(blob)
+                blob_show_strs = split(sprint(show, blob), "\n")
+                @test blob_show_strs[1] == "GitBlob:"
+                @test contains(blob_show_strs[2], "Blob id:")
+                @test blob_show_strs[3] == "Contents are binary."
+            finally
+                close(repo)
+            end
+        end
     end
 
     @testset "Fetch from cache repository" begin
