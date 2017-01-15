@@ -143,3 +143,15 @@ let
     F = lufact(A)
     @test F[:p] == [3 ; 4 ; 2 ; 1]
 end
+
+# Test that A[c|t]_ldiv_B!{T<:Complex}(X::StridedMatrix{T}, lu::UmfpackLU{Float64},
+# B::StridedMatrix{T}) works as expected.
+let N = 10, p = 0.5
+    A = N*speye(N) + sprand(N, N, p)
+    X = zeros(Complex{Float64}, N, N)
+    B = complex.(rand(N, N), rand(N, N))
+    luA, lufA = lufact(A), lufact(Array(A))
+    @test A_ldiv_B!(copy(X), luA, B) ≈ A_ldiv_B!(copy(X), lufA, B)
+    @test At_ldiv_B!(copy(X), luA, B) ≈ At_ldiv_B!(copy(X), lufA, B)
+    @test Ac_ldiv_B!(copy(X), luA, B) ≈ Ac_ldiv_B!(copy(X), lufA, B)
+end
