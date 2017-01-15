@@ -274,8 +274,18 @@ function findmetaarg(metaargs, sym)
     return 0
 end
 
+function is_short_function_def(ex)
+    ex.head == :(=) || return false
+    while length(ex.args) >= 1 && isa(ex.args[1], Expr)
+        (ex.args[1].head == :call) && return true
+        (ex.args[1].head == :where) || return false
+        ex = ex.args[1]
+    end
+    return false
+end
+
 function findmeta(ex::Expr)
-    if ex.head == :function || (ex.head == :(=) && typeof(ex.args[1]) == Expr && ex.args[1].head == :call)
+    if ex.head == :function || is_short_function_def(ex)
         body::Expr = ex.args[2]
         body.head == :block || error(body, " is not a block expression")
         return findmeta_block(ex.args)
