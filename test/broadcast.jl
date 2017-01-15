@@ -449,3 +449,14 @@ let
     @test broadcast(==, [1], AbstractArray) == BitArray([false])
     @test broadcast(==, 1, AbstractArray) == false
 end
+
+# Test that an Array{Any} is returned when an empty array is passed
+# and no function applies to the element type (#20033)
+let f(x::Float64) = true, f(x::Float64, y::Float64) = 2
+    @test isa(broadcast(f, Int[]), Vector{Any})
+    @test isa(map(f, Int[]), Vector{Any})
+
+    @test isa(broadcast(f, Int[], Int[]), Vector{Any})
+    @test isa(map(f, Int[], Int[]), Vector{Any})
+end
+
