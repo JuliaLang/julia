@@ -73,7 +73,8 @@ function depwarn(msg, funcsym)
     nothing
 end
 
-function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
+firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol) = firstcaller(bt, (funcsym,))
+function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
     # Identify the calling line
     i = 1
     while i <= length(bt)
@@ -83,7 +84,7 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
             if lkup === StackTraces.UNKNOWN
                 continue
             end
-            if lkup.func == funcsym
+            if lkup.func in funcsyms
                 @goto found
             end
         end
@@ -1424,6 +1425,23 @@ function promote_array_type(F, R, S, T)
                  "for more information.", :promote_array_type)
     _promote_array_type(F, R, S, T)
 end
+
+# Deprecate generalized linear indexing
+function __maybe_reshape{N}(::LinearSlow, A::AbstractArray, ::NTuple{N})
+    depwarn("general linear indexing is deprecated; use reshape(A, Val{$N}) before indexing", (:getindex, :setindex!, :view))
+    reshape(A, Val{N})
+end
+function __maybe_reshape{N}(::LinearFast, A::AbstractArray, ::NTuple{N})
+    depwarn("general linear indexing is deprecated; use reshape(A, Val{$N}) before indexing", (:getindex, :setindex!, :view))
+    reshape(A, Val{N}) # Reshape isn't necessary, but do so to prevent depwarns everywhere
+end
+@inline __maybe_reshape{T,N}(::LinearFast, A::AbstractArray{T,N}, ::NTuple{N}) = A
+@inline __maybe_reshape{T,N}(::LinearFast, A::AbstractArray{T,N}, ::NTuple{1}) = A
+function _maybe_reshape_parent{N}(A::AbstractArray, ::NTuple{N, Bool})
+    depwarn("general linear indexing is deprecated; use reshape(A, Val{$N}) before indexing", (:getindex, :setindex!, :view))
+    reshape(A, Val{N})
+end
+
 
 # Deprecate manually vectorized abs2 methods in favor of compact broadcast syntax
 @deprecate abs2(x::AbstractSparseVector) abs2.(x)

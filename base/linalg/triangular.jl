@@ -1547,12 +1547,11 @@ for (f, g) in ((:A_mul_Bc, :A_mul_Bc!), (:A_mul_Bt, :A_mul_Bt!))
     end
 end
 
-for mat in (:AbstractVector, :AbstractMatrix)
-
 ### Multiplication with triangle to the left and hence rhs cannot be transposed.
 for (f, g) in ((:*, :A_mul_B!), (:Ac_mul_B, :Ac_mul_B!), (:At_mul_B, :At_mul_B!))
     @eval begin
-        function ($f)(A::AbstractTriangular, B::$mat)
+        ($f)(A::AbstractTriangular, B::AbstractVector) = ($f)(A, reshape(B, Val{2}))
+        function ($f)(A::AbstractTriangular, B::AbstractMatrix)
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
             copy!(BB, B)
@@ -1563,7 +1562,8 @@ end
 ### Left division with triangle to the left hence rhs cannot be transposed. No quotients.
 for (f, g) in ((:\, :A_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!))
     @eval begin
-        function ($f)(A::Union{UnitUpperTriangular,UnitLowerTriangular}, B::$mat)
+        ($f)(A::Union{UnitUpperTriangular,UnitLowerTriangular}, B::AbstractVector) = ($f)(A, reshape(B, Val{2}))
+        function ($f)(A::Union{UnitUpperTriangular,UnitLowerTriangular}, B::AbstractMatrix)
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             BB = similar(B, TAB, size(B))
             copy!(BB, B)
@@ -1574,7 +1574,8 @@ end
 ### Left division with triangle to the left hence rhs cannot be transposed. Quotients.
 for (f, g) in ((:\, :A_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!))
     @eval begin
-        function ($f)(A::Union{UpperTriangular,LowerTriangular}, B::$mat)
+        ($f)(A::Union{UpperTriangular,LowerTriangular}, B::AbstractVector) = ($f)(A, reshape(B, Val{2}))
+        function ($f)(A::Union{UpperTriangular,LowerTriangular}, B::AbstractMatrix)
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
             BB = similar(B, TAB, size(B))
             copy!(BB, B)
@@ -1585,7 +1586,8 @@ end
 ### Multiplication with triangle to the rigth and hence lhs cannot be transposed.
 for (f, g) in ((:*, :A_mul_B!), (:A_mul_Bc, :A_mul_Bc!), (:A_mul_Bt, :A_mul_Bt!))
     @eval begin
-        function ($f)(A::$mat, B::AbstractTriangular)
+        ($f)(A::AbstractVector, B::AbstractTriangular) = ($f)(reshape(A, Val{2}), B)
+        function ($f)(A::AbstractMatrix, B::AbstractTriangular)
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             AA = similar(A, TAB, size(A))
             copy!(AA, A)
@@ -1596,7 +1598,8 @@ end
 ### Right division with triangle to the right hence lhs cannot be transposed. No quotients.
 for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
     @eval begin
-        function ($f)(A::$mat, B::Union{UnitUpperTriangular, UnitLowerTriangular})
+        ($f)(A::AbstractVector, B::Union{UnitUpperTriangular, UnitLowerTriangular}) = ($f)(reshape(A, Val{2}), B)
+        function ($f)(A::AbstractMatrix, B::Union{UnitUpperTriangular, UnitLowerTriangular})
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             AA = similar(A, TAB, size(A))
             copy!(AA, A)
@@ -1608,14 +1611,14 @@ end
 ### Right division with triangle to the right hence lhs cannot be transposed. Quotients.
 for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
     @eval begin
-        function ($f)(A::$mat, B::Union{UpperTriangular,LowerTriangular})
+        ($f)(A::AbstractVector, B::Union{UpperTriangular,LowerTriangular}) = ($f)(reshape(A, Val{2}), B)
+        function ($f)(A::AbstractMatrix, B::Union{UpperTriangular,LowerTriangular})
             TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
             AA = similar(A, TAB, size(A))
             copy!(AA, A)
             ($g)(AA, convert(AbstractArray{TAB}, B))
         end
     end
-end
 end
 
 # If these are not defined, they will fallback to the versions in matmul.jl

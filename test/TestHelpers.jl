@@ -132,6 +132,11 @@ end
     val
 end
 
+# Add support for indexing into OffsetVectors with trailing 1s
+# These are required because OffsetVectors don't support sub2ind
+Base._to_linear_index(A::OffsetVector, I::Int...) = I[1] # TODO: REMOVE FOR #14770
+Base._to_linear_index(A::OffsetVector) = error("linear indexing is not defined for one-dimensional arrays")
+
 # Computing a shifted index (subtracting the offset)
 offset{N}(offsets::NTuple{N,Int}, inds::NTuple{N,Int}) = _offset((), offsets, inds)
 _offset(out, ::Tuple{}, ::Tuple{}) = out

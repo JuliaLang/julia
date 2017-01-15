@@ -526,7 +526,7 @@ import Base.==
 
 const global hashoffset = [UInt(190)]
 
-Base.hash(s::MyString) = hash(s.str) + hashoffset[]
+Base.hash(s::MyString) = hash(s.str) + hashoffset[1]
 Base.endof(s::MyString) = endof(s.str)
 Base.next(s::MyString, v::Int) = next(s.str, v)
 Base.isequal(a::MyString, b::MyString) = isequal(a.str, b.str)
@@ -559,7 +559,7 @@ let badKeys = [
     # Walk through all possible hash values (mod size of hash table)
     for offset = 0:1023
         d2 = Dict{MyString,Int}()
-        hashoffset[] = offset
+        hashoffset[1] = offset
         for i = 1:length(badKeys)
             d2[MyString(badKeys[i])] = i
         end
@@ -574,7 +574,7 @@ immutable MyInt <: Integer
     val::UInt
 end
 
-Base.hash(v::MyInt) = v.val + hashoffset[]
+Base.hash(v::MyInt) = v.val + hashoffset[1]
 Base.endof(v::MyInt) = endof(v.val)
 Base.next(v::MyInt, i::Int) = next(v.val, i)
 Base.isequal(a::MyInt, b::MyInt) = isequal(a.val, b.val)
@@ -589,7 +589,7 @@ let badKeys = UInt16[0xb800,0xa501,0xcdff,0x6303,0xe40a,0xcf0e,0xf3df,0xae99,0x9
     # Walk through all possible hash values (mod size of hash table)
     for offset = 0:1023
         d2 = Dict{MyInt, Int}()
-        hashoffset[] = offset
+        hashoffset[1] = offset
         for i = 1:length(badKeys)
             d2[MyInt(badKeys[i])] = i
         end

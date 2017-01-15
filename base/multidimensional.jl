@@ -180,6 +180,11 @@ using .IteratorsMD
     A[to_indices(A, (i1, I...))...]
 @propagate_inbounds setindex!(A::Array, v, i1::Union{Integer, CartesianIndex}, I::Union{Integer, CartesianIndex}...) =
     (A[to_indices(A, (i1, I...))...] = v; A)
+# But they may not expand to 1 or N indices; ensure the above doesn't shadow the general indexing fallbacks
+@propagate_inbounds getindex{T}(A::Array{T}, i1::Int, I::Int...) =
+    _getindex(LinearFast(), A, i1, I...)
+@propagate_inbounds setindex!{T}(A::Array{T}, v, i1::Int, I::Int...) =
+    _setindex!(LinearFast(), A, v, i1, I...)
 
 # Support indexing with an array of CartesianIndex{N}s
 # Here we try to consume N of the indices (if there are that many available)
@@ -372,11 +377,10 @@ getindex(t::Tuple, I...) = getindex(t, IteratorsMD.flatten(I)...)
     end
 end
 # But we can speed up LinearSlow arrays by reshaping them to the appropriate dimensionality:
-_maybe_reshape(::LinearFast, A::AbstractArray, I...) = A
-_maybe_reshape(::LinearSlow, A::AbstractVector, I...) = A
-@inline _maybe_reshape(::LinearSlow, A::AbstractArray, I...) = __maybe_reshape(A, index_ndims(I...))
-@inline __maybe_reshape{T,N}(A::AbstractArray{T,N}, ::NTuple{N}) = A
-@inline __maybe_reshape{N}(A::AbstractArray, ::NTuple{N}) = reshape(A, Val{N})
+@inline _maybe_reshape(l::LinearIndexing, A::AbstractArray, I...) = __maybe_reshape(l, A, index_ndims(I...))
+@inline __maybe_reshape{T,N}(::LinearSlow, A::AbstractArray{T,N}, ::NTuple{N}) = A
+@inline __maybe_reshape{T,N}(::LinearSlow, A::AbstractArray{T,N}, ::NTuple{1}) = reshape(A, Val{1})
+@inline __maybe_reshape{T,N}(::LinearFast, A::AbstractArray{T,N}, ::Any) = A
 
 @generated function _unsafe_getindex(::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray}...)
     N = length(I)
