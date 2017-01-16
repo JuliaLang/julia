@@ -264,28 +264,27 @@ end
     @test size(Matrix()) == (0,0)
 end
 @testset "get" begin
-    let A = reshape(1:24, 3, 8)
-        x = get(A, 32, -12)
-        @test x == -12
-        x = get(A, 14, -12)
-        @test x == 14
-        x = get(A, (2,4), -12)
-        @test x == 11
-        x = get(A, (4,4), -12)
-        @test x == -12
-        X = get(A, -5:5, NaN32)
-        @test eltype(X) == Float32
-        @test Base.elsize(X) == sizeof(Float32)
-        @test !all(isinteger, X)
-        @test isnan.(X) == [trues(6);falses(5)]
-        @test X[7:11] == [1:5;]
-        X = get(A, (2:4, 9:-2:-13), 0)
-        Xv = zeros(Int, 3, 12)
-        Xv[1:2, 2:5] = A[2:3, 7:-2:1]
-        @test X == Xv
-        X2 = get(A, Vector{Int}[[2:4;], [9:-2:-13;]], 0)
-        @test X == X2
-    end
+    A = reshape(1:24, 3, 8)
+    x = get(A, 32, -12)
+    @test x == -12
+    x = get(A, 14, -12)
+    @test x == 14
+    x = get(A, (2,4), -12)
+    @test x == 11
+    x = get(A, (4,4), -12)
+    @test x == -12
+    X = get(A, -5:5, NaN32)
+    @test eltype(X) == Float32
+    @test Base.elsize(X) == sizeof(Float32)
+    @test !all(isinteger, X)
+    @test isnan.(X) == [trues(6);falses(5)]
+    @test X[7:11] == [1:5;]
+    X = get(A, (2:4, 9:-2:-13), 0)
+    Xv = zeros(Int, 3, 12)
+    Xv[1:2, 2:5] = A[2:3, 7:-2:1]
+    @test X == Xv
+    X2 = get(A, Vector{Int}[[2:4;], [9:-2:-13;]], 0)
+    @test X == X2
 end
 @testset "arrays as dequeues" begin
     l = Any[1]
@@ -345,12 +344,11 @@ end
 end
 
 @testset "typed hvcat" begin
-    let X = Float64[1 2 3; 4 5 6]
-        X32 = Float32[X X; X X]
-        @test eltype(X32) <: Float32
-        for i=[1,3], j=[1,4]
-            @test X32[i:(i+1), j:(j+2)] == X
-        end
+    X = Float64[1 2 3; 4 5 6]
+    X32 = Float32[X X; X X]
+    @test eltype(X32) <: Float32
+    for i=[1,3], j=[1,4]
+        @test X32[i:(i+1), j:(j+2)] == X
     end
 end
 @testset "end" begin
@@ -535,252 +533,250 @@ Base.hash(::HashCollision, h::UInt) = h
 end
 
 @testset "repmat and repeat" begin
-    let
-        local A, A1, A2, A3, v, v2, cv, cv2, c, R, T
-        A = ones(Int,2,3,4)
-        A1 = reshape(repmat([1,2],1,12),2,3,4)
-        A2 = reshape(repmat([1 2 3],2,4),2,3,4)
-        A3 = reshape(repmat([1 2 3 4],6,1),2,3,4)
-        @test isequal(cumsum(A),A1)
-        @test isequal(cumsum(A,1),A1)
-        @test isequal(cumsum(A,2),A2)
-        @test isequal(cumsum(A,3),A3)
+    local A, A1, A2, A3, v, v2, cv, cv2, c, R, T
+    A = ones(Int,2,3,4)
+    A1 = reshape(repmat([1,2],1,12),2,3,4)
+    A2 = reshape(repmat([1 2 3],2,4),2,3,4)
+    A3 = reshape(repmat([1 2 3 4],6,1),2,3,4)
+    @test isequal(cumsum(A),A1)
+    @test isequal(cumsum(A,1),A1)
+    @test isequal(cumsum(A,2),A2)
+    @test isequal(cumsum(A,3),A3)
 
-        R = repeat([1, 2])
-        @test R == [1, 2]
-        R = repeat([1, 2], inner=1)
-        @test R == [1, 2]
-        R = repeat([1, 2], outer=1)
-        @test R == [1, 2]
-        R = repeat([1, 2], inner=(1,))
-        @test R == [1, 2]
-        R = repeat([1, 2], outer=(1,))
-        @test R == [1, 2]
-        R = repeat([1, 2], inner=[1])
-        @test R == [1, 2]
-        R = repeat([1, 2], outer=[1])
-        @test R == [1, 2]
-        R = repeat([1, 2], inner=1, outer=1)
-        @test R == [1, 2]
-        R = repeat([1, 2], inner=(1,), outer=(1,))
-        @test R == [1, 2]
-        R = repeat([1, 2], inner=[1], outer=[1])
-        @test R == [1, 2]
+    R = repeat([1, 2])
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=1)
+    @test R == [1, 2]
+    R = repeat([1, 2], outer=1)
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=(1,))
+    @test R == [1, 2]
+    R = repeat([1, 2], outer=(1,))
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=[1])
+    @test R == [1, 2]
+    R = repeat([1, 2], outer=[1])
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=1, outer=1)
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=(1,), outer=(1,))
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=[1], outer=[1])
+    @test R == [1, 2]
 
-        R = repeat([1, 2], inner=2)
-        @test R == [1, 1, 2, 2]
-        R = repeat([1, 2], outer=2)
-        @test R == [1, 2, 1, 2]
-        R = repeat([1, 2], inner=(2,))
-        @test R == [1, 1, 2, 2]
-        R = repeat([1, 2], outer=(2,))
-        @test R == [1, 2, 1, 2]
-        R = repeat([1, 2], inner=[2])
-        @test R == [1, 1, 2, 2]
-        R = repeat([1, 2], outer=[2])
-        @test R == [1, 2, 1, 2]
+    R = repeat([1, 2], inner=2)
+    @test R == [1, 1, 2, 2]
+    R = repeat([1, 2], outer=2)
+    @test R == [1, 2, 1, 2]
+    R = repeat([1, 2], inner=(2,))
+    @test R == [1, 1, 2, 2]
+    R = repeat([1, 2], outer=(2,))
+    @test R == [1, 2, 1, 2]
+    R = repeat([1, 2], inner=[2])
+    @test R == [1, 1, 2, 2]
+    R = repeat([1, 2], outer=[2])
+    @test R == [1, 2, 1, 2]
 
-        R = repeat([1, 2], inner=2, outer=2)
-        @test R == [1, 1, 2, 2, 1, 1, 2, 2]
-        R = repeat([1, 2], inner=(2,), outer=(2,))
-        @test R == [1, 1, 2, 2, 1, 1, 2, 2]
-        R = repeat([1, 2], inner=[2], outer=[2])
-        @test R == [1, 1, 2, 2, 1, 1, 2, 2]
+    R = repeat([1, 2], inner=2, outer=2)
+    @test R == [1, 1, 2, 2, 1, 1, 2, 2]
+    R = repeat([1, 2], inner=(2,), outer=(2,))
+    @test R == [1, 1, 2, 2, 1, 1, 2, 2]
+    R = repeat([1, 2], inner=[2], outer=[2])
+    @test R == [1, 1, 2, 2, 1, 1, 2, 2]
 
-        R = repeat([1, 2], inner = (1, 1), outer = (1, 1))
-        @test R == reshape([1, 2], (2,1))
-        R = repeat([1, 2], inner = (2, 1), outer = (1, 1))
-        @test R == reshape([1, 1, 2, 2], (4,1))
-        R = repeat([1, 2], inner = (1, 2), outer = (1, 1))
-        @test R == [1 1; 2 2]
-        R = repeat([1, 2], inner = (1, 1), outer = (2, 1))
-        @test R == reshape([1, 2, 1, 2], (4,1))
-        R = repeat([1, 2], inner = (1, 1), outer = (1, 2))
-        @test R == [1 1; 2 2]
+    R = repeat([1, 2], inner = (1, 1), outer = (1, 1))
+    @test R == reshape([1, 2], (2,1))
+    R = repeat([1, 2], inner = (2, 1), outer = (1, 1))
+    @test R == reshape([1, 1, 2, 2], (4,1))
+    R = repeat([1, 2], inner = (1, 2), outer = (1, 1))
+    @test R == [1 1; 2 2]
+    R = repeat([1, 2], inner = (1, 1), outer = (2, 1))
+    @test R == reshape([1, 2, 1, 2], (4,1))
+    R = repeat([1, 2], inner = (1, 1), outer = (1, 2))
+    @test R == [1 1; 2 2]
 
-        R = repeat([1 2;
-                    3 4], inner = (1, 1), outer = (1, 1))
-        @test R == [1 2;
-                      3 4]
-        R = repeat([1 2;
-                    3 4], inner = (1, 1), outer = (2, 1))
-        @test R == [1 2;
-                      3 4;
-                      1 2;
-                      3 4]
-        R = repeat([1 2;
-                    3 4], inner = (1, 1), outer = (1, 2))
-        @test R == [1 2 1 2;
-                      3 4 3 4]
-        R = repeat([1 2;
-                    3 4], inner = (1, 1), outer = (2, 2))
-        @test R == [1 2 1 2;
-                      3 4 3 4;
-                      1 2 1 2;
-                      3 4 3 4]
-        R = repeat([1 2;
-                    3 4], inner = (2, 1), outer = (1, 1))
-        @test R == [1 2;
-                      1 2;
-                      3 4;
-                      3 4]
-        R = repeat([1 2;
-                    3 4], inner = (2, 1), outer = (2, 1))
-        @test R == [1 2;
-                      1 2;
-                      3 4;
-                      3 4;
-                      1 2;
-                      1 2;
-                      3 4;
-                      3 4]
-        R = repeat([1 2;
-                    3 4], inner = (2, 1), outer = (1, 2))
-        @test R == [1 2 1 2;
-                      1 2 1 2;
-                      3 4 3 4;
-                      3 4 3 4;]
-        R = repeat([1 2;
-                    3 4], inner = (2, 1), outer = (2, 2))
-        @test R == [1 2 1 2;
-                      1 2 1 2;
-                      3 4 3 4;
-                      3 4 3 4;
-                      1 2 1 2;
-                      1 2 1 2;
-                      3 4 3 4;
-                      3 4 3 4]
-        R = repeat([1 2;
-                    3 4], inner = (1, 2), outer = (1, 1))
-        @test R == [1 1 2 2;
-                      3 3 4 4]
-        R = repeat([1 2;
-                    3 4], inner = (1, 2), outer = (2, 1))
-        @test R == [1 1 2 2;
-                      3 3 4 4;
-                      1 1 2 2;
-                      3 3 4 4]
-        R = repeat([1 2;
-                    3 4], inner = (1, 2), outer = (1, 2))
-        @test R == [1 1 2 2 1 1 2 2;
-                      3 3 4 4 3 3 4 4]
-        R = repeat([1 2;
-                    3 4], inner = (1, 2), outer = (2, 2))
-        @test R == [1 1 2 2 1 1 2 2;
-                      3 3 4 4 3 3 4 4;
-                      1 1 2 2 1 1 2 2;
-                      3 3 4 4 3 3 4 4]
-        R = repeat([1 2;
-                    3 4], inner = (2, 2), outer = [1, 1])
-        @test R == [1 1 2 2;
-                      1 1 2 2;
-                      3 3 4 4;
-                      3 3 4 4]
-        R = repeat([1 2;
-                    3 4], inner = (2, 2), outer = (2, 1))
-        @test R == [1 1 2 2;
-                      1 1 2 2;
-                      3 3 4 4;
-                      3 3 4 4;
-                      1 1 2 2;
-                      1 1 2 2;
-                      3 3 4 4;
-                      3 3 4 4]
-        R = repeat([1 2;
-                    3 4], inner = (2, 2), outer = (1, 2))
-        @test R == [1 1 2 2 1 1 2 2;
-                      1 1 2 2 1 1 2 2;
-                      3 3 4 4 3 3 4 4;
-                      3 3 4 4 3 3 4 4]
-        R = repeat([1 2;
-                    3 4], inner = (2, 2), outer = (2, 2))
-        @test R == [1 1 2 2 1 1 2 2;
-                      1 1 2 2 1 1 2 2;
-                      3 3 4 4 3 3 4 4;
-                      3 3 4 4 3 3 4 4;
-                      1 1 2 2 1 1 2 2;
-                      1 1 2 2 1 1 2 2;
-                      3 3 4 4 3 3 4 4;
-                      3 3 4 4 3 3 4 4]
-        @test_throws ArgumentError repeat([1 2;
-                                           3 4], inner=2, outer=(2, 2))
-        @test_throws ArgumentError repeat([1 2;
-                                           3 4], inner=(2, 2), outer=2)
-        @test_throws ArgumentError repeat([1 2;
-                                           3 4], inner=(2,), outer=(2, 2))
-        @test_throws ArgumentError repeat([1 2;
-                                           3 4], inner=(2, 2), outer=(2,))
+    R = repeat([1 2;
+                3 4], inner = (1, 1), outer = (1, 1))
+    @test R == [1 2;
+                    3 4]
+    R = repeat([1 2;
+                3 4], inner = (1, 1), outer = (2, 1))
+    @test R == [1 2;
+                    3 4;
+                    1 2;
+                    3 4]
+    R = repeat([1 2;
+                3 4], inner = (1, 1), outer = (1, 2))
+    @test R == [1 2 1 2;
+                    3 4 3 4]
+    R = repeat([1 2;
+                3 4], inner = (1, 1), outer = (2, 2))
+    @test R == [1 2 1 2;
+                    3 4 3 4;
+                    1 2 1 2;
+                    3 4 3 4]
+    R = repeat([1 2;
+                3 4], inner = (2, 1), outer = (1, 1))
+    @test R == [1 2;
+                    1 2;
+                    3 4;
+                    3 4]
+    R = repeat([1 2;
+                3 4], inner = (2, 1), outer = (2, 1))
+    @test R == [1 2;
+                    1 2;
+                    3 4;
+                    3 4;
+                    1 2;
+                    1 2;
+                    3 4;
+                    3 4]
+    R = repeat([1 2;
+                3 4], inner = (2, 1), outer = (1, 2))
+    @test R == [1 2 1 2;
+                    1 2 1 2;
+                    3 4 3 4;
+                    3 4 3 4;]
+    R = repeat([1 2;
+                3 4], inner = (2, 1), outer = (2, 2))
+    @test R == [1 2 1 2;
+                    1 2 1 2;
+                    3 4 3 4;
+                    3 4 3 4;
+                    1 2 1 2;
+                    1 2 1 2;
+                    3 4 3 4;
+                    3 4 3 4]
+    R = repeat([1 2;
+                3 4], inner = (1, 2), outer = (1, 1))
+    @test R == [1 1 2 2;
+                    3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = (1, 2), outer = (2, 1))
+    @test R == [1 1 2 2;
+                    3 3 4 4;
+                    1 1 2 2;
+                    3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = (1, 2), outer = (1, 2))
+    @test R == [1 1 2 2 1 1 2 2;
+                    3 3 4 4 3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = (1, 2), outer = (2, 2))
+    @test R == [1 1 2 2 1 1 2 2;
+                    3 3 4 4 3 3 4 4;
+                    1 1 2 2 1 1 2 2;
+                    3 3 4 4 3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = (2, 2), outer = [1, 1])
+    @test R == [1 1 2 2;
+                    1 1 2 2;
+                    3 3 4 4;
+                    3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = (2, 2), outer = (2, 1))
+    @test R == [1 1 2 2;
+                    1 1 2 2;
+                    3 3 4 4;
+                    3 3 4 4;
+                    1 1 2 2;
+                    1 1 2 2;
+                    3 3 4 4;
+                    3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = (2, 2), outer = (1, 2))
+    @test R == [1 1 2 2 1 1 2 2;
+                    1 1 2 2 1 1 2 2;
+                    3 3 4 4 3 3 4 4;
+                    3 3 4 4 3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = (2, 2), outer = (2, 2))
+    @test R == [1 1 2 2 1 1 2 2;
+                    1 1 2 2 1 1 2 2;
+                    3 3 4 4 3 3 4 4;
+                    3 3 4 4 3 3 4 4;
+                    1 1 2 2 1 1 2 2;
+                    1 1 2 2 1 1 2 2;
+                    3 3 4 4 3 3 4 4;
+                    3 3 4 4 3 3 4 4]
+    @test_throws ArgumentError repeat([1 2;
+                                        3 4], inner=2, outer=(2, 2))
+    @test_throws ArgumentError repeat([1 2;
+                                        3 4], inner=(2, 2), outer=2)
+    @test_throws ArgumentError repeat([1 2;
+                                        3 4], inner=(2,), outer=(2, 2))
+    @test_throws ArgumentError repeat([1 2;
+                                        3 4], inner=(2, 2), outer=(2,))
 
-        A = reshape(1:8, 2, 2, 2)
-        R = repeat(A, inner = (1, 1, 2), outer = (1, 1, 1))
-        T = reshape([1:4; 1:4; 5:8; 5:8], 2, 2, 4)
-        @test R == T
-        A = Array{Int}(2, 2, 2)
-        A[:, :, 1] = [1 2;
-                      3 4]
-        A[:, :, 2] = [5 6;
-                      7 8]
-        R = repeat(A, inner = (2, 2, 2), outer = (2, 2, 2))
-        @test R[1, 1, 1] == 1
-        @test R[2, 2, 2] == 1
-        @test R[3, 3, 3] == 8
-        @test R[4, 4, 4] == 8
-        @test R[5, 5, 5] == 1
-        @test R[6, 6, 6] == 1
-        @test R[7, 7, 7] == 8
-        @test R[8, 8, 8] == 8
+    A = reshape(1:8, 2, 2, 2)
+    R = repeat(A, inner = (1, 1, 2), outer = (1, 1, 1))
+    T = reshape([1:4; 1:4; 5:8; 5:8], 2, 2, 4)
+    @test R == T
+    A = Array{Int}(2, 2, 2)
+    A[:, :, 1] = [1 2;
+                    3 4]
+    A[:, :, 2] = [5 6;
+                    7 8]
+    R = repeat(A, inner = (2, 2, 2), outer = (2, 2, 2))
+    @test R[1, 1, 1] == 1
+    @test R[2, 2, 2] == 1
+    @test R[3, 3, 3] == 8
+    @test R[4, 4, 4] == 8
+    @test R[5, 5, 5] == 1
+    @test R[6, 6, 6] == 1
+    @test R[7, 7, 7] == 8
+    @test R[8, 8, 8] == 8
 
-        R = repeat(1:2)
-        @test R == [1, 2]
-        R = repeat(1:2, inner=1)
-        @test R == [1, 2]
-        R = repeat(1:2, inner=2)
-        @test R == [1, 1, 2, 2]
-        R = repeat(1:2, outer=1)
-        @test R == [1, 2]
-        R = repeat(1:2, outer=2)
-        @test R == [1, 2, 1, 2]
-        R = repeat(1:2, inner=(3,), outer=(2,))
-        @test R == [1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2]
+    R = repeat(1:2)
+    @test R == [1, 2]
+    R = repeat(1:2, inner=1)
+    @test R == [1, 2]
+    R = repeat(1:2, inner=2)
+    @test R == [1, 1, 2, 2]
+    R = repeat(1:2, outer=1)
+    @test R == [1, 2]
+    R = repeat(1:2, outer=2)
+    @test R == [1, 2, 1, 2]
+    R = repeat(1:2, inner=(3,), outer=(2,))
+    @test R == [1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2]
 
-        A = rand(4,4)
-        for s in Any[A[1:2:4, 1:2:4], view(A, 1:2:4, 1:2:4)]
-            c = cumsum(s, 1)
-            @test c[1,1] == A[1,1]
-            @test c[2,1] == A[1,1]+A[3,1]
-            @test c[1,2] == A[1,3]
-            @test c[2,2] == A[1,3]+A[3,3]
+    A = rand(4,4)
+    for s in Any[A[1:2:4, 1:2:4], view(A, 1:2:4, 1:2:4)]
+        c = cumsum(s, 1)
+        @test c[1,1] == A[1,1]
+        @test c[2,1] == A[1,1]+A[3,1]
+        @test c[1,2] == A[1,3]
+        @test c[2,2] == A[1,3]+A[3,3]
 
-            c = cumsum(s, 2)
-            @test c[1,1] == A[1,1]
-            @test c[2,1] == A[3,1]
-            @test c[1,2] == A[1,1]+A[1,3]
-            @test c[2,2] == A[3,1]+A[3,3]
-        end
-
-        v   = [1,1e100,1,-1e100]*1000
-        v2  = [1,-1e100,1,1e100]*1000
-
-        cv  = [1,1e100,1e100,2]*1000
-        cv2 = [1,-1e100,-1e100,2]*1000
-
-        @test isequal(cumsum_kbn(v), cv)
-        @test isequal(cumsum_kbn(v2), cv2)
-
-        A = [v reverse(v) v2 reverse(v2)]
-
-        c = cumsum_kbn(A, 1)
-
-        @test isequal(c[:,1], cv)
-        @test isequal(c[:,3], cv2)
-        @test isequal(c[4,:], [2.0, 2.0, 2.0, 2.0]*1000)
-
-        c = cumsum_kbn(A, 2)
-
-        @test isequal(c[1,:], cv2)
-        @test isequal(c[3,:], cv)
-        @test isequal(c[:,4], [2.0,2.0,2.0,2.0]*1000)
+        c = cumsum(s, 2)
+        @test c[1,1] == A[1,1]
+        @test c[2,1] == A[3,1]
+        @test c[1,2] == A[1,1]+A[1,3]
+        @test c[2,2] == A[3,1]+A[3,3]
     end
+
+    v   = [1,1e100,1,-1e100]*1000
+    v2  = [1,-1e100,1,1e100]*1000
+
+    cv  = [1,1e100,1e100,2]*1000
+    cv2 = [1,-1e100,-1e100,2]*1000
+
+    @test isequal(cumsum_kbn(v), cv)
+    @test isequal(cumsum_kbn(v2), cv2)
+
+    A = [v reverse(v) v2 reverse(v2)]
+
+    c = cumsum_kbn(A, 1)
+
+    @test isequal(c[:,1], cv)
+    @test isequal(c[:,3], cv2)
+    @test isequal(c[4,:], [2.0, 2.0, 2.0, 2.0]*1000)
+
+    c = cumsum_kbn(A, 2)
+
+    @test isequal(c[1,:], cv2)
+    @test isequal(c[3,:], cv)
+    @test isequal(c[:,4], [2.0,2.0,2.0,2.0]*1000)
 end
 
 @testset "indexing with bools" begin
@@ -851,68 +847,65 @@ end
 end
 
 @testset "mapslices" begin
-    let
-        local a,h,i
-        a = rand(5,5)
-        s = mapslices(sort, a, [1])
-        S = mapslices(sort, a, [2])
-        for i = 1:5
-            @test s[:,i] == sort(a[:,i])
-            @test vec(S[i,:]) == sort(vec(a[i,:]))
-        end
-
-        # issue #3613
-        b = mapslices(sum, ones(2,3,4), [1,2])
-        @test size(b) === (1,1,4)
-        @test all(b.==6)
-
-        # issue #5141
-        ## Update Removed the version that removes the dimensions when dims==1:ndims(A)
-        c1 = mapslices(x-> maximum(-x), a, [])
-        @test c1 == -a
-
-        # other types than Number
-        @test mapslices(prod,["1" "2"; "3" "4"],1) == ["13" "24"]
-        @test mapslices(prod,["1"],1) == ["1"]
-
-        # issue #5177
-
-        c = ones(2,3,4)
-        m1 = mapslices(x-> ones(2,3), c, [1,2])
-        m2 = mapslices(x-> ones(2,4), c, [1,3])
-        m3 = mapslices(x-> ones(3,4), c, [2,3])
-        @test size(m1) == size(m2) == size(m3) == size(c)
-
-        n1 = mapslices(x-> ones(6), c, [1,2])
-        n2 = mapslices(x-> ones(6), c, [1,3])
-        n3 = mapslices(x-> ones(6), c, [2,3])
-        n1a = mapslices(x-> ones(1,6), c, [1,2])
-        n2a = mapslices(x-> ones(1,6), c, [1,3])
-        n3a = mapslices(x-> ones(1,6), c, [2,3])
-        @test size(n1a) == (1,6,4) && size(n2a) == (1,3,6)  && size(n3a) == (2,1,6)
-        @test size(n1) == (6,1,4) && size(n2) == (6,3,1)  && size(n3) == (2,6,1)
-
-        # mutating functions
-        o = ones(3, 4)
-        m = mapslices(x->fill!(x, 0), o, 2)
-        @test m == zeros(3, 4)
-        @test o == ones(3, 4)
+    local a,h,i
+    a = rand(5,5)
+    s = mapslices(sort, a, [1])
+    S = mapslices(sort, a, [2])
+    for i = 1:5
+        @test s[:,i] == sort(a[:,i])
+        @test vec(S[i,:]) == sort(vec(a[i,:]))
     end
+
+    # issue #3613
+    b = mapslices(sum, ones(2,3,4), [1,2])
+    @test size(b) === (1,1,4)
+    @test all(b.==6)
+
+    # issue #5141
+    ## Update Removed the version that removes the dimensions when dims==1:ndims(A)
+    c1 = mapslices(x-> maximum(-x), a, [])
+    @test c1 == -a
+
+    # other types than Number
+    @test mapslices(prod,["1" "2"; "3" "4"],1) == ["13" "24"]
+    @test mapslices(prod,["1"],1) == ["1"]
+
+    # issue #5177
+
+    c = ones(2,3,4)
+    m1 = mapslices(x-> ones(2,3), c, [1,2])
+    m2 = mapslices(x-> ones(2,4), c, [1,3])
+    m3 = mapslices(x-> ones(3,4), c, [2,3])
+    @test size(m1) == size(m2) == size(m3) == size(c)
+
+    n1 = mapslices(x-> ones(6), c, [1,2])
+    n2 = mapslices(x-> ones(6), c, [1,3])
+    n3 = mapslices(x-> ones(6), c, [2,3])
+    n1a = mapslices(x-> ones(1,6), c, [1,2])
+    n2a = mapslices(x-> ones(1,6), c, [1,3])
+    n3a = mapslices(x-> ones(1,6), c, [2,3])
+    @test size(n1a) == (1,6,4) && size(n2a) == (1,3,6)  && size(n3a) == (2,1,6)
+    @test size(n1) == (6,1,4) && size(n2) == (6,3,1)  && size(n3) == (2,6,1)
+
+    # mutating functions
+    o = ones(3, 4)
+    m = mapslices(x->fill!(x, 0), o, 2)
+    @test m == zeros(3, 4)
+    @test o == ones(3, 4)
 end
 
 @testset "single multidimensional index" begin
-    let a = rand(6,6)
-        I = [1 4 5; 4 2 6; 5 6 3]
-        a2 = a[I]
-        @test size(a2) == size(I)
-        for i = 1:length(a2)
-            @test a2[i] == a[I[i]]
-        end
-        a = [1,3,5]
-        b = [1 3]
-        a[b] = 8
-        @test a == [8,3,8]
+    a = rand(6,6)
+    I = [1 4 5; 4 2 6; 5 6 3]
+    a2 = a[I]
+    @test size(a2) == size(I)
+    for i = 1:length(a2)
+        @test a2[i] == a[I[i]]
     end
+    a = [1,3,5]
+    b = [1 3]
+    a[b] = 8
+    @test a == [8,3,8]
 end
 
 @testset "assigning an array into itself" begin
@@ -938,63 +931,61 @@ end
 end
 
 @testset "sort on arrays" begin
-    let
-        local a = rand(3,3)
+    local a = rand(3,3)
 
-        asr = sortrows(a)
-        @test lexless(asr[1,:],asr[2,:])
-        @test lexless(asr[2,:],asr[3,:])
+    asr = sortrows(a)
+    @test lexless(asr[1,:],asr[2,:])
+    @test lexless(asr[2,:],asr[3,:])
 
-        asc = sortcols(a)
-        @test lexless(asc[:,1],asc[:,2])
-        @test lexless(asc[:,2],asc[:,3])
+    asc = sortcols(a)
+    @test lexless(asc[:,1],asc[:,2])
+    @test lexless(asc[:,2],asc[:,3])
 
-        # mutating functions
-        o = ones(3, 4)
-        m = mapslices(x->fill!(x, 0), o, 2)
-        @test m == zeros(3, 4)
-        @test o == ones(3, 4)
+    # mutating functions
+    o = ones(3, 4)
+    m = mapslices(x->fill!(x, 0), o, 2)
+    @test m == zeros(3, 4)
+    @test o == ones(3, 4)
 
-        # issue #18524
-        m = mapslices(x->tuple(x), [1 2; 3 4], 1)
-        @test m[1,1] == ([1,3],)
-        @test m[1,2] == ([2,4],)
+    # issue #18524
+    m = mapslices(x->tuple(x), [1 2; 3 4], 1)
+    @test m[1,1] == ([1,3],)
+    @test m[1,2] == ([2,4],)
 
-        asr = sortrows(a, rev=true)
-        @test lexless(asr[2,:],asr[1,:])
-        @test lexless(asr[3,:],asr[2,:])
+    asr = sortrows(a, rev=true)
+    @test lexless(asr[2,:],asr[1,:])
+    @test lexless(asr[3,:],asr[2,:])
 
-        asc = sortcols(a, rev=true)
-        @test lexless(asc[:,2],asc[:,1])
-        @test lexless(asc[:,3],asc[:,2])
+    asc = sortcols(a, rev=true)
+    @test lexless(asc[:,2],asc[:,1])
+    @test lexless(asc[:,3],asc[:,2])
 
-        as = sort(a, 1)
-        @test issorted(as[:,1])
-        @test issorted(as[:,2])
-        @test issorted(as[:,3])
+    as = sort(a, 1)
+    @test issorted(as[:,1])
+    @test issorted(as[:,2])
+    @test issorted(as[:,3])
 
-        as = sort(a, 2)
-        @test issorted(as[1,:])
-        @test issorted(as[2,:])
-        @test issorted(as[3,:])
+    as = sort(a, 2)
+    @test issorted(as[1,:])
+    @test issorted(as[2,:])
+    @test issorted(as[3,:])
 
-        local b = rand(21,21,2)
+    local b = rand(21,21,2)
 
-        bs = sort(b, 1)
-        for i in 1:21
-            @test issorted(bs[:,i,1])
-            @test issorted(bs[:,i,2])
-        end
-
-        bs = sort(b, 2)
-        for i in 1:21
-            @test issorted(bs[i,:,1])
-            @test issorted(bs[i,:,2])
-        end
-
-        bs = sort(b, 3)
-        @test all(bs[:,:,1] .<= bs[:,:,2])
+    bs = sort(b, 1)
+    for i in 1:21
+        @test issorted(bs[:,i,1])
+        @test issorted(bs[:,i,2])
     end
+
+    bs = sort(b, 2)
+    for i in 1:21
+        @test issorted(bs[i,:,1])
+        @test issorted(bs[i,:,2])
+    end
+
+    bs = sort(b, 3)
+    @test all(bs[:,:,1] .<= bs[:,:,2])
 end
 
 @testset "fill" begin
@@ -1805,26 +1796,28 @@ end
 end
 
 @testset "sign, conj, ~" begin
-    let A = [-10,0,3], B = [-10.0,0.0,3.0], C = [1,im,0]
-        @test sign(A) == [-1,0,1]
-        @test sign(B) == [-1,0,1]
-        @test typeof(sign(A)) == Vector{Int}
-        @test typeof(sign(B)) == Vector{Float64}
+    A = [-10,0,3]
+    B = [-10.0,0.0,3.0]
+    C = [1,im,0]
 
-        @test conj(A) == A
-        @test conj(B) == A
-        @test conj(C) == [1,-im,0]
-        @test typeof(conj(A)) == Vector{Int}
-        @test typeof(conj(B)) == Vector{Float64}
-        @test typeof(conj(C)) == Vector{Complex{Int}}
+    @test sign(A) == [-1,0,1]
+    @test sign(B) == [-1,0,1]
+    @test typeof(sign(A)) == Vector{Int}
+    @test typeof(sign(B)) == Vector{Float64}
 
-        @test ~A == [9,-1,-4]
-        @test typeof(~A) == Vector{Int}
-    end
+    @test conj(A) == A
+    @test conj(B) == A
+    @test conj(C) == [1,-im,0]
+    @test typeof(conj(A)) == Vector{Int}
+    @test typeof(conj(B)) == Vector{Float64}
+    @test typeof(conj(C)) == Vector{Complex{Int}}
+
+    @test ~A == [9,-1,-4]
+    @test typeof(~A) == Vector{Int}
 end
 
-# issue #16247
-let A = zeros(3,3)
+@testset "issue #16247" begin
+    A = zeros(3,3)
     @test size(A[:,0x1:0x2]) == (3, 2)
     @test size(A[:,UInt(1):UInt(2)]) == (3,2)
     @test size(similar(A, UInt(3), 0x3)) == size(similar(A, (UInt(3), 0x3))) == (3,3)
@@ -1850,47 +1843,45 @@ end
 end # module AutoRetType
 
 @testset "concatenations of dense matrices/vectors yield dense matrices/vectors" begin
-    let N = 4
-        densevec = ones(N)
-        densemat = diagm(ones(N))
-        # Test that concatenations of homogeneous pairs of either dense matrices or dense vectors
-        # (i.e., Matrix-Matrix concatenations, and Vector-Vector concatenations) yield dense arrays
-        for densearray in (densevec, densemat)
-            @test isa(vcat(densearray, densearray), Array)
-            @test isa(hcat(densearray, densearray), Array)
-            @test isa(hvcat((2,), densearray, densearray), Array)
-            @test isa(cat((1,2), densearray, densearray), Array)
-        end
-        # Test that concatenations of heterogeneous Matrix-Vector pairs yield dense matrices
-        @test isa(hcat(densemat, densevec), Array)
-        @test isa(hcat(densevec, densemat), Array)
-        @test isa(hvcat((2,), densemat, densevec), Array)
-        @test isa(hvcat((2,), densevec, densemat), Array)
-        @test isa(cat((1,2), densemat, densevec), Array)
-        @test isa(cat((1,2), densevec, densemat), Array)
+    N = 4
+    densevec = ones(N)
+    densemat = diagm(ones(N))
+    # Test that concatenations of homogeneous pairs of either dense matrices or dense vectors
+    # (i.e., Matrix-Matrix concatenations, and Vector-Vector concatenations) yield dense arrays
+    for densearray in (densevec, densemat)
+        @test isa(vcat(densearray, densearray), Array)
+        @test isa(hcat(densearray, densearray), Array)
+        @test isa(hvcat((2,), densearray, densearray), Array)
+        @test isa(cat((1,2), densearray, densearray), Array)
     end
+    # Test that concatenations of heterogeneous Matrix-Vector pairs yield dense matrices
+    @test isa(hcat(densemat, densevec), Array)
+    @test isa(hcat(densevec, densemat), Array)
+    @test isa(hvcat((2,), densemat, densevec), Array)
+    @test isa(hvcat((2,), densevec, densemat), Array)
+    @test isa(cat((1,2), densemat, densevec), Array)
+    @test isa(cat((1,2), densevec, densemat), Array)
 end
 
 @testset "type constructor Array{T, N}(d...) works (especially for N>3)" begin
-    let a = Array{Float64}(10)
-        b = Array{Float64, 1}(10)
-        @test size(a) == (10,)
-        @test size(a, 1) == 10
-        @test size(a,2,1) == (1,10)
-        @test size(a) == size(b)
-        a = Array{Float64}(2,3)
-        b = Array{Float64, 2}(2,3)
-        @test size(a) == (2,3)
-        @test size(a,4,3,2,1) == (1,1,3,2)
-        @test size(a,1,2) == (2,3)
-        @test size(a) == size(b)
-        a = Array{Float64}(9,8,7,6,5,4,3,2,1)
-        b = Array{Float64, 9}(9,8,7,6,5,4,3,2,1)
-        @test size(a,1,1) == (9,9)
-        @test size(a,4) == 6
-        @test size(a,9,8,7,6,5,4,3,2,19,8,7,6,5,4,3,2,1) == (1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8,9)
-        @test size(a) == size(b)
-    end
+    a = Array{Float64}(10)
+    b = Array{Float64, 1}(10)
+    @test size(a) == (10,)
+    @test size(a, 1) == 10
+    @test size(a,2,1) == (1,10)
+    @test size(a) == size(b)
+    a = Array{Float64}(2,3)
+    b = Array{Float64, 2}(2,3)
+    @test size(a) == (2,3)
+    @test size(a,4,3,2,1) == (1,1,3,2)
+    @test size(a,1,2) == (2,3)
+    @test size(a) == size(b)
+    a = Array{Float64}(9,8,7,6,5,4,3,2,1)
+    b = Array{Float64, 9}(9,8,7,6,5,4,3,2,1)
+    @test size(a,1,1) == (9,9)
+    @test size(a,4) == 6
+    @test size(a,9,8,7,6,5,4,3,2,19,8,7,6,5,4,3,2,1) == (1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8,9)
+    @test size(a) == size(b)
 end
 
 @testset "accumulate, accumulate!" begin

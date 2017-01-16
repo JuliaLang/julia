@@ -207,8 +207,7 @@ end
     @test isequal(sqrt(complex( NaN,-Inf)), complex( Inf,-Inf))
 end
 
-@testset "log" begin
-    # log(conj(z)) = conj(log(z))
+@testset "log(conj(z)) == conj(log(z))" begin
     @test isequal(log(complex( 0.0, 0.0)), complex(-Inf, 0.0))
     @test isequal(log(complex( 0.0,-0.0)), complex(-Inf,-0.0))
     @test isequal(log(complex( 0.0, 1.0)), complex( 0.0, pi/2))
@@ -240,8 +239,7 @@ end
     @test isequal(log(complex( NaN, NaN)), complex( NaN, NaN))
 end
 
-@testset "exp" begin
-    # exp(conj(z)) = conj(exp(z))
+@testset "exp(conj(z)) == conj(exp(z))" begin
     @test isequal(exp(complex( 0.0, 0.0)), complex(1.0, 0.0))
     @test isequal(exp(complex( 0.0,-0.0)), complex(1.0,-0.0))
     @test isequal(exp(complex( 0.0, Inf)), complex(NaN, NaN))
@@ -275,8 +273,7 @@ end
     @test isequal(exp(complex( NaN, NaN)), complex( NaN, NaN))
 end
 
-@testset "expm1" begin
-    # expm1(conj(z)) = conj(expm1(z))
+@testset "expm1(conj(z)) == conj(expm1(z))" begin
     @test isequal(expm1(complex( 0.0, 0.0)), complex(0.0, 0.0))
     @test isequal(expm1(complex( 0.0,-0.0)), complex(0.0,-0.0))
     @test isequal(expm1(complex( 0.0, Inf)), complex(NaN, NaN))
@@ -392,7 +389,6 @@ end
 
     # @test isequal(sin(complex( 0, 10000)),complex( 0.0, Inf))
     # @test isequal(sin(complex( 0,-10000)),complex( 0.0,-Inf))
-
     for (x,y) in [(complex( 0.0, 0.0), complex( 0.0, 0.0)),
                   (complex( 0.0, Inf), complex( 0.0, NaN)),
                   (complex( 0.0, NaN), complex( 0.0, NaN)),
@@ -408,7 +404,6 @@ end
                   (complex( NaN, 7.2), complex( NaN, NaN)),
                   (complex( NaN, NaN), complex( NaN, NaN)),
                   ]
-
         @test isequal(sinh(x), y)
         @test isequal(sinh(conj(x)), conj(y))
         @test isequal(sinh(-x), -y)
@@ -441,7 +436,6 @@ end
     #   and cos(b+ia) = cosh(a-ib)
     #  cos(conj(z)) = conj(cos(z))
     #  cos(-z) = cos(z)
-
     for (x,y) in [(complex( 0.0, 0.0), complex( 1.0, 0.0)),
                   (complex( 0.0, Inf), complex( NaN, 0.0)),
                   (complex( 0.0, NaN), complex( NaN, 0.0)),
@@ -485,9 +479,7 @@ end
     end
 end
 
-@testset "tanh" begin
-    # tanh(conj(z)) = conj(tanh(z))
-    # tanh(-z) = -tanh(z)
+@testset "tanh(op(z)) == op(tanh(z)) for op in (conj, -)" begin
     @test isequal(tanh(complex( 0, 0)),complex(0.0,0.0)) #integer fallback
     @test isequal(tanh(complex( 0.0, 0.0)),complex(0.0,0.0))
     @test isequal(tanh(complex( 0.0,-0.0)),complex(0.0,-0.0))
@@ -524,8 +516,7 @@ end
     @test isequal(tanh(complex( NaN, NaN)),complex(NaN, NaN))
 end
 
-@testset "tan" begin
-    # tan(z) = -i tanh(iz)
+@testset "tan(z) == -i tanh(iz)" begin
     @test isequal(tan(complex( 0.0, Inf)),complex( 0.0, 1.0))
     @test isequal(tan(complex( 0.0,-Inf)),complex( 0.0,-1.0))
     @test isequal(tan(complex( 0.0, NaN)),complex( 0.0, NaN))
@@ -552,8 +543,7 @@ end
     @test isequal(tan(complex( NaN, NaN)),complex( NaN, NaN))
 end
 
-@testset "acosh" begin
-    # acosh(conj(z)) = conj(acosh(z))
+@testset "acosh(conj(z)) == conj(acosh(z))" begin
     @test isequal(acosh(complex( 0.0, 0.0)), complex( 0.0, pi/2))
     @test isequal(acosh(complex( 0.0,-0.0)), complex( 0.0,-pi/2))
     @test isequal(acosh(complex( 0.0, Inf)), complex( Inf, pi/2))
@@ -585,8 +575,7 @@ end
     @test isequal(acosh(complex( NaN, NaN)), complex( NaN, NaN))
 end
 
-@testset "acos" begin
-    # acos(conj(z)) = conj(acos(z))
+@testset "acos(conj(z)) == conj(acos(z))" begin
     @test isequal(acos(complex( 0, 0)),complex(pi/2,-0.0)) #integer fallback
     @test isequal(acos(complex( 0.0, 0.0)),complex(pi/2,-0.0))
     @test isequal(acos(complex( 0.0,-0.0)),complex(pi/2, 0.0))
@@ -625,9 +614,7 @@ end
     @test isequal(acos(complex( NaN, NaN)),complex( NaN, NaN))
 end
 
-@testset "asinh" begin
-    # asinh(conj(z)) = conj(asinh(z))
-    # asinh(-z) = -asinh(z)
+@testset "asinh(op(z)) == op(asinh(z)) for op in (conj, -)" begin
     @test isequal(asinh(complex( 0.0, 0.0)),complex( 0.0, 0.0))
     @test isequal(asinh(complex( 0.0,-0.0)),complex( 0.0,-0.0))
     @test isequal(asinh(complex( 0.0, Inf)),complex( Inf, pi/2))
@@ -660,8 +647,7 @@ end
     @test isequal(asinh(complex( NaN, NaN)),complex( NaN, NaN))
 end
 
-@testset "asin" begin
-    # asin(z) = -i*asinh(iz)
+@testset "asin(z) == -i*asinh(iz)" begin
     @test isequal(asin(complex( 0.0, 0.0)),complex( 0.0, 0.0))
     @test isequal(asin(complex( 0.0,-0.0)),complex( 0.0,-0.0))
     @test isequal(asin(complex(-0.0, 0.0)),complex(-0.0, 0.0))
@@ -693,9 +679,7 @@ end
     @test isequal(asin(complex( NaN, NaN)),complex( NaN, NaN))
 end
 
-@testset "atanh" begin
-    # atanh(conj(z)) = conj(atanh(z))
-    # atanh(-z) = -atanh(z)
+@testset "atanh(op(z)) == op(atanh(z)) for op in (conj, -)" begin
     @test isequal(atanh(complex( 0, 0)),complex( 0.0, 0.0)) #integer fallback
     @test isequal(atanh(complex( 0.0, 0.0)),complex( 0.0, 0.0))
     @test isequal(atanh(complex( 0.0,-0.0)),complex( 0.0,-0.0))
@@ -743,8 +727,7 @@ end
     @test isequal(atanh(complex( NaN, NaN)),complex( NaN, NaN))
 end
 
-@testset "atan" begin
-    # atan(z) = -i*atanh(iz)
+@testset "atan(z) == -i*atanh(iz)" begin
     @test isequal(atan(complex( 0.0, 0.0)),complex( 0.0, 0.0))
     @test isequal(atan(complex( 0.0,-0.0)),complex( 0.0,-0.0))
     @test isequal(atan(complex( 0.0, 1.0)),complex( 0.0, Inf))
@@ -941,7 +924,7 @@ end
 end
 
 @testset "issue #11839" begin
-    #type stability for Complex{Int64}
+    # type stability for Complex{Int64}
     let x = 1+im
         @inferred sin(x)
         @inferred cos(x)
