@@ -842,7 +842,7 @@ and consumer can both run as long as they need to, passing values back and forth
 
 Julia provides a [`Channel`](@ref) mechanism for solving this problem.
 A [`Channel`](@ref) is a waitable first-in first-out queue which can have
-multiple tasks reading and writing to it.
+multiple tasks reading from and writing to it.
 
 Let's define a producer task, which produces values via the [`put!`](@ref) call.
 To consume values, we need to schedule the producer to run in a new task. A special [`Channel`](@ref)

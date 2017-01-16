@@ -31,10 +31,14 @@ dimg  = randn(n)/2
 for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     a = eltya == Int ? rand(1:7, n, n) :
         convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
-    d = eltya == Int ? Tridiagonal(rand(1:7, n-1), rand(1:7, n), rand(1:7, n-1)) :
-        convert(Tridiagonal{eltya}, eltya <: Complex ?
-        Tridiagonal(complex.(dlreal, dlimg), complex.(dreal, dimg), complex.(dureal, duimg)) :
-        Tridiagonal(dlreal, dreal, dureal))
+    d = if eltya == Int
+        Tridiagonal(rand(1:7, n-1), rand(1:7, n), rand(1:7, n-1))
+    elseif eltya <: Complex
+        convert(Tridiagonal{eltya}, Tridiagonal(
+            complex.(dlreal, dlimg), complex.(dreal, dimg), complex.(dureal, duimg)))
+    else
+        convert(Tridiagonal{eltya}, Tridiagonal(dlreal, dreal, dureal))
+    end
     ε = εa = eps(abs(float(one(eltya))))
 
     if eltya <: BlasFloat
