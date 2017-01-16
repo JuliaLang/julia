@@ -933,7 +933,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Types",
     "title": "Parametric Composite Types",
     "category": "section",
-    "text": "Type parameters are introduced immediately after the type name, surrounded by curly braces:type Point{T}\n    x::T\n    y::T\nendThis declaration defines a new parametric type, Point{T}, holding two \"coordinates\" of type T. What, one may ask, is T? Well, that's precisely the point of parametric types: it can be any type at all (or a value of any bits type, actually, although here it's clearly used as a type). Point{Float64} is a concrete type equivalent to the type defined by replacing T in the definition of Point with Float64. Thus, this single declaration actually declares an unlimited number of types: Point{Float64}, Point{AbstractString}, Point{Int64}, etc. Each of these is now a usable concrete type:julia> Point{Float64}\nPoint{Float64}\n\njulia> Point{AbstractString}\nPoint{AbstractString}The type Point{Float64} is a point whose coordinates are 64-bit floating-point values, while the type Point{AbstractString} is a \"point\" whose \"coordinates\" are string objects (see Strings). However, Point itself is also a valid type object:julia> Point\nPoint{T}Here the T is the dummy type symbol used in the original declaration of Point. What does Point by itself mean? It is a type that contains all the specific instances Point{Float64}, Point{AbstractString}, etc.:julia> Point{Float64} <: Point\ntrue\n\njulia> Point{AbstractString} <: Point\ntrueOther types, of course, are not subtypes of it:julia> Float64 <: Point\nfalse\n\njulia> AbstractString <: Point\nfalseConcrete Point types with different values of T are never subtypes of each other:julia> Point{Float64} <: Point{Int64}\nfalse\n\njulia> Point{Float64} <: Point{Real}\nfalsewarning: Warning\nThis last point is very important: even though Float64 <: Real we DO NOT have Point{Float64} <: Point{Real}.In other words, in the parlance of type theory, Julia's type parameters are invariant, rather than being covariant (or even contravariant). This is for practical reasons: while any instance of Point{Float64} may conceptually be like an instance of Point{Real} as well, the two types have different representations in memory:An instance of Point{Float64} can be represented compactly and efficiently as an immediate pair of 64-bit values;\nAn instance of Point{Real} must be able to hold any pair of instances of Real. Since objects that are instances of Real can be of arbitrary size and structure, in practice an instance of Point{Real} must be represented as a pair of pointers to individually allocated Real objects.The efficiency gained by being able to store Point{Float64} objects with immediate values is magnified enormously in the case of arrays: an Array{Float64} can be stored as a contiguous memory block of 64-bit floating-point values, whereas an Array{Real} must be an array of pointers to individually allocated Real objects – which may well be boxed 64-bit floating-point values, but also might be arbitrarily large, complex objects, which are declared to be implementations of the Real abstract type.Since Point{Float64} is not a subtype of Point{Real}, the following method can't be applied to arguments of type Point{Float64}:function norm(p::Point{Real})\n   sqrt(p.x^2 + p.y^2)\nendThe correct way to define a method that accepts all arguments of type Point{T} where T is a subtype of Real is:function norm{T<:Real}(p::Point{T})\n   sqrt(p.x^2 + p.y^2)\nendMore examples will be discussed later in Methods.How does one construct a Point object? It is possible to define custom constructors for composite types, which will be discussed in detail in Constructors, but in the absence of any special constructor declarations, there are two default ways of creating new composite objects, one in which the type parameters are explicitly given and the other in which they are implied by the arguments to the object constructor.Since the type Point{Float64} is a concrete type equivalent to Point declared with Float64 in place of T, it can be applied as a constructor accordingly:julia> Point{Float64}(1.0,2.0)\nPoint{Float64}(1.0,2.0)\n\njulia> typeof(ans)\nPoint{Float64}For the default constructor, exactly one argument must be supplied for each field:julia> Point{Float64}(1.0)\nERROR: MethodError: Cannot `convert` an object of type Float64 to an object of type Point{Float64}\nThis may have arisen from a call to the constructor Point{Float64}(...),\nsince type constructors fall back to convert methods.\n in Point{Float64}(::Float64) at ./sysimg.jl:66\n ...\n\njulia> Point{Float64}(1.0,2.0,3.0)\nERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)\nClosest candidates are:\n  Point{Float64}{T}(::Any, ::Any) at none:3\n  Point{Float64}{T}(::Any) at sysimg.jl:66\n ...Only one default constructor is generated for parametric types, since overriding it is not possible. This constructor accepts any arguments and converts them to the field types.In many cases, it is redundant to provide the type of Point object one wants to construct, since the types of arguments to the constructor call already implicitly provide type information. For that reason, you can also apply Point itself as a constructor, provided that the implied value of the parameter type T is unambiguous:julia> Point(1.0,2.0)\nPoint{Float64}(1.0,2.0)\n\njulia> typeof(ans)\nPoint{Float64}\n\njulia> Point(1,2)\nPoint{Int64}(1,2)\n\njulia> typeof(ans)\nPoint{Int64}In the case of Point, the type of T is unambiguously implied if and only if the two arguments to Point have the same type. When this isn't the case, the constructor will fail with a MethodError:julia> Point(1,2.5)\nERROR: MethodError: no method matching Point{T}(::Int64, ::Float64)\n...Constructor methods to appropriately handle such mixed cases can be defined, but that will not be discussed until later on in Constructors."
+    "text": "Type parameters are introduced immediately after the type name, surrounded by curly braces:type Point{T}\n    x::T\n    y::T\nendThis declaration defines a new parametric type, Point{T}, holding two \"coordinates\" of type T. What, one may ask, is T? Well, that's precisely the point of parametric types: it can be any type at all (or a value of any bits type, actually, although here it's clearly used as a type). Point{Float64} is a concrete type equivalent to the type defined by replacing T in the definition of Point with Float64. Thus, this single declaration actually declares an unlimited number of types: Point{Float64}, Point{AbstractString}, Point{Int64}, etc. Each of these is now a usable concrete type:julia> Point{Float64}\nPoint{Float64}\n\njulia> Point{AbstractString}\nPoint{AbstractString}The type Point{Float64} is a point whose coordinates are 64-bit floating-point values, while the type Point{AbstractString} is a \"point\" whose \"coordinates\" are string objects (see Strings).Point itself is also a valid type object, containing all instances Point{Float64}, Point{AbstractString}, etc. as subtypes:julia> Point{Float64} <: Point\ntrue\n\njulia> Point{AbstractString} <: Point\ntrueOther types, of course, are not subtypes of it:julia> Float64 <: Point\nfalse\n\njulia> AbstractString <: Point\nfalseConcrete Point types with different values of T are never subtypes of each other:julia> Point{Float64} <: Point{Int64}\nfalse\n\njulia> Point{Float64} <: Point{Real}\nfalsewarning: Warning\nThis last point is very important: even though Float64 <: Real we DO NOT have Point{Float64} <: Point{Real}.In other words, in the parlance of type theory, Julia's type parameters are invariant, rather than being covariant (or even contravariant). This is for practical reasons: while any instance of Point{Float64} may conceptually be like an instance of Point{Real} as well, the two types have different representations in memory:An instance of Point{Float64} can be represented compactly and efficiently as an immediate pair of 64-bit values;\nAn instance of Point{Real} must be able to hold any pair of instances of Real. Since objects that are instances of Real can be of arbitrary size and structure, in practice an instance of Point{Real} must be represented as a pair of pointers to individually allocated Real objects.The efficiency gained by being able to store Point{Float64} objects with immediate values is magnified enormously in the case of arrays: an Array{Float64} can be stored as a contiguous memory block of 64-bit floating-point values, whereas an Array{Real} must be an array of pointers to individually allocated Real objects – which may well be boxed 64-bit floating-point values, but also might be arbitrarily large, complex objects, which are declared to be implementations of the Real abstract type.Since Point{Float64} is not a subtype of Point{Real}, the following method can't be applied to arguments of type Point{Float64}:function norm(p::Point{Real})\n   sqrt(p.x^2 + p.y^2)\nendThe correct way to define a method that accepts all arguments of type Point{T} where T is a subtype of Real is:function norm{T<:Real}(p::Point{T})\n   sqrt(p.x^2 + p.y^2)\nendMore examples will be discussed later in Methods.How does one construct a Point object? It is possible to define custom constructors for composite types, which will be discussed in detail in Constructors, but in the absence of any special constructor declarations, there are two default ways of creating new composite objects, one in which the type parameters are explicitly given and the other in which they are implied by the arguments to the object constructor.Since the type Point{Float64} is a concrete type equivalent to Point declared with Float64 in place of T, it can be applied as a constructor accordingly:julia> Point{Float64}(1.0,2.0)\nPoint{Float64}(1.0,2.0)\n\njulia> typeof(ans)\nPoint{Float64}For the default constructor, exactly one argument must be supplied for each field:julia> Point{Float64}(1.0)\nERROR: MethodError: Cannot `convert` an object of type Float64 to an object of type Point{Float64}\nThis may have arisen from a call to the constructor Point{Float64}(...),\nsince type constructors fall back to convert methods.\n in Point{Float64}(::Float64) at ./sysimg.jl:66\n ...\n\njulia> Point{Float64}(1.0,2.0,3.0)\nERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)\nClosest candidates are:\n  Point{Float64}{T}(::Any, ::Any) at none:3\n  Point{Float64}{T}(::Any) at sysimg.jl:66\n ...Only one default constructor is generated for parametric types, since overriding it is not possible. This constructor accepts any arguments and converts them to the field types.In many cases, it is redundant to provide the type of Point object one wants to construct, since the types of arguments to the constructor call already implicitly provide type information. For that reason, you can also apply Point itself as a constructor, provided that the implied value of the parameter type T is unambiguous:julia> Point(1.0,2.0)\nPoint{Float64}(1.0,2.0)\n\njulia> typeof(ans)\nPoint{Float64}\n\njulia> Point(1,2)\nPoint{Int64}(1,2)\n\njulia> typeof(ans)\nPoint{Int64}In the case of Point, the type of T is unambiguously implied if and only if the two arguments to Point have the same type. When this isn't the case, the constructor will fail with a MethodError:julia> Point(1,2.5)\nERROR: MethodError: no method matching Point{T}(::Int64, ::Float64)\n...Constructor methods to appropriately handle such mixed cases can be defined, but that will not be discussed until later on in Constructors."
 },
 
 {
@@ -977,11 +977,19 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "manual/types.html#UnionAll-Types-1",
+    "page": "Types",
+    "title": "UnionAll Types",
+    "category": "section",
+    "text": "We have said that a parametric type like Ptr acts as a supertype of all its instances (Ptr{Int64} etc.). How does this work? Ptr itself cannot be a normal data type, since without knowing the type of the referenced data the type clearly cannot be used for memory operations. The answer is that Ptr (or other parametric type like Array) is a different kind of type called a UnionAll type. Such a type expresses the iterated union of types for all values of some parameter.UnionAll types are usually written using the keyword where. For example Ptr could be more accurately written as Ptr{T} where T, meaning all values whose type is Ptr{T} for some value of T. In this context, the parameter T is also often called a \"type variable\" since it is like a variable that ranges over types. Each where introduces a single type variable, so these expressions are nested for types with multiple parameters, for example Array{T,N} where N where T.The type application syntax A{B,C} requires A to be a UnionAll type, and first substitutes B for the outermost type variable in A. The result is expected to be another UnionAll type, into which C is then substituted. So A{B,C} is equivalent to A{B}{C}. This explains why it is possible to partially instantiate a type, as in Array{Float64}: the first parameter value has been fixed, but the second still ranges over all possible values. Using explicit where syntax, any subset of parameters can be fixed. For example, the type of all 1-dimensional arrays can be written as Array{T,1} where T.Type variables can be restricted with subtype relations. Array{T} where T<:Integer refers to all arrays whose element type is some kind of Integer. Type variables can have both lower and upper bounds. Array{T} where Int<:T<:Number refers to all arrays of Numbers that are able to contain Ints (since T must be at least as big as Int). The syntax where T>:Int also works to specify only the lower bound of a type variable.Since where expressions nest, type variable bounds can refer to outer type variables. For example Tuple{T,Array{S}} where S<:AbstractArray{T} where T<:Real refers to 2-tuples whose first element is some Real, and whose second element is an Array of any kind of array whose element type contains the type of the first tuple element."
+},
+
+{
     "location": "manual/types.html#Type-Aliases-1",
     "page": "Types",
     "title": "Type Aliases",
     "category": "section",
-    "text": "Sometimes it is convenient to introduce a new name for an already expressible type. For such occasions, Julia provides the typealias mechanism. For example, UInt is type aliased to either UInt32 or UInt64 as is appropriate for the size of pointers on the system:# 32-bit system:\njulia> UInt\nUInt32\n\n# 64-bit system:\njulia> UInt\nUInt64This is accomplished via the following code in base/boot.jl:if is(Int,Int64)\n    typealias UInt UInt64\nelse\n    typealias UInt UInt32\nendOf course, this depends on what Int is aliased to – but that is predefined to be the correct type – either Int32 or Int64.For parametric types, typealias can be convenient for providing names for cases where some of the parameter choices are fixed. Julia's arrays have type Array{T,N} where T is the element type and N is the number of array dimensions. For convenience, writing Array{Float64} allows one to specify the element type without specifying the dimension:julia> Array{Float64,1} <: Array{Float64} <: Array\ntrueHowever, there is no way to equally simply restrict just the dimension but not the element type. Yet, one often needs to ensure an object is a vector or a matrix (imposing restrictions on the number of dimensions). For that reason, the following type aliases are provided:typealias Vector{T} Array{T,1}\ntypealias Matrix{T} Array{T,2}Writing Vector{Float64} is equivalent to writing Array{Float64,1}, and the umbrella type Vector has as instances all Array objects where the second parameter – the number of array dimensions – is 1, regardless of what the element type is. In languages where parametric types must always be specified in full, this is not especially helpful, but in Julia, this allows one to write just Matrix for the abstract type including all two-dimensional dense arrays of any element type.This declaration of Vector creates a subtype relation Vector{Int} <: Vector.  However, it is not always the case that a parametric typealias statement creates such a relation; for example, the statement:typealias AA{T} Array{Array{T,1},1}does not create the relation AA{Int} <: AA.  The reason is that Array{Array{T,1},1} is not an abstract type at all; in fact, it is a concrete type describing a 1-dimensional array in which each entry is an object of type Array{T,1} for some value of T."
+    "text": "Sometimes it is convenient to introduce a new name for an already expressible type. For such occasions, Julia provides the typealias mechanism. For example, UInt is type aliased to either UInt32 or UInt64 as is appropriate for the size of pointers on the system:# 32-bit system:\njulia> UInt\nUInt32\n\n# 64-bit system:\njulia> UInt\nUInt64This is accomplished via the following code in base/boot.jl:if is(Int,Int64)\n    typealias UInt UInt64\nelse\n    typealias UInt UInt32\nendOf course, this depends on what Int is aliased to – but that is predefined to be the correct type – either Int32 or Int64.For parametric types, typealias can be convenient for providing names for cases where some of the parameter choices are fixed:typealias Vector{T} Array{T,1}\ntypealias Matrix{T} Array{T,2}Writing Vector{Float64} is equivalent to writing Array{Float64,1}, and the umbrella type Vector has as instances all Array objects where the second parameter – the number of array dimensions – is 1, regardless of what the element type is. In languages where parametric types must always be specified in full, this is not especially helpful, but in Julia, this allows one to write just Matrix for the abstract type including all two-dimensional dense arrays of any element type."
 },
 
 {
@@ -989,7 +997,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Types",
     "title": "Operations on Types",
     "category": "section",
-    "text": "Since types in Julia are themselves objects, ordinary functions can operate on them. Some functions that are particularly useful for working with or exploring types have already been introduced, such as the <: operator, which indicates whether its left hand operand is a subtype of its right hand operand.The isa function tests if an object is of a given type and returns true or false:julia> isa(1,Int)\ntrue\n\njulia> isa(1,AbstractFloat)\nfalseThe typeof() function, already used throughout the manual in examples, returns the type of its argument. Since, as noted above, types are objects, they also have types, and we can ask what their types are:julia> typeof(Rational)\nDataType\n\njulia> typeof(Union{Real,Float64,Rational})\nDataType\n\njulia> typeof(Union{Real,String})\nUnionWhat if we repeat the process? What is the type of a type of a type? As it happens, types are all composite values and thus all have a type of DataType:julia> typeof(DataType)\nDataType\n\njulia> typeof(Union)\nDataTypeDataType is its own type.Another operation that applies to some types is supertype(), which reveals a type's supertype. Only declared types (DataType) have unambiguous supertypes:julia> supertype(Float64)\nAbstractFloat\n\njulia> supertype(Number)\nAny\n\njulia> supertype(AbstractString)\nAny\n\njulia> supertype(Any)\nAnyIf you apply supertype() to other type objects (or non-type objects), a MethodError is raised:julia> supertype(Union{Float64,Int64})\nERROR: `supertype` has no method matching supertype(::Type{Union{Float64,Int64}})"
+    "text": "Since types in Julia are themselves objects, ordinary functions can operate on them. Some functions that are particularly useful for working with or exploring types have already been introduced, such as the <: operator, which indicates whether its left hand operand is a subtype of its right hand operand.The isa function tests if an object is of a given type and returns true or false:julia> isa(1,Int)\ntrue\n\njulia> isa(1,AbstractFloat)\nfalseThe typeof() function, already used throughout the manual in examples, returns the type of its argument. Since, as noted above, types are objects, they also have types, and we can ask what their types are:julia> typeof(Rational{Int})\nDataType\n\njulia> typeof(Union{Real,Float64,Rational})\nDataType\n\njulia> typeof(Union{Real,String})\nUnionWhat if we repeat the process? What is the type of a type of a type? As it happens, types are all composite values and thus all have a type of DataType:julia> typeof(DataType)\nDataType\n\njulia> typeof(Union)\nDataTypeDataType is its own type.Another operation that applies to some types is supertype(), which reveals a type's supertype. Only declared types (DataType) have unambiguous supertypes:julia> supertype(Float64)\nAbstractFloat\n\njulia> supertype(Number)\nAny\n\njulia> supertype(AbstractString)\nAny\n\njulia> supertype(Any)\nAnyIf you apply supertype() to other type objects (or non-type objects), a MethodError is raised:julia> supertype(Union{Float64,Int64})\nERROR: `supertype` has no method matching supertype(::Type{Union{Float64,Int64}})"
 },
 
 {
@@ -4661,7 +4669,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.isleaftype",
     "category": "Function",
-    "text": "isleaftype(T)\n\nDetermine whether T is a concrete type that can have instances, meaning its only subtypes are itself and Union{} (but T itself is not Union{}).\n\n\n\n"
+    "text": "isleaftype(T)\n\nDetermine whether T's only subtypes are itself and Union{}. This means T is a concrete type that can have instances.\n\n\n\n"
 },
 
 {
@@ -4684,7 +4692,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/base.html#Base.Val",
     "page": "Essentials",
     "title": "Base.Val",
-    "category": "Type",
+    "category": "Constant",
     "text": "Val{c}\n\nCreate a \"value type\" out of c, which must be an isbits value. The intent of this construct is to be able to dispatch on constants, e.g., f(Val{false}) allows you to dispatch directly (at compile-time) to an implementation f(::Type{Val{false}}), without having to test the boolean value at runtime.\n\n\n\n"
 },
 
@@ -4868,7 +4876,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/base.html#Base.Nullable",
     "page": "Essentials",
     "title": "Base.Nullable",
-    "category": "Type",
+    "category": "Constant",
     "text": "Nullable(x, hasvalue::Bool=true)\n\nWrap value x in an object of type Nullable, which indicates whether a value is present. Nullable(x) yields a non-empty wrapper and Nullable{T}() yields an empty instance of a wrapper that might contain a value of type T.\n\nNullable(x, false) yields Nullable{typeof(x)}() with x stored in the result's value field.\n\nExamples\n\njulia> Nullable(1)\nNullable{Int64}(1)\n\njulia> Nullable{Int64}()\nNullable{Int64}()\n\njulia> Nullable(1, false)\nNullable{Int64}()\n\njulia> dump(Nullable(1, false))\nNullable{Int64}\n  hasvalue: Bool false\n  value: Int64 1\n\n\n\n"
 },
 
@@ -5025,7 +5033,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/base.html#Base.pipeline-Tuple{Any,Any,Any,Vararg{Any,N}}",
+    "location": "stdlib/base.html#Base.pipeline-Tuple{Any,Any,Any,Vararg{Any,N} where N}",
     "page": "Essentials",
     "title": "Base.pipeline",
     "category": "Method",
@@ -6401,7 +6409,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/collections.html#Base.getindex-Tuple{Any,Vararg{Any,N}}",
+    "location": "stdlib/collections.html#Base.getindex-Tuple{Any,Vararg{Any,N} where N}",
     "page": "Collections and Data Structures",
     "title": "Base.getindex",
     "category": "Method",
@@ -6409,7 +6417,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/collections.html#Base.setindex!-Tuple{Any,Any,Vararg{Any,N}}",
+    "location": "stdlib/collections.html#Base.setindex!-Tuple{Any,Any,Vararg{Any,N} where N}",
     "page": "Collections and Data Structures",
     "title": "Base.setindex!",
     "category": "Method",
@@ -6428,7 +6436,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/collections.html#Base.Dict",
     "page": "Collections and Data Structures",
     "title": "Base.Dict",
-    "category": "Type",
+    "category": "Constant",
     "text": "Dict([itr])\n\nDict{K,V}() constructs a hash table with keys of type K and values of type V.\n\nGiven a single iterable argument, constructs a Dict whose key-value pairs are taken from 2-tuples (key,value) generated by the argument.\n\njulia> Dict([(\"A\", 1), (\"B\", 2)])\nDict{String,Int64} with 2 entries:\n  \"B\" => 2\n  \"A\" => 1\n\nAlternatively, a sequence of pair arguments may be passed.\n\njulia> Dict(\"A\"=>1, \"B\"=>2)\nDict{String,Int64} with 2 entries:\n  \"B\" => 2\n  \"A\" => 1\n\n\n\n"
 },
 
@@ -6444,7 +6452,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/collections.html#Base.WeakKeyDict",
     "page": "Collections and Data Structures",
     "title": "Base.WeakKeyDict",
-    "category": "Type",
+    "category": "Constant",
     "text": "WeakKeyDict([itr])\n\nWeakKeyDict() constructs a hash table where the keys are weak references to objects, and thus may be garbage collected even when referenced in a hash table.\n\nSee Dict for further help.\n\n\n\n"
 },
 
@@ -6580,7 +6588,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/collections.html#Base.Set",
     "page": "Collections and Data Structures",
     "title": "Base.Set",
-    "category": "Type",
+    "category": "Constant",
     "text": "Set([itr])\n\nConstruct a Set of the values generated by the given iterable object, or an empty set. Should be used instead of IntSet for sparse integer sets, or for sets of arbitrary objects.\n\n\n\n"
 },
 
@@ -6817,7 +6825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/math.html#Base.:*-Tuple{Any,Vararg{Any,N}}",
+    "location": "stdlib/math.html#Base.:*-Tuple{Any,Vararg{Any,N} where N}",
     "page": "Mathematics",
     "title": "Base.:*",
     "category": "Method",
@@ -7028,7 +7036,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/math.html#Base.OneTo",
     "page": "Mathematics",
     "title": "Base.OneTo",
-    "category": "Type",
+    "category": "Constant",
     "text": "Base.OneTo(n)\n\nDefine an AbstractUnitRange that behaves like 1:n, with the added distinction that the lower limit is guaranteed (by the type system) to be 1.\n\n\n\n"
 },
 
@@ -7628,7 +7636,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/math.html#Base.Rounding.RoundingMode",
     "page": "Mathematics",
     "title": "Base.Rounding.RoundingMode",
-    "category": "Type",
+    "category": "Constant",
     "text": "RoundingMode\n\nA type used for controlling the rounding mode of floating point operations (via rounding/setrounding functions), or as optional arguments for rounding to the nearest integer (via the round function).\n\nCurrently supported rounding modes are:\n\nRoundNearest (default)\nRoundNearestTiesAway\nRoundNearestTiesUp\nRoundToZero\nRoundFromZero (BigFloat only)\nRoundUp\nRoundDown\n\n\n\n"
 },
 
@@ -7681,7 +7689,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/math.html#Base.round-Tuple{Complex{T<:AbstractFloat},RoundingMode{MR},RoundingMode{MI}}",
+    "location": "stdlib/math.html#Base.round-Tuple{Complex{T},RoundingMode{MR},RoundingMode{MI}} where MI where MR where T<:AbstractFloat",
     "page": "Mathematics",
     "title": "Base.round",
     "category": "Method",
@@ -9665,7 +9673,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/strings.html#Base.:*-Tuple{AbstractString,Vararg{Any,N}}",
+    "location": "stdlib/strings.html#Base.:*-Tuple{AbstractString,Vararg{Any,N} where N}",
     "page": "Strings",
     "title": "Base.:*",
     "category": "Method",
@@ -10372,12 +10380,12 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/arrays.html#Core.Array",
     "page": "Arrays",
     "title": "Core.Array",
-    "category": "Type",
+    "category": "Constant",
     "text": "Array{T,N}(dims)\n\nConstruct an uninitialized N-dimensional dense array with element type T. dims may be a tuple or a series of integer arguments corresponding to the length in each dimension. If the rank N is omitted, i.e. Array{T}(dims), the rank is determined based on dims.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/arrays.html#Base.getindex-Tuple{Type,Vararg{Any,N}}",
+    "location": "stdlib/arrays.html#Base.getindex-Tuple{Type,Vararg{Any,N} where N}",
     "page": "Arrays",
     "title": "Base.getindex",
     "category": "Method",
@@ -10404,7 +10412,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/arrays.html#Base.BitArray",
     "page": "Arrays",
     "title": "Base.BitArray",
-    "category": "Type",
+    "category": "Constant",
     "text": "BitArray(dims::Integer...)\nBitArray{N}(dims::NTuple{N,Int})\n\nConstruct an uninitialized BitArray with the given dimensions. Behaves identically to the Array constructor.\n\n\n\nBitArray(itr)\n\nConstruct a BitArray generated by the given iterable object. The shape is inferred from the itr object.\n\njulia> BitArray([1 0; 0 1])\n2×2 BitArray{2}:\n  true  false\n false   true\n\njulia> BitArray(x+y == 3 for x = 1:2, y = 1:3)\n2×3 BitArray{2}:\n false   true  false\n  true  false  false\n\njulia> BitArray(x+y == 3 for x = 1:2 for y = 1:3)\n6-element BitArray{1}:\n false\n  true\n false\n  true\n false\n false\n\n\n\n"
 },
 
@@ -10529,7 +10537,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays.html#Base.getindex-Tuple{AbstractArray,Vararg{Any,N}}",
+    "location": "stdlib/arrays.html#Base.getindex-Tuple{AbstractArray,Vararg{Any,N} where N}",
     "page": "Arrays",
     "title": "Base.getindex",
     "category": "Method",
@@ -10593,7 +10601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays.html#Base.setindex!-Tuple{AbstractArray,Any,Vararg{Any,N}}",
+    "location": "stdlib/arrays.html#Base.setindex!-Tuple{AbstractArray,Any,Vararg{Any,N} where N}",
     "page": "Arrays",
     "title": "Base.setindex!",
     "category": "Method",
@@ -11057,7 +11065,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays.html#Base.permute!-Tuple{Any,AbstractArray{T,1}}",
+    "location": "stdlib/arrays.html#Base.permute!-Tuple{Any,AbstractArray{T,1}} where T",
     "page": "Arrays",
     "title": "Base.permute!",
     "category": "Method",
@@ -11337,7 +11345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays.html#Base.permute!-Tuple{SparseMatrixCSC{Tv,Ti},SparseMatrixCSC{Tv,Ti},AbstractArray{Tp<:Integer,1},AbstractArray{Tq<:Integer,1}}",
+    "location": "stdlib/arrays.html#Base.permute!-Tuple{SparseMatrixCSC{Tv,Ti},SparseMatrixCSC{Tv,Ti},AbstractArray{Tp,1},AbstractArray{Tq,1}} where Tq<:Integer where Tp<:Integer where Ti where Tv",
     "page": "Arrays",
     "title": "Base.permute!",
     "category": "Method",
@@ -11492,7 +11500,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/parallel.html#Base.Channel",
     "page": "Tasks and Parallel Computing",
     "title": "Base.Channel",
-    "category": "Type",
+    "category": "Constant",
     "text": "Channel{T}(sz::Int)\n\nConstructs a Channel with an internal buffer that can hold a maximum of sz objects of type T. put! calls on a full channel block until an object is removed with take!.\n\nChannel(0) constructs an unbuffered channel. put! blocks until a matching take! is called. And vice-versa.\n\nOther constructors:\n\nChannel(Inf): equivalent to Channel{Any}(typemax(Int))\nChannel(sz): equivalent to Channel{Any}(sz)\n\n\n\n"
 },
 
@@ -11697,7 +11705,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel.html#Base.remotecall-Tuple{Any,Integer,Vararg{Any,N}}",
+    "location": "stdlib/parallel.html#Base.remotecall-Tuple{Any,Integer,Vararg{Any,N} where N}",
     "page": "Tasks and Parallel Computing",
     "title": "Base.remotecall",
     "category": "Method",
@@ -11705,7 +11713,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel.html#Base.remotecall_wait-Tuple{Any,Integer,Vararg{Any,N}}",
+    "location": "stdlib/parallel.html#Base.remotecall_wait-Tuple{Any,Integer,Vararg{Any,N} where N}",
     "page": "Tasks and Parallel Computing",
     "title": "Base.remotecall_wait",
     "category": "Method",
@@ -11713,7 +11721,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel.html#Base.remotecall_fetch-Tuple{Any,Integer,Vararg{Any,N}}",
+    "location": "stdlib/parallel.html#Base.remotecall_fetch-Tuple{Any,Integer,Vararg{Any,N} where N}",
     "page": "Tasks and Parallel Computing",
     "title": "Base.remotecall_fetch",
     "category": "Method",
@@ -11721,7 +11729,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel.html#Base.remote_do-Tuple{Any,Integer,Vararg{Any,N}}",
+    "location": "stdlib/parallel.html#Base.remote_do-Tuple{Any,Integer,Vararg{Any,N} where N}",
     "page": "Tasks and Parallel Computing",
     "title": "Base.remote_do",
     "category": "Method",
@@ -11729,7 +11737,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel.html#Base.put!-Tuple{RemoteChannel,Vararg{Any,N}}",
+    "location": "stdlib/parallel.html#Base.put!-Tuple{RemoteChannel,Vararg{Any,N} where N}",
     "page": "Tasks and Parallel Computing",
     "title": "Base.put!",
     "category": "Method",
@@ -11745,7 +11753,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel.html#Base.take!-Tuple{RemoteChannel,Vararg{Any,N}}",
+    "location": "stdlib/parallel.html#Base.take!-Tuple{RemoteChannel,Vararg{Any,N} where N}",
     "page": "Tasks and Parallel Computing",
     "title": "Base.take!",
     "category": "Method",
@@ -11753,7 +11761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel.html#Base.isready-Tuple{RemoteChannel,Vararg{Any,N}}",
+    "location": "stdlib/parallel.html#Base.isready-Tuple{RemoteChannel,Vararg{Any,N} where N}",
     "page": "Tasks and Parallel Computing",
     "title": "Base.isready",
     "category": "Method",
@@ -11801,7 +11809,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel.html#Base.remotecall-Tuple{Any,Base.AbstractWorkerPool,Vararg{Any,N}}",
+    "location": "stdlib/parallel.html#Base.remotecall-Tuple{Any,Base.AbstractWorkerPool,Vararg{Any,N} where N}",
     "page": "Tasks and Parallel Computing",
     "title": "Base.remotecall",
     "category": "Method",
@@ -11809,7 +11817,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel.html#Base.remotecall_wait-Tuple{Any,Base.AbstractWorkerPool,Vararg{Any,N}}",
+    "location": "stdlib/parallel.html#Base.remotecall_wait-Tuple{Any,Base.AbstractWorkerPool,Vararg{Any,N} where N}",
     "page": "Tasks and Parallel Computing",
     "title": "Base.remotecall_wait",
     "category": "Method",
@@ -11817,7 +11825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel.html#Base.remotecall_fetch-Tuple{Any,Base.AbstractWorkerPool,Vararg{Any,N}}",
+    "location": "stdlib/parallel.html#Base.remotecall_fetch-Tuple{Any,Base.AbstractWorkerPool,Vararg{Any,N} where N}",
     "page": "Tasks and Parallel Computing",
     "title": "Base.remotecall_fetch",
     "category": "Method",
@@ -11825,7 +11833,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel.html#Base.remote_do-Tuple{Any,Base.AbstractWorkerPool,Vararg{Any,N}}",
+    "location": "stdlib/parallel.html#Base.remote_do-Tuple{Any,Base.AbstractWorkerPool,Vararg{Any,N} where N}",
     "page": "Tasks and Parallel Computing",
     "title": "Base.remote_do",
     "category": "Method",
@@ -11964,7 +11972,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/parallel.html#Base.SharedArray",
     "page": "Tasks and Parallel Computing",
     "title": "Base.SharedArray",
-    "category": "Type",
+    "category": "Constant",
     "text": "SharedArray{T,N}(dims::NTuple; init=false, pids=Int[])\n\nConstruct a SharedArray of a bitstype T and size dims across the processes specified by pids - all of which have to be on the same host.\n\nIf pids is left unspecified, the shared array will be mapped across all processes on the current host, including the master. But, localindexes and indexpids will only refer to worker processes. This facilitates work distribution code to use workers for actual computation with the master process acting as a driver.\n\nIf an init function of the type initfn(S::SharedArray) is specified, it is called on all the participating workers.\n\nSharedArray{T,N}(filename::AbstractString, dims::NTuple, [offset=0]; mode=nothing, init=false, pids=Int[])\n\nConstruct a SharedArray backed by the file filename, with element type T (must be a bitstype) and size dims, across the processes specified by pids - all of which have to be on the same host. This file is mmapped into the host memory, with the following consequences:\n\nThe array data must be represented in binary format (e.g., an ASCII format like CSV cannot be supported)\nAny changes you make to the array values (e.g., A[3] = 0) will also change the values on disk\n\nIf pids is left unspecified, the shared array will be mapped across all processes on the current host, including the master. But, localindexes and indexpids will only refer to worker processes. This facilitates work distribution code to use workers for actual computation with the master process acting as a driver.\n\nmode must be one of \"r\", \"r+\", \"w+\", or \"a+\", and defaults to \"r+\" if the file specified by filename already exists, or \"w+\" if not. If an init function of the type initfn(S::SharedArray) is specified, it is called on all the participating workers. You cannot specify an init function if the file is not writable.\n\noffset allows you to skip the specified number of bytes at the beginning of the file.\n\n\n\n"
 },
 
@@ -12036,7 +12044,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/parallel.html#Base.Threads.Atomic",
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.Atomic",
-    "category": "Type",
+    "category": "Constant",
     "text": "Threads.Atomic{T}\n\nHolds a reference to an object of type T, ensuring that it is only accessed atomically, i.e. in a thread-safe manner.\n\nOnly certain \"simple\" types can be used atomically, namely the bitstypes integer and float-point types. These are Int8...Int128, UInt8...UInt128, and Float16...Float64.\n\nNew atomic objects can be created from a non-atomic values; if none is specified, the atomic object is initialized with zero.\n\nAtomic objects can be accessed using the [] notation:\n\nx::Atomic{Int}\nx[] = 1\nval = x[]\n\nAtomic operations use an atomic_ prefix, such as atomic_add!, atomic_xchg!, etc.\n\n\n\n"
 },
 
@@ -12380,7 +12388,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/linalg.html#Base.LinAlg.Diagonal",
     "page": "Linear Algebra",
     "title": "Base.LinAlg.Diagonal",
-    "category": "Type",
+    "category": "Constant",
     "text": "Diagonal(A::AbstractMatrix)\n\nConstructs a matrix from the diagonal of A.\n\nExample\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> Diagonal(A)\n3×3 Diagonal{Int64}:\n 1  ⋅  ⋅\n ⋅  5  ⋅\n ⋅  ⋅  9\n\n\n\nDiagonal(V::AbstractVector)\n\nConstructs a matrix with V as its diagonal.\n\nExample\n\njulia> V = [1; 2]\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> Diagonal(V)\n2×2 Diagonal{Int64}:\n 1  ⋅\n ⋅  2\n\n\n\n"
 },
 
@@ -12388,7 +12396,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/linalg.html#Base.LinAlg.Bidiagonal",
     "page": "Linear Algebra",
     "title": "Base.LinAlg.Bidiagonal",
-    "category": "Type",
+    "category": "Constant",
     "text": "Bidiagonal(dv, ev, isupper::Bool)\n\nConstructs an upper (isupper=true) or lower (isupper=false) bidiagonal matrix using the given diagonal (dv) and off-diagonal (ev) vectors.  The result is of type Bidiagonal and provides efficient specialized linear solvers, but may be converted into a regular matrix with convert(Array, _) (or Array(_) for short). ev's length must be one less than the length of dv.\n\nExample\n\njulia> dv = [1; 2; 3; 4]\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> ev = [7; 8; 9]\n3-element Array{Int64,1}:\n 7\n 8\n 9\n\njulia> Bu = Bidiagonal(dv, ev, true) # ev is on the first superdiagonal\n4×4 Bidiagonal{Int64}:\n 1  7  ⋅  ⋅\n ⋅  2  8  ⋅\n ⋅  ⋅  3  9\n ⋅  ⋅  ⋅  4\n\njulia> Bl = Bidiagonal(dv, ev, false) # ev is on the first subdiagonal\n4×4 Bidiagonal{Int64}:\n 1  ⋅  ⋅  ⋅\n 7  2  ⋅  ⋅\n ⋅  8  3  ⋅\n ⋅  ⋅  9  4\n\n\n\nBidiagonal(dv, ev, uplo::Char)\n\nConstructs an upper (uplo='U') or lower (uplo='L') bidiagonal matrix using the given diagonal (dv) and off-diagonal (ev) vectors.  The result is of type Bidiagonal and provides efficient specialized linear solvers, but may be converted into a regular matrix with convert(Array, _) (or Array(_) for short). ev's length must be one less than the length of dv.\n\nExample\n\njulia> dv = [1; 2; 3; 4]\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> ev = [7; 8; 9]\n3-element Array{Int64,1}:\n 7\n 8\n 9\n\njulia> Bu = Bidiagonal(dv, ev, 'U') #e is on the first superdiagonal\n4×4 Bidiagonal{Int64}:\n 1  7  ⋅  ⋅\n ⋅  2  8  ⋅\n ⋅  ⋅  3  9\n ⋅  ⋅  ⋅  4\n\njulia> Bl = Bidiagonal(dv, ev, 'L') #e is on the first subdiagonal\n4×4 Bidiagonal{Int64}:\n 1  ⋅  ⋅  ⋅\n 7  2  ⋅  ⋅\n ⋅  8  3  ⋅\n ⋅  ⋅  9  4\n\n\n\nBidiagonal(A, isupper::Bool)\n\nConstruct a Bidiagonal matrix from the main diagonal of A and its first super- (if isupper=true) or sub-diagonal (if isupper=false).\n\nExample\n\njulia> A = [1 1 1 1; 2 2 2 2; 3 3 3 3; 4 4 4 4]\n4×4 Array{Int64,2}:\n 1  1  1  1\n 2  2  2  2\n 3  3  3  3\n 4  4  4  4\n\njulia> Bidiagonal(A, true) #contains the main diagonal and first superdiagonal of A\n4×4 Bidiagonal{Int64}:\n 1  1  ⋅  ⋅\n ⋅  2  2  ⋅\n ⋅  ⋅  3  3\n ⋅  ⋅  ⋅  4\n\njulia> Bidiagonal(A, false) #contains the main diagonal and first subdiagonal of A\n4×4 Bidiagonal{Int64}:\n 1  ⋅  ⋅  ⋅\n 2  2  ⋅  ⋅\n ⋅  3  3  ⋅\n ⋅  ⋅  4  4\n\n\n\n"
 },
 
@@ -12396,7 +12404,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/linalg.html#Base.LinAlg.SymTridiagonal",
     "page": "Linear Algebra",
     "title": "Base.LinAlg.SymTridiagonal",
-    "category": "Type",
+    "category": "Constant",
     "text": "SymTridiagonal(dv, ev)\n\nConstruct a symmetric tridiagonal matrix from the diagonal and first sub/super-diagonal, respectively. The result is of type SymTridiagonal and provides efficient specialized eigensolvers, but may be converted into a regular matrix with convert(Array, _) (or Array(_) for short).\n\nExample\n\njulia> dv = [1; 2; 3; 4]\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> ev = [7; 8; 9]\n3-element Array{Int64,1}:\n 7\n 8\n 9\n\njulia> SymTridiagonal(dv, ev)\n4×4 SymTridiagonal{Int64}:\n 1  7  ⋅  ⋅\n 7  2  8  ⋅\n ⋅  8  3  9\n ⋅  ⋅  9  4\n\n\n\n"
 },
 
@@ -12404,7 +12412,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/linalg.html#Base.LinAlg.Tridiagonal",
     "page": "Linear Algebra",
     "title": "Base.LinAlg.Tridiagonal",
-    "category": "Type",
+    "category": "Constant",
     "text": "Tridiagonal(dl, d, du)\n\nConstruct a tridiagonal matrix from the first subdiagonal, diagonal, and first superdiagonal, respectively.  The result is of type Tridiagonal and provides efficient specialized linear solvers, but may be converted into a regular matrix with convert(Array, _) (or Array(_) for short). The lengths of dl and du must be one less than the length of d.\n\nExample\n\njulia> dl = [1; 2; 3]\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> du = [4; 5; 6]\n3-element Array{Int64,1}:\n 4\n 5\n 6\n\njulia> d = [7; 8; 9; 0]\n4-element Array{Int64,1}:\n 7\n 8\n 9\n 0\n\njulia> Tridiagonal(dl, d, du)\n4×4 Tridiagonal{Int64}:\n 7  4  ⋅  ⋅\n 1  8  5  ⋅\n ⋅  2  9  6\n ⋅  ⋅  3  0\n\n\n\nTridiagonal(A)\n\nreturns a Tridiagonal array based on (abstract) matrix A, using its first lower diagonal, main diagonal, and first upper diagonal.\n\nExample\n\njulia> A = [1 2 3 4; 1 2 3 4; 1 2 3 4; 1 2 3 4]\n4×4 Array{Int64,2}:\n 1  2  3  4\n 1  2  3  4\n 1  2  3  4\n 1  2  3  4\n\njulia> Tridiagonal(A)\n4×4 Tridiagonal{Int64}:\n 1  2  ⋅  ⋅\n 1  2  3  ⋅\n ⋅  2  3  4\n ⋅  ⋅  3  4\n\n\n\n"
 },
 
@@ -12412,7 +12420,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/linalg.html#Base.LinAlg.Symmetric",
     "page": "Linear Algebra",
     "title": "Base.LinAlg.Symmetric",
-    "category": "Type",
+    "category": "Constant",
     "text": "Symmetric(A, uplo=:U)\n\nConstruct a Symmetric matrix from the upper (if uplo = :U) or lower (if uplo = :L) triangle of A.\n\nExample\n\njulia> A = [1 0 2 0 3; 0 4 0 5 0; 6 0 7 0 8; 0 9 0 1 0; 2 0 3 0 4]\n5×5 Array{Int64,2}:\n 1  0  2  0  3\n 0  4  0  5  0\n 6  0  7  0  8\n 0  9  0  1  0\n 2  0  3  0  4\n\njulia> Supper = Symmetric(A)\n5×5 Symmetric{Int64,Array{Int64,2}}:\n 1  0  2  0  3\n 0  4  0  5  0\n 2  0  7  0  8\n 0  5  0  1  0\n 3  0  8  0  4\n\njulia> Slower = Symmetric(A, :L)\n5×5 Symmetric{Int64,Array{Int64,2}}:\n 1  0  6  0  2\n 0  4  0  9  0\n 6  0  7  0  3\n 0  9  0  1  0\n 2  0  3  0  4\n\njulia> eigfact(Supper)\nBase.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([-2.96684,-2.72015,0.440875,7.72015,14.526],[-0.302016 -2.22045e-16 … 1.11022e-16 0.248524; -6.67755e-16 0.596931 … -0.802293 1.93069e-17; … ; 8.88178e-16 -0.802293 … -0.596931 0.0; 0.772108 8.93933e-16 … 0.0 0.630015])\n\neigfact will use a method specialized for matrices known to be symmetric. Note that Supper will not be equal to Slower unless A is itself symmetric (e.g. if A == A.').\n\n\n\n"
 },
 
@@ -12420,7 +12428,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/linalg.html#Base.LinAlg.Hermitian",
     "page": "Linear Algebra",
     "title": "Base.LinAlg.Hermitian",
-    "category": "Type",
+    "category": "Constant",
     "text": "Hermitian(A, uplo=:U)\n\nConstruct a Hermitian matrix from the upper (if uplo = :U) or lower (if uplo = :L) triangle of A.\n\nExample\n\njulia> A = [1 0 2+2im 0 3-3im; 0 4 0 5 0; 6-6im 0 7 0 8+8im; 0 9 0 1 0; 2+2im 0 3-3im 0 4];\n\njulia> Hupper = Hermitian(A)\n5×5 Hermitian{Complex{Int64},Array{Complex{Int64},2}}:\n 1+0im  0+0im  2+2im  0+0im  3-3im\n 0+0im  4+0im  0+0im  5+0im  0+0im\n 2-2im  0+0im  7+0im  0+0im  8+8im\n 0+0im  5+0im  0+0im  1+0im  0+0im\n 3+3im  0+0im  8-8im  0+0im  4+0im\n\njulia> Hlower = Hermitian(A, :L)\n5×5 Hermitian{Complex{Int64},Array{Complex{Int64},2}}:\n 1+0im  0+0im  6+6im  0+0im  2-2im\n 0+0im  4+0im  0+0im  9+0im  0+0im\n 6-6im  0+0im  7+0im  0+0im  3+3im\n 0+0im  9+0im  0+0im  1+0im  0+0im\n 2+2im  0+0im  3-3im  0+0im  4+0im\n\njulia> eigfact(Hupper)\nBase.LinAlg.Eigen{Complex{Float64},Float64,Array{Complex{Float64},2},Array{Float64,1}}([-8.32069,-2.72015,3.1496,7.72015,17.1711],Complex{Float64}[-0.231509+0.392692im -2.77556e-17+1.11022e-16im … -4.16334e-17-4.16334e-17im -0.129023-0.00628656im; 0.0+0.0im -0.523844+0.286205im … -0.521629+0.609571im 0.0+0.0im; … ; 0.0-6.93889e-18im 0.704063-0.384669im … -0.388108+0.45354im 0.0-1.38778e-17im; 0.67898+0.0im 0.0+0.0im … 0.0+0.0im -0.661651-0.0im])\n\neigfact will use a method specialized for matrices known to be Hermitian. Note that Hupper will not be equal to Hlower unless A is itself Hermitian (e.g. if A == A').\n\n\n\n"
 },
 
@@ -12437,7 +12445,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.lufact",
     "category": "Function",
-    "text": "lufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ncond ✓ \ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}}([4.0 3.0; 1.5 -1.5],[1,2],0)\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\nlufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\n\n\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "lufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\n\n\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nlufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ncond ✓ \ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}}([4.0 3.0; 1.5 -1.5],[1,2],0)\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\n"
 },
 
 {
@@ -12748,7 +12756,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/linalg.html#Base.LinAlg.Givens",
     "page": "Linear Algebra",
     "title": "Base.LinAlg.Givens",
-    "category": "Type",
+    "category": "Constant",
     "text": "LinAlg.Givens(i1,i2,c,s) -> G\n\nA Givens rotation linear operator. The fields c and s represent the cosine and sine of the rotation angle, respectively. The Givens type supports left multiplication G*A and conjugated transpose right multiplication A*G'. The type doesn't have a size and can therefore be multiplied with matrices of arbitrary size as long as i2<=size(A,2) for G*A or i2<=size(A,1) for A*G'.\n\nSee also: givens\n\n\n\n"
 },
 
@@ -13076,7 +13084,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/linalg.html#Base.LinAlg.RowVector",
     "page": "Linear Algebra",
     "title": "Base.LinAlg.RowVector",
-    "category": "Type",
+    "category": "Constant",
     "text": "RowVector(vector)\n\nA lazy-view wrapper of an AbstractVector, which turns a length-n vector into a 1×n shaped row vector and represents the transpose of a vector (the elements are also transposed recursively). This type is usually constructed (and unwrapped) via the transpose() function or .' operator (or related ctranspose() or ' operator).\n\nBy convention, a vector can be multiplied by a matrix on its left (A * v) whereas a row vector can be multiplied by a matrix on its right (such that v.' * A = (A.' * v).'). It differs from a 1×n-sized matrix by the facts that its transpose returns a vector and the inner product v1.' * v2 returns a scalar, but will otherwise behave similarly.\n\n\n\n"
 },
 
@@ -15388,7 +15396,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/io-network.html#Base.IOContext",
     "page": "I/O and Network",
     "title": "Base.IOContext",
-    "category": "Type",
+    "category": "Constant",
     "text": "IOContext\n\nIOContext provides a mechanism for passing output configuration settings among show methods.\n\nIn short, it is an immutable dictionary that is a subclass of IO. It supports standard dictionary operations such as getindex, and can also be used as an I/O stream.\n\n\n\n"
 },
 
@@ -16412,7 +16420,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/dates.html#Base.Dates.UTInstant",
     "page": "Dates and Time",
     "title": "Base.Dates.UTInstant",
-    "category": "Type",
+    "category": "Constant",
     "text": "UTInstant{T}\n\nThe UTInstant represents a machine timeline based on UT time (1 day = one revolution of the earth). The T is a Period parameter that indicates the resolution or precision of the instant.\n\n\n\n"
 },
 
@@ -16457,7 +16465,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/dates.html#Base.Dates.DateTime-Tuple{Vararg{Base.Dates.Period,N}}",
+    "location": "stdlib/dates.html#Base.Dates.DateTime-Tuple{Vararg{Base.Dates.Period,N} where N}",
     "page": "Dates and Time",
     "title": "Base.Dates.DateTime",
     "category": "Method",
@@ -16465,7 +16473,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/dates.html#Base.Dates.DateTime-Tuple{Function,Vararg{Any,N}}",
+    "location": "stdlib/dates.html#Base.Dates.DateTime-Tuple{Function,Vararg{Any,N} where N}",
     "page": "Dates and Time",
     "title": "Base.Dates.DateTime",
     "category": "Method",
@@ -16521,7 +16529,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/dates.html#Base.Dates.Date-Tuple{Vararg{Base.Dates.Period,N}}",
+    "location": "stdlib/dates.html#Base.Dates.Date-Tuple{Vararg{Base.Dates.Period,N} where N}",
     "page": "Dates and Time",
     "title": "Base.Dates.Date",
     "category": "Method",
@@ -17009,7 +17017,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/dates.html#Base.Dates.CompoundPeriod-Tuple{Array{P<:Base.Dates.Period,1}}",
+    "location": "stdlib/dates.html#Base.Dates.CompoundPeriod-Tuple{Array{P,1}} where P<:Base.Dates.Period",
     "page": "Dates and Time",
     "title": "Base.Dates.CompoundPeriod",
     "category": "Method",
@@ -17513,7 +17521,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/c.html#Base.unsafe_copy!-Tuple{Ptr{T},Ptr{T},Any}",
+    "location": "stdlib/c.html#Base.unsafe_copy!-Tuple{Ptr{T},Ptr{T},Any} where T",
     "page": "C Interface",
     "title": "Base.unsafe_copy!",
     "category": "Method",
@@ -17553,7 +17561,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/c.html#Base.unsafe_wrap-Tuple{Union{Type{Array{T,N}},Type{Array{T,N}},Type{Array}},Ptr{T},Tuple{Vararg{Int64,N}}}",
+    "location": "stdlib/c.html#Base.unsafe_wrap-Tuple{Union{Type{Array{T,N} where N},Type{Array{T,N}},Type{Array}},Ptr{T},Tuple{Vararg{Int64,N}}} where N where T",
     "page": "C Interface",
     "title": "Base.unsafe_wrap",
     "category": "Method",
@@ -17604,7 +17612,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/c.html#Core.Ptr",
     "page": "C Interface",
     "title": "Core.Ptr",
-    "category": "Type",
+    "category": "Constant",
     "text": "Ptr{T}\n\nA memory address referring to data of type T.  However, there is no guarantee that the memory is actually valid, or that it actually represents data of the specified type.\n\n\n\n"
 },
 
@@ -17612,7 +17620,7 @@ var documenterSearchIndex = {"docs": [
     "location": "stdlib/c.html#Core.Ref",
     "page": "C Interface",
     "title": "Core.Ref",
-    "category": "Type",
+    "category": "Constant",
     "text": "Ref{T}\n\nAn object that safely references data of type T. This type is guaranteed to point to valid, Julia-allocated memory of the correct type. The underlying data is protected from freeing by the garbage collector as long as the Ref itself is referenced.\n\nWhen passed as a ccall argument (either as a Ptr or Ref type), a Ref object will be converted to a native pointer to the data it references.\n\nThere is no invalid (NULL) Ref.\n\n\n\n"
 },
 
@@ -18509,47 +18517,15 @@ var documenterSearchIndex = {"docs": [
     "page": "More about types",
     "title": "Types and sets (and Any and Union{}/Bottom)",
     "category": "section",
-    "text": "It's perhaps easiest to conceive of Julia's type system in terms of sets.  A concrete type corresponds to a single entity in the space of all possible types; an abstract type refers to a collection (set) of concrete types.  Any is a type that describes the entire universe of possible types; Integer is a subset of Any that includes Int, Int8, and other concrete types.  Internally, Julia also makes heavy use of another type known as Bottom, or equivalently, Union{}.  This corresponds to the empty set.Julia's types support the standard operations of set theory: you can ask whether T1 is a \"subset\" (subtype) of T2 with T1 <: T2.  Likewise, you intersect two types using typeintersect, take their union with Union, and compute a type that contains their union with typejoin:julia> typeintersect(Int, Float64)\nUnion{}\n\njulia> Union{Int, Float64}\nUnion{Float64,Int64}\n\njulia> typejoin(Int, Float64)\nReal\n\njulia> typeintersect(Signed, Union{UInt8, Int8})\nInt8\n\njulia> Union{Signed, Union{UInt8, Int8}}\nUnion{Signed,UInt8}\n\njulia> typejoin(Signed, Union{UInt8, Int8})\nInteger\n\njulia> typeintersect(Tuple{Integer,Float64}, Tuple{Int,Real})\nTuple{Int64,Float64}\n\njulia> Union{Tuple{Integer,Float64}, Tuple{Int,Real}}\nUnion{Tuple{Int64,Real},Tuple{Integer,Float64}}\n\njulia> typejoin(Tuple{Integer,Float64}, Tuple{Int,Real})\nTuple{Integer,Real}While these operations may seem abstract, they lie at the heart of Julia.  For example, method dispatch is implemented by stepping through the items in a method list until reaching one for which typeintersect(args, sig) is not Union{}.  (Here, args is a tuple-type describing the types of the arguments, and sig is a tuple-type specifying the types in the function's signature.)  For this algorithm to work, it's important that methods be sorted by their specificity, and that the search begins with the most specific methods.  Consequently, Julia also implements a partial order on types; this is achieved by functionality that is similar to <:, but with differences that will be discussed below."
+    "text": "It's perhaps easiest to conceive of Julia's type system in terms of sets. While programs manipulate individual values, a type refers to a set of values. This is not the same thing as a collection; for example a Set of values is itself a single Set value. Rather, a type describes a set of possible values, expressing uncertainty about which value we have.A concrete type T describes the set of values whose direct tag, as returned by the typeof function, is T. An abstract type describes some possibly-larger set of values.Any describes the entire universe of possible values. Integer is a subset of Any that includes Int, Int8, and other concrete types. Internally, Julia also makes heavy use of another type known as Bottom, which can also be written as Union{}. This corresponds to the empty set.Julia's types support the standard operations of set theory: you can ask whether T1 is a \"subset\" (subtype) of T2 with T1 <: T2. Likewise, you intersect two types using typeintersect, take their union with Union, and compute a type that contains their union with typejoin:julia> typeintersect(Int, Float64)\nUnion{}\n\njulia> Union{Int, Float64}\nUnion{Float64,Int64}\n\njulia> typejoin(Int, Float64)\nReal\n\njulia> typeintersect(Signed, Union{UInt8, Int8})\nInt8\n\njulia> Union{Signed, Union{UInt8, Int8}}\nUnion{Signed,UInt8}\n\njulia> typejoin(Signed, Union{UInt8, Int8})\nInteger\n\njulia> typeintersect(Tuple{Integer,Float64}, Tuple{Int,Real})\nTuple{Int64,Float64}\n\njulia> Union{Tuple{Integer,Float64}, Tuple{Int,Real}}\nUnion{Tuple{Int64,Real},Tuple{Integer,Float64}}\n\njulia> typejoin(Tuple{Integer,Float64}, Tuple{Int,Real})\nTuple{Integer,Real}While these operations may seem abstract, they lie at the heart of Julia.  For example, method dispatch is implemented by stepping through the items in a method list until reaching one for which the type of the argument tuple is a subtype of the method signature. For this algorithm to work, it's important that methods be sorted by their specificity, and that the search begins with the most specific methods. Consequently, Julia also implements a partial order on types; this is achieved by functionality that is similar to <:, but with differences that will be discussed below."
 },
 
 {
-    "location": "devdocs/types.html#TypeVars-1",
+    "location": "devdocs/types.html#UnionAll-types-1",
     "page": "More about types",
-    "title": "TypeVars",
+    "title": "UnionAll types",
     "category": "section",
-    "text": "Many types take parameters; an easy example is Array, which takes two parameters often written as Array{T,N}.  Let's compare the following methods:f1(A::Array) = 1\nf2(A::Array{Int}) = 2\nf3{T}(A::Array{T}) = 3\nf4(A::Array{Any}) = 4\nf5{T<:Any}(A::Array{T}) = 5All but f4 can be called with a = [1,2]; all but f2 can be called with b = Any[1,2].Let's look at these types a little more closely:julia> Array\nArray{T,N}\n\njulia> dump(Array)\nArray{T,N} <: DenseArray{T,N}This indicates that Array is a shorthand for Array{T,N}.  If you type this at the REPL prompt–on its own, not while defining a function or type–you get an error T not defined. So what, exactly, are T and N? You can learn more by extracting these parameters:julia> T,N = Array.parameters\nsvec(T,N)\n\njulia> dump(T)\nTypeVar\n  name: Symbol T\n  lb: Union{}\n  ub: Any\n  bound: Bool falseA TypeVar is one of Julia's built-in types–it's defined in jltypes.c, although you can find a commented-out version in boot.jl.  The name field is straightforward: it's what's printed when showing the object.  lb and ub stand for \"lower bound\" and \"upper bound,\" respectively: these are the sets that constrain what types the TypeVar may represent.  In this case, T's lower bound is Union{} (i.e., Bottom or the empty set); in other words, this TypeVar is not constrained from below.  The upper bound is Any, so neither is it constrained from above.In a method definition like:g{S<:Integer}(x::S) = 0one can extract the underlying TypeVar:g{S<:Integer}(x::S) = 0\nm = first(methods(g))\np = m.sig.parameters\ntv = p[2]\ndump(tv)TypeVar\n  name: Symbol S\n  lb: Union{}\n  ub: Integer <: Real\n  bound: Bool trueHere ub is Integer, as specified in the function definition.The last field of a TypeVar is bound.  This boolean value specifies whether the TypeVar is defined as one of the function parameters. For example:julia> h1(A::Array, b::Real) = 1\nh1 (generic function with 1 method)\n\njulia> h2{T<:Real}(A::Array, b::T) = 1\nh2 (generic function with 1 method)\n\njulia> h3{T<:Real}(A::Array{T}, b::T) = 1\nh3 (generic function with 1 method)\n\njulia> p1 = first(methods(h1)).sig.parameters\nsvec(#h1,Array{T,N},Real)\n\njulia> p2 = first(methods(h2)).sig.parameters\nsvec(#h2,Array{T,N},T<:Real)\n\njulia> p3 = first(methods(h3)).sig.parameters\nsvec(#h3,Array{T<:Real,N},T<:Real)\n\njulia> dump(p1[2].parameters[1])\nTypeVar\n  name: Symbol T\n  lb: Union{}\n  ub: Any\n  bound: Bool false\n\njulia> dump(p3[2].parameters[1])\nTypeVar\n  name: Symbol T\n  lb: Union{}\n  ub: Real <: Number\n  bound: Bool trueNote that p2 shows two objects called T, but only one of them has the upper bound Real; in contrast, p3 shows both of them bounded.  This is because in h3, the same type T is used in both places, whereas for h2 the T inside the array is simply the default symbol used for the first parameter of Array.One can construct TypeVars manually:julia> TypeVar(:V, Signed, Real, false)\nSigned<:V<:RealThere are convenience versions that allow you to omit any of these arguments except the name symbol.Armed with this information, we can do some sneaky things that reveal a lot about how Julia does dispatch:julia> TV = TypeVar(:T, false)   # bound = false\nT\n\njulia> candid{T}(A::Array{T}, x::T) = 0\ncandid (generic function with 1 method)\n\njulia> @eval sneaky{T}(A::Array{T}, x::$TV) = 1\nsneaky (generic function with 1 method)\n\njulia> methods(candid)\n# 1 method for generic function \"candid\":\ncandid{T}(A::Array{T,N<:Any}, x::T) in Main at none:1\n\njulia> methods(sneaky)\n# 1 method for generic function \"sneaky\":\nsneaky{T}(A::Array{T,N<:Any}, x::T<:Any) in Main at none:1These therefore print identically, but they have very different behavior:julia> candid([1],3.2)\nERROR: MethodError: no method matching candid(::Array{Int64,1}, ::Float64)\nClosest candidates are:\n  candid{T}(::Array{T,N}, !Matched::T) at none:1\n ...\n\njulia> sneaky([1],3.2)\n1To see what's happening, it's helpful to use Julia's internal jl_() function (defined in builtins.c) for display, because it prints bound TypeVar objects with a hash (#T instead of T):julia> jl_(x) = ccall(:jl_, Void, (Any,), x)\njl_ (generic function with 1 method)julia> jl_(first(methods(candid)).sig)\nTuple{Main.#candid, Array{#T<:Any, N<:Any}, #T<:Any}\n\njulia> jl_(first(methods(sneaky)).sig)\nTuple{Main.#sneaky, Array{#T<:Any, N<:Any}, T<:Any}Even though both print as T, in sneaky the second T is not bound, and hence it isn't constrained to be the same type as the element type of the Array.Some TypeVar interactions depend on the bound state, even when there are not two or more uses of the same TypeVar. For example:julia> S = TypeVar(:S, false); T = TypeVar(:T, true)\nT\n\n# These would be the same no matter whether we used S or T\njulia> Array{Array{S}} <: Array{Array}\ntrue\n\njulia> Array{Array{S}} <: Array{Array{S}}\ntrue\n\njulia> Array{Array} <: Array{Array{S}}\ntrue\n\n# For these cases, it matters\njulia> Array{Array{Int}} <: Array{Array}\nfalse\n\njulia> Array{Array{Int}} <: Array{Array{S}}\nfalse\n\njulia> Array{Array{Int}} <: Array{Array{T}}\ntrueIt's this latter construction that allows function declarations likefoo{T,N}(A::Array{Array{T,N}}) = T,Nto match despite the invariance of Julia's type parameters."
-},
-
-{
-    "location": "devdocs/types.html#TypeNames-1",
-    "page": "More about types",
-    "title": "TypeNames",
-    "category": "section",
-    "text": "The following two Array types are functionally equivalent, yet print differently via jl_():julia> TV, NV = TypeVar(:T), TypeVar(:N)\n(T,N)\n\njulia> jl_(Array)\nArray\n\njulia> jl_(Array{TV,NV})\nArray{T<:Any, N<:Any}These can be distinguished by examining the name field of the type, which is an object of type TypeName:julia> dump(Array.name)\nTypeName\n  name: Symbol Array\n  module: Module Core\n  names: empty SimpleVector\n  primary: Array{T,N} <: DenseArray{T,N}\n  cache: SimpleVector\n    ...\n\n  linearcache: SimpleVector\n    ...\n\n  uid: Int64 -7900426068641098781\n  mt: MethodTable\n    name: Symbol Array\n    defs: Void nothing\n    cache: Void nothing\n    max_args: Int64 0\n    kwsorter: #undef\n    module: Module Core\n    : Int64 0\n    : Int64 0In this case, the relevant field is primary, which holds a reference to the \"primary\" instance of the type:julia> pointer_from_objref(Array)\nPtr{Void} @0x00007fcc7de64850\n\njulia> pointer_from_objref(Array.name.primary)\nPtr{Void} @0x00007fcc7de64850\n\njulia> pointer_from_objref(Array{TV,NV})\nPtr{Void} @0x00007fcc80c4d930\n\njulia> pointer_from_objref(Array{TV,NV}.name.primary)\nPtr{Void} @0x00007fcc7de64850The primary field of Array points to itself, but for Array{TV,NV} it points back to the default definition of the type.What about the other fields? uid assigns a unique integer to each type.  To examine the cache field, it's helpful to pick a type that is less heavily used than Array. Let's first create our own type:julia> type MyType{T,N} end\n\njulia> MyType{Int,2}\nMyType{Int64,2}\n\njulia> MyType{Float32, 5}\nMyType{Float32,5}\n\njulia> MyType.name.cache\nsvec(MyType{Float32,5},MyType{Int64,2},#undef,#undef,#undef,#undef,#undef,#undef)(The cache is pre-allocated to have length 8, but only the first two entries are populated.) Consequently, when you instantiate a parametric type, each concrete type gets saved in a type-cache.  However, instances with TypeVar parameters are not cached."
-},
-
-{
-    "location": "devdocs/types.html#Tuple-types-1",
-    "page": "More about types",
-    "title": "Tuple-types",
-    "category": "section",
-    "text": "Tuple-types constitute an interesting special case.  For dispatch to work on declarations like x::Tuple, the type has to be able to be able to accommodate any tuple.  Let's check the parameters:julia> Tuple\nTuple\n\njulia> Tuple.parameters\nsvec(Vararg{Any,N})It's worth noting that the parameter is a type, Any, rather than a TypeVar T<:Any: comparejulia> jl_(Tuple.parameters)\nsvec(Vararg{Any, N<:Any})\n\njulia> jl_(Array.parameters)\nsvec(T<:Any, N<:Any)Unlike other types, tuple-types are covariant in their parameters, so this definition permits Tuple to match any type of tuple.  This is therefore equivalent to having an unbound TypeVar but distinct from a bound TypeVarjulia> typeintersect(Tuple, Tuple{Int,Float64})\nTuple{Int64,Float64}\n\njulia> typeintersect(Tuple{Vararg{Any}}, Tuple{Int,Float64})\nTuple{Int64,Float64}\n\njulia> T = TypeVar(:T,false)\nT\n\njulia> typeintersect(Tuple{Vararg{T}}, Tuple{Int,Float64})\nTuple{Int64,Float64}\n\njulia> T = TypeVar(:T,true)\nT\n\njulia> typeintersect(Tuple{Vararg{T}}, Tuple{Int,Float64})\nUnion{}Finally, it's worth noting that Tuple{} is distinctjulia> Tuple{}\nTuple{}\n\njulia> Tuple{}.parameters\nsvec()\n\njulia> typeintersect(Tuple{}, Tuple{Int})\nUnion{}What is the \"primary\" tuple-type?julia> pointer_from_objref(Tuple)\nPtr{Void} @0x00007f5998a04370\n\njulia> pointer_from_objref(Tuple{})\nPtr{Void} @0x00007f5998a570d0\n\njulia> pointer_from_objref(Tuple.name.primary)\nPtr{Void} @0x00007f5998a04370\n\njulia> pointer_from_objref(Tuple{}.name.primary)\nPtr{Void} @0x00007f5998a04370so Tuple == Tuple{Vararg{Any}} is indeed the primary type."
-},
-
-{
-    "location": "devdocs/types.html#Introduction-to-the-internal-machinery:-jltypes.c-1",
-    "page": "More about types",
-    "title": "Introduction to the internal machinery: jltypes.c",
-    "category": "section",
-    "text": "Many operations for dealing with types are found in the file jltypes.c. A good way to start is to watch type intersection in action.  Build Julia with make debug and fire up Julia within a debugger. gdb debugging tips has some tips which may be useful.Because the type intersection and matching code is used heavily in the REPL itself–and hence breakpoints in this code get triggered often–it will be easiest if you make the following definition:julia> function myintersect(a,b)\n           ccall(:jl_breakpoint, Void, (Any,), nothing)\n           typeintersect(a, b)\n       endand then set a breakpoint in jl_breakpoint.  Once this breakpoint gets triggered, you can set breakpoints in other functions.As a warm-up, try the following:myintersect(Tuple{Integer,Float64}, Tuple{Int,Real})Set a breakpoint in intersect_tuple and continue until it enters this function.  You should be able to see something like this:Breakpoint 2, intersect_tuple (a=0x7ffdf7409150, b=0x7ffdf74091b0, penv=0x7fffffffcc90, eqc=0x7fffffffcc70, var=covariant) at jltypes.c:405\n405     {\n(gdb) call jl_(a)\nTuple{Integer, Float64}\n(gdb) call jl_(b)\nTuple{Int64, Real}The var argument is either covariant or invariant, the latter being used if you're matching the type parameters of Array{T1} against Array{T2}.  The other two inputs to this function (penv and eqc) may be currently mysterious, but we'll discuss them in a moment.  For now, step through the code until you get into the loop over the different entries in the tuple types a and b.  The key call is:ce = jl_type_intersect(ae,be,penv,eqc,var);which, if you examine ae, be, and ce, you'll see is just type intersection performed on these entries.We can make it more interesting by trying a more complex case:julia> T = TypeVar(:T, true)\nT\n\njulia> myintersect(Tuple{Array{T}, T}, Tuple{Array{Int,2}, Int8})\n\nBreakpoint 1, jl_breakpoint (v=0x7ffdf35e8010) at builtins.c:1559\n1559    {\n(gdb) b intersect_tuple\nBreakpoint 3 at 0x7ffff6dcb07d: file jltypes.c, line 405.\n(gdb) c\nContinuing.\n\nBreakpoint 3, intersect_tuple (a=0x7ffdf74d7a90, b=0x7ffdf74d7af0, penv=0x7fffffffcc90, eqc=0x7fffffffcc70, var=covariant) at jltypes.c:405\n405     {\n(gdb) call jl_(a)\nTuple{Array{＃T<:Any, N<:Any}, ＃T<:Any}\n(gdb) call jl_(b)\nTuple{Array{Int64, 2}, Int8}Let's watch how this bound TypeVar gets handled.  To follow this, you'll need to examine the variables penv and eqc, which are defined as:typedef struct {\n    jl_value_t **data;\n    size_t n;\n    jl_svec_t *tvars;\n} cenv_t;These start out empty (with penv->n == eqc->n == 0).  Once we get into the loop and make the first call to jl_type_intersect, eqc (which stands for \"equality constraints\") has the following value:(gdb) p eqc->n\n$4 = 2\n(gdb) call jl_(eqc->data[0])\n＃T<:Any\n(gdb) call jl_(eqc->data[1])\nInt64This is just a var, value list of pairs, indicating that T now has the value Int64.  If you now allow intersect_tuple to finish and keep progressing, you'll eventually get to type_intersection_matching.  This function contains a call to solve_tvar_constraints.  Roughly speaking, eqc defines T = Int64, but env defines it as Int8; this conflict is detected in solve_tvar_constraints and the resulting return is jl_bottom_type, aka Union{}."
-},
-
-{
-    "location": "devdocs/types.html#Subtyping-and-method-sorting-1",
-    "page": "More about types",
-    "title": "Subtyping and method sorting",
-    "category": "section",
-    "text": "Armed with this knowledge, you may find yourself surprised by the following:julia> typeintersect(Tuple{Array{Int},Float64}, Tuple{Array{T},T})\nUnion{}\n\njulia> Tuple{Array{Int},Float64} <: Tuple{Array{T},T}\ntruewhere T is a bound TypeVar.  In other words, A <: B does not imply that typeintersect(A, B) == A.  A little bit of digging reveals the reason why: jl_subtype_le does not use the cenv_t constraints that we just saw in typeintersect.jltypes.c contains three closely related collections of functions for testing how types a and b are ordered:The subtype functions implement a <: b. Among other uses, they serve in matching function arguments against method signatures in the function cache.\nThe type_morespecific functions are used for imposing a partial order on functions in method tables (from most-to-least specific). Note that jl_type_morespecific(a,b,0) really means \"is a at least as specific as b?\" and not \"is a strictly more specific than b?\"\nThe type_match functions are similar to type_morespecific, but additionally accept (and employ) an environment to constrain typevars. The related type_match_morespecific functions call type_match with an argument morespecific=1All three of these take an argument, invariant, which is set to 1 when comparing type parameters and otherwise is 0.The rules for these are somewhat different. subtype is sensitive to the number arguments, but type_morespecific may not be. In particular, Tuple{Int,AbstractFloat} is more specific than Tuple{Integer}, even though it is not a subtype.  (Of Tuple{Int,AbstractFloat} and Tuple{Integer,Float64}, neither is more specific than the other.)  Likewise, Tuple{Int,Vararg{Int}} is not a subtype of Tuple{Integer}, but it is considered more specific. However, morespecific does get a bonus for length: in particular, Tuple{Int,Int} is more specific than Tuple{Int,Vararg{Int}}.If you're debugging how methods get sorted, it can be convenient to define the function:args_morespecific(a, b) = ccall(:jl_args_morespecific, Cint, (Any,Any), a, b)which allows you to test whether arg-tuple a is more specific than arg-tuple b."
+    "text": "Julia's type system can also express an iterated union of types: a union of types over all values of some variable. This is needed to describe parametric types where the values of some parameters are not known.For example, :obj:Array has two parameters as in Array{Int,2}. If we did not know the element type, we could write Array{T,2} where T, which is the union of Array{T,2} for all values of T: Union{Array{Int8,2}, Array{Int16,2}, ...}.Such a type is represented by a UnionAll object, which contains a variable (T in this example, of type TypeVar), and a wrapped type (Array{T,2} in this example).Consider the following methods::f1(A::Array) = 1\nf2(A::Array{Int}) = 2\nf3(A::Array{T}) where T<:Any = 3\nf4(A::Array{Any}) = 4The signature of f3 is a UnionAll type wrapping a tuple type. All but f4 can be called with a = [1,2]; all but f2 can be called with b = Any[1,2].Let's look at these types a little more closely:julia> dump(Array)\n   UnionAll\n     var: TypeVar\n       name: Symbol T\n       lb: Core.BottomType Union{}\n       ub: Any\n     body: UnionAll\n       var: TypeVar\n         name: Symbol N\n         lb: Core.BottomType Union{}\n         ub: Any\n       body: Array{T,N} <: DenseArray{T,N}\n\nThis indicates that `Array` actually names a `UnionAll` type. There is one `UnionAll` type for\neach parameter, nested. The syntax `Array{Int,2}` is equivalent to `Array{Int}{2}`;\ninternally each `UnionAll` is instantiated with a particular variable value, one at a time,\noutermost-first. This gives a natural meaning to the omission of trailing type parameters;\n`Array{Int}` gives a type equivalent to `Array{Int,N} where N`.\n\nA `TypeVar` is not itself a type, but rather should be considered part of the structure of a\n`UnionAll` type. Type variables have lower and upper bounds on their values (in the fields\n`lb` and `ub`). The symbol `name` is purely cosmetic. Internally, `TypeVar`s are compared by\naddress, so they are defined as mutable types to ensure that \"different\" type variables can be\ndistinguished. However, by convention they should not be mutated.\n\nOne can construct `TypeVar`s manually:\njulia julia> TypeVar(:V, Signed, Real) Signed<:V<:Real\nThere are convenience versions that allow you to omit any of these arguments except the `name`\nsymbol.\n\nThe syntax `Array{T} where T<:Integer` is lowered to\n\n    let T = TypeVar(:T,Integer)\n        UnionAll(T, Array{T})\n    end\n\nso it is seldom necessary to construct a `TypeVar` manually (indeed, this is to be avoided).\n\n## Free variables\n\nThe concept of a *free* type variable is extremely important in the type system. We say that a\nvariable `V` is free in type `T` if `T` does not contain the `UnionAll` that introduces variable\n`V`. For example, the type `Array{Array{V} where V<:Integer}` has no free variables, but the\n`Array{V}` part inside of it does have a free variable, `V`.\n\nA type with free variables is, in some sense, not really a type at all. Consider the type\n`Array{Array{T}} where T`, which refers to all homogeneous arrays of arrays.\nThe inner type `Array{T}`, seen by itself, might seem to refer to any kind of array.\nHowever, every element of the outer array must have the *same* array type, so `Array{T}` cannot\nrefer to just any old array. One could say that `Array{T}` effectively \"occurs\" multiple times,\nand `T` must have the same value each \"time\".\n\nFor this reason, the function `jl_has_free_typevars` in the C API is very important. Types for\nwhich it returns true will not give meaningful answers in subtyping and other type functions.\n\n## TypeNames\n\nThe following two [`Array`](@ref) types are functionally equivalent, yet print differently:\njulia julia> TV, NV = TypeVar(:T), TypeVar(:N) (T,N)julia> Array Arrayjulia> Array{TV,NV} Array{T,N}\nThese can be distinguished by examining the `name` field of the type, which is an object of type\n`TypeName`:\njulia julia> dump(Array{Int,1}.name) TypeName   name: Symbol Array   module: Module Core   names: empty SimpleVector   wrapper: UnionAll     var: TypeVar       name: Symbol T       lb: Core.BottomType Union{}       ub: Any     body: UnionAll       var: TypeVar         name: Symbol N         lb: Core.BottomType Union{}         ub: Any       body: Array{T,N} <: DenseArray{T,N}   cache: SimpleVector     ...linearcache: SimpleVector     ...hash: Int64 -7900426068641098781   mt: MethodTable     name: Symbol Array     defs: Void nothing     cache: Void nothing     max_args: Int64 0     kwsorter: #undef     module: Module Core     : Int64 0     : Int64 0\nIn this case, the relevant field is `wrapper`, which holds a reference to the top-level type used\nto make new `Array` types.\njulia julia> pointer_from_objref(Array) Ptr{Void} @0x00007fcc7de64850julia> pointer_from_objref(Array.body.body.name.wrapper) Ptr{Void} @0x00007fcc7de64850julia> pointer_from_objref(Array{TV,NV}) Ptr{Void} @0x00007fcc80c4d930julia> pointer_from_objref(Array{TV,NV}.name.wrapper) Ptr{Void} @0x00007fcc7de64850\nThe `wrapper` field of [`Array`](@ref) points to itself, but for `Array{TV,NV}` it points back\nto the original definition of the type.\n\nWhat about the other fields? `hash` assigns an integer to each type.  To examine the `cache`\nfield, it's helpful to pick a type that is less heavily used than Array. Let's first create our\nown type:\njulia julia> type MyType{T,N} endjulia> MyType{Int,2} MyType{Int64,2}julia> MyType{Float32, 5} MyType{Float32,5}julia> MyType.body.body.name.cache svec(MyType{Float32,5},MyType{Int64,2},#undef,#undef,#undef,#undef,#undef,#undef)\n(The cache is pre-allocated to have length 8, but only the first two entries are populated.) Consequently,\nwhen you instantiate a parametric type, each concrete type gets saved in a type cache.  However,\ninstances containing free type variables are not cached.\n\n## Tuple types\n\nTuple types constitute an interesting special case.  For dispatch to work on declarations like\n`x::Tuple`, the type has to be able to accommodate any tuple.  Let's check the parameters:\njulia julia> Tuple Tuplejulia> Tuple.parameters svec(Vararg{Any,N} where N)\nUnlike other types, tuple types are covariant in their parameters, so this definition permits\n`Tuple` to match any type of tuple:\njulia julia> typeintersect(Tuple, Tuple{Int,Float64}) Tuple{Int64,Float64}julia> typeintersect(Tuple{Vararg{Any}}, Tuple{Int,Float64}) Tuple{Int64,Float64}\nHowever, if a variadic (`Vararg`) tuple type has free variables it can describe different kinds\nof tuples:\njulia julia> typeintersect(Tuple{Vararg{T} where T}, Tuple{Int,Float64}) Tuple{Int64,Float64}julia> typeintersect(Tuple{Vararg{T}} where T, Tuple{Int,Float64}) Union{}\nNotice that when `T` is free with respect to the `Tuple` type (i.e. its binding `UnionAll`\ntype is outside the `Tuple` type), only one `T` value must work over the whole type.\nTherefore a heterogeneous tuple does not match.\n\nFinally, it's worth noting that `Tuple{}` is distinct:\njulia julia> Tuple{} Tuple{}julia> Tuple{}.parameters svec()julia> typeintersect(Tuple{}, Tuple{Int}) Union{}\nWhat is the \"primary\" tuple-type?\njulia julia> pointer_from_objref(Tuple) Ptr{Void} @0x00007f5998a04370julia> pointer_from_objref(Tuple{}) Ptr{Void} @0x00007f5998a570d0julia> pointer_from_objref(Tuple.name.wrapper) Ptr{Void} @0x00007f5998a04370julia> pointer_from_objref(Tuple{}.name.wrapper) Ptr{Void} @0x00007f5998a04370\nso `Tuple == Tuple{Vararg{Any}}` is indeed the primary type.\n\n## Introduction to the internal machinery: `jltypes.c`\n\nMost operations for dealing with types are found in the files `jltypes.c` and `subtype.c`.\nA good way to start is to watch subtyping in action.\nBuild Julia with `make debug` and fire up Julia within a debugger.\n[gdb debugging tips](@ref) has some tips which may be useful.\n\nBecause the subtyping code is used heavily in the REPL itself--and hence breakpoints in this\ncode get triggered often--it will be easiest if you make the following definition:\njulia julia> function mysubtype(a,b)            ccall(:jl_breakpoint, Void, (Any,), nothing)            issubtype(a, b)        end\nand then set a breakpoint in `jl_breakpoint`.  Once this breakpoint gets triggered, you can set\nbreakpoints in other functions.\n\nAs a warm-up, try the following:\njulia mysubtype(Tuple{Int,Float64}, Tuple{Integer,Real})\nWe can make it more interesting by trying a more complex case:\njulia mysubtype(Tuple{Array{Int,2}, Int8}, Tuple{Array{T}, T} where T)\n## Subtyping and method sorting\n\nThe `type_morespecific` functions are used for imposing a partial order on functions in method\ntables (from most-to-least specific). Note that `jl_type_morespecific(a,b)` really means \"is `a`\nat least as specific as `b`?\" and not \"is `a` strictly more specific than `b`?\"\n\nIf `a` is a subtype of `b`, then it is automatically considered more specific.\nFrom there, `type_morespecific` employs some less formal rules.\nFor example, `subtype` is sensitive to the number of arguments, but `type_morespecific` may not be.\nIn particular, `Tuple{Int,AbstractFloat}` is more specific than `Tuple{Integer}`, even though it is\nnot a subtype.  (Of `Tuple{Int,AbstractFloat}` and `Tuple{Integer,Float64}`, neither is more specific\nthan the other.)  Likewise, `Tuple{Int,Vararg{Int}}` is not a subtype of `Tuple{Integer}`, but it is\nconsidered more specific. However, `morespecific` does get a bonus for length: in particular,\n`Tuple{Int,Int}` is more specific than `Tuple{Int,Vararg{Int}}`.\n\nIf you're debugging how methods get sorted, it can be convenient to define the function:\njulia type_morespecific(a, b) = ccall(:jl_type_morespecific, Cint, (Any,Any), a, b) ```which allows you to test whether tuple type a is more specific than tuple type b."
 },
 
 {
@@ -18653,7 +18629,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Julia Functions",
     "title": "Constructors",
     "category": "section",
-    "text": "A constructor call is just a call to a type. The type of most types is DataType, so the method table for DataType contains most constructor definitions. One wrinkle is the fallback definition that makes all types callable via convert:(::Type{T}){T}(args...) = convert(T, args...)::TIn this definition the function type is abstract, which is not normally supported. To make this work, all subtypes of Type (Type, TypeConstructor, Union, and DataType) currently share a method table via special arrangement."
+    "text": "A constructor call is just a call to a type. The type of most types is DataType, so the method table for DataType contains most constructor definitions. One wrinkle is the fallback definition that makes all types callable via convert:(::Type{T}){T}(args...) = convert(T, args...)::TIn this definition the function type is abstract, which is not normally supported. To make this work, all subtypes of Type (Type, UnionAll, Union, and DataType) currently share a method table via special arrangement."
 },
 
 {
