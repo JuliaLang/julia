@@ -4,7 +4,7 @@ module Serializer
 
 import Base: GMP, Bottom, unsafe_convert, uncompressed_ast, datatype_pointerfree
 import Core: svec
-using Base: ViewIndex, Slice, index_lengths
+using Base: ViewIndex, Slice, index_lengths, unwrap_unionall
 
 export serialize, deserialize, SerializationState
 
@@ -24,16 +24,15 @@ SerializationState(io::IO) = SerializationState{typeof(io)}(io)
 const TAGS = Any[
     Symbol, Int8, UInt8, Int16, UInt16, Int32, UInt32,
     Int64, UInt64, Int128, UInt128, Float32, Float64, Char, Ptr,
-    DataType, Union, TypeName,
-    Tuple, Array, Expr,
+    DataType, Union, TypeName, Tuple, Array, Expr,
     #LongSymbol, LongTuple, LongExpr,
     Symbol, Tuple, Expr,  # dummy entries, intentionally shadowed by earlier ones
     LineNumberNode, Slot, LabelNode, GotoNode,
     QuoteNode, CodeInfo, TypeVar, Core.Box, Core.MethodInstance,
     Module, #=UndefRefTag=#Symbol, Task, String, Float16,
-    SimpleVector, #=BackrefTag=#Symbol, Method, GlobalRef,
+    SimpleVector, #=BackrefTag=#Symbol, Method, GlobalRef, UnionAll,
 
-    (), Bool, Any, :Any, Bottom, :reserved21, :reserved22, Type,
+    (), Bool, Any, :Any, Bottom, Core.BottomType, :reserved22, Type,
     :Array, :TypeVar, :Box,
     :lambda, :body, :return, :call, Symbol("::"),
     :(=), :null, :gotoifnot, :A, :B, :C, :M, :N, :T, :S, :X, :Y,
@@ -50,7 +49,7 @@ const TAGS = Any[
     28, 29, 30, 31, 32
 ]
 
-const ser_version = 4 # do not make changes without bumping the version #!
+const ser_version = 5 # do not make changes without bumping the version #!
 
 const NTAGS = length(TAGS)
 
@@ -386,7 +385,8 @@ function serialize(s::AbstractSerializer, g::GlobalRef)
     writetag(s.io, GLOBALREF_TAG)
     if g.mod === Main && isdefined(g.mod, g.name) && isconst(g.mod, g.name)
         v = getfield(g.mod, g.name)
-        if isa(v, DataType) && v === v.name.primary && should_send_whole_type(s, v)
+        unw = unwrap_unionall(v)
+        if isa(unw,DataType) && v === unw.name.wrapper && should_send_whole_type(s, unw)
             # handle references to types in Main by sending the whole type.
             # needed to be able to send nested functions (#15451).
             write(s.io, UInt8(1))
@@ -410,13 +410,14 @@ end
 function serialize_typename(s::AbstractSerializer, t::TypeName)
     serialize(s, t.name)
     serialize(s, t.names)
-    serialize(s, t.primary.super)
-    serialize(s, t.primary.parameters)
-    serialize(s, t.primary.types)
-    serialize(s, isdefined(t.primary, :instance))
-    serialize(s, t.primary.abstract)
-    serialize(s, t.primary.mutable)
-    serialize(s, t.primary.ninitialized)
+    primary = unwrap_unionall(t.wrapper)
+    serialize(s, primary.super)
+    serialize(s, primary.parameters)
+    serialize(s, primary.types)
+    serialize(s, isdefined(primary, :instance))
+    serialize(s, primary.abstract)
+    serialize(s, primary.mutable)
+    serialize(s, primary.ninitialized)
     if isdefined(t, :mt)
         serialize(s, t.mt.name)
         serialize(s, collect(Base.MethodList(t.mt)))
@@ -471,7 +472,7 @@ function serialize_type_data(s, t::DataType, type_itself::Bool)
         serialize(s, mod)
     end
     if !isempty(t.parameters)
-        if (whole ? (t === t.name.primary) : (isdefined(mod,tname) && t === getfield(mod,tname)))
+        if (whole ? (t === unwrap_unionall(t.name.wrapper)) : (isdefined(mod,tname) && t === getfield(mod,tname)))
             serialize(s, svec())
         else
             serialize(s, t.parameters)
@@ -743,11 +744,6 @@ function deserialize(s::AbstractSerializer, ::Type{GlobalRef})
     end
 end
 
-function deserialize(s::AbstractSerializer, ::Type{Union})
-    types = deserialize(s)
-    Union{types...}
-end
-
 module __deserialized_types__ end
 
 function deserialize(s::AbstractSerializer, ::Type{TypeName})
@@ -789,12 +785,13 @@ function deserialize_typename(s::AbstractSerializer, number)
         tn.names = names
         # TODO: there's an unhanded cycle in the dependency graph at this point:
         # while deserializing super and/or types, we may have encountered
-        # tn.primary and throw UndefRefException before we get to this point
-        tn.primary = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Cint, Cint, Cint),
-                           tn, super, parameters, names, types,
-                           abstr, mutable, ninitialized)
-        ty = tn.primary
-        ccall(:jl_set_const, Void, (Any, Any, Any), tn.module, tn.name, ty)
+        # tn.wrapper and throw UndefRefException before we get to this point
+        ndt = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Cint, Cint, Cint),
+                    tn, super, parameters, names, types,
+                    abstr, mutable, ninitialized)
+        tn.wrapper = ndt.name.wrapper
+        ccall(:jl_set_const, Void, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
+        ty = tn.wrapper
         if has_instance && !isdefined(ty, :instance)
             # use setfield! directly to avoid `fieldtype` lowering expecting to see a Singleton object already on ty
             Core.setfield!(ty, :instance, ccall(:jl_new_struct, Any, (Any, Any...), ty))
@@ -831,14 +828,13 @@ function deserialize_datatype(s::AbstractSerializer)
     form = read(s.io, UInt8)::UInt8
     if (form&2) != 0
         tname = deserialize(s)::TypeName
-        ty = tname.primary
+        ty = tname.wrapper
     else
         name = deserialize(s)::Symbol
         mod = deserialize(s)::Module
         ty = getfield(mod,name)
     end
-    assert(isa(ty,DataType))
-    if isempty(ty.parameters)
+    if isa(ty,DataType) && isempty(ty.parameters)
         t = ty
     else
         params = deserialize(s)

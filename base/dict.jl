@@ -137,15 +137,14 @@ const AnyDict = Dict{Any,Any}
 
 Dict{K,V}(ps::Pair{K,V}...)            = Dict{K,V}(ps)
 Dict{K  }(ps::Pair{K}...,)             = Dict{K,Any}(ps)
-Dict{V  }(ps::Pair{TypeVar(:K),V}...,) = Dict{Any,V}(ps)
+Dict{V  }(ps::(Pair{K,V} where K)...,) = Dict{Any,V}(ps)
 Dict(     ps::Pair...)                 = Dict{Any,Any}(ps)
 
 function Dict(kv)
     try
-        Base.associative_with_eltype(Dict, kv, eltype(kv))
+        associative_with_eltype((K, V) -> Dict{K, V}, kv, eltype(kv))
     catch e
-        if any(x->isempty(methods(x, (typeof(kv),))), [start, next, done]) ||
-            !all(x->isa(x,Union{Tuple,Pair}),kv)
+        if !applicable(start, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
             throw(ArgumentError("Dict(kv): kv needs to be an iterator of tuples or pairs"))
         else
             rethrow(e)
@@ -155,17 +154,17 @@ end
 
 typealias TP{K,V} Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
 
-associative_with_eltype{K,V}(DT, kv, ::TP{K,V}) = DT{K,V}(kv)
-associative_with_eltype{K,V}(DT, kv::Generator, ::TP{K,V}) = DT{K,V}(kv)
-associative_with_eltype{K,V}(DT, ::Type{Pair{K,V}}) = DT{K,V}()
-associative_with_eltype(DT, ::Type) = DT()
-associative_with_eltype(DT, kv, t) = grow_to!(associative_with_eltype(DT, _default_eltype(typeof(kv))), kv)
-function associative_with_eltype(DT, kv::Generator, t)
+associative_with_eltype{K,V}(DT_apply, kv, ::TP{K,V}) = DT_apply(K, V)(kv)
+associative_with_eltype{K,V}(DT_apply, kv::Generator, ::TP{K,V}) = DT_apply(K, V)(kv)
+associative_with_eltype{K,V}(DT_apply, ::Type{Pair{K,V}}) = DT_apply(K, V)()
+associative_with_eltype(DT_apply, ::Type) = DT_apply(Any, Any)()
+associative_with_eltype{F}(DT_apply::F, kv, t) = grow_to!(associative_with_eltype(DT_apply, _default_eltype(typeof(kv))), kv)
+function associative_with_eltype{F}(DT_apply::F, kv::Generator, t)
     T = _default_eltype(typeof(kv))
-    if T <: Union{Pair,NTuple{2}} && isleaftype(T)
-        return associative_with_eltype(DT, kv, T)
+    if T <: Union{Pair, Tuple{Any, Any}} && isleaftype(T)
+        return associative_with_eltype(DT_apply, kv, T)
     end
-    return grow_to!(associative_with_eltype(DT, T), kv)
+    return grow_to!(associative_with_eltype(DT_apply, T), kv)
 end
 
 # this is a special case due to (1) allowing both Pairs and Tuples as elements,

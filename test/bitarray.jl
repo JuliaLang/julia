@@ -5,7 +5,7 @@ module BitArrayTests
 using Base.Test
 using Base: findprevnot, findnextnot
 
-tc{N}(r1::NTuple{N}, r2::NTuple{N}) = all(x->tc(x...), [zip(r1,r2)...])
+tc{N}(r1::NTuple{N,Any}, r2::NTuple{N,Any}) = all(x->tc(x...), [zip(r1,r2)...])
 tc{N}(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) = true
 tc(r1::RowVector{Bool,BitVector}, r2::Union{RowVector{Bool,BitVector},RowVector{Bool,Vector{Bool}}}) = true
 tc{T}(r1::T, r2::T) = true
