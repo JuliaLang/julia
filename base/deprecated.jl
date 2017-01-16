@@ -73,7 +73,8 @@ function depwarn(msg, funcsym)
     nothing
 end
 
-function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
+firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol) = firstcaller(bt, (funcsym,))
+function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
     # Identify the calling line
     i = 1
     while i <= length(bt)
@@ -83,7 +84,7 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
             if lkup === StackTraces.UNKNOWN
                 continue
             end
-            if lkup.func == funcsym
+            if lkup.func in funcsyms
                 @goto found
             end
         end
