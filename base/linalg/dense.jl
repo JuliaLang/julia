@@ -309,7 +309,7 @@ kron(a::AbstractVector, b::AbstractVector)=vec(kron(reshape(a,length(a),1),resha
 kron(a::AbstractMatrix, b::AbstractVector)=kron(a,reshape(b,length(b),1))
 kron(a::AbstractVector, b::AbstractMatrix)=kron(reshape(a,length(a),1),b)
 
-^(A::AbstractMatrix, p::Integer) = p < 0 ? inv(A^-p) : Base.power_by_squaring(A,p)
+^(A::AbstractMatrix, p::Integer) = p < 0 ? inv(A)^-p : Base.power_by_squaring(A,p)
 
 function ^(A::AbstractMatrix, p::Number)
     if isinteger(p)
