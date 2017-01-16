@@ -473,6 +473,8 @@ function test_old()
     # TODO: note that NTuple now means "tuples of all the same type"
     #@test issubtype(Array{Tuple}, Array{NTuple})
     @test issub_strict(NTuple, Tuple)
+    @test issub_strict(NTuple, Tuple{Vararg})
+    @test isequal_type(Tuple, Tuple{Vararg})
     #@test issubtype(Array{Tuple{Vararg{Any}}}, Array{NTuple})
     #@test issubtype(Array{Tuple{Vararg}}, Array{NTuple})
     @test !issubtype(Type{Tuple{Void}}, Tuple{Type{Void}})

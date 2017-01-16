@@ -840,6 +840,30 @@ static jl_value_t *extract_wrapper(jl_value_t *t)
     return NULL;
 }
 
+// convert `Vararg{X, Y} where T` to `Vararg{X where T, Y}` where T doesn't occur free in Y
+static jl_value_t *normalize_vararg(jl_value_t *va)
+{
+    assert(jl_is_vararg_type(va));
+    if (!jl_is_unionall(va)) return va;
+    jl_value_t *body=NULL;
+    JL_GC_PUSH2(&va, &body);
+    jl_unionall_t *ua = (jl_unionall_t*)va;
+    body = normalize_vararg(ua->body);
+    jl_value_t *unw = jl_unwrap_unionall(body);
+    jl_value_t *va0 = jl_tparam0(unw), *va1 = jl_tparam1(unw);
+    if (jl_has_typevar(va1, ua->var)) {
+        if (body != ua->body)
+            va = jl_type_unionall(ua->var, body);
+    }
+    else {
+        va = jl_type_unionall(ua->var, va0);
+        va = jl_wrap_vararg(va, va1);
+        va = jl_rewrap_unionall(va, body);
+    }
+    JL_GC_POP();
+    return va;
+}
+
 static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
                                  int cacheable, jl_typestack_t *stack, jl_typeenv_t *env)
 {
@@ -871,35 +895,67 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
         return stack_lkup;
     }
 
+    if (!istuple) {
+        if (jl_is_vararg_type((jl_value_t*)dt) && ntp == 2) {
+            if (!jl_is_long(iparams[1]) && !jl_is_typevar(iparams[1])) {
+                jl_type_error_rt("apply_type", "Vararg count", (jl_value_t*)jl_long_type, iparams[1]);
+            }
+        }
+        // check parameters against bounds in type definition
+        check_datatype_parameters(tn, iparams, ntp);
+    }
+    else if (ntp == 0 && jl_emptytuple != NULL) {
+        // empty tuple type case
+        if (cacheable) JL_UNLOCK(&typecache_lock); // Might GC
+        return jl_typeof(jl_emptytuple);
+    }
+
+    jl_datatype_t *ndt = NULL;
+    JL_GC_PUSH2(&p, &ndt);
+
     jl_value_t *last = iparams[ntp - 1];
     if (istuple && ntp > 0 && jl_is_vararg_type(last)) {
         // normalize Tuple{..., Vararg{Int, 3}} to Tuple{..., Int, Int, Int}
         jl_value_t *va = jl_unwrap_unionall(last);
+        jl_value_t *va0 = jl_tparam0(va), *va1 = jl_tparam1(va);
         // return same `Tuple` object for types equal to it
-        if (ntp == 1 && jl_tparam0(va) == (jl_value_t*)jl_any_type &&
-            jl_is_unionall(last) && jl_tparam1(va) == (jl_value_t*)((jl_unionall_t*)last)->var) {
+        if (ntp == 1 &&
+            (last == (jl_value_t*)jl_vararg_type ||  // Tuple{Vararg} == Tuple
+             (va0 == (jl_value_t*)jl_any_type &&
+              jl_is_unionall(last) && va1 == (jl_value_t*)((jl_unionall_t*)last)->var))) {
             if (cacheable) JL_UNLOCK(&typecache_lock); // Might GC
+            JL_GC_POP();
             return (jl_value_t*)jl_anytuple_type;
         }
-        if (jl_is_long(jl_tparam1(va))) {
-            ssize_t nt = jl_unbox_long(jl_tparam1(va));
+        {
+            JL_GC_PUSH1(&last);
+            jl_value_t *last2 = normalize_vararg(last);
+            if (last2 != last) {
+                last = last2;
+                p = jl_alloc_svec(ntp);
+                for (size_t i = 0; i < ntp-1; i++)
+                    jl_svecset(p, i, iparams[i]);
+                jl_svecset(p, ntp-1, last);
+            }
+            JL_GC_POP();
+        }
+        if (jl_is_long(va1)) {
+            ssize_t nt = jl_unbox_long(va1);
             if (nt < 0)
                 jl_errorf("apply_type: Vararg length N is negative: %zd", nt);
-            va = jl_tparam0(va);
-            if (nt == 0 || !jl_has_free_typevars(va)) {
+            if (nt == 0 || !jl_has_free_typevars(va0)) {
                 if (cacheable) JL_UNLOCK(&typecache_lock); // Might GC
-                if (ntp == 1)
-                    return jl_tupletype_fill(nt, va);
+                if (ntp == 1) {
+                    JL_GC_POP();
+                    return jl_tupletype_fill(nt, va0);
+                }
                 size_t i, l;
                 p = jl_alloc_svec(ntp - 1 + nt);
-                for (i = 0, l = ntp - 1; i < l; i++) {
+                for (i = 0, l = ntp - 1; i < l; i++)
                     jl_svecset(p, i, iparams[i]);
-                }
                 l = ntp - 1 + nt;
-                for (; i < l; i++) {
-                    jl_svecset(p, i, va);
-                }
-                JL_GC_PUSH1(&p);
+                for (; i < l; i++)
+                    jl_svecset(p, i, va0);
                 jl_value_t *ndt = (jl_value_t*)jl_apply_tuple_type(p);
                 JL_GC_POP();
                 return ndt;
@@ -907,30 +963,10 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
         }
     }
 
-    if (!istuple) {
-        if (jl_is_vararg_type((jl_value_t*)dt) && ntp == 2) {
-            if (!jl_is_long(iparams[1]) && !jl_is_typevar(iparams[1])) {
-                jl_type_error_rt("apply_type", "Vararg count", (jl_value_t*)jl_long_type, iparams[1]);
-            }
-        }
-    }
-    else if (ntp == 0 && jl_emptytuple != NULL) {
-        if (cacheable) JL_UNLOCK(&typecache_lock); // Might GC
-        return jl_typeof(jl_emptytuple);
-    }
-
-    jl_datatype_t *ndt = NULL;
-    jl_svec_t *ftypes;
-
-    // check parameters against bounds in type definition
-    if (!istuple)
-        check_datatype_parameters(tn, iparams, ntp);
-
     // move array of instantiated parameters to heap; we need to keep it
-    JL_GC_PUSH2(&p, &ndt);
     if (p == NULL) {
         p = jl_alloc_svec_uninit(ntp);
-        for(unsigned i=0; i < ntp; i++)
+        for(size_t i=0; i < ntp; i++)
             jl_svecset(p, i, iparams[i]);
     }
 
@@ -967,7 +1003,7 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
         ndt->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)dt->super, env, stack, 1);
         jl_gc_wb(ndt, ndt->super);
     }
-    ftypes = dt->types;
+    jl_svec_t *ftypes = dt->types;
     if (!istuple && ndt->name->names == jl_emptysvec) {
         assert(ftypes == NULL || ftypes == jl_emptysvec);
         ndt->size = dt->size;
