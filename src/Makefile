@@ -40,7 +40,7 @@ SRCS := \
 	alloc dlload sys init task array dump toplevel jl_uv \
 	simplevector APInt-C runtime_intrinsics runtime_ccall \
 	threadgroup threading stackwalk gc gc-debug gc-pages \
-	jlapi signal-handling safepoint jloptions timing
+	jlapi signal-handling safepoint jloptions timing subtype
 
 ifeq ($(USEMSVC), 1)
 SRCS += getopt

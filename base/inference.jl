@@ -4,7 +4,7 @@ import Core: _apply, svec, apply_type, Builtin, IntrinsicFunction, MethodInstanc
 
 #### parameters limiting potentially-infinite types ####
 const MAX_TYPEUNION_LEN = 3
-const MAX_TYPE_DEPTH = 7
+const MAX_TYPE_DEPTH = 8
 
 immutable InferenceParams
     world::UInt
@@ -117,7 +117,13 @@ type InferenceState
 
         if !toplevel && isempty(linfo.sparam_vals) && !isempty(linfo.def.sparam_syms)
             # linfo is unspecialized
-            sp = svec(Any[ TypeVar(sym, Any, true) for sym in linfo.def.sparam_syms ]...)
+            sp = Any[]
+            sig = linfo.def.sig
+            while isa(sig,UnionAll)
+                push!(sp, sig.var)
+                sig = sig.body
+            end
+            sp = svec(sp...)
         else
             sp = linfo.sparam_vals
         end
@@ -132,18 +138,21 @@ type InferenceState
         s_types[1] = Any[ VarState(Bottom, true) for i = 1:nslots ]
         s_edges = Any[ () for i = 1:n ]
 
-        atypes = linfo.specTypes
+        atypes = unwrap_unionall(linfo.specTypes)
         nargs = toplevel ? 0 : linfo.def.nargs
         la = nargs
         if la > 0
             if linfo.def.isva
-                if atypes === Tuple
+                if atypes == Tuple
                     if la > 1
                         atypes = Tuple{Any[Any for i = 1:(la - 1)]..., Tuple.parameters[1]}
                     end
                     s_types[1][la] = VarState(Tuple, false)
                 else
-                    s_types[1][la] = VarState(tuple_tfunc(limit_tuple_depth(params, tupletype_tail(atypes, la))), false)
+                    s_types[1][la] = VarState(rewrap_unionall(tuple_tfunc(limit_tuple_depth(params,
+                                                                                            tupletype_tail(atypes, la))),
+                                                              linfo.specTypes),
+                                              false)
                 end
                 la -= 1
             end
@@ -151,33 +160,30 @@ type InferenceState
 
         laty = length(atypes.parameters)
         if laty > 0
-            lastatype = atypes.parameters[laty]
-            if isvarargtype(lastatype)
-                lastatype = lastatype.parameters[1]
-                laty -= 1
-            end
-            if isa(lastatype, TypeVar)
-                lastatype = lastatype.ub
-            end
-            if isa(lastatype, DataType) && isdefined(lastatype, :instance)
-                # replace singleton types with their equivalent Const object
-                lastatype = Const(lastatype.instance)
-            end
             if laty > la
                 laty = la
             end
+            local lastatype
+            atail = laty
             for i = 1:laty
                 atyp = atypes.parameters[i]
+                if i == laty && isvarargtype(atyp)
+                    atyp = unwrap_unionall(atyp).parameters[1]
+                    atail -= 1
+                end
                 if isa(atyp, TypeVar)
                     atyp = atyp.ub
                 end
                 if isa(atyp, DataType) && isdefined(atyp, :instance)
                     # replace singleton types with their equivalent Const object
                     atyp = Const(atyp.instance)
+                else
+                    atyp = rewrap_unionall(atyp, linfo.specTypes)
                 end
+                i == laty && (lastatype = atyp)
                 s_types[1][i] = VarState(atyp, false)
             end
-            for i = (laty + 1):la
+            for i = (atail + 1):la
                 s_types[1][i] = VarState(lastatype, false)
             end
         else
@@ -287,7 +293,8 @@ function istopfunction(topmod, f::ANY, sym)
     return false
 end
 
-isknownlength(t::DataType) = !isvatuple(t) || (length(t.parameters) == 1 && isa(t.parameters[1].parameters[2],Int))
+isknownlength(t::DataType) = !isvatuple(t) ||
+    (length(t.parameters) > 0 && isa(unwrap_unionall(t.parameters[end]).parameters[2],Int))
 
 # t[n:end]
 tupletype_tail(t::ANY, n) = Tuple{t.parameters[n:end]...}
@@ -297,12 +304,11 @@ tupletype_tail(t::ANY, n) = Tuple{t.parameters[n:end]...}
 
 cmp_tfunc = (x::ANY, y::ANY) -> Bool
 
-isType(t::ANY) = isa(t,DataType) && (t::DataType).name === Type.name
+const _Type_name = Type.body.name
+isType(t::ANY) = isa(t,DataType) && (t::DataType).name === _Type_name
 
-# true if Type is inlineable as constant
-isconstType(t::ANY, b::Bool) =
-    isType(t) && !has_typevars(t.parameters[1],b) &&
-    !issubtype(Type{Tuple{Vararg}}, t)  # work around inference bug #18450
+# true if Type is inlineable as constant (is a singleton)
+isconstType(t::ANY) = isType(t) && (isleaftype(t.parameters[1]) || t.parameters[1] === Union{})
 
 const IInf = typemax(Int) # integer infinity
 const n_ifunc = reinterpret(Int32,arraylen)+1
@@ -317,7 +323,19 @@ function add_tfunc(f::Function, minarg::Int, maxarg::Int, tfunc::ANY)
     push!(t_ffunc_val, (minarg, maxarg, tfunc))
 end
 add_tfunc(throw, 1, 1, x->Bottom)
-add_tfunc(box, 2, 2, (t,v)->(isType(t) ? t.parameters[1] : Any))
+# the inverse of typeof_tfunc
+function instanceof_tfunc(t::ANY)
+    # TODO improve
+    if isa(t, Const)
+        if isa(t.val, Type)
+            return t.val
+        end
+    elseif isType(t)
+        return t.parameters[1]
+    end
+    return Any
+end
+add_tfunc(box, 2, 2, (t,v)->instanceof_tfunc(t))
 add_tfunc(eq_int, 2, 2, cmp_tfunc)
 add_tfunc(ne_int, 2, 2, cmp_tfunc)
 add_tfunc(slt_int, 2, 2, cmp_tfunc)
@@ -343,13 +361,11 @@ add_tfunc(checked_usub_int, 2, 2, chk_tfunc)
 add_tfunc(checked_smul_int, 2, 2, chk_tfunc)
 add_tfunc(checked_umul_int, 2, 2, chk_tfunc)
 
+const _Ref_name = Ref.body.name
 add_tfunc(Core.Intrinsics.ccall, 3, IInf,
     function(fptr::ANY, rt::ANY, at::ANY, a...)
-        if !isType(rt)
-            return Any
-        end
-        t = rt.parameters[1]
-        if isa(t,DataType) && (t::DataType).name === Ref.name
+        t = instanceof_tfunc(rt)
+        if isa(t, DataType) && (t::DataType).name === _Ref_name
             t = t.parameters[1]
             if t === Any
                 return Union{} # a return type of Box{Any} is invalid
@@ -359,10 +375,11 @@ add_tfunc(Core.Intrinsics.ccall, 3, IInf,
         return t
     end)
 add_tfunc(Core.Intrinsics.llvmcall, 3, IInf,
-    (fptr::ANY, rt::ANY, at::ANY, a...)->(isType(rt) ? rt.parameters[1] : Any))
-add_tfunc(Core.Intrinsics.cglobal, 1, 2,
-    (fptr::ANY, t::ANY...)->(isempty(t) ? Ptr{Void} :
-                   isType(t[1]) ? Ptr{t[1].parameters[1]} : Ptr))
+    (fptr::ANY, rt::ANY, at::ANY, a...) -> instanceof_tfunc(rt))
+cglobal_tfunc(fptr::ANY) = Ptr{Void}
+cglobal_tfunc(fptr::ANY, t::ANY) = (isType(t) ? Ptr{t.parameters[1]} : Ptr)
+cglobal_tfunc(fptr::ANY, t::Const) = (isa(t.val, Type) ? Ptr{t.val} : Ptr)
+add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc)
 add_tfunc(Core.Intrinsics.select_value, 3, 3,
     function (cnd::ANY, x::ANY, y::ANY)
         if isa(cnd, Const)
@@ -379,14 +396,12 @@ add_tfunc(Core.Intrinsics.select_value, 3, 3,
     end)
 add_tfunc(===, 2, 2,
     function (x::ANY, y::ANY)
-        if isa(x,Const) && isa(y,Const)
-            return Const(x.val===y.val)
-        elseif isType(x) && isType(y) && isleaftype(x) && isleaftype(y)
-            return Const(x.parameters[1]===y.parameters[1])
+        if isa(x, Const) && isa(y, Const)
+            return Const(x.val === y.val)
         elseif typeintersect(widenconst(x), widenconst(y)) === Bottom
             return Const(false)
-        elseif (isa(x,Const) && y === typeof(x.val) && isdefined(y,:instance)) ||
-               (isa(y,Const) && x === typeof(y.val) && isdefined(x,:instance))
+        elseif (isa(x, Const) && y === typeof(x.val) && isdefined(y, :instance)) ||
+               (isa(y, Const) && x === typeof(y.val) && isdefined(x, :instance))
             return Const(true)
         else
             return Bool
@@ -411,56 +426,68 @@ add_tfunc(arraysize, 2, 2, (a::ANY, d::ANY)->Int)
 add_tfunc(pointerref, 3, 3,
           function (a::ANY, i::ANY, align::ANY)
               a = widenconst(a)
-              return isa(a,DataType) && a<:Ptr && isa(a.parameters[1],Union{Type,TypeVar}) ? a.parameters[1] : Any
+              if a <: Ptr
+                  if isa(a,DataType) && isa(a.parameters[1],Type)
+                      return a.parameters[1]
+                  elseif isa(a,UnionAll) && !has_free_typevars(a)
+                      unw = unwrap_unionall(a)
+                      if isa(unw,DataType)
+                          return rewrap_unionall(unw.parameters[1], a)
+                      end
+                  end
+              end
+              return Any
           end)
 add_tfunc(pointerset, 4, 4, (a::ANY, v::ANY, i::ANY, align::ANY) -> a)
 
 function typeof_tfunc(t::ANY)
-    return if isa(t,Const)
-        Type{typeof(t.val)}
+    if isa(t, Const)
+        return Const(typeof(t.val))
     elseif isType(t)
-        t = t.parameters[1]
-        if isa(t,TypeVar)
-            DataType
+        tp = t.parameters[1]
+        if !isleaftype(tp)
+            return DataType # typeof(Kind::Type)::DataType
         else
-            Type{typeof(t)}
+            return Const(typeof(tp)) # XXX: this is not necessarily true
         end
-    elseif isa(t,DataType)
+    elseif isa(t, DataType)
         if isleaftype(t) || isvarargtype(t)
-            Type{t}
+            return Const(t)
         elseif t === Any
-            DataType
+            return DataType
         else
-            Type{TypeVar(:_,t)}
+            return Type{_} where _<:t
         end
-    elseif isa(t,Union)
-        Union{map(typeof_tfunc, t.types)...}
-    elseif isa(t,TypeVar) && !(Any <: t.ub)
-        Type{t}
+    elseif isa(t, Union)
+        a = widenconst(typeof_tfunc(t.a))
+        b = widenconst(typeof_tfunc(t.b))
+        return Union{a, b}
+    elseif isa(t, TypeVar) && !(Any <: t.ub)
+        return typeof_tfunc(t.ub)
     else
-        DataType
+        return DataType # typeof(anything)::DataType
     end
 end
 add_tfunc(typeof, 1, 1, typeof_tfunc)
 add_tfunc(typeassert, 2, 2,
           function (v::ANY, t::ANY)
-              if isType(t)
-                  if isa(v,Const)
-                      if isleaftype(t) && !isa(v.val, t.parameters[1])
-                          return Bottom
-                      end
-                      return v
+              t = instanceof_tfunc(t)
+              t === Any && return v
+              if isa(v, Const)
+                  if !has_free_typevars(t) && !isa(v.val, t)
+                      return Bottom
                   end
-                  return typeintersect(v, t.parameters[1])
+                  return v
               end
-              return v
+              return typeintersect(v, t)
           end)
 add_tfunc(isa, 2, 2,
           function (v::ANY, t::ANY)
-              if isType(t) && isleaftype(t)
-                  if v ⊑ t.parameters[1]
+              t = instanceof_tfunc(t)
+              if t !== Any && !has_free_typevars(t)
+                  if v ⊑ t
                       return Const(true)
-                  elseif isa(v,Const) || isleaftype(v)
+                  elseif isa(v, Const) || isleaftype(v)
                       return Const(false)
                   end
               end
@@ -468,170 +495,193 @@ add_tfunc(isa, 2, 2,
           end)
 add_tfunc(issubtype, 2, 2,
           function (a::ANY, b::ANY)
-              if isType(a) && isType(b) && isleaftype(a) && isleaftype(b)
-                  return Const(issubtype(a.parameters[1], b.parameters[1]))
+              a = instanceof_tfunc(a)
+              b = instanceof_tfunc(b)
+              if a !== Any && b !== Any
+                  if !has_free_typevars(a) && !has_free_typevars(b)
+                      return Const(issubtype(a, b))
+                  end
               end
               return Bool
           end)
 
 function type_depth(t::ANY)
-    if isa(t, Union)
-        t === Bottom && return 0
-        return maximum(type_depth, t.types) + 1
+    if t === Bottom
+        return 0
+    elseif isa(t, Union)
+        return max(type_depth(t.a), type_depth(t.b)) + 1
     elseif isa(t, DataType)
         return (t::DataType).depth
+    elseif isa(t, UnionAll)
+        if t.var.ub === Any
+            return type_depth(t.body)
+        end
+        return max(type_depth(t.var.ub)+1, type_depth(t.body))
     end
     return 0
 end
 
-function limit_type_depth(t::ANY, d::Int, cov::Bool, vars::Vector{Any})
-    if isa(t,TypeVar) || isa(t,TypeConstructor)
-        return t
-    end
-    inexact = !cov && d > MAX_TYPE_DEPTH
+function limit_type_depth(t::ANY, d::Int, cov::Bool=true, var::Union{Void,TypeVar}=nothing)
     if isa(t,Union)
-        t === Bottom && return t
         if d > MAX_TYPE_DEPTH
-            R = Any
-        else
-            R = Union{map(x->limit_type_depth(x, d+1, cov, vars), t.types)...}
+            return Any
         end
-    elseif isa(t,DataType)
-        P = t.parameters
-        isempty(P) && return t
-        if d > MAX_TYPE_DEPTH
-            R = t.name.primary
-        else
-            stillcov = cov && (t.name === Tuple.name)
-            Q = map(x->limit_type_depth(x, d+1, stillcov, vars), P)
-            if !cov && _any(p->contains_is(vars,p), Q)
-                R = t.name.primary
-                inexact = true
-            else
-                R = t.name.primary{Q...}
-            end
+        return Union{map(x->limit_type_depth(x, d+1, cov, var), (t.a,t.b))...}
+    elseif isa(t,UnionAll)
+        v = t.var
+        if v.ub === Any
+            return UnionAll(t.var, limit_type_depth(t.body, d, cov, var))
         end
-    else
+        ub = limit_type_depth(v.ub, d+1, true, nothing)
+        v2 = TypeVar(v.name, v.lb, ub)
+        return UnionAll(v2, limit_type_depth(t{v2}, d, cov, var))
+    elseif !isa(t,DataType)
         return t
     end
-    if inexact && (!cov || !isvarargtype(R))
-        R = TypeVar(:_,R)
-        push!(vars, R)
+    P = t.parameters
+    isempty(P) && return t
+    if d > MAX_TYPE_DEPTH
+        cov && return t.name.wrapper
+        # TODO mutating a TypeVar is not great style
+        var.ub = t.name.wrapper
+        return var
     end
-    return R
+    stillcov = cov && (t.name === Tuple.name)
+    if cov && !stillcov
+        var = TypeVar(:_)
+    end
+    Q = map(x->limit_type_depth(x, d+1, stillcov, var), P)
+    R = t.name.wrapper{Q...}
+    return (cov && !stillcov) ? UnionAll(var, R) : R
 end
 
+const DataType_parameters_fieldindex = fieldindex(DataType, :parameters)
+const DataType_types_fieldindex = fieldindex(DataType, :types)
+const DataType_super_fieldindex = fieldindex(DataType, :super)
+
 # returns (type, isexact)
-function getfield_tfunc(s0::ANY, name)
-    if isa(s0, TypeVar)
-        s0 = s0.ub
+function getfield_tfunc(s00::ANY, name)
+    if isa(s00, TypeVar)
+        s00 = s00.ub
     end
-    if isa(s0, TypeConstructor)
-        s0 = s0.body
-    end
-    s = s0
+    s = unwrap_unionall(s00)
     if isType(s)
-        s = typeof(s.parameters[1])
-        if s === TypeVar
-            return Any, false
+        p1 = s.parameters[1]
+        if !isleaftype(p1)
+            return Any
         end
+        s = DataType # typeof(p1)
+    elseif isa(s,Union)
+        return rewrap_unionall(tmerge(getfield_tfunc(s.a, name), getfield_tfunc(s.b, name)),
+                               s00)
     elseif isa(s,Const)
-        if isa(s.val, Module) && isa(name, Const) && isa(name.val, Symbol)
-            return abstract_eval_global(s.val, name.val), true
-        end
-        s = typeof(s.val)
-    end
-    if isa(s,Union)
-        return reduce(tmerge, Bottom, map(t->getfield_tfunc(t, name)[1], s.types)), false
-    end
-    if isa(s,DataType)
-        if s.abstract
-            return Any, false
-        end
-        if s <: Tuple && name ⊑ Symbol
-            return Bottom, true
-        end
-    end
-    if isa(name,Const) && isa(name.val,Symbol)
-        fld = name.val
-        if isa(s0,Const) && isa(s0.val,Module) && isdefined(s0.val,fld) && isconst(s0.val,fld)
-            return abstract_eval_constant(getfield(s0.val,fld)), true
-        end
-        if s <: Module
-            return Any, false
-        end
-        if isType(s0)
-            sp = s0.parameters[1]
-            if isa(sp,DataType)
-                if fld === :parameters
-                    return Const(sp.parameters), true
-                elseif fld === :types
-                    return Const(sp.types), true
-                elseif fld === :super
-                    return Type{sp.super}, isleaftype(s)
+        sv = s.val
+        if isa(name, Const)
+            nv = name.val
+            if isa(sv, UnionAll)
+                if nv === :var || nv === 1
+                    return Const(sv.var)
+                elseif nv === :body || nv === 2
+                    return Const(sv.body)
                 end
             end
-        end
-        snames = s.name.names
-        for i = 1:length(snames)
-            if snames[i] === fld
-                R = s.types[i]
-                if isempty(s.parameters)
-                    return R, true
-                else
-                    # conservatively limit the type depth here,
-                    # since the UnionAll type bound is otherwise incorrect
-                    # in the current type system
-                    typ = limit_type_depth(R, 0, true,
-                                           filter!(x->isa(x,TypeVar), Any[s.parameters...]))
-                    return typ, isleaftype(s) && isa(R, Type) && typeof(R) === typeof(typ) && typeseq(R, typ)
-                end
+            if isa(sv, Module) && isa(nv, Symbol)
+                return abstract_eval_global(sv, nv)
+            end
+            if (isa(sv, DataType) || isimmutable(sv)) && isdefined(sv, nv)
+                return abstract_eval_constant(getfield(sv, nv))
             end
         end
-        return Bottom, true
-    elseif isa(name,Const) && isa(name.val,Int)
-        if s <: Module
-            return Bottom, true
+        s = typeof(sv)
+    end
+    if !isa(s,DataType) || s.abstract
+        return Any
+    end
+    if s <: Tuple && name ⊑ Symbol
+        return Bottom
+    end
+    if s <: Module
+        if name ⊑ Int
+            return Bottom
         end
-        i::Int = name.val
-        nf = s.types.length
-        if isvatuple(s) && i >= nf
-            return s.types[nf].parameters[1], false
+        return Any
+    end
+    if isempty(s.types)
+        return Bottom
+    end
+    if !isa(name,Const)
+        if !(Int <: name || Symbol <: name)
+            return Bottom
         end
-        if i < 1 || i > nf
-            return Bottom, true
+        if length(s.types) == 1
+            return rewrap_unionall(unwrapva(s.types[1]), s00)
         end
-        return s.types[i], false
-    elseif isempty(s.types)
-        return Bottom, true
-    elseif length(s.types) == 1 && isempty(s.parameters)
-        return s.types[1], true
-    else
-        R = reduce(tmerge, Bottom, map(unwrapva, s.types)) #=Union{s.types...}=#
-        alleq = isa(R, Type) && typeof(R) === typeof(s.types[1]) && typeseq(R, s.types[1])
+        # union together types of all fields
+        R = reduce(tmerge, Bottom, map(t->rewrap_unionall(unwrapva(t),s00), s.types))
         # do the same limiting as the known-symbol case to preserve type-monotonicity
         if isempty(s.parameters)
-            return R, alleq
-        else
-            typ = limit_type_depth(R, 0, true,
-                                   filter!(x->isa(x,TypeVar), Any[s.parameters...]))
-            return typ, alleq && isleaftype(s) && typeof(R) === typeof(typ) && typeseq(R, typ)
+            return R
         end
+        return limit_type_depth(R, 0)
     end
+    fld = name.val
+    if isa(fld,Symbol)
+        fld = fieldindex(s, fld, false)
+    end
+    if !isa(fld,Int)
+        return Bottom
+    end
+    nf = length(s.types)
+    if s <: Tuple && fld >= nf && isvarargtype(s.types[nf])
+        return rewrap_unionall(unwrapva(s.types[nf]), s00)
+    end
+    if fld < 1 || fld > nf
+        return Bottom
+    end
+    if isType(s00) && isleaftype(s00.parameters[1])
+        sp = s00.parameters[1]
+    elseif isa(s00, Const) && isa(s00.val, DataType)
+        sp = s00.val
+    else
+        sp = nothing
+    end
+    if (sp !== nothing &&
+        (fld == DataType_parameters_fieldindex ||
+         fld == DataType_types_fieldindex ||
+         fld == DataType_super_fieldindex))
+        return Const(getfield(sp, fld))
+    end
+    R = s.types[fld]
+    if isempty(s.parameters)
+        return R
+    end
+    # TODO jb/subtype is this still necessary?
+    # conservatively limit the type depth here,
+    # since the UnionAll type bound is otherwise incorrect
+    # in the current type system
+    return rewrap_unionall(limit_type_depth(R, 0), s00)
 end
-add_tfunc(getfield, 2, 2, (s::ANY, name::ANY) -> getfield_tfunc(s, name)[1])
+add_tfunc(getfield, 2, 2, (s::ANY, name::ANY) -> getfield_tfunc(s, name))
 add_tfunc(setfield!, 3, 3, (o::ANY, f::ANY, v::ANY) -> v)
 function fieldtype_tfunc(s::ANY, name::ANY)
-    if isType(s)
+    if isa(s, Const)
+        s = s.val
+    elseif isType(s)
         s = s.parameters[1]
     else
         return Type
     end
-    t, exact = getfield_tfunc(s, name)
+    t = getfield_tfunc(s, name)
     if t === Bottom
         return t
+    elseif isa(t, Const)
+        return Const(typeof(t.val))
+    elseif isleaftype(t)
+        return Const(t)
+    elseif isvarargtype(t)
+        return Type{t}
     end
-    return Type{exact || isleaftype(t) || isa(t,TypeVar) || isvarargtype(t) ? t : TypeVar(:_, t)}
+    return Type{_} where _<:t
 end
 add_tfunc(fieldtype, 2, 2, fieldtype_tfunc)
 
@@ -645,71 +695,88 @@ function valid_tparam(x::ANY)
     return isa(x,Int) || isa(x,Symbol) || isa(x,Bool) || (!isa(x,Type) && isbits(x))
 end
 
-has_typevars(t::ANY, all=false) = ccall(:jl_has_typevars_, Cint, (Any,Cint), t, all)!=0
+has_free_typevars(t::ANY) = ccall(:jl_has_free_typevars, Cint, (Any,), t)!=0
 
 # TODO: handle e.g. apply_type(T, R::Union{Type{Int32},Type{Float64}})
-function apply_type_tfunc(args...)
-    if !isType(args[1])
+function apply_type_tfunc(headtypetype::ANY, args::ANY...)
+    if isa(headtypetype, Const)
+        headtype = headtypetype.val
+    elseif isType(headtypetype) && isleaftype(headtypetype.parameters[1])
+        headtype = headtypetype.parameters[1]
+    else
         return Any
-    end
-    headtype = args[1].parameters[1]
-    if isa(headtype,Union) || isa(headtype,TypeVar)
-        return args[1]
     end
     largs = length(args)
     if headtype === Union
-        largs == 1 && return Type{Bottom}
-        largs == 2 && return args[2]
-        for i = 2:largs
-            isType(args[i]) || return Any
+        largs == 0 && return Const(Bottom)
+        largs == 1 && return args[1]
+        for i = 1:largs
+            ai = args[i]
+            if !isa(ai, Const) || !isa(ai.val, Type)
+                if !isType(ai)
+                    return Any
+                end
+            end
         end
         ty = Union{}
-        for i = 2:largs
-            ty = Union{ty, args[i].parameters[1]}
+        allconst = true
+        for i = 1:largs
+            ai = args[i]
+            if isType(ai)
+                aty = ai.parameters[1]
+                isleaftype(aty) || (allconst = false)
+            else
+                aty = (ai::Const).val
+            end
+            ty = Union{ty, aty}
         end
-        return Type{ty}
-    elseif isa(headtype, Union)
+        return allconst ? Const(ty) : Type{ty}
+    end
+    istuple = (headtype == Tuple)
+    if !istuple && !isa(headtype, UnionAll)
+        # TODO: return `Bottom` for trying to apply a non-UnionAll
         return Any
     end
-    istuple = (headtype === Tuple)
     uncertain = false
     tparams = Any[]
-    for i=2:largs
+    for i = 1:largs
         ai = args[i]
         if isType(ai)
             aip1 = ai.parameters[1]
-            uncertain |= has_typevars(aip1)
+            uncertain |= has_free_typevars(aip1)
             push!(tparams, aip1)
-        elseif isa(ai, Const) && valid_tparam(ai.val)
+        elseif isa(ai, Const) && (isa(ai.val, Type) || valid_tparam(ai.val))
             push!(tparams, ai.val)
         else
-            if !istuple && i-1 > length(headtype.parameters)
-                # too many parameters for type
-                return Bottom
-            end
+            # TODO: return `Bottom` for trying to apply a non-UnionAll
+            #if !istuple && i-1 > length(headtype.parameters)
+            #    # too many parameters for type
+            #    return Bottom
+            #end
             uncertain = true
             if istuple
                 push!(tparams, Any)
             else
-                push!(tparams, headtype.parameters[i-1])
+                # TODO: use rewrap_unionall to skip only the unknown parameters
+                #push!(tparams, headtype.parameters[i-1])
+                break
             end
         end
     end
     local appl
-    # good, all arguments understood
     try
         appl = apply_type(headtype, tparams...)
-    catch
+    catch ex
         # type instantiation might fail if one of the type parameters
         # doesn't match, which could happen if a type estimate is too coarse
         appl = headtype
         uncertain = true
     end
-    !uncertain && return Type{appl}
+    !uncertain && return Const(appl)
     if type_too_complex(appl,0)
-        return Type{TypeVar(:_,headtype)}
+        return Type{_} where _<:headtype
     end
-    !(isa(appl,TypeVar) || isvarargtype(appl)) ? Type{TypeVar(:_,appl)} : Type{appl}
+    !isa(appl,TypeVar) ? (Type{_} where _<:appl) : Type{appl}
 end
 add_tfunc(apply_type, 1, IInf, apply_type_tfunc)
 
@@ -736,15 +803,15 @@ function invoke_tfunc(f::ANY, types::ANY, argtype::ANY, sv::InferenceState)
         return Any
     end
     meth = entry.func
-    (ti, env) = ccall(:jl_match_method, Ref{SimpleVector}, (Any, Any, Any),
-                      argtype, meth.sig, meth.tvars)
+    (ti, env) = ccall(:jl_match_method, Ref{SimpleVector}, (Any, Any),
+                      argtype, meth.sig)
     return typeinf_edge(meth::Method, ti, env, sv)
 end
 
 function tuple_tfunc(argtype::ANY)
     if isa(argtype, DataType) && argtype.name === Tuple.name
-        p = map(x->(isType(x) && !isa(x.parameters[1], TypeVar) ? typeof(x.parameters[1]) : x),
-                argtype.parameters)
+        p = Any[ isType(x) && !isa(x.parameters[1], TypeVar) ? typeof(x.parameters[1]) : x
+                 for x in argtype.parameters ]
         t = Tuple{p...}
         # replace a singleton type with its equivalent Const object
         isdefined(t, :instance) && return Const(t.instance)
@@ -770,7 +837,7 @@ function builtin_tfunction(f::ANY, argtypes::Array{Any,1}, sv::InferenceState)
         end
         a1 = argtypes[1]
         if isvarargtype(a1)
-            return a1.parameters[1]
+            return unwrap_unionall(a1).parameters[1]
         end
         return a1
     elseif f === arrayref
@@ -778,8 +845,19 @@ function builtin_tfunction(f::ANY, argtypes::Array{Any,1}, sv::InferenceState)
             return Bottom
         end
         a = widenconst(argtypes[1])
-        return (isa(a,DataType) && a<:Array && isa(a.parameters[1],Union{Type,TypeVar}) ?
-                a.parameters[1] : Any)
+        if a <: Array
+            if isa(a,DataType) && (isa(a.parameters[1],Type) || isa(a.parameters[1],TypeVar))
+                # TODO: the TypeVar case should not be needed here
+                a = a.parameters[1]
+                return isa(a,TypeVar) ? a.ub : a
+            elseif isa(a,UnionAll) && !has_free_typevars(a)
+                unw = unwrap_unionall(a)
+                if isa(unw,DataType)
+                    return rewrap_unionall(unw.parameters[1], a)
+                end
+            end
+        end
+        return Any
     elseif f === Expr
         if length(argtypes) < 1 && !isva
             return Bottom
@@ -789,8 +867,15 @@ function builtin_tfunction(f::ANY, argtypes::Array{Any,1}, sv::InferenceState)
         if length(argtypes)>1 && isa(argtypes[1], Const)
             af = argtypes[1].val
             sig = argtypes[2]
-            if isType(sig) && sig.parameters[1] <: Tuple
-                return invoke_tfunc(af, sig.parameters[1], argtypes_to_type(argtypes[3:end]), sv)
+            if isa(sig, Const)
+                sigty = sig.val
+            elseif isType(sig)
+                sigty = sig.parameters[1]
+            else
+                sigty = nothing
+            end
+            if isa(sigty, Type) && sigty <: Tuple
+                return invoke_tfunc(af, sigty, argtypes_to_type(argtypes[3:end]), sv)
             end
         end
         return Any
@@ -827,15 +912,22 @@ function limit_tuple_depth_(params::InferenceParams, t::ANY, d::Int)
     if isa(t,Union)
         # also limit within Union types.
         # may have to recur into other stuff in the future too.
-        return Union{map(x->limit_tuple_depth_(params,x,d+1), t.types)...}
-    end
-    if isa(t,TypeVar)
-        return limit_tuple_depth_(params, t.ub, d)
-    end
-    if !(isa(t,DataType) && t.name === Tuple.name)
+        return Union{limit_tuple_depth_(params, t.a, d+1),
+                     limit_tuple_depth_(params, t.b, d+1)}
+    elseif isa(t,UnionAll)
+        ub = limit_tuple_depth_(params, t.var.ub, d)
+        if ub !== t.var.ub
+            var = TypeVar(t.var.name, t.var.lb, ub)
+            body = t{var}
+        else
+            var = t.var
+            body = t.body
+        end
+        body = limit_tuple_depth_(params, body, d)
+        return UnionAll(var, body)
+    elseif !(isa(t,DataType) && t.name === Tuple.name)
         return t
-    end
-    if d > params.MAX_TUPLE_DEPTH
+    elseif d > params.MAX_TUPLE_DEPTH
         return Tuple
     end
     p = map(x->limit_tuple_depth_(params,x,d+1), t.parameters)
@@ -845,6 +937,9 @@ end
 limit_tuple_type = (t::ANY, params::InferenceParams) -> limit_tuple_type_n(t, params.MAX_TUPLETYPE_LEN)
 
 function limit_tuple_type_n(t::ANY, lim::Int)
+    if isa(t,UnionAll)
+        return UnionAll(t.var, limit_tuple_type_n(t.body, lim))
+    end
     p = t.parameters
     n = length(p)
     if n > lim
@@ -867,18 +962,16 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
     # function, so we can still know that error() is always Bottom.
     # here I picked 4.
     argtype = limit_tuple_type(atype, sv.params)
-    argtypes = argtype.parameters
+    argtypes = unwrap_unionall(argtype).parameters
     ft = argtypes[1] # TODO: ccall jl_first_argument_datatype here
     isa(ft, DataType) || return Any # the function being called is unknown. can't properly handle this backedge right now
     isdefined(ft.name, :mt) || return Any # not callable. should be Bottom, but can't track this backedge right now
-    if ft.name === Type.name
+    if ft.name === _Type_name
         tname = ft.parameters[1]
         if isa(tname, TypeVar)
             tname = tname.ub
         end
-        if isa(tname, TypeConstructor)
-            tname = tname.body
-        end
+        tname = unwrap_unionall(tname)
         if !isa(tname, DataType)
             # can't track the backedge to the ctor right now
             # for things like Union
@@ -896,7 +989,8 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
     x::Array{Any,1} = applicable
     fullmatch = false
     for (m::SimpleVector) in x
-        sig = m[1]::DataType
+        sig = m[1]
+        sigtuple = unwrap_unionall(sig)::DataType
         method = m[3]::Method
         sparams = m[2]::SimpleVector
         recomputesvec = false
@@ -905,8 +999,9 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
         end
 
         # limit argument type tuple growth
-        lsig = length(m[3].sig.parameters)
-        ls = length(sig.parameters)
+        msig = unwrap_unionall(m[3].sig)
+        lsig = length(msig.parameters)
+        ls = length(sigtuple.parameters)
         td = type_depth(sig)
         # look at the existing edges to detect growing argument lists
         mightlimitlength = ls > lsig + 1
@@ -916,7 +1011,7 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
         if mightlimitlength
             for (callee, _) in sv.edges
                 callee = callee::InferenceState
-                if method === callee.linfo.def && ls > length(callee.linfo.specTypes.parameters)
+                if method === callee.linfo.def && ls > length(unwrap_unionall(callee.linfo.specTypes).parameters)
                     limitlength = true
                     break
                 end
@@ -930,17 +1025,18 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
                 infstate === nothing && continue
                 infstate = infstate::InferenceState
                 if isdefined(infstate.linfo, :def) && method === infstate.linfo.def
-                    if mightlimitlength && ls > length(infstate.linfo.specTypes.parameters)
+                    if mightlimitlength && ls > length(unwrap_unionall(infstate.linfo.specTypes).parameters)
                         limitlength = true
                     end
                     if mightlimitdepth && td > type_depth(infstate.linfo.specTypes)
                         # impose limit if we recur and the argument types grow beyond MAX_TYPE_DEPTH
                         if td > MAX_TYPE_DEPTH
-                            sig = limit_type_depth(sig, 0, true, [])
+                            sig = limit_type_depth(sig, 0)
+                            sigtuple = unwrap_unionall(sig)
                             recomputesvec = true
                             break
                         else
-                            p1, p2 = sig.parameters, infstate.linfo.specTypes.parameters
+                            p1, p2 = sigtuple.parameters, unwrap_unionall(infstate.linfo.specTypes).parameters
                             if length(p2) == ls
                                 limitdepth = false
                                 newsig = Array{Any}(ls)
@@ -950,14 +1046,15 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
                                         # if a Function argument is growing (e.g. nested closures)
                                         # then widen to the outermost function type. without this
                                         # inference fails to terminate on do_quadgk.
-                                        newsig[i] = p1[i].name.primary
+                                        newsig[i] = p1[i].name.wrapper
                                         limitdepth  = true
                                     else
-                                        newsig[i] = limit_type_depth(p1[i], 1, true, [])
+                                        newsig[i] = limit_type_depth(p1[i], 1)
                                     end
                                 end
                                 if limitdepth
-                                    sig = Tuple{newsig...}
+                                    sigtuple = Tuple{newsig...}
+                                    sig = rewrap_unionall(sigtuple, sig)
                                     recomputesvec = true
                                     break
                                 end
@@ -968,30 +1065,25 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
             end
         end
 
-#        # limit argument type size growth
-#        tdepth = type_depth(sig)
-#        if tdepth > MAX_TYPE_DEPTH
-#            sig = limit_type_depth(sig, 0, true, [])
-#        end
-
         # limit length based on size of definition signature.
         # for example, given function f(T, Any...), limit to 3 arguments
         # instead of the default (MAX_TUPLETYPE_LEN)
         if limitlength
             if !istopfunction(tm, f, :promote_typeof)
-                fst = sig.parameters[lsig + 1]
+                fst = sigtuple.parameters[lsig + 1]
                 allsame = true
                 # allow specializing on longer arglists if all the trailing
                 # arguments are the same, since there is no exponential
                 # blowup in this case.
                 for i = (lsig + 2):ls
-                    if sig.parameters[i] != fst
+                    if sigtuple.parameters[i] != fst
                         allsame = false
                         break
                     end
                 end
                 if !allsame
-                    sig = limit_tuple_type_n(sig, lsig + 1)
+                    sigtuple = limit_tuple_type_n(sigtuple, lsig + 1)
+                    sig = rewrap_unionall(sigtuple, sig)
                     recomputesvec = true
                 end
             end
@@ -999,12 +1091,12 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
 
         # if sig changed, may need to recompute the sparams environment
         if recomputesvec && !isempty(sparams)
-            recomputed = ccall(:jl_type_intersection_env, Ref{SimpleVector}, (Any, Any, Any), sig, method.sig, method.tvars)
-            if !isa(recomputed[1], DataType) # probably Union{}
+            recomputed = ccall(:jl_type_intersection_env, Ref{SimpleVector}, (Any, Any), sig, method.sig)
+            sig = recomputed[1]
+            if !isa(unwrap_unionall(sig), DataType) # probably Union{}
                 rettype = Any
                 break
             end
-            sig = recomputed[1]::DataType
             sparams = recomputed[2]::SimpleVector
         end
         rt = typeinf_edge(method, sig, sparams, sv)
@@ -1045,9 +1137,7 @@ function precise_container_types(args, types, vtypes::VarTable, sv)
         ai = args[i]
         ti = types[i]
         tti = widenconst(ti)
-        if isa(tti, TypeConstructor)
-            tti = tti.body
-        end
+        tti = unwrap_unionall(tti)
         if isa(ti, Const) && (isa(ti.val, SimpleVector) || isa(ti.val, Tuple))
             result[i] = Any[ abstract_eval_constant(x) for x in ti.val ]
         elseif isa(ai, Expr) && ai.head === :call && (abstract_evals_to_constant(ai.args[1], svec, vtypes, sv) ||
@@ -1059,10 +1149,10 @@ function precise_container_types(args, types, vtypes::VarTable, sv)
             end
         elseif isa(tti, Union)
             return nothing
-        elseif tti <: Tuple
+        elseif isa(tti,DataType) && tti <: Tuple
             if i == n
                 if isvatuple(tti) && length(tti.parameters) == 1
-                    result[i] = Any[Vararg{tti.parameters[1].parameters[1]}]
+                    result[i] = Any[Vararg{unwrapva(tti.parameters[1])}]
                 else
                     result[i] = tti.parameters
                 end
@@ -1086,7 +1176,7 @@ function abstract_apply(af::ANY, fargs, aargtypes::Vector{Any}, vtypes::VarTable
     if ctypes !== nothing
         # apply with known func with known tuple types
         # can be collapsed to a call to the applied func
-        at = append_any(Any[type_typeof(af)], ctypes...)
+        at = append_any(Any[Const(af)], ctypes...)
         n = length(at)
         if n-1 > sv.params.MAX_TUPLETYPE_LEN
             tail = foldl((a,b)->tmerge(a,unwrapva(b)), Bottom, at[sv.params.MAX_TUPLETYPE_LEN+1:n])
@@ -1095,41 +1185,50 @@ function abstract_apply(af::ANY, fargs, aargtypes::Vector{Any}, vtypes::VarTable
         return abstract_call(af, (), at, vtypes, sv)
     end
     # apply known function with unknown args => f(Any...)
-    return abstract_call(af, (), Any[type_typeof(af), Vararg{Any}], vtypes, sv)
+    return abstract_call(af, (), Any[Const(af), Vararg{Any}], vtypes, sv)
 end
 
-function pure_eval_call(f::ANY, argtypes::ANY, atype::ANY, vtypes::VarTable, sv::InferenceState)
-    if f === return_type && length(argtypes) == 3
-        # NOTE: only considering calls to return_type without InferenceParams arg
+function return_type_tfunc(argtypes::ANY, vtypes::VarTable, sv::InferenceState)
+    if length(argtypes) == 3
         tt = argtypes[3]
-        af = argtypes[2]
-        af_isconst = isa(af, Const) || isconstType(af, false)
-        if isconstType(tt, false) &&
-            (af_isconst || (isleaftype(af) &&
-                            !(af <: Builtin) && !(af <: IntrinsicFunction)))
-            af_argtype = tt.parameters[1]
-            if af_argtype <: Tuple && isa(af_argtype, DataType)
-                argtypes_vec = Any[af, af_argtype.parameters...]
-                if af_isconst
-                    rt = abstract_call(isa(af,Const) ? af.val : af.parameters[1],
-                                       (), argtypes_vec, vtypes, sv)
-                else
-                    rt = abstract_call_gf_by_type(nothing, argtypes_to_type(argtypes_vec), sv)
-                end
-                if isa(rt,Const)
-                    return Type{widenconst(rt)}
-                elseif isleaftype(rt) || isleaftype(af_argtype) || rt === Bottom
-                    return Type{rt}
-                else
-                    return Type{TypeVar(:R, rt)}
+        if isa(tt, Const) || (isType(tt) && !has_free_typevars(tt))
+            aft = argtypes[2]
+            if isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
+                   (isleaftype(aft) && !(aft <: Builtin) && !(aft <: IntrinsicFunction))
+                af_argtype = isa(tt, Const) ? tt.val : tt.parameters[1]
+                if isa(af_argtype, DataType) && af_argtype <: Tuple
+                    argtypes_vec = Any[aft, af_argtype.parameters...]
+                    if isa(aft, Const)
+                        rt = abstract_call(aft.val, (), argtypes_vec, vtypes, sv)
+                    elseif isconstType(aft)
+                        rt = abstract_call(aft.parameters[1], (), argtypes_vec, vtypes, sv)
+                    else
+                        rt = abstract_call_gf_by_type(nothing, argtypes_to_type(argtypes_vec), sv)
+                    end
+                    if isa(rt, Const)
+                        # output was computed to be constant
+                        return Const(typeof(rt.val))
+                    elseif isleaftype(rt)
+                        # output type was known for certain
+                        return Const(rt)
+                    elseif (isa(tt, Const) || isconstType(tt)) &&
+                           (isa(aft, Const) || isconstType(aft))
+                        # input arguments were known for certain
+                        return Const(rt)
+                    else
+                        return Type{R} where R <: rt
+                    end
                 end
             end
         end
     end
+    return NF
+end
 
+function pure_eval_call(f::ANY, argtypes::ANY, atype::ANY, vtypes::VarTable, sv::InferenceState)
     for i = 2:length(argtypes)
         a = argtypes[i]
-        if !(isa(a,Const) || isconstType(a,false))
+        if !(isa(a,Const) || isconstType(a))
             return false
         end
     end
@@ -1159,16 +1258,27 @@ end
 
 argtypes_to_type(argtypes::Array{Any,1}) = Tuple{map(widenconst, argtypes)...}
 
+_Pair_name = nothing
+function Pair_name()
+    global _Pair_name
+    if _Pair_name === nothing
+        if isdefined(Main, :Base) && isdefined(Main.Base, :Pair)
+            _Pair_name = Main.Base.Pair.body.body.name
+        end
+    end
+    return _Pair_name
+end
+
 function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
     if f === _apply
-        length(fargs)>1 || return Any
+        length(fargs) > 1 || return Any
         aft = argtypes[2]
-        if isa(aft,Const)
+        if isa(aft, Const)
             af = aft.val
         else
-            if isType(aft) && !isa(aft.parameters[1],TypeVar)
+            if isType(aft) && isleaftype(aft.parameters[1])
                 af = aft.parameters[1]
-            elseif isleaftype(aft) && isdefined(aft,:instance)
+            elseif isleaftype(aft) && isdefined(aft, :instance)
                 af = aft.instance
             else
                 # TODO jb/functions: take advantage of case where non-constant `af`'s type is known
@@ -1193,23 +1303,42 @@ function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes::VarTable, s
             end
         end
         return Any
+    elseif f === UnionAll
+        if length(fargs) == 3 && isa(argtypes[2], Const)
+            tv = argtypes[2].val
+            if isa(tv, TypeVar)
+                if isa(argtypes[3], Const)
+                    body = argtypes[3].val
+                elseif isType(argtypes[3])
+                    body = argtypes[3].parameters[1]
+                else
+                    return Any
+                end
+                return abstract_eval_constant(UnionAll(tv, body))
+            end
+        end
+        return Any
+    elseif f === return_type
+        rt_rt = return_type_tfunc(argtypes, vtypes, sv)
+        if rt_rt !== NF
+            return rt_rt
+        end
     end
 
     tm = _topmod(sv)
     if length(argtypes)>2 && argtypes[3] ⊑ Int
         at2 = widenconst(argtypes[2])
         if (at2 <: Tuple ||
-            (isa(at2, DataType) && isdefined(Main, :Base) && isdefined(Main.Base, :Pair) &&
-             (at2::DataType).name === Main.Base.Pair.name))
+            (isa(at2, DataType) && (at2::DataType).name === Pair_name()))
             # allow tuple indexing functions to take advantage of constant
             # index arguments.
             if istopfunction(tm, f, :getindex)
-                return getfield_tfunc(argtypes[2], argtypes[3])[1]
+                return getfield_tfunc(argtypes[2], argtypes[3])
             elseif istopfunction(tm, f, :next)
-                t1 = getfield_tfunc(argtypes[2], argtypes[3])[1]
+                t1 = widenconst(getfield_tfunc(argtypes[2], argtypes[3]))
                 return t1===Bottom ? Bottom : Tuple{t1, Int}
             elseif istopfunction(tm, f, :indexed_next)
-                t1 = getfield_tfunc(argtypes[2], argtypes[3])[1]
+                t1 = widenconst(getfield_tfunc(argtypes[2], argtypes[3]))
                 return t1===Bottom ? Bottom : Tuple{t1, Int}
             end
         end
@@ -1253,9 +1382,9 @@ function abstract_eval_call(e::Expr, vtypes::VarTable, sv::InferenceState)
     if isa(ft, Const)
         f = ft.val
     else
-        if isType(ft) && !isa(ft.parameters[1],TypeVar)
+        if isType(ft) && isleaftype(ft.parameters[1])
             f = ft.parameters[1]
-        elseif isleaftype(ft) && isdefined(ft,:instance)
+        elseif isleaftype(ft) && isdefined(ft, :instance)
             f = ft.instance
         else
             for i = 2:(length(argtypes)-1)
@@ -1295,12 +1424,7 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
     elseif e.head === :null
         t = Void
     elseif e.head === :new
-        t = abstract_eval(e.args[1], vtypes, sv)
-        if isType(t)
-            t = t.parameters[1]
-        else
-            t = Any
-        end
+        t = instanceof_tfunc(abstract_eval(e.args[1], vtypes, sv))
         for i = 2:length(e.args)
             abstract_eval(e.args[i], vtypes, sv)
         end
@@ -1317,7 +1441,7 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
                 # if the tvar does not refer to anything more specific than Any,
                 # the static param might actually be an integer, symbol, etc.
                 if !(Any <: val.ub)
-                    t = Type{val}
+                    t = UnionAll(val, Type{val})
                 end
             else
                 t = abstract_eval_constant(val)
@@ -1346,14 +1470,11 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
     return t
 end
 
-const Type_Array = Type{Array}
+const Type_Array = Const(Array)
 
 function abstract_eval_constant(x::ANY)
-    if isa(x,Type)
-        if x === Array
-            return Type_Array
-        end
-        return Type{x}
+    if x === Array
+        return Type_Array
     end
     return Const(x)
 end
@@ -1411,19 +1532,17 @@ end
 function type_too_complex(t::ANY, d)
     if d > MAX_TYPE_DEPTH
         return true
-    end
-    if isa(t,Union)
-        p = t.types
-    elseif isa(t,DataType)
-        p = t.parameters
+    elseif isa(t,Union)
+        return type_too_complex(t.a, d+1) || type_too_complex(t.b, d+1)
     elseif isa(t,TypeVar)
         return type_too_complex(t.lb,d+1) || type_too_complex(t.ub,d+1)
-    else
-        return false
-    end
-    for x in (p::SimpleVector)
-        if type_too_complex(x, d+1)
-            return true
+    elseif isa(t,UnionAll)
+        return type_too_complex(t.var, d) || type_too_complex(t.body, d)
+    elseif isa(t,DataType)
+        for x in (t.parameters)::SimpleVector
+            if type_too_complex(x, d+1)
+                return true
+            end
         end
     end
     return false
@@ -1448,7 +1567,7 @@ function ⊑(a::ANY, b::ANY)
     end
 end
 
-widenconst(c::Const) = typeof(c.val)
+widenconst(c::Const) = isa(c.val, Type) ? Type{c.val} : typeof(c.val)
 widenconst(t::ANY) = t
 
 issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)
@@ -1480,7 +1599,7 @@ function tmerge(typea::ANY, typeb::ANY)
         end
     end
     u = Union{typea, typeb}
-    if length(u.types) > MAX_TYPEUNION_LEN || type_too_complex(u, 0)
+    if unionlen(u) > MAX_TYPEUNION_LEN || type_too_complex(u, 0)
         # don't let type unions get too big
         # TODO: something smarter, like a common supertype
         return Any
@@ -1705,7 +1824,7 @@ function code_for_method(method::Method, atypes::ANY, sparams::SimpleVector, wor
         # don't call staged functions on abstract types.
         # (see issues #8504, #10230)
         # we can't guarantee that their type behavior is monotonic.
-        # XXX: this test is wrong if Types (such as DataType) are present
+        # XXX: this test is wrong if Types (such as DataType or Bottom) are present
         return nothing
     end
     if preexisting
@@ -2185,6 +2304,7 @@ function isinlineable(m::Method, src::CodeInfo)
         name = m.name
         sig = m.sig
         if ((name === :+ || name === :* || name === :min || name === :max) &&
+            isa(sig,DataType) &&
             sig == Tuple{sig.parameters[1],Any,Any,Any,Vararg{Any}})
             inlineable = true
         elseif (name === :next || name === :done || name === :unsafe_convert ||
@@ -2245,7 +2365,7 @@ function optimize(me::InferenceState)
     end
     widen_all_consts!(me.src)
 
-    if isa(me.bestguess, Const) || isconstType(me.bestguess, true)
+    if isa(me.bestguess, Const) || isconstType(me.bestguess)
         me.const_ret = true
         ispure = me.src.pure
         if !ispure && length(me.src.code) < 10
@@ -2320,7 +2440,7 @@ function finish(me::InferenceState)
                 if isa(me.bestguess, Const)
                     inferred_const = (me.bestguess::Const).val
                 else
-                    @assert isconstType(me.bestguess, true)
+                    @assert isconstType(me.bestguess)
                     inferred_const = me.bestguess.parameters[1]
                 end
             else
@@ -2583,7 +2703,7 @@ function exprtype(x::ANY, src::CodeInfo, mod::Module)
 end
 
 # known affect-free calls (also effect-free)
-const _pure_builtins = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof]
+const _pure_builtins = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof, UnionAll]
 
 # known effect-free calls (might not be affect-free)
 const _pure_builtins_volatile = Any[getfield, arrayref]
@@ -2729,7 +2849,7 @@ function countunionsplit(atypes::Vector{Any})
     nu = 1
     for ti in atypes
         if isa(ti, Union)
-            nu *= length((ti::Union).types)
+            nu *= unionlen(ti::Union)
         end
     end
     return nu
@@ -2804,7 +2924,7 @@ function invoke_NF(argexprs, etype::ANY, atypes, sv, atype_unlimited::ANY,
                     local all = true
                     local stmts = []
                     local aei = ex.args[i]
-                    for ty in (ti::Union).types
+                    for ty in uniontypes(ti::Union)
                         local ty
                         atypes[i] = ty
                         local match = splitunion(atypes, i - 1)
@@ -2907,23 +3027,26 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     topmod = _topmod(sv)
     # special-case inliners for known pure functions that compute types
     if sv.params.inlining
-        if isconstType(e.typ,true)
+        if isa(e.typ, Const) # || isconstType(e.typ)
+            # XXX: this is needlessly buggy and should just call `inline_as_constant`
             if (f === apply_type || f === fieldtype || f === typeof ||
                 istopfunction(topmod, f, :typejoin) ||
                 istopfunction(topmod, f, :promote_type))
                 # XXX: compute effect_free for the actual arguments
                 if length(argexprs) < 2 || effect_free(argexprs[2], sv.src, sv.mod, true)
-                    return (e.typ.parameters[1],())
+                    return (e.typ.val, ())
                 else
-                    return (e.typ.parameters[1], Any[argexprs[2]])
+                    return (e.typ.val, Any[argexprs[2]])
                 end
             end
         end
         if istopfunction(topmod, f, :isbits) && length(atypes)==2 && isType(atypes[2]) &&
             effect_free(argexprs[2], sv.src, sv.mod, true) && isleaftype(atypes[2].parameters[1])
+            # TODO: this is needlessly complicated and should just call `inline_as_constant`
             return (isbits(atypes[2].parameters[1]),())
         end
         if f === Core.kwfunc && length(argexprs) == 2 && isa(e.typ, Const)
+            # TODO: replace with a call to `inline_as_constant`
             if effect_free(argexprs[2], sv.src, sv.mod, true)
                 return (e.typ.val, ())
             else
@@ -3002,14 +3125,13 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     else
         invoke_data = invoke_data::InvokeData
         method = invoke_data.entry.func
-        (metharg, methsp) = ccall(:jl_match_method, Ref{SimpleVector},
-                                  (Any, Any, Any),
-                                  atype_unlimited, method.sig, method.tvars)
+        (metharg, methsp) = ccall(:jl_match_method, Ref{SimpleVector}, (Any, Any),
+                                  atype_unlimited, method.sig)
         methsp = methsp::SimpleVector
     end
     # check whether call can be inlined to just a quoted constant value
     if isa(f, widenconst(ft)) && !method.isstaged && (method.source.pure || f === return_type)
-        if isconstType(e.typ,false)
+        if isconstType(e.typ)
             return inline_as_constant(e.typ.parameters[1], argexprs, sv,
                                       invoke_data)
         elseif isa(e.typ,Const)
@@ -3058,8 +3180,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
                 if length(atypes) > 2 && atypes[3] ⊑ Int
                     at2 = widenconst(atypes[2])
                     if (at2 <: Tuple ||
-                        (isa(at2, DataType) && isdefined(Main, :Base) && isdefined(Main.Base, :Pair) &&
-                         (at2::DataType).name === Main.Base.Pair.name))
+                        (isa(at2, DataType) && (at2::DataType).name === Pair_name()))
                         force_infer = true
                     end
                 end
@@ -3124,7 +3245,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
             if isa(frame.bestguess, Const)
                 inferred_const = (frame.bestguess::Const).val
             else
-                @assert isconstType(frame.bestguess, true)
+                @assert isconstType(frame.bestguess)
                 inferred_const = frame.bestguess.parameters[1]
             end
             return inline_as_constant(inferred_const, argexprs, sv, invoke_data)
@@ -3164,7 +3285,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         end
     end
 
-    nm = length(metharg.parameters)
+    nm = length(unwrap_unionall(metharg).parameters)
 
     if !isa(ast, Array{Any,1})
         ast = ccall(:jl_uncompress_ast, Any, (Any, Any), method, ast)
@@ -3708,7 +3829,7 @@ function is_known_call_p(e::Expr, pred::ANY, src::CodeInfo, mod::Module)
         return false
     end
     f = exprtype(e.args[1], src, mod)
-    return isa(f, Const) && pred(f.val)
+    return (isa(f, Const) && pred(f.val)) || (isType(f) && pred(f.parameters[1]))
 end
 
 function delete_var!(src::CodeInfo, id, T)
@@ -4185,9 +4306,8 @@ function is_allocation(e::ANY, sv::InferenceState)
         return (length(e.args)-1,())
     elseif e.head === :new
         typ = widenconst(exprtype(e, sv.src, sv.mod))
-        if isleaftype(typ)
-            @assert(isa(typ,DataType))
-            nf = length(e.args)-1
+        if isa(typ, DataType) && isleaftype(typ)
+            nf = length(e.args) - 1
             names = fieldnames(typ)
             @assert(nf <= nfields(typ))
             if nf < nfields(typ)

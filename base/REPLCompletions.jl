@@ -315,7 +315,7 @@ function get_type(sym, fn)
 end
 # Method completion on function call expression that look like :(max(1))
 function complete_methods(ex_org::Expr)
-    args_ex = DataType[]
+    args_ex = Any[]
     func, found = get_value(ex_org.args[1], Main)
     !found && return String[]
     for ex in ex_org.args[2:end]
@@ -330,7 +330,8 @@ function complete_methods(ex_org::Expr)
     io = IOBuffer()
     for method in ml
         # Check if the method's type signature intersects the input types
-        if typeintersect(Tuple{method.sig.parameters[1 : min(na, end)]...}, t_in) != Union{}
+        ms = method.sig
+        if typeintersect(Base.rewrap_unionall(Tuple{Base.unwrap_unionall(ms).parameters[1 : min(na, end)]...}, ms), t_in) != Union{}
             show(io, method, kwtype=kwtype)
             push!(out, String(take!(io)))
         end

@@ -289,6 +289,16 @@ end
 @test repr(:(bitstype A B)) == ":(bitstype A B)"
 @test repr(:(bitstype 100 B)) == ":(bitstype 100 B)"
 
+# `where` syntax
+@test_repr "A where T<:B"
+@test_repr "A where T<:(Array{T} where T<:Real)"
+@test_repr "Array{T} where T<:Array{S} where S<:Real"
+@test_repr "x::Array{T} where T"
+@test_repr "(a::b) where T"
+@test_repr "a::b where T"
+@test_repr "X where (T=1)"
+@test_repr "X where T = 1"
+
 let oldout = STDOUT, olderr = STDERR
     local rdout, wrout, rderr, wrerr, out, err, rd, wr
     try
@@ -514,10 +524,10 @@ end
 
 # PR 16221
 # Printing of upper and lower bound of a TypeVar
-@test string(TypeVar(:V, Signed, Real, false)) == "Signed<:V<:Real"
+@test string(TypeVar(:V, Signed, Real)) == "Signed<:V<:Real"
 # Printing of primary type in type parameter place should not show the type
 # parameter names.
-@test string(Array) == "Array{T,N}"
+@test string(Array) == "Array"
 @test string(Tuple{Array}) == "Tuple{Array}"
 
 # PR #16651
@@ -543,8 +553,8 @@ end
 let repr = sprint(dump, :(x = 1))
     @test repr == "Expr\n  head: Symbol =\n  args: Array{Any}((2,))\n    1: Symbol x\n    2: $Int 1\n  typ: Any\n"
 end
-let repr = sprint(dump, Pair)
-    @test repr == "Pair{A,B} <: Any\n  first::A\n  second::B\n"
+let repr = sprint(dump, Pair{String,Int64})
+    @test repr == "Pair{String,Int64} <: Any\n  first::String\n  second::Int64\n"
 end
 let repr = sprint(dump, Tuple)
     @test repr == "Tuple <: Any\n"
@@ -558,7 +568,7 @@ let repr = sprint(dump, Any)
     @test length(repr) > 100000
     @test ismatch(r"^Any\n  [^ \t\n]", repr)
     @test endswith(repr, '\n')
-    @test contains(repr, "     Base.Vector{T} = Array{T,1}\n")
+    @test_broken contains(repr, "     Base.Vector{T} = Array{T,1}\n")
     @test !contains(repr, "Core.Vector{T}")
 end
 let repr = sprint(dump, Integer)
