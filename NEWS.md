@@ -694,6 +694,8 @@ Deprecated or removed
     * `@linux_only` is deprecated in favor of `if is_linux()`
     * NOTE: Using `@static` could be useful/necessary when used in a function's local scope. See details at the section entitled [Handling Operating System Variation](http://docs.julialang.org/en/latest/manual/handling-operating-system-variation/#man-handling-operating-system-variation) in the manual.
 
+  * The macros `@unix_only`, `@linux_only`, `@osx_only`, and `@windows_only` (and similar without `_only` ending) have been deprecated. Instead use the functions `is_unix`, `is_linux`, `is_apple`, `is_bsd`, and `is_windows`. Note, it can be helpful to use them with the new `@static` macro. See details at [Handling Operating System Variation](http://docs.julialang.org/en/latest/manual/handling-operating-system-variation/#man-handling-operating-system-variation) section in the manual.
+
 Command-line option changes
 ---------------------------
 
