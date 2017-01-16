@@ -59,41 +59,40 @@ end
 function depwarn(msg, funcsym)
     opts = JLOptions()
     if opts.depwarn > 0
-        ln = Int(unsafe_load(cglobal(:jl_lineno, Cint)))
-        fn = unsafe_string(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
         bt = backtrace()
-        caller = firstcaller(bt, funcsym)
-        if opts.depwarn == 1 # raise a warning
-            warn(msg, once=(caller != C_NULL), key=caller, bt=bt,
-                 filename=fn, lineno=ln)
-        elseif opts.depwarn == 2 # raise an error
-            throw(ErrorException(msg))
-        end
+        _depwarn(msg, opts, bt, firstcaller(bt, funcsym))
     end
     nothing
+end
+function _depwarn(msg, opts, bt, caller)
+    ln = Int(unsafe_load(cglobal(:jl_lineno, Cint)))
+    fn = unsafe_string(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
+    if opts.depwarn == 1 # raise a warning
+        warn(msg, once=(caller != StackTraces.UNKNOWN), key=(caller,fn,ln), bt=bt,
+             filename=fn, lineno=ln)
+    elseif opts.depwarn == 2 # raise an error
+        throw(ErrorException(msg))
+    end
 end
 
 firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol) = firstcaller(bt, (funcsym,))
 function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
     # Identify the calling line
-    i = 1
-    while i <= length(bt)
-        lkups = StackTraces.lookup(bt[i])
-        i += 1
+    found = false
+    lkup = StackTraces.UNKNOWN
+    for frame in bt
+        lkups = StackTraces.lookup(frame)
         for lkup in lkups
             if lkup === StackTraces.UNKNOWN
                 continue
             end
-            if lkup.func in funcsyms
-                @goto found
-            end
+            found && @goto found
+            found = lkup.func in funcsyms
         end
     end
+    return StackTraces.UNKNOWN
     @label found
-    if i <= length(bt)
-        return bt[i]
-    end
-    return C_NULL
+    return lkup
 end
 
 deprecate(s::Symbol) = deprecate(current_module(), s)
@@ -1739,6 +1738,46 @@ eval(Base.Test, quote
     end
     export @test_approx_eq
 end)
+
+# Deprecate partial linear indexing
+function partial_linear_indexing_warning_lookup(nidxs_remaining)
+    # We need to figure out how many indices were passed for a sensible deprecation warning
+    opts = JLOptions()
+    if opts.depwarn > 0
+        # Find the caller -- this is very expensive so we don't want to do it twice
+        bt = backtrace()
+        found = false
+        call = StackTraces.UNKNOWN
+        caller = StackTraces.UNKNOWN
+        for frame in bt
+            lkups = StackTraces.lookup(frame)
+            for caller in lkups
+                if caller === StackTraces.UNKNOWN
+                    continue
+                end
+                found && @goto found
+                if caller.func in (:getindex, :setindex!, :view)
+                    found = true
+                    call = caller
+                end
+            end
+        end
+        @label found
+        fn = "`reshape`"
+        if call != StackTraces.UNKNOWN && !isnull(call.linfo)
+            # Try to grab the number of dimensions in the parent array
+            mi = get(call.linfo)
+            args = mi.specTypes.parameters
+            if length(args) >= 2 && args[2] <: AbstractArray
+                fn = "`reshape(A, Val{$(ndims(args[2]) - nidxs_remaining + 1)})`"
+            end
+        end
+        _depwarn("Partial linear indexing is deprecated. Use $fn to make the dimensionality of the array match the number of indices.", opts, bt, caller)
+    end
+end
+function partial_linear_indexing_warning(n)
+    depwarn("Partial linear indexing is deprecated. Use `reshape(A, Val{$n})` to make the dimensionality of the array match the number of indices.", (:getindex, :setindex!, :view))
+end
 
 # Deprecate Array(T, dims...) in favor of proper type constructors
 @deprecate Array{T,N}(::Type{T}, d::NTuple{N,Int})               Array{T,N}(d)

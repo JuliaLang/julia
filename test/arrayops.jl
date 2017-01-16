@@ -221,7 +221,7 @@ end
     @test A[2:6] == [2:6;]
     @test A[1:3,2,2:4] == cat(2,46:48,86:88,126:128)
     @test A[:,7:-3:1,5] == [191 176 161; 192 177 162; 193 178 163; 194 179 164; 195 180 165]
-    @test A[:,3:9] == reshape(11:45,5,7)
+    @test reshape(A, Val{2})[:,3:9] == reshape(11:45,5,7)
     rng = (2,2:3,2:2:5)
     tmp = zeros(Int,map(maximum,rng)...)
     tmp[rng...] = A[rng...]
@@ -255,7 +255,7 @@ end
     B[4,[2,3]] = 7
     @test B == [0 23 1 24 0; 11 12 13 14 15; 0 21 3 22 0; 0 7 7 0 0]
 
-    @test isequal(reshape(1:27, 3, 3, 3)[1,:], [1,  4,  7,  10,  13,  16,  19,  22,  25])
+    @test isequal(reshape(reshape(1:27, 3, 3, 3), Val{2})[1,:], [1,  4,  7,  10,  13,  16,  19,  22,  25])
 
     a = [3, 5, -7, 6]
     b = [4, 6, 2, -7, 1]
@@ -1360,11 +1360,13 @@ end
         @test a[:, [CartesianIndex()], :, :] == (@view a[:, [CartesianIndex()], :, :]) == reshape(a, 3, 1, 4, 5)
         @test a[:, :, [CartesianIndex()], :] == (@view a[:, :, [CartesianIndex()], :]) == reshape(a, 3, 4, 1, 5)
         @test a[:, :, :, [CartesianIndex()]] == (@view a[:, :, :, [CartesianIndex()]]) == reshape(a, 3, 4, 5, 1)
-        @test a[[CartesianIndex()], :, :]    == (@view a[[CartesianIndex()], :, :])    == reshape(a, 1, 3, 20)
-        @test a[:, [CartesianIndex()], :]    == (@view a[:, [CartesianIndex()], :])    == reshape(a, 3, 1, 20)
-        @test a[:, :, [CartesianIndex()]]    == (@view a[:, :, [CartesianIndex()]])    == reshape(a, 3, 20, 1)
-        @test a[[CartesianIndex()], :]       == (@view a[[CartesianIndex()], :])       == reshape(a, 1, 60)
-        @test a[:, [CartesianIndex()]]       == (@view a[:, [CartesianIndex()]])       == reshape(a, 60, 1)
+        a2 = reshape(a, Val{2})
+        @test a2[[CartesianIndex()], :, :]   == (@view a2[[CartesianIndex()], :, :])   == reshape(a, 1, 3, 20)
+        @test a2[:, [CartesianIndex()], :]   == (@view a2[:, [CartesianIndex()], :])   == reshape(a, 3, 1, 20)
+        @test a2[:, :, [CartesianIndex()]]   == (@view a2[:, :, [CartesianIndex()]])   == reshape(a, 3, 20, 1)
+        a1 = reshape(a, Val{1})
+        @test a1[[CartesianIndex()], :]      == (@view a1[[CartesianIndex()], :])      == reshape(a, 1, 60)
+        @test a1[:, [CartesianIndex()]]      == (@view a1[:, [CartesianIndex()]])      == reshape(a, 60, 1)
 
         @test_throws BoundsError a[[CartesianIndex(1,5),CartesianIndex(2,4)],3:3]
         @test_throws BoundsError a[1:4, [CartesianIndex(1,3),CartesianIndex(2,4)]]

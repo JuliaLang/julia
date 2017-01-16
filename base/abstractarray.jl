@@ -306,6 +306,11 @@ function checkbounds(::Type{Bool}, A::AbstractArray, I...)
     @_inline_meta
     checkbounds_indices(Bool, indices(A), I)
 end
+# Linear indexing is explicitly allowed when there is only one (non-cartesian) index
+function checkbounds(::Type{Bool}, A::AbstractArray, i)
+    @_inline_meta
+    checkindex(Bool, linearindices(A), i)
+end
 # As a special extension, allow using logical arrays that match the source array exactly
 function checkbounds{_,N}(::Type{Bool}, A::AbstractArray{_,N}, I::AbstractArray{Bool,N})
     @_inline_meta
@@ -358,7 +363,21 @@ function checkbounds_indices(::Type{Bool}, IA::Tuple{Any}, I::Tuple{Any})
 end
 function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple{Any})
     @_inline_meta
-    checkindex(Bool, OneTo(trailingsize(IA)), I[1])  # linear indexing
+    checkbounds_linear_indices(Bool, IA, I[1])
+end
+function checkbounds_linear_indices(::Type{Bool}, IA::Tuple, i)
+    @_inline_meta
+    if checkindex(Bool, IA[1], i)
+        return true
+    elseif checkindex(Bool, OneTo(trailingsize(IA)), i)  # partial linear indexing
+        partial_linear_indexing_warning_lookup(length(IA))
+        return true # TODO: Return false after the above function is removed in deprecated.jl
+    end
+    return false
+end
+function checkbounds_linear_indices(::Type{Bool}, IA::Tuple, i::Union{Slice,Colon})
+    partial_linear_indexing_warning_lookup(length(IA))
+    true
 end
 checkbounds_indices(::Type{Bool}, ::Tuple, ::Tuple{}) = true
 

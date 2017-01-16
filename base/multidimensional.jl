@@ -172,6 +172,12 @@ end  # IteratorsMD
 using .IteratorsMD
 
 ## Bounds-checking with CartesianIndex
+# Disallow linear indexing with CartesianIndex
+function checkbounds(::Type{Bool}, A::AbstractArray, i::Union{CartesianIndex, AbstractArray{C} where C <: CartesianIndex})
+    @_inline_meta
+    checkbounds_indices(Bool, indices(A), (i,))
+end
+
 @inline checkbounds_indices(::Type{Bool}, ::Tuple{}, I::Tuple{CartesianIndex,Vararg{Any}}) =
     checkbounds_indices(Bool, (), (I[1].I..., tail(I)...))
 @inline checkbounds_indices(::Type{Bool}, IA::Tuple{Any}, I::Tuple{CartesianIndex,Vararg{Any}}) =
