@@ -1060,6 +1060,40 @@ JL_CALLABLE(jl_f_invoke)
     return res;
 }
 
+// Expr constructor for internal use ------------------------------------------
+
+jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_array_t *ar = n==0 ? (jl_array_t*)jl_an_empty_vec_any : jl_alloc_vec_any(n);
+    JL_GC_PUSH1(&ar);
+    jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc(ptls, sizeof(jl_expr_t),
+                                            jl_expr_type);
+    ex->head = head;
+    ex->args = ar;
+    ex->etype = (jl_value_t*)jl_any_type;
+    JL_GC_POP();
+    return ex;
+}
+
+JL_CALLABLE(jl_f__expr)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    JL_NARGSV(Expr, 1);
+    JL_TYPECHK(Expr, symbol, args[0]);
+    jl_array_t *ar = jl_alloc_vec_any(nargs-1);
+    JL_GC_PUSH1(&ar);
+    for(size_t i=0; i < nargs-1; i++)
+        jl_array_ptr_set(ar, i, args[i+1]);
+    jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc(ptls, sizeof(jl_expr_t),
+                                            jl_expr_type);
+    ex->head = (jl_sym_t*)args[0];
+    ex->args = ar;
+    ex->etype = (jl_value_t*)jl_any_type;
+    JL_GC_POP();
+    return (jl_value_t*)ex;
+}
+
 // eq hash table --------------------------------------------------------------
 
 #include "table.c"
