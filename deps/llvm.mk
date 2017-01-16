@@ -511,6 +511,7 @@ $(eval $(call LLVM_PATCH,llvm-PR277939)) # Issue #19976, Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-PR278321)) # Issue #19976, Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-PR278923)) # Issue #19976, Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D28759-loopclearance))
+$(eval $(call LLVM_PATCH,llvm-D28786-callclearance))
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
