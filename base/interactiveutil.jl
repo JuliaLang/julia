@@ -681,17 +681,20 @@ function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
             value = getfield(m, v)
             @printf head "%30s " s
             try
-                bytes = summarysize(value)
-                if bytes < 10_000
-                    @printf(head, "%6d bytes  ", bytes)
+                if value ∈ (Base, Main, Core)
+                    print(head, "              ")
                 else
-                    @printf(head, "%6d KB     ", bytes ÷ (1024))
+                    bytes = summarysize(value)
+                    if bytes < 10_000
+                        @printf(head, "%6d bytes  ", bytes)
+                    else
+                        @printf(head, "%6d KB     ", bytes ÷ (1024))
+                    end
                 end
                 print(head, summary(value))
             catch e
                 print(head, "#=ERROR: unable to show value=#")
             end
-
             newline = search(head, UInt8('\n')) - 1
             if newline < 0
                 newline = nb_available(head)
