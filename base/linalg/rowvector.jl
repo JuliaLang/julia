@@ -23,7 +23,8 @@ end
 
 
 @inline check_types{T1,T2}(::Type{T1},::AbstractVector{T2}) = check_types(T1, T2)
-@pure check_types{T1,T2}(::Type{T1},::Type{T2}) = T1 === transpose_type(T2) ? nothing : error("Element type mismatch. Tried to create a `RowVector{$T1}` from an `AbstractVector{$T2}`")
+@pure check_types{T1,T2}(::Type{T1},::Type{T2}) = T1 === transpose_type(T2) ? nothing :
+    error("Element type mismatch. Tried to create a `RowVector{$T1}` from an `AbstractVector{$T2}`")
 
 # The element type may be transformed as transpose is recursive
 @inline transpose_type{T}(::Type{T}) = promote_op(transpose, T)
@@ -34,12 +35,17 @@ end
 
 # Constructors that take a size and default to Array
 @inline (::Type{RowVector{T}}){T}(n::Int) = RowVector{T}(Vector{transpose_type(T)}(n))
-@inline (::Type{RowVector{T}}){T}(n1::Int, n2::Int) = n1 == 1 ? RowVector{T}(Vector{transpose_type(T)}(n2)) : error("RowVector expects 1×N size, got ($n1,$n2)")
+@inline (::Type{RowVector{T}}){T}(n1::Int, n2::Int) = n1 == 1 ?
+    RowVector{T}(Vector{transpose_type(T)}(n2)) :
+    error("RowVector expects 1×N size, got ($n1,$n2)")
 @inline (::Type{RowVector{T}}){T}(n::Tuple{Int}) = RowVector{T}(Vector{transpose_type(T)}(n[1]))
-@inline (::Type{RowVector{T}}){T}(n::Tuple{Int,Int}) = n[1] == 1 ? RowVector{T}(Vector{transpose_type(T)}(n[2])) : error("RowVector expects 1×N size, got $n")
+@inline (::Type{RowVector{T}}){T}(n::Tuple{Int,Int}) = n[1] == 1 ?
+    RowVector{T}(Vector{transpose_type(T)}(n[2])) :
+    error("RowVector expects 1×N size, got $n")
 
 # Conversion of underlying storage
-convert{T,V<:AbstractVector}(::Type{RowVector{T,V}}, rowvec::RowVector) = RowVector{T,V}(convert(V,rowvec.vec))
+convert{T,V<:AbstractVector}(::Type{RowVector{T,V}}, rowvec::RowVector) =
+    RowVector{T,V}(convert(V,rowvec.vec))
 
 # similar()
 @inline similar(rowvec::RowVector) = RowVector(similar(rowvec.vec))
@@ -115,7 +121,7 @@ end
 @propagate_inbounds setindex!(rowvec::RowVector, v, i::CartesianIndex{1}) = setindex!(rowvec, v, i.I[1])
 
 @inline check_tail_indices(i1, i2) = true
-@inline check_tail_indices(i1, i2, i3, is...) = i3 == 1 ? check_tail_indices(i1, i2, is...) :  false
+@inline check_tail_indices(i1, i2, i3, is...) = i3 == 1 ? check_tail_indices(i1, i2, is...) : false
 
 # helper function for below
 @inline to_vec(rowvec::RowVector) = transpose(rowvec)
@@ -126,15 +132,18 @@ end
 @inline map(f, rowvecs::RowVector...) = RowVector(map(f, to_vecs(rowvecs...)...))
 
 # broacast (other combinations default to higher-dimensional array)
-@inline broadcast(f, rowvecs::Union{Number,RowVector}...) = RowVector(broadcast(f, to_vecs(rowvecs...)...))
+@inline broadcast(f, rowvecs::Union{Number,RowVector}...) =
+    RowVector(broadcast(f, to_vecs(rowvecs...)...))
 
 # Horizontal concatenation #
 
 @inline hcat(X::RowVector...) = transpose(vcat(map(transpose, X)...))
 @inline hcat(X::Union{RowVector,Number}...) = transpose(vcat(map(transpose, X)...))
 
-@inline typed_hcat{T}(::Type{T}, X::RowVector...) = transpose(typed_vcat(T, map(transpose, X)...))
-@inline typed_hcat{T}(::Type{T}, X::Union{RowVector,Number}...) = transpose(typed_vcat(T, map(transpose, X)...))
+@inline typed_hcat{T}(::Type{T}, X::RowVector...) =
+    transpose(typed_vcat(T, map(transpose, X)...))
+@inline typed_hcat{T}(::Type{T}, X::Union{RowVector,Number}...) =
+    transpose(typed_vcat(T, map(transpose, X)...))
 
 # Multiplication #
 
@@ -145,7 +154,8 @@ end
     sum(@inbounds(return rowvec[i]*vec[i]) for i = 1:length(vec))
 end
 @inline *(rowvec::RowVector, mat::AbstractMatrix) = transpose(mat.' * transpose(rowvec))
-*(vec::AbstractVector, mat::AbstractMatrix) = throw(DimensionMismatch("Cannot left-multiply a matrix by a vector")) # Should become a deprecation
+*(vec::AbstractVector, mat::AbstractMatrix) = throw(DimensionMismatch(
+    "Cannot left-multiply a matrix by a vector")) # Should become a deprecation
 *(::RowVector, ::RowVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
 @inline *(vec::AbstractVector, rowvec::RowVector) = vec .* rowvec
 *(vec::AbstractVector, rowvec::AbstractVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
@@ -154,28 +164,35 @@ end
 # Transposed forms
 A_mul_Bt(::RowVector, ::AbstractVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
 @inline A_mul_Bt(rowvec::RowVector, mat::AbstractMatrix) = transpose(mat * transpose(rowvec))
-A_mul_Bt(vec::AbstractVector, mat::AbstractMatrix) = throw(DimensionMismatch("Cannot left-multiply a matrix by a vector"))
+A_mul_Bt(vec::AbstractVector, mat::AbstractMatrix) = throw(DimensionMismatch(
+    "Cannot left-multiply a matrix by a vector"))
 @inline A_mul_Bt(rowvec1::RowVector, rowvec2::RowVector) = rowvec1*transpose(rowvec2)
 A_mul_Bt(vec::AbstractVector, rowvec::RowVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
 @inline A_mul_Bt(vec1::AbstractVector, vec2::AbstractVector) = vec1 * transpose(vec2)
 @inline A_mul_Bt(mat::AbstractMatrix, rowvec::RowVector) = mat * transpose(rowvec)
 
 @inline At_mul_Bt(rowvec::RowVector, vec::AbstractVector) = transpose(rowvec) * transpose(vec)
-At_mul_Bt(rowvec::RowVector, mat::AbstractMatrix) = throw(DimensionMismatch("Cannot left-multiply matrix by vector"))
+At_mul_Bt(rowvec::RowVector, mat::AbstractMatrix) = throw(DimensionMismatch(
+    "Cannot left-multiply matrix by vector"))
 @inline At_mul_Bt(vec::AbstractVector, mat::AbstractMatrix) = transpose(mat * vec)
 At_mul_Bt(rowvec1::RowVector, rowvec2::RowVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
 @inline At_mul_Bt(vec::AbstractVector, rowvec::RowVector) = transpose(vec)*transpose(rowvec)
-At_mul_Bt(vec::AbstractVector, rowvec::AbstractVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
+At_mul_Bt(vec::AbstractVector, rowvec::AbstractVector) = throw(DimensionMismatch(
+    "Cannot multiply two transposed vectors"))
 @inline At_mul_Bt(mat::AbstractMatrix, rowvec::RowVector) = mat.' * transpose(rowvec)
 
 At_mul_B(::RowVector, ::AbstractVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
-At_mul_B(rowvec::RowVector, mat::AbstractMatrix) = throw(DimensionMismatch("Cannot left-multiply matrix by vector"))
+At_mul_B(rowvec::RowVector, mat::AbstractMatrix) = throw(DimensionMismatch(
+    "Cannot left-multiply matrix by vector"))
 @inline At_mul_B(vec::AbstractVector, mat::AbstractMatrix) = transpose(At_mul_B(mat,vec))
 @inline At_mul_B(rowvec1::RowVector, rowvec2::RowVector) = transpose(rowvec1) * rowvec2
-At_mul_B(vec::AbstractVector, rowvec::RowVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
-@inline At_mul_B{T<:Real}(vec1::AbstractVector{T}, vec2::AbstractVector{T}) = reduce(+, map(At_mul_B, vec1, vec2)) # Seems to be overloaded...
+At_mul_B(vec::AbstractVector, rowvec::RowVector) = throw(DimensionMismatch(
+    "Cannot multiply two transposed vectors"))
+@inline At_mul_B{T<:Real}(vec1::AbstractVector{T}, vec2::AbstractVector{T}) =
+    reduce(+, map(At_mul_B, vec1, vec2)) # Seems to be overloaded...
 @inline At_mul_B(vec1::AbstractVector, vec2::AbstractVector) = transpose(vec1) * vec2
-At_mul_B(mat::AbstractMatrix, rowvec::RowVector) = throw(DimensionMismatch("Cannot right-multiply matrix by transposed vector"))
+At_mul_B(mat::AbstractMatrix, rowvec::RowVector) = throw(DimensionMismatch(
+    "Cannot right-multiply matrix by transposed vector"))
 
 # Conjugated forms
 A_mul_Bc(::RowVector, ::AbstractVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
