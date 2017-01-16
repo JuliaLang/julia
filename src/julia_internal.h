@@ -320,6 +320,12 @@ JL_DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle,
                                                jl_value_t *data);
 JL_DLLEXPORT int jl_uv_fs_result(uv_fs_t *f);
 
+typedef struct _typeenv {
+    jl_tvar_t *var;
+    jl_value_t *val;
+    struct _typeenv *prev;
+} jl_typeenv_t;
+
 int jl_tuple_isa(jl_value_t **child, size_t cl, jl_datatype_t *pdt);
 
 int jl_subtype_invariant(jl_value_t *a, jl_value_t *b, int ta);

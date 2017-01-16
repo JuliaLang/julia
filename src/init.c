@@ -597,8 +597,8 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     jl_gc_init();
     jl_gc_enable(0);
-    jl_init_frontend();
     jl_init_types();
+    jl_init_frontend();
     jl_init_tasks();
     jl_init_root_task(ptls->stack_lo, ptls->stack_hi-ptls->stack_lo);
 
