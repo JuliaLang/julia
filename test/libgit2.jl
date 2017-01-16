@@ -185,6 +185,11 @@ mktempdir() do dir
                 @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: $repo_url"
                 @test LibGit2.isattached(repo)
                 close(remote)
+
+                remote = LibGit2.GitRemoteAnon(repo, repo_url)
+                @test LibGit2.url(remote) == repo_url
+                @test LibGit2.name(remote) == ""
+                @test isa(remote, LibGit2.GitRemote)
             finally
                 close(repo)
             end
