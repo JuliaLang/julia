@@ -94,11 +94,14 @@ load_hook(prefix::String, name::String, found::String) = found
 load_hook(prefix, name::String, found) =
     throw(ArgumentError("unrecognized custom loader in LOAD_PATH: $prefix"))
 
+_str(x::AbstractString) = String(x)
+_str(x) = x
+
 function find_in_path(name::String)
     path = nothing
-    path = load_hook(Pkg.dir(), name, path)
+    path = _str(load_hook(_str(Pkg.dir()), name, path))
     for dir in LOAD_PATH
-        path = load_hook(dir, name, path)
+        path = _str(load_hook(_str(dir), name, path))
     end
     return path
 end

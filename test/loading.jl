@@ -42,10 +42,12 @@ end
 
 SAVED_LOAD_PATH = copy(LOAD_PATH)
 empty!(LOAD_PATH)
-push!(LOAD_PATH, @__DIR__)
 let paddedname = "Atest_sourcepathZ"
+    push!(LOAD_PATH, @__DIR__)
     filename = SubString(paddedname, 2, length(paddedname)-1)
-    @test Base.find_in_path(filename) == abspath("$(paddedname[2:end-1]).jl")
+    @test Base.find_in_path(filename) == abspath("test_sourcepath.jl")
+    LOAD_PATH[end] = GenericString(LOAD_PATH[end])
+    @test Base.find_in_path(filename) == abspath("test_sourcepath.jl")
 end
 
 immutable CustomLoader
