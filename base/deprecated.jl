@@ -592,10 +592,6 @@ function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
     start:step:(start + nm1*step)
 end
 
-## midpoints of intervals
-midpoints(r::Range) = r[1:length(r)-1] + 0.5*step(r)
-midpoints(v::AbstractVector) = [0.5*(v[i] + v[i+1]) for i in 1:length(v)-1]
-
 ## hist ##
 function sturges(n)  # Sturges' formula
     depwarn("sturges(n) is deprecated, use StatsBase.sturges(n) instead.",:sturges)
@@ -1028,6 +1024,9 @@ export $
 
 @deprecate is (===)
 
+# midpoints of intervals
+@deprecate midpoints(r::Range) r[1:length(r)-1] + 0.5*step(r)
+@deprecate midpoints(v::AbstractVector) [0.5*(v[i] + v[i+1]) for i in 1:length(v)-1]
 
 @deprecate_binding Filter    Iterators.Filter
 @deprecate_binding Zip       Iterators.Zip
