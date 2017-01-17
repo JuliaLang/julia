@@ -443,6 +443,11 @@ d = Dict(:a=>"a")
 @test_throws ArgumentError Dict([1])
 @test_throws ArgumentError Dict([(1,2),0])
 
+# test Dict constructor's argument checking (for an iterable of pairs or tuples)
+# make sure other errors can propagate when the nature of the iterator is not the problem
+@test_throws InexactError Dict(convert(Int,1.5) for i=1:1)
+@test_throws InexactError WeakKeyDict(convert(Int,1.5) for i=1:1)
+
 # ImmutableDict
 import Base.ImmutableDict
 let d = ImmutableDict{String, String}(),
