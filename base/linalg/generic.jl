@@ -693,8 +693,6 @@ trace(x::Number) = x
 
 #det(a::AbstractMatrix)
 
-inv(a::StridedMatrix) = throw(ArgumentError("argument must be a square matrix"))
-
 """
     inv(M)
 
