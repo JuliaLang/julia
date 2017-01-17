@@ -409,7 +409,7 @@ Function *juliapersonality_func;
 #endif
 static Function *diff_gc_total_bytes_func;
 static Function *jlarray_data_owner_func;
-static Function *jlgetworld_func;
+static GlobalVariable *jlgetworld_global;
 
 // placeholder functions
 static Function *gcroot_func;
@@ -1242,36 +1242,34 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 {
     assert(jl_is_tuple_type(argt));
     Function *llvmf = jl_cfunction_object(f, rt, (jl_tupletype_t*)argt);
-    if (llvmf) {
-        // force eager emission of the function (llvm 3.3 gets confused otherwise and tries to do recursive compilation)
-        uint64_t Addr = getAddressForFunction(llvmf);
+    // force eager emission of the function (llvm 3.3 gets confused otherwise and tries to do recursive compilation)
+    uint64_t Addr = getAddressForFunction(llvmf);
 
 #if defined(USE_ORCJIT) || defined(USE_MCJIT)
-        if (imaging_mode)
-             // in the old JIT, the shadow_module aliases the engine_module,
-             // otherwise, just point the alias to the declaration
+    if (imaging_mode)
+         // in the old JIT, the shadow_module aliases the engine_module,
+         // otherwise, just point the alias to the declaration
 #endif
-            llvmf = cast<Function>(shadow_output->getNamedValue(llvmf->getName()));
+        llvmf = cast<Function>(shadow_output->getNamedValue(llvmf->getName()));
 
-        // make the alias to the shadow_module
-        GlobalAlias *GA =
+    // make the alias to the shadow_module
+    GlobalAlias *GA =
 #if JL_LLVM_VERSION >= 30800
-            GlobalAlias::create(llvmf->getType()->getElementType(), llvmf->getType()->getAddressSpace(),
-                                GlobalValue::ExternalLinkage, name, llvmf, shadow_output);
+        GlobalAlias::create(llvmf->getType()->getElementType(), llvmf->getType()->getAddressSpace(),
+                            GlobalValue::ExternalLinkage, name, llvmf, shadow_output);
 #elif JL_LLVM_VERSION >= 30700
-            GlobalAlias::create(cast<PointerType>(llvmf->getType()),
-                                GlobalValue::ExternalLinkage, name, llvmf, shadow_output);
+        GlobalAlias::create(cast<PointerType>(llvmf->getType()),
+                            GlobalValue::ExternalLinkage, name, llvmf, shadow_output);
 #else
-            new GlobalAlias(llvmf->getType(), GlobalValue::ExternalLinkage, name, llvmf, shadow_output);
+        new GlobalAlias(llvmf->getType(), GlobalValue::ExternalLinkage, name, llvmf, shadow_output);
 #endif
 
 #if defined(USE_ORCJIT) || defined(USE_MCJIT)
-        // make the alias name is valid for the current session
-        jl_ExecutionEngine->addGlobalMapping(GA, (void*)(uintptr_t)Addr);
+    // make the alias name is valid for the current session
+    jl_ExecutionEngine->addGlobalMapping(GA, (void*)(uintptr_t)Addr);
 #else
-        (void)GA; (void)Addr;
+    (void)GA; (void)Addr;
 #endif
-    }
 }
 
 // --- native code info, and dump function to IR and ASM ---
@@ -3390,7 +3388,7 @@ static void emit_stmtpos(jl_value_t *expr, jl_codectx_t *ctx)
     }
     else {
         if (ctx->linfo->def == NULL) {
-            Value *world = builder.CreateCall(prepare_call(jlgetworld_func));
+            Value *world = builder.CreateLoad(prepare_global(jlgetworld_global));
             builder.CreateStore(world, ctx->world_age_field);
         }
         (void)emit_expr(expr, ctx);
@@ -3648,8 +3646,7 @@ static void emit_last_age_field(jl_codectx_t *ctx)
 }
 
 static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_tupletype_t *argt,
-                                  jl_typemap_entry_t *sf, jl_value_t *declrt, jl_tupletype_t *sigt,
-                                  size_t world)
+                                  jl_typemap_entry_t *sf, jl_value_t *declrt, jl_tupletype_t *sigt)
 {
     // Generate a c-callable wrapper
     bool toboxed;
@@ -3665,6 +3662,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         jl_error("va_arg syntax not allowed for cfunction argument list");
 
     const char *name = "cfunction";
+    size_t world = jl_world_counter;
     // try to look up this function for direct invoking
     jl_method_instance_t *lam = jl_get_specialization1((jl_tupletype_t*)sigt, world);
     jl_value_t *astrt = (jl_value_t*)jl_any_type;
@@ -3718,20 +3716,37 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     ctx.f = cw;
     ctx.linfo = lam;
     ctx.code = NULL;
-    ctx.world = jl_world_counter;
+    ctx.world = world;
     ctx.sret = false;
     ctx.spvals_ptr = NULL;
     ctx.params = &jl_default_cgparams;
     allocate_gc_frame(b0, &ctx);
     emit_last_age_field(&ctx);
+
     Value *dummy_world = builder.CreateAlloca(T_size);
-    Value *have_tls = builder.CreateICmpNE(ctx.ptlsStates, Constant::getNullValue(ctx.ptlsStates->getType()));
+    Value *have_tls = builder.CreateIsNotNull(ctx.ptlsStates);
     // TODO: in the future, try to initialize a full TLS context here
     // for now, just use a dummy field to avoid a branch in this function
     ctx.world_age_field = builder.CreateSelect(have_tls, ctx.world_age_field, dummy_world);
     Value *last_age = tbaa_decorate(tbaa_gcframe, builder.CreateLoad(ctx.world_age_field));
-    builder.CreateStore(ConstantInt::get(T_size, world), ctx.world_age_field);
+    have_tls = builder.CreateAnd(have_tls, builder.CreateIsNotNull(last_age));
+    Value *world_v = builder.CreateLoad(prepare_global(jlgetworld_global));
 
+    Value *age_ok = NULL;
+    if (lam) {
+        Value *lam_max = builder.CreateLoad(
+                builder.CreateConstInBoundsGEP1_32(
+                    LLVM37_param(T_size)
+                    emit_bitcast(literal_pointer_val((jl_value_t*)lam), T_psize),
+                    offsetof(jl_method_instance_t, max_world) / sizeof(size_t)));
+        // XXX: age is always OK if we don't have a TLS. This is a hack required due to `@threadcall` abuse.
+        // and adds quite a bit of complexity here, even though it's still wrong
+        // (anything that tries to interact with the runtime will fault)
+        age_ok = builder.CreateICmpUGE(lam_max, world_v);
+        world_v = builder.CreateSelect(builder.CreateOr(have_tls, age_ok), world_v, lam_max);
+        age_ok = builder.CreateOr(builder.CreateNot(have_tls), age_ok);
+    }
+    builder.CreateStore(world_v, ctx.world_age_field);
     // Save the Function object reference
     sf->func.value = jl_box_voidpointer((void*)cw_proto);
     jl_gc_wb(sf, sf->func.value);
@@ -3745,21 +3760,14 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     std::vector<Value*> args;
     Function::arg_iterator AI = cw->arg_begin();
     Value *sretPtr = sig.sret ? &*AI++ : NULL;
-    if (lam == NULL) {
-        theFptr = jlapplygeneric_func;
-        specsig = false;
+    if (lam && lam->jlcall_api == 2) {
+        nargs = 0; // arguments not needed
+        specsig = true;
         jlfunc_sret = false;
-        myargs = CallInst::Create(prepare_call(jlcall_frame_func),
-            ConstantInt::get(T_int32, nargs + 1),
-            "",
-            /*InsertBefore*/ctx.ptlsStates);
-        GetElementPtrInst *slot = GetElementPtrInst::Create(LLVM37_param(NULL) myargs,
-                ArrayRef<Value*>(ConstantInt::get(T_int32, FParamIndex++)));
-        slot->insertAfter(ctx.ptlsStates);
-        Value *theF = literal_pointer_val((jl_value_t*)ff);
-        builder.CreateStore(theF, slot);
+        myargs = NULL;
+        theFptr = NULL;
     }
-    else if (lam->functionObjectsDecls.specFunctionObject != NULL) {
+    else if (lam && lam->functionObjectsDecls.specFunctionObject != NULL) {
         theFptr = (Function*)lam->functionObjectsDecls.specFunctionObject;
         specsig = true;
         jlfunc_sret = theFptr->hasStructRetAttr();
@@ -3774,21 +3782,15 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         }
         myargs = NULL;
     }
-    else if (lam->jlcall_api == 2) {
-        nargs = 0; // arguments not needed
-        specsig = false;
-        jlfunc_sret = false;
-        myargs = NULL;
-        theFptr = NULL;
-    }
     else {
-        theFptr = (Function*)lam->functionObjectsDecls.functionObject;
+        theFptr = lam ? (Function*)lam->functionObjectsDecls.functionObject : NULL;
         specsig = false;
         jlfunc_sret = false;
         myargs = CallInst::Create(prepare_call(jlcall_frame_func),
-            ConstantInt::get(T_int32, nargs),
+            ConstantInt::get(T_int32, nargs + 1),
             "",
             /*InsertBefore*/ctx.ptlsStates);
+        FParamIndex++; // leave room for writing the ff object at the beginning
     }
 
     // first emit the arguments
@@ -3897,40 +3899,76 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
 
     // Create the call
     jl_cgval_t retval;
-    if (lam == NULL) {
-        assert(theFptr);
+    Function *gf_thunk = NULL;
+    if (specsig) {
+        if (lam->jlcall_api == 2) {
+            retval = mark_julia_const(lam->inferred);
+        }
+        else {
+            assert(theFptr);
+            bool retboxed;
+            Value *call_v = prepare_call(theFptr);
+            if (age_ok) {
+                funcName << "_gfthunk";
+                gf_thunk = Function::Create(theFptr->getFunctionType(),
+                                GlobalVariable::InternalLinkage,
+                                funcName.str(), M);
+                jl_init_function(gf_thunk);
+                gf_thunk->setAttributes(theFptr->getAttributes());
 #if JL_LLVM_VERSION >= 30700
-        Value *ret = builder.CreateCall(prepare_call(theFptr), {myargs,
-                                        ConstantInt::get(T_int32, nargs + 1)});
-#else
-        Value *ret = builder.CreateCall2(prepare_call(theFptr), myargs,
-                                         ConstantInt::get(T_int32, nargs + 1));
+                gf_thunk->addFnAttr("no-frame-pointer-elim", "true");
 #endif
-        retval = mark_julia_type(ret, true, astrt, &ctx);
-    }
-    else if (specsig) {
-        assert(theFptr);
-        bool retboxed;
-        CallInst *call = builder.CreateCall(prepare_call(theFptr), ArrayRef<Value*>(args));
-        call->setAttributes(theFptr->getAttributes());
-        (void)julia_type_to_llvm(astrt, &retboxed);
-        retval = mark_julia_type(jlfunc_sret ? (Value*)builder.CreateLoad(result) : (Value*)call, retboxed, astrt, &ctx);
-    }
-    else if (lam->jlcall_api == 2) {
-        retval = mark_julia_const(lam->inferred);
+                call_v = builder.CreateSelect(age_ok, call_v, gf_thunk);
+            }
+            CallInst *call = builder.CreateCall(call_v, ArrayRef<Value*>(args));
+            call->setAttributes(theFptr->getAttributes());
+            (void)julia_type_to_llvm(astrt, &retboxed);
+            retval = mark_julia_type(jlfunc_sret ? (Value*)builder.CreateLoad(result) : (Value*)call, retboxed, astrt, &ctx);
+        }
     }
     else {
-        assert(theFptr);
         // for jlcall, we need to pass the function object even if it is a ghost.
         // here we reconstruct the function instance from its type (first elt of argt)
         Value *theF = literal_pointer_val((jl_value_t*)ff);
+        GetElementPtrInst *slot = GetElementPtrInst::Create(LLVM37_param(NULL) myargs,
+                ArrayRef<Value*>(ConstantInt::get(T_int32, 0)));
+        slot->insertAfter(ctx.ptlsStates);
+        builder.CreateStore(theF, slot);
+
+        BasicBlock *b_generic, *b_jlcall, *b_after;
+        Value *ret_jlcall;
+        if (age_ok) {
+            assert(theFptr);
+            b_generic = BasicBlock::Create(jl_LLVMContext, "generic", cw);
+            b_jlcall = BasicBlock::Create(jl_LLVMContext, "apply", cw);
+            b_after = BasicBlock::Create(jl_LLVMContext, "after", cw);
+            builder.CreateCondBr(age_ok, b_jlcall, b_generic);
+            builder.SetInsertPoint(b_jlcall);
+            Value *nargs_v = ConstantInt::get(T_int32, nargs);
+            Value *myargs1 = builder.CreateConstInBoundsGEP1_32(LLVM37_param(NULL) myargs, 1);
 #if JL_LLVM_VERSION >= 30700
-        Value *ret = builder.CreateCall(prepare_call(theFptr), {theF, myargs,
-                                        ConstantInt::get(T_int32, nargs)});
+            ret_jlcall = builder.CreateCall(prepare_call(theFptr), {theF, myargs1, nargs_v});
 #else
-        Value *ret = builder.CreateCall3(prepare_call(theFptr), theF, myargs,
-                                         ConstantInt::get(T_int32, nargs));
+            ret_jlcall = builder.CreateCall3(prepare_call(theFptr), theF, myargs1, nargs_v);
 #endif
+            builder.CreateBr(b_after);
+            builder.SetInsertPoint(b_generic);
+        }
+
+        Value *nargs_v = ConstantInt::get(T_int32, nargs + 1);
+#if JL_LLVM_VERSION >= 30700
+        Value *ret = builder.CreateCall(prepare_call(jlapplygeneric_func), {myargs, nargs_v});
+#else
+        Value *ret = builder.CreateCall2(prepare_call(jlapplygeneric_func), myargs, nargs_v);
+#endif
+        if (age_ok) {
+            builder.CreateBr(b_after);
+            builder.SetInsertPoint(b_after);
+            PHINode *retphi = builder.CreatePHI(T_pjlvalue, 2);
+            retphi->addIncoming(ret_jlcall, b_jlcall);
+            retphi->addIncoming(ret, b_generic);
+            ret = retphi;
+        }
         retval = mark_julia_type(ret, true, astrt, &ctx);
     }
 
@@ -3971,11 +4009,94 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     else
         builder.CreateRet(r);
 
+    // also need to finish emission of our specsig -> jl_apply_generic converter thunk
+    if (gf_thunk) {
+        assert(lam && specsig);
+        BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", gf_thunk);
+        builder.SetInsertPoint(b0);
+        builder.SetCurrentDebugLocation(noDbg);
+
+        jl_codectx_t ctx2 = {};
+        ctx2.f = gf_thunk;
+        ctx2.linfo = NULL;
+        ctx2.code = NULL;
+        ctx2.world = world;
+        ctx2.sret = false;
+        ctx2.spvals_ptr = NULL;
+        ctx2.params = &jl_default_cgparams;
+        allocate_gc_frame(b0, &ctx2);
+
+        Function::arg_iterator AI = gf_thunk->arg_begin();
+        Value *myargs = CallInst::Create(prepare_call(jlcall_frame_func),
+            ConstantInt::get(T_int32, nargs + 1),
+            "",
+            /*InsertBefore*/ctx2.ptlsStates);
+        if (jlfunc_sret)
+            ++AI;
+        for (size_t i = 0; i < nargs + 1; i++) {
+            jl_value_t *jt = jl_nth_slot_type(lam->specTypes, i);
+            bool isboxed;
+            Type *et = julia_type_to_llvm(jt, &isboxed);
+            Value *arg_box;
+            if (type_is_ghost(et)) {
+                assert(jl_is_datatype(jt) && ((jl_datatype_t*)jt)->instance);
+                arg_box = literal_pointer_val(((jl_datatype_t*)jt)->instance);
+            }
+            else {
+                Value *arg_v = &*AI;
+                ++AI;
+                Type *at = arg_v->getType();
+                if (isboxed) {
+                    assert(at == T_pjlvalue && et == T_pjlvalue);
+                    arg_box = arg_v;
+                }
+                else if (et->isAggregateType()) {
+                    arg_box = boxed(mark_julia_slot(arg_v, jt, tbaa_const), &ctx2, false);
+                }
+                else {
+                    assert(at == et);
+                    arg_box = boxed(mark_julia_type(arg_v, false, jt, &ctx2), &ctx2, false);
+                }
+            }
+            Value *argn = builder.CreateConstInBoundsGEP1_32(LLVM37_param(NULL) myargs, i);
+            builder.CreateStore(arg_box, argn);
+        }
+        assert(AI == gf_thunk->arg_end());
+        Value *nargs_v = ConstantInt::get(T_int32, nargs + 1);
+#if JL_LLVM_VERSION >= 30700
+        Value *gf_ret = builder.CreateCall(prepare_call(jlapplygeneric_func), {myargs, nargs_v});
+#else
+        Value *gf_ret = builder.CreateCall2(prepare_call(jlapplygeneric_func), myargs, nargs_v);
+#endif
+        bool retboxed;
+        (void)julia_type_to_llvm(astrt, &retboxed);
+        if (retboxed) {
+            assert(!jlfunc_sret);
+            builder.CreateRet(gf_ret);
+        }
+        else {
+            jl_cgval_t gf_retbox = mark_julia_type(gf_ret, true, jl_any_type, &ctx2);
+            emit_typecheck(gf_retbox, astrt, "cfunction", &ctx2);
+            Type *gfrt = gf_thunk->getReturnType();
+            if (jlfunc_sret) {
+                unsigned sret_nbytes = jl_datatype_size(astrt);
+                builder.CreateMemCpy(&*gf_thunk->arg_begin(), gf_ret, sret_nbytes, jl_alignment(sret_nbytes));
+                builder.CreateRetVoid();
+            }
+            else if (gfrt->isVoidTy()) {
+                builder.CreateRetVoid();
+            }
+            else {
+                gf_ret = emit_bitcast(gf_ret, gfrt->getPointerTo());
+                builder.CreateRet(builder.CreateLoad(gf_ret));
+            }
+        }
+    }
+
     builder.SetCurrentDebugLocation(noDbg);
     builder.ClearInsertionPoint();
 
     jl_finalize_module(M, true);
-    assert(!ctx.roots);
 
     return cw_proto;
 }
@@ -4038,19 +4159,24 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
     cfunc_sig = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)cfunc_sig);
 
     // check the cache
-    size_t world = jl_world_counter;
+    jl_typemap_entry_t *sf = NULL;
     if (jl_cfunction_list.unknown != jl_nothing) {
-        jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(jl_cfunction_list, (jl_tupletype_t*)cfunc_sig, NULL, 1, 0, /*offs*/0, world);
-        if (sf) {
-            Function *f = (Function*)jl_unbox_voidpointer(sf->func.value);
-            if (f) {
-               JL_GC_POP();
-               return f;
+        sf = jl_typemap_assoc_by_type(jl_cfunction_list, (jl_tupletype_t*)cfunc_sig, NULL, 1, /*subtype*/0, /*offs*/0, /*world*/1);
+        if (sf != NULL) {
+            jl_value_t *v = sf->func.value;
+            if (v != NULL) {
+                if (jl_is_svec(v))
+                    v = jl_svecref(v, 0);
+                Function *f = (Function*)jl_unbox_voidpointer(v);
+                JL_GC_POP();
+                return f;
             }
         }
     }
-    jl_typemap_entry_t *sf = jl_typemap_insert(&jl_cfunction_list, (jl_value_t*)jl_cfunction_list.unknown, (jl_tupletype_t*)cfunc_sig,
-            jl_emptysvec, NULL, jl_emptysvec, NULL, /*offs*/0, &cfunction_cache, world, world, NULL);
+    if (sf == NULL) {
+        sf = jl_typemap_insert(&jl_cfunction_list, (jl_value_t*)jl_cfunction_list.unknown, (jl_tupletype_t*)cfunc_sig,
+            jl_emptysvec, NULL, jl_emptysvec, NULL, /*offs*/0, &cfunction_cache, 1, ~(size_t)0, NULL);
+    }
 
     // Backup the info for the nested compile
     JL_LOCK(&codegen_lock);
@@ -4058,13 +4184,21 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
     DebugLoc olddl = builder.getCurrentDebugLocation();
     bool last_n_c = nested_compile;
     nested_compile = true;
-    Function *f = gen_cfun_wrapper(ff, crt, (jl_tupletype_t*)argt, sf, declrt, (jl_tupletype_t*)sigt, world);
+    Function *f;
+    JL_TRY {
+        f = gen_cfun_wrapper(ff, crt, (jl_tupletype_t*)argt, sf, declrt, (jl_tupletype_t*)sigt);
+    }
+    JL_CATCH {
+        f = NULL;
+    }
     // Restore the previous compile context
     builder.restoreIP(old);
     builder.SetCurrentDebugLocation(olddl);
     nested_compile = last_n_c;
     JL_UNLOCK(&codegen_lock); // Might GC
     JL_GC_POP();
+    if (f == NULL)
+        jl_rethrow();
     return f;
 }
 
@@ -6036,12 +6170,11 @@ static void init_julia_llvm_env(Module *m)
     except_enter_func->addFnAttr(Attribute::ReturnsTwice);
     add_named_global(except_enter_func, (void*)NULL, /*dllimport*/false);
 
-    jlgetworld_func =
-        Function::Create(FunctionType::get(T_size, ArrayRef<Type*>(), false),
-                         Function::ExternalLinkage,
-                         "jl_get_world_counter", m);
-    jlgetworld_func->addFnAttr(Attribute::ReadOnly);
-    add_named_global(jlgetworld_func, jl_get_world_counter);
+    jlgetworld_global =
+        new GlobalVariable(*m, T_size,
+                           false, GlobalVariable::ExternalLinkage,
+                           NULL, "jl_world_counter");
+    add_named_global(jlgetworld_global, &jl_world_counter);
 
     // set up optimization passes
 #if JL_LLVM_VERSION >= 30700
