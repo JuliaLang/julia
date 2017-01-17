@@ -10,6 +10,12 @@ f47{T}(x::Vector{Vector{T}}) = 0
 @test_throws MethodError f47(Array{Vector}(0))
 @test f47(Array{Vector{Int}}(0)) == 0
 
+# checking unionall and typevar components
+@test_throws TypeError ([] where T)
+@test_throws TypeError ([T] where T)
+@test_throws TypeError (Array{T} where T<:[])
+@test_throws TypeError (Array{T} where T>:[])
+
 # issue #8652
 args_morespecific(a, b) = ccall(:jl_type_morespecific, Cint, (Any,Any), a, b) != 0
 let
