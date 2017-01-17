@@ -197,7 +197,7 @@ end
 """
     upstream(ref::GitReference) -> Nullable{GitReference}
 
-Determine if the branch specified by `ref` has a specified upstream branch.
+Determine if the branch containing `ref` has a specified upstream branch.
 
 `upstream` returns a `Nullable`, which will be null if the requested branch does
 not have an upstream counterpart. If the upstream branch does exist, the `Nullable`

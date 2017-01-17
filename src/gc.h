@@ -116,7 +116,7 @@ typedef struct {
     // index of pool that owns this page
     uint8_t pool_n;
     // Whether any cell in the page is marked
-    // This bit is set before sweeping iff there's live cells in the page.
+    // This bit is set before sweeping iff there are live cells in the page.
     // Note that before marking or after sweeping there can be live
     // (and young) cells in the page for `!has_marked`.
     uint8_t has_marked;
