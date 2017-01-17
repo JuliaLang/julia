@@ -38,61 +38,66 @@ workers and tasks.
 For multiple collection arguments, apply `f` elementwise.
 
 Note that `f` must be made available to all worker processes; see
-[Code Availability and Loading Packages](@ref)
-for details.
+[Code Availability and Loading Packages](@ref) for details.
 
 If a worker pool is not specified, all available workers, i.e., the default worker pool
 is used.
 
 By default, `pmap` distributes the computation over all specified workers. To use only the
 local process and distribute over tasks, specify `distributed=false`.
-This is equivalent to [`asyncmap`](@ref).
+This is equivalent to using [`asyncmap`](@ref). For example,
+`pmap(f, c; distributed=false)` is equivalent to `asyncmap(f,c; ntasks=()->nworkers())`
 
 `pmap` can also use a mix of processes and tasks via the `batch_size` argument. For batch sizes
-greater than 1, the collection is split into multiple batches, which are distributed across
-workers. Each such batch is processed in parallel via tasks in each worker. The specified
-`batch_size` is an upper limit, the actual size of batches may be smaller and is calculated
-depending on the number of workers available and length of the collection.
+greater than 1, the collection is processed in multiple batches, each of length `batch_size` or less.
+A batch is sent as a single request to a free worker, where a local [`asyncmap`](@ref) processes
+elements from the batch using multiple concurrent tasks.
 
-Any error stops pmap from processing the remainder of the collection. To override this behavior
+Any error stops `pmap` from processing the remainder of the collection. To override this behavior
 you can specify an error handling function via argument `on_error` which takes in a single argument, i.e.,
 the exception. The function can stop the processing by rethrowing the error, or, to continue, return any value
 which is then returned inline with the results to the caller.
 
-Failed computation can also be retried via `retry_delays`, `retry_check`, which
-are passed through to `retry` as keyword arguments `delays` and `check`,
+Consider the following two examples. The first one returns the exception object inline,
+the second a 0 in place of any exception:
+```julia
+julia> pmap(x->iseven(x) ? error("foo") : x, 1:4; on_error=identity)
+4-element Array{Any,1}:
+ 1
+  ErrorException("foo")
+ 3
+  ErrorException("foo")
+
+julia> pmap(x->iseven(x) ? error("foo") : x, 1:4; on_error=ex->0)
+4-element Array{Int64,1}:
+ 1
+ 0
+ 3
+ 0
+```
+
+Errors can also be handled by retrying failed computations. Keyword arguments `retry_delays` and
+`retry_check` are passed through to [`retry`](@ref) as keyword arguments `delays` and `check`
 respectively. If batching is specified, and an entire batch fails, all items in
 the batch are retried.
 
-The following are equivalent:
+Note that if both `on_error` and `retry_delays` are specified, the `on_error` hook is called
+before retrying. If `on_error` does not throw (or rethrow) an exception, the element will not
+be retried.
 
-* `pmap(f, c; distributed=false)` and `asyncmap(f,c)`
-* `pmap(f, c; retry_delays=Base.ExponentialBackOff())` and `asyncmap(retry(remote(f)),c)`
-* `pmap(f, c; retry_delays=Base.ExponentialBackOff(), on_error=e->e)` and `asyncmap(x->try retry(remote(f))(x) catch e; e end, c)`
+Example: On errors, retry `f` on an element a maximum of 3 times without any delay between retries.
+```julia
+pmap(f, c; retry_delays = zeros(3))
+```
+
+Example: Retry `f` only if the exception is not of type `InexactError`, with exponentially increasing
+delays up to 3 times. Return a `NaN` in place for all `InexactError` occurrences.
+```julia
+pmap(f, c; on_error = e->(isa(e, InexactError) ? NaN : rethrow(e)), retry_delays = ExponentialBackOff(n = 3))
+```
 """
 function pmap(p::AbstractWorkerPool, f, c; distributed=true, batch_size=1, on_error=nothing,
-                                           retry_delays=[],
-                                           retry_check=nothing,
-                                           # deprecated keyword args:
-                                           err_retry=nothing, err_stop=nothing, pids=nothing)
-    #15409
-    if err_retry !== nothing
-        depwarn("err_retry is deprecated, use pmap(retry(f), c...).", :pmap)
-        if err_retry == true
-            f = retry(f, delays=retry_delays, check=retry_check)
-        end
-    end
-    if pids !== nothing
-        depwarn("pids is deprecated, use pmap(::WorkerPool, f, c...).", :pmap)
-        p = WorkerPool(pids)
-    end
-    if err_stop !== nothing
-        depwarn("err_stop is deprecated, use pmap(f, c...; on_error = error_handling_func).", :pmap)
-        if err_stop === false
-            on_error = e->e
-        end
-    end
-
+                                           retry_delays=[], retry_check=nothing)
     f_orig = f
     # Don't do remote calls if there are no workers.
     if (length(p) == 0) || (length(p) == 1 && fetch(p.channel) == myid())
@@ -106,15 +111,16 @@ function pmap(p::AbstractWorkerPool, f, c; distributed=true, batch_size=1, on_er
 
     # If not batching, do simple remote call.
     if batch_size == 1
+        if on_error !== nothing
+            f = wrap_on_error(f, on_error)
+        end
+
         if distributed
             f = remote(p, f)
         end
 
         if length(retry_delays) > 0
             f = wrap_retry(f, retry_delays, retry_check)
-        end
-        if on_error !== nothing
-            f = wrap_on_error(f, on_error)
         end
 
         return asyncmap(f, c; ntasks=()->nworkers(p))
@@ -125,14 +131,20 @@ function pmap(p::AbstractWorkerPool, f, c; distributed=true, batch_size=1, on_er
         # to ensure that we do not call mapped function on the same element more than length(retry_delays).
         # This guarantee is not possible in case of worker death / network errors, wherein
         # we will retry the entire batch on a new worker.
-        if (on_error !== nothing) || (length(retry_delays) > 0)
+
+        handle_errors = ((on_error !== nothing) || (length(retry_delays) > 0))
+
+        # Unlike the non-batch case, in batch mode, we trap all errors and the on_error hook (if present)
+        # is processed later in non-batch mode.
+        if handle_errors
             f = wrap_on_error(f, (x,e)->BatchProcessingError(x,e); capture_data=true)
         end
-        f = wrap_batch(f, p, on_error)
+
+        f = wrap_batch(f, p, handle_errors)
         results = asyncmap(f, c; ntasks=()->nworkers(p), batch_size=batch_size)
 
-        # handle error processing....
-        if (on_error !== nothing) || (length(retry_delays) > 0)
+        # process errors if any.
+        if handle_errors
             process_batch_errors!(p, f_orig, results, on_error, retry_delays, retry_check)
         end
 
@@ -158,15 +170,23 @@ function wrap_on_error(f, on_error; capture_data=false)
     end
 end
 
-wrap_retry(f, retry_delays, retry_check) = retry(f, delays=retry_delays, check=retry_check)
+function wrap_retry(f, retry_delays, retry_check)
+    retry(delays=retry_delays, check=retry_check) do x
+        try
+            f(x)
+        catch e
+            rethrow(extract_exception(e))
+        end
+    end
+end
 
-function wrap_batch(f, p, on_error)
+function wrap_batch(f, p, handle_errors)
     f = asyncmap_batch(f)
     return batch -> begin
         try
             remotecall_fetch(f, p, batch)
         catch e
-            if on_error !== nothing
+            if handle_errors
                 return Any[BatchProcessingError(batch[i], e) for i in 1:length(batch)]
             else
                 rethrow(e)
@@ -176,34 +196,35 @@ function wrap_batch(f, p, on_error)
 end
 
 asyncmap_batch(f) = batch -> asyncmap(x->f(x...), batch)
+extract_exception(e) = isa(e, RemoteException) ? e.captured.ex : e
+
 
 function process_batch_errors!(p, f, results, on_error, retry_delays, retry_check)
     # Handle all the ones in error in another pmap, with batch size set to 1
-    if (on_error !== nothing) || (length(retry_delays) > 0)
-        reprocess = []
-        for (idx, v) in enumerate(results)
-            if isa(v, BatchProcessingError)
-                push!(reprocess, (idx,v))
-            end
+    reprocess = []
+    for (idx, v) in enumerate(results)
+        if isa(v, BatchProcessingError)
+            push!(reprocess, (idx,v))
+        end
+    end
+
+    if length(reprocess) > 0
+        errors = [x[2] for x in reprocess]
+        exceptions = [x.ex for x in errors]
+        state = start(retry_delays)
+        if (length(retry_delays) > 0) &&
+                (retry_check==nothing || all([retry_check(state,ex)[2] for ex in exceptions]))
+            # BatchProcessingError.data is a tuple of original args
+            error_processed = pmap(p, x->f(x...), [x.data for x in errors];
+                    on_error = on_error, retry_delays = collect(retry_delays)[2:end], retry_check = retry_check)
+        elseif on_error !== nothing
+            error_processed = map(on_error, exceptions)
+        else
+            throw(CompositeException(exceptions))
         end
 
-        if length(reprocess) > 0
-            errors = [x[2] for x in reprocess]
-            exceptions = [x.ex for x in errors]
-            state = start(retry_delays)
-            if (length(retry_delays) > 0) &&
-                    (retry_check==nothing || all([retry_check(state,ex)[2] for ex in exceptions]))
-                error_processed = pmap(p, f, [x.data for x in errors];
-                        on_error = on_error, retry_delays = collect(retry_delays)[2:end], retry_check = retry_check)
-            elseif on_error !== nothing
-                error_processed = map(on_error, exceptions)
-            else
-                throw(CompositeException(exceptions))
-            end
-
-            for (idx, v) in enumerate(error_processed)
-                results[reprocess[idx][1]] = v
-            end
+        for (idx, v) in enumerate(error_processed)
+            results[reprocess[idx][1]] = v
         end
     end
     nothing
