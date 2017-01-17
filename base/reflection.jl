@@ -314,6 +314,7 @@ function _subtypes(m::Module, x::DataType, sts=Set{DataType}(), visited=Set{Modu
     return sts
 end
 subtypes(m::Module, x::DataType) = sort(collect(_subtypes(m, x)), by=string)
+subtypes(m::Module, x::UnionAll) = subtypes(m, unwrap_unionall(x))
 
 """
     subtypes(T::DataType)
@@ -331,6 +332,7 @@ julia> subtypes(Integer)
 ```
 """
 subtypes(x::DataType) = subtypes(Main, x)
+subtypes(x::UnionAll) = subtypes(unwrap_unionall(x))
 
 function to_tuple_type(t::ANY)
     @_pure_meta
