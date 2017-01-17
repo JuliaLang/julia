@@ -303,7 +303,25 @@ function _subtypes(m::Module, x::DataType, sts=Set{DataType}(), visited=Set{Modu
     for s in names(m, true)
         if isdefined(m, s) && !isdeprecated(m, s)
             t = getfield(m, s)
-            if isa(t, DataType) && t.name.name == s && supertype(t).name == x.name
+            if isa(t, DataType) && supertype(t) == x
+                ti = typeintersect(t, x)
+                ti != Bottom && push!(sts, ti)
+            elseif isa(t, UnionAll) && isa(unwrap_unionall(t), DataType)
+                ti = typeintersect(t, x)
+                ti != Bottom && supertype(ti) == x && push!(sts, ti)
+            elseif isa(t, Module) && !in(t, visited)
+                _subtypes(t, x, sts, visited)
+            end
+        end
+    end
+    return sts
+end
+function _subtypes(m::Module, x::UnionAll, sts=Set{UnionAll}(), visited=Set{Module}())
+    push!(visited, m)
+    for s in names(m, true)
+        if isdefined(m, s) && !isdeprecated(m, s)
+            t = getfield(m, s)
+            if isa(t, UnionAll) && isa(unwrap_unionall(t), DataType) && supertype(t) == x
                 ti = typeintersect(t, x)
                 ti != Bottom && push!(sts, ti)
             elseif isa(t, Module) && !in(t, visited)
@@ -314,7 +332,7 @@ function _subtypes(m::Module, x::DataType, sts=Set{DataType}(), visited=Set{Modu
     return sts
 end
 subtypes(m::Module, x::DataType) = sort(collect(_subtypes(m, x)), by=string)
-subtypes(m::Module, x::UnionAll) = subtypes(m, unwrap_unionall(x))
+subtypes(m::Module, x::UnionAll) = sort(collect(_subtypes(m, x)), by=string)
 
 """
     subtypes(T::DataType)
@@ -332,7 +350,7 @@ julia> subtypes(Integer)
 ```
 """
 subtypes(x::DataType) = subtypes(Main, x)
-subtypes(x::UnionAll) = subtypes(unwrap_unionall(x))
+subtypes(x::UnionAll) = subtypes(Main, x)
 
 function to_tuple_type(t::ANY)
     @_pure_meta
