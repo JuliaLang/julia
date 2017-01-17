@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-import .Serializer: serialize_cycle, serialize_type, writetag, UNDEFREF_TAG
+import .Serializer: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG
 
 type SharedArray{T,N} <: DenseArray{T,N}
     dims::NTuple{N,Int}
@@ -397,8 +397,7 @@ end
 # Don't serialize s (it is the complete array) and
 # pidx, which is relevant to the current process only
 function serialize(s::AbstractSerializer, S::SharedArray)
-    serialize_cycle(s, S) && return
-    serialize_type(s, typeof(S))
+    serialize_cycle_header(s, S) && return
     for n in fieldnames(SharedArray)
         if n in [:s, :pidx, :loc_subarr_1d]
             writetag(s.io, UNDEFREF_TAG)

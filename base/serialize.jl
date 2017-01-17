@@ -110,6 +110,14 @@ function serialize_cycle(s::AbstractSerializer, x)
     return false
 end
 
+function serialize_cycle_header(s::AbstractSerializer, x::ANY)
+    t = typeof(x)
+    t.mutable && haskey(s.table, x) && serialize_cycle(s, x) && return true
+    serialize_type(s, t)
+    t.mutable && serialize_cycle(s, x)
+    return false
+end
+
 function reset_state(s::AbstractSerializer)
     s.counter = 0
     s.table = ObjectIdDict()
@@ -292,8 +300,7 @@ function serialize(s::AbstractSerializer, ex::Expr)
 end
 
 function serialize(s::AbstractSerializer, t::Dict)
-    serialize_cycle(s, t) && return
-    serialize_type(s, typeof(t))
+    serialize_cycle_header(s, t) && return
     write(s.io, Int32(length(t)))
     for (k,v) in t
         serialize(s, k)
@@ -472,7 +479,8 @@ function serialize_type_data(s, t::DataType, type_itself::Bool)
         serialize(s, mod)
     end
     if !isempty(t.parameters)
-        if (whole ? (t === unwrap_unionall(t.name.wrapper)) : (isdefined(mod,tname) && t === getfield(mod,tname)))
+        if (whole ? (t === unwrap_unionall(t.name.wrapper)) :
+                    (isdefined(mod,tname) && t === unwrap_unionall(getfield(mod,tname))))
             serialize(s, svec())
         else
             serialize(s, t.parameters)
@@ -521,9 +529,7 @@ function serialize_any(s::AbstractSerializer, x::ANY)
         serialize_type(s, t)
         write(s.io, x)
     else
-        t.mutable && haskey(s.table, x) && serialize_cycle(s, x) && return
-        serialize_type(s, t)
-        t.mutable && serialize_cycle(s, x)
+        serialize_cycle_header(s, x) && return
         for i in 1:nf
             if isdefined(x, i)
                 serialize(s, getfield(x, i))
@@ -588,7 +594,7 @@ deserialize_tuple(s::AbstractSerializer, len) = ntuple(i->deserialize(s), len)
 
 function deserialize(s::AbstractSerializer, ::Type{SimpleVector})
     n = read(s.io, Int32)
-    svec([ deserialize(s) for i=1:n ]...)
+    svec(Any[ deserialize(s) for i=1:n ]...)
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Module})
@@ -838,6 +844,10 @@ function deserialize_datatype(s::AbstractSerializer)
         t = ty
     else
         params = deserialize(s)
+        if isempty(params)
+            @assert (form&1) == 0
+            return unwrap_unionall(ty)
+        end
         t = ty{params...}
     end
     if (form&1) == 0
