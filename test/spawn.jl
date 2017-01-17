@@ -6,7 +6,7 @@
 
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 
-yes = `perl -le 'while (1) {print STDOUT "y"}'`
+yes = `yes`
 echo = `echo`
 sortcmd = `sort`
 printf = `printf`
@@ -64,12 +64,12 @@ if valgrind_off
 end
 
 if is_unix()
-    prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
-    @test success(pipeline(`perl -le '$|=1; for(0..2){ print; sleep 1 }'`,
-                       prefixer("A",2) & prefixer("B",2)))
-    @test success(pipeline(`perl -le '$|=1; for(0..2){ print; sleep 1 }'`,
-                       prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3),
-                       prefixer("A",2) & prefixer("B",2)))
+    prefixer(prefix, sleep) = `sh -c "while read; do echo '$prefix ' \$REPLY; sleep $sleep; done"`
+    @test success(pipeline(`sh -c "for i in 1 2 3 4 5 6 7 8 9 10; do echo \$i; sleep 0.1; done"`,
+                       prefixer("A", 0.2) & prefixer("B", 0.2)))
+    @test success(pipeline(`sh -c "for i in 1 2 3 4 5 6 7 8 9 10; do echo \$i; sleep 0.1; done"`,
+                       prefixer("X", 0.3) & prefixer("Y", 0.3) & prefixer("Z", 0.3),
+                       prefixer("A", 0.2) & prefixer("B", 0.2)))
 end
 
 @test  success(truecmd)
