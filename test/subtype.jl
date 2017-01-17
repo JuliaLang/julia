@@ -827,5 +827,27 @@ test_intersection()
 test_properties()
 test_intersection_properties()
 
+
 # issue #20121
 @test NTuple{170,Matrix{Int}} <: (Tuple{Vararg{Union{Array{T,1},Array{T,2},Array{T,3}}}} where T)
+
+# Issue #12580
+abstract AbstractMyType12580{T}
+immutable MyType12580{T}<:AbstractMyType12580{T} end
+tpara{A<:AbstractMyType12580}(::Type{A}) = tpara(supertype(A))
+tpara{I}(::Type{AbstractMyType12580{I}}) = I
+@test tpara(MyType12580{true})
+
+# Issue #18348
+f18348{T<:Any}(::Type{T}, x) = 1
+f18348{T<:Any}(::Type{T}, x::T) = 2
+@test length(methods(f18348, Tuple{Type{Any},Any})) == 1
+
+# Issue #13165
+@test Symmetric{Float64,Matrix{Float64}} <: LinAlg.RealHermSymComplexHerm
+@test Hermitian{Float64,Matrix{Float64}} <: LinAlg.RealHermSymComplexHerm
+@test Hermitian{Complex{Float64},Matrix{Complex{Float64}}} <: LinAlg.RealHermSymComplexHerm
+
+# Issue #12721
+f12721{T<:Type{Int}}(::T) = true
+@test_throws MethodError f12721(Float64)
