@@ -638,3 +638,11 @@ let
     @test @inferred wrapperT(Union{ReflectionExample{Union{},1},ReflectionExample{Float64,1}}) == ReflectionExample
     @test_throws ErrorException Base.typename(Union{Int, Float64})
 end
+
+# Issue #20086
+abstract A20086{T,N}
+immutable B20086{T,N} <: A20086{T,N} end
+@test subtypes(A20086) == [B20086]
+@test subtypes(A20086{Int}) == [B20086{Int}]
+@test subtypes(A20086{T,3} where T) == [B20086{T,3} where T]
+@test subtypes(A20086{Int,3}) == [B20086{Int,3}]
