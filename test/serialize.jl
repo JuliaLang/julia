@@ -411,6 +411,13 @@ let b = IOBuffer()
     c = deserialize(b)
     @test isa(c,B15163) && c.x == [1]
 end
+# related issue #20066
+let b = IOBuffer()
+    serialize(b, Dict{Vector, Vector}())
+    seekstart(b)
+    c = deserialize(b)
+    @test isa(c, Dict{Vector, Vector})
+end
 
 # issue #15849
 let b = IOBuffer()
