@@ -663,28 +663,14 @@ end
 
 # pmap tests. Needs at least 4 processors dedicated to the below tests. Which we currently have
 # since the parallel tests are now spawned as a separate set.
-function unmangle_exception(e)
-    while any(x->isa(e, x), [CompositeException, RemoteException, CapturedException])
-        if isa(e, CompositeException)
-            e = e.exceptions[1].ex
-        end
-        if isa(e, RemoteException)
-            e = e.captured.ex
-        end
-        if isa(e, CapturedException)
-            e = e.ex
-        end
-    end
-    return e
-end
 
 # Test all combinations of pmap keyword args.
 pmap_args = [
                 (:distributed, [:default, false]),
                 (:batch_size, [:default,2]),
-                (:on_error, [:default, e -> unmangle_exception(e).msg == "foobar"]),
-                (:retry_delays, [:default, fill(0.01, 1000)]),
-                (:retry_check, [:default, (s,e) -> (s,unmangle_exception(e).msg == "foobar")]),
+                (:on_error, [:default, e -> (e.msg == "foobar" ? true : rethrow(e))]),
+                (:retry_delays, [:default, fill(0.001, 1000)]),
+                (:retry_check, [:default, (s,e) -> (s,endswith(e.msg,"foobar"))]),
             ]
 
 kwdict = Dict()
@@ -697,22 +683,12 @@ function walk_args(i)
             end
         end
 
-        data = [1:100...]
+        data = 1:100
 
         testw = kwdict[:distributed] === false ? [1] : workers()
 
-        if (kwdict[:on_error] === :default) && (kwdict[:retry_delays] === :default)
-            mapf = x -> (x*2, myid())
-            results_test = pmap_res -> begin
-                results = [x[1] for x in pmap_res]
-                pids = [x[2] for x in pmap_res]
-                @test results == [2:2:200...]
-                for p in testw
-                    @test p in pids
-                end
-            end
-        elseif kwdict[:retry_delays] !== :default
-            mapf = x -> iseven(myid()) ? error("foobar") : (x*2, myid())
+        if kwdict[:retry_delays] !== :default
+            mapf = x -> iseven(myid()) ? error("notfoobar") : (x*2, myid())
             results_test = pmap_res -> begin
                 results = [x[1] for x in pmap_res]
                 pids = [x[2] for x in pmap_res]
@@ -725,7 +701,17 @@ function walk_args(i)
                     end
                 end
             end
-        else (kwdict[:on_error] !== :default) && (kwdict[:retry_delays] === :default)
+        elseif kwdict[:on_error] === :default
+            mapf = x -> (x*2, myid())
+            results_test = pmap_res -> begin
+                results = [x[1] for x in pmap_res]
+                pids = [x[2] for x in pmap_res]
+                @test results == [2:2:200...]
+                for p in testw
+                    @test p in pids
+                end
+            end
+        else
             mapf = x -> iseven(x) ? error("foobar") : (x*2, myid())
             results_test = pmap_res -> begin
                 w = testw
@@ -765,7 +751,7 @@ error_thrown = false
 try
     pmap(x -> x==50 ? error("foobar") : x, 1:100)
 catch e
-    @test unmangle_exception(e).msg == "foobar"
+    @test e.captured.ex.msg == "foobar"
     error_thrown = true
 end
 @test error_thrown

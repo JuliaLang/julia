@@ -268,10 +268,6 @@ export call
 # #12872
 @deprecate istext istextmime
 
-#15409
-# Deprecated definition of pmap with keyword arguments.
-# deprecation warnings are in pmap.jl
-
 # 15692
 typealias Func{N} Function
 deprecate(:Func)
