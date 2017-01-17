@@ -105,7 +105,6 @@ buf_ref = Ref(Buffer())
 free(buf_ref)
 ```
 In particular, note that `LibGit2.free` should be called afterward on the `Ref` object.
-
 """
 immutable Buffer
     ptr::Ptr{Cchar}

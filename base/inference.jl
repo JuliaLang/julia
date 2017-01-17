@@ -707,13 +707,13 @@ const TypeName_module_fieldindex = fieldindex(TypeName, :module)
 const TypeName_wrapper_fieldindex = fieldindex(TypeName, :wrapper)
 
 function const_datatype_getfield_tfunc(sv, fld)
-  if (fld == DataType_name_fieldindex ||
-      fld == DataType_parameters_fieldindex ||
-      fld == DataType_types_fieldindex ||
-      fld == DataType_super_fieldindex)
-    return abstract_eval_constant(getfield(sv, fld))
-  end
-  return nothing
+    if (fld == DataType_name_fieldindex ||
+            fld == DataType_parameters_fieldindex ||
+            fld == DataType_types_fieldindex ||
+            fld == DataType_super_fieldindex)
+        return abstract_eval_constant(getfield(sv, fld))
+    end
+    return nothing
 end
 
 # returns (type, isexact)

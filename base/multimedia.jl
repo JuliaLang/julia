@@ -3,8 +3,8 @@
 module Multimedia
 
 export Display, display, pushdisplay, popdisplay, displayable, redisplay,
-   MIME, @MIME_str, reprmime, stringmime, istextmime,
-   mimewritable, TextDisplay
+    MIME, @MIME_str, reprmime, stringmime, istextmime,
+    mimewritable, TextDisplay
 
 ###########################################################################
 # We define a singleton type MIME{mime symbol} for each MIME type, so
@@ -194,7 +194,7 @@ function display(x)
                 return display(displays[i], x)
             catch e
                 isa(e, MethodError) && e.f in (display, show) ||
-                  rethrow()
+                    rethrow()
             end
         end
     end
@@ -208,7 +208,7 @@ function display(m::MIME, x)
                 return display(displays[i], m, x)
             catch e
                 isa(e, MethodError) && e.f == display ||
-                  rethrow()
+                    rethrow()
             end
         end
     end
@@ -240,7 +240,7 @@ function redisplay(x)
                 return redisplay(displays[i], x)
             catch e
                 isa(e, MethodError) && e.f in (redisplay, display, show) ||
-                  rethrow()
+                    rethrow()
             end
         end
     end
@@ -254,7 +254,7 @@ function redisplay(m::Union{MIME,AbstractString}, x)
                 return redisplay(displays[i], m, x)
             catch e
                 isa(e, MethodError) && e.f in (redisplay, display) ||
-                  rethrow()
+                    rethrow()
             end
         end
     end
