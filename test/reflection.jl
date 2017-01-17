@@ -610,3 +610,10 @@ end
 @generated f18883() = nothing
 @test !isempty(sprint(io->code_llvm(io, f18883, Tuple{})))
 @test !isempty(sprint(io->code_native(io, f18883, Tuple{})))
+
+# Issue #20086
+@test subtypes(Integer) == Type[BigInt, Bool, Signed, Unsigned]
+abstract A212323{T}
+immutable B212323{T} <: A212323{T} end
+@test subtypes(A212323) == Type[B212323]
+@test subtypes(A212323{Int}) == Type[B212323{Int}]
