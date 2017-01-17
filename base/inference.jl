@@ -63,6 +63,11 @@ immutable Const
     Const(v::ANY) = new(v)
 end
 
+function rewrap(t::ANY, u::ANY)
+    isa(t, Const) && return t
+    rewrap_unionall(t, u)
+end
+
 type InferenceState
     sp::SimpleVector     # static parameters
     label_counter::Int   # index of the current highest label for this function
@@ -149,9 +154,9 @@ type InferenceState
                     end
                     s_types[1][la] = VarState(Tuple, false)
                 else
-                    s_types[1][la] = VarState(rewrap_unionall(tuple_tfunc(limit_tuple_depth(params,
-                                                                                            tupletype_tail(atypes, la))),
-                                                              linfo.specTypes),
+                    s_types[1][la] = VarState(rewrap(tuple_tfunc(limit_tuple_depth(params,
+                                                                                   tupletype_tail(atypes, la))),
+                                                     linfo.specTypes),
                                               false)
                 end
                 la -= 1
@@ -572,8 +577,8 @@ function getfield_tfunc(s00::ANY, name)
         end
         s = DataType # typeof(p1)
     elseif isa(s,Union)
-        return rewrap_unionall(tmerge(getfield_tfunc(s.a, name), getfield_tfunc(s.b, name)),
-                               s00)
+        return rewrap(tmerge(getfield_tfunc(s.a, name), getfield_tfunc(s.b, name)),
+                      s00)
     elseif isa(s,Const)
         sv = s.val
         if isa(name, Const)
