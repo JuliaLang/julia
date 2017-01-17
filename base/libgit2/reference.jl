@@ -99,6 +99,21 @@ function isremote(ref::GitReference)
     return err == 1
 end
 
+function Base.show(io::IO, ref::GitReference)
+    println(io, "GitReference:")
+    if isremote(ref)
+        println(io, "Remote with name ", name(ref))
+    elseif isbranch(ref)
+        println(io, "Branch with name ", name(ref))
+        if ishead(ref)
+            println(io, "Branch is HEAD.")
+        else
+            println(io, "Branch is not HEAD.")
+        end
+    elseif istag(ref)
+        println(io, "Tag with name ", name(ref))
+    end
+end
 function peel{T <: GitObject}(::Type{T}, ref::GitReference)
     git_otype = getobjecttype(T)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
