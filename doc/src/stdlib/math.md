@@ -232,7 +232,6 @@ Base.varm
 Base.middle
 Base.median
 Base.median!
-Base.midpoints
 Base.quantile
 Base.quantile!
 Base.cov

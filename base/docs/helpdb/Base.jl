@@ -2220,14 +2220,6 @@ unsigned without checking for negative values.
 unsigned
 
 """
-    midpoints(e)
-
-Compute the midpoints of the bins with edges `e`. The result is a vector/range of length
-`length(e) - 1`. Note: Julia does not ignore `NaN` values in the computation.
-"""
-midpoints
-
-"""
     reverseind(v, i)
 
 Given an index `i` in `reverse(v)`, return the corresponding index in `v` so that

@@ -317,11 +317,6 @@ let tmp = linspace(1, 85, 100)
     @test cor(tmp, tmp2) <= 1.0
 end
 
-
-@test midpoints(1.0:1.0:10.0) == 1.5:1.0:9.5
-@test midpoints(1:10) == 1.5:9.5
-@test midpoints(Float64[1.0:1.0:10.0;]) == Float64[1.5:1.0:9.5;]
-
 @test quantile([1,2,3,4],0.5) == 2.5
 @test quantile([1,2,3,4],[0.5]) == [2.5]
 @test quantile([1., 3],[.25,.5,.75])[2] == median([1., 3])

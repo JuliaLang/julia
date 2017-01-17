@@ -886,7 +886,6 @@ export
     median!,
     median,
     middle,
-    midpoints,
     quantile!,
     quantile,
     std,
