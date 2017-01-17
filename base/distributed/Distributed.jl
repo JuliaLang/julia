@@ -3,8 +3,8 @@
 module Distributed
 
 # imports for extension
-import Base: getindex, wait, put!, take!, fetch, isready, push!, length,
-             hash, ==, connect, kill, serialize, deserialize, close
+import Base: getindex, setindex!, wait, put!, take!, fetch, isready, push!, length,
+             hash, ==, connect, kill, serialize, deserialize, close, reduce
 
 # imports for use
 using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, wait_connected,
@@ -27,6 +27,7 @@ export
     clear!,
     ClusterManager,
     default_worker_pool,
+    DistributedRef,
     init_worker,
     interrupt,
     launch,

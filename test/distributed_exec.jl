@@ -10,14 +10,75 @@ elseif Base.JLOptions().code_coverage == 2
     cov_flag = `--code-coverage=all`
 end
 
+# DistributedRef and @parallel tests.
+function dref_tests()
+    # DistributedRef used independent of a @parallel
+    acc = DistributedRef(0)
+    @sync for p in workers()
+        @spawnat p begin
+            for i in 1:10
+                acc[] += 2
+            end
+            push!(acc)
+        end
+    end
+    @test reduce(+,acc) == 2*nworkers()*10
+    @test acc[] == 2*nworkers()*10
+
+    # reuse the accumulator
+    clear!(acc)
+    @parallel for i in 1:10
+        acc[] += i
+    end
+    @test reduce(+,acc) == 55
+
+    # Multiple accumulators in a @parallel call, mix of local and global accumulators.
+    global gacc1 = DistributedRef(0)
+    global gacc2 = DistributedRef(1)
+    global gval = 1
+    function test_multi_pacc()
+        local lval = 2
+        local l1 = DistributedRef("");
+        local l2 = DistributedRef([]);  # accumulator with an anonymous reducer
+        @parallel for i in 11:20
+            j = i - 10
+            gacc1[] += lval*j
+            gacc2[] *= gval*j
+            l1[] = string(l1[], j)
+            push!(l2[], myid())
+        end
+
+        @test reduce(+, gacc1) == 110
+        @test reduce(*, gacc2) == 3628800
+        v = reduce(string, l1)
+        @test length(v) == 11
+        @test all(x -> x>=0 && x <= 9, [parse(Int, string(x)) for x in v])
+        wlist = workers()
+        @test all(x -> x in wlist, reduce((a,b)->[a;b], l2))
+    end
+
+    test_multi_pacc()
+
+    # Parallel accumulator with a regular for loop
+    acc = DistributedRef(0)
+    for i in 1:10
+        acc[] += i
+    end
+    @test reduce(+, acc) == 55
+
+    # With an initial value and without, simulate an empty loop
+    @test reduce(+, DistributedRef(0)) == 0
+end
+
 # Test a few "remote" invocations when no workers are present
 @test remote(myid)() == 1
 @test pmap(identity, 1:100) == [1:100...]
-@test 100 == @parallel (+) for i in 1:100
-        1
-    end
+
+dref_tests()  # DistributedRef without any workers
 
 addprocs(4; exeflags=`$cov_flag $inline_flag --check-bounds=yes --startup-file=no --depwarn=error`)
+
+dref_tests()  # DistributedRef with added workers
 
 # Test remote()
 let
@@ -219,7 +280,6 @@ for i in 1:nworkers()
     push!(pids, @fetch myid())
 end
 @test sort(pids) == sort(workers())
-
 
 # test getindex on Futures and RemoteChannels
 function test_indexing(rr)
@@ -470,8 +530,9 @@ for T in [Void, ShmemFoo]
 end
 
 # Issue #14664
-d = SharedArray{Int}(10)
-@sync @parallel for i=1:10
+# Also tests that @parallel blocks by default.
+d = SharedArray{Int}(100)
+@parallel for i=1:100
     d[i] = i
 end
 
@@ -482,7 +543,7 @@ end
 # complex
 sd = SharedArray{Int}(10)
 se = SharedArray{Int}(10)
-@sync @parallel for i=1:10
+@parallel for i=1:10
     sd[i] = i
     se[i] = i
 end
@@ -511,12 +572,16 @@ finalize(d)
 
 # Test @parallel load balancing - all processors should get either M or M+1
 # iterations out of the loop range for some M.
-ids = @parallel((a,b)->[a;b], for i=1:7; myid(); end)
+acc = DistributedRef([])
+@parallel(for i=1:7; push!(acc[], myid()); end)
+ids = reduce((a,b)->[a;b], acc)
 workloads = Int[sum(ids .== i) for i in 2:nprocs()]
 @test maximum(workloads) - minimum(workloads) <= 1
 
 # @parallel reduction should work even with very short ranges
-@test @parallel(+, for i=1:2; i; end) == 3
+acc = DistributedRef(0)
+@parallel(for i=1:2; acc[] += i; end)
+@test reduce(+, acc) == 3
 
 @test_throws ArgumentError sleep(-1)
 @test_throws ArgumentError timedwait(()->false, 0.1, pollint=-0.5)
@@ -998,10 +1063,12 @@ end
 
 # issue #8207
 let A = Any[]
-    @parallel (+) for i in (push!(A,1); 1:2)
-        i
+    acc = DistributedRef(0)
+    @parallel for i in (push!(A, 1); 1:2)
+        acc[] += i
     end
     @test length(A) == 1
+    @test reduce(+, acc) == 3
 end
 
 # issue #13168
@@ -1116,16 +1183,19 @@ let
 end
 
 # issue #16451
-rng=RandomDevice()
-retval = @parallel (+) for _ in 1:10
-    rand(rng)
+rng = RandomDevice()
+acc = DistributedRef(0.0)
+@parallel for _ in 1:10
+    acc[] += rand(rng)
 end
+retval = reduce(+, acc)
 @test retval > 0.0 && retval < 10.0
 
 rand(rng)
-retval = @parallel (+) for _ in 1:10
-    rand(rng)
+@parallel for _ in 1:10
+    acc[] += rand(rng)
 end
+retval = reduce(+, acc)
 @test retval > 0.0 && retval < 10.0
 
 # serialization tests
@@ -1415,11 +1485,12 @@ s = convert(SharedArray, [1,2,3,4])
 #6760
 if true
     a = 2
-    x = @parallel (vcat) for k=1:2
-        sin(a)
+    acc = DistributedRef([])
+    @parallel for k=1:2
+        acc[] = vcat(acc[], sin(a))
     end
 end
-@test x == map(_->sin(2), 1:2)
+@test reduce(vcat, acc) == map(_->sin(2), 1:2)
 
 # Testing clear!
 function setup_syms(n, pids)

@@ -1354,6 +1354,7 @@ export
     clear!,
     ClusterManager,
     default_worker_pool,
+    DistributedRef,
     init_worker,
     interrupt,
     launch,

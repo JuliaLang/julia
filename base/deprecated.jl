@@ -1272,6 +1272,9 @@ for f in (:airyai, :airyaiprime, :airybi, :airybiprime, :airyaix, :airyaiprimex,
     end
 end
 
+# TODO: reducer mode from `@parallel for` is now deprecated. Should be removed from
+# the implementation in distributed/macros.jl
+
 # END 0.6 deprecations
 
 # BEGIN 1.0 deprecations

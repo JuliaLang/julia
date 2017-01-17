@@ -433,12 +433,13 @@ remote_do(f, id::Integer, args...; kwargs...) = remote_do(f, worker_from_id(id),
 
 # have the owner of rr call f on it
 function call_on_owner(f, rr::AbstractRemoteRef, args...)
-    rid = remoteref_id(rr)
-    if rr.where == myid()
-        f(rid, args...)
-    else
-        remotecall_fetch(f, rr.where, rid, args...)
-    end
+    rr.where == myid() && return f(remoteref_id(rr), args...)
+    return remotecall_fetch(f, rr.where, remoteref_id(rr), args...)
+end
+
+function call_on_owner_nowait(f, rr::AbstractRemoteRef, args...)
+    rr.where == myid() && return f(remoteref_id(rr), args...)
+    return remote_do(f, rr.where, remoteref_id(rr), args...)
 end
 
 function wait_ref(rid, callee, args...)
@@ -524,6 +525,9 @@ If the channel is full, blocks until space is available.
 Returns its first argument.
 """
 put!(rr::RemoteChannel, args...) = (call_on_owner(put_ref, rr, args...); rr)
+
+# Returns immediately, does not guarantee a successful put!
+put_nowait!(rr::RemoteChannel, args...) = (call_on_owner_nowait(put_ref, rr, args...); rr)
 
 # take! is not supported on Future
 
