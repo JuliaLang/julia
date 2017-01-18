@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 function content(blob::GitBlob)
-    return ccall((:git_blob_rawcontent, :libgit2), Ptr{Void}, (Ptr{Void},), blob.ptr)
+    unsafe_string(ccall((:git_blob_rawcontent, :libgit2), Ptr{UInt8}, (Ptr{Void},), blob.ptr))
 end
 
 function Base.length(blob::GitBlob)
@@ -26,24 +26,29 @@ function lookup(repo::GitRepo, oid::GitHash)
     return GitBlob(blob_ptr_ptr[])
 end
 
-function GitBlob(repo::GitRepo, path::AbstractString)
-    blob_id_ptr = Ref(GitHash())
+"""
+    LibGit2.addblob!(repo::GitRepo, path::AbstractString)
+
+Reads the file at `path` and adds it to the object database of `repo` as a loose blob.
+Returns the `GitHash` of the resulting blob.
+"""
+function addblob!(repo::GitRepo, path::AbstractString)
+    id_ref = Ref{GitHash}()
     @check ccall((:git_blob_create_fromdisk, :libgit2), Cint,
-                 (Ptr{GitHash}, Ptr{Void}, Ptr{UInt8}), blob_id_ptr,
-                 repo.ptr, path)
-    blob = get(GitBlob, repo, blob_id_ptr[])
-    return blob
+                 (Ptr{GitHash}, Ptr{Void}, Cstring),
+                 id_ref, repo.ptr, path)
+    return id_ref[]
 end
 
 function Base.show(io::IO, blob::GitBlob)
     if !isbinary(blob)
         conts   = split(content(blob), "\n")
-        showlen = max(len(conts), 3)
-        print(io, "GitBlob:\nBlob id: ", GitHash(blob.ptr), "\nContents:\n")
+        showlen = max(length(conts), 3)
+        print(io, "GitBlob:\nBlob id: ", GitHash(blob), "\nContents:\n")
         for i in 1:showlen
             print(io, conts[i],"\n")
         end
     else
-        print(io, "GitBlob:\nBlob id: ", GitHash(blob.ptr), "\nContents are binary.")
+        print(io, "GitBlob:\nBlob id: ", GitHash(blob), "\nContents are binary.")
     end
 end

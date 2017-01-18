@@ -114,21 +114,23 @@ function Base.show(io::IO, ref::GitReference)
         println(io, "Tag with name ", name(ref))
     end
 end
-function peel{T <: GitObject}(::Type{T}, ref::GitReference)
-    git_otype = getobjecttype(T)
+
+"""
+    peel([T,] ref::GitReference)
+
+Recursively peel `ref` until an object of type `T` is obtained. If no `T` is provided,
+then it will be peeled until an object other than a `GitTag` is obtained.
+
+- A `GitTag` will be peeled to the object it references.
+- A `GitCommit` will be peeled to a `GitTree`.
+"""
+function peel{T<:GitObject}(::Type{T}, ref::GitReference)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    err = ccall((:git_reference_peel, :libgit2), Cint,
-                 (Ptr{Ptr{Void}}, Ptr{Void}, Cint), obj_ptr_ptr, ref.ptr, git_otype)
-    if err == Int(Error.ENOTFOUND)
-        return GitHash()
-    elseif err != Int(Error.GIT_OK)
-        if obj_ptr_ptr[] != C_NULL
-            close(GitUnknownObject(ref.repo, obj_ptr_ptr[]))
-        end
-        throw(Error.GitError(err))
-    end
+    @check ccall((:git_reference_peel, :libgit2), Cint,
+                 (Ptr{Ptr{Void}}, Ptr{Void}, Cint), obj_ptr_ptr, ref.ptr, Consts.OBJECT(T))
     return T(ref.repo, obj_ptr_ptr[])
 end
+peel(ref::GitReference) = peel(GitObject, ref)
 
 function ref_list(repo::GitRepo)
     sa_ref = Ref(StrArrayStruct())

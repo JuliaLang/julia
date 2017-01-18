@@ -73,52 +73,45 @@ function isattached(repo::GitRepo)
     ccall((:git_repository_head_detached, :libgit2), Cint, (Ptr{Void},), repo.ptr) != 1
 end
 
-""" Returns a found object """
-function revparse(repo::GitRepo, objname::AbstractString)
+"""
+    GitObject(repo::GitRepo, hash::AbstractGitHash)
+    GitObject(repo::GitRepo, spec::AbstractString)
+
+Return the specified git object from `repo` specified by `hash`/`spec`.
+
+- `hash` is a full (`GitHash`) or partial (`GitShortHash`) hash.
+- `spec` is a textual specification: see https://git-scm.com/docs/git-rev-parse.html#_specifying_revisions for a full list.
+"""
+function (::Type{T}){T<:GitObject}(repo::GitRepo, spec::AbstractString)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    err = ccall((:git_revparse_single, :libgit2), Cint,
-            (Ptr{Ptr{Void}}, Ptr{Void}, Cstring), obj_ptr_ptr, repo.ptr, objname)
-    err != 0 && return nothing
-    return GitUnknownObject(repo, obj_ptr_ptr[])
-end
-
-""" Returns id of a found object """
-function revparseid(repo::GitRepo, objname::AbstractString)
-    obj = revparse(repo, objname)
-    obj === nothing && return GitHash()
-    oid = GitHash(obj.ptr)
-    close(obj)
-    return oid
-end
-
-function get{T <: GitObject}(::Type{T}, repo::GitRepo, oid::GitHash, oid_size::Int=OID_HEXSZ)
-    id_ptr  = Ref(oid)
-    obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    git_otype = getobjecttype(T)
-
-    err = if oid_size != OID_HEXSZ
-        ccall((:git_object_lookup_prefix, :libgit2), Cint,
-              (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{GitHash}, Csize_t, Cint),
-              obj_ptr_ptr, repo.ptr, id_ptr, Csize_t(oid_size), git_otype)
-    else
-        ccall((:git_object_lookup, :libgit2), Cint,
-              (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{GitHash}, Cint),
-              obj_ptr_ptr, repo.ptr, id_ptr, git_otype)
-    end
-    if err == Int(Error.ENOTFOUND)
-        return nothing
-    elseif err != Int(Error.GIT_OK)
-        if obj_ptr_ptr[] != C_NULL
-            close(GitUnknownObject(repo, obj_ptr_ptr[]))
-        end
-        throw(Error.GitError(err))
-    end
+    @check ccall((:git_revparse_single, :libgit2), Cint,
+                 (Ptr{Ptr{Void}}, Ptr{Void}, Cstring), obj_ptr_ptr, repo.ptr, spec)
     return T(repo, obj_ptr_ptr[])
 end
 
-function get{T <: GitObject}(::Type{T}, repo::GitRepo, oid::AbstractString)
-    return get(T, repo, GitHash(oid), length(oid))
+function (::Type{T}){T<:GitObject}(repo::GitRepo, oid::GitHash)
+    oid_ptr  = Ref(oid)
+    obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+
+    @check ccall((:git_object_lookup, :libgit2), Cint,
+                 (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{GitHash}, Consts.OBJECT),
+                 obj_ptr_ptr, repo.ptr, oid_ptr, Consts.OBJECT(T))
+
+    return T(repo, obj_ptr_ptr[])
 end
+function (::Type{T}){T<:GitObject}(repo::GitRepo, oid::GitShortHash)
+    oid_ptr  = Ref(oid.hash)
+    obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+
+    @check ccall((:git_object_lookup_prefix, :libgit2), Cint,
+                 (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{GitHash}, Csize_t, Consts.OBJECT),
+                 obj_ptr_ptr, repo.ptr, oid_ptr, oid.len, Consts.OBJECT(T))
+
+    return T(repo, obj_ptr_ptr[])
+end
+
+# TODO: deprecate this function
+revparseid(repo::GitRepo, spec) = GitHash(GitUnknownObject(repo, spec))
 
 """
     LibGit2.gitdir(repo::GitRepo)
@@ -181,23 +174,25 @@ function path(repo::GitRepo)
     end
 end
 
-function peel(obj::GitObject, obj_type::Cint)
-    peeled_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    git_otype = getobjecttype(obj_type)
-    err = ccall((:git_object_peel, :libgit2), Cint,
-                (Ptr{Ptr{Void}}, Ptr{Void}, Cint), peeled_ptr_ptr, obj.ptr, obj_type)
-    if err == Int(Error.ENOTFOUND)
-        return GitHash()
-    elseif err != Int(Error.GIT_OK)
-        if peeled_ptr_ptr[] != C_NULL
-            close(GitUnknownObject(obj.repo, peeled_ptr_ptr[]))
-        end
-        throw(Error.GitError(err))
-    end
-    return git_otype(obj.repo, peeled_ptr_ptr[])
-end
+"""
+    peel([T,] obj::GitObject)
 
-peel{T <: GitObject}(::Type{T}, obj::GitObject) = peel(obj, getobjecttype(T))
+Recursively peel `obj` until an object of type `T` is obtained. If no `T` is provided,
+then it will be peeled until the type changes.
+
+- A `GitTag` will be peeled to the object it references.
+- A `GitCommit` will be peeled to a `GitTree`.
+"""
+function peel{T<:GitObject}(::Type{T}, obj::GitObject)
+    new_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+
+    @check ccall((:git_object_peel, :libgit2), Cint,
+                (Ptr{Ptr{Void}}, Ptr{Void}, Cint), new_ptr_ptr, obj.ptr, Consts.OBJECT(T))
+
+    return T(obj.repo, new_ptr_ptr[])
+end
+peel(obj::GitObject) = peel(GitObject, obj)
+
 
 function checkout_tree(repo::GitRepo, obj::GitObject;
                        options::CheckoutOptions = CheckoutOptions())

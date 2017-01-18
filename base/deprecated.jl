@@ -18,13 +18,13 @@
 # the name of the function, which is used to ensure that the deprecation warning
 # is only printed the first time for each call place.
 
-macro deprecate(old,new)
+macro deprecate(old,new,ex=true)
     meta = Expr(:meta, :noinline)
     if isa(old,Symbol)
         oldname = Expr(:quote,old)
         newname = Expr(:quote,new)
         Expr(:toplevel,
-            Expr(:export,esc(old)),
+            ex ? Expr(:export,esc(old)) : nothing,
             :(function $(esc(old))(args...)
                   $meta
                   depwarn(string($oldname," is deprecated, use ",$newname," instead."),
@@ -1552,8 +1552,6 @@ _promote_eltype_op(op, A, B, C, D...) = (@_inline_meta; _promote_eltype_op(op, e
     _promote_eltype_op(args...)
 end
 
-# Rename LibGit2.Oid to LibGit2.GitHash (part of #19839)
-eval(Base.LibGit2, :(Base.@deprecate_binding Oid GitHash))
 
 function unsafe_wrap(::Type{String}, p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer, own::Bool=false)
     Base.depwarn("unsafe_wrap(String, ...) is deprecated; use `unsafe_string` instead.", :unsafe_wrap)
@@ -1571,9 +1569,6 @@ unsafe_wrap(::Type{String}, p::Cstring, len::Integer, own::Bool=false) =
 # #19660
 @deprecate finalize(sa::LibGit2.StrArrayStruct) close(sa)
 @deprecate finalize(sa::LibGit2.Buffer) close(sa)
-
-# Rename LibGit2.GitAnyObject to LibGit2.GitUnknownObject (part of #19839)
-eval(LibGit2, :(Base.@deprecate_binding GitAnyObject GitUnknownObject))
 
 ## produce, consume, and task iteration
 # NOTE: When removing produce/consume, also remove field Task.consumers and related code in
@@ -1763,14 +1758,6 @@ end)
     return false
 end
 
-# Not exported
-eval(LibGit2, quote
-    function owner(x)
-        depwarn("owner(x) is deprecated, use repository(x) instead.", :owner)
-        repository(x)
-    end
-end)
-
 @deprecate EachLine(stream, ondone) EachLine(stream, ondone=ondone)
 
 # These conversions should not be defined, see #19896
@@ -1785,5 +1772,18 @@ function colon{T<:Dates.Period}(start::T, stop::T)
     depwarn("$start:$stop is deprecated, use $start:$T(1):$stop instead.", :colon)
     colon(start, T(1), stop)
 end
+
+# LibGit2 refactor (#19839)
+eval(Base.LibGit2, begin
+     @deprecate_binding Oid GitHash
+     @deprecate_binding GitAnyObject GitUnknownObject
+
+     @deprecate owner(x) repository(x) false
+     @deprecate get{T<:GitObject}(::Type{T}, repo::GitRepo, x) T(repo, x) false
+     @deprecate get{T<:GitObject}(::Type{T}, repo::GitRepo, oid::GitHash, oid_size::Int) T(repo, GitShortHash(oid, oid_size)) false
+     @deprecate revparse(repo::GitRepo, objname::AbstractString) GitObject(repo, objname) false
+     @deprecate object(repo::GitRepo, te::GitTreeEntry) GitObject(repo, te) false
+     @deprecate commit(ann::GitAnnotated) GitHash(ann) false
+end)
 
 # End deprecations scheduled for 0.6
