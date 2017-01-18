@@ -23,7 +23,7 @@ Julia's types support the standard operations of set theory: you can ask whether
 (subtype) of `T2` with `T1 <: T2`. Likewise, you intersect two types using `typeintersect`, take
 their union with `Union`, and compute a type that contains their union with `typejoin`:
 
-```julia
+```jldoctest
 julia> typeintersect(Int, Float64)
 Union{}
 
@@ -87,7 +87,7 @@ All but `f4` can be called with `a = [1,2]`; all but `f2` can be called with `b 
 
 Let's look at these types a little more closely:
 
-```julia
+```jldoctest
 julia> dump(Array)
    UnionAll
      var: TypeVar
@@ -116,7 +116,7 @@ distinguished. However, by convention they should not be mutated.
 
 One can construct `TypeVar`s manually:
 
-```julia
+```jldoctest
 julia> TypeVar(:V, Signed, Real)
 Signed<:V<:Real
 ```
@@ -155,7 +155,7 @@ which it returns true will not give meaningful answers in subtyping and other ty
 
 The following two [`Array`](@ref) types are functionally equivalent, yet print differently:
 
-```julia
+```jldoctest
 julia> TV, NV = TypeVar(:T), TypeVar(:N)
 (T,N)
 
@@ -228,7 +228,7 @@ What about the other fields? `hash` assigns an integer to each type.  To examine
 field, it's helpful to pick a type that is less heavily used than Array. Let's first create our
 own type:
 
-```julia
+```jldoctest
 julia> type MyType{T,N} end
 
 julia> MyType{Int,2}
@@ -250,7 +250,7 @@ instances containing free type variables are not cached.
 Tuple types constitute an interesting special case.  For dispatch to work on declarations like
 `x::Tuple`, the type has to be able to accommodate any tuple.  Let's check the parameters:
 
-```julia
+```jldoctest
 julia> Tuple
 Tuple
 
@@ -261,7 +261,7 @@ svec(Vararg{Any,N} where N)
 Unlike other types, tuple types are covariant in their parameters, so this definition permits
 `Tuple` to match any type of tuple:
 
-```julia
+```jldoctest
 julia> typeintersect(Tuple, Tuple{Int,Float64})
 Tuple{Int64,Float64}
 
@@ -272,7 +272,7 @@ Tuple{Int64,Float64}
 However, if a variadic (`Vararg`) tuple type has free variables it can describe different kinds
 of tuples:
 
-```julia
+```jldoctest
 julia> typeintersect(Tuple{Vararg{T} where T}, Tuple{Int,Float64})
 Tuple{Int64,Float64}
 
@@ -286,7 +286,7 @@ Therefore a heterogeneous tuple does not match.
 
 Finally, it's worth noting that `Tuple{}` is distinct:
 
-```julia
+```jldoctest
 julia> Tuple{}
 Tuple{}
 
