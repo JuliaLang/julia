@@ -1396,7 +1396,7 @@ JL_DLLEXPORT void jl_gc_lookfor(jl_value_t *v) { lookforme = v; }
 */
 
 #define MAX_MARK_DEPTH 400
-// Scan an marked object `v` and recursively mark its children.
+// Scan a marked object `v` and recursively mark its children.
 // The object will be queued on the mark stack when recursion depth
 // becomes too high.
 // It does so assuming that the tag of the (marked) object is `tag`.

@@ -153,8 +153,7 @@ let
 end
 
 @testset "real svds" begin
-    let # svds test
-        A = sparse([1, 1, 2, 3, 4], [2, 1, 1, 3, 1], [2.0, -1.0, 6.1, 7.0, 1.5])
+    let A = sparse([1, 1, 2, 3, 4], [2, 1, 1, 3, 1], [2.0, -1.0, 6.1, 7.0, 1.5])
         S1 = svds(A, nsv = 2)
         S2 = svd(Array(A))
 
@@ -198,8 +197,7 @@ end
 end
 
 @testset "complex svds" begin
-    let # complex svds test
-        A = sparse([1, 1, 2, 3, 4], [2, 1, 1, 3, 1], exp.(im*[2.0:2:10;]))
+    let A = sparse([1, 1, 2, 3, 4], [2, 1, 1, 3, 1], exp.(im*[2.0:2:10;]))
         S1 = svds(A, nsv = 2)
         S2 = svd(Array(A))
 
@@ -242,8 +240,7 @@ end
 end
 
 # Symmetric generalized with singular B
-let
-    n = 10
+let n = 10
     k = 3
     A = randn(n,n); A = A'A
     B = randn(n,k);  B = B*B'

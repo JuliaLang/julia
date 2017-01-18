@@ -456,7 +456,6 @@ end
 
 for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
                          (:Float32,:Complex64,"fftwf",libfftwf))
-
     @eval function (::Type{cFFTWPlan{$Tc,K,inplace,N}}){K,inplace,N}(X::StridedArray{$Tc,N},
                                                                      Y::StridedArray{$Tc,N},
                                                                      region, flags::Integer, timelimit::Real)

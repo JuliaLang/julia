@@ -408,16 +408,14 @@ str = String(take!(io))
 @test contains(str, "test.jl")
 @test !contains(str, "boot.jl")
 
-let
-    io = IOBuffer()
+let io = IOBuffer()
     exc = Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}())
     Base.showerror(io, exc, backtrace())
     @test !contains(String(take!(io)), "backtrace()")
 end
 
 # 19750
-let
-    io = IOBuffer()
+let io = IOBuffer()
     exc = Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}())
     Base.showerror(io, exc, backtrace())
     @test !contains(String(take!(io)), "backtrace()")

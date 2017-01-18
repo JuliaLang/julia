@@ -730,8 +730,7 @@ A = TSlowNIndexes(rand(2,2))
 @test @inferred(indices(rand(3,2), 3)) == 1:1
 
 #17088
-let
-    n = 10
+let n = 10
     M = rand(n, n)
     # vector of vectors
     v = [[M]; [M]] # using vcat

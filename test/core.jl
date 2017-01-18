@@ -4640,10 +4640,9 @@ immutable MyTime <: Dates.TimeType
 end
 @test_throws ErrorException isless(MyTime(1), now())
 
-end
+end # module SOE
 
 # issue #15240
-
 @test_nowarn begin
     local p15240
     p15240 = ccall(:jl_realloc, Ptr{Void}, (Ptr{Void}, Csize_t), C_NULL, 10)
@@ -4651,5 +4650,4 @@ end
 end
 
 # issue #19963
-
 @test_nowarn ccall(:jl_free, Void, (Ptr{Void}, ), C_NULL)

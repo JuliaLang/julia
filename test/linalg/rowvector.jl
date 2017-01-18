@@ -72,7 +72,6 @@ end
     @test (rv/d)::RowVector ≈ [2/1  3/2  4/3]
 
     @test_throws Exception d \ rv
-
 end
 
 @testset "Bidiagonal ambiguity methods" begin
@@ -164,7 +163,6 @@ end
     @test_throws Exception z'*cz
     @test z'*z === 15 + 0im
     @test_throws Exception mat'*cz
-
 end
 
 @testset "norm" begin
@@ -238,7 +236,6 @@ end
     @test (rv/ut')::RowVector ≈ [2/1  3/2  4/3]
 
     @test_throws Exception ut\rv
-
 end
 
 

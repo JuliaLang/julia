@@ -433,7 +433,6 @@ any!(r, A)
 for (fname, op) in [(:sum, :+), (:prod, :*),
                     (:maximum, :scalarmax), (:minimum, :scalarmin),
                     (:all, :&), (:any, :|)]
-
     fname! = Symbol(fname, '!')
     @eval begin
         $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
