@@ -27,19 +27,24 @@ _containertype(::Type) = Any
 _containertype(::Type{<:Ptr}) = Any
 _containertype(::Type{<:Tuple}) = Tuple
 _containertype(::Type{<:Ref}) = Array
+_containertype(::Type{<:AbstractVecOrMat}) = VecOrMat
 _containertype(::Type{<:AbstractArray}) = Array
 _containertype(::Type{<:Nullable}) = Nullable
 containertype(x) = _containertype(typeof(x))
 containertype(ct1, ct2) = promote_containertype(containertype(ct1), containertype(ct2))
 @inline containertype(ct1, ct2, cts...) = promote_containertype(containertype(ct1), containertype(ct2, cts...))
 
-promote_containertype(::Type{Array}, ::Type{Array}) = Array
-promote_containertype(::Type{Array}, ct) = Array
-promote_containertype(ct, ::Type{Array}) = Array
+promote_containertype(ct1, ct2) = Array
+promote_containertype{T<:AbstractArray}(::Type{T}, ::Type{Tuple}) = Array
+promote_containertype{T<:AbstractArray}(::Type{Tuple}, ::Type{T}) = Array
+promote_containertype(::Type{Array}, ::Type{VecOrMat}) = Array
+promote_containertype(::Type{VecOrMat}, ::Type{Array}) = Array
 promote_containertype(::Type{Tuple}, ::ScalarType) = Tuple
 promote_containertype(::ScalarType, ::Type{Tuple}) = Tuple
 promote_containertype(::Type{Any}, ::Type{Nullable}) = Nullable
 promote_containertype(::Type{Nullable}, ::Type{Any}) = Nullable
+promote_containertype(T::Type, ::ScalarType) = T
+promote_containertype(::ScalarType, T::Type) = T
 promote_containertype{T}(::Type{T}, ::Type{T}) = T
 
 ## Calculate the broadcast indices of the arguments, or error if incompatible
@@ -49,7 +54,7 @@ broadcast_indices(A) = broadcast_indices(containertype(A), A)
 broadcast_indices(::ScalarType, A) = ()
 broadcast_indices(::Type{Tuple}, A) = (OneTo(length(A)),)
 broadcast_indices(::Type{Array}, A::Ref) = ()
-broadcast_indices(::Type{Array}, A) = indices(A)
+broadcast_indices(::Type{<:AbstractArray}, A) = indices(A)
 @inline broadcast_indices(A, B...) = broadcast_shape((), broadcast_indices(A), map(broadcast_indices, B)...)
 # shape (i.e., tuple-of-indices) inputs
 broadcast_shape(shape::Tuple) = shape
@@ -201,8 +206,8 @@ arguments to `f` unless it is also listed in the `As`,
 as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
 """
 @inline broadcast!{N}(f, C::AbstractArray, A, Bs::Vararg{Any,N}) =
-    broadcast_c!(f, containertype(C), containertype(A, Bs...), C, A, Bs...)
-@inline function broadcast_c!{N}(f, ::Type, ::Type, C, A, Bs::Vararg{Any,N})
+    broadcast_c!(f, containertype(C, A, Bs...), C, A, Bs...)
+@inline function broadcast_c!{N}(f, ::Type, C, A, Bs::Vararg{Any,N})
     shape = indices(C)
     @boundscheck check_broadcast_indices(shape, A, Bs...)
     keeps, Idefaults = map_newindexer(shape, A, Bs)
@@ -285,7 +290,7 @@ eltypestuple(a, b...) = (Base.@_pure_meta; Tuple{eltypestuple(a).types..., eltyp
 _broadcast_eltype(f, A, Bs...) = Base._return_type(f, eltypestuple(A, Bs...))
 
 # broadcast methods that dispatch on the type of the final container
-@inline function broadcast_c(f, ::Type{Array}, A, Bs...)
+@inline function broadcast_c{T<:Array}(f, ::Type{T}, A, Bs...)
     T = _broadcast_eltype(f, A, Bs...)
     shape = broadcast_indices(A, Bs...)
     iter = CartesianRange(shape)

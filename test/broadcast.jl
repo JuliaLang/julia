@@ -423,14 +423,12 @@ Base.size(A::Array19745) = size(A.data)
 
 Base.Broadcast._containertype{T<:Array19745}(::Type{T}) = Array19745
 
-Base.Broadcast.promote_containertype(::Type{Array19745}, ::Type{Array19745}) = Array19745
-Base.Broadcast.promote_containertype(::Type{Array19745}, ::Type{Array})      = Array19745
-Base.Broadcast.promote_containertype(::Type{Array19745}, ct)                 = Array19745
-Base.Broadcast.promote_containertype(::Type{Array}, ::Type{Array19745})      = Array19745
-Base.Broadcast.promote_containertype(ct, ::Type{Array19745})                 = Array19745
-
-Base.Broadcast.broadcast_indices(::Type{Array19745}, A)      = indices(A)
-Base.Broadcast.broadcast_indices(::Type{Array19745}, A::Ref) = ()
+# Only define promote_containertype methods with tight container types
+# (scalars are properly handled by default)
+Base.Broadcast.promote_containertype{T<:AbstractArray}(::Type{Array19745}, ::Type{T}) = Array19745
+Base.Broadcast.promote_containertype{T<:AbstractArray}(::Type{T}, ::Type{Array19745}) = Array19745
+Base.Broadcast.promote_containertype(::Type{Array19745}, ::Type{Tuple}) = Array19745
+Base.Broadcast.promote_containertype(::Type{Tuple}, ::Type{Array19745}) = Array19745
 
 getfield19745(x::Array19745) = x.data
 getfield19745(x)             = x
@@ -441,10 +439,9 @@ Base.Broadcast.broadcast_c(f, ::Type{Array19745}, A, Bs...) =
 @testset "broadcasting for custom AbstractArray" begin
     a  = randn(10)
     aa = Array19745(a)
-    @test a .+ 1  == @inferred(aa .+ 1)
-    @test a .* a' == @inferred(aa .* aa')
-    @test isa(aa .+ 1, Array19745)
-    @test isa(aa .* aa', Array19745)
+    @test a .+ 1  == @inferred(aa .+ 1)::Array19745
+    @test a .* a' == @inferred(aa .* aa')::Array19745
+    @test (aa .+ [1])::Array19745 == (aa .+ (1,))::Array19745
 end
 
 # broadcast should only "peel off" one container layer

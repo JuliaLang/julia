@@ -5,11 +5,11 @@ module HigherOrderFns
 # This module provides higher order functions specialized for sparse arrays,
 # particularly map[!]/broadcast[!] for SparseVectors and SparseMatrixCSCs at present.
 import Base: map, map!, broadcast, broadcast!
-import Base.Broadcast: _containertype, promote_containertype,
-    broadcast_indices, broadcast_c, broadcast_c!
+import Base.Broadcast: _containertype, promote_containertype, broadcast_c, broadcast_c!
 
 using Base: front, tail, to_shape
-using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseArray, indtype
+using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseArray,
+      AbstractSparseMatrix, AbstractSparseVector, indtype
 
 # This module is organized as follows:
 # (1) Define a common interface to SparseVectors and SparseMatrixCSCs sufficient for
@@ -940,25 +940,22 @@ end
 
 # (10) broadcast[!] over combinations of broadcast scalars and sparse vectors/matrices
 
-# broadcast shape promotion for combinations of sparse arrays and other types
-broadcast_indices(::Type{AbstractSparseArray}, A) = indices(A)
 # broadcast container type promotion for combinations of sparse arrays and other types
 _containertype(::Type{<:SparseVecOrMat}) = AbstractSparseArray
 # combinations of sparse arrays with broadcast scalars should yield sparse arrays
-promote_containertype(::Type{Any}, ::Type{AbstractSparseArray}) = AbstractSparseArray
-promote_containertype(::Type{AbstractSparseArray}, ::Type{Any}) = AbstractSparseArray
-# combinations of sparse arrays with tuples should divert to the generic AbstractArray broadcast code
-# (we handle combinations involving dense vectors/matrices below)
-promote_containertype(::Type{Tuple}, ::Type{AbstractSparseArray}) = Array
-promote_containertype(::Type{AbstractSparseArray}, ::Type{Tuple}) = Array
+promote_containertype{T<:AbstractSparseArray}(::Type{VecOrMat}, ::Type{T}) = AbstractSparseArray
+promote_containertype{T<:AbstractSparseArray}(::Type{T}, ::Type{VecOrMat}) = AbstractSparseArray
+# combinations of sparse arrays with anything else should fall back to generic dense broadcast
+promote_containertype{T<:AbstractSparseArray}(::Type{Array}, ::Type{T}) = Array
+promote_containertype{T<:AbstractSparseArray}(::Type{T}, ::Type{Array}) = Array
 
 # broadcast[!] entry points for combinations of sparse arrays and other (scalar) types
-@inline function broadcast_c{N}(f, ::Type{AbstractSparseArray}, mixedargs::Vararg{Any,N})
-    parevalf, passedargstup = capturescalars(f, mixedargs)
+@inline function broadcast_c{T<:AbstractSparseArray,N}(f, ::Type{T}, mixedargs::Vararg{Any,N})
+    parevalf, passedargstup = capturescalars(f, map(_sparsifystructured, mixedargs))
     return broadcast(parevalf, passedargstup...)
 end
-@inline function broadcast_c!{N}(f, ::Type{AbstractSparseArray}, dest::SparseVecOrMat, mixedsrcargs::Vararg{Any,N})
-    parevalf, passedsrcargstup = capturescalars(f, mixedsrcargs)
+@inline function broadcast_c!{T<:AbstractSparseArray,N}(f, ::Type{T}, dest::SparseVecOrMat, mixedsrcargs::Vararg{Any,N})
+    parevalf, passedsrcargstup = capturescalars(f, map(_sparsifystructured, mixedsrcargs))
     return broadcast!(parevalf, dest, passedsrcargstup...)
 end
 # capturescalars takes a function (f) and a tuple of mixed sparse vectors/matrices and
@@ -966,6 +963,7 @@ end
 # evaluated f) and a reduced argument tuple (passedargstup) containing only the sparse
 # vectors/matrices in mixedargs in their orginal order, and such that the result of
 # broadcast(parevalf, passedargstup...) is broadcast(f, mixedargs...)
+@inline capturescalars{N}(f, mixedargs::Vararg{SparseVecOrMat,N}) = (f, mixedargs)
 @inline capturescalars(f, mixedargs) =
     capturescalars((passed, tofill) -> f(tofill...), (), mixedargs...)
 # Recursion cases for capturescalars
@@ -1002,6 +1000,15 @@ broadcast{Tf,T}(f::Tf, A::SparseMatrixCSC, ::Type{T}) = broadcast(x -> f(x, T), 
 # (spbroadcast_c[!], spcontainertype, promote_spcontainertype), and then promote
 # arguments to sparse as appropriate and rebroadcast.
 
+# structured array container type promotion
+struct StructuredArray{Tv,Ti,N} <: AbstractSparseArray{Tv,Ti,N} end
+_containertype{T<:Diagonal}(::Type{T}) = StructuredArray
+_containertype{T<:Bidiagonal}(::Type{T}) = StructuredArray
+_containertype{T<:Tridiagonal}(::Type{T}) = StructuredArray
+_containertype{T<:SymTridiagonal}(::Type{T}) = StructuredArray
+# combinations involving sparse arrays continue in the structured array funnel
+promote_containertype(::Type{StructuredArray}, ::Type{AbstractSparseArray}) = AbstractSparseArray
+promote_containertype(::Type{AbstractSparseArray}, ::Type{StructuredArray}) = AbstractSparseArray
 
 # first (Broadcast containertype) dispatch layer's promotion logic
 struct PromoteToSparse end
@@ -1078,8 +1085,11 @@ promote_spcontainertype(::FunnelToSparseBC, ::FunnelToSparseBC) = PromoteToSpars
 
 @inline _sparsifystructured(A::AbstractSparseArray) = A
 @inline _sparsifystructured(M::StructuredMatrix) = SparseMatrixCSC(M)
-@inline _sparsifystructured(M::Matrix) = SparseMatrixCSC(M)
-@inline _sparsifystructured(V::Vector) = SparseVector(V)
+@inline _sparsifystructured(A::AbstractMatrix) = SparseMatrixCSC(A)
+@inline _sparsifystructured(A::AbstractVector) = SparseVector(A)
+@inline _sparsifystructured(A::AbstractSparseMatrix) = SparseMatrixCSC(A)
+@inline _sparsifystructured(A::AbstractSparseVector) = SparseVector(A)
+@inline _sparsifystructured(S::SparseVecOrMat) = S
 @inline _sparsifystructured(x) = x
 
 
