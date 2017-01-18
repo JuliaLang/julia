@@ -2885,7 +2885,7 @@ jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *li, size_
     jl_datatype_t *argtypes = (jl_datatype_t*)li->specTypes;
     jl_set_typeof(li, (void*)(intptr_t)0x40); // invalidate the old value to help catch errors
     jl_svec_t *env = jl_emptysvec;
-    jl_value_t *ti = jl_type_intersection_matching((jl_value_t*)argtypes, (jl_value_t*)m->sig, &env);
+    jl_value_t *ti = jl_type_intersection_env((jl_value_t*)argtypes, (jl_value_t*)m->sig, &env);
     //assert(ti != jl_bottom_type); (void)ti;
     if (ti == jl_bottom_type)
         env = jl_emptysvec; // the intersection may fail now if the type system had made an incorrect subtype env in the past
