@@ -102,6 +102,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * The method of `!` to negate functions (typically used as a unary operator, as in `!isinteger`) can be used in 0.5 and earlier. [#17155](https://github.com/JuliaLang/julia/pull/17155)
 
+* `.&` and `.|` are short syntax for `broadcast(&, xs...)` and `broadcast(|, xs...)` (respectively) in Julia 0.6 (only supported on Julia 0.5 and above) [#17623](https://github.com/JuliaLang/julia/pull/17623)
+
 ## Renamed functions
 
 * `pointer_to_array` and `pointer_to_string` have been replaced with `unsafe_wrap(Array, ...)` and `unsafe_wrap(String, ...)` respectively

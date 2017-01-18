@@ -1759,4 +1759,11 @@ if VERSION < v"0.5.0-dev+3669"
         scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), D.diag, A)
 end
 
+if VERSION >= v"0.5.0-dev+5509" && VERSION < v"0.6.0-dev.1614"
+    # To work around unsupported syntax on Julia 0.4
+    include_string("export .&, .|")
+    include_string(".&(xs...) = broadcast(&, xs...)")
+    include_string(".|(xs...) = broadcast(|, xs...)")
+end
+
 end # module
