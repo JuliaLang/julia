@@ -6,7 +6,7 @@ default: html
 SRCDIR           := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 JULIAHOME        := $(abspath $(SRCDIR)/..)
 include $(JULIAHOME)/Make.inc
-JULIA_EXECUTABLE := $(build_bindir)/julia
+JULIA_EXECUTABLE := $(call spawn,$(build_bindir)/julia)
 
 .PHONY: help clean cleanall html pdf linkcheck doctest check
 
