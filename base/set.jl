@@ -135,6 +135,30 @@ function unique(C)
     out
 end
 
+
+"""
+```jldoctest
+julia> unique(x for x in [1, 2, 2, 3])
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+```
+"""
+function unique(g::Generator)
+    et = _default_eltype(typeof(g))
+    out = Vector{et}()
+    seen = Set{et}()
+    for x in g
+        if !in(x, seen)
+            push!(seen, x)
+            push!(out, x)
+        end
+    end
+    out
+end
+
+
 """
     unique(f, itr)
 
