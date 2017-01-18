@@ -275,9 +275,9 @@ end
 ## Other array functions ##
 
 """
-    repmat(A, m::Int, n::Int=1)
+    repmat(A, m::Integer, n::Integer=1)
 
-Construct a matrix by repeating the given matrix `m` times in dimension 1 and `n` times in
+Construct a matrix by repeating the given matrix (or vector) `m` times in dimension 1 and `n` times in
 dimension 2.
 
 ```jldoctest
@@ -323,6 +323,8 @@ function repmat(a::AbstractVector, m::Int)
     end
     return b
 end
+
+@inline repmat(a, m::Integer...) = repmat(a, convert(Dims, m)...)
 
 """
     repeat(A::AbstractArray; inner=ntuple(x->1, ndims(A)), outer=ntuple(x->1, ndims(A)))

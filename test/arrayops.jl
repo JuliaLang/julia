@@ -564,6 +564,12 @@ end
     @test isequal(cumsum(A,2),A2)
     @test isequal(cumsum(A,3),A3)
 
+    # issue 20112
+    A3 = reshape(repmat([1 2 3 4],UInt32(6),UInt32(1)),2,3,4)
+    @test isequal(cumsum(A,3),A3)
+    @test repmat([1,2,3,4], UInt32(1)) == [1,2,3,4]
+
+
     R = repeat([1, 2])
     @test R == [1, 2]
     R = repeat([1, 2], inner=1)
