@@ -36,29 +36,10 @@ end
 end
 
 @testset "StrArrayStruct" begin
-    p1 = "XXX"
-    p2 = "YYY"
-    sa1 = LibGit2.StrArrayStruct(p1)
-    try
-        arr = convert(Vector{AbstractString}, sa1)
-        @test arr[1] == p1
-    finally
-        close(sa1)
-    end
-
-    sa2 = LibGit2.StrArrayStruct(p1, p2)
-    try
-        arr1 = convert(Vector{AbstractString}, sa2)
-        @test arr1[1] == p1
-        @test arr1[2] == p2
-        sa3 = copy(sa2)
-        arr2 = convert(Vector{AbstractString}, sa3)
-        @test arr1[1] == arr2[1]
-        @test arr1[2] == arr2[2]
-        close(sa3)
-    finally
-        close(sa2)
-    end
+    p = ["XXX","YYY"]
+    a = Base.cconvert(Ptr{LibGit2.StrArrayStruct}, p)
+    b = Base.unsafe_convert(Ptr{LibGit2.StrArrayStruct}, a)
+    @test p == convert(Vector{String}, unsafe_load(b))
 end
 
 @testset "Signature" begin

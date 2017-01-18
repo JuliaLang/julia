@@ -1,12 +1,12 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 function tag_list(repo::GitRepo)
-    with(StrArrayStruct()) do sa
-        sa_ref = Ref(sa)
-        @check ccall((:git_tag_list, :libgit2), Cint,
-                      (Ptr{StrArrayStruct}, Ptr{Void}), sa_ref, repo.ptr)
-        convert(Vector{AbstractString}, sa_ref[])
-    end
+    sa_ref = Ref(StrArrayStruct())
+    @check ccall((:git_tag_list, :libgit2), Cint,
+                 (Ptr{StrArrayStruct}, Ptr{Void}), sa_ref, repo.ptr)
+    res = convert(Vector{String}, sa_ref[])
+    free(sa_ref)
+    res
 end
 
 function tag_delete(repo::GitRepo, tag::AbstractString)

@@ -1,24 +1,27 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+# TODO: make this a general purpose solution
+function Base.cconvert(::Type{Ptr{DiffOptionsStruct}}, pathspecs::AbstractString)
+    str_ref = Base.cconvert(Ref{Cstring}, [pathspecs])
+    sa = StrArrayStruct(Base.unsafe_convert(Ref{Cstring}, str_ref), 1)
+    do_ref = Ref(DiffOptions(pathspec = sa))
+    do_ref, str_ref
+end
+function Base.unsafe_convert(::Type{Ptr{DiffOptionsStruct}}, rr::Tuple{Ref{DiffOptionsStruct}, Ref{Cstring}})
+    Base.unsafe_convert(Ptr{DiffOptionStruct}, first(rr))
+end
+
+
 function diff_tree(repo::GitRepo, tree::GitTree, pathspecs::AbstractString=""; cached::Bool=false)
-    emptypathspec = isempty(pathspecs)
     diff_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    if !emptypathspec
-        sa = StrArrayStruct(pathspecs)
-        diff_opts = DiffOptionsStruct(pathspec = sa)
-    end
-    try
-        if cached
-            @check ccall((:git_diff_tree_to_index, :libgit2), Cint,
-                          (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{DiffOptionsStruct}),
-                           diff_ptr_ptr, repo.ptr, tree.ptr, C_NULL,  emptypathspec ? C_NULL : Ref(diff_opts))
-        else
-            @check ccall((:git_diff_tree_to_workdir_with_index, :libgit2), Cint,
-                          (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}, Ptr{DiffOptionsStruct}),
-                           diff_ptr_ptr, repo.ptr, tree.ptr, emptypathspec ? C_NULL : Ref(diff_opts))
-        end
-    finally
-        !emptypathspec && close(sa)
+    if cached
+        @check ccall((:git_diff_tree_to_index, :libgit2), Cint,
+                     (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{DiffOptionsStruct}),
+                     diff_ptr_ptr, repo.ptr, tree.ptr, C_NULL, isempty(pathspecs) ? C_NULL : pathspecs)
+    else
+        @check ccall((:git_diff_tree_to_workdir_with_index, :libgit2), Cint,
+                     (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}, Ptr{DiffOptionsStruct}),
+                     diff_ptr_ptr, repo.ptr, tree.ptr, isempty(pathspecs) ? C_NULL : pathspecs)
     end
     return GitDiff(repo, diff_ptr_ptr[])
 end

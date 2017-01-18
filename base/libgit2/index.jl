@@ -42,36 +42,21 @@ end
 
 function add!{T<:AbstractString}(idx::GitIndex, files::T...;
              flags::Cuint = Consts.INDEX_ADD_DEFAULT)
-    sa = StrArrayStruct(files...)
-    try
-        @check ccall((:git_index_add_all, :libgit2), Cint,
-                     (Ptr{Void}, Ptr{StrArrayStruct}, Cuint, Ptr{Void}, Ptr{Void}),
-                      idx.ptr, Ref(sa), flags, C_NULL, C_NULL)
-    finally
-        close(sa)
-    end
+    @check ccall((:git_index_add_all, :libgit2), Cint,
+                 (Ptr{Void}, Ptr{StrArrayStruct}, Cuint, Ptr{Void}, Ptr{Void}),
+                 idx.ptr, collect(files), flags, C_NULL, C_NULL)
 end
 
 function update!{T<:AbstractString}(idx::GitIndex, files::T...)
-    sa = StrArrayStruct(files...)
-    try
-        @check ccall((:git_index_update_all, :libgit2), Cint,
-                     (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
-                      idx.ptr, Ref(sa), C_NULL, C_NULL)
-    finally
-        close(sa)
-    end
+    @check ccall((:git_index_update_all, :libgit2), Cint,
+                 (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
+                 idx.ptr, collect(files), C_NULL, C_NULL)
 end
 
 function remove!{T<:AbstractString}(idx::GitIndex, files::T...)
-    sa = StrArrayStruct(files...)
-    try
-        @check ccall((:git_index_remove_all, :libgit2), Cint,
-                     (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
-                      idx.ptr, Ref(sa), C_NULL, C_NULL)
-    finally
-        close(sa)
-    end
+    @check ccall((:git_index_remove_all, :libgit2), Cint,
+                 (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
+                 idx.ptr, collect(files), C_NULL, C_NULL)
 end
 
 function add!{T<:AbstractString}(repo::GitRepo, files::T...;
