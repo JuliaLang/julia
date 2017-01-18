@@ -1593,3 +1593,9 @@ D = Diagonal(x)
 A = view(rand(5,5), 1:3, 1:3)
 @test D*A == Diagonal(copy(x)) * copy(A)
 @test A*D == copy(A) * Diagonal(copy(x))
+
+# julia#17623
+@static if VERSION >= v"0.5.0-dev+5509" # To work around unsupported syntax on Julia 0.4
+    @test [true, false] .& [true, true] == [true, false]
+    @test [true, false] .| [true, true] == [true, true]
+end
