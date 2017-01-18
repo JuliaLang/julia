@@ -470,6 +470,22 @@ function g19348(x)
 end
 test_inferred_static(@code_typed g19348((1, 2.0)))
 
+# issue #5575
+f5575() = zeros(Type[Float64][1], 1)
+@test Base.return_types(f5575, ())[1] == Vector
+
+# make sure Tuple{unknown} handles the possibility that `unknown` is a Vararg
+function maybe_vararg_tuple_1()
+    x = Any[Vararg{Int}][1]
+    Tuple{x}
+end
+@test Type{Tuple{Vararg{Int}}} <: Base.return_types(maybe_vararg_tuple_1, ())[1]
+function maybe_vararg_tuple_2()
+    x = Type[Vararg{Int}][1]
+    Tuple{x}
+end
+@test Type{Tuple{Vararg{Int}}} <: Base.return_types(maybe_vararg_tuple_2, ())[1]
+
 # Issue 19641
 foo19641() = let a = 1.0
     Core.Inference.return_type(x -> x + a, Tuple{Float64})
