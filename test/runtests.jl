@@ -98,35 +98,37 @@ if VERSION < v"0.4.0-dev+1387"
     @test isdefined(Main, :AbstractString)
 end
 
-@test round(Int, 3//4) == 1
-@test round(Int, 1) == 1
-@test round(Int, 1.1) == 1
-@test round(Int, [1, 1]) == [1, 1]
-@test round(Int, [1.1, 1.1]) == [1, 1]
-@test round(Int, [1 1]) == [1 1]
-@test round(Int, [1.1 1.1]) == [1 1]
-@test round(Int, fill(1.1, 2, 3, 4)) == fill(1, 2, 3, 4)
-@test ceil(Int, 1) == 1
-@test ceil(Int, 1.1) == 2
-@test ceil(Int, [1, 1]) == [1, 1]
-@test ceil(Int, [1.1, 1.1]) == [2, 2]
-@test ceil(Int, [1 1]) == [1 1]
-@test ceil(Int, [1.1 1.1]) == [2 2]
-@test ceil(Int, fill(1.1, 2, 3, 4)) == fill(2, 2, 3, 4)
-@test floor(Int, 1) == 1
-@test floor(Int, 1.1) == 1
-@test floor(Int, [1, 1]) == [1, 1]
-@test floor(Int, [1.1, 1.1]) == [1, 1]
-@test floor(Int, [1 1]) == [1 1]
-@test floor(Int, [1.1 1.1]) == [1 1]
-@test floor(Int, fill(1.1, 2, 3, 4)) == fill(1, 2, 3, 4)
-@test trunc(Int, 1) == 1
-@test trunc(Int, 1.1) == 1
-@test trunc(Int, [1, 1]) == [1, 1]
-@test trunc(Int, [1.1, 1.1]) == [1, 1]
-@test trunc(Int, [1 1]) == [1 1]
-@test trunc(Int, [1.1 1.1]) == [1 1]
-@test trunc(Int, fill(1.1, 2, 3, 4)) == fill(1, 2, 3, 4)
+if VERSION < v"0.6.0-"
+    @test round(Int, 3//4) == 1
+    @test round(Int, 1) == 1
+    @test round(Int, 1.1) == 1
+    @test round(Int, [1, 1]) == [1, 1]
+    @test round(Int, [1.1, 1.1]) == [1, 1]
+    @test round(Int, [1 1]) == [1 1]
+    @test round(Int, [1.1 1.1]) == [1 1]
+    @test round(Int, fill(1.1, 2, 3, 4)) == fill(1, 2, 3, 4)
+    @test ceil(Int, 1) == 1
+    @test ceil(Int, 1.1) == 2
+    @test ceil(Int, [1, 1]) == [1, 1]
+    @test ceil(Int, [1.1, 1.1]) == [2, 2]
+    @test ceil(Int, [1 1]) == [1 1]
+    @test ceil(Int, [1.1 1.1]) == [2 2]
+    @test ceil(Int, fill(1.1, 2, 3, 4)) == fill(2, 2, 3, 4)
+    @test floor(Int, 1) == 1
+    @test floor(Int, 1.1) == 1
+    @test floor(Int, [1, 1]) == [1, 1]
+    @test floor(Int, [1.1, 1.1]) == [1, 1]
+    @test floor(Int, [1 1]) == [1 1]
+    @test floor(Int, [1.1 1.1]) == [1 1]
+    @test floor(Int, fill(1.1, 2, 3, 4)) == fill(1, 2, 3, 4)
+    @test trunc(Int, 1) == 1
+    @test trunc(Int, 1.1) == 1
+    @test trunc(Int, [1, 1]) == [1, 1]
+    @test trunc(Int, [1.1, 1.1]) == [1, 1]
+    @test trunc(Int, [1 1]) == [1 1]
+    @test trunc(Int, [1.1 1.1]) == [1 1]
+    @test trunc(Int, fill(1.1, 2, 3, 4)) == fill(1, 2, 3, 4)
+end
 
 # n % Type
 for T in Any[Int16, Int32, UInt32, Int64, UInt64]
