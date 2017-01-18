@@ -983,29 +983,29 @@ cd(dirwalk) do
     follow_symlink_vec = has_symlinks ? [true, false] : [false]
     has_symlinks && symlink(abspath("sub_dir2"), joinpath("sub_dir1", "link"))
     for follow_symlinks in follow_symlink_vec
-        task = walkdir(".", follow_symlinks=follow_symlinks)
-        root, dirs, files = consume(task)
+        chnl = walkdir(".", follow_symlinks=follow_symlinks)
+        root, dirs, files = take!(chnl)
         @test root == "."
         @test dirs == ["sub_dir1", "sub_dir2"]
         @test files == ["file1", "file2"]
 
-        root, dirs, files = consume(task)
+        root, dirs, files = take!(chnl)
         @test root == joinpath(".", "sub_dir1")
         @test dirs == (has_symlinks ? ["link", "subsub_dir1", "subsub_dir2"] : ["subsub_dir1", "subsub_dir2"])
         @test files == ["file1", "file2"]
 
-        root, dirs, files = consume(task)
+        root, dirs, files = take!(chnl)
         if follow_symlinks
             @test root == joinpath(".", "sub_dir1", "link")
             @test dirs == []
             @test files == ["file_dir2"]
-            root, dirs, files = consume(task)
+            root, dirs, files = take!(chnl)
         end
         for i=1:2
             @test root == joinpath(".", "sub_dir1", "subsub_dir$i")
             @test dirs == []
             @test files == []
-            root, dirs, files = consume(task)
+            root, dirs, files = take!(chnl)
         end
 
         @test root == joinpath(".", "sub_dir2")
@@ -1014,51 +1014,51 @@ cd(dirwalk) do
     end
 
     for follow_symlinks in follow_symlink_vec
-        task = walkdir(".", follow_symlinks=follow_symlinks, topdown=false)
-        root, dirs, files = consume(task)
+        chnl = walkdir(".", follow_symlinks=follow_symlinks, topdown=false)
+        root, dirs, files = take!(chnl)
         if follow_symlinks
             @test root == joinpath(".", "sub_dir1", "link")
             @test dirs == []
             @test files == ["file_dir2"]
-            root, dirs, files = consume(task)
+            root, dirs, files = take!(chnl)
         end
         for i=1:2
             @test root == joinpath(".", "sub_dir1", "subsub_dir$i")
             @test dirs == []
             @test files == []
-            root, dirs, files = consume(task)
+            root, dirs, files = take!(chnl)
         end
         @test root == joinpath(".", "sub_dir1")
         @test dirs ==  (has_symlinks ? ["link", "subsub_dir1", "subsub_dir2"] : ["subsub_dir1", "subsub_dir2"])
         @test files == ["file1", "file2"]
 
-        root, dirs, files = consume(task)
+        root, dirs, files = take!(chnl)
         @test root == joinpath(".", "sub_dir2")
         @test dirs == []
         @test files == ["file_dir2"]
 
-        root, dirs, files = consume(task)
+        root, dirs, files = take!(chnl)
         @test root == "."
         @test dirs == ["sub_dir1", "sub_dir2"]
         @test files == ["file1", "file2"]
     end
     #test of error handling
-    task_error = walkdir(".")
-    task_noerror = walkdir(".", onerror=x->x)
-    root, dirs, files = consume(task_error)
+    chnl_error = walkdir(".")
+    chnl_noerror = walkdir(".", onerror=x->x)
+    root, dirs, files = take!(chnl_error)
     @test root == "."
     @test dirs == ["sub_dir1", "sub_dir2"]
     @test files == ["file1", "file2"]
 
     rm(joinpath("sub_dir1"), recursive=true)
-    @test_throws SystemError consume(task_error) # throws an error because sub_dir1 do not exist
+    @test_throws SystemError take!(chnl_error) # throws an error because sub_dir1 do not exist
 
-    root, dirs, files = consume(task_noerror)
+    root, dirs, files = take!(chnl_noerror)
     @test root == "."
     @test dirs == ["sub_dir1", "sub_dir2"]
     @test files == ["file1", "file2"]
 
-    root, dirs, files = consume(task_noerror) # skips sub_dir1 as it no longer exist
+    root, dirs, files = take!(chnl_noerror) # skips sub_dir1 as it no longer exist
     @test root == joinpath(".", "sub_dir2")
     @test dirs == []
     @test files == ["file_dir2"]
@@ -1192,7 +1192,7 @@ let x = rand(3), y = rand(3)
     @test @compat(sin.(cos.(x))) == map(x -> sin(cos(x)), x)
     @test @compat(atan2.(sin.(y),x)) == broadcast(atan2,map(sin,y),x)
 end
-let x0 = Array(Float64), v, v0
+let x0 = Array{Float64}(), v, v0
     x0[1] = rand()
     v0 = @compat sin.(x0)
     @test isa(v0, Array{Float64,0})
