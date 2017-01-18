@@ -131,12 +131,12 @@ function peel{T <: GitObject}(::Type{T}, ref::GitReference)
 end
 
 function ref_list(repo::GitRepo)
-    with(StrArrayStruct()) do sa
-        sa_ref = Ref(sa)
-        @check ccall((:git_reference_list, :libgit2), Cint,
+    sa_ref = Ref(StrArrayStruct())
+    @check ccall((:git_reference_list, :libgit2), Cint,
                       (Ptr{StrArrayStruct}, Ptr{Void}), sa_ref, repo.ptr)
-        convert(Vector{AbstractString}, sa_ref[])
-    end
+    res = convert(Vector{String}, sa_ref[])
+    free(sa_ref)
+    res
 end
 
 function create_branch(repo::GitRepo,
