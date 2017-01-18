@@ -328,7 +328,7 @@ the following rules:
  - If the arguments are tuples and zero or more scalars, it returns a tuple.
  - If the arguments contain at least one array or `Ref`, it returns an array
    (expanding singleton dimensions), and treats `Ref`s as 0-dimensional arrays,
-   and tuples as a 1-dimensional arrays.
+   and tuples as 1-dimensional arrays.
 
 The following additional rule applies to `Nullable` arguments: If there is at
 least one `Nullable`, and all the arguments are scalars or `Nullable`, it

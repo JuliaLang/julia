@@ -104,17 +104,13 @@ The `BigFloat` type implements arbitrary-precision floating-point arithmetic usi
 Base.precision
 Base.MPFR.precision(::Type{BigFloat})
 Base.MPFR.setprecision
-```
-
-### Additional constructors for `BigFloat`
-```@docs
 Base.MPFR.BigFloat(x, prec::Int)
 BigFloat(x::Union{Integer, AbstractFloat, String}, rounding::RoundingMode)
 Base.MPFR.BigFloat(x, prec::Int, rounding::RoundingMode)
 Base.MPFR.BigFloat(x::String)
 ```
-## Random Numbers
 
+## Random Numbers
 
 Random number generation in Julia uses the [Mersenne Twister library](http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT)
 via `MersenneTwister` objects. Julia has a global RNG, which is used by default. Other RNG types
