@@ -333,10 +333,12 @@ function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractSt
     # do not remove entries in the index matching the provided pathspecs with empty target commit tree
     obj === nothing && throw(GitError(Error.Object, Error.ERROR, "`$committish` not found"))
     try
-        reset!(repo, Nullable(obj), pathspecs...)
+        head = reset!(repo, Nullable(obj), pathspecs...)
+        return head
     finally
         close(obj)
     end
+    return head_oid(repo)
 end
 
 """ git reset [--soft | --mixed | --hard] <commit> """
@@ -345,10 +347,12 @@ function reset!(repo::GitRepo, commit::GitHash, mode::Cint = Consts.RESET_MIXED)
     # object must exist for reset
     obj === nothing && throw(GitError(Error.Object, Error.ERROR, "Commit `$(string(commit))` object not found"))
     try
-        reset!(repo, obj, mode)
+        head = reset!(repo, obj, mode)
+        return head
     finally
         close(obj)
     end
+    return head_oid(repo)
 end
 
 """ git cat-file <commit> """
@@ -513,7 +517,7 @@ function rebase!(repo::GitRepo, upstream::AbstractString="")
             close(head_ann)
         end
     end
-    return nothing
+    return head_oid(repo)
 end
 
 
@@ -549,7 +553,7 @@ function snapshot(repo::GitRepo)
 end
 
 function restore(s::State, repo::GitRepo)
-    reset!(repo, Consts.HEAD_FILE, "*")  # unstage everything
+    head = reset!(repo, Consts.HEAD_FILE, "*")  # unstage everything
     with(GitIndex, repo) do idx
         read_tree!(idx, s.work)            # move work tree to index
         opts = CheckoutOptions(
