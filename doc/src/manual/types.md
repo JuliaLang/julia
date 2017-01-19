@@ -1002,6 +1002,20 @@ For example `Tuple{T,Array{S}} where S<:AbstractArray{T} where T<:Real` refers t
 element is some `Real`, and whose second element is an `Array` of any kind of array whose element type
 contains the type of the first tuple element.
 
+The `where` keyword itself can be nested inside a more complex declaration.  For example, consider the
+two types created by the following declarations:
+```julia
+julia> const T1 = Array{Array{T,1} where T, 1}
+Array{Array{T,1} where T,1}
+
+julia> const T2 = Array{Array{T,1}, 1} where T
+Array{Array{T,1},1} where T
+```
+Type `T1` defines a 1-dimensional array of 1-dimensional arrays; each
+of the inner arrays consists of objects of the same type, but this type may vary from one inner array to the next.
+On the other hand, type `T2` defines a 1-dimensional array of 1-dimensional arrays all of whose inner arrays must have the 
+same type.  Note that `T2` is an abstract type, e.g., `Array{Array{Int,1},1} <: T2`, whereas `T1` is a concrete type. As a consequence, `T1` can be constructed with a zero-argument constructor `a=T1()` but `T2` cannot.
+
 ## Type Aliases
 
 Sometimes it is convenient to introduce a new name for an already expressible type. For such occasions,
