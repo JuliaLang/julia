@@ -33,7 +33,7 @@ behavior, should take care to create a copy of inputs that it may modify.
 | [`length(A)`](@ref)    | the number of elements in `A`                                                    |
 | [`ndims(A)`](@ref)     | the number of dimensions of `A`                                                  |
 | [`size(A)`](@ref)      | a tuple containing the dimensions of `A`                                         |
-| [`size(A,n)`](@ref)    | the size of `A` along a particular dimension                                     |
+| [`size(A,n)`](@ref)    | the size of `A` along dimension `n`                                              |
 | [`indices(A)`](@ref)   | a tuple containing the valid indices of `A`                                      |
 | [`indices(A,n)`](@ref) | a range expressing the valid indices along dimension `n`                         |
 | [`eachindex(A)`](@ref) | an efficient iterator for visiting each position in `A`                          |
@@ -44,31 +44,33 @@ behavior, should take care to create a copy of inputs that it may modify.
 
 Many functions for constructing and initializing arrays are provided. In the following list of
 such functions, calls with a `dims...` argument can either take a single tuple of dimension sizes
-or a series of dimension sizes passed as a variable number of arguments.
+or a series of dimension sizes passed as a variable number of arguments. Most of the functions
+also accept a first input `T`, which is the element type of the array. If the type `T` is
+omitted it will default to `Float64`.
 
-| Function                                    | Description                                                                                                                                                                                                                                              |
-|:------------------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`Array{T}(dims...)`](@ref)                 | an uninitialized dense array                                                                                                                                                                                                                             |
-| [`zeros(T, dims...)`](@ref)                 | an array of all zeros of type `T`, the type defaults to `Float64` if not specified                                                                                                                                                                       |
-| [`zeros(A)`](@ref)                          | an array of all zeros with the same element type and shape as `A`                                                                                                                                                                                        |
-| [`ones(T, dims...)`](@ref)                  | an array of all ones of type `T`, the type defaults to `Float64` if not specified                                                                                                                                                                        |
-| [`ones(A)`](@ref)                           | an array of all ones with the same element type and shape as `A`                                                                                                                                                                                         |
-| [`trues(dims...)`](@ref)                    | a [`BitArray`](@ref) with all values `true`                                                                                                                                                                                                              |
-| [`trues(A)`](@ref)                          | a `BitArray` with all values `true` and the same shape as `A`                                                                                                                                                                                            |
-| [`falses(dims...)`](@ref)                   | a `BitArray` with all values `false`                                                                                                                                                                                                                     |
-| [`falses(A)`](@ref)                         | a `BitArray` with all values `false` and the same shape as `A`                                                                                                                                                                                           |
-| [`reshape(A, dims...)`](@ref)               | an array with the same data as `A`, but with different dimensions                                                                                                                                                                                        |
-| [`copy(A)`](@ref)                           | copy `A`                                                                                                                                                                                                                                                 |
-| [`deepcopy(A)`](@ref)                       | copy `A`, recursively copying its elements                                                                                                                                                                                                               |
-| [`similar(A, element_type, dims...)`](@ref) | an uninitialized array of the same type as the given array (dense, sparse, etc.), but with the specified element type and dimensions. The second and third arguments are both optional, defaulting to the element type and dimensions of `A` if omitted. |
-| [`reinterpret(T, A)`](@ref)                 | an array with the same binary data as `A`, but with the specified element type `T`                                                                                                                                                                      |
-| [`rand(dims...)`](@ref)                     | an array of `Float64`s with random, iid [^1] and uniformly distributed values in the half-open interval ``[0, 1)``                                                                                                                                   |
-| [`randn(dims...)`](@ref)                    | an array of `Float64`s with random, iid and standard normally distributed random values                                                                                                                                                                 |
-| [`eye(n)`](@ref)                            | `n`-by-`n` identity matrix                                                                                                                                                                                                                               |
-| [`eye(m, n)`](@ref)                         | `m`-by-`n` identity matrix                                                                                                                                                                                                                               |
-| [`linspace(start, stop, n)`](@ref)          | range of `n` linearly spaced elements from `start` to `stop`                                                                                                                                                                                             |
-| [`fill!(A, x)`](@ref)                       | fill the array `A` with the value `x`                                                                                                                                                                                                                    |
-| [`fill(x, dims...)`](@ref)                  | an array filled with the value `x`                                                                                                                                                                                                                       |
+| Function                           | Description                                                                                                                                                                                                                                  |
+|:---------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`Array{T}(dims...)`](@ref)        | an uninitialized dense [`Array`](@ref)                                                                                                                                                                                                       |
+| [`zeros(T, dims...)`](@ref)        | an `Array` of all zeros                                                                                                                                                                                                                      |
+| [`zeros(A)`](@ref)                 | an array of all zeros with the same type, element type and shape as `A`                                                                                                                                                                      |
+| [`ones(T, dims...)`](@ref)         | an `Array` of all ones                                                                                                                                                                                                                       |
+| [`ones(A)`](@ref)                  | an array of all ones with the same type, element type and shape as `A`                                                                                                                                                                       |
+| [`trues(dims...)`](@ref)           | a [`BitArray`](@ref) with all values `true`                                                                                                                                                                                                  |
+| [`trues(A)`](@ref)                 | a `BitArray` with all values `true` and the same shape as `A`                                                                                                                                                                                |
+| [`falses(dims...)`](@ref)          | a `BitArray` with all values `false`                                                                                                                                                                                                         |
+| [`falses(A)`](@ref)                | a `BitArray` with all values `false` and the same shape as `A`                                                                                                                                                                               |
+| [`reshape(A, dims...)`](@ref)      | an array containing the same data as `A`, but with different dimensions                                                                                                                                                                      |
+| [`copy(A)`](@ref)                  | copy `A`                                                                                                                                                                                                                                     |
+| [`deepcopy(A)`](@ref)              | copy `A`, recursively copying its elements                                                                                                                                                                                                   |
+| [`similar(A, T, dims...)`](@ref)   | an uninitialized array of the same type as `A` (dense, sparse, etc.), but with the specified element type and dimensions. The second and third arguments are both optional, defaulting to the element type and dimensions of `A` if omitted. |
+| [`reinterpret(T, A)`](@ref)        | an array with the same binary data as `A`, but with element type `T`                                                                                                                                                                         |
+| [`rand(T, dims...)`](@ref)         | an `Array` with random, iid [^1] and uniformly distributed values in the half-open interval ``[0, 1)``                                                                                                                                       |
+| [`randn(T, dims...)`](@ref)        | an `Array` with random, iid and standard normally distributed values                                                                                                                                                                         |
+| [`eye(T, n)`](@ref)                | `n`-by-`n` identity matrix                                                                                                                                                                                                                   |
+| [`eye(T, m, n)`](@ref)             | `m`-by-`n` identity matrix                                                                                                                                                                                                                   |
+| [`linspace(start, stop, n)`](@ref) | range of `n` linearly spaced elements from `start` to `stop`                                                                                                                                                                                 |
+| [`fill!(A, x)`](@ref)              | fill the array `A` with the value `x`                                                                                                                                                                                                        |
+| [`fill(x, dims...)`](@ref)         | an `Array` filled with the value `x`                                                                                                                                                                                                         |
 
 [^1]: *iid*, independently and identically distributed.
 
@@ -409,7 +411,7 @@ specify this trait, the default value `LinearSlow()` is used.
 The following operators are supported for arrays. Also, *every* binary
 operator supports a [dot version](@ref man-dot-operators) that can be
 applied to arrays (and combinations of arrays and scalars) as a
-[fused broadcasting operation](@ref man-vectorized). For comparison
+[fused broadcasting operation](@ref man-vectorized). (For comparison
 operations like `<`, *only* the `.<` version is applicable to arrays.)
 
 1. Unary arithmetic -- `-`, `+`, `!`
@@ -609,7 +611,7 @@ end
 
 The compressed sparse column storage makes it easy and quick to access the elements in the column
 of a sparse matrix, whereas accessing the sparse matrix by rows is considerably slower. Operations
-such as insertion of values one at a time in the CSC structure tend to be slow. This is
+such as insertion of previously unstored entries one at a time in the CSC structure tend to be slow. This is
 because all elements of the sparse matrix that are beyond the point of insertion have to be moved
 one place over.
 
@@ -699,7 +701,7 @@ Arithmetic operations on sparse matrices also work as they do on dense matrices.
 assignment into, and concatenation of sparse matrices work in the same way as dense matrices.
 Indexing operations, especially assignment, are expensive, when carried out one element at a time.
 In many cases it may be better to convert the sparse matrix into `(I,J,V)` format using [`findnz()`](@ref),
-manipulate the nonzeros or the structure in the dense vectors `(I,J,V)`, and then reconstruct
+manipulate the values or the structure in the dense vectors `(I,J,V)`, and then reconstruct
 the sparse matrix.
 
 ### Correspondence of dense and sparse methods
