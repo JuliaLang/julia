@@ -107,7 +107,7 @@ etc. For example `Any[x, y, z]` constructs a heterogeneous array that can contai
 Concatenation syntax can similarly be prefixed with a type to specify the element type of the
 result.
 
-```julia
+```jldoctest
 julia> [[1 2] [3 4]]
 1×4 Array{Int64,2}:
  1  2  3  4
@@ -172,7 +172,7 @@ known as a generator. This object can be iterated to produce values on demand, i
 an array and storing them in advance (see [Iteration](@ref)). For example, the following expression
 sums a series without allocating memory:
 
-```julia
+```jldoctest
 julia> sum(1/n^2 for n=1:1000)
 1.6439345666815615
 ```
@@ -188,7 +188,7 @@ ERROR: syntax: invalid iteration specification
 All comma-separated expressions after `for` are interpreted as ranges. Adding parentheses lets
 us add a third argument to `map`:
 
-```julia
+```jldoctest
 julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1 3; 2 4])
 2×2 Array{Tuple{Float64,Int64},2}:
  (0.5,1)       (0.333333,3)
@@ -198,7 +198,7 @@ julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1 3; 2 4])
 Ranges in generators and comprehensions can depend on previous ranges by writing multiple `for`
 keywords:
 
-```julia
+```jldoctest
 julia> [(i,j) for i=1:3 for j=1:i]
 6-element Array{Tuple{Int64,Int64},1}:
  (1,1)
@@ -213,7 +213,7 @@ In such cases, the result is always 1-d.
 
 Generated values can be filtered using the `if` keyword:
 
-```julia
+```jldoctest
 julia> [(i,j) for i=1:3 for j=1:i if i+j == 4]
 2-element Array{Tuple{Int64,Int64},1}:
  (2,2)
@@ -269,7 +269,7 @@ X = getindex(A, I_1, I_2, ..., I_n)
 
 Example:
 
-```julia
+```jldoctest
 julia> x = reshape(1:16, 4, 4)
 4×4 Base.ReshapedArray{Int64,2,UnitRange{Int64},Tuple{}}:
  1  5   9  13
@@ -300,7 +300,7 @@ Empty ranges of the form `n:n-1` are sometimes used to indicate the inter-index 
 `n-1` and `n`. For example, the [`searchsorted()`](@ref) function uses this convention to indicate
 the insertion point of a value not found in a sorted array:
 
-```julia
+```jldoctest
 julia> a = [1,2,5,6,7];
 
 julia> searchsorted(a, 3)
@@ -339,7 +339,7 @@ setindex!(A, X, I_1, I_2, ..., I_n)
 
 Example:
 
-```julia
+```jldoctest
 julia> x = collect(reshape(1:9, 3, 3))
 3×3 Array{Int64,2}:
  1  4  7
@@ -374,18 +374,20 @@ The first construct is used when you need the value, but not index, of each elem
 construct, `i` will be an `Int` if `A` is an array type with fast linear indexing; otherwise,
 it will be a `CartesianIndex`:
 
-```julia
-A = rand(4,3)
-B = view(A, 1:3, 2:3)
+```jldoctest
+julia> A = rand(4,3);
+
+julia> B = view(A, 1:3, 2:3);
+
 julia> for i in eachindex(B)
            @show i
        end
-       i = Base.IteratorsMD.CartesianIndex_2(1,1)
-       i = Base.IteratorsMD.CartesianIndex_2(2,1)
-       i = Base.IteratorsMD.CartesianIndex_2(3,1)
-       i = Base.IteratorsMD.CartesianIndex_2(1,2)
-       i = Base.IteratorsMD.CartesianIndex_2(2,2)
-       i = Base.IteratorsMD.CartesianIndex_2(3,2)
+i = CartesianIndex{2}((1,1))
+i = CartesianIndex{2}((2,1))
+i = CartesianIndex{2}((3,1))
+i = CartesianIndex{2}((1,2))
+i = CartesianIndex{2}((2,2))
+i = CartesianIndex{2}((3,2))
 ```
 
 In contrast with `for i = 1:length(A)`, iterating with `eachindex` provides an efficient way to
@@ -479,7 +481,7 @@ is equivalent to `broadcast(f, args...)`, providing a convenient syntax to broad
 Additionally, [`broadcast()`](@ref) is not limited to arrays (see the function documentation),
 it also handles tuples and treats any argument that is not an array, tuple or `Ref` (except for `Ptr`) as a "scalar".
 
-```julia
+```jldoctest
 julia> convert.(Float32, [1, 2])
 2-element Array{Float32,1}:
  1.0
@@ -607,7 +609,7 @@ end
 
 The compressed sparse column storage makes it easy and quick to access the elements in the column
 of a sparse matrix, whereas accessing the sparse matrix by rows is considerably slower. Operations
-such as insertion of nonzero values one at a time in the CSC structure tend to be slow. This is
+such as insertion of values one at a time in the CSC structure tend to be slow. This is
 because all elements of the sparse matrix that are beyond the point of insertion have to be moved
 one place over.
 
@@ -633,30 +635,30 @@ The simplest way to create sparse matrices is to use functions equivalent to the
 and [`eye()`](@ref) functions that Julia provides for working with dense matrices. To produce
 sparse matrices instead, you can use the same names with an `sp` prefix:
 
-```julia
+```jldoctest
 julia> spzeros(3,5)
-3×5 sparse matrix with 0 Float64 nonzero entries
+3×5 sparse matrix with 0 Float64 stored entries
 
 julia> speye(3,5)
-3×5 sparse matrix with 3 Float64 nonzero entries:
-        [1, 1]  =  1.0
-        [2, 2]  =  1.0
-        [3, 3]  =  1.0
+3×5 sparse matrix with 3 Float64 stored entries:
+  [1, 1]  =  1.0
+  [2, 2]  =  1.0
+  [3, 3]  =  1.0
 ```
 
 The [`sparse()`](@ref) function is often a handy way to construct sparse matrices. It takes as
 its input a vector `I` of row indices, a vector `J` of column indices, and a vector `V` of nonzero
 values. `sparse(I,J,V)` constructs a sparse matrix such that `S[I[k], J[k]] = V[k]`.
 
-```julia
+```jldoctest
 julia> I = [1, 4, 3, 5]; J = [4, 7, 18, 9]; V = [1, 2, -5, 3];
 
 julia> S = sparse(I,J,V)
-5×18 sparse matrix with 4 Int64 nonzero entries:
-        [1 ,  4]  =  1
-        [4 ,  7]  =  2
-        [5 ,  9]  =  3
-        [3 , 18]  =  -5
+5×18 sparse matrix with 4 Int64 stored entries:
+  [1 ,  4]  =  1
+  [4 ,  7]  =  2
+  [5 ,  9]  =  3
+  [3 , 18]  =  -5
 ```
 
 The inverse of the [`sparse()`](@ref) function is [`findn()`](@ref), which retrieves the inputs
@@ -673,20 +675,20 @@ julia> findnz(S)
 Another way to create sparse matrices is to convert a dense matrix into a sparse matrix using
 the [`sparse()`](@ref) function:
 
-```julia
+```jldoctest
 julia> sparse(eye(5))
-5×5 sparse matrix with 5 Float64 nonzero entries:
-        [1, 1]  =  1.0
-        [2, 2]  =  1.0
-        [3, 3]  =  1.0
-        [4, 4]  =  1.0
-        [5, 5]  =  1.0
+5×5 sparse matrix with 5 Float64 stored entries:
+  [1, 1]  =  1.0
+  [2, 2]  =  1.0
+  [3, 3]  =  1.0
+  [4, 4]  =  1.0
+  [5, 5]  =  1.0
 ```
 
 You can go in the other direction using the [`full()`](@ref) function. The [`issparse()`](@ref)
 function can be used to query if a matrix is sparse.
 
-```julia
+```jldoctest
 julia> issparse(speye(5))
 true
 ```
