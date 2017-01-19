@@ -652,6 +652,19 @@ mktempdir() do dir
 
             # issue #19624
             @test newnewhead == newhead
+
+            # add yet another file
+            open(joinpath(LibGit2.path(repo),"file4"),"w") do f
+                write(f, "444\n")
+            end
+            LibGit2.add!(repo, "file4")
+            LibGit2.commit(repo, "add file4")
+
+            # rebase with onto
+            newhead = LibGit2.rebase!(repo, "branch/a", "master")
+
+            newerhead = LibGit2.head_oid(repo)
+            @test newerhead == newhead
         finally
             close(repo)
         end
