@@ -1021,7 +1021,7 @@ UInt64
 This is accomplished via the following code in `base/boot.jl`:
 
 ```julia
-if is(Int,Int64)
+if Int === Int64
     typealias UInt UInt64
 else
     typealias UInt UInt32
