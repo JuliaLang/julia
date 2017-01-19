@@ -219,22 +219,22 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
                  force::Bool=false,           # force branch creation
                  set_head::Bool=true)         # set as head reference on exit
     # try to lookup branch first
-    branch_ref = force ? nothing : lookup_branch(repo, branch_name)
-    if branch_ref === nothing
-        branch_rmt_ref = isempty(track) ? nothing : lookup_branch(repo, "$track/$branch_name", true)
+    branch_ref = Nullable{GitReference}(force ? nothing : lookup_branch(repo, branch_name))
+    if isnull(branch_ref)
+        branch_rmt_ref = Nullable{GitReference}(isempty(track) ? nothing : lookup_branch(repo, "$track/$branch_name", true))
         # if commit is empty get head commit oid
         commit_id = if isempty(commit)
-            if branch_rmt_ref === nothing
+            if isnull(branch_rmt_ref)
                 with(head(repo)) do head_ref
                     with(peel(GitCommit, head_ref)) do hrc
                         GitHash(hrc)
                     end
                 end
             else
-                tmpcmt = with(peel(GitCommit, branch_rmt_ref)) do hrc
+                tmpcmt = with(peel(GitCommit, Base.get(branch_rmt_ref))) do hrc
                     GitHash(hrc)
                 end
-                close(branch_rmt_ref)
+                close(Base.get(branch_rmt_ref))
                 tmpcmt
             end
         else
@@ -244,10 +244,10 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
         cmt =  get(GitCommit, repo, commit_id)
         new_branch_ref = nothing
         try
-            new_branch_ref = create_branch(repo, branch_name, cmt, force=force)
+            new_branch_ref = Nullable(create_branch(repo, branch_name, cmt, force=force))
         finally
             close(cmt)
-            new_branch_ref === nothing && throw(GitError(Error.Object, Error.ERROR, "cannot create branch `$branch_name` with `$commit_id`"))
+            isnull(new_branch_ref) && throw(GitError(Error.Object, Error.ERROR, "cannot create branch `$branch_name` with `$commit_id`"))
             branch_ref = new_branch_ref
         end
     end
@@ -257,7 +257,7 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
             try
                 with(GitConfig, repo) do cfg
                     set!(cfg, "branch.$branch_name.remote", Consts.REMOTE_ORIGIN)
-                    set!(cfg, "branch.$branch_name.merge", name(branch_ref))
+                    set!(cfg, "branch.$branch_name.merge", name(Base.get(branch_ref)))
                 end
             catch
                 warn("Please provide remote tracking for branch '$branch_name' in '$(path(repo))'")
@@ -266,15 +266,15 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
 
         if set_head
             # checkout selected branch
-            with(peel(GitTree, branch_ref)) do btree
+            with(peel(GitTree, Base.get(branch_ref))) do btree
                 checkout_tree(repo, btree)
             end
 
             # switch head to the branch
-            head!(repo, branch_ref)
+            head!(repo, Base.get(branch_ref))
         end
     finally
-        close(branch_ref)
+        close(Base.get(branch_ref))
     end
     return
 end
@@ -452,14 +452,14 @@ function merge!(repo::GitRepo;
             else
                 with(head(repo)) do head_ref
                     tr_brn_ref = upstream(head_ref)
-                    if tr_brn_ref === nothing
+                    if isnull(tr_brn_ref)
                         throw(GitError(Error.Merge, Error.ERROR,
                                        "There is no tracking information for the current branch."))
                     end
                     try
-                        [GitAnnotated(repo, tr_brn_ref)]
+                        [GitAnnotated(repo, Base.get(tr_brn_ref))]
                     finally
-                        close(tr_brn_ref)
+                        close(Base.get(tr_brn_ref))
                     end
                 end
             end
@@ -494,14 +494,14 @@ a `GitError`. This is roughly equivalent to the following command line statement
 function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractString="")
     with(head(repo)) do head_ref
         head_ann = GitAnnotated(repo, head_ref)
-        upst_ann  = if isempty(upstream)
+        upst_ann = if isempty(upstream)
             brn_ref = LibGit2.upstream(head_ref)
-            if brn_ref === nothing
+            if isnull(brn_ref)
                 throw(GitError(Error.Rebase, Error.ERROR,
                                "There is no tracking information for the current branch."))
             end
             try
-                GitAnnotated(repo, brn_ref)
+                GitAnnotated(repo, get(brn_ref))
             finally
                 close(brn_ref)
             end

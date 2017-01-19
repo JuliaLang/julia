@@ -169,15 +169,15 @@ function lookup_branch(repo::GitRepo,
     err = ccall((:git_branch_lookup, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Cint),
                   ref_ptr_ptr, repo.ptr, branch_name, branch_type)
-    if err == Int(Error.ENOTFOUND)
-        return nothing
-    elseif err != Int(Error.GIT_OK)
-        if ref_ptr_ptr[] != C_NULL
+    if err != Int(Error.GIT_OK)
+        if err == Int(Error.ENOTFOUND)
+            return Nullable{GitReference}()
+        elseif err != Int(Error.ENOTFOUND) && ref_ptr_ptr[] != C_NULL
             close(GitReference(repo, ref_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
-    return GitReference(repo, ref_ptr_ptr[])
+    return Nullable{GitReference}(GitReference(repo, ref_ptr_ptr[]))
 end
 
 function upstream(ref::GitReference)
@@ -185,15 +185,15 @@ function upstream(ref::GitReference)
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_branch_upstream, :libgit2), Cint,
                   (Ref{Ptr{Void}}, Ptr{Void},), ref_ptr_ptr, ref.ptr)
-    if err == Int(Error.ENOTFOUND)
-        return nothing
-    elseif err != Int(Error.GIT_OK)
-        if ref_ptr_ptr[] != C_NULL
+    if err != Int(Error.GIT_OK)
+        if err == Int(Error.ENOTFOUND)
+            return Nullable{GitReference}()
+        elseif err != Int(Error.ENOTFOUND) && ref_ptr_ptr[] != C_NULL
             close(GitReference(ref.repo, ref_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
-    return GitReference(ref.repo, ref_ptr_ptr[])
+    return Nullable{GitReference}(GitReference(ref.repo, ref_ptr_ptr[]))
 end
 
 repository(ref::GitReference) = ref.repo
