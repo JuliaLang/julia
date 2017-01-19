@@ -228,6 +228,7 @@ function reset!{T<:AbstractString, S<:GitObject}(repo::GitRepo, obj::Nullable{S}
                  repo.ptr,
                  isnull(obj) ? C_NULL: Base.get(obj).ptr,
                  collect(pathspecs))
+    return head_oid(repo)
 end
 
 """Sets the current head to the specified commit oid and optionally resets the index and working tree to match."""
@@ -236,6 +237,7 @@ function reset!(repo::GitRepo, obj::GitObject, mode::Cint;
     @check ccall((:git_reset, :libgit2), Cint,
                  (Ptr{Void}, Ptr{Void}, Cint, Ptr{CheckoutOptions}),
                   repo.ptr, obj.ptr, mode, Ref(checkout_opts))
+    return head_oid(repo)
 end
 
 function clone(repo_url::AbstractString, repo_path::AbstractString,
