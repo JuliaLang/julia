@@ -246,6 +246,9 @@ static void schedule_all_finalizers(arraylist_t *flist)
         if (!gc_ptr_tag(v, 1)) {
             schedule_finalization(v, f);
         }
+        else {
+            ((void (*)(void*))f)(gc_ptr_clear_tag(v, 1));
+        }
     }
     flist->len = 0;
 }
