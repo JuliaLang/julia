@@ -112,7 +112,7 @@ end
 
 # test hour, minute, second
 let h=0, mi=0, s=0, ms=0, us=0, ns=0
-    for h = 0:23, mi = 0:59, s = 0:59,
+    for h = (0,23), mi = (0,59), s = (0,59),
         ms in (0,1,500,999), us in (0,1,500,999), ns in (0,1,500,999)
         t = Dates.Time(h, mi, s, ms, us, ns)
         @test h == Dates.hour(t)

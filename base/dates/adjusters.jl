@@ -199,7 +199,9 @@ provided `h, mi, s, ms, us` arguments, and will be adjusted until `f::Function` 
 size in adjusting can be provided manually through the `step` keyword. If `negate=true`,
 then the adjusting will stop when `f::Function` returns `false` instead of `true`. `limit`
 provides a limit to the max number of iterations the adjustment API will pursue before
-throwing an error (in the case that `f::Function` is never satisfied).
+throwing an error (in the case that `f::Function` is never satisfied). Note that the default step
+will adjust to allow for greater precision for the given arguments; i.e. if hour, minute, and second
+arguments are provided, the default step will be `Millisecond(1)` instead of `Second(1)`.
 """
 Time(::Function, args...)
 
