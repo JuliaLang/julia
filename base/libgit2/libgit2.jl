@@ -9,6 +9,8 @@ export with, GitRepo, GitConfig
 const GITHUB_REGEX =
     r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
+const REFCOUNT = Ref(zero(UInt))
+
 include("utils.jl")
 include("consts.jl")
 include("types.jl")
@@ -603,8 +605,14 @@ function __init__()
 
     err = ccall((:git_libgit2_init, :libgit2), Cint, ())
     err > 0 || throw(ErrorException("error initializing LibGit2 module"))
+    REFCOUNT[] += 1
+
     atexit() do
-        ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
+        REFCOUNT[] -= 1
+        if REFCOUNT[] == 0
+            # no objects to be finalized
+            ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
+        end
     end
 
     @static if is_linux()
