@@ -80,19 +80,26 @@ else
     end
 end
 
-function try_path(prefix::String, base::String, name::String)
-    path = joinpath(prefix, name)
+function load_hook(prefix::String, name::String, ::Void)
+    name_jl = "$name.jl"
+    path = joinpath(prefix, name_jl)
     isfile_casesensitive(path) && return abspath(path)
-    path = joinpath(prefix, base, "src", name)
+    path = joinpath(prefix, name_jl, "src", name_jl)
     isfile_casesensitive(path) && return abspath(path)
-    path = joinpath(prefix, name, "src", name)
+    path = joinpath(prefix, name, "src", name_jl)
     isfile_casesensitive(path) && return abspath(path)
     return nothing
 end
+load_hook(prefix::String, name::String, path::String) = path
+load_hook(prefix, name::String, ::Any) =
+    throw(ArgumentError("unrecognized custom loader in LOAD_PATH: $prefix"))
+
+_str(x::AbstractString) = String(x)
+_str(x) = x
 
 # `wd` is a working directory to search. defaults to current working directory.
 # if `wd === nothing`, no extra path is searched.
-function find_in_path(name::String, wd)
+function find_in_path(name::String, wd::Union{Void,String})
     isabspath(name) && return name
     base = name
     if endswith(name,".jl")
@@ -103,15 +110,15 @@ function find_in_path(name::String, wd)
     if wd !== nothing
         isfile_casesensitive(joinpath(wd,name)) && return joinpath(wd,name)
     end
-    p = try_path(Pkg.dir(), base, name)
-    p !== nothing && return p
-    for prefix in LOAD_PATH
-        p = try_path(prefix, base, name)
-        p !== nothing && return p
+    path = nothing
+    path = _str(load_hook(_str(Pkg.dir()), base, path))
+    for dir in LOAD_PATH
+        path = _str(load_hook(_str(dir), base, path))
     end
-    return nothing
+    return path
 end
-find_in_path(name::AbstractString, wd = pwd()) = find_in_path(String(name), wd)
+find_in_path(name::AbstractString, wd::AbstractString = pwd()) =
+    find_in_path(String(name), String(wd))
 
 function find_in_node_path(name::String, srcpath, node::Int=1)
     if myid() == node
