@@ -51,7 +51,7 @@ function add(pkg::AbstractString, vers::VersionSet)
     @sync begin
         @async if !edit(Reqs.add,pkg,vers)
             ispath(pkg) || throw(PkgError("unknown package $pkg"))
-            info("`$pkg` package is already installed")
+            info("Package $pkg is already installed")
         end
         branch = Dir.getmetabranch()
         outdated = with(GitRepo, "METADATA") do repo
@@ -79,7 +79,7 @@ add(pkg::AbstractString, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
 function rm(pkg::AbstractString)
     edit(Reqs.rm,pkg) && return
-    ispath(pkg) || return info("`$pkg` is not installed")
+    ispath(pkg) || return info("Package $pkg is not installed")
     info("Removing $pkg (unregistered)")
     Write.remove(pkg)
 end
