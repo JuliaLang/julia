@@ -134,6 +134,10 @@ Library improvements
 
   * New `accumulate` and `accumulate!` functions, which generalize `cumsum` and `cumprod`. Also known as a [scan](https://en.wikipedia.org/wiki/Prefix_sum) operation ([#18931]).
 
+  * `reshape` now allows specifying one dimension with a `Colon()` (`:`) for the new shape, in which case
+    that dimension's length will be computed such that its product with all the other dimensions is equal
+    to the length of the original array ([#19919]).
+
   * New `titlecase` function, which capitalizes the first character of each word within a string ([#19469]).
 
   * `any` and `all` now always short-circuit, and `mapreduce` never short-circuits ([#19543]).
