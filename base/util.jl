@@ -750,3 +750,47 @@ kwdef_val(::Type{Cwstring}) = Cwstring(C_NULL)
 kwdef_val{T<:Integer}(::Type{T}) = zero(T)
 
 kwdef_val{T}(::Type{T}) = T()
+
+"""
+    @callsuper f(x::T, y::S, ...)
+
+Call the method of function `f` with parameter signature specified by `T`, `S`, etc.
+"""
+macro callsuper(ex)
+    ex.head == :call || error("@invoke requires a call expression")
+    fname = ex.args[1]
+    args = ex.args[2:end]
+    types = Symbol[]
+    vals = Symbol[]
+    kwargs = Any[]
+    blk = quote end
+    for arg in args
+        if isa(arg,Expr) && arg.head == :kw
+            push!(kwargs, QuoteNode(arg.args[1]))
+            push!(kwargs, esc(arg.args[2]))
+        elseif isa(arg,Expr) && arg.head == :parameters
+            for aarg in arg.args
+                push!(kwargs, QuoteNode(aarg.args[1]))
+                push!(kwargs, esc(aarg.args[2]))
+            end
+        else
+            val = gensym()
+            typ = gensym()
+            push!(vals, val)
+            push!(types, typ)
+            if isa(arg,Expr) && arg.head == :(::) && length(arg.args) == 2
+                push!(blk.args, :($typ = $(esc(arg.args[2]))))
+                push!(blk.args, :($val = $(esc(arg.args[1]))::$typ))
+            else
+                push!(blk.args, :($val = $(esc(arg))))
+                push!(blk.args, :($typ = typeof($val)))
+            end
+        end
+    end
+    if isempty(kwargs)
+        push!(blk.args, :(invoke($(esc(fname)), Tuple{$(types...)}, $(vals...))))
+    else
+        push!(blk.args, :(invoke(Core.kwfunc($(esc(fname))), Tuple{Vector{Any}, typeof($(esc(fname))), $(types...)}, [$(kwargs...)], $(esc(fname)), $(vals...))))
+    end
+    return blk
+end

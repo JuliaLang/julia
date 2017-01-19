@@ -589,3 +589,16 @@ let
         eval(Base, :(have_color = $(old_have_color)))
     end
 end
+
+@testset "callsuper" begin
+    f18252(x; y=1) = x+y
+    f18252(x::Int; y=1) = x-y
+    @test  0 == @callsuper f18252(1)
+    @test -1 == @callsuper f18252(1, y=2)
+    @test -2 == @callsuper f18252(1; y=3)
+    @test  2 == @callsuper f18252(1::Any)
+    @test  3 == @callsuper f18252(1::Any, y=2)
+    @test  4 == @callsuper f18252(1::Any; y=3)
+    @test_throws MethodError @callsuper f18252(1, y=3, z=2)
+    @test_throws MethodError @callsuper f18252(1::Any, y=3, z=2)
+end

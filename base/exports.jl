@@ -1379,6 +1379,7 @@ export
     @polly,
 
     @assert,
+    @callsuper,
     @enum,
     @label,
     @goto,
