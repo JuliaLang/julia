@@ -452,6 +452,7 @@ for (typ, reporef, sup, cname) in [
                 @assert ptr != C_NULL
                 obj = new(ptr)
                 if fin
+                    REFCOUNT[] += 1
                     finalizer(obj, Base.close)
                 end
                 return obj
@@ -464,12 +465,14 @@ for (typ, reporef, sup, cname) in [
             function $typ(repo::GitRepo, ptr::Ptr{Void})
                 @assert ptr != C_NULL
                 obj = new(Nullable(repo), ptr)
+                REFCOUNT[] += 1
                 finalizer(obj, Base.close)
                 return obj
             end
             function $typ(ptr::Ptr{Void})
                 @assert ptr != C_NULL
                 obj = new(Nullable{GitRepo}(), ptr)
+                REFCOUNT[] += 1
                 finalizer(obj, Base.close)
                 return obj
             end
@@ -481,6 +484,7 @@ for (typ, reporef, sup, cname) in [
             function $typ(repo::GitRepo, ptr::Ptr{Void})
                 @assert ptr != C_NULL
                 obj = new(repo, ptr)
+                REFCOUNT[] += 1
                 finalizer(obj, Base.close)
                 return obj
             end
@@ -490,6 +494,11 @@ for (typ, reporef, sup, cname) in [
         if obj.ptr != C_NULL
             ccall(($(string(cname, :_free)), :libgit2), Void, (Ptr{Void},), obj.ptr)
             obj.ptr = C_NULL
+            REFCOUNT[] -= 1
+            if REFCOUNT[] == 0
+                # will the last finalizer please turn out the lights?
+                ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
+            end
         end
     end
 end
