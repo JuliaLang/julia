@@ -215,6 +215,12 @@ Library improvements
 Compiler/Runtime improvements
 -----------------------------
 
+* `ccall` is now implemented as a macro, removing the need for special code-generator support for Intrinsics.
+
+* `ccall` gained limited support for a `llvmcall` calling-convention. This can replace many uses of `llvmcall` with a simpler, shorter declaration.
+
+* All Intrinsics are now Builtin functions instead and have proper error checking and fall-back static compilation support.
+
 Deprecated or removed
 ---------------------
 
