@@ -102,7 +102,7 @@ that makes all types callable via `convert`:
 ```
 
 In this definition the function type is abstract, which is not normally supported. To make this
-work, all subtypes of `Type` (`Type`, `TypeConstructor`, `Union`, and `DataType`) currently share
+work, all subtypes of `Type` (`Type`, `UnionAll`, `Union`, and `DataType`) currently share
 a method table via special arrangement.
 
 ## Builtins
@@ -268,7 +268,8 @@ filtering definitions from "replaced modules" out of method tables and caches be
 system image. A "replaced module" is one that satisfies the condition `m != jl_get_global(m->parent, m->name)`
 -- in other words, some newer module has taken its name and place.
 
-Another type inference worst case was triggered by the following code from quadgk.jl:
+Another type inference worst case was triggered by the following code from the QuadGK.jl package,
+formerly part of Base:
 
 ```julia
 function do_quadgk{Tw}(f, s, n, ::Type{Tw}, abstol, reltol, maxevals, nrm)

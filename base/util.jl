@@ -309,7 +309,7 @@ function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args.
     have_color && print(buf, get(text_colors, color, color_normal))
     try f(IOContext(buf, io), args...)
     finally
-        have_color && print(buf, get(disable_text_style, color, text_colors[:default]))
+        have_color && color != :nothing && print(buf, get(disable_text_style, color, text_colors[:default]))
         have_color && (bold || color == :bold) && print(buf, disable_text_style[:bold])
         print(io, String(take!(buf)))
     end
@@ -335,9 +335,88 @@ println_with_color(color::Union{Int, Symbol}, msg::AbstractString...; bold::Bool
 
 ## warnings and messages ##
 
+const log_info_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
+const log_warn_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
+const log_error_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
+
+function _redirect(io::IO, log_to::Dict, sf::StackTraces.StackFrame)
+    isnull(sf.linfo) && return io
+    mod = get(sf.linfo).def.module
+    fun = sf.func
+    if haskey(log_to, (mod,fun))
+        return log_to[(mod,fun)]
+    elseif haskey(log_to, (mod,nothing))
+        return log_to[(mod,nothing)]
+    elseif haskey(log_to, (nothing,nothing))
+        return log_to[(nothing,nothing)]
+    else
+        return io
+    end
+end
+
+function _redirect(io::IO, log_to::Dict, fun::Symbol)
+    clos = string("#",fun,"#")
+    kw = string("kw##",fun)
+    local sf
+    break_next_frame = false
+    for trace in backtrace()
+        stack::Vector{StackFrame} = StackTraces.lookup(trace)
+        filter!(frame -> !frame.from_c, stack)
+        for frame in stack
+            isnull(frame.linfo) && continue
+            sf = frame
+            break_next_frame && (@goto skip)
+            get(frame.linfo).def.module == Base || continue
+            sff = string(frame.func)
+            if frame.func == fun || startswith(sff, clos) || startswith(sff, kw)
+                break_next_frame = true
+            end
+        end
+    end
+    @label skip
+    _redirect(io, log_to, sf)
+end
+
+@inline function redirect(io::IO, log_to::Dict, arg::Union{Symbol,StackTraces.StackFrame})
+    if isempty(log_to)
+        return io
+    else
+        if length(log_to)==1 && haskey(log_to,(nothing,nothing))
+            return log_to[(nothing,nothing)]
+        else
+            return _redirect(io, log_to, arg)
+        end
+    end
+end
 
 """
-    info(msg...; prefix="INFO: ")
+    logging(io [, m [, f]][; kind=:all])
+    logging([; kind=:all])
+
+Stream output of informational, warning, and/or error messages to `io`,
+overriding what was otherwise specified.  Optionally, divert stream only for
+module `m`, or specifically function `f` within `m`.  `kind` can be `:all` (the
+default), `:info`, `:warn`, or `:error`.  See `Base.log_{info,warn,error}_to`
+for the current set of redirections.  Call `logging` with no arguments (or just
+the `kind`) to reset everything.
+"""
+function logging(io::IO, m::Union{Module,Void}=nothing, f::Union{Symbol,Void}=nothing;
+                 kind::Symbol=:all)
+    (kind==:all || kind==:info)  && (log_info_to[(m,f)] = io)
+    (kind==:all || kind==:warn)  && (log_warn_to[(m,f)] = io)
+    (kind==:all || kind==:error) && (log_error_to[(m,f)] = io)
+    nothing
+end
+
+function logging(;  kind::Symbol=:all)
+    (kind==:all || kind==:info)  && empty!(log_info_to)
+    (kind==:all || kind==:warn)  && empty!(log_warn_to)
+    (kind==:all || kind==:error) && empty!(log_error_to)
+    nothing
+end
+
+"""
+    info([io, ] msg..., [prefix="INFO: "])
 
 Display an informational message.
 Argument `msg` is a string describing the information to be displayed.
@@ -351,10 +430,14 @@ INFO: hello world
 julia> info("hello world"; prefix="MY INFO: ")
 MY INFO: hello world
 ```
+
+See also [`logging`](@ref).
 """
 function info(io::IO, msg...; prefix="INFO: ")
+    io = redirect(io, log_info_to, :info)
     print_with_color(info_color(), io, prefix; bold = true)
     println_with_color(info_color(), io, chomp(string(msg...)))
+    return
 end
 info(msg...; prefix="INFO: ") = info(STDERR, msg..., prefix=prefix)
 
@@ -365,6 +448,16 @@ const have_warned = Set()
 warn_once(io::IO, msg...) = warn(io, msg..., once=true)
 warn_once(msg...) = warn(STDERR, msg..., once=true)
 
+"""
+    warn([io, ] msg..., [prefix="WARNING: ", once=false, key=nothing, bt=nothing, filename=nothing, lineno::Int=0])
+
+Display a warning. Argument `msg` is a string describing the warning to be
+displayed.  Set `once` to true and specify a `key` to only display `msg` the
+first time `warn` is called.  If `bt` is not `nothing` a backtrace is displayed.
+If `filename` is not `nothing` both it and `lineno` are displayed.
+
+See also [`logging`](@ref).
+"""
 function warn(io::IO, msg...;
               prefix="WARNING: ", once=false, key=nothing, bt=nothing,
               filename=nothing, lineno::Int=0)
@@ -376,6 +469,7 @@ function warn(io::IO, msg...;
         (key in have_warned) && return
         push!(have_warned, key)
     end
+    io = redirect(io, log_warn_to, :warn)
     print_with_color(warn_color(), io, prefix; bold = true)
     print_with_color(warn_color(), io, str)
     if bt !== nothing
@@ -442,7 +536,7 @@ will always be called.
 """
 function securezero! end
 @noinline securezero!{T<:Number}(a::AbstractArray{T}) = fill!(a, 0)
-securezero!(s::String) = securezero!(s.data)
+securezero!(s::String) = unsafe_securezero!(pointer(s), sizeof(s))
 @noinline unsafe_securezero!{T}(p::Ptr{T}, len::Integer=1) =
     ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
 unsafe_securezero!(p::Ptr{Void}, len::Integer=1) = Ptr{Void}(unsafe_securezero!(Ptr{UInt8}(p), len))
@@ -575,5 +669,84 @@ a starting `crc` integer to be mixed in with the checksum.
 (Technically, a little-endian checksum is computed.)
 """
 function crc32c end
-crc32c(a::Array{UInt8}, crc::UInt32=0x00000000) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, sizeof(a))
-crc32c(s::String, crc::UInt32=0x00000000) = crc32c(s.data, crc)
+crc32c(a::Union{Array{UInt8},String}, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, sizeof(a))
+
+"""
+    @kwdef typedef
+
+This is a helper macro that automatically defines a keyword-based constructor for the type
+declared in the expression `typedef`, which must be a `type` or `immutable`
+expression. The default argument is supplied by declaring fields of the form `field::T =
+default`. If no default is provided then the default is provided by the `kwdef_val(T)`
+function.
+
+```
+@kwdef immutable Foo
+    a::Cint            # implied default Cint(0)
+    b::Cint = 1        # specified default
+    z::Cstring         # implied default Cstring(C_NULL)
+    y::Bar             # implied default Bar()
+end
+```
+"""
+macro kwdef(expr)
+    expr = macroexpand(expr) # to expand @static
+    T = expr.args[2]
+    params_ex = Expr(:parameters)
+    call_ex = Expr(:call, T)
+    _kwdef!(expr.args[3], params_ex, call_ex)
+    quote
+        Base.@__doc__($(esc(expr)))
+        $(esc(Expr(:call,T,params_ex))) = $(esc(call_ex))
+    end
+end
+
+# @kwdef helper function
+# mutates arguments inplace
+function _kwdef!(blk, params_ex, call_ex)
+    for i in eachindex(blk.args)
+        ei = blk.args[i]
+        isa(ei, Expr) || continue
+        if ei.head == :(=)
+            # var::Typ = defexpr
+            dec = ei.args[1]  # var::Typ
+            var = dec.args[1] # var
+            def = ei.args[2]  # defexpr
+            push!(params_ex.args, Expr(:kw, var, def))
+            push!(call_ex.args, var)
+            blk.args[i] = dec
+        elseif ei.head == :(::)
+            dec = ei # var::Typ
+            var = dec.args[1] # var
+            def = :(Base.kwdef_val($(ei.args[2])))
+            push!(params_ex.args, Expr(:kw, var, def))
+            push!(call_ex.args, dec.args[1])
+        elseif ei.head == :block
+            # can arise with use of @static inside type decl
+            _kwdef!(ei, params_ex, call_ex)
+        end
+    end
+    blk
+end
+
+
+
+"""
+    kwdef_val(T)
+
+The default value for a type for use with the `@kwdef` macro. Returns:
+
+ - null pointer for pointer types (`Ptr{T}`, `Cstring`, `Cwstring`)
+ - zero for integer types
+ - no-argument constructor calls (e.g. `T()`) for all other types
+"""
+function kwdef_val end
+
+kwdef_val{T}(::Type{Ptr{T}}) = Ptr{T}(C_NULL)
+kwdef_val(::Type{Cstring}) = Cstring(C_NULL)
+kwdef_val(::Type{Cwstring}) = Cwstring(C_NULL)
+
+kwdef_val{T<:Integer}(::Type{T}) = zero(T)
+
+kwdef_val{T}(::Type{T}) = T()

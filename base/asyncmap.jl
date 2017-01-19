@@ -246,7 +246,7 @@ end
 
 # Special handling for some types.
 function asyncmap(f, s::AbstractString; kwargs...)
-    s2=Array(Char, length(s))
+    s2 = Array{Char,1}(length(s))
     asyncmap!(f, s2, s; kwargs...)
     return convert(String, s2)
 end
@@ -411,16 +411,6 @@ end
 iteratorsize(itr::AsyncGenerator) = iteratorsize(itr.collector.enumerator)
 size(itr::AsyncGenerator) = size(itr.collector.enumerator)
 length(itr::AsyncGenerator) = length(itr.collector.enumerator)
-
-"""
-    asyncmap!(f, c; ntasks=0, batch_size=nothing)
-
-In-place version of [`asyncmap()`](@ref).
-"""
-function asyncmap!(f, c; ntasks=0, batch_size=nothing)
-    foreach(identity, AsyncCollector(f, c, c; ntasks=ntasks, batch_size=batch_size))
-    c
-end
 
 """
     asyncmap!(f, results, c...; ntasks=0, batch_size=nothing)

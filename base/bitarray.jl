@@ -1237,78 +1237,16 @@ end
 (/)(B::BitArray, x::Number) = (/)(Array(B), x)
 (/)(x::Number, B::BitArray) = (/)(x, Array(B))
 
-function div(A::BitArray, B::BitArray)
-    shp = promote_shape(size(A), size(B))
-    all(B) || throw(DivideError())
-    return reshape(copy(A), shp)
-end
-div(A::BitArray, B::Array{Bool}) = div(A, BitArray(B))
-div(A::Array{Bool}, B::BitArray) = div(BitArray(A), B)
-function div(B::BitArray, x::Bool)
-    return x ? copy(B) : throw(DivideError())
-end
-function div(x::Bool, B::BitArray)
-    all(B) || throw(DivideError())
-    return x ? trues(size(B)) : falses(size(B))
-end
-function div(x::Number, B::BitArray)
-    all(B) || throw(DivideError())
-    y = div(x, true)
-    return fill(y, size(B))
-end
-
-function mod(A::BitArray, B::BitArray)
-    shp = promote_shape(size(A), size(B))
-    all(B) || throw(DivideError())
-    return falses(shp)
-end
-mod(A::BitArray, B::Array{Bool}) = mod(A, BitArray(B))
-mod(A::Array{Bool}, B::BitArray) = mod(BitArray(A), B)
-function mod(B::BitArray, x::Bool)
-    return x ? falses(size(B)) : throw(DivideError())
-end
-function mod(x::Bool, B::BitArray)
-    all(B) || throw(DivideError())
-    return falses(size(B))
-end
-function mod(x::Number, B::BitArray)
-    all(B) || throw(DivideError())
-    y = mod(x, true)
-    return fill(y, size(B))
-end
-
-for f in (:div, :mod)
-    @eval begin
-        function ($f)(B::BitArray, x::Number)
-            T = promote_op($f, Bool, typeof(x))
-            T === Any && return [($f)(b, x) for b in B]
-            F = Array{T}(size(B))
-            for i = 1:length(F)
-                F[i] = ($f)(B[i], x)
-            end
-            return F
-        end
-    end
-end
-
-function (&)(B::BitArray, x::Bool)
-    x ? copy(B) : falses(size(B))
-end
-(&)(x::Bool, B::BitArray) = B & x
-
-function (|)(B::BitArray, x::Bool)
-    x ? trues(size(B)) : copy(B)
-end
-(|)(x::Bool, B::BitArray) = B | x
-
-function xor(B::BitArray, x::Bool)
-    x ? ~B : copy(B)
-end
-xor(x::Bool, B::BitArray) = xor(B, x)
-
+# broadcast specializations for &, |, and xor/⊻
+broadcast(::typeof(&), B::BitArray, x::Bool) = x ? copy(B) : falses(size(B))
+broadcast(::typeof(&), x::Bool, B::BitArray) = broadcast(&, B, x)
+broadcast(::typeof(|), B::BitArray, x::Bool) = x ? trues(size(B)) : copy(B)
+broadcast(::typeof(|), x::Bool, B::BitArray) = broadcast(|, B, x)
+broadcast(::typeof(xor), B::BitArray, x::Bool) = x ? ~B : copy(B)
+broadcast(::typeof(xor), x::Bool, B::BitArray) = broadcast(xor, B, x)
 for f in (:&, :|, :xor)
     @eval begin
-        function ($f)(A::BitArray, B::BitArray)
+        function broadcast(::typeof($f), A::BitArray, B::BitArray)
             F = BitArray(promote_shape(size(A),size(B))...)
             Fc = F.chunks
             Ac = A.chunks
@@ -1320,12 +1258,11 @@ for f in (:&, :|, :xor)
             Fc[end] &= _msk_end(F)
             return F
         end
-        ($f)(A::DenseArray{Bool}, B::BitArray) = ($f)(BitArray(A), B)
-        ($f)(B::BitArray, A::DenseArray{Bool}) = ($f)(B, BitArray(A))
-        ($f)(x::Number, B::BitArray) = ($f)(x, Array(B))
-        ($f)(B::BitArray, x::Number) = ($f)(Array(B), x)
+        broadcast(::typeof($f), A::DenseArray{Bool}, B::BitArray) = broadcast($f, BitArray(A), B)
+        broadcast(::typeof($f), B::BitArray, A::DenseArray{Bool}) = broadcast($f, B, BitArray(A))
     end
 end
+
 
 ## promotion to complex ##
 
@@ -1486,7 +1423,8 @@ end
 
 reverse(v::BitVector) = reverse!(copy(v))
 
-function (<<)(B::BitVector, i::Int)
+
+function (<<)(B::BitVector, i::UInt)
     n = length(B)
     i == 0 && return copy(B)
     A = falses(n)
@@ -1494,7 +1432,7 @@ function (<<)(B::BitVector, i::Int)
     return A
 end
 
-function (>>>)(B::BitVector, i::Int)
+function (>>>)(B::BitVector, i::UInt)
     n = length(B)
     i == 0 && return copy(B)
     A = falses(n)
@@ -1502,7 +1440,11 @@ function (>>>)(B::BitVector, i::Int)
     return A
 end
 
-(>>)(B::BitVector, i::Int) = B >>> i
+(>>)(B::BitVector, i::Union{Int, UInt}) = B >>> i
+
+# signed integer version of shift operators with handling of negative values
+(<<)(B::BitVector, i::Int) = (i >=0 ? B << unsigned(i) : B >> unsigned(-i))
+(>>>)(B::BitVector, i::Int) = (i >=0 ? B >> unsigned(i) : B << unsigned(-i))
 
 """
     rol!(dest::BitVector, src::BitVector, i::Integer) -> BitVector
@@ -1900,8 +1842,6 @@ map(::typeof(zero), A::BitArray) = fill!(similar(A), false)
 map(::typeof(one), A::BitArray) = fill!(similar(A), true)
 map(::typeof(identity), A::BitArray) = copy(A)
 
-map!(f, A::BitArray) = map!(f, A, A)
-map!(::typeof(identity), A::BitArray) = A
 map!(::Union{typeof(~), typeof(!)}, dest::BitArray, A::BitArray) = bit_map!(~, dest, A)
 map!(::typeof(zero), dest::BitArray, A::BitArray) = fill!(dest, false)
 map!(::typeof(one), dest::BitArray, A::BitArray) = fill!(dest, true)
@@ -1953,94 +1893,6 @@ function filter(f, Bs::BitArray)
     Bs[boolmap]
 end
 
-## Transpose ##
-
-transpose(B::BitVector) = reshape(copy(B), 1, length(B))
-
-# fast 8x8 bit transpose from Henry S. Warrens's "Hacker's Delight"
-# http://www.hackersdelight.org/hdcodetxt/transpose8.c.txt
-function transpose8x8(x::UInt64)
-    y = x
-    t = xor(y, y >>> 7) & 0x00aa00aa00aa00aa
-    y = xor(y, t, t << 7)
-    t = xor(y, y >>> 14) & 0x0000cccc0000cccc
-    y = xor(y, t, t << 14)
-    t = xor(y, y >>> 28) & 0x00000000f0f0f0f0
-    return xor(y, t, t << 28)
-end
-
-function form_8x8_chunk(Bc::Vector{UInt64}, i1::Int, i2::Int, m::Int, cgap::Int, cinc::Int, nc::Int, msk8::UInt64)
-    x = UInt64(0)
-
-    k, l = get_chunks_id(i1 + (i2 - 1) * m)
-    r = 0
-    for j = 1:8
-        k > nc && break
-        x |= ((Bc[k] >>> l) & msk8) << r
-        if l + 8 >= 64 && nc > k
-            r0 = 8 - _mod64(l + 8)
-            x |= (Bc[k + 1] & (msk8 >>> r0)) << (r + r0)
-        end
-        k += cgap + (l + cinc >= 64 ? 1 : 0)
-        l = _mod64(l + cinc)
-        r += 8
-    end
-    return x
-end
-
-# note: assumes B is filled with 0's
-function put_8x8_chunk(Bc::Vector{UInt64}, i1::Int, i2::Int, x::UInt64, m::Int, cgap::Int, cinc::Int, nc::Int, msk8::UInt64)
-    k, l = get_chunks_id(i1 + (i2 - 1) * m)
-    r = 0
-    for j = 1:8
-        k > nc && break
-        Bc[k] |= ((x >>> r) & msk8) << l
-        if l + 8 >= 64 && nc > k
-            r0 = 8 - _mod64(l + 8)
-            Bc[k + 1] |= ((x >>> (r + r0)) & (msk8 >>> r0))
-        end
-        k += cgap + (l + cinc >= 64 ? 1 : 0)
-        l = _mod64(l + cinc)
-        r += 8
-    end
-    return
-end
-
-function transpose(B::BitMatrix)
-    l1 = size(B, 1)
-    l2 = size(B, 2)
-    Bt = falses(l2, l1)
-
-    cgap1, cinc1 = _div64(l1), _mod64(l1)
-    cgap2, cinc2 = _div64(l2), _mod64(l2)
-
-    Bc = B.chunks
-    Btc = Bt.chunks
-
-    nc = length(Bc)
-
-    for i = 1:8:l1
-        msk8_1 = UInt64(0xff)
-        if (l1 < i + 7)
-            msk8_1 >>>= i + 7 - l1
-        end
-
-        for j = 1:8:l2
-            x = form_8x8_chunk(Bc, i, j, l1, cgap1, cinc1, nc, msk8_1)
-            x = transpose8x8(x)
-
-            msk8_2 = UInt64(0xff)
-            if (l2 < j + 7)
-                msk8_2 >>>= j + 7 - l2
-            end
-
-            put_8x8_chunk(Btc, j, i, x, l2, cgap2, cinc2, nc, msk8_2)
-        end
-    end
-    return Bt
-end
-
-ctranspose(B::BitArray) = transpose(B)
 
 ## Concatenation ##
 

@@ -19,6 +19,11 @@ function divgcd(x::Integer,y::Integer)
     div(x,g), div(y,g)
 end
 
+"""
+    //(num, den)
+
+Divide two integers or rational numbers, giving a `Rational` result.
+"""
 //(n::Integer,  d::Integer ) = Rational(n,d)
 
 function //(x::Rational, y::Integer )
@@ -63,6 +68,7 @@ convert(::Type{Rational}, x::Rational) = x
 convert(::Type{Rational}, x::Integer) = convert(Rational{typeof(x)},x)
 
 convert(::Type{Bool}, x::Rational) = x==0 ? false : x==1 ? true : throw(InexactError()) # to resolve ambiguity
+convert(::Type{Integer}, x::Rational) = (isinteger(x) ? convert(Integer, x.num) : throw(InexactError()))
 convert{T<:Integer}(::Type{T}, x::Rational) = (isinteger(x) ? convert(T, x.num) : throw(InexactError()))
 
 convert(::Type{AbstractFloat}, x::Rational) = float(x.num)/float(x.den)
@@ -80,7 +86,6 @@ convert(::Type{Rational}, x::Float64) = convert(Rational{Int64}, x)
 convert(::Type{Rational}, x::Float32) = convert(Rational{Int}, x)
 
 big{T<:Integer}(z::Complex{Rational{T}}) = Complex{Rational{BigInt}}(z)
-big{T<:Integer,N}(x::AbstractArray{Complex{Rational{T}},N}) = convert(AbstractArray{Complex{Rational{BigInt}},N}, x)
 
 promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
 promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
@@ -394,3 +399,5 @@ end
 function ^{T<:Rational}(z::Complex{T}, n::Integer)
     n >= 0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
 end
+
+iszero(x::Rational) = iszero(numerator(x))

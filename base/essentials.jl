@@ -2,7 +2,7 @@
 
 using Core: CodeInfo
 
-typealias Callable Union{Function,DataType}
+typealias Callable Union{Function,Type}
 
 const Bottom = Union{}
 
@@ -47,13 +47,13 @@ end
 argtail(x, rest...) = rest
 tail(x::Tuple) = argtail(x...)
 
-tuple_type_head(T::TypeConstructor) = tuple_type_head(T.body)
+tuple_type_head(T::UnionAll) = tuple_type_head(T.body)
 function tuple_type_head(T::DataType)
     @_pure_meta
     T.name === Tuple.name || throw(MethodError(tuple_type_head, (T,)))
     return T.parameters[1]
 end
-tuple_type_tail(T::TypeConstructor) = tuple_type_tail(T.body)
+tuple_type_tail(T::UnionAll) = tuple_type_tail(T.body)
 function tuple_type_tail(T::DataType)
     @_pure_meta
     T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
@@ -69,9 +69,31 @@ function tuple_type_cons{S,T<:Tuple}(::Type{S}, ::Type{T})
     Tuple{S, T.parameters...}
 end
 
-isvarargtype(t::ANY) = isa(t, DataType) && (t::DataType).name === Vararg.name
+function unwrap_unionall(a::ANY)
+    while isa(a,UnionAll)
+        a = a.body
+    end
+    return a
+end
+
+function rewrap_unionall(t::ANY, u::ANY)
+    if !isa(u, UnionAll)
+        return t
+    end
+    return UnionAll(u.var, rewrap_unionall(t, u.body))
+end
+
+const _va_typename = Vararg.body.body.name
+function isvarargtype(t::ANY)
+    t = unwrap_unionall(t)
+    isa(t, DataType) && (t::DataType).name === _va_typename
+end
+
 isvatuple(t::DataType) = (n = length(t.parameters); n > 0 && isvarargtype(t.parameters[n]))
-unwrapva(t::ANY) = isvarargtype(t) ? t.parameters[1] : t
+function unwrapva(t::ANY)
+    t2 = unwrap_unionall(t)
+    isvarargtype(t2) ? t2.parameters[1] : t
+end
 
 convert{T<:Tuple{Any,Vararg{Any}}}(::Type{T}, x::Tuple{Any, Vararg{Any}}) =
     tuple(convert(tuple_type_head(T),x[1]), convert(tuple_type_tail(T), tail(x))...)
@@ -90,6 +112,7 @@ ptr_arg_unsafe_convert(::Type{Ptr{Void}}, x) = x
 cconvert(T::Type, x) = convert(T, x) # do the conversion eagerly in most cases
 cconvert{P<:Ptr}(::Type{P}, x) = x # but defer the conversion to Ptr to unsafe_convert
 unsafe_convert{T}(::Type{T}, x::T) = x # unsafe_convert (like convert) defaults to assuming the convert occurred
+unsafe_convert{T<:Ptr}(::Type{T}, x::T) = x  # to resolve ambiguity with the next method
 unsafe_convert{P<:Ptr}(::Type{P}, x::Ptr) = convert(P, x)
 
 reinterpret{T}(::Type{T}, x) = box(T, x)
@@ -122,16 +145,6 @@ end
 # simple Array{Any} operations needed for bootstrap
 setindex!(A::Array{Any}, x::ANY, i::Int) = Core.arrayset(A, x, i)
 
-function length_checked_equal(args...)
-    n = length(args[1])
-    for i=2:length(args)
-        if length(args[i]) != n
-            error("argument dimensions must match")
-        end
-    end
-    n
-end
-
 map(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
 
 function precompile(f::ANY, args::Tuple)
@@ -158,6 +171,26 @@ macro boundscheck(blk)
       $(Expr(:boundscheck,:pop)))
 end
 
+"""
+    @inbounds(blk)
+
+Eliminates array bounds checking within expressions.
+
+In the example below the bound check of array A is skipped to improve performance.
+```julia
+function sum(A::AbstractArray)
+    r = zero(eltype(A))
+    for i = 1:length(A)
+        @inbounds r += A[i]
+    end
+    return r
+end
+```
+!!! Warning
+
+    Using `@inbounds` may return incorrect results/crashes/corruption
+    for out-of-bounds indices. The user is responsible for checking it manually.
+"""
 macro inbounds(blk)
     :($(Expr(:inbounds,true));
       $(esc(blk));
@@ -219,7 +252,15 @@ function isassigned(v::SimpleVector, i::Int)
     return x != C_NULL
 end
 
-# index colon
+"""
+    Colon()
+
+Colons (:) are used to signify indexing entire objects or dimensions at once.
+
+Very few operations are defined on Colons directly; instead they are converted
+by `to_indices` to an internal vector type (`Base.Slice`) to represent the
+collection of indices they span before being used.
+"""
 immutable Colon
 end
 const (:) = Colon()

@@ -15,8 +15,8 @@ endof(t::Tuple) = length(t)
 size(t::Tuple, d) = d==1 ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
 getindex(t::Tuple, i::Int) = getfield(t, i)
 getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i))
-getindex(t::Tuple, r::AbstractArray) = tuple([t[ri] for ri in r]...)
-getindex(t::Tuple, b::AbstractArray{Bool}) = getindex(t,find(b))
+getindex{T}(t::Tuple, r::AbstractArray{T,1}) = tuple([t[ri] for ri in r]...)
+getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t,find(b)) : throw(BoundsError(t, b))
 
 ## iterating ##
 
@@ -49,7 +49,7 @@ first(t::Tuple) = t[1]
 # eltype
 
 eltype(::Type{Tuple{}}) = Bottom
-eltype{T}(::Type{Tuple{Vararg{T}}}) = T
+eltype{E, T <: Tuple{Vararg{E}}}(::Type{T}) = E
 
 # version of tail that doesn't throw on empty tuples (used in array indexing)
 safe_tail(t::Tuple) = tail(t)
@@ -95,7 +95,7 @@ function ntuple{F,N}(f::F, ::Type{Val{N}})
 end
 
 # Build up the output until it has length N
-_ntuple{F,N}(out::NTuple{N}, f::F, ::Type{Val{N}}) = out
+_ntuple{F,N}(out::NTuple{N,Any}, f::F, ::Type{Val{N}}) = out
 function _ntuple{F,N,M}(out::NTuple{M}, f::F, ::Type{Val{N}})
     @_inline_meta
     _ntuple((out..., f(M+1)), f, Val{N})
@@ -145,8 +145,8 @@ map(f, t1::Tuple, t2::Tuple, ts::Tuple...) = (f(heads(t1, t2, ts...)...), map(f,
 
 # type-stable padding
 fill_to_length{N}(t::Tuple, val, ::Type{Val{N}}) = _ftl((), val, Val{N}, t...)
-_ftl{N}(out::NTuple{N}, val, ::Type{Val{N}}) = out
-function _ftl{N}(out::NTuple{N}, val, ::Type{Val{N}}, t...)
+_ftl{N}(out::NTuple{N,Any}, val, ::Type{Val{N}}) = out
+function _ftl{N}(out::NTuple{N,Any}, val, ::Type{Val{N}}, t...)
     @_inline_meta
     throw(ArgumentError("input tuple of length $(N+length(t)), requested $N"))
 end

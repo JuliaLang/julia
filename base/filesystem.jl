@@ -173,9 +173,9 @@ function readbytes!(f::File, b::Array{UInt8}, nb=length(b))
     uv_error("read",ret)
     return ret
 end
-read(io::File) = read!(io, Array{UInt8}(nb_available(io)))
+read(io::File) = read!(io, Base.StringVector(nb_available(io)))
 readavailable(io::File) = read(io)
-read(io::File, nb::Integer) = read!(io, Array{UInt8}(min(nb, nb_available(io))))
+read(io::File, nb::Integer) = read!(io, Base.StringVector(min(nb, nb_available(io))))
 
 const SEEK_SET = Int32(0)
 const SEEK_CUR = Int32(1)

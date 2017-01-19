@@ -51,7 +51,7 @@ julia> ∑(x,y) = x + y
 Julia function arguments follow a convention sometimes called "pass-by-sharing", which means that
 values are not copied when they are passed to functions. Function arguments themselves act as
 new variable *bindings* (new locations that can refer to values), but the values they refer to
-are identical to the passed values. Modifications to mutable values (such as Arrays) made within
+are identical to the passed values. Modifications to mutable values (such as `Array`s) made within
 a function will be visible to the caller. This is the same behavior found in Scheme, most Lisps,
 Python, Ruby and Perl, among other dynamic languages.
 
@@ -92,7 +92,7 @@ Of course, in a purely linear function body like `g`, the usage of `return` is p
 the expression `x + y` is never evaluated and we could simply make `x * y` the last expression
 in the function and omit the `return`. In conjunction with other control flow, however, `return`
 is of real use. Here, for example, is a function that computes the hypotenuse length of a right
-triangle with sides of length *x* and *y*, avoiding overflow:
+triangle with sides of length `x` and `y`, avoiding overflow:
 
 ```julia
 function hypot(x,y)
@@ -111,7 +111,7 @@ end
 ```
 
 There are three possible points of return from this function, returning the values of three different
-expressions, depending on the values of *x* and *y*. The `return` on the last line could be omitted
+expressions, depending on the values of `x` and `y`. The `return` on the last line could be omitted
 since it is the last expression.
 
 ## Operators Are Functions
@@ -179,8 +179,8 @@ julia> function (x)
 (::#3) (generic function with 1 method)
 ```
 
-This creates a function taking one argument *x* and returning the value of the polynomial *x*^2 +
-2*x* - 1 at that value. Notice that the result is a generic function, but with a compiler-generated
+This creates a function taking one argument `x` and returning the value of the polynomial `x^2 +
+2x - 1` at that value. Notice that the result is a generic function, but with a compiler-generated
 name based on consecutive numbering.
 
 The primary use for anonymous functions is passing them to functions which take other functions

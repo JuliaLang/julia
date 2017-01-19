@@ -263,7 +263,7 @@ the package, so its requirements must be satisfied by whatever other package ver
 The combination of top-level requirements in `~/.julia/v0.6/REQUIRE` and the requirement of fixed
 packages are used to determine what should be installed.
 
-You can also update only a subset of the installed packages, by providing arguments to the *Pkg.update*
+You can also update only a subset of the installed packages, by providing arguments to the [`Pkg.update`](@ref)
 function. In that case, only the packages provided as arguments and their dependencies will be
 updated:
 

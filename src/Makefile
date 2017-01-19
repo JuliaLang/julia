@@ -36,11 +36,11 @@ FLAGS += -DJL_BUILD_UNAME='"$(OS)"'
 endif
 
 SRCS := \
-	jltypes gf typemap ast builtins module interpreter \
-	alloc dlload sys init task array dump toplevel jl_uv \
+	jltypes gf typemap ast builtins module interpreter symbol \
+	dlload sys init task array dump toplevel jl_uv datatype \
 	simplevector APInt-C runtime_intrinsics runtime_ccall \
-	threadgroup threading stackwalk gc gc-debug gc-pages \
-	jlapi signal-handling safepoint jloptions timing
+	threadgroup threading stackwalk gc gc-debug gc-pages method \
+	jlapi signal-handling safepoint jloptions timing subtype
 
 ifeq ($(USEMSVC), 1)
 SRCS += getopt
@@ -105,6 +105,10 @@ SHIPFLAGS += $(FLAGS)
 # if not absolute, then relative to the directory of the julia executable
 SHIPFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.$(SHLIB_EXT)\""
 DEBUGFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys-debug.$(SHLIB_EXT)\""
+
+ifneq ($(CPUID_SPECIFIC_BINARIES), 0)
+override CPPFLAGS += "-DCPUID_SPECIFIC_BINARIES=1"
+endif
 
 FLISP_EXECUTABLE_debug := $(BUILDDIR)/flisp/flisp-debug
 FLISP_EXECUTABLE_release := $(BUILDDIR)/flisp/flisp

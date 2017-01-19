@@ -23,7 +23,15 @@ julia> supertype(Int32)
 Signed
 ```
 """
-supertype(T::DataType) = T.super
+function supertype(T::DataType)
+    @_pure_meta
+    T.super
+end
+
+function supertype(T::UnionAll)
+    @_pure_meta
+    UnionAll(T.var, supertype(T.body))
+end
 
 ## generic comparison ##
 
@@ -645,6 +653,14 @@ For associative collection types, this will be a `Pair{KeyType,ValType}`. The de
 `eltype(x) = eltype(typeof(x))` is provided for convenience so that instances can be passed
 instead of types. However the form that accepts a type argument should be defined for new
 types.
+
+```jldoctest
+julia> eltype(ones(Float32,2,2))
+Float32
+
+julia> eltype(ones(Int8,2,2))
+Int8
+```
 """
 eltype(::Type) = Any
 eltype(::Type{Any}) = Any
@@ -664,6 +680,48 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
 ```
 """
 |>(x, f) = f(x)
+
+# function composition
+
+"""
+    f ∘ g
+
+Compose functions: i.e. `(f ∘ g)(args...)` means `f(g(args...))`. The `∘` symbol can be
+entered in the Julia REPL (and most editors, appropriately configured) by typing `\circ<tab>`.
+Example:
+
+```jldoctest
+julia> map(uppercase∘hex, 250:255)
+6-element Array{String,1}:
+ "FA"
+ "FB"
+ "FC"
+ "FD"
+ "FE"
+ "FF"
+```
+"""
+∘(f, g) = (x...)->f(g(x...))
+
+
+"""
+    !f::Function
+
+Predicate function negation: when the argument of `!` is a function, it returns a
+function which computes the boolean negation of `f`. Example:
+
+```jldoctest
+julia> str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
+"∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
+
+julia> filter(isalpha, str)
+"εδxyδfxfyε"
+
+julia> filter(!isalpha, str)
+"∀  > 0, ∃  > 0: |-| <  ⇒ |()-()| < "
+```
+"""
+!(f::Function) = (x...)->!f(x...)
 
 # array shape rules
 
@@ -818,19 +876,95 @@ function setindex_shape_check{T}(X::AbstractArray{T,2}, i::Integer, j::Integer)
 end
 setindex_shape_check(X, I...) = nothing # Non-arrays broadcast to all idxs
 
-# convert to a supported index type (Array, Colon, or Int)
-to_index(i::Int) = i
+# convert to a supported index type (array or Int)
+"""
+    to_index(A, i)
+
+Convert index `i` to an `Int` or array of indices to be used as an index into array `A`.
+
+Custom array types may specialize `to_index(::CustomArray, i)` to provide
+special indexing behaviors. Note that some index types (like `Colon`) require
+more context in order to transform them into an array of indices; those get
+converted in the more complicated `to_indices` function. By default, this
+simply calls the generic `to_index(i)`. This must return either an `Int` or an
+`AbstractArray` of scalar indices that are supported by `A`.
+"""
+to_index(A, i) = to_index(i)
+
+"""
+    to_index(i)
+
+Convert index `i` to an `Int` or array of `Int`s to be used as an index for all arrays.
+
+Custom index types may specialize `to_index(::CustomIndex)` to provide special
+indexing behaviors. This must return either an `Int` or an `AbstractArray` of
+`Int`s.
+"""
 to_index(i::Integer) = convert(Int,i)::Int
-to_index(c::Colon) = c
-to_index(I::AbstractArray{Bool}) = find(I)
-to_index(A::AbstractArray) = A
-to_index{T<:AbstractArray}(A::AbstractArray{T}) = throw(ArgumentError("invalid index: $A"))
-to_index(A::AbstractArray{Colon}) = throw(ArgumentError("invalid index: $A"))
+to_index(I::AbstractArray{Bool}) = LogicalIndex(I)
+to_index(I::AbstractArray) = I
+to_index{T<:Union{AbstractArray, Colon}}(I::AbstractArray{T}) = throw(ArgumentError("invalid index: $I"))
+to_index(::Colon) = throw(ArgumentError("colons must be converted by to_indices(...)"))
 to_index(i) = throw(ArgumentError("invalid index: $i"))
 
-to_indexes() = ()
-to_indexes(i1) = (to_index(i1),)
-to_indexes(i1, I...) = (@_inline_meta; (to_index(i1), to_indexes(I...)...))
+# The general to_indices is mostly defined in multidimensional.jl, but this
+# definition is required for bootstrap:
+"""
+    to_indices(A, I::Tuple)
+
+Convert the tuple `I` to a tuple of indices for use in indexing into array `A`.
+
+The returned tuple must only contain either `Int`s or `AbstractArray`s of
+scalar indices that are supported by array `A`. It will error upon encountering
+a novel index type that it does not know how to process.
+
+For simple index types, it defers to the unexported `Base.to_index(A, i)` to
+process each index `i`. While this internal function is not intended to be
+called directly, `Base.to_index` may be extended by custom array or index types
+to provide custom indexing behaviors.
+
+More complicated index types may require more context about the dimension into
+which they index. To support those cases, `to_indices(A, I)` calls
+`to_indices(A, indices(A), I)`, which then recursively walks through both the
+given tuple of indices and the dimensional indices of `A` in tandem. As such,
+not all index types are guaranteed to propagate to `Base.to_index`.
+"""
+to_indices(A, I::Tuple) = (@_inline_meta; to_indices(A, indices(A), I))
+to_indices(A, inds, ::Tuple{}) = ()
+to_indices(A, inds, I::Tuple{Any, Vararg{Any}}) =
+    (@_inline_meta; (to_index(A, I[1]), to_indices(A, _maybetail(inds), tail(I))...))
+
+_maybetail(::Tuple{}) = ()
+_maybetail(t::Tuple) = tail(t)
+
+"""
+   Slice(indices)
+
+Represent an AbstractUnitRange of indices as a vector of the indices themselves.
+
+Upon calling `to_indices()`, Colons are converted to Slice objects to represent
+the indices over which the Colon spans. Slice objects are themselves unit
+ranges with the same indices as those they wrap. This means that indexing into
+Slice objects with an integer always returns that exact integer, and they
+iterate over all the wrapped indices, even supporting offset indices.
+"""
+immutable Slice{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
+    indices::T
+end
+indices(S::Slice) = (S.indices,)
+unsafe_indices(S::Slice) = (S.indices,)
+indices1(S::Slice) = S.indices
+first(S::Slice) = first(S.indices)
+last(S::Slice) = last(S.indices)
+errmsg(A) = error("size not supported for arrays with indices $(indices(A)); see http://docs.julialang.org/en/latest/devdocs/offset-arrays/")
+size(S::Slice) = first(S.indices) == 1 ? (length(S.indices),) : errmsg(S)
+length(S::Slice) = first(S.indices) == 1 ? length(S.indices) : errmsg(S)
+unsafe_length(S::Slice) = first(S.indices) == 1 ? unsafe_length(S.indices) : errmsg(S)
+getindex(S::Slice, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
+show(io::IO, r::Slice) = print(io, "Base.Slice(", r.indices, ")")
+start(S::Slice) = start(S.indices)
+next(S::Slice, s) = next(S.indices, s)
+done(S::Slice, s) = done(S.indices, s)
 
 # Addition/subtraction of ranges
 for f in (:+, :-)
@@ -877,26 +1011,8 @@ for f in (:+, :-)
 
         $f(r1::Union{FloatRange, OrdinalRange, LinSpace},
            r2::Union{FloatRange, OrdinalRange, LinSpace}) =
-               $f(promote(r1, r2)...)
+               $f(promote_noncircular(r1, r2)...)
     end
-end
-
-# vectorized ifelse
-
-function ifelse(c::AbstractArray{Bool}, x, y)
-    [ifelse(ci, x, y) for ci in c]
-end
-
-function ifelse(c::AbstractArray{Bool}, x::AbstractArray, y::AbstractArray)
-    [ifelse(c_elem, x_elem, y_elem) for (c_elem, x_elem, y_elem) in zip(c, x, y)]
-end
-
-function ifelse(c::AbstractArray{Bool}, x::AbstractArray, y)
-    [ifelse(c_elem, x_elem, y) for (c_elem, x_elem) in zip(c, x)]
-end
-
-function ifelse(c::AbstractArray{Bool}, x, y::AbstractArray)
-    [ifelse(c_elem, x, y_elem) for (c_elem, y_elem) in zip(c, y)]
 end
 
 # Pair
@@ -911,6 +1027,7 @@ const => = Pair
 start(p::Pair) = 1
 done(p::Pair, i) = i>2
 next(p::Pair, i) = (getfield(p,i), i+1)
+eltype{A,B}(p::Pair{A,B}) = Union{A,B}
 
 indexed_next(p::Pair, i::Int, state) = (getfield(p,i), i+1)
 
@@ -927,6 +1044,8 @@ reverse{A,B}(p::Pair{A,B}) = Pair{B,A}(p.second, p.first)
 
 endof(p::Pair) = 2
 length(p::Pair) = 2
+first(p::Pair) = p.first
+last(p::Pair) = p.second
 
 convert{A,B}(::Type{Pair{A,B}}, x::Pair{A,B}) = x
 function convert{A,B}(::Type{Pair{A,B}}, x::Pair)
@@ -989,6 +1108,7 @@ export
     √,
     ∛,
     ⊻,
+    ∘,
     colon,
     hcat,
     vcat,
@@ -1002,6 +1122,6 @@ import ..this_module: !, !=, xor, %, ÷, &, *, +, -,
     /, //, <, <:, <<, <=, ==, >, >=, >>, >>>,
     <|, |>, \, ^, |, ~, !==, ===, >:, colon, hcat, vcat, hvcat, getindex, setindex!,
     transpose, ctranspose,
-    ≥, ≤, ≠, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛, ⊻
+    ≥, ≤, ≠, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛, ⊻, ∘
 
 end

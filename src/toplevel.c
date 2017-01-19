@@ -517,7 +517,7 @@ static jl_method_instance_t *jl_new_thunk(jl_code_info_t *src)
 {
     jl_method_instance_t *li = jl_new_method_instance_uninit();
     li->inferred = (jl_value_t*)src;
-    li->specTypes = (jl_tupletype_t*)jl_typeof(jl_emptytuple);
+    li->specTypes = jl_typeof(jl_emptytuple);
     return li;
 }
 
@@ -606,10 +606,14 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
     jl_sym_t *head = jl_is_expr(ex) ? ex->head : NULL;
 
     if (head == toplevel_sym) {
-        int i=0; jl_value_t *res=jl_nothing;
-        for(i=0; i < jl_array_len(ex->args); i++) {
+        size_t last_age = ptls->world_age;
+        jl_value_t *res = jl_nothing;
+        int i;
+        for (i = 0; i < jl_array_len(ex->args); i++) {
+            ptls->world_age = jl_world_counter; // eval each statement in the newest world age
             res = jl_toplevel_eval_flex(jl_array_ptr_ref(ex->args, i), fast, 0);
         }
+        ptls->world_age = last_age;
         JL_GC_POP();
         return res;
     }
@@ -678,218 +682,8 @@ JL_DLLEXPORT jl_value_t *jl_load(const char *fname)
 // load from filename given as a String object
 JL_DLLEXPORT jl_value_t *jl_load_(jl_value_t *str)
 {
-    jl_array_t *ary =
-        jl_array_cconvert_cstring((jl_array_t*)(jl_data_ptr(str)[0]));
-    JL_GC_PUSH1(&ary);
-    jl_value_t *res = jl_load((const char*)ary->data);
-    JL_GC_POP();
-    return res;
-}
-
-// method definition ----------------------------------------------------------
-
-extern int jl_boot_file_loaded;
-
-static int type_contains(jl_value_t *ty, jl_value_t *x);
-static int svec_contains(jl_svec_t *svec, jl_value_t *x)
-{
-    assert(jl_is_svec(svec));
-    size_t i, l=jl_svec_len(svec);
-    for(i=0; i < l; i++) {
-        jl_value_t *e = jl_svecref(svec, i);
-        if (e==x || type_contains(e, x))
-            return 1;
-    }
-    return 0;
-}
-
-static int type_contains(jl_value_t *ty, jl_value_t *x)
-{
-    if (ty == x) return 1;
-    if (jl_is_uniontype(ty))
-        return svec_contains((jl_svec_t*)jl_fieldref(ty,0), x);
-    if (jl_is_datatype(ty))
-        return svec_contains(((jl_datatype_t*)ty)->parameters, x);
-    return 0;
-}
-
-void print_func_loc(JL_STREAM *s, jl_method_t *m);
-
-void jl_check_static_parameter_conflicts(jl_method_t *m, jl_svec_t *t)
-{
-    jl_code_info_t *src = m->isstaged ? (jl_code_info_t*)m->unspecialized->inferred : m->source;
-    size_t nvars = jl_array_len(src->slotnames);
-
-    size_t i, n = jl_svec_len(t);
-    for (i = 0; i < n; i++) {
-        jl_value_t *tv = jl_svecref(t, i);
-        size_t j;
-        for (j = 0; j < nvars; j++) {
-            if (jl_is_typevar(tv)) {
-                if ((jl_sym_t*)jl_array_ptr_ref(src->slotnames, j) == ((jl_tvar_t*)tv)->name) {
-                    jl_printf(JL_STDERR,
-                              "WARNING: local variable %s conflicts with a static parameter in %s",
-                              jl_symbol_name(((jl_tvar_t*)tv)->name),
-                              jl_symbol_name(m->name));
-                    print_func_loc(JL_STDERR, m);
-                    jl_printf(JL_STDERR, ".\n");
-                }
-            }
-        }
-    }
-}
-
-// empty generic function def
-JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp, jl_value_t *bp_owner,
-                                                 jl_binding_t *bnd)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_value_t *gf=NULL;
-
-    assert(name && bp);
-    if (bnd && bnd->value != NULL && !bnd->constp)
-        jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(bnd->name));
-    if (*bp != NULL) {
-        gf = *bp;
-        if (!jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(gf)) && !jl_is_type(gf))
-            jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
-    }
-    if (bnd)
-        bnd->constp = 1;
-    if (*bp == NULL) {
-        jl_module_t *module = (bnd ? bnd->owner : ptls->current_module);
-        gf = (jl_value_t*)jl_new_generic_function(name, module);
-        *bp = gf;
-        if (bp_owner) jl_gc_wb(bp_owner, gf);
-    }
-    return gf;
-}
-
-static jl_datatype_t *first_arg_datatype(jl_value_t *a, int got_tuple1)
-{
-    if (jl_is_datatype(a)) {
-        if (got_tuple1)
-            return (jl_datatype_t*)a;
-        if (jl_is_tuple_type(a)) {
-            if (jl_nparams(a) < 1)
-                return NULL;
-            return first_arg_datatype(jl_tparam0(a), 1);
-        }
-        return NULL;
-    }
-    else if (jl_is_typevar(a)) {
-        return first_arg_datatype(((jl_tvar_t*)a)->ub, got_tuple1);
-    }
-    else if (jl_is_typector(a)) {
-        return first_arg_datatype(((jl_typector_t*)a)->body, got_tuple1);
-    }
-    else if (jl_is_uniontype(a)) {
-        jl_svec_t *ts = ((jl_uniontype_t*)a)->types;
-        if (jl_svec_len(ts) == 0) return NULL;
-        jl_datatype_t *dt = first_arg_datatype(jl_svecref(ts,0), got_tuple1);
-        if (dt == NULL) return NULL;
-        int i;
-        for(i=1; i < jl_svec_len(ts); i++) {
-            jl_datatype_t *ti = first_arg_datatype(jl_svecref(ts,i), got_tuple1);
-            if (ti==NULL || ti->name != dt->name)
-                return NULL;
-        }
-        return dt;
-    }
-    return NULL;
-}
-
-// get DataType of first tuple element, or NULL if cannot be determined
-JL_DLLEXPORT jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes)
-{
-    return first_arg_datatype(argtypes, 0);
-}
-
-extern tracer_cb jl_newmeth_tracer;
-JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
-                                jl_code_info_t *f,
-                                jl_value_t *isstaged)
-{
-    // argdata is svec(svec(types...), svec(typevars...))
-    jl_svec_t *atypes = (jl_svec_t*)jl_svecref(argdata, 0);
-    jl_svec_t *tvars = (jl_svec_t*)jl_svecref(argdata, 1);
-    size_t nargs = jl_svec_len(atypes);
-    int isva = jl_is_vararg_type(jl_svecref(atypes, nargs - 1));
-    assert(jl_is_svec(atypes));
-    assert(nargs > 0);
-    assert(jl_is_svec(tvars));
-    if (!jl_is_type(jl_svecref(atypes, 0)) || (isva && nargs == 1))
-        jl_error("function type in method definition is not a type");
-    jl_methtable_t *mt;
-    jl_sym_t *name;
-    jl_method_t *m = NULL;
-    jl_tupletype_t *argtype = jl_apply_tuple_type(atypes);
-    JL_GC_PUSH3(&f, &m, &argtype);
-
-    if (!jl_is_code_info(f)) {
-        // this occurs when there is a closure being added to an out-of-scope function
-        // the user should only do this at the toplevel
-        // the result is that the closure variables get interpolated directly into the AST
-        f = jl_new_code_info_from_ast((jl_expr_t*)f);
-    }
-
-    assert(jl_is_code_info(f));
-    jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)argtype);
-    if (ftype == NULL ||
-        !(jl_is_type_type((jl_value_t*)ftype) ||
-          (jl_is_datatype(ftype) &&
-           (!ftype->abstract || jl_is_leaf_type((jl_value_t*)ftype)) &&
-           ftype->name->mt != NULL)))
-        jl_error("cannot add methods to an abstract type");
-    mt = ftype->name->mt;
-    name = mt->name;
-
-    if (jl_subtype((jl_value_t*)ftype, (jl_value_t*)jl_builtin_type, 0))
-        jl_error("cannot add methods to a builtin function");
-
-    m = jl_new_method(f, name, argtype, nargs, isva, tvars, isstaged == jl_true);
-    jl_check_static_parameter_conflicts(m, tvars);
-
-    size_t i, na = jl_nparams(argtype);
-    for (i = 0; i < na; i++) {
-        jl_value_t *elt = jl_tparam(argtype, i);
-        if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
-            jl_sym_t *argname = (jl_sym_t*)jl_array_ptr_ref(f->slotnames, i);
-            if (argname == unused_sym)
-                jl_exceptionf(jl_argumenterror_type,
-                              "invalid type for argument number %d in method definition for %s at %s:%d",
-                              i,
-                              jl_symbol_name(name),
-                              jl_symbol_name(m->file),
-                              m->line);
-            else
-                jl_exceptionf(jl_argumenterror_type,
-                              "invalid type for argument %s in method definition for %s at %s:%d",
-                              jl_symbol_name(argname),
-                              jl_symbol_name(name),
-                              jl_symbol_name(m->file),
-                              m->line);
-        }
-    }
-
-    int ishidden = !!strchr(jl_symbol_name(name), '#');
-    for (size_t i=0; i < jl_svec_len(tvars); i++) {
-        jl_value_t *tv = jl_svecref(tvars,i);
-        if (!jl_is_typevar(tv))
-            jl_type_error_rt(jl_symbol_name(name), "method definition", (jl_value_t*)jl_tvar_type, tv);
-        if (!ishidden && !type_contains((jl_value_t*)argtype, tv)) {
-            jl_printf(JL_STDERR, "WARNING: static parameter %s does not occur in signature for %s",
-                      jl_symbol_name(((jl_tvar_t*)tv)->name),
-                      jl_symbol_name(name));
-            print_func_loc(JL_STDERR, m);
-            jl_printf(JL_STDERR, ".\nThe method will not be callable.\n");
-        }
-    }
-
-    jl_method_table_insert(mt, m, NULL);
-    if (jl_newmeth_tracer)
-        jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)m);
-    JL_GC_POP();
+    // assume String has a hidden '\0' at the end
+    return jl_load((const char*)jl_string_data(str));
 }
 
 #ifdef __cplusplus

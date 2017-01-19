@@ -5,7 +5,7 @@ function GitStatus(repo::GitRepo; status_opts=StatusOptions())
     @check ccall((:git_status_list_new, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{StatusOptions}),
                   stat_ptr_ptr, repo.ptr, Ref(status_opts))
-    return GitStatus(stat_ptr_ptr[])
+    return GitStatus(repo, stat_ptr_ptr[])
 end
 
 function Base.length(status::GitStatus)
@@ -13,16 +13,15 @@ function Base.length(status::GitStatus)
                       (Ptr{Ptr{Void}}, ), status.ptr))
 end
 
-function Base.getindex(status::GitStatus, i::Csize_t)
-    if i < 1 || i > length(status)
-        throw(BoundsError())
-    end
-    entry_ptr = ccall((:git_status_byindex, :libgit2), Ptr{Void},
-                       (Ptr{Void}, Csize_t), status.ptr, i-1)
+function Base.getindex(status::GitStatus, i::Integer)
+    1 <= i <= length(status) || throw(BoundsError())
+    entry_ptr = ccall((:git_status_byindex, :libgit2),
+                      Ptr{StatusEntry},
+                      (Ptr{Void}, Csize_t),
+                      status.ptr, i-1)
     entry_ptr == C_NULL && throw(Error.GitError(Error.ERROR))
-    return unsafe_load(convert(Ptr{StatusEntry}, entry_ptr), 1)
+    return unsafe_load(entry_ptr)
 end
-Base.getindex(status::GitStatus, i::Int) = getindex(status, Csize_t(i))
 
 function status(repo::GitRepo, path::String)
     status_ptr = Ref{Cuint}(0)

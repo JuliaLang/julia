@@ -1,10 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # constructors
-let d = [0x61,0x62,0x63,0x21]
-    @test String(d) == "abc!"
-    @test String(d).data === d # String(d) should not make a copy
-end
+@test String([0x61,0x62,0x63,0x21]) == "abc!"
 @test String("abc!") == "abc!"
 
 @test isempty(string())
@@ -248,7 +245,7 @@ end
 
 cstrdup(s) = @static is_windows() ? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
 let p = cstrdup("hello")
-    @test unsafe_string(p) == "hello" == unsafe_wrap(String, cstrdup(p), true)
+    @test unsafe_string(p) == "hello"
     Libc.free(p)
 end
 
@@ -416,6 +413,10 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 @test ["b","c"].*"a" == ["ba","ca"]
 @test ["a","b"].*["c" "d"] == ["ac" "ad"; "bc" "bd"]
 
+@test one(String) == ""
+@test prod(["*" for i in 1:3]) == "***"
+@test prod(["*" for i in 1:0]) == ""
+
 # Make sure NULL pointers are handled consistently by String
 @test_throws ArgumentError unsafe_string(Ptr{UInt8}(0))
 @test_throws ArgumentError unsafe_string(Ptr{UInt8}(0), 10)
@@ -437,8 +438,8 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 
 # issue #18280: next/nextind must return past String's underlying data
 for s in ("Hello", "Σ", "こんにちは", "😊😁")
-    @test next(s, endof(s))[2] > endof(s.data)
-    @test nextind(s, endof(s)) > endof(s.data)
+    @test next(s, endof(s))[2] > sizeof(s)
+    @test nextind(s, endof(s)) > sizeof(s)
 end
 
 # Test cmp with AbstractStrings that don't index the same as UTF-8, which would include

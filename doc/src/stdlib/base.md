@@ -122,6 +122,7 @@ Base.method_exists
 Core.applicable
 Core.invoke
 Base.:(|>)
+Base.:(∘)
 ```
 
 ## Syntax
@@ -131,6 +132,9 @@ Core.eval
 Base.@eval
 Base.evalfile
 Base.esc
+Base.@inbounds
+Base.@inline
+Base.@noinline
 Base.gensym
 Base.@gensym
 Base.@polly
@@ -227,6 +231,7 @@ Core.UndefRefError
 Core.UndefVarError
 Base.InitError
 Base.retry
+Base.ExponentialBackOff
 ```
 
 ## Events

@@ -179,10 +179,10 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
 
     # the default worker timeout
     tval = haskey(ENV, "JULIA_WORKER_TIMEOUT") ?
-        `export JULIA_WORKER_TIMEOUT=$(ENV["JULIA_WORKER_TIMEOUT"]);` : ``
+        `export JULIA_WORKER_TIMEOUT=$(ENV["JULIA_WORKER_TIMEOUT"])\;` : ``
 
     # Julia process with passed in command line flag arguments
-    cmd = `cd $dir && $tval $exename $exeflags`
+    cmd = `cd $dir '&&' $tval $exename $exeflags`
 
     # shell login (-l) with string command (-c) to launch julia process
     cmd = `sh -l -c $(shell_escape(cmd))`

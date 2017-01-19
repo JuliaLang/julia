@@ -67,11 +67,11 @@ Base.issubnormal
 Base.isfinite
 Base.isinf
 Base.isnan
+Base.iszero
 Base.nextfloat
 Base.prevfloat
 Base.isinteger
 Base.isreal
-Base.isimag
 Core.Float32
 Core.Float64
 Base.GMP.BigInt
@@ -102,7 +102,12 @@ The `BigFloat` type implements arbitrary-precision floating-point arithmetic usi
 
 ```@docs
 Base.precision
+Base.MPFR.precision(::Type{BigFloat})
 Base.MPFR.setprecision
+Base.MPFR.BigFloat(x, prec::Int)
+BigFloat(x::Union{Integer, AbstractFloat, String}, rounding::RoundingMode)
+Base.MPFR.BigFloat(x, prec::Int, rounding::RoundingMode)
+Base.MPFR.BigFloat(x::String)
 ```
 
 ## Random Numbers

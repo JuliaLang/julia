@@ -174,13 +174,36 @@ function show(io::IO, x::Core.IntrinsicFunction)
     print(io, unsafe_string(name))
 end
 
+show(io::IO, ::Core.BottomType) = print(io, "Union{}")
+
 function show(io::IO, x::Union)
     print(io, "Union")
-    sorted_types = sort!(collect(x.types); by=string)
+    sorted_types = sort!(uniontypes(x); by=string)
     show_comma_array(io, sorted_types, '{', '}')
 end
 
-show(io::IO, x::TypeConstructor) = show(io, x.body)
+function print_without_params(x::ANY)
+    if isa(x,UnionAll)
+        b = unwrap_unionall(x)
+        return isa(b,DataType) && b.name.wrapper === x
+    end
+    return false
+end
+
+function show(io::IO, x::UnionAll)
+    if print_without_params(x)
+        return show(io, unwrap_unionall(x).name)
+    end
+    tvar_env = get(io, :tvar_env, false)
+    if tvar_env !== false && isa(tvar_env, AbstractVector)
+        tvar_env = Any[tvar_env..., x.var]
+    else
+        tvar_env = Any[x.var]
+    end
+    show(IOContext(io, tvar_env = tvar_env), x.body)
+    print(io, " where ")
+    show(io, x.var)
+end
 
 function show_type_parameter(io::IO, p::ANY, has_tvar_env::Bool)
     if has_tvar_env
@@ -197,8 +220,7 @@ function show_datatype(io::IO, x::DataType)
     # and `true` if we are printing type parameters outside a method signature.
     has_tvar_env = get(io, :tvar_env, false) !== false
 
-    if ((!isempty(x.parameters) || x.name === Tuple.name) && x !== Tuple &&
-        !(has_tvar_env && x.name.primary === x))
+    if (!isempty(x.parameters) || x.name === Tuple.name) && x !== Tuple
         n = length(x.parameters)
 
         # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
@@ -294,7 +316,7 @@ end
 
 function show(io::IO, l::Core.MethodInstance)
     if isdefined(l, :def)
-        if l.def.isstaged && l === l.def.unspecialized
+        if l.def.isstaged && l === l.def.generator
             print(io, "MethodInstance generator for ")
             show(io, l.def)
         else
@@ -783,7 +805,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         # binary operator (i.e. "x + y")
         elseif func_prec > 0 # is a binary operator
             na = length(func_args)
-            if (na == 2 || (na > 2 && func in (:+, :++, :*))) && all(!isa(a, Expr) || a.head !== :... for a in func_args)
+            if (na == 2 || (na > 2 && func in (:+, :++, :*))) &&
+                    all(!isa(a, Expr) || a.head !== :... for a in func_args)
                 sep = " $func "
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, true)
@@ -989,6 +1012,15 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         print(io, head)
 
+    # `where` syntax
+    elseif head === :where && length(args) == 2
+        parens = 1 <= prec
+        parens && print(io, "(")
+        show_unquoted(io, args[1], indent, operator_precedence(:(::)))
+        print(io, " where ")
+        show_unquoted(io, args[2], indent, 1)
+        parens && print(io, ")")
+
     elseif head === :import || head === :importall || head === :using
         print(io, head)
         first = true
@@ -1030,31 +1062,37 @@ end
 
 function show_lambda_types(io::IO, li::Core.MethodInstance)
     # print a method signature tuple for a lambda definition
-    if li.specTypes === Tuple
-        print(io, li.def.name, "(...)")
-        return
+    local sig
+    returned_from_do = false
+    Base.with_output_color(have_color ? stackframe_function_color() : :nothing, io) do io
+        if li.specTypes === Tuple
+            print(io, li.def.name, "(...)")
+            returned_from_do = true
+            return
+        end
+        sig = li.specTypes.parameters
+        ft = sig[1]
+        if ft <: Function && isempty(ft.parameters) &&
+                isdefined(ft.name.module, ft.name.mt.name) &&
+                ft == typeof(getfield(ft.name.module, ft.name.mt.name))
+            print(io, ft.name.mt.name)
+        elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
+            f = ft.parameters[1]
+            print(io, f)
+        else
+            print(io, "(::", ft, ")")
+        end
     end
-
-    sig = li.specTypes.parameters
-    ft = sig[1]
-    if ft <: Function && isempty(ft.parameters) &&
-            isdefined(ft.name.module, ft.name.mt.name) &&
-            ft == typeof(getfield(ft.name.module, ft.name.mt.name))
-        print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && ft.name === Type.name && isleaftype(ft)
-        f = ft.parameters[1]
-        print(io, f)
-    else
-        print(io, "(::", ft, ")")
-    end
+    returned_from_do && return
     first = true
-    print(io, '(')
+    print_style = have_color ? :bold : :nothing
+    print_with_color(print_style, io, "(")
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
         first = false
         print(io, "::", sig[i])
     end
-    print(io, ')')
+    print_with_color(print_style, io, ")")
     nothing
 end
 
@@ -1071,27 +1109,35 @@ function show(io::IO, tv::TypeVar)
     # already printed and we don't need to print it again.
     # Otherwise, the lower bound should be printed if it is not `Bottom`
     # and the upper bound should be printed if it is not `Any`.
-    # The upper bound `Any` should also be printed if we are not in the
-    # existing `tvar_env` in order to resolve the ambiguity when printing a
-    # method signature.
-    # i.e. `foo{T,N}(::Array{T,N}, ::Vector)` should be printed as
-    # `foo{T,N}(::Array{T,N}, ::Array{T<:Any,1})`
     tvar_env = isa(io, IOContext) && get(io, :tvar_env, false)
     if isa(tvar_env, Vector{Any})
-        have_env = true
         in_env = (tv in tvar_env::Vector{Any})
     else
-        have_env = false
         in_env = false
     end
-    if !in_env && tv.lb !== Bottom
-        show(io, tv.lb)
-        print(io, "<:")
+    function show_bound(io::IO, b::ANY)
+        parens = isa(b,UnionAll) && !print_without_params(b)
+        parens && print(io, "(")
+        show(io, b)
+        parens && print(io, ")")
     end
-    write(io, tv.name)
-    if have_env ? !in_env : tv.ub !== Any
+    lb, ub = tv.lb, tv.ub
+    if !in_env && lb !== Bottom
+        if ub === Any
+            write(io, tv.name)
+            print(io, ">:")
+            show_bound(io, lb)
+        else
+            show_bound(io, lb)
+            print(io, "<:")
+            write(io, tv.name)
+        end
+    else
+        write(io, tv.name)
+    end
+    if !in_env && ub !== Any
         print(io, "<:")
-        show(io, tv.ub)
+        show_bound(io, ub)
     end
     nothing
 end
@@ -1211,8 +1257,8 @@ function dumptype(io::IO, x::ANY, n::Int, indent)
 end
 
 directsubtype(a::DataType, b::DataType) = supertype(a).name === b.name
-directsubtype(a::TypeConstructor, b::DataType) = directsubtype(a.body, b)
-directsubtype(a::Union, b::DataType) = any(t->directsubtype(t, b), a.types)
+directsubtype(a::UnionAll, b::DataType) = directsubtype(a.body, b)
+directsubtype(a::Union, b::DataType) = directsubtype(a.a, b) || directsubtype(a.b, b)
 # Fallback to handle TypeVar's
 directsubtype(a, b::DataType) = false
 function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
@@ -1224,10 +1270,9 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
             elseif isa(t, Module) && module_name(t) === s && module_parent(t) === m
                 # recurse into primary module bindings
                 dumpsubtypes(io, x, t, n, indent)
-            elseif isa(t, TypeConstructor) && directsubtype(t::TypeConstructor, x)
+            elseif isa(t, UnionAll) && directsubtype(t::UnionAll, x)
                 println(io)
                 print(io, indent, "  ", m, ".", s)
-                isempty(t.parameters) || print(io, "{", join(t.parameters, ","), "}")
                 print(io, " = ", t)
             elseif isa(t, Union) && directsubtype(t::Union, x)
                 println(io)
@@ -1623,6 +1668,9 @@ end
 
 show(io::IO, X::AbstractArray) = showarray(io, X, true)
 
+repremptyarray{T}(io::IO, X::Array{T}) = print(io, "Array{$T}(", join(size(X),','), ')')
+repremptyarray(io, X) = nothing # by default, we don't know this constructor
+
 function showarray(io::IO, X::AbstractArray, repr::Bool = true; header = true)
     if repr && ndims(X) == 1
         return show_vector(io, X, "[", "]")
@@ -1660,6 +1708,8 @@ function showarray(io::IO, X::AbstractArray, repr::Bool = true; header = true)
                         !repr)
             end
         end
+    elseif repr
+        repremptyarray(io, X)
     end
 end
 
@@ -1684,8 +1734,8 @@ end
 # returns compact, prefix
 function array_eltype_show_how(X)
     e = eltype(X)
-    if isa(e,DataType) && e === e.name.primary
-        str = string(e.name) # Print "Array" rather than "Array{T,N}"
+    if print_without_params(e)
+        str = string(unwrap_unionall(e).name) # Print "Array" rather than "Array{T,N}"
     else
         str = string(e)
     end

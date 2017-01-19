@@ -110,18 +110,6 @@ function ip_matches_func(ip, func::Symbol)
     return false
 end
 
-function display_error(io::IO, er, bt)
-    print_with_color(Base.error_color(), io, "ERROR: "; bold = true)
-    Base.with_output_color(Base.error_color(), io) do io
-        # remove REPL-related frames from interactive printing
-        eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
-        if eval_ind != 0
-            bt = bt[1:eval_ind-1]
-        end
-        Base.showerror(IOContext(io, :limit => true), er, bt)
-    end
-end
-
 immutable REPLDisplay{R<:AbstractREPL} <: Display
     repl::R
 end
@@ -146,8 +134,8 @@ function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::B
         try
             Base.sigatomic_end()
             if bt !== nothing
-                display_error(errio, val, bt)
-                println(errio)
+                eval(Main, Expr(:body, Expr(:return, Expr(:call, Base.display_error,
+                                                          errio, QuoteNode(val), bt))))
                 iserr, lasterr = false, ()
             else
                 if val !== nothing && show_value
@@ -167,6 +155,8 @@ function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::B
         catch err
             if bt !== nothing
                 println(errio, "SYSTEM: show(lasterr) caused an error")
+                println(errio, err)
+                Base.show_backtrace(errio, bt)
                 break
             end
             val = err
@@ -854,7 +844,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                     end
                     # Check if input line starts with "julia> ", remove it if we are in prompt paste mode
                     jl_prompt_len = 7
-                     if (firstline || isprompt_paste) && (oldpos + jl_prompt_len <= sizeof(input) && input[oldpos:oldpos+jl_prompt_len-1] == JULIA_PROMPT)
+                    if (firstline || isprompt_paste) && (oldpos + jl_prompt_len <= sizeof(input) && input[oldpos:oldpos+jl_prompt_len-1] == JULIA_PROMPT)
                         isprompt_paste = true
                         oldpos += jl_prompt_len
                     # If we are prompt pasting and current statement does not begin with julia> , skip to next line
@@ -898,6 +888,26 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                 oldpos = pos
                 firstline = false
             end
+        end,
+
+        # Open the editor at the location of a stackframe
+        # This is accessing a global variable that gets set in
+        # the show_backtrace function.
+        "^Q" => (s, o...) -> begin
+            linfos = Base.LAST_BACKTRACE_LINE_INFOS
+            str = String(take!(LineEdit.buffer(s)))
+            n = tryparse(Int, str)
+            isnull(n) && @goto writeback
+            n = get(n)
+            if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "./REPL")
+                @goto writeback
+            end
+            Base.edit(linfos[n][1], linfos[n][2])
+            Base.LineEdit.refresh_line(s)
+            return
+            @label writeback
+            write(Base.LineEdit.buffer(s), str)
+            return
         end,
     )
 

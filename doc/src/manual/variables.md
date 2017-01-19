@@ -55,7 +55,9 @@ julia> 안녕하세요 = "Hello"
 In the Julia REPL and several other Julia editing environments, you can type many Unicode math
 symbols by typing the backslashed LaTeX symbol name followed by tab.  For example, the variable
 name `δ` can be entered by typing `\delta`-*tab*, or even `α̂₂` by `\alpha`-*tab*-`\hat`-
-*tab*-`\_2`-*tab*.
+*tab*-`\_2`-*tab*.  (If you find a symbol somewhere, e.g. in someone else's code,
+that you don't know how to type, the REPL help will tell you: just type `?` and
+then paste the symbol.)
 
 Julia will even let you redefine built-in constants and functions if needed:
 
@@ -107,6 +109,13 @@ julia> try = "No"
 ERROR: syntax: unexpected "="
  ...
 ```
+
+Some Unicode characters are considered to be equivalent in identifiers.
+Different ways of entering Unicode combining characters (e.g., accents)
+are treated as equivalent (specifically, Julia identifiers are NFC-normalized).
+The Unicode characters `ɛ` (U+025B: Latin small letter open e)
+and `µ` (U+00B5: micro sign) are treated as equivalent to the corresponding
+Greek letters, because the former are easily accessible via some input methods.
 
 ## Stylistic Conventions
 

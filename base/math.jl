@@ -14,7 +14,8 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        significand,
        lgamma, hypot, gamma, lfact, max, min, minmax, ldexp, frexp,
        clamp, clamp!, modf, ^, mod2pi,
-       airy, airyai, airyprime, airyaiprime, airybi, airybiprime, airyx,
+       airyai, airyaiprime, airybi, airybiprime,
+       airyaix, airyaiprimex, airybix, airybiprimex,
        besselj0, besselj1, besselj, besseljx,
        bessely0, bessely1, bessely, besselyx,
        hankelh1, hankelh2, hankelh1x, hankelh2x,
@@ -25,12 +26,13 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
 import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
              max, min, minmax, ^, exp2, muladd,
-             exp10, expm1, log1p,
-             sign_mask, exponent_mask, exponent_one, exponent_half,
-             significand_mask, significand_bits, exponent_bits, exponent_bias
+             exp10, expm1, log1p
 
+using Base: sign_mask, exponent_mask, exponent_one, exponent_bias,
+            exponent_half, exponent_max, exponent_raw_max, fpinttype,
+            significand_mask, significand_bits, exponent_bits
 
-import Core.Intrinsics: sqrt_llvm, box, unbox, powi_llvm
+using Core.Intrinsics: sqrt_llvm, box, unbox, powi_llvm
 
 # non-type specific math functions
 
@@ -38,10 +40,10 @@ import Core.Intrinsics: sqrt_llvm, box, unbox, powi_llvm
     clamp(x, lo, hi)
 
 Return `x` if `lo <= x <= hi`. If `x < lo`, return `lo`. If `x > hi`, return `hi`. Arguments
-are promoted to a common type. Operates elementwise over `x` if `x` is an array.
+are promoted to a common type.
 
 ```jldoctest
-julia> clamp([pi, 1.0, big(10.)], 2., 9.)
+julia> clamp.([pi, 1.0, big(10.)], 2., 9.)
 3-element Array{BigFloat,1}:
  3.141592653589793238462643383279502884197169399375105820974944592307816406286198
  2.000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -53,13 +55,6 @@ clamp{X,L,H}(x::X, lo::L, hi::H) =
            ifelse(x < lo,
                   convert(promote_type(X,L,H), lo),
                   convert(promote_type(X,L,H), x)))
-
-clamp{T}(x::AbstractArray{T,1}, lo, hi) = [clamp(xx, lo, hi) for xx in x]
-clamp{T}(x::AbstractArray{T,2}, lo, hi) =
-    [clamp(x[i,j], lo, hi) for i in indices(x,1), j in indices(x,2)]
-
-clamp{T}(x::AbstractArray{T}, lo, hi) =
-    reshape([clamp(xx, lo, hi) for xx in x], size(x))
 
 """
     clamp!(array::AbstractArray, lo, hi)
@@ -193,13 +188,72 @@ const libm = Base.libm_name
 const openspecfun = "libopenspecfun"
 
 # functions with no domain error
-for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2, :expm1)
+"""
+    sinh(x)
+
+Compute hyperbolic sine of `x`.
+"""
+sinh(x)
+
+"""
+    cosh(x)
+
+Compute hyperbolic cosine of `x`.
+"""
+cosh(x)
+
+"""
+    tanh(x)
+
+Compute hyperbolic tangent of `x`.
+"""
+tanh(x)
+
+"""
+    atan(x)
+
+Compute the inverse tangent of `x`, where the output is in radians.
+"""
+atan(x)
+
+"""
+    asinh(x)
+
+Compute the inverse hyperbolic sine of `x`.
+"""
+asinh(x)
+
+"""
+    erf(x)
+
+Compute the error function of `x`, defined by ``\\frac{2}{\\sqrt{\\pi}} \\int_0^x e^{-t^2} dt``
+for arbitrary complex `x`.
+"""
+erf(x)
+
+"""
+    erfc(x)
+
+Compute the complementary error function of `x`, defined by ``1 - \\operatorname{erf}(x)``.
+"""
+erfc(x)
+
+"""
+    expm1(x)
+
+Accurately compute ``e^x-1``.
+"""
+expm1(x)
+for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :erf, :erfc, :exp2, :expm1)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
         ($f)(x::Real) = ($f)(float(x))
     end
 end
+# pure julia exp function
+include("special/exp.jl")
+exp(x::Real) = exp(float(x))
 
 # fallback definitions to prevent infinite loop from $f(x::Real) def above
 
@@ -257,6 +311,106 @@ exp10(x::Integer) = exp10(float(x))
 @inline nan_dom_err(f, x) = isnan(f) & !isnan(x) ? throw(DomainError()) : f
 
 # functions that return NaN on non-NaN argument for domain error
+"""
+    sin(x)
+
+Compute sine of `x`, where `x` is in radians.
+"""
+sin(x)
+
+"""
+    cos(x)
+
+Compute cosine of `x`, where `x` is in radians.
+"""
+cos(x)
+
+"""
+    tan(x)
+
+Compute tangent of `x`, where `x` is in radians.
+"""
+tan(x)
+
+"""
+    asin(x)
+
+Compute the inverse sine of `x`, where the output is in radians.
+"""
+asin(x)
+
+"""
+    acos(x)
+
+Compute the inverse cosine of `x`, where the output is in radians
+"""
+acos(x)
+
+"""
+    acosh(x)
+
+Compute the inverse hyperbolic cosine of `x`.
+"""
+acosh(x)
+
+"""
+    atanh(x)
+
+Compute the inverse hyperbolic tangent of `x`.
+"""
+atanh(x)
+
+"""
+    log(x)
+
+Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative `Real` arguments.
+Use complex negative arguments to obtain complex results.
+
+There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
+faster and more accurate.
+"""
+log(x)
+
+"""
+    log2(x)
+
+Compute the logarithm of `x` to base 2. Throws [`DomainError`](@ref) for negative `Real` arguments.
+
+```jldoctest
+julia> log2(4)
+2.0
+
+julia> log2(10)
+3.321928094887362
+```
+"""
+log2(x)
+
+"""
+    log10(x)
+
+Compute the logarithm of `x` to base 10.
+Throws [`DomainError`](@ref) for negative `Real` arguments.
+
+```jldoctest
+julia> log10(100)
+2.0
+
+julia> log10(2)
+0.3010299956639812
+```
+"""
+log10(x)
+
+"""
+    log1p(x)
+
+Accurate natural logarithm of `1+x`. Throws [`DomainError`](@ref) for `Real` arguments less than -1.
+
+There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
+faster and more accurate.
+"""
+log1p(x)
 for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
           :lgamma, :log1p)
     @eval begin
@@ -373,11 +527,11 @@ function ldexp{T<:AbstractFloat}(x::T, e::Integer)
     n = e % Int
     k += n
     # overflow, if k is larger than maximum posible exponent
-    if k >= Int(exponent_mask(T) >> significand_bits(T))
+    if k >= exponent_raw_max(T)
         return flipsign(T(Inf), x)
     end
     if k > 0 # normal case
-        xu = (xu & ~exponent_mask(T)) | (k % typeof(xu) << significand_bits(T))
+        xu = (xu & ~exponent_mask(T)) | (rem(k, fpinttype(T)) << significand_bits(T))
         return reinterpret(T, xu)
     else # subnormal case
         if k <= -significand_bits(T) # underflow
@@ -387,7 +541,7 @@ function ldexp{T<:AbstractFloat}(x::T, e::Integer)
         end
         k += significand_bits(T)
         z = T(2.0)^-significand_bits(T)
-        xu = (xu & ~exponent_mask(T)) | (k % typeof(xu) << significand_bits(T))
+        xu = (xu & ~exponent_mask(T)) | (rem(k, fpinttype(T)) << significand_bits(T))
         return z*reinterpret(T, xu)
     end
 end
@@ -460,15 +614,6 @@ function frexp{T<:AbstractFloat}(x::T)
     k -= (exponent_bias(T) - 1)
     xu = (xu & ~exponent_mask(T)) | exponent_half(T)
     return reinterpret(T, xu), k
-end
-
-function frexp{T<:AbstractFloat}(A::Array{T})
-    F = similar(A)
-    E = Array{Int}(size(A))
-    for (iF, iE, iA) in zip(eachindex(F), eachindex(E), eachindex(A))
-        F[iF], E[iE] = frexp(A[iA])
-    end
-    return (F, E)
 end
 
 """

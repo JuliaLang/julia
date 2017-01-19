@@ -89,8 +89,7 @@ julia> extrema(b)
 """
 linearindices(A)                 = (@_inline_meta; OneTo(_length(A)))
 linearindices(A::AbstractVector) = (@_inline_meta; indices1(A))
-eltype{T}(::Type{AbstractArray{T}}) = T
-eltype{T,N}(::Type{AbstractArray{T,N}}) = T
+eltype(::Type{A}) where A<:AbstractArray{E} where E  = E
 elsize{T}(::AbstractArray{T}) = sizeof(T)
 
 """
@@ -127,11 +126,41 @@ _length(A) = length(A)
 endof(a::AbstractArray) = length(a)
 first(a::AbstractArray) = a[first(eachindex(a))]
 
+"""
+    first(coll)
+
+Get the first element of an iterable collection. Returns the start point of a
+`Range` even if it is empty.
+
+```jldoctest
+julia> first(2:2:10)
+2
+
+julia> first([1; 2; 3; 4])
+1
+```
+"""
 function first(itr)
     state = start(itr)
     done(itr, state) && throw(ArgumentError("collection must be non-empty"))
     next(itr, state)[1]
 end
+
+"""
+    last(coll)
+
+Get the last element of an ordered collection, if it can be computed in O(1) time. This is
+accomplished by calling [`endof`](@ref) to get the last index. Returns the end
+point of a `Range` even if it is empty.
+
+```jldoctest
+julia> last(1:2:10)
+9
+
+julia> last([1; 2; 3; 4])
+4
+```
+"""
 last(a) = a[end]
 
 """
@@ -174,7 +203,7 @@ julia> strides(A)
 ```
 """
 strides(A::AbstractArray) = _strides((1,), A)
-_strides{T,N}(out::NTuple{N}, A::AbstractArray{T,N}) = out
+_strides{T,N}(out::NTuple{N,Any}, A::AbstractArray{T,N}) = out
 function _strides{M,T,N}(out::NTuple{M}, A::AbstractArray{T,N})
     @_inline_meta
     _strides((out..., out[M]*size(A, M)), A)
@@ -237,6 +266,7 @@ should define `linearindexing` in the type-domain:
     Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearFast()
 """
 linearindexing(A::AbstractArray) = linearindexing(typeof(A))
+linearindexing(::Type{Union{}}) = LinearFast()
 linearindexing{T<:AbstractArray}(::Type{T}) = LinearSlow()
 linearindexing{T<:Array}(::Type{T}) = LinearFast()
 linearindexing{T<:Range}(::Type{T}) = LinearFast()
@@ -354,6 +384,7 @@ false
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i) = throw(ArgumentError("unable to check bounds for indices of type $(typeof(i))"))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i::Real) = (first(inds) <= i) & (i <= last(inds))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Colon) = true
+checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Slice) = true
 function checkindex(::Type{Bool}, inds::AbstractUnitRange, r::Range)
     @_propagate_inbounds_meta
     isempty(r) | (checkindex(Bool, inds, first(r)) & checkindex(Bool, inds, last(r)))
@@ -613,29 +644,6 @@ function copy!{R,S}(B::AbstractVecOrMat{R}, ir_dest::Range{Int}, jr_dest::Range{
     return B
 end
 
-function copy_transpose!{R,S}(B::AbstractVecOrMat{R}, ir_dest::Range{Int}, jr_dest::Range{Int},
-                              A::AbstractVecOrMat{S}, ir_src::Range{Int}, jr_src::Range{Int})
-    if length(ir_dest) != length(jr_src)
-        throw(ArgumentError(string("source and destination must have same size (got ",
-                                   length(jr_src)," and ",length(ir_dest),")")))
-    end
-    if length(jr_dest) != length(ir_src)
-        throw(ArgumentError(string("source and destination must have same size (got ",
-                                   length(ir_src)," and ",length(jr_dest),")")))
-    end
-    @boundscheck checkbounds(B, ir_dest, jr_dest)
-    @boundscheck checkbounds(A, ir_src, jr_src)
-    idest = first(ir_dest)
-    for jsrc in jr_src
-        jdest = first(jr_dest)
-        for isrc in ir_src
-            B[idest,jdest] = A[isrc,jsrc]
-            jdest += step(jr_dest)
-        end
-        idest += step(ir_dest)
-    end
-    return B
-end
 
 """
     copymutable(a)
@@ -769,7 +777,6 @@ end
 pointer{T}(x::AbstractArray{T}) = unsafe_convert(Ptr{T}, x)
 pointer{T}(x::AbstractArray{T}, i::Integer) = (@_inline_meta; unsafe_convert(Ptr{T},x) + (i-first(linearindices(x)))*elsize(x))
 
-
 ## Approach:
 # We only define one fallback method on getindex for all argument types.
 # That dispatches to an (inlined) internal _getindex function, where the goal is
@@ -782,61 +789,62 @@ pointer{T}(x::AbstractArray{T}, i::Integer) = (@_inline_meta; unsafe_convert(Ptr
 
 function getindex(A::AbstractArray, I...)
     @_propagate_inbounds_meta
-    _getindex(linearindexing(A), A, I...)
+    error_if_canonical_indexing(linearindexing(A), A, I...)
+    _getindex(linearindexing(A), A, to_indices(A, I)...)
 end
 function unsafe_getindex(A::AbstractArray, I...)
     @_inline_meta
     @inbounds r = getindex(A, I...)
     r
 end
+
+error_if_canonical_indexing(::LinearFast, A::AbstractArray, ::Int) = error("indexing not defined for ", typeof(A))
+error_if_canonical_indexing{T,N}(::LinearSlow, A::AbstractArray{T,N}, ::Vararg{Int, N}) = error("indexing not defined for ", typeof(A))
+error_if_canonical_indexing(::LinearIndexing, ::AbstractArray, ::Any...) = nothing
+
 ## Internal definitions
 _getindex(::LinearIndexing, A::AbstractArray, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
 
 ## LinearFast Scalar indexing: canonical method is one Int
-_getindex(::LinearFast, A::AbstractVector, ::Int) = error("indexing not defined for ", typeof(A))
-_getindex(::LinearFast, A::AbstractArray,  ::Int) = error("indexing not defined for ", typeof(A))
+_getindex(::LinearFast, A::AbstractVector, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
+_getindex(::LinearFast, A::AbstractArray,  i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
 _getindex{T}(::LinearFast, A::AbstractArray{T,0}) = A[1]
-_getindex(::LinearFast, A::AbstractArray, i::Real) = (@_propagate_inbounds_meta; getindex(A, to_index(i)))
-function _getindex{T,N}(::LinearFast, A::AbstractArray{T,N}, I::Vararg{Real,N})
+function _getindex{T,N}(::LinearFast, A::AbstractArray{T,N}, I::Vararg{Int,N})
     # We must check bounds for sub2ind; so we can then use @inbounds
     @_inline_meta
-    J = to_indexes(I...)
-    @boundscheck checkbounds(A, J...)
-    @inbounds r = getindex(A, sub2ind(A, J...))
+    @boundscheck checkbounds(A, I...)
+    @inbounds r = getindex(A, sub2ind(A, I...))
     r
 end
-function _getindex(::LinearFast, A::AbstractVector, I1::Real, I::Real...)
+function _getindex(::LinearFast, A::AbstractVector, I1::Int, I::Int...)
     @_inline_meta
-    J = to_indexes(I1, I...)
-    @boundscheck checkbounds(A, J...)
-    @inbounds r = getindex(A, J[1])
+    @boundscheck checkbounds(A, I1, I...)
+    @inbounds r = getindex(A, I1)
     r
 end
-function _getindex(::LinearFast, A::AbstractArray, I::Real...) # TODO: DEPRECATE FOR #14770
+function _getindex(::LinearFast, A::AbstractArray, I::Int...) # TODO: DEPRECATE FOR #14770
     @_inline_meta
-    J = to_indexes(I...)
-    @boundscheck checkbounds(A, J...)
-    @inbounds r = getindex(A, sub2ind(A, J...))
+    @boundscheck checkbounds(A, I...)
+    @inbounds r = getindex(A, sub2ind(A, I...))
     r
 end
 
 
 ## LinearSlow Scalar indexing: Canonical method is full dimensionality of Ints
-_getindex{T,N}(::LinearSlow, A::AbstractArray{T,N}, ::Vararg{Int, N}) = error("indexing not defined for ", typeof(A))
-_getindex{T,N}(::LinearSlow, A::AbstractArray{T,N}, I::Vararg{Real, N}) = (@_propagate_inbounds_meta; getindex(A, to_indexes(I...)...))
-function _getindex(::LinearSlow, A::AbstractArray, i::Real)
+_getindex{T,N}(::LinearSlow, A::AbstractArray{T,N}, I::Vararg{Int, N}) = (@_propagate_inbounds_meta; getindex(A, I...))
+function _getindex(::LinearSlow, A::AbstractArray, i::Int)
     # ind2sub requires all dimensions to be > 0; may as well just check bounds
     @_inline_meta
     @boundscheck checkbounds(A, i)
-    @inbounds r = getindex(A, ind2sub(A, to_index(i))...)
+    @inbounds r = getindex(A, ind2sub(A, i)...)
     r
 end
-@generated function _getindex{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, I::Real...) # TODO: DEPRECATE FOR #14770
+@generated function _getindex{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, I::Int...) # TODO: DEPRECATE FOR #14770
     N = length(I)
     if N > AN
         # Drop trailing ones
         Isplat = Expr[:(I[$d]) for d = 1:AN]
-        Osplat = Expr[:(to_index(I[$d]) == 1) for d = AN+1:N]
+        Osplat = Expr[:(I[$d] == 1) for d = AN+1:N]
         quote
             @_propagate_inbounds_meta
             @boundscheck (&)($(Osplat...)) || throw_boundserror(A, I)
@@ -848,7 +856,7 @@ end
         sz = Expr(:tuple)
         sz.args = Expr[:(size(A, $d)) for d=max(N,1):AN]
         szcheck = Expr[:(size(A, $d) > 0) for d=max(N,1):AN]
-        last_idx = N > 0 ? :(to_index(I[$N])) : 1
+        last_idx = N > 0 ? :(I[$N]) : 1
         quote
             # ind2sub requires all dimensions to be > 0:
             @_propagate_inbounds_meta
@@ -862,7 +870,8 @@ end
 # function that allows dispatch on array storage
 function setindex!(A::AbstractArray, v, I...)
     @_propagate_inbounds_meta
-    _setindex!(linearindexing(A), A, v, I...)
+    error_if_canonical_indexing(linearindexing(A), A, I...)
+    _setindex!(linearindexing(A), A, v, to_indices(A, I)...)
 end
 function unsafe_setindex!(A::AbstractArray, v, I...)
     @_inline_meta
@@ -873,49 +882,44 @@ end
 _setindex!(::LinearIndexing, A::AbstractArray, v, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
 
 ## LinearFast Scalar indexing
-_setindex!(::LinearFast, A::AbstractVector, v, ::Int) = error("indexed assignment not defined for ", typeof(A))
-_setindex!(::LinearFast, A::AbstractArray, v, ::Int) = error("indexed assignment not defined for ", typeof(A))
+_setindex!(::LinearFast, A::AbstractVector, v, i::Int) = (@_propagate_inbounds_meta; setindex!(A, v, i))
+_setindex!(::LinearFast, A::AbstractArray, v, i::Int) = (@_propagate_inbounds_meta; setindex!(A, v, i))
 _setindex!{T}(::LinearFast, A::AbstractArray{T,0}, v) = (@_propagate_inbounds_meta; setindex!(A, v, 1))
-_setindex!(::LinearFast, A::AbstractArray, v, i::Real) = (@_propagate_inbounds_meta; setindex!(A, v, to_index(i)))
-function _setindex!{T,N}(::LinearFast, A::AbstractArray{T,N}, v, I::Vararg{Real,N})
+function _setindex!{T,N}(::LinearFast, A::AbstractArray{T,N}, v, I::Vararg{Int,N})
     # We must check bounds for sub2ind; so we can then use @inbounds
     @_inline_meta
-    J = to_indexes(I...)
-    @boundscheck checkbounds(A, J...)
-    @inbounds r = setindex!(A, v, sub2ind(A, J...))
+    @boundscheck checkbounds(A, I...)
+    @inbounds r = setindex!(A, v, sub2ind(A, I...))
     r
 end
-function _setindex!(::LinearFast, A::AbstractVector, v, I1::Real, I::Real...)
+function _setindex!(::LinearFast, A::AbstractVector, v, I1::Int, I::Int...)
     @_inline_meta
-    J = to_indexes(I1, I...)
-    @boundscheck checkbounds(A, J...)
-    @inbounds r = setindex!(A, v, J[1])
+    @boundscheck checkbounds(A, I1, I...)
+    @inbounds r = setindex!(A, v, I1)
     r
 end
-function _setindex!(::LinearFast, A::AbstractArray, v, I::Real...) # TODO: DEPRECATE FOR #14770
+function _setindex!(::LinearFast, A::AbstractArray, v, I::Int...) # TODO: DEPRECATE FOR #14770
     @_inline_meta
-    J = to_indexes(I...)
-    @boundscheck checkbounds(A, J...)
-    @inbounds r = setindex!(A, v, sub2ind(A, J...))
+    @boundscheck checkbounds(A, I...)
+    @inbounds r = setindex!(A, v, sub2ind(A, I...))
     r
 end
 
 # LinearSlow Scalar indexing
-_setindex!{T,N}(::LinearSlow, A::AbstractArray{T,N}, v, ::Vararg{Int, N}) = error("indexed assignment not defined for ", typeof(A))
-_setindex!{T,N}(::LinearSlow, A::AbstractArray{T,N}, v, I::Vararg{Real, N}) = (@_propagate_inbounds_meta; setindex!(A, v, to_indexes(I...)...))
-function _setindex!(::LinearSlow, A::AbstractArray, v, i::Real)
+_setindex!{T,N}(::LinearSlow, A::AbstractArray{T,N}, v, I::Vararg{Int, N}) = (@_propagate_inbounds_meta; setindex!(A, v, I...))
+function _setindex!(::LinearSlow, A::AbstractArray, v, i::Int)
     # ind2sub requires all dimensions to be > 0; may as well just check bounds
     @_inline_meta
     @boundscheck checkbounds(A, i)
-    @inbounds r = setindex!(A, v, ind2sub(A, to_index(i))...)
+    @inbounds r = setindex!(A, v, ind2sub(A, i)...)
     r
 end
-@generated function _setindex!{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, v, I::Real...) # TODO: DEPRECATE FOR #14770
+@generated function _setindex!{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, v, I::Int...) # TODO: DEPRECATE FOR #14770
     N = length(I)
     if N > AN
         # Drop trailing ones
         Isplat = Expr[:(I[$d]) for d = 1:AN]
-        Osplat = Expr[:(to_index(I[$d]) == 1) for d = AN+1:N]
+        Osplat = Expr[:(I[$d] == 1) for d = AN+1:N]
         quote
             # We only check the trailing ones, so just propagate @inbounds state
             @_propagate_inbounds_meta
@@ -928,7 +932,7 @@ end
         sz = Expr(:tuple)
         sz.args = Expr[:(size(A, $d)) for d=max(N,1):AN]
         szcheck = Expr[:(size(A, $d) > 0) for d=max(N,1):AN]
-        last_idx = N > 0 ? :(to_index(I[$N])) : 1
+        last_idx = N > 0 ? :(I[$N]) : 1
         quote
             # ind2sub requires all dimensions to be > 0:
             @_propagate_inbounds_meta
@@ -964,7 +968,7 @@ function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::Union{Range, Abstract
     X
 end
 
-get(A::AbstractArray, I::Range, default) = get!(similar(A, typeof(default), index_shape(A, I)), A, I, default)
+get(A::AbstractArray, I::Range, default) = get!(similar(A, typeof(default), index_shape(I)), A, I, default)
 
 # TODO: DEPRECATE FOR #14770 (just the partial linear indexing part)
 function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::RangeVecIntList, default::T)
@@ -974,7 +978,7 @@ function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::RangeVecIntList, defa
     X
 end
 
-get(A::AbstractArray, I::RangeVecIntList, default) = get!(similar(A, typeof(default), index_shape(A, I...)), A, I, default)
+get(A::AbstractArray, I::RangeVecIntList, default) = get!(similar(A, typeof(default), index_shape(I...)), A, I, default)
 
 ## structured matrix methods ##
 replace_in_print_matrix(A::AbstractMatrix,i::Integer,j::Integer,s::AbstractString) = s
@@ -993,8 +997,6 @@ promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
 #TODO: ERROR CHECK
 cat(catdim::Integer) = Array{Any,1}(0)
 
-vcat() = Array{Any,1}(0)
-hcat() = Array{Any,1}(0)
 typed_vcat{T}(::Type{T}) = Array{T,1}(0)
 typed_hcat{T}(::Type{T}) = Array{T,1}(0)
 
@@ -1143,8 +1145,7 @@ function cat_t(dims, T::Type, X...)
     return _cat(A, shape, catdims, X...)
 end
 
-function _cat(A, shape, catdims, X...)
-    N = length(shape)
+function _cat{N}(A, shape::NTuple{N}, catdims, X...)
     offsets = zeros(Int, N)
     inds = Vector{UnitRange{Int}}(N)
     concat = copy!(zeros(Bool, N), catdims)
@@ -1157,7 +1158,8 @@ function _cat(A, shape, catdims, X...)
                 inds[i] = 1:shape[i]
             end
         end
-        A[inds...] = x
+        I::NTuple{N, UnitRange{Int}} = (inds...,)
+        A[I...] = x
     end
     return A
 end
@@ -1729,7 +1731,7 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
     idx = Any[first(ind) for ind in indices(A)]
     itershape   = tuple(dimsA[otherdims]...)
     for d in dims
-        idx[d] = Colon()
+        idx[d] = Slice(indices(A, d))
     end
 
     Aslice = A[idx...]
@@ -1790,20 +1792,8 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
     return R
 end
 
-# These are needed because map(eltype, As) is not inferrable
-promote_eltype_op(::Any) = Any
-promote_eltype_op(op, A) = (@_inline_meta; promote_op(op, eltype(A)))
-promote_eltype_op(op, A, B) = (@_inline_meta; promote_op(op, eltype(A), eltype(B)))
-promote_eltype_op(op, A, B, C, D...) = (@_inline_meta; promote_eltype_op(op, eltype(A), promote_eltype_op(op, B, C, D...)))
-
 ## 1 argument
 
-"""
-    map!(function, collection)
-
-In-place version of [`map`](@ref).
-"""
-map!{F}(f::F, A::AbstractArray) = map!(f, A, A)
 function map!{F}(f::F, dest::AbstractArray, A::AbstractArray)
     for (i,j) in zip(eachindex(dest),eachindex(A))
         dest[i] = f(A[j])

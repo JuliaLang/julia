@@ -144,7 +144,7 @@ doesn't return C functions, but this can be enabled.) When called without specif
 trace, `stacktrace` first calls `backtrace`.
 """
 function stacktrace(trace::Vector{Ptr{Void}}, c_funcs::Bool=false)
-    stack = vcat(map(lookup, trace)...)::StackTrace
+    stack = vcat(StackTrace(), map(lookup, trace)...)::StackTrace
 
     # Remove frames that come from C calls.
     if !c_funcs
@@ -153,6 +153,13 @@ function stacktrace(trace::Vector{Ptr{Void}}, c_funcs::Bool=false)
 
     # Remove frame for this function (and any functions called by this function).
     remove_frames!(stack, :stacktrace)
+
+    # is there a better way?  the func symbol has a number suffix which changes.
+    # it's possible that no test is needed and we could just shift! all the time.
+    # this line was added to PR #16213 because otherwise stacktrace() != stacktrace(false).
+    # not sure why.  possibly b/c of re-ordering of base/sysimg.jl
+    !isempty(stack) && startswith(string(stack[1].func),"jlcall_stacktrace") && shift!(stack)
+    stack
 end
 
 stacktrace(c_funcs::Bool=false) = stacktrace(backtrace(), c_funcs)
@@ -188,7 +195,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         if frame.func === empty_sym
             @printf(io, "ip:%#x", frame.pointer)
         else
-            print(io, frame.func)
+            print_with_color(Base.have_color ? Base.stackframe_function_color() : :nothing, io, string(frame.func))
         end
     else
         linfo = get(frame.linfo)
@@ -200,16 +207,20 @@ function show_spec_linfo(io::IO, frame::StackFrame)
     end
 end
 
-function show(io::IO, frame::StackFrame; full_path::Bool=false)
-    print(io, " in ")
+function show(io::IO, frame::StackFrame; full_path::Bool=false,
+              prefix = " in ")
+    print(io, prefix)
     show_spec_linfo(io, frame)
     if frame.file !== empty_sym
         file_info = full_path ? string(frame.file) : basename(string(frame.file))
-        print(io, " at ", file_info, ":")
-        if frame.line >= 0
-            print(io, frame.line)
-        else
-            print(io, "?")
+        print(io, " at ")
+        Base.with_output_color(Base.have_color ? Base.stackframe_lineinfo_color() : :nothing, io) do io
+            print(io, file_info, ":")
+            if frame.line >= 0
+                print(io, frame.line)
+            else
+                print(io, "?")
+            end
         end
     end
     if frame.inlined

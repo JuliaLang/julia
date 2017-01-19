@@ -32,8 +32,8 @@ convert{T}(::Type{Ptr{T}}, p::Ptr) = box(Ptr{T}, unbox(Ptr{Void},p))
 # object to pointer (when used with ccall)
 unsafe_convert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), x)
 unsafe_convert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8}, (Any,), x)
-unsafe_convert(::Type{Ptr{UInt8}}, s::String) = unsafe_convert(Ptr{UInt8}, s.data)
-unsafe_convert(::Type{Ptr{Int8}}, s::String) = convert(Ptr{Int8}, unsafe_convert(Ptr{UInt8}, s.data))
+unsafe_convert(::Type{Ptr{UInt8}}, s::String) = convert(Ptr{UInt8}, pointer_from_objref(s)+sizeof(Int))
+unsafe_convert(::Type{Ptr{Int8}}, s::String) = convert(Ptr{Int8}, pointer_from_objref(s)+sizeof(Int))
 # convert strings to String etc. to pass as pointers
 cconvert(::Type{Ptr{UInt8}}, s::AbstractString) = String(s)
 cconvert(::Type{Ptr{Int8}}, s::AbstractString) = String(s)
@@ -92,32 +92,6 @@ program, in the same manner as C.
 """
 unsafe_store!(p::Ptr{Any}, x::ANY, i::Integer=1) = pointerset(p, x, Int(i), 1)
 unsafe_store!{T}(p::Ptr{T}, x, i::Integer=1) = pointerset(p, convert(T,x), Int(i), 1)
-
-# unsafe pointer to string conversions (don't make a copy, unlike unsafe_string)
-# (Cstring versions are in c.jl)
-"""
-    unsafe_wrap(String, p::Ptr{UInt8}, [length,] own=false)
-
-Wrap a pointer `p` to an array of bytes in a `String` object,
-interpreting the bytes as UTF-8 encoded characters *without making a
-copy*. The optional `length` argument indicates the length in bytes of
-the pointer's data; if it is omitted, the data is assumed to be
-NUL-terminated.  The `own` argument optionally specifies whether Julia
-should take ownership of the memory, calling `free` on the pointer
-when the array is no longer referenced.
-
-This function is labelled "unsafe" because it will crash if `p` is not
-a valid memory address to data of the requested length.
-
-See also [`unsafe_string`](@ref), which takes a pointer
-and makes a copy of the data.
-"""
-unsafe_wrap(::Type{String}, p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer, own::Bool=false) =
-    ccall(:jl_array_to_string, Ref{String}, (Any,),
-          ccall(:jl_ptr_to_array_1d, Vector{UInt8}, (Any, Ptr{UInt8}, Csize_t, Cint),
-                Vector{UInt8}, p, len, own))
-unsafe_wrap(::Type{String}, p::Union{Ptr{UInt8},Ptr{Int8}}, own::Bool=false) =
-    unsafe_wrap(String, p, ccall(:strlen, Csize_t, (Ptr{UInt8},), p), own)
 
 # convert a raw Ptr to an object reference, and vice-versa
 """

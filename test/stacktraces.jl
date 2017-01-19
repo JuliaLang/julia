@@ -38,9 +38,8 @@ let
     @test isnull(frame2.linfo)
 end
 
-let
-    # Test from_c
-    default, with_c, without_c = stacktrace(), stacktrace(true), stacktrace(false)
+# Test from_c
+let (default, with_c, without_c) = (stacktrace(), stacktrace(true), stacktrace(false))
     @test default == without_c
     @test length(with_c) > length(without_c)
     @test !isempty(filter(frame -> frame.from_c, with_c))
@@ -123,4 +122,11 @@ let ctestptr = cglobal((:ctest, "libccalltest")),
     @test isnull(ctest[1].linfo)
     @test ctest[1].from_c
     @test ctest[1].pointer === UInt64(ctestptr)
+end
+
+# issue #19655
+let st = stacktrace(empty!(backtrace()))
+    # not in a `catch`, so should return an empty StackTrace
+    @test isempty(st)
+    @test isa(st, StackTrace)
 end

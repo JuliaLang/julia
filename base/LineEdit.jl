@@ -437,7 +437,7 @@ function splice_buffer!{T<:Integer}(buf::IOBuffer, r::UnitRange{T}, ins::Abstrac
     elseif pos > last(r)
         seek(buf, pos - length(r))
     end
-    splice!(buf.data, r + 1, ins.data) # position(), etc, are 0-indexed
+    splice!(buf.data, r + 1, Vector{UInt8}(ins)) # position(), etc, are 0-indexed
     buf.size = buf.size + sizeof(ins) - length(r)
     seek(buf, position(buf) + sizeof(ins))
 end
@@ -626,8 +626,8 @@ default_enter_cb(_) = true
 
 write_prompt(terminal, s::PromptState) = write_prompt(terminal, s.p)
 function write_prompt(terminal, p::Prompt)
-    prefix = isa(p.prompt_prefix,Function) ? p.prompt_prefix() : p.prompt_prefix
-    suffix = isa(p.prompt_suffix,Function) ? p.prompt_suffix() : p.prompt_suffix
+    prefix = isa(p.prompt_prefix,Function) ? eval(Expr(:call, p.prompt_prefix)) : p.prompt_prefix
+    suffix = isa(p.prompt_suffix,Function) ? eval(Expr(:call, p.prompt_suffix)) : p.prompt_suffix
     write(terminal, prefix)
     write(terminal, Base.text_colors[:bold])
     write(terminal, p.prompt)
@@ -734,7 +734,7 @@ end
 keymap_fcn(f::Void, c) = (s, p) -> return :ok
 function keymap_fcn(f::Function, c)
     return function (s, p)
-        r = f(s, p, c)
+        r = eval(Expr(:call,f,s, p, c))
         if isa(r, Symbol)
             return r
         else

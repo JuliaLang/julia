@@ -48,8 +48,9 @@
                 ((vect)   (string #\[ (deparse-arglist (cdr e)) #\]))
                 ((vcat)   (string #\[ (deparse-arglist (cdr e) ";") #\]))
                 ((hcat)   (string #\[ (deparse-arglist (cdr e) " ") #\]))
-                ((global local const)
-                 (string (car e) " " (deparse (cadr e))))
+                ((const)  (string "const " (deparse (cadr e))))
+                ((global local)
+                 (string (car e) " " (string.join (map deparse (cdr e)) ", ")))
                 ((top)        (deparse (cadr e)))
                 ((core)       (string "Core." (deparse (cadr e))))
                 ((globalref)  (string (deparse (cadr e)) "." (deparse (caddr e))))
@@ -75,6 +76,8 @@
                  (string "[ " (deparse (cadr e)) " for " (deparse-arglist (cddr e) ", ") " ]"))
                 ((generator)
                  (string "(" (deparse (cadr e)) " for " (deparse-arglist (cddr e) ", ") ")"))
+                ((where)
+                 (string (deparse (cadr e)) " where " (deparse (caddr e))))
                 (else
                  (string e))))))
 
@@ -195,7 +198,9 @@
       (cadr (caddr e))
       e))
 
-(define (dotop? o) (and (symbol? o) (eqv? (string.char (string o) 0) #\.)))
+(define (dotop? o) (and (symbol? o) (eqv? (string.char (string o) 0) #\.)
+                        (not (eq? o '|.|))
+                        (not (eqv? (string.char (string o) 1) #\.))))
 
 ; convert '.xx to 'xx
 (define (undotop op)
@@ -207,7 +212,9 @@
 (define (maybe-undotop e)
   (if (symbol? e)
       (let ((str (string e)))
-        (if (eqv? (string.char str 0) #\.)
+        (if (and (eqv? (string.char str 0) #\.)
+                 (not (eq? e '|.|))
+                 (not (eqv? (string.char str 1) #\.)))
             (symbol (string.sub str 1 (length str)))
             #f))
       (if (pair? e)

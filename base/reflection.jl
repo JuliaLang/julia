@@ -117,6 +117,7 @@ julia> fieldname(SparseMatrixCSC,5)
 ```
 """
 fieldname(t::DataType, i::Integer) = t.name.names[i]::Symbol
+fieldname(t::UnionAll, i::Integer) = fieldname(unwrap_unionall(t), i)
 fieldname{T<:Tuple}(t::Type{T}, i::Integer) = i < 1 || i > nfields(t) ? throw(BoundsError(t, i)) : Int(i)
 
 """
@@ -139,6 +140,7 @@ function fieldnames(v)
     return fieldnames(t)
 end
 fieldnames(t::DataType) = Symbol[fieldname(t, n) for n in 1:nfields(t)]
+fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
 fieldnames{T<:Tuple}(t::Type{T}) = Int[n for n in 1:nfields(t)]
 
 """
@@ -225,8 +227,8 @@ isbits(x) = (@_pure_meta; isbits(typeof(x)))
 """
     isleaftype(T)
 
-Determine whether `T` is a concrete type that can have instances, meaning its only subtypes
-are itself and `Union{}` (but `T` itself is not `Union{}`).
+Determine whether `T`'s only subtypes are itself and `Union{}`. This means `T` is
+a concrete type that can have instances.
 """
 isleaftype(t::ANY) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
 
@@ -272,6 +274,16 @@ fieldoffset(x::DataType, idx::Integer) = (@_pure_meta; ccall(:jl_get_field_offse
 Determine the declared type of a field (specified by name or index) in a composite DataType `T`.
 """
 fieldtype
+
+"""
+    fieldindex(T, name::Symbol, err:Bool=true)
+
+Get the index of a named field, throwing an error if the field does not exist (when err==true)
+or returning 0 (when err==false).
+"""
+function fieldindex(T::DataType, name::Symbol, err::Bool=true)
+    return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
+end
 
 type_alignment(x::DataType) = (@_pure_meta; ccall(:jl_get_alignment, Csize_t, (Any,), x))
 
@@ -345,12 +357,19 @@ Returns an array of lowered ASTs for the methods matching the given generic func
 function code_lowered(f::ANY, t::ANY=Tuple)
     asts = map(methods(f, t)) do m
         m = m::Method
-        return uncompressed_ast(m, m.isstaged ? m.unspecialized.inferred : m.source)
+        return uncompressed_ast(m, m.source)
     end
     return asts
 end
 
 # low-level method lookup functions used by the compiler
+
+unionlen(x::Union) = unionlen(x.a) + unionlen(x.b)
+unionlen(x::ANY) = 1
+
+_uniontypes(x::Union, ts) = (_uniontypes(x.a,ts); _uniontypes(x.b,ts); ts)
+_uniontypes(x::ANY, ts) = (push!(ts, x); ts)
+uniontypes(x::ANY) = _uniontypes(x, Any[])
 
 function _methods(f::ANY, t::ANY, lim::Int, world::UInt)
     ft = isa(f,Type) ? Type{f} : typeof(f)
@@ -362,39 +381,41 @@ function _methods_by_ftype(t::ANY, lim::Int, world::UInt)
     return _methods_by_ftype(t, lim, world, UInt[typemin(UInt)], UInt[typemax(UInt)])
 end
 function _methods_by_ftype(t::ANY, lim::Int, world::UInt, min::Array{UInt,1}, max::Array{UInt,1})
-    tp = t.parameters::SimpleVector
+    tp = unwrap_unionall(t).parameters::SimpleVector
     nu = 1
     for ti in tp
         if isa(ti, Union)
-            nu *= length((ti::Union).types)
+            nu *= unionlen(ti::Union)
         end
     end
     if 1 < nu <= 64
-        return _methods_by_ftype(Any[tp...], length(tp), lim, [], world, min, max)
+        return _methods_by_ftype(Any[tp...], t, length(tp), lim, [], world, min, max)
     end
     # XXX: the following can return incorrect answers that the above branch would have corrected
     return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), t, lim, 0, world, min, max)
 end
 
-function _methods_by_ftype(t::Array, i, lim::Integer, matching::Array{Any,1}, world::UInt, min::Array{UInt,1}, max::Array{UInt,1})
+function _methods_by_ftype(t::Array, origt::ANY, i, lim::Integer, matching::Array{Any,1},
+                           world::UInt, min::Array{UInt,1}, max::Array{UInt,1})
     if i == 0
         world = typemax(UInt)
-        new = ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), Tuple{t...}, lim, 0, world, min, max)
+        new = ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}),
+                    rewrap_unionall(Tuple{t...}, origt), lim, 0, world, min, max)
         new === false && return false
         append!(matching, new::Array{Any,1})
     else
         ti = t[i]
         if isa(ti, Union)
-            for ty in (ti::Union).types
+            for ty in uniontypes(ti::Union)
                 t[i] = ty
-                if _methods_by_ftype(t, i - 1, lim, matching, world, min, max) === false
+                if _methods_by_ftype(t, origt, i - 1, lim, matching, world, min, max) === false
                     t[i] = ti
                     return false
                 end
             end
             t[i] = ti
         else
-            return _methods_by_ftype(t, i - 1, lim, matching, world, min, max)
+            return _methods_by_ftype(t, origt, i - 1, lim, matching, world, min, max)
         end
     end
     return matching
@@ -501,6 +522,18 @@ function uncompressed_ast(m::Method, s::CodeInfo)
     return s
 end
 
+# this type mirrors jl_cghooks_t (documented in julia.h)
+immutable CodegenHooks
+    module_setup::Ptr{Void}
+    module_activation::Ptr{Void}
+    raise_exception::Ptr{Void}
+
+    CodegenHooks(;module_setup=nothing, module_activation=nothing, raise_exception=nothing) =
+        new(pointer_from_objref(module_setup),
+            pointer_from_objref(module_activation),
+            pointer_from_objref(raise_exception))
+end
+
 # this type mirrors jl_cgparams_t (documented in julia.h)
 immutable CodegenParams
     cached::Cint
@@ -512,14 +545,18 @@ immutable CodegenParams
     static_alloc::Cint
     dynamic_alloc::Cint
 
+    hooks::CodegenHooks
+
     CodegenParams(;cached::Bool=true,
                    runtime::Bool=true, exceptions::Bool=true,
                    track_allocations::Bool=true, code_coverage::Bool=true,
-                   static_alloc::Bool=true, dynamic_alloc::Bool=true) =
+                   static_alloc::Bool=true, dynamic_alloc::Bool=true,
+                   hooks::CodegenHooks=CodegenHooks()) =
         new(Cint(cached),
             Cint(runtime), Cint(exceptions),
             Cint(track_allocations), Cint(code_coverage),
-            Cint(static_alloc), Cint(dynamic_alloc))
+            Cint(static_alloc), Cint(dynamic_alloc),
+            hooks)
 end
 
 # Printing code representations in IR and assembly
@@ -536,8 +573,7 @@ function _dump_function(f::ANY, t::ANY, native::Bool, wrapper::Bool,
     t = to_tuple_type(t)
     ft = isa(f, Type) ? Type{f} : typeof(f)
     tt = Tuple{ft, t.parameters...}
-    (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any),
-                      tt, meth.sig, meth.tvars)::SimpleVector
+    (ti, env) = ccall(:jl_match_method, Any, (Any, Any), tt, meth.sig)::SimpleVector
     meth = func_for_method_checked(meth, tt)
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, tt, env, world)
     # get the code for it

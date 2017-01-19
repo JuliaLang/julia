@@ -282,7 +282,10 @@ sprint_plan_{T<:fftwDouble}(plan::FFTWPlan{T}) =
 sprint_plan_{T<:fftwSingle}(plan::FFTWPlan{T}) =
     ccall((:fftwf_sprint_plan,libfftwf), Ptr{UInt8}, (PlanPtr,), plan)
 function sprint_plan(plan::FFTWPlan)
-    unsafe_wrap(String, sprint_plan_(plan), true)
+    p = sprint_plan_(plan)
+    str = unsafe_string(p)
+    Libc.free(p)
+    return str
 end
 
 function show{T,K,inplace}(io::IO, p::cFFTWPlan{T,K,inplace})
@@ -453,7 +456,6 @@ end
 
 for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
                          (:Float32,:Complex64,"fftwf",libfftwf))
-
     @eval function (::Type{cFFTWPlan{$Tc,K,inplace,N}}){K,inplace,N}(X::StridedArray{$Tc,N},
                                                                      Y::StridedArray{$Tc,N},
                                                                      region, flags::Integer, timelimit::Real)

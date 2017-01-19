@@ -97,12 +97,18 @@ similar{T}(S::SymTridiagonal, ::Type{T}) = SymTridiagonal{T}(similar(S.dv, T), s
 
 #Elementary operations
 broadcast(::typeof(abs), M::SymTridiagonal) = SymTridiagonal(abs.(M.dv), abs.(M.ev))
-for func in (:conj, :copy, :round, :trunc, :floor, :ceil, :real, :imag)
+broadcast(::typeof(round), M::SymTridiagonal) = SymTridiagonal(round.(M.dv), round.(M.ev))
+broadcast(::typeof(trunc), M::SymTridiagonal) = SymTridiagonal(trunc.(M.dv), trunc.(M.ev))
+broadcast(::typeof(floor), M::SymTridiagonal) = SymTridiagonal(floor.(M.dv), floor.(M.ev))
+broadcast(::typeof(ceil), M::SymTridiagonal) = SymTridiagonal(ceil.(M.dv), ceil.(M.ev))
+for func in (:conj, :copy, :real, :imag)
     @eval ($func)(M::SymTridiagonal) = SymTridiagonal(($func)(M.dv), ($func)(M.ev))
 end
-for func in (:round, :trunc, :floor, :ceil)
-    @eval ($func){T<:Integer}(::Type{T},M::SymTridiagonal) = SymTridiagonal(($func)(T,M.dv), ($func)(T,M.ev))
-end
+broadcast{T<:Integer}(::typeof(round), ::Type{T}, M::SymTridiagonal) = SymTridiagonal(round.(T, M.dv), round.(T, M.ev))
+broadcast{T<:Integer}(::typeof(trunc), ::Type{T}, M::SymTridiagonal) = SymTridiagonal(trunc.(T, M.dv), trunc.(T, M.ev))
+broadcast{T<:Integer}(::typeof(floor), ::Type{T}, M::SymTridiagonal) = SymTridiagonal(floor.(T, M.dv), floor.(T, M.ev))
+broadcast{T<:Integer}(::typeof(ceil), ::Type{T}, M::SymTridiagonal) = SymTridiagonal(ceil.(T, M.dv), ceil.(T, M.ev))
+
 transpose(M::SymTridiagonal) = M #Identity operation
 ctranspose(M::SymTridiagonal) = conj(M)
 
@@ -202,6 +208,44 @@ eigmin(A::SymTridiagonal) = eigvals(A, 1:1)[1]
 
 #Compute selected eigenvectors only corresponding to particular eigenvalues
 eigvecs(A::SymTridiagonal) = eigfact(A)[:vectors]
+
+"""
+    eigvecs(A::SymTridiagonal[, eigvals]) -> Matrix
+
+Returns a matrix `M` whose columns are the eigenvectors of `A`. (The `k`th eigenvector can
+be obtained from the slice `M[:, k]`.)
+
+If the optional vector of eigenvalues `eigvals` is specified, `eigvecs`
+returns the specific corresponding eigenvectors.
+
+# Example
+
+```jldoctest
+julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
+3×3 SymTridiagonal{Float64}:
+ 1.0  2.0   ⋅
+ 2.0  2.0  3.0
+  ⋅   3.0  1.0
+
+julia> eigvals(A)
+3-element Array{Float64,1}:
+ -2.14005
+  1.0
+  5.14005
+
+julia> eigvecs(A)
+3×3 Array{Float64,2}:
+  0.418304  -0.83205      0.364299
+ -0.656749  -7.39009e-16  0.754109
+  0.627457   0.5547       0.546448
+
+julia> eigvecs(A, [1.])
+3×1 Array{Float64,2}:
+  0.83205
+  4.26351e-17
+ -0.5547
+```
+"""
 eigvecs{T<:BlasFloat,Eigenvalue<:Real}(A::SymTridiagonal{T}, eigvals::Vector{Eigenvalue}) = LAPACK.stein!(A.dv, A.ev, eigvals)
 
 #tril and triu
@@ -464,16 +508,23 @@ copy!(dest::Tridiagonal, src::Tridiagonal) = Tridiagonal(copy!(dest.dl, src.dl),
 
 #Elementary operations
 broadcast(::typeof(abs), M::Tridiagonal) = Tridiagonal(abs.(M.dl), abs.(M.d), abs.(M.du), abs.(M.du2))
-for func in (:conj, :copy, :round, :trunc, :floor, :ceil, :real, :imag)
+broadcast(::typeof(round), M::Tridiagonal) = Tridiagonal(round.(M.dl), round.(M.d), round.(M.du), round.(M.du2))
+broadcast(::typeof(trunc), M::Tridiagonal) = Tridiagonal(trunc.(M.dl), trunc.(M.d), trunc.(M.du), trunc.(M.du2))
+broadcast(::typeof(floor), M::Tridiagonal) = Tridiagonal(floor.(M.dl), floor.(M.d), floor.(M.du), floor.(M.du2))
+broadcast(::typeof(ceil), M::Tridiagonal) = Tridiagonal(ceil.(M.dl), ceil.(M.d), ceil.(M.du), ceil.(M.du2))
+for func in (:conj, :copy, :real, :imag)
     @eval function ($func)(M::Tridiagonal)
         Tridiagonal(($func)(M.dl), ($func)(M.d), ($func)(M.du), ($func)(M.du2))
     end
 end
-for func in (:round, :trunc, :floor, :ceil)
-    @eval function ($func){T<:Integer}(::Type{T},M::Tridiagonal)
-        Tridiagonal(($func)(T,M.dl), ($func)(T,M.d), ($func)(T,M.du), ($func)(T,M.du2))
-    end
-end
+broadcast{T<:Integer}(::typeof(round), ::Type{T}, M::Tridiagonal) =
+    Tridiagonal(round.(T, M.dl), round.(T, M.d), round.(T, M.du), round.(T, M.du2))
+broadcast{T<:Integer}(::typeof(trunc), ::Type{T}, M::Tridiagonal) =
+    Tridiagonal(trunc.(T, M.dl), trunc.(T, M.d), trunc.(T, M.du), trunc.(T, M.du2))
+broadcast{T<:Integer}(::typeof(floor), ::Type{T}, M::Tridiagonal) =
+    Tridiagonal(floor.(T, M.dl), floor.(T, M.d), floor.(T, M.du), floor.(T, M.du2))
+broadcast{T<:Integer}(::typeof(ceil), ::Type{T}, M::Tridiagonal) =
+    Tridiagonal(ceil.(T, M.dl), ceil.(T, M.d), ceil.(T, M.du), ceil.(T, M.du2))
 
 transpose(M::Tridiagonal) = Tridiagonal(M.du, M.d, M.dl)
 ctranspose(M::Tridiagonal) = conj(transpose(M))

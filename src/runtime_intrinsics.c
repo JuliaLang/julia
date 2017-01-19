@@ -81,7 +81,7 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
     JL_TYPECHK(cglobal, type, ty);
     jl_value_t *rt =
         v == (jl_value_t*)jl_void_type ? (jl_value_t*)jl_voidpointer_type : // a common case
-            (jl_value_t*)jl_apply_type_((jl_value_t*)jl_pointer_type, &ty, 1);
+            (jl_value_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, ty);
 
     if (!jl_is_leaf_type(rt))
         jl_error("cglobal: type argument not a leaftype");

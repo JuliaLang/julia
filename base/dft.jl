@@ -354,7 +354,7 @@ plan_irfft
 
 export fftshift, ifftshift
 
-fftshift(x) = circshift(x, div([size(x)...],2))
+fftshift(x) = circshift(x, div.([size(x)...],2))
 
 """
     fftshift(x)
@@ -376,7 +376,7 @@ Swap the first and second halves of the given dimension of array `x`.
 """
 fftshift(x,dim)
 
-ifftshift(x) = circshift(x, div([size(x)...],-2))
+ifftshift(x) = circshift(x, div.([size(x)...],-2))
 
 """
     ifftshift(x, [dim])

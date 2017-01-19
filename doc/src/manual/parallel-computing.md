@@ -165,7 +165,7 @@ Starting Julia with `julia -p 2`, you can use this to verify the following:
     allow you to store an object of type `MyType` on process 2 even if `DummyModule` is not in scope
     on process 2.
 
-You can force a command to run on all processes using the `@everywhere` macro. For example, `@everywhere`
+You can force a command to run on all processes using the [`@everywhere`](@ref) macro. For example, `@everywhere`
 can also be used to directly define a function on all processes:
 
 ```julia
@@ -308,11 +308,11 @@ end
 ```
 
 This code will not initialize all of `a`, since each process will have a separate copy of it.
-Parallel for loops like these must be avoided. Fortunately,  [Shared Arrays](@ref man-shared-arrays) can be used
+Parallel for loops like these must be avoided. Fortunately, [Shared Arrays](@ref man-shared-arrays) can be used
 to get around this limitation:
 
 ```julia
-a = SharedArray(Float64,10)
+a = SharedArray{Float64}(10)
 @parallel for i=1:10
   a[i] = i
 end
@@ -418,8 +418,8 @@ when [`remotecall_fetch()`](@ref) is called.
 
 ## Channels
 
-The section on Tasks in [Control Flow](@ref) discussed the execution of multiple functions in
-a co-operative manner. `Channels` can be quite useful to pass data between running tasks, particularly
+The section on [`Task`](@ref)s in [Control Flow](@ref) discussed the execution of multiple functions in
+a co-operative manner. [`Channel`](@ref)s can be quite useful to pass data between running tasks, particularly
 those involving I/O operations.
 
 Examples of operations involving I/O include reading/writing to files, accessing web services,
@@ -459,13 +459,13 @@ A channel can be visualized as a pipe, i.e., it has a write end and read end.
     to the maximum number of elements that can be held in the channel at any time. For example, `Channel(32)`
     creates a channel that can hold a maximum of 32 objects of any type. A `Channel{MyType}(64)` can
     hold up to 64 objects of `MyType` at any time.
-  * If a `Channel` is empty, readers (on a [`take!()`](@ref) call) will block until data is available.
-  * If a `Channel` is full, writers (on a [`put!()`](@ref) call) will block until space becomes available.
+  * If a [`Channel`](@ref) is empty, readers (on a [`take!()`](@ref) call) will block until data is available.
+  * If a [`Channel`](@ref) is full, writers (on a [`put!()`](@ref) call) will block until space becomes available.
   * [`isready()`](@ref) tests for the presence of any object in the channel, while [`wait()`](@ref)
     waits for an object to become available.
-  * A `Channel` is in an open state initially. This means that it can be read from and written to
-    freely via [`take!()`](@ref) and [`put!()`](@ref) calls. [`close()`](@ref) closes a `Channel`.
-    On a closed `Channel`, [`put!()`](@ref) will fail. For example:
+  * A [`Channel`](@ref) is in an open state initially. This means that it can be read from and written to
+    freely via [`take!()`](@ref) and [`put!()`](@ref) calls. [`close()`](@ref) closes a [`Channel`](@ref).
+    On a closed [`Channel`](@ref), [`put!()`](@ref) will fail. For example:
 
 ```julia
 julia> c=Channel(2);
@@ -602,7 +602,7 @@ remote store.
 
 ## Channels and RemoteChannels
 
-  * A `Channel` is local to a process. Worker 2 cannot directly refer to a `Channel` on worker 3 and
+  * A [`Channel`](@ref) is local to a process. Worker 2 cannot directly refer to a `Channel` on worker 3 and
     vice-versa. A [`RemoteChannel`](@ref), however, can put and take values across workers.
   * A [`RemoteChannel`](@ref) can be thought of as a *handle* to a `Channel`.
   * The process id, `pid`, associated with a [`RemoteChannel`](@ref) identifies the process where
@@ -720,10 +720,10 @@ just returns the object itself, so it's safe to use [`sdata()`](@ref) on any `Ar
 The constructor for a shared array is of the form:
 
 ```julia
-SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
+SharedArray{T,N}(dims::NTuple; init=false, pids=Int[])
 ```
 
-which creates a shared array of a bits type `T` and size `dims` across the processes specified
+which creates an `N`-dimensional shared array of a bits type `T` and size `dims` across the processes specified
 by `pids`.  Unlike distributed arrays, a shared array is accessible only from those participating
 workers specified by the `pids` named argument (and the creating process too, if it is on the
 same host).
@@ -741,7 +741,7 @@ julia> addprocs(3)
  3
  4
 
-julia> S = SharedArray(Int, (3,4), init = S -> S[Base.localindexes(S)] = myid())
+julia> S = SharedArray{Int,2}((3,4), init = S -> S[Base.localindexes(S)] = myid())
 3×4 SharedArray{Int64,2}:
  2  2  3  4
  2  3  3  4
@@ -762,7 +762,7 @@ convenient for splitting up tasks among processes. You can, of course, divide th
 you wish:
 
 ```julia
-julia> S = SharedArray(Int, (3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = myid())
+julia> S = SharedArray{Int,2}((3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = myid())
 3×4 SharedArray{Int64,2}:
  2  2  2  2
  3  3  3  3
@@ -858,11 +858,11 @@ function advection_shared!(q, u)
 end
 ```
 
-If we create SharedArrays and time these functions, we get the following results (with `julia -p 4`):
+If we create `SharedArray`s and time these functions, we get the following results (with `julia -p 4`):
 
 ```julia
-q = SharedArray(Float64, (500,500,500))
-u = SharedArray(Float64, (500,500,500))
+q = SharedArray{Float64,3}((500,500,500))
+u = SharedArray{Float64,3}((500,500,500))
 
 # Run once to JIT-compile
 advection_serial!(q, u)
@@ -1270,12 +1270,12 @@ All I/O tasks, timers, REPL commands, etc are multiplexed onto a single OS threa
 loop. A patched version of libuv ([http://docs.libuv.org/en/v1.x/](http://docs.libuv.org/en/v1.x/))
 provides this functionality. Yield points provide for co-operatively scheduling multiple tasks
 onto the same OS thread. I/O tasks and timers yield implicitly while waiting for the event to
-occur. Calling `yield()` explicitly allows for other tasks to be scheduled.
+occur. Calling [`yield()`](@ref) explicitly allows for other tasks to be scheduled.
 
-Thus, a task executing a `ccall` effectively prevents the Julia scheduler from executing any other
+Thus, a task executing a [`ccall`](@ref) effectively prevents the Julia scheduler from executing any other
 tasks till the call returns. This is true for all calls into external libraries. Exceptions are
 calls into custom C code that call back into Julia (which may then yield) or C code that calls
-`jl_yield()` (C equivalent of `yield()`).
+`jl_yield()` (C equivalent of [`yield()`](@ref)).
 
 Note that while Julia code runs on a single thread (by default), libraries used by Julia may launch
 their own internal threads. For example, the BLAS library may start as many threads as there are

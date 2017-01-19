@@ -40,6 +40,10 @@ ifeq ($(OS),Linux)
 LIBGIT2_OPTS += -DUSE_OPENSSL=OFF -DUSE_MBEDTLS=ON -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
+ifeq ($(OS),FreeBSD)
+LIBGIT2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+endif
+
 # We need to bundle ca certs on linux now that we're using libgit2 with ssl
 ifeq ($(OS),Linux)
 OPENSSL_DIR=$(shell openssl version -d | cut -d '"' -f 2)

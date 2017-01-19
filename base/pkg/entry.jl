@@ -166,7 +166,7 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
                 if LibGit2.isattached(prepo)
                     print(io, LibGit2.shortname(phead))
                 else
-                    print(io, string(LibGit2.Oid(phead))[1:8])
+                    print(io, string(LibGit2.GitHash(phead))[1:8])
                 end
             end
             attrs = AbstractString[]
@@ -176,7 +176,7 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
         catch err
             print_with_color(Base.error_color(), io, " broken-repo (unregistered)")
         finally
-            finalize(prepo)
+            close(prepo)
         end
     else
         print_with_color(Base.warn_color(), io, "non-repo (unregistered)")
@@ -314,7 +314,8 @@ function pin(pkg::AbstractString, head::AbstractString)
             try
                 if ref !== nothing
                     if LibGit2.revparseid(repo, branch) != id
-                        throw(PkgError("Package $pkg: existing branch $branch has been edited and doesn't correspond to its original commit"))
+                        throw(PkgError("Package $pkg: existing branch $branch has " *
+                            "been edited and doesn't correspond to its original commit"))
                     end
                     info("Package $pkg: checking out existing branch $branch")
                 else
@@ -329,10 +330,10 @@ function pin(pkg::AbstractString, head::AbstractString)
                 # switch head to the branch
                 LibGit2.head!(repo, ref)
             finally
-                finalize(ref)
+                close(ref)
             end
         finally
-            finalize(commit)
+            close(commit)
         end
     end
     should_resolve && resolve()
@@ -375,7 +376,8 @@ function update(branch::AbstractString, upkgs::Set{String})
             end
         catch err
             cex = CapturedException(err, catch_backtrace())
-            throw(PkgError("METADATA cannot be updated. Resolve problems manually in $(Pkg.dir("METADATA")).", cex))
+            throw(PkgError("METADATA cannot be updated. Resolve problems manually in " *
+                Pkg.dir("METADATA") * ".", cex))
         end
     end
     deferred_errors = CompositeException()
@@ -393,7 +395,9 @@ function update(branch::AbstractString, upkgs::Set{String})
     reqs = Reqs.parse("REQUIRE")
     if !isempty(upkgs)
         for (pkg, (v,f)) in instd
-            satisfies(pkg, v, reqs) || throw(PkgError("Package $pkg: current package status does not satisfy the requirements, cannot do a partial update; use `Pkg.update()`"))
+            satisfies(pkg, v, reqs) || throw(PkgError("Package $pkg: current " *
+                "package status does not satisfy the requirements, cannot do " *
+                "a partial update; use `Pkg.update()`"))
         end
     end
     dont_update = Query.partial_update_mask(instd, avail, upkgs)
@@ -480,11 +484,12 @@ function resolve(
     for pkg in keys(reqs)
         if !haskey(deps,pkg)
             if "julia" in conflicts[pkg]
-                throw(PkgError("$pkg can't be installed because it has no versions that support $VERSION of julia. " *
-                   "You may need to update METADATA by running `Pkg.update()`"))
+                throw(PkgError("$pkg can't be installed because it has no versions that support $VERSION " *
+                   "of julia. You may need to update METADATA by running `Pkg.update()`"))
             else
                 sconflicts = join(conflicts[pkg], ", ", " and ")
-                throw(PkgError("$pkg's requirements can't be satisfied because of the following fixed packages: $sconflicts"))
+                throw(PkgError("$pkg's requirements can't be satisfied because " *
+                    "of the following fixed packages: $sconflicts"))
             end
         end
     end
@@ -726,6 +731,14 @@ function test!(pkg::AbstractString,
     isfile(reqs_path) && resolve()
 end
 
+type PkgTestError <: Exception
+    msg::String
+end
+
+function Base.showerror(io::IO, ex::PkgTestError, bt; backtrace=true)
+    print_with_color(Base.error_color(), io, ex.msg)
+end
+
 function test(pkgs::Vector{AbstractString}; coverage::Bool=false)
     errs = AbstractString[]
     nopkgs = AbstractString[]
@@ -746,7 +759,7 @@ function test(pkgs::Vector{AbstractString}; coverage::Bool=false)
         if !isempty(notests)
             push!(messages, "$(join(notests,", "," and ")) did not provide a test/runtests.jl file")
         end
-        throw(PkgError(join(messages, "and")))
+        throw(PkgTestError(join(messages, "and")))
     end
 end
 

@@ -87,10 +87,7 @@ end
 *{P<:Period}(x::P,y::Real) = P(value(x) * Int64(y))
 *(y::Real,x::Period) = x * y
 for (op,Ty,Tz) in ((:*,Real,:P),
-                   (:/,:P,Float64), (:/,Real,:P),
-                   (:div,:P,Int64), (:div,Integer,:P),
-                   (:%,:P,:P),
-                   (:mod,:P,:P))
+                   (:/,:P,Float64), (:/,Real,:P))
     @eval begin
         function ($op){P<:Period}(X::StridedArray{P},y::$Ty)
             Z = similar(X, $Tz)
@@ -173,84 +170,11 @@ type CompoundPeriod <: AbstractTime
                 j = k
             end
             n = i - 1 # new length
+            p  = resize!(p, n)
         elseif n == 1 && value(p[1]) == 0
             p = Period[]
-            n = 0
         end
-        # canonicalize Periods by pushing "overflow" into a coarser period.
-        if n > 0
-            pc = sizehint!(Period[], n)
-            P = typeof(p[n])
-            v = value(p[n])
-            i = n - 1
-            while true
-                Pc, f = coarserperiod(P)
-                if i > 0 && typeof(p[i]) == P
-                    v += value(p[i])
-                    i -= 1
-                end
-                v0 = f == 1 ? v : rem(v, f)
-                v0 != 0 && push!(pc, P(v0))
-                if v != v0
-                    P = Pc
-                    v = div(v - v0, f)
-                elseif i > 0
-                    P = typeof(p[i])
-                    v = value(p[i])
-                    i -= 1
-                else
-                    break
-                end
-            end
-            p = reverse!(pc)
-            n = length(p)
-        else
-            return new(resize!(p, n))
-        end
-        # reduce the amount of mixed positive/negative Periods.
-        if n > 0
-            pc = sizehint!(Period[], n)
-            i = n
-            while i > 0
-                j = i
 
-                # Determine sign of the largest period in this group which
-                # can be converted into via coarserperiod.
-                last = Union{}
-                current = typeof(p[i])
-                while i > 0 && current != last
-                    if typeof(p[i]) == current
-                        i -= 1
-                    end
-                    last, current = current, coarserperiod(current)[1]
-                end
-                s = sign(value(p[i + 1]))
-
-                # Adjust all the periods in the group based upon the
-                # largest period sign.
-                P = typeof(p[j])
-                v = 0
-                while j > i
-                    Pc, f = coarserperiod(P)
-                    if j > 0 && typeof(p[j]) == P
-                        v += value(p[j])
-                        j -= 1
-                    end
-                    v0 = f == 1 ? v : mod(v, f * s)
-                    v0 != 0 && push!(pc, P(v0))
-                    if v != v0
-                        P = Pc
-                        v = div(v - v0, f)
-                    elseif j > 0
-                        P = typeof(p[j])
-                        v = 0
-                    else
-                        break
-                    end
-                end
-            end
-            p = reverse!(pc)
-        end
         return new(p)
     end
 end
@@ -258,35 +182,135 @@ end
 """
     CompoundPeriod(periods) -> CompoundPeriod
 
-Construct a `CompoundPeriod` from a `Vector` of `Period`s. The constructor will
-automatically simplify the periods into a canonical form according to the following rules:
+Construct a `CompoundPeriod` from a `Vector` of `Period`s. All `Period`s of the same type
+will be added together.
 
-* All `Period`s of the same type will be added together
+# Examples
+```julia
+julia> Dates.CompoundPeriod(Dates.Hour(12), Dates.Hour(13))
+25 hours
+
+julia> Dates.CompoundPeriod(Dates.Hour(-1), Dates.Minute(1))
+-1 hour, 1 minute
+
+julia> Dates.CompoundPeriod(Dates.Month(1), Dates.Week(-2))
+1 month, -2 weeks
+
+julia> Dates.CompoundPeriod(Dates.Minute(50000))
+50000 minutes
+```
+"""
+CompoundPeriod{P<:Period}(p::Vector{P}) = CompoundPeriod(Array{Period}(p))
+
+CompoundPeriod(p::Period...) = CompoundPeriod(Period[p...])
+
+
+"""
+    canonicalize(::CompoundPeriod) -> CompoundPeriod
+
+Reduces the `CompoundPeriod` into its canonical form by applying the following rules:
+
 * Any `Period` large enough be partially representable by a coarser `Period` will be broken
   into multiple `Period`s (eg. `Hour(30)` becomes `Day(1) + Hour(6)`)
 * `Period`s with opposite signs will be combined when possible
   (eg. `Hour(1) - Day(1)` becomes `-Hour(23)`)
 
-Due to the canonicalization, `CompoundPeriod` is also useful for converting time periods
-into more human-comprehensible forms.
-
 # Examples
 ```julia
-julia> Dates.CompoundPeriod([Dates.Hour(12), Dates.Hour(13)])
+julia> Dates.canonicalize(Dates.CompoundPeriod(Dates.Hour(12), Dates.Hour(13)))
 1 day, 1 hour
 
-julia> Dates.CompoundPeriod([Dates.Hour(-1), Dates.Minute(1)])
+julia> Dates.canonicalize(Dates.CompoundPeriod(Dates.Hour(-1), Dates.Minute(1)))
 -59 minutes
 
-julia> Dates.CompoundPeriod([Dates.Month(1), Dates.Week(-2)])
+julia> Dates.canonicalize(Dates.CompoundPeriod(Dates.Month(1), Dates.Week(-2)))
 1 month, -2 weeks
 
-julia> Dates.CompoundPeriod(Dates.Minute(50000)))
+julia> Dates.canonicalize(Dates.CompoundPeriod(Dates.Minute(50000)))
 4 weeks, 6 days, 17 hours, 20 minutes
 ```
 """
-CompoundPeriod{P<:Period}(p::Vector{P}) = CompoundPeriod(Array{Period}(p))
+function canonicalize(x::CompoundPeriod)
+    # canonicalize Periods by pushing "overflow" into a coarser period.
+    p = x.periods
+    n = length(p)
+    if n > 0
+        pc = sizehint!(Period[], n)
+        P = typeof(p[n])
+        v = value(p[n])
+        i = n - 1
+        while true
+            Pc, f = coarserperiod(P)
+            if i > 0 && typeof(p[i]) == P
+                v += value(p[i])
+                i -= 1
+            end
+            v0 = f == 1 ? v : rem(v, f)
+            v0 != 0 && push!(pc, P(v0))
+            if v != v0
+                P = Pc
+                v = div(v - v0, f)
+            elseif i > 0
+                P = typeof(p[i])
+                v = value(p[i])
+                i -= 1
+            else
+                break
+            end
+        end
+        p = reverse!(pc)
+        n = length(p)
+    else
+        return x
+    end
 
+    # reduce the amount of mixed positive/negative Periods.
+    if n > 0
+        pc = sizehint!(Period[], n)
+        i = n
+        while i > 0
+            j = i
+
+            # Determine sign of the largest period in this group which
+            # can be converted into via coarserperiod.
+            last = Union{}
+            current = typeof(p[i])
+            while i > 0 && current != last
+                if typeof(p[i]) == current
+                    i -= 1
+                end
+                last, current = current, coarserperiod(current)[1]
+            end
+            s = sign(value(p[i + 1]))
+
+            # Adjust all the periods in the group based upon the
+            # largest period sign.
+            P = typeof(p[j])
+            v = 0
+            while j > i
+                Pc, f = coarserperiod(P)
+                if j > 0 && typeof(p[j]) == P
+                    v += value(p[j])
+                    j -= 1
+                end
+                v0 = f == 1 ? v : mod(v, f * s)
+                v0 != 0 && push!(pc, P(v0))
+                if v != v0
+                    P = Pc
+                    v = div(v - v0, f)
+                elseif j > 0
+                    P = typeof(p[j])
+                    v = 0
+                else
+                    break
+                end
+            end
+        end
+        p = reverse!(pc)
+    end
+
+    return CompoundPeriod(p)
+end
 
 Base.convert(::Type{CompoundPeriod}, x::Period) = CompoundPeriod(Period[x])
 function Base.string(x::CompoundPeriod)
@@ -327,8 +351,12 @@ for op in (:+, :-)
 end
 
 (==)(x::CompoundPeriod, y::Period) = x == CompoundPeriod(y)
-(==)(y::Period, x::CompoundPeriod) = x == y
-(==)(x::CompoundPeriod, y::CompoundPeriod) = x.periods == y.periods
+(==)(x::Period, y::CompoundPeriod) = y == x
+(==)(x::CompoundPeriod, y::CompoundPeriod) = canonicalize(x).periods == canonicalize(y).periods
+
+Base.isequal(x::CompoundPeriod, y::Period) = isequal(x, CompoundPeriod(y))
+Base.isequal(x::Period, y::CompoundPeriod) = isequal(y, x)
+Base.isequal(x::CompoundPeriod, y::CompoundPeriod) = x.periods == y.periods
 
 # Capture TimeType+-Period methods
 (+)(a::TimeType,b::Period,c::Period) = (+)(a,b+c)
