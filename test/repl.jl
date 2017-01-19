@@ -511,7 +511,6 @@ let exename = Base.julia_cmd()
 # Test REPL in dumb mode
 if !is_windows()
     TestHelpers.with_fake_pty() do slave, master
-
         nENV = copy(ENV)
         nENV["TERM"] = "dumb"
         p = spawn(setenv(`$exename --startup-file=no --quiet`,nENV),slave,slave,slave)
@@ -527,7 +526,6 @@ if !is_windows()
         output = readuntil(master,' ')
         @test output == "1\r\nquit()\r\n1\r\n\r\njulia> "
         @test nb_available(master) == 0
-
     end
 end
 
@@ -539,12 +537,39 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
 end
 end # let exename
 
+# issue #19864:
+type Error19864 <: Exception; end
+function test19864()
+    eval(current_module(), :(Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")))
+    buf = IOBuffer()
+    REPL.print_response(buf, Error19864(), [], false, false, nothing)
+    return String(take!(buf))
+end
+@test contains(test19864(), "correct19864")
+
 # Test containers in error messages are limited #18726
 let io = IOBuffer()
-    REPL.display_error(io,
-        try [][trues(6000)]
+    Base.display_error(io,
+        try
+            [][trues(6000)]
         catch e
             e
         end, [])
     @test length(String(take!(io))) < 1500
 end
+
+function test_replinit()
+    stdin_write, stdout_read, stdout_read, repl = fake_repl()
+    # Relies on implementation detail to make sure we only have the single
+    # replinit callback we want to test.
+    saved_replinit = copy(Base.repl_hooks)
+    slot = Ref(false)
+    # Create a closure from a newer world to check if `_atreplinit`
+    # can run it correctly
+    atreplinit(eval(:(repl::Base.REPL.LineEditREPL->($slot[] = true))))
+    Base._atreplinit(repl)
+    @test slot[]
+    @test_throws MethodError Base.repl_hooks[1](repl)
+    copy!(Base.repl_hooks, saved_replinit)
+end
+test_replinit()

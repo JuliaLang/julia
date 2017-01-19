@@ -80,6 +80,7 @@ bkfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issymmetric(A),
 convert{T}(::Type{BunchKaufman{T}}, B::BunchKaufman{T}) = B
 convert{T}(::Type{BunchKaufman{T}}, B::BunchKaufman) =
     BunchKaufman(convert(Matrix{T}, B.LD), B.ipiv, B.uplo, B.symmetric, B.rook, B.info)
+convert{T}(::Type{Factorization{T}}, B::BunchKaufman{T}) = B
 convert{T}(::Type{Factorization{T}}, B::BunchKaufman) = convert(BunchKaufman{T}, B)
 
 size(B::BunchKaufman) = size(B.LD)

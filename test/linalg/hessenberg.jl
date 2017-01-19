@@ -14,7 +14,7 @@ let n = 10
         A = eltya == Int ?
                 rand(1:7, n, n) :
                 convert(Matrix{eltya}, eltya <: Complex ?
-                    complex(Areal, Aimg) :
+                    complex.(Areal, Aimg) :
                     Areal)
 
         if eltya != BigFloat

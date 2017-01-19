@@ -11,7 +11,27 @@
 #include "getopt.h"
 #endif
 
-static const char system_image_path[256] = "\0" JL_SYSTEM_IMAGE_PATH;
+#ifdef _OS_WINDOWS_
+char *shlib_ext = ".dll";
+#elif defined(_OS_DARWIN_)
+char *shlib_ext = ".dylib";
+#else
+char *shlib_ext = ".so";
+#endif
+
+static char system_image_path[256] = "\0" JL_SYSTEM_IMAGE_PATH;
+static const char *get_default_sysimg_path(void)
+{
+#ifdef CPUID_SPECIFIC_BINARIES
+    char *path = &system_image_path[1];
+    size_t existing_length = strlen(path) - strlen(shlib_ext);
+    path += existing_length;
+    snprintf(path, sizeof(system_image_path) - existing_length,
+        "_%" PRIx64 "%s", jl_cpuid_tag(), shlib_ext);
+#endif
+    return &system_image_path[1];
+}
+
 
 jl_options_t jl_options = { 0,    // quiet
                             NULL, // julia_home
@@ -20,7 +40,7 @@ jl_options_t jl_options = { 0,    // quiet
                             NULL, // print
                             NULL, // post-boot
                             NULL, // load
-                            &system_image_path[1], // image_file
+                            NULL, // image_file (will be filled in below)
                             NULL, // cpu_target ("native", "core2", etc...)
                             0,    // nprocs
                             NULL, // machinefile
@@ -191,6 +211,10 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "no-startup",      no_argument,       0, 'f' },                 // deprecated
         { 0, 0, 0, 0 }
     };
+
+    // If CPUID specific binaries are enabled, this varies between runs, so initialize
+    // it here, rather than as part of the static initialization above.
+    jl_options.image_file = get_default_sysimg_path();
 
     int codecov  = JL_LOG_NONE;
     int malloclog= JL_LOG_NONE;

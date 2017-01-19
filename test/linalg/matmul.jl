@@ -256,10 +256,10 @@ for elty in (Float32,Float64,Complex64,Complex128)
     @test_throws BoundsError dot(x, 1:4, y, 1:4)
     @test_throws BoundsError dot(x, 1:3, y, 2:4)
     @test dot(x,1:2,y,1:2) == convert(elty,12.5)
-    @test x.'*y == convert(Vector{elty},[29.0])
+    @test x.'*y == convert(elty,29.0)
 end
 
-vecdot_(x,y) = invoke(vecdot, (Any,Any), x,y) # generic vecdot
+vecdot_(x,y) = invoke(vecdot, Tuple{Any,Any}, x,y) # generic vecdot
 let AA = [1+2im 3+4im; 5+6im 7+8im], BB = [2+7im 4+1im; 3+8im 6+5im]
     for Atype = ["Array", "SubArray"],  Btype = ["Array", "SubArray"]
         A = Atype == "Array" ? AA : view(AA, 1:2, 1:2)

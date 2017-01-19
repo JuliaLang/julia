@@ -99,6 +99,7 @@ Base.LinAlg.istril
 Base.LinAlg.istriu
 Base.LinAlg.isdiag
 Base.LinAlg.ishermitian
+Base.LinAlg.RowVector
 Base.transpose
 Base.transpose!
 Base.ctranspose
@@ -112,13 +113,13 @@ Base.LinAlg.peakflops
 ## Low-level matrix operations
 
 Matrix operations involving transpositions operations like `A' \ B` are converted by the Julia
-parser into calls to specially named functions like `Ac_ldiv_B`. If you want to overload these
+parser into calls to specially named functions like [`Ac_ldiv_B`](@ref). If you want to overload these
 operations for your own types, then it is useful to know the names of these functions.
 
 Also, in many cases there are in-place versions of matrix operations that allow you to supply
 a pre-allocated output vector or matrix.  This is useful when optimizing critical code in order
 to avoid the overhead of repeated allocations. These in-place operations are suffixed with `!`
-below (e.g. `A_mul_B!`) according to the usual Julia convention.
+below (e.g. [`A_mul_B!`](@ref)) according to the usual Julia convention.
 
 ```@docs
 Base.LinAlg.A_ldiv_B!
@@ -156,6 +157,38 @@ linear algebra routines it is useful to call the BLAS functions directly.
 `Base.LinAlg.BLAS` provides wrappers for some of the BLAS functions. Those BLAS functions
 that overwrite one of the input arrays have names ending in `'!'`.  Usually, a BLAS function has
 four methods defined, for `Float64`, `Float32`, `Complex128`, and `Complex64` arrays.
+
+### [BLAS Character Arguments](@id stdlib-blas-chars)
+Many BLAS functions accept arguments that determine whether to transpose an argument (`trans`),
+which triangle of a matrix to reference (`uplo` or `ul`),
+whether the diagonal of a triangular matrix can be assumed to
+be all ones (`dA`) or which side of a matrix multiplication
+the input argument belongs on (`side`). The possiblities are:
+
+#### [Multplication Order](@id stdlib-blas-side)
+| `side` | Meaning                                                             |
+|:-------|:--------------------------------------------------------------------|
+| `'L'`  | The argument goes on the *left* side of a matrix-matrix operation.  |
+| `'R'`  | The argument goes on the *right* side of a matrix-matrix operation. |
+
+#### [Triangle Referencing](@id stdlib-blas-uplo)
+| `uplo`/`ul` | Meaning                                               |
+|:------------|:------------------------------------------------------|
+| `'U'`       | Only the *upper* triangle of the matrix will be used. |
+| `'L'`       | Only the *lower* triangle of the matrix will be used. |
+
+#### [Transposition Operation](@id stdlib-blas-trans)
+| `trans`/`tX` | Meaning                                                 |
+|:-------------|:--------------------------------------------------------|
+| `'N'`        | The input matrix `X` is not transposed or conjugated.   |
+| `'T'`        | The input matrix `X` will be transposed.                |
+| `'C'`        | The input matrix `X` will be conjugated and transposed. |
+
+#### [Unit Diagonal](@id stdlib-blas-diag)
+| `diag`/`dX` | Meaning                                                   |
+|:------------|:----------------------------------------------------------|
+| `'N'`       | The diagonal values of the matrix `X` will be read.       |
+| `'U'`       | The diagonal of the matrix `X` is assumed to be all ones. |
 
 ```@docs
 Base.LinAlg.BLAS.dotu

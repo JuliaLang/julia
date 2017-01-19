@@ -13,8 +13,8 @@
     @test clamp(3.0, 1, 3) == 3.0
     @test clamp(4.0, 1, 3) == 3.0
 
-    @test clamp([0, 1, 2, 3, 4], 1.0, 3.0) == [1.0, 1.0, 2.0, 3.0, 3.0]
-    @test clamp([0 1; 2 3], 1.0, 3.0) == [1.0 1.0; 2.0 3.0]
+    @test clamp.([0, 1, 2, 3, 4], 1.0, 3.0) == [1.0, 1.0, 2.0, 3.0, 3.0]
+    @test clamp.([0 1; 2 3], 1.0, 3.0) == [1.0 1.0; 2.0 3.0]
     begin
         x = [0.0, 1.0, 2.0, 3.0, 4.0]
         clamp!(x, 1, 3)
@@ -23,8 +23,8 @@
 end
 
 @testset "constants" begin
-    @test !(pi == e)
-    @test !(e == 1//2)
+    @test pi != e
+    @test e != 1//2
     @test 1//2 <= e
     @test e <= 15//3
     @test big(1//2) < e
@@ -34,8 +34,8 @@ end
     @test e^2.4 == exp(2.4)
     @test e^(2//3) == exp(2//3)
 
-    @test Float16(3.) < pi
-    @test pi < Float16(4.)
+    @test Float16(3.0) < pi
+    @test pi < Float16(4.0)
     @test contains(sprint(show,π),"3.14159")
 end
 
@@ -71,37 +71,51 @@ end
         @test isnan(x)
         @test y == 0
 
-        # more ldexp tests
-        @test ldexp(T(0.8), 4) === T(12.8)
-        @test ldexp(T(-0.854375), 5) === T(-27.34)
-        @test ldexp(T(1.0), typemax(Int)) === T(Inf)
-        @test ldexp(T(1.0), typemin(Int)) === T(0.0)
-        @test ldexp(prevfloat(realmin(T)), typemax(Int)) === T(Inf)
-        @test ldexp(prevfloat(realmin(T)), typemin(Int)) === T(0.0)
+        @testset "ldexp function" begin
+            @test ldexp(T(0.0), 0) === T(0.0)
+            @test ldexp(T(-0.0), 0) === T(-0.0)
+            @test ldexp(T(Inf), 1) === T(Inf)
+            @test ldexp(T(Inf), 10000) === T(Inf)
+            @test ldexp(T(-Inf), 1) === T(-Inf)
+            @test ldexp(T(NaN), 10) === T(NaN)
+            @test ldexp(T(1.0), 0) === T(1.0)
+            @test ldexp(T(0.8), 4) === T(12.8)
+            @test ldexp(T(-0.854375), 5) === T(-27.34)
+            @test ldexp(T(1.0), typemax(Int)) === T(Inf)
+            @test ldexp(T(1.0), typemin(Int)) === T(0.0)
+            @test ldexp(prevfloat(realmin(T)), typemax(Int)) === T(Inf)
+            @test ldexp(prevfloat(realmin(T)), typemin(Int)) === T(0.0)
 
-        @test ldexp(T(0.8), Int128(4)) === T(12.8)
-        @test ldexp(T(-0.854375), Int128(5)) === T(-27.34)
-        @test ldexp(T(1.0), typemax(Int128)) === T(Inf)
-        @test ldexp(T(1.0), typemin(Int128)) === T(0.0)
-        @test ldexp(prevfloat(realmin(T)), typemax(Int128)) === T(Inf)
-        @test ldexp(prevfloat(realmin(T)), typemin(Int128)) === T(0.0)
+            @test ldexp(T(0.0), Int128(0)) === T(0.0)
+            @test ldexp(T(-0.0), Int128(0)) === T(-0.0)
+            @test ldexp(T(1.0), Int128(0)) === T(1.0)
+            @test ldexp(T(0.8), Int128(4)) === T(12.8)
+            @test ldexp(T(-0.854375), Int128(5)) === T(-27.34)
+            @test ldexp(T(1.0), typemax(Int128)) === T(Inf)
+            @test ldexp(T(1.0), typemin(Int128)) === T(0.0)
+            @test ldexp(prevfloat(realmin(T)), typemax(Int128)) === T(Inf)
+            @test ldexp(prevfloat(realmin(T)), typemin(Int128)) === T(0.0)
 
-        @test ldexp(T(0.8), BigInt(4)) === T(12.8)
-        @test ldexp(T(-0.854375), BigInt(5)) === T(-27.34)
-        @test ldexp(T(1.0), BigInt(typemax(Int128))) === T(Inf)
-        @test ldexp(T(1.0), BigInt(typemin(Int128))) === T(0.0)
-        @test ldexp(prevfloat(realmin(T)), BigInt(typemax(Int128))) === T(Inf)
-        @test ldexp(prevfloat(realmin(T)), BigInt(typemin(Int128))) === T(0.0)
+            @test ldexp(T(0.0), BigInt(0)) === T(0.0)
+            @test ldexp(T(-0.0), BigInt(0)) === T(-0.0)
+            @test ldexp(T(1.0), BigInt(0)) === T(1.0)
+            @test ldexp(T(0.8), BigInt(4)) === T(12.8)
+            @test ldexp(T(-0.854375), BigInt(5)) === T(-27.34)
+            @test ldexp(T(1.0), BigInt(typemax(Int128))) === T(Inf)
+            @test ldexp(T(1.0), BigInt(typemin(Int128))) === T(0.0)
+            @test ldexp(prevfloat(realmin(T)), BigInt(typemax(Int128))) === T(Inf)
+            @test ldexp(prevfloat(realmin(T)), BigInt(typemin(Int128))) === T(0.0)
 
-        # Test also against BigFloat reference. Needs to be exactly rounded.
-        @test ldexp(realmin(T), -1) == T(ldexp(big(realmin(T)), -1))
-        @test ldexp(realmin(T), -2) == T(ldexp(big(realmin(T)), -2))
-        @test ldexp(realmin(T)/2, 0) == T(ldexp(big(realmin(T)/2), 0))
-        @test ldexp(realmin(T)/3, 0) == T(ldexp(big(realmin(T)/3), 0))
-        @test ldexp(realmin(T)/3, -1) == T(ldexp(big(realmin(T)/3), -1))
-        @test ldexp(realmin(T)/3, 11) == T(ldexp(big(realmin(T)/3), 11))
-        @test ldexp(realmin(T)/11, -10) == T(ldexp(big(realmin(T)/11), -10))
-        @test ldexp(-realmin(T)/11, -10) == T(ldexp(big(-realmin(T)/11), -10))
+            # Test also against BigFloat reference. Needs to be exactly rounded.
+            @test ldexp(realmin(T), -1) == T(ldexp(big(realmin(T)), -1))
+            @test ldexp(realmin(T), -2) == T(ldexp(big(realmin(T)), -2))
+            @test ldexp(realmin(T)/2, 0) == T(ldexp(big(realmin(T)/2), 0))
+            @test ldexp(realmin(T)/3, 0) == T(ldexp(big(realmin(T)/3), 0))
+            @test ldexp(realmin(T)/3, -1) == T(ldexp(big(realmin(T)/3), -1))
+            @test ldexp(realmin(T)/3, 11) == T(ldexp(big(realmin(T)/3), 11))
+            @test ldexp(realmin(T)/11, -10) == T(ldexp(big(realmin(T)/11), -10))
+            @test ldexp(-realmin(T)/11, -10) == T(ldexp(big(-realmin(T)/11), -10))
+        end
     end
 end
 
@@ -147,38 +161,38 @@ end
             @test isequal(T(1//4)^2, T(1//16))
             @test isequal(acos(T(1)), T(0))
             @test isequal(acosh(T(1)), T(0))
-            @test_approx_eq_eps asin(T(1)) T(pi)/2 eps(T)
-            @test_approx_eq_eps atan(T(1)) T(pi)/4 eps(T)
-            @test_approx_eq_eps atan2(T(1),T(1)) T(pi)/4 eps(T)
+            @test asin(T(1)) ≈ T(pi)/2 atol=eps(T)
+            @test atan(T(1)) ≈ T(pi)/4 atol=eps(T)
+            @test atan2(T(1),T(1)) ≈ T(pi)/4 atol=eps(T)
             @test isequal(cbrt(T(0)), T(0))
             @test isequal(cbrt(T(1)), T(1))
             @test isequal(cbrt(T(1000000000)), T(1000))
             @test isequal(cos(T(0)), T(1))
-            @test_approx_eq_eps cos(T(pi)/2) T(0) eps(T)
+            @test cos(T(pi)/2) ≈ T(0) atol=eps(T)
             @test isequal(cos(T(pi)), T(-1))
-            @test_approx_eq_eps exp(T(1)) T(e) 10*eps(T)
+            @test exp(T(1)) ≈ T(e) atol=10*eps(T)
             @test isequal(exp10(T(1)), T(10))
             @test isequal(exp2(T(1)), T(2))
             @test isequal(expm1(T(0)), T(0))
-            @test_approx_eq_eps expm1(T(1)) T(e)-1 10*eps(T)
+            @test expm1(T(1)) ≈ T(e)-1 atol=10*eps(T)
             @test isequal(hypot(T(3),T(4)), T(5))
             @test isequal(log(T(1)), T(0))
             @test isequal(log(e,T(1)), T(0))
-            @test_approx_eq_eps log(T(e)) T(1) eps(T)
+            @test log(T(e)) ≈ T(1) atol=eps(T)
             @test isequal(log10(T(1)), T(0))
             @test isequal(log10(T(10)), T(1))
             @test isequal(log1p(T(0)), T(0))
-            @test_approx_eq_eps log1p(T(e)-1) T(1) eps(T)
+            @test log1p(T(e)-1) ≈ T(1) atol=eps(T)
             @test isequal(log2(T(1)), T(0))
             @test isequal(log2(T(2)), T(1))
             @test isequal(sin(T(0)), T(0))
             @test isequal(sin(T(pi)/2), T(1))
-            @test_approx_eq_eps sin(T(pi)) T(0) eps(T)
+            @test sin(T(pi)) ≈ T(0) atol=eps(T)
             @test isequal(sqrt(T(0)), T(0))
             @test isequal(sqrt(T(1)), T(1))
             @test isequal(sqrt(T(100000000)), T(10000))
             @test isequal(tan(T(0)), T(0))
-            @test_approx_eq_eps tan(T(pi)/4) T(1) eps(T)
+            @test tan(T(pi)/4) ≈ T(1) atol=eps(T)
         end
         @testset "Inverses" begin
             @test acos(cos(x)) ≈ x
@@ -235,6 +249,24 @@ end
 @test exp2(Float16(2.)) ≈ exp2(2.)
 @test log(e) == 1
 
+@testset "exp function" for T in (Float64, Float32)
+    @testset "$T accuracy" begin
+        X = map(T, vcat(-10:0.0002:10, -80:0.001:80, 2.0^-27, 2.0^-28, 2.0^-14, 2.0^-13))
+        for x in X
+            y, yb = exp(x), exp(big(x))
+            @test abs(y-yb) <= 1.0*eps(T(yb))
+        end
+    end
+    @testset "$T edge cases" begin
+        @test isnan(exp(T(NaN)))
+        @test exp(T(-Inf)) === T(0.0)
+        @test exp(T(Inf)) === T(Inf)
+        @test exp(T(0.0)) === T(1.0) # exact
+        @test exp(T(5000.0)) === T(Inf)
+        @test exp(T(-5000.0)) === T(0.0)
+    end
+end
+
 @testset "test abstractarray trig fxns" begin
     TAA = rand(2,2)
     TAA = (TAA + TAA.')/2.
@@ -277,8 +309,8 @@ end
     @testset "$T" for T = (Float32,Float64,Rational{Int})
         fT = typeof(float(one(T)))
         for x = -400:40:400
-            @test_approx_eq_eps sind(convert(T,x))::fT convert(fT,sin(pi/180*x)) eps(deg2rad(convert(fT,x)))
-            @test_approx_eq_eps cosd(convert(T,x))::fT convert(fT,cos(pi/180*x)) eps(deg2rad(convert(fT,x)))
+            @test sind(convert(T,x))::fT ≈ convert(fT,sin(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
+            @test cosd(convert(T,x))::fT ≈ convert(fT,cos(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
         end
         @testset "sind" begin
             @test sind(convert(T,0.0))::fT === zero(fT)
@@ -297,8 +329,8 @@ end
 
         @testset "sinpi and cospi" begin
             for x = -3:0.3:3
-                @test_approx_eq_eps sinpi(convert(T,x))::fT convert(fT,sin(pi*x)) eps(pi*convert(fT,x))
-                @test_approx_eq_eps cospi(convert(T,x))::fT convert(fT,cos(pi*x)) eps(pi*convert(fT,x))
+                @test sinpi(convert(T,x))::fT ≈ convert(fT,sin(pi*x)) atol=eps(pi*convert(fT,x))
+                @test cospi(convert(T,x))::fT ≈ convert(fT,cos(pi*x)) atol=eps(pi*convert(fT,x))
             end
 
             @test sinpi(convert(T,0.0))::fT === zero(fT)
@@ -371,14 +403,14 @@ end
 
     for elty in [Float32,Float64]
         for x in logspace(-200, -0.01)
-            @test_approx_eq_eps erf(erfinv(x)) x 1e-12*x
-            @test_approx_eq_eps erf(erfinv(-x)) -x 1e-12*x
-            @test_approx_eq_eps erfc(erfcinv(2*x)) 2*x 1e-12*x
+            @test erf(erfinv(x)) ≈ x atol=1e-12*x
+            @test erf(erfinv(-x)) ≈ -x atol=1e-12*x
+            @test erfc(erfcinv(2*x)) ≈ 2*x atol=1e-12*x
             if x > 1e-20
                 xf = Float32(x)
-                @test_approx_eq_eps erf(erfinv(xf)) xf 1e-5*xf
-                @test_approx_eq_eps erf(erfinv(-xf)) -xf 1e-5*xf
-                @test_approx_eq_eps erfc(erfcinv(2xf)) 2xf 1e-5*xf
+                @test erf(erfinv(xf)) ≈ xf atol=1e-5*xf
+                @test erf(erfinv(-xf)) ≈ -xf atol=1e-5*xf
+                @test erfc(erfcinv(2xf)) ≈ 2xf atol=1e-5*xf
             end
         end
         @test erfinv(one(elty)) == Inf
@@ -394,26 +426,39 @@ end
 end
 
 @testset "airy" begin
-    @test airy(1.8) ≈ airyai(1.8)
-    @test airyprime(1.8) ≈ -0.0685247801186109345638
-    @test airyaiprime(1.8) ≈ airyprime(1.8)
-    @test airybi(1.8) ≈ 2.595869356743906290060
-    @test airybiprime(1.8) ≈ 2.98554005084659907283
-    @test_throws Base.Math.AmosException airy(200im)
+    @test_throws Base.Math.AmosException airyai(200im)
     @test_throws Base.Math.AmosException airybi(200)
-    @test_throws ArgumentError airy(5,one(Complex128))
-    z = 1.8 + 1.0im
-    for elty in [Complex64,Complex128]
-        @test airy(convert(elty,1.8)) ≈ 0.0470362168668458052247
-        z = convert(elty,z)
-        @test airyx(z) ≈ airyx(0,z)
-        @test airyx(0, z) ≈ airy(0, z) * exp(2/3 * z * sqrt(z))
-        @test airyx(1, z) ≈ airy(1, z) * exp(2/3 * z * sqrt(z))
-        @test airyx(2, z) ≈ airy(2, z) * exp(-abs(real(2/3 * z * sqrt(z))))
-        @test airyx(3, z) ≈ airy(3, z) * exp(-abs(real(2/3 * z * sqrt(z))))
-        @test_throws ArgumentError airyx(5,z)
+
+    for T in [Float32, Float64, Complex64,Complex128]
+        @test airyai(T(1.8)) ≈ 0.0470362168668458052247
+        @test airyaiprime(T(1.8)) ≈ -0.0685247801186109345638
+        @test airybi(T(1.8)) ≈ 2.595869356743906290060
+        @test airybiprime(T(1.8)) ≈ 2.98554005084659907283
     end
-    @test_throws MethodError airy(complex(big(1.0)))
+    for T in [Complex64, Complex128]
+        z = convert(T,1.8 + 1.0im)
+        @test airyaix(z) ≈ airyai(z) * exp(2/3 * z * sqrt(z))
+        @test airyaiprimex(z) ≈ airyaiprime(z) * exp(2/3 * z * sqrt(z))
+        @test airybix(z) ≈ airybi(z) * exp(-abs(real(2/3 * z * sqrt(z))))
+        @test airybiprimex(z) ≈ airybiprime(z) * exp(-abs(real(2/3 * z * sqrt(z))))
+    end
+    @test_throws MethodError airyai(complex(big(1.0)))
+
+    for x = -3:3
+        @test airyai(x) ≈ airyai(complex(x))
+        @test airyaiprime(x) ≈ airyaiprime(complex(x))
+        @test airybi(x) ≈ airybi(complex(x))
+        @test airybiprime(x) ≈ airybiprime(complex(x))
+        if x >= 0
+            @test airyaix(x) ≈ airyaix(complex(x))
+            @test airyaiprimex(x) ≈ airyaiprimex(complex(x))
+        else
+            @test_throws DomainError airyaix(x)
+            @test_throws DomainError airyaiprimex(x)
+        end
+        @test airybix(x) ≈ airybix(complex(x))
+        @test airybiprimex(x) ≈ airybiprimex(complex(x))
+    end
 end
 
 @testset "bessel functions" begin
@@ -748,18 +793,6 @@ end
     @test isnan(zeta(complex(-Inf,0)))
 end
 
-@testset "quadgk" begin
-    @test quadgk(cos, 0,0.7,1)[1] ≈ sin(1)
-    @test quadgk(x -> exp(im*x), 0,0.7,1)[1] ≈ (exp(1im)-1)/im
-    @test quadgk(x -> exp(im*x), 0,1im)[1] ≈ -1im*expm1(-1)
-    @test_approx_eq_eps quadgk(cos, 0,BigFloat(1),order=40)[1] sin(BigFloat(1)) 1000*eps(BigFloat)
-    @test quadgk(x -> exp(-x), 0,0.7,Inf)[1] ≈ 1.0
-    @test quadgk(x -> exp(x), -Inf,0)[1] ≈ 1.0
-    @test quadgk(x -> exp(-x^2), -Inf,Inf)[1] ≈ sqrt(pi)
-    @test quadgk(x -> [exp(-x), exp(-2x)], 0, Inf)[1] ≈ [1,0.5]
-    @test quadgk(cos, 0,0.7,1, norm=abs)[1] ≈ sin(1)
-end
-
 @testset "subnormal flags" begin
     # Ensure subnormal flags functions don't segfault
     @test any(set_zero_subnormals(true) .== [false,true])
@@ -877,14 +910,10 @@ end
 end
 
 @testset "frexp" begin
-    @testset "$elty" for elty in (Float32, Float64)
-        @test frexp( convert(elty,0.5) ) == (convert(elty,0.5),0)
-        @test frexp( convert(elty,4.0) ) == (convert(elty,0.5),3)
-        @test frexp( convert(elty,10.5) )[1] ≈ convert(elty,0.65625)
-        @test frexp( convert(elty,10.5) )[2] == 4
-        @test frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[1][1] ≈ convert(elty,0.5)
-        @test frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[1][2] ≈ convert(elty,0.65625)
-        @test frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[2] == [ 3 4 ]
+    @testset "$elty" for elty in (Float16, Float32, Float64)
+        @test frexp( convert(elty,0.5) ) == (0.5, 0)
+        @test frexp( convert(elty,4.0) ) == (0.5, 3)
+        @test frexp( convert(elty,10.5) ) == (0.65625, 4)
     end
 end
 
@@ -938,7 +967,7 @@ end
 @testset "vectorization of 2-arg functions" begin
     binary_math_functions = [
         copysign, flipsign, log, atan2, hypot, max, min,
-        airy, airyx, besselh, hankelh1, hankelh2, hankelh1x, hankelh2x,
+        besselh, hankelh1, hankelh2, hankelh1x, hankelh2x,
         besseli, besselix, besselj, besseljx, besselk, besselkx, bessely, besselyx,
         polygamma, zeta, beta, lbeta,
     ]

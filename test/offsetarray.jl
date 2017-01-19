@@ -267,11 +267,12 @@ am = map(identity, a)
 
 # other functions
 v = OffsetArray(v0, (-3,))
-@test_approx_eq v v
-@test parent(v') == v0'
-@test indices(v') === (1:1,-2:1)
+@test v ≈ v
+@test indices(v') === (Base.OneTo(1),-2:1)
 A = OffsetArray(rand(4,4), (-3,5))
-@test_approx_eq A A
+@test A ≈ A
+@test indices(A') === (6:9, -2:1)
+@test parent(A') == parent(A)'
 @test maximum(A) == maximum(parent(A))
 @test minimum(A) == minimum(parent(A))
 @test extrema(A) == extrema(parent(A))
@@ -315,15 +316,15 @@ I,J,N = findnz(z)
 @test mean(A_3_3) == median(A_3_3) == 5
 @test mean(x->2x, A_3_3) == 10
 @test mean(A_3_3, 1) == median(A_3_3, 1) == OffsetArray([2 5 8], (0,A_3_3.offsets[2]))
-@test mean(A_3_3, 2) == median(A_3_3, 2) == OffsetArray([4,5,6]'', (A_3_3.offsets[1],0))
+@test mean(A_3_3, 2) == median(A_3_3, 2) == OffsetArray(reshape([4,5,6],(3,1)), (A_3_3.offsets[1],0))
 @test var(A_3_3) == 7.5
 @test std(A_3_3, 1) == OffsetArray([1 1 1], (0,A_3_3.offsets[2]))
-@test std(A_3_3, 2) == OffsetArray([3,3,3]'', (A_3_3.offsets[1],0))
+@test std(A_3_3, 2) == OffsetArray(reshape([3,3,3], (3,1)), (A_3_3.offsets[1],0))
 @test sum(OffsetArray(ones(Int,3000), -1000)) == 3000
 
-@test_approx_eq vecnorm(v) vecnorm(parent(v))
-@test_approx_eq vecnorm(A) vecnorm(parent(A))
-@test_approx_eq vecdot(v, v) vecdot(v0, v0)
+@test vecnorm(v) ≈ vecnorm(parent(v))
+@test vecnorm(A) ≈ vecnorm(parent(A))
+@test vecdot(v, v) ≈ vecdot(v0, v0)
 
 v  = OffsetArray([1,1e100,1,-1e100], (-3,))*1000
 v2 = OffsetArray([1,-1e100,1,1e100], (5,))*1000
@@ -340,7 +341,7 @@ seek(io, 0)
 @test readdlm(io, eltype(A)) == parent(A)
 
 amin, amax = extrema(parent(A))
-@test clamp(A, (amax+amin)/2, amax) == clamp(parent(A), (amax+amin)/2, amax)
+@test clamp.(A, (amax+amin)/2, amax).parent == clamp.(parent(A), (amax+amin)/2, amax)
 
 @test unique(A, 1) == parent(A)
 @test unique(A, 2) == parent(A)
@@ -384,14 +385,14 @@ for s = -5:5
     for i = 1:5
         thisa = OffsetArray(a[i], (s,))
         thisc = c[mod1(i+s+5,5)]
-        @test_approx_eq fft(thisa) thisc
-        @test_approx_eq fft(thisa, 1) thisc
-        @test_approx_eq ifft(fft(thisa)) circcopy!(a1, thisa)
-        @test_approx_eq ifft(fft(thisa, 1), 1) circcopy!(a1, thisa)
-        @test_approx_eq rfft(thisa) thisc[1:3]
-        @test_approx_eq rfft(thisa, 1) thisc[1:3]
-        @test_approx_eq irfft(rfft(thisa, 1), 5, 1) a1
-        @test_approx_eq irfft(rfft(thisa, 1), 5, 1) a1
+        @test fft(thisa) ≈ thisc
+        @test fft(thisa, 1) ≈ thisc
+        @test ifft(fft(thisa)) ≈ circcopy!(a1, thisa)
+        @test ifft(fft(thisa, 1), 1) ≈ circcopy!(a1, thisa)
+        @test rfft(thisa) ≈ thisc[1:3]
+        @test rfft(thisa, 1) ≈ thisc[1:3]
+        @test irfft(rfft(thisa, 1), 5, 1) ≈ a1
+        @test irfft(rfft(thisa, 1), 5, 1) ≈ a1
     end
 end
 

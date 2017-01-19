@@ -16,6 +16,7 @@ function version()
           (Ptr{Cint}, Ptr{Cint}, Ptr{Cint}), major, minor, patch)
     return VersionNumber(major[], minor[], patch[])
 end
+const VERSION = version()
 
 isset(val::Integer, flag::Integer) = (val & flag == flag)
 reset(val::Integer, flag::Integer) = (val &= ~flag)
@@ -42,4 +43,16 @@ function features()
         isset(feat, Cuint(f)) && push!(res, f)
     end
     return res
+end
+
+"""
+    LibGit2.posixpath(path)
+
+Standardise the path string `path` to use POSIX separators.
+"""
+function posixpath end
+if is_windows()
+    posixpath(path) = replace(path,'\\','/')
+else is_unix()
+    posixpath(path) = path
 end

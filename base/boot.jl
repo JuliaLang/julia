@@ -31,7 +31,8 @@
 #end
 
 #type Union <: Type
-#    types::Tuple
+#    a
+#    b
 #end
 
 #type TypeVar
@@ -40,8 +41,8 @@
 #    ub::Type
 #end
 
-#type TypeConstructor
-#    parameters::Tuple
+#type UnionAll
+#    var::TypeVar
 #    body
 #end
 
@@ -120,7 +121,7 @@ import Core.Intrinsics.ccall
 export
     # key types
     Any, DataType, Vararg, ANY, NTuple,
-    Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, Void,
+    Tuple, Type, UnionAll, TypeName, TypeVar, Union, Void,
     SimpleVector, AbstractArray, DenseArray,
     # special objects
     Function, CodeInfo, Method, MethodTable, TypeMapEntry, TypeMapLevel,
@@ -182,8 +183,6 @@ else
     typealias UInt UInt32
 end
 
-abstract AbstractString
-
 function Typeof end
 (f::typeof(Typeof))(x::ANY) = isa(x,Type) ? Type{x} : typeof(x)
 
@@ -192,12 +191,19 @@ type ErrorException <: Exception
     msg::AbstractString
     ErrorException(msg::AbstractString) = new(msg)
 end
+
+Expr(args::ANY...) = _expr(args...)
+
+macro _noinline_meta()
+    Expr(:meta, :noinline)
+end
+
 immutable BoundsError        <: Exception
     a::Any
     i::Any
     BoundsError() = new()
-    BoundsError(a::ANY) = new(a)
-    BoundsError(a::ANY, i::ANY) = new(a,i)
+    BoundsError(a::ANY) = (@_noinline_meta; new(a))
+    BoundsError(a::ANY, i) = (@_noinline_meta; new(a,i))
 end
 immutable DivideError        <: Exception end
 immutable DomainError        <: Exception end
@@ -221,11 +227,7 @@ end
 
 abstract DirectIndexString <: AbstractString
 
-immutable String <: AbstractString
-    data::Array{UInt8,1}
-    # required to make String("foo") work (#15120):
-    String(d::Array{UInt8,1}) = new(d)
-end
+String(s::String) = s  # no constructor yet
 
 # This should always be inlined
 getptls() = ccall(:jl_get_ptls_states, Ptr{Void}, ())
@@ -257,18 +259,11 @@ end
 TypeVar(n::Symbol) =
     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, Any)
 TypeVar(n::Symbol, ub::ANY) =
-    (isa(ub,Bool) ?
-     ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, Union{}, Any, ub) :
-     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, ub::Type))
+    ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, ub)
 TypeVar(n::Symbol, lb::ANY, ub::ANY) =
-    (isa(ub,Bool) ?
-     ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, Union{}, lb::Type, ub) :
-     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, lb::Type, ub::Type))
-TypeVar(n::Symbol, lb::ANY, ub::ANY, b::Bool) =
-    ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, lb::Type, ub::Type, b)
+    ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, lb, ub)
 
-TypeConstructor(p::ANY, t::ANY) =
-    ccall(:jl_new_type_constructor, Ref{TypeConstructor}, (Any, Any), p::SimpleVector, t::Type)
+UnionAll(v::TypeVar, t::ANY) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
 
 Void() = nothing
 
@@ -277,8 +272,6 @@ immutable VecElement{T}
     VecElement(value::T) = new(value) # disable converting constructor in Core
 end
 VecElement{T}(arg::T) = VecElement{T}(arg)
-
-Expr(args::ANY...) = _expr(args...)
 
 # used by lowering of splicing unquote
 splicedexpr(hd::Symbol, args::Array{Any,1}) = (e=Expr(hd); e.args=args; e)
@@ -331,22 +324,17 @@ typealias NTuple{N,T} Tuple{Vararg{T,N}}
 (::Type{Array{T,1}}){T}() = Array{T,1}(0)
 (::Type{Array{T,2}}){T}() = Array{T,2}(0, 0)
 
-# TODO: possibly turn these into deprecations
-Array{T,N}(::Type{T}, d::NTuple{N,Int})   = Array{T,N}(d)
-Array{T}(::Type{T}, d::Int...)            = Array(T, d)
-Array{T}(::Type{T}, m::Int)               = Array{T,1}(m)
-Array{T}(::Type{T}, m::Int,n::Int)        = Array{T,2}(m,n)
-Array{T}(::Type{T}, m::Int,n::Int,o::Int) = Array{T,3}(m,n,o)
-
-
 # primitive Symbol constructors
-Symbol(s::String) = Symbol(s.data)
+function Symbol(s::String)
+    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
+                 ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s),
+                 sizeof(s))
+end
 function Symbol(a::Array{UInt8,1})
     return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
-          ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
-          Intrinsics.arraylen(a))
+                 ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
+                 Intrinsics.arraylen(a))
 end
-
 
 # docsystem basics
 macro doc(x...)
@@ -378,8 +366,8 @@ unsafe_write(io::IO, x::Ptr{UInt8}, nb::Int) =
 write(io::IO, x::UInt8) =
     (ccall(:jl_uv_putb, Void, (Ptr{Void}, UInt8), io_pointer(io), x); 1)
 function write(io::IO, x::String)
-    nb = sizeof(x.data)
-    unsafe_write(io, ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), x.data), nb)
+    nb = sizeof(x)
+    unsafe_write(io, ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), x), nb)
     return nb
 end
 

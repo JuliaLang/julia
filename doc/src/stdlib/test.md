@@ -167,11 +167,7 @@ ERROR: Some tests did not pass: 3 passed, 1 failed, 0 errored, 0 broken.
 
 As calculations on floating-point values can be imprecise, you can perform approximate equality
 checks using either `@test a ≈ b` (where `≈`, typed via tab completion of `\approx`, is the
-`isapprox()` function) or use `isapprox()` directly.
-
-An alternative is the `@test_approx_eq` macro (which differs from `isapprox` in that it treats
-NaN values as equal and has a smaller default tolerance) or `@test_approx_eq_eps` (which takes
-an extra argument indicating the relative tolerance):
+[`isapprox()`](@ref) function) or use [`isapprox()`](@ref) directly.
 
 ```julia
 julia> @test 1 ≈ 0.999999999
@@ -182,34 +178,12 @@ ERROR: test failed: 1 isapprox 0.999999
  in error at error.jl:21
  in default_handler at test.jl:30
  in do_test at test.jl:53
-
-julia> @test_approx_eq 1. 0.999999999
-ERROR: assertion failed: |1.0 - 0.999999999| < 2.220446049250313e-12
-  1.0 = 1.0
-  0.999999999 = 0.999999999
- in test_approx_eq at test.jl:75
- in test_approx_eq at test.jl:80
-
-julia> @test_approx_eq 1. 0.9999999999999
-
-julia> @test_approx_eq_eps 1. 0.999 1e-2
-
-julia> @test_approx_eq_eps 1. 0.999 1e-3
-ERROR: assertion failed: |1.0 - 0.999| <= 0.001
-  1.0 = 1.0
-  0.999 = 0.999
-  difference = 0.0010000000000000009 > 0.001
- in error at error.jl:22
- in test_approx_eq at test.jl:68
 ```
 
-Note that these macros will fail immediately, and are not compatible with `@testset()`, so using
-`@test isapprox` is encouraged when writing new tests.
-
 ```@docs
-Base.Test.@test_approx_eq
-Base.Test.@test_approx_eq_eps
 Base.Test.@inferred
+Base.Test.@test_warn
+Base.Test.@test_nowarn
 ```
 
 ## Broken Tests
@@ -223,7 +197,7 @@ Base.Test.@test_broken
 ```
 
 `@test_skip()` is also available to skip a test without evaluation, but counting the skipped test
-in the test set reporting. The test will not run but gives a `Broken``Result`.
+in the test set reporting. The test will not run but gives a `Broken` `Result`.
 
 ```@docs
 Base.Test.@test_skip

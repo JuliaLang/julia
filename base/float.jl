@@ -63,6 +63,7 @@ for t1 in (Float32,Float64)
         end
     end
 end
+convert(::Type{Integer}, x::Float16) = convert(Integer, Float32(x))
 convert{T<:Integer}(::Type{T}, x::Float16) = convert(T, Float32(x))
 
 
@@ -151,11 +152,11 @@ function convert(::Type{Float16}, val::Float32)
 end
 
 function convert(::Type{Float32}, val::Float16)
-    local ival::UInt32 = reinterpret(UInt16, val),
-          sign::UInt32 = (ival & 0x8000) >> 15,
-          exp::UInt32  = (ival & 0x7c00) >> 10,
-          sig::UInt32  = (ival & 0x3ff) >> 0,
-          ret::UInt32
+    local ival::UInt32 = reinterpret(UInt16, val)
+    local sign::UInt32 = (ival & 0x8000) >> 15
+    local exp::UInt32  = (ival & 0x7c00) >> 10
+    local sig::UInt32  = (ival & 0x3ff) >> 0
+    local ret::UInt32
 
     if exp == 0
         if sig == 0
@@ -517,11 +518,29 @@ isnan(x::AbstractFloat) = x != x
 isnan(x::Float16)    = reinterpret(UInt16,x)&0x7fff  > 0x7c00
 isnan(x::Real) = false
 
+"""
+    isfinite(f) -> Bool
+
+Test whether a number is finite.
+
+```jldoctest
+julia> isfinite(5)
+true
+
+julia> isfinite(NaN32)
+false
+```
+"""
 isfinite(x::AbstractFloat) = x - x == 0
 isfinite(x::Float16) = reinterpret(UInt16,x)&0x7c00 != 0x7c00
 isfinite(x::Real) = decompose(x)[3] != 0
 isfinite(x::Integer) = true
 
+"""
+    isinf(f) -> Bool
+
+Test whether a number is infinite.
+"""
 isinf(x::Real) = !isnan(x) & !isfinite(x)
 
 ## hashing small, built-in numeric types ##
@@ -720,9 +739,18 @@ exponent_one(::Type{Float16}) =     0x3c00
 exponent_half(::Type{Float16}) =    0x3800
 significand_mask(::Type{Float16}) = 0x03ff
 
+# integer size of float
+fpinttype(::Type{Float64}) = UInt64
+fpinttype(::Type{Float32}) = UInt32
+fpinttype(::Type{Float16}) = UInt16
+
 @pure significand_bits{T<:AbstractFloat}(::Type{T}) = trailing_ones(significand_mask(T))
 @pure exponent_bits{T<:AbstractFloat}(::Type{T}) = sizeof(T)*8 - significand_bits(T) - 1
 @pure exponent_bias{T<:AbstractFloat}(::Type{T}) = Int(exponent_one(T) >> significand_bits(T))
+# maximum float exponent
+@pure exponent_max{T<:AbstractFloat}(::Type{T}) = Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T)
+# maximum float exponent without bias
+@pure exponent_raw_max{T<:AbstractFloat}(::Type{T}) = Int(exponent_mask(T) >> significand_bits(T))
 
 ## Array operations on floating point numbers ##
 
@@ -735,7 +763,7 @@ function float{T}(A::AbstractArray{T})
     convert(AbstractArray{typeof(float(zero(T)))}, A)
 end
 
-for fn in (:float,:big)
+for fn in (:float,)
     @eval begin
         $fn(r::StepRange) = $fn(r.start):$fn(r.step):$fn(last(r))
         $fn(r::UnitRange) = $fn(r.start):$fn(last(r))
@@ -748,5 +776,13 @@ for fn in (:float,:big)
     end
 end
 
-big{T<:AbstractFloat,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigFloat,N}, x)
-big{T<:Integer,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigInt,N}, x)
+# big, broadcast over arrays
+# TODO: do the definitions below primarily pertaining to integers belong in float.jl?
+function big end # no prior definitions of big in sysimg.jl, necessitating this
+broadcast(::typeof(big), r::UnitRange) = big(r.start):big(last(r))
+broadcast(::typeof(big), r::StepRange) = big(r.start):big(r.step):big(last(r))
+broadcast(::typeof(big), r::FloatRange) = FloatRange(big(r.start), big(r.step), r.len, big(r.divisor))
+function broadcast(::typeof(big), r::LinSpace)
+    big(r.len) == r.len || throw(ArgumentError(string(r, ": too long for ", big)))
+    LinSpace(big(r.start), big(r.stop), big(r.len), big(r.divisor))
+end

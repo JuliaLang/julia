@@ -249,11 +249,11 @@ end
 
 const hasha_seed = UInt === UInt64 ? 0x6d35bb51952d5539 : 0x952d5539
 function hash(a::Associative, h::UInt)
-    h = hash(hasha_seed, h)
+    hv = hasha_seed
     for (k,v) in a
-        h ⊻= hash(k, hash(v))
+        hv ⊻= hash(k, hash(v))
     end
-    return h
+    hash(hv, h)
 end
 
 function getindex(t::Associative, key)
@@ -275,6 +275,15 @@ push!(t::Associative, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q
 
 # hashing objects by identity
 
+"""
+    ObjectIdDict([itr])
+
+`ObjectIdDict()` constructs a hash table where the keys are (always)
+object identities.  Unlike `Dict` it is not parameterized on its key
+and value type and thus its `eltype` is always `Pair{Any,Any}`.
+
+See [`Dict`](@ref) for further help.
+"""
 type ObjectIdDict <: Associative{Any,Any}
     ht::Vector{Any}
     ndel::Int

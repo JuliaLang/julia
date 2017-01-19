@@ -75,6 +75,120 @@ while !done(c,s)
 end
 @test res == Int[1:10...]
 
+# Tests for channels bound to tasks.
+for N in [0,10]
+    # Normal exit of task
+    c=Channel(N)
+    bind(c, @schedule (yield();nothing))
+    @test_throws InvalidStateException take!(c)
+    @test !isopen(c)
+
+    # Error exception in task
+    c=Channel(N)
+    bind(c, @schedule (yield();error("foo")))
+    @test_throws ErrorException take!(c)
+    @test !isopen(c)
+
+    # Multiple channels closed by the same bound task
+    cs = [Channel(N) for i in 1:5]
+    tf2 = () -> begin
+        if N > 0
+            foreach(c->assert(take!(c)==2), cs)
+        end
+        yield()
+        error("foo")
+    end
+    task = Task(tf2)
+    foreach(c->bind(c, task), cs)
+    schedule(task)
+
+    if N > 0
+        for i in 1:5
+            @test put!(cs[i], 2) == 2
+        end
+    end
+    for i in 1:5
+        while (isopen(cs[i])); yield(); end
+        @test_throws ErrorException wait(cs[i])
+        @test_throws ErrorException take!(cs[i])
+        @test_throws ErrorException put!(cs[i], 1)
+        @test_throws ErrorException fetch(cs[i])
+    end
+
+    # Multiple tasks, first one to terminate closes the channel
+    nth = rand(1:5)
+    ref = Ref(0)
+    cond = Condition()
+    tf3(i) = begin
+        if i == nth
+            ref[] = i
+        else
+            sleep(2.0)
+        end
+    end
+
+    tasks = [Task(()->tf3(i)) for i in 1:5]
+    c = Channel(N)
+    foreach(t->bind(c,t), tasks)
+    foreach(schedule, tasks)
+    @test_throws InvalidStateException wait(c)
+    @test !isopen(c)
+    @test ref[] == nth
+
+    # channeled_tasks
+    for T in [Any, Int]
+        chnls, tasks = Base.channeled_tasks(2, (c1,c2)->(assert(take!(c1)==1); put!(c2,2)); ctypes=[T,T], csizes=[N,N])
+        put!(chnls[1], 1)
+        @test take!(chnls[2]) == 2
+        @test_throws InvalidStateException wait(chnls[1])
+        @test_throws InvalidStateException wait(chnls[2])
+        @test istaskdone(tasks[1])
+        @test !isopen(chnls[1])
+        @test !isopen(chnls[2])
+
+        f=Future()
+        tf4 = (c1,c2) -> begin
+            assert(take!(c1)==1)
+            wait(f)
+        end
+
+        tf5 = (c1,c2) -> begin
+            put!(c2,2)
+            wait(f)
+        end
+
+        chnls, tasks = Base.channeled_tasks(2, tf4, tf5; ctypes=[T,T], csizes=[N,N])
+        put!(chnls[1], 1)
+        @test take!(chnls[2]) == 2
+        yield()
+        put!(f, 1)
+
+        @test_throws InvalidStateException wait(chnls[1])
+        @test_throws InvalidStateException wait(chnls[2])
+        @test istaskdone(tasks[1])
+        @test istaskdone(tasks[2])
+        @test !isopen(chnls[1])
+        @test !isopen(chnls[2])
+    end
+
+    # channel
+    tf6 = c -> begin
+        assert(take!(c)==2)
+        error("foo")
+    end
+
+    for T in [Any, Int]
+        taskref = Ref{Task}()
+        chnl = Channel(tf6, ctype=T, csize=N, taskref=taskref)
+        put!(chnl, 2)
+        yield()
+        @test_throws ErrorException wait(chnl)
+        @test istaskdone(taskref[])
+        @test !isopen(chnl)
+        @test_throws ErrorException take!(chnl)
+    end
+end
+
 
 # Testing timedwait on multiple channels
 @sync begin
@@ -92,7 +206,7 @@ end
     @async begin sleep(2.0); put!(rr3, :ok) end
 
     tic()
-    timedwait(callback, 1.0)
+    timedwait(callback, Dates.Second(1))
     et=toq()
     # assuming that 0.5 seconds is a good enough buffer on a typical modern CPU
     try

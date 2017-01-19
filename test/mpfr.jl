@@ -756,7 +756,7 @@ tol = 1e-12
 a = parse(BigFloat,"12.34567890121")
 b = parse(BigFloat,"12.34567890122")
 
-@test_approx_eq_eps a+1e-11 b tol
+@test a+1e-11 ≈ b atol=tol
 @test !(b == a)
 @test b > a
 @test b >= a
@@ -765,15 +765,15 @@ b = parse(BigFloat,"12.34567890122")
 
 c = parse(BigFloat,"24.69135780242")
 @test typeof(a * 2) == BigFloat
-@test_approx_eq_eps a*2 c tol
-@test_approx_eq_eps (c-a) a tol
+@test a*2 ≈ c atol=tol
+@test (c-a) ≈ a atol=tol
 
 
 d = parse(BigFloat,"-24.69135780242")
 @test typeof(d) == BigFloat
-@test_approx_eq_eps d+c 0 tol
+@test d+c ≈ 0 atol=tol
 
-@test_approx_eq_eps (BigFloat(3)/BigFloat(2)) BigFloat(1.5) tol
+@test (BigFloat(3)/BigFloat(2)) ≈ BigFloat(1.5) atol=tol
 
 @test typeof(BigFloat(typemax(Int8))) == BigFloat
 @test typeof(BigFloat(typemax(Int16))) == BigFloat
@@ -802,29 +802,29 @@ g = parse(BigFloat,"1234567891.123")
 
 tol = 1e-3
 
-@test_approx_eq_eps f+Int8(1) g tol
-@test_approx_eq_eps f+Int16(1) g tol
-@test_approx_eq_eps f+Int32(1) g tol
-@test_approx_eq_eps f+Int64(1) g tol
-@test_approx_eq_eps f+Int128(1) g tol
+@test f+Int8(1) ≈ g atol=tol
+@test f+Int16(1) ≈ g atol=tol
+@test f+Int32(1) ≈ g atol=tol
+@test f+Int64(1) ≈ g atol=tol
+@test f+Int128(1) ≈ g atol=tol
 
-@test_approx_eq_eps f+true g tol
-@test_approx_eq_eps f+UInt8(1) g tol
-@test_approx_eq_eps f+UInt16(1) g tol
-@test_approx_eq_eps f+UInt32(1) g tol
-@test_approx_eq_eps f+UInt64(1) g tol
-@test_approx_eq_eps f+UInt128(1) g tol
+@test f+true ≈ g atol=tol
+@test f+UInt8(1) ≈ g atol=tol
+@test f+UInt16(1) ≈ g atol=tol
+@test f+UInt32(1) ≈ g atol=tol
+@test f+UInt64(1) ≈ g atol=tol
+@test f+UInt128(1) ≈ g atol=tol
 
-@test_approx_eq_eps f+BigInt(1) g tol
+@test f+BigInt(1) ≈ g atol=tol
 
-@test_approx_eq_eps f+1f0 g tol
-@test_approx_eq_eps f+1e0 g tol
+@test f+1f0 ≈ g atol=tol
+@test f+1e0 ≈ g atol=tol
 
-@test_approx_eq_eps f+BigFloat(1) g tol
+@test f+BigFloat(1) ≈ g atol=tol
 
-@test_approx_eq_eps f+(1//1) g tol
+@test f+(1//1) ≈ g atol=tol
 
-@test_approx_eq_eps f+one(Rational{BigInt}) g tol
+@test f+one(Rational{BigInt}) ≈ g atol=tol
 
 # issue #5963
 @test typemax(Int128) == convert(BigFloat, typemax(Int128))
@@ -873,3 +873,24 @@ let b = IOBuffer()
 end
 
 @test isnan(sqrt(BigFloat(NaN)))
+
+# PR 17217 -- BigFloat constructors with given precision and rounding mode
+# test constructors and `big` with additional precision and rounding mode:
+for prec in (10, 100, 1000)
+    for val in ("3.1", pi, "-1.3", 3.1)
+        let
+            a = BigFloat(val)
+            b = BigFloat(val, prec)
+            c = BigFloat(val, RoundUp)
+            d = BigFloat(val, prec, RoundDown)
+            e = BigFloat(val, prec, RoundUp)
+
+            @test precision(a) == precision(BigFloat)
+            @test precision(b) == prec
+            @test precision(c) == precision(BigFloat)
+            @test precision(d) == prec
+            @test precision(e) == prec
+            (val != 3.1) && @test e > d     # rounding has no effect when constructing from Float64
+        end
+    end
+end

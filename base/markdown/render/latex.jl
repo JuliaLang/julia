@@ -41,7 +41,7 @@ end
 
 function latexinline(io::IO, code::Code)
     wrapinline(io, "texttt") do
-        print(io, code.code)
+        print(io, latexesc(code.code))
     end
 end
 
@@ -49,6 +49,7 @@ function latex(io::IO, md::Paragraph)
     for md in md.content
         latexinline(io, md)
     end
+    println(io)
     println(io)
 end
 

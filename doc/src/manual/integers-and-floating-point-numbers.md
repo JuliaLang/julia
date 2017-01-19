@@ -70,7 +70,7 @@ Int64
 ```
 
 The Julia internal variable [`Sys.WORD_SIZE`](@ref) indicates whether the target system is 32-bit
-or 64-bit.:
+or 64-bit:
 
 ```julia
 # 32-bit system:
@@ -83,7 +83,7 @@ julia> Sys.WORD_SIZE
 ```
 
 Julia also defines the types `Int` and `UInt`, which are aliases for the system's signed and unsigned
-native integer types respectively.:
+native integer types respectively:
 
 ```julia
 # 32-bit system:

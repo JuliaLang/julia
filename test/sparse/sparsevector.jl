@@ -441,8 +441,7 @@ end
 
 # Test that concatenations of combinations of sparse vectors with various other
 # matrix/vector types yield sparse arrays
-let
-    N = 4
+let N = 4
     spvec = spzeros(N)
     spmat = spzeros(N, 1)
     densevec = ones(N)
@@ -582,13 +581,13 @@ spv_x2 = SparseVector(8, [1, 2, 6, 7], [3.25, 4.0, -5.5, -6.0])
 
 ### Arithmetic operations
 
-let x = spv_x1, x2 = x2 = spv_x2
+let x = spv_x1, x2 = spv_x2
     # negate
     @test exact_equal(-x, SparseVector(8, [2, 5, 6], [-1.25, 0.75, -3.5]))
 
     # abs and abs2
     @test exact_equal(abs.(x), SparseVector(8, [2, 5, 6], abs.([1.25, -0.75, 3.5])))
-    @test exact_equal(abs2(x), SparseVector(8, [2, 5, 6], abs2.([1.25, -0.75, 3.5])))
+    @test exact_equal(abs2.(x), SparseVector(8, [2, 5, 6], abs2.([1.25, -0.75, 3.5])))
 
     # plus and minus
     xa = SparseVector(8, [1,2,5,6,7], [3.25,5.25,-0.75,-2.0,-6.0])
@@ -609,9 +608,7 @@ let x = spv_x1, x2 = x2 = spv_x2
 
     # multiplies
     xm = SparseVector(8, [2, 6], [5.0, -19.25])
-    let y=x # workaround for broadcast not preserving sparsity in general
-        @test exact_equal(x .* y, abs2(x))
-    end
+    @test exact_equal(x .* x, abs2.(x))
     @test exact_equal(x .* x2, xm)
     @test exact_equal(x2 .* x, xm)
 
@@ -619,11 +616,11 @@ let x = spv_x1, x2 = x2 = spv_x2
     @test x .* Array(x2) == Array(xm)
 
     # max & min
-    @test exact_equal(max(x, x), x)
-    @test exact_equal(min(x, x), x)
-    @test exact_equal(max(x, x2),
+    @test exact_equal(max.(x, x), x)
+    @test exact_equal(min.(x, x), x)
+    @test exact_equal(max.(x, x2),
         SparseVector(8, Int[1, 2, 6], Float64[3.25, 4.0, 3.5]))
-    @test exact_equal(min(x, x2),
+    @test exact_equal(min.(x, x2),
         SparseVector(8, Int[2, 5, 6, 7], Float64[1.25, -0.75, -5.5, -6.0]))
 end
 
@@ -631,11 +628,11 @@ end
 
 let x = spv_x1, x2 = spv_x2
     # complex
-    @test exact_equal(complex(x, x),
+    @test exact_equal(complex.(x, x),
         SparseVector(8, [2,5,6], [1.25+1.25im, -0.75-0.75im, 3.5+3.5im]))
-    @test exact_equal(complex(x, x2),
+    @test exact_equal(complex.(x, x2),
         SparseVector(8, [1,2,5,6,7], [3.25im, 1.25+4.0im, -0.75+0.0im, 3.5-5.5im, -6.0im]))
-    @test exact_equal(complex(x2, x),
+    @test exact_equal(complex.(x2, x),
         SparseVector(8, [1,2,5,6,7], [3.25+0.0im, 4.0+1.25im, -0.75im, -5.5+3.5im, -6.0+0.0im]))
 
     # real & imag
@@ -643,7 +640,7 @@ let x = spv_x1, x2 = spv_x2
     @test real(x) === x
     @test exact_equal(imag(x), spzeros(Float64, length(x)))
 
-    xcp = complex(x, x2)
+    xcp = complex.(x, x2)
     @test exact_equal(real(xcp), x)
     @test exact_equal(imag(xcp), x2)
 end
@@ -790,8 +787,8 @@ let x = sprand(16, 0.5), x2 = sprand(16, 0.4)
     end
 end
 
-let x = complex(sprand(32, 0.6), sprand(32, 0.6)),
-    y = complex(sprand(32, 0.6), sprand(32, 0.6))
+let x = complex.(sprand(32, 0.6), sprand(32, 0.6)),
+    y = complex.(sprand(32, 0.6), sprand(32, 0.6))
     xf = Array(x)::Vector{Complex128}
     yf = Array(y)::Vector{Complex128}
     @test dot(x, x) ≈ dot(xf, xf)
@@ -859,9 +856,9 @@ let A = sprandn(16, 9, 0.5), x = sprand(16, 0.7)
     @test y ≈ At_mul_B(Af, xf)
 end
 
-let A = complex(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
-    x = complex(sprandn(8, 0.6), sprandn(8, 0.6)),
-    x2 = complex(sprandn(7, 0.75), sprandn(7, 0.75))
+let A = complex.(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
+    x = complex.(sprandn(8, 0.6), sprandn(8, 0.6)),
+    x2 = complex.(sprandn(7, 0.75), sprandn(7, 0.75))
     Af = Array(A)
     xf = Array(x)
     x2f = Array(x2)
@@ -889,9 +886,9 @@ let A = sprandn(9, 16, 0.5), x = sprand(16, 0.7), x2 = sprand(9, 0.7)
     @test Array(y) ≈ Af'x2f
 end
 
-let A = complex(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
-    x = complex(sprandn(8, 0.6), sprandn(8, 0.6)),
-    x2 = complex(sprandn(7, 0.75), sprandn(7, 0.75))
+let A = complex.(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
+    x = complex.(sprandn(8, 0.6), sprandn(8, 0.6)),
+    x2 = complex.(sprandn(7, 0.75), sprandn(7, 0.75))
     Af = Array(A)
     xf = Array(x)
     x2f = Array(x2)
@@ -912,17 +909,17 @@ end
 # left-division operations involving triangular matrices and sparse vectors (#14005)
 let m = 10
     sparsefloatvecs = SparseVector[sprand(m, 0.4) for k in 1:3]
-    sparseintvecs = SparseVector[SparseVector(m, sprvec.nzind, round(Int, sprvec.nzval*10)) for sprvec in sparsefloatvecs]
-    sparsecomplexvecs = SparseVector[SparseVector(m, sprvec.nzind, complex(sprvec.nzval, sprvec.nzval)) for sprvec in sparsefloatvecs]
+    sparseintvecs = SparseVector[SparseVector(m, sprvec.nzind, round.(Int, sprvec.nzval*10)) for sprvec in sparsefloatvecs]
+    sparsecomplexvecs = SparseVector[SparseVector(m, sprvec.nzind, complex.(sprvec.nzval, sprvec.nzval)) for sprvec in sparsefloatvecs]
 
     sprmat = sprand(m, m, 0.2)
     sparsefloatmat = speye(m) + sprmat/(2m)
-    sparsecomplexmat = speye(m) + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, complex(sprmat.nzval, sprmat.nzval)/(4m))
-    sparseintmat = speye(Int, m)*10m + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, round(Int, sprmat.nzval*10))
+    sparsecomplexmat = speye(m) + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, complex.(sprmat.nzval, sprmat.nzval)/(4m))
+    sparseintmat = speye(Int, m)*10m + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, round.(Int, sprmat.nzval*10))
 
     denseintmat = eye(Int, m)*10m + rand(1:m, m, m)
     densefloatmat = eye(m) + randn(m, m)/(2m)
-    densecomplexmat = eye(m) + complex(randn(m, m), randn(m, m))/(4m)
+    densecomplexmat = eye(m) + complex.(randn(m, m), randn(m, m))/(4m)
 
     inttypes = (Int32, Int64, BigInt)
     floattypes = (Float32, Float64, BigFloat)
@@ -969,8 +966,7 @@ let m = 10
     end
 end
 # The preceding tests miss the edge case where the sparse vector is empty (#16716)
-let
-    origmat = [-1.5 -0.7; 0.0 1.0]
+let origmat = [-1.5 -0.7; 0.0 1.0]
     transmat = transpose(origmat)
     utmat = UpperTriangular(origmat)
     ltmat = LowerTriangular(transmat)
@@ -1017,9 +1013,9 @@ let testdims = (10, 20, 30), nzprob = 0.4, targetnumposzeros = 5, targetnumnegze
         vposzeros = setindex!(copy(v), 2, poszerosinds)
         vnegzeros = setindex!(copy(v), -2, negzerosinds)
         vbothsigns = setindex!(copy(vposzeros), -2, negzerosinds)
-        map!(x -> x == 2 ? 0.0 : x, vposzeros.nzval)
-        map!(x -> x == -2 ? -0.0 : x, vnegzeros.nzval)
-        map!(x -> x == 2 ? 0.0 : x == -2 ? -0.0 : x, vbothsigns.nzval)
+        map!(x -> x == 2 ? 0.0 : x, vposzeros.nzval, vposzeros.nzval)
+        map!(x -> x == -2 ? -0.0 : x, vnegzeros.nzval, vnegzeros.nzval)
+        map!(x -> x == 2 ? 0.0 : x == -2 ? -0.0 : x, vbothsigns.nzval, vbothsigns.nzval)
         for vwithzeros in (vposzeros, vnegzeros, vbothsigns)
             # Basic functionality / dropzeros!
             @test dropzeros!(copy(vwithzeros)) == v
@@ -1041,7 +1037,7 @@ let testdims = (10, 20, 30), nzprob = 0.4, targetnumposzeros = 5, targetnumnegze
     @test exact_equal(xdrop, SparseVector(7, [1, 3, 5, 7], [3, -1., -2., 3.]))
 end
 
-# It's tempting to share data between a SparseVector and a SparseArrays,
+# It's tempting to share data between a SparseVector and a SparseMatrix,
 # but if that's done, then modifications to one or the other will cause
 # an inconsistent state:
 sv = sparse(1:10)

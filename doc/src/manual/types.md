@@ -542,16 +542,9 @@ Point{AbstractString}
 
 The type `Point{Float64}` is a point whose coordinates are 64-bit floating-point values, while
 the type `Point{AbstractString}` is a "point" whose "coordinates" are string objects (see [Strings](@ref)).
-However, `Point` itself is also a valid type object:
 
-```julia
-julia> Point
-Point{T}
-```
-
-Here the `T` is the dummy type symbol used in the original declaration of `Point`. What does
-`Point` by itself mean? It is a type that contains all the specific instances `Point{Float64}`,
-`Point{AbstractString}`, etc.:
+`Point` itself is also a valid type object, containing all instances `Point{Float64}`, `Point{AbstractString}`,
+etc. as subtypes:
 
 ```julia
 julia> Point{Float64} <: Point
@@ -973,6 +966,42 @@ julia> Ptr{Int64} <: Ptr
 true
 ```
 
+## UnionAll Types
+
+We have said that a parametric type like `Ptr` acts as a supertype of all its instances
+(`Ptr{Int64}` etc.). How does this work? `Ptr` itself cannot be a normal data type, since without
+knowing the type of the referenced data the type clearly cannot be used for memory operations.
+The answer is that `Ptr` (or other parametric type like `Array`) is a different kind of type called a
+`UnionAll` type. Such a type expresses the *iterated union* of types for all values of some parameter.
+
+`UnionAll` types are usually written using the keyword `where`. For example `Ptr` could be more
+accurately written as `Ptr{T} where T`, meaning all values whose type is `Ptr{T}` for some value
+of `T`. In this context, the parameter `T` is also often called a "type variable" since it is
+like a variable that ranges over types.
+Each `where` introduces a single type variable, so these expressions are nested for types with
+multiple parameters, for example `Array{T,N} where N where T`.
+
+The type application syntax `A{B,C}` requires `A` to be a `UnionAll` type, and first substitutes `B`
+for the outermost type variable in `A`.
+The result is expected to be another `UnionAll` type, into which `C` is then substituted.
+So `A{B,C}` is equivalent to `A{B}{C}`.
+This explains why it is possible to partially instantiate a type, as in `Array{Float64}`: the first
+parameter value has been fixed, but the second still ranges over all possible values.
+Using explicit `where` syntax, any subset of parameters can be fixed. For example, the type of all
+1-dimensional arrays can be written as `Array{T,1} where T`.
+
+Type variables can be restricted with subtype relations.
+`Array{T} where T<:Integer` refers to all arrays whose element type is some kind of `Integer`.
+Type variables can have both lower and upper bounds.
+`Array{T} where Int<:T<:Number` refers to all arrays of `Number`s that are able to contain `Int`s
+(since `T` must be at least as big as `Int`).
+The syntax `where T>:Int` also works to specify only the lower bound of a type variable.
+
+Since `where` expressions nest, type variable bounds can refer to outer type variables.
+For example `Tuple{T,Array{S}} where S<:AbstractArray{T} where T<:Real` refers to 2-tuples whose first
+element is some `Real`, and whose second element is an `Array` of any kind of array whose element type
+contains the type of the first tuple element.
+
 ## Type Aliases
 
 Sometimes it is convenient to introduce a new name for an already expressible type. For such occasions,
@@ -1003,18 +1032,7 @@ Of course, this depends on what `Int` is aliased to -- but that is predefined to
 type -- either `Int32` or `Int64`.
 
 For parametric types, `typealias` can be convenient for providing names for cases where some of
-the parameter choices are fixed. Julia's arrays have type `Array{T,N}` where `T` is the element
-type and `N` is the number of array dimensions. For convenience, writing `Array{Float64}` allows
-one to specify the element type without specifying the dimension:
-
-```julia
-julia> Array{Float64,1} <: Array{Float64} <: Array
-true
-```
-
-However, there is no way to equally simply restrict just the dimension but not the element type.
-Yet, one often needs to ensure an object is a vector or a matrix (imposing restrictions on the
-number of dimensions). For that reason, the following type aliases are provided:
+the parameter choices are fixed:
 
 ```julia
 typealias Vector{T} Array{T,1}
@@ -1027,18 +1045,6 @@ dimensions -- is 1, regardless of what the element type is. In languages where p
 must always be specified in full, this is not especially helpful, but in Julia, this allows one
 to write just `Matrix` for the abstract type including all two-dimensional dense arrays of any
 element type.
-
-This declaration of `Vector` creates a subtype relation `Vector{Int} <: Vector`.  However, it
-is not always the case that a parametric `typealias` statement creates such a relation; for example,
-the statement:
-
-```julia
-typealias AA{T} Array{Array{T,1},1}
-```
-
-does not create the relation `AA{Int} <: AA`.  The reason is that `Array{Array{T,1},1}` is not
-an abstract type at all; in fact, it is a concrete type describing a 1-dimensional array in which
-each entry is an object of type `Array{T,1}` for some value of `T`.
 
 ## Operations on Types
 
@@ -1062,7 +1068,7 @@ of its argument. Since, as noted above, types are objects, they also have types,
 what their types are:
 
 ```julia
-julia> typeof(Rational)
+julia> typeof(Rational{Int})
 DataType
 
 julia> typeof(Union{Real,Float64,Rational})
@@ -1236,17 +1242,23 @@ about the proper (and improper) uses of `Val`, please read the more extensive di
 ## [Nullable Types: Representing Missing Values](@id man-nullable-types)
 
 In many settings, you need to interact with a value of type `T` that may or may not exist. To
-handle these settings, Julia provides a parametric type called `Nullable{T}`, which can be thought
+handle these settings, Julia provides a parametric type called [`Nullable{T}`](@ref), which can be thought
 of as a specialized container type that can contain either zero or one values. `Nullable{T}` provides
 a minimal interface designed to ensure that interactions with missing values are safe. At present,
-the interface consists of four possible interactions:
+the interface consists of several possible interactions:
 
-  * Construct a [`Nullable`](@ref) object.
-  * Check if a [`Nullable`](@ref) object has a missing value.
-  * Access the value of a [`Nullable`](@ref) object with a guarantee that a [`NullException`](@ref)
+  * Construct a `Nullable` object.
+  * Check if a `Nullable` object has a missing value.
+  * Access the value of a `Nullable` object with a guarantee that a [`NullException`](@ref)
     will be thrown if the object's value is missing.
-  * Access the value of a [`Nullable`](@ref) object with a guarantee that a default value of type
+  * Access the value of a `Nullable` object with a guarantee that a default value of type
     `T` will be returned if the object's value is missing.
+  * Perform an operation on the value (if it exists) of a `Nullable` object, getting a
+    `Nullable` result. The result will be missing if the original value was missing.
+  * Performing a test on the value (if it exists) of a `Nullable`
+    object, getting a result that is missing if either the `Nullable`
+    itself was missing, or the test failed.
+  * Perform general operations on single `Nullable` objects, propagating the missing data.
 
 ### Constructing [`Nullable`](@ref) objects
 
@@ -1277,13 +1289,13 @@ julia> x3 = Nullable([1, 2, 3])
 Nullable{Array{Int64,1}}([1,2,3])
 ```
 
-Note the core distinction between these two ways of constructing a [`Nullable`](@ref) object:
+Note the core distinction between these two ways of constructing a `Nullable` object:
 in one style, you provide a type, `T`, as a function parameter; in the other style, you provide
 a single value of type `T` as an argument.
 
-### Checking if a [`Nullable`](@ref) object has a value
+### Checking if a `Nullable` object has a value
 
-You can check if a [`Nullable`](@ref) object has any value using [`isnull()`](@ref):
+You can check if a `Nullable` object has any value using [`isnull()`](@ref):
 
 ```julia
 julia> isnull(Nullable{Float64}())
@@ -1293,9 +1305,9 @@ julia> isnull(Nullable(0.0))
 false
 ```
 
-### Safely accessing the value of a [`Nullable`](@ref) object
+### Safely accessing the value of a `Nullable` object
 
-You can safely access the value of a [`Nullable`](@ref) object using [`get()`](@ref):
+You can safely access the value of a `Nullable` object using [`get()`](@ref):
 
 ```julia
 julia> get(Nullable{Float64}())
@@ -1308,12 +1320,12 @@ julia> get(Nullable(1.0))
 ```
 
 If the value is not present, as it would be for `Nullable{Float64}`, a [`NullException`](@ref)
-error will be thrown. The error-throwing nature of the [`get()`](@ref) function ensures that any
+error will be thrown. The error-throwing nature of the `get()` function ensures that any
 attempt to access a missing value immediately fails.
 
-In cases for which a reasonable default value exists that could be used when a [`Nullable`](@ref)
+In cases for which a reasonable default value exists that could be used when a `Nullable`
 object's value turns out to be missing, you can provide this default value as a second argument
-to [`get()`](@ref):
+to `get()`:
 
 ```julia
 julia> get(Nullable{Float64}(), 0.0)
@@ -1324,7 +1336,94 @@ julia> get(Nullable(1.0), 0.0)
 ```
 
 !!! tip
-    Make sure the type of the default value passed to [`get()`](@ref) and that of the [`Nullable`](@ref)
+    Make sure the type of the default value passed to `get()` and that of the `Nullable`
     object match to avoid type instability, which could hurt performance. Use [`convert()`](@ref)
     manually if needed.
 
+### Performing operations on `Nullable` objects
+
+`Nullable` objects represent values that are possibly missing, and it
+is possible to write all code using these objects by first testing to see if
+the value is missing with [`isnull()`](@ref), and then doing an appropriate
+action. However, there are some common use cases where the code could be more
+concise or clear by using a higher-order function.
+
+The [`map`](@ref) function takes as arguments a function `f` and a `Nullable` value
+`x`. It produces a `Nullable`:
+
+ - If `x` is a missing value, then it produces a missing value;
+ - If `x` has a value, then it produces a `Nullable` containing
+   `f(get(x))` as value.
+
+This is useful for performing simple operations on values that might be missing
+if the desired behaviour is to simply propagate the missing values forward.
+
+The [`filter`](@ref) function takes as arguments a predicate function `p`
+(that is, a function returning a boolean) and a `Nullable` value `x`.
+It produces a `Nullable` value:
+
+ - If `x` is a missing value, then it produces a missing value;
+ - If `p(get(x))` is true, then it produces the original value `x`;
+ - If `p(get(x))` is false, then it produces a missing value.
+
+In this way, `filter` can be thought of as selecting only allowable
+values, and converting non-allowable values to missing values.
+
+While `map` and `filter` are useful in specific cases, by far the most useful
+higher-order function is [`broadcast`](@ref), which can handle a wide variety of cases,
+including making existing operations work and propagate `Nullable`s. An example
+will motivate the need for `broadcast`. Suppose we have a function that computes the
+greater of two real roots of a quadratic equation, using the quadratic formula:
+
+```julia
+"""
+Compute the positive real root of ``ax^2 + bx + c = 0``.
+"""
+root(a::Real, b::Real, c::Real) = (-b + √(b^2 - 4a*c)) / 2a
+```
+
+We may verify that the result of `root(1, -9, 20)` is `5.0`, as we expect,
+since `5.0` is the greater of two real roots of the quadratic equation.
+
+Suppose now that we want to find the greatest real root of a quadratic
+equations where the coefficients might be missing values. Having missing values
+in datasets is a common occurrence in real-world data, and so it is important
+to be able to deal with them. But we cannot find the roots of an equation if we
+do not know all the coefficients. The best solution to this will depend on the
+particular use case; perhaps we should throw an error. However, for this
+example, we will assume that the best solution is to propagate the missing
+values forward; that is, if any input is missing, we simply produce a missing
+output.
+
+The `broadcast()` function makes this task easy; we can simply pass the
+`root` function we wrote to `broadcast`:
+
+```julia
+julia> broadcast(root, Nullable(1), Nullable(-9), Nullable(20))
+Nullable{Float64}(5.0)
+
+julia> broadcast(root, Nullable(1), Nullable{Int}(), Nullable{Int}())
+Nullable{Float64}()
+
+julia> broadcast(root, Nullable{Int}(), Nullable(-9), Nullable(20))
+Nullable{Float64}()
+```
+
+If one or more of the inputs is missing, then the output of
+`broadcast()` will be missing.
+
+There exists special syntactic sugar for the `broadcast()` function
+using a dot notation:
+
+```julia
+julia> root.(Nullable(1), Nullable(-9), Nullable(20))
+Nullable{Float64}(5.0)
+```
+
+In particular, the regular arithmetic operators can be `broadcast()`
+conveniently using `.`-prefixed operators:
+
+```julia
+julia> Nullable(2) ./ Nullable(3) .+ Nullable(1.0)
+Nullable{Float64}(1.66667)
+```

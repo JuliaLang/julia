@@ -26,10 +26,10 @@ for elty in (Float32, Float64, Complex64, Complex128)
             a = view(ainit, 1:n, 1:n)
         end
         # cond
-        @test_approx_eq_eps cond(a, 1) 4.837320054554436e+02 0.01
-        @test_approx_eq_eps cond(a, 2) 1.960057871514615e+02 0.01
-        @test_approx_eq_eps cond(a, Inf) 3.757017682707787e+02 0.01
-        @test_approx_eq_eps cond(a[:,1:5]) 10.233059337453463 0.01
+        @test cond(a,1) ≈ 4.837320054554436e+02 atol=0.01
+        @test cond(a,2) ≈ 1.960057871514615e+02 atol=0.01
+        @test cond(a,Inf) ≈ 3.757017682707787e+02 atol=0.01
+        @test cond(a[:,1:5]) ≈ 10.233059337453463 atol=0.01
         @test_throws ArgumentError cond(a,3)
     end
 end
@@ -42,14 +42,14 @@ breal = randn(n,2)/2
 bimg  = randn(n,2)/2
 
 for eltya in (Float32, Float64, Complex64, Complex128, Int)
-    ainit = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
-    ainit2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(a2real, a2img) : a2real)
+    ainit = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
+    ainit2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     ε = εa = eps(abs(float(one(eltya))))
 
     apd  = ainit'*ainit                 # symmetric positive-definite
     @test isposdef(apd,:U)
     for eltyb in (Float32, Float64, Complex64, Complex128, Int)
-        binit = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
+        binit = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
 
@@ -75,8 +75,8 @@ debug && println("Solve square general system of equations")
 debug && println("Test nullspace")
             a15null = nullspace(a[:,1:n1]')
             @test rank([a[:,1:n1] a15null]) == 10
-            @test_approx_eq_eps norm(a[:,1:n1]'a15null, Inf) zero(eltya) 300ε
-            @test_approx_eq_eps norm(a15null'a[:,1:n1], Inf) zero(eltya) 400ε
+            @test norm(a[:,1:n1]'a15null,Inf) ≈ zero(eltya) atol=300ε
+            @test norm(a15null'a[:,1:n1],Inf) ≈ zero(eltya) atol=400ε
             @test size(nullspace(b), 2) == 0
             @test nullspace(zeros(eltya,n)) == eye(eltya,1)
         end
@@ -176,8 +176,8 @@ for elty in (Int32, Int64, Float32, Float64, Complex64, Complex128)
         x = convert(Vector{elty}, [1:3;])
         g = ones(elty, 3)
     else
-        x = convert(Vector{elty}, complex([1:3;], [1:3;]))
-        g = convert(Vector{elty}, complex(ones(3), ones(3)))
+        x = convert(Vector{elty}, complex.([1:3;], [1:3;]))
+        g = convert(Vector{elty}, complex.(ones(3), ones(3)))
     end
     xsub = view(x, 1:size(x, 1))
     @test gradient(x) ≈ g
@@ -232,10 +232,10 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
 
     for i = 1:10
         xinit = elty <: Integer ? convert(Vector{elty}, rand(1:10, nnorm)) :
-                elty <: Complex ? convert(Vector{elty}, complex(randn(nnorm), randn(nnorm))) :
+                elty <: Complex ? convert(Vector{elty}, complex.(randn(nnorm), randn(nnorm))) :
                 convert(Vector{elty}, randn(nnorm))
         yinit = elty <: Integer ? convert(Vector{elty}, rand(1:10, nnorm)) :
-                elty <: Complex ? convert(Vector{elty}, complex(randn(nnorm), randn(nnorm))) :
+                elty <: Complex ? convert(Vector{elty}, complex.(randn(nnorm), randn(nnorm))) :
                 convert(Vector{elty}, randn(nnorm))
         α = elty <: Integer ? randn() :
             elty <: Complex ? convert(elty, complex(randn(),randn())) :
@@ -284,10 +284,10 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
 
     for i = 1:10
         Ainit = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) :
-                elty <: Complex ? convert(Matrix{elty}, complex(randn(mmat, nmat), randn(mmat, nmat))) :
+                elty <: Complex ? convert(Matrix{elty}, complex.(randn(mmat, nmat), randn(mmat, nmat))) :
                 convert(Matrix{elty}, randn(mmat, nmat))
         Binit = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) :
-                elty <: Complex ? convert(Matrix{elty}, complex(randn(mmat, nmat), randn(mmat, nmat))) :
+                elty <: Complex ? convert(Matrix{elty}, complex.(randn(mmat, nmat), randn(mmat, nmat))) :
                 convert(Matrix{elty}, randn(mmat, nmat))
         α = elty <: Integer ? randn() :
             elty <: Complex ? convert(elty, complex(randn(),randn())) :
@@ -392,7 +392,7 @@ let
 end
 
 # similar issue for Array{Real}
-@test Real[1 2] * Real[1.5; 2.0] == [5.5]
+@test Real[1 2] * Real[1.5; 2.0] == Real[5.5]
 
 # Matrix exponential
 for elty in (Float32, Float64, Complex64, Complex128)

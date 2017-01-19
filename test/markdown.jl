@@ -60,6 +60,10 @@ let text = "Foo ```bar` ``baz`` ```\n",
     @test text == Markdown.plain(md)
 end
 
+@test isempty(Markdown.parse("\r"))
+@test Markdown.parse("hello\r") == MD(Paragraph(["hello"]))
+@test Markdown.parse("hello\r*julia*") == MD(Paragraph(Any["hello ", Italic(Any["julia"])]))
+
 @test md"A footnote [^foo]." == MD(Paragraph(["A footnote ", Footnote("foo", nothing), "."]))
 
 @test md"[^foo]: footnote" == MD([Footnote("foo", Any[Paragraph(Any["footnote"])])])
@@ -176,7 +180,6 @@ let doc = Markdown.parse(
         ... another paragraph.
         """
     )
-
     @test length(doc.content) === 3
     @test isa(doc.content[1], Markdown.Paragraph)
     @test isa(doc.content[2], Markdown.List)
@@ -198,7 +201,6 @@ end
 @test md"Foo \[bar](baz)" == MD(Paragraph("Foo [bar](baz)"))
 
 # Basic plain (markdown) output
-
 @test md"foo" |> plain == "foo\n"
 @test md"foo *bar* baz" |> plain == "foo *bar* baz\n"
 @test md"# title" |> plain == "# title\n"
@@ -238,7 +240,6 @@ let doc = Markdown.parse(
 end
 
 # HTML output
-
 @test md"foo *bar* baz" |> html == "<p>foo <em>bar</em> baz</p>\n"
 @test md"something ***" |> html == "<p>something ***</p>\n"
 @test md"# h1## " |> html == "<h1>h1##</h1>\n"
@@ -289,10 +290,8 @@ Some **bolded**
 - list1
 - list2
 """
-@test latex(book) == "\\section{Title}\nSome discussion\n\\begin{quote}\nA quote\n\\end{quote}\n\\subsection{Section \\emph{important}}\nSome \\textbf{bolded}\n\\begin{itemize}\n\\item list1\n\n\\item list2\n\\end{itemize}\n"
-
+@test latex(book) == "\\section{Title}\nSome discussion\n\n\\begin{quote}\nA quote\n\n\\end{quote}\n\\subsection{Section \\emph{important}}\nSome \\textbf{bolded}\n\n\\begin{itemize}\n\\item list1\n\n\n\\item list2\n\n\\end{itemize}\n"
 # mime output
-
 let out =
     """
     # Title
@@ -334,15 +333,20 @@ let out =
     """
     \\section{Title}
     Some discussion
+
     \\begin{quote}
     A quote
+
     \\end{quote}
     \\subsection{Section \\emph{important}}
     Some \\textbf{bolded}
+
     \\begin{itemize}
     \\item list1
 
+
     \\item list2
+
     \\end{itemize}
     """
     @test sprint(io -> show(io, "text/latex", book)) == out
@@ -371,7 +375,6 @@ let out =
 end
 
 # rst rendering
-
 for (input, output) in (
         md"foo *bar* baz"     => "foo *bar* baz\n",
         md"something ***"     => "something ***\n",
@@ -399,7 +402,6 @@ for (input, output) in (
 end
 
 # Interpolation / Custom types
-
 type Reference
     ref
 end
@@ -486,7 +488,6 @@ let text =
 end
 
 # LaTeX extension
-
 let in_dollars =
     """
     We have \$x^2 < x\$ whenever:
@@ -528,8 +529,10 @@ let in_dollars =
     out_latex =
     """
     We have \$x^2 < x\$ whenever:
+
     \$\$|x| < 1\$\$
     etc.
+
     """,
     dollars   = Markdown.parse(in_dollars),
     backticks = Markdown.parse(in_backticks),
@@ -553,7 +556,6 @@ let in_dollars =
 end
 
 # Nested backticks for inline code and math.
-
 let t_1 = "`code` ``math`` ```code``` ````math```` `````code`````",
     t_2 = "`` `math` `` ``` `code` ``code`` ``` ```` `math` ``math`` ```math``` ````",
     t_3 = "`` ` `` ``` `` ` `` ` ` ```",
@@ -607,7 +609,6 @@ let t_1 = "`code` ``math`` ```code``` ````math```` `````code`````",
 end
 
 # Admonitions.
-
 let t_1 =
         """
         # Foo
@@ -685,7 +686,6 @@ let t_1 =
     @test isa(m_2.content[3].content[3], Markdown.Header{1})
 
     # Rendering Tests.
-
     let out = Markdown.plain(m_1),
         expected =
             """
@@ -744,6 +744,7 @@ let t_1 =
             \n\n
             \\end{quote}
             !!!
+
             """
         @test out == expected
     end
@@ -822,7 +823,6 @@ let t_1 =
 end
 
 # Nested Lists.
-
 let text =
         """
         1. A paragraph
@@ -876,7 +876,6 @@ let text =
     @test md.content[6].items[3][1].content[1] == "baz"
 
     # Rendering tests.
-
     let expected =
             """
             1. A paragraph with two lines.
@@ -977,7 +976,6 @@ let text =
 end
 
 # Ordered list starting number.
-
 let text =
         """
         42. foo
@@ -1026,17 +1024,23 @@ let text =
             \\begin{itemize}
             \\item[42. ] foo
 
+
             \\item[43. ] bar
+
             \\end{itemize}
             \\begin{itemize}
             \\item[1. ] foo
 
+
             \\item[2. ] bar
+
             \\end{itemize}
             \\begin{itemize}
             \\item foo
 
+
             \\item bar
+
             \\end{itemize}
             """
         @test expected == Markdown.latex(md)

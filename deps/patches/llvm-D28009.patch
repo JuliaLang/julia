@@ -1,0 +1,68 @@
+commit 57ab82784ddb8d21eb0041d52f8490d8fd404e29
+Author: Michael Kuperstein <mkuper@google.com>
+Date:   Wed Dec 21 17:34:21 2016 +0000
+
+    [ConstantFolding] Fix vector GEPs harder
+    
+    For vector GEPs, CastGEPIndices can end up in an infinite recursion, because
+    we compare the vector type to the scalar pointer type, find them different,
+    and then try to cast a type to itself.
+    
+    Differential Revision: https://reviews.llvm.org/D28009
+    
+    
+    git-svn-id: https://llvm.org/svn/llvm-project/llvm/trunk@290260 91177308-0d34-0410-b5e6-96231b3b80d8
+
+diff --git a/lib/Analysis/ConstantFolding.cpp b/lib/Analysis/ConstantFolding.cpp
+index cf0d5e4..9e521e1 100644
+--- a/lib/Analysis/ConstantFolding.cpp
++++ b/lib/Analysis/ConstantFolding.cpp
+@@ -742,13 +742,16 @@ Constant *CastGEPIndices(Type *SrcElemTy, ArrayRef<Constant *> Ops,
+     if ((i == 1 ||
+          !isa<StructType>(GetElementPtrInst::getIndexedType(
+              SrcElemTy, Ops.slice(1, i - 1)))) &&
+-        Ops[i]->getType() != (i == 1 ? IntPtrTy : IntPtrScalarTy)) {
++        Ops[i]->getType()->getScalarType() != IntPtrScalarTy) {
+       Any = true;
++      Type *NewType = Ops[i]->getType()->isVectorTy()
++                          ? IntPtrTy
++                          : IntPtrTy->getScalarType();
+       NewIdxs.push_back(ConstantExpr::getCast(CastInst::getCastOpcode(Ops[i],
+                                                                       true,
+-                                                                      IntPtrTy,
++                                                                      NewType,
+                                                                       true),
+-                                              Ops[i], IntPtrTy));
++                                              Ops[i], NewType));
+     } else
+       NewIdxs.push_back(Ops[i]);
+   }
+diff --git a/test/Analysis/ConstantFolding/vectorgep-crash.ll b/test/Analysis/ConstantFolding/vectorgep-crash.ll
+index bcc96b2..e7a5117 100644
+--- a/test/Analysis/ConstantFolding/vectorgep-crash.ll
++++ b/test/Analysis/ConstantFolding/vectorgep-crash.ll
+@@ -17,3 +17,24 @@ top:
+   %0 = bitcast <8 x double*> %VectorGep14 to <8 x i64*>
+   ret <8 x i64*> %0
+ }
++
++%struct.A = type { i32, %struct.B* }
++%struct.B = type { i64, %struct.C* }
++%struct.C = type { i64 }
++
++@G = internal global [65 x %struct.A] zeroinitializer, align 16
++; CHECK-LABEL: @test
++; CHECK: ret <16 x i32*> getelementptr ([65 x %struct.A], [65 x %struct.A]* @G, <16 x i64> zeroinitializer, <16 x i64> <i64 1, i64 2, i64 3, i64 4, i64 5, i64 6, i64 7, i64 8, i64 9, i64 10, i64 11, i64 12, i64 13, i64 14, i64 15, i64 16>, <16 x i32> zeroinitializer)
++define <16 x i32*> @test() {
++vector.body:
++  %VectorGep = getelementptr [65 x %struct.A], [65 x %struct.A]* @G, <16 x i64> zeroinitializer, <16 x i64> <i64 1, i64 2, i64 3, i64 4, i64 5, i64 6, i64 7, i64 8, i64 9, i64 10, i64 11, i64 12, i64 13, i64 14, i64 15, i64 16>, <16 x i32> zeroinitializer
++  ret <16 x i32*> %VectorGep
++}
++
++; CHECK-LABEL: @test2
++; CHECK: ret <16 x i32*> getelementptr ([65 x %struct.A], [65 x %struct.A]* @G, <16 x i64> zeroinitializer, <16 x i64> <i64 1, i64 2, i64 3, i64 4, i64 5, i64 6, i64 7, i64 8, i64 9, 
++define <16 x i32*> @test2() {
++vector.body:
++  %VectorGep = getelementptr [65 x %struct.A], [65 x %struct.A]* @G, <16 x i32> zeroinitializer, <16 x i64> <i64 1, i64 2, i64 3, i64 4, i64 5, i64 6, i64 7, i64 8, i64 9, i64 10, i64 11, i64 12, i64 13, i64 14, i64 15, i64 16>, <16 x i32> zeroinitializer
++  ret <16 x i32*> %VectorGep
++}

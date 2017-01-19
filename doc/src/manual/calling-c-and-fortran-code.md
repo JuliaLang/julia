@@ -900,5 +900,4 @@ For more details on how to pass callbacks to C libraries, see this [blog post](h
 
 ## C++
 
-Limited support for C++ is provided by the [Cpp](https://github.com/timholy/Cpp.jl), [Clang](https://github.com/ihnorton/Clang.jl),
-and [Cxx](https://github.com/Keno/Cxx.jl) packages.
+For direct C++ interfacing, see the [Cxx](https://github.com/Keno/Cxx.jl) package. For tools to create C++ bindings, see the [CxxWrap](https://github.com/JuliaInterop/CxxWrap.jl) package.

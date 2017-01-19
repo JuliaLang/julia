@@ -43,7 +43,7 @@ for elty in (Int, Rational{BigInt}, Float32, Float64, BigFloat, Complex{Float32}
     elseif elty <: Real
         A = convert(Matrix{elty}, randn(n,n)) + 10I
     else
-        A = convert(Matrix{elty}, complex(randn(n,n), randn(n,n)))
+        A = convert(Matrix{elty}, complex.(randn(n,n), randn(n,n)))
     end
 
     debug && println("element type: $elty")
@@ -107,17 +107,17 @@ y = linspace(50, 200, 100)
 # Anscombe's quartet (https://en.wikipedia.org/wiki/Anscombe%27s_quartet)
 x123 = [10.0; 8.0; 13.0; 9.0; 11.0; 14.0; 6.0; 4.0; 12.0; 7.0; 5.0]
 y1 = [8.04; 6.95; 7.58; 8.81; 8.33; 9.96; 7.24; 4.26; 10.84; 4.82; 5.68]
-@test_approx_eq_eps [linreg(x123, y1)...] [3.0, 0.5] 10e-5
+@test [linreg(x123,y1)...] ≈ [3.0,0.5] atol=15e-5
 
 y2 = [9.14; 8.14; 8.74; 8.77; 9.26; 8.10; 6.12; 3.10; 9.13; 7.26; 4.74]
-@test_approx_eq_eps [linreg(x123, y2)...] [3.0, 0.5] 10e-3
+@test [linreg(x123,y2)...] ≈ [3.0,0.5] atol=10e-3
 
 y3 = [7.46; 6.77; 12.74; 7.11; 7.81; 8.84; 6.08; 5.39; 8.15; 6.42; 5.73]
-@test_approx_eq_eps [linreg(x123, y3)...] [3.0, 0.5] 10e-3
+@test [linreg(x123,y3)...] ≈ [3.0,0.5] atol=10e-3
 
 x4 = [8.0; 8.0; 8.0; 8.0; 8.0; 8.0; 8.0; 19.0; 8.0; 8.0; 8.0]
 y4 = [6.58; 5.76; 7.71; 8.84; 8.47; 7.04; 5.25; 12.50; 5.56; 7.91; 6.89]
-@test_approx_eq_eps [linreg(x4, y4)...] [3.0, 0.5] 10e-3
+@test [linreg(x4,y4)...] ≈ [3.0,0.5] atol=10e-3
 
 # test diag
 let A = eye(4)
@@ -235,7 +235,7 @@ end
 @test !issymmetric(NaN)
 
 @test rank([1.0 0.0; 0.0 0.9],0.95) == 1
-@test qr(big([0 1; 0 0]))[2] == [0 1; 0 0]
+@test qr(big.([0 1; 0 0]))[2] == [0 1; 0 0]
 
 @test norm([2.4e-322, 4.4e-323]) ≈ 2.47e-322
 @test norm([2.4e-322, 4.4e-323], 3) ≈ 2.4e-322
@@ -301,3 +301,12 @@ end
 
 # Issue 17650
 @test [0.01311489462160816, Inf] ≈ [0.013114894621608135, Inf]
+
+# Issue 19035
+@test Base.LinAlg.promote_leaf_eltypes([1, 2, [3.0, 4.0]]) == Float64
+@test Base.LinAlg.promote_leaf_eltypes([[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]) == Complex128
+@test [1, 2, 3] ≈ [1, 2, 3]
+@test [[1, 2], [3, 4]] ≈ [[1, 2], [3, 4]]
+@test [[1, 2], [3, 4]] ≈ [[1.0-eps(), 2.0+eps()], [3.0+2eps(), 4.0-1e8eps()]]
+@test [[1, 2], [3, 4]] ≉ [[1.0-eps(), 2.0+eps()], [3.0+2eps(), 4.0-1e9eps()]]
+@test [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]] ≈ [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]

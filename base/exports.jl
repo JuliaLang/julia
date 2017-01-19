@@ -2,7 +2,6 @@
 
 export
 # Modules
-    Collections,
     FFTW,
     Meta,
     Operators,
@@ -60,6 +59,7 @@ export
     EachLine,
     Enum,
     Enumerate,
+    ExponentialBackOff,
     Factorization,
     FileMonitor,
     FloatRange,
@@ -89,7 +89,6 @@ export
     Regex,
     RegexMatch,
     RemoteChannel,
-    RepString,
     RevString,
     RoundFromZero,
     RoundDown,
@@ -99,6 +98,7 @@ export
     RoundNearestTiesUp,
     RoundToZero,
     RoundUp,
+    RowVector,
     AbstractSerializer,
     SerializationState,
     Set,
@@ -233,6 +233,7 @@ export
     ~,
     :,
     =>,
+    ∘,
     A_ldiv_B!,
     A_ldiv_Bc,
     A_ldiv_Bt,
@@ -359,8 +360,8 @@ export
     ispow2,
     isqrt,
     isreal,
-    isimag,
     issubnormal,
+    iszero,
     lcm,
     ldexp,
     leading_ones,
@@ -430,13 +431,14 @@ export
     ≉,
 
 # specfun
-    airy,
     airyai,
     airyaiprime,
     airybi,
     airybiprime,
-    airyprime,
-    airyx,
+    airyaix,
+    airyaiprimex,
+    airybix,
+    airybiprimex,
     besselh,
     besselhx,
     besseli,
@@ -462,7 +464,6 @@ export
     zeta,
 
 # arrays
-    bitbroadcast,
     broadcast!,
     broadcast,
     broadcast_getindex,
@@ -578,6 +579,7 @@ export
     sum!,
     sum,
     sum_kbn,
+    to_indices,
     vcat,
     vec,
     view,
@@ -779,6 +781,7 @@ export
     chomp,
     chop,
     chr2ind,
+    codeunit,
     dec,
     digits,
     digits!,
@@ -809,6 +812,7 @@ export
     isxdigit,
     join,
     lcfirst,
+    logging,
     lowercase,
     lpad,
     lstrip,
@@ -882,7 +886,6 @@ export
     median!,
     median,
     middle,
-    midpoints,
     quantile!,
     quantile,
     std,
@@ -926,9 +929,6 @@ export
     rfft,
     xcorr,
 
-# numerical integration
-    quadgk,
-
 # iteration
     done,
     next,
@@ -954,14 +954,12 @@ export
 
 # tasks and conditions
     Condition,
-    consume,
     current_task,
     islocked,
     istaskdone,
     istaskstarted,
     lock,
     notify,
-    produce,
     ReentrantLock,
     schedule,
     task_local_storage,
@@ -1308,10 +1306,11 @@ export
     @cmd,    # `commands`
 
     # notation for certain types
-    @b_str,  # byte vector
-    @r_str,  # regex
-    @s_str,  # regex substitution string
-    @v_str,  # version number
+    @b_str,    # byte vector
+    @r_str,    # regex
+    @s_str,    # regex substitution string
+    @v_str,    # version number
+    @raw_str,  # raw string with no interpolation/unescaping
 
     # documentation
     @text_str,

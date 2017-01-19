@@ -13,14 +13,38 @@ and summarize them at the end of the test set with `@testset`.
 """
 module Test
 
-export @test, @test_throws, @test_broken, @test_skip
+export @test, @test_throws, @test_broken, @test_skip, @test_warn, @test_nowarn
 export @testset
 # Legacy approximate testing functions, yet to be included
-export @test_approx_eq, @test_approx_eq_eps, @inferred
+export @inferred
 export detect_ambiguities
 export GenericString
 
 #-----------------------------------------------------------------------
+
+# Backtrace utility functions
+function ip_matches_func_and_name(ip, func::Symbol, dir::String, file::String)
+    for fr in StackTraces.lookup(ip)
+        if fr === StackTraces.UNKNOWN || fr.from_c
+            return false
+        end
+        path = string(fr.file)
+        fr.func == func && dirname(path) == dir && basename(path) == file && return true
+    end
+    return false
+end
+
+function scrub_backtrace(bt)
+    do_test_ind = findfirst(addr->ip_matches_func_and_name(addr, :do_test, ".", "test.jl"), bt)
+    if do_test_ind != 0 && length(bt) > do_test_ind
+        bt = bt[do_test_ind + 1:end]
+    end
+    name_ind = findfirst(addr->ip_matches_func_and_name(addr, Symbol("macro expansion;"), ".", "test.jl"), bt)
+    if name_ind != 0 && length(bt) != 0
+        bt = bt[1:name_ind]
+    end
+    return bt
+end
 
 """
     Result
@@ -111,7 +135,7 @@ function Base.show(io::IO, t::Error)
         println(io, "  Test threw an exception of type ", typeof(t.value))
         println(io, "  Expression: ", t.orig_expr)
         # Capture error message and indent to match
-        errmsg = sprint(showerror, t.value, t.backtrace)
+        errmsg = sprint(showerror, t.value, scrub_backtrace(t.backtrace))
         print(io, join(map(line->string("  ",line),
                             split(errmsg, "\n")), "\n"))
     elseif t.test_type == :test_unbroken
@@ -179,15 +203,47 @@ end
 
 const comparison_prec = Base.operator_precedence(:(==))
 
+"""
+    test_expr!(ex, kws...)
+
+Preprocess test expressions of function calls with trailing keyword arguments
+so that e.g. `@test a ≈ b atol=ε` means `@test ≈(a, b, atol=ε)`.
+"""
+test_expr!(m, ex) = ex
+
+function test_expr!(m, ex, kws...)
+    ex isa Expr && ex.head == :call || @goto fail
+    for kw in kws
+        kw isa Expr && kw.head == :(=) || @goto fail
+        kw.head = :kw
+        push!(ex.args, kw)
+    end
+    return ex
+@label fail
+    error("invalid test macro call: $m $ex $(join(kws," "))")
+end
+
 # @test - check if the expression evaluates to true
 """
     @test ex
+    @test f(args...) key=val ...
 
 Tests that the expression `ex` evaluates to `true`.
 Returns a `Pass` `Result` if it does, a `Fail` `Result` if it is
 `false`, and an `Error` `Result` if it could not be evaluated.
+
+The `@test f(args...) key=val...` form is equivalent to writing
+`@test f(args..., key=val...)` which can be useful when the expression
+is a call using infix syntax such as approximate comparisons:
+
+    @test a ≈ b atol=ε
+
+This is equivalent to the uglier test `@test ≈(a, b, atol=ε)`.
+It is an error to supply more than one expression unless the first
+is a call expression and the rest are assignments (`k=v`).
 """
-macro test(ex)
+macro test(ex, kws...)
+    test_expr!("@test", ex, kws...)
     orig_ex = Expr(:inert, ex)
     result = get_test_result(ex)
     :(do_test($result, $orig_ex))
@@ -195,13 +251,17 @@ end
 
 """
     @test_broken ex
+    @test_broken f(args...) key=val ...
 
 Indicates a test that should pass but currently consistently fails.
 Tests that the expression `ex` evaluates to `false` or causes an
 exception. Returns a `Broken` `Result` if it does, or an `Error` `Result`
 if the expression evaluates to `true`.
+
+The `@test_broken f(args...) key=val...` form works as for the `@test` macro.
 """
-macro test_broken(ex)
+macro test_broken(ex, kws...)
+    test_expr!("@test_broken", ex, kws...)
     orig_ex = Expr(:inert, ex)
     result = get_test_result(ex)
     # code to call do_test with execution result and original expr
@@ -210,12 +270,16 @@ end
 
 """
     @test_skip ex
+    @test_skip f(args...) key=val ...
 
 Marks a test that should not be executed but should be included in test
 summary reporting as `Broken`. This can be useful for tests that intermittently
 fail, or tests of not-yet-implemented functionality.
+
+The `@test_skip f(args...) key=val...` form works as for the `@test` macro.
 """
-macro test_skip(ex)
+macro test_skip(ex, kws...)
+    test_expr!("@test_skip", ex, kws...)
     orig_ex = Expr(:inert, ex)
     testres = :(Broken(:skipped, $orig_ex))
     :(record(get_testset(), $testres))
@@ -302,6 +366,7 @@ end
     @test_throws extype ex
 
 Tests that the expression `ex` throws an exception of type `extype`.
+Note that `@test_throws` does not support a trailing keyword form.
 """
 macro test_throws(extype, ex)
     orig_ex = Expr(:inert, ex)
@@ -330,6 +395,57 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
         testres = Fail(:test_throws_nothing, orig_expr, extype, nothing)
     end
     record(get_testset(), testres)
+end
+
+#-----------------------------------------------------------------------
+# Test for warning messages
+
+ismatch_warn(s::AbstractString, output) = contains(output, s)
+ismatch_warn(s::Regex, output) = ismatch(s, output)
+ismatch_warn(s::Function, output) = s(output)
+ismatch_warn(S::Union{AbstractArray,Tuple}, output) = all(s -> ismatch_warn(s, output), S)
+
+"""
+    @test_warn msg expr
+
+Test whether evaluating `expr` results in [`STDERR`](@ref) output that contains
+the `msg` string or matches the `msg` regular expression.  If `msg` is
+a boolean function, tests whether `msg(output)` returns `true`.  If `msg` is a
+tuple or array, checks that the error output contains/matches each item in `msg`.
+Returns the result of evaluating `expr`.
+
+See also [`@test_nowarn`](@ref) to check for the absence of error output.
+"""
+macro test_warn(msg, expr)
+    quote
+        let fname = tempname(), have_color = Base.have_color
+            try
+                eval(Base, :(have_color = false))
+                ret = open(fname, "w") do f
+                    redirect_stderr(f) do
+                        $(esc(expr))
+                    end
+                end
+                @test ismatch_warn($(esc(msg)), readstring(fname))
+                ret
+            finally
+                eval(Base, Expr(:(=), :have_color, have_color))
+                rm(fname, force=true)
+            end
+        end
+    end
+end
+
+"""
+    @test_nowarn expr
+
+Test whether evaluating `expr` results in empty [`STDERR`](@ref) output
+(no warnings or other messages).  Returns the result of evaluating `expr`.
+"""
+macro test_nowarn(expr)
+    quote
+        @test_warn r"^(?!.)"s $(esc(expr))
+    end
 end
 
 #-----------------------------------------------------------------------
@@ -382,6 +498,10 @@ function Base.show(io::IO, ex::TestSetException)
     print(io, ex.broken, " broken.")
 end
 
+function Base.showerror(io::IO, ex::TestSetException, bt; backtrace=true)
+    print_with_color(Base.error_color(), io, string(ex))
+end
+
 #-----------------------------------------------------------------------
 
 """
@@ -393,12 +513,20 @@ immutable FallbackTestSet <: AbstractTestSet
 end
 fallback_testset = FallbackTestSet()
 
+type FallbackTestSetException <: Exception
+    msg::String
+end
+
+function Base.showerror(io::IO, ex::FallbackTestSetException, bt; backtrace=true)
+    print_with_color(Base.error_color(), io, ex.msg)
+end
+
 # Records nothing, and throws an error immediately whenever a Fail or
 # Error occurs. Takes no action in the event of a Pass or Broken result
 record(ts::FallbackTestSet, t::Union{Pass,Broken}) = t
 function record(ts::FallbackTestSet, t::Union{Fail,Error})
     println(t)
-    error("There was an error during testing")
+    throw(FallbackTestSetException("There was an error during testing"))
 end
 # We don't need to do anything as we don't record anything
 finish(ts::FallbackTestSet) = ts
@@ -430,7 +558,7 @@ function record(ts::DefaultTestSet, t::Union{Fail, Error})
         print(t)
         # don't print the backtrace for Errors because it gets printed in the show
         # method
-        isa(t, Error) || Base.show_backtrace(STDOUT, backtrace())
+        isa(t, Error) || Base.show_backtrace(STDOUT, scrub_backtrace(backtrace()))
         println()
     end
     push!(ts.results, t)
@@ -873,68 +1001,6 @@ function get_testset_depth()
     return length(testsets)
 end
 
-#-----------------------------------------------------------------------
-# Legacy approximate testing functions, yet to be included
-
-approx_full(x::AbstractArray) = x
-approx_full(x::Number) = x
-approx_full(x) = full(x)
-
-function test_approx_eq(va, vb, Eps, astr, bstr)
-    va = approx_full(va)
-    vb = approx_full(vb)
-    la, lb = length(linearindices(va)), length(linearindices(vb))
-    if la != lb
-        error("lengths of ", astr, " and ", bstr, " do not match: ",
-              "\n  ", astr, " (length $la) = ", va,
-              "\n  ", bstr, " (length $lb) = ", vb)
-    end
-    diff = real(zero(eltype(va)))
-    for (xa, xb) = zip(va, vb)
-        if isfinite(xa) && isfinite(xb)
-            diff = max(diff, abs(xa-xb))
-        elseif !isequal(xa,xb)
-            error("mismatch of non-finite elements: ",
-                  "\n  ", astr, " = ", va,
-                  "\n  ", bstr, " = ", vb)
-        end
-    end
-
-    if !isnan(Eps) && !(diff <= Eps)
-        sdiff = string("|", astr, " - ", bstr, "| <= ", Eps)
-        error("assertion failed: ", sdiff,
-              "\n  ", astr, " = ", va,
-              "\n  ", bstr, " = ", vb,
-              "\n  difference = ", diff, " > ", Eps)
-    end
-end
-
-array_eps{T}(a::AbstractArray{Complex{T}}) = eps(float(maximum(x->(isfinite(x) ? abs(x) : T(NaN)), a)))
-array_eps(a) = eps(float(maximum(x->(isfinite(x) ? abs(x) : oftype(x,NaN)), a)))
-
-test_approx_eq(va, vb, astr, bstr) =
-    test_approx_eq(va, vb, 1E4*length(linearindices(va))*max(array_eps(va), array_eps(vb)), astr, bstr)
-
-"""
-    @test_approx_eq_eps(a, b, tol)
-
-Test two floating point numbers `a` and `b` for equality taking into account
-a margin of tolerance given by `tol`.
-"""
-macro test_approx_eq_eps(a, b, c)
-    :(test_approx_eq($(esc(a)), $(esc(b)), $(esc(c)), $(string(a)), $(string(b))))
-end
-
-"""
-    @test_approx_eq(a, b)
-
-Test two floating point numbers `a` and `b` for equality taking into account
-small numerical errors.
-"""
-macro test_approx_eq(a, b)
-    :(test_approx_eq($(esc(a)), $(esc(b)), $(string(a)), $(string(b))))
-end
-
 _args_and_call(args...; kwargs...) = (args[1:end-1], kwargs, args[end](args[1:end-1]...; kwargs...))
 """
     @inferred f(x)
@@ -972,7 +1038,8 @@ Body:
 
 julia> @inferred f(1,2,3)
 ERROR: return type Int64 does not match inferred return type Union{Float64,Int64}
- in error(::String) at ./error.jl:21
+Stacktrace:
+ [1] error(::String) at ./error.jl:21
 
 julia> @inferred max(1,2)
 2
@@ -1028,13 +1095,13 @@ end
 # Raises an error if any columnwise vector norm exceeds err. Otherwise, returns
 # nothing.
 function test_approx_eq_modphase{S<:Real,T<:Real}(
-        a::StridedVecOrMat{S}, b::StridedVecOrMat{T}, err=nothing)
+        a::StridedVecOrMat{S}, b::StridedVecOrMat{T},
+        err = length(indices(a,1))^3*(eps(S)+eps(T))
+    )
     @test indices(a,1) == indices(b,1) && indices(a,2) == indices(b,2)
-    m = length(indices(a,1))
-    err === nothing && (err=m^3*(eps(S)+eps(T)))
     for i in indices(a,2)
         v1, v2 = a[:, i], b[:, i]
-        @test_approx_eq_eps min(abs(norm(v1-v2)), abs(norm(v1+v2))) 0.0 err
+        @test min(abs(norm(v1-v2)),abs(norm(v1+v2))) ≈ 0.0 atol=err
     end
 end
 

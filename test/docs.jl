@@ -26,7 +26,7 @@ end
 docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
 @doc "Doc abstract type" ->
-abstract C74685 <: AbstractArray
+abstract C74685{T,N} <: AbstractArray{T,N}
 @test stringmime("text/plain", Docs.doc(C74685))=="Doc abstract type\n"
 
 macro macro_doctest() end
@@ -602,7 +602,7 @@ Base.collect{T}(::Type{EmptyType{T}}) = "borked"
 end
 
 let fd = meta(I12515)[@var(Base.collect)]
-    @test fd.order[1] == Tuple{Type{I12515.EmptyType{TypeVar(:T, Any, true)}}}
+    @test fd.order[1] == (Tuple{Type{I12515.EmptyType{T}}} where T)
 end
 
 # PR #12593
@@ -908,5 +908,17 @@ for (line, expr) in Pair[
     "\"...\""      => "...",
     "r\"...\""     => :(r"..."),
     ]
-    @test Docs.helpmode(line) == :(Base.Docs.@repl($expr))
+    @test Docs.helpmode(line) == :(Base.Docs.@repl($STDOUT, $expr))
+    buf = IOBuffer()
+    @test eval(Base, Docs.helpmode(buf, line)) isa Union{Base.Markdown.MD,Void}
+end
+
+let save_color = Base.have_color
+    try
+        eval(Base, :(have_color = false))
+        @test sprint(Base.Docs.repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
+        @test sprint(Base.Docs.repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
+    finally
+        eval(Base, :(have_color = $save_color))
+    end
 end

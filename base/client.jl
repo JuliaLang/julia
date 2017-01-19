@@ -22,7 +22,12 @@ const text_colors = AnyDict(
     :normal        => "\033[0m",
     :default       => "\033[39m",
     :bold          => "\033[1m",
+    :nothing       => "",
 )
+
+for i in 0:255
+    text_colors[i] = "\033[38;5;$(i)m"
+end
 
 const disable_text_style = AnyDict(
     :bold => "\033[22m",
@@ -30,17 +35,13 @@ const disable_text_style = AnyDict(
     :default => "",
 )
 
-for i in 0:255
-    text_colors[i] = "\033[38;5;$(i)m"
-end
-
 # Create a docstring with an automatically generated list
 # of colors.
 available_text_colors = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors)))
 const possible_formatting_symbols = [:normal, :bold, :default]
 available_text_colors = cat(1,
-    sort(intersect(available_text_colors, possible_formatting_symbols), rev=true),
-    sort(setdiff(  available_text_colors, possible_formatting_symbols)))
+    sort!(intersect(available_text_colors, possible_formatting_symbols), rev=true),
+    sort!(setdiff(  available_text_colors, possible_formatting_symbols)))
 
 const available_text_colors_docstring =
     string(join([string("`:", key,"`")
@@ -52,6 +53,7 @@ Available colors are: $available_text_colors_docstring as well as the integers 0
 
 The color `:default` will print text in the default color while the color `:normal`
 will print text with all text properties (like boldness) reset.
+Printing with the color `:nothing` will print the string without modifications.
 """
 text_colors
 
@@ -82,6 +84,9 @@ info_color()  = repl_color("JULIA_INFO_COLOR" , default_color_info)
 # Print input and answer in bold.
 input_color()  = text_colors[:bold] * text_colors[repl_color("JULIA_INPUT_COLOR", default_color_input)]
 answer_color() = text_colors[:bold] * text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answer)]
+
+stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bold)
+stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
 function repl_cmd(cmd, out)
     shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
@@ -120,14 +125,24 @@ function repl_cmd(cmd, out)
     nothing
 end
 
-display_error(er) = display_error(er, [])
-function display_error(er, bt)
-    print_with_color(Base.error_color(), STDERR, "ERROR: "; bold = true)
-    with_output_color(Base.error_color(), STDERR) do io
-        showerror(io, er, bt)
-        println(io)
+function display_error(io::IO, er, bt)
+    if !isempty(bt)
+        st = stacktrace(bt)
+        if !isempty(st)
+            io = redirect(io, log_error_to, st[1])
+        end
     end
+    print_with_color(Base.error_color(), io, "ERROR: "; bold = true)
+    # remove REPL-related frames from interactive printing
+    eval_ind = findlast(addr->Base.REPL.ip_matches_func(addr, :eval), bt)
+    if eval_ind != 0
+        bt = bt[1:eval_ind-1]
+    end
+    showerror(IOContext(io, :limit => true), er, bt)
+    println(io)
 end
+display_error(er, bt) = display_error(STDERR, er, bt)
+display_error(er) = display_error(er, [])
 
 function eval_user_input(ast::ANY, show_value)
     errcount, lasterr, bt = 0, (), nothing
@@ -312,7 +327,8 @@ end
 function load_machine_file(path::AbstractString)
     machines = []
     for line in split(readstring(path),'\n'; keep=false)
-        s = map!(strip, split(line,'*'; keep=false))
+        s = split(line, '*'; keep = false)
+        map!(strip, s, s)
         if length(s) > 1
             cnt = isnumber(s[1]) ? parse(Int,s[1]) : Symbol(s[1])
             push!(machines,(s[2], cnt))
@@ -338,16 +354,17 @@ file.
 """
 atreplinit(f::Function) = (unshift!(repl_hooks, f); nothing)
 
-function _atreplinit(repl)
+function __atreplinit(repl)
     for f in repl_hooks
         try
             f(repl)
         catch err
-            show(STDERR, err)
+            showerror(STDERR, err)
             println(STDERR)
         end
     end
 end
+_atreplinit(repl) = eval(Main, :($__atreplinit($repl)))
 
 function _start()
     empty!(ARGS)

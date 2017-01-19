@@ -4,7 +4,7 @@ function GitIndex(repo::GitRepo)
     idx_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_repository_index, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Ptr{Void}), idx_ptr_ptr, repo.ptr)
-    return GitIndex(idx_ptr_ptr[])
+    return GitIndex(repo, idx_ptr_ptr[])
 end
 
 function read!(idx::GitIndex, force::Bool = false)
@@ -18,61 +18,45 @@ function write!(idx::GitIndex)
 end
 
 function write_tree!(idx::GitIndex)
-    oid_ptr = Ref(Oid())
+    oid_ptr = Ref(GitHash())
     @check ccall((:git_index_write_tree, :libgit2), Cint,
-                 (Ptr{Oid}, Ptr{Void}), oid_ptr, idx.ptr)
+                 (Ptr{GitHash}, Ptr{Void}), oid_ptr, idx.ptr)
     return oid_ptr[]
 end
 
 function owner(idx::GitIndex)
-    repo_ptr = ccall((:git_index_owner, :libgit2), Ptr{Void},
-                     (Ptr{Void},), idx.ptr)
-    return GitRepo(repo_ptr)
+    isnull(idx.nrepo) && throw(GitError(Error.Index, Error.ENOTFOUND, "Index does not have an owning repository."))
+    return Base.get(idx.nrepo)
 end
 
-function read_tree!(idx::GitIndex, tree_id::Oid)
+function read_tree!(idx::GitIndex, tree_id::GitHash)
     repo = owner(idx)
     tree = get(GitTree, repo, tree_id)
     try
         @check ccall((:git_index_read_tree, :libgit2), Cint,
                      (Ptr{Void}, Ptr{Void}), idx.ptr, tree.ptr)
     finally
-        finalize(tree)
+        close(tree)
     end
 end
 
 function add!{T<:AbstractString}(idx::GitIndex, files::T...;
              flags::Cuint = Consts.INDEX_ADD_DEFAULT)
-    sa = StrArrayStruct(files...)
-    try
-        @check ccall((:git_index_add_all, :libgit2), Cint,
-                     (Ptr{Void}, Ptr{StrArrayStruct}, Cuint, Ptr{Void}, Ptr{Void}),
-                      idx.ptr, Ref(sa), flags, C_NULL, C_NULL)
-    finally
-        finalize(sa)
-    end
+    @check ccall((:git_index_add_all, :libgit2), Cint,
+                 (Ptr{Void}, Ptr{StrArrayStruct}, Cuint, Ptr{Void}, Ptr{Void}),
+                 idx.ptr, collect(files), flags, C_NULL, C_NULL)
 end
 
 function update!{T<:AbstractString}(idx::GitIndex, files::T...)
-    sa = StrArrayStruct(files...)
-    try
-        @check ccall((:git_index_update_all, :libgit2), Cint,
-                     (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
-                      idx.ptr, Ref(sa), C_NULL, C_NULL)
-    finally
-        finalize(sa)
-    end
+    @check ccall((:git_index_update_all, :libgit2), Cint,
+                 (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
+                 idx.ptr, collect(files), C_NULL, C_NULL)
 end
 
 function remove!{T<:AbstractString}(idx::GitIndex, files::T...)
-    sa = StrArrayStruct(files...)
-    try
-        @check ccall((:git_index_remove_all, :libgit2), Cint,
-                     (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
-                      idx.ptr, Ref(sa), C_NULL, C_NULL)
-    finally
-        finalize(sa)
-    end
+    @check ccall((:git_index_remove_all, :libgit2), Cint,
+                 (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
+                 idx.ptr, collect(files), C_NULL, C_NULL)
 end
 
 function add!{T<:AbstractString}(repo::GitRepo, files::T...;
@@ -111,13 +95,13 @@ function Base.count(idx::GitIndex)
     return ccall((:git_index_entrycount, :libgit2), Csize_t, (Ptr{Void},), idx.ptr)
 end
 
-function Base.getindex(idx::GitIndex, i::Csize_t)
-    ie_ptr = ccall((:git_index_get_byindex, :libgit2), Ptr{Void},
-                  (Ptr{Void}, Csize_t), idx.ptr, i-1)
+function Base.getindex(idx::GitIndex, i::Integer)
+    ie_ptr = ccall((:git_index_get_byindex, :libgit2),
+                   Ptr{IndexEntry},
+                   (Ptr{Void}, Csize_t), idx.ptr, i-1)
     ie_ptr == C_NULL && return nothing
-    return unsafe_load(convert(Ptr{IndexEntry}, ie_ptr), 1)
+    return unsafe_load(ie_ptr)
 end
-Base.getindex(idx::GitIndex, i::Int) = getindex(idx, Csize_t(i))
 
 function Base.find(path::String, idx::GitIndex)
     pos_ref = Ref{Csize_t}(0)
@@ -128,3 +112,7 @@ function Base.find(path::String, idx::GitIndex)
 end
 
 stage(ie::IndexEntry) = ccall((:git_index_entry_stage, :libgit2), Cint, (Ptr{IndexEntry},), Ref(ie))
+
+function Base.show(io::IO, idx::GitIndex)
+    println(io, "GitIndex:\nOwner: ", owner(idk), "\nNumber of elements: ", count(idx))
+end

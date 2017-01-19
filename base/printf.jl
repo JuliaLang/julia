@@ -626,12 +626,18 @@ function gen_c(flags::String, width::Int, precision::Int, c::Char)
     :(($x)::Integer), blk
 end
 
+function _limit(s, prec)
+    prec >= sizeof(s) && return s
+    p = prevind(s, prec+1)
+    n = nextind(s, p)-1
+    s[1:(prec>=n?n:prevind(s,p))]
+end
+
 function gen_s(flags::String, width::Int, precision::Int, c::Char)
     # print a string:
     #  [sS]: both the same for us (Unicode)
     #
     # flags:
-    #  (0): pad left with zeros
     #  (-): left justify
     #
     @gensym x
@@ -642,6 +648,9 @@ function gen_s(flags::String, width::Int, precision::Int, c::Char)
         else
             push!(blk.args, :($x = repr($x)))
         end
+        if precision!=-1
+            push!(blk.args, :($x = _limit($x, $precision)))
+        end
         if !('-' in flags)
             push!(blk.args, pad(width, :($width-strwidth($x)), ' '))
         end
@@ -650,10 +659,18 @@ function gen_s(flags::String, width::Int, precision::Int, c::Char)
             push!(blk.args, pad(width, :($width-strwidth($x)), ' '))
         end
     else
-        if !('#' in flags)
-            push!(blk.args, :(print(out, $x)))
+        if precision!=-1
+            push!(blk.args, :(io = IOBuffer()))
         else
-            push!(blk.args, :(show(out, $x)))
+            push!(blk.args, :(io = out))
+        end
+        if !('#' in flags)
+            push!(blk.args, :(print(io, $x)))
+        else
+            push!(blk.args, :(show(io, $x)))
+        end
+        if precision!=-1
+            push!(blk.args, :(write(out, _limit(String(take!(io)), $precision))))
         end
     end
     :(($x)::Any), blk
@@ -853,8 +870,8 @@ function decode_hex(d::Integer, symbols::Array{UInt8,1})
     return Int32(pt), Int32(pt), neg
 end
 
-const hex_symbols = "0123456789abcdef".data
-const HEX_symbols = "0123456789ABCDEF".data
+const hex_symbols = b"0123456789abcdef"
+const HEX_symbols = b"0123456789ABCDEF"
 
 decode_hex(x::Integer) = decode_hex(x,hex_symbols)
 decode_HEX(x::Integer) = decode_hex(x,HEX_symbols)

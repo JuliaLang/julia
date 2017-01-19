@@ -47,8 +47,8 @@ end
 # Move elements from inds to out until out reaches the desired
 # dimensionality N, either filling with OneTo(1) or collapsing the
 # product of trailing dims into the last element
-@pure rdims{N}(out::NTuple{N}, inds::Tuple{}, ::Type{Val{N}}) = out
-@pure function rdims{N}(out::NTuple{N}, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}})
+@pure rdims{N}(out::NTuple{N,Any}, inds::Tuple{}, ::Type{Val{N}}) = out
+@pure function rdims{N}(out::NTuple{N,Any}, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}})
     l = length(last(out)) * prod(map(length, inds))
     (front(out)..., OneTo(l))
 end

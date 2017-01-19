@@ -274,7 +274,12 @@ false
 """
 ispow2(x::Integer) = x > 0 && count_ones(x) == 1
 
-# smallest a^n >= x, with integer n
+"""
+    nextpow(a, x)
+
+The smallest `a^n` not less than `x`, where `n` is a non-negative integer. `a` must be
+greater than 1, and `x` must be greater than 0.
+"""
 function nextpow(a::Real, x::Real)
     (a <= 1 || x <= 0) && throw(DomainError())
     x <= 1 && return one(a)
@@ -283,7 +288,13 @@ function nextpow(a::Real, x::Real)
     # guard against roundoff error, e.g., with a=5 and x=125
     p >= x ? p : a^n
 end
-# largest a^n <= x, with integer n
+
+"""
+    prevpow(a, x)
+
+The largest `a^n` not greater than `x`, where `n` is a non-negative integer.
+`a` must be greater than 1, and `x` must not be less than 1.
+"""
 function prevpow(a::Real, x::Real)
     (a <= 1 || x < 1) && throw(DomainError())
     n = floor(Integer,log(a, x))
@@ -366,7 +377,7 @@ string(x::Union{Int8,Int16,Int32,Int64,Int128}) = dec(x)
 
 function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
-    a = Array{UInt8}(i)
+    a = StringVector(i)
     while i > neg
         a[i] = '0'+(x&0x1)
         x >>= 1
@@ -378,7 +389,7 @@ end
 
 function oct(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,div((sizeof(x)<<3)-leading_zeros(x)+2,3))
-    a = Array{UInt8}(i)
+    a = StringVector(i)
     while i > neg
         a[i] = '0'+(x&0x7)
         x >>= 3
@@ -390,7 +401,7 @@ end
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,ndigits0z(x))
-    a = Array{UInt8}(i)
+    a = StringVector(i)
     while i > neg
         a[i] = '0'+rem(x,10)
         x = oftype(x,div(x,10))
@@ -402,7 +413,7 @@ end
 
 function hex(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
-    a = Array{UInt8}(i)
+    a = StringVector(i)
     while i > neg
         d = x & 0xf
         a[i] = '0'+d+39*(d>9)
@@ -422,7 +433,7 @@ function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
     digits = b <= 36 ? base36digits : base62digits
     i = neg + max(pad,ndigits0z(x,b))
-    a = Array{UInt8}(i)
+    a = StringVector(i)
     while i > neg
         a[i] = digits[1+rem(x,b)]
         x = div(x,b)

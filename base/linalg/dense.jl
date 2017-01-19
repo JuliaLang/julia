@@ -291,7 +291,7 @@ julia> kron(A, B)
 ```
 """
 function kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
-    R = Array{promote_type(T,S)}(size(a,1)*size(b,1), size(a,2)*size(b,2))
+    R = Array{promote_op(*,T,S)}(size(a,1)*size(b,1), size(a,2)*size(b,2))
     m = 1
     for j = 1:size(a,2), l = 1:size(b,2), i = 1:size(a,1)
         aij = a[i,j]
@@ -509,7 +509,7 @@ function logm(A::StridedMatrix)
         end
     end
 
-    if isreal(A) && ~np_real_eigs
+    if isreal(A) && !np_real_eigs
         return real(retmat)
     else
         return retmat
@@ -583,6 +583,7 @@ sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
 sqrtm(a::Complex) = sqrt(a)
 
 function inv{T}(A::StridedMatrix{T})
+    checksquare(A)
     S = typeof((one(T)*zero(T) + one(T)*zero(T))/one(T))
     AA = convert(AbstractArray{S}, A)
     if istriu(AA)

@@ -21,51 +21,32 @@ end
 end
 
 @testset "OID" begin
-    z = LibGit2.Oid()
+    z = LibGit2.GitHash()
     @test LibGit2.iszero(z)
-    @test z == zero(LibGit2.Oid)
-    @test z == LibGit2.Oid(z)
+    @test z == zero(LibGit2.GitHash)
+    @test z == LibGit2.GitHash(z)
     rs = string(z)
     rr = LibGit2.raw(z)
-    @test z == LibGit2.Oid(rr)
-    @test z == LibGit2.Oid(rs)
-    @test z == LibGit2.Oid(pointer(rr))
+    @test z == LibGit2.GitHash(rr)
+    @test z == LibGit2.GitHash(rs)
+    @test z == LibGit2.GitHash(pointer(rr))
     for i in 11:length(rr); rr[i] = 0; end
-    @test LibGit2.Oid(rr) == LibGit2.Oid(rs[1:20])
-    @test_throws ArgumentError LibGit2.Oid(Ptr{UInt8}(C_NULL))
+    @test LibGit2.GitHash(rr) == LibGit2.GitHash(rs[1:20])
+    @test_throws ArgumentError LibGit2.GitHash(Ptr{UInt8}(C_NULL))
 end
 
 @testset "StrArrayStruct" begin
-    p1 = "XXX"
-    p2 = "YYY"
-    sa1 = LibGit2.StrArrayStruct(p1)
-    try
-        arr = convert(Vector{AbstractString}, sa1)
-        @test arr[1] == p1
-    finally
-        finalize(sa1)
-    end
-
-    sa2 = LibGit2.StrArrayStruct(p1, p2)
-    try
-        arr1 = convert(Vector{AbstractString}, sa2)
-        @test arr1[1] == p1
-        @test arr1[2] == p2
-        sa3 = copy(sa2)
-        arr2 = convert(Vector{AbstractString}, sa3)
-        @test arr1[1] == arr2[1]
-        @test arr1[2] == arr2[2]
-        finalize(sa3)
-    finally
-        finalize(sa2)
-    end
+    p = ["XXX","YYY"]
+    a = Base.cconvert(Ptr{LibGit2.StrArrayStruct}, p)
+    b = Base.unsafe_convert(Ptr{LibGit2.StrArrayStruct}, a)
+    @test p == convert(Vector{String}, unsafe_load(b))
 end
 
 @testset "Signature" begin
     sig = LibGit2.Signature("AAA", "AAA@BBB.COM", round(time(), 0), 0)
     git_sig = convert(LibGit2.GitSignature, sig)
     sig2 = LibGit2.Signature(git_sig)
-    finalize(git_sig)
+    close(git_sig)
     @test sig.name == sig2.name
     @test sig.email == sig2.email
     @test sig.time == sig2.time
@@ -135,9 +116,9 @@ mktempdir() do dir
     config_file = "testconfig"
     commit_msg1 = randstring(10)
     commit_msg2 = randstring(10)
-    commit_oid1 = LibGit2.Oid()
-    commit_oid2 = LibGit2.Oid()
-    commit_oid3 = LibGit2.Oid()
+    commit_oid1 = LibGit2.GitHash()
+    commit_oid2 = LibGit2.GitHash()
+    commit_oid3 = LibGit2.GitHash()
     master_branch = "master"
     test_branch = "test_branch"
     tag1 = "tag1"
@@ -159,7 +140,7 @@ mktempdir() do dir
             @test LibGit2.get(cfg, "tmp.int64", Int64(0)) == Int64(1)
             @test LibGit2.get(cfg, "tmp.bool", false) == true
         finally
-            finalize(cfg)
+            close(cfg)
         end
     end
 
@@ -168,11 +149,12 @@ mktempdir() do dir
             repo = LibGit2.init(cache_repo)
             try
                 @test isdir(cache_repo)
+                @test LibGit2.path(repo) == LibGit2.posixpath(realpath(cache_repo))
                 @test isdir(joinpath(cache_repo, ".git"))
 
                 # set a remote branch
                 branch = "upstream"
-                LibGit2.GitRemote(repo, branch, repo_url) |> finalize
+                LibGit2.GitRemote(repo, branch, repo_url) |> close
 
                 config = joinpath(cache_repo, ".git", "config")
                 lines = split(open(readstring, config, "r"), "\n")
@@ -180,10 +162,18 @@ mktempdir() do dir
 
                 remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
                 @test LibGit2.url(remote) == repo_url
+                @test LibGit2.name(remote) == "upstream"
+                @test isa(remote, LibGit2.GitRemote)
+                @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: $repo_url"
                 @test LibGit2.isattached(repo)
-                finalize(remote)
+                close(remote)
+
+                remote = LibGit2.GitRemoteAnon(repo, repo_url)
+                @test LibGit2.url(remote) == repo_url
+                @test LibGit2.name(remote) == ""
+                @test isa(remote, LibGit2.GitRemote)
             finally
-                finalize(repo)
+                close(repo)
             end
         end
 
@@ -192,10 +182,11 @@ mktempdir() do dir
             repo = LibGit2.init(path, true)
             try
                 @test isdir(path)
+                @test LibGit2.path(repo) == LibGit2.posixpath(realpath(path))
                 @test isfile(joinpath(path, LibGit2.Consts.HEAD_FILE))
                 @test LibGit2.isattached(repo)
             finally
-                finalize(repo)
+                close(repo)
             end
 
             path = joinpath("garbagefakery", "Example.Bare")
@@ -216,11 +207,12 @@ mktempdir() do dir
             repo = LibGit2.clone(cache_repo, repo_path, isbare = true)
             try
                 @test isdir(repo_path)
+                @test LibGit2.path(repo) == LibGit2.posixpath(realpath(repo_path))
                 @test isfile(joinpath(repo_path, LibGit2.Consts.HEAD_FILE))
                 @test LibGit2.isattached(repo)
                 @test LibGit2.remotes(repo) == ["origin"]
             finally
-                finalize(repo)
+                close(repo)
             end
         end
         @testset "bare with remote callback" begin
@@ -228,6 +220,7 @@ mktempdir() do dir
             repo = LibGit2.clone(cache_repo, repo_path, isbare = true, remote_cb = LibGit2.mirror_cb())
             try
                 @test isdir(repo_path)
+                @test LibGit2.path(repo) == LibGit2.posixpath(realpath(repo_path))
                 @test isfile(joinpath(repo_path, LibGit2.Consts.HEAD_FILE))
                 rmt = LibGit2.get(LibGit2.GitRemote, repo, "origin")
                 try
@@ -235,20 +228,22 @@ mktempdir() do dir
                     @test LibGit2.isattached(repo)
                     @test LibGit2.remotes(repo) == ["origin"]
                 finally
-                    finalize(rmt)
+                    close(rmt)
                 end
             finally
-                finalize(repo)
+                close(repo)
             end
         end
         @testset "normal" begin
-            repo = LibGit2.clone(cache_repo, test_repo, remote_cb = LibGit2.mirror_cb())
+            repo = LibGit2.clone(cache_repo, test_repo)
             try
                 @test isdir(test_repo)
+                @test LibGit2.path(repo) == LibGit2.posixpath(realpath(test_repo))
                 @test isdir(joinpath(test_repo, ".git"))
                 @test LibGit2.isattached(repo)
+                @test LibGit2.isorphan(repo)
             finally
-                finalize(repo)
+                close(repo)
             end
         end
     end
@@ -289,7 +284,7 @@ mktempdir() do dir
                 # lookup commits
                 cmt = LibGit2.get(LibGit2.GitCommit, repo, commit_oid1)
                 try
-                    @test commit_oid1 == LibGit2.Oid(cmt)
+                    @test commit_oid1 == LibGit2.GitHash(cmt)
                     auth = LibGit2.author(cmt)
                     @test isa(auth, LibGit2.Signature)
                     @test auth.name == test_sig.name
@@ -301,11 +296,19 @@ mktempdir() do dir
                     @test cmtr.time == test_sig.time
                     @test cmtr.email == test_sig.email
                     @test LibGit2.message(cmt) == commit_msg1
+                    showstr = split(sprint(show, cmt), "\n")
+                    # the time of the commit will vary so just test the first two parts
+                    @test contains(showstr[1], "Git Commit:")
+                    @test contains(showstr[2], "Commit Author: Name: TEST, Email: TEST@TEST.COM, Time:")
+                    @test contains(showstr[3], "Committer: Name: TEST, Email: TEST@TEST.COM, Time:")
+                    @test contains(showstr[4], "SHA:")
+                    @test showstr[5] == "Message:"
+                    @test showstr[6] == commit_msg1
                 finally
-                    finalize(cmt)
+                    close(cmt)
                 end
             finally
-                finalize(repo)
+                close(repo)
                 close(repo_file)
             end
         end
@@ -333,17 +336,17 @@ mktempdir() do dir
                         @test LibGit2.shortname(tbref) == test_branch
                         @test LibGit2.upstream(tbref) === nothing
                     finally
-                        finalize(tbref)
+                        close(tbref)
                     end
                 finally
-                    finalize(brref)
+                    close(brref)
                 end
 
                 branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
                 @test master_branch in branches
                 @test test_branch in branches
             finally
-                finalize(repo)
+                close(repo)
             end
         end
 
@@ -365,7 +368,7 @@ mktempdir() do dir
                     @test sig.email == "BBBB@BBBB.COM"
                 end
             finally
-                finalize(repo)
+                close(repo)
             end
         end
 
@@ -382,10 +385,13 @@ mktempdir() do dir
                 @test tag1 in tags
                 tag1ref = LibGit2.GitReference(repo, "refs/tags/$tag1")
                 @test isempty(LibGit2.fullname(tag1ref)) #because this is a reference to an OID
+                show_strs = split(sprint(show, tag1ref), "\n")
+                @test show_strs[1] == "GitReference:"
+                @test show_strs[2] == "Tag with name refs/tags/$tag1"
                 tag1tag = LibGit2.peel(LibGit2.GitTag,tag1ref)
                 @test LibGit2.name(tag1tag) == tag1
                 @test LibGit2.target(tag1tag) == commit_oid1
-
+                @test sprint(show, tag1tag) == "GitTag:\nTag name: $tag1 target: $commit_oid1"
                 tag_oid2 = LibGit2.tag_create(repo, tag2, commit_oid2)
                 @test !LibGit2.iszero(tag_oid2)
                 tags = LibGit2.tag_list(repo)
@@ -401,7 +407,7 @@ mktempdir() do dir
                 @test tag2 ∈ tags
                 @test tag1 ∉ tags
             finally
-                finalize(repo)
+                close(repo)
             end
         end
 
@@ -425,7 +431,25 @@ mktempdir() do dir
                 @test status[1].status == LibGit2.Consts.STATUS_WT_NEW
                 close(repo_file)
             finally
-                finalize(repo)
+                close(repo)
+            end
+        end
+
+        @testset "blobs" begin
+            repo = LibGit2.GitRepo(cache_repo)
+            try
+                # clear out the "GitHash( )" part
+                hash_string = sprint(show, commit_oid1)[9:end]
+                hash_string = strip(hash_string, ')')
+                blob_file   = joinpath(cache_repo,".git/objects", hash_string[1:2], hash_string[3:end])
+                blob = LibGit2.GitBlob(repo, blob_file)
+                @test LibGit2.isbinary(blob)
+                blob_show_strs = split(sprint(show, blob), "\n")
+                @test blob_show_strs[1] == "GitBlob:"
+                @test contains(blob_show_strs[2], "Blob id:")
+                @test blob_show_strs[3] == "Contents are binary."
+            finally
+                close(repo)
             end
         end
     end
@@ -460,12 +484,13 @@ mktempdir() do dir
 
             # Try rebasing on master instead
             LibGit2.rebase!(repo, master_branch)
+            @test LibGit2.head_oid(repo) == head_oid
 
             # Switch to the master branch
             LibGit2.branch!(repo, master_branch)
 
         finally
-            finalize(repo)
+            close(repo)
         end
     end
 
@@ -492,11 +517,11 @@ mktempdir() do dir
                 try
                     @test_throws LibGit2.Error.GitError LibGit2.upstream(tag2ref)
                 finally
-                    finalize(tag2ref)
+                    close(tag2ref)
                 end
 
             finally
-                finalize(repo)
+                close(repo)
             end
         end
 
@@ -519,8 +544,8 @@ mktempdir() do dir
                     @test cache_oids[i] == test_oids[i]
                 end
             finally
-                finalize(repo)
-                finalize(cache)
+                close(repo)
+                close(cache)
             end
         end
     end
@@ -575,14 +600,14 @@ mktempdir() do dir
             @test get(st_uns) == get(st_mod)
 
             # reset repo
-            @test_throws LibGit2.Error.GitError LibGit2.reset!(repo, LibGit2.Oid(), LibGit2.Consts.RESET_HARD)
+            @test_throws LibGit2.Error.GitError LibGit2.reset!(repo, LibGit2.GitHash(), LibGit2.Consts.RESET_HARD)
 
             LibGit2.reset!(repo, LibGit2.head_oid(repo), LibGit2.Consts.RESET_HARD)
             open(joinpath(test_repo, test_file), "r") do io
                 @test read(io)[end] != 0x41
             end
         finally
-            finalize(repo)
+            close(repo)
         end
     end
 
@@ -626,7 +651,7 @@ mktempdir() do dir
             # issue #19624
             @test LibGit2.head_oid(repo) == newhead
         finally
-            finalize(repo)
+            close(repo)
         end
     end
 
@@ -647,7 +672,7 @@ mktempdir() do dir
             @test !isfile(joinpath(test_repo, "BBB"))
             @test isfile(joinpath(test_repo, test_file))
         finally
-            finalize(repo)
+            close(repo)
         end
     end
 
@@ -748,10 +773,10 @@ mktempdir() do dir
                                     println(f, err)
                                 end
                             finally
-                                finalize(repo)
+                                close(repo)
                             end
                             """
-                            # We try to be helpful by desparately looking for
+                            # We try to be helpful by desperately looking for
                             # a way to prompt the password interactively. Pretend
                             # to be a TTY to suppress those shenanigans. Further, we
                             # need to detach and change the controlling terminal with

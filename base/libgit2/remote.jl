@@ -5,7 +5,7 @@ function GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractStr
     @check ccall((:git_remote_create, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring),
                 rmt_ptr_ptr, repo.ptr, rmt_name, rmt_url)
-    return GitRemote(rmt_ptr_ptr[])
+    return GitRemote(repo, rmt_ptr_ptr[])
 end
 
 function GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString, fetch_spec::AbstractString)
@@ -13,7 +13,7 @@ function GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractStr
     @check ccall((:git_remote_create_with_fetchspec, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring, Cstring),
                 rmt_ptr_ptr, repo.ptr, rmt_name, rmt_url, fetch_spec)
-    return GitRemote(rmt_ptr_ptr[])
+    return GitRemote(repo, rmt_ptr_ptr[])
 end
 
 function GitRemoteAnon(repo::GitRepo, url::AbstractString)
@@ -21,7 +21,7 @@ function GitRemoteAnon(repo::GitRepo, url::AbstractString)
     @check ccall((:git_remote_create_anonymous, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{Void}, Cstring),
                 rmt_ptr_ptr, repo.ptr, url)
-    return GitRemote(rmt_ptr_ptr[])
+    return GitRemote(repo, rmt_ptr_ptr[])
 end
 
 function get(::Type{GitRemote}, repo::GitRepo, rmt_name::AbstractString)
@@ -29,62 +29,54 @@ function get(::Type{GitRemote}, repo::GitRepo, rmt_name::AbstractString)
     @check ccall((:git_remote_lookup, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{Void}, Cstring),
                 rmt_ptr_ptr, repo.ptr, rmt_name)
-    return GitRemote(rmt_ptr_ptr[])
+    return GitRemote(repo, rmt_ptr_ptr[])
 end
 
 function url(rmt::GitRemote)
     url_ptr = ccall((:git_remote_url, :libgit2), Cstring, (Ptr{Void}, ), rmt.ptr)
-    url_ptr == Cstring_NULL && return ""
-    return  unsafe_string(url_ptr)
+    url_ptr == C_NULL && return ""
+    return unsafe_string(url_ptr)
+end
+
+function name(rmt::GitRemote)
+    name_ptr = ccall((:git_remote_name, :libgit2), Cstring, (Ptr{Void}, ), rmt.ptr)
+    name_ptr == C_NULL && return ""
+    return unsafe_string(name_ptr)
 end
 
 function fetch_refspecs(rmt::GitRemote)
-    sa_ref = Ref{StrArrayStruct}()
-    try
-        @check ccall((:git_remote_get_fetch_refspecs, :libgit2), Cint,
-                      (Ptr{LibGit2.StrArrayStruct}, Ptr{Void}), sa_ref, rmt.ptr)
-        convert(Vector{AbstractString}, sa_ref[])
-    finally
-        finalize(sa_ref[])
-    end
+    sa_ref = Ref(StrArrayStruct())
+    @check ccall((:git_remote_get_fetch_refspecs, :libgit2), Cint,
+                 (Ptr{StrArrayStruct}, Ptr{Void}), sa_ref, rmt.ptr)
+    res = convert(Vector{String}, sa_ref[])
+    free(sa_ref)
+    res
 end
 
 function push_refspecs(rmt::GitRemote)
-    sa_ref = Ref{StrArrayStruct}()
-    try
-        @check ccall((:git_remote_get_push_refspecs, :libgit2), Cint,
-                      (Ptr{LibGit2.StrArrayStruct}, Ptr{Void}), sa_ref, rmt.ptr)
-        convert(Vector{AbstractString}, sa_ref[])
-    finally
-        finalize(sa_ref[])
-    end
+    sa_ref = Ref(StrArrayStruct())
+    @check ccall((:git_remote_get_push_refspecs, :libgit2), Cint,
+                 (Ptr{StrArrayStruct}, Ptr{Void}), sa_ref, rmt.ptr)
+    res = convert(Vector{String}, sa_ref[])
+    free(sa_ref)
+    res
 end
 
 function fetch{T<:AbstractString}(rmt::GitRemote, refspecs::Vector{T};
                options::FetchOptions = FetchOptions(),
                msg::AbstractString="")
     msg = "libgit2.fetch: $msg"
-    no_refs = isempty(refspecs)
-    !no_refs && (sa = StrArrayStruct(refspecs...))
-    try
-        @check ccall((:git_remote_fetch, :libgit2), Cint,
-            (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{FetchOptions}, Cstring),
-            rmt.ptr, no_refs ? C_NULL : Ref(sa), Ref(options), msg)
-    finally
-        !no_refs && finalize(sa)
-    end
+    @check ccall((:git_remote_fetch, :libgit2), Cint,
+                 (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{FetchOptions}, Cstring),
+                 rmt.ptr, isempty(refspecs) ? C_NULL : refspecs, Ref(options), msg)
 end
 
 function push{T<:AbstractString}(rmt::GitRemote, refspecs::Vector{T};
                                  force::Bool = false,
                                  options::PushOptions = PushOptions())
-    no_refs = isempty(refspecs)
-    !no_refs && (sa = StrArrayStruct(refspecs...))
-    try
-        @check ccall((:git_remote_push, :libgit2), Cint,
-                      (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{PushOptions}),
-                       rmt.ptr, no_refs ? C_NULL : Ref(sa), Ref(options))
-    finally
-        !no_refs && finalize(sa)
-    end
+    @check ccall((:git_remote_push, :libgit2), Cint,
+                 (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{PushOptions}),
+                 rmt.ptr, isempty(refspecs) ? C_NULL : refspecs, Ref(options))
 end
+
+Base.show(io::IO, rmt::GitRemote) = print(io, "GitRemote:\nRemote name: ", name(rmt), " url: ", url(rmt))

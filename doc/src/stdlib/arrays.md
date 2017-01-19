@@ -25,10 +25,8 @@ Base.LinAlg.checksquare
 ```@docs
 Core.Array
 Base.getindex(::Type, ::Any...)
-Base.zeros(::Any, ::Any)
-Base.zeros(::Any)
-Base.ones(::Any, ::Any)
-Base.ones(::Any)
+Base.zeros
+Base.ones
 Base.BitArray
 Base.trues
 Base.falses
@@ -50,7 +48,6 @@ All mathematical operations and functions are supported for arrays
 ```@docs
 Base.broadcast
 Base.Broadcast.broadcast!
-Base.Broadcast.bitbroadcast
 ```
 
 ## Indexing, Assignment, and Concatenation
@@ -59,6 +56,8 @@ Base.Broadcast.bitbroadcast
 Base.getindex(::AbstractArray, ::Any...)
 Base.view
 Base.@view
+Base.to_indices
+Base.Colon
 Base.parent
 Base.parentindexes
 Base.slicedim
@@ -111,8 +110,6 @@ Base.cumprod!
 Base.cumsum
 Base.cumsum!
 Base.cumsum_kbn
-Base.cummin
-Base.cummax
 Base.LinAlg.diff
 Base.LinAlg.gradient
 Base.rot180
@@ -142,7 +139,7 @@ Base.reverse!
 
 ## BitArrays
 
-BitArrays are space-efficient "packed" boolean arrays, which store one bit per boolean value.
+`BitArray`s are space-efficient "packed" boolean arrays, which store one bit per boolean value.
  They can be used similarly to `Array{Bool}` arrays (which store one byte per boolean value),
 and can be converted to/from the latter via `Array(bitarray)` and `BitArray(array)`, respectively.
 

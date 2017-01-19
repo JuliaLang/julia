@@ -32,8 +32,10 @@ typealias BitUnsigned64T Union{Type{UInt8},Type{UInt16},Type{UInt32},Type{UInt64
 +{T<:BitInteger}(x::T, y::T) = box(T, add_int(unbox(T,x),unbox(T,y)))
 *{T<:BitInteger}(x::T, y::T) = box(T, mul_int(unbox(T,x),unbox(T,y)))
 
-/(x::Integer, y::Integer) = float(x)/float(y)
 inv(x::Integer) = float(one(x))/float(x)
+/{T<:Integer}(x::T, y::T) = float(x)/float(y)
+# skip promotion for system integer types
+/(x::BitInteger, y::BitInteger) = float(x)/float(y)
 
 """
     isodd(x::Integer) -> Bool
@@ -70,7 +72,7 @@ signbit(x::Unsigned) = false
 
 flipsign{T<:BitSigned}(x::T, y::T) = box(T,flipsign_int(unbox(T,x),unbox(T,y)))
 
-flipsign(x::Signed, y::Signed)  = convert(typeof(x), flipsign(promote(x,y)...))
+flipsign(x::Signed, y::Signed)  = convert(typeof(x), flipsign(promote_noncircular(x,y)...))
 flipsign(x::Signed, y::Float16) = flipsign(x, reinterpret(Int16,y))
 flipsign(x::Signed, y::Float32) = flipsign(x, reinterpret(Int32,y))
 flipsign(x::Signed, y::Float64) = flipsign(x, reinterpret(Int64,y))

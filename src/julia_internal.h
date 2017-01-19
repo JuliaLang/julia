@@ -192,6 +192,8 @@ STATIC_INLINE void *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz)
     return jl_gc_alloc(ptls, sz, (void*)jl_buff_tag);
 }
 
+jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz);
+
 jl_code_info_t *jl_type_infer(jl_method_instance_t **li, size_t world, int force);
 jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, void *F, size_t world);
 jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t *src, size_t world, const jl_cgparams_t *params);
@@ -263,7 +265,7 @@ void jl_gc_count_allocd(size_t sz);
 void jl_gc_run_all_finalizers(jl_ptls_t ptls);
 
 void gc_queue_binding(jl_binding_t *bnd);
-void gc_setmark_buf(jl_ptls_t ptls, void *buf, int, size_t);
+void gc_setmark_buf(jl_ptls_t ptls, void *buf, int8_t, size_t);
 
 STATIC_INLINE void jl_gc_wb_binding(jl_binding_t *bnd, void *val) // val isa jl_value_t*
 {
@@ -318,33 +320,30 @@ JL_DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle,
                                                jl_value_t *data);
 JL_DLLEXPORT int jl_uv_fs_result(uv_fs_t *f);
 
-int jl_tuple_subtype(jl_value_t **child, size_t cl, jl_datatype_t *pdt, int ta);
+typedef struct _typeenv {
+    jl_tvar_t *var;
+    jl_value_t *val;
+    struct _typeenv *prev;
+} jl_typeenv_t;
+
+int jl_tuple_isa(jl_value_t **child, size_t cl, jl_datatype_t *pdt);
 
 int jl_subtype_invariant(jl_value_t *a, jl_value_t *b, int ta);
 jl_value_t *jl_type_match(jl_value_t *a, jl_value_t *b);
-extern int type_match_invariance_mask;
 jl_value_t *jl_type_match_morespecific(jl_value_t *a, jl_value_t *b);
-int jl_types_equal_generic(jl_value_t *a, jl_value_t *b, int useenv);
 jl_datatype_t *jl_inst_concrete_tupletype_v(jl_value_t **p, size_t np);
 jl_datatype_t *jl_inst_concrete_tupletype(jl_svec_t *p);
-void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype);
+JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype);
 void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_t fptr);
-STATIC_INLINE int jl_is_type(jl_value_t *v)
-{
-    jl_value_t *t = jl_typeof(v);
-    return (t == (jl_value_t*)jl_datatype_type || t == (jl_value_t*)jl_uniontype_type ||
-            t == (jl_value_t*)jl_typector_type);
-}
-jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
-                                          jl_svec_t **penv, jl_svec_t *tvars);
-jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n);
+jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b, jl_svec_t **penv);
 jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);
+jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val);
 jl_datatype_t *jl_new_uninitialized_datatype(void);
 jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
                                    jl_svec_t *parameters);
 void jl_precompute_memoized_dt(jl_datatype_t *dt);
 jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
-jl_datatype_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n);
+jl_value_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n);
 void jl_assign_bits(void *dest, jl_value_t *bits);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module);
@@ -373,7 +372,7 @@ jl_value_t *jl_gf_invoke(jl_tupletype_t *types, jl_value_t **args, size_t nargs)
 JL_DLLEXPORT jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes);
 int jl_has_intrinsics(jl_method_instance_t *li, jl_value_t *v, jl_module_t *m);
 
-jl_value_t *jl_nth_slot_type(jl_tupletype_t *sig, size_t i);
+jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i);
 void jl_compute_field_offsets(jl_datatype_t *st);
 jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
                                              int isunboxed, int elsz);
@@ -484,9 +483,9 @@ JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz);
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module);
 jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world);
 JL_DLLEXPORT int jl_has_call_ambiguities(jl_tupletype_t *types, jl_method_t *m);
-jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t *types, jl_svec_t *sp);
+jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_svec_t *sp);
 JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_tupletype_t *type, size_t world);
-JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m, jl_tupletype_t *type, jl_svec_t *sparams, size_t world);
+JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m, jl_value_t *type, jl_svec_t *sparams, size_t world);
 JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_method_instance_t *caller);
 JL_DLLEXPORT void jl_method_table_add_backedge(jl_methtable_t *mt, jl_value_t *typ, jl_value_t *caller);
 
@@ -750,13 +749,6 @@ STATIC_INLINE void jl_free_aligned(void *p)
 
 // -- typemap.c -- //
 
-STATIC_INLINE int is_kind(jl_value_t *v)
-{
-    return (v==(jl_value_t*)jl_uniontype_type ||
-            v==(jl_value_t*)jl_datatype_type ||
-            v==(jl_value_t*)jl_typector_type);
-}
-
 // a descriptor of a jl_typemap_t that gets
 // passed around as self-documentation of the parameters of the type
 struct jl_typemap_info {
@@ -773,7 +765,7 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
                                       jl_value_t **overwritten);
 
 jl_typemap_entry_t *jl_typemap_assoc_by_type(union jl_typemap_t ml_or_cache, jl_tupletype_t *types, jl_svec_t **penv,
-        int8_t subtype_inexact__sigseq_useenv, int8_t subtype, int8_t offs, size_t world);
+        int8_t inexact, int8_t subtype, int8_t offs, size_t world);
 static jl_typemap_entry_t *const INEXACT_ENTRY = (jl_typemap_entry_t*)(uintptr_t)-1;
 jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_value_t **args, size_t n, int8_t offs, size_t world);
 jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *mn, jl_value_t **args, size_t n, size_t world);
@@ -805,9 +797,7 @@ struct typemap_intersection_env {
 };
 int jl_typemap_intersection_visitor(union jl_typemap_t a, int offs, struct typemap_intersection_env *closure);
 
-int sigs_eq(jl_value_t *a, jl_value_t *b, int useenv);
-
-jl_value_t *jl_lookup_match(jl_value_t *a, jl_value_t *b, jl_svec_t **penv, jl_svec_t *tvars);
+jl_value_t *jl_lookup_match(jl_value_t *a, jl_value_t *b, jl_svec_t **penv);
 
 unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *field_type);
 
@@ -827,6 +817,7 @@ STATIC_INLINE void *jl_get_frame_addr(void)
 }
 
 JL_DLLEXPORT jl_array_t *jl_array_cconvert_cstring(jl_array_t *a);
+void jl_depwarn(const char *msg, jl_sym_t *sym);
 
 int isabspath(const char *in);
 

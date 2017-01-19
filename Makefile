@@ -55,7 +55,7 @@ julia_flisp.boot.inc.phony: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
 
 # Build the HTML docs (skipped if already exists, notably in tarballs)
-$(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUILDROOT)/doc -path $(BUILDROOT)/doc/_build -prune -o -print)
+$(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUILDROOT)/doc \( -path $(BUILDROOT)/doc/_build -o -path $(BUILDROOT)/doc/deps -o -name *_constants.jl -o -name *_h.jl \) -prune -o -type f -print)
 	@$(MAKE) docs
 
 # doc needs to live under $(build_docdir), not under $(build_datarootdir)/julia/
@@ -95,11 +95,17 @@ julia-ui-release julia-ui-debug : julia-ui-% : julia-src-%
 julia-inference : julia-base julia-ui-$(JULIA_BUILD_MODE) $(build_prefix)/.examples
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/inference.ji JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
+ifneq ($(CPUID_SPECIFIC_BINARIES), 0)
+CPUID_TAG = _$(call exec,$(JULIA_EXECUTABLE) --cpuid)
+else
+CPUID_TAG =
+endif
+
 julia-sysimg-release : julia-inference julia-ui-release
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys.$(SHLIB_EXT) JULIA_BUILD_MODE=release
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys$(CPUID_TAG).$(SHLIB_EXT) JULIA_BUILD_MODE=release
 
 julia-sysimg-debug : julia-inference julia-ui-debug
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) JULIA_BUILD_MODE=debug
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys-debug$(CPUID_TAG).$(SHLIB_EXT) JULIA_BUILD_MODE=debug
 
 julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink julia-libccalltest
 
@@ -169,7 +175,7 @@ $(build_datarootdir)/julia/julia-config.jl : $(JULIAHOME)/contrib/julia-config.j
 
 $(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%.o
 	@$(call PRINT_LINK, $(CXX) $(LDFLAGS) -shared $(fPIC) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
-		$(if $(findstring -debug.$(SHLIB_EXT),$(notdir $@)),-ljulia-debug,-ljulia) \
+		$(if $(findstring -debug,$(notdir $@)),-ljulia-debug,-ljulia) \
 		$$([ $(OS) = WINNT ] && echo '' -lssp))
 	@$(INSTALL_NAME_CMD)$(notdir $@) $@
 	@$(DSYMUTIL) $@
@@ -215,8 +221,13 @@ $$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji $$(JULIA
 		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***' && false; } )
 .SECONDARY: $(build_private_libdir)/sys$1.o
 endef
+ifneq ($(CPUID_SPECIFIC_BINARIES),0)
+$(eval $(call sysimg_builder,_%,-O3,$(JULIA_EXECUTABLE_release)))
+$(eval $(call sysimg_builder,-debug_%,-O0,$(JULIA_EXECUTABLE_debug)))
+else
 $(eval $(call sysimg_builder,,-O3,$(JULIA_EXECUTABLE_release)))
 $(eval $(call sysimg_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
+endif
 
 $(build_depsbindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(build_depsbindir)
 	@$(call PRINT_CC, $(HOSTCC) -o $(build_depsbindir)/stringreplace $(JULIAHOME)/contrib/stringreplace.c)

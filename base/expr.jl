@@ -9,9 +9,8 @@ Generates a symbol which will not conflict with other variable names.
 """
 gensym() = ccall(:jl_gensym, Ref{Symbol}, ())
 
-gensym(s::String) = gensym(s.data)
-gensym(a::Array{UInt8,1}) =
-    ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), a, length(a))
+gensym(s::String) = ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), s, sizeof(s))
+
 gensym(ss::String...) = map(gensym, ss)
 gensym(s::Symbol) =
     ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), s, ccall(:strlen, Csize_t, (Ptr{UInt8},), s))
@@ -75,13 +74,13 @@ julia> module M
                1
            end
            function f()
-              (@macroexpand(@m), macroexpand(:(@m)))
+               (@macroexpand(@m), macroexpand(:(@m)))
            end
        end
 M
 
 julia> macro m()
-          2
+           2
        end
 @m (macro with 1 method)
 
@@ -118,10 +117,43 @@ macro eval(x)
     :($(esc(:eval))($(Expr(:quote,x))))
 end
 
+"""
+    @inline
+
+Give a hint to the compiler that this function is worth inlining.
+
+Small functions typically do not need the `@inline` annotation,
+as the compiler does it automatically. By using `@inline` on bigger functions,
+an extra nudge can be given to the compiler to inline it.
+This is shown in the following example:
+```julia
+@inline function bigfunction(x)
+    #=
+        Function Definition
+    =#
+end
+```
+"""
 macro inline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :inline) : ex)
 end
 
+"""
+    @noinline
+
+Prevents the compiler from inlining a function.
+
+Small functions are typically inlined automatically.
+By using `@noinline` on small functions, auto-inlining can be
+prevented. This is shown in the following example:
+```julia
+@noinline function smallfunction(x)
+    #=
+        Function Definition
+    =#
+end
+```
+"""
 macro noinline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :noinline) : ex)
 end

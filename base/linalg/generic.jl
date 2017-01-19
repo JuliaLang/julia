@@ -113,7 +113,8 @@ julia> cross(a,b)
  0
 ```
 """
-cross(a::AbstractVector, b::AbstractVector) = [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
+cross(a::AbstractVector, b::AbstractVector) =
+    [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
 """
     triu(M)
@@ -544,6 +545,20 @@ end
 
 @inline norm(x::Number, p::Real=2) = vecnorm(x, p)
 
+@inline norm{T}(tv::RowVector{T}) = norm(transpose(tv))
+
+"""
+    norm(rowvector, [q = 2])
+
+Takes the q-norm of a `RowVector`, which is equivalent to the p-norm with
+value `p = q/(q-1)`. They coincide at `p = q = 2`.
+
+The difference in norm between a vector space and its dual arises to preserve
+the relationship between duality and the inner product, and the result is
+consistent with the p-norm of `1 × n` matrix.
+"""
+@inline norm{T}(tv::RowVector{T}, q::Real) = q == Inf ? norm(transpose(tv), 1) : norm(transpose(tv), q/(q-1))
+
 function vecdot(x::AbstractArray, y::AbstractArray)
     lx = _length(x)
     if lx != _length(y)
@@ -565,6 +580,19 @@ end
 For any iterable containers `x` and `y` (including arrays of any dimension) of numbers (or
 any element type for which `dot` is defined), compute the Euclidean dot product (the sum of
 `dot(x[i],y[i])`) as if they were vectors.
+
+# Examples
+```jldoctest
+julia> vecdot(1:5, 2:6)
+70
+
+julia> x = fill(2., (5,5));
+
+julia> y = fill(3., (5,5));
+
+julia> vecdot(x, y)
+150.0
+```
 """
 function vecdot(x, y) # arbitrary iterables
     ix = start(x)
@@ -664,8 +692,6 @@ trace(x::Number) = x
 #kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
 
 #det(a::AbstractMatrix)
-
-inv(a::StridedMatrix) = throw(ArgumentError("argument must be a square matrix"))
 
 """
     inv(M)
@@ -981,7 +1007,10 @@ function linreg(x::AbstractVector, y::AbstractVector)
     # where
     # b = cov(X, Y)/var(X)
     # a = mean(Y) - b*mean(X)
-    size(x) == size(y) || throw(DimensionMismatch("x has size $(size(x)) and y has size $(size(y)), but these must be the same size"))
+    if size(x) != size(y)
+        throw(DimensionMismatch("x has size $(size(x)) and y has size $(size(y)), " *
+            "but these must be the same size"))
+    end
     mx = mean(x)
     my = mean(y)
     # don't need to worry about the scaling (n vs n - 1) since they cancel in the ratio
@@ -1057,7 +1086,8 @@ function axpy!{Ti<:Integer,Tj<:Integer}(α, x::AbstractArray, rx::AbstractArray{
 end
 
 
-# Elementary reflection similar to LAPACK. The reflector is not Hermitian but ensures that tridiagonalization of Hermitian matrices become real. See lawn72
+# Elementary reflection similar to LAPACK. The reflector is not Hermitian but
+# ensures that tridiagonalization of Hermitian matrices become real. See lawn72
 @inline function reflector!(x::AbstractVector)
     n = length(x)
     @inbounds begin
@@ -1080,7 +1110,8 @@ end
     ξ1/ν
 end
 
-@inline function reflectorApply!(x::AbstractVector, τ::Number, A::StridedMatrix) # apply reflector from left
+# apply reflector from left
+@inline function reflectorApply!(x::AbstractVector, τ::Number, A::StridedMatrix)
     m, n = size(A)
     if length(x) != m
         throw(DimensionMismatch("reflector has length $(length(x)), which must match the first dimension of matrix A, $m"))
@@ -1134,16 +1165,16 @@ det(x::Number) = x
 """
     logabsdet(M)
 
-Log of absolute value of determinant of real matrix. Equivalent to `(log(abs(det(M))), sign(det(M)))`,
-but may provide increased accuracy and/or speed.
+Log of absolute value of determinant of real matrix. Equivalent to
+`(log(abs(det(M))), sign(det(M)))`, but may provide increased accuracy and/or speed.
 """
 logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
 
 """
     logdet(M)
 
-Log of matrix determinant. Equivalent to `log(det(M))`, but may provide increased accuracy
-and/or speed.
+Log of matrix determinant. Equivalent to `log(det(M))`, but may provide
+increased accuracy and/or speed.
 
 # Example
 
@@ -1165,14 +1196,45 @@ function logdet(A::AbstractMatrix)
     return d + log(s)
 end
 
+typealias NumberArray{T<:Number} AbstractArray{T}
+
+"""
+    promote_leaf_eltypes(itr)
+
+For an (possibly nested) iterable object `itr`, promote the types of leaf
+elements.  Equivalent to `promote_type(typeof(leaf1), typeof(leaf2), ...)`.
+Currently supports only numeric leaf elements.
+
+# Example
+
+```jldoctest
+julia> a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
+3-element Array{Any,1}:
+  Any[1,2,[3,4]]
+ 5.0
+  Any[0+6im,[7.0,8.0]]
+
+julia> promote_leaf_eltypes(a)
+Complex{Float64}
+```
+"""
+promote_leaf_eltypes{T<:Number}(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) = T
+promote_leaf_eltypes{T<:NumberArray}(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) = eltype(T)
+promote_leaf_eltypes{T}(x::T) = T
+promote_leaf_eltypes(x::Union{AbstractArray,Tuple}) = mapreduce(promote_leaf_eltypes, promote_type, Bool, x)
+
 # isapprox: approximate equality of arrays [like isapprox(Number,Number)]
-function isapprox{T<:Number,S<:Number}(x::AbstractArray{T}, y::AbstractArray{S}; rtol::Real=Base.rtoldefault(T,S), atol::Real=0, norm::Function=vecnorm)
+# Supports nested arrays; e.g., for `a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]`
+# `a ≈ a` is `true`.
+function isapprox(x::AbstractArray, y::AbstractArray;
+    rtol::Real=Base.rtoldefault(promote_leaf_eltypes(x),promote_leaf_eltypes(y)),
+    atol::Real=0, nans::Bool=false, norm::Function=vecnorm)
     d = norm(x - y)
     if isfinite(d)
         return d <= atol + rtol*max(norm(x), norm(y))
     else
         # Fall back to a component-wise approximate comparison
-        return all(ab -> isapprox(ab[1], ab[2]; rtol=rtol, atol=atol), zip(x, y))
+        return all(ab -> isapprox(ab[1], ab[2]; rtol=rtol, atol=atol, nans=nans), zip(x, y))
     end
 end
 
@@ -1188,11 +1250,10 @@ function normalize!(v::AbstractVector, p::Real=2)
 end
 
 @inline function __normalize!(v::AbstractVector, nrm::AbstractFloat)
-    #The largest positive floating point number whose inverse is less than
-    #infinity
+    # The largest positive floating point number whose inverse is less than infinity
     δ = inv(prevfloat(typemax(nrm)))
 
-    if nrm ≥ δ #Safe to multiply with inverse
+    if nrm ≥ δ # Safe to multiply with inverse
         invnrm = inv(nrm)
         scale!(v, invnrm)
 

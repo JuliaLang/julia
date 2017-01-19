@@ -8,7 +8,8 @@ using ..Types
 readstrip(path...) = strip(readstring(joinpath(path...)))
 
 url(pkg::AbstractString) = readstrip(Dir.path("METADATA"), pkg, "url")
-sha1(pkg::AbstractString, ver::VersionNumber) = readstrip(Dir.path("METADATA"), pkg, "versions", string(ver), "sha1")
+sha1(pkg::AbstractString, ver::VersionNumber) =
+    readstrip(Dir.path("METADATA"), pkg, "versions", string(ver), "sha1")
 
 function available(names=readdir("METADATA"))
     pkgs = Dict{String,Dict{VersionNumber,Available}}()
@@ -95,7 +96,7 @@ function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=availa
             end
         end
     finally
-        cache_has_head && LibGit2.finalize(crepo)
+        cache_has_head && LibGit2.close(crepo)
     end
     return res
 end
@@ -159,7 +160,7 @@ function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::D
             string(base) == head && push!(descendants,ver)
         end
     finally
-        cache_has_head && LibGit2.finalize(crepo)
+        cache_has_head && LibGit2.close(crepo)
     end
     both = sort!(intersect(ancestors,descendants))
     isempty(both) || warn("$pkg: some versions are both ancestors and descendants of head: $both")
