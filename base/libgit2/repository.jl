@@ -10,9 +10,6 @@ function GitRepo(path::AbstractString)
     err = ccall((:git_repository_open, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Cstring), repo_ptr_ptr, path)
     if err != Int(Error.GIT_OK)
-        if repo_ptr_ptr[] != C_NULL
-            close(GitRepo(repo_ptr_ptr[]))
-        end
         throw(Error.GitError(err))
     end
     return GitRepo(repo_ptr_ptr[])
@@ -31,9 +28,6 @@ function GitRepoExt(path::AbstractString, flags::Cuint = Cuint(Consts.REPOSITORY
                 (Ptr{Ptr{Void}}, Cstring, Cuint, Cstring),
                  repo_ptr_ptr, path, flags, separator)
     if err != Int(Error.GIT_OK)
-        if repo_ptr_ptr[] != C_NULL
-            close(GitRepo(repo_ptr_ptr[]))
-        end
         throw(Error.GitError(err))
     end
     return GitRepo(repo_ptr_ptr[])
@@ -65,14 +59,7 @@ end
 Lookup the object id of the current HEAD of git
 repository `repo`.
 """
-function head_oid(repo::GitRepo)
-    head_ref = head(repo)
-    try
-        return GitHash(head_ref)
-    finally
-        close(head_ref)
-    end
-end
+head_oid(repo::GitRepo) = GitHash(head(repo))
 
 """
     LibGit2.headname(repo::GitRepo)
@@ -83,12 +70,11 @@ detached, returns the name of the HEAD it's
 detached from.
 """
 function headname(repo::GitRepo)
-    with(head(repo)) do href
-        if isattached(repo)
-            shortname(href)
-        else
-            "(detached from $(string(GitHash(href))[1:7]))"
-        end
+    href = head(repo)
+    if isattached(repo)
+        return shortname(href)
+    else
+        return "(detached from $(string(GitHash(href))[1:7]))"
     end
 end
 

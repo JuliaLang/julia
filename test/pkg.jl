@@ -130,30 +130,25 @@ temp_pkg_dir() do
         branch_commit = "ba3888212e30a7974ac6803a89e64c7098f4865e"
 
         # create a branch in Example package
-        LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example")) do repo
-            LibGit2.branch!(repo, branch_name, branch_commit, set_head=false)
-        end
+        LibGit2.branch!(LibGit2.GitRepo(Pkg.dir("Example")), branch_name, branch_commit, set_head=false)
 
         Pkg.clone(Pkg.dir("Example"), "Example2")
         Pkg.clone(Pkg.dir("Example"), "Example3")
         open(Pkg.dir("Example3", "README.md"), "w") do f
             println(f, "overwritten")
         end
-        LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example3")) do repo
-            LibGit2.add!(repo, "README.md")
-            test_sig = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time(), 0), 0)
-            LibGit2.commit(repo, "testmsg"; author=test_sig, committer=test_sig)
-        end
+        repo = LibGit2.GitRepo(Pkg.dir("Example3"))
+        LibGit2.add!(repo, "README.md")
+        test_sig = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time(), 0), 0)
+        LibGit2.commit(repo, "testmsg"; author=test_sig, committer=test_sig)
 
         Pkg.checkout("Example2", branch_name)
         Pkg.checkout("Example3", branch_name)
 
-        LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example2")) do repo
-            @test LibGit2.head_oid(repo) == LibGit2.GitHash(branch_commit)
-        end
-        LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example3")) do repo
-            @test LibGit2.head_oid(repo) == LibGit2.GitHash(branch_commit)
-        end
+        repo = LibGit2.GitRepo(Pkg.dir("Example2"))
+        @test LibGit2.head_oid(repo) == LibGit2.GitHash(branch_commit)
+        repo = LibGit2.GitRepo(Pkg.dir("Example3"))
+        @test LibGit2.head_oid(repo) == LibGit2.GitHash(branch_commit)
     end
 
     # 17364 - b, remote off-tree branch
@@ -161,28 +156,23 @@ temp_pkg_dir() do
         branch_commit = "ba3888212e30a7974ac6803a89e64c7098f4865e"
 
         # create a branch in Example package
-        LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example")) do repo
-            LibGit2.branch!(repo, branch_name, branch_commit, set_head=true)
-        end
+        repo = LibGit2.GitRepo(Pkg.dir("Example"))
+        LibGit2.branch!(repo, branch_name, branch_commit, set_head=true)
 
         # Make changes to local branch
         open(Pkg.dir("Example", "README.md"), "w") do f
             println(f, "overwritten")
         end
 
-        test_commit = LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example")) do repo
-            LibGit2.add!(repo, "README.md")
-            test_sig = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time(), 0), 0)
-            LibGit2.commit(repo, "testmsg"; author=test_sig, committer=test_sig)
-        end
+        LibGit2.add!(repo, "README.md")
+        test_sig = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time(), 0), 0)
+        test_commit = LibGit2.commit(repo, "testmsg"; author=test_sig, committer=test_sig)
         Pkg.checkout("Example")
 
         Pkg.clone(Pkg.dir("Example"), "Example4")
         Pkg.checkout("Example4", branch_name)
 
-        LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example4")) do repo
-            @test LibGit2.head_oid(repo) == test_commit
-        end
+        @test LibGit2.head_oid(LibGit2.GitRepo(Pkg.dir("Example4"))) == test_commit
     end
 
     # adding a package with unsatisfiable julia version requirements (REPL.jl) errors
@@ -238,9 +228,7 @@ temp_pkg_dir() do
     end
 
     # PR #13572, handling of versions with untagged detached heads
-    LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example")) do repo
-        LibGit2.checkout!(repo, "72f09c7d0099793378c645929a9961155faae6d2")
-    end
+    LibGit2.checkout!(LibGit2.GitRepo(Pkg.dir("Example")), "72f09c7d0099793378c645929a9961155faae6d2")
     @test Pkg.installed()["Example"] > v"0.0.0"
 
     # issue #13583
@@ -268,9 +256,7 @@ temp_pkg_dir() do
 
         @test_warn r"^INFO: Creating Example branch pinned\.[0-9a-f]{8}\.tmp$" Pkg.pin("Example")
         vers = Pkg.installed("Example")
-        branch = LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example")) do repo
-            LibGit2.branch(repo)
-        end
+        branch = LibGit2.branch(LibGit2.GitRepo(Pkg.dir("Example")))
 
         @test_warn "INFO: Freeing Example" Pkg.free("Example")
 
@@ -457,9 +443,7 @@ temp_pkg_dir() do
         # outdated versions of some packages and then update some of those
         # (note that the following Pkg.update calls will update METADATA to the
         # latest version even though they don't update all packages)
-        LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo
-            LibGit2.reset!(repo, LibGit2.GitHash(old_commit), LibGit2.Consts.RESET_HARD)
-        end
+        LibGit2.reset!(LibGit2.GitRepo(metadata_dir), LibGit2.GitHash(old_commit), LibGit2.Consts.RESET_HARD)
 
         # run these at an old metadata commit where it's guaranteed no
         # packages depend on Example.jl
@@ -489,9 +473,7 @@ temp_pkg_dir() do
         const old_commit = "83ff7116e51fc9cdbd7e67affbd344b9f5c9dbf2"
 
         # Reset METADATA to the second to last update of Example.jl
-        LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo
-            LibGit2.reset!(repo, LibGit2.GitHash(old_commit), LibGit2.Consts.RESET_HARD)
-        end
+        LibGit2.reset!(LibGit2.GitRepo(metadata_dir), LibGit2.GitHash(old_commit), LibGit2.Consts.RESET_HARD)
 
         Pkg.add(package)
         msg = readstring(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e

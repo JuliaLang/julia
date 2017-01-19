@@ -54,18 +54,16 @@ function add(pkg::AbstractString, vers::VersionSet)
             info("Package $pkg is already installed")
         end
         branch = Dir.getmetabranch()
-        outdated = with(GitRepo, "METADATA") do repo
-            if LibGit2.branch(repo) == branch
-                if LibGit2.isdiff(repo, "origin/$branch")
-                    outdated = :yes
-                else
-                    try
-                        LibGit2.fetch(repo)
-                        outdated = LibGit2.isdiff(repo, "origin/$branch") ? (:yes) : (:no)
-                    end
-                end
+        outdated = :no # user is doing something funky with METADATA
+        repo = GitRepo("METADATA")
+        if LibGit2.branch(repo) == branch
+            if LibGit2.isdiff(repo, "origin/$branch")
+                outdated = :yes
             else
-                :no # user is doing something funky with METADATA
+                try
+                    LibGit2.fetch(repo)
+                    outdated = LibGit2.isdiff(repo, "origin/$branch") ? (:yes) : (:no)
+                end
             end
         end
     end
@@ -114,9 +112,7 @@ function installed(pkg::AbstractString)
     if Read.isinstalled(pkg)
         res = typemin(VersionNumber)
         if ispath(joinpath(pkg,".git"))
-            LibGit2.with(GitRepo, pkg) do repo
-                res = Read.installed_version(pkg, repo, avail)
-            end
+            res = Read.installed_version(pkg, GitRepo(pkg), avail)
         end
         return res
     end
@@ -162,12 +158,11 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
     if ispath(pkg,".git")
         prepo = GitRepo(pkg)
         try
-            with(LibGit2.head(prepo)) do phead
-                if LibGit2.isattached(prepo)
-                    print(io, LibGit2.shortname(phead))
-                else
-                    print(io, string(LibGit2.GitHash(phead))[1:8])
-                end
+            phead = LibGit2.head(prepo)
+            if LibGit2.isattached(prepo)
+                print(io, LibGit2.shortname(phead))
+            else
+                print(io, string(LibGit2.GitHash(phead))[1:8])
             end
             attrs = AbstractString[]
             isfile("METADATA",pkg,"url") || push!(attrs,"unregistered")
@@ -175,8 +170,6 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
             isempty(attrs) || print(io, " (",join(attrs,", "),")")
         catch err
             print_with_color(Base.error_color(), io, " broken-repo (unregistered)")
-        finally
-            close(prepo)
         end
     else
         print_with_color(Base.warn_color(), io, "non-repo (unregistered)")
@@ -192,9 +185,7 @@ function clone(url::AbstractString, pkg::AbstractString)
     info("Cloning $pkg from $url")
     ispath(pkg) && throw(PkgError("$pkg already exists"))
     try
-        LibGit2.with(LibGit2.clone(url, pkg)) do repo
-            LibGit2.set_remote_url(repo, url)
-        end
+        LibGit2.set_remote_url(LibGit2.clone(url, pkg), url)
     catch err
         isdir(pkg) && Base.rm(pkg, recursive=true)
         rethrow(err)
@@ -224,18 +215,17 @@ end
 function checkout(pkg::AbstractString, branch::AbstractString, do_merge::Bool, do_pull::Bool)
     ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
     info("Checking out $pkg $branch...")
-    with(GitRepo, pkg) do r
-        LibGit2.transact(r) do repo
-            LibGit2.isdirty(repo) && throw(PkgError("$pkg is dirty, bailing"))
-            LibGit2.branch!(repo, branch, track=LibGit2.Consts.REMOTE_ORIGIN)
-            do_merge && LibGit2.merge!(repo, fastforward=true) # merge changes
-            if do_pull
-                info("Pulling $pkg latest $branch...")
-                LibGit2.fetch(repo)
-                LibGit2.merge!(repo, fastforward=true)
-            end
-            resolve()
+    r = GitRepo(pkg)
+    LibGit2.transact(r) do repo
+        LibGit2.isdirty(repo) && throw(PkgError("$pkg is dirty, bailing"))
+        LibGit2.branch!(repo, branch, track=LibGit2.Consts.REMOTE_ORIGIN)
+        do_merge && LibGit2.merge!(repo, fastforward=true) # merge changes
+        if do_pull
+            info("Pulling $pkg latest $branch...")
+            LibGit2.fetch(repo)
+            LibGit2.merge!(repo, fastforward=true)
         end
+        resolve()
     end
 end
 
@@ -244,23 +234,22 @@ function free(pkg::AbstractString)
     Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be freed – not an installed package"))
     avail = Read.available(pkg)
     isempty(avail) && throw(PkgError("$pkg cannot be freed – not a registered package"))
-    with(GitRepo, pkg) do repo
-        LibGit2.isdirty(repo) && throw(PkgError("$pkg cannot be freed – repo is dirty"))
-        info("Freeing $pkg")
-        vers = sort!(collect(keys(avail)), rev=true)
-        while true
-            for ver in vers
-                sha1 = avail[ver].sha1
-                LibGit2.iscommit(sha1, repo) || continue
-                return LibGit2.transact(repo) do r
-                    LibGit2.isdirty(repo) && throw(PkgError("$pkg is dirty, bailing"))
-                    LibGit2.checkout!(repo, sha1)
-                    resolve()
-                end
+    repo = GitRepo(pkg)
+    LibGit2.isdirty(repo) && throw(PkgError("$pkg cannot be freed – repo is dirty"))
+    info("Freeing $pkg")
+    vers = sort!(collect(keys(avail)), rev=true)
+    while true
+        for ver in vers
+            sha1 = avail[ver].sha1
+            LibGit2.iscommit(sha1, repo) || continue
+            return LibGit2.transact(repo) do r
+                LibGit2.isdirty(repo) && throw(PkgError("$pkg is dirty, bailing"))
+                LibGit2.checkout!(repo, sha1)
+                resolve()
             end
-            isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
-            throw(PkgError("can't find any registered versions of $pkg to checkout"))
         end
+        isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
+        throw(PkgError("can't find any registered versions of $pkg to checkout"))
     end
 end
 
@@ -271,16 +260,15 @@ function free(pkgs)
             Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be freed – not an installed package"))
             avail = Read.available(pkg)
             isempty(avail) && throw(PkgError("$pkg cannot be freed – not a registered package"))
-            with(GitRepo, pkg) do repo
-                LibGit2.isdirty(repo) && throw(PkgError("$pkg cannot be freed – repo is dirty"))
-                info("Freeing $pkg")
-                vers = sort!(collect(keys(avail)), rev=true)
-                for ver in vers
-                    sha1 = avail[ver].sha1
-                    LibGit2.iscommit(sha1, repo) || continue
-                    LibGit2.checkout!(repo, sha1)
-                    break
-                end
+            repo = GitRepo(pkg)
+            LibGit2.isdirty(repo) && throw(PkgError("$pkg cannot be freed – repo is dirty"))
+            info("Freeing $pkg")
+            vers = sort!(collect(keys(avail)), rev=true)
+            for ver in vers
+                sha1 = avail[ver].sha1
+                LibGit2.iscommit(sha1, repo) || continue
+                LibGit2.checkout!(repo, sha1)
+                break
             end
             isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
             throw(PkgError("Can't find any registered versions of $pkg to checkout"))
@@ -293,51 +281,40 @@ end
 function pin(pkg::AbstractString, head::AbstractString)
     ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
     should_resolve = true
-    with(GitRepo, pkg) do repo
-        id = if isempty(head) # get HEAD commit
-            # no need to resolve, branch will be from HEAD
-            should_resolve = false
-            LibGit2.head_oid(repo)
-        else
-            LibGit2.revparseid(repo, head)
-        end
-        commit = LibGit2.GitCommit(repo, id)
-        try
-            # note: changing the following naming scheme requires a corresponding change in Read.ispinned()
-            branch = "pinned.$(string(id)[1:8]).tmp"
-            if LibGit2.isattached(repo) && LibGit2.branch(repo) == branch
-                info("Package $pkg is already pinned" * (isempty(head) ? "" : " to the selected commit"))
-                should_resolve = false
-                return
-            end
-            ref = LibGit2.lookup_branch(repo, branch)
-            try
-                if !isnull(ref)
-                    if LibGit2.revparseid(repo, branch) != id
-                        throw(PkgError("Package $pkg: existing branch $branch has " *
-                            "been edited and doesn't correspond to its original commit"))
-                    end
-                    info("Package $pkg: checking out existing branch $branch")
-                else
-                    info("Creating $pkg branch $branch")
-                    ref = Nullable(LibGit2.create_branch(repo, branch, commit))
-                end
-
-                # checkout selected branch
-                with(LibGit2.peel(LibGit2.GitTree, get(ref))) do btree
-                    LibGit2.checkout_tree(repo, btree)
-                end
-                # switch head to the branch
-                LibGit2.head!(repo, get(ref))
-            finally
-                close(get(ref))
-            end
-        finally
-            close(commit)
-        end
+    repo = GitRepo(pkg)
+    id = if isempty(head) # get HEAD commit
+        # no need to resolve, branch will be from HEAD
+        should_resolve = false
+        LibGit2.head_oid(repo)
+    else
+        LibGit2.revparseid(repo, head)
     end
+    commit = LibGit2.GitCommit(repo, id)
+    # note: changing the following naming scheme requires a corresponding change in Read.ispinned()
+    branch = "pinned.$(string(id)[1:8]).tmp"
+    if LibGit2.isattached(repo) && LibGit2.branch(repo) == branch
+        info("Package $pkg is already pinned" * (isempty(head) ? "" : " to the selected commit"))
+        should_resolve = false
+        return
+    end
+    ref = LibGit2.lookup_branch(repo, branch)
+    if !isnull(ref)
+        if LibGit2.revparseid(repo, branch) != id
+            throw(PkgError("Package $pkg: existing branch $branch has " *
+                "been edited and doesn't correspond to its original commit"))
+        end
+        info("Package $pkg: checking out existing branch $branch")
+    else
+        info("Creating $pkg branch $branch")
+        ref = Nullable(LibGit2.create_branch(repo, branch, commit))
+    end
+
+    # checkout selected branch
+    LibGit2.checkout_tree(repo, LibGit2.peel(LibGit2.GitTree, get(ref)))
+    # switch head to the branch
+    LibGit2.head!(repo, get(ref))
     should_resolve && resolve()
-    nothing
+    return nothing
 end
 pin(pkg::AbstractString) = pin(pkg, "")
 
@@ -352,33 +329,31 @@ end
 
 function update(branch::AbstractString, upkgs::Set{String})
     info("Updating METADATA...")
-    with(GitRepo, "METADATA") do repo
-        try
-            with(LibGit2.head(repo)) do h
-                if LibGit2.branch(h) != branch
-                    if LibGit2.isdirty(repo)
-                        throw(PkgError("METADATA is dirty and not on $branch, bailing"))
-                    end
-                    if !LibGit2.isattached(repo)
-                        throw(PkgError("METADATA is detached not on $branch, bailing"))
-                    end
-                    LibGit2.fetch(repo)
-                    LibGit2.checkout_head(repo)
-                    LibGit2.branch!(repo, branch, track="refs/remotes/origin/$branch")
-                    LibGit2.merge!(repo)
-                end
+    repo = GitRepo("METADATA")
+    try
+        h = LibGit2.head(repo)
+        if LibGit2.branch(h) != branch
+            if LibGit2.isdirty(repo)
+                throw(PkgError("METADATA is dirty and not on $branch, bailing"))
             end
-
+            if !LibGit2.isattached(repo)
+                throw(PkgError("METADATA is detached not on $branch, bailing"))
+            end
             LibGit2.fetch(repo)
-            ff_succeeded = LibGit2.merge!(repo, fastforward=true)
-            if !ff_succeeded
-                LibGit2.rebase!(repo, "origin/$branch")
-            end
-        catch err
-            cex = CapturedException(err, catch_backtrace())
-            throw(PkgError("METADATA cannot be updated. Resolve problems manually in " *
-                Pkg.dir("METADATA") * ".", cex))
+            LibGit2.checkout_head(repo)
+            LibGit2.branch!(repo, branch, track="refs/remotes/origin/$branch")
+            LibGit2.merge!(repo)
         end
+
+        LibGit2.fetch(repo)
+        ff_succeeded = LibGit2.merge!(repo, fastforward=true)
+        if !ff_succeeded
+            LibGit2.rebase!(repo, "origin/$branch")
+        end
+    catch err
+        cex = CapturedException(err, catch_backtrace())
+        throw(PkgError("METADATA cannot be updated. Resolve problems manually in " *
+            Pkg.dir("METADATA") * ".", cex))
     end
     deferred_errors = CompositeException()
     avail = Read.available()
@@ -417,31 +392,30 @@ function update(branch::AbstractString, upkgs::Set{String})
         for (pkg,ver) in fixed
             ispath(pkg,".git") || continue
             pkg in dont_update && continue
-            with(GitRepo, pkg) do repo
-                if LibGit2.isattached(repo)
-                    if LibGit2.isdirty(repo)
-                        warn("Package $pkg: skipping update (dirty)...")
-                    elseif Read.ispinned(repo)
-                        info("Package $pkg: skipping update (pinned)...")
-                    else
-                        prev_sha = string(LibGit2.head_oid(repo))
-                        success = true
-                        try
-                            LibGit2.fetch(repo, payload = Nullable(creds))
-                            LibGit2.reset!(creds)
-                            LibGit2.merge!(repo, fastforward=true)
-                        catch err
-                            cex = CapturedException(err, catch_backtrace())
-                            push!(deferred_errors, PkgError("Package $pkg cannot be updated.", cex))
-                            success = false
-                            stopupdate = isa(err, InterruptException)
-                        end
-                        if success
-                            post_sha = string(LibGit2.head_oid(repo))
-                            branch = LibGit2.branch(repo)
-                            info("Updating $pkg $branch...",
-                                prev_sha != post_sha ? " $(prev_sha[1:8]) → $(post_sha[1:8])" : "")
-                        end
+            repo = GitRepo(pkg)
+            if LibGit2.isattached(repo)
+                if LibGit2.isdirty(repo)
+                    warn("Package $pkg: skipping update (dirty)...")
+                elseif Read.ispinned(repo)
+                    info("Package $pkg: skipping update (pinned)...")
+                else
+                    prev_sha = string(LibGit2.head_oid(repo))
+                    success = true
+                    try
+                        LibGit2.fetch(repo, payload = Nullable(creds))
+                        LibGit2.reset!(creds)
+                        LibGit2.merge!(repo, fastforward=true)
+                    catch err
+                        cex = CapturedException(err, catch_backtrace())
+                        push!(deferred_errors, PkgError("Package $pkg cannot be updated.", cex))
+                        success = false
+                        stopupdate = isa(err, InterruptException)
+                    end
+                    if success
+                        post_sha = string(LibGit2.head_oid(repo))
+                        branch = LibGit2.branch(repo)
+                        info("Updating $pkg $branch...",
+                            prev_sha != post_sha ? " $(prev_sha[1:8]) → $(post_sha[1:8])" : "")
                     end
                 end
             end

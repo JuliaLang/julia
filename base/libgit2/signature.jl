@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 function Signature(ptr::Ptr{SignatureStruct})
-    sig   = unsafe_load(ptr)::SignatureStruct
-    name  = unsafe_string(sig.name)
-    email = unsafe_string(sig.email)
+    sig    = unsafe_load(ptr)::SignatureStruct
+    name   = unsafe_string(sig.name)
+    email  = unsafe_string(sig.email)
     time   = sig.when.time
     offset = sig.when.offset
     return Signature(name, email, time, offset)
@@ -14,18 +14,10 @@ function Signature(name::AbstractString, email::AbstractString)
     sig_ptr_ptr = Ref{Ptr{SignatureStruct}}(C_NULL)
     @check ccall((:git_signature_now, :libgit2), Cint,
                  (Ptr{Ptr{SignatureStruct}}, Cstring, Cstring), sig_ptr_ptr, name, email)
-    sig = GitSignature(sig_ptr_ptr[])
-    s = Signature(sig.ptr)
-    close(sig)
-    return s
+    return Signature(GitSignature(sig_ptr_ptr[]))
 end
 
-function Signature(repo::GitRepo)
-    sig = default_signature(repo)
-    s = Signature(sig.ptr)
-    close(sig)
-    return s
-end
+Signature(repo::GitRepo) = Signature(default_signature(repo))
 
 function Base.convert(::Type{GitSignature}, sig::Signature)
     sig_ptr_ptr = Ref{Ptr{SignatureStruct}}(C_NULL)

@@ -11,7 +11,7 @@ function tag_list(repo::GitRepo)
                  (Ptr{StrArrayStruct}, Ptr{Void}), sa_ref, repo.ptr)
     res = convert(Vector{String}, sa_ref[])
     free(sa_ref)
-    res
+    return res
 end
 
 """
@@ -40,14 +40,12 @@ function tag_create(repo::GitRepo, tag::AbstractString, commit::Union{AbstractSt
                     force::Bool = false,
                     sig::Signature = Signature(repo))
     oid_ptr = Ref(GitHash())
-    with(GitCommit(repo, commit)) do commit_obj
-        commit_obj === nothing && return oid_ptr[] # return empty oid
-        with(convert(GitSignature, sig)) do git_sig
-            @check ccall((:git_tag_create, :libgit2), Cint,
-                 (Ptr{GitHash}, Ptr{Void}, Cstring, Ptr{Void}, Ptr{SignatureStruct}, Cstring, Cint),
-                  oid_ptr, repo.ptr, tag, commit_obj.ptr, git_sig.ptr, msg, Cint(force))
-        end
-    end
+    commit_obj = GitCommit(repo, commit)
+    commit_obj === nothing && return oid_ptr[] # return empty oid
+    git_sig = convert(GitSignature, sig)
+    @check ccall((:git_tag_create, :libgit2), Cint,
+         (Ptr{GitHash}, Ptr{Void}, Cstring, Ptr{Void}, Ptr{SignatureStruct}, Cstring, Cint),
+          oid_ptr, repo.ptr, tag, commit_obj.ptr, git_sig.ptr, msg, Cint(force))
     return oid_ptr[]
 end
 
@@ -58,8 +56,11 @@ The name of `tag` (e.g. `"v0.5"`).
 """
 function name(tag::GitTag)
     str_ptr = ccall((:git_tag_name, :libgit2), Cstring, (Ptr{Void}, ), tag.ptr)
-    str_ptr == C_NULL && throw(Error.GitError(Error.ERROR))
-    return unsafe_string(str_ptr)
+    if str_ptr == C_NULL
+        throw(Error.GitError(Error.ERROR))
+    else
+        return unsafe_string(str_ptr)
+    end
 end
 
 # should we return the actual object? i.e. git_tag_target?

@@ -80,33 +80,27 @@ function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=availa
         false
     end
     res = true
-    try
-        for (ver,info) in avail
-            if cache_has_head && LibGit2.iscommit(info.sha1, crepo)
-                if LibGit2.is_ancestor_of(head, info.sha1, crepo)
-                    res = false
-                    break
-                end
-            elseif LibGit2.iscommit(info.sha1, prepo)
-                if LibGit2.is_ancestor_of(head, info.sha1, prepo)
-                    res = false
-                    break
-                end
-            else
-                Base.warn_once("unknown $pkg commit $(info.sha1[1:8]), metadata may be ahead of package cache")
+    for (ver,info) in avail
+        if cache_has_head && LibGit2.iscommit(info.sha1, crepo)
+            if LibGit2.is_ancestor_of(head, info.sha1, crepo)
+                res = false
+                break
             end
+        elseif LibGit2.iscommit(info.sha1, prepo)
+            if LibGit2.is_ancestor_of(head, info.sha1, prepo)
+                res = false
+                break
+            end
+        else
+            Base.warn_once("unknown $pkg commit $(info.sha1[1:8]), metadata may be ahead of package cache")
         end
-    finally
-        cache_has_head && LibGit2.close(crepo)
     end
     return res
 end
 
 function ispinned(pkg::AbstractString)
     ispath(pkg,".git") || return false
-    LibGit2.with(LibGit2.GitRepo, pkg) do repo
-        return ispinned(repo)
-    end
+    return ispinned(LibGit2.GitRepo(pkg))
 end
 
 function ispinned(prepo::LibGit2.GitRepo)
@@ -146,22 +140,18 @@ function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::D
     end
     ancestors = VersionNumber[]
     descendants = VersionNumber[]
-    try
-        for (ver,info) in avail
-            sha1 = info.sha1
-            base = if cache_has_head && LibGit2.iscommit(sha1, crepo)
-                LibGit2.merge_base(crepo, head, sha1)
-            elseif LibGit2.iscommit(sha1, prepo)
-                LibGit2.merge_base(prepo, head, sha1)
-            else
-                Base.warn_once("unknown $pkg commit $(sha1[1:8]), metadata may be ahead of package cache")
-                continue
-            end
-            string(base) == sha1 && push!(ancestors,ver)
-            string(base) == head && push!(descendants,ver)
+    for (ver,info) in avail
+        sha1 = info.sha1
+        base = if cache_has_head && LibGit2.iscommit(sha1, crepo)
+            LibGit2.merge_base(crepo, head, sha1)
+        elseif LibGit2.iscommit(sha1, prepo)
+            LibGit2.merge_base(prepo, head, sha1)
+        else
+            Base.warn_once("unknown $pkg commit $(sha1[1:8]), metadata may be ahead of package cache")
+            continue
         end
-    finally
-        cache_has_head && LibGit2.close(crepo)
+        string(base) == sha1 && push!(ancestors,ver)
+        string(base) == head && push!(descendants,ver)
     end
     both = sort!(intersect(ancestors,descendants))
     isempty(both) || warn("$pkg: some versions are both ancestors and descendants of head: $both")
@@ -180,14 +170,14 @@ function requires_path(pkg::AbstractString, avail::Dict=available(pkg))
     pkgreq = joinpath(pkg,"REQUIRE")
     ispath(pkg,".git") || return pkgreq
     repo = LibGit2.GitRepo(pkg)
-    head = LibGit2.with(LibGit2.GitRepo, pkg) do repo
-        LibGit2.isdirty(repo, "REQUIRE") && return pkgreq
-        LibGit2.need_update(repo)
-        if isnull(find("REQUIRE", LibGit2.GitIndex(repo)))
-            isfile(pkgreq) && return pkgreq
-        end
-        string(LibGit2.head_oid(repo))
+    LibGit2.isdirty(repo, "REQUIRE") && return pkgreq
+    LibGit2.need_update(repo)
+    if isnull(find("REQUIRE", LibGit2.GitIndex(repo)))
+        isfile(pkgreq) && return pkgreq
     end
+    head = string(LibGit2.head_oid(repo))
+    LibGit2.iszero(LibGit2.revparseid(repo, "HEAD:REQUIRE")) && isfile(pkgreq) && return pkgreq
+    head = string(LibGit2.head_oid(repo))
     for (ver,info) in avail
         if head == info.sha1
             return joinpath("METADATA", pkg, "versions", string(ver), "requires")
@@ -208,11 +198,10 @@ function installed(avail::Dict=available())
         isinstalled(pkg) || continue
         ap = get(avail,pkg,Dict{VersionNumber,Available}())
         if ispath(pkg,".git")
-            LibGit2.with(LibGit2.GitRepo, pkg) do repo
-                ver = installed_version(pkg, repo, ap)
-                fixed = isfixed(pkg, repo, ap)
-                pkgs[pkg] = (ver, fixed)
-            end
+            repo = LibGit2.GitRepo(pkg)
+            ver = installed_version(pkg, repo, ap)
+            fixed = isfixed(pkg, repo, ap)
+            pkgs[pkg] = (ver, fixed)
         else
             pkgs[pkg] = (typemin(VersionNumber), true)
         end

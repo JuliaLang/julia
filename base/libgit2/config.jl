@@ -7,12 +7,7 @@ function GitConfig(path::AbstractString,
     cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_config_new, :libgit2), Cint, (Ptr{Ptr{Void}},), cfg_ptr_ptr)
     cfg = GitConfig(cfg_ptr_ptr[])
-    try
-        addfile(cfg, path, level, force)
-    catch ex
-        close(cfg)
-        rethrow(ex)
-    end
+    addfile(cfg, path, level, force)
     return cfg
 end
 
@@ -31,14 +26,10 @@ function GitConfig(level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT)
     if level != Consts.CONFIG_LEVEL_DEFAULT
         glb_cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
         tmpcfg = cfg
-        try
-            @check ccall((:git_config_open_level, :libgit2), Cint,
-                         (Ptr{Ptr{Void}}, Ptr{Void}, Cint),
-                          glb_cfg_ptr_ptr, cfg.ptr, Cint(level))
-            cfg = GitConfig(glb_cfg_ptr_ptr[])
-        finally
-            close(tmpcfg)
-        end
+        @check ccall((:git_config_open_level, :libgit2), Cint,
+                     (Ptr{Ptr{Void}}, Ptr{Void}, Cint),
+                      glb_cfg_ptr_ptr, cfg.ptr, Cint(level))
+        cfg = GitConfig(glb_cfg_ptr_ptr[])
     end
     return cfg
 end
@@ -84,29 +75,13 @@ end
 
 function get{T}(c::GitConfig, name::AbstractString, default::T)
     res = default
-    try res = get(T,c,name) end
+    try res = get(T, c, name) end
     return res
 end
 
-function getconfig(r::GitRepo, name::AbstractString, default)
-    with(GitConfig, r) do cfg
-        get(cfg, name, default)
-    end
-end
-
-function getconfig(rname::AbstractString, name::AbstractString, default)
-    with(GitRepo, rname) do r
-        with(GitConfig, r) do cfg
-            get(cfg, name, default)
-        end
-    end
-end
-
-function getconfig(name::AbstractString, default)
-    with(GitConfig) do cfg
-        get(cfg, name, default)
-    end
-end
+getconfig(r::GitRepo, name::AbstractString, default) = get(GitConfig(r), name, default)
+getconfig(rname::AbstractString, name::AbstractString, default) = get(GitConfig(GitRepo(rname)), name, default)
+getconfig(name::AbstractString, default) = get(GitConfig, name, default)
 
 function set!(c::GitConfig, name::AbstractString, value::AbstractString)
     @check ccall((:git_config_set_string, :libgit2), Cint,

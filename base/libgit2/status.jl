@@ -28,8 +28,11 @@ function Base.getindex(status::GitStatus, i::Integer)
                       Ptr{StatusEntry},
                       (Ptr{Void}, Csize_t),
                       status.ptr, i-1)
-    entry_ptr == C_NULL && throw(Error.GitError(Error.ERROR))
-    return unsafe_load(entry_ptr)
+    if entry_ptr == C_NULL
+        throw(Error.GitError(Error.ERROR))
+    else
+        return unsafe_load(entry_ptr)
+    end
 end
 
 """
@@ -45,6 +48,9 @@ function status(repo::GitRepo, path::String)
     ret =  ccall((:git_status_file, :libgit2), Cint,
                   (Ref{Cuint}, Ptr{Void}, Cstring),
                   status_ptr, repo.ptr, path)
-    (ret == Cint(Error.ENOTFOUND) || ret == Cint(Error.EAMBIGUOUS)) && return Nullable{Cuint}()
-    return Nullable(status_ptr[])
+    if ret == Cint(Error.ENOTFOUND) || ret == Cint(Error.EAMBIGUOUS)
+        return Nullable{Cuint}()
+    else
+        return Nullable(status_ptr[])
+    end
 end

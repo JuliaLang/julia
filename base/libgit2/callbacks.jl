@@ -14,14 +14,10 @@ function mirror_callback(remote::Ptr{Ptr{Void}}, repo_ptr::Ptr{Void},
     err != 0 && return Cint(err)
 
     # And set the configuration option to true for the push command
-    config = GitConfig(GitRepo(repo_ptr,false))
+    config   = GitConfig(GitRepo(repo_ptr,false))
     name_str = unsafe_string(name)
-    err= try set!(config, "remote.$name_str.mirror", true)
-         catch -1
-         finally close(config)
-         end
-    err != 0 && return Cint(err)
-    return Cint(0)
+    err = set!(config, "remote.$name_str.mirror", true)
+    return Cint(err)
 end
 
 function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
