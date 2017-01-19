@@ -32,9 +32,9 @@ isinteractive() = (is_interactive::Bool)
 
 An array of paths (as strings) where the `require` function looks for code.
 """
-const LOAD_PATH = String[]
-
+const LOAD_PATH = Any[]
 const LOAD_CACHE_PATH = String[]
+
 function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"
     if haskey(ENV, "JULIA_LOAD_PATH")
