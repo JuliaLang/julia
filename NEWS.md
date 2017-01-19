@@ -290,7 +290,7 @@ Experimental language features
 ------------------------------
 
   * Support for
-    [multi-threading](http://docs.julialang.org/en/latest/manual/parallel-computing/#multi-threading-experimental).
+    [multi-threading](http://docs.julialang.org/en/stable/manual/parallel-computing/#multi-threading-experimental).
     Loops with independent iterations can be easily parallelized with the
     `Threads.@threads` macro.
 
