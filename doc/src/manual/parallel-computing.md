@@ -312,7 +312,7 @@ Parallel for loops like these must be avoided. Fortunately, [Shared Arrays](@ref
 to get around this limitation:
 
 ```julia
-a = SharedArray(Float64,10)
+a = SharedArray{Float64}(10)
 @parallel for i=1:10
   a[i] = i
 end
@@ -720,10 +720,10 @@ just returns the object itself, so it's safe to use [`sdata()`](@ref) on any `Ar
 The constructor for a shared array is of the form:
 
 ```julia
-SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
+SharedArray{T,N}(dims::NTuple; init=false, pids=Int[])
 ```
 
-which creates a shared array of a bits type `T` and size `dims` across the processes specified
+which creates an `N`-dimensional shared array of a bits type `T` and size `dims` across the processes specified
 by `pids`.  Unlike distributed arrays, a shared array is accessible only from those participating
 workers specified by the `pids` named argument (and the creating process too, if it is on the
 same host).
@@ -741,7 +741,7 @@ julia> addprocs(3)
  3
  4
 
-julia> S = SharedArray(Int, (3,4), init = S -> S[Base.localindexes(S)] = myid())
+julia> S = SharedArray{Int,2}((3,4), init = S -> S[Base.localindexes(S)] = myid())
 3×4 SharedArray{Int64,2}:
  2  2  3  4
  2  3  3  4
@@ -762,7 +762,7 @@ convenient for splitting up tasks among processes. You can, of course, divide th
 you wish:
 
 ```julia
-julia> S = SharedArray(Int, (3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = myid())
+julia> S = SharedArray{Int,2}((3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = myid())
 3×4 SharedArray{Int64,2}:
  2  2  2  2
  3  3  3  3
@@ -861,8 +861,8 @@ end
 If we create `SharedArray`s and time these functions, we get the following results (with `julia -p 4`):
 
 ```julia
-q = SharedArray(Float64, (500,500,500))
-u = SharedArray(Float64, (500,500,500))
+q = SharedArray{Float64,3}((500,500,500))
+u = SharedArray{Float64,3}((500,500,500))
 
 # Run once to JIT-compile
 advection_serial!(q, u)

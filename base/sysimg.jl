@@ -98,12 +98,6 @@ include("subarray.jl")
 (::Type{Matrix{T}}){T}(m::Integer, n::Integer) = Matrix{T}(Int(m), Int(n))
 (::Type{Matrix})(m::Integer, n::Integer) = Matrix{Any}(Int(m), Int(n))
 
-# TODO: possibly turn these into deprecations
-Array{T}(::Type{T}, d::Integer...) = Array(T, convert(Tuple{Vararg{Int}}, d))
-Array{T}(::Type{T}, m::Integer)                       = Array{T,1}(Int(m))
-Array{T}(::Type{T}, m::Integer,n::Integer)            = Array{T,2}(Int(m),Int(n))
-Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) = Array{T,3}(Int(m),Int(n),Int(o))
-
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")

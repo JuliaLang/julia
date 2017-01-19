@@ -8,11 +8,11 @@ function GitReference(repo::GitRepo, refname::AbstractString)
     return GitReference(repo, ref_ptr_ptr[])
 end
 
-function GitReference(repo::GitRepo, obj_oid::Oid, refname::AbstractString = Consts.HEAD_FILE;
+function GitReference(repo::GitRepo, obj_oid::GitHash, refname::AbstractString = Consts.HEAD_FILE;
                       force::Bool=false, msg::AbstractString="")
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_reference_create, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{Oid}, Cint, Cstring),
+                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{GitHash}, Cint, Cstring),
                    ref_ptr_ptr, repo.ptr, refname, Ref(obj_oid), Cint(force),
                    isempty(msg) ? C_NULL : msg)
     return GitReference(repo, ref_ptr_ptr[])
@@ -99,16 +99,31 @@ function isremote(ref::GitReference)
     return err == 1
 end
 
+function Base.show(io::IO, ref::GitReference)
+    println(io, "GitReference:")
+    if isremote(ref)
+        println(io, "Remote with name ", name(ref))
+    elseif isbranch(ref)
+        println(io, "Branch with name ", name(ref))
+        if ishead(ref)
+            println(io, "Branch is HEAD.")
+        else
+            println(io, "Branch is not HEAD.")
+        end
+    elseif istag(ref)
+        println(io, "Tag with name ", name(ref))
+    end
+end
 function peel{T <: GitObject}(::Type{T}, ref::GitReference)
     git_otype = getobjecttype(T)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_reference_peel, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Ptr{Void}, Cint), obj_ptr_ptr, ref.ptr, git_otype)
     if err == Int(Error.ENOTFOUND)
-        return Oid()
+        return GitHash()
     elseif err != Int(Error.GIT_OK)
         if obj_ptr_ptr[] != C_NULL
-            close(GitAnyObject(ref.repo, obj_ptr_ptr[]))
+            close(GitUnknownObject(ref.repo, obj_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
@@ -116,12 +131,12 @@ function peel{T <: GitObject}(::Type{T}, ref::GitReference)
 end
 
 function ref_list(repo::GitRepo)
-    with(StrArrayStruct()) do sa
-        sa_ref = Ref(sa)
-        @check ccall((:git_reference_list, :libgit2), Cint,
+    sa_ref = Ref(StrArrayStruct())
+    @check ccall((:git_reference_list, :libgit2), Cint,
                       (Ptr{StrArrayStruct}, Ptr{Void}), sa_ref, repo.ptr)
-        convert(Vector{AbstractString}, sa_ref[])
-    end
+    res = convert(Vector{String}, sa_ref[])
+    free(sa_ref)
+    res
 end
 
 function create_branch(repo::GitRepo,
@@ -183,10 +198,10 @@ end
 
 owner(ref::GitReference) = ref.repo
 
-function target!(ref::GitReference, new_oid::Oid; msg::AbstractString="")
+function target!(ref::GitReference, new_oid::GitHash; msg::AbstractString="")
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_reference_set_target, :libgit2), Cint,
-             (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}, Cstring),
+             (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{GitHash}, Cstring),
              ref_ptr_ptr, ref.ptr, Ref(new_oid), isempty(msg) ? C_NULL : msg)
     return GitReference(ref.repo, ref_ptr_ptr[])
 end

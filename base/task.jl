@@ -104,7 +104,7 @@ julia> istaskdone(b)
 true
 ```
 """
-istaskdone(t::Task) = ((t.state == :done) | (t.state == :failed))
+istaskdone(t::Task) = ((t.state == :done) | istaskfailed(t))
 
 """
     istaskstarted(t::Task) -> Bool
@@ -121,6 +121,10 @@ false
 ```
 """
 istaskstarted(t::Task) = ccall(:jl_is_task_started, Cint, (Any,), t) != 0
+
+istaskfailed(t::Task) = (t.state == :failed)
+
+task_result(t::Task) = t.result
 
 task_local_storage() = get_task_tls(current_task())
 function get_task_tls(t::Task)
@@ -172,19 +176,25 @@ function wait(t::Task)
     while !istaskdone(t)
         wait(t.donenotify)
     end
-    if t.state == :failed
+    if istaskfailed(t)
         throw(t.exception)
     end
-    return t.result
+    return task_result(t)
 end
 
 suppress_excp_printing(t::Task) = isa(t.storage, ObjectIdDict) ? get(get_task_tls(t), :SUPPRESS_EXCEPTION_PRINTING, false) : false
 
+function register_taskdone_hook(t::Task, hook)
+    tls = get_task_tls(t)
+    push!(get!(tls, :TASKDONE_HOOKS, []), hook)
+    t
+end
+
 # runtime system hook called when a task finishes
 function task_done_hook(t::Task)
     # `finish_task` sets `sigatomic` before entering this function
-    err = (t.state == :failed)
-    result = t.result
+    err = istaskfailed(t)
+    result = task_result(t)
     handled = false
     if err
         t.backtrace = catch_backtrace()
@@ -196,6 +206,13 @@ function task_done_hook(t::Task)
     if isa(t.donenotify, Condition) && !isempty(t.donenotify.waitq)
         handled = true
         notify(t.donenotify, result, error=err)
+    end
+
+    # Execute any other hooks registered in the TLS
+    if isa(t.storage, ObjectIdDict) && haskey(t.storage, :TASKDONE_HOOKS)
+        foreach(hook -> hook(t), t.storage[:TASKDONE_HOOKS])
+        delete!(t.storage, :TASKDONE_HOOKS)
+        handled = true
     end
 
     #### un-optimized version
@@ -236,95 +253,6 @@ function task_done_hook(t::Task)
 end
 
 
-## produce, consume, and task iteration
-
-function produce(v)
-    #### un-optimized version
-    #q = current_task().consumers
-    #t = shift!(q.waitq)
-    #empty = isempty(q.waitq)
-    ct = current_task()
-    local empty, t, q
-    while true
-        q = ct.consumers
-        if isa(q,Task)
-            t = q
-            ct.consumers = nothing
-            empty = true
-            break
-        elseif isa(q,Condition) && !isempty(q.waitq)
-            t = shift!(q.waitq)
-            empty = isempty(q.waitq)
-            break
-        end
-        wait()
-    end
-
-    t.state == :runnable || throw(AssertionError("producer.consumer.state == :runnable"))
-    if empty
-        schedule_and_wait(t, v)
-        while true
-            # wait until there are more consumers
-            q = ct.consumers
-            if isa(q,Task)
-                return q.result
-            elseif isa(q,Condition) && !isempty(q.waitq)
-                return q.waitq[1].result
-            end
-            wait()
-        end
-    else
-        schedule(t, v)
-        # make sure `t` runs before us. otherwise, the producer might
-        # finish before `t` runs again, causing it to see the producer
-        # as done, causing done(::Task, _) to miss the value `v`.
-        # see issue #7727
-        yield()
-        return q.waitq[1].result
-    end
-end
-produce(v...) = produce(v)
-
-function consume(P::Task, values...)
-    if istaskdone(P)
-        return wait(P)
-    end
-
-    ct = current_task()
-    ct.result = length(values)==1 ? values[1] : values
-
-    #### un-optimized version
-    #if P.consumers === nothing
-    #    P.consumers = Condition()
-    #end
-    #push!(P.consumers.waitq, ct)
-    # optimized version that avoids the queue for 1 consumer
-    if P.consumers === nothing || (isa(P.consumers,Condition)&&isempty(P.consumers.waitq))
-        P.consumers = ct
-    else
-        if isa(P.consumers, Task)
-            t = P.consumers
-            P.consumers = Condition()
-            push!(P.consumers.waitq, t)
-        end
-        push!(P.consumers.waitq, ct)
-    end
-
-    P.state == :runnable ? schedule_and_wait(P) : wait() # don't attempt to queue it twice
-end
-
-start(t::Task) = nothing
-function done(t::Task, val)
-    t.result = consume(t)
-    istaskdone(t)
-end
-next(t::Task, val) = (t.result, nothing)
-iteratorsize(::Type{Task}) = SizeUnknown()
-iteratoreltype(::Type{Task}) = EltypeUnknown()
-
-isempty(::Task) = error("isempty not defined for Tasks")
-
-
 ## dynamically-scoped waiting for multiple items
 sync_begin() = task_local_storage(:SPAWNS, ([], get(task_local_storage(), :SPAWNS, ())))
 
@@ -341,12 +269,12 @@ function sync_end()
         try
             wait(r)
         catch ex
-            if !isa(r, Task) || (isa(r, Task) && !(r.state == :failed))
+            if !isa(r, Task) || (isa(r, Task) && !istaskfailed(r))
                 rethrow(ex)
             end
         finally
-            if isa(r, Task) && (r.state == :failed)
-                push!(c_ex, CapturedException(r.result, r.backtrace))
+            if isa(r, Task) && istaskfailed(r)
+                push!(c_ex, CapturedException(task_result(r), r.backtrace))
             end
         end
     end

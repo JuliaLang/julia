@@ -150,10 +150,10 @@ temp_pkg_dir() do
         Pkg.checkout("Example3", branch_name)
 
         LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example2")) do repo
-            @test LibGit2.head_oid(repo) == LibGit2.Oid(branch_commit)
+            @test LibGit2.head_oid(repo) == LibGit2.GitHash(branch_commit)
         end
         LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example3")) do repo
-            @test LibGit2.head_oid(repo) == LibGit2.Oid(branch_commit)
+            @test LibGit2.head_oid(repo) == LibGit2.GitHash(branch_commit)
         end
     end
 
@@ -459,7 +459,7 @@ temp_pkg_dir() do
         # (note that the following Pkg.update calls will update METADATA to the
         # latest version even though they don't update all packages)
         LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo
-            LibGit2.reset!(repo, LibGit2.Oid(old_commit), LibGit2.Consts.RESET_HARD)
+            LibGit2.reset!(repo, LibGit2.GitHash(old_commit), LibGit2.Consts.RESET_HARD)
         end
 
         @test_warn ("INFO: Installing Colors v0.6.4",
@@ -486,7 +486,7 @@ temp_pkg_dir() do
 
         # Reset METADATA to the second to last update of Example.jl
         LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo
-            LibGit2.reset!(repo, LibGit2.Oid(old_commit), LibGit2.Consts.RESET_HARD)
+            LibGit2.reset!(repo, LibGit2.GitHash(old_commit), LibGit2.Consts.RESET_HARD)
         end
 
         Pkg.add(package)
@@ -496,8 +496,7 @@ temp_pkg_dir() do
     end
 end
 
-let
-    io = IOBuffer()
+let io = IOBuffer()
     Base.showerror(io, Base.Pkg.Entry.PkgTestError("ppp"), backtrace())
     @test !contains(String(take!(io)), "backtrace()")
 end

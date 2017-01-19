@@ -26,8 +26,16 @@
 # Test @test_warn
 @test 1234 === @test_nowarn(1234)
 @test 5678 === @test_warn("WARNING: foo", begin warn("foo"); 5678; end)
+let a
+    # Broken
+    # @test_throws UndefVarError a
+    # Replace with the previous line when #20016 is fixed
+    @test_throws UndefRefError a
+    @test_nowarn a = 1
+    @test a === 1
+end
 
-a = Array(Float64, 2, 2, 2, 2, 2)
+a = Array{Float64,5}(2, 2, 2, 2, 2)
 a[1,1,1,1,1] = 10
 @test a[1,1,1,1,1] == 10
 @test a[1,1,1,1,1] != 2
@@ -192,12 +200,6 @@ end
 # TODO
 @test isapprox(.1+.1+.1, .3)
 @test !isapprox(.1+.1+.1, .4)
-
-@test_throws ErrorException Test.test_approx_eq(ones(10),ones(11),1e-8,"a","b")
-@test_throws ErrorException Test.test_approx_eq(ones(10),zeros(10),1e-8,"a","b")
-
-# Test @test_approx_eq_eps
-# TODO
 
 ts = @testset "@testset should return the testset" begin
     @test true
@@ -406,16 +408,14 @@ str = String(take!(io))
 @test contains(str, "test.jl")
 @test !contains(str, "boot.jl")
 
-let
-    io = IOBuffer()
+let io = IOBuffer()
     exc = Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}())
     Base.showerror(io, exc, backtrace())
     @test !contains(String(take!(io)), "backtrace()")
 end
 
 # 19750
-let
-    io = IOBuffer()
+let io = IOBuffer()
     exc = Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}())
     Base.showerror(io, exc, backtrace())
     @test !contains(String(take!(io)), "backtrace()")

@@ -5,9 +5,11 @@ module HigherOrderFns
 # This module provides higher order functions specialized for sparse arrays,
 # particularly map[!]/broadcast[!] for SparseVectors and SparseMatrixCSCs at present.
 import Base: map, map!, broadcast, broadcast!
+import Base.Broadcast: _containertype, promote_containertype,
+    broadcast_indices, broadcast_c, broadcast_c!
 
-using Base: tail, to_shape
-using ..SparseArrays: SparseVector, SparseMatrixCSC, indtype
+using Base: front, tail, to_shape
+using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseArray, indtype
 
 # This module is organized as follows:
 # (1) Define a common interface to SparseVectors and SparseMatrixCSCs sufficient for
@@ -19,7 +21,9 @@ using ..SparseArrays: SparseVector, SparseMatrixCSC, indtype
 # (6) Define general _map_[not]zeropres! capable of handling >2 (input) sparse vectors/matrices.
 # (7) Define _broadcast_[not]zeropres! specialized for a pair of (input) sparse vectors/matrices.
 # (8) Define general _broadcast_[not]zeropres! capable of handling >2 (input) sparse vectors/matrices.
-# (9) Define methods handling combinations of broadcast scalars and sparse vectors/matrices.
+# (9) Define (broadcast[!]) methods handling combinations of broadcast scalars and sparse vectors/matrices.
+# (10) Define (broadcast[!]) methods handling combinations of scalars, sparse vectors/matrices, and structured matrices.
+# (11) Define (map[!]) methods handling combinations of sparse and structured matrices.
 
 
 # (1) The definitions below provide a common interface to sparse vectors and matrices
@@ -59,8 +63,12 @@ end
 
 # (2) map[!] entry points
 map{Tf}(f::Tf, A::SparseVecOrMat) = _noshapecheck_map(f, A)
+map{Tf,N}(f::Tf, A::SparseMatrixCSC, Bs::Vararg{SparseMatrixCSC,N}) =
+    (_checksameshape(A, Bs...); _noshapecheck_map(f, A, Bs...))
 map{Tf,N}(f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N}) =
     (_checksameshape(A, Bs...); _noshapecheck_map(f, A, Bs...))
+map!{Tf,N}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC, Bs::Vararg{SparseMatrixCSC,N}) =
+    (_checksameshape(C, A, Bs...); _noshapecheck_map!(f, C, A, Bs...))
 map!{Tf,N}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N}) =
     (_checksameshape(C, A, Bs...); _noshapecheck_map!(f, C, A, Bs...))
 function _noshapecheck_map!{Tf,N}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N})
@@ -81,6 +89,19 @@ function _noshapecheck_map{Tf,N}(f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseVecO
 end
 # (3) broadcast[!] entry points
 broadcast{Tf}(f::Tf, A::SparseVecOrMat) = _noshapecheck_map(f, A)
+function broadcast!{Tf}(f::Tf, C::SparseVecOrMat)
+    isempty(C) && return _finishempty!(C)
+    fofnoargs = f()
+    if _iszero(fofnoargs) # f() is zero, so empty C
+        trimstorage!(C, 0)
+        _finishempty!(C)
+    else # f() is nonzero, so densify C and fill with independent calls to f()
+        _densestructure!(C)
+        storedvals(C)[1] = fofnoargs
+        broadcast!(f, view(storedvals(C), 2:length(storedvals(C))))
+    end
+    return C
+end
 broadcast!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat) = map!(f, C, A)
 function broadcast!{Tf,N}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N})
     _aresameshape(C, A, Bs...) && return _noshapecheck_map!(f, C, A, Bs...)
@@ -148,9 +169,6 @@ ambiguityfunnel{Tf}(f::Tf, x, y) = _aresameshape(x, y) ? _noshapecheck_map(f, x,
 broadcast(::typeof(+), x::SparseVector, y::SparseVector) = ambiguityfunnel(+, x, y) # base/sparse/sparsevectors.jl:1266
 broadcast(::typeof(-), x::SparseVector, y::SparseVector) = ambiguityfunnel(-, x, y) # base/sparse/sparsevectors.jl:1266
 broadcast(::typeof(*), x::SparseVector, y::SparseVector) = ambiguityfunnel(*, x, y) # base/sparse/sparsevectors.jl:1266
-function broadcast!(::typeof(identity), C::SparseMatrixCSC, A::SparseMatrixCSC) # from #17623, loc?
-    _checksameshape(C, A); return copy!(C, A)
-end
 
 
 # (4) _map_zeropres!/_map_notzeropres! specialized for a single sparse vector/matrix
@@ -837,16 +855,101 @@ end
 
 
 # (9) broadcast[!] over combinations of broadcast scalars and sparse vectors/matrices
-#
-# TODO: The minimal snippet below is not satisfying: A better solution would achieve
-# the same for (1) all broadcast scalar types (Base.Broadcast.containertype(x) == Any?) and
-# (2) any combination (number, order, type mixture) of broadcast scalars.
-#
-broadcast{Tf}(f::Tf, x::Union{Number,Bool}, A::SparseMatrixCSC) = broadcast(y -> f(x, y), A)
-broadcast{Tf}(f::Tf, A::SparseMatrixCSC, y::Union{Number,Bool}) = broadcast(x -> f(x, y), A)
-# NOTE: The following two method definitions work around #19096. These definitions should
-# be folded into the two preceding definitions on resolution of #19096.
+
+# broadcast shape promotion for combinations of sparse arrays and other types
+broadcast_indices(::Type{AbstractSparseArray}, A) = indices(A)
+# broadcast container type promotion for combinations of sparse arrays and other types
+_containertype{T<:SparseVecOrMat}(::Type{T}) = AbstractSparseArray
+# combinations of sparse arrays with broadcast scalars should yield sparse arrays
+promote_containertype(::Type{Any}, ::Type{AbstractSparseArray}) = AbstractSparseArray
+promote_containertype(::Type{AbstractSparseArray}, ::Type{Any}) = AbstractSparseArray
+# combinations of sparse arrays with anything else should fall back to generic dense broadcast
+promote_containertype(::Type{Array}, ::Type{AbstractSparseArray}) = Array
+promote_containertype(::Type{Tuple}, ::Type{AbstractSparseArray}) = Array
+promote_containertype(::Type{AbstractSparseArray}, ::Type{Array}) = Array
+promote_containertype(::Type{AbstractSparseArray}, ::Type{Tuple}) = Array
+
+# broadcast[!] entry points for combinations of sparse arrays and other (scalar) types
+@inline function broadcast_c{N}(f, ::Type{AbstractSparseArray}, mixedargs::Vararg{Any,N})
+    parevalf, passedargstup = capturescalars(f, mixedargs)
+    return broadcast(parevalf, passedargstup...)
+end
+@inline function broadcast_c!{N}(f, ::Type{AbstractSparseArray}, dest::SparseVecOrMat, mixedsrcargs::Vararg{Any,N})
+    parevalf, passedsrcargstup = capturescalars(f, mixedsrcargs)
+    return broadcast!(parevalf, dest, passedsrcargstup...)
+end
+# capturescalars takes a function (f) and a tuple of mixed sparse vectors/matrices and
+# broadcast scalar arguments (mixedargs), and returns a function (parevalf, i.e. partially
+# evaluated f) and a reduced argument tuple (passedargstup) containing only the sparse
+# vectors/matrices in mixedargs in their orginal order, and such that the result of
+# broadcast(parevalf, passedargstup...) is broadcast(f, mixedargs...)
+@inline capturescalars(f, mixedargs) =
+    capturescalars((passed, tofill) -> f(tofill...), (), mixedargs...)
+# Recursion cases for capturescalars
+@inline capturescalars(f, passedargstup, scalararg, mixedargs...) =
+    capturescalars(capturescalar(f, scalararg), passedargstup, mixedargs...)
+@inline capturescalars(f, passedargstup, nonscalararg::SparseVecOrMat, mixedargs...) =
+    capturescalars(passnonscalar(f), (passedargstup..., nonscalararg), mixedargs...)
+@inline passnonscalar(f) = (passed, tofill) -> f(Base.front(passed), (last(passed), tofill...))
+@inline capturescalar(f, scalararg) = (passed, tofill) -> f(passed, (scalararg, tofill...))
+# Base cases for capturescalars
+@inline capturescalars(f, passedargstup, scalararg) =
+    (capturelastscalar(f, scalararg), passedargstup)
+@inline capturescalars(f, passedargstup, nonscalararg::SparseVecOrMat) =
+    (passlastnonscalar(f), (passedargstup..., nonscalararg))
+@inline passlastnonscalar(f) = (passed...) -> f(Base.front(passed), (last(passed),))
+@inline capturelastscalar(f, scalararg) = (passed...) -> f(passed, (scalararg,))
+
+# NOTE: The following two method definitions work around #19096.
 broadcast{Tf,T}(f::Tf, ::Type{T}, A::SparseMatrixCSC) = broadcast(y -> f(T, y), A)
 broadcast{Tf,T}(f::Tf, A::SparseMatrixCSC, ::Type{T}) = broadcast(x -> f(x, T), A)
+
+
+# (10) broadcast[!] over combinations of scalars, sparse vectors/matrices, and structured matrices
+
+# structured array container type promotion
+immutable StructuredArray end
+_containertype{T<:Diagonal}(::Type{T}) = StructuredArray
+_containertype{T<:Bidiagonal}(::Type{T}) = StructuredArray
+_containertype{T<:Tridiagonal}(::Type{T}) = StructuredArray
+_containertype{T<:SymTridiagonal}(::Type{T}) = StructuredArray
+promote_containertype(::Type{StructuredArray}, ::Type{StructuredArray}) = StructuredArray
+# combinations involving sparse arrays continue in the structured array funnel
+promote_containertype(::Type{StructuredArray}, ::Type{AbstractSparseArray}) = StructuredArray
+promote_containertype(::Type{AbstractSparseArray}, ::Type{StructuredArray}) = StructuredArray
+# combinations involving scalars continue in the structured array funnel
+promote_containertype(::Type{StructuredArray}, ::Type{Any}) = StructuredArray
+promote_containertype(::Type{Any}, ::Type{StructuredArray}) = StructuredArray
+# combinations involving arrays divert to the generic array code
+promote_containertype(::Type{StructuredArray}, ::Type{Array}) = Array
+promote_containertype(::Type{Array}, ::Type{StructuredArray}) = Array
+# combinations involving tuples divert to the generic array code
+promote_containertype(::Type{StructuredArray}, ::Type{Tuple}) = Array
+promote_containertype(::Type{Tuple}, ::Type{StructuredArray}) = Array
+
+# for combinations involving sparse/structured arrays and scalars only,
+# promote all structured arguments to sparse and then rebroadcast
+@inline broadcast_c{N}(f, ::Type{StructuredArray}, As::Vararg{Any,N}) =
+    broadcast(f, map(_sparsifystructured, As)...)
+@inline broadcast_c!{N}(f, ::Type{AbstractSparseArray}, ::Type{StructuredArray}, C, B, As::Vararg{Any,N}) =
+    broadcast!(f, C, _sparsifystructured(B), map(_sparsifystructured, As)...)
+@inline broadcast_c!{N}(f, CT::Type, ::Type{StructuredArray}, C, B, As::Vararg{Any,N}) =
+    broadcast_c!(f, CT, Array, C, B, As...)
+@inline _sparsifystructured(S::SymTridiagonal) = SparseMatrixCSC(S)
+@inline _sparsifystructured(T::Tridiagonal) = SparseMatrixCSC(T)
+@inline _sparsifystructured(B::Bidiagonal) = SparseMatrixCSC(B)
+@inline _sparsifystructured(D::Diagonal) = SparseMatrixCSC(D)
+@inline _sparsifystructured(A::AbstractSparseArray) = A
+@inline _sparsifystructured(x) = x
+
+
+# (11) map[!] over combinations of sparse and structured matrices
+StructuredMatrix = Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}
+SparseOrStructuredMatrix = Union{SparseMatrixCSC,StructuredMatrix}
+map{Tf}(f::Tf, A::StructuredMatrix) = _noshapecheck_map(f, _sparsifystructured(A))
+map{Tf,N}(f::Tf, A::SparseOrStructuredMatrix, Bs::Vararg{SparseOrStructuredMatrix,N}) =
+    (_checksameshape(A, Bs...); _noshapecheck_map(f, _sparsifystructured(A), map(_sparsifystructured, Bs)...))
+map!{Tf,N}(f::Tf, C::SparseMatrixCSC, A::SparseOrStructuredMatrix, Bs::Vararg{SparseOrStructuredMatrix,N}) =
+    (_checksameshape(C, A, Bs...); _noshapecheck_map!(f, C, _sparsifystructured(A), map(_sparsifystructured, Bs)...))
 
 end

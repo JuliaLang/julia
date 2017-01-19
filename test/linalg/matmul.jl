@@ -256,7 +256,7 @@ for elty in (Float32,Float64,Complex64,Complex128)
     @test_throws BoundsError dot(x, 1:4, y, 1:4)
     @test_throws BoundsError dot(x, 1:3, y, 2:4)
     @test dot(x,1:2,y,1:2) == convert(elty,12.5)
-    @test x.'*y == convert(Vector{elty},[29.0])
+    @test x.'*y == convert(elty,29.0)
 end
 
 vecdot_(x,y) = invoke(vecdot, Tuple{Any,Any}, x,y) # generic vecdot

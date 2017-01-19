@@ -280,13 +280,13 @@ let undefvar
     err_str = @except_str 0::AbstractFloat TypeError
     @test err_str == "TypeError: typeassert: expected AbstractFloat, got $Int"
     err_str = @except_str 0::7 TypeError
-    @test err_str == "TypeError: typeassert: expected Type{T}, got $Int"
+    @test err_str == "TypeError: typeassert: expected Type, got $Int"
     err_str = @except_str "" <: AbstractString TypeError
-    @test err_str == "TypeError: subtype: expected Type{T}, got String"
+    @test err_str == "TypeError: issubtype: expected Type, got String"
     err_str = @except_str AbstractString <: "" TypeError
-    @test err_str == "TypeError: subtype: expected Type{T}, got String"
+    @test err_str == "TypeError: issubtype: expected Type, got String"
     err_str = @except_str Type{""} TypeError
-    @test err_str == "TypeError: Type: in parameter, expected Type{T}, got String"
+    @test err_str == "TypeError: Type: in parameter, expected Type, got String"
     err_str = @except_str TypeWithIntParam{Any} TypeError
     @test err_str == "TypeError: TypeWithIntParam: in T, expected T<:Integer, got Type{Any}"
 
@@ -335,7 +335,7 @@ let err_str,
     err_str = @except_str i() MethodError
     @test contains(err_str, "MethodError: objects of type $(curmod_prefix)EightBitType are not callable")
     err_str = @except_str EightBitTypeT() MethodError
-    @test contains(err_str, "MethodError: no method matching $(curmod_prefix)EightBitTypeT{T}()")
+    @test contains(err_str, "MethodError: no method matching $(curmod_prefix)EightBitTypeT()")
     err_str = @except_str EightBitTypeT{Int32}() MethodError
     @test contains(err_str, "MethodError: no method matching $(curmod_prefix)EightBitTypeT{Int32}()")
     err_str = @except_str j() MethodError
@@ -389,7 +389,7 @@ let err_str,
     err_str = @except_stackframe i() ErrorException
     @test err_str == " in (::$(curmod_prefix)EightBitType)() at $sn:$(method_defs_lineno + 3)"
     err_str = @except_stackframe EightBitTypeT() ErrorException
-    @test err_str == " in $(curmod_prefix)EightBitTypeT{T}() at $sn:$(method_defs_lineno + 4)"
+    @test err_str == " in $(curmod_prefix)EightBitTypeT() at $sn:$(method_defs_lineno + 4)"
     err_str = @except_stackframe EightBitTypeT{Int32}() ErrorException
     @test err_str == " in $(curmod_prefix)EightBitTypeT{Int32}() at $sn:$(method_defs_lineno + 5)"
     err_str = @except_stackframe j() ErrorException

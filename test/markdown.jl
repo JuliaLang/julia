@@ -180,7 +180,6 @@ let doc = Markdown.parse(
         ... another paragraph.
         """
     )
-
     @test length(doc.content) === 3
     @test isa(doc.content[1], Markdown.Paragraph)
     @test isa(doc.content[2], Markdown.List)
@@ -202,7 +201,6 @@ end
 @test md"Foo \[bar](baz)" == MD(Paragraph("Foo [bar](baz)"))
 
 # Basic plain (markdown) output
-
 @test md"foo" |> plain == "foo\n"
 @test md"foo *bar* baz" |> plain == "foo *bar* baz\n"
 @test md"# title" |> plain == "# title\n"
@@ -242,7 +240,6 @@ let doc = Markdown.parse(
 end
 
 # HTML output
-
 @test md"foo *bar* baz" |> html == "<p>foo <em>bar</em> baz</p>\n"
 @test md"something ***" |> html == "<p>something ***</p>\n"
 @test md"# h1## " |> html == "<h1>h1##</h1>\n"
@@ -295,7 +292,6 @@ Some **bolded**
 """
 @test latex(book) == "\\section{Title}\nSome discussion\n\n\\begin{quote}\nA quote\n\n\\end{quote}\n\\subsection{Section \\emph{important}}\nSome \\textbf{bolded}\n\n\\begin{itemize}\n\\item list1\n\n\n\\item list2\n\n\\end{itemize}\n"
 # mime output
-
 let out =
     """
     # Title
@@ -379,7 +375,6 @@ let out =
 end
 
 # rst rendering
-
 for (input, output) in (
         md"foo *bar* baz"     => "foo *bar* baz\n",
         md"something ***"     => "something ***\n",
@@ -407,7 +402,6 @@ for (input, output) in (
 end
 
 # Interpolation / Custom types
-
 type Reference
     ref
 end
@@ -494,7 +488,6 @@ let text =
 end
 
 # LaTeX extension
-
 let in_dollars =
     """
     We have \$x^2 < x\$ whenever:
@@ -563,7 +556,6 @@ let in_dollars =
 end
 
 # Nested backticks for inline code and math.
-
 let t_1 = "`code` ``math`` ```code``` ````math```` `````code`````",
     t_2 = "`` `math` `` ``` `code` ``code`` ``` ```` `math` ``math`` ```math``` ````",
     t_3 = "`` ` `` ``` `` ` `` ` ` ```",
@@ -617,7 +609,6 @@ let t_1 = "`code` ``math`` ```code``` ````math```` `````code`````",
 end
 
 # Admonitions.
-
 let t_1 =
         """
         # Foo
@@ -695,7 +686,6 @@ let t_1 =
     @test isa(m_2.content[3].content[3], Markdown.Header{1})
 
     # Rendering Tests.
-
     let out = Markdown.plain(m_1),
         expected =
             """
@@ -833,7 +823,6 @@ let t_1 =
 end
 
 # Nested Lists.
-
 let text =
         """
         1. A paragraph
@@ -887,7 +876,6 @@ let text =
     @test md.content[6].items[3][1].content[1] == "baz"
 
     # Rendering tests.
-
     let expected =
             """
             1. A paragraph with two lines.
@@ -988,7 +976,6 @@ let text =
 end
 
 # Ordered list starting number.
-
 let text =
         """
         42. foo

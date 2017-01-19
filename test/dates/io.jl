@@ -332,8 +332,7 @@ let f = "YY"
 end
 
 # Issue: https://github.com/quinnj/TimeZones.jl/issues/19
-let
-    ds = "2015-07-24T05:38:19.591Z"
+let ds = "2015-07-24T05:38:19.591Z"
     dt = Dates.DateTime(2015,7,24,5,38,19,591)
 
     format = "yyyy-mm-ddTHH:MM:SS.sssZ"

@@ -463,9 +463,6 @@ maximum(r::AbstractUnitRange) = isempty(r) ? throw(ArgumentError("range must be 
 minimum(r::Range)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : min(first(r), last(r))
 maximum(r::Range)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : max(first(r), last(r))
 
-ctranspose(r::Range) = [x for _=1:1, x=r]
-transpose(r::Range) = r'
-
 # Ranges are immutable
 copy(r::Range) = r
 

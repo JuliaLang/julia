@@ -154,7 +154,11 @@ static Value *uint_cnvt(Type *to, Value *x)
     return builder.CreateZExt(x, to);
 }
 
+#if JL_LLVM_VERSION >= 40000
+#define LLVM_FP(a,b) APFloat(a(),b)
+#else
 #define LLVM_FP(a,b) APFloat(a,b)
+#endif
 static Constant *julia_const_to_llvm(void *ptr, jl_value_t *bt)
 {
     // assume `jl_isbits(bt)`.
@@ -747,7 +751,7 @@ static jl_cgval_t emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, j
     jl_value_t *xty = expr_type(x, ctx);
     jl_cgval_t val;
     bool emitted = false;
-    if (!jl_subtype(xty, ety, 0)) {
+    if (!jl_subtype(xty, ety)) {
         emitted = true;
         val = emit_expr(x, ctx);
         emit_typecheck(val, ety, "pointerset: type mismatch in assign", ctx);

@@ -511,7 +511,6 @@ let exename = Base.julia_cmd()
 # Test REPL in dumb mode
 if !is_windows()
     TestHelpers.with_fake_pty() do slave, master
-
         nENV = copy(ENV)
         nENV["TERM"] = "dumb"
         p = spawn(setenv(`$exename --startup-file=no --quiet`,nENV),slave,slave,slave)
@@ -527,7 +526,6 @@ if !is_windows()
         output = readuntil(master,' ')
         @test output == "1\r\nquit()\r\n1\r\n\r\njulia> "
         @test nb_available(master) == 0
-
     end
 end
 
@@ -552,7 +550,8 @@ end
 # Test containers in error messages are limited #18726
 let io = IOBuffer()
     Base.display_error(io,
-        try [][trues(6000)]
+        try
+            [][trues(6000)]
         catch e
             e
         end, [])

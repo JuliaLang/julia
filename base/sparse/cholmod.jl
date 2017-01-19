@@ -1007,6 +1007,9 @@ function convert{T}(::Type{Matrix{T}}, D::Dense{T})
 end
 
 Base.copy!(dest::Base.PermutedDimsArrays.PermutedDimsArray, src::Dense) = _copy!(dest, src) # ambig
+Base.copy!{T<:VTypes}(dest::Dense{T}, D::Dense{T}) = _copy!(dest, D)
+Base.copy!{T<:VTypes}(dest::AbstractArray{T}, D::Dense{T}) = _copy!(dest, D)
+Base.copy!{T<:VTypes}(dest::AbstractArray{T,2}, D::Dense{T}) = _copy!(dest, D)
 Base.copy!(dest::AbstractArray, D::Dense) = _copy!(dest, D)
 
 function _copy!(dest::AbstractArray, D::Dense)
@@ -1136,7 +1139,7 @@ sparse{Tv}(FC::FactorComponent{Tv,:LD}) = sparse(Sparse(Factor(FC)))
 
 # Calculate the offset into the stype field of the cholmod_sparse_struct and
 # change the value
-let offset = fieldoffset(C_Sparse{Float64}, findfirst(name -> name === :stype, fieldnames(C_Sparse)))
+let offset = fieldoffset(C_Sparse{Float64}, findfirst(name -> name === :stype, fieldnames(C_Sparse{Float64})))
     global change_stype!
     function change_stype!(A::Sparse, i::Integer)
         unsafe_store!(convert(Ptr{Cint}, A.p), i, div(offset, 4) + 1)
@@ -1570,6 +1573,7 @@ function (\)(L::FactorComponent, B::SparseVecOrMat)
 end
 
 Ac_ldiv_B(L::FactorComponent, B) = ctranspose(L)\B
+Ac_ldiv_B(L::FactorComponent, B::RowVector) = ctranspose(L)\B # ambiguity
 
 (\){T<:VTypes}(L::Factor{T}, B::Dense{T}) = solve(CHOLMOD_A, L, B)
 (\)(L::Factor{Float64}, B::VecOrMat{Complex{Float64}}) = complex.(L\real(B), L\imag(B))

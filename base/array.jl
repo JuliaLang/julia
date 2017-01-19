@@ -7,7 +7,7 @@
 typealias AbstractVector{T} AbstractArray{T,1}
 typealias AbstractMatrix{T} AbstractArray{T,2}
 typealias AbstractVecOrMat{T} Union{AbstractVector{T}, AbstractMatrix{T}}
-typealias RangeIndex Union{Int, Range{Int}, AbstractUnitRange{Int}, Colon}
+typealias RangeIndex Union{Int, Range{Int}, AbstractUnitRange{Int}}
 typealias DimOrInd Union{Integer, AbstractUnitRange}
 typealias IntOrInd Union{Int, AbstractUnitRange}
 typealias DimsOrInds{N} NTuple{N,DimOrInd}
@@ -24,6 +24,15 @@ typealias DenseVecOrMat{T} Union{DenseVector{T}, DenseMatrix{T}}
 ## Basic functions ##
 
 import Core: arraysize, arrayset, arrayref
+
+"""
+    Array{T,N}(dims)
+
+Construct an uninitialized `N`-dimensional dense array with element type `T`. `dims` may
+be a tuple or a series of integer arguments corresponding to the length in each dimension.
+If the rank `N` is omitted, i.e. `Array{T}(dims)`, the rank is determined based on `dims`.
+"""
+Array
 
 vect() = Array{Any,1}(0)
 vect{T}(X::T...) = T[ X[i] for i=1:length(X) ]
@@ -448,8 +457,8 @@ done(a::Array,i) = (@_inline_meta; i == length(a)+1)
 ## Indexing: getindex ##
 
 # This is more complicated than it needs to be in order to get Win64 through bootstrap
-getindex(A::Array, i1::Real) = arrayref(A, to_index(i1))
-getindex(A::Array, i1::Real, i2::Real, I::Real...) = (@_inline_meta; arrayref(A, to_index(i1), to_index(i2), to_indexes(I...)...)) # TODO: REMOVE FOR #14770
+getindex(A::Array, i1::Int) = arrayref(A, i1)
+getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref(A, i1, i2, I...)) # TODO: REMOVE FOR #14770
 
 # Faster contiguous indexing using copy! for UnitRange and Colon
 function getindex(A::Array, I::UnitRange{Int})
@@ -472,13 +481,13 @@ function getindex(A::Array, c::Colon)
 end
 
 # This is redundant with the abstract fallbacks, but needed for bootstrap
-function getindex{S,T<:Real}(A::Array{S}, I::Range{T})
-    return S[ A[to_index(i)] for i in I ]
+function getindex{S}(A::Array{S}, I::Range{Int})
+    return S[ A[i] for i in I ]
 end
 
 ## Indexing: setindex! ##
-setindex!{T}(A::Array{T}, x, i1::Real) = arrayset(A, convert(T,x)::T, to_index(i1))
-setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, I::Real...) = (@_inline_meta; arrayset(A, convert(T,x)::T, to_index(i1), to_index(i2), to_indexes(I...)...)) # TODO: REMOVE FOR #14770
+setindex!{T}(A::Array{T}, x, i1::Int) = arrayset(A, convert(T,x)::T, i1)
+setindex!{T}(A::Array{T}, x, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayset(A, convert(T,x)::T, i1, i2, I...)) # TODO: REMOVE FOR #14770
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})
@@ -554,15 +563,17 @@ function push!(a::Array{Any,1}, item::ANY)
 end
 
 function append!{T}(a::Array{T,1}, items::AbstractVector)
-    n = length(items)
+    itemindices = eachindex(items)
+    n = length(itemindices)
     ccall(:jl_array_grow_end, Void, (Any, UInt), a, n)
-    copy!(a, length(a)-n+1, items, 1, n)
+    copy!(a, length(a)-n+1, items, first(itemindices), n)
     return a
 end
 
 append!(a::Vector, iter) = _append!(a, iteratorsize(iter), iter)
+push!(a::Vector, iter...) = append!(a, iter)
 
-function _append!(a, ::HasLength, iter)
+function _append!(a, ::Union{HasLength,HasShape}, iter)
     n = length(a)
     resize!(a, n+length(iter))
     @inbounds for (i,item) in zip(n+1:length(a), iter)
@@ -591,15 +602,40 @@ julia> prepend!([3],[1,2])
  3
 ```
 """
+function prepend! end
+
 function prepend!{T}(a::Array{T,1}, items::AbstractVector)
-    n = length(items)
+    itemindices = eachindex(items)
+    n = length(itemindices)
     ccall(:jl_array_grow_beg, Void, (Any, UInt), a, n)
     if a === items
         copy!(a, 1, items, n+1, n)
     else
-        copy!(a, 1, items, 1, n)
+        copy!(a, 1, items, first(itemindices), n)
     end
     return a
+end
+
+prepend!(a::Vector, iter) = _prepend!(a, iteratorsize(iter), iter)
+unshift!(a::Vector, iter...) = prepend!(a, iter)
+
+function _prepend!(a, ::Union{HasLength,HasShape}, iter)
+    n = length(iter)
+    ccall(:jl_array_grow_beg, Void, (Any, UInt), a, n)
+    i = 0
+    for item in iter
+        @inbounds a[i += 1] = item
+    end
+    a
+end
+function _prepend!(a, ::IteratorSize, iter)
+    n = 0
+    for item in iter
+        n += 1
+        unshift!(a, item)
+    end
+    reverse!(a, 1, n)
+    a
 end
 
 
@@ -969,6 +1005,10 @@ end
 
 
 # concatenations of homogeneous combinations of vectors, horizontal and vertical
+
+vcat() = Array{Any,1}(0)
+hcat() = Array{Any,1}(0)
+
 function hcat{T}(V::Vector{T}...)
     height = length(V[1])
     for j = 2:length(V)
@@ -1331,7 +1371,7 @@ function find(testf::Function, A)
     return I
 end
 _index_remapper(A::AbstractArray) = linearindices(A)
-_index_remapper(iter) = Colon()  # safe for objects that don't implement length
+_index_remapper(iter) = OneTo(typemax(Int))  # safe for objects that don't implement length
 
 """
     find(A)

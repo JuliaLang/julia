@@ -6,11 +6,11 @@ const OID_RAWSZ = 20
 const OID_HEXSZ = OID_RAWSZ * 2
 const OID_MINPREFIXLEN = 4
 
-immutable Oid
+immutable GitHash
     val::NTuple{OID_RAWSZ, UInt8}
-    Oid(val::NTuple{OID_RAWSZ, UInt8}) = new(val)
+    GitHash(val::NTuple{OID_RAWSZ, UInt8}) = new(val)
 end
-Oid() = Oid(ntuple(i->zero(UInt8), OID_RAWSZ))
+GitHash() = GitHash(ntuple(i->zero(UInt8), OID_RAWSZ))
 
 """
     LibGit2.TimeStruct
@@ -38,17 +38,34 @@ end
 """
     LibGit2.StrArrayStruct
 
-Array of strings.
+A LibGit2 representation of an array of strings.
 Matches the [`git_strarray`](https://libgit2.github.com/libgit2/#HEAD/type/git_strarray) struct.
+
+When fetching data from LibGit2, a typical usage would look like:
+```julia
+sa_ref = Ref(StrArrayStruct())
+@check ccall(..., (Ptr{StrArrayStruct},), sa_ref)
+res = convert(Vector{String}, sa_ref[])
+free(sa_ref)
+```
+In particular, note that `LibGit2.free` should be called afterward on the `Ref` object.
+
+Conversely, when passing a vector of strings to LibGit2, it is generally simplest to rely
+on implicit conversion:
+```julia
+strs = String[...]
+@check ccall(..., (Ptr{StrArrayStruct},), strs)
+```
+Note that no call to `free` is required as the data is allocated by Julia.
 """
-@kwdef immutable StrArrayStruct
+immutable StrArrayStruct
    strings::Ptr{Cstring}
    count::Csize_t
 end
-function Base.close(sa::StrArrayStruct)
-    sa_ptr = Ref(sa)
-    ccall((:git_strarray_free, :libgit2), Void, (Ptr{StrArrayStruct},), sa_ptr)
-    return sa_ptr[]
+StrArrayStruct() = StrArrayStruct(C_NULL, 0)
+
+function free(sa_ref::Base.Ref{StrArrayStruct})
+    ccall((:git_strarray_free, :libgit2), Void, (Ptr{StrArrayStruct},), sa_ref)
 end
 
 """
@@ -56,16 +73,26 @@ end
 
 A data buffer for exporting data from libgit2.
 Matches the [`git_buf`](https://libgit2.github.com/libgit2/#HEAD/type/git_buf) struct.
+
+When fetching data from LibGit2, a typical usage would look like:
+```julia
+buf_ref = Ref(Buffer())
+@check ccall(..., (Ptr{Buffer},), buf_ref)
+# operation on buf_ref
+free(buf_ref)
+```
+In particular, note that `LibGit2.free` should be called afterward on the `Ref` object.
+
 """
-@kwdef immutable Buffer
+immutable Buffer
     ptr::Ptr{Cchar}
     asize::Csize_t
     size::Csize_t
 end
-function Base.close(buf::Buffer)
-    buf_ptr = Ref(buf)
-    ccall((:git_buf_free, :libgit2), Void, (Ptr{Buffer},), buf_ptr)
-    return buf_ptr[]
+Buffer() = Buffer(C_NULL, 0, 0)
+
+function free(buf_ref::Base.Ref{Buffer})
+    ccall((:git_buf_free, :libgit2), Void, (Ptr{Buffer},), buf_ref)
 end
 
 "Abstract credentials payload"
@@ -227,7 +254,7 @@ Description of one side of a delta.
 Matches the [`git_diff_file`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_file) struct.
 """
 immutable DiffFile
-    id::Oid
+    id::GitHash
     path::Cstring
     size::Int64
     flags::UInt32
@@ -317,7 +344,7 @@ immutable IndexEntry
     gid::UInt32
     file_size::Int64
 
-    id::Oid
+    id::GitHash
 
     flags::UInt16
     flags_extended::UInt16
@@ -348,11 +375,11 @@ end
     LibGit2.RebaseOperation
 
 Describes a single instruction/operation to be performed during the rebase.
-Matches the `git_rebase_operation` struct.
+Matches the [`git_rebase_operation`](https://libgit2.github.com/libgit2/#HEAD/type/git_rebase_operation_t) struct.
 """
 immutable RebaseOperation
     optype::Cint
-    id::Oid
+    id::GitHash
     exec::Cstring
 end
 Base.show(io::IO, rbo::RebaseOperation) = print(io, "RebaseOperation($(string(rbo.id)))")
@@ -361,7 +388,7 @@ Base.show(io::IO, rbo::RebaseOperation) = print(io, "RebaseOperation($(string(rb
     LibGit2.StatusOptions
 
 Options to control how `git_status_foreach_ext()` will issue callbacks.
-Matches the `git_status_options` struct.
+Matches the [`git_status_opt_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_status_opt_t) struct.
 """
 @kwdef immutable StatusOptions
     version::Cuint           = 1
@@ -389,7 +416,7 @@ end
 immutable FetchHead
     name::String
     url::String
-    oid::Oid
+    oid::GitHash
     ismerge::Bool
 end
 
@@ -412,7 +439,7 @@ for (typ, reporef, sup, cname) in [
     (:GitRebase,     :GitRepo,  :AbstractGitObject, :git_rebase),
     (:GitStatus,     :GitRepo,  :AbstractGitObject, :git_status_list),
     (:GitBranchIter, :GitRepo,  :AbstractGitObject, :git_branch_iterator),
-    (:GitAnyObject,  :GitRepo,  :GitObject,         :git_object),
+    (:GitUnknownObject,  :GitRepo,  :GitObject,         :git_object),
     (:GitCommit,     :GitRepo,  :GitObject,         :git_commit),
     (:GitBlob,       :GitRepo,  :GitObject,         :git_blob),
     (:GitTree,       :GitRepo,  :GitObject,         :git_tree),
@@ -527,8 +554,8 @@ function getobjecttype{T<:GitObject}(::Type{T})
         Consts.OBJ_BLOB
     elseif T == GitTag
         Consts.OBJ_TAG
-    elseif T == GitAnyObject
-        Consts.OBJ_ANY
+    elseif T == GitUnknownObject
+        Consts.OBJ_ANY # this name comes from the header
     else
         throw(GitError(Error.Object, Error.ENOTFOUND, "Type $T is not supported"))
     end
@@ -543,8 +570,8 @@ function getobjecttype(obj_type::Cint)
         GitBlob
     elseif obj_type == Consts.OBJ_TAG
         GitTag
-    elseif obj_type == Consts.OBJ_ANY
-        GitAnyObject
+    elseif obj_type == Consts.OBJ_ANY #this name comes from the header
+        GitUnknownObject
     else
         throw(GitError(Error.Object, Error.ENOTFOUND, "Object type $obj_type is not supported"))
     end

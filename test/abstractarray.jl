@@ -730,8 +730,7 @@ A = TSlowNIndexes(rand(2,2))
 @test @inferred(indices(rand(3,2), 3)) == 1:1
 
 #17088
-let
-    n = 10
+let n = 10
     M = rand(n, n)
     # vector of vectors
     v = [[M]; [M]] # using vcat
@@ -747,7 +746,7 @@ let
 end
 
 # isinteger and isreal
-@test isinteger(Diagonal(rand(1:5,5)))
+@test all(isinteger, Diagonal(rand(1:5, 5))) # reducing isinteger(...) deprecated
 @test isreal(Diagonal(rand(5)))
 
 # unary ops

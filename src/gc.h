@@ -207,14 +207,19 @@ STATIC_INLINE int page_index(region_t *region, void *data)
     return (gc_page_data(data) - region->pages->data) / GC_PAGE_SZ;
 }
 
-STATIC_INLINE int gc_marked(int bits)
+STATIC_INLINE int gc_marked(uintptr_t bits)
 {
     return (bits & GC_MARKED) != 0;
 }
 
-STATIC_INLINE int gc_old(int bits)
+STATIC_INLINE int gc_old(uintptr_t bits)
 {
     return (bits & GC_OLD) != 0;
+}
+
+STATIC_INLINE uintptr_t gc_set_bits(uintptr_t tag, int bits)
+{
+    return (tag & ~(uintptr_t)3) | bits;
 }
 
 STATIC_INLINE uintptr_t gc_ptr_tag(void *v, uintptr_t mask)

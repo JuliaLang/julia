@@ -48,15 +48,14 @@ copy(d::WeakKeyDict) = WeakKeyDict(d)
 
 WeakKeyDict{K,V}(ps::Pair{K,V}...)            = WeakKeyDict{K,V}(ps)
 WeakKeyDict{K  }(ps::Pair{K}...,)             = WeakKeyDict{K,Any}(ps)
-WeakKeyDict{V  }(ps::Pair{TypeVar(:K),V}...,) = WeakKeyDict{Any,V}(ps)
+WeakKeyDict{V  }(ps::(Pair{K,V} where K)...,) = WeakKeyDict{Any,V}(ps)
 WeakKeyDict(     ps::Pair...)                 = WeakKeyDict{Any,Any}(ps)
 
 function WeakKeyDict(kv)
     try
-        Base.associative_with_eltype(WeakKeyDict, kv, eltype(kv))
+        Base.associative_with_eltype((K, V) -> WeakKeyDict{K, V}, kv, eltype(kv))
     catch e
-        if any(x->isempty(methods(x, (typeof(kv),))), [start, next, done]) ||
-            !all(x->isa(x,Union{Tuple,Pair}),kv)
+        if !applicable(start, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
             throw(ArgumentError("WeakKeyDict(kv): kv needs to be an iterator of tuples or pairs"))
         else
             rethrow(e)

@@ -52,12 +52,13 @@ function addfile(cfg::GitConfig, path::AbstractString,
 end
 
 function get{T<:AbstractString}(::Type{T}, c::GitConfig, name::AbstractString)
-    buf_ptr = Ref(Buffer())
+    buf_ref = Ref(Buffer())
     @check ccall((:git_config_get_string_buf, :libgit2), Cint,
-                (Ptr{Buffer}, Ptr{Void}, Cstring), buf_ptr, c.ptr, name)
-    return with(buf_ptr[]) do buf
-        unsafe_string(buf.ptr, buf.size)
-    end
+                 (Ptr{Buffer}, Ptr{Void}, Cstring), buf_ref, c.ptr, name)
+    buf = buf_ref[]
+    str = unsafe_string(buf.ptr, buf.size)
+    free(buf_ref)
+    str
 end
 
 function get(::Type{Bool}, c::GitConfig, name::AbstractString)

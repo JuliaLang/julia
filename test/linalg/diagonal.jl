@@ -7,7 +7,6 @@ n=12 #Size of matrix problem to test
 srand(1)
 
 @testset for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
-
     d=convert(Vector{elty}, randn(n))
     v=convert(Vector{elty}, randn(n))
     U=convert(Matrix{elty}, randn(n,n))
@@ -47,17 +46,17 @@ srand(1)
         end
 
         for func in (det, trace)
-            @test_approx_eq_eps func(D) func(DM) n^2*eps(relty)*(elty<:Complex ? 2:1)
+            @test func(D) ≈ func(DM) atol=n^2*eps(relty)*(1+(elty<:Complex))
         end
         if relty <: BlasFloat
             for func in (expm,)
-                @test_approx_eq_eps func(D) func(DM) n^3*eps(relty)
+                @test func(D) ≈ func(DM) atol=n^3*eps(relty)
             end
-            @test_approx_eq_eps logm(Diagonal(abs.(D.diag))) logm(abs.(DM)) n^3*eps(relty)
+            @test logm(Diagonal(abs.(D.diag))) ≈ logm(abs.(DM)) atol=n^3*eps(relty)
         end
         if elty <: BlasComplex
             for func in (logdet, sqrtm)
-                @test_approx_eq_eps func(D) func(DM) n^2*eps(relty)*2
+                @test func(D) ≈ func(DM) atol=n^2*eps(relty)*2
             end
         end
     end
@@ -73,18 +72,18 @@ srand(1)
                     U = view(UU, 1:n, 1:2)
                 end
 
-                @test_approx_eq_eps D*v DM*v n*eps(relty)*(elty<:Complex ? 2:1)
-                @test_approx_eq_eps D*U DM*U n^2*eps(relty)*(elty<:Complex ? 2:1)
+                @test D*v ≈ DM*v atol=n*eps(relty)*(1+(elty<:Complex))
+                @test D*U ≈ DM*U atol=n^2*eps(relty)*(1+(elty<:Complex))
 
                 @test U.'*D ≈ U.'*Array(D)
                 @test U'*D ≈ U'*Array(D)
 
                 if relty != BigFloat
-                    @test_approx_eq_eps D\v DM\v 2n^2*eps(relty)*(elty<:Complex ? 2:1)
-                    @test_approx_eq_eps D\U DM\U 2n^3*eps(relty)*(elty<:Complex ? 2:1)
-                    @test_approx_eq_eps A_ldiv_B!(D,copy(v)) DM\v 2n^2*eps(relty)*(elty<:Complex ? 2:1)
-                    @test_approx_eq_eps A_ldiv_B!(D,copy(U)) DM\U 2n^3*eps(relty)*(elty<:Complex ? 2:1)
-                    @test_approx_eq_eps A_ldiv_B!(D,eye(D)) D\eye(D) 2n^3*eps(relty)*(elty<:Complex ? 2:1)
+                    @test D\v ≈ DM\v atol=2n^2*eps(relty)*(1+(elty<:Complex))
+                    @test D\U ≈ DM\U atol=2n^3*eps(relty)*(1+(elty<:Complex))
+                    @test A_ldiv_B!(D,copy(v)) ≈ DM\v atol=2n^2*eps(relty)*(1+(elty<:Complex))
+                    @test A_ldiv_B!(D,copy(U)) ≈ DM\U atol=2n^3*eps(relty)*(1+(elty<:Complex))
+                    @test A_ldiv_B!(D,eye(D)) ≈ D\eye(D) atol=2n^3*eps(relty)*(1+(elty<:Complex))
                     @test_throws DimensionMismatch A_ldiv_B!(D, ones(elty, n + 1))
                     @test_throws SingularException A_ldiv_B!(Diagonal(zeros(relty,n)),copy(v))
                     b = rand(elty,n,n)

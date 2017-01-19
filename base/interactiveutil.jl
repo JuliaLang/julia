@@ -7,7 +7,7 @@
 
 Determines the editor to use when running functions like `edit`. Returns an Array compatible
 for use within backticks. You can change the editor by setting `JULIA_EDITOR`, `VISUAL` or
-`EDITOR` as an environmental variable.
+`EDITOR` as an environment variable.
 """
 function editor()
     if is_windows() || is_apple()
@@ -28,7 +28,7 @@ end
 
 Edit a file or directory optionally providing a line number to edit the file at.
 Returns to the `julia` prompt when you quit the editor. The editor can be changed
-by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environmental variable.
+by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 """
 function edit(path::AbstractString, line::Integer=0)
     command = editor()
@@ -76,7 +76,7 @@ end
 
 Edit the definition of a function, optionally specifying a tuple of types to
 indicate which method to edit. The editor can be changed by setting `JULIA_EDITOR`,
-`VISUAL` or `EDITOR` as an environmental variable.
+`VISUAL` or `EDITOR` as an environment variable.
 """
 edit(f)          = edit(functionloc(f)...)
 edit(f, t::ANY)  = edit(functionloc(f,t)...)
@@ -500,7 +500,7 @@ function type_close_enough(x::ANY, t::ANY)
     x == t && return true
     return (isa(x,DataType) && isa(t,DataType) && x.name === t.name &&
             !isleaftype(t) && x <: t) ||
-           (isa(x,Union) && isa(t,DataType) && any(u -> u===t, x.types))
+           (isa(x,Union) && isa(t,DataType) && (type_close_enough(x.a, t) || type_close_enough(x.b, t)))
 end
 
 # `methodswith` -- shows a list of methods using the type given
@@ -517,11 +517,15 @@ excluding type `Any`.
 """
 function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Method[])
     for d in methods(f)
-        if any(x -> (type_close_enough(x, t) ||
-                     (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
-                      (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
-                     x != Any && x != ANY),
-               d.sig.parameters)
+        if any(function (x)
+                   let x = rewrap_unionall(x, d.sig)
+                       (type_close_enough(x, t) ||
+                        (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
+                         (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
+                        x != Any && x != ANY)
+                   end
+               end,
+               unwrap_unionall(d.sig).parameters)
             push!(meths, d)
         end
     end
@@ -677,17 +681,20 @@ function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
             value = getfield(m, v)
             @printf head "%30s " s
             try
-                bytes = summarysize(value)
-                if bytes < 10_000
-                    @printf(head, "%6d bytes  ", bytes)
+                if value ∈ (Base, Main, Core)
+                    print(head, "              ")
                 else
-                    @printf(head, "%6d KB     ", bytes ÷ (1024))
+                    bytes = summarysize(value)
+                    if bytes < 10_000
+                        @printf(head, "%6d bytes  ", bytes)
+                    else
+                        @printf(head, "%6d KB     ", bytes ÷ (1024))
+                    end
                 end
                 print(head, summary(value))
             catch e
                 print(head, "#=ERROR: unable to show value=#")
             end
-
             newline = search(head, UInt8('\n')) - 1
             if newline < 0
                 newline = nb_available(head)
@@ -722,6 +729,10 @@ summarysize(obj; exclude = Union{Module,DataType,TypeName}) =
     summarysize(obj, ObjectIdDict(), exclude)
 
 summarysize(obj::Symbol, seen, excl) = 0
+
+function summarysize(obj::UnionAll, seen, excl)
+    return 2*sizeof(Int) + summarysize(obj.body, seen, excl) + summarysize(obj.var, seen, excl)
+end
 
 function summarysize(obj::DataType, seen, excl)
     key = pointer_from_objref(obj)

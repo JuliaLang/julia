@@ -281,6 +281,16 @@ kw"'"
      1+1im  2+1im
      3+1im  4+1im
 
+    julia> v = [1,2,3]
+    3-element Array{Int64,1}:
+     1
+     2
+     3
+
+    julia> v.'
+    1×3 RowVector{Int64,Array{Int64,1}}:
+     1  2  3
+
 """
 kw".'"
 

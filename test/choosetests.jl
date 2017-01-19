@@ -16,7 +16,7 @@ Upon return, `tests` is a vector of fully-expanded test names, and
 function choosetests(choices = [])
     testnames = [
         "linalg", "subarray", "core", "inference", "worlds",
-        "keywordargs", "numbers",
+        "keywordargs", "numbers", "subtype",
         "printf", "char", "strings", "triplequote", "unicode",
         "dates", "dict", "hashing", "iobuffer", "staged", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "random", "abstractarray",
@@ -130,7 +130,7 @@ function choosetests(choices = [])
                    "linalg/diagonal", "linalg/pinv", "linalg/givens",
                    "linalg/cholesky", "linalg/lu", "linalg/symmetric",
                    "linalg/generic", "linalg/uniformscaling", "linalg/lq",
-                   "linalg/hessenberg"]
+                   "linalg/hessenberg", "linalg/rowvector"]
     if Base.USE_GPL_LIBS
         push!(linalgtests, "linalg/arnoldi")
     end

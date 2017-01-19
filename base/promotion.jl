@@ -7,27 +7,23 @@ typejoin(t::ANY) = (@_pure_meta; t)
 typejoin(t::ANY, ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
 function typejoin(a::ANY, b::ANY)
     @_pure_meta
-    if isa(a,TypeConstructor); a = a.body; end
-    if isa(b,TypeConstructor); b = b.body; end
     if a <: b
         return b
     elseif b <: a
         return a
-    end
-    if isa(a,TypeVar)
+    elseif isa(a,UnionAll)
+        return UnionAll(a.var, typejoin(a.body, b))
+    elseif isa(b,UnionAll)
+        return UnionAll(b.var, typejoin(a, b.body))
+    elseif isa(a,TypeVar)
         return typejoin(a.ub, b)
-    end
-    if isa(b,TypeVar)
+    elseif isa(b,TypeVar)
         return typejoin(a, b.ub)
-    end
-    if isa(a,Union) || isa(b,Union)
-        u = Union{a, b}
-        if !isa(u,Union)
-            return u
-        end
-        return reduce(typejoin, Bottom, u.types)
-    end
-    if a <: Tuple
+    elseif isa(a,Union)
+        return typejoin(typejoin(a.a,a.b), b)
+    elseif isa(b,Union)
+        return typejoin(a, typejoin(b.a,b.b))
+    elseif a <: Tuple
         if !(b <: Tuple)
             return Any
         end
@@ -41,7 +37,7 @@ function typejoin(a::ANY, b::ANY)
         if laf < lbf
             if isvarargtype(ap[lar]) && !afixed
                 c = Vector{Any}(laf)
-                c[laf] = Vararg{typejoin(ap[lar].parameters[1], tailjoin(bp,laf))}
+                c[laf] = Vararg{typejoin(unwrapva(ap[lar]), tailjoin(bp,laf))}
                 n = laf-1
             else
                 c = Vector{Any}(laf+1)
@@ -51,7 +47,7 @@ function typejoin(a::ANY, b::ANY)
         elseif lbf < laf
             if isvarargtype(bp[lbr]) && !bfixed
                 c = Vector{Any}(lbf)
-                c[lbf] = Vararg{typejoin(bp[lbr].parameters[1], tailjoin(ap,lbf))}
+                c[lbf] = Vararg{typejoin(unwrapva(bp[lbr]), tailjoin(ap,lbf))}
                 n = lbf-1
             else
                 c = Vector{Any}(lbf+1)
@@ -72,22 +68,26 @@ function typejoin(a::ANY, b::ANY)
         return Any
     end
     while b !== Any
-        if a <: b.name.primary
+        if a <: b.name.wrapper
             while a.name !== b.name
                 a = supertype(a)
             end
+            aprimary = unwrap_unionall(a.name.wrapper)
             # join on parameters
             n = length(a.parameters)
+            if n == 0
+                return aprimary
+            end
             p = Vector{Any}(n)
             for i = 1:n
                 ai, bi = a.parameters[i], b.parameters[i]
                 if ai === bi || (isa(ai,Type) && isa(bi,Type) && typeseq(ai,bi))
                     p[i] = ai
                 else
-                    p[i] = a.name.primary.parameters[i]
+                    p[i] = aprimary.parameters[i]
                 end
             end
-            return a.name.primary{p...}
+            return rewrap_unionall(a.name.wrapper{p...}, a.name.wrapper)
         end
         b = supertype(b)
     end
@@ -97,8 +97,9 @@ end
 # Returns length, isfixed
 function full_va_len(p)
     isempty(p) && return 0, true
-    if isvarargtype(p[end])
-        N = p[end].parameters[2]
+    last = p[end]
+    if isvarargtype(last)
+        N = unwrap_unionall(last).parameters[2]
         if isa(N, Integer)
             return (length(p) + N - 1)::Int, true
         end
@@ -195,6 +196,41 @@ promote_to_supertype{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type{T}) = (@_
 promote_to_supertype{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type{S}) = (@_pure_meta; S)
 promote_to_supertype{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type) =
     error("no promotion exists for ", T, " and ", S)
+
+# promotion with a check for circularity. Can be used to catch what
+# would otherwise become StackOverflowErrors.
+function promote_noncircular(x, y)
+    @_inline_meta
+    px, py = promote(x, y)
+    not_all_sametype((x,px), (y,py))
+    px, py
+end
+function promote_noncircular(x, y, z)
+    @_inline_meta
+    px, py, pz = promote(x, y, z)
+    not_all_sametype((x,px), (y,py), (z,pz))
+    px, py, pz
+end
+function promote_noncircular(x, y, z, a...)
+    p = promote(x, y, z, a...)
+    not_all_sametype(map(identity, (x, y, z, a...), p))
+    p
+end
+not_all_sametype(x, y) = nothing
+not_all_sametype(x, y, z) = nothing
+not_all_sametype{S,T}(x::Tuple{S,S}, y::Tuple{T,T}) = sametype_error(x[1], y[1])
+not_all_sametype{R,S,T}(x::Tuple{R,R}, y::Tuple{S,S}, z::Tuple{T,T}) = sametype_error(x[1], y[1], z[1])
+function not_all_sametype{R,S,T}(::Tuple{R,R}, y::Tuple{S,S}, z::Tuple{T,T}, args...)
+    @_inline_meta
+    not_all_sametype(y, z, args...)
+end
+not_all_sametype() = error("promotion failed to change any input types")
+function sametype_error(input...)
+    @_noinline_meta
+    error("circular method definition: promotion of types ",
+          join(map(x->string(typeof(x)), input), ", ", " and "),
+          " failed to change any input types")
+end
 
 +(x::Number, y::Number) = +(promote(x,y)...)
 *(x::Number, y::Number) = *(promote(x,y)...)

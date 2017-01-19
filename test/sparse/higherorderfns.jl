@@ -76,6 +76,16 @@ end
     end
 end
 
+@testset "broadcast! implementation specialized for solely an output sparse vector/matrix (no inputs)" begin
+    N, M, p = 10, 12, 0.4
+    V, C = sprand(N, p), sprand(N, M, p)
+    fV, fC = Array(V), Array(C)
+    @test broadcast!(() -> 0, V) == sparse(broadcast!(() -> 0, fV))
+    @test broadcast!(() -> 0, C) == sparse(broadcast!(() -> 0, fC))
+    @test let z = 0, fz = 0; broadcast!(() -> z += 1, V) == broadcast!(() -> fz += 1, fV); end
+    @test let z = 0, fz = 0; broadcast!(() -> z += 1, C) == broadcast!(() -> fz += 1, fC); end
+end
+
 @testset "broadcast[!] implementation specialized for a single (input) sparse vector/matrix" begin
     # broadcast[!] for a single sparse vector/matrix falls back to map[!], tested extensively
     # above. here we simply lightly exercise the relevant broadcast[!] entry points.
@@ -86,6 +96,8 @@ end
     @test broadcast(sin, A) == sparse(broadcast(sin, fA))
     @test broadcast!(sin, copy(a), a) == sparse(broadcast!(sin, copy(fa), fa))
     @test broadcast!(sin, copy(A), A) == sparse(broadcast!(sin, copy(fA), fA))
+    @test broadcast!(identity, copy(a), a) == sparse(broadcast!(identity, copy(fa), fa))
+    @test broadcast!(identity, copy(A), A) == sparse(broadcast!(identity, copy(fA), fA))
 end
 
 @testset "broadcast[!] implementation specialized for pairs of (input) sparse vectors/matrices" begin
@@ -193,6 +205,7 @@ end
     end
 end
 
+
 @testset "sparse map/broadcast with result eltype not a concrete subtype of Number (#19561/#19589)" begin
     intoneorfloatzero(x) = x != 0.0 ? Int(1) : Float64(x)
     stringorfloatzero(x) = x != 0.0 ? "Hello" : Float64(x)
@@ -200,6 +213,148 @@ end
     @test map(stringorfloatzero, speye(4)) == sparse(map(stringorfloatzero, eye(4)))
     @test broadcast(intoneorfloatzero, speye(4)) == sparse(broadcast(intoneorfloatzero, eye(4)))
     @test broadcast(stringorfloatzero, speye(4)) == sparse(broadcast(stringorfloatzero, eye(4)))
+end
+
+@testset "broadcast[!] over combinations of scalars and sparse vectors/matrices" begin
+    N, M, p = 10, 12, 0.5
+    elT = Float64
+    s = Float32(2.0)
+    V = sprand(elT, N, p)
+    A = sprand(elT, N, M, p)
+    fV, fA = Array(V), Array(A)
+    # test combinations involving one to three scalars and one to five sparse vectors/matrices
+    spargseq, dargseq = Iterators.cycle((A, V)), Iterators.cycle((fA, fV))
+    for nargs in 1:5 # number of tensor arguments
+        nargsl = cld(nargs, 2) # number in "left half" of tensor arguments
+        nargsr = fld(nargs, 2) # number in "right half" of tensor arguments
+        spargsl = tuple(Iterators.take(spargseq, nargsl)...) # "left half" of tensor args
+        spargsr = tuple(Iterators.take(spargseq, nargsr)...) # "right half" of tensor args
+        dargsl = tuple(Iterators.take(dargseq, nargsl)...) # "left half" of tensor args, densified
+        dargsr = tuple(Iterators.take(dargseq, nargsr)...) # "right half" of tensor args, densified
+        for (sparseargs, denseargs) in ( # argument combinations including scalars
+                # a few combinations involving one scalar
+                ((s, spargsl..., spargsr...), (s, dargsl..., dargsr...)),
+                ((spargsl..., s, spargsr...), (dargsl..., s, dargsr...)),
+                ((spargsl..., spargsr..., s), (dargsl..., dargsr..., s)),
+                # a few combinations involving two scalars
+                ((s, spargsl..., s, spargsr...), (s, dargsl..., s, dargsr...)),
+                ((s, spargsl..., spargsr..., s), (s, dargsl..., dargsr..., s)),
+                ((spargsl..., s, spargsr..., s), (dargsl..., s, dargsr..., s)),
+                ((s, s, spargsl..., spargsr...), (s, s, dargsl..., dargsr...)),
+                ((spargsl..., s, s, spargsr...), (dargsl..., s, s, dargsr...)),
+                ((spargsl..., spargsr..., s, s), (dargsl..., dargsr..., s, s)),
+                # a few combinations involving three scalars
+                ((s, spargsl..., s, spargsr..., s), (s, dargsl..., s, dargsr..., s)),
+                ((s, spargsl..., s, s, spargsr...), (s, dargsl..., s, s, dargsr...)),
+                ((spargsl..., s, s, spargsr..., s), (dargsl..., s, s, dargsr..., s)),
+                ((spargsl..., s, s, s, spargsr...), (dargsl..., s, s, s, dargsr...)), )
+            # test broadcast entry point
+            @test broadcast(*, sparseargs...) == sparse(broadcast(*, denseargs...))
+            @test isa(@inferred(broadcast(*, sparseargs...)), SparseMatrixCSC{elT})
+            # test broadcast! entry point
+            fX = broadcast(*, sparseargs...); X = sparse(fX)
+            @test broadcast!(*, X, sparseargs...) == sparse(broadcast!(*, fX, denseargs...))
+            @test isa(@inferred(broadcast!(*, X, sparseargs...)), SparseMatrixCSC{elT})
+            X = sparse(fX) # reset / warmup for @allocated test
+            @test_broken (@allocated broadcast!(*, X, sparseargs...)) == 0
+            # This test (and the analog below) fails for three reasons:
+            # (1) In all cases, generating the closures that capture the scalar arguments
+            #   results in allocation, not sure why.
+            # (2) In some cases, though _broadcast_eltype (which wraps _return_type)
+            #   consistently provides the correct result eltype when passed the closure
+            #   that incorporates the scalar arguments to broadcast (and, with #19667,
+            #   is inferable, so the overall return type from broadcast is inferred),
+            #   in some cases inference seems unable to determine the return type of
+            #   direct calls to that closure. This issue causes variables in both the
+            #   broadcast[!] entry points (fofzeros = f(_zeros_eltypes(args...)...)) and
+            #   the driver routines (Cx in _map_zeropres! and _broadcast_zeropres!) to have
+            #   inferred type Any, resulting in allocation and lackluster performance.
+            # (3) The sparseargs... splat in the call above allocates a bit, but of course
+            #   that issue is negligible and perhaps could be accounted for in the test.
+        end
+    end
+    # test combinations at the limit of inference (eight arguments net)
+    for (sparseargs, denseargs) in (
+            ((s, s, s, A, s, s, s, s), (s, s, s, fA, s, s, s, s)), # seven scalars, one sparse matrix
+            ((s, s, V, s, s, A, s, s), (s, s, fV, s, s, fA, s, s)), # six scalars, two sparse vectors/matrices
+            ((s, s, V, s, A, s, V, s), (s, s, fV, s, fA, s, fV, s)), # five scalars, three sparse vectors/matrices
+            ((s, V, s, A, s, V, s, A), (s, fV, s, fA, s, fV, s, fA)), # four scalars, four sparse vectors/matrices
+            ((s, V, A, s, V, A, s, A), (s, fV, fA, s, fV, fA, s, fA)), # three scalars, five sparse vectors/matrices
+            ((V, A, V, s, A, V, A, s), (fV, fA, fV, s, fA, fV, fA, s)), # two scalars, six sparse vectors/matrices
+            ((V, A, V, A, s, V, A, V), (fV, fA, fV, fA, s, fV, fA, fV)) ) # one scalar, seven sparse vectors/matrices
+        # test broadcast entry point
+        @test broadcast(*, sparseargs...) == sparse(broadcast(*, denseargs...))
+        @test isa(@inferred(broadcast(*, sparseargs...)), SparseMatrixCSC{elT})
+        # test broadcast! entry point
+        fX = broadcast(*, sparseargs...); X = sparse(fX)
+        @test broadcast!(*, X, sparseargs...) == sparse(broadcast!(*, fX, denseargs...))
+        @test isa(@inferred(broadcast!(*, X, sparseargs...)), SparseMatrixCSC{elT})
+        X = sparse(fX) # reset / warmup for @allocated test
+        @test_broken (@allocated broadcast!(*, X, sparseargs...)) == 0
+        # please see the note a few lines above re. this @test_broken
+    end
+end
+
+@testset "broadcast[!] over combinations of scalars, structured matrices, and sparse vectors/matrices" begin
+    N, p = 10, 0.4
+    s = rand()
+    V = sprand(N, p)
+    A = sprand(N, N, p)
+    Z = copy(A)
+    sparsearrays = (V, A)
+    fV, fA = map(Array, sparsearrays)
+    D = Diagonal(rand(N))
+    B = Bidiagonal(rand(N), rand(N - 1), true)
+    T = Tridiagonal(rand(N - 1), rand(N), rand(N - 1))
+    S = SymTridiagonal(rand(N), rand(N - 1))
+    structuredarrays = (D, B, T, S)
+    fstructuredarrays = map(Array, structuredarrays)
+    for (X, fX) in zip(structuredarrays, fstructuredarrays)
+        @test (Q = broadcast(sin, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(sin, fX)))
+        @test broadcast!(sin, Z, X) == sparse(broadcast(sin, fX))
+        @test (Q = broadcast(cos, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(cos, fX)))
+        @test broadcast!(cos, Z, X) == sparse(broadcast(cos, fX))
+        @test (Q = broadcast(*, s, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(*, s, fX)))
+        @test broadcast!(*, Z, s, X) == sparse(broadcast(*, s, fX))
+        @test (Q = broadcast(+, V, A, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(+, fV, fA, fX)))
+        @test broadcast!(+, Z, V, A, X) == sparse(broadcast(+, fV, fA, fX))
+        @test (Q = broadcast(*, s, V, A, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(*, s, fV, fA, fX)))
+        @test broadcast!(*, Z, s, V, A, X) == sparse(broadcast(*, s, fV, fA, fX))
+        for (Y, fY) in zip(structuredarrays, fstructuredarrays)
+            @test (Q = broadcast(+, X, Y); Q isa SparseMatrixCSC && Q == sparse(broadcast(+, fX, fY)))
+            @test broadcast!(+, Z, X, Y) == sparse(broadcast(+, fX, fY))
+            @test (Q = broadcast(*, X, Y); Q isa SparseMatrixCSC && Q == sparse(broadcast(*, fX, fY)))
+            @test broadcast!(*, Z, X, Y) == sparse(broadcast(*, fX, fY))
+        end
+    end
+end
+
+@testset "map[!] over combinations of sparse and structured matrices" begin
+    N, p = 10, 0.4
+    A = sprand(N, N, p)
+    Z, fA = copy(A), Array(A)
+    D = Diagonal(rand(N))
+    B = Bidiagonal(rand(N), rand(N - 1), true)
+    T = Tridiagonal(rand(N - 1), rand(N), rand(N - 1))
+    S = SymTridiagonal(rand(N), rand(N - 1))
+    structuredarrays = (D, B, T, S)
+    fstructuredarrays = map(Array, structuredarrays)
+    for (X, fX) in zip(structuredarrays, fstructuredarrays)
+        @test (Q = map(sin, X); Q isa SparseMatrixCSC && Q == sparse(map(sin, fX)))
+        @test map!(sin, Z, X) == sparse(map(sin, fX))
+        @test (Q = map(cos, X); Q isa SparseMatrixCSC && Q == sparse(map(cos, fX)))
+        @test map!(cos, Z, X) == sparse(map(cos, fX))
+        @test (Q = map(+, A, X); Q isa SparseMatrixCSC && Q == sparse(map(+, fA, fX)))
+        @test map!(+, Z, A, X) == sparse(map(+, fA, fX))
+        for (Y, fY) in zip(structuredarrays, fstructuredarrays)
+            @test (Q = map(+, X, Y); Q isa SparseMatrixCSC && Q == sparse(map(+, fX, fY)))
+            @test map!(+, Z, X, Y) == sparse(map(+, fX, fY))
+            @test (Q = map(*, X, Y); Q isa SparseMatrixCSC && Q == sparse(map(*, fX, fY)))
+            @test map!(*, Z, X, Y) == sparse(map(*, fX, fY))
+            @test (Q = map(+, X, A, Y); Q isa SparseMatrixCSC && Q == sparse(map(+, fX, fA, fY)))
+            @test map!(+, Z, X, A, Y) == sparse(map(+, fX, fA, fY))
+        end
+    end
 end
 
 # Older tests of sparse broadcast, now largely covered by the tests above

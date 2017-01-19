@@ -664,11 +664,8 @@ function getipaddr()
     count_ref = Ref{Int32}(1)
     lo_present = false
     err = ccall(:jl_uv_interface_addresses, Int32, (Ref{Ptr{UInt8}}, Ref{Int32}), addr_ref, count_ref)
+    uv_error("getlocalip", err)
     addr, count = addr_ref[], count_ref[]
-    if err != 0
-        ccall(:uv_free_interface_addresses, Void, (Ptr{UInt8}, Int32), addr, count)
-        throw(UVError("getlocalip", err))
-    end
     for i = 0:(count-1)
         current_addr = addr + i*_sizeof_uv_interface_address
         if 1 == ccall(:jl_uv_interface_address_is_internal, Int32, (Ptr{UInt8},), current_addr)

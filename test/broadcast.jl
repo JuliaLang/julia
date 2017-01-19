@@ -291,6 +291,8 @@ import Base.Meta: isexpr
 @test isexpr(expand(:(f.(x,1))), :thunk)
 @test isexpr(expand(:(f.(x,1.0))), :thunk)
 @test isexpr(expand(:(f.(x,$π))), :thunk)
+@test isexpr(expand(:(f.(x,"hello"))), :thunk)
+@test isexpr(expand(:(f.(x,$("hello")))), :thunk)
 
 # PR #17623: Fused binary operators
 @test [true] .* [true] == [true]
@@ -339,6 +341,9 @@ end
 @test broadcast(+, 1.0, (0, -2.0)) == (1.0,-1.0)
 @test broadcast(+, 1.0, (0, -2.0), [1]) == [2.0, 0.0]
 @test broadcast(*, ["Hello"], ", ", ["World"], "!") == ["Hello, World!"]
+let s = "foo"
+    @test s .* ["bar", "baz"] == ["foobar", "foobaz"] == "foo" .* ["bar", "baz"]
+end
 
 # Ensure that even strange constructors that break `T(x)::T` work with broadcast
 immutable StrangeType18623 end
@@ -386,7 +391,7 @@ end
 Base.getindex(A::Array19745, i::Integer...) = A.data[i...]
 Base.size(A::Array19745) = size(A.data)
 
-Base.Broadcast.containertype{T<:Array19745}(::Type{T}) = Array19745
+Base.Broadcast._containertype{T<:Array19745}(::Type{T}) = Array19745
 
 Base.Broadcast.promote_containertype(::Type{Array19745}, ::Type{Array19745}) = Array19745
 Base.Broadcast.promote_containertype(::Type{Array19745}, ::Type{Array})      = Array19745
@@ -435,4 +440,12 @@ end
         @test a == ["false"]
         @test f.([true, false]) == [true, "false"]
     end
+end
+
+# Test that broadcast treats type arguments as scalars, i.e. containertype yields Any,
+# even for subtypes of abstract array. (https://github.com/JuliaStats/DataArrays.jl/issues/229)
+@testset "treat type arguments as scalars, DataArrays issue 229" begin
+    @test Base.Broadcast.containertype(AbstractArray) == Any
+    @test broadcast(==, [1], AbstractArray) == BitArray([false])
+    @test broadcast(==, 1, AbstractArray) == false
 end

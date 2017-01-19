@@ -88,7 +88,6 @@ function normalize_url(url::AbstractString)
     m = match(GITHUB_REGEX,url)
     (m === nothing || rewrite_url_to === nothing) ?
         url : "$rewrite_url_to://github.com/$(m.captures[1]).git"
-
 end
 
 end # module

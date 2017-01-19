@@ -225,6 +225,10 @@ function convert(::Type{BigInt},x::BigFloat)
     trunc(BigInt,x)
 end
 
+function convert(::Type{Integer},x::BigFloat)
+    isinteger(x) || throw(InexactError())
+    trunc(Integer,x)
+end
 function convert{T<:Integer}(::Type{T},x::BigFloat)
     isinteger(x) || throw(InexactError())
     trunc(T,x)

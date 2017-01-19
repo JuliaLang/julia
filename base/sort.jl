@@ -8,7 +8,9 @@ import
     Base.sort,
     Base.sort!,
     Base.issorted,
-    Base.sortperm
+    Base.sortperm,
+    Base.Slice,
+    Base.to_indices
 
 export # also exported by Base
     # order-only:
@@ -669,11 +671,11 @@ function sortcols(A::AbstractMatrix; kws...)
 end
 
 function slicetypeof{T,N}(A::AbstractArray{T,N}, i1, i2)
-    I = (slice_dummy(i1),slice_dummy(i2))
+    I = map(slice_dummy, to_indices(A, (i1, i2)))
     fast = isa(linearindexing(viewindexing(I), linearindexing(A)), LinearFast)
     SubArray{T,1,typeof(A),typeof(I),fast}
 end
-slice_dummy(::Colon) = Colon()
+slice_dummy(S::Slice) = S
 slice_dummy{T}(::AbstractUnitRange{T}) = one(T)
 
 ## fast clever sorting for floats ##
