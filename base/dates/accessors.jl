@@ -136,7 +136,7 @@ for func in (:hour, :minute, :second, :millisecond, :microsecond, :nanosecond)
         @doc """
             $($name)(t::Time) -> Int64
 
-         The $($name) of a `Time` as an `Int64`.
-         """ $func(t::Time)
+        The $($name) of a `Time` as an `Int64`.
+        """ $func(t::Time)
     end
 end
