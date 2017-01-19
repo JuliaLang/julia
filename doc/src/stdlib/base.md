@@ -123,6 +123,7 @@ Core.applicable
 Core.invoke
 Base.:(|>)
 Base.:(∘)
+Base.@callsuper
 ```
 
 ## Syntax
