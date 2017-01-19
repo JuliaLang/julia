@@ -973,3 +973,7 @@ JL_DLLEXPORT float32x4_t test_ppc64_vec2(int64_t d1, float32x4_t a, float32x4_t 
 JL_DLLEXPORT int threadcall_args(int a, int b) {
     return a + b;
 }
+
+JL_DLLEXPORT void c_exit_finalizer(void* v) {
+    printf("c_exit_finalizer: %d, %u", *(int*)v, (unsigned)((uintptr_t)v & (uintptr_t)1));
+}
