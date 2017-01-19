@@ -1983,7 +1983,7 @@ For example :
 will result in `Main.bar` being defined on all processes and not `FooBar.bar`.
 
 The expression is evaluated on all current processes. Any processes added later
-(say with [`addprocs`](:func:`addprocs`)) will not have the expression defined.
+(say with [`addprocs()`](@ref)) will not have the expression defined.
 """
 macro everywhere(ex)
     quote
