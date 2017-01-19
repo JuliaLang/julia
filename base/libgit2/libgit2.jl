@@ -461,10 +461,11 @@ function merge!(repo::GitRepo;
 end
 
 """
-    LibGit2.rebase!(repo::GitRepo[, upstream::AbstractString])
+    LibGit2.rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractString="")
 
 Attempt an automatic merge rebase of the current branch, from `upstream` if provided, or
 otherwise from the upstream tracking branch.
+`newbase` is the branch to rebase onto. By default this is `upstream`.
 
 If any conflicts arise which cannot be automatically resolved, the rebase will abort,
 leaving the repository and working tree in its original state, and the function will throw
@@ -476,7 +477,7 @@ a `GitError`. This is roughly equivalent to the following command line statement
     fi
 
 """
-function rebase!(repo::GitRepo, upstream::AbstractString="")
+function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractString="")
     with(head(repo)) do head_ref
         head_ann = GitAnnotated(repo, head_ref)
         upst_ann  = if isempty(upstream)
@@ -493,10 +494,11 @@ function rebase!(repo::GitRepo, upstream::AbstractString="")
         else
             GitAnnotated(repo, upstream)
         end
+        onto_ann  = Nullable{GitAnnotated}(isempty(newbase) ? nothing : GitAnnotated(repo, newbase))
         try
             sig = default_signature(repo)
             try
-                rbs = GitRebase(repo, head_ann, upst_ann)
+                rbs = GitRebase(repo, head_ann, upst_ann, onto=onto_ann)
                 try
                     while (rbs_op = next(rbs)) !== nothing
                         commit(rbs, sig)
@@ -513,6 +515,9 @@ function rebase!(repo::GitRepo, upstream::AbstractString="")
                 close(sig)
             end
         finally
+            if !isempty(newbase)
+                close(Base.get(onto_ann))
+            end
             close(upst_ann)
             close(head_ann)
         end
