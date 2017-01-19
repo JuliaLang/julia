@@ -116,7 +116,9 @@ immutable Date <: TimeType
 end
 
 """
+    Time
 
+`Time` wraps a `Nanosecond` and represents a specific moment in a 24-hour day.
 """
 immutable Time <: TimeType
     instant::Nanosecond
