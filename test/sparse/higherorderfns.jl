@@ -76,6 +76,16 @@ end
     end
 end
 
+@testset "broadcast! implementation specialized for solely an output sparse vector/matrix (no inputs)" begin
+    N, M, p = 10, 12, 0.4
+    V, C = sprand(N, p), sprand(N, M, p)
+    fV, fC = Array(V), Array(C)
+    @test broadcast!(() -> 0, V) == sparse(broadcast!(() -> 0, fV))
+    @test broadcast!(() -> 0, C) == sparse(broadcast!(() -> 0, fC))
+    @test let z = 0, fz = 0; broadcast!(() -> z += 1, V) == broadcast!(() -> fz += 1, fV); end
+    @test let z = 0, fz = 0; broadcast!(() -> z += 1, C) == broadcast!(() -> fz += 1, fC); end
+end
+
 @testset "broadcast[!] implementation specialized for a single (input) sparse vector/matrix" begin
     # broadcast[!] for a single sparse vector/matrix falls back to map[!], tested extensively
     # above. here we simply lightly exercise the relevant broadcast[!] entry points.
