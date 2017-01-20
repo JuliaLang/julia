@@ -449,10 +449,12 @@ for (typ, reporef, sup, cname) in [
         @eval type $typ <: $sup
             ptr::Ptr{Void}
             function $typ(ptr::Ptr{Void},fin=true)
+                # fin=false should only be used when the pointer should not be free'd
+                # e.g. from within callback functions which are passed a pointer
                 @assert ptr != C_NULL
                 obj = new(ptr)
                 if fin
-                    REFCOUNT[] += 1
+                    Threads.atomic_add!(REFCOUNT, UInt(1))
                     finalizer(obj, Base.close)
                 end
                 return obj
@@ -465,14 +467,14 @@ for (typ, reporef, sup, cname) in [
             function $typ(repo::GitRepo, ptr::Ptr{Void})
                 @assert ptr != C_NULL
                 obj = new(Nullable(repo), ptr)
-                REFCOUNT[] += 1
+                Threads.atomic_add!(REFCOUNT, UInt(1))
                 finalizer(obj, Base.close)
                 return obj
             end
             function $typ(ptr::Ptr{Void})
                 @assert ptr != C_NULL
                 obj = new(Nullable{GitRepo}(), ptr)
-                REFCOUNT[] += 1
+                Threads.atomic_add!(REFCOUNT, UInt(1))
                 finalizer(obj, Base.close)
                 return obj
             end
@@ -484,7 +486,7 @@ for (typ, reporef, sup, cname) in [
             function $typ(repo::GitRepo, ptr::Ptr{Void})
                 @assert ptr != C_NULL
                 obj = new(repo, ptr)
-                REFCOUNT[] += 1
+                Threads.atomic_add!(REFCOUNT, UInt(1))
                 finalizer(obj, Base.close)
                 return obj
             end
@@ -494,8 +496,7 @@ for (typ, reporef, sup, cname) in [
         if obj.ptr != C_NULL
             ccall(($(string(cname, :_free)), :libgit2), Void, (Ptr{Void},), obj.ptr)
             obj.ptr = C_NULL
-            REFCOUNT[] -= 1
-            if REFCOUNT[] == 0
+            if Threads.atomic_sub!(REFCOUNT, UInt(1)) == 1
                 # will the last finalizer please turn out the lights?
                 ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
             end
