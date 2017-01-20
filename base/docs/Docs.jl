@@ -239,11 +239,26 @@ end
 # =================
 
 """
+    getdoc(x::T) -> String
+
+Return the dynamic docstring associated with object `x`.
+"""
+function getdoc end
+
+"""
     Docs.doc(binding, sig)
 
 Returns all documentation that matches both `binding` and `sig`.
+
+If `getdoc` is defined on the value of the binding, then a dynamic docstring is returned instead of one based on the binding itself. 
 """
 function doc(binding::Binding, sig::Type = Union{})
+    if isdefined(binding.mod, binding.var)
+        var = getfield(binding.mod, binding.var)
+        if method_exists(getdoc, (typeof(var),))
+            return Base.Markdown.parse(getdoc(var))
+        end
+    end
     results, groups = DocStr[], MultiDoc[]
     # Lookup `binding` and `sig` for matches in all modules of the docsystem.
     for mod in modules
@@ -285,7 +300,10 @@ end
 
 # Some additional convenience `doc` methods that take objects rather than `Binding`s.
 doc(obj::UnionAll) = doc(Base.unwrap_unionall(obj))
-doc(object, sig::Type = Union{}) = doc(aliasof(object, typeof(object)), sig)
+
+function doc(object, sig::Type = Union{})
+    doc(aliasof(object, typeof(object)), sig)
+end
 doc(object, sig...)              = doc(object, Tuple{sig...})
 
 """
