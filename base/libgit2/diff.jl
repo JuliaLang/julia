@@ -42,6 +42,6 @@ function Base.getindex(diff::GitDiff, i::Integer)
     delta_ptr = ccall((:git_diff_get_delta, :libgit2),
                       Ptr{DiffDelta},
                       (Ptr{Void}, Csize_t), diff.ptr, i-1)
-    delta_ptr == C_NULL && throw(BoundsError("Attempt to access $(count(diff))-element GitDiff at index $i"))
+    delta_ptr == C_NULL && throw(BoundsError(diff, (i,)))
     return unsafe_load(delta_ptr)
 end
