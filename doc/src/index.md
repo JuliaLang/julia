@@ -28,6 +28,7 @@
   * [Running External Programs](@ref)
   * [Calling C and Fortran Code](@ref)
   * [Handling Operating System Variation](@ref)
+  * [Handling Operating System Variation](@ref)
   * [Interacting With Julia](@ref)
   * [Embedding Julia](@ref)
   * [Packages](@ref)
