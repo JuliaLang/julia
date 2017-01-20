@@ -397,6 +397,7 @@ export
     reim,
     reinterpret,
     rem,
+    rem2pi,
     round,
     sec,
     secd,
