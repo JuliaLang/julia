@@ -12,7 +12,7 @@
     @test size(RowVector{Int}(1,3)) === (1,3)
     @test size(RowVector{Int}((3,))) === (1,3)
     @test size(RowVector{Int}((1,3))) === (1,3)
-    @test_throws Exception RowVector{Float64, Vector{Int}}(v)
+    @test_throws ErrorException RowVector{Float64, Vector{Int}}(v)
 
     @test (v.')::RowVector == [1 2 3]
     @test (v')::RowVector == [1 2 3]
@@ -59,19 +59,19 @@ end
     rv = v.'
 
     @test (rv*d)::RowVector == [2,6,12].'
-    @test_throws Exception d*rv
+    @test_throws DimensionMismatch d*rv
 
     @test (d*rv.')::Vector == [2,6,12]
 
-    @test_throws Exception rv.'*d
+    @test_throws DimensionMismatch rv.'*d
 
     @test (d*rv')::Vector == [2,6,12]
 
-    @test_throws Exception rv'*d
+    @test_throws DimensionMismatch rv'*d
 
     @test (rv/d)::RowVector ≈ [2/1  3/2  4/3]
 
-    @test_throws Exception d \ rv
+    @test_throws DimensionMismatch d \ rv
 end
 
 @testset "Bidiagonal ambiguity methods" begin
@@ -81,7 +81,7 @@ end
 
     @test (rv/bd)::RowVector ≈ [2/1  3/2  4/3]
 
-    @test_throws Exception bd \ rv
+    @test_throws DimensionMismatch bd \ rv
 end
 
 @testset "hcat" begin
@@ -94,7 +94,7 @@ end
     v = [2,3,4]
     rv = v.'
 
-    @test_throws Exception mat \ rv
+    @test_throws DimensionMismatch mat \ rv
 end
 
 @testset "Multiplication" begin
@@ -104,35 +104,35 @@ end
 
     @test (rv*v) === 14
     @test (rv*mat)::RowVector == [1 4 9]
-    @test_throws Exception [1]*reshape([1],(1,1)) # no longer permitted
-    @test_throws Exception rv*rv
+    @test_throws DimensionMismatch [1]*reshape([1],(1,1)) # no longer permitted
+    @test_throws DimensionMismatch rv*rv
     @test (v*rv)::Matrix == [1 2 3; 2 4 6; 3 6 9]
-    @test_throws Exception v*v # Was previously a missing method error, now an error message
-    @test_throws Exception mat*rv
+    @test_throws DimensionMismatch v*v # Was previously a missing method error, now an error message
+    @test_throws DimensionMismatch mat*rv
 
-    @test_throws Exception rv*v.'
+    @test_throws DimensionMismatch rv*v.'
     @test (rv*mat.')::RowVector == [1 4 9]
-    @test_throws Exception [1]*reshape([1],(1,1)).' # no longer permitted
+    @test_throws DimensionMismatch [1]*reshape([1],(1,1)).' # no longer permitted
     @test rv*rv.' === 14
-    @test_throws Exception v*rv.'
+    @test_throws DimensionMismatch v*rv.'
     @test (v*v.')::Matrix == [1 2 3; 2 4 6; 3 6 9]
     @test (mat*rv.')::Vector == [1,4,9]
 
     @test (rv.'*v.')::Matrix == [1 2 3; 2 4 6; 3 6 9]
-    @test_throws Exception rv.'*mat.'
+    @test_throws DimensionMismatch rv.'*mat.'
     @test (v.'*mat.')::RowVector == [1 4 9]
-    @test_throws Exception rv.'*rv.'
+    @test_throws DimensionMismatch rv.'*rv.'
     @test v.'*rv.' === 14
-    @test_throws Exception v.'*v.'
+    @test_throws DimensionMismatch v.'*v.'
     @test (mat.'*rv.')::Vector == [1,4,9]
 
-    @test_throws Exception rv.'*v
-    @test_throws Exception rv.'*mat
+    @test_throws DimensionMismatch rv.'*v
+    @test_throws DimensionMismatch rv.'*mat
     @test (v.'*mat)::RowVector == [1 4 9]
     @test (rv.'*rv)::Matrix == [1 2 3; 2 4 6; 3 6 9]
-    @test_throws Exception v.'*rv
+    @test_throws DimensionMismatch v.'*rv
     @test v.'*v === 14
-    @test_throws Exception mat.'*rv
+    @test_throws DimensionMismatch mat.'*rv
 
     z = [1+im,2,3]
     cz = z'
@@ -140,29 +140,29 @@ end
 
     @test cz*z === 15 + 0im
 
-    @test_throws Exception cz*z'
+    @test_throws DimensionMismatch cz*z'
     @test (cz*mat')::RowVector == [-2im 4 9]
-    @test_throws Exception [1]*reshape([1],(1,1))' # no longer permitted
+    @test_throws DimensionMismatch [1]*reshape([1],(1,1))' # no longer permitted
     @test cz*cz' === 15 + 0im
-    @test_throws Exception z*vz'
+    @test_throws DimensionMismatch z*cz'
     @test (z*z')::Matrix == [2 2+2im 3+3im; 2-2im 4 6; 3-3im 6 9]
     @test (mat*cz')::Vector == [2im,4,9]
 
     @test (cz'*z')::Matrix == [2 2+2im 3+3im; 2-2im 4 6; 3-3im 6 9]
-    @test_throws Exception cz'*mat'
+    @test_throws DimensionMismatch cz'*mat'
     @test (z'*mat')::RowVector == [-2im 4 9]
-    @test_throws Exception cz'*cz'
+    @test_throws DimensionMismatch cz'*cz'
     @test z'*cz' === 15 + 0im
-    @test_throws Exception z'*z'
+    @test_throws DimensionMismatch z'*z'
     @test (mat'*cz')::Vector == [2,4,9]
 
-    @test_throws Exception cz'*z
-    @test_throws Exception cz'*mat
+    @test_throws DimensionMismatch cz'*z
+    @test_throws DimensionMismatch cz'*mat
     @test (z'*mat)::RowVector == [2 4 9]
     @test (cz'*cz)::Matrix == [2 2+2im 3+3im; 2-2im 4 6; 3-3im 6 9]
-    @test_throws Exception z'*cz
+    @test_throws DimensionMismatch z'*cz
     @test z'*z === 15 + 0im
-    @test_throws Exception mat'*cz
+    @test_throws DimensionMismatch mat'*cz
 end
 
 @testset "norm" begin
@@ -202,7 +202,7 @@ end
 
     @test (rv/mat)::RowVector ≈ [2/1  3/2  4/3]
 
-    @test_throws Exception mat\rv
+    @test_throws DimensionMismatch mat\rv
 end
 
 @testset "AbstractTriangular ambiguity methods" begin
@@ -211,31 +211,31 @@ end
     rv = v.'
 
     @test (rv*ut)::RowVector == [2 6 12]
-    @test_throws Exception ut*rv
+    @test_throws DimensionMismatch ut*rv
 
     @test (rv*ut.')::RowVector == [2 6 12]
     @test (ut*rv.')::Vector == [2,6,12]
 
     @test (ut.'*rv.')::Vector == [2,6,12]
-    @test_throws Exception rv.'*ut.'
+    @test_throws DimensionMismatch rv.'*ut.'
 
-    @test_throws Exception ut.'*rv
-    @test_throws Exception rv.'*ut
+    @test_throws DimensionMismatch ut.'*rv
+    @test_throws DimensionMismatch rv.'*ut
 
     @test (rv*ut')::RowVector == [2 6 12]
     @test (ut*rv')::Vector == [2,6,12]
 
-    @test_throws Exception rv'*ut'
+    @test_throws DimensionMismatch rv'*ut'
     @test (ut'*rv')::Vector == [2,6,12]
 
-    @test_throws Exception ut'*rv
-    @test_throws Exception rv'*ut
+    @test_throws DimensionMismatch ut'*rv
+    @test_throws DimensionMismatch rv'*ut
 
     @test (rv/ut)::RowVector ≈ [2/1  3/2  4/3]
     @test (rv/ut.')::RowVector ≈ [2/1  3/2  4/3]
     @test (rv/ut')::RowVector ≈ [2/1  3/2  4/3]
 
-    @test_throws Exception ut\rv
+    @test_throws DimensionMismatch ut\rv
 end
 
 
