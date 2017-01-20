@@ -75,18 +75,22 @@ end
 isdirty(repo::GitRepo, paths::AbstractString=""; cached::Bool=false) =
     isdiff(repo, Consts.HEAD_FILE, paths, cached=cached)
 
-""" git diff-index <treeish> [-- <path>]"""
+"""
+    LibGit2.isdiff(repo::GitRepo, treeish[, paths]; [cached=false])
+
+Checks if there are any differences between the tree specified by `treeish` and  working tree (if `cached=false`) or the index (if `cached=true`).
+
+See `git diff-index <treeish> [-- <path>]`
+"""
 function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""; cached::Bool=false)
     tree_oid = revparseid(repo, "$treeish^{tree}")
-    iszero(tree_oid) && return true
+    iszero(tree_oid) && return error("invalid treeish $treeish") # this can be removed by #20104
     result = false
     tree = get(GitTree, repo, tree_oid)
     try
-        diff = diff_tree(repo, tree, paths)
+        diff = diff_tree(repo, tree, paths, cached=cached)
         result = count(diff) > 0
         close(diff)
-    catch err
-        result = true
     finally
         close(tree)
     end

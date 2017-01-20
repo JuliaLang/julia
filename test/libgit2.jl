@@ -452,6 +452,36 @@ mktempdir() do dir
                 close(repo)
             end
         end
+
+        @testset "diff" begin
+            repo = LibGit2.GitRepo(cache_repo)
+            try
+                @test !LibGit2.isdirty(repo)
+                @test !LibGit2.isdiff(repo, "HEAD")
+                @test !LibGit2.isdirty(repo, cached=true)
+                @test !LibGit2.isdiff(repo, "HEAD", cached=true)
+                open(joinpath(cache_repo,test_file), "a") do f
+                    println(f, "zzzz")
+                end
+                @test LibGit2.isdirty(repo)
+                @test LibGit2.isdiff(repo, "HEAD")
+                @test !LibGit2.isdirty(repo, cached=true)
+                @test !LibGit2.isdiff(repo, "HEAD", cached=true)
+                LibGit2.add!(repo, test_file)
+                @test LibGit2.isdirty(repo)
+                @test LibGit2.isdiff(repo, "HEAD")
+                @test LibGit2.isdirty(repo, cached=true)
+                @test LibGit2.isdiff(repo, "HEAD", cached=true)
+                LibGit2.commit(repo, "zzz")
+                @test !LibGit2.isdirty(repo)
+                @test !LibGit2.isdiff(repo, "HEAD")
+                @test !LibGit2.isdirty(repo, cached=true)
+                @test !LibGit2.isdiff(repo, "HEAD", cached=true)
+            finally
+                close(repo)
+            end
+        end
+
     end
 
     @testset "Fetch from cache repository" begin
