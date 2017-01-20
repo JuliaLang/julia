@@ -9,7 +9,7 @@ export with, GitRepo, GitConfig
 const GITHUB_REGEX =
     r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
-const REFCOUNT = Ref(zero(UInt))
+const REFCOUNT = Threads.Atomic{UInt}()
 
 include("utils.jl")
 include("consts.jl")
@@ -608,9 +608,8 @@ function __init__()
     REFCOUNT[] = 1
 
     atexit() do
-        REFCOUNT[] -= 1
-        if REFCOUNT[] == 0
-            # no objects to be finalized
+        if Threads.atomic_sub!(REFCOUNT, UInt(1)) == 1
+            # refcount zero, no objects to be finalized
             ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
         end
     end
