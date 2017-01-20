@@ -826,3 +826,6 @@ test_old()
 test_intersection()
 test_properties()
 test_intersection_properties()
+
+# issue #20121
+@test NTuple{170,Matrix{Int}} <: (Tuple{Vararg{Union{Array{T,1},Array{T,2},Array{T,3}}}} where T)
