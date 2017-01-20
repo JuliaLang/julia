@@ -1599,3 +1599,7 @@ A = view(rand(5,5), 1:3, 1:3)
     @test [true, false] .& [true, true] == [true, false]
     @test [true, false] .| [true, true] == [true, true]
 end
+
+# julia#20022
+@test !Compat.isapprox(NaN, NaN)
+@test Compat.isapprox(NaN, NaN, nans=true)

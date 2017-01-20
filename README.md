@@ -106,6 +106,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `.&` and `.|` are short syntax for `broadcast(&, xs...)` and `broadcast(|, xs...)` (respectively) in Julia 0.6 (only supported on Julia 0.5 and above) [#17623](https://github.com/JuliaLang/julia/pull/17623)
 
+* `Compat.isapprox` with `nans` keyword argument [#20022](https://github.com/JuliaLang/julia/pull/20022)
+
 ## Renamed functions
 
 * `pointer_to_array` and `pointer_to_string` have been replaced with `unsafe_wrap(Array, ...)` and `unsafe_wrap(String, ...)` respectively
