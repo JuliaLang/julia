@@ -78,15 +78,16 @@ g11840{T<:Tuple}(sig::Type{T}) = 3
 
 g11840b(::DataType) = 1
 g11840b(::Type) = 2
-# FIXME: how to compute that the guard entry is still required,
-# even though Type{Vector} ∩ DataType = Bottom and this method would set cache_with_orig = true
-#g11840b{T<:Tuple}(sig::Type{T}) = 3
+# FIXME (needs a test): how to compute that the guard entry is still required,
+# even though Type{Vector} ∩ DataType = Bottom and this method would set
+# cache_with_orig = true
+g11840b{T<:Tuple}(sig::Type{T}) = 3
 @test g11840b(Vector) == 2
 @test g11840b(Vector.body) == 1
 @test g11840b(Vector) == 2
 @test g11840b(Vector.body) == 1
-#@test g11840b(Tuple) == 3
-#@test g11840b(TT11840) == 3
+@test g11840b(Tuple) == 3
+@test g11840b(TT11840) == 3
 
 h11840(::DataType) = '1'
 h11840(::Type) = '2'
