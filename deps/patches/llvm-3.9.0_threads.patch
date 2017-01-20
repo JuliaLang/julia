@@ -5524,3 +5524,22 @@ index 55b0370..c869a73 100644
 -  }
 +  return 0;
  }
+diff --git a/unittests/Support/ThreadPool.cpp b/unittests/Support/ThreadPool.cpp
+index 69a24bc..b185859 100644
+--- a/unittests/Support/ThreadPool.cpp
++++ b/unittests/Support/ThreadPool.cpp
+@@ -7,6 +7,8 @@
+ //
+ //===----------------------------------------------------------------------===//
+ 
++#if 0
++
+ #include "llvm/Support/ThreadPool.h"
+ 
+ #include "llvm/ADT/STLExtras.h"
+@@ -166,3 +168,5 @@ TEST_F(ThreadPoolTest, PoolDestruction) {
+   }
+   ASSERT_EQ(5, checked_in);
+ }
++
++#endif
