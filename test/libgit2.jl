@@ -487,7 +487,6 @@ mktempdir() do dir
                 close(repo)
             end
         end
-
     end
 
     @testset "Fetch from cache repository" begin

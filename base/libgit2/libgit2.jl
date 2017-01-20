@@ -71,20 +71,28 @@ function iscommit(id::AbstractString, repo::GitRepo)
     return res
 end
 
-""" git diff-index HEAD [-- <path>]"""
+"""
+    LibGit2.isdirty(repo::GitRepo[, paths]; cached=false)
+
+Checks if there have been any changes to tracked files in the working tree (if
+`cached=false`) or the index (if `cached=true`).
+
+See `git diff-index HEAD [-- <path>]`
+"""
 isdirty(repo::GitRepo, paths::AbstractString=""; cached::Bool=false) =
     isdiff(repo, Consts.HEAD_FILE, paths, cached=cached)
 
 """
-    LibGit2.isdiff(repo::GitRepo, treeish[, paths]; [cached=false])
+    LibGit2.isdiff(repo::GitRepo, treeish[, paths]; cached=false)
 
-Checks if there are any differences between the tree specified by `treeish` and  working tree (if `cached=false`) or the index (if `cached=true`).
+Checks if there are any differences between the tree specified by `treeish` and the
+tracked files in the working tree (if `cached=false`) or the index (if `cached=true`).
 
 See `git diff-index <treeish> [-- <path>]`
 """
 function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""; cached::Bool=false)
     tree_oid = revparseid(repo, "$treeish^{tree}")
-    iszero(tree_oid) && return error("invalid treeish $treeish") # this can be removed by #20104
+    iszero(tree_oid) && error("invalid treeish $treeish") # this can be removed by #20104
     result = false
     tree = get(GitTree, repo, tree_oid)
     try
