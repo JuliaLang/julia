@@ -543,12 +543,15 @@ along with a summary of the test results.
 type DefaultTestSet <: AbstractTestSet
     description::AbstractString
     results::Vector
+    n_passed::Int
     anynonpass::Bool
 end
-DefaultTestSet(desc) = DefaultTestSet(desc, [], false)
+DefaultTestSet(desc) = DefaultTestSet(desc, [], 0, false)
 
-# For a passing or broken result, simply store the result
-record(ts::DefaultTestSet, t::Union{Pass,Broken}) = (push!(ts.results, t); t)
+# For a a broken result, simply store the result
+record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
+# For a passed result, do not store the result since it uses a lot of memory
+record(ts::DefaultTestSet, t::Pass) = (ts.n_passed += 1; t)
 
 # For the other result types, immediately print the error message
 # but do not terminate. Print a backtrace.
@@ -691,10 +694,9 @@ end
 # Recursive function that counts the number of test results of each
 # type directly in the testset, and totals across the child testsets
 function get_test_counts(ts::DefaultTestSet)
-    passes, fails, errors, broken = 0, 0, 0, 0
+    passes, fails, errors, broken = ts.n_passed, 0, 0, 0
     c_passes, c_fails, c_errors, c_broken = 0, 0, 0, 0
     for t in ts.results
-        isa(t, Pass)   && (passes += 1)
         isa(t, Fail)   && (fails  += 1)
         isa(t, Error)  && (errors += 1)
         isa(t, Broken) && (broken += 1)
