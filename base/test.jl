@@ -548,7 +548,7 @@ type DefaultTestSet <: AbstractTestSet
 end
 DefaultTestSet(desc) = DefaultTestSet(desc, [], 0, false)
 
-# For a a broken result, simply store the result
+# For a broken result, simply store the result
 record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
 # For a passed result, do not store the result since it uses a lot of memory
 record(ts::DefaultTestSet, t::Pass) = (ts.n_passed += 1; t)
