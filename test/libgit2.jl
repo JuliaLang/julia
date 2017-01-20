@@ -457,13 +457,19 @@ mktempdir() do dir
             repo = LibGit2.GitRepo(cache_repo)
             try
                 @test !LibGit2.isdirty(repo)
+                @test !LibGit2.isdirty(repo, test_file)
+                @test !LibGit2.isdirty(repo, "nonexistent")
                 @test !LibGit2.isdiff(repo, "HEAD")
                 @test !LibGit2.isdirty(repo, cached=true)
+                @test !LibGit2.isdirty(repo, test_file, cached=true)
+                @test !LibGit2.isdirty(repo, "nonexistent", cached=true)
                 @test !LibGit2.isdiff(repo, "HEAD", cached=true)
                 open(joinpath(cache_repo,test_file), "a") do f
                     println(f, "zzzz")
                 end
                 @test LibGit2.isdirty(repo)
+                @test LibGit2.isdirty(repo, test_file)
+                @test !LibGit2.isdirty(repo, "nonexistent")
                 @test LibGit2.isdiff(repo, "HEAD")
                 @test !LibGit2.isdirty(repo, cached=true)
                 @test !LibGit2.isdiff(repo, "HEAD", cached=true)
