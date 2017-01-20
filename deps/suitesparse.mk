@@ -39,6 +39,10 @@ $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-winclang.patch-applied: $
 	cd $(dir $@) && patch -p0 < $(SRCDIR)/patches/SuiteSparse-winclang.patch
 	echo 1 > $@
 
+$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-O2.patch-applied: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-winclang.patch-applied
+	cd $(dir $@) && patch -p0 < $(SRCDIR)/patches/SuiteSparse-O2.patch
+	echo 1 > $@
+
 ifeq ($(USE_ATLAS), 1)
 $(SUITESPARSE_OBJ_SOURCE): | $(ATLAS_OBJ_TARGET)
 endif
@@ -48,7 +52,7 @@ $(SUITESPARSE_OBJ_SOURCE): | $(OPENBLAS_OBJ_TARGET)
 else ifeq ($(USE_SYSTEM_LAPACK), 0)
 $(SUITESPARSE_OBJ_SOURCE): | $(LAPACK_OBJ_TARGET)
 endif
-$(SUITESPARSE_OBJ_SOURCE): $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/Makefile $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-winclang.patch-applied
+$(SUITESPARSE_OBJ_SOURCE): $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/Makefile $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-O2.patch-applied
 	$(MAKE) -C $(dir $<) library $(SUITESPARSE_MFLAGS)
 	touch -c $@
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/checked: $(SUITESPARSE_OBJ_SOURCE)
