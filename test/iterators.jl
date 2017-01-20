@@ -385,3 +385,19 @@ for T in (UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int128, BigInt)
     @test length(repeated(1, T(5))) == 5
     @test collect(partition(1:5, T(5)))[1] == collect(1:5)
 end
+
+# Issue #19332: enumerate from a specific counting-index
+#               (like Python's `enumerate(x, n)`)
+let i = 1:5
+    @test collect(enumerate_countfrom(i, 5)) == [(5,1),
+                                                 (6,2),
+                                                 (7,3),
+                                                 (8,4),
+                                                 (9,5)]
+
+    @test collect(enumerate_countfrom(i, 10)) == [(10,1),
+                                                  (11,2),
+                                                  (12,3),
+                                                  (13,4),
+                                                  (14,5)]
+end

@@ -6,7 +6,7 @@ import Base: start, done, next, isempty, length, size, eltype, iteratorsize, ite
 
 using Base: tuple_type_cons, SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo
 
-export enumerate, zip, rest, countfrom, take, drop, cycle, repeated, product, flatten, partition
+export enumerate, enumerate_countfrom, zip, rest, countfrom, take, drop, cycle, repeated, product, flatten, partition
 
 _min_length(a, b, ::IsInfinite, ::IsInfinite) = min(length(a),length(b)) # inherit behaviour, error
 _min_length(a, b, A, ::IsInfinite) = length(a)
@@ -54,6 +54,23 @@ julia> for (index, value) in enumerate(a)
 ```
 """
 enumerate(iter) = Enumerate(iter)
+
+"""
+    enumerate_countfrom(iter, n)
+
+Returns an iterator that yields `(i + n, e)` where `i` is a counter starting
+at `n`, and `e` is the `i - n + 1`-th element from the iterator.
+
+```jldoctest
+julia> for (i, e) in enumerate_countfrom(1:3, 5)
+           println(i, " ", e)
+       end
+5 1
+6 2
+7 3
+```
+"""
+enumerate_countfrom(iter, n::Integer) = ((i+n-1, e) for (i,e) in enumerate(iter))
 
 length(e::Enumerate) = length(e.itr)
 size(e::Enumerate) = size(e.itr)
