@@ -17,11 +17,11 @@ function bench_eu_devec(numPaths)
     t2 = sigma*sqrt(dt)
     for i=1:steps
         for j=1:numPaths
-            S[j] .*= exp(t1 + t2*randn())
+            S[j] *= exp(t1 + t2*randn())
         end
     end
 
-    V = mean( exp(-r*T)*max(K.-S,0) )
+    V = mean( exp(-r*T)*max.(K.-S,0) )
 end
 
 function bench_eu_vec(numPaths)
@@ -37,8 +37,8 @@ function bench_eu_vec(numPaths)
     t1 = (r-0.5*sigma.^2)*dt
     t2 = sigma*sqrt(dt)
     for i=1:steps
-        S = S .* exp(t1.+t2*randn(numPaths))
+        S = S .* exp.(t1.+t2*randn(numPaths))
     end
 
-    V = mean( exp(-r*T)*max(K.-S,0) )
+    V = mean( exp(-r*T)*max.(K.-S,0) )
 end
