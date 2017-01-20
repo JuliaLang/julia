@@ -381,7 +381,8 @@ end
 
 Creates a `SubArray` from an indexing expression. This can only be applied directly to a
 reference expression (e.g. `@view A[1,2:end]`), and should *not* be used as the target of
-an assignment (e.g. `@view(A[1,2:end]) = ...`).
+an assignment (e.g. `@view(A[1,2:end]) = ...`).  See also [`@views`](@ref)
+to switch an entire block of code to use views for slicing.
 """
 macro view(ex)
     if isa(ex, Expr) && ex.head == :ref
