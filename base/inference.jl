@@ -2046,7 +2046,7 @@ end
 function typeinf_code(method::Method, atypes::ANY, sparams::SimpleVector,
                       optimize::Bool, cached::Bool, params::InferenceParams)
     code = code_for_method(method, atypes, sparams, params.world)
-    code === nothing && return (nothing, Any)
+    code === nothing && return (nothing, nothing, Any)
     return typeinf_code(code::MethodInstance, optimize, cached, params)
 end
 function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
