@@ -606,7 +606,7 @@ endif
 	chmod a+x ./nsis/makensis.exe
 ifeq ($(USE_GPL_LIBS), 1)
 	cd $(JULIAHOME)/dist-extras && \
-	$(JLDOWNLOAD) busybox.exe http://frippery.org/files/busybox/busybox-w32-FRP-483-g31277ab.exe && \
+	$(JLDOWNLOAD) busybox.exe http://frippery.org/files/busybox/busybox-w32-FRP-875-gc6ec14a.exe && \
 	chmod a+x busybox.exe
 endif
 
