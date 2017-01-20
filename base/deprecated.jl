@@ -1763,4 +1763,11 @@ end)
     return false
 end
 
+# Not exported
+eval(LibGit2, quote
+    function owner(x)
+        depwarn("owner(x) is deprecated, use repository(x) instead.", :owner)
+        repository(x)
+    end
+end)
 # End deprecations scheduled for 0.6

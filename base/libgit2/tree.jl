@@ -16,7 +16,7 @@ function treewalk(f::Function, tree::GitTree, payload=Any[], post::Bool = false)
     return cbf_payload
 end
 
-function owner(tree::GitTree)
+function repository(tree::GitTree)
     repo_ptr = ccall((:git_tree_owner, :libgit2), Ptr{Void},
                  (Ptr{Void},), tree.ptr)
     return GitRepo(repo_ptr)
