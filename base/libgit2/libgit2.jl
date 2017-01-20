@@ -605,7 +605,7 @@ function __init__()
 
     err = ccall((:git_libgit2_init, :libgit2), Cint, ())
     err > 0 || throw(ErrorException("error initializing LibGit2 module"))
-    REFCOUNT[] += 1
+    REFCOUNT[] = 1
 
     atexit() do
         REFCOUNT[] -= 1
