@@ -1013,7 +1013,7 @@ Array{Array{T,1},1} where T
 ```
 Type `T1` defines a 1-dimensional array of 1-dimensional arrays; each
 of the inner arrays consists of objects of the same type, but this type may vary from one inner array to the next.
-On the other hand, type `T2` defines a 1-dimensional array of 1-dimensional arrays all of whose inner arrays must have the 
+On the other hand, type `T2` defines a 1-dimensional array of 1-dimensional arrays all of whose inner arrays must have the
 same type.  Note that `T2` is an abstract type, e.g., `Array{Array{Int,1},1} <: T2`, whereas `T1` is a concrete type. As a consequence, `T1` can be constructed with a zero-argument constructor `a=T1()` but `T2` cannot.
 
 ## Type Aliases
