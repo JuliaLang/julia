@@ -4,11 +4,11 @@
 function Base.cconvert(::Type{Ptr{DiffOptionsStruct}}, pathspecs::AbstractString)
     str_ref = Base.cconvert(Ref{Cstring}, [pathspecs])
     sa = StrArrayStruct(Base.unsafe_convert(Ref{Cstring}, str_ref), 1)
-    do_ref = Ref(DiffOptions(pathspec = sa))
+    do_ref = Ref(DiffOptionsStruct(pathspec = sa))
     do_ref, str_ref
 end
 function Base.unsafe_convert(::Type{Ptr{DiffOptionsStruct}}, rr::Tuple{Ref{DiffOptionsStruct}, Ref{Cstring}})
-    Base.unsafe_convert(Ptr{DiffOptionStruct}, first(rr))
+    Base.unsafe_convert(Ptr{DiffOptionsStruct}, first(rr))
 end
 
 
@@ -42,6 +42,6 @@ function Base.getindex(diff::GitDiff, i::Integer)
     delta_ptr = ccall((:git_diff_get_delta, :libgit2),
                       Ptr{DiffDelta},
                       (Ptr{Void}, Csize_t), diff.ptr, i-1)
-    delta_ptr == C_NULL && return nothing
+    delta_ptr == C_NULL && throw(BoundsError("Attempt to access $(count(diff))-element GitDiff at index $i"))
     return unsafe_load(delta_ptr)
 end
