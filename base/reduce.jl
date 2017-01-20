@@ -132,7 +132,7 @@ Like `mapfoldr(f, op, v0, itr)`, but using the first element of `itr` as `v0`. I
 this cannot be used with empty collections (see `reduce(op, itr)`).
 """
 function mapfoldr(f, op, itr)
-    i = endof(itr);
+    i = endof(itr)
     if i == 0
         return Base.mr_empty_iter(f, op, itr, iteratoreltype(itr))
     end
