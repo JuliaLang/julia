@@ -267,7 +267,7 @@ JL_DLLEXPORT int jl_is_debugbuild(void)
 #endif
 }
 
-JL_DLLEXPORT int8_t jl_is_memdebug() {
+JL_DLLEXPORT int8_t jl_is_memdebug(void) {
 #ifdef MEMDEBUG
     return 1;
 #else
