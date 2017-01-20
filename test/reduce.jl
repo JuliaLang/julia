@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # fold(l|r) & mapfold(l|r)
+@test foldl(+, Int64[]) == 0
 @test foldl(-, 1:5) == -13
 @test foldl(-, 10, 1:5) == -5
 
@@ -16,6 +17,7 @@
 @test Base.mapfoldl((x)-> x ⊻ true, |, [true false true false false]) == true
 @test Base.mapfoldl((x)-> x ⊻ true, |, false, [true false true false false]) == true
 
+@test foldr(+, Int64[]) == 0
 @test foldr(-, 1:5) == 3
 @test foldr(-, 10, 1:5) == -7
 
