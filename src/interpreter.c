@@ -233,9 +233,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         ssize_t n = jl_unbox_long(args[0]);
         assert(n > 0);
         if (s->sparam_vals && n <= jl_svec_len(s->sparam_vals)) {
-            jl_value_t *sp = jl_svecref(s->sparam_vals, n - 1);
-            if (!jl_is_typevar(sp))
-                return sp;
+            return jl_svecref(s->sparam_vals, n - 1);
         }
         // static parameter val unknown needs to be an error for ccall
         jl_error("could not determine static parameter value");

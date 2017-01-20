@@ -924,3 +924,7 @@ let
 end
 @test c8925 == 3 && isconst(:c8925)
 @test d8925 == 4 && isconst(:d8925)
+
+# issue #18754: parse ccall as a regular function
+@test parse("ccall([1], 2)[3]") == Expr(:ref, Expr(:call, :ccall, Expr(:vect, 1), 2), 3)
+@test parse("ccall(a).member") == Expr(:., Expr(:call, :ccall, :a), QuoteNode(:member))

@@ -256,10 +256,6 @@ typedef struct _jl_method_t {
     int32_t called;  // bit flags: whether each of the first 8 arguments is called
     uint8_t isva;
     uint8_t isstaged;
-    // if there are intrinsic calls, sparams are probably required to compile successfully,
-    // and so unspecialized will be created for each linfo instead of using linfo->def->template
-    // 0 = no, 1 = yes, 2 = not yet known
-    uint8_t needs_sparam_vals_ducttape;
 
 // hidden fields:
     uint8_t traced;
@@ -974,6 +970,7 @@ JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v);
 JL_DLLEXPORT int jl_is_leaf_type(jl_value_t *v);
 JL_DLLEXPORT int jl_has_free_typevars(jl_value_t *v);
 JL_DLLEXPORT int jl_has_typevar(jl_value_t *t, jl_tvar_t *v);
+JL_DLLEXPORT int jl_has_typevar_from_unionall(jl_value_t *t, jl_unionall_t *ua);
 JL_DLLEXPORT int jl_subtype_env_size(jl_value_t *t);
 JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, int envsz);
 JL_DLLEXPORT int jl_isa(jl_value_t *a, jl_value_t *t);

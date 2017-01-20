@@ -101,7 +101,7 @@ function show(io::IO, ::MIME"text/plain", f::Function)
     mt = ft.name.mt
     if isa(f, Core.IntrinsicFunction)
         show(io, f)
-        id = Core.Intrinsics.box(Int32, f)
+        id = Core.Intrinsics.bitcast(Int32, f)
         print(io, " (intrinsic function #$id)")
     elseif isa(f, Core.Builtin)
         print(io, mt.name, " (built-in function)")
