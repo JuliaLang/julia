@@ -107,13 +107,13 @@ end
         @test true
     end
     @test typeof(ts) == Base.Test.DefaultTestSet
-    @test typeof(ts.results[1]) == Base.Test.Pass
+    @test ts.n_passed == 1
     tss = @testset "@testset/for should return an array of testsets: $i" for i in 1:3
         @test true
     end
     @test length(tss) == 3
     @test typeof(tss[1]) == Base.Test.DefaultTestSet
-    @test typeof(tss[1].results[1]) == Base.Test.Pass
+    @test tss[1].n_passed == 1
 end
 @testset "accounting" begin
     local ts
@@ -205,14 +205,14 @@ ts = @testset "@testset should return the testset" begin
     @test true
 end
 @test typeof(ts) == Base.Test.DefaultTestSet
-@test typeof(ts.results[1]) == Base.Test.Pass
+@test ts.n_passed == 1
 
 tss = @testset "@testset/for should return an array of testsets: $i" for i in 1:3
     @test true
 end
 @test length(tss) == 3
 @test typeof(tss[1]) == Base.Test.DefaultTestSet
-@test typeof(tss[1].results[1]) == Base.Test.Pass
+@test tss[1].n_passed == 1
 
 # Issue #17908 (return)
 testset_depth17908 = Test.get_testset_depth()
