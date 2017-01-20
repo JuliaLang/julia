@@ -588,7 +588,9 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
             if (!vvx && yi == (jl_value_t*)jl_any_type)
                 break;  // if y ends in `Vararg{Any}` skip checking everything
         }
-        if (xi == lastx && yi == lasty && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) {
+        if (xi == lastx &&
+            ((yi == lasty && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) ||
+             (yi == lasty && !vx && vy && jl_is_leaf_type(xi)))) {
             // fast path for repeated elements
         }
         else if (e->Runions.depth == 0 && e->Lunions.depth == 0 && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) {
