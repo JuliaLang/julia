@@ -6913,19 +6913,27 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/math.html#Base.Math.mod2pi",
-    "page": "Mathematics",
-    "title": "Base.Math.mod2pi",
-    "category": "Function",
-    "text": "mod2pi(x)\n\nModulus after division by 2π, returning in the range 02).\n\nThis function computes a floating point representation of the modulus after division by numerically exact 2π, and is therefore not exactly the same as mod(x,2π), which would compute the modulus of x relative to division by the floating-point number 2π.\n\njulia> mod2pi(9*pi/4)\n0.7853981633974481\n\n\n\n"
-},
-
-{
     "location": "stdlib/math.html#Base.rem",
     "page": "Mathematics",
     "title": "Base.rem",
     "category": "Function",
     "text": "rem(x, y)\n%(x, y)\n\nRemainder from Euclidean division, returning a value of the same sign as x, and smaller in magnitude than y. This value is always exact.\n\nx == div(x,y)*y + rem(x,y)\n\n\n\n"
+},
+
+{
+    "location": "stdlib/math.html#Base.Math.rem2pi",
+    "page": "Mathematics",
+    "title": "Base.Math.rem2pi",
+    "category": "Function",
+    "text": "rem2pi(x, r::RoundingMode)\n\nCompute the remainder of x after integer division by 2π, with the quotient rounded according to the rounding mode r. In other words, the quantity\n\nx - 2π*round(x/(2π),r)\n\nwithout any intermediate rounding. This internally uses a high precision approximation of 2π, and so will give a more accurate result than rem(x,2π,r)\n\nif r == RoundNearest, then the result is in the interval - . This will generally be the most accurate result.\nif r == RoundToZero, then the result is in the interval 0 2 if x is positive,. or -2 0 otherwise.\nif r == RoundDown, then the result is in the interval 0 2.\nif r == RoundUp, then the result is in the interval -2 0.\n\njulia> rem2pi(7pi/4, RoundNearest)\n-0.7853981633974485\n\njulia> rem2pi(7pi/4, RoundDown)\n5.497787143782138\n\n\n\n"
+},
+
+{
+    "location": "stdlib/math.html#Base.Math.mod2pi",
+    "page": "Mathematics",
+    "title": "Base.Math.mod2pi",
+    "category": "Function",
+    "text": "mod2pi(x)\n\nModulus after division by 2π, returning in the range 02).\n\nThis function computes a floating point representation of the modulus after division by numerically exact 2π, and is therefore not exactly the same as mod(x,2π), which would compute the modulus of x relative to division by the floating-point number 2π.\n\njulia> mod2pi(9*pi/4)\n0.7853981633974481\n\n\n\n"
 },
 
 {
@@ -7173,7 +7181,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Mathematical Operators",
     "category": "section",
-    "text": "Base.:-(::Any)\nBase.:(+)\nBase.:-(::Any, ::Any)\nBase.:*(::Any, ::Any...)\nBase.:(/)\nBase.:\\(::Any, ::Any)\nBase.:^(::Number, ::Number)\nBase.fma\nBase.muladd\nBase.div\nBase.fld\nBase.cld\nBase.mod\nBase.Math.mod2pi\nBase.rem\nBase.divrem\nBase.fldmod\nBase.fld1\nBase.mod1\nBase.fldmod1\nBase.:(//)\nBase.rationalize\nBase.numerator\nBase.denominator\nBase.:(<<)\nBase.:(>>)\nBase.:(>>>)\nBase.colon\nBase.range\nBase.OneTo\nBase.:(==)\nBase.:(!=)\nBase.:(!==)\nBase.:(<)\nBase.:(<=)\nBase.:(>)\nBase.:(>=)\nBase.cmp\nBase.:(~)\nBase.:(&)\nBase.:(|)\nBase.xor\nBase.:(!)\n&&\n||"
+    "text": "Base.:-(::Any)\nBase.:(+)\nBase.:-(::Any, ::Any)\nBase.:*(::Any, ::Any...)\nBase.:(/)\nBase.:\\(::Any, ::Any)\nBase.:^(::Number, ::Number)\nBase.fma\nBase.muladd\nBase.div\nBase.fld\nBase.cld\nBase.mod\nBase.rem\nBase.rem2pi\nBase.Math.mod2pi\nBase.divrem\nBase.fldmod\nBase.fld1\nBase.mod1\nBase.fldmod1\nBase.:(//)\nBase.rationalize\nBase.numerator\nBase.denominator\nBase.:(<<)\nBase.:(>>)\nBase.:(>>>)\nBase.colon\nBase.range\nBase.OneTo\nBase.:(==)\nBase.:(!=)\nBase.:(!==)\nBase.:(<)\nBase.:(<=)\nBase.:(>)\nBase.:(>=)\nBase.cmp\nBase.:(~)\nBase.:(&)\nBase.:(|)\nBase.xor\nBase.:(!)\n&&\n||"
 },
 
 {
