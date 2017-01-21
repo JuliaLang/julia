@@ -64,6 +64,26 @@ typedef struct {
     jl_gc_pool_t norm_pools[JL_GC_N_POOLS];
 } jl_thread_heap_t;
 
+// Cache of thread local change to global metadata during GC
+// This is sync'd after marking.
+typedef struct {
+    // thread local increment of `perm_scanned_bytes`
+    size_t perm_scanned_bytes;
+    // thread local increment of `scanned_bytes`
+    size_t scanned_bytes;
+    // Number of queued big objects (<= 1024)
+    size_t nbig_obj;
+    // Array of queued big objects to be moved between the young list
+    // and the old list.
+    // A set low bit means that the object should be moved from the old list
+    // to the young list (`mark_reset_age`).
+    // Objects can only be put into this list when the mark bit is flipped to
+    // `1` (atomically). Combining with the sync after marking,
+    // this makes sure that a single objects can only appear once in
+    // the lists (the mark bit cannot be flipped to `0` without sweeping)
+    void *big_obj[1024];
+} jl_gc_mark_cache_t;
+
 // This includes all the thread local states we care about for a thread.
 #define JL_MAX_BT_SIZE 80000
 typedef struct _jl_tls_states_t {
@@ -116,6 +136,7 @@ typedef struct _jl_tls_states_t {
     // Counter to disable finalizer **on the current thread**
     int finalizers_inhibited;
     arraylist_t finalizers;
+    jl_gc_mark_cache_t gc_cache;
 } jl_tls_states_t;
 typedef jl_tls_states_t *jl_ptls_t;
 
@@ -173,6 +194,8 @@ static inline unsigned long JL_CONST_FUNC jl_thread_self(void)
  */
 #if defined(__GNUC__)
 #  define jl_signal_fence() __atomic_signal_fence(__ATOMIC_SEQ_CST)
+#  define jl_atomic_fetch_add_relaxed(obj, arg)         \
+    __atomic_fetch_add(obj, arg, __ATOMIC_RELAXED)
 #  define jl_atomic_fetch_add(obj, arg)                 \
     __atomic_fetch_add(obj, arg, __ATOMIC_SEQ_CST)
 #  define jl_atomic_fetch_and_relaxed(obj, arg)         \
@@ -241,6 +264,7 @@ jl_atomic_fetch_add(T *obj, T2 arg)
 {
     return (T)_InterlockedExchangeAdd64((volatile __int64*)obj, (__int64)arg);
 }
+#define jl_atomic_fetch_add_relaxed(obj, arg) jl_atomic_fetch_add(obj, arg)
 
 // and
 template<typename T, typename T2>
