@@ -436,7 +436,7 @@ unaffected.
 
 Note that the `@views` macro only affects `array[...]` expressions
 that appear explicitly in the given `expression`, not array slicing that
-occurs in functions called by the code.
+occurs in functions called by that code.
 """
 macro views(x)
     _views(x)
