@@ -536,7 +536,9 @@ by copying. A `SubArray` is created with the [`view()`](@ref) function, which is
 way as [`getindex()`](@ref) (with an array and a series of index arguments). The result of [`view()`](@ref)
 looks the same as the result of [`getindex()`](@ref), except the data is left in place. [`view()`](@ref)
 stores the input index vectors in a `SubArray` object, which can later be used to index the original
-array indirectly.
+array indirectly.  By putting the [`@views`](@ref) macro in front of an expression or
+block of code, any `array[...]` slice in that expression will be converted to
+create a `SubArray` view instead.
 
 `StridedVector` and `StridedMatrix` are convenient aliases defined to make it possible for Julia
 to call a wider range of BLAS and LAPACK functions by passing them either [`Array`](@ref) or
