@@ -491,8 +491,3 @@ tpara18457{I}(::Type{AbstractMyType18457{I}}) = I
 tpara18457{A<:AbstractMyType18457}(::Type{A}) = tpara18457(supertype(A))
 @test tpara18457(MyType18457{true}) === true
 
-# Issue 20067
-@generated function foo20067{T <: Tuple}(::Type{T}, elements::Tuple)
-           :(T)
-end
-code_typed(DevNull, foo20067, (DataType, Tuple{Int, Int}))
