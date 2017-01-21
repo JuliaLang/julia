@@ -6557,7 +6557,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Function",
-    "text": "Merge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\nmerge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\n"
+    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\nMerge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\n"
 },
 
 {
@@ -13525,7 +13525,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.BLAS.sbmv!",
     "category": "Function",
-    "text": "sbmv!(uplo, k, alpha, A, x, beta, y)\n\nUpdate vector y as alpha*A*x + beta*y where A is a a symmetric band matrix of order size(A,2) with k super-diagonals stored in the argument A. The storage layout for A is described the reference BLAS module, level-2 BLAS at <http://www.netlib.org/lapack/explore-html/>. Only the uplo triangle of A is used.\n\nReturns the updated y.\n\n\n\n"
+    "text": "sbmv!(uplo, k, alpha, A, x, beta, y)\n\nUpdate vector y as alpha*A*x + beta*y where A is a a symmetric band matrix of order size(A,2) with k super-diagonals stored in the argument A. The storage layout for A is described the reference BLAS module, level-2 BLAS at http://www.netlib.org/lapack/explore-html/. Only the uplo triangle of A is used.\n\nReturns the updated y.\n\n\n\n"
 },
 
 {
@@ -15957,7 +15957,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.Filesystem.watch_file",
     "category": "Function",
-    "text": "watch_file(path::AbstractString, timeout_s::Real=-1)\n\nWatch file or directory path for changes until a change occurs or timeout_s seconds have elapsed.\n\nThe returned value is an object with boolean fields changed, renamed, and timedout, giving the result of watching the file.\n\nThis behavior of this function varies slightly across platforms. See <https://nodejs.org/api/fs.html#fs_caveats> for more detailed information.\n\n\n\n"
+    "text": "watch_file(path::AbstractString, timeout_s::Real=-1)\n\nWatch file or directory path for changes until a change occurs or timeout_s seconds have elapsed.\n\nThe returned value is an object with boolean fields changed, renamed, and timedout, giving the result of watching the file.\n\nThis behavior of this function varies slightly across platforms. See https://nodejs.org/api/fs.html#fs_caveats for more detailed information.\n\n\n\n"
 },
 
 {
