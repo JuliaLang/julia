@@ -28,6 +28,10 @@
 #include "julia.h"
 #include "julia_internal.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // stack of bits to keep track of which combination of Union components we are
 // looking at (0 for Union.a, 1 for Union.b). forall_exists_subtype and
 // exists_subtype loop over all combinations by updating a binary count in
@@ -2246,3 +2250,7 @@ JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b)
     if (jl_subtype(b, a)) return 0;
     return type_morespecific_(a, b, 0, NULL);
 }
+
+#ifdef __cplusplus
+}
+#endif
