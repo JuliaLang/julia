@@ -6557,7 +6557,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Function",
-    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\nMerge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\n"
+    "text": "Merge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\nmerge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\n"
 },
 
 {
@@ -15789,7 +15789,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.Multimedia.TextDisplay",
     "category": "Type",
-    "text": "TextDisplay(io::IO)\n\nReturns a TextDisplay <: Display, which can display any object as the text/plain MIME type (only), writing the text representation to the given I/O stream. (The text representation is the same as the way an object is printed in the Julia REPL.)\n\n\n\n"
+    "text": "TextDisplay(io::IO)\n\nReturns a TextDisplay <: Display, which displays any object as the text/plain MIME type (by default), writing the text representation to the given I/O stream. (This is how objects are printed in the Julia REPL.)\n\n\n\n"
 },
 
 {
