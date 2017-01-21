@@ -426,16 +426,16 @@ function _views(ex::Expr)
 end
 
 """
-    @views code
+    @views expression
 
-Convert every array-slicing operation in the given `code`
+Convert every array-slicing operation in the given expression
 (which may be a `begin`/`end` block, loop, function, etc.)
 to return a view.   Scalar indices, non-array types, and
 explicit `getindex` calls (as opposed to `array[...]`) are
 unaffected.
 
 Note that the `@views` macro only affects `array[...]` expressions
-that appear explicitly in the given code, not array slicing that
+that appear explicitly in the given `expression`, not array slicing that
 occurs in functions called by the code.
 """
 macro views(x)
