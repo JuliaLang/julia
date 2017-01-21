@@ -412,16 +412,15 @@ function _views(ex::Expr)
         Expr(ex.head, esc(ex.args[1]), _views(ex.args[2]))
     elseif ex.head == :ref
         ex = replace_ref_end!(ex)
-        Expr(:call, :maybeview, map(_views, ex.args)...)
+        Expr(:call, :maybeview, _views.(ex.args)...)
     else
         h = string(ex.head)
         if last(h) == '='
             # don't use view on the lhs of an op-assignment
             Expr(first(h) == '.' ? :(.=) : :(=), esc(ex.args[1]),
-                 Expr(:call, esc(Symbol(h[1:end-1])), _views(ex.args[1]),
-                             map(_views, ex.args[2:end])...))
+                 Expr(:call, esc(Symbol(h[1:end-1])), _views.(ex.args)...)
         else
-            Expr(ex.head, map(_views, ex.args)...)
+            Expr(ex.head, _views.(ex.args)...)
         end
     end
 end
