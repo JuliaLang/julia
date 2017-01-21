@@ -392,3 +392,52 @@ macro view(ex)
         throw(ArgumentError("Invalid use of @view macro: argument must be a reference expression A[...]."))
     end
 end
+
+############################################################################
+# @views macro code:
+
+# maybeview is like getindex, but returns a view for slicing operations
+# (while remaining equivalent to getindex for scalar indices and non-array types)
+@propagate_inbounds maybeview(A, args...) = getindex(A, args...)
+@propagate_inbounds maybeview(A::AbstractArray, args...) = view(A, args...)
+@propagate_inbounds maybeview(A::AbstractArray, args::Number...) = getindex(A, args...)
+@propagate_inbounds maybeview(A) = getindex(A)
+@propagate_inbounds maybeview(A::AbstractArray) = getindex(A)
+
+_views(x) = x
+_views(x::Symbol) = esc(x)
+function _views(ex::Expr)
+    if ex.head in (:(=), :(.=))
+        # don't use view on the lhs of an assignment
+        Expr(ex.head, esc(ex.args[1]), _views(ex.args[2]))
+    elseif ex.head == :ref
+        Expr(:call, :maybeview, map(_views, ex.args)...)
+    else
+        h = string(ex.head)
+        if last(h) == '='
+            # don't use view on the lhs of an op-assignment
+            Expr(first(h) == '.' ? :(.=) : :(=), esc(ex.args[1]),
+                 Expr(:call, esc(Symbol(h[1:end-1])), _views(ex.args[1]),
+                             map(_views, ex.args[2:end])...))
+        else
+            Expr(ex.head, map(_views, ex.args)...)
+        end
+    end
+end
+
+"""
+    @views code
+
+Convert every array-slicing operation in the given `code`
+(which may be a `begin`/`end` block, loop, function, etc.)
+to return a view.   Scalar indices, non-array types, and
+explicit `getindex` calls (as opposed to `array[...]`) are
+unaffected.
+
+Note that the `@views` macro only affects `array[...]` expressions
+that appear explicitly in the given code, not array slicing that
+occurs in functions called by the code.
+"""
+macro views(x)
+    _views(x)
+end
