@@ -411,6 +411,7 @@ function _views(ex::Expr)
         # don't use view on the lhs of an assignment
         Expr(ex.head, esc(ex.args[1]), _views(ex.args[2]))
     elseif ex.head == :ref
+        ex = replace_ref_end!(ex)
         Expr(:call, :maybeview, map(_views, ex.args)...)
     else
         h = string(ex.head)
