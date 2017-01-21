@@ -1559,11 +1559,11 @@ JL_DLLEXPORT void jl_pop_handler(int n);
 
 #if defined(_OS_WINDOWS_)
 #if defined(_COMPILER_MINGW_)
-int __attribute__ ((__nothrow__,__returns_twice__)) jl_setjmp(jmp_buf _Buf);
-__declspec(noreturn) __attribute__ ((__nothrow__)) void jl_longjmp(jmp_buf _Buf,int _Value);
+int __attribute__ ((__nothrow__,__returns_twice__)) (jl_setjmp)(jmp_buf _Buf);
+__declspec(noreturn) __attribute__ ((__nothrow__)) void (jl_longjmp)(jmp_buf _Buf, int _Value);
 #else
-int jl_setjmp(jmp_buf _Buf);
-void jl_longjmp(jmp_buf _Buf,int _Value);
+int (jl_setjmp)(jmp_buf _Buf);
+void (jl_longjmp)(jmp_buf _Buf, int _Value);
 #endif
 #define jl_setjmp_f jl_setjmp
 #define jl_setjmp_name "jl_setjmp"
