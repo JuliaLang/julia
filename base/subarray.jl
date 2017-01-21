@@ -418,7 +418,7 @@ function _views(ex::Expr)
         if last(h) == '='
             # don't use view on the lhs of an op-assignment
             Expr(first(h) == '.' ? :(.=) : :(=), esc(ex.args[1]),
-                 Expr(:call, esc(Symbol(h[1:end-1])), _views.(ex.args)...)
+                 Expr(:call, esc(Symbol(h[1:end-1])), _views.(ex.args)...))
         else
             Expr(ex.head, _views.(ex.args)...)
         end
