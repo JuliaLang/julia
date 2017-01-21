@@ -864,6 +864,7 @@ _containertype{T<:SparseVecOrMat}(::Type{T}) = AbstractSparseArray
 promote_containertype(::Type{Any}, ::Type{AbstractSparseArray}) = AbstractSparseArray
 promote_containertype(::Type{AbstractSparseArray}, ::Type{Any}) = AbstractSparseArray
 # combinations of sparse arrays with anything else should fall back to generic dense broadcast
+# (except Arrays of dimension less than three, which we hack in below)
 promote_containertype(::Type{Array}, ::Type{AbstractSparseArray}) = Array
 promote_containertype(::Type{Tuple}, ::Type{AbstractSparseArray}) = Array
 promote_containertype(::Type{AbstractSparseArray}, ::Type{Array}) = Array
@@ -905,40 +906,129 @@ broadcast{Tf,T}(f::Tf, ::Type{T}, A::SparseMatrixCSC) = broadcast(y -> f(T, y), 
 broadcast{Tf,T}(f::Tf, A::SparseMatrixCSC, ::Type{T}) = broadcast(x -> f(x, T), A)
 
 
-# (10) broadcast[!] over combinations of scalars, sparse vectors/matrices, and structured matrices
+# (10) broadcast[!] over combinations of scalars, sparse vectors/matrices, structured matrices,
+# and one- and two-dimensional Arrays (via promotion of structured matrices and Arrays)
 
-# structured array container type promotion
-immutable StructuredArray end
-_containertype{T<:Diagonal}(::Type{T}) = StructuredArray
-_containertype{T<:Bidiagonal}(::Type{T}) = StructuredArray
-_containertype{T<:Tridiagonal}(::Type{T}) = StructuredArray
-_containertype{T<:SymTridiagonal}(::Type{T}) = StructuredArray
-promote_containertype(::Type{StructuredArray}, ::Type{StructuredArray}) = StructuredArray
-# combinations involving sparse arrays continue in the structured array funnel
-promote_containertype(::Type{StructuredArray}, ::Type{AbstractSparseArray}) = StructuredArray
-promote_containertype(::Type{AbstractSparseArray}, ::Type{StructuredArray}) = StructuredArray
-# combinations involving scalars continue in the structured array funnel
-promote_containertype(::Type{StructuredArray}, ::Type{Any}) = StructuredArray
-promote_containertype(::Type{Any}, ::Type{StructuredArray}) = StructuredArray
-# combinations involving arrays divert to the generic array code
-promote_containertype(::Type{StructuredArray}, ::Type{Array}) = Array
-promote_containertype(::Type{Array}, ::Type{StructuredArray}) = Array
-# combinations involving tuples divert to the generic array code
-promote_containertype(::Type{StructuredArray}, ::Type{Tuple}) = Array
-promote_containertype(::Type{Tuple}, ::Type{StructuredArray}) = Array
+immutable PromoteToSparse end
 
-# for combinations involving sparse/structured arrays and scalars only,
-# promote all structured arguments to sparse and then rebroadcast
-@inline broadcast_c{N}(f, ::Type{StructuredArray}, As::Vararg{Any,N}) =
+# broadcast containertype definitions for structured matrices
+_containertype{T<:Diagonal}(::Type{T}) = PromoteToSparse
+_containertype{T<:Bidiagonal}(::Type{T}) = PromoteToSparse
+_containertype{T<:Tridiagonal}(::Type{T}) = PromoteToSparse
+_containertype{T<:SymTridiagonal}(::Type{T}) = PromoteToSparse
+
+# combinations involving sparse arrays and promote-to-sparse continue in the promote-to-sparse funnel
+promote_containertype(::Type{PromoteToSparse}, ::Type{AbstractSparseArray}) = PromoteToSparse
+promote_containertype(::Type{AbstractSparseArray}, ::Type{PromoteToSparse}) = PromoteToSparse
+# combinations involving scalars and promote-to-sparse continue in the promote-to-sparse funnel
+promote_containertype(::Type{PromoteToSparse}, ::Type{Any}) = PromoteToSparse
+promote_containertype(::Type{Any}, ::Type{PromoteToSparse}) = PromoteToSparse
+
+# combinations involving arrays of dimension >2 divert to the abstractarray broadcast code
+promote_containertype(::Type{PromoteToSparse}, ::Type{Array}) = Array
+promote_containertype(::Type{Array}, ::Type{PromoteToSparse}) = Array
+# combinations involving tuples divert to the abstractarray broadcast code
+promote_containertype(::Type{PromoteToSparse}, ::Type{Tuple}) = Array
+promote_containertype(::Type{Tuple}, ::Type{PromoteToSparse}) = Array
+
+# broadcast containertype definitions and promotion for promote-to-sparse combinations
+# involving one- and/or two-dimensional Arrays
+#
+# Issue: `Array` has multiple meanings in the broadcast containertype promotion mechanism:
+# (1) `Array`, in the sense of "this object is an Array (or this is a collection of Arrays)";
+# (2) `AbstractArray`, in the sense of "this object is an AbstractArray (or this is a collection
+#   of AbstractArrays) but where that AbstractArray is (/a subset of that collection of
+#   AbstractArrays are) not of a specific AbstractArray subtype for which special
+#   handling is defined;
+# (3) `AbstractArray`, in the sense of "this is a collection of objects that need be funneled
+#   to the generic AbstractArray broadcast code".
+# Presently we conflate these three meanings in `Array`. Conflating meanings (2) and (3)
+# might be fine, but conflating meaning (1) with the other two prevents separating objects
+# that are Arrays (from e.g. collections of Arrays and Tuples) for special handling, as is
+# necessary e.g. to handle Arrays in sparse broadcast.
+#
+# We should probably disambiguate these meanings in Broadcast. One approach to doing so
+# would be to replace `Array` with `AbstractArray` in the existing containertype promotion
+# mechanism, and then separately define containertype promotion methods for Array as we do
+# for Tuple.
+#
+# The tricky question is what to do about the promote_containertype(ct, ::Type{Array}) = Array
+# (after the change suggested above, promote_containertype(ct, ::Type{AbstractArray})) = AbstractArray)
+# methods. These methods are ambiguity magnets, and there is a tendency to write similar
+# such methods whenever extending broadcast to a new type, which ultimately results
+# in having to write a combinatorial explosion of ambiguity-killing methods.
+#
+# Perhaps the following makes a reasonable model: don't define methods like
+# promote_containertype(ct, ::Type{Array}) = Array, and discourage definition of such
+# methods for new types. Instead (1) define promote_containertype(cta, ctb) = AbstractArray as
+# primary fallback, such that any type pair without clearly defined behavior gets funneled
+# to the generic AbstractArray broadcast code, and (2) encourage writing only explicit, tight
+# promote_containertype definitions.
+#
+# The above should improve the extensibility and maintainability of Broadcast.
+#
+# The implementation of extending sparse broadcast to handle Arrays below illustrates the
+# above issue. Specifically, here we need to be able to identify Arrays (in sense (1) above),
+# and specifically one- and two-dimensional Arrays (though sparse broadcast can handle the
+# dimension separation internally just fine), so we introduce _containertype methods for
+# Vector and Matrix. But to keep existing code functioning, this forces all other consumers
+# of broadcast that define methods like promote_containertype(ct, ::Type{Custom}) to be
+# aware of Vector and Matrix (see e.g. the modifications necessary to test/broadcast.jl)
+# in addition to their present awareness of Array.
+#
+# So here's the problematic hack, which impacts other consumers of Broadcast if they define
+# additional ambiguity-magnets like promote_containertype(ct, ::Type{Custom}). Such consumers
+# will need to define disambiguating methods for Vector and Matrix as they now do for Array.
+_containertype{T<:Vector}(::Type{T}) = Vector
+_containertype{T<:Matrix}(::Type{T}) = Matrix
+broadcast_indices(::Type{Vector}, A) = indices(A)
+broadcast_indices(::Type{Matrix}, A) = indices(A)
+@inline broadcast_c(f, ::Type{Vector}, A, Bs...) = broadcast_c(f, Array, A, Bs...)
+@inline broadcast_c(f, ::Type{Matrix}, A, Bs...) = broadcast_c(f, Array, A, Bs...)
+
+promote_containertype(::Type{Vector}, ct) = Array
+promote_containertype(ct, ::Type{Vector}) = Array
+promote_containertype(::Type{Vector}, ::Type{Vector}) = Vector
+promote_containertype(::Type{Vector}, ::Type{Array}) = Array
+promote_containertype(::Type{Array}, ::Type{Vector}) = Array
+promote_containertype(::Type{Vector}, ::Type{Any}) = Vector
+promote_containertype(::Type{Any}, ::Type{Vector}) = Vector
+
+promote_containertype(::Type{Matrix}, ct) = Array
+promote_containertype(ct, ::Type{Matrix}) = Array
+promote_containertype(::Type{Matrix}, ::Type{Matrix}) = Matrix
+promote_containertype(::Type{Matrix}, ::Type{Array}) = Array
+promote_containertype(::Type{Array}, ::Type{Matrix}) = Array
+promote_containertype(::Type{Matrix}, ::Type{Any}) =  Matrix
+promote_containertype(::Type{Any}, ::Type{Matrix}) = Matrix
+
+promote_containertype(::Type{Vector}, ::Type{Matrix}) = Matrix
+promote_containertype(::Type{Matrix}, ::Type{Vector}) = Matrix
+
+promote_containertype(::Type{Vector}, ::Type{AbstractSparseArray}) = PromoteToSparse
+promote_containertype(::Type{AbstractSparseArray}, ::Type{Vector}) = PromoteToSparse
+promote_containertype(::Type{Vector}, ::Type{PromoteToSparse}) = PromoteToSparse
+promote_containertype(::Type{PromoteToSparse}, ::Type{Vector}) = PromoteToSparse
+
+promote_containertype(::Type{Matrix}, ::Type{AbstractSparseArray}) = PromoteToSparse
+promote_containertype(::Type{AbstractSparseArray}, ::Type{Matrix}) = PromoteToSparse
+promote_containertype(::Type{Matrix}, ::Type{PromoteToSparse}) = PromoteToSparse
+promote_containertype(::Type{PromoteToSparse}, ::Type{Matrix}) = PromoteToSparse
+
+# for combinatinons involving only scalars, sparse arrays, structured matrices, and Arrays of
+# dimension less than three, promote all structurd matrices and Arrays to sparse and rebroadcast
+@inline broadcast_c{N}(f, ::Type{PromoteToSparse}, As::Vararg{Any,N}) =
     broadcast(f, map(_sparsifystructured, As)...)
-@inline broadcast_c!{N}(f, ::Type{AbstractSparseArray}, ::Type{StructuredArray}, C, B, As::Vararg{Any,N}) =
+@inline broadcast_c!{N}(f, ::Type{AbstractSparseArray}, ::Type{PromoteToSparse}, C, B, As::Vararg{Any,N}) =
     broadcast!(f, C, _sparsifystructured(B), map(_sparsifystructured, As)...)
-@inline broadcast_c!{N}(f, CT::Type, ::Type{StructuredArray}, C, B, As::Vararg{Any,N}) =
-    broadcast_c!(f, CT, Array, C, B, As...)
+@inline broadcast_c!{N}(f, CT::Type, ::Type{PromoteToSparse}, C, B, As::Vararg{Any,N}) =
+    broadcast_c!(f, CT, Array, C, B, As...) # where destination C is not sparse, divert to Array code
 @inline _sparsifystructured(S::SymTridiagonal) = SparseMatrixCSC(S)
 @inline _sparsifystructured(T::Tridiagonal) = SparseMatrixCSC(T)
 @inline _sparsifystructured(B::Bidiagonal) = SparseMatrixCSC(B)
 @inline _sparsifystructured(D::Diagonal) = SparseMatrixCSC(D)
+@inline _sparsifystructured(M::Matrix) = SparseMatrixCSC(M)
+@inline _sparsifystructured(V::Vector) = SparseVector(V)
 @inline _sparsifystructured(A::AbstractSparseArray) = A
 @inline _sparsifystructured(x) = x
 
