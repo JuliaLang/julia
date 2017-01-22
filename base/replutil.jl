@@ -515,6 +515,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                     # If the methods args is longer than input then the method
                     # arguments is printed as not a match
                     for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
+                        sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
                         if Base.isvarargtype(sigtype)
                             sigstr = string(sigtype.parameters[1], "...")
                         else
