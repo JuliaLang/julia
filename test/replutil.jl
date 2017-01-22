@@ -463,8 +463,8 @@ end
 
 # Issue 20111
 let K20111(x) = y -> x, buf = IOBuffer()
-  show(buf, methods(K20111(1)))
-  @test contains(String(buf), " 1 method for generic function")
+    show(buf, methods(K20111(1)))
+    @test contains(String(buf), " 1 method for generic function")
 end
 
 # @macroexpand tests
