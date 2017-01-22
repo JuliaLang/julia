@@ -54,7 +54,7 @@ function eof end
     write(filename::AbstractString, x)
 
 Write the canonical binary representation of a value to the given I/O stream or file.
-Returns the number of bytes written into the stream.
+Returns the number of bytes written into the stream. (note: file operations are blocking)
 
 You can write multiple values with the same `write` call. i.e. the following are equivalent:
 
@@ -351,7 +351,7 @@ read{T}(s::IO, t::Type{T}, d1::Integer, dims::Integer...) =
 
 Read a series of values of type `T` from `stream`, in canonical binary representation.
 `dims` is either a tuple or a series of integer arguments specifying the size of the `Array{T}`
-to return.
+to return. (note: file operations are blocking)
 """
 read{T}(s::IO, ::Type{T}, dims::Dims) = read!(s, Array{T}(dims))
 
@@ -473,6 +473,7 @@ readchomp(x) = chomp!(readstring(x))
 Read at most `nb` bytes from `stream` into `b`, returning the number of bytes read.
 The size of `b` will be increased if needed (i.e. if `nb` is greater than `length(b)`
 and enough bytes could be read), but it will never be decreased.
+(note: file operations are blocking)
 """
 function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b))
     olb = lb = length(b)
