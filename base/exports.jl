@@ -827,6 +827,7 @@ export
     print,
     print_shortest,
     print_with_color,
+    println_with_color,
     println,
     randstring,
     repeat,
