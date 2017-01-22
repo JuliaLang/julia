@@ -1700,3 +1700,7 @@ end
 @testset "issue #19503" begin
     @test which(-, (SparseMatrixCSC,)).module == Base.SparseArrays
 end
+
+@testset "issue #14398" begin
+    @test transpose(view(speye(10), 1:5, 1:5)) ≈ eye(5,5)
+end
