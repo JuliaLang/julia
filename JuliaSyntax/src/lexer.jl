@@ -310,12 +310,12 @@ function next_token(l::Lexer)
     elseif c == '('; return emit(l, Tokens.LPAREN)
     elseif c == ')'; return emit(l, Tokens.RPAREN)
     elseif c == ','; return emit(l, Tokens.COMMA)
-    elseif c == '*'; return emit(l, Tokens.STAR)
+    elseif c == '*'; return lex_star(l);
+    elseif c == '^'; return lex_circumflex(l);
     elseif c == '@'; return emit(l, Tokens.AT_SIGN)
     elseif c == '?'; return emit(l, Tokens.CONDITIONAL)
-    elseif c == '$'; return emit(l, Tokens.EX_OR)
+    elseif c == '$'; return lex_xor(l);
     elseif c == '~'; return emit(l, Tokens.APPROX)
-    elseif c == '\\'; return emit(l, Tokens.BACKSLASH)
     elseif c == '#'; return lex_comment(l)
     elseif c == '='; return lex_equal(l)
     elseif c == '!'; return lex_exclaim(l)
@@ -324,10 +324,12 @@ function next_token(l::Lexer)
     elseif c == ':'; return lex_colon(l)
     elseif c == '|'; return lex_bar(l)
     elseif c == '&'; return lex_amper(l)
-    elseif c == '\'';return lex_prime(l)
+    elseif c == '\''; return lex_prime(l)
+    elseif c == '÷'; return lex_division(l)    
     elseif c == '"'; return lex_quote(l);
     elseif c == '%'; return lex_percent(l);
     elseif c == '/'; return lex_forwardslash(l);
+    elseif c == '\\'; return lex_backslash(l);
     elseif c == '.'; return lex_dot(l);
     elseif c == '+'; return lex_plus(l);
     elseif c == '-'; return lex_minus(l);
@@ -392,6 +394,8 @@ function lex_greater(l::Lexer)
         end
     elseif accept(l, '=') # >=
         return emit(l, Tokens.GREATER_EQ)
+    elseif accept(l, ':') # >:
+        return emit(l, Tokens.GREATER_COLON)
     else  # '>'
         return emit(l, Tokens.GREATER)
     end
@@ -435,9 +439,11 @@ end
 # Lex a colon, a ':' has been consumed
 function lex_colon(l::Lexer)
     if accept(l, ':') # '::'
-        emit(l, Tokens.DECLARATION)
+        return emit(l, Tokens.DECLARATION)
+    elseif accept(l, '=') # ':='
+        return emit(l, Tokens.COLON_EQ)
     else
-        emit(l, Tokens.COLON)
+        return emit(l, Tokens.COLON)
     end
 end
 
@@ -474,13 +480,55 @@ function lex_bar(l::Lexer)
 end
 
 function lex_plus(l::Lexer)
-    accept(l, '+') && return emit(l, Tokens.PLUSPLUS)
+    if accept(l, '+')
+        return emit(l, Tokens.PLUSPLUS)
+    elseif accept(l, '=')
+        return emit(l, Tokens.PLUS_EQ)
+    end
     return emit(l, Tokens.PLUS)
 end
 
 function lex_minus(l::Lexer)
-    accept(l, '-') && return emit_error(l) # "--" is an invalid operator
+    if accept(l, '-')
+        if accept(l, '>')
+            return emit(l, Tokens.RIGHT_ARROW)
+        else
+            return emit_error(l) # "--" is an invalid operator
+        end
+    elseif accept(l, '=')
+        return emit(l, Tokens.MINUS_EQ)
+    end
     return emit(l, Tokens.MINUS)
+end
+
+function lex_star(l::Lexer)
+    if accept(l, '*')
+        return emit_error(l) # "**" is an invalid operator use ^
+    elseif accept(l, '=')
+        return emit(l, Tokens.STAR_EQ)
+    end
+    return emit(l, Tokens.STAR)
+end
+
+function lex_circumflex(l::Lexer)
+    if accept(l, '=')
+        return emit(l, Tokens.CIRCUMFLEX_EQ)
+    end
+    return emit(l, Tokens.CIRCUMFLEX_ACCENT)
+end
+
+function lex_division(l::Lexer)
+    if accept(l, '=')
+        return emit(l, Tokens.DIVISION_EQ)
+    end
+    return emit(l, Tokens.DIVISION_SIGN)
+end
+
+function lex_xor(l::Lexer)
+    if accept(l, '=')
+        return emit(l, Tokens.EX_OR_EQ)
+    end
+    return emit(l, Tokens.EX_OR)
 end
 
 
@@ -636,6 +684,13 @@ function lex_forwardslash(l::Lexer)
     else
         return emit(l, Tokens.FWD_SLASH)
     end
+end
+
+function lex_backslash(l::Lexer)
+    if accept(l, '=')
+        return emit(l, Tokens.BACKSLASH_EQ)
+    end
+    return emit(l, Tokens.BACKSLASH)
 end
 
 # TODO .op

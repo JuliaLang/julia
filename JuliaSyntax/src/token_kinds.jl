@@ -38,71 +38,48 @@
 
     begin_ops,
         OP, # general
-        STAR,  # *
-        PLUS, # +
-        MINUS, # -
-        PLUSPLUS, # ++
-        BACKSLASH, # \
-        NOT, # !
-        APPROX, # ~
 
-        DECLARATION, # ::
-        COLON, # :
-        PRIME, # '
-
-        DOT,# .
-        DDOT, # ..
-        DDDOT, # ...
-
-        LAZY_OR, # ||
-        LAZY_AND, # &&
-        OR, # |
-        AND, # &
-        CONDITIONAL, # ?
-        REM, # %
-        FWD_SLASH, # /
-        FWDFWD_SLASH, # //
-        TRANSPOSE, # .'
-        ISSUBTYPE, # <:
-        EX_OR, # $
-
-        GREATER, # >
-        LESS, # <
-        NOT_EQ, # !=
-        NOT_IS, # !==
-
-        LPIPE, # |>
-        RPIPE, # <|
-
-        begin_bitshifts,
-          LBITSHIFT, # <<
-          RBITSHIFT, # >>
-          UNSIGNED_BITSHIFT, # >>>
-        end_bitshifts,
-
+        # Level 1
         begin_assignments,
-          EQ, # =
-          EQEQ, # ==
-          EQEQEQ, # ===
-          PAIR_ARROW, # =>
-          GREATER_EQ, # >=
-          LESS_EQ, # <=
-          RBITSHIFT_EQ, # >>=
-          UNSIGNED_BITSHIFT_EQ, # >>>=
-          LBITSHIFT_EQ, # <<=
-          OR_EQ, # |=
-          AND_EQ, # &=
-          REM_EQ, # %=
-          FWD_SLASH_EQ, # /=
-          FWDFWD_SLASH_EQ, # //=
+            EQ, # =
+            PLUS_EQ, # +=
+            MINUS_EQ, # -=
+            STAR_EQ, # *=
+            FWD_SLASH_EQ, # /=
+            FWDFWD_SLASH_EQ, # //=
+            OR_EQ, # |=
+            CIRCUMFLEX_EQ, # ^=
+            DIVISION_EQ, # ÷=
+            REM_EQ, # %=
+            LBITSHIFT_EQ, # <<=
+            RBITSHIFT_EQ, # >>=
+            UNSIGNED_BITSHIFT_EQ, # >>>=
+            BACKSLASH_EQ, # \=
+            AND_EQ, # &=
+            COLON_EQ, # :=
+            PAIR_ARROW, # =>
+            APPROX, # ~
+            EX_OR_EQ, # $=
         end_assignments,
 
-        begin_unicode_ops,
-            DIVISION_SIGN, # ÷
-            NOT_SIGN, # ¬
-            SQUARE_ROOT, # √
-            CUBE_ROOT, # ∛
-            QUAD_ROOT, # ∜
+        # Level 2
+        begin_conditional,
+            CONDITIONAL, # ?
+        end_conditional,
+
+        # Level 3
+        begin_lazyor,
+            LAZY_OR, # ||
+        end_lazyor,
+
+        # Level 4
+        begin_lazyand,
+            LAZY_AND, # &&
+        end_lazyand,
+
+        # Level 5
+        begin_arrow,
+            RIGHT_ARROW, # -->
             LEFTWARDS_ARROW, # ←
             RIGHTWARDS_ARROW, # →
             LEFT_RIGHT_ARROW, # ↔
@@ -218,10 +195,25 @@
             RIGHTWARDS_ARROW_ABOVE_REVERSE_TILDE_OPERATOR, # ⭌
             HALFWIDTH_LEFTWARDS_ARROW, # ￩
             HALFWIDTH_RIGHTWARDS_ARROW, # ￫
+        end_arrow,
+
+
+        # Level 6
+        begin_comparison,
+            ISSUBTYPE, # <:
+            GREATER_COLON, # >:
+            GREATER, # >
+            LESS, # <
+            GREATER_EQ, # >=
             GREATER_THAN_OR_EQUAL_TO, # ≥
+            LESS_EQ, # <=
             LESS_THAN_OR_EQUAL_TO, # ≤
+            EQEQ, # ==
+            EQEQEQ, # ===
             IDENTICAL_TO, # ≡
+            NOT_EQ, # !=
             NOT_EQUAL_TO, # ≠
+            NOT_IS, # !==
             NOT_IDENTICAL_TO, # ≢
             ELEMENT_OF, # ∈
             NOT_AN_ELEMENT_OF, # ∉
@@ -493,6 +485,26 @@
             DOUBLE_LINE_SLANTED_GREATER_THAN_OR_EQUAL_TO, # ⫺
             RIGHT_TACK, # ⊢
             LEFT_TACK, # ⊣
+        end_comparison,
+
+        # Level 7
+        begin_pipe,
+            LPIPE, # |>
+            RPIPE, # <|
+        end_pipe,
+
+        # Level 8
+        begin_colon,
+            COLON, # :
+            DDOT, # ..
+        end_colon,
+
+        # Level 9
+        begin_plus,
+            EX_OR, # $
+            PLUS, # +
+            MINUS, # -
+            PLUSPLUS, # ++
             CIRCLED_PLUS, # ⊕
             CIRCLED_MINUS, # ⊖
             SQUARED_PLUS, # ⊞
@@ -546,8 +558,26 @@
             SMALL_VEE_WITH_UNDERBAR, # ⩡
             LOGICAL_OR_WITH_DOUBLE_OVERBAR, # ⩢
             LOGICAL_OR_WITH_DOUBLE_UNDERBAR, # ⩣
+        end_plus,
+
+        # Level 10
+        begin_bitshifts,
+          LBITSHIFT, # <<
+          RBITSHIFT, # >>
+          UNSIGNED_BITSHIFT, # >>>
+        end_bitshifts,
+
+        # Level 11
+        begin_times,
+            STAR,  # *
+            FWD_SLASH, # /
+            DIVISION_SIGN, # ÷
+            REM, # %
+            UNICODE_DOT, # ⋅
             RING_OPERATOR, # ∘
             MULTIPLICATION_SIGN, # ×
+            BACKSLASH, # \
+            AND, # &
             INTERSECTION, # ∩
             LOGICAL_AND, # ∧
             CIRCLED_TIMES, # ⊗
@@ -610,6 +640,15 @@
             LOGICAL_AND_WITH_DOUBLE_UNDERBAR, # ⩠
             TRANSVERSAL_INTERSECTION, # ⫛
             MULTISET_MULTIPLICATION, # ⊍
+        end_times,
+
+        # Level 12
+        begin_rational,
+            FWDFWD_SLASH, # //
+        end_rational,
+
+        # Level 13
+        begin_power,
             CIRCUMFLEX_ACCENT, # ^
             UPWARDS_ARROW, # ↑
             DOWNWARDS_ARROW, # ↓
@@ -641,7 +680,30 @@
             DOWNWARDS_HARPOON_WITH_BARB_LEFT_BESIDE_UPWARDS_HARPOON_WITH_BARB_RIGHT, # ⥯
             HALFWIDTH_UPWARDS_ARROW, # ￪
             HALFWIDTH_DOWNWARDS_ARROW, # ￬
-            UNICODE_DOT, # ⋅
+        end_power,
+        
+        # Level 14
+        begin_decl,
+            DECLARATION, # ::
+        end_decl,
+
+        # Level 15
+        begin_dot,
+            DOT,# .
+        end_dot,
+
+        NOT, # !
+        PRIME, # '
+        DDDOT, # ...
+        OR, # |
+        TRANSPOSE, # .'
+        
+
+        begin_unicode_ops,
+            NOT_SIGN, # ¬
+            SQUARE_ROOT, # √
+            CUBE_ROOT, # ∛
+            QUAD_ROOT, # ∜
         end_unicode_ops,
     end_ops,
 )
