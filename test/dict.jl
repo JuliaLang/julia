@@ -650,3 +650,11 @@ end
     b = Dict(Dict(1 => 2, 2 => 3, 5 => 6) => 1, Dict(3 => 4) => 2)
     @test hash(a) != hash(b)
 end
+
+type Foo_15776
+    x::Vector{Pair{Tuple{Function, Vararg{Int}}, Int}}
+end
+@testset "issue #15776, convert for pair" begin
+    z = [Pair((+,1,5,7), 3), Pair((-,6,5,3,5,8), 1)]
+    @test_nowarn Foo_15776(z)
+end
