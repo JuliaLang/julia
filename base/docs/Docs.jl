@@ -241,7 +241,8 @@ end
 """
     getdoc(x::T, sig) -> String
 
-Return the dynamic docstring associated with object `x`, or `nothing` to use the binding's documentation.
+Return the dynamic docstring associated with object `x`, or `nothing` to use
+the binding's documentation.
 """
 getdoc(x, sig) = getdoc(x)
 getdoc(x) = nothing
@@ -251,7 +252,8 @@ getdoc(x) = nothing
 
 Returns all documentation that matches both `binding` and `sig`.
 
-If `getdoc` returns a non-`nothing` result on the value of the binding, then a dynamic docstring is returned instead of one based on the binding itself.
+If `getdoc` returns a non-`nothing` result on the value of the binding, then a
+dynamic docstring is returned instead of one based on the binding itself.
 """
 function doc(binding::Binding, sig::Type = Union{})
     if defined(binding)
