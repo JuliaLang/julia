@@ -656,5 +656,9 @@ type Foo_15776
 end
 @testset "issue #15776, convert for pair" begin
     z = [Pair((+,1,5,7), 3), Pair((-,6,5,3,5,8), 1)]
-    @test_nowarn Foo_15776(z)
+    f = Foo_15776(z)
+    @test f.x[1].first == (+, 1, 5, 7)
+    @test f.x[1].second == 3
+    @test f.x[2].first == (-, 6, 5, 3, 5, 8)
+    @test f.x[2].second == 1
 end
