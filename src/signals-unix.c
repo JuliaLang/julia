@@ -535,9 +535,16 @@ static void *signal_listener(void *arg)
         if (sigwait(&sset, &sig)) {
             sig = SIGABRT; // this branch can't occur, unless we had stack memory corruption of sset
         }
-        if (!sig) {
-            // this should never happen, but it has been observed to occur on some buggy kernels (mach)
-            // when sigprocmask is incorrectly used on some other thread, instead of pthread_sigmask
+        if (!sig || errno == EINTR) {
+            // This should never happen, but it has been observed to occur
+            // when this thread gets used to handle run a signal handler (without SA_RESTART).
+            // It would be nice to prohibit the kernel from doing that, by blocking signals on this thread,
+            // (so that we aren't temporarily unable to handle the signals that this thread exists to handle)
+            // but that sometimes results in the signals never getting delivered at all.
+            // Apparently the only consistent way to handle signals with sigwait is all-or-nothing :(
+            // And while sigwait handles per-process signals more sanely,
+            // it can't really handle thread-targeted signals at all.
+            // So signals really do seem to always just be lose-lose.
             continue;
         }
 #ifndef HAVE_MACH
