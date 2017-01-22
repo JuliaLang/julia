@@ -449,3 +449,11 @@ end
     @test broadcast(==, [1], AbstractArray) == BitArray([false])
     @test broadcast(==, 1, AbstractArray) == false
 end
+
+# Test that broadcasting identity where the input and output Array shapes do not match
+# yields the correct result, not merely a partial copy. See pull request #19895 for discussion.
+let N = 5
+    @test iszero(ones(N, N) .= zeros(N, 1))
+    @test iszero(ones(N, N) .= zeros(1, N))
+    @test iszero(ones(N, N) .= zeros(1, 1))
+end
