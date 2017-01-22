@@ -385,12 +385,10 @@ function lex_greater(l::Lexer)
             else # >>>?, ? not a =
                 return emit(l, Tokens.UNSIGNED_BITSHIFT)
             end
-        else # >>?
-            if accept(l, '=') # >>=
-                return emit(l, Tokens.RBITSHIFT_EQ)
-            else accept(l, iswhitespace) # '>> '
-                return emit(l, Tokens.RBITSHIFT)
-            end
+        elseif accept(l, '=') # >>=
+            return emit(l, Tokens.RBITSHIFT_EQ)
+        else # '>>'
+            return emit(l, Tokens.RBITSHIFT)
         end
     elseif accept(l, '=') # >=
         return emit(l, Tokens.GREATER_EQ)

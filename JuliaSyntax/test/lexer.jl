@@ -132,3 +132,6 @@ end
 
 # test #5
 @test Tokens.kind.(collect(tokenize("1.23..3.21"))) == [T.FLOAT,T.OP,T.FLOAT,T.ENDMARKER]
+
+# issue #17
+@test collect(tokenize(">> "))[1].val==">>"
