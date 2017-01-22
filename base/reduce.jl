@@ -104,7 +104,7 @@ foldl(op, itr) = mapfoldl(identity, op, itr)
 function mapfoldr_impl(f, op, v0, itr, i::Integer)
     # Unroll the while loop once; if v0 is known, the call to op may
     # be evaluated at compile time
-    if i == 0
+    if isempty(itr)
         return r_promote(op, v0)
     else
         x = itr[i]
@@ -133,7 +133,7 @@ this cannot be used with empty collections (see `reduce(op, itr)`).
 """
 function mapfoldr(f, op, itr)
     i = endof(itr)
-    if i == 0
+    if isempty(itr)
         return Base.mr_empty_iter(f, op, itr, iteratoreltype(itr))
     end
     return mapfoldr_impl(f, op, f(itr[i]), itr, i-1)
