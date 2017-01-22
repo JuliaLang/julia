@@ -1001,3 +1001,7 @@ end
 
 # no domain error is thrown for negative values
 @test invoke(cbrt, Tuple{AbstractFloat}, -1.0) == -1.0
+
+@testset "promote Float16 irrational" begin
+    @test typeof(Float16(.5) * pi) == Float16
+end
