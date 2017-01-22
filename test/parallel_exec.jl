@@ -1149,22 +1149,10 @@ end
 
 # Test addprocs enable_threaded_blas parameter
 
-const get_num_threads = function() # anonymous so it will be serialized when called
-    blas = BLAS.vendor()
+const _get_num_threads = function() # anonymous so it will be serialized when called
     # Wrap in a try to catch unsupported blas versions
     try
-        if blas == :openblas
-            return ccall((:openblas_get_num_threads, Base.libblas_name), Cint, ())
-        elseif blas == :openblas64
-            return ccall((:openblas_get_num_threads64_, Base.libblas_name), Cint, ())
-        elseif blas == :mkl
-            return ccall((:MKL_Get_Max_Num_Threads, Base.libblas_name), Cint, ())
-        end
-
-        # OSX BLAS looks at an environment variable
-        if is_apple()
-            return ENV["VECLIB_MAXIMUM_THREADS"]
-        end
+        return BLAS.get_num_threads()
     end
 
     return nothing
