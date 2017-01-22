@@ -129,7 +129,7 @@ larger values correspond to larger amounts of time.
 Suppose the value of `$JULIA_PKGRESOLVE_ACCURACY` is `n`. Then
 
 *   the number of pre-decimation iterations is `20*n`,
-*   the number of iterations between decimation steps is `10*n`, and 
+*   the number of iterations between decimation steps is `10*n`, and
 *   at decimation steps, at most one in every `20*n` packages is decimated.
 
 ## External applications
