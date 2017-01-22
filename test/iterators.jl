@@ -385,3 +385,7 @@ for T in (UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int128, BigInt)
     @test length(repeated(1, T(5))) == 5
     @test collect(partition(1:5, T(5)))[1] == collect(1:5)
 end
+
+@testset begin "collect finite iterators"
+    @test_nowarn collect(enumerate(Iterators.Filter(x -> x>0, randn(10))))
+end
