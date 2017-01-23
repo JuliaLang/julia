@@ -1608,6 +1608,7 @@ B = 1.5:5.5
         @test_throws ArgumentError slicedim(A,0,1)
         @test slicedim(A, 3, 1) == A
         @test_throws BoundsError slicedim(A, 3, 2)
+        @test @inferred(slicedim(A, 1, 2:2)) == collect(2:4:20)'
     end
 end
 

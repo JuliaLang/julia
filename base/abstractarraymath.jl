@@ -113,7 +113,7 @@ function slicedim(A::AbstractArray, d::Integer, i)
     d >= 1 || throw(ArgumentError("dimension must be ≥ 1"))
     nd = ndims(A)
     d > nd && (i == 1 || throw_boundserror(A, (ntuple(k->Colon(),nd)..., ntuple(k->1,d-1-nd)..., i)))
-    A[( n==d ? i : indices(A,n) for n in 1:nd )...]
+    A[setindex(indices(A), i, d)...]
 end
 
 function flipdim(A::AbstractVector, d::Integer)
