@@ -1149,7 +1149,7 @@
        ((begin quote)
         (let ((loc  (begin (skip-ws-and-comments (ts:port s))
                            (line-number-node s)))
-              (blk  (parse-block s)))
+              (blk  (parse-block s (lambda (s) (parse-docstring s parse-eq)))))
           (expect-end s word)
           (let ((blk  (if (and (length> blk 1)
                                (pair? (cadr blk)) (eq? (caadr blk) 'line))
