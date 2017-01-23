@@ -138,6 +138,9 @@ c = Dates.Time(0)
 @test string(typemin(Dates.Date)) == "-252522163911150-01-01"
 @test string(typemax(Dates.Time)) == "23:59:59.999999999"
 @test string(typemin(Dates.Time)) == "00:00:00"
+@test isfinite(Dates.Date)
+@test isfinite(Dates.DateTime)
+@test isfinite(Dates.Time)
 
 # Date-DateTime conversion/promotion
 @test Dates.DateTime(a) == a
