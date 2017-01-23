@@ -37,9 +37,9 @@ Base.Dates.Date(::Base.Dates.TimeType)
 Base.Dates.Date(::AbstractString, ::AbstractString)
 Base.Dates.Date(::AbstractString, ::Base.Dates.DateFormat)
 Base.Dates.Time(::Int64::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
-Base.Dates.Time(::Base.Dates.Period...)
+Base.Dates.Time(::Base.Dates.TimePeriod...)
 Base.Dates.Time(::Function, ::Any...)
-Base.Dates.Time(::Base.Dates.TimeType)
+Base.Dates.Time(::Base.Dates.DateTime)
 Base.Dates.now()
 Base.Dates.now(::Type{Base.Dates.UTC})
 Base.eps
@@ -66,8 +66,8 @@ Base.Dates.Hour(::DateTime)
 Base.Dates.Minute(::DateTime)
 Base.Dates.Second(::DateTime)
 Base.Dates.Millisecond(::DateTime)
-Base.Dates.Microsecond(::Time)
-Base.Dates.Nanosecond(::Time)
+Base.Dates.Microsecond(::Dates.Time)
+Base.Dates.Nanosecond(::Dates.Time)
 Base.Dates.yearmonth
 Base.Dates.monthday
 Base.Dates.yearmonthday
