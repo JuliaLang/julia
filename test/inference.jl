@@ -491,3 +491,30 @@ tpara18457{I}(::Type{AbstractMyType18457{I}}) = I
 tpara18457{A<:AbstractMyType18457}(::Type{A}) = tpara18457(supertype(A))
 @test tpara18457(MyType18457{true}) === true
 
+abstract MaybeNullable_19362
+immutable YesNullable_19362 <: MaybeNullable_19362 end
+immutable NoNullable_19362 <: MaybeNullable_19362 end
+Base.@pure any_nullable_19362(x,y) =
+    ifelse((x<:Nullable) | (y<:Nullable), YesNullable_19362(), NoNullable_19362())
+
+@inline lift_19362(f, x, y) = lift_19362(f, x, y, any_nullable_19362(typeof(x), typeof(y)))
+@inline lift_19362(f, x, y, ::NoNullable_19362) = f(x, y)
+
+@inline function lift_19362(f, x1, x2, ::YesNullable_19362)
+    if Base.null_safe_op(f, typeof(x1), typeof(x2))
+        return Nullable(
+            f(x1.value, x2.value), !(isnull(x1) | isnull(x2)))
+    else
+        U = Core.Inference.return_type(
+            f, Tuple{eltype(typeof(x1)), eltype(typeof(x2))})
+        if isnull(x1) | isnull(x2)
+            return Nullable{U}()
+        else
+            return Nullable(f(unsafe_get(x1), unsafe_get(x2)))
+        end
+    end
+end
+
+@testset "inference failure 0.5 #19362" begin
+    @inferred lift_19362(*, Nullable(1), Nullable(2))
+end
