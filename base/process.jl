@@ -561,7 +561,7 @@ function eachline(cmd::AbstractCmd, stdin)
     close(stdout.in)
     out = stdout.out
     # implicitly close after reading lines, since we opened
-    return EachLine(out, ()->(close(out); success(processes) || pipeline_error(processes)))
+    return EachLine(out, false, ()->(close(out); success(processes) || pipeline_error(processes)))
 end
 eachline(cmd::AbstractCmd) = eachline(cmd, DevNull)
 

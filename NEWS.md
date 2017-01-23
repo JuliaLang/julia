@@ -46,6 +46,9 @@ Breaking changes
 
 This section lists changes that do not have deprecation warnings.
 
+  * `readline`, `readlines` and `eachline` return lines without line endings by default.
+     You can use `readline(s, false)` to get the old behavior and include EOL character(s). ([#19944]).
+
   * `String`s no longer have a `.data` field (as part of a significant performance
     improvement). Use `Vector{UInt8}(str)` to access a string as a byte array.
     However, allocating the `Vector` object has overhead. You can also use

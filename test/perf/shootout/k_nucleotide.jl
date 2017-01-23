@@ -64,7 +64,7 @@ function k_nucleotide(infile="knucleotide-input.txt")
     input = open(infile, "r")
     three = ">THREE "
     while true
-        line = readline(input)
+        line = readline(input, false)
         if length(line) >= length(three) && line[1:length(three)] == three
             break
         end
