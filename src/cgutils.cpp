@@ -621,9 +621,11 @@ static jl_cgval_t emit_typeof(const jl_cgval_t &p, jl_codectx_t *ctx)
         return mark_julia_type(emit_typeof(p.V), true, jl_datatype_type, ctx, /*needsroot*/false);
     }
     jl_value_t *aty = p.typ;
-    if (jl_is_type_type(aty)) // convert Int::Type{Int} ==> typeof(Int) ==> DataType
-                              // but convert 1::Type{1} ==> typeof(1) ==> Int
+    if (jl_is_type_type(aty)) {
+        // convert Int::Type{Int} ==> typeof(Int) ==> DataType
+        // but convert 1::Type{1} ==> typeof(1) ==> Int
         aty = (jl_value_t*)jl_typeof(jl_tparam0(aty));
+    }
     return mark_julia_const(aty);
 }
 
@@ -809,22 +811,32 @@ static void emit_typecheck(const jl_cgval_t &x, jl_value_t *type, const std::str
         builder.SetInsertPoint(failBB);
         return;
     }
-    else if (jl_is_type_type(type) || !jl_is_leaf_type(type)) {
+    else if (jl_has_intersect_type_not_kind(x.typ) ||
+             jl_has_intersect_type_not_kind(type)) {
         Value *vx = boxed(x, ctx);
-        istype = builder.
-            CreateICmpNE(
+        istype = builder.CreateICmpNE(
 #if JL_LLVM_VERSION >= 30700
                 builder.CreateCall(prepare_call(jlisa_func), { vx, literal_pointer_val(type) }),
 #else
                 builder.CreateCall2(prepare_call(jlisa_func), vx, literal_pointer_val(type)),
 #endif
-                         ConstantInt::get(T_int32,0));
+                ConstantInt::get(T_int32, 0));
+    }
+    else if (jl_is_leaf_type(type)) {
+        istype = builder.CreateICmpEQ(emit_typeof_boxed(x, ctx), literal_pointer_val(type));
     }
     else {
-        istype = builder.CreateICmpEQ(emit_typeof_boxed(x,ctx), literal_pointer_val(type));
+        Value *vxt = emit_typeof_boxed(x, ctx);
+        istype = builder.CreateICmpNE(
+#if JL_LLVM_VERSION >= 30700
+                builder.CreateCall(prepare_call(jlsubtype_func), { vxt, literal_pointer_val(type) }),
+#else
+                builder.CreateCall2(prepare_call(jlsubtype_func), vxt, literal_pointer_val(type)),
+#endif
+                ConstantInt::get(T_int32, 0));
     }
-    BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext,"fail",ctx->f);
-    BasicBlock *passBB = BasicBlock::Create(jl_LLVMContext,"pass");
+    BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext, "fail", ctx->f);
+    BasicBlock *passBB = BasicBlock::Create(jl_LLVMContext, "pass");
     builder.CreateCondBr(istype, passBB, failBB);
     builder.SetInsertPoint(failBB);
 
@@ -1454,8 +1466,8 @@ static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, ssize
 // --- boxing ---
 
 static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size, Value *jt);
-static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size,
-                            const jl_cgval_t &v);
+static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size, const jl_cgval_t &v);
+
 static Value *init_bits_value(Value *newv, Value *v, MDNode *tbaa, unsigned alignment = sizeof(void*)) // min alignment in julia's gc is pointer-aligned
 {
     // newv should already be tagged
@@ -1463,7 +1475,7 @@ static Value *init_bits_value(Value *newv, Value *v, MDNode *tbaa, unsigned alig
         PointerType::get(v->getType(), 0)), alignment));
     return newv;
 }
-static Value *as_value(Type *t, const jl_cgval_t&);
+
 static Value *init_bits_cgval(Value *newv, const jl_cgval_t& v, MDNode *tbaa, jl_codectx_t *ctx)
 {
     // newv should already be tagged
@@ -1556,37 +1568,23 @@ static Value *call_with_unsigned(Function *ufunc, Value *v)
 
 static void jl_add_method_root(jl_codectx_t *ctx, jl_value_t *val);
 
-static Value *as_value(Type *t, const jl_cgval_t &v)
+static Value *as_value(Type *to, const jl_cgval_t &v)
 {
     assert(!v.isboxed);
-    return emit_unbox(t, v, v.typ);
+    return emit_unbox(to, v, v.typ);
 }
 
-// this is used to wrap values for generic contexts, where a
-// dynamically-typed value is required (e.g. argument to unknown function).
-// if it's already a pointer it's left alone.
-static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
+// some types have special boxing functions with small-value caches
+static Value *_boxed_special(const jl_cgval_t &vinfo, Type *t, jl_codectx_t *ctx)
 {
     jl_value_t *jt = vinfo.typ;
-    Value *v = vinfo.V;
-    if (jt == jl_bottom_type || jt == NULL)
-        // We have an undef value on a (hopefully) dead branch
-        return UndefValue::get(T_pjlvalue);
-    if (vinfo.constant)
-        return literal_pointer_val(vinfo.constant);
-    assert(v);
-    if (vinfo.isboxed)
-        return v;
-    Type *t = julia_type_to_llvm(vinfo.typ);
-    assert(!type_is_ghost(t)); // should have been handled by isghost above!
-
     if (jt == (jl_value_t*)jl_bool_type)
         return julia_bool(builder.CreateTrunc(as_value(t, vinfo), T_int1));
     if (t == T_int1)
         return julia_bool(as_value(t, vinfo));
 
     if (ctx->linfo && ctx->linfo->def && !vinfo.ispointer()) { // don't bother codegen pre-boxing for toplevel
-        if (Constant *c = dyn_cast<Constant>(v)) {
+        if (Constant *c = dyn_cast<Constant>(vinfo.V)) {
             jl_value_t *s = static_constant_instance(c, jt);
             if (s) {
                 jl_add_method_root(ctx, s);
@@ -1623,33 +1621,51 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
         box = call_with_unsigned(box_char_func, as_value(t, vinfo));
     else if (jb == jl_ssavalue_type) {
         unsigned zero = 0;
-        v = as_value(t, vinfo);
+        Value *v = as_value(t, vinfo);
         assert(v->getType() == jl_ssavalue_type->struct_decl);
         v = builder.CreateExtractValue(v, makeArrayRef(&zero, 1));
         box = call_with_unsigned(box_ssavalue_func, v);
     }
-    else if (!jl_isbits(jt) || !jl_is_leaf_type(jt)) {
-        assert("Don't know how to box this type" && false);
-        return NULL;
-    }
     else if (!jb->abstract && jl_datatype_nbits(jb) == 0) {
+        // singleton
         assert(jb->instance != NULL);
         return literal_pointer_val(jb->instance);
     }
-    else {
-        box = init_bits_cgval(emit_allocobj(ctx, jl_datatype_size(jt), vinfo),
-                              vinfo, jb->mutabl ? tbaa_mutab : tbaa_immut, ctx);
-    }
+    return box;
+}
 
+// this is used to wrap values for generic contexts, where a
+// dynamically-typed value is required (e.g. argument to unknown function).
+// if it's already a pointer it's left alone.
+static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
+{
+    jl_value_t *jt = vinfo.typ;
+    if (jt == jl_bottom_type || jt == NULL)
+        // We have an undef value on a (hopefully) dead branch
+        return UndefValue::get(T_pjlvalue);
+    if (vinfo.constant)
+        return literal_pointer_val(vinfo.constant);
+    assert(vinfo.V);
+    if (vinfo.isboxed)
+        return vinfo.V;
+
+    assert(jl_isbits(jt) && jl_is_leaf_type(jt) && "This type shouldn't have been unboxed.");
+    Type *t = julia_type_to_llvm(jt);
+    assert(!type_is_ghost(t)); // ghost values should have been handled by vinfo.constant above!
+    Value *box = _boxed_special(vinfo, t, ctx);
+    if (!box) {
+        box = init_bits_cgval(emit_allocobj(ctx, jl_datatype_size(jt), vinfo),
+                              vinfo, jl_is_mutable(jt) ? tbaa_mutab : tbaa_immut, ctx);
+    }
     if (gcrooted) {
         // make a gcroot for the new box
         // (unless the caller explicitly said this was unnecessary)
         Value *froot = emit_local_root(ctx);
         builder.CreateStore(box, froot);
     }
-
     return box;
 }
+
 
 static void emit_cpointercheck(const jl_cgval_t &x, const std::string &msg, jl_codectx_t *ctx)
 {
