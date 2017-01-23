@@ -180,12 +180,12 @@ end
 @test_throws BoundsError ()[[true]]
 
 immutable BitPerm_19352
-   p::NTuple{8,UInt8}
-   function BitPerm(p::NTuple{8,UInt8})
-       sort(collect(p)) != collect(0:7) && error("$p is not a permutation of 0:7")
-       new(p)
-   end
-   BitPerm_19352(b0,b1,b2,b3,b4,b5,b6,b7) = BitPerm((UInt8(b0),UInt8(b1),UInt8(b2),UInt8(b3),
+    p::NTuple{8,UInt8}
+    function BitPerm(p::NTuple{8,UInt8})
+        sort(collect(p)) != collect(0:7) && error("$p is not a permutation of 0:7")
+        new(p)
+    end
+    BitPerm_19352(b0,b1,b2,b3,b4,b5,b6,b7) = BitPerm((UInt8(b0),UInt8(b1),UInt8(b2),UInt8(b3),
         UInt8(b4),UInt8(b5),UInt8(b6),UInt8(b7)))
 end
 
