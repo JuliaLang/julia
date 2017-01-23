@@ -650,3 +650,7 @@ end
     b = Dict(Dict(1 => 2, 2 => 3, 5 => 6) => 1, Dict(3 => 4) => 2)
     @test hash(a) != hash(b)
 end
+
+@testset "issue #18708 error type for dict constructor" begin
+    @test_throws UndefVarError Dict(x => y for x in 1:10)
+end
