@@ -797,3 +797,34 @@ end
 
 # dispatch loop introduced in #19305
 @test [(1:2) zeros(2,2); ones(3,3)] == [[1,2] zeros(2,2); ones(3,3)] == [reshape([1,2],2,1) zeros(2,2); ones(3,3)]
+
+# Test a very basic linear interpolations-like custom array
+immutable InterpolatedVector{T,A} <: AbstractVector{T}
+    data::A
+end
+InterpolatedVector{T}(data::AbstractVector{T}) = InterpolatedVector{T,typeof(data)}(data)
+Base.size(V::InterpolatedVector) = size(V.data)
+# This custom type supports all Numbers as scalar indices; protect them in a 0-d array for non-scalar methods
+Base.to_index(::InterpolatedVector, x::Number) = fill(x) # could be a specialized immutable
+Base.indexed_eltype{T}(V::InterpolatedVector{T}, xs...) = _reduce_promote_eltype(T, xs...)
+Base.@pure _reduce_promote_eltype{T}(::Type{T}) = T
+Base.@pure _reduce_promote_eltype{T}(::Type{T}, x, xs...) = _reduce_promote_eltype(promote_type(T, eltype(x)), xs...)
+Base.getindex(V::InterpolatedVector, i::Integer) = V.data[i]
+function Base.getindex{T}(V::InterpolatedVector{T}, x::Number)::Base.indexed_eltype(V, x)
+    x₀, x₁ = floor(Int, x), ceil(Int, x)
+    x₀ == x₁ && return V.data[x₀]
+    y₀, y₁ = V.data[x₀], V.data[x₁]
+    y₀ + (x - x₀) * (y₁ - y₀) / (x₁ - x₀)
+end
+# Fulfill the promise that all ::Number... args are supported as scalar indices
+function Base.getindex(V::InterpolatedVector, x::Number, rest::Number...)
+    all(map(x->x == 1, rest)) || throw(BoundsError(V, (x, rest...)))
+    V[x]
+end
+
+let v = InterpolatedVector([1,2,3,6,0,-6,0])
+    @test @inferred(v[1.1]) === 1.1
+    @test @inferred(v[1.1,1]) === 1.1
+    @test @inferred(v[[2.1,3.5,5.5]]) == @inferred(view(v, [2.1,3.5,5.5])) == [2.1,4.5,-3]
+    @test @inferred(v[1.5:6.5]) == @inferred(view(v, 1.5:6.5)) == [1.5, 2.5, 4.5, 3, -3, -3]
+end

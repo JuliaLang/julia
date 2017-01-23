@@ -382,6 +382,21 @@ uncolon(inds::Tuple,      I::Tuple{Colon, Vararg{Any}}) = Slice(inds[1])
 uncolon(inds::Tuple,      I::Tuple{Colon})              = Slice(OneTo(trailingsize(inds)))
 uncolon(inds::Tuple,      I::Tuple{Colon, Vararg{CI0}}) = Slice(OneTo(trailingsize(inds)))
 
+# In some cases, custom array types may want to return a different element for
+# non-Int indices.
+"""
+    indexed_eltype(A, I...)
+
+Like `eltype`, but returns the element type for the indexing operation `A[I...]`.
+
+This function provides a hook that allows more exotic arrays to customize the
+returned element type for non-Integer indices for non-scalar indexing methods.
+"""
+@inline indexed_eltype{T}(::AbstractArray{T}, I...) = T
+
+@inline indexed_similar(A::AbstractArray, I...) = similar(A, indexed_eltype(A, I...), index_shape(I...))
+
+
 ### From abstractarray.jl: Internal multidimensional indexing definitions ###
 getindex(x::Number, i::CartesianIndex{0}) = x
 getindex(t::Tuple, I...) = getindex(t, IteratorsMD.flatten(I)...)
@@ -409,8 +424,8 @@ _maybe_reshape(::LinearSlow, A::AbstractVector, I...) = A
     quote
         # This is specifically not inlined to prevent exessive allocations in type unstable code
         @nexprs $N d->(I_d = I[d])
+        dest = @ncall $N indexed_similar A I
         shape = @ncall $N index_shape I
-        dest = similar(A, shape)
         map(unsafe_length, indices(dest)) == map(unsafe_length, shape) || throw_checksize_error(dest, shape)
         @ncall $N _unsafe_getindex! dest A I
     end
