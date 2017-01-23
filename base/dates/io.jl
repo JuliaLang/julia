@@ -127,20 +127,33 @@ for (tok, fn) in zip("eE", [dayabbr, dayname])
     end
 end
 
-function format(io, d::DatePart{'y'}, dt)
+@inline function format(io, d::DatePart{'y'}, dt)
     y = year(dt)
     n = d.width
 
-    # the last `n` digits of `y`
-    # will be 0 padded if `y` has less than `n` digits
+    # the last n digits of y
+    # will be 0 padded if y has less than n digits
     str = dec(y,n)
     l = endof(str)
-    write(io, SubString(str,l-(n-1),l))
+    if l == n
+        # fast path
+        write(io, str)
+    else
+        write(io, SubString(str,l-(n-1),l))
+    end
 end
 
 function format(io, d::DatePart{'s'}, dt)
-    str = string(millisecond(dt)/1000)
-    write(io, SubString(str, 3, endof(str)))
+    ms = millisecond(dt)
+    if ms == 0
+        write(io, '0')
+    elseif ms % 100 == 0
+        write(io, dec(div(ms, 100), 1))
+    elseif ms % 10 == 0
+        write(io, dec(div(ms, 10), 2))
+    else
+        write(io, dec(ms, 3))
+    end
 end
 
 
@@ -180,7 +193,7 @@ end
     return R(0), i1
 end
 
-function format(io, d::Delim, dt, locale)
+@inline function format(io, d::Delim, dt, locale)
     write(io, d.d)
 end
 
@@ -388,15 +401,19 @@ Parse a date from a date string `dt` using a `DateFormat` object `df`.
 Date(dt::AbstractString,df::DateFormat=ISODateFormat) = parse(Date,dt,df)
 
 @generated function format{S,T}(io::IO, dt::TimeType, fmt::DateFormat{S,T})
-    N = length(T.parameters)
+    N = nfields(T)
     quote
         ts = fmt.tokens
-        Base.@nexprs $N i-> format(io, ts[i], dt, fmt.locale)
+        loc = fmt.locale
+        Base.@nexprs $N i -> format(io, ts[i], dt, loc)
     end
 end
 
-function format(dt::TimeType, fmt::DateFormat)
-    sprint(io -> format(io, dt, fmt))
+function format(dt::TimeType, fmt::DateFormat, bufsize=12)
+    # preallocate to reduce resizing
+    io = IOBuffer(Vector{UInt8}(bufsize), true, true)
+    format(io, dt, fmt)
+    String(io.data[1:io.ptr-1])
 end
 
 
@@ -438,20 +455,33 @@ format(dt::TimeType,f::AbstractString;locale=ENGLISH) = format(dt,DateFormat(f,l
 # show
 
 function Base.show(io::IO, dt::DateTime)
-    df = if millisecond(dt) == 0
-        dateformat"YYYY-mm-dd\THH:MM:SS"
+    if millisecond(dt) == 0
+        format(io, dt, dateformat"YYYY-mm-dd\THH:MM:SS")
     else
-        dateformat"YYYY-mm-dd\THH:MM:SS.s"
+        format(io, dt, dateformat"YYYY-mm-dd\THH:MM:SS.s")
     end
-    format(io, dt, df)
 end
 
 function Base.show(io::IO, dt::Date)
     format(io, dt, dateformat"YYYY-mm-dd")
 end
 
-function Base.string(dt::TimeType)
-    sprint(io -> show(io, dt))
+function Base.string(dt::DateTime)
+    if millisecond(dt) == 0
+        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS", 24)
+    else
+        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS.s", 26)
+    end
+end
+
+function Base.string(dt::Date)
+    # don't use format - bypassing IOBuffer creation
+    # saves a bit of time here.
+    y,m,d = yearmonthday(value(dt))
+    yy = y < 0 ? @sprintf("%05i",y) : lpad(y,4,"0")
+    mm = lpad(m,2,"0")
+    dd = lpad(d,2,"0")
+    "$yy-$mm-$dd"
 end
 
 # vectorized
