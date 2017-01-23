@@ -300,6 +300,7 @@ include("datafmt.jl")
 importall .DataFmt
 include("deepcopy.jl")
 include("interactiveutil.jl")
+include("summarysize.jl")
 include("replutil.jl")
 include("test.jl")
 include("i18n.jl")
