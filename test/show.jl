@@ -14,11 +14,11 @@ replstr(x) = sprint((io,x) -> show(IOContext(io, limit=true), MIME("text/plain")
 immutable T5589
     names::Vector{String}
 end
-@test replstr(T5589(Array{String,1}(100))) == "$(curmod_prefix)T5589(String[#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef  …  #undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef])"
+@test replstr(T5589(Array{String,1}(100))) == "$(curmod_prefix)T5589(String[#undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef  …  #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef])"
 
 @test replstr(parse("type X end")) == ":(type X # none, line 1:\n    end)"
 @test replstr(parse("immutable X end")) == ":(immutable X # none, line 1:\n    end)"
-s = "ccall(:f,Int,(Ptr{Void},),&x)"
+s = "ccall(:f, Int, (Ptr{Void},), &x)"
 @test replstr(parse(s)) == ":($s)"
 
 # recursive array printing
@@ -64,7 +64,7 @@ end
 @test_repr "x + y"
 @test_repr "2e"
 @test_repr "!x"
-@test_repr "f(1,2,3)"
+@test_repr "f(1, 2, 3)"
 @test_repr "x = ~y"
 @test_repr ":(:x, :y)"
 @test_repr ":(:(:(x)))"
@@ -176,7 +176,7 @@ end"""
 @test sprint(show, :end) == ":end"
 
 # issue #12477
-@test sprint(show, Union{Int64,Int32,Int16,Int8,Float64}) == "Union{Float64,Int16,Int32,Int64,Int8}"
+@test sprint(show,  Union{Int64, Int32, Int16, Int8, Float64}) == "Union{Float64, Int16, Int32, Int64, Int8}"
 
 # Function and array reference precedence
 @test_repr "([2] + 3)[1]"
@@ -185,7 +185,8 @@ end"""
 @test_repr "(foo + bar)()"
 
 # issue #7921
-@test replace(sprint(show, Expr(:function, :(==(a, b)), Expr(:block,:(return a == b)))), r"\s+", " ") == ":(function ==(a,b) return a == b end)"
+@test replace(sprint(show, Expr(:function, :(==(a, b)), Expr(:block,:(return a == b)))),
+              r"\s+", " ") == ":(function ==(a, b) return a == b end)"
 
 # unicode operator printing
 @test sprint(show, :(1 ⊕ (2 ⊗ 3))) == ":(1 ⊕ 2 ⊗ 3)"
@@ -256,8 +257,8 @@ end
 @test ismatch(r"^Set\(\[.+….+\]\)$", replstr(Set(1:100)))
 
 # issue #11413
-@test string(:(*{1,2})) == "*{1,2}"
-@test string(:(*{1,x})) == "*{1,x}"
+@test string(:(*{1, 2})) == "*{1, 2}"
+@test string(:(*{1, x})) == "*{1, x}"
 @test string(:(-{x}))   == "-{x}"
 
 # issue #11393
@@ -493,18 +494,18 @@ show_f1(x...) = [x...]
 show_f2(x::Vararg{Any}) = [x...]
 show_f3(x::Vararg) = [x...]
 show_f4(x::Vararg{Any,3}) = [x...]
-show_f5{T,N}(A::AbstractArray{T,N}, indexes::Vararg{Int,N}) = [indexes...]
+show_f5{T, N}(A::AbstractArray{T,N}, indexes::Vararg{Int,N}) = [indexes...]
 test_mt(show_f1, "show_f1(x...)")
 test_mt(show_f2, "show_f2(x...)")
 test_mt(show_f3, "show_f3(x...)")
 test_mt(show_f4, "show_f4(x::Vararg{Any,3})")
-test_mt(show_f5, "show_f5{T,N}(A::AbstractArray{T,N}, indexes::Vararg{$Int,N})")
+test_mt(show_f5, "show_f5{T, N}(A::AbstractArray{T,N}, indexes::Vararg{$Int,N})")
 
 # Issue #15525, printing of vcat
 @test sprint(show, :([a;])) == ":([a;])"
-@test sprint(show, :([a;b])) == ":([a;b])"
+@test sprint(show, :([a; b])) == ":([a; b])"
 @test_repr "[a;]"
-@test_repr "[a;b]"
+@test_repr "[a; b]"
 
 # Printing of :(function f end)
 @test sprint(show, :(function f end)) == ":(function f end)"
@@ -538,15 +539,15 @@ end
 let io = IOBuffer()
     x = [1, 2]
     showcompact(io, x)
-    @test String(take!(io)) == "[1,2]"
+    @test String(take!(io)) == "[1, 2]"
     showcompact(IOContext(io, :compact=>true), x)
-    @test String(take!(io)) == "[1,2]"
+    @test String(take!(io)) == "[1, 2]"
 end
 
 # PR 17117
 # test show array
 let s = IOBuffer(Array{UInt8}(0), true, true)
-    Base.showarray(s, [1,2,3], false, header = false)
+    Base.showarray(s, [1, 2, 3], false, header = false)
     @test String(resize!(s.data, s.size)) == " 1\n 2\n 3"
 end
 
@@ -576,7 +577,7 @@ let repr = sprint(dump, Integer)
     @test !contains(repr, "Any")
 end
 let repr = sprint(dump, Union{Integer, Float32})
-    @test repr == "Union{Integer,Float32}\n" || repr == "Union{Float32,Integer}\n"
+    @test repr == "Union{Integer, Float32}\n" || repr == "Union{Float32, Integer}\n"
 end
 let repr = sprint(dump, Core.svec())
     @test repr == "empty SimpleVector\n"
@@ -602,7 +603,7 @@ let a = Array{Any}(10000)
 end
 
 # issue #17338
-@test repr(Core.svec(1,2)) == "svec(1,2)"
+@test repr(Core.svec(1, 2)) == "svec(1, 2)"
 
 # showing generator and comprehension expressions
 @test repr(:(x for x in y for z in w)) == ":((x for x = y for z = w))"
@@ -616,7 +617,7 @@ for op in (:(.=), :(.+=), :(.&=))
 end
 
 # pretty-printing of compact broadcast expressions (#17289)
-@test repr(:(f.(X,Y))) == ":(f.(X,Y))"
+@test repr(:(f.(X, Y))) == ":(f.(X, Y))"
 @test repr(:(f.(X))) == ":(f.(X))"
 @test repr(:(f.())) == ":(f.())"
 
