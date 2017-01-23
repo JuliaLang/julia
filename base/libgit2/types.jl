@@ -413,6 +413,13 @@ immutable StatusEntry
     index_to_workdir::Ptr{DiffDelta}
 end
 
+"""
+    LibGit2.FetchHead
+
+Contains the information about HEAD during a fetch, including the name and url
+of the branch fetched from, the oid of the HEAD, and whether the fetched HEAD
+has been merged locally.
+"""
 immutable FetchHead
     name::String
     url::String
@@ -507,7 +514,8 @@ end
 """
     LibGit2.GitSignature
 
-This is a Julia wrapper around a pointer to a [`git_signature`](https://libgit2.github.com/libgit2/#HEAD/type/git_signature) object.
+This is a Julia wrapper around a pointer to a
+[`git_signature`](https://libgit2.github.com/libgit2/#HEAD/type/git_signature) object.
 """
 type GitSignature <: AbstractGitObject
     ptr::Ptr{SignatureStruct}
@@ -554,7 +562,10 @@ function with_warn{T}(f::Function, ::Type{T}, args...)
     end
 end
 
-
+"""
+Convert between the julia Type of a git object and
+the constant integer id code for that object type.
+"""
 function getobjecttype{T<:GitObject}(::Type{T})
     return if T == GitCommit
         Consts.OBJ_COMMIT
@@ -571,6 +582,10 @@ function getobjecttype{T<:GitObject}(::Type{T})
     end
 end
 
+"""
+Convert between the constant integer id code for a git object
+and the corresponding Julia type.
+"""
 function getobjecttype(obj_type::Cint)
     return if obj_type == Consts.OBJ_COMMIT
         GitCommit
