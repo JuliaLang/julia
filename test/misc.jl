@@ -602,12 +602,12 @@ end
 abstract DA_19281{T, N} <: AbstractArray{T, N}
 Base.convert{S,T,N}(::Type{Array{S, N}}, ::DA_19281{T, N}) = error()
 x_19281 = [(), (1,)]
-type Foo
+type Foo_19281
     f::Vector{Tuple}
-    Foo() = new(x_19281)
+    Foo_19281() = new(x_19281)
 end
 
 @testset "test this does not segfault #19281" begin
-    @test Foo().f[1] == ()
-    @test Foo().f[2] == (1, )
+    @test Foo_19281().f[1] == ()
+    @test Foo_19281().f[2] == (1, )
 end
