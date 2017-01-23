@@ -122,10 +122,10 @@ julia> length(A)
 60
 ```
 """
-length(t::AbstractArray) = prod(size(t))
-_length(A::AbstractArray) = prod(map(unsafe_length, indices(A))) # circumvent missing size
-_length(A) = length(A)
-endof(a::AbstractArray) = last(linearindices(a))
+length(t::AbstractArray) = (@_inline_meta; prod(size(t)))
+_length(A::AbstractArray) = (@_inline_meta; prod(map(unsafe_length, indices(A)))) # circumvent missing size
+_length(A) = (@_inline_meta; length(A))
+endof(a::AbstractArray) = (@_inline_meta; last(linearindices(a)))
 first(a::AbstractArray) = a[first(eachindex(a))]
 
 function first(itr)
