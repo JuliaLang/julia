@@ -433,7 +433,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         btemp = btemp->prev;
     }
     jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, NULL, 0, 0, 0, 0, e->invdepth, 0, e->vars };
-    JL_GC_PUSH2(&u, &vb.lb);
+    JL_GC_PUSH3(&u, &vb.lb, &vb.ub);
     e->vars = &vb;
     int ans;
     if (R) {
