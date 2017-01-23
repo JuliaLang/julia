@@ -491,3 +491,26 @@ tpara18457{I}(::Type{AbstractMyType18457{I}}) = I
 tpara18457{A<:AbstractMyType18457}(::Type{A}) = tpara18457(supertype(A))
 @test tpara18457(MyType18457{true}) === true
 
+@testset "type inference error #19322" begin
+    Y_19322 = reshape(round.(Int, abs.(randn(5*1000)))+1,1000,5)
+
+    function FOO_19322(Y::AbstractMatrix; frac::Float64=0.3, nbins::Int=100, n_sims::Int=100)
+      num_iters, num_chains = size(Y)
+      start_iters = unique([1; [round(Int64, s) for s in logspace(log(10,100),log(10,num_iters/2),nbins-1)]])
+      result = zeros(Float64, 10, length(start_iters) * num_chains)
+      j=1
+      for c in 1:num_chains
+        for st in 1:length(start_iters)
+          n = length(start_iters[st]:num_iters)
+          idx1 = start_iters[st]:round(Int64, start_iters[st] + frac * n - 1)
+          idx2 = round(Int64, num_iters - frac * n + 1):num_iters
+          y1 = Y[idx1,c]
+          y2 = Y[idx2,c]
+          n_min = min(length(y1), length(y2))
+          X = [y1[1:n_min] y2[(end - n_min + 1):end]]
+        end
+      end
+    end
+
+    @test_nowarn FOO_19322(Y_19322)
+end
