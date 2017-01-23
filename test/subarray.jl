@@ -485,7 +485,7 @@ Y = 4:-1:1
 @test X[1:end] == @view X[1:end]
 @test X[1:end-3] == @view X[1:end-3]
 @test X[1:end,2,2] == @view X[1:end,2,2]
-# @test X[1,1:end-2] == @view X[1,1:end-2]
+# @test X[1,1:end-2] == @view X[1,1:end-2] # TODO: Re-enable after partial linear indexing deprecation
 @test X[1,2,1:end-2] == @view X[1,2,1:end-2]
 @test X[1,2,Y[2:end]] == @view X[1,2,Y[2:end]]
 @test X[1:end,2,Y[2:end]] == @view X[1:end,2,Y[2:end]]
