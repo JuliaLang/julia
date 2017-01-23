@@ -878,7 +878,11 @@ function apply_type_tfunc(headtypetype::ANY, args::ANY...)
             #end
             uncertain = true
             if istuple
-                push!(tparams, Any)
+                if i == largs
+                    push!(tparams, Vararg)
+                else
+                    push!(tparams, Any)
+                end
             else
                 # TODO: use rewrap_unionall to skip only the unknown parameters
                 #push!(tparams, headtype.parameters[i-1])
