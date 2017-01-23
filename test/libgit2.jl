@@ -325,7 +325,7 @@ mktempdir() do dir
                     @test LibGit2.shortname(brref) == master_branch
                     @test LibGit2.ishead(brref)
                     @test LibGit2.upstream(brref) === nothing
-                    @test repo.ptr == LibGit2.owner(brref).ptr
+                    @test repo.ptr == LibGit2.repository(brref).ptr
                     @test brnch == master_branch
                     @test LibGit2.headname(repo) == master_branch
                     LibGit2.branch!(repo, test_branch, string(commit_oid1), set_head=false)
