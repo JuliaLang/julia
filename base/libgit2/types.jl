@@ -416,7 +416,7 @@ end
 """
     LibGit2.FetchHead
 
-Contains the information about HEAD during a fetch, including the name and url
+Contains the information about HEAD during a fetch, including the name and URL
 of the branch fetched from, the oid of the HEAD, and whether the fetched HEAD
 has been merged locally.
 """
@@ -563,7 +563,9 @@ function with_warn{T}(f::Function, ::Type{T}, args...)
 end
 
 """
-Convert between the julia Type of a git object and
+    getobjecttype{T<:GitObject}(::Type{T})
+
+Convert between the Julia `Type` of a git object and
 the constant integer id code for that object type.
 """
 function getobjecttype{T<:GitObject}(::Type{T})
@@ -583,6 +585,8 @@ function getobjecttype{T<:GitObject}(::Type{T})
 end
 
 """
+    getobjecttype(obj_type::Cint)
+
 Convert between the constant integer id code for a git object
 and the corresponding Julia type.
 """
