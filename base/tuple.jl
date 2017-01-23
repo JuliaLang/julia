@@ -18,6 +18,14 @@ getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i))
 getindex{T}(t::Tuple, r::AbstractArray{T,1}) = tuple([t[ri] for ri in r]...)
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t,find(b)) : throw(BoundsError(t, b))
 
+# returns new tuple; N.B.: becomes no-op if i is out-of-bounds
+setindex(x::Tuple, v, i::Integer) = _setindex((), x, v, i::Integer)
+function _setindex(y::Tuple, r::Tuple, v, i::Integer)
+    @_inline_meta
+    _setindex((y..., ifelse(length(y) + 1 == i, v, first(r))), tail(r), v, i)
+end
+_setindex(y::Tuple, r::Tuple{}, v, i::Integer) = y
+
 ## iterating ##
 
 start(t::Tuple) = 1
