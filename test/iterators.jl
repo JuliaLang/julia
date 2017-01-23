@@ -387,5 +387,5 @@ for T in (UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int128, BigInt)
 end
 
 @testset begin "collect finite iterators issue #12009"
-    @test eltype(collect(enumerate(Iterators.Filter(x -> x>0, randn(10))))) == Tuple{Int64, Float64}
+    @test eltype(collect(enumerate(Iterators.Filter(x -> x>0, randn(10))))) == Tuple{Int, Float64}
 end
