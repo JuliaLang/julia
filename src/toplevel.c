@@ -450,9 +450,11 @@ static jl_method_instance_t *jl_new_thunk(jl_code_info_t *src, jl_module_t *modu
     li->specTypes = jl_typeof(jl_emptytuple);
     jl_array_t *stmts = (jl_array_t*)src->code;
     size_t i, l;
+    JL_GC_PUSH1(&li);
     for (i = 0, l = jl_array_len(stmts); i < l; i++) {
         jl_array_ptr_set(stmts, i, jl_resolve_globals(jl_array_ptr_ref(stmts, i), module, NULL));
     }
+    JL_GC_POP();
     return li;
 }
 
