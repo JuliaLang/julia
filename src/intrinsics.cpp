@@ -459,13 +459,14 @@ static jl_cgval_t generic_bitcast(const jl_cgval_t *argv, jl_codectx_t *ctx)
             vx = emit_bitcast(vx, llvmt);
     }
 
-    if (jl_is_leaf_type(bt))
+    if (jl_is_leaf_type(bt)) {
         return mark_julia_type(vx, false, bt, ctx);
-    else
-        return mark_julia_type(
-            init_bits_value(emit_allocobj(ctx, nb, boxed(bt_value, ctx)),
-                            vx, tbaa_immut),
-            true, bt, ctx);
+    }
+    else {
+        Value *box = emit_allocobj(ctx, nb, boxed(bt_value, ctx));
+        init_bits_value(box, vx, tbaa_immut);
+        return mark_julia_type(box, true, bt, ctx);
+    }
 }
 
 static jl_cgval_t generic_cast(
