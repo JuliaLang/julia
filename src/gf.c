@@ -215,7 +215,9 @@ void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_t fptr)
     li->min_world = 1;
     li->max_world = ~(size_t)0;
 
+    JL_GC_PUSH1(&li);
     li->def = jl_new_method_uninit();
+    jl_gc_wb(li, li->def);
     li->def->name = sname;
     li->def->module = jl_core_module;
     li->def->isva = 1;
@@ -227,6 +229,7 @@ void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_t fptr)
     jl_methtable_t *mt = dt->name->mt;
     jl_typemap_insert(&mt->cache, (jl_value_t*)mt, jl_anytuple_type, jl_emptysvec,
         NULL, jl_emptysvec, (jl_value_t*)li, 0, &lambda_cache, 1, ~(size_t)0, NULL);
+    JL_GC_POP();
 }
 
 // run type inference on lambda "li" for given argument types.
@@ -2373,6 +2376,7 @@ JL_DLLEXPORT jl_value_t *jl_get_invoke_lambda(jl_methtable_t *mt,
     return (jl_value_t*)mfunc;
 }
 
+// Return value is rooted globally
 static jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, int iskw)
 {
     // type name is function name prefixed with #
