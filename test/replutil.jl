@@ -484,3 +484,18 @@ let
     x = 2
     @test (@macroexpand @seven_dollar 1+$x) == :(1 + $(Expr(:$, :x)))
 end
+
+foo_9965(x::Float64; w=false) = x
+foo_9965(x::Int) = 2x
+
+@testset "closest candidates kwarg #9965" begin
+    ex = try
+        foo_9965(1, w=true)
+    catch e
+        e
+    end
+    @test typeof(ex) == MethodError
+    io = IOBuffer()
+    Base.show_method_candidates(io, ex, [(:w,true)])
+    @test contains(String(take!(io)), "got unsupported keyword argument \"w\"")
+end
