@@ -103,7 +103,7 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     # Test that accepting a REPL result immediately shows up, not
     # just on the next keystroke
     write(stdin_write, "1+1\n") # populate history with a trivial input
-    readline(stdout_read)
+    readline(stdout_read, false)
     write(stdin_write, "\e[A\n")
     t = Timer(10) do t
         isopen(t) || return
@@ -116,19 +116,19 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     # Issue #10222
     # Test ignoring insert key in standard and prefix search modes
     write(stdin_write, "\e[2h\e[2h\n") # insert (VT100-style)
-    @test search(readline(stdout_read), "[2h") == 0:-1
-    readline(stdout_read)
+    @test search(readline(stdout_read, false), "[2h") == 0:-1
+    readline(stdout_read, false)
     write(stdin_write, "\e[2~\e[2~\n") # insert (VT220-style)
-    @test search(readline(stdout_read), "[2~") == 0:-1
-    readline(stdout_read)
+    @test search(readline(stdout_read, false), "[2~") == 0:-1
+    readline(stdout_read, false)
     write(stdin_write, "1+1\n") # populate history with a trivial input
-    readline(stdout_read)
+    readline(stdout_read, false)
     write(stdin_write, "\e[A\e[2h\n") # up arrow, insert (VT100-style)
-    readline(stdout_read)
-    readline(stdout_read)
+    readline(stdout_read, false)
+    readline(stdout_read, false)
     write(stdin_write, "\e[A\e[2~\n") # up arrow, insert (VT220-style)
-    readline(stdout_read)
-    readline(stdout_read)
+    readline(stdout_read, false)
+    readline(stdout_read, false)
 
     # Test down arrow to go back to history
     # populate history with a trivial input

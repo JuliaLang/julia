@@ -21,7 +21,7 @@ function outputline(io, line)
     println(io, "jl_symbol(\"", row[2], "\"),")
 end
 
-lines = eachline(io)
+lines = eachline(io, false)
 
 open(f->foreach(l->outputline(f,l), take(lines,63)), "common_symbols1.inc", "w")
 open(f->foreach(l->outputline(f,l), lines), "common_symbols2.inc", "w")
