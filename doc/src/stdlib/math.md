@@ -16,8 +16,9 @@ Base.div
 Base.fld
 Base.cld
 Base.mod
-Base.Math.mod2pi
 Base.rem
+Base.rem2pi
+Base.Math.mod2pi
 Base.divrem
 Base.fldmod
 Base.fld1
@@ -232,7 +233,6 @@ Base.varm
 Base.middle
 Base.median
 Base.median!
-Base.midpoints
 Base.quantile
 Base.quantile!
 Base.cov

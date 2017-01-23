@@ -101,7 +101,7 @@ function show(io::IO, ::MIME"text/plain", f::Function)
     mt = ft.name.mt
     if isa(f, Core.IntrinsicFunction)
         show(io, f)
-        id = Core.Intrinsics.box(Int32, f)
+        id = Core.Intrinsics.bitcast(Int32, f)
         print(io, " (intrinsic function #$id)")
     elseif isa(f, Core.Builtin)
         print(io, mt.name, " (built-in function)")
@@ -376,7 +376,7 @@ function showerror(io::IO, ex::MethodError)
     # and sees a no method error for convert
     if (f === Base.convert && !isempty(arg_types_param) && !is_arg_types &&
         isa(arg_types_param[1], DataType) &&
-        arg_types_param[1].name === Type.name)
+        arg_types_param[1].name === Type.body.name)
         construct_type = arg_types_param[1].parameters[1]
         println(io)
         print(io, "This may have arisen from a call to the constructor $construct_type(...),",
@@ -434,7 +434,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
     # pool MethodErrors for these two functions.
     if f === convert && !isempty(arg_types_param)
         at1 = arg_types_param[1]
-        if isa(at1,DataType) && (at1::DataType).name === Type.name && isleaftype(at1)
+        if isa(at1,DataType) && (at1::DataType).name === Type.body.name && isleaftype(at1)
             push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
         end
     end
@@ -442,8 +442,9 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
     for (func,arg_types_param) in funcs
         for method in methods(func)
             buf = IOBuffer()
-            s1 = method.sig.parameters[1]
-            sig = method.sig.parameters[2:end]
+            sig0 = unwrap_unionall(method.sig)
+            s1 = sig0.parameters[1]
+            sig = sig0.parameters[2:end]
             print(buf, "  ")
             if !isa(func, s1)
                 # function itself doesn't match
@@ -468,14 +469,15 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                 # If isvarargtype then it checks whether the rest of the input arguments matches
                 # the varargtype
                 if Base.isvarargtype(sig[i])
-                    sigstr = string(sig[i].parameters[1], "...")
+                    sigstr = string(unwrap_unionall(sig[i]).parameters[1], "...")
                     j = length(t_i)
                 else
                     sigstr = string(sig[i])
                     j = i
                 end
                 # Checks if the type of arg 1:i of the input intersects with the current method
-                t_in = typeintersect(Tuple{sig[1:i]...}, Tuple{t_i[1:j]...})
+                t_in = typeintersect(rewrap_unionall(Tuple{sig[1:i]...}, method.sig),
+                                     rewrap_unionall(Tuple{t_i[1:j]...}, method.sig))
                 # If the function is one of the special cased then it should break the loop if
                 # the type of the first argument is not matched.
                 t_in === Union{} && special && i == 1 && break
@@ -502,7 +504,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                 # It ensures that methods like f(a::AbstractString...) gets the correct
                 # number of right_matches
                 for t in arg_types_param[length(sig):end]
-                    if t <: sig[end].parameters[1]
+                    if t <: rewrap_unionall(unwrap_unionall(sig[end]).parameters[1], method.sig)
                         right_matches += 1
                     end
                 end
@@ -513,6 +515,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                     # If the methods args is longer than input then the method
                     # arguments is printed as not a match
                     for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
+                        sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
                         if Base.isvarargtype(sigtype)
                             sigstr = string(sigtype.parameters[1], "...")
                         else

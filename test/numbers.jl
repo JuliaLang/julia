@@ -2502,7 +2502,7 @@ function allsubtypes!(m::Module, x::DataType, sts::Set)
     for s in names(m, true)
         if isdefined(m, s) && !Base.isdeprecated(m, s)
             t = getfield(m, s)
-            if isa(t, Type) && t <: x
+            if isa(t, Type) && t <: x && t != Union{}
                 push!(sts, t)
             elseif isa(t, Module) && t !== m && module_name(t) === s && module_parent(t) === m
                 allsubtypes!(t, x, sts)
@@ -2864,3 +2864,62 @@ let types = (Base.BitInteger_types..., BigInt, Bool)
 end
 
 @test !isempty(complex(1,2))
+
+@testset "rem $T rounded" for T in (Float16, Float32, Float64, BigFloat)
+    @test rem(T(1), T(2), RoundToZero)  == 1
+    @test rem(T(1), T(2), RoundNearest) == 1
+    @test rem(T(1), T(2), RoundDown)    == 1
+    @test rem(T(1), T(2), RoundUp)      == -1
+    @test rem(T(1.5), T(2), RoundToZero)  == 1.5
+    @test rem(T(1.5), T(2), RoundNearest) == -0.5
+    @test rem(T(1.5), T(2), RoundDown)    == 1.5
+    @test rem(T(1.5), T(2), RoundUp)      == -0.5
+    @test rem(T(-1), T(2), RoundToZero)  == -1
+    @test rem(T(-1), T(2), RoundNearest) == -1
+    @test rem(T(-1), T(2), RoundDown)    == 1
+    @test rem(T(-1), T(2), RoundUp)      == -1
+    @test rem(T(-1.5), T(2), RoundToZero)  == -1.5
+    @test rem(T(-1.5), T(2), RoundNearest) == 0.5
+    @test rem(T(-1.5), T(2), RoundDown)    == 0.5
+    @test rem(T(-1.5), T(2), RoundUp)      == -1.5
+end
+
+@testset "rem2pi $T" for T in (Float16, Float32, Float64, BigFloat)
+    @test rem2pi(T(1), RoundToZero)  == 1
+    @test rem2pi(T(1), RoundNearest) == 1
+    @test rem2pi(T(1), RoundDown)    == 1
+    @test rem2pi(T(1), RoundUp)      ≈ 1-2pi
+    @test rem2pi(T(2), RoundToZero)  == 2
+    @test rem2pi(T(2), RoundNearest) == 2
+    @test rem2pi(T(2), RoundDown)    == 2
+    @test rem2pi(T(2), RoundUp)      ≈ 2-2pi
+    @test rem2pi(T(4), RoundToZero)  == 4
+    @test rem2pi(T(4), RoundNearest) ≈ 4-2pi
+    @test rem2pi(T(4), RoundDown)    == 4
+    @test rem2pi(T(4), RoundUp)      ≈ 4-2pi
+    @test rem2pi(T(-4), RoundToZero)  == -4
+    @test rem2pi(T(-4), RoundNearest) ≈ 2pi-4
+    @test rem2pi(T(-4), RoundDown)    ≈ 2pi-4
+    @test rem2pi(T(-4), RoundUp)      == -4
+end
+
+@testset "iszero" begin
+    # Numeric scalars
+    for T in [Float16, Float32, Float64, BigFloat,
+              Int8, Int16, Int32, Int64, Int128, BigInt,
+              UInt8, UInt16, UInt32, UInt64, UInt128]
+        @test iszero(T(0))
+        @test iszero(Complex{T}(0))
+        if T <: Integer
+            @test iszero(Rational{T}(0))
+        elseif T <: AbstractFloat
+            @test iszero(T(-0.0))
+            @test iszero(Complex{T}(-0.0))
+        end
+    end
+    @test !iszero(nextfloat(BigFloat(0)))
+
+    # Array reduction
+    @test !iszero([0, 1, 2, 3])
+    @test iszero(zeros(Int, 5))
+end

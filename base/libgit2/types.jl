@@ -38,17 +38,34 @@ end
 """
     LibGit2.StrArrayStruct
 
-Array of strings.
+A LibGit2 representation of an array of strings.
 Matches the [`git_strarray`](https://libgit2.github.com/libgit2/#HEAD/type/git_strarray) struct.
+
+When fetching data from LibGit2, a typical usage would look like:
+```julia
+sa_ref = Ref(StrArrayStruct())
+@check ccall(..., (Ptr{StrArrayStruct},), sa_ref)
+res = convert(Vector{String}, sa_ref[])
+free(sa_ref)
+```
+In particular, note that `LibGit2.free` should be called afterward on the `Ref` object.
+
+Conversely, when passing a vector of strings to LibGit2, it is generally simplest to rely
+on implicit conversion:
+```julia
+strs = String[...]
+@check ccall(..., (Ptr{StrArrayStruct},), strs)
+```
+Note that no call to `free` is required as the data is allocated by Julia.
 """
-@kwdef immutable StrArrayStruct
+immutable StrArrayStruct
    strings::Ptr{Cstring}
    count::Csize_t
 end
-function Base.close(sa::StrArrayStruct)
-    sa_ptr = Ref(sa)
-    ccall((:git_strarray_free, :libgit2), Void, (Ptr{StrArrayStruct},), sa_ptr)
-    return sa_ptr[]
+StrArrayStruct() = StrArrayStruct(C_NULL, 0)
+
+function free(sa_ref::Base.Ref{StrArrayStruct})
+    ccall((:git_strarray_free, :libgit2), Void, (Ptr{StrArrayStruct},), sa_ref)
 end
 
 """
@@ -56,16 +73,26 @@ end
 
 A data buffer for exporting data from libgit2.
 Matches the [`git_buf`](https://libgit2.github.com/libgit2/#HEAD/type/git_buf) struct.
+
+When fetching data from LibGit2, a typical usage would look like:
+```julia
+buf_ref = Ref(Buffer())
+@check ccall(..., (Ptr{Buffer},), buf_ref)
+# operation on buf_ref
+free(buf_ref)
+```
+In particular, note that `LibGit2.free` should be called afterward on the `Ref` object.
+
 """
-@kwdef immutable Buffer
+immutable Buffer
     ptr::Ptr{Cchar}
     asize::Csize_t
     size::Csize_t
 end
-function Base.close(buf::Buffer)
-    buf_ptr = Ref(buf)
-    ccall((:git_buf_free, :libgit2), Void, (Ptr{Buffer},), buf_ptr)
-    return buf_ptr[]
+Buffer() = Buffer(C_NULL, 0, 0)
+
+function free(buf_ref::Base.Ref{Buffer})
+    ccall((:git_buf_free, :libgit2), Void, (Ptr{Buffer},), buf_ref)
 end
 
 "Abstract credentials payload"
@@ -348,7 +375,7 @@ end
     LibGit2.RebaseOperation
 
 Describes a single instruction/operation to be performed during the rebase.
-Matches the `git_rebase_operation` struct.
+Matches the [`git_rebase_operation`](https://libgit2.github.com/libgit2/#HEAD/type/git_rebase_operation_t) struct.
 """
 immutable RebaseOperation
     optype::Cint
@@ -361,7 +388,7 @@ Base.show(io::IO, rbo::RebaseOperation) = print(io, "RebaseOperation($(string(rb
     LibGit2.StatusOptions
 
 Options to control how `git_status_foreach_ext()` will issue callbacks.
-Matches the `git_status_options` struct.
+Matches the [`git_status_opt_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_status_opt_t) struct.
 """
 @kwdef immutable StatusOptions
     version::Cuint           = 1
@@ -422,9 +449,12 @@ for (typ, reporef, sup, cname) in [
         @eval type $typ <: $sup
             ptr::Ptr{Void}
             function $typ(ptr::Ptr{Void},fin=true)
+                # fin=false should only be used when the pointer should not be free'd
+                # e.g. from within callback functions which are passed a pointer
                 @assert ptr != C_NULL
                 obj = new(ptr)
                 if fin
+                    Threads.atomic_add!(REFCOUNT, UInt(1))
                     finalizer(obj, Base.close)
                 end
                 return obj
@@ -437,12 +467,14 @@ for (typ, reporef, sup, cname) in [
             function $typ(repo::GitRepo, ptr::Ptr{Void})
                 @assert ptr != C_NULL
                 obj = new(Nullable(repo), ptr)
+                Threads.atomic_add!(REFCOUNT, UInt(1))
                 finalizer(obj, Base.close)
                 return obj
             end
             function $typ(ptr::Ptr{Void})
                 @assert ptr != C_NULL
                 obj = new(Nullable{GitRepo}(), ptr)
+                Threads.atomic_add!(REFCOUNT, UInt(1))
                 finalizer(obj, Base.close)
                 return obj
             end
@@ -454,6 +486,7 @@ for (typ, reporef, sup, cname) in [
             function $typ(repo::GitRepo, ptr::Ptr{Void})
                 @assert ptr != C_NULL
                 obj = new(repo, ptr)
+                Threads.atomic_add!(REFCOUNT, UInt(1))
                 finalizer(obj, Base.close)
                 return obj
             end
@@ -463,6 +496,10 @@ for (typ, reporef, sup, cname) in [
         if obj.ptr != C_NULL
             ccall(($(string(cname, :_free)), :libgit2), Void, (Ptr{Void},), obj.ptr)
             obj.ptr = C_NULL
+            if Threads.atomic_sub!(REFCOUNT, UInt(1)) == 1
+                # will the last finalizer please turn out the lights?
+                ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
+            end
         end
     end
 end

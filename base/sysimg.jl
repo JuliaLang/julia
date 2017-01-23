@@ -23,7 +23,6 @@ eval(x) = Core.eval(Base, x)
 eval(m, x) = Core.eval(m, x)
 (::Type{T}){T}(arg) = convert(T, arg)::T
 (::Type{VecElement{T}}){T}(arg) = VecElement{T}(convert(T, arg))
-(::Type{Union{}})(arg) = error("cannot convert type ", typeof(arg), " to Union{}")
 convert{T<:VecElement}(::Type{T}, arg) = T(arg)
 convert{T<:VecElement}(::Type{T}, arg::T) = arg
 
@@ -98,12 +97,6 @@ include("subarray.jl")
 (::Type{Matrix})() = Array{Any,2}(0, 0)
 (::Type{Matrix{T}}){T}(m::Integer, n::Integer) = Matrix{T}(Int(m), Int(n))
 (::Type{Matrix})(m::Integer, n::Integer) = Matrix{Any}(Int(m), Int(n))
-
-# TODO: possibly turn these into deprecations
-Array{T}(::Type{T}, d::Integer...) = Array(T, convert(Tuple{Vararg{Int}}, d))
-Array{T}(::Type{T}, m::Integer)                       = Array{T,1}(Int(m))
-Array{T}(::Type{T}, m::Integer,n::Integer)            = Array{T,2}(Int(m),Int(n))
-Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) = Array{T,3}(Int(m),Int(n),Int(o))
 
 # numeric operations
 include("hashing.jl")
@@ -307,6 +300,7 @@ include("datafmt.jl")
 importall .DataFmt
 include("deepcopy.jl")
 include("interactiveutil.jl")
+include("summarysize.jl")
 include("replutil.jl")
 include("test.jl")
 include("i18n.jl")

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-import .Serializer: serialize_cycle, serialize_type, writetag, UNDEFREF_TAG
+import .Serializer: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG
 
 type SharedArray{T,N} <: DenseArray{T,N}
     dims::NTuple{N,Int}
@@ -28,19 +28,8 @@ type SharedArray{T,N} <: DenseArray{T,N}
     end
 end
 
-(::Type{SharedArray{T}}){T,N}(d::NTuple{N,Int}; kwargs...) =
-    SharedArray(T, d; kwargs...)
-(::Type{SharedArray{T}}){T}(d::Integer...; kwargs...) =
-    SharedArray(T, d; kwargs...)
-(::Type{SharedArray{T}}){T}(m::Integer; kwargs...) =
-    SharedArray(T, m; kwargs...)
-(::Type{SharedArray{T}}){T}(m::Integer, n::Integer; kwargs...) =
-    SharedArray(T, m, n; kwargs...)
-(::Type{SharedArray{T}}){T}(m::Integer, n::Integer, o::Integer; kwargs...) =
-    SharedArray(T, m, n, o; kwargs...)
-
 """
-    SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
+    SharedArray{T,N}(dims::NTuple; init=false, pids=Int[])
 
 Construct a `SharedArray` of a bitstype `T` and size `dims` across the processes specified
 by `pids` - all of which have to be on the same host.
@@ -52,8 +41,39 @@ computation with the master process acting as a driver.
 
 If an `init` function of the type `initfn(S::SharedArray)` is specified, it is called on all
 the participating workers.
+
+    SharedArray{T,N}(filename::AbstractString, dims::NTuple, [offset=0]; mode=nothing, init=false, pids=Int[])
+
+Construct a `SharedArray` backed by the file `filename`, with element
+type `T` (must be a `bitstype`) and size `dims`, across the processes
+specified by `pids` - all of which have to be on the same host. This
+file is mmapped into the host memory, with the following consequences:
+
+- The array data must be represented in binary format (e.g., an ASCII
+  format like CSV cannot be supported)
+
+- Any changes you make to the array values (e.g., `A[3] = 0`) will
+  also change the values on disk
+
+If `pids` is left unspecified, the shared array will be mapped across
+all processes on the current host, including the master. But,
+`localindexes` and `indexpids` will only refer to worker
+processes. This facilitates work distribution code to use workers for
+actual computation with the master process acting as a driver.
+
+`mode` must be one of `"r"`, `"r+"`, `"w+"`, or `"a+"`, and defaults
+to `"r+"` if the file specified by `filename` already exists, or
+`"w+"` if not. If an `init` function of the type
+`initfn(S::SharedArray)` is specified, it is called on all the
+participating workers. You cannot specify an `init` function if the
+file is not writable.
+
+`offset` allows you to skip the specified number of bytes at the
+beginning of the file.
 """
-function SharedArray{T,N}(::Type{T}, dims::Dims{N}; init=false, pids=Int[])
+SharedArray
+
+function (::Type{SharedArray{T,N}}){T,N}(dims::Dims{N}; init=false, pids=Int[])
     isbits(T) || throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
 
     pids, onlocalhost = shared_pids(pids)
@@ -110,39 +130,20 @@ function SharedArray{T,N}(::Type{T}, dims::Dims{N}; init=false, pids=Int[])
     S
 end
 
-SharedArray(T, I::Int...; kwargs...) = SharedArray(T, I; kwargs...)
+(::Type{SharedArray{T,N}}){T,N}(I::Integer...; kwargs...) =
+    SharedArray{T,N}(I; kwargs...)
+(::Type{SharedArray{T}}){T}(d::NTuple; kwargs...) =
+    SharedArray{T,length(d)}(d; kwargs...)
+(::Type{SharedArray{T}}){T}(I::Integer...; kwargs...) =
+    SharedArray{T,length(I)}(I; kwargs...)
+(::Type{SharedArray{T}}){T}(m::Integer; kwargs...) =
+    SharedArray{T,1}(m; kwargs...)
+(::Type{SharedArray{T}}){T}(m::Integer, n::Integer; kwargs...) =
+    SharedArray{T,2}(m, n; kwargs...)
+(::Type{SharedArray{T}}){T}(m::Integer, n::Integer, o::Integer; kwargs...) =
+    SharedArray{T,3}(m, n, o; kwargs...)
 
-"""
-    SharedArray(filename::AbstractString, T::Type, dims::NTuple, [offset=0]; mode=nothing, init=false, pids=Int[])
-
-Construct a `SharedArray` backed by the file `filename`, with element
-type `T` (must be a `bitstype`) and size `dims`, across the processes
-specified by `pids` - all of which have to be on the same host. This
-file is mmapped into the host memory, with the following consequences:
-
-- The array data must be represented in binary format (e.g., an ASCII
-  format like CSV cannot be supported)
-
-- Any changes you make to the array values (e.g., `A[3] = 0`) will
-  also change the values on disk
-
-If `pids` is left unspecified, the shared array will be mapped across
-all processes on the current host, including the master. But,
-`localindexes` and `indexpids` will only refer to worker
-processes. This facilitates work distribution code to use workers for
-actual computation with the master process acting as a driver.
-
-`mode` must be one of `"r"`, `"r+"`, `"w+"`, or `"a+"`, and defaults
-to `"r+"` if the file specified by `filename` already exists, or
-`"w+"` if not. If an `init` function of the type
-`initfn(S::SharedArray)` is specified, it is called on all the
-participating workers. You cannot specify an `init` function if the
-file is not writable.
-
-`offset` allows you to skip the specified number of bytes at the
-beginning of the file.
-"""
-function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,Int},
+function (::Type{SharedArray{T,N}}){T,N}(filename::AbstractString, dims::NTuple{N,Int},
         offset::Integer=0; mode=nothing, init=false, pids::Vector{Int}=Int[])
     if !isabspath(filename)
         throw(ArgumentError("$filename is not an absolute path; try abspath(filename)?"))
@@ -208,6 +209,10 @@ function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,In
     S
 end
 
+(::Type{SharedArray{T}}){T,N}(filename::AbstractString, dims::NTuple{N,Int}, offset::Integer=0;
+                              mode=nothing, init=false, pids::Vector{Int}=Int[]) =
+    SharedArray{T,N}(filename, dims, offset; mode=mode, init=init, pids=pids)
+
 function initialize_shared_array(S, onlocalhost, init, pids)
     if onlocalhost
         init_loc_flds(S)
@@ -246,6 +251,7 @@ typealias SharedMatrix{T} SharedArray{T,2}
 
 length(S::SharedArray) = prod(S.dims)
 size(S::SharedArray) = S.dims
+ndims(S::SharedArray) = length(S.dims)
 linearindexing{S<:SharedArray}(::Type{S}) = LinearFast()
 
 function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
@@ -304,24 +310,25 @@ for each worker process.
 """
 localindexes(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
 
-unsafe_convert{T}(::Type{Ptr{T}}, S::SharedArray) = unsafe_convert(Ptr{T}, sdata(S))
+unsafe_convert{T}(::Type{Ptr{T}}, S::SharedArray{T}) = unsafe_convert(Ptr{T}, sdata(S))
+unsafe_convert{T}(::Type{Ptr{T}}, S::SharedArray   ) = unsafe_convert(Ptr{T}, sdata(S))
 
 function convert(::Type{SharedArray}, A::Array)
-    S = SharedArray(eltype(A), size(A))
+    S = SharedArray{eltype(A),ndims(A)}(size(A))
     copy!(S, A)
 end
 function convert{T}(::Type{SharedArray{T}}, A::Array)
-    S = SharedArray(T, size(A))
+    S = SharedArray{T,ndims(A)}(size(A))
     copy!(S, A)
 end
 function convert{TS,TA,N}(::Type{SharedArray{TS,N}}, A::Array{TA,N})
-    S = SharedArray(TS, size(A))
+    S = SharedArray{TS,ndims(A)}(size(A))
     copy!(S, A)
 end
 
 function deepcopy_internal(S::SharedArray, stackdict::ObjectIdDict)
     haskey(stackdict, S) && return stackdict[S]
-    R = SharedArray(eltype(S), size(S); pids = S.pids)
+    R = SharedArray{eltype(S),ndims(S)}(size(S); pids = S.pids)
     copy!(sdata(R), sdata(S))
     stackdict[S] = R
     return R
@@ -390,9 +397,8 @@ end
 # Don't serialize s (it is the complete array) and
 # pidx, which is relevant to the current process only
 function serialize(s::AbstractSerializer, S::SharedArray)
-    serialize_cycle(s, S) && return
-    serialize_type(s, typeof(S))
-    for n in SharedArray.name.names
+    serialize_cycle_header(s, S) && return
+    for n in fieldnames(SharedArray)
         if n in [:s, :pidx, :loc_subarr_1d]
             writetag(s.io, UNDEFREF_TAG)
         elseif n == :refs
@@ -468,16 +474,16 @@ end
 
 # convenience constructors
 function shmem_fill(v, dims; kwargs...)
-    SharedArray(typeof(v), dims; init = S->fill!(S.loc_subarr_1d, v), kwargs...)
+    SharedArray{typeof(v),length(dims)}(dims; init = S->fill!(S.loc_subarr_1d, v), kwargs...)
 end
 shmem_fill(v, I::Int...; kwargs...) = shmem_fill(v, I; kwargs...)
 
 # rand variant with range
 function shmem_rand(TR::Union{DataType, UnitRange}, dims; kwargs...)
     if isa(TR, UnitRange)
-        SharedArray(Int, dims; init = S -> map!(x -> rand(TR), S.loc_subarr_1d, S.loc_subarr_1d), kwargs...)
+        SharedArray{Int,length(dims)}(dims; init = S -> map!(x -> rand(TR), S.loc_subarr_1d, S.loc_subarr_1d), kwargs...)
     else
-        SharedArray(TR, dims; init = S -> map!(x -> rand(TR), S.loc_subarr_1d, S.loc_subarr_1d), kwargs...)
+        SharedArray{TR,length(dims)}(dims; init = S -> map!(x -> rand(TR), S.loc_subarr_1d, S.loc_subarr_1d), kwargs...)
     end
 end
 shmem_rand(TR::Union{DataType, UnitRange}, i::Int; kwargs...) = shmem_rand(TR, (i,); kwargs...)
@@ -487,7 +493,7 @@ shmem_rand(dims; kwargs...) = shmem_rand(Float64, dims; kwargs...)
 shmem_rand(I::Int...; kwargs...) = shmem_rand(I; kwargs...)
 
 function shmem_randn(dims; kwargs...)
-    SharedArray(Float64, dims; init = S-> map!(x -> randn(), S.loc_subarr_1d, S.loc_subarr_1d), kwargs...)
+    SharedArray{Float64,length(dims)}(dims; init = S-> map!(x -> randn(), S.loc_subarr_1d, S.loc_subarr_1d), kwargs...)
 end
 shmem_randn(I::Int...; kwargs...) = shmem_randn(I; kwargs...)
 

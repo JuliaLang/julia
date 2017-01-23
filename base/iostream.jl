@@ -225,6 +225,11 @@ function readuntil(s::IOStream, delim::UInt8)
     ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Void}, UInt8, UInt8, UInt8), s.ios, delim, 0, 0)
 end
 
+# like readuntil, above, but returns a String without requiring a copy
+function readuntil_string(s::IOStream, delim::UInt8)
+    ccall(:jl_readuntil, Ref{String}, (Ptr{Void}, UInt8, UInt8, UInt8), s.ios, delim, 1, false)
+end
+
 function readline(s::IOStream, chomp::Bool=true)
     ccall(:jl_readuntil, Ref{String}, (Ptr{Void}, UInt8, UInt8, UInt8), s.ios, '\n', 1, chomp)
 end

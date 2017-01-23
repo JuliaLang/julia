@@ -106,7 +106,7 @@ try
               let some_method = @which Base.include("string")
                     # global const some_method // FIXME: support for serializing a direct reference to an external Method not implemented
                   global const some_linfo =
-                      ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any, UInt),
+                      ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
                           some_method, Tuple{typeof(Base.include), String}, Core.svec(), typemax(UInt))
               end
           end
@@ -175,18 +175,17 @@ try
             0:25)
         some_method = @which Base.include("string")
         some_linfo =
-                ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any, UInt),
+                ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
                     some_method, Tuple{typeof(Base.include), String}, Core.svec(), typemax(UInt))
         @test Foo.some_linfo::Core.MethodInstance === some_linfo
 
-        PV = Foo.Value18343{Nullable}.types[1]
+        PV = Foo.Value18343{Nullable}.body.types[1]
         VR = PV.types[1].parameters[1]
         @test PV.types[1] === Array{VR,1}
         @test pointer_from_objref(PV.types[1]) ===
-              pointer_from_objref(PV.types[1].parameters[1].types[1].types[1]) ===
-              pointer_from_objref(Array{VR,1})
+              pointer_from_objref(PV.types[1].parameters[1].types[1].types[1])
         @test PV === PV.types[1].parameters[1].types[1]
-        @test pointer_from_objref(PV) !== pointer_from_objref(PV.types[1].parameters[1].types[1])
+        @test pointer_from_objref(PV) === pointer_from_objref(PV.types[1].parameters[1].types[1])
     end
 
     Baz_file = joinpath(dir, "Baz.jl")

@@ -496,8 +496,7 @@ temp_pkg_dir() do
     end
 end
 
-let
-    io = IOBuffer()
+let io = IOBuffer()
     Base.showerror(io, Base.Pkg.Entry.PkgTestError("ppp"), backtrace())
     @test !contains(String(take!(io)), "backtrace()")
 end

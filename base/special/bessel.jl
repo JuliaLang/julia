@@ -118,7 +118,6 @@ for afn in (:airyai, :airyaiprime, :airybi, :airybiprime,
     else
         @eval $afn(x::Real) = real($afn(complex(float(x))))
     end
-
 end
 
 ## Bessel functions

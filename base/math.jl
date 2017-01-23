@@ -13,7 +13,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        cbrt, sqrt, erf, erfc, erfcx, erfi, dawson,
        significand,
        lgamma, hypot, gamma, lfact, max, min, minmax, ldexp, frexp,
-       clamp, clamp!, modf, ^, mod2pi,
+       clamp, clamp!, modf, ^, mod2pi, rem2pi,
        airyai, airyaiprime, airybi, airybiprime,
        airyaix, airyaiprimex, airybix, airybiprimex,
        besselj0, besselj1, besselj, besseljx,
@@ -25,14 +25,14 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
 
 import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
-             max, min, minmax, ^, exp2, muladd,
+             max, min, minmax, ^, exp2, muladd, rem,
              exp10, expm1, log1p
 
 using Base: sign_mask, exponent_mask, exponent_one, exponent_bias,
             exponent_half, exponent_max, exponent_raw_max, fpinttype,
             significand_mask, significand_bits, exponent_bits
 
-using Core.Intrinsics: sqrt_llvm, box, unbox, powi_llvm
+using Core.Intrinsics: sqrt_llvm, powi_llvm
 
 # non-type specific math functions
 
@@ -420,8 +420,8 @@ for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
     end
 end
 
-sqrt(x::Float64) = box(Float64,sqrt_llvm(unbox(Float64,x)))
-sqrt(x::Float32) = box(Float32,sqrt_llvm(unbox(Float32,x)))
+sqrt(x::Float64) = sqrt_llvm(x)
+sqrt(x::Float32) = sqrt_llvm(x)
 
 """
     sqrt(x)
@@ -617,6 +617,42 @@ function frexp{T<:AbstractFloat}(x::T)
 end
 
 """
+    rem(x, y, r::RoundingMode)
+
+Compute the remainder of `x` after integer division by `y`, with the quotient rounded
+according to the rounding mode `r`. In other words, the quantity
+
+    x - y*round(x/y,r)
+
+without any intermediate rounding.
+
+- if `r == RoundNearest`, then the result is exact, and in the interval
+  ``[-|y|/2, |y|/2]``.
+
+- if `r == RoundToZero` (default), then the result is exact, and in the interval
+  ``[0, |y|)`` if `x` is positive, or ``(-|y|, 0]`` otherwise.
+
+- if `r == RoundDown`, then the result is in the interval ``[0, y)`` if `y` is positive, or
+  ``(y, 0]`` otherwise. The result may not be exact if `x` and `y` have different signs, and
+  `abs(x) < abs(y)`.
+
+- if `r == RoundUp`, then the result is in the interval `(-y,0]` if `y` is positive, or
+  `[0,-y)` otherwise. The result may not be exact if `x` and `y` have the same sign, and
+  `abs(x) < abs(y)`.
+
+"""
+rem(x, y, ::RoundingMode{:ToZero}) = rem(x,y)
+rem(x, y, ::RoundingMode{:Down}) = mod(x,y)
+rem(x, y, ::RoundingMode{:Up}) = mod(x,-y)
+
+rem(x::Float64, y::Float64, ::RoundingMode{:Nearest}) =
+    ccall((:remainder, libm),Float64,(Float64,Float64),x,y)
+rem(x::Float32, y::Float32, ::RoundingMode{:Nearest}) =
+    ccall((:remainderf, libm),Float32,(Float32,Float32),x,y)
+rem(x::Float16, y::Float16, r::RoundingMode{:Nearest}) = Float16(rem(Float32(x), Float32(y), r))
+
+
+"""
     modf(x)
 
 Return a tuple (fpart,ipart) of the fractional and integral parts of a number. Both parts
@@ -644,10 +680,10 @@ end
 ^(x::Float64, y::Float64) = nan_dom_err(ccall((:pow,libm),  Float64, (Float64,Float64), x, y), x+y)
 ^(x::Float32, y::Float32) = nan_dom_err(ccall((:powf,libm), Float32, (Float32,Float32), x, y), x+y)
 
-^(x::Float64, y::Integer) =
-    box(Float64, powi_llvm(unbox(Float64,x), unbox(Int32,Int32(y))))
-^(x::Float32, y::Integer) =
-    box(Float32, powi_llvm(unbox(Float32,x), unbox(Int32,Int32(y))))
+^(x::Float64, y::Integer) = x^Int32(y)
+^(x::Float64, y::Int32) = powi_llvm(x, y)
+^(x::Float32, y::Integer) = x^Int32(y)
+^(x::Float32, y::Int32) = powi_llvm(x, y)
 ^(x::Float16, y::Integer) = Float16(Float32(x)^y)
 
 function angle_restrict_symm(theta)
@@ -663,7 +699,7 @@ function angle_restrict_symm(theta)
     return r
 end
 
-## mod2pi-related calculations ##
+## rem2pi-related calculations ##
 
 function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
     # as above, but only compute and return high double
@@ -706,6 +742,152 @@ const pi4o2_h  = 6.283185307179586      # convert(Float64, pi * BigFloat(2))
 const pi4o2_l  = 2.4492935982947064e-16 # convert(Float64, pi * BigFloat(2) - pi4o2_h)
 
 """
+    rem2pi(x, r::RoundingMode)
+
+Compute the remainder of `x` after integer division by `2π`, with the quotient rounded
+according to the rounding mode `r`. In other words, the quantity
+
+    x - 2π*round(x/(2π),r)
+
+without any intermediate rounding. This internally uses a high precision approximation of
+2π, and so will give a more accurate result than `rem(x,2π,r)`
+
+- if `r == RoundNearest`, then the result is in the interval ``[-π, π]``. This will generally
+  be the most accurate result.
+
+- if `r == RoundToZero`, then the result is in the interval ``[0, 2π]`` if `x` is positive,.
+  or ``[-2π, 0]`` otherwise.
+
+- if `r == RoundDown`, then the result is in the interval ``[0, 2π]``.
+
+- if `r == RoundUp`, then the result is in the interval ``[-2π, 0]``.
+
+```jldoctest
+julia> rem2pi(7pi/4, RoundNearest)
+-0.7853981633974485
+
+julia> rem2pi(7pi/4, RoundDown)
+5.497787143782138
+```
+"""
+function rem2pi end
+function rem2pi(x::Float64, ::RoundingMode{:Nearest})
+    abs(x) < pi && return x
+
+    (n,y) = ieee754_rem_pio2(x)
+
+    if iseven(n)
+        if n & 2 == 2 # n % 4 == 2: add/subtract pi
+            if y[1] <= 0
+                return add22condh(y[1],y[2],pi2o2_h,pi2o2_l)
+            else
+                return add22condh(y[1],y[2],-pi2o2_h,-pi2o2_l)
+            end
+        else          # n % 4 == 0: add 0
+            return y[1]
+        end
+    else
+        if n & 2 == 2 # n % 4 == 3: subtract pi/2
+            return add22condh(y[1],y[2],-pi1o2_h,-pi1o2_l)
+        else          # n % 4 == 1: add pi/2
+            return add22condh(y[1],y[2],pi1o2_h,pi1o2_l)
+        end
+    end
+end
+function rem2pi(x::Float64, ::RoundingMode{:ToZero})
+    ax = abs(x)
+    ax <= 2*Float64(pi,RoundDown) && return x
+
+    (n,y) = ieee754_rem_pio2(ax)
+
+    if iseven(n)
+        if n & 2 == 2 # n % 4 == 2: add pi
+            z = add22condh(y[1],y[2],pi2o2_h,pi2o2_l)
+        else          # n % 4 == 0: add 0 or 2pi
+            if y[1] > 0
+                z = y[1]
+            else      # negative: add 2pi
+                z = add22condh(y[1],y[2],pi4o2_h,pi4o2_l)
+            end
+        end
+    else
+        if n & 2 == 2 # n % 4 == 3: add 3pi/2
+            z = add22condh(y[1],y[2],pi3o2_h,pi3o2_l)
+        else          # n % 4 == 1: add pi/2
+            z = add22condh(y[1],y[2],pi1o2_h,pi1o2_l)
+        end
+    end
+    copysign(z,x)
+end
+function rem2pi(x::Float64, ::RoundingMode{:Down})
+    if x < pi4o2_h
+        if x >= 0
+            return x
+        elseif x > -pi4o2_h
+            return add22condh(x,0.0,pi4o2_h,pi4o2_l)
+        end
+    end
+
+    (n,y) = ieee754_rem_pio2(x)
+
+    if iseven(n)
+        if n & 2 == 2 # n % 4 == 2: add pi
+            return add22condh(y[1],y[2],pi2o2_h,pi2o2_l)
+        else          # n % 4 == 0: add 0 or 2pi
+            if y[1] > 0
+                return y[1]
+            else      # negative: add 2pi
+                return add22condh(y[1],y[2],pi4o2_h,pi4o2_l)
+            end
+        end
+    else
+        if n & 2 == 2 # n % 4 == 3: add 3pi/2
+            return add22condh(y[1],y[2],pi3o2_h,pi3o2_l)
+        else          # n % 4 == 1: add pi/2
+            return add22condh(y[1],y[2],pi1o2_h,pi1o2_l)
+        end
+    end
+end
+function rem2pi(x::Float64, ::RoundingMode{:Up})
+    if x > -pi4o2_h
+        if x <= 0
+            return x
+        elseif x < pi4o2_h
+            return add22condh(x,0.0,-pi4o2_h,-pi4o2_l)
+        end
+    end
+
+    (n,y) = ieee754_rem_pio2(x)
+
+    if iseven(n)
+        if n & 2 == 2 # n % 4 == 2: sub pi
+            return add22condh(y[1],y[2],-pi2o2_h,-pi2o2_l)
+        else          # n % 4 == 0: sub 0 or 2pi
+            if y[1] < 0
+                return y[1]
+            else      # positive: sub 2pi
+                return add22condh(y[1],y[2],-pi4o2_h,-pi4o2_l)
+            end
+        end
+    else
+        if n & 2 == 2 # n % 4 == 3: sub pi/2
+            return add22condh(y[1],y[2],-pi1o2_h,-pi1o2_l)
+        else          # n % 4 == 1: sub 3pi/2
+            return add22condh(y[1],y[2],-pi3o2_h,-pi3o2_l)
+        end
+    end
+end
+
+rem2pi(x::Float32, r::RoundingMode) = Float32(rem2pi(Float64(x), r))
+rem2pi(x::Float16, r::RoundingMode) = Float16(rem2pi(Float64(x), r))
+rem2pi(x::Int32, r::RoundingMode) = rem2pi(Float64(x), r)
+function rem2pi(x::Int64, r::RoundingMode)
+    fx = Float64(x)
+    fx == x || throw(ArgumentError("Int64 argument to rem2pi is too large: $x"))
+    rem2pi(fx, r)
+end
+
+"""
     mod2pi(x)
 
 Modulus after division by `2π`, returning in the range ``[0,2π)``.
@@ -719,49 +901,7 @@ julia> mod2pi(9*pi/4)
 0.7853981633974481
 ```
 """
-function mod2pi(x::Float64) # or modtau(x)
-# with r = mod2pi(x)
-# a) 0 <= r < 2π  (note: boundary open or closed - a bit fuzzy, due to rem_pio2 implementation)
-# b) r-x = k*2π with k integer
-
-# note: mod(n,4) is 0,1,2,3; while mod(n-1,4)+1 is 1,2,3,4.
-# We use the latter to push negative y in quadrant 0 into the positive (one revolution, + 4*pi/2)
-
-    if x < pi4o2_h
-        if 0.0 <= x return x end
-        if x > -pi4o2_h
-            return add22condh(x,0.0,pi4o2_h,pi4o2_l)
-        end
-    end
-
-    (n,y) = ieee754_rem_pio2(x)
-
-    if iseven(n)
-        if n & 2 == 2 # add pi
-            return add22condh(y[1],y[2],pi2o2_h,pi2o2_l)
-        else # add 0 or 2pi
-            if y[1] > 0.0
-                return y[1]
-            else # else add 2pi
-                return add22condh(y[1],y[2],pi4o2_h,pi4o2_l)
-            end
-        end
-    else # add pi/2 or 3pi/2
-        if n & 2 == 2 # add 3pi/2
-            return add22condh(y[1],y[2],pi3o2_h,pi3o2_l)
-        else # add pi/2
-            return add22condh(y[1],y[2],pi1o2_h,pi1o2_l)
-        end
-    end
-end
-
-mod2pi(x::Float32) = Float32(mod2pi(Float64(x)))
-mod2pi(x::Int32) = mod2pi(Float64(x))
-function mod2pi(x::Int64)
-  fx = Float64(x)
-  fx == x || throw(ArgumentError("Int64 argument to mod2pi is too large: $x"))
-  mod2pi(fx)
-end
+mod2pi(x) = rem2pi(x,RoundDown)
 
 # generic fallback; for number types, promotion.jl does promotion
 

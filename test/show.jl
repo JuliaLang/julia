@@ -289,6 +289,16 @@ end
 @test repr(:(bitstype A B)) == ":(bitstype A B)"
 @test repr(:(bitstype 100 B)) == ":(bitstype 100 B)"
 
+# `where` syntax
+@test_repr "A where T<:B"
+@test_repr "A where T<:(Array{T} where T<:Real)"
+@test_repr "Array{T} where T<:Array{S} where S<:Real"
+@test_repr "x::Array{T} where T"
+@test_repr "(a::b) where T"
+@test_repr "a::b where T"
+@test_repr "X where (T=1)"
+@test_repr "X where T = 1"
+
 let oldout = STDOUT, olderr = STDERR
     local rdout, wrout, rderr, wrerr, out, err, rd, wr
     try
@@ -420,7 +430,7 @@ end
 @test replstr(eye(10)) == "10×10 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0"
 # an array too long vertically to fit on screen, and too long horizontally:
 @test replstr(collect(1.:100.)) == "100-element Array{Float64,1}:\n   1.0\n   2.0\n   3.0\n   4.0\n   5.0\n   6.0\n   7.0\n   8.0\n   9.0\n  10.0\n   ⋮  \n  92.0\n  93.0\n  94.0\n  95.0\n  96.0\n  97.0\n  98.0\n  99.0\n 100.0"
-@test replstr(collect(1.:100.)') == "1×100 Array{Float64,2}:\n 1.0  2.0  3.0  4.0  5.0  6.0  7.0  …  95.0  96.0  97.0  98.0  99.0  100.0"
+@test replstr(collect(1.:100.)') == "1×100 RowVector{Float64,Array{Float64,1}}:\n 1.0  2.0  3.0  4.0  5.0  6.0  7.0  …  95.0  96.0  97.0  98.0  99.0  100.0"
 # too big in both directions to fit on screen:
 @test replstr((1.:100.)*(1:100)') == "100×100 Array{Float64,2}:\n   1.0    2.0    3.0    4.0    5.0    6.0  …    97.0    98.0    99.0    100.0\n   2.0    4.0    6.0    8.0   10.0   12.0      194.0   196.0   198.0    200.0\n   3.0    6.0    9.0   12.0   15.0   18.0      291.0   294.0   297.0    300.0\n   4.0    8.0   12.0   16.0   20.0   24.0      388.0   392.0   396.0    400.0\n   5.0   10.0   15.0   20.0   25.0   30.0      485.0   490.0   495.0    500.0\n   6.0   12.0   18.0   24.0   30.0   36.0  …   582.0   588.0   594.0    600.0\n   7.0   14.0   21.0   28.0   35.0   42.0      679.0   686.0   693.0    700.0\n   8.0   16.0   24.0   32.0   40.0   48.0      776.0   784.0   792.0    800.0\n   9.0   18.0   27.0   36.0   45.0   54.0      873.0   882.0   891.0    900.0\n  10.0   20.0   30.0   40.0   50.0   60.0      970.0   980.0   990.0   1000.0\n   ⋮                                  ⋮    ⋱                                 \n  92.0  184.0  276.0  368.0  460.0  552.0     8924.0  9016.0  9108.0   9200.0\n  93.0  186.0  279.0  372.0  465.0  558.0     9021.0  9114.0  9207.0   9300.0\n  94.0  188.0  282.0  376.0  470.0  564.0     9118.0  9212.0  9306.0   9400.0\n  95.0  190.0  285.0  380.0  475.0  570.0     9215.0  9310.0  9405.0   9500.0\n  96.0  192.0  288.0  384.0  480.0  576.0  …  9312.0  9408.0  9504.0   9600.0\n  97.0  194.0  291.0  388.0  485.0  582.0     9409.0  9506.0  9603.0   9700.0\n  98.0  196.0  294.0  392.0  490.0  588.0     9506.0  9604.0  9702.0   9800.0\n  99.0  198.0  297.0  396.0  495.0  594.0     9603.0  9702.0  9801.0   9900.0\n 100.0  200.0  300.0  400.0  500.0  600.0     9700.0  9800.0  9900.0  10000.0"
 
@@ -514,10 +524,10 @@ end
 
 # PR 16221
 # Printing of upper and lower bound of a TypeVar
-@test string(TypeVar(:V, Signed, Real, false)) == "Signed<:V<:Real"
+@test string(TypeVar(:V, Signed, Real)) == "Signed<:V<:Real"
 # Printing of primary type in type parameter place should not show the type
 # parameter names.
-@test string(Array) == "Array{T,N}"
+@test string(Array) == "Array"
 @test string(Tuple{Array}) == "Tuple{Array}"
 
 # PR #16651
@@ -543,8 +553,8 @@ end
 let repr = sprint(dump, :(x = 1))
     @test repr == "Expr\n  head: Symbol =\n  args: Array{Any}((2,))\n    1: Symbol x\n    2: $Int 1\n  typ: Any\n"
 end
-let repr = sprint(dump, Pair)
-    @test repr == "Pair{A,B} <: Any\n  first::A\n  second::B\n"
+let repr = sprint(dump, Pair{String,Int64})
+    @test repr == "Pair{String,Int64} <: Any\n  first::String\n  second::Int64\n"
 end
 let repr = sprint(dump, Tuple)
     @test repr == "Tuple <: Any\n"
@@ -558,7 +568,7 @@ let repr = sprint(dump, Any)
     @test length(repr) > 100000
     @test ismatch(r"^Any\n  [^ \t\n]", repr)
     @test endswith(repr, '\n')
-    @test contains(repr, "     Base.Vector{T} = Array{T,1}\n")
+    @test_broken contains(repr, "     Base.Vector{T} = Array{T,1}\n")
     @test !contains(repr, "Core.Vector{T}")
 end
 let repr = sprint(dump, Integer)
@@ -620,3 +630,15 @@ end
 
 # don't use julia-specific `f` in Float32 printing (PR #18053)
 @test sprint(print, 1f-7) == "1.0e-7"
+
+# test that the REPL TextDisplay works for displaying arbitrary textual MIME types
+let d = TextDisplay(IOBuffer())
+    display(d, "text/csv", [3 1 4])
+    @test String(take!(d.io)) == "3,1,4\n"
+    @test_throws MethodError display(d, "text/foobar", [3 1 4])
+    try
+        display(d, "text/foobar", [3 1 4])
+    catch e
+        @test e.f == show
+    end
+end

@@ -176,62 +176,57 @@ end
 
 function issub_env(x, y)
     e = Env()
-    ans = forall_exists_issub(x, y, e, false)
+    ans = forall_exists_issub(x, y, e)
     ans, e.vars
 end
 issub(x, y) = issub_env(x, y)[1]
 issub(x, y, env) = (x === y)
 issub(x::Ty, y::Ty, env) = (x === y) || x === BottomT
 
-function forall_exists_issub(x, y, env, anyunions::Bool)
+function forall_exists_issub(x, y, env)
     # for all combinations of elements from Unions on the left, there must
     # exist a combination of elements from Unions on the right that makes
     # issub() true. Unions in invariant position are on both the left and
     # the right in this formula.
-    for forall in false:anyunions
-        if !isempty(env.Lunions.stack)
-            env.Lunions.stack[end] = forall
-        end
+    sub = exists_issub(x, y, env)
 
-        !exists_issub(x, y, env, false) && return false
-
-        if env.Lunions.more
-            push!(env.Lunions.stack, false)
-            sub = forall_exists_issub(x, y, env, true)
-            pop!(env.Lunions.stack)
-            !sub && return false
+    if sub && env.Lunions.more
+        push!(env.Lunions.stack, false)
+        sub = forall_exists_issub(x, y, env)
+        if sub
+            env.Lunions.stack[end] = true
+            sub = forall_exists_issub(x, y, env)
         end
+        pop!(env.Lunions.stack)
     end
-    return true
+    return sub
 end
 
-function exists_issub(x, y, env, anyunions::Bool)
-    for exists in false:anyunions
-        if !isempty(env.Runions.stack)
-            env.Runions.stack[end] = exists
-        end
-        env.Lunions.depth = env.Runions.depth = 1
-        env.Lunions.more = env.Runions.more = false
+function exists_issub(x, y, env)
+    env.Lunions.depth = env.Runions.depth = 1
+    env.Lunions.more = env.Runions.more = false
 
-        found = issub(x, y, env)
+    found = issub(x, y, env)
 
-        if env.Lunions.more
-            # return up to forall_exists_issub. the recursion must have this shape:
-            # ∀₁         ∀₁
-            #   ∃₁  =>     ∀₂
-            #                ...
-            #                ∃₁
-            #                  ∃₂
-            return true
-        end
-        if env.Runions.more
-            push!(env.Runions.stack, false)
-            found = exists_issub(x, y, env, true)
-            pop!(env.Runions.stack)
-        end
-        found && return true
+    if env.Lunions.more
+        # return up to forall_exists_issub. the recursion must have this shape:
+        # ∀₁         ∀₁
+        #   ∃₁  =>     ∀₂
+        #                ...
+        #                ∃₁
+        #                  ∃₂
+        return true
     end
-    return false
+    if env.Runions.more
+        push!(env.Runions.stack, false)
+        found = exists_issub(x, y, env)
+        if !found
+            env.Runions.stack[end] = true
+            found = exists_issub(x, y, env)
+        end
+        pop!(env.Runions.stack)
+    end
+    return found
 end
 
 function issub_union(t, u::UnionT, env, R, state::UnionState)
@@ -250,9 +245,10 @@ issub(a::UnionT, b::UnionT, env) = a === b || issub_union(a, b, env, true, env.R
 issub(a::UnionT, b::Ty, env) = b===AnyT || issub_union(b, a, env, false, env.Lunions)
 issub(a::Ty, b::UnionT, env) =
     a===BottomT || a===b.a || a===b.b || issub_union(a, b, env, true, env.Runions)
-# take apart unions before handling vars
-issub(a::UnionT, b::Var, env) = issub_union(b, a, env, false, env.Lunions)
-issub(a::Var, b::UnionT, env) = a===b.a || a===b.b || issub_union(a, b, env, true, env.Runions)
+
+# handle vars before unions
+issub(a::UnionT, b::Var, env) = var_gt(b, a, env)
+issub(a::Var, b::UnionT, env) = var_lt(a, b, env)
 
 function issub(a::TagT, b::TagT, env)
     env.outer = false
@@ -313,12 +309,17 @@ function issub(a::Var, b::Var, env)
     end
 end
 
+# issub, but taking apart unions before handling vars
+issub_ufirst(a::UnionT, b::Var, env) = issub_union(b, a, env, false, env.Lunions)
+issub_ufirst(a::Var, b::UnionT, env) = a===b.a || a===b.b || issub_union(a, b, env, true, env.Runions)
+issub_ufirst(a, b, env) = issub(a, b, env)
+
 function var_lt(b::Var, a::Union{Ty,Var}, env)
     env.outer = false
     bb = env.vars[b]
     #println("$b($(bb.lb),$(bb.ub)) <: $a")
-    !bb.right && return issub(bb.ub, a, env)  # check ∀b . b<:a
-    !issub(bb.lb, a, env) && return false
+    !bb.right && return issub_ufirst(bb.ub, a, env)  # check ∀b . b<:a
+    !issub_ufirst(bb.lb, a, env) && return false
     # for contravariance we would need to compute a meet here, but
     # because of invariance bb.ub ⊓ a == a here always. however for this
     # to work we need to compute issub(left,right) before issub(right,left),
@@ -331,8 +332,8 @@ function var_gt(b::Var, a::Union{Ty,Var}, env)
     env.outer = false
     bb = env.vars[b]
     #println("$b($(bb.lb),$(bb.ub)) >: $a")
-    !bb.right && return issub(a, bb.lb, env)  # check ∀b . b>:a
-    !issub(a, bb.ub, env) && return false
+    !bb.right && return issub_ufirst(a, bb.lb, env)  # check ∀b . b>:a
+    !issub_ufirst(a, bb.ub, env) && return false
     bb.lb = join(bb.lb, a)
     return true
 end
@@ -384,6 +385,12 @@ macro UnionAll(var, expr)
         else
             error("invalid bounds in UnionAll")
         end
+    elseif isa(var,Expr) && var.head === :(<:)
+        v = var.args[1]
+        ub = esc(var.args[2])
+    elseif isa(var,Expr) && var.head === :(>:)
+        v = var.args[1]
+        lb = esc(var.args[2])
     elseif !isa(var,Symbol)
         error("invalid variable in UnionAll")
     else
@@ -768,6 +775,13 @@ function test_5()
     # these tests require renaming in issub_unionall
     @test  issub((@UnionAll T<:B tupletype(Ty(Int8), T, inst(RefT,Ty(Int8)))), B)
     @test !issub((@UnionAll T<:B tupletype(Ty(Int8), T, inst(RefT,T))),        B)
+
+    # the `convert(Type{T},T)` pattern, where T is a Union
+    # required changing priority of unions and vars
+    @test issub(tupletype(inst(ArrayT,u,1),Ty(Int)),
+                @UnionAll T tupletype(inst(ArrayT,T,1), T))
+    @test issub(tupletype(inst(ArrayT,u,1),Ty(Int)),
+                @UnionAll T @UnionAll S<:T tupletype(inst(ArrayT,T,1), S))
 end
 
 # tricky type variable lower bounds

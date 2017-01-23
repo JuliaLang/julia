@@ -95,12 +95,11 @@ str = String(take!(iob))
 module ImportIntrinsics15819
 # Make sure changing the lookup path of an intrinsic doesn't break
 # the heuristic for type instability warning.
-# This can be any intrinsic that needs boxing
-import Core.Intrinsics: sqrt_llvm, box, unbox
+import Core.Intrinsics: sqrt_llvm, bitcast
 # Use import
-sqrt15819(x::Float64) = box(Float64, sqrt_llvm(unbox(Float64, x)))
+sqrt15819(x::Float64) = bitcast(Float64, sqrt_llvm(x))
 # Use fully qualified name
-sqrt15819(x::Float32) = box(Float32, Core.Intrinsics.sqrt_llvm(unbox(Float32, x)))
+sqrt15819(x::Float32) = bitcast(Float32, Core.Intrinsics.sqrt_llvm(x))
 end
 foo11122(x) = @fastmath x - 1.0
 
@@ -141,10 +140,10 @@ end
 @test isleaftype(Type{Vector})
 
 # issue #10165
-i10165(::DataType) = 0
+i10165(::Type) = 0
 i10165{T,n}(::Type{AbstractArray{T,n}}) = 1
-@test i10165(AbstractArray{Int}) == 0
-@test which(i10165, Tuple{Type{AbstractArray{Int}},}).sig == Tuple{typeof(i10165),DataType}
+@test i10165(AbstractArray{Int,n} where n) == 0
+@test which(i10165, Tuple{Type{AbstractArray{Int,n} where n},}).sig == Tuple{typeof(i10165),Type}
 
 # fullname
 @test fullname(Base) == (:Base,)
@@ -180,7 +179,7 @@ foo7648(x) = x
 function foo7648_nomethods end
 type Foo7648 end
 
-    module TestModSub9475
+module TestModSub9475
     using Base.Test
     using ..TestMod7648
     import ..curmod_name
@@ -196,7 +195,7 @@ type Foo7648 end
                                                   :TestModSub9475)
         @test Base.module_parent(current_module()) == TestMod7648
     end
-    end # module TestModSub9475
+end # module TestModSub9475
 
 using .TestModSub9475
 
@@ -283,7 +282,7 @@ let ex = :(a + b)
 end
 foo13825{T,N}(::Array{T,N}, ::Array, ::Vector) = nothing
 @test startswith(string(first(methods(foo13825))),
-                 "foo13825{T,N}(::Array{T,N}, ::Array, ::Array{T<:Any,1})")
+                 "foo13825{T,N}(::Array{T,N}, ::Array, ::Array{T,1} where T)")
 
 type TLayout
     x::Int8
@@ -342,7 +341,7 @@ for (f, t) in Any[(definitely_not_in_sysimg, Tuple{}),
                   (Base.:+, Tuple{Int, Int})]
     meth = which(f, t)
     tt = Tuple{typeof(f), t.parameters...}
-    env = (ccall(:jl_match_method, Any, (Any, Any, Any), tt, meth.sig, meth.tvars))[2]
+    env = (ccall(:jl_match_method, Any, (Any, Any), tt, meth.sig))[2]
     world = typemax(UInt)
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, tt, env, world)
     params = Base.CodegenParams()
@@ -552,8 +551,7 @@ else
 end
 
 # Adds test for PR #17636
-let
-    a = @code_typed 1 + 1
+let a = @code_typed 1 + 1
     b = @code_lowered 1 + 1
     @test isa(a, Pair{CodeInfo, DataType})
     @test isa(b, CodeInfo)

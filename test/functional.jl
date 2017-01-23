@@ -48,8 +48,7 @@ end
 @test isa(collect(Any, [1,2]), Vector{Any})
 
 # foreach
-let
-    a = []
+let a = []
     foreach(()->push!(a,0))
     @test a == [0]
     a = []
@@ -61,7 +60,6 @@ let
 end
 
 # generators (#4470, #14848)
-
 @test sum(i/2 for i=1:2) == 1.5
 @test collect(2i for i=2:5) == [4,6,8,10]
 @test collect((i+10j for i=1:2,j=3:4)) == [31 41; 32 42]
@@ -104,7 +102,6 @@ let i = 1
 end
 
 # generators and guards
-
 let gen = (x for x in 1:10)
     @test gen.iter == 1:10
     @test gen.f(first(1:10)) == next(gen, start(gen))[1]
@@ -135,7 +132,6 @@ let gen = ((x,y) for x in 1:10, y in 1:10 if x % 2 == 0 && y % 2 == 0),
 end
 
 # generators with nested loops (#4867)
-
 @test [(i,j) for i=1:3 for j=1:i] == [(1,1), (2,1), (2,2), (3,1), (3,2), (3,3)]
 
 @test [(i,j) for i=1:3 for j=1:i if j>1] == [(2,2), (3,2), (3,3)]

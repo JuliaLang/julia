@@ -4,6 +4,19 @@ Julia v0.6.0 Release Notes
 New language features
 ---------------------
 
+  * New type system capabilities ([#8974], [#18457])
+    * Type parameter constraints can refer to previous parameters, e.g.
+      `type Foo{R<:Real, A<:AbstractArray{R}}`. Can also be used in method definitions.
+    * New syntax `Array{T} where T<:Integer`, indicating a union of types over all
+      specified values of `T` (represented by a `UnionAll` type). This provides behavior
+      similar to parametric methods or `typealias`, but can be used anywhere a type is
+      accepted. This syntax can also be used in method definitions, e.g.
+      `function inv(M::Matrix{T}) where T<:AbstractFloat`.
+      Anonymous functions can have type parameters via the syntax
+      `((x::Array{T}) where T<:Real) -> 2x`.
+    * Much more accurate subtype and type intersection algorithms. Method sorting and
+      identification of equivalent and ambiguous methods are improved as a result.
+
 Language changes
 ----------------
 
@@ -98,14 +111,34 @@ This section lists changes that do not have deprecation warnings.
     the corresponding Greek characters in identifiers.  `\varepsilon`
     now tab-completes to U+03B5 (greek small letter epsilon) ([#19464]).
 
+  * `retry` now inputs the keyword arguments `delays` and `check` instead of
+    `n` and `max_delay`.  The previous functionality can be achieved setting
+    `delays` to `ExponentialBackOff`. ([#19331])
+
+  * `transpose(::AbstractVector)` now always returns a `RowVector` view of the input (which is a
+     special 1×n-sized `AbstractMatrix`), not a `Matrix`, etc. In particular, for
+     `v::AbstractVector` we now have `(v.').' === v` and `v.' * v` is a scalar. ([#19670])
+
+  * Parametric types with "unspecified" parameters, such as `Array`, are now represented
+    as `UnionAll` types instead of `DataType`s ([#18457]).
+
+  * `Union` types have two fields, `a` and `b`, instead of a single `types` field.
+    The empty type `Union{}` is represented by a singleton of type `BottomType` ([#18457]).
+
+  * The type `NTuple{N}` now refers to tuples where every element has the same type
+    (since it is shorthand for `NTuple{N,T} where T`). To get the old behavior of matching
+    any tuple, use `NTuple{N,Any}` ([#18457]).
+
 Library improvements
 --------------------
 
-  * `max`, `min`, and related functions (`minmax`, `maximum`, `minimum`, `extrema`) now return `NaN` for `NaN` arguments ([#12563]).
+  * `max`, `min`, and related functions (`minmax`, `maximum`, `minimum`,
+    `extrema`) now return `NaN` for `NaN` arguments ([#12563]).
 
   * The `chop` and `chomp` functions now return a `SubString` ([#18339]).
 
-  * Numbered stackframes printed in stacktraces can be opened in an editor by entering the corresponding number in the REPL and pressing `^Q` ([#19680]).
+  * Numbered stackframes printed in stacktraces can be opened in an editor by
+    entering the corresponding number in the REPL and pressing `^Q` ([#19680]).
 
   * The REPL now supports something called *prompt pasting* ([#17599]).
     This activates when pasting text that starts with `julia> ` into the REPL.
@@ -114,22 +147,32 @@ Library improvements
     without having to scrub away prompts and outputs.
     This can be disabled or enabled at will with `Base.REPL.enable_promptpaste(::Bool)`.
 
-  * The function `print_with_color` can now take a color represented by an integer between 0 and 255 inclusive as its first argument ([#18473]).
-    For a number to color mapping please refer to [this chart](https://upload.wikimedia.org/wikipedia/en/1/15/Xterm_256color_chart.svg).
-    It is also possible to use numbers as colors in environment variables that customizes colors in the REPL.
-    For example, to get orange warning messages, simply set `ENV["JULIA_WARN_COLOR"] = 208`.
-    Please note that not all terminals support 256 colors.
+  * The function `print_with_color` can now take a color represented by an
+    integer between 0 and 255 inclusive as its first argument ([#18473]).  For
+    a number to color mapping please refer to [this
+    chart](https://commons.wikimedia.org/wiki/File:Xterm_256color_chart.svg).
+    It is also possible to use numbers as colors in environment variables that
+    customizes colors in the REPL.  For example, to get orange warning
+    messages, simply set `ENV["JULIA_WARN_COLOR"] = 208`.  Please note that not
+    all terminals support 256 colors.
 
-  * The function `print_with_color` no longer prints text in bold by default ([#18628]).
-    Instead, the function now take a keyword argument `bold::Bool` which determines whether to print in bold or not.
-    On some terminals, printing a color in non bold results in slightly darker colors being printed than when printing in bold.
-    Therefore, light versions of the colors are now supported.
-    For the available colors see the help entry on `print_with_color`.
+  * The function `print_with_color` no longer prints text in bold by default
+    ([#18628]).  Instead, the function now take a keyword argument `bold::Bool`
+    which determines whether to print in bold or not.  On some terminals,
+    printing a color in non bold results in slightly darker colors being
+    printed than when printing in bold.  Therefore, light versions of the
+    colors are now supported.  For the available colors see the help entry on
+    `print_with_color`.
 
-  * The default color for info messages has been changed from blue to cyan and for warning messages from red to yellow.
-    This can be changed back to the original colors by setting the environment variables `JULIA_INFO_COLOR` to `"blue"` and `JULIA_WARN_COLOR` to `"red"`.
-    One way of doing this is by adding for example `ENV["JULIA_INFO_COLOR"] = :blue` and `ENV["JULIA_WARN_COLOR"] = :red` to the `.juliarc.jl` file.
-    For more information regarding customizing colors in the REPL, see this [manual section]( http://docs.julialang.org/en/latest/manual/interacting-with-julia/#customizing-colors).
+  * The default color for info messages has been changed from blue to cyan and
+    for warning messages from red to yellow.  This can be changed back to the
+    original colors by setting the environment variables `JULIA_INFO_COLOR` to
+    `"blue"` and `JULIA_WARN_COLOR` to `"red"`.  One way of doing this is by
+    adding for example `ENV["JULIA_INFO_COLOR"] = :blue` and
+    `ENV["JULIA_WARN_COLOR"] = :red` to the `.juliarc.jl` file.  For more
+    information regarding customizing colors in the REPL, see this [manual
+    section](
+    http://docs.julialang.org/en/latest/manual/interacting-with-julia/#customizing-colors).
 
   * Iteration utilities that wrap iterators and return other iterators (`enumerate`, `zip`, `rest`,
     `countfrom`, `take`, `drop`, `cycle`, `repeated`, `product`, `flatten`, `partition`) have been
@@ -142,7 +185,13 @@ Library improvements
     you can now do e.g. `[A I]` and it will concatenate an appropriately sized
     identity matrix ([#19305]).
 
-  * New `accumulate` and `accumulate!` functions, which generalize `cumsum` and `cumprod`. Also known as a [scan](https://en.wikipedia.org/wiki/Prefix_sum) operation ([#18931]).
+  * New `accumulate` and `accumulate!` functions, which generalize `cumsum` and
+  `cumprod`. Also known as a [scan](https://en.wikipedia.org/wiki/Prefix_sum)
+  operation ([#18931]).
+
+  * `reshape` now allows specifying one dimension with a `Colon()` (`:`) for the new shape, in which case
+    that dimension's length will be computed such that its product with all the other dimensions is equal
+    to the length of the original array ([#19919]).
 
   * New `titlecase` function, which capitalizes the first character of each word within a string ([#19469]).
 
@@ -162,8 +211,18 @@ Library improvements
   * `logging` can be used to redirect `info`, `warn`, and `error` messages
     either universally or on a per-module/function basis ([#16213]).
 
+  * New `iszero(x)` function to quickly check whether `x` is zero (or is all zeros, for an array) ([#19950]).
+
+  * `notify` now returns a count of tasks woken up ([#19841]).
+
 Compiler/Runtime improvements
 -----------------------------
+
+* `ccall` is now implemented as a macro, removing the need for special code-generator support for Intrinsics.
+
+* `ccall` gained limited support for a `llvmcall` calling-convention. This can replace many uses of `llvmcall` with a simpler, shorter declaration.
+
+* All Intrinsics are now Builtin functions instead and have proper error checking and fall-back static compilation support.
 
 Deprecated or removed
 ---------------------
@@ -187,6 +246,9 @@ Deprecated or removed
   * `airy`, `airyx` and `airyprime` have been deprecated in favor of more specific
     functions (`airyai`, `airybi`, `airyaiprime`, `airybiprimex`, `airyaix`, `airybix`,
     `airyaiprimex`, `airybiprimex`) ([#18050]).
+
+  * `produce`, `consume` and iteration over a Task object have been deprecated in favor of
+    using Channels for inter-task communication  ([#19841]).
 
 Julia v0.5.0 Release Notes
 ==========================

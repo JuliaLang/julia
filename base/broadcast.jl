@@ -14,15 +14,11 @@ typealias ScalarType Union{Type{Any}, Type{Nullable}}
 ## Broadcasting utilities ##
 # fallbacks for some special cases
 @inline broadcast(f, x::Number...) = f(x...)
-@inline broadcast{N}(f, t::NTuple{N}, ts::Vararg{NTuple{N}}) = map(f, t, ts...)
+@inline broadcast{N}(f, t::NTuple{N,Any}, ts::Vararg{NTuple{N,Any}}) = map(f, t, ts...)
 
 # special cases for "X .= ..." (broadcast!) assignments
 broadcast!(::typeof(identity), X::AbstractArray, x::Number) = fill!(X, x)
 broadcast!(f, X::AbstractArray, x::Number...) = (@inbounds for I in eachindex(X); X[I] = f(x...); end; X)
-function broadcast!{T,S,N}(::typeof(identity), x::AbstractArray{T,N}, y::AbstractArray{S,N})
-    @boundscheck check_broadcast_shape(broadcast_indices(x), broadcast_indices(y))
-    copy!(x, y)
-end
 
 # logic for deciding the resulting container type
 _containertype(::Type) = Any
@@ -203,8 +199,8 @@ arguments to `f` unless it is also listed in the `As`,
 as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
 """
 @inline broadcast!{N}(f, C::AbstractArray, A, Bs::Vararg{Any,N}) =
-    broadcast_c!(f, containertype(C, A, Bs...), C, A, Bs...)
-@inline function broadcast_c!{N}(f, ::Type, C::AbstractArray, A, Bs::Vararg{Any,N})
+    broadcast_c!(f, containertype(C), containertype(A, Bs...), C, A, Bs...)
+@inline function broadcast_c!{N}(f, ::Type, ::Type, C, A, Bs::Vararg{Any,N})
     shape = indices(C)
     @boundscheck check_broadcast_indices(shape, A, Bs...)
     keeps, Idefaults = map_newindexer(shape, A, Bs)
@@ -332,7 +328,7 @@ the following rules:
  - If the arguments are tuples and zero or more scalars, it returns a tuple.
  - If the arguments contain at least one array or `Ref`, it returns an array
    (expanding singleton dimensions), and treats `Ref`s as 0-dimensional arrays,
-   and tuples as a 1-dimensional arrays.
+   and tuples as 1-dimensional arrays.
 
 The following additional rule applies to `Nullable` arguments: If there is at
 least one `Nullable`, and all the arguments are scalars or `Nullable`, it

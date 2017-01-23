@@ -141,15 +141,22 @@ displayable(mime::AbstractString) = displayable(MIME(mime))
 """
     TextDisplay(io::IO)
 
-Returns a `TextDisplay <: Display`, which can display any object as the text/plain MIME type
-(only), writing the text representation to the given I/O stream. (The text representation is
-the same as the way an object is printed in the Julia REPL.)
+Returns a `TextDisplay <: Display`, which displays any object as the text/plain MIME type
+(by default), writing the text representation to the given I/O stream. (This is how
+objects are printed in the Julia REPL.)
 """
 immutable TextDisplay <: Display
     io::IO
 end
 display(d::TextDisplay, M::MIME"text/plain", x) = show(d.io, M, x)
 display(d::TextDisplay, x) = display(d, MIME"text/plain"(), x)
+
+# if you explicitly call display("text/foo", x), it should work on a TextDisplay:
+displayable(d::TextDisplay, M::MIME) = istextmime(M)
+function display(d::TextDisplay, M::MIME, x)
+    displayable(d, M) || throw(MethodError(display, (d, M, x)))
+    show(d.io, M, x)
+end
 
 import Base: close, flush
 flush(d::TextDisplay) = flush(d.io)
@@ -178,30 +185,32 @@ function reinit_displays()
     pushdisplay(TextDisplay(STDOUT))
 end
 
-macro try_display(expr)
-  quote
-    try $(esc(expr))
-    catch e
-      isa(e, MethodError) && e.f in (display, redisplay, show) ||
-        rethrow()
-    end
-  end
-end
-
 xdisplayable(D::Display, args...) = applicable(display, D, args...)
 
 function display(x)
     for i = length(displays):-1:1
-        xdisplayable(displays[i], x) &&
-            @try_display return display(displays[i], x)
+        if xdisplayable(displays[i], x)
+            try
+                return display(displays[i], x)
+            catch e
+                isa(e, MethodError) && e.f in (display, show) ||
+                  rethrow()
+            end
+        end
     end
     throw(MethodError(display, (x,)))
 end
 
 function display(m::MIME, x)
     for i = length(displays):-1:1
-        xdisplayable(displays[i], m, x) &&
-            @try_display return display(displays[i], m, x)
+        if xdisplayable(displays[i], m, x)
+            try
+                return display(displays[i], m, x)
+            catch e
+                isa(e, MethodError) && e.f == display ||
+                  rethrow()
+            end
+        end
     end
     throw(MethodError(display, (m, x)))
 end
@@ -226,16 +235,28 @@ end
 
 function redisplay(x)
     for i = length(displays):-1:1
-        xdisplayable(displays[i], x) &&
-            @try_display return redisplay(displays[i], x)
+        if xdisplayable(displays[i], x)
+            try
+                return redisplay(displays[i], x)
+            catch e
+                isa(e, MethodError) && e.f in (redisplay, display, show) ||
+                  rethrow()
+            end
+        end
     end
     throw(MethodError(redisplay, (x,)))
 end
 
 function redisplay(m::Union{MIME,AbstractString}, x)
     for i = length(displays):-1:1
-        xdisplayable(displays[i], m, x) &&
-            @try_display return redisplay(displays[i], m, x)
+        if xdisplayable(displays[i], m, x)
+            try
+                return redisplay(displays[i], m, x)
+            catch e
+                isa(e, MethodError) && e.f in (redisplay, display) ||
+                  rethrow()
+            end
+        end
     end
     throw(MethodError(redisplay, (m, x)))
 end

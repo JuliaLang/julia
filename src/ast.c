@@ -25,6 +25,38 @@ extern "C" {
 #pragma warning(disable:4335)
 #endif
 
+// head symbols for each expression type
+jl_sym_t *call_sym;    jl_sym_t *invoke_sym;
+jl_sym_t *dots_sym;    jl_sym_t *empty_sym;
+jl_sym_t *module_sym;  jl_sym_t *slot_sym;
+jl_sym_t *export_sym;  jl_sym_t *import_sym;
+jl_sym_t *importall_sym; jl_sym_t *toplevel_sym;
+jl_sym_t *quote_sym;   jl_sym_t *amp_sym;
+jl_sym_t *top_sym;     jl_sym_t *colons_sym;
+jl_sym_t *line_sym;    jl_sym_t *jl_incomplete_sym;
+jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
+jl_sym_t *label_sym;   jl_sym_t *return_sym;
+jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
+jl_sym_t *body_sym;    jl_sym_t *globalref_sym;
+jl_sym_t *method_sym;  jl_sym_t *core_sym;
+jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
+jl_sym_t *exc_sym;     jl_sym_t *error_sym;
+jl_sym_t *new_sym;     jl_sym_t *using_sym;
+jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
+jl_sym_t *anonymous_sym;  jl_sym_t *underscore_sym;
+jl_sym_t *abstracttype_sym; jl_sym_t *bitstype_sym;
+jl_sym_t *compositetype_sym; jl_sym_t *foreigncall_sym;
+jl_sym_t *global_sym; jl_sym_t *list_sym;
+jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
+jl_sym_t *boundscheck_sym; jl_sym_t *inbounds_sym;
+jl_sym_t *copyast_sym; jl_sym_t *fastmath_sym;
+jl_sym_t *pure_sym; jl_sym_t *simdloop_sym;
+jl_sym_t *meta_sym; jl_sym_t *compiler_temp_sym;
+jl_sym_t *inert_sym; jl_sym_t *vararg_sym;
+jl_sym_t *unused_sym; jl_sym_t *static_parameter_sym;
+jl_sym_t *polly_sym; jl_sym_t *inline_sym;
+jl_sym_t *propagate_inbounds_sym;
+
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
 };
@@ -200,15 +232,14 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
 // Check whether v is a scalar for purposes of inlining fused-broadcast
 // arguments when lowering; should agree with broadcast.jl on what is a
 // scalar.  When in doubt, return false, since this is only an optimization.
-// (TODO: update after #16966 is resolved.)
 value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "julia-scalar?", nargs, 1);
-    if (fl_isnumber(fl_ctx, args[0]))
+    if (fl_isnumber(fl_ctx, args[0]) || fl_isstring(fl_ctx, args[0]))
         return fl_ctx->T;
     else if (iscvalue(args[0]) && fl_ctx->jl_sym == cv_type((cvalue_t*)ptr(args[0]))) {
         jl_value_t *v = *(jl_value_t**)cptr(args[0]);
-        if (jl_subtype(v,(jl_value_t*)jl_number_type,1))
+        if (jl_isa(v,(jl_value_t*)jl_number_type) || jl_is_string(v))
             return fl_ctx->T;
     }
     return fl_ctx->F;
@@ -323,6 +354,65 @@ void jl_init_frontend(void)
     // To match the one in jl_ast_ctx_leave
     JL_SIGATOMIC_BEGIN();
     jl_ast_ctx_leave(&jl_ast_main_ctx);
+
+    empty_sym = jl_symbol("");
+    call_sym = jl_symbol("call");
+    invoke_sym = jl_symbol("invoke");
+    foreigncall_sym = jl_symbol("foreigncall");
+    quote_sym = jl_symbol("quote");
+    inert_sym = jl_symbol("inert");
+    top_sym = jl_symbol("top");
+    core_sym = jl_symbol("core");
+    globalref_sym = jl_symbol("globalref");
+    line_sym = jl_symbol("line");
+    jl_incomplete_sym = jl_symbol("incomplete");
+    error_sym = jl_symbol("error");
+    goto_sym = jl_symbol("goto");
+    goto_ifnot_sym = jl_symbol("gotoifnot");
+    label_sym = jl_symbol("label");
+    return_sym = jl_symbol("return");
+    lambda_sym = jl_symbol("lambda");
+    module_sym = jl_symbol("module");
+    export_sym = jl_symbol("export");
+    import_sym = jl_symbol("import");
+    using_sym = jl_symbol("using");
+    importall_sym = jl_symbol("importall");
+    assign_sym = jl_symbol("=");
+    body_sym = jl_symbol("body");
+    colons_sym = jl_symbol("::");
+    method_sym = jl_symbol("method");
+    exc_sym = jl_symbol("the_exception");
+    enter_sym = jl_symbol("enter");
+    leave_sym = jl_symbol("leave");
+    new_sym = jl_symbol("new");
+    const_sym = jl_symbol("const");
+    global_sym = jl_symbol("global");
+    thunk_sym = jl_symbol("thunk");
+    anonymous_sym = jl_symbol("anonymous");
+    underscore_sym = jl_symbol("_");
+    amp_sym = jl_symbol("&");
+    abstracttype_sym = jl_symbol("abstract_type");
+    bitstype_sym = jl_symbol("bits_type");
+    compositetype_sym = jl_symbol("composite_type");
+    toplevel_sym = jl_symbol("toplevel");
+    dot_sym = jl_symbol(".");
+    boundscheck_sym = jl_symbol("boundscheck");
+    inbounds_sym = jl_symbol("inbounds");
+    fastmath_sym = jl_symbol("fastmath");
+    newvar_sym = jl_symbol("newvar");
+    copyast_sym = jl_symbol("copyast");
+    simdloop_sym = jl_symbol("simdloop");
+    pure_sym = jl_symbol("pure");
+    meta_sym = jl_symbol("meta");
+    dots_sym = jl_symbol("...");
+    list_sym = jl_symbol("list");
+    unused_sym = jl_symbol("#unused#");
+    slot_sym = jl_symbol("slot");
+    static_parameter_sym = jl_symbol("static_parameter");
+    compiler_temp_sym = jl_symbol("#temp#");
+    polly_sym = jl_symbol("polly");
+    inline_sym = jl_symbol("inline");
+    propagate_inbounds_sym = jl_symbol("propagate_inbounds");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)

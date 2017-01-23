@@ -4,7 +4,15 @@
 
 const shell_special = "#{}()[]<>|&*?~;"
 
-function shell_parse(str::AbstractString, interpolate::Bool=true)
+# needs to be factored out so depwarn only warns once
+@noinline warn_shell_special(special) =
+    depwarn("special characters \"$special\" should now be quoted in commands", :warn_shell_special)
+
+function shell_parse(
+        str::AbstractString,
+        interpolate::Bool=true;
+        special::AbstractString=""
+    )
     s = lstrip(str)
     # strips the end but respects the space when the string ends with "\\ "
     r = RevString(s)
@@ -94,8 +102,8 @@ function shell_parse(str::AbstractString, interpolate::Bool=true)
                     update_arg(s[i:j-1]); i = k
                     c, k = next(s,k)
                 end
-            elseif !in_single_quotes && !in_double_quotes && c in shell_special
-                depwarn("special characters \"$shell_special\" should now be quoted in commands", :shell_parse)
+            elseif !in_single_quotes && !in_double_quotes && c in special
+                warn_shell_special(special) # noinline depwarn
             end
             j = k
         end
@@ -118,7 +126,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true)
 end
 
 function shell_split(s::AbstractString)
-    parsed = shell_parse(s,false)[1]
+    parsed = shell_parse(s, false)[1]
     args = AbstractString[]
     for arg in parsed
        push!(args, string(arg...))
@@ -126,7 +134,7 @@ function shell_split(s::AbstractString)
     args
 end
 
-function print_shell_word(io::IO, word::AbstractString, special::AbstractString = shell_special)
+function print_shell_word(io::IO, word::AbstractString, special::AbstractString = "")
     if isempty(word)
         print(io, "''")
     end
@@ -158,7 +166,7 @@ end
 
 function print_shell_escaped(
         io::IO, cmd::AbstractString, args::AbstractString...;
-        special::AbstractString=shell_special
+        special::AbstractString=""
     )
     print_shell_word(io, cmd, special)
     for arg in args
@@ -166,22 +174,22 @@ function print_shell_escaped(
         print_shell_word(io, arg, special)
     end
 end
-print_shell_escaped(io::IO; special::String=shell_special) = nothing
+print_shell_escaped(io::IO; special::String="") = nothing
 
 """
-    shell_escape(args::Union{Cmd,AbstractString...}; special::AbstractString="$shell_special")
+    shell_escape(args::Union{Cmd,AbstractString...}; special::AbstractString="")
 
 The unexported `shell_escape` function is the inverse of the unexported `shell_split` function:
 it takes a string or command object and escapes any special characters in such a way that calling
 `shell_split` on it would give back the array of words in the original command. The `special`
 keyword argument controls what characters in addition to whitespace, backslashes, quotes and
-dollar signs are considered to be special. Examples:
+dollar signs are considered to be special (default: none). Examples:
+
+    julia> Base.shell_escape("cat", "/foo/bar baz", "&&", "echo", "done")
+    "cat '/foo/bar baz' && echo done"
 
     julia> Base.shell_escape("echo", "this", "&&", "that")
     "echo this '&&' that"
-
-    julia> Base.shell_escape("cat", "/foo/bar baz", "&&", "echo", "done", special="")
-    "cat '/foo/bar baz' && echo done"
 """
-shell_escape(args::AbstractString...; special::AbstractString=shell_special) =
+shell_escape(args::AbstractString...; special::AbstractString="") =
     sprint(io->print_shell_escaped(io, args..., special=special))

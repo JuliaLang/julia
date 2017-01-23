@@ -9,6 +9,8 @@ export with, GitRepo, GitConfig
 const GITHUB_REGEX =
     r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
+const REFCOUNT = Threads.Atomic{UInt}()
+
 include("utils.jl")
 include("consts.jl")
 include("types.jl")
@@ -71,22 +73,34 @@ function iscommit(id::AbstractString, repo::GitRepo)
     return res
 end
 
-""" git diff-index HEAD [-- <path>]"""
+"""
+    LibGit2.isdirty(repo::GitRepo[, paths]; cached=false)
+
+Checks if there have been any changes to tracked files in the working tree (if
+`cached=false`) or the index (if `cached=true`).
+
+See `git diff-index HEAD [-- <path>]`
+"""
 isdirty(repo::GitRepo, paths::AbstractString=""; cached::Bool=false) =
     isdiff(repo, Consts.HEAD_FILE, paths, cached=cached)
 
-""" git diff-index <treeish> [-- <path>]"""
+"""
+    LibGit2.isdiff(repo::GitRepo, treeish[, paths]; cached=false)
+
+Checks if there are any differences between the tree specified by `treeish` and the
+tracked files in the working tree (if `cached=false`) or the index (if `cached=true`).
+
+See `git diff-index <treeish> [-- <path>]`
+"""
 function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""; cached::Bool=false)
     tree_oid = revparseid(repo, "$treeish^{tree}")
-    iszero(tree_oid) && return true
+    iszero(tree_oid) && error("invalid treeish $treeish") # this can be removed by #20104
     result = false
     tree = get(GitTree, repo, tree_oid)
     try
-        diff = diff_tree(repo, tree, paths)
+        diff = diff_tree(repo, tree, paths, cached=cached)
         result = count(diff) > 0
         close(diff)
-    catch err
-        result = true
     finally
         close(tree)
     end
@@ -333,10 +347,12 @@ function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractSt
     # do not remove entries in the index matching the provided pathspecs with empty target commit tree
     obj === nothing && throw(GitError(Error.Object, Error.ERROR, "`$committish` not found"))
     try
-        reset!(repo, Nullable(obj), pathspecs...)
+        head = reset!(repo, Nullable(obj), pathspecs...)
+        return head
     finally
         close(obj)
     end
+    return head_oid(repo)
 end
 
 """ git reset [--soft | --mixed | --hard] <commit> """
@@ -345,10 +361,12 @@ function reset!(repo::GitRepo, commit::GitHash, mode::Cint = Consts.RESET_MIXED)
     # object must exist for reset
     obj === nothing && throw(GitError(Error.Object, Error.ERROR, "Commit `$(string(commit))` object not found"))
     try
-        reset!(repo, obj, mode)
+        head = reset!(repo, obj, mode)
+        return head
     finally
         close(obj)
     end
+    return head_oid(repo)
 end
 
 """ git cat-file <commit> """
@@ -457,10 +475,11 @@ function merge!(repo::GitRepo;
 end
 
 """
-    LibGit2.rebase!(repo::GitRepo[, upstream::AbstractString])
+    LibGit2.rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractString="")
 
 Attempt an automatic merge rebase of the current branch, from `upstream` if provided, or
 otherwise from the upstream tracking branch.
+`newbase` is the branch to rebase onto. By default this is `upstream`.
 
 If any conflicts arise which cannot be automatically resolved, the rebase will abort,
 leaving the repository and working tree in its original state, and the function will throw
@@ -472,7 +491,7 @@ a `GitError`. This is roughly equivalent to the following command line statement
     fi
 
 """
-function rebase!(repo::GitRepo, upstream::AbstractString="")
+function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractString="")
     with(head(repo)) do head_ref
         head_ann = GitAnnotated(repo, head_ref)
         upst_ann  = if isempty(upstream)
@@ -489,10 +508,11 @@ function rebase!(repo::GitRepo, upstream::AbstractString="")
         else
             GitAnnotated(repo, upstream)
         end
+        onto_ann  = Nullable{GitAnnotated}(isempty(newbase) ? nothing : GitAnnotated(repo, newbase))
         try
             sig = default_signature(repo)
             try
-                rbs = GitRebase(repo, head_ann, upst_ann)
+                rbs = GitRebase(repo, head_ann, upst_ann, onto=onto_ann)
                 try
                     while (rbs_op = next(rbs)) !== nothing
                         commit(rbs, sig)
@@ -509,11 +529,14 @@ function rebase!(repo::GitRepo, upstream::AbstractString="")
                 close(sig)
             end
         finally
+            if !isempty(newbase)
+                close(Base.get(onto_ann))
+            end
             close(upst_ann)
             close(head_ann)
         end
     end
-    return nothing
+    return head_oid(repo)
 end
 
 
@@ -549,7 +572,7 @@ function snapshot(repo::GitRepo)
 end
 
 function restore(s::State, repo::GitRepo)
-    reset!(repo, Consts.HEAD_FILE, "*")  # unstage everything
+    head = reset!(repo, Consts.HEAD_FILE, "*")  # unstage everything
     with(GitIndex, repo) do idx
         read_tree!(idx, s.work)            # move work tree to index
         opts = CheckoutOptions(
@@ -603,8 +626,13 @@ function __init__()
 
     err = ccall((:git_libgit2_init, :libgit2), Cint, ())
     err > 0 || throw(ErrorException("error initializing LibGit2 module"))
+    REFCOUNT[] = 1
+
     atexit() do
-        ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
+        if Threads.atomic_sub!(REFCOUNT, UInt(1)) == 1
+            # refcount zero, no objects to be finalized
+            ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
+        end
     end
 
     @static if is_linux()

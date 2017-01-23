@@ -8,8 +8,8 @@ other code written in Julia. As such, it's also possible to define custom array 
 from `AbstractArray.` See the [manual section on the AbstractArray interface](@ref man-interface-array) for more details
 on implementing a custom array type.
 
-An array is a collection of objects stored in a multi-dimensional grid.  In the most general case,
-an array may contain objects of type `Any`.  For most computational purposes, arrays should contain
+An array is a collection of objects stored in a multi-dimensional grid. In the most general case,
+an array may contain objects of type `Any`. For most computational purposes, arrays should contain
 objects of a more specific type, such as `Float64` or `Int32`.
 
 In general, unlike many other technical computing languages, Julia does not expect programs to
@@ -33,7 +33,7 @@ behavior, should take care to create a copy of inputs that it may modify.
 | [`length(A)`](@ref)    | the number of elements in `A`                                                    |
 | [`ndims(A)`](@ref)     | the number of dimensions of `A`                                                  |
 | [`size(A)`](@ref)      | a tuple containing the dimensions of `A`                                         |
-| [`size(A,n)`](@ref)    | the size of `A` along a particular dimension                                     |
+| [`size(A,n)`](@ref)    | the size of `A` along dimension `n`                                              |
 | [`indices(A)`](@ref)   | a tuple containing the valid indices of `A`                                      |
 | [`indices(A,n)`](@ref) | a range expressing the valid indices along dimension `n`                         |
 | [`eachindex(A)`](@ref) | an efficient iterator for visiting each position in `A`                          |
@@ -44,35 +44,39 @@ behavior, should take care to create a copy of inputs that it may modify.
 
 Many functions for constructing and initializing arrays are provided. In the following list of
 such functions, calls with a `dims...` argument can either take a single tuple of dimension sizes
-or a series of dimension sizes passed as a variable number of arguments.
+or a series of dimension sizes passed as a variable number of arguments. Most of the functions
+also accept a first input `T`, which is the element type of the array. If the type `T` is
+omitted it will default to `Float64`.
 
-| Function                                    | Description                                                                                                                                                                                                                                              |
-|:------------------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`Array{T}(dims...)`](@ref)                 | an uninitialized dense array                                                                                                                                                                                                                             |
-| [`zeros(T, dims...)`](@ref)                 | an array of all zeros of specified type, defaults to `Float64` if `type` not specified                                                                                                                                                                   |
-| [`zeros(A)`](@ref)                          | an array of all zeros of same element type and shape of `A`                                                                                                                                                                                              |
-| [`ones(T, dims...)`](@ref)                  | an array of all ones of specified type, defaults to `Float64` if `type` not specified                                                                                                                                                                    |
-| [`ones(A)`](@ref)                           | an array of all ones of same element type and shape of `A`                                                                                                                                                                                               |
-| [`trues(dims...)`](@ref)                    | a `Bool` array with all values `true`                                                                                                                                                                                                                    |
-| [`trues(A)`](@ref)                          | a `Bool` array with all values `true` and the shape of `A`                                                                                                                                                                                               |
-| [`falses(dims...)`](@ref)                   | a `Bool` array with all values `false`                                                                                                                                                                                                                   |
-| [`falses(A)`](@ref)                         | a `Bool` array with all values `false` and the shape of `A`                                                                                                                                                                                              |
-| [`reshape(A, dims...)`](@ref)               | an array with the same data as the given array, but with different dimensions.                                                                                                                                                                           |
-| [`copy(A)`](@ref)                           | copy `A`                                                                                                                                                                                                                                                 |
-| [`deepcopy(A)`](@ref)                       | copy `A`, recursively copying its elements                                                                                                                                                                                                               |
-| [`similar(A, element_type, dims...)`](@ref) | an uninitialized array of the same type as the given array (dense, sparse, etc.), but with the specified element type and dimensions. The second and third arguments are both optional, defaulting to the element type and dimensions of `A` if omitted. |
-| [`reinterpret(T, A)`](@ref)                 | an array with the same binary data as the given array, but with the specified element type                                                                                                                                                               |
-| [`rand(dims)`](@ref)                        | [`Array`](@ref) of `Float64`s with random, iid [^1] and uniformly distributed values in the half-open interval ``[0, 1)``                                                                                                                                |
-| [`randn(dims)`](@ref)                       | [`Array`](@ref) of `Float64`s with random, iid and standard normally distributed random values                                                                                                                                                           |
-| [`eye(n)`](@ref)                            | `n`-by-`n` identity matrix                                                                                                                                                                                                                               |
-| [`eye(m, n)`](@ref)                         | `m`-by-`n` identity matrix                                                                                                                                                                                                                               |
-| [`linspace(start, stop, n)`](@ref)          | range of `n` linearly spaced elements from `start` to `stop`                                                                                                                                                                                             |
-| [`fill!(A, x)`](@ref)                       | fill the array `A` with the value `x`                                                                                                                                                                                                                    |
-| [`fill(x, dims)`](@ref)                     | create an array filled with the value `x`                                                                                                                                                                                                                |
+| Function                           | Description                                                                                                                                                                                                                                  |
+|:---------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`Array{T}(dims...)`](@ref)        | an uninitialized dense [`Array`](@ref)                                                                                                                                                                                                       |
+| [`zeros(T, dims...)`](@ref)        | an `Array` of all zeros                                                                                                                                                                                                                      |
+| [`zeros(A)`](@ref)                 | an array of all zeros with the same type, element type and shape as `A`                                                                                                                                                                      |
+| [`ones(T, dims...)`](@ref)         | an `Array` of all ones                                                                                                                                                                                                                       |
+| [`ones(A)`](@ref)                  | an array of all ones with the same type, element type and shape as `A`                                                                                                                                                                       |
+| [`trues(dims...)`](@ref)           | a [`BitArray`](@ref) with all values `true`                                                                                                                                                                                                  |
+| [`trues(A)`](@ref)                 | a `BitArray` with all values `true` and the same shape as `A`                                                                                                                                                                                |
+| [`falses(dims...)`](@ref)          | a `BitArray` with all values `false`                                                                                                                                                                                                         |
+| [`falses(A)`](@ref)                | a `BitArray` with all values `false` and the same shape as `A`                                                                                                                                                                               |
+| [`reshape(A, dims...)`](@ref)      | an array containing the same data as `A`, but with different dimensions                                                                                                                                                                      |
+| [`copy(A)`](@ref)                  | copy `A`                                                                                                                                                                                                                                     |
+| [`deepcopy(A)`](@ref)              | copy `A`, recursively copying its elements                                                                                                                                                                                                   |
+| [`similar(A, T, dims...)`](@ref)   | an uninitialized array of the same type as `A` (dense, sparse, etc.), but with the specified element type and dimensions. The second and third arguments are both optional, defaulting to the element type and dimensions of `A` if omitted. |
+| [`reinterpret(T, A)`](@ref)        | an array with the same binary data as `A`, but with element type `T`                                                                                                                                                                         |
+| [`rand(T, dims...)`](@ref)         | an `Array` with random, iid [^1] and uniformly distributed values in the half-open interval ``[0, 1)``                                                                                                                                       |
+| [`randn(T, dims...)`](@ref)        | an `Array` with random, iid and standard normally distributed values                                                                                                                                                                         |
+| [`eye(T, n)`](@ref)                | `n`-by-`n` identity matrix                                                                                                                                                                                                                   |
+| [`eye(T, m, n)`](@ref)             | `m`-by-`n` identity matrix                                                                                                                                                                                                                   |
+| [`linspace(start, stop, n)`](@ref) | range of `n` linearly spaced elements from `start` to `stop`                                                                                                                                                                                 |
+| [`fill!(A, x)`](@ref)              | fill the array `A` with the value `x`                                                                                                                                                                                                        |
+| [`fill(x, dims...)`](@ref)         | an `Array` filled with the value `x`                                                                                                                                                                                                         |
 
 [^1]: *iid*, independently and identically distributed.
 
-The syntax `[A, B, C, ...]` constructs a 1-d array (vector) of its arguments.
+The syntax `[A, B, C, ...]` constructs a 1-d array (vector) of its arguments. If all
+arguments have a common [promotion type](@ref conversion-and-promotion) then they get
+converted to that type using `convert()`.
 
 ### Concatenation
 
@@ -105,7 +109,7 @@ etc. For example `Any[x, y, z]` constructs a heterogeneous array that can contai
 Concatenation syntax can similarly be prefixed with a type to specify the element type of the
 result.
 
-```julia
+```jldoctest
 julia> [[1 2] [3 4]]
 1×4 Array{Int64,2}:
  1  2  3  4
@@ -170,7 +174,7 @@ known as a generator. This object can be iterated to produce values on demand, i
 an array and storing them in advance (see [Iteration](@ref)). For example, the following expression
 sums a series without allocating memory:
 
-```julia
+```jldoctest
 julia> sum(1/n^2 for n=1:1000)
 1.6439345666815615
 ```
@@ -186,7 +190,7 @@ ERROR: syntax: invalid iteration specification
 All comma-separated expressions after `for` are interpreted as ranges. Adding parentheses lets
 us add a third argument to `map`:
 
-```julia
+```jldoctest
 julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1 3; 2 4])
 2×2 Array{Tuple{Float64,Int64},2}:
  (0.5,1)       (0.333333,3)
@@ -196,7 +200,7 @@ julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1 3; 2 4])
 Ranges in generators and comprehensions can depend on previous ranges by writing multiple `for`
 keywords:
 
-```julia
+```jldoctest
 julia> [(i,j) for i=1:3 for j=1:i]
 6-element Array{Tuple{Int64,Int64},1}:
  (1,1)
@@ -211,7 +215,7 @@ In such cases, the result is always 1-d.
 
 Generated values can be filtered using the `if` keyword:
 
-```julia
+```jldoctest
 julia> [(i,j) for i=1:3 for j=1:i if i+j == 4]
 2-element Array{Tuple{Int64,Int64},1}:
  (2,2)
@@ -267,7 +271,7 @@ X = getindex(A, I_1, I_2, ..., I_n)
 
 Example:
 
-```julia
+```jldoctest
 julia> x = reshape(1:16, 4, 4)
 4×4 Base.ReshapedArray{Int64,2,UnitRange{Int64},Tuple{}}:
  1  5   9  13
@@ -295,10 +299,10 @@ julia> x[1, [2 3; 4 1]]
 ```
 
 Empty ranges of the form `n:n-1` are sometimes used to indicate the inter-index location between
-`n-1` and `n`.  For example, the [`searchsorted()`](@ref) function uses this convention to indicate
+`n-1` and `n`. For example, the [`searchsorted()`](@ref) function uses this convention to indicate
 the insertion point of a value not found in a sorted array:
 
-```julia
+```jldoctest
 julia> a = [1,2,5,6,7];
 
 julia> searchsorted(a, 3)
@@ -337,7 +341,7 @@ setindex!(A, X, I_1, I_2, ..., I_n)
 
 Example:
 
-```julia
+```jldoctest
 julia> x = collect(reshape(1:9, 3, 3))
 3×3 Array{Int64,2}:
  1  4  7
@@ -368,22 +372,24 @@ for i in eachindex(A)
 end
 ```
 
-The first construct is used when you need the value, but not index, of each element.  In the second
+The first construct is used when you need the value, but not index, of each element. In the second
 construct, `i` will be an `Int` if `A` is an array type with fast linear indexing; otherwise,
 it will be a `CartesianIndex`:
 
-```julia
-A = rand(4,3)
-B = view(A, 1:3, 2:3)
+```jldoctest
+julia> A = rand(4,3);
+
+julia> B = view(A, 1:3, 2:3);
+
 julia> for i in eachindex(B)
            @show i
        end
-       i = Base.IteratorsMD.CartesianIndex_2(1,1)
-       i = Base.IteratorsMD.CartesianIndex_2(2,1)
-       i = Base.IteratorsMD.CartesianIndex_2(3,1)
-       i = Base.IteratorsMD.CartesianIndex_2(1,2)
-       i = Base.IteratorsMD.CartesianIndex_2(2,2)
-       i = Base.IteratorsMD.CartesianIndex_2(3,2)
+i = CartesianIndex{2}((1,1))
+i = CartesianIndex{2}((2,1))
+i = CartesianIndex{2}((3,1))
+i = CartesianIndex{2}((1,2))
+i = CartesianIndex{2}((2,2))
+i = CartesianIndex{2}((3,2))
 ```
 
 In contrast with `for i = 1:length(A)`, iterating with `eachindex` provides an efficient way to
@@ -397,15 +403,15 @@ If you write a custom `AbstractArray` type, you can specify that it has fast lin
 Base.linearindexing{T<:MyArray}(::Type{T}) = LinearFast()
 ```
 
-This setting will cause `eachindex` iteration over a `MyArray` to use integers.  If you don't
+This setting will cause `eachindex` iteration over a `MyArray` to use integers. If you don't
 specify this trait, the default value `LinearSlow()` is used.
 
 ### Vectorized Operators and Functions
 
-The following operators are supported for arrays.  Also, *every* binary
+The following operators are supported for arrays. Also, *every* binary
 operator supports a [dot version](@ref man-dot-operators) that can be
 applied to arrays (and combinations of arrays and scalars) as a
-[fused broadcasting operation](@ref man-vectorized).  (For comparison
+[fused broadcasting operation](@ref man-vectorized). (For comparison
 operations like `<`, *only* the `.<` version is applicable to arrays.)
 
 1. Unary arithmetic -- `-`, `+`, `!`
@@ -433,7 +439,7 @@ holds for `min.(a,b)` and `minimum(a)`.
 ### Broadcasting
 
 It is sometimes useful to perform element-by-element binary operations on arrays of different
-sizes, such as adding a vector to each column of a matrix.  An inefficient way to do this would
+sizes, such as adding a vector to each column of a matrix. An inefficient way to do this would
 be to replicate the vector to the size of the matrix:
 
 ```julia
@@ -469,15 +475,15 @@ julia> broadcast(+, a, b)
 to `broadcast` calls (except that they fuse, as described below). There is also a
 [`broadcast!()`](@ref) function to specify an explicit destination (which can also
 be accessed in a fusing fashion by `.=` assignment), and functions [`broadcast_getindex()`](@ref)
-and [`broadcast_setindex!()`](@ref) that broadcast the indices before indexing.   Moreover, `f.(args...)`
+and [`broadcast_setindex!()`](@ref) that broadcast the indices before indexing. Moreover, `f.(args...)`
 is equivalent to `broadcast(f, args...)`, providing a convenient syntax to broadcast any function
-([dot syntax](@ref man-vectorized)).  Nested "dot calls" `f.(...)` (including calls to `.+` etcetera)
+([dot syntax](@ref man-vectorized)). Nested "dot calls" `f.(...)` (including calls to `.+` etcetera)
 [automatically fuse](@ref man-dot-operators) into a single `broadcast` call.
 
 Additionally, [`broadcast()`](@ref) is not limited to arrays (see the function documentation),
 it also handles tuples and treats any argument that is not an array, tuple or `Ref` (except for `Ptr`) as a "scalar".
 
-```julia
+```jldoctest
 julia> convert.(Float32, [1, 2])
 2-element Array{Float32,1}:
  1.0
@@ -505,11 +511,11 @@ generally work correctly as a fallback for any specific array implementation.
 
 The `AbstractArray` type includes anything vaguely array-like, and implementations of it might
 be quite different from conventional arrays. For example, elements might be computed on request
-rather than stored.  However, any concrete `AbstractArray{T,N}` type should generally implement
+rather than stored. However, any concrete `AbstractArray{T,N}` type should generally implement
 at least [`size(A)`](@ref) (returning an `Int` tuple), [`getindex(A,i)`](@ref) and [`getindex(A,i1,...,iN)`](@ref getindex);
-mutable arrays should also implement [`setindex!()`](@ref).  It is recommended that these operations
+mutable arrays should also implement [`setindex!()`](@ref). It is recommended that these operations
 have nearly constant time complexity, or technically Õ(1) complexity, as otherwise some array
-functions may be unexpectedly slow.   Concrete types should also typically provide a [`similar(A,T=eltype(A),dims=size(A))`](@ref)
+functions may be unexpectedly slow. Concrete types should also typically provide a [`similar(A,T=eltype(A),dims=size(A))`](@ref)
 method, which is used to allocate a similar array for [`copy()`](@ref) and other out-of-place
 operations. No matter how an `AbstractArray{T,N}` is represented internally, `T` is the type of
 object returned by *integer* indexing (`A[1, ..., 1]`, when `A` is not empty) and `N` should be
@@ -517,9 +523,9 @@ the length of the tuple returned by [`size()`](@ref).
 
 `DenseArray` is an abstract subtype of `AbstractArray` intended to include all arrays that are
 laid out at regular offsets in memory, and which can therefore be passed to external C and Fortran
-functions expecting this memory layout.  Subtypes should provide a method [`stride(A,k)`](@ref)
+functions expecting this memory layout. Subtypes should provide a method [`stride(A,k)`](@ref)
 that returns the "stride" of dimension `k`: increasing the index of dimension `k` by `1` should
-increase the index `i` of [`getindex(A,i)`](@ref) by [`stride(A,k)`](@ref).  If a pointer conversion
+increase the index `i` of [`getindex(A,i)`](@ref) by [`stride(A,k)`](@ref). If a pointer conversion
 method [`Base.unsafe_convert(Ptr{T}, A)`](@ref) is provided, the memory layout should correspond
 in the same way to these strides.
 
@@ -605,7 +611,7 @@ end
 
 The compressed sparse column storage makes it easy and quick to access the elements in the column
 of a sparse matrix, whereas accessing the sparse matrix by rows is considerably slower. Operations
-such as insertion of nonzero values one at a time in the CSC structure tend to be slow. This is
+such as insertion of previously unstored entries one at a time in the CSC structure tend to be slow. This is
 because all elements of the sparse matrix that are beyond the point of insertion have to be moved
 one place over.
 
@@ -619,8 +625,8 @@ them is by doing a double transpose.
 
 In some applications, it is convenient to store explicit zero values in a `SparseMatrixCSC`. These
 *are* accepted by functions in `Base` (but there is no guarantee that they will be preserved in
-mutating operations).  Such explicitly stored zeros are treated as structural nonzeros by many
-routines.  The [`nnz()`](@ref) function returns the number of elements explicitly stored in the
+mutating operations). Such explicitly stored zeros are treated as structural nonzeros by many
+routines. The [`nnz()`](@ref) function returns the number of elements explicitly stored in the
 sparse data structure, including structural nonzeros. In order to count the exact number of actual
 values that are nonzero, use [`countnz()`](@ref), which inspects every stored element of a sparse
 matrix.
@@ -631,30 +637,30 @@ The simplest way to create sparse matrices is to use functions equivalent to the
 and [`eye()`](@ref) functions that Julia provides for working with dense matrices. To produce
 sparse matrices instead, you can use the same names with an `sp` prefix:
 
-```julia
+```jldoctest
 julia> spzeros(3,5)
-3×5 sparse matrix with 0 Float64 nonzero entries
+3×5 sparse matrix with 0 Float64 stored entries
 
 julia> speye(3,5)
-3×5 sparse matrix with 3 Float64 nonzero entries:
-        [1, 1]  =  1.0
-        [2, 2]  =  1.0
-        [3, 3]  =  1.0
+3×5 sparse matrix with 3 Float64 stored entries:
+  [1, 1]  =  1.0
+  [2, 2]  =  1.0
+  [3, 3]  =  1.0
 ```
 
 The [`sparse()`](@ref) function is often a handy way to construct sparse matrices. It takes as
 its input a vector `I` of row indices, a vector `J` of column indices, and a vector `V` of nonzero
 values. `sparse(I,J,V)` constructs a sparse matrix such that `S[I[k], J[k]] = V[k]`.
 
-```julia
+```jldoctest
 julia> I = [1, 4, 3, 5]; J = [4, 7, 18, 9]; V = [1, 2, -5, 3];
 
 julia> S = sparse(I,J,V)
-5×18 sparse matrix with 4 Int64 nonzero entries:
-        [1 ,  4]  =  1
-        [4 ,  7]  =  2
-        [5 ,  9]  =  3
-        [3 , 18]  =  -5
+5×18 sparse matrix with 4 Int64 stored entries:
+  [1 ,  4]  =  1
+  [4 ,  7]  =  2
+  [5 ,  9]  =  3
+  [3 , 18]  =  -5
 ```
 
 The inverse of the [`sparse()`](@ref) function is [`findn()`](@ref), which retrieves the inputs
@@ -671,20 +677,20 @@ julia> findnz(S)
 Another way to create sparse matrices is to convert a dense matrix into a sparse matrix using
 the [`sparse()`](@ref) function:
 
-```julia
+```jldoctest
 julia> sparse(eye(5))
-5×5 sparse matrix with 5 Float64 nonzero entries:
-        [1, 1]  =  1.0
-        [2, 2]  =  1.0
-        [3, 3]  =  1.0
-        [4, 4]  =  1.0
-        [5, 5]  =  1.0
+5×5 sparse matrix with 5 Float64 stored entries:
+  [1, 1]  =  1.0
+  [2, 2]  =  1.0
+  [3, 3]  =  1.0
+  [4, 4]  =  1.0
+  [5, 5]  =  1.0
 ```
 
 You can go in the other direction using the [`full()`](@ref) function. The [`issparse()`](@ref)
 function can be used to query if a matrix is sparse.
 
-```julia
+```jldoctest
 julia> issparse(speye(5))
 true
 ```
@@ -695,7 +701,7 @@ Arithmetic operations on sparse matrices also work as they do on dense matrices.
 assignment into, and concatenation of sparse matrices work in the same way as dense matrices.
 Indexing operations, especially assignment, are expensive, when carried out one element at a time.
 In many cases it may be better to convert the sparse matrix into `(I,J,V)` format using [`findnz()`](@ref),
-manipulate the non-zeroes or the structure in the dense vectors `(I,J,V)`, and then reconstruct
+manipulate the values or the structure in the dense vectors `(I,J,V)`, and then reconstruct
 the sparse matrix.
 
 ### Correspondence of dense and sparse methods

@@ -31,7 +31,8 @@
 #end
 
 #type Union <: Type
-#    types::Tuple
+#    a
+#    b
 #end
 
 #type TypeVar
@@ -40,8 +41,8 @@
 #    ub::Type
 #end
 
-#type TypeConstructor
-#    parameters::Tuple
+#type UnionAll
+#    var::TypeVar
 #    body
 #end
 
@@ -115,12 +116,10 @@
 #     runnable::Bool
 # end
 
-import Core.Intrinsics.ccall
-
 export
     # key types
     Any, DataType, Vararg, ANY, NTuple,
-    Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, Void,
+    Tuple, Type, UnionAll, TypeName, TypeVar, Union, Void,
     SimpleVector, AbstractArray, DenseArray,
     # special objects
     Function, CodeInfo, Method, MethodTable, TypeMapEntry, TypeMapLevel,
@@ -258,18 +257,11 @@ end
 TypeVar(n::Symbol) =
     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, Any)
 TypeVar(n::Symbol, ub::ANY) =
-    (isa(ub,Bool) ?
-     ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, Union{}, Any, ub) :
-     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, ub::Type))
+    ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, ub)
 TypeVar(n::Symbol, lb::ANY, ub::ANY) =
-    (isa(ub,Bool) ?
-     ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, Union{}, lb::Type, ub) :
-     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, lb::Type, ub::Type))
-TypeVar(n::Symbol, lb::ANY, ub::ANY, b::Bool) =
-    ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, lb::Type, ub::Type, b)
+    ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, lb, ub)
 
-TypeConstructor(p::ANY, t::ANY) =
-    ccall(:jl_new_type_constructor, Ref{TypeConstructor}, (Any, Any), p::SimpleVector, t::Type)
+UnionAll(v::TypeVar, t::ANY) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
 
 Void() = nothing
 
@@ -329,13 +321,6 @@ typealias NTuple{N,T} Tuple{Vararg{T,N}}
 
 (::Type{Array{T,1}}){T}() = Array{T,1}(0)
 (::Type{Array{T,2}}){T}() = Array{T,2}(0, 0)
-
-# TODO: possibly turn these into deprecations
-Array{T,N}(::Type{T}, d::NTuple{N,Int})   = Array{T,N}(d)
-Array{T}(::Type{T}, d::Int...)            = Array(T, d)
-Array{T}(::Type{T}, m::Int)               = Array{T,1}(m)
-Array{T}(::Type{T}, m::Int,n::Int)        = Array{T,2}(m,n)
-Array{T}(::Type{T}, m::Int,n::Int,o::Int) = Array{T,3}(m,n,o)
 
 # primitive Symbol constructors
 function Symbol(s::String)

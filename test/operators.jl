@@ -89,3 +89,11 @@ end
     @test filter(!isupper, str) == replace(str, r"[A-Z]", "")
     @test filter(!islower, str) == replace(str, r"[a-z]", "")
 end
+
+# issue #19891
+@testset "chained comparison" begin
+    B = 0 .< [1 -1 5] .< 3
+    @test B == [true false false]
+    B = 3 .> [1 -1 5] .> 0
+    @test B == [true false false]
+end

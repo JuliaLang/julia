@@ -113,7 +113,10 @@ flush(io::AbstractPipe) = flush(pipe_writer(io))
 read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io), byte)
 unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io), p, nb)
 read(io::AbstractPipe) = read(pipe_reader(io))
-readuntil{T<:AbstractPipe}(io::T, args...) = readuntil(pipe_reader(io), args...)
+readuntil(io::AbstractPipe, arg::UInt8)          = readuntil(pipe_reader(io), arg)
+readuntil(io::AbstractPipe, arg::Char)           = readuntil(pipe_reader(io), arg)
+readuntil(io::AbstractPipe, arg::AbstractString) = readuntil(pipe_reader(io), arg)
+readuntil(io::AbstractPipe, arg)                 = readuntil(pipe_reader(io), arg)
 readavailable(io::AbstractPipe) = readavailable(pipe_reader(io))
 
 isreadable(io::AbstractPipe) = isreadable(pipe_reader(io))
@@ -416,9 +419,13 @@ function read(s::IO, ::Type{Char})
     return Char(c)
 end
 
+# readuntil_string is useful below since it has
+# an optimized method for s::IOStream
+readuntil_string(s::IO, delim::UInt8) = String(readuntil(s, delim))
+
 function readuntil(s::IO, delim::Char)
     if delim < Char(0x80)
-        return String(readuntil(s, delim % UInt8))
+        return readuntil_string(s, delim % UInt8)
     end
     out = IOBuffer()
     while !eof(s)

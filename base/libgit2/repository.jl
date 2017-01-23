@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+"""
+    LibGit2.GitRepo(path::AbstractString)
+
+Opens a git repository at `path`.
+"""
 function GitRepo(path::AbstractString)
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_repository_open, :libgit2), Cint,
@@ -115,14 +120,65 @@ function get{T <: GitObject}(::Type{T}, repo::GitRepo, oid::AbstractString)
     return get(T, repo, GitHash(oid), length(oid))
 end
 
+"""
+    LibGit2.gitdir(repo::GitRepo)
+
+Returns the location of the "git" files of `repo`:
+
+ - for normal repositories, this is the location of the `.git` folder.
+ - for bare repositories, this is the location of the repository itself.
+
+See also `workdir`, `path`
+"""
 function gitdir(repo::GitRepo)
     return unsafe_string(ccall((:git_repository_path, :libgit2), Cstring,
                         (Ptr{Void},), repo.ptr))
 end
 
+"""
+    LibGit2.workdir(repo::GitRepo)
+
+The location of the working directory of `repo`. This will throw an error for bare
+repositories.
+
+!!! note
+
+    This will typically be the parent directory of `gitdir(repo)`, but can be different in
+    some cases: e.g. if either the `core.worktree` configuration variable or the
+    `GIT_WORK_TREE` environment variable is set.
+
+See also `gitdir`, `path`
+"""
+function workdir(repo::GitRepo)
+    sptr = ccall((:git_repository_workdir, :libgit2), Cstring,
+                (Ptr{Void},), repo.ptr)
+    sptr == C_NULL && throw(GitError(Error.Object, Error.ERROR, "No working directory found."))
+    return unsafe_string(sptr)
+end
+
+"""
+    LibGit2.path(repo::GitRepo)
+
+The base file path of the repository `repo`.
+
+ - for normal repositories, this will typically be the parent directory of the ".git"
+   directory (note: this may be different than the working directory, see `workdir` for
+   more details).
+ - for bare repositories, this is the location of the "git" files.
+
+See also `gitdir`, `workdir`.
+"""
 function path(repo::GitRepo)
-    rpath = gitdir(repo)
-    return isbare(repo) ? rpath : splitdir(rpath[1:end-1])[1]*"/" # remove '.git' part
+    d = gitdir(repo)
+    if isdirpath(d)
+        d = dirname(d) # strip trailing separator
+    end
+    if isbare(repo)
+        return d
+    else
+        parent, base = splitdir(d)
+        return base == ".git" ? parent : d
+    end
 end
 
 function peel(obj::GitObject, obj_type::Cint)
@@ -167,13 +223,12 @@ end
 
 """Updates some entries, determined by the `pathspecs`, in the index from the target commit tree."""
 function reset!{T<:AbstractString, S<:GitObject}(repo::GitRepo, obj::Nullable{S}, pathspecs::T...)
-    with(StrArrayStruct(pathspecs...)) do sa
-        @check ccall((:git_reset_default, :libgit2), Cint,
-                (Ptr{Void}, Ptr{Void}, Ptr{StrArrayStruct}),
-                repo.ptr,
-                isnull(obj) ? C_NULL: Base.get(obj).ptr,
-                Ref(sa))
-    end
+    @check ccall((:git_reset_default, :libgit2), Cint,
+                 (Ptr{Void}, Ptr{Void}, Ptr{StrArrayStruct}),
+                 repo.ptr,
+                 isnull(obj) ? C_NULL: Base.get(obj).ptr,
+                 collect(pathspecs))
+    return head_oid(repo)
 end
 
 """Sets the current head to the specified commit oid and optionally resets the index and working tree to match."""
@@ -182,6 +237,7 @@ function reset!(repo::GitRepo, obj::GitObject, mode::Cint;
     @check ccall((:git_reset, :libgit2), Cint,
                  (Ptr{Void}, Ptr{Void}, Cint, Ptr{CheckoutOptions}),
                   repo.ptr, obj.ptr, mode, Ref(checkout_opts))
+    return head_oid(repo)
 end
 
 function clone(repo_url::AbstractString, repo_path::AbstractString,
@@ -203,9 +259,22 @@ function fetchheads(repo::GitRepo)
     return fhr[]
 end
 
+"""
+    LibGit2.remotes(repo::GitRepo)
+
+Returns a vector of the names of the remotes of `repo`.
+"""
 function remotes(repo::GitRepo)
-    out = Ref(StrArrayStruct())
+    sa_ref = Ref(StrArrayStruct())
     @check ccall((:git_remote_list, :libgit2), Cint,
-                  (Ptr{Void}, Ptr{Void}), out, repo.ptr)
-    return convert(Vector{AbstractString}, out[])
+                  (Ptr{StrArrayStruct}, Ptr{Void}), sa_ref, repo.ptr)
+    res = convert(Vector{String}, sa_ref[])
+    free(sa_ref)
+    return res
+end
+
+function Base.show(io::IO, repo::GitRepo)
+    print(io, "LibGit2.GitRepo(")
+    show(io, path(repo))
+    print(io, ")")
 end

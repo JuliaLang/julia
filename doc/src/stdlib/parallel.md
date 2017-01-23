@@ -8,8 +8,6 @@ Base.yieldto
 Base.current_task
 Base.istaskdone
 Base.istaskstarted
-Base.consume
-Base.produce
 Base.yield
 Base.task_local_storage(::Any)
 Base.task_local_storage(::Any, ::Any)
@@ -26,6 +24,7 @@ Base.take!(::Channel)
 Base.isready(::Channel)
 Base.fetch(::Channel)
 Base.close(::Channel)
+Base.bind(c::Channel, task::Task)
 Base.asyncmap
 Base.asyncmap!
 ```

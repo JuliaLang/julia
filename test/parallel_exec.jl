@@ -231,11 +231,11 @@ test_indexing(RemoteChannel(id_other))
 dims = (20,20,20)
 
 if is_linux()
-    S = SharedArray(Int64, dims)
+    S = SharedArray{Int64,3}(dims)
     @test startswith(S.segname, "/jl")
     @test !ispath("/dev/shm" * S.segname)
 
-    S = SharedArray(Int64, dims; pids=[id_other])
+    S = SharedArray{Int64,3}(dims; pids=[id_other])
     @test startswith(S.segname, "/jl")
     @test !ispath("/dev/shm" * S.segname)
 end
@@ -298,7 +298,7 @@ copy!(s, sdata(d))
 a = rand(dims)
 @test sdata(a) == a
 
-d = SharedArray(Int, dims, init = D->fill!(D.loc_subarr_1d, myid()))
+d = SharedArray{Int}(dims, init = D->fill!(D.loc_subarr_1d, myid()))
 for p in procs(d)
     idxes_in_p = remotecall_fetch(p, d) do D
         parentindexes(D.loc_subarr_1d)[1]
@@ -309,7 +309,7 @@ for p in procs(d)
     @test d[idxl] == p
 end
 
-d = @inferred(SharedArray(Float64, (2,3)))
+d = @inferred(SharedArray{Float64,2}((2,3)))
 @test isa(d[:,2], Vector{Float64})
 
 ### SharedArrays from a file
@@ -320,7 +320,7 @@ write(fn, 1:30)
 sz = (6,5)
 Atrue = reshape(1:30, sz)
 
-S = @inferred(SharedArray(fn, Int, sz))
+S = @inferred(SharedArray{Int,2}(fn, sz))
 @test S == Atrue
 @test length(procs(S)) > 1
 @sync begin
@@ -338,14 +338,14 @@ read!(fn, filedata)
 finalize(S)
 
 # Error for write-only files
-@test_throws ArgumentError SharedArray(fn, Int, sz, mode="w")
+@test_throws ArgumentError SharedArray{Int,2}(fn, sz, mode="w")
 
 # Error for file doesn't exist, but not allowed to create
-@test_throws ArgumentError SharedArray(joinpath(tempdir(),randstring()), Int, sz, mode="r")
+@test_throws ArgumentError SharedArray{Int,2}(joinpath(tempdir(),randstring()), sz, mode="r")
 
 # Creating a new file
 fn2 = tempname()
-S = SharedArray(fn2, Int, sz, init=D->D[localindexes(D)] = myid())
+S = SharedArray{Int,2}(fn2, sz, init=D->D[localindexes(D)] = myid())
 @test S == filedata
 filedata2 = similar(Atrue)
 read!(fn2, filedata2)
@@ -355,7 +355,7 @@ finalize(S)
 # Appending to a file
 fn3 = tempname()
 write(fn3, ones(UInt8, 4))
-S = SharedArray(fn3, UInt8, sz, 4, mode="a+", init=D->D[localindexes(D)]=0x02)
+S = SharedArray{UInt8}(fn3, sz, 4, mode="a+", init=D->D[localindexes(D)]=0x02)
 len = prod(sz)+4
 @test filesize(fn3) == len
 filedata = Array{UInt8}(len)
@@ -438,7 +438,7 @@ A = @inferred(convert(SharedArray, AA))
 B = @inferred(convert(SharedArray, AA'))
 @test B*A == ctranspose(AA)*AA
 
-d=SharedArray(Int64, (10,10); init = D->fill!(D.loc_subarr_1d, myid()), pids=[id_me, id_other])
+d=SharedArray{Int64,2}((10,10); init = D->fill!(D.loc_subarr_1d, myid()), pids=[id_me, id_other])
 d2 = map(x->1, d)
 @test reduce(+, d2) == 100
 
@@ -459,12 +459,12 @@ map!(x->1, d, d)
 # Shared arrays of singleton immutables
 @everywhere immutable ShmemFoo end
 for T in [Void, ShmemFoo]
-    s = @inferred(SharedArray(T, 10))
+    s = @inferred(SharedArray{T}(10))
     @test T() === remotecall_fetch(x->x[3], workers()[1], s)
 end
 
 # Issue #14664
-d = SharedArray(Int,10)
+d = SharedArray{Int}(10)
 @sync @parallel for i=1:10
     d[i] = i
 end
@@ -474,8 +474,8 @@ for (x,i) in enumerate(d)
 end
 
 # complex
-sd = SharedArray(Int,10)
-se = SharedArray(Int,10)
+sd = SharedArray{Int}(10)
+se = SharedArray{Int}(10)
 @sync @parallel for i=1:10
     sd[i] = i
     se[i] = i
@@ -498,7 +498,7 @@ for id in [id_me, id_other]
     finalize_and_test((r=RemoteChannel(id); put!(r, 1); r))
 end
 
-d = SharedArray(Int,10)
+d = SharedArray{Int}(10)
 finalize(d)
 @test_throws BoundsError d[1]
 
@@ -663,29 +663,14 @@ end
 
 # pmap tests. Needs at least 4 processors dedicated to the below tests. Which we currently have
 # since the parallel tests are now spawned as a separate set.
-function unmangle_exception(e)
-    while any(x->isa(e, x), [CompositeException, RemoteException, CapturedException])
-        if isa(e, CompositeException)
-            e = e.exceptions[1].ex
-        end
-        if isa(e, RemoteException)
-            e = e.captured.ex
-        end
-        if isa(e, CapturedException)
-            e = e.ex
-        end
-    end
-    return e
-end
 
 # Test all combinations of pmap keyword args.
 pmap_args = [
                 (:distributed, [:default, false]),
                 (:batch_size, [:default,2]),
-                (:on_error, [:default, e -> unmangle_exception(e).msg == "foobar"]),
-                (:retry_on, [:default, e -> unmangle_exception(e).msg == "foobar"]),
-                (:retry_n, [:default, typemax(Int)-1]),
-                (:retry_max_delay, [0, 0.001])
+                (:on_error, [:default, e -> (e.msg == "foobar" ? true : rethrow(e))]),
+                (:retry_delays, [:default, fill(0.001, 1000)]),
+                (:retry_check, [:default, (s,e) -> (s,endswith(e.msg,"foobar"))]),
             ]
 
 kwdict = Dict()
@@ -698,22 +683,12 @@ function walk_args(i)
             end
         end
 
-        data = [1:100...]
+        data = 1:100
 
         testw = kwdict[:distributed] === false ? [1] : workers()
 
-        if (kwdict[:on_error] === :default) && (kwdict[:retry_n] === :default)
-            mapf = x -> (x*2, myid())
-            results_test = pmap_res -> begin
-                results = [x[1] for x in pmap_res]
-                pids = [x[2] for x in pmap_res]
-                @test results == [2:2:200...]
-                for p in testw
-                    @test p in pids
-                end
-            end
-        elseif kwdict[:retry_n] !== :default
-            mapf = x -> iseven(myid()) ? error("foobar") : (x*2, myid())
+        if kwdict[:retry_delays] !== :default
+            mapf = x -> iseven(myid()) ? error("notfoobar") : (x*2, myid())
             results_test = pmap_res -> begin
                 results = [x[1] for x in pmap_res]
                 pids = [x[2] for x in pmap_res]
@@ -726,7 +701,17 @@ function walk_args(i)
                     end
                 end
             end
-        else (kwdict[:on_error] !== :default) && (kwdict[:retry_n] === :default)
+        elseif kwdict[:on_error] === :default
+            mapf = x -> (x*2, myid())
+            results_test = pmap_res -> begin
+                results = [x[1] for x in pmap_res]
+                pids = [x[2] for x in pmap_res]
+                @test results == [2:2:200...]
+                for p in testw
+                    @test p in pids
+                end
+            end
+        else
             mapf = x -> iseven(x) ? error("foobar") : (x*2, myid())
             results_test = pmap_res -> begin
                 w = testw
@@ -766,7 +751,7 @@ error_thrown = false
 try
     pmap(x -> x==50 ? error("foobar") : x, 1:100)
 catch e
-    @test unmangle_exception(e).msg == "foobar"
+    @test e.captured.ex.msg == "foobar"
     error_thrown = true
 end
 @test error_thrown
@@ -998,16 +983,6 @@ if is_unix() # aka have ssh
     test_n_remove_pids(new_pids)
 end # unix-only
 end # full-test
-
-# issue #7727
-let A = [], B = []
-    t = @task produce(11)
-    @sync begin
-        @async for x in t; push!(A,x); end
-        @async for x in t; push!(B,x); end
-    end
-    @test (A == [11]) != (B == [11])
-end
 
 let t = @task 42
     schedule(t, ErrorException(""), error=true)

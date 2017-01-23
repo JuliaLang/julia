@@ -24,13 +24,16 @@ function write_tree!(idx::GitIndex)
     return oid_ptr[]
 end
 
-function owner(idx::GitIndex)
-    isnull(idx.nrepo) && throw(GitError(Error.Index, Error.ENOTFOUND, "Index does not have an owning repository."))
-    return Base.get(idx.nrepo)
+function repository(idx::GitIndex)
+    if isnull(idx.nrepo)
+        throw(GitError(Error.Index, Error.ENOTFOUND, "Index does not have an owning repository."))
+    else
+        return Base.get(idx.nrepo)
+    end
 end
 
 function read_tree!(idx::GitIndex, tree_id::GitHash)
-    repo = owner(idx)
+    repo = repository(idx)
     tree = get(GitTree, repo, tree_id)
     try
         @check ccall((:git_index_read_tree, :libgit2), Cint,
@@ -42,36 +45,21 @@ end
 
 function add!{T<:AbstractString}(idx::GitIndex, files::T...;
              flags::Cuint = Consts.INDEX_ADD_DEFAULT)
-    sa = StrArrayStruct(files...)
-    try
-        @check ccall((:git_index_add_all, :libgit2), Cint,
-                     (Ptr{Void}, Ptr{StrArrayStruct}, Cuint, Ptr{Void}, Ptr{Void}),
-                      idx.ptr, Ref(sa), flags, C_NULL, C_NULL)
-    finally
-        close(sa)
-    end
+    @check ccall((:git_index_add_all, :libgit2), Cint,
+                 (Ptr{Void}, Ptr{StrArrayStruct}, Cuint, Ptr{Void}, Ptr{Void}),
+                 idx.ptr, collect(files), flags, C_NULL, C_NULL)
 end
 
 function update!{T<:AbstractString}(idx::GitIndex, files::T...)
-    sa = StrArrayStruct(files...)
-    try
-        @check ccall((:git_index_update_all, :libgit2), Cint,
-                     (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
-                      idx.ptr, Ref(sa), C_NULL, C_NULL)
-    finally
-        close(sa)
-    end
+    @check ccall((:git_index_update_all, :libgit2), Cint,
+                 (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
+                 idx.ptr, collect(files), C_NULL, C_NULL)
 end
 
 function remove!{T<:AbstractString}(idx::GitIndex, files::T...)
-    sa = StrArrayStruct(files...)
-    try
-        @check ccall((:git_index_remove_all, :libgit2), Cint,
-                     (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
-                      idx.ptr, Ref(sa), C_NULL, C_NULL)
-    finally
-        close(sa)
-    end
+    @check ccall((:git_index_remove_all, :libgit2), Cint,
+                 (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
+                 idx.ptr, collect(files), C_NULL, C_NULL)
 end
 
 function add!{T<:AbstractString}(repo::GitRepo, files::T...;
@@ -127,3 +115,7 @@ function Base.find(path::String, idx::GitIndex)
 end
 
 stage(ie::IndexEntry) = ccall((:git_index_entry_stage, :libgit2), Cint, (Ptr{IndexEntry},), Ref(ie))
+
+function Base.show(io::IO, idx::GitIndex)
+    println(io, "GitIndex:\nRepository: ", repository(idk), "\nNumber of elements: ", count(idx))
+end

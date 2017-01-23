@@ -7,7 +7,7 @@
 
 Determines the editor to use when running functions like `edit`. Returns an Array compatible
 for use within backticks. You can change the editor by setting `JULIA_EDITOR`, `VISUAL` or
-`EDITOR` as an environmental variable.
+`EDITOR` as an environment variable.
 """
 function editor()
     if is_windows() || is_apple()
@@ -28,7 +28,7 @@ end
 
 Edit a file or directory optionally providing a line number to edit the file at.
 Returns to the `julia` prompt when you quit the editor. The editor can be changed
-by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environmental variable.
+by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 """
 function edit(path::AbstractString, line::Integer=0)
     command = editor()
@@ -76,7 +76,7 @@ end
 
 Edit the definition of a function, optionally specifying a tuple of types to
 indicate which method to edit. The editor can be changed by setting `JULIA_EDITOR`,
-`VISUAL` or `EDITOR` as an environmental variable.
+`VISUAL` or `EDITOR` as an environment variable.
 """
 edit(f)          = edit(functionloc(f)...)
 edit(f, t::ANY)  = edit(functionloc(f,t)...)
@@ -500,7 +500,7 @@ function type_close_enough(x::ANY, t::ANY)
     x == t && return true
     return (isa(x,DataType) && isa(t,DataType) && x.name === t.name &&
             !isleaftype(t) && x <: t) ||
-           (isa(x,Union) && isa(t,DataType) && any(u -> u===t, x.types))
+           (isa(x,Union) && isa(t,DataType) && (type_close_enough(x.a, t) || type_close_enough(x.b, t)))
 end
 
 # `methodswith` -- shows a list of methods using the type given
@@ -517,11 +517,15 @@ excluding type `Any`.
 """
 function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Method[])
     for d in methods(f)
-        if any(x -> (type_close_enough(x, t) ||
-                     (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
-                      (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
-                     x != Any && x != ANY),
-               d.sig.parameters)
+        if any(function (x)
+                   let x = rewrap_unionall(x, d.sig)
+                       (type_close_enough(x, t) ||
+                        (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
+                         (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
+                        x != Any && x != ANY)
+                   end
+               end,
+               unwrap_unionall(d.sig).parameters)
             push!(meths, d)
         end
     end
@@ -677,17 +681,20 @@ function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
             value = getfield(m, v)
             @printf head "%30s " s
             try
-                bytes = summarysize(value)
-                if bytes < 10_000
-                    @printf(head, "%6d bytes  ", bytes)
+                if value ∈ (Base, Main, Core)
+                    print(head, "              ")
                 else
-                    @printf(head, "%6d KB     ", bytes ÷ (1024))
+                    bytes = summarysize(value)
+                    if bytes < 10_000
+                        @printf(head, "%6d bytes  ", bytes)
+                    else
+                        @printf(head, "%6d KB     ", bytes ÷ (1024))
+                    end
                 end
                 print(head, summary(value))
             catch e
                 print(head, "#=ERROR: unable to show value=#")
             end
-
             newline = search(head, UInt8('\n')) - 1
             if newline < 0
                 newline = nb_available(head)
@@ -709,147 +716,3 @@ function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
 end
 whos(m::Module, pat::Regex=r"") = whos(STDOUT, m, pat)
 whos(pat::Regex) = whos(STDOUT, current_module(), pat)
-
-#################################################################################
-
-"""
-    Base.summarysize(obj; exclude=Union{Module,DataType,TypeName}) -> Int
-
-Compute the amount of memory used by all unique objects reachable from the argument.
-Keyword argument `exclude` specifies a type of objects to exclude from the traversal.
-"""
-summarysize(obj; exclude = Union{Module,DataType,TypeName}) =
-    summarysize(obj, ObjectIdDict(), exclude)
-
-summarysize(obj::Symbol, seen, excl) = 0
-
-function summarysize(obj::DataType, seen, excl)
-    key = pointer_from_objref(obj)
-    haskey(seen, key) ? (return 0) : (seen[key] = true)
-    size = 7*sizeof(Int) + 6*sizeof(Int32) + 4*nfields(obj) + ifelse(Sys.WORD_SIZE == 64, 4, 0)
-    size += summarysize(obj.parameters, seen, excl)::Int
-    size += summarysize(obj.types, seen, excl)::Int
-    return size
-end
-
-function summarysize(obj::TypeName, seen, excl)
-    key = pointer_from_objref(obj)
-    haskey(seen, key) ? (return 0) : (seen[key] = true)
-    return Core.sizeof(obj) + (isdefined(obj,:mt) ? summarysize(obj.mt, seen, excl) : 0)
-end
-
-summarysize(obj::ANY, seen, excl) = _summarysize(obj, seen, excl)
-# define the general case separately to make sure it is not specialized for every type
-function _summarysize(obj::ANY, seen, excl)
-    key = pointer_from_objref(obj)
-    haskey(seen, key) ? (return 0) : (seen[key] = true)
-    size = Core.sizeof(obj)
-    ft = typeof(obj).types
-    for i in 1:nfields(obj)
-        if !isbits(ft[i]) && isdefined(obj,i)
-            val = getfield(obj, i)
-            if !isa(val,excl)
-                size += summarysize(val, seen, excl)::Int
-            end
-        end
-    end
-    return size
-end
-
-function summarysize(obj::Array, seen, excl)
-    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
-    size = Core.sizeof(obj)
-    # TODO: add size of jl_array_t
-    if !isbits(eltype(obj))
-        for i in 1:length(obj)
-            if ccall(:jl_array_isassigned, Cint, (Any, UInt), obj, i-1) == 1
-                val = obj[i]
-                if !isa(val, excl)
-                    size += summarysize(val, seen, excl)::Int
-                end
-            end
-        end
-    end
-    return size
-end
-
-summarysize(s::String, seen, excl) = sizeof(Int) + sizeof(s)
-
-function summarysize(obj::SimpleVector, seen, excl)
-    key = pointer_from_objref(obj)
-    haskey(seen, key) ? (return 0) : (seen[key] = true)
-    size = Core.sizeof(obj)
-    for i in 1:length(obj)
-        if isassigned(obj, i)
-            val = obj[i]
-            if !isa(val, excl)
-                size += summarysize(val, seen, excl)::Int
-            end
-        end
-    end
-    return size
-end
-
-function summarysize(obj::Module, seen, excl)
-    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
-    size::Int = Core.sizeof(obj)
-    for binding in names(obj, true)
-        if isdefined(obj, binding) && !isdeprecated(obj, binding)
-            value = getfield(obj, binding)
-            if !isa(value, Module) || module_parent(value) === obj
-                size += summarysize(value, seen, excl)::Int
-                vt = isa(value,DataType) ? value : typeof(value)
-                if vt.name.module === obj
-                    if vt !== value
-                        size += summarysize(vt, seen, excl)::Int
-                    end
-                    # charge a TypeName to its module
-                    size += summarysize(vt.name, seen, excl)::Int
-                end
-            end
-        end
-    end
-    return size
-end
-
-function summarysize(obj::Task, seen, excl)
-    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
-    size::Int = Core.sizeof(obj)
-    if isdefined(obj, :code)
-        size += summarysize(obj.code, seen, excl)::Int
-    end
-    size += summarysize(obj.storage, seen, excl)::Int
-    size += summarysize(obj.backtrace, seen, excl)::Int
-    size += summarysize(obj.donenotify, seen, excl)::Int
-    size += summarysize(obj.exception, seen, excl)::Int
-    size += summarysize(obj.result, seen, excl)::Int
-    # TODO: add stack size, and possibly traverse stack roots
-    return size
-end
-
-function summarysize(obj::MethodTable, seen, excl)
-    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
-    size::Int = Core.sizeof(obj)
-    size += summarysize(obj.defs, seen, excl)::Int
-    size += summarysize(obj.cache, seen, excl)::Int
-    if isdefined(obj, :kwsorter)
-        size += summarysize(obj.kwsorter, seen, excl)::Int
-    end
-    return size
-end
-
-function summarysize(m::TypeMapEntry, seen, excl)
-    size::Int = 0
-    while true # specialized to prevent stack overflow while following this linked list
-        haskey(seen, m) ? (return size) : (seen[m] = true)
-        size += Core.sizeof(m)
-        if isdefined(m, :func)
-            size += summarysize(m.func, seen, excl)::Int
-        end
-        size += summarysize(m.sig, seen, excl)::Int
-        size += summarysize(m.tvars, seen, excl)::Int
-        m.next === nothing && break
-        m = m.next::TypeMapEntry
-    end
-    return size
-end

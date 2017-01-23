@@ -161,38 +161,38 @@ end
             @test isequal(T(1//4)^2, T(1//16))
             @test isequal(acos(T(1)), T(0))
             @test isequal(acosh(T(1)), T(0))
-            @test_approx_eq_eps asin(T(1)) T(pi)/2 eps(T)
-            @test_approx_eq_eps atan(T(1)) T(pi)/4 eps(T)
-            @test_approx_eq_eps atan2(T(1),T(1)) T(pi)/4 eps(T)
+            @test asin(T(1)) ≈ T(pi)/2 atol=eps(T)
+            @test atan(T(1)) ≈ T(pi)/4 atol=eps(T)
+            @test atan2(T(1),T(1)) ≈ T(pi)/4 atol=eps(T)
             @test isequal(cbrt(T(0)), T(0))
             @test isequal(cbrt(T(1)), T(1))
             @test isequal(cbrt(T(1000000000)), T(1000))
             @test isequal(cos(T(0)), T(1))
-            @test_approx_eq_eps cos(T(pi)/2) T(0) eps(T)
+            @test cos(T(pi)/2) ≈ T(0) atol=eps(T)
             @test isequal(cos(T(pi)), T(-1))
-            @test_approx_eq_eps exp(T(1)) T(e) 10*eps(T)
+            @test exp(T(1)) ≈ T(e) atol=10*eps(T)
             @test isequal(exp10(T(1)), T(10))
             @test isequal(exp2(T(1)), T(2))
             @test isequal(expm1(T(0)), T(0))
-            @test_approx_eq_eps expm1(T(1)) T(e)-1 10*eps(T)
+            @test expm1(T(1)) ≈ T(e)-1 atol=10*eps(T)
             @test isequal(hypot(T(3),T(4)), T(5))
             @test isequal(log(T(1)), T(0))
             @test isequal(log(e,T(1)), T(0))
-            @test_approx_eq_eps log(T(e)) T(1) eps(T)
+            @test log(T(e)) ≈ T(1) atol=eps(T)
             @test isequal(log10(T(1)), T(0))
             @test isequal(log10(T(10)), T(1))
             @test isequal(log1p(T(0)), T(0))
-            @test_approx_eq_eps log1p(T(e)-1) T(1) eps(T)
+            @test log1p(T(e)-1) ≈ T(1) atol=eps(T)
             @test isequal(log2(T(1)), T(0))
             @test isequal(log2(T(2)), T(1))
             @test isequal(sin(T(0)), T(0))
             @test isequal(sin(T(pi)/2), T(1))
-            @test_approx_eq_eps sin(T(pi)) T(0) eps(T)
+            @test sin(T(pi)) ≈ T(0) atol=eps(T)
             @test isequal(sqrt(T(0)), T(0))
             @test isequal(sqrt(T(1)), T(1))
             @test isequal(sqrt(T(100000000)), T(10000))
             @test isequal(tan(T(0)), T(0))
-            @test_approx_eq_eps tan(T(pi)/4) T(1) eps(T)
+            @test tan(T(pi)/4) ≈ T(1) atol=eps(T)
         end
         @testset "Inverses" begin
             @test acos(cos(x)) ≈ x
@@ -309,8 +309,8 @@ end
     @testset "$T" for T = (Float32,Float64,Rational{Int})
         fT = typeof(float(one(T)))
         for x = -400:40:400
-            @test_approx_eq_eps sind(convert(T,x))::fT convert(fT,sin(pi/180*x)) eps(deg2rad(convert(fT,x)))
-            @test_approx_eq_eps cosd(convert(T,x))::fT convert(fT,cos(pi/180*x)) eps(deg2rad(convert(fT,x)))
+            @test sind(convert(T,x))::fT ≈ convert(fT,sin(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
+            @test cosd(convert(T,x))::fT ≈ convert(fT,cos(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
         end
         @testset "sind" begin
             @test sind(convert(T,0.0))::fT === zero(fT)
@@ -329,8 +329,8 @@ end
 
         @testset "sinpi and cospi" begin
             for x = -3:0.3:3
-                @test_approx_eq_eps sinpi(convert(T,x))::fT convert(fT,sin(pi*x)) eps(pi*convert(fT,x))
-                @test_approx_eq_eps cospi(convert(T,x))::fT convert(fT,cos(pi*x)) eps(pi*convert(fT,x))
+                @test sinpi(convert(T,x))::fT ≈ convert(fT,sin(pi*x)) atol=eps(pi*convert(fT,x))
+                @test cospi(convert(T,x))::fT ≈ convert(fT,cos(pi*x)) atol=eps(pi*convert(fT,x))
             end
 
             @test sinpi(convert(T,0.0))::fT === zero(fT)
@@ -403,14 +403,14 @@ end
 
     for elty in [Float32,Float64]
         for x in logspace(-200, -0.01)
-            @test_approx_eq_eps erf(erfinv(x)) x 1e-12*x
-            @test_approx_eq_eps erf(erfinv(-x)) -x 1e-12*x
-            @test_approx_eq_eps erfc(erfcinv(2*x)) 2*x 1e-12*x
+            @test erf(erfinv(x)) ≈ x atol=1e-12*x
+            @test erf(erfinv(-x)) ≈ -x atol=1e-12*x
+            @test erfc(erfcinv(2*x)) ≈ 2*x atol=1e-12*x
             if x > 1e-20
                 xf = Float32(x)
-                @test_approx_eq_eps erf(erfinv(xf)) xf 1e-5*xf
-                @test_approx_eq_eps erf(erfinv(-xf)) -xf 1e-5*xf
-                @test_approx_eq_eps erfc(erfcinv(2xf)) 2xf 1e-5*xf
+                @test erf(erfinv(xf)) ≈ xf atol=1e-5*xf
+                @test erf(erfinv(-xf)) ≈ -xf atol=1e-5*xf
+                @test erfc(erfcinv(2xf)) ≈ 2xf atol=1e-5*xf
             end
         end
         @test erfinv(one(elty)) == Inf
@@ -1001,3 +1001,7 @@ end
 
 # no domain error is thrown for negative values
 @test invoke(cbrt, Tuple{AbstractFloat}, -1.0) == -1.0
+
+@testset "promote Float16 irrational #15359" begin
+    @test typeof(Float16(.5) * pi) == Float16
+end

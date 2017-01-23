@@ -60,7 +60,7 @@ function g3182(t::DataType)
     # however the ::Type{T} method should still match at run time.
     return f3182(t)
 end
-@test g3182(Complex) == 0
+@test g3182(Complex.body) == 0
 
 
 # issue #5906
@@ -103,6 +103,10 @@ barTuple2() = fooTuple{tuple(:y)}()
 
 @test Base.return_types(barTuple1,Tuple{})[1] == Base.return_types(barTuple2,Tuple{})[1] == fooTuple{(:y,)}
 
+# issue #6050
+@test Core.Inference.getfield_tfunc(
+          Dict{Int64,Tuple{UnitRange{Int64},UnitRange{Int64}}},
+          Core.Inference.Const(:vals)) == Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1}
 
 # issue #12476
 function f12476(a)
@@ -139,7 +143,7 @@ end
 
 # issue #12826
 f12826{I<:Integer}(v::Vector{I}) = v[1]
-@test Base.return_types(f12826,Tuple{Array{TypeVar(:I, Integer),1}})[1] == Integer
+@test Base.return_types(f12826,Tuple{Array{I,1} where I<:Integer})[1] == Integer
 
 
 # non-terminating inference, issue #14009
@@ -160,7 +164,7 @@ code_llvm(DevNull, f14009, (Int,))
 arithtype9232{T<:Real}(::Type{T},::Type{T}) = arithtype9232(T)
 result_type9232{T1<:Number,T2<:Number}(::Type{T1}, ::Type{T2}) = arithtype9232(T1, T2)
 # this gave a "type too large", but not reliably
-@test length(code_typed(result_type9232, Tuple{Type{TypeVar(:_, Union{Float32,Float64})}, Type{TypeVar(:T2, Number)}})) == 1
+@test length(code_typed(result_type9232, Tuple{(Type{_} where _<:Union{Float32,Float64}), Type{T2} where T2<:Number})) == 1
 
 
 # issue #10878
@@ -318,8 +322,8 @@ f16530a(c) = fieldtype(Foo16530a, c)
 f16530b() = fieldtype(Foo16530b, :c)
 f16530b(c) = fieldtype(Foo16530b, c)
 
-let T = Array{Tuple{Vararg{Float64,TypeVar(:dim)}},1},
-    TTlim = Type{TypeVar(:_,Array{TypeVar(:_,Tuple),1})}
+let T = Array{Tuple{Vararg{Float64,dim}}, 1} where dim,
+    TTlim = Type{_} where _<:T
 
     @test f16530a() == T
     @test f16530a(:c) == T
@@ -342,7 +346,7 @@ let T1 = Tuple{Int, Float64},
     @test f18037(2) === T2
 
     @test Base.return_types(f18037, ()) == Any[Type{T1}]
-    @test Base.return_types(f18037, (Int,)) == Any[Type{TypeVar(:T, Tuple{Int, AbstractFloat})}]
+    @test Base.return_types(f18037, (Int,)) == Any[Type{T} where T<:Tuple{Int, AbstractFloat}]
 end
 
 # issue #18015
@@ -399,7 +403,7 @@ f18450() = ifelse(true, Tuple{Vararg{Int}}, Tuple{Vararg})
 @test f18450() == Tuple{Vararg{Int}}
 
 # issue #18569
-@test Core.Inference.isconstType(Type{Tuple},true)
+@test !Core.Inference.isconstType(Type{Tuple})
 
 # ensure pure attribute applies correctly to all signatures of fpure
 Base.@pure function fpure(a=rand(); b=rand())
@@ -425,24 +429,20 @@ end
 @inferred cat10880(Tuple{Int8,Int16}, Tuple{Int32})
 
 # issue #19348
-function is_intrinsic_expr(e::Expr)
-    if e.head === :call
-        return Base.is_intrinsic_expr(e.args[1])
-    elseif e.head == :invoke
-        return false
-    elseif e.head === :new
-        return false
-    elseif e.head === :copyast
-        return false
-    elseif e.head === :inert
-        return false
+function is_typed_expr(e::Expr)
+    if e.head === :call ||
+       e.head === :invoke ||
+       e.head === :new ||
+       e.head === :copyast ||
+       e.head === :inert
+        return true
     end
-    return true
+    return false
 end
 test_inferred_static(other::ANY) = true
 test_inferred_static(slot::TypedSlot) = @test isleaftype(slot.typ)
 function test_inferred_static(expr::Expr)
-    if !is_intrinsic_expr(expr)
+    if is_typed_expr(expr)
         @test isleaftype(expr.typ)
     end
     for a in expr.args
@@ -484,3 +484,10 @@ test_fast_le(a, b) = @fastmath a <= b
 @inferred test_fast_ne(1.0, 1.0)
 @inferred test_fast_lt(1.0, 1.0)
 @inferred test_fast_le(1.0, 1.0)
+
+abstract AbstractMyType18457{T,F,G}
+immutable MyType18457{T,F,G}<:AbstractMyType18457{T,F,G} end
+tpara18457{I}(::Type{AbstractMyType18457{I}}) = I
+tpara18457{A<:AbstractMyType18457}(::Type{A}) = tpara18457(supertype(A))
+@test tpara18457(MyType18457{true}) === true
+

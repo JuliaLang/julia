@@ -298,6 +298,8 @@ convert{Tv}(::Type{SparseVector}, s::AbstractVector{Tv}) =
 
 
 # convert between different types of SparseVector
+convert{Tv}(::Type{SparseVector{Tv}}, s::SparseVector{Tv}) = s
+convert{Tv,Ti}(::Type{SparseVector{Tv,Ti}}, s::SparseVector{Tv,Ti}) = s
 convert{Tv,Ti,TvS,TiS}(::Type{SparseVector{Tv,Ti}}, s::SparseVector{TvS,TiS}) =
     SparseVector{Tv,Ti}(s.n, convert(Vector{Ti}, s.nzind), convert(Vector{Tv}, s.nzval))
 
@@ -563,7 +565,7 @@ end
 
 function find{Tv,Ti}(x::SparseVector{Tv,Ti})
     numnz = nnz(x)
-    I = Array(Ti, numnz)
+    I = Array{Ti,1}(numnz)
 
     nzind = x.nzind
     nzval = x.nzval
@@ -587,8 +589,8 @@ end
 function findnz{Tv,Ti}(x::SparseVector{Tv,Ti})
     numnz = nnz(x)
 
-    I = Array(Ti, numnz)
-    V = Array(Tv, numnz)
+    I = Array{Ti,1}(numnz)
+    V = Array{Tv,1}(numnz)
 
     nzind = x.nzind
     nzval = x.nzval
@@ -903,7 +905,9 @@ promote_to_arrays_{T}(n::Int, ::Type{SparseMatrixCSC}, J::UniformScaling{T}) = s
 
 # Concatenations strictly involving un/annotated dense matrices/vectors should yield dense arrays
 cat(catdims, xs::_DenseConcatGroup...) = Base.cat_t(catdims, promote_eltype(xs...), xs...)
+vcat(A::Vector...) = Base.typed_vcat(promote_eltype(A...), A...)
 vcat(A::_DenseConcatGroup...) = Base.typed_vcat(promote_eltype(A...), A...)
+hcat(A::Vector...) = Base.typed_hcat(promote_eltype(A...), A...)
 hcat(A::_DenseConcatGroup...) = Base.typed_hcat(promote_eltype(A...), A...)
 hvcat(rows::Tuple{Vararg{Int}}, xs::_DenseConcatGroup...) = Base.typed_hvcat(promote_eltype(xs...), rows, xs...)
 # For performance, specially handle the case where the matrices/vectors have homogeneous eltype
@@ -1316,18 +1320,8 @@ vecnorm(x::AbstractSparseVector, p::Real=2) = vecnorm(nonzeros(x), p)
 
 # Transpose
 # (The only sparse matrix structure in base is CSC, so a one-row sparse matrix is worse than dense)
-transpose(x::SparseVector) = _ct(identity, x)
-ctranspose(x::SparseVector) = _ct(conj, x)
-function _ct{T}(f, x::SparseVector{T})
-    isempty(x) && return Array{T}(1, 0)
-    A = zeros(T, 1, length(x))
-    xnzind = nonzeroinds(x)
-    xnzval = nonzeros(x)
-    for (i,v) in zip(xnzind, xnzval)
-        @inbounds A[i] = f(v)
-    end
-    A
-end
+@inline transpose(sv::SparseVector) = RowVector(sv)
+@inline ctranspose(sv::SparseVector) = RowVector(conj(sv))
 
 ### BLAS Level-1
 
