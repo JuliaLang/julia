@@ -1446,6 +1446,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (vt == jl_uniontype_type) {
         n += jl_printf(out, "Union{");
         while (jl_is_uniontype(v)) {
+            // tail-recurse on b to flatten the printing of the Union structure in the common case
             n += jl_static_show_x(out, ((jl_uniontype_t*)v)->a, depth);
             n += jl_printf(out, ", ");
             v = ((jl_uniontype_t*)v)->b;
@@ -1460,27 +1461,37 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_x(out, (jl_value_t*)ua->var, depth->prev);
     }
     else if (vt == jl_tvar_type) {
+        // show type-var bounds only if they aren't going to be printed by UnionAll later
         jl_tvar_t *var = (jl_tvar_t*)v;
-        struct recur_list *p = depth;
+        struct recur_list *p;
         int showbounds = 1;
-        while (showbounds && p) {
-            if (jl_is_unionall(p->v) && ((jl_unionall_t*)p->v)->var == var)
+        for (p = depth; p != NULL; p = p->prev) {
+            if (jl_is_unionall(p->v) && ((jl_unionall_t*)p->v)->var == var) {
                 showbounds = 0;
-            p = p->prev;
+                break;
+            }
         }
         jl_value_t *lb = var->lb, *ub = var->ub;
         if (showbounds && lb != jl_bottom_type) {
-            if (jl_is_unionall(lb)) n += jl_printf(out, "(");
+            // show type-var lower bound if it is defined
+            int ua = jl_is_unionall(lb);
+            if (ua)
+                n += jl_printf(out, "(");
             n += jl_static_show_x(out, lb, depth);
-            if (jl_is_unionall(lb)) n += jl_printf(out, ")");
+            if (ua)
+                n += jl_printf(out, ")");
             n += jl_printf(out, "<:");
         }
         n += jl_printf(out, "%s", jl_symbol_name(var->name));
-        if (showbounds && ub != (jl_value_t*)jl_any_type) {
+        if (showbounds && (ub != (jl_value_t*)jl_any_type || lb != jl_bottom_type)) {
+            // show type-var upper bound if it is defined, or if we showed the lower bound
+            int ua = jl_is_unionall(ub);
             n += jl_printf(out, "<:");
-            if (jl_is_unionall(ub)) n += jl_printf(out, "(");
+            if (ua)
+                n += jl_printf(out, "(");
             n += jl_static_show_x(out, ub, depth);
-            if (jl_is_unionall(ub)) n += jl_printf(out, ")");
+            if (ua)
+                n += jl_printf(out, ")");
         }
     }
     else if (vt == jl_module_type) {
