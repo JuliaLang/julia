@@ -598,3 +598,16 @@ let
         eval(Base, :(have_color = $(old_have_color)))
     end
 end
+
+abstract DA_19281{T, N} <: AbstractArray{T, N}
+Base.convert{S,T,N}(::Type{Array{S, N}}, ::DA_19281{T, N}) = error()
+x_19281 = [(), (1,)]
+type Foo
+    f::Vector{Tuple}
+    Foo() = new(x_19281)
+end
+
+@testset "test this does not segfault #19281" begin
+    @test Foo().f[1] == ()
+    @test Foo().f[2] == (1, )
+end
