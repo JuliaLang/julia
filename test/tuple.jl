@@ -192,3 +192,28 @@ end
 @testset "side effect in tuple constructor #19352" begin
     @test BitPerm_19352(0,2,4,6,1,3,5,7).p[2] == 0x02
 end
+
+# issue #15703
+let
+    immutable A_15703{N}
+        keys::NTuple{N, Int}
+    end
+
+    immutable B_15703
+        x::A_15703
+    end
+
+    function bug_15703(xs...)
+        [x for x in xs]
+    end
+
+    function test_15703()
+        s = (1,)
+        a = A_15703(s)
+        ss = B_15703(a).x.keys
+        @test ss === s
+        bug_15703(ss...)
+    end
+
+    test_15703()
+end

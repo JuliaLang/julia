@@ -196,7 +196,7 @@ function upstream(ref::GitReference)
     return GitReference(ref.repo, ref_ptr_ptr[])
 end
 
-owner(ref::GitReference) = ref.repo
+repository(ref::GitReference) = ref.repo
 
 function target!(ref::GitReference, new_oid::GitHash; msg::AbstractString="")
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
