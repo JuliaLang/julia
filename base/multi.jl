@@ -1624,13 +1624,13 @@ end
 
 function redirect_worker_output(ident, stream)
     @schedule while !eof(stream)
-        line = readline(stream, false)
+        line = readline(stream)
         if startswith(line, "\tFrom worker ")
             # STDOUT's of "additional" workers started from an initial worker on a host are not available
             # on the master directly - they are routed via the initial worker's STDOUT.
-            print(line)
+            println(line)
         else
-            print("\tFrom worker $(ident):\t$line")
+            println("\tFrom worker $(ident):\t$line")
         end
     end
 end
@@ -1642,7 +1642,7 @@ end
 # setup a all-to-all network.
 function read_worker_host_port(io::IO)
     while true
-        conninfo = readline(io, false)
+        conninfo = readline(io)
         bind_addr, port = parse_connection_info(conninfo)
         if bind_addr != ""
             return bind_addr, port

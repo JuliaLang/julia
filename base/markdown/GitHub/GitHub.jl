@@ -8,7 +8,7 @@ function fencedcode(stream::IO, block::MD)
         startswith(stream, "~~~", padding = true) || startswith(stream, "```", padding = true) || return false
         skip(stream, -1)
         ch = read(stream, Char)
-        trailing = strip(readline(stream, false))
+        trailing = strip(readline(stream))
         flavor = lstrip(trailing, ch)
         n = 3 + length(trailing) - length(flavor)
 
@@ -30,7 +30,7 @@ function fencedcode(stream::IO, block::MD)
                     seek(stream, line_start)
                 end
             end
-            write(buffer, readline(stream, false))
+            write(buffer, readline(stream, chomp=false))
         end
         return false
     end

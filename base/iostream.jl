@@ -230,7 +230,7 @@ function readuntil_string(s::IOStream, delim::UInt8)
     ccall(:jl_readuntil, Ref{String}, (Ptr{Void}, UInt8, UInt8, UInt8), s.ios, delim, 1, false)
 end
 
-function readline(s::IOStream, chomp::Bool=true)
+function readline(s::IOStream; chomp::Bool=true)
     ccall(:jl_readuntil, Ref{String}, (Ptr{Void}, UInt8, UInt8, UInt8), s.ios, '\n', 1, chomp)
 end
 
@@ -325,7 +325,7 @@ function skipchars(s::IOStream, pred; linecomment::Char=Char(0xffffffff))
     ch = peekchar(s); status = Int(ch)
     while status >= 0 && (pred(ch) || ch == linecomment)
         if ch == linecomment
-            readline(s, false)
+            readline(s)
         else
             read(s, Char)  # advance one character
         end

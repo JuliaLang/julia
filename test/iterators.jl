@@ -25,19 +25,30 @@ end
 # typed `collect`
 @test collect(Float64, Iterators.filter(isodd, [1,2,3,4]))[1] === 1.0
 
+# check direct EachLine constructor
+let b = IOBuffer("foo\n")
+    @test collect(EachLine(b)) == ["foo"]
+    seek(b, 0)
+    @test collect(EachLine(b, chomp=false)) == ["foo\n"]
+    seek(b, 0)
+    @test collect(EachLine(b, ondone=()->0)) == ["foo"]
+    seek(b, 0)
+    @test collect(EachLine(b, chomp=false, ondone=()->0)) == ["foo\n"]
+end
+
 # enumerate (issue #6284)
 let b = IOBuffer("1\n2\n3\n"), a = []
-    for (i,x) in enumerate(eachline(b, false))
+    for (i,x) in enumerate(eachline(b))
         push!(a, (i,x))
     end
-    @test a == [(1,"1\n"),(2,"2\n"),(3,"3\n")]
+    @test a == [(1,"1"),(2,"2"),(3,"3")]
 end
 
 # zip eachline (issue #7369)
 let zeb = IOBuffer("1\n2\n3\n4\n5\n"),
     letters = ['a', 'b', 'c', 'd', 'e'],
     res     = []
-    for (number, letter) in zip(eachline(zeb, false), letters)
+    for (number, letter) in zip(eachline(zeb), letters)
         push!(res, (parse(Int,strip(number)), letter))
     end
     @test res == [(1, 'a'), (2, 'b'), (3, 'c'), (4, 'd'), (5, 'e')]
