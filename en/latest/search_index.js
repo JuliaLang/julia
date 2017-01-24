@@ -6557,7 +6557,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Function",
-    "text": "Merge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\nmerge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\n"
+    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\nMerge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\n"
 },
 
 {
@@ -12445,7 +12445,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.lufact",
     "category": "Function",
-    "text": "lufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\n\n\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nlufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ncond ✓ \ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}}([4.0 3.0; 1.5 -1.5],[1,2],0)\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\n"
+    "text": "lufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ncond ✓ \ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}}([4.0 3.0; 1.5 -1.5],[1,2],0)\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\nlufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\n\n\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
 },
 
 {
@@ -16397,7 +16397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.Period",
     "category": "Type",
-    "text": "Period\nYear\nMonth\nWeek\nDay\nHour\nMinute\nSecond\nMillisecond\n\nPeriod types represent discrete, human representations of time.\n\n\n\n"
+    "text": "Period\nYear\nMonth\nWeek\nDay\nHour\nMinute\nSecond\nMillisecond\nMicrosecond\nNanosecond\n\nPeriod types represent discrete, human representations of time.\n\n\n\n"
 },
 
 {
@@ -16449,11 +16449,19 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/dates.html#Base.Dates.Time",
+    "page": "Dates and Time",
+    "title": "Base.Dates.Time",
+    "category": "Type",
+    "text": "Time\n\nTime wraps a Nanosecond and represents a specific moment in a 24-hour day.\n\n\n\n"
+},
+
+{
     "location": "stdlib/dates.html#Dates-and-Time-Types-1",
     "page": "Dates and Time",
     "title": "Dates and Time Types",
     "category": "section",
-    "text": "Base.Dates.Period\nBase.Dates.CompoundPeriod\nBase.Dates.Instant\nBase.Dates.UTInstant\nBase.Dates.TimeType\nBase.Dates.DateTime\nBase.Dates.Date"
+    "text": "Base.Dates.Period\nBase.Dates.CompoundPeriod\nBase.Dates.Instant\nBase.Dates.UTInstant\nBase.Dates.TimeType\nBase.Dates.DateTime\nBase.Dates.Date\nBase.Dates.Time"
 },
 
 {
@@ -16569,6 +16577,38 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/dates.html#Base.Dates.Time-NTuple{5,Int64}",
+    "page": "Dates and Time",
+    "title": "Base.Dates.Time",
+    "category": "Method",
+    "text": "Time(h, [mi, s, ms, us, ns]) -> Time\n\nConstruct a Time type by parts. Arguments must be convertible to Int64.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/dates.html#Base.Dates.Time-Tuple{Vararg{Base.Dates.TimePeriod,N} where N}",
+    "page": "Dates and Time",
+    "title": "Base.Dates.Time",
+    "category": "Method",
+    "text": "Time(period::TimePeriod...) -> Time\n\nConstruct a Time type by Period type parts. Arguments may be in any order. Time parts not provided will default to the value of Dates.default(period).\n\n\n\n"
+},
+
+{
+    "location": "stdlib/dates.html#Base.Dates.Time-Tuple{Function,Vararg{Any,N} where N}",
+    "page": "Dates and Time",
+    "title": "Base.Dates.Time",
+    "category": "Method",
+    "text": "Time(f::Function, h[, mi, s, ms, us]; step=Second(1), negate=false, limit=10000) -> Time\n\nCreate a Time through the adjuster API. The starting point will be constructed from the provided h, mi, s, ms, us arguments, and will be adjusted until f::Function returns true. The step size in adjusting can be provided manually through the step keyword. If negate=true, then the adjusting will stop when f::Function returns false instead of true. limit provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (in the case that f::Function is never satisfied). Note that the default step will adjust to allow for greater precision for the given arguments; i.e. if hour, minute, and second arguments are provided, the default step will be Millisecond(1) instead of Second(1).\n\n\n\n"
+},
+
+{
+    "location": "stdlib/dates.html#Base.Dates.Time-Tuple{DateTime}",
+    "page": "Dates and Time",
+    "title": "Base.Dates.Time",
+    "category": "Method",
+    "text": "Time(dt::DateTime) -> Time\n\nConverts a DateTime to a Time. The hour, minute, second, and millisecond parts of the DateTime are used to create the new Time. Microsecond and nanoseconds are zero by default.\n\n\n\n"
+},
+
+{
     "location": "stdlib/dates.html#Base.Dates.now-Tuple{}",
     "page": "Dates and Time",
     "title": "Base.Dates.now",
@@ -16589,7 +16629,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.eps",
     "category": "Function",
-    "text": "eps(::DateTime) -> Millisecond\neps(::Date) -> Day\n\nReturns Millisecond(1) for DateTime values and Day(1) for Date values.\n\n\n\n"
+    "text": "eps(::DateTime) -> Millisecond\neps(::Date) -> Day\neps(::Time) -> Nanosecond\n\nReturns Millisecond(1) for DateTime values, Day(1) for Date values, and Nanosecond(1) for Time values.\n\n\n\n"
 },
 
 {
@@ -16597,7 +16637,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Dates Functions",
     "category": "section",
-    "text": "All Dates functions are defined in the Dates module; note that only the Date, DateTime, and now functions are exported; to use all other Dates functions, you'll need to prefix each function call with an explicit Dates., e.g. Dates.dayofweek(dt). Alternatively, you can write using Base.Dates to bring all exported functions into Main to be used without the Dates. prefix.Base.Dates.DateTime(::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64)\nBase.Dates.DateTime(::Base.Dates.Period...)\nBase.Dates.DateTime(::Function, ::Any...)\nBase.Dates.DateTime(::Base.Dates.TimeType)\nBase.Dates.DateTime(::AbstractString, ::AbstractString)\nBase.Dates.format\nBase.Dates.DateFormat\nBase.Dates.DateTime(::AbstractString, ::Base.Dates.DateFormat)\nBase.Dates.Date(::Int64, ::Int64, ::Int64)\nBase.Dates.Date(::Base.Dates.Period...)\nBase.Dates.Date(::Function, ::Any, ::Any, ::Any)\nBase.Dates.Date(::Base.Dates.TimeType)\nBase.Dates.Date(::AbstractString, ::AbstractString)\nBase.Dates.Date(::AbstractString, ::Base.Dates.DateFormat)\nBase.Dates.now()\nBase.Dates.now(::Type{Base.Dates.UTC})\nBase.eps"
+    "text": "All Dates functions are defined in the Dates module; note that only the Date, DateTime, and now functions are exported; to use all other Dates functions, you'll need to prefix each function call with an explicit Dates., e.g. Dates.dayofweek(dt). Alternatively, you can write using Base.Dates to bring all exported functions into Main to be used without the Dates. prefix.Base.Dates.DateTime(::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64)\nBase.Dates.DateTime(::Base.Dates.Period...)\nBase.Dates.DateTime(::Function, ::Any...)\nBase.Dates.DateTime(::Base.Dates.TimeType)\nBase.Dates.DateTime(::AbstractString, ::AbstractString)\nBase.Dates.format\nBase.Dates.DateFormat\nBase.Dates.DateTime(::AbstractString, ::Base.Dates.DateFormat)\nBase.Dates.Date(::Int64, ::Int64, ::Int64)\nBase.Dates.Date(::Base.Dates.Period...)\nBase.Dates.Date(::Function, ::Any, ::Any, ::Any)\nBase.Dates.Date(::Base.Dates.TimeType)\nBase.Dates.Date(::AbstractString, ::AbstractString)\nBase.Dates.Date(::AbstractString, ::Base.Dates.DateFormat)\nBase.Dates.Time(::Int64::Int64, ::Int64, ::Int64, ::Int64, ::Int64)\nBase.Dates.Time(::Base.Dates.TimePeriod...)\nBase.Dates.Time(::Function, ::Any...)\nBase.Dates.Time(::Base.Dates.DateTime)\nBase.Dates.now()\nBase.Dates.now(::Type{Base.Dates.UTC})\nBase.eps"
 },
 
 {
@@ -16637,7 +16677,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.hour",
     "category": "Function",
-    "text": "hour(dt::DateTime) -> Int64\n\nThe hour of day of a DateTime as an Int64.\n\n\n\n"
+    "text": "hour(dt::DateTime) -> Int64\n\nThe hour of day of a DateTime as an Int64.\n\n\n\nhour(t::Time) -> Int64\n\nThe hour of a Time as an Int64.\n\n\n\n"
 },
 
 {
@@ -16645,7 +16685,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.minute",
     "category": "Function",
-    "text": "minute(dt::DateTime) -> Int64\n\nThe minute of a DateTime as an Int64.\n\n\n\n"
+    "text": "minute(dt::DateTime) -> Int64\n\nThe minute of a DateTime as an Int64.\n\n\n\nminute(t::Time) -> Int64\n\nThe minute of a Time as an Int64.\n\n\n\n"
 },
 
 {
@@ -16653,7 +16693,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.second",
     "category": "Function",
-    "text": "second(dt::DateTime) -> Int64\n\nThe second of a DateTime as an Int64.\n\n\n\n"
+    "text": "second(dt::DateTime) -> Int64\n\nThe second of a DateTime as an Int64.\n\n\n\nsecond(t::Time) -> Int64\n\nThe second of a Time as an Int64.\n\n\n\n"
 },
 
 {
@@ -16661,7 +16701,23 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.millisecond",
     "category": "Function",
-    "text": "millisecond(dt::DateTime) -> Int64\n\nThe millisecond of a DateTime as an Int64.\n\n\n\n"
+    "text": "millisecond(dt::DateTime) -> Int64\n\nThe millisecond of a DateTime as an Int64.\n\n\n\nmillisecond(t::Time) -> Int64\n\nThe millisecond of a Time as an Int64.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/dates.html#Base.Dates.microsecond",
+    "page": "Dates and Time",
+    "title": "Base.Dates.microsecond",
+    "category": "Function",
+    "text": "microsecond(t::Time) -> Int64\n\nThe microsecond of a Time as an Int64.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/dates.html#Base.Dates.nanosecond",
+    "page": "Dates and Time",
+    "title": "Base.Dates.nanosecond",
+    "category": "Function",
+    "text": "nanosecond(t::Time) -> Int64\n\nThe nanosecond of a Time as an Int64.\n\n\n\n"
 },
 
 {
@@ -16669,7 +16725,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.Year",
     "category": "Method",
-    "text": "Year(dt::TimeType) -> Year\n\nThe year part of a Date or DateTime as a Year.\n\n\n\n"
+    "text": "Year(v)\n\nConstruct a Year object with the given v value. Input must be losslessly convertible to an Int64.\n\n\n\n"
 },
 
 {
@@ -16677,7 +16733,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.Month",
     "category": "Method",
-    "text": "Month(dt::TimeType) -> Month\n\nThe month part of a Date or DateTime as a Month.\n\n\n\n"
+    "text": "Month(v)\n\nConstruct a Month object with the given v value. Input must be losslessly convertible to an Int64.\n\n\n\n"
 },
 
 {
@@ -16685,7 +16741,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.Week",
     "category": "Method",
-    "text": "Week(dt::TimeType) -> Week\n\nThe week part of a Date or DateTime as a Week. For details see week(::TimeType).\n\n\n\n"
+    "text": "Week(v)\n\nConstruct a Week object with the given v value. Input must be losslessly convertible to an Int64.\n\n\n\n"
 },
 
 {
@@ -16693,7 +16749,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.Day",
     "category": "Method",
-    "text": "Day(dt::TimeType) -> Day\n\nThe day part of a Date or DateTime as a Day.\n\n\n\n"
+    "text": "Day(v)\n\nConstruct a Day object with the given v value. Input must be losslessly convertible to an Int64.\n\n\n\n"
 },
 
 {
@@ -16729,6 +16785,22 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/dates.html#Base.Dates.Microsecond-Tuple{Base.Dates.Time}",
+    "page": "Dates and Time",
+    "title": "Base.Dates.Microsecond",
+    "category": "Method",
+    "text": "Microsecond(dt::Time) -> Microsecond\n\nThe microsecond part of a Time as a Microsecond.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/dates.html#Base.Dates.Nanosecond-Tuple{Base.Dates.Time}",
+    "page": "Dates and Time",
+    "title": "Base.Dates.Nanosecond",
+    "category": "Method",
+    "text": "Nanosecond(dt::Time) -> Nanosecond\n\nThe nanosecond part of a Time as a Nanosecond.\n\n\n\n"
+},
+
+{
     "location": "stdlib/dates.html#Base.Dates.yearmonth",
     "page": "Dates and Time",
     "title": "Base.Dates.yearmonth",
@@ -16757,7 +16829,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Accessor Functions",
     "category": "section",
-    "text": "Base.Dates.year\nBase.Dates.month\nBase.Dates.week\nBase.Dates.day\nBase.Dates.hour\nBase.Dates.minute\nBase.Dates.second\nBase.Dates.millisecond\nBase.Dates.Year(::Base.Dates.TimeType)\nBase.Dates.Month(::Base.Dates.TimeType)\nBase.Dates.Week(::Base.Dates.TimeType)\nBase.Dates.Day(::Base.Dates.TimeType)\nBase.Dates.Hour(::DateTime)\nBase.Dates.Minute(::DateTime)\nBase.Dates.Second(::DateTime)\nBase.Dates.Millisecond(::DateTime)\nBase.Dates.yearmonth\nBase.Dates.monthday\nBase.Dates.yearmonthday"
+    "text": "Base.Dates.year\nBase.Dates.month\nBase.Dates.week\nBase.Dates.day\nBase.Dates.hour\nBase.Dates.minute\nBase.Dates.second\nBase.Dates.millisecond\nBase.Dates.microsecond\nBase.Dates.nanosecond\nBase.Dates.Year(::Base.Dates.TimeType)\nBase.Dates.Month(::Base.Dates.TimeType)\nBase.Dates.Week(::Base.Dates.TimeType)\nBase.Dates.Day(::Base.Dates.TimeType)\nBase.Dates.Hour(::DateTime)\nBase.Dates.Minute(::DateTime)\nBase.Dates.Second(::DateTime)\nBase.Dates.Millisecond(::DateTime)\nBase.Dates.Microsecond(::Dates.Time)\nBase.Dates.Nanosecond(::Dates.Time)\nBase.Dates.yearmonth\nBase.Dates.monthday\nBase.Dates.yearmonthday"
 },
 
 {
@@ -17013,7 +17085,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.Period",
     "category": "Method",
-    "text": "Year(v)\nMonth(v)\nWeek(v)\nDay(v)\nHour(v)\nMinute(v)\nSecond(v)\nMillisecond(v)\n\nConstruct a Period type with the given v value. Input must be losslessly convertible to an Int64.\n\n\n\n"
+    "text": "Year(v)\nMonth(v)\nWeek(v)\nDay(v)\nHour(v)\nMinute(v)\nSecond(v)\nMillisecond(v)\nMicrosecond(v)\nNanosecond(v)\n\nConstruct a Period type with the given v value. Input must be losslessly convertible to an Int64.\n\n\n\n"
 },
 
 {
