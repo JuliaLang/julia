@@ -1773,4 +1773,17 @@ end)
 
 @deprecate EachLine(stream, ondone) EachLine(stream, ondone=ondone)
 
+# These conversions should not be defined, see #19896
+@deprecate convert{T<:Number}(::Type{T}, x::Dates.Period) convert(T, Dates.value(x))
+@deprecate convert{T<:Dates.Period}(::Type{T}, x::Real)   T(x)
+@deprecate convert{R<:Real}(::Type{R}, x::Dates.DateTime) R(Dates.value(x))
+@deprecate convert{R<:Real}(::Type{R}, x::Dates.Date)     R(Dates.value(x))
+@deprecate convert(::Type{Dates.DateTime}, x::Real)       Dates.DateTime(Dates.Millisecond(x))
+@deprecate convert(::Type{Dates.Date}, x::Real)           Dates.Date(Dates.Day(x))
+
+function colon{T<:Dates.Period}(start::T, stop::T)
+    depwarn("$start:$stop is deprecated, use $start:$T(1):$stop instead.", :colon)
+    colon(start, T(1), stop)
+end
+
 # End deprecations scheduled for 0.6

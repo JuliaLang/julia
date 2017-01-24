@@ -37,16 +37,12 @@ for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond
         """ $period(v)
     end
 end
-# Now we're safe to define Period-Number conversions
-# Anything an Int64 can convert to, a Period can convert to
-Base.convert{T<:Number}(::Type{T},x::Period) = convert(T,value(x))
-Base.convert{T<:Period}(::Type{T},x::Real) = T(x)
 
 #Print/show/traits
 Base.string{P<:Period}(x::P) = string(value(x),_units(x))
 Base.show(io::IO,x::Period) = print(io,string(x))
 Base.zero{P<:Period}(::Union{Type{P},P}) = P(0)
-Base.one{P<:Period}(::Union{Type{P},P}) = P(1)
+Base.one{P<:Period}(::Union{Type{P},P}) = 1  # see #16116
 Base.typemin{P<:Period}(::Type{P}) = P(typemin(Int64))
 Base.typemax{P<:Period}(::Type{P}) = P(typemax(Int64))
 
@@ -54,13 +50,13 @@ Base.typemax{P<:Period}(::Type{P}) = P(typemax(Int64))
 """
     default(p::Period) -> Period
 
-Returns a sensible "default" value for the input Period by returning `one(p)` for Year,
-Month, and Day, and `zero(p)` for Hour, Minute, Second, and Millisecond.
+Returns a sensible "default" value for the input Period by returning `T(1)` for Year,
+Month, and Day, and `T(0)` for Hour, Minute, Second, and Millisecond.
 """
 function default end
 
-default{T<:DatePeriod}(p::Union{T,Type{T}}) = one(p)
-default{T<:TimePeriod}(p::Union{T,Type{T}}) = zero(p)
+default{T<:DatePeriod}(p::Union{T,Type{T}}) = T(1)
+default{T<:TimePeriod}(p::Union{T,Type{T}}) = T(0)
 
 (-){P<:Period}(x::P) = P(-value(x))
 Base.isless{P<:Period}(x::P,y::P) = isless(value(x),value(y))
