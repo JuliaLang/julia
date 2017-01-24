@@ -119,7 +119,7 @@ This section lists changes that do not have deprecation warnings.
   * `transpose(::AbstractVector)` now always returns a `RowVector` view of the input (which is a
      special 1×n-sized `AbstractMatrix`), not a `Matrix`, etc. In particular, for
      `v::AbstractVector` we now have `(v.').' === v` and `v.' * v` is a scalar. ([#19670]).
-     To create a 1-column vector out of a vector, use `reshape(v,length(v),1)`.
+     To create a 1-column matrix out of a vector, use `reshape(v,length(v),1)`.
 
   * Parametric types with "unspecified" parameters, such as `Array`, are now represented
     as `UnionAll` types instead of `DataType`s ([#18457]).
