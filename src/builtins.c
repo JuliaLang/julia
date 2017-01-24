@@ -784,7 +784,13 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f)
     int field_index;
     if (jl_is_long(f)) {
         field_index = jl_unbox_long(f) - 1;
-        if (field_index < 0 || field_index >= jl_field_count(st))
+        int nf = jl_field_count(st);
+        if (nf > 0 && field_index >= nf-1 && st->name == jl_tuple_typename) {
+            jl_value_t *ft = jl_field_type(st, nf-1);
+            if (jl_is_vararg_type(ft))
+                return jl_unwrap_vararg(ft);
+        }
+        if (field_index < 0 || field_index >= nf)
             jl_bounds_error(t, f);
     }
     else {
