@@ -629,9 +629,12 @@ end
 @test Base.parameter_upper_bound(ReflectionExample, 2) === Any
 @test Base.parameter_upper_bound(ReflectionExample{T, N} where T where N <: Real, 2) === Real
 
-@test Base.typename(ReflectionExample{Float64, Int64}).wrapper === ReflectionExample
-@test Base.typename(ReflectionExample{Float64, N} where N).wrapper === ReflectionExample
-@test Base.typename(ReflectionExample{T, Int64} where T).wrapper === ReflectionExample
-@test Base.typename(ReflectionExample).wrapper === ReflectionExample
-@test Base.typename(Union{ReflectionExample{Union{},1},ReflectionExample{Float64,1}}).wrapper === ReflectionExample
-@test_throws ErrorException Base.typename(Union{Int, Float64})
+let
+    wrapperT(T) = Base.typename(T).wrapper
+    @test @inferred wrapperT(ReflectionExample{Float64, Int64}) == ReflectionExample
+    @test @inferred wrapperT(ReflectionExample{Float64, N} where N) == ReflectionExample
+    @test @inferred wrapperT(ReflectionExample{T, Int64} where T) == ReflectionExample
+    @test @inferred wrapperT(ReflectionExample) == ReflectionExample
+    @test @inferred wrapperT(Union{ReflectionExample{Union{},1},ReflectionExample{Float64,1}}) == ReflectionExample
+    @test_throws ErrorException Base.typename(Union{Int, Float64})
+end
