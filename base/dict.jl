@@ -191,10 +191,9 @@ end
 
 
 """
-    similar(dictionary)
+    similar(d::Dict)
 
-Create an empty dictionary with the same element types for key and value of the given source
-dictionary.
+Create an empty dictionary with the same key and value types as `d`.
 """
 similar{K,V}(d::Dict{K,V}) = Dict{K,V}()
 similar{K,V}(d::Dict, ::Type{Pair{K,V}}) = Dict{K,V}()
