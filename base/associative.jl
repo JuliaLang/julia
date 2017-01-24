@@ -64,7 +64,7 @@ in(k, v::KeyIterator) = get(v.dict, k, secret_table_token) !== secret_table_toke
     keys(a::Associative)
 
 Return an iterator over all keys in a collection.
-`keys(Dict)` and `values(Dict)` both simply iterate the `Dict`
+`keys(Dict)` and `values(Dict)` both iterate the `Dict`
  and return the elements in the same order.
 `collect(keys(d))` returns an array of keys.
 Since the keys are stored internally in a hash table,
@@ -89,7 +89,7 @@ eachindex(a::Associative) = KeyIterator(a)
     values(a::Associative)
 
 Return an iterator over all values in a collection.
-`keys(Dict)` and `values(Dict)` both simply iterate the `Dict`
+`keys(Dict)` and `values(Dict)` both iterate the `Dict`
  and return the elements in the same order.
 `collect(values(d))` returns an array of values.
 
