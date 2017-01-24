@@ -478,6 +478,17 @@ function maybe_vararg_tuple_2()
 end
 @test Type{Tuple{Vararg{Int}}} <: Base.return_types(maybe_vararg_tuple_2, ())[1]
 
+# issue #11480
+@noinline f11480(x,y) = x
+let A = Ref
+    function h11480(x::A{A{A{A{A{A{A{A{A{Int}}}}}}}}}) # enough for type_too_complex
+        y :: Tuple{Vararg{typeof(x)}} = (x,) # apply_type(Vararg, too_complex) => TypeVar(_,Vararg)
+        f(y[1], # fool getfield logic : Tuple{_<:Vararg}[1] => Vararg
+          1) # make it crash by construction of the signature Tuple{Vararg,Int}
+    end
+    @test !Base.isvarargtype(Base.return_types(h11480, (Any,))[1])
+end
+
 # Issue 19641
 foo19641() = let a = 1.0
     Core.Inference.return_type(x -> x + a, Tuple{Float64})

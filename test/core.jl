@@ -15,6 +15,10 @@ f47{T}(x::Vector{Vector{T}}) = 0
 @test_throws TypeError ([T] where T)
 @test_throws TypeError (Array{T} where T<:[])
 @test_throws TypeError (Array{T} where T>:[])
+@test_throws TypeError (Array{T} where T<:Vararg)
+@test_throws TypeError (Array{T} where T>:Vararg)
+@test_throws TypeError (Array{T} where T<:Vararg{Int})
+@test_throws TypeError (Array{T} where T<:Vararg{Int,2})
 
 # issue #8652
 args_morespecific(a, b) = ccall(:jl_type_morespecific, Cint, (Any,Any), a, b) != 0
@@ -3086,10 +3090,12 @@ end
 
 # don't allow Vararg{} in Union{} type constructor
 @test_throws TypeError Union{Int,Vararg{Int}}
+@test_throws TypeError Union{Vararg{Int}}
 
-# don't allow Vararg{} in Tuple{} type constructor in non-trailing position
+# only allow Vararg{} in last position of Tuple{ }
 @test_throws TypeError Tuple{Vararg{Int32},Int64,Float64}
 @test_throws TypeError Tuple{Int64,Vararg{Int32},Float64}
+@test_throws TypeError Array{Vararg}
 
 # don't allow non-types in Union
 @test_throws TypeError Union{1}

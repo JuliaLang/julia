@@ -376,9 +376,9 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
 
 JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub)
 {
-    if (lb != jl_bottom_type && !jl_is_type(lb) && !jl_is_typevar(lb))
+    if ((lb != jl_bottom_type && !jl_is_type(lb) && !jl_is_typevar(lb)) || jl_is_vararg_type(lb))
         jl_type_error_rt("TypeVar", "lower bound", (jl_value_t*)jl_type_type, lb);
-    if (ub != (jl_value_t*)jl_any_type && !jl_is_type(ub) && !jl_is_typevar(ub))
+    if ((ub != (jl_value_t*)jl_any_type && !jl_is_type(ub) && !jl_is_typevar(ub)) || jl_is_vararg_type(ub))
         jl_type_error_rt("TypeVar", "upper bound", (jl_value_t*)jl_type_type, ub);
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_tvar_t *tv = (jl_tvar_t*)jl_gc_alloc(ptls, sizeof(jl_tvar_t), jl_tvar_type);
@@ -659,25 +659,6 @@ jl_value_t *jl_cache_type_(jl_datatype_t *type)
 
 // type instantiation
 
-static int valid_type_param(jl_value_t *v)
-{
-    if (jl_is_tuple(v)) {
-        // NOTE: tuples of symbols are not currently bits types, but have been
-        // allowed as type parameters. this is a bit ugly.
-        jl_value_t *tt = jl_typeof(v);
-        size_t i;
-        size_t l = jl_nparams(tt);
-        for(i=0; i < l; i++) {
-            jl_value_t *pi = jl_tparam(tt,i);
-            if (!(pi == (jl_value_t*)jl_sym_type || jl_isbits(pi)))
-                return 0;
-        }
-        return 1;
-    }
-    // TODO: maybe more things
-    return jl_is_type(v) || jl_is_typevar(v) || jl_is_symbol(v) || jl_isbits(jl_typeof(v));
-}
-
 static int within_typevar(jl_value_t *t, jl_value_t *vlb, jl_value_t *vub)
 {
     jl_value_t *lb = t, *ub = t;
@@ -707,13 +688,6 @@ jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n)
         if (!jl_is_unionall(tc0))
             jl_error("too many parameters for type");
         jl_value_t *pi = params[i];
-
-        if (!valid_type_param(pi)) {
-            jl_type_error_rt("Type", "parameter",
-                             jl_isa(pi, (jl_value_t*)jl_number_type) ?
-                             (jl_value_t*)jl_long_type : (jl_value_t*)jl_type_type,
-                             pi);
-        }
 
         tc0 = ((jl_unionall_t*)tc0)->body;
         // doing a substitution can cause later UnionAlls to be dropped,
@@ -1150,23 +1124,11 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
     return (jl_value_t*)ndt;
 }
 
-static void check_tuple_parameter(jl_value_t *pi, size_t i, size_t np)
-{
-    // TODO: should possibly only allow Types and TypeVars, but see
-    // https://github.com/JuliaLang/julia/commit/85f45974a581ab9af955bac600b90d9ab00f093b#commitcomment-13041922
-    if (!valid_type_param(pi))
-        jl_type_error_rt("Tuple", "parameter", (jl_value_t*)jl_type_type, pi);
-    if (i != np-1 && jl_is_vararg_type(pi))
-        jl_type_error_rt("Tuple", "non-final parameter", (jl_value_t*)jl_type_type, pi);
-}
-
 static jl_tupletype_t *jl_apply_tuple_type_v_(jl_value_t **p, size_t np, jl_svec_t *params)
 {
     int cacheable = 1;
     for(size_t i=0; i < np; i++) {
-        jl_value_t *pi = p[i];
-        check_tuple_parameter(pi, i, np);
-        if (!jl_is_leaf_type(pi))
+        if (!jl_is_leaf_type(p[i]))
             cacheable = 0;
     }
     jl_datatype_t *ndt = (jl_datatype_t*)inst_datatype(jl_anytuple_type, params, p, np,
@@ -1246,9 +1208,8 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
         iparams = jl_svec_data(ip_heap);
     }
     int cacheable = 1;
-    if (jl_is_va_tuple(tt)) {
+    if (jl_is_va_tuple(tt))
         cacheable = 0;
-    }
     int i;
     for(i=0; i < ntp; i++) {
         jl_value_t *elt = jl_svecref(tp, i);
@@ -1256,10 +1217,8 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
         iparams[i] = pi;
         if (ip_heap)
             jl_gc_wb(ip_heap, pi);
-        check_tuple_parameter(pi, i, ntp);
-        if (cacheable && !jl_is_leaf_type(pi)) {
+        if (cacheable && !jl_is_leaf_type(pi))
             cacheable = 0;
-        }
     }
     jl_value_t *result = inst_datatype((jl_datatype_t*)tt, ip_heap, iparams, ntp, cacheable,
                                        stack, env);
