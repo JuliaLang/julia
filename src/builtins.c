@@ -1012,13 +1012,63 @@ JL_DLLEXPORT void jl_show(jl_value_t *stream, jl_value_t *v)
 
 // internal functions ---------------------------------------------------------
 
+static int valid_type_param(jl_value_t *v)
+{
+    if (jl_is_tuple(v)) {
+        // NOTE: tuples of symbols are not currently bits types, but have been
+        // allowed as type parameters. this is a bit ugly.
+        jl_value_t *tt = jl_typeof(v);
+        size_t i, l = jl_nparams(tt);
+        for(i=0; i < l; i++) {
+            jl_value_t *pi = jl_tparam(tt,i);
+            if (!(pi == (jl_value_t*)jl_sym_type || jl_isbits(pi)))
+                return 0;
+        }
+        return 1;
+    }
+    if (jl_is_vararg_type(v))
+        return 0;
+    // TODO: maybe more things
+    return jl_is_type(v) || jl_is_typevar(v) || jl_is_symbol(v) || jl_isbits(jl_typeof(v));
+}
+
 JL_CALLABLE(jl_f_apply_type)
 {
     JL_NARGSV(apply_type, 1);
-    if (!jl_is_unionall(args[0]) && args[0] != (jl_value_t*)jl_anytuple_type &&
-        args[0] != (jl_value_t*)jl_uniontype_type)
-        jl_type_error("Type{...} expression", (jl_value_t*)jl_unionall_type, args[0]);
-    return jl_apply_type(args[0], &args[1], nargs-1);
+    int i;
+    if (args[0] == (jl_value_t*)jl_anytuple_type) {
+        for(i=1; i < nargs; i++) {
+            jl_value_t *pi = args[i];
+            // TODO: should possibly only allow Types and TypeVars, but see
+            // https://github.com/JuliaLang/julia/commit/85f45974a581ab9af955bac600b90d9ab00f093b#commitcomment-13041922
+            if (jl_is_vararg_type(pi)) {
+                if (i != nargs-1)
+                    jl_type_error_rt("Tuple", "non-final parameter", (jl_value_t*)jl_type_type, pi);
+            }
+            else if (!valid_type_param(pi)) {
+                jl_type_error_rt("Tuple", "parameter", (jl_value_t*)jl_type_type, pi);
+            }
+        }
+        return (jl_value_t*)jl_apply_tuple_type_v(&args[1], nargs-1);
+    }
+    else if (args[0] == (jl_value_t*)jl_uniontype_type) {
+        // Union{} has extra restrictions, so it needs to be checked after
+        // substituting typevars (a valid_type_param check here isn't sufficient).
+        return (jl_value_t*)jl_type_union(&args[1], nargs-1);
+    }
+    else if (jl_is_unionall(args[0])) {
+        for(i=1; i < nargs; i++) {
+            jl_value_t *pi = args[i];
+            if (!valid_type_param(pi)) {
+                jl_type_error_rt("Type", "parameter",
+                                 jl_isa(pi, (jl_value_t*)jl_number_type) ?
+                                 (jl_value_t*)jl_long_type : (jl_value_t*)jl_type_type,
+                                 pi);
+            }
+        }
+        return jl_apply_type(args[0], &args[1], nargs-1);
+    }
+    jl_type_error("Type{...} expression", (jl_value_t*)jl_unionall_type, args[0]);
 }
 
 // generic function reflection ------------------------------------------------
