@@ -472,7 +472,6 @@ Y = 4:-1:1
 
 @test isa(@view(X[1:3]), SubArray)
 
-
 @test X[1:end] == @view X[1:end]
 @test X[1:end-3] == @view X[1:end-3]
 @test X[1:end,2,2] == @view X[1:end,2,2]
@@ -488,6 +487,37 @@ u = (1,2:3)
 # test macro hygiene
 let size=(x,y)-> error("should not happen")
     @test X[1:end,2,2] == @view X[1:end,2,2]
+end
+
+# test @views macro
+@views let f!(x) = x[1:end-1] .+= x[2:end].^2
+    x = [1,2,3,4]
+    f!(x)
+    @test x == [5,11,19,4]
+    @test x[1:3] isa SubArray
+    @test x[2] === 11
+    @test Dict((1:3) => 4)[1:3] === 4
+    x[1:2] = 0
+    @test x == [0,0,19,4]
+    x[1:2] .= 5:6
+    @test x == [5,6,19,4]
+    f!(x[3:end])
+    @test x == [5,6,35,4]
+end
+@views @test isa(X[1:3], SubArray)
+@test X[1:end] == @views X[1:end]
+@test X[1:end-3] == @views X[1:end-3]
+@test X[1:end,2,2] == @views X[1:end,2,2]
+@test X[1,1:end-2] == @views X[1,1:end-2]
+@test X[1,2,1:end-2] == @views X[1,2,1:end-2]
+@test X[1,2,Y[2:end]] == @views X[1,2,Y[2:end]]
+@test X[1:end,2,Y[2:end]] == @views X[1:end,2,Y[2:end]]
+@test X[u...,2:end] == @views X[u...,2:end]
+@test X[(1,)...,(2,)...,2:end] == @views X[(1,)...,(2,)...,2:end]
+
+# test macro hygiene
+let size=(x,y)-> error("should not happen")
+    @test X[1:end,2,2] == @views X[1:end,2,2]
 end
 
 # issue #18034
