@@ -29,10 +29,12 @@ type SharedArray{T,N} <: DenseArray{T,N}
 end
 
 """
-    SharedArray{T,N}(dims::NTuple; init=false, pids=Int[])
+    SharedArray{T[,N]}(dims::NTuple; init=false, pids=Int[])
 
-Construct a `SharedArray` of a bitstype `T` and size `dims` across the processes specified
-by `pids` - all of which have to be on the same host.
+Construct a `SharedArray` of a bitstype `T` and size `dims` across the
+processes specified by `pids` - all of which have to be on the same
+host.  If `N` is specified by calling `SharedArray{T,N}(dims)`, then
+`N` must match the length of `dims`.
 
 If `pids` is left unspecified, the shared array will be mapped across all processes on the
 current host, including the master. But, `localindexes` and `indexpids` will only refer to
@@ -42,7 +44,7 @@ computation with the master process acting as a driver.
 If an `init` function of the type `initfn(S::SharedArray)` is specified, it is called on all
 the participating workers.
 
-    SharedArray{T,N}(filename::AbstractString, dims::NTuple, [offset=0]; mode=nothing, init=false, pids=Int[])
+    SharedArray{T[,N]}(filename::AbstractString, dims::NTuple, [offset=0]; mode=nothing, init=false, pids=Int[])
 
 Construct a `SharedArray` backed by the file `filename`, with element
 type `T` (must be a `bitstype`) and size `dims`, across the processes

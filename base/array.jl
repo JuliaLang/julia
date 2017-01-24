@@ -27,11 +27,12 @@ import Core: arraysize, arrayset, arrayref
 
 """
     Array{T}(dims)
+    Array{T,N}(dims)
 
 Construct an uninitialized `N`-dimensional dense array with element type `T`,
 where `N` is determined from the length or number of `dims`.  `dims` may
-be a tuple or a series of `Int` arguments corresponding to the lengths in each dimension.
-If the rank `N` is supplied explicitly, e.g. `Array{T,N}(dims)`, then it must
+be a tuple or a series of integer arguments corresponding to the lengths in each dimension.
+If the rank `N` is supplied explicitly as in `Array{T,N}(dims)`, then it must
 match the length or number of `dims`.
 """
 Array
