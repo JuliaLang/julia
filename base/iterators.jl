@@ -248,7 +248,7 @@ end
 An iterator that counts forever, starting at `start` and incrementing by `step`.
 """
 countfrom(start::Number, step::Number) = Count(promote(start, step)...)
-countfrom(start::Number)               = Count(start, one(start))
+countfrom(start::Number)               = Count(start, oneunit(start))
 countfrom()                            = Count(1, 1)
 
 eltype{S}(::Type{Count{S}}) = S

@@ -246,7 +246,7 @@ function qr(v::AbstractVector)
         return __normalize!(vv, nrm), nrm
     else
         T = typeof(zero(eltype(v))/nrm)
-        return T[], one(T)
+        return T[], oneunit(T)
     end
 end
 

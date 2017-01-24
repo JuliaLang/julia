@@ -234,8 +234,8 @@ end
 `m`-by-`n` identity matrix.
 The default element type is `Float64`.
 """
-function eye(T::Type, m::Integer, n::Integer)
-    a = zeros(T,m,n)
+function eye{T}(::Type{T}, m::Integer, n::Integer)
+    a = zeros(typeof(one(T)),m,n)
     for i = 1:min(m,n)
         a[i,i] = one(T)
     end
@@ -248,7 +248,7 @@ end
 `m`-by-`n` identity matrix.
 """
 eye(m::Integer, n::Integer) = eye(Float64, m, n)
-eye(T::Type, n::Integer) = eye(T, n, n)
+eye{T}(::Type{T}, n::Integer) = eye(T, n, n)
 """
     eye([T::Type=Float64,] n::Integer)
 

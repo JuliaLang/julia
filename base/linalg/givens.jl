@@ -55,14 +55,16 @@ realmin2{T}(::Type{T}) = (twopar = 2one(T); twopar^trunc(Integer,log(realmin(T)/
 # Univ. of Colorado Denver
 # NAG Ltd.
 function givensAlgorithm{T<:AbstractFloat}(f::T, g::T)
-    zeropar = zero(T)
     onepar = one(T)
     twopar = 2one(T)
+    T0 = typeof(onepar) # dimensionless
+    zeropar = T0(zero(T)) # must be dimensionless
 
-    safmin = realmin(T)
-    epspar = eps(T)
-    safmn2 = realmin2(T)
-    safmx2 = onepar/safmn2
+    # need both dimensionful and dimensionless versions of these:
+    safmn2 = realmin2(T0)
+    safmn2u = realmin2(T)
+    safmx2 = one(T)/safmn2
+    safmx2u = oneunit(T)/safmn2
 
     if g == 0
         cs = onepar
@@ -76,14 +78,14 @@ function givensAlgorithm{T<:AbstractFloat}(f::T, g::T)
         f1 = f
         g1 = g
         scalepar = max(abs(f1), abs(g1))
-        if scalepar >= safmx2
+        if scalepar >= safmx2u
             count = 0
             while true
                 count += 1
                 f1 *= safmn2
                 g1 *= safmn2
                 scalepar = max(abs(f1), abs(g1))
-                if scalepar < safmx2 break end
+                if scalepar < safmx2u break end
             end
             r = sqrt(f1*f1 + g1*g1)
             cs = f1/r
@@ -91,14 +93,14 @@ function givensAlgorithm{T<:AbstractFloat}(f::T, g::T)
             for i = 1:count
                 r *= safmx2
             end
-        elseif scalepar <= safmn2
+        elseif scalepar <= safmn2u
             count = 0
             while true
                 count += 1
                 f1 *= safmx2
                 g1 *= safmx2
                 scalepar = max(abs(f1), abs(g1))
-                if scalepar > safmn2 break end
+                if scalepar > safmn2u break end
             end
             r = sqrt(f1*f1 + g1*g1)
             cs = f1/r
@@ -127,27 +129,30 @@ end
 # Univ. of Colorado Denver
 # NAG Ltd.
 function givensAlgorithm{T<:AbstractFloat}(f::Complex{T}, g::Complex{T})
-    twopar, onepar, zeropar = 2one(T), one(T), zero(T)
-    czero = zero(Complex{T})
+    twopar, onepar = 2one(T), one(T)
+    T0 = typeof(onepar) # dimensionless
+    zeropar = T0(zero(T)) # must be dimensionless
+    czero = complex(zeropar)
 
     abs1(ff) = max(abs(real(ff)), abs(imag(ff)))
-    safmin = realmin(T)
-    epspar = eps(T)
-    safmn2 = realmin2(T)
-    safmx2 = onepar/safmn2
+    safmin = realmin(T0)
+    safmn2 = realmin2(T0)
+    safmn2u = realmin2(T)
+    safmx2 = one(T)/safmn2
+    safmx2u = oneunit(T)/safmn2
     scalepar = max(abs1(f), abs1(g))
     fs = f
     gs = g
     count = 0
-    if scalepar >= safmx2
+    if scalepar >= safmx2u
         while true
             count += 1
             fs *= safmn2
             gs *= safmn2
             scalepar *= safmn2
-            if scalepar < safmx2 break end
+            if scalepar < safmx2u break end
         end
-    elseif scalepar <= safmn2
+    elseif scalepar <= safmn2u
         if g == 0
             cs = onepar
             sn = czero
@@ -159,12 +164,12 @@ function givensAlgorithm{T<:AbstractFloat}(f::Complex{T}, g::Complex{T})
             fs *= safmx2
             gs *= safmx2
             scalepar *= safmx2
-            if scalepar > safmn2 break end
+            if scalepar > safmn2u break end
         end
     end
     f2 = abs2(fs)
     g2 = abs2(gs)
-    if f2 <= max(g2, onepar)*safmin
+    if f2 <= max(g2, oneunit(T))*safmin
 
      # This is a rare case: F is very small.
 
@@ -305,7 +310,7 @@ function getindex(G::Givens, i::Integer, j::Integer)
         if i == G.i1 || i == G.i2
             G.c
         else
-            one(G.c)
+            oneunit(G.c)
         end
     elseif i == G.i1 && j == G.i2
         G.s

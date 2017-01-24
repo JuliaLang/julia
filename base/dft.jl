@@ -33,10 +33,10 @@ realfloat{T<:FFTWFloat}(x::StridedArray{T}) = x
 
 # return an Array, rather than similar(x), to avoid an extra copy for FFTW
 # (which only works on StridedArray types).
-complexfloat{T<:Complex}(x::AbstractArray{T}) = copy1(typeof(fftwfloat(one(T))), x)
-complexfloat{T<:Real}(x::AbstractArray{T}) = copy1(typeof(complex(fftwfloat(one(T)))), x)
+complexfloat{T<:Complex}(x::AbstractArray{T}) = copy1(typeof(fftwfloat(zero(T))), x)
+complexfloat{T<:Real}(x::AbstractArray{T}) = copy1(typeof(complex(fftwfloat(zero(T)))), x)
 
-realfloat{T<:Real}(x::AbstractArray{T}) = copy1(typeof(fftwfloat(one(T))), x)
+realfloat{T<:Real}(x::AbstractArray{T}) = copy1(typeof(fftwfloat(zero(T))), x)
 
 # copy to a 1-based array, using circular permutation
 function copy1{T}(::Type{T}, x)
@@ -262,7 +262,7 @@ summary(p::ScaledPlan) = string(p.scale, " * ", summary(p.p))
 *(p::Plan, I::UniformScaling) = ScaledPlan(p, I.λ)
 
 # Normalization for ifft, given unscaled bfft, is 1/prod(dimensions)
-normalization(T, sz, region) = (one(T) / prod([sz...][[region...]]))::T
+normalization(T, sz, region) = one(T) / Int(prod([sz...][[region...]]))
 normalization(X, region) = normalization(real(eltype(X)), size(X), region)
 
 plan_ifft(x::AbstractArray, region; kws...) =

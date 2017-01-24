@@ -76,9 +76,9 @@ signbit(x::Real) = x < 0
 
 Return zero if `x==0` and ``x/|x|`` otherwise (i.e., ±1 for real `x`).
 """
-sign(x::Number) = x == 0 ? x/abs(one(x)) : x/abs(x)
-sign(x::Real) = ifelse(x < 0, oftype(x,-1), ifelse(x > 0, one(x), x))
-sign(x::Unsigned) = ifelse(x > 0, one(x), x)
+sign(x::Number) = x == 0 ? x/abs(oneunit(x)) : x/abs(x)
+sign(x::Real) = ifelse(x < 0, oftype(one(x),-1), ifelse(x > 0, one(x), oftype(one(x),0)))
+sign(x::Unsigned) = ifelse(x > 0, one(x), oftype(one(x),0))
 abs(x::Real) = ifelse(signbit(x), -x, x)
 
 """
@@ -133,11 +133,41 @@ zero{T<:Number}(::Type{T}) = convert(T,0)
 """
     one(x)
 
-Get the multiplicative identity element for the type of `x` (`x` can also specify the type
-itself). For matrices, returns an identity matrix of the appropriate size and type.
+Return a multiplicative identity for `x` (which can be either a value
+or a type), of the same shape and numeric precision as `x`.  (For matrices,
+this returns an identity matrix.)
+
+`one(x)` returns a value of the type given by `x` if possible, but
+this may not be true for dimensionful quantities, since the multiplicative
+identity must be dimensionless.  If you want a quantity that is of
+the same type as `x` even if `x` is dimensionful, use [`oneunit`](@ref) instead.
+
+```jldoctest
+julia> one(3.7)
+1.0
+
+julia> one(Int)
+1
+```
 """
-one(x::Number)  = oftype(x,1)
 one{T<:Number}(::Type{T}) = convert(T,1)
+one{T<:Number}(x::T) = one(T)
+# note that convert(T, 1) should throw an error if T is dimensionful,
+# so this fallback definition should be okay.
+
+"""
+    oneunit(x::T)
+    oneunit(::Type{T})
+
+Returns `T(one(x))`, where `T` is either the type of the argument or
+(if a type is passed) the argument.  This differs from [`one`](@ref) for
+dimensionful quantites: `one` is dimensionless (a multiplicative identity)
+while `oneunit` is dimensionful (of the same type as `x`).
+"""
+oneunit{T}(x::T) = T(one(x))
+oneunit{T}(::Type{T}) = T(one(T))
+
+dimensionless{T<:Number}(::Type{T}) = typeof(one(T)) # convert T to dimensionless type
 
 _default_type(::Type{Number}) = Int
 

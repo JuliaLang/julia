@@ -29,7 +29,7 @@ lgamma_r(x::Number) = lgamma(x), 1 # lgamma does not take abs for non-real x
 
 Compute the logarithmic factorial of `x`
 """
-lfact(x::Real) = (x<=1 ? zero(float(x)) : lgamma(x+one(x)))
+lfact(x::Real) = (x<=1 ? zero(float(x)) : lgamma(x+oneunit(x)))
 
 """
     lgamma(x)

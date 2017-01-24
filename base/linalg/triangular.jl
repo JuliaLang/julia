@@ -120,11 +120,11 @@ function full!{T,S}(A::UnitUpperTriangular{T,S})
 end
 
 getindex{T,S}(A::UnitLowerTriangular{T,S}, i::Integer, j::Integer) =
-    i > j ? A.data[i,j] : ifelse(i == j, one(T), zero(T))
+    i > j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
 getindex{T,S}(A::LowerTriangular{T,S}, i::Integer, j::Integer) =
     i >= j ? A.data[i,j] : zero(A.data[j,i])
 getindex{T,S}(A::UnitUpperTriangular{T,S}, i::Integer, j::Integer) =
-    i < j ? A.data[i,j] : ifelse(i == j, one(T), zero(T))
+    i < j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
 getindex{T,S}(A::UpperTriangular{T,S}, i::Integer, j::Integer) =
     i <= j ? A.data[i,j] : zero(A.data[j,i])
 
@@ -207,22 +207,22 @@ function tril!(A::UpperTriangular,k::Integer=0)
 end
 triu!(A::UpperTriangular,k::Integer=0) = UpperTriangular(triu!(A.data,k))
 
-function tril!(A::UnitUpperTriangular,k::Integer=0)
+function tril!{T}(A::UnitUpperTriangular{T},k::Integer=0)
     n = size(A,1)
     if abs(k) > n
         throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
     elseif k < 0
-        fill!(A.data,0)
+        fill!(A.data, zero(T))
         return UpperTriangular(A.data)
     elseif k == 0
-        fill!(A.data,0)
+        fill!(A.data, zero(T))
         for i in diagind(A)
-            A.data[i] = one(eltype(A))
+            A.data[i] = oneunit(T)
         end
         return UpperTriangular(A.data)
     else
         for i in diagind(A)
-            A.data[i] = one(eltype(A))
+            A.data[i] = oneunit(T)
         end
         return UpperTriangular(tril!(A.data,k))
     end
@@ -230,7 +230,7 @@ end
 
 function triu!(A::UnitUpperTriangular,k::Integer=0)
     for i in diagind(A)
-        A.data[i] = one(eltype(A))
+        A.data[i] = oneunit(eltype(A))
     end
     return triu!(UpperTriangular(A.data),k)
 end
@@ -254,22 +254,22 @@ end
 
 tril!(A::LowerTriangular,k::Integer=0) = LowerTriangular(tril!(A.data,k))
 
-function triu!(A::UnitLowerTriangular,k::Integer=0)
+function triu!{T}(A::UnitLowerTriangular{T},k::Integer=0)
     n = size(A,1)
     if abs(k) > n
         throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
     elseif k > 0
-        fill!(A.data,0)
+        fill!(A.data, zero(T))
         return LowerTriangular(A.data)
     elseif k == 0
-        fill!(A.data,0)
+        fill!(A.data, zero(T))
         for i in diagind(A)
-            A.data[i] = one(eltype(A))
+            A.data[i] = oneunit(T)
         end
         return LowerTriangular(A.data)
     else
         for i in diagind(A)
-            A.data[i] = one(eltype(A))
+            A.data[i] = oneunit(T)
         end
         return LowerTriangular(triu!(A.data,k))
     end
@@ -277,7 +277,7 @@ end
 
 function tril!(A::UnitLowerTriangular,k::Integer=0)
     for i in diagind(A)
-        A.data[i] = one(eltype(A))
+        A.data[i] = oneunit(eltype(A))
     end
     return tril!(LowerTriangular(A.data),k)
 end

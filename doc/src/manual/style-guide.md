@@ -43,19 +43,19 @@ argument:
 
 ```julia
 addone(x::Int) = x + 1             # works only for Int
-addone(x::Integer) = x + one(x)    # any integer type
-addone(x::Number) = x + one(x)     # any numeric type
-addone(x) = x + one(x)             # any type supporting + and one
+addone(x::Integer) = x + oneunit(x)    # any integer type
+addone(x::Number) = x + oneunit(x)     # any numeric type
+addone(x) = x + oneunit(x)             # any type supporting + and one
 ```
 
-The last definition of `addone` handles any type supporting [`one()`](@ref) (which returns 1 in
+The last definition of `addone` handles any type supporting [`oneunit`](@ref) (which returns 1 in
 the same type as `x`, which avoids unwanted type promotion) and the [`+`](@ref) function with
 those arguments. The key thing to realize is that there is *no performance penalty* to defining
-*only* the general `addone(x) = x + one(x)`, because Julia will automatically compile specialized
+*only* the general `addone(x) = x + oneunit(x)`, because Julia will automatically compile specialized
 versions as needed. For example, the first time you call `addone(12)`, Julia will automatically
-compile a specialized `addone` function for `x::Int` arguments, with the call to [`one()`](@ref)
+compile a specialized `addone` function for `x::Int` arguments, with the call to `oneunit`
 replaced by its inlined value `1`. Therefore, the first three definitions of `addone` above are
-completely redundant.
+completely redundant with the fourth definition.
 
 ## Handle excess argument diversity in the caller
 

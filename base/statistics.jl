@@ -389,7 +389,7 @@ function cov2cor!{T}(C::AbstractMatrix{T}, xsd::AbstractArray)
         for i = 1:j-1
             C[i,j] = C[j,i]
         end
-        C[j,j] = one(T)
+        C[j,j] = oneunit(T)
         for i = j+1:nx
             C[i,j] = clamp(C[i,j] / (xsd[i] * xsd[j]), -1, 1)
         end

@@ -568,7 +568,7 @@ end
 # (FIXME: is there a way to use the Julia promotion rules more cleverly here?)
 fftwcomplex{T<:fftwComplex}(X::StridedArray{T}) = X
 fftwcomplex{T<:fftwReal}(X::AbstractArray{T}) =
-    copy!(Array{typeof(complex(one(T)))}(size(X)), X)
+    copy!(Array{typeof(complex(zero(T)))}(size(X)), X)
 fftwcomplex{T<:Real}(X::AbstractArray{T}) = copy!(Array{Complex128}(size(X)),X)
 fftwcomplex{T<:Complex}(X::AbstractArray{T}) =
     copy!(Array{Complex128}(size(X)), X)

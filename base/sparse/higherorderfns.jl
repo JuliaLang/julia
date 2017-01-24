@@ -248,14 +248,14 @@ function _map_zeropres!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B::Spar
             if Ai == Bi
                 Ai == rowsentinelA && break # column complete
                 Cx, Ci::indtype(C) = f(storedvals(A)[Ak], storedvals(B)[Bk]), Ai
-                Ak += one(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
-                Bk += one(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
             elseif Ai < Bi
                 Cx, Ci = f(storedvals(A)[Ak], zero(eltype(B))), Ai
-                Ak += one(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
             else # Bi < Ai
                 Cx, Ci = f(zero(eltype(A)), storedvals(B)[Bk]), Bi
-                Bk += one(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
             end
             # NOTE: The ordering of the conditional chain above impacts which matrices this
             # method performs best for. In the map situation (arguments have same shape, and
@@ -293,14 +293,14 @@ function _map_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseVecOrMat, A::SparseVec
             if Ai == Bi
                 Ai == rowsentinelA && break # column complete
                 Cx, Ci::indtype(C) = f(storedvals(A)[Ak], storedvals(B)[Bk]), Ai
-                Ak += one(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
-                Bk += one(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
             elseif Ai < Bi
                 Cx, Ci = f(storedvals(A)[Ak], zero(eltype(B))), Ai
-                Ak += one(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
             else # Bi < Ai
                 Cx, Ci = f(zero(eltype(A)), storedvals(B)[Bk]), Bi
-                Bk += one(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
             end
             Cx != fillvalue && (storedvals(C)[jo + Ci] = Cx)
         end
@@ -396,7 +396,7 @@ end
 # @inline _gatherargs(activerows, ks, As) = (
 #     _gatherarg(first(activerows), first(ks), first(As)),
 #     _gatherargs(tail(activerows), tail(ks), tail(As))...)
-# @inline _updateind(isactiverow, k) = isactiverow ? (k + one(k)) : k
+# @inline _updateind(isactiverow, k) = isactiverow ? (k + oneunit(k)) : k
 # @inline _updateind_all(::Tuple{}, ::Tuple{}) = ()
 # @inline _updateind_all(activerows, ks) = (
 #     _updateind(first(activerows), first(ks)),
@@ -410,7 +410,7 @@ end
 @inline function _fusedupdate(rowsentinel, activerow, row, k, stopk, A)
     # returns (val, nextk, nextrow)
     if row == activerow
-        nextk = k + one(k)
+        nextk = k + oneunit(k)
         (storedvals(A)[k], nextk, (nextk < stopk ? storedinds(A)[nextk] : oftype(row, rowsentinel)))
     else
         (zero(eltype(A)), k, row)
@@ -543,17 +543,17 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B
                 if Ai != Bi
                     if Ai < Bi
                         Cx, Ci = f(storedvals(A)[Ak], zero(eltype(B))), Ai
-                        Ak += one(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                        Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
                     else # Ai > Bi
                         Cx, Ci = f(zero(eltype(A)), storedvals(B)[Bk]), Bi
-                        Bk += one(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                        Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
                     end
                 elseif #= Ai == Bi && =# Ai == rowsentinelA
                     break # column complete
                 else #= Ai == Bi != rowsentinel =#
                     Cx, Ci::indtype(C) = f(storedvals(A)[Ak], storedvals(B)[Bk]), Ai
-                    Ak += one(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
-                    Bk += one(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                    Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                    Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
                 end
                 # NOTE: The ordering of the conditional chain above impacts which matrices
                 # this method perform best for. In contrast to the map situation (arguments
@@ -592,7 +592,7 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B
                         storedvals(C)[Ck] = Cx
                         Ck += 1
                     end
-                    Bk += one(Bk)
+                    Bk += oneunit(Bk)
                 end
             else
                 # A's jth column is nonempty and f(Ax, zero(eltype(B))) is not zero, so
@@ -601,7 +601,7 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B
                 for Ci::indtype(C) in 1:numrows(C)
                     if Bi == Ci
                         Cx = f(Ax, storedvals(B)[Bk])
-                        Bk += one(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                        Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
                     else
                         Cx = fvAzB
                     end
@@ -633,7 +633,7 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B
                         storedvals(C)[Ck] = Cx
                         Ck += 1
                     end
-                    Ak += one(Ak)
+                    Ak += oneunit(Ak)
                 end
             else
                 # B's jth column is nonempty and f(zero(eltype(A)), Bx) is not zero, so
@@ -642,7 +642,7 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B
                 for Ci::indtype(C) in 1:numrows(C)
                     if Ai == Ci
                         Cx = f(storedvals(A)[Ak], Bx)
-                        Ak += one(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                        Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
                     else
                         Cx = fzAvB
                     end
@@ -678,16 +678,16 @@ function _broadcast_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseVecOrMat, A::Spa
             while true
                 if Ai < Bi
                     Cx, Ci = f(storedvals(A)[Ak], zero(eltype(B))), Ai
-                    Ak += one(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                    Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
                 elseif Ai > Bi
                     Cx, Ci = f(zero(eltype(A)), storedvals(B)[Bk]), Bi
-                    Bk += one(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                    Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
                 elseif #= Ai == Bi && =# Ai == rowsentinelA
                     break # column complete
                 else #= Ai == Bi != rowsentinel =#
                     Cx, Ci::indtype(C) = f(storedvals(A)[Ak], storedvals(B)[Bk]), Ai
-                    Ak += one(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
-                    Bk += one(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                    Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                    Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
                 end
                 Cx != fillvalue && (storedvals(C)[jo + Ci] = Cx)
             end
@@ -703,14 +703,14 @@ function _broadcast_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseVecOrMat, A::Spa
                 while Bk < stopBk
                     Cx = f(Ax, storedvals(B)[Bk])
                     Cx != fillvalue && (storedvals(C)[jo + storedinds(B)[Bk]] = Cx)
-                    Bk += one(Bk)
+                    Bk += oneunit(Bk)
                 end
             else
                 Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
                 for Ci::indtype(C) in 1:numrows(C)
                     if Bi == Ci
                         Cx = f(Ax, storedvals(B)[Bk])
-                        Bk += one(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                        Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
                     else
                         Cx = fvAzB
                     end
@@ -728,14 +728,14 @@ function _broadcast_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseVecOrMat, A::Spa
                 while Ak < stopAk
                     Cx = f(storedvals(A)[Ak], Bx)
                     Cx != fillvalue && (storedvals(C)[jo + storedinds(A)[Ak]] = Cx)
-                    Ak += one(Ak)
+                    Ak += oneunit(Ak)
                 end
             else
                 Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
                 for Ci::indtype(C) in 1:numrows(C)
                     if Ai == Ci
                         Cx = f(storedvals(A)[Ak], Bx)
-                        Ak += one(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                        Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
                     else
                         Cx = fzAvB
                     end
@@ -905,7 +905,7 @@ end
 # @inline _gatherbcargs(activerows, defargs, ks, As) = (
 #     _gatherbcarg(first(activerows), first(defargs), first(ks), first(As)),
 #     _gatherbcargs(tail(activerows), tail(defargs), tail(ks), tail(As))...)
-# @inline _updateind(isactiverow, k) = isactiverow ? (k + one(k)) : k
+# @inline _updateind(isactiverow, k) = isactiverow ? (k + oneunit(k)) : k
 # @inline _updateind_all(::Tuple{}, ::Tuple{}) = ()
 # @inline _updateind_all(activerows, ks) = (
 #     _updateind(first(activerows), first(ks)),
@@ -919,7 +919,7 @@ end
 @inline function _fusedupdatebc(rowsentinel, activerow, row, defarg, k, stopk, A)
     # returns (val, nextk, nextrow)
     if row == activerow
-        nextk = k + one(k)
+        nextk = k + oneunit(k)
         (storedvals(A)[k], nextk, (nextk < stopk ? storedinds(A)[nextk] : oftype(row, rowsentinel)))
     else
         (defarg, k, row)

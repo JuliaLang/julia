@@ -447,7 +447,7 @@ function vecnorm(itr, p::Real=2)
         vecnormp(itr,p)
     end
 end
-@inline vecnorm(x::Number, p::Real=2) = p == 0 ? (x==0 ? zero(abs(x)) : one(abs(x))) : abs(x)
+@inline vecnorm(x::Number, p::Real=2) = p == 0 ? (x==0 ? zero(abs(x)) : oneunit(abs(x))) : abs(x)
 
 norm(x::AbstractVector, p::Real=2) = vecnorm(x, p)
 
@@ -719,8 +719,9 @@ true
 ```
 """
 function inv{T}(A::AbstractMatrix{T})
-    S = typeof(zero(T)/one(T))
-    A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S, checksquare(A)))
+    S = typeof(zero(T)/one(T))      # dimensionful
+    S0 = typeof(zero(T)/oneunit(T)) # dimensionless
+    A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S0, checksquare(A)))
 end
 
 """
