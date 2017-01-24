@@ -17,11 +17,11 @@ io,_ = open(pipeline(`strings -n 3 $fname`,
                      `head -n 315`))  # 63 + 252
 
 function outputline(io, line)
-    row = split(chomp(line), " ", keep=false)
+    row = split(line, " ", keep=false)
     println(io, "jl_symbol(\"", row[2], "\"),")
 end
 
-lines = eachline(io, false)
+lines = eachline(io)
 
 open(f->foreach(l->outputline(f,l), take(lines,63)), "common_symbols1.inc", "w")
 open(f->foreach(l->outputline(f,l), lines), "common_symbols2.inc", "w")

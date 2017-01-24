@@ -81,8 +81,8 @@ end
 
 function print_worker_stdout(io, pid)
     @schedule while !eof(io)
-        line = readline(io, false)
-        print("\tFrom worker $(pid):\t$line")
+        line = readline(io)
+        println("\tFrom worker $(pid):\t$line")
     end
 end
 

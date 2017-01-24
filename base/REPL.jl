@@ -205,7 +205,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
         interrupted = false
         while true
             try
-                line *= readline(repl.terminal, false)
+                line *= readline(repl.terminal, chomp=false)
             catch e
                 if isa(e,InterruptException)
                     try # raise the debugger if present
@@ -337,7 +337,7 @@ An editor may have converted tabs to spaces at line """
 
 function hist_getline(file)
     while !eof(file)
-        line = readline(file, false)
+        line = readline(file, chomp=false)
         isempty(line) && return line
         line[1] in "\r\n" || return line
     end
@@ -995,7 +995,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
         if have_color
             print(repl.stream, input_color(repl))
         end
-        line = readline(repl.stream, false)
+        line = readline(repl.stream, chomp=false)
         if !isempty(line)
             ast = Base.parse_input_line(line)
             if have_color

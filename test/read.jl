@@ -241,16 +241,16 @@ for (name, f) in l
         cleanup()
 
         verbose && println("$name readline...")
-        @test readline(io(), false) == readline(IOBuffer(text), false)
-        @test readline(io(), false) == readline(filename, false)
+        @test readline(io(), chomp=false) == readline(IOBuffer(text), chomp=false)
+        @test readline(io(), chomp=false) == readline(filename, chomp=false)
 
         verbose && println("$name readlines...")
-        @test readlines(io(), false) == readlines(IOBuffer(text), false)
-        @test readlines(io(), false) == readlines(filename, false)
+        @test readlines(io(), chomp=false) == readlines(IOBuffer(text), chomp=false)
+        @test readlines(io(), chomp=false) == readlines(filename, chomp=false)
         @test readlines(io()) == readlines(IOBuffer(text))
         @test readlines(io()) == readlines(filename)
-        @test collect(eachline(io(), false)) == collect(eachline(IOBuffer(text), false))
-        @test collect(eachline(io(), false)) == collect(eachline(filename, false))
+        @test collect(eachline(io(), chomp=false)) == collect(eachline(IOBuffer(text), chomp=false))
+        @test collect(eachline(io(), chomp=false)) == collect(eachline(filename, chomp=false))
         @test collect(eachline(io())) == collect(eachline(IOBuffer(text)))
         @test collect(eachline(io())) == collect(eachline(filename))
 
@@ -275,13 +275,13 @@ for (name, f) in l
 
         verbose && println("$name seek...")
         for n = 0:length(text)-1
-            @test readlines(seek(io(), n), false) == readlines(seek(IOBuffer(text), n), false)
+            @test readlines(seek(io(), n)) == readlines(seek(IOBuffer(text), n))
             cleanup()
         end
         verbose && println("$name skip...")
         for n = 0:length(text)-1
-            @test readlines(seek(io(), n), false) == readlines(seek(IOBuffer(text), n), false)
-            @test readlines(skip(io(), n), false) == readlines(skip(IOBuffer(text), n), false)
+            @test readlines(seek(io(), n)) == readlines(seek(IOBuffer(text), n))
+            @test readlines(skip(io(), n)) == readlines(skip(IOBuffer(text), n))
             cleanup()
         end
         verbose && println("$name seekend...")

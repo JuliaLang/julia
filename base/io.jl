@@ -170,26 +170,23 @@ The text is assumed to be encoded in UTF-8.
 readuntil(filename::AbstractString, args...) = open(io->readuntil(io, args...), filename)
 
 """
-    readline()
-    readline(stream, chomp::Bool=true)
-    readline(filename::AbstractString, chomp::Bool=true)
+    readline(stream::IO=STDIN; chomp::Bool=true)
+    readline(filename::AbstractString; chomp::Bool=true)
 
 Read a single line of text from the given I/O stream or file (defaults to `STDIN`).
-Lines in the input can end in `'\\n'` or `"\\r\\n"`. When reading from a file, the text is
-assumed to be encoded in UTF-8.
-
-If `chomp=false` trailing newline character(s) will be included in the output
-(if reached before the end of the input); otherwise newline characters(s)
-are stripped from result.
+When reading from a file, the text is assumed to be encoded in UTF-8. Lines in the
+input end with `'\\n'` or `"\\r\\n"` or the end of an input stream. When `chomp` is
+true (as it is by default), these trailing newline characters are removed from the
+line before it is returned. When `chomp` is false, they are returned as part of the
+line.
 """
-function readline(filename::AbstractString, chomp::Bool=true)
+function readline(filename::AbstractString; chomp::Bool=true)
     open(filename) do f
-          readline(f, chomp)
+        readline(f, chomp=chomp)
     end
 end
-readline() = readline(STDIN, false)
 
-function readline(s::IO, chomp::Bool=true)
+function readline(s::IO=STDIN; chomp::Bool=true)
     line = readuntil(s, 0x0a)
     i = length(line)
     if !chomp || i == 0 || line[i] != 0x0a
@@ -202,21 +199,19 @@ function readline(s::IO, chomp::Bool=true)
 end
 
 """
-    readlines(stream::IO, chomp::Bool=true)
-    readlines(filename::AbstractString, chomp::Bool=true)
+    readlines(stream::IO=STDIN; chomp::Bool=true)
+    readlines(filename::AbstractString; chomp::Bool=true)
 
-Read all lines of an I/O stream or a file as a vector of strings.
-Lines in the input can end in `'\\n'` or `"\\r\\n"`.
-The text is assumed to be encoded in UTF-8.
-
-If `chomp=false` trailing newline character(s) will be included in the output;
-otherwise newline characters(s) are stripped from result.
+Read all lines of an I/O stream or a file as a vector of strings. Behavior is
+equivalent to saving the result of reading `readline` repeatedly with the same
+arguments and saving the resulting lines as a vector of strings.
 """
-function readlines(filename::AbstractString, chomp::Bool=true)
+function readlines(filename::AbstractString; chomp::Bool=true)
     open(filename) do f
-        readlines(f, chomp)
+        readlines(f, chomp=chomp)
     end
 end
+readlines(s::IO=STDIN; chomp::Bool=true) = collect(eachline(s, chomp=chomp))
 
 ## byte-order mark, ntoh & hton ##
 
@@ -545,43 +540,40 @@ readstring(filename::AbstractString) = open(readstring, filename)
 
 type EachLine
     stream::IO
-    chomp::Bool
     ondone::Function
-    EachLine(stream, chomp) = EachLine(stream, chomp, ()->nothing)
-    EachLine(stream, chomp, ondone) = new(stream, chomp, ondone)
+    chomp::Bool
+
+    EachLine(stream::IO=STDIN; ondone::Function=()->nothing, chomp::Bool=true) =
+        new(stream, ondone, chomp)
 end
 
 """
-    eachline(stream::IO,  chomp::Bool=true)
-    eachline(filename::AbstractString,  chomp::Bool=true)
+    eachline(stream::IO=STDIN; chomp::Bool=true)
+    eachline(filename::AbstractString; chomp::Bool=true)
 
-Create an iterable object that will yield each line from an I/O stream or a file.
-Lines in the input can end in `'\\n'` or `"\\r\\n"`.
-The text is assumed to be encoded in UTF-8.
-
-If `chomp=false` trailing newline character(s) will be included in the output;
-otherwise newline characters(s) are stripped from result.
+Create an iterable `EachLine` object that will yield each line from an I/O stream
+or a file. Iteration calls `readline` on the stream argument repeatedly with
+`chomp` passed through, determining whether trailing end-of-line characters are
+removed. When called with a file name, the file is opened once at the beginning of
+iteration and closed at the end. If iteration is interrupted, the file will be
+closed when the `EachLine` object is garbage collected.
 """
-eachline(stream::IO, chomp::Bool=true) = EachLine(stream, chomp)
+eachline(stream::IO=STDIN; chomp::Bool=true) = EachLine(stream, chomp=chomp)
 
-function eachline(filename::AbstractString, chomp::Bool=true)
+function eachline(filename::AbstractString; chomp::Bool=true)
     s = open(filename)
-    EachLine(s, chomp, ()->close(s))
+    EachLine(s, ondone=()->close(s), chomp=chomp)
 end
 
 start(itr::EachLine) = nothing
-function done(itr::EachLine, nada)
-    if !eof(itr.stream)
-        return false
-    end
+function done(itr::EachLine, ::Void)
+    eof(itr.stream) || return false
     itr.ondone()
     true
 end
+next(itr::EachLine, ::Void) = (readline(itr.stream, chomp=itr.chomp), nothing)
 
-next(itr::EachLine, nada) = (readline(itr.stream, itr.chomp), nothing)
 eltype(::Type{EachLine}) = String
-
-readlines(s::IO, chomp::Bool=true) = collect(eachline(s, chomp))
 
 iteratorsize(::Type{EachLine}) = SizeUnknown()
 

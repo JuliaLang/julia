@@ -182,13 +182,13 @@ let r, t, sock
     sock = connect(fetch(r))
     mark(sock)
     @test ismarked(sock)
-    @test readline(sock, false) == "Hello, world!\n"
-    @test readline(sock, false) == "Goodbye, world...\n"
+    @test readline(sock) == "Hello, world!"
+    @test readline(sock) == "Goodbye, world..."
     @test reset(sock) == 0
     @test !ismarked(sock)
     mark(sock)
     @test ismarked(sock)
-    @test readline(sock, false) == "Hello, world!\n"
+    @test readline(sock) == "Hello, world!"
     unmark(sock)
     @test !ismarked(sock)
     @test_throws ArgumentError reset(sock)
@@ -316,8 +316,8 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
     @test c == read!(out, c)
     Base.wait_readnb(out, 1)
     @test nb_available(out) > 0
-    ln1 = readline(out, false)
-    ln2 = readline(out, false)
+    ln1 = readline(out)
+    ln2 = readline(out)
     desc = readstring(out)
     @test !isreadable(out)
     @test !iswritable(out)
@@ -326,8 +326,8 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
     @test outfd != Base._fd(out.out) == Base.INVALID_OS_HANDLE
     @test nb_available(out) == 0
     @test c == UInt8['w']
-    @test lstrip(ln2) == "1\thello\n"
-    @test ln1 == "orld\n"
+    @test lstrip(ln2) == "1\thello"
+    @test ln1 == "orld"
     @test isempty(read(out))
     @test eof(out)
     @test desc == "Pipe($infd open => $outfd active, 0 bytes waiting)"
@@ -345,7 +345,7 @@ let fname = tempname()
             cmd = pipeline(`busybox echo asdf`,`busybox cat`)
         end
     end
-    for line in eachline(STDIN, false)
+    for line in eachline(STDIN)
         run(cmd)
     end
     """
