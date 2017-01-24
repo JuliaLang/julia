@@ -2083,17 +2083,39 @@ end
 function pfor(f, R)
     lenR = length(R)
     chunks = splitrange(lenR, workers())
-    tls_acc = get(task_local_storage(), :JULIA_ACCUMULATOR, ())
-    if tls_acc !== ()
-        acc_current = tls_acc[1]
-        acc_coll = isa(acc_current, ParallelAccumulator) ? [acc_current] : acc_current
-        for acc in acc_coll
-            lenR != acc.length && throw(AssertionError("loop length must equal ParallelAccumulator length"))
-            set_f_len_at_pid!(acc, p->length(chunks[p]))
-        end
+
+    # identify all accumulators
+    accs = ParallelAccumulator[]
+
+    # locals closed over
+    for i in 1:nfields(f)
+        v = getfield(f, i)
+        isa(v, ParallelAccumulator) && push!(accs, v)
+    end
+
+    # globals referenced
+    for x in code_lowered(f, (UnitRange, Int, Int))[1].code
+        isa(x, Expr) && search_glb_accs(x, accs)
+    end
+
+    for acc in accs
+        lenR != acc.length && throw(AssertionError("loop length must equal ParallelAccumulator length"))
+        set_f_len_at_pid!(acc, p->length(chunks[p]))
     end
 
     [remotecall(f, p, R, first(c), last(c)) for (p,c) in chunks]
+end
+
+function search_glb_accs(ex::Expr, accs)
+    for x in ex.args
+        if isa(x, GlobalRef)
+            if x.mod == Main && isdefined(Main, x.name)
+                v = getfield(Main, x.name)
+                isa(v, ParallelAccumulator) && push!(accs, v)
+            end
+        end
+        isa(x, Expr) && search_glb_accs(x, accs)
+    end
 end
 
 function make_pfor_body(var, body)
@@ -2215,7 +2237,6 @@ function deserialize(s::AbstractSerializer, t::Type{T}) where T <: ParallelAccum
     return T(f, len, initial, chnl)
 end
 
-
 function push!(pacc::ParallelAccumulator, v)
     if pacc.pending <= 0
         throw(AssertionError("Reusing a ParallelAccumulator is not allowed. reset(acc)?"))
@@ -2252,21 +2273,6 @@ function reset(pacc::ParallelAccumulator)
     pacc.value = pacc.initial
     pacc.f_len_at_pid = Nullable{Function}()
     pacc
-end
-
-macro accumulate(acc, expr)
-    quote
-        esc_acc = $(esc(acc))
-
-        old_list = get(task_local_storage(), :JULIA_ACCUMULATOR, ())
-        task_local_storage(:JULIA_ACCUMULATOR, ($(esc(acc)), old_list))
-
-        try
-            $(esc(expr))
-        finally
-            task_local_storage(:JULIA_ACCUMULATOR, task_local_storage(:JULIA_ACCUMULATOR)[2])
-        end
-    end
 end
 
 
