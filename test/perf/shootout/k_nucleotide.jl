@@ -62,12 +62,8 @@ end
 
 function k_nucleotide(infile="knucleotide-input.txt")
     input = open(infile, "r")
-    three = ">THREE "
-    while true
-        line = readline(input)
-        if length(line) >= length(three) && line[1:length(three)] == three
-            break
-        end
+    for line in eachline(input)
+        startswith(line, ">THREE ") && break
     end
     data = collect(readstring(input))
     # delete the newlines and convert to upper case

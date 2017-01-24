@@ -1770,4 +1770,7 @@ eval(LibGit2, quote
         repository(x)
     end
 end)
+
+@deprecate EachLine(stream, ondone) EachLine(stream, ondone=ondone)
+
 # End deprecations scheduled for 0.6
