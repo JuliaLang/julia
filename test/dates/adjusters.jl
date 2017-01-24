@@ -229,7 +229,7 @@ dt = Dates.Date(2014,5,21)
 
 @test Dates.tonext(Dates.Date(0),Dates.Mon) == Dates.Date(0,1,3)
 
-#test func, diff steps, negate, same
+#test func, diff steps, same
 @test Dates.tonext(Dates.iswednesday,dt) == Dates.Date(2014,5,28)
 @test Dates.tonext(Dates.iswednesday,dt;same=true) == dt
 @test Dates.tonext(Dates.isthursday,dt) == Dates.Date(2014,5,22)
@@ -240,7 +240,8 @@ dt = Dates.Date(2014,5,21)
 @test Dates.tonext(Dates.istuesday,dt) == Dates.Date(2014,5,27)
 @test Dates.tonext(Dates.ismonday,Dates.Date(0)) == Dates.Date(0,1,3)
 
-@test Dates.tonext(x->!Dates.iswednesday(x),dt;negate=true) == Dates.Date(2014,5,28)
+@test Dates.tonext(!Dates.iswednesday,dt) == Dates.Date(2014,5,22)
+@test Dates.tonext(!Dates.isthursday,dt) == Dates.Date(2014,5,23)
 # Reach adjust limit
 @test_throws ArgumentError Dates.tonext(Dates.iswednesday,dt;limit=6)
 
@@ -322,8 +323,8 @@ Januarymondays2014 = [Dates.Date(2014,1,6),Dates.Date(2014,1,13),Dates.Date(2014
 @test filter(Dates.ismonday,startdate:stopdate) == Januarymondays2014
 
 @test_throws MethodError filter((x,y)->x+y,Dates.Date(2013):Dates.Date(2014))
-@test_throws MethodError Dates.DateFunction((x,y)->x+y, false, Date(0))
-@test_throws ArgumentError Dates.DateFunction((dt)->2, false, Date(0))
+@test_throws MethodError Dates.DateFunction((x,y)->x+y, Date(0))
+@test_throws ArgumentError Dates.DateFunction((dt)->2, Date(0))
 @test length(filter(x->true,Dates.Date(2013):Dates.Date(2013,2))) == 32
 @test length(filter(x->true,Dates.Date(2013):Dates.Date(2013,1,1))) == 1
 @test length(filter(x->true,Dates.Date(2013):Dates.Date(2013,1,2))) == 2
