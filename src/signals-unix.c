@@ -530,7 +530,23 @@ static void *signal_listener(void *arg)
     jl_sigsetset(&sset);
     while (1) {
         profile = 0;
-        sigwait(&sset, &sig);
+        sig = 0;
+        errno = 0;
+        if (sigwait(&sset, &sig)) {
+            sig = SIGABRT; // this branch can't occur, unless we had stack memory corruption of sset
+        }
+        if (!sig || errno == EINTR) {
+            // This should never happen, but it has been observed to occur
+            // when this thread gets used to handle run a signal handler (without SA_RESTART).
+            // It would be nice to prohibit the kernel from doing that, by blocking signals on this thread,
+            // (so that we aren't temporarily unable to handle the signals that this thread exists to handle)
+            // but that sometimes results in the signals never getting delivered at all.
+            // Apparently the only consistent way to handle signals with sigwait is all-or-nothing :(
+            // And while sigwait handles per-process signals more sanely,
+            // it can't really handle thread-targeted signals at all.
+            // So signals really do seem to always just be lose-lose.
+            continue;
+        }
 #ifndef HAVE_MACH
 #  ifdef HAVE_ITIMER
         profile = (sig == SIGPROF);

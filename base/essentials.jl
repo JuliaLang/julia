@@ -115,7 +115,7 @@ unsafe_convert{T}(::Type{T}, x::T) = x # unsafe_convert (like convert) defaults 
 unsafe_convert{T<:Ptr}(::Type{T}, x::T) = x  # to resolve ambiguity with the next method
 unsafe_convert{P<:Ptr}(::Type{P}, x::Ptr) = convert(P, x)
 
-reinterpret{T}(::Type{T}, x) = box(T, x)
+reinterpret{T}(::Type{T}, x) = bitcast(T, x)
 reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16,x)
 reinterpret(::Type{Signed}, x::Float16) = reinterpret(Int16,x)
 
@@ -148,11 +148,11 @@ setindex!(A::Array{Any}, x::ANY, i::Int) = Core.arrayset(A, x, i)
 map(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
 
 function precompile(f::ANY, args::Tuple)
-    ccall(:jl_compile_hint, Cint, (Any,), Tuple{Core.Typeof(f), args...}) != 0
+    ccall(:jl_compile_hint, Int32, (Any,), Tuple{Core.Typeof(f), args...}) != 0
 end
 
 function precompile(argt::Type)
-    ccall(:jl_compile_hint, Cint, (Any,), argt) != 0
+    ccall(:jl_compile_hint, Int32, (Any,), argt) != 0
 end
 
 """

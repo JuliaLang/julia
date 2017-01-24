@@ -186,6 +186,10 @@ Library improvements
   `cumprod`. Also known as a [scan](https://en.wikipedia.org/wiki/Prefix_sum)
   operation ([#18931]).
 
+  * `reshape` now allows specifying one dimension with a `Colon()` (`:`) for the new shape, in which case
+    that dimension's length will be computed such that its product with all the other dimensions is equal
+    to the length of the original array ([#19919]).
+
   * New `titlecase` function, which capitalizes the first character of each word within a string ([#19469]).
 
   * `any` and `all` now always short-circuit, and `mapreduce` never short-circuits ([#19543]).
@@ -210,6 +214,12 @@ Library improvements
 
 Compiler/Runtime improvements
 -----------------------------
+
+* `ccall` is now implemented as a macro, removing the need for special code-generator support for Intrinsics.
+
+* `ccall` gained limited support for a `llvmcall` calling-convention. This can replace many uses of `llvmcall` with a simpler, shorter declaration.
+
+* All Intrinsics are now Builtin functions instead and have proper error checking and fall-back static compilation support.
 
 Deprecated or removed
 ---------------------

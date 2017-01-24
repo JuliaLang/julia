@@ -251,6 +251,11 @@ end
 @test md"* World" |> html == "<ul>\n<li><p>World</p>\n</li>\n</ul>\n"
 @test md"# title *blah*" |> html == "<h1>title <em>blah</em></h1>\n"
 @test md"## title *blah*" |> html == "<h2>title <em>blah</em></h2>\n"
+@test md"<https://julialang.org>" |> html == """<p><a href="https://julialang.org">https://julialang.org</a></p>\n"""
+@test md"<mailto://a@example.com>" |> html == """<p><a href="mailto://a@example.com">mailto://a@example.com</a></p>\n"""
+@test md"<https://julialang.org/not a link>" |> html == "<p>&lt;https://julialang.org/not a link&gt;</p>\n"
+@test md"""<https://julialang.org/nota
+link>""" |> html == "<p>&lt;https://julialang.org/nota link&gt;</p>\n"
 @test md"""Hello
 
 ---

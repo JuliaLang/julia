@@ -118,7 +118,7 @@ function toc()
 end
 
 # print elapsed time, return expression value
-const _mem_units = ["byte", "KB", "MB", "GB", "TB", "PB"]
+const _mem_units = ["byte", "KiB", "MiB", "GiB", "TiB", "PiB"]
 const _cnt_units = ["", " k", " M", " G", " T", " P"]
 function prettyprint_getunits(value, numunits, factor)
     if value == 0 || value == 1

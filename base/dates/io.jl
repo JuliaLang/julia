@@ -1,6 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-
 """
     AbstractDateToken
 
@@ -43,6 +42,18 @@ function format end
 @inline function tryparsenext(d::AbstractDateToken, str, i, len, locale)
     tryparsenext(d, str, i, len)
 end
+
+function Base.string(t::Time)
+    h, mi, s = hour(t), minute(t), second(t)
+    hh = lpad(h, 2, "0")
+    mii = lpad(mi, 2, "0")
+    ss = lpad(s, 2, "0")
+    nss = tons(Millisecond(t)) + tons(Microsecond(t)) + tons(Nanosecond(t))
+    ns = nss == 0 ? "" : rstrip(@sprintf("%.9f", nss / 1e+9)[2:end], '0')
+    return "$hh:$mii:$ss$ns"
+end
+
+Base.show(io::IO, x::Time) = print(io, string(x))
 
 @inline function format(io, d::AbstractDateToken, dt, locale)
     format(io, d, dt)

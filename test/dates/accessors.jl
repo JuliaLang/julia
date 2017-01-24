@@ -40,8 +40,7 @@
 # test_dates(-10000,10000) takes about 15 seconds
 # test_dates(year(typemin(Date)),year(typemax(Date))) is full range
 # and would take.......a really long time
-function test_dates1(from,to)
-    y = m = d = 0
+let from=0, to=2100, y=0, m=0, d=0
     test_day = Dates.totaldays(from,1,1)
     for y in from:to
         for m = 1:12
@@ -54,11 +53,9 @@ function test_dates1(from,to)
         end
     end
 end
-test_dates1(0,2100)
 
 # Test year, month, day, hour, minute
-function test_dates1()
-    y = m = d = h = mi = 0
+let y=0, m=0, d=0, h=0, mi=0
     for m = 1:12
         for d = 1:Dates.daysinmonth(y,m)
             for h = 0:23
@@ -71,18 +68,14 @@ function test_dates1()
                     @test h == Dates.hour(dt)
                     @test mi == Dates.minute(dt)
                     @test (m,d) == Dates.monthday(dt)
-                    #@test s == Dates.second(dt)
-                    #@test ms == Dates.millisecond(dt)
                 end
             end
         end
     end
 end
-test_dates1()
 
 # Test second, millisecond
-function test_dates2()
-    y = m = d = h = mi = s = ms = 0
+let y=0, m=0, d=0, h=0, mi=0, s=0, ms=0
     for y in [-2013,-1,0,1,2013]
         for m in [1,6,12]
             for d in [1,15,Dates.daysinmonth(y,m)]
@@ -103,10 +96,8 @@ function test_dates2()
         end
     end
 end
-test_dates2()
 
-function test_dates2(from,to)
-    y = m = d = 0
+let from=0, to=2100, y=0, m=0, d=0
     for y in from:to
         for m = 1:12
             for d = 1:Dates.daysinmonth(y,m)
@@ -118,7 +109,20 @@ function test_dates2(from,to)
         end
     end
 end
-test_dates2(0,2100)
+
+# test hour, minute, second
+let h=0, mi=0, s=0, ms=0, us=0, ns=0
+    for h = (0,23), mi = (0,59), s = (0,59),
+        ms in (0,1,500,999), us in (0,1,500,999), ns in (0,1,500,999)
+        t = Dates.Time(h, mi, s, ms, us, ns)
+        @test h == Dates.hour(t)
+        @test mi == Dates.minute(t)
+        @test s == Dates.second(t)
+        @test ms == Dates.millisecond(t)
+        @test us == Dates.microsecond(t)
+        @test ns == Dates.nanosecond(t)
+    end
+end
 
 # week function
 # Tests from https://en.wikipedia.org/wiki/ISO_week_date
@@ -193,3 +197,12 @@ dr = [a,a,a,a,a,a,a,a,a,a]
 @test Dates.minute.(dr) == repmat([0],10)
 @test Dates.second.(dr) == repmat([0],10)
 @test Dates.millisecond.(dr) == repmat([0],10)
+
+b = Dates.Time(1,2,3,4,5,6)
+tr = [b,b,b,b,b,b,b,b,b,b]
+@test Dates.hour.(tr) == repmat([1],10)
+@test Dates.minute.(tr) == repmat([2],10)
+@test Dates.second.(tr) == repmat([3],10)
+@test Dates.millisecond.(tr) == repmat([4],10)
+@test Dates.microsecond.(tr) == repmat([5],10)
+@test Dates.nanosecond.(tr) == repmat([6],10)

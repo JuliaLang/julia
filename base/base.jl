@@ -145,8 +145,8 @@ end
 finalize(o::ANY) = ccall(:jl_finalize_th, Void, (Ptr{Void}, Any,),
                          Core.getptls(), o)
 
-gc(full::Bool=true) = ccall(:jl_gc_collect, Void, (Cint,), full)
-gc_enable(on::Bool) = ccall(:jl_gc_enable, Cint, (Cint,), on)!=0
+gc(full::Bool=true) = ccall(:jl_gc_collect, Void, (Int32,), full)
+gc_enable(on::Bool) = ccall(:jl_gc_enable, Int32, (Int32,), on) != 0
 
 immutable Nullable{T}
     hasvalue::Bool
