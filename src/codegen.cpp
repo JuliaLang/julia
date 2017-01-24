@@ -2437,7 +2437,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
 
     else if (f==jl_builtin_tuple) {
         if (nargs == 0) {
-            *ret = ghostValue(jl_typeof(jl_emptytuple));
+            *ret = ghostValue(jl_emptytuple_type);
             JL_GC_POP();
             return true;
         }

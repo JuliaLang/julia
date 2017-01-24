@@ -1634,7 +1634,7 @@ void pre_mark(jl_ptls_t ptls)
     // constants
     gc_push_root(ptls, jl_emptysvec, 0);
     gc_push_root(ptls, jl_emptytuple, 0);
-    gc_push_root(ptls, jl_typeof(jl_emptytuple), 0);
+    gc_push_root(ptls, jl_emptytuple_type, 0);
     gc_push_root(ptls, jl_true, 0);
     gc_push_root(ptls, jl_false, 0);
 }
