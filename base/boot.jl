@@ -265,6 +265,8 @@ UnionAll(v::TypeVar, t::ANY) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
 
 Void() = nothing
 
+(::Type{Tuple{}})() = ()
+
 immutable VecElement{T}
     value::T
     VecElement(value::T) = new(value) # disable converting constructor in Core

@@ -203,3 +203,17 @@ let
 
     test_15703()
 end
+
+# PR #15516
+@test Tuple{Char,Char}("za") === ('z','a')
+@test_throws ArgumentError Tuple{Char,Char}("z")
+
+@test NTuple{20,Int}(Iterators.countfrom(2)) === (2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21)
+@test NTuple{20,Float64}(Iterators.countfrom(2)) === (2.,3.,4.,5.,6.,7.,8.,9.,10.,11.,12.,13.,14.,15.,16.,17.,18.,19.,20.,21.)
+@test_throws ArgumentError NTuple{20,Int}([1,2])
+
+@test Tuple{Vararg{Float32}}(Float64[1,2,3]) === (1.0f0, 2.0f0, 3.0f0)
+@test Tuple{Int,Vararg{Float32}}(Float64[1,2,3]) === (1, 2.0f0, 3.0f0)
+@test Tuple{Int,Vararg{Any}}(Float64[1,2,3]) === (1, 2.0, 3.0)
+@test Tuple(ones(5)) === (1.0,1.0,1.0,1.0,1.0)
+@test_throws MethodError convert(Tuple, ones(5))
