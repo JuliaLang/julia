@@ -361,9 +361,9 @@ function instanceof_tfunc(t::ANY)
         return t.parameters[1]
     elseif isa(t,UnionAll)
         t′ = unwrap_unionall(t)
-        if isType(t′)
-            return rewrap_unionall(t′.parameters[1], t)
-        end
+        return rewrap_unionall(instanceof_tfunc(t′), t)
+    elseif isa(t,Union)
+        return Union{instanceof_tfunc(t.a), instanceof_tfunc(t.b)}
     end
     return Any
 end
@@ -695,8 +695,8 @@ function getfield_tfunc(s00::ANY, name)
         end
         s = DataType # typeof(p1)
     elseif isa(s, Union)
-        return rewrap(tmerge(getfield_tfunc(s.a, name), getfield_tfunc(s.b, name)),
-                      s00)
+        return tmerge(rewrap(getfield_tfunc(s.a, name),s00),
+                      rewrap(getfield_tfunc(s.b, name),s00))
     elseif isa(s, Conditional)
         return Bottom # Bool has no fields
     elseif isa(s, Const)
@@ -791,25 +791,64 @@ function getfield_tfunc(s00::ANY, name)
 end
 add_tfunc(getfield, 2, 2, (s::ANY, name::ANY) -> getfield_tfunc(s, name))
 add_tfunc(setfield!, 3, 3, (o::ANY, f::ANY, v::ANY) -> v)
-function fieldtype_tfunc(s::ANY, name::ANY)
-    if isa(s, Const)
-        s = s.val
-    elseif isType(s)
-        s = s.parameters[1]
-    else
+function fieldtype_tfunc(s0::ANY, name::ANY)
+    if s0 === Any || s0 === Type || DataType ⊑ s0 || UnionAll ⊑ s0
         return Type
     end
-    t = getfield_tfunc(s, name)
-    if t === Bottom
-        return t
-    elseif isa(t, Const)
-        return Const(typeof(t.val))
-    elseif isleaftype(t)
-        return Const(t)
-    elseif isvarargtype(t)
-        return Type{t}
+    # fieldtype only accepts DataType and UnionAll, errors on `Module`
+    if isa(s0,Const) && (!(isa(s0.val,DataType) || isa(s0.val,UnionAll)) || s0.val === Module)
+        return Bottom
     end
-    return Type{_} where _<:t
+    if s0 == Type{Module} || s0 == Type{Union{}} || isa(s0, Conditional)
+        return Bottom
+    end
+
+    s = instanceof_tfunc(s0)
+    u = unwrap_unionall(s)
+
+    if isa(u,Union)
+        return tmerge(rewrap(fieldtype_tfunc(u.a, name),s),
+                      rewrap(fieldtype_tfunc(u.b, name),s))
+    end
+
+    if !isa(u,DataType) || u.abstract
+        return Type
+    end
+    ftypes = u.types
+    if isempty(ftypes)
+        return Bottom
+    end
+
+    if !isa(name, Const)
+        if !(Int <: name || Symbol <: name)
+            return Bottom
+        end
+        return reduce(tmerge, Bottom,
+                      Any[ fieldtype_tfunc(s0, Const(i)) for i = 1:length(ftypes) ])
+    end
+
+    fld = name.val
+    if isa(fld,Symbol)
+        fld = fieldindex(u, fld, false)
+    end
+    if !isa(fld, Int)
+        return Bottom
+    end
+    nf = length(ftypes)
+    if u.name === Tuple.name && fld >= nf && isvarargtype(ftypes[nf])
+        ft = unwrapva(ftypes[nf])
+    elseif fld < 1 || fld > nf
+        return Bottom
+    else
+        ft = ftypes[fld]
+    end
+
+    exact = (isa(s0, Const) || isType(s0)) && !has_free_typevars(s)
+    ft = rewrap_unionall(ft,s)
+    if exact
+        return Const(ft)
+    end
+    return Type{_} where _<:ft
 end
 add_tfunc(fieldtype, 2, 2, fieldtype_tfunc)
 
