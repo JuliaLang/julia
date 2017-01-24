@@ -447,7 +447,7 @@ static jl_method_instance_t *jl_new_thunk(jl_code_info_t *src, jl_module_t *modu
 {
     jl_method_instance_t *li = jl_new_method_instance_uninit();
     li->inferred = (jl_value_t*)src;
-    li->specTypes = jl_typeof(jl_emptytuple);
+    li->specTypes = (jl_value_t*)jl_emptytuple_type;
     jl_array_t *stmts = (jl_array_t*)src->code;
     size_t i, l;
     JL_GC_PUSH1(&li);
