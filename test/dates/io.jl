@@ -16,6 +16,15 @@
 @test string(Dates.DateTime(2000,1,1,0,0,0,500)) == "2000-01-01T00:00:00.5"
 @test string(Dates.DateTime(2000,1,1,0,0,0,998)) == "2000-01-01T00:00:00.998"
 @test string(Dates.DateTime(2000,1,1,0,0,0,999)) == "2000-01-01T00:00:00.999"
+@test string(Dates.Time(0)) == "00:00:00"
+@test string(Dates.Time(0,1)) == "00:01:00"
+@test string(Dates.Time(0,1,2)) == "00:01:02"
+@test string(Dates.Time(0,1,2,3)) == "00:01:02.003"
+@test string(Dates.Time(0,1,2,3,4)) == "00:01:02.003004"
+@test string(Dates.Time(0,1,2,3,4,5)) == "00:01:02.003004005"
+@test string(Dates.Time(0,0,0,0,1)) == "00:00:00.000001"
+@test string(Dates.Time(0,0,0,0,0,1)) == "00:00:00.000000001"
+@test string(Dates.Time(0,0,0,1)) == "00:00:00.001"
 
 # DateTime parsing
 # Useful reference for different locales: http://library.princeton.edu/departments/tsd/katmandu/reference/months.html

@@ -557,7 +557,7 @@ ifeq ($(OS),$(BUILD_OS))
 	cd $(LLVM_BUILDDIR_withtype) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
 		$(if $(filter $(LLVM_USE_CMAKE),1), \
-		  $(CMAKE) --build . check, \
+		  $(CMAKE) --build . --target check, \
 		  $(MAKE) $(LLVM_MFLAGS) check)
 endif
 	echo 1 > $@

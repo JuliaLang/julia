@@ -429,24 +429,20 @@ end
 @inferred cat10880(Tuple{Int8,Int16}, Tuple{Int32})
 
 # issue #19348
-function is_intrinsic_expr(e::Expr)
-    if e.head === :call
-        return Base.is_intrinsic_expr(e.args[1])
-    elseif e.head == :invoke
-        return false
-    elseif e.head === :new
-        return false
-    elseif e.head === :copyast
-        return false
-    elseif e.head === :inert
-        return false
+function is_typed_expr(e::Expr)
+    if e.head === :call ||
+       e.head === :invoke ||
+       e.head === :new ||
+       e.head === :copyast ||
+       e.head === :inert
+        return true
     end
-    return true
+    return false
 end
 test_inferred_static(other::ANY) = true
 test_inferred_static(slot::TypedSlot) = @test isleaftype(slot.typ)
 function test_inferred_static(expr::Expr)
-    if !is_intrinsic_expr(expr)
+    if is_typed_expr(expr)
         @test isleaftype(expr.typ)
     end
     for a in expr.args
@@ -494,3 +490,4 @@ immutable MyType18457{T,F,G}<:AbstractMyType18457{T,F,G} end
 tpara18457{I}(::Type{AbstractMyType18457{I}}) = I
 tpara18457{A<:AbstractMyType18457}(::Type{A}) = tpara18457(supertype(A))
 @test tpara18457(MyType18457{true}) === true
+

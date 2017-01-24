@@ -453,6 +453,19 @@ let d = Dict(1 => 2, 3 => 45)
     end
 end
 
+# Issue #20108
+let err, buf = IOBuffer()
+    try Array() catch err end
+    Base.show_method_candidates(buf,err)
+    @test isa(err, MethodError)
+    @test contains(String(buf), "Closest candidates are:")
+end
+
+# Issue 20111
+let K20111(x) = y -> x, buf = IOBuffer()
+    show(buf, methods(K20111(1)))
+    @test contains(String(buf), " 1 method for generic function")
+end
 
 # @macroexpand tests
 macro seven_dollar(ex)

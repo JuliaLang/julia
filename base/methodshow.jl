@@ -87,7 +87,7 @@ end
 function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
-    ft = sig.parameters[1]
+    ft = unwrap_unionall(sig.parameters[1])
     d1 = decls[1]
     if sig === Tuple
         print(io, m.name)

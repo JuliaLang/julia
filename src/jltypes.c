@@ -178,7 +178,7 @@ JL_DLLEXPORT int jl_has_free_typevars(jl_value_t *v)
 }
 
 // test whether a type has vars bound by the given environment
-JL_DLLEXPORT int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env)
+static int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env)
 {
     if (jl_typeis(v, jl_tvar_type))
         return typeenv_has(env, (jl_tvar_t*)v);
@@ -217,6 +217,21 @@ JL_DLLEXPORT int jl_has_typevar(jl_value_t *t, jl_tvar_t *v)
     jl_typeenv_t env = { v, NULL, NULL };
     return jl_has_bound_typevars(t, &env);
 }
+
+static int _jl_has_typevar_from_ua(jl_value_t *t, jl_unionall_t *ua, jl_typeenv_t *prev)
+{
+    jl_typeenv_t env = { ua->var, NULL, prev };
+    if (jl_is_unionall(ua->body))
+        return _jl_has_typevar_from_ua(t, (jl_unionall_t*)ua->body, &env);
+    else
+        return jl_has_bound_typevars(t, &env);
+}
+
+JL_DLLEXPORT int jl_has_typevar_from_unionall(jl_value_t *t, jl_unionall_t *ua)
+{
+    return _jl_has_typevar_from_ua(t, ua, NULL);
+}
+
 
 JL_DLLEXPORT int (jl_is_leaf_type)(jl_value_t *v)
 {
@@ -1345,6 +1360,27 @@ jl_value_t *instantiate_with(jl_value_t *t, jl_value_t **env, size_t n, jl_typee
 jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n)
 {
     return instantiate_with(t, env, n, NULL, NULL);
+}
+
+static jl_value_t *_jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals, jl_typeenv_t *prev)
+{
+    jl_typeenv_t en = { env->var, vals[0], prev };
+    if (jl_is_unionall(env->body))
+        return _jl_instantiate_type_in_env(ty, (jl_unionall_t*)env->body, vals + 1, &en);
+    else
+        return inst_type_w_(ty, &en, NULL, 1);
+}
+
+JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals)
+{
+    jl_value_t *typ;
+    JL_TRY {
+        typ = _jl_instantiate_type_in_env(ty, env, vals, NULL);
+    }
+    JL_CATCH {
+        typ = jl_bottom_type;
+    }
+    return typ;
 }
 
 jl_datatype_t *jl_wrap_Type(jl_value_t *t)

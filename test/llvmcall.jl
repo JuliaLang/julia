@@ -64,10 +64,10 @@ baremodule PlusTest
 end
 
 # issue #11800
-@test eval(Expr(:call,Core.Intrinsics.llvmcall,
+@test_throws ErrorException eval(Expr(:call,Core.Intrinsics.llvmcall,
     """%3 = add i32 %1, %0
        ret i32 %3""", Int32, Tuple{Int32, Int32},
-        Int32(1), Int32(2))) == 3
+        Int32(1), Int32(2))) # llvmcall must be compiled to be called
 
 # Test whether declarations work properly
 function undeclared_ceil(x::Float64)

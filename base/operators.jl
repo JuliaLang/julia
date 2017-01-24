@@ -687,7 +687,7 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
     f ∘ g
 
 Compose functions: i.e. `(f ∘ g)(args...)` means `f(g(args...))`. The `∘` symbol can be
-entered in the Julia REPL (and most editors, appropriately configured) by typing `\circ<tab>`.
+entered in the Julia REPL (and most editors, appropriately configured) by typing `\\circ<tab>`.
 Example:
 
 ```jldoctest

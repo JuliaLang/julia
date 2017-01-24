@@ -135,6 +135,27 @@ end
         @test isa(reshape(s, Val{N}), Base.ReshapedArray{Int,N})
     end
 end
+@testset "reshape with colon" begin
+    # Reshape with an omitted dimension
+    let A = linspace(1, 60, 60)
+        @test size(reshape(A, :))         == (60,)
+        @test size(reshape(A, :, 1))      == (60, 1)
+        @test size(reshape(A, (:, 2)))    == (30, 2)
+        @test size(reshape(A, 3, :))      == (3, 20)
+        @test size(reshape(A, 2, 3, :))   == (2, 3, 10)
+        @test size(reshape(A, (2, :, 5))) == (2, 6, 5)
+        @test_throws DimensionMismatch reshape(A, 7, :)
+        @test_throws DimensionMismatch reshape(A, :, 2, 3, 4)
+        @test_throws DimensionMismatch reshape(A, (:, :))
+
+        B = rand(2,2,2,2)
+        @test size(reshape(B, :)) == (16,)
+        @test size(reshape(B, :, 4)) == (4, 4)
+        @test size(reshape(B, (2, 1, :))) == (2, 1, 8)
+        @test_throws DimensionMismatch reshape(B, 3, :)
+        @test_throws DimensionMismatch reshape(B, :, :, 2, 2)
+    end
+end
 
 @test reshape(1:5, (5,)) === 1:5
 @test reshape(1:5, 5) === 1:5

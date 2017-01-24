@@ -203,7 +203,7 @@
    m inarg))
 
 (define (resolve-expansion-vars- e env m inarg)
-  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end))
+  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end) (eq? e 'ccall))
          e)
         ((symbol? e)
          (let ((a (assq e env)))

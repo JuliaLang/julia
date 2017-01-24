@@ -6,6 +6,7 @@ immutable Irrational{sym} <: Real end
 
 show{sym}(io::IO, x::Irrational{sym}) = print(io, "$sym = $(string(float(x))[1:15])...")
 
+promote_rule{s}(::Type{Irrational{s}}, ::Type{Float16}) = Float16
 promote_rule{s}(::Type{Irrational{s}}, ::Type{Float32}) = Float32
 promote_rule{s,t}(::Type{Irrational{s}}, ::Type{Irrational{t}}) = Float64
 promote_rule{s,T<:Number}(::Type{Irrational{s}}, ::Type{T}) = promote_type(Float64,T)

@@ -116,8 +116,6 @@
 #     runnable::Bool
 # end
 
-import Core.Intrinsics.ccall
-
 export
     # key types
     Any, DataType, Vararg, ANY, NTuple,

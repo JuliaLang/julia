@@ -49,6 +49,8 @@ h = Dates.Hour(1)
 mi = Dates.Minute(1)
 s = Dates.Second(1)
 ms = Dates.Millisecond(1)
+us = Dates.Microsecond(1)
+ns = Dates.Nanosecond(1)
 @test Dates.Year(y) == y
 @test Dates.Month(m) == m
 @test Dates.Week(w) == w
@@ -57,6 +59,8 @@ ms = Dates.Millisecond(1)
 @test Dates.Minute(mi) == mi
 @test Dates.Second(s) == s
 @test Dates.Millisecond(ms) == ms
+@test Dates.Microsecond(us) == us
+@test Dates.Nanosecond(ns) == ns
 @test typeof(Int8(y)) <: Int8
 @test typeof(UInt8(y)) <: UInt8
 @test typeof(Int16(y)) <: Int16
@@ -99,6 +103,8 @@ ms = Dates.Millisecond(1)
 @test mi == mi
 @test s == s
 @test ms == ms
+@test us == us
+@test ns == ns
 y2 = Dates.Year(2)
 @test y < y2
 @test y2 > y
@@ -147,11 +153,18 @@ y2 = Dates.Year(2)
 @test typeof(y+mi) <: Dates.CompoundPeriod
 @test typeof(y+s) <: Dates.CompoundPeriod
 @test typeof(y+ms) <: Dates.CompoundPeriod
+@test typeof(y+us) <: Dates.CompoundPeriod
+@test typeof(y+ns) <: Dates.CompoundPeriod
 @test y > m
 @test d < w
 @test mi < h
 @test ms < h
 @test ms < mi
+@test us < ms
+@test ns < ms
+@test ns < us
+@test ns < w
+@test us < w
 @test typemax(Dates.Year) == Dates.Year(typemax(Int64))
 @test typemax(Dates.Year) + y == Dates.Year(-9223372036854775808)
 @test typemin(Dates.Year) == Dates.Year(-9223372036854775808)
@@ -261,6 +274,8 @@ test = ((((((((dt + y) - m) + w) - d) + h) - mi) + s) - ms)
 @test Dates.Minute("1") == mi
 @test Dates.Second("1") == s
 @test Dates.Millisecond("1") == ms
+@test Dates.Microsecond("1") == us
+@test Dates.Nanosecond("1") == ns
 @test_throws ArgumentError Dates.Year("1.0")
 @test Dates.Year(parse(Float64,"1.0")) == y
 
@@ -283,6 +298,8 @@ dt = Dates.DateTime(2014)
 @test Dates.default(Dates.Minute) == zero(Dates.Minute)
 @test Dates.default(Dates.Second) == zero(Dates.Second)
 @test Dates.default(Dates.Millisecond) == zero(Dates.Millisecond)
+@test Dates.default(Dates.Microsecond) == zero(Dates.Microsecond)
+@test Dates.default(Dates.Nanosecond) == zero(Dates.Nanosecond)
 
 # Conversions
 @test Dates.toms(ms) == Dates.value(Dates.Millisecond(ms)) == 1

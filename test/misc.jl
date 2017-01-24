@@ -293,8 +293,17 @@ v11801, t11801 = @timed sin(1)
 # interactive utilities
 
 import Base.summarysize
-@test summarysize(Core) > summarysize(Core.Inference) > Core.sizeof(Core)
-@test summarysize(Base) > 10_000*sizeof(Int)
+@test summarysize(Core) > (summarysize(Core.Inference) + Base.summarysize(Core.Intrinsics)) > Core.sizeof(Core)
+@test summarysize(Base) > 100_000 * sizeof(Ptr)
+
+let R = Ref{Any}(nothing), depth = 10^6
+    for i = 1:depth
+        R = Ref{Any}(R)
+    end
+    R = Core.svec(R, R)
+    @test summarysize(R) == (depth + 4) * sizeof(Ptr)
+end
+
 module _test_whos_
 export x
 x = 1.0
@@ -588,4 +597,17 @@ let
     finally
         eval(Base, :(have_color = $(old_have_color)))
     end
+end
+
+abstract DA_19281{T, N} <: AbstractArray{T, N}
+Base.convert{S,T,N}(::Type{Array{S, N}}, ::DA_19281{T, N}) = error()
+x_19281 = [(), (1,)]
+type Foo_19281
+    f::Vector{Tuple}
+    Foo_19281() = new(x_19281)
+end
+
+@testset "test this does not segfault #19281" begin
+    @test Foo_19281().f[1] == ()
+    @test Foo_19281().f[2] == (1, )
 end

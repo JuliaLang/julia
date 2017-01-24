@@ -325,7 +325,7 @@ mktempdir() do dir
                     @test LibGit2.shortname(brref) == master_branch
                     @test LibGit2.ishead(brref)
                     @test LibGit2.upstream(brref) === nothing
-                    @test repo.ptr == LibGit2.owner(brref).ptr
+                    @test repo.ptr == LibGit2.repository(brref).ptr
                     @test brnch == master_branch
                     @test LibGit2.headname(repo) == master_branch
                     LibGit2.branch!(repo, test_branch, string(commit_oid1), set_head=false)
@@ -452,6 +452,41 @@ mktempdir() do dir
                 close(repo)
             end
         end
+
+        @testset "diff" begin
+            repo = LibGit2.GitRepo(cache_repo)
+            try
+                @test !LibGit2.isdirty(repo)
+                @test !LibGit2.isdirty(repo, test_file)
+                @test !LibGit2.isdirty(repo, "nonexistent")
+                @test !LibGit2.isdiff(repo, "HEAD")
+                @test !LibGit2.isdirty(repo, cached=true)
+                @test !LibGit2.isdirty(repo, test_file, cached=true)
+                @test !LibGit2.isdirty(repo, "nonexistent", cached=true)
+                @test !LibGit2.isdiff(repo, "HEAD", cached=true)
+                open(joinpath(cache_repo,test_file), "a") do f
+                    println(f, "zzzz")
+                end
+                @test LibGit2.isdirty(repo)
+                @test LibGit2.isdirty(repo, test_file)
+                @test !LibGit2.isdirty(repo, "nonexistent")
+                @test LibGit2.isdiff(repo, "HEAD")
+                @test !LibGit2.isdirty(repo, cached=true)
+                @test !LibGit2.isdiff(repo, "HEAD", cached=true)
+                LibGit2.add!(repo, test_file)
+                @test LibGit2.isdirty(repo)
+                @test LibGit2.isdiff(repo, "HEAD")
+                @test LibGit2.isdirty(repo, cached=true)
+                @test LibGit2.isdiff(repo, "HEAD", cached=true)
+                LibGit2.commit(repo, "zzz")
+                @test !LibGit2.isdirty(repo)
+                @test !LibGit2.isdiff(repo, "HEAD")
+                @test !LibGit2.isdirty(repo, cached=true)
+                @test !LibGit2.isdiff(repo, "HEAD", cached=true)
+            finally
+                close(repo)
+            end
+        end
     end
 
     @testset "Fetch from cache repository" begin
@@ -466,8 +501,9 @@ mktempdir() do dir
 
             # because there was not any file we need to reset branch
             head_oid = LibGit2.head_oid(repo)
-            LibGit2.reset!(repo, head_oid, LibGit2.Consts.RESET_HARD)
+            new_head = LibGit2.reset!(repo, head_oid, LibGit2.Consts.RESET_HARD)
             @test isfile(joinpath(test_repo, test_file))
+            @test new_head == head_oid
 
             # Detach HEAD - no merge
             LibGit2.checkout!(repo, string(commit_oid3))
@@ -483,8 +519,8 @@ mktempdir() do dir
             LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
 
             # Try rebasing on master instead
-            LibGit2.rebase!(repo, master_branch)
-            @test LibGit2.head_oid(repo) == head_oid
+            newhead = LibGit2.rebase!(repo, master_branch)
+            @test newhead == head_oid
 
             # Switch to the master branch
             LibGit2.branch!(repo, master_branch)
@@ -595,14 +631,14 @@ mktempdir() do dir
             @test get(st_new) == get(st_stg)
 
             # try to unstage to HEAD
-            LibGit2.reset!(repo, LibGit2.Consts.HEAD_FILE, test_file)
+            new_head = LibGit2.reset!(repo, LibGit2.Consts.HEAD_FILE, test_file)
             st_uns = LibGit2.status(repo, test_file)
             @test get(st_uns) == get(st_mod)
 
             # reset repo
             @test_throws LibGit2.Error.GitError LibGit2.reset!(repo, LibGit2.GitHash(), LibGit2.Consts.RESET_HARD)
 
-            LibGit2.reset!(repo, LibGit2.head_oid(repo), LibGit2.Consts.RESET_HARD)
+            new_head = LibGit2.reset!(repo, LibGit2.head_oid(repo), LibGit2.Consts.RESET_HARD)
             open(joinpath(test_repo, test_file), "r") do io
                 @test read(io)[end] != 0x41
             end
@@ -632,7 +668,8 @@ mktempdir() do dir
             LibGit2.branch!(repo, "branch/b")
 
             # squash last 2 commits
-            LibGit2.reset!(repo, oldhead, LibGit2.Consts.RESET_SOFT)
+            new_head = LibGit2.reset!(repo, oldhead, LibGit2.Consts.RESET_SOFT)
+            @test new_head == oldhead
             LibGit2.commit(repo, "squash file1 and file2")
 
             # add another file
@@ -646,10 +683,23 @@ mktempdir() do dir
 
             # switch back and rebase
             LibGit2.branch!(repo, "branch/a")
-            LibGit2.rebase!(repo, "branch/b")
+            newnewhead = LibGit2.rebase!(repo, "branch/b")
 
             # issue #19624
-            @test LibGit2.head_oid(repo) == newhead
+            @test newnewhead == newhead
+
+            # add yet another file
+            open(joinpath(LibGit2.path(repo),"file4"),"w") do f
+                write(f, "444\n")
+            end
+            LibGit2.add!(repo, "file4")
+            LibGit2.commit(repo, "add file4")
+
+            # rebase with onto
+            newhead = LibGit2.rebase!(repo, "branch/a", "master")
+
+            newerhead = LibGit2.head_oid(repo)
+            @test newerhead == newhead
         finally
             close(repo)
         end

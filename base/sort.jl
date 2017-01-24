@@ -684,7 +684,7 @@ module Float
 using ..Sort
 using ...Order
 
-import Core.Intrinsics: unbox, slt_int
+import Core.Intrinsics: slt_int
 import ..Sort: sort!
 import ...Order: lt, DirectOrdering
 
@@ -699,8 +699,8 @@ right(::DirectOrdering) = Right()
 left(o::Perm) = Perm(left(o.order), o.data)
 right(o::Perm) = Perm(right(o.order), o.data)
 
-lt{T<:Floats}(::Left, x::T, y::T) = slt_int(unbox(T,y),unbox(T,x))
-lt{T<:Floats}(::Right, x::T, y::T) = slt_int(unbox(T,x),unbox(T,y))
+lt{T<:Floats}(::Left, x::T, y::T) = slt_int(y, x)
+lt{T<:Floats}(::Right, x::T, y::T) = slt_int(x, y)
 
 isnan(o::DirectOrdering, x::Floats) = (x!=x)
 isnan(o::Perm, i::Int) = isnan(o.order,o.data[i])
