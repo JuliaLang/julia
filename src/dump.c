@@ -3088,7 +3088,7 @@ void jl_init_serializer(void)
                      jl_abstractslot_type, jl_methtable_type, jl_typemap_level_type,
                      jl_voidpointer_type, jl_newvarnode_type, jl_abstractstring_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
-                     jl_typeof(jl_emptytuple), jl_array_uint8_type, jl_symbol_type->name,
+                     jl_emptytuple_type, jl_array_uint8_type, jl_symbol_type->name,
                      jl_ssavalue_type->name, jl_tuple_typename, jl_code_info_type, jl_bottomtype_type,
                      ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_ref_type))->name,
                      jl_pointer_typename, jl_simplevector_type->name, jl_datatype_type->name,
