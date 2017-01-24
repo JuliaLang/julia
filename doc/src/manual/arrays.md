@@ -230,13 +230,11 @@ The general syntax for indexing into an n-dimensional array A is:
 X = A[I_1, I_2, ..., I_n]
 ```
 
-where each `I_k` may be:
-
-1. A scalar integer
-2. A `Range` of the form `a:b`, or `a:b:c`
-3. A `:` or `Colon()` to select entire dimensions
-4. An arbitrary integer array, including the empty array `[]`
-5. A boolean array to select a vector of elements at its `true` indices
+where each `I_k` may be a scalar integer, an array of integers, or any other
+[supported index](@ref man-supported-index-types). This includes
+[`Colon`](@ref) (`:`) to select all indices within the entire dimension,
+ranges of the form `a:c` or `a:b:c` to select congiguous or strided
+subsections, and arrays of booleans to select elements at their `true` indices.
 
 If all the indices are scalars, then the result `X` is a single element from the array `A`. Otherwise,
 `X` is an array with the same number of dimensions as the sum of the dimensionalities of all the
@@ -249,17 +247,6 @@ shape `(size(I_1, 1), size(I_1, 2), length(I_2), ..., length(I_n))`. The matrix 
 The location `(i_1, i_2, i_3, ..., i_{n+1})` contains the value at `A[I_1[i_1, i_2], I_2[i_3], ..., I_n[i_{n+1}]]`.
 All dimensions indexed with scalars are dropped. For example, the result of `A[2, I, 3]` is an
 array with size `size(I)`. Its `i`th element is populated by `A[2, I[i], 3]`.
-
-Indexing by a boolean array `B` is effectively the same as indexing by the vector that is returned
-by [`find(B)`](@ref). Often referred to as logical indexing, this selects elements at the indices
-where the values are `true`, akin to a mask. A logical index must be a vector of the same length
-as the dimension it indexes into, or it must be the only index provided and match the size and
-dimensionality of the array it indexes into. It is generally more efficient to use boolean arrays
-as indices directly instead of first calling [`find()`](@ref).
-
-Additionally, single elements of a multidimensional array can be indexed as `x = A[I]`, where
-`I` is a `CartesianIndex`. It effectively behaves like an `n`-tuple of integers spanning multiple
-dimensions of `A`. See [Iteration](@ref) below.
 
 As a special part of this syntax, the `end` keyword may be used to represent the last index of
 each dimension within the indexing brackets, as determined by the size of the innermost array
@@ -283,14 +270,6 @@ julia> x[2:3, 2:end-1]
 2×2 Array{Int64,2}:
  6  10
  7  11
-
-julia> x[map(ispow2, x)]
-5-element Array{Int64,1}:
-  1
-  2
-  4
-  8
- 16
 
 julia> x[1, [2 3; 4 1]]
 2×2 Array{Int64,2}:
@@ -317,23 +296,22 @@ The general syntax for assigning values in an n-dimensional array A is:
 A[I_1, I_2, ..., I_n] = X
 ```
 
-where each `I_k` may be:
-
-1. A scalar integer
-2. A `Range` of the form `a:b`, or `a:b:c`
-3. A `:` or `Colon()` to select entire dimensions
-4. An arbitrary integer array, including the empty array `[]`
-5. A boolean array to select elements at its `true` indices
+where each `I_k` may be a scalar integer, an array of integers, or any other
+[supported index](@ref man-supported-index-types). This includes
+[`Colon`](@ref) (`:`) to select all indices within the entire dimension,
+ranges of the form `a:c` or `a:b:c` to select congiguous or strided
+subsections, and arrays of booleans to select elements at their `true` indices.
 
 If `X` is an array, it must have the same number of elements as the product of the lengths of
 the indices: `prod(length(I_1), length(I_2), ..., length(I_n))`. The value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]`
 of `A` is overwritten with the value `X[i_1, i_2, ..., i_n]`. If `X` is not an array, its value
 is written to all referenced locations of `A`.
 
-A boolean array used as an index behaves as in [`getindex()`](@ref), behaving as though it is
-first transformed with [`find()`](@ref).
-
-Index assignment syntax is equivalent to a call to [`setindex!()`](@ref):
+Just as in [Indexing](@ref man-array-indexing), the `end` keyword may be used
+to represent the last index of each dimension within the indexing brackets, as
+determined by the size of the array being assigned into. Indexed assignment
+syntax without the `end` keyword is equivalent to a call to
+[`setindex!()`](@ref):
 
 ```
 setindex!(A, X, I_1, I_2, ..., I_n)
@@ -356,6 +334,141 @@ julia> x
  1  -1  -1
  2  -1  -1
  3   6   9
+```
+
+### [Supported index types](@id man-supported-index-types)
+
+In the expression `A[I_1, I_2, ..., I_n]`, each `I_k` may be a scalar index, an
+array of scalar indices, or an object that represents an array of scalar
+indices and can be converted to such by [`to_indices`](@ref):
+
+1. A scalar index. By default this includes:
+    * Non-boolean integers
+    * `CartesianIndex{N}`s, which behave like an `N`-tuple of integers spanning multiple dimensions (see below for more details)
+2. An array of scalar indices. This includes:
+    * Vectors and multidimensional arrays of integers
+    * Empty arrays like `[]`, which select no elements
+    * `Range`s of the form `a:c` or `a:b:c`, which select contiguous or strided subsections from `a` to `c` (inclusive)
+    * Any custom array of scalar indices that is a subtype of `AbstractArray`
+    * Arrays of `CartesianIndex{N}` (see below for more details)
+3. An object that represents an array of scalar indices and can be converted to such by [`to_indices`](@ref). By default this includes:
+    * [`Colon()`](@ref) (`:`), which represents all indices within an entire dimension or across the entire array
+    * Arrays of booleans, which select elements at their `true` indices (see below for more details)
+
+#### Cartesian indices
+
+The special `CartesianIndex{N}` object represents a scalar index that behaves
+like an `N`-tuple of integers spanning multiple dimensions.  For example:
+
+```jldoctest cartesianindex
+julia> A = reshape(1:32, 4, 4, 2);
+
+julia> A[3, 2, 1]
+7
+
+julia> A[CartesianIndex(3, 2, 1)] == A[3, 2, 1] == 7
+true
+```
+
+Considered alone, this may seem relatively trivial; `CartesianIndex` simply
+gathers multiple integers together into one object that represents a single
+multidimensional index. When combined with other indexing forms and iterators
+that yield `CartesianIndex`es, however, this can lead directly to very elegant
+and efficient code. See [Iteration](@ref) below, and for some more advanced
+examples, see [this blog post on multidimensional algorithms and
+iteration](http://julialang.org/blog/2016/02/iteration).
+
+Arrays of `CartesianIndex{N}` are also supported. They represent a collection
+of scalar indices that each span `N` dimensions, enabling a form of indexing
+that is sometimes referred to as pointwise indexing. For example, it enables
+accessing the diagonal elements from the first "page" of `A` from above:
+
+```jldoctest cartesianindex
+julia> page = A[:,:,1]
+4×4 Array{Int64,2}:
+ 1  5   9  13
+ 2  6  10  14
+ 3  7  11  15
+ 4  8  12  16
+
+julia> page[[CartesianIndex(1,1),
+             CartesianIndex(2,2),
+             CartesianIndex(3,3),
+             CartesianIndex(4,4)]]
+4-element Array{Int64,1}:
+  1
+  6
+ 11
+ 16
+```
+
+This can be expressed much more simply with [dot broadcasting](@ref man-vectorized)
+and by combining it with a normal integer index (instead of extracting the
+first `page` from `A` as a separate step). It can even be combined with a `:`
+to extract both diagonals from the two pages at the same time:
+
+```jldoctest cartesianindex
+julia> A[CartesianIndex.(indices(A, 1), indices(A, 2)), 1]
+4-element Array{Int64,1}:
+  1
+  6
+ 11
+ 16
+
+julia> A[CartesianIndex.(indices(A, 1), indices(A, 2)), :]
+4×2 Array{Int64,2}:
+  1  17
+  6  22
+ 11  27
+ 16  32
+```
+
+!!! warning
+
+    `CartesianIndex` and arrays of `CartesianIndex` are not compatible with the
+    `end` keyword to represent the last index of a dimension. Do not use `end`
+    in indexing expressions that may contain either.
+
+#### Logical indexing
+
+Often referred to as logical indexing or indexing with a logical mask, indexing
+by a boolean array selects elements at the indices where its values are `true`.
+Indexing by a boolean vector `B` is effectively the same as indexing by the
+vector of integers that is returned by [`find(B)`](@ref). Similarly, indexing
+by a `N`-dimensional boolean array is effectively the same as indexing by the
+vector of `CartesianIndex{N}`s where its values are `true`. A logical index
+must be a vector of the same length as the dimension it indexes into, or it
+must be the only index provided and match the size and dimensionality of the
+array it indexes into. It is generally more efficient to use boolean arrays as
+indices directly instead of first calling [`find()`](@ref).
+
+```jldoctest
+julia> x = reshape(1:16, 4, 4)
+4×4 Base.ReshapedArray{Int64,2,UnitRange{Int64},Tuple{}}:
+ 1  5   9  13
+ 2  6  10  14
+ 3  7  11  15
+ 4  8  12  16
+
+julia> x[[false, true, true, false], :]
+2×4 Array{Int64,2}:
+ 2  6  10  14
+ 3  7  11  15
+
+julia> mask = map(ispow2, x)
+4×4 Array{Bool,2}:
+  true  false  false  false
+  true  false  false  false
+ false  false  false  false
+  true   true  false   true
+
+julia> x[mask]
+5-element Array{Int64,1}:
+  1
+  2
+  4
+  8
+ 16
 ```
 
 ### Iteration
