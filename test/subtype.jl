@@ -66,6 +66,10 @@ function test_2()
 
     @test issub_strict(Tuple{Tuple{Int,Int},Tuple{Int,Int}}, Tuple{NTuple{N,Int},NTuple{N,Int}} where N)
     @test !issub(Tuple{Tuple{Int,Int},Tuple{Int,}}, Tuple{NTuple{N,Int},NTuple{N,Int}} where N)
+    @test NTuple{0} === Tuple{}
+
+    @test issub_strict(Tuple{Int,Int}, Tuple{Int,Int,Vararg{Int,N}} where N)
+    @test issub_strict(Tuple{Int,Int}, Tuple{E,E,Vararg{E,N}} where E where N)
 
     @test issub(Type{Tuple{VecElement{Bool}}}, (Type{Tuple{Vararg{VecElement{T},N}}} where T where N))
 end
@@ -470,7 +474,7 @@ function test_old()
     @test Tuple{Int,Int} <: Tuple{Vararg}
     @test Tuple{} <: @UnionAll N NTuple{N}
     @test !(Type{Tuple{}} <: Type{Tuple{Vararg}})
-    @test !(Type{Tuple{}} <: (@UnionAll N Type{NTuple{N}}))
+    @test   Type{Tuple{}} <: (@UnionAll N Type{NTuple{N}})
 
     @test !(Type{Array{Integer}} <: Type{AbstractArray{Integer}})
     @test !(Type{Array{Integer}} <: Type{@UnionAll T<:Integer Array{T}})

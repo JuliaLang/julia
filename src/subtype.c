@@ -555,8 +555,6 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
     size_t lx = jl_nparams(xd), ly = jl_nparams(yd);
     if (lx == 0 && ly == 0)
         return 1;
-    if (ly == 0)
-        return 0;
     size_t i=0, j=0;
     int vx=0, vy=0, vvx = (lx > 0 && jl_is_vararg_type(jl_tparam(xd, lx-1)));
     int vvy = (ly > 0 && jl_is_vararg_type(jl_tparam(yd, ly-1)));
@@ -564,16 +562,19 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
         if ((vvy && ly > lx) || (!vvy && ly < lx-1))
             return 0;
     }
-    else if (!vvy && lx != ly) {
+    else if ((vvy && ly > lx+1) || (!vvy && lx != ly)) {
         return 0;
     }
     param = (param == 0 ? 1 : param);
     jl_value_t *lastx=NULL, *lasty=NULL;
     while (i < lx) {
-        if (j >= ly) return vx;
-        jl_value_t *xi = jl_tparam(xd, i), *yi = jl_tparam(yd, j);
+        jl_value_t *xi = jl_tparam(xd, i);
         if (jl_is_vararg_type(xi)) vx = 1;
-        if (jl_is_vararg_type(yi)) vy = 1;
+        jl_value_t *yi = NULL;
+        if (j < ly) {
+            yi = jl_tparam(yd, j);
+            if (jl_is_vararg_type(yi)) vy = 1;
+        }
         if (vx && !vy) {
             if (!check_vararg_length(xi, ly+1-lx, e))
                 return 0;
@@ -582,9 +583,13 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
             jl_value_t *N = jl_tparam1(xi);
             if (N == (jl_value_t*)p1 || N == (jl_value_t*)p2)
                 return 0;
+            if (j >= ly) return 1;
             xi = jl_tparam0(xi);
         }
-        else if (!vx && vy) {
+        else if (j >= ly) {
+            return 0;
+        }
+        if (!vx && vy) {
             jl_tvar_t *p1=NULL, *p2=NULL;
             yi = jl_tparam0(unwrap_2_unionall(yi, &p1, &p2));
             if (yi == (jl_value_t*)p1 || yi == (jl_value_t*)p2)
