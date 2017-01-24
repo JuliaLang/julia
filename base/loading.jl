@@ -80,54 +80,36 @@ else
     end
 end
 
-function try_path(prefix::String, base::String, name::String)
-    path = joinpath(prefix, name)
+function load_hook(prefix::String, name::String, found::Void)
+    name_jl = "$name.jl"
+    path = joinpath(prefix, name_jl)
     isfile_casesensitive(path) && return abspath(path)
-    path = joinpath(prefix, base, "src", name)
+    path = joinpath(prefix, name_jl, "src", name_jl)
     isfile_casesensitive(path) && return abspath(path)
-    path = joinpath(prefix, name, "src", name)
+    path = joinpath(prefix, name, "src", name_jl)
     isfile_casesensitive(path) && return abspath(path)
     return nothing
 end
+load_hook(prefix::String, name::String, found::String) = found
+load_hook(prefix, name::String, found) =
+    throw(ArgumentError("unrecognized custom loader in LOAD_PATH: $prefix"))
 
-# `wd` is a working directory to search. defaults to current working directory.
-# if `wd === nothing`, no extra path is searched.
-function find_in_path(name::String, wd)
-    isabspath(name) && return name
-    base = name
-    if endswith(name,".jl")
-        base = name[1:end-3]
-    else
-        name = string(base,".jl")
-    end
-    if wd !== nothing
-        isfile_casesensitive(joinpath(wd,name)) && return joinpath(wd,name)
-    end
-    p = try_path(Pkg.dir(), base, name)
-    p !== nothing && return p
-    for prefix in LOAD_PATH
-        p = try_path(prefix, base, name)
-        p !== nothing && return p
-    end
-    return nothing
-end
-find_in_path(name::AbstractString, wd = pwd()) = find_in_path(String(name), wd)
+_str(x::AbstractString) = String(x)
+_str(x) = x
 
-function find_in_node_path(name::String, srcpath, node::Int=1)
-    if myid() == node
-        return find_in_path(name, srcpath)
-    else
-        return remotecall_fetch(find_in_path, node, name, srcpath)
+function find_in_path(name::String)
+    path = nothing
+    path = _str(load_hook(_str(Pkg.dir()), name, path))
+    for dir in LOAD_PATH
+        path = _str(load_hook(_str(dir), name, path))
     end
+    return path
 end
+find_in_path(name::AbstractString) = find_in_path(String(name))
 
-function find_source_file(file::String)
-    (isabspath(file) || isfile(file)) && return file
-    file2 = find_in_path(file)
-    file2 !== nothing && return file2
-    file2 = joinpath(JULIA_HOME, DATAROOTDIR, "julia", "base", file)
-    return isfile(file2) ? file2 : nothing
-end
+find_in_node_path(name::String, node::Int=1) =
+    myid() == node ? find_in_path(name) :
+    remotecall_fetch(find_in_path, node, name)
 
 function find_all_in_cache_path(mod::Symbol)
     name = string(mod)
@@ -391,7 +373,7 @@ function require(mod::Symbol)
         toplevel_load = false
         # perform the search operation to select the module file require intends to load
         name = string(mod)
-        path = find_in_node_path(name, nothing, 1)
+        path = find_in_node_path(name, 1)
         if path === nothing
             throw(ArgumentError("Module $name not found in current path.\nRun `Pkg.add(\"$name\")` to install the $name package."))
         end
@@ -632,7 +614,7 @@ for important notes.
 function compilecache(name::String)
     myid() == 1 || error("can only precompile from node 1")
     # decide where to get the source file from
-    path = find_in_path(name, nothing)
+    path = find_in_path(name)
     path === nothing && throw(ArgumentError("$name not found in path"))
     path = String(path)
     # decide where to put the resulting cache file
