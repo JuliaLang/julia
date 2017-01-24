@@ -1867,6 +1867,16 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
 end
 logm(A::LowerTriangular) = logm(A.').'
 
+function floop(x,R,i::Int,j::Int)
+    r = x
+    @inbounds begin
+        @simd for k = i+1:j-1
+            r -= R[i,k]*R[k,j]
+        end
+    end
+    r
+end
+
 function sqrtm{T}(A::UpperTriangular{T})
     n = checksquare(A)
     realmatrix = false
@@ -1888,10 +1898,7 @@ function sqrtm{T}(A::UpperTriangular{T})
     for j = 1:n
         R[j,j] = realmatrix?sqrt(A[j,j]):sqrt(complex(A[j,j]))
         for i = j-1:-1:1
-            r = A[i,j]
-            for k = i+1:j-1
-                r -= R[i,k]*R[k,j]
-            end
+            r = floop(A[i,j],R,i,j)
             r==0 || (R[i,j] = r / (R[i,i] + R[j,j]))
         end
     end
@@ -1900,14 +1907,10 @@ end
 function sqrtm{T}(A::UnitUpperTriangular{T})
     n = checksquare(A)
     TT = typeof(sqrt(zero(T)))
-    R = zeros(TT, n, n)
+    R = eye(TT, n, n)
     for j = 1:n
-        R[j,j] = one(T)
         for i = j-1:-1:1
-            r = A[i,j]
-            for k = i+1:j-1
-                r -= R[i,k]*R[k,j]
-            end
+            r = floop(A[i,j],R,i,j)
             r==0 || (R[i,j] = r / (R[i,i] + R[j,j]))
         end
     end
