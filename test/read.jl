@@ -241,12 +241,16 @@ for (name, f) in l
         cleanup()
 
         verbose && println("$name readline...")
-        @test readline(io()) == readline(IOBuffer(text))
-        @test readline(io()) == readline(filename)
+        @test readline(io(), chomp=false) == readline(IOBuffer(text), chomp=false)
+        @test readline(io(), chomp=false) == readline(filename, chomp=false)
 
         verbose && println("$name readlines...")
+        @test readlines(io(), chomp=false) == readlines(IOBuffer(text), chomp=false)
+        @test readlines(io(), chomp=false) == readlines(filename, chomp=false)
         @test readlines(io()) == readlines(IOBuffer(text))
         @test readlines(io()) == readlines(filename)
+        @test collect(eachline(io(), chomp=false)) == collect(eachline(IOBuffer(text), chomp=false))
+        @test collect(eachline(io(), chomp=false)) == collect(eachline(filename, chomp=false))
         @test collect(eachline(io())) == collect(eachline(IOBuffer(text)))
         @test collect(eachline(io())) == collect(eachline(filename))
 
