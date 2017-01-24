@@ -49,6 +49,14 @@ test = Dates.Date(Dates.UTD(734869))
 @test Dates.Date(2013) == test
 @test Dates.Date(2013,1) == test
 @test Dates.Date(2013,1,1) == test
+# Test Time construction by parts
+t = Dates.Time(Dates.Nanosecond(82800000000000))
+@test Dates.Time(23) == t
+@test Dates.Time(23,0) == t
+@test Dates.Time(23,0,0) == t
+@test Dates.Time(23,0,0,0) == t
+@test Dates.Time(23,0,0,0,0) == t
+@test Dates.Time(23,0,0,0,0,0) == t
 
 # Test various input types for Date/DateTime
 test = Dates.Date(1,1,1)
@@ -101,19 +109,38 @@ test = Dates.Date(1,1,1)
 @test_throws ArgumentError Dates.DateTime(2013,1,1,0,0,60)
 @test_throws ArgumentError Dates.DateTime(2013,1,1,0,0,0,-1)
 @test_throws ArgumentError Dates.DateTime(2013,1,1,0,0,0,1000)
+@test_throws ArgumentError Dates.Time(24)
+@test_throws ArgumentError Dates.Time(-1)
+@test_throws ArgumentError Dates.Time(0,-1)
+@test_throws ArgumentError Dates.Time(0,60)
+@test_throws ArgumentError Dates.Time(0,0,-1)
+@test_throws ArgumentError Dates.Time(0,0,60)
+@test_throws ArgumentError Dates.Time(0,0,0,-1)
+@test_throws ArgumentError Dates.Time(0,0,0,1000)
+@test_throws ArgumentError Dates.Time(0,0,0,0,-1)
+@test_throws ArgumentError Dates.Time(0,0,0,0,1000)
+@test_throws ArgumentError Dates.Time(0,0,0,0,0,-1)
+@test_throws ArgumentError Dates.Time(0,0,0,0,0,1000)
 
 # Test DateTime traits
 a = Dates.DateTime(2000)
 b = Dates.Date(2000)
+c = Dates.Time(0)
 @test Dates.calendar(a) == Dates.ISOCalendar
 @test Dates.calendar(b) == Dates.ISOCalendar
 @test eps(a) == Dates.Millisecond(1)
 @test eps(b) == Dates.Day(1)
+@test eps(c) == Dates.Nanosecond(1)
 @test string(typemax(Dates.DateTime)) == "146138512-12-31T23:59:59"
 @test string(typemin(Dates.DateTime)) == "-146138511-01-01T00:00:00"
 @test typemax(Dates.DateTime) - typemin(Dates.DateTime) == Dates.Millisecond(9223372017043199000)
 @test string(typemax(Dates.Date)) == "252522163911149-12-31"
 @test string(typemin(Dates.Date)) == "-252522163911150-01-01"
+@test string(typemax(Dates.Time)) == "23:59:59.999999999"
+@test string(typemin(Dates.Time)) == "00:00:00"
+@test isfinite(Dates.Date)
+@test isfinite(Dates.DateTime)
+@test isfinite(Dates.Time)
 
 # Date-DateTime conversion/promotion
 @test Dates.DateTime(a) == a
@@ -168,6 +195,12 @@ ms = Dates.Millisecond(1)
 @test Dates.Date(d,y) == Dates.Date(1,1,1)
 @test Dates.Date(d,m) == Dates.Date(1,1,1)
 @test Dates.Date(m,y) == Dates.Date(1,1,1)
-
-@test isfinite(Dates.Date)
-@test isfinite(Dates.DateTime)
+us = Dates.Microsecond(1)
+ns = Dates.Nanosecond(1)
+@test Dates.Time(h) == Dates.Time(1)
+@test Dates.Time(h,mi) == Dates.Time(1,1)
+@test Dates.Time(h,mi,s) == Dates.Time(1,1,1)
+@test Dates.Time(h,mi,s,ms) == Dates.Time(1,1,1,1)
+@test Dates.Time(h,mi,s,ms,us) == Dates.Time(1,1,1,1,1)
+@test Dates.Time(h,mi,s,ms,us,ns) == Dates.Time(1,1,1,1,1,1)
+@test Dates.Time(us,h,s,ns,mi,ms) == Dates.Time(1,1,1,1,1,1)

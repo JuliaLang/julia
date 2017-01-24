@@ -19,8 +19,18 @@ the new `DateTime` are assumed to be zero.
 """
 DateTime(dt::TimeType) = convert(DateTime,dt)
 
-Base.convert(::Type{DateTime},dt::Date) = DateTime(UTM(value(dt)*86400000))
-Base.convert(::Type{Date},dt::DateTime) = Date(UTD(days(dt)))
+"""
+    Time(dt::DateTime) -> Time
+
+Converts a `DateTime` to a `Time`. The hour, minute, second, and millisecond parts of
+the `DateTime` are used to create the new `Time`. Microsecond and nanoseconds are zero by default.
+"""
+Time(dt::DateTime) = convert(Time, dt)
+
+Base.convert(::Type{DateTime}, dt::Date) = DateTime(UTM(value(dt)*86400000))
+Base.convert(::Type{Date}, dt::DateTime) = Date(UTD(days(dt)))
+Base.convert(::Type{Time}, dt::DateTime) = Time(Nanosecond((value(dt) % 86400000) * 1000000))
+
 """
     convert{T<:Real}(::Type{T}, dt::DateTime) -> T
 Converts a DateTime value `dt` to a number of type `T`. The returned value corresponds to the number of Rata Die milliseconds since epoch.
