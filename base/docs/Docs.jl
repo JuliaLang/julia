@@ -258,7 +258,7 @@ dynamic docstring is returned instead of one based on the binding itself.
 function doc(binding::Binding, sig::Type = Union{})
     if defined(binding)
         result = getdoc(resolve(binding), sig)
-        result === nothing || return Markdown.parse(result)
+        result === nothing || return result
     end
     results, groups = DocStr[], MultiDoc[]
     # Lookup `binding` and `sig` for matches in all modules of the docsystem.
