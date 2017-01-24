@@ -935,19 +935,6 @@ if VERSION < v"0.4.0-dev+6068"
     Base.real{T<:Real}(::Type{Complex{T}}) = T
 end
 
-if VERSION < v"0.4.0-dev+6578"
-    rtoldefault{T<:AbstractFloat}(::Type{T}) = sqrt(eps(T))
-    rtoldefault{T<:Real}(::Type{T}) = 0
-    rtoldefault{T<:Number,S<:Number}(x::Union(T,Type{T}), y::Union(S,Type{S})) = rtoldefault(promote_type(real(T),real(S)))
-    function Base.isapprox{T<:Number,S<:Number}(x::AbstractArray{T}, y::AbstractArray{S}; rtol::Real=rtoldefault(T,S), atol::Real=0, norm::Function=vecnorm)
-        d = norm(x - y)
-        return isfinite(d) ? d <= atol + rtol*max(norm(x), norm(y)) : x == y
-    end
-    const ≈ = isapprox
-    ≉(x,y) = !(x ≈ y)
-    export ≈, ≉
-end
-
 # Use as Compat.Linspace to get improved linspace in both 0.3 and 0.4
 if VERSION < v"0.4.0-dev+6110"
     include("linspace.jl")
@@ -1772,6 +1759,15 @@ if VERSION >= v"0.5.0-dev+5509" && VERSION < v"0.6.0-dev.1614"
     include_string("export .&, .|")
     include_string(".&(xs...) = broadcast(&, xs...)")
     include_string(".|(xs...) = broadcast(|, xs...)")
+end
+
+if VERSION < v"0.6.0-dev.2093" # Compat.isapprox to allow for NaNs
+    using Base.rtoldefault
+    function isapprox(x::Number, y::Number; rtol::Real=rtoldefault(x,y), atol::Real=0, nans::Bool=false)
+        x == y || (isfinite(x) && isfinite(y) && abs(x-y) <= atol + rtol*max(abs(x), abs(y))) || (nans && isnan(x) && isnan(y))
+    end
+else
+    import Base.isapprox
 end
 
 end # module
