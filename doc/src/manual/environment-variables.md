@@ -140,9 +140,11 @@ The absolute path of the shell with which Julia should execute external
 commands (via `Base.repl_cmd()`). Defaults to the environment variable
 `$SHELL`, and falls back to `/bin/sh` if `$SHELL` is unset.
 
-!!! note the `fish` shell is unsupported.
+!!! note
 
-### `JULIA_EDITOR`, `VISUAL`, `EDITOR`
+    the `fish` shell is unsupported.
+
+### `JULIA_EDITOR`
 
 The editor returned by `Base.editor()` and used in, e.g., [`Base.edit`](@ref).
 
@@ -151,7 +153,9 @@ over `$EDITOR`. If none of these environment variables is set, then the editor
 is taken to be `open` on Windows and OS X, or `/etc/alternatives/editor` if it
 exists, or `emacs` otherwise.
 
-!!! note `$JULIA_EDITOR` is *not* used in the determination of the editor for
+!!! note
+
+    `$JULIA_EDITOR` is *not* used in the determination of the editor for
     [`Base.Pkg.edit`](@ref): this function checks `$VISUAL` and `$EDITOR`
     alone.
 
@@ -219,14 +223,18 @@ should have at the terminal.
 The formatting `Base.input_color()` (default: normal, `"\033[0m"`) that input
 should have at the terminal.
 
-!!! note input is hardcoded to be bold (`"\033[1m"`).
+!!! note
+
+    input is hardcoded to be bold (`"\033[1m"`).
 
 ### `JULIA_ANSWER_COLOR`
 
 The formatting `Base.answer_color()` (default: normal, `"\033[0m"`) that output
 should have at the terminal.
 
-!!! note output is hardcoded to be bold (`"\033[1m"`).
+!!! note
+
+    output is hardcoded to be bold (`"\033[1m"`).
 
 ### `JULIA_STACKFRAME_LINEINFO_COLOR`
 
@@ -262,7 +270,9 @@ integers `a:b:c` represents the arithmetic sequence `a`, `a + b`, `a + 2*b`,
 If the character `'r'` appears as above, then the interval between garbage
 collection events is randomized.
 
-!!! note these environment variables only have an effect if Julia was compiled
+!!! note
+
+    these environment variables only have an effect if Julia was compiled
     with garbage-collection debugging (that is, if `WITH_GC_DEBUG_ENV` is set
     to `1` in the build configuration).
 
@@ -271,7 +281,9 @@ collection events is randomized.
 If set to anything besides `0`, then the Julia garbage collector never performs
 "quick sweeps" of memory.
 
-!!! note this environment variable only has an effect if Julia was compiled
+!!! note
+
+    this environment variable only has an effect if Julia was compiled
     with garbage-collection debugging (that is, if `WITH_GC_DEBUG_ENV` is set
     to `1` in the build configuration).
 
@@ -280,7 +292,9 @@ If set to anything besides `0`, then the Julia garbage collector never performs
 If set to anything besides `0`, then the Julia garbage collector will wait for
 the debugger to attach instead of aborting whenever there's a critical error.
 
-!!! note this environment variable only has an effect if Julia was compiled
+!!! note
+
+    this environment variable only has an effect if Julia was compiled
     with garbage-collection debugging (that is, if `WITH_GC_DEBUG_ENV` is set
     to `1` in the build configuration).
 
@@ -289,7 +303,9 @@ the debugger to attach instead of aborting whenever there's a critical error.
 If set to anything besides `0`, then the compiler will create and register an
 event listener for just-in-time (JIT) profiling.
 
-!!! note this environment variable only has an effect if Julia was compiled
+!!! note
+
+    this environment variable only has an effect if Julia was compiled
     with JIT profiling support, using either
 
 *   Intel's [VTune™
@@ -302,7 +318,9 @@ event listener for just-in-time (JIT) profiling.
 
 Arguments to be passed to the LLVM backend.
 
-!!! note this environment variable has an effect only if Julia was compiled with
+!!! note
+
+    this environment variable has an effect only if Julia was compiled with
     `JL_DEBUG_BUILD` set.
 
 ### `JULIA_DEBUG_LOADING`
