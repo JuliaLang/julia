@@ -930,7 +930,7 @@ type DynamicDocType
     x
 end
 
-Base.Docs.getdoc(d::DynamicDocType) = d.x
+Base.Docs.getdoc(d::DynamicDocType) = Base.Markdown.parse(d.x)
 
 dynamic_test = DynamicDocType("test 1")
 @test docstrings_equal(@doc(dynamic_test), doc"test 1")
