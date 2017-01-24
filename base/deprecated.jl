@@ -1789,11 +1789,16 @@ end
 # when this deprecation is deleted, remove all calls to it, and all
 # negate=nothing keyword arguments, from base/dates/adjusters.jl
 eval(Dates, quote
-    function deprecate_negate(f, sig, negate)
-        msg = "$f($sig; negate=$negate) is deprecated, use $f("
-        negate && (msg *= "!")
-        msg *= "$sig) instead."
-        Base.depwarn(msg, f)
+    function deprecate_negate(f, func, sig, negate)
+        if negate === nothing
+            return func
+        else
+            msg = "$f($sig; negate=$negate) is deprecated, use $f("
+            negate && (msg *= "!")
+            msg *= "$sig) instead."
+            Base.depwarn(msg, f)
+            return negate ? !func : func
+        end
     end
 end)
 
