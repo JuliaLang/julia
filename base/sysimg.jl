@@ -355,7 +355,7 @@ importall .Profile
 
 # dates
 include("dates/Dates.jl")
-import .Dates: Date, DateTime, now
+import .Dates: Date, DateTime, DateFormat, @dateformat_str, now
 
 # sparse matrices, vectors, and sparse linear algebra
 include("sparse/sparse.jl")
