@@ -911,6 +911,43 @@ example, but in many contexts it is more convenient to just sprinkle
 some dots in your expressions rather than defining a separate function
 for each vectorized operation.)
 
+## Consider using views for slices
+
+In Julia, an array "slice" expression like `array[1:5, :]` creates
+a copy of that data (except on the left-hand side of an assignment,
+where `array[1:5, :] = ...` assigns in-place to that portion of `array`).
+If you are doing many operations on the slice, this can be good for
+performance because it is more efficient to work with a smaller
+contiguous copy than it would be to index into the original array.
+On the other hand, if you are just doing a few simple operations on
+the slice, the cost of the allocation and copy operations can be
+substantial.
+
+An alternative is to create a "view" of the array, which is
+an array object (a `SubArray`) that actually references the data
+of the original array in-place, without making a copy.  (If you
+write to a view, it modifies the original array's data as well.)
+This can be done for individual slices by calling [`view()`](@ref),
+or more simply for a whole expression or block of code by putting
+[`@views`](@ref) in front of that expression.  For example:
+
+```julia
+julia> fcopy(x) = sum(x[2:end-1])
+
+julia> @views fview(x) = sum(x[2:end-1])
+
+julia> x = rand(10^6);
+
+julia> @time fcopy(x);
+  0.003051 seconds (7 allocations: 7.630 MB)
+
+julia> @time fview(x);
+  0.001020 seconds (6 allocations: 224 bytes)
+```
+
+Notice both the 3× speedup and the decreased memory allocation
+of the `fview` version of the function.
+
 ## Avoid string interpolation for I/O
 
 When writing data to a file (or other I/O device), forming extra intermediate strings is a source

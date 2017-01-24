@@ -133,6 +133,9 @@ This section lists changes that do not have deprecation warnings.
 Library improvements
 --------------------
 
+  * `@views` macro to convert a whole expression or block of code to
+    use views for all slices ([#20164]).
+
   * `max`, `min`, and related functions (`minmax`, `maximum`, `minimum`,
     `extrema`) now return `NaN` for `NaN` arguments ([#12563]).
 

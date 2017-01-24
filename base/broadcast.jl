@@ -503,16 +503,8 @@ end
 # explicit calls to view.   (All of this can go away if slices
 # are changed to generate views by default.)
 
-dotview(args...) = getindex(args...)
-dotview(A::AbstractArray, args...) = view(A, args...)
-dotview{T<:AbstractArray}(A::AbstractArray{T}, args...) = getindex(A, args...)
-# avoid splatting penalty in common cases:
-for nargs = 0:5
-    args = Symbol[Symbol("x",i) for i = 1:nargs]
-    eval(Expr(:(=), Expr(:call, :dotview, args...),
-                    Expr(:call, :getindex, args...)))
-    eval(Expr(:(=), Expr(:call, :dotview, :(A::AbstractArray), args...),
-                    Expr(:call, :view, :A, args...)))
-end
+Base.@propagate_inbounds dotview(args...) = getindex(args...)
+Base.@propagate_inbounds dotview(A::AbstractArray, args...) = view(A, args...)
+Base.@propagate_inbounds dotview{T<:AbstractArray}(A::AbstractArray{T}, args...) = getindex(A, args...)
 
 end # module
