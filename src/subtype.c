@@ -1063,12 +1063,16 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         if (bb->lb == bb->ub && jl_is_typevar(bb->lb))
             return intersect(a, bb->ub, e, param);
         jl_value_t *ub = R ? intersect_ufirst(a, bb->ub, e, d) : intersect_ufirst(bb->ub, a, e, d);
-        if (!subtype_in_env(bb->lb, a, e))
+        JL_GC_PUSH1(&ub);
+        if (!subtype_in_env(bb->lb, a, e)) {
+            JL_GC_POP();
             return jl_bottom_type;
+        }
         if (ub != (jl_value_t*)b) {
             bb->ub = ub;
             bb->lb = ub;
         }
+        JL_GC_POP();
         return ub;
     }
     else if (bb->constraintkind == 0) {
@@ -1088,10 +1092,14 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     }
     else if (bb->concrete || bb->constraintkind == 1) {
         jl_value_t *ub = R ? intersect_ufirst(a, bb->ub, e, d) : intersect_ufirst(bb->ub, a, e, d);
-        if (ub == jl_bottom_type || !subtype_in_env(bb->lb, a, e))
+        JL_GC_PUSH1(&ub);
+        if (ub == jl_bottom_type || !subtype_in_env(bb->lb, a, e)) {
+            JL_GC_POP();
             return jl_bottom_type;
+        }
         if (ub != (jl_value_t*)b)
             bb->ub = ub;
+        JL_GC_POP();
         return (jl_value_t*)b;
     }
     else if (bb->constraintkind == 2) {
@@ -1155,6 +1163,7 @@ static int var_occurs_invariant(jl_value_t *v, jl_tvar_t *var, int inv)
     return 0;
 }
 
+// Caller might not have rooted `res`
 static jl_value_t *finish_unionall(jl_value_t *res, jl_varbinding_t *vb, jl_stenv_t *e)
 {
     jl_value_t *varval = NULL, *root = NULL;
@@ -1272,6 +1281,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
             res = jl_bottom_type;
     }
     if (res != jl_bottom_type)
+        // res is rooted by callee
         res = finish_unionall(res, vb, e);
     JL_GC_POP();
     return res;
