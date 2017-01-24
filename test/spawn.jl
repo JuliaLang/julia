@@ -182,18 +182,18 @@ let r, t, sock
     sock = connect(fetch(r))
     mark(sock)
     @test ismarked(sock)
-    @test readline(sock) == "Hello, world!\n"
-    @test readline(sock) == "Goodbye, world...\n"
+    @test readline(sock, false) == "Hello, world!\n"
+    @test readline(sock, false) == "Goodbye, world...\n"
     @test reset(sock) == 0
     @test !ismarked(sock)
     mark(sock)
     @test ismarked(sock)
-    @test readline(sock) == "Hello, world!\n"
+    @test readline(sock, false) == "Hello, world!\n"
     unmark(sock)
     @test !ismarked(sock)
     @test_throws ArgumentError reset(sock)
     @test !unmark(sock)
-    @test readline(sock) == "Goodbye, world...\n"
+    @test readline(sock) == "Goodbye, world..."
     #@test eof(sock) ## doesn't work
     close(sock)
     @test wait(t)
@@ -316,8 +316,8 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
     @test c == read!(out, c)
     Base.wait_readnb(out, 1)
     @test nb_available(out) > 0
-    ln1 = readline(out)
-    ln2 = readline(out)
+    ln1 = readline(out, false)
+    ln2 = readline(out, false)
     desc = readstring(out)
     @test !isreadable(out)
     @test !iswritable(out)
@@ -345,7 +345,7 @@ let fname = tempname()
             cmd = pipeline(`busybox echo asdf`,`busybox cat`)
         end
     end
-    for line in eachline(STDIN)
+    for line in eachline(STDIN, false)
         run(cmd)
     end
     """

@@ -66,7 +66,6 @@ end
 function read(readable::Union{IO,Base.AbstractCmd})
     lines = Line[]
     for line in eachline(readable)
-        line = chomp(line)
         push!(lines, ismatch(r"^\s*(?:#|$)", line) ? Comment(line) : Requirement(line))
     end
     return lines

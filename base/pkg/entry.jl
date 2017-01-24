@@ -608,7 +608,7 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
         empty!(Base.DL_LOAD_PATH)
         append!(Base.DL_LOAD_PATH, $(repr(Base.DL_LOAD_PATH)))
         open("$(escape_string(errfile))", "a") do f
-            for path_ in eachline(STDIN)
+            for path_ in eachline(STDIN, false)
                 path = chomp(path_)
                 pkg = basename(dirname(dirname(path)))
                 try
