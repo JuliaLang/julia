@@ -189,6 +189,13 @@ function grow_to!{K,V}(dest::Associative{K,V}, itr, st)
     return dest
 end
 
+
+"""
+    similar(dictionary)
+
+Create an empty dictionary with the same element types for key and value of the given source
+dictionary.
+"""
 similar{K,V}(d::Dict{K,V}) = Dict{K,V}()
 similar{K,V}(d::Dict, ::Type{Pair{K,V}}) = Dict{K,V}()
 
