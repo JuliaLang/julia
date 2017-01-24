@@ -752,11 +752,9 @@ static bool store_unboxed_p(jl_value_t *jt)
 static bool store_unboxed_p(int s, jl_codectx_t *ctx)
 {
     jl_varinfo_t &vi = ctx->slots[s];
-    // only store a variable unboxed if type inference has run, which
-    // checks that the variable is not referenced undefined.
-    return (ctx->source->inferred &&
-            // don't unbox vararg tuples
-            s != ctx->vaSlot && store_unboxed_p(vi.value.typ));
+    if (s == ctx->vaSlot) // don't unbox vararg tuples
+        return false;
+    return store_unboxed_p(vi.value.typ);
 }
 
 static jl_sym_t *slot_symbol(int s, jl_codectx_t *ctx)
@@ -2233,13 +2231,18 @@ static Value *emit_f_is(const jl_cgval_t &arg1, const jl_cgval_t &arg2, jl_codec
     if (isleaf && rt1 != rt2 && !jl_is_type_type(rt1) && !jl_is_type_type(rt2))
         // disjoint leaf types are never equal (quick test)
         return ConstantInt::get(T_int1, 0);
-    if (arg1.isghost || (isleaf && jl_is_datatype_singleton((jl_datatype_t*)rt1))) {
-        if (arg2.isghost || (isleaf && jl_is_datatype_singleton((jl_datatype_t*)rt2))) {
-            if (rt1 == rt2) {
-                // singleton objects of the same type
-                return ConstantInt::get(T_int1, 1);
-            }
+    bool ghost1 = arg1.isghost || (isleaf && jl_is_datatype_singleton((jl_datatype_t*)rt1));
+    bool ghost2 = arg2.isghost || (isleaf && jl_is_datatype_singleton((jl_datatype_t*)rt2));
+    if (ghost1 || ghost2) {
+        // comparing singleton objects
+        if (ghost1 && ghost2) {
+            return ConstantInt::get(T_int1, rt1 == rt2);
         }
+        // mark_gc_use isn't needed since we won't load this pointer
+        // and we know at least one of them is a unique Singleton
+        // which is already enough to ensure pointer uniqueness for this test
+        // even if the other pointer managed to get garbage collected
+        return builder.CreateICmpEQ(boxed(arg1, ctx, false), boxed(arg2, ctx, false));
     }
 
     if (jl_type_intersection(rt1, rt2) == (jl_value_t*)jl_bottom_type) // types are disjoint (exhaustive test)
