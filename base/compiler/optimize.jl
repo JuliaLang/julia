@@ -89,7 +89,7 @@ const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
 # known to be effect-free if the are nothrow
 const _PURE_OR_ERROR_BUILTINS = [
     fieldtype, apply_type, isa, UnionAll,
-    getfield, arrayref, isdefined, Core.sizeof,
+    getfield, arrayref, const_arrayref, isdefined, Core.sizeof,
     Core.kwfunc, ifelse, Core._typevar, (<:)
 ]
 
@@ -307,7 +307,7 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, sptypes::Vector{Any}
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)
                 return 0
-            elseif f === Main.Core.arrayref && length(ex.args) >= 3
+            elseif (f === Main.Core.arrayref || f === Main.Core.const_arrayref) && length(ex.args) >= 3
                 atyp = argextype(ex.args[3], src, sptypes, slottypes)
                 return isknowntype(atyp) ? 4 : params.inline_nonleaf_penalty
             end
