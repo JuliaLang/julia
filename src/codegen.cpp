@@ -602,6 +602,7 @@ public:
     Value *spvals_ptr;
     Value *argArray;
     Value *argCount;
+    MDNode *aliasscope;
     std::string funcName;
     int vaSlot;        // name of vararg argument
     bool vaStack;      // varargs stack-allocated
@@ -2778,7 +2779,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         }
     }
 
-    else if (f==jl_builtin_arrayref && nargs>=2) {
+    else if ((f==jl_builtin_arrayref || f == jl_builtin_const_arrayref) && nargs>=2) {
         jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
         bool indexes_ok = true;
         for (size_t i=2; i <= nargs; i++) {
@@ -2805,7 +2806,8 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                         *ret = ghostValue(ety);
                     }
                     else {
-                        *ret = typed_load(emit_arrayptr(ary, args[1], ctx), idx, ety, ctx, tbaa_arraybuf);
+                        MDNode *aliasscope = (f == jl_builtin_const_arrayref) ? ctx->aliasscope : nullptr;
+                        *ret = typed_load(emit_arrayptr(ary, args[1], ctx), idx, ety, ctx, tbaa_arraybuf, aliasscope);
                     }
                     JL_GC_POP();
                     return true;
@@ -2884,7 +2886,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                             data_owner->addIncoming(own_ptr, ownedBB);
                         }
                         typed_store(emit_arrayptr(ary,args[1],ctx), idx, v,
-                                    ety, ctx, tbaa_arraybuf, data_owner, 0,
+                                    ety, ctx, tbaa_arraybuf, ctx->aliasscope, data_owner, 0,
                                     false); // don't need to root the box if we had to make one since it's being stored in the array immediatly
                     }
                     *ret = ary;
@@ -3930,7 +3932,7 @@ static void emit_stmtpos(jl_value_t *expr, jl_codectx_t *ctx)
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     jl_sym_t *head = ex->head;
     if (head == line_sym || head == meta_sym || head == boundscheck_sym ||
-        head == inbounds_sym) {
+        head == inbounds_sym || head == aliasscope_sym || head == popaliasscope_sym) {
         // some expression types are metadata and can be ignored
         // in statement position
         return;
@@ -4150,6 +4152,12 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
     }
     else if (head == inbounds_sym) {
         jl_error("Expr(:inbounds) in value position");
+    }
+    else if (head == aliasscope_sym) {
+        jl_error("Expr(:aliasscope) in value position");
+    }
+    else if (head == popaliasscope_sym) {
+        jl_error("Expr(:popaliasscope) in value position");
     }
     else if (head == boundscheck_sym) {
         jl_error("Expr(:boundscheck) in value position");
@@ -5684,6 +5692,7 @@ static std::unique_ptr<Module> emit_function(
         bool in_user_code;
     };
     struct StmtProp {
+        MDNode *scope_list;
         DebugLoc loc;
         StringRef file;
         ssize_t line;
@@ -5694,6 +5703,8 @@ static std::unique_ptr<Module> emit_function(
     };
     std::vector<StmtProp> stmtprops(stmtslen);
     std::vector<DbgState> DI_stack;
+    std::vector<Metadata*> scope_stack;
+    std::vector<MDNode*> scope_list_stack;
     std::vector<bool> inbounds_stack{false};
     auto is_inbounds = [&] () {
         // inbounds rule is either of top two values on inbounds stack are true
@@ -5703,7 +5714,9 @@ static std::unique_ptr<Module> emit_function(
             inbounds |= inbounds_stack[sz - 2];
         return inbounds;
     };
-    StmtProp cur_prop{topdebugloc, filename, toplineno,
+    static MDBuilder *mbuilder = new MDBuilder(jl_LLVMContext);
+    MDNode *alias_domain = mbuilder->createAliasScopeDomain(ctx.name);
+    StmtProp cur_prop{nullptr, topdebugloc, filename, toplineno,
             false, true, false, false};
     ctx.line = &cur_prop.line;
     if (coverage_mode != JL_LOG_NONE || malloc_log_mode) {
@@ -5839,6 +5852,20 @@ static std::unique_ptr<Module> emit_function(
                         inbounds_stack.pop_back();
                     }
                 }
+            } else if (expr->head == aliasscope_sym) {
+                MDNode *scope = mbuilder->createAliasScope("aliasscope", alias_domain);
+                scope_stack.push_back(scope);
+                MDNode *scope_list = MDNode::get(jl_LLVMContext, ArrayRef<Metadata*>(scope_stack)
+#if JL_LLVM_VERSION >= 40000
+                    , MDNode::FL_Yes
+#endif
+                );
+                scope_list_stack.push_back(scope_list);
+                cur_prop.scope_list = scope_list;
+            } else if (expr->head == popaliasscope_sym) {
+                scope_stack.pop_back();
+                scope_list_stack.pop_back();
+                cur_prop.scope_list = scope_list_stack.back();
             }
         }
         cur_prop.is_inbounds = is_inbounds();
@@ -5949,6 +5976,7 @@ static std::unique_ptr<Module> emit_function(
             coverageVisitLine(props.file, props.line);
         }
         ctx.is_inbounds = props.is_inbounds;
+        ctx.aliasscope = props.scope_list;
         jl_value_t *stmt = jl_array_ptr_ref(stmts, cursor);
         jl_expr_t *expr = jl_is_expr(stmt) ? (jl_expr_t*)stmt : nullptr;
         if (jl_is_labelnode(stmt)) {
@@ -6644,6 +6672,7 @@ static void init_julia_llvm_env(Module *m)
     builtin_func_map[jl_f_nfields] = jlcall_func_to_llvm("jl_f_nfields", &jl_f_nfields, m);
     builtin_func_map[jl_f__expr] = jlcall_func_to_llvm("jl_f__expr", &jl_f__expr, m);
     builtin_func_map[jl_f_arrayref] = jlcall_func_to_llvm("jl_f_arrayref", &jl_f_arrayref, m);
+    builtin_func_map[jl_f_const_arrayref] = jlcall_func_to_llvm("jl_f_const_arrayref", &jl_f_arrayref, m);
     builtin_func_map[jl_f_arrayset] = jlcall_func_to_llvm("jl_f_arrayset", &jl_f_arrayset, m);
     builtin_func_map[jl_f_arraysize] = jlcall_func_to_llvm("jl_f_arraysize", &jl_f_arraysize, m);
     builtin_func_map[jl_f_apply_type] = jlcall_func_to_llvm("jl_f_apply_type", &jl_f_apply_type, m);

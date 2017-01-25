@@ -28,7 +28,8 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t 
         if (jl_is_toplevel_only_expr(expr) || e->head == const_sym || e->head == copyast_sym ||
             e->head == global_sym || e->head == quote_sym || e->head == inert_sym ||
             e->head == line_sym || e->head == meta_sym || e->head == inbounds_sym ||
-            e->head == boundscheck_sym || e->head == simdloop_sym) {
+            e->head == boundscheck_sym || e->head == simdloop_sym || e->head == aliasscope_sym ||
+            e->head == popaliasscope_sym) {
             // ignore these
         }
         else {

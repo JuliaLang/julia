@@ -11,6 +11,7 @@
 #if JL_LLVM_VERSION >= 30800
 #include <llvm/Analysis/BasicAliasAnalysis.h>
 #include <llvm/Analysis/TypeBasedAliasAnalysis.h>
+#include <llvm/Analysis/ScopedNoAliasAA.h>
 #endif
 #if JL_LLVM_VERSION >= 30700
 #include <llvm/Analysis/TargetTransformInfo.h>
@@ -135,6 +136,7 @@ void addOptimizationPasses(PassManager *PM)
 #else
     jl_TargetMachine->addAnalysisPasses(*PM);
 #endif
+    PM->add(createScopedNoAliasAAWrapperPass());
 #if JL_LLVM_VERSION >= 30800
     PM->add(createTypeBasedAAWrapperPass());
 #else

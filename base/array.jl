@@ -46,7 +46,7 @@ eltype(::Type{Bottom}) = throw(ArgumentError("Union{} does not have elements"))
 eltype(t::DataType) = eltype(supertype(t))
 eltype(x) = eltype(typeof(x))
 
-import Core: arraysize, arrayset, arrayref
+import Core: arraysize, arrayset, arrayref, const_arrayref
 
 """
     Array{T}(dims)

@@ -625,7 +625,7 @@ static jl_cgval_t emit_pointerref(jl_cgval_t *argv, jl_codectx_t *ctx)
     Type *ptrty = julia_type_to_llvm(e.typ, &isboxed);
     assert(!isboxed);
     Value *thePtr = emit_unbox(ptrty, e, e.typ);
-    return typed_load(thePtr, im1, ety, ctx, tbaa_data, align_nb);
+    return typed_load(thePtr, im1, ety, ctx, tbaa_data, nullptr, align_nb);
 }
 
 static jl_cgval_t emit_runtime_pointerset(jl_cgval_t *argv, jl_codectx_t *ctx)
@@ -682,7 +682,7 @@ static jl_cgval_t emit_pointerset(jl_cgval_t *argv, jl_codectx_t *ctx)
         Type *ptrty = julia_type_to_llvm(e.typ, &isboxed);
         assert(!isboxed);
         thePtr = emit_unbox(ptrty, e, e.typ);
-        typed_store(thePtr, im1, x, ety, ctx, tbaa_data, NULL, align_nb);
+        typed_store(thePtr, im1, x, ety, ctx, tbaa_data, nullptr, NULL, align_nb);
     }
     return mark_julia_type(thePtr, false, aty, ctx);
 }

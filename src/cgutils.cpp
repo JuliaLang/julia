@@ -1126,7 +1126,7 @@ static unsigned julia_alignment(Value* /*ptr*/, jl_value_t *jltype, unsigned ali
 static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value* dest = NULL, bool volatile_store = false);
 
 static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
-                             jl_codectx_t *ctx, MDNode *tbaa, unsigned alignment = 0)
+                             jl_codectx_t *ctx, MDNode *tbaa, MDNode *aliasscope, unsigned alignment = 0)
 {
     bool isboxed;
     Type *elty = julia_type_to_llvm(jltype, &isboxed);
@@ -1148,6 +1148,9 @@ static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
     //else {
         Instruction *load = builder.CreateAlignedLoad(data, isboxed ?
             alignment : julia_alignment(data, jltype, alignment), false);
+        if (aliasscope) {
+            load->setMetadata("alias.scope", aliasscope);
+        }
         if (tbaa) {
             elt = tbaa_decorate(tbaa, load);
         }
@@ -1163,6 +1166,7 @@ static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
 
 static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
                         jl_value_t *jltype, jl_codectx_t *ctx, MDNode *tbaa,
+                        MDNode *aliasscope,
                         Value *parent,  // for the write barrier, NULL if no barrier needed
                         unsigned alignment = 0, bool root_box = true) // if the value to store needs a box, should we root it ?
 {
@@ -1185,6 +1189,8 @@ static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
         data = ptr;
     Instruction *store = builder.CreateAlignedStore(r, builder.CreateGEP(data,
         idx_0based), isboxed ? alignment : julia_alignment(r, jltype, alignment));
+    if (aliasscope)
+        store->setMetadata("noalias", aliasscope);
     if (tbaa)
         tbaa_decorate(tbaa, store);
 }
@@ -1307,7 +1313,7 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct,
                 ret->isimmutable = strct.isimmutable;
                 return true;
             }
-            *ret = typed_load(ptr, idx, jt, ctx, strct.tbaa);
+            *ret = typed_load(ptr, idx, jt, ctx, strct.tbaa, nullptr);
             return true;
         }
         else if (strct.isboxed) {
@@ -1378,7 +1384,7 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
         int align = jl_field_offset(jt, idx);
         align |= 16;
         align &= -align;
-        return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx, strct.tbaa, align);
+        return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx, strct.tbaa, nullptr, align);
     }
     else if (isa<UndefValue>(strct.V)) {
         return jl_cgval_t();
@@ -2130,7 +2136,7 @@ static void emit_setfield(jl_datatype_t *sty, const jl_cgval_t &strct, size_t id
             align |= 16;
             align &= -align;
             typed_store(addr, ConstantInt::get(T_size, 0), rhs, jfty, ctx,
-                strct.tbaa, data_pointer(strct, ctx, T_pjlvalue), align);
+                strct.tbaa, nullptr, data_pointer(strct, ctx, T_pjlvalue), align);
         }
     }
     else {

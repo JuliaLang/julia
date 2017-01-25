@@ -76,7 +76,7 @@ static const jl_fptr_t id_to_fptrs[] = {
   jl_f_typeassert, jl_f__apply, jl_f__apply_pure, jl_f_isdefined,
   jl_f_tuple, jl_f_svec, jl_f_intrinsic_call, jl_f_invoke_kwsorter,
   jl_f_getfield, jl_f_setfield, jl_f_fieldtype, jl_f_nfields,
-  jl_f_arrayref, jl_f_arrayset, jl_f_arraysize, jl_f_apply_type,
+  jl_f_arrayref, jl_f_const_arrayref, jl_f_arrayset, jl_f_arraysize, jl_f_apply_type,
   jl_f_applicable, jl_f_invoke, jl_unprotect_stack, jl_f_sizeof, jl_f__expr,
   NULL };
 
