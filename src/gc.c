@@ -453,7 +453,7 @@ static inline uint16_t gc_setmark_big(jl_ptls_t ptls, jl_taggedvalue_t *o,
     assert(!gc_marked(tag));
     if (gc_verifying) {
         o->bits.gc = mark_mode;
-        return mark_mode;
+        return mark_mode | (1 << 8);
     }
     assert(find_region(o) == NULL);
     bigval_t *hdr = bigval_header(o);
@@ -499,7 +499,7 @@ static inline uint16_t gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
     assert(r != NULL);
     if (gc_verifying) {
         o->bits.gc = mark_mode;
-        return mark_mode;
+        return mark_mode | (1 << 8);
     }
     jl_gc_pagemeta_t *page = page_metadata_(o, r);
     if (mark_reset_age) {
@@ -1520,8 +1520,10 @@ queue_the_root:
 
 // Mark an object (without scanning it)
 // The top `int8_t` of the return value is set to `1` if the object was not
-// marked before. Returning `0` in these bits can happen if another thread
-// marked it in parallel.
+// marked before and the object needs to be scanned.
+// Returning `0` in these bits can happen if another thread
+// marked it in parallel or if the object is known to not reference
+// any object.
 // The bottom `int8_t` of the return value is the new GC bits.
 static uint16_t gc_mark_obj(jl_ptls_t ptls, jl_value_t *v, uintptr_t tag)
 {
@@ -1529,6 +1531,8 @@ static uint16_t gc_mark_obj(jl_ptls_t ptls, jl_value_t *v, uintptr_t tag)
     assert(!gc_marked(tag));
     jl_datatype_t *vt = (jl_datatype_t*)(tag & ~(uintptr_t)15);
     gc_assert_datatype(vt);
+    // Symbols are always marked
+    assert(vt != jl_symbol_type);
     // Do not initialize `mark_res` to catch branches forgetting to set `mark_res`
     // using compiler warnings.
     uint16_t mark_res;
@@ -1563,19 +1567,14 @@ static uint16_t gc_mark_obj(jl_ptls_t ptls, jl_value_t *v, uintptr_t tag)
     else if (vt == jl_task_type) {
         mark_res = gc_setmark(ptls, v, sizeof(jl_task_t), tag);
     }
-    else if (vt == jl_symbol_type) {
-        // symbols have their own allocator and are never freed
-        mark_res = GC_OLD_MARKED;
-    }
     else if (vt == jl_string_type) {
+        // String cannot reference any object.
         mark_res = gc_setmark(ptls, v, jl_string_len(v) + sizeof(size_t) + 1,
-                              tag);
+                              tag) & 0xff;
     }
     else {
         mark_res = gc_setmark(ptls, v, jl_datatype_size(vt), tag);
     }
-    if (gc_verifying)
-        return mark_res | (1 << 8);
     return mark_res;
 }
 
