@@ -150,7 +150,7 @@ end
 
 const ipv4_leading_zero_error = """
 Leading zeros in IPv4 addresses are disallowed due to ambiguity.
-If octal or hexadecimal, convert to decimal, otherwise remove leading zero.
+If the address is in octal or hexadecimal, convert it to decimal, otherwise remove the leading zero.
 """
 
 function parse(::Type{IPv4}, str::AbstractString)
