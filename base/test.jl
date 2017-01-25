@@ -631,6 +631,9 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
     print_counts(ts, depth_pad, align, pass_width, fail_width, error_width, broken_width, total_width)
 end
 
+
+const TESTSET_PRINT_ENABLE = Ref(true)
+
 # Called at the end of a @testset, behaviour depends on whether
 # this is a child of another testset, or the "root" testset
 function finish(ts::DefaultTestSet)
@@ -648,6 +651,11 @@ function finish(ts::DefaultTestSet)
     total_error  = errors + c_errors
     total_broken = broken + c_broken
     total = total_pass + total_fail + total_error + total_broken
+
+    if TESTSET_PRINT_ENABLE[]
+        print_test_results(ts)
+    end
+
     # Finally throw an error as we are the outermost test set
     if total != total_pass + total_broken
         # Get all the error/failures and bring them along for the ride
