@@ -1888,7 +1888,7 @@ function sqrtm(A::UpperTriangular)
             end
         end
     end
-    sqrtm(A::UpperTriangular,Val{realmatrix})
+    sqrtm(A,Val{realmatrix})
 end
 function sqrtm{T,realmatrix}(A::UpperTriangular{T},::Type{Val{realmatrix}})
     if realmatrix
