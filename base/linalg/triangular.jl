@@ -1876,8 +1876,7 @@ function floop(x,R,i::Int,j::Int)
     end
     r
 end
-
-function sqrtm{T}(A::UpperTriangular{T})
+function sqrtm(A::UpperTriangular)
     n = checksquare(A)
     realmatrix = false
     if isreal(A)
@@ -1889,14 +1888,18 @@ function sqrtm{T}(A::UpperTriangular{T})
             end
         end
     end
+    sqrtm(A::UpperTriangular,Val{realmatrix})
+end
+function sqrtm{T,realmatrix}(A::UpperTriangular{T},::Type{Val{realmatrix}})
     if realmatrix
         TT = typeof(sqrt(zero(T)))
     else
         TT = typeof(sqrt(complex(-one(T))))
     end
+    n = checksquare(A)
     R = zeros(TT, n, n)
     for j = 1:n
-        R[j,j] = realmatrix?sqrt(A[j,j]):sqrt(complex(A[j,j]))
+        R[j,j] = realmatrix ? sqrt(A[j,j]) : sqrt(complex(A[j,j]))
         for i = j-1:-1:1
             r = floop(A[i,j],R,i,j)
             r==0 || (R[i,j] = r / (R[i,i] + R[j,j]))
