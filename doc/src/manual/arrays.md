@@ -427,7 +427,7 @@ julia> A[CartesianIndex.(indices(A, 1), indices(A, 2)), :]
 
     `CartesianIndex` and arrays of `CartesianIndex` are not compatible with the
     `end` keyword to represent the last index of a dimension. Do not use `end`
-    in indexing expressions that may contain either.
+    in indexing expressions that may contain either `CartesianIndex` or arrays thereof.
 
 #### Logical indexing
 
