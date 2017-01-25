@@ -441,8 +441,7 @@ end
 
 # Test that concatenations of combinations of sparse vectors with various other
 # matrix/vector types yield sparse arrays
-let
-    N = 4
+let N = 4
     spvec = spzeros(N)
     spmat = spzeros(N, 1)
     densevec = ones(N)
@@ -967,8 +966,7 @@ let m = 10
     end
 end
 # The preceding tests miss the edge case where the sparse vector is empty (#16716)
-let
-    origmat = [-1.5 -0.7; 0.0 1.0]
+let origmat = [-1.5 -0.7; 0.0 1.0]
     transmat = transpose(origmat)
     utmat = UpperTriangular(origmat)
     ltmat = LowerTriangular(transmat)

@@ -8,7 +8,9 @@ import
     Base.sort,
     Base.sort!,
     Base.issorted,
-    Base.sortperm
+    Base.sortperm,
+    Base.Slice,
+    Base.to_indices
 
 export # also exported by Base
     # order-only:
@@ -669,11 +671,11 @@ function sortcols(A::AbstractMatrix; kws...)
 end
 
 function slicetypeof{T,N}(A::AbstractArray{T,N}, i1, i2)
-    I = (slice_dummy(i1),slice_dummy(i2))
+    I = map(slice_dummy, to_indices(A, (i1, i2)))
     fast = isa(linearindexing(viewindexing(I), linearindexing(A)), LinearFast)
     SubArray{T,1,typeof(A),typeof(I),fast}
 end
-slice_dummy(::Colon) = Colon()
+slice_dummy(S::Slice) = S
 slice_dummy{T}(::AbstractUnitRange{T}) = one(T)
 
 ## fast clever sorting for floats ##
@@ -682,7 +684,7 @@ module Float
 using ..Sort
 using ...Order
 
-import Core.Intrinsics: unbox, slt_int
+import Core.Intrinsics: slt_int
 import ..Sort: sort!
 import ...Order: lt, DirectOrdering
 
@@ -697,8 +699,8 @@ right(::DirectOrdering) = Right()
 left(o::Perm) = Perm(left(o.order), o.data)
 right(o::Perm) = Perm(right(o.order), o.data)
 
-lt{T<:Floats}(::Left, x::T, y::T) = slt_int(unbox(T,y),unbox(T,x))
-lt{T<:Floats}(::Right, x::T, y::T) = slt_int(unbox(T,x),unbox(T,y))
+lt{T<:Floats}(::Left, x::T, y::T) = slt_int(y, x)
+lt{T<:Floats}(::Right, x::T, y::T) = slt_int(x, y)
 
 isnan(o::DirectOrdering, x::Floats) = (x!=x)
 isnan(o::Perm, i::Int) = isnan(o.order,o.data[i])

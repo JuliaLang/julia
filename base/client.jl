@@ -40,8 +40,8 @@ const disable_text_style = AnyDict(
 available_text_colors = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors)))
 const possible_formatting_symbols = [:normal, :bold, :default]
 available_text_colors = cat(1,
-    sort(intersect(available_text_colors, possible_formatting_symbols), rev=true),
-    sort(setdiff(  available_text_colors, possible_formatting_symbols)))
+    sort!(intersect(available_text_colors, possible_formatting_symbols), rev=true),
+    sort!(setdiff(  available_text_colors, possible_formatting_symbols)))
 
 const available_text_colors_docstring =
     string(join([string("`:", key,"`")
@@ -210,7 +210,7 @@ parse_input_line(s::AbstractString) = parse_input_line(String(s))
 function parse_input_line(io::IO)
     s = ""
     while !eof(io)
-        s = s*readline(io)
+        s *= readline(io, chomp=false)
         e = parse_input_line(s)
         if !(isa(e,Expr) && e.head === :incomplete)
             return e

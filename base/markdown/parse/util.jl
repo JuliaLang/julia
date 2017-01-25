@@ -46,7 +46,7 @@ function linecontains(io::IO, chars; allow_whitespace = true,
                                      eat = true,
                                      allowempty = false)
     start = position(io)
-    l = readline(io) |> chomp
+    l = readline(io)
     length(l) == 0 && return allowempty
 
     result = allowempty
@@ -99,7 +99,7 @@ function startswith(stream::IO, r::Regex; eat = true, padding = false)
     @assert Base.startswith(r.pattern, "^")
     start = position(stream)
     padding && skipwhitespace(stream)
-    line = chomp(readline(stream))
+    line = readline(stream)
     seek(stream, start)
     m = match(r, line)
     m === nothing && return ""

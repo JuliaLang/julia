@@ -134,7 +134,8 @@ function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::B
         try
             Base.sigatomic_end()
             if bt !== nothing
-                Base.display_error(errio, val, bt)
+                eval(Main, Expr(:body, Expr(:return, Expr(:call, Base.display_error,
+                                                          errio, QuoteNode(val), bt))))
                 iserr, lasterr = false, ()
             else
                 if val !== nothing && show_value
@@ -204,7 +205,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
         interrupted = false
         while true
             try
-                line *= readline(repl.terminal)
+                line *= readline(repl.terminal, chomp=false)
             catch e
                 if isa(e,InterruptException)
                     try # raise the debugger if present
@@ -336,7 +337,7 @@ An editor may have converted tabs to spaces at line """
 
 function hist_getline(file)
     while !eof(file)
-        line = readline(file)
+        line = readline(file, chomp=false)
         isempty(line) && return line
         line[1] in "\r\n" || return line
     end
@@ -992,7 +993,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
         if have_color
             print(repl.stream, input_color(repl))
         end
-        line = readline(repl.stream)
+        line = readline(repl.stream, chomp=false)
         if !isempty(line)
             ast = Base.parse_input_line(line)
             if have_color

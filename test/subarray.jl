@@ -320,7 +320,7 @@ A = copy(reshape(1:120, 3, 5, 8))
 sA = view(A, 2:2, 1:5, :)
 @test strides(sA) == (1, 3, 15)
 @test parent(sA) == A
-@test parentindexes(sA) == (2:2, 1:5, :)
+@test parentindexes(sA) == (2:2, 1:5, Base.Slice(1:8))
 @test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (1, 5, 8)
 @test indices(sA) === (Base.OneTo(1), Base.OneTo(5), Base.OneTo(8))
@@ -365,18 +365,18 @@ sA = view(A, 1:2, 3, [1 3; 4 2])
 
 # logical indexing #4763
 A = view([1:10;], 5:8)
-@test A[A.<7] == [5, 6]
+@test A[A.<7] == view(A, A.<7) == [5, 6]
 @test Base.unsafe_getindex(A, A.<7) == [5, 6]
 B = reshape(1:16, 4, 4)
 sB = view(B, 2:3, 2:3)
-@test sB[sB.>8] == [10, 11]
+@test sB[sB.>8] == view(sB, sB.>8) == [10, 11]
 @test Base.unsafe_getindex(sB, sB.>8) == [10, 11]
 
 # Tests where dimensions are dropped
 A = copy(reshape(1:120, 3, 5, 8))
 sA = view(A, 2, :, 1:8)
 @test parent(sA) == A
-@test parentindexes(sA) == (2, :, 1:8)
+@test parentindexes(sA) == (2, Base.Slice(1:5), 1:8)
 @test Base.parentdims(sA) == [2:3;]
 @test size(sA) == (5, 8)
 @test indices(sA) === (Base.OneTo(5), Base.OneTo(8))
@@ -472,7 +472,6 @@ Y = 4:-1:1
 
 @test isa(@view(X[1:3]), SubArray)
 
-
 @test X[1:end] == @view X[1:end]
 @test X[1:end-3] == @view X[1:end-3]
 @test X[1:end,2,2] == @view X[1:end,2,2]
@@ -488,6 +487,37 @@ u = (1,2:3)
 # test macro hygiene
 let size=(x,y)-> error("should not happen")
     @test X[1:end,2,2] == @view X[1:end,2,2]
+end
+
+# test @views macro
+@views let f!(x) = x[1:end-1] .+= x[2:end].^2
+    x = [1,2,3,4]
+    f!(x)
+    @test x == [5,11,19,4]
+    @test x[1:3] isa SubArray
+    @test x[2] === 11
+    @test Dict((1:3) => 4)[1:3] === 4
+    x[1:2] = 0
+    @test x == [0,0,19,4]
+    x[1:2] .= 5:6
+    @test x == [5,6,19,4]
+    f!(x[3:end])
+    @test x == [5,6,35,4]
+end
+@views @test isa(X[1:3], SubArray)
+@test X[1:end] == @views X[1:end]
+@test X[1:end-3] == @views X[1:end-3]
+@test X[1:end,2,2] == @views X[1:end,2,2]
+@test X[1,1:end-2] == @views X[1,1:end-2]
+@test X[1,2,1:end-2] == @views X[1,2,1:end-2]
+@test X[1,2,Y[2:end]] == @views X[1,2,Y[2:end]]
+@test X[1:end,2,Y[2:end]] == @views X[1:end,2,Y[2:end]]
+@test X[u...,2:end] == @views X[u...,2:end]
+@test X[(1,)...,(2,)...,2:end] == @views X[(1,)...,(2,)...,2:end]
+
+# test macro hygiene
+let size=(x,y)-> error("should not happen")
+    @test X[1:end,2,2] == @views X[1:end,2,2]
 end
 
 # issue #18034

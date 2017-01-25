@@ -59,6 +59,7 @@ export
     EachLine,
     Enum,
     Enumerate,
+    ExponentialBackOff,
     Factorization,
     FileMonitor,
     FloatRange,
@@ -97,6 +98,7 @@ export
     RoundNearestTiesUp,
     RoundToZero,
     RoundUp,
+    RowVector,
     AbstractSerializer,
     SerializationState,
     Set,
@@ -358,8 +360,8 @@ export
     ispow2,
     isqrt,
     isreal,
-    isimag,
     issubnormal,
+    iszero,
     lcm,
     ldexp,
     leading_ones,
@@ -395,6 +397,7 @@ export
     reim,
     reinterpret,
     rem,
+    rem2pi,
     round,
     sec,
     secd,
@@ -577,6 +580,7 @@ export
     sum!,
     sum,
     sum_kbn,
+    to_indices,
     vcat,
     vec,
     view,
@@ -778,6 +782,7 @@ export
     chomp,
     chop,
     chr2ind,
+    codeunit,
     dec,
     digits,
     digits!,
@@ -882,7 +887,6 @@ export
     median!,
     median,
     middle,
-    midpoints,
     quantile!,
     quantile,
     std,
@@ -951,14 +955,12 @@ export
 
 # tasks and conditions
     Condition,
-    consume,
     current_task,
     islocked,
     istaskdone,
     istaskstarted,
     lock,
     notify,
-    produce,
     ReentrantLock,
     schedule,
     task_local_storage,
@@ -978,6 +980,8 @@ export
 # dates
     Date,
     DateTime,
+    DateFormat,
+    @dateformat_str,
     now,
 
 # errors
@@ -1303,10 +1307,11 @@ export
     @cmd,    # `commands`
 
     # notation for certain types
-    @b_str,  # byte vector
-    @r_str,  # regex
-    @s_str,  # regex substitution string
-    @v_str,  # version number
+    @b_str,    # byte vector
+    @r_str,    # regex
+    @s_str,    # regex substitution string
+    @v_str,    # version number
+    @raw_str,  # raw string with no interpolation/unescaping
 
     # documentation
     @text_str,
@@ -1381,6 +1386,7 @@ export
     @label,
     @goto,
     @view,
+    @views,
 
 # SparseArrays module re-exports
     SparseArrays,

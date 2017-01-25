@@ -30,7 +30,7 @@ function fencedcode(stream::IO, block::MD)
                     seek(stream, line_start)
                 end
             end
-            write(buffer, readline(stream))
+            write(buffer, readline(stream, chomp=false))
         end
         return false
     end
@@ -62,4 +62,5 @@ end
                 github_table, github_paragraph,
 
                 linebreak, escapes, en_dash, inline_code, asterisk_bold,
-                asterisk_italic, image, footnote_link, link]
+                asterisk_italic, image, footnote_link, link, autolink]
+

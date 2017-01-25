@@ -102,14 +102,19 @@ const UTF8PROC_STRIPMARK = (1<<13)
 
 ############################################################################
 
-function utf8proc_map(s::String, flags::Integer)
-    p = Ref{Ptr{UInt8}}()
-    result = ccall(:utf8proc_map, Cssize_t,
-                   (Ptr{UInt8}, Cssize_t, Ref{Ptr{UInt8}}, Cint),
-                   s, sizeof(s), p, flags)
-    result < 0 && error(unsafe_string(ccall(:utf8proc_errmsg, Cstring,
-                                         (Cssize_t,), result)))
-    unsafe_wrap(String, p[], result, true)::String
+utf8proc_error(result) = error(unsafe_string(ccall(:utf8proc_errmsg, Cstring, (Cssize_t,), result)))
+
+function utf8proc_map(str::String, options::Integer)
+    nwords = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
+                   str, sizeof(str), C_NULL, 0, options)
+    nwords < 0 && utf8proc_error(nwords)
+    buffer = Base.StringVector(nwords*4)
+    nwords = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
+                   str, sizeof(str), buffer, nwords, options)
+    nwords < 0 && utf8proc_error(nwords)
+    nbytes = ccall(:utf8proc_reencode, Int, (Ptr{UInt8}, Int, Cint), buffer, nwords, options)
+    nbytes < 0 && utf8proc_error(nbytes)
+    return String(resize!(buffer, nbytes))
 end
 
 utf8proc_map(s::AbstractString, flags::Integer) = utf8proc_map(String(s), flags)

@@ -165,8 +165,10 @@ broadcast(::typeof(/), J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
 
 ==(J1::UniformScaling,J2::UniformScaling) = (J1.λ == J2.λ)
 
-isapprox{T<:Number,S<:Number}(J1::UniformScaling{T}, J2::UniformScaling{S};
-                              rtol::Real=Base.rtoldefault(T,S), atol::Real=0) = isapprox(J1.λ, J2.λ, rtol=rtol, atol=atol)
+function isapprox{T<:Number,S<:Number}(J1::UniformScaling{T}, J2::UniformScaling{S};
+                              rtol::Real=Base.rtoldefault(T,S), atol::Real=0, nans::Bool=false)
+    isapprox(J1.λ, J2.λ, rtol=rtol, atol=atol, nans=nans)
+end
 
 function copy!(A::AbstractMatrix, J::UniformScaling)
     size(A,1)==size(A,2) || throw(DimensionMismatch("a UniformScaling can only be copied to a square matrix"))
@@ -176,6 +178,11 @@ function copy!(A::AbstractMatrix, J::UniformScaling)
         @inbounds A[i,i] = λ
     end
     return A
+end
+
+function cond{T}(J::UniformScaling{T})
+    onereal = inv(one(real(J.λ)))
+    return J.λ ≠ zero(T) ? onereal : oftype(onereal, Inf)
 end
 
 # promote_to_arrays(n,k, T, A...) promotes any UniformScaling matrices

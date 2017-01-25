@@ -13,10 +13,10 @@ false ? push!(s, 3) : push!(s, 4)
 @test s == Set([1, 4])
 
 B = [true true false]
-@test ifelse(B, 1, 2) == [1 1 2]
-@test ifelse(B, 1, [2 3 4]) == [1 1 4]
-@test ifelse(B, [2 3 4], 1) == [2 3 1]
-@test ifelse(B, [2 3 4], [5 6 7]) == [2 3 7]
+@test ifelse.(B, 1, 2) == [1 1 2]
+@test ifelse.(B, 1, [2 3 4]) == [1 1 4]
+@test ifelse.(B, [2 3 4], 1) == [2 3 1]
+@test ifelse.(B, [2 3 4], [5 6 7]) == [2 3 7]
 
 @test reverse(Pair(1,2)) == Pair(2,1)
 @test reverse(Pair("13","24")) == Pair("24","13")
@@ -88,4 +88,12 @@ end
     str = randstring(20)
     @test filter(!isupper, str) == replace(str, r"[A-Z]", "")
     @test filter(!islower, str) == replace(str, r"[a-z]", "")
+end
+
+# issue #19891
+@testset "chained comparison" begin
+    B = 0 .< [1 -1 5] .< 3
+    @test B == [true false false]
+    B = 3 .> [1 -1 5] .> 0
+    @test B == [true false false]
 end

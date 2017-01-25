@@ -102,7 +102,7 @@ script:
     # capture the log, but only print it if `make deps` fails
     # try to show the end of the log first, because this log might be very long (> 4MB)
     # and thus be truncated by travis
-    - moreutils/mispipe "make $BUILDOPTS NO_GIT=1 -C deps 2> deps-err.log" "$BAR" > deps.log ||
+    - moreutils/mispipe "make \$BUILDOPTS NO_GIT=1 -C deps 2> deps-err.log" "$BAR" > deps.log ||
         { echo "-- deps build log stderr tail 100 --------------------------------------";
           tail -n 100 deps-err.log;
           echo "-- deps build log stdout tail 100 --------------------------------------";

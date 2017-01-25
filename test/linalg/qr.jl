@@ -52,9 +52,9 @@ debug && println("QR decomposition (without pivoting)")
                 @test full(q, thin=false)'q ≈ eye(n)
                 @test eye(n)'q' ≈ full(q, thin=false)'
                 @test q*r ≈ a
-                @test_approx_eq_eps a*(qra\b) b 3000ε
+                @test a*(qra\b) ≈ b atol=3000ε
                 @test full(qra) ≈ a
-                @test_approx_eq_eps A_mul_Bc(eye(eltyb,size(q.factors,2)),q)*full(q, thin=false) eye(n) 5000ε
+                @test A_mul_Bc(eye(eltyb,size(q.factors,2)),q)*full(q,thin=false) ≈ eye(n) atol=5000ε
                 if eltya != Int
                     @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
                     ac = copy(a)
@@ -69,11 +69,11 @@ debug && println("Thin QR decomposition (without pivoting)")
                 @test q'*full(q, thin=false) ≈ eye(n)
                 @test q'*full(q) ≈ eye(n,n1)
                 @test q*r ≈ a[:,1:n1]
-                @test_approx_eq_eps q*b[1:n1] full(q)*b[1:n1] 100ε
-                @test_approx_eq_eps q*b full(q, thin=false)*b 100ε
+                @test q*b[1:n1] ≈ full(q)*b[1:n1] atol=100ε
+                @test q*b ≈ full(q,thin=false)*b atol=100ε
                 @test_throws DimensionMismatch q*b[1:n1 + 1]
                 @test_throws DimensionMismatch b[1:n1 + 1]*q'
-                @test_approx_eq_eps A_mul_Bc(UpperTriangular(eye(eltyb,size(q.factors,2))),q)*full(q, thin=false) eye(n1,n) 5000ε
+                @test A_mul_Bc(UpperTriangular(eye(eltyb,size(q.factors,2))),q)*full(q,thin=false) ≈ eye(n1,n) atol=5000ε
                 if eltya != Int
                     @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
                 end
@@ -92,7 +92,7 @@ debug && println("(Automatic) Fat (pivoted) QR decomposition")
                 @test q*r ≈ (isa(qrpa,QRPivoted) ? a[1:n1,p] : a[1:n1,:])
                 @test q*r[:,invperm(p)] ≈ a[1:n1,:]
                 @test q*r*qrpa[:P].' ≈ a[1:n1,:]
-                @test_approx_eq_eps a[1:n1,:]*(qrpa\b[1:n1]) b[1:n1] 5000ε
+                @test a[1:n1,:]*(qrpa\b[1:n1]) ≈ b[1:n1] atol=5000ε
                 @test full(qrpa) ≈ a[1:5,:]
                 @test_throws DimensionMismatch q*b[1:n1+1]
                 @test_throws DimensionMismatch b[1:n1+1]*q'
@@ -112,7 +112,7 @@ debug && println("(Automatic) Thin (pivoted) QR decomposition")
                 @test full(qrpa) ≈ a[:,1:5]
                 @test_throws DimensionMismatch q*b[1:n1+1]
                 @test_throws DimensionMismatch b[1:n1+1]*q'
-                @test_approx_eq_eps A_mul_Bc(UpperTriangular(eye(eltyb,size(q.factors,2))),q)*full(q, thin=false) eye(n1,n) 5000ε
+                @test A_mul_Bc(UpperTriangular(eye(eltyb,size(q.factors,2))),q)*full(q,thin=false) ≈ eye(n1,n) atol=5000ε
                 if eltya != Int
                     @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
                 end

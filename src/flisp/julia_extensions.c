@@ -169,7 +169,7 @@ void jl_charmap_init(fl_context_t *fl_ctx)
            directly to pointer keys works because pointers are at
            least 32 bits on all Julia-supported systems, and because
            we never map anything to U+0001 (since HT_NOTFOUND is (void*)1). */
-        assert((void*)charmap[i][1] != HT_NOTFOUND);
+        assert((void*)(uintptr_t)charmap[i][1] != HT_NOTFOUND);
         wcharhash_put_r(h, (void*)((uintptr_t)charmap[i][0]),
                            (void*)((uintptr_t)charmap[i][1]), (void*)fl_ctx);
     }

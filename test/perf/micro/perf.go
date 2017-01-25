@@ -1,6 +1,6 @@
 // Implementation of the Julia benchmark suite in Go.
 //
-// Three gonum packages must be installed, and then an additional environmental
+// Three gonum packages must be installed, and then an additional environment
 // variable must be set to use the BLAS installation.
 // To install the gonum packages, run:
 // 		go get github.com/gonum/blas

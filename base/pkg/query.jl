@@ -186,7 +186,7 @@ function check_requirements(reqs::Requires, deps::Dict{String,Dict{VersionNumber
         if !any(vn->(vn in vs), keys(deps[p]))
             remaining_vs = VersionSet()
             err_msg = "fixed packages introduce conflicting requirements for $p: \n"
-            available_list = sort(collect(keys(deps[p])))
+            available_list = sort!(collect(keys(deps[p])))
             for (p1,f1) in fix
                 f1r = f1.requires
                 haskey(f1r, p) || continue

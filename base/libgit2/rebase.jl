@@ -9,7 +9,7 @@ function GitRebase(repo::GitRepo, branch::GitAnnotated, upstream::GitAnnotated;
                    Ptr{Void}, Ptr{RebaseOptions}),
                    rebase_ptr_ptr, repo.ptr, branch.ptr, upstream.ptr,
                    isnull(onto) ? C_NULL : Base.get(onto).ptr, Ref(opts))
-    return GitRebase(rebase_ptr_ptr[])
+    return GitRebase(repo, rebase_ptr_ptr[])
 end
 
 function Base.count(rb::GitRebase)
@@ -49,10 +49,10 @@ Commits the current patch to the rebase `rb`, using `sig` as the committer. Is s
 the commit has already been applied.
 """
 function commit(rb::GitRebase, sig::GitSignature)
-    oid_ptr = Ref(Oid())
+    oid_ptr = Ref(GitHash())
     try
         @check ccall((:git_rebase_commit, :libgit2), Error.Code,
-                     (Ptr{Oid}, Ptr{Void}, Ptr{SignatureStruct}, Ptr{SignatureStruct}, Ptr{UInt8}, Ptr{UInt8}),
+                     (Ptr{GitHash}, Ptr{Void}, Ptr{SignatureStruct}, Ptr{SignatureStruct}, Ptr{UInt8}, Ptr{UInt8}),
                       oid_ptr, rb.ptr, C_NULL, sig.ptr, C_NULL, C_NULL)
     catch err
         # TODO: return current HEAD instead

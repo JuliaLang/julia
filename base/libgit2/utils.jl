@@ -31,7 +31,7 @@ function prompt(msg::AbstractString; default::AbstractString="", password::Bool=
         Base.getpass(msg)
     else
         print(msg)
-        chomp(readline(STDIN))
+        readline()
     end
     isempty(uinput) ? default : uinput
 end
@@ -43,4 +43,16 @@ function features()
         isset(feat, Cuint(f)) && push!(res, f)
     end
     return res
+end
+
+"""
+    LibGit2.posixpath(path)
+
+Standardise the path string `path` to use POSIX separators.
+"""
+function posixpath end
+if is_windows()
+    posixpath(path) = replace(path,'\\','/')
+else is_unix()
+    posixpath(path) = path
 end

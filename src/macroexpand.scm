@@ -57,7 +57,7 @@
     (cons 'varlist (append (llist-vars (fix-arglist argl))
                            (apply nconc
                                   (map (lambda (v) (trycatch
-                                                    (list (sparam-name v))
+                                                    (list (typevar-expr-name v))
                                                     (lambda (e) '())))
                                        sparams)))))
 
@@ -164,9 +164,7 @@
       (cadr e)
       e))
 
-(define (typevar-expr-name e)
-  (if (symbol? e) e
-      (cadr e)))
+(define (typevar-expr-name e) (car (analyze-typevar e)))
 
 (define (new-expansion-env-for x env (outermost #f))
   (let ((introduced (pattern-expand1 vars-introduced-by-patterns x)))
@@ -205,7 +203,7 @@
    m inarg))
 
 (define (resolve-expansion-vars- e env m inarg)
-  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end))
+  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end) (eq? e 'ccall))
          e)
         ((symbol? e)
          (let ((a (assq e env)))

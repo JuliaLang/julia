@@ -12,7 +12,7 @@ import
         bessely0, bessely1, ceil, cmp, convert, copysign, div,
         exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
-        nextfloat, prevfloat, promote_rule, rem, round, show,
+        nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show,
         sum, sqrt, string, print, trunc, precision, exp10, expm1,
         gamma, lgamma, digamma, erf, erfc, zeta, eta, log1p, airyai,
         eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
@@ -225,6 +225,10 @@ function convert(::Type{BigInt},x::BigFloat)
     trunc(BigInt,x)
 end
 
+function convert(::Type{Integer},x::BigFloat)
+    isinteger(x) || throw(InexactError())
+    trunc(Integer,x)
+end
 function convert{T<:Integer}(::Type{T},x::BigFloat)
     isinteger(x) || throw(InexactError())
     trunc(T,x)
@@ -656,6 +660,15 @@ function rem(x::BigFloat, y::BigFloat)
     return z
 end
 
+function rem(x::BigFloat, y::BigFloat, ::RoundingMode{:Nearest})
+    z = BigFloat()
+    ccall((:mpfr_remainder, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, &y, ROUNDING_MODE[])
+    return z
+end
+
+# TODO: use a higher-precision BigFloat(pi) here?
+rem2pi(x::BigFloat, r::RoundingMode) = rem(x, 2*BigFloat(pi), r)
+
 function sum(arr::AbstractArray{BigFloat})
     z = BigFloat(0)
     for i in arr
@@ -923,17 +936,17 @@ function string(x::BigFloat)
     # is, excluding the most significant, ceil(log(10, 2^precision(x)))
     k = ceil(Int32, precision(x) * 0.3010299956639812)
     lng = k + Int32(8) # Add space for the sign, the most significand digit, the dot and the exponent
-    buf = Array{UInt8}(lng + 1)
+    buf = Base.StringVector(lng + 1)
     # format strings are guaranteed to contain no NUL, so we don't use Cstring
     lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
     if lng < k + 5 # print at least k decimal places
         lng = ccall((:mpfr_sprintf,:libmpfr), Int32, (Ptr{UInt8}, Ptr{UInt8}, Ptr{BigFloat}...), buf, "%.$(k)Re", &x)
     elseif lng > k + 8
-        buf = Array{UInt8}(lng + 1)
+        buf = Base.StringVector(lng + 1)
         lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
     end
     n = (1 <= x < 10 || -10 < x <= -1 || x == 0) ? lng - 4 : lng
-    return String(buf[1:n])
+    return String(resize!(buf,n))
 end
 
 print(io::IO, b::BigFloat) = print(io, string(b))

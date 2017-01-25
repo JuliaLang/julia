@@ -254,6 +254,18 @@ function A_ldiv_B!{T}(D::Diagonal{T}, V::AbstractMatrix{T})
     V
 end
 
+# Methods to resolve ambiguities with `Diagonal`
+@inline *(rowvec::RowVector, D::Diagonal) = transpose(D * transpose(rowvec))
+*(::Diagonal, ::RowVector) = throw(DimensionMismatch("Cannot right-multiply matrix by transposed vector"))
+
+@inline A_mul_Bt(D::Diagonal, rowvec::RowVector) = D*transpose(rowvec)
+
+At_mul_B(rowvec::RowVector, ::Diagonal) = throw(DimensionMismatch("Cannot left-multiply matrix by vector"))
+
+@inline A_mul_Bc(D::Diagonal, rowvec::RowVector) = D*ctranspose(rowvec)
+
+Ac_mul_B(rowvec::RowVector, ::Diagonal) = throw(DimensionMismatch("Cannot left-multiply matrix by vector"))
+
 conj(D::Diagonal) = Diagonal(conj(D.diag))
 transpose(D::Diagonal) = D
 ctranspose(D::Diagonal) = conj(D)
@@ -262,9 +274,9 @@ diag(D::Diagonal) = D.diag
 trace(D::Diagonal) = sum(D.diag)
 det(D::Diagonal) = prod(D.diag)
 logdet{T<:Real}(D::Diagonal{T}) = sum(log, D.diag)
-function logdet{T<:Complex}(D::Diagonal{T}) #Make sure branch cut is correct
-    x = sum(log, D.diag)
-    -pi<imag(x)<pi ? x : real(x)+(mod2pi(imag(x)+pi)-pi)*im
+function logdet{T<:Complex}(D::Diagonal{T}) # make sure branch cut is correct
+    z = sum(log, D.diag)
+    complex(real(z), rem2pi(imag(z), RoundNearest))
 end
 # identity matrices via eye(Diagonal{type},n)
 eye{T}(::Type{Diagonal{T}}, n::Int) = Diagonal(ones(T,n))

@@ -19,9 +19,19 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
         return s, ""
     end
     if isvarargtype(t)
-        tt, tn = t.parameters[1], t.parameters[2]
-        if isa(tn, TypeVar) && !tn.bound
-            if tt === Any || (isa(tt, TypeVar) && !tt.bound)
+        v1, v2 = nothing, nothing
+        if isa(t, UnionAll)
+            v1 = t.var
+            t = t.body
+            if isa(t, UnionAll)
+                v2 = t.var
+                t = t.body
+            end
+        end
+        ut = unwrap_unionall(t)
+        tt, tn = ut.parameters[1], ut.parameters[2]
+        if isa(tn, TypeVar) && (tn === v1 || tn === v2)
+            if tt === Any || (isa(tt, TypeVar) && (tt === v1 || tt === v2))
                 return string(s, "..."), ""
             else
                 return s, string_with_env(env, tt) * "..."
@@ -48,16 +58,17 @@ function arg_decl_parts(m::Method)
     line = m.line
     if src !== nothing && src.slotnames !== nothing
         argnames = src.slotnames[1:m.nargs]
-        decls = Any[argtype_decl(:tvar_env => tv, argnames[i], m.sig, i, m.nargs, m.isva)
+        sig = unwrap_unionall(m.sig)
+        decls = Any[argtype_decl(:tvar_env => tv, argnames[i], sig, i, m.nargs, m.isva)
                     for i = 1:m.nargs]
     else
-        decls = Any[("", "") for i = 1:length(m.sig.parameters)]
+        decls = Any[("", "") for i = 1:length(unwrap_unionall(m.sig).parameters)]
     end
     return tv, decls, file, line
 end
 
 function kwarg_decl(m::Method, kwtype::DataType)
-    sig = Tuple{kwtype, Core.AnyVector, m.sig.parameters...}
+    sig = rewrap_unionall(Tuple{kwtype, Core.AnyVector, unwrap_unionall(m.sig).parameters...}, m.sig)
     kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, max_world(m))
     if kwli !== nothing
         kwli = kwli::Method
@@ -75,9 +86,10 @@ end
 
 function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
-    ft = m.sig.parameters[1]
+    sig = unwrap_unionall(m.sig)
+    ft = unwrap_unionall(sig.parameters[1])
     d1 = decls[1]
-    if m.sig === Tuple
+    if sig === Tuple
         print(io, m.name)
         decls = Any[(), ("...", "")]
     elseif ft <: Function &&
@@ -85,7 +97,7 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
                 # TODO: more accurate test? (tn.name === "#" name)
             ft == typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && ft.name === Type.name && isleaftype(ft)
+    elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
         f = ft.parameters[1]
         if isa(f, DataType) && isempty(f.parameters)
             print(io, f)
@@ -200,13 +212,14 @@ end
 
 function show(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
-    ft = m.sig.parameters[1]
+    sig = unwrap_unionall(m.sig)
+    ft = sig.parameters[1]
     d1 = decls[1]
     if ft <: Function &&
             isdefined(ft.name.module, ft.name.mt.name) &&
             ft == typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && ft.name === Type.name && isleaftype(ft)
+    elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
         f = ft.parameters[1]
         if isa(f, DataType) && isempty(f.parameters)
             print(io, f)

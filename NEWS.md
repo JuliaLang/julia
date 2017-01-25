@@ -4,6 +4,19 @@ Julia v0.6.0 Release Notes
 New language features
 ---------------------
 
+  * New type system capabilities ([#8974], [#18457])
+    * Type parameter constraints can refer to previous parameters, e.g.
+      `type Foo{R<:Real, A<:AbstractArray{R}}`. Can also be used in method definitions.
+    * New syntax `Array{T} where T<:Integer`, indicating a union of types over all
+      specified values of `T` (represented by a `UnionAll` type). This provides behavior
+      similar to parametric methods or `typealias`, but can be used anywhere a type is
+      accepted. This syntax can also be used in method definitions, e.g.
+      `function inv(M::Matrix{T}) where T<:AbstractFloat`.
+      Anonymous functions can have type parameters via the syntax
+      `((x::Array{T}) where T<:Real) -> 2x`.
+    * Much more accurate subtype and type intersection algorithms. Method sorting and
+      identification of equivalent and ambiguous methods are improved as a result.
+
 Language changes
 ----------------
 
@@ -32,6 +45,17 @@ Breaking changes
 ----------------
 
 This section lists changes that do not have deprecation warnings.
+
+  * `readline`, `readlines` and `eachline` return lines without line endings by default.
+    You *must* use `readline(s, chomp=false)`, etc. to get the old behavior where lines
+    returned include trailing end-of-line character(s). ([#19944])
+
+  * `String`s no longer have a `.data` field (as part of a significant performance
+    improvement). Use `Vector{UInt8}(str)` to access a string as a byte array.
+    However, allocating the `Vector` object has overhead. You can also use
+    `codeunit(str, i)` to access the `i`th byte of a `String`.
+    Use `sizeof(str)` instead of `length(str.data)`, and `pointer(str)` instead of
+    `pointer(str.data)`. ([#19449])
 
   * Operations between `Float16` and `Integers` now return `Float16` instead of `Float32`. ([#17261])
 
@@ -88,14 +112,37 @@ This section lists changes that do not have deprecation warnings.
     the corresponding Greek characters in identifiers.  `\varepsilon`
     now tab-completes to U+03B5 (greek small letter epsilon) ([#19464]).
 
+  * `retry` now inputs the keyword arguments `delays` and `check` instead of
+    `n` and `max_delay`.  The previous functionality can be achieved setting
+    `delays` to `ExponentialBackOff`. ([#19331])
+
+  * `transpose(::AbstractVector)` now always returns a `RowVector` view of the input (which is a
+     special 1×n-sized `AbstractMatrix`), not a `Matrix`, etc. In particular, for
+     `v::AbstractVector` we now have `(v.').' === v` and `v.' * v` is a scalar. ([#19670])
+
+  * Parametric types with "unspecified" parameters, such as `Array`, are now represented
+    as `UnionAll` types instead of `DataType`s ([#18457]).
+
+  * `Union` types have two fields, `a` and `b`, instead of a single `types` field.
+    The empty type `Union{}` is represented by a singleton of type `BottomType` ([#18457]).
+
+  * The type `NTuple{N}` now refers to tuples where every element has the same type
+    (since it is shorthand for `NTuple{N,T} where T`). To get the old behavior of matching
+    any tuple, use `NTuple{N,Any}` ([#18457]).
+
 Library improvements
 --------------------
 
-  * `max`, `min`, and related functions (`minmax`, `maximum`, `minimum`, `extrema`) now return `NaN` for `NaN` arguments ([#12563]).
+  * `@views` macro to convert a whole expression or block of code to
+    use views for all slices ([#20164]).
+
+  * `max`, `min`, and related functions (`minmax`, `maximum`, `minimum`,
+    `extrema`) now return `NaN` for `NaN` arguments ([#12563]).
 
   * The `chop` and `chomp` functions now return a `SubString` ([#18339]).
 
-  * Numbered stackframes printed in stacktraces can be opened in an editor by entering the corresponding number in the REPL and pressing `^Q` ([#19680]).
+  * Numbered stackframes printed in stacktraces can be opened in an editor by
+    entering the corresponding number in the REPL and pressing `^Q` ([#19680]).
 
   * The REPL now supports something called *prompt pasting* ([#17599]).
     This activates when pasting text that starts with `julia> ` into the REPL.
@@ -135,7 +182,13 @@ Library improvements
     you can now do e.g. `[A I]` and it will concatenate an appropriately sized
     identity matrix ([#19305]).
 
-  * New `accumulate` and `accumulate!` functions, which generalize `cumsum` and `cumprod`. Also known as a [scan](https://en.wikipedia.org/wiki/Prefix_sum) operation ([#18931]).
+  * New `accumulate` and `accumulate!` functions, which generalize `cumsum` and
+  `cumprod`. Also known as a [scan](https://en.wikipedia.org/wiki/Prefix_sum)
+  operation ([#18931]).
+
+  * `reshape` now allows specifying one dimension with a `Colon()` (`:`) for the new shape, in which case
+    that dimension's length will be computed such that its product with all the other dimensions is equal
+    to the length of the original array ([#19919]).
 
   * New `titlecase` function, which capitalizes the first character of each word within a string ([#19469]).
 
@@ -155,8 +208,18 @@ Library improvements
   * `logging` can be used to redirect `info`, `warn`, and `error` messages
     either universally or on a per-module/function basis ([#16213]).
 
+  * New `iszero(x)` function to quickly check whether `x` is zero (or is all zeros, for an array) ([#19950]).
+
+  * `notify` now returns a count of tasks woken up ([#19841]).
+
 Compiler/Runtime improvements
 -----------------------------
+
+* `ccall` is now implemented as a macro, removing the need for special code-generator support for Intrinsics.
+
+* `ccall` gained limited support for a `llvmcall` calling-convention. This can replace many uses of `llvmcall` with a simpler, shorter declaration.
+
+* All Intrinsics are now Builtin functions instead and have proper error checking and fall-back static compilation support.
 
 Deprecated or removed
 ---------------------
@@ -180,6 +243,9 @@ Deprecated or removed
   * `airy`, `airyx` and `airyprime` have been deprecated in favor of more specific
     functions (`airyai`, `airybi`, `airyaiprime`, `airybiprimex`, `airyaix`, `airybix`,
     `airyaiprimex`, `airybiprimex`) ([#18050]).
+
+  * `produce`, `consume` and iteration over a Task object have been deprecated in favor of
+    using Channels for inter-task communication  ([#19841]).
 
 Julia v0.5.0 Release Notes
 ==========================
@@ -683,10 +749,12 @@ Language tooling improvements
 [#6190]: https://github.com/JuliaLang/julia/issues/6190
 [#6842]: https://github.com/JuliaLang/julia/issues/6842
 [#7258]: https://github.com/JuliaLang/julia/issues/7258
+[#7669]: https://github.com/JuliaLang/julia/issues/7669
 [#8036]: https://github.com/JuliaLang/julia/issues/8036
 [#8599]: https://github.com/JuliaLang/julia/issues/8599
 [#8814]: https://github.com/JuliaLang/julia/issues/8814
 [#8846]: https://github.com/JuliaLang/julia/issues/8846
+[#8974]: https://github.com/JuliaLang/julia/issues/8974
 [#9482]: https://github.com/JuliaLang/julia/issues/9482
 [#9503]: https://github.com/JuliaLang/julia/issues/9503
 [#9627]: https://github.com/JuliaLang/julia/issues/9627
@@ -762,6 +830,7 @@ Language tooling improvements
 [#16098]: https://github.com/JuliaLang/julia/issues/16098
 [#16107]: https://github.com/JuliaLang/julia/issues/16107
 [#16154]: https://github.com/JuliaLang/julia/issues/16154
+[#16213]: https://github.com/JuliaLang/julia/issues/16213
 [#16219]: https://github.com/JuliaLang/julia/issues/16219
 [#16260]: https://github.com/JuliaLang/julia/issues/16260
 [#16285]: https://github.com/JuliaLang/julia/issues/16285
@@ -810,6 +879,7 @@ Language tooling improvements
 [#18330]: https://github.com/JuliaLang/julia/issues/18330
 [#18339]: https://github.com/JuliaLang/julia/issues/18339
 [#18346]: https://github.com/JuliaLang/julia/issues/18346
+[#18457]: https://github.com/JuliaLang/julia/issues/18457
 [#18473]: https://github.com/JuliaLang/julia/issues/18473
 [#18628]: https://github.com/JuliaLang/julia/issues/18628
 [#18644]: https://github.com/JuliaLang/julia/issues/18644
@@ -822,9 +892,24 @@ Language tooling improvements
 [#19233]: https://github.com/JuliaLang/julia/issues/19233
 [#19288]: https://github.com/JuliaLang/julia/issues/19288
 [#19305]: https://github.com/JuliaLang/julia/issues/19305
+[#19331]: https://github.com/JuliaLang/julia/issues/19331
+[#19449]: https://github.com/JuliaLang/julia/issues/19449
+[#19464]: https://github.com/JuliaLang/julia/issues/19464
 [#19469]: https://github.com/JuliaLang/julia/issues/19469
 [#19543]: https://github.com/JuliaLang/julia/issues/19543
 [#19598]: https://github.com/JuliaLang/julia/issues/19598
 [#19635]: https://github.com/JuliaLang/julia/issues/19635
+[#19670]: https://github.com/JuliaLang/julia/issues/19670
+[#19677]: https://github.com/JuliaLang/julia/issues/19677
 [#19680]: https://github.com/JuliaLang/julia/issues/19680
+[#19692]: https://github.com/JuliaLang/julia/issues/19692
+[#19722]: https://github.com/JuliaLang/julia/issues/19722
+[#19741]: https://github.com/JuliaLang/julia/issues/19741
 [#19787]: https://github.com/JuliaLang/julia/issues/19787
+[#19800]: https://github.com/JuliaLang/julia/issues/19800
+[#19841]: https://github.com/JuliaLang/julia/issues/19841
+[#19903]: https://github.com/JuliaLang/julia/issues/19903
+[#19919]: https://github.com/JuliaLang/julia/issues/19919
+[#19944]: https://github.com/JuliaLang/julia/issues/19944
+[#19950]: https://github.com/JuliaLang/julia/issues/19950
+[#20164]: https://github.com/JuliaLang/julia/issues/20164

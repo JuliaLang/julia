@@ -59,3 +59,13 @@
 @test [0,1] ≈ [1e-9, 1]
 @test [0,Inf] ≈ [0,Inf]
 @test [0,Inf] ≉ [0,-Inf]
+
+# issue #19936
+for elty in (Float16,Float32,Float64)
+    nan  = elty(NaN)
+    half = elty(0.5)
+    @test !isapprox(nan, nan)
+    @test isapprox(nan, nan, nans=true)
+    @test !isapprox([half, nan, half], [half, nan, half])
+    @test isapprox([half, nan, half], [half, nan, half], nans=true)
+end

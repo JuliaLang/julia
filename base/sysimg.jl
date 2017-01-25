@@ -98,12 +98,6 @@ include("subarray.jl")
 (::Type{Matrix{T}}){T}(m::Integer, n::Integer) = Matrix{T}(Int(m), Int(n))
 (::Type{Matrix})(m::Integer, n::Integer) = Matrix{Any}(Int(m), Int(n))
 
-# TODO: possibly turn these into deprecations
-Array{T}(::Type{T}, d::Integer...) = Array(T, convert(Tuple{Vararg{Int}}, d))
-Array{T}(::Type{T}, m::Integer)                       = Array{T,1}(Int(m))
-Array{T}(::Type{T}, m::Integer,n::Integer)            = Array{T,2}(Int(m),Int(n))
-Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) = Array{T,3}(Int(m),Int(n),Int(o))
-
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
@@ -115,6 +109,15 @@ include("multinverses.jl")
 using .MultiplicativeInverses
 include("abstractarraymath.jl")
 include("arraymath.jl")
+
+# define MIME"foo/bar" early so that we can overload 3-arg show
+immutable MIME{mime} end
+macro MIME_str(s)
+    :(MIME{$(Expr(:quote, Symbol(s)))})
+end
+
+include("char.jl")
+include("strings/string.jl")
 
 # SIMD loops
 include("simdloop.jl")
@@ -142,8 +145,9 @@ typealias StridedMatrix{T,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Var
 typealias StridedVecOrMat{T} Union{StridedVector{T}, StridedMatrix{T}}
 
 # For OS specific stuff
-include(String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "build_h.jl".data))) # include($BUILDROOT/base/build_h.jl)
-include(String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "version_git.jl".data))) # include($BUILDROOT/base/version_git.jl)
+include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
+include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
+
 include("osutils.jl")
 include("c.jl")
 include("sysinfo.jl")
@@ -158,14 +162,7 @@ include("io.jl")
 include("iostream.jl")
 include("iobuffer.jl")
 
-# define MIME"foo/bar" early so that we can overload 3-arg show
-immutable MIME{mime} end
-macro MIME_str(s)
-    :(MIME{$(Expr(:quote, Symbol(s)))})
-end
-
 # strings & printing
-include("char.jl")
 include("intfuncs.jl")
 include("strings/strings.jl")
 include("parse.jl")
@@ -303,6 +300,7 @@ include("datafmt.jl")
 importall .DataFmt
 include("deepcopy.jl")
 include("interactiveutil.jl")
+include("summarysize.jl")
 include("replutil.jl")
 include("test.jl")
 include("i18n.jl")
@@ -357,7 +355,7 @@ importall .Profile
 
 # dates
 include("dates/Dates.jl")
-import .Dates: Date, DateTime, now
+import .Dates: Date, DateTime, DateFormat, @dateformat_str, now
 
 # sparse matrices, vectors, and sparse linear algebra
 include("sparse/sparse.jl")

@@ -88,7 +88,11 @@ function signature(expr::Expr)
             end
             push!(sig.args[end].args, argtype(arg))
         end
-        Expr(:let, Expr(:block, sig), typevars(expr)...)
+        tv = typevars(expr)
+        for i = length(tv):-1:1
+            sig = Expr(:where, sig, tv[i])
+        end
+        sig
     else
         signature(expr.args[1])
     end
@@ -103,13 +107,10 @@ end
 argtype(other) = :Any
 
 function typevars(expr::Expr)
-    isexpr(expr, :curly) && return [tvar(x) for x in expr.args[2:end]]
+    isexpr(expr, :curly) && return expr.args[2:end]
     typevars(expr.args[1])
 end
 typevars(::Symbol) = []
-
-tvar(x::Expr)   = :($(x.args[1]) = TypeVar($(quot(x.args[1])), $(x.args[2]), true))
-tvar(s::Symbol) = :($(s) = TypeVar($(quot(s)), Any, true))
 
 # Docsystem types.
 # ================
@@ -238,11 +239,27 @@ end
 # =================
 
 """
+    getdoc(x::T, sig) -> String
+
+Return the dynamic docstring associated with object `x`, or `nothing` to use
+the binding's documentation.
+"""
+getdoc(x, sig) = getdoc(x)
+getdoc(x) = nothing
+
+"""
     Docs.doc(binding, sig)
 
 Returns all documentation that matches both `binding` and `sig`.
+
+If `getdoc` returns a non-`nothing` result on the value of the binding, then a
+dynamic docstring is returned instead of one based on the binding itself.
 """
 function doc(binding::Binding, sig::Type = Union{})
+    if defined(binding)
+        result = getdoc(resolve(binding), sig)
+        result === nothing || return result
+    end
     results, groups = DocStr[], MultiDoc[]
     # Lookup `binding` and `sig` for matches in all modules of the docsystem.
     for mod in modules
@@ -283,6 +300,7 @@ function doc(binding::Binding, sig::Type = Union{})
 end
 
 # Some additional convenience `doc` methods that take objects rather than `Binding`s.
+doc(obj::UnionAll) = doc(Base.unwrap_unionall(obj))
 doc(object, sig::Type = Union{}) = doc(aliasof(object, typeof(object)), sig)
 doc(object, sig...)              = doc(object, Tuple{sig...})
 

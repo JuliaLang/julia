@@ -545,6 +545,20 @@ end
 
 @inline norm(x::Number, p::Real=2) = vecnorm(x, p)
 
+@inline norm{T}(tv::RowVector{T}) = norm(transpose(tv))
+
+"""
+    norm(rowvector, [q = 2])
+
+Takes the q-norm of a `RowVector`, which is equivalent to the p-norm with
+value `p = q/(q-1)`. They coincide at `p = q = 2`.
+
+The difference in norm between a vector space and its dual arises to preserve
+the relationship between duality and the inner product, and the result is
+consistent with the p-norm of `1 × n` matrix.
+"""
+@inline norm{T}(tv::RowVector{T}, q::Real) = q == Inf ? norm(transpose(tv), 1) : norm(transpose(tv), q/(q-1))
+
 function vecdot(x::AbstractArray, y::AbstractArray)
     lx = _length(x)
     if lx != _length(y)
@@ -678,8 +692,6 @@ trace(x::Number) = x
 #kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
 
 #det(a::AbstractMatrix)
-
-inv(a::StridedMatrix) = throw(ArgumentError("argument must be a square matrix"))
 
 """
     inv(M)
@@ -1216,13 +1228,13 @@ promote_leaf_eltypes(x::Union{AbstractArray,Tuple}) = mapreduce(promote_leaf_elt
 # `a ≈ a` is `true`.
 function isapprox(x::AbstractArray, y::AbstractArray;
     rtol::Real=Base.rtoldefault(promote_leaf_eltypes(x),promote_leaf_eltypes(y)),
-    atol::Real=0, norm::Function=vecnorm)
+    atol::Real=0, nans::Bool=false, norm::Function=vecnorm)
     d = norm(x - y)
     if isfinite(d)
         return d <= atol + rtol*max(norm(x), norm(y))
     else
         # Fall back to a component-wise approximate comparison
-        return all(ab -> isapprox(ab[1], ab[2]; rtol=rtol, atol=atol), zip(x, y))
+        return all(ab -> isapprox(ab[1], ab[2]; rtol=rtol, atol=atol, nans=nans), zip(x, y))
     end
 end
 

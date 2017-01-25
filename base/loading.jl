@@ -64,12 +64,12 @@ elseif is_apple()
             break
         end
         # Hack to compensate for inability to create a string from a subarray with no allocations.
-        path_basename.data == casepreserved_basename && return true
+        Vector{UInt8}(path_basename) == casepreserved_basename && return true
 
         # If there is no match, it's possible that the file does exist but HFS+
         # performed unicode normalization. See  https://developer.apple.com/library/mac/qa/qa1235/_index.html.
         isascii(path_basename) && return false
-        normalize_string(path_basename, :NFD).data == casepreserved_basename
+        Vector{UInt8}(normalize_string(path_basename, :NFD)) == casepreserved_basename
     end
 else
     # Generic fallback that performs a slow directory listing.
@@ -80,19 +80,26 @@ else
     end
 end
 
-function try_path(prefix::String, base::String, name::String)
-    path = joinpath(prefix, name)
+function load_hook(prefix::String, name::String, ::Void)
+    name_jl = "$name.jl"
+    path = joinpath(prefix, name_jl)
     isfile_casesensitive(path) && return abspath(path)
-    path = joinpath(prefix, base, "src", name)
+    path = joinpath(prefix, name_jl, "src", name_jl)
     isfile_casesensitive(path) && return abspath(path)
-    path = joinpath(prefix, name, "src", name)
+    path = joinpath(prefix, name, "src", name_jl)
     isfile_casesensitive(path) && return abspath(path)
     return nothing
 end
+load_hook(prefix::String, name::String, path::String) = path
+load_hook(prefix, name::String, ::Any) =
+    throw(ArgumentError("unrecognized custom loader in LOAD_PATH: $prefix"))
+
+_str(x::AbstractString) = String(x)
+_str(x) = x
 
 # `wd` is a working directory to search. defaults to current working directory.
 # if `wd === nothing`, no extra path is searched.
-function find_in_path(name::String, wd)
+function find_in_path(name::String, wd::Union{Void,String})
     isabspath(name) && return name
     base = name
     if endswith(name,".jl")
@@ -103,15 +110,15 @@ function find_in_path(name::String, wd)
     if wd !== nothing
         isfile_casesensitive(joinpath(wd,name)) && return joinpath(wd,name)
     end
-    p = try_path(Pkg.dir(), base, name)
-    p !== nothing && return p
-    for prefix in LOAD_PATH
-        p = try_path(prefix, base, name)
-        p !== nothing && return p
+    path = nothing
+    path = _str(load_hook(_str(Pkg.dir()), base, path))
+    for dir in LOAD_PATH
+        path = _str(load_hook(_str(dir), base, path))
     end
-    return nothing
+    return path
 end
-find_in_path(name::AbstractString, wd = pwd()) = find_in_path(String(name), wd)
+find_in_path(name::AbstractString, wd::AbstractString = pwd()) =
+    find_in_path(String(name), String(wd))
 
 function find_in_node_path(name::String, srcpath, node::Int=1)
     if myid() == node
@@ -545,22 +552,16 @@ function include_from_node1(_path::String)
 end
 
 """
-    include(path::AbstractString...)
+    include(path::AbstractString)
 
-Evaluate the contents of the input source file(s) in the current context. Returns the result
-of the last evaluated argument (of the last input file). During including, a
-task-local include path is set to the directory containing the file. Nested calls to
-`include` will search relative to that path. All paths refer to files on node 1 when running
-in parallel, and files will be fetched from node 1. This function is typically used to load
-source interactively, or to combine files in packages that are broken into multiple source files.
+Evaluate the contents of the input source file in the current context. Returns the result
+of the last evaluated expression of the input file. During including, a task-local include
+path is set to the directory containing the file. Nested calls to `include` will search
+relative to that path. All paths refer to files on node 1 when running in parallel, and
+files will be fetched from node 1. This function is typically used to load source
+interactively, or to combine files in packages that are broken into multiple source files.
 """
-function include(_path::AbstractString...)
-    local result
-    for path in _path
-        result = include(path)
-    end
-    result
-end
+include # defined in sysimg.jl
 
 """
     evalfile(path::AbstractString, args::Vector{String}=String[])

@@ -231,6 +231,7 @@ Core.UndefRefError
 Core.UndefVarError
 Base.InitError
 Base.retry
+Base.ExponentialBackOff
 ```
 
 ## Events

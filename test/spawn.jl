@@ -6,7 +6,7 @@
 
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 
-yes = `perl -le 'while (1) {print STDOUT "y"}'`
+yes = `yes`
 echo = `echo`
 sortcmd = `sort`
 printf = `printf`
@@ -64,12 +64,12 @@ if valgrind_off
 end
 
 if is_unix()
-    prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
-    @test success(pipeline(`perl -le '$|=1; for(0..2){ print; sleep 1 }'`,
-                       prefixer("A",2) & prefixer("B",2)))
-    @test success(pipeline(`perl -le '$|=1; for(0..2){ print; sleep 1 }'`,
-                       prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3),
-                       prefixer("A",2) & prefixer("B",2)))
+    prefixer(prefix, sleep) = `sh -c "while IFS= read REPLY; do echo '$prefix ' \$REPLY; sleep $sleep; done"`
+    @test success(pipeline(`sh -c "for i in 1 2 3 4 5 6 7 8 9 10; do echo \$i; sleep 0.1; done"`,
+                       prefixer("A", 0.2) & prefixer("B", 0.2)))
+    @test success(pipeline(`sh -c "for i in 1 2 3 4 5 6 7 8 9 10; do echo \$i; sleep 0.1; done"`,
+                       prefixer("X", 0.3) & prefixer("Y", 0.3) & prefixer("Z", 0.3),
+                       prefixer("A", 0.2) & prefixer("B", 0.2)))
 end
 
 @test  success(truecmd)
@@ -182,18 +182,18 @@ let r, t, sock
     sock = connect(fetch(r))
     mark(sock)
     @test ismarked(sock)
-    @test readline(sock) == "Hello, world!\n"
-    @test readline(sock) == "Goodbye, world...\n"
+    @test readline(sock) == "Hello, world!"
+    @test readline(sock) == "Goodbye, world..."
     @test reset(sock) == 0
     @test !ismarked(sock)
     mark(sock)
     @test ismarked(sock)
-    @test readline(sock) == "Hello, world!\n"
+    @test readline(sock) == "Hello, world!"
     unmark(sock)
     @test !ismarked(sock)
     @test_throws ArgumentError reset(sock)
     @test !unmark(sock)
-    @test readline(sock) == "Goodbye, world...\n"
+    @test readline(sock) == "Goodbye, world..."
     #@test eof(sock) ## doesn't work
     close(sock)
     @test wait(t)
@@ -216,14 +216,6 @@ end
 
 # issue #5904
 @test run(pipeline(ignorestatus(falsecmd), truecmd)) === nothing
-
-
-# issue #6010
-# TODO: should create separate set of task tests
-ducer = @async for i=1:100; produce(i); end
-yield()
-@test consume(ducer) == 1
-@test consume(ducer) == 2
 
 @testset "redirect_*" begin
     let OLD_STDOUT = STDOUT,
@@ -334,8 +326,8 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
     @test outfd != Base._fd(out.out) == Base.INVALID_OS_HANDLE
     @test nb_available(out) == 0
     @test c == UInt8['w']
-    @test lstrip(ln2) == "1\thello\n"
-    @test ln1 == "orld\n"
+    @test lstrip(ln2) == "1\thello"
+    @test ln1 == "orld"
     @test isempty(read(out))
     @test eof(out)
     @test desc == "Pipe($infd open => $outfd active, 0 bytes waiting)"
