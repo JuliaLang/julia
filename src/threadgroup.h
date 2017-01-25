@@ -17,7 +17,7 @@ typedef struct {
     uint8_t num_sockets, num_cores, num_threads_per_core;
 
     // fork/join/barrier
-    uint8_t group_sense; // Written only be master thread
+    uint8_t group_sense; // Written only by master thread
     ti_thread_sense_t **thread_sense;
     void              *envelope;
 
