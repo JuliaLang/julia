@@ -1766,7 +1766,7 @@ end
 # Not exported
 eval(LibGit2, quote
     function owner(x)
-        depwarn("owner(x) is deprecated, use repository(x) instead.", :owner)
+        Base.depwarn("owner(x) is deprecated, use repository(x) instead.", :owner)
         repository(x)
     end
 end)
@@ -1785,5 +1785,21 @@ function colon{T<:Dates.Period}(start::T, stop::T)
     depwarn("$start:$stop is deprecated, use $start:$T(1):$stop instead.", :colon)
     colon(start, T(1), stop)
 end
+
+# when this deprecation is deleted, remove all calls to it, and all
+# negate=nothing keyword arguments, from base/dates/adjusters.jl
+eval(Dates, quote
+    function deprecate_negate(f, func, sig, negate)
+        if negate === nothing
+            return func
+        else
+            msg = "$f($sig; negate=$negate) is deprecated, use $f("
+            negate && (msg *= "!")
+            msg *= "$sig) instead."
+            Base.depwarn(msg, f)
+            return negate ? !func : func
+        end
+    end
+end)
 
 # End deprecations scheduled for 0.6
