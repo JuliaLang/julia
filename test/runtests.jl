@@ -154,35 +154,34 @@ cd(dirname(@__FILE__)) do
             Base.Test.push_testset(fake)
             Base.Test.record(o_ts, fake)
             Base.Test.pop_testset()
-        elseif isa(res[2][1], RemoteException)
+        elseif isa(res[2][1], RemoteException) && isa(res[2][1].captured.ex, Base.Test.TestSetException)
             println("Worker $(res[2][1].pid) failed running test $(res[1]):")
             Base.showerror(STDOUT,res[2][1].captured)
-            o_ts.anynonpass = true
-            if isa(res[2][1].captured.ex, Base.Test.TestSetException)
-                fake = Base.Test.DefaultTestSet(res[1])
-                for i in 1:res[2][1].captured.ex.pass
-                    Base.Test.record(fake, Base.Test.Pass(:test, nothing, nothing, nothing))
-                end
-                for i in 1:res[2][1].captured.ex.broken
-                    Base.Test.record(fake, Base.Test.Broken(:test, nothing))
-                end
-                for t in res[2][1].captured.ex.errors_and_fails
-                    Base.Test.record(fake, t)
-                end
-                Base.Test.push_testset(fake)
-                Base.Test.record(o_ts, fake)
-                Base.Test.pop_testset()
+            fake = Base.Test.DefaultTestSet(res[1])
+            for i in 1:res[2][1].captured.ex.pass
+                Base.Test.record(fake, Base.Test.Pass(:test, nothing, nothing, nothing))
             end
+            for i in 1:res[2][1].captured.ex.broken
+                Base.Test.record(fake, Base.Test.Broken(:test, nothing))
+            end
+            for t in res[2][1].captured.ex.errors_and_fails
+                Base.Test.record(fake, t)
+            end
+            Base.Test.push_testset(fake)
+            Base.Test.record(o_ts, fake)
+            Base.Test.pop_testset()
         elseif isa(res[2][1], Exception)
-            # If this test raised an exception that is not a RemoteException, that means
-            # the test runner itself had some problem, so we may have hit a segfault
-            # or something similar.  Record this testset as Errored.
-            o_ts.anynonpass = true
+            # If this test raised an exception that is not a remote testset exception,
+            # i.e. not a RemoteException capturing a TestSetException that means
+            # the test runner itself had some problem, so we may have hit a segfault,
+            # deserialization errors or something similar.  Record this testset as Errored.
             fake = Base.Test.DefaultTestSet(res[1])
             Base.Test.record(fake, Base.Test.Error(:test_error, res[1], res[2][1], []))
             Base.Test.push_testset(fake)
             Base.Test.record(o_ts, fake)
             Base.Test.pop_testset()
+        else
+            error(string("Unknown result type : ", typeof(res)))
         end
     end
     println()

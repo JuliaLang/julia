@@ -13,6 +13,13 @@ dt = Dates.DateTime(2012,12,21,16,30,20,200)
 @test trunc(dt,Dates.Minute) == Dates.DateTime(2012,12,21,16,30)
 @test trunc(dt,Dates.Second) == Dates.DateTime(2012,12,21,16,30,20)
 @test trunc(dt,Dates.Millisecond) == Dates.DateTime(2012,12,21,16,30,20,200)
+t = Dates.Time(1,2,3,4,5,6)
+@test trunc(t,Dates.Hour) == Dates.Time(1)
+@test trunc(t,Dates.Minute) == Dates.Time(1,2)
+@test trunc(t,Dates.Second) == Dates.Time(1,2,3)
+@test trunc(t,Dates.Millisecond) == Dates.Time(1,2,3,4)
+@test trunc(t,Dates.Microsecond) == Dates.Time(1,2,3,4,5)
+@test trunc(t,Dates.Nanosecond) == Dates.Time(1,2,3,4,5,6)
 
 # Date functions
 Jan = Dates.DateTime(2013,1,1) #Tuesday
@@ -455,3 +462,11 @@ end) == 251
     end
     return sum == 15
 end) == 15 # On average, there's one of those months every year
+
+r = Dates.Time(x->Dates.second(x) == 5, 1)
+@test r == Dates.Time(1,0,5)
+
+r = filter(x->Dates.second(x) == 5, Dates.Time(0):Dates.Time(10))
+@test length(r) == 600
+@test first(r) == Dates.Time(0,0,5)
+@test last(r) == Dates.Time(9,59,5)

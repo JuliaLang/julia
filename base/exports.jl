@@ -980,6 +980,8 @@ export
 # dates
     Date,
     DateTime,
+    DateFormat,
+    @dateformat_str,
     now,
 
 # errors
@@ -1384,6 +1386,7 @@ export
     @label,
     @goto,
     @view,
+    @views,
 
 # SparseArrays module re-exports
     SparseArrays,

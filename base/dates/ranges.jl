@@ -4,10 +4,19 @@
 
 # Override default step; otherwise it would be Millisecond(1)
 Base.colon{T<:DateTime}(start::T, stop::T) = StepRange(start, Day(1), stop)
+Base.colon{T<:Date}(start::T, stop::T)     = StepRange(start, Day(1), stop)
+Base.colon{T<:Time}(start::T, stop::T)     = StepRange(start, Second(1), stop)
+
+Base.range(start::DateTime, len::Integer)  = range(start, Day(1), len)
+Base.range(start::Date, len::Integer)      = range(start, Day(1), len)
+
+(::Type{StepRange{T,R}}){T<:Dates.DatePeriod,R<:Real}(start, step, stop) =
+    throw(ArgumentError("must specify step as a Period when constructing Dates ranges"))
 
 # Given a start and end date, how many steps/periods are in between
-guess(a::DateTime,b::DateTime,c) = floor(Int64,(Int128(b) - Int128(a))/toms(c))
-guess(a::Date,b::Date,c) = Int64(div(Int64(b - a),days(c)))
+guess(a::DateTime,b::DateTime,c) = floor(Int64,(Int128(value(b)) - Int128(value(a)))/toms(c))
+guess(a::Date,b::Date,c) = Int64(div(value(b - a),days(c)))
+len(a::Time,b::Time,c) = Int64(div(value(b - a), tons(c)))
 function len(a,b,c)
     lo, hi, st = min(a,b), max(a,b), abs(c)
     i = guess(a,b,c)-1

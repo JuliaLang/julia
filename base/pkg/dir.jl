@@ -67,7 +67,7 @@ end
 
 function getmetabranch()
     try
-        chomp(readline(joinpath(path(),"META_BRANCH")))
+        readline(joinpath(path(),"META_BRANCH"))
     catch err
         META_BRANCH
     end

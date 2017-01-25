@@ -108,8 +108,10 @@ map(f, t::Tuple{Any, Any})      = (f(t[1]), f(t[2]))
 map(f, t::Tuple{Any, Any, Any}) = (f(t[1]), f(t[2]), f(t[3]))
 map(f, t::Tuple)                = (@_inline_meta; (f(t[1]), map(f,tail(t))...))
 # stop inlining after some number of arguments to avoid code blowup
-typealias Any16{N} Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
-                         Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
+typealias Any16{N}   Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
+                           Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
+typealias All16{T,N} Tuple{T,T,T,T,T,T,T,T,
+                           T,T,T,T,T,T,T,T,Vararg{T,N}}
 function map(f, t::Any16)
     n = length(t)
     A = Array{Any}(n)
@@ -157,6 +159,44 @@ end
 function _ftl{N}(out, val, ::Type{Val{N}})
     @_inline_meta
     _ftl((out..., val), val, Val{N})
+end
+
+# constructing from an iterator
+
+# only define these in Base, to avoid overwriting the constructors
+if isdefined(Main, :Base)
+
+(::Type{T}){T<:Tuple}(x::Tuple) = convert(T, x)  # still use `convert` for tuples
+
+function (T::Type{All16{E,N}}){E,N}(itr)
+    len = N+16
+    elts = collect(E, Iterators.take(itr,len))
+    if length(elts) != len
+        _totuple_err(T)
+    end
+    (elts...,)
+end
+
+(::Type{T}){T<:Tuple}(itr) = _totuple(T, itr, start(itr))
+
+_totuple(::Type{Tuple{}}, itr, s) = ()
+
+function _totuple_err(T::ANY)
+    @_noinline_meta
+    throw(ArgumentError("too few elements for tuple type $T"))
+end
+
+function _totuple(T, itr, s)
+    @_inline_meta
+    done(itr, s) && _totuple_err(T)
+    v, s = next(itr, s)
+    (convert(tuple_type_head(T), v), _totuple(tuple_type_tail(T), itr, s)...)
+end
+
+_totuple{E}(::Type{Tuple{Vararg{E}}}, itr, s) = (collect(E, Iterators.rest(itr,s))...,)
+
+_totuple(::Type{Tuple}, itr, s) = (collect(Iterators.rest(itr,s))...,)
+
 end
 
 ## comparison ##

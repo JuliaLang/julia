@@ -555,15 +555,16 @@ spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::R
 spawn(cmds::AbstractCmd, args...; chain::Nullable{ProcessChain}=Nullable{ProcessChain}()) =
     spawn(cmds, spawn_opts_swallow(args...)...; chain=chain)
 
-function eachline(cmd::AbstractCmd, stdin)
+function eachline(cmd::AbstractCmd, stdin; chomp::Bool=true)
     stdout = Pipe()
     processes = spawn(cmd, (stdin,stdout,STDERR))
     close(stdout.in)
     out = stdout.out
     # implicitly close after reading lines, since we opened
-    return EachLine(out, ()->(close(out); success(processes) || pipeline_error(processes)))
+    return EachLine(out, chomp=chomp,
+        ondone=()->(close(out); success(processes) || pipeline_error(processes)))
 end
-eachline(cmd::AbstractCmd) = eachline(cmd, DevNull)
+eachline(cmd::AbstractCmd; chomp::Bool=true) = eachline(cmd, DevNull, chomp=chomp)
 
 # return a Process object to read-to/write-from the pipeline
 """

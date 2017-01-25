@@ -6,7 +6,7 @@ value(x::Period) = x.value
 # The default constructors for Periods work well in almost all cases
 # P(x) = new((convert(Int64,x))
 # The following definitions are for Period-specific safety
-for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond)
+for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond, :Microsecond, :Nanosecond)
     period_str = string(period)
     accessor_str = lowercase(period_str)
     # Convenience method for show()
@@ -16,17 +16,19 @@ for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond
     # AbstractString parsing (mainly for IO code)
     @eval $period(x::AbstractString) = $period(Base.parse(Int64,x))
     # Period accessors
-    typ_str = period in (:Hour, :Minute, :Second, :Millisecond) ? "DateTime" : "TimeType"
-    description = typ_str == "TimeType" ? "`Date` or `DateTime`" : "`$typ_str`"
-    reference = period == :Week ? " For details see [`$accessor_str(::$typ_str)`](@ref)." : ""
+    typs = period in (:Microsecond, :Nanosecond) ? ["Time"] :
+           period in (:Hour, :Minute, :Second, :Millisecond) ? ["Time", "DateTime"] : ["Date","DateTime"]
+    reference = period == :Week ? " For details see [`$accessor_str(::Union{Date, DateTime})`](@ref)." : ""
+    for typ_str in typs
+        @eval begin
+            @doc """
+                $($period_str)(dt::$($typ_str)) -> $($period_str)
+
+            The $($accessor_str) part of a $($typ_str) as a `$($period_str)`.$($reference)
+            """ $period(dt::$(Symbol(typ_str))) = $period($(Symbol(accessor_str))(dt))
+        end
+    end
     @eval begin
-        @doc """
-            $($period_str)(dt::$($typ_str)) -> $($period_str)
-
-        The $($accessor_str) part of a $($description) as a `$($period_str)`.$($reference)
-        """ ->
-        $period(dt::$(Symbol(typ_str))) = $period($(Symbol(accessor_str))(dt))
-
         @doc """
             $($period_str)(v)
 
@@ -35,16 +37,12 @@ for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond
         """ $period(v)
     end
 end
-# Now we're safe to define Period-Number conversions
-# Anything an Int64 can convert to, a Period can convert to
-Base.convert{T<:Number}(::Type{T},x::Period) = convert(T,value(x))
-Base.convert{T<:Period}(::Type{T},x::Real) = T(x)
 
 #Print/show/traits
 Base.string{P<:Period}(x::P) = string(value(x),_units(x))
 Base.show(io::IO,x::Period) = print(io,string(x))
 Base.zero{P<:Period}(::Union{Type{P},P}) = P(0)
-Base.one{P<:Period}(::Union{Type{P},P}) = P(1)
+Base.one{P<:Period}(::Union{Type{P},P}) = 1  # see #16116
 Base.typemin{P<:Period}(::Type{P}) = P(typemin(Int64))
 Base.typemax{P<:Period}(::Type{P}) = P(typemax(Int64))
 
@@ -52,13 +50,13 @@ Base.typemax{P<:Period}(::Type{P}) = P(typemax(Int64))
 """
     default(p::Period) -> Period
 
-Returns a sensible "default" value for the input Period by returning `one(p)` for Year,
-Month, and Day, and `zero(p)` for Hour, Minute, Second, and Millisecond.
+Returns a sensible "default" value for the input Period by returning `T(1)` for Year,
+Month, and Day, and `T(0)` for Hour, Minute, Second, and Millisecond.
 """
 function default end
 
-default{T<:DatePeriod}(p::Union{T,Type{T}}) = one(p)
-default{T<:TimePeriod}(p::Union{T,Type{T}}) = zero(p)
+default{T<:DatePeriod}(p::Union{T,Type{T}}) = T(1)
+default{T<:TimePeriod}(p::Union{T,Type{T}}) = T(0)
 
 (-){P<:Period}(x::P) = P(-value(x))
 Base.isless{P<:Period}(x::P,y::P) = isless(value(x),value(y))
@@ -117,15 +115,28 @@ periodisless(::Period,::Hour)        = false
 periodisless(::Minute,::Hour)        = true
 periodisless(::Second,::Hour)        = true
 periodisless(::Millisecond,::Hour)   = true
+periodisless(::Microsecond,::Hour)   = true
+periodisless(::Nanosecond,::Hour)    = true
 periodisless(::Period,::Minute)      = false
 periodisless(::Second,::Minute)      = true
 periodisless(::Millisecond,::Minute) = true
+periodisless(::Microsecond,::Minute) = true
+periodisless(::Nanosecond,::Minute)  = true
 periodisless(::Period,::Second)      = false
 periodisless(::Millisecond,::Second) = true
+periodisless(::Microsecond,::Second) = true
+periodisless(::Nanosecond,::Second)  = true
 periodisless(::Period,::Millisecond) = false
+periodisless(::Microsecond,::Millisecond) = true
+periodisless(::Nanosecond,::Millisecond)  = true
+periodisless(::Period,::Microsecond)      = false
+periodisless(::Nanosecond,::Microsecond)  = true
+periodisless(::Period,::Nanosecond)       = false
 
 # return (next coarser period, conversion factor):
 coarserperiod{P<:Period}(::Type{P}) = (P,1)
+coarserperiod(::Type{Nanosecond})  = (Microsecond,1000)
+coarserperiod(::Type{Microsecond}) = (Millisecond,1000)
 coarserperiod(::Type{Millisecond}) = (Second,1000)
 coarserperiod(::Type{Second}) = (Minute,60)
 coarserperiod(::Type{Minute}) = (Hour,60)
@@ -201,6 +212,9 @@ julia> Dates.CompoundPeriod(Dates.Minute(50000))
 ```
 """
 CompoundPeriod{P<:Period}(p::Vector{P}) = CompoundPeriod(Array{Period}(p))
+
+CompoundPeriod(t::Time) = CompoundPeriod(Period[Hour(t), Minute(t), Second(t), Millisecond(t),
+                                                Microsecond(t), Nanosecond(t)])
 
 CompoundPeriod(p::Period...) = CompoundPeriod(Period[p...])
 
@@ -382,7 +396,7 @@ end
 
 # Fixed-value Periods (periods corresponding to a well-defined time interval,
 # as opposed to variable calendar intervals like Year).
-typealias FixedPeriod Union{Week,Day,Hour,Minute,Second,Millisecond}
+typealias FixedPeriod Union{Week,Day,Hour,Minute,Second,Millisecond,Microsecond,Nanosecond}
 
 # like div but throw an error if remainder is nonzero
 function divexact(x,y)
@@ -392,10 +406,10 @@ function divexact(x,y)
 end
 
 # FixedPeriod conversions and promotion rules
-const fixedperiod_conversions = [(Week,7),(Day,24),(Hour,60),(Minute,60),(Second,1000),(Millisecond,1)]
+const fixedperiod_conversions = [(Week,7),(Day,24),(Hour,60),(Minute,60),(Second,1000),(Millisecond,1000),(Microsecond,1000),(Nanosecond,1)]
 for i = 1:length(fixedperiod_conversions)
     (T,n) = fixedperiod_conversions[i]
-    N = 1
+    N = Int64(1)
     for j = i-1:-1:1 # less-precise periods
         (Tc,nc) = fixedperiod_conversions[j]
         N *= nc
@@ -432,6 +446,8 @@ Base.promote_rule(::Type{Year}, ::Type{Month}) = Month
 Base.isless{T<:OtherPeriod,S<:OtherPeriod}(x::T,y::S) = isless(promote(x,y)...)
 
 # truncating conversions to milliseconds and days:
+toms(c::Nanosecond)  = div(value(c), 1000000)
+toms(c::Microsecond) = div(value(c), 1000)
 toms(c::Millisecond) = value(c)
 toms(c::Second)      = 1000*value(c)
 toms(c::Minute)      = 60000*value(c)
@@ -440,7 +456,10 @@ toms(c::Day)         = 86400000*value(c)
 toms(c::Week)        = 604800000*value(c)
 toms(c::Month)       = 86400000.0*30.436875*value(c)
 toms(c::Year)        = 86400000.0*365.2425*value(c)
-toms(c::CompoundPeriod) = isempty(c.periods)?0.0 : Float64(sum(toms,c.periods))
+toms(c::CompoundPeriod) = isempty(c.periods)? 0.0 : Float64(sum(toms, c.periods))
+tons(x)              = toms(x) * 1000000
+tons(x::Microsecond) = value(x) * 1000
+tons(x::Nanosecond)  = value(x)
 days(c::Millisecond) = div(value(c),86400000)
 days(c::Second)      = div(value(c),86400)
 days(c::Minute)      = div(value(c),1440)

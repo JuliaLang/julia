@@ -4,7 +4,7 @@
 module IteratorsMD
     import Base: eltype, length, size, start, done, next, last, in, getindex,
                  setindex!, linearindexing, min, max, zero, one, isless, eachindex,
-                 ndims, iteratorsize
+                 ndims, iteratorsize, convert
 
     importall ..Base.Operators
     import Base: simd_outer_range, simd_inner_length, simd_index
@@ -87,6 +87,15 @@ module IteratorsMD
     CartesianRange{N}(sz::NTuple{N,Int}) = CartesianRange(CartesianIndex(sz))
     CartesianRange{N}(rngs::NTuple{N,Union{Integer,AbstractUnitRange}}) =
         CartesianRange(CartesianIndex(map(first, rngs)), CartesianIndex(map(last, rngs)))
+
+    convert{N}(::Type{NTuple{N,UnitRange{Int}}}, R::CartesianRange{CartesianIndex{N}}) =
+        map((f,l)->f:l, first(R).I, last(R).I)
+    convert{N}(::Type{NTuple{N,UnitRange}}, R::CartesianRange) =
+        convert(NTuple{N,UnitRange{Int}}, R)
+    convert{N}(::Type{Tuple{Vararg{UnitRange{Int}}}}, R::CartesianRange{CartesianIndex{N}}) =
+        convert(NTuple{N,UnitRange{Int}}, R)
+    convert(::Type{Tuple{Vararg{UnitRange}}}, R::CartesianRange) =
+        convert(Tuple{Vararg{UnitRange{Int}}}, R)
 
     ndims(R::CartesianRange) = length(R.start)
     ndims{I<:CartesianIndex}(::Type{CartesianRange{I}}) = length(I)
