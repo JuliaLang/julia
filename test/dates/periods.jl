@@ -12,32 +12,32 @@
 @test Dates.Year(10) % Dates.Year(4) == Dates.Year(2)
 @test gcd(Dates.Year(10), Dates.Year(4)) == Dates.Year(2)
 @test lcm(Dates.Year(10), Dates.Year(4)) == Dates.Year(20)
-@test div(Dates.Year(10),Dates.Year(3)) == 3
-@test div(Dates.Year(10),Dates.Year(4)) == 2
-@test div(Dates.Year(10),4) == Dates.Year(2)
+@test div(Dates.Year(10), Dates.Year(3)) == 3
+@test div(Dates.Year(10), Dates.Year(4)) == 2
+@test div(Dates.Year(10), 4) == Dates.Year(2)
 @test Dates.Year(10) / Dates.Year(4) == 2.5
 
-@test mod(Dates.Year(10),Dates.Year(4)) == Dates.Year(2)
-@test mod(Dates.Year(-10),Dates.Year(4)) == Dates.Year(2)
-@test mod(Dates.Year(10),4) == Dates.Year(2)
-@test mod(Dates.Year(-10),4) == Dates.Year(2)
+@test mod(Dates.Year(10), Dates.Year(4)) == Dates.Year(2)
+@test mod(Dates.Year(-10), Dates.Year(4)) == Dates.Year(2)
+@test mod(Dates.Year(10), 4) == Dates.Year(2)
+@test mod(Dates.Year(-10), 4) == Dates.Year(2)
 
-@test rem(Dates.Year(10),Dates.Year(4)) == Dates.Year(2)
-@test rem(Dates.Year(-10),Dates.Year(4)) == Dates.Year(-2)
-@test rem(Dates.Year(10),4) == Dates.Year(2)
-@test rem(Dates.Year(-10),4) == Dates.Year(-2)
+@test rem(Dates.Year(10), Dates.Year(4)) == Dates.Year(2)
+@test rem(Dates.Year(-10), Dates.Year(4)) == Dates.Year(-2)
+@test rem(Dates.Year(10), 4) == Dates.Year(2)
+@test rem(Dates.Year(-10), 4) == Dates.Year(-2)
 
 t = Dates.Year(1)
 t2 = Dates.Year(2)
-@test ([t,t,t,t,t] + Dates.Year(1)) == ([t2,t2,t2,t2,t2])
-@test (Dates.Year(1) + [t,t,t,t,t]) == ([t2,t2,t2,t2,t2])
-@test ([t2,t2,t2,t2,t2] - Dates.Year(1)) == ([t,t,t,t,t])
-@test_throws MethodError ([t,t,t,t,t] .* Dates.Year(1)) == ([t,t,t,t,t])
-@test ([t,t,t,t,t] * 1) == ([t,t,t,t,t])
-@test ([t,t,t,t,t] .% t2) == ([t,t,t,t,t])
-@test div.([t,t,t,t,t],Dates.Year(1)) == ([1,1,1,1,1])
-@test mod.([t,t,t,t,t],Dates.Year(2)) == ([t,t,t,t,t])
-@test [t,t,t] / t2 == [0.5,0.5,0.5]
+@test ([t, t, t, t, t] + Dates.Year(1)) == ([t2, t2, t2, t2, t2])
+@test (Dates.Year(1) + [t, t, t, t, t]) == ([t2, t2, t2, t2, t2])
+@test ([t2, t2, t2, t2, t2] - Dates.Year(1)) == ([t, t, t, t, t])
+@test_throws MethodError ([t, t, t, t, t] .* Dates.Year(1)) == ([t, t, t, t, t])
+@test ([t, t, t, t, t] * 1) == ([t, t, t, t, t])
+@test ([t, t, t, t, t] .% t2) == ([t, t, t, t, t])
+@test div.([t, t, t, t, t], Dates.Year(1)) == ([1, 1, 1, 1, 1])
+@test mod.([t, t, t, t, t], Dates.Year(2)) == ([t, t, t, t, t])
+@test [t, t, t] / t2 == [0.5, 0.5, 0.5]
 @test abs(-t) == t
 
 #Period arithmetic
@@ -61,23 +61,23 @@ ns = Dates.Nanosecond(1)
 @test Dates.Millisecond(ms) == ms
 @test Dates.Microsecond(us) == us
 @test Dates.Nanosecond(ns) == ns
-@test Dates.Year(convert(Int8,1)) == y
-@test Dates.Year(convert(UInt8,1)) == y
-@test Dates.Year(convert(Int16,1)) == y
-@test Dates.Year(convert(UInt16,1)) == y
-@test Dates.Year(convert(Int32,1)) == y
-@test Dates.Year(convert(UInt32,1)) == y
-@test Dates.Year(convert(Int64,1)) == y
-@test Dates.Year(convert(UInt64,1)) == y
-@test Dates.Year(convert(Int128,1)) == y
-@test Dates.Year(convert(UInt128,1)) == y
-@test Dates.Year(convert(BigInt,1)) == y
-@test Dates.Year(convert(BigFloat,1)) == y
-@test Dates.Year(convert(Complex,1)) == y
-@test Dates.Year(convert(Rational,1)) == y
-@test Dates.Year(convert(Float16,1)) == y
-@test Dates.Year(convert(Float32,1)) == y
-@test Dates.Year(convert(Float64,1)) == y
+@test Dates.Year(convert(Int8, 1)) == y
+@test Dates.Year(convert(UInt8, 1)) == y
+@test Dates.Year(convert(Int16, 1)) == y
+@test Dates.Year(convert(UInt16, 1)) == y
+@test Dates.Year(convert(Int32, 1)) == y
+@test Dates.Year(convert(UInt32, 1)) == y
+@test Dates.Year(convert(Int64, 1)) == y
+@test Dates.Year(convert(UInt64, 1)) == y
+@test Dates.Year(convert(Int128, 1)) == y
+@test Dates.Year(convert(UInt128, 1)) == y
+@test Dates.Year(convert(BigInt, 1)) == y
+@test Dates.Year(convert(BigFloat, 1)) == y
+@test Dates.Year(convert(Complex, 1)) == y
+@test Dates.Year(convert(Rational, 1)) == y
+@test Dates.Year(convert(Float16, 1)) == y
+@test Dates.Year(convert(Float32, 1)) == y
+@test Dates.Year(convert(Float64, 1)) == y
 @test y == y
 @test m == m
 @test w == w
@@ -126,18 +126,18 @@ y2 = Dates.Year(2)
 @test_throws MethodError Dates.Year(mi) == y
 @test_throws MethodError Dates.Year(s) == y
 @test_throws MethodError Dates.Year(ms) == y
-@test Dates.Year(Dates.Date(2013,1,1)) == Dates.Year(2013)
-@test Dates.Year(Dates.DateTime(2013,1,1)) == Dates.Year(2013)
-@test typeof(y+m) <: Dates.CompoundPeriod
-@test typeof(m+y) <: Dates.CompoundPeriod
-@test typeof(y+w) <: Dates.CompoundPeriod
-@test typeof(y+d) <: Dates.CompoundPeriod
-@test typeof(y+h) <: Dates.CompoundPeriod
-@test typeof(y+mi) <: Dates.CompoundPeriod
-@test typeof(y+s) <: Dates.CompoundPeriod
-@test typeof(y+ms) <: Dates.CompoundPeriod
-@test typeof(y+us) <: Dates.CompoundPeriod
-@test typeof(y+ns) <: Dates.CompoundPeriod
+@test Dates.Year(Dates.Date(2013, 1, 1)) == Dates.Year(2013)
+@test Dates.Year(Dates.DateTime(2013, 1, 1)) == Dates.Year(2013)
+@test typeof(y + m) <: Dates.CompoundPeriod
+@test typeof(m + y) <: Dates.CompoundPeriod
+@test typeof(y + w) <: Dates.CompoundPeriod
+@test typeof(y + d) <: Dates.CompoundPeriod
+@test typeof(y + h) <: Dates.CompoundPeriod
+@test typeof(y + mi) <: Dates.CompoundPeriod
+@test typeof(y + s) <: Dates.CompoundPeriod
+@test typeof(y + ms) <: Dates.CompoundPeriod
+@test typeof(y + us) <: Dates.CompoundPeriod
+@test typeof(y + ns) <: Dates.CompoundPeriod
 @test y > m
 @test d < w
 @test mi < h
@@ -160,23 +160,23 @@ y2 = Dates.Year(2)
 @test y * 4 == Dates.Year(4)
 @test y * 4f0 == Dates.Year(4)
 @test_throws InexactError y * 3//4 == Dates.Year(1)
-@test div(y,2) == Dates.Year(0)
-@test_throws MethodError div(2,y) == Dates.Year(2)
-@test div(y,y) == 1
+@test div(y, 2) == Dates.Year(0)
+@test_throws MethodError div(2, y) == Dates.Year(2)
+@test div(y, y) == 1
 @test y*10 % Dates.Year(5) == Dates.Year(0)
 @test_throws MethodError (y > 3) == false
 @test_throws MethodError (4 < y) == false
 @test 1 != y
-t = [y,y,y,y,y]
-@test t .+ Dates.Year(2) == [Dates.Year(3),Dates.Year(3),Dates.Year(3),Dates.Year(3),Dates.Year(3)]
+t = [y, y, y, y, y]
+@test t .+ Dates.Year(2) == [Dates.Year(3), Dates.Year(3), Dates.Year(3), Dates.Year(3), Dates.Year(3)]
 
 let x = Dates.Year(5), y = Dates.Year(2)
-    @test div(x,y)*y + rem(x,y) == x
-    @test fld(x,y)*y + mod(x,y) == x
+    @test div(x, y) * y + rem(x, y) == x
+    @test fld(x, y) * y + mod(x, y) == x
 end
 
 # Associativity
-dt = Dates.DateTime(2012,12,21)
+dt = Dates.DateTime(2012, 12, 21)
 test = ((((((((dt + y) - m) + w) - d) + h) - mi) + s) - ms)
 @test test == dt + y - m + w - d + h - mi + s - ms
 @test test == y - m + w - d + dt + h - mi + s - ms
@@ -184,9 +184,9 @@ test = ((((((((dt + y) - m) + w) - d) + h) - mi) + s) - ms)
 @test test == dt + (y - m + w - d + h - mi + s - ms)
 @test test == dt + y - m + w - d + (h - mi + s - ms)
 @test (dt + Dates.Year(4)) + Dates.Day(1) == dt + (Dates.Year(4) + Dates.Day(1))
-@test Dates.Date(2014,1,29) + Dates.Month(1) + Dates.Day(1) + Dates.Month(1) + Dates.Day(1) ==
-    Dates.Date(2014,1,29) + Dates.Day(1) + Dates.Month(1) + Dates.Month(1) + Dates.Day(1)
-@test Dates.Date(2014,1,29) + Dates.Month(1) + Dates.Day(1) == Dates.Date(2014,1,29) + Dates.Day(1) + Dates.Month(1)
+@test Dates.Date(2014, 1, 29) + Dates.Month(1) + Dates.Day(1) + Dates.Month(1) + Dates.Day(1) ==
+    Dates.Date(2014, 1, 29) + Dates.Day(1) + Dates.Month(1) + Dates.Month(1) + Dates.Day(1)
+@test Dates.Date(2014, 1, 29) + Dates.Month(1) + Dates.Day(1) == Dates.Date(2014, 1, 29) + Dates.Day(1) + Dates.Month(1)
 # traits
 @test Dates._units(Dates.Year(0)) == " years"
 @test Dates._units(Dates.Year(1)) == " year"
@@ -246,7 +246,7 @@ test = ((((((((dt + y) - m) + w) - d) + h) - mi) + s) - ms)
 @test Dates.Microsecond("1") == us
 @test Dates.Nanosecond("1") == ns
 @test_throws ArgumentError Dates.Year("1.0")
-@test Dates.Year(parse(Float64,"1.0")) == y
+@test Dates.Year(parse(Float64, "1.0")) == y
 
 dt = Dates.DateTime(2014)
 @test typeof(Dates.Year(dt)) <: Dates.Year
@@ -314,63 +314,63 @@ emptyperiod = ((y + d) - d) - y
 @test Dates.canonicalize(y - m + w - d + h - mi + s - ms).periods == Dates.Period[11m, 6d, 59mi, 999ms]
 @test Dates.canonicalize(-y + m - w + d - h + mi - s + ms).periods == Dates.Period[-11m, -6d, -59mi, -999ms]
 
-@test Dates.Date(2009,2,1) - (Dates.Month(1) + Dates.Day(1)) == Dates.Date(2008,12,31)
-@test (Dates.Month(1) + Dates.Day(1)) - Dates.Date(2009,2,1) == Dates.Date(2008,12,31)
+@test Dates.Date(2009, 2, 1) - (Dates.Month(1) + Dates.Day(1)) == Dates.Date(2008, 12, 31)
+@test (Dates.Month(1) + Dates.Day(1)) - Dates.Date(2009, 2, 1) == Dates.Date(2008, 12, 31)
 
 pa = [1y 1m 1w 1d; 1h 1mi 1s 1ms]
-cpa = [1y+1s 1m+1s 1w+1s 1d+1s; 1h+1s 1mi+1s 2m+1s 1s+1ms]
+cpa = [1y + 1s 1m + 1s 1w + 1s 1d + 1s; 1h + 1s 1mi + 1s 2m + 1s 1s + 1ms]
 
 @test +pa == pa == -(-pa)
 @test -pa == map(-, pa)
-@test 1y .+ pa == [2y 1y+1m 1y+1w 1y+1d; 1y+1h 1y+1mi 1y+1s 1y+1ms]
-@test (1y+1m) .+ pa == [2y+1m 1y+2m 1y+1m+1w 1y+1m+1d; 1y+1m+1h 1y+1m+1mi 1y+1m+1s 1y+1m+1ms]
-@test pa .+ 1y == [2y 1y+1m 1y+1w 1y+1d; 1y+1h 1y+1mi 1y+1s 1y+1ms]
-@test pa .+ (1y+1m) == [2y+1m 1y+2m 1y+1m+1w 1y+1m+1d; 1y+1m+1h 1y+1m+1mi 1y+1m+1s 1y+1m+1ms]
+@test 1y .+ pa == [2y 1y + 1m 1y + 1w 1y + 1d; 1y + 1h 1y + 1mi 1y + 1s 1y + 1ms]
+@test (1y + 1m) .+ pa == [2y + 1m 1y + 2m 1y + 1m + 1w 1y + 1m + 1d; 1y + 1m + 1h 1y + 1m + 1mi 1y + 1m + 1s 1y + 1m + 1ms]
+@test pa .+ 1y == [2y 1y + 1m 1y + 1w 1y + 1d; 1y + 1h 1y + 1mi 1y + 1s 1y + 1ms]
+@test pa .+ (1y + 1m) == [2y + 1m 1y + 2m 1y + 1m + 1w 1y + 1m + 1d; 1y + 1m + 1h 1y + 1m + 1mi 1y + 1m + 1s 1y + 1m + 1ms]
 
-@test 1y .+ cpa == [2y+1s 1y+1m+1s 1y+1w+1s 1y+1d+1s; 1y+1h+1s 1y+1mi+1s 1y+2m+1s 1y+1ms+1s]
-@test (1y+1m) .+ cpa == [2y+1m+1s 1y+2m+1s 1y+1m+1w+1s 1y+1m+1d+1s; 1y+1m+1h+1s 1y+1m+1mi+1s 1y+3m+1s 1y+1m+1s+1ms]
-@test cpa .+ 1y == [2y+1s 1y+1m+1s 1y+1w+1s 1y+1d+1s; 1y+1h+1s 1y+1mi+1s 1y+2m+1s 1y+1ms+1s]
-@test cpa .+ (1y+1m) == [2y+1m+1s 1y+2m+1s 1y+1m+1w+1s 1y+1m+1d+1s; 1y+1m+1h+1s 1y+1m+1mi+1s 1y+3m+1s 1y+1m+1s+1ms]
+@test 1y .+ cpa == [2y + 1s 1y + 1m + 1s 1y + 1w + 1s 1y + 1d + 1s; 1y + 1h + 1s 1y + 1mi + 1s 1y + 2m + 1s 1y + 1ms + 1s]
+@test (1y + 1m) .+ cpa == [2y + 1m + 1s 1y + 2m + 1s 1y + 1m + 1w + 1s 1y + 1m + 1d + 1s; 1y + 1m + 1h + 1s 1y + 1m + 1mi + 1s 1y + 3m + 1s 1y + 1m + 1s + 1ms]
+@test cpa .+ 1y == [2y + 1s 1y + 1m + 1s 1y + 1w + 1s 1y + 1d + 1s; 1y + 1h + 1s 1y + 1mi + 1s 1y + 2m + 1s 1y + 1ms + 1s]
+@test cpa .+ (1y + 1m) == [2y + 1m + 1s 1y + 2m + 1s 1y + 1m + 1w + 1s 1y + 1m + 1d + 1s; 1y + 1m + 1h + 1s 1y + 1m + 1mi + 1s 1y + 3m + 1s 1y + 1m + 1s + 1ms]
 
-@test 1y + pa == [2y 1y+1m 1y+1w 1y+1d; 1y+1h 1y+1mi 1y+1s 1y+1ms]
-@test (1y+1m) + pa == [2y+1m 1y+2m 1y+1m+1w 1y+1m+1d; 1y+1m+1h 1y+1m+1mi 1y+1m+1s 1y+1m+1ms]
-@test pa + 1y == [2y 1y+1m 1y+1w 1y+1d; 1y+1h 1y+1mi 1y+1s 1y+1ms]
-@test pa + (1y+1m) == [2y+1m 1y+2m 1y+1m+1w 1y+1m+1d; 1y+1m+1h 1y+1m+1mi 1y+1m+1s 1y+1m+1ms]
+@test 1y + pa == [2y 1y + 1m 1y + 1w 1y + 1d; 1y + 1h 1y + 1mi 1y + 1s 1y + 1ms]
+@test (1y + 1m) + pa == [2y + 1m 1y + 2m 1y + 1m + 1w 1y + 1m + 1d; 1y + 1m + 1h 1y + 1m + 1mi 1y + 1m + 1s 1y + 1m + 1ms]
+@test pa + 1y == [2y 1y + 1m 1y + 1w 1y + 1d; 1y + 1h 1y + 1mi 1y + 1s 1y + 1ms]
+@test pa + (1y + 1m) == [2y + 1m 1y + 2m 1y + 1m + 1w 1y + 1m + 1d; 1y + 1m + 1h 1y + 1m + 1mi 1y + 1m + 1s 1y + 1m + 1ms]
 
-@test 1y + cpa == [2y+1s 1y+1m+1s 1y+1w+1s 1y+1d+1s; 1y+1h+1s 1y+1mi+1s 1y+2m+1s 1y+1ms+1s]
-@test (1y+1m) + cpa == [2y+1m+1s 1y+2m+1s 1y+1m+1w+1s 1y+1m+1d+1s; 1y+1m+1h+1s 1y+1m+1mi+1s 1y+3m+1s 1y+1m+1s+1ms]
-@test cpa + 1y == [2y+1s 1y+1m+1s 1y+1w+1s 1y+1d+1s; 1y+1h+1s 1y+1mi+1s 1y+2m+1s 1y+1ms+1s]
-@test cpa + (1y+1m) == [2y+1m+1s 1y+2m+1s 1y+1m+1w+1s 1y+1m+1d+1s; 1y+1m+1h+1s 1y+1m+1mi+1s 1y+3m+1s 1y+1m+1s+1ms]
+@test 1y + cpa == [2y + 1s 1y + 1m + 1s 1y + 1w + 1s 1y + 1d + 1s; 1y + 1h + 1s 1y + 1mi + 1s 1y + 2m + 1s 1y + 1ms + 1s]
+@test (1y + 1m) + cpa == [2y + 1m + 1s 1y + 2m + 1s 1y + 1m + 1w + 1s 1y + 1m + 1d + 1s; 1y + 1m + 1h + 1s 1y + 1m + 1mi + 1s 1y + 3m + 1s 1y + 1m + 1s + 1ms]
+@test cpa + 1y == [2y + 1s 1y + 1m + 1s 1y + 1w + 1s 1y + 1d + 1s; 1y + 1h + 1s 1y + 1mi + 1s 1y + 2m + 1s 1y + 1ms + 1s]
+@test cpa + (1y + 1m) == [2y + 1m + 1s 1y + 2m + 1s 1y + 1m + 1w + 1s 1y + 1m + 1d + 1s; 1y + 1m + 1h + 1s 1y + 1m + 1mi + 1s 1y + 3m + 1s 1y + 1m + 1s + 1ms]
 
 @test 1y .- pa == [0y 1y-1m 1y-1w 1y-1d; 1y-1h 1y-1mi 1y-1s 1y-1ms]
-@test (1y+1m) .- pa == [1m 1y 1y+1m-1w 1y+1m-1d; 1y+1m-1h 1y+1m-1mi 1y+1m-1s 1y+1m-1ms]
-@test pa .- (1y+1m) == [-1m -1y -1y-1m+1w -1y-1m+1d; -1y-1m+1h -1y-1m+1mi -1y-1m+1s -1y-1m+1ms]
-@test pa .- 1y == [0y 1m-1y -1y+1w -1y+1d; -1y+1h -1y+1mi -1y+1s -1y+1ms]
+@test (1y + 1m) .- pa == [1m 1y 1y + 1m-1w 1y + 1m-1d; 1y + 1m-1h 1y + 1m-1mi 1y + 1m-1s 1y + 1m-1ms]
+@test pa .- (1y + 1m) == [-1m -1y -1y-1m + 1w -1y-1m + 1d; -1y-1m + 1h -1y-1m + 1mi -1y-1m + 1s -1y-1m + 1ms]
+@test pa .- 1y == [0y 1m-1y -1y + 1w -1y + 1d; -1y + 1h -1y + 1mi -1y + 1s -1y + 1ms]
 
 @test 1y .- cpa == [-1s 1y-1m-1s 1y-1w-1s 1y-1d-1s; 1y-1h-1s 1y-1mi-1s 1y-2m-1s 1y-1ms-1s]
-@test (1y+1m) .- cpa == [1m-1s 1y-1s 1y+1m-1w-1s 1y+1m-1d-1s; 1y+1m-1h-1s 1y+1m-1mi-1s 1y-1m-1s 1y+1m-1s-1ms]
-@test cpa .- 1y == [1s -1y+1m+1s -1y+1w+1s -1y+1d+1s; -1y+1h+1s -1y+1mi+1s -1y+2m+1s -1y+1ms+1s]
-@test cpa .- (1y+1m) == [-1m+1s -1y+1s -1y-1m+1w+1s -1y-1m+1d+1s; -1y-1m+1h+1s -1y-1m+1mi+1s -1y+1m+1s -1y+-1m+1s+1ms]
+@test (1y + 1m) .- cpa == [1m-1s 1y-1s 1y + 1m-1w-1s 1y + 1m-1d-1s; 1y + 1m-1h-1s 1y + 1m-1mi-1s 1y-1m-1s 1y + 1m-1s-1ms]
+@test cpa .- 1y == [1s -1y + 1m + 1s -1y + 1w + 1s -1y + 1d + 1s; -1y + 1h + 1s -1y + 1mi + 1s -1y + 2m + 1s -1y + 1ms + 1s]
+@test cpa .- (1y + 1m) == [-1m + 1s -1y + 1s -1y-1m + 1w + 1s -1y-1m + 1d + 1s; -1y-1m + 1h + 1s -1y-1m + 1mi + 1s -1y + 1m + 1s -1y + -1m + 1s + 1ms]
 
 @test 1y - pa == [0y 1y-1m 1y-1w 1y-1d; 1y-1h 1y-1mi 1y-1s 1y-1ms]
-@test (1y+1m) - pa == [1m 1y 1y+1m-1w 1y+1m-1d; 1y+1m-1h 1y+1m-1mi 1y+1m-1s 1y+1m-1ms]
-@test pa - (1y+1m) == [-1m -1y -1y-1m+1w -1y-1m+1d; -1y-1m+1h -1y-1m+1mi -1y-1m+1s -1y-1m+1ms]
-@test pa - 1y == [0y 1m-1y -1y+1w -1y+1d; -1y+1h -1y+1mi -1y+1s -1y+1ms]
+@test (1y + 1m) - pa == [1m 1y 1y + 1m-1w 1y + 1m-1d; 1y + 1m-1h 1y + 1m-1mi 1y + 1m-1s 1y + 1m-1ms]
+@test pa - (1y + 1m) == [-1m -1y -1y-1m + 1w -1y-1m + 1d; -1y-1m + 1h -1y-1m + 1mi -1y-1m + 1s -1y-1m + 1ms]
+@test pa - 1y == [0y 1m-1y -1y + 1w -1y + 1d; -1y + 1h -1y + 1mi -1y + 1s -1y + 1ms]
 
 @test 1y - cpa == [-1s 1y-1m-1s 1y-1w-1s 1y-1d-1s; 1y-1h-1s 1y-1mi-1s 1y-2m-1s 1y-1ms-1s]
-@test (1y+1m) - cpa == [1m-1s 1y-1s 1y+1m-1w-1s 1y+1m-1d-1s; 1y+1m-1h-1s 1y+1m-1mi-1s 1y-1m-1s 1y+1m-1s-1ms]
-@test cpa - 1y == [1s -1y+1m+1s -1y+1w+1s -1y+1d+1s; -1y+1h+1s -1y+1mi+1s -1y+2m+1s -1y+1ms+1s]
-@test cpa - (1y+1m) == [-1m+1s -1y+1s -1y-1m+1w+1s -1y-1m+1d+1s; -1y-1m+1h+1s -1y-1m+1mi+1s -1y+1m+1s -1y+-1m+1s+1ms]
+@test (1y + 1m) - cpa == [1m-1s 1y-1s 1y + 1m-1w-1s 1y + 1m-1d-1s; 1y + 1m-1h-1s 1y + 1m-1mi-1s 1y-1m-1s 1y + 1m-1s-1ms]
+@test cpa - 1y == [1s -1y + 1m + 1s -1y + 1w + 1s -1y + 1d + 1s; -1y + 1h + 1s -1y + 1mi + 1s -1y + 2m + 1s -1y + 1ms + 1s]
+@test cpa - (1y + 1m) == [-1m + 1s -1y + 1s -1y-1m + 1w + 1s -1y-1m + 1d + 1s; -1y-1m + 1h + 1s -1y-1m + 1mi + 1s -1y + 1m + 1s -1y + -1m + 1s + 1ms]
 
-@test [1y 1m; 1w 1d] + [1h 1mi; 1s 1ms] == [1y+1h 1m+1mi; 1w+1s 1d+1ms]
+@test [1y 1m; 1w 1d] + [1h 1mi; 1s 1ms] == [1y + 1h 1m + 1mi; 1w + 1s 1d + 1ms]
 @test [1y 1m; 1w 1d] - [1h 1mi; 1s 1ms] == [1y-1h 1m-1mi; 1w-1s 1d-1ms]
 @test [1y 1m; 1w 1d] - [1h 1mi; 1s 1ms] - [1y-1h 1m-1mi; 1w-1s 1d-1ms] == [emptyperiod emptyperiod; emptyperiod emptyperiod]
 
-@test [1y+1s 1m+1s; 1w+1s 1d+1s] + [1h 1mi; 1s 1ms] == [1y+1h+1s 1m+1mi+1s; 1w+2s 1d+1s+1ms]
-@test [1y+1s 1m+1s; 1w+1s 1d+1s] - [1h 1mi; 1s 1ms] == [1y-1h+1s 1m-1mi+1s; 1w 1d+1s-1ms]
+@test [1y + 1s 1m + 1s; 1w + 1s 1d + 1s] + [1h 1mi; 1s 1ms] == [1y + 1h + 1s 1m + 1mi + 1s; 1w + 2s 1d + 1s + 1ms]
+@test [1y + 1s 1m + 1s; 1w + 1s 1d + 1s] - [1h 1mi; 1s 1ms] == [1y-1h + 1s 1m-1mi + 1s; 1w 1d + 1s-1ms]
 
-@test [1y 1m; 1w 1d] + [1h+1s 1mi+1s; 1m+1s 1s+1ms] == [1y+1h+1s 1m+1mi+1s; 1w+1m+1s 1d+1s+1ms]
-@test [1y 1m; 1w 1d] - [1h+1s 1mi+1s; 1m+1s 1s+1ms] == [1y-1h-1s 1m-1mi-1s; 1w-1m-1s 1d-1s-1ms]
+@test [1y 1m; 1w 1d] + [1h + 1s 1mi + 1s; 1m + 1s 1s + 1ms] == [1y + 1h + 1s 1m + 1mi + 1s; 1w + 1m + 1s 1d + 1s + 1ms]
+@test [1y 1m; 1w 1d] - [1h + 1s 1mi + 1s; 1m + 1s 1s + 1ms] == [1y-1h-1s 1m-1mi-1s; 1w-1m-1s 1d-1s-1ms]
 
-@test [1y+1s 1m+1s; 1w+1s 1d+1s] + [1y+1h 1y+1mi; 1y+1s 1y+1ms] == [2y+1h+1s 1y+1m+1mi+1s; 1y+1w+2s 1y+1d+1s+1ms]
-@test [1y+1s 1m+1s; 1w+1s 1d+1s] - [1y+1h 1y+1mi; 1y+1s 1y+1ms] == [1s-1h 1m+1s-1y-1mi; 1w-1y 1d+1s-1y-1ms]
+@test [1y + 1s 1m + 1s; 1w + 1s 1d + 1s] + [1y + 1h 1y + 1mi; 1y + 1s 1y + 1ms] == [2y + 1h + 1s 1y + 1m + 1mi + 1s; 1y + 1w + 2s 1y + 1d + 1s + 1ms]
+@test [1y + 1s 1m + 1s; 1w + 1s 1d + 1s] - [1y + 1h 1y + 1mi; 1y + 1s 1y + 1ms] == [1s-1h 1m + 1s-1y-1mi; 1w-1y 1d + 1s-1y-1ms]
