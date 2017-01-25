@@ -1188,6 +1188,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     // array primitives
     add_builtin_func("arrayref", jl_f_arrayref);
+    add_builtin_func("const_arrayref", jl_f_const_arrayref);
     add_builtin_func("arrayset", jl_f_arrayset);
     add_builtin_func("arraysize", jl_f_arraysize);
 

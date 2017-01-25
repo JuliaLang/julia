@@ -10,6 +10,7 @@
 #include <llvm/Analysis/Passes.h>
 #include <llvm/Analysis/BasicAliasAnalysis.h>
 #include <llvm/Analysis/TypeBasedAliasAnalysis.h>
+#include <llvm/Analysis/ScopedNoAliasAA.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/IR/Verifier.h>
@@ -124,6 +125,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
         return;
     }
     PM->add(createPropagateJuliaAddrspaces());
+    PM->add(createScopedNoAliasAAWrapperPass());
     PM->add(createTypeBasedAAWrapperPass());
     if (opt_level >= 3) {
         PM->add(createBasicAAWrapperPass());

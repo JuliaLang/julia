@@ -1151,7 +1151,7 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         # Check that the element type is compatible with the element we're assigning
         (argtypes[3] ⊑ a.parameters[1]::Type) || return false
         return true
-    elseif f === arrayref
+    elseif f === arrayref || f === const_arrayref
         return array_builtin_common_nothrow(argtypes, 3)
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
@@ -1208,7 +1208,7 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
             return Bottom
         end
         return argtypes[2]
-    elseif f === arrayref
+    elseif f === arrayref || f === const_arrayref
         if length(argtypes) < 3
             isva && return Any
             return Bottom
