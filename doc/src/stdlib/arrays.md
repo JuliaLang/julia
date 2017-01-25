@@ -56,6 +56,7 @@ Base.Broadcast.broadcast!
 Base.getindex(::AbstractArray, ::Any...)
 Base.view
 Base.@view
+Base.@views
 Base.to_indices
 Base.Colon
 Base.parent

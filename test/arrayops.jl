@@ -1449,6 +1449,9 @@ end
     @test !in(CartesianIndex((3,6)), R)
     @test !in(CartesianIndex((6,5)), R)
 
+    @test @inferred(convert(NTuple{2,UnitRange}, R)) === (2:5, 3:5)
+    @test @inferred(convert(Tuple{Vararg{UnitRange}}, R)) === (2:5, 3:5)
+
     @test CartesianRange((3:5,-7:7)) == CartesianRange(CartesianIndex{2}(3,-7),CartesianIndex{2}(5,7))
     @test CartesianRange((3,-7:7)) == CartesianRange(CartesianIndex{2}(3,-7),CartesianIndex{2}(3,7))
 end

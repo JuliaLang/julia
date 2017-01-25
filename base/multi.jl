@@ -1628,9 +1628,9 @@ function redirect_worker_output(ident, stream)
         if startswith(line, "\tFrom worker ")
             # STDOUT's of "additional" workers started from an initial worker on a host are not available
             # on the master directly - they are routed via the initial worker's STDOUT.
-            print(line)
+            println(line)
         else
-            print("\tFrom worker $(ident):\t$line")
+            println("\tFrom worker $(ident):\t$line")
         end
     end
 end

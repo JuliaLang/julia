@@ -61,11 +61,10 @@ let t = Dates.Period[Dates.Week(2), Dates.Day(14), Dates.Hour(14*24), Dates.Minu
         Pi = typeof(t[i])
         for j = 1:length(t)
             @test t[i] == t[j]
-            @test Int(convert(Pi,t[j])) == Int(t[i])
         end
         for j = i+1:length(t)
             Pj = typeof(t[j])
-            tj1 = t[j] + one(Pj)
+            tj1 = t[j] + Pj(1)
             @test t[i] < tj1
             @test_throws InexactError Pi(tj1)
             @test_throws InexactError Pj(Pi(typemax(Int64)))
@@ -74,8 +73,7 @@ let t = Dates.Period[Dates.Week(2), Dates.Day(14), Dates.Hour(14*24), Dates.Minu
     end
 end
 @test Dates.Year(3) == Dates.Month(36)
-@test Int(convert(Dates.Month, Dates.Year(3))) == 36
-@test Int(convert(Dates.Year, Dates.Month(36))) == 3
+@test_throws ErrorException Int(Dates.Month(36))  # eventually change to MethodError
 @test Dates.Year(3) < Dates.Month(37)
 @test_throws InexactError convert(Dates.Year, Dates.Month(37))
 @test_throws InexactError Dates.Month(Dates.Year(typemax(Int64)))
@@ -89,18 +87,26 @@ let dt = DateTime(1915,1,1,12)
     @test Dates.julian2datetime(julian) == dt
 end
 
-# Conversions to/from numbers
+# "Conversions" to/from numbers
 a = Dates.DateTime(2000)
 b = Dates.Date(2000)
-@test convert(Real,b) == 730120
-@test convert(Float64,b) == 730120.0
-@test convert(Int32,b) == 730120
-@test convert(Real,a) == 63082368000000
-@test convert(Float64,a) == 63082368000000.0
-@test convert(Int64,a) == 63082368000000
-@test convert(DateTime,63082368000000) == a
-@test convert(DateTime,63082368000000.0) == a
-@test convert(Date,730120) == b
-@test convert(Date,730120.0) == b
-@test convert(Date,Int32(730120)) == b
+@test Dates.value(b) == 730120
+@test Dates.value(a) == 63082368000000
+@test convert(Dates.DateTime, Dates.Millisecond(63082368000000)) == a
+@test convert(Dates.Millisecond, a) == Dates.Millisecond(63082368000000)
+@test Dates.DateTime(Dates.UTM(63082368000000)) == a
+@test Dates.DateTime(Dates.UTM(63082368000000.0)) == a
+@test convert(Dates.Date, Dates.Day(730120)) == b
+@test convert(Dates.Day, b) == Dates.Day(730120)
+@test Dates.Date(Dates.UTD(730120)) == b
+@test Dates.Date(Dates.UTD(730120.0)) == b
+@test Dates.Date(Dates.UTD(Int32(730120))) == b
 
+dt = Dates.DateTime(2000,1,1,23,59,59,50)
+t = Dates.Time(dt)
+@test Dates.hour(t) == 23
+@test Dates.minute(t) == 59
+@test Dates.second(t) == 59
+@test Dates.millisecond(t) == 50
+@test Dates.microsecond(t) == 0
+@test Dates.nanosecond(t) == 0

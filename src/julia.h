@@ -491,6 +491,7 @@ extern JL_DLLEXPORT jl_datatype_t *jl_simplevector_type;
 extern JL_DLLEXPORT jl_typename_t *jl_tuple_typename;
 extern JL_DLLEXPORT jl_typename_t *jl_vecelement_typename;
 extern JL_DLLEXPORT jl_datatype_t *jl_anytuple_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_emptytuple_type;
 #define jl_tuple_type jl_anytuple_type
 extern JL_DLLEXPORT jl_unionall_t *jl_anytuple_type_type;
 extern JL_DLLEXPORT jl_unionall_t *jl_vararg_type;

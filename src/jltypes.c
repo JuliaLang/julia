@@ -33,6 +33,7 @@ jl_datatype_t *jl_typedslot_type;
 jl_datatype_t *jl_simplevector_type;
 jl_typename_t *jl_tuple_typename;
 jl_datatype_t *jl_anytuple_type;
+jl_datatype_t *jl_emptytuple_type=NULL;
 jl_unionall_t *jl_anytuple_type_type;
 jl_typename_t *jl_vecelement_typename;
 jl_unionall_t *jl_vararg_type;
@@ -700,9 +701,10 @@ jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n)
     if (tc == (jl_value_t*)jl_uniontype_type)
         return (jl_value_t*)jl_type_union(params, n);
     JL_GC_PUSH1(&tc);
+    jl_value_t *tc0 = tc;
     size_t i;
     for (i=0; i < n; i++) {
-        if (!jl_is_unionall(tc))
+        if (!jl_is_unionall(tc0))
             jl_error("too many parameters for type");
         jl_value_t *pi = params[i];
 
@@ -712,6 +714,15 @@ jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n)
                              (jl_value_t*)jl_long_type : (jl_value_t*)jl_type_type,
                              pi);
         }
+
+        tc0 = ((jl_unionall_t*)tc0)->body;
+        // doing a substitution can cause later UnionAlls to be dropped,
+        // as in `NTuple{0,T} where T` => `Tuple{}`. allow values to be
+        // substituted for these missing parameters.
+        // TODO: figure out how to get back a type error for e.g.
+        // S = Tuple{Vararg{T,N}} where T<:NTuple{N} where N
+        // S{0,Int}
+        if (!jl_is_unionall(tc)) continue;
 
         jl_unionall_t *ua = (jl_unionall_t*)tc;
         if (!jl_has_free_typevars(ua->var->lb) && !jl_has_free_typevars(ua->var->ub) &&
@@ -989,10 +1000,10 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
         // check parameters against bounds in type definition
         check_datatype_parameters(tn, iparams, ntp);
     }
-    else if (ntp == 0 && jl_emptytuple != NULL) {
+    else if (ntp == 0 && jl_emptytuple_type != NULL) {
         // empty tuple type case
         if (cacheable) JL_UNLOCK(&typecache_lock); // Might GC
-        return jl_typeof(jl_emptytuple);
+        return (jl_value_t*)jl_emptytuple_type;
     }
 
     jl_datatype_t *ndt = NULL;
@@ -1299,6 +1310,9 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
         ((jl_unionall_t*)res)->body = inst_type_w_(ua->body, &newenv, &top, check);
         if (((jl_unionall_t*)res)->body == ua->body)
             res = t;
+        // NTuple{0} => Tuple{} can make a typevar disappear
+        if (((jl_unionall_t*)res)->body == (jl_value_t*)jl_emptytuple_type)
+            res = (jl_value_t*)jl_emptytuple_type;
         JL_GC_POP();
         return res;
     }
@@ -1670,10 +1684,10 @@ void jl_init_types(void)
     jl_type_typename->wrapper = jl_new_struct(jl_unionall_type, tttvar, (jl_value_t*)jl_type_type);
     jl_type_type = (jl_unionall_t*)jl_type_typename->wrapper;
 
-    jl_tupletype_t *empty_tuple_type = jl_apply_tuple_type(jl_emptysvec);
-    empty_tuple_type->uid = jl_assign_type_uid();
-    jl_emptytuple = jl_gc_alloc(ptls, 0, empty_tuple_type);
-    empty_tuple_type->instance = jl_emptytuple;
+    jl_emptytuple_type = jl_apply_tuple_type(jl_emptysvec);
+    jl_emptytuple_type->uid = jl_assign_type_uid();
+    jl_emptytuple = jl_gc_alloc(ptls, 0, jl_emptytuple_type);
+    jl_emptytuple_type->instance = jl_emptytuple;
 
     // non-primitive definitions follow
     jl_int32_type = NULL;
