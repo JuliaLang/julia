@@ -139,7 +139,7 @@ function peekchar(io::IOBuffer)
 end
 
 # this implementation is copied from Base
-const _CHTMP = Array(Char, 1)
+const _CHTMP = Vector{Char}(1)
 
 peekchar(s::IOStream) = begin
     if ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Char}), s, _CHTMP) < 0
