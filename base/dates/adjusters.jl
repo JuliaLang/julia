@@ -159,7 +159,7 @@ The step size in adjusting can be provided manually through the `step` keyword.
 `limit` provides a limit to the max number of iterations the adjustment API will
 pursue before throwing an error (given that `f::Function` is never satisfied).
 """
-function Date(func::Function, y, m=1, d=1;step::Period=Day(1), negate=nothing, limit::Int=10000)
+function Date(func::Function, y, m=1, d=1; step::Period=Day(1), negate=nothing, limit::Int=10000)
     func = deprecate_negate(:Date, func, "func,y,m,d", negate)
     return adjust(DateFunction(func, Date(y, m, d)), Date(y, m, d), step, limit)
 end
@@ -197,10 +197,10 @@ function DateTime(func::Function, y, m, d, h, mi, s; step::Period=Millisecond(1)
 end
 
 """
-    Time(func::Function, h, mi=0; step::Period=Second(1), negate::Bool=false, limit::Int=10000)
-    Time(func::Function, h, mi, s; step::Period=Millisecond(1), negate::Bool=false, limit::Int=10000)
-    Time(func::Function, h, mi, s, ms; step::Period=Microsecond(1), negate::Bool=false, limit::Int=10000)
-    Time(func::Function, h, mi, s, ms, us; step::Period=Nanosecond(1), negate::Bool=false, limit::Int=10000)
+    Time(func::Function, h, mi=0; step::Period=Second(1), limit::Int=10000)
+    Time(func::Function, h, mi, s; step::Period=Millisecond(1), limit::Int=10000)
+    Time(func::Function, h, mi, s, ms; step::Period=Microsecond(1), limit::Int=10000)
+    Time(func::Function, h, mi, s, ms, us; step::Period=Nanosecond(1), limit::Int=10000)
 
 Create a `Time` through the adjuster API. The starting point will be constructed from the
 provided `h, mi, s, ms, us` arguments, and will be adjusted until `f::Function` returns `true`.
@@ -240,38 +240,38 @@ ISDAYOFWEEK = Dict(Mon => DateFunction(ismonday, Date(0)),
 
 # "same" indicates whether the current date can be considered or not
 """
-    tonext(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
+    tonext(dt::TimeType, dow::Int; same::Bool=false) -> TimeType
 
 Adjusts `dt` to the next day of week corresponding to `dow` with `1 = Monday, 2 = Tuesday,
 etc`. Setting `same=true` allows the current `dt` to be considered as the next `dow`,
 allowing for no adjustment to occur.
 """
-tonext(dt::TimeType, dow::Int; same::Bool=false) = adjust(ISDAYOFWEEK[dow], same ? dt : dt+Day(1), Day(1), 7)
+tonext(dt::TimeType, dow::Int; same::Bool=false) = adjust(ISDAYOFWEEK[dow], same ? dt : dt + Day(1), Day(1), 7)
 
 # Return the next TimeType where func evals true using step in incrementing
 """
-    tonext(func::Function,dt::TimeType;step=Day(1),limit=10000,same=false) -> TimeType
+    tonext(func::Function, dt::TimeType; step=Day(1), limit=10000, same=false) -> TimeType
 
 Adjusts `dt` by iterating at most `limit` iterations by `step` increments until `func`
 returns `true`. `func` must take a single `TimeType` argument and return a `Bool`. `same`
 allows `dt` to be considered in satisfying `func`.
 """
-function tonext(func::Function, dt::TimeType;step::Period=Day(1), negate=nothing, limit::Int=10000, same::Bool=false)
+function tonext(func::Function, dt::TimeType; step::Period=Day(1), negate=nothing, limit::Int=10000, same::Bool=false)
     func = deprecate_negate(:tonext, func, "func,dt", negate)
-    return adjust(DateFunction(func, dt), same ? dt : dt+step, step, limit)
+    return adjust(DateFunction(func, dt), same ? dt : dt + step, step, limit)
 end
 
 """
-    toprev(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
+    toprev(dt::TimeType, dow::Int; same::Bool=false) -> TimeType
 
 Adjusts `dt` to the previous day of week corresponding to `dow` with `1 = Monday, 2 =
 Tuesday, etc`. Setting `same=true` allows the current `dt` to be considered as the previous
 `dow`, allowing for no adjustment to occur.
 """
-toprev(dt::TimeType, dow::Int; same::Bool=false) = adjust(ISDAYOFWEEK[dow], same ? dt : dt+Day(-1), Day(-1), 7)
+toprev(dt::TimeType, dow::Int; same::Bool=false) = adjust(ISDAYOFWEEK[dow], same ? dt : dt + Day(-1), Day(-1), 7)
 
 """
-    toprev(func::Function,dt::TimeType;step=Day(-1),limit=10000,same=false) -> TimeType
+    toprev(func::Function, dt::TimeType; step=Day(-1), limit=10000, same=false) -> TimeType
 
 Adjusts `dt` by iterating at most `limit` iterations by `step` increments until `func`
 returns `true`. `func` must take a single `TimeType` argument and return a `Bool`. `same`
@@ -279,12 +279,12 @@ allows `dt` to be considered in satisfying `func`.
 """
 function toprev(func::Function, dt::TimeType; step::Period=Day(-1), negate=nothing, limit::Int=10000, same::Bool=false)
     func = deprecate_negate(:toprev, func, "func,dt", negate)
-    return adjust(DateFunction(func, dt), same ? dt : dt+step, step, limit)
+    return adjust(DateFunction(func, dt), same ? dt : dt + step, step, limit)
 end
 
 # Return the first TimeType that falls on dow in the Month or Year
 """
-    tofirst(dt::TimeType,dow::Int;of=Month) -> TimeType
+    tofirst(dt::TimeType, dow::Int; of=Month) -> TimeType
 
 Adjusts `dt` to the first `dow` of its month. Alternatively, `of=Year` will adjust to the
 first `dow` of the year.
@@ -296,7 +296,7 @@ end
 
 # Return the last TimeType that falls on dow in the Month or Year
 """
-    tolast(dt::TimeType,dow::Int;of=Month) -> TimeType
+    tolast(dt::TimeType, dow::Int; of=Month) -> TimeType
 
 Adjusts `dt` to the last `dow` of its month. Alternatively, `of=Year` will adjust to the
 last `dow` of the year.
