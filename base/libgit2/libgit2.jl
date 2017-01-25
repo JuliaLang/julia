@@ -337,9 +337,8 @@ function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractSt
 end
 
 """ git reset [--soft | --mixed | --hard] <id> """
-function reset!(repo::GitRepo, id::GitHash, mode::Cint = Consts.RESET_MIXED)
+reset!(repo::GitRepo, id::GitHash, mode::Cint = Consts.RESET_MIXED) =
     reset!(repo, GitObject(repo, id), mode)
-end
 
 """ git cat-file <commit> """
 function cat(repo::GitRepo, spec)

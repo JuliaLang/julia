@@ -43,9 +43,8 @@ function read_tree!(idx::GitIndex, tree::GitTree)
     @check ccall((:git_index_read_tree, :libgit2), Cint,
                  (Ptr{Void}, Ptr{Void}), idx.ptr, tree.ptr)
 end
-function read_tree!(idx::GitIndex, hash::AbstractGitHash)
+read_tree!(idx::GitIndex, hash::AbstractGitHash) =
     read_tree!(idx, GitTree(repository(idx), hash))
-end
 
 function add!{T<:AbstractString}(idx::GitIndex, files::T...;
              flags::Cuint = Consts.INDEX_ADD_DEFAULT)
