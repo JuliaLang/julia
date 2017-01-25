@@ -397,10 +397,9 @@ for (f!, umfpack) in ((:A_ldiv_B!, :UMFPACK_A),
             end
             return x
         end
-        $f!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::StridedVector{T}) = $f!(b, lu, copy(b))
-        $f!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::StridedMatrix{T}) = $f!(b, lu, copy(b))
+        $f!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::StridedVecOrMat{T}) = $f!(b, lu, copy(b))
 
-        function $f!{Tb<:Complex}(x::StridedVector{Tb}, lu::UmfpackLU{Float64}, b::StridedVector{Tb})
+        function $f!{Tb<:Complex}(x::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, b::StridedVecOrMat{Tb})
             m, n = size(x, 1), size(x, 2)
             if n != size(b, 2)
                 throw(DimensionMismatch("in and output arrays must have the same number of columns"))
@@ -416,7 +415,7 @@ for (f!, umfpack) in ((:A_ldiv_B!, :UMFPACK_A),
             end
             return x
         end
-        $f!{Tb<:Complex}(lu::UmfpackLU{Float64}, b::StridedVector{Tb}) = $f!(b, lu, copy(b))
+        $f!{Tb<:Complex}(lu::UmfpackLU{Float64}, b::StridedVecOrMat{Tb}) = $f!(b, lu, copy(b))
     end
 end
 
