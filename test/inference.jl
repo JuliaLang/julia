@@ -422,6 +422,10 @@ gpure(x::Irrational) = fpure(x)
 @test gpure() == gpure() == gpure()
 @test gpure(π) == gpure(π) == gpure(π)
 
+# Make sure @pure works for functions using the new syntax
+Base.@pure (fpure2(x::T) where T) = T
+@test which(fpure2, (Int64,)).source.pure
+
 # issue #10880
 function cat10880(a, b)
     Tuple{a.parameters..., b.parameters...}
