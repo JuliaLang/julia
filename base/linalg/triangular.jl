@@ -1867,21 +1867,11 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
 end
 logm(A::LowerTriangular) = logm(A.').'
 
-function floop(x,R,i::Int,j::Int)
-    r = x
-    @inbounds begin
-        @simd for k = i+1:j-1
-            r -= R[i,k]*R[k,j]
-        end
-    end
-    r
-end
 function sqrtm(A::UpperTriangular)
-    n = checksquare(A)
     realmatrix = false
     if isreal(A)
         realmatrix = true
-        for i = 1:n
+        for i = 1:Base.LinAlg.checksquare(A)
             if real(A[i,i]) < 0
                 realmatrix = false
                 break
@@ -1894,15 +1884,20 @@ function sqrtm{T,realmatrix}(A::UpperTriangular{T},::Type{Val{realmatrix}})
     if realmatrix
         TT = typeof(sqrt(zero(T)))
     else
-        TT = typeof(sqrt(complex(-one(T))))
+        TT = typeof(sqrt(complex(zero(T))))
     end
-    n = checksquare(A)
+    n = Base.LinAlg.checksquare(A)
     R = zeros(TT, n, n)
-    for j = 1:n
-        R[j,j] = realmatrix ? sqrt(A[j,j]) : sqrt(complex(A[j,j]))
-        for i = j-1:-1:1
-            r = floop(A[i,j],R,i,j)
-            r==0 || (R[i,j] = r / (R[i,i] + R[j,j]))
+    @inbounds begin
+        for j = 1:n
+            R[j,j] = realmatrix ? sqrt(A[j,j]) : sqrt(complex(A[j,j]))
+            for i = j-1:-1:1
+                r = A[i,j] + zero(TT)
+                @simd for k = i+1:j-1
+                    r -= R[i,k]*R[k,j]
+                end
+                r==0 || (R[i,j] = r / (R[i,i] + R[j,j]))
+            end
         end
     end
     return UpperTriangular(R)
@@ -1911,10 +1906,15 @@ function sqrtm{T}(A::UnitUpperTriangular{T})
     n = checksquare(A)
     TT = typeof(sqrt(zero(T)))
     R = eye(TT, n, n)
-    for j = 1:n
-        for i = j-1:-1:1
-            r = floop(A[i,j],R,i,j)
-            r==0 || (R[i,j] = r / (R[i,i] + R[j,j]))
+    @inbounds begin
+        for j = 1:n
+            for i = j-1:-1:1
+                r = A[i,j] + zero(TT)
+                @simd for k = i+1:j-1
+                    r -= R[i,k]*R[k,j]
+                end
+                r==0 || (R[i,j] = r / (R[i,i] + R[j,j]))
+            end
         end
     end
     return UnitUpperTriangular(R)
