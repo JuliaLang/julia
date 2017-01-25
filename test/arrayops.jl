@@ -1824,10 +1824,10 @@ end
     B = [-10.0,0.0,3.0]
     C = [1,im,0]
 
-    @test sign(A) == [-1,0,1]
-    @test sign(B) == [-1,0,1]
-    @test typeof(sign(A)) == Vector{Int}
-    @test typeof(sign(B)) == Vector{Float64}
+    @test sign.(A) == [-1,0,1]
+    @test sign.(B) == [-1,0,1]
+    @test typeof(sign.(A)) == Vector{Int}
+    @test typeof(sign.(B)) == Vector{Float64}
 
     @test conj(A) == A
     @test conj(B) == A
