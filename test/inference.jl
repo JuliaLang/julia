@@ -509,3 +509,14 @@ f_inferred_union_float(::Any) = "broken"
 f_inferred_union_int(::Int) = 3
 f_inferred_union_int(::Any) = "broken"
 @test @inferred(f_inferred_union()) in (1, 2, 3)
+
+# issue #11015
+type AT11015
+    f::Union{Bool,Function}
+end
+
+g11015{S}(::Type{S}, ::S) = 1
+f11015(a::AT11015) = g11015(Base.fieldtype(typeof(a), :f), true)
+g11015(::Type{Bool}, ::Bool) = 2.0
+@test Int <: Base.return_types(f11015, (AT11015,))[1]
+@test f11015(AT11015(true)) === 1
