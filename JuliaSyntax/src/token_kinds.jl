@@ -216,6 +216,8 @@
             NOT_IS, # !==
             NOT_IDENTICAL_TO, # ≢
             ELEMENT_OF, # ∈
+            IN, # in
+            ISA, # isa
             NOT_AN_ELEMENT_OF, # ∉
             CONTAINS_AS_MEMBER, # ∋
             DOES_NOT_CONTAIN_AS_MEMBER, # ∌

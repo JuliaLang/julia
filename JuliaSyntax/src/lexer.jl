@@ -334,6 +334,7 @@ function next_token(l::Lexer)
     elseif c == '+'; return lex_plus(l);
     elseif c == '-'; return lex_minus(l);
     elseif c == '`'; return lex_cmd(l);
+    elseif c == 'i'; return lex_i(l);
     elseif isdigit(c); return lex_digit(l)
     elseif is_identifier_start_char(c); return lex_identifier(l)
     elseif (k = get(UNICODE_OPS, c, Tokens.ERROR)) != Tokens.ERROR return emit(l, k)
@@ -531,6 +532,16 @@ function lex_xor(l::Lexer)
     return emit(l, Tokens.EX_OR)
 end
 
+function lex_i(l::Lexer)
+    str = lex_identifier(l)
+    if str.val=="in"
+        return emit(l, Tokens.IN, "in")
+    elseif (VERSION >= v"0.6.0-dev.1471" && str.val == "isa")
+        return emit(l, Tokens.ISA, "isa")
+    else
+        return str
+    end
+end
 
 # A digit has been consumed
 function lex_digit(l::Lexer)
