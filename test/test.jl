@@ -426,3 +426,33 @@ let io = IOBuffer()
     @test contains(str, "msg")
     @test !contains(str, "backtrace()")
 end
+
+msg = readstring(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e '
+using Base.Test
+
+foo(x) = length(x)^2
+
+@testset "Foo Tests" begin
+    @testset "Animals" begin
+        @testset "Felines" begin
+            @test foo("cat") == 9
+        end
+        @testset "Canines" begin
+            @test foo("dog") == 11
+        end
+    end
+    @testset "Arrays" begin
+        @test foo(zeros(2)) == 4
+        @test foo(ones(4)) == 15
+    end
+end'`))
+
+@test contains(msg,
+"""
+Test Summary: | Pass  Fail  Total
+Foo Tests     |    2     2      4
+  Animals     |    1     1      2
+    Felines   |    1            1
+    Canines   |          1      1
+  Arrays      |    1     1      2
+""")

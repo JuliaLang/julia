@@ -536,5 +536,5 @@ a = Dates.Time(23,1,1)
 @test map(x->a in x,drs[1:4]) == [true,true,false,true]
 @test a in dr
 
-@test all(x->sort(x) == (step(x) < zero(step(x)) ? reverse(x) : x),drs)
-@test all(x->step(x) < zero(step(x)) ? issorted(reverse(x)) : issorted(x),drs)
+@test all(x->sort(x) == (step(x) < zero(step(x)) ? reverse(x) : x), drs)
+@test all(x->step(x) < zero(step(x)) ? issorted(reverse(x)) : issorted(x), drs)

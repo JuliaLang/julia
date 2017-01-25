@@ -1758,6 +1758,14 @@ end)
     return false
 end
 
+# Not exported
+eval(LibGit2, quote
+    function owner(x)
+        Base.depwarn("owner(x) is deprecated, use repository(x) instead.", :owner)
+        repository(x)
+    end
+end)
+
 @deprecate EachLine(stream, ondone) EachLine(stream, ondone=ondone)
 
 # These conversions should not be defined, see #19896
@@ -1784,6 +1792,22 @@ eval(Base.LibGit2, begin
      @deprecate revparse(repo::GitRepo, objname::AbstractString) GitObject(repo, objname) false
      @deprecate object(repo::GitRepo, te::GitTreeEntry) GitObject(repo, te) false
      @deprecate commit(ann::GitAnnotated) GitHash(ann) false
+end)
+
+# when this deprecation is deleted, remove all calls to it, and all
+# negate=nothing keyword arguments, from base/dates/adjusters.jl
+eval(Dates, quote
+    function deprecate_negate(f, func, sig, negate)
+        if negate === nothing
+            return func
+        else
+            msg = "$f($sig; negate=$negate) is deprecated, use $f("
+            negate && (msg *= "!")
+            msg *= "$sig) instead."
+            Base.depwarn(msg, f)
+            return negate ? !func : func
+        end
+    end
 end)
 
 # End deprecations scheduled for 0.6
