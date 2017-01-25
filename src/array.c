@@ -530,7 +530,7 @@ int jl_array_isdefined(jl_value_t **args0, int nargs)
 {
     assert(jl_is_array(args0[0]));
     jl_depwarn("`isdefined(a::Array, i::Int)` is deprecated, "
-               "use `isassigned(a, i)` instead", jl_symbol("isdefined"));
+               "use `isassigned(a, i)` instead", (jl_value_t*)jl_symbol("isdefined"));
 
     jl_array_t *a = (jl_array_t*)args0[0];
     jl_value_t **args = &args0[1];
