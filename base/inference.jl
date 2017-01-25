@@ -963,7 +963,7 @@ function builtin_tfunction(f::ANY, argtypes::Array{Any,1}, sv::InferenceState)
             return unwrap_unionall(a1).parameters[1]
         end
         return a1
-    elseif f === arrayref
+    elseif f === arrayref || f === const_arrayref
         if length(argtypes) < 2 && !isva
             return Bottom
         end
@@ -2988,7 +2988,7 @@ end
 const _pure_builtins = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof, UnionAll]
 
 # known effect-free calls (might not be affect-free)
-const _pure_builtins_volatile = Any[getfield, arrayref]
+const _pure_builtins_volatile = Any[getfield, arrayref, const_arrayref]
 
 function is_pure_builtin(f::ANY)
     if contains_is(_pure_builtins, f)
@@ -3046,7 +3046,8 @@ function effect_free(e::ANY, src::CodeInfo, mod::Module, allow_volatile::Bool)
         if head === :call && !isa(e.args[1], SSAValue) && !isa(e.args[1], Slot)
             if is_known_call_p(e, is_pure_builtin, src, mod)
                 if !allow_volatile
-                    if is_known_call(e, arrayref, src, mod) || is_known_call(e, arraylen, src, mod)
+                    if is_known_call(e, arrayref, src, mod) || is_known_call(e, const_arrayref, src, mod) ||
+                            is_known_call(e, arraylen, src, mod)
                         return false
                     elseif is_known_call(e, getfield, src, mod)
                         et = exprtype(e, src, mod)

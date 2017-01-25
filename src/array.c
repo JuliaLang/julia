@@ -519,6 +519,13 @@ JL_CALLABLE(jl_f_arrayref)
     return jl_arrayref(a, i);
 }
 
+JL_CALLABLE(jl_f_const_arrayref)
+{
+    // The constness of the array matters during codegen for alias analysis
+    // purposes, but we don't particularly care here.
+    return jl_f_arrayref(F, args, nargs);
+}
+
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
 {
     if (a->flags.ptrarray)

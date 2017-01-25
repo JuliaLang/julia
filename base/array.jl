@@ -23,7 +23,7 @@ typealias DenseVecOrMat{T} Union{DenseVector{T}, DenseMatrix{T}}
 
 ## Basic functions ##
 
-import Core: arraysize, arrayset, arrayref
+import Core: arraysize, arrayset, arrayref, const_arrayref
 
 """
     Array{T,N}(dims)
