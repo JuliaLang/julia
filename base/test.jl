@@ -730,7 +730,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
     subtotal = passes + fails + errors + broken + c_passes + c_fails + c_errors + c_broken
     # Print test set header, with an alignment that ensures all
     # the test results appear above each other
-    print(rpad(string(lpad("  ",depth), ts.description), align, " "), " | ")
+    print(rpad(string("  "^depth, ts.description), align, " "), " | ")
 
     np = passes + c_passes
     if np > 0
