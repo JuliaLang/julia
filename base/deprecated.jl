@@ -1782,9 +1782,9 @@ function colon{T<:Dates.Period}(start::T, stop::T)
 end
 
 # LibGit2 refactor (#19839)
-eval(Base.LibGit2, begin
-     @deprecate_binding Oid GitHash
-     @deprecate_binding GitAnyObject GitUnknownObject
+eval(Base.LibGit2, quote
+     Base.@deprecate_binding Oid GitHash
+     Base.@deprecate_binding GitAnyObject GitUnknownObject
 
      @deprecate owner(x) repository(x) false
      @deprecate get{T<:GitObject}(::Type{T}, repo::GitRepo, x) T(repo, x) false
