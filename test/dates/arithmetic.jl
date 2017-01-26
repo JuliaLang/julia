@@ -429,3 +429,13 @@ t5 = [Dates.Time(0, 0, 0) Dates.Time(0, 0, 1) Dates.Time(0, 0, 2); Dates.Time(0,
 @test t4 - t3 == [Dates.Millisecond(1000), Dates.Millisecond(60000), Dates.Millisecond(3600000)]
 @test (Dates.Date(2009, 1, 1):Dates.Week(1):Dates.Date(2009, 1, 21)) - (Dates.Date(2009, 1, 1):Dates.Day(1):Dates.Date(2009, 1, 3)) == [Dates.Day(0), Dates.Day(6), Dates.Day(12)]
 @test (Dates.DateTime(2009, 1, 1, 1, 1, 1):Dates.Second(1):Dates.DateTime(2009, 1, 1, 1, 1, 3)) - (Dates.DateTime(2009, 1, 1, 1, 1):Dates.Second(1):Dates.DateTime(2009, 1, 1, 1, 1, 2)) == [Dates.Second(1), Dates.Second(1), Dates.Second(1)]
+
+# ensure commutative subtraction methods are not defined, #20205
+@test_throws MethodError Dates.Day(1) .- t1
+@test_throws MethodError Dates.Hour(1) .- t3
+@test_throws MethodError Dates.Day(1) - t1
+@test_throws MethodError Dates.Hour(1) - t3
+@test_throws MethodError (Dates.Month(1) + Dates.Day(1)) .- t1
+@test_throws MethodError (Dates.Hour(1) + Dates.Minute(1)) .- t3
+@test_throws MethodError (Dates.Month(1) + Dates.Day(1)) - t1
+@test_throws MethodError (Dates.Hour(1) + Dates.Minute(1)) - t3
