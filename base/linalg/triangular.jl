@@ -1902,7 +1902,7 @@ end
 function sqrtm{T}(A::UnitUpperTriangular{T})
     n = checksquare(A)
     t = typeof(sqrt(zero(T)))
-    R = eye(TT, n, n)
+    R = eye(t, n, n)
     tt = typeof(zero(t)*zero(t))
     half = 1/(2*R[1,1])
     @inbounds begin
