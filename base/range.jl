@@ -135,7 +135,16 @@ colon{T}(start::T, step, stop::T) = StepRange(start, step, stop)
 
 Construct a range by length, given a starting value and optional step (defaults to 1).
 """
-range{T,S}(a::T, step::S, len::Integer) = StepRange{T,S}(a, step, convert(T, a+step*(len-1)))
+function range{T,S}(a::T, step::S, len::Integer)
+    r = StepRange{T,S}(a, step, convert(T, a+step*(len-1)))
+    if length(r) < len
+        r = StepRange{T,S}(a, step, convert(T, a+step*len))
+        if length(r) > len
+            throw(InexactError())
+        end
+    end
+    r
+end
 
 ## floating point ranges
 
@@ -402,8 +411,12 @@ step{T}(r::LinSpace{T}) = ifelse(r.len <= 0, convert(T,NaN), (r.stop-r.start)/r.
 
 unsafe_length(r::Range) = length(r)  # generic fallback
 
-function unsafe_length(r::StepRange)
+function unsafe_length{T<:Integer,S<:Integer}(r::StepRange{T,S})
     n = Integer(div(r.stop+r.step - r.start, r.step))
+    isempty(r) ? zero(n) : n
+end
+function unsafe_length(r::StepRange)
+    n = round(Integer, (r.stop - r.start)/r.step + 1)
     isempty(r) ? zero(n) : n
 end
 length(r::StepRange) = unsafe_length(r)
