@@ -130,6 +130,9 @@ This section lists changes that do not have deprecation warnings.
     (since it is shorthand for `NTuple{N,T} where T`). To get the old behavior of matching
     any tuple, use `NTuple{N,Any}` ([#18457]).
 
+  * `isimmutable(T::Type)` now checks whether `T` is an immutable type,
+    rather than checking whether `typeof(T)` is an immutable type ([#18168]).
+
 Library improvements
 --------------------
 
@@ -209,8 +212,6 @@ Library improvements
     either universally or on a per-module/function basis ([#16213]).
 
   * New `iszero(x)` function to quickly check whether `x` is zero (or is all zeros, for an array) ([#19950]).
-
-  * New function `isimmutabletype(T)` ([#18168]).
 
   * `notify` now returns a count of tasks woken up ([#19841]).
 

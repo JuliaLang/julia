@@ -161,10 +161,10 @@ not_const = 1
 @test isimmutable([]) == false
 @test isimmutable("abc") == true
 @test isimmutable((3,4,5)) == true
-@test isimmutabletype(Int) == true
-@test isimmutabletype(Vector{Int}) == false
-@test isimmutabletype(String) == true
-@test isimmutabletype(Tuple{Int}) == true
+@test isimmutable(Int) == true
+@test isimmutable(Vector{Int}) == false
+@test isimmutable(String) == true
+@test isimmutable(Tuple{Int}) == true
 
 
 ## find bindings tests

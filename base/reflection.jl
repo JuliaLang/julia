@@ -195,24 +195,17 @@ datatype_fielddesc_type(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefErro
     (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 30) & 3
 
 """
-    isimmutable(v)
+    isimmutable(x)
 
-Return `true` iff value `v` is immutable.  See [Immutable Composite Types](@ref)
-for a discussion of immutability. Note that this function works on values, so if you give it
-a type, it will tell you that a value of `DataType` is mutable.
+Return `true` if the value `x` is immutable; if `x` is a type, then returns
+whether `x` is an immutable type.  See [Immutable Composite Types](@ref)
+for a discussion of immutability.
 """
 isimmutable(x::ANY) = (@_pure_meta; (isa(x,Tuple) || !typeof(x).mutable))
+isimmutable(t::DataType) = (@_pure_meta; !t.mutable)
+isimmutable(::Type) = (@_pure_meta; false)
 isstructtype(t::DataType) = (@_pure_meta; nfields(t) != 0 || (t.size==0 && !t.abstract))
 isstructtype(x) = (@_pure_meta; false)
-
-"""
-    isimmutabletype(T)
-
-Return `true` if the type `T` is immutable.  See [manual](:ref:`man-immutable-composite-types`)
-for a discussion of immutability.   See also [`isimmutable`](:func:`isimmutable`)
-for the corresponding function acting on values rather than types.
-"""
-isimmutabletype(t::ANY) = (@_pure_meta; isa(t, DataType) && !t.mutable)
 
 """
     isbits(T)

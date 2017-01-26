@@ -946,7 +946,6 @@ export
     isbits,
     isequal,
     isimmutable,
-    isimmutabletype,
     isless,
     ifelse,
     lexless,
