@@ -219,9 +219,9 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
                  force::Bool=false,           # force branch creation
                  set_head::Bool=true)         # set as head reference on exit
     # try to lookup branch first
-    branch_ref = Nullable{GitReference}(force ? nothing : lookup_branch(repo, branch_name))
+    branch_ref = force ? Nullable{GitReference}() : lookup_branch(repo, branch_name)
     if isnull(branch_ref)
-        branch_rmt_ref = Nullable{GitReference}(isempty(track) ? nothing : lookup_branch(repo, "$track/$branch_name", true))
+        branch_rmt_ref = isempty(track) ? Nullable{GitReference}() : lookup_branch(repo, "$track/$branch_name", true)
         # if commit is empty get head commit oid
         commit_id = if isempty(commit)
             if isnull(branch_rmt_ref)
@@ -501,7 +501,7 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
                                "There is no tracking information for the current branch."))
             end
             try
-                GitAnnotated(repo, get(brn_ref))
+                GitAnnotated(repo, Base.get(brn_ref))
             finally
                 close(brn_ref)
             end
