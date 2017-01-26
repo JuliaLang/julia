@@ -933,3 +933,24 @@ end
 # a :block for its body
 short_where_call = :(f(x::T) where T = T)
 @test short_where_call.args[2].head == :block
+
+# issue #16594
+@test length(:(@test 1 +
+                     1 == 2).args) == 2
+@test [1 +
+       1] == [2]
+@test [1 +1] == [1 1]
+@test length(:(@x 1 +1 -1).args) == 4
+@test length(:(@x 1 + 1 -1).args) == 3
+@test length(:(@x 1 + 1 - 1).args) == 2
+@test length(:(@x 1 +
+                  1 -
+                  1).args) == 2
+@test length(:(@x 1 +
+                  1 +
+                  1).args) == 2
+@test length(:([x .+
+                y]).args) == 1
+
+# line break in : expression disallowed
+@test_throws ParseError parse("[1 :\n2] == [1:2]""")

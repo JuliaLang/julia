@@ -529,6 +529,9 @@
    (begin0 (ts:last-tok s)
            (ts:set-tok! s #f))))
 
+(define (space-before-next-token? s)
+  (or (skip-ws (ts:port s) #f) (eqv? #\newline (peek-char (ts:port s)))))
+
 ;; --- misc ---
 
 (define (syntax-deprecation s what instead)
@@ -703,7 +706,7 @@
             ((and range-colon-enabled (eq? t ':))
              (take-token s)
              (if (and space-sensitive spc
-                      (or (peek-token s) #t) (not (ts:space? s)))
+                      (not (space-before-next-token? s)))
                  ;; "a :b" in space sensitive mode
                  (begin (ts:put-back! s ':)
                         ex)
@@ -751,7 +754,7 @@
         (begin (take-token s)
                (if (eq? t '~)
                    (if (and space-sensitive (ts:space? s)
-                            (not (eqv? (peek-char (ts:port s)) #\ )))
+                            (not (space-before-next-token? s)))
                        (begin (ts:put-back! s t)
                               ex)
                        (list 'call t ex (parse-assignment s down)))
@@ -785,7 +788,7 @@
           (begin
             (take-token s)
             (cond ((and space-sensitive spc (memq t unary-and-binary-ops)
-                        (not (eqv? (peek-char (ts:port s)) #\ )))
+                        (not (space-before-next-token? s)))
                    ;; here we have "x -y"
                    (ts:put-back! s t)
                    (reverse! chain))
@@ -803,7 +806,7 @@
           (begin
             (take-token s)
             (cond ((and space-sensitive spc (memq t unary-and-binary-ops)
-                        (not (eqv? (peek-char (ts:port s)) #\ )))
+                        (not (space-before-next-token? s)))
                    ;; here we have "x -y"
                    (ts:put-back! s t)
                    ex)
