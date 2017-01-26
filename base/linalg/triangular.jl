@@ -1871,7 +1871,7 @@ function sqrtm(A::UpperTriangular)
     realmatrix = false
     if isreal(A)
         realmatrix = true
-        for i = 1:Base.LinAlg.checksquare(A)
+        for i = 1:checksquare(A)
             if real(A[i,i]) < 0
                 realmatrix = false
                 break
@@ -1881,18 +1881,15 @@ function sqrtm(A::UpperTriangular)
     sqrtm(A,Val{realmatrix})
 end
 function sqrtm{T,realmatrix}(A::UpperTriangular{T},::Type{Val{realmatrix}})
-    if realmatrix
-        TT = typeof(sqrt(zero(T)))
-    else
-        TT = typeof(sqrt(complex(zero(T))))
-    end
-    n = Base.LinAlg.checksquare(A)
-    R = zeros(TT, n, n)
+    n = checksquare(A)
+    t = realmatrix ? typeof(sqrt(zero(T))) : typeof(sqrt(complex(zero(T))))
+    R = zeros(t, n, n)
+    tt = typeof(zero(t)*zero(t))
     @inbounds begin
         for j = 1:n
             R[j,j] = realmatrix ? sqrt(A[j,j]) : sqrt(complex(A[j,j]))
             for i = j-1:-1:1
-                r = A[i,j] + zero(TT)
+                r::tt = A[i,j]
                 @simd for k = i+1:j-1
                     r -= R[i,k]*R[k,j]
                 end
@@ -1904,16 +1901,18 @@ function sqrtm{T,realmatrix}(A::UpperTriangular{T},::Type{Val{realmatrix}})
 end
 function sqrtm{T}(A::UnitUpperTriangular{T})
     n = checksquare(A)
-    TT = typeof(sqrt(zero(T)))
+    t = typeof(sqrt(zero(T)))
     R = eye(TT, n, n)
+    tt = typeof(zero(t)*zero(t))
+    one = R[1,1]
     @inbounds begin
         for j = 1:n
             for i = j-1:-1:1
-                r = A[i,j] + zero(TT)
+                r::tt = A[i,j]
                 @simd for k = i+1:j-1
                     r -= R[i,k]*R[k,j]
                 end
-                r==0 || (R[i,j] = r / (R[i,i] + R[j,j]))
+                r==0 || (R[i,j] = r/one)
             end
         end
     end
