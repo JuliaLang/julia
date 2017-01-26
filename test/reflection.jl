@@ -159,12 +159,14 @@ not_const = 1
 
 @test isimmutable(1) == true
 @test isimmutable([]) == false
-@test isimmutable("abc") == true
 @test isimmutable((3,4,5)) == true
 @test isimmutable(Int) == true
 @test isimmutable(Vector{Int}) == false
-@test isimmutable(String) == true
 @test isimmutable(Tuple{Int}) == true
+
+# should String in 0.6 be immutable?
+@test_broken isimmutable("abc") == true
+@test_broken isimmutable(String) == true
 
 
 ## find bindings tests
