@@ -610,3 +610,6 @@ end
 @generated f18883() = nothing
 @test !isempty(sprint(io->code_llvm(io, f18883, Tuple{})))
 @test !isempty(sprint(io->code_native(io, f18883, Tuple{})))
+
+# PR #19964
+@test isempty(subtypes(Float64))
