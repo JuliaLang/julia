@@ -44,6 +44,8 @@ function vect(X...)
     return copy!(Array{T,1}(length(X)), X)
 end
 
+(::Type{Array{T,N}}){T,N}() = Array{T,N}(ntuple(i -> 0, Val{N})...)
+
 size(a::Array, d) = arraysize(a, d)
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
