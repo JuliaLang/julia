@@ -73,7 +73,7 @@ let t = Dates.Period[Dates.Week(2), Dates.Day(14), Dates.Hour(14 * 24), Dates.Mi
     end
 end
 @test Dates.Year(3) == Dates.Month(36)
-@test_throws ErrorException Int(Dates.Month(36))  # eventually change to MethodError
+#@test_throws MethodError Int(Dates.Month(36)) # re-enable when deprecation removed
 @test Dates.Year(3) < Dates.Month(37)
 @test_throws InexactError convert(Dates.Year, Dates.Month(37))
 @test_throws InexactError Dates.Month(Dates.Year(typemax(Int64)))
