@@ -11,7 +11,7 @@
     begin_keywords,
         KEYWORD, # general
         begin_0arg_kw,
-            TRUE, FALSE, BREAK, CONTINUE,
+            BREAK, CONTINUE,
         end_0arg_kw,
         begin_1arg_kw,
             ABSTRACT, CONST, EXPORT, GLOBAL, LOCAL, IMPORT, IMPORTALL, RETURN,USING,
@@ -36,6 +36,7 @@
         TRIPLE_STRING, # """ foo \n """
         CHAR, # 'a'
         CMD, # `cmd ...`
+        TRUE, FALSE, 
     end_literal,
 
     begin_delimiters,

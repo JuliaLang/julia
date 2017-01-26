@@ -159,3 +159,8 @@ else
     @test collect(tokenize("1 isa[2]"))[3].kind == Tokenize.Tokens.IDENTIFIER
 end
 
+@test collect(tokenize("somtext true"))[3].kind == Tokenize.Tokens.TRUE
+@test collect(tokenize("somtext false"))[3].kind == Tokenize.Tokens.FALSE
+@test collect(tokenize("somtext tr"))[3].kind == Tokenize.Tokens.IDENTIFIER
+@test collect(tokenize("somtext falsething"))[3].kind == Tokenize.Tokens.IDENTIFIER
+
