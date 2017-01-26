@@ -30,9 +30,6 @@ Language changes
     module. For instance, `Base.r"x"` is now parsed as `Base.@r_str "x"`.
     Previously, this syntax parsed as an implicit multiplication. ([#18690])
 
-  * Introduce nonstandard string literal `raw"..."` for creating strings
-    with no interpolation or unescaping. ([#19900])
-
   * For every binary operator `⨳`, `a .⨳ b` is now automatically equivalent to
     the `broadcast` call `(⨳).(a, b)`.  Hence, one no longer defines methods
     for `.*` etcetera.  This also means that "dot operations" automatically
@@ -214,6 +211,9 @@ Library improvements
   * New `iszero(x)` function to quickly check whether `x` is zero (or is all zeros, for an array) ([#19950]).
 
   * `notify` now returns a count of tasks woken up ([#19841]).
+
+  * Introduce nonstandard string literal `raw"..."` for creating strings
+    with no interpolation or unescaping. ([#19900])
 
 Compiler/Runtime improvements
 -----------------------------
