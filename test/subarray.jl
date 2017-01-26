@@ -473,8 +473,6 @@ end
 @test collect(view(view(reshape(1:13^3, 13, 13, 13), 3:7, 6:6, :), 1:2:5, :, 1:2:5)) ==
     cat(3,[68,70,72],[406,408,410],[744,746,748])
 
-
-
 # tests @view (and replace_ref_end!)
 X = reshape(1:24,2,3,4)
 Y = 4:-1:1
@@ -494,8 +492,14 @@ u = (1,2:3)
 @test X[(1,)...,(2,)...,2:end] == @view X[(1,)...,(2,)...,2:end]
 
 # test macro hygiene
-let size=(x,y)-> error("should not happen")
+let size=(x,y)-> error("should not happen"), Base=nothing
     @test X[1:end,2,2] == @view X[1:end,2,2]
+end
+
+# test that side effects occur only once
+let foo = [X]
+    @test X[2:end-1] == @view (push!(foo,X)[1])[2:end-1]
+    @test foo == [X, X]
 end
 
 # test @views macro
