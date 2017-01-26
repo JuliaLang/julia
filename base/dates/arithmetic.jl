@@ -86,11 +86,11 @@ for op in (:+, :-)
     @eval begin
         ($op){T<:TimeType}(x::AbstractArray{T}, y::GeneralPeriod) = broadcast($op, x, y)
         ($op){P<:GeneralPeriod}(y::TimeType, x::StridedArray{P}) = broadcast($op, x, y)
+        ($op){T<:TimeType,P<:GeneralPeriod}(x::StridedArray{P}, y::T) = broadcast($op, x, y)
     end
     if op == :+
         @eval begin
             ($op){T<:TimeType}(y::GeneralPeriod, x::AbstractArray{T}) = broadcast($op, x, y)
-            ($op){T<:TimeType,P<:GeneralPeriod}(x::StridedArray{P}, y::T) = broadcast($op, x, y)
         end
     end
 end
