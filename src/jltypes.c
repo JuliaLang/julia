@@ -1304,15 +1304,23 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
             lb = inst_type_w_(ua->var->lb, env, &top, check);
         if (jl_has_bound_typevars(ua->var->ub, env))
             ub = inst_type_w_(ua->var->ub, env, &top, check);
-        if (lb != ua->var->lb || ub != ua->var->ub)
+        if (lb != ua->var->lb || ub != ua->var->ub) {
             ((jl_unionall_t*)res)->var = jl_new_typevar(ua->var->name, lb, ub);
+            jl_gc_wb(res, ((jl_unionall_t*)res)->var);
+        }
         jl_typeenv_t newenv = { ua->var, (jl_value_t*)((jl_unionall_t*)res)->var, env };
-        ((jl_unionall_t*)res)->body = inst_type_w_(ua->body, &newenv, &top, check);
-        if (((jl_unionall_t*)res)->body == ua->body)
+        jl_value_t *newbody = inst_type_w_(ua->body, &newenv, &top, check);
+        if (newbody == ua->body) {
             res = t;
-        // NTuple{0} => Tuple{} can make a typevar disappear
-        if (((jl_unionall_t*)res)->body == (jl_value_t*)jl_emptytuple_type)
+        }
+        else if (newbody == (jl_value_t*)jl_emptytuple_type) {
+            // NTuple{0} => Tuple{} can make a typevar disappear
             res = (jl_value_t*)jl_emptytuple_type;
+        }
+        else {
+            ((jl_unionall_t*)res)->body = newbody;
+            jl_gc_wb(res, newbody);
+        }
         JL_GC_POP();
         return res;
     }
