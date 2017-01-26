@@ -65,10 +65,11 @@
                      t))
 (define (operator-precedence op) (get prec-table op 0))
 
-(define unary-ops '(+ - ! ¬ ~ |<:| |>:| √ ∛ ∜))
+(define unary-ops (append! '(|<:| |>:| ~)
+                           (add-dots '(+ - ! ¬ √ ∛ ∜))))
 
 ; operators that are both unary and binary
-(define unary-and-binary-ops '(+ - $ & ~))
+(define unary-and-binary-ops '(+ - $ & ~ |.+| |.-|))
 
 ; operators that are special forms, not function names
 (define syntactic-operators
@@ -93,9 +94,9 @@
 
 (define operators
   (filter (lambda (x) (not (is-word-operator? x)))
-          (list* '~ '! '¬ '-> '√ '∛ '∜ ctrans-op trans-op vararg-op
-                 (delete-duplicates
-                   (apply append (map eval prec-names))))))
+          (delete-duplicates
+           (list* '-> ctrans-op trans-op vararg-op
+                  (append unary-ops (apply append (map eval prec-names)))))))
 
 (define op-chars
   (delete-duplicates
@@ -200,7 +201,7 @@
                                     (loop newop (peek-char port)))
                              str))
                        str))))
-        (if (or (equal? str "--") (equal? str ".!"))
+        (if (equal? str "--")
             (error (string "invalid operator \"" str "\"")))
         (string->symbol str))))
 
