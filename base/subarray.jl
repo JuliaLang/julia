@@ -424,21 +424,53 @@ end
 @propagate_inbounds maybeview(A) = getindex(A)
 @propagate_inbounds maybeview(A::AbstractArray) = getindex(A)
 
+# _views implements the transformation for the @views macro.
+# @views calls esc(_views(...)) to work around #20241,
+# so any function calls we insert (to maybeview, or to
+# size and endof in replace_ref_end!) must be interpolated
+# as values rather than as symbols to ensure that they are called
+# from Base rather than from the caller's scope.
 _views(x) = x
-_views(x::Symbol) = esc(x)
 function _views(ex::Expr)
     if ex.head in (:(=), :(.=))
-        # don't use view on the lhs of an assignment
-        Expr(ex.head, esc(ex.args[1]), _views(ex.args[2]))
+        # don't use view for ref on the lhs of an assignment,
+        # but still use views for the args of the ref:
+        lhs = ex.args[1]
+        Expr(ex.head, Meta.isexpr(lhs, :ref) ?
+                      Expr(:ref, _views.(lhs.args)...) : _views(lhs),
+             _views(ex.args[2]))
     elseif ex.head == :ref
-        ex = replace_ref_end!(ex)
-        Expr(:call, :maybeview, _views.(ex.args)...)
+        Expr(:call, maybeview, _views.(ex.args)...)
     else
         h = string(ex.head)
-        if last(h) == '='
-            # don't use view on the lhs of an op-assignment
-            Expr(first(h) == '.' ? :(.=) : :(=), esc(ex.args[1]),
-                 Expr(:call, esc(Symbol(h[1:end-1])), _views.(ex.args)...))
+        # don't use view on the lhs of an op-assignment a[i...] += ...
+        if last(h) == '=' && Meta.isexpr(ex.args[1], :ref)
+            lhs = ex.args[1]
+
+            # temp vars to avoid recomputing a and i,
+            # which will be assigned in a let block:
+            a = gensym(:a)
+            i = [gensym(:i) for k = 1:length(lhs.args)-1]
+
+            # for splatted indices like a[i, j...], we need to
+            # splat the corresponding temp var.
+            I = similar(i, Any)
+            for k = 1:length(i)
+                if Meta.isexpr(lhs.args[k+1], :...)
+                    I[k] = Expr(:..., i[k])
+                    lhs.args[k+1] = lhs.args[k+1].args[1] # unsplat
+                else
+                    I[k] = i[k]
+                end
+            end
+
+            Expr(:let,
+                 Expr(first(h) == '.' ? :(.=) : :(=), :($a[$(I...)]),
+                      Expr(:call, Symbol(h[1:end-1]),
+                           :($maybeview($a, $(I...))),
+                           _views.(ex.args[2:end])...)),
+                 :($a = $(_views(lhs.args[1]))),
+                 [:($(i[k]) = $(_views(lhs.args[k+1]))) for k=1:length(i)]...)
         else
             Expr(ex.head, _views.(ex.args)...)
         end
@@ -459,5 +491,5 @@ that appear explicitly in the given `expression`, not array slicing that
 occurs in functions called by that code.
 """
 macro views(x)
-    _views(x)
+    esc(_views(replace_ref_end!(x)))
 end
