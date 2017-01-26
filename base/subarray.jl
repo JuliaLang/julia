@@ -82,7 +82,7 @@ function unsafe_view{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
 end
 function unsafe_view{T,N}(V::SubArray{T,N}, I::Vararg{ViewIndex,N})
     @_inline_meta
-    idxs = reindex(V, V.indexes, to_indexes(I...))
+    @inbounds idxs = reindex(V, V.indexes, to_indexes(I...))
     SubArray(V.parent, idxs, map(unsafe_length, (index_shape(V.parent, idxs...))))
 end
 
