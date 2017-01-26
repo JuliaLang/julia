@@ -335,6 +335,7 @@ function next_token(l::Lexer)
     elseif c == '-'; return lex_minus(l);
     elseif c == '`'; return lex_cmd(l);
     elseif c == 'i'; return lex_i(l);
+    elseif c == 't' || c == 'f'; return lex_bool(l);
     elseif isdigit(c); return lex_digit(l)
     elseif is_identifier_start_char(c); return lex_identifier(l)
     elseif (k = get(UNICODE_OPS, c, Tokens.ERROR)) != Tokens.ERROR return emit(l, k)
@@ -538,6 +539,17 @@ function lex_i(l::Lexer)
         return emit(l, Tokens.IN, "in")
     elseif (VERSION >= v"0.6.0-dev.1471" && str.val == "isa")
         return emit(l, Tokens.ISA, "isa")
+    else
+        return str
+    end
+end
+
+function lex_bool(l::Lexer)
+    str = lex_identifier(l)
+    if str.val=="true"
+        return emit(l, Tokens.TRUE, "true")
+    elseif str.val == "false"
+        return emit(l, Tokens.FALSE, "false")
     else
         return str
     end
