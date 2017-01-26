@@ -150,7 +150,7 @@ This section lists changes that do not have deprecation warnings.
       `FloatNN`. `LinSpace(start, stop, len)` always returns a
       `LinSpace`.
 
-    + `StepRangeLen(a, step, len)` constructs a single-precision range
+    + `StepRangeLen(a, step, len)` constructs an ordinary-precision range
       using the values and types of `a` and `step` as given, whereas
       `range(a, step, len)` will attempt to match inputs `a::FloatNN`
       and `step::FloatNN` to rationals and construct a `StepRangeLen`
