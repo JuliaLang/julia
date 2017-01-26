@@ -212,7 +212,7 @@ Library improvements
 
   * `notify` now returns a count of tasks woken up ([#19841]).
 
-  * Introduce nonstandard string literal `raw"..."` for creating strings
+  * New nonstandard string literal `raw"..."` for creating strings
     with no interpolation or unescaping ([#19900]).
 
 Compiler/Runtime improvements
