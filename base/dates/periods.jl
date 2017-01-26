@@ -392,7 +392,6 @@ function (-)(x::TimeType, y::CompoundPeriod)
     end
     return x
 end
-(-)(x::CompoundPeriod, y::TimeType) = y - x
 
 # Fixed-value Periods (periods corresponding to a well-defined time interval,
 # as opposed to variable calendar intervals like Year).

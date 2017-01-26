@@ -315,7 +315,6 @@ emptyperiod = ((y + d) - d) - y
 @test Dates.canonicalize(-y + m - w + d - h + mi - s + ms).periods == Dates.Period[-11m, -6d, -59mi, -999ms]
 
 @test Dates.Date(2009, 2, 1) - (Dates.Month(1) + Dates.Day(1)) == Dates.Date(2008, 12, 31)
-@test (Dates.Month(1) + Dates.Day(1)) - Dates.Date(2009, 2, 1) == Dates.Date(2008, 12, 31)
 
 pa = [1y 1m 1w 1d; 1h 1mi 1s 1ms]
 cpa = [1y + 1s 1m + 1s 1w + 1s 1d + 1s; 1h + 1s 1mi + 1s 2m + 1s 1s + 1ms]

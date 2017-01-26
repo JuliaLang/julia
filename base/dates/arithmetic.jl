@@ -82,18 +82,12 @@ end
 (-)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) - tons(y)))
 (+)(y::Period, x::TimeType) = x + y
 
-for op in (:+, :-)
-    @eval begin
-        ($op){T<:TimeType}(x::AbstractArray{T}, y::GeneralPeriod) = broadcast($op, x, y)
-        ($op){P<:GeneralPeriod}(y::TimeType, x::StridedArray{P}) = broadcast($op, x, y)
-        ($op){T<:TimeType,P<:GeneralPeriod}(x::StridedArray{P}, y::T) = broadcast($op, x, y)
-    end
-    if op == :+
-        @eval begin
-            ($op){T<:TimeType}(y::GeneralPeriod, x::AbstractArray{T}) = broadcast($op, x, y)
-        end
-    end
-end
+(+){T<:TimeType}(x::AbstractArray{T}, y::GeneralPeriod) = x .+ y
+(+){T<:TimeType,P<:GeneralPeriod}(x::StridedArray{P}, y::T) = x .+ y
+(+){T<:TimeType}(y::GeneralPeriod, x::AbstractArray{T}) = x .+ y
+(+){P<:GeneralPeriod}(y::TimeType, x::StridedArray{P}) = x .+ y
+(-){T<:TimeType}(x::AbstractArray{T}, y::GeneralPeriod) = x .- y
+(-){T<:TimeType,P<:GeneralPeriod}(x::StridedArray{P}, y::T) = x .- y
 
 # TimeType, AbstractArray{TimeType}
 (-){T<:TimeType}(x::AbstractArray{T}, y::T) = x .- y
