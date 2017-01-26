@@ -1904,7 +1904,7 @@ function sqrtm{T}(A::UnitUpperTriangular{T})
     t = typeof(sqrt(zero(T)))
     R = eye(TT, n, n)
     tt = typeof(zero(t)*zero(t))
-    one = R[1,1]
+    two = 2*R[1,1]
     @inbounds begin
         for j = 1:n
             for i = j-1:-1:1
@@ -1912,7 +1912,7 @@ function sqrtm{T}(A::UnitUpperTriangular{T})
                 @simd for k = i+1:j-1
                     r -= R[i,k]*R[k,j]
                 end
-                r==0 || (R[i,j] = r/one)
+                r==0 || (R[i,j] = r/two)
             end
         end
     end
