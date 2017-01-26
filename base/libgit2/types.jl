@@ -436,6 +436,13 @@ immutable StatusEntry
     index_to_workdir::Ptr{DiffDelta}
 end
 
+"""
+    LibGit2.FetchHead
+
+Contains the information about HEAD during a fetch, including the name and URL
+of the branch fetched from, the oid of the HEAD, and whether the fetched HEAD
+has been merged locally.
+"""
 immutable FetchHead
     name::String
     url::String
@@ -536,7 +543,8 @@ end
 """
     LibGit2.GitSignature
 
-This is a Julia wrapper around a pointer to a [`git_signature`](https://libgit2.github.com/libgit2/#HEAD/type/git_signature) object.
+This is a Julia wrapper around a pointer to a
+[`git_signature`](https://libgit2.github.com/libgit2/#HEAD/type/git_signature) object.
 """
 type GitSignature <: AbstractGitObject
     ptr::Ptr{SignatureStruct}
@@ -583,7 +591,11 @@ function with_warn{T}(f::Function, ::Type{T}, args...)
     end
 end
 
+"""
+    LibGit2.Const.OBJECT{T<:GitObject}(::Type{T})
 
+The `OBJECT` enum value corresponding to type `T`.
+"""
 Consts.OBJECT(::Type{GitCommit})        = Consts.OBJ_COMMIT
 Consts.OBJECT(::Type{GitTree})          = Consts.OBJ_TREE
 Consts.OBJECT(::Type{GitBlob})          = Consts.OBJ_BLOB
@@ -591,6 +603,11 @@ Consts.OBJECT(::Type{GitTag})           = Consts.OBJ_TAG
 Consts.OBJECT(::Type{GitUnknownObject}) = Consts.OBJ_ANY
 Consts.OBJECT(::Type{GitObject})        = Consts.OBJ_ANY
 
+"""
+    objtype(obj_type::Consts.OBJECT)
+
+Returns the type corresponding to the enum value.
+"""
 function objtype(obj_type::Consts.OBJECT)
     if obj_type == Consts.OBJ_COMMIT
         GitCommit

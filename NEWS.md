@@ -224,6 +224,13 @@ Compiler/Runtime improvements
 Deprecated or removed
 ---------------------
 
+  * Linear indexing is now only supported when there is exactly one
+    non-cartesian index provided. Allowing a trailing index at dimension `d` to
+    linearly access the higher dimensions from array `A` (beyond `size(A, d)`)
+    has been deprecated as a stricter constraint during bounds checking.
+    Instead, `reshape` the array such that its dimensionality matches the
+    number of indices ([#20079]).
+
   * `isdefined(a::Array, i::Int)` has been deprecated in favor of `isassigned` ([#18346]).
 
   * `is` has been deprecated in favor of `===` (which used to be an alias for `is`) ([#17758]).

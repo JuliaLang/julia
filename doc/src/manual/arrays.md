@@ -233,7 +233,7 @@ X = A[I_1, I_2, ..., I_n]
 where each `I_k` may be a scalar integer, an array of integers, or any other
 [supported index](@ref man-supported-index-types). This includes
 [`Colon`](@ref) (`:`) to select all indices within the entire dimension,
-ranges of the form `a:c` or `a:b:c` to select congiguous or strided
+ranges of the form `a:c` or `a:b:c` to select contiguous or strided
 subsections, and arrays of booleans to select elements at their `true` indices.
 
 If all the indices are scalars, then the result `X` is a single element from the array `A`. Otherwise,
@@ -299,7 +299,7 @@ A[I_1, I_2, ..., I_n] = X
 where each `I_k` may be a scalar integer, an array of integers, or any other
 [supported index](@ref man-supported-index-types). This includes
 [`Colon`](@ref) (`:`) to select all indices within the entire dimension,
-ranges of the form `a:c` or `a:b:c` to select congiguous or strided
+ranges of the form `a:c` or `a:b:c` to select contiguous or strided
 subsections, and arrays of booleans to select elements at their `true` indices.
 
 If `X` is an array, it must have the same number of elements as the product of the lengths of
@@ -427,7 +427,7 @@ julia> A[CartesianIndex.(indices(A, 1), indices(A, 2)), :]
 
     `CartesianIndex` and arrays of `CartesianIndex` are not compatible with the
     `end` keyword to represent the last index of a dimension. Do not use `end`
-    in indexing expressions that may contain either.
+    in indexing expressions that may contain either `CartesianIndex` or arrays thereof.
 
 #### Logical indexing
 
