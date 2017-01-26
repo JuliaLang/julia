@@ -320,25 +320,32 @@ should transform to
     A[B[endof(B)]]
 
 """
-function replace_ref_end!(ex,withex=nothing)
+replace_ref_end!(ex) = replace_ref_end_!(ex, nothing)[1]
+# replace_ref_end_!(ex,withex) returns (new ex, whether withex was used)
+function replace_ref_end_!(ex, withex)
+    used_withex = false
     if isa(ex,Symbol) && ex == :end
         withex === nothing && error("Invalid use of end")
-        return withex
+        return withex, true
     elseif isa(ex,Expr)
         if ex.head == :ref
-            S = ex.args[1] = replace_ref_end!(ex.args[1],withex)
+            ex.args[1], used_withex = replace_ref_end_!(ex.args[1],withex)
+            S = isa(ex.args[1],Symbol) ? ex.args[1]::Symbol : gensym(:S) # temp var to cache ex.args[1] if needed
+            used_S = false # whether we actually need S
             # new :ref, so redefine withex
             nargs = length(ex.args)-1
             if nargs == 0
-                return ex
+                return ex, used_withex
             elseif nargs == 1
                 # replace with endof(S)
-                ex.args[2] = replace_ref_end!(ex.args[2],:(Base.endof($S)))
+                ex.args[2], used_S = replace_ref_end_!(ex.args[2],:($endof($S)))
             else
                 n = 1
                 J = endof(ex.args)
                 for j = 2:J-1
-                    exj = ex.args[j] = replace_ref_end!(ex.args[j],:(Base.size($S,$n)))
+                    exj, used = replace_ref_end_!(ex.args[j],:($size($S,$n)))
+                    used_S |= used
+                    ex.args[j] = exj
                     if isa(exj,Expr) && exj.head == :...
                         # splatted object
                         exjs = exj.args[1]
@@ -351,16 +358,23 @@ function replace_ref_end!(ex,withex=nothing)
                         n += 1
                     end
                 end
-                ex.args[J] = replace_ref_end!(ex.args[J],:(Base.trailingsize($S,$n)))
+                ex.args[J], used = replace_ref_end_!(ex.args[J],:($trailingsize($S,$n)))
+                used_S |= used
+            end
+            if used_S && S !== ex.args[1]
+                S0 = ex.args[1]
+                ex.args[1] = S
+                ex = Expr(:let, ex, :($S = $S0))
             end
         else
             # recursive search
             for i = eachindex(ex.args)
-                ex.args[i] = replace_ref_end!(ex.args[i],withex)
+                ex.args[i], used = replace_ref_end_!(ex.args[i],withex)
+                used_withex |= used
             end
         end
     end
-    ex
+    ex, used_withex
 end
 
 """
@@ -371,9 +385,15 @@ reference expression (e.g. `@view A[1,2:end]`), and should *not* be used as the 
 an assignment (e.g. `@view(A[1,2:end]) = ...`).
 """
 macro view(ex)
-    if isa(ex, Expr) && ex.head == :ref
+    if Meta.isexpr(ex, :ref)
         ex = replace_ref_end!(ex)
-        Expr(:&&, true, esc(Expr(:call,:(Base.view),ex.args...)))
+        if Meta.isexpr(ex, :ref)
+            ex = Expr(:call, view, ex.args...)
+        else # ex replaced by let ...; foo[...]; end
+            assert(Meta.isexpr(ex, :let) && Meta.isexpr(ex.args[1], :ref))
+            ex.args[1] = Expr(:call, view, ex.args[1].args...)
+        end
+        Expr(:&&, true, esc(ex))
     else
         throw(ArgumentError("Invalid use of @view macro: argument must be a reference expression A[...]."))
     end
