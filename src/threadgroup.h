@@ -8,7 +8,7 @@
 
 // for the barrier
 typedef struct {
-    volatile int sense;
+    int sense;
 } ti_thread_sense_t;
 
 // thread group
@@ -17,7 +17,7 @@ typedef struct {
     uint8_t num_sockets, num_cores, num_threads_per_core;
 
     // fork/join/barrier
-    volatile uint8_t  group_sense;
+    uint8_t group_sense; // Written only by master thread
     ti_thread_sense_t **thread_sense;
     void              *envelope;
 

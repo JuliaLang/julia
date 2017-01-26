@@ -422,6 +422,10 @@ gpure(x::Irrational) = fpure(x)
 @test gpure() == gpure() == gpure()
 @test gpure(π) == gpure(π) == gpure(π)
 
+# Make sure @pure works for functions using the new syntax
+Base.@pure (fpure2(x::T) where T) = T
+@test which(fpure2, (Int64,)).source.pure
+
 # issue #10880
 function cat10880(a, b)
     Tuple{a.parameters..., b.parameters...}
@@ -491,3 +495,32 @@ tpara18457{I}(::Type{AbstractMyType18457{I}}) = I
 tpara18457{A<:AbstractMyType18457}(::Type{A}) = tpara18457(supertype(A))
 @test tpara18457(MyType18457{true}) === true
 
+randT_inferred_union() = rand(Bool) ? rand(Bool) ? 1 : 2.0 : nothing
+function f_inferred_union()
+    b = randT_inferred_union()
+    if !(nothing !== b) === true
+        return f_inferred_union_nothing(b)
+    elseif (isa(b, Float64) === true) !== false
+        return f_inferred_union_float(b)
+    else
+        return f_inferred_union_int(b)
+    end
+end
+f_inferred_union_nothing(::Void) = 1
+f_inferred_union_nothing(::Any) = "broken"
+f_inferred_union_float(::Float64) = 2
+f_inferred_union_float(::Any) = "broken"
+f_inferred_union_int(::Int) = 3
+f_inferred_union_int(::Any) = "broken"
+@test @inferred(f_inferred_union()) in (1, 2, 3)
+
+# issue #11015
+type AT11015
+    f::Union{Bool,Function}
+end
+
+g11015{S}(::Type{S}, ::S) = 1
+f11015(a::AT11015) = g11015(Base.fieldtype(typeof(a), :f), true)
+g11015(::Type{Bool}, ::Bool) = 2.0
+@test Int <: Base.return_types(f11015, (AT11015,))[1]
+@test f11015(AT11015(true)) === 1

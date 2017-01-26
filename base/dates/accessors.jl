@@ -42,6 +42,7 @@ end
 
 # Accessor functions
 value(dt::TimeType) = dt.instant.periods.value
+value(t::Time) = t.instant.value
 days(dt::Date) = value(dt)
 days(dt::DateTime) = fld(value(dt),86400000)
 year(dt::TimeType) = year(days(dt))
@@ -52,6 +53,12 @@ hour(dt::DateTime)   = mod(fld(value(dt),3600000),24)
 minute(dt::DateTime) = mod(fld(value(dt),60000),60)
 second(dt::DateTime) = mod(fld(value(dt),1000),60)
 millisecond(dt::DateTime) = mod(value(dt),1000)
+hour(t::Time)   = mod(fld(value(t),3600000000000),Int64(24))
+minute(t::Time) = mod(fld(value(t),60000000000),Int64(60))
+second(t::Time) = mod(fld(value(t),1000000000),Int64(60))
+millisecond(t::Time) = mod(fld(value(t),Int64(1000000)),Int64(1000))
+microsecond(t::Time) = mod(fld(value(t),Int64(1000)),Int64(1000))
+nanosecond(t::Time) = mod(value(t),Int64(1000))
 
 dayofmonth(dt::TimeType) = day(dt)
 
@@ -120,5 +127,16 @@ for parts in (["year", "month"], ["month", "day"], ["year", "month", "day"])
         Simultaneously return the $(join($parts, ", ", " and ")) parts of a `Date` or
         `DateTime`.
         """ $func(dt::TimeType)
+    end
+end
+
+for func in (:hour, :minute, :second, :millisecond, :microsecond, :nanosecond)
+    name = string(func)
+    @eval begin
+        @doc """
+            $($name)(t::Time) -> Int64
+
+        The $($name) of a `Time` as an `Int64`.
+        """ $func(t::Time)
     end
 end

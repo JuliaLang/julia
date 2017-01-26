@@ -13,6 +13,13 @@ dt = Dates.DateTime(2012,12,21,16,30,20,200)
 @test trunc(dt,Dates.Minute) == Dates.DateTime(2012,12,21,16,30)
 @test trunc(dt,Dates.Second) == Dates.DateTime(2012,12,21,16,30,20)
 @test trunc(dt,Dates.Millisecond) == Dates.DateTime(2012,12,21,16,30,20,200)
+t = Dates.Time(1,2,3,4,5,6)
+@test trunc(t,Dates.Hour) == Dates.Time(1)
+@test trunc(t,Dates.Minute) == Dates.Time(1,2)
+@test trunc(t,Dates.Second) == Dates.Time(1,2,3)
+@test trunc(t,Dates.Millisecond) == Dates.Time(1,2,3,4)
+@test trunc(t,Dates.Microsecond) == Dates.Time(1,2,3,4,5)
+@test trunc(t,Dates.Nanosecond) == Dates.Time(1,2,3,4,5,6)
 
 # Date functions
 Jan = Dates.DateTime(2013,1,1) #Tuesday
@@ -222,7 +229,7 @@ dt = Dates.Date(2014,5,21)
 
 @test Dates.tonext(Dates.Date(0),Dates.Mon) == Dates.Date(0,1,3)
 
-#test func, diff steps, negate, same
+#test func, diff steps, same
 @test Dates.tonext(Dates.iswednesday,dt) == Dates.Date(2014,5,28)
 @test Dates.tonext(Dates.iswednesday,dt;same=true) == dt
 @test Dates.tonext(Dates.isthursday,dt) == Dates.Date(2014,5,22)
@@ -233,7 +240,8 @@ dt = Dates.Date(2014,5,21)
 @test Dates.tonext(Dates.istuesday,dt) == Dates.Date(2014,5,27)
 @test Dates.tonext(Dates.ismonday,Dates.Date(0)) == Dates.Date(0,1,3)
 
-@test Dates.tonext(x->!Dates.iswednesday(x),dt;negate=true) == Dates.Date(2014,5,28)
+@test Dates.tonext(!Dates.iswednesday,dt) == Dates.Date(2014,5,22)
+@test Dates.tonext(!Dates.isthursday,dt) == Dates.Date(2014,5,23)
 # Reach adjust limit
 @test_throws ArgumentError Dates.tonext(Dates.iswednesday,dt;limit=6)
 
@@ -315,8 +323,8 @@ Januarymondays2014 = [Dates.Date(2014,1,6),Dates.Date(2014,1,13),Dates.Date(2014
 @test filter(Dates.ismonday,startdate:stopdate) == Januarymondays2014
 
 @test_throws MethodError filter((x,y)->x+y,Dates.Date(2013):Dates.Date(2014))
-@test_throws MethodError Dates.DateFunction((x,y)->x+y, false, Date(0))
-@test_throws ArgumentError Dates.DateFunction((dt)->2, false, Date(0))
+@test_throws MethodError Dates.DateFunction((x,y)->x+y, Date(0))
+@test_throws ArgumentError Dates.DateFunction((dt)->2, Date(0))
 @test length(filter(x->true,Dates.Date(2013):Dates.Date(2013,2))) == 32
 @test length(filter(x->true,Dates.Date(2013):Dates.Date(2013,1,1))) == 1
 @test length(filter(x->true,Dates.Date(2013):Dates.Date(2013,1,2))) == 2
@@ -455,3 +463,11 @@ end) == 251
     end
     return sum == 15
 end) == 15 # On average, there's one of those months every year
+
+r = Dates.Time(x->Dates.second(x) == 5, 1)
+@test r == Dates.Time(1,0,5)
+
+r = filter(x->Dates.second(x) == 5, Dates.Time(0):Dates.Time(10))
+@test length(r) == 600
+@test first(r) == Dates.Time(0,0,5)
+@test last(r) == Dates.Time(9,59,5)

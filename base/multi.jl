@@ -1628,9 +1628,9 @@ function redirect_worker_output(ident, stream)
         if startswith(line, "\tFrom worker ")
             # STDOUT's of "additional" workers started from an initial worker on a host are not available
             # on the master directly - they are routed via the initial worker's STDOUT.
-            print(line)
+            println(line)
         else
-            print("\tFrom worker $(ident):\t$line")
+            println("\tFrom worker $(ident):\t$line")
         end
     end
 end
@@ -1937,8 +1937,8 @@ end
 ## higher-level functions: spawn, pmap, pfor, etc. ##
 
 let nextidx = 0
-    global chooseproc
-    function chooseproc(thunk::Function)
+    global nextproc
+    function nextproc()
         p = -1
         if p == -1
             p = workers()[(nextidx % nworkers()) + 1]
@@ -1950,16 +1950,16 @@ end
 
 spawnat(p, thunk) = sync_add(remotecall(thunk, p))
 
-spawn_somewhere(thunk) = spawnat(chooseproc(thunk),thunk)
+spawn_somewhere(thunk) = spawnat(nextproc(),thunk)
 
 macro spawn(expr)
-    expr = localize_vars(esc(:(()->($expr))), false)
-    :(spawn_somewhere($expr))
+    thunk = esc(:(()->($expr)))
+    :(spawn_somewhere($thunk))
 end
 
 macro spawnat(p, expr)
-    expr = localize_vars(esc(:(()->($expr))), false)
-    :(spawnat($(esc(p)), $expr))
+    thunk = esc(:(()->($expr)))
+    :(spawnat($(esc(p)), $thunk))
 end
 
 """
@@ -1969,11 +1969,8 @@ Equivalent to `fetch(@spawn expr)`.
 See [`fetch`](@ref) and [`@spawn`](@ref).
 """
 macro fetch(expr)
-    expr = localize_vars(esc(:(()->($expr))), false)
-    quote
-        thunk = $expr
-        remotecall_fetch(thunk, chooseproc(thunk))
-    end
+    thunk = esc(:(()->($expr)))
+    :(remotecall_fetch($thunk, nextproc()))
 end
 
 """
@@ -1983,8 +1980,8 @@ Equivalent to `fetch(@spawnat p expr)`.
 See [`fetch`](@ref) and [`@spawnat`](@ref).
 """
 macro fetchfrom(p, expr)
-    expr = localize_vars(esc(:(()->($expr))), false)
-    :(remotecall_fetch($expr, $(esc(p))))
+    thunk = esc(:(()->($expr)))
+    :(remotecall_fetch($thunk, $(esc(p))))
 end
 
 """
@@ -2140,7 +2137,7 @@ macro parallel(args...)
     else
         thecall = :(preduce($(esc(reducer)), $(make_preduce_body(var, body)), $(esc(r))))
     end
-    localize_vars(thecall)
+    thecall
 end
 
 
@@ -2286,3 +2283,25 @@ function getindex(r::RemoteChannel, args...)
     end
     return remotecall_fetch(getindex, r.where, r, args...)
 end
+
+"""
+    clear!(syms, pids=workers(); mod=Main)
+
+Clears global bindings in modules by initializing them to `nothing`.
+`syms` should be of type `Symbol` or a collection of `Symbol`s . `pids` and `mod`
+identify the processes and the module in which global variables are to be
+reinitialized. Only those names found to be defined under `mod` are cleared.
+
+An exception is raised if a global constant is requested to be cleared.
+"""
+function clear!(syms, pids=workers(); mod=Main)
+    @sync for p in pids
+        @async remotecall_wait(clear_impl!, p, syms, mod)
+    end
+end
+clear!(sym::Symbol, pid::Int; mod=Main) = clear!([sym], [pid]; mod=mod)
+clear!(sym::Symbol, pids=workers(); mod=Main) = clear!([sym], pids; mod=mod)
+clear!(syms, pid::Int; mod=Main) = clear!(syms, [pid]; mod=mod)
+
+clear_impl!(syms, mod::Module) = foreach(x->clear_impl!(x,mod), syms)
+clear_impl!(sym::Symbol, mod::Module) = isdefined(mod, sym) && eval(mod, :(global $sym = nothing))
