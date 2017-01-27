@@ -255,6 +255,12 @@ end
     @test_throws ArgumentError parse(Complex{Int}, "3 + 4.2im")
 end
 
+# identifiers starting with category No:
+let ½x = 1/2, ¹x = 12
+    @test ½x === 1/2
+    @test ¹x === 12
+end
+
 # added ⟂ to operator precedence (#24404)
 @test Meta.parse("a ⟂ b ⟂ c") == Expr(:comparison, :a, :⟂, :b, :⟂, :c)
 @test Meta.parse("a ⟂ b ∥ c") == Expr(:comparison, :a, :⟂, :b, :∥, :c)

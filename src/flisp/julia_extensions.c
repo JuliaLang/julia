@@ -60,7 +60,8 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
 {
     return (cat == UTF8PROC_CATEGORY_LU || cat == UTF8PROC_CATEGORY_LL ||
             cat == UTF8PROC_CATEGORY_LT || cat == UTF8PROC_CATEGORY_LM ||
-            cat == UTF8PROC_CATEGORY_LO || cat == UTF8PROC_CATEGORY_NL ||
+            cat == UTF8PROC_CATEGORY_LO ||
+            cat == UTF8PROC_CATEGORY_NL || cat == UTF8PROC_CATEGORY_NO ||
             cat == UTF8PROC_CATEGORY_SC ||  // allow currency symbols
             // other symbols, but not arrows
             (cat == UTF8PROC_CATEGORY_SO && !(wc >= 0x2190 && wc <= 0x21FF)) ||
@@ -131,7 +132,6 @@ JL_DLLEXPORT int jl_id_char(uint32_t wc)
     if (cat == UTF8PROC_CATEGORY_MN || cat == UTF8PROC_CATEGORY_MC ||
         cat == UTF8PROC_CATEGORY_ND || cat == UTF8PROC_CATEGORY_PC ||
         cat == UTF8PROC_CATEGORY_SK || cat == UTF8PROC_CATEGORY_ME ||
-        cat == UTF8PROC_CATEGORY_NO ||
         // primes (single, double, triple, their reverses, and quadruple)
         (wc >= 0x2032 && wc <= 0x2037) || (wc == 0x2057) ||
         // Other_ID_Continue
