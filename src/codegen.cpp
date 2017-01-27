@@ -1807,8 +1807,13 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, int sparams=tr
             if (f) {
                 if (jl_array_dim0(e->args) == 3 && f==jl_builtin_getfield) {
                     m = (jl_module_t*)static_eval(jl_exprarg(e, 1), ctx, sparams, allow_alloc);
+                    // Check the tag before evaluating `s` so that a value of random
+                    // type won't be corrupted.
+                    if (!m || !jl_is_module(m))
+                        return NULL;
+                    // Assumes that the module is rooted somewhere.
                     s = (jl_sym_t*)static_eval(jl_exprarg(e, 2), ctx, sparams, allow_alloc);
-                    if (m && jl_is_module(m) && s && jl_is_symbol(s)) {
+                    if (s && jl_is_symbol(s)) {
                         jl_binding_t *b = jl_get_binding(m, s);
                         if (b && b->constp) {
                             if (b->deprecated) cg_bdw(b, ctx);
