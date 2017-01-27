@@ -305,13 +305,6 @@ This would create a 25-by-30000 `BitArray`, linked to the file associated with s
 Mmap.mmap(io, ::BitArray, dims = ?, offset = ?)
 
 """
-    bessely0(x)
-
-Bessel function of the second kind of order 0, ``Y_0(x)``.
-"""
-bessely0
-
-"""
     filter!(function, collection)
 
 Update `collection`, removing elements for which `function` is `false`.
@@ -648,13 +641,6 @@ for use in `Mmap.mmap`. Used by `SharedArray` for creating shared memory arrays.
 Mmap.Anonymous
 
 """
-    erfi(x)
-
-Compute the imaginary error function of `x`, defined by ``-i \\operatorname{erf}(ix)``.
-"""
-erfi
-
-"""
     floor([T,] x, [digits, [base]])
 
 `floor(x)` returns the nearest integral value of the same type as `x` that is less than or
@@ -694,13 +680,6 @@ reverse!
 The item or field is not defined for the given object.
 """
 UndefRefError
-
-"""
-    bessely1(x)
-
-Bessel function of the second kind of order 1, ``Y_1(x)``.
-"""
-bessely1
 
 """
     append!(collection, collection2) -> collection.
@@ -797,13 +776,6 @@ julia> getfield(a, :num)
 ```
 """
 getfield
-
-"""
-    besselj1(x)
-
-Bessel function of the first kind of order 1, ``J_1(x)``.
-"""
-besselj1
 
 """
     select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -934,33 +906,11 @@ behavior, including program corruption or segfaults, at any later time.
 unsafe_convert
 
 """
-    erfinv(x)
-
-Compute the inverse error function of a real `x`, defined by ``\\operatorname{erf}(\\operatorname{erfinv}(x)) = x``.
-"""
-erfinv
-
-"""
     seek(s, pos)
 
 Seek a stream to the given position.
 """
 seek
-
-"""
-    besselj0(x)
-
-Bessel function of the first kind of order 0, ``J_0(x)``.
-"""
-besselj0
-
-"""
-    erfcinv(x)
-
-Compute the inverse error complementary function of a real `x`, defined by
-``\\operatorname{erfc}(\\operatorname{erfcinv}(x)) = x``.
-"""
-erfcinv
 
 """
     popdisplay()
@@ -1604,14 +1554,6 @@ error
 Equivalent to [`readdlm`](@ref) with `delim` set to comma, and type optionally defined by `T`.
 """
 readcsv
-
-"""
-    erfcx(x)
-
-Compute the scaled complementary error function of `x`, defined by ``e^{x^2} \\operatorname{erfc}(x)``.
-Note also that ``\\operatorname{erfcx}(-ix)`` computes the Faddeeva function ``w(x)``.
-"""
-erfcx
 
 """
     UndefVarError(var::Symbol)
@@ -2482,11 +2424,3 @@ seekend
 Integer division was attempted with a denominator value of 0.
 """
 DivideError
-
-"""
-    dawson(x)
-
-Compute the Dawson function (scaled imaginary error function) of `x`, defined by
-``\\frac{\\sqrt{\\pi}}{2} e^{-x^2} \\operatorname{erfi}(x)``.
-"""
-dawson

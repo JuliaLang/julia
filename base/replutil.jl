@@ -223,7 +223,7 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
         if !code.from_c
             if code.func == :nan_dom_err
                 continue
-            elseif code.func in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
+            elseif code.func in (:log, :log2, :log10, :sqrt)
                 print(io, "\n$(code.func) will only return a complex result if called ",
                     "with a complex argument. Try $(string(code.func))(complex(x)).")
             elseif (code.func == :^ && code.file == Symbol("intfuncs.jl")) ||
