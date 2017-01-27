@@ -197,10 +197,10 @@ function DateTime(func::Function, y, m, d, h, mi, s; step::Period=Millisecond(1)
 end
 
 """
-    Time(func::Function, h, mi=0; step::Period=Second(1), limit::Int=10000)
-    Time(func::Function, h, mi, s; step::Period=Millisecond(1), limit::Int=10000)
-    Time(func::Function, h, mi, s, ms; step::Period=Microsecond(1), limit::Int=10000)
-    Time(func::Function, h, mi, s, ms, us; step::Period=Nanosecond(1), limit::Int=10000)
+    Time(f::Function, h, mi=0; step::Period=Second(1), limit::Int=10000)
+    Time(f::Function, h, mi, s; step::Period=Millisecond(1), limit::Int=10000)
+    Time(f::Function, h, mi, s, ms; step::Period=Microsecond(1), limit::Int=10000)
+    Time(f::Function, h, mi, s, ms, us; step::Period=Nanosecond(1), limit::Int=10000)
 
 Create a `Time` through the adjuster API. The starting point will be constructed from the
 provided `h, mi, s, ms, us` arguments, and will be adjusted until `f::Function` returns `true`.
