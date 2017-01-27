@@ -130,6 +130,33 @@ This section lists changes that do not have deprecation warnings.
     (since it is shorthand for `NTuple{N,T} where T`). To get the old behavior of matching
     any tuple, use `NTuple{N,Any}` ([#18457]).
 
+  * `FloatRange` has been replaced by `StepRangeLen`, and the internal
+    representation of `LinSpace` has changed. Aside from changes in
+    the internal field names, this leads to several differences in
+    behavior ([#18777]):
+
+    + Both `StepRangeLen` and `LinSpace` can represent ranges of
+      arbitrary object types---they are no longer limited to
+      floating-point numbers.
+
+    + For ranges that produce `Float64`, `Float32`, or `Float16`
+      numbers, `StepRangeLen` can be used to produce values with
+      little or no roundoff error due to internal arithmetic that is
+      typically twice the precision of the output result.
+
+    + To take advantage of this precision, `linspace(start, stop,
+      len)` now returns a range of type `StepRangeLen` rather than
+      `LinSpace` when `start` and `stop` are
+      `FloatNN`. `LinSpace(start, stop, len)` always returns a
+      `LinSpace`.
+
+    + `StepRangeLen(a, step, len)` constructs an ordinary-precision range
+      using the values and types of `a` and `step` as given, whereas
+      `range(a, step, len)` will attempt to match inputs `a::FloatNN`
+      and `step::FloatNN` to rationals and construct a `StepRangeLen`
+      that internally uses twice-precision arithmetic.  These two
+      outcomes exhibit differences in both precision and speed.
+
 Library improvements
 --------------------
 
@@ -166,10 +193,12 @@ Library improvements
   * The default text style for REPL input and answers has been changed from bold to normal ([#11250]).
     They can be changed back to bold by setting the environment variables `JULIA_INPUT_COLOR` and `JULIA_ANSWER_COLOR` to `"bold"`.
     For example, one way of doing this is adding `ENV["JULIA_INPUT_COLOR"] = :bold` and `ENV["JULIA_ANSWER_COLOR"] = :bold` to the `.juliarc.jl` file.
-    See the [manual section on customizing colors](http://docs.julialang.org/en/latest/manual/interacting-with-julia/#customizing-colors) for more information.
+    See the [manual section on customizing colors](http://docs.julialang.org/en/latest/manual/interacting-with-julia#Customizing-Colors-1) for more information.
 
-  * The default color for info messages has been changed from blue to cyan, and for warning messages from red to yellow.
-    This can be changed back to the original colors by setting the environment variables `JULIA_INFO_COLOR` to `"blue"` and `JULIA_WARN_COLOR` to `"red"`.
+  * The default color for info messages has been changed from blue to cyan
+    ([#18442]), and for warning messages from red to yellow ([#18453]).  This
+    can be changed back to the original colors by setting the environment
+    variables `JULIA_INFO_COLOR` to `"blue"` and `JULIA_WARN_COLOR` to `"red"`.
 
   * Iteration utilities that wrap iterators and return other iterators (`enumerate`, `zip`, `rest`,
     `countfrom`, `take`, `drop`, `cycle`, `repeated`, `product`, `flatten`, `partition`) have been
@@ -888,11 +917,14 @@ Language tooling improvements
 [#18330]: https://github.com/JuliaLang/julia/issues/18330
 [#18339]: https://github.com/JuliaLang/julia/issues/18339
 [#18346]: https://github.com/JuliaLang/julia/issues/18346
+[#18442]: https://github.com/JuliaLang/julia/issues/18442
+[#18453]: https://github.com/JuliaLang/julia/issues/18453
 [#18457]: https://github.com/JuliaLang/julia/issues/18457
 [#18473]: https://github.com/JuliaLang/julia/issues/18473
 [#18628]: https://github.com/JuliaLang/julia/issues/18628
 [#18644]: https://github.com/JuliaLang/julia/issues/18644
 [#18690]: https://github.com/JuliaLang/julia/issues/18690
+[#18777]: https://github.com/JuliaLang/julia/issues/18777
 [#18839]: https://github.com/JuliaLang/julia/issues/18839
 [#18931]: https://github.com/JuliaLang/julia/issues/18931
 [#18965]: https://github.com/JuliaLang/julia/issues/18965
@@ -921,4 +953,5 @@ Language tooling improvements
 [#19919]: https://github.com/JuliaLang/julia/issues/19919
 [#19944]: https://github.com/JuliaLang/julia/issues/19944
 [#19950]: https://github.com/JuliaLang/julia/issues/19950
+[#20079]: https://github.com/JuliaLang/julia/issues/20079
 [#20164]: https://github.com/JuliaLang/julia/issues/20164
