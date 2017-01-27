@@ -182,18 +182,18 @@ let r, t, sock
     sock = connect(fetch(r))
     mark(sock)
     @test ismarked(sock)
-    @test readline(sock) == "Hello, world!\n"
-    @test readline(sock) == "Goodbye, world...\n"
+    @test readline(sock) == "Hello, world!"
+    @test readline(sock) == "Goodbye, world..."
     @test reset(sock) == 0
     @test !ismarked(sock)
     mark(sock)
     @test ismarked(sock)
-    @test readline(sock) == "Hello, world!\n"
+    @test readline(sock) == "Hello, world!"
     unmark(sock)
     @test !ismarked(sock)
     @test_throws ArgumentError reset(sock)
     @test !unmark(sock)
-    @test readline(sock) == "Goodbye, world...\n"
+    @test readline(sock) == "Goodbye, world..."
     #@test eof(sock) ## doesn't work
     close(sock)
     @test wait(t)
@@ -326,8 +326,8 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
     @test outfd != Base._fd(out.out) == Base.INVALID_OS_HANDLE
     @test nb_available(out) == 0
     @test c == UInt8['w']
-    @test lstrip(ln2) == "1\thello\n"
-    @test ln1 == "orld\n"
+    @test lstrip(ln2) == "1\thello"
+    @test ln1 == "orld"
     @test isempty(read(out))
     @test eof(out)
     @test desc == "Pipe($infd open => $outfd active, 0 bytes waiting)"
@@ -429,16 +429,18 @@ if is_unix()
                 Base.link_pipe(p)
                 push!(ps, p)
             end
-            @test false
-        catch ex
-            for p in ps
-                close(p)
-            end
             if isnull(ulimit_n)
                 warn("`ulimit -n` is set to unlimited, fd exhaustion cannot be tested")
-                @test_broken (ex::Base.UVError).code == Base.UV_EMFILE
+                @test_broken false
             else
-                @test (ex::Base.UVError).code == Base.UV_EMFILE
+                @test false
+            end
+        catch ex
+            isa(ex, Base.UVError) || rethrow(ex)
+            @test ex.code == Base.UV_EMFILE
+        finally
+            for p in ps
+                close(p)
             end
         end
     end

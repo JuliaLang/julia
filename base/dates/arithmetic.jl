@@ -8,6 +8,21 @@
 (+)(x::TimeType) = x
 (-){T<:TimeType}(x::T,y::T) = x.instant - y.instant
 
+# Date-Time arithmetic
+"""
+    dt::Date + t::Time -> DateTime
+
+The addition of a `Date` with a `Time` produces a `DateTime`. The hour, minute, second, and millisecond parts of
+the `Time` are used along with the year, month, and day of the `Date` to create the new `DateTime`.
+Non-zero microseconds or nanoseconds in the `Time` type will result in an `InexactError` being thrown.
+"""
+function (+)(dt::Date, t::Time)
+    (microsecond(t) > 0 || nanosecond(t) > 0) && throw(InexactError())
+    y, m, d = yearmonthday(dt)
+    return DateTime(y, m, d, hour(t), minute(t), second(t), millisecond(t))
+end
+(+)(t::Time, dt::Date) = dt + t
+
 # TimeType-Year arithmetic
 function (+)(dt::DateTime,y::Year)
     oy,m,d = yearmonthday(dt); ny = oy+value(y); ld = daysinmonth(ny,m)
@@ -57,14 +72,16 @@ function (-)(dt::Date,z::Month)
     mm = monthwrap(m,-value(z)); ld = daysinmonth(ny,mm)
     return Date(ny,mm,d <= ld ? d : ld)
 end
-(+)(x::Date,y::Week) = return Date(UTD(value(x) + 7*value(y)))
-(-)(x::Date,y::Week) = return Date(UTD(value(x) - 7*value(y)))
-(+)(x::Date,y::Day)  = return Date(UTD(value(x) + value(y)))
-(-)(x::Date,y::Day)  = return Date(UTD(value(x) - value(y)))
-(+)(x::DateTime,y::Period)   = return DateTime(UTM(value(x)+toms(y)))
-(-)(x::DateTime,y::Period)   = return DateTime(UTM(value(x)-toms(y)))
-(+)(y::Period,x::TimeType) = x + y
-(-)(y::Period,x::TimeType) = x - y
+(+)(x::Date, y::Week) = return Date(UTD(value(x) + 7*value(y)))
+(-)(x::Date, y::Week) = return Date(UTD(value(x) - 7*value(y)))
+(+)(x::Date, y::Day)  = return Date(UTD(value(x) + value(y)))
+(-)(x::Date, y::Day)  = return Date(UTD(value(x) - value(y)))
+(+)(x::DateTime, y::Period) = return DateTime(UTM(value(x) + toms(y)))
+(-)(x::DateTime, y::Period) = return DateTime(UTM(value(x) - toms(y)))
+(+)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) + tons(y)))
+(-)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) - tons(y)))
+(+)(y::Period, x::TimeType) = x + y
+(-)(y::Period, x::TimeType) = x - y
 
 for op in (:+, :-)
     @eval begin

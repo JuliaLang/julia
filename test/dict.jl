@@ -663,6 +663,17 @@ end
     @test f.x[2].second == 1
 end
 
+@testset "issue #18708 error type for dict constructor" begin
+    @test_throws UndefVarError Dict(x => y for x in 1:10)
+end
+
+type Error19179 <: Exception
+end
+
+@testset "issue #19179 throwing error in dict constructor" begin
+    @test_throws Error19179 Dict(i => throw(Error19179()) for i in 1:10)
+end
+
 # issue #18090
 let
     d = Dict(i => i^2 for i in 1:10_000)

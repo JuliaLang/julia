@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-function test_all_combos()
+let
     for T in (Dates.Date,Dates.DateTime)
         f1 = T(2014); l1 = T(2013,12,31)
         f2 = T(2014); l2 = T(2014)
@@ -113,6 +113,7 @@ function test_all_combos()
         end
         if T == Dates.DateTime
             for P in subtypes(Dates.TimePeriod)
+                P in (Dates.Microsecond, Dates.Nanosecond) && continue
                 for pos_step in (P(1),P(2),P(50),P(2048),P(10000))
                     # empty range
                     dr = f1:pos_step:l1
@@ -221,7 +222,6 @@ function test_all_combos()
         end
     end
 end
-test_all_combos()
 
 # All the range representations we want to test
 # Date ranges
@@ -407,14 +407,13 @@ c = Dates.Date(2013,6,1)
 @test [c:Dates.Month(-1):a;] == reverse([a:Dates.Month(1):c;])
 
 @test length(range(Date(2000),366)) == 366
-function testlengths(n)
+let n=100000
     a = Dates.Date(2000)
     for i = 1:n
         @test length(range(a,i)) == i
     end
     return a+Dates.Day(n)
 end
-testlengths(100000)
 
 # Custom definition to override default step of DateTime ranges
 @test typeof(step(Dates.DateTime(2000):Dates.DateTime(2001))) == Dates.Day
@@ -446,16 +445,15 @@ b = Dates.Date(2013,2,1)
 @test length(Dates.Date(2000,6,23):Dates.Year(-10):Dates.Date(1900,2,28)) == 11
 @test length(Dates.Date(2000,1,1):Dates.Year(1):Dates.Date(2000,2,1)) == 1
 
-function testyearranges(n)
+let n=100000
     a = b = Dates.Date(0)
     for i = 1:n
         @test length(a:Dates.Year(1):b) == i
         b += Dates.Year(1)
     end
 end
-testyearranges(100000)
 
-function testmonthranges(n)
+let n=10000
     a = Dates.Date(1985,12,5)
     b = Dates.Date(1986,12,27)
     c = Dates.DateTime(1985,12,5)
@@ -470,9 +468,8 @@ function testmonthranges(n)
     end
     return b
 end
-testmonthranges(10000)
 
-function testmonthranges2(n)
+let n=100000
     a = b = Dates.Date(2000)
     for i = 1:n
         @test length(a:Dates.Month(1):b) == i
@@ -480,12 +477,11 @@ function testmonthranges2(n)
     end
     return b
 end
-testmonthranges2(100000)
 
-@test length(Dates.Year(1):Dates.Year(10)) == 10
+@test length(Dates.Year(1):Dates.Year(1):Dates.Year(10)) == 10
 @test length(Dates.Year(10):Dates.Year(-1):Dates.Year(1)) == 10
 @test length(Dates.Year(10):Dates.Year(-2):Dates.Year(1)) == 5
-@test_throws OverflowError length(typemin(Dates.Year):typemax(Dates.Year))
+@test_throws OverflowError length(typemin(Dates.Year):Dates.Year(1):typemax(Dates.Year))
 @test_throws MethodError Dates.Date(0):Dates.DateTime(2000)
 @test_throws MethodError Dates.Date(0):Dates.Year(10)
 @test length(range(Dates.Date(2000),366)) == 366
@@ -503,3 +499,42 @@ let d = Dates.Day(1)
     @test (Dates.Date(2000):d:Dates.Date(2001))+d == (Dates.Date(2000)+d:d:Dates.Date(2001)+d)
     @test (Dates.Date(2000):d:Dates.Date(2001))-d == (Dates.Date(2000)-d:d:Dates.Date(2001)-d)
 end
+
+# Time ranges
+dr  = Dates.Time(23,1,1):Dates.Time(23,2,1)
+dr1 = Dates.Time(23,1,1):Dates.Time(23,1,1)
+dr2 = Dates.Time(23,1,1):Dates.Time(22,2,1) # empty range
+dr3 = Dates.Time(23,1,1):Dates.Minute(-1):Dates.Time(22,1,1) # negative step
+# Big ranges
+dr8 = typemin(Dates.Time):typemax(Dates.Time)
+dr9 = typemin(Dates.Time):Dates.Nanosecond(1):typemax(Dates.Time)
+# Non-default steps
+dr10 = typemax(Dates.Time):Dates.Microsecond(-1):typemin(Dates.Time)
+dr11 = typemin(Dates.Time):Dates.Millisecond(1):typemax(Dates.Time)
+dr12 = typemin(Dates.Time):Dates.Minute(1):typemax(Dates.Time)
+dr13 = typemin(Dates.Time):Dates.Hour(1):typemax(Dates.Time)
+dr14 = typemin(Dates.Time):Dates.Millisecond(10):typemax(Dates.Time)
+dr15 = typemin(Dates.Time):Dates.Minute(100):typemax(Dates.Time)
+dr16 = typemin(Dates.Time):Dates.Hour(1000):typemax(Dates.Time)
+dr17 = typemax(Dates.Time):Dates.Millisecond(-10000):typemin(Dates.Time)
+dr18 = typemax(Dates.Time):Dates.Minute(-100):typemin(Dates.Time)
+dr19 = typemax(Dates.Time):Dates.Hour(-10):typemin(Dates.Time)
+dr20 = typemin(Dates.Time):Dates.Microsecond(2):typemax(Dates.Time)
+
+drs = Any[dr,dr1,dr2,dr3,dr8,dr9,dr10,
+          dr11,dr12,dr13,dr14,dr15,dr16,dr17,dr18,dr19,dr20]
+
+@test map(length,drs) == map(x->size(x)[1],drs)
+@test all(x->findin(x,x) == [1:length(x);], drs[1:4])
+@test isempty(dr2)
+@test all(x->reverse(x) == last(x):-step(x):first(x),drs)
+@test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)),drs[4:end])
+@test all(x->maximum(x) == (step(x) < zero(step(x)) ? first(x) : last(x)),drs[4:end])
+@test_throws MethodError dr + 1
+
+a = Dates.Time(23,1,1)
+@test map(x->a in x,drs[1:4]) == [true,true,false,true]
+@test a in dr
+
+@test all(x->sort(x) == (step(x) < zero(step(x)) ? reverse(x) : x), drs)
+@test all(x->step(x) < zero(step(x)) ? issorted(reverse(x)) : issorted(x), drs)

@@ -17,7 +17,7 @@ io,_ = open(pipeline(`strings -n 3 $fname`,
                      `head -n 315`))  # 63 + 252
 
 function outputline(io, line)
-    row = split(chomp(line), " ", keep=false)
+    row = split(line, " ", keep=false)
     println(io, "jl_symbol(\"", row[2], "\"),")
 end
 

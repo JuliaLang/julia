@@ -46,6 +46,10 @@ Breaking changes
 
 This section lists changes that do not have deprecation warnings.
 
+  * `readline`, `readlines` and `eachline` return lines without line endings by default.
+    You *must* use `readline(s, chomp=false)`, etc. to get the old behavior where lines
+    returned include trailing end-of-line character(s). ([#19944])
+
   * `String`s no longer have a `.data` field (as part of a significant performance
     improvement). Use `Vector{UInt8}(str)` to access a string as a byte array.
     However, allocating the `Vector` object has overhead. You can also use
@@ -126,8 +130,38 @@ This section lists changes that do not have deprecation warnings.
     (since it is shorthand for `NTuple{N,T} where T`). To get the old behavior of matching
     any tuple, use `NTuple{N,Any}` ([#18457]).
 
+  * `FloatRange` has been replaced by `StepRangeLen`, and the internal
+    representation of `LinSpace` has changed. Aside from changes in
+    the internal field names, this leads to several differences in
+    behavior ([#18777]):
+
+    + Both `StepRangeLen` and `LinSpace` can represent ranges of
+      arbitrary object types---they are no longer limited to
+      floating-point numbers.
+
+    + For ranges that produce `Float64`, `Float32`, or `Float16`
+      numbers, `StepRangeLen` can be used to produce values with
+      little or no roundoff error due to internal arithmetic that is
+      typically twice the precision of the output result.
+
+    + To take advantage of this precision, `linspace(start, stop,
+      len)` now returns a range of type `StepRangeLen` rather than
+      `LinSpace` when `start` and `stop` are
+      `FloatNN`. `LinSpace(start, stop, len)` always returns a
+      `LinSpace`.
+
+    + `StepRangeLen(a, step, len)` constructs an ordinary-precision range
+      using the values and types of `a` and `step` as given, whereas
+      `range(a, step, len)` will attempt to match inputs `a::FloatNN`
+      and `step::FloatNN` to rationals and construct a `StepRangeLen`
+      that internally uses twice-precision arithmetic.  These two
+      outcomes exhibit differences in both precision and speed.
+
 Library improvements
 --------------------
+
+  * `@views` macro to convert a whole expression or block of code to
+    use views for all slices ([#20164]).
 
   * `max`, `min`, and related functions (`minmax`, `maximum`, `minimum`,
     `extrema`) now return `NaN` for `NaN` arguments ([#12563]).
@@ -144,32 +178,27 @@ Library improvements
     without having to scrub away prompts and outputs.
     This can be disabled or enabled at will with `Base.REPL.enable_promptpaste(::Bool)`.
 
-  * The function `print_with_color` can now take a color represented by an
-    integer between 0 and 255 inclusive as its first argument ([#18473]).  For
-    a number to color mapping please refer to [this
-    chart](https://commons.wikimedia.org/wiki/File:Xterm_256color_chart.svg).
-    It is also possible to use numbers as colors in environment variables that
-    customizes colors in the REPL.  For example, to get orange warning
-    messages, simply set `ENV["JULIA_WARN_COLOR"] = 208`.  Please note that not
-    all terminals support 256 colors.
+  * The function `print_with_color` can now take a color represented by an integer between 0 and 255 inclusive as its first argument ([#18473]).
+    For a number to color mapping please refer to [this chart](https://upload.wikimedia.org/wikipedia/en/1/15/Xterm_256color_chart.svg).
+    It is also possible to use numbers as colors in environment variables that customizes colors in the REPL.
+    For example, to get orange warning messages, simply set `ENV["JULIA_WARN_COLOR"] = 208`.
+    Please note that not all terminals support 256 colors.
 
-  * The function `print_with_color` no longer prints text in bold by default
-    ([#18628]).  Instead, the function now take a keyword argument `bold::Bool`
-    which determines whether to print in bold or not.  On some terminals,
-    printing a color in non bold results in slightly darker colors being
-    printed than when printing in bold.  Therefore, light versions of the
-    colors are now supported.  For the available colors see the help entry on
-    `print_with_color`.
+  * The function `print_with_color` no longer prints text in bold by default ([#18628]).
+    Instead, the function now take a keyword argument `bold::Bool` which determines whether to print in bold or not.
+    On some terminals, printing a color in non bold results in slightly darker colors being printed than when printing in bold.
+    Therefore, light versions of the colors are now supported.
+    For the available colors see the help entry on `print_with_color`.
 
-  * The default color for info messages has been changed from blue to cyan and
-    for warning messages from red to yellow.  This can be changed back to the
-    original colors by setting the environment variables `JULIA_INFO_COLOR` to
-    `"blue"` and `JULIA_WARN_COLOR` to `"red"`.  One way of doing this is by
-    adding for example `ENV["JULIA_INFO_COLOR"] = :blue` and
-    `ENV["JULIA_WARN_COLOR"] = :red` to the `.juliarc.jl` file.  For more
-    information regarding customizing colors in the REPL, see this [manual
-    section](
-    http://docs.julialang.org/en/latest/manual/interacting-with-julia/#customizing-colors).
+  * The default text style for REPL input and answers has been changed from bold to normal ([#11250]).
+    They can be changed back to bold by setting the environment variables `JULIA_INPUT_COLOR` and `JULIA_ANSWER_COLOR` to `"bold"`.
+    For example, one way of doing this is adding `ENV["JULIA_INPUT_COLOR"] = :bold` and `ENV["JULIA_ANSWER_COLOR"] = :bold` to the `.juliarc.jl` file.
+    See the [manual section on customizing colors](http://docs.julialang.org/en/latest/manual/interacting-with-julia#Customizing-Colors-1) for more information.
+
+  * The default color for info messages has been changed from blue to cyan
+    ([#18442]), and for warning messages from red to yellow ([#18453]).  This
+    can be changed back to the original colors by setting the environment
+    variables `JULIA_INFO_COLOR` to `"blue"` and `JULIA_WARN_COLOR` to `"red"`.
 
   * Iteration utilities that wrap iterators and return other iterators (`enumerate`, `zip`, `rest`,
     `countfrom`, `take`, `drop`, `cycle`, `repeated`, `product`, `flatten`, `partition`) have been
@@ -223,6 +252,13 @@ Compiler/Runtime improvements
 
 Deprecated or removed
 ---------------------
+
+  * Linear indexing is now only supported when there is exactly one
+    non-cartesian index provided. Allowing a trailing index at dimension `d` to
+    linearly access the higher dimensions from array `A` (beyond `size(A, d)`)
+    has been deprecated as a stricter constraint during bounds checking.
+    Instead, `reshape` the array such that its dimensionality matches the
+    number of indices ([#20079]).
 
   * `isdefined(a::Array, i::Int)` has been deprecated in favor of `isassigned` ([#18346]).
 
@@ -749,16 +785,19 @@ Language tooling improvements
 [#6190]: https://github.com/JuliaLang/julia/issues/6190
 [#6842]: https://github.com/JuliaLang/julia/issues/6842
 [#7258]: https://github.com/JuliaLang/julia/issues/7258
+[#7669]: https://github.com/JuliaLang/julia/issues/7669
 [#8036]: https://github.com/JuliaLang/julia/issues/8036
 [#8599]: https://github.com/JuliaLang/julia/issues/8599
 [#8814]: https://github.com/JuliaLang/julia/issues/8814
 [#8846]: https://github.com/JuliaLang/julia/issues/8846
+[#8974]: https://github.com/JuliaLang/julia/issues/8974
 [#9482]: https://github.com/JuliaLang/julia/issues/9482
 [#9503]: https://github.com/JuliaLang/julia/issues/9503
 [#9627]: https://github.com/JuliaLang/julia/issues/9627
 [#10548]: https://github.com/JuliaLang/julia/issues/10548
 [#11196]: https://github.com/JuliaLang/julia/issues/11196
 [#11242]: https://github.com/JuliaLang/julia/issues/11242
+[#11250]: https://github.com/JuliaLang/julia/issues/11250
 [#11688]: https://github.com/JuliaLang/julia/issues/11688
 [#12231]: https://github.com/JuliaLang/julia/issues/12231
 [#12563]: https://github.com/JuliaLang/julia/issues/12563
@@ -827,6 +866,7 @@ Language tooling improvements
 [#16098]: https://github.com/JuliaLang/julia/issues/16098
 [#16107]: https://github.com/JuliaLang/julia/issues/16107
 [#16154]: https://github.com/JuliaLang/julia/issues/16154
+[#16213]: https://github.com/JuliaLang/julia/issues/16213
 [#16219]: https://github.com/JuliaLang/julia/issues/16219
 [#16260]: https://github.com/JuliaLang/julia/issues/16260
 [#16285]: https://github.com/JuliaLang/julia/issues/16285
@@ -875,10 +915,14 @@ Language tooling improvements
 [#18330]: https://github.com/JuliaLang/julia/issues/18330
 [#18339]: https://github.com/JuliaLang/julia/issues/18339
 [#18346]: https://github.com/JuliaLang/julia/issues/18346
+[#18442]: https://github.com/JuliaLang/julia/issues/18442
+[#18453]: https://github.com/JuliaLang/julia/issues/18453
+[#18457]: https://github.com/JuliaLang/julia/issues/18457
 [#18473]: https://github.com/JuliaLang/julia/issues/18473
 [#18628]: https://github.com/JuliaLang/julia/issues/18628
 [#18644]: https://github.com/JuliaLang/julia/issues/18644
 [#18690]: https://github.com/JuliaLang/julia/issues/18690
+[#18777]: https://github.com/JuliaLang/julia/issues/18777
 [#18839]: https://github.com/JuliaLang/julia/issues/18839
 [#18931]: https://github.com/JuliaLang/julia/issues/18931
 [#18965]: https://github.com/JuliaLang/julia/issues/18965
@@ -887,10 +931,25 @@ Language tooling improvements
 [#19233]: https://github.com/JuliaLang/julia/issues/19233
 [#19288]: https://github.com/JuliaLang/julia/issues/19288
 [#19305]: https://github.com/JuliaLang/julia/issues/19305
+[#19331]: https://github.com/JuliaLang/julia/issues/19331
 [#19449]: https://github.com/JuliaLang/julia/issues/19449
+[#19464]: https://github.com/JuliaLang/julia/issues/19464
 [#19469]: https://github.com/JuliaLang/julia/issues/19469
 [#19543]: https://github.com/JuliaLang/julia/issues/19543
 [#19598]: https://github.com/JuliaLang/julia/issues/19598
 [#19635]: https://github.com/JuliaLang/julia/issues/19635
+[#19670]: https://github.com/JuliaLang/julia/issues/19670
+[#19677]: https://github.com/JuliaLang/julia/issues/19677
 [#19680]: https://github.com/JuliaLang/julia/issues/19680
+[#19692]: https://github.com/JuliaLang/julia/issues/19692
+[#19722]: https://github.com/JuliaLang/julia/issues/19722
+[#19741]: https://github.com/JuliaLang/julia/issues/19741
 [#19787]: https://github.com/JuliaLang/julia/issues/19787
+[#19800]: https://github.com/JuliaLang/julia/issues/19800
+[#19841]: https://github.com/JuliaLang/julia/issues/19841
+[#19903]: https://github.com/JuliaLang/julia/issues/19903
+[#19919]: https://github.com/JuliaLang/julia/issues/19919
+[#19944]: https://github.com/JuliaLang/julia/issues/19944
+[#19950]: https://github.com/JuliaLang/julia/issues/19950
+[#20079]: https://github.com/JuliaLang/julia/issues/20079
+[#20164]: https://github.com/JuliaLang/julia/issues/20164
