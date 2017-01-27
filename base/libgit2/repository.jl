@@ -73,15 +73,29 @@ function isattached(repo::GitRepo)
     ccall((:git_repository_head_detached, :libgit2), Cint, (Ptr{Void},), repo.ptr) != 1
 end
 
-"""
+@doc """
     GitObject(repo::GitRepo, hash::AbstractGitHash)
     GitObject(repo::GitRepo, spec::AbstractString)
 
-Return the specified git object from `repo` specified by `hash`/`spec`.
+Return the specified object (`GitCommit`, `GitBlob`, `GitTree` or `GitTag`) from `repo`
+specified by `hash`/`spec`.
 
 - `hash` is a full (`GitHash`) or partial (`GitShortHash`) hash.
 - `spec` is a textual specification: see https://git-scm.com/docs/git-rev-parse.html#_specifying_revisions for a full list.
-"""
+""" GitObject
+
+for T in (:GitCommit, :GitBlob, :GitTree, :GitTag)
+    @eval @doc $"""
+    $T(repo::GitRepo, hash::AbstractGitHash)
+    $T(repo::GitRepo, spec::AbstractString)
+
+Return a `$T` object from `repo` specified by `hash`/`spec`.
+
+- `hash` is a full (`GitHash`) or partial (`GitShortHash`) hash.
+- `spec` is a textual specification: see https://git-scm.com/docs/git-rev-parse.html#_specifying_revisions for a full list.
+""" $T
+end
+
 function (::Type{T}){T<:GitObject}(repo::GitRepo, spec::AbstractString)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_revparse_single, :libgit2), Cint,
@@ -178,7 +192,7 @@ end
     peel([T,] obj::GitObject)
 
 Recursively peel `obj` until an object of type `T` is obtained. If no `T` is provided,
-then it will be peeled until the type changes.
+then `obj` will be peeled until the type changes.
 
 - A `GitTag` will be peeled to the object it references.
 - A `GitCommit` will be peeled to a `GitTree`.
