@@ -196,10 +196,9 @@ end
     ts.anynonpass = false
     deleteat!(Base.Test.get_testset().results,1)
 end
-# Test @test_approx_eq
-# TODO
-@test isapprox(.1+.1+.1, .3)
-@test !isapprox(.1+.1+.1, .4)
+
+@test .1+.1+.1 ≈ .3
+@test .1+.1+.1 ≉ .4
 
 ts = @testset "@testset should return the testset" begin
     @test true
