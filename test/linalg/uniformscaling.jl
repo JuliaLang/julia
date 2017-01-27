@@ -27,8 +27,8 @@ end
     @test issymmetric(UniformScaling(complex(1.0,1.0)))
     @test ishermitian(I)
     @test !ishermitian(UniformScaling(complex(1.0,1.0)))
-    @test isapprox(UniformScaling(4.00000000000001), UniformScaling(4.0))
-    @test isapprox(UniformScaling(4.32), UniformScaling(4.3); rtol=0.1, atol=0.01)
+    @test UniformScaling(4.00000000000001) ≈ UniformScaling(4.0)
+    @test UniformScaling(4.32) ≈ UniformScaling(4.3) rtol=0.1 atol=0.01
 end
 
 @testset "* and / with number" begin

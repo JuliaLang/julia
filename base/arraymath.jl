@@ -11,7 +11,7 @@ See also [`conj`](@ref).
 """
 conj!{T<:Number}(A::AbstractArray{T}) = (@inbounds broadcast!(conj, A, A); A)
 
-for f in (:-, :~, :conj, :sign, :real, :imag)
+for f in (:-, :~, :conj, :real, :imag)
     @eval ($f)(A::AbstractArray) = broadcast($f, A)
 end
 

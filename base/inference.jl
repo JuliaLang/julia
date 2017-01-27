@@ -878,7 +878,11 @@ function apply_type_tfunc(headtypetype::ANY, args::ANY...)
             #end
             uncertain = true
             if istuple
-                push!(tparams, Any)
+                if i == largs
+                    push!(tparams, Vararg)
+                else
+                    push!(tparams, Any)
+                end
             else
                 # TODO: use rewrap_unionall to skip only the unknown parameters
                 #push!(tparams, headtype.parameters[i-1])
@@ -896,6 +900,9 @@ function apply_type_tfunc(headtypetype::ANY, args::ANY...)
         uncertain = true
     end
     !uncertain && return Const(appl)
+    if isvarargtype(headtype)
+        return Type
+    end
     if type_too_complex(appl,0)
         return Type{_} where _<:headtype
     end
@@ -1817,8 +1824,17 @@ function ⊑(a::ANY, b::ANY)
     end
 end
 
-widenconst(c::Const) = isa(c.val, Type) ? Type{c.val} : typeof(c.val)
 widenconst(c::Conditional) = Bool
+function widenconst(c::Const)
+    if isa(c.val, Type)
+        if isvarargtype(c.val)
+            return Type
+        end
+        return Type{c.val}
+    else
+        return typeof(c.val)
+    end
+end
 widenconst(t::ANY) = t
 
 issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)

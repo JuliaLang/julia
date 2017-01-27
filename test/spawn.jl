@@ -429,16 +429,18 @@ if is_unix()
                 Base.link_pipe(p)
                 push!(ps, p)
             end
-            @test false
-        catch ex
-            for p in ps
-                close(p)
-            end
             if isnull(ulimit_n)
                 warn("`ulimit -n` is set to unlimited, fd exhaustion cannot be tested")
-                @test_broken (ex::Base.UVError).code == Base.UV_EMFILE
+                @test_broken false
             else
-                @test (ex::Base.UVError).code == Base.UV_EMFILE
+                @test false
+            end
+        catch ex
+            isa(ex, Base.UVError) || rethrow(ex)
+            @test ex.code == Base.UV_EMFILE
+        finally
+            for p in ps
+                close(p)
             end
         end
     end

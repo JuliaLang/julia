@@ -120,10 +120,10 @@ julia> length(A)
 60
 ```
 """
-length(t::AbstractArray) = prod(size(t))
-_length(A::AbstractArray) = prod(map(unsafe_length, indices(A))) # circumvent missing size
-_length(A) = length(A)
-endof(a::AbstractArray) = length(a)
+length(t::AbstractArray) = (@_inline_meta; prod(size(t)))
+_length(A::AbstractArray) = (@_inline_meta; prod(map(unsafe_length, indices(A)))) # circumvent missing size
+_length(A) = (@_inline_meta; length(A))
+endof(a::AbstractArray) = (@_inline_meta; length(a))
 first(a::AbstractArray) = a[first(eachindex(a))]
 
 """
@@ -306,6 +306,11 @@ function checkbounds(::Type{Bool}, A::AbstractArray, I...)
     @_inline_meta
     checkbounds_indices(Bool, indices(A), I)
 end
+# Linear indexing is explicitly allowed when there is only one (non-cartesian) index
+function checkbounds(::Type{Bool}, A::AbstractArray, i)
+    @_inline_meta
+    checkindex(Bool, linearindices(A), i)
+end
 # As a special extension, allow using logical arrays that match the source array exactly
 function checkbounds{_,N}(::Type{Bool}, A::AbstractArray{_,N}, I::AbstractArray{Bool,N})
     @_inline_meta
@@ -358,7 +363,21 @@ function checkbounds_indices(::Type{Bool}, IA::Tuple{Any}, I::Tuple{Any})
 end
 function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple{Any})
     @_inline_meta
-    checkindex(Bool, OneTo(trailingsize(IA)), I[1])  # linear indexing
+    checkbounds_linear_indices(Bool, IA, I[1])
+end
+function checkbounds_linear_indices(::Type{Bool}, IA::Tuple, i)
+    @_inline_meta
+    if checkindex(Bool, IA[1], i)
+        return true
+    elseif checkindex(Bool, OneTo(trailingsize(IA)), i)  # partial linear indexing
+        partial_linear_indexing_warning_lookup(length(IA))
+        return true # TODO: Return false after the above function is removed in deprecated.jl
+    end
+    return false
+end
+function checkbounds_linear_indices(::Type{Bool}, IA::Tuple, i::Union{Slice,Colon})
+    partial_linear_indexing_warning_lookup(length(IA))
+    true
 end
 checkbounds_indices(::Type{Bool}, ::Tuple, ::Tuple{}) = true
 
@@ -762,11 +781,9 @@ full(x::AbstractArray) = x
 
 map{T<:Real}(::Type{T}, r::StepRange) = T(r.start):T(r.step):T(last(r))
 map{T<:Real}(::Type{T}, r::UnitRange) = T(r.start):T(last(r))
-map{T<:AbstractFloat}(::Type{T}, r::FloatRange) = FloatRange(T(r.start), T(r.step), r.len, T(r.divisor))
+map{T<:AbstractFloat}(::Type{T}, r::StepRangeLen) = convert(StepRangeLen{T}, r)
 function map{T<:AbstractFloat}(::Type{T}, r::LinSpace)
-    new_len = T(r.len)
-    new_len == r.len || error("$r: too long for $T")
-    LinSpace(T(r.start), T(r.stop), new_len, T(r.divisor))
+    LinSpace(T(r.start), T(r.stop), length(r))
 end
 
 ## unsafe/pointer conversions ##

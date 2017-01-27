@@ -34,6 +34,7 @@ Base.:(>>>)
 Base.colon
 Base.range
 Base.OneTo
+Base.StepRangeLen
 Base.:(==)
 Base.:(!=)
 Base.:(!==)

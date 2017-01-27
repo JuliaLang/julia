@@ -59,40 +59,40 @@ end
 function depwarn(msg, funcsym)
     opts = JLOptions()
     if opts.depwarn > 0
-        ln = Int(unsafe_load(cglobal(:jl_lineno, Cint)))
-        fn = unsafe_string(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
         bt = backtrace()
-        caller = firstcaller(bt, funcsym)
-        if opts.depwarn == 1 # raise a warning
-            warn(msg, once=(caller != C_NULL), key=caller, bt=bt,
-                 filename=fn, lineno=ln)
-        elseif opts.depwarn == 2 # raise an error
-            throw(ErrorException(msg))
-        end
+        _depwarn(msg, opts, bt, firstcaller(bt, funcsym))
     end
     nothing
 end
+function _depwarn(msg, opts, bt, caller)
+    ln = Int(unsafe_load(cglobal(:jl_lineno, Cint)))
+    fn = unsafe_string(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
+    if opts.depwarn == 1 # raise a warning
+        warn(msg, once=(caller != StackTraces.UNKNOWN), key=(caller,fn,ln), bt=bt,
+             filename=fn, lineno=ln)
+    elseif opts.depwarn == 2 # raise an error
+        throw(ErrorException(msg))
+    end
+end
 
-function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
+firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol) = firstcaller(bt, (funcsym,))
+function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
     # Identify the calling line
-    i = 1
-    while i <= length(bt)
-        lkups = StackTraces.lookup(bt[i])
-        i += 1
+    found = false
+    lkup = StackTraces.UNKNOWN
+    for frame in bt
+        lkups = StackTraces.lookup(frame)
         for lkup in lkups
             if lkup === StackTraces.UNKNOWN
                 continue
             end
-            if lkup.func == funcsym
-                @goto found
-            end
+            found && @goto found
+            found = lkup.func in funcsyms
         end
     end
+    return StackTraces.UNKNOWN
     @label found
-    if i <= length(bt)
-        return bt[i]
-    end
-    return C_NULL
+    return lkup
 end
 
 deprecate(s::Symbol) = deprecate(current_module(), s)
@@ -1423,6 +1423,9 @@ end
 # Deprecate manually vectorized abs2 methods in favor of compact broadcast syntax
 @deprecate abs2(x::AbstractSparseVector) abs2.(x)
 
+# Deprecate manually vectorized sign methods in favor of compact broadcast syntax
+@deprecate sign(A::AbstractArray) sign.(A)
+
 # Deprecate manually vectorized trigonometric and hyperbolic functions in favor of compact broadcast syntax
 for f in (:sec, :sech, :secd, :asec, :asech,
             :csc, :csch, :cscd, :acsc, :acsch,
@@ -1471,7 +1474,7 @@ end
 # Deprecate manually vectorized `big` methods in favor of compact broadcast syntax
 @deprecate big(r::UnitRange) big.(r)
 @deprecate big(r::StepRange) big.(r)
-@deprecate big(r::FloatRange) big.(r)
+@deprecate big(r::StepRangeLen) big.(r)
 @deprecate big(r::LinSpace) big.(r)
 @deprecate big{T<:Integer,N}(x::AbstractArray{T,N}) big.(x)
 @deprecate big{T<:AbstractFloat,N}(x::AbstractArray{T,N}) big.(x)
@@ -1739,6 +1742,46 @@ eval(Base.Test, quote
     export @test_approx_eq
 end)
 
+# Deprecate partial linear indexing
+function partial_linear_indexing_warning_lookup(nidxs_remaining)
+    # We need to figure out how many indices were passed for a sensible deprecation warning
+    opts = JLOptions()
+    if opts.depwarn > 0
+        # Find the caller -- this is very expensive so we don't want to do it twice
+        bt = backtrace()
+        found = false
+        call = StackTraces.UNKNOWN
+        caller = StackTraces.UNKNOWN
+        for frame in bt
+            lkups = StackTraces.lookup(frame)
+            for caller in lkups
+                if caller === StackTraces.UNKNOWN
+                    continue
+                end
+                found && @goto found
+                if caller.func in (:getindex, :setindex!, :view)
+                    found = true
+                    call = caller
+                end
+            end
+        end
+        @label found
+        fn = "`reshape`"
+        if call != StackTraces.UNKNOWN && !isnull(call.linfo)
+            # Try to grab the number of dimensions in the parent array
+            mi = get(call.linfo)
+            args = mi.specTypes.parameters
+            if length(args) >= 2 && args[2] <: AbstractArray
+                fn = "`reshape(A, Val{$(ndims(args[2]) - nidxs_remaining + 1)})`"
+            end
+        end
+        _depwarn("Partial linear indexing is deprecated. Use $fn to make the dimensionality of the array match the number of indices.", opts, bt, caller)
+    end
+end
+function partial_linear_indexing_warning(n)
+    depwarn("Partial linear indexing is deprecated. Use `reshape(A, Val{$n})` to make the dimensionality of the array match the number of indices.", (:getindex, :setindex!, :view))
+end
+
 # Deprecate Array(T, dims...) in favor of proper type constructors
 @deprecate Array{T,N}(::Type{T}, d::NTuple{N,Int})               Array{T,N}(d)
 @deprecate Array{T}(::Type{T}, d::Int...)                        Array{T,length(d)}(d...)
@@ -1766,7 +1809,7 @@ end
 # Not exported
 eval(LibGit2, quote
     function owner(x)
-        depwarn("owner(x) is deprecated, use repository(x) instead.", :owner)
+        Base.depwarn("owner(x) is deprecated, use repository(x) instead.", :owner)
         repository(x)
     end
 end)
@@ -1785,5 +1828,25 @@ function colon{T<:Dates.Period}(start::T, stop::T)
     depwarn("$start:$stop is deprecated, use $start:$T(1):$stop instead.", :colon)
     colon(start, T(1), stop)
 end
+
+# when this deprecation is deleted, remove all calls to it, and all
+# negate=nothing keyword arguments, from base/dates/adjusters.jl
+eval(Dates, quote
+    function deprecate_negate(f, func, sig, negate)
+        if negate === nothing
+            return func
+        else
+            msg = "$f($sig; negate=$negate) is deprecated, use $f("
+            negate && (msg *= "!")
+            msg *= "$sig) instead."
+            Base.depwarn(msg, f)
+            return negate ? !func : func
+        end
+    end
+end)
+
+# FloatRange replaced by StepRangeLen
+
+@deprecate FloatRange{T}(start::T, step, len, den) Base.floatrange(T, start, step, len, den)
 
 # End deprecations scheduled for 0.6
