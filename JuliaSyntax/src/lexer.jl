@@ -1,6 +1,7 @@
 module Lexers
 
 include("utilities.jl")
+global const charstore = IOBuffer()
 
 using Compat
 import Compat.String
@@ -274,7 +275,7 @@ end
 Returns all characters since the start of the current `Token` as a `String`.
 """
 function extract_tokenstring(l::Lexer)
-    cs = IOBuffer()
+    global charstore
     curr_pos = position(l)
     seek2startpos!(l)
 
@@ -285,9 +286,9 @@ function extract_tokenstring(l::Lexer)
             l.current_row += 1
             l.current_col = 1
          end
-        write(cs, c)
+        write(charstore, c)
     end
-    str = String(take!(cs))
+    str = String(take!(charstore))
     return str
 end
 
