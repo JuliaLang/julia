@@ -241,8 +241,7 @@ that function calls should have during a stack trace at the terminal.
 If set, these environment variables take strings that optionally start with the
 character `'r'`, followed by a string interpolation of a colon-separated list
 of three signed 64-bit integers (`int64_t`). This triple of integers `a:b:c`
-represents the arithmetic sequence `a`, `a + b`, `a
-+ 2*b`, ... `c`.
+represents the arithmetic sequence `a`, `a + b`, `a + 2*b`, ... `c`.
 
 *   If it's the `n`th time that `jl_gc_pool_alloc()` has been called, and `n`
     belongs to the arithmetic sequence represented by `$JULIA_GC_ALLOC_POOL`,
