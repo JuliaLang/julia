@@ -29,7 +29,8 @@ type SharedArray{T,N} <: DenseArray{T,N}
 end
 
 """
-    SharedArray{T[,N]}(dims::NTuple; init=false, pids=Int[])
+    SharedArray{T}(dims::NTuple; init=false, pids=Int[])
+    SharedArray{T,N}(...)
 
 Construct a `SharedArray` of a bitstype `T` and size `dims` across the
 processes specified by `pids` - all of which have to be on the same
@@ -44,7 +45,8 @@ computation with the master process acting as a driver.
 If an `init` function of the type `initfn(S::SharedArray)` is specified, it is called on all
 the participating workers.
 
-    SharedArray{T[,N]}(filename::AbstractString, dims::NTuple, [offset=0]; mode=nothing, init=false, pids=Int[])
+    SharedArray{T}(filename::AbstractString, dims::NTuple, [offset=0]; mode=nothing, init=false, pids=Int[])
+    SharedArray{T,N}(...)
 
 Construct a `SharedArray` backed by the file `filename`, with element
 type `T` (must be a `bitstype`) and size `dims`, across the processes
