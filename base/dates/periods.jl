@@ -374,9 +374,7 @@ Base.isequal(x::CompoundPeriod, y::CompoundPeriod) = x.periods == y.periods
 
 # Capture TimeType+-Period methods
 (+)(a::TimeType, b::Period, c::Period) = (+)(a, b + c)
-(-)(a::TimeType, b::Period, c::Period) = (-)(a, b - c)
 (+)(a::TimeType, b::Period, c::Period, d::Period...) = (+)((+)(a, b + c), d...)
-(-)(a::TimeType, b::Period, c::Period, d::Period...) = (-)((-)(a, b - c), d...)
 
 function (+)(x::TimeType, y::CompoundPeriod)
     for p in y.periods
