@@ -49,6 +49,6 @@ function Base.show(io::IO, blob::GitBlob)
             print(io, conts[i],"\n")
         end
     else
-        print(io, "GitBlob:\nBlob id: ", GitHash(blob), "\nContents are binary.")
+        print(io, "GitBlob:\nBlob id: ", GitHash(blob), "\nContents are binary.\n")
     end
 end
