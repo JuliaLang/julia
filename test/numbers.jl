@@ -155,8 +155,7 @@ let eps = 1//BigInt(2)^30, one_eps = 1+eps,
     @test eps64 == Float64(eps)
     @test one_eps64 == Float64(one_eps)
     @test one_eps64 * one_eps64 - 1 != Float64(one_eps * one_eps - 1)
-    @test isapprox(muladd(one_eps64, one_eps64, -1),
-                   Float64(one_eps * one_eps - 1))
+    @test muladd(one_eps64, one_eps64, -1) ≈ Float64(one_eps * one_eps - 1)
 end
 
 let eps = 1//BigInt(2)^15, one_eps = 1+eps,
@@ -164,8 +163,7 @@ let eps = 1//BigInt(2)^15, one_eps = 1+eps,
     @test eps32 == Float32(eps)
     @test one_eps32 == Float32(one_eps)
     @test one_eps32 * one_eps32 - 1 != Float32(one_eps * one_eps - 1)
-    @test isapprox(muladd(one_eps32, one_eps32, -1),
-                   Float32(one_eps * one_eps - 1))
+    @test muladd(one_eps32, one_eps32, -1) ≈ Float32(one_eps * one_eps - 1)
 end
 
 let eps = 1//BigInt(2)^7, one_eps = 1+eps,
@@ -173,8 +171,7 @@ let eps = 1//BigInt(2)^7, one_eps = 1+eps,
     @test eps16 == Float16(Float32(eps))
     @test one_eps16 == Float16(Float32(one_eps))
     @test one_eps16 * one_eps16 - 1 != Float16(Float32(one_eps * one_eps - 1))
-    @test isapprox(muladd(one_eps16, one_eps16, -1),
-                   Float16(Float32(one_eps * one_eps - 1)))
+    @test muladd(one_eps16, one_eps16, -1) ≈ Float16(Float32(one_eps * one_eps - 1))
 end
 
 @test muladd(1,2,3) == 1*2+3
@@ -1678,10 +1675,10 @@ end
 @test isnan(eps(-Inf))
 
 @test .1+.1+.1 != .3
-@test isapprox(.1+.1+.1, .3)
-@test !isapprox(.1+.1+.1-.3, 0)
-@test isapprox(.1+.1+.1-.3, 0, atol=eps(.3))
-@test isapprox(1.1,1.1f0)
+@test .1+.1+.1 ≈ .3
+@test .1+.1+.1-.3 ≉ 0
+@test .1+.1+.1-.3 ≈ 0 atol=eps(.3)
+@test 1.1 ≈ 1.1f0
 
 @test div(1e50,1) == 1e50
 @test fld(1e50,1) == 1e50
