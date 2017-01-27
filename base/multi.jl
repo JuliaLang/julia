@@ -1015,7 +1015,7 @@ remote exception and a serializable form of the call stack when the exception wa
 RemoteException(captured) = RemoteException(myid(), captured)
 function showerror(io::IO, re::RemoteException)
     (re.pid != myid()) && print(io, "On worker ", re.pid, ":\n")
-    showerror(io, re.captured)
+    showerror(io, get_root_exception(re.captured))
 end
 
 # Specialized serialize-deserialize implementations for CapturedException to partially
@@ -1055,6 +1055,22 @@ function deserialize(s::AbstractSerializer, t::Type{T}) where T <: CapturedExcep
     end
 
     return CapturedException(capex, bt)
+end
+
+isa_exception_container(ex) = (isa(ex, RemoteException) ||
+                               isa(ex, CapturedException) ||
+                               isa(ex, CompositeException))
+
+function get_root_exception(ex)
+    if isa(ex, RemoteException)
+        return get_root_exception(ex.captured)
+    elseif isa(ex, CapturedException) && isa_exception_container(ex.ex)
+        return get_root_exception(ex.ex)
+    elseif isa(ex, CompositeException) && length(ex.exceptions) > 0 && isa_exception_container(ex.exceptions[1])
+        return get_root_exception(ex.exceptions[1])
+    else
+        return ex
+    end
 end
 
 function run_work_thunk(thunk, print_error)
@@ -1427,7 +1443,9 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
 
                 # remotecalls only rethrow RemoteExceptions. Any other exception is treated as
                 # data to be returned. Wrap this exception in a RemoteException.
-                remote_err = RemoteException(myid(), CapturedException(e, catch_backtrace()))
+
+                # Capture the remote pid that caused a deserialization error.
+                remote_err = RemoteException(wpid, CapturedException(e, catch_backtrace()))
                 # println("Deserialization error. ", remote_err)
                 if !null_id(header.response_oid)
                     ref = lookup_ref(header.response_oid)
