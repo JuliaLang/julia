@@ -587,7 +587,11 @@
               (t 'where))
      (if (eq? t 'where)
          (begin (take-token s)
-                (loop (list 'where ex (parse-comparison s)) (peek-token s)))
+                (let ((var (parse-comparison s)))
+                  (loop (if (and (pair? var) (eq? (car var) 'tuple))
+                            (list* 'where ex (cdr var))  ;; form `x where (T,S)`
+                            (list 'where ex var))
+                        (peek-token s))))
          ex))))
 
 (define (parse-where s)
@@ -605,13 +609,10 @@
   `(line ,(input-port-line (ts:port s)) ,current-filename))
 
 (define (eventually-call ex)
-  (if (pair? ex)
-    (if (eq? (car ex) 'call)
-      #t
-      (if (eq? (car ex) 'where)
-        (eventually-call (cadr ex))
-        #f))
-    #f))
+  (and (pair? ex)
+       (or (eq? (car ex) 'call)
+           (and (eq? (car ex) 'where)
+                (eventually-call (cadr ex))))))
 
 ;; insert line/file for short-form function defs, otherwise leave alone
 (define (short-form-function-loc ex lno)
