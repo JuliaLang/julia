@@ -46,7 +46,7 @@ New language features
 
   * Keyword arguments can be required: if a default value is omitted, then an
     exception is thrown if the caller does not assign the keyword a value ([#25830]).
-    
+
   * Identifiers can now start with numeric symbols in category
     [No: Number, other](http://www.fileformat.info/info/unicode/category/No/list.htm),
     allowing you to have variables with names like `⅓x` or `¹x₂` ([#20278]).
