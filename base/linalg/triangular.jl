@@ -1880,40 +1880,40 @@ function sqrtm(A::UpperTriangular)
     end
     sqrtm(A,Val{realmatrix})
 end
+# solve the sylvester equation a*x + x*b + c for x when a,b,x are commutative numbers. PR#20214
+sylvester(a::Union{Real,Complex},b::Union{Real,Complex},c::Union{Real,Complex}) = -c / (a + b)
 function sqrtm{T,realmatrix}(A::UpperTriangular{T},::Type{Val{realmatrix}})
-    n = checksquare(A)
+    B = A.data
+    n = checksquare(B)
     t = realmatrix ? typeof(sqrt(zero(T))) : typeof(sqrt(complex(zero(T))))
     R = zeros(t, n, n)
     tt = typeof(zero(t)*zero(t))
-    @inbounds begin
-        for j = 1:n
-            R[j,j] = realmatrix ? sqrt(A[j,j]) : sqrt(complex(A[j,j]))
-            for i = j-1:-1:1
-                r::tt = A[i,j]
-                @simd for k = i+1:j-1
-                    r -= R[i,k]*R[k,j]
-                end
-                r==0 || (R[i,j] = r / (R[i,i] + R[j,j]))
+    @inbounds for j = 1:n
+        R[j,j] = realmatrix ? sqrt(B[j,j]) : sqrt(complex(B[j,j]))
+        for i = j-1:-1:1
+            r::tt = B[i,j]
+            @simd for k = i+1:j-1
+                r -= R[i,k]*R[k,j]
             end
+            r==0 || (R[i,j] = sylvester(R[i,i],R[j,j],-r))
         end
     end
     return UpperTriangular(R)
 end
 function sqrtm{T}(A::UnitUpperTriangular{T})
-    n = checksquare(A)
+    B = A.data
+    n = checksquare(B)
     t = typeof(sqrt(zero(T)))
     R = eye(t, n, n)
     tt = typeof(zero(t)*zero(t))
-    half = 1/(2*R[1,1])
-    @inbounds begin
-        for j = 1:n
-            for i = j-1:-1:1
-                r::tt = A[i,j]
-                @simd for k = i+1:j-1
-                    r -= R[i,k]*R[k,j]
-                end
-                r==0 || (R[i,j] = half*r)
+    half = inv(R[1,1]+R[1,1]) # for general, algebraic cases. PR#20214
+    @inbounds for j = 1:n
+        for i = j-1:-1:1
+            r::tt = B[i,j]
+            @simd for k = i+1:j-1
+                r -= R[i,k]*R[k,j]
             end
+            r==0 || (R[i,j] = half*r)
         end
     end
     return UnitUpperTriangular(R)
