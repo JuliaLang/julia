@@ -386,7 +386,7 @@ function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxite
 
     if ritzvec
         # calculating singular vectors
-        left_sv  = sqrt(2) * ex[2][ 1:size(X,1),     ind ] .* sign(ex[1][ind]')
+        left_sv  = sqrt(2) * ex[2][ 1:size(X,1),     ind ] .* sign.(ex[1][ind]')
         right_sv = sqrt(2) * ex[2][ size(X,1)+1:end, ind ]
         return (SVD(left_sv, sval, right_sv'), ex[3], ex[4], ex[5], ex[6])
     else
