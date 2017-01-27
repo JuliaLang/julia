@@ -70,7 +70,7 @@ $JULIA_HOME/../local/share/julia/site/v$(Base.VERSION.major).$(Base.VERSION.mino
 $JULIA_HOME/../share/julia/site/v$(Base.VERSION.major).$(Base.VERSION.minor)
 ```
 
-so that, e. g., version 0.5 of Julia on a Linux system with a Julia executable
+so that, e.g., version 0.5 of Julia on a Linux system with a Julia executable
 at `/bin/julia` will have a default `Base.LOAD_PATH` of
 
 ```
@@ -140,10 +140,6 @@ The absolute path of the shell with which Julia should execute external
 commands (via `Base.repl_cmd()`). Defaults to the environment variable
 `$SHELL`, and falls back to `/bin/sh` if `$SHELL` is unset.
 
-!!! note
-
-    the `fish` shell is unsupported.
-
 ### `JULIA_EDITOR`
 
 The editor returned by `Base.editor()` and used in, e.g., [`Base.edit`](@ref).
@@ -174,10 +170,10 @@ a master process to establish a connection before dying.
 
 ### `JULIA_NUM_THREADS`
 
-An unsigned 64-bit integer that sets the maximum number of threads available to
-Julia. If `$JULIA_NUM_THREADS` exceeds the number of available physical CPU
-cores, then the number of threads is set to the number of cores. If
-`$JULIA_NUM_THREADS` is not positive or is not set, or if the number of CPU
+An unsigned 64-bit integer (`uint64_t`) that sets the maximum number of threads
+available to Julia. If `$JULIA_NUM_THREADS` exceeds the number of available
+physical CPU cores, then the number of threads is set to the number of cores.
+If `$JULIA_NUM_THREADS` is not positive or is not set, or if the number of CPU
 cores cannot be determined through system calls, then the number of threads is
 set to `1`.
 
@@ -186,8 +182,8 @@ set to `1`.
 If set to a string that starts with the case-insensitive substring
 `"infinite"`, then spinning threads never sleep. Otherwise,
 `$JULIA_THREAD_SLEEP_THRESHOLD` is interpreted as an unsigned 64-bit integer
-and gives, in nanoseconds, the amount of time after which spinning threads
-should sleep.
+(`uint64_t`) and gives, in nanoseconds, the amount of time after which spinning
+threads should sleep.
 
 ### `JULIA_EXCLUSIVE`
 
@@ -223,18 +219,10 @@ should have at the terminal.
 The formatting `Base.input_color()` (default: normal, `"\033[0m"`) that input
 should have at the terminal.
 
-!!! note
-
-    input is hardcoded to be bold (`"\033[1m"`).
-
 ### `JULIA_ANSWER_COLOR`
 
 The formatting `Base.answer_color()` (default: normal, `"\033[0m"`) that output
 should have at the terminal.
-
-!!! note
-
-    output is hardcoded to be bold (`"\033[1m"`).
 
 ### `JULIA_STACKFRAME_LINEINFO_COLOR`
 
@@ -251,21 +239,21 @@ that function calls should have during a stack trace at the terminal.
 ### `JULIA_GC_ALLOC_POOL`, `JULIA_GC_ALLOC_OTHER`, `JULIA_GC_ALLOC_PRINT`
 
 If set, these environment variables take strings that optionally start with the
-character `'r'`, followed by a string interpolation of the form `"%d:%d:%d"`
-(that is, three signed 64-bit integers separated by colons). This triple of
-integers `a:b:c` represents the arithmetic sequence `a`, `a + b`, `a + 2*b`,
-... `c`.
+character `'r'`, followed by a string interpolation of a colon-separated list
+of three signed 64-bit integers (`int64_t`). This triple of integers `a:b:c`
+represents the arithmetic sequence `a`, `a + b`, `a
++ 2*b`, ... `c`.
 
 *   If it's the `n`th time that `jl_gc_pool_alloc()` has been called, and `n`
-    belongs to the arithmetic sequence `$JULIA_GC_ALLOC_POOL`, then garbage
-    collection is forced.
+    belongs to the arithmetic sequence represented by `$JULIA_GC_ALLOC_POOL`,
+    then garbage collection is forced.
 *   If it's the `n`th time that `maybe_collect()` has been called, and `n`
-    belongs to the arithmetic sequence `$JULIA_GC_ALLOC_OTHER`, then garbage
-    collection is forced.
+    belongs to the arithmetic sequence represented by `$JULIA_GC_ALLOC_OTHER`,
+    then garbage collection is forced.
 *   If it's the `n`th time that `jl_gc_collect()` has been called, and `n`
-    belongs to the arithmetic sequence `$JULIA_GC_ALLOC_PRINT`, then counts for
-    for the number of calls to `jl_gc_pool_alloc()` and `maybe_collect()` are
-    printed.
+    belongs to the arithmetic sequence represented by `$JULIA_GC_ALLOC_PRINT`,
+    then counts for for the number of calls to `jl_gc_pool_alloc()` and
+    `maybe_collect()` are printed.
 
 If the character `'r'` appears as above, then the interval between garbage
 collection events is randomized.
