@@ -741,10 +741,10 @@ end
 
 # sign, conj, ~ (Issue #16067)
 let A = -1:1, B = -1.0:1.0
-    @test sign(A) == [-1,0,1]
-    @test sign(B) == [-1,0,1]
-    @test typeof(sign(A)) === Vector{Int}
-    @test typeof(sign(B)) === Vector{Float64}
+    @test sign.(A) == [-1,0,1]
+    @test sign.(B) == [-1,0,1]
+    @test typeof(sign.(A)) === Vector{Int}
+    @test typeof(sign.(B)) === Vector{Float64}
 
     @test conj(A) === A
     @test conj(B) === B

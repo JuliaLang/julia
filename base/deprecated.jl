@@ -1423,6 +1423,9 @@ end
 # Deprecate manually vectorized abs2 methods in favor of compact broadcast syntax
 @deprecate abs2(x::AbstractSparseVector) abs2.(x)
 
+# Deprecate manually vectorized sign methods in favor of compact broadcast syntax
+@deprecate sign(A::AbstractArray) sign.(A)
+
 # Deprecate manually vectorized trigonometric and hyperbolic functions in favor of compact broadcast syntax
 for f in (:sec, :sech, :secd, :asec, :asech,
             :csc, :csch, :cscd, :acsc, :acsch,

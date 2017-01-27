@@ -1166,7 +1166,7 @@ function (-)(B::BitArray)
     end
     return A
 end
-sign(B::BitArray) = copy(B)
+broadcast(::typeof(sign), B::BitArray) = copy(B)
 
 function (~)(B::BitArray)
     C = similar(B)
