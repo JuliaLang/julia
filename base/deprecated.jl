@@ -1423,6 +1423,9 @@ end
 # Deprecate manually vectorized abs2 methods in favor of compact broadcast syntax
 @deprecate abs2(x::AbstractSparseVector) abs2.(x)
 
+# Deprecate manually vectorized sign methods in favor of compact broadcast syntax
+@deprecate sign(A::AbstractArray) sign.(A)
+
 # Deprecate manually vectorized trigonometric and hyperbolic functions in favor of compact broadcast syntax
 for f in (:sec, :sech, :secd, :asec, :asech,
             :csc, :csch, :cscd, :acsc, :acsch,
@@ -1471,7 +1474,7 @@ end
 # Deprecate manually vectorized `big` methods in favor of compact broadcast syntax
 @deprecate big(r::UnitRange) big.(r)
 @deprecate big(r::StepRange) big.(r)
-@deprecate big(r::FloatRange) big.(r)
+@deprecate big(r::StepRangeLen) big.(r)
 @deprecate big(r::LinSpace) big.(r)
 @deprecate big{T<:Integer,N}(x::AbstractArray{T,N}) big.(x)
 @deprecate big{T<:AbstractFloat,N}(x::AbstractArray{T,N}) big.(x)
@@ -1841,5 +1844,9 @@ eval(Dates, quote
         end
     end
 end)
+
+# FloatRange replaced by StepRangeLen
+
+@deprecate FloatRange{T}(start::T, step, len, den) Base.floatrange(T, start, step, len, den)
 
 # End deprecations scheduled for 0.6
