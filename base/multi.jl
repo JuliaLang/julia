@@ -1018,6 +1018,45 @@ function showerror(io::IO, re::RemoteException)
     showerror(io, re.captured)
 end
 
+# Specialized serialize-deserialize implementations for CapturedException to partially
+# recover from any deserialization errors in `CapturedException.ex`
+
+function serialize(s::AbstractSerializer, ex::CapturedException)
+    serialize_type(s, typeof(ex))
+    serialize(s, string(typeof(ex.ex))) # String type should not result in a deser error
+    serialize(s, ex.processed_bt)       # Currently should not result in a deser error
+    serialize(s, ex.ex)                 # can result in a UndefVarError on the remote node
+                                        # if a type used in ex.ex is undefined on the remote node.
+end
+
+original_ex(ex_str) = ErrorException(string("Error deserializing a CapturedException.",
+                                                " Original exception of type : ", ex_str))
+
+function deserialize(s::AbstractSerializer, t::Type{T}) where T <: CapturedException
+    ex_str = deserialize(s)
+    local bt
+    local capex
+    try
+        bt = deserialize(s)
+    catch e
+        throw(CompositeException([
+            original_ex(ex_str),
+            CapturedException(e, catch_backtrace())
+        ]))
+    end
+
+    try
+        capex = deserialize(s)
+    catch e
+        throw(CompositeException([
+            CapturedException(original_ex(ex_str), bt),
+            CapturedException(e, catch_backtrace())
+        ]))
+    end
+
+    return CapturedException(capex, bt)
+end
+
 function run_work_thunk(thunk, print_error)
     local result
     try
@@ -1385,6 +1424,9 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
                         boundary_idx = 1
                     end
                 end
+
+                # remotecalls only rethrow RemoteExceptions. Any other exception is treated as
+                # data to be returned. Wrap this exception in a RemoteException.
                 remote_err = RemoteException(myid(), CapturedException(e, catch_backtrace()))
                 # println("Deserialization error. ", remote_err)
                 if !null_id(header.response_oid)
