@@ -274,8 +274,7 @@ end
 Returns all characters since the start of the current `Token` as a `String`.
 """
 function extract_tokenstring(l::Lexer)
-    cs = Char[]
-    sizehint!(cs, position(l) - startpos(l))
+    cs = IOBuffer()
     curr_pos = position(l)
     seek2startpos!(l)
 
@@ -286,9 +285,9 @@ function extract_tokenstring(l::Lexer)
             l.current_row += 1
             l.current_col = 1
          end
-        push!(cs, c)
+        write(cs, c)
     end
-    str = String(cs)
+    str = String(take!(cs))
     return str
 end
 
