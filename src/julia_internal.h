@@ -39,7 +39,7 @@ extern "C" {
 
 // useful constants
 extern jl_methtable_t *jl_type_type_mt;
-extern size_t jl_world_counter;
+JL_DLLEXPORT extern size_t jl_world_counter;
 
 typedef void (*tracer_cb)(jl_value_t *tracee);
 void jl_call_tracer(tracer_cb callback, jl_value_t *tracee);
