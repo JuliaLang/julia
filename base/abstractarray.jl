@@ -707,7 +707,7 @@ Example for a sparse 2-d array:
 
 ```jldoctest
 julia> A = sparse([1, 1, 2], [1, 3, 1], [1, 2, -5])
-2×3 sparse matrix with 3 Int64 nonzero entries:
+2×3 sparse matrix with 3 Int64 stored entries:
   [1, 1]  =  1
   [2, 1]  =  -5
   [1, 3]  =  2

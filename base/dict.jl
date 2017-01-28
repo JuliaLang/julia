@@ -517,10 +517,10 @@ Dict{Char,Int64} with 2 entries:
   'a' => 2
 
 julia> getkey(a,'a',1)
-'a'
+'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 
 julia> getkey(a,'d','a')
-'a'
+'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 ```
 """
 function getkey{K,V}(h::Dict{K,V}, key, default)
