@@ -304,7 +304,7 @@ julia> a = 1;
 julia> ex = Expr(:call, :+, a, :b)
 :(1 + b)
 
-julia> a = 0;  b = 2;
+julia> a = 0; b = 2;
 
 julia> eval(current_module(), ex)
 3
@@ -390,7 +390,7 @@ instances of `@sayhello` with:
 :( println("Hello, world!") )
 ```
 
-When `@sayhello` is given at the REPL, the expression executes immediately, thus we only see the
+When `@sayhello` is entered in the REPL, the expression executes immediately, thus we only see the
 evaluation result:
 
 ```jldoctest sayhello
@@ -550,7 +550,6 @@ julia> macro assert(ex, msgs...)
            return :($ex ? nothing : throw(AssertionError($msg)))
        end
 @assert (macro with 1 method)
-
 ```
 
 Now `@assert` has two modes of operation, depending upon the number of arguments it receives!
@@ -938,7 +937,7 @@ Initially `f(x)` has one definition
 julia> f(x) = "original definition";
 ```
 
-Start some other operations that use f(x):
+Define other operations that use `f(x)`:
 
 ```jldoctest redefinition
 julia> g(x) = f(x);
@@ -948,7 +947,7 @@ julia> @generated gen1(x) = f(x);
 julia> @generated gen2(x) = :(f(x));
 ```
 
-We now add some new definitions for f(x):
+We now add some new definitions for `f(x)`:
 
 ```jldoctest redefinition
 julia> f(x::Int) = "definition for Int";
@@ -1114,7 +1113,7 @@ sub2ind_gen (generic function with 1 method)
 
 **What code will this generate?**
 
-An easy way to find out, is to extract the body into another (regular) function:
+An easy way to find out is to extract the body into another (regular) function:
 
 ```jldoctest sub2ind_gen2
 julia> @generated function sub2ind_gen{N}(dims::NTuple{N}, I::Integer...)
