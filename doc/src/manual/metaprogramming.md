@@ -418,14 +418,22 @@ Hello, human
 We can view the quoted return expression using the function [`macroexpand()`](@ref) (**important note:**
 this is an extremely useful tool for debugging macros):
 
-```julia
+```jldoctest
 julia> ex = macroexpand( :(@sayhello("human")) )
 :((println)("Hello, ","human"))
-                      ^^^^^^^
-                      interpolated: now a literal string
 
 julia> typeof(ex)
 Expr
+```
+
+We can see that the `"human"` literal has been interpolated into the expression.
+
+There also exists a macro [`@macroexpand`][@ref] that is perhaps a bit more convenient than the `macroexpand` function:
+
+
+```jldoctest
+julia> @macroexpand @sayhello "human"
+:((println)("Hello, ","human"))
 ```
 
 ### Hold up: why macros?
