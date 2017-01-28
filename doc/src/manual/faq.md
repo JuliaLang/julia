@@ -649,7 +649,7 @@ work by rebinding new values.
 
 While the streaming I/O API is synchronous, the underlying implementation is fully asynchronous.
 
-Consider the print output from the following:
+Consider the printed output from the following:
 
 ```jldoctest
 julia> @sync for i in 1:3
