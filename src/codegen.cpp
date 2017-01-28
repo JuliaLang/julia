@@ -4066,6 +4066,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
                     assert(at == et);
                     arg_box = boxed(mark_julia_type(arg_v, false, jt, &ctx2), &ctx2, false);
                 }
+                (void)at;
             }
             Value *argn = builder.CreateConstInBoundsGEP1_32(LLVM37_param(NULL) myargs, i);
             builder.CreateStore(arg_box, argn);
