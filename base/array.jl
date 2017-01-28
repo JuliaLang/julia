@@ -286,8 +286,8 @@ function _one{T}(unit::T, x::AbstractMatrix)
     eye(T, m)
 end
 
-one{T}(x::AbstractMatrix{T}) = _one(one(T))
-oneunit{T}(x::AbstractMatrix{T}) = _one(oneunit(T))
+one{T}(x::AbstractMatrix{T}) = _one(one(T), x)
+oneunit{T}(x::AbstractMatrix{T}) = _one(oneunit(T), x)
 
 ## Conversions ##
 
