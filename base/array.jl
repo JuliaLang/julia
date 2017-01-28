@@ -235,9 +235,9 @@ end
 The default element type is `Float64`.
 """
 function eye{T}(::Type{T}, m::Integer, n::Integer)
-    a = zeros(typeof(one(T)),m,n)
+    a = zeros(T,m,n)
     for i = 1:min(m,n)
-        a[i,i] = one(T)
+        a[i,i] = oneunit(T)
     end
     return a
 end
@@ -278,13 +278,16 @@ julia> eye(A)
 
 Note the difference from [`ones`](@ref).
 """
-eye{T}(x::AbstractMatrix{T}) = eye(T, size(x, 1), size(x, 2))
+eye{T}(x::AbstractMatrix{T}) = eye(typeof(one(T)), size(x, 1), size(x, 2))
 
-function one{T}(x::AbstractMatrix{T})
+function _one{T}(unit::T, x::AbstractMatrix)
     m,n = size(x)
     m==n || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
     eye(T, m)
 end
+
+one{T}(x::AbstractMatrix{T}) = _one(one(T))
+oneunit{T}(x::AbstractMatrix{T}) = _one(oneunit(T))
 
 ## Conversions ##
 
