@@ -132,21 +132,31 @@ zero{T<:Number}(::Type{T}) = convert(T,0)
 
 """
     one(x)
+    one(T::type)
 
-Return a multiplicative identity for `x` (which can be either a value
-or a type), of the same shape and numeric precision as `x`.  (For matrices,
-this returns an identity matrix.)
+Return a multiplicative identity for `x`: a value such that
+`one(x)*x == x*one(x) == x`.  Alternatively `one(T)` can
+take a type `T`, in which case `one` returns a multiplicative
+identity for any `x` of type `T`.
 
-`one(x)` returns a value of the type given by `x` if possible, but
-this may not be true for dimensionful quantities, since the multiplicative
-identity must be dimensionless.  If you want a quantity that is of
-the same type as `x` even if `x` is dimensionful, use [`oneunit`](@ref) instead.
+If possible, `one(x)` returns a value of the same type as `x`,
+and `one(T)` returns a value of type `T`.  However, this may
+not be the case for types representing dimensionful quantities
+(e.g. time in days), since the multiplicative
+identity must be dimensionless.  In that case, `one(x)`
+should return an identity value of the same precision
+(and shape, for matrices) as `x`.
 
+If you want a quantity that is of the same type as `x`, or of type `T`,
+even if `x` is dimensionful, use [`oneunit`](@ref) instead.
 ```jldoctest
 julia> one(3.7)
 1.0
 
 julia> one(Int)
+1
+
+julia> one(Dates.Day(1))
 1
 ```
 """
@@ -157,12 +167,20 @@ one{T<:Number}(x::T) = one(T)
 
 """
     oneunit(x::T)
-    oneunit(::Type{T})
+    oneunit(T::Type)
 
 Returns `T(one(x))`, where `T` is either the type of the argument or
 (if a type is passed) the argument.  This differs from [`one`](@ref) for
-dimensionful quantites: `one` is dimensionless (a multiplicative identity)
-while `oneunit` is dimensionful (of the same type as `x`).
+dimensionful quantities: `one` is dimensionless (a multiplicative identity)
+while `oneunit` is dimensionful (of the same type as `x`, or of type `T`).
+
+```jldoctest
+julia> oneunit(3.7)
+1.0
+
+julia> oneunit(Dates.Day)
+1 day
+```
 """
 oneunit{T}(x::T) = T(one(x))
 oneunit{T}(::Type{T}) = T(one(T))
