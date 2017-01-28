@@ -37,7 +37,6 @@ containing that token.
 """
 function format end
 
-
 # fallback to tryparsenext/format methods that don't care about locale
 @inline function tryparsenext(d::AbstractDateToken, str, i, len, locale)
     tryparsenext(d, str, i, len)
@@ -60,7 +59,7 @@ Base.show(io::IO, x::Time) = print(io, string(x))
 end
 
 # Information for parsing and formatting date time values.
-immutable DateFormat{S,T<:Tuple}
+immutable DateFormat{S, T<:Tuple}
     tokens::T
     locale::DateLocale
 end
@@ -117,7 +116,6 @@ end
     return ms, ii
 end
 
-
 ### Format tokens
 
 for (c, fn) in zip("YmdHMS", [year, month, day, hour, minute, second])
@@ -133,7 +131,7 @@ for (tok, fn) in zip("uU", [monthabbr, monthname])
 end
 
 for (tok, fn) in zip("eE", [dayabbr, dayname])
-    @eval function format(io, ::DatePart{$tok}, dt,  locale)
+    @eval function format(io, ::DatePart{$tok}, dt, locale)
         write(io, $fn(dayofweek(dt), locale))
     end
 end
@@ -144,13 +142,13 @@ end
 
     # the last n digits of y
     # will be 0 padded if y has less than n digits
-    str = dec(y,n)
+    str = dec(y, n)
     l = endof(str)
     if l == n
         # fast path
         write(io, str)
     else
-        write(io, SubString(str,l-(n-1),l))
+        write(io, SubString(str, l - (n - 1), l))
     end
 end
 
@@ -167,17 +165,16 @@ function format(io, d::DatePart{'s'}, dt)
     end
 end
 
-
 ### Delimiters
 
 immutable Delim{T, length} <: AbstractDateToken
     d::T
 end
 
-Delim(d::Char) = Delim{Char,1}(d)
-Delim(d::String) = Delim{String,length(d)}(d)
+Delim(d::Char) = Delim{Char, 1}(d)
+Delim(d::String) = Delim{String, length(d)}(d)
 
-@inline function tryparsenext{N}(d::Delim{Char,N}, str, i::Int, len)
+@inline function tryparsenext{N}(d::Delim{Char, N}, str, i::Int, len)
     R = Nullable{Int64}
     for j=1:N
         i > len && return (R(), i)
@@ -187,11 +184,11 @@ Delim(d::String) = Delim{String,length(d)}(d)
     return R(0), i
 end
 
-@inline function tryparsenext{N}(d::Delim{String,N}, str, i::Int, len)
+@inline function tryparsenext{N}(d::Delim{String, N}, str, i::Int, len)
     R = Nullable{Int64}
-    i1=i
-    i2=start(d.d)
-    for j=1:N
+    i1 = i
+    i2 = start(d.d)
+    for j = 1:N
         if i1 > len
             return R(), i1
         end
@@ -208,13 +205,13 @@ end
     write(io, d.d)
 end
 
-function _show_content{N}(io::IO, d::Delim{Char,N})
+function _show_content{N}(io::IO, d::Delim{Char, N})
     if d.d in keys(SLOT_RULE)
-        for i=1:N
+        for i = 1:N
             write(io, '\\', d.d)
         end
     else
-        for i=1:N
+        for i = 1:N
             write(io, d.d)
         end
     end
@@ -236,7 +233,6 @@ function Base.show(io::IO, d::Delim)
 end
 
 ### DateFormat construction
-
 
 abstract DayOfWeekToken # special addition to Period types
 
@@ -306,7 +302,7 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
 
     letters = String(collect(keys(Base.Dates.SLOT_RULE)))
     for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters\\E])\\1*"), f)
-        tran = replace(f[prev_offset:m.offset-1], r"\\(.)", s"\1")
+        tran = replace(f[prev_offset:m.offset - 1], r"\\(.)", s"\1")
 
         if !isempty(prev)
             letter, width = prev
@@ -383,7 +379,8 @@ This method creates a `DateFormat` object each time it is called. If you are par
 date strings of the same format, consider creating a [`DateFormat`](@ref) object once and using
 that as the second argument instead.
 """
-DateTime(dt::AbstractString, format::AbstractString; locale=ENGLISH) = parse(DateTime,dt,DateFormat(format,locale))
+DateTime(dt::AbstractString, format::AbstractString;
+    locale::Union{DateLocale, String}=ENGLISH) = parse(DateTime, dt, DateFormat(format, locale))
 
 """
     DateTime(dt::AbstractString, df::DateFormat) -> DateTime
@@ -393,7 +390,7 @@ the [`DateFormat`](@ref) object. Similar to
 `DateTime(::AbstractString, ::AbstractString)` but more efficient when repeatedly parsing
 similarly formatted date strings with a pre-created `DateFormat` object.
 """
-DateTime(dt::AbstractString,df::DateFormat=ISODateTimeFormat) = parse(DateTime,dt,df)
+DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat) = parse(DateTime, dt, df)
 
 """
     Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
@@ -402,16 +399,17 @@ Construct a `Date` object by parsing a `dt` date string following the pattern gi
 `format` string. Follows the same conventions as
 `DateTime(::AbstractString, ::AbstractString)`.
 """
-Date(dt::AbstractString,format::AbstractString;locale=ENGLISH) = parse(Date,dt,DateFormat(format,locale))
+Date(dt::AbstractString, format::AbstractString;
+    locale::Union{DateLocale, String}=ENGLISH) = parse(Date, dt, DateFormat(format, locale))
 
 """
     Date(dt::AbstractString, df::DateFormat) -> Date
 
 Parse a date from a date string `dt` using a `DateFormat` object `df`.
 """
-Date(dt::AbstractString,df::DateFormat=ISODateFormat) = parse(Date,dt,df)
+Date(dt::AbstractString,df::DateFormat=ISODateFormat) = parse(Date, dt, df)
 
-@generated function format{S,T}(io::IO, dt::TimeType, fmt::DateFormat{S,T})
+@generated function format{S, T}(io::IO, dt::TimeType, fmt::DateFormat{S, T})
     N = nfields(T)
     quote
         ts = fmt.tokens
@@ -424,7 +422,7 @@ function format(dt::TimeType, fmt::DateFormat, bufsize=12)
     # preallocate to reduce resizing
     io = IOBuffer(Vector{UInt8}(bufsize), true, true)
     format(io, dt, fmt)
-    String(io.data[1:io.ptr-1])
+    String(io.data[1:io.ptr - 1])
 end
 
 
@@ -461,7 +459,8 @@ generate the string "1996-01-15T00:00:00" you could use `format`: "yyyy-mm-ddTHH
 Note that if you need to use a code character as a literal you can use the escape character
 backslash. The string "1996y01m" can be produced with the format "yyyy\\ymm\\m".
 """
-format(dt::TimeType,f::AbstractString;locale=ENGLISH) = format(dt,DateFormat(f,locale))
+format(dt::TimeType, f::AbstractString;
+    locale::Union{DateLocale, String}=ENGLISH) = format(dt, DateFormat(f, locale))
 
 # show
 
@@ -489,26 +488,29 @@ function Base.string(dt::Date)
     # don't use format - bypassing IOBuffer creation
     # saves a bit of time here.
     y,m,d = yearmonthday(value(dt))
-    yy = y < 0 ? @sprintf("%05i",y) : lpad(y,4,"0")
-    mm = lpad(m,2,"0")
-    dd = lpad(d,2,"0")
-    "$yy-$mm-$dd"
+    yy = y < 0 ? @sprintf("%05i", y) : lpad(y, 4, "0")
+    mm = lpad(m, 2, "0")
+    dd = lpad(d, 2, "0")
+    return "$yy-$mm-$dd"
 end
 
 # vectorized
-DateTime{T<:AbstractString}(Y::AbstractArray{T},format::AbstractString;locale=ENGLISH) = DateTime(Y,DateFormat(format,locale))
-function DateTime{T<:AbstractString}(Y::AbstractArray{T},df::DateFormat=ISODateTimeFormat)
-    return reshape(DateTime[parse(DateTime,y,df) for y in Y], size(Y))
+DateTime{T<:AbstractString}(Y::AbstractArray{T}, format::AbstractString;
+    locale::Union{DateLocale, String}=ENGLISH) = DateTime(Y, DateFormat(format, locale))
+function DateTime{T<:AbstractString}(Y::AbstractArray{T}, df::DateFormat=ISODateTimeFormat)
+    return reshape(DateTime[parse(DateTime, y, df) for y in Y], size(Y))
 end
-Date{T<:AbstractString}(Y::AbstractArray{T},format::AbstractString;locale=ENGLISH) = Date(Y,DateFormat(format,locale))
-function Date{T<:AbstractString}(Y::AbstractArray{T},df::DateFormat=ISODateFormat)
-    return reshape(Date[Date(parse(Date,y,df)) for y in Y], size(Y))
+Date{T<:AbstractString}(Y::AbstractArray{T}, format::AbstractString;
+    locale::Union{DateLocale, String}=ENGLISH) = Date(Y, DateFormat(format, locale))
+function Date{T<:AbstractString}(Y::AbstractArray{T}, df::DateFormat=ISODateFormat)
+    return reshape(Date[Date(parse(Date, y, df)) for y in Y], size(Y))
 end
 
-format{T<:TimeType}(Y::AbstractArray{T},fmt::AbstractString;locale=ENGLISH) = format(Y,DateFormat(fmt,locale))
-function format(Y::AbstractArray{Date},df::DateFormat=ISODateFormat)
-    return reshape([format(y,df) for y in Y], size(Y))
+format{T<:TimeType}(Y::AbstractArray{T}, fmt::AbstractString;
+    locale::Union{DateLocale, String}=ENGLISH) = format(Y, DateFormat(fmt, locale))
+function format(Y::AbstractArray{Date}, df::DateFormat=ISODateFormat)
+    return reshape([format(y, df) for y in Y], size(Y))
 end
-function format(Y::AbstractArray{DateTime},df::DateFormat=ISODateTimeFormat)
-    return reshape([format(y,df) for y in Y], size(Y))
+function format(Y::AbstractArray{DateTime}, df::DateFormat=ISODateTimeFormat)
+    return reshape([format(y, df) for y in Y], size(Y))
 end
