@@ -7,7 +7,7 @@ type CapturedException <: Exception
     ex::Any
     processed_bt::Vector{Any}
 
-    function CapturedException(ex, bt_raw)
+    function CapturedException(ex, bt_raw::Vector{Ptr{Void}})
         # bt_raw MUST be an Array of code pointers than can be processed by jl_lookup_code_address
         # Typically the result of a catch_backtrace()
 
@@ -16,11 +16,15 @@ type CapturedException <: Exception
         process_func(args...) = push!(bt_lines, args)
         process_backtrace(process_func, bt_raw, 100) # Limiting this to 100 lines.
 
-        new(ex, bt_lines)
+        CapturedException(ex, bt_lines)
     end
+
+    CapturedException(ex, processed_bt::Vector{Any}) = new(ex, processed_bt)
 end
 
-showerror(io::IO, ce::CapturedException) = showerror(io, ce.ex, ce.processed_bt, backtrace=true)
+function showerror(io::IO, ce::CapturedException)
+    showerror(io, ce.ex, ce.processed_bt, backtrace=true)
+end
 
 type CompositeException <: Exception
     exceptions::Vector{Any}
@@ -39,7 +43,7 @@ function showerror(io::IO, ex::CompositeException)
         showerror(io, ex.exceptions[1])
         remaining = length(ex) - 1
         if remaining > 0
-            print(io, "\n\n...and $remaining other exceptions.\n")
+            print(io, string("\n\n...and ", remaining, " more exception(s).\n"))
         end
     else
         print(io, "CompositeException()\n")
