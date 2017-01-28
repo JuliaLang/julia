@@ -299,7 +299,7 @@ The [`dayname()`](@ref) and [`monthname()`](@ref) methods can also take an optio
 that can be used to return the name of the day or month of the year for other languages/locales.
 There are also versions of these functions returning the abbreviated names, namely
 [`dayabbr()`](@ref) and [`monthabbr()`](@ref).
-Firs the mapping is loaded into the `LOCALES` variable:
+First the mapping is loaded into the `LOCALES` variable:
 
 ```jldoctest tdate2
 julia> french_months = ["janvier", "février", "mars", "avril", "mai", "juin",
