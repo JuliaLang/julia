@@ -409,10 +409,10 @@ and add at once. This is even more beneficial when `f` gets inlined into another
 
 ```julia
 julia> function g(k, n)
-         for i = 1:n
-           k = f(k)
-         end
-         return k
+           for i = 1:n
+               k = f(k)
+           end
+           return k
        end
 g (generic function with 1 methods)
 
@@ -444,10 +444,10 @@ Next, consider what happens if we make the number of loop iterations fixed:
 
 ```julia
 julia> function g(k)
-         for i = 1:10
-           k = f(k)
-         end
-         return k
+           for i = 1:10
+               k = f(k)
+           end
+           return k
        end
 g (generic function with 2 methods)
 
