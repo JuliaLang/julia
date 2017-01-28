@@ -191,11 +191,10 @@ end
 
 
 """
-    similar(d::Dict, [element_type=eltype(e::Dict)])
+    similar(d::Dict, [element_type=Pair{K,V}])
 
-Create an empty dictionary with the same key and value types as `e`. The second element
-is a pair `Pair{K,V}` of key and value types and it is optional, defaulting to
-`eltype(d)`.
+Create an empty dictionary with key type `K` and value type `V`. The second element
+is optional, defaulting to `eltype(d)`.
 Note that `similar` is useful when writing generic code that works with different
 `Associative` types. Instead, an empty dictionary with the element type of `e` is simply
 created with `Dict{keytype{e},valtype{e}}()`.
