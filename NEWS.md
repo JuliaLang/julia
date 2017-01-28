@@ -177,6 +177,9 @@ Library improvements
   * `max`, `min`, and related functions (`minmax`, `maximum`, `minimum`,
     `extrema`) now return `NaN` for `NaN` arguments ([#12563]).
 
+  * `oneunit(x)` function to return a dimensionful version of `one(x)` (which
+    is clarified to mean a dimensionless quantity if `x` is dimensionful) ([#20268]).
+
   * The `chop` and `chomp` functions now return a `SubString` ([#18339]).
 
   * Numbered stackframes printed in stacktraces can be opened in an editor by
