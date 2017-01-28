@@ -27,7 +27,7 @@ julia> !false
 true
 
 julia> ![true false true]
-1×3 Array{Bool,2}:
+1×3 BitArray{2}:
  false  true  false
 ```
 """
@@ -51,8 +51,8 @@ Bitwise exclusive or of `x` and `y`.  The infix operation
 or `\\veebar` in the Julia REPL.
 
 ```jldoctest
-julia> [true; true; false] ⊻ [true; false; false]
-3-element Array{Bool,1}:
+julia> [true; true; false] .⊻ [true; false; false]
+3-element BitArray{1}:
  false
   true
  false
