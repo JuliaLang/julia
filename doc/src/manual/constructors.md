@@ -554,8 +554,8 @@ julia> type SummedArray{T<:Number,S<:Number}
            sum::S
        end
 
-julia> SummedArray(Int32[1; 2; 3], Int8(6))
-SummedArray{Int32,Int8}(Int32[1,2,3],6)
+julia> SummedArray(Int32[1; 2; 3], Int128(6))
+SummedArray{Int32,Int128}(Int32[1,2,3],6)
 ```
 
 The problem is that we want `S` to be a larger type than `T`, so that we can sum many elements
