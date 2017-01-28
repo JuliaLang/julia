@@ -1463,3 +1463,19 @@ syms = setup_syms(3, workers())
 clear!(syms, workers())
 test_clear(syms, workers())
 
+# Test partial recovery from a deserialization error in CapturedException
+try
+    expr = quote
+                type DontExistOn1
+                    x
+                end
+                throw(BoundsError(DontExistOn1(1), 1))
+           end
+
+    remotecall_fetch(()->eval(expr), id_other)
+    error("unexpected")
+catch ex
+    @test isa(ex.captured.ex.exceptions[1].ex, ErrorException)
+    @test endswith(ex.captured.ex.exceptions[1].ex.msg, "BoundsError")
+    @test ex.captured.ex.exceptions[2].ex == UndefVarError(:DontExistOn1)
+end
