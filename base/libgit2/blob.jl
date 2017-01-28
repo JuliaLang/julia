@@ -14,7 +14,7 @@ looking for a reasonable ratio of printable to non-printable characters among
 the first 8000 bytes.
 """
 function isbinary(blob::GitBlob)
-    bin_flag = ccall((:git_blob_is_binary, :libgit2), Int64, (Ptr{Void},), blob.ptr)
+    bin_flag = ccall((:git_blob_is_binary, :libgit2), Cint, (Ptr{Void},), blob.ptr)
     return bin_flag == 1
 end
 
