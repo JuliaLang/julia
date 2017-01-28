@@ -167,8 +167,6 @@ while `oneunit` is dimensionful (of the same type as `x`).
 oneunit{T}(x::T) = T(one(x))
 oneunit{T}(::Type{T}) = T(one(T))
 
-dimensionless{T<:Number}(::Type{T}) = typeof(one(T)) # convert T to dimensionless type
-
 _default_type(::Type{Number}) = Int
 
 """
