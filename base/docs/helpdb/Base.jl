@@ -96,6 +96,20 @@ bits
 
 Construct a 1-d array of the specified type. This is usually called with the syntax
 `Type[]`. Element values can be specified using `Type[a,b,c,...]`.
+
+```jldoctest
+julia> Int8[1, 2, 3]
+3-element Array{Int8,1}:
+ 1
+ 2
+ 3
+
+julia> getindex(Int8, 1, 2, 3)
+3-element Array{Int8,1}:
+ 1
+ 2
+ 3
+```
 """
 getindex(::Type, elements...)
 
@@ -541,6 +555,11 @@ print_shortest
     tuple(xs...)
 
 Construct a tuple of the given objects.
+
+```jldoctest
+julia> tuple(1, 'a', pi)
+(1,'a',π = 3.1415926535897...)
+```
 """
 tuple
 
@@ -768,6 +787,14 @@ showcompact
 
 Extract a named field from a `value` of composite type. The syntax `a.b` calls
 `getfield(a, :b)`.
+
+```jldoctest
+julia> a = 1//2
+1//2
+
+julia> getfield(a, :num)
+1
+```
 """
 getfield
 
@@ -829,6 +856,14 @@ union
     realmax(T)
 
 The highest finite value representable by the given floating-point DataType `T`.
+
+```jldoctest
+julia> realmax(Float16)
+Float16(6.55e4)
+
+julia> realmax(Float32)
+3.4028235f38
+```
 """
 realmax
 
@@ -847,6 +882,14 @@ serialize
     typemin(T)
 
 The lowest value representable by the given (real) numeric DataType `T`.
+
+```jldoctest
+julia> typemin(Float16)
+-Inf16
+
+julia> typemin(Float32)
+-Inf32
+```
 """
 typemin
 
@@ -1102,7 +1145,21 @@ false
 """
     bswap(n)
 
-Byte-swap an integer.
+Byte-swap an integer. Flip the bits of its binary representation.
+
+```jldoctest
+julia> a = bswap(4)
+288230376151711744
+
+julia> bswap(a)
+4
+
+julia> bin(1)
+"1"
+
+julia> bin(bswap(1))
+"100000000000000000000000000000000000000000000000000000000"
+```
 """
 bswap
 
