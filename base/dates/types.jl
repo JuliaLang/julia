@@ -21,13 +21,13 @@ abstract Period     <: AbstractTime
 abstract DatePeriod <: Period
 abstract TimePeriod <: Period
 
-for T in (:Year,:Month,:Week,:Day)
+for T in (:Year, :Month, :Week, :Day)
     @eval immutable $T <: DatePeriod
         value::Int64
         $T(v::Number) = new(v)
     end
 end
-for T in (:Hour,:Minute,:Second,:Millisecond,:Microsecond,:Nanosecond)
+for T in (:Hour, :Minute, :Second, :Millisecond, :Microsecond, :Nanosecond)
     @eval immutable $T <: TimePeriod
         value::Int64
         $T(v::Number) = new(v)
@@ -128,20 +128,20 @@ end
 # Convert y,m,d to # of Rata Die days
 # Works by shifting the beginning of the year to March 1,
 # so a leap day is the very last day of the year
-const SHIFTEDMONTHDAYS = [306,337,0,31,61,92,122,153,184,214,245,275]
-function totaldays(y,m,d)
+const SHIFTEDMONTHDAYS = (306, 337, 0, 31, 61, 92, 122, 153, 184, 214, 245, 275)
+function totaldays(y, m, d)
     # If we're in Jan/Feb, shift the given year back one
     z = m < 3 ? y - 1 : y
     mdays = SHIFTEDMONTHDAYS[m]
     # days + month_days + year_days
-    return d + mdays + 365z + fld(z,4) - fld(z,100) + fld(z,400) - 306
+    return d + mdays + 365z + fld(z, 4) - fld(z, 100) + fld(z, 400) - 306
 end
 
 # If the year is divisible by 4, except for every 100 years, except for every 400 years
 isleapyear(y) = ((y % 4 == 0) && (y % 100 != 0)) || (y % 400 == 0)
 
 # Number of days in month
-const DAYSINMONTH = [31,28,31,30,31,30,31,31,30,31,30,31]
+const DAYSINMONTH = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
 daysinmonth(y,m) = DAYSINMONTH[m] + (m == 2 && isleapyear(y))
 
 ### CONSTRUCTORS ###
@@ -151,15 +151,15 @@ daysinmonth(y,m) = DAYSINMONTH[m] + (m == 2 && isleapyear(y))
 
 Construct a `DateTime` type by parts. Arguments must be convertible to `Int64`.
 """
-function DateTime(y::Int64,m::Int64=1,d::Int64=1,
-                  h::Int64=0,mi::Int64=0,s::Int64=0,ms::Int64=0)
+function DateTime(y::Int64, m::Int64=1, d::Int64=1,
+                  h::Int64=0, mi::Int64=0, s::Int64=0, ms::Int64=0)
     0 < m < 13 || throw(ArgumentError("Month: $m out of range (1:12)"))
-    0 < d < daysinmonth(y,m)+1 || throw(ArgumentError("Day: $d out of range (1:$(daysinmonth(y,m)))"))
+    0 < d < daysinmonth(y, m) + 1 || throw(ArgumentError("Day: $d out of range (1:$(daysinmonth(y, m)))"))
     -1 < h < 24 || throw(ArgumentError("Hour: $h out of range (0:23)"))
     -1 < mi < 60 || throw(ArgumentError("Minute: $mi out of range (0:59)"))
     -1 < s < 60 || throw(ArgumentError("Second: $s out of range (0:59)"))
     -1 < ms < 1000 || throw(ArgumentError("Millisecond: $ms out of range (0:999)"))
-    rata = ms + 1000*(s + 60mi + 3600h + 86400*totaldays(y,m,d))
+    rata = ms + 1000 * (s + 60mi + 3600h + 86400 * totaldays(y, m, d))
     return DateTime(UTM(rata))
 end
 
@@ -168,10 +168,10 @@ end
 
 Construct a `Date` type by parts. Arguments must be convertible to `Int64`.
 """
-function Date(y::Int64,m::Int64=1,d::Int64=1)
+function Date(y::Int64, m::Int64=1, d::Int64=1)
     0 < m < 13 || throw(ArgumentError("Month: $m out of range (1:12)"))
-    0 < d < daysinmonth(y,m)+1 || throw(ArgumentError("Day: $d out of range (1:$(daysinmonth(y,m)))"))
-    return Date(UTD(totaldays(y,m,d)))
+    0 < d < daysinmonth(y, m) + 1 || throw(ArgumentError("Day: $d out of range (1:$(daysinmonth(y, m)))"))
+    return Date(UTD(totaldays(y, m, d)))
 end
 
 """
@@ -225,7 +225,7 @@ function DateTime(periods::Period...)
         isa(p, Second) && (s = p::Second)
         isa(p, Millisecond) && (ms = p::Millisecond)
     end
-    return DateTime(y,m,d,h,mi,s,ms)
+    return DateTime(y, m, d, h, mi, s, ms)
 end
 
 """
@@ -241,7 +241,7 @@ function Date(periods::Period...)
         isa(p, Month) && (m = p::Month)
         isa(p, Day) && (d = p::Day)
     end
-    return Date(y,m,d)
+    return Date(y, m, d)
 end
 
 """
@@ -265,12 +265,12 @@ function Time(periods::TimePeriod...)
 end
 
 # Fallback constructors
-DateTime(y,m=1,d=1,h=0,mi=0,s=0,ms=0) = DateTime(Int64(y), Int64(m), Int64(d), Int64(h), Int64(mi), Int64(s), Int64(ms))
-Date(y,m=1,d=1) = Date(Int64(y), Int64(m), Int64(d))
-Time(h,mi=0,s=0,ms=0,us=0,ns=0) = Time(Int64(h), Int64(mi), Int64(s), Int64(ms), Int64(us), Int64(ns))
+DateTime(y, m=1, d=1, h=0, mi=0, s=0, ms=0) = DateTime(Int64(y), Int64(m), Int64(d), Int64(h), Int64(mi), Int64(s), Int64(ms))
+Date(y, m=1, d=1) = Date(Int64(y), Int64(m), Int64(d))
+Time(h, mi=0, s=0, ms=0, us=0, ns=0) = Time(Int64(h), Int64(mi), Int64(s), Int64(ms), Int64(us), Int64(ns))
 
 # Traits, Equality
-Base.isfinite{T<:TimeType}(::Union{Type{T},T}) = true
+Base.isfinite{T<:TimeType}(::Union{Type{T}, T}) = true
 calendar(dt::DateTime) = ISOCalendar
 calendar(dt::Date) = ISOCalendar
 
@@ -297,9 +297,9 @@ Base.typemin(::Union{Time, Type{Time}}) = Time(0)
 Base.eltype{T<:Period}(::Type{T}) = T
 Base.promote_rule(::Type{Date}, x::Type{DateTime}) = DateTime
 Base.isless{T<:TimeType}(x::T, y::T) = isless(value(x), value(y))
-Base.isless(x::TimeType,y::TimeType) = isless(Base.promote_noncircular(x,y)...)
+Base.isless(x::TimeType, y::TimeType) = isless(Base.promote_noncircular(x, y)...)
 =={T<:TimeType}(x::T, y::T) = ==(value(x), value(y))
-function ==(a::Time,b::Time)
+function ==(a::Time, b::Time)
     return hour(a) == hour(b) && minute(a) == minute(b) &&
         second(a) == second(b) && millisecond(a) == millisecond(b) &&
         microsecond(a) == microsecond(b) && nanosecond(a) == nanosecond(b)
