@@ -163,6 +163,17 @@ function head!(repo::GitRepo, ref::GitReference)
     return ref
 end
 
+"""
+    lookup_branch(repo::GitRepo, branch_name::AbstractString, remote::Bool=false) -> Nullable{GitReference}
+
+Determine if the branch specified by `branch_name` exists in the repository `repo`.
+If `remote` is `true`, `repo` is assumed to be a remote git repository. Otherwise, it
+is part of the local filesystem.
+
+`lookup_branch` returns a `Nullable`, which will be null if the requested branch does
+not exist yet. If the branch does exist, the `Nullable` contains a `GitReference` to
+the branch.
+"""
 function lookup_branch(repo::GitRepo,
                        branch_name::AbstractString,
                        remote::Bool=false)
@@ -171,31 +182,42 @@ function lookup_branch(repo::GitRepo,
     err = ccall((:git_branch_lookup, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Cint),
                   ref_ptr_ptr, repo.ptr, branch_name, branch_type)
-    if err == Int(Error.ENOTFOUND)
-        return nothing
-    elseif err != Int(Error.GIT_OK)
+    if err != Int(Error.GIT_OK)
+        if err == Int(Error.ENOTFOUND)
+            return Nullable{GitReference}()
+        end
         if ref_ptr_ptr[] != C_NULL
             close(GitReference(repo, ref_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
-    return GitReference(repo, ref_ptr_ptr[])
+    return Nullable{GitReference}(GitReference(repo, ref_ptr_ptr[]))
 end
 
+"""
+    upstream(ref::GitReference) -> Nullable{GitReference}
+
+Determine if the branch specified by `ref` has a specified upstream branch.
+
+`upstream` returns a `Nullable`, which will be null if the requested branch does
+not have an upstream counterpart. If the upstream branch does exist, the `Nullable`
+contains a `GitReference` to the upstream branch.
+"""
 function upstream(ref::GitReference)
     isempty(ref) && return nothing
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_branch_upstream, :libgit2), Cint,
                   (Ref{Ptr{Void}}, Ptr{Void},), ref_ptr_ptr, ref.ptr)
-    if err == Int(Error.ENOTFOUND)
-        return nothing
-    elseif err != Int(Error.GIT_OK)
+    if err != Int(Error.GIT_OK)
+        if err == Int(Error.ENOTFOUND)
+            return Nullable{GitReference}()
+        end
         if ref_ptr_ptr[] != C_NULL
             close(GitReference(ref.repo, ref_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
-    return GitReference(ref.repo, ref_ptr_ptr[])
+    return Nullable{GitReference}(GitReference(ref.repo, ref_ptr_ptr[]))
 end
 
 repository(ref::GitReference) = ref.repo

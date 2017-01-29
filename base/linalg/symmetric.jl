@@ -36,12 +36,8 @@ julia> Slower = Symmetric(A, :L)
  6  0  7  0  3
  0  9  0  1  0
  2  0  3  0  4
-
-julia> eigfact(Supper)
-Base.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([-2.96684,-2.72015,0.440875,7.72015,14.526],[-0.302016 -2.22045e-16 … 1.11022e-16 0.248524; -6.67755e-16 0.596931 … -0.802293 1.93069e-17; … ; 8.88178e-16 -0.802293 … -0.596931 0.0; 0.772108 8.93933e-16 … 0.0 0.630015])
 ```
 
-[`eigfact`](@ref) will use a method specialized for matrices known to be symmetric.
 Note that `Supper` will not be equal to `Slower` unless `A` is itself symmetric (e.g. if `A == A.'`).
 """
 Symmetric(A::AbstractMatrix, uplo::Symbol=:U) = (checksquare(A);Symmetric{eltype(A),typeof(A)}(A, char_uplo(uplo)))
@@ -74,12 +70,8 @@ julia> Hlower = Hermitian(A, :L)
  6-6im  0+0im  7+0im  0+0im  3+3im
  0+0im  9+0im  0+0im  1+0im  0+0im
  2+2im  0+0im  3-3im  0+0im  4+0im
-
-julia> eigfact(Hupper)
-Base.LinAlg.Eigen{Complex{Float64},Float64,Array{Complex{Float64},2},Array{Float64,1}}([-8.32069,-2.72015,3.1496,7.72015,17.1711],Complex{Float64}[-0.231509+0.392692im -2.77556e-17+1.11022e-16im … -4.16334e-17-4.16334e-17im -0.129023-0.00628656im; 0.0+0.0im -0.523844+0.286205im … -0.521629+0.609571im 0.0+0.0im; … ; 0.0-6.93889e-18im 0.704063-0.384669im … -0.388108+0.45354im 0.0-1.38778e-17im; 0.67898+0.0im 0.0+0.0im … 0.0+0.0im -0.661651-0.0im])
 ```
 
-[`eigfact`](@ref) will use a method specialized for matrices known to be Hermitian.
 Note that `Hupper` will not be equal to `Hlower` unless `A` is itself Hermitian (e.g. if `A == A'`).
 """
 function Hermitian(A::AbstractMatrix, uplo::Symbol=:U)

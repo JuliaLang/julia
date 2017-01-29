@@ -211,7 +211,7 @@ function readlines(filename::AbstractString; chomp::Bool=true)
         readlines(f, chomp=chomp)
     end
 end
-readlines(s::IO=STDIN; chomp::Bool=true) = collect(eachline(s, chomp=chomp))
+readlines(s=STDIN; chomp::Bool=true) = collect(eachline(s, chomp=chomp))
 
 ## byte-order mark, ntoh & hton ##
 

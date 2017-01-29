@@ -83,7 +83,7 @@ end
 ### Core query functions
 
 # Monday = 1....Sunday = 7
-dayofweek(days) = mod1(days,7)
+dayofweek(days) = mod1(days, 7)
 
 # Number of days in year
 """
@@ -94,8 +94,8 @@ Returns 366 if the year of `dt` is a leap year, otherwise returns 365.
 daysinyear(y) = 365 + isleapyear(y)
 
 # Day of the year
-const MONTHDAYS = [0,31,59,90,120,151,181,212,243,273,304,334]
-dayofyear(y,m,d) = MONTHDAYS[m] + d + (m > 2 && isleapyear(y))
+const MONTHDAYS = (0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334)
+dayofyear(y, m, d) = MONTHDAYS[m] + d + (m > 2 && isleapyear(y))
 
 ### Days of the Week
 """
@@ -105,8 +105,8 @@ Returns the day of the week as an `Int64` with `1 = Monday, 2 = Tuesday, etc.`.
 """
 dayofweek(dt::TimeType) = dayofweek(days(dt))
 
-const Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday = 1,2,3,4,5,6,7
-const Mon,Tue,Wed,Thu,Fri,Sat,Sun = 1,2,3,4,5,6,7
+const Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday = 1, 2, 3, 4, 5, 6, 7
+const Mon, Tue, Wed, Thu, Fri, Sat, Sun = 1, 2, 3, 4, 5, 6, 7
 
 dayname(day::Integer, locale::DateLocale) = locale.days_of_week[day]
 dayabbr(day::Integer, locale::DateLocale) = locale.days_of_week_abbr[day]
@@ -157,9 +157,9 @@ end
 
 # Total number of a day of week in the month
 # e.g. are there 4 or 5 Mondays in this month?
-const TWENTYNINE = IntSet([1,8,15,22,29])
-const THIRTY = IntSet([1,2,8,9,15,16,22,23,29,30])
-const THIRTYONE = IntSet([1,2,3,8,9,10,15,16,17,22,23,24,29,30,31])
+const TWENTYNINE = IntSet([1, 8, 15, 22, 29])
+const THIRTY = IntSet([1, 2, 8, 9, 15, 16, 22, 23, 29, 30])
+const THIRTYONE = IntSet([1, 2, 3, 8, 9, 10, 15, 16, 17, 22, 23, 24, 29, 30, 31])
 
 """
     daysofweekinmonth(dt::TimeType) -> Int
@@ -170,17 +170,17 @@ in a month by including `dayofweekofmonth(dt) == daysofweekinmonth(dt)` in the a
 function.
 """
 function daysofweekinmonth(dt::TimeType)
-    y,m,d = yearmonthday(dt)
-    ld = daysinmonth(y,m)
+    y, m, d = yearmonthday(dt)
+    ld = daysinmonth(y, m)
     return ld == 28 ? 4 : ld == 29 ? ((d in TWENTYNINE) ? 5 : 4) :
            ld == 30 ? ((d in THIRTY) ? 5 : 4) :
            (d in THIRTYONE) ? 5 : 4
 end
 
 ### Months
-const January,February,March,April,May,June = 1,2,3,4,5,6
-const July,August,September,October,November,December = 7,8,9,10,11,12
-const Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec = 1,2,3,4,5,6,7,8,9,10,11,12
+const January, February, March, April, May, June = 1, 2, 3, 4, 5, 6
+const July, August, September, October, November, December = 7, 8, 9, 10, 11, 12
+const Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
 
 monthname(month::Integer, locale::DateLocale) = locale.months[month]
 monthabbr(month::Integer, locale::DateLocale) = locale.months_abbr[month]
@@ -210,7 +210,7 @@ end
 
 Returns the number of days in the month of `dt`. Value will be 28, 29, 30, or 31.
 """
-daysinmonth(dt::TimeType) = ((y,m) = yearmonth(dt); return daysinmonth(y,m))
+daysinmonth(dt::TimeType) = ((y, m) = yearmonth(dt); return daysinmonth(y, m))
 
 ### Years
 """
@@ -225,7 +225,7 @@ isleapyear(dt::TimeType) = isleapyear(year(dt))
 
 Returns the day of the year for `dt` with January 1st being day 1.
 """
-dayofyear(dt::TimeType) = ((y,m,d) = yearmonthday(dt); return dayofyear(y,m,d))
+dayofyear(dt::TimeType) = ((y, m, d) = yearmonthday(dt); return dayofyear(y, m, d))
 
 daysinyear(dt::TimeType) = 365 + isleapyear(dt)
 
@@ -239,7 +239,7 @@ function quarterofyear(dt::TimeType)
     m = month(dt)
     return m < 4 ? 1 : m < 7 ? 2 : m < 10 ? 3 : 4
 end
-const QUARTERDAYS = (0,90,181,273)
+const QUARTERDAYS = (0, 90, 181, 273)
 
 """
     dayofquarter(dt::TimeType) -> Int

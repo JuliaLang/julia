@@ -9,7 +9,7 @@ immutable SubString{T<:AbstractString} <: AbstractString
     offset::Int
     endof::Int
 
-    function SubString(s::T, i::Int, j::Int)
+    function SubString{T}(s::T, i::Int, j::Int) where T<:AbstractString
         if i > endof(s) || j<i
             return new(s, i-1, 0)
         else
@@ -26,7 +26,7 @@ immutable SubString{T<:AbstractString} <: AbstractString
         end
     end
 end
-SubString{T<:AbstractString}(s::T, i::Int, j::Int) = SubString{T}(s, i, j)
+SubString(s::T, i::Int, j::Int) where T<:AbstractString = SubString{T}(s, i, j)
 SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
 SubString(s::AbstractString, i::Integer, j::Integer) = SubString(s, Int(i), Int(j))
 SubString(s::AbstractString, i::Integer) = SubString(s, i, endof(s))

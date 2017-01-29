@@ -194,7 +194,7 @@ function isapprox(x::Number, y::Number; rtol::Real=rtoldefault(x,y), atol::Real=
 end
 
 const ≈ = isapprox
-≉(x,y) = !(x ≈ y)
+≉(args...; kws...) = !≈(args...; kws...)
 
 # default tolerance arguments
 rtoldefault{T<:AbstractFloat}(::Type{T}) = sqrt(eps(T))

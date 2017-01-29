@@ -706,13 +706,14 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
         if (y == (jl_value_t*)jl_any_type) return 1;
         jl_datatype_t *xd = (jl_datatype_t*)x, *yd = (jl_datatype_t*)y;
         if (jl_is_type_type(x) && !jl_is_type_type(y)) {
-            if (!jl_is_typevar(jl_tparam0(xd))) {
+            jl_value_t *tp0 = jl_tparam0(xd);
+            if (!jl_is_typevar(tp0)) {
                 // TODO this is not strictly correct, but we don't yet have any other way for
                 // e.g. the argument `Int` to match a `::DataType` slot. Most correct would be:
                 // Int isa DataType, Int isa Type{Int}, Type{Int} more specific than DataType,
                 // !(Type{Int} <: DataType), !isleaftype(Type{Int}), because non-DataTypes can
                 // be type-equal to `Int`.
-                return jl_typeof(jl_tparam0(xd)) == (jl_value_t*)yd;
+                return jl_typeof(tp0) == (jl_value_t*)yd;
             }
             return 0;
         }
@@ -1527,6 +1528,8 @@ static jl_value_t *intersect_type_type(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     if (!jl_is_typevar(p0))
         return (jl_typeof(p0) == y) ? x : jl_bottom_type;
     if (!jl_is_kind(y)) return jl_bottom_type;
+    if (y == (jl_value_t*)jl_bottomtype_type && ((jl_tvar_t*)p0)->lb == jl_bottom_type)
+        return (jl_value_t*)jl_wrap_Type(jl_bottom_type);
     if (((jl_tvar_t*)p0)->ub == (jl_value_t*)jl_any_type)
         return y;
     return x;
@@ -1645,7 +1648,7 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
     if (jl_is_uniontype(y)) {
         if (x == ((jl_uniontype_t*)y)->a || x == ((jl_uniontype_t*)y)->b)
             return x;
-        if (jl_is_unionall(x))
+        if (jl_is_unionall(x) && (jl_has_free_typevars(x) || jl_has_free_typevars(y)))
             return intersect_unionall(y, (jl_unionall_t*)x, e, 0, param);
         return intersect_union(x, (jl_uniontype_t*)y, e, 1, param);
     }
@@ -1685,8 +1688,6 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
     if (jl_is_datatype(x) && jl_is_datatype(y)) {
         jl_datatype_t *xd = (jl_datatype_t*)x, *yd = (jl_datatype_t*)y;
         if (param < 2) {
-            if (x == (jl_value_t*)jl_any_type) return y;
-            if (y == (jl_value_t*)jl_any_type) return x;
             if (jl_is_type_type(x)) {
                 if (!jl_is_type_type(y))
                     return intersect_type_type(x, y, e, 0);
@@ -1766,7 +1767,7 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     e->Runions.depth = 0;
     e->Runions.more = 0;
     memset(e->Runions.stack, 0, sizeof(e->Runions.stack));
-    int lastset = 0;
+    int lastset = 0, niter = 0;
     jl_value_t *ii = intersect(x, y, e, 0);
     while (e->Runions.more) {
         e->Runions.depth = 0;
@@ -1781,8 +1782,18 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         JL_GC_PUSHARGS(is, 2);
         is[0] = ii;
         is[1] = intersect(x, y, e, 0);
-        ii = jl_type_union(is, 2);
+        if (is[0] == jl_bottom_type)
+            ii = is[1];
+        else if (is[1] == jl_bottom_type)
+            ii = is[0];
+        else {
+            // TODO: the repeated subtype checks in here can get expensive
+            ii = jl_type_union(is, 2);
+            niter++;
+        }
         JL_GC_POP();
+        if (niter > 3)
+            return y;
     }
     return ii;
 }
@@ -1797,15 +1808,18 @@ JL_DLLEXPORT jl_value_t *jl_intersect_types(jl_value_t *x, jl_value_t *y)
     return intersect_all(x, y, &e);
 }
 
-jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b, jl_svec_t **penv)
+// sets *issubty to 1 iff `a` is a subtype of `b`
+jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t **penv, int *issubty)
 {
     int szb = jl_subtype_env_size(b);
     int sz = 0, i = 0;
     jl_value_t **env, **ans;
     JL_GC_PUSHARGS(env, szb+1);
     ans = &env[szb]; *ans = jl_bottom_type;
+    if (issubty) *issubty = 0;
     if (jl_subtype_env(a, b, env, szb)) {
         *ans = a; sz = szb;
+        if (issubty) *issubty = 1;
     }
     else if (jl_subtype(b, a)) {
         *ans = b;
@@ -1864,16 +1878,21 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b, jl_svec_
     return *ans;
 }
 
-JL_DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b)
+jl_value_t *jl_type_intersection_env(jl_value_t *a, jl_value_t *b, jl_svec_t **penv)
 {
-    return jl_type_intersection_matching(a, b, NULL);
+    return jl_type_intersection_env_s(a, b, penv, NULL);
 }
 
-JL_DLLEXPORT jl_svec_t *jl_type_intersection_env(jl_value_t *a, jl_value_t *b)
+JL_DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b)
+{
+    return jl_type_intersection_env(a, b, NULL);
+}
+
+JL_DLLEXPORT jl_svec_t *jl_env_from_type_intersection(jl_value_t *a, jl_value_t *b)
 {
     jl_svec_t *env = jl_emptysvec;
     JL_GC_PUSH1(&env);
-    jl_value_t *ti = jl_type_intersection_matching(a, b, &env);
+    jl_value_t *ti = jl_type_intersection_env(a, b, &env);
     jl_svec_t *pair = jl_svec2(ti, env);
     JL_GC_POP();
     return pair;

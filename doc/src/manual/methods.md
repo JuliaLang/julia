@@ -53,41 +53,38 @@ and count.
 When defining a function, one can optionally constrain the types of parameters it is applicable
 to, using the `::` type-assertion operator, introduced in the section on [Composite Types](@ref):
 
-```julia
-julia> f(x::Float64, y::Float64) = 2x + y;
+```jldoctest fofxy
+julia> f(x::Float64, y::Float64) = 2x + y
+f (generic function with 1 method)
 ```
 
 This function definition applies only to calls where `x` and `y` are both values of type `Float64`:
 
-```julia
+```jldoctest fofxy
 julia> f(2.0, 3.0)
 7.0
 ```
 
 Applying it to any other types of arguments will result in a [`MethodError`](@ref):
 
-```julia
+```jldoctest fofxy
 julia> f(2.0, 3)
 ERROR: MethodError: no method matching f(::Float64, ::Int64)
 Closest candidates are:
   f(::Float64, !Matched::Float64) at none:1
-...
 
 julia> f(Float32(2.0), 3.0)
 ERROR: MethodError: no method matching f(::Float32, ::Float64)
 Closest candidates are:
   f(!Matched::Float64, ::Float64) at none:1
-...
 
 julia> f(2.0, "3.0")
 ERROR: MethodError: no method matching f(::Float64, ::String)
 Closest candidates are:
   f(::Float64, !Matched::Float64) at none:1
-...
 
 julia> f("2.0", "3.0")
 ERROR: MethodError: no method matching f(::String, ::String)
-...
 ```
 
 As you can see, the arguments must be precisely of type `Float64`. Other numeric types, such as
@@ -97,8 +94,9 @@ be subclassed in Julia, such a definition can only be applied to arguments that 
 type `Float64`. It may often be useful, however, to write more general methods where the declared
 parameter types are abstract:
 
-```julia
-julia> f(x::Number, y::Number) = 2x - y;
+```jldoctest fofxy
+julia> f(x::Number, y::Number) = 2x - y
+f (generic function with 2 methods)
 
 julia> f(2.0, 3)
 1.0
@@ -118,7 +116,7 @@ behavior specific to pairs of `Float64` values. If one of the arguments is a 64-
 the other one is not, then the `f(Float64,Float64)` method cannot be called and the more general
 `f(Number,Number)` method must be used:
 
-```julia
+```jldoctest fofxy
 julia> f(2.0, 3.0)
 7.0
 
@@ -141,25 +139,23 @@ from magic. [^Clarke61]
 For non-numeric values, and for fewer or more than two arguments, the function `f` remains undefined,
 and applying it will still result in a [`MethodError`](@ref):
 
-```julia
+```jldoctest fofxy
 julia> f("foo", 3)
 ERROR: MethodError: no method matching f(::String, ::Int64)
 Closest candidates are:
   f(!Matched::Number, ::Number) at none:1
-...
 
 julia> f()
 ERROR: MethodError: no method matching f()
 Closest candidates are:
   f(!Matched::Float64, !Matched::Float64) at none:1
   f(!Matched::Number, !Matched::Number) at none:1
-...
 ```
 
 You can easily see which methods exist for a function by entering the function object itself in
 an interactive session:
 
-```julia
+```jldoctest fofxy
 julia> f
 f (generic function with 2 methods)
 ```
@@ -182,8 +178,9 @@ In the absence of a type declaration with `::`, the type of a method parameter i
 meaning that it is unconstrained since all values in Julia are instances of the abstract type
 `Any`. Thus, we can define a catch-all method for `f` like so:
 
-```julia
-julia> f(x,y) = println("Whoa there, Nelly.");
+```jldoctest fofxy
+julia> f(x,y) = println("Whoa there, Nelly.")
+f (generic function with 3 methods)
 
 julia> f("foo", 1)
 Whoa there, Nelly.
@@ -229,10 +226,12 @@ specialized code to handle each case at run time.
 It is possible to define a set of function methods such that there is no unique most specific
 method applicable to some combinations of arguments:
 
-```julia
-julia> g(x::Float64, y) = 2x + y;
+```jldoctest gofxy
+julia> g(x::Float64, y) = 2x + y
+g (generic function with 1 method)
 
-julia> g(x, y::Float64) = x + 2y;
+julia> g(x, y::Float64) = x + 2y
+g (generic function with 2 methods)
 
 julia> g(2.0, 3)
 7.0
@@ -241,10 +240,8 @@ julia> g(2, 3.0)
 8.0
 
 julia> g(2.0, 3.0)
-ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
-  g(x, y::Float64) in Main at none:1
-  g(x::Float64, y) in Main at none:1
- ...
+ERROR: MethodError: g(::Float64, ::Float64) is ambiguous.
+[...]
 ```
 
 Here the call `g(2.0, 3.0)` could be handled by either the `g(Float64, Any)` or the `g(Any, Float64)`
@@ -252,12 +249,9 @@ method, and neither is more specific than the other. In such cases, Julia raises
 rather than arbitrarily picking a method. You can avoid method ambiguities by specifying an appropriate
 method for the intersection case:
 
-```julia
-julia> g(x::Float64, y::Float64) = 2x + 2y;
-
-julia> g(x::Float64, y) = 2x + y;
-
-julia> g(x, y::Float64) = x + 2y;
+```jldoctest gofxy
+julia> g(x::Float64, y::Float64) = 2x + 2y
+g (generic function with 3 methods)
 
 julia> g(2.0, 3)
 7.0
@@ -277,10 +271,12 @@ exists, if transiently, until the more specific method is defined.
 Method definitions can optionally have type parameters immediately after the method name and before
 the parameter tuple:
 
-```julia
-julia> same_type{T}(x::T, y::T) = true;
+```jldoctest same_typefunc
+julia> same_type{T}(x::T, y::T) = true
+same_type (generic function with 1 method)
 
-julia> same_type(x,y) = false;
+julia> same_type(x,y) = false
+same_type (generic function with 2 methods)
 ```
 
 The first method applies whenever both arguments are of the same concrete type, regardless of
@@ -288,7 +284,7 @@ what type that is, while the second method acts as a catch-all, covering all oth
 overall, this defines a boolean function that checks whether its two arguments are of the same
 type:
 
-```julia
+```jldoctest same_typefunc
 julia> same_type(1, 2)
 true
 
@@ -314,7 +310,7 @@ they can be used anywhere a value would be in the signature of the function or b
 Here's an example where the method type parameter `T` is used as the type parameter to the parametric
 type `Vector{T}` in the method signature:
 
-```julia
+```jldoctest
 julia> myappend{T}(v::Vector{T}, x::T) = [v..., x]
 myappend (generic function with 1 method)
 
@@ -329,7 +325,6 @@ julia> myappend([1,2,3],2.5)
 ERROR: MethodError: no method matching myappend(::Array{Int64,1}, ::Float64)
 Closest candidates are:
   myappend{T}(::Array{T,1}, !Matched::T) at none:1
-...
 
 julia> myappend([1.0,2.0,3.0],4.0)
 4-element Array{Float64,1}:
@@ -342,14 +337,13 @@ julia> myappend([1.0,2.0,3.0],4)
 ERROR: MethodError: no method matching myappend(::Array{Float64,1}, ::Int64)
 Closest candidates are:
   myappend{T}(::Array{T,1}, !Matched::T) at none:1
-...
 ```
 
 As you can see, the type of the appended element must match the element type of the vector it
 is appended to, or else a [`MethodError`](@ref) is raised. In the following example, the method type parameter
 `T` is used as the return value:
 
-```julia
+```jldoctest
 julia> mytypeof{T}(x::T) = T
 mytypeof (generic function with 1 method)
 
@@ -363,9 +357,12 @@ Float64
 Just as you can put subtype constraints on type parameters in type declarations (see [Parametric Types](@ref)),
 you can also constrain type parameters of methods:
 
-```julia
-same_type_numeric{T<:Number}(x::T, y::T) = true
-same_type_numeric(x::Number, y::Number) = false
+```jldoctest
+julia> same_type_numeric{T<:Number}(x::T, y::T) = true
+same_type_numeric (generic function with 1 method)
+
+julia> same_type_numeric(x::Number, y::Number) = false
+same_type_numeric (generic function with 2 methods)
 
 julia> same_type_numeric(1, 2)
 true
@@ -377,10 +374,13 @@ julia> same_type_numeric(1.0, 2.0)
 true
 
 julia> same_type_numeric("foo", 2.0)
-no method same_type_numeric(String,Float64)
+ERROR: MethodError: no method matching same_type_numeric(::String, ::Float64)
+Closest candidates are:
+  same_type_numeric{T<:Number}(!Matched::T<:Number, ::T<:Number) at none:1
+  same_type_numeric(!Matched::Number, ::Number) at none:1
 
 julia> same_type_numeric("foo", "bar")
-no method same_type_numeric(String,String)
+ERROR: MethodError: no method matching same_type_numeric(::String, ::String)
 
 julia> same_type_numeric(Int32(1), Int64(2))
 false
@@ -446,55 +446,64 @@ Sometimes it is necessary to get around this (for example, if you are implementi
 Well, don't despair, since there's an easy solution: just call `eval` a second time.
 For example, here we create a zero-argument closure over `ans` and `eval` a call to it:
 
-```julia
-    julia> function tryeval2()
-               ans = (@eval newfun2() = 1)
-               res = eval(Expr(:call,
-                   function()
-                       return ans() + 1
-                   end))
-                return res
-           end
-    tryeval2 (generic function with 1 method)
+```jldoctest
+julia> function tryeval2()
+           ans = (@eval newfun2() = 1)
+           res = eval(Expr(:call,
+               function()
+                   return ans() + 1
+               end))
+           return res
+       end
+tryeval2 (generic function with 1 method)
 
-    julia> tryeval2()
-    2
+julia> tryeval2()
+2
 ```
 
 Finally, let's take a look at some more complex examples where this rule comes into play.
+Define a function `f(x)`, which initially has one method:
 
-```julia
-    julia> # initially f(x) has one definition:
+```jldoctest redefinemethod
+julia> f(x) = "original definition"
+f (generic function with 1 method)
+```
 
-    julia> f(x) = "original definition";
+Start some other operations that use `f(x)`:
 
-    julia> # start some other operations that use f(x):
+```jldoctest redefinemethod
+julia> g(x) = f(x)
+g (generic function with 1 method)
 
-    julia> g(x) = f(x);
+julia> t = @async f(wait()); yield();
+```
 
-    julia> t = @async f(wait()); yield();
+Now we add some new methods to `f(x)`:
 
-    julia> # now we add some new definitions for f(x):
+```jldoctest redefinemethod
+julia> f(x::Int) = "definition for Int"
+f (generic function with 2 methods)
 
-    julia> f(x::Int) = "definition for Int";
+julia> f(x::Type{Int}) = "definition for Type{Int}"
+f (generic function with 3 methods)
+```
 
-    julia> f(x::Type{Int}) = "definition for Type{Int}";
+Compare how these results differ:
 
-    julia> # and compare how these results differ:
+```jldoctest redefinemethod
+julia> f(1)
+"definition for Int"
 
-    julia> f(1)
-    "definition for Int"
+julia> g(1)
+"definition for Int"
 
-    julia> g(1)
-    "definition for Int"
+julia> wait(schedule(t, 1))
+"original definition"
 
-    julia> wait(schedule(t, 1))
-    "original definition"
+julia> t = @async f(wait()); yield();
 
-    julia> t = @async f(wait()); yield();
-
-    julia> wait(schedule(t, 1))
-    "definition for Int"
+julia> wait(schedule(t, 1))
+"definition for Int"
 ```
 
 ## Parametrically-constrained Varargs methods
@@ -503,22 +512,25 @@ Function parameters can also be used to constrain the number of arguments that m
 to a "varargs" function ([Varargs Functions](@ref)).  The notation `Vararg{T,N}` is used to indicate
 such a constraint.  For example:
 
-```julia
-julia> bar(a,b,x::Vararg{Any,2}) = (a,b,x);
+```jldoctest
+julia> bar(a,b,x::Vararg{Any,2}) = (a,b,x)
+bar (generic function with 1 method)
 
 julia> bar(1,2,3)
 ERROR: MethodError: no method matching bar(::Int64, ::Int64, ::Int64)
-...
+Closest candidates are:
+  bar(::Any, ::Any, ::Any, !Matched::Any) at none:1
 
 julia> bar(1,2,3,4)
 (1,2,(3,4))
 
 julia> bar(1,2,3,4,5)
 ERROR: MethodError: no method matching bar(::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
-...
+Closest candidates are:
+  bar(::Any, ::Any, ::Any, ::Any) at none:1
 ```
 
-More usefully, it is possible to constrain varargs methods by a parameter.  For example:
+More usefully, it is possible to constrain varargs methods by a parameter. For example:
 
 ```julia
 function getindex{T,N}(A::AbstractArray{T,N}, indexes::Vararg{Number,N})
@@ -568,24 +580,24 @@ by adding methods to its type. (Such "callable" objects are sometimes called "fu
 For example, you can define a type that stores the coefficients of a polynomial, but behaves like
 a function evaluating the polynomial:
 
-```julia
-immutable Polynomial{R}
-    coeffs::Vector{R}
-end
+```jldoctest polynomial
+julia> immutable Polynomial{R}
+           coeffs::Vector{R}
+       end
 
-function (p::Polynomial)(x)
-    v = p.coeffs[end]
-    for i = (length(p.coeffs)-1):-1:1
-        v = v*x + p.coeffs[i]
-    end
-    return v
-end
+julia> function (p::Polynomial)(x)
+           v = p.coeffs[end]
+           for i = (length(p.coeffs)-1):-1:1
+               v = v*x + p.coeffs[i]
+           end
+           return v
+       end
 ```
 
 Notice that the function is specified by type instead of by name. In the function body, `p` will
 refer to the object that was called. A `Polynomial` can be used as follows:
 
-```julia
+```jldoctest polynomial
 julia> p = Polynomial([1,10,100])
 Polynomial{Int64}([1,10,100])
 

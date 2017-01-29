@@ -724,7 +724,7 @@ timesofar("dequeue")
     @check_bit_operation (~)(b1)  BitMatrix
     @check_bit_operation (!)(b1)  BitMatrix
     @check_bit_operation (-)(b1)  Matrix{Int}
-    @check_bit_operation sign(b1) BitMatrix
+    @check_bit_operation broadcast(sign, b1) BitMatrix
     @check_bit_operation real(b1) BitMatrix
     @check_bit_operation imag(b1) BitMatrix
     @check_bit_operation conj(b1) BitMatrix
@@ -733,7 +733,7 @@ timesofar("dequeue")
     @check_bit_operation (~)(b0)  BitVector
     @check_bit_operation (!)(b0)  BitVector
     @check_bit_operation (-)(b0)  Vector{Int}
-    @check_bit_operation sign(b0) BitVector
+    @check_bit_operation broadcast(sign, b0) BitVector
 
     @testset "flipbits!" begin
         b1 = bitrand(n1, n2)
