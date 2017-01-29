@@ -156,7 +156,6 @@ cd(dirname(@__FILE__)) do
             Base.Test.pop_testset()
         elseif isa(res[2][1], RemoteException) && isa(res[2][1].captured.ex, Base.Test.TestSetException)
             println("Worker $(res[2][1].pid) failed running test $(res[1]):")
-            Base.showerror(STDOUT,res[2][1].captured)
             fake = Base.Test.DefaultTestSet(res[1])
             for i in 1:res[2][1].captured.ex.pass
                 Base.Test.record(fake, Base.Test.Pass(:test, nothing, nothing, nothing))
@@ -190,7 +189,6 @@ cd(dirname(@__FILE__)) do
         println("    \033[32;1mSUCCESS\033[0m")
     else
         println("    \033[31;1mFAILURE\033[0m")
-        Base.Test.print_test_errors(o_ts)
         isinteractive() ? error() : exit(-1)
     end
 end
