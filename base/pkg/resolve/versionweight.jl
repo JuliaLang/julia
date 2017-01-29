@@ -160,9 +160,9 @@ immutable VersionWeight
     prerelease::VWPreBuild
     build::VWPreBuild
 end
-VersionWeight(major::Int,minor::Int,patch::Int,prerelease::VWPreBuild) = VersionWeight(major, minor, patch, prerelease, zero(VWPreBuild))
-VersionWeight(major::Int,minor::Int,patch::Int) = VersionWeight(major, minor, patch, zero(VWPreBuild))
-VersionWeight(major::Int,minor::Int) = VersionWeight(major, minor, 0)
+VersionWeight(major::Int, minor::Int, patch::Int, prerelease::VWPreBuild) = VersionWeight(major, minor, patch, prerelease, zero(VWPreBuild))
+VersionWeight(major::Int, minor::Int, patch::Int) = VersionWeight(major, minor, patch, zero(VWPreBuild))
+VersionWeight(major::Int, minor::Int) = VersionWeight(major, minor, 0)
 VersionWeight(major::Int) = VersionWeight(major, 0)
 VersionWeight() = VersionWeight(0)
 
@@ -172,7 +172,7 @@ VersionWeight(vn::VersionNumber) =
 
 Base.zero(::Type{VersionWeight}) = VersionWeight()
 
-Base.typemin(::Type{VersionWeight}) = (x=typemin(Int); y=typemin(VWPreBuild); VersionWeight(x,x,x,y,y))
+Base.typemin(::Type{VersionWeight}) = (x=typemin(Int); y=typemin(VWPreBuild); VersionWeight(x, x, x, y, y))
 
 Base.:-(a::VersionWeight, b::VersionWeight) =
     VersionWeight(a.major-b.major, a.minor-b.minor, a.patch-b.patch,
