@@ -58,24 +58,6 @@ provided as a generic fallback (based on `isnan`, `signbit`, and `==`).
 """
 isequal(x, y) = x == y
 
-# TODO: these can be deleted once the deprecations of ==(x::Char, y::Integer) and
-# ==(x::Integer, y::Char) are gone and the above returns false anyway
-isequal(x::Char, y::Integer) = false
-isequal(x::Integer, y::Char) = false
-
-## minimally-invasive changes to test == causing NotComparableError
-# export NotComparableError
-# =={T}(x::T, y::T) = x === y
-# immutable NotComparableError <: Exception end
-# const NotComparable = NotComparableError()
-# ==(x::ANY, y::ANY) = NotComparable
-# !(e::NotComparableError) = throw(e)
-# isequal(x, y) = (x == y) === true
-
-## alternative NotComparableError which captures context
-# immutable NotComparableError; a; b; end
-# ==(x::ANY, y::ANY) = NotComparableError(x, y)
-
 isequal(x::AbstractFloat, y::AbstractFloat) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
 isequal(x::Real,          y::AbstractFloat) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
 isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
