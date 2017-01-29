@@ -90,7 +90,7 @@ type Interface
             for v0 = 1:spp0-1
                 vweight0[v0] = VersionWeight(pvers0[v0])
             end
-            vweight0[spp0] = VersionWeight(pvers0[spp0-1], true)
+            vweight0[spp0] = VersionWeight(v"0", true)
         end
 
         return new(reqs, deps, pkgs, np, spp, pdict, pvers, vdict, vweight)
@@ -234,6 +234,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
 
     reqs = interface.reqs
     deps = interface.deps
+    pkgs = interface.pkgs
     spp = interface.spp
     pdict = interface.pdict
     pvers = interface.pvers
@@ -319,6 +320,40 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
             restart = true
         end
     end
+
+    # Finally uninstall unneeded packages:
+    # start from the required ones and keep only
+    # the packages reachable from them along the graph
+    uninst = trues(np)
+    staged = Set{String}(keys(reqs))
+    seen = copy(staged)
+
+    while !isempty(staged)
+        staged_next = Set{String}()
+        for p in staged
+            p0 = pdict[p]
+            uninst[p0] = false
+            @assert sol[p0] < spp[p0]
+            vn = pvers[p0][sol[p0]]
+            a = deps[p][vn]
+
+            # scan dependencies
+            for (rp,rvs) in a.requires
+                rp0 = pdict[rp]
+                @assert sol[rp0] < spp[rp0] && pvers[rp0][sol[rp0]] ∈ rvs
+                if rp ∉ seen
+                    push!(staged_next, rp)
+                end
+            end
+        end
+        union!(seen, staged_next)
+        staged = staged_next
+    end
+
+    for p0 in find(uninst)
+        sol[p0] = spp[p0]
+    end
+
     return
 end
 
