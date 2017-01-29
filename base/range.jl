@@ -69,7 +69,7 @@ immutable StepRange{T,S} <: OrdinalRange{T,S}
     step::S
     stop::T
 
-    function StepRange(start::T, step::S, stop::T)
+    function StepRange{T,S}(start::T, step::S, stop::T) where (T,S)
         new(start, step, steprange_last(start,step,stop))
     end
 end
@@ -122,14 +122,14 @@ steprange_last_empty(start, step, stop) = start - step
 
 steprem(start,stop,step) = (stop-start) % step
 
-StepRange{T,S}(start::T, step::S, stop::T) = StepRange{T,S}(start, step, stop)
+StepRange(start::T, step::S, stop::T) where (T,S) = StepRange{T,S}(start, step, stop)
 
 immutable UnitRange{T<:Real} <: AbstractUnitRange{T}
     start::T
     stop::T
-    UnitRange(start, stop) = new(start, unitrange_last(start,stop))
+    UnitRange{T}(start, stop) where T<:Real = new(start, unitrange_last(start,stop))
 end
-UnitRange{T<:Real}(start::T, stop::T) = UnitRange{T}(start, stop)
+UnitRange(start::T, stop::T) where T<:Real = UnitRange{T}(start, stop)
 
 unitrange_last(::Bool, stop::Bool) = stop
 unitrange_last{T<:Integer}(start::T, stop::T) =
@@ -147,9 +147,9 @@ be 1.
 """
 immutable OneTo{T<:Integer} <: AbstractUnitRange{T}
     stop::T
-    OneTo(stop) = new(max(zero(T), stop))
+    OneTo{T}(stop) where T<:Integer = new(max(zero(T), stop))
 end
-OneTo{T<:Integer}(stop::T) = OneTo{T}(stop)
+OneTo(stop::T) where T<:Integer = OneTo{T}(stop)
 
 ## Step ranges parametrized by length
 
@@ -169,14 +169,14 @@ immutable StepRangeLen{T,R,S} <: Range{T}
     len::Int     # length of the range
     offset::Int  # the index of ref
 
-    function StepRangeLen(ref::R, step::S, len::Integer, offset::Integer = 1)
+    function StepRangeLen{T,R,S}(ref::R, step::S, len::Integer, offset::Integer = 1) where (T,R,S)
         len >= 0 || throw(ArgumentError("length cannot be negative, got $len"))
         1 <= offset <= max(1,len) || throw(ArgumentError("StepRangeLen: offset must be in [1,$len], got $offset"))
         new(ref, step, len, offset)
     end
 end
 
-StepRangeLen{R,S}(ref::R, step::S, len::Integer, offset::Integer = 1) =
+StepRangeLen(ref::R, step::S, len::Integer, offset::Integer = 1) where (R,S) =
     StepRangeLen{typeof(ref+0*step),R,S}(ref, step, len, offset)
 
 ## linspace and logspace
@@ -187,7 +187,7 @@ immutable LinSpace{T} <: Range{T}
     len::Int
     lendiv::Int
 
-    function LinSpace(start,stop,len)
+    function LinSpace{T}(start,stop,len) where T
         len >= 0 || throw(ArgumentError("linspace($start, $stop, $len): negative length"))
         if len == 1
             start == stop || throw(ArgumentError("linspace($start, $stop, $len): endpoints differ"))
