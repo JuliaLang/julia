@@ -61,13 +61,8 @@ have_color = false
 default_color_warn = :yellow
 default_color_error = :light_red
 default_color_info = :cyan
-if is_windows()
-    default_color_input = :normal
-    default_color_answer = :normal
-else
-    default_color_input = :bold
-    default_color_answer = :bold
-end
+default_color_input = :normal
+default_color_answer = :normal
 color_normal = text_colors[:normal]
 
 function repl_color(key, default)
@@ -81,22 +76,15 @@ error_color() = repl_color("JULIA_ERROR_COLOR", default_color_error)
 warn_color()  = repl_color("JULIA_WARN_COLOR" , default_color_warn)
 info_color()  = repl_color("JULIA_INFO_COLOR" , default_color_info)
 
-# Print input and answer in bold.
-input_color()  = text_colors[:bold] * text_colors[repl_color("JULIA_INPUT_COLOR", default_color_input)]
-answer_color() = text_colors[:bold] * text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answer)]
+input_color()  = text_colors[repl_color("JULIA_INPUT_COLOR", default_color_input)]
+answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answer)]
 
 stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bold)
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
 function repl_cmd(cmd, out)
     shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
-    # Note that we can't support the fish shell due to its lack of subshells
-    #   See this for details: https://github.com/JuliaLang/julia/issues/4918
-    if Base.basename(shell[1]) == "fish"
-        warn_once("cannot use the fish shell, defaulting to /bin/sh\
-         set the JULIA_SHELL environment variable to silence this warning")
-        shell = "/bin/sh"
-    end
+    shell_name = Base.basename(shell[1])
 
     if isempty(cmd.exec)
         throw(ArgumentError("no cmd to execute"))
@@ -120,9 +108,17 @@ function repl_cmd(cmd, out)
         ENV["OLDPWD"] = new_oldpwd
         println(out, pwd())
     else
-        run(ignorestatus(@static is_windows() ? cmd : (isa(STDIN, TTY) ? `$shell -i -c "($(shell_escape(cmd))) && true"` : `$shell -c "($(shell_escape(cmd))) && true"`)))
+        run(ignorestatus(@static is_windows() ? cmd : (isa(STDIN, TTY) ? `$shell -i -c "$(shell_wrap_true(shell_name, cmd))"` : `$shell -c "$(shell_wrap_true(shell_name, cmd))"`)))
     end
     nothing
+end
+
+function shell_wrap_true(shell_name, cmd)
+    if shell_name == "fish"
+        "begin; $(shell_escape(cmd)); and true; end"
+    else
+        "($(shell_escape(cmd))) && true"
+    end
 end
 
 function display_error(io::IO, er, bt)
@@ -216,7 +212,7 @@ parse_input_line(s::AbstractString) = parse_input_line(String(s))
 function parse_input_line(io::IO)
     s = ""
     while !eof(io)
-        s = s*readline(io)
+        s *= readline(io, chomp=false)
         e = parse_input_line(s)
         if !(isa(e,Expr) && e.head === :incomplete)
             return e

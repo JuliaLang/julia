@@ -25,12 +25,23 @@ end
 # typed `collect`
 @test collect(Float64, Iterators.filter(isodd, [1,2,3,4]))[1] === 1.0
 
+# check direct EachLine constructor
+let b = IOBuffer("foo\n")
+    @test collect(EachLine(b)) == ["foo"]
+    seek(b, 0)
+    @test collect(EachLine(b, chomp=false)) == ["foo\n"]
+    seek(b, 0)
+    @test collect(EachLine(b, ondone=()->0)) == ["foo"]
+    seek(b, 0)
+    @test collect(EachLine(b, chomp=false, ondone=()->0)) == ["foo\n"]
+end
+
 # enumerate (issue #6284)
 let b = IOBuffer("1\n2\n3\n"), a = []
     for (i,x) in enumerate(eachline(b))
         push!(a, (i,x))
     end
-    @test a == [(1,"1\n"),(2,"2\n"),(3,"3\n")]
+    @test a == [(1,"1"),(2,"2"),(3,"3")]
 end
 
 # zip eachline (issue #7369)
@@ -384,4 +395,8 @@ for T in (UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int128, BigInt)
     @test length(drop(1:6, T(3))) == 3
     @test length(repeated(1, T(5))) == 5
     @test collect(partition(1:5, T(5)))[1] == collect(1:5)
+end
+
+@testset begin "collect finite iterators issue #12009"
+    @test eltype(collect(enumerate(Iterators.Filter(x -> x>0, randn(10))))) == Tuple{Int, Float64}
 end

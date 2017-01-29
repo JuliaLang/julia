@@ -517,18 +517,6 @@ is_quoted(ex::Expr)      = is_expr(ex, :quote, 1) || is_expr(ex, :inert, 1)
 unquoted(ex::QuoteNode)  = ex.value
 unquoted(ex::Expr)       = ex.args[1]
 
-function is_intrinsic_expr(x::ANY)
-    isa(x, Core.IntrinsicFunction) && return true
-    if isa(x, GlobalRef)
-        x = x::GlobalRef
-        return (isdefined(x.mod, x.name) &&
-                isa(getfield(x.mod, x.name), Core.IntrinsicFunction))
-    elseif isa(x, Expr)
-        return (x::Expr).typ === Core.IntrinsicFunction
-    end
-    return false
-end
-
 ## AST printing helpers ##
 
 typeemphasize(io::IO) = get(io, :TYPEEMPHASIZE, false) === true
@@ -775,9 +763,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         func_args = args[2:end]
 
-        if (in(ex.args[1], (GlobalRef(Base, :box), :throw)) ||
-            ismodulecall(ex) ||
-            (ex.typ === Any && is_intrinsic_expr(ex.args[1])))
+        if (in(ex.args[1], (GlobalRef(Base, :bitcast), :throw)) ||
+            ismodulecall(ex))
             show_type = false
         end
         if show_type
@@ -858,10 +845,6 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_unquoted(io, args[2], indent)
         print(io, " if ")
         show_unquoted(io, args[1], indent)
-
-    elseif head === :ccall
-        show_unquoted(io, :ccall, indent)
-        show_enclosed_list(io, '(', args, ",", ')', indent)
 
     # comparison (i.e. "x < y < z")
     elseif head === :comparison && nargs >= 3 && (nargs&1==1)

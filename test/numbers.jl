@@ -155,8 +155,7 @@ let eps = 1//BigInt(2)^30, one_eps = 1+eps,
     @test eps64 == Float64(eps)
     @test one_eps64 == Float64(one_eps)
     @test one_eps64 * one_eps64 - 1 != Float64(one_eps * one_eps - 1)
-    @test isapprox(muladd(one_eps64, one_eps64, -1),
-                   Float64(one_eps * one_eps - 1))
+    @test muladd(one_eps64, one_eps64, -1) ≈ Float64(one_eps * one_eps - 1)
 end
 
 let eps = 1//BigInt(2)^15, one_eps = 1+eps,
@@ -164,8 +163,7 @@ let eps = 1//BigInt(2)^15, one_eps = 1+eps,
     @test eps32 == Float32(eps)
     @test one_eps32 == Float32(one_eps)
     @test one_eps32 * one_eps32 - 1 != Float32(one_eps * one_eps - 1)
-    @test isapprox(muladd(one_eps32, one_eps32, -1),
-                   Float32(one_eps * one_eps - 1))
+    @test muladd(one_eps32, one_eps32, -1) ≈ Float32(one_eps * one_eps - 1)
 end
 
 let eps = 1//BigInt(2)^7, one_eps = 1+eps,
@@ -173,8 +171,7 @@ let eps = 1//BigInt(2)^7, one_eps = 1+eps,
     @test eps16 == Float16(Float32(eps))
     @test one_eps16 == Float16(Float32(one_eps))
     @test one_eps16 * one_eps16 - 1 != Float16(Float32(one_eps * one_eps - 1))
-    @test isapprox(muladd(one_eps16, one_eps16, -1),
-                   Float16(Float32(one_eps * one_eps - 1)))
+    @test muladd(one_eps16, one_eps16, -1) ≈ Float16(Float32(one_eps * one_eps - 1))
 end
 
 @test muladd(1,2,3) == 1*2+3
@@ -1678,10 +1675,10 @@ end
 @test isnan(eps(-Inf))
 
 @test .1+.1+.1 != .3
-@test isapprox(.1+.1+.1, .3)
-@test !isapprox(.1+.1+.1-.3, 0)
-@test isapprox(.1+.1+.1-.3, 0, atol=eps(.3))
-@test isapprox(1.1,1.1f0)
+@test .1+.1+.1 ≈ .3
+@test .1+.1+.1-.3 ≉ 0
+@test .1+.1+.1-.3 ≈ 0 atol=eps(.3)
+@test 1.1 ≈ 1.1f0
 
 @test div(1e50,1) == 1e50
 @test fld(1e50,1) == 1e50
@@ -2864,6 +2861,44 @@ let types = (Base.BitInteger_types..., BigInt, Bool)
 end
 
 @test !isempty(complex(1,2))
+
+@testset "rem $T rounded" for T in (Float16, Float32, Float64, BigFloat)
+    @test rem(T(1), T(2), RoundToZero)  == 1
+    @test rem(T(1), T(2), RoundNearest) == 1
+    @test rem(T(1), T(2), RoundDown)    == 1
+    @test rem(T(1), T(2), RoundUp)      == -1
+    @test rem(T(1.5), T(2), RoundToZero)  == 1.5
+    @test rem(T(1.5), T(2), RoundNearest) == -0.5
+    @test rem(T(1.5), T(2), RoundDown)    == 1.5
+    @test rem(T(1.5), T(2), RoundUp)      == -0.5
+    @test rem(T(-1), T(2), RoundToZero)  == -1
+    @test rem(T(-1), T(2), RoundNearest) == -1
+    @test rem(T(-1), T(2), RoundDown)    == 1
+    @test rem(T(-1), T(2), RoundUp)      == -1
+    @test rem(T(-1.5), T(2), RoundToZero)  == -1.5
+    @test rem(T(-1.5), T(2), RoundNearest) == 0.5
+    @test rem(T(-1.5), T(2), RoundDown)    == 0.5
+    @test rem(T(-1.5), T(2), RoundUp)      == -1.5
+end
+
+@testset "rem2pi $T" for T in (Float16, Float32, Float64, BigFloat)
+    @test rem2pi(T(1), RoundToZero)  == 1
+    @test rem2pi(T(1), RoundNearest) == 1
+    @test rem2pi(T(1), RoundDown)    == 1
+    @test rem2pi(T(1), RoundUp)      ≈ 1-2pi
+    @test rem2pi(T(2), RoundToZero)  == 2
+    @test rem2pi(T(2), RoundNearest) == 2
+    @test rem2pi(T(2), RoundDown)    == 2
+    @test rem2pi(T(2), RoundUp)      ≈ 2-2pi
+    @test rem2pi(T(4), RoundToZero)  == 4
+    @test rem2pi(T(4), RoundNearest) ≈ 4-2pi
+    @test rem2pi(T(4), RoundDown)    == 4
+    @test rem2pi(T(4), RoundUp)      ≈ 4-2pi
+    @test rem2pi(T(-4), RoundToZero)  == -4
+    @test rem2pi(T(-4), RoundNearest) ≈ 2pi-4
+    @test rem2pi(T(-4), RoundDown)    ≈ 2pi-4
+    @test rem2pi(T(-4), RoundUp)      == -4
+end
 
 @testset "iszero" begin
     # Numeric scalars

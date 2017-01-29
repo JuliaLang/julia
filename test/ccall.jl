@@ -15,34 +15,55 @@ ccall_test_func(x) = ccall((:testUcharX, libccalltest), Int32, (UInt8,), x % UIn
 
 
 # Test for proper round-trip of Ref{T} type
-ccall_echo_func{T,U}(x, ::Type{T}, ::Type{U}) = ccall((:test_echo_p, libccalltest), T, (U,), x)
-# Make sure object x is still valid (rooted as argument)
-# when loading the pointer. This works as long as we still keep the argument
-# rooted but might fail if we are smarter about eliminating dead root.
-@noinline ccall_echo_load{T,U}(x, ::Type{T}, ::Type{U}) =
-    unsafe_load(ccall_echo_func(x, T, U))
-@noinline ccall_echo_objref{T,U}(x, ::Type{T}, ::Type{U}) =
-    unsafe_pointer_to_objref(ccall_echo_func(x, Ptr{T}, U))
+function gen_ccall_echo(x, T, U, ret=nothing)
+    # Construct a noninline function to do all the work, this is necessary
+    # to make sure object x is still valid (rooted as argument)
+    # when loading the pointer.
+    # This works as long as we still keep the argument
+    # rooted but might fail if we are smarter about eliminating dead root.
+
+    # `eval` in global scope to make sure the function is not a closure
+    func_ex = :(ccall((:test_echo_p, libccalltest), $T, ($U,), x))
+    # It is not allowed to allocate after the ccall returns
+    # and before calling `ret`.
+    if ret !== nothing
+        func_ex = :($ret($func_ex))
+    end
+    @gensym func_name
+    @eval @noinline $func_name(x) = $func_ex
+    :($func_name($(esc(x))))
+end
+
+macro ccall_echo_func(x, T, U)
+    gen_ccall_echo(x, T, U)
+end
+macro ccall_echo_load(x, T, U)
+    gen_ccall_echo(x, T, U, :unsafe_load)
+end
+macro ccall_echo_objref(x, T, U)
+    gen_ccall_echo(x, :(Ptr{$T}), U, :unsafe_pointer_to_objref)
+end
+
 type IntLike
     x::Int
 end
-@test ccall_echo_load(132, Ptr{Int}, Ref{Int}) === 132
-@test ccall_echo_load(Ref(921), Ptr{Int}, Ref{Int}) === 921
-@test ccall_echo_load(IntLike(993), Ptr{Int}, Ref{IntLike}) === 993
-@test ccall_echo_load(IntLike(881), Ptr{IntLike}, Ref{IntLike}).x === 881
-@test ccall_echo_func(532, Int, Int) === 532
+@test @ccall_echo_load(132, Ptr{Int}, Ref{Int}) === 132
+@test @ccall_echo_load(Ref(921), Ptr{Int}, Ref{Int}) === 921
+@test @ccall_echo_load(IntLike(993), Ptr{Int}, Ref{IntLike}) === 993
+@test @ccall_echo_load(IntLike(881), Ptr{IntLike}, Ref{IntLike}).x === 881
+@test @ccall_echo_func(532, Int, Int) === 532
 if Sys.WORD_SIZE == 64
     # this test is valid only for x86_64 and win64
-    @test ccall_echo_func(164, IntLike, Int).x === 164
+    @test @ccall_echo_func(164, IntLike, Int).x === 164
 end
-@test ccall_echo_func(IntLike(828), Int, IntLike) === 828
-@test ccall_echo_func(913, Any, Any) === 913
-@test ccall_echo_objref(553, Ptr{Any}, Any) === 553
-@test ccall_echo_func(124, Ref{Int}, Any) === 124
-@test ccall_echo_load(422, Ptr{Any}, Ref{Any}) === 422
-@test ccall_echo_load([383], Ptr{Int}, Ref{Int}) === 383
-@test ccall_echo_load(Ref([144,172],2), Ptr{Int}, Ref{Int}) === 172
-# @test ccall_echo_load(Ref([8],1,1), Ptr{Int}, Ref{Int}) === 8
+@test @ccall_echo_func(IntLike(828), Int, IntLike) === 828
+@test @ccall_echo_func(913, Any, Any) === 913
+@test @ccall_echo_objref(553, Ptr{Any}, Any) === 553
+@test @ccall_echo_func(124, Ref{Int}, Any) === 124
+@test @ccall_echo_load(422, Ptr{Any}, Ref{Any}) === 422
+@test @ccall_echo_load([383], Ptr{Int}, Ref{Int}) === 383
+@test @ccall_echo_load(Ref([144,172],2), Ptr{Int}, Ref{Int}) === 172
+# @test @ccall_echo_load(Ref([8],1,1), Ptr{Int}, Ref{Int}) === 8
 
 
 ## Tests for passing and returning structs
@@ -63,7 +84,7 @@ let a, ci_ary, x
 
     x = ccall((:cptest_static, libccalltest), Ptr{Complex{Int}}, (Ptr{Complex{Int}},), &a)
     @test unsafe_load(x) == a
-    Libc.free(convert(Ptr{Void},x))
+    Libc.free(convert(Ptr{Void}, x))
 end
 
 let a, b, x
@@ -123,7 +144,11 @@ function test_struct1{Struct}(::Type{Struct})
     b = Float32(123.456)
 
     a2 = copy(a)
-    x = ccall((:test_1, libccalltest), Struct, (Struct, Float32), a2, b)
+    if Struct === Struct1
+        x = ccall((:test_1, libccalltest), Struct1, (Struct1, Float32), a2, b)
+    else
+        x = ccall((:test_1, libccalltest), Struct1I, (Struct1I, Float32), a2, b)
+    end
 
     @test a2.x == a.x && a2.y == a.y
     @test !(a2 === x)
@@ -202,7 +227,11 @@ function test_struct4{Struct}(::Type{Struct})
     a = Struct(-512275808,882558299,-2133022131)
     b = Int32(42)
 
-    x = ccall((:test_4, libccalltest), Struct, (Struct, Int32), a, b)
+    if Struct === Struct4
+        x = ccall((:test_4, libccalltest), Struct4, (Struct4, Int32), a, b)
+    else
+        x = ccall((:test_4, libccalltest), Struct4I, (Struct4I, Int32), a, b)
+    end
 
     @test x.x == a.x+b*1
     @test x.y == a.y-b*2
@@ -228,7 +257,11 @@ function test_struct5{Struct}(::Type{Struct})
     a = Struct(1771319039, 406394736, -1269509787, -745020976)
     b = Int32(42)
 
-    x = ccall((:test_5, libccalltest), Struct, (Struct, Int32), a, b)
+    if Struct === Struct5
+        x = ccall((:test_5, libccalltest), Struct5, (Struct5, Int32), a, b)
+    else
+        x = ccall((:test_5, libccalltest), Struct5I, (Struct5I, Int32), a, b)
+    end
 
     @test x.x == a.x+b*1
     @test x.y == a.y-b*2
@@ -253,7 +286,11 @@ function test_struct6{Struct}(::Type{Struct})
     a = Struct(-654017936452753226, -5573248801240918230, -983717165097205098)
     b = Int64(42)
 
-    x = ccall((:test_6, libccalltest), Struct, (Struct, Int64), a, b)
+    if Struct === Struct6
+        x = ccall((:test_6, libccalltest), Struct6, (Struct6, Int64), a, b)
+    else
+        x = ccall((:test_6, libccalltest), Struct6I, (Struct6I, Int64), a, b)
+    end
 
     @test x.x == a.x+b*1
     @test x.y == a.y-b*2
@@ -275,7 +312,11 @@ function test_struct7{Struct}(::Type{Struct})
     a = Struct(-384082741977533896, 'h')
     b = Int8(42)
 
-    x = ccall((:test_7, libccalltest), Struct, (Struct, Int8), a, b)
+    if Struct === Struct7
+        x = ccall((:test_7, libccalltest), Struct7, (Struct7, Int8), a, b)
+    else
+        x = ccall((:test_7, libccalltest), Struct7I, (Struct7I, Int8), a, b)
+    end
 
     @test x.x == a.x+Int(b)*1
     @test x.y == a.y-Int(b)*2
@@ -296,7 +337,11 @@ function test_struct8{Struct}(::Type{Struct})
     a = Struct(-384082896, 'h')
     b = Int8(42)
 
-    r8 = ccall((:test_8, libccalltest), Struct, (Struct, Int8), a, b)
+    if Struct === Struct8
+        r8 = ccall((:test_8, libccalltest), Struct8, (Struct8, Int8), a, b)
+    else
+        r8 = ccall((:test_8, libccalltest), Struct8I, (Struct8I, Int8), a, b)
+    end
 
     @test r8.x == a.x+b*1
     @test r8.y == a.y-b*2
@@ -317,7 +362,11 @@ function test_struct9{Struct}(::Type{Struct})
     a = Struct(-394092996, -3840)
     b = Int16(42)
 
-    x = ccall((:test_9, libccalltest), Struct, (Struct, Int16), a, b)
+    if Struct === Struct9
+        x = ccall((:test_9, libccalltest), Struct9, (Struct9, Int16), a, b)
+    else
+        x = ccall((:test_9, libccalltest), Struct9I, (Struct9I, Int16), a, b)
+    end
 
     @test x.x == a.x+b*1
     @test x.y == a.y-b*2
@@ -342,7 +391,11 @@ function test_struct10{Struct}(::Type{Struct})
     a = Struct('0', '1', '2', '3')
     b = Int8(2)
 
-    x = ccall((:test_10, libccalltest), Struct, (Struct, Int8), a, b)
+    if Struct === Struct10
+        x = ccall((:test_10, libccalltest), Struct10, (Struct10, Int8), a, b)
+    else
+        x = ccall((:test_10, libccalltest), Struct10I, (Struct10I, Int8), a, b)
+    end
 
     @test x.x == a.x+b*1
     @test x.y == a.y-b*2
@@ -363,7 +416,11 @@ function test_struct11{Struct}(::Type{Struct})
     a = Struct(0.8877077f0 + 0.4591081f0im)
     b = Float32(42)
 
-    x = ccall((:test_11, libccalltest), Struct, (Struct, Float32), a, b)
+    if Struct === Struct11
+        x = ccall((:test_11, libccalltest), Struct11, (Struct11, Float32), a, b)
+    else
+        x = ccall((:test_11, libccalltest), Struct11I, (Struct11I, Float32), a, b)
+    end
 
     @test x.x ≈ a.x + b*1 - b*2im
 end
@@ -383,7 +440,11 @@ function test_struct12{Struct}(::Type{Struct})
     a = Struct(0.8877077f5 + 0.4591081f2im, 0.0004842868f0 - 6982.3265f3im)
     b = Float32(42)
 
-    x = ccall((:test_12, libccalltest), Struct, (Struct, Float32), a, b)
+    if Struct === Struct12
+        x = ccall((:test_12, libccalltest), Struct12, (Struct12, Float32), a, b)
+    else
+        x = ccall((:test_12, libccalltest), Struct12I, (Struct12I, Float32), a, b)
+    end
 
     @test x.x ≈ a.x + b*1 - b*2im
     @test x.y ≈ a.y + b*3 - b*4im
@@ -402,7 +463,11 @@ function test_struct13{Struct}(::Type{Struct})
     a = Struct(42968.97560380495 - 803.0576845153616im)
     b = Float64(42)
 
-    x = ccall((:test_13, libccalltest), Struct, (Struct, Float64), a, b)
+    if Struct === Struct13
+        x = ccall((:test_13, libccalltest), Struct13, (Struct13, Float64), a, b)
+    else
+        x = ccall((:test_13, libccalltest), Struct13I, (Struct13I, Float64), a, b)
+    end
 
     @test x.x ≈ a.x + b*1 - b*2im
 end
@@ -422,7 +487,11 @@ function test_struct14{Struct}(::Type{Struct})
     a = Struct(0.024138331f0, 0.89759064f32)
     b = Float32(42)
 
-    x = ccall((:test_14, libccalltest), Struct, (Struct, Float32), a, b)
+    if Struct === Struct14
+        x = ccall((:test_14, libccalltest), Struct14, (Struct14, Float32), a, b)
+    else
+        x = ccall((:test_14, libccalltest), Struct14I, (Struct14I, Float32), a, b)
+    end
 
     @test x.x ≈ a.x + b*1
     @test x.y ≈ a.y - b*2
@@ -443,7 +512,11 @@ function test_struct15{Struct}(::Type{Struct})
     a = Struct(4.180997967273657, -0.404218594294923)
     b = Float64(42)
 
-    x = ccall((:test_15, libccalltest), Struct, (Struct, Float64), a, b)
+    if Struct === Struct15
+        x = ccall((:test_15, libccalltest), Struct15, (Struct15, Float64), a, b)
+    else
+        x = ccall((:test_15, libccalltest), Struct15I, (Struct15I, Float64), a, b)
+    end
 
     @test x.x ≈ a.x + b*1
     @test x.y ≈ a.y - b*2
@@ -473,7 +546,11 @@ function test_struct16{Struct}(::Type{Struct})
                0.6460273620993535, 0.9472692581106656, 0.47328535437352093)
     b = Float32(42)
 
-    x = ccall((:test_16, libccalltest), Struct, (Struct, Float32), a, b)
+    if Struct === Struct16
+        x = ccall((:test_16, libccalltest), Struct16, (Struct16, Float32), a, b)
+    else
+        x = ccall((:test_16, libccalltest), Struct16I, (Struct16I, Float32), a, b)
+    end
 
     @test x.x ≈ a.x + b*1
     @test x.y ≈ a.y - b*2
@@ -498,7 +575,11 @@ function test_struct17{Struct}(::Type{Struct})
     a = Struct(2, 10)
     b = Int8(2)
 
-    x = ccall((:test_17, libccalltest), Struct, (Struct, Int8), a, b)
+    if Struct === Struct17
+        x = ccall((:test_17, libccalltest), Struct17, (Struct17, Int8), a, b)
+    else
+        x = ccall((:test_17, libccalltest), Struct17I, (Struct17I, Int8), a, b)
+    end
 
     @test x.a == a.a + b * 1
     @test x.b == a.b - b * 2
@@ -521,7 +602,11 @@ function test_struct18{Struct}(::Type{Struct})
     a = Struct(2, 10, -3)
     b = Int8(2)
 
-    x = ccall((:test_18, libccalltest), Struct, (Struct, Int8), a, b)
+    if Struct === Struct18
+        x = ccall((:test_18, libccalltest), Struct18, (Struct18, Int8), a, b)
+    else
+        x = ccall((:test_18, libccalltest), Struct18I, (Struct18I, Int8), a, b)
+    end
 
     @test x.a == a.a + b * 1
     @test x.b == a.b - b * 2
@@ -557,7 +642,11 @@ function test_struct_big{Struct}(::Type{Struct})
     a = Struct(424,-5,Int8('Z'))
     a2 = copy(a)
 
-    x = ccall((:test_big, libccalltest), Struct, (Struct,), a2)
+    if Struct == Struct_Big
+        x = ccall((:test_big, libccalltest), Struct_Big, (Struct_Big,), a2)
+    else
+        x = ccall((:test_big, libccalltest), Struct_BigI, (Struct_BigI,), a2)
+    end
 
     @test a2.x == a.x && a2.y == a.y && a2.z == a.z
     @test x.x == a.x + 1
@@ -890,28 +979,35 @@ type Struct_huge5_ppc64_hva
 end
 
 if Sys.ARCH === :x86_64
-    function test_sse(a1::V4xF32,a2::V4xF32,a3::V4xF32,a4::V4xF32)
-        ccall((:test_m128, libccalltest), V4xF32, (V4xF32,V4xF32,V4xF32,V4xF32), a1, a2, a3, a4)
+    function test_sse(a1::V4xF32, a2::V4xF32, a3::V4xF32, a4::V4xF32)
+        ccall((:test_m128, libccalltest), V4xF32, (V4xF32, V4xF32, V4xF32, V4xF32), a1, a2, a3, a4)
     end
 
-    function test_sse(a1::V4xI32,a2::V4xI32,a3::V4xI32,a4::V4xI32)
-        ccall((:test_m128i, libccalltest), V4xI32, (V4xI32,V4xI32,V4xI32,V4xI32), a1, a2, a3, a4)
+    function test_sse(a1::V4xI32, a2::V4xI32, a3::V4xI32, a4::V4xI32)
+        ccall((:test_m128i, libccalltest), V4xI32, (V4xI32, V4xI32, V4xI32, V4xI32), a1, a2, a3, a4)
     end
 
-    foo_ams(a1, a2, a3, a4) = VecReg(ntuple(i->VecElement(a1[i].value+a2[i].value*(a3[i].value-a4[i].value)),4))
+    foo_ams(a1, a2, a3, a4) = VecReg(ntuple(i -> VecElement(a1[i].value + a2[i].value * (a3[i].value - a4[i].value)), 4))
 
-    rt_sse{T}(a1::T,a2::T,a3::T,a4::T) = ccall(cfunction(foo_ams,T,(T,T,T,T)), T, (T,T,T,T), a1, a2, a3,a4)
+    for s in [Float32, Int32]
+        T = NTuple{4, VecElement{s}}
+        @eval function rt_sse(a1::$T, a2::$T, a3::$T, a4::$T)
+            return ccall(
+                cfunction(foo_ams, $T, ($T, $T, $T, $T)),
+                $T,
+                ($T, $T, $T, $T),
+                a1,  a2,  a3, a4)
+        end
 
-    for s in [Float32,Int32]
-        a1 = VecReg(ntuple(i->VecElement(s(1i)),4))
-        a2 = VecReg(ntuple(i->VecElement(s(2i)),4))
-        a3 = VecReg(ntuple(i->VecElement(s(3i)),4))
-        a4 = VecReg(ntuple(i->VecElement(s(4i)),4))
-        r = VecReg(ntuple(i->VecElement(s(1i+2i*(3i-4i))),4))
-        @test test_sse(a1,a2,a3,a4) == r
+        a1 = VecReg(ntuple(i -> VecElement(s(1i)), 4))
+        a2 = VecReg(ntuple(i -> VecElement(s(2i)), 4))
+        a3 = VecReg(ntuple(i -> VecElement(s(3i)), 4))
+        a4 = VecReg(ntuple(i -> VecElement(s(4i)), 4))
+        r = VecReg(ntuple(i -> VecElement(s(1i + 2i * (3i - 4i))), 4))
+        @test test_sse(a1, a2, a3, a4) == r
 
         # cfunction round-trip
-        @test rt_sse(a1,a2,a3,a4) == r
+        @test rt_sse(a1, a2, a3, a4) == r
     end
 
 elseif Sys.ARCH === :aarch64

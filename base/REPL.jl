@@ -205,7 +205,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
         interrupted = false
         while true
             try
-                line *= readline(repl.terminal)
+                line *= readline(repl.terminal, chomp=false)
             catch e
                 if isa(e,InterruptException)
                     try # raise the debugger if present
@@ -268,7 +268,7 @@ terminal(r::LineEditREPL) = r.t
 
 LineEditREPL(t::TextTerminal, envcolors = false) =  LineEditREPL(t,
                                               true,
-                                              julia_green,
+                                              Base.text_colors[:light_green],
                                               Base.input_color(),
                                               Base.answer_color(),
                                               Base.text_colors[:red],
@@ -337,7 +337,7 @@ An editor may have converted tabs to spaces at line """
 
 function hist_getline(file)
     while !eof(file)
-        line = readline(file)
+        line = readline(file, chomp=false)
         isempty(line) && return line
         line[1] in "\r\n" || return line
     end
@@ -598,8 +598,6 @@ function history_reset_state(hist::REPLHistoryProvider)
     end
 end
 LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
-
-const julia_green = "\033[1m\033[32m"
 
 function return_callback(s)
     ast = Base.syntax_deprecation_warnings(false) do
@@ -959,7 +957,7 @@ type StreamREPL <: AbstractREPL
     waserror::Bool
     StreamREPL(stream,pc,ic,ac) = new(stream,pc,ic,ac,false)
 end
-StreamREPL(stream::IO) = StreamREPL(stream, julia_green, Base.input_color(), Base.answer_color())
+StreamREPL(stream::IO) = StreamREPL(stream, Base.text_colors[:light_green], Base.input_color(), Base.answer_color())
 run_repl(stream::IO) = run_repl(StreamREPL(stream))
 
 outstream(s::StreamREPL) = s.stream
@@ -995,7 +993,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
         if have_color
             print(repl.stream, input_color(repl))
         end
-        line = readline(repl.stream)
+        line = readline(repl.stream, chomp=false)
         if !isempty(line)
             ast = Base.parse_input_line(line)
             if have_color

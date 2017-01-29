@@ -15,6 +15,10 @@ f47{T}(x::Vector{Vector{T}}) = 0
 @test_throws TypeError ([T] where T)
 @test_throws TypeError (Array{T} where T<:[])
 @test_throws TypeError (Array{T} where T>:[])
+@test_throws TypeError (Array{T} where T<:Vararg)
+@test_throws TypeError (Array{T} where T>:Vararg)
+@test_throws TypeError (Array{T} where T<:Vararg{Int})
+@test_throws TypeError (Array{T} where T<:Vararg{Int,2})
 
 # issue #8652
 args_morespecific(a, b) = ccall(:jl_type_morespecific, Cint, (Any,Any), a, b) != 0
@@ -78,15 +82,16 @@ g11840{T<:Tuple}(sig::Type{T}) = 3
 
 g11840b(::DataType) = 1
 g11840b(::Type) = 2
-# FIXME: how to compute that the guard entry is still required,
-# even though Type{Vector} ∩ DataType = Bottom and this method would set cache_with_orig = true
-#g11840b{T<:Tuple}(sig::Type{T}) = 3
+# FIXME (needs a test): how to compute that the guard entry is still required,
+# even though Type{Vector} ∩ DataType = Bottom and this method would set
+# cache_with_orig = true
+g11840b{T<:Tuple}(sig::Type{T}) = 3
 @test g11840b(Vector) == 2
 @test g11840b(Vector.body) == 1
 @test g11840b(Vector) == 2
 @test g11840b(Vector.body) == 1
-#@test g11840b(Tuple) == 3
-#@test g11840b(TT11840) == 3
+@test g11840b(Tuple) == 3
+@test g11840b(TT11840) == 3
 
 h11840(::DataType) = '1'
 h11840(::Type) = '2'
@@ -208,10 +213,6 @@ type FooFoo{A,B} y::FooFoo{A} end
 let x = (2,3)
     @test +(x...) == 5
 end
-
-# bits types
-@test isa((()->Core.Intrinsics.box(Ptr{Int8}, Core.Intrinsics.unbox(Int, 0)))(), Ptr{Int8})
-@test isa(convert(Char,65), Char)
 
 # conversions
 function fooo()
@@ -347,13 +348,6 @@ end
 glotest()
 @test glob_x == 88
 @test loc_x == 10
-
-# runtime intrinsics
-
-let f = Any[Core.Intrinsics.add_int, Core.Intrinsics.sub_int]
-    @test f[1](1, 1) == 2
-    @test f[2](1, 1) == 0
-end
 
 # issue #7234
 begin
@@ -1317,25 +1311,6 @@ f4518(x, y::Union{Int32,Int64}) = 0
 f4518(x::String, y::Union{Int32,Int64}) = 1
 @test f4518("",1) == 1
 
-# issue #4581
-bitstype 64 Date4581{T}
-let
-    x = Core.Intrinsics.box(Date4581{Int}, Core.Intrinsics.unbox(Int64,Int64(1234)))
-    xs = Date4581[x]
-    ys = copy(xs)
-    @test ys !== xs
-    @test ys == xs
-end
-
-# issue #6591
-function f6591(d)
-    Core.Intrinsics.box(Int64, d)
-    (f->f(d))(identity)
-end
-let d = Core.Intrinsics.box(Date4581{Int}, Int64(1))
-    @test isa(f6591(d), Date4581)
-end
-
 # issue #4645
 i4645(x) = (println(zz); zz = x; zz)
 @test_throws UndefVarError i4645(4)
@@ -1387,6 +1362,11 @@ end
 import Base: promote_rule
 promote_rule{T,T2,S,S2}(A::Type{SIQ{T,T2}},B::Type{SIQ{S,S2}}) = SIQ{promote_type(T,S)}
 @test_throws ErrorException promote_type(SIQ{Int},SIQ{Float64})
+f4731{T}(x::T...) = 0
+f4731(x...) = ""
+g4731() = f4731()
+@test f4731() == ""
+@test g4731() == ""
 
 # issue #4675
 f4675(x::StridedArray...) = 1
@@ -1447,7 +1427,7 @@ f5150(T) = Array{Rational{T}}(1)
 
 # issue #5165
 bitstype 64 T5165{S}
-make_t(x::Int64) = Base.box(T5165{Void}, Base.unbox(Int64, x))
+make_t(x::Int64) = Core.Intrinsics.bitcast(T5165{Void}, x)
 xs5165 = T5165[make_t(Int64(1))]
 b5165 = IOBuffer()
 for x in xs5165
@@ -1766,8 +1746,8 @@ obj6387 = ObjMember(DateRange6387{Int64}())
 
 function v6387{T}(r::Range{T})
     a = Array{T}(1)
-    a[1] = Core.Intrinsics.box(Date6387{Int64}, Core.Intrinsics.unbox(Int64,Int64(1)))
-    a
+    a[1] = Core.Intrinsics.bitcast(Date6387{Int64}, Int64(1))
+    return a
 end
 
 function day_in(obj::ObjMember)
@@ -1967,7 +1947,7 @@ end
 
 # a method specificity issue
 c99991{T}(::Type{T},x::T) = 0
-c99991{T}(::Type{UnitRange{T}},x::FloatRange{T}) = 1
+c99991{T}(::Type{UnitRange{T}},x::StepRangeLen{T}) = 1
 c99991{T}(::Type{UnitRange{T}},x::Range{T}) = 2
 @test c99991(UnitRange{Float64}, 1.0:2.0) == 1
 @test c99991(UnitRange{Int}, 1:2) == 2
@@ -2255,20 +2235,6 @@ f7221{T<:Number}(::T) = 1
 f7221(::BitArray) = 2
 f7221(::AbstractVecOrMat) = 3
 @test f7221(trues(1)) == 2
-
-# test functionality of non-power-of-2 bitstype constants
-bitstype 24 Int24
-Int24(x::Int) = Core.Intrinsics.box(Int24,Core.Intrinsics.trunc_int(Int24,Core.Intrinsics.unbox(Int,x)))
-Int(x::Int24) = Core.Intrinsics.box(Int,Core.Intrinsics.zext_int(Int,Core.Intrinsics.unbox(Int24,x)))
-let x,y,f
-    x = Int24(Int(0x12345678)) # create something (via truncation)
-    @test Int(0x345678) === Int(x)
-    function f() Int24(Int(0x02468ace)) end
-    y = f() # invoke llvm constant folding
-    @test Int(0x468ace) === Int(y)
-    @test x !== y
-    @test string(y) == "$(curmod_prefix)Int24(0x468ace)"
-end
 
 # issue #10570
 immutable Array_512_Uint8
@@ -3129,10 +3095,12 @@ end
 
 # don't allow Vararg{} in Union{} type constructor
 @test_throws TypeError Union{Int,Vararg{Int}}
+@test_throws TypeError Union{Vararg{Int}}
 
-# don't allow Vararg{} in Tuple{} type constructor in non-trailing position
+# only allow Vararg{} in last position of Tuple{ }
 @test_throws TypeError Tuple{Vararg{Int32},Int64,Float64}
 @test_throws TypeError Tuple{Int64,Vararg{Int32},Float64}
+@test_throws TypeError Array{Vararg}
 
 # don't allow non-types in Union
 @test_throws TypeError Union{1}
@@ -3264,16 +3232,6 @@ abstract A11327
 abstract B11327 <: A11327
 f11327{T}(::Type{T},x::T) = x
 @test_throws MethodError f11327(Type{A11327},B11327)
-
-# issue 13855
-macro m13855()
-    Expr(:localize, :(() -> $(esc(:x))))
-end
-@noinline function foo13855(x)
-    @m13855()
-end
-@test foo13855(+)() == +
-@test foo13855(*)() == *
 
 # issue #8487
 @test [x for x in 1:3] == [x for x ∈ 1:3] == [x for x = 1:3]
@@ -4481,7 +4439,7 @@ gc_enable(true)
 
 # issue #18710
 bad_tvars{T}() = 1
-@test isa(@which(bad_tvars()), Method)
+@test_throws ErrorException @which(bad_tvars())
 @test_throws MethodError bad_tvars()
 
 # issue #19059 - test for lowering of `let` with assignment not adding Box in simple cases

@@ -2,15 +2,15 @@
 
 module Enums
 
-import Core.Intrinsics.box
+import Core.Intrinsics.bitcast
 export Enum, @enum
 
 function basetype end
 
 abstract Enum{T<:Integer}
 
-Base.convert{T<:Integer}(::Type{Integer}, x::Enum{T}) = box(T, x)
-Base.convert{T<:Integer,T2<:Integer}(::Type{T}, x::Enum{T2}) = convert(T, box(T2, x))
+Base.convert{T<:Integer}(::Type{Integer}, x::Enum{T}) = bitcast(T, x)
+Base.convert{T<:Integer,T2<:Integer}(::Type{T}, x::Enum{T2}) = convert(T, bitcast(T2, x))
 Base.write{T<:Integer}(io::IO, x::Enum{T}) = write(io, T(x))
 Base.read{T<:Enum}(io::IO, ::Type{T}) = T(read(io, Enums.basetype(T)))
 
@@ -106,7 +106,7 @@ macro enum(T,syms...)
         Base.@__doc__(bitstype $(sizeof(basetype) * 8) $(esc(typename)) <: Enum{$(basetype)})
         function Base.convert(::Type{$(esc(typename))}, x::Integer)
             $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x)
-            box($(esc(typename)), convert($(basetype), x))
+            return bitcast($(esc(typename)), convert($(basetype), x))
         end
         Enums.basetype(::Type{$(esc(typename))}) = $(esc(basetype))
         Base.typemin(x::Type{$(esc(typename))}) = $(esc(typename))($lo)

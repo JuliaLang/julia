@@ -9,12 +9,19 @@
 @test length(2:.2:1) == 0
 @test length(2.:.2:1.) == 0
 
+@inferred(colon(10, 1, 0))
+@inferred(colon(1, .2, 2))
+@inferred(colon(1., .2, 2.))
+@inferred(colon(2, -.2, 1))
+@inferred(colon(1, 0))
+@inferred(colon(0.0, -0.5))
+
 @test length(1:0) == 0
 @test length(0.0:-0.5) == 0
 @test length(1:2:0) == 0
-L32 = linspace(Int32(1), Int32(4), 4)
-L64 = linspace(Int64(1), Int64(4), 4)
-@test L32[1] == 1 && L64[1] == 1
+L32 = @inferred(linspace(Int32(1), Int32(4), 4))
+L64 = @inferred(linspace(Int64(1), Int64(4), 4))
+@test @inferred(L32[1]) === 1.0 && @inferred(L64[1]) === 1.0
 @test L32[2] == 2 && L64[2] == 2
 @test L32[3] == 3 && L64[3] == 3
 @test L32[4] == 4 && L64[4] == 4
@@ -31,16 +38,16 @@ r = 5:-1:1
 @test length(1.1:1.3:3) == 2
 @test length(1:1:1.8) == 1
 
-@test (1:5)[1:4] == 1:4
+@test @inferred((0.1:0.1:0.3)[2]) === 0.2
+@test @inferred((0.1f0:0.1f0:0.3f0)[2]) === 0.2f0
+
+@test @inferred((1:5)[1:4]) === 1:4
+@test @inferred((1.0:5)[1:4]) === 1.0:4
 @test (2:6)[1:4] == 2:5
-@test (1:6)[2:5] == 2:5
-@test typeof((1:6)[2:5]) == typeof(2:5)
-@test (1:6)[2:2:5] == 2:2:4
-@test typeof((1:6)[2:2:5]) == typeof(2:2:4)
-@test (1:2:13)[2:6] == 3:2:11
-@test typeof((1:2:13)[2:6]) == typeof(3:2:11)
-@test (1:2:13)[2:3:7] == 3:6:13
-@test typeof((1:2:13)[2:3:7]) == typeof(3:6:13)
+@test (1:6)[2:5] === 2:5
+@test (1:6)[2:2:5] === 2:2:4
+@test (1:2:13)[2:6] === 3:2:11
+@test (1:2:13)[2:3:7] === 3:6:13
 
 @test isempty((1:4)[5:4])
 @test_throws BoundsError (1:10)[8:-1:-2]
@@ -245,7 +252,7 @@ else
     @test sum(Int64(1):10^9-1) == div(10^9 * (Int64(10^9)-1), 2)
 end
 
-# Tricky sums of FloatRange #8272
+# Tricky sums of StepRangeLen #8272
 @test sum(10000.:-0.0001:0) == 5.00000005e11
 @test sum(0:0.001:1) == 500.5
 @test sum(0:0.000001:1) == 500000.5
@@ -338,9 +345,6 @@ for T = (Float32, Float64)
     @test [linspace(-u,-u,1);] == [-u]
     @test [linspace(-u,u,2);] == [-u,u]
     @test [linspace(-u,u,3);] == [-u,0,u]
-    @test [linspace(-u,u,4);] == [-u,0,0,u]
-    @test [linspace(-u,u,4);][2] === -z
-    @test [linspace(-u,u,4);][3] === z
     @test first(linspace(-u,-u,0)) == -u
     @test last(linspace(-u,-u,0)) == -u
     @test first(linspace(u,-u,0)) == u
@@ -349,18 +353,15 @@ for T = (Float32, Float64)
     @test [linspace(u,u,1);] == [u]
     @test [linspace(u,-u,2);] == [u,-u]
     @test [linspace(u,-u,3);] == [u,0,-u]
-    @test [linspace(u,-u,4);] == [u,0,0,-u]
-    @test [linspace(u,-u,4);][2] === z
-    @test [linspace(u,-u,4);][3] === -z
-    v = [linspace(-u,u,12);]
+    v = linspace(-u,u,12)
     @test length(v) == 12
-    @test issorted(v) && unique(v) == [-u,0,0,u]
     @test [-3u:u:3u;] == [linspace(-3u,3u,7);] == [-3:3;].*u
     @test [3u:-u:-3u;] == [linspace(3u,-3u,7);] == [3:-1:-3;].*u
 end
 
 # linspace with very large endpoints
 for T = (Float32, Float64)
+    largeint = Int(min(maxintfloat(T), typemax(Int)))
     a = realmax()
     for i = 1:5
         @test [linspace(a,a,1);] == [a]
@@ -373,17 +374,15 @@ for T = (Float32, Float64)
             @test [linspace(a,-b,0);] == []
             @test [linspace(a,-b,2);] == [a,-b]
             @test [linspace(a,-b,3);] == [a,(a-b)/2,-b]
-            for c = maxintfloat(T)-3:maxintfloat(T)
+            for c = largeint-3:largeint
                 s = linspace(-a,b,c)
                 @test first(s) == -a
                 @test last(s) == b
-                c <= typemax(Int) && @test length(s) == c
-                @test s.len == c
+                @test length(s) == c
                 s = linspace(a,-b,c)
                 @test first(s) == a
                 @test last(s) == -b
-                c <= typemax(Int) && @test length(s) == c
-                @test s.len == c
+                @test length(s) == c
             end
             b = prevfloat(b)
         end
@@ -456,7 +455,7 @@ let r1 = 1.0:0.1:2.0, r2 = 1.0f0:0.2f0:3.0f0, r3 = 1:2:21
     @test r1 + r1 == 2*r1
     @test r1 + r2 == 2.0:0.3:5.0
     @test (r1 + r2) - r2 == r1
-    @test r1 + r3 == convert(FloatRange{Float64}, r3) + r1
+    @test r1 + r3 == convert(StepRangeLen{Float64}, r3) + r1
     @test r3 + r3 == 2 * r3
 end
 
@@ -475,7 +474,7 @@ r = linspace(1/3,5/7,6)
 @test abs(r[end] - 5/7) <= eps(5/7)
 r = linspace(0.25,0.25,1)
 @test length(r) == 1
-@test_throws ErrorException linspace(0.25,0.5,1)
+@test_throws ArgumentError linspace(0.25,0.5,1)
 
 # issue #7426
 @test [typemax(Int):1:typemax(Int);] == [typemax(Int)]
@@ -486,11 +485,15 @@ r7484 = 0.1:0.1:1
 
 # issue #7387
 for r in (0:1, 0.0:1.0)
-    @test r+im == [r;]+im
-    @test r-im == [r;]-im
-    @test r*im == [r;]*im
-    @test r/im == [r;]/im
+    @test [r+im;] == [r;]+im
+    @test [r-im;] == [r;]-im
+    @test [r*im;] == [r;]*im
+    @test [r/im;] == [r;]/im
 end
+
+# Preservation of high precision upon addition
+r = (-0.1:0.1:0.3) + ((-0.3:0.1:0.1) + 1e-12)
+@test r[3] == 1e-12
 
 # issue #7709
 @test length(map(identity, 0x01:0x05)) == 5
@@ -554,20 +557,26 @@ end
 @test_throws ArgumentError StepRange(1.1,1,5.1)
 
 @test promote(0f0:inv(3f0):1f0, 0.:2.:5.) === (0:1/3:1, 0.:2.:5.)
-@test convert(FloatRange{Float64}, 0:1/3:1) === 0:1/3:1
-@test convert(FloatRange{Float64}, 0f0:inv(3f0):1f0) === 0:1/3:1
+
+@test convert(StepRangeLen{Float64}, 0:1/3:1) === 0:1/3:1
+@test convert(StepRangeLen{Float64}, 0f0:inv(3f0):1f0) === 0:1/3:1
 
 @test promote(0:1/3:1, 0:5) === (0:1/3:1, 0.:1.:5.)
-@test convert(FloatRange{Float64}, 0:5) === 0.:1.:5.
-@test convert(FloatRange{Float64}, 0:1:5) === 0.:1.:5.
-@test convert(FloatRange, 0:5) === 0.:1.:5.
-@test convert(FloatRange, 0:1:5) === 0.:1.:5.
+@test convert(StepRangeLen{Float64}, 0:5) === 0.:1.:5.
+@test convert(StepRangeLen{Float64}, 0:1:5) === 0.:1.:5.
+@test convert(StepRangeLen, 0:5) == 0:5
+@test convert(StepRangeLen, 0:1:5) == 0:1:5
+
+@test convert(LinSpace{Float64}, 0.0:0.1:0.3) === LinSpace{Float64}(0.0, 0.3, 4)
+@test convert(LinSpace, 0.0:0.1:0.3) === LinSpace{Float64}(0.0, 0.3, 4)
+@test convert(LinSpace, 0:3) === LinSpace{Int}(0, 3, 4)
 
 # Issue #11245
 let io = IOBuffer()
     show(io, linspace(1, 2, 3))
     str = String(take!(io))
-    @test str == "linspace(1.0,2.0,3)"
+#    @test str == "linspace(1.0,2.0,3)"
+    @test str == "1.0:0.5:2.0"
 end
 
 # issue 10950
@@ -585,13 +594,16 @@ end
 replstrmime(x) = sprint((io,x) -> show(IOContext(io, limit=true), MIME("text/plain"), x), x)
 @test replstrmime(1:4) == "1:4"
 @test stringmime("text/plain", 1:4) == "1:4"
-@test stringmime("text/plain", linspace(1,5,7)) == "7-element LinSpace{Float64}:\n 1.0,1.66667,2.33333,3.0,3.66667,4.33333,5.0"
-@test repr(linspace(1,5,7)) == "linspace(1.0,5.0,7)"
+@test stringmime("text/plain", linspace(1,5,7)) == "1.0:0.6666666666666666:5.0"
+@test stringmime("text/plain", LinSpace{Float64}(1,5,7)) == "7-element LinSpace{Float64}:\n 1.0,1.66667,2.33333,3.0,3.66667,4.33333,5.0"
+@test repr(linspace(1,5,7)) == "1.0:0.6666666666666666:5.0"
+@test repr(LinSpace{Float64}(1,5,7)) == "linspace(1.0,5.0,7)"
 @test replstrmime(0:100.) == "0.0:1.0:100.0"
 # next is to test a very large range, which should be fast because print_range
 # only examines spacing of the left and right edges of the range, sufficient
 # to cover the designated screen size.
-@test replstrmime(linspace(0,100, 10000)) == "10000-element LinSpace{Float64}:\n 0.0,0.010001,0.020002,0.030003,0.040004,…,99.95,99.96,99.97,99.98,99.99,100.0"
+@test replstrmime(linspace(0,100, 10000)) == "0.0:0.010001000100010001:100.0"
+@test replstrmime(LinSpace{Float64}(0,100, 10000)) == "10000-element LinSpace{Float64}:\n 0.0,0.010001,0.020002,0.030003,0.040004,…,99.95,99.96,99.97,99.98,99.99,100.0"
 
 @test sprint(io -> show(io,UnitRange(1,2))) == "1:2"
 @test sprint(io -> show(io,StepRange(1,2,5))) == "1:2:5"
@@ -600,15 +612,15 @@ replstrmime(x) = sprint((io,x) -> show(IOContext(io, limit=true), MIME("text/pla
 # Issue 11049 and related
 @test promote(linspace(0f0, 1f0, 3), linspace(0., 5., 2)) ===
     (linspace(0., 1., 3), linspace(0., 5., 2))
-@test convert(LinSpace{Float64}, linspace(0., 1., 3)) === linspace(0., 1., 3)
-@test convert(LinSpace{Float64}, linspace(0f0, 1f0, 3)) === linspace(0., 1., 3)
+@test convert(LinSpace{Float64}, linspace(0., 1., 3)) === LinSpace(0., 1., 3)
+@test convert(LinSpace{Float64}, linspace(0f0, 1f0, 3)) === LinSpace(0., 1., 3)
 
 @test promote(linspace(0., 1., 3), 0:5) === (linspace(0., 1., 3),
                                              linspace(0., 5., 6))
-@test convert(LinSpace{Float64}, 0:5) === linspace(0., 5., 6)
-@test convert(LinSpace{Float64}, 0:1:5) === linspace(0., 5., 6)
-@test convert(LinSpace, 0:5) === linspace(0., 5., 6)
-@test convert(LinSpace, 0:1:5) === linspace(0., 5., 6)
+@test convert(LinSpace{Float64}, 0:5) === LinSpace(0., 5., 6)
+@test convert(LinSpace{Float64}, 0:1:5) === LinSpace(0., 5., 6)
+@test convert(LinSpace, 0:5) === LinSpace{Int}(0, 5, 6)
+@test convert(LinSpace, 0:1:5) === LinSpace{Int}(0, 5, 6)
 
 function test_range_index(r, s)
     @test typeof(r[s]) == typeof(r)
@@ -620,26 +632,26 @@ test_range_index(linspace(1.0, 1.0, 1), 1:1)
 test_range_index(linspace(1.0, 1.0, 1), 1:0)
 test_range_index(linspace(1.0, 2.0, 0), 1:0)
 
-function test_linspace_identity{T}(r::LinSpace{T}, mr::LinSpace{T})
+function test_linspace_identity{T}(r::Range{T}, mr)
     @test -r == mr
     @test -collect(r) == collect(mr)
-    @test isa(-r, LinSpace)
+    @test isa(-r, typeof(r))
 
     @test 1 + r + (-1) == r
     @test 1 + collect(r) == collect(1 + r) == collect(r + 1)
-    @test isa(1 + r + (-1), LinSpace)
+    @test isa(1 + r + (-1), typeof(r))
     @test 1 - r - 1 == mr
     @test 1 - collect(r) == collect(1 - r) == collect(1 + mr)
     @test collect(r) - 1 == collect(r - 1) == -collect(mr + 1)
-    @test isa(1 - r - 1, LinSpace)
+    @test isa(1 - r - 1, typeof(r))
 
     @test 1 * r * 1 == r
     @test 2 * r * T(0.5) == r
-    @test isa(1 * r * 1, LinSpace)
+    @test isa(1 * r * 1, typeof(r))
     @test r / 1 == r
     @test r / 2 * 2 == r
     @test r / T(0.5) * T(0.5) == r
-    @test isa(r / 1, LinSpace)
+    @test isa(r / 1, typeof(r))
 
     @test (2 * collect(r) == collect(r * 2) == collect(2 * r) ==
            collect(r * T(2.0)) == collect(T(2.0) * r) ==
@@ -729,10 +741,10 @@ end
 
 # sign, conj, ~ (Issue #16067)
 let A = -1:1, B = -1.0:1.0
-    @test sign(A) == [-1,0,1]
-    @test sign(B) == [-1,0,1]
-    @test typeof(sign(A)) === Vector{Int}
-    @test typeof(sign(B)) === Vector{Float64}
+    @test sign.(A) == [-1,0,1]
+    @test sign.(B) == [-1,0,1]
+    @test typeof(sign.(A)) === Vector{Int}
+    @test typeof(sign.(B)) === Vector{Float64}
 
     @test conj(A) === A
     @test conj(B) === B
@@ -786,3 +798,29 @@ io = IOBuffer()
 show(io, r)
 str = String(take!(io))
 @test str == "Base.OneTo(3)"
+
+# linspace of other types
+r = linspace(0, 3//10, 4)
+@test eltype(r) == Rational{Int}
+@test r[2] === 1//10
+
+a, b = 1.0, nextfloat(1.0)
+ba, bb = BigFloat(a), BigFloat(b)
+r = linspace(ba, bb, 3)
+@test eltype(r) == BigFloat
+@test r[1] == a && r[3] == b
+@test r[2] == (ba+bb)/2
+
+a, b = rand(10), rand(10)
+r = linspace(a, b, 5)
+@test r[1] == a && r[5] == b
+for i = 2:4
+    x = ((5-i)//4)*a + ((i-1)//4)*b
+    @test r[i] == x
+end
+
+# issue #14420
+for r in (linspace(0.10000000000000045, 1), 0.10000000000000045:(1-0.10000000000000045)/49:1)
+    @test r[1] === 0.10000000000000045
+    @test r[end] === 1.0
+end

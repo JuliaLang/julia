@@ -413,6 +413,13 @@ immutable StatusEntry
     index_to_workdir::Ptr{DiffDelta}
 end
 
+"""
+    LibGit2.FetchHead
+
+Contains the information about HEAD during a fetch, including the name and URL
+of the branch fetched from, the oid of the HEAD, and whether the fetched HEAD
+has been merged locally.
+"""
 immutable FetchHead
     name::String
     url::String
@@ -449,9 +456,12 @@ for (typ, reporef, sup, cname) in [
         @eval type $typ <: $sup
             ptr::Ptr{Void}
             function $typ(ptr::Ptr{Void},fin=true)
+                # fin=false should only be used when the pointer should not be free'd
+                # e.g. from within callback functions which are passed a pointer
                 @assert ptr != C_NULL
                 obj = new(ptr)
                 if fin
+                    Threads.atomic_add!(REFCOUNT, UInt(1))
                     finalizer(obj, Base.close)
                 end
                 return obj
@@ -464,12 +474,14 @@ for (typ, reporef, sup, cname) in [
             function $typ(repo::GitRepo, ptr::Ptr{Void})
                 @assert ptr != C_NULL
                 obj = new(Nullable(repo), ptr)
+                Threads.atomic_add!(REFCOUNT, UInt(1))
                 finalizer(obj, Base.close)
                 return obj
             end
             function $typ(ptr::Ptr{Void})
                 @assert ptr != C_NULL
                 obj = new(Nullable{GitRepo}(), ptr)
+                Threads.atomic_add!(REFCOUNT, UInt(1))
                 finalizer(obj, Base.close)
                 return obj
             end
@@ -481,6 +493,7 @@ for (typ, reporef, sup, cname) in [
             function $typ(repo::GitRepo, ptr::Ptr{Void})
                 @assert ptr != C_NULL
                 obj = new(repo, ptr)
+                Threads.atomic_add!(REFCOUNT, UInt(1))
                 finalizer(obj, Base.close)
                 return obj
             end
@@ -490,6 +503,10 @@ for (typ, reporef, sup, cname) in [
         if obj.ptr != C_NULL
             ccall(($(string(cname, :_free)), :libgit2), Void, (Ptr{Void},), obj.ptr)
             obj.ptr = C_NULL
+            if Threads.atomic_sub!(REFCOUNT, UInt(1)) == 1
+                # will the last finalizer please turn out the lights?
+                ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
+            end
         end
     end
 end
@@ -497,7 +514,8 @@ end
 """
     LibGit2.GitSignature
 
-This is a Julia wrapper around a pointer to a [`git_signature`](https://libgit2.github.com/libgit2/#HEAD/type/git_signature) object.
+This is a Julia wrapper around a pointer to a
+[`git_signature`](https://libgit2.github.com/libgit2/#HEAD/type/git_signature) object.
 """
 type GitSignature <: AbstractGitObject
     ptr::Ptr{SignatureStruct}
@@ -544,7 +562,12 @@ function with_warn{T}(f::Function, ::Type{T}, args...)
     end
 end
 
+"""
+    getobjecttype{T<:GitObject}(::Type{T})
 
+Convert between the Julia `Type` of a git object and
+the constant integer id code for that object type.
+"""
 function getobjecttype{T<:GitObject}(::Type{T})
     return if T == GitCommit
         Consts.OBJ_COMMIT
@@ -561,6 +584,12 @@ function getobjecttype{T<:GitObject}(::Type{T})
     end
 end
 
+"""
+    getobjecttype(obj_type::Cint)
+
+Convert between the constant integer id code for a git object
+and the corresponding Julia type.
+"""
 function getobjecttype(obj_type::Cint)
     return if obj_type == Consts.OBJ_COMMIT
         GitCommit

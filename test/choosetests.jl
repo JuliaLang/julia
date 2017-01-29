@@ -17,7 +17,7 @@ function choosetests(choices = [])
     testnames = [
         "linalg", "subarray", "core", "inference", "worlds",
         "keywordargs", "numbers", "subtype",
-        "printf", "char", "strings", "triplequote", "unicode",
+        "printf", "char", "strings", "triplequote", "unicode", "intrinsics",
         "dates", "dict", "hashing", "iobuffer", "staged", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "random", "abstractarray",
         "intfuncs", "simdloop", "vecelement", "blas", "sparse",
@@ -29,7 +29,7 @@ function choosetests(choices = [])
         "floatapprox", "datafmt", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
         "euler", "show", "lineedit", "replcompletions", "repl",
-        "replutil", "sets", "test", "goto", "llvmcall", "grisu",
+        "replutil", "sets", "test", "goto", "llvmcall", "llvmcall2", "grisu",
         "nullable", "meta", "stacktraces", "profile", "libgit2", "docs",
         "markdown", "base64", "serialize", "misc", "threads",
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",

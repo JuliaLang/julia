@@ -51,7 +51,7 @@ tuple_type_head(T::UnionAll) = tuple_type_head(T.body)
 function tuple_type_head(T::DataType)
     @_pure_meta
     T.name === Tuple.name || throw(MethodError(tuple_type_head, (T,)))
-    return T.parameters[1]
+    return unwrapva(T.parameters[1])
 end
 tuple_type_tail(T::UnionAll) = tuple_type_tail(T.body)
 function tuple_type_tail(T::DataType)
@@ -81,6 +81,22 @@ function rewrap_unionall(t::ANY, u::ANY)
         return t
     end
     return UnionAll(u.var, rewrap_unionall(t, u.body))
+end
+
+# replace TypeVars in all enclosing UnionAlls with fresh TypeVars
+function rename_unionall(u::ANY)
+    if !isa(u,UnionAll)
+        return u
+    end
+    body = rename_unionall(u.body)
+    if body === u.body
+        body = u
+    else
+        body = UnionAll(u.var, body)
+    end
+    var = u.var::TypeVar
+    nv = TypeVar(var.name, var.lb, var.ub)
+    return UnionAll(nv, body{nv})
 end
 
 const _va_typename = Vararg.body.body.name
@@ -115,7 +131,7 @@ unsafe_convert{T}(::Type{T}, x::T) = x # unsafe_convert (like convert) defaults 
 unsafe_convert{T<:Ptr}(::Type{T}, x::T) = x  # to resolve ambiguity with the next method
 unsafe_convert{P<:Ptr}(::Type{P}, x::Ptr) = convert(P, x)
 
-reinterpret{T}(::Type{T}, x) = box(T, x)
+reinterpret{T}(::Type{T}, x) = bitcast(T, x)
 reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16,x)
 reinterpret(::Type{Signed}, x::Float16) = reinterpret(Int16,x)
 
@@ -148,11 +164,11 @@ setindex!(A::Array{Any}, x::ANY, i::Int) = Core.arrayset(A, x, i)
 map(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
 
 function precompile(f::ANY, args::Tuple)
-    ccall(:jl_compile_hint, Cint, (Any,), Tuple{Core.Typeof(f), args...}) != 0
+    ccall(:jl_compile_hint, Int32, (Any,), Tuple{Core.Typeof(f), args...}) != 0
 end
 
 function precompile(argt::Type)
-    ccall(:jl_compile_hint, Cint, (Any,), argt) != 0
+    ccall(:jl_compile_hint, Int32, (Any,), argt) != 0
 end
 
 """

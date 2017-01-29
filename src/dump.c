@@ -432,15 +432,15 @@ static void jl_update_all_fptrs(void)
     for (i = 0; i < delayed_fptrs_n; i++) {
         jl_method_instance_t *li = delayed_fptrs[i].li;
         assert(li->def);
-        int32_t func = delayed_fptrs[i].func - 1;
-        if (func >= 0) {
-            jl_fptr_to_llvm((jl_fptr_t)fvars[func], li, 0);
-            linfos[func] = li;
-        }
         int32_t cfunc = delayed_fptrs[i].cfunc - 1;
         if (cfunc >= 0) {
             jl_fptr_to_llvm((jl_fptr_t)fvars[cfunc], li, 1);
             linfos[cfunc] = li;
+        }
+        int32_t func = delayed_fptrs[i].func - 1;
+        if (func >= 0) {
+            jl_fptr_to_llvm((jl_fptr_t)fvars[func], li, 0);
+            linfos[func] = li;
         }
     }
     jl_register_fptrs(sysimage_base, fvars, linfos, sysimg_fvars_max);
@@ -937,7 +937,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)m->unspecialized);
         jl_serialize_value(s, (jl_value_t*)m->generator);
         jl_serialize_value(s, (jl_value_t*)m->invokes.unknown);
-        write_int8(s->s, m->needs_sparam_vals_ducttape);
     }
     else if (jl_is_method_instance(v)) {
         writetag(s->s, jl_method_instance_type);
@@ -1685,7 +1684,6 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
         jl_gc_wb(m, m->generator);
     m->invokes.unknown = jl_deserialize_value(s, (jl_value_t**)&m->invokes);
     jl_gc_wb(m, m->invokes.unknown);
-    m->needs_sparam_vals_ducttape = read_int8(s->s);
     m->traced = 0;
     JL_MUTEX_INIT(&m->writelock);
     return (jl_value_t*)m;
@@ -2887,7 +2885,7 @@ jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *li, size_
     jl_datatype_t *argtypes = (jl_datatype_t*)li->specTypes;
     jl_set_typeof(li, (void*)(intptr_t)0x40); // invalidate the old value to help catch errors
     jl_svec_t *env = jl_emptysvec;
-    jl_value_t *ti = jl_type_intersection_matching((jl_value_t*)argtypes, (jl_value_t*)m->sig, &env);
+    jl_value_t *ti = jl_type_intersection_env((jl_value_t*)argtypes, (jl_value_t*)m->sig, &env);
     //assert(ti != jl_bottom_type); (void)ti;
     if (ti == jl_bottom_type)
         env = jl_emptysvec; // the intersection may fail now if the type system had made an incorrect subtype env in the past
@@ -3090,7 +3088,7 @@ void jl_init_serializer(void)
                      jl_abstractslot_type, jl_methtable_type, jl_typemap_level_type,
                      jl_voidpointer_type, jl_newvarnode_type, jl_abstractstring_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
-                     jl_typeof(jl_emptytuple), jl_array_uint8_type, jl_symbol_type->name,
+                     jl_emptytuple_type, jl_array_uint8_type, jl_symbol_type->name,
                      jl_ssavalue_type->name, jl_tuple_typename, jl_code_info_type, jl_bottomtype_type,
                      ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_ref_type))->name,
                      jl_pointer_typename, jl_simplevector_type->name, jl_datatype_type->name,

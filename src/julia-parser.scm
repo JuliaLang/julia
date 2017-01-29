@@ -113,7 +113,7 @@
 
 (define initial-reserved-words '(begin while if for try return break continue
                          function macro quote let local global const
-                         abstract typealias type bitstype immutable ccall do
+                         abstract typealias type bitstype immutable do
                          module baremodule using import export importall))
 
 (define initial-reserved-word? (Set initial-reserved-words))
@@ -587,7 +587,11 @@
               (t 'where))
      (if (eq? t 'where)
          (begin (take-token s)
-                (loop (list 'where ex (parse-comparison s)) (peek-token s)))
+                (let ((var (parse-comparison s)))
+                  (loop (if (and (pair? var) (eq? (car var) 'tuple))
+                            (list* 'where ex (cdr var))  ;; form `x where (T,S)`
+                            (list 'where ex var))
+                        (peek-token s))))
          ex))))
 
 (define (parse-where s)
@@ -604,12 +608,17 @@
 (define (line-number-node s)
   `(line ,(input-port-line (ts:port s)) ,current-filename))
 
+(define (eventually-call ex)
+  (and (pair? ex)
+       (or (eq? (car ex) 'call)
+           (and (eq? (car ex) 'where)
+                (eventually-call (cadr ex))))))
+
 ;; insert line/file for short-form function defs, otherwise leave alone
 (define (short-form-function-loc ex lno)
   (if (and (pair? ex)
            (eq? (car ex) '=)
-           (pair? (cadr ex))
-           (eq? (caadr ex) 'call))
+           (eventually-call (cadr ex)))
       `(= ,(cadr ex) (block (line ,lno ,current-filename) ,(caddr ex)))
       ex))
 
@@ -1360,17 +1369,6 @@
           (if (length= imports 1)
               (car imports)
               (cons 'toplevel imports))))
-       ((ccall)
-        (if (not (eqv? (peek-token s) #\())
-            (error "invalid \"ccall\" syntax")
-            (begin
-              (take-token s)
-              (let ((al (parse-arglist s #\))))
-                (if (and (length> al 1)
-                         (memq (cadr al) '(cdecl stdcall fastcall thiscall)))
-                    ;; place (callingconv) at end of arglist
-                    `(ccall ,(car al) ,@(cddr al) (,(cadr al)))
-                    `(ccall ,.al))))))
        ((do)
         (error "invalid \"do\" syntax"))
        (else (error "unhandled reserved word")))))))

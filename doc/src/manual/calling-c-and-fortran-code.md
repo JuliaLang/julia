@@ -35,21 +35,28 @@ must be passed by reference.
 Finally, you can use [`ccall`](@ref) to actually generate a call to the library function. Arguments
 to [`ccall`](@ref) are as follows:
 
-1. (:function, "library") pair (must be a constant, but see below).
+1. A `(:function, "library")` pair, which must be written as a literal constant,
+
+   OR
+
+   a function pointer (for example, from `dlsym`).
+
 2. Return type (see below for mapping the declared C type to Julia)
 
-     * This argument will be evaluated at compile-time.
+     * This argument will be evaluated at compile-time, when the containing method is defined.
+
 3. A tuple of input types. The input types must be written as a literal tuple, not a tuple-valued
    variable or expression.
 
-     * This argument will be evaluated at compile-time.
+     * This argument will be evaluated at compile-time, when the containing method is defined.
+
 4. The following arguments, if any, are the actual argument values passed to the function.
 
 As a complete but simple example, the following calls the `clock` function from the standard C
 library:
 
 ```julia
-julia> t = ccall( (:clock, "libc"), Int32, ())
+julia> t = ccall((:clock, "libc"), Int32, ())
 2292761
 
 julia> t
@@ -118,12 +125,12 @@ Here is a slightly more complex example that discovers the local machine's hostn
 
 ```julia
 function gethostname()
-  hostname = Array{UInt8}(128)
-  ccall((:gethostname, "libc"), Int32,
-        (Ptr{UInt8}, Csize_t),
-        hostname, sizeof(hostname))
-  hostname[end] = 0; # ensure null-termination
-  return unsafe_string(pointer(hostname))
+    hostname = Vector{UInt8}(128)
+    ccall((:gethostname, "libc"), Int32,
+          (Ptr{UInt8}, Csize_t),
+          hostname, sizeof(hostname))
+    hostname[end] = 0; # ensure null-termination
+    return unsafe_string(pointer(hostname))
 end
 ```
 
@@ -241,16 +248,18 @@ it to be freed prematurely.
 
 First, a review of some relevant Julia type terminology:
 
-| Syntax / Keyword              | Example                                   | Description                                                                                                                                                                                                                                                                    |
-|:----------------------------- |:----------------------------------------- |:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `type`                        | `String`                                  | "Leaf Type" :: A group of related data that includes a type-tag, is managed by the Julia GC, and is defined by object-identity. The type parameters of a leaf type must be fully defined (no `TypeVars` are allowed) in order for the instance to be constructed.              |
-| `abstract`                    | `Any`, `AbstractArray{T,N}`, `Complex{T}` | "Super Type" :: A super-type (not a leaf-type) that cannot be instantiated, but can be used to describe a group of types.                                                                                                                                                      |
-| `{T}`                         | `Vector{Int}`                             | "Type Parameter" :: A specialization of a type (typically used for dispatch or storage optimization). "TypeVar" :: The `T` in the type parameter declaration is referred to as a TypeVar (short for type variable).                                                            |
-| `bitstype`                    | `Int`, `Float64`                          | "Bits Type" :: A type with no fields, but a size. It is stored and defined by-value.                                                                                                                                                                                           |
-| `immutable`                   | `Pair{Int,Int}``Complex128` (`isbits`)    | "Immutable" :: A type with all fields defined to be constant. It is defined by-value. And may be stored with a type-tag."Is-Bits" :: A `bitstype`, or an `immutable` type where all fields are other `isbits` types. It is defined by-value, and is stored without a type-tag. |
-| `type ...; end`               | `nothing`                                 | "Singleton" :: a Leaf Type or Immutable with no fields.                                                                                                                                                                                                                        |
-| `(...)` or ```tuple(...)` ``` | `(1,2,3)`                                 | "Tuple" :: an immutable data-structure similar to an anonymous immutable type, or a constant array. Represented as either an array or a struct.                                                                                                                                |
-| `typealias`                   | Not applicable here                       | Type aliases, and other similar mechanisms of doing type indirection, are resolved to their base type (this includes assigning a type to another name, or getting the type out of a function call).                                                                            |
+| Syntax / Keyword              | Example                                     | Description                                                                                                                                                                                                                                                                    |
+|:----------------------------- |:------------------------------------------- |:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `type`                        | `String`                                    | "Leaf Type" :: A group of related data that includes a type-tag, is managed by the Julia GC, and is defined by object-identity. The type parameters of a leaf type must be fully defined (no `TypeVars` are allowed) in order for the instance to be constructed.              |
+| `abstract`                    | `Any`, `AbstractArray{T, N}`, `Complex{T}`  | "Super Type" :: A super-type (not a leaf-type) that cannot be instantiated, but can be used to describe a group of types.                                                                                                                                                      |
+| `{T}`                         | `Vector{Int}`                               | "Type Parameter" :: A specialization of a type (typically used for dispatch or storage optimization).                                                                                                                                                                          |
+|                               |                                             | "TypeVar" :: The `T` in the type parameter declaration is referred to as a TypeVar (short for type variable).                                                                                                                                                                  |
+| `bitstype`                    | `Int`, `Float64`                            | "Bits Type" :: A type with no fields, but a size. It is stored and defined by-value.                                                                                                                                                                                           |
+| `immutable`                   | `Pair{Int, Int}`                            | "Immutable" :: A type with all fields defined to be constant. It is defined by-value. And may be stored with a type-tag.                                                                                                                                                       |
+|                               | `Complex128` (`isbits`)                     | "Is-Bits"   :: A `bitstype`, or an `immutable` type where all fields are other `isbits` types. It is defined by-value, and is stored without a type-tag.                                                                                                                       |
+| `type ...; end`               | `nothing`                                   | "Singleton" :: a Leaf Type or Immutable with no fields.                                                                                                                                                                                                                        |
+| `(...)` or `tuple(...)`       | `(1, 2, 3)`                                 | "Tuple" :: an immutable data-structure similar to an anonymous immutable type, or a constant array. Represented as either an array or a struct.                                                                                                                                |
+| `typealias`                   | Not applicable here                         | Type aliases, and other similar mechanisms of doing type indirection, are resolved to their base type (this includes assigning a type to another name, or getting the type out of a function call).                                                                            |
 
 ### Bits Types:
 
@@ -260,29 +269,37 @@ same:
   * `Float32`
 
     Exactly corresponds to the `float` type in C (or `REAL*4` in Fortran).
+
   * `Float64`
 
     Exactly corresponds to the `double` type in C (or `REAL*8` in Fortran).
+
   * `Complex64`
 
     Exactly corresponds to the `complex float` type in C (or `COMPLEX*8` in Fortran).
+
   * `Complex128`
 
     Exactly corresponds to the `complex double` type in C (or `COMPLEX*16` in Fortran).
+
   * `Signed`
 
-    Exactly corresponds to the `signed` type annotation in C (or any `INTEGER` type in Fortran). Any
-    Julia type that is not a subtype of `Signed` is assumed to be unsigned.
+    Exactly corresponds to the `signed` type annotation in C (or any `INTEGER` type in Fortran).
+    Any Julia type that is not a subtype of `Signed` is assumed to be unsigned.
+
+
   * `Ref{T}`
 
-    Behaves like a `Ptr{T}` that owns its memory.
+    Behaves like a `Ptr{T}` that can manage its memory via the Julia GC.
+
+
   * `Array{T,N}`
 
     When an array is passed to C as a `Ptr{T}` argument, it is not reinterpret-cast: Julia requires
     that the element type of the array matches `T`, and the address of the first element is passed.
 
     Therefore, if an `Array` contains data in the wrong format, it will have to be explicitly converted
-    using a call such as `trunc(Int32,a)`.
+    using a call such as `trunc(Int32, a)`.
 
     To pass an array `A` as a pointer of a different type *without* converting the data beforehand
     (for example, to pass a `Float64` array to a function that operates on uninterpreted bytes), you
@@ -298,36 +315,38 @@ as follows. Every C type also has a corresponding Julia type with the same name,
 This can help for writing portable code (and remembering that an `int` in C is not the same as
 an `Int` in Julia).
 
+
 **System Independent:**
 
-| C name                                                  | Fortran name           | Standard Julia Alias | Julia Base Type                                                                                                |
-|:------------------------------------------------------- |:---------------------- |:-------------------- |:-------------------------------------------------------------------------------------------------------------- |
-| `unsigned char``bool` (C++)                             | `CHARACTER`            | `Cuchar`             | `UInt8`                                                                                                        |
-| `short`                                                 | `INTEGER*2``LOGICAL*2` | `Cshort`             | `Int16`                                                                                                        |
-| `unsigned short`                                        |                        | `Cushort`            | `UInt16`                                                                                                       |
-| `int``BOOL` (C, typical)                                | `INTEGER*4``LOGICAL*4` | `Cint`               | `Int32`                                                                                                        |
-| `unsigned int`                                          |                        | `Cuint`              | `UInt32`                                                                                                       |
-| `long long`                                             | `INTEGER*8``LOGICAL*8` | `Clonglong`          | `Int64`                                                                                                        |
-| `unsigned long long`                                    |                        | `Culonglong`         | `UInt64`                                                                                                       |
-| `intmax_t`                                              |                        | `Cintmax_t`          | `Int64`                                                                                                        |
-| `uintmax_t`                                             |                        | `Cuintmax_t`         | `UInt64`                                                                                                       |
-| `float`                                                 | `REAL*4i`              | `Cfloat`             | `Float32`                                                                                                      |
-| `double`                                                | `REAL*8`               | `Cdouble`            | `Float64`                                                                                                      |
-| `complex float`                                         | `COMPLEX*8`            | `Complex64`          | `Complex{Float32}`                                                                                             |
-| `complex double`                                        | `COMPLEX*16`           | `Complex128`         | `Complex{Float64}`                                                                                             |
-| `ptrdiff_t`                                             |                        | `Cptrdiff_t`         | `Int`                                                                                                          |
-| `ssize_t`                                               |                        | `Cssize_t`           | `Int`                                                                                                          |
-| `size_t`                                                |                        | `Csize_t`            | `UInt`                                                                                                         |
-| `void`                                                  |                        |                      | `Void`                                                                                                         |
-| `void` and `[[noreturn]]` or `_Noreturn`                |                        |                      | `Union{}`                                                                                                      |
-| `void*`                                                 |                        |                      | `Ptr{Void}`                                                                                                    |
-| `T*` (where T represents an appropriately defined type) |                        |                      | `Ref{T}`                                                                                                       |
-| `char*` (or `char[]`, e.g. a string)                    | `CHARACTER*N`          |                      | `Cstring` if NUL-terminated, or `Ptr{UInt8}` if not                                                            |
-| `char**` (or `*char[]`)                                 |                        |                      | `Ptr{Ptr{UInt8}}`                                                                                              |
-| `jl_value_t*` (any Julia Type)                          |                        |                      | `Any`                                                                                                          |
-| `jl_value_t**` (a reference to a Julia Type)            |                        |                      | `Ref{Any}`                                                                                                     |
-| `va_arg`                                                |                        |                      | Not supported                                                                                                  |
-| `...` (variadic function specification)                 |                        |                      | `T...` (where `T` is one of the above types, variadic functions of different argument types are not supported) |
+| C name                                                  | Fortran name             | Standard Julia Alias | Julia Base Type                                                                                                |
+|:------------------------------------------------------- |:------------------------ |:-------------------- |:-------------------------------------------------------------------------------------------------------------- |
+| `unsigned char`                                         | `CHARACTER`              | `Cuchar`             | `UInt8`                                                                                                        |
+| `bool` (only in C++)                                    |                          | `Cuchar`             | `UInt8`                                                                                                        |
+| `short`                                                 | `INTEGER*2`, `LOGICAL*2` | `Cshort`             | `Int16`                                                                                                        |
+| `unsigned short`                                        |                          | `Cushort`            | `UInt16`                                                                                                       |
+| `int`, `BOOL` (C, typical)                              | `INTEGER*4`, `LOGICAL*4` | `Cint`               | `Int32`                                                                                                        |
+| `unsigned int`                                          |                          | `Cuint`              | `UInt32`                                                                                                       |
+| `long long`                                             | `INTEGER*8`, `LOGICAL*8` | `Clonglong`          | `Int64`                                                                                                        |
+| `unsigned long long`                                    |                          | `Culonglong`         | `UInt64`                                                                                                       |
+| `intmax_t`                                              |                          | `Cintmax_t`          | `Int64`                                                                                                        |
+| `uintmax_t`                                             |                          | `Cuintmax_t`         | `UInt64`                                                                                                       |
+| `float`                                                 | `REAL*4i`                | `Cfloat`             | `Float32`                                                                                                      |
+| `double`                                                | `REAL*8`                 | `Cdouble`            | `Float64`                                                                                                      |
+| `complex float`                                         | `COMPLEX*8`              | `Complex64`          | `Complex{Float32}`                                                                                             |
+| `complex double`                                        | `COMPLEX*16`             | `Complex128`         | `Complex{Float64}`                                                                                             |
+| `ptrdiff_t`                                             |                          | `Cptrdiff_t`         | `Int`                                                                                                          |
+| `ssize_t`                                               |                          | `Cssize_t`           | `Int`                                                                                                          |
+| `size_t`                                                |                          | `Csize_t`            | `UInt`                                                                                                         |
+| `void`                                                  |                          |                      | `Void`                                                                                                         |
+| `void` and `[[noreturn]]` or `_Noreturn`                |                          |                      | `Union{}`                                                                                                      |
+| `void*`                                                 |                          |                      | `Ptr{Void}`                                                                                                    |
+| `T*` (where T represents an appropriately defined type) |                          |                      | `Ref{T}`                                                                                                       |
+| `char*` (or `char[]`, e.g. a string)                    | `CHARACTER*N`            |                      | `Cstring` if NUL-terminated, or `Ptr{UInt8}` if not                                                            |
+| `char**` (or `*char[]`)                                 |                          |                      | `Ptr{Ptr{UInt8}}`                                                                                              |
+| `jl_value_t*` (any Julia Type)                          |                          |                      | `Any`                                                                                                          |
+| `jl_value_t**` (a reference to a Julia Type)            |                          |                      | `Ref{Any}`                                                                                                     |
+| `va_arg`                                                |                          |                      | Not supported                                                                                                  |
+| `...` (variadic function specification)                 |                          |                      | `T...` (where `T` is one of the above types, variadic functions of different argument types are not supported) |
 
 The `Cstring` type is essentially a synonym for `Ptr{UInt8}`, except the conversion to `Cstring`
 throws an error if the Julia string contains any embedded NUL characters (which would cause the
@@ -340,12 +359,12 @@ checks and is only meant to improve readability of the call.
 
 **System-dependent:**
 
-| C name          | Standard Julia Alias | Julia Base Type                            |
-|:--------------- |:-------------------- |:------------------------------------------ |
-| `char`          | `Cchar`              | `Int8` (x86, x86_64)`UInt8` (powerpc, arm) |
-| `long`          | `Clong`              | `Int` (UNIX)`Int32` (Windows)              |
-| `unsigned long` | `Culong`             | `UInt` (UNIX)`UInt32` (Windows)            |
-| `wchar_t`       | `Cwchar_t`           | `Int32` (UNIX)`UInt16` (Windows)           |
+| C name          | Standard Julia Alias | Julia Base Type                              |
+|:--------------- |:-------------------- |:-------------------------------------------- |
+| `char`          | `Cchar`              | `Int8` (x86, x86_64), `UInt8` (powerpc, arm) |
+| `long`          | `Clong`              | `Int` (UNIX), `Int32` (Windows)              |
+| `unsigned long` | `Culong`             | `UInt` (UNIX), `UInt32` (Windows)            |
+| `wchar_t`       | `Cwchar_t`           | `Int32` (UNIX), `UInt16` (Windows)           |
 
 !!! note
     When calling a Fortran function, all inputs must be passed by reference, so all type correspondences
@@ -364,7 +383,7 @@ checks and is only meant to improve readability of the call.
 !!! warning
     A return type of `Union{}` means the function will not return i.e. C++11 `[[noreturn]]` or C11
     `_Noreturn` (e.g. `jl_throw` or `longjmp`). Do not use this for functions that return no value
-    (`void`) but do return.
+    (`void`) but do return, use `Void` instead.
 
 !!! note
     For `wchar_t*` arguments, the Julia type should be `Cwstring` (if the C routine expects a NUL-terminated
@@ -409,8 +428,7 @@ You can get a near approximation of a `union` if you know, a priori, the field t
 the greatest size (potentially including padding). When translating your fields to Julia, declare
 the Julia field to be only of that type.
 
-Arrays of parameters must be expanded manually, currently (either inline, or in an immutable helper
-type). For example:
+Arrays of parameters can be expressed with `NTuple`:
 
 ```
 in C:
@@ -420,20 +438,48 @@ struct B {
 b_a_2 = B.A[2];
 
 in Julia:
-immutable B_A
-    A_1::Cint
-    A_2::Cint
-    A_3::Cint
-end
 type B
-    A::B_A
+    A::NTuple{3, CInt}
 end
-b_a_2 = B.A.(2)
+b_a_2 = B.A[2]
 ```
 
-Arrays of unknown size are not supported.
+Arrays of unknown size (C99-compliant variable length structs specified by `[]` or `[0]`) are not directly supported.
+Often the best way to deal with these is to deal with the byte offsets directly.
+For example, if a c-library declared a proper string type and returned a pointer to it:
 
-In the future, some of these restrictions may be reduced or eliminated.
+```
+struct String {
+    int strlen;
+    char data[];
+};
+```
+
+In Julia, we can access the parts independently to make a copy of that string:
+
+```
+str = from_c::Ptr{Void}
+len = unsafe_load(Ptr{Cint}(str))
+unsafe_string(str + Core.sizeof(Cint), len)
+```
+
+### Type Parameters
+
+The type arguments to `ccall` are evaluated statically, when the method containing the ccall is defined.
+They therefore must take the form of a literal tuple, not a variable, and cannot reference local variables.
+
+This may sound like a strange restriction,
+but remember that since C is not a dynamic language like Julia,
+its functions can only accept argument types with a statically-known, fixed signature.
+
+However, while the type layout must be known statically to compute the `ccall` ABI,
+the static parameters of the function are considered to be part of this static environment.
+The static parameters of the function may be used as type parameters in the `ccall` signature,
+as long as they don't affect the layout of the type.
+For example, `f{T}(x::T) = ccall(:valid, Ptr{T}, (Ptr{T},), x)`
+is valid, since `Ptr` is always a word-size bitstype.
+But, `g{T}(x::T) = ccall(:notvalid, T, (T,), x)`
+is not valid, since the type layout of `T` is not known statically.
 
 ### SIMD Values
 
@@ -461,10 +507,10 @@ __m256 dist( __m256 a, __m256 b ) {
 The following Julia code calls `dist` using `ccall`:
 
 ```julia
-typealias m256 NTuple{8,VecElement{Float32}}
+typealias m256 NTuple{8, VecElement{Float32}}
 
-a = m256(ntuple(i->VecElement(sin(Float32(i))),8))
-b = m256(ntuple(i->VecElement(cos(Float32(i))),8))
+a = m256(ntuple(i -> VecElement(sin(Float32(i))), 8))
+b = m256(ntuple(i -> VecElement(cos(Float32(i))), 8))
 
 function call_dist(a::m256, b::m256)
     ccall((:dist, "libdist"), m256, (m256, m256), a, b)
@@ -650,12 +696,12 @@ end
 #     gsl_permutation * gsl_permutation_alloc (size_t n);
 function permutation_alloc(n::Integer)
     output_ptr = ccall(
-        (:gsl_permutation_alloc, :libgsl), #name of C function and library
-        Ptr{gsl_permutation},              #output type
-        (Csize_t,),                        #tuple of input types
-        n                                  #name of Julia variable to pass in
+        (:gsl_permutation_alloc, :libgsl), # name of C function and library
+        Ptr{gsl_permutation},              # output type
+        (Csize_t,),                        # tuple of input types
+        n                                  # name of Julia variable to pass in
     )
-    if output_ptr==C_NULL # Could not allocate memory
+    if output_ptr == C_NULL # Could not allocate memory
         throw(OutOfMemoryError())
     end
     return output_ptr
@@ -683,10 +729,10 @@ Here is a second example wrapping the corresponding destructor:
 #     void gsl_permutation_free (gsl_permutation * p);
 function permutation_free(p::Ref{gsl_permutation})
     ccall(
-        (:gsl_permutation_free, :libgsl), #name of C function and library
-        Void,                             #output type
-        (Ref{gsl_permutation},),          #tuple of input types
-        p                                 #name of Julia variable to pass in
+        (:gsl_permutation_free, :libgsl), # name of C function and library
+        Void,                             # output type
+        (Ref{gsl_permutation},),          # tuple of input types
+        p                                 # name of Julia variable to pass in
     )
 end
 ```
@@ -711,15 +757,19 @@ Here is a third example passing Julia arrays:
 #    int gsl_sf_bessel_Jn_array (int nmin, int nmax, double x,
 #                                double result_array[])
 function sf_bessel_Jn_array(nmin::Integer, nmax::Integer, x::Real)
-    if nmax<nmin throw(DomainError()) end
-    result_array = Array{Cdouble}(nmax-nmin+1)
+    if nmax < nmin
+        throw(DomainError())
+    end
+    result_array = Vector{Cdouble}(nmax - nmin + 1)
     errorcode = ccall(
-        (:gsl_sf_bessel_Jn_array, :libgsl), #name of C function and library
-        Cint,                               #output type
-        (Cint, Cint, Cdouble, Ref{Cdouble}),#tuple of input types
-        nmin, nmax, x, result_array         #names of Julia variables to pass in
+        (:gsl_sf_bessel_Jn_array, :libgsl), # name of C function and library
+        Cint,                               # output type
+        (Cint, Cint, Cdouble, Ref{Cdouble}),# tuple of input types
+        nmin, nmax, x, result_array         # names of Julia variables to pass in
     )
-    if errorcode!= 0 error("GSL error code $errorcode") end
+    if errorcode != 0
+        error("GSL error code $errorcode")
+    end
     return result_array
 end
 ```
@@ -766,7 +816,7 @@ A `(name, library)` function specification must be a constant expression. Howeve
 to use computed values as function names by staging through `eval` as follows:
 
 ```
-@eval ccall(($(string("a","b")),"lib"), ...
+@eval ccall(($(string("a", "b")), "lib"), ...
 ```
 
 This expression constructs a name using `string`, then substitutes this name into a new [`ccall`](@ref)
@@ -790,7 +840,7 @@ that session. For example:
 ```julia
 macro dlsym(func, lib)
     z, zlocal = gensym(string(func)), gensym()
-    eval(current_module(),:(global $z = C_NULL))
+    eval(current_module(), :(global $z = C_NULL))
     z = esc(z)
     quote
         let $zlocal::Ptr{Void} = $z::Ptr{Void}
@@ -816,11 +866,25 @@ Other supported conventions are: `stdcall`, `cdecl`, `fastcall`, and `thiscall`.
 signature for Windows:
 
 ```julia
-hn = Array{UInt8}(256)
+hn = Vector{UInt8}(256)
 err = ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
 ```
 
 For more information, please see the [LLVM Language Reference](http://llvm.org/docs/LangRef.html#calling-conventions).
+
+There is one additional special calling convention `llvmcall`,
+which allows inserting calls to LLVM intrinsics directly.
+This can be especially useful when targeting unusual platforms such as GPGPUs.
+For example, for [CUDA](http://llvm.org/docs/NVPTXUsage.html), we need to be able to read the thread index:
+
+```julia
+ccall("llvm.nvvm.read.ptx.sreg.tid.x", llvmcall, Int32, ())
+```
+
+As with any `ccall`, it is essential to get the argument signature exactly correct.
+Also, note that there is no compatibility layer that ensures the intrinsic makes
+sense and works on the current target,
+unlike the equivalent Julia functions exposed by `Core.Intrinsics`.
 
 ## Accessing Global Variables
 
@@ -829,7 +893,7 @@ function. The arguments to [`cglobal()`](@ref) are a symbol specification identi
 by [`ccall`](@ref), and a type describing the value stored in the variable:
 
 ```julia
-julia> cglobal((:errno,:libc), Int32)
+julia> cglobal((:errno, :libc), Int32)
 Ptr{Int32} @0x00007f418d0816b8
 ```
 
@@ -891,7 +955,7 @@ The callback you pass to C should only execute a [`ccall`](@ref) to `:uv_async_s
 `cb.handle` as the argument, taking care to avoid any allocations or other interactions with the
 Julia runtime.
 
-Note that events may be coalesced, so multiple calls to uv_async_send may result in a single wakeup
+Note that events may be coalesced, so multiple calls to `uv_async_send` may result in a single wakeup
 notification to the condition.
 
 ## More About Callbacks

@@ -15,19 +15,21 @@ Ptr
 
 The C null pointer constant, sometimes used when calling external code.
 """
-const C_NULL = box(Ptr{Void}, 0)
+const C_NULL = bitcast(Ptr{Void}, 0)
+
+# TODO: deprecate these conversions. C doesn't even allow them.
 
 # pointer to integer
-convert{T<:Union{Int,UInt}}(::Type{T}, x::Ptr) = box(T, unbox(Ptr{Void},x))
-convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T,convert(UInt, x))
+convert{T<:Union{Int,UInt}}(::Type{T}, x::Ptr) = bitcast(T, x)
+convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T, convert(UInt, x))
 
 # integer to pointer
-convert{T}(::Type{Ptr{T}}, x::UInt) = box(Ptr{T},unbox(UInt,UInt(x)))
-convert{T}(::Type{Ptr{T}}, x::Int) = box(Ptr{T},unbox(Int,Int(x)))
+convert{T}(::Type{Ptr{T}}, x::UInt) = bitcast(Ptr{T}, x)
+convert{T}(::Type{Ptr{T}}, x::Int) = bitcast(Ptr{T}, x)
 
 # pointer to pointer
 convert{T}(::Type{Ptr{T}}, p::Ptr{T}) = p
-convert{T}(::Type{Ptr{T}}, p::Ptr) = box(Ptr{T}, unbox(Ptr{Void},p))
+convert{T}(::Type{Ptr{T}}, p::Ptr) = bitcast(Ptr{T}, p)
 
 # object to pointer (when used with ccall)
 unsafe_convert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), x)
@@ -62,7 +64,7 @@ function unsafe_wrap{T,N}(::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
 end
 function unsafe_wrap{T}(::Union{Type{Array},Type{Array{T}},Type{Array{T,1}}},
                         p::Ptr{T}, d::Integer, own::Bool=false)
-    ccall(:jl_ptr_to_array_1d, Vector{T},
+    ccall(:jl_ptr_to_array_1d, Array{T,1},
           (Any, Ptr{Void}, Csize_t, Cint), Array{T,1}, p, d, own)
 end
 unsafe_wrap{N,I<:Integer}(Atype::Type, p::Ptr, dims::NTuple{N,I}, own::Bool=false) =

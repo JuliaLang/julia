@@ -44,7 +44,7 @@ test_have_color(buf, "", "")
 # matches the implicit constructor -> convert method
 Base.show_method_candidates(buf, Base.MethodError(Tuple{}, (1, 1, 1)))
 let mc = String(take!(buf))
-    @test contains(mc, "\nClosest candidates are:\n  Tuple{}{T}(")
+    @test contains(mc, "\nClosest candidates are:\n  Tuple{}")
     @test !contains(mc, cfile)
 end
 
@@ -453,6 +453,19 @@ let d = Dict(1 => 2, 3 => 45)
     end
 end
 
+# Issue #20108
+let err, buf = IOBuffer()
+    try Array() catch err end
+    Base.show_method_candidates(buf,err)
+    @test isa(err, MethodError)
+    @test contains(String(buf), "Closest candidates are:")
+end
+
+# Issue 20111
+let K20111(x) = y -> x, buf = IOBuffer()
+    show(buf, methods(K20111(1)))
+    @test contains(String(buf), " 1 method for generic function")
+end
 
 # @macroexpand tests
 macro seven_dollar(ex)
@@ -470,4 +483,19 @@ let
     @test (@macroexpand @seven_dollar $bar) == 7
     x = 2
     @test (@macroexpand @seven_dollar 1+$x) == :(1 + $(Expr(:$, :x)))
+end
+
+foo_9965(x::Float64; w=false) = x
+foo_9965(x::Int) = 2x
+
+@testset "closest candidates kwarg #9965" begin
+    ex = try
+        foo_9965(1, w=true)
+    catch e
+        e
+    end
+    @test typeof(ex) == MethodError
+    io = IOBuffer()
+    Base.show_method_candidates(io, ex, [(:w,true)])
+    @test contains(String(take!(io)), "got unsupported keyword argument \"w\"")
 end

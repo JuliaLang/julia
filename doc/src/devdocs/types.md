@@ -89,17 +89,17 @@ Let's look at these types a little more closely:
 
 ```jldoctest
 julia> dump(Array)
-   UnionAll
-     var: TypeVar
-       name: Symbol T
-       lb: Core.BottomType Union{}
-       ub: Any
-     body: UnionAll
-       var: TypeVar
-         name: Symbol N
-         lb: Core.BottomType Union{}
-         ub: Any
-       body: Array{T,N} <: DenseArray{T,N}
+UnionAll
+  var: TypeVar
+    name: Symbol T
+    lb: Core.BottomType Union{}
+    ub: Any
+  body: UnionAll
+    var: TypeVar
+      name: Symbol N
+      lb: Core.BottomType Union{}
+      ub: Any
+    body: Array{T,N} <: DenseArray{T,N}
 ```
 
 This indicates that `Array` actually names a `UnionAll` type. There is one `UnionAll` type for

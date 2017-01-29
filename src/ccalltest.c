@@ -90,6 +90,7 @@ JL_DLLEXPORT complex_t *cptest(complex_t *a) {
 }
 
 JL_DLLEXPORT complex_t *cptest_static(complex_t *a) {
+    if (verbose) fprintf(stderr,"%" PRIjint " + %" PRIjint " i\n", a->real, a->imag);
     complex_t *b = (complex_t*)malloc(sizeof(complex_t));
     b->real = a->real;
     b->imag = a->imag;

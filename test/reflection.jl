@@ -95,12 +95,11 @@ str = String(take!(iob))
 module ImportIntrinsics15819
 # Make sure changing the lookup path of an intrinsic doesn't break
 # the heuristic for type instability warning.
-# This can be any intrinsic that needs boxing
-import Core.Intrinsics: sqrt_llvm, box, unbox
+import Core.Intrinsics: sqrt_llvm, bitcast
 # Use import
-sqrt15819(x::Float64) = box(Float64, sqrt_llvm(unbox(Float64, x)))
+sqrt15819(x::Float64) = bitcast(Float64, sqrt_llvm(x))
 # Use fully qualified name
-sqrt15819(x::Float32) = box(Float32, Core.Intrinsics.sqrt_llvm(unbox(Float32, x)))
+sqrt15819(x::Float32) = bitcast(Float32, Core.Intrinsics.sqrt_llvm(x))
 end
 foo11122(x) = @fastmath x - 1.0
 
@@ -300,6 +299,10 @@ tlayout = TLayout(5,7,11)
 @test_throws BoundsError fieldtype(TLayout, 4)
 @test_throws BoundsError fieldname(TLayout, 4)
 @test_throws BoundsError fieldoffset(TLayout, 4)
+
+@test fieldtype(Tuple{Vararg{Int8}}, 1) === Int8
+@test fieldtype(Tuple{Vararg{Int8}}, 10) === Int8
+@test_throws BoundsError fieldtype(Tuple{Vararg{Int8}}, 0)
 
 @test fieldnames((1,2,3)) == fieldnames(NTuple{3, Int}) == [fieldname(NTuple{3, Int}, i) for i = 1:3] == [1, 2, 3]
 @test_throws BoundsError fieldname(NTuple{3, Int}, 0)

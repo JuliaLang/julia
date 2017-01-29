@@ -116,8 +116,6 @@
 #     runnable::Bool
 # end
 
-import Core.Intrinsics.ccall
-
 export
     # key types
     Any, DataType, Vararg, ANY, NTuple,
@@ -266,6 +264,8 @@ TypeVar(n::Symbol, lb::ANY, ub::ANY) =
 UnionAll(v::TypeVar, t::ANY) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
 
 Void() = nothing
+
+(::Type{Tuple{}})() = ()
 
 immutable VecElement{T}
     value::T

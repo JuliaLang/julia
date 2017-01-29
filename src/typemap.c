@@ -369,35 +369,6 @@ static union jl_typemap_t *mtcache_hash_bp(struct jl_ordereddict_t *pa, jl_value
 
 // ----- Sorted Type Signature Lookup Matching ----- //
 
-jl_value_t *jl_lookup_match(jl_value_t *a, jl_value_t *b, jl_svec_t **penv)
-{
-    jl_value_t *ti = jl_type_intersection_matching(a, b, penv);
-    if (ti == (jl_value_t*)jl_bottom_type)
-        return ti;
-    JL_GC_PUSH1(&ti);
-    assert(jl_is_svec(*penv));
-    int l = jl_svec_len(*penv);
-    for(int i=0; i < l; i++) {
-        jl_value_t *val = jl_svecref(*penv,i);
-        /*
-          since "a" is a concrete type, we assume that
-          (a∩b != Union{}) => a<:b. However if a static parameter is
-          forced to equal Union{}, then part of "b" might become Union{},
-          and therefore a subtype of "a". For example
-          (Type{Union{}},Int) ∩ (Type{T},T)
-          issue #5254
-        */
-        if (val == (jl_value_t*)jl_bottom_type) {
-            if (!jl_subtype(a, ti)) {
-                JL_GC_POP();
-                return (jl_value_t*)jl_bottom_type;
-            }
-        }
-    }
-    JL_GC_POP();
-    return ti;
-}
-
 static int jl_typemap_array_visitor(struct jl_ordereddict_t *a, jl_typemap_visitor_fptr fptr, void *closure)
 {
     size_t i, l = jl_array_len(a->values);
@@ -493,6 +464,7 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
                     closure->env = ml->tvars;
             }
             closure->ti = closure->type;
+            closure->issubty = 1;
             if (!fptr(ml, closure))
                 return 0;
         }
@@ -500,7 +472,7 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
             jl_value_t *ti;
             if (closure->env) {
                 closure->env = jl_emptysvec;
-                ti = jl_lookup_match(closure->type, (jl_value_t*)ml->sig, &closure->env);
+                ti = jl_type_intersection_env_s(closure->type, (jl_value_t*)ml->sig, &closure->env, &closure->issubty);
             }
             else {
                 ti = jl_type_intersection(closure->type, (jl_value_t*)ml->sig);
@@ -619,7 +591,7 @@ static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_
                 // which works currently because types is typically a leaf tt,
                 // or inexact is set (which then does a sort of subtype test via jl_types_equal)
                 // but this isn't entirely general
-                jl_value_t *ti = jl_lookup_match((jl_value_t*)types, (jl_value_t*)ml->sig, penv);
+                jl_value_t *ti = jl_type_intersection_env((jl_value_t*)types, (jl_value_t*)ml->sig, penv);
                 resetenv = 1;
                 ismatch = (ti != (jl_value_t*)jl_bottom_type);
                 if (ismatch) {

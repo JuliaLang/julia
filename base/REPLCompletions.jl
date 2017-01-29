@@ -494,7 +494,7 @@ function completions(string, pos)
         s = string[startpos:pos]
         if dotpos <= startpos
             for dir in [Pkg.dir(); LOAD_PATH; pwd()]
-                isdir(dir) || continue
+                dir isa AbstractString && isdir(dir) || continue
                 for pname in readdir(dir)
                     if pname[1] != '.' && pname != "METADATA" &&
                         pname != "REQUIRE" && startswith(pname, s)

@@ -66,8 +66,15 @@ function test_2()
 
     @test issub_strict(Tuple{Tuple{Int,Int},Tuple{Int,Int}}, Tuple{NTuple{N,Int},NTuple{N,Int}} where N)
     @test !issub(Tuple{Tuple{Int,Int},Tuple{Int,}}, Tuple{NTuple{N,Int},NTuple{N,Int}} where N)
+    @test NTuple{0} === Tuple{}
+
+    @test issub_strict(Tuple{Int,Int}, Tuple{Int,Int,Vararg{Int,N}} where N)
+    @test issub_strict(Tuple{Int,Int}, Tuple{E,E,Vararg{E,N}} where E where N)
 
     @test issub(Type{Tuple{VecElement{Bool}}}, (Type{Tuple{Vararg{VecElement{T},N}}} where T where N))
+
+    @test isequal_type(Type{Tuple{Vararg{Int,N}} where N}, Type{Tuple{Vararg{Int,N} where N}})
+    @test Type{Tuple{Vararg{Int,N}} where N} !== Type{Tuple{Vararg{Int,N} where N}}
 end
 
 function test_diagonal()
@@ -470,7 +477,7 @@ function test_old()
     @test Tuple{Int,Int} <: Tuple{Vararg}
     @test Tuple{} <: @UnionAll N NTuple{N}
     @test !(Type{Tuple{}} <: Type{Tuple{Vararg}})
-    @test !(Type{Tuple{}} <: (@UnionAll N Type{NTuple{N}}))
+    @test   Type{Tuple{}} <: (@UnionAll N Type{NTuple{N}})
 
     @test !(Type{Array{Integer}} <: Type{AbstractArray{Integer}})
     @test !(Type{Array{Integer}} <: Type{@UnionAll T<:Integer Array{T}})
@@ -788,6 +795,9 @@ function test_intersection()
     @test typeintersect(Union{DataType,Int}, Type) === DataType
     @test typeintersect(Union{DataType,Int}, Type{T} where T) === DataType
 
+    # since BottomType is a singleton we can deduce its intersection with Type{...}
+    @testintersect(Core.BottomType, (Type{T} where T<:Tuple), Type{Union{}})
+
     @testintersect((Type{Tuple{Vararg{T}}} where T), Type{Tuple}, Bottom)
     @testintersect(Tuple{Type{S}, Tuple{Any, Vararg{Any}}} where S<:Tuple{Any, Vararg{Any}},
                    Tuple{Type{T}, T} where T,
@@ -826,3 +836,28 @@ test_old()
 test_intersection()
 test_properties()
 test_intersection_properties()
+
+
+# issue #20121
+@test NTuple{170,Matrix{Int}} <: (Tuple{Vararg{Union{Array{T,1},Array{T,2},Array{T,3}}}} where T)
+
+# Issue #12580
+abstract AbstractMyType12580{T}
+immutable MyType12580{T}<:AbstractMyType12580{T} end
+tpara{A<:AbstractMyType12580}(::Type{A}) = tpara(supertype(A))
+tpara{I}(::Type{AbstractMyType12580{I}}) = I
+@test tpara(MyType12580{true})
+
+# Issue #18348
+f18348{T<:Any}(::Type{T}, x) = 1
+f18348{T<:Any}(::Type{T}, x::T) = 2
+@test length(methods(f18348, Tuple{Type{Any},Any})) == 1
+
+# Issue #13165
+@test Symmetric{Float64,Matrix{Float64}} <: LinAlg.RealHermSymComplexHerm
+@test Hermitian{Float64,Matrix{Float64}} <: LinAlg.RealHermSymComplexHerm
+@test Hermitian{Complex{Float64},Matrix{Complex{Float64}}} <: LinAlg.RealHermSymComplexHerm
+
+# Issue #12721
+f12721{T<:Type{Int}}(::T) = true
+@test_throws MethodError f12721(Float64)

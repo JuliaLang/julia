@@ -56,7 +56,9 @@ include("options.jl")
 # core operations & types
 include("promotion.jl")
 include("tuple.jl")
+include("traits.jl")
 include("range.jl")
+include("twiceprecision.jl")
 include("expr.jl")
 include("error.jl")
 
@@ -300,6 +302,7 @@ include("datafmt.jl")
 importall .DataFmt
 include("deepcopy.jl")
 include("interactiveutil.jl")
+include("summarysize.jl")
 include("replutil.jl")
 include("test.jl")
 include("i18n.jl")
@@ -354,7 +357,7 @@ importall .Profile
 
 # dates
 include("dates/Dates.jl")
-import .Dates: Date, DateTime, now
+import .Dates: Date, DateTime, DateFormat, @dateformat_str, now
 
 # sparse matrices, vectors, and sparse linear algebra
 include("sparse/sparse.jl")

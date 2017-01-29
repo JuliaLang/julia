@@ -274,9 +274,9 @@ diag(D::Diagonal) = D.diag
 trace(D::Diagonal) = sum(D.diag)
 det(D::Diagonal) = prod(D.diag)
 logdet{T<:Real}(D::Diagonal{T}) = sum(log, D.diag)
-function logdet{T<:Complex}(D::Diagonal{T}) #Make sure branch cut is correct
-    x = sum(log, D.diag)
-    -pi<imag(x)<pi ? x : real(x)+(mod2pi(imag(x)+pi)-pi)*im
+function logdet{T<:Complex}(D::Diagonal{T}) # make sure branch cut is correct
+    z = sum(log, D.diag)
+    complex(real(z), rem2pi(imag(z), RoundNearest))
 end
 # identity matrices via eye(Diagonal{type},n)
 eye{T}(::Type{Diagonal{T}}, n::Int) = Diagonal(ones(T,n))
