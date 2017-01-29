@@ -1,11 +1,18 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-function content(blob::GitBlob)
-    unsafe_string(ccall((:git_blob_rawcontent, :libgit2), Ptr{UInt8}, (Ptr{Void},), blob.ptr))
-end
-
 function Base.length(blob::GitBlob)
     return ccall((:git_blob_rawsize, :libgit2), Int64, (Ptr{Void},), blob.ptr)
+end
+
+function rawcontent(blob::GitBlob)
+    ptr = ccall((:git_blob_rawcontent, :libgit2), Ptr{UInt8}, (Ptr{Void},), blob.ptr)
+    copy(unsafe_wrap(Array, ptr, (length(blob),), false))
+end
+
+function content(blob::GitBlob)
+    s = String(rawcontent)
+    isvalid(s) || error("Blob does not contain valid UTF-8 data")
+    return s
 end
 
 """
