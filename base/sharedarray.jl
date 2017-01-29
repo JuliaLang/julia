@@ -23,7 +23,7 @@ type SharedArray{T,N} <: DenseArray{T,N}
     # a subset of workers.
     loc_subarr_1d::SubArray{T,1,Array{T,1},Tuple{UnitRange{Int}},true}
 
-    function SharedArray(d,p,r,sn,s)
+    function SharedArray{T,N}(d,p,r,sn,s) where {T,N}
         new(d,p,r,sn,s,0,view(Array{T}(ntuple(d->0,N)), 1:0))
     end
 end

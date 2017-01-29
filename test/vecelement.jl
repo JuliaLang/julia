@@ -40,7 +40,7 @@ b = Bunch((VecElement(1.0), VecElement(2.0)))
 
 immutable Herd{N,T}
     elts::NTuple{N,Base.VecElement{T}}
-    Herd(elts::NTuple{N,T}) = new(ntuple(i->Base.VecElement{T}(elts[i]), N))
+    Herd{N,T}(elts::NTuple{N,T}) where {N,T} = new(ntuple(i->Base.VecElement{T}(elts[i]), N))
 end
 
 function check{N,T}(x::Herd{N,T})

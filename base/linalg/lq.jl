@@ -5,17 +5,17 @@
 immutable LQ{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     τ::Vector{T}
-    LQ(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
+    LQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
 
 immutable LQPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     factors::Matrix{T}
     τ::Vector{T}
-    LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
+    LQPackedQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
 
-LQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = LQ{T,typeof(factors)}(factors, τ)
-LQPackedQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = LQPackedQ{T,typeof(factors)}(factors, τ)
+LQ(factors::AbstractMatrix{T}, τ::Vector{T}) where T = LQ{T,typeof(factors)}(factors, τ)
+LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where T = LQPackedQ{T,typeof(factors)}(factors, τ)
 
 """
     lqfact!(A) -> LQ

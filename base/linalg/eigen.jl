@@ -4,17 +4,21 @@
 immutable Eigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
     values::U
     vectors::S
-    Eigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = new(values, vectors)
+    Eigen{T,V,S,U}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V,S,U} =
+        new(values, vectors)
 end
-Eigen{T,V}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = Eigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
+Eigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V} =
+    Eigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
 
 # Generalized eigenvalue problem.
 immutable GeneralizedEigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
     values::U
     vectors::S
-    GeneralizedEigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = new(values, vectors)
+    GeneralizedEigen{T,V,S,U}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V,S,U} =
+        new(values, vectors)
 end
-GeneralizedEigen{T,V}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = GeneralizedEigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
+GeneralizedEigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V} =
+    GeneralizedEigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
 
 
 function getindex(A::Union{Eigen,GeneralizedEigen}, d::Symbol)

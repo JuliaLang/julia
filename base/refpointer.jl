@@ -37,8 +37,8 @@ unsafe_convert{T}(::Type{Ref{T}}, x) = unsafe_convert(Ptr{T}, x)
 
 type RefValue{T} <: Ref{T}
     x::T
-    RefValue() = new()
-    RefValue(x) = new(x)
+    RefValue{T}() where T = new()
+    RefValue{T}(x) where T = new(x)
 end
 RefValue{T}(x::T) = RefValue{T}(x)
 isassigned(x::RefValue) = isdefined(x, :x)
@@ -64,11 +64,11 @@ end
 unsafe_convert{T}(::Type{Ptr{Void}}, b::RefValue{T}) = convert(Ptr{Void}, unsafe_convert(Ptr{T}, b))
 
 ### Methods for a Ref object that is backed by an array at index i
-immutable RefArray{T, A<:AbstractArray, R} <: Ref{T}
+immutable RefArray{T, A<:AbstractArray{T}, R} <: Ref{T}
     x::A
     i::Int
     roots::R # should be either ::Void or ::Any
-    RefArray(x,i,roots=nothing) = (@assert(eltype(A) == T); new(x,i,roots))
+    RefArray{T,A,R}(x,i,roots=nothing) where {T,A<:AbstractArray{T},R} = new(x,i,roots)
 end
 RefArray{T}(x::AbstractArray{T},i::Int,roots::Any) = RefArray{T,typeof(x),Any}(x, i, roots)
 RefArray{T}(x::AbstractArray{T},i::Int=1,roots::Void=nothing) = RefArray{T,typeof(x),Void}(x, i, nothing)

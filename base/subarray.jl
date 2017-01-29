@@ -10,7 +10,7 @@ immutable SubArray{T,N,P,I,L} <: AbstractArray{T,N}
     indexes::I
     offset1::Int       # for linear indexing and pointer, only valid when L==true
     stride1::Int       # used only for linear indexing
-    function SubArray(parent, indexes, offset1, stride1)
+    function SubArray{T,N,P,I,L}(parent, indexes, offset1, stride1) where {T,N,P,I,L}
         @_inline_meta
         check_parent_index_match(parent, indexes)
         new(parent, indexes, offset1, stride1)
@@ -21,11 +21,11 @@ function SubArray(parent::AbstractArray, indexes::Tuple)
     @_inline_meta
     SubArray(linearindexing(viewindexing(indexes), linearindexing(parent)), parent, ensure_indexable(indexes), index_dimsum(indexes...))
 end
-function SubArray{P, I, N}(::LinearSlow, parent::P, indexes::I, ::NTuple{N,Any})
+function SubArray(::LinearSlow, parent::P, indexes::I, ::NTuple{N,Any}) where {P,I,N}
     @_inline_meta
     SubArray{eltype(P), N, P, I, false}(parent, indexes, 0, 0)
 end
-function SubArray{P, I, N}(::LinearFast, parent::P, indexes::I, ::NTuple{N,Any})
+function SubArray(::LinearFast, parent::P, indexes::I, ::NTuple{N,Any}) where {P,I,N}
     @_inline_meta
     # Compute the stride and offset
     stride1 = compute_stride1(parent, indexes)

@@ -334,19 +334,16 @@ This automatic provision of constructors is equivalent to the following explicit
 julia> type Point{T<:Real}
            x::T
            y::T
-           Point(x,y) = new(x,y)
+           Point{T}(x,y) where T<:Real = new(x,y)
        end
 
-julia> Point{T<:Real}(x::T, y::T) = Point{T}(x,y);
+julia> Point(x::T, y::T) where T<:Real = Point{T}(x,y);
 ```
 
-Some features of parametric constructor definitions at work here deserve comment. First, inner
-constructor declarations always define methods of `Point{T}` rather than methods of the general
-`Point` constructor function. Since `Point` is not a concrete type, it makes no sense for it to
-even have inner constructor methods at all. Thus, the inner method declaration `Point(x,y) = new(x,y)`
-provides an inner constructor method for each value of `T`. It is this method declaration that
-defines the behavior of constructor calls with explicit type parameters like `Point{Int64}(1,2)`
-and `Point{Float64}(1.0,2.0)`. The outer constructor declaration, on the other hand, defines a
+Notice that each definition looks like the form of constructor call that it handles.
+The call `Point{Int64}(1,2)` will invoke the definition `Point{T}(x,y)` inside the
+`type` block.
+The outer constructor declaration, on the other hand, defines a
 method for the general `Point` constructor which only applies to pairs of values of the same real
 type. This declaration makes constructor calls without explicit type parameters, like `Point(1,2)`
 and `Point(1.0,2.5)`, work. Since the method declaration restricts the arguments to being of the
@@ -384,7 +381,7 @@ Closest candidates are:
   Point{T<:Real}(::T<:Real, !Matched::T<:Real) at none:1
 ```
 
-For a much more general way of making all such calls work sensibly, see [Conversion and Promotion](@ref conversion-and-promotion).
+For a more general way to make all such calls work sensibly, see [Conversion and Promotion](@ref conversion-and-promotion).
 At the risk of spoiling the suspense, we can reveal here that all it takes is the following outer
 method definition to make all calls to the general `Point` constructor work as one would expect:
 
@@ -422,7 +419,7 @@ which implements Julia's [Rational Numbers](@ref):
 julia> immutable OurRational{T<:Integer} <: Real
            num::T
            den::T
-           function OurRational(num::T, den::T)
+           function OurRational{T}(num::T, den::T) where T<:Integer
                if num == 0 && den == 0
                     error("invalid rational: 0//0")
                end
@@ -433,7 +430,7 @@ julia> immutable OurRational{T<:Integer} <: Real
            end
        end
 
-julia> OurRational{T<:Integer}(n::T, d::T) = OurRational{T}(n,d)
+julia> OurRational(n::T, d::T) where T<:Integer = OurRational{T}(n,d)
 OurRational
 
 julia> OurRational(n::Integer, d::Integer) = OurRational(promote(n,d)...)
@@ -533,7 +530,7 @@ one type to another, you should probably define a `convert` method instead.
 
 On the other hand, if your constructor does not represent a lossless conversion, or doesn't represent
 "conversion" at all, it is better to leave it as a constructor rather than a `convert` method.
- For example, the `Array{Int}()` constructor creates a zero-dimensional `Array` of the type `Int`,
+For example, the `Array{Int}()` constructor creates a zero-dimensional `Array` of the type `Int`,
 but is not really a "conversion" from `Int` to an `Array`.
 
 ## Outer-only constructors
@@ -561,14 +558,14 @@ SummedArray{Int32,Int32}(Int32[1, 2, 3], 6)
 The problem is that we want `S` to be a larger type than `T`, so that we can sum many elements
 with less information loss. For example, when `T` is `Int32`, we would like `S` to be `Int64`.
 Therefore we want to avoid an interface that allows the user to construct instances of the type
-`SummedArray{Int32,Int32}`. One way to do this is to provide only an outer constructor for `SummedArray`.
-This can be done using method definition by type:
+`SummedArray{Int32,Int32}`. One way to do this is to provide a constructor only for `SummedArray`,
+but inside the `type` definition block to suppress generation of default constructors:
 
 ```jldoctest
 julia> type SummedArray{T<:Number,S<:Number}
            data::Vector{T}
            sum::S
-           function (::Type{SummedArray}){T}(a::Vector{T})
+           function SummedArray(a::Vector{T}) where T
                S = widen(T)
                new{T,S}(a, sum(S, a))
            end
@@ -583,4 +580,5 @@ Closest candidates are:
 
 This constructor will be invoked by the syntax `SummedArray(a)`. The syntax `new{T,S}` allows
 specifying parameters for the type to be constructed, i.e. this call will return a `SummedArray{T,S}`.
-
+`new{T,S}` can be used in any constructor definition, but for convenience the parameters
+to `new{}` are automatically derived from the type being constructed when possible.

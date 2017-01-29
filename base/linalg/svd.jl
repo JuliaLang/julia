@@ -5,9 +5,10 @@ immutable SVD{T,Tr,M<:AbstractArray} <: Factorization{T}
     U::M
     S::Vector{Tr}
     Vt::M
-    SVD(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) = new(U, S, Vt)
+    SVD{T,Tr,M}(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) where {T,Tr,M} =
+        new(U, S, Vt)
 end
-SVD{T,Tr}(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) = SVD{T,Tr,typeof(U)}(U, S, Vt)
+SVD(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) where {T,Tr} = SVD{T,Tr,typeof(U)}(U, S, Vt)
 
 """
     svdfact!(A, thin::Bool=true) -> SVD
@@ -178,9 +179,15 @@ immutable GeneralizedSVD{T,S} <: Factorization{T}
     k::Int
     l::Int
     R::S
-    GeneralizedSVD(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T}, a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) = new(U, V, Q, a, b, k, l, R)
+    function GeneralizedSVD{T,S}(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T},
+                                 a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) where {T,S}
+        new(U, V, Q, a, b, k, l, R)
+    end
 end
-GeneralizedSVD{T}(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T}, a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) = GeneralizedSVD{T,typeof(U)}(U, V, Q, a, b, k, l, R)
+function GeneralizedSVD(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T},
+                        a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) where T
+    GeneralizedSVD{T,typeof(U)}(U, V, Q, a, b, k, l, R)
+end
 
 """
     svdfact!(A, B) -> GeneralizedSVD

@@ -49,7 +49,7 @@ immutable SignedMultiplicativeInverse{T<:Signed} <: MultiplicativeInverse{T}
     addmul::Int8
     shift::UInt8
 
-    function SignedMultiplicativeInverse(d::T)
+    function SignedMultiplicativeInverse{T}(d::T) where T<:Signed
         d == 0 && throw(ArgumentError("cannot compute magic for d == $d"))
         signedmin = unsigned(typemin(T))
         UT = unsigned(T)
@@ -94,7 +94,7 @@ immutable UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
     add::Bool
     shift::UInt8
 
-    function UnsignedMultiplicativeInverse(d::T)
+    function UnsignedMultiplicativeInverse{T}(d::T) where T<:Unsigned
         d == 0 && throw(ArgumentError("cannot compute magic for d == $d"))
         u2 = convert(T, 2)
         add = false

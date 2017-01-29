@@ -7,7 +7,7 @@ import Base: +, -, *, /, inv
 
 immutable ModInt{n} <: Integer
     k::Int
-    ModInt(k) = new(mod(k,n))
+    ModInt{n}(k) where n = new(mod(k,n))
 end
 
 Base.show{n}(io::IO, k::ModInt{n}) =

@@ -754,6 +754,9 @@
            (let* ((temp   (ctor-signature name params bounds curlyargs sig))
                   (sig    (car temp))
                   (params (cdr temp)))
+             (if (pair? params)
+                 (syntax-deprecation #f (string "inner constructor " name "(...)")
+                                     (deparse `(where (call (curly ,name ,@params) ...) ,@params))))
              `(,keyword ,sig ,(ctor-body body params)))))))
 
 ;; rewrite calls to `new( ... )` to `new` expressions on the appropriate

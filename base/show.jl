@@ -13,7 +13,8 @@ dictionary operations such as [`getindex`](@ref), and can also be used as an I/O
 immutable IOContext{IO_t <: IO} <: AbstractPipe
     io::IO_t
     dict::ImmutableDict{Symbol, Any}
-    function IOContext(io::IO_t, dict::ImmutableDict{Symbol, Any})
+
+    function IOContext{IO_t}(io::IO_t, dict::ImmutableDict{Symbol, Any}) where IO_t<:IO
         assert(!(IO_t <: IOContext))
         return new(io, dict)
     end
@@ -971,12 +972,18 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, head)
 
     # `where` syntax
-    elseif head === :where && length(args) == 2
+    elseif head === :where && length(args) > 1
         parens = 1 <= prec
         parens && print(io, "(")
         show_unquoted(io, args[1], indent, operator_precedence(:(::)))
         print(io, " where ")
-        show_unquoted(io, args[2], indent, 1)
+        if nargs == 2
+            show_unquoted(io, args[2], indent, 1)
+        else
+            print(io, "{")
+            show_list(io, args[2:end], ", ", indent)
+            print(io, "}")
+        end
         parens && print(io, ")")
 
     elseif head === :import || head === :importall || head === :using

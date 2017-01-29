@@ -5,9 +5,9 @@ immutable Schur{Ty,S<:AbstractMatrix} <: Factorization{Ty}
     T::S
     Z::S
     values::Vector
-    Schur(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) = new(T, Z, values)
+    Schur{Ty,S}(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where {Ty,S} = new(T, Z, values)
 end
-Schur{Ty}(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) = Schur{Ty, typeof(T)}(T, Z, values)
+Schur(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where Ty = Schur{Ty, typeof(T)}(T, Z, values)
 
 """
     schurfact!(A::StridedMatrix) -> F::Schur
@@ -146,9 +146,15 @@ immutable GeneralizedSchur{Ty,M<:AbstractMatrix} <: Factorization{Ty}
     beta::Vector{Ty}
     Q::M
     Z::M
-    GeneralizedSchur(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty}, alpha::Vector, beta::Vector{Ty}, Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) = new(S, T, alpha, beta, Q, Z)
+    function GeneralizedSchur{Ty,M}(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty}, alpha::Vector,
+                                    beta::Vector{Ty}, Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) where {Ty,M}
+        new(S, T, alpha, beta, Q, Z)
+    end
 end
-GeneralizedSchur{Ty}(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty}, alpha::Vector, beta::Vector{Ty}, Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) = GeneralizedSchur{Ty, typeof(S)}(S, T, alpha, beta, Q, Z)
+function GeneralizedSchur(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty}, alpha::Vector,
+                          beta::Vector{Ty}, Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) where Ty
+    GeneralizedSchur{Ty, typeof(S)}(S, T, alpha, beta, Q, Z)
+end
 
 """
     schurfact!(A::StridedMatrix, B::StridedMatrix) -> F::GeneralizedSchur
