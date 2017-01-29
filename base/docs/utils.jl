@@ -195,8 +195,10 @@ repl(io::IO, other) = :(@doc $(esc(other)))
 repl(x) = repl(STDOUT, x)
 
 function _repl(x)
-    docs = (isexpr(x, :call) && !any(isexpr(x, :(::)) for x in x.args)) ?
-        Base.gen_call_with_extracted_types(doc, x) : :(@doc $(esc(x)))
+    if (isexpr(x, :call) && !any(isexpr(x, :(::)) for x in x.args))
+        x.args[2:end] = [:(::typeof($arg)) for arg in x.args[2:end]]
+    end
+    docs = :(@doc $(esc(x)))
     if isfield(x)
         quote
             if isa($(esc(x.args[1])), DataType)
