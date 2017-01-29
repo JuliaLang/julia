@@ -90,7 +90,7 @@ type Interface
             for v0 = 1:spp0-1
                 vweight0[v0] = VersionWeight(pvers0[v0])
             end
-            vweight0[spp0] = VersionWeight(v"0", true)
+            vweight0[spp0] = VersionWeight(v"0") # last version means uninstalled
         end
 
         return new(reqs, deps, pkgs, np, spp, pdict, pvers, vdict, vweight)
