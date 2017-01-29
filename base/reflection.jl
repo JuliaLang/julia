@@ -332,22 +332,48 @@ enumerated types (see `@enum`).
 function instances end
 
 # subtypes
-function _subtypes(m::Module, x::DataType, sts=Set{DataType}(), visited=Set{Module}())
+function _subtypes(m::Module, x::Union{DataType,UnionAll},
+                   sts=Set{Union{DataType,UnionAll}}(), visited=Set{Module}())
     push!(visited, m)
+    xt = unwrap_unionall(x)
+    if !isa(xt, DataType)
+        return sts
+    end
+    xt = xt::DataType
     for s in names(m, true)
         if isdefined(m, s) && !isdeprecated(m, s)
             t = getfield(m, s)
-            if isa(t, DataType) && t.name.name == s && supertype(t).name == x.name
-                ti = typeintersect(t, x)
-                ti != Bottom && push!(sts, ti)
-            elseif isa(t, Module) && !in(t, visited)
-                _subtypes(t, x, sts, visited)
+            if isa(t, DataType)
+                t = t::DataType
+                if t.name.name === s && supertype(t).name == xt.name
+                    ti = typeintersect(t, x)
+                    ti != Bottom && push!(sts, ti)
+                end
+            elseif isa(t, UnionAll)
+                t = t::UnionAll
+                tt = unwrap_unionall(t)
+                isa(tt, DataType) || continue
+                tt = tt::DataType
+                if tt.name.name === s && supertype(tt).name == xt.name
+                    ti = typeintersect(t, x)
+                    ti != Bottom && push!(sts, ti)
+                end
+            elseif isa(t, Module)
+                t = t::Module
+                in(t, visited) || _subtypes(t, x, sts, visited)
             end
         end
     end
     return sts
 end
-subtypes(m::Module, x::DataType) = x.abstract ? sort!(collect(_subtypes(m, x)), by=string) : DataType[]
+function subtypes(m::Module, x::Union{DataType,UnionAll})
+    if isabstract(x)
+        sort!(collect(_subtypes(m, x)), by=string)
+    else
+        # Fast path
+        Union{DataType,UnionAll}[]
+    end
+end
 
 """
     subtypes(T::DataType)
@@ -364,7 +390,7 @@ julia> subtypes(Integer)
  Unsigned
 ```
 """
-subtypes(x::DataType) = subtypes(Main, x)
+subtypes(x::Union{DataType,UnionAll}) = subtypes(Main, x)
 
 function to_tuple_type(t::ANY)
     @_pure_meta
