@@ -322,14 +322,12 @@ f16530a(c) = fieldtype(Foo16530a, c)
 f16530b() = fieldtype(Foo16530b, :c)
 f16530b(c) = fieldtype(Foo16530b, c)
 
-let T = Array{Tuple{Vararg{Float64,dim}}, 1} where dim,
-    TTlim = Type{_} where _<:T
-
+let T = Vector{Tuple{Vararg{Float64,dim}}} where dim
     @test f16530a() == T
     @test f16530a(:c) == T
-    @test Base.return_types(f16530a, ()) == Any[TTlim]
-    @test Base.return_types(f16530b, ()) == Any[TTlim]
-    @test Base.return_types(f16530b, (Symbol,)) == Any[TTlim]
+    @test Base.return_types(f16530a, ()) == Any[Type{T}]
+    @test Base.return_types(f16530b, ()) == Any[Type{T}]
+    @test Base.return_types(f16530b, (Symbol,)) == Any[Type{T}]
 end
 @test f16530a(:d) == Vector
 
@@ -346,7 +344,7 @@ let T1 = Tuple{Int, Float64},
     @test f18037(2) === T2
 
     @test Base.return_types(f18037, ()) == Any[Type{T1}]
-    @test Base.return_types(f18037, (Int,)) == Any[Type{T} where T<:Tuple{Int, AbstractFloat}]
+    @test Base.return_types(f18037, (Int,)) == Any[Union{Type{T1},Type{T2}}]
 end
 
 # issue #18015
@@ -470,6 +468,10 @@ function g19348(x)
 end
 test_inferred_static(@code_typed g19348((1, 2.0)))
 
+# issue #5575
+f5575() = zeros(Type[Float64][1], 1)
+@test Base.return_types(f5575, ())[1] == Vector
+
 # make sure Tuple{unknown} handles the possibility that `unknown` is a Vararg
 function maybe_vararg_tuple_1()
     x = Any[Vararg{Int}][1]
@@ -481,6 +483,20 @@ function maybe_vararg_tuple_2()
     Tuple{x}
 end
 @test Type{Tuple{Vararg{Int}}} <: Base.return_types(maybe_vararg_tuple_2, ())[1]
+
+# inference of `fieldtype`
+type UndefField__
+    x::Union{}
+end
+f_infer_undef_field() = fieldtype(UndefField__, :x)
+@test Base.return_types(f_infer_undef_field, ()) == Any[Type{Union{}}]
+@test f_infer_undef_field() === Union{}
+
+type HasAbstractlyTypedField
+    x::Union{Int,String}
+end
+f_infer_abstract_fieldtype() = fieldtype(HasAbstractlyTypedField, :x)
+@test Base.return_types(f_infer_abstract_fieldtype, ()) == Any[Type{Union{Int,String}}]
 
 # issue #11480
 @noinline f11480(x,y) = x

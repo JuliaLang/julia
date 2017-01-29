@@ -1362,6 +1362,11 @@ end
 import Base: promote_rule
 promote_rule{T,T2,S,S2}(A::Type{SIQ{T,T2}},B::Type{SIQ{S,S2}}) = SIQ{promote_type(T,S)}
 @test_throws ErrorException promote_type(SIQ{Int},SIQ{Float64})
+f4731{T}(x::T...) = 0
+f4731(x...) = ""
+g4731() = f4731()
+@test f4731() == ""
+@test g4731() == ""
 
 # issue #4675
 f4675(x::StridedArray...) = 1
@@ -4434,7 +4439,7 @@ gc_enable(true)
 
 # issue #18710
 bad_tvars{T}() = 1
-@test isa(@which(bad_tvars()), Method)
+@test_throws ErrorException @which(bad_tvars())
 @test_throws MethodError bad_tvars()
 
 # issue #19059 - test for lowering of `let` with assignment not adding Box in simple cases
