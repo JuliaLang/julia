@@ -586,8 +586,8 @@
      (if (eq? t 'where)
          (begin (take-token s)
                 (let ((var (parse-comparison s)))
-                  (loop (if (and (pair? var) (eq? (car var) 'tuple))
-                            (list* 'where ex (cdr var))  ;; form `x where (T,S)`
+                  (loop (if (and (pair? var) (eq? (car var) 'cell1d))
+                            (list* 'where ex (cdr var))  ;; form `x where {T,S}`
                             (list 'where ex var))
                         (peek-token s))))
          ex))))

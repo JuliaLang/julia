@@ -14,7 +14,7 @@ immutable SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
     nzind::Vector{Ti}   # the indices of nonzeros
     nzval::Vector{Tv}   # the values of nonzeros
 
-    function SparseVector(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv})
+    function SparseVector{Tv,Ti}(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) where {Tv,Ti<:Integer}
         n >= 0 || throw(ArgumentError("The number of elements must be non-negative."))
         length(nzind) == length(nzval) ||
             throw(ArgumentError("index and value vectors must be the same length"))
@@ -22,7 +22,7 @@ immutable SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
     end
 end
 
-SparseVector{Tv,Ti}(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) =
+SparseVector(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) where {Tv,Ti} =
     SparseVector{Tv,Ti}(n, nzind, nzval)
 
 ### Basic properties

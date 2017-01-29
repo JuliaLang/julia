@@ -58,8 +58,8 @@ Atomic operations use an `atomic_` prefix, such as `atomic_add!`,
 """
 type Atomic{T<:AtomicTypes}
     value::T
-    Atomic() = new(zero(T))
-    Atomic(value) = new(value)
+    Atomic{T}() where T<:AtomicTypes = new(zero(T))
+    Atomic{T}(value) where T<:AtomicTypes = new(value)
 end
 
 Atomic() = Atomic{Int}()

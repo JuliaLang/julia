@@ -16,8 +16,10 @@ type ClusterSerializer{I<:IO} <: AbstractSerializer
                                                  # anonymous functions.
     anonfunc_id::UInt64
 
-    ClusterSerializer(io::I) = new(io, 0, ObjectIdDict(), Base.worker_id_from_socket(io),
-                                Set{UInt64}(), Dict{UInt64, UInt64}(), Dict{UInt64, Vector{Symbol}}(), 0)
+    function ClusterSerializer{I}(io::I) where I<:IO
+        new(io, 0, ObjectIdDict(), Base.worker_id_from_socket(io),
+            Set{UInt64}(), Dict{UInt64, UInt64}(), Dict{UInt64, Vector{Symbol}}(), 0)
+    end
 end
 ClusterSerializer(io::IO) = ClusterSerializer{typeof(io)}(io)
 

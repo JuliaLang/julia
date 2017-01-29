@@ -3,8 +3,8 @@
 type Set{T} <: AbstractSet{T}
     dict::Dict{T,Void}
 
-    Set() = new(Dict{T,Void}())
-    Set(itr) = union!(new(Dict{T,Void}()), itr)
+    Set{T}() where T = new(Dict{T,Void}())
+    Set{T}(itr) where T = union!(new(Dict{T,Void}()), itr)
 end
 Set() = Set{Any}()
 Set(itr) = Set{eltype(itr)}(itr)

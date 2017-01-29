@@ -15,7 +15,7 @@ type WeakKeyDict{K,V} <: Associative{K,V}
     finalizer::Function
 
     # Constructors mirror Dict's
-    function WeakKeyDict()
+    function WeakKeyDict{K,V}() where V where K
         t = new(Dict{Any,V}(), Threads.RecursiveSpinLock(), identity)
         t.finalizer = function (k)
             # when a weak key is finalized, remove from dictionary if it is still there
@@ -24,22 +24,22 @@ type WeakKeyDict{K,V} <: Associative{K,V}
         end
         return t
     end
-    function WeakKeyDict(kv)
-        h = WeakKeyDict{K,V}()
-        for (k,v) in kv
-            h[k] = v
-        end
-        return h
+end
+function WeakKeyDict{K,V}(kv) where V where K
+    h = WeakKeyDict{K,V}()
+    for (k,v) in kv
+        h[k] = v
     end
-    WeakKeyDict(p::Pair) = setindex!(WeakKeyDict{K,V}(), p.second, p.first)
-    function WeakKeyDict(ps::Pair...)
-        h = WeakKeyDict{K,V}()
-        sizehint!(h, length(ps))
-        for p in ps
-            h[p.first] = p.second
-        end
-        return h
+    return h
+end
+WeakKeyDict{K,V}(p::Pair) where V where K = setindex!(WeakKeyDict{K,V}(), p.second, p.first)
+function WeakKeyDict{K,V}(ps::Pair...) where V where K
+    h = WeakKeyDict{K,V}()
+    sizehint!(h, length(ps))
+    for p in ps
+        h[p.first] = p.second
     end
+    return h
 end
 WeakKeyDict() = WeakKeyDict{Any,Any}()
 

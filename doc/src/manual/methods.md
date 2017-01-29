@@ -268,11 +268,10 @@ exists, if transiently, until the more specific method is defined.
 
 ## Parametric Methods
 
-Method definitions can optionally have type parameters immediately after the method name and before
-the parameter tuple:
+Method definitions can optionally have type parameters qualifying the signature:
 
 ```jldoctest same_typefunc
-julia> same_type{T}(x::T, y::T) = true
+julia> same_type(x::T, y::T) where {T} = true
 same_type (generic function with 1 method)
 
 julia> same_type(x,y) = false
@@ -304,14 +303,17 @@ julia> same_type(Int32(1), Int64(2))
 false
 ```
 
+Such definitions correspond to methods whose type signatures are `UnionAll` types
+(see [UnionAll Types](@ref)).
+
 This kind of definition of function behavior by dispatch is quite common -- idiomatic, even --
-in Julia. Method type parameters are not restricted to being used as the types of parameters:
+in Julia. Method type parameters are not restricted to being used as the types of arguments:
 they can be used anywhere a value would be in the signature of the function or body of the function.
 Here's an example where the method type parameter `T` is used as the type parameter to the parametric
 type `Vector{T}` in the method signature:
 
 ```jldoctest
-julia> myappend{T}(v::Vector{T}, x::T) = [v..., x]
+julia> myappend(v::Vector{T}, x::T) where {T} = [v..., x]
 myappend (generic function with 1 method)
 
 julia> myappend([1,2,3],4)
@@ -324,7 +326,7 @@ julia> myappend([1,2,3],4)
 julia> myappend([1,2,3],2.5)
 ERROR: MethodError: no method matching myappend(::Array{Int64,1}, ::Float64)
 Closest candidates are:
-  myappend{T}(::Array{T,1}, !Matched::T) at none:1
+  myappend(::Array{T,1}, !Matched::T) where T at none:1
 
 julia> myappend([1.0,2.0,3.0],4.0)
 4-element Array{Float64,1}:
@@ -336,7 +338,7 @@ julia> myappend([1.0,2.0,3.0],4.0)
 julia> myappend([1.0,2.0,3.0],4)
 ERROR: MethodError: no method matching myappend(::Array{Float64,1}, ::Int64)
 Closest candidates are:
-  myappend{T}(::Array{T,1}, !Matched::T) at none:1
+  myappend(::Array{T,1}, !Matched::T) where T at none:1
 ```
 
 As you can see, the type of the appended element must match the element type of the vector it
@@ -344,7 +346,7 @@ is appended to, or else a [`MethodError`](@ref) is raised. In the following exam
 `T` is used as the return value:
 
 ```jldoctest
-julia> mytypeof{T}(x::T) = T
+julia> mytypeof(x::T) where {T} = T
 mytypeof (generic function with 1 method)
 
 julia> mytypeof(1)
@@ -358,7 +360,7 @@ Just as you can put subtype constraints on type parameters in type declarations 
 you can also constrain type parameters of methods:
 
 ```jldoctest
-julia> same_type_numeric{T<:Number}(x::T, y::T) = true
+julia> same_type_numeric(x::T, y::T) where {T<:Number} = true
 same_type_numeric (generic function with 1 method)
 
 julia> same_type_numeric(x::Number, y::Number) = false
@@ -376,7 +378,7 @@ true
 julia> same_type_numeric("foo", 2.0)
 ERROR: MethodError: no method matching same_type_numeric(::String, ::Float64)
 Closest candidates are:
-  same_type_numeric{T<:Number}(!Matched::T<:Number, ::T<:Number) at none:1
+  same_type_numeric(!Matched::T<:Number, ::T<:Number) where T<:Number at none:1
   same_type_numeric(!Matched::Number, ::Number) at none:1
 
 julia> same_type_numeric("foo", "bar")
@@ -388,6 +390,13 @@ false
 
 The `same_type_numeric` function behaves much like the `same_type` function defined above, but
 is only defined for pairs of numbers.
+
+Parametric methods allow the same syntax as `where` expressions used to write types
+(see [UnionAll Types](@ref)).
+If there is only a single parameter, the enclosing curly braces (in `where {T}`) can be omitted,
+but are often preferred for clarity.
+Multiple parameters can be separated with commas, e.g. `where {T, S<:Real}`, or written using
+nested `where`, e.g. `where S<:Real where T`.
 
 Redefining Methods
 ------------------

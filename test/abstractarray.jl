@@ -174,15 +174,17 @@ type T24Linear{T,N,dims} <: AbstractArray{T,N}
     v1::T;  v2::T;  v3::T;  v4::T;  v5::T;  v6::T;  v7::T;  v8::T
     v9::T;  v10::T; v11::T; v12::T; v13::T; v14::T; v15::T; v16::T
     v17::T; v18::T; v19::T; v20::T; v21::T; v22::T; v23::T; v24::T
-    T24Linear() = (prod(dims) == 24 || throw(DimensionMismatch("T24Linear must have 24 elements")); new())
-    function T24Linear(v1,v2,v3,v4,v5,v6,v7,v8,v9,v10,v11,v12,v13,v14,v15,v16,v17,v18,v19,v20,v21,v22,v23,v24)
-        prod(dims) == 24 || throw(DimensionMismatch("T24Linear must have 24 elements"))
+    T24Linear{T,N,d}() where {T,N,d} =
+        (prod(d) == 24 || throw(DimensionMismatch("T24Linear must have 24 elements")); new())
+    function T24Linear{T,N,d}(v1,v2,v3,v4,v5,v6,v7,v8,v9,v10,v11,v12,
+                              v13,v14,v15,v16,v17,v18,v19,v20,v21,v22,v23,v24) where {T,N,d}
+        prod(d) == 24 || throw(DimensionMismatch("T24Linear must have 24 elements"))
         new(v1,v2,v3,v4,v5,v6,v7,v8,v9,v10,v11,v12,v13,v14,v15,v16,v17,v18,v19,v20,v21,v22,v23,v24)
     end
 end
 
-T24Linear{T}(::Type{T}, dims::Int...) = T24Linear(T, dims)
-T24Linear{T,N}(::Type{T}, dims::NTuple{N,Int}) = T24Linear{T,N,dims}()
+T24Linear(::Type{T}, dims::Int...) where T = T24Linear(T, dims)
+T24Linear(::Type{T}, dims::NTuple{N,Int}) where {T,N} = T24Linear{T,N,dims}()
 
 Base.convert{T,N  }(::Type{T24Linear     }, X::AbstractArray{T,N}) = convert(T24Linear{T,N}, X)
 Base.convert{T,N,_}(::Type{T24Linear{T  }}, X::AbstractArray{_,N}) = convert(T24Linear{T,N}, X)

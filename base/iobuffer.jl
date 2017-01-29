@@ -14,13 +14,17 @@ type AbstractIOBuffer{T<:AbstractVector{UInt8}} <: IO
     ptr::Int # read (and maybe write) pointer
     mark::Int # reset mark location for ptr (or <0 for no mark)
 
-    AbstractIOBuffer(data::T,readable::Bool,writable::Bool,seekable::Bool,append::Bool,maxsize::Int) =
+    function AbstractIOBuffer{T}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
+                                 maxsize::Int) where T<:AbstractVector{UInt8}
         new(data,readable,writable,seekable,append,length(data),maxsize,1,-1)
+    end
 end
 typealias IOBuffer AbstractIOBuffer{Vector{UInt8}}
 
-AbstractIOBuffer{T<:AbstractVector{UInt8}}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool, maxsize::Int) =
+function AbstractIOBuffer(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
+                          maxsize::Int) where T<:AbstractVector{UInt8}
     AbstractIOBuffer{T}(data, readable, writable, seekable, append, maxsize)
+end
 
 # allocate Vector{UInt8}s for IOBuffer storage that can efficiently become Strings
 StringVector(n::Integer) = Vector{UInt8}(_string_n(n))

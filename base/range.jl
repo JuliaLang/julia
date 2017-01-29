@@ -70,7 +70,7 @@ immutable StepRange{T,S} <: OrdinalRange{T,S}
     step::S
     stop::T
 
-    function StepRange{T,S}(start::T, step::S, stop::T) where (T,S)
+    function StepRange{T,S}(start::T, step::S, stop::T) where {T,S}
         new(start, step, steprange_last(start,step,stop))
     end
 end
@@ -123,7 +123,7 @@ steprange_last_empty(start, step, stop) = start - step
 
 steprem(start,stop,step) = (stop-start) % step
 
-StepRange(start::T, step::S, stop::T) where (T,S) = StepRange{T,S}(start, step, stop)
+StepRange(start::T, step::S, stop::T) where {T,S} = StepRange{T,S}(start, step, stop)
 
 immutable UnitRange{T<:Real} <: AbstractUnitRange{T}
     start::T
@@ -170,14 +170,14 @@ immutable StepRangeLen{T,R,S} <: Range{T}
     len::Int     # length of the range
     offset::Int  # the index of ref
 
-    function StepRangeLen{T,R,S}(ref::R, step::S, len::Integer, offset::Integer = 1) where (T,R,S)
+    function StepRangeLen{T,R,S}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S}
         len >= 0 || throw(ArgumentError("length cannot be negative, got $len"))
         1 <= offset <= max(1,len) || throw(ArgumentError("StepRangeLen: offset must be in [1,$len], got $offset"))
         new(ref, step, len, offset)
     end
 end
 
-StepRangeLen(ref::R, step::S, len::Integer, offset::Integer = 1) where (R,S) =
+StepRangeLen(ref::R, step::S, len::Integer, offset::Integer = 1) where {R,S} =
     StepRangeLen{typeof(ref+0*step),R,S}(ref, step, len, offset)
 
 ## linspace and logspace
