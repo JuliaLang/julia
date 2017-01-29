@@ -42,6 +42,7 @@ function resolve(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}
         # verify solution (debug code) and enforce its optimality
         @assert verify_solution(sol, interface)
         enforce_optimality!(sol, interface)
+        @assert verify_solution(sol, interface)
     end
 
     # return the solution as a Dict mapping package_name => sha1
