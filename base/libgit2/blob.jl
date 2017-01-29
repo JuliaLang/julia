@@ -10,7 +10,7 @@ function rawcontent(blob::GitBlob)
 end
 
 function content(blob::GitBlob)
-    s = String(rawcontent)
+    s = String(rawcontent(blob))
     isvalid(s) || error("Blob does not contain valid UTF-8 data")
     return s
 end
