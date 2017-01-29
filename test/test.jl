@@ -426,7 +426,7 @@ let io = IOBuffer()
     @test !contains(str, "backtrace()")
 end
 
-msg = readstring(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e '
+msg = readstring(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e '
 using Base.Test
 
 foo(x) = length(x)^2
@@ -444,7 +444,7 @@ foo(x) = length(x)^2
         @test foo(zeros(2)) == 4
         @test foo(ones(4)) == 15
     end
-end'`))
+end'`), stderr=DevNull))
 
 @test contains(msg,
 """
