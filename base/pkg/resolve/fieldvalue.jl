@@ -27,10 +27,10 @@ immutable FieldValue
     l4::Int
     l5::Int128
 end
-FieldValue(l0::Integer,l1::VersionWeight,l2::VersionWeight,l3::Integer,l4::Integer) = FieldValue(l0, l1, l2, l3, l4, Int128(0))
-FieldValue(l0::Integer,l1::VersionWeight,l2::VersionWeight,l3::Integer) = FieldValue(l0, l1, l2, l3, 0)
-FieldValue(l0::Integer,l1::VersionWeight,l2::VersionWeight) = FieldValue(l0, l1, l2, 0)
-FieldValue(l0::Integer,l1::VersionWeight) = FieldValue(l0, l1, zero(VersionWeight))
+FieldValue(l0::Integer, l1::VersionWeight, l2::VersionWeight, l3::Integer, l4::Integer) = FieldValue(l0, l1, l2, l3, l4, Int128(0))
+FieldValue(l0::Integer, l1::VersionWeight, l2::VersionWeight, l3::Integer) = FieldValue(l0, l1, l2, l3, 0)
+FieldValue(l0::Integer, l1::VersionWeight, l2::VersionWeight) = FieldValue(l0, l1, l2, 0)
+FieldValue(l0::Integer, l1::VersionWeight) = FieldValue(l0, l1, zero(VersionWeight))
 FieldValue(l0::Integer) = FieldValue(l0, zero(VersionWeight))
 FieldValue() = FieldValue(0)
 
@@ -38,7 +38,7 @@ typealias Field Vector{FieldValue}
 
 Base.zero(::Type{FieldValue}) = FieldValue()
 
-Base.typemin(::Type{FieldValue}) = (x=typemin(Int); y=typemin(VersionWeight); FieldValue(x,y,y,x,x,typemin(Int128)))
+Base.typemin(::Type{FieldValue}) = (x=typemin(Int); y=typemin(VersionWeight); FieldValue(x, y, y, x, x, typemin(Int128)))
 
 Base.:-(a::FieldValue, b::FieldValue) = FieldValue(a.l0-b.l0, a.l1-b.l1, a.l2-b.l2, a.l3-b.l3, a.l4-b.l4, a.l5-b.l5)
 Base.:+(a::FieldValue, b::FieldValue) = FieldValue(a.l0+b.l0, a.l1+b.l1, a.l2+b.l2, a.l3+b.l3, a.l4+b.l4, a.l5+b.l5)
