@@ -112,7 +112,7 @@ _maybe_reindex{C<:AbstractCartesianIndex{1}}(V, I, A::Tuple{AbstractArray{C}, Va
 _maybe_reindex(V, I, A::Tuple{Any, Vararg{Any}}) = (@_inline_meta; _maybe_reindex(V, I, tail(A)))
 function _maybe_reindex(V, I, ::Tuple{})
     @_inline_meta
-    idxs = to_indices(V.parent, reindex(V, V.indexes, I))
+    @inbounds idxs = to_indices(V.parent, reindex(V, V.indexes, I))
     SubArray(V.parent, idxs)
 end
 
