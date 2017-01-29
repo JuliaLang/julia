@@ -83,6 +83,22 @@ function rewrap_unionall(t::ANY, u::ANY)
     return UnionAll(u.var, rewrap_unionall(t, u.body))
 end
 
+# replace TypeVars in all enclosing UnionAlls with fresh TypeVars
+function rename_unionall(u::ANY)
+    if !isa(u,UnionAll)
+        return u
+    end
+    body = rename_unionall(u.body)
+    if body === u.body
+        body = u
+    else
+        body = UnionAll(u.var, body)
+    end
+    var = u.var::TypeVar
+    nv = TypeVar(var.name, var.lb, var.ub)
+    return UnionAll(nv, body{nv})
+end
+
 const _va_typename = Vararg.body.body.name
 function isvarargtype(t::ANY)
     t = unwrap_unionall(t)

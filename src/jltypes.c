@@ -513,6 +513,14 @@ static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
     size_t j;
     size_t tnp = jl_nparams(tt);
     if (n != tnp) return 0;
+    if (tt->name == jl_type_typename) {
+        // for Type{T}, require `typeof(T)` to match also, to avoid incorrect
+        // dispatch from changing the type of something.
+        // this should work because `Type`s don't have uids, and aren't the
+        // direct tags of values so we don't rely on pointer equality.
+        jl_value_t *kj = key[0], *tj = jl_tparam0(tt);
+        return (kj == tj || (jl_typeof(tj) == jl_typeof(kj) && jl_types_equal(tj, kj)));
+    }
     for(j=0; j < n; j++) {
         jl_value_t *kj = key[j], *tj = jl_svecref(tt->parameters,j);
         if (tj != kj && !jl_types_equal(tj, kj))
