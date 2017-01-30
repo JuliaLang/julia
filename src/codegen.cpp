@@ -6590,9 +6590,18 @@ extern "C" void jl_init_codegen(void)
 // for debugging from gdb
 extern "C" void jl_dump_llvm_value(void *v)
 {
+#if JL_LLVM_VERSION >= 50000
+    ((Value*)v)->print(llvm::dbgs(), true);
+#else
     ((Value*)v)->dump();
+#endif
 }
 extern "C" void jl_dump_llvm_type(void *v)
 {
-    ((Type*)v)->dump(); putchar('\n');
+#if JL_LLVM_VERSION >= 50000
+    ((Type*)v)->print(llvm::dbgs(), true);
+#else
+    ((Type*)v)->dump();
+#endif
+    putchar('\n');
 }

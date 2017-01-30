@@ -444,7 +444,11 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
                 auto Obj = object::ObjectFile::createObjectFile(ObjBuffer->getMemBufferRef());
 
                 if (!Obj) {
+#if JL_LLVM_VERSION >= 50000
+                    M.print(llvm::dbgs(), nullptr, false, true);
+#else
                     M.dump();
+#endif
 #if JL_LLVM_VERSION >= 30900
                     std::string Buf;
                     raw_string_ostream OS(Buf);
