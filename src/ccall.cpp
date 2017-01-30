@@ -1124,13 +1124,17 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
 #endif
 
         //f->dump();
-        #if JL_LLVM_VERSION < 30500
+#if JL_LLVM_VERSION < 30500
         if (verifyFunction(*f,PrintMessageAction)) {
-        #else
+#else
         llvm::raw_fd_ostream out(1,false);
         if (verifyFunction(*f,&out)) {
-        #endif
+#endif
+#if JL_LLVM_VERSION >= 50000
+            f->print(llvm::dbgs(), nullptr, false, true);
+#else
             f->dump();
+#endif
             jl_error("Malformed LLVM Function");
         }
     }
