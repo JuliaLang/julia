@@ -321,58 +321,42 @@ function showerror(io::IO, ex::MethodError)
         kwargs = Any[(temp[i*2-1], temp[i*2]) for i in 1:(length(temp) ÷ 2)]
         ex = MethodError(f, ex.args[3:end])
     end
-    if f == Base.convert && length(arg_types_param) == 2 && !is_arg_types
+    if ft <: Function && isempty(ft.parameters) &&
+            isdefined(ft.name.module, name) &&
+            ft == typeof(getfield(ft.name.module, name))
         f_is_function = true
-        # See #13033
-        T = striptype(ex.args[1])
-        if T === nothing
-            print(io, "First argument to `convert` must be a Type, got ", ex.args[1])
-        else
-            print(io, "Cannot `convert` an object of type ", arg_types_param[2], " to an object of type ", T)
-        end
-    elseif isempty(methods(f)) && !isa(f, Function)
-        print(io, "objects of type $ft are not callable")
-    else
-        if ft <: Function && isempty(ft.parameters) &&
-                isdefined(ft.name.module, name) &&
-                ft == typeof(getfield(ft.name.module, name))
-            f_is_function = true
-            print(io, "no method matching ", name)
-        elseif isa(f, Type)
-            if isa(f, DataType) && f.abstract
-                # Print a more appropriate message if the only method
-                # on the type is the default one from sysimg.jl.
-                ms = methods(f)
-                if length(ms) == 1
-                    m = first(ms)
-                    if Base.is_default_method(m)
-                        print(io, "no constructors have been defined for $f")
-                        return
-                    end
+        print(io, "no method matching ", name)
+    elseif isa(f, Type)
+        if isa(f, DataType) && f.abstract
+            # Print a more appropriate message if the only method
+            # on the type is the default one from sysimg.jl.
+            ms = methods(f)
+            if length(ms) == 1
+                m = first(ms)
+                if Base.is_default_method(m)
+                    print(io, "no constructors have been defined for $f")
+                    return
                 end
             end
-            print(io, "no method matching ", f)
-        else
-            print(io, "no method matching (::", ft, ")")
         end
-        print(io, "(")
-        for (i, typ) in enumerate(arg_types_param)
-            print(io, "::$typ")
-            i == length(arg_types_param) || print(io, ", ")
-        end
-        if !isempty(kwargs)
-            print(io, "; ")
-            for (i, (k, v)) in enumerate(kwargs)
-                print(io, k, "=")
-                show(IOContext(io, :limit => true), v)
-                i == length(kwargs) || print(io, ", ")
-            end
-        end
-        print(io, ")")
+        print(io, "no method matching ", f)
+    else
+        print(io, "no method matching (::", ft, ")")
     end
-    if ft <: AbstractArray
-        print(io, "\nUse square brackets [] for indexing an Array.")
+    print(io, "(")
+    for (i, typ) in enumerate(arg_types_param)
+        print(io, "::$typ")
+        i == length(arg_types_param) || print(io, ", ")
     end
+    if !isempty(kwargs)
+        print(io, "; ")
+        for (i, (k, v)) in enumerate(kwargs)
+            print(io, k, "=")
+            show(IOContext(io, :limit => true), v)
+            i == length(kwargs) || print(io, ", ")
+        end
+    end
+    print(io, ")")
     # Check for local functions that shadow methods in Base
     if f_is_function && isdefined(Base, name)
         basef = getfield(Base, name)
@@ -402,15 +386,14 @@ function showerror(io::IO, ex::MethodError)
                       "\nYou can convert to a column vector with the vec() function.")
         end
     end
-    # Give a helpful error message if the user likely called a type constructor
-    # and sees a no method error for convert
-    if (f === Base.convert && !isempty(arg_types_param) && !is_arg_types &&
-        isa(arg_types_param[1], DataType) &&
-        arg_types_param[1].name === Type.body.name)
-        construct_type = arg_types_param[1].parameters[1]
-        println(io)
-        print(io, "This may have arisen from a call to the constructor $construct_type(...),",
-                  "\nsince type constructors fall back to convert methods.")
+    # Allow functions to define their own helpful no-method-error message
+    if !is_arg_types
+        try
+            println(io)
+            no_method_error_help(io, f, ex.args...)
+        catch
+            warn(io, "Error showing help message")
+        end
     end
     try
         show_method_candidates(io, ex, kwargs)
@@ -419,8 +402,32 @@ function showerror(io::IO, ex::MethodError)
     end
 end
 
-striptype(::Type{T}) where {T} = T
-striptype(::Any) = nothing
+"""
+    no_method_error_help(io, f, args...)
+
+Print a helpful usage message when interactively displaying a MethodError.
+
+This function can be specialized to print custom messages for intentionally
+unimplemented methods or common mistakes. The message is typically a complete
+sentence printed via [`info`](@ref).
+"""
+function no_method_error_help(io, f, args...)
+    if isempty(methods(f)) && !isa(f, Function)
+        info(io, "Objects of type ", typeof(f), " are not callable.")
+    end
+end
+no_method_error_help(io, ::AbstractArray, args...) = info(io, "Use square brackets [] for indexing into arrays.")
+function no_method_error_help(io, ::typeof(convert), ::Type{T}, arg) where {T}
+    info(io, "Cannot `convert` an object of type $(typeof(arg)) to an object of type $T.")
+    info(io, "This may have arisen from a call to the constructor $T(...), since type constructors fall back to convert methods.")
+end
+function no_method_error_help(io, ::typeof(convert), typ, arg)
+    info(io, "First argument to `convert` must be a Type, got $typ.")
+end
+no_method_error_help(io, ::typeof(+), ::AbstractString, ::AbstractString...) = info(io, "Use * for string concatenation.")
+no_method_error_help(io, ::typeof(max), ::AbstractArray) = info(io, "Use maximum() to find the largest element of an array.")
+no_method_error_help(io, ::typeof(min), ::AbstractArray) = info(io, "Use minimum() to find the smallest element of an array.")
+no_method_error_help(io, ::typeof(start), arg) = info(io, "Objects of type $(typeof(arg)) are not iterable.")
 
 function showerror_ambiguous(io::IO, meth, f, args)
     print(io, "MethodError: ", f, "(")
