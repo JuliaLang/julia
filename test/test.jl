@@ -196,10 +196,9 @@ end
     ts.anynonpass = false
     deleteat!(Base.Test.get_testset().results,1)
 end
-# Test @test_approx_eq
-# TODO
-@test isapprox(.1+.1+.1, .3)
-@test !isapprox(.1+.1+.1, .4)
+
+@test .1+.1+.1 ≈ .3
+@test .1+.1+.1 ≉ .4
 
 ts = @testset "@testset should return the testset" begin
     @test true
@@ -427,7 +426,7 @@ let io = IOBuffer()
     @test !contains(str, "backtrace()")
 end
 
-msg = readstring(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e '
+msg = readstring(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e '
 using Base.Test
 
 foo(x) = length(x)^2
@@ -445,7 +444,7 @@ foo(x) = length(x)^2
         @test foo(zeros(2)) == 4
         @test foo(ones(4)) == 15
     end
-end'`))
+end'`), stderr=DevNull))
 
 @test contains(msg,
 """

@@ -17,6 +17,7 @@ for T in (Int32, Int64)
     @test gcd(typemin(T), T(1)) === T(1)
     @test_throws OverflowError gcd(typemin(T), typemin(T))
 
+    @test lcm(T(0)) === T(0)
     @test lcm(T(2)) === T(2)
     @test lcm(T(2), T(3)) === T(6)
     @test lcm(T(4), T(6)) === T(12)

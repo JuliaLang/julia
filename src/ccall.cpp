@@ -1697,9 +1697,11 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         assert(nargt == 3);
         assert(!isVa && !llvmcall);
         jl_value_t *f = static_eval(args[4], ctx, false, false);
+        jl_value_t *fargt = nullptr;
+        JL_GC_PUSH2(&f, &fargt);
         jl_value_t *frt = expr_type(args[6], ctx);
         if (f && (jl_is_type_type((jl_value_t*)frt) && !jl_has_free_typevars(jl_tparam0(frt)))) {
-            jl_value_t *fargt = static_eval(args[8], ctx, true, true);
+            fargt = static_eval(args[8], ctx, true, true);
             if (fargt) {
                 if (jl_is_tuple(fargt)) {
                     // TODO: maybe deprecation warning, better checking
@@ -1727,11 +1729,13 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                     emit_expr(args[6], ctx);
                     emit_expr(args[8], ctx);
                     JL_GC_POP();
+                    JL_GC_POP();
                     return mark_or_box_ccall_result(emit_bitcast(llvmf, lrt),
                                                     retboxed, rt, unionall, static_rt, ctx);
                 }
             }
         }
+        JL_GC_POP();
     }
 
     // emit arguments

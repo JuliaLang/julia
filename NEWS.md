@@ -241,6 +241,8 @@ Library improvements
 
   * `notify` now returns a count of tasks woken up ([#19841]).
 
+  * A new `Dates.Time` type was added that supports representing the time of day with up to nanosecond resolution ([#12274]).
+
 Compiler/Runtime improvements
 -----------------------------
 

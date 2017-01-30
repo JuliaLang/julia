@@ -473,8 +473,6 @@ end
 @test collect(view(view(reshape(1:13^3, 13, 13, 13), 3:7, 6:6, :), 1:2:5, :, 1:2:5)) ==
     cat(3,[68,70,72],[406,408,410],[744,746,748])
 
-
-
 # tests @view (and replace_ref_end!)
 X = reshape(1:24,2,3,4)
 Y = 4:-1:1
@@ -494,8 +492,14 @@ u = (1,2:3)
 @test X[(1,)...,(2,)...,2:end] == @view X[(1,)...,(2,)...,2:end]
 
 # test macro hygiene
-let size=(x,y)-> error("should not happen")
+let size=(x,y)-> error("should not happen"), Base=nothing
     @test X[1:end,2,2] == @view X[1:end,2,2]
+end
+
+# test that side effects occur only once
+let foo = [X]
+    @test X[2:end-1] == @view (push!(foo,X)[1])[2:end-1]
+    @test foo == [X, X]
 end
 
 # test @views macro
@@ -512,6 +516,16 @@ end
     @test x == [5,6,19,4]
     f!(x[3:end])
     @test x == [5,6,35,4]
+    x[Y[2:3]] .= 7:8
+    @test x == [5,8,7,4]
+    x[(3,)..., ()...] .+= 3
+    @test x == [5,8,10,4]
+    i = Int[]
+    # test that lhs expressions in update operations are evaluated only once:
+    x[push!(i,4)[1]] += 5
+    @test x == [5,8,10,9] && i == [4]
+    x[push!(i,3)[end]] += 2
+    @test x == [5,8,12,9] && i == [4,3]
 end
 @views @test isa(X[1:3], SubArray)
 @test X[1:end] == @views X[1:end]
@@ -523,9 +537,8 @@ end
 @test X[1:end,2,Y[2:end]] == @views X[1:end,2,Y[2:end]]
 @test X[u...,2:end] == @views X[u...,2:end]
 @test X[(1,)...,(2,)...,2:end] == @views X[(1,)...,(2,)...,2:end]
-
 # test macro hygiene
-let size=(x,y)-> error("should not happen")
+let size=(x,y)-> error("should not happen"), Base=nothing
     @test X[1:end,2,2] == @views X[1:end,2,2]
 end
 

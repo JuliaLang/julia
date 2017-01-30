@@ -72,6 +72,9 @@ function test_2()
     @test issub_strict(Tuple{Int,Int}, Tuple{E,E,Vararg{E,N}} where E where N)
 
     @test issub(Type{Tuple{VecElement{Bool}}}, (Type{Tuple{Vararg{VecElement{T},N}}} where T where N))
+
+    @test isequal_type(Type{Tuple{Vararg{Int,N}} where N}, Type{Tuple{Vararg{Int,N} where N}})
+    @test Type{Tuple{Vararg{Int,N}} where N} !== Type{Tuple{Vararg{Int,N} where N}}
 end
 
 function test_diagonal()
@@ -791,6 +794,9 @@ function test_intersection()
     # test typeintersect wrapper as well as _type_intersect
     @test typeintersect(Union{DataType,Int}, Type) === DataType
     @test typeintersect(Union{DataType,Int}, Type{T} where T) === DataType
+
+    # since BottomType is a singleton we can deduce its intersection with Type{...}
+    @testintersect(Core.BottomType, (Type{T} where T<:Tuple), Type{Union{}})
 
     @testintersect((Type{Tuple{Vararg{T}}} where T), Type{Tuple}, Bottom)
     @testintersect(Tuple{Type{S}, Tuple{Any, Vararg{Any}}} where S<:Tuple{Any, Vararg{Any}},

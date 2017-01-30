@@ -1015,7 +1015,62 @@ remote exception and a serializable form of the call stack when the exception wa
 RemoteException(captured) = RemoteException(myid(), captured)
 function showerror(io::IO, re::RemoteException)
     (re.pid != myid()) && print(io, "On worker ", re.pid, ":\n")
-    showerror(io, re.captured)
+    showerror(io, get_root_exception(re.captured))
+end
+
+# Specialized serialize-deserialize implementations for CapturedException to partially
+# recover from any deserialization errors in `CapturedException.ex`
+
+function serialize(s::AbstractSerializer, ex::CapturedException)
+    serialize_type(s, typeof(ex))
+    serialize(s, string(typeof(ex.ex))) # String type should not result in a deser error
+    serialize(s, ex.processed_bt)       # Currently should not result in a deser error
+    serialize(s, ex.ex)                 # can result in a UndefVarError on the remote node
+                                        # if a type used in ex.ex is undefined on the remote node.
+end
+
+original_ex(ex_str) = ErrorException(string("Error deserializing a CapturedException.",
+                                                " Original exception of type : ", ex_str))
+
+function deserialize(s::AbstractSerializer, t::Type{T}) where T <: CapturedException
+    ex_str = deserialize(s)
+    local bt
+    local capex
+    try
+        bt = deserialize(s)
+    catch e
+        throw(CompositeException([
+            original_ex(ex_str),
+            CapturedException(e, catch_backtrace())
+        ]))
+    end
+
+    try
+        capex = deserialize(s)
+    catch e
+        throw(CompositeException([
+            CapturedException(original_ex(ex_str), bt),
+            CapturedException(e, catch_backtrace())
+        ]))
+    end
+
+    return CapturedException(capex, bt)
+end
+
+isa_exception_container(ex) = (isa(ex, RemoteException) ||
+                               isa(ex, CapturedException) ||
+                               isa(ex, CompositeException))
+
+function get_root_exception(ex)
+    if isa(ex, RemoteException)
+        return get_root_exception(ex.captured)
+    elseif isa(ex, CapturedException) && isa_exception_container(ex.ex)
+        return get_root_exception(ex.ex)
+    elseif isa(ex, CompositeException) && length(ex.exceptions) > 0 && isa_exception_container(ex.exceptions[1])
+        return get_root_exception(ex.exceptions[1])
+    else
+        return ex
+    end
 end
 
 function run_work_thunk(thunk, print_error)
@@ -1385,7 +1440,12 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
                         boundary_idx = 1
                     end
                 end
-                remote_err = RemoteException(myid(), CapturedException(e, catch_backtrace()))
+
+                # remotecalls only rethrow RemoteExceptions. Any other exception is treated as
+                # data to be returned. Wrap this exception in a RemoteException.
+
+                # Capture the remote pid that caused a deserialization error.
+                remote_err = RemoteException(wpid, CapturedException(e, catch_backtrace()))
                 # println("Deserialization error. ", remote_err)
                 if !null_id(header.response_oid)
                     ref = lookup_ref(header.response_oid)
