@@ -800,16 +800,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_call(io, head, ex.args[1], funcargslike, indent)
 
     # comprehensions
-    elseif (head === :typed_comprehension || head === :typed_dict_comprehension) && length(args) == 2
-        isdict = (head === :typed_dict_comprehension)
-        isdict && print(io, '(')
+    elseif head === :typed_comprehension && length(args) == 2
         show_unquoted(io, args[1], indent)
-        isdict && print(io, ')')
         print(io, '[')
         show_generator(io, args[2], indent)
         print(io, ']')
 
-    elseif (head === :comprehension || head === :dict_comprehension) && length(args) == 1
+    elseif head === :comprehension && length(args) == 1
         print(io, '[')
         show_generator(io, args[1], indent)
         print(io, ']')
