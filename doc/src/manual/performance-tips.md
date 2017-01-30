@@ -883,11 +883,12 @@ resulting loops can be fused with surrounding computations. For example,
 consider the two functions:
 
 ```julia
-f(x) = 3 * x.^2 + 4 * x + 7 * x.^3
-fdot(x) = 3 .* x.^2 .+ 4 .* x .+ 7 .* x.^3
+f(x) = 3x.^2 + 4x + 7x.^3
+fdot(x) = @. 3x^2 + 4x + 7x^3 # equivalent to 3 .* x.^2 .+ 4 .* x .+ 7 .* x.^3
 ```
 
-Both `f` and `fdot` compute the same thing.  However, `fdot` is
+Both `f` and `fdot` compute the same thing.  However, `fdot`
+(defined with the help of the [`@.`](@ref @__DOTS__) macro) is
 significantly faster when applied to an array:
 
 ```julia

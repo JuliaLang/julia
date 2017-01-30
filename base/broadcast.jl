@@ -7,7 +7,7 @@ using Base: linearindices, tail, OneTo, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
             nullable_returntype, null_safe_eltype_op, hasvalue
 import Base: broadcast, broadcast!
-export broadcast_getindex, broadcast_setindex!, dotview
+export broadcast_getindex, broadcast_setindex!, dotview, @__DOTS__
 
 typealias ScalarType Union{Type{Any}, Type{Nullable}}
 
@@ -508,5 +508,65 @@ end
 Base.@propagate_inbounds dotview(args...) = getindex(args...)
 Base.@propagate_inbounds dotview(A::AbstractArray, args...) = view(A, args...)
 Base.@propagate_inbounds dotview{T<:AbstractArray}(A::AbstractArray{T}, args...) = getindex(A, args...)
+
+
+############################################################
+# The parser turns @. into a call to the __DOTS__ macro,
+# which converts all function calls and assignments into
+# broadcasting "dot" calls/assignments:
+
+dottable(x) = false # avoid dotting spliced objects (e.g. view calls inserted by @view)
+dottable(x::Symbol) = true
+dottable(x::Expr) = x.head != :$
+undot(x) = x
+function undot(x::Expr)
+    if x.head == :.=
+        Expr(:(=), x.args...)
+    elseif x.head == :block # occurs in for x=..., y=...
+        Expr(:block, map(undot, x.args)...)
+    else
+        x
+    end
+end
+__DOTS__(x) = x
+function __DOTS__(x::Expr)
+    dotargs = map(__DOTS__, x.args)
+    if x.head == :call && dottable(x.args[1])
+        Expr(:., dotargs[1], Expr(:tuple, dotargs[2:end]...))
+    elseif x.head == :$
+        x.args[1]
+    elseif x.head == :let # don't add dots to "let x=... assignments
+        Expr(:let, dotargs[1], map(undot, dotargs[2:end])...)
+    elseif x.head == :for # don't add dots to for x=... assignments
+        Expr(:for, undot(dotargs[1]), dotargs[2])
+    elseif (x.head == :(=) || x.head == :function || x.head == :macro) &&
+           Meta.isexpr(x.args[1], :call) # function or macro definition
+        Expr(x.head, x.args[1], dotargs[2])
+    else
+        head = string(x.head)
+        if last(head) == '=' && first(head) != '.'
+            Expr(Symbol('.',head), dotargs...)
+        else
+            Expr(x.head, dotargs...)
+        end
+    end
+end
+"""
+    @. expr
+
+Convert every function call or operator in `expr` into a "dot call"
+(e.g. convert `f(x)` to `f.(x)`), and convert every assignment in `expr`
+to a "dot assignment" (e.g. convert `+=` to `.+=`).
+
+If you want to *avoid* adding dots for selected function calls in
+`expr`, splice those function calls in with `\$`.  For example,
+`@. sqrt(abs(\$sort(x)))` is equivalent to `sqrt.(abs.(sort(x)))`
+(no dot for `sort`).
+
+(`@.` is equivalent to a call to `@__DOTS__`.)
+"""
+macro __DOTS__(x)
+    esc(__DOTS__(x))
+end
 
 end # module

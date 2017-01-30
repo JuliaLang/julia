@@ -41,13 +41,15 @@ Base.linspace
 Base.logspace
 ```
 
-## Mathematical operators and functions
+## Broadcasting
 
-All mathematical operations and functions are supported for arrays
+See also the [dot syntax for vectorizing functions](@ref man-vectorized);
+for example, `f.(args...)` implicitly calls `broadcast(f, args...)`.
 
 ```@docs
 Base.broadcast
 Base.Broadcast.broadcast!
+Base.__DOTS__
 ```
 
 ## Indexing, Assignment, and Concatenation

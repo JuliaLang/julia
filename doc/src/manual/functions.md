@@ -642,12 +642,17 @@ overwriting `X` with `sin.(Y)` in-place. If the left-hand side is an array-index
 e.g. `X[2:end] .= sin.(Y)`, then it translates to `broadcast!` on a `view`, e.g. `broadcast!(sin, view(X, 2:endof(X)), Y)`,
 so that the left-hand side is updated in-place.
 
+Since adding dots to many operations and function calls in an expression
+can be tedious and lead to code that is difficult to read, the macro
+[`@.`](@ref @__DOTS__) is provided to convert *every* function call,
+operation, and assignment in an expression into the "dotted" version.
+
 ```jldoctest
 julia> Y = [1.0, 2.0, 3.0, 4.0];
 
 julia> X = similar(Y); # pre-allocate output array
 
-julia> X .= sin.(cos.(Y))
+julia> @. X = sin(cos(Y)) # equivalent to X .= sin.(cos.(Y))
 4-element Array{Float64,1}:
   0.514395
  -0.404239
