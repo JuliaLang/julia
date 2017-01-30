@@ -2911,8 +2911,10 @@ function record_slot_assign(id::Int, vt::ANY, slottypes::Vector{Any})
         otherTy = slottypes[id]
         if otherTy === Bottom
             slottypes[id] = vt
-        elseif otherTy !== Any && !typeseq(otherTy, vt)
+        elseif otherTy === Any
             slottypes[id] = Any
+        else
+            slottypes[id] = tmerge(otherTy, vt)
         end
     end
     nothing
@@ -3002,15 +3004,20 @@ function widen_all_consts!(src::CodeInfo)
 end
 
 # widen all slots to their optimal storage layout
-# we also need to preserve the type for any untyped load
-# since codegen optimizations of functions like `is` need to depend on knowing it
+# we also need to preserve the type for any untyped load of a DataType
+# since codegen optimizations of functions like `is` will depend on knowing it
 function widen_slot_type(ty::ANY, untypedload::Bool)
     if isa(ty, DataType)
         if untypedload || isbits(ty) || isdefined(ty, :instance)
             return ty
         end
     elseif isa(ty, Union)
-        # TODO: optimized codegen for unions
+        ty_a = widen_slot_type(ty.a, false)
+        ty_b = widen_slot_type(ty.b, false)
+        if ty_a !== Any || ty_b !== Any
+            # TODO: better optimized codegen for unions?
+            return ty
+        end
     elseif isa(ty, UnionAll)
         if untypedload
             return ty
