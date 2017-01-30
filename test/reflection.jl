@@ -309,6 +309,10 @@ tlayout = TLayout(5,7,11)
 @test_throws BoundsError fieldname(TLayout, 4)
 @test_throws BoundsError fieldoffset(TLayout, 4)
 
+@test fieldtype(Tuple{Vararg{Int8}}, 1) === Int8
+@test fieldtype(Tuple{Vararg{Int8}}, 10) === Int8
+@test_throws BoundsError fieldtype(Tuple{Vararg{Int8}}, 0)
+
 @test fieldnames((1,2,3)) == fieldnames(NTuple{3, Int}) == [fieldname(NTuple{3, Int}, i) for i = 1:3] == [1, 2, 3]
 @test_throws BoundsError fieldname(NTuple{3, Int}, 0)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 4)

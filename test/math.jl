@@ -650,7 +650,7 @@ end
           0.00169495384841964531409376316336552555952269360134349446910im)
 end
 
-# useful test functions for relative error, which differ from isapprox
+# useful test functions for relative error, which differ from isapprox (≈)
 # in that relerrc separately looks at the real and imaginary parts
 relerr(z, x) = z == x ? 0.0 : abs(z - x) / abs(x)
 relerrc(z, x) = max(relerr(real(z),real(x)), relerr(imag(z),imag(x)))

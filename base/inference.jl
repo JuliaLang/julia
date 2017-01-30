@@ -359,6 +359,11 @@ function instanceof_tfunc(t::ANY)
         end
     elseif isType(t)
         return t.parameters[1]
+    elseif isa(t,UnionAll)
+        t′ = unwrap_unionall(t)
+        return rewrap_unionall(instanceof_tfunc(t′), t)
+    elseif isa(t,Union)
+        return Union{instanceof_tfunc(t.a), instanceof_tfunc(t.b)}
     end
     return Any
 end
@@ -613,9 +618,9 @@ add_tfunc(isa, 2, 2,
           end)
 add_tfunc(issubtype, 2, 2,
           function (a::ANY, b::ANY)
-              a = instanceof_tfunc(a)
-              b = instanceof_tfunc(b)
-              if a !== Any && b !== Any
+              if (isa(a,Const) || isType(a)) && (isa(b,Const) || isType(b))
+                  a = instanceof_tfunc(a)
+                  b = instanceof_tfunc(b)
                   if !has_free_typevars(a) && !has_free_typevars(b)
                       return Const(issubtype(a, b))
                   end
@@ -690,8 +695,8 @@ function getfield_tfunc(s00::ANY, name)
         end
         s = DataType # typeof(p1)
     elseif isa(s, Union)
-        return rewrap(tmerge(getfield_tfunc(s.a, name), getfield_tfunc(s.b, name)),
-                      s00)
+        return tmerge(rewrap(getfield_tfunc(s.a, name),s00),
+                      rewrap(getfield_tfunc(s.b, name),s00))
     elseif isa(s, Conditional)
         return Bottom # Bool has no fields
     elseif isa(s, Const)
@@ -786,25 +791,64 @@ function getfield_tfunc(s00::ANY, name)
 end
 add_tfunc(getfield, 2, 2, (s::ANY, name::ANY) -> getfield_tfunc(s, name))
 add_tfunc(setfield!, 3, 3, (o::ANY, f::ANY, v::ANY) -> v)
-function fieldtype_tfunc(s::ANY, name::ANY)
-    if isa(s, Const)
-        s = s.val
-    elseif isType(s)
-        s = s.parameters[1]
-    else
+function fieldtype_tfunc(s0::ANY, name::ANY)
+    if s0 === Any || s0 === Type || DataType ⊑ s0 || UnionAll ⊑ s0
         return Type
     end
-    t = getfield_tfunc(s, name)
-    if t === Bottom
-        return t
-    elseif isa(t, Const)
-        return Const(typeof(t.val))
-    elseif isleaftype(t)
-        return Const(t)
-    elseif isvarargtype(t)
-        return Type{t}
+    # fieldtype only accepts DataType and UnionAll, errors on `Module`
+    if isa(s0,Const) && (!(isa(s0.val,DataType) || isa(s0.val,UnionAll)) || s0.val === Module)
+        return Bottom
     end
-    return Type{_} where _<:t
+    if s0 == Type{Module} || s0 == Type{Union{}} || isa(s0, Conditional)
+        return Bottom
+    end
+
+    s = instanceof_tfunc(s0)
+    u = unwrap_unionall(s)
+
+    if isa(u,Union)
+        return tmerge(rewrap(fieldtype_tfunc(u.a, name),s),
+                      rewrap(fieldtype_tfunc(u.b, name),s))
+    end
+
+    if !isa(u,DataType) || u.abstract
+        return Type
+    end
+    ftypes = u.types
+    if isempty(ftypes)
+        return Bottom
+    end
+
+    if !isa(name, Const)
+        if !(Int <: name || Symbol <: name)
+            return Bottom
+        end
+        return reduce(tmerge, Bottom,
+                      Any[ fieldtype_tfunc(s0, Const(i)) for i = 1:length(ftypes) ])
+    end
+
+    fld = name.val
+    if isa(fld,Symbol)
+        fld = fieldindex(u, fld, false)
+    end
+    if !isa(fld, Int)
+        return Bottom
+    end
+    nf = length(ftypes)
+    if u.name === Tuple.name && fld >= nf && isvarargtype(ftypes[nf])
+        ft = unwrapva(ftypes[nf])
+    elseif fld < 1 || fld > nf
+        return Bottom
+    else
+        ft = ftypes[fld]
+    end
+
+    exact = (isa(s0, Const) || isType(s0)) && !has_free_typevars(s)
+    ft = rewrap_unionall(ft,s)
+    if exact
+        return Const(ft)
+    end
+    return Type{_} where _<:ft
 end
 add_tfunc(fieldtype, 2, 2, fieldtype_tfunc)
 
@@ -862,27 +906,45 @@ function apply_type_tfunc(headtypetype::ANY, args::ANY...)
     end
     uncertain = false
     tparams = Any[]
+    outervars = Any[]
     for i = 1:largs
         ai = args[i]
         if isType(ai)
             aip1 = ai.parameters[1]
-            uncertain |= has_free_typevars(aip1)
             push!(tparams, aip1)
         elseif isa(ai, Const) && (isa(ai.val, Type) || valid_tparam(ai.val))
             push!(tparams, ai.val)
         else
             # TODO: return `Bottom` for trying to apply a non-UnionAll
-            #if !istuple && i-1 > length(headtype.parameters)
-            #    # too many parameters for type
-            #    return Bottom
-            #end
             uncertain = true
+            # These blocks improve type info but make compilation a bit slower.
+            # XXX
+            #unw = unwrap_unionall(ai)
+            #isT = isType(unw)
+            #if isT && isa(ai,UnionAll) && contains_is(outervars, ai.var)
+            #    ai = rename_unionall(ai)
+            #    unw = unwrap_unionall(ai)
+            #end
             if istuple
-                push!(tparams, Any)
+                if i == largs
+                    push!(tparams, Vararg)
+                # XXX
+                #elseif isT
+                #    push!(tparams, rewrap_unionall(unw.parameters[1], ai))
+                else
+                    push!(tparams, Any)
+                end
+            # XXX
+            #elseif isT
+            #    push!(tparams, unw.parameters[1])
+            #    while isa(ai, UnionAll)
+            #        push!(outervars, ai.var)
+            #        ai = ai.body
+            #    end
             else
-                # TODO: use rewrap_unionall to skip only the unknown parameters
-                #push!(tparams, headtype.parameters[i-1])
-                break
+                v = TypeVar(:_)
+                push!(tparams, v)
+                push!(outervars, v)
             end
         end
     end
@@ -892,14 +954,23 @@ function apply_type_tfunc(headtypetype::ANY, args::ANY...)
     catch ex
         # type instantiation might fail if one of the type parameters
         # doesn't match, which could happen if a type estimate is too coarse
-        appl = headtype
-        uncertain = true
+        return Type{_} where _<:headtype
     end
     !uncertain && return Const(appl)
+    if isvarargtype(headtype)
+        return Type
+    end
     if type_too_complex(appl,0)
         return Type{_} where _<:headtype
     end
-    !isa(appl,TypeVar) ? (Type{_} where _<:appl) : Type{appl}
+    if istuple
+        return Type{_} where _<:appl
+    end
+    ans = Type{appl}
+    for i = length(outervars):-1:1
+        ans = UnionAll(outervars[i], ans)
+    end
+    return ans
 end
 add_tfunc(apply_type, 1, IInf, apply_type_tfunc)
 
@@ -1098,10 +1169,11 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
     # here I picked 4.
     argtype = limit_tuple_type(atype, sv.params)
     argtypes = unwrap_unionall(argtype).parameters
-    ft = argtypes[1] # TODO: ccall jl_first_argument_datatype here
+    ft = unwrap_unionall(argtypes[1]) # TODO: ccall jl_first_argument_datatype here
     isa(ft, DataType) || return Any # the function being called is unknown. can't properly handle this backedge right now
-    isdefined(ft.name, :mt) || return Any # not callable. should be Bottom, but can't track this backedge right now
-    if ft.name === _Type_name
+    ftname = ft.name
+    isdefined(ftname, :mt) || return Any # not callable. should be Bottom, but can't track this backedge right now
+    if ftname === _Type_name
         tname = ft.parameters[1]
         if isa(tname, TypeVar)
             tname = tname.ub
@@ -1226,7 +1298,7 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
 
         # if sig changed, may need to recompute the sparams environment
         if recomputesvec && !isempty(sparams)
-            recomputed = ccall(:jl_type_intersection_env, Ref{SimpleVector}, (Any, Any), sig, method.sig)
+            recomputed = ccall(:jl_env_from_type_intersection, Ref{SimpleVector}, (Any, Any), sig, method.sig)
             sig = recomputed[1]
             if !isa(unwrap_unionall(sig), DataType) # probably Union{}
                 rettype = Any
@@ -1243,7 +1315,7 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
     if !(fullmatch || rettype === Any)
         # also need an edge to the method table in case something gets
         # added that did not intersect with any existing method
-        add_mt_backedge(ft.name.mt, argtype, sv)
+        add_mt_backedge(ftname.mt, argtype, sv)
         update_valid_age!(min_valid[1], max_valid[1], sv)
     end
     if isempty(x)
@@ -1655,6 +1727,11 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
                     t = Bottom # a return type of Box{Any} is invalid
                 end
             end
+            for v in sv.linfo.sparam_vals
+                if isa(v,TypeVar)
+                    t = UnionAll(v, t)
+                end
+            end
         else
             t = Any
         end
@@ -1817,8 +1894,17 @@ function ⊑(a::ANY, b::ANY)
     end
 end
 
-widenconst(c::Const) = isa(c.val, Type) ? Type{c.val} : typeof(c.val)
 widenconst(c::Conditional) = Bool
+function widenconst(c::Const)
+    if isa(c.val, Type)
+        if isvarargtype(c.val)
+            return Type
+        end
+        return Type{c.val}
+    else
+        return typeof(c.val)
+    end
+end
 widenconst(t::ANY) = t
 
 issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)
