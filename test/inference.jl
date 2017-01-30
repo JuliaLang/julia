@@ -545,7 +545,7 @@ end
 @testset "inference failure 0.5 #19362" begin
     @inferred lift_19362(*, Nullable(1), Nullable(2))
 end
-  
+
 @testset "type inference error #19322" begin
     Y_19322 = reshape(round.(Int, abs.(randn(5*1000)))+1,1000,5)
 
