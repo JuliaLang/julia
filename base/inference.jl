@@ -692,6 +692,20 @@ const DataType_parameters_fieldindex = fieldindex(DataType, :parameters)
 const DataType_types_fieldindex = fieldindex(DataType, :types)
 const DataType_super_fieldindex = fieldindex(DataType, :super)
 
+const TypeName_name_fieldindex = fieldindex(TypeName, :name)
+const TypeName_module_fieldindex = fieldindex(TypeName, :module)
+const TypeName_wrapper_fieldindex = fieldindex(TypeName, :wrapper)
+
+function const_datatype_getfield_tfunc(sv, fld)
+  if (fld == DataType_name_fieldindex ||
+      fld == DataType_parameters_fieldindex ||
+      fld == DataType_types_fieldindex ||
+      fld == DataType_super_fieldindex)
+    return abstract_eval_constant(getfield(sv, fld))
+  end
+  return nothing
+end
+
 # returns (type, isexact)
 function getfield_tfunc(s00::ANY, name)
     if isa(s00, TypeVar)
@@ -719,12 +733,22 @@ function getfield_tfunc(s00::ANY, name)
                 elseif nv === :body || nv === 2
                     return Const(sv.body)
                 end
+            elseif isa(sv, DataType)
+                t = const_datatype_getfield_tfunc(sv, isa(nv, Symbol) ?
+                      fieldindex(DataType, nv, false) : nv)
+                t !== nothing && return t
+            elseif isa(sv, TypeName)
+                fld = isa(nv, Symbol) ? fieldindex(TypeName, nv, false) : nv
+                if (fld == TypeName_name_fieldindex ||
+                    fld == TypeName_module_fieldindex ||
+                    fld == TypeName_wrapper_fieldindex)
+                    return abstract_eval_constant(getfield(sv, fld))
+                end
             end
             if isa(sv, Module) && isa(nv, Symbol)
                 return abstract_eval_global(sv, nv)
             end
-            if (isa(sv, DataType) || isa(sv, SimpleVector) || isa(sv, TypeName)
-                || isimmutable(sv)) && isdefined(sv, nv)
+            if (isa(sv, SimpleVector) || isimmutable(sv)) && isdefined(sv, nv)
                 return abstract_eval_constant(getfield(sv, nv))
             end
         end
@@ -784,12 +808,9 @@ function getfield_tfunc(s00::ANY, name)
     else
         sp = nothing
     end
-    if (sp !== nothing &&
-        (fld == DataType_name_fieldindex ||
-         fld == DataType_parameters_fieldindex ||
-         fld == DataType_types_fieldindex ||
-         fld == DataType_super_fieldindex))
-        return Const(getfield(sp, fld))
+    if sp !== nothing
+        t = const_datatype_getfield_tfunc(sp, fld)
+        t !== nothing && return t
     end
     R = s.types[fld]
     if isempty(s.parameters)
