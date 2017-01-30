@@ -796,24 +796,29 @@ static void emit_type_error(const jl_cgval_t &x, Value *type, const std::string 
 #endif
 }
 
-static void emit_typecheck(const jl_cgval_t &x, jl_value_t *type, const std::string &msg,
-                           jl_codectx_t *ctx)
+static Value *emit_isa(const jl_cgval_t &x, jl_value_t *type, const std::string *msg, jl_codectx_t *ctx)
 {
     Value *istype;
-    // if (jl_subtype(x.typ, type)) {
-    //     // This case should already be handled by the caller
-    //     return;
-    // }
     if (jl_type_intersection(x.typ, type) == (jl_value_t*)jl_bottom_type) {
-        emit_type_error(x, literal_pointer_val(type), msg, ctx);
-        builder.CreateUnreachable();
-        BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext, "fail", ctx->f);
-        builder.SetInsertPoint(failBB);
-        return;
+        if (msg) {
+            emit_type_error(x, literal_pointer_val(type), *msg, ctx);
+            builder.CreateUnreachable();
+            BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext, "fail", ctx->f);
+            builder.SetInsertPoint(failBB);
+        }
+        return ConstantInt::get(T_int1, 0);
     }
     else if (jl_has_intersect_type_not_kind(x.typ) ||
              jl_has_intersect_type_not_kind(type)) {
         Value *vx = boxed(x, ctx);
+        if (msg && *msg == "typeassert") {
+#if JL_LLVM_VERSION >= 30700
+            builder.CreateCall(prepare_call(jltypeassert_func), { vx, literal_pointer_val(type) });
+#else
+            builder.CreateCall2(prepare_call(jltypeassert_func), vx, literal_pointer_val(type));
+#endif
+            return ConstantInt::get(T_int1, 1);
+        }
         istype = builder.CreateICmpNE(
 #if JL_LLVM_VERSION >= 30700
                 builder.CreateCall(prepare_call(jlisa_func), { vx, literal_pointer_val(type) }),
@@ -835,16 +840,29 @@ static void emit_typecheck(const jl_cgval_t &x, jl_value_t *type, const std::str
 #endif
                 ConstantInt::get(T_int32, 0));
     }
-    BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext, "fail", ctx->f);
-    BasicBlock *passBB = BasicBlock::Create(jl_LLVMContext, "pass");
-    builder.CreateCondBr(istype, passBB, failBB);
-    builder.SetInsertPoint(failBB);
+    return istype;
+}
 
-    emit_type_error(x, literal_pointer_val(type), msg, ctx);
-    builder.CreateUnreachable();
+static void emit_typecheck(const jl_cgval_t &x, jl_value_t *type, const std::string &msg,
+                           jl_codectx_t *ctx)
+{
+    // if (jl_subtype(x.typ, type)) {
+    //     // This case should already be handled by the caller
+    //     return;
+    // }
+    Value *istype = emit_isa(x, type, &msg, ctx);
+    if (!isa<Constant>(istype)) {
+        BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext, "fail", ctx->f);
+        BasicBlock *passBB = BasicBlock::Create(jl_LLVMContext, "pass");
+        builder.CreateCondBr(istype, passBB, failBB);
+        builder.SetInsertPoint(failBB);
 
-    ctx->f->getBasicBlockList().push_back(passBB);
-    builder.SetInsertPoint(passBB);
+        emit_type_error(x, literal_pointer_val(type), msg, ctx);
+        builder.CreateUnreachable();
+
+        ctx->f->getBasicBlockList().push_back(passBB);
+        builder.SetInsertPoint(passBB);
+    }
 }
 
 static void emit_leafcheck(Value *typ, const std::string &msg, jl_codectx_t *ctx)
