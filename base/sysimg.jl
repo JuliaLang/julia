@@ -96,7 +96,6 @@ include("subarray.jl")
 (::Type{Vector})() = Array{Any,1}(0)
 (::Type{Vector{T}}){T}(m::Integer) = Array{T,1}(Int(m))
 (::Type{Vector})(m::Integer) = Array{Any,1}(Int(m))
-(::Type{Matrix})() = Array{Any,2}(0, 0)
 (::Type{Matrix{T}}){T}(m::Integer, n::Integer) = Matrix{T}(Int(m), Int(n))
 (::Type{Matrix})(m::Integer, n::Integer) = Matrix{Any}(Int(m), Int(n))
 
