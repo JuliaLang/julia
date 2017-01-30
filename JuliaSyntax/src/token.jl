@@ -70,6 +70,17 @@ exactkind(t::Token) = t.kind
 startpos(t::Token) = t.startpos
 endpos(t::Token) = t.endpos
 untokenize(t::Token) = t.val
+function untokenize(ts)
+    if eltype(ts) != Token
+        throw(ArgumentError("element type of iterator has to be Token"))
+    end
+    io = IOBuffer()
+    for tok in ts
+        write(io, untokenize(tok))
+    end
+    return String(take!(io))
+end
+
 
 function Base.show(io::IO, t::Token)
   start_r, start_c = startpos(t)
