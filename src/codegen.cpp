@@ -751,11 +751,10 @@ static void CreateTrap(IRBuilder<> &builder)
 
 // --- allocating local variables ---
 
-static bool isbits_spec(jl_value_t *jt, bool allow_unsized = true)
+static bool isbits_spec(jl_value_t *jt, bool allow_singleton = true)
 {
-    return jl_isbits(jt) && jl_is_leaf_type(jt) && (allow_unsized ||
-        ((jl_is_bitstype(jt) && jl_datatype_size(jt) > 0) ||
-         (jl_is_datatype(jt) && jl_datatype_nfields(jt)>0)));
+    return jl_isbits(jt) && jl_is_leaf_type(jt) &&
+        (allow_singleton || (jl_datatype_size(jt) > 0) || (jl_datatype_nfields(jt) > 0));
 }
 
 static jl_sym_t *slot_symbol(int s, jl_codectx_t *ctx)
