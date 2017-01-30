@@ -164,7 +164,7 @@ code_llvm(DevNull, f14009, (Int,))
 arithtype9232{T<:Real}(::Type{T},::Type{T}) = arithtype9232(T)
 result_type9232{T1<:Number,T2<:Number}(::Type{T1}, ::Type{T2}) = arithtype9232(T1, T2)
 # this gave a "type too large", but not reliably
-@test length(code_typed(result_type9232, Tuple{(Type{_} where _<:Union{Float32,Float64}), Type{T2} where T2<:Number})) == 1
+@test length(code_typed(result_type9232, Tuple{(Type{x} where x<:Union{Float32,Float64}), Type{T2} where T2<:Number})) == 1
 
 
 # issue #10878

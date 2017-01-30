@@ -582,7 +582,7 @@ function typeof_tfunc(t::ANY)
         elseif t === Any
             return DataType
         else
-            return Type{_} where _<:t
+            return Type{_T} where _T<:t
         end
     elseif isa(t, Union)
         a = widenconst(typeof_tfunc(t.a))
@@ -891,7 +891,7 @@ function fieldtype_tfunc(s0::ANY, name::ANY)
     if exact
         return Const(ft)
     end
-    return Type{_} where _<:ft
+    return Type{_T} where _T<:ft
 end
 add_tfunc(fieldtype, 2, 2, fieldtype_tfunc)
 
@@ -1002,17 +1002,17 @@ function apply_type_tfunc(headtypetype::ANY, args::ANY...)
     catch ex
         # type instantiation might fail if one of the type parameters
         # doesn't match, which could happen if a type estimate is too coarse
-        return Type{_} where _<:headtype
+        return Type{_T} where _T<:headtype
     end
     !uncertain && canconst && return Const(appl)
     if isvarargtype(headtype)
         return Type
     end
     if uncertain && type_too_complex(appl,0)
-        return Type{_} where _<:headtype
+        return Type{_T} where _T<:headtype
     end
     if istuple
-        return Type{_} where _<:appl
+        return Type{_T} where _T<:appl
     end
     ans = Type{appl}
     for i = length(outervars):-1:1
