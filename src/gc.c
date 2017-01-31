@@ -11,6 +11,7 @@ extern "C" {
 // is going to realloc the buffer (of its own list) or accessing the
 // list of another thread
 static jl_mutex_t finalizers_lock;
+static jl_mutex_t gc_cache_lock;
 
 /**
  * Note about GC synchronization:
@@ -447,6 +448,67 @@ STATIC_INLINE void gc_update_heap_size(int64_t sz_ub, int64_t sz_est)
     last_full_live_est = sz_est;
 }
 
+static void gc_sync_cache_nolock(jl_ptls_t ptls, jl_gc_mark_cache_t *gc_cache)
+{
+    const int nbig = gc_cache->nbig_obj;
+    for (int i = 0; i < nbig; i++) {
+        void *ptr = gc_cache->big_obj[i];
+        bigval_t *hdr = (bigval_t*)gc_ptr_clear_tag(ptr, 1);
+        gc_big_object_unlink(hdr);
+        if (gc_ptr_tag(ptr, 1)) {
+            gc_big_object_link(hdr, &ptls->heap.big_objects);
+        }
+        else {
+            // Move hdr from `big_objects` list to `big_objects_marked list`
+            gc_big_object_link(hdr, &big_objects_marked);
+        }
+    }
+    gc_cache->nbig_obj = 0;
+    perm_scanned_bytes += gc_cache->perm_scanned_bytes;
+    scanned_bytes += gc_cache->scanned_bytes;
+    gc_cache->perm_scanned_bytes = 0;
+    gc_cache->scanned_bytes = 0;
+}
+
+static void gc_sync_cache(jl_ptls_t ptls)
+{
+    JL_LOCK_NOGC(&gc_cache_lock);
+    gc_sync_cache_nolock(ptls, &ptls->gc_cache);
+    JL_UNLOCK_NOGC(&gc_cache_lock);
+}
+
+// No other threads can be running marking at the same time
+static void gc_sync_all_caches_nolock(jl_ptls_t ptls)
+{
+    for (int t_i = 0; t_i < jl_n_threads; t_i++) {
+        jl_ptls_t ptls2 = jl_all_tls_states[t_i];
+        gc_sync_cache_nolock(ptls, &ptls2->gc_cache);
+    }
+}
+
+STATIC_INLINE void gc_queue_big_marked(jl_ptls_t ptls, bigval_t *hdr,
+                                       int toyoung)
+{
+    const int nentry = sizeof(ptls->gc_cache.big_obj) / sizeof(void*);
+    size_t nobj = ptls->gc_cache.nbig_obj;
+    if (__unlikely(nobj >= nentry)) {
+        gc_sync_cache(ptls);
+        nobj = 0;
+    }
+    uintptr_t v = (uintptr_t)hdr;
+    ptls->gc_cache.big_obj[nobj] = (void*)(toyoung ? (v | 1) : v);
+    ptls->gc_cache.nbig_obj = nobj + 1;
+}
+
+// `gc_setmark_big` and `gc_setmark_pool` can be called concurrently on
+// multiple threads. In all cases (except gc-debug),
+// the functions atomically sets the mark bits and updates the metadata
+// if the bits are changed.
+// All concurrent calls on the same object guarantees to be setting the
+// bits to the same value.
+// For normal objects, this is the bits with only `GC_MARKED` changed to `1`
+// For buffers, this is the bits of the owner object.
+// For `mark_reset_age`, this is `GC_MARKED` with `GC_OLD` cleared.
 static inline uint16_t gc_setmark_big(jl_ptls_t ptls, jl_taggedvalue_t *o,
                                       int8_t mark_mode, uintptr_t tag)
 {
@@ -468,22 +530,22 @@ static inline uint16_t gc_setmark_big(jl_ptls_t ptls, jl_taggedvalue_t *o,
     uint16_t tag_changed = !gc_marked(tag);
     if (tag_changed) {
         if (mark_mode == GC_OLD_MARKED) {
-            perm_scanned_bytes += hdr->sz & ~3;
-            // Move hdr from big_objects list to big_objects_marked list
-            gc_big_object_unlink(hdr);
-            gc_big_object_link(hdr, &big_objects_marked);
+            ptls->gc_cache.perm_scanned_bytes += hdr->sz & ~3;
+            gc_queue_big_marked(ptls, hdr, 0);
         }
         else {
-            scanned_bytes += hdr->sz & ~3;
-            if (mark_reset_age) {
+            ptls->gc_cache.scanned_bytes += hdr->sz & ~3;
+            // We can't easily tell if the object is old or being promoted
+            // from the gc bits but if the `age` is `0` then the object
+            // must be already on a young list.
+            if (mark_reset_age && hdr->age) {
                 // Reset the object as if it was just allocated
                 hdr->age = 0;
-                gc_big_object_unlink(hdr);
-                gc_big_object_link(hdr, &ptls->heap.big_objects);
+                gc_queue_big_marked(ptls, hdr, 1);
             }
         }
         objprofile_count(jl_typeof(jl_valueof(o)),
-                         mark_mode == GC_OLD_MARKED, hdr->sz&~3);
+                         mark_mode == GC_OLD_MARKED, hdr->sz & ~3);
     }
     verify_val(jl_valueof(o));
     return (tag_changed << 8) | mark_mode;
@@ -515,17 +577,17 @@ static inline uint16_t gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
     uint16_t tag_changed = !gc_marked(tag);
     if (tag_changed) {
         if (mark_mode == GC_OLD_MARKED) {
-            perm_scanned_bytes += page->osize;
-            page->nold++;
+            ptls->gc_cache.perm_scanned_bytes += page->osize;
+            jl_atomic_fetch_add_relaxed(&page->nold, 1);
         }
         else {
-            scanned_bytes += page->osize;
+            ptls->gc_cache.scanned_bytes += page->osize;
             if (mark_reset_age) {
                 page->has_young = 1;
                 char *page_begin = gc_page_data(o) + GC_PAGE_OFFSET;
                 int obj_id = (((char*)o) - page_begin) / page->osize;
                 uint8_t *ages = page->ages + obj_id / 8;
-                *ages &= ~(1 << (obj_id % 8));
+                jl_atomic_fetch_and_relaxed(ages, ~(1 << (obj_id % 8)));
             }
         }
         objprofile_count(jl_typeof(jl_valueof(o)),
@@ -1545,10 +1607,10 @@ static uint16_t gc_mark_obj(jl_ptls_t ptls, jl_value_t *v, uintptr_t tag)
             objprofile_count(jl_malloc_tag, bits == GC_OLD_MARKED,
                              array_nbytes(a));
             if (bits == GC_OLD_MARKED) {
-                perm_scanned_bytes += array_nbytes(a);
+                ptls->gc_cache.perm_scanned_bytes += array_nbytes(a);
             }
             else {
-                scanned_bytes += array_nbytes(a);
+                ptls->gc_cache.scanned_bytes += array_nbytes(a);
             }
         }
     }
@@ -1795,8 +1857,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
     assert(mark_sp == 0);
 
-    jl_gc_mark_ptrfree(ptls);
-
     // 1. fix GC bits of objects in the remset.
     for (int t_i = 0; t_i < jl_n_threads; t_i++)
         jl_gc_premark(jl_all_tls_states[t_i]);
@@ -1848,6 +1908,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     visit_mark_stack(ptls);
     mark_reset_age = 0;
     gc_settime_postmark_end();
+
+    // Flush everything in mark cache
+    gc_sync_all_caches_nolock(ptls);
 
     int64_t live_sz_ub = live_bytes + actual_allocd;
     int64_t live_sz_est = scanned_bytes + perm_scanned_bytes;
@@ -1961,12 +2024,16 @@ JL_DLLEXPORT void jl_gc_collect(int full)
         return;
     }
     JL_TIMING(GC);
+    // Now we are ready to wait for other threads to hit the safepoint,
+    // we can do a few things that doesn't require synchronization.
+    jl_gc_mark_ptrfree(ptls);
     // no-op for non-threading
     jl_gc_wait_for_the_world();
 
     if (!jl_gc_disable_counter) {
         JL_LOCK_NOGC(&finalizers_lock);
         if (_jl_gc_collect(ptls, full)) {
+            jl_gc_mark_ptrfree(ptls);
             int ret = _jl_gc_collect(ptls, 0);
             (void)ret;
             assert(!ret);
@@ -2168,7 +2235,7 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
         jl_throw(jl_memory_exception);
 
     if (jl_astaggedvalue(owner)->bits.gc == GC_OLD_MARKED) {
-        perm_scanned_bytes += allocsz - oldsz;
+        ptls->gc_cache.perm_scanned_bytes += allocsz - oldsz;
         live_bytes += allocsz - oldsz;
     }
     else if (allocsz < oldsz)
