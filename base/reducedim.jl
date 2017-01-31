@@ -304,6 +304,22 @@ sum(A, dims)
     sum!(r, A)
 
 Sum elements of `A` over the singleton dimensions of `r`, and write results to `r`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> sum!([1; 1], A)
+2-element Array{Int64,1}:
+ 3
+ 7
+
+julia> sum!([1 1], A)
+1×2 Array{Int64,2}:
+ 4  6
+```
 """
 sum!(r, A)
 
@@ -334,6 +350,22 @@ prod(A, dims)
     prod!(r, A)
 
 Multiply elements of `A` over the singleton dimensions of `r`, and write results to `r`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> prod!([1; 1], A)
+2-element Array{Int64,1}:
+  2
+ 12
+
+julia> prod!([1 1], A)
+1×2 Array{Int64,2}:
+ 3  8
+```
 """
 prod!(r, A)
 
@@ -343,6 +375,22 @@ prod!(r, A)
 Compute the maximum value of an array over the given dimensions. See also the
 [`max(a,b)`](@ref) function to take the maximum of two or more arguments,
 which can be applied elementwise to arrays via `max.(a,b)`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> maximum(A, 1)
+1×2 Array{Int64,2}:
+ 3  4
+
+julia> maximum(A, 2)
+2×1 Array{Int64,2}:
+ 2
+ 4
+```
 """
 maximum(A, dims)
 
@@ -350,6 +398,22 @@ maximum(A, dims)
     maximum!(r, A)
 
 Compute the maximum value of `A` over the singleton dimensions of `r`, and write results to `r`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> maximum!([1; 1], A)
+2-element Array{Int64,1}:
+ 2
+ 4
+
+julia> maximum!([1 1], A)
+1×2 Array{Int64,2}:
+ 3  4
+```
 """
 maximum!(r, A)
 
@@ -382,6 +446,22 @@ minimum(A, dims)
     minimum!(r, A)
 
 Compute the minimum value of `A` over the singleton dimensions of `r`, and write results to `r`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> minimum!([1; 1], A)
+2-element Array{Int64,1}:
+ 1
+ 3
+
+julia> minimum!([1 1], A)
+1×2 Array{Int64,2}:
+ 1  2
+```
 """
 minimum!(r, A)
 
@@ -412,6 +492,22 @@ all(A::AbstractArray, dims)
     all!(r, A)
 
 Test whether all values in `A` along the singleton dimensions of `r` are `true`, and write results to `r`.
+
+```jldoctest
+julia> A = [true false; true false]
+2×2 Array{Bool,2}:
+ true  false
+ true  false
+
+julia> all!([1; 1], A)
+2-element Array{Int64,1}:
+ 0
+ 0
+
+julia> all!([1 1], A)
+1×2 Array{Int64,2}:
+ 1  0
+```
 """
 all!(r, A)
 
@@ -419,6 +515,22 @@ all!(r, A)
     any(A, dims)
 
 Test whether any values along the given dimensions of an array are `true`.
+
+```jldoctest
+julia> A = [true false; true false]
+2×2 Array{Bool,2}:
+ true  false
+ true  false
+
+julia> any(A, 1)
+1×2 Array{Bool,2}:
+ true  false
+
+julia> any(A, 2)
+2×1 Array{Bool,2}:
+ true
+ true
+```
 """
 any(::AbstractArray,dims)
 
@@ -427,6 +539,22 @@ any(::AbstractArray,dims)
 
 Test whether any values in `A` along the singleton dimensions of `r` are `true`, and write
 results to `r`.
+
+```jldoctest
+julia> A = [true false; true false]
+2×2 Array{Bool,2}:
+ true  false
+ true  false
+
+julia> any!([1; 1], A)
+2-element Array{Int64,1}:
+ 1
+ 1
+
+julia> any!([1 1], A)
+1×2 Array{Int64,2}:
+ 1  0
+```
 """
 any!(r, A)
 
@@ -510,6 +638,25 @@ end
     findmin(A, region) -> (minval, index)
 
 For an array input, returns the value and index of the minimum over the given region.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> findmin(A, 1)
+(
+[1 2],
+
+[1 3])
+
+julia> findmin(A, 2)
+(
+[1; 3],
+
+[1; 2])
+```
 """
 function findmin{T}(A::AbstractArray{T}, region)
     if isempty(A)
@@ -537,6 +684,25 @@ end
     findmax(A, region) -> (maxval, index)
 
 For an array input, returns the value and index of the maximum over the given region.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> findmax(A,1)
+(
+[3 4],
+
+[2 4])
+
+julia> findmax(A,2)
+(
+[2; 4],
+
+[3; 4])
+```
 """
 function findmax{T}(A::AbstractArray{T}, region)
     if isempty(A)
