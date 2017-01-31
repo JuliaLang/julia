@@ -41,15 +41,19 @@ Base.linspace
 Base.logspace
 ```
 
-## Broadcasting
+## Broadcast and vectorization
 
 See also the [dot syntax for vectorizing functions](@ref man-vectorized);
 for example, `f.(args...)` implicitly calls `broadcast(f, args...)`.
+Rather than relying on "vectorized" methods of function like `sin`
+to operate on arrays, you should use `sin.(a)` to vectorize via `broadcast`.
 
 ```@docs
 Base.broadcast
 Base.Broadcast.broadcast!
 Base.@__DOTS__
+Base.Broadcast.broadcast_getindex
+Base.Broadcast.broadcast_setindex!
 ```
 
 ## Indexing, Assignment, and Concatenation
@@ -65,8 +69,6 @@ Base.parent
 Base.parentindexes
 Base.slicedim
 Base.setindex!(::AbstractArray, ::Any, ::Any...)
-Base.Broadcast.broadcast_getindex
-Base.Broadcast.broadcast_setindex!
 Base.isassigned
 Base.cat
 Base.vcat
