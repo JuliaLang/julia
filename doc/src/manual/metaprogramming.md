@@ -1117,6 +1117,9 @@ julia> @generated function sub2ind_gen{N}(dims::NTuple{N}, I::Integer...)
            return :($ex + 1)
        end
 sub2ind_gen (generic function with 1 method)
+
+julia> sub2ind_gen((3, 5), 1, 2)
+4
 ```
 
 **What code will this generate?**
