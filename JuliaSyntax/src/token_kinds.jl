@@ -78,18 +78,8 @@
         begin_conditional,
             CONDITIONAL, # ?
         end_conditional,
-
+    
         # Level 3
-        begin_lazyor,
-            LAZY_OR, # ||
-        end_lazyor,
-
-        # Level 4
-        begin_lazyand,
-            LAZY_AND, # &&
-        end_lazyand,
-
-        # Level 5
         begin_arrow,
             RIGHT_ARROW, # -->
             LEFTWARDS_ARROW, # ←
@@ -209,6 +199,15 @@
             HALFWIDTH_RIGHTWARDS_ARROW, # ￫
         end_arrow,
 
+        # Level 4
+        begin_lazyor,
+            LAZY_OR, # ||
+        end_lazyor,
+
+        # Level 5
+        begin_lazyand,
+            LAZY_AND, # &&
+        end_lazyand,
 
         # Level 6
         begin_comparison,
