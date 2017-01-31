@@ -698,9 +698,12 @@ julia> macro zerox()
 julia> function foo()
            x = 1
            @zerox
-           x  # is zero
+           return x # is zero
        end
 foo (generic function with 1 method)
+
+julia> foo()
+0
 ```
 
 This kind of manipulation of variables should be used judiciously, but is occasionally quite handy.
