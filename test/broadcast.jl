@@ -284,15 +284,15 @@ let x = [1:4;], y = x
     @test y === x == [9,9,9,9]
     y .-= 1
     @test y === x == [8,8,8,8]
-    @. y -= 1:4
+    @. y -= 1:4          # @. should convert to .-=
     @test y === x == [7,6,5,4]
     x[1:2] .= 1
     @test y === x == [1,1,5,4]
-    @. x[1:2] .+= [2,3]
+    @. x[1:2] .+= [2,3]  # use .+= to make sure @. works with dotted assignment
     @test y === x == [3,4,5,4]
-    @. x[:] .= 0
+    @. x[:] .= 0         # use .= to make sure @. works with dotted assignment
     @test y === x == [0,0,0,0]
-    @. x[2:end] = 1:3
+    @. x[2:end] = 1:3    # @. should convert to .=
     @test y === x == [0,1,2,3]
 end
 let a = [[4, 5], [6, 7]]
