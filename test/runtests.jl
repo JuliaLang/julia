@@ -70,7 +70,7 @@ cd(dirname(@__FILE__)) do
                     push!(results, (test, resp))
                     if (isa(resp[end], Integer) && (resp[end] > max_worker_rss)) || isa(resp, Exception)
                         if n > 1
-                            rmprocs(wrkr, waitfor=5.0)
+                            rmprocs(wrkr, waitfor=30)
                             p = addprocs(1; exename=test_exename, exeflags=test_exeflags)[1]
                             remotecall_fetch(()->include("testdefs.jl"), p)
                         else
@@ -99,7 +99,7 @@ cd(dirname(@__FILE__)) do
         end
     end
     # Free up memory =)
-    n > 1 && rmprocs(workers(), waitfor=5.0)
+    n > 1 && rmprocs(workers(), waitfor=30)
     for t in node1_tests
         # As above, try to run each test
         # which must run on node 1. If
