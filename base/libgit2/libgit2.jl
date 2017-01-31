@@ -76,7 +76,7 @@ is in the repository.
 function iscommit(id::AbstractString, repo::GitRepo)
     res = true
     try
-        c = get(GitCommit, repo, id)
+        c = GitCommit(repo, id)
         if c === nothing
             res = false
         else
@@ -111,9 +111,8 @@ Equivalent to `git diff-index <treeish> [-- <pathspecs>]`.
 """
 function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""; cached::Bool=false)
     tree_oid = revparseid(repo, "$treeish^{tree}")
-    iszero(tree_oid) && error("invalid treeish $treeish") # this can be removed by #20104
     result = false
-    tree = get(GitTree, repo, tree_oid)
+    tree = GitTree(repo, tree_oid)
     try
         diff = diff_tree(repo, tree, paths, cached=cached)
         result = count(diff) > 0
@@ -129,8 +128,8 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
                     filter::Set{Cint}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED]))
     b1_id = revparseid(repo, branch1*"^{tree}")
     b2_id = revparseid(repo, branch2*"^{tree}")
-    tree1 = get(GitTree, repo, b1_id)
-    tree2 = get(GitTree, repo, b2_id)
+    tree1 = GitTree(repo, b1_id)
+    tree2 = GitTree(repo, b2_id)
     files = AbstractString[]
     try
         diff = diff_tree(repo, tree1, tree2)
@@ -307,7 +306,7 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
             GitHash(commit)
         end
         iszero(commit_id) && return
-        cmt =  get(GitCommit, repo, commit_id)
+        cmt =  GitCommit(repo, commit_id)
         new_branch_ref = nothing
         try
             new_branch_ref = Nullable(create_branch(repo, branch_name, cmt, force=force))
@@ -371,28 +370,17 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
     end
 
     # search for commit to get a commit object
-    obj = get(GitUnknownObject, repo, GitHash(commit))
-    obj === nothing && return
-    try
-        peeled = peel(obj, Consts.OBJ_COMMIT)
-        peeled === nothing && return
-        opts = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) :
-                       CheckoutOptions()
-        try
-            # detach commit
-            obj_oid = GitHash(peeled)
-            ref = GitReference(repo, obj_oid, force=force,
-                msg="libgit2.checkout: moving from $head_name to $(string(obj_oid))")
-            close(ref)
+    obj = GitObject(repo, GitHash(commit))
+    peeled = peel(GitCommit, obj)
 
-            # checkout commit
-            checkout_tree(repo, peeled, options = opts)
-        finally
-            close(peeled)
-        end
-    finally
-        close(obj)
-    end
+    opts = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) : CheckoutOptions()
+    # detach commit
+    obj_oid = GitHash(peeled)
+    ref = GitReference(repo, obj_oid, force=force,
+                       msg="libgit2.checkout: moving from $head_name to $(string(obj_oid))")
+
+    # checkout commit
+    checkout_tree(repo, peeled, options = opts)
 end
 
 """ git clone [-b <branch>] [--bare] <url> <dir> """
@@ -416,42 +404,22 @@ end
 
 """ git reset [<committish>] [--] <pathspecs>... """
 function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractString...)
-    obj = revparse(repo, !isempty(committish) ? committish : Consts.HEAD_FILE)
+    obj = GitObject(repo, isempty(committish) ? Consts.HEAD_FILE : committish)
     # do not remove entries in the index matching the provided pathspecs with empty target commit tree
-    obj === nothing && throw(GitError(Error.Object, Error.ERROR, "`$committish` not found"))
-    try
-        head = reset!(repo, Nullable(obj), pathspecs...)
-        return head
-    finally
-        close(obj)
-    end
-    return head_oid(repo)
+    reset!(repo, Nullable(obj), pathspecs...)
 end
 
-""" git reset [--soft | --mixed | --hard] <commit> """
-function reset!(repo::GitRepo, commit::GitHash, mode::Cint = Consts.RESET_MIXED)
-    obj = get(GitUnknownObject, repo, commit)
-    # object must exist for reset
-    obj === nothing && throw(GitError(Error.Object, Error.ERROR, "Commit `$(string(commit))` object not found"))
-    try
-        head = reset!(repo, obj, mode)
-        return head
-    finally
-        close(obj)
-    end
-    return head_oid(repo)
-end
+""" git reset [--soft | --mixed | --hard] <id> """
+reset!(repo::GitRepo, id::GitHash, mode::Cint = Consts.RESET_MIXED) =
+    reset!(repo, GitObject(repo, id), mode)
 
 """ git cat-file <commit> """
-function cat{T<:GitObject}(repo::GitRepo, ::Type{T}, object::AbstractString)
-    obj_id = revparseid(repo, object)
-    iszero(obj_id) && return nothing
-
-    obj = get(T, repo, obj_id)
+function cat(repo::GitRepo, spec)
+    obj = GitObject(repo, spec)
     if isa(obj, GitBlob)
-        return unsafe_string(convert(Ptr{UInt8}, content(obj)))
+        content(obj)
     else
-        return nothing
+        nothing
     end
 end
 
@@ -515,10 +483,10 @@ function merge!(repo::GitRepo;
                 remotename = with(GitConfig, repo) do cfg
                     LibGit2.get(String, cfg, "branch.$branchname.remote")
                 end
-                obj = with(GitReference(repo, "refs/remotes/$remotename/$branchname")) do ref
+                oid = with(GitReference(repo, "refs/remotes/$remotename/$branchname")) do ref
                     LibGit2.GitHash(ref)
                 end
-                with(get(GitCommit, repo, obj)) do cmt
+                with(GitCommit(repo, oid)) do cmt
                     LibGit2.create_branch(repo, branchname, cmt)
                 end
                 return true
@@ -616,7 +584,7 @@ end
 """ Returns all commit authors """
 function authors(repo::GitRepo)
     return with(GitRevWalker(repo)) do walker
-        map((oid,repo)->with(get(GitCommit, repo, oid)) do cmt
+        map((oid,repo)->with(GitCommit(repo, oid)) do cmt
                             author(cmt)::Signature
                         end,
             walker) #, by = Consts.SORT_TIME)
