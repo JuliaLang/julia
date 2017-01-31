@@ -102,8 +102,6 @@
     /* object access */ \
     ADD_I(arraylen, 1) \
     /*  hidden intrinsics */ \
-    ADD_HIDDEN(fptoui_auto, 1) \
-    ADD_HIDDEN(fptosi_auto, 1) \
     ADD_HIDDEN(cglobal_auto, 1)
 
 enum intrinsic {
@@ -147,10 +145,6 @@ JL_CALLABLE(jl_f_intrinsic_call)
     JL_NARGSV(intrinsic_call, 1);
     JL_TYPECHK(intrinsic_call, intrinsic, F);
     enum intrinsic f = (enum intrinsic)*(uint32_t*)jl_data_ptr(F);
-    if (f == fptoui && nargs == 1)
-        f = fptoui_auto;
-    if (f == fptosi && nargs == 1)
-        f = fptosi_auto;
     if (f == cglobal && nargs == 1)
         f = cglobal_auto;
     unsigned fargs = intrinsic_nargs[f];
