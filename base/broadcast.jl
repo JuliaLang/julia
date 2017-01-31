@@ -5,7 +5,7 @@ module Broadcast
 using Base.Cartesian
 using Base: linearindices, tail, OneTo, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
-            nullable_returntype, null_safe_eltype_op, hasvalue
+            nullable_returntype, null_safe_eltype_op, hasvalue, isoperator
 import Base: broadcast, broadcast!
 export broadcast_getindex, broadcast_setindex!, dotview, @__dot__
 
@@ -516,7 +516,7 @@ Base.@propagate_inbounds dotview{T<:AbstractArray}(A::AbstractArray{T}, args...)
 # broadcasting "dot" calls/assignments:
 
 dottable(x) = false # avoid dotting spliced objects (e.g. view calls inserted by @view)
-dottable(x::Symbol) = true
+dottable(x::Symbol) = !isoperator(x) || first(string(x)) != '.' # don't add dots to dot operators
 dottable(x::Expr) = x.head != :$
 undot(x) = x
 function undot(x::Expr)
