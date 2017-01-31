@@ -51,7 +51,7 @@ to operate on arrays, you should use `sin.(a)` to vectorize via `broadcast`.
 ```@docs
 Base.broadcast
 Base.Broadcast.broadcast!
-Base.@__DOT__
+Base.@__dot__
 Base.Broadcast.broadcast_getindex
 Base.Broadcast.broadcast_setindex!
 ```

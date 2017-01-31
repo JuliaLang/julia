@@ -7,7 +7,7 @@ using Base: linearindices, tail, OneTo, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
             nullable_returntype, null_safe_eltype_op, hasvalue
 import Base: broadcast, broadcast!
-export broadcast_getindex, broadcast_setindex!, dotview, @__DOT__
+export broadcast_getindex, broadcast_setindex!, dotview, @__dot__
 
 typealias ScalarType Union{Type{Any}, Type{Nullable}}
 
@@ -511,7 +511,7 @@ Base.@propagate_inbounds dotview{T<:AbstractArray}(A::AbstractArray{T}, args...)
 
 
 ############################################################
-# The parser turns @. into a call to the __DOT__ macro,
+# The parser turns @. into a call to the __dot__ macro,
 # which converts all function calls and assignments into
 # broadcasting "dot" calls/assignments:
 
@@ -528,9 +528,9 @@ function undot(x::Expr)
         x
     end
 end
-__DOT__(x) = x
-function __DOT__(x::Expr)
-    dotargs = map(__DOT__, x.args)
+__dot__(x) = x
+function __dot__(x::Expr)
+    dotargs = map(__dot__, x.args)
     if x.head == :call && dottable(x.args[1])
         Expr(:., dotargs[1], Expr(:tuple, dotargs[2:end]...))
     elseif x.head == :$
@@ -563,10 +563,10 @@ If you want to *avoid* adding dots for selected function calls in
 `@. sqrt(abs(\$sort(x)))` is equivalent to `sqrt.(abs.(sort(x)))`
 (no dot for `sort`).
 
-(`@.` is equivalent to a call to `@__DOT__`.)
+(`@.` is equivalent to a call to `@__dot__`.)
 """
-macro __DOT__(x)
-    esc(__DOT__(x))
+macro __dot__(x)
+    esc(__dot__(x))
 end
 
 end # module

@@ -2080,7 +2080,7 @@
            (take-token s)
            (with-space-sensitive
             (let ((head (if (eq? (peek-token s) '|.|)
-                            (begin (take-token s) '__DOT__)
+                            (begin (take-token s) '__dot__)
                             (parse-unary-prefix s))))
               (if (eq? head '__LINE__)
                   (input-port-line (ts:port s))

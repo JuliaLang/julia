@@ -41,7 +41,7 @@ Language changes
   * `isa` is now parsed as an infix operator with the same precedence as `in`
     ([#19677]).
 
-  * `@.` is now parsed as `@__DOT__`, and can be used to add dots to
+  * `@.` is now parsed as `@__dot__`, and can be used to add dots to
     every function call, operator, and assignment in an expression ([#20321]).
 
 Breaking changes

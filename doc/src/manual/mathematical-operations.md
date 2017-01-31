@@ -152,7 +152,7 @@ the operation elementwise), and even arrays of different shapes (e.g.
 combining row and column vectors to produce a matrix). Moreover, like
 all vectorized "dot calls," these "dot operators" are
 *fusing*. For example, if you compute `2 .* A.^2 .+ sin.(A)` (or
-equivalently `@. 2A^2 + sin(A)`, using the [`@.`](@ref @__DOT__) macro) for
+equivalently `@. 2A^2 + sin(A)`, using the [`@.`](@ref @__dot__) macro) for
 an array `A`, it performs a *single* loop over `A`, computing `2a^2 + sin(a)`
 for each element of `A`. In particular, nested dot calls like `f.(g.(x))`
 are fused, and "adjacent" binary operators like `x .+ 3 .* x.^2` are
