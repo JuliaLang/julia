@@ -888,7 +888,7 @@ fdot(x) = @. 3x^2 + 4x + 7x^3 # equivalent to 3 .* x.^2 .+ 4 .* x .+ 7 .* x.^3
 ```
 
 Both `f` and `fdot` compute the same thing.  However, `fdot`
-(defined with the help of the [`@.`](@ref @__DOTS__) macro) is
+(defined with the help of the [`@.`](@ref @__DOT__) macro) is
 significantly faster when applied to an array:
 
 ```julia

@@ -1382,7 +1382,7 @@ export
     @polly,
 
     @assert,
-    @__DOTS__,
+    @__DOT__,
     @enum,
     @label,
     @goto,
