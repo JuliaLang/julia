@@ -45,7 +45,7 @@ Base.logspace
 
 See also the [dot syntax for vectorizing functions](@ref man-vectorized);
 for example, `f.(args...)` implicitly calls `broadcast(f, args...)`.
-Rather than relying on "vectorized" methods of function like `sin`
+Rather than relying on "vectorized" methods of functions like `sin`
 to operate on arrays, you should use `sin.(a)` to vectorize via `broadcast`.
 
 ```@docs
