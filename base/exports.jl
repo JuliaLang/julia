@@ -1404,7 +1404,6 @@ export
     sprand,
     sprandn,
     spzeros,
-    symperm,
     rowvals,
     nzrange,
     nnz
