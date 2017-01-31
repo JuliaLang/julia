@@ -76,16 +76,25 @@ end
 """ Returns a found object """
 function revparse(repo::GitRepo, objname::AbstractString)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    err = ccall((:git_revparse_single, :libgit2), Cint,
-            (Ptr{Ptr{Void}}, Ptr{Void}, Cstring), obj_ptr_ptr, repo.ptr, objname)
-    err != 0 && return nothing
+    @check ccall((:git_revparse_single, :libgit2), Cint,
+           (Ptr{Ptr{Void}}, Ptr{Void}, Cstring), obj_ptr_ptr, repo.ptr, objname)
     return GitUnknownObject(repo, obj_ptr_ptr[])
 end
 
 """ Returns id of a found object """
 function revparseid(repo::GitRepo, objname::AbstractString)
-    obj = revparse(repo, objname)
-    obj === nothing && return GitHash()
+    local obj
+    try
+        obj = revparse(repo, objname)
+    catch err
+        if isa(err, GitError)
+            warn("Problem in revparse for $objname:")
+            show(err)
+            return GitHash()
+        else
+            rethrow(err)
+        end
+    end
     oid = GitHash(obj.ptr)
     close(obj)
     return oid
