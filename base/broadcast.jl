@@ -516,7 +516,7 @@ Base.@propagate_inbounds dotview{T<:AbstractArray}(A::AbstractArray{T}, args...)
 # broadcasting "dot" calls/assignments:
 
 dottable(x) = false # avoid dotting spliced objects (e.g. view calls inserted by @view)
-dottable(x::Symbol) = !isoperator(x) || first(string(x)) != '.' # don't add dots to dot operators
+dottable(x::Symbol) = !isoperator(x) || first(string(x)) != '.' || x == :.. # don't add dots to dot operators
 dottable(x::Expr) = x.head != :$
 undot(x) = x
 function undot(x::Expr)
