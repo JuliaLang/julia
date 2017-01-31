@@ -1339,8 +1339,8 @@ STATIC_INLINE uintptr_t gc_read_stack(void *_addr, uintptr_t offset,
     return *(uintptr_t*)real_addr;
 }
 
-static void gc_mark_stack(jl_ptls_t ptls, jl_value_t *ta, jl_gcframe_t *s,
-                          uintptr_t offset, uintptr_t lb, uintptr_t ub, int d)
+static void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uintptr_t offset,
+                          uintptr_t lb, uintptr_t ub, int d)
 {
     while (s != NULL) {
         jl_value_t ***rts = (jl_value_t***)(((void**)s) + 2);
@@ -1359,9 +1359,6 @@ static void gc_mark_stack(jl_ptls_t ptls, jl_value_t *ta, jl_gcframe_t *s,
             for (size_t i=0; i < nr; i++) {
                 void *obj = (void*)gc_read_stack(&rts[i], offset, lb, ub);
                 if (obj) {
-                    verify_parent2("task", ta,
-                                   gc_get_stack_addr(&rts[i], offset, lb, ub),
-                                   "stack(%d)", (int)i);
                     gc_push_root(ptls, obj, d);
                 }
             }
@@ -1387,8 +1384,7 @@ static void gc_mark_task_stack(jl_ptls_t ptls, jl_task_t *ta, int d, int8_t bits
 #endif
     }
     if (ta == ptls2->current_task) {
-        gc_mark_stack(ptls, (jl_value_t*)ta, ptls2->pgcstack,
-                      0, 0, (uintptr_t)-1, d);
+        gc_mark_stack(ptls, ptls2->pgcstack, 0, 0, (uintptr_t)-1, d);
     }
     else if (stkbuf) {
         uintptr_t offset = 0;
@@ -1399,7 +1395,7 @@ static void gc_mark_task_stack(jl_ptls_t ptls, jl_task_t *ta, int d, int8_t bits
         lb = ub - ta->ssize;
         offset = (uintptr_t)ta->stkbuf - lb;
 #endif
-        gc_mark_stack(ptls, (jl_value_t*)ta, ta->gcstack, offset, lb, ub, d);
+        gc_mark_stack(ptls, ta->gcstack, offset, lb, ub, d);
     }
 }
 
