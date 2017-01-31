@@ -74,7 +74,7 @@
 ; operators that are special forms, not function names
 (define syntactic-operators
   (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻=))
-           '(:= --> $= => && |\|\|| |.| ... ->)))
+           '(:= --> $= && |\|\|| |.| ... ->)))
 (define syntactic-unary-operators '($ & |::|))
 
 (define syntactic-op? (Set syntactic-operators))
@@ -752,7 +752,9 @@
                        (begin (ts:put-back! s t)
                               ex)
                        (list 'call t ex (parse-assignment s down)))
-                   (list t ex (parse-assignment s down)))))))
+                   (if (eq? t '=>)  ;; ~ and => are the only non-syntactic assignment-precedence operators
+                       (list 'call t ex (parse-assignment s down))
+                       (list       t ex (parse-assignment s down))))))))
 
 (define (parse-eq s)
   (let ((lno (input-port-line (ts:port s))))
@@ -892,11 +894,7 @@
           (else ex))))
 
 (define (invalid-identifier-name? ex)
-  ;; TODO: remove this hack when we remove the special Dict syntax
-  ;; TODO: Dict syntax removed, but need to decide whether to change the parsing
-  ;; of `a=>b` to use `call`.
-  (or (and (not (eq? ex '=>)) (syntactic-op? ex))
-      (eq? ex '....)))
+  (or (syntactic-op? ex) (eq? ex '....)))
 
 (define (parse-unary s)
   (let ((t (require-token s)))

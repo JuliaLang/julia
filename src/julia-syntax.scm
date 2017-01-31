@@ -2070,9 +2070,6 @@
          (error "assignment not allowed inside tuple"))
      (expand-forms `(call (core tuple) ,@(cdr e))))
 
-   '=>
-   (lambda (e) `(call => ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
-
    'cell1d (lambda (e) (error "{ } vector syntax is discontinued"))
    'cell2d (lambda (e) (error "{ } matrix syntax is discontinued"))
 
