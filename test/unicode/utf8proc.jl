@@ -187,34 +187,34 @@ let
 
 end
 
-@test isspace("  \t   \n   \r  ")==true
-@test isgraph("  \t   \n   \r  ")==false
-@test isprint("  \t   \n   \r  ")==false
-@test isalpha("  \t   \n   \r  ")==false
-@test isnumber("  \t   \n   \r  ")==false
-@test ispunct("  \t   \n   \r  ")==false
+@test  all(isspace,"  \t   \n   \r  ")
+@test !all(isgraph,"  \t   \n   \r  ")
+@test !all(isprint,"  \t   \n   \r  ")
+@test !all(isalpha,"  \t   \n   \r  ")
+@test !all(isnumber,"  \t   \n   \r  ")
+@test !all(ispunct,"  \t   \n   \r  ")
 
-@test isspace("ΣβΣβ")==false
-@test isalpha("ΣβΣβ")==true
-@test isgraph("ΣβΣβ")==true
-@test isprint("ΣβΣβ")==true
-@test isupper("ΣβΣβ")==false
-@test islower("ΣβΣβ")==false
-@test isnumber("ΣβΣβ")==false
-@test iscntrl("ΣβΣβ")==false
-@test ispunct("ΣβΣβ")==false
+@test !all(isspace,"ΣβΣβ")
+@test  all(isalpha,"ΣβΣβ")
+@test  all(isgraph,"ΣβΣβ")
+@test  all(isprint,"ΣβΣβ")
+@test !all(isupper,"ΣβΣβ")
+@test !all(islower,"ΣβΣβ")
+@test !all(isnumber,"ΣβΣβ")
+@test !all(iscntrl,"ΣβΣβ")
+@test !all(ispunct,"ΣβΣβ")
 
-@test isnumber("23435")==true
-@test isdigit("23435")==true
-@test isalnum("23435")==true
-@test isalpha("23435")==false
-@test iscntrl( string(Char(0x0080))) == true
-@test ispunct( "‡؟჻") ==true
+@test  all(isnumber,"23435")
+@test  all(isdigit,"23435")
+@test  all(isalnum,"23435")
+@test !all(isalpha,"23435")
+@test  all(iscntrl,string(Char(0x0080)))
+@test  all(ispunct, "‡؟჻")
 
-@test isxdigit('0') == true
-@test isxdigit("0") == true
-@test isxdigit("a") == true
-@test isxdigit("g") == false
+@test  isxdigit('0')
+@test  isxdigit('a')
+@test !isxdigit('x')
+@test !isxdigit('g')
 
 # check utf8proc handling of CN category constants
 let c_ll = 'β', c_cn = '\u038B'

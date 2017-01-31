@@ -280,20 +280,20 @@ isascii(s::AbstractString) = all(isascii, s)
 promote_rule{S<:AbstractString,T<:AbstractString}(::Type{S}, ::Type{T}) = String
 
 """
-    isxdigit(c::Union{Char,AbstractString}) -> Bool
+    isxdigit(c::Char) -> Bool
 
-Tests whether a character is a valid hexadecimal digit, or whether this is true for all elements of a string.
+Tests whether a character is a valid hexadecimal digit. Note that this does not
+include `x` (as in the standard `0x` prefix).
 
 ```jldoctest
-julia> isxdigit("abc")
+julia> isxdigit('a')
 true
 
-julia> isxdigit("0x9")
+julia> isxdigit('x')
 false
 ```
 """
 isxdigit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
-isxdigit(s::AbstractString) = all(isxdigit, s)
 
 ## uppercase, lowercase, and titlecase transformations ##
 
