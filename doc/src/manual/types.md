@@ -1129,8 +1129,8 @@ is raised:
 julia> supertype(Union{Float64,Int64})
 ERROR: MethodError: no method matching supertype(::Type{Union{Float64,Int64}})
 Closest candidates are:
-  supertype(!Matched::DataType) at operators.jl:27
-  supertype(!Matched::UnionAll) at operators.jl:32
+  supertype(!Matched::DataType) at operators.jl:38
+  supertype(!Matched::UnionAll) at operators.jl:43
 ```
 
 ## Custom pretty-printing
