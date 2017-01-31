@@ -10,6 +10,17 @@ typealias Indices{N} NTuple{N,AbstractUnitRange}
     <:(T1, T2)
 
 Subtype operator, equivalent to `issubtype(T1,T2)`.
+
+```jldoctest
+julia> Float64 <: AbstractFloat
+true
+
+julia> Vector{Int} <: AbstractArray
+true
+
+julia> Matrix{Float64} <: Matrix{AbstractFloat}
+false
+```
 """
 const (<:) = issubtype
 
@@ -55,6 +66,20 @@ corresponding `hash` (and vice versa). Collections typically implement `isequal`
 Scalar types generally do not need to implement `isequal` separate from `==`, unless they
 represent floating-point numbers amenable to a more efficient implementation than that
 provided as a generic fallback (based on `isnan`, `signbit`, and `==`).
+
+```jldoctest
+julia> isequal([1., NaN], [1., NaN])
+true
+
+julia> [1., NaN] == [1., NaN]
+false
+
+julia> 0.0 == -0.0
+true
+
+julia> isequal(0.0, -0.0)
+false
+```
 """
 isequal(x, y) = x == y
 
@@ -103,8 +128,16 @@ end
 
 Not-equals comparison operator. Always gives the opposite answer as `==`. New types should
 generally not implement this, and rely on the fallback definition `!=(x,y) = !(x==y)` instead.
+
+```jldoctest
+julia> 3 != 2
+true
+
+julia> "foo" ≠ "foo"
+false
+```
 """
-!=(x,y) = !(x==y)
+!=(x, y) = !(x == y)
 const ≠ = !=
 
 """
@@ -114,6 +147,19 @@ const ≠ = !=
 Determine whether `x` and `y` are identical, in the sense that no program could distinguish
 them. Compares mutable objects by address in memory, and compares immutable objects (such as
 numbers) by contents at the bit level. This function is sometimes called `egal`.
+
+```jldoctest
+julia> a = [1, 2]; b = [1, 2];
+
+julia> a == b
+true
+
+julia> a === b
+false
+
+julia> a === a
+true
+```
 """
 ===
 const ≡ = ===
@@ -123,8 +169,18 @@ const ≡ = ===
     ≢(x,y)
 
 Equivalent to `!(x === y)`.
+
+```jldoctest
+julia> a = [1, 2]; b = [1, 2];
+
+julia> a ≢ b
+true
+
+julia> a ≢ a
+false
+```
 """
-!==(x,y) = !(x===y)
+!==(x, y) = !(x === y)
 const ≢ = !==
 
 """
@@ -134,24 +190,63 @@ Less-than comparison operator. New numeric types should implement this function 
 arguments of the new type. Because of the behavior of floating-point NaN values, `<`
 implements a partial order. Types with a canonical partial order should implement `<`, and
 types with a canonical total order should implement `isless`.
+
+```jldoctest
+julia> 'a' < 'b'
+true
+
+julia> "abc" < "abd"
+true
+
+julia> 5 < 3
+false
+```
 """
-<(x,y) = isless(x,y)
+<(x, y) = isless(x, y)
 
 """
     >(x, y)
 
 Greater-than comparison operator. Generally, new types should implement `<` instead of this
-function, and rely on the fallback definition `>(x,y) = y<x`.
+function, and rely on the fallback definition `>(x, y) = y < x`.
+
+```jldoctest
+julia> 'a' > 'b'
+false
+
+julia> 7 > 3 > 1
+true
+
+julia> "abc" > "abd"
+false
+
+julia> 5 > 3
+true
+```
 """
->(x,y) = y < x
+>(x, y) = y < x
 
 """
     <=(x, y)
     ≤(x,y)
 
 Less-than-or-equals comparison operator.
+
+```jldoctest
+julia> 'a' <= 'b'
+true
+
+julia> 7 ≤ 7 ≤ 9
+true
+
+julia> "abc" ≤ "abc"
+true
+
+julia> 5 <= 3
+false
+```
 """
-<=(x,y) = !(y < x)
+<=(x, y) = !(y < x)
 const ≤ = <=
 
 """
@@ -159,8 +254,22 @@ const ≤ = <=
     ≥(x,y)
 
 Greater-than-or-equals comparison operator.
+
+```jldoctest
+julia> 'a' >= 'b'
+false
+
+julia> 7 ≥ 7 ≥ 3
+true
+
+julia> "abc" ≥ "abc"
+true
+
+julia> 5 >= 3
+true
+```
 """
->=(x,y) = (y <= x)
+>=(x, y) = (y <= x)
 const ≥ = >=
 
 # this definition allows Number types to implement < instead of isless,
@@ -175,6 +284,11 @@ Return `x` if `condition` is `true`, otherwise return `y`. This differs from `?`
 that it is an ordinary function, so all the arguments are evaluated first. In some cases,
 using `ifelse` instead of an `if` statement can eliminate the branch in generated code and
 provide higher performance in tight loops.
+
+```jldoctest
+julia> ifelse(1 > 2, 1, 2)
+2
+```
 """
 ifelse(c::Bool, x, y) = select_value(c, x, y)
 
@@ -184,8 +298,20 @@ ifelse(c::Bool, x, y) = select_value(c, x, y)
 Return -1, 0, or 1 depending on whether `x` is less than, equal to, or greater than `y`,
 respectively. Uses the total order implemented by `isless`. For floating-point numbers, uses `<`
 but throws an error for unordered arguments.
+
+```jldoctest
+julia> cmp(1, 2)
+-1
+
+julia> cmp(2, 1)
+1
+
+julia> cmp(2+im, 3-im)
+ERROR: MethodError: no method matching isless(::Complex{Int64}, ::Complex{Int64})
+[...]
+```
 """
-cmp(x,y) = isless(x,y) ? -1 : ifelse(isless(y,x), 1, 0)
+cmp(x, y) = isless(x, y) ? -1 : ifelse(isless(y, x), 1, 0)
 
 """
     lexcmp(x, y)
@@ -193,32 +319,55 @@ cmp(x,y) = isless(x,y) ? -1 : ifelse(isless(y,x), 1, 0)
 Compare `x` and `y` lexicographically and return -1, 0, or 1 depending on whether `x` is
 less than, equal to, or greater than `y`, respectively. This function should be defined for
 lexicographically comparable types, and `lexless` will call `lexcmp` by default.
+
+```jldoctest
+julia> lexcmp("abc", "abd")
+-1
+
+julia> lexcmp("abc", "abc")
+0
+```
 """
-lexcmp(x,y) = cmp(x,y)
+lexcmp(x, y) = cmp(x, y)
 
 """
     lexless(x, y)
 
 Determine whether `x` is lexicographically less than `y`.
+
+```jldoctest
+julia> lexless("abc", "abd")
+true
+```
 """
-lexless(x,y) = lexcmp(x,y)<0
+lexless(x, y) = lexcmp(x,y) < 0
 
 # cmp returns -1, 0, +1 indicating ordering
-cmp(x::Integer, y::Integer) = ifelse(isless(x,y), -1, ifelse(isless(y,x), 1, 0))
+cmp(x::Integer, y::Integer) = ifelse(isless(x, y), -1, ifelse(isless(y, x), 1, 0))
 
 """
     max(x, y, ...)
 
 Return the maximum of the arguments. See also the [`maximum`](@ref) function
 to take the maximum element from a collection.
+
+```jldoctest
+julia> max(2, 5, 1)
+5
+```
 """
-max(x,y) = ifelse(y < x, x, y)
+max(x, y) = ifelse(y < x, x, y)
 
 """
     min(x, y, ...)
 
 Return the minimum of the arguments. See also the [`minimum`](@ref) function
 to take the minimum element from a collection.
+
+```jldoctest
+julia> min(2, 5, 1)
+1
+```
 """
 min(x,y) = ifelse(y < x, y, x)
 
@@ -250,6 +399,11 @@ scalarmin(x::AbstractArray, y               ) = throw(ArgumentError("ordering is
     identity(x)
 
 The identity function. Returns its argument.
+
+```jldoctest
+julia> identity("Well, what did you expect?")
+"Well, what did you expect?"
+```
 """
 identity(x) = x
 
@@ -290,6 +444,26 @@ end
 
 Left division operator: multiplication of `y` by the inverse of `x` on the left. Gives
 floating-point results for integer arguments.
+
+```jldoctest
+julia> 3 \\ 6
+2.0
+
+julia> inv(3) * 6
+2.0
+
+julia> A = [1 2; 3 4]; x = [5, 6];
+
+julia> A \\ x
+2-element Array{Float64,1}:
+ -4.0
+  4.5
+
+julia> inv(A) * x
+2-element Array{Float64,1}:
+ -4.0
+  4.5
+```
 """
 \(x,y) = (y'/x')'
 
@@ -432,8 +606,14 @@ modCeil{T<:Real}(x::T, y::T) = convert(T,x-y*ceil(x/y))
 Remainder from Euclidean division, returning a value of the same sign as `x`, and smaller in
 magnitude than `y`. This value is always exact.
 
-```julia
-x == div(x,y)*y + rem(x,y)
+```jldoctest
+julia> x = 15; y = 4;
+
+julia> x % y
+3
+
+julia> x == div(x, y) * y + rem(x, y)
+true
 ```
 """
 rem
@@ -444,6 +624,14 @@ const % = rem
     ÷(x, y)
 
 The quotient from Euclidean division. Computes `x/y`, truncated to an integer.
+
+```jldoctest
+julia> 9 ÷ 4
+2
+
+julia> -5 ÷ 3
+-1
+```
 """
 div
 const ÷ = div
@@ -452,11 +640,19 @@ const ÷ = div
     mod1(x, y)
 
 Modulus after flooring division, returning a value `r` such that `mod(r, y) == mod(x, y)`
- in the range ``(0, y]`` for positive `y` and in the range ``[y,0)`` for negative `y`.
+in the range ``(0, y]`` for positive `y` and in the range ``[y,0)`` for negative `y`.
+
+```jldoctest
+julia> mod1(4, 2)
+2
+
+julia> mod1(4, 3)
+1
+```
 """
-mod1{T<:Real}(x::T, y::T) = (m=mod(x,y); ifelse(m==0, y, m))
+mod1{T<:Real}(x::T, y::T) = (m = mod(x, y); ifelse(m == 0, y, m))
 # efficient version for integers
-mod1{T<:Integer}(x::T, y::T) = mod(x+y-T(1),y)+T(1)
+mod1{T<:Integer}(x::T, y::T) = mod(x + y - T(1), y) + T(1)
 
 
 """
@@ -464,9 +660,19 @@ mod1{T<:Integer}(x::T, y::T) = mod(x+y-T(1),y)+T(1)
 
 Flooring division, returning a value consistent with `mod1(x,y)`
 
-```julia
-x == fld(x,y)*y + mod(x,y)
-x == (fld1(x,y)-1)*y + mod1(x,y)
+See also: [`mod1`](@ref).
+
+```jldoctest
+julia> x = 15; y = 4;
+
+julia> fld1(x, y)
+4
+
+julia> x == fld(x, y) * y + mod(x, y)
+true
+
+julia> x == (fld1(x, y) - 1) * y + mod1(x, y)
+true
 ```
 """
 fld1{T<:Real}(x::T, y::T) = (m=mod(x,y); fld(x-m,y))
@@ -477,6 +683,10 @@ fld1{T<:Integer}(x::T, y::T) = fld(x+y-T(1),y)
     fldmod1(x, y)
 
 Return `(fld1(x,y), mod1(x,y))`.
+
+See also: [`fld1`](@ref), [`mod1`](@ref).
+
+See 
 """
 fldmod1{T<:Real}(x::T, y::T) = (fld1(x,y), mod1(x,y))
 # efficient version for integers
