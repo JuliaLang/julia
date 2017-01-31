@@ -1880,8 +1880,6 @@ function sqrtm(A::UpperTriangular)
     end
     sqrtm(A,Val{realmatrix})
 end
-# solve the sylvester equation a*x + x*b + c for x when a,b,x are commutative numbers. PR#20214
-sylvester(a::Union{Real,Complex},b::Union{Real,Complex},c::Union{Real,Complex}) = -c / (a + b)
 function sqrtm{T,realmatrix}(A::UpperTriangular{T},::Type{Val{realmatrix}})
     B = A.data
     n = checksquare(B)
