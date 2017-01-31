@@ -82,17 +82,10 @@ haskey(io::IOContext, key) = haskey(io.dict, key)
 haskey(io::IO, key) = false
 getindex(io::IOContext, key) = getindex(io.dict, key)
 getindex(io::IO, key) = throw(KeyError(key))
-_limit_output = nothing # TODO: delete with with_output_limit deprecation
 function get(io::IOContext, key, default)
-    if key === :limit && _limit_output !== nothing
-        default = _limit_output::Bool
-    end
     get(io.dict, key, default)
 end
 function get(io::IO, key, default)
-    if key === :limit && _limit_output !== nothing
-        return _limit_output::Bool
-    end
     default
 end
 
