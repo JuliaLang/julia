@@ -49,7 +49,7 @@ for example, `f.(args...)` implicitly calls `broadcast(f, args...)`.
 ```@docs
 Base.broadcast
 Base.Broadcast.broadcast!
-Base.__DOTS__
+Base.@__DOTS__
 ```
 
 ## Indexing, Assignment, and Concatenation
