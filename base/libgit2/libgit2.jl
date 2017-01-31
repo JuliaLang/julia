@@ -42,14 +42,24 @@ immutable State
     work::GitHash
 end
 
-"""Return HEAD GitHash as string"""
+"""
+    head(pkg::AbstractString) -> String
+
+Return current HEAD [`GitHash`](@ref) of
+the `pkg` repo as a string.
+"""
 function head(pkg::AbstractString)
     with(GitRepo, pkg) do repo
         string(head_oid(repo))
     end
 end
 
-""" git update-index """
+"""
+    need_update(repo::GitRepo)
+
+Equivalent to `git update-index`. Returns `true`
+if `repo` needs updating.
+"""
 function need_update(repo::GitRepo)
     if !isbare(repo)
         # read updates index from filesystem
@@ -57,7 +67,12 @@ function need_update(repo::GitRepo)
     end
 end
 
-""" Checks if commit is in repository """
+"""
+    iscommit(id::AbstractString, repo::GitRepo) -> Bool
+
+Checks if commit `id` (which is a [`GitHash`](@ref) in string form)
+is in the repository.
+"""
 function iscommit(id::AbstractString, repo::GitRepo)
     res = true
     try
@@ -74,23 +89,25 @@ function iscommit(id::AbstractString, repo::GitRepo)
 end
 
 """
-    LibGit2.isdirty(repo::GitRepo[, paths]; cached=false)
+    LibGit2.isdirty(repo::GitRepo, pathspecs::AbstractString=""; cached::Bool=false) -> Bool
 
 Checks if there have been any changes to tracked files in the working tree (if
 `cached=false`) or the index (if `cached=true`).
+`pathspecs` are the specifications for options for the diff.
 
-See `git diff-index HEAD [-- <path>]`
+Equivalent to `git diff-index HEAD [-- <pathspecs>]`.
 """
 isdirty(repo::GitRepo, paths::AbstractString=""; cached::Bool=false) =
     isdiff(repo, Consts.HEAD_FILE, paths, cached=cached)
 
 """
-    LibGit2.isdiff(repo::GitRepo, treeish[, paths]; cached=false)
+    LibGit2.isdiff(repo::GitRepo, treeish::AbstractString, pathspecs::AbstractString=""; cached::Bool=false)
 
 Checks if there are any differences between the tree specified by `treeish` and the
 tracked files in the working tree (if `cached=false`) or the index (if `cached=true`).
+`pathspecs` are the specifications for options for the diff.
 
-See `git diff-index <treeish> [-- <path>]`
+Equivalent to `git diff-index <treeish> [-- <pathspecs>]`.
 """
 function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""; cached::Bool=false)
     tree_oid = revparseid(repo, "$treeish^{tree}")
@@ -132,11 +149,23 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
     return files
 end
 
+"""
+    is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo) -> Bool
+
+Returns `true` if `a`, a [`GitHash`](@ref) in string form, is an ancestor of
+`b`, a [`GitHash`](@ref) in string form.
+"""
 function is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo)
     A = revparseid(repo, a)
     merge_base(repo, a, b) == A
 end
 
+"""
+    set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractString="origin")
+
+Set the `url` for `remote` for the git repository `repo`.
+The default name of the remote is `"origin"`.
+"""
 function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractString="origin")
     with(GitConfig, repo) do cfg
         set!(cfg, "remote.$remote.url", url)
@@ -151,6 +180,12 @@ function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractStri
     end
 end
 
+"""
+    set_remote_url(path::AbstractString, url::AbstractString; remote::AbstractString="origin")
+
+Set the `url` for `remote` for the git repository located at `path`.
+The default name of the remote is `"origin"`.
+"""
 function set_remote_url(path::AbstractString, url::AbstractString; remote::AbstractString="origin")
     with(GitRepo, path) do repo
         set_remote_url(repo, url, remote=remote)
@@ -161,7 +196,15 @@ function make_payload{P<:AbstractCredentials}(payload::Nullable{P})
     Ref{Nullable{AbstractCredentials}}(payload)
 end
 
-""" git fetch [<url>|<repository>] [<refspecs>]"""
+"""
+    fetch(repo::GitRepo; remote::AbstractString="origin", remoteurl::AbstractString="", refspecs=AbstractString[], payload=Nullable{AbstractCredentials}())
+
+Equivalent to `git fetch [<remoteurl>|<repo>] [<refspecs>]`.
+Fetches updates from the upstream `remote` with URL `remoteurl` of the repository `repo`.
+Uses the provided fetch `refspecs` to determine properties of the fetch.
+`payload` provides credentials if necessary, for instance if `remote` is a private
+repository.
+"""
 function fetch{T<:AbstractString, P<:AbstractCredentials}(repo::GitRepo;
                                   remote::AbstractString="origin",
                                   remoteurl::AbstractString="",
@@ -181,7 +224,16 @@ function fetch{T<:AbstractString, P<:AbstractCredentials}(repo::GitRepo;
     end
 end
 
-""" git push [<url>|<repository>] [<refspecs>]"""
+"""
+    push(repo::GitRepo; remote::AbstractString="origin", remoteurl::AbstractString="", refspecs=AbstractString[], force::Bool=false, payload=Nullable{AbstractCredentials}())
+
+Equivalent to `git push [<remoteurl>|<repo>] [<refspecs>]`.
+Pushes updates to the `remote` upstream of `repo`, with URL `remoteurl`.
+Uses the provided push `refspecs` to determine properties of the push.
+`force` determines if the push will be a force push, overwriting the remote branch.
+`payload` provides credentials if necessary, for instance if `remote` is a private
+repository.
+"""
 function push{T<:AbstractString, P<:AbstractCredentials}(repo::GitRepo;
               remote::AbstractString="origin",
               remoteurl::AbstractString="",
@@ -202,7 +254,12 @@ function push{T<:AbstractString, P<:AbstractCredentials}(repo::GitRepo;
     end
 end
 
-""" git branch """
+"""
+    branch(repo::GitRepo)
+
+Equivalent to `git branch`.
+Create a new branch from the current HEAD.
+"""
 function branch(repo::GitRepo)
     head_ref = head(repo)
     try
@@ -212,7 +269,16 @@ function branch(repo::GitRepo)
     end
 end
 
-""" git checkout [-b|-B] <branch> [<start-point>] [--track <remote>/<branch>] """
+"""
+    branch!(repo::GitRepo, branch_name::AbstractString, commit::AbstractString=""; track::AbstractString="", force::Bool=false, set_head::Bool=true)
+
+Equivalent to `git checkout [-b|-B] <branch_name> [<commit>] [--track <track>]`.
+Checkout a new git branch in the `repo` repository. `commit` is the [`GitHash`](@ref),
+in string form, which will be the start of the new branch. `track` is the name of the
+remote branch this new branch should track, if any. If empty (the default), no remote branch
+will be tracked. If `force` is `true`, branch creation will be forced. If `set_head` is
+`true`, after the branch creation finishes the branch head will be set as the HEAD of `repo`.
+"""
 function branch!(repo::GitRepo, branch_name::AbstractString,
                  commit::AbstractString = ""; # start point
                  track::AbstractString  = "", # track remote branch
@@ -279,7 +345,14 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
     return
 end
 
-""" git checkout [-f] --detach <commit> """
+"""
+    checkout!(repo::GitRepo, commit::AbstractString=""; force::Bool=true)
+
+Equivalent to `git checkout [-f] --detach <commit>`.
+Checkout the git commit `commit` (a [`GitHash`](@ref) in string form)
+in `repo`. If `force` is `true`, force the checkout and discard any
+current changes. Note that this detaches the current HEAD.
+"""
 function checkout!(repo::GitRepo, commit::AbstractString = "";
                   force::Bool = true)
     # nothing to do
