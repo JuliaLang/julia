@@ -558,11 +558,11 @@ removed. When called with a file name, the file is opened once at the beginning 
 iteration and closed at the end. If iteration is interrupted, the file will be
 closed when the `EachLine` object is garbage collected.
 """
-eachline(stream::IO=STDIN; chomp::Bool=true) = EachLine(stream, chomp=chomp)
+eachline(stream::IO=STDIN; chomp::Bool=true) = EachLine(stream, chomp=chomp)::EachLine
 
 function eachline(filename::AbstractString; chomp::Bool=true)
     s = open(filename)
-    EachLine(s, ondone=()->close(s), chomp=chomp)
+    EachLine(s, ondone=()->close(s), chomp=chomp)::EachLine
 end
 
 start(itr::EachLine) = nothing
