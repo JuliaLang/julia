@@ -32,6 +32,8 @@ DECLARE_BUILTIN(apply_type); DECLARE_BUILTIN(applicable);
 DECLARE_BUILTIN(invoke);     DECLARE_BUILTIN(_expr);
 DECLARE_BUILTIN(typeassert);
 
+JL_CALLABLE(jl_f_invoke_kwsorter);
+
 #ifdef __cplusplus
 }
 #endif
