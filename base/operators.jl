@@ -685,8 +685,6 @@ fld1{T<:Integer}(x::T, y::T) = fld(x+y-T(1),y)
 Return `(fld1(x,y), mod1(x,y))`.
 
 See also: [`fld1`](@ref), [`mod1`](@ref).
-
-See 
 """
 fldmod1{T<:Real}(x::T, y::T) = (fld1(x,y), mod1(x,y))
 # efficient version for integers
