@@ -1356,7 +1356,7 @@ spawn
 
 Tests whether an assignable location is defined. The arguments can be a module and a symbol
 or a composite object and field name (as a symbol) or index. With a single symbol argument,
-tests whether a global variable with that name is defined in `current_module()`.
+tests whether a global variable with that name is defined in [`current_module()`](@ref).
 """
 isdefined
 
@@ -1788,6 +1788,23 @@ matchall
 
 Return the value stored for the given key, or if no mapping for the key is present, store
 `key => default`, and return `default`.
+
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2, "c"=>3);
+
+julia> get!(d, "a", 5)
+1
+
+julia> get!(d, "d", 4)
+4
+
+julia> d
+Dict{String,Int64} with 4 entries:
+  "c" => 3
+  "b" => 2
+  "a" => 1
+  "d" => 4
+```
 """
 get!(collection,key,default)
 
@@ -2404,7 +2421,22 @@ Base.:(|)
     pop!(collection, key[, default])
 
 Delete and return the mapping for `key` if it exists in `collection`, otherwise return
-`default`, or throw an error if default is not specified.
+`default`, or throw an error if `default` is not specified.
+
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2, "c"=>3);
+
+julia> pop!(d, "a")
+1
+
+julia> pop!(d, "d")
+ERROR: KeyError: key "d" not found
+Stacktrace:
+ [1] pop!(::Dict{String,Int64}, ::String) at ./dict.jl:539
+
+julia> pop!(d, "e", 4)
+4
+```
 """
 pop!(collection,key,?)
 
