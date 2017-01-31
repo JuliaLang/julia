@@ -251,7 +251,7 @@ chr2ind(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end
 Convert a byte index `i` to a character index with
 respect to string `s`.
 
-See also [`chr2ind`](@ref)
+See also [`chr2ind`](@ref).
 
 ```jldoctest
 julia> str = "αβγdef";
@@ -282,7 +282,7 @@ end
 
 Convert a character index `i` to a byte index.
 
-See also [`ind2chr`](@ref)
+See also [`ind2chr`](@ref).
 
 ```jldoctest
 julia> str = "αβγdef";

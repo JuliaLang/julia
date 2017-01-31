@@ -84,8 +84,8 @@ chop(s::AbstractString) = SubString(s, 1, endof(s)-1)
 Remove a single trailing newline from a string.
 
 ```jldoctest
-julia> chomp("Hello ")
-"Hello
+julia> chomp("Hello\n")
+"Hello"
 """
 function chomp(s::AbstractString)
     i = endof(s)
