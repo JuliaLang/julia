@@ -234,7 +234,6 @@ NOINLINE uintptr_t gc_get_stack_ptr(void);
 
 STATIC_INLINE region_t *find_region(void *ptr)
 {
-    // on 64bit systems we could probably use a single region and remove this loop
     for (int i = 0; i < REGION_COUNT && regions[i].pages; i++) {
         region_t *region = &regions[i];
         char *begin = region->pages->data;
@@ -246,16 +245,18 @@ STATIC_INLINE region_t *find_region(void *ptr)
     return NULL;
 }
 
-STATIC_INLINE jl_gc_pagemeta_t *page_metadata_(void *data, region_t *r)
+STATIC_INLINE jl_gc_pagemeta_t *page_metadata(void *_data)
 {
-    assert(r != NULL);
-    int pg_idx = page_index(r, (char*)data - GC_PAGE_OFFSET);
-    return &r->meta[pg_idx];
-}
-
-STATIC_INLINE jl_gc_pagemeta_t *page_metadata(void *data)
-{
-    return page_metadata_(data, find_region(data));
+    uintptr_t data = ((uintptr_t)_data) - 1;
+    for (int i = 0; i < REGION_COUNT && regions[i].pages; i++) {
+        region_t *region = &regions[i];
+        uintptr_t begin = (uintptr_t)region->pages->data;
+        uintptr_t offset = data - begin;
+        if (offset < region->pg_cnt * sizeof(jl_gc_page_t)) {
+            return &region->meta[offset >> GC_PAGE_LG2];
+        }
+    }
+    return NULL;
 }
 
 STATIC_INLINE void gc_big_object_unlink(const bigval_t *hdr)
