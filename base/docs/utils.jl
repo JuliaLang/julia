@@ -73,7 +73,7 @@ print{F <: Function}(io::IO, t::Text{F}) = t.content(io)
 show(io::IO, t::Text) = print(io, t)
 
 =={T<:Union{HTML, Text}}(t1::T, t2::T) = t1.content == t2.content
-hash{T<:Union{HTML, Text}}(t::T, h::UInt) = hash(t.content, h)
+hash{T<:Union{HTML, Text}}(t::T, h::UInt) = hash(T, hash(t.content, h))
 
 """
     @text_str -> Docs.Text
