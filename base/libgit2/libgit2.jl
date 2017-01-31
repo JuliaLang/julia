@@ -409,7 +409,17 @@ function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractSt
     reset!(repo, Nullable(obj), pathspecs...)
 end
 
-""" git reset [--soft | --mixed | --hard] <id> """
+"""
+    reset!(repo::GitRepo, id::GitHash, mode::Cint = Consts.RESET_MIXED)
+
+Reset the repository `repo` to its state at `id`, using one of three modes
+set by `mode`:
+  1. `Consts.RESET_SOFT` - move HEAD to `id`.
+  2. `Consts.RESET_MIXED` - default, move HEAD to `id` and reset the index to `id`.
+  3. `Consts.RESET_HARD` - move HEAD to `id`, reset the index to `id`, and discard all working changes.
+
+Equivalent to `git reset [--soft | --mixed | --hard] <id>`.
+"""
 reset!(repo::GitRepo, id::GitHash, mode::Cint = Consts.RESET_MIXED) =
     reset!(repo, GitObject(repo, id), mode)
 
@@ -437,7 +447,27 @@ function revcount(repo::GitRepo, fst::AbstractString, snd::AbstractString)
     return (fc-1, sc-1)
 end
 
-""" git merge [--ff-only] [<committish> | FETCH_HEAD] """
+"""
+    merge!(repo::GitRepo; committish::AbstractString="", branch::AbstractString="", fastforward::Bool=false, merge_opts::MergeOptions=MergeOptions(), checkout_opts::CheckoutOptions=CheckoutOptions()) -> Bool
+
+Perform a git merge on the repository `repo`, merging commits
+with diverging history into the current branch. Returns `true`
+if the merge succeeded, `false` if not.
+
+The optional arguments are:
+  * Merge the named commit(s) in `committish`.
+  * Merge the branch `branch` and all its commits since it diverged from the current branch.
+  * If `fastforward` is `true`, only merge if the merge is a fast-forward (the current branch
+    head is an ancestor of the commits to be merged), otherwise refuse to merge and return
+    `false`. This is equivalent to the Git CLI option `--ff-only`.
+  * `merge_opts` specifies options for the merge, such as merge strategy in case of conflicts.
+    For more information, see [`MergeOptions()`].
+  * `checkout_opts` specifies options for the checkout step. For more information, see
+    [`CheckoutOptions()`].
+
+Equivalent to `git merge [--ff-only] [<committish> | FETCH_HEAD]`, where `branch` plays the role
+of `FETCH_HEAD`.
+"""
 function merge!(repo::GitRepo;
                 committish::AbstractString = "",
                 branch::AbstractString = "",
@@ -581,7 +611,11 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
 end
 
 
-""" Returns all commit authors """
+"""
+    authors(repo::GitRepo) -> Vector{Signature}
+
+Returns all authors of commits to the `repo` repository.
+"""
 function authors(repo::GitRepo)
     return with(GitRevWalker(repo)) do walker
         map((oid,repo)->with(GitCommit(repo, oid)) do cmt
@@ -591,6 +625,14 @@ function authors(repo::GitRepo)
     end
 end
 
+"""
+    snapshot(repo::GitRepo) -> State
+
+Take a snapshot of the current state of the repository `repo`,
+storing the current HEAD, index, and any uncommitted work.
+The output `State` can be used later during a call to [`restore`](@ref)
+to return the repository to the snapshotted state.
+"""
 function snapshot(repo::GitRepo)
     head = GitHash(repo, Consts.HEAD_FILE)
     index = with(GitIndex, repo) do idx; write_tree!(idx) end
@@ -612,6 +654,13 @@ function snapshot(repo::GitRepo)
     State(head, index, work)
 end
 
+"""
+    restore(s::State, repo::GitRepo)
+
+Return a repository `repo` to a previous `State` `s`, for
+example the HEAD of a branch before a merge attempt. `s`
+can be generated using the [`snapshot`](@ref) function.
+"""
 function restore(s::State, repo::GitRepo)
     head = reset!(repo, Consts.HEAD_FILE, "*")  # unstage everything
     with(GitIndex, repo) do idx
