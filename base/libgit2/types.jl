@@ -6,11 +6,34 @@ const OID_RAWSZ = 20
 const OID_HEXSZ = OID_RAWSZ * 2
 const OID_MINPREFIXLEN = 4
 
-immutable GitHash
+abstract AbstractGitHash
+
+"""
+    GitHash
+
+A git object identifier, based on the sha-1 hash. It is a $OID_RAWSZ byte string
+($OID_HEXSZ hex digits) used to identify a `GitObject` in a repository.
+"""
+immutable GitHash <: AbstractGitHash
     val::NTuple{OID_RAWSZ, UInt8}
     GitHash(val::NTuple{OID_RAWSZ, UInt8}) = new(val)
 end
 GitHash() = GitHash(ntuple(i->zero(UInt8), OID_RAWSZ))
+
+"""
+    GitShortHash
+
+This is a shortened form of `GitHash`, which can be used to identify a git object when it
+is unique.
+
+Internally it is stored as two fields: a full-size `GitHash` (`hash`) and a length
+(`len`). Only the initial `len` hex digits of `hash` are used.
+"""
+immutable GitShortHash <: AbstractGitHash
+    hash::GitHash   # underlying hash: unused digits are ignored
+    len::Csize_t    # length in hex digits
+end
+
 
 """
     LibGit2.TimeStruct
@@ -511,6 +534,12 @@ for (typ, reporef, sup, cname) in [
     end
 end
 
+## Calling `GitObject(repo, ...)` will automatically resolve to the appropriate type.
+function GitObject(repo::GitRepo, ptr::Ptr{Void})
+    T = objtype(ccall((:git_object_type, :libgit2), Consts.OBJECT, (Ptr{Void},), ptr))
+    T(repo, ptr)
+end
+
 """
     LibGit2.GitSignature
 
@@ -563,35 +592,24 @@ function with_warn{T}(f::Function, ::Type{T}, args...)
 end
 
 """
-    getobjecttype{T<:GitObject}(::Type{T})
+    LibGit2.Const.OBJECT{T<:GitObject}(::Type{T})
 
-Convert between the Julia `Type` of a git object and
-the constant integer id code for that object type.
+The `OBJECT` enum value corresponding to type `T`.
 """
-function getobjecttype{T<:GitObject}(::Type{T})
-    return if T == GitCommit
-        Consts.OBJ_COMMIT
-    elseif T == GitTree
-        Consts.OBJ_TREE
-    elseif T == GitBlob
-        Consts.OBJ_BLOB
-    elseif T == GitTag
-        Consts.OBJ_TAG
-    elseif T == GitUnknownObject
-        Consts.OBJ_ANY # this name comes from the header
-    else
-        throw(GitError(Error.Object, Error.ENOTFOUND, "Type $T is not supported"))
-    end
-end
+Consts.OBJECT(::Type{GitCommit})        = Consts.OBJ_COMMIT
+Consts.OBJECT(::Type{GitTree})          = Consts.OBJ_TREE
+Consts.OBJECT(::Type{GitBlob})          = Consts.OBJ_BLOB
+Consts.OBJECT(::Type{GitTag})           = Consts.OBJ_TAG
+Consts.OBJECT(::Type{GitUnknownObject}) = Consts.OBJ_ANY
+Consts.OBJECT(::Type{GitObject})        = Consts.OBJ_ANY
 
 """
-    getobjecttype(obj_type::Cint)
+    objtype(obj_type::Consts.OBJECT)
 
-Convert between the constant integer id code for a git object
-and the corresponding Julia type.
+Returns the type corresponding to the enum value.
 """
-function getobjecttype(obj_type::Cint)
-    return if obj_type == Consts.OBJ_COMMIT
+function objtype(obj_type::Consts.OBJECT)
+    if obj_type == Consts.OBJ_COMMIT
         GitCommit
     elseif obj_type == Consts.OBJ_TREE
         GitTree

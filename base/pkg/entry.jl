@@ -301,7 +301,7 @@ function pin(pkg::AbstractString, head::AbstractString)
         else
             LibGit2.revparseid(repo, head)
         end
-        commit = LibGit2.get(LibGit2.GitCommit, repo, id)
+        commit = LibGit2.GitCommit(repo, id)
         try
             # note: changing the following naming scheme requires a corresponding change in Read.ispinned()
             branch = "pinned.$(string(id)[1:8]).tmp"

@@ -30,8 +30,8 @@ end
     @test z == LibGit2.GitHash(rr)
     @test z == LibGit2.GitHash(rs)
     @test z == LibGit2.GitHash(pointer(rr))
-    for i in 11:length(rr); rr[i] = 0; end
-    @test LibGit2.GitHash(rr) == LibGit2.GitHash(rs[1:20])
+
+    @test LibGit2.GitShortHash(z, 20) == LibGit2.GitShortHash(rs[1:20])
     @test_throws ArgumentError LibGit2.GitHash(Ptr{UInt8}(C_NULL))
 end
 
@@ -282,7 +282,7 @@ mktempdir() do dir
                 end
 
                 # lookup commits
-                cmt = LibGit2.get(LibGit2.GitCommit, repo, commit_oid1)
+                cmt = LibGit2.GitCommit(repo, commit_oid1)
                 try
                     @test commit_oid1 == LibGit2.GitHash(cmt)
                     auth = LibGit2.author(cmt)
@@ -438,11 +438,13 @@ mktempdir() do dir
         @testset "blobs" begin
             repo = LibGit2.GitRepo(cache_repo)
             try
-                # clear out the "GitHash( )" part
-                hash_string = sprint(show, commit_oid1)[9:end]
-                hash_string = strip(hash_string, ')')
+                # this is slightly dubious, as it assumes the object has not been packed
+                # could be replaced by another binary format
+                hash_string = hex(commit_oid1)
                 blob_file   = joinpath(cache_repo,".git/objects", hash_string[1:2], hash_string[3:end])
-                blob = LibGit2.GitBlob(repo, blob_file)
+
+                id = LibGit2.addblob!(repo, blob_file)
+                blob = LibGit2.GitBlob(repo, id)
                 @test LibGit2.isbinary(blob)
                 blob_show_strs = split(sprint(show, blob), "\n")
                 @test blob_show_strs[1] == "GitBlob:"
