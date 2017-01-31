@@ -589,6 +589,25 @@ g11015(::Type{Bool}, ::Bool) = 2.0
 @test Int <: Base.return_types(f11015, (AT11015,))[1]
 @test f11015(AT11015(true)) === 1
 
+# splatting a Union of Tuple's (#20343)
+f20343(::String, ::Int) = 1
+f20343(::Int, ::String, ::Int, ::Int) = 1
+f20343(::Int, ::Int, ::String, ::Int, ::Int, ::Int) = 1
+f20343(::Union{Int,String}...) = Int8(1)
+f20343(::Any...) = "no"
+function g20343()
+    n = rand(1:3)
+    i = ntuple(i->n==i ? "" : 0, 2n)::Union{Tuple{String,Int},Tuple{Int,String,Int,Int},Tuple{Int,Int,String,Int,Int,Int}}
+    f20343(i...)
+end
+@test Base.return_types(g20343, ()) == [Int]
+function h20343()
+    n = rand(1:3)
+    i = ntuple(i->n==i ? "" : 0, 3)::Union{Tuple{String,Int,Int},Tuple{Int,String,Int},Tuple{Int,Int,String}}
+    f20343(i..., i...)
+end
+@test all(t -> t<:Integer, Base.return_types(h20343, ()))
+
 # Inference for some type-level computation
 fUnionAll{T}(::Type{T}) = Type{S} where S <: T
 @inferred fUnionAll(Real) == Type{T} where T <: Real
