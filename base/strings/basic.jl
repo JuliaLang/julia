@@ -75,6 +75,11 @@ length(s::DirectIndexString) = endof(s)
     length(s::AbstractString)
 
 The number of characters in string `s`.
+
+```jldoctest
+julia> length("jμΛIα")
+5
+```
 """
 function length(s::AbstractString)
     i = start(s)
@@ -130,6 +135,23 @@ isvalid(s::DirectIndexString, i::Integer) = (start(s) <= i <= endof(s))
     isvalid(str::AbstractString, i::Integer)
 
 Tells whether index `i` is valid for the given string.
+
+```jldoctest
+julia> str = "αβγdef";
+
+julia> isvalid(str, 1)
+true
+
+julia> str[1]
+'α': Unicode U+03b1 (category Ll: Letter, lowercase)
+
+julia> isvalid(str, 2)
+false
+
+julia> str[2]
+ERROR: UnicodeError: invalid character index
+[...]
+```
 """
 function isvalid(s::AbstractString, i::Integer)
     i < 1 && return false
@@ -154,6 +176,14 @@ nextind(s::AbstractArray    , i::Integer) = Int(i)+1
 
 Get the previous valid string index before `i`.
 Returns a value less than `1` at the beginning of the string.
+
+```jldoctest
+julia> prevind("αβγdef", 3)
+1
+
+julia> prevind("αβγdef", 1)
+0
+```
 """
 function prevind(s::AbstractString, i::Integer)
     e = endof(s)
@@ -175,6 +205,19 @@ end
 
 Get the next valid string index after `i`.
 Returns a value greater than `endof(str)` at or after the end of the string.
+
+```jldoctest
+julia> str = "αβγdef";
+
+julia> nextind(str, 1)
+3
+
+julia> endof(str)
+9
+
+julia> nextind(str, 9)
+10
+```
 """
 function nextind(s::AbstractString, i::Integer)
     e = endof(s)
@@ -207,6 +250,18 @@ chr2ind(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end
 
 Convert a byte index `i` to a character index with
 respect to string `s`.
+
+See also [`chr2ind`](@ref)
+
+```jldoctest
+julia> str = "αβγdef";
+
+julia> ind2chr(str, 3)
+2
+
+julia> chr2ind(str, 2)
+3
+```
 """
 function ind2chr(s::AbstractString, i::Integer)
     s[i] # throws error if invalid
@@ -226,6 +281,18 @@ end
     chr2ind(s::AbstractString, i::Integer)
 
 Convert a character index `i` to a byte index.
+
+See also [`ind2chr`](@ref)
+
+```jldoctest
+julia> str = "αβγdef";
+
+julia> chr2ind(str, 2)
+3
+
+julia> ind2chr(str, 3)
+2
+```
 """
 function chr2ind(s::AbstractString, i::Integer)
     i < start(s) && throw(BoundsError(s, i))
