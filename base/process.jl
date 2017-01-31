@@ -562,7 +562,7 @@ function eachline(cmd::AbstractCmd, stdin; chomp::Bool=true)
     out = stdout.out
     # implicitly close after reading lines, since we opened
     return EachLine(out, chomp=chomp,
-        ondone=()->(close(out); success(processes) || pipeline_error(processes)))
+        ondone=()->(close(out); success(processes) || pipeline_error(processes)))::EachLine
 end
 eachline(cmd::AbstractCmd; chomp::Bool=true) = eachline(cmd, DevNull, chomp=chomp)
 
