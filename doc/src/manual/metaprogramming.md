@@ -263,13 +263,13 @@ julia> eval(ans)
 julia> ex = :(a + b)
 :(a + b)
 
-julia> eval(current_module(), ex)
+julia> eval(ex)
 ERROR: UndefVarError: b not defined
 [...]
 
 julia> a = 1; b = 2;
 
-julia> eval(current_module(), ex)
+julia> eval(ex)
 3
 ```
 
@@ -284,7 +284,7 @@ julia> ex = :(x = 1)
 julia> x
 ERROR: UndefVarError: x not defined
 
-julia> eval(current_module(), ex)
+julia> eval(ex)
 1
 
 julia> x
@@ -306,7 +306,7 @@ julia> ex = Expr(:call, :+, a, :b)
 
 julia> a = 0; b = 2;
 
-julia> eval(current_module(), ex)
+julia> eval(ex)
 3
 ```
 
