@@ -589,6 +589,17 @@ g11015(::Type{Bool}, ::Bool) = 2.0
 @test Int <: Base.return_types(f11015, (AT11015,))[1]
 @test f11015(AT11015(true)) === 1
 
+# Inference for some type-level computation
+fUnionAll{T}(::Type{T}) = Type{S} where S <: T
+@inferred fUnionAll(Real) == Type{T} where T <: Real
+@inferred fUnionAll(Rational{T} where T <: AbstractFloat) == Type{T} where T<:(Rational{S} where S <: AbstractFloat)
+
+fComplicatedUnionAll{T}(::Type{T}) = Type{Tuple{S,rand() >= 0.5 ? Int : Float64}} where S <: T
+let pub = Base.parameter_upper_bound, x = fComplicatedUnionAll(Real)
+    @test pub(pub(x, 1), 1) == Real
+    @test pub(pub(x, 1), 2) == Int || pub(pub(x, 1), 2) == Float64
+end
+
 # issue #20267
 type T20267{T}
     inds::Vector{T}
