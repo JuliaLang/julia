@@ -89,6 +89,7 @@ Base.identity
 Base.supertype
 Core.issubtype
 Base.:(<:)
+Base.:(>:)
 Base.subtypes
 Base.typemin
 Base.typemax
