@@ -98,31 +98,32 @@ if VERSION < v"0.4.0-dev+1387"
     @test isdefined(Main, :AbstractString)
 end
 
-if VERSION < v"0.6.0-"
-    @test round(Int, 3//4) == 1
-    @test round(Int, 1) == 1
-    @test round(Int, 1.1) == 1
+@test round(Int, 3//4) == 1
+@test round(Int, 1) == 1
+@test round(Int, 1.1) == 1
+@test ceil(Int, 1) == 1
+@test ceil(Int, 1.1) == 2
+@test floor(Int, 1) == 1
+@test floor(Int, 1.1) == 1
+@test trunc(Int, 1) == 1
+@test trunc(Int, 1.1) == 1
+
+if VERSION < v"0.6.0-dev.1825"
     @test round(Int, [1, 1]) == [1, 1]
     @test round(Int, [1.1, 1.1]) == [1, 1]
     @test round(Int, [1 1]) == [1 1]
     @test round(Int, [1.1 1.1]) == [1 1]
     @test round(Int, fill(1.1, 2, 3, 4)) == fill(1, 2, 3, 4)
-    @test ceil(Int, 1) == 1
-    @test ceil(Int, 1.1) == 2
     @test ceil(Int, [1, 1]) == [1, 1]
     @test ceil(Int, [1.1, 1.1]) == [2, 2]
     @test ceil(Int, [1 1]) == [1 1]
     @test ceil(Int, [1.1 1.1]) == [2 2]
     @test ceil(Int, fill(1.1, 2, 3, 4)) == fill(2, 2, 3, 4)
-    @test floor(Int, 1) == 1
-    @test floor(Int, 1.1) == 1
     @test floor(Int, [1, 1]) == [1, 1]
     @test floor(Int, [1.1, 1.1]) == [1, 1]
     @test floor(Int, [1 1]) == [1 1]
     @test floor(Int, [1.1 1.1]) == [1 1]
     @test floor(Int, fill(1.1, 2, 3, 4)) == fill(1, 2, 3, 4)
-    @test trunc(Int, 1) == 1
-    @test trunc(Int, 1.1) == 1
     @test trunc(Int, [1, 1]) == [1, 1]
     @test trunc(Int, [1.1, 1.1]) == [1, 1]
     @test trunc(Int, [1 1]) == [1 1]
@@ -577,9 +578,6 @@ for T = (Float32, Float64)
     @test [Compat.linspace(-u,-u,1);] == [-u]
     @test [Compat.linspace(-u,u,2);] == [-u,u]
     @test [Compat.linspace(-u,u,3);] == [-u,0,u]
-    @test [Compat.linspace(-u,u,4);] == [-u,0,0,u]
-    @test [Compat.linspace(-u,u,4);][2] === -z
-    @test [Compat.linspace(-u,u,4);][3] === z
     @test first(Compat.linspace(-u,-u,0)) == -u
     @test last(Compat.linspace(-u,-u,0)) == -u
     @test first(Compat.linspace(u,-u,0)) == u
@@ -588,12 +586,8 @@ for T = (Float32, Float64)
     @test [Compat.linspace(u,u,1);] == [u]
     @test [Compat.linspace(u,-u,2);] == [u,-u]
     @test [Compat.linspace(u,-u,3);] == [u,0,-u]
-    @test [Compat.linspace(u,-u,4);] == [u,0,0,-u]
-    @test [Compat.linspace(u,-u,4);][2] === z
-    @test [Compat.linspace(u,-u,4);][3] === -z
     v = [Compat.linspace(-u,u,12);]
     @test length(v) == 12
-    @test issorted(v) && unique(v) == [-u,0,0,u]
     @test [-3u:u:3u;] == [Compat.linspace(-3u,3u,7);] == [-3:3;].*u
     @test [3u:-u:-3u;] == [Compat.linspace(3u,-3u,7);] == [3:-1:-3;].*u
 end
@@ -1336,8 +1330,10 @@ end
 @test allunique([1, 2, 3])
 @test !allunique([1, 2, 1])
 @test allunique(1:3)
-@test allunique(FloatRange(0.0, 0.0, 0.0, 1.0))
-@test !allunique(FloatRange(0.0, 0.0, 2.0, 1.0))
+if VERSION < v"0.6.0-dev.2390"
+    @test allunique(FloatRange(0.0, 0.0, 0.0, 1.0))
+    @test !allunique(FloatRange(0.0, 0.0, 2.0, 1.0))
+end
 
 # Add test for Base.view
 let a = rand(10,10)
