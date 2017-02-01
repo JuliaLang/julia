@@ -126,6 +126,7 @@ The default delimiters to remove are `' '`, `\\t`, `\\n`, `\\v`,
 `\\f`, and `\\r`.
 If `chars` (a character, or vector or set of characters) is provided,
 instead remove characters contained in it.
+
 ```jldoctest
 julia> a = lpad("March", 20)
 "               March"
