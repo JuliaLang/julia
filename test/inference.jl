@@ -588,3 +588,9 @@ f11015(a::AT11015) = g11015(Base.fieldtype(typeof(a), :f), true)
 g11015(::Type{Bool}, ::Bool) = 2.0
 @test Int <: Base.return_types(f11015, (AT11015,))[1]
 @test f11015(AT11015(true)) === 1
+
+# issue 17903
+n_17903 = 1000
+x_17903 = zeros(Float64, n)
+y_17903 = [0.0, nothing]
+@test (@elapsed [x_17903..., y_17903...]) < 30
