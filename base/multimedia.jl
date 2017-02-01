@@ -39,7 +39,7 @@ mimewritable{mime}(::MIME{mime}, x) =
 show(io::IO, m::AbstractString, x) = show(io, MIME(m), x)
 mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
 
-verbose_show(io, m, x) = show(IOContext(io,limit=false), m, x)
+verbose_show(io, m, x) = show(IOContext(io, :limit => false), m, x)
 
 """
     reprmime(mime, x)

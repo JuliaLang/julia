@@ -124,7 +124,8 @@ function Base.show(io::IO, ::MIME"text/plain", S::SparseMatrixCSC)
     end
 end
 
-function Base.show(io::IO, S::SparseMatrixCSC)
+Base.show(io::IO, S::SparseMatrixCSC) = Base.show(convert(IOContext, io), S::SparseMatrixCSC)
+function Base.show(io::IOContext, S::SparseMatrixCSC)
     if nnz(S) == 0
         return show(io, MIME("text/plain"), S)
     end
@@ -139,7 +140,6 @@ function Base.show(io::IO, S::SparseMatrixCSC)
     pad = ndigits(max(S.m,S.n))
     k = 0
     sep = "\n  "
-    io = IOContext(io)
     if !haskey(io, :compact)
         io = IOContext(io, :compact => true)
     end

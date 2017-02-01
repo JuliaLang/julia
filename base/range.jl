@@ -254,7 +254,7 @@ function print_range(io::IO, r::Range,
     limit = get(io, :limit, false)
     sz = displaysize(io)
     if !haskey(io, :compact)
-        io = IOContext(io, compact=true)
+        io = IOContext(io, :compact => true)
     end
     screenheight, screenwidth = sz[1] - 4, sz[2]
     screenwidth -= length(pre) + length(post)
