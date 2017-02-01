@@ -479,7 +479,7 @@ Y = 4:-1:1
 
 @test isa(@view(X[1:3]), SubArray)
 
-@test X[1:end] == @.(@view X[1:end]) == @view(@. X[1:end]) # test compatibility of @. and @view
+@test X[1:end] == @.(@view X[1:end]) # test compatibility of @. and @view
 @test X[1:end-3] == @view X[1:end-3]
 @test X[1:end,2,2] == @view X[1:end,2,2]
 # @test X[1,1:end-2] == @view X[1,1:end-2] # TODO: Re-enable after partial linear indexing deprecation
@@ -526,6 +526,8 @@ end
     @test x == [5,8,10,9] && i == [4]
     x[push!(i,3)[end]] += 2
     @test x == [5,8,12,9] && i == [4,3]
+    @. x[3:end] = 0       # make sure @. works with end expressions in @views
+    @test x == [5,8,0,0]
 end
 @views @test isa(X[1:3], SubArray)
 @test X[1:end] == @views X[1:end]
