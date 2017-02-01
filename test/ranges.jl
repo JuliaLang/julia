@@ -333,6 +333,27 @@ for T = (Float32, Float64,),# BigFloat),
     @test [r[n:-2:1];] == [r;][n:-2:1]
 end
 
+# issue #20373 (unliftable ranges with exact end points)
+@test [3*0.05:0.05:0.2;]    == [linspace(3*0.05,0.2,2);]   == [3*0.05,0.2]
+@test [0.2:-0.05:3*0.05;]   == [linspace(0.2,3*0.05,2);]   == [0.2,3*0.05]
+@test [-3*0.05:-0.05:-0.2;] == [linspace(-3*0.05,-0.2,2);] == [-3*0.05,-0.2]
+@test [-0.2:0.05:-3*0.05;]  == [linspace(-0.2,-3*0.05,2);] == [-0.2,-3*0.05]
+
+for T = (Float32, Float64,), i = 1:2^15, n = 1:5
+    start, step = randn(T), randn(T)
+    stop = start + (n-1)*step
+    r = start:step:stop
+    @test n == length(r)
+    # FIXME: these fail some small portion of the time
+    @test_skip start == first(r)
+    @test_skip stop  == last(r)
+    l = linspace(start,stop,n)
+    @test n == length(l)
+    # FIXME: these fail some small portion of the time
+    @test_skip start == first(l)
+    @test_skip stop  == last(l)
+end
+
 # linspace & ranges with very small endpoints
 for T = (Float32, Float64)
     z = zero(T)

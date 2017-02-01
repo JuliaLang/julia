@@ -122,8 +122,6 @@ end
 
 function colon{T<:Union{Float16,Float32,Float64}}(start::T, step::T, stop::T)
     step == 0 && throw(ArgumentError("range step cannot be zero"))
-    len = max(0, floor(Int, (stop-start)/step) + 1)
-    # Because len might be too small by 1 due to roundoff error, let's
     # see if the inputs have exact rational approximations (and if so,
     # perform all computations in terms of the rationals)
     step_n, step_d = rat(step)
@@ -149,6 +147,9 @@ function colon{T<:Union{Float16,Float32,Float64}}(start::T, step::T, stop::T)
         end
     end
     # Fallback, taking start and step literally
+    len = max(0, floor(Int, (stop-start)/step) + 1)
+    stop′ = start + len*step
+    len += (start < stop′ <= stop) + (start > stop′ >= stop)
     StepRangeLen(TwicePrecision(start, zero(T)), twiceprecision(step, nbitslen(T, len, 1)), len)
 end
 
