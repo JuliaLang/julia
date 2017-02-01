@@ -3496,9 +3496,10 @@ function invoke_NF(argexprs, etype::ANY, atypes, sv, atype_unlimited::ANY,
             end
         end
         newvar = newvar!(sv, atypes[1])
-        stmts = Any[invoke_fexpr, :($newvar = $(argexprs[1])),
+        stmts = Any[invoke_fexpr,
+                    :($newvar = $(argexprs[2])),
                     invoke_texpr]
-        argexprs[1] = newvar
+        argexprs[2] = newvar
         return ex, stmts
     end
     return NF
