@@ -588,3 +588,11 @@ f11015(a::AT11015) = g11015(Base.fieldtype(typeof(a), :f), true)
 g11015(::Type{Bool}, ::Bool) = 2.0
 @test Int <: Base.return_types(f11015, (AT11015,))[1]
 @test f11015(AT11015(true)) === 1
+
+# issue #20267
+type T20267{T}
+    inds::Vector{T}
+end
+# infinite type growth via lower bounds (formed by intersection)
+f20267(x::T20267{T}, y::T) where (T) = f20267(Any[1][1], x.inds)
+@test Base.return_types(f20267, (Any, Any)) == Any[Union{}]
