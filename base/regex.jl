@@ -291,7 +291,7 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
                 end
                 #  TODO: avoid this allocation
                 groupname = SubString(repl, groupstart, prevind(repl, i))
-                if isnumber(groupname)
+                if all(isnumber,groupname)
                     _write_capture(io, re, parse(Int, groupname))
                 else
                     group = PCRE.substring_number_from_name(re.regex, groupname)
