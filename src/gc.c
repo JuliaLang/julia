@@ -607,7 +607,7 @@ static inline uint16_t gc_setmark_pool(jl_ptls_t ptls, jl_taggedvalue_t *o,
 }
 
 static inline uint16_t gc_setmark(jl_ptls_t ptls, jl_value_t *v,
-                                  int sz, uintptr_t tag)
+                                  size_t sz, uintptr_t tag)
 {
     assert(!gc_marked(tag));
     jl_taggedvalue_t *o = jl_astaggedvalue(v);

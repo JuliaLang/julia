@@ -4609,3 +4609,30 @@ end
 
 # issue #19963
 @test_nowarn ccall(:jl_free, Void, (Ptr{Void}, ), C_NULL)
+
+# Wrong string size on 64bits for large string.
+if Sys.WORD_SIZE == 64
+    @noinline function test_large_string20360(slot)
+        try
+            # Do no touch the string to avoid triggering OOM
+            slot[] = Base._string_n(2^32)
+            gc(false)
+        catch ex
+            # This can happen if there's a virtual address size limit
+            @test isa(ex, OutOfMemoryError)
+            @test_broken false
+        end
+        return
+    end
+    @noinline function tester20360()
+        gc()
+        # Makes sure the string is rooted during the `gc(false)`
+        # but is not before the last gc in this function.
+        slot = Ref{Any}()
+        test_large_string20360(slot)
+        slot[] = nothing
+        gc()
+        return
+    end
+    @test_nowarn tester20360()
+end
