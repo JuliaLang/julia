@@ -724,7 +724,7 @@ function test_dict_completion(dict_name)
     @test c == Any["66]"]
     s = "$dict_name[("
     c, r = test_complete(s)
-    @test c == Any["(\"q\",3)]"]
+    @test c == Any["(\"q\", 3)]"]
     s = "$dict_name[\"\\alp"
     c, r = test_complete(s)
     @test c == String["\\alpha"]
