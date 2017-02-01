@@ -599,3 +599,11 @@ let pub = Base.parameter_upper_bound, x = fComplicatedUnionAll(Real)
     @test pub(pub(x, 1), 1) == Real
     @test pub(pub(x, 1), 2) == Int || pub(pub(x, 1), 2) == Float64
 end
+
+# issue #20267
+type T20267{T}
+    inds::Vector{T}
+end
+# infinite type growth via lower bounds (formed by intersection)
+f20267(x::T20267{T}, y::T) where (T) = f20267(Any[1][1], x.inds)
+@test Base.return_types(f20267, (Any, Any)) == Any[Union{}]

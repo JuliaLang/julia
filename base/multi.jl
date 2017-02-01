@@ -1029,8 +1029,17 @@ function serialize(s::AbstractSerializer, ex::CapturedException)
                                         # if a type used in ex.ex is undefined on the remote node.
 end
 
-original_ex(ex_str) = ErrorException(string("Error deserializing a CapturedException.",
-                                                " Original exception of type : ", ex_str))
+function original_ex(s::AbstractSerializer, ex_str, remote_stktrace)
+    local pid_str = ""
+    try
+        pid_str = string(" from worker ", worker_id_from_socket(s.io))
+    end
+
+    stk_str = remote_stktrace ? "Remote" : "Local"
+    ErrorException(string("Error deserializing a remote exception", pid_str, "\n",
+                          "Remote(original) exception of type ", ex_str, "\n",
+                          stk_str,  " stacktrace : "))
+end
 
 function deserialize(s::AbstractSerializer, t::Type{T}) where T <: CapturedException
     ex_str = deserialize(s)
@@ -1040,7 +1049,7 @@ function deserialize(s::AbstractSerializer, t::Type{T}) where T <: CapturedExcep
         bt = deserialize(s)
     catch e
         throw(CompositeException([
-            original_ex(ex_str),
+            original_ex(s, ex_str, false),
             CapturedException(e, catch_backtrace())
         ]))
     end
@@ -1049,7 +1058,7 @@ function deserialize(s::AbstractSerializer, t::Type{T}) where T <: CapturedExcep
         capex = deserialize(s)
     catch e
         throw(CompositeException([
-            CapturedException(original_ex(ex_str), bt),
+            CapturedException(original_ex(s, ex_str, true), bt),
             CapturedException(e, catch_backtrace())
         ]))
     end
@@ -1443,9 +1452,7 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
 
                 # remotecalls only rethrow RemoteExceptions. Any other exception is treated as
                 # data to be returned. Wrap this exception in a RemoteException.
-
-                # Capture the remote pid that caused a deserialization error.
-                remote_err = RemoteException(wpid, CapturedException(e, catch_backtrace()))
+                remote_err = RemoteException(myid(), CapturedException(e, catch_backtrace()))
                 # println("Deserialization error. ", remote_err)
                 if !null_id(header.response_oid)
                     ref = lookup_ref(header.response_oid)
