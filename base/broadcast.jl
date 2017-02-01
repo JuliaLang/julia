@@ -507,6 +507,6 @@ end
 
 Base.@propagate_inbounds dotview(args...) = getindex(args...)
 Base.@propagate_inbounds dotview(A::AbstractArray, args...) = view(A, args...)
-Base.@propagate_inbounds dotview{T<:AbstractArray}(A::AbstractArray{T}, args...) = getindex(A, args...)
+Base.@propagate_inbounds dotview{T<:AbstractArray}(A::AbstractArray{T}, args::Integer...) = getindex(A, args...)
 
 end # module

@@ -458,3 +458,9 @@ let N = 5
     @test iszero(ones(N, N) .= zeros(1, N))
     @test iszero(ones(N, N) .= zeros(1, 1))
 end
+
+@testset "test broadcast for matrix of matrices" begin
+    A = fill(zeros(2,2), 4, 4)
+    A[1:3,1:3] .= [ones(2,2)]
+    @test all(A[1:3,1:3] .== [ones(2,2)])
+end
