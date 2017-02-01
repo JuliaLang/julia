@@ -512,7 +512,7 @@ respectively. The [`BigInt`](@ref) and [`BigFloat`](@ref) types are available in
 precision integer and floating point numbers respectively.
 
 Constructors exist to create these types from primitive numerical types, and [`parse()`](@ref)
-can be use to construct them from `AbstractString`s.  Once created, they participate in arithmetic
+can be used to construct them from `AbstractString`s.  Once created, they participate in arithmetic
 with all other numeric types thanks to Julia's [type promotion and conversion mechanism](@ref conversion-and-promotion):
 
 ```jldoctest
