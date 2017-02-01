@@ -954,7 +954,7 @@
          (where (if (and (pair? name) (eq? (car name) 'where))
                     (let ((w (flatten-where-expr name)))
                       (begin0 (cddr w)
-                              (if (not (and (pair? (cadr w)) (eq? (caadr w) 'call)))
+                              (if (not (and (pair? (cadr w)) (memq (caadr w) '(call |::|))))
                                   (error (string "invalid assignment location \"" (deparse name) "\"")))
                               (set! name (cadr w))))
                     #f))
@@ -1000,7 +1000,8 @@
                                #f name)))
              (expand-forms
               (method-def-expr name sparams argl (caddr e) isstaged rett))))
-          (else e))))
+          (else
+           (error (string "invalid assignment location \"" (deparse name) "\""))))))
 
 ;; handle ( )->( ) function expressions. blocks `(a;b=1)` on the left need to be
 ;; converted to argument lists with kwargs.
@@ -3553,7 +3554,7 @@ f(x) = yt(x)
             ((...)
              (error "\"...\" expression outside call"))
             (else
-             (error (string "unhandled expr " e))))))
+             (error (string "invalid syntax " (deparse e)))))))
     ;; introduce new slots for assigned arguments
     (for-each (lambda (v)
                 (if (vinfo:asgn v)
