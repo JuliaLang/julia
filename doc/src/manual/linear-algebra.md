@@ -59,7 +59,9 @@ julia> A = [1.5 2 -4; 3 -1 -6; -10 2.3 4]
  -10.0   2.3   4.0
 
 julia> factorize(A)
-Base.LinAlg.LU{Float64,Array{Float64,2}}([-10.0 2.3 4.0; -0.15 2.345 -3.4; -0.3 -0.132196 -5.24947],[3,3,3],0)
+Base.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:
+[1.0 0.0 0.0; -0.15 1.0 0.0; -0.3 -0.132196 1.0]
+[-10.0 2.3 4.0; 0.0 2.345 -3.4; 0.0 0.0 -5.24947]
 ```
 
 Since `A` is not Hermitian, symmetric, triangular, tridiagonal, or bidiagonal, an LU factorization may be the
@@ -124,7 +126,7 @@ julia> sB\x
  -1.1087
  -1.45652
 ```
-The `\\` operation here performs the linear solution. Julia's parser provides convenient dispatch
+The `\` operation here performs the linear solution. Julia's parser provides convenient dispatch
 to specialized methods for the *transpose* of a matrix left-divided by a vector, or for the various combinations
 of transpose operations in matrix-matrix solutions. Many of these are further specialized for certain special
 matrix types. For example, `A\B` will end up calling [`Base.LinAlg.A_ldiv_B!`](@ref) while `A'\B` will end up calling
