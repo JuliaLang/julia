@@ -486,7 +486,7 @@ julia> ascii("abcdeγfgh")
 julia> ascii("abcdeγfgh")
 ERROR: ArgumentError: invalid ASCII at index 6 in "abcdeγfgh"
 Stacktrace:
- [1] ascii(::String) at ./strings/util.jl:472
+ [1] ascii(::String) at ./strings/util.jl:473
 
 julia> ascii("abcdefgh")
 "abcdefgh"
