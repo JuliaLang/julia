@@ -134,6 +134,22 @@ Multiplication with respect to either thin or full `Q` is allowed, i.e. both `F[
 and `F[:Q]*A` are supported. A `Q` matrix can be converted into a regular matrix with
 [`full`](@ref) which has a named argument `thin`.
 
+```jldoctest
+julia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]
+3×2 Array{Float64,2}:
+ 3.0  -6.0
+ 4.0  -8.0
+ 0.0   1.0
+
+julia> F = qrfact(A)
+Base.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:
+[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]
+[-5.0 10.0; 0.0 -1.0]
+
+julia> F[:Q] * F[:R] == A
+true
+```
+
 !!! note
     `qrfact` returns multiple types because LAPACK uses several representations
     that minimize the memory storage requirements of products of Householder
@@ -270,6 +286,13 @@ convert(::Type{AbstractArray}, F::QRPivoted) = convert(AbstractMatrix, F)
 convert(::Type{Matrix}, F::QRPivoted) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::QRPivoted) = convert(Matrix, F)
 full(F::QRPivoted) = convert(AbstractArray, F)
+
+function show(io::IO, F::Union{QR, QRCompactWY, QRPivoted})
+    println(io, "$(typeof(F)) with factors Q and R:")
+    show(io, F[:Q])
+    println(io)
+    show(io, F[:R])
+end
 
 function getindex(A::QR, d::Symbol)
     m, n = size(A)

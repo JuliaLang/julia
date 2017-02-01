@@ -8,6 +8,8 @@
 Returns `true` if `s` starts with `prefix`. If `prefix` is a vector or set
 of characters, tests whether the first character of `s` belongs to that set.
 
+See also [`endswith`](@ref).
+
 ```jldoctest
 julia> startswith("JuliaLang", "Julia")
 true
@@ -30,6 +32,8 @@ startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str) in c
 
 Returns `true` if `s` ends with `suffix`. If `suffix` is a vector or set of
 characters, tests whether the last character of `s` belongs to that set.
+
+See also [`startswith`](@ref).
 
 ```jldoctest
 julia> endswith("Sunday", "day")
@@ -78,6 +82,10 @@ chop(s::AbstractString) = SubString(s, 1, endof(s)-1)
     chomp(s::AbstractString)
 
 Remove a single trailing newline from a string.
+
+```jldoctest
+julia> chomp("Hello\n")
+"Hello"
 """
 function chomp(s::AbstractString)
     i = endof(s)
@@ -118,6 +126,14 @@ The default delimiters to remove are `' '`, `\\t`, `\\n`, `\\v`,
 `\\f`, and `\\r`.
 If `chars` (a character, or vector or set of characters) is provided,
 instead remove characters contained in it.
+
+```jldoctest
+julia> a = lpad("March", 20)
+"               March"
+
+julia> lstrip(a)
+"March"
+```
 """
 function lstrip(s::AbstractString, chars::Chars=_default_delims)
     i = start(s)
@@ -141,7 +157,7 @@ If `chars` (a character, or vector or set of characters) is provided,
 instead remove characters contained in it.
 
 ```jldoctest
-julia> a = rpad("March",20)
+julia> a = rpad("March", 20)
 "March               "
 
 julia> rstrip(a)
@@ -167,6 +183,10 @@ end
 Return `s` with any leading and trailing whitespace removed.
 If `chars` (a character, or vector or set of characters) is provided,
 instead remove characters contained in it.
+
+```jldoctest
+julia> strip("{3, 5}\n", ['{', '}', '\n'])
+"3, 5"
 """
 strip(s::AbstractString) = lstrip(rstrip(s))
 strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
@@ -460,5 +480,16 @@ end
 
 Convert a string to `String` type and check that it contains only ASCII data, otherwise
 throwing an `ArgumentError` indicating the position of the first non-ASCII byte.
+
+```jldoctest
+julia> ascii("abcdeγfgh")
+julia> ascii("abcdeγfgh")
+ERROR: ArgumentError: invalid ASCII at index 6 in "abcdeγfgh"
+Stacktrace:
+ [1] ascii(::String) at ./strings/util.jl:473
+
+julia> ascii("abcdefgh")
+"abcdefgh"
+```
 """
 ascii(x::AbstractString) = ascii(convert(String, x))
