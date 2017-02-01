@@ -1704,6 +1704,12 @@ function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vect
             return Const(rty.val === false)
         end
         return rty
+    elseif length(fargs) == 3 && istopfunction(tm, f, :(>:))
+        # swap T1 and T2 arguments and call issubtype
+        fargs = Any[issubtype, fargs[3], fargs[2]]
+        argtypes = Any[typeof(issubtype), argtypes[3], argtypes[2]]
+        rty = abstract_call(issubtype, fargs, argtypes, vtypes, sv)
+        return rty
     end
 
     if length(argtypes)>2 && argtypes[3] ⊑ Int
@@ -3605,6 +3611,24 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         not_is.typ = Bool
         not_is.args[2].typ = Bool
         return (not_is, ())
+    elseif length(atypes) == 3 && istopfunction(topmod, f, :(>:))
+        # special-case inliner for issupertype
+        # that works, even though inference generally avoids inferring the `>:` Method
+        if isa(e.typ, Const)
+            return inline_as_constant(e.typ.val, argexprs, sv, nothing)
+        end
+        arg_T1 = argexprs[2]
+        arg_T2 = argexprs[3]
+        issubtype_stmts = ()
+        if !effect_free(arg_T2, sv.src, sv.mod, false)
+            # spill first argument to preserve order-of-execution
+            issubtype_vnew = newvar!(sv, widenconst(exprtype(arg_T1, sv.src, sv.mod)))
+            issubtype_stmts = Any[ Expr(:(=), issubtype_vnew, arg_T1) ]
+            arg_T1 = issubtype_vnew
+        end
+        issubtype_expr = Expr(:call, GlobalRef(Core, :issubtype), arg_T2, arg_T1)
+        issubtype_expr.typ = Bool
+        return (issubtype_expr, issubtype_stmts)
     end
 
     if length(atype_unlimited.parameters) - 1 > sv.params.MAX_TUPLETYPE_LEN
