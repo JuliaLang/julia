@@ -1278,38 +1278,19 @@ end
 
 ## Data movement ##
 
-# TODO some of this could be optimized
-
-function slicedim(A::BitArray, d::Integer, i::Integer)
-    d_in = size(A)
-    leading = d_in[1:(d-1)]
-    d_out = tuple(leading..., d_in[(d+1):end]...)
-
-    M = prod(leading)
-    N = length(A)
-    stride = M * d_in[d]
-
-    B = BitArray(d_out)
-    index_offset = 1 + (i-1)*M
-
-    l = 1
-
-    if M == 1
-        for j = 0:stride:(N-stride)
-            B[l] = A[j + index_offset]
-            l += 1
-        end
+# preserve some special behavior
+function slicedim(A::BitVector, d::Integer, i::Integer)
+    d >= 1 || throw(ArgumentError("dimension must be ≥ 1"))
+    if d > 1
+        i == 1 || throw_boundserror(A, (:, ntuple(k->1,d-2)..., i))
+        A[:]
     else
-        for j = 0:stride:(N-stride)
-            offs = j + index_offset
-            for k = 0:(M-1)
-                B[l] = A[offs + k]
-                l += 1
-            end
-        end
+        fill!(BitArray{0}(), A[i]) # generic slicedim would return A[i] here
     end
-    return B
 end
+
+
+# TODO some of this could be optimized
 
 function flipdim(A::BitArray, d::Integer)
     nd = ndims(A)

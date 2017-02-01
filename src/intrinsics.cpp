@@ -138,37 +138,6 @@ static Type *INTT(Type *t)
     return IntegerType::get(jl_LLVMContext, nb);
 }
 
-// convert float type to same-size int type (as a Julia type)
-static jl_value_t *JL_JLUINTT(Type *t)
-{
-    assert(!t->isIntegerTy());
-    if (t == T_float64)
-        return (jl_value_t*)jl_uint64_type;
-    if (t == T_float32)
-        return (jl_value_t*)jl_uint32_type;
-    if (t == T_float16)
-        return (jl_value_t*)jl_uint16_type;
-    //if (t == T_float128)
-    //   return (jl_value_t*)jl_uint128_type;
-    assert(t == T_void);
-    return jl_bottom_type;
-}
-
-static jl_value_t *JL_JLSINTT(Type *t)
-{
-    assert(!t->isIntegerTy());
-    if (t == T_float64)
-        return (jl_value_t*)jl_int64_type;
-    if (t == T_float32)
-        return (jl_value_t*)jl_int32_type;
-    if (t == T_float16)
-        return (jl_value_t*)jl_int16_type;
-    //if (t == T_float128)
-    //   return (jl_value_t*)jl_uint128_type;
-    assert(t == T_void);
-    return jl_bottom_type;
-}
-
 static Value *uint_cnvt(Type *to, Value *x)
 {
     Type *t = x->getType();
@@ -777,10 +746,6 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                  jl_codectx_t *ctx)
 {
     assert(f < num_intrinsics);
-    if (f == fptoui && nargs == 1)
-        f = fptoui_auto;
-    if (f == fptosi && nargs == 1)
-        f = fptosi_auto;
     if (f == cglobal && nargs == 1)
         f = cglobal_auto;
     unsigned expected_nargs = intrinsic_nargs[f];
@@ -832,36 +797,6 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return generic_cast(f, generic_fptrunc, argv, ctx, false, false);
     case fpext:
         return generic_cast(f, generic_fpext, argv, ctx, false, false);
-
-    case fptoui_auto: {
-        // deprecated
-        const jl_cgval_t &x = argv[0];
-        if (!jl_is_bitstype(x.typ))
-            return emit_runtime_call(f, argv, nargs, ctx);
-        Type *xt = bitstype_to_llvm(x.typ);
-        Type *to = INTT(xt);
-        xt = FLOATT(xt);
-        if (!xt)
-            return emit_runtime_call(f, argv, nargs, ctx);
-        Value *from = emit_unbox(xt, x, x.typ);
-        Value *ans = builder.CreateFPToUI(from, to);
-        return mark_julia_type(ans, false, JL_JLUINTT(xt), ctx);
-    }
-
-    case fptosi_auto: {
-        // deprecated
-        const jl_cgval_t &x = argv[0];
-        if (!jl_is_bitstype(x.typ))
-            return emit_runtime_call(f, argv, nargs, ctx);
-        Type *xt = bitstype_to_llvm(x.typ);
-        Type *to = INTT(xt);
-        xt = FLOATT(xt);
-        if (!xt)
-            return emit_runtime_call(f, argv, nargs, ctx);
-        Value *from = emit_unbox(xt, x, x.typ);
-        Value *ans = builder.CreateFPToSI(from, to);
-        return mark_julia_type(ans, false, JL_JLSINTT(xt), ctx);
-    }
 
     case select_value: {
         Value *isfalse = emit_condition(argv[0], "select_value", ctx); // emit the first argument

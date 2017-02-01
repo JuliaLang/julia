@@ -1476,6 +1476,6 @@ try
     error("unexpected")
 catch ex
     @test isa(ex.captured.ex.exceptions[1].ex, ErrorException)
-    @test endswith(ex.captured.ex.exceptions[1].ex.msg, "BoundsError")
+    @test contains(ex.captured.ex.exceptions[1].ex.msg, "BoundsError")
     @test ex.captured.ex.exceptions[2].ex == UndefVarError(:DontExistOn1)
 end

@@ -144,11 +144,12 @@ fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
 fieldnames{T<:Tuple}(t::Type{T}) = Int[n for n in 1:nfields(t)]
 
 """
-    Base.datatype_name(t::DataType) -> Symbol
+    Base.datatype_name(t) -> Symbol
 
-Get the name of a `DataType` (without its parent module) as a symbol.
+Get the name of a (potentially UnionAll-wrapped) `DataType` (without its parent module) as a symbol.
 """
 datatype_name(t::DataType) = t.name.name
+datatype_name(t::UnionAll) = datatype_name(unwrap_unionall(t))
 
 """
     Base.datatype_module(t::DataType) -> Module
@@ -233,6 +234,39 @@ a concrete type that can have instances.
 isleaftype(t::ANY) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
 
 """
+    Base.isabstract(T)
+
+Determine whether `T` was declared as an abstract type (i.e. using the
+`abstract` keyword).
+"""
+function isabstract(t::ANY)
+    @_pure_meta
+    t = unwrap_unionall(t)
+    isa(t,DataType) && t.abstract
+end
+
+"""
+    Base.parameter_upper_bound(t::UnionAll, idx)
+
+Determine the upper bound of a type parameter in the underlying type. E.g.:
+```jldoctest
+julia> immutable Foo{T<:AbstractFloat, N}
+           x::Tuple{T, N}
+       end
+
+julia> Base.parameter_upper_bound(Foo, 1)
+AbstractFloat
+
+julia> Base.parameter_upper_bound(Foo, 2)
+Any
+```
+"""
+function parameter_upper_bound(t::UnionAll, idx)
+    @_pure_meta
+    rewrap_unionall(unwrap_unionall(t).parameters[idx], t)
+end
+
+"""
     typeintersect(T, S)
 
 Compute a type that contains the intersection of `T` and `S`. Usually this will be the
@@ -313,7 +347,7 @@ function _subtypes(m::Module, x::DataType, sts=Set{DataType}(), visited=Set{Modu
     end
     return sts
 end
-subtypes(m::Module, x::DataType) = sort(collect(_subtypes(m, x)), by=string)
+subtypes(m::Module, x::DataType) = x.abstract ? sort!(collect(_subtypes(m, x)), by=string) : DataType[]
 
 """
     subtypes(T::DataType)
@@ -816,9 +850,14 @@ function method_exists(f::ANY, t::ANY)
         typemax(UInt)) != 0
 end
 
-function isambiguous(m1::Method, m2::Method)
+function isambiguous(m1::Method, m2::Method, allow_bottom_tparams::Bool=true)
     ti = typeintersect(m1.sig, m2.sig)
     ti === Bottom && return false
+    if !allow_bottom_tparams
+        (_, env) = ccall(:jl_match_method, Ref{SimpleVector}, (Any, Any),
+                         ti, m1.sig)
+        any(x->x === Bottom, env) && return false
+    end
     ml = _methods_by_ftype(ti, -1, typemax(UInt))
     isempty(ml) && return true
     for m in ml

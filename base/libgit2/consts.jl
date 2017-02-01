@@ -7,12 +7,13 @@ module Consts
     const REMOTE_ORIGIN = "origin"
 
     # objs
-    const OBJ_ANY    = Cint(-2)
-    const OBJ_BAD    = Cint(-1)
-    const OBJ_COMMIT = Cint(1)
-    const OBJ_TREE   = Cint(2)
-    const OBJ_BLOB   = Cint(3)
-    const OBJ_TAG    = Cint(4)
+    @enum(OBJECT,
+          OBJ_ANY    = -2,
+          OBJ_BAD    = -1,
+          OBJ_COMMIT = 1,
+          OBJ_TREE   = 2,
+          OBJ_BLOB   = 3,
+          OBJ_TAG    = 4)
 
     #revwalk
     const SORT_NONE        = Cint(0)
