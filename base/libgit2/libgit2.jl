@@ -454,16 +454,16 @@ Perform a git merge on the repository `repo`, merging commits
 with diverging history into the current branch. Returns `true`
 if the merge succeeded, `false` if not.
 
-The optional arguments are:
+The keyword arguments are:
   * Merge the named commit(s) in `committish`.
   * Merge the branch `branch` and all its commits since it diverged from the current branch.
   * If `fastforward` is `true`, only merge if the merge is a fast-forward (the current branch
     head is an ancestor of the commits to be merged), otherwise refuse to merge and return
-    `false`. This is equivalent to the Git CLI option `--ff-only`.
+    `false`. This is equivalent to the git CLI option `--ff-only`.
   * `merge_opts` specifies options for the merge, such as merge strategy in case of conflicts.
-    For more information, see [`MergeOptions()`].
+    For more information, see [`MergeOptions()`](@ref).
   * `checkout_opts` specifies options for the checkout step. For more information, see
-    [`CheckoutOptions()`].
+    [`CheckoutOptions()`](@ref).
 
 Equivalent to `git merge [--ff-only] [<committish> | FETCH_HEAD]`, where `branch` plays the role
 of `FETCH_HEAD`.
