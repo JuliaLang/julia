@@ -1095,22 +1095,21 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
     jl_method_t *m = closure->newentry->func.method;
     jl_tupletype_t *sig = oldentry->sig;
     jl_value_t *isect = closure->match.ti;
-    if (jl_types_equal(isect, (jl_value_t*)(closure->after ? sig : type))) {
-        // we're ok if the new definition is actually the one we just
-        // inferred to be required (see issue #3609). ideally this would
-        // never happen, since if New ⊓ Old == New then we should have
-        // considered New more specific, but jl_type_morespecific is not
-        // perfect, so this is a useful fallback.
-        return 1;
-    }
 
     // we know type ∩ sig != Union{} and
-    // we know !jl_type_morespecific(type, sig) [before]
-    //      or !jl_type_morespecific(sig, type) [after]
+    // we are assuming that
+    //        !jl_type_morespecific(type, sig) [before]
+    //     or !jl_type_morespecific(sig, type) [after]
+    // based on their sort order in the typemap
     // now we are checking that the reverse is true
     if (!jl_type_morespecific((jl_value_t*)(closure->after ? type : sig),
                               (jl_value_t*)(closure->after ? sig : type))) {
-        jl_typemap_entry_t *l = jl_typemap_assoc_by_type(map, (jl_tupletype_t*)isect, NULL, 0, 0, 0,
+        // see if the intersection is covered by another existing method
+        // that will resolve the ambiguity (by being more specific than either)
+        // (if type-morespecific made a mistake, this also might end up finding
+        // that isect == type or isect == sig and return the original match)
+        jl_typemap_entry_t *l = jl_typemap_assoc_by_type(
+                map, (jl_tupletype_t*)isect, NULL, 0, 0, 0,
                 closure->newentry->min_world);
         if (l != NULL) // ok, intersection is covered
             return 1;
