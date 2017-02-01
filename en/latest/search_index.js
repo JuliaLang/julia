@@ -6613,7 +6613,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Function",
-    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\nMerge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\n"
+    "text": "Merge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\nmerge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\n"
 },
 
 {
@@ -10165,7 +10165,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.UTF8proc.isalnum",
     "category": "Function",
-    "text": "isalnum(c::Union{Char,AbstractString}) -> Bool\n\nTests whether a character is alphanumeric, or whether this is true for all elements of a string. A character is classified as alphabetic if it belongs to the Unicode general category Letter or Number, i.e. a character whose category code begins with 'L' or 'N'.\n\n\n\n"
+    "text": "isalnum(c::Char) -> Bool\n\nTests whether a character is alphanumeric. A character is classified as alphabetic if it belongs to the Unicode general category Letter or Number, i.e. a character whose category code begins with 'L' or 'N'.\n\n\n\n"
 },
 
 {
@@ -10173,7 +10173,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.UTF8proc.isalpha",
     "category": "Function",
-    "text": "isalpha(c::Union{Char,AbstractString}) -> Bool\n\nTests whether a character is alphabetic, or whether this is true for all elements of a string. A character is classified as alphabetic if it belongs to the Unicode general category Letter, i.e. a character whose category code begins with 'L'.\n\n\n\n"
+    "text": "isalpha(c::Char) -> Bool\n\nTests whether a character is alphabetic. A character is classified as alphabetic if it belongs to the Unicode general category Letter, i.e. a character whose category code begins with 'L'.\n\n\n\n"
 },
 
 {
@@ -10189,7 +10189,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.UTF8proc.iscntrl",
     "category": "Function",
-    "text": "iscntrl(c::Union{Char,AbstractString}) -> Bool\n\nTests whether a character is a control character, or whether this is true for all elements of a string. Control characters are the non-printing characters of the Latin-1 subset of Unicode.\n\n\n\n"
+    "text": "iscntrl(c::Char) -> Bool\n\nTests whether a character is a control character. Control characters are the non-printing characters of the Latin-1 subset of Unicode.\n\n\n\n"
 },
 
 {
@@ -10197,7 +10197,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.UTF8proc.isdigit",
     "category": "Function",
-    "text": "isdigit(c::Union{Char,AbstractString}) -> Bool\n\nTests whether a character is a numeric digit (0-9), or whether this is true for all elements of a string.\n\n\n\n"
+    "text": "isdigit(c::Char) -> Bool\n\nTests whether a character is a numeric digit (0-9).\n\n\n\n"
 },
 
 {
@@ -10205,7 +10205,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.UTF8proc.isgraph",
     "category": "Function",
-    "text": "isgraph(c::Union{Char,AbstractString}) -> Bool\n\nTests whether a character is printable, and not a space, or whether this is true for all elements of a string. Any character that would cause a printer to use ink should be classified with isgraph(c)==true.\n\n\n\n"
+    "text": "isgraph(c::Char) -> Bool\n\nTests whether a character is printable, and not a space. Any character that would cause a printer to use ink should be classified with isgraph(c)==true.\n\n\n\n"
 },
 
 {
@@ -10213,7 +10213,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.UTF8proc.islower",
     "category": "Function",
-    "text": "islower(c::Union{Char,AbstractString}) -> Bool\n\nTests whether a character is a lowercase letter, or whether this is true for all elements of a string. A character is classified as lowercase if it belongs to Unicode category Ll, Letter: Lowercase.\n\n\n\n"
+    "text": "islower(c::Char) -> Bool\n\nTests whether a character is a lowercase letter. A character is classified as lowercase if it belongs to Unicode category Ll, Letter: Lowercase.\n\n\n\n"
 },
 
 {
@@ -10221,7 +10221,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.UTF8proc.isnumber",
     "category": "Function",
-    "text": "isnumber(c::Union{Char,AbstractString}) -> Bool\n\nTests whether a character is numeric, or whether this is true for all elements of a string. A character is classified as numeric if it belongs to the Unicode general category Number, i.e. a character whose category code begins with 'N'.\n\n\n\n"
+    "text": "isnumber(c::Char) -> Bool\n\nTests whether a character is numeric. A character is classified as numeric if it belongs to the Unicode general category Number, i.e. a character whose category code begins with 'N'.\n\n\n\n"
 },
 
 {
@@ -10229,7 +10229,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.UTF8proc.isprint",
     "category": "Function",
-    "text": "isprint(c::Union{Char,AbstractString}) -> Bool\n\nTests whether a character is printable, including spaces, but not a control character. For strings, tests whether this is true for all elements of the string.\n\n\n\n"
+    "text": "isprint(c::Char) -> Bool\n\nTests whether a character is printable, including spaces, but not a control character.\n\n\n\n"
 },
 
 {
@@ -10237,7 +10237,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.UTF8proc.ispunct",
     "category": "Function",
-    "text": "ispunct(c::Union{Char,AbstractString}) -> Bool\n\nTests whether a character belongs to the Unicode general category Punctuation, i.e. a character whose category code begins with 'P'. For strings, tests whether this is true for all elements of the string.\n\n\n\n"
+    "text": "ispunct(c::Char) -> Bool\n\nTests whether a character belongs to the Unicode general category Punctuation, i.e. a character whose category code begins with 'P'.\n\n\n\n"
 },
 
 {
@@ -10245,7 +10245,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.UTF8proc.isspace",
     "category": "Function",
-    "text": "isspace(c::Union{Char,AbstractString}) -> Bool\n\nTests whether a character is any whitespace character. Includes ASCII characters '\\t', '\\n', '\\v', '\\f', '\\r', and ' ', Latin-1 character U+0085, and characters in Unicode category Zs. For strings, tests whether this is true for all elements of the string.\n\n\n\n"
+    "text": "isspace(c::Char) -> Bool\n\nTests whether a character is any whitespace character. Includes ASCII characters '\\t', '\\n', '\\v', '\\f', '\\r', and ' ', Latin-1 character U+0085, and characters in Unicode category Zs.\n\n\n\n"
 },
 
 {
@@ -10253,7 +10253,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.UTF8proc.isupper",
     "category": "Function",
-    "text": "isupper(c::Union{Char,AbstractString}) -> Bool\n\nTests whether a character is an uppercase letter, or whether this is true for all elements of a string. A character is classified as uppercase if it belongs to Unicode category Lu, Letter: Uppercase, or Lt, Letter: Titlecase.\n\n\n\n"
+    "text": "isupper(c::Char) -> Bool\n\nTests whether a character is an uppercase letter. A character is classified as uppercase if it belongs to Unicode category Lu, Letter: Uppercase, or Lt, Letter: Titlecase.\n\n\n\n"
 },
 
 {
@@ -10261,7 +10261,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.isxdigit",
     "category": "Function",
-    "text": "isxdigit(c::Union{Char,AbstractString}) -> Bool\n\nTests whether a character is a valid hexadecimal digit, or whether this is true for all elements of a string.\n\njulia> isxdigit(\"abc\")\ntrue\n\njulia> isxdigit(\"0x9\")\nfalse\n\n\n\n"
+    "text": "isxdigit(c::Char) -> Bool\n\nTests whether a character is a valid hexadecimal digit. Note that this does not include x (as in the standard 0x prefix).\n\njulia> isxdigit('a')\ntrue\n\njulia> isxdigit('x')\nfalse\n\n\n\n"
 },
 
 {
@@ -12525,7 +12525,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.lufact",
     "category": "Function",
-    "text": "lufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ncond ✓ \ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\nlufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\n\n\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "lufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\n\n\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nlufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ncond ✓ \ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\n"
 },
 
 {
