@@ -120,10 +120,10 @@ function show_default(io::IO, x::ANY)
     print(io, '(')
     nf = nfields(t)
     nb = sizeof(x)
-    if nf != 0 || nb==0
+    if nf != 0 || nb == 0
         if !show_circular(io, x)
             recur_io = IOContext(io, :SHOWN_SET => x)
-            for i=1:nf
+            for i in 1:nf
                 f = fieldname(t, i)
                 if !isdefined(x, f)
                     print(io, undef_ref_str)
@@ -131,15 +131,15 @@ function show_default(io::IO, x::ANY)
                     show(recur_io, getfield(x, f))
                 end
                 if i < nf
-                    print(io, ',')
+                    print(io, ", ")
                 end
             end
         end
     else
         print(io, "0x")
         p = data_pointer_from_objref(x)
-        for i=nb-1:-1:0
-            print(io, hex(unsafe_load(convert(Ptr{UInt8}, p+i)), 2))
+        for i in (nb - 1):-1:0
+            print(io, hex(unsafe_load(convert(Ptr{UInt8}, p + i)), 2))
         end
     end
     print(io,')')
@@ -353,18 +353,14 @@ function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, de
         if !haskey(io, :compact)
             recur_io = IOContext(recur_io, :compact => true)
         end
-        newline = true
         first = true
         i = i1
         if l >= i1
             while true
                 if !isassigned(itr, i)
                     print(io, undef_ref_str)
-                    multiline = false
                 else
                     x = itr[i]
-                    multiline = isa(x,AbstractArray) && ndims(x)>1 && !isempty(x)
-                    newline && multiline && println(io)
                     show(recur_io, x)
                 end
                 i += 1
@@ -374,12 +370,7 @@ function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, de
                 end
                 first = false
                 print(io, delim)
-                if multiline
-                    println(io); println(io)
-                    newline = false
-                else
-                    newline = true
-                end
+                print(io, ' ')
             end
         end
     end
@@ -391,31 +382,23 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one, i1=1, n=typemax
     if !show_circular(io, itr)
         recur_io = IOContext(io, :SHOWN_SET => itr)
         state = start(itr)
-        newline = true
         first = true
-        while i1 > 1 && !done(itr,state)
+        while i1 > 1 && !done(itr, state)
             _, state = next(itr, state)
             i1 -= 1
         end
-        if !done(itr,state)
+        if !done(itr, state)
             while true
-                x, state = next(itr,state)
-                multiline = isa(x,AbstractArray) && ndims(x)>1 && !isempty(x)
-                newline && multiline && println(io)
+                x, state = next(itr, state)
                 show(recur_io, x)
                 i1 += 1
-                if done(itr,state) || i1 > n
+                if done(itr, state) || i1 > n
                     delim_one && first && print(io, delim)
                     break
                 end
                 first = false
                 print(io, delim)
-                if multiline
-                    println(io); println(io)
-                    newline = false
-                else
-                    newline = true
-                end
+                print(io, ' ')
             end
         end
     end
@@ -581,10 +564,12 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operato
 end
 # show an indented list inside the parens (op, cl)
 function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, encl_ops=false)
-    print(io, op); show_list(io, items, sep, indent, prec, encl_ops); print(io, cl)
+    print(io, op)
+    show_list(io, items, sep, indent, prec, encl_ops)
+    print(io, cl)
 end
 
-# show a normal (non-operator) function call, e.g. f(x,y) or A[z]
+# show a normal (non-operator) function call, e.g. f(x, y) or A[z]
 function show_call(io::IO, head, func, func_args, indent)
     op, cl = expr_calls[head]
     if isa(func, Symbol) || (isa(func, Expr) &&
@@ -600,12 +585,12 @@ function show_call(io::IO, head, func, func_args, indent)
     end
     if !isempty(func_args) && isa(func_args[1], Expr) && func_args[1].head === :parameters
         print(io, op)
-        show_list(io, func_args[2:end], ',', indent)
+        show_list(io, func_args[2:end], ", ", indent)
         print(io, "; ")
-        show_list(io, func_args[1].args, ',', indent)
+        show_list(io, func_args[1].args, ", ", indent)
         print(io, cl)
     else
-        show_enclosed_list(io, op, func_args, ",", cl, indent)
+        show_enclosed_list(io, op, func_args, ", ", cl, indent)
     end
 end
 
@@ -726,7 +711,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             print(io, ')')
         end
 
-    # infix (i.e. "x<:y" or "x = y")
+    # infix (i.e. "x <: y" or "x = y")
     elseif (head in expr_infix_any && nargs==2) || (head === :(:) && nargs==3)
         func_prec = operator_precedence(head)
         head_ = head in expr_infix_wide ? " $head " : head
@@ -736,20 +721,24 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             show_list(io, args, head_, indent, func_prec, true)
         end
 
-    # list (i.e. "(1,2,3)" or "[1,2,3]")
+    # list (i.e. "(1, 2, 3)" or "[1, 2, 3]")
     elseif haskey(expr_parens, head)               # :tuple/:vcat
         op, cl = expr_parens[head]
         if head === :vcat
-            sep = ";"
+            sep = "; "
         elseif head === :hcat || head === :row
             sep = " "
         else
-            sep = ","
+            sep = ", "
         end
         head !== :row && print(io, op)
         show_list(io, args, sep, indent)
-        if (head === :tuple || head === :vcat) && nargs == 1
-            print(io, sep)
+        if nargs == 1
+            if head === :tuple
+                print(io, ',')
+            elseif head === :vcat
+                print(io, ';')
+            end
         end
         head !== :row && print(io, cl)
 
@@ -784,7 +773,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         elseif isa(func,Symbol) && func in uni_ops && length(func_args) == 1
             show_unquoted(io, func, indent)
             if isa(func_args[1], Expr) || func_args[1] in all_ops
-                show_enclosed_list(io, '(', func_args, ",", ')', indent, func_prec)
+                show_enclosed_list(io, '(', func_args, ", ", ')', indent, func_prec)
             else
                 show_unquoted(io, func_args[1])
             end
@@ -806,7 +795,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
                 print(io, "(")
                 show_unquoted(io, func, indent)
                 print(io, ")")
-                show_enclosed_list(io, op, func_args, ",", cl, indent)
+                show_enclosed_list(io, op, func_args, ", ", cl, indent)
             else
                 show_call(io, head, func, func_args, indent)
             end

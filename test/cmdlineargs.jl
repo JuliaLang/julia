@@ -258,15 +258,15 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
                 println(ARGS)
             """)
             @test readchomp(`$exename $testfile foo -bar --baz`) ==
-                "String[\"foo\",\"-bar\",\"--baz\"]"
+                "String[\"foo\", \"-bar\", \"--baz\"]"
             @test readchomp(`$exename $testfile -- foo -bar --baz`) ==
-                "String[\"foo\",\"-bar\",\"--baz\"]"
+                "String[\"foo\", \"-bar\", \"--baz\"]"
             @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar --baz`) ==
-                "String[\"foo\",\"-bar\",\"--baz\"]"
+                "String[\"foo\", \"-bar\", \"--baz\"]"
             @test split(readchomp(`$exename -L $testfile $testfile`), '\n') ==
                 ["String[\"$(escape(testfile))\"]", "String[]"]
             @test !success(`$exename --foo $testfile`)
-            @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar -- baz`) == "String[\"foo\",\"-bar\",\"--\",\"baz\"]"
+            @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar -- baz`) == "String[\"foo\", \"-bar\", \"--\", \"baz\"]"
         finally
             rm(testfile)
         end
