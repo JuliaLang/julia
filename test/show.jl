@@ -4,7 +4,7 @@ const curmod = current_module()
 const curmod_name = fullname(curmod)
 const curmod_prefix = "$(["$m." for m in curmod_name]...)"
 
-replstr(x) = sprint((io,x) -> show(IOContext(io, limit=true), MIME("text/plain"), x), x)
+replstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true), MIME("text/plain"), x), x)
 
 @test replstr(Array{Any}(2)) == "2-element Array{Any,1}:\n #undef\n #undef"
 @test replstr(Array{Any}(2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
@@ -533,14 +533,14 @@ end
 
 # PR #16651
 @test !contains(repr(ones(10,10)), "\u2026")
-@test contains(sprint((io,x)->show(IOContext(io,:limit=>true), x), ones(30,30)), "\u2026")
+@test contains(sprint((io, x) -> show(IOContext(io, :limit => true), x), ones(30, 30)), "\u2026")
 
 # showcompact() also sets :multiline=>false (#16817)
 let io = IOBuffer()
     x = [1, 2]
     showcompact(io, x)
     @test String(take!(io)) == "[1, 2]"
-    showcompact(IOContext(io, :compact=>true), x)
+    showcompact(IOContext(io, :compact => true), x)
     @test String(take!(io)) == "[1, 2]"
 end
 

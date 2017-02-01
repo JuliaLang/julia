@@ -682,7 +682,8 @@ function show(io::IO, ::MIME"text/plain", x::AbstractSparseVector)
     show(io, x)
 end
 
-function show(io::IO, x::AbstractSparseVector)
+show(io::IO, x::AbstractSparseVector) = show(convert(IOContext, io), x)
+function show(io::IOContext, x::AbstractSparseVector)
     # TODO: make this a one-line form
     n = length(x)
     nzind = nonzeroinds(x)
@@ -693,7 +694,6 @@ function show(io::IO, x::AbstractSparseVector)
     half_screen_rows = limit ? div(displaysize(io)[1] - 8, 2) : typemax(Int)
     pad = ndigits(n)
     sep = "\n\t"
-    io = IOContext(io)
     if !haskey(io, :compact)
         io = IOContext(io, :compact => true)
     end

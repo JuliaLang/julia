@@ -39,7 +39,7 @@ function show{K,V}(io::IO, ::MIME"text/plain", t::Associative{K,V})
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit::Bool = get(io, :limit, false)
     if !haskey(io, :compact)
-        recur_io = IOContext(recur_io, compact=true)
+        recur_io = IOContext(recur_io, :compact => true)
     end
 
     print(io, summary(t))
