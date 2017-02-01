@@ -2598,11 +2598,9 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
                         }
                     }
                     else {
-                        // the current method doesn't match if there is an intersection with an
-                        // ambiguous method that covers our intersection with this one.
-                        jl_value_t *ambi = jl_type_intersection_env((jl_value_t*)ml->sig,
-                                                                    (jl_value_t*)mambig->sig, &env);
-                        if (jl_subtype(closure->match.ti, ambi)) {
+                        // the current method definitely never matches if the intersection with this method
+                        // is also fully covered by an ambiguous method's signature
+                        if (jl_subtype(closure->match.ti, mambig->sig)) {
                             return_this_match = 0;
                             break;
                         }
