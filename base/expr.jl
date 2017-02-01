@@ -109,12 +109,16 @@ evaluates expressions in that module.
 Core.eval
 
 """
-    @eval
+    @eval [m,] ex
 
-Evaluate an expression and return the value.
+Evaluate an expression with values interpolated into it using `eval`.
+If two arguments are provided, the first is the module to evaluate in.
 """
 macro eval(x)
     :($(esc(:eval))($(Expr(:quote,x))))
+end
+macro eval(m, x)
+    :($(esc(:eval))($(esc(m)),$(Expr(:quote,x))))
 end
 
 """
