@@ -169,13 +169,16 @@ function colon{T<:AbstractFloat}(start::T, step::T, stop::T)
                 a *= div(e,b)
                 c *= div(e,d)
                 eT = convert(T,e)
-                if (a+n*c)/eT == stop
+                if a/eT == start && (a+n*c)/eT == stop
                     return FloatRange{T}(a, c, n+1, eT)
                 end
             end
         end
     end
-    FloatRange{T}(start, step, floor(r)+1, one(step))
+    len = max(0, floor(r) + 1)
+    stop′ = start + len*step
+    len += (start < stop′ <= stop) + (start > stop′ >= stop)
+    FloatRange{T}(start, step, len, one(step))
 end
 
 colon{T<:AbstractFloat}(a::T, b::T) = colon(a, one(a), b)
