@@ -173,7 +173,7 @@ mutable struct InferenceState
         s_edges = Any[ () for i = 1:n ]
 
         atypes = unwrap_unionall(linfo.specTypes)
-        nargs = toplevel ? 0 : linfo.def.nargs
+        nargs::Int = toplevel ? 0 : linfo.def.nargs
         la = nargs
         if la > 0
             if linfo.def.isva
@@ -1896,7 +1896,7 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
     else
         t = Any
     end
-    if isa(t,TypeVar)
+    if isa(t, TypeVar)
         # no need to use a typevar as the type of an expression
         t = t.ub
     end
@@ -1904,7 +1904,11 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
         # replace singleton types with their equivalent Const object
         t = Const(t.instance)
     end
-    e.typ = t
+    if isa(t, Conditional)
+        e.typ = Bool
+    else
+        e.typ = t
+    end
     return t
 end
 
@@ -3432,7 +3436,9 @@ function invoke_NF(argexprs, etype::ANY, atypes, sv, atype_unlimited::ANY,
                         local match = splitunion(atypes, i - 1)
                         if match !== false
                             after = genlabel(sv)
-                            unshift!(match, Expr(:gotoifnot, Expr(:call, GlobalRef(Core, :isa), aei, ty), after.label))
+                            isa_ty = Expr(:call, GlobalRef(Core, :isa), aei, ty)
+                            isa_ty.typ = Bool
+                            unshift!(match, Expr(:gotoifnot, isa_ty, after.label))
                             append!(stmts, match)
                             push!(stmts, after)
                         else
@@ -4236,6 +4242,7 @@ function inlining_pass(e::Expr, sv::InferenceState)
                         res = inlining_pass(e, sv)
                     else
                         e.args = Any[GlobalRef(Main.Base,:*), Expr(:call, GlobalRef(Main.Base,:*), a1, a1), a1]
+                        e.args[2].typ = e.typ
                         res = inlining_pass(e, sv)
                     end
                     if isa(res, Tuple)
