@@ -832,3 +832,9 @@ for r in (linspace(0.10000000000000045, 1), 0.10000000000000045:(1-0.10000000000
     @test r[1] === 0.10000000000000045
     @test r[end] === 1.0
 end
+
+# issue #20381
+let r = linspace(-big(1.0),big(1.0),4)
+    @test isa(@inferred(r[2]), BigFloat)
+    @test r[2] ≈ big(-1.0)/3
+end
