@@ -245,7 +245,7 @@ julia> baz()
 22
 
 julia> x, y
-(1,2)
+(1, 2)
 ```
 
 The distinction between inheriting global and local variables for assignment can lead to some
@@ -269,7 +269,7 @@ julia> quz()
 14
 
 julia> x, y
-(1,2)
+(1, 2)
 ```
 
 Note that above subtlety does not pertain to type and macro definitions as they can only appear

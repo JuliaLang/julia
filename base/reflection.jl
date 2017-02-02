@@ -43,7 +43,7 @@ Get the fully-qualified name of a module as a tuple of symbols. For example,
 
 ```jldoctest
 julia> fullname(Base.Pkg)
-(:Base,:Pkg)
+(:Base, :Pkg)
 
 julia> fullname(Main)
 ()
@@ -286,18 +286,18 @@ julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i
 
 julia> structinfo(Base.Filesystem.StatStruct)
 12-element Array{Tuple{UInt64,Symbol,DataType},1}:
- (0x0000000000000000,:device,UInt64)
- (0x0000000000000008,:inode,UInt64)
- (0x0000000000000010,:mode,UInt64)
- (0x0000000000000018,:nlink,Int64)
- (0x0000000000000020,:uid,UInt64)
- (0x0000000000000028,:gid,UInt64)
- (0x0000000000000030,:rdev,UInt64)
- (0x0000000000000038,:size,Int64)
- (0x0000000000000040,:blksize,Int64)
- (0x0000000000000048,:blocks,Int64)
- (0x0000000000000050,:mtime,Float64)
- (0x0000000000000058,:ctime,Float64)
+ (0x0000000000000000, :device, UInt64)
+ (0x0000000000000008, :inode, UInt64)
+ (0x0000000000000010, :mode, UInt64)
+ (0x0000000000000018, :nlink, Int64)
+ (0x0000000000000020, :uid, UInt64)
+ (0x0000000000000028, :gid, UInt64)
+ (0x0000000000000030, :rdev, UInt64)
+ (0x0000000000000038, :size, Int64)
+ (0x0000000000000040, :blksize, Int64)
+ (0x0000000000000048, :blocks, Int64)
+ (0x0000000000000050, :mtime, Float64)
+ (0x0000000000000058, :ctime, Float64)
 ```
 """
 fieldoffset(x::DataType, idx::Integer) = (@_pure_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))

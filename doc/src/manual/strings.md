@@ -389,7 +389,7 @@ julia> v = [1,2,3]
  3
 
 julia> "v: $v"
-"v: [1,2,3]"
+"v: [1, 2, 3]"
 ```
 
 [`string()`](@ref) is the identity for `AbstractString` and `Char` values, so these are interpolated
@@ -652,7 +652,7 @@ julia> m.match
 "acd"
 
 julia> m.captures
-3-element Array{Union{SubString{String},Void},1}:
+3-element Array{Union{SubString{String}, Void},1}:
  "a"
  "c"
  "d"
@@ -673,7 +673,7 @@ julia> m.match
 "ad"
 
 julia> m.captures
-3-element Array{Union{SubString{String},Void},1}:
+3-element Array{Union{SubString{String}, Void},1}:
  "a"
  nothing
  "d"

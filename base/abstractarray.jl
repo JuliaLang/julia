@@ -16,7 +16,7 @@ julia> size(A, 2)
 3
 
 julia> size(A,3,2)
-(4,3)
+(4, 3)
 ```
 """
 size{T,N}(t::AbstractArray{T,N}, d) = d <= N ? size(t)[d] : 1
@@ -48,7 +48,7 @@ Returns the tuple of valid indices for array `A`.
 julia> A = ones(5,6,7);
 
 julia> indices(A)
-(Base.OneTo(5),Base.OneTo(6),Base.OneTo(7))
+(Base.OneTo(5), Base.OneTo(6), Base.OneTo(7))
 ```
 """
 function indices(A)
@@ -84,7 +84,7 @@ julia> A = ones(5,6,7);
 julia> b = linearindices(A);
 
 julia> extrema(b)
-(1,210)
+(1, 210)
 ```
 """
 linearindices(A)                 = (@_inline_meta; OneTo(_length(A)))
@@ -199,7 +199,7 @@ Returns a tuple of the memory strides in each dimension.
 julia> A = ones(3,4,5);
 
 julia> strides(A)
-(1,3,12)
+(1, 3, 12)
 ```
 """
 strides(A::AbstractArray) = _strides((1,), A)
@@ -716,17 +716,17 @@ julia> for iter in eachindex(A)
            @show iter.I[1], iter.I[2]
            @show A[iter]
        end
-(iter.I[1],iter.I[2]) = (1,1)
+(iter.I[1], iter.I[2]) = (1, 1)
 A[iter] = 1
-(iter.I[1],iter.I[2]) = (2,1)
+(iter.I[1], iter.I[2]) = (2, 1)
 A[iter] = -5
-(iter.I[1],iter.I[2]) = (1,2)
+(iter.I[1], iter.I[2]) = (1, 2)
 A[iter] = 0
-(iter.I[1],iter.I[2]) = (2,2)
+(iter.I[1], iter.I[2]) = (2, 2)
 A[iter] = 0
-(iter.I[1],iter.I[2]) = (1,3)
+(iter.I[1], iter.I[2]) = (1, 3)
 A[iter] = 2
-(iter.I[1],iter.I[2]) = (2,3)
+(iter.I[1], iter.I[2]) = (2, 3)
 A[iter] = 0
 ```
 
@@ -1142,10 +1142,7 @@ julia> vcat(a,b)
  11  12  13  14  15
 
 julia> c = ([1 2 3], [4 5 6])
-(
-[1 2 3],
-
-[4 5 6])
+([1 2 3], [4 5 6])
 
 julia> vcat(c...)
 2×3 Array{Int64,2}:
@@ -1185,7 +1182,7 @@ julia> hcat(a,b)
  5  14  15
 
 julia> c = ([1; 2; 3], [4; 5; 6])
-([1,2,3],[4,5,6])
+([1, 2, 3], [4, 5, 6])
 
 julia> hcat(c...)
 3×2 Array{Int64,2}:
@@ -1237,7 +1234,7 @@ row.
 
 ```jldoctest
 julia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6
-(1,2,3,4,5,6)
+(1, 2, 3, 4, 5, 6)
 
 julia> [a b c; d e f]
 2×3 Array{Int64,2}:
@@ -1444,10 +1441,10 @@ Returns a tuple of subscripts into array `a` corresponding to the linear index `
 julia> A = ones(5,6,7);
 
 julia> ind2sub(A,35)
-(5,1,2)
+(5, 1, 2)
 
 julia> ind2sub(A,70)
-(5,2,3)
+(5, 2, 3)
 ```
 """
 function ind2sub(A::AbstractArray, ind)
@@ -1517,13 +1514,13 @@ provides the indices of the maximum element.
 
 ```jldoctest
 julia> ind2sub((3,4),2)
-(2,1)
+(2, 1)
 
 julia> ind2sub((3,4),3)
-(3,1)
+(3, 1)
 
 julia> ind2sub((3,4),4)
-(1,2)
+(1, 2)
 ```
 """
 ind2sub(dims::DimsInteger, ind::Integer) = (@_inline_meta; _ind2sub(dims, ind-1))

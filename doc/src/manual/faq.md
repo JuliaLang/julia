@@ -677,7 +677,7 @@ You can lock your writes with a `ReentrantLock` like this:
 
 ```jldoctest
 julia> l = ReentrantLock()
-ReentrantLock(Nullable{Task}(),Condition(Any[]),0)
+ReentrantLock(Nullable{Task}(), Condition(Any[]), 0)
 
 julia> @sync for i in 1:3
            @async begin

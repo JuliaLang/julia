@@ -475,10 +475,10 @@ Compute both the minimum and maximum element in a single pass, and return them a
 
 ```jldoctest
 julia> extrema(2:10)
-(2,10)
+(2, 10)
 
 julia> extrema([9,pi,4.5])
-(3.141592653589793,9.0)
+(3.141592653589793, 9.0)
 ```
 """
 function extrema(itr)
