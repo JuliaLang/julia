@@ -502,7 +502,7 @@ The keyword arguments are:
   * `checkout_opts::CheckoutOptions=CheckoutOptions()`: `checkout_opts` specifies
     options for the checkout step. For more information, see [`CheckoutOptions()`](@ref).
 
-Equivalent to `git merge [--ff-only] [<committish> | <branch> | FETCH_HEAD]`.
+Equivalent to `git merge [--ff-only] [<committish> | <branch>]`.
 """
 function merge!(repo::GitRepo;
                 committish::AbstractString = "",
