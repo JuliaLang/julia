@@ -198,8 +198,6 @@ JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_tupletype_t 
 // ----- MethodInstance specialization instantiation ----- //
 
 JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void);
-static jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name,
-    jl_module_t *module, jl_datatype_t *st, int iskw);
 void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_t fptr)
 {
     jl_sym_t *sname = jl_symbol(name);
@@ -2377,7 +2375,7 @@ JL_DLLEXPORT jl_value_t *jl_get_invoke_lambda(jl_methtable_t *mt,
 }
 
 // Return value is rooted globally
-static jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, int iskw)
+jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, int iskw)
 {
     // type name is function name prefixed with #
     size_t l = strlen(jl_symbol_name(name));
