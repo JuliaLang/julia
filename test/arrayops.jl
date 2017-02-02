@@ -1256,6 +1256,10 @@ let a = Array{Float64}(10)
     @test size(aa) == size(bb)
     bbb = Array{Float64, 9}(9,8,7,6,5,4,3,2,1)
     @test size(aaa) == size(bbb)
+
+    #14201 Test Array{T, N}() constructor
+    @test @inferred size(Array{Float64,5}()) == (0,0,0,0,0)
+    @test @inferred size(Array{Float64,8}()) == (0,0,0,0,0,0,0,0)
 end
 
 # Cartesian
