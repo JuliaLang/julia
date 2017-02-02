@@ -14,7 +14,7 @@ Base.isless(a::Binding, b::Binding) = isless(a.sym, b.sym)
 
 # The node type holds the type of the current node and a dict of subtypes
 immutable TTNode
-    typ::Type
+    typ # ::Type
     subtypes::Dict{Binding, TTNode}
 
     TTNode(t::ANY) = new(t, Dict{Binding, TTNode}())
@@ -38,21 +38,29 @@ function store_type(sname::Binding, t::Union)
     # store unions under Union type
     subtypes = store_type(Binding(suptype.name), suptype)
     add_ttnode(subtypes, sname, tnode)
+    store_union(sname, tnode, t)
 
     # unions are also in a sense related to the types of their components
-    for suptype = t.types
-        if isa(suptype, DataType) # ignore TypeConstructors
-            subtypes = store_type(Binding(suptype.name), suptype)
-            add_ttnode(subtypes, sname, tnode)
-        end
-    end
 
     return tnode.subtypes
 end
+function store_union(sname::Binding, tnode::TTNode, t::ANY)
+    t = Base.unwrap_unionall(t)
+    if isa(t, Union)
+        store_union(sname, tnode, t.a)
+        store_union(sname, tnode, t.b)
+    elseif isa(t, DataType)
+        binding = Binding(t.name)
+        subtypes = store_type(binding, t)
+        add_ttnode(subtypes, sname, tnode)
+    end
+    nothing
+end
 
-function store_type(sname::Binding, t::TypeConstructor)
-    suptype = t.body
-    subtypes = store_type(isa(suptype, DataType) ? Binding(suptype.name) : Binding(Main, string(suptype::Union)), suptype)
+function store_type(sname::Binding, t::UnionAll)
+    suptype = Base.unwrap_unionall(t)
+    binding = isa(suptype, DataType) ? Binding(suptype.name) : Binding(Main, string(suptype::Union))
+    subtypes = store_type(binding, suptype)
     tnode = add_ttnode(subtypes, sname, t)
     return tnode.subtypes
 end
@@ -69,7 +77,7 @@ function store_all_from(m::Module)
     for s in names(m, true)
         if isdefined(m, s) && !Base.isdeprecated(m, s)
             t = getfield(m, s)
-            if isa(t, Type)
+            if isa(t, Type) && t !== Union{}
                 store_type(Binding(m, s), t)
             elseif isa(t, Module) && module_name(t) === s && module_parent(t) === m && t !== m
                 store_all_from(t)
@@ -93,17 +101,34 @@ type_props(typ::DataType) = string("<<",
 function print_tree(subtypes::Dict{Binding, TTNode}, pfx::String="")
     for b in sort!(collect(keys(subtypes)))
         v = subtypes[b]
-        if b.mod === Main
-            n = string(b.sym)
-        elseif !isa(v.typ, DataType) || v.typ.name.module != b.mod || v.typ.name.name != b.sym
-            n = string(b.mod, '.', b.sym, (isa(v.typ, TypeConstructor) ? ("{", join(v.typ.parameters, ","), "}") : ())...)
-        else
-            n = string(v.typ)
-        end
         ishidden = unsafe_load(Base.unsafe_convert(Ptr{UInt8}, b.sym)) == UInt8('#')
         if ishidden && supertype(v.typ) === Function
             continue
-        elseif n == string(v.typ)
+        end
+        if b.mod === Main
+            n = string(b.sym)
+        elseif !isa(v.typ, DataType) || v.typ.name.module != b.mod || v.typ.name.name != b.sym
+            n_io = IOBuffer()
+            print(n_io, b.mod, '.', b.sym)
+            ua = v.typ
+            if isa(ua, UnionAll)
+                print(n_io, "{")
+                while true
+                    print(n_io, ua.var)
+                    ua = ua.body
+                    if isa(ua, UnionAll)
+                        print(n_io, ", ")
+                    else
+                        break
+                    end
+                end
+                print(n_io, "}")
+            end
+            n = String(take!(n_io))
+        else
+            n = string(v.typ)
+        end
+        if n == string(v.typ)
             println(pfx, "+- ", n, " ", type_props(v.typ))
         else
             println(pfx, "+- ", n, " = ", v.typ, " ", type_props(v.typ))
