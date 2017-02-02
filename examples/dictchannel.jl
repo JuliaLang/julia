@@ -32,26 +32,3 @@ function wait(D::DictChannel, k)
         wait(D.cond_take)
     end
 end
-
-# Usage:
-
-# RemoteRef to a DictChannel on worker pid
-# dc_ref=RemoteRef(()->DictChannel(), pid)
-
-# Test if there is any data
-# isready(dc_ref)
-
-# add
-# put!(dc_ref, 1, 2)
-
-# Test if key 1 exists
-# isready(dc_ref, 1)
-
-# fetch key 1
-# fetch(dc_ref, 1)
-
-# fetch and remove key 1
-# take!(dc_ref, 1)
-
-# wait for key 3 to be added
-# wait(dc_ref, 3)
