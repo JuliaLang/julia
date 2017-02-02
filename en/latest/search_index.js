@@ -6589,7 +6589,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.keys",
     "category": "Function",
-    "text": "keys(a::Associative)\n\nReturn an iterator over all keys in a collection. collect(keys(d)) returns an array of keys. Since the keys are stored internally in a hash table, the order in which they are returned may vary.\n\njulia> a = Dict('a'=>2, 'b'=>3)\nDict{Char,Int64} with 2 entries:\n  'b' => 3\n  'a' => 2\n\njulia> collect(keys(a))\n2-element Array{Char,1}:\n 'b'\n 'a'\n\n\n\n"
+    "text": "keys(a::Associative)\n\nReturn an iterator over all keys in a collection. collect(keys(a)) returns an array of keys. Since the keys are stored internally in a hash table, the order in which they are returned may vary. But keys(a) and values(a) both iterate a and return the elements in the same order.\n\njulia> a = Dict('a'=>2, 'b'=>3)\nDict{Char,Int64} with 2 entries:\n  'b' => 3\n  'a' => 2\n\njulia> collect(keys(a))\n2-element Array{Char,1}:\n 'b'\n 'a'\n\n\n\n"
 },
 
 {
@@ -6597,7 +6597,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.values",
     "category": "Function",
-    "text": "values(a::Associative)\n\nReturn an iterator over all values in a collection. collect(values(d)) returns an array of values.\n\njulia> a = Dict('a'=>2, 'b'=>3)\nDict{Char,Int64} with 2 entries:\n  'b' => 3\n  'a' => 2\n\njulia> collect(values(a))\n2-element Array{Int64,1}:\n 3\n 2\n\n\n\n"
+    "text": "values(a::Associative)\n\nReturn an iterator over all values in a collection. collect(values(a)) returns an array of values. Since the values are stored internally in a hash table, the order in which they are returned may vary. But keys(a) and values(a) both iterate a and return the elements in the same order.\n\njulia> a = Dict('a'=>2, 'b'=>3)\nDict{Char,Int64} with 2 entries:\n  'b' => 3\n  'a' => 2\n\njulia> collect(values(a))\n2-element Array{Int64,1}:\n 3\n 2\n\n\n\n"
 },
 
 {
@@ -6613,7 +6613,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Function",
-    "text": "Merge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\nmerge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\n"
+    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\nMerge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\n"
 },
 
 {
