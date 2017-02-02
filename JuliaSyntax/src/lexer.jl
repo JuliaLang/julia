@@ -577,10 +577,16 @@ function lex_digit(l::Lexer)
         if peekchar(l) == '.' # 43.. -> [43, ..]
             backup!(l)
             return emit(l, Tokens.INTEGER)
+        elseif !(isdigit(peekchar(l)) || iswhitespace(peekchar(l)) || is_identifier_start_char(peekchar(l)))
+            backup!(l)
+            return emit(l, Tokens.INTEGER)
         end
         accept_batch(l, isdigit)
         if accept(l, '.')
             if peekchar(l) == '.' # 1.23..3.21 is valid
+                backup!(l)
+                return emit(l, Tokens.FLOAT)
+            elseif !(isdigit(peekchar(l)) || iswhitespace(peekchar(l)) || is_identifier_start_char(peekchar(l)))
                 backup!(l)
                 return emit(l, Tokens.FLOAT)
             else # 3213.313.3123 is an error

@@ -180,3 +180,15 @@ end
     @test collect(tokenize("somtext tr"))[3].kind == T.IDENTIFIER
     @test collect(tokenize("somtext falsething"))[3].kind == T.IDENTIFIER
 end
+
+
+@testset "tokenizing juxtaposed numbers and dotted operators/identifiers" begin
+    @test (t->t.val=="1234" && t.kind == Tokens.INTEGER)(collect(tokenize("1234.+1"))[1])
+    @test (t->t.val=="1234" && t.kind == Tokens.INTEGER)(collect(tokenize("1234 .+1"))[1])
+    @test (t->t.val=="1234.0" && t.kind == Tokens.FLOAT)(collect(tokenize("1234.0.+1"))[1])
+    @test (t->t.val=="1234.0" && t.kind == Tokens.FLOAT)(collect(tokenize("1234.0 .+1"))[1])
+    @test (t->t.val=="1234." && t.kind == Tokens.FLOAT)(collect(tokenize("1234.f(a)"))[1])
+    @test (t->t.val=="1234" && t.kind == Tokens.INTEGER)(collect(tokenize("1234 .f(a)"))[1])
+    @test (t->t.val=="1234.0." && t.kind == Tokens.ERROR)(collect(tokenize("1234.0.f(a)"))[1])
+    @test (t->t.val=="1234.0" && t.kind == Tokens.FLOAT)(collect(tokenize("1234.0 .f(a)"))[1])
+end
