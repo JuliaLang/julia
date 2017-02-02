@@ -646,16 +646,10 @@ julia> A = [1 2; 3 4]
  3  4
 
 julia> findmin(A, 1)
-(
-[1 2],
-
-[1 3])
+([1 2], [1 3])
 
 julia> findmin(A, 2)
-(
-[1; 3],
-
-[1; 2])
+([1; 3], [1; 2])
 ```
 """
 function findmin{T}(A::AbstractArray{T}, region)
@@ -692,16 +686,10 @@ julia> A = [1 2; 3 4]
  3  4
 
 julia> findmax(A,1)
-(
-[3 4],
-
-[2 4])
+([3 4], [2 4])
 
 julia> findmax(A,2)
-(
-[2; 4],
-
-[3; 4])
+([2; 4], [3; 4])
 ```
 """
 function findmax{T}(A::AbstractArray{T}, region)
