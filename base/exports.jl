@@ -531,7 +531,6 @@ export
     minmax,
     ndims,
     nonzeros,
-    countnz,
     ones,
     parent,
     parentindexes,

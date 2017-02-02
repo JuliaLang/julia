@@ -1224,6 +1224,8 @@ function (::Type{Matrix})()
     return Matrix(0, 0)
 end
 
+@deprecate countnz(itr) count(itr)
+
 for name in ("alnum", "alpha", "cntrl", "digit", "number", "graph",
              "lower", "print", "punct", "space", "upper", "xdigit")
     f = Symbol("is",name)

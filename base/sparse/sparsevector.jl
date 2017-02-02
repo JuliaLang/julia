@@ -30,7 +30,7 @@ SparseVector{Tv,Ti}(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) =
 length(x::SparseVector) = x.n
 size(x::SparseVector) = (x.n,)
 nnz(x::SparseVector) = length(x.nzval)
-countnz(x::SparseVector) = countnz(x.nzval)
+count(x::SparseVector) = count(x.nzval)
 nonzeros(x::SparseVector) = x.nzval
 nonzeroinds(x::SparseVector) = x.nzind
 

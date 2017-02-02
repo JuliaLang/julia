@@ -258,15 +258,15 @@ immutable SomeFunctor end
 @test contains("quick fox", "fox") == true
 @test contains("quick fox", "lazy dog") == false
 
-# count & countnz
+# count & count
 
 @test count(x->x>0, Int[]) == 0
 @test count(x->x>0, -3:5) == 5
 
-@test countnz(Int[]) == 0
-@test countnz(Int[0]) == 0
-@test countnz(Int[1]) == 1
-@test countnz([1, 0, 2, 0, 3, 0, 4]) == 4
+@test count(Int[]) == 0
+@test count(Int[0]) == 0
+@test count(Int[1]) == 1
+@test count([1, 0, 2, 0, 3, 0, 4]) == 4
 
 
 ## cumsum, cummin, cummax

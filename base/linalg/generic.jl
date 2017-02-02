@@ -440,7 +440,7 @@ function vecnorm(itr, p::Real=2)
         return vecnormInf(itr)
     elseif p == 0
         return convert(typeof(float(real(zero(eltype(itr))))),
-               countnz(itr))
+               count(itr))
     elseif p == -Inf
         return vecnormMinusInf(itr)
     else
