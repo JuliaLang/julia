@@ -714,6 +714,17 @@ julia> Pointy{Real} <: Pointy{Float64}
 false
 ```
 
+The notation `Pointy{<:Real}` can be used to express the Julia analogue of a
+*covariant* type, while `Pointy{>:Int}` the analogue of a *contravariant* type,
+but technically these represent *sets* of types (see [UnionAll Types](@ref)).
+```jldoctest pointytype
+julia> Pointy{Float64} <: Pointy{<:Real}
+true
+
+julia> Pointy{Real} <: Pointy{>:Int}
+true
+```
+
 Much as plain old abstract types serve to create a useful hierarchy of types over concrete types,
 parametric abstract types serve the same purpose with respect to parametric composite types. We
 could, for example, have declared `Point{T}` to be a subtype of `Pointy{T}` as follows:
@@ -743,6 +754,9 @@ This relationship is also invariant:
 ```jldoctest pointytype
 julia> Point{Float64} <: Pointy{Real}
 false
+
+julia> Point{Float64} <: Pointy{<:Real}
+true
 ```
 
 What purpose do parametric abstract types like `Pointy` serve? Consider if we create a point-like
@@ -997,7 +1011,8 @@ The syntax `Array{<:Integer}` is a convenient shorthand for `Array{T} where T<:I
 Type variables can have both lower and upper bounds.
 `Array{T} where Int<:T<:Number` refers to all arrays of `Number`s that are able to contain `Int`s
 (since `T` must be at least as big as `Int`).
-The syntax `where T>:Int` also works to specify only the lower bound of a type variable.
+The syntax `where T>:Int` also works to specify only the lower bound of a type variable,
+and `Array{>:Int}` is equivalent to `Array{T} where T>:Int`.
 
 Since `where` expressions nest, type variable bounds can refer to outer type variables.
 For example `Tuple{T,Array{S}} where S<:AbstractArray{T} where T<:Real` refers to 2-tuples whose first
