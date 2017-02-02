@@ -306,6 +306,14 @@ promote_rule{T,n,S}(::Type{Array{T,n}}, ::Type{Array{S,n}}) = Array{promote_type
 
 Return an `Array` with the given element type of all items in a collection or iterable.
 The result has the same shape and number of dimensions as `collection`.
+
+```jldoctest
+julia> collect(Float64, 1:2:5)
+3-element Array{Float64,1}:
+ 1.0
+ 3.0
+ 5.0
+```
 """
 collect{T}(::Type{T}, itr) = _collect(T, itr, iteratorsize(itr))
 

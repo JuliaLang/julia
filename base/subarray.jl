@@ -84,6 +84,28 @@ Like [`getindex`](@ref), but returns a view into the parent array `A` with the
 given indices instead of making a copy.  Calling [`getindex`](@ref) or
 [`setindex!`](@ref) on the returned `SubArray` computes the
 indices to the parent array on the fly without checking bounds.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> b = view(A, :, 1)
+2-element SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}:
+ 1
+ 3
+
+julia> fill!(b, 0.0)
+2-element SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}:
+ 0
+ 0
+
+julia> A # Note A has changed even though we modified b
+2×2 Array{Int64,2}:
+ 0  2
+ 0  4
+```
 """
 function view(A::AbstractArray, I...)
     @_inline_meta
@@ -397,6 +419,28 @@ Creates a `SubArray` from an indexing expression. This can only be applied direc
 reference expression (e.g. `@view A[1,2:end]`), and should *not* be used as the target of
 an assignment (e.g. `@view(A[1,2:end]) = ...`).  See also [`@views`](@ref)
 to switch an entire block of code to use views for slicing.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> b = @view A[:, 1]
+2-element SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}:
+ 1
+ 3
+
+julia> fill!(b, 0.0)
+2-element SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}:
+ 0
+ 0
+
+julia> A
+2×2 Array{Int64,2}:
+ 0  2
+ 0  4
+```
 """
 macro view(ex)
     if Meta.isexpr(ex, :ref)

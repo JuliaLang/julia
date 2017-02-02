@@ -37,6 +37,11 @@ widen{T}(::Type{Complex{T}}) = Complex{widen(T)}
     real(z)
 
 Return the real part of the complex number `z`.
+
+```jldoctest
+julia> real(1 + 3im)
+1
+```
 """
 real(z::Complex) = z.re
 
@@ -44,6 +49,11 @@ real(z::Complex) = z.re
     imag(z)
 
 Return the imaginary part of the complex number `z`.
+
+```jldoctest
+julia> imag(1 + 3im)
+3
+```
 """
 imag(z::Complex) = z.im
 real(x::Real) = x
@@ -53,6 +63,11 @@ imag(x::Real) = zero(x)
     reim(z)
 
 Return both the real and imaginary parts of the complex number `z`.
+
+```jldoctest
+julia> reim(1 + 3im)
+(1, 3)
+```
 """
 reim(z) = (real(z), imag(z))
 
@@ -179,6 +194,10 @@ end
     conj(z)
 
 Compute the complex conjugate of a complex number `z`.
+
+```julia
+julia> conj(1 + 3im)
+1 - 3im
 """
 conj(z::Complex) = Complex(real(z),-imag(z))
 abs(z::Complex)  = hypot(real(z), imag(z))

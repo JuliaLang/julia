@@ -47,10 +47,15 @@ specified, the atomic object is initialized with zero.
 
 Atomic objects can be accessed using the `[]` notation:
 
-```Julia
-x::Atomic{Int}
-x[] = 1
-val = x[]
+```jldoctest
+julia> x = Threads.Atomic{Int}(3)
+Base.Threads.Atomic{Int64}(3)
+
+julia> x[] = 1
+1
+
+julia> x[]
+1
 ```
 
 Atomic operations use an `atomic_` prefix, such as `atomic_add!`,
@@ -80,6 +85,21 @@ This function can be used to implement transactional semantics. Before
 the transaction, one records the value in `x`. After the transaction,
 the new value is stored only if `x` has not been modified in the mean
 time.
+
+```jldoctest
+julia> x = Threads.Atomic{Int}(3)
+Base.Threads.Atomic{Int64}(3)
+
+julia> Threads.atomic_cas!(x, 4, 2);
+
+julia> x
+Base.Threads.Atomic{Int64}(3)
+
+julia> Threads.atomic_cas!(x, 3, 2);
+
+julia> x
+Base.Threads.Atomic{Int64}(2)
+```
 """
 function atomic_cas! end
 
@@ -88,10 +108,21 @@ function atomic_cas! end
 
 Atomically exchange the value in `x`
 
-Atomically exchanges the value in `x` with `newval`. Returns the old
+Atomically exchanges the value in `x` with `newval`. Returns the old (!)
 value.
 
 For further details, see LLVM's `atomicrmw xchg` instruction.
+
+```jldoctest
+julia> x = Threads.Atomic{Int}(3)
+Base.Threads.Atomic{Int64}(3)
+
+julia> Threads.atomic_xchg!(x, 2)
+3
+
+julia> x[]
+2
+```
 """
 function atomic_xchg! end
 
@@ -103,6 +134,17 @@ Atomically add `val` to `x`
 Performs `x[] += val` atomically. Returns the old (!) value.
 
 For further details, see LLVM's `atomicrmw add` instruction.
+
+```jldoctest
+julia> x = Threads.Atomic{Int}(3)
+Base.Threads.Atomic{Int64}(3)
+
+julia> Threads.atomic_add!(x, 2)
+3
+
+julia> x[]
+5
+```
 """
 function atomic_add! end
 
@@ -114,6 +156,17 @@ Atomically subtract `val` from `x`
 Performs `x[] -= val` atomically. Returns the old (!) value.
 
 For further details, see LLVM's `atomicrmw sub` instruction.
+
+```jldoctest
+julia> x = Threads.Atomic{Int}(3)
+Base.Threads.Atomic{Int64}(3)
+
+julia> Threads.atomic_sub!(x, 2)
+3
+
+julia> x[]
+1
+```
 """
 function atomic_sub! end
 
@@ -125,6 +178,17 @@ Atomically bitwise-and `x` with `val`
 Performs `x[] &= val` atomically. Returns the old (!) value.
 
 For further details, see LLVM's `atomicrmw and` instruction.
+
+```jldoctest
+julia> x = Threads.Atomic{Int}(3)
+Base.Threads.Atomic{Int64}(3)
+
+julia> Threads.atomic_and!(x, 2)
+3
+
+julia> x[]
+2
+```
 """
 function atomic_and! end
 
@@ -136,6 +200,17 @@ Atomically bitwise-nand (not-and) `x` with `val`
 Performs `x[] = ~(x[] & val)` atomically. Returns the old (!) value.
 
 For further details, see LLVM's `atomicrmw nand` instruction.
+
+```jldoctest
+julia> x = Threads.Atomic{Int}(3)
+Base.Threads.Atomic{Int64}(3)
+
+julia> Threads.atomic_nand!(x, 2)
+3
+
+julia> x[]
+-3
+```
 """
 function atomic_nand! end
 
@@ -147,6 +222,17 @@ Atomically bitwise-or `x` with `val`
 Performs `x[] |= val` atomically. Returns the old (!) value.
 
 For further details, see LLVM's `atomicrmw or` instruction.
+
+```jldoctest
+julia> x = Threads.Atomic{Int}(5)
+Base.Threads.Atomic{Int64}(5)
+
+julia> Threads.atomic_or!(x, 7)
+5
+
+julia> x[]
+7
+```
 """
 function atomic_or! end
 
@@ -158,6 +244,17 @@ Atomically bitwise-xor (exclusive-or) `x` with `val`
 Performs `x[] \$= val` atomically. Returns the old (!) value.
 
 For further details, see LLVM's `atomicrmw xor` instruction.
+
+```jldoctest
+julia> x = Threads.Atomic{Int}(5)
+Base.Threads.Atomic{Int64}(5)
+
+julia> Threads.atomic_xor!(x, 7)
+5
+
+julia> x[]
+2
+```
 """
 function atomic_xor! end
 
@@ -169,6 +266,17 @@ Atomically store the maximum of `x` and `val` in `x`
 Performs `x[] = max(x[], val)` atomically. Returns the old (!) value.
 
 For further details, see LLVM's `atomicrmw min` instruction.
+
+```jldoctest
+julia> x = Threads.Atomic{Int}(5)
+Base.Threads.Atomic{Int64}(5)
+
+julia> Threads.atomic_max!(x, 7)
+5
+
+julia> x[]
+7
+```
 """
 function atomic_max! end
 
@@ -180,6 +288,17 @@ Atomically store the minimum of `x` and `val` in `x`
 Performs `x[] = min(x[], val)` atomically. Returns the old (!) value.
 
 For further details, see LLVM's `atomicrmw max` instruction.
+
+```jldoctest
+julia> x = Threads.Atomic{Int}(7)
+Base.Threads.Atomic{Int64}(7)
+
+julia> Threads.atomic_min!(x, 5)
+7
+
+julia> x[]
+5
+```
 """
 function atomic_min! end
 
