@@ -196,13 +196,21 @@ function make_payload{P<:AbstractCredentials}(payload::Nullable{P})
 end
 
 """
-    fetch(repo::GitRepo; remote::AbstractString="origin", remoteurl::AbstractString="", refspecs=AbstractString[], payload=Nullable{AbstractCredentials}())
+    fetch(repo::GitRepo; kwargs... , payload=Nullable{AbstractCredentials}())
+
+Fetches updates from an upstream of the repository `repo`.
+
+The keyword arguments are:
+  * `remote::AbstractString="origin"`: which remote, specified by name,
+    of `repo` to fetch from. If this is empty, the URL will be used to
+    construct an anonymous remote.
+  * `remoteurl::AbstractString=""`: the URL of `remote`. If not specified,
+    will be assumed based on the given name of `remote`.
+  * `refspecs=AbstractString[]`: determines properties of the fetch.
+  * `payload=Nullable{AbstractCredentials}()`: provides credentials, if necessary,
+    for instance if `remote` is a private repository.
 
 Equivalent to `git fetch [<remoteurl>|<repo>] [<refspecs>]`.
-Fetches updates from the upstream `remote` with URL `remoteurl` of the repository `repo`.
-Uses the provided fetch `refspecs` to determine properties of the fetch.
-`payload` provides credentials if necessary, for instance if `remote` is a private
-repository.
 """
 function fetch{T<:AbstractString, P<:AbstractCredentials}(repo::GitRepo;
                                   remote::AbstractString="origin",
@@ -224,14 +232,20 @@ function fetch{T<:AbstractString, P<:AbstractCredentials}(repo::GitRepo;
 end
 
 """
-    push(repo::GitRepo; remote::AbstractString="origin", remoteurl::AbstractString="", refspecs=AbstractString[], force::Bool=false, payload=Nullable{AbstractCredentials}())
+    push(repo::GitRepo; kwargs...)
+
+Pushes updates to an upstream of `repo`.
+
+The keyword arguments are:
+  * `remote::AbstractString="origin"`: the name of the upstream remote to push to.
+  * `remoteurl::AbstractString=""`: the URL of `remote`.
+  * `refspecs=AbstractString[]`: determines properties of the push.
+  * `force::Bool=false`: determines if the push will be a force push,
+     overwriting the remote branch.
+  * `payload=Nullable{AbstractCredentials}()`: provides credentials, if necessary,
+    for instance if `remote` is a private repository.
 
 Equivalent to `git push [<remoteurl>|<repo>] [<refspecs>]`.
-Pushes updates to the `remote` upstream of `repo`, with URL `remoteurl`.
-Uses the provided push `refspecs` to determine properties of the push.
-`force` determines if the push will be a force push, overwriting the remote branch.
-`payload` provides credentials if necessary, for instance if `remote` is a private
-repository.
 """
 function push{T<:AbstractString, P<:AbstractCredentials}(repo::GitRepo;
               remote::AbstractString="origin",
@@ -383,7 +397,27 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
     checkout_tree(repo, peeled, options = opts)
 end
 
-""" git clone [-b <branch>] [--bare] <url> <dir> """
+"""
+    clone(repo_url::AbstractString, repo_path::AbstractString; kwargs...)
+
+Clone a remote repository located at `repo_url` to the local filesystem location `repo_path`.
+
+The keyword arguments are:
+  * `branch::AbstractString=""`: which branch of the remote to clone,
+    if not `master` (this will be the default if not specified).
+  * `isbare::Bool=false`: if `true`, clone the remote as a bare repository,
+    which will make `repo_path` itself the git directory instead of `repo_path/.git`.
+    This means that a working tree cannot be checked out. Plays the role of the
+    git CLI argument `--bare`.
+  * `remote_cb::Ptr{Void}=C_NULL`: a callback which will be used to create the remote
+    before it is cloned. If `C_NULL` (the default), no attempt will be made to create
+    the remote - it will be assumed to already exist.
+  * `payload::Nullable{P<:AbstractCredentials}=Nullable{AbstractCredentials}()`:
+    provides credentials if necessary, for instance if the remote is a private
+    repository.
+
+Equivalent to `git clone [-b <branch>] [--bare] <repo_url> <repo_path>`.
+"""
 function clone{P<:AbstractCredentials}(repo_url::AbstractString, repo_path::AbstractString;
                branch::AbstractString="",
                isbare::Bool = false,
@@ -448,22 +482,25 @@ function revcount(repo::GitRepo, fst::AbstractString, snd::AbstractString)
 end
 
 """
-    merge!(repo::GitRepo; committish::AbstractString="", branch::AbstractString="", fastforward::Bool=false, merge_opts::MergeOptions=MergeOptions(), checkout_opts::CheckoutOptions=CheckoutOptions()) -> Bool
+    merge!(repo::GitRepo; kwargs...) -> Bool
 
 Perform a git merge on the repository `repo`, merging commits
 with diverging history into the current branch. Returns `true`
 if the merge succeeded, `false` if not.
 
 The keyword arguments are:
-  * Merge the named commit(s) in `committish`.
-  * Merge the branch `branch` and all its commits since it diverged from the current branch.
-  * If `fastforward` is `true`, only merge if the merge is a fast-forward (the current branch
-    head is an ancestor of the commits to be merged), otherwise refuse to merge and return
-    `false`. This is equivalent to the git CLI option `--ff-only`.
-  * `merge_opts` specifies options for the merge, such as merge strategy in case of conflicts.
+  * `committish::AbstractString=""`: Merge the named commit(s) in `committish`.
+  * `branch::AbstractString=""`: Merge the branch `branch` and all its commits
+    since it diverged from the current branch.
+  * `fastforward::Bool=false`: If `fastforward` is `true`, only merge if the
+    merge is a fast-forward (the current branch head is an ancestor of the
+    commits to be merged), otherwise refuse to merge and return `false`.
+    This is equivalent to the git CLI option `--ff-only`.
+  * `merge_opts::MergeOptions=MergeOptions()`: `merge_opts` specifies options
+    for the merge, such as merge strategy in case of conflicts.
     For more information, see [`MergeOptions()`](@ref).
-  * `checkout_opts` specifies options for the checkout step. For more information, see
-    [`CheckoutOptions()`](@ref).
+  * `checkout_opts::CheckoutOptions=CheckoutOptions()`: `checkout_opts` specifies
+    options for the checkout step. For more information, see [`CheckoutOptions()`](@ref).
 
 Equivalent to `git merge [--ff-only] [<committish> | FETCH_HEAD]`, where `branch` plays the role
 of `FETCH_HEAD`.
