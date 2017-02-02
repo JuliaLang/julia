@@ -266,6 +266,7 @@ julia> A^3
 2×2 Array{Int64,2}:
  37   54
  81  118
+```
 """
 ^(x::Number, y::Number) = ^(promote(x,y)...)
 
