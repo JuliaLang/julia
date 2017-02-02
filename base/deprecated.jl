@@ -1213,6 +1213,17 @@ end)
 
 @deprecate FloatRange{T}(start::T, step, len, den) Base.floatrange(T, start, step, len, den)
 
+@noinline zero_arg_matrix_constructor(prefix::String) =
+    depwarn("$prefix() is deprecated, use $prefix(0, 0) instead.", :zero_arg_matrix_constructor)
+function (::Type{Matrix{T}}){T}()
+    zero_arg_matrix_constructor("Matrix{T}")
+    return Matrix{T}(0, 0)
+end
+function (::Type{Matrix})()
+    zero_arg_matrix_constructor("Matrix")
+    return Matrix(0, 0)
+end
+
 for name in ("alnum", "alpha", "cntrl", "digit", "number", "graph",
              "lower", "print", "punct", "space", "upper", "xdigit")
     f = Symbol("is",name)

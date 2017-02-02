@@ -322,7 +322,6 @@ typealias NTuple{N,T} Tuple{Vararg{T,N}}
 (::Type{Array{T}}){T}(m::Int, n::Int, o::Int) = Array{T,3}(m, n, o)
 
 (::Type{Array{T,1}}){T}() = Array{T,1}(0)
-(::Type{Array{T,2}}){T}() = Array{T,2}(0, 0)
 
 # primitive Symbol constructors
 function Symbol(s::String)
