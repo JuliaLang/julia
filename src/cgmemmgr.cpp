@@ -739,6 +739,7 @@ public:
                                  unsigned SectionID, StringRef SectionName,
                                  bool isReadOnly) override;
 #if JL_LLVM_VERSION >= 30800
+    using SectionMemoryManager::notifyObjectLoaded;
     void notifyObjectLoaded(RuntimeDyld &Dyld,
                             const object::ObjectFile &Obj) override;
 #endif
