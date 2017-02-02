@@ -6,11 +6,11 @@ export LAPACKException,
        PosDefException,
        RankDeficientException
 
-type LAPACKException <: Exception
+mutable struct LAPACKException <: Exception
     info::BlasInt
 end
 
-type ARPACKException <: Exception
+mutable struct ARPACKException <: Exception
     info::String
 end
 
@@ -25,14 +25,14 @@ function ARPACKException(i::Integer)
     return ARPACKException("unspecified ARPACK error: $i")
 end
 
-type SingularException <: Exception
+mutable struct SingularException <: Exception
     info::BlasInt
 end
 
-type PosDefException <: Exception
+mutable struct PosDefException <: Exception
     info::BlasInt
 end
 
-type RankDeficientException <: Exception
+mutable struct RankDeficientException <: Exception
     info::BlasInt
 end

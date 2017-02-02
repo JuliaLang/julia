@@ -28,7 +28,7 @@ and_iteratoreltype(a, b) = EltypeUnknown()
 
 # enumerate
 
-immutable Enumerate{I}
+struct Enumerate{I}
     itr::I
 end
 
@@ -71,7 +71,7 @@ iteratoreltype{I}(::Type{Enumerate{I}}) = iteratoreltype(I)
 
 # zip
 
-abstract AbstractZipIterator
+abstract type AbstractZipIterator end
 
 zip_iteratorsize(a, b) = and_iteratorsize(a,b) # as `and_iteratorsize` but inherit `Union{HasLength,IsInfinite}` of the shorter iterator
 zip_iteratorsize(::HasLength, ::IsInfinite) = HasLength()
@@ -80,7 +80,7 @@ zip_iteratorsize(a::IsInfinite, b) = zip_iteratorsize(b,a)
 zip_iteratorsize(a::IsInfinite, b::IsInfinite) = IsInfinite()
 
 
-immutable Zip1{I} <: AbstractZipIterator
+struct Zip1{I} <: AbstractZipIterator
     a::I
 end
 zip(a) = Zip1(a)
@@ -98,7 +98,7 @@ end
 iteratorsize{I}(::Type{Zip1{I}}) = iteratorsize(I)
 iteratoreltype{I}(::Type{Zip1{I}}) = iteratoreltype(I)
 
-immutable Zip2{I1, I2} <: AbstractZipIterator
+struct Zip2{I1, I2} <: AbstractZipIterator
     a::I1
     b::I2
 end
@@ -118,7 +118,7 @@ end
 iteratorsize{I1,I2}(::Type{Zip2{I1,I2}}) = zip_iteratorsize(iteratorsize(I1),iteratorsize(I2))
 iteratoreltype{I1,I2}(::Type{Zip2{I1,I2}}) = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
 
-immutable Zip{I, Z<:AbstractZipIterator} <: AbstractZipIterator
+struct Zip{I, Z<:AbstractZipIterator} <: AbstractZipIterator
     a::I
     z::Z
 end
@@ -171,7 +171,7 @@ iteratoreltype{I1,I2}(::Type{Zip{I1,I2}}) = and_iteratoreltype(iteratoreltype(I1
 
 # filter
 
-immutable Filter{F,I}
+struct Filter{F,I}
     flt::F
     itr::I
 end
@@ -212,7 +212,7 @@ iteratorsize{T<:Filter}(::Type{T}) = SizeUnknown()
 
 # Rest -- iterate starting at the given state
 
-immutable Rest{I,S}
+struct Rest{I,S}
     itr::I
     st::S
 end
@@ -237,7 +237,7 @@ iteratorsize{I,S}(::Type{Rest{I,S}}) = rest_iteratorsize(iteratorsize(I))
 
 # Count -- infinite counting
 
-immutable Count{S<:Number}
+struct Count{S<:Number}
     start::S
     step::S
 end
@@ -261,7 +261,7 @@ iteratorsize{S}(::Type{Count{S}}) = IsInfinite()
 
 # Take -- iterate through the first n elements
 
-immutable Take{I}
+struct Take{I}
     xs::I
     n::Int
 end
@@ -316,7 +316,7 @@ end
 
 # Drop -- iterator through all but the first n elements
 
-immutable Drop{I}
+struct Drop{I}
     xs::I
     n::Int
 end
@@ -374,7 +374,7 @@ done(it::Drop, state) = done(it.xs, state)
 
 # Cycle an iterator forever
 
-immutable Cycle{I}
+struct Cycle{I}
     xs::I
 end
 
@@ -408,7 +408,7 @@ done(it::Cycle, state) = state[2]
 
 # Repeated - repeat an object infinitely many times
 
-immutable Repeated{O}
+struct Repeated{O}
     x::O
 end
 repeated(x) = Repeated(x)
@@ -444,7 +444,7 @@ iteratoreltype{O}(::Type{Repeated{O}}) = HasEltype()
 
 # Product -- cartesian product of iterators
 
-abstract AbstractProdIterator
+abstract type AbstractProdIterator end
 
 length(p::AbstractProdIterator) = prod(size(p))
 _length(p::AbstractProdIterator) = prod(map(unsafe_length, indices(p)))
@@ -476,7 +476,7 @@ _prod_indices(a, b, A, B) =
     throw(ArgumentError("Cannot construct indices for objects of types $(typeof(a)) and $(typeof(b))"))
 
 # one iterator
-immutable Prod1{I} <: AbstractProdIterator
+struct Prod1{I} <: AbstractProdIterator
     a::I
 end
 product(a) = Prod1(a)
@@ -496,7 +496,7 @@ iteratoreltype{I}(::Type{Prod1{I}}) = iteratoreltype(I)
 iteratorsize{I}(::Type{Prod1{I}}) = iteratorsize(I)
 
 # two iterators
-immutable Prod2{I1, I2} <: AbstractProdIterator
+struct Prod2{I1, I2} <: AbstractProdIterator
     a::I1
     b::I2
 end
@@ -548,7 +548,7 @@ end
 @inline done(p::AbstractProdIterator, st) = st[4]
 
 # n iterators
-immutable Prod{I1, I2<:AbstractProdIterator} <: AbstractProdIterator
+struct Prod{I1, I2<:AbstractProdIterator} <: AbstractProdIterator
     a::I1
     b::I2
 end
@@ -574,7 +574,7 @@ prod_iteratorsize(a, b) = SizeUnknown()
 
 # flatten an iterator of iterators
 
-immutable Flatten{I}
+struct Flatten{I}
     it::I
 end
 
@@ -649,7 +649,7 @@ julia> collect(Iterators.partition([1,2,3,4,5], 2))
 partition{T}(c::T, n::Integer) = PartitionIterator{T}(c, Int(n))
 
 
-type PartitionIterator{T}
+mutable struct PartitionIterator{T}
     c::T
     n::Int
 end

@@ -26,7 +26,7 @@ function count_one(data::AbstractString, s::AbstractString)
     count(data, length(s))[s]
 end
 
-type KNuc
+mutable struct KNuc
     name::AbstractString
     count::Int
 end

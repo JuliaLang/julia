@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Schur decomposition
-immutable Schur{Ty,S<:AbstractMatrix} <: Factorization{Ty}
+struct Schur{Ty,S<:AbstractMatrix} <: Factorization{Ty}
     T::S
     Z::S
     values::Vector
@@ -139,7 +139,7 @@ either both included or both excluded via `select`.
 ordschur{Ty<:BlasFloat}(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) =
     ordschur!(copy(T), copy(Z), select)
 
-immutable GeneralizedSchur{Ty,M<:AbstractMatrix} <: Factorization{Ty}
+struct GeneralizedSchur{Ty,M<:AbstractMatrix} <: Factorization{Ty}
     S::M
     T::M
     alpha::Vector

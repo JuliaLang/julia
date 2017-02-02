@@ -180,7 +180,7 @@ File extension for dynamic libraries (e.g. dll, dylib, so) on the current platfo
 dlext
 
 if is_linux()
-    immutable dl_phdr_info
+    struct dl_phdr_info
         # Base address of object
         addr::Cuint
 

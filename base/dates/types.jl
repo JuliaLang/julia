@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-abstract AbstractTime
+abstract type AbstractTime end
 
 """
     Period
@@ -17,18 +17,18 @@ abstract AbstractTime
 
 `Period` types represent discrete, human representations of time.
 """
-abstract Period     <: AbstractTime
-abstract DatePeriod <: Period
-abstract TimePeriod <: Period
+abstract type Period     <: AbstractTime end
+abstract type DatePeriod <: Period end
+abstract type TimePeriod <: Period end
 
 for T in (:Year, :Month, :Week, :Day)
-    @eval immutable $T <: DatePeriod
+    @eval struct $T <: DatePeriod
         value::Int64
         $T(v::Number) = new(v)
     end
 end
 for T in (:Hour, :Minute, :Second, :Millisecond, :Microsecond, :Nanosecond)
-    @eval immutable $T <: TimePeriod
+    @eval struct $T <: TimePeriod
         value::Int64
         $T(v::Number) = new(v)
     end
@@ -57,7 +57,7 @@ Period(v)
 `Instant` types represent integer-based, machine representations of time as continuous
 timelines starting from an epoch.
 """
-abstract Instant <: AbstractTime
+abstract type Instant <: AbstractTime end
 
 """
     UTInstant{T}
@@ -66,7 +66,7 @@ The `UTInstant` represents a machine timeline based on UT time (1 day = one revo
 the earth). The `T` is a `Period` parameter that indicates the resolution or precision of
 the instant.
 """
-immutable UTInstant{P<:Period} <: Instant
+struct UTInstant{P<:Period} <: Instant
     periods::P
 end
 
@@ -76,15 +76,15 @@ UTD(x) = UTInstant(Day(x))
 
 # Calendar types provide rules for interpretating instant
 # timelines in human-readable form.
-abstract Calendar <: AbstractTime
+abstract type Calendar <: AbstractTime end
 
 # ISOCalendar implements the ISO 8601 standard (en.wikipedia.org/wiki/ISO_8601)
 # Notably based on the proleptic Gregorian calendar
 # ISOCalendar provides interpretation rules for UTInstants to civil date and time parts
-immutable ISOCalendar <: Calendar end
+struct ISOCalendar <: Calendar end
 
-abstract TimeZone
-immutable UTC <: TimeZone end
+abstract type TimeZone end
+struct UTC <: TimeZone end
 
 """
     TimeType
@@ -92,7 +92,7 @@ immutable UTC <: TimeZone end
 `TimeType` types wrap `Instant` machine instances to provide human representations of the
 machine instant. Both `DateTime` and `Date` are subtypes of `TimeType`.
 """
-abstract TimeType <: AbstractTime
+abstract type TimeType <: AbstractTime end
 
 """
     DateTime
@@ -100,7 +100,7 @@ abstract TimeType <: AbstractTime
 `DateTime` wraps a `UTInstant{Millisecond}` and interprets it according to the proleptic
 Gregorian calendar.
 """
-immutable DateTime <: TimeType
+struct DateTime <: TimeType
     instant::UTInstant{Millisecond}
     DateTime(instant::UTInstant{Millisecond}) = new(instant)
 end
@@ -110,7 +110,7 @@ end
 
 `Date` wraps a `UTInstant{Day}` and interprets it according to the proleptic Gregorian calendar.
 """
-immutable Date <: TimeType
+struct Date <: TimeType
     instant::UTInstant{Day}
     Date(instant::UTInstant{Day}) = new(instant)
 end
@@ -120,7 +120,7 @@ end
 
 `Time` wraps a `Nanosecond` and represents a specific moment in a 24-hour day.
 """
-immutable Time <: TimeType
+struct Time <: TimeType
     instant::Nanosecond
     Time(instant::Nanosecond) = new(instant)
 end

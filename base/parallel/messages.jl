@@ -1,13 +1,13 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-abstract AbstractMsg
+abstract type AbstractMsg end
 
 let REF_ID::Int = 1
     global next_ref_id
     next_ref_id() = (id = REF_ID; REF_ID += 1; id)
 end
 
-immutable RRID
+struct RRID
     whence::Int
     id::Int
 
@@ -26,7 +26,7 @@ hash(r::RRID, h::UInt) = hash(r.whence, hash(r.id, h))
 
 # Message header stored separately from body to be able to send back errors if
 # a deserialization error occurs when reading the message body.
-immutable MsgHeader
+struct MsgHeader
     response_oid::RRID
     notify_oid::RRID
     MsgHeader(respond_oid=RRID(0,0), notify_oid=RRID(0,0)) =
@@ -37,41 +37,41 @@ end
 # Used instead of Nullable to decrease wire size of header.
 null_id(id) =  id == RRID(0, 0)
 
-immutable CallMsg{Mode} <: AbstractMsg
+struct CallMsg{Mode} <: AbstractMsg
     f::Function
     args::Tuple
     kwargs::Array
 end
-immutable CallWaitMsg <: AbstractMsg
+struct CallWaitMsg <: AbstractMsg
     f::Function
     args::Tuple
     kwargs::Array
 end
-immutable RemoteDoMsg <: AbstractMsg
+struct RemoteDoMsg <: AbstractMsg
     f::Function
     args::Tuple
     kwargs::Array
 end
-immutable ResultMsg <: AbstractMsg
+struct ResultMsg <: AbstractMsg
     value::Any
 end
 
 
 # Worker initialization messages
-immutable IdentifySocketMsg <: AbstractMsg
+struct IdentifySocketMsg <: AbstractMsg
     from_pid::Int
 end
 
-immutable IdentifySocketAckMsg <: AbstractMsg
+struct IdentifySocketAckMsg <: AbstractMsg
 end
 
-immutable JoinPGRPMsg <: AbstractMsg
+struct JoinPGRPMsg <: AbstractMsg
     self_pid::Int
     other_workers::Array
     topology::Symbol
     enable_threaded_blas::Bool
 end
-immutable JoinCompleteMsg <: AbstractMsg
+struct JoinCompleteMsg <: AbstractMsg
     cpu_cores::Int
     ospid::Int
 end

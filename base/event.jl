@@ -12,7 +12,7 @@ called can be woken up. For level-triggered notifications, you must keep extra s
 track of whether a notification has happened. The [`Channel`](@ref) type does
 this, and so can be used for level-triggered events.
 """
-type Condition
+mutable struct Condition
     waitq::Vector{Any}
 
     Condition() = new([])
@@ -235,7 +235,7 @@ when notified from C by a call to `uv_async_send`.
 Waiting tasks are woken with an error when the object is closed (by [`close`](@ref).
 Use [`isopen`](@ref) to check whether it is still active.
 """
-type AsyncCondition
+mutable struct AsyncCondition
     handle::Ptr{Void}
     cond::Condition
 
@@ -308,7 +308,7 @@ Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on 
 a specified interval.  Times are in seconds.  Waiting tasks are woken with an error when the
 timer is closed (by [`close`](@ref). Use [`isopen`](@ref) to check whether a timer is still active.
 """
-type Timer
+mutable struct Timer
     handle::Ptr{Void}
     cond::Condition
     isopen::Bool

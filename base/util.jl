@@ -14,7 +14,7 @@ Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps
 time_ns() = ccall(:jl_hrtime, UInt64, ())
 
 # This type must be kept in sync with the C struct in src/gc.h
-immutable GC_Num
+struct GC_Num
     allocd      ::Int64 # GC internal
     deferred_alloc::Int64 # GC internal
     freed       ::Int64 # GC internal
@@ -34,7 +34,7 @@ end
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
 
 # This type is to represent differences in the counters, so fields may be negative
-immutable GC_Diff
+struct GC_Diff
     allocd      ::Int64 # Bytes allocated
     malloc      ::Int64 # Number of GC aware malloc()
     realloc     ::Int64 # Number of GC aware realloc()
@@ -670,7 +670,7 @@ end
 
 # Windows authentication prompt
 if is_windows()
-    immutable CREDUI_INFO
+    struct CREDUI_INFO
         cbSize::UInt32
         parent::Ptr{Void}
         pszMessageText::Ptr{UInt16}
@@ -771,13 +771,13 @@ crc32c(a::Union{Array{UInt8},String}, crc::UInt32=0x00000000) =
     @kwdef typedef
 
 This is a helper macro that automatically defines a keyword-based constructor for the type
-declared in the expression `typedef`, which must be a `type` or `immutable`
+declared in the expression `typedef`, which must be a `struct` or `mutable struct`
 expression. The default argument is supplied by declaring fields of the form `field::T =
 default`. If no default is provided then the default is provided by the `kwdef_val(T)`
 function.
 
 ```julia
-@kwdef immutable Foo
+@kwdef struct Foo
     a::Cint            # implied default Cint(0)
     b::Cint = 1        # specified default
     z::Cstring         # implied default Cstring(C_NULL)

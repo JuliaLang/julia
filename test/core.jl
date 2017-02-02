@@ -130,9 +130,9 @@ Type{Integer}  # cache this
 @test Base.typeseq(typejoin(Union{Int,AbstractString},Int8), Any)
 
 # typejoin associativity
-abstract Foo____{K}
-type Wow____{K,V} <: Foo____{K} end
-type Bar____{K,V} <: Foo____{K} end
+abstract type Foo____{K} end
+mutable struct Wow____{K,V} <: Foo____{K} end
+mutable struct Bar____{K,V} <: Foo____{K} end
 let
     a = Wow____{Int64, Int64}
     b = Wow____{Int64, Float64}
@@ -161,8 +161,8 @@ nttest1{n}(x::NTuple{n,Int}) = n
 
 # type declarations
 
-abstract Sup_{A,B}
-abstract Qux_{T} <: Sup_{Qux_{Int},T}
+abstract type Sup_{A,B} end
+abstract type Qux_{T} <: Sup_{Qux_{Int},T} end
 
 @test Qux_{Int}.super <: Sup_
 @test ===(Qux_{Int}, Qux_{Int}.super.parameters[1])
@@ -175,43 +175,43 @@ abstract Qux_{T} <: Sup_{Qux_{Int},T}
 @test ===(Qux_{Int}, Qux_.body.super.parameters[1].super.parameters[1])
 @test ===(Int, Qux_.body.super.parameters[1].super.parameters[2])
 
-type Foo_{T} x::Foo_{Int} end
+mutable struct Foo_{T} x::Foo_{Int} end
 
 @test ===(Foo_.body.types[1], Foo_{Int})
 @test ===(Foo_.body.types[1].types[1], Foo_{Int})
 
-type Circ_{T} x::Circ_{T} end
+mutable struct Circ_{T} x::Circ_{T} end
 @test ===(Circ_{Int}, Circ_{Int}.types[1])
 
-abstract Sup2a_
-abstract Sup2b_{A <: Sup2a_, B} <: Sup2a_
-@test_throws ErrorException @eval abstract Qux2_{T} <: Sup2b_{Qux2_{Int}, T} # wrapped in eval to avoid #16793
+abstract type Sup2a_ end
+abstract type Sup2b_{A <: Sup2a_, B} <: Sup2a_ end
+@test_throws ErrorException @eval abstract type Qux2_{T} <: Sup2b_{Qux2_{Int}, T} end # wrapped in eval to avoid #16793
 
 # issue #3890
-type A3890{T1}
+mutable struct A3890{T1}
     x::Matrix{Complex{T1}}
 end
 @test A3890{Float64}.types[1] === Array{Complex{Float64},2}
 # make sure the field type Matrix{Complex{T1}} isn't cached
-type B3890{T2}
+mutable struct B3890{T2}
     x::Matrix{Complex{T2}}
 end
 @test B3890{Float64}.types[1] === Array{Complex{Float64},2}
 
 # issue #786
-type Node{T}
+mutable struct Node{T}
     v::Vector{Node}
 end
 
 @test ===(Node{Int}.types[1].parameters[1], Node)
 
-type Node2{T}
+mutable struct Node2{T}
     v::Vector{Node2{T}}
 end
 
 @test ===(Node2{Int}.types[1].parameters[1], Node2{Int})
 
-type FooFoo{A,B} y::FooFoo{A} end
+mutable struct FooFoo{A,B} y::FooFoo{A} end
 
 @test FooFoo{Int} <: FooFoo{Int,AbstractString}.types[1]
 
@@ -469,7 +469,7 @@ end
 @test [-1 ~1] == [(-1) (~1)]
 
 # undefinedness
-type UndefField
+mutable struct UndefField
     field
     UndefField() = new()
 end
@@ -497,7 +497,7 @@ let
 end
 
 # isassigned, issue #11167
-type Type11167{T,N} end
+mutable struct Type11167{T,N} end
 Type11167{Int,2}
 let tname = Type11167.body.body.name
     @test !isassigned(tname.cache, 0)
@@ -549,7 +549,7 @@ let
     @test isa(mytype(some_data),Vector{Tuple{String, DataType}})
 end
 
-type MyArray{N} <: AbstractArray{Int, N}
+mutable struct MyArray{N} <: AbstractArray{Int, N}
 end
 let
     local x
@@ -568,7 +568,7 @@ let
     @test ===(g(a), a)
 end
 
-type _AA{T}; a::T; end
+mutable struct _AA{T}; a::T; end
 typealias _AoA{T} _AA{_AA{T}}
 let
     local g, a
@@ -827,7 +827,7 @@ let
 end
 
 # issue #1153
-type SI{m, s, kg}
+mutable struct SI{m, s, kg}
     value::AbstractFloat
 end
 
@@ -897,7 +897,7 @@ let
     @test_throws InexactError unsafe_wrap(Array, pointer(a), -3)
 end
 
-immutable FooBar2515
+struct FooBar2515
     foo::Int
     bar::Int
 end
@@ -935,7 +935,7 @@ let
 end
 
 # issue #1442
-type S1442{T}
+mutable struct S1442{T}
 end
 
 let
@@ -948,9 +948,9 @@ let
 end
 
 # issue #1727
-abstract Component
+abstract type Component end
 
-type Transform <: Component
+mutable struct Transform <: Component
     x
     y
     z
@@ -958,7 +958,7 @@ type Transform <: Component
     Transform() = new(0, 0, 0)
 end
 
-type Body <: Component
+mutable struct Body <: Component
     vel
     curr_force
 
@@ -1035,7 +1035,7 @@ let
 end
 
 # issue #2365
-type B2365{T}
+mutable struct B2365{T}
      v::Union{T, Void}
 end
 @test B2365{Int}(nothing).v === nothing
@@ -1051,18 +1051,18 @@ let
 end
 
 # issue #2509
-immutable Foo2509; foo::Int; end
+struct Foo2509; foo::Int; end
 @test Foo2509(1) != Foo2509(2)
 @test Foo2509(42) == Foo2509(42)
 
 # issue #2517
-immutable Foo2517; end
+struct Foo2517; end
 @test repr(Foo2517()) == "$(curmod_prefix)Foo2517()"
 @test repr(Array{Foo2517}(1)) == "$(curmod_prefix)Foo2517[$(curmod_prefix)Foo2517()]"
 @test Foo2517() === Foo2517()
 
 # issue #1474
-type X1474{a,b} end
+mutable struct X1474{a,b} end
 let
     local Y
     Y{A,B}(::Type{X1474{A,B}}) = 1
@@ -1074,7 +1074,7 @@ let
 end
 
 # issue #2562
-type Node2562{T}
+mutable struct Node2562{T}
     value::T
     Node2562{T}(value::T) where T = new(value)
 end
@@ -1084,7 +1084,7 @@ makenode2562(value) = Node2562(value)
 @test isa(makenode2562(0), Node2562)
 
 # issue #2619
-type I2619{T}
+mutable struct I2619{T}
     v::T
     I2619{T}(v) where T = new(convert(T,v))
 end
@@ -1103,15 +1103,15 @@ i2619()
 
 # issue #2919
 typealias Foo2919 Int
-type Baz2919; Foo2919::Foo2919; end
+mutable struct Baz2919; Foo2919::Foo2919; end
 @test Baz2919(3).Foo2919 === 3
 
 # issue #2982
 module M2982
-abstract U
+abstract type U end
 macro bad(Y)
     quote
-        type $(esc(Y)) <: U
+        mutable struct $(esc(Y)) <: U
         end
     end
 end
@@ -1169,7 +1169,7 @@ end
 @test isa(f3821(), Array)
 
 # issue #4075
-immutable Foo4075
+struct Foo4075
     x::Int64
     y::Float64
 end
@@ -1202,7 +1202,7 @@ end
 
 # TODO!!
 # issue #4115
-#type Foo4115
+#mutable struct Foo4115
 #end
 #typealias Foo4115s NTuple{3,Union{Foo4115,Type{Foo4115}}}
 #baz4115(x::Foo4115s) = x
@@ -1210,18 +1210,18 @@ end
 #                      (Foo4115,Foo4115,Foo4115()))) == (Foo4115,Foo4115,Foo4115())
 
 # issue #4129
-type Foo4129; end
+mutable struct Foo4129; end
 
-abstract Bar4129
+abstract type Bar4129 end
 
-type Bar41291 <: Bar4129
+mutable struct Bar41291 <: Bar4129
     f::Foo4129
 end
-type Bar41292 <: Bar4129
+mutable struct Bar41292 <: Bar4129
     f::Foo4129
 end
 
-type Baz4129
+mutable struct Baz4129
     b::Bar4129
 end
 
@@ -1233,15 +1233,15 @@ foo4129(a::Baz4129,args...)         = foo4129(a,a.b,args...)
 @test isa(foo4129(Baz4129(Bar41291(Foo4129())),1,2), Tuple{Baz4129,Bar4129,Foo4129,Int,Int})
 
 # issue #4141
-type Vertex4141{N,T}; end
-type Face4141{V}; end
-type Hull4141{F<:Face4141}; end
+mutable struct Vertex4141{N,T}; end
+mutable struct Face4141{V}; end
+mutable struct Hull4141{F<:Face4141}; end
 
 g4141(N,T) = Hull4141{Face4141{Vertex4141{N,T}}}()
 @test isa(g4141(4,Int), Hull4141{Face4141{Vertex4141{4,Int}}})
 
 # issue #4154
-type MyType4154{T}
+mutable struct MyType4154{T}
     a1::T
     a2
 end
@@ -1254,11 +1254,11 @@ g4154() = typeof(foo4154(rand(2,2,2,2,2,2,2,2,2)))
 @test g4154() === MyType4154{Array{Float64,9}}
 
 # issue #4208
-type a4208
+mutable struct a4208
     a4208
 end
 @test isa(a4208(5),a4208)
-type b4208
+mutable struct b4208
     b4208() = (local b4208=1;new())
 end
 @test isa(b4208(),b4208)
@@ -1270,7 +1270,7 @@ convert_default_should_fail_here() = similar([1],typeof(zero(typeof(rand(2,2))))
 # issue #4343
 @test_throws ErrorException Array{Float64}{Int, 2}
 
-type Foo4376{T}
+mutable struct Foo4376{T}
     x
     Foo4376{T}(x::T) where T = new(x)
     Foo4376{T}(a::Foo4376{Int}) where T = new(a.x)
@@ -1278,14 +1278,14 @@ end
 
 @test isa(Foo4376{Float32}(Foo4376{Int}(2)), Foo4376{Float32})
 
-type _0_test_ctor_syntax_
+mutable struct _0_test_ctor_syntax_
     _0_test_ctor_syntax_{T<:AbstractString}(files::Vector{T},step) = 0
 end
 
 # issue #4413
-type A4413 end
-type B4413 end
-type C4413 end
+mutable struct A4413 end
+mutable struct B4413 end
+mutable struct C4413 end
 f4413(::Union{A4413, B4413, C4413}) = "ABC"
 f4413(::Union{A4413, B4413}) = "AB"
 g4413(::Union{A4413, C4413}) = "AC"
@@ -1351,7 +1351,7 @@ end
 
 # issue #4681
 # ccall should error if convert() returns something of the wrong type
-type Z4681
+mutable struct Z4681
     x::Ptr{Void}
     Z4681() = new(C_NULL)
 end
@@ -1376,7 +1376,7 @@ end
 @test b4688(1) == "an Int"
 
 # issue #4731
-type SIQ{A,B} <: Number
+mutable struct SIQ{A,B} <: Number
     x::A
 end
 import Base: promote_rule
@@ -1408,7 +1408,7 @@ end # module
 @test (Lib4771.@make_closure)(0) == 1
 
 # issue #4805
-abstract IT4805{N, T}
+abstract type IT4805{N, T} end
 
 let
     test0{T <: Int64}(::Type{IT4805{1, T}}, x) = x
@@ -1446,7 +1446,7 @@ f5150(T) = Array{Rational{T}}(1)
 
 
 # issue #5165
-bitstype 64 T5165{S}
+primitive type T5165{S} 64 end
 make_t(x::Int64) = Core.Intrinsics.bitcast(T5165{Void}, x)
 xs5165 = T5165[make_t(Int64(1))]
 b5165 = IOBuffer()
@@ -1456,7 +1456,7 @@ end
 
 # support tuples as type parameters
 
-type TupleParam{P}
+mutable struct TupleParam{P}
     x::Bool
 end
 
@@ -1515,7 +1515,7 @@ end
 @test isequal(tighttypes!(Any[Any[1.0,2.0],]), [1,2])
 
 # issue #5142
-bitstype 64 Int5142
+primitive type Int5142 64 end
 function h5142(a::Bool)
     x=a ? (Int64(0),reinterpret(Int5142,Int64(0))) : (Int64(1),reinterpret(Int5142,Int64(1)))
     x[2]::Int5142
@@ -1534,7 +1534,7 @@ try
     f5142()
 end
 
-bitstype 8 Int5142b
+primitive type Int5142b 8 end
 function h5142b(a::Int)
     x=((Int8(1),Int8(2)),(reinterpret(Int5142b,Int8(3)),reinterpret(Int5142b,Int8(4))))
     x[a]::Tuple{Int8,Int8}
@@ -1553,7 +1553,7 @@ end
 @test real(test_bits_tuples()) == 10
 
 # issue #5374
-type FileObj5374
+mutable struct FileObj5374
     io::IO
 end
 function read_file5374(fileobj)
@@ -1587,7 +1587,7 @@ f5584()
 
 # issue #5884
 
-type Polygon5884{T<:Real}
+mutable struct Polygon5884{T<:Real}
     points::Vector{Complex{T}}
 end
 
@@ -1651,7 +1651,7 @@ test5536(a::Union{Real, AbstractArray}) = "Non-splatting"
 
 # issue #6142
 import Base: +
-type A6142 <: AbstractMatrix{Float64}; end
+mutable struct A6142 <: AbstractMatrix{Float64}; end
 +{TJ}(x::A6142, y::UniformScaling{TJ}) = "UniformScaling method called"
 +(x::A6142, y::AbstractArray) = "AbstractArray method called"
 @test A6142() + I == "UniformScaling method called"
@@ -1675,11 +1675,11 @@ end
 @test g6292() == 2
 
 # issue #6404
-type type_2{T <: Integer, N} <: Number
+mutable struct type_2{T <: Integer, N} <: Number
     x::T
     type_2{T,N}(n::T) where {T<:Integer,N} = new(n)
 end
-type type_1{T <: Number} <: Number
+mutable struct type_1{T <: Number} <: Number
     x::Vector{T}
     type_1{T}(x::Vector{T}) where T<:Number = new(x)
 end
@@ -1753,12 +1753,12 @@ let
 end
 
 # issue #6387
-bitstype 64 Date6387{C}
+primitive type Date6387{C} 64 end
 
-type DateRange6387{C} <: Range{Date6387{C}}
+mutable struct DateRange6387{C} <: Range{Date6387{C}}
 end
 
-type ObjMember
+mutable struct ObjMember
     member::DateRange6387
 end
 
@@ -1823,8 +1823,8 @@ let x = zeros(2)
 end
 
 # issue #6980
-abstract A6980
-type B6980 <: A6980 end
+abstract type A6980 end
+mutable struct B6980 <: A6980 end
 f6980(::Union{Int, Float64}, ::A6980) = false
 f6980(::Union{Int, Float64}, ::B6980) = true
 @test f6980(1, B6980())
@@ -1881,7 +1881,7 @@ const (¬) = !
 @test ¬false
 
 # issue #7652
-type A7652
+mutable struct A7652
     a :: Int
 end
 a7652 = A7652(0)
@@ -1918,7 +1918,7 @@ end
 # issue #7582
 aₜ = "a variable using Unicode 6"
 
-immutable My8156{A, B}
+struct My8156{A, B}
     a::A
     b::B
 end
@@ -1929,7 +1929,7 @@ let m = My8156(nothing, 1)
 end
 
 # issue #8184
-immutable Foo8184
+struct Foo8184
     x::Void
     y::Void
     z::Float64
@@ -1956,7 +1956,7 @@ let x = 10
     @test x((3,)...) == 19
     @test issue2403func(x) == 31
 end
-type Issue2403
+mutable struct Issue2403
     x
 end
 (i::Issue2403)(y) = i.x + 2y
@@ -2134,7 +2134,7 @@ g9535() = (f9535(),f9535())
 @test g9535() == (3,4)
 
 # weak references
-type Obj; x; end
+mutable struct Obj; x; end
 @testset "weak references" begin
     @noinline function mk_wr(r, wr)
         x = Obj(1)
@@ -2169,7 +2169,7 @@ end
 #issue #9835
 module M9835
     using Base.Test
-    type A end; type B end
+    mutable struct A end; mutable struct B end
     f() = (isa(A(), A) ? A : B)()
     @test isa(f(), A)
 end
@@ -2202,10 +2202,10 @@ y8d003 = 777
 @test eval(:(string(:(f($($(x8d003...))))))) == "f(777)"
 
 # issue #9378
-abstract Foo9378{T,S}
-immutable B9378{T} end
+abstract type Foo9378{T,S} end
+struct B9378{T} end
 typealias FooB9378{T} Foo9378{T,B9378}
-immutable CFoo9378 <: FooB9378{Float64} end
+struct CFoo9378 <: FooB9378{Float64} end
 @test isa(CFoo9378(),FooB9378)
 
 # issue #10281
@@ -2223,7 +2223,7 @@ file = open(fname, "w")
 redirect_stdout(file)
 versioninfo()
 try
-    type Foo{T}
+    mutable struct Foo{T}
         val::Bar{T}
     end
 end
@@ -2236,7 +2236,7 @@ end
 # issue #10373
 f10373(x) = x
 g10373(x) = x
-type newtype10373
+mutable struct newtype10373
 end
 let f
     for f in (f10373,g10373)
@@ -2257,7 +2257,7 @@ f7221(::AbstractVecOrMat) = 3
 @test f7221(trues(1)) == 2
 
 # issue #10570
-immutable Array_512_Uint8
+struct Array_512_Uint8
     d1::UInt8
     d2::UInt8
     d3::UInt8
@@ -2824,7 +2824,7 @@ function func8283 end
 @test_throws MethodError func8283()
 
 # issue #11243
-type Type11243{A, B}
+mutable struct Type11243{A, B}
     x::A
     y::B
 end
@@ -2852,7 +2852,7 @@ end
 @test isa(f11295(:a,:b), Expr)
 
 # issue #11675
-immutable T11675{T}
+struct T11675{T}
     x::T
     T11675{T}() where T = new()
 end
@@ -2879,8 +2879,8 @@ f11715(x) = (x === Tuple{Any})
 
 # part of #11597
 # make sure invalid, partly-constructed types don't end up in the cache
-abstract C11597{T<:Union{Void, Int}}
-type D11597{T} <: C11597{T} d::T end
+abstract type C11597{T<:Union{Void, Int}} end
+mutable struct D11597{T} <: C11597{T} d::T end
 @test_throws TypeError D11597(1.0)
 @test_throws TypeError repr(D11597(1.0))
 
@@ -2914,12 +2914,12 @@ let a = (1:1000...),
 end
 
 # issue 11858
-type Foo11858
+mutable struct Foo11858
     x::Float64
     Foo11858(x::Float64) = new(x)
 end
 
-type Bar11858
+mutable struct Bar11858
     x::Float64
     Bar11858(x::Float64) = new(x)
 end
@@ -2948,7 +2948,7 @@ end
 @test !isnull(foo11904(Nullable(1)))
 
 # issue 11874
-immutable Foo11874
+struct Foo11874
     x::Int
 end
 
@@ -2989,7 +2989,7 @@ end
 @test_throws ErrorException NTuple{-1, Int}
 @test_throws TypeError Union{Int, 1}
 
-type FooNTuple{N}
+mutable struct FooNTuple{N}
     z::Tuple{Integer, Vararg{Int, N}}
 end
 @test_throws ErrorException FooNTuple{-1}
@@ -2997,7 +2997,7 @@ end
 @test_throws TypeError FooNTuple{0x01}
 @test fieldtype(FooNTuple{0}, 1) == Tuple{Integer}
 
-type FooTupleT{T}
+mutable struct FooTupleT{T}
     z::Tuple{Int, T, Int}
 end
 @test_throws TypeError FooTupleT{Vararg{Int, 2}}
@@ -3011,13 +3011,13 @@ const DATE12003 = DateTime(1917,1,1)
 failure12003(dt=DATE12003) = Dates.year(dt)
 @test isa(failure12003(), Integer)
 
-# issue #12023 Test error checking in bitstype
-@test_throws ErrorException (@eval bitstype 0 SPJa12023)
-@test_throws ErrorException (@eval bitstype 4294967312 SPJb12023)
-@test_throws ErrorException (@eval bitstype -4294967280 SPJc12023)
+# issue #12023 Test error checking in primitive type
+@test_throws ErrorException (@eval primitive type 0 SPJa12023 end)
+@test_throws ErrorException (@eval primitive type 4294967312 SPJb12023 end)
+@test_throws ErrorException (@eval primitive type -4294967280 SPJc12023 end)
 
 # issue #12089
-type A12089{K, N}
+mutable struct A12089{K, N}
     sz::NTuple{N, Int}
     A12089{K,N}(sz::NTuple{N, Int}) where {K,N} = new(sz)
 end
@@ -3037,7 +3037,7 @@ g12063() = f12063(0, 0, 0, 0, 0, 0, 0.0, spzeros(0,0), Int[])
 @test g12063() == 1
 
 # issue #11587
-type Sampler11587{N}
+mutable struct Sampler11587{N}
     clampedpos::Array{Int,2}
     buf::Array{Float64,N}
 end
@@ -3048,34 +3048,34 @@ end
 @test isa(Sampler11587(), Sampler11587{2})
 
 # issue #8010 - error when convert returns wrong type during new()
-immutable Vec8010{T}
+struct Vec8010{T}
     x::T
     y::T
 end
 Vec8010(a::AbstractVector) = Vec8010(ntuple(x->a[x],2)...)
 Base.convert{T}(::Type{Vec8010{T}},x::AbstractVector) = Vec8010(x)
 Base.convert(::Type{Void},x::AbstractVector) = Vec8010(x)
-immutable MyType8010
+struct MyType8010
      m::Vec8010{Float32}
 end
-immutable MyType8010_ghost
+struct MyType8010_ghost
      m::Void
 end
 @test_throws TypeError MyType8010([3.0;4.0])
 @test_throws TypeError MyType8010_ghost([3.0;4.0])
 
 # don't allow redefining types if ninitialized changes
-immutable NInitializedTestType
+struct NInitializedTestType
     a
 end
 
-@test_throws ErrorException @eval immutable NInitializedTestType
+@test_throws ErrorException @eval struct NInitializedTestType
     a
     NInitializedTestType() = new()
 end
 
 # issue #12394
-type Empty12394 end
+mutable struct Empty12394 end
 let x = Array{Empty12394}(1), y = [Empty12394()]
     @test_throws UndefRefError x==y
     @test_throws UndefRefError y==x
@@ -3094,11 +3094,11 @@ test_eq_array_int() = ===(const_array_int1, const_array_int2)
 @test test_eq_array_int()
 
 # object_id of haspadding field
-immutable HasPadding
+struct HasPadding
     x::Bool
     y::Int
 end
-immutable HasHasPadding
+struct HasHasPadding
     x::HasPadding
 end
 hashaspadding = HasHasPadding(HasPadding(true,1))
@@ -3163,7 +3163,7 @@ for j = 1:1
 end
 
 # PR 11888
-immutable A11888{T}
+struct A11888{T}
     a::NTuple{16,T}
 end
 
@@ -3172,8 +3172,8 @@ typealias B11888{T} A11888{A11888{A11888{T}}}
 @test sizeof(B11888{B11888{Int64}}) == (1 << 24) * 8
 
 # issue #13175
-immutable EmptyImmutable13175 end
-immutable EmptyIIOtherField13175
+struct EmptyImmutable13175 end
+struct EmptyIIOtherField13175
     x::EmptyImmutable13175
     y::Float64
 end
@@ -3185,7 +3185,7 @@ gg13183{X}(x::X...) = 1==0 ? gg13183(x, x) : 0
 @test gg13183(5) == 0
 
 # issue 8932 (llvm return type legalizer error)
-immutable Vec3_8932
+struct Vec3_8932
     x::Float32
     y::Float32
     z::Float32
@@ -3216,12 +3216,12 @@ end
 @test f13432b(false) == false
 
 #13433, read!(::IO, a::Vector{UInt8}) should return a
-type IO13433 <: IO end
+mutable struct IO13433 <: IO end
 Base.read(::IO13433, ::Type{UInt8}) = 0x01
 @test read!(IO13433(), Array{UInt8}(4)) == [0x01, 0x01, 0x01, 0x01]
 
 # issue #13647, comparing boxed isbits immutables
-immutable X13647
+struct X13647
     a::Int
     b::Bool
 end
@@ -3248,8 +3248,8 @@ end
 # issue #11327 and #13547
 @test_throws MethodError convert(Type{Int}, Float32)
 @test_throws MethodError Array{Type{Int64}}([Float32])
-abstract A11327
-abstract B11327 <: A11327
+abstract type A11327 end
+abstract type B11327 <: A11327 end
 f11327{T}(::Type{T},x::T) = x
 @test_throws MethodError f11327(Type{A11327},B11327)
 
@@ -3356,7 +3356,7 @@ end
 @test __f_isa_arg_1() == 1
 
 # issue #14477
-immutable Z14477
+struct Z14477
     fld::Z14477
     Z14477() = new(new())
 end
@@ -3410,7 +3410,7 @@ end
 @test isa(object_id(Tuple.name.cache), Integer)
 
 # issue #14691
-type T14691; a::UInt; end
+mutable struct T14691; a::UInt; end
 @test (T14691(0).a = 0) === 0
 
 # issue #14245
@@ -3452,7 +3452,7 @@ f10985(::Any...) = 1
 @test f10985(1, 2, 3) == 1
 
 # a tricky case for closure conversion
-type _CaptureInCtor
+mutable struct _CaptureInCtor
     yy
     function _CaptureInCtor(list_file::AbstractString="")
         y = 0
@@ -3476,14 +3476,14 @@ let
 end
 
 # issue #14825
-abstract abstest_14825
+abstract type abstest_14825 end
 
-type t1_14825{A <: abstest_14825, B}
+mutable struct t1_14825{A <: abstest_14825, B}
   x::A
   y::B
 end
 
-type t2_14825{C, B} <: abstest_14825
+mutable struct t2_14825{C, B} <: abstest_14825
   x::C
   y::t1_14825{t2_14825{C, B}, B}
 end
@@ -3943,7 +3943,7 @@ end
 end
 
 # issue #8712
-type Issue8712; end
+mutable struct Issue8712; end
 @test isa(invoke(Issue8712, Tuple{}), Issue8712)
 
 # issue #16089
@@ -4124,8 +4124,8 @@ undefined_x16090 = (Int,)
 @test_throws TypeError f16090()
 
 # issue #12238
-type A12238{T} end
-type B12238{T,S}
+mutable struct A12238{T} end
+mutable struct B12238{T,S}
     a::A12238{B12238{Int,S}}
 end
 @test B12238.body.body.types[1] === A12238{B12238{Int}.body}
@@ -4163,11 +4163,11 @@ end
 @test @inferred(f16431(1)) == 4
 
 # issue #14878
-type A14878
+mutable struct A14878
     ext
 end
 A14878() = A14878(Dict())
-type B14878
+mutable struct B14878
 end
 B14878(ng) = B14878()
 function trigger14878()
@@ -4206,7 +4206,7 @@ end
 @test where1090([4]) === 6
 @test_throws MethodError where1090(String[])
 
-type A1090 end
+mutable struct A1090 end
 Base.convert(::Type{Int}, ::A1090) = "hey"
 f1090()::Int = A1090()
 @test_throws TypeError f1090()
@@ -4224,13 +4224,13 @@ end
 @test f16783()() == 1
 
 # issue #16767
-type A16767{T}
+mutable struct A16767{T}
     a::Base.RefValue{T}
 end
-type B16767{T}
+mutable struct B16767{T}
     b::A16767{B16767{T}}
 end
-type C16767{T}
+mutable struct C16767{T}
     b::A16767{C16767{:a}}
 end
 @test B16767.body.types[1].types[1].parameters[1].types[1] === A16767{B16767.body}
@@ -4249,11 +4249,11 @@ end
 
 # issue #16793
 try
-    abstract T16793
+    abstract type T16793 end
 catch
 end
 @test isa(T16793, Type)
-@test isa(abstract T16793_2, Void)
+@test isa(abstract type T16793_2 end, Void)
 
 # issue #17147
 f17147(::Tuple) = 1
@@ -4343,7 +4343,7 @@ ptr18236 = cfunction(identity, VecElement{Float64}, Tuple{VecElement{Float64}})
                                     (VecElement{Float64},), $v18236)
 @test f18236(ptr18236) === v18236
 @test !contains(sprint(code_llvm, f18236, Tuple{Ptr{Void}}), "double undef")
-# VecElement of struct type, not necessarily useful but does have special
+# VecElement of struct, not necessarily useful but does have special
 # ABI so should be handled correctly
 # This struct should be small enough to be passed by value in C ABI
 # in order to trigger the problematic code path.
@@ -4612,7 +4612,7 @@ f19599{T}(x::((S)->Vector{S})(T)...) = 1
 
 # avoiding StackOverflowErrors (issues #12007, #10326, #15736)
 module SOE
-type Sgnd <: Signed
+mutable struct Sgnd <: Signed
     v::Int
 end
 using Base.Test
@@ -4620,7 +4620,7 @@ using Base.Test
 io = IOBuffer()
 @test_throws ErrorException show(io, Sgnd(1))  #12007
 
-immutable MyTime <: Dates.TimeType
+struct MyTime <: Dates.TimeType
     value::Int
 end
 @test_throws ErrorException isless(MyTime(1), now())

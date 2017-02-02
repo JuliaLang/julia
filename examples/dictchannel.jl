@@ -2,7 +2,7 @@
 
 import Base: put!, wait, isready, take!, fetch
 
-type DictChannel <: AbstractChannel
+mutable struct DictChannel <: AbstractChannel
     d::Dict
     cond_take::Condition    # waiting for data to become available
     DictChannel() = new(Dict(), Condition())

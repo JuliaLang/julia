@@ -2,7 +2,7 @@
 
 import Base: launch, manage, connect, exit
 
-type UnixDomainCM <: ClusterManager
+mutable struct UnixDomainCM <: ClusterManager
     np::Integer
 end
 

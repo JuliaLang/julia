@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Eigendecomposition
-immutable Eigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
+struct Eigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
     values::U
     vectors::S
     Eigen{T,V,S,U}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V,S,U} =
@@ -11,7 +11,7 @@ Eigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V} =
     Eigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
 
 # Generalized eigenvalue problem.
-immutable GeneralizedEigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
+struct GeneralizedEigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
     values::U
     vectors::S
     GeneralizedEigen{T,V,S,U}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V,S,U} =

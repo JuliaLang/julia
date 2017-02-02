@@ -3,7 +3,7 @@
 #### Specialized matrix types ####
 
 ## (complex) symmetric tridiagonal matrices
-immutable SymTridiagonal{T} <: AbstractMatrix{T}
+struct SymTridiagonal{T} <: AbstractMatrix{T}
     dv::Vector{T}                        # diagonal
     ev::Vector{T}                        # subdiagonal
     function SymTridiagonal{T}(dv::Vector{T}, ev::Vector{T}) where T
@@ -294,7 +294,7 @@ end
 ###################
 
 #Needed for inv_usmani()
-type ZeroOffsetVector
+mutable struct ZeroOffsetVector
     data::Vector
 end
 getindex( a::ZeroOffsetVector, i) = a.data[i+1]
@@ -385,7 +385,7 @@ function setindex!(A::SymTridiagonal, x, i::Integer, j::Integer)
 end
 
 ## Tridiagonal matrices ##
-immutable Tridiagonal{T} <: AbstractMatrix{T}
+struct Tridiagonal{T} <: AbstractMatrix{T}
     dl::Vector{T}    # sub-diagonal
     d::Vector{T}     # diagonal
     du::Vector{T}    # sup-diagonal

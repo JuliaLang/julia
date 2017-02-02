@@ -1002,7 +1002,7 @@ broadcast{Tf,T}(f::Tf, A::SparseMatrixCSC, ::Type{T}) = broadcast(x -> f(x, T), 
 
 
 # first (Broadcast containertype) dispatch layer's promotion logic
-immutable PromoteToSparse end
+struct PromoteToSparse end
 
 # broadcast containertype definitions for structured matrices
 StructuredMatrix = Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}

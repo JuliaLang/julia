@@ -2,7 +2,7 @@
 
 ## Matrix factorizations and decompositions
 
-abstract Factorization{T}
+abstract type Factorization{T} end
 
 eltype{T}(::Type{Factorization{T}}) = T
 transpose(F::Factorization) = error("transpose not implemented for $(typeof(F))")

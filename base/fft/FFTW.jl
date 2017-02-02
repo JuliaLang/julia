@@ -73,7 +73,7 @@ typealias fftwTypeSingle Union{Type{Float32},Type{Complex64}}
 # since it is not written to.  Hence, it is convenient to create an
 # array-like type that carries a size and a stride like a "real" array
 # but which is converted to C_NULL as a pointer.
-immutable FakeArray{T, N} <: DenseArray{T, N}
+struct FakeArray{T, N} <: DenseArray{T, N}
     sz::NTuple{N, Int}
     st::NTuple{N, Int}
 end
@@ -154,7 +154,7 @@ end
 
 # pointer type for fftw_plan (opaque pointer)
 
-immutable fftw_plan_struct end
+struct fftw_plan_struct end
 typealias PlanPtr Ptr{fftw_plan_struct}
 
 # Planner timelimits
@@ -197,10 +197,10 @@ end
 # this into a type to support a finalizer on the fftw_plan.
 # K is FORWARD/BACKWARD for forward/backward or r2c/c2r plans, respectively.
 # For r2r plans, K is a tuple of the transform kinds along each dimension.
-abstract FFTWPlan{T<:fftwNumber,K,inplace} <: Plan{T}
+abstract type FFTWPlan{T<:fftwNumber,K,inplace} <: Plan{T} end
 for P in (:cFFTWPlan, :rFFTWPlan, :r2rFFTWPlan) # complex, r2c/c2r, and r2r
     @eval begin
-        type $P{T<:fftwNumber,K,inplace,N} <: FFTWPlan{T,K,inplace}
+        mutable struct $P{T<:fftwNumber,K,inplace,N} <: FFTWPlan{T,K,inplace}
             plan::PlanPtr
             sz::NTuple{N, Int} # size of array on which plan operates (Int tuple)
             osz::NTuple{N, Int} # size of output array (Int tuple)
