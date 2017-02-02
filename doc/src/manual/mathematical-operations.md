@@ -151,13 +151,14 @@ it can combine arrays and scalars, arrays of the same size (performing
 the operation elementwise), and even arrays of different shapes (e.g.
 combining row and column vectors to produce a matrix). Moreover, like
 all vectorized "dot calls," these "dot operators" are
-*fusing*. For example, if you compute `2 .* A.^2 .+ sin.(A)` for an
-array `A`, it performs a *single* loop over `A`, computing `2a^2 + sin(a)`
+*fusing*. For example, if you compute `2 .* A.^2 .+ sin.(A)` (or
+equivalently `@. 2A^2 + sin(A)`, using the [`@.`](@ref @__dot__) macro) for
+an array `A`, it performs a *single* loop over `A`, computing `2a^2 + sin(a)`
 for each element of `A`. In particular, nested dot calls like `f.(g.(x))`
 are fused, and "adjacent" binary operators like `x .+ 3 .* x.^2` are
 equivalent to nested dot calls `(+).(x, (*).(3, (^).(x, 2)))`.
 
-Furthermore, "dotted" updating operators like `a .+= b` are parsed
+Furthermore, "dotted" updating operators like `a .+= b` (or `@. a += b`) are parsed
 as `a .= a .+ b`, where `.=` is a fused *in-place* assignment operation
 (see the [dot syntax documentation](@ref man-vectorized)).
 
