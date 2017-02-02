@@ -517,7 +517,8 @@ function merge!(repo::GitRepo;
             filter!(fh->fh.ismerge, fheads)
             if isempty(fheads)
                 throw(GitError(Error.Merge, Error.ERROR,
-                               "There is no fetch reference for this branch.")) end
+                               "There is no fetch reference for this branch."))
+            end
             map(fh->GitAnnotated(repo,fh), fheads)
         else # merge commitish
             [GitAnnotated(repo, committish)]
