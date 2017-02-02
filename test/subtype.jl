@@ -878,6 +878,7 @@ ftwoparams(::TwoParams{<:Real,<:Real}) = 3
 @test ftwoparams(TwoParams(3,4)) == 3
 @test !([TwoParams(3,4)] isa Vector{TwoParams{<:Real,<:Real}})
 @test TwoParams{<:Real,<:Real}[TwoParams(3,4)] isa Vector{TwoParams{<:Real,<:Real}}
+@test [TwoParams(3,4)] isa Vector{<:TwoParams{<:Real,<:Real}}
 @test [TwoParams(3,4)] isa (Vector{TwoParams{T,T}} where T<:Real)
 
 # implicit "contravariant" type parameters:
