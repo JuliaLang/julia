@@ -34,6 +34,7 @@ Language changes
     the `broadcast` call `(⨳).(a, b)`.  Hence, one no longer defines methods
     for `.*` etcetera.  This also means that "dot operations" automatically
     fuse into a single loop, along with other dot calls `f.(x)`. ([#17623])
+    Similarly for unary operators ([#20249]).
 
   * Newly defined methods are no longer callable from the same dynamic runtime
     scope they were defined in ([#17057]).
