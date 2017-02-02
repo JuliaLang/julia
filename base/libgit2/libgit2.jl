@@ -404,7 +404,7 @@ Clone a remote repository located at `repo_url` to the local filesystem location
 
 The keyword arguments are:
   * `branch::AbstractString=""`: which branch of the remote to clone,
-    if not `master` (this will be the default if not specified).
+    if not the default repository branch (usually `master`).
   * `isbare::Bool=false`: if `true`, clone the remote as a bare repository,
     which will make `repo_path` itself the git directory instead of `repo_path/.git`.
     This means that a working tree cannot be checked out. Plays the role of the
