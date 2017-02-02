@@ -502,8 +502,7 @@ The keyword arguments are:
   * `checkout_opts::CheckoutOptions=CheckoutOptions()`: `checkout_opts` specifies
     options for the checkout step. For more information, see [`CheckoutOptions()`](@ref).
 
-Equivalent to `git merge [--ff-only] [<committish> | FETCH_HEAD]`, where `branch` plays the role
-of `FETCH_HEAD`.
+Equivalent to `git merge [--ff-only] [<committish> | <branch> | FETCH_HEAD]`.
 """
 function merge!(repo::GitRepo;
                 committish::AbstractString = "",
@@ -518,8 +517,7 @@ function merge!(repo::GitRepo;
             filter!(fh->fh.ismerge, fheads)
             if isempty(fheads)
                 throw(GitError(Error.Merge, Error.ERROR,
-                               "There is no fetch reference for this branch."))
-            end
+                               "There is no fetch reference for this branch.")) end
             map(fh->GitAnnotated(repo,fh), fheads)
         else # merge commitish
             [GitAnnotated(repo, committish)]
