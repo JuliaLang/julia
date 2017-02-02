@@ -1157,14 +1157,6 @@ end
     return false
 end
 
-# Not exported
-eval(LibGit2, quote
-    function owner(x)
-        Base.depwarn("owner(x) is deprecated, use repository(x) instead.", :owner)
-        repository(x)
-    end
-end)
-
 @deprecate EachLine(stream, ondone) EachLine(stream, ondone=ondone)
 
 # These conversions should not be defined, see #19896
