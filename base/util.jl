@@ -228,7 +228,7 @@ julia> @time begin
            1+1
        end
   0.301395 seconds (8 allocations: 336 bytes)
-2
+```
 """
 macro time(ex)
     quote
@@ -315,7 +315,7 @@ See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@elapsed`](@ref).
 
 ```julia
-julia> rand(10^6)
+julia> @allocated rand(10^6)
 8000080
 ```
 """

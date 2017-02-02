@@ -198,6 +198,7 @@ Compute the complex conjugate of a complex number `z`.
 ```julia
 julia> conj(1 + 3im)
 1 - 3im
+```
 """
 conj(z::Complex) = Complex(real(z),-imag(z))
 abs(z::Complex)  = hypot(real(z), imag(z))

@@ -30,6 +30,7 @@ julia> 3 // 5
 
 julia> (3 // 5) // (2 // 1)
 3//10
+```
 """
 //(n::Integer,  d::Integer ) = Rational(n,d)
 
