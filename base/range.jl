@@ -19,6 +19,7 @@ colon{T<:Real}(start::T, step::Real, stop::T) = colon(promote(start, step, stop)
 
 Called by `:` syntax for constructing ranges.
 """
+colon{T<:AbstractFloat}(start::T, step::T, stop::T) = _colon(TypeOrder(T), TypeArithmetic(T), start, step, stop)
 colon{T<:Real}(start::T, step::T, stop::T) = _colon(TypeOrder(T), TypeArithmetic(T), start, step, stop)
 _colon{T}(::HasOrder, ::Any, start::T, step, stop::T) = StepRange(start, step, stop)
 # for T<:Union{Float16,Float32,Float64} see twiceprecision.jl
