@@ -926,8 +926,8 @@ unsafe_wrap(::Type{String}, p::Cstring, len::Integer, own::Bool=false) =
     unsafe_wrap(String, convert(Ptr{UInt8}, p), len, own)
 
 # #19660
-@deprecate finalize(sa::LibGit2.StrArrayStruct) close(sa)
-@deprecate finalize(sa::LibGit2.Buffer) close(sa)
+@deprecate finalize(sa::LibGit2.StrArrayStruct) LibGit2.free(sa)
+@deprecate finalize(sa::LibGit2.Buffer) LibGit2.free(sa)
 
 ## produce, consume, and task iteration
 # NOTE: When removing produce/consume, also remove field Task.consumers and related code in
