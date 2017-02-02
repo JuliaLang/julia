@@ -108,7 +108,7 @@ function atomic_cas! end
 
 Atomically exchange the value in `x`
 
-Atomically exchanges the value in `x` with `newval`. Returns the old (!)
+Atomically exchanges the value in `x` with `newval`. Returns the **old**
 value.
 
 For further details, see LLVM's `atomicrmw xchg` instruction.
@@ -131,7 +131,7 @@ function atomic_xchg! end
 
 Atomically add `val` to `x`
 
-Performs `x[] += val` atomically. Returns the old (!) value.
+Performs `x[] += val` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw add` instruction.
 
@@ -153,7 +153,7 @@ function atomic_add! end
 
 Atomically subtract `val` from `x`
 
-Performs `x[] -= val` atomically. Returns the old (!) value.
+Performs `x[] -= val` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw sub` instruction.
 
@@ -175,7 +175,7 @@ function atomic_sub! end
 
 Atomically bitwise-and `x` with `val`
 
-Performs `x[] &= val` atomically. Returns the old (!) value.
+Performs `x[] &= val` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw and` instruction.
 
@@ -197,7 +197,7 @@ function atomic_and! end
 
 Atomically bitwise-nand (not-and) `x` with `val`
 
-Performs `x[] = ~(x[] & val)` atomically. Returns the old (!) value.
+Performs `x[] = ~(x[] & val)` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw nand` instruction.
 
@@ -219,7 +219,7 @@ function atomic_nand! end
 
 Atomically bitwise-or `x` with `val`
 
-Performs `x[] |= val` atomically. Returns the old (!) value.
+Performs `x[] |= val` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw or` instruction.
 
@@ -241,7 +241,7 @@ function atomic_or! end
 
 Atomically bitwise-xor (exclusive-or) `x` with `val`
 
-Performs `x[] \$= val` atomically. Returns the old (!) value.
+Performs `x[] \$= val` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw xor` instruction.
 
@@ -263,7 +263,7 @@ function atomic_xor! end
 
 Atomically store the maximum of `x` and `val` in `x`
 
-Performs `x[] = max(x[], val)` atomically. Returns the old (!) value.
+Performs `x[] = max(x[], val)` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw min` instruction.
 
@@ -285,7 +285,7 @@ function atomic_max! end
 
 Atomically store the minimum of `x` and `val` in `x`
 
-Performs `x[] = min(x[], val)` atomically. Returns the old (!) value.
+Performs `x[] = min(x[], val)` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw max` instruction.
 
