@@ -569,7 +569,7 @@ let repr = sprint(dump, Any)
     @test length(repr) > 100000
     @test ismatch(r"^Any\n  [^ \t\n]", repr)
     @test endswith(repr, '\n')
-    @test_broken contains(repr, "     Base.Vector{T} = Array{T,1}\n")
+    @test contains(repr, "     Base.Vector{T} = Array{T,1} where T\n")
     @test !contains(repr, "Core.Vector{T}")
 end
 let repr = sprint(dump, Integer)

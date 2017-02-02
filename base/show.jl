@@ -1216,9 +1216,28 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
                 # recurse into primary module bindings
                 dumpsubtypes(io, x, t, n, indent)
             elseif isa(t, UnionAll) && directsubtype(t::UnionAll, x)
+                dt = unwrap_unionall(t)
                 println(io)
-                print(io, indent, "  ", m, ".", s)
-                print(io, " = ", t)
+                if isa(dt, DataType) && dt.name.wrapper === t
+                    # primary type binding
+                    print(io, indent, "  ")
+                    dumptype(io, dt, n - 1, string(indent, "  "))
+                else
+                    # aliases to types
+                    print(io, indent, "  ", m, ".", s, "{")
+                    tp = t
+                    while true
+                        print(io, tp.var.name)
+                        tp = tp.body
+                        if isa(tp, UnionAll)
+                            print(io, ", ")
+                        else
+                            print(io, "} = ")
+                            break
+                        end
+                    end
+                    print(io, t)
+                end
             elseif isa(t, Union) && directsubtype(t::Union, x)
                 println(io)
                 print(io, indent, "  ", m, ".", s, " = ", t)
