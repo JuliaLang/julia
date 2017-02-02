@@ -533,7 +533,7 @@ function getindex{T<:Integer}(r::LinSpace, s::OrdinalRange{T})
     @boundscheck checkbounds(r, s)
     vfirst = unsafe_getindex(r, first(s))
     vlast  = unsafe_getindex(r, last(s))
-    return linspace(vfirst, vlast, length(s))
+    return LinSpace(vfirst, vlast, length(s))
 end
 
 show(io::IO, r::Range) = print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
