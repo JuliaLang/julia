@@ -217,7 +217,7 @@ let A = [sqrt(i)+j for i = 1:3, j=1:4]
 end
 let x = sin.(1:10)
     @test atan2.((x->x+1).(x), (x->x+2).(x)) == broadcast(atan2, x+1, x+2) == broadcast(atan2, x.+1, x.+2)
-    @test sin.(atan2.([x+1,x+2]...)) == sin.(atan2.(x+1,x+2))
+    @test sin.(atan2.([x+1,x+2]...)) == sin.(atan2.(x+1,x+2)) == @. sin(atan2(x+1,x+2))
     @test sin.(atan2.(x, 3.7)) == broadcast(x -> sin(atan2(x,3.7)), x)
     @test atan2.(x, 3.7) == broadcast(x -> atan2(x,3.7), x) == broadcast(atan2, x, 3.7)
 end
@@ -225,6 +225,9 @@ end
 let g = Int[]
     f17300(x) = begin; push!(g, x); x+2; end
     f17300.(f17300.(f17300.(1:3)))
+    @test g == [1,3,5, 2,4,6, 3,5,7]
+    empty!(g)
+    @. f17300(f17300(f17300(1:3)))
     @test g == [1,3,5, 2,4,6, 3,5,7]
 end
 # fusion with splatted args:
@@ -244,6 +247,28 @@ let x = [1:4;]
     @test sin.(f17300kw.(x, y=1)) == sin.(f17300kw.(x; y=1)) == sin.(x .+ 1)
 end
 
+# splice escaping of @.
+let x = [4, -9, 1, -16]
+    @test [2, 3, 4, 5] == @.(1 + sqrt($sort(abs(x))))
+end
+
+# interaction of @. with let
+@test [1,4,9] == @. let x = [1,2,3]; x^2; end
+
+# interaction of @. with for loops
+let x = [1,2,3], y = x
+    @. for i = 1:3
+        y = y^2 # should convert to y .= y.^2
+    end
+    @test x == [1,256,6561]
+end
+
+# interaction of @. with function definitions
+let x = [1,2,3]
+    @. f(x) = x^2
+    @test f(x) == [1,4,9]
+end
+
 # PR #17510: Fused in-place assignment
 let x = [1:4;], y = x
     y .= 2:5
@@ -259,15 +284,15 @@ let x = [1:4;], y = x
     @test y === x == [9,9,9,9]
     y .-= 1
     @test y === x == [8,8,8,8]
-    y .-= 1:4
+    @. y -= 1:4          # @. should convert to .-=
     @test y === x == [7,6,5,4]
     x[1:2] .= 1
     @test y === x == [1,1,5,4]
-    x[1:2] .+= [2,3]
+    @. x[1:2] .+= [2,3]  # use .+= to make sure @. works with dotted assignment
     @test y === x == [3,4,5,4]
-    x[:] .= 0
+    @. x[:] .= 0         # use .= to make sure @. works with dotted assignment
     @test y === x == [0,0,0,0]
-    x[2:end] .= 1:3
+    @. x[2:end] = 1:3    # @. should convert to .=
     @test y === x == [0,1,2,3]
 end
 let a = [[4, 5], [6, 7]]

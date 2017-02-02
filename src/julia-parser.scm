@@ -2079,7 +2079,9 @@
           ((eqv? t #\@)
            (take-token s)
            (with-space-sensitive
-            (let ((head (parse-unary-prefix s)))
+            (let ((head (if (eq? (peek-token s) '|.|)
+                            (begin (take-token s) '__dot__)
+                            (parse-unary-prefix s))))
               (if (eq? head '__LINE__)
                   (input-port-line (ts:port s))
                   (begin
