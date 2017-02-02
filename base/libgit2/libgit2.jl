@@ -196,7 +196,7 @@ function make_payload{P<:AbstractCredentials}(payload::Nullable{P})
 end
 
 """
-    fetch(repo::GitRepo; kwargs... , payload=Nullable{AbstractCredentials}())
+    fetch(repo::GitRepo; kwargs...)
 
 Fetches updates from an upstream of the repository `repo`.
 
