@@ -49,6 +49,8 @@ function edit(path::AbstractString, line::Integer=0)
         cmd = line != 0 ? `$command $path -l $line` : `$command $path`
     elseif startswith(name, "subl") || startswith(name, "atom")
         cmd = line != 0 ? `$command $path:$line` : `$command $path`
+    elseif startswith(name, "notepad++")
+        cmd = line != 0 ? `$command $path -n$line` : `$command $path`
     elseif is_windows() && (name == "start" || name == "open")
         cmd = `cmd /c start /b $path`
         line_unsupported = true
