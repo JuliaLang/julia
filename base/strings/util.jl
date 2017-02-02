@@ -297,6 +297,17 @@ end
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 split(str::AbstractString) = split(str, _default_delims; limit=0, keep=false)
 
+"""
+    splitlines(str::AbstractString; chomp = true)
+
+Return an array of strings by splitting the given string at line break characters
+(`'\\n'` or `"\\r\\n"`). When `chomp` is true (as it is by default),
+these trailing newline characters are removed from the
+line before it is returned. When `chomp` is false, they are returned as part of the
+line.
+"""
+splitlines(str::AbstractString; chomp = true) = readlines(IOBuffer(str), chomp = chomp)
+
 rsplit{T<:SubString}(str::T, splitter; limit::Integer=0, keep::Bool=true) = _rsplit(str, splitter, limit, keep, T[])
 
 """

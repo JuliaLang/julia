@@ -845,6 +845,7 @@ export
     showcompact,
     showerror,
     split,
+    splitlines,
     sprint,
     string,
     strip,
