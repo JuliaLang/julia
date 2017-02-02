@@ -819,6 +819,10 @@ for i = 2:4
     @test r[i] == x
 end
 
+# issue #20382
+r = @inferred(colon(big(1.0),big(2.0),big(5.0)))
+@test eltype(r) == BigFloat
+
 # issue #14420
 for r in (linspace(0.10000000000000045, 1), 0.10000000000000045:(1-0.10000000000000045)/49:1)
     @test r[1] === 0.10000000000000045
