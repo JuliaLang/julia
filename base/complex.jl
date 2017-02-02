@@ -195,7 +195,7 @@ end
 
 Compute the complex conjugate of a complex number `z`.
 
-```julia
+```jldoctest
 julia> conj(1 + 3im)
 1 - 3im
 ```
