@@ -577,7 +577,7 @@ false
     This last point is *very* important: even though `Float64 <: Real` we **DO NOT** have `Point{Float64} <: Point{Real}`.
 
 In other words, in the parlance of type theory, Julia's type parameters are *invariant*, rather
-than being covariant (or even contravariant). This is for practical reasons: while any instance
+than being [covariant (or even contravariant)](https://en.wikipedia.org/wiki/Covariance_and_contravariance_%28computer_science%29). This is for practical reasons: while any instance
 of `Point{Float64}` may conceptually be like an instance of `Point{Real}` as well, the two types
 have different representations in memory:
 
