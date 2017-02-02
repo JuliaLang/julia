@@ -140,3 +140,15 @@ show_sexpr(ioB,:(1+1))
 show_sexpr(ioB,QuoteNode(1),1)
 
 end
+
+# test base/expr.jl
+baremodule B
+    eval = 0
+    x = 1
+    module M; x = 2; end
+    import Base
+    @Base.eval x = 3
+    @Base.eval M x = 4
+end
+@test B.x == 3
+@test B.M.x == 4
