@@ -603,14 +603,17 @@ function norm(p::Point{Real})
 end
 ```
 
-The correct way to define a method that accepts all arguments of type `Point{T}` where `T` is
+A correct way to define a method that accepts all arguments of type `Point{T}` where `T` is
 a subtype of `Real` is:
 
 ```julia
-function norm{T<:Real}(p::Point{T})
+function norm(p::Point{<:Real})
     sqrt(p.x^2 + p.y^2)
 end
 ```
+
+(Equivalently, one could define `function norm{T<:Real}(p::Point{T})` or
+`function norm(p::Point{T} where T<:Real)`; see [UnionAll Types](@ref).)
 
 More examples will be discussed later in [Methods](@ref).
 
@@ -990,6 +993,7 @@ Using explicit `where` syntax, any subset of parameters can be fixed. For exampl
 
 Type variables can be restricted with subtype relations.
 `Array{T} where T<:Integer` refers to all arrays whose element type is some kind of `Integer`.
+The syntax `Array{<:Integer}` is a convenient shorthand for `Array{T} where T<:Integer`.
 Type variables can have both lower and upper bounds.
 `Array{T} where Int<:T<:Number` refers to all arrays of `Number`s that are able to contain `Int`s
 (since `T` must be at least as big as `Int`).
