@@ -4179,6 +4179,13 @@ function f17613_2(x)::Float64
 end
 @test isa(f17613_2(1), Float64)
 
+# return type decl with `where`
+function where1090(x::Array{T})::T where T<:Real
+    return x[1] + 2.0
+end
+@test where1090([4]) === 6
+@test_throws MethodError where1090(String[])
+
 type A1090 end
 Base.convert(::Type{Int}, ::A1090) = "hey"
 f1090()::Int = A1090()
