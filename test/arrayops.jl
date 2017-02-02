@@ -496,12 +496,12 @@ end
     c = convert(Array, s)
     for p in ([1,2,3], [1,3,2], [2,1,3], [2,3,1], [3,1,2], [3,2,1])
         @test permutedims(s, p) == permutedims(c, p)
-        @test Base.PermutedDimsArrays.PermutedDimsArray(s, p) == permutedims(c, p)
+        @test PermutedDimsArray(s, p) == permutedims(c, p)
     end
     @test_throws ArgumentError permutedims(a, (1,1,1))
     @test_throws ArgumentError permutedims(s, (1,1,1))
-    @test_throws ArgumentError Base.PermutedDimsArrays.PermutedDimsArray(a, (1,1,1))
-    @test_throws ArgumentError Base.PermutedDimsArrays.PermutedDimsArray(s, (1,1,1))
+    @test_throws ArgumentError PermutedDimsArray(a, (1,1,1))
+    @test_throws ArgumentError PermutedDimsArray(s, (1,1,1))
 
     for A in [rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1)]
         perm = randperm(4)

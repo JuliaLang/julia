@@ -81,6 +81,7 @@ export
     OrdinalRange,
     Pair,
     PartialQuickSort,
+    PermutedDimsArray,
     PollingFileWatcher,
     QuickSort,
     Range,
