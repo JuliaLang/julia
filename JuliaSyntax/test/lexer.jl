@@ -192,3 +192,8 @@ end
     @test (t->t.val=="1234.0." && t.kind == Tokens.ERROR)(collect(tokenize("1234.0.f(a)"))[1])
     @test (t->t.val=="1234.0" && t.kind == Tokens.FLOAT)(collect(tokenize("1234.0 .f(a)"))[1])
 end
+
+
+@testset "lexing anon functions '->' " begin
+    @test collect(tokenize("a->b"))[2].kind==Tokens.ANON_FUNC
+end

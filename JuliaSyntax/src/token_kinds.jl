@@ -710,6 +710,7 @@
         DDDOT, # ...
         OR, # |
         TRANSPOSE, # .'
+        ANON_FUNC, # ->
         
 
         begin_unicode_ops,
