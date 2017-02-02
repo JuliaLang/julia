@@ -862,7 +862,7 @@ f18348{T<:Any}(::Type{T}, x::T) = 2
 f12721{T<:Type{Int}}(::T) = true
 @test_throws MethodError f12721(Float64)
 
-# implicit type parameters:
+# implicit "covariant" type parameters:
 type TwoParams{S,T}; x::S; y::T; end
 @test TwoParams{<:Real,<:Number} == (TwoParams{S,T} where S<:Real where T<:Number) ==
       (TwoParams{S,<:Number} where S<:Real) == (TwoParams{<:Real,T} where T<:Number)
@@ -879,3 +879,11 @@ ftwoparams(::TwoParams{<:Real,<:Real}) = 3
 @test !([TwoParams(3,4)] isa Vector{TwoParams{<:Real,<:Real}})
 @test TwoParams{<:Real,<:Real}[TwoParams(3,4)] isa Vector{TwoParams{<:Real,<:Real}}
 @test [TwoParams(3,4)] isa (Vector{TwoParams{T,T}} where T<:Real)
+
+# implicit "contravariant" type parameters:
+@test TwoParams{>:Int,<:Number} == (TwoParams{S,T} where S>:Int where T<:Number) ==
+      (TwoParams{S,<:Number} where S>:Int) == (TwoParams{>:Int,T} where T<:Number)
+@test TwoParams(3,0im) isa TwoParams{>:Int,<:Number}
+@test TwoParams{Real,Complex}(3,0im) isa TwoParams{>:Int,<:Number}
+@test !(TwoParams(3.0,0im) isa TwoParams{>:Int,<:Number})
+@test !(TwoParams(3,'x') isa TwoParams{>:Int,<:Number})
