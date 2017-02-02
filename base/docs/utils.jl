@@ -19,7 +19,7 @@ You can also use a stream for large amounts of data:
       println(io, "<div>foo</div>")
     end
 """
-type HTML{T}
+mutable struct HTML{T}
     content::T
 end
 
@@ -64,7 +64,7 @@ You can also use a stream for large amounts of data:
       println(io, "foo")
     end
 """
-type Text{T}
+mutable struct Text{T}
     content::T
 end
 
@@ -348,12 +348,12 @@ print_correction(word) = print_correction(STDOUT, word)
 
 # Completion data
 
-const builtins = ["abstract", "baremodule", "begin", "bitstype", "break",
+const builtins = ["abstract type", "baremodule", "begin", "break",
                   "catch", "ccall", "const", "continue", "do", "else",
                   "elseif", "end", "export", "finally", "for", "function",
-                  "global", "if", "immutable", "import", "importall", "let",
-                  "local", "macro", "module", "quote", "return", "try", "type",
-                  "typealias", "using", "while"]
+                  "global", "if", "import", "importall", "let",
+                  "local", "macro", "module", "mutable struct", "primitive type",
+                  "quote", "return", "struct", "try", "typealias", "using", "while"]
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 

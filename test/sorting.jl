@@ -95,7 +95,7 @@ end
 @test searchsortedlast(500:1.0:600, 1.0e20) == 101
 
 # exercise the codepath in searchsorted* methods for ranges that check for zero step range
-immutable ConstantRange{T} <: Range{T}
+struct ConstantRange{T} <: Range{T}
    val::T
    len::Int
 end
@@ -337,7 +337,7 @@ end
 @test sortperm([-1.0, 1.0, 1.0], rev=true) == [2, 3, 1]
 
 # issue #8825 - stability of min/max
-type Twain
+mutable struct Twain
     a :: Int
     b :: Int
 end

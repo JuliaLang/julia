@@ -20,7 +20,7 @@ end
 # libuv file watching event flags
 const UV_RENAME = 1
 const UV_CHANGE = 2
-immutable FileEvent
+struct FileEvent
     renamed::Bool
     changed::Bool
     timedout::Bool
@@ -31,7 +31,7 @@ FileEvent(flags::Integer) = FileEvent((flags & UV_RENAME) != 0,
                                   (flags & FD_TIMEDOUT) != 0)
 fetimeout() = FileEvent(false, false, true)
 
-immutable FDEvent
+struct FDEvent
     readable::Bool
     writable::Bool
     disconnect::Bool
@@ -57,7 +57,7 @@ fdtimeout() = FDEvent(false, false, false, true)
             a.disconnect | b.disconnect,
             a.timedout | b.timedout)
 
-type FileMonitor
+mutable struct FileMonitor
     handle::Ptr{Void}
     file::String
     notify::Condition
@@ -76,7 +76,7 @@ type FileMonitor
     end
 end
 
-type PollingFileWatcher
+mutable struct PollingFileWatcher
     handle::Ptr{Void}
     file::String
     interval::UInt32
@@ -96,7 +96,7 @@ type PollingFileWatcher
     end
 end
 
-type _FDWatcher
+mutable struct _FDWatcher
     handle::Ptr{Void}
     fdnum::Int # this is NOT the file descriptor
     refcount::Tuple{Int, Int}
@@ -195,7 +195,7 @@ type _FDWatcher
     end
 end
 
-type FDWatcher
+mutable struct FDWatcher
     watcher::_FDWatcher
     readable::Bool
     writable::Bool

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-abstract AbstractSparseArray{Tv,Ti,N} <: AbstractArray{Tv,N}
+abstract type AbstractSparseArray{Tv,Ti,N} <: AbstractArray{Tv,N} end
 
 typealias AbstractSparseVector{Tv,Ti} AbstractSparseArray{Tv,Ti,1}
 typealias AbstractSparseMatrix{Tv,Ti} AbstractSparseArray{Tv,Ti,2}

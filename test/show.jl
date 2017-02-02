@@ -11,13 +11,13 @@ replstr(x) = sprint((io,x) -> show(IOContext(io, limit=true), MIME("text/plain")
 @test replstr(Array{Any}(2,2,2)) == "2×2×2 Array{Any,3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
 @test replstr([1f10]) == "1-element Array{Float32,1}:\n 1.0f10"
 
-immutable T5589
+struct T5589
     names::Vector{String}
 end
 @test replstr(T5589(Array{String,1}(100))) == "$(curmod_prefix)T5589(String[#undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef  …  #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef])"
 
-@test replstr(parse("type X end")) == ":(type X # none, line 1:\n    end)"
-@test replstr(parse("immutable X end")) == ":(immutable X # none, line 1:\n    end)"
+@test replstr(parse("mutable struct X end")) == ":(mutable struct X # none, line 1:\n    end)"
+@test replstr(parse("struct X end")) == ":(struct X # none, line 1:\n    end)"
 s = "ccall(:f, Int, (Ptr{Void},), &x)"
 @test replstr(parse(s)) == ":($s)"
 
@@ -94,7 +94,7 @@ end
 @test_repr "(a == b == c) != (c == d < e)"
 
 # control structures (shamelessly stolen from base/bitarray.jl)
-@test_repr """type BitArray{N} <: AbstractArray{Bool, N}
+@test_repr """mutable struct BitArray{N} <: AbstractArray{Bool, N}
     chunks::Vector{UInt64}
     len::Int
     dims::NTuple{N,Int}
@@ -232,7 +232,7 @@ for s in ("(1::Int64 == 1::Int64)::Bool", "(1:2:3) + 4", "x = 1:2:3")
 end
 
 # parametric type instantiation printing
-immutable TParametricPrint{a}; end
+struct TParametricPrint{a}; end
 @test sprint(show, :(TParametricPrint{false}())) == ":(TParametricPrint{false}())"
 
 # issue #9797
@@ -285,10 +285,10 @@ end
 @test_repr "(1 => 2) => 3"
 
 # pr 12008
-@test_repr "bitstype A B"
-@test_repr "bitstype 100 B"
-@test repr(:(bitstype A B)) == ":(bitstype A B)"
-@test repr(:(bitstype 100 B)) == ":(bitstype 100 B)"
+@test_repr "primitive type A B end"
+@test_repr "primitive type B 100 end"
+@test repr(:(primitive type A B end)) == ":(primitive type A B end)"
+@test repr(:(primitive type B 100 end)) == ":(primitive type B 100 end)"
 
 # `where` syntax
 @test_repr "A where T<:B"
@@ -367,7 +367,7 @@ let filename = tempname()
 end
 
 # issue #12960
-type T12960 end
+mutable struct T12960 end
 let
     A = speye(3)
     B = similar(A, T12960)

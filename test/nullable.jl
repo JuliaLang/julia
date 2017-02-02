@@ -67,7 +67,7 @@ for T in types
 end
 
 
-# immutable NullException <: Exception
+# struct NullException <: Exception
 @test isa(NullException(), NullException)
 @test_throws NullException throw(NullException())
 
@@ -283,7 +283,7 @@ for T in types
     @test hash(x3) != hash(x4)
 end
 
-type TestNType{T}
+mutable struct TestNType{T}
     v::Nullable{T}
 end
 

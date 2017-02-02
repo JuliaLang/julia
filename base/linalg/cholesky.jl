@@ -27,14 +27,14 @@
 # checks of those fields before calls to LAPACK to check which version of the Cholesky
 # factorization the type represents.
 
-immutable Cholesky{T,S<:AbstractMatrix} <: Factorization{T}
+struct Cholesky{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     uplo::Char
 end
 Cholesky{T}(A::AbstractMatrix{T}, uplo::Symbol) = Cholesky{T,typeof(A)}(A, char_uplo(uplo))
 Cholesky{T}(A::AbstractMatrix{T}, uplo::Char) = Cholesky{T,typeof(A)}(A, uplo)
 
-immutable CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
+struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     uplo::Char
     piv::Vector{BlasInt}

@@ -47,7 +47,7 @@ try
               end
 
               # test for creation of some reasonably complicated type
-              immutable MyType{T} end
+              struct MyType{T} end
               const t17809s = Any[
                     Tuple{
                         Type{Ptr{MyType{i}}},
@@ -67,20 +67,20 @@ try
               const nothingkw = Core.kwfunc(Base.nothing)
 
               # issue 16908 (some complicated types and external method definitions)
-              abstract CategoricalPool{T, R <: Integer, V}
-              abstract CategoricalValue{T, R <: Integer}
-              immutable NominalPool{T, R <: Integer, V} <: CategoricalPool{T, R, V}
+              abstract type CategoricalPool{T, R <: Integer, V} end
+              abstract type CategoricalValue{T, R <: Integer} end
+              struct NominalPool{T, R <: Integer, V} <: CategoricalPool{T, R, V}
                   index::Vector{T}
                   invindex::Dict{T, R}
                   order::Vector{R}
                   ordered::Vector{T}
                   valindex::Vector{V}
               end
-              immutable NominalValue{T, R <: Integer} <: CategoricalValue{T, R}
+              struct NominalValue{T, R <: Integer} <: CategoricalValue{T, R}
                   level::R
                   pool::NominalPool{T, R, NominalValue{T, R}}
               end
-              immutable OrdinalValue{T, R <: Integer} <: CategoricalValue{T, R}
+              struct OrdinalValue{T, R <: Integer} <: CategoricalValue{T, R}
                   level::R
                   pool::NominalPool{T, R, NominalValue{T, R}}
               end
@@ -92,10 +92,10 @@ try
 
               # more tests for method signature involving a complicated type
               # issue 18343
-              immutable Pool18343{R, V}
+              struct Pool18343{R, V}
                   valindex::Vector{V}
               end
-              immutable Value18343{T, R}
+              struct Value18343{T, R}
                   pool::Pool18343{R, Value18343{T, R}}
               end
               Base.convert{S}(::Type{Nullable{S}}, ::Value18343{Nullable}) = 2

@@ -6,7 +6,7 @@ const OID_RAWSZ = 20
 const OID_HEXSZ = OID_RAWSZ * 2
 const OID_MINPREFIXLEN = 4
 
-abstract AbstractGitHash
+abstract type AbstractGitHash end
 
 """
     GitHash
@@ -14,7 +14,7 @@ abstract AbstractGitHash
 A git object identifier, based on the sha-1 hash. It is a $OID_RAWSZ byte string
 ($OID_HEXSZ hex digits) used to identify a `GitObject` in a repository.
 """
-immutable GitHash <: AbstractGitHash
+struct GitHash <: AbstractGitHash
     val::NTuple{OID_RAWSZ, UInt8}
     GitHash(val::NTuple{OID_RAWSZ, UInt8}) = new(val)
 end
@@ -29,7 +29,7 @@ is unique.
 Internally it is stored as two fields: a full-size `GitHash` (`hash`) and a length
 (`len`). Only the initial `len` hex digits of `hash` are used.
 """
-immutable GitShortHash <: AbstractGitHash
+struct GitShortHash <: AbstractGitHash
     hash::GitHash   # underlying hash: unused digits are ignored
     len::Csize_t    # length in hex digits
 end
@@ -41,7 +41,7 @@ end
 Time in a signature.
 Matches the [`git_time`](https://libgit2.github.com/libgit2/#HEAD/type/git_time) struct.
 """
-immutable TimeStruct
+struct TimeStruct
     time::Int64     # time in seconds from epoch
     offset::Cint    # timezone offset in minutes
 end
@@ -52,7 +52,7 @@ end
 An action signature (e.g. for committers, taggers, etc).
 Matches the [`git_signature`](https://libgit2.github.com/libgit2/#HEAD/type/git_signature) struct.
 """
-immutable SignatureStruct
+struct SignatureStruct
     name::Ptr{UInt8}  # full name of the author
     email::Ptr{UInt8} # email of the author
     when::TimeStruct  # time when the action happened
@@ -81,7 +81,7 @@ strs = String[...]
 ```
 Note that no call to `free` is required as the data is allocated by Julia.
 """
-immutable StrArrayStruct
+struct StrArrayStruct
    strings::Ptr{Cstring}
    count::Csize_t
 end
@@ -106,7 +106,7 @@ free(buf_ref)
 ```
 In particular, note that `LibGit2.free` should be called afterward on the `Ref` object.
 """
-immutable Buffer
+struct Buffer
     ptr::Ptr{Cchar}
     asize::Csize_t
     size::Csize_t
@@ -118,7 +118,7 @@ function free(buf_ref::Base.Ref{Buffer})
 end
 
 "Abstract credentials payload"
-abstract AbstractCredentials
+abstract type AbstractCredentials end
 
 "Checks if credentials were used"
 checkused!(p::AbstractCredentials) = true
@@ -131,7 +131,7 @@ reset!(p::AbstractCredentials, cnt::Int=3) = nothing
 
 Matches the [`git_checkout_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_checkout_options) struct.
 """
-@kwdef immutable CheckoutOptions
+@kwdef struct CheckoutOptions
     version::Cuint = 1
 
     checkout_strategy::Cuint    = Consts.CHECKOUT_SAFE
@@ -168,7 +168,7 @@ end
 Callback settings.
 Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/type/git_remote_callbacks) struct.
 """
-@kwdef immutable RemoteCallbacks
+@kwdef struct RemoteCallbacks
     version::Cuint                    = 1
     sideband_progress::Ptr{Void}
     completion::Ptr{Void}
@@ -195,7 +195,7 @@ Options for connecting through a proxy.
 
 Matches the [`git_proxy_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_proxy_options) struct.
 """
-@kwdef immutable ProxyOptions
+@kwdef struct ProxyOptions
     version::Cuint             = 1
     proxytype::Cint
     url::Cstring
@@ -210,7 +210,7 @@ end
 
 Matches the [`git_fetch_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_fetch_options) struct.
 """
-@kwdef immutable FetchOptions
+@kwdef struct FetchOptions
     version::Cuint                  = 1
     callbacks::RemoteCallbacks
     prune::Cint                     = Consts.FETCH_PRUNE_UNSPECIFIED
@@ -229,7 +229,7 @@ end
 
 Matches the [`git_clone_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_clone_options) struct.
 """
-@kwdef immutable CloneOptions
+@kwdef struct CloneOptions
     version::Cuint                      = 1
     checkout_opts::CheckoutOptions
     fetch_opts::FetchOptions
@@ -247,7 +247,7 @@ end
 
 Matches the [`git_diff_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_options) struct.
 """
-@kwdef immutable DiffOptionsStruct
+@kwdef struct DiffOptionsStruct
     version::Cuint                           = Consts.DIFF_OPTIONS_VERSION
     flags::UInt32                            = Consts.DIFF_NORMAL
 
@@ -275,7 +275,7 @@ end
 Description of one side of a delta.
 Matches the [`git_diff_file`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_file) struct.
 """
-immutable DiffFile
+struct DiffFile
     id::GitHash
     path::Cstring
     size::Int64
@@ -292,7 +292,7 @@ end
 Description of changes to one entry.
 Matches the [`git_diff_file`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_file) struct.
 """
-immutable DiffDelta
+struct DiffDelta
     status::Cint
     flags::UInt32
     similarity::UInt16
@@ -306,7 +306,7 @@ end
 
 Matches the [`git_merge_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_merge_options) struct.
 """
-@kwdef immutable MergeOptions
+@kwdef struct MergeOptions
     version::Cuint                    = 1
     flags::Cint
     rename_threshold::Cuint           = 50
@@ -327,7 +327,7 @@ end
 
 Matches the [`git_push_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_push_options) struct.
 """
-@kwdef immutable PushOptions
+@kwdef struct PushOptions
     version::Cuint                     = 1
     parallelism::Cint                  = 1
     callbacks::RemoteCallbacks
@@ -344,7 +344,7 @@ end
 
 Matches the [`git_index_time`](https://libgit2.github.com/libgit2/#HEAD/type/git_index_time) struct.
 """
-immutable IndexTime
+struct IndexTime
     seconds::Int64
     nanoseconds::Cuint
 end
@@ -355,7 +355,7 @@ end
 In-memory representation of a file entry in the index.
 Matches the [`git_index_entry`](https://libgit2.github.com/libgit2/#HEAD/type/git_index_entry) struct.
 """
-immutable IndexEntry
+struct IndexEntry
     ctime::IndexTime
     mtime::IndexTime
 
@@ -380,7 +380,7 @@ Base.show(io::IO, ie::IndexEntry) = print(io, "IndexEntry($(string(ie.id)))")
 
 Matches the `git_rebase_options` struct.
 """
-@kwdef immutable RebaseOptions
+@kwdef struct RebaseOptions
     version::Cuint                 = 1
     quiet::Cint                    = 1
     @static if LibGit2.VERSION >= v"0.24.0"
@@ -399,7 +399,7 @@ end
 Describes a single instruction/operation to be performed during the rebase.
 Matches the [`git_rebase_operation`](https://libgit2.github.com/libgit2/#HEAD/type/git_rebase_operation_t) struct.
 """
-immutable RebaseOperation
+struct RebaseOperation
     optype::Cint
     id::GitHash
     exec::Cstring
@@ -412,7 +412,7 @@ Base.show(io::IO, rbo::RebaseOperation) = print(io, "RebaseOperation($(string(rb
 Options to control how `git_status_foreach_ext()` will issue callbacks.
 Matches the [`git_status_opt_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_status_opt_t) struct.
 """
-@kwdef immutable StatusOptions
+@kwdef struct StatusOptions
     version::Cuint           = 1
     show::Cint               = Consts.STATUS_SHOW_INDEX_AND_WORKDIR
     flags::Cuint             = Consts.STATUS_OPT_INCLUDE_UNTRACKED |
@@ -429,7 +429,7 @@ Providing the differences between the file as it exists in HEAD and the index, a
 providing the differences between the index and the working directory.
 Matches the `git_status_entry` struct.
 """
-immutable StatusEntry
+struct StatusEntry
     status::Cuint
     head_to_index::Ptr{DiffDelta}
     index_to_workdir::Ptr{DiffDelta}
@@ -442,7 +442,7 @@ Contains the information about HEAD during a fetch, including the name and URL
 of the branch fetched from, the oid of the HEAD, and whether the fetched HEAD
 has been merged locally.
 """
-immutable FetchHead
+struct FetchHead
     name::String
     url::String
     oid::GitHash
@@ -450,10 +450,10 @@ immutable FetchHead
 end
 
 # Abstract object types
-abstract AbstractGitObject
+abstract type AbstractGitObject end
 Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
 
-abstract GitObject <: AbstractGitObject
+abstract type GitObject <: AbstractGitObject end
 
 for (typ, reporef, sup, cname) in [
     (:GitRepo,       nothing,   :AbstractGitObject, :git_repository),
@@ -475,7 +475,7 @@ for (typ, reporef, sup, cname) in [
     (:GitTag,        :GitRepo,  :GitObject,         :git_tag)]
 
     if reporef === nothing
-        @eval type $typ <: $sup
+        @eval mutable struct $typ <: $sup
             ptr::Ptr{Void}
             function $typ(ptr::Ptr{Void},fin=true)
                 # fin=false should only be used when the pointer should not be free'd
@@ -490,7 +490,7 @@ for (typ, reporef, sup, cname) in [
             end
         end
     elseif reporef == :Nullable
-        @eval type $typ <: $sup
+        @eval mutable struct $typ <: $sup
             nrepo::Nullable{GitRepo}
             ptr::Ptr{Void}
             function $typ(repo::GitRepo, ptr::Ptr{Void})
@@ -509,7 +509,7 @@ for (typ, reporef, sup, cname) in [
             end
         end
     elseif reporef == :GitRepo
-        @eval type $typ <: $sup
+        @eval mutable struct $typ <: $sup
             repo::GitRepo
             ptr::Ptr{Void}
             function $typ(repo::GitRepo, ptr::Ptr{Void})
@@ -545,7 +545,7 @@ end
 This is a Julia wrapper around a pointer to a
 [`git_signature`](https://libgit2.github.com/libgit2/#HEAD/type/git_signature) object.
 """
-type GitSignature <: AbstractGitObject
+mutable struct GitSignature <: AbstractGitObject
     ptr::Ptr{SignatureStruct}
     function GitSignature(ptr::Ptr{SignatureStruct})
         @assert ptr != C_NULL
@@ -562,7 +562,7 @@ function Base.close(obj::GitSignature)
 end
 
 # Structure has the same layout as SignatureStruct
-type Signature
+mutable struct Signature
     name::String
     email::String
     time::Int64
@@ -629,7 +629,7 @@ end
 import Base.securezero!
 
 "Credentials that support only `user` and `password` parameters"
-type UserPasswordCredentials <: AbstractCredentials
+mutable struct UserPasswordCredentials <: AbstractCredentials
     user::String
     pass::String
     prompt_if_incorrect::Bool    # Whether to allow interactive prompting if the credentials are incorrect
@@ -650,7 +650,7 @@ function securezero!(cred::UserPasswordCredentials)
 end
 
 "SSH credentials type"
-type SSHCredentials <: AbstractCredentials
+mutable struct SSHCredentials <: AbstractCredentials
     user::String
     pass::String
     pubkey::String
@@ -676,7 +676,7 @@ function securezero!(cred::SSHCredentials)
 end
 
 "Credentials that support caching"
-type CachedCredentials <: AbstractCredentials
+mutable struct CachedCredentials <: AbstractCredentials
     cred::Dict{String,AbstractCredentials}
     count::Int            # authentication failure protection count
     CachedCredentials() = new(Dict{String,AbstractCredentials}(),3)

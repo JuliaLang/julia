@@ -76,7 +76,7 @@ clear() = ccall(:jl_profile_clear_data, Void, ())
 typealias LineInfoDict Dict{UInt64, Vector{StackFrame}}
 typealias LineInfoFlatDict Dict{UInt64, StackFrame}
 
-immutable ProfileFormat
+struct ProfileFormat
     maxdepth::Int
     mincount::Int
     noisefloor::Float64

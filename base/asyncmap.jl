@@ -267,7 +267,7 @@ function asyncmap(f, s::AbstractSparseArray...; kwargs...)
     return sparse(asyncmap(f, sa...; kwargs...))
 end
 
-type AsyncCollector
+mutable struct AsyncCollector
     f
     results
     enumerator::Enumerate
@@ -302,7 +302,7 @@ function AsyncCollector(f, results, c...; ntasks=0, batch_size=nothing)
     AsyncCollector(f, results, enumerate(zip(c...)), ntasks, batch_size)
 end
 
-type AsyncCollectorState
+mutable struct AsyncCollectorState
     chnl::Channel
     worker_tasks::Array{Task,1}
     enum_state      # enumerator state
@@ -367,7 +367,7 @@ be a function which operates on an array of argument tuples.
     `collect(AsyncGenerator(f, c...; ntasks=1))` is equivalent to
     `map(f, c...)`.
 """
-type AsyncGenerator
+mutable struct AsyncGenerator
     collector::AsyncCollector
 end
 
@@ -375,7 +375,7 @@ function AsyncGenerator(f, c...; ntasks=0)
     AsyncGenerator(AsyncCollector(f, Dict{Int,Any}(), c...; ntasks=ntasks))
 end
 
-type AsyncGeneratorState
+mutable struct AsyncGeneratorState
     i::Int
     collector_state::AsyncCollectorState
 end

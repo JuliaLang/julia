@@ -112,7 +112,7 @@ include("abstractarraymath.jl")
 include("arraymath.jl")
 
 # define MIME"foo/bar" early so that we can overload 3-arg show
-immutable MIME{mime} end
+struct MIME{mime} end
 macro MIME_str(s)
     :(MIME{$(Expr(:quote, Symbol(s)))})
 end

@@ -34,6 +34,14 @@ Language changes
     i.e. the case where the type parameters are specified. For clarity, this
     definition now must be written as `Foo{T,S}(x) where {T,S<:Real} = new(x)`. ([#11310])
 
+  * The keywords used to define types have changed ([#19157], [#20418]).
+    + `immutable` changes to `struct`
+    + `type` changes to `mutable struct`
+    + `abstract` changes to `abstract type ... end`
+    + `bitstype 32 Char` changes to `primitive type Char 32 end`
+    In 0.6, `immutable` and `type` are still allowed as synonyms without a deprecation
+    warning.
+
   * Multi-line and single-line nonstandard command literals have been added. A
     nonstandard command literal is like a nonstandard string literal, but the
     syntax uses backquotes (``` ` ```) instead of double quotes, and the

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-type LaTeX
+mutable struct LaTeX
     formula::String
 end
 

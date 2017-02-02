@@ -25,17 +25,17 @@ import Base.haskey, Base.get
 import Base.setindex!, Base.getindex, Base.delete!, Base.empty!
 import Base.show
 
-abstract LRU{K,V} <: Associative{K,V}
+abstract type LRU{K,V} <: Associative{K,V} end
 
 # Default cache size
 const __MAXCACHE = 1024
 
-type CacheItem{K,V}
+mutable struct CacheItem{K,V}
     k::K
     v::V
 end
 
-type UnboundedLRU{K,V} <: LRU{K,V}
+mutable struct UnboundedLRU{K,V} <: LRU{K,V}
     ht::Dict
     q::Vector{CacheItem}
 
@@ -43,7 +43,7 @@ type UnboundedLRU{K,V} <: LRU{K,V}
 end
 UnboundedLRU() = UnboundedLRU{Any, Any}()
 
-type BoundedLRU{K,V} <: LRU{K,V}
+mutable struct BoundedLRU{K,V} <: LRU{K,V}
     ht::Dict
     q::Vector{CacheItem}
     maxsize::Int

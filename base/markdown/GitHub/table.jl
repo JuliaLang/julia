@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-type Table
+mutable struct Table
     rows::Vector{Vector{Any}}
     align::Vector{Symbol}
 end

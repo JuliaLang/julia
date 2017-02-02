@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-abstract AbstractWorkerPool
+abstract type AbstractWorkerPool end
 
 # An AbstractWorkerPool should implement
 #
@@ -15,7 +15,7 @@ abstract AbstractWorkerPool
 #    workers::Set{Int}
 #
 
-type WorkerPool <: AbstractWorkerPool
+mutable struct WorkerPool <: AbstractWorkerPool
     channel::Channel{Int}
     workers::Set{Int}
     ref::RemoteChannel
@@ -214,7 +214,7 @@ using [`remotecall_fetch`](@ref).
 remote(f) = (args...; kwargs...)->remotecall_fetch(f, default_worker_pool(), args...; kwargs...)
 remote(p::AbstractWorkerPool, f) = (args...; kwargs...)->remotecall_fetch(f, p, args...; kwargs...)
 
-type CachingPool <: AbstractWorkerPool
+mutable struct CachingPool <: AbstractWorkerPool
     channel::Channel{Int}
     workers::Set{Int}
 
