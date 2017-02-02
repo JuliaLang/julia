@@ -390,6 +390,10 @@ for T = (Float32, Float64)
     end
 end
 
+# issue #20380
+r = LinSpace(1,4,4)
+@test isa(r[1:4], LinSpace)
+
 # linspace with 1 or 0 elements (whose step length is NaN)
 @test issorted(linspace(1,1,0))
 @test issorted(linspace(1,1,1))
