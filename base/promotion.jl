@@ -251,7 +251,7 @@ end
 """
     ^(x, y)
 
-Exponentiation operator. If `x is a matrix, computes matrix exponentiatin.
+Exponentiation operator. If `x` is a matrix, computes the matrix exponential.
 
 ```jldoctest
 julia> 3^5
