@@ -30,8 +30,8 @@ end
     @test z == LibGit2.GitHash(rr)
     @test z == LibGit2.GitHash(rs)
     @test z == LibGit2.GitHash(pointer(rr))
-    for i in 11:length(rr); rr[i] = 0; end
-    @test LibGit2.GitHash(rr) == LibGit2.GitHash(rs[1:20])
+
+    @test LibGit2.GitShortHash(z, 20) == LibGit2.GitShortHash(rs[1:20])
     @test_throws ArgumentError LibGit2.GitHash(Ptr{UInt8}(C_NULL))
 end
 
@@ -282,7 +282,7 @@ mktempdir() do dir
                 end
 
                 # lookup commits
-                cmt = LibGit2.get(LibGit2.GitCommit, repo, commit_oid1)
+                cmt = LibGit2.GitCommit(repo, commit_oid1)
                 try
                     @test commit_oid1 == LibGit2.GitHash(cmt)
                     auth = LibGit2.author(cmt)
@@ -324,17 +324,17 @@ mktempdir() do dir
                     @test LibGit2.name(brref) == "refs/heads/master"
                     @test LibGit2.shortname(brref) == master_branch
                     @test LibGit2.ishead(brref)
-                    @test LibGit2.upstream(brref) === nothing
-                    @test repo.ptr == LibGit2.owner(brref).ptr
+                    @test isnull(LibGit2.upstream(brref))
+                    @test repo.ptr == LibGit2.repository(brref).ptr
                     @test brnch == master_branch
                     @test LibGit2.headname(repo) == master_branch
                     LibGit2.branch!(repo, test_branch, string(commit_oid1), set_head=false)
 
-                    @test LibGit2.lookup_branch(repo, test_branch, true) === nothing
-                    tbref = LibGit2.lookup_branch(repo, test_branch, false)
+                    @test isnull(LibGit2.lookup_branch(repo, test_branch, true))
+                    tbref = Base.get(LibGit2.lookup_branch(repo, test_branch, false))
                     try
                         @test LibGit2.shortname(tbref) == test_branch
-                        @test LibGit2.upstream(tbref) === nothing
+                        @test isnull(LibGit2.upstream(tbref))
                     finally
                         close(tbref)
                     end
@@ -438,11 +438,13 @@ mktempdir() do dir
         @testset "blobs" begin
             repo = LibGit2.GitRepo(cache_repo)
             try
-                # clear out the "GitHash( )" part
-                hash_string = sprint(show, commit_oid1)[9:end]
-                hash_string = strip(hash_string, ')')
+                # this is slightly dubious, as it assumes the object has not been packed
+                # could be replaced by another binary format
+                hash_string = hex(commit_oid1)
                 blob_file   = joinpath(cache_repo,".git/objects", hash_string[1:2], hash_string[3:end])
-                blob = LibGit2.GitBlob(repo, blob_file)
+
+                id = LibGit2.addblob!(repo, blob_file)
+                blob = LibGit2.GitBlob(repo, id)
                 @test LibGit2.isbinary(blob)
                 blob_show_strs = split(sprint(show, blob), "\n")
                 @test blob_show_strs[1] == "GitBlob:"

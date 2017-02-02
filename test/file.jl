@@ -285,7 +285,7 @@ reset(s)
 str = readline(s)
 @test startswith(str, "Marked!")
 mark(s)
-@test readline(s) == "Hello world!\n"
+@test readline(s) == "Hello world!"
 @test ismarked(s)
 unmark(s)
 @test !ismarked(s)
@@ -335,7 +335,7 @@ end
 emptyfile = joinpath(dir, "empty")
 touch(emptyfile)
 emptyf = open(emptyfile)
-@test isempty(readlines(emptyf))
+@test isempty(readlines(emptyf, chomp=false))
 close(emptyf)
 rm(emptyfile)
 

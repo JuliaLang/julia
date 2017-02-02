@@ -42,14 +42,24 @@ immutable State
     work::GitHash
 end
 
-"""Return HEAD GitHash as string"""
+"""
+    head(pkg::AbstractString) -> String
+
+Return current HEAD [`GitHash`](@ref) of
+the `pkg` repo as a string.
+"""
 function head(pkg::AbstractString)
     with(GitRepo, pkg) do repo
         string(head_oid(repo))
     end
 end
 
-""" git update-index """
+"""
+    need_update(repo::GitRepo)
+
+Equivalent to `git update-index`. Returns `true`
+if `repo` needs updating.
+"""
 function need_update(repo::GitRepo)
     if !isbare(repo)
         # read updates index from filesystem
@@ -57,11 +67,16 @@ function need_update(repo::GitRepo)
     end
 end
 
-""" Checks if commit is in repository """
+"""
+    iscommit(id::AbstractString, repo::GitRepo) -> Bool
+
+Checks if commit `id` (which is a [`GitHash`](@ref) in string form)
+is in the repository.
+"""
 function iscommit(id::AbstractString, repo::GitRepo)
     res = true
     try
-        c = get(GitCommit, repo, id)
+        c = GitCommit(repo, id)
         if c === nothing
             res = false
         else
@@ -74,29 +89,30 @@ function iscommit(id::AbstractString, repo::GitRepo)
 end
 
 """
-    LibGit2.isdirty(repo::GitRepo[, paths]; cached=false)
+    LibGit2.isdirty(repo::GitRepo, pathspecs::AbstractString=""; cached::Bool=false) -> Bool
 
 Checks if there have been any changes to tracked files in the working tree (if
 `cached=false`) or the index (if `cached=true`).
+`pathspecs` are the specifications for options for the diff.
 
-See `git diff-index HEAD [-- <path>]`
+Equivalent to `git diff-index HEAD [-- <pathspecs>]`.
 """
 isdirty(repo::GitRepo, paths::AbstractString=""; cached::Bool=false) =
     isdiff(repo, Consts.HEAD_FILE, paths, cached=cached)
 
 """
-    LibGit2.isdiff(repo::GitRepo, treeish[, paths]; cached=false)
+    LibGit2.isdiff(repo::GitRepo, treeish::AbstractString, pathspecs::AbstractString=""; cached::Bool=false)
 
 Checks if there are any differences between the tree specified by `treeish` and the
 tracked files in the working tree (if `cached=false`) or the index (if `cached=true`).
+`pathspecs` are the specifications for options for the diff.
 
-See `git diff-index <treeish> [-- <path>]`
+Equivalent to `git diff-index <treeish> [-- <pathspecs>]`.
 """
 function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""; cached::Bool=false)
     tree_oid = revparseid(repo, "$treeish^{tree}")
-    iszero(tree_oid) && error("invalid treeish $treeish") # this can be removed by #20104
     result = false
-    tree = get(GitTree, repo, tree_oid)
+    tree = GitTree(repo, tree_oid)
     try
         diff = diff_tree(repo, tree, paths, cached=cached)
         result = count(diff) > 0
@@ -112,8 +128,8 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
                     filter::Set{Cint}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED]))
     b1_id = revparseid(repo, branch1*"^{tree}")
     b2_id = revparseid(repo, branch2*"^{tree}")
-    tree1 = get(GitTree, repo, b1_id)
-    tree2 = get(GitTree, repo, b2_id)
+    tree1 = GitTree(repo, b1_id)
+    tree2 = GitTree(repo, b2_id)
     files = AbstractString[]
     try
         diff = diff_tree(repo, tree1, tree2)
@@ -132,11 +148,23 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
     return files
 end
 
+"""
+    is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo) -> Bool
+
+Returns `true` if `a`, a [`GitHash`](@ref) in string form, is an ancestor of
+`b`, a [`GitHash`](@ref) in string form.
+"""
 function is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo)
     A = revparseid(repo, a)
     merge_base(repo, a, b) == A
 end
 
+"""
+    set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractString="origin")
+
+Set the `url` for `remote` for the git repository `repo`.
+The default name of the remote is `"origin"`.
+"""
 function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractString="origin")
     with(GitConfig, repo) do cfg
         set!(cfg, "remote.$remote.url", url)
@@ -151,6 +179,12 @@ function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractStri
     end
 end
 
+"""
+    set_remote_url(path::AbstractString, url::AbstractString; remote::AbstractString="origin")
+
+Set the `url` for `remote` for the git repository located at `path`.
+The default name of the remote is `"origin"`.
+"""
 function set_remote_url(path::AbstractString, url::AbstractString; remote::AbstractString="origin")
     with(GitRepo, path) do repo
         set_remote_url(repo, url, remote=remote)
@@ -161,7 +195,15 @@ function make_payload{P<:AbstractCredentials}(payload::Nullable{P})
     Ref{Nullable{AbstractCredentials}}(payload)
 end
 
-""" git fetch [<url>|<repository>] [<refspecs>]"""
+"""
+    fetch(repo::GitRepo; remote::AbstractString="origin", remoteurl::AbstractString="", refspecs=AbstractString[], payload=Nullable{AbstractCredentials}())
+
+Equivalent to `git fetch [<remoteurl>|<repo>] [<refspecs>]`.
+Fetches updates from the upstream `remote` with URL `remoteurl` of the repository `repo`.
+Uses the provided fetch `refspecs` to determine properties of the fetch.
+`payload` provides credentials if necessary, for instance if `remote` is a private
+repository.
+"""
 function fetch{T<:AbstractString, P<:AbstractCredentials}(repo::GitRepo;
                                   remote::AbstractString="origin",
                                   remoteurl::AbstractString="",
@@ -181,7 +223,16 @@ function fetch{T<:AbstractString, P<:AbstractCredentials}(repo::GitRepo;
     end
 end
 
-""" git push [<url>|<repository>] [<refspecs>]"""
+"""
+    push(repo::GitRepo; remote::AbstractString="origin", remoteurl::AbstractString="", refspecs=AbstractString[], force::Bool=false, payload=Nullable{AbstractCredentials}())
+
+Equivalent to `git push [<remoteurl>|<repo>] [<refspecs>]`.
+Pushes updates to the `remote` upstream of `repo`, with URL `remoteurl`.
+Uses the provided push `refspecs` to determine properties of the push.
+`force` determines if the push will be a force push, overwriting the remote branch.
+`payload` provides credentials if necessary, for instance if `remote` is a private
+repository.
+"""
 function push{T<:AbstractString, P<:AbstractCredentials}(repo::GitRepo;
               remote::AbstractString="origin",
               remoteurl::AbstractString="",
@@ -202,7 +253,12 @@ function push{T<:AbstractString, P<:AbstractCredentials}(repo::GitRepo;
     end
 end
 
-""" git branch """
+"""
+    branch(repo::GitRepo)
+
+Equivalent to `git branch`.
+Create a new branch from the current HEAD.
+"""
 function branch(repo::GitRepo)
     head_ref = head(repo)
     try
@@ -212,42 +268,51 @@ function branch(repo::GitRepo)
     end
 end
 
-""" git checkout [-b|-B] <branch> [<start-point>] [--track <remote>/<branch>] """
+"""
+    branch!(repo::GitRepo, branch_name::AbstractString, commit::AbstractString=""; track::AbstractString="", force::Bool=false, set_head::Bool=true)
+
+Equivalent to `git checkout [-b|-B] <branch_name> [<commit>] [--track <track>]`.
+Checkout a new git branch in the `repo` repository. `commit` is the [`GitHash`](@ref),
+in string form, which will be the start of the new branch. `track` is the name of the
+remote branch this new branch should track, if any. If empty (the default), no remote branch
+will be tracked. If `force` is `true`, branch creation will be forced. If `set_head` is
+`true`, after the branch creation finishes the branch head will be set as the HEAD of `repo`.
+"""
 function branch!(repo::GitRepo, branch_name::AbstractString,
                  commit::AbstractString = ""; # start point
                  track::AbstractString  = "", # track remote branch
                  force::Bool=false,           # force branch creation
                  set_head::Bool=true)         # set as head reference on exit
     # try to lookup branch first
-    branch_ref = force ? nothing : lookup_branch(repo, branch_name)
-    if branch_ref === nothing
-        branch_rmt_ref = isempty(track) ? nothing : lookup_branch(repo, "$track/$branch_name", true)
+    branch_ref = force ? Nullable{GitReference}() : lookup_branch(repo, branch_name)
+    if isnull(branch_ref)
+        branch_rmt_ref = isempty(track) ? Nullable{GitReference}() : lookup_branch(repo, "$track/$branch_name", true)
         # if commit is empty get head commit oid
         commit_id = if isempty(commit)
-            if branch_rmt_ref === nothing
+            if isnull(branch_rmt_ref)
                 with(head(repo)) do head_ref
                     with(peel(GitCommit, head_ref)) do hrc
                         GitHash(hrc)
                     end
                 end
             else
-                tmpcmt = with(peel(GitCommit, branch_rmt_ref)) do hrc
+                tmpcmt = with(peel(GitCommit, Base.get(branch_rmt_ref))) do hrc
                     GitHash(hrc)
                 end
-                close(branch_rmt_ref)
+                close(Base.get(branch_rmt_ref))
                 tmpcmt
             end
         else
             GitHash(commit)
         end
         iszero(commit_id) && return
-        cmt =  get(GitCommit, repo, commit_id)
+        cmt =  GitCommit(repo, commit_id)
         new_branch_ref = nothing
         try
-            new_branch_ref = create_branch(repo, branch_name, cmt, force=force)
+            new_branch_ref = Nullable(create_branch(repo, branch_name, cmt, force=force))
         finally
             close(cmt)
-            new_branch_ref === nothing && throw(GitError(Error.Object, Error.ERROR, "cannot create branch `$branch_name` with `$commit_id`"))
+            isnull(new_branch_ref) && throw(GitError(Error.Object, Error.ERROR, "cannot create branch `$branch_name` with `$commit_id`"))
             branch_ref = new_branch_ref
         end
     end
@@ -257,7 +322,7 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
             try
                 with(GitConfig, repo) do cfg
                     set!(cfg, "branch.$branch_name.remote", Consts.REMOTE_ORIGIN)
-                    set!(cfg, "branch.$branch_name.merge", name(branch_ref))
+                    set!(cfg, "branch.$branch_name.merge", name(Base.get(branch_ref)))
                 end
             catch
                 warn("Please provide remote tracking for branch '$branch_name' in '$(path(repo))'")
@@ -266,20 +331,27 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
 
         if set_head
             # checkout selected branch
-            with(peel(GitTree, branch_ref)) do btree
+            with(peel(GitTree, Base.get(branch_ref))) do btree
                 checkout_tree(repo, btree)
             end
 
             # switch head to the branch
-            head!(repo, branch_ref)
+            head!(repo, Base.get(branch_ref))
         end
     finally
-        close(branch_ref)
+        close(Base.get(branch_ref))
     end
     return
 end
 
-""" git checkout [-f] --detach <commit> """
+"""
+    checkout!(repo::GitRepo, commit::AbstractString=""; force::Bool=true)
+
+Equivalent to `git checkout [-f] --detach <commit>`.
+Checkout the git commit `commit` (a [`GitHash`](@ref) in string form)
+in `repo`. If `force` is `true`, force the checkout and discard any
+current changes. Note that this detaches the current HEAD.
+"""
 function checkout!(repo::GitRepo, commit::AbstractString = "";
                   force::Bool = true)
     # nothing to do
@@ -298,28 +370,17 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
     end
 
     # search for commit to get a commit object
-    obj = get(GitUnknownObject, repo, GitHash(commit))
-    obj === nothing && return
-    try
-        peeled = peel(obj, Consts.OBJ_COMMIT)
-        peeled === nothing && return
-        opts = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) :
-                       CheckoutOptions()
-        try
-            # detach commit
-            obj_oid = GitHash(peeled)
-            ref = GitReference(repo, obj_oid, force=force,
-                msg="libgit2.checkout: moving from $head_name to $(string(obj_oid))")
-            close(ref)
+    obj = GitObject(repo, GitHash(commit))
+    peeled = peel(GitCommit, obj)
 
-            # checkout commit
-            checkout_tree(repo, peeled, options = opts)
-        finally
-            close(peeled)
-        end
-    finally
-        close(obj)
-    end
+    opts = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) : CheckoutOptions()
+    # detach commit
+    obj_oid = GitHash(peeled)
+    ref = GitReference(repo, obj_oid, force=force,
+                       msg="libgit2.checkout: moving from $head_name to $(string(obj_oid))")
+
+    # checkout commit
+    checkout_tree(repo, peeled, options = opts)
 end
 
 """ git clone [-b <branch>] [--bare] <url> <dir> """
@@ -343,42 +404,22 @@ end
 
 """ git reset [<committish>] [--] <pathspecs>... """
 function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractString...)
-    obj = revparse(repo, !isempty(committish) ? committish : Consts.HEAD_FILE)
+    obj = GitObject(repo, isempty(committish) ? Consts.HEAD_FILE : committish)
     # do not remove entries in the index matching the provided pathspecs with empty target commit tree
-    obj === nothing && throw(GitError(Error.Object, Error.ERROR, "`$committish` not found"))
-    try
-        head = reset!(repo, Nullable(obj), pathspecs...)
-        return head
-    finally
-        close(obj)
-    end
-    return head_oid(repo)
+    reset!(repo, Nullable(obj), pathspecs...)
 end
 
-""" git reset [--soft | --mixed | --hard] <commit> """
-function reset!(repo::GitRepo, commit::GitHash, mode::Cint = Consts.RESET_MIXED)
-    obj = get(GitUnknownObject, repo, commit)
-    # object must exist for reset
-    obj === nothing && throw(GitError(Error.Object, Error.ERROR, "Commit `$(string(commit))` object not found"))
-    try
-        head = reset!(repo, obj, mode)
-        return head
-    finally
-        close(obj)
-    end
-    return head_oid(repo)
-end
+""" git reset [--soft | --mixed | --hard] <id> """
+reset!(repo::GitRepo, id::GitHash, mode::Cint = Consts.RESET_MIXED) =
+    reset!(repo, GitObject(repo, id), mode)
 
 """ git cat-file <commit> """
-function cat{T<:GitObject}(repo::GitRepo, ::Type{T}, object::AbstractString)
-    obj_id = revparseid(repo, object)
-    iszero(obj_id) && return nothing
-
-    obj = get(T, repo, obj_id)
+function cat(repo::GitRepo, spec)
+    obj = GitObject(repo, spec)
     if isa(obj, GitBlob)
-        return unsafe_string(convert(Ptr{UInt8}, content(obj)))
+        content(obj)
     else
-        return nothing
+        nothing
     end
 end
 
@@ -442,24 +483,24 @@ function merge!(repo::GitRepo;
                 remotename = with(GitConfig, repo) do cfg
                     LibGit2.get(String, cfg, "branch.$branchname.remote")
                 end
-                obj = with(GitReference(repo, "refs/remotes/$remotename/$branchname")) do ref
+                oid = with(GitReference(repo, "refs/remotes/$remotename/$branchname")) do ref
                     LibGit2.GitHash(ref)
                 end
-                with(get(GitCommit, repo, obj)) do cmt
+                with(GitCommit(repo, oid)) do cmt
                     LibGit2.create_branch(repo, branchname, cmt)
                 end
                 return true
             else
                 with(head(repo)) do head_ref
                     tr_brn_ref = upstream(head_ref)
-                    if tr_brn_ref === nothing
+                    if isnull(tr_brn_ref)
                         throw(GitError(Error.Merge, Error.ERROR,
                                        "There is no tracking information for the current branch."))
                     end
                     try
-                        [GitAnnotated(repo, tr_brn_ref)]
+                        [GitAnnotated(repo, Base.get(tr_brn_ref))]
                     finally
-                        close(tr_brn_ref)
+                        close(Base.get(tr_brn_ref))
                     end
                 end
             end
@@ -494,14 +535,14 @@ a `GitError`. This is roughly equivalent to the following command line statement
 function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractString="")
     with(head(repo)) do head_ref
         head_ann = GitAnnotated(repo, head_ref)
-        upst_ann  = if isempty(upstream)
+        upst_ann = if isempty(upstream)
             brn_ref = LibGit2.upstream(head_ref)
-            if brn_ref === nothing
+            if isnull(brn_ref)
                 throw(GitError(Error.Rebase, Error.ERROR,
                                "There is no tracking information for the current branch."))
             end
             try
-                GitAnnotated(repo, brn_ref)
+                GitAnnotated(repo, Base.get(brn_ref))
             finally
                 close(brn_ref)
             end
@@ -543,7 +584,7 @@ end
 """ Returns all commit authors """
 function authors(repo::GitRepo)
     return with(GitRevWalker(repo)) do walker
-        map((oid,repo)->with(get(GitCommit, repo, oid)) do cmt
+        map((oid,repo)->with(GitCommit(repo, oid)) do cmt
                             author(cmt)::Signature
                         end,
             walker) #, by = Consts.SORT_TIME)

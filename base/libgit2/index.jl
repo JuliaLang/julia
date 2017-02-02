@@ -24,21 +24,27 @@ function write_tree!(idx::GitIndex)
     return oid_ptr[]
 end
 
-function owner(idx::GitIndex)
-    isnull(idx.nrepo) && throw(GitError(Error.Index, Error.ENOTFOUND, "Index does not have an owning repository."))
-    return Base.get(idx.nrepo)
-end
-
-function read_tree!(idx::GitIndex, tree_id::GitHash)
-    repo = owner(idx)
-    tree = get(GitTree, repo, tree_id)
-    try
-        @check ccall((:git_index_read_tree, :libgit2), Cint,
-                     (Ptr{Void}, Ptr{Void}), idx.ptr, tree.ptr)
-    finally
-        close(tree)
+function repository(idx::GitIndex)
+    if isnull(idx.nrepo)
+        throw(GitError(Error.Index, Error.ENOTFOUND, "Index does not have an owning repository."))
+    else
+        return Base.get(idx.nrepo)
     end
 end
+
+"""
+    LibGit2.read_tree!(idx::GitIndex, tree::GitTree)
+    LibGit2.read_tree!(idx::GitIndex, treehash::AbstractGitHash)
+
+Read the tree `tree` (or the tree pointed to by `treehash` in the repository owned by
+`idx`) into the index `idx`. The current index contents will be replaced.
+"""
+function read_tree!(idx::GitIndex, tree::GitTree)
+    @check ccall((:git_index_read_tree, :libgit2), Cint,
+                 (Ptr{Void}, Ptr{Void}), idx.ptr, tree.ptr)
+end
+read_tree!(idx::GitIndex, hash::AbstractGitHash) =
+    read_tree!(idx, GitTree(repository(idx), hash))
 
 function add!{T<:AbstractString}(idx::GitIndex, files::T...;
              flags::Cuint = Consts.INDEX_ADD_DEFAULT)
@@ -114,5 +120,5 @@ end
 stage(ie::IndexEntry) = ccall((:git_index_entry_stage, :libgit2), Cint, (Ptr{IndexEntry},), Ref(ie))
 
 function Base.show(io::IO, idx::GitIndex)
-    println(io, "GitIndex:\nOwner: ", owner(idk), "\nNumber of elements: ", count(idx))
+    println(io, "GitIndex:\nRepository: ", repository(idk), "\nNumber of elements: ", count(idx))
 end

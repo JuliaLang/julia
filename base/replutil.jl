@@ -170,7 +170,7 @@ function showerror(io::IO, ex::BoundsError)
             if isa(ex.i, Range)
                 print(io, ex.i)
             else
-                join(io, ex.i, ',')
+                join(io, ex.i, ", ")
             end
             print(io, ']')
         end

@@ -649,15 +649,22 @@
       (map (lambda (x) (gensy)) field-names)
       field-names))
 
-(define (default-inner-ctors name field-names field-types gen-specific? locs)
+(define (with-wheres call wheres)
+  (if (pair? wheres)
+      `(where ,call ,@wheres)
+      call))
+
+(define (default-inner-ctors name field-names field-types params bounds locs)
   (let* ((field-names (safe-field-names field-names field-types))
          (any-ctor
           ;; definition with Any for all arguments
-          `(function (call ,name ,@field-names)
+          `(function ,(with-wheres
+                       `(call (curly ,name ,@params) ,@field-names)
+                       (map (lambda (b) (cons 'var-bounds b)) bounds))
                      (block
                       ,@locs
                       (call new ,@field-names)))))
-    (if (and gen-specific? (any (lambda (t) (not (eq? t 'Any))) field-types))
+    (if (and (null? params) (any (lambda (t) (not (eq? t 'Any))) field-types))
         (list
          ;; definition with field types for all arguments
          `(function (call ,name
@@ -670,9 +677,9 @@
 
 (define (default-outer-ctor name field-names field-types params bounds locs)
   (let ((field-names (safe-field-names field-names field-types)))
-    `(function (call (curly ,name
-                            ,@(map (lambda (b) (cons 'var-bounds b)) bounds))
-                     ,@(map make-decl field-names field-types))
+    `(function ,(with-wheres
+                 `(call ,name ,@(map make-decl field-names field-types))
+                 (map (lambda (b) (cons 'var-bounds b)) bounds))
                (block
                 ,@locs
                 (call (curly ,name ,@params) ,@field-names)))))
@@ -744,16 +751,23 @@
                          ,@sig)
                   new-params)))))
 
-(define (ctor-def keyword name Tname params bounds method-params sig ctor-body body)
-  (if (eq? name Tname)
-      (let* ((temp   (ctor-signature name params bounds method-params sig))
-             (sig    (car temp))
-             (params (cdr temp)))
-        `(,keyword ,sig ,(ctor-body body params)))
-      `(,keyword (call (curly ,name ,@method-params) ,@sig)
-                 ;; pass '() in order to require user-specified parameters with
-                 ;; new{...} inside a non-ctor inner definition.
-                 ,(ctor-body body '()))))
+(define (ctor-def keyword name Tname params bounds sig ctor-body body wheres)
+  (let* ((curly?     (and (pair? name) (eq? (car name) 'curly)))
+         (curlyargs  (if curly? (cddr name) '()))
+         (name       (if curly? (cadr name) name)))
+    (cond ((not (eq? name Tname))
+           `(,keyword ,(with-wheres `(call (curly ,name ,@curlyargs) ,@sig) wheres)
+                      ;; pass '() in order to require user-specified parameters with
+                      ;; new{...} inside a non-ctor inner definition.
+                      ,(ctor-body body '())))
+          (wheres
+           `(,keyword (where (call (curly ,name ,@curlyargs) ,@sig) ,@wheres)
+                      ,(ctor-body body curlyargs)))
+          (else
+           (let* ((temp   (ctor-signature name params bounds curlyargs sig))
+                  (sig    (car temp))
+                  (params (cdr temp)))
+             `(,keyword ,sig ,(ctor-body body params)))))))
 
 ;; rewrite calls to `new( ... )` to `new` expressions on the appropriate
 ;; type, determined by the containing constructor definition.
@@ -773,30 +787,38 @@
                      body))
   (pattern-replace
    (pattern-set
-    (pattern-lambda (function (call (curly name . p) . sig) body)
-                    (ctor-def 'function name Tname params bounds p sig ctor-body body))
-    (pattern-lambda (stagedfunction (call (curly name . p) . sig) body)
-                    (ctor-def 'stagedfunction name Tname params bounds p sig ctor-body body))
-    (pattern-lambda (function (call name . sig) body)
-                    (ctor-def 'function name Tname params bounds '() sig ctor-body body))
+    ;; definitions without `where`
+    (pattern-lambda (function       (call name . sig) body)
+                    (ctor-def (car __) name Tname params bounds sig ctor-body body #f))
     (pattern-lambda (stagedfunction (call name . sig) body)
-                    (ctor-def 'stagedfunction name Tname params bounds '() sig ctor-body body))
-    (pattern-lambda (= (call (curly name . p) . sig) body)
-                    (ctor-def 'function name Tname params bounds p sig ctor-body body))
+                    (ctor-def (car __) name Tname params bounds sig ctor-body body #f))
     (pattern-lambda (= (call name . sig) body)
-                    (ctor-def 'function name Tname params bounds '() sig ctor-body body)))
-   ctor))
+                    (ctor-def 'function name Tname params bounds sig ctor-body body #f))
+    ;; definitions with `where`
+    (pattern-lambda (function       (where (call name . sig) . wheres) body)
+                    (ctor-def (car __) name Tname params bounds sig ctor-body body wheres))
+    (pattern-lambda (stagedfunction (where (call name . sig) . wheres) body)
+                    (ctor-def (car __) name Tname params bounds sig ctor-body body wheres))
+    (pattern-lambda (= (where (call name . sig) . wheres) body)
+                    (ctor-def 'function name Tname params bounds sig ctor-body body wheres)))
+
+   ;; flatten `where`s first
+   (pattern-replace
+    (pattern-set
+     (pattern-lambda (where (where . rest1) . rest2)
+                     (flatten-where-expr __)))
+    ctor)))
 
 ;; check if there are any calls to new with fewer than n arguments
 (define (ctors-min-initialized expr)
   (and (pair? expr)
        (min
-        ((pattern-lambda
-          (call (-/ new) . args)
-          (length args)) (car expr))
-        ((pattern-lambda
-          (call (curly (-/ new) . p) . args)
-          (length args)) (car expr))
+        ((pattern-lambda (call (-/ new) . args)
+                         (length args))
+         (car expr))
+        ((pattern-lambda (call (curly (-/ new) . p) . args)
+                         (length args))
+         (car expr))
         (ctors-min-initialized (car expr))
         (ctors-min-initialized (cdr expr)))))
 
@@ -811,7 +833,7 @@
           (field-names (map decl-var fields))
           (field-types (map decl-type fields))
           (defs2 (if (null? defs)
-                     (default-inner-ctors name field-names field-types (null? params) locs)
+                     (default-inner-ctors name field-names field-types params bounds locs)
                      defs))
           (min-initialized (min (ctors-min-initialized defs) (length fields))))
      (let ((dups (has-dups field-names)))
@@ -932,6 +954,8 @@
          (where (if (and (pair? name) (eq? (car name) 'where))
                     (let ((w (flatten-where-expr name)))
                       (begin0 (cddr w)
+                              (if (not (and (pair? (cadr w)) (eq? (caadr w) 'call)))
+                                  (error (string "invalid assignment location \"" (deparse name) "\"")))
                               (set! name (cadr w))))
                     #f))
          (dcl   (and (pair? name) (eq? (car name) '|::|)))
@@ -1727,6 +1751,17 @@
             (expand-forms e)
             (expand-forms `(call (top broadcast!) (top identity) ,lhs-view ,e))))))
 
+(define (expand-where body var)
+  (let* ((bounds (analyze-typevar var))
+         (v  (car bounds)))
+    `(let (call (core UnionAll) ,v ,body)
+       (= ,v ,(bounds-to-TypeVar bounds)))))
+
+(define (expand-wheres body vars)
+  (if (null? vars)
+      body
+      (expand-where (expand-wheres body (cdr vars)) (car vars))))
+
 ;; table mapping expression head to a function expanding that form
 (define expand-table
   (table
@@ -1773,12 +1808,7 @@
    '|>:| syntactic-op-to-call
 
    'where
-   (lambda (e)
-     (let* ((bounds (analyze-typevar (caddr e)))
-            (v  (car bounds)))
-       (expand-forms
-        `(let (call (core UnionAll) ,v ,(cadr e))
-           (= ,v ,(bounds-to-TypeVar bounds))))))
+   (lambda (e) (expand-forms (expand-wheres (cadr e) (cddr e))))
 
    'const  expand-const-decl
    'local  expand-local-or-global-decl

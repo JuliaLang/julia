@@ -264,6 +264,26 @@ end
 will add documentation to `f(x)` when the condition is `true`. Note that even if `f(x)` goes
 out of scope at the end of the block, its documentation will remain.
 
+### Dynamic documentation
+
+Sometimes the appropriate documentation for an instance of a type depends on the field values of that
+instance, rather than just on the type itself. In these cases, you can add a method to `Docs.getdoc`
+for your custom type that returns the documentation on a per-instance basis. For instance,
+
+```julia
+type MyType
+    value::String
+end
+
+Docs.getdoc(t::MyType) = "Documentation for MyType with value $(t.value)"
+
+x = MyType("x")
+y = MyType("y")
+```
+
+`?x` will display "Documentation for MyType with value x" while `?y` will display
+"Documentation for MyType with value y".
+
 ## Syntax Guide
 
 A comprehensive overview of all documentable Julia syntax.

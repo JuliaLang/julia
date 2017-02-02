@@ -105,7 +105,7 @@ d = randn(len)
 writecsv("random.csv", rand(100000,4))
 
 function parsecsv()
-    for line in EachLine(open("random.csv"))
+    for line in eachline("random.csv")
         split(line, ',')
     end
 end

@@ -4,13 +4,13 @@ immutable Rational{T<:Integer} <: Real
     num::T
     den::T
 
-    function Rational(num::Integer, den::Integer)
+    function Rational{T}(num::Integer, den::Integer) where T<:Integer
         num == den == zero(T) && throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
         g = den < 0 ? -gcd(den, num) : gcd(den, num)
         new(div(num, g), div(den, g))
     end
 end
-Rational{T<:Integer}(n::T, d::T) = Rational{T}(n,d)
+Rational(n::T, d::T) where T<:Integer = Rational{T}(n,d)
 Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
 Rational(n::Integer) = Rational(n,one(n))
 
@@ -401,3 +401,7 @@ function ^{T<:Rational}(z::Complex{T}, n::Integer)
 end
 
 iszero(x::Rational) = iszero(numerator(x))
+
+function lerpi(j::Integer, d::Integer, a::Rational, b::Rational)
+    ((d-j)*a)/d + (j*b)/d
+end

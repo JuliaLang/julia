@@ -44,7 +44,7 @@ test_have_color(buf, "", "")
 # matches the implicit constructor -> convert method
 Base.show_method_candidates(buf, Base.MethodError(Tuple{}, (1, 1, 1)))
 let mc = String(take!(buf))
-    @test contains(mc, "\nClosest candidates are:\n  Tuple{}{T}(")
+    @test contains(mc, "\nClosest candidates are:\n  Tuple{}")
     @test !contains(mc, cfile)
 end
 
@@ -267,12 +267,12 @@ let undefvar
     err_str = @except_strbt (-1)^0.25 DomainError
     @test contains(err_str, "Exponentiation yielding a complex result requires a complex argument")
 
-    err_str = @except_str (1,2,3)[4] BoundsError
-    @test err_str == "BoundsError: attempt to access (1,2,3)\n  at index [4]"
+    err_str = @except_str (1, 2, 3)[4] BoundsError
+    @test err_str == "BoundsError: attempt to access (1, 2, 3)\n  at index [4]"
 
-    err_str = @except_str [5,4,3][-2,1] BoundsError
-    @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [-2,1]"
-    err_str = @except_str [5,4,3][1:5] BoundsError
+    err_str = @except_str [5, 4, 3][-2, 1] BoundsError
+    @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [-2, 1]"
+    err_str = @except_str [5, 4, 3][1:5] BoundsError
     @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [1:5]"
 
     err_str = @except_str 0::Bool TypeError
@@ -483,4 +483,19 @@ let
     @test (@macroexpand @seven_dollar $bar) == 7
     x = 2
     @test (@macroexpand @seven_dollar 1+$x) == :(1 + $(Expr(:$, :x)))
+end
+
+foo_9965(x::Float64; w=false) = x
+foo_9965(x::Int) = 2x
+
+@testset "closest candidates kwarg #9965" begin
+    ex = try
+        foo_9965(1, w=true)
+    catch e
+        e
+    end
+    @test typeof(ex) == MethodError
+    io = IOBuffer()
+    Base.show_method_candidates(io, ex, [(:w,true)])
+    @test contains(String(take!(io)), "got unsupported keyword argument \"w\"")
 end

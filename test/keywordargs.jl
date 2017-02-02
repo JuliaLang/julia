@@ -240,3 +240,11 @@ eval(Core.Inference, quote
     g18396(;x=1,y=2) = x+y
 end)
 @test Core.Inference.f18396() == 3
+
+# issue #7045, `invoke` with keyword args
+f7045(x::Float64; y=true) = y ? 1 : invoke(f7045,Tuple{Real},x,y=y)
+f7045(x::Real; y=true) = y ? 2 : 3
+@test f7045(1) === 2
+@test f7045(1.0) === 1
+@test f7045(1, y=false) === 3
+@test f7045(1.0, y=false) === 3

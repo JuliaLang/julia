@@ -41,13 +41,19 @@ Base.linspace
 Base.logspace
 ```
 
-## Mathematical operators and functions
+## Broadcast and vectorization
 
-All mathematical operations and functions are supported for arrays
+See also the [dot syntax for vectorizing functions](@ref man-vectorized);
+for example, `f.(args...)` implicitly calls `broadcast(f, args...)`.
+Rather than relying on "vectorized" methods of functions like `sin`
+to operate on arrays, you should use `sin.(a)` to vectorize via `broadcast`.
 
 ```@docs
 Base.broadcast
 Base.Broadcast.broadcast!
+Base.@__dot__
+Base.Broadcast.broadcast_getindex
+Base.Broadcast.broadcast_setindex!
 ```
 
 ## Indexing, Assignment, and Concatenation
@@ -56,14 +62,13 @@ Base.Broadcast.broadcast!
 Base.getindex(::AbstractArray, ::Any...)
 Base.view
 Base.@view
+Base.@views
 Base.to_indices
 Base.Colon
 Base.parent
 Base.parentindexes
 Base.slicedim
 Base.setindex!(::AbstractArray, ::Any, ::Any...)
-Base.Broadcast.broadcast_getindex
-Base.Broadcast.broadcast_setindex!
 Base.isassigned
 Base.cat
 Base.vcat

@@ -62,7 +62,7 @@ export
     ExponentialBackOff,
     Factorization,
     FileMonitor,
-    FloatRange,
+    StepRangeLen,
     Future,
     Hermitian,
     UniformScaling,
@@ -980,6 +980,8 @@ export
 # dates
     Date,
     DateTime,
+    DateFormat,
+    @dateformat_str,
     now,
 
 # errors
@@ -1380,10 +1382,12 @@ export
     @polly,
 
     @assert,
+    @__dot__,
     @enum,
     @label,
     @goto,
     @view,
+    @views,
 
 # SparseArrays module re-exports
     SparseArrays,
@@ -1401,7 +1405,6 @@ export
     sprand,
     sprandn,
     spzeros,
-    symperm,
     rowvals,
     nzrange,
     nnz

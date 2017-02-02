@@ -1015,7 +1015,71 @@ remote exception and a serializable form of the call stack when the exception wa
 RemoteException(captured) = RemoteException(myid(), captured)
 function showerror(io::IO, re::RemoteException)
     (re.pid != myid()) && print(io, "On worker ", re.pid, ":\n")
-    showerror(io, re.captured)
+    showerror(io, get_root_exception(re.captured))
+end
+
+# Specialized serialize-deserialize implementations for CapturedException to partially
+# recover from any deserialization errors in `CapturedException.ex`
+
+function serialize(s::AbstractSerializer, ex::CapturedException)
+    serialize_type(s, typeof(ex))
+    serialize(s, string(typeof(ex.ex))) # String type should not result in a deser error
+    serialize(s, ex.processed_bt)       # Currently should not result in a deser error
+    serialize(s, ex.ex)                 # can result in a UndefVarError on the remote node
+                                        # if a type used in ex.ex is undefined on the remote node.
+end
+
+function original_ex(s::AbstractSerializer, ex_str, remote_stktrace)
+    local pid_str = ""
+    try
+        pid_str = string(" from worker ", worker_id_from_socket(s.io))
+    end
+
+    stk_str = remote_stktrace ? "Remote" : "Local"
+    ErrorException(string("Error deserializing a remote exception", pid_str, "\n",
+                          "Remote(original) exception of type ", ex_str, "\n",
+                          stk_str,  " stacktrace : "))
+end
+
+function deserialize(s::AbstractSerializer, t::Type{T}) where T <: CapturedException
+    ex_str = deserialize(s)
+    local bt
+    local capex
+    try
+        bt = deserialize(s)
+    catch e
+        throw(CompositeException([
+            original_ex(s, ex_str, false),
+            CapturedException(e, catch_backtrace())
+        ]))
+    end
+
+    try
+        capex = deserialize(s)
+    catch e
+        throw(CompositeException([
+            CapturedException(original_ex(s, ex_str, true), bt),
+            CapturedException(e, catch_backtrace())
+        ]))
+    end
+
+    return CapturedException(capex, bt)
+end
+
+isa_exception_container(ex) = (isa(ex, RemoteException) ||
+                               isa(ex, CapturedException) ||
+                               isa(ex, CompositeException))
+
+function get_root_exception(ex)
+    if isa(ex, RemoteException)
+        return get_root_exception(ex.captured)
+    elseif isa(ex, CapturedException) && isa_exception_container(ex.ex)
+        return get_root_exception(ex.ex)
+    elseif isa(ex, CompositeException) && length(ex.exceptions) > 0 && isa_exception_container(ex.exceptions[1])
+        return get_root_exception(ex.exceptions[1])
+    else
+        return ex
+    end
 end
 
 function run_work_thunk(thunk, print_error)
@@ -1385,6 +1449,9 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
                         boundary_idx = 1
                     end
                 end
+
+                # remotecalls only rethrow RemoteExceptions. Any other exception is treated as
+                # data to be returned. Wrap this exception in a RemoteException.
                 remote_err = RemoteException(myid(), CapturedException(e, catch_backtrace()))
                 # println("Deserialization error. ", remote_err)
                 if !null_id(header.response_oid)
@@ -1628,9 +1695,9 @@ function redirect_worker_output(ident, stream)
         if startswith(line, "\tFrom worker ")
             # STDOUT's of "additional" workers started from an initial worker on a host are not available
             # on the master directly - they are routed via the initial worker's STDOUT.
-            print(line)
+            println(line)
         else
-            print("\tFrom worker $(ident):\t$line")
+            println("\tFrom worker $(ident):\t$line")
         end
     end
 end
@@ -1937,8 +2004,8 @@ end
 ## higher-level functions: spawn, pmap, pfor, etc. ##
 
 let nextidx = 0
-    global chooseproc
-    function chooseproc(thunk::Function)
+    global nextproc
+    function nextproc()
         p = -1
         if p == -1
             p = workers()[(nextidx % nworkers()) + 1]
@@ -1950,16 +2017,16 @@ end
 
 spawnat(p, thunk) = sync_add(remotecall(thunk, p))
 
-spawn_somewhere(thunk) = spawnat(chooseproc(thunk),thunk)
+spawn_somewhere(thunk) = spawnat(nextproc(),thunk)
 
 macro spawn(expr)
-    expr = localize_vars(esc(:(()->($expr))), false)
-    :(spawn_somewhere($expr))
+    thunk = esc(:(()->($expr)))
+    :(spawn_somewhere($thunk))
 end
 
 macro spawnat(p, expr)
-    expr = localize_vars(esc(:(()->($expr))), false)
-    :(spawnat($(esc(p)), $expr))
+    thunk = esc(:(()->($expr)))
+    :(spawnat($(esc(p)), $thunk))
 end
 
 """
@@ -1969,11 +2036,8 @@ Equivalent to `fetch(@spawn expr)`.
 See [`fetch`](@ref) and [`@spawn`](@ref).
 """
 macro fetch(expr)
-    expr = localize_vars(esc(:(()->($expr))), false)
-    quote
-        thunk = $expr
-        remotecall_fetch(thunk, chooseproc(thunk))
-    end
+    thunk = esc(:(()->($expr)))
+    :(remotecall_fetch($thunk, nextproc()))
 end
 
 """
@@ -1983,8 +2047,8 @@ Equivalent to `fetch(@spawnat p expr)`.
 See [`fetch`](@ref) and [`@spawnat`](@ref).
 """
 macro fetchfrom(p, expr)
-    expr = localize_vars(esc(:(()->($expr))), false)
-    :(remotecall_fetch($expr, $(esc(p))))
+    thunk = esc(:(()->($expr)))
+    :(remotecall_fetch($thunk, $(esc(p))))
 end
 
 """
@@ -2140,7 +2204,7 @@ macro parallel(args...)
     else
         thecall = :(preduce($(esc(reducer)), $(make_preduce_body(var, body)), $(esc(r))))
     end
-    localize_vars(thecall)
+    thecall
 end
 
 
@@ -2286,3 +2350,25 @@ function getindex(r::RemoteChannel, args...)
     end
     return remotecall_fetch(getindex, r.where, r, args...)
 end
+
+"""
+    clear!(syms, pids=workers(); mod=Main)
+
+Clears global bindings in modules by initializing them to `nothing`.
+`syms` should be of type `Symbol` or a collection of `Symbol`s . `pids` and `mod`
+identify the processes and the module in which global variables are to be
+reinitialized. Only those names found to be defined under `mod` are cleared.
+
+An exception is raised if a global constant is requested to be cleared.
+"""
+function clear!(syms, pids=workers(); mod=Main)
+    @sync for p in pids
+        @async remotecall_wait(clear_impl!, p, syms, mod)
+    end
+end
+clear!(sym::Symbol, pid::Int; mod=Main) = clear!([sym], [pid]; mod=mod)
+clear!(sym::Symbol, pids=workers(); mod=Main) = clear!([sym], pids; mod=mod)
+clear!(syms, pid::Int; mod=Main) = clear!(syms, [pid]; mod=mod)
+
+clear_impl!(syms, mod::Module) = foreach(x->clear_impl!(x,mod), syms)
+clear_impl!(sym::Symbol, mod::Module) = isdefined(mod, sym) && eval(mod, :(global $sym = nothing))

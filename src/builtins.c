@@ -784,7 +784,13 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f)
     int field_index;
     if (jl_is_long(f)) {
         field_index = jl_unbox_long(f) - 1;
-        if (field_index < 0 || field_index >= jl_field_count(st))
+        int nf = jl_field_count(st);
+        if (nf > 0 && field_index >= nf-1 && st->name == jl_tuple_typename) {
+            jl_value_t *ft = jl_field_type(st, nf-1);
+            if (jl_is_vararg_type(ft))
+                return jl_unwrap_vararg(ft);
+        }
+        if (field_index < 0 || field_index >= nf)
             jl_bounds_error(t, f);
     }
     else {
@@ -1012,13 +1018,63 @@ JL_DLLEXPORT void jl_show(jl_value_t *stream, jl_value_t *v)
 
 // internal functions ---------------------------------------------------------
 
+static int valid_type_param(jl_value_t *v)
+{
+    if (jl_is_tuple(v)) {
+        // NOTE: tuples of symbols are not currently bits types, but have been
+        // allowed as type parameters. this is a bit ugly.
+        jl_value_t *tt = jl_typeof(v);
+        size_t i, l = jl_nparams(tt);
+        for(i=0; i < l; i++) {
+            jl_value_t *pi = jl_tparam(tt,i);
+            if (!(pi == (jl_value_t*)jl_sym_type || jl_isbits(pi)))
+                return 0;
+        }
+        return 1;
+    }
+    if (jl_is_vararg_type(v))
+        return 0;
+    // TODO: maybe more things
+    return jl_is_type(v) || jl_is_typevar(v) || jl_is_symbol(v) || jl_isbits(jl_typeof(v));
+}
+
 JL_CALLABLE(jl_f_apply_type)
 {
     JL_NARGSV(apply_type, 1);
-    if (!jl_is_unionall(args[0]) && args[0] != (jl_value_t*)jl_anytuple_type &&
-        args[0] != (jl_value_t*)jl_uniontype_type)
-        jl_type_error("Type{...} expression", (jl_value_t*)jl_unionall_type, args[0]);
-    return jl_apply_type(args[0], &args[1], nargs-1);
+    int i;
+    if (args[0] == (jl_value_t*)jl_anytuple_type) {
+        for(i=1; i < nargs; i++) {
+            jl_value_t *pi = args[i];
+            // TODO: should possibly only allow Types and TypeVars, but see
+            // https://github.com/JuliaLang/julia/commit/85f45974a581ab9af955bac600b90d9ab00f093b#commitcomment-13041922
+            if (jl_is_vararg_type(pi)) {
+                if (i != nargs-1)
+                    jl_type_error_rt("Tuple", "non-final parameter", (jl_value_t*)jl_type_type, pi);
+            }
+            else if (!valid_type_param(pi)) {
+                jl_type_error_rt("Tuple", "parameter", (jl_value_t*)jl_type_type, pi);
+            }
+        }
+        return (jl_value_t*)jl_apply_tuple_type_v(&args[1], nargs-1);
+    }
+    else if (args[0] == (jl_value_t*)jl_uniontype_type) {
+        // Union{} has extra restrictions, so it needs to be checked after
+        // substituting typevars (a valid_type_param check here isn't sufficient).
+        return (jl_value_t*)jl_type_union(&args[1], nargs-1);
+    }
+    else if (jl_is_unionall(args[0])) {
+        for(i=1; i < nargs; i++) {
+            jl_value_t *pi = args[i];
+            if (!valid_type_param(pi)) {
+                jl_type_error_rt("Type", "parameter",
+                                 jl_isa(pi, (jl_value_t*)jl_number_type) ?
+                                 (jl_value_t*)jl_long_type : (jl_value_t*)jl_type_type,
+                                 pi);
+            }
+        }
+        return jl_apply_type(args[0], &args[1], nargs-1);
+    }
+    jl_type_error("Type{...} expression", (jl_value_t*)jl_unionall_type, args[0]);
 }
 
 // generic function reflection ------------------------------------------------
@@ -1045,7 +1101,7 @@ JL_CALLABLE(jl_f_invoke)
     if (jl_is_tuple(args[1])) {
         jl_depwarn("`invoke(f, (types...), ...)` is deprecated, "
                    "use `invoke(f, Tuple{types...}, ...)` instead",
-                   jl_symbol("invoke"));
+                   (jl_value_t*)jl_symbol("invoke"));
         argtypes = (jl_value_t*)jl_apply_tuple_type_v((jl_value_t**)jl_data_ptr(argtypes),
                                                       jl_nfields(argtypes));
     }
@@ -1056,6 +1112,56 @@ JL_CALLABLE(jl_f_invoke)
         jl_error("invoke: argument type error");
     args[1] = args[0];  // move function directly in front of arguments
     jl_value_t *res = jl_gf_invoke((jl_tupletype_t*)argtypes, &args[1], nargs-1);
+    JL_GC_POP();
+    return res;
+}
+
+JL_CALLABLE(jl_f_invoke_kwsorter)
+{
+    JL_NARGSV(invoke, 3);
+    jl_value_t *kwargs = args[0];
+    // args[1] is `invoke` itself
+    jl_value_t *func = args[2];
+    jl_value_t *argtypes = args[3];
+    jl_value_t *kws = jl_get_keyword_sorter(func);
+    JL_GC_PUSH1(&argtypes);
+    if (jl_is_tuple(argtypes)) {
+        jl_depwarn("`invoke(f, (types...), ...)` is deprecated, "
+                   "use `invoke(f, Tuple{types...}, ...)` instead",
+                   (jl_value_t*)jl_symbol("invoke"));
+        argtypes = (jl_value_t*)jl_apply_tuple_type_v((jl_value_t**)jl_data_ptr(argtypes),
+                                                      jl_nfields(argtypes));
+    }
+    if (jl_is_tuple_type(argtypes)) {
+        // construct a tuple type for invoking a keyword sorter by putting `Vector{Any}`
+        // and the type of the function at the front.
+        size_t i, nt = jl_nparams(argtypes) + 2;
+        if (nt < jl_page_size/sizeof(jl_value_t*)) {
+            jl_value_t **types = (jl_value_t**)alloca(nt*sizeof(jl_value_t*));
+            types[0] = jl_array_any_type; types[1] = jl_typeof(func);
+            for(i=2; i < nt; i++)
+                types[i] = jl_tparam(argtypes,i-2);
+            argtypes = (jl_value_t*)jl_apply_tuple_type_v(types, nt);
+        }
+        else {
+            jl_svec_t *types = jl_alloc_svec_uninit(nt);
+            JL_GC_PUSH1(&types);
+            jl_svecset(types, 0, jl_array_any_type);
+            jl_svecset(types, 1, jl_typeof(func));
+            for(i=2; i < nt; i++)
+                jl_svecset(types, i, jl_tparam(argtypes,i-2));
+            argtypes = (jl_value_t*)jl_apply_tuple_type(types);
+            JL_GC_POP();
+        }
+    }
+    else {
+        // invoke will throw an error
+    }
+    args[0] = kws;
+    args[1] = argtypes;
+    args[2] = kwargs;
+    args[3] = func;
+    jl_value_t *res = jl_f_invoke(NULL, args, nargs);
     JL_GC_POP();
     return res;
 }
@@ -1232,6 +1338,12 @@ void jl_init_primitives(void)
     // method table utils
     add_builtin_func("applicable", jl_f_applicable);
     add_builtin_func("invoke", jl_f_invoke);
+    jl_value_t *invokef = jl_get_global(jl_core_module, jl_symbol("invoke"));
+    jl_typename_t *itn = ((jl_datatype_t*)jl_typeof(invokef))->name;
+    jl_value_t *ikws = jl_new_generic_function_with_supertype(itn->name, jl_core_module, jl_builtin_type, 1);
+    itn->mt->kwsorter = ikws;
+    jl_gc_wb(itn->mt, ikws);
+    jl_mk_builtin_func((jl_datatype_t*)jl_typeof(ikws), jl_symbol_name(jl_gf_name(ikws)), jl_f_invoke_kwsorter);
 
     // internal functions
     add_builtin_func("apply_type", jl_f_apply_type);
@@ -1446,6 +1558,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (vt == jl_uniontype_type) {
         n += jl_printf(out, "Union{");
         while (jl_is_uniontype(v)) {
+            // tail-recurse on b to flatten the printing of the Union structure in the common case
             n += jl_static_show_x(out, ((jl_uniontype_t*)v)->a, depth);
             n += jl_printf(out, ", ");
             v = ((jl_uniontype_t*)v)->b;
@@ -1460,27 +1573,37 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_x(out, (jl_value_t*)ua->var, depth->prev);
     }
     else if (vt == jl_tvar_type) {
+        // show type-var bounds only if they aren't going to be printed by UnionAll later
         jl_tvar_t *var = (jl_tvar_t*)v;
-        struct recur_list *p = depth;
+        struct recur_list *p;
         int showbounds = 1;
-        while (showbounds && p) {
-            if (jl_is_unionall(p->v) && ((jl_unionall_t*)p->v)->var == var)
+        for (p = depth; p != NULL; p = p->prev) {
+            if (jl_is_unionall(p->v) && ((jl_unionall_t*)p->v)->var == var) {
                 showbounds = 0;
-            p = p->prev;
+                break;
+            }
         }
         jl_value_t *lb = var->lb, *ub = var->ub;
         if (showbounds && lb != jl_bottom_type) {
-            if (jl_is_unionall(lb)) n += jl_printf(out, "(");
+            // show type-var lower bound if it is defined
+            int ua = jl_is_unionall(lb);
+            if (ua)
+                n += jl_printf(out, "(");
             n += jl_static_show_x(out, lb, depth);
-            if (jl_is_unionall(lb)) n += jl_printf(out, ")");
+            if (ua)
+                n += jl_printf(out, ")");
             n += jl_printf(out, "<:");
         }
         n += jl_printf(out, "%s", jl_symbol_name(var->name));
-        if (showbounds && ub != (jl_value_t*)jl_any_type) {
+        if (showbounds && (ub != (jl_value_t*)jl_any_type || lb != jl_bottom_type)) {
+            // show type-var upper bound if it is defined, or if we showed the lower bound
+            int ua = jl_is_unionall(ub);
             n += jl_printf(out, "<:");
-            if (jl_is_unionall(ub)) n += jl_printf(out, "(");
+            if (ua)
+                n += jl_printf(out, "(");
             n += jl_static_show_x(out, ub, depth);
-            if (jl_is_unionall(ub)) n += jl_printf(out, ")");
+            if (ua)
+                n += jl_printf(out, ")");
         }
     }
     else if (vt == jl_module_type) {
@@ -1735,7 +1858,7 @@ JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)
     // put a breakpoint in your debugger here
 }
 
-void jl_depwarn(const char *msg, jl_sym_t *sym)
+void jl_depwarn(const char *msg, jl_value_t *sym)
 {
     static jl_value_t *depwarn_func = NULL;
     if (!depwarn_func && jl_base_module) {
@@ -1749,8 +1872,28 @@ void jl_depwarn(const char *msg, jl_sym_t *sym)
     JL_GC_PUSHARGS(depwarn_args, 3);
     depwarn_args[0] = depwarn_func;
     depwarn_args[1] = jl_cstr_to_string(msg);
-    depwarn_args[2] = (jl_value_t*)sym;
+    depwarn_args[2] = sym;
     jl_apply(depwarn_args, 3);
+    JL_GC_POP();
+}
+
+void jl_depwarn_partial_indexing(size_t n)
+{
+    static jl_value_t *depwarn_func = NULL;
+    if (!depwarn_func && jl_base_module) {
+        depwarn_func = jl_get_global(jl_base_module, jl_symbol("partial_linear_indexing_warning"));
+    }
+    if (!depwarn_func) {
+        jl_safe_printf("WARNING: Partial linear indexing is deprecated. Use "
+            "`reshape(A, Val{%zd})` to make the dimensionality of the array match "
+            "the number of indices\n", n);
+        return;
+    }
+    jl_value_t **depwarn_args;
+    JL_GC_PUSHARGS(depwarn_args, 2);
+    depwarn_args[0] = depwarn_func;
+    depwarn_args[1] = jl_box_long(n);
+    jl_apply(depwarn_args, 2);
     JL_GC_POP();
 }
 

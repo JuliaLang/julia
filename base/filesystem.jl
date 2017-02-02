@@ -69,7 +69,8 @@ end
 uvhandle(file::File) = convert(Ptr{Void}, Base.cconvert(Cint, file.handle) % UInt)
 uvtype(::File) = Base.UV_RAW_FD
 
-function open(path::AbstractString, flags::Integer, mode::Integer=0) # FS.open, not Base.open
+# Filesystem.open, not Base.open
+function open(path::AbstractString, flags::Integer, mode::Integer=0)
     req = Libc.malloc(_sizeof_uv_fs)
     local handle
     try

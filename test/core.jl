@@ -15,6 +15,10 @@ f47{T}(x::Vector{Vector{T}}) = 0
 @test_throws TypeError ([T] where T)
 @test_throws TypeError (Array{T} where T<:[])
 @test_throws TypeError (Array{T} where T>:[])
+@test_throws TypeError (Array{T} where T<:Vararg)
+@test_throws TypeError (Array{T} where T>:Vararg)
+@test_throws TypeError (Array{T} where T<:Vararg{Int})
+@test_throws TypeError (Array{T} where T<:Vararg{Int,2})
 
 # issue #8652
 args_morespecific(a, b) = ccall(:jl_type_morespecific, Cint, (Any,Any), a, b) != 0
@@ -1358,6 +1362,11 @@ end
 import Base: promote_rule
 promote_rule{T,T2,S,S2}(A::Type{SIQ{T,T2}},B::Type{SIQ{S,S2}}) = SIQ{promote_type(T,S)}
 @test_throws ErrorException promote_type(SIQ{Int},SIQ{Float64})
+f4731{T}(x::T...) = 0
+f4731(x...) = ""
+g4731() = f4731()
+@test f4731() == ""
+@test g4731() == ""
 
 # issue #4675
 f4675(x::StridedArray...) = 1
@@ -1938,7 +1947,7 @@ end
 
 # a method specificity issue
 c99991{T}(::Type{T},x::T) = 0
-c99991{T}(::Type{UnitRange{T}},x::FloatRange{T}) = 1
+c99991{T}(::Type{UnitRange{T}},x::StepRangeLen{T}) = 1
 c99991{T}(::Type{UnitRange{T}},x::Range{T}) = 2
 @test c99991(UnitRange{Float64}, 1.0:2.0) == 1
 @test c99991(UnitRange{Int}, 1:2) == 2
@@ -3086,10 +3095,12 @@ end
 
 # don't allow Vararg{} in Union{} type constructor
 @test_throws TypeError Union{Int,Vararg{Int}}
+@test_throws TypeError Union{Vararg{Int}}
 
-# don't allow Vararg{} in Tuple{} type constructor in non-trailing position
+# only allow Vararg{} in last position of Tuple{ }
 @test_throws TypeError Tuple{Vararg{Int32},Int64,Float64}
 @test_throws TypeError Tuple{Int64,Vararg{Int32},Float64}
+@test_throws TypeError Array{Vararg}
 
 # don't allow non-types in Union
 @test_throws TypeError Union{1}
@@ -3221,16 +3232,6 @@ abstract A11327
 abstract B11327 <: A11327
 f11327{T}(::Type{T},x::T) = x
 @test_throws MethodError f11327(Type{A11327},B11327)
-
-# issue 13855
-macro m13855()
-    Expr(:localize, :(() -> $(esc(:x))))
-end
-@noinline function foo13855(x)
-    @m13855()
-end
-@test foo13855(+)() == +
-@test foo13855(*)() == *
 
 # issue #8487
 @test [x for x in 1:3] == [x for x ∈ 1:3] == [x for x = 1:3]
@@ -4438,7 +4439,7 @@ gc_enable(true)
 
 # issue #18710
 bad_tvars{T}() = 1
-@test isa(@which(bad_tvars()), Method)
+@test_throws ErrorException @which(bad_tvars())
 @test_throws MethodError bad_tvars()
 
 # issue #19059 - test for lowering of `let` with assignment not adding Box in simple cases

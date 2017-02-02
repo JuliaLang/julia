@@ -39,7 +39,7 @@ function scrub_backtrace(bt)
     if do_test_ind != 0 && length(bt) > do_test_ind
         bt = bt[do_test_ind + 1:end]
     end
-    name_ind = findfirst(addr->ip_matches_func_and_name(addr, Symbol("macro expansion;"), ".", "test.jl"), bt)
+    name_ind = findfirst(addr->ip_matches_func_and_name(addr, Symbol("macro expansion"), ".", "test.jl"), bt)
     if name_ind != 0 && length(bt) != 0
         bt = bt[1:name_ind]
     end
@@ -631,6 +631,9 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
     print_counts(ts, depth_pad, align, pass_width, fail_width, error_width, broken_width, total_width)
 end
 
+
+const TESTSET_PRINT_ENABLE = Ref(true)
+
 # Called at the end of a @testset, behaviour depends on whether
 # this is a child of another testset, or the "root" testset
 function finish(ts::DefaultTestSet)
@@ -648,6 +651,11 @@ function finish(ts::DefaultTestSet)
     total_error  = errors + c_errors
     total_broken = broken + c_broken
     total = total_pass + total_fail + total_error + total_broken
+
+    if TESTSET_PRINT_ENABLE[]
+        print_test_results(ts)
+    end
+
     # Finally throw an error as we are the outermost test set
     if total != total_pass + total_broken
         # Get all the error/failures and bring them along for the ride
@@ -722,7 +730,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
     subtotal = passes + fails + errors + broken + c_passes + c_fails + c_errors + c_broken
     # Print test set header, with an alignment that ensures all
     # the test results appear above each other
-    print(rpad(string(lpad("  ",depth), ts.description), align, " "), " | ")
+    print(rpad(string("  "^depth, ts.description), align, " "), " | ")
 
     np = passes + c_passes
     if np > 0
@@ -1115,7 +1123,7 @@ defined in the specified modules. Use `imported=true` if you wish to
 also test functions that were imported into these modules from
 elsewhere.
 """
-function detect_ambiguities(mods...; imported::Bool=false)
+function detect_ambiguities(mods...; imported::Bool=false, allow_bottom::Bool=true)
     function sortdefs(m1, m2)
         ord12 = m1.file < m2.file
         if !ord12 && (m1.file == m2.file)
@@ -1137,7 +1145,7 @@ function detect_ambiguities(mods...; imported::Bool=false)
                 for m in mt
                     if m.ambig !== nothing
                         for m2 in m.ambig
-                            if Base.isambiguous(m, m2)
+                            if Base.isambiguous(m, m2, allow_bottom)
                                 push!(ambs, sortdefs(m, m2))
                             end
                         end

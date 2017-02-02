@@ -611,3 +611,11 @@ end
     @test Foo_19281().f[1] == ()
     @test Foo_19281().f[2] == (1, )
 end
+
+let
+    x_notdefined = Ref{String}()
+    @test !isassigned(x_notdefined)
+
+    x_defined = Ref{String}("Test")
+    @test isassigned(x_defined)
+end

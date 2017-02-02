@@ -16,7 +16,7 @@ julia> write(STDOUT,"Hello World");  # suppress return value 11 with ;
 Hello World
 julia> read(STDIN,Char)
 
-'\n'
+'\n': ASCII/Unicode U+000a (category Cc: Other, control)
 ```
 
 Note that [`write()`](@ref) returns 11, the number of bytes (in `"Hello World"`) written to [`STDOUT`](@ref),
@@ -29,14 +29,14 @@ takes the type of the data to be read as the second argument.
 For example, to read a simple byte array, we could do:
 
 ```julia
-julia> x = zeros(UInt8,4)
+julia> x = zeros(UInt8, 4)
 4-element Array{UInt8,1}:
  0x00
  0x00
  0x00
  0x00
 
-julia> read!(STDIN,x)
+julia> read!(STDIN, x)
 abcd
 4-element Array{UInt8,1}:
  0x61
@@ -63,7 +63,7 @@ or if we had wanted to read the entire line instead:
 ```julia
 julia> readline(STDIN)
 abcd
-"abcd\n"
+"abcd"
 ```
 
 Note that depending on your terminal settings, your TTY may be line buffered and might thus require
@@ -91,7 +91,7 @@ end
 Note that the [`write()`](@ref) method mentioned above operates on binary streams. In particular,
 values do not get converted to any canonical text representation but are written out as is:
 
-```julia
+```jldoctest
 julia> write(STDOUT,0x61);  # suppress return value 1 with ;
 a
 ```
@@ -102,8 +102,8 @@ value is `1` (since `0x61` is one byte).
 For text I/O, use the [`print()`](@ref) or [`show()`](@ref) methods, depending on your needs (see
 the standard library reference for a detailed discussion of the difference between the two):
 
-```julia
-julia> print(STDOUT,0x61)
+```jldoctest
+julia> print(STDOUT, 0x61)
 97
 ```
 
@@ -126,7 +126,7 @@ IOStream(<file hello.txt>)
 
 julia> readlines(f)
 1-element Array{String,1}:
- "Hello, World!\n"
+ "Hello, World!"
 ```
 
 If you want to write to a file, you can open it with the write (`"w"`) flag:
@@ -193,8 +193,6 @@ julia> @async begin
          end
        end
 Task (runnable) @0x00007fd31dc11ae0
-
-julia>
 ```
 
 To those familiar with the Unix socket API, the method names will feel familiar, though their
@@ -264,8 +262,8 @@ julia> @async begin
        end
 Task (runnable) @0x00007fd31dc12e60
 
-julia> clientside=connect(2001)
-TCPSocket(open, 0 bytes waiting)
+julia> clientside = connect(2001)
+TCPSocket(RawFD(28) open, 0 bytes waiting)
 
 julia> @async while true
           write(STDOUT,readline(clientside))
@@ -290,7 +288,7 @@ on the port given by the port parameter. It allows you to do things like:
 
 ```julia
 julia> connect("google.com",80)
-TCPSocket(open, 0 bytes waiting)
+TCPSocket(RawFD(30) open, 0 bytes waiting)
 ```
 
 At the base of this functionality is [`getaddrinfo()`](@ref), which will do the appropriate address
