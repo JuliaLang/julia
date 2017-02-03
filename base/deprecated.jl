@@ -1191,6 +1191,7 @@ eval(Base.LibGit2, quote
      @deprecate revparse(repo::GitRepo, objname::AbstractString) GitObject(repo, objname) false
      @deprecate object(repo::GitRepo, te::GitTreeEntry) GitObject(repo, te) false
      @deprecate commit(ann::GitAnnotated) GitHash(ann) false
+     @deprecate cat{T<:GitObject}(repo::GitRepo, ::Type{T}, object::AbstractString) cat(repo, object)
 end)
 
 # when this deprecation is deleted, remove all calls to it, and all
