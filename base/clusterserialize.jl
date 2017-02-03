@@ -136,9 +136,9 @@ function deserialize_global_from_main(s::ClusterSerializer, sym)
     sym_isconst = deserialize(s)
     v = deserialize(s)
     if sym_isconst
-        eval(Main, :(const $sym = $v))
+        @eval Main const $sym = $v
     else
-        eval(Main, :($sym = $v))
+        @eval Main $sym = $v
     end
 end
 

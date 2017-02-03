@@ -563,12 +563,12 @@ end
 let
     old_have_color = Base.have_color
     try
-        eval(Base, :(have_color = true))
+        @eval Base have_color = true
         buf = IOBuffer()
         print_with_color(:red, buf, "foo")
         @test startswith(String(take!(buf)), Base.text_colors[:red])
     finally
-        eval(Base, :(have_color = $(old_have_color)))
+        @eval Base have_color = $(old_have_color)
     end
 end
 
@@ -585,7 +585,7 @@ end
 let
     old_have_color = Base.have_color
     try
-        eval(Base, :(have_color = true))
+        @eval Base have_color = true
         buf = IOBuffer()
         print_with_color(:red, buf, "foo")
         # Check that we get back to normal text color in the end
@@ -595,7 +595,7 @@ let
         print_with_color(:red, buf, "foo"; bold = true)
         @test String(take!(buf)) == "\e[1m\e[31mfoo\e[39m\e[22m"
     finally
-        eval(Base, :(have_color = $(old_have_color)))
+        @eval Base have_color = $(old_have_color)
     end
 end
 

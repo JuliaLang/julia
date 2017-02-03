@@ -6,11 +6,11 @@ function runtests(name, isolate=true)
     try
         if isolate
             mod_name = Symbol("TestMain_", replace(name, '/', '_'))
-            m = eval(Main, :(module $mod_name end))
+            m = @eval(Main, module $mod_name end)
         else
             m = Main
         end
-        eval(m, :(using Base.Test))
+        @eval(m, using Base.Test)
         ex = quote
             @timed @testset $"$name" begin
                 include($"$name.jl")

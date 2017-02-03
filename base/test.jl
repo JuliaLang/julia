@@ -420,7 +420,7 @@ macro test_warn(msg, expr)
     quote
         let fname = tempname(), have_color = Base.have_color
             try
-                eval(Base, :(have_color = false))
+                @eval Base have_color = false
                 ret = open(fname, "w") do f
                     redirect_stderr(f) do
                         $(esc(expr))
