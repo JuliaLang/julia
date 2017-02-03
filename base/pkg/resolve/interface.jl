@@ -54,7 +54,7 @@ type Interface
         # generate spp and pvers
         spp = Array{Int}(np)
 
-        pvers = [ VersionNumber[] for i = 1:np ]
+        pvers = [VersionNumber[] for i = 1:np]
 
         for (p,depsp) in deps, vn in keys(depsp)
             p0 = pdict[p]
@@ -90,7 +90,7 @@ type Interface
             for v0 = 1:spp0-1
                 vweight0[v0] = VersionWeight(pvers0[v0])
             end
-            vweight0[spp0] = VersionWeight(pvers0[spp0-1], true)
+            vweight0[spp0] = VersionWeight(v"0") # last version means uninstalled
         end
 
         return new(reqs, deps, pkgs, np, spp, pdict, pvers, vdict, vweight)
@@ -137,7 +137,7 @@ function greedysolver(interface::Interface)
         rv = spp[rp0] - 1
         while rv > 0
             rvn = pvers[rp0][rv]
-            rvn in rvs && break
+            rvn ∈ rvs && break
             rv -= 1
         end
         @assert rv > 0
@@ -164,7 +164,7 @@ function greedysolver(interface::Interface)
                 rv = spp[rp0] - 1
                 while rv > 0
                     rvn = pvers[rp0][rv]
-                    rvn in rvs && break
+                    rvn ∈ rvs && break
                     rv -= 1
                 end
                 # if we found a version, and the package was uninstalled
@@ -177,9 +177,7 @@ function greedysolver(interface::Interface)
                     return (false, Int[])
                 end
 
-                if !(rp in seen)
-                    push!(staged_next, rp)
-                end
+                rp ∈ seen || push!(staged_next, rp)
             end
         end
         union!(seen, staged_next)
@@ -206,7 +204,7 @@ function verify_solution(sol::Vector{Int}, interface::Interface)
         p0 = pdict[p]
         sol[p0] != spp[p0] || return false
         vn = pvers[p0][sol[p0]]
-        vn in vs || return false
+        vn ∈ vs || return false
     end
 
     # verify dependencies
@@ -220,7 +218,7 @@ function verify_solution(sol::Vector{Int}, interface::Interface)
                     p1 = pdict[rp]
                     sol[p1] != spp[p1] || return false
                     vn = pvers[p1][sol[p1]]
-                    vn in rvs || return false
+                    vn ∈ rvs || return false
                 end
             end
         end
@@ -234,6 +232,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
 
     reqs = interface.reqs
     deps = interface.deps
+    pkgs = interface.pkgs
     spp = interface.spp
     pdict = interface.pdict
     pvers = interface.pvers
@@ -241,10 +240,10 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
 
     # prepare some useful structures
     # pdeps[p0][v0] has all dependencies of package p0 version v0
-    pdeps = [ Array{Requires}(spp[p0]-1) for p0 = 1:np ]
+    pdeps = [Array{Requires}(spp[p0]-1) for p0 = 1:np]
     # prevdeps[p1][p0][v0] is the VersionSet of package p1 which package p0 version v0
     # depends upon
-    prevdeps = [ Dict{Int,Dict{Int,VersionSet}}() for p0 = 1:np ]
+    prevdeps = [Dict{Int,Dict{Int,VersionSet}}() for p0 = 1:np]
 
     for (p,d) in deps
         p0 = pdict[p]
@@ -284,41 +283,67 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
                     break
                 end
                 vn = pvers[p1][sol[p1]]
-                if !in(vn, vs)
+                if vn ∉ vs
                     # the dependency is violated because
                     # the other package version is invalid
                     viol = true
                     break
                 end
             end
-            if viol
-                continue
-            end
+            viol && continue
 
             # check if bumping the version would violate some
             # dependency of another package
             for (p1,d) in prevdeps[p0]
                 vs = get(d, sol[p1], nothing)
-                if vs === nothing
-                    continue
-                end
+                vs === nothing && continue
                 vn = pvers[p0][s0+1]
-                if !in(vn, vs)
+                if vn ∉ vs
                     # bumping the version would violate
                     # the dependency
                     viol = true
                     break
                 end
             end
-            if viol
-                continue
-            end
+            viol && continue
             # So the solution is non-optimal: we bump it manually
             #warn("nonoptimal solution for package $(interface.pkgs[p0]): sol=$s0")
             sol[p0] += 1
             restart = true
         end
     end
+
+    # Finally uninstall unneeded packages:
+    # start from the required ones and keep only
+    # the packages reachable from them along the graph
+    uninst = trues(np)
+    staged = Set{String}(keys(reqs))
+    seen = copy(staged)
+
+    while !isempty(staged)
+        staged_next = Set{String}()
+        for p in staged
+            p0 = pdict[p]
+            uninst[p0] = false
+            @assert sol[p0] < spp[p0]
+            vn = pvers[p0][sol[p0]]
+            a = deps[p][vn]
+
+            # scan dependencies
+            for (rp,rvs) in a.requires
+                rp0 = pdict[rp]
+                @assert sol[rp0] < spp[rp0] && pvers[rp0][sol[rp0]] ∈ rvs
+                rp ∈ seen || push!(staged_next, rp)
+            end
+        end
+        union!(seen, staged_next)
+        staged = staged_next
+    end
+
+    for p0 in find(uninst)
+        sol[p0] = spp[p0]
+    end
+
     return
 end
 

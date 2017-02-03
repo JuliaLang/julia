@@ -23,7 +23,7 @@ type MaxSumParams
                  # step
 
     function MaxSumParams()
-        accuracy = parse(Int,get(ENV, "JULIA_PKGRESOLVE_ACCURACY", "1"))
+        accuracy = parse(Int, get(ENV, "JULIA_PKGRESOLVE_ACCURACY", "1"))
         if accuracy <= 0
             error("JULIA_PKGRESOLVE_ACCURACY must be > 0")
         end
@@ -87,10 +87,10 @@ type Graph
         pvers = interface.pvers
         vdict = interface.vdict
 
-        gadj = [ Int[] for i = 1:np ]
-        gmsk = [ BitMatrix[] for i = 1:np ]
-        gdir = [ Int[] for i = 1:np ]
-        adjdict = [ Dict{Int,Int}() for i = 1:np ]
+        gadj = [Int[] for i = 1:np]
+        gmsk = [BitMatrix[] for i = 1:np]
+        gdir = [Int[] for i = 1:np]
+        adjdict = [Dict{Int,Int}() for i = 1:np]
 
         for (p,d) in deps
             p0 = pdict[p]
@@ -138,7 +138,7 @@ type Graph
                     end
 
                     for v1 = 1:length(pvers[p1])
-                        if !in(pvers[p1][v1], rvs)
+                        if pvers[p1][v1] ∉ rvs
                             bm[v1, v0] = false
                             bmt[v0, v1] = false
                         end
@@ -191,7 +191,7 @@ type Messages
 
         # external fields: there are 2 terms, a noise to break potential symmetries
         #                  and one to favor newest versions over older, and no-version over all
-        fld = [ [ FieldValue(0,zero(VersionWeight),vweight[p0][v0],0,noise(p0,v0)) for v0 = 1:spp[p0] ] for p0 = 1:np]
+        fld = [[FieldValue(0, zero(VersionWeight), vweight[p0][v0], (v0==spp[p0]), 0, noise(p0,v0)) for v0 = 1:spp[p0]] for p0 = 1:np]
 
         # enforce requirements
         for (rp, rvs) in reqs
@@ -207,7 +207,7 @@ type Messages
                     # the state is one of those explicitly requested:
                     # favor it at a higer level than normal (upgrade
                     # FieldValue from l2 to l1)
-                    fld0[v0] += FieldValue(0,vweight[p0][v0],-vweight[p0][v0])
+                    fld0[v0] += FieldValue(0, vweight[p0][v0], -vweight[p0][v0])
                 end
             end
             # the uninstalled state is forbidden by requirements
@@ -223,7 +223,7 @@ type Messages
 
         # initialize cavity messages to 0
         gadj = graph.gadj
-        msg = [ [ zeros(FieldValue,spp[p0]) for p1 = 1:length(gadj[p0])] for p0 = 1:np]
+        msg = [[zeros(FieldValue, spp[p0]) for p1 = 1:length(gadj[p0])] for p0 = 1:np]
 
         return new(msg, fld, falses(np), np)
     end
@@ -273,9 +273,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
     for j0 in 1:length(gadj0)
 
         p1 = gadj0[j0]
-        if decimated[p1]
-            continue
-        end
+        decimated[p1] && continue
         j1 = adjdict0[p1]
         #@assert j0 == adjdict[p1][p0]
         bm1 = gmsk[p1][j1]
@@ -289,7 +287,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
         if dir1 == -1
             # p0 depends on p1
             for v0 = 1:spp0-1
-                cavmsg[v0] += FieldValue(0,VersionWeight(0),VersionWeight(0),v0)
+                cavmsg[v0] += FieldValue(0, VersionWeight(0), VersionWeight(0), 0, v0)
             end
         end
 
@@ -297,12 +295,12 @@ function update(p0::Int, graph::Graph, msgs::Messages)
         oldmsg = msg1[j1]
 
         # init the new message to minus infinity
-        newmsg = [ FieldValue(-1) for v1 = 1:spp1 ]
+        newmsg = [FieldValue(-1) for v1 = 1:spp1]
 
         # compute the new message by passing cavmsg
         # through the constraint encoded in the bitmask
         # (nearly equivalent to:
-        #    newmsg = [ maximum(cavmsg[bm1[:,v1]]) for v1 = 1:spp1 ]
+        #    newmsg = [maximum(cavmsg[bm1[:,v1]]) for v1 = 1:spp1]
         #  except for the gnrg term)
         m = FieldValue(-1)
         for v1 = 1:spp1
@@ -313,7 +311,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
             end
             if dir1 == 1 && v1 != spp1
                 # p1 depends on p0
-                newmsg[v1] += FieldValue(0,VersionWeight(0),VersionWeight(0),v1)
+                newmsg[v1] += FieldValue(0, VersionWeight(0), VersionWeight(0), 0, v1)
             end
             m = max(m, newmsg[v1])
         end
@@ -399,14 +397,10 @@ function decimate(n::Int, graph::Graph, msgs::Messages)
     decimated = msgs.decimated
     fldorder = sortperm(fld, by=secondmax)
     for p0 in fldorder
-        if decimated[p0]
-            continue
-        end
+        decimated[p0] && continue
         decimate1(p0, graph, msgs)
         n -= 1
-        if n == 0
-            break
-        end
+        n == 0 && break
     end
     @assert n == 0
     return
@@ -450,19 +444,14 @@ function maxsum(graph::Graph, msgs::Messages)
         #println("it = $it maxdiff = $maxdiff")
 
         if maxdiff == zero(FieldValue)
-            if break_ties(msgs)
-                break
-            else
-                continue
-            end
+            break_ties(msgs) && break
+            continue
         end
         if it >= params.nondec_iterations &&
            (it - params.nondec_iterations) % params.dec_interval == 0
-            numdec = clamp(floor(Int,params.dec_fraction * graph.np),  1, msgs.num_nondecimated)
+            numdec = clamp(floor(Int, params.dec_fraction * graph.np),  1, msgs.num_nondecimated)
             decimate(numdec, graph, msgs)
-            if msgs.num_nondecimated == 0
-                break
-            end
+            msgs.num_nondecimated == 0 && break
         end
     end
 
