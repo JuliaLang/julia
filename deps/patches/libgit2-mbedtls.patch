@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 4e1104f..8110489 100644
+index f26f468..c246687 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -113,6 +113,10 @@ IF (HAVE_STRUCT_STAT_NSEC OR WIN32)
@@ -13,7 +13,7 @@ index 4e1104f..8110489 100644
  # This variable will contain the libraries we need to put into
  # libgit2.pc's Requires.private. That is, what we're linking to or
  # what someone who's statically linking us needs to link to.
-@@ -283,6 +287,10 @@ ELSE ()
+@@ -284,6 +288,10 @@ ELSE ()
  		FIND_PACKAGE(OpenSSL)
  	ENDIF ()
  
@@ -24,7 +24,7 @@ index 4e1104f..8110489 100644
  	IF (CURL_FOUND)
  		ADD_DEFINITIONS(-DGIT_CURL)
  		INCLUDE_DIRECTORIES(${CURL_INCLUDE_DIRS})
-@@ -316,6 +324,9 @@ ELSEIF (OPENSSL_FOUND AND NOT SHA1_TYPE STREQUAL "builtin")
+@@ -317,6 +325,9 @@ ELSEIF (OPENSSL_FOUND AND NOT SHA1_TYPE STREQUAL "builtin")
  	ELSE()
  		SET(LIBGIT2_PC_REQUIRES "${LIBGIT2_PC_REQUIRES} openssl")
  	ENDIF ()
@@ -34,7 +34,7 @@ index 4e1104f..8110489 100644
  ELSE()
  	FILE(GLOB SRC_SHA1 src/hash/hash_generic.c)
  ENDIF()
-@@ -543,6 +554,11 @@ IF (OPENSSL_FOUND)
+@@ -549,6 +560,11 @@ IF (OPENSSL_FOUND)
    SET(SSL_LIBRARIES ${OPENSSL_LIBRARIES})
  ENDIF()
  
@@ -46,7 +46,7 @@ index 4e1104f..8110489 100644
  
  
  IF (THREADSAFE)
-@@ -688,7 +704,7 @@ IF (BUILD_CLAR)
+@@ -696,7 +712,7 @@ IF (BUILD_CLAR)
  	ENDIF ()
  
  	ENABLE_TESTING()
@@ -158,10 +158,10 @@ index e2ad8fe..c5b4269 100644
  
  	GIT_MEMORY_BARRIER;
 diff --git a/src/global.h b/src/global.h
-index 2199515..adadcd9 100644
+index 88f40aa..139630c 100644
 --- a/src/global.h
 +++ b/src/global.h
-@@ -23,6 +23,12 @@ typedef struct {
+@@ -29,6 +29,12 @@ typedef struct {
  extern SSL_CTX *git__ssl_ctx;
  #endif
  
@@ -260,10 +260,10 @@ index 0000000..e50d295
 \ No newline at end of file
 diff --git a/src/mbedtls_stream.c b/src/mbedtls_stream.c
 new file mode 100644
-index 0000000..98ff808
+index 0000000..f88eeb0
 --- /dev/null
 +++ b/src/mbedtls_stream.c
-@@ -0,0 +1,483 @@
+@@ -0,0 +1,435 @@
 +/*
 + * Copyright (C) the libgit2 contributors. All rights reserved.
 + *
@@ -487,82 +487,34 @@ index 0000000..98ff808
 +    return ret;
 +}
 +
-+static int check_host_name(const char *name, const char *host)
-+{
-+    if (!strcasecmp(name, host))
-+        return 0;
-+
-+    if (gitno__match_host(name, host) < 0)
-+        return -1;
-+
-+    return 0;
-+}
-+
 +static int verify_server_cert(mbedtls_ssl_context *ssl, const char *host)
 +{
-+    const mbedtls_x509_crt *cert;
-+    const mbedtls_x509_sequence *alts;
-+    int ret, matched = -1;
++    mbedtls_x509_crt *cert;
++    uint32_t flags;
++    int ret = -1;
 +    size_t sn_size = 512;
-+    char subject_name[sn_size], alt_name[sn_size];
-+
++    char buf[sn_size];
 +
 +    if (( ret = mbedtls_ssl_get_verify_result(ssl) ) != 0) {
-+        char vrfy_buf[512];
-+        mbedtls_x509_crt_verify_info( vrfy_buf, sizeof( vrfy_buf ), "  ! ", ret );
-+        giterr_set(GITERR_SSL, "The SSL certificate is invalid: %s", vrfy_buf);
++        mbedtls_x509_crt_verify_info(buf, sn_size, "  ! ", ret);
++        giterr_set(GITERR_SSL, "The SSL certificate is invalid: %s", buf);
 +        return GIT_ECERTIFICATE;
 +    }
 +
-+    cert = mbedtls_ssl_get_peer_cert(ssl);
++    cert = (mbedtls_x509_crt*) mbedtls_ssl_get_peer_cert(ssl);
 +    if (!cert) {
 +        giterr_set(GITERR_SSL, "the server did not provide a certificate");
 +        return -1;
 +    }
 +
-+    /* Check the alternative names */
-+    alts = &cert->subject_alt_names;
-+    while (alts != NULL && matched != 1) {
-+        // Buffer is too small
-+        if( alts->buf.len >= sn_size )
-+            goto on_error;
-+
-+        memcpy(alt_name, alts->buf.p, alts->buf.len);
-+        alt_name[alts->buf.len] = '\0';
-+
-+        if (!memchr(alt_name, '\0', alts->buf.len)) {
-+            if (check_host_name(alt_name, host) < 0)
-+                matched = 0;
-+            else
-+                matched = 1;
-+        }
-+
-+        alts = alts->next;
++    if (mbedtls_x509_crt_verify(cert, git__ssl_conf->ca_chain, NULL, host, &flags, NULL, NULL) != 0) {
++        mbedtls_x509_crt_verify_info(buf, sn_size, "", flags);
++        buf[strlen(buf) - 1] = '\0';  // Remove trailing newline
++        giterr_set(GITERR_SSL, buf);
++        return GIT_ECERTIFICATE;
 +    }
-+    if (matched == 0)
-+        goto cert_fail_name;
-+
-+    if (matched == 1)
-+        return 0;
-+
-+    /* If no alternative names are available, check the common name */
-+    ret = mbedtls_x509_dn_gets(subject_name, sn_size, &cert->subject);
-+    if (ret == 0)
-+        goto on_error;
-+    if (memchr(subject_name, '\0', ret))
-+        goto cert_fail_name;
-+
-+    if (check_host_name(subject_name, host) < 0)
-+        goto cert_fail_name;
 +
 +    return 0;
-+
-+on_error:
-+    return ssl_set_error(ssl, 0);
-+
-+cert_fail_name:
-+    giterr_set(GITERR_SSL, "hostname does not match certificate");
-+    return GIT_ECERTIFICATE;
 +}
 +
 +typedef struct {
@@ -770,7 +722,7 @@ index 0000000..5cb1071
 +
 +#endif
 diff --git a/src/settings.c b/src/settings.c
-index 0da19ea..65bbb41 100644
+index 4a6e0f3..9ebcd78 100644
 --- a/src/settings.c
 +++ b/src/settings.c
 @@ -9,6 +9,10 @@
@@ -784,7 +736,7 @@ index 0da19ea..65bbb41 100644
  #include <git2.h>
  #include "common.h"
  #include "sysdir.h"
-@@ -29,7 +33,7 @@ int git_libgit2_features()
+@@ -29,7 +33,7 @@ int git_libgit2_features(void)
  #ifdef GIT_THREADS
  		| GIT_FEATURE_THREADS
  #endif
