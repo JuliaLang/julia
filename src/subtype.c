@@ -1187,7 +1187,7 @@ static jl_value_t *finish_unionall(jl_value_t *res, jl_varbinding_t *vb, jl_sten
     // remove/replace/rewrap free occurrences of this var in the environment
     jl_varbinding_t *btemp = e->vars;
     while (btemp != NULL) {
-        if (jl_has_typevar(btemp->lb, vb->var)) {
+        if (jl_has_typevar(btemp->lb, vb->var) && vb->lb != (jl_value_t*)btemp->var) {
             if (varval)
                 btemp->lb = jl_substitute_var(btemp->lb, vb->var, varval);
             else if (btemp->lb == (jl_value_t*)vb->var)
@@ -1196,7 +1196,7 @@ static jl_value_t *finish_unionall(jl_value_t *res, jl_varbinding_t *vb, jl_sten
                 btemp->lb = jl_new_struct(jl_unionall_type, vb->var, btemp->lb);
             assert((jl_value_t*)btemp->var != btemp->lb);
         }
-        if (jl_has_typevar(btemp->ub, vb->var)) {
+        if (jl_has_typevar(btemp->ub, vb->var) && vb->ub != (jl_value_t*)btemp->var) {
             if (varval)
                 btemp->ub = jl_substitute_var(btemp->ub, vb->var, varval);
             else if (btemp->ub == (jl_value_t*)vb->var)
