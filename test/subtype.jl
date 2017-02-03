@@ -807,6 +807,11 @@ function test_intersection()
                                               Union{Tuple{S,Array{Int64,1}},Tuple{S,Array{S,1}}} where S),
                               Union{Tuple{Vector{Int64},Vector{Int64}},
                                     Tuple{Vector{T},Vector{T}} where T>:Vector})
+
+    # part of issue #20344
+    @testintersect(Tuple{Type{Tuple{Vararg{T, N} where N}}, Tuple} where T,
+                   Tuple{Type{Tuple{Vararg{T, N}}} where N where T, Any},
+                   Tuple{Type{Tuple{}}, Tuple})
 end
 
 function test_intersection_properties()
