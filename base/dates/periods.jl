@@ -39,7 +39,7 @@ for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond
 end
 
 #Print/show/traits
-Base.string{P<:Period}(x::P) = string(value(x), _units(x))
+Base.string(x::Period) = string(value(x), _units(x))
 Base.show(io::IO,x::Period) = print(io, string(x))
 Base.zero{P<:Period}(::Union{Type{P},P}) = P(0)
 Base.one{P<:Period}(::Union{Type{P},P}) = 1  # see #16116
@@ -211,7 +211,7 @@ julia> Dates.CompoundPeriod(Dates.Minute(50000))
 50000 minutes
 ```
 """
-CompoundPeriod{P<:Period}(p::Vector{P}) = CompoundPeriod(Array{Period}(p))
+CompoundPeriod(p::Vector{<:Period}) = CompoundPeriod(Array{Period}(p))
 
 CompoundPeriod(t::Time) = CompoundPeriod(Period[Hour(t), Minute(t), Second(t), Millisecond(t),
                                                 Microsecond(t), Nanosecond(t)])
@@ -353,13 +353,13 @@ Base.show(io::IO,x::CompoundPeriod) = print(io, string(x))
 
 GeneralPeriod = Union{Period, CompoundPeriod}
 (+)(x::GeneralPeriod) = x
-(+){P<:GeneralPeriod}(x::StridedArray{P}) = x
+(+)(x::StridedArray{<:GeneralPeriod}) = x
 
 for op in (:+, :-)
     @eval begin
-        ($op){P<:GeneralPeriod}(x::GeneralPeriod, Y::StridedArray{P}) = broadcast($op, x, Y)
-        ($op){P<:GeneralPeriod}(Y::StridedArray{P}, x::GeneralPeriod) = broadcast($op, Y, x)
-        ($op){P<:GeneralPeriod, Q<:GeneralPeriod}(X::StridedArray{P}, Y::StridedArray{Q}) =
+        ($op)(x::GeneralPeriod, Y::StridedArray{<:GeneralPeriod}) = broadcast($op, x, Y)
+        ($op)(Y::StridedArray{<:GeneralPeriod}, x::GeneralPeriod) = broadcast($op, Y, x)
+        ($op)(X::StridedArray{<:GeneralPeriod}, Y::StridedArray{<:GeneralPeriod}) =
             reshape(CompoundPeriod[($op)(x, y) for (x, y) in zip(X, Y)], promote_shape(size(X), size(Y)))
     end
 end
