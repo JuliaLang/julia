@@ -96,6 +96,7 @@ Base.findprev(::Function, ::Any, ::Integer)
 Base.findprev(::Any, ::Any, ::Integer)
 Base.permutedims
 Base.permutedims!
+Base.PermutedDimsArray
 Base.squeeze
 Base.vec
 Base.promote_shape
