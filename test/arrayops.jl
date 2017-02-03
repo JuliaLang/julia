@@ -4,7 +4,7 @@
 
 @testset "basics" begin
     @test length([1, 2, 3]) == 3
-    @test countnz([1, 2, 3]) == 3
+    @test count([1, 2, 3]) == 3
 
     let a = ones(4), b = a+a, c = a-a
         @test b[1] === 2. && b[2] === 2. && b[3] === 2. && b[4] === 2.

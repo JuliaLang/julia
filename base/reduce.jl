@@ -348,7 +348,7 @@ julia> sum(1:20)
 ```
 """
 sum(a) = mapreduce(identity, +, a)
-sum(a::AbstractArray{Bool}) = countnz(a)
+sum(a::AbstractArray{Bool}) = count(a)
 
 
 # Kahan (compensated) summation: O(1) error growth, at the expense
@@ -637,42 +637,37 @@ function contains(eq::Function, itr, x)
     return false
 end
 
-
-## countnz & count
-
 """
     count(p, itr) -> Integer
+    count(itr)
 
-Count the number of elements in `itr` for which predicate `p` returns `true`.
+Count the number of elements in `itr` for which the function `p` returns
+a nonzero value (or returns `true`, for boolean `p`) according to the
+[`iszero`](@ref) function.  `count(itr)` is equivalent to `p = identity`,
+i.e. it counts the number of nonzero (or `true`) elements of `itr`.
 
 ```jldoctest
 julia> count(i->(4<=i<=6), [2,3,4,5,6])
 3
-```
-"""
-function count(pred, itr)
-    n = 0
-    for x in itr
-        n += pred(x)
-    end
-    return n
-end
 
-"""
-    countnz(A) -> Integer
-
-Counts the number of nonzero values in array `A` (dense or sparse). Note that this is not a constant-time operation.
-For sparse matrices, one should usually use [`nnz`](@ref), which returns the number of stored values.
-
-```jldoctest
 julia> A = [1 2 4; 0 0 1; 1 1 0]
 3×3 Array{Int64,2}:
  1  2  4
  0  0  1
  1  1  0
 
-julia> countnz(A)
+julia> count(A)
 6
 ```
 """
-countnz(a) = count(x -> x != 0, a)
+function count end
+
+function count(pred, itr)
+    n = 0
+    for x in itr
+        n += !iszero(pred(x))
+    end
+    return n
+end
+
+count(itr) = count(identity, itr)

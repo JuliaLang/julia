@@ -1565,9 +1565,9 @@ julia> ror(A,5)
 """
 ror(B::BitVector, i::Integer) = ror!(similar(B), B, i)
 
-## countnz & find ##
+## count & find ##
 
-function countnz(B::BitArray)
+function count(B::BitArray)
     n = 0
     Bc = B.chunks
     @inbounds for i = 1:length(Bc)
@@ -1728,7 +1728,7 @@ end
 
 function find(B::BitArray)
     l = length(B)
-    nnzB = countnz(B)
+    nnzB = count(B)
     I = Array{Int}(nnzB)
     nnzB == 0 && return I
     Bc = B.chunks
@@ -1762,7 +1762,7 @@ end
 findn(B::BitVector) = find(B)
 
 function findn(B::BitMatrix)
-    nnzB = countnz(B)
+    nnzB = count(B)
     I = Array{Int}(nnzB)
     J = Array{Int}(nnzB)
     count = 1
@@ -1784,7 +1784,7 @@ end
 ## Reductions ##
 
 sum(A::BitArray, region) = reducedim(+, A, region)
-sum(B::BitArray) = countnz(B)
+sum(B::BitArray) = count(B)
 
 function all(B::BitArray)
     isempty(B) && return true

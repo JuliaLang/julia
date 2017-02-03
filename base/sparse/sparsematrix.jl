@@ -43,7 +43,7 @@ julia> nnz(A)
 ```
 """
 nnz(S::SparseMatrixCSC) = Int(S.colptr[end]-1)
-countnz(S::SparseMatrixCSC) = countnz(S.nzval)
+count(S::SparseMatrixCSC) = count(S.nzval)
 
 """
     nonzeros(A)
@@ -1740,7 +1740,7 @@ indmax(A::SparseMatrixCSC) = findmax(A)[2]
 #all(A::SparseMatrixCSC{Bool}, region) = reducedim(all,A,region,true)
 #any(A::SparseMatrixCSC{Bool}, region) = reducedim(any,A,region,false)
 #sum(A::SparseMatrixCSC{Bool}, region) = reducedim(+,A,region,0,Int)
-#sum(A::SparseMatrixCSC{Bool}) = countnz(A)
+#sum(A::SparseMatrixCSC{Bool}) = count(A)
 
 ## getindex
 function rangesearch(haystack::Range, needle)

@@ -276,7 +276,7 @@ wrapped with `LogicalIndex` upon calling `to_indices`.
 immutable LogicalIndex{T, A<:AbstractArray{Bool}} <: AbstractVector{T}
     mask::A
     sum::Int
-    LogicalIndex(mask::A) = new(mask, countnz(mask))
+    LogicalIndex(mask::A) = new(mask, count(mask))
 end
 LogicalIndex(mask::AbstractVector{Bool}) = LogicalIndex{Int, typeof(mask)}(mask)
 LogicalIndex{N}(mask::AbstractArray{Bool, N}) = LogicalIndex{CartesianIndex{N}, typeof(mask)}(mask)
@@ -467,7 +467,7 @@ end
 
 @generated function findn{T,N}(A::AbstractArray{T,N})
     quote
-        nnzA = countnz(A)
+        nnzA = count(A)
         @nexprs $N d->(I_d = Array{Int}(nnzA))
         k = 1
         @nloops $N i A begin
@@ -1066,7 +1066,7 @@ end
 
 @generated function findn{N}(B::BitArray{N})
     quote
-        nnzB = countnz(B)
+        nnzB = count(B)
         I = ntuple(x->Array{Int}(nnzB), $N)
         if nnzB > 0
             count = 1

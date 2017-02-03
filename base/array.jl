@@ -1393,7 +1393,7 @@ julia> find(A)
 ```
 """
 function find(A)
-    nnzA = countnz(A)
+    nnzA = count(A)
     I = Vector{Int}(nnzA)
     count = 1
     inds = _index_remapper(A)
@@ -1438,7 +1438,7 @@ julia> findn(A)
 ```
 """
 function findn(A::AbstractMatrix)
-    nnzA = countnz(A)
+    nnzA = count(A)
     I = similar(A, Int, nnzA)
     J = similar(A, Int, nnzA)
     count = 1
@@ -1470,7 +1470,7 @@ julia> findnz(A)
 ```
 """
 function findnz{T}(A::AbstractMatrix{T})
-    nnzA = countnz(A)
+    nnzA = count(A)
     I = zeros(Int, nnzA)
     J = zeros(Int, nnzA)
     NZs = Array{T,1}(nnzA)
