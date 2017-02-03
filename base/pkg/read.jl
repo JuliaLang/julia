@@ -182,7 +182,13 @@ function requires_path(pkg::AbstractString, avail::Dict=available(pkg))
     head = LibGit2.with(LibGit2.GitRepo, pkg) do repo
         LibGit2.isdirty(repo, "REQUIRE") && return pkgreq
         LibGit2.need_update(repo)
-        LibGit2.iszero(LibGit2.revparseid(repo, "HEAD:REQUIRE")) && isfile(pkgreq) && return pkgreq
+        try
+            # check if the spec exists
+            LibGit2.GitObject(repo, "HEAD:REQUIRE")
+        catch e
+            # if not, check if the file exists
+            isfile(pkgreq) && return pkgreq
+        end
         string(LibGit2.head_oid(repo))
     end
     for (ver,info) in avail
