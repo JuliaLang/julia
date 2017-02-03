@@ -96,7 +96,7 @@ julia> b = view(A, :, 1)
  1
  3
 
-julia> fill!(b, 0.0)
+julia> fill!(b, 0)
 2-element SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}:
  0
  0

@@ -119,6 +119,7 @@ end
     @nexprs N expr
 
 Generate `N` expressions. `expr` should be an anonymous-function expression.
+
 ```jldoctest
 julia> @macroexpand Base.Cartesian.@nexprs 4 i -> y[i] = A[i+j]
 quote 

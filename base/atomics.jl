@@ -265,7 +265,7 @@ Atomically store the maximum of `x` and `val` in `x`
 
 Performs `x[] = max(x[], val)` atomically. Returns the **old** value.
 
-For further details, see LLVM's `atomicrmw min` instruction.
+For further details, see LLVM's `atomicrmw max` instruction.
 
 ```jldoctest
 julia> x = Threads.Atomic{Int}(5)
@@ -287,7 +287,7 @@ Atomically store the minimum of `x` and `val` in `x`
 
 Performs `x[] = min(x[], val)` atomically. Returns the **old** value.
 
-For further details, see LLVM's `atomicrmw max` instruction.
+For further details, see LLVM's `atomicrmw min` instruction.
 
 ```jldoctest
 julia> x = Threads.Atomic{Int}(7)
