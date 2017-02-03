@@ -1575,6 +1575,7 @@ function countnz(B::BitArray)
     end
     return n
 end
+count(B::BitArray) = countnz(B)
 
 # returns the index of the next non-zero element, or 0 if all zeros
 function findnext(B::BitArray, start::Integer)
