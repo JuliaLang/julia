@@ -104,7 +104,7 @@ end
 
     @test (rv*v) === 14
     @test (rv*mat)::RowVector == [1 4 9]
-    @test_throws DimensionMismatch [1]*reshape([1],(1,1)) # no longer permitted
+    @test [1]*reshape([1],(1,1)) == reshape([1],(1,1))
     @test_throws DimensionMismatch rv*rv
     @test (v*rv)::Matrix == [1 2 3; 2 4 6; 3 6 9]
     @test_throws DimensionMismatch v*v # Was previously a missing method error, now an error message
@@ -238,5 +238,10 @@ end
     @test_throws DimensionMismatch ut\rv
 end
 
+# issue #20389
+@testset "1 row/col vec*mat" begin
+    @test [1,2,3] * ones(1, 4) == [1,2,3] .* ones(1, 4)
+    @test ones(4,1) * RowVector([1,2,3]) == ones(4,1) .* RowVector([1,2,3])
+end
 
 end # @testset "RowVector"

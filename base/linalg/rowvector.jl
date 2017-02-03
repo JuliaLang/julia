@@ -154,12 +154,9 @@ end
     sum(@inbounds(return rowvec[i]*vec[i]) for i = 1:length(vec))
 end
 @inline *(rowvec::RowVector, mat::AbstractMatrix) = transpose(mat.' * transpose(rowvec))
-*(vec::AbstractVector, mat::AbstractMatrix) = throw(DimensionMismatch(
-    "Cannot left-multiply a matrix by a vector")) # Should become a deprecation
 *(::RowVector, ::RowVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
 @inline *(vec::AbstractVector, rowvec::RowVector) = vec .* rowvec
 *(vec::AbstractVector, rowvec::AbstractVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
-*(mat::AbstractMatrix, rowvec::RowVector) = throw(DimensionMismatch("Cannot right-multiply matrix by transposed vector"))
 
 # Transposed forms
 A_mul_Bt(::RowVector, ::AbstractVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
