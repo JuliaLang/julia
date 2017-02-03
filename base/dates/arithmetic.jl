@@ -82,12 +82,12 @@ end
 (-)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) - tons(y)))
 (+)(y::Period, x::TimeType) = x + y
 
-(+){T<:TimeType}(x::AbstractArray{T}, y::GeneralPeriod) = x .+ y
-(+){T<:TimeType,P<:GeneralPeriod}(x::StridedArray{P}, y::T) = x .+ y
-(+){T<:TimeType}(y::GeneralPeriod, x::AbstractArray{T}) = x .+ y
-(+){P<:GeneralPeriod}(y::TimeType, x::StridedArray{P}) = x .+ y
-(-){T<:TimeType}(x::AbstractArray{T}, y::GeneralPeriod) = x .- y
-(-){T<:TimeType,P<:GeneralPeriod}(x::StridedArray{P}, y::T) = x .- y
+(+)(x::AbstractArray{<:TimeType}, y::GeneralPeriod) = x .+ y
+(+)(x::StridedArray{<:GeneralPeriod}, y::TimeType) = x .+ y
+(+)(y::GeneralPeriod, x::AbstractArray{<:TimeType}) = x .+ y
+(+)(y::TimeType, x::StridedArray{<:GeneralPeriod}) = x .+ y
+(-)(x::AbstractArray{<:TimeType}, y::GeneralPeriod) = x .- y
+(-)(x::StridedArray{<:GeneralPeriod}, y::TimeType) = x .- y
 
 # TimeType, AbstractArray{TimeType}
 (-){T<:TimeType}(x::AbstractArray{T}, y::T) = x .- y
