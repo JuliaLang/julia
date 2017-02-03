@@ -754,9 +754,7 @@
                             (not (eqv? (peek-char (ts:port s)) #\ )))
                        (begin (ts:put-back! s t)
                               ex)
-                       (let ((args (parse-chain s down '~)))
-                         `(macrocall @~ ,ex ,@(butlast args)
-                                     ,(loop (last args) (peek-token s)))))
+                       (list 'call t ex (parse-assignment s down)))
                    (list t ex (parse-assignment s down)))))))
 
 (define (parse-eq s)
