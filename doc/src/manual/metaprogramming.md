@@ -232,7 +232,7 @@ In this example, the tuple `(1,2,3)` is interpolated as an expression into a con
 
 ```jldoctest interp1
 julia> ex = :(a in $:((1,2,3)) )
-:(a in (1,2,3))
+:(a in (1, 2, 3))
 ```
 
 Interpolating symbols into a nested expression requires enclosing each symbol in an enclosing
@@ -420,7 +420,7 @@ this is an extremely useful tool for debugging macros):
 
 ```jldoctest sayhello2
 julia> ex = macroexpand( :(@sayhello("human")) )
-:((println)("Hello, ","human"))
+:((println)("Hello, ", "human"))
 
 julia> typeof(ex)
 Expr
@@ -433,7 +433,7 @@ There also exists a macro [`@macroexpand`](@ref) that is perhaps a bit more conv
 
 ```jldoctest sayhello2
 julia> @macroexpand @sayhello "human"
-:((println)("Hello, ","human"))
+:((println)("Hello, ", "human"))
 ```
 
 ### Hold up: why macros?
@@ -453,7 +453,7 @@ julia> macro twostep(arg)
 @twostep (macro with 1 method)
 
 julia> ex = macroexpand( :(@twostep :(1, 2, 3)) );
-I execute at parse time. The argument is: $(Expr(:quote, :((1,2,3))))
+I execute at parse time. The argument is: $(Expr(:quote, :((1, 2, 3))))
 ```
 
 The first call to [`println()`](@ref) is executed when [`macroexpand()`](@ref) is called. The
@@ -464,10 +464,10 @@ julia> typeof(ex)
 Expr
 
 julia> ex
-:((println)("I execute at runtime. The argument is: ",$(Expr(:copyast, :($(QuoteNode(:((1,2,3)))))))))
+:((println)("I execute at runtime. The argument is: ", $(Expr(:copyast, :($(QuoteNode(:((1, 2, 3)))))))))
 
 julia> eval(ex)
-I execute at runtime. The argument is: (1,2,3)
+I execute at runtime. The argument is: (1, 2, 3)
 ```
 
 ### Macro invocation
