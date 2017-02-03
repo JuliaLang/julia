@@ -577,7 +577,7 @@ false
     This last point is *very* important: even though `Float64 <: Real` we **DO NOT** have `Point{Float64} <: Point{Real}`.
 
 In other words, in the parlance of type theory, Julia's type parameters are *invariant*, rather
-than being covariant (or even contravariant). This is for practical reasons: while any instance
+than being [covariant (or even contravariant)](https://en.wikipedia.org/wiki/Covariance_and_contravariance_%28computer_science%29). This is for practical reasons: while any instance
 of `Point{Float64}` may conceptually be like an instance of `Point{Real}` as well, the two types
 have different representations in memory:
 
@@ -603,14 +603,17 @@ function norm(p::Point{Real})
 end
 ```
 
-The correct way to define a method that accepts all arguments of type `Point{T}` where `T` is
+A correct way to define a method that accepts all arguments of type `Point{T}` where `T` is
 a subtype of `Real` is:
 
 ```julia
-function norm{T<:Real}(p::Point{T})
+function norm(p::Point{<:Real})
     sqrt(p.x^2 + p.y^2)
 end
 ```
+
+(Equivalently, one could define `function norm{T<:Real}(p::Point{T})` or
+`function norm(p::Point{T} where T<:Real)`; see [UnionAll Types](@ref).)
 
 More examples will be discussed later in [Methods](@ref).
 
@@ -711,6 +714,17 @@ julia> Pointy{Real} <: Pointy{Float64}
 false
 ```
 
+The notation `Pointy{<:Real}` can be used to express the Julia analogue of a
+*covariant* type, while `Pointy{>:Int}` the analogue of a *contravariant* type,
+but technically these represent *sets* of types (see [UnionAll Types](@ref)).
+```jldoctest pointytype
+julia> Pointy{Float64} <: Pointy{<:Real}
+true
+
+julia> Pointy{Real} <: Pointy{>:Int}
+true
+```
+
 Much as plain old abstract types serve to create a useful hierarchy of types over concrete types,
 parametric abstract types serve the same purpose with respect to parametric composite types. We
 could, for example, have declared `Point{T}` to be a subtype of `Pointy{T}` as follows:
@@ -740,6 +754,9 @@ This relationship is also invariant:
 ```jldoctest pointytype
 julia> Point{Float64} <: Pointy{Real}
 false
+
+julia> Point{Float64} <: Pointy{<:Real}
+true
 ```
 
 What purpose do parametric abstract types like `Pointy` serve? Consider if we create a point-like
@@ -990,10 +1007,12 @@ Using explicit `where` syntax, any subset of parameters can be fixed. For exampl
 
 Type variables can be restricted with subtype relations.
 `Array{T} where T<:Integer` refers to all arrays whose element type is some kind of `Integer`.
+The syntax `Array{<:Integer}` is a convenient shorthand for `Array{T} where T<:Integer`.
 Type variables can have both lower and upper bounds.
 `Array{T} where Int<:T<:Number` refers to all arrays of `Number`s that are able to contain `Int`s
 (since `T` must be at least as big as `Int`).
-The syntax `where T>:Int` also works to specify only the lower bound of a type variable.
+The syntax `where T>:Int` also works to specify only the lower bound of a type variable,
+and `Array{>:Int}` is equivalent to `Array{T} where T>:Int`.
 
 Since `where` expressions nest, type variable bounds can refer to outer type variables.
 For example `Tuple{T,Array{S}} where S<:AbstractArray{T} where T<:Real` refers to 2-tuples whose first
