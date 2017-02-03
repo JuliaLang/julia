@@ -660,7 +660,7 @@ have the same sign as the argument.
 
 ```jldoctest
 julia> modf(3.5)
-(0.5,3.0)
+(0.5, 3.0)
 ```
 """
 modf(x) = rem(x,one(x)), trunc(x)

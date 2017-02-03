@@ -323,7 +323,7 @@ to values for its fields:
 
 ```jldoctest footype
 julia> foo = Foo("Hello, world.", 23, 1.5)
-Foo("Hello, world.",23,1.5)
+Foo("Hello, world.", 23, 1.5)
 
 julia> typeof(foo)
 Foo
@@ -476,7 +476,7 @@ argument types, constructed using the special `Union` function:
 
 ```jldoctest
 julia> IntOrString = Union{Int,AbstractString}
-Union{AbstractString,Int64}
+Union{AbstractString, Int64}
 
 julia> 1 :: IntOrString
 1
@@ -485,7 +485,7 @@ julia> "Hello!" :: IntOrString
 "Hello!"
 
 julia> 1.0 :: IntOrString
-ERROR: TypeError: typeassert: expected Union{AbstractString,Int64}, got Float64
+ERROR: TypeError: typeassert: expected Union{AbstractString, Int64}, got Float64
 ```
 
 The compilers for many languages have an internal union construct for reasoning about types; Julia
@@ -624,8 +624,8 @@ Since the type `Point{Float64}` is a concrete type equivalent to `Point` declare
 in place of `T`, it can be applied as a constructor accordingly:
 
 ```jldoctest pointtype
-julia> Point{Float64}(1.0,2.0)
-Point{Float64}(1.0,2.0)
+julia> Point{Float64}(1.0, 2.0)
+Point{Float64}(1.0, 2.0)
 
 julia> typeof(ans)
 Point{Float64}
@@ -655,13 +655,13 @@ of the parameter type `T` is unambiguous:
 
 ```jldoctest pointtype
 julia> Point(1.0,2.0)
-Point{Float64}(1.0,2.0)
+Point{Float64}(1.0, 2.0)
 
 julia> typeof(ans)
 Point{Float64}
 
 julia> Point(1,2)
-Point{Int64}(1,2)
+Point{Int64}(1, 2)
 
 julia> typeof(ans)
 Point{Int64}
@@ -1127,7 +1127,7 @@ is raised:
 
 ```jldoctest
 julia> supertype(Union{Float64,Int64})
-ERROR: MethodError: no method matching supertype(::Type{Union{Float64,Int64}})
+ERROR: MethodError: no method matching supertype(::Type{Union{Float64, Int64}})
 Closest candidates are:
   supertype(!Matched::DataType) at operators.jl:27
   supertype(!Matched::UnionAll) at operators.jl:32
@@ -1308,7 +1308,7 @@ julia> x2 = Nullable(1.0)
 Nullable{Float64}(1.0)
 
 julia> x3 = Nullable([1, 2, 3])
-Nullable{Array{Int64,1}}([1,2,3])
+Nullable{Array{Int64,1}}([1, 2, 3])
 ```
 
 Note the core distinction between these two ways of constructing a `Nullable` object:

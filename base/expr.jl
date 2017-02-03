@@ -85,7 +85,7 @@ julia> macro m()
 @m (macro with 1 method)
 
 julia> M.f()
-(1,2)
+(1, 2)
 ```
 With `@macroexpand` the expression expands where `@macroexpand` appears in the code (module
 `M` in the example). With `macroexpand` the expression expands in the current module where

@@ -88,12 +88,12 @@ coefficients, i.e. the integer coefficients `u` and `v` that satisfy
 
 ```jldoctest
 julia> gcdx(12, 42)
-(6,-3,1)
+(6, -3, 1)
 ```
 
 ```jldoctest
 julia> gcdx(240, 46)
-(2,-9,47)
+(2, -9, 47)
 ```
 
 !!! note

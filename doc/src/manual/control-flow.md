@@ -363,7 +363,7 @@ be evaluated and returned depending on the preceding conditionals:
 
 ```jldoctest
 julia> true && (x = (1, 2, 3))
-(1,2,3)
+(1, 2, 3)
 
 julia> false && (x = (1, 2, 3))
 false
@@ -516,10 +516,10 @@ of its iterables:
 julia> for i = 1:2, j = 3:4
            println((i, j))
        end
-(1,3)
-(1,4)
-(2,3)
-(2,4)
+(1, 3)
+(1, 4)
+(2, 3)
+(2, 4)
 ```
 
 A `break` statement inside such a loop exits the entire nest of loops, not just the inner one.
