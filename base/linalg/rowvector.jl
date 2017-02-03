@@ -161,16 +161,12 @@ end
 # Transposed forms
 A_mul_Bt(::RowVector, ::AbstractVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
 @inline A_mul_Bt(rowvec::RowVector, mat::AbstractMatrix) = transpose(mat * transpose(rowvec))
-A_mul_Bt(vec::AbstractVector, mat::AbstractMatrix) = throw(DimensionMismatch(
-    "Cannot left-multiply a matrix by a vector"))
 @inline A_mul_Bt(rowvec1::RowVector, rowvec2::RowVector) = rowvec1*transpose(rowvec2)
 A_mul_Bt(vec::AbstractVector, rowvec::RowVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
 @inline A_mul_Bt(vec1::AbstractVector, vec2::AbstractVector) = vec1 * transpose(vec2)
 @inline A_mul_Bt(mat::AbstractMatrix, rowvec::RowVector) = mat * transpose(rowvec)
 
 @inline At_mul_Bt(rowvec::RowVector, vec::AbstractVector) = transpose(rowvec) * transpose(vec)
-At_mul_Bt(rowvec::RowVector, mat::AbstractMatrix) = throw(DimensionMismatch(
-    "Cannot left-multiply matrix by vector"))
 @inline At_mul_Bt(vec::AbstractVector, mat::AbstractMatrix) = transpose(mat * vec)
 At_mul_Bt(rowvec1::RowVector, rowvec2::RowVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
 @inline At_mul_Bt(vec::AbstractVector, rowvec::RowVector) = transpose(vec)*transpose(rowvec)
@@ -179,8 +175,6 @@ At_mul_Bt(vec::AbstractVector, rowvec::AbstractVector) = throw(DimensionMismatch
 @inline At_mul_Bt(mat::AbstractMatrix, rowvec::RowVector) = mat.' * transpose(rowvec)
 
 At_mul_B(::RowVector, ::AbstractVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
-At_mul_B(rowvec::RowVector, mat::AbstractMatrix) = throw(DimensionMismatch(
-    "Cannot left-multiply matrix by vector"))
 @inline At_mul_B(vec::AbstractVector, mat::AbstractMatrix) = transpose(At_mul_B(mat,vec))
 @inline At_mul_B(rowvec1::RowVector, rowvec2::RowVector) = transpose(rowvec1) * rowvec2
 At_mul_B(vec::AbstractVector, rowvec::RowVector) = throw(DimensionMismatch(
@@ -188,20 +182,16 @@ At_mul_B(vec::AbstractVector, rowvec::RowVector) = throw(DimensionMismatch(
 @inline At_mul_B{T<:Real}(vec1::AbstractVector{T}, vec2::AbstractVector{T}) =
     reduce(+, map(At_mul_B, vec1, vec2)) # Seems to be overloaded...
 @inline At_mul_B(vec1::AbstractVector, vec2::AbstractVector) = transpose(vec1) * vec2
-At_mul_B(mat::AbstractMatrix, rowvec::RowVector) = throw(DimensionMismatch(
-    "Cannot right-multiply matrix by transposed vector"))
 
 # Conjugated forms
 A_mul_Bc(::RowVector, ::AbstractVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
 @inline A_mul_Bc(rowvec::RowVector, mat::AbstractMatrix) = ctranspose(mat * ctranspose(rowvec))
-A_mul_Bc(vec::AbstractVector, mat::AbstractMatrix) = throw(DimensionMismatch("Cannot left-multiply a matrix by a vector"))
 @inline A_mul_Bc(rowvec1::RowVector, rowvec2::RowVector) = rowvec1 * ctranspose(rowvec2)
 A_mul_Bc(vec::AbstractVector, rowvec::RowVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
 @inline A_mul_Bc(vec1::AbstractVector, vec2::AbstractVector) = vec1 * ctranspose(vec2)
 @inline A_mul_Bc(mat::AbstractMatrix, rowvec::RowVector) = mat * ctranspose(rowvec)
 
 @inline Ac_mul_Bc(rowvec::RowVector, vec::AbstractVector) = ctranspose(rowvec) * ctranspose(vec)
-Ac_mul_Bc(rowvec::RowVector, mat::AbstractMatrix) = throw(DimensionMismatch("Cannot left-multiply matrix by vector"))
 @inline Ac_mul_Bc(vec::AbstractVector, mat::AbstractMatrix) = ctranspose(mat * vec)
 Ac_mul_Bc(rowvec1::RowVector, rowvec2::RowVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
 @inline Ac_mul_Bc(vec::AbstractVector, rowvec::RowVector) = ctranspose(vec)*ctranspose(rowvec)
@@ -209,12 +199,10 @@ Ac_mul_Bc(vec::AbstractVector, rowvec::AbstractVector) = throw(DimensionMismatch
 @inline Ac_mul_Bc(mat::AbstractMatrix, rowvec::RowVector) = mat' * ctranspose(rowvec)
 
 Ac_mul_B(::RowVector, ::AbstractVector) = throw(DimensionMismatch("Cannot multiply two vectors"))
-Ac_mul_B(rowvec::RowVector, mat::AbstractMatrix) = throw(DimensionMismatch("Cannot left-multiply matrix by vector"))
 @inline Ac_mul_B(vec::AbstractVector, mat::AbstractMatrix) = ctranspose(Ac_mul_B(mat,vec))
 @inline Ac_mul_B(rowvec1::RowVector, rowvec2::RowVector) = ctranspose(rowvec1) * rowvec2
 Ac_mul_B(vec::AbstractVector, rowvec::RowVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
 @inline Ac_mul_B(vec1::AbstractVector, vec2::AbstractVector) = ctranspose(vec1)*vec2
-Ac_mul_B(mat::AbstractMatrix, rowvec::RowVector) = throw(DimensionMismatch("Cannot right-multiply matrix by transposed vector"))
 
 # Left Division #
 
