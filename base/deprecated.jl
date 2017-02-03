@@ -401,6 +401,10 @@ function promote_op(op::Type, Ts::Type...)
     return op
 end
 
+# NOTE: Deprecation of `isdefined(a::Array, i::Int)` is implemented in src/array.c
+# and deprecation of `invoke(f, (types...), ...)` is implemented in src/builtins.c
+# To be removed when 0.6 deprecations are removed
+
 # NOTE: Deprecation of Channel{T}() is implemented in channels.jl.
 # To be removed from there when 0.6 deprecations are removed.
 

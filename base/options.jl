@@ -7,7 +7,6 @@ immutable JLOptions
     julia_bin::Ptr{UInt8}
     eval::Ptr{UInt8}
     print::Ptr{UInt8}
-    postboot::Ptr{UInt8}
     load::Ptr{UInt8}
     image_file::Ptr{UInt8}
     cpu_target::Ptr{UInt8}

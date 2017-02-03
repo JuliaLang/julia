@@ -38,7 +38,6 @@ jl_options_t jl_options = { 0,    // quiet
                             NULL, // julia_bin
                             NULL, // eval
                             NULL, // print
-                            NULL, // post-boot
                             NULL, // load
                             NULL, // image_file (will be filled in below)
                             NULL, // cpu_target ("native", "core2", etc...)

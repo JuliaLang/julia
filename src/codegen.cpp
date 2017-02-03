@@ -1264,7 +1264,7 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 #endif
 
 #if defined(USE_ORCJIT) || defined(USE_MCJIT)
-    // make the alias name is valid for the current session
+    // make sure the alias name is valid for the current session
     jl_ExecutionEngine->addGlobalMapping(GA, (void*)(uintptr_t)Addr);
 #else
     (void)GA; (void)Addr;

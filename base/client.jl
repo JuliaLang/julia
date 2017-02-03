@@ -288,10 +288,6 @@ function process_options(opts::JLOptions)
             println()
             break
         end
-        # eval expression but don't disable interactive mode
-        if opts.postboot != C_NULL
-            eval(Main, parse_input_line(unsafe_string(opts.postboot)))
-        end
         # load file
         if !isempty(ARGS) && !isempty(ARGS[1])
             # program
