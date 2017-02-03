@@ -167,6 +167,9 @@ for n = 0:4
     show(IOContext(io, limit=true), MIME("text/plain"), (a,a))
     @test String(take!(io)) == targets2[n+1]
 end
+P = OffsetArray(rand(8,8), (1,1))
+PV = view(P, 2:3, :)
+@test endswith(summary(PV), "with indices Base.OneTo(2)×2:9")
 
 # Similar
 B = similar(A, Float32)
