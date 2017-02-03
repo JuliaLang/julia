@@ -88,7 +88,7 @@ julia> λ
       Applications (1996), 17(4), 789–821.  doi:10.1137/S0895479895281484
 """
 eigs(A; kwargs...) = eigs(A, I; kwargs...)
-eigs{T<:BlasFloat}(A::AbstractMatrix{T}, ::UniformScaling; kwargs...) = _eigs(A, I; kwargs...)
+eigs(A::AbstractMatrix{<:BlasFloat}, ::UniformScaling; kwargs...) = _eigs(A, I; kwargs...)
 
 eigs{T<:BlasFloat}(A::AbstractMatrix{T}, B::AbstractMatrix{T}; kwargs...) = _eigs(A, B; kwargs...)
 eigs(A::AbstractMatrix{BigFloat}, B::AbstractMatrix...; kwargs...) = throw(MethodError(eigs, Any[A,B,kwargs...]))
@@ -315,7 +315,7 @@ function SVDOperator(A::AbstractMatrix{T}) where T
     SVDOperator{Tnew,typeof(Anew)}(Anew)
 end
 
-function A_mul_B!{T,S}(u::StridedVector{T}, s::SVDOperator{T,S}, v::StridedVector{T})
+function A_mul_B!{T}(u::StridedVector{T}, s::SVDOperator{T}, v::StridedVector{T})
     a, b = s.m, length(v)
     A_mul_B!(view(u,1:a), s.X, view(v,a+1:b)) # left singular vector
     Ac_mul_B!(view(u,a+1:b), s.X, view(v,1:a)) # right singular vector
@@ -324,7 +324,7 @@ end
 size(s::SVDOperator)  = s.m + s.n, s.m + s.n
 issymmetric(s::SVDOperator) = true
 
-svds{T<:BlasFloat}(A::AbstractMatrix{T}; kwargs...) = _svds(A; kwargs...)
+svds(A::AbstractMatrix{<:BlasFloat}; kwargs...) = _svds(A; kwargs...)
 svds(A::AbstractMatrix{BigFloat}; kwargs...) = throw(MethodError(svds, Any[A, kwargs...]))
 function svds{T}(A::AbstractMatrix{T}; kwargs...)
     Tnew = typeof(zero(T)/sqrt(one(T)))

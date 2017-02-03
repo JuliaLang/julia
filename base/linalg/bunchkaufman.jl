@@ -22,7 +22,7 @@ BunchKaufman{T}(A::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetr
 `bkfact!` is the same as [`bkfact`](@ref), but saves space by overwriting the
 input `A`, instead of creating a copy.
 """
-function bkfact!{T<:BlasReal}(A::StridedMatrix{T}, uplo::Symbol = :U,
+function bkfact!(A::StridedMatrix{<:BlasReal}, uplo::Symbol = :U,
     symmetric::Bool = issymmetric(A), rook::Bool = false)
 
     if !symmetric
@@ -35,7 +35,7 @@ function bkfact!{T<:BlasReal}(A::StridedMatrix{T}, uplo::Symbol = :U,
     end
     BunchKaufman(LD, ipiv, char_uplo(uplo), symmetric, rook, info)
 end
-function bkfact!{T<:BlasComplex}(A::StridedMatrix{T}, uplo::Symbol=:U,
+function bkfact!(A::StridedMatrix{<:BlasComplex}, uplo::Symbol=:U,
     symmetric::Bool=issymmetric(A), rook::Bool=false)
 
     if rook
@@ -69,7 +69,7 @@ The following functions are available for
 [^Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. [url](http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0).
 
 """
-bkfact{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issymmetric(A),
+bkfact(A::StridedMatrix{<:BlasFloat}, uplo::Symbol=:U, symmetric::Bool=issymmetric(A),
     rook::Bool=false) =
         bkfact!(copy(A), uplo, symmetric, rook)
 bkfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issymmetric(A),
@@ -88,7 +88,7 @@ size(B::BunchKaufman, d::Integer) = size(B.LD, d)
 issymmetric(B::BunchKaufman) = B.symmetric
 ishermitian(B::BunchKaufman) = !B.symmetric
 
-function inv{T<:BlasReal}(B::BunchKaufman{T})
+function inv(B::BunchKaufman{<:BlasReal})
     if B.info > 0
         throw(SingularException(B.info))
     end
@@ -100,7 +100,7 @@ function inv{T<:BlasReal}(B::BunchKaufman{T})
     end
 end
 
-function inv{T<:BlasComplex}(B::BunchKaufman{T})
+function inv(B::BunchKaufman{<:BlasComplex})
     if B.info > 0
         throw(SingularException(B.info))
     end
