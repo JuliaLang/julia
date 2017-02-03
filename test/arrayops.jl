@@ -478,6 +478,12 @@ end
 @test_throws ArgumentError permutedims(s, (1,1,1))
 @test_throws ArgumentError Base.PermutedDimsArrays.PermutedDimsArray(a, (1,1,1))
 @test_throws ArgumentError Base.PermutedDimsArrays.PermutedDimsArray(s, (1,1,1))
+cp = Base.PermutedDimsArrays.PermutedDimsArray(c, (3,2,1))
+@test pointer(cp) == pointer(c)
+@test_throws ArgumentError pointer(cp, 2)
+@test strides(cp) == (9,3,1)
+ap = Base.PermutedDimsArrays.PermutedDimsArray(collect(a), (2,1,3))
+@test strides(ap) == (3,1,12)
 
 ## ipermutedims ##
 
