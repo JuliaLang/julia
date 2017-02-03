@@ -275,13 +275,9 @@ LineEditREPL(t::TextTerminal, envcolors = false) =  LineEditREPL(t,
                                               Base.text_colors[:yellow],
                                               false, false, false, envcolors)
 
-type REPLCompletionProvider <: CompletionProvider
-    r::LineEditREPL
-end
+type REPLCompletionProvider <: CompletionProvider; end
 
-type ShellCompletionProvider <: CompletionProvider
-    r::LineEditREPL
-end
+type ShellCompletionProvider <: CompletionProvider; end
 
 immutable LatexCompletions <: CompletionProvider; end
 
@@ -713,7 +709,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
     ############################### Stage I ################################
 
     # This will provide completions for REPL and help mode
-    replc = REPLCompletionProvider(repl)
+    replc = REPLCompletionProvider()
 
     # Set up the main Julia prompt
     julia_prompt = Prompt(JULIA_PROMPT;
@@ -741,7 +737,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         prompt_suffix = hascolor ?
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
         keymap_func_data = repl,
-        complete = ShellCompletionProvider(repl),
+        complete = ShellCompletionProvider(),
         # Transform "foo bar baz" into `foo bar baz` (shell quoting)
         # and pass into Base.repl_cmd for processing (handles `ls` and `cd`
         # special)
