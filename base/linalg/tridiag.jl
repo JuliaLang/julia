@@ -162,40 +162,40 @@ end
 
 (\)(T::SymTridiagonal, B::StridedVecOrMat) = ldltfact(T)\B
 
-eigfact!{T<:BlasReal}(A::SymTridiagonal{T}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
+eigfact!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
 function eigfact{T}(A::SymTridiagonal{T})
     S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
     eigfact!(copy_oftype(A, S))
 end
 
-eigfact!{T<:BlasReal}(A::SymTridiagonal{T}, irange::UnitRange) =
+eigfact!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
     Eigen(LAPACK.stegr!('V', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)...)
 function eigfact{T}(A::SymTridiagonal{T}, irange::UnitRange)
     S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
     return eigfact!(copy_oftype(A, S), irange)
 end
 
-eigfact!{T<:BlasReal}(A::SymTridiagonal{T}, vl::Real, vu::Real) =
+eigfact!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
     Eigen(LAPACK.stegr!('V', 'V', A.dv, A.ev, vl, vu, 0, 0)...)
 function eigfact{T}(A::SymTridiagonal{T}, vl::Real, vu::Real)
     S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
     return eigfact!(copy_oftype(A, S), vl, vu)
 end
 
-eigvals!{T<:BlasReal}(A::SymTridiagonal{T}) = LAPACK.stev!('N', A.dv, A.ev)[1]
+eigvals!(A::SymTridiagonal{<:BlasReal}) = LAPACK.stev!('N', A.dv, A.ev)[1]
 function eigvals{T}(A::SymTridiagonal{T})
     S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
     return eigvals!(copy_oftype(A, S))
 end
 
-eigvals!{T<:BlasReal}(A::SymTridiagonal{T}, irange::UnitRange) =
+eigvals!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
     LAPACK.stegr!('N', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)[1]
 function eigvals{T}(A::SymTridiagonal{T}, irange::UnitRange)
     S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
     return eigvals!(copy_oftype(A, S), irange)
 end
 
-eigvals!{T<:BlasReal}(A::SymTridiagonal{T}, vl::Real, vu::Real) =
+eigvals!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
     LAPACK.stegr!('N', 'V', A.dv, A.ev, vl, vu, 0, 0)[1]
 function eigvals{T}(A::SymTridiagonal{T}, vl::Real, vu::Real)
     S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
@@ -246,7 +246,7 @@ julia> eigvecs(A, [1.])
  -0.5547
 ```
 """
-eigvecs{T<:BlasFloat,Eigenvalue<:Real}(A::SymTridiagonal{T}, eigvals::Vector{Eigenvalue}) = LAPACK.stein!(A.dv, A.ev, eigvals)
+eigvecs(A::SymTridiagonal{<:BlasFloat}, eigvals::Vector{<:Real}) = LAPACK.stein!(A.dv, A.ev, eigvals)
 
 #tril and triu
 

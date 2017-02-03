@@ -206,10 +206,10 @@ promote_rule{T,S}(::Type{Tridiagonal{T}}, ::Type{Bidiagonal{S}})=Tridiagonal{pro
 
 # No-op for trivial conversion Bidiagonal{T} -> Bidiagonal{T}
 convert{T}(::Type{Bidiagonal{T}}, A::Bidiagonal{T}) = A
-# Convert Bidiagonal{Told} to Bidiagonal{Tnew} by constructing a new instance with converted elements
-convert{Tnew,Told}(::Type{Bidiagonal{Tnew}}, A::Bidiagonal{Told}) = Bidiagonal(convert(Vector{Tnew}, A.dv), convert(Vector{Tnew}, A.ev), A.isupper)
-# When asked to convert Bidiagonal{Told} to AbstractMatrix{Tnew}, preserve structure by converting to Bidiagonal{Tnew} <: AbstractMatrix{Tnew}
-convert{Tnew,Told}(::Type{AbstractMatrix{Tnew}}, A::Bidiagonal{Told}) = convert(Bidiagonal{Tnew}, A)
+# Convert Bidiagonal to Bidiagonal{T} by constructing a new instance with converted elements
+convert{T}(::Type{Bidiagonal{T}}, A::Bidiagonal) = Bidiagonal(convert(Vector{T}, A.dv), convert(Vector{T}, A.ev), A.isupper)
+# When asked to convert Bidiagonal to AbstractMatrix{T}, preserve structure by converting to Bidiagonal{T} <: AbstractMatrix{T}
+convert{T}(::Type{AbstractMatrix{T}}, A::Bidiagonal) = convert(Bidiagonal{T}, A)
 
 broadcast(::typeof(big), B::Bidiagonal) = Bidiagonal(big.(B.dv), big.(B.ev), B.isupper)
 
@@ -220,8 +220,8 @@ similar{T}(B::Bidiagonal, ::Type{T}) = Bidiagonal{T}(similar(B.dv, T), similar(B
 ###################
 
 #Singular values
-svdvals!{T<:BlasReal}(M::Bidiagonal{T}) = LAPACK.bdsdc!(M.isupper ? 'U' : 'L', 'N', M.dv, M.ev)[1]
-function svdfact!{T<:BlasReal}(M::Bidiagonal{T}; thin::Bool=true)
+svdvals!(M::Bidiagonal{<:BlasReal}) = LAPACK.bdsdc!(M.isupper ? 'U' : 'L', 'N', M.dv, M.ev)[1]
+function svdfact!(M::Bidiagonal{<:BlasReal}; thin::Bool=true)
     d, e, U, Vt, Q, iQ = LAPACK.bdsdc!(M.isupper ? 'U' : 'L', 'I', M.dv, M.ev)
     SVD(U, d, Vt)
 end
@@ -356,13 +356,13 @@ A_mul_B!(C::AbstractVecOrMat, A::BiTri, B::AbstractVecOrMat) = A_mul_B_td!(C, A,
 
 \(::Diagonal, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
 \(::Bidiagonal, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-\{TA<:Number,TB<:Number}(::Bidiagonal{TA}, ::RowVector{TB}) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+\(::Bidiagonal{<:Number}, ::RowVector{<:Number}) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
 
 At_ldiv_B(::Bidiagonal, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-At_ldiv_B{TA<:Number,TB<:Number}(::Bidiagonal{TA}, ::RowVector{TB}) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+At_ldiv_B(::Bidiagonal{<:Number}, ::RowVector{<:Number}) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
 
 Ac_ldiv_B(::Bidiagonal, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
-Ac_ldiv_B{TA<:Number,TB<:Number}(::Bidiagonal{TA}, ::RowVector{TB}) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+Ac_ldiv_B(::Bidiagonal{<:Number}, ::RowVector{<:Number}) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
 
 function check_A_mul_B!_sizes(C, A, B)
     nA, mA = size(A)
@@ -604,11 +604,11 @@ end
 eigfact(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))
 
 # fill! methods
-_valuefields{T <: Diagonal}(S::Type{T}) = [:diag]
-_valuefields{T <: Bidiagonal}(S::Type{T}) = [:dv, :ev]
-_valuefields{T <: Tridiagonal}(S::Type{T}) = [:dl, :d, :du]
-_valuefields{T <: SymTridiagonal}(S::Type{T}) = [:dv, :ev]
-_valuefields{T <: AbstractTriangular}(S::Type{T}) = [:data]
+_valuefields(::Type{<:Diagonal}) = [:diag]
+_valuefields(::Type{<:Bidiagonal}) = [:dv, :ev]
+_valuefields(::Type{<:Tridiagonal}) = [:dl, :d, :du]
+_valuefields(::Type{<:SymTridiagonal}) = [:dv, :ev]
+_valuefields(::Type{<:AbstractTriangular}) = [:data]
 
 SpecialArrays = Union{Diagonal,
     Bidiagonal,

@@ -168,12 +168,12 @@ The option `permute=true` permutes the matrix to become
 closer to upper triangular, and `scale=true` scales the matrix by its diagonal elements to
 make rows and columns more equal in norm.
 """
-function eigvals!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
+function eigvals!(A::StridedMatrix{<:BlasReal}; permute::Bool=true, scale::Bool=true)
     issymmetric(A) && return eigvals!(Symmetric(A))
     _, valsre, valsim, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)
     return iszero(valsim) ? valsre : complex.(valsre, valsim)
 end
-function eigvals!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
+function eigvals!(A::StridedMatrix{<:BlasComplex}; permute::Bool=true, scale::Bool=true)
     ishermitian(A) && return eigvals(Hermitian(A))
     return LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)[2]
 end
