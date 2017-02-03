@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-##################################
-# Cross Plaform tests for spawn. #
-##################################
+###################################
+# Cross Platform tests for spawn. #
+###################################
 
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 

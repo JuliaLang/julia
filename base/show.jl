@@ -82,12 +82,8 @@ haskey(io::IOContext, key) = haskey(io.dict, key)
 haskey(io::IO, key) = false
 getindex(io::IOContext, key) = getindex(io.dict, key)
 getindex(io::IO, key) = throw(KeyError(key))
-function get(io::IOContext, key, default)
-    get(io.dict, key, default)
-end
-function get(io::IO, key, default)
-    default
-end
+get(io::IOContext, key, default) = get(io.dict, key, default)
+get(io::IO, key, default) = default
 
 displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize] : displaysize(io.io)
 

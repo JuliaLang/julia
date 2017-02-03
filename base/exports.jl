@@ -654,7 +654,6 @@ export
     lqfact,
     rank,
     scale!,
-    scale,
     schur,
     schurfact!,
     schurfact,
