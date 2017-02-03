@@ -26,6 +26,8 @@ let x = spv_x1
     @test nonzeros(x) == [1.25, -0.75, 3.5]
 end
 
+@test count(SparseVector(8, [2, 5, 6], [true,false,true])) == 2
+
 # full
 
 for (x, xf) in [(spv_x1, x1_full)]

@@ -260,8 +260,18 @@ immutable SomeFunctor end
 
 # count & countnz
 
-@test count(x->x>0, Int[]) == 0
-@test count(x->x>0, -3:5) == 5
+@test count(x->x>0, Int[]) == count(Bool[]) == 0
+@test count(x->x>0, -3:5) == count((-3:5) .> 0) == 5
+@test count([true, true, false, true]) == count(BitVector([true, true, false, true])) == 3
+@test_throws TypeError count(sqrt, [1])
+@test_throws TypeError count([1])
+let itr = (x for x in 1:10 if x < 7)
+    @test count(iseven, itr) == 3
+    @test_throws TypeError count(itr)
+    @test_throws TypeError count(sqrt, itr)
+end
+@test count(iseven(x) for x in 1:10 if x < 7) == 3
+@test count(iseven(x) for x in 1:10 if x < -7) == 0
 
 @test countnz(Int[]) == 0
 @test countnz(Int[0]) == 0
