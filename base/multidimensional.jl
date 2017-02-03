@@ -1300,10 +1300,10 @@ julia> A = reshape(collect(1:2:16), (2,2,2))
 julia> extrema(A, (1,2))
 1×1×2 Array{Tuple{Int64,Int64},3}:
 [:, :, 1] =
- (1,7)
+ (1, 7)
 
 [:, :, 2] =
- (9,15)
+ (9, 15)
 ```
 """
 function extrema(A::AbstractArray, dims)

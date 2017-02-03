@@ -11,8 +11,8 @@ julia> type Foo
            baz
        end
 
-julia> foo = Foo(1,2)
-Foo(1,2)
+julia> foo = Foo(1, 2)
+Foo(1, 2)
 
 julia> foo.bar
 1
@@ -51,7 +51,7 @@ julia> Foo(x) = Foo(x,x)
 Foo
 
 julia> Foo(1)
-Foo(1,1)
+Foo(1, 1)
 ```
 
 You could also add a zero-argument `Foo` constructor method that supplies default values for both
@@ -62,7 +62,7 @@ julia> Foo() = Foo(0)
 Foo
 
 julia> Foo()
-Foo(0,0)
+Foo(0, 0)
 ```
 
 Here the zero-argument constructor method calls the single-argument constructor method, which
@@ -99,8 +99,8 @@ julia> type OrderedPair
 Now `OrderedPair` objects can only be constructed such that `x <= y`:
 
 ```jldoctest pairtype
-julia> OrderedPair(1,2)
-OrderedPair(1,2)
+julia> OrderedPair(1, 2)
+OrderedPair(1, 2)
 
 julia> OrderedPair(2,1)
 ERROR: out of order
@@ -288,10 +288,10 @@ julia> type Point{T<:Real}
        end
 
 julia> Point(1,2) ## implicit T ##
-Point{Int64}(1,2)
+Point{Int64}(1, 2)
 
 julia> Point(1.0,2.5) ## implicit T ##
-Point{Float64}(1.0,2.5)
+Point{Float64}(1.0, 2.5)
 
 julia> Point(1,2.5) ## implicit T ##
 ERROR: MethodError: no method matching Point(::Int64, ::Float64)
@@ -299,8 +299,8 @@ Closest candidates are:
   Point{T}(::Any) at sysimg.jl:24
   Point{T<:Real}(::T<:Real, !Matched::T<:Real) at none:2
 
-julia> Point{Int64}(1,2) ## explicit T ##
-Point{Int64}(1,2)
+julia> Point{Int64}(1, 2) ## explicit T ##
+Point{Int64}(1, 2)
 
 julia> Point{Int64}(1.0,2.5) ## explicit T ##
 ERROR: InexactError()
@@ -368,7 +368,7 @@ successfully creates a point of type `Point{Float64}`:
 
 ```jldoctest parametric2
 julia> Point(1,2.5)
-Point{Float64}(1.0,2.5)
+Point{Float64}(1.0, 2.5)
 
 julia> typeof(ans)
 Point{Float64}
@@ -398,13 +398,13 @@ numeric operators like [`+`](@ref) do, and works for all kinds of real numbers:
 
 ```jldoctest parametric2
 julia> Point(1.5,2)
-Point{Float64}(1.5,2.0)
+Point{Float64}(1.5, 2.0)
 
 julia> Point(1,1//2)
-Point{Rational{Int64}}(1//1,1//2)
+Point{Rational{Int64}}(1//1, 1//2)
 
 julia> Point(1.0,1//2)
-Point{Float64}(1.0,0.5)
+Point{Float64}(1.0, 0.5)
 ```
 
 Thus, while the implicit type parameter constructors provided by default in Julia are fairly strict,
@@ -555,7 +555,7 @@ julia> type SummedArray{T<:Number,S<:Number}
        end
 
 julia> SummedArray(Int32[1; 2; 3], Int32(6))
-SummedArray{Int32,Int32}(Int32[1,2,3],6)
+SummedArray{Int32,Int32}(Int32[1, 2, 3], 6)
 ```
 
 The problem is that we want `S` to be a larger type than `T`, so that we can sum many elements

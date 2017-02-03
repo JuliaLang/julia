@@ -55,10 +55,10 @@ The quotient and remainder from Euclidean division. Equivalent to `(div(x,y), re
 
 ```jldoctest
 julia> divrem(3,7)
-(0,3)
+(0, 3)
 
 julia> divrem(7,3)
-(2,1)
+(2, 1)
 ```
 """
 divrem(x,y) = (div(x,y),rem(x,y))

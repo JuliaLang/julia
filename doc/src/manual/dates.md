@@ -194,7 +194,7 @@ parts or fields can be retrieved through accessor functions. The lowercase acces
 field as an integer:
 
 ```jldoctest tdate
-julia> t = Date(2014,1,31)
+julia> t = Date(2014, 1, 31)
 2014-01-31
 
 julia> Dates.year(t)
@@ -225,13 +225,13 @@ needed at the same time:
 
 ```jldoctest tdate
 julia> Dates.yearmonth(t)
-(2014,1)
+(2014, 1)
 
 julia> Dates.monthday(t)
-(1,31)
+(1, 31)
 
 julia> Dates.yearmonthday(t)
-(2014,1,31)
+(2014, 1, 31)
 ```
 
 One may also access the underlying `UTInstant` or integer value:
@@ -256,7 +256,7 @@ Query functions provide calendrical information about a [`TimeType`](@ref). They
 about the day of the week:
 
 ```jldoctest tdate2
-julia> t = Date(2014,1,31)
+julia> t = Date(2014, 1, 31)
 2014-01-31
 
 julia> Dates.dayofweek(t)

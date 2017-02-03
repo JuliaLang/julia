@@ -166,7 +166,7 @@ by the [`typemin()`](@ref) and [`typemax()`](@ref) functions:
 
 ```jldoctest
 julia> (typemin(Int32), typemax(Int32))
-(-2147483648,2147483647)
+(-2147483648, 2147483647)
 
 julia> for T in [Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128]
            println("$(lpad(T,7)): [$(typemin(T)),$(typemax(T))]")
@@ -298,7 +298,7 @@ The underscore `_` can be used as digit separator:
 
 ```jldoctest
 julia> 10_000, 0.000_000_005, 0xdead_beef, 0b1011_0010
-(10000,5.0e-9,0xdeadbeef,0xb2)
+(10000, 5.0e-9, 0xdeadbeef, 0xb2)
 ```
 
 ### Floating-point zero
@@ -375,13 +375,13 @@ The [`typemin()`](@ref) and [`typemax()`](@ref) functions also apply to floating
 
 ```jldoctest
 julia> (typemin(Float16),typemax(Float16))
-(-Inf16,Inf16)
+(-Inf16, Inf16)
 
 julia> (typemin(Float32),typemax(Float32))
-(-Inf32,Inf32)
+(-Inf32, Inf32)
 
 julia> (typemin(Float64),typemax(Float64))
-(-Inf,Inf)
+(-Inf, Inf)
 ```
 
 ### Machine epsilon
