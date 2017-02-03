@@ -10,7 +10,7 @@ immutable Rational{T<:Integer} <: Real
         new(div(num, g), div(den, g))
     end
 end
-Rational(n::T, d::T) where T<:Integer = Rational{T}(n,d)
+Rational(n::T, d::T){T<:Integer} = Rational{T}(n,d)
 Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
 Rational(n::Integer) = Rational(n,one(n))
 

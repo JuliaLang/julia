@@ -89,7 +89,7 @@ julia> extrema(b)
 """
 linearindices(A)                 = (@_inline_meta; OneTo(_length(A)))
 linearindices(A::AbstractVector) = (@_inline_meta; indices1(A))
-eltype(::Type{A}) where A<:AbstractArray{E} where E  = E
+eltype(::Type{A}){E, A<:AbstractArray{E}} = E
 elsize{T}(::AbstractArray{T}) = sizeof(T)
 
 """

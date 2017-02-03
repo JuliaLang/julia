@@ -931,5 +931,5 @@ end
 
 # Check that the body of a `where`-qualified short form function definition gets
 # a :block for its body
-short_where_call = :(f(x::T) where T = T)
+short_where_call = :(f(x::T){T} = T)
 @test short_where_call.args[2].head == :block

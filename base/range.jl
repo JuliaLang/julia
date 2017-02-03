@@ -123,14 +123,14 @@ steprange_last_empty(start, step, stop) = start - step
 
 steprem(start,stop,step) = (stop-start) % step
 
-StepRange(start::T, step::S, stop::T) where (T,S) = StepRange{T,S}(start, step, stop)
+StepRange(start::T, step::S, stop::T){T, S} = StepRange{T,S}(start, step, stop)
 
 immutable UnitRange{T<:Real} <: AbstractUnitRange{T}
     start::T
     stop::T
-    UnitRange{T}(start, stop) where T<:Real = new(start, unitrange_last(start,stop))
+    UnitRange(start, stop) = new(start, unitrange_last(start,stop))
 end
-UnitRange(start::T, stop::T) where T<:Real = UnitRange{T}(start, stop)
+UnitRange(start::T, stop::T){T<:Real} = UnitRange{T}(start, stop)
 
 unitrange_last(::Bool, stop::Bool) = stop
 unitrange_last{T<:Integer}(start::T, stop::T) =
@@ -148,9 +148,9 @@ be 1.
 """
 immutable OneTo{T<:Integer} <: AbstractUnitRange{T}
     stop::T
-    OneTo{T}(stop) where T<:Integer = new(max(zero(T), stop))
+    OneTo(stop) = new(max(zero(T), stop))
 end
-OneTo(stop::T) where T<:Integer = OneTo{T}(stop)
+OneTo(stop::T){T<:Integer} = OneTo{T}(stop)
 
 ## Step ranges parametrized by length
 
@@ -177,7 +177,7 @@ immutable StepRangeLen{T,R,S} <: Range{T}
     end
 end
 
-StepRangeLen(ref::R, step::S, len::Integer, offset::Integer = 1) where (R,S) =
+StepRangeLen(ref::R, step::S, len::Integer, offset::Integer = 1){R, S} =
     StepRangeLen{typeof(ref+0*step),R,S}(ref, step, len, offset)
 
 ## linspace and logspace
