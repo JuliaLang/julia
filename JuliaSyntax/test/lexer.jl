@@ -213,3 +213,16 @@ end
              T.ENDMARKER]
     @test T.kind.(toks) == kinds
 end
+
+
+@testset "primes" begin
+    tokens = collect(tokenize(
+    """
+    ImageMagick.save(fn, reinterpret(ARGB32, [0xf0884422]''))
+    D = ImageMagick.load(fn)
+    """))
+    @test tokens[16].val==tokens[17].val=="'"
+    @test all(x->x.val=="'", collect(tokenize("''"))[1:2])
+    @test all(x->x.val=="'", collect(tokenize("'''"))[1:3])
+    @test all(x->x.val=="'", collect(tokenize("''''"))[1:4])
+end
