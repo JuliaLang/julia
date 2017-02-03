@@ -327,6 +327,11 @@ let g = Int[], ⊕ = (a,b) -> let c=a+2b; push!(g, c); c; end
     @test g == [21,221,24,424,27,627] # test for loop fusion
 end
 
+# Fused unary operators
+@test .√[3,4,5] == sqrt.([3,4,5])
+@test .![true, true, false] == [false, false, true]
+@test .-[1,2,3] == -[1,2,3] == .+[-1,-2,-3] == [-1,-2,-3]
+
 # PR 16988
 @test Base.promote_op(+, Bool) === Int
 @test isa(broadcast(+, [true]), Array{Int,1})
