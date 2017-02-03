@@ -57,6 +57,9 @@ LLVMLINK += -lPolly -lPollyISL
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --src-root)/tools/polly/include
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --obj-root)/tools/polly/include
 FLAGS += -DUSE_POLLY
+ifeq ($(USE_POLLY_OPENMP),1)
+FLAGS += -fopenmp
+endif
 endif
 else
 SRCS += anticodegen

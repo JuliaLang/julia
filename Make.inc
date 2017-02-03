@@ -237,6 +237,7 @@ BUILD_LLVM_CLANG := 0
 # see http://lldb.llvm.org/build.html for dependencies
 BUILD_LLDB := 0
 USE_POLLY := 0
+USE_POLLY_OPENMP := 0
 
 # Cross-compile
 #XC_HOST := i686-w64-mingw32
