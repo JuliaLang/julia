@@ -194,6 +194,9 @@ if VERSION < v"0.5.0-dev+961"
         Task(_it)
     end
 end
+if VERSION < v"0.6.0-dev.2043"
+    Base.take!(t::Task) = consume(t)
+end
 
 function rewrite_show(ex)
     if isexpr(ex, :call)

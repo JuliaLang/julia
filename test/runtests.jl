@@ -101,32 +101,35 @@ end
 @test round(Int, 3//4) == 1
 @test round(Int, 1) == 1
 @test round(Int, 1.1) == 1
-@test round(Int, [1, 1]) == [1, 1]
-@test round(Int, [1.1, 1.1]) == [1, 1]
-@test round(Int, [1 1]) == [1 1]
-@test round(Int, [1.1 1.1]) == [1 1]
-@test round(Int, fill(1.1, 2, 3, 4)) == fill(1, 2, 3, 4)
 @test ceil(Int, 1) == 1
 @test ceil(Int, 1.1) == 2
-@test ceil(Int, [1, 1]) == [1, 1]
-@test ceil(Int, [1.1, 1.1]) == [2, 2]
-@test ceil(Int, [1 1]) == [1 1]
-@test ceil(Int, [1.1 1.1]) == [2 2]
-@test ceil(Int, fill(1.1, 2, 3, 4)) == fill(2, 2, 3, 4)
 @test floor(Int, 1) == 1
 @test floor(Int, 1.1) == 1
-@test floor(Int, [1, 1]) == [1, 1]
-@test floor(Int, [1.1, 1.1]) == [1, 1]
-@test floor(Int, [1 1]) == [1 1]
-@test floor(Int, [1.1 1.1]) == [1 1]
-@test floor(Int, fill(1.1, 2, 3, 4)) == fill(1, 2, 3, 4)
 @test trunc(Int, 1) == 1
 @test trunc(Int, 1.1) == 1
-@test trunc(Int, [1, 1]) == [1, 1]
-@test trunc(Int, [1.1, 1.1]) == [1, 1]
-@test trunc(Int, [1 1]) == [1 1]
-@test trunc(Int, [1.1 1.1]) == [1 1]
-@test trunc(Int, fill(1.1, 2, 3, 4)) == fill(1, 2, 3, 4)
+
+if VERSION < v"0.6.0-dev.1825"
+    @test round(Int, [1, 1]) == [1, 1]
+    @test round(Int, [1.1, 1.1]) == [1, 1]
+    @test round(Int, [1 1]) == [1 1]
+    @test round(Int, [1.1 1.1]) == [1 1]
+    @test round(Int, fill(1.1, 2, 3, 4)) == fill(1, 2, 3, 4)
+    @test ceil(Int, [1, 1]) == [1, 1]
+    @test ceil(Int, [1.1, 1.1]) == [2, 2]
+    @test ceil(Int, [1 1]) == [1 1]
+    @test ceil(Int, [1.1 1.1]) == [2 2]
+    @test ceil(Int, fill(1.1, 2, 3, 4)) == fill(2, 2, 3, 4)
+    @test floor(Int, [1, 1]) == [1, 1]
+    @test floor(Int, [1.1, 1.1]) == [1, 1]
+    @test floor(Int, [1 1]) == [1 1]
+    @test floor(Int, [1.1 1.1]) == [1 1]
+    @test floor(Int, fill(1.1, 2, 3, 4)) == fill(1, 2, 3, 4)
+    @test trunc(Int, [1, 1]) == [1, 1]
+    @test trunc(Int, [1.1, 1.1]) == [1, 1]
+    @test trunc(Int, [1 1]) == [1 1]
+    @test trunc(Int, [1.1 1.1]) == [1 1]
+    @test trunc(Int, fill(1.1, 2, 3, 4)) == fill(1, 2, 3, 4)
+end
 
 # n % Type
 for T in Any[Int16, Int32, UInt32, Int64, UInt64]
@@ -575,9 +578,6 @@ for T = (Float32, Float64)
     @test [Compat.linspace(-u,-u,1);] == [-u]
     @test [Compat.linspace(-u,u,2);] == [-u,u]
     @test [Compat.linspace(-u,u,3);] == [-u,0,u]
-    @test [Compat.linspace(-u,u,4);] == [-u,0,0,u]
-    @test [Compat.linspace(-u,u,4);][2] === -z
-    @test [Compat.linspace(-u,u,4);][3] === z
     @test first(Compat.linspace(-u,-u,0)) == -u
     @test last(Compat.linspace(-u,-u,0)) == -u
     @test first(Compat.linspace(u,-u,0)) == u
@@ -586,12 +586,8 @@ for T = (Float32, Float64)
     @test [Compat.linspace(u,u,1);] == [u]
     @test [Compat.linspace(u,-u,2);] == [u,-u]
     @test [Compat.linspace(u,-u,3);] == [u,0,-u]
-    @test [Compat.linspace(u,-u,4);] == [u,0,0,-u]
-    @test [Compat.linspace(u,-u,4);][2] === z
-    @test [Compat.linspace(u,-u,4);][3] === -z
     v = [Compat.linspace(-u,u,12);]
     @test length(v) == 12
-    @test issorted(v) && unique(v) == [-u,0,0,u]
     @test [-3u:u:3u;] == [Compat.linspace(-3u,3u,7);] == [-3:3;].*u
     @test [3u:-u:-3u;] == [Compat.linspace(3u,-3u,7);] == [3:-1:-3;].*u
 end
@@ -981,29 +977,29 @@ cd(dirwalk) do
     follow_symlink_vec = has_symlinks ? [true, false] : [false]
     has_symlinks && symlink(abspath("sub_dir2"), joinpath("sub_dir1", "link"))
     for follow_symlinks in follow_symlink_vec
-        task = walkdir(".", follow_symlinks=follow_symlinks)
-        root, dirs, files = consume(task)
+        chnl = walkdir(".", follow_symlinks=follow_symlinks)
+        root, dirs, files = take!(chnl)
         @test root == "."
         @test dirs == ["sub_dir1", "sub_dir2"]
         @test files == ["file1", "file2"]
 
-        root, dirs, files = consume(task)
+        root, dirs, files = take!(chnl)
         @test root == joinpath(".", "sub_dir1")
         @test dirs == (has_symlinks ? ["link", "subsub_dir1", "subsub_dir2"] : ["subsub_dir1", "subsub_dir2"])
         @test files == ["file1", "file2"]
 
-        root, dirs, files = consume(task)
+        root, dirs, files = take!(chnl)
         if follow_symlinks
             @test root == joinpath(".", "sub_dir1", "link")
             @test dirs == []
             @test files == ["file_dir2"]
-            root, dirs, files = consume(task)
+            root, dirs, files = take!(chnl)
         end
         for i=1:2
             @test root == joinpath(".", "sub_dir1", "subsub_dir$i")
             @test dirs == []
             @test files == []
-            root, dirs, files = consume(task)
+            root, dirs, files = take!(chnl)
         end
 
         @test root == joinpath(".", "sub_dir2")
@@ -1012,51 +1008,51 @@ cd(dirwalk) do
     end
 
     for follow_symlinks in follow_symlink_vec
-        task = walkdir(".", follow_symlinks=follow_symlinks, topdown=false)
-        root, dirs, files = consume(task)
+        chnl = walkdir(".", follow_symlinks=follow_symlinks, topdown=false)
+        root, dirs, files = take!(chnl)
         if follow_symlinks
             @test root == joinpath(".", "sub_dir1", "link")
             @test dirs == []
             @test files == ["file_dir2"]
-            root, dirs, files = consume(task)
+            root, dirs, files = take!(chnl)
         end
         for i=1:2
             @test root == joinpath(".", "sub_dir1", "subsub_dir$i")
             @test dirs == []
             @test files == []
-            root, dirs, files = consume(task)
+            root, dirs, files = take!(chnl)
         end
         @test root == joinpath(".", "sub_dir1")
         @test dirs ==  (has_symlinks ? ["link", "subsub_dir1", "subsub_dir2"] : ["subsub_dir1", "subsub_dir2"])
         @test files == ["file1", "file2"]
 
-        root, dirs, files = consume(task)
+        root, dirs, files = take!(chnl)
         @test root == joinpath(".", "sub_dir2")
         @test dirs == []
         @test files == ["file_dir2"]
 
-        root, dirs, files = consume(task)
+        root, dirs, files = take!(chnl)
         @test root == "."
         @test dirs == ["sub_dir1", "sub_dir2"]
         @test files == ["file1", "file2"]
     end
     #test of error handling
-    task_error = walkdir(".")
-    task_noerror = walkdir(".", onerror=x->x)
-    root, dirs, files = consume(task_error)
+    chnl_error = walkdir(".")
+    chnl_noerror = walkdir(".", onerror=x->x)
+    root, dirs, files = take!(chnl_error)
     @test root == "."
     @test dirs == ["sub_dir1", "sub_dir2"]
     @test files == ["file1", "file2"]
 
     rm(joinpath("sub_dir1"), recursive=true)
-    @test_throws SystemError consume(task_error) # throws an error because sub_dir1 do not exist
+    @test_throws SystemError take!(chnl_error) # throws an error because sub_dir1 do not exist
 
-    root, dirs, files = consume(task_noerror)
+    root, dirs, files = take!(chnl_noerror)
     @test root == "."
     @test dirs == ["sub_dir1", "sub_dir2"]
     @test files == ["file1", "file2"]
 
-    root, dirs, files = consume(task_noerror) # skips sub_dir1 as it no longer exist
+    root, dirs, files = take!(chnl_noerror) # skips sub_dir1 as it no longer exist
     @test root == joinpath(".", "sub_dir2")
     @test dirs == []
     @test files == ["file_dir2"]
@@ -1164,10 +1160,13 @@ end
 let a = rand(1:10, 10)
     @test mapreduce(identity, dot, a) == mapreduce(identity, @functorize(dot), a)
 end
-@test isa(@functorize(centralizedabs2fun)(1), @functorize(centralizedabs2fun))
-@test isa(@functorize(centralizedabs2fun)(1.0), @functorize(centralizedabs2fun))
-let a = rand(1:10, 10)
-    @eval @test mapreduce(x -> abs2(x - 1), +, $(a)) == mapreduce(@functorize(centralizedabs2fun)(1), +, $(a))
+
+if VERSION < v"0.6.0-dev.2521"
+    @test isa(@functorize(centralizedabs2fun)(1), @functorize(centralizedabs2fun))
+    @test isa(@functorize(centralizedabs2fun)(1.0), @functorize(centralizedabs2fun))
+    let a = rand(1:10, 10)
+        @eval @test mapreduce(x -> abs2(x - 1), +, $(a)) == mapreduce(@functorize(centralizedabs2fun)(1), +, $(a))
+    end
 end
 
 # Threads.@threads
@@ -1190,7 +1189,7 @@ let x = rand(3), y = rand(3)
     @test @compat(sin.(cos.(x))) == map(x -> sin(cos(x)), x)
     @test @compat(atan2.(sin.(y),x)) == broadcast(atan2,map(sin,y),x)
 end
-let x0 = Array(Float64), v, v0
+let x0 = Array{Float64}(), v, v0
     x0[1] = rand()
     v0 = @compat sin.(x0)
     @test isa(v0, Array{Float64,0})
@@ -1334,8 +1333,10 @@ end
 @test allunique([1, 2, 3])
 @test !allunique([1, 2, 1])
 @test allunique(1:3)
-@test allunique(FloatRange(0.0, 0.0, 0.0, 1.0))
-@test !allunique(FloatRange(0.0, 0.0, 2.0, 1.0))
+if VERSION < v"0.6.0-dev.2390"
+    @test allunique(FloatRange(0.0, 0.0, 0.0, 1.0))
+    @test !allunique(FloatRange(0.0, 0.0, 2.0, 1.0))
+end
 
 # Add test for Base.view
 let a = rand(10,10)
