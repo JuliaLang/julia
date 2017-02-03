@@ -260,11 +260,11 @@ end
 
 @inline A_mul_Bt(D::Diagonal, rowvec::RowVector) = D*transpose(rowvec)
 
-At_mul_B(rowvec::RowVector, ::Diagonal) = throw(DimensionMismatch("Cannot left-multiply matrix by vector"))
+At_mul_B(rowvec::RowVector, d::Diagonal) = transpose(rowvec) * d # deprecated
 
 @inline A_mul_Bc(D::Diagonal, rowvec::RowVector) = D*ctranspose(rowvec)
 
-Ac_mul_B(rowvec::RowVector, ::Diagonal) = throw(DimensionMismatch("Cannot left-multiply matrix by vector"))
+Ac_mul_B(rowvec::RowVector, d::Diagonal) = ctranspose(rowvec) * d # deprecated
 
 conj(D::Diagonal) = Diagonal(conj(D.diag))
 transpose(D::Diagonal) = D

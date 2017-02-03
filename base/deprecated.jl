@@ -1222,6 +1222,16 @@ for name in ("alnum", "alpha", "cntrl", "digit", "number", "graph",
     @eval @deprecate ($f)(s::AbstractString) all($f, s)
 end
 
+# Vector-matrix multiplication deprecated in favor of vector-rowvector multiplication (outer product)
+function *(A::AbstractVector, B::AbstractMatrix)
+    depwarn("Vector-matrix multiplication `v*M` is being deprecated in favor of broadcasting `v.*M`, or else use the vector-rowvector (outer) product `v1*v2'`", :*)
+    if size(B,1) != 1
+        throw(DimensionMismatch(""))
+    end
+    reshape(A, (size(A,1), 1)) * B
+end
+
+
 # END 0.6 deprecations
 
 # BEGIN 1.0 deprecations

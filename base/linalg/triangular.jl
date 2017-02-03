@@ -1643,19 +1643,19 @@ At_mul_Bt(A::AbstractMatrix, B::AbstractTriangular) = A_mul_Bt(A.', B)
 @inline A_mul_Bt(A::AbstractTriangular, rowvec::RowVector) = A * transpose(rowvec)
 
 @inline At_mul_Bt(A::AbstractTriangular, rowvec::RowVector) = A.' * transpose(rowvec)
-At_mul_Bt(::RowVector, ::AbstractTriangular) = throw(DimensionMismatch("Cannot left-multiply matrix by vector"))
+At_mul_Bt(rowvec::RowVector, A::AbstractTriangular) = transpose(rowvec) * transpose(A) # deprecated
 
 At_mul_B(::AbstractTriangular, ::RowVector) = throw(DimensionMismatch("Cannot right-multiply matrix by transposed vector"))
-At_mul_B(::RowVector, ::AbstractTriangular) = throw(DimensionMismatch("Cannot left-multiply matrix by vector"))
+At_mul_B(rowvec::RowVector, A::AbstractTriangular) = transpose(rowvec) * A # deprecated
 
 @inline A_mul_Bc(rowvec::RowVector, A::AbstractTriangular) = ctranspose(A * ctranspose(rowvec))
 @inline A_mul_Bc(A::AbstractTriangular, rowvec::RowVector) = A * ctranspose(rowvec)
 
 @inline Ac_mul_Bc(A::AbstractTriangular, rowvec::RowVector) = A' * ctranspose(rowvec)
-Ac_mul_Bc(::RowVector, ::AbstractTriangular) = throw(DimensionMismatch("Cannot left-multiply matrix by vector"))
+Ac_mul_Bc(rowvec::RowVector, A::AbstractTriangular) = ctranspose(rowvec) * ctranspose(A) # deprecated
 
 Ac_mul_B(::AbstractTriangular, ::RowVector) = throw(DimensionMismatch("Cannot right-multiply matrix by transposed vector"))
-Ac_mul_B(::RowVector, ::AbstractTriangular) = throw(DimensionMismatch("Cannot left-multiply matrix by vector"))
+Ac_mul_B(rowvec::RowVector, A::AbstractTriangular) = ctranspose(rowvec) * A # deprecated
 
 @inline /(rowvec::RowVector, A::Union{UpperTriangular,LowerTriangular}) = transpose(transpose(A) \ transpose(rowvec))
 @inline /(rowvec::RowVector, A::Union{UnitUpperTriangular,UnitLowerTriangular}) = transpose(transpose(A) \ transpose(rowvec))
