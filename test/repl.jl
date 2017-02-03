@@ -5,7 +5,7 @@ const curmod_name = fullname(curmod)
 const curmod_prefix = "$(["$m." for m in curmod_name]...)"
 
 # REPL tests
-isdefined(Main, :TestHelpers) || eval(Main, :(include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))))
+isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using TestHelpers
 import Base: REPL, LineEdit
 
@@ -540,7 +540,7 @@ end # let exename
 # issue #19864:
 type Error19864 <: Exception; end
 function test19864()
-    eval(current_module(), :(Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")))
+    @eval current_module() Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
     buf = IOBuffer()
     REPL.print_response(buf, Error19864(), [], false, false, nothing)
     return String(take!(buf))
@@ -566,7 +566,7 @@ function test_replinit()
     slot = Ref(false)
     # Create a closure from a newer world to check if `_atreplinit`
     # can run it correctly
-    atreplinit(eval(:(repl::Base.REPL.LineEditREPL->($slot[] = true))))
+    atreplinit(@eval(repl::Base.REPL.LineEditREPL->($slot[] = true)))
     Base._atreplinit(repl)
     @test slot[]
     @test_throws MethodError Base.repl_hooks[1](repl)
