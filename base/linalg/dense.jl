@@ -874,6 +874,8 @@ function sylvester{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T},C::Stri
 end
 sylvester{T<:Integer}(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) = sylvester(float(A), float(B), float(C))
 
+sylvester(a::Union{Real,Complex},b::Union{Real,Complex},c::Union{Real,Complex}) = -c / (a + b)
+
 # AX + XA' + C = 0
 
 """
