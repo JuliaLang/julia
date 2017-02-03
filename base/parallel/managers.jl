@@ -322,7 +322,7 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
 
     for i in 1:manager.np
         io, pobj = open(pipeline(detach(
-                setenv(`$(julia_cmd(exename)) $exeflags --bind-to $bind_to --worker $(cluster_cookie())`, dir=dir)),
+                setenv(`$(Base.julia_cmd(exename)) $exeflags --bind-to $bind_to --worker $(cluster_cookie())`, dir=dir)),
             stderr=STDERR), "r")
         wconfig = WorkerConfig()
         wconfig.process = pobj
