@@ -247,6 +247,8 @@ Library improvements
 
   * A new `Dates.Time` type was added that supports representing the time of day with up to nanosecond resolution ([#12274]).
 
+  * New `@macroexpand` macro as a convenient alternative to the `macroexpand` function ([#18660]).
+
 Compiler/Runtime improvements
 -----------------------------
 
