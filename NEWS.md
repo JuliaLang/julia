@@ -112,6 +112,9 @@ This section lists changes that do not have deprecation warnings.
   * In macro calls with parentheses, e.g. `@m(a=1)`, assignments are now parsed as
     `=` expressions, instead of as `kw` expressions. ([#7669])
 
+  * When used as an infix operator, `~` is now parsed as a call to an ordinary operator
+    with assignment precedence, instead of as a macro call. ([#20406])
+
   * (µ "micro" and ɛ "latin epsilon") are considered equivalent to
     the corresponding Greek characters in identifiers.  `\varepsilon`
     now tab-completes to U+03B5 (greek small letter epsilon) ([#19464]).
