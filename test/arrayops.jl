@@ -514,6 +514,12 @@ end
     @test_throws ArgumentError permutedims(s, (1,1,1))
     @test_throws ArgumentError PermutedDimsArray(a, (1,1,1))
     @test_throws ArgumentError PermutedDimsArray(s, (1,1,1))
+    cp = PermutedDimsArray(c, (3,2,1))
+    @test pointer(cp) == pointer(c)
+    @test_throws ArgumentError pointer(cp, 2)
+    @test strides(cp) == (9,3,1)
+    ap = PermutedDimsArray(collect(a), (2,1,3))
+    @test strides(ap) == (3,1,12)
 
     for A in [rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1)]
         perm = randperm(4)

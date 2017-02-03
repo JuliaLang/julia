@@ -49,6 +49,20 @@ Base.parent(A::PermutedDimsArray) = A.parent
 Base.size{T,N,perm}(A::PermutedDimsArray{T,N,perm})    = genperm(size(parent(A)),    perm)
 Base.indices{T,N,perm}(A::PermutedDimsArray{T,N,perm}) = genperm(indices(parent(A)), perm)
 
+Base.unsafe_convert{T}(::Type{Ptr{T}}, A::PermutedDimsArray{T}) = Base.unsafe_convert(Ptr{T}, parent(A))
+
+# It's OK to return a pointer to the first element, and indeed quite
+# useful for wrapping C routines that require a different storage
+# order than used by Julia. But for an array with unconventional
+# storage order, a linear offset is ambiguous---is it a memory offset
+# or a linear index?
+Base.pointer{T}(A::PermutedDimsArray{T}, i::Integer) = throw(ArgumentError("pointer(A, i) is deliberately unsupported for PermutedDimsArray"))
+
+function Base.strides{T,N,perm}(A::PermutedDimsArray{T,N,perm})
+    s = strides(parent(A))
+    ntuple(d->s[perm[d]], Val{N})
+end
+
 @inline function Base.getindex{T,N,perm,iperm}(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N})
     @boundscheck checkbounds(A, I...)
     @inbounds val = getindex(A.parent, genperm(I, iperm)...)
