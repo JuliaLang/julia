@@ -662,7 +662,7 @@ end
 start(t::ImmutableDict) = t
 next{K,V}(::ImmutableDict{K,V}, t) = (Pair{K,V}(t.key, t.value), t.parent)
 done(::ImmutableDict, t) = !isdefined(t, :parent)
-length(t::ImmutableDict) = count(x->1, t)
+length(t::ImmutableDict) = count(x->true, t)
 isempty(t::ImmutableDict) = done(t, start(t))
 function similar(t::ImmutableDict)
     while isdefined(t, :parent)
