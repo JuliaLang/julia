@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "string normalization" begin
 # normalize_string (Unicode normalization etc.):
 @test normalize_string("\u006e\u0303", :NFC) == "\u00f1"
 @test "\u006e\u0303" == normalize_string("\u00f1", :NFD)
@@ -19,11 +20,13 @@
 @test isempty(normalize_string("\u00ad", stripignore=true))
 @test normalize_string("\t\r", stripcc=true) == "  "
 @test normalize_string("\t\r", stripcc=true, newline2ls=true) == " \u2028"
+end
 
+@testset "unicode sa#15" begin
 #Tests from Unicode SA#15, "Unicode normalization forms"
 #http://www.unicode.org/reports/tr15/
 
-#1. Canonical equivalence
+@testset "canonical equivalence" begin
 let ==(a::Array{Char},b::Array{Char}) = normalize_string(string(a...), :NFC)==normalize_string(string(b...), :NFC)
     ==(a,b) = Base.:(==)(a,b)
     @test ['C', '̧'] == ['Ç']
@@ -31,8 +34,9 @@ let ==(a::Array{Char},b::Array{Char}) = normalize_string(string(a...), :NFC)==no
     @test ['가'] == ['ᄀ', 'ᅡ']
     @test ['Ω'] == ['Ω']
 end
+end
 
-#2. Compatibility Equivalence
+@testset "compatibility equivalence" begin
 let ==(a::Array{Char},b::Array{Char}) = normalize_string(string(a...), :NFKC)==normalize_string(string(b...), :NFKC)
     ==(a,b) = Base.:(==)(a,b)
     @test ['ℌ'] == ['ℍ'] == ['H']
@@ -45,27 +49,31 @@ let ==(a::Array{Char},b::Array{Char}) = normalize_string(string(a...), :NFKC)==n
     @test ['¼'] == ['1', '⁄', '4']
     @test ['ǆ'] == ['d', 'ž']
 end
+end
 
-#3. Singletons
+@testset "singletons" begin
 @test normalize_string("\U212b", :NFD) == "A\U030a"
 @test normalize_string("\U212b", :NFC) == "\U00c5"
 @test normalize_string("\U2126", :NFC) == normalize_string("\U2126", :NFD) == "\U03a9"
+end
 
-#4. Canonical Composites
+@testset "canonical composites" begin
 @test normalize_string("\U00c5", :NFC) == "\U00c5"
 @test normalize_string("\U00c5", :NFD) == "A\U030a"
 @test normalize_string("\U00f4", :NFC) == "\U00f4"
 @test normalize_string("\U00f4", :NFD) == "o\U0302"
+end
 
-#5. Multiple Combining Marks
+@testset "multiple combining marks" begin
 @test normalize_string("\U1e69", :NFD) == "s\U0323\U0307"
 @test normalize_string("\U1e69", :NFC) == "\U1e69"
 @test normalize_string("\U1e0b\U0323", :NFD) == "d\U0323\U0307"
 @test normalize_string("\U1e0b\U0323", :NFC) == "\U1e0d\U0307"
 @test normalize_string("q\U0307\U0323", :NFC) == "q\U0323\U0307"
 @test normalize_string("q\U0307\U0323", :NFD) == "q\U0323\U0307"
+end
 
-#6. Compatibility Composites
+@testset "compatibility composites"
 @test normalize_string("\Ufb01", :NFD) == normalize_string("\Ufb01", :NFC) == "\Ufb01"
 @test normalize_string("\Ufb01", :NFKD) == normalize_string("\Ufb01", :NFKC) == "fi"
 @test normalize_string("2\U2075", :NFD) == normalize_string("2\U2075", :NFC) == "2\U2075"
@@ -74,8 +82,10 @@ end
 @test normalize_string("\U1e9b\U0323", :NFC) == "\U1e9b\U0323"
 @test normalize_string("\U1e9b\U0323", :NFKD) == "s\U0323\U0307"
 @test normalize_string("\U1e9b\U0323", :NFKC) == "\U1e69"
+end
+end
 
-#issue #5939  uft8proc character predicates
+@testset "#issue #5939" begin #  uft8proc character predicates
 let
     alower=['a', 'd', 'j', 'y', 'z']
     ulower=['α', 'β', 'γ', 'δ', 'ф', 'я']
@@ -103,7 +113,6 @@ let
          @test isalpha(c) == true
          @test isnumber(c) == false
     end
-
 
     anumber=['0', '1', '5', '9']
     unumber=['٣', '٥', '٨', '¹', 'ⅳ' ]
@@ -184,9 +193,9 @@ let
             @test isgraph(c) == false
         end
     end
-
 end
 
+@testset "is* functions" begin
 @test  all(isspace,"  \t   \n   \r  ")
 @test !all(isgraph,"  \t   \n   \r  ")
 @test !all(isprint,"  \t   \n   \r  ")
@@ -215,15 +224,19 @@ end
 @test  isxdigit('a')
 @test !isxdigit('x')
 @test !isxdigit('g')
+end
+end
 
+@testset "utf8proc" begin
 # check utf8proc handling of CN category constants
 let c_ll = 'β', c_cn = '\u038B'
     @test Base.UTF8proc.category_code(c_ll) == Base.UTF8proc.UTF8PROC_CATEGORY_LL
     # check codepoint with category code CN
     @test Base.UTF8proc.category_code(c_cn) == Base.UTF8proc.UTF8PROC_CATEGORY_CN
 end
+end
 
-# graphemes
+@testset "graphemes" begin
 let grphtest = (("b\u0300lahβlahb\u0302láh", ["b\u0300","l","a","h",
                                               "β","l","a","h",
                                               "b\u0302","l","á","h"]),
@@ -254,32 +267,39 @@ let grphtest = (("b\u0300lahβlahb\u0302láh", ["b\u0300","l","a","h",
         end
     end
 end
+end
 
-# up-to-date character widths (#3721, #6939)
+@testset "#3721, #6939" begin # up-to-date character widths
 @test charwidth('\U1f355') == 2
 @test strwidth("\U1f355") == 2
 @test strwidth(GenericString("\U1f355")) == 2
 @test strwidth("\U1f355\u0302") == 2
 @test strwidth(GenericString("\U1f355\u0302")) == 2
+end
 
-# handling of embedded NUL chars (#10958)
+@testset "#10958" begin # handling of embedded NUL chars
 @test length("\0w") == length("\0α") == 2
 @test strwidth("\0w") == strwidth("\0α") == 1
 @test normalize_string("\0W", casefold=true) == "\0w"
+end
 
-# Make sure AbstractString case is covered (for utf8proc_map)
+@testset "ut8proc_map with GenericString" begin
 @test normalize_string(GenericString("\u006e\u0303"), :NFC) == "\u00f1"
+end
 
+@testset "normalize_string keywords" begin
 @test_throws ArgumentError normalize_string("\u006e\u0303", compose=false, compat=true)
 @test_throws ArgumentError normalize_string("\u006e\u0303", compose=false, stripmark=true)
+end
 
-# Make sure fastplus is called for coverage
+@testset "fastplus" begin# Make sure fastplus is called for coverage
 @test lowercase('A') == 'a'
 @test uppercase('a') == 'A'
 
 @test is_assigned_char('A')
+end
 
-# Get full coverage of isspace function
+@testset "isspace" begin
 @test isspace(' ')
 @test isspace('\t')
 @test isspace('\r')
@@ -287,8 +307,9 @@ end
 @test isspace('\ua0')
 @test !isspace('\ufffd')
 @test !isspace('\U10ffff')
+end
 
-# Get full coverage of grapheme iterator functions
+@testset "grapheme iterators" begin
 let str = ascii("This is a test")
     g = graphemes(str)
     h = hash(str)
@@ -298,4 +319,5 @@ let str = ascii("This is a test")
     show(io, g)
     check = "length-14 GraphemeIterator{String} for \"$str\""
     @test String(take!(io)) == check
+end
 end
