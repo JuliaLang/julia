@@ -1533,8 +1533,8 @@ dims2string(d::Dims) = isempty(d) ? "0-dimensional" :
 inds2string(inds::Indices) = join(map(string,inds), '×')
 
 # anything array-like gets summarized e.g. 10-element Array{Int64,1}
-summary(a::AbstractArray) = _summary(a, to_shape(indices(a)))
-_summary(a, dims::Dims) = string(dims2string(dims), " ", typeof(a))
+summary(a::AbstractArray) = _summary(a, indices(a))
+_summary(a, inds::Tuple{Vararg{OneTo}}) = string(dims2string(length.(inds)), " ", typeof(a))
 _summary(a, inds) = string(typeof(a), " with indices ", inds2string(inds))
 
 # n-dimensional arrays
