@@ -14,6 +14,8 @@ New language features
       `function inv(M::Matrix{T}) where T<:AbstractFloat`.
       Anonymous functions can have type parameters via the syntax
       `((x::Array{T}) where T<:Real) -> 2x`.
+    * Implicit type parameters, e.g. `Vector{<:Real}` is equivalent to
+      `Vector{T} where T<:Real`, and similarly for `Vector{>:Int}` ([#20414]).
     * Much more accurate subtype and type intersection algorithms. Method sorting and
       identification of equivalent and ambiguous methods are improved as a result.
 
