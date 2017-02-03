@@ -623,7 +623,7 @@ function lex_digit(l::Lexer)
 end
 
 function lex_prime(l)
-    if l.last_token ∈ [Tokens.IDENTIFIER, Tokens.DOT, Tokens.RPAREN, Tokens.RSQUARE]
+    if l.last_token ∈ (Tokens.IDENTIFIER, Tokens.DOT, Tokens.RPAREN, Tokens.RSQUARE)
         return emit(l, Tokens.PRIME)
     else
         while true
