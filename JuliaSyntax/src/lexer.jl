@@ -325,7 +325,7 @@ function next_token(l::Lexer)
     elseif c == '|'; return lex_bar(l)
     elseif c == '&'; return lex_amper(l)
     elseif c == '\''; return lex_prime(l)
-    elseif c == '÷'; return lex_division(l)    
+    elseif c == '÷'; return lex_division(l)
     elseif c == '"'; return lex_quote(l);
     elseif c == '%'; return lex_percent(l);
     elseif c == '/'; return lex_forwardslash(l);
@@ -351,7 +351,7 @@ function lex_whitespace(l::Lexer)
 end
 
 function lex_comment(l::Lexer)
-    if readchar(l) != '='
+    if peekchar(l) != '='
         while true
             c = readchar(l)
             if c == '\n' || eof(c)

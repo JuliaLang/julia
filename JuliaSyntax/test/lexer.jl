@@ -165,7 +165,7 @@ end
     @test collect(tokenize("1 in 2"))[3].kind == T.IN
     @test collect(tokenize("1 in[1]"))[3].kind == T.IN
 
-    if VERSION >= v"0.6.0-dev.1471" 
+    if VERSION >= v"0.6.0-dev.1471"
         @test collect(tokenize("1 isa 2"))[3].kind == T.ISA
         @test collect(tokenize("1 isa[2]"))[3].kind == T.ISA
     else
@@ -196,4 +196,20 @@ end
 
 @testset "lexing anon functions '->' " begin
     @test collect(tokenize("a->b"))[2].kind==Tokens.ANON_FUNC
+end
+
+@testset "comments" begin
+    toks = collect(tokenize("""
+       #
+       \"\"\"
+       f
+       \"\"\"
+       1
+       """))
+
+    kinds = [T.COMMENT, T.WHITESPACE,
+             T.TRIPLE_STRING, T.WHITESPACE,
+             T.INTEGER, T.WHITESPACE,
+             T.ENDMARKER]
+    @test T.kind.(toks) == kinds
 end
