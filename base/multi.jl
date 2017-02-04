@@ -2371,4 +2371,4 @@ clear!(sym::Symbol, pids=workers(); mod=Main) = clear!([sym], pids; mod=mod)
 clear!(syms, pid::Int; mod=Main) = clear!(syms, [pid]; mod=mod)
 
 clear_impl!(syms, mod::Module) = foreach(x->clear_impl!(x,mod), syms)
-clear_impl!(sym::Symbol, mod::Module) = isdefined(mod, sym) && eval(mod, :(global $sym = nothing))
+clear_impl!(sym::Symbol, mod::Module) = isdefined(mod, sym) && @eval(mod, global $sym = nothing)

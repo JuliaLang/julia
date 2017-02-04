@@ -179,7 +179,7 @@ type Circ_{T} x::Circ_{T} end
 
 abstract Sup2a_
 abstract Sup2b_{A <: Sup2a_, B} <: Sup2a_
-@test_throws ErrorException eval(:(abstract Qux2_{T} <: Sup2b_{Qux2_{Int}, T})) # wrapped in eval to avoid #16793
+@test_throws ErrorException @eval abstract Qux2_{T} <: Sup2b_{Qux2_{Int}, T} # wrapped in eval to avoid #16793
 
 # issue #3890
 type A3890{T1}
@@ -3365,7 +3365,7 @@ macro m8846(a, b=0)
 end
 @test @m8846(a) === (:a, 0)
 @test @m8846(a,1) === (:a, 1)
-@test_throws MethodError eval(:(@m8846(a,b,c)))
+@test_throws MethodError @eval @m8846(a,b,c)
 
 # a simple case of parametric dispatch with unions
 let foo{T}(x::Union{T,Void},y::Union{T,Void}) = 1
@@ -3434,7 +3434,7 @@ end
 @test_throws UndefVarError @M6846.f()
 
 # issue #14758
-@test isa(eval(:(f14758(; $([]...)) = ())), Function)
+@test isa(@eval(f14758(; $([]...)) = ()), Function)
 
 # issue #14767
 @inline f14767(x) = x ? A14767 : ()
@@ -4589,15 +4589,15 @@ end
 @test M14893.f14893() == 14893
 
 # issue #18725
-@test_nowarn eval(Main, :(begin
+@test_nowarn @eval Main begin
     f18725(x) = 1
     f18725(x) = 2
-end))
+end
 @test Main.f18725(0) == 2
-@test_warn "WARNING: Method definition f18725(Any) in module Module18725" eval(Main, :(module Module18725
+@test_warn "WARNING: Method definition f18725(Any) in module Module18725" @eval Main module Module18725
     f18725(x) = 1
     f18725(x) = 2
-end))
+end
 
 # issue #19599
 f19599{T}(x::((S)->Vector{S})(T)...) = 1

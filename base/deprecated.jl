@@ -249,7 +249,7 @@ for f in ( :acos_fast, :acosh_fast, :angle_fast, :asin_fast, :asinh_fast,
             :cosh_fast, :exp10_fast, :exp2_fast, :exp_fast, :expm1_fast,
             :lgamma_fast, :log10_fast, :log1p_fast, :log2_fast, :log_fast,
             :sin_fast, :sinh_fast, :sqrt_fast, :tan_fast, :tanh_fast )
-    eval(FastMath, :(Base.@dep_vectorize_1arg Number $f))
+    @eval FastMath Base.@dep_vectorize_1arg Number $f
 end
 for f in (
         :invdigamma, # base/special/gamma.jl
@@ -265,7 +265,7 @@ end
 @dep_vectorize_1arg Complex float
 # base/dates/*.jl
 for f in (:unix2datetime, :rata2datetime, :julian2datetime)  # base/dates/conversions.jl
-    eval(Dates, :(Base.@dep_vectorize_1arg Real $f))
+    @eval Dates Base.@dep_vectorize_1arg Real $f
 end
 for f in (
         # base/dates/accessors.jl
@@ -279,15 +279,15 @@ for f in (
         :daysofweekinmonth, :monthname, :monthabbr, :daysinmonth,
         :isleapyear, :dayofyear, :daysinyear, :quarterofyear, :dayofquarter,
     )
-    eval(Dates, :(Base.@dep_vectorize_1arg Dates.TimeType $f))
+    @eval Dates Base.@dep_vectorize_1arg Dates.TimeType $f
 end
 for f in (
     :hour, :minute, :second, :millisecond, # base/dates/accessors.jl
     :Date, :datetime2unix, :datetime2rata, :datetime2julian, # base/dates/conversions.jl
     )
-    eval(Dates, :(Base.@dep_vectorize_1arg Dates.DateTime $f))
+    @eval Dates Base.@dep_vectorize_1arg Dates.DateTime $f
 end
-eval(Dates, :(Base.@dep_vectorize_1arg Dates.Date Datetime)) # base/dates/conversions.jl
+@eval Dates Base.@dep_vectorize_1arg Dates.Date Datetime # base/dates/conversions.jl
 
 # Deprecate @vectorize_2arg-vectorized functions from...
 for f in (
@@ -304,7 +304,7 @@ for f in (
 end
 # base/fastmath.jl
 for f in (:pow_fast, :atan2_fast, :hypot_fast, :max_fast, :min_fast, :minmax_fast)
-    eval(FastMath, :(Base.@dep_vectorize_2arg Number $f))
+    @eval FastMath Base.@dep_vectorize_2arg Number $f
 end
 for f in (
         :max, :min, # base/math.jl
@@ -356,14 +356,14 @@ end
 @deprecate abs(x::AbstractSparseVector) abs.(x)
 
 # Deprecate @textmime into the Multimedia module, #18441
-eval(Multimedia, :(macro textmime(mime)
+@eval Multimedia macro textmime(mime)
     Base.depwarn(string("`@textmime \"mime\"` is deprecated; use ",
         "`Base.Multimedia.istextmime(::MIME\"mime\") = true` instead"
         ), :textmime)
     quote
         Base.Multimedia.istextmime(::MIME{$(Meta.quot(Symbol(mime)))}) = true
     end
-end))
+end
 
 @deprecate ipermutedims(A::AbstractArray,p) permutedims(A, invperm(p))
 
@@ -440,7 +440,7 @@ function reduced_dims0(a::AbstractArray, region)
 end
 
 # #18218
-eval(Base.LinAlg, quote
+@eval Base.LinAlg begin
     function arithtype(T)
         Base.depwarn(string("arithtype is now deprecated. If you were using it inside a ",
             "promote_op call, use promote_op(LinAlg.matprod, Ts...) instead. Otherwise, ",
@@ -455,7 +455,7 @@ eval(Base.LinAlg, quote
             :arithtype)
         Int
     end
-end)
+end
 
 # #19246
 @deprecate den denominator
@@ -468,7 +468,7 @@ Filesystem.stop_watching(stream::Filesystem._FDWatcher) = depwarn("stop_watching
 @deprecate takebuf_string(b) String(take!(b))
 
 # #19288
-eval(Base.Dates, quote
+@eval Base.Dates begin
     function recur{T<:TimeType}(fun::Function, dr::StepRange{T}; negate::Bool=false, limit::Int=10000)
         Base.depwarn("Dates.recur is deprecated, use filter instead.",:recur)
         if negate
@@ -478,7 +478,7 @@ eval(Base.Dates, quote
         end
      end
      recur{T<:TimeType}(fun::Function, start::T, stop::T; step::Period=Day(1), negate::Bool=false, limit::Int=10000) = recur(fun, start:step:stop; negate=negate)
-end)
+end
 
 # Index conversions revamp; #19730
 function getindex(A::LogicalIndex, i::Int)
@@ -655,13 +655,15 @@ function _depwarn_bczpres!(f, args...)
     depwarn(_depstring_bczpres(), :broadcast_zpreserving!)
     return _broadcast_zpreserving!(f, args...)
 end
-eval(SparseArrays, :(broadcast_zpreserving(f, args...) = Base._depwarn_bczpres(f, args...)))
-eval(SparseArrays, :(broadcast_zpreserving(f, A::SparseMatrixCSC, B::SparseMatrixCSC) = Base._depwarn_bczpres(f, A, B)))
-eval(SparseArrays, :(broadcast_zpreserving(f, A::SparseMatrixCSC, B::Union{Array,BitArray,Number}) = Base._depwarn_bczpres(f, A, B)))
-eval(SparseArrays, :(broadcast_zpreserving(f, A::Union{Array,BitArray,Number}, B::SparseMatrixCSC) = Base._depwarn_bczpres(f, A, B)))
-eval(SparseArrays, :(broadcast_zpreserving!(f, args...) = Base._depwarn_bczpres!(f, args...)))
-eval(SparseArrays, :(broadcast_zpreserving!(f, C::SparseMatrixCSC, A::SparseMatrixCSC, B::Union{Array,BitArray,Number}) = Base._depwarn_bczpres!(f, C, A, B)))
-eval(SparseArrays, :(broadcast_zpreserving!(f, C::SparseMatrixCSC, A::Union{Array,BitArray,Number}, B::SparseMatrixCSC) = Base._depwarn_bczpres!(f, C, A, B)))
+@eval SparseArrays begin
+    broadcast_zpreserving(f, args...) = Base._depwarn_bczpres(f, args...)
+    broadcast_zpreserving(f, A::SparseMatrixCSC, B::SparseMatrixCSC) = Base._depwarn_bczpres(f, A, B)
+    broadcast_zpreserving(f, A::SparseMatrixCSC, B::Union{Array,BitArray,Number}) = Base._depwarn_bczpres(f, A, B)
+    broadcast_zpreserving(f, A::Union{Array,BitArray,Number}, B::SparseMatrixCSC) = Base._depwarn_bczpres(f, A, B)
+    broadcast_zpreserving!(f, args...) = Base._depwarn_bczpres!(f, args...)
+    broadcast_zpreserving!(f, C::SparseMatrixCSC, A::SparseMatrixCSC, B::Union{Array,BitArray,Number}) = Base._depwarn_bczpres!(f, C, A, B)
+    broadcast_zpreserving!(f, C::SparseMatrixCSC, A::Union{Array,BitArray,Number}, B::SparseMatrixCSC) = Base._depwarn_bczpres!(f, C, A, B)
+end
 
 # #19719
 @deprecate getindex(t::Tuple, r::AbstractArray)       getindex(t, vec(r))
@@ -1030,7 +1032,7 @@ iteratoreltype(::Type{Task}) = EltypeUnknown()
 
 isempty(::Task) = error("isempty not defined for Tasks")
 
-eval(Base.Test, quote
+@eval Base.Test begin
     approx_full(x::AbstractArray) = x
     approx_full(x::Number) = x
     approx_full(x) = full(x)
@@ -1095,7 +1097,7 @@ eval(Base.Test, quote
         :(test_approx_eq($(esc(a)), $(esc(b)), $(string(a)), $(string(b))))
     end
     export @test_approx_eq
-end)
+end
 
 # Deprecate partial linear indexing
 function partial_linear_indexing_warning_lookup(nidxs_remaining)
@@ -1138,23 +1140,23 @@ function partial_linear_indexing_warning(n)
 end
 
 # Deprecate Array(T, dims...) in favor of proper type constructors
-@deprecate Array{T,N}(::Type{T}, d::NTuple{N,Int})               Array{T,N}(d)
-@deprecate Array{T}(::Type{T}, d::Int...)                        Array{T,length(d)}(d...)
-@deprecate Array{T}(::Type{T}, m::Int)                           Array{T,1}(m)
-@deprecate Array{T}(::Type{T}, m::Int,n::Int)                    Array{T,2}(m,n)
-@deprecate Array{T}(::Type{T}, m::Int,n::Int,o::Int)             Array{T,3}(m,n,o)
-@deprecate Array{T}(::Type{T}, d::Integer...)                    Array{T,length(d)}(convert(Tuple{Vararg{Int}}, d))
-@deprecate Array{T}(::Type{T}, m::Integer)                       Array{T,1}(Int(m))
-@deprecate Array{T}(::Type{T}, m::Integer,n::Integer)            Array{T,2}(Int(m),Int(n))
-@deprecate Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) Array{T,3}(Int(m),Int(n),Int(o))
+@deprecate Array{T,N}(::Type{T}, d::NTuple{N,Int})               Array{T}(d)
+@deprecate Array{T}(::Type{T}, d::Int...)                        Array{T}(d...)
+@deprecate Array{T}(::Type{T}, m::Int)                           Array{T}(m)
+@deprecate Array{T}(::Type{T}, m::Int,n::Int)                    Array{T}(m,n)
+@deprecate Array{T}(::Type{T}, m::Int,n::Int,o::Int)             Array{T}(m,n,o)
+@deprecate Array{T}(::Type{T}, d::Integer...)                    Array{T}(convert(Tuple{Vararg{Int}}, d))
+@deprecate Array{T}(::Type{T}, m::Integer)                       Array{T}(Int(m))
+@deprecate Array{T}(::Type{T}, m::Integer,n::Integer)            Array{T}(Int(m),Int(n))
+@deprecate Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) Array{T}(Int(m),Int(n),Int(o))
 
 # Likewise for SharedArrays
-@deprecate SharedArray{T,N}(::Type{T}, dims::Dims{N}; kwargs...) SharedArray{T,N}(dims; kwargs...)
-@deprecate SharedArray{T}(::Type{T}, dims::Int...; kwargs...)    SharedArray{T,length(dims)}(dims...; kwargs...)
+@deprecate SharedArray{T,N}(::Type{T}, dims::Dims{N}; kwargs...) SharedArray{T}(dims; kwargs...)
+@deprecate SharedArray{T}(::Type{T}, dims::Int...; kwargs...)    SharedArray{T}(dims...; kwargs...)
 @deprecate(SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,Int}, offset; kwargs...),
-           SharedArray{T,N}(filename, dims, offset; kwargs...))
+           SharedArray{T}(filename, dims, offset; kwargs...))
 @deprecate(SharedArray{T}(filename::AbstractString, ::Type{T}, dims::NTuple, offset; kwargs...),
-           SharedArray{T,length(dims)}(filename, dims, offset; kwargs...))
+           SharedArray{T}(filename, dims, offset; kwargs...))
 
 @noinline function is_intrinsic_expr(x::ANY)
     Base.depwarn("is_intrinsic_expr is deprecated. There are no intrinsic functions anymore.", :is_intrinsic_expr)
@@ -1177,7 +1179,7 @@ function colon{T<:Dates.Period}(start::T, stop::T)
 end
 
 # LibGit2 refactor (#19839)
-eval(Base.LibGit2, quote
+@eval Base.LibGit2 begin
      Base.@deprecate_binding Oid GitHash
      Base.@deprecate_binding GitAnyObject GitUnknownObject
 
@@ -1187,23 +1189,21 @@ eval(Base.LibGit2, quote
      @deprecate revparse(repo::GitRepo, objname::AbstractString) GitObject(repo, objname) false
      @deprecate object(repo::GitRepo, te::GitTreeEntry) GitObject(repo, te) false
      @deprecate commit(ann::GitAnnotated) GitHash(ann) false
-end)
+end
 
 # when this deprecation is deleted, remove all calls to it, and all
 # negate=nothing keyword arguments, from base/dates/adjusters.jl
-eval(Dates, quote
-    function deprecate_negate(f, func, sig, negate)
-        if negate === nothing
-            return func
-        else
-            msg = "$f($sig; negate=$negate) is deprecated, use $f("
-            negate && (msg *= "!")
-            msg *= "$sig) instead."
-            Base.depwarn(msg, f)
-            return negate ? !func : func
-        end
+@eval Dates function deprecate_negate(f, func, sig, negate)
+    if negate === nothing
+        return func
+    else
+        msg = "$f($sig; negate=$negate) is deprecated, use $f("
+        negate && (msg *= "!")
+        msg *= "$sig) instead."
+        Base.depwarn(msg, f)
+        return negate ? !func : func
     end
-end)
+end
 
 # FloatRange replaced by StepRangeLen
 
