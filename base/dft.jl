@@ -365,14 +365,16 @@ fftshift(x)
 
 function fftshift(x,dim)
     s = zeros(Int,ndims(x))
-    s[dim] = div(size(x,dim),2)
+    for i in dim
+        s[i] = div(size(x,i),2)
+    end
     circshift(x, s)
 end
 
 """
     fftshift(x,dim)
 
-Swap the first and second halves of the given dimension of array `x`.
+Swap the first and second halves of the given dimension or iterable of dimensions of array `x`.
 """
 fftshift(x,dim)
 
@@ -387,7 +389,9 @@ ifftshift
 
 function ifftshift(x,dim)
     s = zeros(Int,ndims(x))
-    s[dim] = -div(size(x,dim),2)
+    for i in dim
+        s[i] = -div(size(x,i),2)
+    end
     circshift(x, s)
 end
 
