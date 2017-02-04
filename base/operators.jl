@@ -1049,13 +1049,13 @@ setindex_shape_check(X::AbstractArray) =
 setindex_shape_check(X::AbstractArray, i::Integer) =
     (_length(X)==i || throw_setindex_mismatch(X, (i,)))
 
-setindex_shape_check{T}(X::AbstractArray{T,1}, i::Integer) =
+setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer) =
     (_length(X)==i || throw_setindex_mismatch(X, (i,)))
 
-setindex_shape_check{T}(X::AbstractArray{T,1}, i::Integer, j::Integer) =
+setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer, j::Integer) =
     (_length(X)==i*j || throw_setindex_mismatch(X, (i,j)))
 
-function setindex_shape_check{T}(X::AbstractArray{T,2}, i::Integer, j::Integer)
+function setindex_shape_check(X::AbstractArray{<:Any,2}, i::Integer, j::Integer)
     if length(X) != i*j
         throw_setindex_mismatch(X, (i,j))
     end
@@ -1093,7 +1093,7 @@ indexing behaviors. This must return either an `Int` or an `AbstractArray` of
 to_index(i::Integer) = convert(Int,i)::Int
 to_index(I::AbstractArray{Bool}) = LogicalIndex(I)
 to_index(I::AbstractArray) = I
-to_index{T<:Union{AbstractArray, Colon}}(I::AbstractArray{T}) = throw(ArgumentError("invalid index: $I"))
+to_index(I::AbstractArray{<:Union{AbstractArray, Colon}}) = throw(ArgumentError("invalid index: $I"))
 to_index(::Colon) = throw(ArgumentError("colons must be converted by to_indices(...)"))
 to_index(i) = throw(ArgumentError("invalid index: $i"))
 
