@@ -208,7 +208,7 @@ function cstr(s)
 end
 
 # convert various env representations into an array of "key=val" strings
-byteenv{S<:AbstractString}(env::AbstractArray{S}) =
+byteenv(env::AbstractArray{<:AbstractString}) =
     String[cstr(x) for x in env]
 byteenv(env::Associative) =
     String[cstr(string(k)*"="*string(v)) for (k,v) in env]
@@ -228,15 +228,15 @@ use `withenv`.
 The `dir` keyword argument can be used to specify a working directory for the command.
 """
 setenv(cmd::Cmd, env; dir="") = Cmd(cmd; env=byteenv(env), dir=dir)
-setenv{T<:AbstractString}(cmd::Cmd, env::Pair{T}...; dir="") =
+setenv(cmd::Cmd, env::Pair{<:AbstractString}...; dir="") =
     setenv(cmd, env; dir=dir)
 setenv(cmd::Cmd; dir="") = Cmd(cmd; dir=dir)
 
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)
 redir_out(src::AbstractCmd, dest::AbstractCmd) = OrCmds(src, dest)
 redir_err(src::AbstractCmd, dest::AbstractCmd) = ErrOrCmds(src, dest)
-Base.mr_empty{T2<:Base.AbstractCmd}(f, op::typeof(&), T1::Type{T2}) =
-    throw(ArgumentError("reducing over an empty collection of type $T1 with operator & is not allowed"))
+Base.mr_empty(f, op::typeof(&), T::Type{<:Base.AbstractCmd}) =
+    throw(ArgumentError("reducing over an empty collection of type $T with operator & is not allowed"))
 
 # Stream Redirects
 redir_out(dest::Redirectable, src::AbstractCmd) = CmdRedirect(src, dest, STDIN_NO)

@@ -121,7 +121,7 @@ The keyword arguments can be any combination of:
  - `mincount` can also be used to limit the printout to only those
    lines with at least mincount occurrences.
 """
-function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::LineInfoDict = getdict(data);
+function print(io::IO, data::Vector{<:Unsigned} = fetch(), lidict::LineInfoDict = getdict(data);
         format = :tree,
         C = false,
         combine = true,
@@ -138,7 +138,7 @@ function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::LineInfoD
         format)
 end
 
-function print{T<:Unsigned}(io::IO, data::Vector{T}, lidict::LineInfoDict, fmt::ProfileFormat, format::Symbol)
+function print(io::IO, data::Vector{<:Unsigned}, lidict::LineInfoDict, fmt::ProfileFormat, format::Symbol)
     cols::Int = Base.displaysize(io)[2]
     if format == :tree
         tree(io, data, lidict, cols, fmt)
@@ -158,7 +158,7 @@ a dictionary `lidict` of line information.
 
 See `Profile.print([io], data)` for an explanation of the valid keyword arguments.
 """
-print{T<:Unsigned}(data::Vector{T} = fetch(), lidict::LineInfoDict = getdict(data); kwargs...) =
+print(data::Vector{<:Unsigned} = fetch(), lidict::LineInfoDict = getdict(data); kwargs...) =
     print(STDOUT, data, lidict; kwargs...)
 
 """
