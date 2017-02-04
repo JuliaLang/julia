@@ -63,7 +63,7 @@ function tuple_type_tail(T::DataType)
     return Tuple{argtail(T.parameters...)...}
 end
 
-tuple_type_cons{S}(::Type{S}, ::Type{Union{}}) = Union{}
+tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
 function tuple_type_cons{S,T<:Tuple}(::Type{S}, ::Type{T})
     @_pure_meta
     Tuple{S, T.parameters...}
@@ -135,7 +135,7 @@ ptr_arg_unsafe_convert{T}(::Type{Ptr{T}}, x) = unsafe_convert(T, x)
 ptr_arg_unsafe_convert(::Type{Ptr{Void}}, x) = x
 
 cconvert(T::Type, x) = convert(T, x) # do the conversion eagerly in most cases
-cconvert{P<:Ptr}(::Type{P}, x) = x # but defer the conversion to Ptr to unsafe_convert
+cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_convert
 unsafe_convert{T}(::Type{T}, x::T) = x # unsafe_convert (like convert) defaults to assuming the convert occurred
 unsafe_convert{T<:Ptr}(::Type{T}, x::T) = x  # to resolve ambiguity with the next method
 unsafe_convert{P<:Ptr}(::Type{P}, x::Ptr) = convert(P, x)
