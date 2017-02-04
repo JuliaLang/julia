@@ -42,7 +42,7 @@ for f in (:-, :+)
     end
 end
 
-Base.:-{T}(a::HierarchicalValue{T}) = HierarchicalValue(-a.v, -a.rest)
+Base.:-(a::HierarchicalValue) = HierarchicalValue(-a.v, -a.rest)
 
 function Base.cmp{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T})
     av = a.v
