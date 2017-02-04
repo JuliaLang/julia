@@ -27,10 +27,10 @@ indices(x::Number) = ()
 indices(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : OneTo(1)
 eltype{T<:Number}(::Type{T}) = T
 ndims(x::Number) = 0
-ndims{T<:Number}(::Type{T}) = 0
+ndims(::Type{<:Number}) = 0
 length(x::Number) = 1
 endof(x::Number) = 1
-iteratorsize{T<:Number}(::Type{T}) = HasShape()
+iteratorsize(::Type{<:Number}) = HasShape()
 
 getindex(x::Number) = x
 function getindex(x::Number, i::Integer)
