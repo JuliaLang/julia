@@ -80,7 +80,13 @@ function (*){T,S}(A::AbstractMatrix{T}, x::AbstractVector{S})
     TS = promote_op(matprod, T, S)
     A_mul_B!(similar(x,TS,size(A,1)),A,x)
 end
-(*)(A::AbstractVector, B::AbstractMatrix) = reshape(A,length(A),1)*B
+
+# these will throw a DimensionMismatch unless B has 1 row (or 1 col for transposed case):
+A_mul_B(a::AbstractVector, B::AbstractMatrix) = A_mul_B(reshape(a,length(a),1),B)
+A_mul_Bt(a::AbstractVector, B::AbstractMatrix) = A_mul_Bt(reshape(a,length(a),1),B)
+A_mul_Bt(A::AbstractMatrix, b::AbstractVector) = A_mul_Bt(A,reshape(b,length(b),1))
+A_mul_Bc(a::AbstractVector, B::AbstractMatrix) = A_mul_Bc(reshape(a,length(a),1),B)
+(*)(a::AbstractVector, B::AbstractMatrix) = reshape(a,length(a),1)*B
 
 A_mul_B!{T<:BlasFloat}(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T}) = gemv!(y, 'N', A, x)
 for elty in (Float32,Float64)
