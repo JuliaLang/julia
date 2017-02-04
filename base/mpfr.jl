@@ -250,9 +250,9 @@ convert(::Type{Float16}, x::BigFloat) = convert(Float16, convert(Float32, x))
 (::Type{Float16})(x::BigFloat, r::RoundingMode) =
     convert(Float16, Float32(x, r))
 
-promote_rule{T<:Real}(::Type{BigFloat}, ::Type{T}) = BigFloat
-promote_rule{T<:AbstractFloat}(::Type{BigInt},::Type{T}) = BigFloat
-promote_rule{T<:AbstractFloat}(::Type{BigFloat},::Type{T}) = BigFloat
+promote_rule(::Type{BigFloat}, ::Type{<:Real}) = BigFloat
+promote_rule(::Type{BigInt},::Type{<:AbstractFloat}) = BigFloat
+promote_rule(::Type{BigFloat},::Type{<:AbstractFloat}) = BigFloat
 
 function convert(::Type{Rational{BigInt}}, x::AbstractFloat)
     if isnan(x); return zero(BigInt)//zero(BigInt); end
