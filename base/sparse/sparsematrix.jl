@@ -43,7 +43,7 @@ julia> nnz(A)
 3
 ```
 """
-nnz(S::SparseMatrixCSC) = Int(S.colptr[end]-1)
+nnz(S::SparseMatrixCSC) = Int(S.colptr[S.n + 1]-1)
 countnz(S::SparseMatrixCSC) = countnz(S.nzval)
 count(S::SparseMatrixCSC) = count(S.nzval)
 
