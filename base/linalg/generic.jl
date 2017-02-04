@@ -113,7 +113,8 @@ julia> cross(a,b)
  0
 ```
 """
-cross(a::AbstractVector, b::AbstractVector) = [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
+cross(a::AbstractVector, b::AbstractVector) =
+    [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
 """
     triu(M)
@@ -233,7 +234,7 @@ tril(M::AbstractMatrix,k::Integer) = tril!(copy(M),k)
     triu!(M)
 
 Upper triangle of a matrix, overwriting `M` in the process.
-See also [`triu`](:func:`triu`).
+See also [`triu`](@ref).
 """
 triu!(M::AbstractMatrix) = triu!(M,0)
 
@@ -241,7 +242,7 @@ triu!(M::AbstractMatrix) = triu!(M,0)
     tril!(M)
 
 Lower triangle of a matrix, overwriting `M` in the process.
-See also [`tril`](:func:`tril`).
+See also [`tril`](@ref).
 """
 tril!(M::AbstractMatrix) = tril!(M,0)
 
@@ -418,6 +419,16 @@ element type for which `norm` is defined), compute the `p`-norm (defaulting to `
 `A` were a vector of the corresponding length.
 
 For example, if `A` is a matrix and `p=2`, then this is equivalent to the Frobenius norm.
+
+# Example
+
+```jldoctest
+julia> vecnorm([1 2 3; 4 5 6; 7 8 9])
+16.881943016134134
+
+julia> vecnorm([1 2 3 4 5 6 7 8 9])
+16.881943016134134
+```
 """
 function vecnorm(itr, p::Real=2)
     isempty(itr) && return float(real(zero(eltype(itr))))
@@ -506,7 +517,7 @@ julia> norm(v, Inf)
 
 For matrices, the matrix norm induced by the vector `p`-norm is used, where valid values of
 `p` are `1`, `2`, or `Inf`. (Note that for sparse matrices, `p=2` is currently not
-implemented.) Use [`vecnorm`](:func:`vecnorm`) to compute the Frobenius norm.
+implemented.) Use [`vecnorm`](@ref) to compute the Frobenius norm.
 
 # Example
 
@@ -534,6 +545,20 @@ end
 
 @inline norm(x::Number, p::Real=2) = vecnorm(x, p)
 
+@inline norm{T}(tv::RowVector{T}) = norm(transpose(tv))
+
+"""
+    norm(rowvector, [q = 2])
+
+Takes the q-norm of a `RowVector`, which is equivalent to the p-norm with
+value `p = q/(q-1)`. They coincide at `p = q = 2`.
+
+The difference in norm between a vector space and its dual arises to preserve
+the relationship between duality and the inner product, and the result is
+consistent with the p-norm of `1 × n` matrix.
+"""
+@inline norm{T}(tv::RowVector{T}, q::Real) = q == Inf ? norm(transpose(tv), 1) : norm(transpose(tv), q/(q-1))
+
 function vecdot(x::AbstractArray, y::AbstractArray)
     lx = _length(x)
     if lx != _length(y)
@@ -555,6 +580,19 @@ end
 For any iterable containers `x` and `y` (including arrays of any dimension) of numbers (or
 any element type for which `dot` is defined), compute the Euclidean dot product (the sum of
 `dot(x[i],y[i])`) as if they were vectors.
+
+# Examples
+```jldoctest
+julia> vecdot(1:5, 2:6)
+70
+
+julia> x = fill(2., (5,5));
+
+julia> y = fill(3., (5,5));
+
+julia> vecdot(x, y)
+150.0
+```
 """
 function vecdot(x, y) # arbitrary iterables
     ix = start(x)
@@ -615,10 +653,10 @@ dot(x::AbstractVector, y::AbstractVector) = vecdot(x, y)
 Compute the rank of a matrix by counting how many singular
 values of `M` have magnitude greater than `tol`.
 By default, the value of `tol` is the largest
-dimension of `M` multiplied by the [`eps`](:func:`eps`)
-of the [`eltype`](:func:`eltype`) of `M`.
+dimension of `M` multiplied by the [`eps`](@ref)
+of the [`eltype`](@ref) of `M`.
 """
-rank(A::AbstractMatrix, tol::Real) = sum(svdvals(A) .> tol)
+rank(A::AbstractMatrix, tol::Real) = mapreduce(x -> x > tol, +, 0, svdvals(A))
 function rank(A::AbstractMatrix)
     m,n = size(A)
     (m == 0 || n == 0) && return 0
@@ -654,8 +692,6 @@ trace(x::Number) = x
 #kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
 
 #det(a::AbstractMatrix)
-
-inv(a::StridedMatrix) = throw(ArgumentError("argument must be a square matrix"))
 
 """
     inv(M)
@@ -962,7 +998,7 @@ the squared error between `y` and `a + b*x` is minimized.
 
 See also:
 
-`\\`, [`cov`](:func:`cov`), [`std`](:func:`std`), [`mean`](:func:`mean`).
+`\\`, [`cov`](@ref), [`std`](@ref), [`mean`](@ref).
 
 """
 function linreg(x::AbstractVector, y::AbstractVector)
@@ -971,7 +1007,10 @@ function linreg(x::AbstractVector, y::AbstractVector)
     # where
     # b = cov(X, Y)/var(X)
     # a = mean(Y) - b*mean(X)
-    size(x) == size(y) || throw(DimensionMismatch("x has size $(size(x)) and y has size $(size(y)), but these must be the same size"))
+    if size(x) != size(y)
+        throw(DimensionMismatch("x has size $(size(x)) and y has size $(size(y)), " *
+            "but these must be the same size"))
+    end
     mx = mean(x)
     my = mean(y)
     # don't need to worry about the scaling (n vs n - 1) since they cancel in the ratio
@@ -1000,10 +1039,10 @@ scale!(b::AbstractVector, A::AbstractMatrix) = scale!(A,b,A)
     peakflops(n::Integer=2000; parallel::Bool=false)
 
 `peakflops` computes the peak flop rate of the computer by using double precision
-[`gemm!`](:func:`Base.LinAlg.BLAS.gemm!`). By default, if no arguments are specified, it
+[`gemm!`](@ref Base.LinAlg.BLAS.gemm!). By default, if no arguments are specified, it
 multiplies a matrix of size `n x n`, where `n = 2000`. If the underlying BLAS is using
 multiple threads, higher flop rates are realized. The number of BLAS threads can be set with
-[`BLAS.set_num_threads(n)`](:func:`Base.LinAlg.BLAS.set_num_threads`).
+[`BLAS.set_num_threads(n)`](@ref).
 
 If the keyword argument `parallel` is set to `true`, `peakflops` is run in parallel on all
 the worker processors. The flop rate of the entire parallel computer is returned. When
@@ -1047,7 +1086,8 @@ function axpy!{Ti<:Integer,Tj<:Integer}(α, x::AbstractArray, rx::AbstractArray{
 end
 
 
-# Elementary reflection similar to LAPACK. The reflector is not Hermitian but ensures that tridiagonalization of Hermitian matrices become real. See lawn72
+# Elementary reflection similar to LAPACK. The reflector is not Hermitian but
+# ensures that tridiagonalization of Hermitian matrices become real. See lawn72
 @inline function reflector!(x::AbstractVector)
     n = length(x)
     @inbounds begin
@@ -1070,7 +1110,8 @@ end
     ξ1/ν
 end
 
-@inline function reflectorApply!(x::AbstractVector, τ::Number, A::StridedMatrix) # apply reflector from left
+# apply reflector from left
+@inline function reflectorApply!(x::AbstractVector, τ::Number, A::StridedMatrix)
     m, n = size(A)
     if length(x) != m
         throw(DimensionMismatch("reflector has length $(length(x)), which must match the first dimension of matrix A, $m"))
@@ -1124,30 +1165,76 @@ det(x::Number) = x
 """
     logabsdet(M)
 
-Log of absolute value of determinant of real matrix. Equivalent to `(log(abs(det(M))), sign(det(M)))`,
-but may provide increased accuracy and/or speed.
+Log of absolute value of determinant of real matrix. Equivalent to
+`(log(abs(det(M))), sign(det(M)))`, but may provide increased accuracy and/or speed.
 """
 logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
 
 """
     logdet(M)
 
-Log of matrix determinant. Equivalent to `log(det(M))`, but may provide increased accuracy
-and/or speed.
+Log of matrix determinant. Equivalent to `log(det(M))`, but may provide
+increased accuracy and/or speed.
+
+# Example
+
+```jldoctest
+julia> M = [1 0; 2 2]
+2×2 Array{Int64,2}:
+ 1  0
+ 2  2
+
+julia> logdet(M)
+0.6931471805599453
+
+julia> logdet(eye(3))
+0.0
+```
 """
 function logdet(A::AbstractMatrix)
     d,s = logabsdet(A)
     return d + log(s)
 end
 
+typealias NumberArray{T<:Number} AbstractArray{T}
+
+"""
+    promote_leaf_eltypes(itr)
+
+For an (possibly nested) iterable object `itr`, promote the types of leaf
+elements.  Equivalent to `promote_type(typeof(leaf1), typeof(leaf2), ...)`.
+Currently supports only numeric leaf elements.
+
+# Example
+
+```jldoctest
+julia> a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
+3-element Array{Any,1}:
+  Any[1,2,[3,4]]
+ 5.0
+  Any[0+6im,[7.0,8.0]]
+
+julia> promote_leaf_eltypes(a)
+Complex{Float64}
+```
+"""
+promote_leaf_eltypes{T<:Number}(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) = T
+promote_leaf_eltypes{T<:NumberArray}(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) = eltype(T)
+promote_leaf_eltypes{T}(x::T) = T
+promote_leaf_eltypes(x::Union{AbstractArray,Tuple}) = mapreduce(promote_leaf_eltypes, promote_type, Bool, x)
+
 # isapprox: approximate equality of arrays [like isapprox(Number,Number)]
-function isapprox{T<:Number,S<:Number}(x::AbstractArray{T}, y::AbstractArray{S}; rtol::Real=Base.rtoldefault(T,S), atol::Real=0, norm::Function=vecnorm)
+# Supports nested arrays; e.g., for `a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]`
+# `a ≈ a` is `true`.
+function isapprox(x::AbstractArray, y::AbstractArray;
+    rtol::Real=Base.rtoldefault(promote_leaf_eltypes(x),promote_leaf_eltypes(y)),
+    atol::Real=0, nans::Bool=false, norm::Function=vecnorm)
     d = norm(x - y)
     if isfinite(d)
         return d <= atol + rtol*max(norm(x), norm(y))
     else
         # Fall back to a component-wise approximate comparison
-        return all(ab -> isapprox(ab[1], ab[2]; rtol=rtol, atol=atol), zip(x, y))
+        return all(ab -> isapprox(ab[1], ab[2]; rtol=rtol, atol=atol, nans=nans), zip(x, y))
     end
 end
 
@@ -1155,7 +1242,7 @@ end
     normalize!(v, [p::Real=2])
 
 Normalize the vector `v` in-place with respect to the `p`-norm.
-See also [`vecnorm`](:func:`vecnorm`) and [`normalize`](:func:`normalize`).
+See also [`vecnorm`](@ref) and [`normalize`](@ref).
 """
 function normalize!(v::AbstractVector, p::Real=2)
     nrm = norm(v, p)
@@ -1163,11 +1250,10 @@ function normalize!(v::AbstractVector, p::Real=2)
 end
 
 @inline function __normalize!(v::AbstractVector, nrm::AbstractFloat)
-    #The largest positive floating point number whose inverse is less than
-    #infinity
+    # The largest positive floating point number whose inverse is less than infinity
     δ = inv(prevfloat(typemax(nrm)))
 
-    if nrm ≥ δ #Safe to multiply with inverse
+    if nrm ≥ δ # Safe to multiply with inverse
         invnrm = inv(nrm)
         scale!(v, invnrm)
 
@@ -1184,7 +1270,7 @@ end
     normalize(v, [p::Real=2])
 
 Normalize the vector `v` with respect to the `p`-norm.
-See also [`normalize!`](:func:`normalize!`) and [`vecnorm`](:func:`vecnorm`).
+See also [`normalize!`](@ref) and [`vecnorm`](@ref).
 
 # Example
 

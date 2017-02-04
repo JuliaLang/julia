@@ -19,6 +19,10 @@ ifeq ($(OS),Linux)
 MBEDTLS_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
+ifeq ($(OS),FreeBSD)
+MBEDTLS_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+endif
+
 $(SRCDIR)/srccache/$(MBEDTLS_SRC).tgz: | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ $(MBEDTLS_URL)
 

@@ -23,9 +23,9 @@ end
 """
     lufact!(A, pivot=Val{true}) -> LU
 
-`lufact!` is the same as [`lufact`](:func:`lufact`), but saves space by overwriting the
-input `A`, instead of creating a copy. An [`InexactError`](:obj:`InexactError`)
-exception is thrown if the factorisation produces a number not representable by the
+`lufact!` is the same as [`lufact`](@ref), but saves space by overwriting the
+input `A`, instead of creating a copy. An [`InexactError`](@ref)
+exception is thrown if the factorization produces a number not representable by the
 element type of `A`, e.g. for integer types.
 """
 lufact!(A::StridedMatrix, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true}) = generic_lufact!(A, pivot)
@@ -108,13 +108,13 @@ The relationship between `F` and `A` is
 
 | Supported function               | `LU` | `LU{T,Tridiagonal{T}}` |
 |:---------------------------------|:-----|:-----------------------|
-| [`/`](:func:`/`)                 | ✓    |                        |
-| [`\\`](:func:`\\`)               | ✓    | ✓                      |
-| [`cond`](:func:`cond`)           | ✓    |                        |
-| [`det`](:func:`det`)             | ✓    | ✓                      |
-| [`logdet`](:func:`logdet`)       | ✓    | ✓                      |
-| [`logabsdet`](:func:`logabsdet`) | ✓    | ✓                      |
-| [`size`](:func:`size`)           | ✓    | ✓                      |
+| [`/`](@ref)                      | ✓    |                        |
+| [`\\`](@ref)                     | ✓    | ✓                      |
+| [`cond`](@ref)                   | ✓    |                        |
+| [`det`](@ref)                    | ✓    | ✓                      |
+| [`logdet`](@ref)                 | ✓    | ✓                      |
+| [`logabsdet`](@ref)              | ✓    | ✓                      |
+| [`size`](@ref)                   | ✓    | ✓                      |
 
 # Example
 
@@ -125,7 +125,9 @@ julia> A = [4 3; 6 3]
  6  3
 
 julia> F = lufact(A)
-Base.LinAlg.LU{Float64,Array{Float64,2}}([4.0 3.0; 1.5 -1.5],[1,2],0)
+Base.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:
+[1.0 0.0; 1.5 1.0]
+[4.0 3.0; 0.0 -1.5]
 
 julia> F[:L] * F[:U] == A[F[:p], :]
 true
@@ -164,7 +166,7 @@ Compute the LU factorization of `A`, such that `A[p,:] = L*U`.
 By default, pivoting is used. This can be overridden by passing
 `Val{false}` for the second argument.
 
-See also [`lufact`](:func:`lufact`).
+See also [`lufact`](@ref).
 
 # Example
 
@@ -175,12 +177,7 @@ julia> A = [4. 3.; 6. 3.]
  6.0  3.0
 
 julia> L, U, p = lu(A)
-(
-[1.0 0.0; 0.666667 1.0],
-<BLANKLINE>
-[6.0 3.0; 0.0 1.0],
-<BLANKLINE>
-[2,1])
+([1.0 0.0; 0.666667 1.0], [6.0 3.0; 0.0 1.0], [2, 1])
 
 julia> A[p, :] == L * U
 true
@@ -196,6 +193,7 @@ function convert{T}(::Type{LU{T}}, F::LU)
     LU{T,typeof(M)}(M, F.ipiv, F.info)
 end
 convert{T,S}(::Type{LU{T,S}}, F::LU) = LU{T,S}(convert(S, F.factors), F.ipiv, F.info)
+convert{T}(::Type{Factorization{T}}, F::LU{T}) = F
 convert{T}(::Type{Factorization{T}}, F::LU) = convert(LU{T}, F)
 
 
@@ -225,6 +223,13 @@ function getindex{T,S<:StridedMatrix}(F::LU{T,S}, d::Symbol)
     else
         throw(KeyError(d))
     end
+end
+
+function show(io::IO, C::LU)
+    println(io, "$(typeof(C)) with factors L and U:")
+    show(io, C[:L])
+    println(io)
+    show(io, C[:U])
 end
 
 A_ldiv_B!{T<:BlasFloat, S<:StridedMatrix}(A::LU{T, S}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('N', A.factors, A.ipiv, B) A.info

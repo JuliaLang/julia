@@ -80,7 +80,7 @@ reducedim_initarray0{T}(A::AbstractArray, region, v0::T) = reducedim_initarray0(
 #
 # The current scheme is basically following Steven G. Johnson's original implementation
 #
-promote_union(T::Union) = promote_type(T.types...)
+promote_union(T::Union) = promote_type(promote_union(T.a), promote_union(T.b))
 promote_union(T) = T
 
 function reducedim_init{S}(f, op::typeof(+), A::AbstractArray{S}, region)
@@ -117,7 +117,7 @@ reducedim_init(f, op::typeof(|), A::AbstractArray, region) = reducedim_initarray
 # specialize to make initialization more efficient for common cases
 
 for (IT, RT) in ((CommonReduceResult, :(eltype(A))), (SmallSigned, :Int), (SmallUnsigned, :UInt))
-    T = Union{[AbstractArray{t} for t in IT.types]..., [AbstractArray{Complex{t}} for t in IT.types]...}
+    T = Union{[AbstractArray{t} for t in uniontypes(IT)]..., [AbstractArray{Complex{t}} for t in uniontypes(IT)]...}
     @eval begin
         reducedim_init(f::typeof(identity), op::typeof(+), A::$T, region) =
             reducedim_initarray(A, region, zero($RT))
@@ -250,7 +250,7 @@ dimensions to reduce, and `v0` is the initial value to use in the reductions. Fo
 
 The associativity of the reduction is implementation-dependent; if you need a particular
 associativity, e.g. left-to-right, you should write your own loop. See documentation for
-[`reduce`](:func:`reduce`).
+[`reduce`](@ref).
 
 ```jldoctest
 julia> a = reshape(collect(1:16), (4,4))
@@ -277,11 +277,162 @@ reducedim(op, A::AbstractArray, region) = mapreducedim(identity, op, A, region)
 
 
 ##### Specific reduction functions #####
+"""
+    sum(A, dims)
+
+Sum elements of an array over the given dimensions.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> sum(A, 1)
+1×2 Array{Int64,2}:
+ 4  6
+
+julia> sum(A, 2)
+2×1 Array{Int64,2}:
+ 3
+ 7
+```
+"""
+sum(A, dims)
+
+"""
+    sum!(r, A)
+
+Sum elements of `A` over the singleton dimensions of `r`, and write results to `r`.
+"""
+sum!(r, A)
+
+"""
+    prod(A, dims)
+
+Multiply elements of an array over the given dimensions.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> prod(A, 1)
+1×2 Array{Int64,2}:
+ 3  8
+
+julia> prod(A, 2)
+2×1 Array{Int64,2}:
+  2
+ 12
+```
+"""
+prod(A, dims)
+
+"""
+    prod!(r, A)
+
+Multiply elements of `A` over the singleton dimensions of `r`, and write results to `r`.
+"""
+prod!(r, A)
+
+"""
+    maximum(A, dims)
+
+Compute the maximum value of an array over the given dimensions. See also the
+[`max(a,b)`](@ref) function to take the maximum of two or more arguments,
+which can be applied elementwise to arrays via `max.(a,b)`.
+"""
+maximum(A, dims)
+
+"""
+    maximum!(r, A)
+
+Compute the maximum value of `A` over the singleton dimensions of `r`, and write results to `r`.
+"""
+maximum!(r, A)
+
+"""
+    minimum(A, dims)
+
+Compute the minimum value of an array over the given dimensions. See also the
+[`min(a,b)`](@ref) function to take the minimum of two or more arguments,
+which can be applied elementwise to arrays via `min.(a,b)`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> minimum(A, 1)
+1×2 Array{Int64,2}:
+ 1  2
+
+julia> minimum(A, 2)
+2×1 Array{Int64,2}:
+ 1
+ 3
+```
+"""
+minimum(A, dims)
+
+"""
+    minimum!(r, A)
+
+Compute the minimum value of `A` over the singleton dimensions of `r`, and write results to `r`.
+"""
+minimum!(r, A)
+
+"""
+    all(A, dims)
+
+Test whether all values along the given dimensions of an array are `true`.
+
+```jldoctest
+julia> A = [true false; true true]
+2×2 Array{Bool,2}:
+ true  false
+ true   true
+
+julia> all(A, 1)
+1×2 Array{Bool,2}:
+ true  false
+
+julia> all(A, 2)
+2×1 Array{Bool,2}:
+ false
+  true
+```
+"""
+all(A::AbstractArray, dims)
+
+"""
+    all!(r, A)
+
+Test whether all values in `A` along the singleton dimensions of `r` are `true`, and write results to `r`.
+"""
+all!(r, A)
+
+"""
+    any(A, dims)
+
+Test whether any values along the given dimensions of an array are `true`.
+"""
+any(::AbstractArray,dims)
+
+"""
+    any!(r, A)
+
+Test whether any values in `A` along the singleton dimensions of `r` are `true`, and write
+results to `r`.
+"""
+any!(r, A)
 
 for (fname, op) in [(:sum, :+), (:prod, :*),
                     (:maximum, :scalarmax), (:minimum, :scalarmin),
                     (:all, :&), (:any, :|)]
-
     fname! = Symbol(fname, '!')
     @eval begin
         $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
@@ -291,19 +442,6 @@ for (fname, op) in [(:sum, :+), (:prod, :*),
         $(fname)(f::Function, A::AbstractArray, region) =
             mapreducedim(f, $(op), A, region)
         $(fname)(A::AbstractArray, region) = $(fname)(identity, A, region)
-    end
-end
-
-for (fname, fbase, fun) in [(:sumabs, :sum, :abs),
-                            (:sumabs2, :sum, :abs2),
-                            (:maxabs, :maximum, :abs),
-                            (:minabs, :minimum, :abs)]
-    fname! = Symbol(fname, '!')
-    fbase! = Symbol(fbase, '!')
-    @eval begin
-        $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) =
-            $(fbase!)($(fun), r, A; init=init)
-        $(fname)(A::AbstractArray, region) = $(fbase)($(fun), A, region)
     end
 end
 

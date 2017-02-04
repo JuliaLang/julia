@@ -117,6 +117,8 @@ push!(j, 257)
 @test intersect(i, j) == IntSet([])
 push!(j, 2, 3, 17)
 @test intersect(i, j) == IntSet([2, 3])
+k = IntSet([1, 2, 3, 4, 5, 6, 7])
+@test intersect(i, j, k) == IntSet([2, 3])
 
 ## equality
 i = IntSet([1, 2, 3])

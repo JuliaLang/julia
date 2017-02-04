@@ -163,10 +163,10 @@ function tril!(M::AbstractMatrix, k::Integer)
 end
 tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
-function gradient(F::Vector, h::Vector)
+function gradient(F::AbstractVector, h::Vector)
     n = length(F)
     T = typeof(one(eltype(F))/one(eltype(h)))
-    g = Array{T}(n)
+    g = similar(F, T)
     if n == 1
         g[1] = zero(T)
     elseif n > 1
@@ -190,7 +190,7 @@ end
 """
     diagind(M, k::Integer=0)
 
-A [`Range`](:class:`Range`) giving the indices of the `k`th diagonal of the matrix `M`.
+A `Range` giving the indices of the `k`th diagonal of the matrix `M`.
 
 # Example
 
@@ -211,7 +211,7 @@ diagind(A::AbstractMatrix, k::Integer=0) = diagind(size(A,1), size(A,2), k)
     diag(M, k::Integer=0)
 
 The `k`th diagonal of a matrix, as a vector.
-Use [`diagm`](:func:`diagm`) to construct a diagonal matrix.
+Use [`diagm`](@ref) to construct a diagonal matrix.
 
 # Example
 
@@ -291,7 +291,7 @@ julia> kron(A, B)
 ```
 """
 function kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
-    R = Array{promote_type(T,S)}(size(a,1)*size(b,1), size(a,2)*size(b,2))
+    R = Array{promote_op(*,T,S)}(size(a,1)*size(b,1), size(a,2)*size(b,2))
     m = 1
     for j = 1:size(a,2), l = 1:size(b,2), i = 1:size(a,1)
         aij = a[i,j]
@@ -309,9 +309,9 @@ kron(a::AbstractVector, b::AbstractVector)=vec(kron(reshape(a,length(a),1),resha
 kron(a::AbstractMatrix, b::AbstractVector)=kron(a,reshape(b,length(b),1))
 kron(a::AbstractVector, b::AbstractMatrix)=kron(reshape(a,length(a),1),b)
 
-^(A::Matrix, p::Integer) = p < 0 ? inv(A^-p) : Base.power_by_squaring(A,p)
+^(A::AbstractMatrix, p::Integer) = p < 0 ? inv(A^-p) : Base.power_by_squaring(A,p)
 
-function ^(A::Matrix, p::Number)
+function ^(A::AbstractMatrix, p::Number)
     if isinteger(p)
         return A^Integer(real(p))
     end
@@ -333,7 +333,7 @@ Compute the matrix exponential of `A`, defined by
 e^A = \\sum_{n=0}^{\\infty} \\frac{A^n}{n!}.
 ```
 
-For symmetric or Hermitian `A`, an eigendecomposition ([`eigfact`](:func:`eigfact`)) is
+For symmetric or Hermitian `A`, an eigendecomposition ([`eigfact`](@ref)) is
 used, otherwise the scaling and squaring algorithm (see [^H05]) is chosen.
 
 [^H05]: Nicholas J. Higham, "The squaring and scaling method for the matrix exponential revisited", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. [doi:10.1137/090768539](http://dx.doi.org/10.1137/090768539)
@@ -459,16 +459,29 @@ the unique matrix ``X`` such that ``e^X = A`` and ``-\\pi < Im(\\lambda) < \\pi`
 the eigenvalues ``\\lambda`` of ``X``. If `A` has nonpositive eigenvalues, a nonprincipal
 matrix function is returned whenever possible.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](:func:`eigfact`)) is
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is
 used, if `A` is triangular an improved version of the inverse scaling and squaring method is
 employed (see [^AH12] and [^AHR13]). For general matrices, the complex Schur form
-([`schur`](:func:`schur`)) is computed and the triangular algorithm is used on the
+([`schur`](@ref)) is computed and the triangular algorithm is used on the
 triangular factor.
 
 [^AH12]: Awad H. Al-Mohy and Nicholas J. Higham, "Improved inverse  scaling and squaring algorithms for the matrix logarithm", SIAM Journal on Scientific Computing, 34(4), 2012, C153-C169. [doi:10.1137/110852553](http://dx.doi.org/10.1137/110852553)
 
 [^AHR13]: Awad H. Al-Mohy, Nicholas J. Higham and Samuel D. Relton, "Computing the Fréchet derivative of the matrix logarithm and estimating the condition number", SIAM Journal on Scientific Computing, 35(4), 2013, C394-C410. [doi:10.1137/120885991](http://dx.doi.org/10.1137/120885991)
 
+# Example
+
+```jldoctest
+julia> A = 2.7182818 * eye(2)
+2×2 Array{Float64,2}:
+ 2.71828  0.0
+ 0.0      2.71828
+
+julia> logm(A)
+2×2 Array{Float64,2}:
+ 1.0  0.0
+ 0.0  1.0
+```
 """
 function logm(A::StridedMatrix)
     # If possible, use diagonalization
@@ -496,7 +509,7 @@ function logm(A::StridedMatrix)
         end
     end
 
-    if isreal(A) && ~np_real_eigs
+    if isreal(A) && !np_real_eigs
         return real(retmat)
     else
         return retmat
@@ -508,6 +521,38 @@ function logm(a::Number)
 end
 logm(a::Complex) = log(a)
 
+"""
+    sqrtm(A)
+
+If `A` has no negative real eigenvalues, compute the principal matrix square root of `A`,
+that is the unique matrix ``X`` with eigenvalues having positive real part such that
+``X^2 = A``. Otherwise, a nonprincipal square root is returned.
+
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is
+used to compute the square root. Otherwise, the square root is determined by means of the
+Björck-Hammarling method [^BH83], which computes the complex Schur form ([`schur`](@ref))
+and then the complex square root of the triangular factor.
+
+[^BH83]:
+
+    Åke Björck and Sven Hammarling, "A Schur method for the square root of a matrix",
+    Linear Algebra and its Applications, 52-53, 1983, 127-140.
+    [doi:10.1016/0024-3795(83)80010-X](http://dx.doi.org/10.1016/0024-3795(83)80010-X)
+
+# Example
+
+```jldoctest
+julia> A = [4 0; 0 4]
+2×2 Array{Int64,2}:
+ 4  0
+ 0  4
+
+julia> sqrtm(A)
+2×2 Array{Float64,2}:
+ 2.0  0.0
+ 0.0  2.0
+```
+"""
 function sqrtm{T<:Real}(A::StridedMatrix{T})
     if issymmetric(A)
         return full(sqrtm(Symmetric(A)))
@@ -538,6 +583,7 @@ sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
 sqrtm(a::Complex) = sqrt(a)
 
 function inv{T}(A::StridedMatrix{T})
+    checksquare(A)
     S = typeof((one(T)*zero(T) + one(T)*zero(T))/one(T))
     AA = convert(AbstractArray{S}, A)
     if istriu(AA)
@@ -562,16 +608,16 @@ systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
 
 | Properties of `A`          | type of factorization                          |
 |:---------------------------|:-----------------------------------------------|
-| Positive-definite          | Cholesky (see [`cholfact`](:func:`cholfact`))  |
-| Dense Symmetric/Hermitian  | Bunch-Kaufman (see [`bkfact`](:func:`bkfact`)) |
-| Sparse Symmetric/Hermitian | LDLt (see [`ldltfact`](:func:`ldltfact`))      |
+| Positive-definite          | Cholesky (see [`cholfact`](@ref))  |
+| Dense Symmetric/Hermitian  | Bunch-Kaufman (see [`bkfact`](@ref)) |
+| Sparse Symmetric/Hermitian | LDLt (see [`ldltfact`](@ref))      |
 | Triangular                 | Triangular                                     |
 | Diagonal                   | Diagonal                                       |
 | Bidiagonal                 | Bidiagonal                                     |
-| Tridiagonal                | LU (see [`lufact`](:func:`lufact`))            |
-| Symmetric real tridiagonal | LDLt (see [`ldltfact`](:func:`ldltfact`))      |
-| General square             | LU (see [`lufact`](:func:`lufact`))            |
-| General non-square         | QR (see [`qrfact`](:func:`qrfact`))            |
+| Tridiagonal                | LU (see [`lufact`](@ref))            |
+| Symmetric real tridiagonal | LDLt (see [`ldltfact`](@ref))      |
+| General square             | LU (see [`lufact`](@ref))            |
+| General non-square         | QR (see [`qrfact`](@ref))            |
 
 If `factorize` is called on a Hermitian positive-definite matrix, for instance, then `factorize`
 will return a Cholesky factorization.
@@ -827,6 +873,8 @@ function sylvester{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T},C::Stri
     scale!(QA*A_mul_Bc(Y,QB), inv(scale))
 end
 sylvester{T<:Integer}(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) = sylvester(float(A), float(B), float(C))
+
+sylvester(a::Union{Real,Complex},b::Union{Real,Complex},c::Union{Real,Complex}) = -c / (a + b)
 
 # AX + XA' + C = 0
 

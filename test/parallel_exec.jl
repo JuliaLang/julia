@@ -212,8 +212,14 @@ sleep(0.5) # to ensure that wid2 messages have been executed on wid1
 @test remotecall_fetch(k->haskey(Base.PGRP.refs, k), wid1, rrid) == false
 
 @test fetch(@spawnat id_other myid()) == id_other
-@test @fetchfrom id_other begin myid() end == id_other
-@fetch begin myid() end
+@test (@fetchfrom id_other myid()) == id_other
+
+pids=[]
+for i in 1:nworkers()
+    push!(pids, @fetch myid())
+end
+@test sort(pids) == sort(workers())
+
 
 # test getindex on Futures and RemoteChannels
 function test_indexing(rr)
@@ -231,11 +237,11 @@ test_indexing(RemoteChannel(id_other))
 dims = (20,20,20)
 
 if is_linux()
-    S = SharedArray(Int64, dims)
+    S = SharedArray{Int64,3}(dims)
     @test startswith(S.segname, "/jl")
     @test !ispath("/dev/shm" * S.segname)
 
-    S = SharedArray(Int64, dims; pids=[id_other])
+    S = SharedArray{Int64,3}(dims; pids=[id_other])
     @test startswith(S.segname, "/jl")
     @test !ispath("/dev/shm" * S.segname)
 end
@@ -298,7 +304,7 @@ copy!(s, sdata(d))
 a = rand(dims)
 @test sdata(a) == a
 
-d = SharedArray(Int, dims, init = D->fill!(D.loc_subarr_1d, myid()))
+d = SharedArray{Int}(dims, init = D->fill!(D.loc_subarr_1d, myid()))
 for p in procs(d)
     idxes_in_p = remotecall_fetch(p, d) do D
         parentindexes(D.loc_subarr_1d)[1]
@@ -309,7 +315,7 @@ for p in procs(d)
     @test d[idxl] == p
 end
 
-d = @inferred(SharedArray(Float64, (2,3)))
+d = @inferred(SharedArray{Float64,2}((2,3)))
 @test isa(d[:,2], Vector{Float64})
 
 ### SharedArrays from a file
@@ -320,7 +326,7 @@ write(fn, 1:30)
 sz = (6,5)
 Atrue = reshape(1:30, sz)
 
-S = @inferred(SharedArray(fn, Int, sz))
+S = @inferred(SharedArray{Int,2}(fn, sz))
 @test S == Atrue
 @test length(procs(S)) > 1
 @sync begin
@@ -338,14 +344,14 @@ read!(fn, filedata)
 finalize(S)
 
 # Error for write-only files
-@test_throws ArgumentError SharedArray(fn, Int, sz, mode="w")
+@test_throws ArgumentError SharedArray{Int,2}(fn, sz, mode="w")
 
 # Error for file doesn't exist, but not allowed to create
-@test_throws ArgumentError SharedArray(joinpath(tempdir(),randstring()), Int, sz, mode="r")
+@test_throws ArgumentError SharedArray{Int,2}(joinpath(tempdir(),randstring()), sz, mode="r")
 
 # Creating a new file
 fn2 = tempname()
-S = SharedArray(fn2, Int, sz, init=D->D[localindexes(D)] = myid())
+S = SharedArray{Int,2}(fn2, sz, init=D->D[localindexes(D)] = myid())
 @test S == filedata
 filedata2 = similar(Atrue)
 read!(fn2, filedata2)
@@ -355,7 +361,7 @@ finalize(S)
 # Appending to a file
 fn3 = tempname()
 write(fn3, ones(UInt8, 4))
-S = SharedArray(fn3, UInt8, sz, 4, mode="a+", init=D->D[localindexes(D)]=0x02)
+S = SharedArray{UInt8}(fn3, sz, 4, mode="a+", init=D->D[localindexes(D)]=0x02)
 len = prod(sz)+4
 @test filesize(fn3) == len
 filedata = Array{UInt8}(len)
@@ -438,12 +444,12 @@ A = @inferred(convert(SharedArray, AA))
 B = @inferred(convert(SharedArray, AA'))
 @test B*A == ctranspose(AA)*AA
 
-d=SharedArray(Int64, (10,10); init = D->fill!(D.loc_subarr_1d, myid()), pids=[id_me, id_other])
+d=SharedArray{Int64,2}((10,10); init = D->fill!(D.loc_subarr_1d, myid()), pids=[id_me, id_other])
 d2 = map(x->1, d)
 @test reduce(+, d2) == 100
 
 @test reduce(+, d) == ((50*id_me) + (50*id_other))
-map!(x->1, d)
+map!(x->1, d, d)
 @test reduce(+, d) == 100
 
 @test fill!(d, 1) == ones(10, 10)
@@ -459,12 +465,12 @@ map!(x->1, d)
 # Shared arrays of singleton immutables
 @everywhere immutable ShmemFoo end
 for T in [Void, ShmemFoo]
-    s = @inferred(SharedArray(T, 10))
+    s = @inferred(SharedArray{T}(10))
     @test T() === remotecall_fetch(x->x[3], workers()[1], s)
 end
 
 # Issue #14664
-d = SharedArray(Int,10)
+d = SharedArray{Int}(10)
 @sync @parallel for i=1:10
     d[i] = i
 end
@@ -474,13 +480,13 @@ for (x,i) in enumerate(d)
 end
 
 # complex
-sd = SharedArray(Int,10)
-se = SharedArray(Int,10)
+sd = SharedArray{Int}(10)
+se = SharedArray{Int}(10)
 @sync @parallel for i=1:10
     sd[i] = i
     se[i] = i
 end
-sc = complex(sd,se)
+sc = convert(SharedArray, complex.(sd,se))
 for (x,i) in enumerate(sc)
     @test i == complex(x,x)
 end
@@ -498,7 +504,7 @@ for id in [id_me, id_other]
     finalize_and_test((r=RemoteChannel(id); put!(r, 1); r))
 end
 
-d = SharedArray(Int,10)
+d = SharedArray{Int}(10)
 finalize(d)
 @test_throws BoundsError d[1]
 
@@ -533,13 +539,14 @@ num_small_requests = 10000
 
 # test parallel sends of large arrays from multiple tasks to the same remote worker
 ntasks = 10
-rr_list = [Channel(32) for x in 1:ntasks]
-a = ones(2*10^5)
+rr_list = [Channel(1) for x in 1:ntasks]
+
 for rr in rr_list
-    @async let rr=rr
-        try
+    let rr=rr
+        @async try
             for i in 1:10
-                @test a == remotecall_fetch((x)->x, id_other, a)
+                a = rand(2*10^5)
+                @test a == remotecall_fetch(x->x, id_other, a)
                 yield()
             end
             put!(rr, :OK)
@@ -663,29 +670,14 @@ end
 
 # pmap tests. Needs at least 4 processors dedicated to the below tests. Which we currently have
 # since the parallel tests are now spawned as a separate set.
-function unmangle_exception(e)
-    while any(x->isa(e, x), [CompositeException, RemoteException, CapturedException])
-        if isa(e, CompositeException)
-            e = e.exceptions[1].ex
-        end
-        if isa(e, RemoteException)
-            e = e.captured.ex
-        end
-        if isa(e, CapturedException)
-            e = e.ex
-        end
-    end
-    return e
-end
 
 # Test all combinations of pmap keyword args.
 pmap_args = [
                 (:distributed, [:default, false]),
                 (:batch_size, [:default,2]),
-                (:on_error, [:default, e -> unmangle_exception(e).msg == "foobar"]),
-                (:retry_on, [:default, e -> unmangle_exception(e).msg == "foobar"]),
-                (:retry_n, [:default, typemax(Int)-1]),
-                (:retry_max_delay, [0, 0.001])
+                (:on_error, [:default, e -> (e.msg == "foobar" ? true : rethrow(e))]),
+                (:retry_delays, [:default, fill(0.001, 1000)]),
+                (:retry_check, [:default, (s,e) -> (s,endswith(e.msg,"foobar"))]),
             ]
 
 kwdict = Dict()
@@ -698,22 +690,12 @@ function walk_args(i)
             end
         end
 
-        data = [1:100...]
+        data = 1:100
 
         testw = kwdict[:distributed] === false ? [1] : workers()
 
-        if (kwdict[:on_error] === :default) && (kwdict[:retry_n] === :default)
-            mapf = x -> (x*2, myid())
-            results_test = pmap_res -> begin
-                results = [x[1] for x in pmap_res]
-                pids = [x[2] for x in pmap_res]
-                @test results == [2:2:200...]
-                for p in testw
-                    @test p in pids
-                end
-            end
-        elseif kwdict[:retry_n] !== :default
-            mapf = x -> iseven(myid()) ? error("foobar") : (x*2, myid())
+        if kwdict[:retry_delays] !== :default
+            mapf = x -> iseven(myid()) ? error("notfoobar") : (x*2, myid())
             results_test = pmap_res -> begin
                 results = [x[1] for x in pmap_res]
                 pids = [x[2] for x in pmap_res]
@@ -726,7 +708,17 @@ function walk_args(i)
                     end
                 end
             end
-        else (kwdict[:on_error] !== :default) && (kwdict[:retry_n] === :default)
+        elseif kwdict[:on_error] === :default
+            mapf = x -> (x*2, myid())
+            results_test = pmap_res -> begin
+                results = [x[1] for x in pmap_res]
+                pids = [x[2] for x in pmap_res]
+                @test results == [2:2:200...]
+                for p in testw
+                    @test p in pids
+                end
+            end
+        else
             mapf = x -> iseven(x) ? error("foobar") : (x*2, myid())
             results_test = pmap_res -> begin
                 w = testw
@@ -766,7 +758,7 @@ error_thrown = false
 try
     pmap(x -> x==50 ? error("foobar") : x, 1:100)
 catch e
-    @test unmangle_exception(e).msg == "foobar"
+    @test e.captured.ex.msg == "foobar"
     error_thrown = true
 end
 @test error_thrown
@@ -774,8 +766,47 @@ end
 # Test pmap with a generator type iterator
 @test [1:100...] == pmap(x->x, Base.Generator(x->(sleep(0.0001); x), 1:100))
 
+# Test pgenerate
+n = 10
+as = [rand(4,4) for i in 1:n]
+bs = deepcopy(as)
+cs = collect(Base.pgenerate(x->(sleep(rand()*0.1); svdfact(x)), bs))
+svdas = map(svdfact, as)
+for i in 1:n
+    @test cs[i][:U] ≈ svdas[i][:U]
+    @test cs[i][:S] ≈ svdas[i][:S]
+    @test cs[i][:V] ≈ svdas[i][:V]
+end
+
 # Test asyncmap
 @test allunique(asyncmap(x->(sleep(1.0);object_id(current_task())), 1:10))
+
+# num tasks
+@test length(unique(asyncmap(x->(yield();object_id(current_task())), 1:20; ntasks=5))) == 5
+
+# default num tasks
+@test length(unique(asyncmap(x->(yield();object_id(current_task())), 1:200))) == 100
+
+# ntasks as a function
+let nt=0
+    global nt_func
+    nt_func() = (v=div(nt, 25); nt+=1; v)  # increment number of tasks by 1 for every 25th call.
+                                           # nt_func() will be called initally once and then for every
+                                           # iteration
+end
+@test length(unique(asyncmap(x->(yield();object_id(current_task())), 1:200; ntasks=nt_func))) == 7
+
+# batch mode tests
+let ctr=0
+    global next_ctr
+    next_ctr() = (ctr+=1; ctr)
+end
+resp = asyncmap(x->(v=next_ctr(); map(_->v, x)), 1:22; ntasks=5, batch_size=5)
+@test length(resp) == 22
+@test length(unique(resp)) == 5
+
+input = rand(1:1000, 100)
+@test asyncmap(x->map(args->identity(args...), x), input; ntasks=5, batch_size=5) == input
 
 # check whether shape is retained
 a=rand(2,2)
@@ -790,9 +821,50 @@ b=asyncmap(identity, c)
 @test size(b) == (10,)
 
 # check with an iterator that has only implements length()
-len_iter = (1,2,3,4,5)
-@test Base.iteratorsize(len_iter) == Base.HasLength()
-@test asyncmap(identity, len_iter) == Any[1,2,3,4,5]
+len_only_iterable = (1,2,3,4,5)
+@test Base.iteratorsize(len_only_iterable) == Base.HasLength()
+@test asyncmap(identity, len_only_iterable) == map(identity, len_only_iterable)
+
+# Error conditions
+@test_throws ArgumentError asyncmap(identity, 1:10; batch_size=0)
+@test_throws ArgumentError asyncmap(identity, 1:10; batch_size="10")
+@test_throws ArgumentError asyncmap(identity, 1:10; ntasks="10")
+
+# asyncmap and pmap with various types. Test for equivalence with map
+function testmap_equivalence(f, c...)
+    x1 = asyncmap(f,c...)
+    x2 = pmap(f,c...)
+    x3 = map(f,c...)
+
+    if Base.iteratorsize == Base.HasShape()
+        @test size(x1) == size(x3)
+        @test size(x2) == size(x3)
+    else
+        @test length(x1) == length(x3)
+        @test length(x2) == length(x3)
+    end
+
+    @test eltype(x1) == eltype(x3)
+    @test eltype(x2) == eltype(x3)
+
+    for (v1,v2) in zip(x1,x3)
+        @test v1==v2
+    end
+    for (v1,v2) in zip(x2,x3)
+        @test v1==v2
+    end
+end
+
+testmap_equivalence(identity, (1,2,3,4))
+testmap_equivalence(x->x>0?1.0:0.0, sparse(eye(5)))
+testmap_equivalence((x,y,z)->x+y+z, 1,2,3)
+testmap_equivalence(x->x?false:true, BitArray(10,10))
+testmap_equivalence(x->"foobar", BitArray(10,10))
+testmap_equivalence((x,y,z)->string(x,y,z), BitArray(10), ones(10), "1234567890")
+
+@test asyncmap(uppercase, "Hello World!") == map(uppercase, "Hello World!")
+@test pmap(uppercase, "Hello World!") == map(uppercase, "Hello World!")
+
 
 # Test that the default worker pool cycles through all workers
 pmap(_->myid(), 1:nworkers())  # priming run
@@ -873,9 +945,7 @@ if is_unix() # aka have ssh
             end
         end
 
-        @test :ok == remotecall_fetch(1, new_pids) do p
-            rmprocs(p; waitfor=5.0)
-        end
+        remotecall_fetch(plst->rmprocs(plst; waitfor=5.0), 1, new_pids)
     end
 
     print("\n\nTesting SSHManager. A minimum of 4GB of RAM is recommended.\n")
@@ -920,16 +990,6 @@ if is_unix() # aka have ssh
     test_n_remove_pids(new_pids)
 end # unix-only
 end # full-test
-
-# issue #7727
-let A = [], B = []
-    t = @task produce(11)
-    @sync begin
-        @async for x in t; push!(A,x); end
-        @async for x in t; push!(B,x); end
-    end
-    @test (A == [11]) != (B == [11])
-end
 
 let t = @task 42
     schedule(t, ErrorException(""), error=true)
@@ -1039,8 +1099,21 @@ remotecall_fetch(()->eval(:(f16091a() = 2)), wid)
 f16091b = () -> 1
 remotecall_fetch(()->eval(:(f16091b = () -> 2)), wid)
 @test remotecall_fetch(f16091b, 2) === 1
-@test remotecall_fetch((myid)->remotecall_fetch(f16091b, myid), wid, myid()) === 2
+# Global anonymous functions are over-written...
+@test remotecall_fetch((myid)->remotecall_fetch(f16091b, myid), wid, myid()) === 1
 
+# ...while local anonymous functions are by definition, local.
+let
+    f16091c = () -> 1
+    @test remotecall_fetch(f16091c, 2) === 1
+    @test remotecall_fetch(
+        myid -> begin
+            let
+                f16091c = () -> 2
+                remotecall_fetch(f16091c, myid)
+            end
+        end, wid, myid()) === 2
+end
 
 # issue #16451
 rng=RandomDevice()
@@ -1131,7 +1204,7 @@ function test_blas_config(pid, expected)
 end
 
 function test_add_procs_threaded_blas()
-    if get_num_threads() == nothing
+    if get_num_threads() === nothing
         warn("Skipping blas num threads tests due to unsupported blas version")
         return
     end
@@ -1170,3 +1243,239 @@ function test_add_procs_threaded_blas()
     rmprocs(processes_added)
 end
 test_add_procs_threaded_blas()
+
+#19687
+# ensure no race conditions between rmprocs and addprocs
+for i in 1:5
+    p = addprocs(1)[1]
+    @spawnat p sleep(5)
+    rmprocs(p; waitfor=0)
+end
+
+# Test if a wait has been called on rmprocs(...;waitfor=0), further remotecalls
+# don't throw errors.
+for i in 1:5
+    p = addprocs(1)[1]
+    np = nprocs()
+    @spawnat p sleep(5)
+    wait(rmprocs(p; waitfor=0))
+    for pid in procs()
+        @test pid == remotecall_fetch(myid, pid)
+    end
+    @test nprocs() == np - 1
+end
+
+# Test that an exception is thrown if workers are unable to be removed within requested time.
+if DoFullTest
+    pids=addprocs(4);
+    @test_throws ErrorException rmprocs(pids; waitfor=0.001);
+end
+
+# Auto serialization of globals from Main.
+# bitstypes
+global v1 = 1
+@test remotecall_fetch(()->v1, id_other) == v1
+@test remotecall_fetch(()->isdefined(Main, :v1), id_other)
+for i in 2:5
+    global v1 = i
+    @test remotecall_fetch(()->v1, id_other) == i
+end
+
+# non-bitstypes
+global v2 = zeros(10)
+for i in 1:5
+    v2[i] = i
+    @test remotecall_fetch(()->v2, id_other) == v2
+end
+
+# Test that a global is not being repeatedly serialized when
+# a) referenced multiple times in the closure
+# b) hash value has not changed.
+
+@everywhere begin
+    global testsercnt_d = Dict()
+    type TestSerCnt
+        v
+    end
+    import Base.hash, Base.==
+    hash(x::TestSerCnt, h::UInt) = hash(hash(x.v), h)
+    ==(x1::TestSerCnt, x2::TestSerCnt) = (x1.v == x2.v)
+
+    function Base.serialize(s::AbstractSerializer, t::TestSerCnt)
+        Base.Serializer.serialize_type(s, TestSerCnt)
+        serialize(s, t.v)
+        global testsercnt_d
+        cnt = get!(testsercnt_d, object_id(t), 0)
+        testsercnt_d[object_id(t)] = cnt+1
+    end
+
+    Base.deserialize(s::AbstractSerializer, ::Type{TestSerCnt}) = TestSerCnt(deserialize(s))
+end
+
+# hash value of tsc is not changed
+global tsc = TestSerCnt(zeros(10))
+for i in 1:5
+    remotecall_fetch(()->tsc, id_other)
+end
+# should have been serialized only once
+@test testsercnt_d[object_id(tsc)] == 1
+
+# hash values are changed
+n=5
+testsercnt_d[object_id(tsc)] = 0
+for i in 1:n
+    tsc.v[i] = i
+    remotecall_fetch(()->tsc, id_other)
+end
+# should have been serialized as many times as the loop
+@test testsercnt_d[object_id(tsc)] == n
+
+# Multiple references in a closure should be serialized only once.
+global mrefs = TestSerCnt(ones(10))
+@test remotecall_fetch(()->(mrefs.v, 2*mrefs.v, 3*mrefs.v), id_other) == (ones(10), 2*ones(10), 3*ones(10))
+@test testsercnt_d[object_id(mrefs)] == 1
+
+
+# nested anon functions
+global f1 = x->x
+global f2 = x->f1(x)
+v = rand()
+@test remotecall_fetch(f2, id_other, v) == v
+@test remotecall_fetch(x->f2(x), id_other, v) == v
+
+# consts
+const c1 = ones(10)
+@test remotecall_fetch(()->c1, id_other) == c1
+@test remotecall_fetch(()->isconst(Main, :c1), id_other)
+
+# Test same calls with local vars
+function wrapped_var_ser_tests()
+    # bitstypes
+    local lv1 = 1
+    @test remotecall_fetch(()->lv1, id_other) == lv1
+    @test !remotecall_fetch(()->isdefined(Main, :lv1), id_other)
+    for i in 2:5
+        lv1 = i
+        @test remotecall_fetch(()->lv1, id_other) == i
+    end
+
+    # non-bitstypes
+    local lv2 = zeros(10)
+    for i in 1:5
+        lv2[i] = i
+        @test remotecall_fetch(()->lv2, id_other) == lv2
+    end
+
+    # nested anon functions
+    local lf1 = x->x
+    local lf2 = x->lf1(x)
+    v = rand()
+    @test remotecall_fetch(lf2, id_other, v) == v
+    @test remotecall_fetch(x->lf2(x), id_other, v) == v
+end
+
+wrapped_var_ser_tests()
+
+# Test internal data structures being cleaned up upon gc.
+global ids_cleanup = ones(6)
+global ids_func = ()->ids_cleanup
+
+clust_ser = (Base.worker_from_id(id_other)).w_serializer
+@test remotecall_fetch(ids_func, id_other) == ids_cleanup
+
+@test haskey(clust_ser.glbs_sent, object_id(ids_cleanup))
+finalize(ids_cleanup)
+@test !haskey(clust_ser.glbs_sent, object_id(ids_cleanup))
+
+# TODO Add test for cleanup from `clust_ser.glbs_in_tnobj`
+
+# reported github issues - Mostly tests with globals and various parallel macros
+#2669, #5390
+v2669=10
+@test fetch(@spawn (1+v2669)) == 11
+
+#12367
+refs = []
+if true
+    n = 10
+    for p in procs()
+        push!(refs, @spawnat p begin
+            @sync for i in 1:n
+                nothing
+            end
+        end)
+    end
+end
+foreach(wait, refs)
+
+#14399
+s = convert(SharedArray, [1,2,3,4])
+@test pmap(i->length(s), 1:2) == [4,4]
+
+#6760
+if true
+    a = 2
+    x = @parallel (vcat) for k=1:2
+        sin(a)
+    end
+end
+@test x == map(_->sin(2), 1:2)
+
+# Testing clear!
+function setup_syms(n, pids)
+    syms = []
+    for i in 1:n
+        symstr = string("clrtest", randstring())
+        sym = Symbol(symstr)
+        eval(:(global $sym = rand()))
+        for p in pids
+            eval(:(@test $sym == remotecall_fetch(()->$sym, $p)))
+            eval(:(@test remotecall_fetch(isdefined, $p, Symbol($symstr))))
+        end
+        push!(syms, sym)
+    end
+    syms
+end
+
+function test_clear(syms, pids)
+    for p in pids
+        for sym in syms
+            remote_val = remotecall_fetch(()->getfield(Main, sym), p)
+            @test remote_val === nothing
+            @test remote_val != getfield(Main, sym)
+        end
+    end
+end
+
+syms = setup_syms(1, [id_other])
+clear!(syms[1], id_other)
+test_clear(syms, [id_other])
+
+syms = setup_syms(1, workers())
+clear!(syms[1], workers())
+test_clear(syms, workers())
+
+syms = setup_syms(3, [id_other])
+clear!(syms, id_other)
+test_clear(syms, [id_other])
+
+syms = setup_syms(3, workers())
+clear!(syms, workers())
+test_clear(syms, workers())
+
+# Test partial recovery from a deserialization error in CapturedException
+try
+    expr = quote
+                type DontExistOn1
+                    x
+                end
+                throw(BoundsError(DontExistOn1(1), 1))
+           end
+
+    remotecall_fetch(()->eval(expr), id_other)
+    error("unexpected")
+catch ex
+    @test isa(ex.captured.ex.exceptions[1].ex, ErrorException)
+    @test contains(ex.captured.ex.exceptions[1].ex.msg, "BoundsError")
+    @test ex.captured.ex.exceptions[2].ex == UndefVarError(:DontExistOn1)
+end

@@ -71,6 +71,8 @@ init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH) = Di
 
 function __init__()
     vers = "v$(VERSION.major).$(VERSION.minor)"
+    vers = ccall(:jl_uses_cpuid_tag, Cint, ()) == 0 ? vers :
+        joinpath(vers,hex(ccall(:jl_cpuid_tag, UInt64, ()), 2*sizeof(UInt64)))
     unshift!(Base.LOAD_CACHE_PATH, abspath(Dir._pkgroot(), "lib", vers))
 end
 
@@ -124,7 +126,8 @@ installed() = cd(Entry.installed)
 """
     installed(pkg) -> Void | VersionNumber
 
-If `pkg` is installed, return the installed version number, otherwise return `nothing`.
+If `pkg` is installed, return the installed version number. If `pkg` is registered,
+but not installed, return `nothing`.
 """
 installed(pkg::AbstractString) = cd(Entry.installed,pkg)
 

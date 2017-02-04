@@ -47,7 +47,7 @@ X = [2 3 1 -1; 7 4 5 -4]
 @test median!([1 2; 3 4]) == 2.5
 
 
-@test invoke(median, (AbstractVector,), 1:10) == median(1:10) == 5.5
+@test invoke(median, Tuple{AbstractVector}, 1:10) == median(1:10) == 5.5
 
 # mean
 @test_throws ArgumentError mean(())
@@ -317,18 +317,14 @@ let tmp = linspace(1, 85, 100)
     @test cor(tmp, tmp2) <= 1.0
 end
 
-
-@test midpoints(1.0:1.0:10.0) == 1.5:1.0:9.5
-@test midpoints(1:10) == 1.5:9.5
-@test midpoints(Float64[1.0:1.0:10.0;]) == Float64[1.5:1.0:9.5;]
-
 @test quantile([1,2,3,4],0.5) == 2.5
 @test quantile([1,2,3,4],[0.5]) == [2.5]
 @test quantile([1., 3],[.25,.5,.75])[2] == median([1., 3])
 @test quantile(100.0:-1.0:0.0, 0.0:0.1:1.0) == collect(0.0:10.0:100.0)
 @test quantile(0.0:100.0, 0.0:0.1:1.0, sorted=true) == collect(0.0:10.0:100.0)
 @test quantile(100f0:-1f0:0.0, 0.0:0.1:1.0) == collect(0f0:10f0:100f0)
-
+@test quantile([Inf,Inf],0.5) == Inf
+@test quantile([-Inf,1],0.5) == -Inf
 @test quantile([0,1],1e-18) == 1e-18
 
 # StatsBase issue 164
@@ -337,14 +333,14 @@ y = [0.40003674665581906,0.4085630862624367,0.41662034698690303,0.41662034698690
 
 # variance of complex arrays (#13309)
 let z = rand(Complex128, 10)
-    @test var(z) ≈ invoke(var, (Any,), z) ≈ cov(z) ≈ var(z,1)[1] ≈ sumabs2(z - mean(z))/9
+    @test var(z) ≈ invoke(var, Tuple{Any}, z) ≈ cov(z) ≈ var(z,1)[1] ≈ sum(abs2, z - mean(z))/9
     @test isa(var(z), Float64)
-    @test isa(invoke(var, (Any,), z), Float64)
+    @test isa(invoke(var, Tuple{Any}, z), Float64)
     @test isa(cov(z), Float64)
     @test isa(var(z,1), Vector{Float64})
-    @test varm(z, 0.0) ≈ invoke(varm, (Any,Float64), z, 0.0) ≈ sumabs2(z)/9
+    @test varm(z, 0.0) ≈ invoke(varm, Tuple{Any,Float64}, z, 0.0) ≈ sum(abs2, z)/9
     @test isa(varm(z, 0.0), Float64)
-    @test isa(invoke(varm, (Any,Float64), z, 0.0), Float64)
+    @test isa(invoke(varm, Tuple{Any,Float64}, z, 0.0), Float64)
     @test cor(z) === 1.0
 end
 let v = varm([1.0+2.0im], 0; corrected = false)

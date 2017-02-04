@@ -10,6 +10,17 @@ typealias Indices{N} NTuple{N,AbstractUnitRange}
     <:(T1, T2)
 
 Subtype operator, equivalent to `issubtype(T1,T2)`.
+
+```jldoctest
+julia> Float64 <: AbstractFloat
+true
+
+julia> Vector{Int} <: AbstractArray
+true
+
+julia> Matrix{Float64} <: Matrix{AbstractFloat}
+false
+```
 """
 const (<:) = issubtype
 
@@ -23,7 +34,15 @@ julia> supertype(Int32)
 Signed
 ```
 """
-supertype(T::DataType) = T.super
+function supertype(T::DataType)
+    @_pure_meta
+    T.super
+end
+
+function supertype(T::UnionAll)
+    @_pure_meta
+    UnionAll(T.var, supertype(T.body))
+end
 
 ## generic comparison ##
 
@@ -47,26 +66,22 @@ corresponding `hash` (and vice versa). Collections typically implement `isequal`
 Scalar types generally do not need to implement `isequal` separate from `==`, unless they
 represent floating-point numbers amenable to a more efficient implementation than that
 provided as a generic fallback (based on `isnan`, `signbit`, and `==`).
+
+```jldoctest
+julia> isequal([1., NaN], [1., NaN])
+true
+
+julia> [1., NaN] == [1., NaN]
+false
+
+julia> 0.0 == -0.0
+true
+
+julia> isequal(0.0, -0.0)
+false
+```
 """
 isequal(x, y) = x == y
-
-# TODO: these can be deleted once the deprecations of ==(x::Char, y::Integer) and
-# ==(x::Integer, y::Char) are gone and the above returns false anyway
-isequal(x::Char, y::Integer) = false
-isequal(x::Integer, y::Char) = false
-
-## minimally-invasive changes to test == causing NotComparableError
-# export NotComparableError
-# =={T}(x::T, y::T) = x === y
-# immutable NotComparableError <: Exception end
-# const NotComparable = NotComparableError()
-# ==(x::ANY, y::ANY) = NotComparable
-# !(e::NotComparableError) = throw(e)
-# isequal(x, y) = (x == y) === true
-
-## alternative NotComparableError which captures context
-# immutable NotComparableError; a; b; end
-# ==(x::ANY, y::ANY) = NotComparableError(x, y)
 
 isequal(x::AbstractFloat, y::AbstractFloat) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
 isequal(x::Real,          y::AbstractFloat) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
@@ -95,8 +110,16 @@ end
 
 Not-equals comparison operator. Always gives the opposite answer as `==`. New types should
 generally not implement this, and rely on the fallback definition `!=(x,y) = !(x==y)` instead.
+
+```jldoctest
+julia> 3 != 2
+true
+
+julia> "foo" ≠ "foo"
+false
+```
 """
-!=(x,y) = !(x==y)
+!=(x, y) = !(x == y)
 const ≠ = !=
 
 """
@@ -106,6 +129,19 @@ const ≠ = !=
 Determine whether `x` and `y` are identical, in the sense that no program could distinguish
 them. Compares mutable objects by address in memory, and compares immutable objects (such as
 numbers) by contents at the bit level. This function is sometimes called `egal`.
+
+```jldoctest
+julia> a = [1, 2]; b = [1, 2];
+
+julia> a == b
+true
+
+julia> a === b
+false
+
+julia> a === a
+true
+```
 """
 ===
 const ≡ = ===
@@ -115,8 +151,18 @@ const ≡ = ===
     ≢(x,y)
 
 Equivalent to `!(x === y)`.
+
+```jldoctest
+julia> a = [1, 2]; b = [1, 2];
+
+julia> a ≢ b
+true
+
+julia> a ≢ a
+false
+```
 """
-!==(x,y) = !(x===y)
+!==(x, y) = !(x === y)
 const ≢ = !==
 
 """
@@ -126,24 +172,63 @@ Less-than comparison operator. New numeric types should implement this function 
 arguments of the new type. Because of the behavior of floating-point NaN values, `<`
 implements a partial order. Types with a canonical partial order should implement `<`, and
 types with a canonical total order should implement `isless`.
+
+```jldoctest
+julia> 'a' < 'b'
+true
+
+julia> "abc" < "abd"
+true
+
+julia> 5 < 3
+false
+```
 """
-<(x,y) = isless(x,y)
+<(x, y) = isless(x, y)
 
 """
     >(x, y)
 
 Greater-than comparison operator. Generally, new types should implement `<` instead of this
-function, and rely on the fallback definition `>(x,y) = y<x`.
+function, and rely on the fallback definition `>(x, y) = y < x`.
+
+```jldoctest
+julia> 'a' > 'b'
+false
+
+julia> 7 > 3 > 1
+true
+
+julia> "abc" > "abd"
+false
+
+julia> 5 > 3
+true
+```
 """
->(x,y) = y < x
+>(x, y) = y < x
 
 """
     <=(x, y)
     ≤(x,y)
 
 Less-than-or-equals comparison operator.
+
+```jldoctest
+julia> 'a' <= 'b'
+true
+
+julia> 7 ≤ 7 ≤ 9
+true
+
+julia> "abc" ≤ "abc"
+true
+
+julia> 5 <= 3
+false
+```
 """
-<=(x,y) = !(y < x)
+<=(x, y) = !(y < x)
 const ≤ = <=
 
 """
@@ -151,25 +236,23 @@ const ≤ = <=
     ≥(x,y)
 
 Greater-than-or-equals comparison operator.
+
+```jldoctest
+julia> 'a' >= 'b'
+false
+
+julia> 7 ≥ 7 ≥ 3
+true
+
+julia> "abc" ≥ "abc"
+true
+
+julia> 5 >= 3
+true
+```
 """
->=(x,y) = (y <= x)
+>=(x, y) = (y <= x)
 const ≥ = >=
-
-"""
-    .>(x, y)
-
-Element-wise greater-than comparison operator.
-"""
-.>(x,y) = y .< x
-
-"""
-    .>=(x, y)
-    .≥(x,y)
-
-Element-wise greater-than-or-equals comparison operator.
-"""
-.>=(x,y) = y .<= x
-const .≥ = .>=
 
 # this definition allows Number types to implement < instead of isless,
 # which is more idiomatic:
@@ -183,6 +266,11 @@ Return `x` if `condition` is `true`, otherwise return `y`. This differs from `?`
 that it is an ordinary function, so all the arguments are evaluated first. In some cases,
 using `ifelse` instead of an `if` statement can eliminate the branch in generated code and
 provide higher performance in tight loops.
+
+```jldoctest
+julia> ifelse(1 > 2, 1, 2)
+2
+```
 """
 ifelse(c::Bool, x, y) = select_value(c, x, y)
 
@@ -192,8 +280,20 @@ ifelse(c::Bool, x, y) = select_value(c, x, y)
 Return -1, 0, or 1 depending on whether `x` is less than, equal to, or greater than `y`,
 respectively. Uses the total order implemented by `isless`. For floating-point numbers, uses `<`
 but throws an error for unordered arguments.
+
+```jldoctest
+julia> cmp(1, 2)
+-1
+
+julia> cmp(2, 1)
+1
+
+julia> cmp(2+im, 3-im)
+ERROR: MethodError: no method matching isless(::Complex{Int64}, ::Complex{Int64})
+[...]
+```
 """
-cmp(x,y) = isless(x,y) ? -1 : ifelse(isless(y,x), 1, 0)
+cmp(x, y) = isless(x, y) ? -1 : ifelse(isless(y, x), 1, 0)
 
 """
     lexcmp(x, y)
@@ -201,43 +301,66 @@ cmp(x,y) = isless(x,y) ? -1 : ifelse(isless(y,x), 1, 0)
 Compare `x` and `y` lexicographically and return -1, 0, or 1 depending on whether `x` is
 less than, equal to, or greater than `y`, respectively. This function should be defined for
 lexicographically comparable types, and `lexless` will call `lexcmp` by default.
+
+```jldoctest
+julia> lexcmp("abc", "abd")
+-1
+
+julia> lexcmp("abc", "abc")
+0
+```
 """
-lexcmp(x,y) = cmp(x,y)
+lexcmp(x, y) = cmp(x, y)
 
 """
     lexless(x, y)
 
 Determine whether `x` is lexicographically less than `y`.
+
+```jldoctest
+julia> lexless("abc", "abd")
+true
+```
 """
-lexless(x,y) = lexcmp(x,y)<0
+lexless(x, y) = lexcmp(x,y) < 0
 
 # cmp returns -1, 0, +1 indicating ordering
-cmp(x::Integer, y::Integer) = ifelse(isless(x,y), -1, ifelse(isless(y,x), 1, 0))
+cmp(x::Integer, y::Integer) = ifelse(isless(x, y), -1, ifelse(isless(y, x), 1, 0))
 
 """
     max(x, y, ...)
 
-Return the maximum of the arguments. See also the [`maximum`](:func:`maximum`) function
+Return the maximum of the arguments. See also the [`maximum`](@ref) function
 to take the maximum element from a collection.
+
+```jldoctest
+julia> max(2, 5, 1)
+5
+```
 """
-max(x,y) = ifelse(y < x, x, y)
+max(x, y) = ifelse(y < x, x, y)
 
 """
     min(x, y, ...)
 
-Return the minimum of the arguments. See also the [`minimum`](:func:`minimum`) function
+Return the minimum of the arguments. See also the [`minimum`](@ref) function
 to take the minimum element from a collection.
+
+```jldoctest
+julia> min(2, 5, 1)
+1
+```
 """
 min(x,y) = ifelse(y < x, y, x)
 
 """
     minmax(x, y)
 
-Return `(min(x,y), max(x,y))`. See also: [`extrema`](:func:`extrema`) that returns `(minimum(x), maximum(x))`.
+Return `(min(x,y), max(x,y))`. See also: [`extrema`](@ref) that returns `(minimum(x), maximum(x))`.
 
 ```jldoctest
 julia> minmax('c','b')
-('b','c')
+('b', 'c')
 ```
 """
 minmax(x,y) = y < x ? (y, x) : (x, y)
@@ -258,6 +381,11 @@ scalarmin(x::AbstractArray, y               ) = throw(ArgumentError("ordering is
     identity(x)
 
 The identity function. Returns its argument.
+
+```jldoctest
+julia> identity("Well, what did you expect?")
+"Well, what did you expect?"
+```
 """
 identity(x) = x
 
@@ -298,40 +426,28 @@ end
 
 Left division operator: multiplication of `y` by the inverse of `x` on the left. Gives
 floating-point results for integer arguments.
+
+```jldoctest
+julia> 3 \\ 6
+2.0
+
+julia> inv(3) * 6
+2.0
+
+julia> A = [1 2; 3 4]; x = [5, 6];
+
+julia> A \\ x
+2-element Array{Float64,1}:
+ -4.0
+  4.5
+
+julia> inv(A) * x
+2-element Array{Float64,1}:
+ -4.0
+  4.5
+```
 """
 \(x,y) = (y'/x')'
-
-# .<op> defaults to <op>
-./(x::Number,y::Number) = x/y
-.\(x::Number,y::Number) = y./x
-.*(x::Number,y::Number) = x*y
-.^(x::Number,y::Number) = x^y
-.+(x::Number,y::Number) = x+y
-.-(x::Number,y::Number) = x-y
-.<<(x::Integer,y::Integer) = x<<y
-.>>(x::Integer,y::Integer) = x>>y
-
-.==(x::Number,y::Number) = x == y
-
-"""
-    .!=(x, y)
-    .≠(x,y)
-
-Element-wise not-equals comparison operator.
-"""
-.!=(x::Number,y::Number) = x != y
-.<( x::Real,y::Real) = x < y
-
-"""
-    .<=(x, y)
-    .≤(x,y)
-
-Element-wise less-than-or-equals comparison operator.
-"""
-.<=(x::Real,y::Real) = x <= y
-
-const .≤ = .<=
-const .≠ = .!=
 
 # Core <<, >>, and >>> take either Int or UInt as second arg. Signed shift
 # counts can shift in either direction, and are translated here to unsigned
@@ -354,7 +470,7 @@ julia> bits(Int8(3))
 julia> bits(Int8(12))
 "00001100"
 ```
-See also [`>>`](:func:`>>`), [`>>>`](:func:`>>>`).
+See also [`>>`](@ref), [`>>>`](@ref).
 """
 function <<(x::Integer, c::Integer)
     typemin(Int) <= c <= typemax(Int) && return x << (c % Int)
@@ -392,7 +508,7 @@ julia> bits(Int8(-14))
 julia> bits(Int8(-4))
 "11111100"
 ```
-See also [`>>>`](:func:`>>>`), [`<<`](:func:`<<`).
+See also [`>>>`](@ref), [`<<`](@ref).
 """
 function >>(x::Integer, c::Integer)
     typemin(Int) <= c <= typemax(Int) && return x >> (c % Int)
@@ -409,7 +525,7 @@ Unsigned right bit shift operator, `x >>> n`. For `n >= 0`, the result is `x`
 shifted right by `n` bits, where `n >= 0`, filling with `0`s. For `n < 0`, this
 is equivalent to `x << -n`.
 
-For `Unsigned` integer types, this is equivalent to [`>>`](:func:`>>`). For
+For `Unsigned` integer types, this is equivalent to [`>>`](@ref). For
 `Signed` integer types, this is equivalent to `signed(unsigned(x) >> n)`.
 
 ```jldoctest
@@ -423,9 +539,9 @@ julia> bits(Int8(60))
 "00111100"
 ```
 `BigInt`s are treated as if having infinite size, so no filling is required and this
-is equivalent to [`>>`](:func:`>>`).
+is equivalent to [`>>`](@ref).
 
-See also [`>>`](:func:`>>`), [`<<`](:func:`<<`).
+See also [`>>`](@ref), [`<<`](@ref).
 """
 >>>(x::Integer, c::Integer) =
     typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x)
@@ -472,34 +588,53 @@ modCeil{T<:Real}(x::T, y::T) = convert(T,x-y*ceil(x/y))
 Remainder from Euclidean division, returning a value of the same sign as `x`, and smaller in
 magnitude than `y`. This value is always exact.
 
-```julia
-x == div(x,y)*y + rem(x,y)
+```jldoctest
+julia> x = 15; y = 4;
+
+julia> x % y
+3
+
+julia> x == div(x, y) * y + rem(x, y)
+true
 ```
 """
 rem
 const % = rem
-.%(x::Real, y::Real) = x%y
 
 """
     div(x, y)
     ÷(x, y)
 
 The quotient from Euclidean division. Computes `x/y`, truncated to an integer.
+
+```jldoctest
+julia> 9 ÷ 4
+2
+
+julia> -5 ÷ 3
+-1
+```
 """
 div
 const ÷ = div
-.÷(x::Real, y::Real) = x÷y
-
 
 """
     mod1(x, y)
 
 Modulus after flooring division, returning a value `r` such that `mod(r, y) == mod(x, y)`
- in the range ``(0, y]`` for positive `y` and in the range ``[y,0)`` for negative `y`.
+in the range ``(0, y]`` for positive `y` and in the range ``[y,0)`` for negative `y`.
+
+```jldoctest
+julia> mod1(4, 2)
+2
+
+julia> mod1(4, 3)
+1
+```
 """
-mod1{T<:Real}(x::T, y::T) = (m=mod(x,y); ifelse(m==0, y, m))
+mod1{T<:Real}(x::T, y::T) = (m = mod(x, y); ifelse(m == 0, y, m))
 # efficient version for integers
-mod1{T<:Integer}(x::T, y::T) = mod(x+y-T(1),y)+T(1)
+mod1{T<:Integer}(x::T, y::T) = mod(x + y - T(1), y) + T(1)
 
 
 """
@@ -507,9 +642,19 @@ mod1{T<:Integer}(x::T, y::T) = mod(x+y-T(1),y)+T(1)
 
 Flooring division, returning a value consistent with `mod1(x,y)`
 
-```julia
-x == fld(x,y)*y + mod(x,y)
-x == (fld1(x,y)-1)*y + mod1(x,y)
+See also: [`mod1`](@ref).
+
+```jldoctest
+julia> x = 15; y = 4;
+
+julia> fld1(x, y)
+4
+
+julia> x == fld(x, y) * y + mod(x, y)
+true
+
+julia> x == (fld1(x, y) - 1) * y + mod1(x, y)
+true
 ```
 """
 fld1{T<:Real}(x::T, y::T) = (m=mod(x,y); fld(x-m,y))
@@ -520,6 +665,8 @@ fld1{T<:Integer}(x::T, y::T) = fld(x+y-T(1),y)
     fldmod1(x, y)
 
 Return `(fld1(x,y), mod1(x,y))`.
+
+See also: [`fld1`](@ref), [`mod1`](@ref).
 """
 fldmod1{T<:Real}(x::T, y::T) = (fld1(x,y), mod1(x,y))
 # efficient version for integers
@@ -531,6 +678,20 @@ fldmod1{T<:Integer}(x::T, y::T) = (fld1(x,y), mod1(x,y))
     ctranspose(A)
 
 The conjugate transposition operator (`'`).
+
+# Example
+
+```jldoctest
+julia> A =  [3+2im 9+2im; 8+7im  4+6im]
+2×2 Array{Complex{Int64},2}:
+ 3+2im  9+2im
+ 8+7im  4+6im
+
+julia> ctranspose(A)
+2×2 Array{Complex{Int64},2}:
+ 3-2im  8-7im
+ 9-2im  4-6im
+```
 """
 ctranspose(x) = conj(transpose(x))
 conj(x) = x
@@ -682,6 +843,14 @@ For associative collection types, this will be a `Pair{KeyType,ValType}`. The de
 `eltype(x) = eltype(typeof(x))` is provided for convenience so that instances can be passed
 instead of types. However the form that accepts a type argument should be defined for new
 types.
+
+```jldoctest
+julia> eltype(ones(Float32,2,2))
+Float32
+
+julia> eltype(ones(Int8,2,2))
+Int8
+```
 """
 eltype(::Type) = Any
 eltype(::Type{Any}) = Any
@@ -701,6 +870,48 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
 ```
 """
 |>(x, f) = f(x)
+
+# function composition
+
+"""
+    f ∘ g
+
+Compose functions: i.e. `(f ∘ g)(args...)` means `f(g(args...))`. The `∘` symbol can be
+entered in the Julia REPL (and most editors, appropriately configured) by typing `\\circ<tab>`.
+Example:
+
+```jldoctest
+julia> map(uppercase∘hex, 250:255)
+6-element Array{String,1}:
+ "FA"
+ "FB"
+ "FC"
+ "FD"
+ "FE"
+ "FF"
+```
+"""
+∘(f, g) = (x...)->f(g(x...))
+
+
+"""
+    !f::Function
+
+Predicate function negation: when the argument of `!` is a function, it returns a
+function which computes the boolean negation of `f`. Example:
+
+```jldoctest
+julia> str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
+"∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
+
+julia> filter(isalpha, str)
+"εδxyδfxfyε"
+
+julia> filter(!isalpha, str)
+"∀  > 0, ∃  > 0: |-| <  ⇒ |()-()| < "
+```
+"""
+!(f::Function) = (x...)->!f(x...)
 
 # array shape rules
 
@@ -741,10 +952,10 @@ julia> a = ones(3,4,1,1,1);
 julia> b = ones(3,4);
 
 julia> promote_shape(a,b)
-(Base.OneTo(3),Base.OneTo(4),Base.OneTo(1),Base.OneTo(1),Base.OneTo(1))
+(Base.OneTo(3), Base.OneTo(4), Base.OneTo(1), Base.OneTo(1), Base.OneTo(1))
 
-julia> promote_shape((2,3,1,4), (2,3,1,4,1))
-(2,3,1,4,1)
+julia> promote_shape((2,3,1,4), (2, 3, 1, 4, 1))
+(2, 3, 1, 4, 1)
 ```
 """
 function promote_shape(a::Dims, b::Dims)
@@ -855,19 +1066,95 @@ function setindex_shape_check{T}(X::AbstractArray{T,2}, i::Integer, j::Integer)
 end
 setindex_shape_check(X, I...) = nothing # Non-arrays broadcast to all idxs
 
-# convert to a supported index type (Array, Colon, or Int)
-to_index(i::Int) = i
+# convert to a supported index type (array or Int)
+"""
+    to_index(A, i)
+
+Convert index `i` to an `Int` or array of indices to be used as an index into array `A`.
+
+Custom array types may specialize `to_index(::CustomArray, i)` to provide
+special indexing behaviors. Note that some index types (like `Colon`) require
+more context in order to transform them into an array of indices; those get
+converted in the more complicated `to_indices` function. By default, this
+simply calls the generic `to_index(i)`. This must return either an `Int` or an
+`AbstractArray` of scalar indices that are supported by `A`.
+"""
+to_index(A, i) = to_index(i)
+
+"""
+    to_index(i)
+
+Convert index `i` to an `Int` or array of `Int`s to be used as an index for all arrays.
+
+Custom index types may specialize `to_index(::CustomIndex)` to provide special
+indexing behaviors. This must return either an `Int` or an `AbstractArray` of
+`Int`s.
+"""
 to_index(i::Integer) = convert(Int,i)::Int
-to_index(c::Colon) = c
-to_index(I::AbstractArray{Bool}) = find(I)
-to_index(A::AbstractArray) = A
-to_index{T<:AbstractArray}(A::AbstractArray{T}) = throw(ArgumentError("invalid index: $A"))
-to_index(A::AbstractArray{Colon}) = throw(ArgumentError("invalid index: $A"))
+to_index(I::AbstractArray{Bool}) = LogicalIndex(I)
+to_index(I::AbstractArray) = I
+to_index{T<:Union{AbstractArray, Colon}}(I::AbstractArray{T}) = throw(ArgumentError("invalid index: $I"))
+to_index(::Colon) = throw(ArgumentError("colons must be converted by to_indices(...)"))
 to_index(i) = throw(ArgumentError("invalid index: $i"))
 
-to_indexes() = ()
-to_indexes(i1) = (to_index(i1),)
-to_indexes(i1, I...) = (@_inline_meta; (to_index(i1), to_indexes(I...)...))
+# The general to_indices is mostly defined in multidimensional.jl, but this
+# definition is required for bootstrap:
+"""
+    to_indices(A, I::Tuple)
+
+Convert the tuple `I` to a tuple of indices for use in indexing into array `A`.
+
+The returned tuple must only contain either `Int`s or `AbstractArray`s of
+scalar indices that are supported by array `A`. It will error upon encountering
+a novel index type that it does not know how to process.
+
+For simple index types, it defers to the unexported `Base.to_index(A, i)` to
+process each index `i`. While this internal function is not intended to be
+called directly, `Base.to_index` may be extended by custom array or index types
+to provide custom indexing behaviors.
+
+More complicated index types may require more context about the dimension into
+which they index. To support those cases, `to_indices(A, I)` calls
+`to_indices(A, indices(A), I)`, which then recursively walks through both the
+given tuple of indices and the dimensional indices of `A` in tandem. As such,
+not all index types are guaranteed to propagate to `Base.to_index`.
+"""
+to_indices(A, I::Tuple) = (@_inline_meta; to_indices(A, indices(A), I))
+to_indices(A, inds, ::Tuple{}) = ()
+to_indices(A, inds, I::Tuple{Any, Vararg{Any}}) =
+    (@_inline_meta; (to_index(A, I[1]), to_indices(A, _maybetail(inds), tail(I))...))
+
+_maybetail(::Tuple{}) = ()
+_maybetail(t::Tuple) = tail(t)
+
+"""
+   Slice(indices)
+
+Represent an AbstractUnitRange of indices as a vector of the indices themselves.
+
+Upon calling `to_indices()`, Colons are converted to Slice objects to represent
+the indices over which the Colon spans. Slice objects are themselves unit
+ranges with the same indices as those they wrap. This means that indexing into
+Slice objects with an integer always returns that exact integer, and they
+iterate over all the wrapped indices, even supporting offset indices.
+"""
+immutable Slice{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
+    indices::T
+end
+indices(S::Slice) = (S.indices,)
+unsafe_indices(S::Slice) = (S.indices,)
+indices1(S::Slice) = S.indices
+first(S::Slice) = first(S.indices)
+last(S::Slice) = last(S.indices)
+errmsg(A) = error("size not supported for arrays with indices $(indices(A)); see http://docs.julialang.org/en/latest/devdocs/offset-arrays/")
+size(S::Slice) = first(S.indices) == 1 ? (length(S.indices),) : errmsg(S)
+length(S::Slice) = first(S.indices) == 1 ? length(S.indices) : errmsg(S)
+unsafe_length(S::Slice) = first(S.indices) == 1 ? unsafe_length(S.indices) : errmsg(S)
+getindex(S::Slice, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
+show(io::IO, r::Slice) = print(io, "Base.Slice(", r.indices, ")")
+start(S::Slice) = start(S.indices)
+next(S::Slice, s) = next(S.indices, s)
+done(S::Slice, s) = done(S.indices, s)
 
 # Addition/subtraction of ranges
 for f in (:+, :-)
@@ -879,62 +1166,28 @@ for f in (:+, :-)
             range($f(first(r1),first(r2)), $f(step(r1),step(r2)), r1l)
         end
 
-        function $f{T<:AbstractFloat}(r1::FloatRange{T}, r2::FloatRange{T})
+        function $f{T}(r1::LinSpace{T}, r2::LinSpace{T})
             len = r1.len
             (len == r2.len ||
              throw(DimensionMismatch("argument dimensions must match")))
-            divisor1, divisor2 = r1.divisor, r2.divisor
-            if divisor1 == divisor2
-                FloatRange{T}($f(r1.start,r2.start), $f(r1.step,r2.step),
-                              len, divisor1)
-            else
-                d1 = Int(divisor1)
-                d2 = Int(divisor2)
-                d = lcm(d1,d2)
-                s1 = div(d,d1)
-                s2 = div(d,d2)
-                FloatRange{T}($f(r1.start*s1, r2.start*s2),
-                              $f(r1.step*s1, r2.step*s2),  len, d)
-            end
+            linspace(convert(T, $f(first(r1), first(r2))),
+                     convert(T, $f(last(r1), last(r2))), len)
         end
 
-        function $f{T<:AbstractFloat}(r1::LinSpace{T}, r2::LinSpace{T})
-            len = r1.len
-            (len == r2.len ||
-             throw(DimensionMismatch("argument dimensions must match")))
-            divisor1, divisor2 = r1.divisor, r2.divisor
-            if divisor1 == divisor2
-                LinSpace{T}($f(r1.start, r2.start), $f(r1.stop, r2.stop),
-                            len, divisor1)
-            else
-                linspace(convert(T, $f(first(r1), first(r2))),
-                         convert(T, $f(last(r1), last(r2))), len)
-            end
-        end
-
-        $f(r1::Union{FloatRange, OrdinalRange, LinSpace},
-           r2::Union{FloatRange, OrdinalRange, LinSpace}) =
-               $f(promote(r1, r2)...)
+        $f(r1::Union{StepRangeLen, OrdinalRange, LinSpace},
+           r2::Union{StepRangeLen, OrdinalRange, LinSpace}) =
+               $f(promote_noncircular(r1, r2)...)
     end
 end
 
-# vectorized ifelse
-
-function ifelse(c::AbstractArray{Bool}, x, y)
-    [ifelse(ci, x, y) for ci in c]
+function +{T,S}(r1::StepRangeLen{T,S}, r2::StepRangeLen{T,S})
+    len = length(r1)
+    (len == length(r2) ||
+        throw(DimensionMismatch("argument dimensions must match")))
+    StepRangeLen(first(r1)+first(r2), step(r1)+step(r2), len)
 end
 
-function ifelse(c::AbstractArray{Bool}, x::AbstractArray, y::AbstractArray)
-    [ifelse(c_elem, x_elem, y_elem) for (c_elem, x_elem, y_elem) in zip(c, x, y)]
-end
-
-function ifelse(c::AbstractArray{Bool}, x::AbstractArray, y)
-    [ifelse(c_elem, x_elem, y) for (c_elem, x_elem) in zip(c, x)]
-end
-
-function ifelse(c::AbstractArray{Bool}, x, y::AbstractArray)
-    [ifelse(c_elem, x, y_elem) for (c_elem, y_elem) in zip(c, y)]
-end
+-(r1::StepRangeLen, r2::StepRangeLen) = +(r1, -r2)
 
 # Pair
 
@@ -948,6 +1201,7 @@ const => = Pair
 start(p::Pair) = 1
 done(p::Pair, i) = i>2
 next(p::Pair, i) = (getfield(p,i), i+1)
+eltype{A,B}(p::Pair{A,B}) = Union{A,B}
 
 indexed_next(p::Pair, i::Int, state) = (getfield(p,i), i+1)
 
@@ -964,6 +1218,8 @@ reverse{A,B}(p::Pair{A,B}) = Pair{B,A}(p.second, p.first)
 
 endof(p::Pair) = 2
 length(p::Pair) = 2
+first(p::Pair) = p.first
+last(p::Pair) = p.second
 
 convert{A,B}(::Type{Pair{A,B}}, x::Pair{A,B}) = x
 function convert{A,B}(::Type{Pair{A,B}}, x::Pair)
@@ -986,25 +1242,11 @@ export
     ===,
     xor,
     %,
-    .%,
     ÷,
-    .÷,
     &,
     *,
     +,
     -,
-    .!=,
-    .+,
-    .-,
-    .*,
-    ./,
-    .<,
-    .<=,
-    .==,
-    .>,
-    .>=,
-    .\,
-    .^,
     /,
     //,
     <,
@@ -1018,12 +1260,7 @@ export
     ≥,
     ≤,
     ≠,
-    .≥,
-    .≤,
-    .≠,
     >>,
-    .>>,
-    .<<,
     >>>,
     \,
     ^,
@@ -1045,6 +1282,7 @@ export
     √,
     ∛,
     ⊻,
+    ∘,
     colon,
     hcat,
     vcat,
@@ -1054,10 +1292,10 @@ export
     transpose,
     ctranspose
 
-import ..this_module: !, !=, xor, %, .%, ÷, .÷, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
-    .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
+import ..this_module: !, !=, xor, %, ÷, &, *, +, -,
+    /, //, <, <:, <<, <=, ==, >, >=, >>, >>>,
     <|, |>, \, ^, |, ~, !==, ===, >:, colon, hcat, vcat, hvcat, getindex, setindex!,
     transpose, ctranspose,
-    ≥, ≤, ≠, .≥, .≤, .≠, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛, ⊻
+    ≥, ≤, ≠, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛, ⊻, ∘
 
 end

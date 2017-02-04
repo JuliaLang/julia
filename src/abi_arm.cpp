@@ -23,9 +23,9 @@
 
 struct ABI_ARMLayout : AbiLayout {
 
-void needPassByRef(jl_datatype_t *dt, bool *byRef, bool *inReg) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
 {
-    return;
+    return false;
 }
 
 Type *get_llvm_fptype(jl_datatype_t *dt) const

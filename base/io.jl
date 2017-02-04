@@ -7,22 +7,22 @@ unlock(::IO) = nothing
 reseteof(x::IO) = nothing
 
 const SZ_UNBUFFERED_IO = 65536
-buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = nothing
+buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = x
 
 """
     isopen(object) -> Bool
 
 Determine whether an object - such as a stream, timer, or mmap -- is not yet closed. Once an
 object is closed, it will never produce a new event. However, a closed stream may still have
-data to read in its buffer, use [`eof`](:func:`eof`) to check for the ability to read data.
-Use [`poll_fd`](:func:`poll_fd`) to be notified when a stream might be writable or readable.
+data to read in its buffer, use [`eof`](@ref) to check for the ability to read data.
+Use [`poll_fd`](@ref) to be notified when a stream might be writable or readable.
 """
 function isopen end
 
 """
     close(stream)
 
-Close an I/O stream. Performs a [`flush`](:func:`flush`) first.
+Close an I/O stream. Performs a [`flush`](@ref) first.
 """
 function close end
 function flush end
@@ -113,7 +113,10 @@ flush(io::AbstractPipe) = flush(pipe_writer(io))
 read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io), byte)
 unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io), p, nb)
 read(io::AbstractPipe) = read(pipe_reader(io))
-readuntil{T<:AbstractPipe}(io::T, args...) = readuntil(pipe_reader(io), args...)
+readuntil(io::AbstractPipe, arg::UInt8)          = readuntil(pipe_reader(io), arg)
+readuntil(io::AbstractPipe, arg::Char)           = readuntil(pipe_reader(io), arg)
+readuntil(io::AbstractPipe, arg::AbstractString) = readuntil(pipe_reader(io), arg)
+readuntil(io::AbstractPipe, arg)                 = readuntil(pipe_reader(io), arg)
 readavailable(io::AbstractPipe) = readavailable(pipe_reader(io))
 
 isreadable(io::AbstractPipe) = isreadable(pipe_reader(io))
@@ -156,7 +159,6 @@ Open a file and read its contents. `args` is passed to `read`: this is equivalen
 """
 read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
 read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
-readstring(filename::AbstractString) = open(readstring, filename)
 
 """
     readuntil(stream::IO, delim)
@@ -168,24 +170,48 @@ The text is assumed to be encoded in UTF-8.
 readuntil(filename::AbstractString, args...) = open(io->readuntil(io, args...), filename)
 
 """
-    readline(stream::IO=STDIN)
-    readline(filename::AbstractString)
+    readline(stream::IO=STDIN; chomp::Bool=true)
+    readline(filename::AbstractString; chomp::Bool=true)
 
-Read a single line of text, including a trailing newline character (if one is reached before
-the end of the input), from the given I/O stream or file (defaults to `STDIN`).
-When reading from a file, the text is assumed to be encoded in UTF-8.
+Read a single line of text from the given I/O stream or file (defaults to `STDIN`).
+When reading from a file, the text is assumed to be encoded in UTF-8. Lines in the
+input end with `'\\n'` or `"\\r\\n"` or the end of an input stream. When `chomp` is
+true (as it is by default), these trailing newline characters are removed from the
+line before it is returned. When `chomp` is false, they are returned as part of the
+line.
 """
-readline(filename::AbstractString) = open(readline, filename)
+function readline(filename::AbstractString; chomp::Bool=true)
+    open(filename) do f
+        readline(f, chomp=chomp)
+    end
+end
+
+function readline(s::IO=STDIN; chomp::Bool=true)
+    line = readuntil(s, 0x0a)
+    i = length(line)
+    if !chomp || i == 0 || line[i] != 0x0a
+        return String(line)
+    elseif i < 2 || line[i-1] != 0x0d
+        return String(resize!(line,i-1))
+    else
+        return String(resize!(line,i-2))
+    end
+end
 
 """
-    readlines(stream::IO)
-    readlines(filename::AbstractString)
+    readlines(stream::IO=STDIN; chomp::Bool=true)
+    readlines(filename::AbstractString; chomp::Bool=true)
 
-Read all lines of an I/O stream or a file as a vector of strings.
-The text is assumed to be encoded in UTF-8.
+Read all lines of an I/O stream or a file as a vector of strings. Behavior is
+equivalent to saving the result of reading `readline` repeatedly with the same
+arguments and saving the resulting lines as a vector of strings.
 """
-readlines(filename::AbstractString) = open(readlines, filename)
-
+function readlines(filename::AbstractString; chomp::Bool=true)
+    open(filename) do f
+        readlines(f, chomp=chomp)
+    end
+end
+readlines(s=STDIN; chomp::Bool=true) = collect(eachline(s, chomp=chomp))
 
 ## byte-order mark, ntoh & hton ##
 
@@ -388,9 +414,13 @@ function read(s::IO, ::Type{Char})
     return Char(c)
 end
 
+# readuntil_string is useful below since it has
+# an optimized method for s::IOStream
+readuntil_string(s::IO, delim::UInt8) = String(readuntil(s, delim))
+
 function readuntil(s::IO, delim::Char)
     if delim < Char(0x80)
-        return String(readuntil(s, delim % UInt8))
+        return readuntil_string(s, delim % UInt8)
     end
     out = IOBuffer()
     while !eof(s)
@@ -448,9 +478,6 @@ function readuntil(s::IO, t::AbstractString)
     return String(take!(out))
 end
 
-readline() = readline(STDIN)
-readline(s::IO) = readuntil(s, '\n')
-
 """
     readchomp(x)
 
@@ -499,34 +526,54 @@ function read(s::IO, nb=typemax(Int))
     return resize!(b, nr)
 end
 
+"""
+    readstring(stream::IO)
+    readstring(filename::AbstractString)
+
+Read the entire contents of an I/O stream or a file as a string.
+The text is assumed to be encoded in UTF-8.
+"""
 readstring(s::IO) = String(read(s))
+readstring(filename::AbstractString) = open(readstring, filename)
 
 ## high-level iterator interfaces ##
 
 type EachLine
     stream::IO
     ondone::Function
-    EachLine(stream) = EachLine(stream, ()->nothing)
-    EachLine(stream, ondone) = new(stream, ondone)
+    chomp::Bool
+
+    EachLine(stream::IO=STDIN; ondone::Function=()->nothing, chomp::Bool=true) =
+        new(stream, ondone, chomp)
 end
-eachline(stream::IO) = EachLine(stream)
-function eachline(filename::AbstractString)
+
+"""
+    eachline(stream::IO=STDIN; chomp::Bool=true)
+    eachline(filename::AbstractString; chomp::Bool=true)
+
+Create an iterable `EachLine` object that will yield each line from an I/O stream
+or a file. Iteration calls `readline` on the stream argument repeatedly with
+`chomp` passed through, determining whether trailing end-of-line characters are
+removed. When called with a file name, the file is opened once at the beginning of
+iteration and closed at the end. If iteration is interrupted, the file will be
+closed when the `EachLine` object is garbage collected.
+"""
+eachline(stream::IO=STDIN; chomp::Bool=true) = EachLine(stream, chomp=chomp)::EachLine
+
+function eachline(filename::AbstractString; chomp::Bool=true)
     s = open(filename)
-    EachLine(s, ()->close(s))
+    EachLine(s, ondone=()->close(s), chomp=chomp)::EachLine
 end
 
 start(itr::EachLine) = nothing
-function done(itr::EachLine, nada)
-    if !eof(itr.stream)
-        return false
-    end
+function done(itr::EachLine, ::Void)
+    eof(itr.stream) || return false
     itr.ondone()
     true
 end
-next(itr::EachLine, nada) = (readline(itr.stream), nothing)
-eltype(::Type{EachLine}) = String
+next(itr::EachLine, ::Void) = (readline(itr.stream, chomp=itr.chomp), nothing)
 
-readlines(s=STDIN) = collect(eachline(s))
+eltype(::Type{EachLine}) = String
 
 iteratorsize(::Type{EachLine}) = SizeUnknown()
 
@@ -540,7 +587,7 @@ iteratorsize(::Type{EachLine}) = SizeUnknown()
 
 Add a mark at the current position of stream `s`. Returns the marked position.
 
-See also [`unmark`](:func:`unmark`), [`reset`](:func:`reset`), [`ismarked`](:func:`ismarked`).
+See also [`unmark`](@ref), [`reset`](@ref), [`ismarked`](@ref).
 """
 function mark(io::IO)
     io.mark = position(io)
@@ -551,7 +598,7 @@ end
 
 Remove a mark from stream `s`. Returns `true` if the stream was marked, `false` otherwise.
 
-See also [`mark`](:func:`mark`), [`reset`](:func:`reset`), [`ismarked`](:func:`ismarked`).
+See also [`mark`](@ref), [`reset`](@ref), [`ismarked`](@ref).
 """
 function unmark(io::IO)
     !ismarked(io) && return false
@@ -565,7 +612,7 @@ end
 Reset a stream `s` to a previously marked position, and remove the mark. Returns the
 previously marked position. Throws an error if the stream is not marked.
 
-See also [`mark`](:func:`mark`), [`unmark`](:func:`unmark`), [`ismarked`](:func:`ismarked`).
+See also [`mark`](@ref), [`unmark`](@ref), [`ismarked`](@ref).
 """
 function reset{T<:IO}(io::T)
     ismarked(io) || throw(ArgumentError("$(T) not marked"))
@@ -580,7 +627,7 @@ end
 
 Returns `true` if stream `s` is marked.
 
-See also [`mark`](:func:`mark`), [`unmark`](:func:`unmark`), [`reset`](:func:`reset`).
+See also [`mark`](@ref), [`unmark`](@ref), [`reset`](@ref).
 """
 ismarked(io::IO) = io.mark >= 0
 

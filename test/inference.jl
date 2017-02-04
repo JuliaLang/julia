@@ -60,7 +60,7 @@ function g3182(t::DataType)
     # however the ::Type{T} method should still match at run time.
     return f3182(t)
 end
-@test g3182(Complex) == 0
+@test g3182(Complex.body) == 0
 
 
 # issue #5906
@@ -103,6 +103,10 @@ barTuple2() = fooTuple{tuple(:y)}()
 
 @test Base.return_types(barTuple1,Tuple{})[1] == Base.return_types(barTuple2,Tuple{})[1] == fooTuple{(:y,)}
 
+# issue #6050
+@test Core.Inference.getfield_tfunc(
+          Dict{Int64,Tuple{UnitRange{Int64},UnitRange{Int64}}},
+          Core.Inference.Const(:vals)) == Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1}
 
 # issue #12476
 function f12476(a)
@@ -139,7 +143,7 @@ end
 
 # issue #12826
 f12826{I<:Integer}(v::Vector{I}) = v[1]
-@test Base.return_types(f12826,Tuple{Array{TypeVar(:I, Integer),1}})[1] == Integer
+@test Base.return_types(f12826,Tuple{Array{I,1} where I<:Integer})[1] == Integer
 
 
 # non-terminating inference, issue #14009
@@ -160,7 +164,7 @@ code_llvm(DevNull, f14009, (Int,))
 arithtype9232{T<:Real}(::Type{T},::Type{T}) = arithtype9232(T)
 result_type9232{T1<:Number,T2<:Number}(::Type{T1}, ::Type{T2}) = arithtype9232(T1, T2)
 # this gave a "type too large", but not reliably
-@test length(code_typed(result_type9232, Tuple{Type{TypeVar(:_, Union{Float32,Float64})}, Type{TypeVar(:T2, Number)}})) == 1
+@test length(code_typed(result_type9232, Tuple{(Type{_} where _<:Union{Float32,Float64}), Type{T2} where T2<:Number})) == 1
 
 
 # issue #10878
@@ -318,14 +322,12 @@ f16530a(c) = fieldtype(Foo16530a, c)
 f16530b() = fieldtype(Foo16530b, :c)
 f16530b(c) = fieldtype(Foo16530b, c)
 
-let T = Array{Tuple{Vararg{Float64,TypeVar(:dim)}},1},
-    TTlim = Type{TypeVar(:_,Array{TypeVar(:_,Tuple),1})}
-
+let T = Vector{Tuple{Vararg{Float64,dim}}} where dim
     @test f16530a() == T
     @test f16530a(:c) == T
-    @test Base.return_types(f16530a, ()) == Any[TTlim]
-    @test Base.return_types(f16530b, ()) == Any[TTlim]
-    @test Base.return_types(f16530b, (Symbol,)) == Any[TTlim]
+    @test Base.return_types(f16530a, ()) == Any[Type{T}]
+    @test Base.return_types(f16530b, ()) == Any[Type{T}]
+    @test Base.return_types(f16530b, (Symbol,)) == Any[Type{T}]
 end
 @test f16530a(:d) == Vector
 
@@ -342,7 +344,7 @@ let T1 = Tuple{Int, Float64},
     @test f18037(2) === T2
 
     @test Base.return_types(f18037, ()) == Any[Type{T1}]
-    @test Base.return_types(f18037, (Int,)) == Any[Type{TypeVar(:T, Tuple{Int, AbstractFloat})}]
+    @test Base.return_types(f18037, (Int,)) == Any[Union{Type{T1},Type{T2}}]
 end
 
 # issue #18015
@@ -399,7 +401,7 @@ f18450() = ifelse(true, Tuple{Vararg{Int}}, Tuple{Vararg})
 @test f18450() == Tuple{Vararg{Int}}
 
 # issue #18569
-@test Core.Inference.isconstType(Type{Tuple},true)
+@test !Core.Inference.isconstType(Type{Tuple})
 
 # ensure pure attribute applies correctly to all signatures of fpure
 Base.@pure function fpure(a=rand(); b=rand())
@@ -418,6 +420,10 @@ gpure(x::Irrational) = fpure(x)
 @test gpure() == gpure() == gpure()
 @test gpure(π) == gpure(π) == gpure(π)
 
+# Make sure @pure works for functions using the new syntax
+Base.@pure (fpure2(x::T) where T) = T
+@test which(fpure2, (Int64,)).source.pure
+
 # issue #10880
 function cat10880(a, b)
     Tuple{a.parameters..., b.parameters...}
@@ -425,24 +431,20 @@ end
 @inferred cat10880(Tuple{Int8,Int16}, Tuple{Int32})
 
 # issue #19348
-function is_intrinsic_expr(e::Expr)
-    if e.head === :call
-        return Base.is_intrinsic_expr(e.args[1])
-    elseif e.head == :invoke
-        return false
-    elseif e.head === :new
-        return false
-    elseif e.head === :copyast
-        return false
-    elseif e.head === :inert
-        return false
+function is_typed_expr(e::Expr)
+    if e.head === :call ||
+       e.head === :invoke ||
+       e.head === :new ||
+       e.head === :copyast ||
+       e.head === :inert
+        return true
     end
-    return true
+    return false
 end
 test_inferred_static(other::ANY) = true
 test_inferred_static(slot::TypedSlot) = @test isleaftype(slot.typ)
 function test_inferred_static(expr::Expr)
-    if !is_intrinsic_expr(expr)
+    if is_typed_expr(expr)
         @test isleaftype(expr.typ)
     end
     for a in expr.args
@@ -465,3 +467,143 @@ function g19348(x)
     return a + b
 end
 test_inferred_static(@code_typed g19348((1, 2.0)))
+
+# issue #5575
+f5575() = zeros(Type[Float64][1], 1)
+@test Base.return_types(f5575, ())[1] == Vector
+
+# make sure Tuple{unknown} handles the possibility that `unknown` is a Vararg
+function maybe_vararg_tuple_1()
+    x = Any[Vararg{Int}][1]
+    Tuple{x}
+end
+@test Type{Tuple{Vararg{Int}}} <: Base.return_types(maybe_vararg_tuple_1, ())[1]
+function maybe_vararg_tuple_2()
+    x = Type[Vararg{Int}][1]
+    Tuple{x}
+end
+@test Type{Tuple{Vararg{Int}}} <: Base.return_types(maybe_vararg_tuple_2, ())[1]
+
+# inference of `fieldtype`
+type UndefField__
+    x::Union{}
+end
+f_infer_undef_field() = fieldtype(UndefField__, :x)
+@test Base.return_types(f_infer_undef_field, ()) == Any[Type{Union{}}]
+@test f_infer_undef_field() === Union{}
+
+type HasAbstractlyTypedField
+    x::Union{Int,String}
+end
+f_infer_abstract_fieldtype() = fieldtype(HasAbstractlyTypedField, :x)
+@test Base.return_types(f_infer_abstract_fieldtype, ()) == Any[Type{Union{Int,String}}]
+
+# issue #11480
+@noinline f11480(x,y) = x
+let A = Ref
+    function h11480(x::A{A{A{A{A{A{A{A{A{Int}}}}}}}}}) # enough for type_too_complex
+        y :: Tuple{Vararg{typeof(x)}} = (x,) # apply_type(Vararg, too_complex) => TypeVar(_,Vararg)
+        f(y[1], # fool getfield logic : Tuple{_<:Vararg}[1] => Vararg
+          1) # make it crash by construction of the signature Tuple{Vararg,Int}
+    end
+    @test !Base.isvarargtype(Base.return_types(h11480, (Any,))[1])
+end
+
+# Issue 19641
+foo19641() = let a = 1.0
+    Core.Inference.return_type(x -> x + a, Tuple{Float64})
+end
+@inferred foo19641()
+
+test_fast_eq(a, b) = @fastmath a == b
+test_fast_ne(a, b) = @fastmath a != b
+test_fast_lt(a, b) = @fastmath a < b
+test_fast_le(a, b) = @fastmath a <= b
+@inferred test_fast_eq(1f0, 1f0)
+@inferred test_fast_ne(1f0, 1f0)
+@inferred test_fast_lt(1f0, 1f0)
+@inferred test_fast_le(1f0, 1f0)
+@inferred test_fast_eq(1.0, 1.0)
+@inferred test_fast_ne(1.0, 1.0)
+@inferred test_fast_lt(1.0, 1.0)
+@inferred test_fast_le(1.0, 1.0)
+
+abstract AbstractMyType18457{T,F,G}
+immutable MyType18457{T,F,G}<:AbstractMyType18457{T,F,G} end
+tpara18457{I}(::Type{AbstractMyType18457{I}}) = I
+tpara18457{A<:AbstractMyType18457}(::Type{A}) = tpara18457(supertype(A))
+@test tpara18457(MyType18457{true}) === true
+
+@testset "type inference error #19322" begin
+    Y_19322 = reshape(round.(Int, abs.(randn(5*1000)))+1,1000,5)
+
+    function FOO_19322(Y::AbstractMatrix; frac::Float64=0.3, nbins::Int=100, n_sims::Int=100)
+        num_iters, num_chains = size(Y)
+        start_iters = unique([1; [round(Int64, s) for s in logspace(log(10,100),
+                                                                    log(10,num_iters/2),nbins-1)]])
+        result = zeros(Float64, 10, length(start_iters) * num_chains)
+        j=1
+        for c in 1:num_chains
+            for st in 1:length(start_iters)
+                n = length(start_iters[st]:num_iters)
+                idx1 = start_iters[st]:round(Int64, start_iters[st] + frac * n - 1)
+                idx2 = round(Int64, num_iters - frac * n + 1):num_iters
+                y1 = Y[idx1,c]
+                y2 = Y[idx2,c]
+                n_min = min(length(y1), length(y2))
+                X = [y1[1:n_min] y2[(end - n_min + 1):end]]
+            end
+        end
+    end
+
+    @test_nowarn FOO_19322(Y_19322)
+end
+
+randT_inferred_union() = rand(Bool) ? rand(Bool) ? 1 : 2.0 : nothing
+function f_inferred_union()
+    b = randT_inferred_union()
+    if !(nothing !== b) === true
+        return f_inferred_union_nothing(b)
+    elseif (isa(b, Float64) === true) !== false
+        return f_inferred_union_float(b)
+    else
+        return f_inferred_union_int(b)
+    end
+end
+f_inferred_union_nothing(::Void) = 1
+f_inferred_union_nothing(::Any) = "broken"
+f_inferred_union_float(::Float64) = 2
+f_inferred_union_float(::Any) = "broken"
+f_inferred_union_int(::Int) = 3
+f_inferred_union_int(::Any) = "broken"
+@test @inferred(f_inferred_union()) in (1, 2, 3)
+
+# issue #11015
+type AT11015
+    f::Union{Bool,Function}
+end
+
+g11015{S}(::Type{S}, ::S) = 1
+f11015(a::AT11015) = g11015(Base.fieldtype(typeof(a), :f), true)
+g11015(::Type{Bool}, ::Bool) = 2.0
+@test Int <: Base.return_types(f11015, (AT11015,))[1]
+@test f11015(AT11015(true)) === 1
+
+# Inference for some type-level computation
+fUnionAll{T}(::Type{T}) = Type{S} where S <: T
+@inferred fUnionAll(Real) == Type{T} where T <: Real
+@inferred fUnionAll(Rational{T} where T <: AbstractFloat) == Type{T} where T<:(Rational{S} where S <: AbstractFloat)
+
+fComplicatedUnionAll{T}(::Type{T}) = Type{Tuple{S,rand() >= 0.5 ? Int : Float64}} where S <: T
+let pub = Base.parameter_upper_bound, x = fComplicatedUnionAll(Real)
+    @test pub(pub(x, 1), 1) == Real
+    @test pub(pub(x, 1), 2) == Int || pub(pub(x, 1), 2) == Float64
+end
+
+# issue #20267
+type T20267{T}
+    inds::Vector{T}
+end
+# infinite type growth via lower bounds (formed by intersection)
+f20267(x::T20267{T}, y::T) where (T) = f20267(Any[1][1], x.inds)
+@test Base.return_types(f20267, (Any, Any)) == Any[Union{}]

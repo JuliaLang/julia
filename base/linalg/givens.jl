@@ -22,7 +22,7 @@ conjugated transpose right multiplication `A*G'`. The type doesn't have a `size`
 therefore be multiplied with matrices of arbitrary size as long as `i2<=size(A,2)` for
 `G*A` or `i2<=size(A,1)` for `A*G'`.
 
-See also: [`givens`](:func:`givens`)
+See also: [`givens`](@ref)
 """
 immutable Givens{T} <: AbstractRotation{T}
     i1::Int
@@ -249,7 +249,7 @@ y[i1] = r
 y[i2] = 0
 ```
 
-See also: [`LinAlg.Givens`](:class:`LinAlg.Givens`)
+See also: [`LinAlg.Givens`](@ref)
 """
 function givens{T}(f::T, g::T, i1::Integer, i2::Integer)
     if i1 == i2
@@ -275,7 +275,7 @@ B[i1,j] = r
 B[i2,j] = 0
 ```
 
-See also: [`LinAlg.Givens`](:class:`LinAlg.Givens`)
+See also: [`LinAlg.Givens`](@ref)
 """
 givens(A::AbstractMatrix, i1::Integer, i2::Integer, j::Integer) =
     givens(A[i1,j], A[i2,j],i1,i2)
@@ -294,7 +294,7 @@ B[i1] = r
 B[i2] = 0
 ```
 
-See also: [`LinAlg.Givens`](:class:`LinAlg.Givens`)
+See also: [`LinAlg.Givens`](@ref)
 """
 givens(x::AbstractVector, i1::Integer, i2::Integer) =
     givens(x[i1], x[i2], i1, i2)

@@ -110,7 +110,7 @@ end
 
 # Eviction
 function setindex!{V,K}(lru::BoundedLRU, v::V, key::K)
-    invoke(setindex!, (LRU, V, K), lru, v, key)
+    invoke(setindex!, Tuple{LRU,V,K}, lru, v, key)
     nrm = length(lru) - lru.maxsize
     for i in 1:nrm
         rm = pop!(lru.q)

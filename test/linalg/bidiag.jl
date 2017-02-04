@@ -63,7 +63,7 @@ srand(1)
             @test size(T) == (n, n)
             @test Array(T) == diagm(dv) + diagm(ev, isupper?1:-1)
             @test Bidiagonal(Array(T), isupper) == T
-            @test big(T) == T
+            @test big.(T) == T
             @test Array(abs.(T)) == abs.(diagm(dv)) + abs.(diagm(ev, isupper?1:-1))
             @test Array(real(T)) == real(diagm(dv)) + real(diagm(ev, isupper?1:-1))
             @test Array(imag(T)) == imag(diagm(dv)) + imag(diagm(ev, isupper?1:-1))
@@ -160,14 +160,14 @@ srand(1)
 
         @testset "Round,float,trunc,ceil" begin
             if elty <: BlasReal
-                @test floor(Int,T) == Bidiagonal(floor(Int,T.dv),floor(Int,T.ev),T.isupper)
-                @test isa(floor(Int,T), Bidiagonal)
-                @test trunc(Int,T) == Bidiagonal(trunc(Int,T.dv),trunc(Int,T.ev),T.isupper)
-                @test isa(trunc(Int,T), Bidiagonal)
-                @test round(Int,T) == Bidiagonal(round(Int,T.dv),round(Int,T.ev),T.isupper)
-                @test isa(round(Int,T), Bidiagonal)
-                @test ceil(Int,T) == Bidiagonal(ceil(Int,T.dv),ceil(Int,T.ev),T.isupper)
-                @test isa(ceil(Int,T), Bidiagonal)
+                @test floor.(Int, T) == Bidiagonal(floor.(Int, T.dv), floor.(Int, T.ev), T.isupper)
+                @test isa(floor.(Int, T), Bidiagonal)
+                @test trunc.(Int,T) == Bidiagonal(trunc.(Int, T.dv), trunc.(Int, T.ev), T.isupper)
+                @test isa(trunc.(Int,T), Bidiagonal)
+                @test round.(Int, T) == Bidiagonal(round.(Int, T.dv), round.(Int, T.ev), T.isupper)
+                @test isa(round.(Int, T), Bidiagonal)
+                @test ceil.(Int,T) == Bidiagonal(ceil.(Int,T.dv), ceil.(Int,T.ev), T.isupper)
+                @test isa(ceil.(Int,T), Bidiagonal)
             end
         end
 
@@ -198,7 +198,7 @@ srand(1)
                     Test.test_approx_eq_modphase(u1, u2)
                     Test.test_approx_eq_modphase(v1, v2)
                 end
-                @test_approx_eq_eps 0 vecnorm(u2*diagm(d2)*v2'-Tfull) n*max(n^2*eps(relty), vecnorm(u1*diagm(d1)*v1' - Tfull))
+                @test 0 ≈ vecnorm(u2*diagm(d2)*v2'-Tfull) atol=n*max(n^2*eps(relty),vecnorm(u1*diagm(d1)*v1'-Tfull))
                 @inferred svdvals(T)
                 @inferred svd(T)
             end

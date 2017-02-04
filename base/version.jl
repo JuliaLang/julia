@@ -203,7 +203,7 @@ end
     VERSION
 
 A `VersionNumber` object describing which version of Julia is in use. For details see
-[Version Number Literals](:ref:`man-version-number-literals`).
+[Version Number Literals](@ref man-version-number-literals).
 """
 const VERSION = try
     ver = convert(VersionNumber, VERSION_STRING)
@@ -245,14 +245,15 @@ function banner(io::IO = STDOUT)
     commit_date = GIT_VERSION_INFO.date_string != "" ? " ($(GIT_VERSION_INFO.date_string))": ""
 
     if have_color
-        tx = "\033[0m\033[1m" # text
-        jl = "\033[0m\033[1m" # julia
-        d1 = "\033[34m" # first dot
-        d2 = "\033[31m" # second dot
-        d3 = "\033[32m" # third dot
-        d4 = "\033[35m" # fourth dot
+        c = text_colors
+        tx = c[:normal] # text
+        jl = c[:normal] # julia
+        d1 = c[:bold] * c[:light_blue]    # first dot
+        d2 = c[:bold] * c[:light_red]     # second dot
+        d3 = c[:bold] * c[:light_green]   # third dot
+        d4 = c[:bold] * c[:light_magenta] # fourth dot
 
-        print(io,"""\033[1m               $(d3)_$(tx)
+        print(io,"""               $(d3)_$(tx)
            $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  A fresh approach to technical computing
           $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: http://docs.julialang.org
            $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?help\" for help.
@@ -261,7 +262,7 @@ function banner(io::IO = STDOUT)
          $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
         $(jl)|__/$(tx)                   |  $(Sys.MACHINE)
 
-        \033[0m""")
+        """)
     else
         print(io,"""
                        _

@@ -173,7 +173,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         end
 
     # issue #1490
-    @test_approx_eq_eps det(ones(elty, 3,3)) zero(elty) 3*eps(real(one(elty)))
+    @test det(ones(elty,3,3)) ≈ zero(elty) atol=3*eps(real(one(elty)))
 
     @test det(SymTridiagonal(elty[],elty[])) == one(elty)
 
@@ -216,7 +216,7 @@ function test_approx_eq_vecs{S<:Real,T<:Real}(a::StridedVecOrMat{S}, b::StridedV
         ev1, ev2 = a[:,i], b[:,i]
         deviation = min(abs(norm(ev1-ev2)),abs(norm(ev1+ev2)))
         if !isnan(deviation)
-            @test_approx_eq_eps deviation 0.0 error
+            @test deviation ≈ 0.0 atol=error
         end
     end
 end
@@ -267,19 +267,19 @@ let n = 12 #Size of matrix problem to test
 
         debug && println("Simple unary functions")
         for func in (det, inv)
-            @test_approx_eq_eps func(A) func(fA) n^2*sqrt(eps(relty))
+            @test func(A) ≈ func(fA) atol=n^2*sqrt(eps(relty))
         end
 
         debug && println("Rounding to Ints")
         if elty <: Real
-            @test round(Int,A) == round(Int,fA)
-            @test isa(round(Int,A), SymTridiagonal)
-            @test trunc(Int,A) == trunc(Int,fA)
-            @test isa(trunc(Int,A), SymTridiagonal)
-            @test ceil(Int,A) == ceil(Int,fA)
-            @test isa(ceil(Int,A), SymTridiagonal)
-            @test floor(Int,A) == floor(Int,fA)
-            @test isa(floor(Int,A), SymTridiagonal)
+            @test round.(Int,A) == round.(Int,fA)
+            @test isa(round.(Int,A), SymTridiagonal)
+            @test trunc.(Int,A) == trunc.(Int,fA)
+            @test isa(trunc.(Int,A), SymTridiagonal)
+            @test ceil.(Int,A) == ceil.(Int,fA)
+            @test isa(ceil.(Int,A), SymTridiagonal)
+            @test floor.(Int,A) == floor.(Int,fA)
+            @test isa(floor.(Int,A), SymTridiagonal)
         end
 
         debug && println("Tridiagonal/SymTridiagonal mixing ops")
@@ -385,19 +385,19 @@ let n = 12 #Size of matrix problem to test
 
         debug && println("Simple unary functions")
         for func in (det, inv)
-            @test_approx_eq_eps func(A) func(fA) n^2*sqrt(eps(relty))
+            @test func(A) ≈ func(fA) atol=n^2*sqrt(eps(relty))
         end
 
         debug && println("Rounding to Ints")
         if elty <: Real
-            @test round(Int,A) == round(Int,fA)
-            @test isa(round(Int,A), Tridiagonal)
-            @test trunc(Int,A) == trunc(Int,fA)
-            @test isa(trunc(Int,A), Tridiagonal)
-            @test ceil(Int,A) == ceil(Int,fA)
-            @test isa(ceil(Int,A), Tridiagonal)
-            @test floor(Int,A) == floor(Int,fA)
-            @test isa(floor(Int,A), Tridiagonal)
+            @test round.(Int,A) == round.(Int,fA)
+            @test isa(round.(Int,A), Tridiagonal)
+            @test trunc.(Int,A) == trunc.(Int,fA)
+            @test isa(trunc.(Int,A), Tridiagonal)
+            @test ceil.(Int,A) == ceil.(Int,fA)
+            @test isa(ceil.(Int,A), Tridiagonal)
+            @test floor.(Int,A) == floor.(Int,fA)
+            @test isa(floor.(Int,A), Tridiagonal)
         end
 
         debug && println("Binary operations")

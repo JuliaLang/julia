@@ -5,7 +5,6 @@ type AmosException <: Exception
 end
 
 ## Airy functions
-
 let
     const ai::Array{Float64,1} = Array{Float64}(2)
     const ae::Array{Int32,1} = Array{Int32}(2)
@@ -40,88 +39,86 @@ let
     end
 end
 
-"""
-    airy(k,x)
-
-The `k`th derivative of the Airy function ``\\operatorname{Ai}(x)``.
-"""
-function airy(k::Integer, z::Complex128)
-    id = Int32(k==1 || k==3)
-    if k == 0 || k == 1
-        return _airy(z, id, Int32(1))
-    elseif k == 2 || k == 3
-        return _biry(z, id, Int32(1))
-    else
-        throw(ArgumentError("k must be between 0 and 3"))
-    end
-end
-
-"""
-    airyprime(x)
-
-Airy function derivative ``\\operatorname{Ai}'(x)``.
-"""
-airyprime(z) = airy(1,z)
 
 """
     airyai(x)
 
-Airy function ``\\operatorname{Ai}(x)``.
+Airy function of the first kind ``\\operatorname{Ai}(x)``.
 """
-airyai(z) = airy(0,z)
+function airyai end
+airyai(z::Complex128) = _airy(z, Int32(0), Int32(1))
 
 """
     airyaiprime(x)
 
-Airy function derivative ``\\operatorname{Ai}'(x)``.
+Derivative of the Airy function of the first kind ``\\operatorname{Ai}'(x)``.
 """
-airyaiprime(z) = airy(1,z)
+function airyaiprime end
+airyaiprime(z::Complex128) =  _airy(z, Int32(1), Int32(1))
 
 """
     airybi(x)
 
-Airy function ``\\operatorname{Bi}(x)``.
+Airy function of the second kind ``\\operatorname{Bi}(x)``.
 """
-airybi(z) = airy(2,z)
+function airybi end
+airybi(z::Complex128) = _biry(z, Int32(0), Int32(1))
 
 """
     airybiprime(x)
 
-Airy function derivative ``\\operatorname{Bi}'(x)``.
+Derivative of the Airy function of the second kind ``\\operatorname{Bi}'(x)``.
 """
-airybiprime(z) = airy(3,z)
+function airybiprime end
+airybiprime(z::Complex128) = _biry(z, Int32(1), Int32(1))
 
-function airyx(k::Integer, z::Complex128)
-    id = Int32(k==1 || k==3)
-    if k == 0 || k == 1
-        return _airy(z, id, Int32(2))
-    elseif k == 2 || k == 3
-        return _biry(z, id, Int32(2))
-    else
-        throw(ArgumentError("k must be between 0 and 3"))
-    end
-end
+"""
+    airyaix(x)
 
-for afn in (:airy,:airyx)
+Scaled Airy function of the first kind ``\\operatorname{Ai}(x) e^{\\frac{2}{3} x
+\\sqrt{x}}``.  Throws [`DomainError`](@ref) for negative `Real` arguments.
+"""
+function airyaix end
+airyaix(z::Complex128) = _airy(z, Int32(0), Int32(2))
+
+"""
+    airyaiprimex(x)
+
+Scaled derivative of the Airy function of the first kind ``\\operatorname{Ai}'(x)
+e^{\\frac{2}{3} x \\sqrt{x}}``.  Throws [`DomainError`](@ref) for negative `Real` arguments.
+"""
+function airyaiprimex end
+airyaiprimex(z::Complex128) =  _airy(z, Int32(1), Int32(2))
+
+"""
+    airybix(x)
+
+Scaled Airy function of the second kind ``\\operatorname{Bi}(x) e^{- \\left| \\operatorname{Re} \\left( \\frac{2}{3} x \\sqrt{x} \\right) \\right|}``.
+"""
+function airybix end
+airybix(z::Complex128) = _biry(z, Int32(0), Int32(2))
+
+"""
+    airybiprimex(x)
+
+Scaled derivative of the Airy function of the second kind ``\\operatorname{Bi}'(x) e^{- \\left| \\operatorname{Re} \\left( \\frac{2}{3} x \\sqrt{x} \\right) \\right|}``.
+"""
+function airybiprimex end
+airybiprimex(z::Complex128) = _biry(z, Int32(1), Int32(2))
+
+for afn in (:airyai, :airyaiprime, :airybi, :airybiprime,
+            :airyaix, :airyaiprimex, :airybix, :airybiprimex)
     @eval begin
-        $afn(k::Integer, z::Complex) = $afn(k, float(z))
-        $afn{T<:AbstractFloat}(k::Integer, z::Complex{T}) = throw(MethodError($afn,(k,z)))
-        $afn(k::Integer, z::Complex64) = Complex64($afn(k, Complex128(z)))
-
-        $afn(k::Integer, x::Real) = $afn(k, float(x))
-        $afn(k::Integer, x::AbstractFloat) = real($afn(k, complex(x)))
-
-        $afn(z) = $afn(0,z)
+        $afn(z::Complex) = $afn(float(z))
+        $afn{T<:AbstractFloat}(z::Complex{T}) = throw(MethodError($afn,(z,)))
+        $afn(z::Complex64) = Complex64($afn(Complex128(z)))
+    end
+    if afn in (:airyaix, :airyaiprimex)
+        @eval $afn(x::Real) = x < 0 ? throw(DomainError()) : real($afn(complex(float(x))))
+    else
+        @eval $afn(x::Real) = real($afn(complex(float(x))))
     end
 end
-"""
-    airyx(k,x)
-
-scaled `k`th derivative of the Airy function, return ``\\operatorname{Ai}(x) e^{\\frac{2}{3} x \\sqrt{x}}``
-for `k == 0 || k == 1`, and ``\\operatorname{Ai}(x) e^{- \\left| \\operatorname{Re} \\left( \\frac{2}{3} x \\sqrt{x} \\right) \\right|}``
-for `k == 2 || k == 3`.
-"""
-function airyx(k,x) end
 
 ## Bessel functions
 
@@ -228,9 +225,9 @@ end
     besselh(nu, [k=1,] x)
 
 Bessel function of the third kind of order `nu` (the Hankel function). `k` is either 1 or 2,
-selecting [`hankelh1`](:func:`hankelh1`) or [`hankelh2`](:func:`hankelh2`), respectively.
+selecting [`hankelh1`](@ref) or [`hankelh2`](@ref), respectively.
 `k` defaults to 1 if it is omitted.
-(See also [`besselhx`](:func:`besselhx`) for an exponentially scaled variant.)
+(See also [`besselhx`](@ref) for an exponentially scaled variant.)
 """
 function besselh end
 
@@ -251,7 +248,7 @@ Compute the scaled Hankel function ``\\exp(∓iz) H_ν^{(k)}(z)``, where
 
 The reason for this function is that ``H_ν^{(k)}(z)`` is asymptotically
 proportional to ``\\exp(∓iz)/\\sqrt{z}`` for large ``|z|``, and so the
-[`besselh`](:func:`besselh`) function is susceptible to overflow or underflow
+[`besselh`](@ref) function is susceptible to overflow or underflow
 when `z` has a large imaginary part.  The `besselhx` function cancels this
 exponential factor (analytically), so it avoids these problems.
 """

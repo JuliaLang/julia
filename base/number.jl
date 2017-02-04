@@ -1,8 +1,25 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 ## generic operations on numbers ##
+"""
+    isinteger(x) -> Bool
 
+Test whether `x` is numerically equal to some integer.
+
+```jldoctest
+julia> isinteger(4.0)
+true
+```
+"""
 isinteger(x::Integer) = true
+
+"""
+    iszero(x)
+
+Return `true` if `x == zero(x)`; if `x` is an array, this checks whether
+all of the elements of `x` are zero.
+"""
+iszero(x) = x == zero(x) # fallback method
 
 size(x::Number) = ()
 size(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : 1
@@ -26,7 +43,6 @@ function getindex(x::Number, I::Integer...)
     @boundscheck all([i == 1 for i in I]) || throw(BoundsError())
     x
 end
-getindex(x::Number, I::Real...) = getindex(x, to_indexes(I...)...)
 first(x::Number) = x
 last(x::Number) = x
 copy(x::Number) = x  # some code treats numbers as collection-like
@@ -39,10 +55,10 @@ The quotient and remainder from Euclidean division. Equivalent to `(div(x,y), re
 
 ```jldoctest
 julia> divrem(3,7)
-(0,3)
+(0, 3)
 
 julia> divrem(7,3)
-(2,1)
+(2, 1)
 ```
 """
 divrem(x,y) = (div(x,y),rem(x,y))
@@ -64,7 +80,19 @@ sign(x::Number) = x == 0 ? x/abs(one(x)) : x/abs(x)
 sign(x::Real) = ifelse(x < 0, oftype(x,-1), ifelse(x > 0, one(x), x))
 sign(x::Unsigned) = ifelse(x > 0, one(x), x)
 abs(x::Real) = ifelse(signbit(x), -x, x)
+
+"""
+    abs2(x)
+
+Squared absolute value of `x`.
+"""
 abs2(x::Real) = x*x
+
+"""
+    flipsign(x, y)
+
+Return `x` with its sign flipped if `y` is negative. For example `abs(x) = flipsign(x,x)`.
+"""
 flipsign(x::Real, y::Real) = ifelse(signbit(y), -x, x)
 copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
 
@@ -94,8 +122,20 @@ in(x::Number, y::Number) = x == y
 
 map(f, x::Number, ys::Number...) = f(x, ys...)
 
+"""
+    zero(x)
+
+Get the additive identity element for the type of `x` (`x` can also specify the type itself).
+"""
 zero(x::Number) = oftype(x,0)
 zero{T<:Number}(::Type{T}) = convert(T,0)
+
+"""
+    one(x)
+
+Get the multiplicative identity element for the type of `x` (`x` can also specify the type
+itself). For matrices, returns an identity matrix of the appropriate size and type.
+"""
 one(x::Number)  = oftype(x,1)
 one{T<:Number}(::Type{T}) = convert(T,1)
 
@@ -104,9 +144,9 @@ _default_type(::Type{Number}) = Int
 """
     factorial(n)
 
-Factorial of `n`.  If `n` is an [`Integer`](:obj:`Integer`), the factorial is computed as an
+Factorial of `n`.  If `n` is an `Integer`, the factorial is computed as an
 integer (promoted to at least 64 bits).  Note that this may overflow if `n` is not small,
 but you can use `factorial(big(n))` to compute the result exactly in arbitrary precision.
-If `n` is not an `Integer`, `factorial(n)` is equivalent to [`gamma(n+1)`](:func:`gamma(n+1) <gamma>`).
+If `n` is not an `Integer`, `factorial(n)` is equivalent to [`gamma(n+1)`](@ref).
 """
 factorial(x::Number) = gamma(x + 1) # fallback for x not Integer

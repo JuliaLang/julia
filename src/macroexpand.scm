@@ -57,7 +57,7 @@
     (cons 'varlist (append (llist-vars (fix-arglist argl))
                            (apply nconc
                                   (map (lambda (v) (trycatch
-                                                    (list (sparam-name v))
+                                                    (list (typevar-expr-name v))
                                                     (lambda (e) '())))
                                        sparams)))))
 
@@ -164,9 +164,7 @@
       (cadr e)
       e))
 
-(define (typevar-expr-name e)
-  (if (symbol? e) e
-      (cadr e)))
+(define (typevar-expr-name e) (car (analyze-typevar e)))
 
 (define (new-expansion-env-for x env (outermost #f))
   (let ((introduced (pattern-expand1 vars-introduced-by-patterns x)))
@@ -205,7 +203,7 @@
    m inarg))
 
 (define (resolve-expansion-vars- e env m inarg)
-  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end))
+  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end) (eq? e 'ccall))
          e)
         ((symbol? e)
          (let ((a (assq e env)))
@@ -280,17 +278,6 @@
                           (cadr e))
                      ,(resolve-expansion-vars- (caddr e) env m inarg))))
 
-           ((localize)
-            (let ((expr (cadr e))
-                  (lvars (map unescape (cddr e))))
-              (let ((vs (delete-duplicates
-                         (expr-find-all (lambda (v)
-                                          (and (symbol? v) (or (memq v lvars)
-                                                               (assq v env))))
-                                        expr identity)))
-                    (e2 (resolve-expansion-vars-with-new-env expr env m inarg)))
-                `(call (-> (tuple ,@vs) ,e2) ,@vs))))
-
            ((let)
             (let* ((newenv (new-expansion-env-for e env))
                    (body   (resolve-expansion-vars- (cadr e) newenv m inarg)))
@@ -331,7 +318,6 @@
 (define (find-declared-vars-in-expansion e decl (outer #t))
   (cond ((or (not (pair? e)) (quoted? e)) '())
         ((eq? (car e) 'escape)  '())
-        ((eq? (car e) 'localize) '())
         ((eq? (car e) decl)     (map decl-var* (cdr e)))
         ((and (not outer) (function-def? e)) '())
         (else
@@ -342,7 +328,6 @@
 (define (find-assigned-vars-in-expansion e (outer #t))
   (cond ((or (not (pair? e)) (quoted? e))  '())
         ((eq? (car e) 'escape)  '())
-        ((eq? (car e) 'localize) '())
         ((and (not outer) (function-def? e))
          ;; pick up only function name
          (let ((fname (cond ((eq? (car e) '=) (cadr (cadr e)))
@@ -423,7 +408,7 @@
                (error (cadr form)))
            (let ((form (car form))
                  (m    (cdr form)))
-             ;; m is the macro's def module, or #f if def env === use env
+             ;; m is the macro's def module
              (rename-symbolic-labels
               (julia-expand-macros
                (resolve-expansion-vars form m))))))

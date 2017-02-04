@@ -1,11 +1,11 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-function GitAnnotated(repo::GitRepo, commit_id::Oid)
+function GitAnnotated(repo::GitRepo, commit_id::GitHash)
     ann_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_annotated_commit_lookup, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}),
+                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{GitHash}),
                    ann_ptr_ptr, repo.ptr, Ref(commit_id))
-    return GitAnnotated(ann_ptr_ptr[])
+    return GitAnnotated(repo, ann_ptr_ptr[])
 end
 
 function GitAnnotated(repo::GitRepo, ref::GitReference)
@@ -13,30 +13,25 @@ function GitAnnotated(repo::GitRepo, ref::GitReference)
     @check ccall((:git_annotated_commit_from_ref, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}),
                    ann_ref_ref, repo.ptr, ref.ptr)
-    return GitAnnotated(ann_ref_ref[])
+    return GitAnnotated(repo, ann_ref_ref[])
 end
 
 function GitAnnotated(repo::GitRepo, fh::FetchHead)
     ann_ref_ref = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_annotated_commit_from_fetchhead, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring, Ptr{Oid}),
+                  (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring, Ptr{GitHash}),
                    ann_ref_ref, repo.ptr, fh.name, fh.url, Ref(fh.oid))
-    return GitAnnotated(ann_ref_ref[])
+    return GitAnnotated(repo, ann_ref_ref[])
 end
 
 function GitAnnotated(repo::GitRepo, comittish::AbstractString)
-    obj = revparse(repo, comittish)
-    try
-        cmt = peel(obj, Consts.OBJ_COMMIT)
-        cmt === nothing && return nothing
-        return GitAnnotated(repo, Oid(cmt))
-    finally
-        finalize(obj)
-    end
+    obj = GitObject(repo, comittish)
+    cmt = peel(GitCommit, obj)
+    return GitAnnotated(repo, GitHash(cmt))
 end
 
-function commit(ann::GitAnnotated)
-    return Oid(ccall((:git_annotated_commit_id, :libgit2), Ptr{Oid}, (Ptr{Void},), ann.ptr))
+function GitHash(ann::GitAnnotated)
+    unsafe_load(ccall((:git_annotated_commit_id, :libgit2), Ptr{GitHash}, (Ptr{Void},), ann.ptr))
 end
 
 function merge_analysis(repo::GitRepo, anns::Vector{GitAnnotated})
@@ -52,23 +47,18 @@ end
 
 """Fastforward merge changes into current head """
 function ffmerge!(repo::GitRepo, ann::GitAnnotated)
-    ann_cmt_oid = commit(ann)
-    cmt = get(GitCommit, repo, ann_cmt_oid)
-    cmt === nothing && return false # could not find commit tree
-    try
-        checkout_tree(repo, cmt)
-        with(head(repo)) do head_ref
-            cmt_oid = Oid(cmt)
-            msg = "libgit2.merge: fastforward $(string(cmt_oid)) into $(name(head_ref))"
-            new_head_ref = if reftype(head_ref) == Consts.REF_OID
-                target!(head_ref, cmt_oid, msg=msg)
-            else
-                GitReference(repo, cmt_oid, fullname(head_ref), msg=msg)
-            end
-            finalize(new_head_ref)
+    cmt = GitCommit(repo, GitHash(ann))
+
+    checkout_tree(repo, cmt)
+    with(head(repo)) do head_ref
+        cmt_oid = GitHash(cmt)
+        msg = "libgit2.merge: fastforward $(string(cmt_oid)) into $(name(head_ref))"
+        new_head_ref = if reftype(head_ref) == Consts.REF_OID
+            target!(head_ref, cmt_oid, msg=msg)
+        else
+            GitReference(repo, cmt_oid, fullname(head_ref), msg=msg)
         end
-    finally
-        finalize(cmt)
+        close(new_head_ref)
     end
     return true
 end
@@ -148,17 +138,17 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool;
 end
 
 function merge_base(repo::GitRepo, one::AbstractString, two::AbstractString)
-    oid1_ptr = Ref(Oid(one))
-    oid2_ptr = Ref(Oid(two))
-    moid_ptr = Ref(Oid())
+    oid1_ptr = Ref(GitHash(one))
+    oid2_ptr = Ref(GitHash(two))
+    moid_ptr = Ref(GitHash())
     moid = try
         @check ccall((:git_merge_base, :libgit2), Cint,
-                (Ptr{Oid}, Ptr{Void}, Ptr{Oid}, Ptr{Oid}),
+                (Ptr{GitHash}, Ptr{Void}, Ptr{GitHash}, Ptr{GitHash}),
                 moid_ptr, repo.ptr, oid1_ptr, oid2_ptr)
         moid_ptr[]
     catch e
         #warn("Pkg:",path(repo),"=>",e.msg)
-        Oid()
+        GitHash()
     end
     return moid
 end

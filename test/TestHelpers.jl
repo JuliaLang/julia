@@ -31,7 +31,7 @@ function open_fake_pty()
         ccall(:ptsname, Ptr{UInt8}, (Cint,), fdm), O_RDWR|O_NOCTTY)
 
     # slave
-    slave   = RawFD(fds)
+    slave = RawFD(fds)
     master = Base.TTY(RawFD(fdm); readable = true)
     slave, master
 end
@@ -95,7 +95,7 @@ function Base.similar(A::AbstractArray, T::Type, inds::Tuple{UnitRange,Vararg{Un
     OffsetArray(B, map(indsoffset, inds))
 end
 
-Base.similar(f::Union{Function,DataType}, shape::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(f(map(length, shape)), map(indsoffset, shape))
+Base.similar(f::Union{Function,Type}, shape::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(f(map(length, shape)), map(indsoffset, shape))
 
 Base.reshape(A::AbstractArray, inds::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(reshape(A, map(length, inds)), map(indsoffset, inds))
 
@@ -104,12 +104,14 @@ Base.reshape(A::AbstractArray, inds::Tuple{UnitRange,Vararg{UnitRange}}) = Offse
     @inbounds ret = parent(A)[offset(A.offsets, I)...]
     ret
 end
-@inline function Base._getindex(::LinearFast, A::OffsetVector, i::Int)
+# Vectors don't support one-based linear indexing; they always use the offsets
+@inline function Base.getindex(A::OffsetVector, i::Int)
     checkbounds(A, i)
     @inbounds ret = parent(A)[offset(A.offsets, (i,))[1]]
     ret
 end
-@inline function Base._getindex(::LinearFast, A::OffsetArray, i::Int)
+# But multidimensional arrays allow one-based linear indexing
+@inline function Base.getindex(A::OffsetArray, i::Int)
     checkbounds(A, i)
     @inbounds ret = parent(A)[i]
     ret
@@ -119,12 +121,12 @@ end
     @inbounds parent(A)[offset(A.offsets, I)...] = val
     val
 end
-@inline function Base._setindex!(::LinearFast, A::OffsetVector, val, i::Int)
+@inline function Base.setindex!(A::OffsetVector, val, i::Int)
     checkbounds(A, i)
     @inbounds parent(A)[offset(A.offsets, (i,))[1]] = val
     val
 end
-@inline function Base._setindex!(::LinearFast, A::OffsetArray, val, i::Int)
+@inline function Base.setindex!(A::OffsetArray, val, i::Int)
     checkbounds(A, i)
     @inbounds parent(A)[i] = val
     val

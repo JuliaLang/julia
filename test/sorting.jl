@@ -352,3 +352,10 @@ end
 # PR #18791
 @test sort([typemax(Int),typemin(Int)]) == [typemin(Int),typemax(Int)]
 @test sort([typemax(UInt),0]) == [0,typemax(UInt)]
+
+# issue #19005
+@test searchsortedfirst(0:256, 0x80) == 129
+@test searchsortedlast(0:256, 0x80) == 129
+
+# https://discourse.julialang.org/t/sorting-big-int-with-v-0-6/1241
+@test sort([big(3), big(2)]) == [big(2), big(3)]

@@ -43,14 +43,22 @@ Given the type of an iterator, returns one of the following values:
 * `SizeUnknown()` if the length (number of elements) cannot be determined in advance.
 * `HasLength()` if there is a fixed, finite length.
 * `HasShape()` if there is a known length plus a notion of multidimensional shape (as for an array).
-  In this case the `size` function is valid for the iterator.
+   In this case the [`size`](@ref) function is valid for the iterator.
 * `IsInfinite()` if the iterator yields values forever.
 
 The default value (for iterators that do not define this function) is `HasLength()`.
-This means that most iterators are assumed to implement `length`.
+This means that most iterators are assumed to implement [`length`](@ref).
 
 This trait is generally used to select between algorithms that pre-allocate space for their
 result, and algorithms that resize their result incrementally.
+
+```jldoctest
+julia> Base.iteratorsize(1:5)
+Base.HasShape()
+
+julia> Base.iteratorsize((2,3))
+Base.HasLength()
+```
 """
 iteratorsize(x) = iteratorsize(typeof(x))
 iteratorsize(::Type) = HasLength()  # HasLength is the default
@@ -65,13 +73,18 @@ immutable HasEltype <: IteratorEltype end
 Given the type of an iterator, returns one of the following values:
 
 * `EltypeUnknown()` if the type of elements yielded by the iterator is not known in advance.
-* `HasEltype()` if the element type is known, and `eltype` would return a meaningful value.
+* `HasEltype()` if the element type is known, and [`eltype`](@ref) would return a meaningful value.
 
-`HasEltype()` is the default, since iterators are assumed to implement `eltype`.
+`HasEltype()` is the default, since iterators are assumed to implement [`eltype`](@ref).
 
 This trait is generally used to select between algorithms that pre-allocate a specific
 type of result, and algorithms that pick a result type based on the types of yielded
 values.
+
+```jldoctest
+julia> Base.iteratoreltype(1:5)
+Base.HasEltype()
+```
 """
 iteratoreltype(x) = iteratoreltype(typeof(x))
 iteratoreltype(::Type) = HasEltype()  # HasEltype is the default

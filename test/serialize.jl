@@ -4,8 +4,8 @@ using Base.Test
 
 # Check that serializer hasn't gone out-of-frame
 @test Serializer.sertag(Symbol) == 2
-@test Serializer.sertag(()) == 44
-@test Serializer.sertag(false) == 120
+@test Serializer.sertag(()) == 45
+@test Serializer.sertag(false) == 121
 
 function create_serialization_stream(f::Function)
     s = IOBuffer()
@@ -77,6 +77,14 @@ create_serialization_stream() do s
     @test deserialize(s) === Tuple{}
 end
 
+# Dict
+create_serialization_stream() do s
+    dct = Dict("A"=>1, "B"=>2)
+    serialize(s, dct)
+    seek(s, 0)
+    @test deserialize(s) == dct
+end
+
 # Symbol
 create_serialization_stream() do s
     gensym(len) = Symbol(repeat("A", len))
@@ -143,7 +151,7 @@ create_serialization_stream() do s # user-defined type
     utype = eval(parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
-    @test deserialize(s) === utype
+    @test deserialize(s) == utype
 end
 
 create_serialization_stream() do s # immutable type with 1 field
@@ -152,7 +160,7 @@ create_serialization_stream() do s # immutable type with 1 field
     utype = eval(parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
-    @test deserialize(s) === utype
+    @test deserialize(s) == utype
 end
 
 create_serialization_stream() do s # immutable type with 2 field
@@ -403,6 +411,13 @@ let b = IOBuffer()
     c = deserialize(b)
     @test isa(c,B15163) && c.x == [1]
 end
+# related issue #20066
+let b = IOBuffer()
+    serialize(b, Dict{Vector, Vector}())
+    seekstart(b)
+    c = deserialize(b)
+    @test isa(c, Dict{Vector, Vector})
+end
 
 # issue #15849
 let b = IOBuffer()
@@ -413,8 +428,7 @@ let b = IOBuffer()
 end
 
 # issue #1770
-let
-    a = ['T', 'e', 's', 't']
+let a = ['T', 'e', 's', 't']
     f = IOBuffer()
     serialize(f, a)
     seek(f, 0)

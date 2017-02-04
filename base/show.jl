@@ -5,10 +5,10 @@ print(io::IO, s::Symbol) = (write(io,s); nothing)
 """
     IOContext
 
-IOContext provides a mechanism for passing output configuration settings among `show` methods.
+`IOContext` provides a mechanism for passing output configuration settings among [`show`](@ref) methods.
 
 In short, it is an immutable dictionary that is a subclass of `IO`. It supports standard
-dictionary operations such as `getindex`, and can also be used as an I/O stream.
+dictionary operations such as [`getindex`](@ref), and can also be used as an I/O stream.
 """
 immutable IOContext{IO_t <: IO} <: AbstractPipe
     io::IO_t
@@ -82,19 +82,8 @@ haskey(io::IOContext, key) = haskey(io.dict, key)
 haskey(io::IO, key) = false
 getindex(io::IOContext, key) = getindex(io.dict, key)
 getindex(io::IO, key) = throw(KeyError(key))
-_limit_output = nothing # TODO: delete with with_output_limit deprecation
-function get(io::IOContext, key, default)
-    if key === :limit && _limit_output !== nothing
-        default = _limit_output::Bool
-    end
-    get(io.dict, key, default)
-end
-function get(io::IO, key, default)
-    if key === :limit && _limit_output !== nothing
-        return _limit_output::Bool
-    end
-    default
-end
+get(io::IOContext, key, default) = get(io.dict, key, default)
+get(io::IO, key, default) = default
 
 displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize] : displaysize(io.io)
 
@@ -120,10 +109,10 @@ function show_default(io::IO, x::ANY)
     print(io, '(')
     nf = nfields(t)
     nb = sizeof(x)
-    if nf != 0 || nb==0
+    if nf != 0 || nb == 0
         if !show_circular(io, x)
             recur_io = IOContext(io, :SHOWN_SET => x)
-            for i=1:nf
+            for i in 1:nf
                 f = fieldname(t, i)
                 if !isdefined(x, f)
                     print(io, undef_ref_str)
@@ -131,15 +120,15 @@ function show_default(io::IO, x::ANY)
                     show(recur_io, getfield(x, f))
                 end
                 if i < nf
-                    print(io, ',')
+                    print(io, ", ")
                 end
             end
         end
     else
         print(io, "0x")
         p = data_pointer_from_objref(x)
-        for i=nb-1:-1:0
-            print(io, hex(unsafe_load(convert(Ptr{UInt8}, p+i)), 2))
+        for i in (nb - 1):-1:0
+            print(io, hex(unsafe_load(convert(Ptr{UInt8}, p + i)), 2))
         end
     end
     print(io,')')
@@ -174,13 +163,36 @@ function show(io::IO, x::Core.IntrinsicFunction)
     print(io, unsafe_string(name))
 end
 
+show(io::IO, ::Core.BottomType) = print(io, "Union{}")
+
 function show(io::IO, x::Union)
     print(io, "Union")
-    sorted_types = sort!(collect(x.types); by=string)
+    sorted_types = sort!(uniontypes(x); by=string)
     show_comma_array(io, sorted_types, '{', '}')
 end
 
-show(io::IO, x::TypeConstructor) = show(io, x.body)
+function print_without_params(x::ANY)
+    if isa(x,UnionAll)
+        b = unwrap_unionall(x)
+        return isa(b,DataType) && b.name.wrapper === x
+    end
+    return false
+end
+
+function show(io::IO, x::UnionAll)
+    if print_without_params(x)
+        return show(io, unwrap_unionall(x).name)
+    end
+    tvar_env = get(io, :tvar_env, false)
+    if tvar_env !== false && isa(tvar_env, AbstractVector)
+        tvar_env = Any[tvar_env..., x.var]
+    else
+        tvar_env = Any[x.var]
+    end
+    show(IOContext(io, tvar_env = tvar_env), x.body)
+    print(io, " where ")
+    show(io, x.var)
+end
 
 function show_type_parameter(io::IO, p::ANY, has_tvar_env::Bool)
     if has_tvar_env
@@ -197,8 +209,7 @@ function show_datatype(io::IO, x::DataType)
     # and `true` if we are printing type parameters outside a method signature.
     has_tvar_env = get(io, :tvar_env, false) !== false
 
-    if ((!isempty(x.parameters) || x.name === Tuple.name) && x !== Tuple &&
-        !(has_tvar_env && x.name.primary === x))
+    if (!isempty(x.parameters) || x.name === Tuple.name) && x !== Tuple
         n = length(x.parameters)
 
         # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
@@ -294,7 +305,7 @@ end
 
 function show(io::IO, l::Core.MethodInstance)
     if isdefined(l, :def)
-        if l.def.isstaged && l === l.def.unspecialized
+        if l.def.isstaged && l === l.def.generator
             print(io, "MethodInstance generator for ")
             show(io, l.def)
         else
@@ -331,18 +342,14 @@ function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, de
         if !haskey(io, :compact)
             recur_io = IOContext(recur_io, :compact => true)
         end
-        newline = true
         first = true
         i = i1
         if l >= i1
             while true
                 if !isassigned(itr, i)
                     print(io, undef_ref_str)
-                    multiline = false
                 else
                     x = itr[i]
-                    multiline = isa(x,AbstractArray) && ndims(x)>1 && !isempty(x)
-                    newline && multiline && println(io)
                     show(recur_io, x)
                 end
                 i += 1
@@ -352,12 +359,7 @@ function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, de
                 end
                 first = false
                 print(io, delim)
-                if multiline
-                    println(io); println(io)
-                    newline = false
-                else
-                    newline = true
-                end
+                print(io, ' ')
             end
         end
     end
@@ -369,31 +371,23 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one, i1=1, n=typemax
     if !show_circular(io, itr)
         recur_io = IOContext(io, :SHOWN_SET => itr)
         state = start(itr)
-        newline = true
         first = true
-        while i1 > 1 && !done(itr,state)
+        while i1 > 1 && !done(itr, state)
             _, state = next(itr, state)
             i1 -= 1
         end
-        if !done(itr,state)
+        if !done(itr, state)
             while true
-                x, state = next(itr,state)
-                multiline = isa(x,AbstractArray) && ndims(x)>1 && !isempty(x)
-                newline && multiline && println(io)
+                x, state = next(itr, state)
                 show(recur_io, x)
                 i1 += 1
-                if done(itr,state) || i1 > n
+                if done(itr, state) || i1 > n
                     delim_one && first && print(io, delim)
                     break
                 end
                 first = false
                 print(io, delim)
-                if multiline
-                    println(io); println(io)
-                    newline = false
-                else
-                    newline = true
-                end
+                print(io, ' ')
             end
         end
     end
@@ -495,18 +489,6 @@ is_quoted(ex::Expr)      = is_expr(ex, :quote, 1) || is_expr(ex, :inert, 1)
 unquoted(ex::QuoteNode)  = ex.value
 unquoted(ex::Expr)       = ex.args[1]
 
-function is_intrinsic_expr(x::ANY)
-    isa(x, Core.IntrinsicFunction) && return true
-    if isa(x, GlobalRef)
-        x = x::GlobalRef
-        return (isdefined(x.mod, x.name) &&
-                isa(getfield(x.mod, x.name), Core.IntrinsicFunction))
-    elseif isa(x, Expr)
-        return (x::Expr).typ === Core.IntrinsicFunction
-    end
-    return false
-end
-
 ## AST printing helpers ##
 
 typeemphasize(io::IO) = get(io, :TYPEEMPHASIZE, false) === true
@@ -527,7 +509,7 @@ function show_expr_type(io::IO, ty, emph)
     end
 end
 
-emphasize(io, str::AbstractString) = have_color ? print_with_color(:red, io, str) : print(io, uppercase(str))
+emphasize(io, str::AbstractString) = have_color ? print_with_color(Base.error_color(), io, str; bold = true) : print(io, uppercase(str))
 
 show_linenumber(io::IO, line)       = print(io," # line ",line,':')
 show_linenumber(io::IO, line, file) = print(io," # ", file,", line ",line,':')
@@ -571,10 +553,12 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operato
 end
 # show an indented list inside the parens (op, cl)
 function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, encl_ops=false)
-    print(io, op); show_list(io, items, sep, indent, prec, encl_ops); print(io, cl)
+    print(io, op)
+    show_list(io, items, sep, indent, prec, encl_ops)
+    print(io, cl)
 end
 
-# show a normal (non-operator) function call, e.g. f(x,y) or A[z]
+# show a normal (non-operator) function call, e.g. f(x, y) or A[z]
 function show_call(io::IO, head, func, func_args, indent)
     op, cl = expr_calls[head]
     if isa(func, Symbol) || (isa(func, Expr) &&
@@ -590,12 +574,12 @@ function show_call(io::IO, head, func, func_args, indent)
     end
     if !isempty(func_args) && isa(func_args[1], Expr) && func_args[1].head === :parameters
         print(io, op)
-        show_list(io, func_args[2:end], ',', indent)
+        show_list(io, func_args[2:end], ", ", indent)
         print(io, "; ")
-        show_list(io, func_args[1].args, ',', indent)
+        show_list(io, func_args[1].args, ", ", indent)
         print(io, cl)
     else
-        show_enclosed_list(io, op, func_args, ",", cl, indent)
+        show_enclosed_list(io, op, func_args, ", ", cl, indent)
     end
 end
 
@@ -716,7 +700,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             print(io, ')')
         end
 
-    # infix (i.e. "x<:y" or "x = y")
+    # infix (i.e. "x <: y" or "x = y")
     elseif (head in expr_infix_any && nargs==2) || (head === :(:) && nargs==3)
         func_prec = operator_precedence(head)
         head_ = head in expr_infix_wide ? " $head " : head
@@ -726,20 +710,24 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             show_list(io, args, head_, indent, func_prec, true)
         end
 
-    # list (i.e. "(1,2,3)" or "[1,2,3]")
+    # list (i.e. "(1, 2, 3)" or "[1, 2, 3]")
     elseif haskey(expr_parens, head)               # :tuple/:vcat
         op, cl = expr_parens[head]
         if head === :vcat
-            sep = ";"
+            sep = "; "
         elseif head === :hcat || head === :row
             sep = " "
         else
-            sep = ","
+            sep = ", "
         end
         head !== :row && print(io, op)
         show_list(io, args, sep, indent)
-        if (head === :tuple || head === :vcat) && nargs == 1
-            print(io, sep)
+        if nargs == 1
+            if head === :tuple
+                print(io, ',')
+            elseif head === :vcat
+                print(io, ';')
+            end
         end
         head !== :row && print(io, cl)
 
@@ -753,9 +741,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         func_args = args[2:end]
 
-        if (in(ex.args[1], (GlobalRef(Base, :box), :throw)) ||
-            ismodulecall(ex) ||
-            (ex.typ === Any && is_intrinsic_expr(ex.args[1])))
+        if (in(ex.args[1], (GlobalRef(Base, :bitcast), :throw)) ||
+            ismodulecall(ex))
             show_type = false
         end
         if show_type
@@ -775,7 +762,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         elseif isa(func,Symbol) && func in uni_ops && length(func_args) == 1
             show_unquoted(io, func, indent)
             if isa(func_args[1], Expr) || func_args[1] in all_ops
-                show_enclosed_list(io, '(', func_args, ",", ')', indent, func_prec)
+                show_enclosed_list(io, '(', func_args, ", ", ')', indent, func_prec)
             else
                 show_unquoted(io, func_args[1])
             end
@@ -783,7 +770,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         # binary operator (i.e. "x + y")
         elseif func_prec > 0 # is a binary operator
             na = length(func_args)
-            if (na == 2 || (na > 2 && func in (:+, :++, :*))) && all(!isa(a, Expr) || a.head !== :... for a in func_args)
+            if (na == 2 || (na > 2 && func in (:+, :++, :*))) &&
+                    all(!isa(a, Expr) || a.head !== :... for a in func_args)
                 sep = " $func "
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, true)
@@ -796,7 +784,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
                 print(io, "(")
                 show_unquoted(io, func, indent)
                 print(io, ")")
-                show_enclosed_list(io, op, func_args, ",", cl, indent)
+                show_enclosed_list(io, op, func_args, ", ", cl, indent)
             else
                 show_call(io, head, func, func_args, indent)
             end
@@ -835,10 +823,6 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_unquoted(io, args[2], indent)
         print(io, " if ")
         show_unquoted(io, args[1], indent)
-
-    elseif head === :ccall
-        show_unquoted(io, :ccall, indent)
-        show_enclosed_list(io, '(', args, ",", ')', indent)
 
     # comparison (i.e. "x < y < z")
     elseif head === :comparison && nargs >= 3 && (nargs&1==1)
@@ -989,6 +973,15 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         print(io, head)
 
+    # `where` syntax
+    elseif head === :where && length(args) == 2
+        parens = 1 <= prec
+        parens && print(io, "(")
+        show_unquoted(io, args[1], indent, operator_precedence(:(::)))
+        print(io, " where ")
+        show_unquoted(io, args[2], indent, 1)
+        parens && print(io, ")")
+
     elseif head === :import || head === :importall || head === :using
         print(io, head)
         first = true
@@ -1030,31 +1023,37 @@ end
 
 function show_lambda_types(io::IO, li::Core.MethodInstance)
     # print a method signature tuple for a lambda definition
-    if li.specTypes === Tuple
-        print(io, li.def.name, "(...)")
-        return
+    local sig
+    returned_from_do = false
+    Base.with_output_color(have_color ? stackframe_function_color() : :nothing, io) do io
+        if li.specTypes === Tuple
+            print(io, li.def.name, "(...)")
+            returned_from_do = true
+            return
+        end
+        sig = li.specTypes.parameters
+        ft = sig[1]
+        if ft <: Function && isempty(ft.parameters) &&
+                isdefined(ft.name.module, ft.name.mt.name) &&
+                ft == typeof(getfield(ft.name.module, ft.name.mt.name))
+            print(io, ft.name.mt.name)
+        elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
+            f = ft.parameters[1]
+            print(io, f)
+        else
+            print(io, "(::", ft, ")")
+        end
     end
-
-    sig = li.specTypes.parameters
-    ft = sig[1]
-    if ft <: Function && isempty(ft.parameters) &&
-            isdefined(ft.name.module, ft.name.mt.name) &&
-            ft == typeof(getfield(ft.name.module, ft.name.mt.name))
-        print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && ft.name === Type.name && isleaftype(ft)
-        f = ft.parameters[1]
-        print(io, f)
-    else
-        print(io, "(::", ft, ")")
-    end
+    returned_from_do && return
     first = true
-    print(io, '(')
+    print_style = have_color ? :bold : :nothing
+    print_with_color(print_style, io, "(")
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
         first = false
         print(io, "::", sig[i])
     end
-    print(io, ')')
+    print_with_color(print_style, io, ")")
     nothing
 end
 
@@ -1071,27 +1070,35 @@ function show(io::IO, tv::TypeVar)
     # already printed and we don't need to print it again.
     # Otherwise, the lower bound should be printed if it is not `Bottom`
     # and the upper bound should be printed if it is not `Any`.
-    # The upper bound `Any` should also be printed if we are not in the
-    # existing `tvar_env` in order to resolve the ambiguity when printing a
-    # method signature.
-    # i.e. `foo{T,N}(::Array{T,N}, ::Vector)` should be printed as
-    # `foo{T,N}(::Array{T,N}, ::Array{T<:Any,1})`
     tvar_env = isa(io, IOContext) && get(io, :tvar_env, false)
     if isa(tvar_env, Vector{Any})
-        have_env = true
         in_env = (tv in tvar_env::Vector{Any})
     else
-        have_env = false
         in_env = false
     end
-    if !in_env && tv.lb !== Bottom
-        show(io, tv.lb)
-        print(io, "<:")
+    function show_bound(io::IO, b::ANY)
+        parens = isa(b,UnionAll) && !print_without_params(b)
+        parens && print(io, "(")
+        show(io, b)
+        parens && print(io, ")")
     end
-    write(io, tv.name)
-    if have_env ? !in_env : tv.ub !== Any
+    lb, ub = tv.lb, tv.ub
+    if !in_env && lb !== Bottom
+        if ub === Any
+            write(io, tv.name)
+            print(io, ">:")
+            show_bound(io, lb)
+        else
+            show_bound(io, lb)
+            print(io, "<:")
+            write(io, tv.name)
+        end
+    else
+        write(io, tv.name)
+    end
+    if !in_env && ub !== Any
         print(io, "<:")
-        show(io, tv.ub)
+        show_bound(io, ub)
     end
     nothing
 end
@@ -1211,8 +1218,8 @@ function dumptype(io::IO, x::ANY, n::Int, indent)
 end
 
 directsubtype(a::DataType, b::DataType) = supertype(a).name === b.name
-directsubtype(a::TypeConstructor, b::DataType) = directsubtype(a.body, b)
-directsubtype(a::Union, b::DataType) = any(t->directsubtype(t, b), a.types)
+directsubtype(a::UnionAll, b::DataType) = directsubtype(a.body, b)
+directsubtype(a::Union, b::DataType) = directsubtype(a.a, b) || directsubtype(a.b, b)
 # Fallback to handle TypeVar's
 directsubtype(a, b::DataType) = false
 function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
@@ -1224,10 +1231,9 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
             elseif isa(t, Module) && module_name(t) === s && module_parent(t) === m
                 # recurse into primary module bindings
                 dumpsubtypes(io, x, t, n, indent)
-            elseif isa(t, TypeConstructor) && directsubtype(t::TypeConstructor, x)
+            elseif isa(t, UnionAll) && directsubtype(t::UnionAll, x)
                 println(io)
                 print(io, indent, "  ", m, ".", s)
-                isempty(t.parameters) || print(io, "{", join(t.parameters, ","), "}")
                 print(io, " = ", t)
             elseif isa(t, Union) && directsubtype(t::Union, x)
                 println(io)
@@ -1504,6 +1510,14 @@ Return a string giving a brief description of a value. By default returns
 
 For arrays, returns a string of size and type info,
 e.g. `10-element Array{Int64,1}`.
+
+```jldoctest
+julia> summary(1)
+"Int64"
+
+julia> summary(zeros(2))
+"2-element Array{Float64,1}"
+```
 """
 summary(x) = string(typeof(x)) # e.g. Int64
 
@@ -1615,6 +1629,9 @@ end
 
 show(io::IO, X::AbstractArray) = showarray(io, X, true)
 
+repremptyarray{T}(io::IO, X::Array{T}) = print(io, "Array{$T}(", join(size(X),','), ')')
+repremptyarray(io, X) = nothing # by default, we don't know this constructor
+
 function showarray(io::IO, X::AbstractArray, repr::Bool = true; header = true)
     if repr && ndims(X) == 1
         return show_vector(io, X, "[", "]")
@@ -1652,6 +1669,8 @@ function showarray(io::IO, X::AbstractArray, repr::Bool = true; header = true)
                         !repr)
             end
         end
+    elseif repr
+        repremptyarray(io, X)
     end
 end
 
@@ -1676,8 +1695,8 @@ end
 # returns compact, prefix
 function array_eltype_show_how(X)
     e = eltype(X)
-    if isa(e,DataType) && e === e.name.primary
-        str = string(e.name) # Print "Array" rather than "Array{T,N}"
+    if print_without_params(e)
+        str = string(unwrap_unionall(e).name) # Print "Array" rather than "Array{T,N}"
     else
         str = string(e)
     end

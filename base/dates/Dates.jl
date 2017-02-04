@@ -3,6 +3,7 @@
 module Dates
 
 importall ..Base.Operators
+import ..Base.broadcast
 
 using Base.Iterators
 
@@ -16,13 +17,18 @@ include("ranges.jl")
 include("adjusters.jl")
 include("rounding.jl")
 include("io.jl")
+include("parse.jl")
 
 export Period, DatePeriod, TimePeriod,
        Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
-       TimeZone, UTC, TimeType, DateTime, Date,
+       Microsecond, Nanosecond,
+       TimeZone, UTC, TimeType, DateTime, Date, Time,
+       # periods.jl
+       canonicalize,
        # accessors.jl
        yearmonthday, yearmonth, monthday, year, month, week, day,
        hour, minute, second, millisecond, dayofmonth,
+       microsecond, nanosecond,
        # query.jl
        dayofweek, isleapyear, daysinmonth, daysinyear, dayofyear, dayname, dayabbr,
        dayofweekofmonth, daysofweekinmonth, monthname, monthabbr,
@@ -42,6 +48,6 @@ export Period, DatePeriod, TimePeriod,
        firstdayofquarter, lastdayofquarter,
        adjust, tonext, toprev, tofirst, tolast,
        # io.jl
-       ISODateTimeFormat, ISODateFormat, DateFormat, RFC1123Format
+       ISODateTimeFormat, ISODateFormat, DateFormat, RFC1123Format, @dateformat_str
 
 end # module

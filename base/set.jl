@@ -113,7 +113,15 @@ const ⊆ = issubset
     unique(itr)
 
 Returns an array containing one value from `itr` for each unique value,
-as determined by `isequal`.
+as determined by [`isequal`](@ref).
+
+```jldoctest
+julia> unique([1; 2; 2; 6])
+3-element Array{Int64,1}:
+ 1
+ 2
+ 6
+```
 """
 function unique(C)
     out = Vector{eltype(C)}()
@@ -132,6 +140,13 @@ end
 
 Returns an array containing one value from `itr` for each unique value produced by `f`
 applied to elements of `itr`.
+
+```jldoctest
+julia> unique(isodd, [1; 2; 2; 6])
+2-element Array{Int64,1}:
+ 1
+ 2
+```
 """
 function unique(f::Callable, C)
     out = Vector{eltype(C)}()
@@ -147,9 +162,20 @@ function unique(f::Callable, C)
 end
 
 """
-    allunique(itr)
+    allunique(itr) -> Bool
 
-Return `true` if all values from `itr` are distinct when compared with `isequal`.
+Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).
+
+```jldoctest
+julia> a = [1; 2; 3]
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> allunique([a, a])
+false
+```
 """
 function allunique(C)
     seen = Set{eltype(C)}()

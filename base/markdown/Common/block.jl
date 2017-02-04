@@ -19,7 +19,7 @@ function paragraph(stream::IO, md::MD)
     while !eof(stream)
         char = read(stream, Char)
         if char == '\n' || char == '\r'
-            char == '\r' && Char(peek(stream)) == '\n' && read(stream, Char)
+            char == '\r' && !eof(stream) && Char(peek(stream)) == '\n' && read(stream, Char)
             if prev_char == '\\'
                 write(buffer, '\n')
             elseif blankline(stream) || parse(stream, md, breaking = true)
@@ -61,7 +61,7 @@ function hashheader(stream::IO, md::MD)
             return false
 
         if c != '\n' # Empty header
-            h = readline(stream) |> strip
+            h = strip(readline(stream))
             h = match(r"(.*?)( +#+)?$", h).captures[1]
             buffer = IOBuffer()
             print(buffer, h)
@@ -76,11 +76,11 @@ end
 function setextheader(stream::IO, md::MD)
     withstream(stream) do
         eatindent(stream) || return false
-        header = readline(stream) |> strip
+        header = strip(readline(stream))
         header == "" && return false
 
         eatindent(stream) || return false
-        underline = readline(stream) |> strip
+        underline = strip(readline(stream))
         length(underline) < 3 && return false
         u = underline[1]
         u in "-=" || return false
@@ -108,7 +108,7 @@ function indentcode(stream::IO, block::MD)
         buffer = IOBuffer()
         while !eof(stream)
             if startswith(stream, "    ") || startswith(stream, "\t")
-                write(buffer, readline(stream))
+                write(buffer, readline(stream, chomp=false))
             elseif blankline(stream)
                 write(buffer, '\n')
             else
@@ -139,10 +139,10 @@ function footnote(stream::IO, block::MD)
         else
             ref = match(regex, str).captures[1]
             buffer = IOBuffer()
-            write(buffer, readline(stream))
+            write(buffer, readline(stream, chomp=false))
             while !eof(stream)
                 if startswith(stream, "    ")
-                    write(buffer, readline(stream))
+                    write(buffer, readline(stream, chomp=false))
                 elseif blankline(stream)
                     write(buffer, '\n')
                 else
@@ -174,7 +174,7 @@ function blockquote(stream::IO, block::MD)
         empty = true
         while eatindent(stream) && startswith(stream, '>')
             startswith(stream, " ")
-            write(buffer, readline(stream))
+            write(buffer, readline(stream, chomp=false))
             empty = false
         end
         empty && return false
@@ -229,7 +229,7 @@ function admonition(stream::IO, block::MD)
         buffer = IOBuffer()
         while !eof(stream)
             if startswith(stream, "    ")
-                write(buffer, readline(stream))
+                write(buffer, readline(stream, chomp=false))
             elseif blankline(stream)
                 write(buffer, '\n')
             else
@@ -305,7 +305,7 @@ function list(stream::IO, block::MD)
                 newline = false
                 if startswith(stream, " "^indent)
                     # Indented text that is part of the current list item.
-                    print(buffer, readline(stream))
+                    print(buffer, readline(stream, chomp=false))
                 else
                     matched = startswith(stream, regex)
                     if isempty(matched)
@@ -316,7 +316,7 @@ function list(stream::IO, block::MD)
                         # Start of a new list item.
                         count += 1
                         count > 1 && pushitem!(list, buffer)
-                        print(buffer, readline(stream))
+                        print(buffer, readline(stream, chomp=false))
                     end
                 end
             end

@@ -1257,7 +1257,7 @@ end
     randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A
 
 Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers.
-Also see the [`rand`](:func:`rand`) function.
+Also see the [`rand`](@ref) function.
 """
 function randn! end
 
@@ -1468,7 +1468,7 @@ end
 """
     shuffle!([rng=GLOBAL_RNG,] v)
 
-In-place version of [`shuffle`](:func:`shuffle`): randomly permute the array `v` in-place,
+In-place version of [`shuffle`](@ref): randomly permute the array `v` in-place,
 optionally supplying the random-number generator `rng`.
 """
 function shuffle!(r::AbstractRNG, a::AbstractVector)
@@ -1489,9 +1489,9 @@ shuffle!(a::AbstractVector) = shuffle!(GLOBAL_RNG, a)
     shuffle([rng=GLOBAL_RNG,] v)
 
 Return a randomly permuted copy of `v`. The optional `rng` argument specifies a random
-number generator (see [Random Numbers](:ref:`Random Numbers <random-numbers>`)).
-To permute `v` in-place, see [`shuffle!`](:func:`shuffle!`).  To obtain randomly permuted
-indices, see [`randperm`](:func:`randperm`).
+number generator (see [Random Numbers](@ref)).
+To permute `v` in-place, see [`shuffle!`](@ref).  To obtain randomly permuted
+indices, see [`randperm`](@ref).
 """
 shuffle(r::AbstractRNG, a::AbstractVector) = shuffle!(r, copymutable(a))
 shuffle(a::AbstractVector) = shuffle(GLOBAL_RNG, a)
@@ -1500,9 +1500,9 @@ shuffle(a::AbstractVector) = shuffle(GLOBAL_RNG, a)
     randperm([rng=GLOBAL_RNG,] n::Integer)
 
 Construct a random permutation of length `n`. The optional `rng` argument specifies a random
-number generator (see [Random Numbers](:ref:`Random Numbers <random-numbers>`)).
-To randomly permute a arbitrary vector, see [`shuffle`](:func:`shuffle`)
-or [`shuffle!`](:func:`shuffle!`).
+number generator (see [Random Numbers](@ref)).
+To randomly permute a arbitrary vector, see [`shuffle`](@ref)
+or [`shuffle!`](@ref).
 """
 function randperm(r::AbstractRNG, n::Integer)
     a = Array{typeof(n)}(n)
@@ -1528,7 +1528,7 @@ randperm(n::Integer) = randperm(GLOBAL_RNG, n)
     randcycle([rng=GLOBAL_RNG,] n::Integer)
 
 Construct a random cyclic permutation of length `n`. The optional `rng`
-argument specifies a random number generator, see [Random Numbers](:ref:`Random Numbers <random-numbers>`).
+argument specifies a random number generator, see [Random Numbers](@ref).
 """
 function randcycle(r::AbstractRNG, n::Integer)
     a = Array{typeof(n)}(n)

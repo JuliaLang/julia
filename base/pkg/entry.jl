@@ -51,7 +51,7 @@ function add(pkg::AbstractString, vers::VersionSet)
     @sync begin
         @async if !edit(Reqs.add,pkg,vers)
             ispath(pkg) || throw(PkgError("unknown package $pkg"))
-            info("Nothing to be done")
+            info("Package $pkg is already installed")
         end
         branch = Dir.getmetabranch()
         outdated = with(GitRepo, "METADATA") do repo
@@ -79,7 +79,7 @@ add(pkg::AbstractString, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
 function rm(pkg::AbstractString)
     edit(Reqs.rm,pkg) && return
-    ispath(pkg) || return info("Nothing to be done")
+    ispath(pkg) || return info("Package $pkg is not installed")
     info("Removing $pkg (unregistered)")
     Write.remove(pkg)
 end
@@ -166,7 +166,7 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
                 if LibGit2.isattached(prepo)
                     print(io, LibGit2.shortname(phead))
                 else
-                    print(io, string(LibGit2.Oid(phead))[1:8])
+                    print(io, string(LibGit2.GitHash(phead))[1:8])
                 end
             end
             attrs = AbstractString[]
@@ -174,12 +174,12 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
             LibGit2.isdirty(prepo) && push!(attrs,"dirty")
             isempty(attrs) || print(io, " (",join(attrs,", "),")")
         catch err
-            print_with_color(:red, io, " broken-repo (unregistered)")
+            print_with_color(Base.error_color(), io, " broken-repo (unregistered)")
         finally
-            finalize(prepo)
+            close(prepo)
         end
     else
-        print_with_color(:yellow, io, "non-repo (unregistered)")
+        print_with_color(Base.warn_color(), io, "non-repo (unregistered)")
     end
     println(io)
 end
@@ -301,7 +301,7 @@ function pin(pkg::AbstractString, head::AbstractString)
         else
             LibGit2.revparseid(repo, head)
         end
-        commit = LibGit2.get(LibGit2.GitCommit, repo, id)
+        commit = LibGit2.GitCommit(repo, id)
         try
             # note: changing the following naming scheme requires a corresponding change in Read.ispinned()
             branch = "pinned.$(string(id)[1:8]).tmp"
@@ -312,27 +312,28 @@ function pin(pkg::AbstractString, head::AbstractString)
             end
             ref = LibGit2.lookup_branch(repo, branch)
             try
-                if ref !== nothing
+                if !isnull(ref)
                     if LibGit2.revparseid(repo, branch) != id
-                        throw(PkgError("Package $pkg: existing branch $branch has been edited and doesn't correspond to its original commit"))
+                        throw(PkgError("Package $pkg: existing branch $branch has " *
+                            "been edited and doesn't correspond to its original commit"))
                     end
                     info("Package $pkg: checking out existing branch $branch")
                 else
                     info("Creating $pkg branch $branch")
-                    ref = LibGit2.create_branch(repo, branch, commit)
+                    ref = Nullable(LibGit2.create_branch(repo, branch, commit))
                 end
 
                 # checkout selected branch
-                with(LibGit2.peel(LibGit2.GitTree, ref)) do btree
+                with(LibGit2.peel(LibGit2.GitTree, get(ref))) do btree
                     LibGit2.checkout_tree(repo, btree)
                 end
                 # switch head to the branch
-                LibGit2.head!(repo, ref)
+                LibGit2.head!(repo, get(ref))
             finally
-                finalize(ref)
+                close(get(ref))
             end
         finally
-            finalize(commit)
+            close(commit)
         end
     end
     should_resolve && resolve()
@@ -375,7 +376,8 @@ function update(branch::AbstractString, upkgs::Set{String})
             end
         catch err
             cex = CapturedException(err, catch_backtrace())
-            throw(PkgError("METADATA cannot be updated. Resolve problems manually in $(Pkg.dir("METADATA")).", cex))
+            throw(PkgError("METADATA cannot be updated. Resolve problems manually in " *
+                Pkg.dir("METADATA") * ".", cex))
         end
     end
     deferred_errors = CompositeException()
@@ -393,7 +395,9 @@ function update(branch::AbstractString, upkgs::Set{String})
     reqs = Reqs.parse("REQUIRE")
     if !isempty(upkgs)
         for (pkg, (v,f)) in instd
-            satisfies(pkg, v, reqs) || throw(PkgError("Package $pkg: current package status does not satisfy the requirements, cannot do a partial update; use `Pkg.update()`"))
+            satisfies(pkg, v, reqs) || throw(PkgError("Package $pkg: current " *
+                "package status does not satisfy the requirements, cannot do " *
+                "a partial update; use `Pkg.update()`"))
         end
     end
     dont_update = Query.partial_update_mask(instd, avail, upkgs)
@@ -480,11 +484,12 @@ function resolve(
     for pkg in keys(reqs)
         if !haskey(deps,pkg)
             if "julia" in conflicts[pkg]
-                throw(PkgError("$pkg can't be installed because it has no versions that support $VERSION of julia. " *
-                   "You may need to update METADATA by running `Pkg.update()`"))
+                throw(PkgError("$pkg can't be installed because it has no versions that support $VERSION " *
+                   "of julia. You may need to update METADATA by running `Pkg.update()`"))
             else
                 sconflicts = join(conflicts[pkg], ", ", " and ")
-                throw(PkgError("$pkg's requirements can't be satisfied because of the following fixed packages: $sconflicts"))
+                throw(PkgError("$pkg's requirements can't be satisfied because " *
+                    "of the following fixed packages: $sconflicts"))
             end
         end
     end
@@ -595,16 +600,17 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
     # are serialized to errfile for later retrieval into errs[pkg]
     errfile = tempname()
     close(open(errfile, "w")) # create empty file
+    # TODO: serialize the same way the load cache does, not with strings
+    LOAD_PATH = filter(x -> x isa AbstractString, Base.LOAD_PATH)
     code = """
         empty!(Base.LOAD_PATH)
-        append!(Base.LOAD_PATH, $(repr(Base.LOAD_PATH)))
+        append!(Base.LOAD_PATH, $(repr(LOAD_PATH)))
         empty!(Base.LOAD_CACHE_PATH)
         append!(Base.LOAD_CACHE_PATH, $(repr(Base.LOAD_CACHE_PATH)))
         empty!(Base.DL_LOAD_PATH)
         append!(Base.DL_LOAD_PATH, $(repr(Base.DL_LOAD_PATH)))
         open("$(escape_string(errfile))", "a") do f
-            for path_ in eachline(STDIN)
-                path = chomp(path_)
+            for path in eachline(STDIN)
                 pkg = basename(dirname(dirname(path)))
                 try
                     info("Building \$pkg")
@@ -726,6 +732,14 @@ function test!(pkg::AbstractString,
     isfile(reqs_path) && resolve()
 end
 
+type PkgTestError <: Exception
+    msg::String
+end
+
+function Base.showerror(io::IO, ex::PkgTestError, bt; backtrace=true)
+    print_with_color(Base.error_color(), io, ex.msg)
+end
+
 function test(pkgs::Vector{AbstractString}; coverage::Bool=false)
     errs = AbstractString[]
     nopkgs = AbstractString[]
@@ -746,7 +760,7 @@ function test(pkgs::Vector{AbstractString}; coverage::Bool=false)
         if !isempty(notests)
             push!(messages, "$(join(notests,", "," and ")) did not provide a test/runtests.jl file")
         end
-        throw(PkgError(join(messages, "and")))
+        throw(PkgTestError(join(messages, "and")))
     end
 end
 

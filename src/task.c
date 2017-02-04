@@ -147,7 +147,8 @@ static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *t)
     if (t->state == done_sym || t->state == failed_sym)
         return;
     char *frame_addr = (char*)jl_get_frame_addr();
-    size_t nb = (char*)ptls->stackbase - frame_addr;
+    char *stackbase = (char*)ptls->stackbase;
+    size_t nb = stackbase > frame_addr ? stackbase - frame_addr : 0;
     char *buf;
     if (t->stkbuf == NULL || t->bufsz < nb) {
         buf = (char*)jl_gc_alloc_buf(ptls, nb);
@@ -256,6 +257,7 @@ static void NOINLINE JL_NORETURN start_task(void)
                 jl_sigint_safepoint(ptls);
             }
             JL_TIMING(ROOT);
+            ptls->world_age = jl_world_counter;
             res = jl_apply(&t->start, 1);
         }
         JL_CATCH {
@@ -264,6 +266,7 @@ static void NOINLINE JL_NORETURN start_task(void)
             jl_gc_wb(t, res);
         }
     }
+    jl_get_ptls_states()->world_age = jl_world_counter; // TODO
     finish_task(t, res);
     gc_debug_critical_error();
     abort();
@@ -305,14 +308,16 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t *t, jl_jmp_buf *where)
     if (!jl_setjmp(ptls->current_task->ctx, 0)) {
         // backtraces don't survive task switches, see e.g. issue #12485
         ptls->bt_size = 0;
-#ifdef COPY_STACKS
         jl_task_t *lastt = ptls->current_task;
+#ifdef COPY_STACKS
         save_stack(ptls, lastt);
 #endif
 
         // set up global state for new task
-        ptls->current_task->gcstack = ptls->pgcstack;
+        lastt->gcstack = ptls->pgcstack;
+        lastt->world_age = ptls->world_age;
         ptls->pgcstack = t->gcstack;
+        ptls->world_age = t->world_age;
 #ifdef JULIA_ENABLE_THREADING
         // If the current task is not holding any locks, free the locks list
         // so that it can be GC'd without leaking memory
@@ -654,32 +659,33 @@ jl_function_t *jl_unprotect_stack_func;
 void jl_init_tasks(void)
 {
     _probe_arch();
-    jl_task_type = jl_new_datatype(jl_symbol("Task"),
-                                   jl_any_type,
-                                   jl_emptysvec,
-                                   jl_svec(13,
-                                           jl_symbol("parent"),
-                                           jl_symbol("storage"),
-                                           jl_symbol("state"),
-                                           jl_symbol("consumers"),
-                                           jl_symbol("donenotify"),
-                                           jl_symbol("result"),
-                                           jl_symbol("exception"),
-                                           jl_symbol("backtrace"),
-                                           jl_symbol("code"),
-                                           jl_symbol("ctx"),
-                                           jl_symbol("bufsz"),
-                                           jl_symbol("stkbuf"),
-                                           jl_symbol("ssize")),
-                                   jl_svec(13,
-                                           jl_any_type,
-                                           jl_any_type, jl_sym_type,
-                                           jl_any_type, jl_any_type,
-                                           jl_any_type, jl_any_type,
-                                           jl_any_type, jl_any_type,
-                                           jl_tupletype_fill(sizeof(jl_jmp_buf), (jl_value_t*)jl_uint8_type),
-                                           jl_long_type, jl_voidpointer_type, jl_long_type),
-                                   0, 1, 8);
+    jl_task_type = (jl_datatype_t*)
+        jl_new_datatype(jl_symbol("Task"),
+                        jl_any_type,
+                        jl_emptysvec,
+                        jl_svec(13,
+                                jl_symbol("parent"),
+                                jl_symbol("storage"),
+                                jl_symbol("state"),
+                                jl_symbol("consumers"),
+                                jl_symbol("donenotify"),
+                                jl_symbol("result"),
+                                jl_symbol("exception"),
+                                jl_symbol("backtrace"),
+                                jl_symbol("code"),
+                                jl_symbol("ctx"),
+                                jl_symbol("bufsz"),
+                                jl_symbol("stkbuf"),
+                                jl_symbol("ssize")),
+                        jl_svec(13,
+                                jl_any_type,
+                                jl_any_type, jl_sym_type,
+                                jl_any_type, jl_any_type,
+                                jl_any_type, jl_any_type,
+                                jl_any_type, jl_any_type,
+                                jl_tupletype_fill(sizeof(jl_jmp_buf), (jl_value_t*)jl_uint8_type),
+                                jl_long_type, jl_voidpointer_type, jl_long_type),
+                        0, 1, 8);
     jl_svecset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
 
     done_sym = jl_symbol("done");

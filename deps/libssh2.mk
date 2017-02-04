@@ -24,6 +24,10 @@ ifeq ($(OS),Linux)
 LIBSSH2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
+ifeq ($(OS),FreeBSD)
+LIBSSH2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+endif
+
 $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/source-extracted
 	cd $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libssh2-encryptedpem.patch
 	echo 1 > $@

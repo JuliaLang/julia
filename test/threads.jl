@@ -144,7 +144,7 @@ end
 
 @threads for i in 1:100
     for j in 1:100
-        eval(M14726, :(module_var14726 = $j))
+        @eval M14726 module_var14726 = $j
     end
 end
 @test isdefined(:orig_curmodule14726)
@@ -273,7 +273,8 @@ let atomic_types = [Int8, Int16, Int32, Int64, Int128,
                     Float16, Float32, Float64]
     # Temporarily omit 128-bit types on 32bit x86
     # 128-bit atomics do not exist on AArch32.
-    # And we don't support them yet on power.
+    # And we don't support them yet on power, because they are lowered
+    # to `__sync_lock_test_and_set_16`.
     if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm") ||
        Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
         filter!(T -> sizeof(T)<=8, atomic_types)
@@ -346,37 +347,38 @@ for T in (Int32, Int64, Float32, Float64)
     @test varmax[] === T(maximum(1:nloops))
     @test varmin[] === T(0)
 end
-
-let async = Base.AsyncCondition(), t
-    c = Condition()
-    task = schedule(Task(function()
+for period in (0.06, Dates.Millisecond(60))
+    let async = Base.AsyncCondition(), t
+        c = Condition()
+        task = schedule(Task(function()
+            notify(c)
+            wait(c)
+            t = Timer(period)
+            wait(t)
+            ccall(:uv_async_send, Void, (Ptr{Void},), async)
+            ccall(:uv_async_send, Void, (Ptr{Void},), async)
+            wait(c)
+            sleep(period)
+            ccall(:uv_async_send, Void, (Ptr{Void},), async)
+            ccall(:uv_async_send, Void, (Ptr{Void},), async)
+        end))
+        wait(c)
         notify(c)
-        wait(c)
-        t = Timer(0.06)
-        wait(t)
-        ccall(:uv_async_send, Void, (Ptr{Void},), async)
-        ccall(:uv_async_send, Void, (Ptr{Void},), async)
-        wait(c)
-        sleep(0.06)
-        ccall(:uv_async_send, Void, (Ptr{Void},), async)
-        ccall(:uv_async_send, Void, (Ptr{Void},), async)
-    end))
-    wait(c)
-    notify(c)
-    delay1 = @elapsed wait(async)
-    notify(c)
-    delay2 = @elapsed wait(async)
-    @test istaskdone(task)
-    @test delay1 > 0.05
-    @test delay2 > 0.05
-    @test isopen(async)
-    @test !isopen(t)
-    close(t)
-    close(async)
-    @test_throws EOFError wait(async)
-    @test !isopen(async)
-    @test_throws EOFError wait(t)
-    @test_throws EOFError wait(async)
+        delay1 = @elapsed wait(async)
+        notify(c)
+        delay2 = @elapsed wait(async)
+        @test istaskdone(task)
+        @test delay1 > 0.05
+        @test delay2 > 0.05
+        @test isopen(async)
+        @test !isopen(t)
+        close(t)
+        close(async)
+        @test_throws EOFError wait(async)
+        @test !isopen(async)
+        @test_throws EOFError wait(t)
+        @test_throws EOFError wait(async)
+    end
 end
 
 # Compare the two ways of checking if threading is enabled.

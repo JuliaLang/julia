@@ -55,8 +55,8 @@ julia_flisp.boot.inc.phony: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
 
 # Build the HTML docs (skipped if already exists, notably in tarballs)
-$(BUILDROOT)/doc/_build/html:
-	@$(MAKE) -C $(BUILDROOT)/doc html
+$(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUILDROOT)/doc \( -path $(BUILDROOT)/doc/_build -o -path $(BUILDROOT)/doc/deps -o -name *_constants.jl -o -name *_h.jl \) -prune -o -type f -print)
+	@$(MAKE) docs
 
 # doc needs to live under $(build_docdir), not under $(build_datarootdir)/julia/
 CLEAN_TARGETS += clean-docdir
@@ -95,21 +95,24 @@ julia-ui-release julia-ui-debug : julia-ui-% : julia-src-%
 julia-inference : julia-base julia-ui-$(JULIA_BUILD_MODE) $(build_prefix)/.examples
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/inference.ji JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
+ifneq ($(CPUID_SPECIFIC_BINARIES), 0)
+CPUID_TAG = _$(call exec,$(JULIA_EXECUTABLE) --cpuid)
+else
+CPUID_TAG =
+endif
+
 julia-sysimg-release : julia-inference julia-ui-release
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys.$(SHLIB_EXT) JULIA_BUILD_MODE=release
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys$(CPUID_TAG).$(SHLIB_EXT) JULIA_BUILD_MODE=release
 
 julia-sysimg-debug : julia-inference julia-ui-debug
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) JULIA_BUILD_MODE=debug
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys-debug$(CPUID_TAG).$(SHLIB_EXT) JULIA_BUILD_MODE=debug
 
 julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink julia-libccalltest
 
 debug release : % : julia-%
 
-julia-genstdlib: julia-sysimg-$(JULIA_BUILD_MODE)
-	@$(call PRINT_JULIA, $(JULIA_EXECUTABLE) $(call cygpath_w, $(JULIAHOME)/doc/genstdlib.jl))
-
-docs: julia-genstdlib
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc
+docs: julia-sysimg-$(JULIA_BUILD_MODE)
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc JULIA_EXECUTABLE=$(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))
 
 check-whitespace:
 ifneq ($(NO_GIT), 1)
@@ -120,21 +123,11 @@ endif
 
 release-candidate: release testall
 	@$(JULIA_EXECUTABLE) $(JULIAHOME)/contrib/add_license_to_files.jl #add license headers
-	@$(JULIA_EXECUTABLE) $(JULIAHOME)/doc/genstdlib.jl
 	@#Check documentation
 	@$(JULIA_EXECUTABLE) $(JULIAHOME)/doc/NEWS-update.jl #Add missing cross-references to NEWS.md
-	@$(MAKE) -C $(BUILDROOT)/doc unicode #Rebuild Unicode table if necessary
-	@$(JULIA_EXECUTABLE) $(JULIAHOME)/doc/DocCheck.jl > $(BUILDROOT)/doc/UNDOCUMENTED.rst 2>&1 #Check for undocumented items
-	@if [ -z "$(cat $(BUILDROOT)/doc/UNDOCUMENTED.rst)" ]; then \
-		rm $(BUILDROOT)/doc/UNDOCUMENTED.rst; \
-	else \
-		echo "Undocumented functions found in doc/UNDOCUMENTED.rst; document them, then retry"; \
-		exit 1; \
-	fi
-	@$(MAKE) -C $(BUILDROOT)/doc html  SPHINXOPTS="-n" #Rebuild Julia HTML docs pedantically
-	@$(MAKE) -C $(BUILDROOT)/doc latex SPHINXOPTS="-n" #Rebuild Julia PDF docs pedantically
-	@$(MAKE) -C $(BUILDROOT)/doc doctest #Run Julia doctests
-	@$(MAKE) -C $(BUILDROOT)/doc linkcheck #Check all links
+	@$(MAKE) -C $(BUILDROOT)/doc html
+	@$(MAKE) -C $(BUILDROOT)/doc pdf
+	@$(MAKE) -C $(BUILDROOT)/doc check
 
 	@# Check to see if the above make invocations changed anything important
 	@if [ -n "$$(git status --porcelain)" ]; then \
@@ -182,7 +175,7 @@ $(build_datarootdir)/julia/julia-config.jl : $(JULIAHOME)/contrib/julia-config.j
 
 $(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%.o
 	@$(call PRINT_LINK, $(CXX) $(LDFLAGS) -shared $(fPIC) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
-		$(if $(findstring -debug.$(SHLIB_EXT),$(notdir $@)),-ljulia-debug,-ljulia) \
+		$(if $(findstring -debug,$(notdir $@)),-ljulia-debug,-ljulia) \
 		$$([ $(OS) = WINNT ] && echo '' -lssp))
 	@$(INSTALL_NAME_CMD)$(notdir $@) $@
 	@$(DSYMUTIL) $@
@@ -228,8 +221,13 @@ $$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji $$(JULIA
 		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***' && false; } )
 .SECONDARY: $(build_private_libdir)/sys$1.o
 endef
+ifneq ($(CPUID_SPECIFIC_BINARIES),0)
+$(eval $(call sysimg_builder,_%,-O3,$(JULIA_EXECUTABLE_release)))
+$(eval $(call sysimg_builder,-debug_%,-O0,$(JULIA_EXECUTABLE_debug)))
+else
 $(eval $(call sysimg_builder,,-O3,$(JULIA_EXECUTABLE_release)))
 $(eval $(call sysimg_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
+endif
 
 $(build_depsbindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(build_depsbindir)
 	@$(call PRINT_CC, $(HOSTCC) -o $(build_depsbindir)/stringreplace $(JULIAHOME)/contrib/stringreplace.c)
@@ -324,12 +322,13 @@ else
 $(eval $(call std_dll,gcc_s_seh-1))
 endif
 $(eval $(call std_dll,ssp-0))
+$(eval $(call std_dll,winpthread-1))
 endif
 define stringreplace
 	$(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep '$2' | awk '{print $$1;}') '$3' 255 "$(call cygpath_w,$1)"
 endef
 
-install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html
+install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index.html
 	@$(MAKE) $(QUIET_MAKE) all
 	@for subdir in $(bindir) $(libexecdir) $(datarootdir)/julia/site/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
 		mkdir -p $(DESTDIR)$$subdir; \
@@ -379,7 +378,6 @@ endif
 	# Copy documentation
 	cp -R -L $(build_docdir)/* $(DESTDIR)$(docdir)/
 	cp -R -L $(BUILDROOT)/doc/_build/html $(DESTDIR)$(docdir)/
-	-rm $(DESTDIR)$(docdir)/html/.buildinfo
 	# Remove perf suite
 	-rm -rf $(DESTDIR)$(datarootdir)/julia/test/perf/
 	# Remove various files which should not be installed
@@ -460,7 +458,7 @@ endif
 
 ifeq ($(OS), WINNT)
 	[ ! -d $(JULIAHOME)/dist-extras ] || ( cd $(JULIAHOME)/dist-extras && \
-		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll libgfortran-3.dll libquadmath-0.dll libstdc++-6.dll libgcc_s_s*-1.dll libssp-0.dll $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin )
+		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll libgfortran-3.dll libquadmath-0.dll libstdc++-6.dll libgcc_s_s*-1.dll libssp-0.dll libwinpthread-1.dll $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin )
 ifeq ($(USE_GPL_LIBS), 1)
 	[ ! -d $(JULIAHOME)/dist-extras ] || ( cd $(JULIAHOME)/dist-extras && \
 		cp busybox.exe $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin )
@@ -584,15 +582,8 @@ ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cd $(JULIAHOME)/dist-extras && \
 	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920.exe && \
 	7z x -y 7z920.exe 7z.exe 7z.dll && \
-	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_13.2 \
-		"mingw32-libexpat1 mingw32-zlib1" && \
-	$(JLDOWNLOAD) https://julialang.s3.amazonaws.com/bin/winnt/extras/mingw32-libgfortran3-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://julialang.s3.amazonaws.com/bin/winnt/extras/mingw32-libquadmath0-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://julialang.s3.amazonaws.com/bin/winnt/extras/mingw32-libstdc++6-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://julialang.s3.amazonaws.com/bin/winnt/extras/mingw32-libgcc_s_sjlj1-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://julialang.s3.amazonaws.com/bin/winnt/extras/mingw32-libssp0-5.3.0-1.1.noarch.rpm && \
-	for i in *.rpm; do 7z x -y $$i; done && \
-	for i in *.cpio; do 7z x -y $$i; done && \
+	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_42.2 \
+		"mingw32-libgfortran3 mingw32-libquadmath0 mingw32-libstdc++6 mingw32-libgcc_s_sjlj1 mingw32-libssp0 mingw32-libwinpthread1 mingw32-libexpat1 mingw32-zlib1" && \
 	cp usr/i686-w64-mingw32/sys-root/mingw/bin/*.dll .
 else ifeq ($(ARCH),x86_64)
 	cd $(JULIAHOME)/dist-extras && \
@@ -600,15 +591,8 @@ else ifeq ($(ARCH),x86_64)
 	7z x -y 7z920-x64.msi _7z.exe _7z.dll && \
 	mv _7z.dll 7z.dll && \
 	mv _7z.exe 7z.exe && \
-	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.2 \
-		"mingw64-libexpat1 mingw64-zlib1" && \
-	$(JLDOWNLOAD) https://julialang.s3.amazonaws.com/bin/winnt/extras/mingw64-libgfortran3-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://julialang.s3.amazonaws.com/bin/winnt/extras/mingw64-libquadmath0-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://julialang.s3.amazonaws.com/bin/winnt/extras/mingw64-libstdc++6-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://julialang.s3.amazonaws.com/bin/winnt/extras/mingw64-libgcc_s_seh1-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://julialang.s3.amazonaws.com/bin/winnt/extras/mingw64-libssp0-5.3.0-1.1.noarch.rpm && \
-	for i in *.rpm; do 7z x -y $$i; done && \
-	for i in *.cpio; do 7z x -y $$i; done && \
+	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_42.2 \
+		"mingw64-libgfortran3 mingw64-libquadmath0 mingw64-libstdc++6 mingw64-libgcc_s_seh1 mingw64-libssp0 mingw64-libwinpthread1 mingw64-libexpat1 mingw64-zlib1" && \
 	cp usr/x86_64-w64-mingw32/sys-root/mingw/bin/*.dll .
 else
 	$(error no win-extras target for ARCH=$(ARCH))
@@ -622,7 +606,7 @@ endif
 	chmod a+x ./nsis/makensis.exe
 ifeq ($(USE_GPL_LIBS), 1)
 	cd $(JULIAHOME)/dist-extras && \
-	$(JLDOWNLOAD) busybox.exe http://frippery.org/files/busybox/busybox-w32-FRP-483-g31277ab.exe && \
+	$(JLDOWNLOAD) busybox.exe http://frippery.org/files/busybox/busybox-w32-FRP-875-gc6ec14a.exe && \
 	chmod a+x busybox.exe
 endif
 

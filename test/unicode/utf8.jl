@@ -5,7 +5,7 @@
 let ch = 0x10000
     for hi = 0xd800:0xdbff
         for lo = 0xdc00:0xdfff
-            @test convert(String, String(Char[hi, lo]).data) == string(Char(ch))
+            @test convert(String, Vector{UInt8}(String(Char[hi, lo]))) == string(Char(ch))
             ch += 1
         end
     end

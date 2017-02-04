@@ -1,0 +1,23 @@
+From 9f7957830512dbcddd9cb5542080eb2d1cdd705b Mon Sep 17 00:00:00 2001
+From: Nuno Lopes <nunoplopes@sapo.pt>
+Date: Thu, 6 Oct 2016 09:32:16 +0000
+Subject: [PATCH] fix build on cygwin Cygwin has dlfcn.h, but no Dl_info
+
+git-svn-id: https://llvm.org/svn/llvm-project/llvm/trunk@283427 91177308-0d34-0410-b5e6-96231b3b80d8
+---
+ lib/Support/Unix/Signals.inc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/lib/Support/Unix/Signals.inc b/lib/Support/Unix/Signals.inc
+index 46b640a..9752b70 100644
+--- a/lib/Support/Unix/Signals.inc
++++ b/lib/Support/Unix/Signals.inc
+@@ -412,7 +412,7 @@ void llvm::sys::PrintStackTrace(raw_ostream &OS) {
+ 
+   if (printSymbolizedStackTrace(Argv0, StackTrace, depth, OS))
+     return;
+-#if HAVE_DLFCN_H && __GNUG__
++#if HAVE_DLFCN_H && __GNUG__ && !defined(__CYGWIN__)
+   int width = 0;
+   for (int i = 0; i < depth; ++i) {
+     Dl_info dlinfo;

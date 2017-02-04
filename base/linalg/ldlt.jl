@@ -12,13 +12,14 @@ convert{T,S}(::Type{LDLt{T,S}}, F::LDLt) = LDLt{T,S}(convert(S, F.data))
 #       to avoid an ambiguity warning (see issue #6383)
 convert{T,S,U<:AbstractMatrix}(::Type{LDLt{T}}, F::LDLt{S,U}) = convert(LDLt{T,U}, F)
 
+convert{T}(::Type{Factorization{T}}, F::LDLt{T}) = F
 convert{T,S,U}(::Type{Factorization{T}}, F::LDLt{S,U}) = convert(LDLt{T,U}, F)
 
 # SymTridiagonal
 """
     ldltfact!(S::SymTridiagonal) -> LDLt
 
-Same as [`ldltfact`](:func:`ldltfact`), but saves space by overwriting the input `A`, instead of creating a copy.
+Same as [`ldltfact`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
 """
 function ldltfact!{T<:Real}(S::SymTridiagonal{T})
     n = size(S,1)

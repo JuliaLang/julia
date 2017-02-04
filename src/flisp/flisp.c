@@ -32,7 +32,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <setjmp.h>
 #include <stdint.h>
 #include <stdarg.h>
 #include <assert.h>
@@ -117,7 +116,7 @@ static void free_readstate(fl_readstate_t *rs)
   fl_exception_context_t _ctx; int l__tr, l__ca; \
   _ctx.sp=fl_ctx->SP; _ctx.frame=fl_ctx->curr_frame; _ctx.rdst=fl_ctx->readstate; _ctx.prev=fl_ctx->exc_ctx; \
   _ctx.ngchnd = fl_ctx->N_GCHND; fl_ctx->exc_ctx = &_ctx;                                    \
-  if (!setjmp(_ctx.buf)) \
+  if (!fl_setjmp(_ctx.buf)) \
     for (l__tr=1; l__tr; l__tr=0, (void)(fl_ctx->exc_ctx=fl_ctx->exc_ctx->prev))
 
 #define FL_CATCH(fl_ctx)                                                \
@@ -156,7 +155,7 @@ void fl_raise(fl_context_t *fl_ctx, value_t e)
     fl_exception_context_t *thisctx = fl_ctx->exc_ctx;
     if (fl_ctx->exc_ctx->prev)   // don't throw past toplevel
         fl_ctx->exc_ctx = fl_ctx->exc_ctx->prev;
-    longjmp(thisctx->buf, 1);
+    fl_longjmp(thisctx->buf, 1);
 }
 
 static value_t make_error_msg(fl_context_t *fl_ctx, const char *format, va_list args)
@@ -2305,6 +2304,7 @@ static const builtinspec_t core_builtin_info[] = {
 
 extern void builtins_init(fl_context_t *fl_ctx);
 extern void comparehash_init(fl_context_t *fl_ctx);
+extern void jl_charmap_init(fl_context_t *fl_ctx);
 
 static void lisp_init(fl_context_t *fl_ctx, size_t initial_heapsize)
 {
@@ -2337,6 +2337,7 @@ static void lisp_init(fl_context_t *fl_ctx, size_t initial_heapsize)
     fl_ctx->consflags = bitvector_new(fl_ctx->heapsize/sizeof(cons_t), 1);
     fl_print_init(fl_ctx);
     comparehash_init(fl_ctx);
+    jl_charmap_init(fl_ctx);
     fl_ctx->N_STACK = 262144;
     fl_ctx->Stack = (value_t*)malloc(fl_ctx->N_STACK*sizeof(value_t));
     CHECK_ALIGN8(fl_ctx->Stack);

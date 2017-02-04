@@ -183,7 +183,7 @@ var{T}(A::AbstractArray{T}; corrected::Bool=true, mean=nothing) =
 Compute the sample variance of a vector or array `v`, optionally along dimensions in
 `region`. The algorithm will return an estimator of the generative distribution's variance
 under the assumption that each entry of `v` is an IID drawn from that generative
-distribution. This computation is equivalent to calculating `sumabs2(v - mean(v)) /
+distribution. This computation is equivalent to calculating `sum(abs2, v - mean(v)) /
 (length(v) - 1)`. If `corrected` is `true`, then the sum is scaled with `n-1`,
 whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x)`.
 The mean `mean` over the region may be provided.
@@ -296,7 +296,7 @@ _vmean(x::AbstractMatrix, vardim::Int) = mean(x, vardim)
 
 # core functions
 
-unscaled_covzm(x::AbstractVector) = sumabs2(x)
+unscaled_covzm(x::AbstractVector) = sum(abs2, x)
 unscaled_covzm(x::AbstractMatrix, vardim::Int) = (vardim == 1 ? _conj(x'x) : x * x')
 
 unscaled_covzm(x::AbstractVector, y::AbstractVector) = dot(x, y)
@@ -436,11 +436,11 @@ function corzm(x::AbstractMatrix, vardim::Int=1)
     return cov2cor!(c, sqrt!(diag(c)))
 end
 corzm(x::AbstractVector, y::AbstractMatrix, vardim::Int=1) =
-    cov2cor!(unscaled_covzm(x, y, vardim), sqrt(sumabs2(x)), sqrt!(sumabs2(y, vardim)))
+    cov2cor!(unscaled_covzm(x, y, vardim), sqrt(sum(abs2, x)), sqrt!(sum(abs2, y, vardim)))
 corzm(x::AbstractMatrix, y::AbstractVector, vardim::Int=1) =
-    cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sumabs2(x, vardim)), sqrt(sumabs2(y)))
+    cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sum(abs2, x, vardim)), sqrt(sum(abs2, y)))
 corzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int=1) =
-    cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sumabs2(x, vardim)), sqrt!(sumabs2(y, vardim)))
+    cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sum(abs2, x, vardim)), sqrt!(sum(abs2, y, vardim)))
 
 # corm
 
@@ -561,6 +561,11 @@ julia> middle(a)
 """
 middle(a::AbstractArray) = ((v1, v2) = extrema(a); middle(v1, v2))
 
+"""
+    median!(v)
+
+Like [`median`](@ref), but may overwrite the input vector.
+"""
 function median!{T}(v::AbstractVector{T})
     isempty(v) && throw(ArgumentError("median of an empty array is undefined, $(repr(v))"))
     if T<:AbstractFloat
@@ -675,7 +680,6 @@ end
     f0 = (lv-1)*p # 0-based interpolated index
     t0 = trunc(f0)
     h = f0 - t0
-
     i = trunc(Int,t0) + 1
 
     if h == 0
@@ -683,7 +687,11 @@ end
     else
         a = T(v[i])
         b = T(v[i+1])
-        return a + h*(b-a)
+        if isfinite(a) && isfinite(b)
+            return a + h*(b-a)
+        else
+            return (1-h)*a + h*b
+        end
     end
 end
 

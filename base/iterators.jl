@@ -129,7 +129,7 @@ end
 For a set of iterable objects, returns an iterable of tuples, where the `i`th tuple contains
 the `i`th component of each input iterable.
 
-Note that [`zip`](:func:`zip`) is its own inverse: `collect(zip(zip(a...)...)) == collect(a)`.
+Note that [`zip`](@ref) is its own inverse: `collect(zip(zip(a...)...)) == collect(a)`.
 
 ```jldoctest
 julia> a = 1:5
@@ -144,13 +144,13 @@ julia> b = ["e","d","b","c","a"]
  "a"
 
 julia> c = zip(a,b)
-Base.Iterators.Zip2{UnitRange{Int64},Array{String,1}}(1:5,String["e","d","b","c","a"])
+Base.Iterators.Zip2{UnitRange{Int64},Array{String,1}}(1:5, String["e", "d", "b", "c", "a"])
 
 julia> length(c)
 5
 
 julia> first(c)
-(1,"e")
+(1, "e")
 ```
 """
 zip(a, b, c...) = Zip(a, zip(b, c...))
@@ -511,8 +511,8 @@ changes the fastest. Example:
 ```jldoctest
 julia> collect(Iterators.product(1:2,3:5))
 2×3 Array{Tuple{Int64,Int64},2}:
- (1,3)  (1,4)  (1,5)
- (2,3)  (2,4)  (2,5)
+ (1, 3)  (1, 4)  (1, 5)
+ (2, 3)  (2, 4)  (2, 5)
 ```
 """
 product(a, b) = Prod2(a, b)
@@ -641,8 +641,8 @@ Iterate over a collection `n` elements at a time.
 ```jldoctest
 julia> collect(Iterators.partition([1,2,3,4,5], 2))
 3-element Array{Array{Int64,1},1}:
- [1,2]
- [3,4]
+ [1, 2]
+ [3, 4]
  [5]
 ```
 """

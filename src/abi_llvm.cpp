@@ -45,9 +45,9 @@ bool use_sret(jl_datatype_t *ty) override
     return false;
 }
 
-void needPassByRef(jl_datatype_t *ty, bool *byRef, bool *inReg) override
+bool needPassByRef(jl_datatype_t *ty, AttrBuilder &ab) override
 {
-    return;
+    return false;
 }
 
 Type *preferred_llvm_type(jl_datatype_t *ty, bool isret) const override

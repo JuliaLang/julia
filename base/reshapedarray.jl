@@ -36,9 +36,78 @@ start(R::ReshapedArrayIterator) = start(R.iter)
 end
 length(R::ReshapedArrayIterator) = length(R.iter)
 
+"""
+    reshape(A, dims...)
+    reshape(A, dims)
+
+Return an array with the same data as the given array, but with different dimensions.
+
+The new dimensions may be specified either as a list of arguments or as a shape
+tuple. At most one dimension may be specified with a `:`, in which case its
+length is computed such that its product with all the specified dimensions is
+equal to the length of the original array A.
+
+```jldoctest
+julia> A = collect(1:16)
+16-element Array{Int64,1}:
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+
+julia> reshape(A, (4, 4))
+4×4 Array{Int64,2}:
+ 1  5   9  13
+ 2  6  10  14
+ 3  7  11  15
+ 4  8  12  16
+
+julia> reshape(A, 2, :)
+2×8 Array{Int64,2}:
+ 1  3  5  7   9  11  13  15
+ 2  4  6  8  10  12  14  16
+```
+
+"""
+reshape
+
 reshape(parent::AbstractArray, dims::IntOrInd...) = reshape(parent, dims)
 reshape(parent::AbstractArray, shp::NeedsShaping) = reshape(parent, to_shape(shp))
 reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
+
+# Allow missing dimensions with Colon():
+reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)
+reshape(parent::AbstractArray, dims::Union{Int,Colon}...) = reshape(parent, dims)
+reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = _reshape(parent, _reshape_uncolon(parent, dims))
+# Recursively move dimensions to pre and post tuples, splitting on the Colon
+@inline _reshape_uncolon(A, dims) = _reshape_uncolon(A, (), nothing, (), dims)
+@inline _reshape_uncolon(A, pre, c::Void,  post, dims::Tuple{Any, Vararg{Any}}) =
+    _reshape_uncolon(A, (pre..., dims[1]), c, post, tail(dims))
+@inline _reshape_uncolon(A, pre, c::Void,  post, dims::Tuple{Colon, Vararg{Any}}) =
+    _reshape_uncolon(A, pre, dims[1], post, tail(dims))
+@inline _reshape_uncolon(A, pre, c::Colon, post, dims::Tuple{Any, Vararg{Any}}) =
+    _reshape_uncolon(A, pre, c, (post..., dims[1]), tail(dims))
+_reshape_uncolon(A, pre, c::Colon, post, dims::Tuple{Colon, Vararg{Any}}) =
+    throw(DimensionMismatch("new dimensions $((pre..., c, post..., dims...)) may only have at most one omitted dimension specified by Colon()"))
+@inline function _reshape_uncolon(A, pre, c::Colon, post, dims::Tuple{})
+    sz, remainder = divrem(length(A), prod(pre)*prod(post))
+    remainder == 0 || _throw_reshape_colon_dimmismatch(A, pre, post)
+    (pre..., sz, post...)
+end
+_throw_reshape_colon_dimmismatch(A, pre, post) =
+    throw(DimensionMismatch("array size $(length(A)) must be divisible by the product of the new dimensions $((pre..., :, post...))"))
 
 reshape{T,N}(parent::AbstractArray{T,N}, ndims::Type{Val{N}}) = parent
 function reshape{T,AN,N}(parent::AbstractArray{T,AN}, ndims::Type{Val{N}})
@@ -47,8 +116,8 @@ end
 # Move elements from inds to out until out reaches the desired
 # dimensionality N, either filling with OneTo(1) or collapsing the
 # product of trailing dims into the last element
-@pure rdims{N}(out::NTuple{N}, inds::Tuple{}, ::Type{Val{N}}) = out
-@pure function rdims{N}(out::NTuple{N}, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}})
+@pure rdims{N}(out::NTuple{N,Any}, inds::Tuple{}, ::Type{Val{N}}) = out
+@pure function rdims{N}(out::NTuple{N,Any}, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}})
     l = length(last(out)) * prod(map(length, inds))
     (front(out)..., OneTo(l))
 end

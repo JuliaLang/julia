@@ -13,7 +13,7 @@ Hessenberg(A::StridedMatrix) = Hessenberg(LAPACK.gehrd!(A)...)
 """
     hessfact!(A) -> Hessenberg
 
-`hessfact!` is the same as [`hessfact`](:func:`hessfact`), but saves space by overwriting
+`hessfact!` is the same as [`hessfact`](@ref), but saves space by overwriting
 the input `A`, instead of creating a copy.
 """
 hessfact!{T<:BlasFloat}(A::StridedMatrix{T}) = Hessenberg(A)
@@ -26,8 +26,26 @@ hessfact{T<:BlasFloat}(A::StridedMatrix{T}) = hessfact!(copy(A))
 Compute the Hessenberg decomposition of `A` and return a `Hessenberg` object. If `F` is the
 factorization object, the unitary matrix can be accessed with `F[:Q]` and the Hessenberg
 matrix with `F[:H]`. When `Q` is extracted, the resulting type is the `HessenbergQ` object,
-and may be converted to a regular matrix with [`convert(Array, _)`](:func:`convert`)
+and may be converted to a regular matrix with [`convert(Array, _)`](@ref)
  (or `Array(_)` for short).
+
+# Example
+
+```jldoctest
+julia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]
+3×3 Array{Float64,2}:
+ 4.0  9.0  7.0
+ 4.0  4.0  1.0
+ 4.0  3.0  2.0
+
+julia> F = hessfact(A);
+
+julia> F[:Q] * F[:H] * F[:Q]'
+3×3 Array{Float64,2}:
+ 4.0  9.0  7.0
+ 4.0  4.0  1.0
+ 4.0  3.0  2.0
+```
 """
 function hessfact{T}(A::StridedMatrix{T})
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))

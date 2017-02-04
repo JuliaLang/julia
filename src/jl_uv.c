@@ -100,8 +100,12 @@ static void jl_uv_closeHandle(uv_handle_t *handle)
     if (handle == (uv_handle_t*)JL_STDERR)
         JL_STDERR = (JL_STREAM*)STDERR_FILENO;
     // also let the client app do its own cleanup
-    if (handle->type != UV_FILE && handle->data)
+    if (handle->type != UV_FILE && handle->data) {
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_world_counter;
         jl_uv_call_close_callback((jl_value_t*)handle->data);
+        jl_get_ptls_states()->world_age = last_age;
+    }
     if (handle == (uv_handle_t*)&signal_async)
         return;
     free(handle);

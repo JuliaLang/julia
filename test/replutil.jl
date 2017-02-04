@@ -44,7 +44,7 @@ test_have_color(buf, "", "")
 # matches the implicit constructor -> convert method
 Base.show_method_candidates(buf, Base.MethodError(Tuple{}, (1, 1, 1)))
 let mc = String(take!(buf))
-    @test contains(mc, "\nClosest candidates are:\n  Tuple{}{T}(")
+    @test contains(mc, "\nClosest candidates are:\n  Tuple{}")
     @test !contains(mc, cfile)
 end
 
@@ -267,12 +267,12 @@ let undefvar
     err_str = @except_strbt (-1)^0.25 DomainError
     @test contains(err_str, "Exponentiation yielding a complex result requires a complex argument")
 
-    err_str = @except_str (1,2,3)[4] BoundsError
-    @test err_str == "BoundsError: attempt to access (1,2,3)\n  at index [4]"
+    err_str = @except_str (1, 2, 3)[4] BoundsError
+    @test err_str == "BoundsError: attempt to access (1, 2, 3)\n  at index [4]"
 
-    err_str = @except_str [5,4,3][-2,1] BoundsError
-    @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [-2,1]"
-    err_str = @except_str [5,4,3][1:5] BoundsError
+    err_str = @except_str [5, 4, 3][-2, 1] BoundsError
+    @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [-2, 1]"
+    err_str = @except_str [5, 4, 3][1:5] BoundsError
     @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [1:5]"
 
     err_str = @except_str 0::Bool TypeError
@@ -280,13 +280,13 @@ let undefvar
     err_str = @except_str 0::AbstractFloat TypeError
     @test err_str == "TypeError: typeassert: expected AbstractFloat, got $Int"
     err_str = @except_str 0::7 TypeError
-    @test err_str == "TypeError: typeassert: expected Type{T}, got $Int"
+    @test err_str == "TypeError: typeassert: expected Type, got $Int"
     err_str = @except_str "" <: AbstractString TypeError
-    @test err_str == "TypeError: subtype: expected Type{T}, got String"
+    @test err_str == "TypeError: issubtype: expected Type, got String"
     err_str = @except_str AbstractString <: "" TypeError
-    @test err_str == "TypeError: subtype: expected Type{T}, got String"
+    @test err_str == "TypeError: issubtype: expected Type, got String"
     err_str = @except_str Type{""} TypeError
-    @test err_str == "TypeError: Type: in parameter, expected Type{T}, got String"
+    @test err_str == "TypeError: Type: in parameter, expected Type, got String"
     err_str = @except_str TypeWithIntParam{Any} TypeError
     @test err_str == "TypeError: TypeWithIntParam: in T, expected T<:Integer, got Type{Any}"
 
@@ -335,7 +335,7 @@ let err_str,
     err_str = @except_str i() MethodError
     @test contains(err_str, "MethodError: objects of type $(curmod_prefix)EightBitType are not callable")
     err_str = @except_str EightBitTypeT() MethodError
-    @test contains(err_str, "MethodError: no method matching $(curmod_prefix)EightBitTypeT{T}()")
+    @test contains(err_str, "MethodError: no method matching $(curmod_prefix)EightBitTypeT()")
     err_str = @except_str EightBitTypeT{Int32}() MethodError
     @test contains(err_str, "MethodError: no method matching $(curmod_prefix)EightBitTypeT{Int32}()")
     err_str = @except_str j() MethodError
@@ -389,7 +389,7 @@ let err_str,
     err_str = @except_stackframe i() ErrorException
     @test err_str == " in (::$(curmod_prefix)EightBitType)() at $sn:$(method_defs_lineno + 3)"
     err_str = @except_stackframe EightBitTypeT() ErrorException
-    @test err_str == " in $(curmod_prefix)EightBitTypeT{T}() at $sn:$(method_defs_lineno + 4)"
+    @test err_str == " in $(curmod_prefix)EightBitTypeT() at $sn:$(method_defs_lineno + 4)"
     err_str = @except_stackframe EightBitTypeT{Int32}() ErrorException
     @test err_str == " in $(curmod_prefix)EightBitTypeT{Int32}() at $sn:$(method_defs_lineno + 5)"
     err_str = @except_stackframe j() ErrorException
@@ -453,11 +453,24 @@ let d = Dict(1 => 2, 3 => 45)
     end
 end
 
+# Issue #20108
+let err, buf = IOBuffer()
+    try Array() catch err end
+    Base.show_method_candidates(buf,err)
+    @test isa(err, MethodError)
+    @test contains(String(buf), "Closest candidates are:")
+end
+
+# Issue 20111
+let K20111(x) = y -> x, buf = IOBuffer()
+    show(buf, methods(K20111(1)))
+    @test contains(String(buf), " 1 method for generic function")
+end
 
 # @macroexpand tests
 macro seven_dollar(ex)
     # simonbyrne example 18240
-    isa(ex,Expr) && ex.head == :$ ? 7 : ex
+    isa(ex,Expr) && ex.head == :$ ? 7 : esc(ex)
 end
 
 let
@@ -470,4 +483,19 @@ let
     @test (@macroexpand @seven_dollar $bar) == 7
     x = 2
     @test (@macroexpand @seven_dollar 1+$x) == :(1 + $(Expr(:$, :x)))
+end
+
+foo_9965(x::Float64; w=false) = x
+foo_9965(x::Int) = 2x
+
+@testset "closest candidates kwarg #9965" begin
+    ex = try
+        foo_9965(1, w=true)
+    catch e
+        e
+    end
+    @test typeof(ex) == MethodError
+    io = IOBuffer()
+    Base.show_method_candidates(io, ex, [(:w,true)])
+    @test contains(String(take!(io)), "got unsupported keyword argument \"w\"")
 end

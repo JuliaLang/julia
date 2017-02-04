@@ -44,6 +44,16 @@ cd(dirname(@__FILE__)) do
     end
 
     @everywhere include("testdefs.jl")
+
+    #pretty print the information about gc and mem usage
+    name_align    = maximum([length("Test (Worker)"); map(x -> length(x) + 3 + ndigits(nworkers()), tests)])
+    elapsed_align = length("Time (s)")
+    gc_align      = length("GC (s)")
+    percent_align = length("GC %")
+    alloc_align   = length("Alloc (MB)")
+    rss_align     = length("RSS (MB)")
+    print_with_color(:white, rpad("Test (Worker)",name_align," "), " | ")
+    print_with_color(:white, "Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)\n")
     results=[]
     @sync begin
         for p in workers()
@@ -51,15 +61,16 @@ cd(dirname(@__FILE__)) do
                 while length(tests) > 0
                     test = shift!(tests)
                     local resp
+                    wrkr = p
                     try
-                        resp = remotecall_fetch(runtests, p, test)
+                        resp = remotecall_fetch(runtests, wrkr, test)
                     catch e
                         resp = [e]
                     end
                     push!(results, (test, resp))
                     if (isa(resp[end], Integer) && (resp[end] > max_worker_rss)) || isa(resp, Exception)
                         if n > 1
-                            rmprocs(p, waitfor=0.5)
+                            rmprocs(wrkr, waitfor=30)
                             p = addprocs(1; exename=test_exename, exeflags=test_exeflags)[1]
                             remotecall_fetch(()->include("testdefs.jl"), p)
                         else
@@ -67,12 +78,28 @@ cd(dirname(@__FILE__)) do
                             isa(resp, Exception) ? rethrow(resp) : error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
                         end
                     end
+                    if !isa(resp[1], Exception)
+                        print_with_color(:white, rpad(test*" ($wrkr)", name_align, " "), " | ")
+                        time_str = @sprintf("%7.2f",resp[2])
+                        print_with_color(:white, rpad(time_str,elapsed_align," "), " | ")
+                        gc_str = @sprintf("%5.2f",resp[5].total_time/10^9)
+                        print_with_color(:white, rpad(gc_str,gc_align," "), " | ")
+
+                        # since there may be quite a few digits in the percentage,
+                        # the left-padding here is less to make sure everything fits
+                        percent_str = @sprintf("%4.1f",100*resp[5].total_time/(10^9*resp[2]))
+                        print_with_color(:white, rpad(percent_str,percent_align," "), " | ")
+                        alloc_str = @sprintf("%5.2f",resp[3]/2^20)
+                        print_with_color(:white, rpad(alloc_str,alloc_align," "), " | ")
+                        rss_str = @sprintf("%5.2f",resp[6]/2^20)
+                        print_with_color(:white, rpad(rss_str,rss_align," "), "\n")
+                    end
                 end
             end
         end
     end
     # Free up memory =)
-    n > 1 && rmprocs(workers(), waitfor=5.0)
+    n > 1 && rmprocs(workers(), waitfor=30)
     for t in node1_tests
         # As above, try to run each test
         # which must run on node 1. If
@@ -82,7 +109,7 @@ cd(dirname(@__FILE__)) do
         n > 1 && print("\tFrom worker 1:\t")
         local resp
         try
-            resp = runtests(t)
+            resp = eval(Expr(:call, () -> runtests(t))) # runtests is defined by the include above
         catch e
             resp = [e]
         end
@@ -103,6 +130,12 @@ cd(dirname(@__FILE__)) do
     and Brokens from the worker and the full information about all errors and
     failures encountered running the tests. This information will be displayed
     as a summary at the end of the test run.
+
+    If a test failed, returning an `Exception` that is not a `RemoteException`,
+    it is likely the julia process running the test has encountered some kind
+    of internal error, such as a segfault.  The entire testset is marked as
+    Errored, and execution continues until the summary at the end of the test
+    run, where the test file is printed out as the "failed expression".
     =#
     o_ts = Base.Test.DefaultTestSet("Overall")
     Base.Test.push_testset(o_ts)
@@ -122,54 +155,38 @@ cd(dirname(@__FILE__)) do
             Base.Test.push_testset(fake)
             Base.Test.record(o_ts, fake)
             Base.Test.pop_testset()
-        elseif isa(res[2][1], RemoteException)
+        elseif isa(res[2][1], RemoteException) && isa(res[2][1].captured.ex, Base.Test.TestSetException)
             println("Worker $(res[2][1].pid) failed running test $(res[1]):")
             Base.showerror(STDOUT,res[2][1].captured)
-            o_ts.anynonpass = true
-            if isa(res[2][1].captured.ex, Base.Test.TestSetException)
-                fake = Base.Test.DefaultTestSet(res[1])
-                for i in 1:res[2][1].captured.ex.pass
-                    Base.Test.record(fake, Base.Test.Pass(:test, nothing, nothing, nothing))
-                end
-                for i in 1:res[2][1].captured.ex.broken
-                    Base.Test.record(fake, Base.Test.Broken(:test, nothing))
-                end
-                for t in res[2][1].captured.ex.errors_and_fails
-                    Base.Test.record(fake, t)
-                end
-                Base.Test.push_testset(fake)
-                Base.Test.record(o_ts, fake)
-                Base.Test.pop_testset()
+            fake = Base.Test.DefaultTestSet(res[1])
+            for i in 1:res[2][1].captured.ex.pass
+                Base.Test.record(fake, Base.Test.Pass(:test, nothing, nothing, nothing))
             end
+            for i in 1:res[2][1].captured.ex.broken
+                Base.Test.record(fake, Base.Test.Broken(:test, nothing))
+            end
+            for t in res[2][1].captured.ex.errors_and_fails
+                Base.Test.record(fake, t)
+            end
+            Base.Test.push_testset(fake)
+            Base.Test.record(o_ts, fake)
+            Base.Test.pop_testset()
+        elseif isa(res[2][1], Exception)
+            # If this test raised an exception that is not a remote testset exception,
+            # i.e. not a RemoteException capturing a TestSetException that means
+            # the test runner itself had some problem, so we may have hit a segfault,
+            # deserialization errors or something similar.  Record this testset as Errored.
+            fake = Base.Test.DefaultTestSet(res[1])
+            Base.Test.record(fake, Base.Test.Error(:test_error, res[1], res[2][1], []))
+            Base.Test.push_testset(fake)
+            Base.Test.record(o_ts, fake)
+            Base.Test.pop_testset()
+        else
+            error(string("Unknown result type : ", typeof(res)))
         end
     end
     println()
     Base.Test.print_test_results(o_ts,1)
-    #pretty print the information about gc and mem usage
-    name_align    = maximum(map(x -> length(x[1]), results))
-    elapsed_align = length("Total time (s):")
-    gc_align      = length("GC time (s):")
-    percent_align = length("Percent in gc:")
-    alloc_align   = length("Allocated (MB):")
-    rss_align     = length("RSS (MB):")
-    print_with_color(:white, rpad("Test:",name_align," "), " | ")
-    print_with_color(:white, "Total time (s): | GC time (s): | Percent in gc: | Allocated (MB): | RSS (MB):\n")
-    for res in results
-        if !isa(res[2][1], Exception)
-            print_with_color(:white, rpad("$(res[1])",name_align," "), " | ")
-            time_str = @sprintf("%7.2f",res[2][2])
-            print_with_color(:white, rpad(time_str,elapsed_align," "), " | ")
-            gc_str = @sprintf("%7.2f",res[2][5].total_time/10^9)
-            print_with_color(:white, rpad(gc_str,gc_align," "), " | ")
-            percent_str = @sprintf("%7.2f",100*res[2][5].total_time/(10^9*res[2][2]))
-            print_with_color(:white, rpad(percent_str,percent_align," "), " | ")
-            alloc_str = @sprintf("%7.2f",res[2][3]/2^20)
-            print_with_color(:white, rpad(alloc_str,alloc_align," "), " | ")
-            rss_str = @sprintf("%7.2f",res[2][6]/2^20)
-            print_with_color(:white, rpad(rss_str,rss_align," "), "\n")
-        end
-    end
-
     if !o_ts.anynonpass
         println("    \033[32;1mSUCCESS\033[0m")
     else

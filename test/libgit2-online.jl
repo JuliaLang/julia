@@ -16,7 +16,7 @@ mktempdir() do dir
                 @test isdir(repo_path)
                 @test isdir(joinpath(repo_path, ".git"))
             finally
-                finalize(repo)
+                close(repo)
             end
         end
 

@@ -311,7 +311,6 @@ for (finv, f) in ((:sec, :cos), (:csc, :sin), (:cot, :tan),
                   (:secd, :cosd), (:cscd, :sind), (:cotd, :tand))
     @eval begin
         ($finv){T<:Number}(z::T) = one(T) / (($f)(z))
-        ($finv){T<:Number}(z::AbstractArray{T}) = one(T) ./ (($f)(z))
     end
 end
 
@@ -324,11 +323,9 @@ for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
         @doc """
             $($tname)(x)
         Compute the inverse $($fn) of `x`, where the output is in radians. """ ($tfa){T<:Number}(y::T) = ($tfainv)(one(T) / y)
-        ($tfa){T<:Number}(y::AbstractArray{T}) = ($tfainv)(one(T) ./ y)
         @doc """
             $($hname)(x)
         Compute the inverse hyperbolic $($fn) of `x`. """ ($hfa){T<:Number}(y::T) = ($hfainv)(one(T) / y)
-        ($hfa){T<:Number}(y::AbstractArray{T}) = ($hfainv)(one(T) ./ y)
     end
 end
 

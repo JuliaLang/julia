@@ -20,4 +20,4 @@ issparse{T, A<:AbstractSparseMatrix}(S::LinAlg.UnitLowerTriangular{T, A}) = true
 issparse{T, A<:AbstractSparseMatrix}(S::UpperTriangular{T, A}) = true
 issparse{T, A<:AbstractSparseMatrix}(S::LinAlg.UnitUpperTriangular{T, A}) = true
 
-indtype{Tv,Ti}(S::AbstractSparseArray{Tv,Ti}) = Ti
+indtype{Tv,Ti}(S::AbstractSparseArray{Tv,Ti}) = (Base.@_pure_meta; Ti)

@@ -88,12 +88,12 @@ coefficients, i.e. the integer coefficients `u` and `v` that satisfy
 
 ```jldoctest
 julia> gcdx(12, 42)
-(6,-3,1)
+(6, -3, 1)
 ```
 
 ```jldoctest
 julia> gcdx(240, 46)
-(2,-9,47)
+(2, -9, 47)
 ```
 
 !!! note
@@ -274,7 +274,12 @@ false
 """
 ispow2(x::Integer) = x > 0 && count_ones(x) == 1
 
-# smallest a^n >= x, with integer n
+"""
+    nextpow(a, x)
+
+The smallest `a^n` not less than `x`, where `n` is a non-negative integer. `a` must be
+greater than 1, and `x` must be greater than 0.
+"""
 function nextpow(a::Real, x::Real)
     (a <= 1 || x <= 0) && throw(DomainError())
     x <= 1 && return one(a)
@@ -283,7 +288,13 @@ function nextpow(a::Real, x::Real)
     # guard against roundoff error, e.g., with a=5 and x=125
     p >= x ? p : a^n
 end
-# largest a^n <= x, with integer n
+
+"""
+    prevpow(a, x)
+
+The largest `a^n` not greater than `x`, where `n` is a non-negative integer.
+`a` must be greater than 1, and `x` must not be less than 1.
+"""
 function prevpow(a::Real, x::Real)
     (a <= 1 || x < 1) && throw(DomainError())
     n = floor(Integer,log(a, x))
@@ -314,8 +325,6 @@ function ndigits0z(x::UInt128)
 end
 ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
-const ndigits_max_mul = Core.sizeof(Int) == 4 ? 69000000 : 290000000000000000
-
 function ndigits0znb(n::Signed, b::Int)
     d = 0
     while n != 0
@@ -326,23 +335,24 @@ function ndigits0znb(n::Signed, b::Int)
 end
 
 function ndigits0z(n::Unsigned, b::Int)
+    b < 0   && return ndigits0znb(signed(n), b)
+    b == 2  && return sizeof(n)<<3 - leading_zeros(n)
+    b == 8  && return (sizeof(n)<<3 - leading_zeros(n) + 2) ÷ 3
+    b == 16 && return sizeof(n)<<1 - leading_zeros(n)>>2
+    b == 10 && return ndigits0z(n)
+
     d = 0
-    if b < 0
-        d = ndigits0znb(signed(n), b)
-    else
-        b == 2  && return (sizeof(n)<<3-leading_zeros(n))
-        b == 8  && return div((sizeof(n)<<3)-leading_zeros(n)+2,3)
-        b == 16 && return (sizeof(n)<<1)-(leading_zeros(n)>>2)
-        b == 10 && return ndigits0z(n)
-        while ndigits_max_mul < n
-            n = div(n,b)
-            d += 1
-        end
-        m = 1
-        while m <= n
-            m *= b
-            d += 1
-        end
+    while n > typemax(Int)
+        n = div(n,b)
+        d += 1
+    end
+    n = div(n,b)
+    d += 1
+
+    m = 1
+    while m <= n
+        m *= b
+        d += 1
     end
     return d
 end
@@ -367,7 +377,7 @@ string(x::Union{Int8,Int16,Int32,Int64,Int128}) = dec(x)
 
 function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
-    a = Array{UInt8}(i)
+    a = StringVector(i)
     while i > neg
         a[i] = '0'+(x&0x1)
         x >>= 1
@@ -379,7 +389,7 @@ end
 
 function oct(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,div((sizeof(x)<<3)-leading_zeros(x)+2,3))
-    a = Array{UInt8}(i)
+    a = StringVector(i)
     while i > neg
         a[i] = '0'+(x&0x7)
         x >>= 3
@@ -391,7 +401,7 @@ end
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,ndigits0z(x))
-    a = Array{UInt8}(i)
+    a = StringVector(i)
     while i > neg
         a[i] = '0'+rem(x,10)
         x = oftype(x,div(x,10))
@@ -403,7 +413,7 @@ end
 
 function hex(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
-    a = Array{UInt8}(i)
+    a = StringVector(i)
     while i > neg
         d = x & 0xf
         a[i] = '0'+d+39*(d>9)
@@ -423,7 +433,7 @@ function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
     digits = b <= 36 ? base36digits : base62digits
     i = neg + max(pad,ndigits0z(x,b))
-    a = Array{UInt8}(i)
+    a = StringVector(i)
     while i > neg
         a[i] = digits[1+rem(x,b)]
         x = div(x,b)

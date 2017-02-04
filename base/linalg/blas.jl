@@ -217,20 +217,41 @@ scal(n, DA, DX, incx) = scal!(n, DA, copy(DX), incx)
 
 Dot product of two vectors consisting of `n` elements of array `X` with stride `incx` and
 `n` elements of array `Y` with stride `incy`.
+
+# Example:
+```jldoctest
+julia> dot(10, ones(10), 1, ones(20), 2)
+10.0
+```
 """
 function dot end
 
 """
     dotc(n, X, incx, U, incy)
 
-Dot function for two complex vectors conjugating the first vector.
+Dot function for two complex vectors, consisting of `n` elements of array `X`
+with stride `incx` and `n` elements of array `U` with stride `incy`,
+conjugating the first vector.
+
+# Example:
+```jldoctest
+julia> Base.BLAS.dotc(10, im*ones(10), 1, complex.(ones(20), ones(20)), 2)
+10.0 - 10.0im
+```
 """
 function dotc end
 
 """
     dotu(n, X, incx, Y, incy)
 
-Dot function for two complex vectors.
+Dot function for two complex vectors consisting of `n` elements of array `X`
+with stride `incx` and `n` elements of array `Y` with stride `incy`.
+
+# Example:
+```jldoctest
+julia> Base.BLAS.dotu(10, im*ones(10), 1, complex.(ones(20), ones(20)), 2)
+-10.0 + 10.0im
+```
 """
 function dotu end
 
@@ -314,6 +335,15 @@ end
     nrm2(n, X, incx)
 
 2-norm of a vector consisting of `n` elements of array `X` with stride `incx`.
+
+# Example:
+```jldoctest
+julia> Base.BLAS.nrm2(4, ones(8), 2)
+2.0
+
+julia> Base.BLAS.nrm2(1, ones(8), 2)
+1.0
+```
 """
 function nrm2 end
 
@@ -339,6 +369,15 @@ nrm2(x::Array) = nrm2(length(x), pointer(x), 1)
     asum(n, X, incx)
 
 Sum of the absolute values of the first `n` elements of array `X` with stride `incx`.
+
+# Example:
+```jldoctest
+julia> Base.BLAS.asum(5, im*ones(10), 2)
+5.0
+
+julia> Base.BLAS.asum(2, im*ones(10), 5)
+2.0
+```
 """
 function asum end
 
@@ -363,7 +402,20 @@ asum(x::Array) = asum(length(x), pointer(x), 1)
 """
     axpy!(a, X, Y)
 
-Overwrite `Y` with `a*X + Y`. Returns `Y`.
+Overwrite `Y` with `a*X + Y`, where `a` is a scalar. Returns `Y`.
+
+# Example:
+```jldoctest
+julia> x = [1; 2; 3];
+
+julia> y = [4; 5; 6];
+
+julia> Base.BLAS.axpy!(2, x, y)
+3-element Array{Int64,1}:
+  6
+  9
+ 12
+```
 """
 function axpy! end
 
@@ -472,22 +524,24 @@ end
 """
     gemv!(tA, alpha, A, x, beta, y)
 
-Update the vector `y` as `alpha*A*x + beta*y` or `alpha*A'x + beta*y` according to `tA`
-(transpose `A`). Returns the updated `y`.
+Update the vector `y` as `alpha*A*x + beta*y` or `alpha*A'x + beta*y`
+according to [`tA`](@ref stdlib-blas-trans).
+`alpha` and `beta` are scalars. Returns the updated `y`.
 """
 gemv!
 
 """
     gemv(tA, alpha, A, x)
 
-Returns `alpha*A*x` or `alpha*A'x` according to `tA` (transpose `A`).
+Returns `alpha*A*x` or `alpha*A'x` according to [`tA`](@ref stdlib-blas-trans).
+`alpha` is a scalar.
 """
 gemv(tA, alpha, A, x)
 
 """
     gemv(tA, A, x)
 
-Returns `A*x` or `A'x` according to `tA` (transpose `A`).
+Returns `A*x` or `A'x` according to [`tA`](@ref stdlib-blas-trans).
 """
 gemv(tA, A, x)
 
@@ -496,18 +550,18 @@ gemv(tA, A, x)
 """
     gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
 
-Update vector `y` as `alpha*A*x + beta*y` or `alpha*A'*x + beta*y` according to `trans` ('N'
-or 'T'). The matrix `A` is a general band matrix of dimension `m` by `size(A,2)` with `kl`
-sub-diagonals and `ku` super-diagonals. Returns the updated `y`.
+Update vector `y` as `alpha*A*x + beta*y` or `alpha*A'*x + beta*y` according to [`trans`](@ref stdlib-blas-trans).
+The matrix `A` is a general band matrix of dimension `m` by `size(A,2)` with `kl`
+sub-diagonals and `ku` super-diagonals. `alpha` and `beta` are scalars. Returns the updated `y`.
 """
 function gbmv! end
 
 """
     gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
 
-Returns `alpha*A*x` or `alpha*A'*x` according to `trans` ('N' or 'T'). The matrix `A` is a
-general band matrix of dimension `m` by `size(A,2)` with `kl` sub-diagonals and `ku`
-super-diagonals.
+Returns `alpha*A*x` or `alpha*A'*x` according to [`trans`](@ref stdlib-blas-trans).
+The matrix `A` is a general band matrix of dimension `m` by `size(A,2)` with `kl` sub-diagonals and `ku`
+super-diagonals. `alpha` and `beta` are scalars.
 """
 function gbmv end
 
@@ -550,8 +604,9 @@ end
 """
     symv!(ul, alpha, A, x, beta, y)
 
-Update the vector `y` as `alpha*A*x + beta*y`. `A` is assumed to be symmetric. Only the `ul`
-triangle of `A` is used. Returns the updated `y`.
+Update the vector `y` as `alpha*A*x + beta*y`. `A` is assumed to be symmetric.
+Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
+`alpha` and `beta` are scalars. Returns the updated `y`.
 """
 function symv! end
 
@@ -600,14 +655,17 @@ end
 """
     symv(ul, alpha, A, x)
 
-Returns `alpha*A*x`. `A` is assumed to be symmetric. Only the `ul` triangle of `A` is used.
+Returns `alpha*A*x`. `A` is assumed to be symmetric.
+Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
+`alpha` is a scalar.
 """
 symv(ul, alpha, A, x)
 
 """
     symv(ul, A, x)
 
-Returns `A*x`. `A` is assumed to be symmetric. Only the `ul` triangle of `A` is used.
+Returns `A*x`. `A` is assumed to be symmetric.
+Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 """
 symv(ul, A, x)
 
@@ -683,6 +741,7 @@ end
 
 Returns `alpha*A*x` where `A` is a symmetric band matrix of order `size(A,2)` with `k`
 super-diagonals stored in the argument `A`.
+Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `A` is used.
 """
 sbmv(uplo, k, alpha, A, x)
 
@@ -691,6 +750,7 @@ sbmv(uplo, k, alpha, A, x)
 
 Returns `A*x` where `A` is a symmetric band matrix of order `size(A,2)` with `k`
 super-diagonals stored in the argument `A`.
+Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `A` is used.
 """
 sbmv(uplo, k, A, x)
 
@@ -701,6 +761,7 @@ Update vector `y` as `alpha*A*x + beta*y` where `A` is a a symmetric band matrix
 `size(A,2)` with `k` super-diagonals stored in the argument `A`. The storage layout for `A`
 is described the reference BLAS module, level-2 BLAS at
 <http://www.netlib.org/lapack/explore-html/>.
+Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `A` is used.
 
 Returns the updated `y`.
 """
@@ -742,24 +803,21 @@ end
 """
     trmv(ul, tA, dA, A, b)
 
-Returns `op(A)*b`, where `op` is determined by `tA`
-(`N` for identity, `T` for transpose `A`, and `C` for conjugate
-transpose `A`). Only the `ul` triangle (`U` for upper, `L`
-for lower) of `A` is used. `dA` indicates if `A` is
-unit-triangular (the diagonal is assumed to be all ones if `U`,
-or non-unit if `N`).
+Returns `op(A)*b`, where `op` is determined by [`tA`](@ref stdlib-blas-trans).
+Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
+[`dA`](@ref stdlib-blas-diag) determines if the diagonal values are read or
+are assumed to be all ones.
 """
 function trmv end
 
 """
     trmv!(ul, tA, dA, A, b)
 
-Returns `op(A)*b`, where `op` is determined by `tA`
-(`N` for identity, `T` for transpose `A`, and `C` for conjugate
-transpose `A`). Only the `ul` triangle (`U` for upper, `L`
-for lower) of `A` is used. `dA` indicates if `A` is
-unit-triangular (the diagonal is assumed to be all ones if `U`,
-or non-unit if `N`). The multiplication occurs in-place on `b`.
+Returns `op(A)*b`, where `op` is determined by [`tA`](@ref stdlib-blas-trans).
+Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
+[`dA`](@ref stdlib-blas-diag) determines if the diagonal values are read or
+are assumed to be all ones.
+The multiplication occurs in-place on `b`.
 """
 function trmv! end
 
@@ -798,17 +856,20 @@ end
     trsv!(ul, tA, dA, A, b)
 
 Overwrite `b` with the solution to `A*x = b` or one of the other two variants determined by
-`tA` (transpose `A`) and `ul` (triangle of `A` used). `dA` indicates if `A` is
-unit-triangular (the diagonal is assumed to be all ones). Returns the updated `b`.
+[`tA`](@ref stdlib-blas-trans) and [`ul`](@ref stdlib-blas-uplo).
+[`dA`](@ref stdlib-blas-diag) determines if the diagonal values are read or
+are assumed to be all ones.
+Returns the updated `b`.
 """
 function trsv! end
 
 """
     trsv(ul, tA, dA, A, b)
 
-Returns the solution to `A*x = b` or one of the other two variants determined by `tA`
-(transpose `A`) and `ul` (triangle of `A` is used.) `dA` indicates if `A` is unit-triangular
-(the diagonal is assumed to be all ones).
+Returns the solution to `A*x = b` or one of the other two variants determined by
+[`tA`](@ref stdlib-blas-trans) and [`ul`](@ref stdlib-blas-uplo).
+[`dA`](@ref stdlib-blas-diag) determines if the diagonal values are read or
+are assumed to be all ones.
 """
 function trsv end
 
@@ -877,8 +938,8 @@ end
 """
     syr!(uplo, alpha, x, A)
 
-Rank-1 update of the symmetric matrix `A` with vector `x` as `alpha*x*x.' + A`. When `uplo`
-is 'U' the upper triangle of `A` is updated ('L' for lower triangle). Returns `A`.
+Rank-1 update of the symmetric matrix `A` with vector `x` as `alpha*x*x.' + A`.
+[`uplo`](@ref stdlib-blas-uplo) controls which triangle of `A` is updated. Returns `A`.
 """
 function syr! end
 
@@ -908,8 +969,8 @@ end
     her!(uplo, alpha, x, A)
 
 Methods for complex arrays only. Rank-1 update of the Hermitian matrix `A` with vector `x`
-as `alpha*x*x' + A`. When `uplo` is 'U' the upper triangle of `A` is updated ('L' for lower
-triangle). Returns `A`.
+as `alpha*x*x' + A`.
+[`uplo`](@ref stdlib-blas-uplo) controls which triangle of `A` is updated. Returns `A`.
 """
 function her! end
 
@@ -937,8 +998,8 @@ end
 """
     gemm!(tA, tB, alpha, A, B, beta, C)
 
-Update `C` as `alpha*A*B + beta*C` or the other three variants according to `tA` (transpose
-`A`) and `tB`. Returns the updated `C`.
+Update `C` as `alpha*A*B + beta*C` or the other three variants according to
+[`tA`](@ref stdlib-blas-trans) and `tB`. Returns the updated `C`.
 """
 function gemm! end
 
@@ -989,14 +1050,14 @@ end
 """
     gemm(tA, tB, alpha, A, B)
 
-Returns `alpha*A*B` or the other three variants according to `tA` (transpose `A`) and `tB`.
+Returns `alpha*A*B` or the other three variants according to [`tA`](@ref stdlib-blas-trans) and `tB`.
 """
 gemm(tA, tB, alpha, A, B)
 
 """
     gemm(tA, tB, A, B)
 
-Returns `A*B` or the other three variants according to `tA` (transpose `A`) and `tB`.
+Returns `A*B` or the other three variants according to [`tA`](@ref stdlib-blas-trans) and `tB`.
 """
 gemm(tA, tB, A, B)
 
@@ -1044,31 +1105,27 @@ end
 """
     symm(side, ul, alpha, A, B)
 
-Returns `alpha*A*B` or `alpha*B*A` according to `side`. `A` is assumed to be symmetric. Only
-the `ul` triangle of `A` is used.
+Returns `alpha*A*B` or `alpha*B*A` according to [`side`](@ref stdlib-blas-side).
+`A` is assumed to be symmetric. Only
+the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 """
 symm(side, ul, alpha, A, B)
 
 """
     symm(side, ul, A, B)
 
-Returns `A*B` or `B*A` according to `side`. `A` is assumed to be symmetric. Only the `ul`
+Returns `A*B` or `B*A` according to [`side`](@ref stdlib-blas-side).
+`A` is assumed to be symmetric. Only the [`ul`](@ref stdlib-blas-uplo)
 triangle of `A` is used.
 """
 symm(side, ul, A, B)
 
 """
-    symm(tA, tB, alpha, A, B)
-
-Returns `alpha*A*B` or the other three variants according to `tA` (transpose `A`) and `tB`.
-"""
-symm(tA::Char, tB::Char, alpha, A, B)
-
-"""
     symm!(side, ul, alpha, A, B, beta, C)
 
-Update `C` as `alpha*A*B + beta*C` or `alpha*B*A + beta*C` according to `side`. `A` is
-assumed to be symmetric. Only the `ul` triangle of `A` is used. Returns the updated `C`.
+Update `C` as `alpha*A*B + beta*C` or `alpha*B*A + beta*C` according to [`side`](@ref stdlib-blas-side).
+`A` is assumed to be symmetric. Only the [`ul`](@ref stdlib-blas-uplo) triangle of
+`A` is used. Returns the updated `C`.
 """
 symm!
 
@@ -1116,16 +1173,18 @@ end
     syrk!(uplo, trans, alpha, A, beta, C)
 
 Rank-k update of the symmetric matrix `C` as `alpha*A*A.' + beta*C` or `alpha*A.'*A +
-beta*C` according to whether `trans` is 'N' or 'T'. When `uplo` is 'U' the upper triangle of
-`C` is updated ('L' for lower triangle). Returns `C`.
+beta*C` according to [`trans`](@ref stdlib-blas-trans).
+Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is used. Returns `C`.
 """
 function syrk! end
 
 """
     syrk(uplo, trans, alpha, A)
 
-Returns either the upper triangle or the lower triangle, according to `uplo` ('U' or 'L'),
-of `alpha*A*A.'` or `alpha*A.'*A`, according to `trans` ('N' or 'T').
+Returns either the upper triangle or the lower triangle of `A`,
+according to [`uplo`](@ref stdlib-blas-uplo),
+of `alpha*A*A.'` or `alpha*A.'*A`,
+according to [`trans`](@ref stdlib-blas-trans).
 """
 function syrk end
 
@@ -1170,17 +1229,18 @@ syrk(uplo::Char, trans::Char, A::StridedVecOrMat) = syrk(uplo, trans, one(eltype
     herk!(uplo, trans, alpha, A, beta, C)
 
 Methods for complex arrays only. Rank-k update of the Hermitian matrix `C` as `alpha*A*A' +
-beta*C` or `alpha*A'*A + beta*C` according to whether `trans` is 'N' or 'T'. When `uplo` is
-'U' the upper triangle of `C` is updated ('L' for lower triangle). Returns `C`.
+beta*C` or `alpha*A'*A + beta*C` according to [`trans`](@ref stdlib-blas-trans).
+Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is updated.
+Returns `C`.
 """
 function herk! end
 
 """
     herk(uplo, trans, alpha, A)
 
-Methods for complex arrays only. Returns either the upper triangle or the lower triangle,
-according to `uplo` ('U' or 'L'), of `alpha*A*A'` or `alpha*A'*A`, according to `trans` ('N'
-or 'T').
+Methods for complex arrays only.
+Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of `alpha*A*A'` or `alpha*A'*A`,
+according to [`trans`](@ref stdlib-blas-trans).
 """
 function herk end
 
@@ -1301,19 +1361,23 @@ end
 """
     trmm!(side, ul, tA, dA, alpha, A, B)
 
-Update `B` as `alpha*A*B` or one of the other three variants determined by `side` (`A` on
-left or right) and `tA` (transpose `A`). Only the `ul` triangle of `A` is used. `dA`
-indicates if `A` is unit-triangular (the diagonal is assumed to be all ones). Returns the
-updated `B`.
+Update `B` as `alpha*A*B` or one of the other three variants determined by
+[`side`](@ref stdlib-blas-side) and [`tA`](@ref stdlib-blas-trans).
+Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
+[`dA`](@ref stdlib-blas-diag) determines if the diagonal values are read or
+are assumed to be all ones.
+Returns the updated `B`.
 """
 function trmm! end
 
 """
     trmm(side, ul, tA, dA, alpha, A, B)
 
-Returns `alpha*A*B` or one of the other three variants determined by `side` (`A` on left or
-right) and `tA` (transpose `A`). Only the `ul` triangle of `A` is used. `dA` indicates if
-`A` is unit-triangular (the diagonal is assumed to be all ones).
+Returns `alpha*A*B` or one of the other three variants determined by
+[`side`](@ref stdlib-blas-side) and [`tA`](@ref stdlib-blas-trans).
+Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
+[`dA`](@ref stdlib-blas-diag) determines if the diagonal values are read or
+are assumed to be all ones.
 """
 function trmm end
 
@@ -1321,9 +1385,11 @@ function trmm end
     trsm!(side, ul, tA, dA, alpha, A, B)
 
 Overwrite `B` with the solution to `A*X = alpha*B` or one of the other three variants
-determined by `side` (`A` on left or right of `X`) and `tA` (transpose `A`). Only the `ul`
-triangle of `A` is used. `dA` indicates if `A` is unit-triangular (the diagonal is assumed
-to be all ones). Returns the updated `B`.
+determined by [`side`](@ref stdlib-blas-side) and [`tA`](@ref stdlib-blas-trans).
+Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
+[`dA`](@ref stdlib-blas-diag) determines if the diagonal values are read or
+are assumed to be all ones.
+Returns the updated `B`.
 """
 function trsm! end
 
@@ -1331,8 +1397,10 @@ function trsm! end
     trsm(side, ul, tA, dA, alpha, A, B)
 
 Returns the solution to `A*X = alpha*B` or one of the other three variants determined by
-`side` (`A` on left or right of `X`) and `tA` (transpose `A`). Only the `ul` triangle of `A`
-is used. `dA` indicates if `A` is unit-triangular (the diagonal is assumed to be all ones).
+determined by [`side`](@ref stdlib-blas-side) and [`tA`](@ref stdlib-blas-trans).
+Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
+[`dA`](@ref stdlib-blas-diag) determines if the diagonal values are read or
+are assumed to be all ones.
 """
 function trsm end
 

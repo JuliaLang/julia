@@ -22,8 +22,8 @@ breal = randn(n,2)/2
 bimg  = randn(n,2)/2
 
 for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
-    a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
-    a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(a2real, a2img) : a2real)
+    a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
+    a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     apd  = a'*a                  # symmetric positive-definite
 
     apds  = Symmetric(apd)
@@ -66,8 +66,22 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         capds = cholfact(apds)
         @test inv(capds)*apds ≈ eye(n)
         @test abs((det(capds) - det(apd))/det(capds)) <= ε*κ*n
+        if eltya <: BlasReal
+            capds = cholfact!(copy(apds))
+            @test inv(capds)*apds ≈ eye(n)
+            @test abs((det(capds) - det(apd))/det(capds)) <= ε*κ*n
+        end
     else
         capdh = cholfact(apdh)
+        @test inv(capdh)*apdh ≈ eye(n)
+        @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
+        capdh = cholfact!(copy(apdh))
+        @test inv(capdh)*apdh ≈ eye(n)
+        @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
+        capdh = cholfact!(copy(apd))
+        @test inv(capdh)*apdh ≈ eye(n)
+        @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
+        capdh = cholfact!(copy(apd), :L)
         @test inv(capdh)*apdh ≈ eye(n)
         @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
     end
@@ -125,11 +139,12 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         @test size(cpapd) == size(apd)
         @test full(copy(cpapd)) ≈ apd
         @test det(cpapd) ≈ det(apd)
+        @test logdet(cpapd) ≈ logdet(apd)
         @test cpapd[:P]*cpapd[:L]*cpapd[:U]*cpapd[:P]' ≈ apd
     end
 
     for eltyb in (Float32, Float64, Complex64, Complex128, Int)
-        b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
+        b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
 
@@ -185,7 +200,7 @@ end
 # Test generic cholfact!
 for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
     if elty <: Complex
-        A = complex(randn(5,5), randn(5,5))
+        A = complex.(randn(5,5), randn(5,5))
     else
         A = randn(5,5)
     end
@@ -195,7 +210,7 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
 end
 
 # Test up- and downdates
-let A = complex(randn(10,5), randn(10, 5)), v = complex(randn(5), randn(5))
+let A = complex.(randn(10,5), randn(10, 5)), v = complex.(randn(5), randn(5))
     for uplo in (:U, :L)
         AcA = A'A
         BcB = AcA + v*v'
@@ -203,7 +218,9 @@ let A = complex(randn(10,5), randn(10, 5)), v = complex(randn(5), randn(5))
         F = cholfact(AcA, uplo)
         G = cholfact(BcB, uplo)
         @test LinAlg.lowrankupdate(F, v)[uplo] ≈ G[uplo]
+        @test_throws DimensionMismatch LinAlg.lowrankupdate(F, ones(eltype(v), length(v)+1))
         @test LinAlg.lowrankdowndate(G, v)[uplo] ≈ F[uplo]
+        @test_throws DimensionMismatch LinAlg.lowrankdowndate(G, ones(eltype(v), length(v)+1))
     end
 end
 
@@ -240,8 +257,11 @@ end
 
 # Fail if non-Hermitian
 @test_throws ArgumentError cholfact(randn(5,5))
-@test_throws ArgumentError cholfact(complex(randn(5,5), randn(5,5)))
+@test_throws ArgumentError cholfact(complex.(randn(5,5), randn(5,5)))
 @test_throws ArgumentError Base.LinAlg.chol!(randn(5,5))
 @test_throws ArgumentError Base.LinAlg.cholfact!(randn(5,5),:U,Val{false})
 @test_throws ArgumentError Base.LinAlg.cholfact!(randn(5,5),:U,Val{true})
 @test_throws ArgumentError cholfact(randn(5,5),:U,Val{false})
+
+# Fail for non-BLAS element types
+@test_throws ArgumentError cholfact!(Hermitian(rand(Float16, 5,5)), Val{true})

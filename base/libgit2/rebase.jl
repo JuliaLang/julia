@@ -9,7 +9,7 @@ function GitRebase(repo::GitRepo, branch::GitAnnotated, upstream::GitAnnotated;
                    Ptr{Void}, Ptr{RebaseOptions}),
                    rebase_ptr_ptr, repo.ptr, branch.ptr, upstream.ptr,
                    isnull(onto) ? C_NULL : Base.get(onto).ptr, Ref(opts))
-    return GitRebase(rebase_ptr_ptr[])
+    return GitRebase(repo, rebase_ptr_ptr[])
 end
 
 function Base.count(rb::GitRebase)
@@ -20,13 +20,13 @@ function current(rb::GitRebase)
     return ccall((:git_rebase_operation_current, :libgit2), Csize_t, (Ptr{Void},), rb.ptr)
 end
 
-function Base.getindex(rb::GitRebase, i::Csize_t)
-    rb_op_ptr = ccall((:git_rebase_operation_byindex, :libgit2), Ptr{Void},
-                       (Ptr{Void}, Csize_t), rb.ptr, i-1)
+function Base.getindex(rb::GitRebase, i::Integer)
+    rb_op_ptr = ccall((:git_rebase_operation_byindex, :libgit2),
+                      Ptr{RebaseOperation},
+                      (Ptr{Void}, Csize_t), rb.ptr, i-1)
     rb_op_ptr == C_NULL && return nothing
-    return unsafe_load(convert(Ptr{RebaseOperation}, rb_op_ptr), 1)
+    return unsafe_load(rb_op_ptr)
 end
-Base.getindex(rb::GitRebase, i::Int) = getindex(rb, Csize_t(i))
 
 function Base.next(rb::GitRebase)
     rb_op_ptr_ptr = Ref{Ptr{RebaseOperation}}(C_NULL)
@@ -38,14 +38,27 @@ function Base.next(rb::GitRebase)
         err.code == Error.ITEROVER && return nothing
         rethrow(err)
     end
-    return unsafe_load(convert(Ptr{RebaseOperation}, rb_op_ptr_ptr[]), 1)
+    return unsafe_load(rb_op_ptr_ptr[])
 end
 
+
+"""
+    LibGit2.commit(rb::GitRebase, sig::GitSignature)
+
+Commits the current patch to the rebase `rb`, using `sig` as the committer. Is silent if
+the commit has already been applied.
+"""
 function commit(rb::GitRebase, sig::GitSignature)
-    oid_ptr = Ref(Oid())
-    @check ccall((:git_rebase_commit, :libgit2), Cint,
-                  (Ptr{Oid}, Ptr{Void}, Ptr{SignatureStruct}, Ptr{SignatureStruct}, Ptr{UInt8}, Ptr{UInt8}),
-                   oid_ptr, rb.ptr, C_NULL, sig.ptr, C_NULL, C_NULL)
+    oid_ptr = Ref(GitHash())
+    try
+        @check ccall((:git_rebase_commit, :libgit2), Error.Code,
+                     (Ptr{GitHash}, Ptr{Void}, Ptr{SignatureStruct}, Ptr{SignatureStruct}, Ptr{UInt8}, Ptr{UInt8}),
+                      oid_ptr, rb.ptr, C_NULL, sig.ptr, C_NULL, C_NULL)
+    catch err
+        # TODO: return current HEAD instead
+        err.code == Error.EAPPLIED && return nothing
+        rethrow(err)
+    end
     return oid_ptr[]
 end
 

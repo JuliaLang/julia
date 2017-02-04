@@ -2,94 +2,96 @@
 
 # Instant arithmetic
 (+)(x::Instant) = x
-(-){T<:Instant}(x::T,y::T) = x.periods - y.periods
+(-){T<:Instant}(x::T, y::T) = x.periods - y.periods
 
 # TimeType arithmetic
 (+)(x::TimeType) = x
-(-){T<:TimeType}(x::T,y::T) = x.instant - y.instant
+(-){T<:TimeType}(x::T, y::T) = x.instant - y.instant
+
+# Date-Time arithmetic
+"""
+    dt::Date + t::Time -> DateTime
+
+The addition of a `Date` with a `Time` produces a `DateTime`. The hour, minute, second, and millisecond parts of
+the `Time` are used along with the year, month, and day of the `Date` to create the new `DateTime`.
+Non-zero microseconds or nanoseconds in the `Time` type will result in an `InexactError` being thrown.
+"""
+function (+)(dt::Date, t::Time)
+    (microsecond(t) > 0 || nanosecond(t) > 0) && throw(InexactError())
+    y, m, d = yearmonthday(dt)
+    return DateTime(y, m, d, hour(t), minute(t), second(t), millisecond(t))
+end
+(+)(t::Time, dt::Date) = dt + t
 
 # TimeType-Year arithmetic
-function (+)(dt::DateTime,y::Year)
-    oy,m,d = yearmonthday(dt); ny = oy+value(y); ld = daysinmonth(ny,m)
-    return DateTime(ny,m,d <= ld ? d : ld,hour(dt),minute(dt),second(dt),millisecond(dt))
+function (+)(dt::DateTime, y::Year)
+    oy, m, d = yearmonthday(dt); ny = oy + value(y); ld = daysinmonth(ny, m)
+    return DateTime(ny, m, d <= ld ? d : ld, hour(dt), minute(dt), second(dt), millisecond(dt))
 end
 function (+)(dt::Date,y::Year)
-    oy,m,d = yearmonthday(dt); ny = oy+value(y); ld = daysinmonth(ny,m)
-    return Date(ny,m,d <= ld ? d : ld)
+    oy, m, d = yearmonthday(dt); ny = oy + value(y); ld = daysinmonth(ny, m)
+    return Date(ny, m, d <= ld ? d : ld)
 end
 function (-)(dt::DateTime,y::Year)
-    oy,m,d = yearmonthday(dt); ny = oy-value(y); ld = daysinmonth(ny,m)
-    return DateTime(ny,m,d <= ld ? d : ld,hour(dt),minute(dt),second(dt),millisecond(dt))
+    oy, m, d = yearmonthday(dt); ny = oy - value(y); ld = daysinmonth(ny, m)
+    return DateTime(ny, m, d <= ld ? d : ld, hour(dt), minute(dt), second(dt), millisecond(dt))
 end
 function (-)(dt::Date,y::Year)
-    oy,m,d = yearmonthday(dt); ny = oy-value(y); ld = daysinmonth(ny,m)
-    return Date(ny,m,d <= ld ? d : ld)
+    oy, m, d = yearmonthday(dt); ny = oy - value(y); ld = daysinmonth(ny, m)
+    return Date(ny, m, d <= ld ? d : ld)
 end
 
 # TimeType-Month arithmetic
 # monthwrap adds two months with wraparound behavior (i.e. 12 + 1 == 1)
-monthwrap(m1,m2) = (v = mod1(m1+m2,12); return v < 0 ? 12 + v : v)
+monthwrap(m1, m2) = (v = mod1(m1 + m2, 12); return v < 0 ? 12 + v : v)
 # yearwrap takes a starting year/month and a month to add and returns
 # the resulting year with wraparound behavior (i.e. 2000-12 + 1 == 2001)
-yearwrap(y,m1,m2) = y + fld(m1 + m2 - 1,12)
+yearwrap(y, m1, m2) = y + fld(m1 + m2 - 1, 12)
 
-function (+)(dt::DateTime,z::Month)
+function (+)(dt::DateTime, z::Month)
     y,m,d = yearmonthday(dt)
-    ny = yearwrap(y,m,value(z))
-    mm = monthwrap(m,value(z)); ld = daysinmonth(ny,mm)
-    return DateTime(ny,mm,d <= ld ? d : ld,hour(dt),minute(dt),second(dt),millisecond(dt))
+    ny = yearwrap(y, m, value(z))
+    mm = monthwrap(m, value(z)); ld = daysinmonth(ny, mm)
+    return DateTime(ny, mm, d <= ld ? d : ld, hour(dt), minute(dt), second(dt), millisecond(dt))
 end
-function (+)(dt::Date,z::Month)
+function (+)(dt::Date, z::Month)
     y,m,d = yearmonthday(dt)
-    ny = yearwrap(y,m,value(z))
-    mm = monthwrap(m,value(z)); ld = daysinmonth(ny,mm)
-    return Date(ny,mm,d <= ld ? d : ld)
+    ny = yearwrap(y, m, value(z))
+    mm = monthwrap(m, value(z)); ld = daysinmonth(ny, mm)
+    return Date(ny, mm, d <= ld ? d : ld)
 end
-function (-)(dt::DateTime,z::Month)
+function (-)(dt::DateTime, z::Month)
     y,m,d = yearmonthday(dt)
-    ny = yearwrap(y,m,-value(z))
-    mm = monthwrap(m,-value(z)); ld = daysinmonth(ny,mm)
-    return DateTime(ny,mm,d <= ld ? d : ld,hour(dt),minute(dt),second(dt),millisecond(dt))
+    ny = yearwrap(y, m, -value(z))
+    mm = monthwrap(m, -value(z)); ld = daysinmonth(ny, mm)
+    return DateTime(ny, mm, d <= ld ? d : ld, hour(dt), minute(dt), second(dt), millisecond(dt))
 end
-function (-)(dt::Date,z::Month)
+function (-)(dt::Date, z::Month)
     y,m,d = yearmonthday(dt)
-    ny = yearwrap(y,m,-value(z))
-    mm = monthwrap(m,-value(z)); ld = daysinmonth(ny,mm)
-    return Date(ny,mm,d <= ld ? d : ld)
+    ny = yearwrap(y, m, -value(z))
+    mm = monthwrap(m, -value(z)); ld = daysinmonth(ny, mm)
+    return Date(ny, mm, d <= ld ? d : ld)
 end
-(+)(x::Date,y::Week) = return Date(UTD(value(x) + 7*value(y)))
-(-)(x::Date,y::Week) = return Date(UTD(value(x) - 7*value(y)))
-(+)(x::Date,y::Day)  = return Date(UTD(value(x) + value(y)))
-(-)(x::Date,y::Day)  = return Date(UTD(value(x) - value(y)))
-(+)(x::DateTime,y::Period)   = return DateTime(UTM(value(x)+toms(y)))
-(-)(x::DateTime,y::Period)   = return DateTime(UTM(value(x)-toms(y)))
-(+)(y::Period,x::TimeType) = x + y
-(-)(y::Period,x::TimeType) = x - y
+(+)(x::Date, y::Week) = return Date(UTD(value(x) + 7 * value(y)))
+(-)(x::Date, y::Week) = return Date(UTD(value(x) - 7 * value(y)))
+(+)(x::Date, y::Day)  = return Date(UTD(value(x) + value(y)))
+(-)(x::Date, y::Day)  = return Date(UTD(value(x) - value(y)))
+(+)(x::DateTime, y::Period) = return DateTime(UTM(value(x) + toms(y)))
+(-)(x::DateTime, y::Period) = return DateTime(UTM(value(x) - toms(y)))
+(+)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) + tons(y)))
+(-)(x::Time, y::TimePeriod) = return Time(Nanosecond(value(x) - tons(y)))
+(+)(y::Period, x::TimeType) = x + y
 
-for op in (:.+, :.-)
-    op_ = Symbol(string(op)[2:end])
-    @eval begin
-        # GeneralPeriod, AbstractArray{TimeType}
-        ($op){T<:TimeType}(x::AbstractArray{T}, y::GeneralPeriod) =
-            reshape(T[($op_)(i,y) for i in x], size(x))
-        ($op){T<:TimeType}(y::GeneralPeriod, x::AbstractArray{T}) = ($op)(x,y)
-        ($op_){T<:TimeType}(x::AbstractArray{T}, y::GeneralPeriod) = ($op)(x,y)
-        ($op_){T<:TimeType}(y::GeneralPeriod, x::AbstractArray{T}) = ($op)(x,y)
-
-        # TimeType, StridedArray{GeneralPeriod}
-        ($op){T<:TimeType,P<:GeneralPeriod}(x::StridedArray{P}, y::T) =
-            reshape(T[($op_)(i,y) for i in x], size(x))
-        ($op){P<:GeneralPeriod}(y::TimeType, x::StridedArray{P}) = ($op)(x,y)
-        ($op_){T<:TimeType,P<:GeneralPeriod}(x::StridedArray{P}, y::T) = ($op)(x,y)
-        ($op_){P<:GeneralPeriod}(y::TimeType, x::StridedArray{P}) = ($op)(x,y)
-    end
-end
+(+){T<:TimeType}(x::AbstractArray{T}, y::GeneralPeriod) = x .+ y
+(+){T<:TimeType,P<:GeneralPeriod}(x::StridedArray{P}, y::T) = x .+ y
+(+){T<:TimeType}(y::GeneralPeriod, x::AbstractArray{T}) = x .+ y
+(+){P<:GeneralPeriod}(y::TimeType, x::StridedArray{P}) = x .+ y
+(-){T<:TimeType}(x::AbstractArray{T}, y::GeneralPeriod) = x .- y
+(-){T<:TimeType,P<:GeneralPeriod}(x::StridedArray{P}, y::T) = x .- y
 
 # TimeType, AbstractArray{TimeType}
-(.-){T<:TimeType}(x::AbstractArray{T}, y::T) = reshape(Period[i - y for i in x], size(x))
-(.-){T<:TimeType}(y::T, x::AbstractArray{T}) = -(x .- y)
 (-){T<:TimeType}(x::AbstractArray{T}, y::T) = x .- y
-(-){T<:TimeType}(y::T, x::AbstractArray{T}) = -(x .- y)
+(-){T<:TimeType}(y::T, x::AbstractArray{T}) = y .- x
 
 # AbstractArray{TimeType}, AbstractArray{TimeType}
 (-){T<:TimeType}(x::OrdinalRange{T}, y::OrdinalRange{T}) = collect(x) - collect(y)

@@ -25,6 +25,38 @@ extern "C" {
 #pragma warning(disable:4335)
 #endif
 
+// head symbols for each expression type
+jl_sym_t *call_sym;    jl_sym_t *invoke_sym;
+jl_sym_t *dots_sym;    jl_sym_t *empty_sym;
+jl_sym_t *module_sym;  jl_sym_t *slot_sym;
+jl_sym_t *export_sym;  jl_sym_t *import_sym;
+jl_sym_t *importall_sym; jl_sym_t *toplevel_sym;
+jl_sym_t *quote_sym;   jl_sym_t *amp_sym;
+jl_sym_t *top_sym;     jl_sym_t *colons_sym;
+jl_sym_t *line_sym;    jl_sym_t *jl_incomplete_sym;
+jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
+jl_sym_t *label_sym;   jl_sym_t *return_sym;
+jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
+jl_sym_t *body_sym;    jl_sym_t *globalref_sym;
+jl_sym_t *method_sym;  jl_sym_t *core_sym;
+jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
+jl_sym_t *exc_sym;     jl_sym_t *error_sym;
+jl_sym_t *new_sym;     jl_sym_t *using_sym;
+jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
+jl_sym_t *anonymous_sym;  jl_sym_t *underscore_sym;
+jl_sym_t *abstracttype_sym; jl_sym_t *bitstype_sym;
+jl_sym_t *compositetype_sym; jl_sym_t *foreigncall_sym;
+jl_sym_t *global_sym; jl_sym_t *list_sym;
+jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
+jl_sym_t *boundscheck_sym; jl_sym_t *inbounds_sym;
+jl_sym_t *copyast_sym; jl_sym_t *fastmath_sym;
+jl_sym_t *pure_sym; jl_sym_t *simdloop_sym;
+jl_sym_t *meta_sym; jl_sym_t *compiler_temp_sym;
+jl_sym_t *inert_sym; jl_sym_t *vararg_sym;
+jl_sym_t *unused_sym; jl_sym_t *static_parameter_sym;
+jl_sym_t *polly_sym; jl_sym_t *inline_sym;
+jl_sym_t *propagate_inbounds_sym;
+
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
 };
@@ -108,13 +140,18 @@ value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint32_t na
     jl_ptls_t ptls = jl_get_ptls_states();
     // tells whether a var is defined in and *by* the current module
     argcount(fl_ctx, "defined-julia-global", nargs, 1);
-    (void)tosymbol(fl_ctx, args[0], "defined-julia-global");
-    if (ptls->current_module == NULL)
+    jl_module_t *mod = ptls->current_module;
+    jl_sym_t *sym = (jl_sym_t*)scm_to_julia(fl_ctx, args[0], 0);
+    if (jl_is_globalref(sym)) {
+        mod = jl_globalref_mod(sym);
+        sym = jl_globalref_name(sym);
+    }
+    if (!jl_is_symbol(sym))
+        type_error(fl_ctx, "defined-julia-global", "symbol", args[0]);
+    if (!mod)
         return fl_ctx->F;
-    jl_sym_t *var = jl_symbol(symbol_name(fl_ctx, args[0]));
-    jl_binding_t *b =
-        (jl_binding_t*)ptrhash_get(&ptls->current_module->bindings, var);
-    return (b != HT_NOTFOUND && b->owner==ptls->current_module) ? fl_ctx->T : fl_ctx->F;
+    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&mod->bindings, sym);
+    return (b != HT_NOTFOUND && b->owner == mod) ? fl_ctx->T : fl_ctx->F;
 }
 
 value_t fl_current_julia_module(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
@@ -148,14 +185,15 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     int i;
     for(i=1; i < nargs; i++) margs[i] = scm_to_julia(fl_ctx, args[i], 1);
     jl_value_t *result = NULL;
+    size_t world = jl_get_ptls_states()->world_age;
 
     JL_TRY {
         margs[0] = scm_to_julia(fl_ctx, args[0], 1);
         margs[0] = jl_toplevel_eval(margs[0]);
-        mfunc = jl_method_lookup(jl_gf_mtable(margs[0]), margs, nargs, 1);
+        mfunc = jl_method_lookup(jl_gf_mtable(margs[0]), margs, nargs, 1, world);
         if (mfunc == NULL) {
             JL_GC_POP();
-            jl_method_error((jl_function_t*)margs[0], margs, nargs);
+            jl_method_error((jl_function_t*)margs[0], margs, nargs, world);
             // unreachable
         }
         margs[nargs] = result = jl_call_method_internal(mfunc, margs, nargs);
@@ -177,14 +215,14 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     fl_gc_handle(fl_ctx, &scm);
     value_t scmresult;
     jl_module_t *defmod = mfunc->def->module;
-    if (defmod == NULL || defmod == ptls->current_module) {
-        scmresult = fl_cons(fl_ctx, scm, fl_ctx->F);
-    }
-    else {
-        value_t opaque = cvalue(fl_ctx, jl_ast_ctx(fl_ctx)->jvtype, sizeof(void*));
-        *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = (jl_value_t*)defmod;
-        scmresult = fl_cons(fl_ctx, scm, opaque);
-    }
+    /* if (defmod == NULL || defmod == ptls->current_module) { */
+    /*     scmresult = fl_cons(fl_ctx, scm, fl_ctx->F); */
+    /* } */
+    /* else { */
+    value_t opaque = cvalue(fl_ctx, jl_ast_ctx(fl_ctx)->jvtype, sizeof(void*));
+    *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = (jl_value_t*)defmod;
+    scmresult = fl_cons(fl_ctx, scm, opaque);
+    /* } */
     fl_free_gc_handles(fl_ctx, 1);
 
     JL_GC_POP();
@@ -194,15 +232,14 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
 // Check whether v is a scalar for purposes of inlining fused-broadcast
 // arguments when lowering; should agree with broadcast.jl on what is a
 // scalar.  When in doubt, return false, since this is only an optimization.
-// (TODO: update after #16966 is resolved.)
 value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "julia-scalar?", nargs, 1);
-    if (fl_isnumber(fl_ctx, args[0]))
+    if (fl_isnumber(fl_ctx, args[0]) || fl_isstring(fl_ctx, args[0]))
         return fl_ctx->T;
     else if (iscvalue(args[0]) && fl_ctx->jl_sym == cv_type((cvalue_t*)ptr(args[0]))) {
         jl_value_t *v = *(jl_value_t**)cptr(args[0]);
-        if (jl_subtype(v,(jl_value_t*)jl_number_type,1))
+        if (jl_isa(v,(jl_value_t*)jl_number_type) || jl_is_string(v))
             return fl_ctx->T;
     }
     return fl_ctx->F;
@@ -317,6 +354,65 @@ void jl_init_frontend(void)
     // To match the one in jl_ast_ctx_leave
     JL_SIGATOMIC_BEGIN();
     jl_ast_ctx_leave(&jl_ast_main_ctx);
+
+    empty_sym = jl_symbol("");
+    call_sym = jl_symbol("call");
+    invoke_sym = jl_symbol("invoke");
+    foreigncall_sym = jl_symbol("foreigncall");
+    quote_sym = jl_symbol("quote");
+    inert_sym = jl_symbol("inert");
+    top_sym = jl_symbol("top");
+    core_sym = jl_symbol("core");
+    globalref_sym = jl_symbol("globalref");
+    line_sym = jl_symbol("line");
+    jl_incomplete_sym = jl_symbol("incomplete");
+    error_sym = jl_symbol("error");
+    goto_sym = jl_symbol("goto");
+    goto_ifnot_sym = jl_symbol("gotoifnot");
+    label_sym = jl_symbol("label");
+    return_sym = jl_symbol("return");
+    lambda_sym = jl_symbol("lambda");
+    module_sym = jl_symbol("module");
+    export_sym = jl_symbol("export");
+    import_sym = jl_symbol("import");
+    using_sym = jl_symbol("using");
+    importall_sym = jl_symbol("importall");
+    assign_sym = jl_symbol("=");
+    body_sym = jl_symbol("body");
+    colons_sym = jl_symbol("::");
+    method_sym = jl_symbol("method");
+    exc_sym = jl_symbol("the_exception");
+    enter_sym = jl_symbol("enter");
+    leave_sym = jl_symbol("leave");
+    new_sym = jl_symbol("new");
+    const_sym = jl_symbol("const");
+    global_sym = jl_symbol("global");
+    thunk_sym = jl_symbol("thunk");
+    anonymous_sym = jl_symbol("anonymous");
+    underscore_sym = jl_symbol("_");
+    amp_sym = jl_symbol("&");
+    abstracttype_sym = jl_symbol("abstract_type");
+    bitstype_sym = jl_symbol("bits_type");
+    compositetype_sym = jl_symbol("composite_type");
+    toplevel_sym = jl_symbol("toplevel");
+    dot_sym = jl_symbol(".");
+    boundscheck_sym = jl_symbol("boundscheck");
+    inbounds_sym = jl_symbol("inbounds");
+    fastmath_sym = jl_symbol("fastmath");
+    newvar_sym = jl_symbol("newvar");
+    copyast_sym = jl_symbol("copyast");
+    simdloop_sym = jl_symbol("simdloop");
+    pure_sym = jl_symbol("pure");
+    meta_sym = jl_symbol("meta");
+    dots_sym = jl_symbol("...");
+    list_sym = jl_symbol("list");
+    unused_sym = jl_symbol("#unused#");
+    slot_sym = jl_symbol("slot");
+    static_parameter_sym = jl_symbol("static_parameter");
+    compiler_temp_sym = jl_symbol("#temp#");
+    polly_sym = jl_symbol("polly");
+    inline_sym = jl_symbol("inline");
+    propagate_inbounds_sym = jl_symbol("propagate_inbounds");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
@@ -610,6 +706,19 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
         return julia_to_list2(fl_ctx, (jl_value_t*)inert_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_newvarnode_type))
         return julia_to_list2(fl_ctx, (jl_value_t*)newvar_sym, jl_fieldref(v,0));
+    if (jl_typeis(v, jl_globalref_type)) {
+        jl_module_t *m = jl_globalref_mod(v);
+        jl_sym_t *sym = jl_globalref_name(v);
+        if (m == jl_core_module)
+            return julia_to_list2(fl_ctx, (jl_value_t*)core_sym,
+                                  (jl_value_t*)sym);
+        value_t args = julia_to_list2(fl_ctx, (jl_value_t*)m, (jl_value_t*)sym);
+        fl_gc_handle(fl_ctx, &args);
+        value_t hd = julia_to_scm_(fl_ctx, (jl_value_t*)globalref_sym);
+        value_t scmv = fl_cons(fl_ctx, hd, args);
+        fl_free_gc_handles(fl_ctx, 1);
+        return scmv;
+    }
     if (jl_is_long(v) && fits_fixnum(jl_unbox_long(v)))
         return fixnum(jl_unbox_long(v));
     if (jl_is_ssavalue(v))
@@ -702,6 +811,7 @@ jl_value_t *jl_parse_eval_all(const char *fname,
 
     int last_lineno = jl_lineno;
     const char *last_filename = jl_filename;
+    size_t last_age = jl_get_ptls_states()->world_age;
     jl_lineno = 0;
     jl_filename = fname;
     jl_array_t *roots = NULL;
@@ -719,10 +829,12 @@ jl_value_t *jl_parse_eval_all(const char *fname,
                 JL_TIMING(LOWERING);
                 expansion = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-expand-to-thunk")), car_(ast));
             }
+            jl_get_ptls_states()->world_age = jl_world_counter;
             form = scm_to_julia(fl_ctx, expansion, 0);
             jl_sym_t *head = NULL;
             if (jl_is_expr(form)) head = ((jl_expr_t*)form)->head;
             JL_SIGATOMIC_END();
+            jl_get_ptls_states()->world_age = jl_world_counter;
             if (head == jl_incomplete_sym)
                 jl_errorf("syntax: %s", jl_string_data(jl_exprarg(form,0)));
             else if (head == error_sym)
@@ -742,6 +854,7 @@ jl_value_t *jl_parse_eval_all(const char *fname,
         result = jl_box_long(jl_lineno);
         err = 1;
     }
+    jl_get_ptls_states()->world_age = last_age;
     jl_lineno = last_lineno;
     jl_filename = last_filename;
     fl_free_gc_handles(fl_ctx, 1);

@@ -8,7 +8,9 @@ import
     Base.sort,
     Base.sort!,
     Base.issorted,
-    Base.sortperm
+    Base.sortperm,
+    Base.Slice,
+    Base.to_indices
 
 export # also exported by Base
     # order-only:
@@ -59,7 +61,7 @@ end
     issorted(v, by=identity, rev:Bool=false, order::Ordering=Forward)
 
 Test whether a vector is in sorted order. The `by`, `lt` and `rev` keywords modify what
-order is considered to be sorted just as they do for [`sort`](:func:`sort`).
+order is considered to be sorted just as they do for [`sort`](@ref).
 """
 issorted(itr;
     lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
@@ -168,18 +170,24 @@ function searchsortedfirst{T<:Integer}(a::Range{T}, x::Real, o::DirectOrdering)
 end
 
 function searchsortedfirst{T<:Integer}(a::Range{T}, x::Unsigned, o::DirectOrdering)
-    if step(a) == 0
-        lt(o, first(a), x) ? length(a) + 1 : 1
+    if lt(o, first(a), x)
+        if step(a) == 0
+            length(a) + 1
+        else
+            min(cld(x - first(a), step(a)), length(a)) + 1
+        end
     else
-        clamp(-fld(first(a) - signed(x), step(a)) + 1, 1, length(a) + 1)
+        1
     end
 end
 
 function searchsortedlast{T<:Integer}(a::Range{T}, x::Unsigned, o::DirectOrdering)
-    if step(a) == 0
-        lt(o, x, first(a)) ? 0 : length(a)
+    if lt(o, x, first(a))
+        0
+    elseif step(a) == 0
+        length(a)
     else
-        clamp( fld(signed(x) - first(a), step(a)) + 1, 0, length(a))
+        min(fld(x - first(a), step(a)) + 1, length(a))
     end
 end
 
@@ -472,7 +480,7 @@ end
 """
     sort(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
-Variant of [`sort!`](:func:`sort!`) that returns a sorted copy of `v` leaving `v` itself unmodified.
+Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 """
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 
@@ -512,7 +520,7 @@ appear in ascending order. If you choose a non-stable sorting algorithm such as 
 a different permutation that puts the array into order may be returned. The order is
 specified using the same keywords as `sort!`.
 
-See also [`sortperm!`](:func:`sortperm!`).
+See also [`sortperm!`](@ref).
 """
 function sortperm(v::AbstractVector;
                   alg::Algorithm=DEFAULT_UNSTABLE,
@@ -543,7 +551,7 @@ end
 """
     sortperm!(ix, v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)
 
-Like [`sortperm`](:func:`sortperm`), but accepts a preallocated index vector `ix`.  If `initialized` is `false`
+Like [`sortperm`](@ref), but accepts a preallocated index vector `ix`.  If `initialized` is `false`
 (the default), ix is initialized to contain the values `1:length(v)`.
 """
 function sortperm!{I<:Integer}(x::AbstractVector{I}, v::AbstractVector;
@@ -592,7 +600,7 @@ end
     sort(A, dim::Integer; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)
 
 Sort a multidimensional array `A` along the given dimension.
-See [`sort!`](:func:`sort!`) for a description of possible
+See [`sort!`](@ref) for a description of possible
 keyword arguments.
 """
 function sort(A::AbstractArray, dim::Integer;
@@ -630,7 +638,7 @@ end
     sortrows(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort the rows of matrix `A` lexicographically.
-See [`sort!`](:func:`sort!`) for a description of possible
+See [`sort!`](@ref) for a description of possible
 keyword arguments.
 """
 function sortrows(A::AbstractMatrix; kws...)
@@ -648,7 +656,7 @@ end
     sortcols(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort the columns of matrix `A` lexicographically.
-See [`sort!`](:func:`sort!`) for a description of possible
+See [`sort!`](@ref) for a description of possible
 keyword arguments.
 """
 function sortcols(A::AbstractMatrix; kws...)
@@ -663,11 +671,11 @@ function sortcols(A::AbstractMatrix; kws...)
 end
 
 function slicetypeof{T,N}(A::AbstractArray{T,N}, i1, i2)
-    I = (slice_dummy(i1),slice_dummy(i2))
+    I = map(slice_dummy, to_indices(A, (i1, i2)))
     fast = isa(linearindexing(viewindexing(I), linearindexing(A)), LinearFast)
     SubArray{T,1,typeof(A),typeof(I),fast}
 end
-slice_dummy(::Colon) = Colon()
+slice_dummy(S::Slice) = S
 slice_dummy{T}(::AbstractUnitRange{T}) = one(T)
 
 ## fast clever sorting for floats ##
@@ -676,7 +684,7 @@ module Float
 using ..Sort
 using ...Order
 
-import Core.Intrinsics: unbox, slt_int
+import Core.Intrinsics: slt_int
 import ..Sort: sort!
 import ...Order: lt, DirectOrdering
 
@@ -691,8 +699,8 @@ right(::DirectOrdering) = Right()
 left(o::Perm) = Perm(left(o.order), o.data)
 right(o::Perm) = Perm(right(o.order), o.data)
 
-lt{T<:Floats}(::Left, x::T, y::T) = slt_int(unbox(T,y),unbox(T,x))
-lt{T<:Floats}(::Right, x::T, y::T) = slt_int(unbox(T,x),unbox(T,y))
+lt{T<:Floats}(::Left, x::T, y::T) = slt_int(y, x)
+lt{T<:Floats}(::Right, x::T, y::T) = slt_int(x, y)
 
 isnan(o::DirectOrdering, x::Floats) = (x!=x)
 isnan(o::Perm, i::Int) = isnan(o.order,o.data[i])

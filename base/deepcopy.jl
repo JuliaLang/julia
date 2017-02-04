@@ -22,6 +22,15 @@ function deepcopy_internal(x::SimpleVector, stackdict::ObjectIdDict)
     return y
 end
 
+function deepcopy_internal(x::String, stackdict::ObjectIdDict)
+    if haskey(stackdict, x)
+        return stackdict[x]
+    end
+    y = unsafe_string(pointer(x), sizeof(x))
+    stackdict[x] = y
+    return y
+end
+
 function deepcopy_internal(x::ANY, stackdict::ObjectIdDict)
     T = typeof(x)::DataType
     nf = nfields(T)
@@ -66,3 +75,21 @@ function _deepcopy_array_t(x::ANY, T, stackdict::ObjectIdDict)
     end
     return dest
 end
+
+function deepcopy_internal(x::Dict, stackdict::ObjectIdDict)
+    if haskey(stackdict, x)
+        return stackdict[x]::typeof(x)
+    end
+
+    if isbits(eltype(x))
+        return (stackdict[x] = copy(x))
+    end
+
+    dest = similar(x)
+    stackdict[x] = dest
+    for (k, v) in x
+        dest[deepcopy_internal(k, stackdict)] = deepcopy_internal(v, stackdict)
+    end
+    dest
+end
+

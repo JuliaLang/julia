@@ -5,6 +5,16 @@
 (define (deparse-arglist l (sep ",")) (string.join (map deparse l) sep))
 
 (define (deparse e)
+  (define (block-stmts e)
+    (if (and (pair? e) (eq? (car e) 'block))
+        (cdr e)
+        (list e)))
+  (define (deparse-block head lst)
+    (string head "\n"
+            (string.join (map (lambda (ex) (string "    " (deparse ex)))
+                              lst)
+                         "\n")
+            "\nend"))
   (cond ((or (symbol? e) (number? e)) (string e))
         ((string? e) (print-to-string e))
         ((eq? e #t) "true")
@@ -48,11 +58,13 @@
                 ((vect)   (string #\[ (deparse-arglist (cdr e)) #\]))
                 ((vcat)   (string #\[ (deparse-arglist (cdr e) ";") #\]))
                 ((hcat)   (string #\[ (deparse-arglist (cdr e) " ") #\]))
-                ((global local const)
-                 (string (car e) " " (deparse (cadr e))))
+                ((const)  (string "const " (deparse (cadr e))))
+                ((global local)
+                 (string (car e) " " (string.join (map deparse (cdr e)) ", ")))
                 ((top)        (deparse (cadr e)))
                 ((core)       (string "Core." (deparse (cadr e))))
                 ((globalref)  (string (deparse (cadr e)) "." (deparse (caddr e))))
+                ((outerref)   (string (deparse (cadr e))))
                 ((:)
                  (string (deparse (cadr e)) ': (deparse (caddr e))
                          (if (length> e 3)
@@ -65,15 +77,16 @@
                             (string "# line " (cadr e))
                             (string "# " (caddr e) ", line " (cadr e))))
                 ((block)
-                 (string "begin\n"
-                         (string.join (map (lambda (ex) (string "    " (deparse ex)))
-                                           (cdr e))
-                                      "\n")
-                         "\nend"))
+                 (deparse-block "begin" (cdr e)))
                 ((comprehension)
                  (string "[ " (deparse (cadr e)) " for " (deparse-arglist (cddr e) ", ") " ]"))
                 ((generator)
                  (string "(" (deparse (cadr e)) " for " (deparse-arglist (cddr e) ", ") ")"))
+                ((where)
+                 (string (deparse (cadr e)) " where " (deparse (caddr e))))
+                ((function for while)
+                 (deparse-block (string (car e) " " (deparse (cadr e)))
+                                (block-stmts (caddr e))))
                 (else
                  (string e))))))
 
@@ -105,7 +118,7 @@
 
 ;; predicates and accessors
 
-(define (quoted? e) (memq (car e) '(quote top core globalref line break inert)))
+(define (quoted? e) (memq (car e) '(quote top core globalref outerref line break inert meta)))
 
 (define (lam:args x) (cadr x))
 (define (lam:vars x) (llist-vars (lam:args x)))
@@ -194,7 +207,36 @@
       (cadr (caddr e))
       e))
 
-(define (dotop? o) (and (symbol? o) (eqv? (string.char (string o) 0) #\.)))
+(define (dotop? o) (and (symbol? o) (eqv? (string.char (string o) 0) #\.)
+                        (not (eq? o '|.|))
+                        (not (eqv? (string.char (string o) 1) #\.))))
+
+; convert '.xx to 'xx
+(define (undotop op)
+  (let ((str (string op)))
+    (assert (eqv? (string.char str 0) #\.))
+    (symbol (string.sub str 1 (length str)))))
+
+; convert '.xx to 'xx, and (|.| _ '.xx) to (|.| _ 'xx), and otherwise return #f
+(define (maybe-undotop e)
+  (if (symbol? e)
+      (let ((str (string e)))
+        (if (and (eqv? (string.char str 0) #\.)
+                 (not (eq? e '|.|))
+                 (not (eqv? (string.char str 1) #\.)))
+            (symbol (string.sub str 1 (length str)))
+            #f))
+      (if (pair? e)
+          (if (eq? (car e) '|.|)
+              (let ((op (maybe-undotop (caddr e))))
+                (if op
+                    (list '|.| (cadr e) op)
+                    #f))
+              (if (quoted? e)
+                  (let ((op (maybe-undotop (cadr e))))
+                    (if op (list (car e) op) #f))
+                  #f))
+          #f)))
 
 (define (vararg? x) (and (pair? x) (eq? (car x) '...)))
 (define (varargexpr? x) (and

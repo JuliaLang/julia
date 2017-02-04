@@ -15,6 +15,7 @@
 #endif
 #ifdef _OS_LINUX_
 #  include <sys/syscall.h>
+#  include <sys/utsname.h>
 #endif
 #ifndef _OS_WINDOWS_
 #  include <sys/mman.h>
@@ -265,6 +266,16 @@ static int self_mem_fd = -1;
 
 static int init_self_mem()
 {
+    struct utsname kernel;
+    uname(&kernel);
+    int major, minor;
+    if (-1 == sscanf(kernel.release, "%d.%d", &major, &minor))
+        return -1;
+    // Can't risk getting a memory block backed by transparent huge pages,
+    // which cause the kernel to freeze on systems that have the DirtyCOW
+    // mitigation patch, but are < 4.10.
+    if (!(major > 4 || (major == 4 && minor >= 10)))
+        return -1;
 #ifdef O_CLOEXEC
     int fd = open("/proc/self/mem", O_RDWR | O_SYNC | O_CLOEXEC);
     if (fd == -1)
@@ -728,6 +739,7 @@ public:
                                  unsigned SectionID, StringRef SectionName,
                                  bool isReadOnly) override;
 #if JL_LLVM_VERSION >= 30800
+    using SectionMemoryManager::notifyObjectLoaded;
     void notifyObjectLoaded(RuntimeDyld &Dyld,
                             const object::ObjectFile &Obj) override;
 #endif

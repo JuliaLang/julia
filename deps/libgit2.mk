@@ -40,22 +40,27 @@ ifeq ($(OS),Linux)
 LIBGIT2_OPTS += -DUSE_OPENSSL=OFF -DUSE_MBEDTLS=ON -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
+ifeq ($(OS),FreeBSD)
+LIBGIT2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+endif
+
 # We need to bundle ca certs on linux now that we're using libgit2 with ssl
 ifeq ($(OS),Linux)
 OPENSSL_DIR=$(shell openssl version -d | cut -d '"' -f 2)
+# This certfile location observed on Ubuntu 16.04
+ifeq ($(shell [ -e $(OPENSSL_DIR)/certs/ca-certificates.crt ] && echo exists),exists)
+CERTFILE=$(OPENSSL_DIR)/certs/ca-certificates.crt
+# This certfile location observed on openSUSE Leap 42.1
+else ifeq ($(shell [ -e $(OPENSSL_DIR)/ca-bundle.pem ] && echo exists),exists)
+CERTFILE=$(OPENSSL_DIR)/ca-bundle.pem
 # This certfile location observed on Ubuntu 14.04
-ifeq ($(shell [ -e $(OPENSSL_DIR)/cert.pem ] && echo exists),exists)
+else ifeq ($(shell [ -e $(OPENSSL_DIR)/cert.pem ] && echo exists),exists)
 CERTFILE=$(OPENSSL_DIR)/cert.pem
-endif
 # This certfile location observed on Debian 7
-ifeq ($(shell [ -e $(OPENSSL_DIR)/certs/ca.pem ] && echo exists),exists)
+else ifeq ($(shell [ -e $(OPENSSL_DIR)/certs/ca.pem ] && echo exists),exists)
 CERTFILE=$(OPENSSL_DIR)/certs/ca.pem
 endif
-# This certfile location observed on openSUSE Leap 42.1
-ifeq ($(shell [ -e $(OPENSSL_DIR)/ca-bundle.pem ] && echo exists),exists)
-CERTFILE=$(OPENSSL_DIR)/ca-bundle.pem
-endif
-endif
+endif # Linux
 
 LIBGIT2_SRC_PATH := $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)
 

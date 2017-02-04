@@ -8,7 +8,8 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
-             bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0z, widen, signed, unsafe_trunc, trunc
+             bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0z, widen, signed, unsafe_trunc, trunc,
+             iszero
 
 if Clong == Int32
     typealias ClongMax Union{Int8, Int16, Int32}
@@ -259,6 +260,8 @@ for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
     end
 end
 
+/(x::BigInt, y::BigInt) = float(x)/float(y)
+
 function invmod(x::BigInt, y::BigInt)
     z = zero(BigInt)
     ya = abs(y)
@@ -340,6 +343,9 @@ function *(x::BigInt, c::ClongMax)
     return z
 end
 *(c::ClongMax, x::BigInt) = x * c
+
+/(x::BigInt, y::Union{ClongMax,CulongMax}) = float(x)/y
+/(x::Union{ClongMax,CulongMax}, y::BigInt) = x/float(y)
 
 # unary ops
 for (fJ, fC) in ((:-, :neg), (:~, :com))
@@ -497,6 +503,7 @@ binomial(n::BigInt, k::Integer) = k < 0 ? BigInt(0) : binomial(n, UInt(k))
 ==(i::Integer, x::BigInt) = cmp(x,i) == 0
 ==(x::BigInt, f::CdoubleMax) = isnan(f) ? false : cmp(x,f) == 0
 ==(f::CdoubleMax, x::BigInt) = isnan(f) ? false : cmp(x,f) == 0
+iszero(x::BigInt) = x == Clong(0)
 
 <=(x::BigInt, y::BigInt) = cmp(x,y) <= 0
 <=(x::BigInt, i::Integer) = cmp(x,i) <= 0
@@ -518,23 +525,31 @@ oct(n::BigInt) = base( 8, n)
 dec(n::BigInt) = base(10, n)
 hex(n::BigInt) = base(16, n)
 
-for f in (:bin, :oct, :dec, :hex)
-    @eval function ($f)(n::BigInt, pad::Int)
-        b = IOBuffer()
-        res = ($f)(n)
-        diff = pad - length(res)
-        for _ in 1:diff
-            write(b, "0")
-        end
-        write(b, res)
-        String(b)
-    end
-end
+bin(n::BigInt, pad::Int) = base( 2, n, pad)
+oct(n::BigInt, pad::Int) = base( 8, n, pad)
+dec(n::BigInt, pad::Int) = base(10, n, pad)
+hex(n::BigInt, pad::Int) = base(16, n, pad)
 
 function base(b::Integer, n::BigInt)
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
-    p = ccall((:__gmpz_get_str,:libgmp), Ptr{UInt8}, (Ptr{UInt8}, Cint, Ptr{BigInt}), C_NULL, b, &n)
-    unsafe_wrap(String, p, true)
+    nd = ndigits(n, b)
+    str = Base._string_n(n < 0 ? nd+1 : nd)
+    ccall((:__gmpz_get_str,:libgmp), Ptr{UInt8}, (Ptr{UInt8}, Cint, Ptr{BigInt}), str, b, &n)
+    return str
+end
+
+function base(b::Integer, n::BigInt, pad::Integer)
+    s = base(b, n)
+    buf = IOBuffer()
+    if n < 0
+        s = s[2:end]
+        write(buf, '-')
+    end
+    for i in 1:pad-sizeof(s) # `s` is known to be ASCII, and `length` is slower
+        write(buf, '0')
+    end
+    write(buf, s)
+    String(buf)
 end
 
 function ndigits0z(x::BigInt, b::Integer=10)
@@ -573,6 +588,9 @@ Base.checked_rem(a::BigInt, b::BigInt) = rem(a, b)
 Base.checked_fld(a::BigInt, b::BigInt) = fld(a, b)
 Base.checked_mod(a::BigInt, b::BigInt) = mod(a, b)
 Base.checked_cld(a::BigInt, b::BigInt) = cld(a, b)
+Base.add_with_overflow(a::BigInt, b::BigInt) = a + b, false
+Base.sub_with_overflow(a::BigInt, b::BigInt) = a - b, false
+Base.mul_with_overflow(a::BigInt, b::BigInt) = a * b, false
 
 function Base.deepcopy_internal(x::BigInt, stackdict::ObjectIdDict)
     if haskey(stackdict, x)

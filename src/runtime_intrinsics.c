@@ -14,16 +14,16 @@
 
 const unsigned int host_char_bit = 8;
 
-// run time version of box/unbox intrinsic
-JL_DLLEXPORT jl_value_t *jl_reinterpret(jl_value_t *ty, jl_value_t *v)
+// run time version of bitcast intrinsic
+JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
 {
-    JL_TYPECHK(reinterpret, datatype, ty);
+    JL_TYPECHK(bitcast, datatype, ty);
     if (!jl_is_leaf_type(ty) || !jl_is_bitstype(ty))
-        jl_error("reinterpret: target type not a leaf bitstype");
+        jl_error("bitcast: target type not a leaf bitstype");
     if (!jl_is_bitstype(jl_typeof(v)))
-        jl_error("reinterpret: value not a bitstype");
+        jl_error("bitcast: value not a bitstype");
     if (jl_datatype_size(jl_typeof(v)) != jl_datatype_size(ty))
-        jl_error("reinterpret: argument size does not match size of target type");
+        jl_error("bitcast: argument size does not match size of target type");
     if (ty == jl_typeof(v))
         return v;
     if (ty == (jl_value_t*)jl_bool_type)
@@ -81,7 +81,7 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
     JL_TYPECHK(cglobal, type, ty);
     jl_value_t *rt =
         v == (jl_value_t*)jl_void_type ? (jl_value_t*)jl_voidpointer_type : // a common case
-            (jl_value_t*)jl_apply_type_((jl_value_t*)jl_pointer_type, &ty, 1);
+            (jl_value_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, ty);
 
     if (!jl_is_leaf_type(rt))
         jl_error("cglobal: type argument not a leaftype");
@@ -90,7 +90,7 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
         v = jl_fieldref(v, 0);
 
     if (jl_is_pointer(v))
-        return jl_reinterpret(rt, v);
+        return jl_bitcast(rt, v);
 
     char *f_lib = NULL;
     if (jl_is_tuple(v) && jl_nfields(v) > 1) {
@@ -114,7 +114,7 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
 
 #ifdef _OS_WINDOWS_
     if (!f_lib)
-        f_lib = jl_dlfind_win32(f_name);
+        f_lib = (char*)jl_dlfind_win32(f_name);
 #endif
 
     void *ptr = jl_dlsym(jl_get_library(f_lib), f_name);
@@ -847,37 +847,6 @@ cvt_iintrinsic(LLVMFPtoUI, fptoui)
 un_fintrinsic_withtype(fpcvt,fptrunc)
 un_fintrinsic_withtype(fpcvt,fpext)
 
-JL_DLLEXPORT jl_value_t *jl_fptoui_auto(jl_value_t *a)
-{
-    jl_datatype_t *ty;
-    switch (jl_datatype_size(jl_typeof(a))) {
-        case 4:
-            ty = jl_uint32_type;
-            break;
-        case 8:
-            ty = jl_uint64_type;
-            break;
-        default:
-            jl_error("fptoui: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
-    }
-    return jl_fptoui((jl_value_t*)ty, a);
-}
-JL_DLLEXPORT jl_value_t *jl_fptosi_auto(jl_value_t *a)
-{
-    jl_datatype_t *ty;
-    switch (jl_datatype_size(jl_typeof(a))) {
-        case 4:
-            ty = jl_int32_type;
-            break;
-        case 8:
-            ty = jl_int64_type;
-            break;
-        default:
-            jl_error("fptoui: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
-    }
-    return jl_fptosi((jl_value_t*)ty, a);
-}
-
 // checked conversion
 static inline int all_eq(char *p, char n, char v)
 {
@@ -989,5 +958,6 @@ JL_DLLEXPORT jl_value_t *jl_select_value(jl_value_t *isfalse, jl_value_t *a, jl_
 
 JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a)
 {
+    JL_TYPECHK(arraylen, array, a);
     return jl_box_long(jl_array_len((jl_array_t*)a));
 }

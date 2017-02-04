@@ -10,17 +10,17 @@ function GitConfig(path::AbstractString,
     try
         addfile(cfg, path, level, force)
     catch ex
-        finalize(cfg)
-        throw(ex)
+        close(cfg)
+        rethrow(ex)
     end
     return cfg
 end
 
-function GitConfig(r::GitRepo)
+function GitConfig(repo::GitRepo)
     cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_repository_config, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}), cfg_ptr_ptr, r.ptr)
-    return GitConfig(cfg_ptr_ptr[])
+                  (Ptr{Ptr{Void}}, Ptr{Void}), cfg_ptr_ptr, repo.ptr)
+    return GitConfig(repo, cfg_ptr_ptr[])
 end
 
 function GitConfig(level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT)
@@ -37,7 +37,7 @@ function GitConfig(level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT)
                           glb_cfg_ptr_ptr, cfg.ptr, Cint(level))
             cfg = GitConfig(glb_cfg_ptr_ptr[])
         finally
-            finalize(tmpcfg)
+            close(tmpcfg)
         end
     end
     return cfg
@@ -52,12 +52,13 @@ function addfile(cfg::GitConfig, path::AbstractString,
 end
 
 function get{T<:AbstractString}(::Type{T}, c::GitConfig, name::AbstractString)
-    buf_ptr = Ref(Buffer())
+    buf_ref = Ref(Buffer())
     @check ccall((:git_config_get_string_buf, :libgit2), Cint,
-                (Ptr{Buffer}, Ptr{Void}, Cstring), buf_ptr, c.ptr, name)
-    return with(buf_ptr[]) do buf
-        unsafe_string(buf.ptr, buf.size)
-    end
+                 (Ptr{Buffer}, Ptr{Void}, Cstring), buf_ref, c.ptr, name)
+    buf = buf_ref[]
+    str = unsafe_string(buf.ptr, buf.size)
+    free(buf_ref)
+    str
 end
 
 function get(::Type{Bool}, c::GitConfig, name::AbstractString)

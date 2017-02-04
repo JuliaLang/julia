@@ -46,6 +46,9 @@ ensure_iterable(::Tuple{}) = ()
 ensure_iterable(t::Tuple{Union{Number, CartesianIndex}, Vararg{Any}}) = ((t[1],), ensure_iterable(Base.tail(t))...)
 ensure_iterable(t::Tuple{Any, Vararg{Any}}) = (t[1], ensure_iterable(Base.tail(t))...)
 
+index_ndims(t::Tuple) = tup2val(Base.index_ndims(t))
+tup2val{N}(::NTuple{N}) = Val{N}
+
 # To avoid getting confused by manipulations that are implemented for SubArrays,
 # it's good to copy the contents to an Array. This version protects against
 # `similar` ever changing its meaning.
@@ -127,9 +130,8 @@ test_mixed{T}(::AbstractArray{T,1}, ::Array) = nothing
 test_mixed{T}(::AbstractArray{T,2}, ::Array) = nothing
 test_mixed(A, B::Array) = _test_mixed(A, reshape(B, size(A)))
 function _test_mixed(A::ANY, B::ANY)
-    L = length(A)
     m = size(A, 1)
-    n = div(L, m)
+    n = size(A, 2)
     isgood = true
     for j = 1:n, i = 1:m
         if A[i,j] != B[i,j]
@@ -224,9 +226,11 @@ end
 function runviews(SB::AbstractArray, indexN, indexNN, indexNNN)
     @assert ndims(SB) > 2
     for i3 in indexN, i2 in indexN, i1 in indexN
+        ndims(SB) > 3 && i3 isa Colon && continue # TODO: Re-enable once Colon no longer spans partial trailing dimensions
         runsubarraytests(SB, i1, i2, i3)
     end
-    for i2 in indexNN, i1 in indexN
+    for i2 in indexN, i1 in indexN
+        i2 isa Colon && continue # TODO: Re-enable once Colon no longer spans partial trailing dimensions
         runsubarraytests(SB, i1, i2)
     end
     for i1 in indexNNN
@@ -272,9 +276,15 @@ end
 # with the exception of Int-slicing
 oindex = (:, 6, 3:7, reshape([12]), [8,4,6,12,5,7], [3:7 1:5 2:6 4:8 5:9])
 
+_ndims{T,N}(::AbstractArray{T,N}) = N
+_ndims(x) = 1
+
 if testfull
     let B = copy(reshape(1:13^3, 13, 13, 13))
         for o3 in oindex, o2 in oindex, o1 in oindex
+            if (o3 isa Colon && (_ndims(o1) + _ndims(o2) != 2))
+                continue # TODO: remove once Colon no longer spans partial trailing dimensions
+            end
             viewB = view(B, o1, o2, o3)
             runviews(viewB, index5, index25, index125)
         end
@@ -298,8 +308,7 @@ if !testfull
                      (CartesianIndex(13,6),[8,4,6,12,5,7]),
                      (1,:,view(1:13,[9,12,4,13,1])),
                      (view(1:13,[9,12,4,13,1]),2:6,4),
-                     ([1:5 2:6 3:7 4:8 5:9], :, 3),
-                     (:, [46:-1:42 88:-1:84 22:-1:18 49:-1:45 8:-1:4]))
+                     ([1:5 2:6 3:7 4:8 5:9], :, 3))
             runsubarraytests(B, oind...)
             viewB = view(B, oind...)
             runviews(viewB, index5, index25, index125)
@@ -320,7 +329,7 @@ A = copy(reshape(1:120, 3, 5, 8))
 sA = view(A, 2:2, 1:5, :)
 @test strides(sA) == (1, 3, 15)
 @test parent(sA) == A
-@test parentindexes(sA) == (2:2, 1:5, :)
+@test parentindexes(sA) == (2:2, 1:5, Base.Slice(1:8))
 @test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (1, 5, 8)
 @test indices(sA) === (Base.OneTo(1), Base.OneTo(5), Base.OneTo(8))
@@ -365,18 +374,18 @@ sA = view(A, 1:2, 3, [1 3; 4 2])
 
 # logical indexing #4763
 A = view([1:10;], 5:8)
-@test A[A.<7] == [5, 6]
+@test A[A.<7] == view(A, A.<7) == [5, 6]
 @test Base.unsafe_getindex(A, A.<7) == [5, 6]
 B = reshape(1:16, 4, 4)
 sB = view(B, 2:3, 2:3)
-@test sB[sB.>8] == [10, 11]
+@test sB[sB.>8] == view(sB, sB.>8) == [10, 11]
 @test Base.unsafe_getindex(sB, sB.>8) == [10, 11]
 
 # Tests where dimensions are dropped
 A = copy(reshape(1:120, 3, 5, 8))
 sA = view(A, 2, :, 1:8)
 @test parent(sA) == A
-@test parentindexes(sA) == (2, :, 1:8)
+@test parentindexes(sA) == (2, Base.Slice(1:5), 1:8)
 @test Base.parentdims(sA) == [2:3;]
 @test size(sA) == (5, 8)
 @test indices(sA) === (Base.OneTo(5), Base.OneTo(8))
@@ -464,19 +473,16 @@ end
 @test collect(view(view(reshape(1:13^3, 13, 13, 13), 3:7, 6:6, :), 1:2:5, :, 1:2:5)) ==
     cat(3,[68,70,72],[406,408,410],[744,746,748])
 
-
-
 # tests @view (and replace_ref_end!)
 X = reshape(1:24,2,3,4)
 Y = 4:-1:1
 
 @test isa(@view(X[1:3]), SubArray)
 
-
-@test X[1:end] == @view X[1:end]
+@test X[1:end] == @.(@view X[1:end]) # test compatibility of @. and @view
 @test X[1:end-3] == @view X[1:end-3]
 @test X[1:end,2,2] == @view X[1:end,2,2]
-@test X[1,1:end-2] == @view X[1,1:end-2]
+# @test X[1,1:end-2] == @view X[1,1:end-2] # TODO: Re-enable after partial linear indexing deprecation
 @test X[1,2,1:end-2] == @view X[1,2,1:end-2]
 @test X[1,2,Y[2:end]] == @view X[1,2,Y[2:end]]
 @test X[1:end,2,Y[2:end]] == @view X[1:end,2,Y[2:end]]
@@ -486,8 +492,56 @@ u = (1,2:3)
 @test X[(1,)...,(2,)...,2:end] == @view X[(1,)...,(2,)...,2:end]
 
 # test macro hygiene
-let size=(x,y)-> error("should not happen")
+let size=(x,y)-> error("should not happen"), Base=nothing
     @test X[1:end,2,2] == @view X[1:end,2,2]
+end
+
+# test that side effects occur only once
+let foo = [X]
+    @test X[2:end-1] == @view (push!(foo,X)[1])[2:end-1]
+    @test foo == [X, X]
+end
+
+# test @views macro
+@views let f!(x) = x[1:end-1] .+= x[2:end].^2
+    x = [1,2,3,4]
+    f!(x)
+    @test x == [5,11,19,4]
+    @test x[1:3] isa SubArray
+    @test x[2] === 11
+    @test Dict((1:3) => 4)[1:3] === 4
+    x[1:2] = 0
+    @test x == [0,0,19,4]
+    x[1:2] .= 5:6
+    @test x == [5,6,19,4]
+    f!(x[3:end])
+    @test x == [5,6,35,4]
+    x[Y[2:3]] .= 7:8
+    @test x == [5,8,7,4]
+    @. x[(3,)..., ()...] += 3 # @. should convert to .+=, test compatibility with @views
+    @test x == [5,8,10,4]
+    i = Int[]
+    # test that lhs expressions in update operations are evaluated only once:
+    x[push!(i,4)[1]] += 5
+    @test x == [5,8,10,9] && i == [4]
+    x[push!(i,3)[end]] += 2
+    @test x == [5,8,12,9] && i == [4,3]
+    @. x[3:end] = 0       # make sure @. works with end expressions in @views
+    @test x == [5,8,0,0]
+end
+@views @test isa(X[1:3], SubArray)
+@test X[1:end] == @views X[1:end]
+@test X[1:end-3] == @views X[1:end-3]
+@test X[1:end,2,2] == @views X[1:end,2,2]
+# @test X[1,1:end-2] == @views X[1,1:end-2] # TODO: Re-enable after partial linear indexing deprecation
+@test X[1,2,1:end-2] == @views X[1,2,1:end-2]
+@test X[1,2,Y[2:end]] == @views X[1,2,Y[2:end]]
+@test X[1:end,2,Y[2:end]] == @views X[1:end,2,Y[2:end]]
+@test X[u...,2:end] == @views X[u...,2:end]
+@test X[(1,)...,(2,)...,2:end] == @views X[(1,)...,(2,)...,2:end]
+# test macro hygiene
+let size=(x,y)-> error("should not happen"), Base=nothing
+    @test X[1:end,2,2] == @views X[1:end,2,2]
 end
 
 # issue #18034

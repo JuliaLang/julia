@@ -9,7 +9,7 @@ a = rand(1:100,100)
 include(joinpath(dir, "lru.jl"))
 include(joinpath(dir, "lru_test.jl"))
 
-include(joinpath(dir, "modint.jl"))
+include(joinpath(dir, "ModInts.jl"))
 b = ModInts.ModInt{10}(2)
 c = ModInts.ModInt{10}(4)
 @test b + c == ModInts.ModInt{10}(6)

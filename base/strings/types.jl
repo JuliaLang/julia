@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# SubString, RevString, and RepString types
+# SubString and RevString types
 
 ## substrings reference original strings ##
 
@@ -9,7 +9,7 @@ immutable SubString{T<:AbstractString} <: AbstractString
     offset::Int
     endof::Int
 
-    function SubString(s::T, i::Int, j::Int)
+    function SubString{T}(s::T, i::Int, j::Int) where T<:AbstractString
         if i > endof(s) || j<i
             return new(s, i-1, 0)
         else
@@ -26,7 +26,7 @@ immutable SubString{T<:AbstractString} <: AbstractString
         end
     end
 end
-SubString{T<:AbstractString}(s::T, i::Int, j::Int) = SubString{T}(s, i, j)
+SubString(s::T, i::Int, j::Int) where T<:AbstractString = SubString{T}(s, i, j)
 SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
 SubString(s::AbstractString, i::Integer, j::Integer) = SubString(s, Int(i), Int(j))
 SubString(s::AbstractString, i::Integer) = SubString(s, i, endof(s))
@@ -76,7 +76,7 @@ prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
 convert{T<:AbstractString}(::Type{SubString{T}}, s::T) = SubString(s, 1, endof(s))
 
 String(p::SubString{String}) =
-    String(p.string.data[1+p.offset:p.offset+nextind(p, p.endof)-1])
+    unsafe_string(pointer(p.string, p.offset+1), nextind(p, p.endof)-1)
 
 function getindex(s::AbstractString, r::UnitRange{Int})
     checkbounds(s, r) || throw(BoundsError(s, r))
@@ -95,7 +95,7 @@ end
 cconvert(::Type{Ptr{UInt8}}, s::SubString{String}) = s
 cconvert(::Type{Ptr{Int8}}, s::SubString{String}) = s
 function unsafe_convert{R<:Union{Int8, UInt8}}(::Type{Ptr{R}}, s::SubString{String})
-    unsafe_convert(Ptr{R}, s.string.data) + s.offset
+    convert(Ptr{R}, pointer(s.string)) + s.offset
 end
 
 ## reversed strings without data movement ##
@@ -133,62 +133,18 @@ reverseind(s::RevString, i::Integer) = endof(s) - i + 1
 reverseind(s::SubString{String}, i::Integer) =
     reverseind(s.string, nextind(s.string, endof(s.string))-s.offset-s.endof+i-1) - s.offset
 
-## efficient representation of repeated strings ##
-
-immutable RepString <: AbstractString
-    string::AbstractString
-    repeat::Integer
-end
-
-function endof(s::RepString)
-    e = endof(s.string)
-    (next(s.string,e)[2]-1) * (s.repeat-1) + e
-end
-length(s::RepString) = length(s.string)*s.repeat
-sizeof(s::RepString) = sizeof(s.string)*s.repeat
-
-function next(s::RepString, i::Int)
-    if i < 1
-        throw(BoundsError(s, i))
-    end
-    e = endof(s.string)
-    sz = next(s.string,e)[2]-1
-
-    r, j = divrem(i-1, sz)
-    j += 1
-
-    if r >= s.repeat || j > e
-        throw(BoundsError(s, i))
-    end
-
-    c, k = next(s.string, j)
-    c, k-j+i
-end
-
 function repeat(s::AbstractString, r::Integer)
     r <  0 ? throw(ArgumentError("can't repeat a string $r times")) :
     r == 0 ? "" :
     r == 1 ? s  :
-    RepString(s,r)
-end
-
-convert(::Type{RepString}, s::AbstractString) = RepString(s,1)
-
-function repeat(s::String, r::Integer)
-    r < 0 && throw(ArgumentError("can't repeat a string $r times"))
-    d = s.data; n = length(d)
-    out = Array{UInt8}(n*r)
-    for i=1:r
-        copy!(out, 1+(i-1)*n, d, 1, n)
-    end
-    convert(typeof(s), out)
+    repeat(convert(String, s), r)
 end
 
 """
     ^(s::AbstractString, n::Integer)
 
 Repeat `n` times the string `s`.
-The [`repeat`](:func:`repeat`) function is an alias to this operator.
+The [`repeat`](@ref) function is an alias to this operator.
 
 ```jldoctest
 julia> "Test "^3
@@ -197,5 +153,5 @@ julia> "Test "^3
 """
 (^)(s::AbstractString, r::Integer) = repeat(s,r)
 
-pointer(x::SubString{String}) = pointer(x.string.data) + x.offset
-pointer(x::SubString{String}, i::Integer) = pointer(x.string.data) + x.offset + (i-1)
+pointer(x::SubString{String}) = pointer(x.string) + x.offset
+pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)

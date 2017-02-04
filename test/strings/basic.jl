@@ -1,10 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # constructors
-let d = [0x61,0x62,0x63,0x21]
-    @test String(d) == "abc!"
-    @test String(d).data === d # String(d) should not make a copy
-end
+@test String([0x61,0x62,0x63,0x21]) == "abc!"
 @test String("abc!") == "abc!"
 
 @test isempty(string())
@@ -248,7 +245,7 @@ end
 
 cstrdup(s) = @static is_windows() ? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
 let p = cstrdup("hello")
-    @test unsafe_string(p) == "hello" == unsafe_wrap(String, cstrdup(p), true)
+    @test unsafe_string(p) == "hello"
     Libc.free(p)
 end
 
@@ -392,6 +389,12 @@ end
 @test lcfirst(GenericString("a")) == "a"
 @test ucfirst(GenericString("A")) == "A"
 
+# titlecase
+@test titlecase('ǉ') == 'ǈ'
+@test titlecase("ǉubljana") == "ǈubljana"
+@test titlecase("aBc ABC") == "ABc ABC"
+@test titlecase("abcD   EFG\n\thij") == "AbcD   EFG\n\tHij"
+
 # issue # 11464: uppercase/lowercase of GenericString becomes a String
 str = "abcdef\uff\uffff\u10ffffABCDEF"
 @test typeof(uppercase("abcdef")) == String
@@ -409,6 +412,10 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 @test "a".*["b","c"] == ["ab","ac"]
 @test ["b","c"].*"a" == ["ba","ca"]
 @test ["a","b"].*["c" "d"] == ["ac" "ad"; "bc" "bd"]
+
+@test one(String) == ""
+@test prod(["*" for i in 1:3]) == "***"
+@test prod(["*" for i in 1:0]) == ""
 
 # Make sure NULL pointers are handled consistently by String
 @test_throws ArgumentError unsafe_string(Ptr{UInt8}(0))
@@ -429,6 +436,28 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 # issue #17624, missing getindex method for String
 @test "abc"[:] == "abc"
 
-# PR #18259 reverted because failing test below
-a = [x for x in String([0xcf, 0x83, 0x83, 0x83, 0x83])]
-@test a[1] == 'σ'
+# issue #18280: next/nextind must return past String's underlying data
+for s in ("Hello", "Σ", "こんにちは", "😊😁")
+    @test next(s, endof(s))[2] > sizeof(s)
+    @test nextind(s, endof(s)) > sizeof(s)
+end
+
+# Test cmp with AbstractStrings that don't index the same as UTF-8, which would include
+# (LegacyString.)UTF16String and (LegacyString.)UTF32String, among others.
+
+type CharStr <: AbstractString
+    chars::Vector{Char}
+    CharStr(x) = new(collect(x))
+end
+Base.start(x::CharStr) = start(x.chars)
+Base.next(x::CharStr, i::Int) = next(x.chars, i)
+Base.done(x::CharStr, i::Int) = done(x.chars, i)
+Base.endof(x::CharStr) = endof(x.chars)
+
+# Simple case, with just ANSI Latin 1 characters
+@test "áB" != CharStr("áá") # returns false with bug
+@test cmp("áB", CharStr("áá")) == -1 # returns 0 with bug
+
+# Case with Unicode characters
+@test cmp("\U1f596\U1f596", CharStr("\U1f596")) == 1   # Gives BoundsError with bug
+@test cmp(CharStr("\U1f596"), "\U1f596\U1f596") == -1

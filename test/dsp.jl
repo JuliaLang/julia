@@ -37,7 +37,7 @@ si = [0.9967207836936347,-1.4940914728163142,1.2841226760316475,-0.4524417279474
 a = [1., 2., 1., 2.]
 b = [1., 2., 3.]
 @test conv(a, b) ≈ [1., 4., 8., 10., 7., 6.]
-@test conv(complex(a, ones(4)), complex(b)) ≈ complex([1., 4., 8., 10., 7., 6.], [1., 3., 6., 6., 5., 3.])
+@test conv(complex.(a, ones(4)), complex(b)) ≈ complex.([1., 4., 8., 10., 7., 6.], [1., 3., 6., 6., 5., 3.])
 
 # Discrete cosine transform (DCT) tests
 

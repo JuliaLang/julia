@@ -66,7 +66,7 @@ function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
         end
         sha1s[!in_cache]
     finally
-        finalize(repo) # closing repo opened/created above
+        close(repo) # closing repo opened/created above
     end
 end
 prefetch(pkg::AbstractString, url::AbstractString, sha1::AbstractString...) =
@@ -88,7 +88,6 @@ function normalize_url(url::AbstractString)
     m = match(GITHUB_REGEX,url)
     (m === nothing || rewrite_url_to === nothing) ?
         url : "$rewrite_url_to://github.com/$(m.captures[1]).git"
-
 end
 
 end # module

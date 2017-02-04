@@ -2,6 +2,22 @@
 
 import Base.Pkg.PkgError
 
+function capture_stdout(f::Function)
+    let fname = tempname()
+        try
+            open(fname, "w") do fout
+                redirect_stdout(fout) do
+                    f()
+                end
+            end
+            return readstring(fname)
+        finally
+            rm(fname, force=true)
+        end
+    end
+end
+
+
 function temp_pkg_dir(fn::Function, remove_tmp_dir::Bool=true)
     # Used in tests below to set up and tear down a sandboxed package directory
     const tmpdir = joinpath(tempdir(),randstring())
@@ -15,45 +31,6 @@ function temp_pkg_dir(fn::Function, remove_tmp_dir::Bool=true)
         finally
             remove_tmp_dir && rm(tmpdir, recursive=true)
         end
-    end
-end
-
-macro grab_outputs(ex)
-    quote
-        local err::String, out::String
-        local ferrname = ""
-        local foutname = ""
-        local ret
-        try
-            OLD_STDERR = STDERR
-            ferrname = tempname()
-            ferr = open(ferrname, "w")
-            try
-                OLD_STDOUT = STDOUT
-                foutname = tempname()
-                fout = open(foutname, "w")
-                try
-                    redirect_stderr(ferr)
-                    try
-                        redirect_stdout(fout)
-                        ret = $(esc(ex))
-                    finally
-                        redirect_stdout(OLD_STDOUT)
-                        close(fout)
-                    end
-                finally
-                    redirect_stderr(OLD_STDERR)
-                    close(ferr)
-                end
-                out = readstring(foutname)
-                err = readstring(ferrname)
-            finally
-                isfile(foutname) && rm(foutname)
-            end
-        finally
-            isfile(ferrname) && rm(ferrname)
-        end
-        ret, out, err
     end
 end
 
@@ -173,10 +150,10 @@ temp_pkg_dir() do
         Pkg.checkout("Example3", branch_name)
 
         LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example2")) do repo
-            @test LibGit2.head_oid(repo) == LibGit2.Oid(branch_commit)
+            @test LibGit2.head_oid(repo) == LibGit2.GitHash(branch_commit)
         end
         LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example3")) do repo
-            @test LibGit2.head_oid(repo) == LibGit2.Oid(branch_commit)
+            @test LibGit2.head_oid(repo) == LibGit2.GitHash(branch_commit)
         end
     end
 
@@ -273,7 +250,7 @@ temp_pkg_dir() do
             Pkg.test("IDoNotExist")
             error("unexpected")
         catch ex
-            @test isa(ex,Pkg.PkgError)
+            @test isa(ex,Pkg.Entry.PkgTestError)
             @test ex.msg == "IDoNotExist is not an installed package"
         end
 
@@ -281,78 +258,52 @@ temp_pkg_dir() do
             Pkg.test("IDoNotExist1", "IDoNotExist2")
             error("unexpected")
         catch ex
-            @test isa(ex,Pkg.PkgError)
+            @test isa(ex,Pkg.Entry.PkgTestError)
             @test ex.msg == "IDoNotExist1 and IDoNotExist2 are not installed packages"
         end
     end
 
     # Various pin/free/re-pin/change-pin patterns (issue #17176)
-    begin
-        ret, out, err = @grab_outputs Pkg.free("Example")
-        @test ret === nothing && out == ""
-        @test contains(err, "INFO: Freeing Example")
+    @test "" == capture_stdout() do
+        @test_warn "INFO: Freeing Example" Pkg.free("Example")
 
-        ret, out, err = @grab_outputs Pkg.pin("Example")
-        @test ret === nothing && out == ""
-        @test ismatch(r"INFO: Creating Example branch pinned\.[0-9a-f]{8}\.tmp", err)
-        @test !contains(err, "INFO: No packages to install, update or remove")
-        branchid = replace(err, r".*pinned\.([0-9a-f]{8})\.tmp.*"s, s"\1")
+        @test_warn r"^INFO: Creating Example branch pinned\.[0-9a-f]{8}\.tmp$" Pkg.pin("Example")
         vers = Pkg.installed("Example")
+        branch = LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example")) do repo
+            LibGit2.branch(repo)
+        end
 
-        ret, out, err = @grab_outputs Pkg.free("Example")
-        @test ret === nothing && out == ""
-        @test contains(err, "INFO: Freeing Example")
+        @test_warn "INFO: Freeing Example" Pkg.free("Example")
 
-        ret, out, err = @grab_outputs Pkg.pin("Example", v"0.4.0")
-        @test ret === nothing && out == ""
-        @test contains(err, "INFO: Creating Example branch pinned.b1990792.tmp")
-        @test contains(err, "INFO: No packages to install, update or remove")
+        @test_warn ("INFO: Creating Example branch pinned.b1990792.tmp",
+                    "INFO: No packages to install, update or remove") Pkg.pin("Example", v"0.4.0")
         @test Pkg.installed("Example") == v"0.4.0"
 
-        ret, out, err = @grab_outputs Pkg.pin("Example", v"0.4.0")
-        @test ret === nothing && out == ""
-        @test contains(err, "INFO: Package Example is already pinned to the selected commit")
-        @test !contains(err, "INFO: No packages to install, update or remove")
+        @test_warn r"^INFO: Package Example is already pinned to the selected commit$" Pkg.pin("Example", v"0.4.0")
         @test Pkg.installed("Example") == v"0.4.0"
 
-        ret, out, err = @grab_outputs Pkg.pin("Example")
-        @test ret === nothing && out == ""
-        @test contains(err, "INFO: Package Example is already pinned")
-        @test !contains(err, "INFO: No packages to install, update or remove")
+        @test_warn r"^INFO: Package Example is already pinned$" Pkg.pin("Example")
         @test Pkg.installed("Example") == v"0.4.0"
 
-        ret, out, err = @grab_outputs Pkg.update()
-        @test ret === nothing && out == ""
-        @test contains(err, "INFO: Package Example: skipping update (pinned)...")
+        @test_warn "INFO: Package Example: skipping update (pinned)..." Pkg.update()
         @test Pkg.installed("Example") == v"0.4.0"
 
-        ret, out, err = @grab_outputs Pkg.pin("Example", v"0.3.1")
-        @test ret === nothing && out == ""
-        @test contains(err, "INFO: Creating Example branch pinned.d1ef7b00.tmp")
-        @test contains(err, "INFO: No packages to install, update or remove")
+        @test_warn ("INFO: Creating Example branch pinned.d1ef7b00.tmp",
+                    "INFO: No packages to install, update or remove") Pkg.pin("Example", v"0.3.1")
         @test Pkg.installed("Example") == v"0.3.1"
 
-        ret, out, err = @grab_outputs Pkg.pin("Example", v"0.4.0")
-        @test ret === nothing && out == ""
-        @test contains(err, "INFO: Package Example: checking out existing branch pinned.b1990792.tmp")
-        @test contains(err, "INFO: No packages to install, update or remove")
+        @test_warn ("INFO: Package Example: checking out existing branch pinned.b1990792.tmp",
+                    "INFO: No packages to install, update or remove") Pkg.pin("Example", v"0.4.0")
         @test Pkg.installed("Example") == v"0.4.0"
 
-        ret, out, err = @grab_outputs Pkg.free("Example")
-        @test ret === nothing && out == ""
-        @test contains(err, "INFO: Freeing Example")
-        @test contains(err, "INFO: No packages to install, update or remove")
+        @test_warn ("INFO: Freeing Example",
+                    "INFO: No packages to install, update or remove") Pkg.free("Example")
         @test Pkg.installed("Example") == vers
 
-        ret, out, err = @grab_outputs Pkg.pin("Example")
-        @test ret === nothing && out == ""
-        @test contains(err, "INFO: Package Example: checking out existing branch pinned.$branchid.tmp")
-        @test !contains(err, "INFO: No packages to install, update or remove")
+        @test_warn Regex("^INFO: Package Example: checking out existing branch $branch\$") Pkg.pin("Example")
         @test Pkg.installed("Example") == vers
 
-        ret, out, err = @grab_outputs Pkg.free("Example")
-        @test ret === nothing && out == ""
-        @test contains(err, "INFO: Freeing Example")
+        @test_warn "INFO: Freeing Example" Pkg.free("Example")
         @test Pkg.installed("Example") == vers
     end
 
@@ -379,7 +330,7 @@ temp_pkg_dir() do
         # create a bare repo (isbare = true)
         repo = LibGit2.init(pth, true)
         @test repo.ptr != C_NULL
-        finalize(repo)
+        close(repo)
         Pkg.update()
     end
 
@@ -470,47 +421,35 @@ temp_pkg_dir() do
     end
 
     # partial Pkg.update
-    begin
-        nothingtodomsg = "INFO: No packages to install, update or remove\n"
+    @test "" == capture_stdout() do
+        nothingtodomsg = "INFO: No packages to install, update or remove"
 
-        ret, out, err = @grab_outputs begin
+        @test_warn "INFO: Installing Example v" begin
             Pkg.rm("Example")
             Pkg.add("Example")
         end
-        @test ret === nothing && out == ""
-        @test contains(err, "INFO: Installing Example v")
 
-        ret, out, err = @grab_outputs Pkg.update("Example")
-        @test ret === nothing && out == ""
-        @test contains(err, nothingtodomsg)
+        @test_warn nothingtodomsg Pkg.update("Example")
 
-        ret, out, err = @grab_outputs begin
+        @test_warn "INFO: Installing Example v0.4.0" begin
             Pkg.rm("Example")
             Pkg.add("Example", v"0", v"0.4.1-") # force version to be < 0.4.1
         end
-        @test ret === nothing && out == ""
-        @test contains(err, "INFO: Installing Example v0.4.0")
 
-        ret, out, err = @grab_outputs Pkg.update("Example")
-        @test ret === nothing && out == ""
-        @test ismatch(r"INFO: Package Example was set to version 0\.4\.0, but a higher version \d+\.\d+\.\d+\S* exists.\n", err)
-        @test contains(err, "The update is prevented by explicit requirements constraints. Edit your REQUIRE file to change this.\n")
-        @test contains(err, nothingtodomsg)
+        @test_warn (r"INFO: Package Example was set to version 0\.4\.0, but a higher version \d+\.\d+\.\d+\S* exists.",
+                    "The update is prevented by explicit requirements constraints. Edit your REQUIRE file to change this.",
+                    nothingtodomsg) Pkg.update("Example")
 
-        ret, out, err = @grab_outputs begin
+        @test_warn "INFO: Installing Example" begin
             Pkg.rm("Example")
             Pkg.add("Example")
             Pkg.pin("Example", v"0.4.0")
         end
-        @test ret === nothing && out == ""
-        @test contains(err, "INFO: Installing Example")
 
-        ret, out, err = @grab_outputs Pkg.update("Example")
-        @test ret === nothing && out == ""
-        @test contains(err, "INFO: Package Example: skipping update (pinned)...\n")
-        @test ismatch(r"INFO: Package Example was set to version 0\.4\.0, but a higher version \d+\.\d+\.\d+\S* exists.\n", err)
-        @test contains(err, "The package is fixed. You can try using `Pkg.free(\"Example\")` to update it.")
-        @test contains(err, nothingtodomsg)
+        @test_warn ("INFO: Package Example: skipping update (pinned)...",
+                    r"INFO: Package Example was set to version 0\.4\.0, but a higher version \d+\.\d+\.\d+\S* exists.",
+                    "The package is fixed. You can try using `Pkg.free(\"Example\")` to update it.",
+                    nothingtodomsg) Pkg.update("Example")
 
         metadata_dir = Pkg.dir("METADATA")
         const old_commit = "313bfaafa301e82d40574a778720e893c559a7e2"
@@ -520,26 +459,21 @@ temp_pkg_dir() do
         # (note that the following Pkg.update calls will update METADATA to the
         # latest version even though they don't update all packages)
         LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo
-            LibGit2.reset!(repo, LibGit2.Oid(old_commit), LibGit2.Consts.RESET_HARD)
+            LibGit2.reset!(repo, LibGit2.GitHash(old_commit), LibGit2.Consts.RESET_HARD)
         end
 
-        ret, out, err = @grab_outputs Pkg.add("Colors")
-        @test ret === nothing && out == ""
-        @test contains(err, "INFO: Installing Colors v0.6.4")
-        @test contains(err, "INFO: Installing ColorTypes v0.2.2")
-        @test contains(err, "INFO: Installing FixedPointNumbers v0.1.3")
-        @test contains(err, "INFO: Installing Compat v0.7.18")
-        @test contains(err, "INFO: Installing Reexport v0.0.3")
+        @test_warn ("INFO: Installing Colors v0.6.4",
+                    "INFO: Installing ColorTypes v0.2.2",
+                    "INFO: Installing FixedPointNumbers v0.1.3",
+                    "INFO: Installing Compat v0.7.18",
+                    "INFO: Installing Reexport v0.0.3") Pkg.add("Colors")
 
-        ret, out, err = @grab_outputs Pkg.update("ColorTypes")
-        @test ismatch(r"INFO: Upgrading ColorTypes: v0\.2\.2 => v\d+\.\d+\.\d+", err)
-        @test ismatch(r"INFO: Upgrading Compat: v0\.7\.18 => v\d+\.\d+\.\d+", err)
-        @test !contains(err, "INFO: Upgrading Colors: ")
+        @test_warn (r"INFO: Upgrading ColorTypes: v0\.2\.2 => v\d+\.\d+\.\d+",
+                    r"INFO: Upgrading Compat: v0\.7\.18 => v\d+\.\d+\.\d+",
+                    s -> !contains(s, "INFO: Upgrading Colors: ")) Pkg.update("ColorTypes")
         @test Pkg.installed("Colors") == v"0.6.4"
 
-        ret, out, err = @grab_outputs Pkg.update("FixedPointNumbers")
-        @test ret === nothing && out == ""
-        @test contains(err, nothingtodomsg)
+        @test_warn nothingtodomsg Pkg.update("FixedPointNumbers")
     end
 
     # issue #18239
@@ -552,7 +486,7 @@ temp_pkg_dir() do
 
         # Reset METADATA to the second to last update of Example.jl
         LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo
-            LibGit2.reset!(repo, LibGit2.Oid(old_commit), LibGit2.Consts.RESET_HARD)
+            LibGit2.reset!(repo, LibGit2.GitHash(old_commit), LibGit2.Consts.RESET_HARD)
         end
 
         Pkg.add(package)
@@ -560,4 +494,9 @@ temp_pkg_dir() do
             "redirect_stderr(STDOUT); using Example; Pkg.update(\"$package\")"`))
         @test contains(msg, "- $package\nRestart Julia to use the updated versions.")
     end
+end
+
+let io = IOBuffer()
+    Base.showerror(io, Base.Pkg.Entry.PkgTestError("ppp"), backtrace())
+    @test !contains(String(take!(io)), "backtrace()")
 end

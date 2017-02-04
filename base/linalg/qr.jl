@@ -94,9 +94,9 @@ qrfact!{T<:BlasFloat}(A::StridedMatrix{T}) = qrfact!(A, Val{false})
 """
     qrfact!(A, pivot=Val{false})
 
-`qrfact!` is the same as [`qrfact`](:func:`qrfact`) when `A` is a subtype of
+`qrfact!` is the same as [`qrfact`](@ref) when `A` is a subtype of
 `StridedMatrix`, but saves space by overwriting the input `A`, instead of creating a copy.
-An [`InexactError`](:obj:`InexactError`) exception is thrown if the factorisation produces a number not
+An [`InexactError`](@ref) exception is thrown if the factorization produces a number not
 representable by the element type of `A`, e.g. for integer types.
 """
 qrfact!(A::StridedMatrix, ::Type{Val{false}}) = qrfactUnblocked!(A)
@@ -126,13 +126,29 @@ The individual components of the factorization `F` can be accessed by indexing:
 | `F[:p]`   | pivot `Vector`                            |                 |                    | ✓               |
 | `F[:P]`   | (pivot) permutation `Matrix`              |                 |                    | ✓               |
 
-The following functions are available for the `QR` objects: [`size`](:func:`size`)
-and [`\\`](:func:`\\`). When `A` is rectangular, `\\` will return a least squares
+The following functions are available for the `QR` objects: [`size`](@ref)
+and [`\\`](@ref). When `A` is rectangular, `\\` will return a least squares
 solution and if the solution is not unique, the one with smallest norm is returned.
 
 Multiplication with respect to either thin or full `Q` is allowed, i.e. both `F[:Q]*F[:R]`
 and `F[:Q]*A` are supported. A `Q` matrix can be converted into a regular matrix with
-[`full`](:func:`full`) which has a named argument `thin`.
+[`full`](@ref) which has a named argument `thin`.
+
+```jldoctest
+julia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]
+3×2 Array{Float64,2}:
+ 3.0  -6.0
+ 4.0  -8.0
+ 0.0   1.0
+
+julia> F = qrfact(A)
+Base.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:
+[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]
+[-5.0 10.0; 0.0 -1.0]
+
+julia> F[:Q] * F[:R] == A
+true
+```
 
 !!! note
     `qrfact` returns multiple types because LAPACK uses several representations
@@ -183,7 +199,7 @@ qrfact(x::Number) = qrfact(fill(x,1,1))
     qr(A, pivot=Val{false}; thin::Bool=true) -> Q, R, [p]
 
 Compute the (pivoted) QR factorization of `A` such that either `A = Q*R` or `A[:,p] = Q*R`.
-Also see [`qrfact`](:func:`qrfact`).
+Also see [`qrfact`](@ref).
 The default is to compute a thin factorization. Note that `R` is not
 extended with zeros when the full `Q` is requested.
 """
@@ -205,8 +221,8 @@ Computes the polar decomposition of a vector.
 Returns `w`, a unit vector in the direction of `v`, and
 `r`, the norm of `v`.
 
-See also [`normalize`](:func:`normalize`), [`normalize!`](:func:`normalize!`),
-and [`LinAlg.qr!](:func:`LinAlg.qr!`).
+See also [`normalize`](@ref), [`normalize!`](@ref),
+and [`LinAlg.qr!`](@ref).
 
 # Example
 
@@ -217,7 +233,7 @@ julia> v = [1; 2]
  2
 
 julia> w, r = qr(v)
-([0.447214,0.894427],2.23606797749979)
+([0.447214, 0.894427], 2.23606797749979)
 
 julia> w*r == v
 true
@@ -242,8 +258,8 @@ as `qr(v::AbstractVector)`, this function mutates the input vector `v` in place.
 Returns `w`, a unit vector in the direction of `v` (this is a mutation of `v`),
 and `r`, the norm of `v`.
 
-See also [`normalize`](:func:`normalize`), [`normalize!`](:func:`normalize!`),
-and [`qr`](:func:`qr`).
+See also [`normalize`](@ref), [`normalize!`](@ref),
+and [`qr`](@ref).
 """
 function qr!(v::AbstractVector)
     nrm = norm(v)
@@ -252,8 +268,10 @@ end
 
 # Conversions
 convert{T}(::Type{QR{T}}, A::QR) = QR(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
+convert{T}(::Type{Factorization{T}}, A::QR{T}) = A
 convert{T}(::Type{Factorization{T}}, A::QR) = convert(QR{T}, A)
 convert{T}(::Type{QRCompactWY{T}}, A::QRCompactWY) = QRCompactWY(convert(AbstractMatrix{T}, A.factors), convert(AbstractMatrix{T}, A.T))
+convert{T}(::Type{Factorization{T}}, A::QRCompactWY{T}) = A
 convert{T}(::Type{Factorization{T}}, A::QRCompactWY) = convert(QRCompactWY{T}, A)
 convert(::Type{AbstractMatrix}, F::Union{QR,QRCompactWY}) = F[:Q] * F[:R]
 convert(::Type{AbstractArray}, F::Union{QR,QRCompactWY}) = convert(AbstractMatrix, F)
@@ -261,12 +279,20 @@ convert(::Type{Matrix}, F::Union{QR,QRCompactWY}) = convert(Array, convert(Abstr
 convert(::Type{Array}, F::Union{QR,QRCompactWY}) = convert(Matrix, F)
 full(F::Union{QR,QRCompactWY}) = convert(AbstractArray, F)
 convert{T}(::Type{QRPivoted{T}}, A::QRPivoted) = QRPivoted(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ), A.jpvt)
+convert{T}(::Type{Factorization{T}}, A::QRPivoted{T}) = A
 convert{T}(::Type{Factorization{T}}, A::QRPivoted) = convert(QRPivoted{T}, A)
 convert(::Type{AbstractMatrix}, F::QRPivoted) = (F[:Q] * F[:R])[:,invperm(F[:p])]
 convert(::Type{AbstractArray}, F::QRPivoted) = convert(AbstractMatrix, F)
 convert(::Type{Matrix}, F::QRPivoted) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::QRPivoted) = convert(Matrix, F)
 full(F::QRPivoted) = convert(AbstractArray, F)
+
+function show(io::IO, F::Union{QR, QRCompactWY, QRPivoted})
+    println(io, "$(typeof(F)) with factors Q and R:")
+    show(io, F[:Q])
+    println(io)
+    show(io, F[:R])
+end
 
 function getindex(A::QR, d::Symbol)
     m, n = size(A)
@@ -328,8 +354,10 @@ end
 QRCompactWYQ{S}(factors::AbstractMatrix{S}, T::Matrix{S}) = QRCompactWYQ{S,typeof(factors)}(factors, T)
 
 convert{T}(::Type{QRPackedQ{T}}, Q::QRPackedQ) = QRPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
+convert{T}(::Type{AbstractMatrix{T}}, Q::QRPackedQ{T}) = Q
 convert{T}(::Type{AbstractMatrix{T}}, Q::QRPackedQ) = convert(QRPackedQ{T}, Q)
 convert{S}(::Type{QRCompactWYQ{S}}, Q::QRCompactWYQ) = QRCompactWYQ(convert(AbstractMatrix{S}, Q.factors), convert(AbstractMatrix{S}, Q.T))
+convert{S}(::Type{AbstractMatrix{S}}, Q::QRCompactWYQ{S}) = Q
 convert{S}(::Type{AbstractMatrix{S}}, Q::QRCompactWYQ) = convert(QRCompactWYQ{S}, Q)
 convert{T}(::Type{Matrix}, A::Union{QRPackedQ{T},QRCompactWYQ{T}}) = A_mul_B!(A, eye(T, size(A.factors, 1), minimum(size(A.factors))))
 convert(::Type{Array}, A::Union{QRPackedQ,QRCompactWYQ}) = convert(Matrix, A)
@@ -543,6 +571,8 @@ function A_mul_Bc(A::AbstractMatrix, B::Union{QRCompactWYQ,QRPackedQ})
         throw(DimensionMismatch("matrix A has dimensions $(size(A)) but matrix B has dimensions $(size(B))"))
     end
 end
+@inline A_mul_Bc(rowvec::RowVector, B::Union{LinAlg.QRCompactWYQ,LinAlg.QRPackedQ}) = ctranspose(B*ctranspose(rowvec))
+
 
 ### AcQ/AcQc
 for (f1, f2) in ((:Ac_mul_B, :A_mul_B!),

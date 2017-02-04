@@ -2,7 +2,7 @@
 
 # Text / HTML objects
 
-import Base: print, show
+import Base: print, show, ==, hash
 
 export HTML, @html_str
 
@@ -72,6 +72,9 @@ print(io::IO, t::Text) = print(io, t.content)
 print{F <: Function}(io::IO, t::Text{F}) = t.content(io)
 show(io::IO, t::Text) = print(io, t)
 
+=={T<:Union{HTML, Text}}(t1::T, t2::T) = t1.content == t2.content
+hash{T<:Union{HTML, Text}}(t::T, h::UInt) = hash(T, hash(t.content, h))
+
 """
     @text_str -> Docs.Text
 
@@ -91,7 +94,7 @@ end
 
 # REPL help
 
-function helpmode(line::AbstractString)
+function helpmode(io::IO, line::AbstractString)
     line = strip(line)
     expr =
         if haskey(keywords, Symbol(line))
@@ -109,8 +112,11 @@ function helpmode(line::AbstractString)
             # definition if it exists.
             (isexpr(x, :macrocall, 1) && !endswith(line, "()")) ? quot(x) : x
         end
-    :(Base.Docs.@repl $expr)
+    # the following must call repl(io, expr) via the @repl macro
+    # so that the resulting expressions are evaluated in the Base.Docs namespace
+    :(Base.Docs.@repl $io $expr)
 end
+helpmode(line::AbstractString) = helpmode(STDOUT, line)
 
 function repl_search(io::IO, s)
     pre = "search:"
@@ -118,7 +124,6 @@ function repl_search(io::IO, s)
     printmatches(io, s, completions(s), cols = displaysize(io)[2] - length(pre))
     println(io, "\n")
 end
-
 repl_search(s) = repl_search(STDOUT, s)
 
 function repl_corrections(io::IO, s)
@@ -128,30 +133,75 @@ function repl_corrections(io::IO, s)
     end
     print_correction(io, s)
 end
-
 repl_corrections(s) = repl_corrections(STDOUT, s)
 
-macro repl(ex) repl(ex) end
+# inverse of latex_symbols Dict, lazily created as needed
+const symbols_latex = Dict{String,String}()
+function symbol_latex(s::String)
+    if isempty(symbols_latex)
+        for (k,v) in Base.REPLCompletions.latex_symbols
+            symbols_latex[v] = k
+        end
+    end
+    return get(symbols_latex, s, "")
+end
+function repl_latex(io::IO, s::String)
+    latex = symbol_latex(s)
+    if !isempty(latex)
+        print(io, "\"")
+        Markdown.with_output_format(:cyan, io) do io
+            print(io, s)
+        end
+        print(io, "\" can be typed by ")
+        Markdown.with_output_format(:cyan, io) do io
+            print(io, latex, "<tab>")
+        end
+        println(io, '\n')
+    elseif any(c -> haskey(symbols_latex, string(c)), s)
+        print(io, "\"")
+        Markdown.with_output_format(:cyan, io) do io
+            print(io, s)
+        end
+        print(io, "\" can be typed by ")
+        Markdown.with_output_format(:cyan, io) do io
+            for c in s
+                cstr = string(c)
+                if haskey(symbols_latex, cstr)
+                    print(io, symbols_latex[cstr], "<tab>")
+                else
+                    print(io, c)
+                end
+            end
+        end
+        println(io, '\n')
+    end
+end
+repl_latex(s::String) = repl_latex(STDOUT, s)
 
-function repl(s::Symbol)
+macro repl(ex) repl(ex) end
+macro repl(io, ex) repl(io, ex) end
+
+function repl(io::IO, s::Symbol)
+    str = string(s)
     quote
-        repl_search($(string(s)))
-        ($(isdefined(s) || haskey(keywords, s))) || repl_corrections($(string(s)))
+        repl_latex($io, $str)
+        repl_search($io, $str)
+        ($(isdefined(s) || haskey(keywords, s))) || repl_corrections($io, $str)
         $(_repl(s))
     end
 end
-
 isregex(x) = isexpr(x, :macrocall, 2) && x.args[1] === Symbol("@r_str") && !isempty(x.args[2])
+repl(io::IO, ex::Expr) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex)
+repl(io::IO, str::AbstractString) = :(apropos($io, $str))
+repl(io::IO, other) = :(@doc $(esc(other)))
 
-repl(ex::Expr) = isregex(ex) ? :(apropos($ex)) : _repl(ex)
-
-repl(str::AbstractString) = :(apropos($str))
-
-repl(other) = :(@doc $(esc(other)))
+repl(x) = repl(STDOUT, x)
 
 function _repl(x)
-    docs = (isexpr(x, :call) && !any(isexpr(x, :(::)) for x in x.args)) ?
-        Base.gen_call_with_extracted_types(doc, x) : :(@doc $(esc(x)))
+    if (isexpr(x, :call) && !any(isexpr(x, :(::)) for x in x.args))
+        x.args[2:end] = [:(::typeof($arg)) for arg in x.args[2:end]]
+    end
+    docs = :(@doc $(esc(x)))
     if isfield(x)
         quote
             if isa($(esc(x.args[1])), DataType)

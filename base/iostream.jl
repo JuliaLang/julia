@@ -222,7 +222,16 @@ take!(s::IOStream) =
     ccall(:jl_take_buffer, Vector{UInt8}, (Ptr{Void},), s.ios)
 
 function readuntil(s::IOStream, delim::UInt8)
-    ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Void}, UInt8), s.ios, delim)
+    ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Void}, UInt8, UInt8, UInt8), s.ios, delim, 0, 0)
+end
+
+# like readuntil, above, but returns a String without requiring a copy
+function readuntil_string(s::IOStream, delim::UInt8)
+    ccall(:jl_readuntil, Ref{String}, (Ptr{Void}, UInt8, UInt8, UInt8), s.ios, delim, 1, false)
+end
+
+function readline(s::IOStream; chomp::Bool=true)
+    ccall(:jl_readuntil, Ref{String}, (Ptr{Void}, UInt8, UInt8, UInt8), s.ios, '\n', 1, chomp)
 end
 
 function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
@@ -263,7 +272,7 @@ Read at most `nb` bytes from `stream` into `b`, returning the number of bytes re
 The size of `b` will be increased if needed (i.e. if `nb` is greater than `length(b)`
 and enough bytes could be read), but it will never be decreased.
 
-See [`read`](:func:`read`) for a description of the `all` option.
+See [`read`](@ref) for a description of the `all` option.
 """
 function readbytes!(s::IOStream, b::Array{UInt8}, nb=length(b); all::Bool=true)
     return all ? readbytes_all!(s, b, nb) : readbytes_some!(s, b, nb)
@@ -278,7 +287,7 @@ function read(s::IOStream)
             sz -= pos
         end
     end
-    b = Array{UInt8}(sz<=0 ? 1024 : sz)
+    b = Array{UInt8,1}(sz<=0 ? 1024 : sz)
     nr = readbytes_all!(s, b, typemax(Int))
     resize!(b, nr)
 end
@@ -294,7 +303,7 @@ requested bytes, until an error or end-of-file occurs. If `all` is `false`, at m
 all stream types support the `all` option.
 """
 function read(s::IOStream, nb::Integer; all::Bool=true)
-    b = Array{UInt8}(nb)
+    b = Array{UInt8,1}(nb)
     nr = readbytes!(s, b, nb, all=all)
     resize!(b, nr)
 end

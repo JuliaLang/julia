@@ -16,7 +16,7 @@ areal = randn(n,n)/2
 aimg  = randn(n,n)/2
 
 @testset for eltya in (Float32, Float64, Complex64, Complex128, Int)
-    a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
+    a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     asym = a'+a                  # symmetric indefinite
     apd  = a'*a                 # symmetric positive-definite
     @testset for atype in ("Array", "SubArray")

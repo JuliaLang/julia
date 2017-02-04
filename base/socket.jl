@@ -148,6 +148,11 @@ end
 
 # Parsing
 
+const ipv4_leading_zero_error = """
+Leading zeros in IPv4 addresses are disallowed due to ambiguity.
+If the address is in octal or hexadecimal, convert it to decimal, otherwise remove the leading zero.
+"""
+
 function parse(::Type{IPv4}, str::AbstractString)
     fields = split(str,'.')
     i = 1
@@ -156,18 +161,8 @@ function parse(::Type{IPv4}, str::AbstractString)
         if isempty(f)
             throw(ArgumentError("empty field in IPv4 address"))
         end
-        if f[1] == '0'
-            if length(f) >= 2 && f[2] == 'x'
-                if length(f) > 8 # 2+(3*2) - prevent parseint from overflowing on 32bit
-                    throw(ArgumentError("IPv4 field too large"))
-                end
-                r = parse(Int,f[3:end],16)
-            else
-                if length(f) > 9 # 1+8 - prevent parseint from overflowing on 32bit
-                    throw(ArgumentError("IPv4 field too large"))
-                end
-                r = parse(Int,f,8)
-            end
+        if length(f) > 1 && f[1] == '0'
+            throw(ArgumentError(ipv4_leading_zero_error))
         else
             r = parse(Int,f,10)
         end
@@ -481,8 +476,8 @@ end
 """
     recvfrom(socket::UDPSocket) -> (address, data)
 
-Read a UDP packet from the specified socket, returning a tuple of (address, data), where
-address will be either IPv4 or IPv6 as appropriate.
+Read a UDP packet from the specified socket, returning a tuple of `(address, data)`, where
+`address` will be either IPv4 or IPv6 as appropriate.
 """
 function recvfrom(sock::UDPSocket)
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
@@ -633,15 +628,19 @@ function getaddrinfo(host::String)
         notify(c,IP)
     end
     r = wait(c)
-    if isa(r,UVError)
-        if r.code in [UV_EAI_NONAME, UV_EAI_AGAIN, UV_EAI_FAIL, UV_EAI_NODATA]
-            throw(DNSError(host, r.code))
-        elseif r.code == UV_EAI_SYSTEM
-            throw(SystemError("uv_getaddrinfocb"))
-        elseif r.code == UV_EAI_MEMORY
+    if isa(r, UVError)
+        r = r::UVError
+        code = r.code
+        if code in (UV_EAI_ADDRFAMILY, UV_EAI_AGAIN, UV_EAI_BADFLAGS,
+                    UV_EAI_BADHINTS, UV_EAI_CANCELED, UV_EAI_FAIL,
+                    UV_EAI_FAMILY, UV_EAI_NODATA, UV_EAI_NONAME,
+                    UV_EAI_OVERFLOW, UV_EAI_PROTOCOL, UV_EAI_SERVICE,
+                    UV_EAI_SOCKTYPE)
+            throw(DNSError(host, code))
+        elseif code == UV_EAI_MEMORY
             throw(OutOfMemoryError())
         else
-            throw(r)
+            throw(SystemError("uv_getaddrinfocb", -code))
         end
     end
     return r::IPAddr
@@ -656,16 +655,12 @@ const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32
 Get the IP address of the local machine.
 """
 function getipaddr()
-    addr = Array{Ptr{UInt8}}(1)
-    addr[1] = C_NULL
-    count = zeros(Int32,1)
+    addr_ref = Ref{Ptr{UInt8}}(C_NULL)
+    count_ref = Ref{Int32}(1)
     lo_present = false
-    err = ccall(:jl_uv_interface_addresses, Int32, (Ptr{Ptr{UInt8}}, Ptr{Int32}), addr, count)
-    addr,  count = addr[1], count[1]
-    if err != 0
-        ccall(:uv_free_interface_addresses, Void, (Ptr{UInt8}, Int32), addr, count)
-        throw(UVError("getlocalip", err))
-    end
+    err = ccall(:jl_uv_interface_addresses, Int32, (Ref{Ptr{UInt8}}, Ref{Int32}), addr_ref, count_ref)
+    uv_error("getlocalip", err)
+    addr, count = addr_ref[], count_ref[]
     for i = 0:(count-1)
         current_addr = addr + i*_sizeof_uv_interface_address
         if 1 == ccall(:jl_uv_interface_address_is_internal, Int32, (Ptr{UInt8},), current_addr)
@@ -755,7 +750,7 @@ Listen on port on the address specified by `addr`.
 By default this listens on `localhost` only.
 To listen on all interfaces pass `IPv4(0)` or `IPv6(0)` as appropriate.
 `backlog` determines how many connections can be pending (not having
-called [`accept`](:func:`accept`)) before the server will begin to
+called [`accept`](@ref)) before the server will begin to
 reject them. The default value of `backlog` is 511.
 """
 function listen(addr; backlog::Integer=BACKLOG_DEFAULT)

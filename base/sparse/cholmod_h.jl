@@ -75,5 +75,5 @@ type CHOLMODException <: Exception
 end
 
 macro isok(A)
-    :($A == TRUE || throw(CHOLMODException("")))
+    :($(esc(A)) == TRUE || throw(CHOLMODException("")))
 end

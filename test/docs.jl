@@ -26,7 +26,7 @@ end
 docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
 @doc "Doc abstract type" ->
-abstract C74685 <: AbstractArray
+abstract C74685{T,N} <: AbstractArray{T,N}
 @test stringmime("text/plain", Docs.doc(C74685))=="Doc abstract type\n"
 
 macro macro_doctest() end
@@ -602,7 +602,7 @@ Base.collect{T}(::Type{EmptyType{T}}) = "borked"
 end
 
 let fd = meta(I12515)[@var(Base.collect)]
-    @test fd.order[1] == Tuple{Type{I12515.EmptyType{TypeVar(:T, Any, true)}}}
+    @test fd.order[1] == (Tuple{Type{I12515.EmptyType{T}}} where T)
 end
 
 # PR #12593
@@ -908,5 +908,45 @@ for (line, expr) in Pair[
     "\"...\""      => "...",
     "r\"...\""     => :(r"..."),
     ]
-    @test Docs.helpmode(line) == :(Base.Docs.@repl($expr))
+    @test Docs.helpmode(line) == :(Base.Docs.@repl($STDOUT, $expr))
+    buf = IOBuffer()
+    @test eval(Base, Docs.helpmode(buf, line)) isa Union{Base.Markdown.MD,Void}
 end
+
+let save_color = Base.have_color
+    try
+        @eval Base have_color = false
+        @test sprint(Base.Docs.repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
+        @test sprint(Base.Docs.repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
+    finally
+        @eval Base have_color = $save_color
+    end
+end
+
+
+# Dynamic docstrings
+
+type DynamicDocType
+    x
+end
+
+Base.Docs.getdoc(d::DynamicDocType, sig) = "$(d.x) $(sig)"
+
+dynamic_test = DynamicDocType("test 1")
+@test @doc(dynamic_test) == "test 1 Union{}"
+dynamic_test.x = "test 2"
+@test @doc(dynamic_test) == "test 2 Union{}"
+@test @doc(dynamic_test(::String)) == "test 2 Tuple{String}"
+
+@test Docs._repl(:(dynamic_test(1.0))) == :(@doc $(Expr(:escape, :(dynamic_test(::typeof(1.0))))))
+@test Docs._repl(:(dynamic_test(::String))) == :(@doc $(Expr(:escape, :(dynamic_test(::String)))))
+
+
+# Equality testing
+
+@test Text("docstring") == Text("docstring")
+@test hash(Text("docstring")) == hash(Text("docstring"))
+@test HTML("<b>docstring</b>") == HTML("<b>docstring</b>")
+@test Text("docstring1") ≠ Text("docstring2")
+@test hash(Text("docstring1")) ≠ hash(Text("docstring2"))
+@test hash(Text("docstring")) ≠ hash(HTML("docstring"))

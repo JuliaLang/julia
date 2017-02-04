@@ -2,12 +2,10 @@
 
  ## Basic functions ##
 
-isinteger(x::AbstractArray) = all(isinteger,x)
-isinteger{T<:Integer,n}(x::AbstractArray{T,n}) = true
 isreal(x::AbstractArray) = all(isreal,x)
+iszero(x::AbstractArray) = all(iszero,x)
 isreal{T<:Real,n}(x::AbstractArray{T,n}) = true
-ctranspose(a::AbstractArray) = error("ctranspose not implemented for $(typeof(a)). Consider adding parentheses, e.g. A*(B*C') instead of A*B*C' to avoid explicit calculation of the transposed matrix.")
-transpose(a::AbstractArray) = error("transpose not implemented for $(typeof(a)). Consider adding parentheses, e.g. A*(B*C.') instead of A*B*C' to avoid explicit calculation of the transposed matrix.")
+all{T<:Integer}(::typeof(isinteger), ::AbstractArray{T}) = true
 
 ## Constructors ##
 
@@ -91,15 +89,6 @@ imag{T<:Real}(x::AbstractArray{T}) = zero(x)
 +{T<:Number}(x::AbstractArray{T}) = x
 *{T<:Number}(x::AbstractArray{T,2}) = x
 
-## Binary arithmetic operators ##
-
-*(A::Number, B::AbstractArray) = A .* B
-*(A::AbstractArray, B::Number) = A .* B
-
-/(A::AbstractArray, B::Number) = A ./ B
-
-\(A::Number, B::AbstractArray) = B ./ A
-
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
 
 """
@@ -124,7 +113,7 @@ function slicedim(A::AbstractArray, d::Integer, i)
     d >= 1 || throw(ArgumentError("dimension must be ≥ 1"))
     nd = ndims(A)
     d > nd && (i == 1 || throw_boundserror(A, (ntuple(k->Colon(),nd)..., ntuple(k->1,d-1-nd)..., i)))
-    A[( n==d ? i : indices(A,n) for n in 1:nd )...]
+    A[setindex(indices(A), i, d)...]
 end
 
 function flipdim(A::AbstractVector, d::Integer)
@@ -210,7 +199,7 @@ julia> circshift(b, (-1,0))
  1  5   9  13
 ```
 
-See also [`circshift!`](:func:`circshift!`).
+See also [`circshift!`](@ref).
 """
 function circshift(a::AbstractArray, shiftamt)
     circshift!(similar(a), a, map(Integer, (shiftamt...,)))
@@ -286,9 +275,9 @@ end
 ## Other array functions ##
 
 """
-    repmat(A, m::Int, n::Int=1)
+    repmat(A, m::Integer, n::Integer=1)
 
-Construct a matrix by repeating the given matrix `m` times in dimension 1 and `n` times in
+Construct a matrix by repeating the given matrix (or vector) `m` times in dimension 1 and `n` times in
 dimension 2.
 
 ```jldoctest
@@ -334,6 +323,8 @@ function repmat(a::AbstractVector, m::Int)
     end
     return b
 end
+
+@inline repmat(a, m::Integer...) = repmat(a, convert(Dims, m)...)
 
 """
     repeat(A::AbstractArray; inner=ntuple(x->1, ndims(A)), outer=ntuple(x->1, ndims(A)))

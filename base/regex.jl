@@ -177,7 +177,7 @@ match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
 
 function matchall(re::Regex, str::String, overlap::Bool=false)
     regex = compile(re).regex
-    n = length(str.data)
+    n = sizeof(str)
     matches = SubString{String}[]
     offset = UInt32(0)
     opts = re.match_options
@@ -291,7 +291,7 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
                 end
                 #  TODO: avoid this allocation
                 groupname = SubString(repl, groupstart, prevind(repl, i))
-                if isnumber(groupname)
+                if all(isnumber,groupname)
                     _write_capture(io, re, parse(Int, groupname))
                 else
                     group = PCRE.substring_number_from_name(re.regex, groupname)
@@ -344,7 +344,7 @@ function next(itr::RegexMatchIterator, prev_match)
                     prevempty ? opts_nonempty : UInt32(0))
 
         if mat === nothing
-            if prevempty && offset <= length(itr.string.data)
+            if prevempty && offset <= sizeof(itr.string)
                 offset = nextind(itr.string, offset)
                 prevempty = false
                 continue

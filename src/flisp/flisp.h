@@ -167,8 +167,25 @@ fixnum_t tofixnum(fl_context_t *fl_ctx, value_t v, const char *fname);
 char *tostring(fl_context_t *fl_ctx, value_t v, const char *fname);
 
 /* error handling */
+#if defined(_OS_WINDOWS_)
+#define fl_jmp_buf jmp_buf
+#if defined(_COMPILER_MINGW_)
+int __attribute__ ((__nothrow__,__returns_twice__)) (jl_setjmp)(jmp_buf _Buf);
+__declspec(noreturn) __attribute__ ((__nothrow__)) void (jl_longjmp)(jmp_buf _Buf, int _Value);
+#else
+int (jl_setjmp)(jmp_buf _Buf);
+void (jl_longjmp)(jmp_buf _Buf, int _Value);
+#endif
+#define fl_setjmp(a) (jl_setjmp)((a))
+#define fl_longjmp(a, b) (jl_longjmp)((a), (b))
+#else // !_OS_WINDOWS_
+#define fl_jmp_buf sigjmp_buf
+#define fl_setjmp(a) sigsetjmp((a), 0)
+#define fl_longjmp(a, b) siglongjmp((a), (b))
+#endif
+
 typedef struct _ectx_t {
-    jmp_buf buf;
+    fl_jmp_buf buf;
     uint32_t sp;
     uint32_t frame;
     uint32_t ngchnd;
@@ -179,7 +196,7 @@ typedef struct _ectx_t {
 #define FL_TRY_EXTERN(fl_ctx)                                           \
   fl_exception_context_t _ctx; int l__tr, l__ca;                        \
   fl_savestate(fl_ctx, &_ctx); fl_ctx->exc_ctx = &_ctx;                      \
-  if (!setjmp(_ctx.buf))                                                \
+  if (!fl_setjmp(_ctx.buf))                                                \
       for (l__tr=1; l__tr; l__tr=0, (void)(fl_ctx->exc_ctx=fl_ctx->exc_ctx->prev))
 
 #define FL_CATCH_EXTERN(fl_ctx)                                         \
@@ -389,6 +406,7 @@ struct _fl_context_t {
     fltype_t *builtintype;
 
     htable_t equal_eq_hashtable;
+    htable_t jl_charmap;
 
     value_t tablesym;
     fltype_t *tabletype;

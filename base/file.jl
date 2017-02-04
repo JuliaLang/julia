@@ -430,7 +430,7 @@ readdir() = readdir(".")
 The `walkdir` method returns an iterator that walks the directory tree of a directory.
 The iterator returns a tuple containing `(rootpath, dirs, files)`.
 The directory tree can be traversed top-down or bottom-up.
-If `walkdir` encounters a [`SystemError`](:obj:`SystemError`)
+If `walkdir` encounters a [`SystemError`](@ref)
 it will rethrow the error by default.
 A custom error handling function can be provided through `onerror` keyword argument.
 `onerror` is called with a `SystemError` as argument.
@@ -454,8 +454,10 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
     catch err
         isa(err, SystemError) || throw(err)
         onerror(err)
-        #Need to return an empty task to skip the current root folder
-        return Task(()->())
+        # Need to return an empty closed channel to skip the current root folder
+        chnl = Channel(0)
+        close(chnl)
+        return chnl
     end
     dirs = Array{eltype(content)}(0)
     files = Array{eltype(content)}(0)
@@ -467,23 +469,24 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
         end
     end
 
-    function _it()
+    function _it(chnl)
         if topdown
-            produce(root, dirs, files)
+            put!(chnl, (root, dirs, files))
         end
         for dir in dirs
             path = joinpath(root,dir)
             if follow_symlinks || !islink(path)
                 for (root_l, dirs_l, files_l) in walkdir(path, topdown=topdown, follow_symlinks=follow_symlinks, onerror=onerror)
-                    produce(root_l, dirs_l, files_l)
+                    put!(chnl, (root_l, dirs_l, files_l))
                 end
             end
         end
         if !topdown
-            produce(root, dirs, files)
+            put!(chnl, (root, dirs, files))
         end
     end
-    Task(_it)
+
+    return Channel(_it)
 end
 
 function unlink(p::AbstractString)
@@ -505,10 +508,9 @@ function rename(src::AbstractString, dst::AbstractString)
 end
 
 function sendfile(src::AbstractString, dst::AbstractString)
-    local src_open = false,
-          dst_open = false,
-          src_file,
-          dst_file
+    local src_open = false
+    local dst_open = false
+    local src_file, dst_file
     try
         src_file = open(src, JL_O_RDONLY)
         src_open = true

@@ -21,6 +21,14 @@ ex = quote
         :()
     end
 
+    # Support non-Dict Associatives, #19441
+    type CustomDict{K, V} <: Associative{K, V}
+        mydict::Dict{K, V}
+    end
+
+    Base.keys(d::CustomDict) = collect(keys(d.mydict))
+    Base.length(d::CustomDict) = length(d.mydict)
+
     test{T<:Real}(x::T, y::T) = pass
     test(x::Real, y::Real) = pass
     test{T<:Real}(x::AbstractArray{T}, y) = pass
@@ -55,8 +63,10 @@ ex = quote
     test_dict = Dict("abc"=>1, "abcd"=>10, :bar=>2, :bar2=>9, Base=>3,
                      contains=>4, `ls`=>5, 66=>7, 67=>8, ("q",3)=>11,
                      "α"=>12, :α=>13)
+    test_customdict = CustomDict(test_dict)
     end
     test_repl_comp_dict = CompletionFoo.test_dict
+    test_repl_comp_customdict = CompletionFoo.test_customdict
 end
 ex.head = :toplevel
 eval(Main, ex)
@@ -279,7 +289,7 @@ for (T, arg) in [(String,"\")\""),(Char, "')'")]
     @test s[r] == "CompletionFoo.test2"
 end
 
-s = "(1, CompletionFoo.test2(`)`,"
+s = "(1, CompletionFoo.test2(`')'`,"
 c, r, res = test_complete(s)
 @test c[1] == string(first(methods(Main.CompletionFoo.test2, Tuple{Cmd})))
 @test length(c) == 1
@@ -306,11 +316,14 @@ c, r, res = test_complete(s)
 @test length(c) == 1
 @test s[r] == "CompletionFoo.test4"
 
+# (As discussed in #19829, the Base.REPLCompletions.get_type function isn't
+#  powerful enough to analyze general dot calls because it can't handle
+#  anonymous-function evaluation.)
 s = "CompletionFoo.test5(push!(Base.split(\"\",' '),\"\",\"\").==\"\","
 c, r, res = test_complete(s)
 @test !res
-@test length(c) == 1
-@test c[1] == string(first(methods(Main.CompletionFoo.test5, Tuple{BitArray{1}})))
+@test_broken length(c) == 1
+@test_broken c[1] == string(first(methods(Main.CompletionFoo.test5, Tuple{BitArray{1}})))
 
 s = "CompletionFoo.test4(CompletionFoo.test_y_array[1]()[1], CompletionFoo.test_y_array[1]()[2], "
 c, r, res = test_complete(s)
@@ -350,13 +363,13 @@ s = "\"\"."
 c,r = test_complete(s)
 @test length(c)==1
 @test r == (endof(s)+1):endof(s)
-@test c[1] == "data"
+@test c[1] == "len"
 
 s = "(\"\"*\"\")."
 c,r = test_complete(s)
 @test length(c)==1
 @test r == (endof(s)+1):endof(s)
-@test c[1] == "data"
+@test c[1] == "len"
 
 s = "CompletionFoo.test_y_array[1]."
 c,r = test_complete(s)
@@ -711,7 +724,7 @@ function test_dict_completion(dict_name)
     @test c == Any["66]"]
     s = "$dict_name[("
     c, r = test_complete(s)
-    @test c == Any["(\"q\",3)]"]
+    @test c == Any["(\"q\", 3)]"]
     s = "$dict_name[\"\\alp"
     c, r = test_complete(s)
     @test c == String["\\alpha"]
@@ -732,4 +745,6 @@ function test_dict_completion(dict_name)
     @test c == Any[":α]"]
 end
 test_dict_completion("CompletionFoo.test_dict")
+test_dict_completion("CompletionFoo.test_customdict")
 test_dict_completion("test_repl_comp_dict")
+test_dict_completion("test_repl_comp_customdict")

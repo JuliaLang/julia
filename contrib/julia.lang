@@ -233,7 +233,7 @@
       <keyword>Any|Void</keyword>
       <keyword>Type(Constructor|Name|Var|_Array)?|(Union|Data|NonTuple)Type</keyword>
       <keyword>(Abstract|Strided|Bit)?(Array|Matrix|Vector)</keyword>
-      <keyword>Abstract(Cmd|RNG|RemoteRef|SparseMatrix)</keyword>
+      <keyword>Abstract(Cmd|RNG|SparseMatrix)</keyword>
       <keyword>(Abstract|Strided)?VecOrMat</keyword>
       <keyword>SparseMatrixCSC</keyword>
       <keyword>(D|Sub((Or)?D)?)Array</keyword>

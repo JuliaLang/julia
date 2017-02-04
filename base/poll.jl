@@ -521,7 +521,7 @@ Monitor a file for changes by polling every `interval_s` seconds until a change 
 Returns a pair of `StatStruct` objects `(previous, current)` when a change is detected.
 
 To determine when a file was modified, compare `mtime(prev) != mtime(current)` to detect
-notification of changes. However, using [`watch_file`](:func:`watch_file`) for this operation is preferred, since
+notification of changes. However, using [`watch_file`](@ref) for this operation is preferred, since
 it is more reliable and efficient, although in some situations it may not be available.
 """
 function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::Real=-1)

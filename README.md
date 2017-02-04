@@ -27,15 +27,13 @@ This is the GitHub repository of Julia source code, including instructions for c
 - **Packages:** <http://pkg.julialang.org/>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
+- **Discussion forum:** <https://discourse.julialang.org>
 - **Mailing lists:** <http://julialang.org/community/>
 - **Gitter:** <https://gitter.im/JuliaLang/julia>
 - **IRC:** <http://webchat.freenode.net/?channels=julia>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
-The mailing list for developer discussion is
-<http://groups.google.com/group/julia-dev/>. All are welcome, but the volume
-of messages is higher, and the discussions tend to be more esoteric. New
-developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md) helpful to start contributing to the Julia codebase.
+New developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md) helpful to start contributing to the Julia codebase.
 
 ### External Resources
 <a name="External-Resources"/>
@@ -85,7 +83,7 @@ If you need to build Julia in an environment that does not allow access to the o
 **Note:** the build process fail badly if any of the build directory's parent directories have spaces or other shell meta-characters such as `$` or `:` in their names (this is due to a limitation in GNU make).
 
 Once it is built, you can run the `julia` executable using its full path in the directory created above (the `julia` directory), or, to run it from anywhere, either
-
+- add an alias (in `bash`: `echo "alias julia='/path/to/install/folder/bin/julia'" >> ~/.bashrc && source ~/.bashrc`), or
 - add a soft link to the `julia` executable in the `julia` directory to `/usr/local/bin` (or any suitable directory already in your path), or
 
 - add the `julia` directory to your executable path for this shell session (in `bash`: `export PATH="$(pwd):$PATH"` ; in `csh` or `tcsh`:
@@ -107,7 +105,7 @@ the `julia` source directory, type `make testall`. You should see output
 that lists a series of tests being run; if they complete without
 error, you should be in good shape to start using Julia.
 
-You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.
+You can read about [getting started](http://docs.julialang.org/en/stable/manual/getting-started/) in the manual.
 
 If you are building a Julia package for distribution on Linux, OS X,
 or Windows, take a look at the detailed notes in
@@ -276,7 +274,7 @@ Building Julia requires that the following software be installed:
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
-- **[LLVM]** (3.7)           — compiler infrastructure.
+- **[LLVM]** (3.9)           — compiler infrastructure.
 - **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
 - **[libuv]**                — portable, high-performance event-based I/O library
 - **[OpenLibm]**             — portable libm library containing elementary math functions.
@@ -296,7 +294,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[curl]** (>= 7.50)       — libcurl provides download and proxy support for Julia's package manager
 - **[libssh2]** (>= 1.7)     — library for SSH transport, used by libgit2 for packages with SSH remotes
 - **[mbedtls]** (>= 2.2)     — library used for cryptography and transport layer security, used by libssh2
-- **[utf8proc]** (>= 2.0)    — a library for processing UTF-8 encoded Unicode strings
+- **[utf8proc]** (>= 2.1)    — a library for processing UTF-8 encoded Unicode strings
 - **[libosxunwind]**         — clone of [libunwind], a library that determines the call-chain of a program
 
 [GNU make]:     http://www.gnu.org/software/make

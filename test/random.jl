@@ -133,10 +133,10 @@ ke = Array{UInt64}(ziggurat_table_size)
 we = Array{Float64}(ziggurat_table_size)
 fe = Array{Float64}(ziggurat_table_size)
 function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
-    wib = big(wi)
-    fib = big(fi)
-    web = big(we)
-    feb = big(fe)
+    wib = big.(wi)
+    fib = big.(fi)
+    web = big.(we)
+    feb = big.(fe)
     # Ziggurat tables for the normal distribution
     x1 = ziggurat_nor_r
     wib[256] = x1/nmantissa

@@ -5,24 +5,36 @@ function GitReference(repo::GitRepo, refname::AbstractString)
     @check ccall((:git_reference_lookup, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Cstring),
                    ref_ptr_ptr, repo.ptr, refname)
-    return GitReference(ref_ptr_ptr[])
+    return GitReference(repo, ref_ptr_ptr[])
 end
 
-function GitReference(repo::GitRepo, obj_oid::Oid, refname::AbstractString = Consts.HEAD_FILE;
+function GitReference(repo::GitRepo, obj_oid::GitHash, refname::AbstractString = Consts.HEAD_FILE;
                       force::Bool=false, msg::AbstractString="")
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_reference_create, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{Oid}, Cint, Cstring),
+                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{GitHash}, Cint, Cstring),
                    ref_ptr_ptr, repo.ptr, refname, Ref(obj_oid), Cint(force),
-                   isempty(msg) ? Cstring_NULL : msg)
-    return GitReference(ref_ptr_ptr[])
+                   isempty(msg) ? C_NULL : msg)
+    return GitReference(repo, ref_ptr_ptr[])
+end
+
+"""
+    LibGit2.isorphan(repo::GitRepo)
+
+Checks if the current branch is an "orphan" branch, i.e. has no commits. The first commit
+to this branch will have no parents.
+"""
+function isorphan(repo::GitRepo)
+    r = @check ccall((:git_repository_head_unborn, :libgit2), Cint,
+                     (Ptr{Void},), repo.ptr)
+    r != 0
 end
 
 function head(repo::GitRepo)
     head_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_repository_head, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}), head_ptr_ptr, repo.ptr)
-    return GitReference(head_ptr_ptr[])
+    return GitReference(repo, head_ptr_ptr[])
 end
 
 function shortname(ref::GitReference)
@@ -53,7 +65,7 @@ end
 
 function branch(ref::GitReference)
     isempty(ref) && return ""
-    str_ptr_ptr = Ref(LibGit2.Cstring_NULL)
+    str_ptr_ptr = Ref{Cstring}()
     @check ccall((:git_branch_name, :libgit2), Cint,
                   (Ptr{Cstring}, Ptr{Void},), str_ptr_ptr, ref.ptr)
     return unsafe_string(str_ptr_ptr[])
@@ -87,29 +99,46 @@ function isremote(ref::GitReference)
     return err == 1
 end
 
-function peel{T <: GitObject}(::Type{T}, ref::GitReference)
-    git_otype = getobjecttype(T)
-    obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    err = ccall((:git_reference_peel, :libgit2), Cint,
-                 (Ptr{Ptr{Void}}, Ptr{Void}, Cint), obj_ptr_ptr, ref.ptr, git_otype)
-    if err == Int(Error.ENOTFOUND)
-        return Oid()
-    elseif err != Int(Error.GIT_OK)
-        if obj_ptr_ptr[] != C_NULL
-            finalize(GitAnyObject(obj_ptr_ptr[]))
+function Base.show(io::IO, ref::GitReference)
+    println(io, "GitReference:")
+    if isremote(ref)
+        println(io, "Remote with name ", name(ref))
+    elseif isbranch(ref)
+        println(io, "Branch with name ", name(ref))
+        if ishead(ref)
+            println(io, "Branch is HEAD.")
+        else
+            println(io, "Branch is not HEAD.")
         end
-        throw(Error.GitError(err))
+    elseif istag(ref)
+        println(io, "Tag with name ", name(ref))
     end
-    return T(obj_ptr_ptr[])
 end
 
+"""
+    peel([T,] ref::GitReference)
+
+Recursively peel `ref` until an object of type `T` is obtained. If no `T` is provided,
+then `ref` will be peeled until an object other than a `GitTag` is obtained.
+
+- A `GitTag` will be peeled to the object it references.
+- A `GitCommit` will be peeled to a `GitTree`.
+"""
+function peel{T<:GitObject}(::Type{T}, ref::GitReference)
+    obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    @check ccall((:git_reference_peel, :libgit2), Cint,
+                 (Ptr{Ptr{Void}}, Ptr{Void}, Cint), obj_ptr_ptr, ref.ptr, Consts.OBJECT(T))
+    return T(ref.repo, obj_ptr_ptr[])
+end
+peel(ref::GitReference) = peel(GitObject, ref)
+
 function ref_list(repo::GitRepo)
-    with(StrArrayStruct()) do sa
-        sa_ref = Ref(sa)
-        @check ccall((:git_reference_list, :libgit2), Cint,
+    sa_ref = Ref(StrArrayStruct())
+    @check ccall((:git_reference_list, :libgit2), Cint,
                       (Ptr{StrArrayStruct}, Ptr{Void}), sa_ref, repo.ptr)
-        convert(Vector{AbstractString}, sa_ref[])
-    end
+    res = convert(Vector{String}, sa_ref[])
+    free(sa_ref)
+    res
 end
 
 function create_branch(repo::GitRepo,
@@ -120,7 +149,7 @@ function create_branch(repo::GitRepo,
     @check ccall((:git_branch_create, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Ptr{Void}, Cint),
                    ref_ptr_ptr, repo.ptr, bname, commit_obj.ptr, Cint(force))
-    return GitReference(ref_ptr_ptr[])
+    return GitReference(repo, ref_ptr_ptr[])
 end
 
 function delete_branch(branch::GitReference)
@@ -134,6 +163,17 @@ function head!(repo::GitRepo, ref::GitReference)
     return ref
 end
 
+"""
+    lookup_branch(repo::GitRepo, branch_name::AbstractString, remote::Bool=false) -> Nullable{GitReference}
+
+Determine if the branch specified by `branch_name` exists in the repository `repo`.
+If `remote` is `true`, `repo` is assumed to be a remote git repository. Otherwise, it
+is part of the local filesystem.
+
+`lookup_branch` returns a `Nullable`, which will be null if the requested branch does
+not exist yet. If the branch does exist, the `Nullable` contains a `GitReference` to
+the branch.
+"""
 function lookup_branch(repo::GitRepo,
                        branch_name::AbstractString,
                        remote::Bool=false)
@@ -142,52 +182,59 @@ function lookup_branch(repo::GitRepo,
     err = ccall((:git_branch_lookup, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Cint),
                   ref_ptr_ptr, repo.ptr, branch_name, branch_type)
-    if err == Int(Error.ENOTFOUND)
-        return nothing
-    elseif err != Int(Error.GIT_OK)
+    if err != Int(Error.GIT_OK)
+        if err == Int(Error.ENOTFOUND)
+            return Nullable{GitReference}()
+        end
         if ref_ptr_ptr[] != C_NULL
-            finalize(GitReference(ref_ptr_ptr[]))
+            close(GitReference(repo, ref_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
-    return GitReference(ref_ptr_ptr[])
+    return Nullable{GitReference}(GitReference(repo, ref_ptr_ptr[]))
 end
 
+"""
+    upstream(ref::GitReference) -> Nullable{GitReference}
+
+Determine if the branch containing `ref` has a specified upstream branch.
+
+`upstream` returns a `Nullable`, which will be null if the requested branch does
+not have an upstream counterpart. If the upstream branch does exist, the `Nullable`
+contains a `GitReference` to the upstream branch.
+"""
 function upstream(ref::GitReference)
     isempty(ref) && return nothing
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_branch_upstream, :libgit2), Cint,
                   (Ref{Ptr{Void}}, Ptr{Void},), ref_ptr_ptr, ref.ptr)
-    if err == Int(Error.ENOTFOUND)
-        return nothing
-    elseif err != Int(Error.GIT_OK)
+    if err != Int(Error.GIT_OK)
+        if err == Int(Error.ENOTFOUND)
+            return Nullable{GitReference}()
+        end
         if ref_ptr_ptr[] != C_NULL
-            finalize(GitReference(ref_ptr_ptr[]))
+            close(GitReference(ref.repo, ref_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
-    return GitReference(ref_ptr_ptr[])
+    return Nullable{GitReference}(GitReference(ref.repo, ref_ptr_ptr[]))
 end
 
-function owner(ref::GitReference)
-    repo_ptr = ccall((:git_reference_owner, :libgit2), Ptr{Void},
-                      (Ptr{Void},), ref.ptr)
-    return GitRepo(repo_ptr)
-end
+repository(ref::GitReference) = ref.repo
 
-function target!(ref::GitReference, new_oid::Oid; msg::AbstractString="")
+function target!(ref::GitReference, new_oid::GitHash; msg::AbstractString="")
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_reference_set_target, :libgit2), Cint,
-             (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}, Cstring),
-             ref_ptr_ptr, ref.ptr, Ref(new_oid), isempty(msg) ? Cstring_NULL : msg)
-    return GitReference(ref_ptr_ptr[])
+             (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{GitHash}, Cstring),
+             ref_ptr_ptr, ref.ptr, Ref(new_oid), isempty(msg) ? C_NULL : msg)
+    return GitReference(ref.repo, ref_ptr_ptr[])
 end
 
-function GitBranchIter(r::GitRepo, flags::Cint=Cint(Consts.BRANCH_LOCAL))
+function GitBranchIter(repo::GitRepo, flags::Cint=Cint(Consts.BRANCH_LOCAL))
     bi_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_branch_iterator_new, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}, Cint), bi_ptr, r.ptr, flags)
-    return GitBranchIter(bi_ptr[])
+                  (Ptr{Ptr{Void}}, Ptr{Void}, Cint), bi_ptr, repo.ptr, flags)
+    return GitBranchIter(repo, bi_ptr[])
 end
 
 function Base.start(bi::GitBranchIter)
@@ -197,7 +244,7 @@ function Base.start(bi::GitBranchIter)
                  (Ptr{Ptr{Void}}, Ptr{Cint}, Ptr{Void}),
                   ref_ptr_ptr, btype, bi.ptr)
     err != Int(Error.GIT_OK) && return (nothing, -1, true)
-    return (GitReference(ref_ptr_ptr[]), btype[], false)
+    return (GitReference(bi.repo, ref_ptr_ptr[]), btype[], false)
 end
 
 Base.done(bi::GitBranchIter, state) = Bool(state[3])
@@ -209,7 +256,7 @@ function Base.next(bi::GitBranchIter, state)
                  (Ptr{Ptr{Void}}, Ptr{Cint}, Ptr{Void}),
                   ref_ptr_ptr, btype, bi.ptr)
     err != Int(Error.GIT_OK) && return (state[1:2], (nothing, -1, true))
-    return (state[1:2], (GitReference(ref_ptr_ptr[]), btype[], false))
+    return (state[1:2], (GitReference(bi.repo, ref_ptr_ptr[]), btype[], false))
 end
 
 Base.iteratorsize(::Type{GitBranchIter}) = Base.SizeUnknown()

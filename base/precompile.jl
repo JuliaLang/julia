@@ -323,6 +323,8 @@ precompile(Base.read, (IOBuffer, Type{Char}))
 precompile(Base.read, (IOBuffer, Type{UInt8}))
 precompile(Base.read, (IOStream, Array{UInt32,1}))
 precompile(Base.readline, (String,))
+precompile(Base.readline, (IOBuffer,))
+precompile(Base.readline, (IOStream,))
 precompile(Base.readuntil, (IOBuffer, Char))
 precompile(Base.readuntil, (IOBuffer, UInt8))
 precompile(Base.rehash!, (Dict{Any,Any}, Int))
@@ -453,6 +455,9 @@ precompile(Base.joinpath, (String, String, String, String))
 precompile(Base.string, (String, String, Char))
 precompile(Base.string, (String, String, Int))
 precompile(Base.vect, (Base.LineEdit.Prompt, String))
+
+# Speed up type inference in the post-Base world redefinition of convert
+isdefined(Core, :Inference) && Base.code_typed(Base.code_typed)
 
 # Speeding up addprocs for LocalManager
 precompile(Base.start_worker, ())
