@@ -7,13 +7,12 @@ import Base: getindex, wait, put!, take!, fetch, isready, push!, length,
              hash, ==, connect, kill, serialize, deserialize, close
 
 # imports for use
-import Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, wait_connected,
-             VERSION_STRING, sync_begin, sync_add, sync_end, async_run_thunk,
-            binding_module, notify_error
+using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, wait_connected,
+            VERSION_STRING, sync_begin, sync_add, sync_end, async_run_thunk,
+            binding_module, notify_error, atexit, julia_exename, julia_cmd,
+            AsyncGenerator, display_error
 
-# The following are required but cannot be imported at this
-# time as they are included after Parallel in sysimg.jl
-#import Base: atexit, julia_exename, julia_cmd, AsyncGenerator, display_error
+# NOTE: clusterserialize.jl imports additional symbols from Base.Serializer for use
 
 export
     @spawn,

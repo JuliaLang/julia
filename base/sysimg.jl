@@ -283,16 +283,10 @@ importall .Enums
 include("serialize.jl")
 importall .Serializer
 include("channels.jl")
-include("parallel/Parallel.jl")
-importall .Parallel
-
-# code loading
-include("loading.jl")
 
 # memory-mapped and shared arrays
 include("mmap.jl")
 import .Mmap
-include("sharedarray.jl")
 
 # utilities - timing, help, edit
 include("datafmt.jl")
@@ -361,6 +355,13 @@ include("sparse/sparse.jl")
 importall .SparseArrays
 
 include("asyncmap.jl")
+
+include("parallel/Parallel.jl")
+importall .Parallel
+include("sharedarray.jl")
+
+# code loading
+include("loading.jl")
 
 # worker threads
 include("threadcall.jl")

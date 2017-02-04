@@ -967,6 +967,7 @@ export
     wait,
     timedwait,
     asyncmap,
+    asyncmap!,
 
 # channels
     take!,

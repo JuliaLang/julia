@@ -344,7 +344,7 @@ end
 default_addprocs_params() = AnyDict(
     :topology => :all_to_all,
     :dir      => pwd(),
-    :exename  => joinpath(JULIA_HOME, Base.julia_exename()),
+    :exename  => joinpath(JULIA_HOME, julia_exename()),
     :exeflags => ``,
     :enable_threaded_blas => false)
 
@@ -947,7 +947,7 @@ end
 
 function init_parallel()
     start_gc_msgs_task()
-    Base.atexit(terminate_all_workers)
+    atexit(terminate_all_workers)
 
     init_bind_addr()
 

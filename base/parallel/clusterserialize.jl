@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-import Base.Serializer: known_object_data, object_number, serialize_cycle, deserialize_cycle, writetag,
+using Base.Serializer: known_object_data, object_number, serialize_cycle, deserialize_cycle, writetag,
                       __deserialized_types__, serialize_typename, deserialize_typename,
                       TYPENAME_TAG, object_numbers, reset_state, serialize_type
 

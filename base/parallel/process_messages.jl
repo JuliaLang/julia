@@ -90,7 +90,7 @@ function deliver_result(sock::IO, msg, oid, value)
         # terminate connection in case of serialization error
         # otherwise the reading end would hang
         print(STDERR, "fatal error on ", myid(), ": ")
-        Base.display_error(e, catch_backtrace())
+        display_error(e, catch_backtrace())
         wid = worker_id_from_socket(sock)
         close(sock)
         if myid()==1
@@ -209,7 +209,7 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
             if wpid == 1
                 if isopen(w_stream)
                     print(STDERR, "fatal error on ", myid(), ": ")
-                    Base.display_error(e, catch_backtrace())
+                    display_error(e, catch_backtrace())
                 end
                 exit(1)
             end
@@ -332,7 +332,7 @@ function connect_to_peer(manager::ClusterManager, rpid::Int, wconfig::WorkerConf
         send_connection_hdr(w, true)
         send_msg_now(w, MsgHeader(), IdentifySocketMsg(myid()))
     catch e
-        Base.display_error(e, catch_backtrace())
+        display_error(e, catch_backtrace())
         println(STDERR, "Error [$e] on $(myid()) while connecting to peer $rpid. Exiting.")
         exit(1)
     end
