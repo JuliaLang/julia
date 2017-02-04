@@ -2586,7 +2586,7 @@ function typeinf_frame(frame)
             local pc´::Int = pc + 1 # next program-counter (after executing instruction)
             if pc == frame.pc´´
                 # need to update pc´´ to point at the new lowest instruction in W
-                min_pc = next(W, Int64(pc))[2]
+                min_pc = next(W, pc)[2]
                 if done(W, min_pc)
                     frame.pc´´ = max(min_pc, n + 1)
                 else

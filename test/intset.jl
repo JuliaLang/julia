@@ -7,12 +7,12 @@
     s = IntSet(data_in)
     data_out = collect(s)
     @test all(map(d->in(d,data_out), data_in))
-    @test length(data_out) == length(data_in)
+    @test length(data_out) === length(data_in)
 end
 
 @testset "eltype, similar" begin
-    @test eltype(IntSet()) === Int64
-    @test eltype(IntSet) === Int64
+    @test eltype(IntSet()) === Int
+    @test eltype(IntSet) === Int
     @test isequal(similar(IntSet([1,2,3])), IntSet())
 end
 
@@ -24,14 +24,14 @@ end
 
 @testset "in, hashing" begin
     s = IntSet([1,2,10,20,200,300,1000,10000,10002])
-    @test last(s) == 10002
-    @test first(s) == 1
-    @test length(s) == 9
-    @test pop!(s) == 10002
+    @test last(s) === 10002
+    @test first(s) === 1
+    @test length(s) === 9
+    @test pop!(s) === 10002
     @test_throws KeyError pop!(s, -1)
-    @test length(s) == 8
-    @test shift!(s) == 1
-    @test length(s) == 7
+    @test length(s) === 8
+    @test shift!(s) === 1
+    @test length(s) === 7
     @test !in(0,s)
     @test !in(1,s)
     @test in(2,s)
@@ -43,10 +43,13 @@ end
     @test_throws ArgumentError last(IntSet())
     t = copy(s)
     sizehint!(t, 20000) #check that hash does not depend on size of internal storage
-    @test hash(s) == hash(t)
+    @test hash(s) === hash(t)
     push!(t, 20000)
-    pop!(t, 20000)
-    @test hash(s) == hash(t)
+    @test 20000 in t
+    sizehint!(t, 200) # ensure that sizehint!'ing a small amount isn't destructive
+    @test 20000 in t
+    @test pop!(t, 20000) === 20000
+    @test hash(s) === hash(t)
     # Ensure empty chunks don't affect hash
     @test hash(IntSet([1])) != hash(IntSet([17]))
     @test hash(IntSet([1])) != hash(IntSet([33]))
@@ -60,21 +63,21 @@ end
 
 # # issue #8570
 # This requires 2^29 bytes of storage, which is too much for a simple test
-# s = IntSet(2^32)
-# @test length(s) == 1
+# s = IntSet(typemax(Int32))
+# @test length(s) === 1
 # for b in s; b; end
 
 @testset "union!, symdiff!" begin
     i = IntSet([1, 2, 3])
     union!(i, [1, 2])
-    @test length(i) == 3
+    @test length(i) === 3
     union!(i, [3, 4, 5])
-    @test length(i) == 5
+    @test length(i) === 5
 
     @test_throws KeyError pop!(i, 10)
 
     empty!(i)
-    @test length(i) == 0
+    @test length(i) === 0
 
     @test_throws ArgumentError symdiff!(i, -3)
     @test symdiff!(i, 3) == IntSet([3])
@@ -144,10 +147,10 @@ end
     push!(s, 100)
     @test pop!(s, 100) == 100
     push!(s, 1:2:10...)
-    @test pop!(s) == 9
-    @test pop!(s) == 7
-    @test shift!(s) == 1
-    @test shift!(s) == 3
+    @test pop!(s) === 9
+    @test pop!(s) === 7
+    @test shift!(s) === 1
+    @test shift!(s) === 3
     @test collect(s) == [5]
     empty!(s)
     @test isempty(s)
@@ -258,23 +261,23 @@ end
     @test 100 in s
     @test !(101 in s)
     @test !(1000 in s)
-    @test first(s) == 1
-    @test last(s) == 100
+    @test first(s) === 1
+    @test last(s) === 100
     @test s == IntSet([1, 2, 100])
     push!(s, 1000)
     @test [i for i in s] == [1, 2, 100, 1000]
-    @test pop!(s) == 1000
+    @test pop!(s) === 1000
     @test s == IntSet([1, 2, 100])
-    @test hash(s) == hash(IntSet([1, 2, 100]))
+    @test hash(s) === hash(IntSet([1, 2, 100]))
 
     b = 1:1000
     s = IntSet(b)
     @test collect(s) == collect(b)
-    @test length(s) == length(b)
-    @test pop!(s, 100) == 100
+    @test length(s) === length(b)
+    @test pop!(s, 100) === 100
     @test collect(s) == [1:99; 101:1000]
     @test_throws KeyError pop!(s, 100)
     @test_throws KeyError pop!(s, 0)
-    @test pop!(s, 100, 0) == 0
-    @test pop!(s, 99, 0) == 99
+    @test pop!(s, 100, 0) === 0
+    @test pop!(s, 99, 0) === 99
 end

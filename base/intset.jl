@@ -2,29 +2,29 @@
 
 immutable IntSet <: AbstractSet{Int}
     bits::BitVector
-    IntSet() = new(fill!(BitVector(256), false))
+    IntSet() = new(falses(256))
 end
 IntSet(itr) = union!(IntSet(), itr)
 
-eltype(::Type{IntSet}) = Int64
+eltype(::Type{IntSet}) = Int
 similar(s::IntSet) = IntSet()
 copy(s1::IntSet) = copy!(IntSet(), s1)
-function copy!(to::IntSet, from::IntSet)
-    resize!(to.bits, length(from.bits))
-    copy!(to.bits, from.bits)
-    to
+function copy!(dest::IntSet, src::IntSet)
+    resize!(dest.bits, length(src.bits))
+    copy!(dest.bits, src.bits)
+    dest
 end
 eltype(s::IntSet) = Int
-sizehint!(s::IntSet, n::Integer) = (_resize0!(s.bits, n); s)
+sizehint!(s::IntSet, n::Integer) = (_resize0!(s.bits, max(n, length(s.bits))); s)
 
 # An internal function for setting the inclusion bit for a given integer n >= 0
 @inline function _setint!(s::IntSet, idx::Integer, b::Bool)
     if idx > length(s.bits)
-        !b && return s # setting a bit to zero outside the set's bits is a no-op
+        b || return s # setting a bit to zero outside the set's bits is a no-op
         newlen = idx + idx>>1 # This operation may overflow; we want saturation
         _resize0!(s.bits, ifelse(newlen<0, typemax(Int), newlen))
     end
-    unsafe_setindex!(s.bits, b, idx) # Use @inbounds once available
+    @inbounds s.bits[idx] = b
     s
 end
 
@@ -33,7 +33,7 @@ end
 @inline function _resize0!(b::BitVector, newlen::Integer)
     len = length(b)
     resize!(b, newlen)
-    len < newlen && unsafe_setindex!(b, false, len+1:newlen) # resize! gives dirty memory
+    len < newlen && @inbounds b[len+1:newlen] = false # resize! gives dirty memory
     b
 end
 
@@ -152,10 +152,11 @@ end
 
 @inline function in(n::Integer, s::IntSet)
     if 1 <= n <= length(s.bits)
-        unsafe_getindex(s.bits, n)
+        @inbounds b = s.bits[n]
     else
-        false
+        b = false
     end
+    b
 end
 
 # Use the next-set index as the state to prevent looking it up again in done
@@ -225,7 +226,7 @@ function hash(s::IntSet, h::UInt)
     end
     while i > 0
         h = hash(bc[i], h)
-	i -= 1
+        i -= 1
     end
     h
 end
