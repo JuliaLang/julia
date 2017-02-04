@@ -522,7 +522,7 @@ Closest candidates are:
   bar(::Any, ::Any, ::Any, !Matched::Any) at none:1
 
 julia> bar(1,2,3,4)
-(1,2,(3,4))
+(1, 2, (3, 4))
 
 julia> bar(1,2,3,4,5)
 ERROR: MethodError: no method matching bar(::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
@@ -599,7 +599,7 @@ refer to the object that was called. A `Polynomial` can be used as follows:
 
 ```jldoctest polynomial
 julia> p = Polynomial([1,10,100])
-Polynomial{Int64}([1,10,100])
+Polynomial{Int64}([1, 10, 100])
 
 julia> p(3)
 931

@@ -243,7 +243,7 @@ see the tuple returned:
 
 ```jldoctest foofunc
 julia> foo(2,3)
-(5,6)
+(5, 6)
 ```
 
 A typical usage of such a pair of return values, however, extracts each value into a variable.
@@ -251,7 +251,7 @@ Julia supports simple tuple "destructuring" that facilitates this:
 
 ```jldoctest foofunc
 julia> x, y = foo(2,3)
-(5,6)
+(5, 6)
 
 julia> x
 5
@@ -287,16 +287,16 @@ two arguments:
 
 ```jldoctest barfunc
 julia> bar(1,2)
-(1,2,())
+(1, 2, ())
 
 julia> bar(1,2,3)
-(1,2,(3,))
+(1, 2, (3,))
 
-julia> bar(1,2,3,4)
-(1,2,(3,4))
+julia> bar(1, 2, 3, 4)
+(1, 2, (3, 4))
 
 julia> bar(1,2,3,4,5,6)
-(1,2,(3,4,5,6))
+(1, 2, (3, 4, 5, 6))
 ```
 
 In all these cases, `x` is bound to a tuple of the trailing values passed to `bar`.
@@ -309,28 +309,28 @@ into a function call as individual arguments. To do this, one also uses `...` bu
 call instead:
 
 ```jldoctest barfunc
-julia> x = (3,4)
-(3,4)
+julia> x = (3, 4)
+(3, 4)
 
 julia> bar(1,2,x...)
-(1,2,(3,4))
+(1, 2, (3, 4))
 ```
 
 In this case a tuple of values is spliced into a varargs call precisely where the variable number
 of arguments go. This need not be the case, however:
 
 ```jldoctest barfunc
-julia> x = (2,3,4)
-(2,3,4)
+julia> x = (2, 3, 4)
+(2, 3, 4)
 
 julia> bar(1,x...)
-(1,2,(3,4))
+(1, 2, (3, 4))
 
-julia> x = (1,2,3,4)
-(1,2,3,4)
+julia> x = (1, 2, 3, 4)
+(1, 2, 3, 4)
 
 julia> bar(x...)
-(1,2,(3,4))
+(1, 2, (3, 4))
 ```
 
 Furthermore, the iterable object spliced into a function call need not be a tuple:
@@ -342,7 +342,7 @@ julia> x = [3,4]
  4
 
 julia> bar(1,2,x...)
-(1,2,(3,4))
+(1, 2, (3, 4))
 
 julia> x = [1,2,3,4]
 4-element Array{Int64,1}:
@@ -352,7 +352,7 @@ julia> x = [1,2,3,4]
  4
 
 julia> bar(x...)
-(1,2,(3,4))
+(1, 2, (3, 4))
 ```
 
 Also, the function that arguments are spliced into need not be a varargs function (although it
@@ -660,7 +660,7 @@ julia> @. X = sin(cos(Y)) # equivalent to X .= sin.(cos.(Y))
  -0.608083
 ```
 
-Operators like `.*` are handled with the same mechanism:
+Binary (or unary) operators like `.+` are handled with the same mechanism:
 they are equivalent to `broadcast` calls and are fused with other nested "dot" calls.
  `X .+= Y` etcetera is equivalent to `X .= X .+ Y` and results in a fused in-place assignment;
  see also [dot operators](@ref man-dot-operators).

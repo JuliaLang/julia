@@ -14,6 +14,8 @@ New language features
       `function inv(M::Matrix{T}) where T<:AbstractFloat`.
       Anonymous functions can have type parameters via the syntax
       `((x::Array{T}) where T<:Real) -> 2x`.
+    * Implicit type parameters, e.g. `Vector{<:Real}` is equivalent to
+      `Vector{T} where T<:Real`, and similarly for `Vector{>:Int}` ([#20414]).
     * Much more accurate subtype and type intersection algorithms. Method sorting and
       identification of equivalent and ambiguous methods are improved as a result.
 
@@ -34,6 +36,7 @@ Language changes
     the `broadcast` call `(⨳).(a, b)`.  Hence, one no longer defines methods
     for `.*` etcetera.  This also means that "dot operations" automatically
     fuse into a single loop, along with other dot calls `f.(x)`. ([#17623])
+    Similarly for unary operators ([#20249]).
 
   * Newly defined methods are no longer callable from the same dynamic runtime
     scope they were defined in ([#17057]).
@@ -50,8 +53,8 @@ Breaking changes
 This section lists changes that do not have deprecation warnings.
 
   * `readline`, `readlines` and `eachline` return lines without line endings by default.
-    You *must* use `readline(s, chomp=false)`, etc. to get the old behavior where lines
-    returned include trailing end-of-line character(s). ([#19944])
+    You *must* use `readline(s, chomp=false)`, etc. to get the old behavior where
+    returned lines include trailing end-of-line character(s). ([#19944])
 
   * `String`s no longer have a `.data` field (as part of a significant performance
     improvement). Use `Vector{UInt8}(str)` to access a string as a byte array.
@@ -111,6 +114,9 @@ This section lists changes that do not have deprecation warnings.
   * In macro calls with parentheses, e.g. `@m(a=1)`, assignments are now parsed as
     `=` expressions, instead of as `kw` expressions. ([#7669])
 
+  * When used as an infix operator, `~` is now parsed as a call to an ordinary operator
+    with assignment precedence, instead of as a macro call. ([#20406])
+
   * (µ "micro" and ɛ "latin epsilon") are considered equivalent to
     the corresponding Greek characters in identifiers.  `\varepsilon`
     now tab-completes to U+03B5 (greek small letter epsilon) ([#19464]).
@@ -159,6 +165,8 @@ This section lists changes that do not have deprecation warnings.
       and `step::FloatNN` to rationals and construct a `StepRangeLen`
       that internally uses twice-precision arithmetic.  These two
       outcomes exhibit differences in both precision and speed.
+
+  * The `count` function no longer sums non-boolean values ([#20404])
 
 Library improvements
 --------------------
@@ -230,6 +238,8 @@ Library improvements
 
   * Additional methods for `ones` and `zeros` functions to support the same signature as the `similar` function ([#19635]).
 
+  * `count` now has a `count(itr)` method equivalent to `count(identity, itr)` ([#20403]).
+
   * Methods for `map` and `filter` with `Nullable` arguments have been
     implemented; the semantics are as if the `Nullable` were a container with
     zero or one elements ([#16961]).
@@ -245,6 +255,8 @@ Library improvements
   * `notify` now returns a count of tasks woken up ([#19841]).
 
   * A new `Dates.Time` type was added that supports representing the time of day with up to nanosecond resolution ([#12274]).
+
+  * New `@macroexpand` macro as a convenient alternative to the `macroexpand` function ([#18660]).
 
 Compiler/Runtime improvements
 -----------------------------

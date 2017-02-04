@@ -420,7 +420,7 @@ macro test_warn(msg, expr)
     quote
         let fname = tempname(), have_color = Base.have_color
             try
-                eval(Base, :(have_color = false))
+                @eval Base have_color = false
                 ret = open(fname, "w") do f
                     redirect_stderr(f) do
                         $(esc(expr))
@@ -1040,14 +1040,14 @@ Variables:
 
 Body:
   begin
-      unless (Base.slt_int)(1,b::Int64)::Bool goto 3
+      unless (Base.slt_int)(1, b::Int64)::Bool goto 3
       return 1
       3:
       return 1.0
-  end::UNION{FLOAT64,INT64}
+  end::UNION{FLOAT64, INT64}
 
 julia> @inferred f(1,2,3)
-ERROR: return type Int64 does not match inferred return type Union{Float64,Int64}
+ERROR: return type Int64 does not match inferred return type Union{Float64, Int64}
 Stacktrace:
  [1] error(::String) at ./error.jl:21
 

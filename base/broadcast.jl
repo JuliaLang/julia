@@ -371,10 +371,10 @@ julia> parse.(Int, ["1", "2"])
  2
 
 julia> abs.((1, -2))
-(1,2)
+(1, 2)
 
 julia> broadcast(+, 1.0, (0, -2.0))
-(1.0,-1.0)
+(1.0, -1.0)
 
 julia> broadcast(+, 1.0, (0, -2.0), Ref(1))
 2-element Array{Float64,1}:
@@ -383,8 +383,8 @@ julia> broadcast(+, 1.0, (0, -2.0), Ref(1))
 
 julia> (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1]))
 2-element Array{Array{Int64,1},1}:
- [1,1]
- [2,2]
+ [1, 1]
+ [2, 2]
 
 julia> string.(("one","two","three","four"), ": ", 1:4)
 4-element Array{String,1}:

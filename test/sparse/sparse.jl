@@ -806,6 +806,7 @@ end
     FI = Array(I)
     @test sparse(FS[FI]) == S[I] == S[FI]
     @test sum(S[FI]) + sum(S[!FI]) == sum(S)
+    @test countnz(I) == count(I)
 
     sumS1 = sum(S)
     sumFI = sum(S[FI])

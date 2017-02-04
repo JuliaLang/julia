@@ -252,7 +252,7 @@ for (name, f) in l
         @test collect(eachline(io(), chomp=false)) == collect(eachline(IOBuffer(text), chomp=false))
         @test collect(eachline(io(), chomp=false)) == collect(eachline(filename, chomp=false))
         @test collect(eachline(io())) == collect(eachline(IOBuffer(text)))
-        @test collect(eachline(io())) == collect(eachline(filename))
+        @test collect(@inferred(eachline(io()))) == collect(@inferred(eachline(filename))) #20351
 
         cleanup()
 

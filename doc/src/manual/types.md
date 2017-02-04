@@ -323,7 +323,7 @@ to values for its fields:
 
 ```jldoctest footype
 julia> foo = Foo("Hello, world.", 23, 1.5)
-Foo("Hello, world.",23,1.5)
+Foo("Hello, world.", 23, 1.5)
 
 julia> typeof(foo)
 Foo
@@ -476,7 +476,7 @@ argument types, constructed using the special `Union` function:
 
 ```jldoctest
 julia> IntOrString = Union{Int,AbstractString}
-Union{AbstractString,Int64}
+Union{AbstractString, Int64}
 
 julia> 1 :: IntOrString
 1
@@ -485,7 +485,7 @@ julia> "Hello!" :: IntOrString
 "Hello!"
 
 julia> 1.0 :: IntOrString
-ERROR: TypeError: typeassert: expected Union{AbstractString,Int64}, got Float64
+ERROR: TypeError: typeassert: expected Union{AbstractString, Int64}, got Float64
 ```
 
 The compilers for many languages have an internal union construct for reasoning about types; Julia
@@ -577,7 +577,7 @@ false
     This last point is *very* important: even though `Float64 <: Real` we **DO NOT** have `Point{Float64} <: Point{Real}`.
 
 In other words, in the parlance of type theory, Julia's type parameters are *invariant*, rather
-than being covariant (or even contravariant). This is for practical reasons: while any instance
+than being [covariant (or even contravariant)](https://en.wikipedia.org/wiki/Covariance_and_contravariance_%28computer_science%29). This is for practical reasons: while any instance
 of `Point{Float64}` may conceptually be like an instance of `Point{Real}` as well, the two types
 have different representations in memory:
 
@@ -603,14 +603,17 @@ function norm(p::Point{Real})
 end
 ```
 
-The correct way to define a method that accepts all arguments of type `Point{T}` where `T` is
+A correct way to define a method that accepts all arguments of type `Point{T}` where `T` is
 a subtype of `Real` is:
 
 ```julia
-function norm{T<:Real}(p::Point{T})
+function norm(p::Point{<:Real})
     sqrt(p.x^2 + p.y^2)
 end
 ```
+
+(Equivalently, one could define `function norm{T<:Real}(p::Point{T})` or
+`function norm(p::Point{T} where T<:Real)`; see [UnionAll Types](@ref).)
 
 More examples will be discussed later in [Methods](@ref).
 
@@ -624,8 +627,8 @@ Since the type `Point{Float64}` is a concrete type equivalent to `Point` declare
 in place of `T`, it can be applied as a constructor accordingly:
 
 ```jldoctest pointtype
-julia> Point{Float64}(1.0,2.0)
-Point{Float64}(1.0,2.0)
+julia> Point{Float64}(1.0, 2.0)
+Point{Float64}(1.0, 2.0)
 
 julia> typeof(ans)
 Point{Float64}
@@ -655,13 +658,13 @@ of the parameter type `T` is unambiguous:
 
 ```jldoctest pointtype
 julia> Point(1.0,2.0)
-Point{Float64}(1.0,2.0)
+Point{Float64}(1.0, 2.0)
 
 julia> typeof(ans)
 Point{Float64}
 
 julia> Point(1,2)
-Point{Int64}(1,2)
+Point{Int64}(1, 2)
 
 julia> typeof(ans)
 Point{Int64}
@@ -711,6 +714,17 @@ julia> Pointy{Real} <: Pointy{Float64}
 false
 ```
 
+The notation `Pointy{<:Real}` can be used to express the Julia analogue of a
+*covariant* type, while `Pointy{>:Int}` the analogue of a *contravariant* type,
+but technically these represent *sets* of types (see [UnionAll Types](@ref)).
+```jldoctest pointytype
+julia> Pointy{Float64} <: Pointy{<:Real}
+true
+
+julia> Pointy{Real} <: Pointy{>:Int}
+true
+```
+
 Much as plain old abstract types serve to create a useful hierarchy of types over concrete types,
 parametric abstract types serve the same purpose with respect to parametric composite types. We
 could, for example, have declared `Point{T}` to be a subtype of `Pointy{T}` as follows:
@@ -740,6 +754,9 @@ This relationship is also invariant:
 ```jldoctest pointytype
 julia> Point{Float64} <: Pointy{Real}
 false
+
+julia> Point{Float64} <: Pointy{<:Real}
+true
 ```
 
 What purpose do parametric abstract types like `Pointy` serve? Consider if we create a point-like
@@ -990,10 +1007,12 @@ Using explicit `where` syntax, any subset of parameters can be fixed. For exampl
 
 Type variables can be restricted with subtype relations.
 `Array{T} where T<:Integer` refers to all arrays whose element type is some kind of `Integer`.
+The syntax `Array{<:Integer}` is a convenient shorthand for `Array{T} where T<:Integer`.
 Type variables can have both lower and upper bounds.
 `Array{T} where Int<:T<:Number` refers to all arrays of `Number`s that are able to contain `Int`s
 (since `T` must be at least as big as `Int`).
-The syntax `where T>:Int` also works to specify only the lower bound of a type variable.
+The syntax `where T>:Int` also works to specify only the lower bound of a type variable,
+and `Array{>:Int}` is equivalent to `Array{T} where T>:Int`.
 
 Since `where` expressions nest, type variable bounds can refer to outer type variables.
 For example `Tuple{T,Array{S}} where S<:AbstractArray{T} where T<:Real` refers to 2-tuples whose first
@@ -1127,10 +1146,10 @@ is raised:
 
 ```jldoctest
 julia> supertype(Union{Float64,Int64})
-ERROR: MethodError: no method matching supertype(::Type{Union{Float64,Int64}})
+ERROR: MethodError: no method matching supertype(::Type{Union{Float64, Int64}})
 Closest candidates are:
-  supertype(!Matched::DataType) at operators.jl:27
-  supertype(!Matched::UnionAll) at operators.jl:32
+  supertype(!Matched::DataType) at operators.jl:38
+  supertype(!Matched::UnionAll) at operators.jl:43
 ```
 
 ## Custom pretty-printing
@@ -1308,7 +1327,7 @@ julia> x2 = Nullable(1.0)
 Nullable{Float64}(1.0)
 
 julia> x3 = Nullable([1, 2, 3])
-Nullable{Array{Int64,1}}([1,2,3])
+Nullable{Array{Int64,1}}([1, 2, 3])
 ```
 
 Note the core distinction between these two ways of constructing a `Nullable` object:

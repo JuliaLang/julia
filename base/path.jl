@@ -110,7 +110,7 @@ Split a path into a tuple of the directory name and file name.
 
 ```jldoctest
 julia> splitdir("/home/myuser")
-("/home","myuser")
+("/home", "myuser")
 ```
 """
 function splitdir(path::String)
@@ -154,10 +154,10 @@ unmodified and the empty string.
 
 ```jldoctest
 julia> splitext("/home/myuser/example.jl")
-("/home/myuser/example",".jl")
+("/home/myuser/example", ".jl")
 
 julia> splitext("/home/myuser/example")
-("/home/myuser/example","")
+("/home/myuser/example", "")
 ```
 """
 function splitext(path::String)

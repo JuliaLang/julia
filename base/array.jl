@@ -26,11 +26,14 @@ typealias DenseVecOrMat{T} Union{DenseVector{T}, DenseMatrix{T}}
 import Core: arraysize, arrayset, arrayref
 
 """
+    Array{T}(dims)
     Array{T,N}(dims)
 
-Construct an uninitialized `N`-dimensional dense array with element type `T`. `dims` may
-be a tuple or a series of integer arguments corresponding to the length in each dimension.
-If the rank `N` is omitted, i.e. `Array{T}(dims)`, the rank is determined based on `dims`.
+Construct an uninitialized `N`-dimensional dense array with element type `T`,
+where `N` is determined from the length or number of `dims`.  `dims` may
+be a tuple or a series of integer arguments corresponding to the lengths in each dimension.
+If the rank `N` is supplied explicitly as in `Array{T,N}(dims)`, then it must
+match the length or number of `dims`.
 """
 Array
 
@@ -1426,7 +1429,7 @@ julia> A = [1 2 0; 0 0 3; 0 4 0]
  0  4  0
 
 julia> findn(A)
-([1,1,3,2],[1,2,2,3])
+([1, 1, 3, 2], [1, 2, 2, 3])
 
 julia> A = zeros(2,2)
 2×2 Array{Float64,2}:
@@ -1434,7 +1437,7 @@ julia> A = zeros(2,2)
  0.0  0.0
 
 julia> findn(A)
-(Int64[],Int64[])
+(Int64[], Int64[])
 ```
 """
 function findn(A::AbstractMatrix)
@@ -1466,7 +1469,7 @@ julia> A = [1 2 0; 0 0 3; 0 4 0]
  0  4  0
 
 julia> findnz(A)
-([1,1,3,2],[1,2,2,3],[1,2,4,3])
+([1, 1, 3, 2], [1, 2, 2, 3], [1, 2, 4, 3])
 ```
 """
 function findnz{T}(A::AbstractMatrix{T})
@@ -1500,13 +1503,13 @@ The collection must not be empty.
 
 ```jldoctest
 julia> findmax([8,0.1,-9,pi])
-(8.0,1)
+(8.0, 1)
 
 julia> findmax([1,7,7,6])
-(7,2)
+(7, 2)
 
 julia> findmax([1,7,7,NaN])
-(7.0,2)
+(7.0, 2)
 ```
 """
 function findmax(a)
@@ -1538,13 +1541,13 @@ The collection must not be empty.
 
 ```jldoctest
 julia> findmin([8,0.1,-9,pi])
-(-9.0,3)
+(-9.0, 3)
 
 julia> findmin([7,1,1,6])
-(1,2)
+(1, 2)
 
 julia> findmin([7,1,1,NaN])
-(1.0,2)
+(1.0, 2)
 ```
 """
 function findmin(a)

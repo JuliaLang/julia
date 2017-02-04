@@ -22,9 +22,9 @@ julia> fill!(A, 2.)
 
 julia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(3), a); a[1] = 2; A
 3-element Array{Array{Int64,1},1}:
- [2,1,1]
- [2,1,1]
- [2,1,1]
+ [2, 1, 1]
+ [2, 1, 1]
+ [2, 1, 1]
 
 julia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(3), f())
 3-element Array{Int64,1}:
@@ -348,7 +348,7 @@ If `T` is not a bitstype, an error is thrown.
 julia> sizeof(Base.LinAlg.LU)
 ERROR: argument is an abstract type; size is indeterminate
 Stacktrace:
- [1] sizeof(::Type{T} where T) at ./essentials.jl:138
+ [1] sizeof(::Type{T} where T) at ./essentials.jl:147
 ```
 """
 sizeof(::Type)
@@ -558,7 +558,7 @@ Construct a tuple of the given objects.
 
 ```jldoctest
 julia> tuple(1, 'a', pi)
-(1,'a',π = 3.1415926535897...)
+(1, 'a', π = 3.1415926535897...)
 ```
 """
 tuple
@@ -1002,10 +1002,10 @@ For a given iterable object and iteration state, return the current item and the
 
 ```jldoctest
 julia> next(1:5, 3)
-(3,4)
+(3, 4)
 
 julia> next(1:5, 5)
-(5,6)
+(5, 6)
 ```
 """
 next

@@ -1763,6 +1763,20 @@
       body
       (expand-where (expand-wheres body (cdr vars)) (car vars))))
 
+; given e = (curly T params...), return (newparams . whereparams) where any <:X expression
+; in params is converted to T and T<:X is added to whereparams; similarly for >:X.
+; (This implements the syntactic sugar Foo{<:Bar} --> Foo{T} where T<:Bar.)
+(define (extract-implicit-whereparams e)
+  (define (extract params newparams whereparams)
+    (if (null? params)
+        (cons (reverse newparams) (reverse whereparams))
+        (let ((p (car params)))
+          (if (and (list? p) (= (length p) 3) (eq? (car p) 'call) (or (eq? (cadr p) '|<:|) (eq? (cadr p) '|>:|)))
+              (let ((T (gensy)))
+                (extract (cdr params) (cons T newparams) (cons (list (cadr p) T (caddr p)) whereparams)))
+              (extract (cdr params) (cons p newparams) whereparams)))))
+  (extract (cddr e) '() '()))
+
 ;; table mapping expression head to a function expanding that form
 (define expand-table
   (table
@@ -1980,7 +1994,13 @@
            (expand-forms (partially-expand-ref e)))))
 
    'curly
-   (lambda (e) (expand-forms `(call (core apply_type) ,@(cdr e))))
+   (lambda (e)
+     (let* ((p (extract-implicit-whereparams e))
+            (curlyparams (car p))
+            (whereparams (cdr p)))
+       (if (null? whereparams)
+           (expand-forms `(call (core apply_type) ,@(cdr e)))
+           (expand-forms `(where (curly ,(cadr e) ,@curlyparams) ,@whereparams)))))
 
    'call
    (lambda (e)

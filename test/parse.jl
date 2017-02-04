@@ -326,10 +326,10 @@ parse("""
 
 # issue #13302
 let p = parse("try
-           a
-       catch
-           b, c = t
-       end")
+            a
+        catch
+            b, c = t
+        end")
     @test isa(p,Expr) && p.head === :try
     @test p.args[2] === false
     @test p.args[3].args[end] == parse("b,c = t")
@@ -420,7 +420,7 @@ test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
 # issue #19861 make sure macro-expansion happens in the newest world for top-level expression
 @test eval(Base.parse_input_line("""
            macro X19861()
-             return 23341
+               return 23341
            end
            @X19861
            """)::Expr) == 23341

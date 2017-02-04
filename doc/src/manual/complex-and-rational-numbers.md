@@ -284,7 +284,7 @@ julia> 0//0
 ERROR: ArgumentError: invalid rational: zero(Int64)//zero(Int64)
 Stacktrace:
  [1] Rational{Int64}(::Int64, ::Int64) at ./rational.jl:8
- [2] //(::Int64, ::Int64) at ./rational.jl:27
+ [2] //(::Int64, ::Int64) at ./rational.jl:34
 ```
 
 As usual, the promotion system makes interactions with other numeric types effortless:

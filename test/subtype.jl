@@ -861,3 +861,30 @@ f18348{T<:Any}(::Type{T}, x::T) = 2
 # Issue #12721
 f12721{T<:Type{Int}}(::T) = true
 @test_throws MethodError f12721(Float64)
+
+# implicit "covariant" type parameters:
+type TwoParams{S,T}; x::S; y::T; end
+@test TwoParams{<:Real,<:Number} == (TwoParams{S,T} where S<:Real where T<:Number) ==
+      (TwoParams{S,<:Number} where S<:Real) == (TwoParams{<:Real,T} where T<:Number)
+@test TwoParams(3,0im) isa TwoParams{<:Real,<:Number}
+@test TwoParams(3,"foo") isa TwoParams{<:Real}
+@test !(TwoParams(3im,0im) isa TwoParams{<:Real,<:Number})
+@test !(TwoParams(3,"foo") isa TwoParams{<:Real,<:Number})
+ftwoparams(::TwoParams) = 1
+ftwoparams(::TwoParams{<:Real}) = 2
+ftwoparams(::TwoParams{<:Real,<:Real}) = 3
+@test ftwoparams(TwoParams('x',3)) == 1
+@test ftwoparams(TwoParams(3,'x')) == 2
+@test ftwoparams(TwoParams(3,4)) == 3
+@test !([TwoParams(3,4)] isa Vector{TwoParams{<:Real,<:Real}})
+@test TwoParams{<:Real,<:Real}[TwoParams(3,4)] isa Vector{TwoParams{<:Real,<:Real}}
+@test [TwoParams(3,4)] isa Vector{<:TwoParams{<:Real,<:Real}}
+@test [TwoParams(3,4)] isa (Vector{TwoParams{T,T}} where T<:Real)
+
+# implicit "contravariant" type parameters:
+@test TwoParams{>:Int,<:Number} == (TwoParams{S,T} where S>:Int where T<:Number) ==
+      (TwoParams{S,<:Number} where S>:Int) == (TwoParams{>:Int,T} where T<:Number)
+@test TwoParams(3,0im) isa TwoParams{>:Int,<:Number}
+@test TwoParams{Real,Complex}(3,0im) isa TwoParams{>:Int,<:Number}
+@test !(TwoParams(3.0,0im) isa TwoParams{>:Int,<:Number})
+@test !(TwoParams(3,'x') isa TwoParams{>:Int,<:Number})
