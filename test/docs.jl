@@ -923,6 +923,15 @@ let save_color = Base.have_color
     end
 end
 
+# issue #15684
+begin
+    """
+    abc
+    """
+    f15684(x) = 1
+end
+
+@test string(@doc f15684) == "abc\n"
 
 # Dynamic docstrings
 
