@@ -1774,6 +1774,7 @@ else
 end
 
 module TypeUtils
+    using ..Compat: @static
     @static if isdefined(Core, :UnionAll)
         using Base: isabstract, parameter_upper_bound, typename
     else
