@@ -42,10 +42,10 @@ For example, consider the following definitions of a function `addone` that retu
 argument:
 
 ```julia
-addone(x::Int) = x + 1             # works only for Int
+addone(x::Int) = x + 1                 # works only for Int
 addone(x::Integer) = x + oneunit(x)    # any integer type
 addone(x::Number) = x + oneunit(x)     # any numeric type
-addone(x) = x + oneunit(x)             # any type supporting + and one
+addone(x) = x + oneunit(x)             # any type supporting + and oneunit
 ```
 
 The last definition of `addone` handles any type supporting [`oneunit`](@ref) (which returns 1 in
