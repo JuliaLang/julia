@@ -263,7 +263,7 @@ function checkout_head(repo::GitRepo; options::CheckoutOptions = CheckoutOptions
 end
 
 """Updates some entries, determined by the `pathspecs`, in the index from the target commit tree."""
-function reset!{T<:AbstractString, S<:GitObject}(repo::GitRepo, obj::Nullable{S}, pathspecs::T...)
+function reset!(repo::GitRepo, obj::Nullable{<:GitObject}, pathspecs::AbstractString...)
     @check ccall((:git_reset_default, :libgit2), Cint,
                  (Ptr{Void}, Ptr{Void}, Ptr{StrArrayStruct}),
                  repo.ptr,
