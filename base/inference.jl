@@ -4768,7 +4768,7 @@ function void_use_elim_pass!(sv::InferenceState)
             return !effect_free(ex, sv.src, sv.mod, false)
         elseif (isa(ex, GotoNode) || isa(ex, LineNumberNode) ||
                 isa(ex, NewvarNode) || isa(ex, Symbol) || isa(ex, LabelNode))
-            # This is a list of special type handled by the compiler
+            # This is a list of special types handled by the compiler
             return true
         end
         return false
