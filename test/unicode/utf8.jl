@@ -1,6 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-## Test for CESU-8 sequences
 @testset "cesu8 input" begin
     let ch = 0x10000
         for hi = 0xd800:0xdbff

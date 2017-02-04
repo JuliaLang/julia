@@ -73,7 +73,7 @@ end
         @test normalize_string("q\U0307\U0323", :NFD) == "q\U0323\U0307"
     end
 
-    @testset "compatibility composites"
+    @testset "compatibility composites" begin
         @test normalize_string("\Ufb01", :NFD) == normalize_string("\Ufb01", :NFC) == "\Ufb01"
         @test normalize_string("\Ufb01", :NFKD) == normalize_string("\Ufb01", :NFKC) == "fi"
         @test normalize_string("2\U2075", :NFD) == normalize_string("2\U2075", :NFC) == "2\U2075"
@@ -85,113 +85,111 @@ end
     end
 end
 
-@testset "#issue #5939" begin #  uft8proc character predicates
-    let
-        alower=['a', 'd', 'j', 'y', 'z']
-        ulower=['α', 'β', 'γ', 'δ', 'ф', 'я']
-        for c in vcat(alower,ulower)
-            @test islower(c) == true
-            @test isupper(c) == false
-            @test isdigit(c) == false
-            @test isnumber(c) == false
-        end
+@testset "uft8proc character predicates #5939" begin #
+    alower=['a', 'd', 'j', 'y', 'z']
+    ulower=['α', 'β', 'γ', 'δ', 'ф', 'я']
+    for c in vcat(alower,ulower)
+        @test islower(c) == true
+        @test isupper(c) == false
+        @test isdigit(c) == false
+        @test isnumber(c) == false
+    end
 
-        aupper=['A', 'D', 'J', 'Y', 'Z']
-        uupper= ['Δ', 'Γ', 'Π', 'Ψ', 'ǅ', 'Ж', 'Д']
+    aupper=['A', 'D', 'J', 'Y', 'Z']
+    uupper= ['Δ', 'Γ', 'Π', 'Ψ', 'ǅ', 'Ж', 'Д']
 
-        for c in vcat(aupper,uupper)
-            @test islower(c) == false
-            @test isupper(c) == true
-            @test isdigit(c) == false
-            @test isnumber(c) == false
-        end
+    for c in vcat(aupper,uupper)
+        @test islower(c) == false
+        @test isupper(c) == true
+        @test isdigit(c) == false
+        @test isnumber(c) == false
+    end
 
-        nocase=['א','ﺵ']
-        alphas=vcat(alower,ulower,aupper,uupper,nocase)
+    nocase=['א','ﺵ']
+    alphas=vcat(alower,ulower,aupper,uupper,nocase)
 
-        for c in alphas
-             @test isalpha(c) == true
-             @test isnumber(c) == false
-        end
+    for c in alphas
+         @test isalpha(c) == true
+         @test isnumber(c) == false
+    end
 
-        anumber=['0', '1', '5', '9']
-        unumber=['٣', '٥', '٨', '¹', 'ⅳ' ]
+    anumber=['0', '1', '5', '9']
+    unumber=['٣', '٥', '٨', '¹', 'ⅳ' ]
 
-        for c in anumber
-             @test isdigit(c) == true
-             @test isnumber(c) == true
-        end
-        for c in unumber
-             @test isdigit(c) == false
-             @test isnumber(c) == true
-        end
+    for c in anumber
+         @test isdigit(c) == true
+         @test isnumber(c) == true
+    end
+    for c in unumber
+         @test isdigit(c) == false
+         @test isnumber(c) == true
+    end
 
-        alnums=vcat(alphas,anumber,unumber)
-        for c in alnums
-             @test isalnum(c) == true
-             @test ispunct(c) == false
-        end
+    alnums=vcat(alphas,anumber,unumber)
+    for c in alnums
+         @test isalnum(c) == true
+         @test ispunct(c) == false
+    end
 
-        asymbol = ['(',')', '~', '$' ]
-        usymbol = ['∪', '∩', '⊂', '⊃', '√', '€', '¥', '↰', '△', '§']
+    asymbol = ['(',')', '~', '$' ]
+    usymbol = ['∪', '∩', '⊂', '⊃', '√', '€', '¥', '↰', '△', '§']
 
-        apunct =['.',',',';',':','&']
-        upunct =['‡', '؟', '჻' ]
+    apunct =['.',',',';',':','&']
+    upunct =['‡', '؟', '჻' ]
 
-        for c in vcat(apunct,upunct)
-             @test ispunct(c) == true
-             @test isalnum(c) == false
-        end
+    for c in vcat(apunct,upunct)
+         @test ispunct(c) == true
+         @test isalnum(c) == false
+    end
 
-        for c in vcat(alnums,asymbol,usymbol,apunct,upunct)
-            @test isprint(c) == true
-            @test isgraph(c) == true
-            @test isspace(c) == false
+    for c in vcat(alnums,asymbol,usymbol,apunct,upunct)
+        @test isprint(c) == true
+        @test isgraph(c) == true
+        @test isspace(c) == false
+        @test iscntrl(c) == false
+    end
+
+    NBSP = Char(0x0000A0)
+    ENSPACE = Char(0x002002)
+    EMSPACE = Char(0x002003)
+    THINSPACE = Char(0x002009)
+    ZWSPACE = Char(0x002060)
+
+    uspace = [ENSPACE, EMSPACE, THINSPACE]
+    aspace = [' ']
+    acntrl_space = ['\t', '\n', '\v', '\f', '\r']
+    for c in vcat(aspace,uspace)
+        @test isspace(c) == true
+        @test isprint(c) == true
+        @test isgraph(c) == false
+    end
+
+    for c in vcat(acntrl_space)
+        @test isspace(c) == true
+        @test isprint(c) == false
+        @test isgraph(c) == false
+    end
+
+    @test isspace(ZWSPACE) == false # zero-width space
+
+    acontrol = [ Char(0x001c), Char(0x001d), Char(0x001e), Char(0x001f)]
+    latincontrol = [ Char(0x0080), Char(0x0085) ]
+    ucontrol = [ Char(0x200E), Char(0x202E) ]
+
+    for c in vcat(acontrol, acntrl_space, latincontrol)
+        @test iscntrl(c) == true
+        @test isalnum(c) == false
+        @test isprint(c) == false
+        @test isgraph(c) == false
+    end
+
+    for c in ucontrol  #non-latin1 controls
+        if c!=Char(0x0085)
             @test iscntrl(c) == false
-        end
-
-        NBSP = Char(0x0000A0)
-        ENSPACE = Char(0x002002)
-        EMSPACE = Char(0x002003)
-        THINSPACE = Char(0x002009)
-        ZWSPACE = Char(0x002060)
-
-        uspace = [ENSPACE, EMSPACE, THINSPACE]
-        aspace = [' ']
-        acntrl_space = ['\t', '\n', '\v', '\f', '\r']
-        for c in vcat(aspace,uspace)
-            @test isspace(c) == true
-            @test isprint(c) == true
-            @test isgraph(c) == false
-        end
-
-        for c in vcat(acntrl_space)
-            @test isspace(c) == true
-            @test isprint(c) == false
-            @test isgraph(c) == false
-        end
-
-        @test isspace(ZWSPACE) == false # zero-width space
-
-        acontrol = [ Char(0x001c), Char(0x001d), Char(0x001e), Char(0x001f)]
-        latincontrol = [ Char(0x0080), Char(0x0085) ]
-        ucontrol = [ Char(0x200E), Char(0x202E) ]
-
-        for c in vcat(acontrol, acntrl_space, latincontrol)
-            @test iscntrl(c) == true
+            @test isspace(c) == false
             @test isalnum(c) == false
             @test isprint(c) == false
             @test isgraph(c) == false
-        end
-
-        for c in ucontrol  #non-latin1 controls
-            if c!=Char(0x0085)
-                @test iscntrl(c) == false
-                @test isspace(c) == false
-                @test isalnum(c) == false
-                @test isprint(c) == false
-                @test isgraph(c) == false
-            end
         end
     end
 
@@ -290,7 +288,7 @@ end
     @test_throws ArgumentError normalize_string("\u006e\u0303", compose=false, stripmark=true)
 end
 
-@testset "fastplus" begin# Make sure fastplus is called for coverage
+@testset "fastplus" begin
     @test lowercase('A') == 'a'
     @test uppercase('a') == 'A'
 
