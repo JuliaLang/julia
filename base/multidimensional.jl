@@ -971,17 +971,6 @@ end
     return B
 end
 
-@inline function setindex!(B::BitArray, x, J0::Union{Colon,UnitRange{Int}})
-    I0 = to_indices(B, (J0,))[1]
-    @boundscheck checkbounds(B, I0)
-    y = Bool(x)
-    l0 = length(I0)
-    l0 == 0 && return B
-    f0 = indexoffset(I0)+1
-    fill_chunks!(B.chunks, y, f0, l0)
-    return B
-end
-
 @inline function setindex!(B::BitArray, X::Union{BitArray,Array},
         I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
     J = to_indices(B, (I0, I...))
@@ -1275,10 +1264,6 @@ julia> unique(A, 3)
         @nref $N A d->d == dim ? sort!(uniquerows) : (indices(A, d))
     end
 end
-
-indexoffset(i) = first(i)-1
-indexoffset(::Colon) = 0
-
 
 """
     extrema(A, dims) -> Array{Tuple}
