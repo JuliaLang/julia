@@ -13,11 +13,11 @@ Returns `true` if `S` is sparse, and `false` otherwise.
 issparse(A::AbstractArray) = false
 issparse(S::AbstractSparseArray) = true
 
-issparse{T, A<:AbstractSparseMatrix}(S::Symmetric{T, A}) = true
-issparse{T, A<:AbstractSparseMatrix}(S::Hermitian{T, A}) = true
-issparse{T, A<:AbstractSparseMatrix}(S::LowerTriangular{T, A}) = true
-issparse{T, A<:AbstractSparseMatrix}(S::LinAlg.UnitLowerTriangular{T, A}) = true
-issparse{T, A<:AbstractSparseMatrix}(S::UpperTriangular{T, A}) = true
-issparse{T, A<:AbstractSparseMatrix}(S::LinAlg.UnitUpperTriangular{T, A}) = true
+issparse(S::Symmetric{<:Any,<:AbstractSparseMatrix}) = true
+issparse(S::Hermitian{<:Any,<:AbstractSparseMatrix}) = true
+issparse(S::LowerTriangular{<:Any,<:AbstractSparseMatrix}) = true
+issparse(S::LinAlg.UnitLowerTriangular{<:Any,<:AbstractSparseMatrix}) = true
+issparse(S::UpperTriangular{<:Any,<:AbstractSparseMatrix}) = true
+issparse(S::LinAlg.UnitUpperTriangular{<:Any,<:AbstractSparseMatrix}) = true
 
 indtype{Tv,Ti}(S::AbstractSparseArray{Tv,Ti}) = (Base.@_pure_meta; Ti)

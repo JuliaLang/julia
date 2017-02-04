@@ -881,10 +881,10 @@ function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer,
     return o
 end
 
-function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer,
+function (::Type{Sparse})(m::Integer, n::Integer,
         colptr::Vector{SuiteSparse_long},
         rowval::Vector{SuiteSparse_long},
-        nzval::Vector{Tv})
+        nzval::Vector{<:VTypes})
     o = Sparse(m, n, colptr, rowval, nzval, 0)
 
     # sort indices
@@ -914,9 +914,9 @@ function (::Type{Sparse}){Tv<:VTypes}(A::SparseMatrixCSC{Tv,SuiteSparse_long}, s
 end
 
 # convert SparseVectors into CHOLMOD Sparse types through a mx1 CSC matrix
-convert{Tv<:VTypes}(::Type{Sparse}, A::SparseVector{Tv,SuiteSparse_long}) =
+convert(::Type{Sparse}, A::SparseVector{<:VTypes,SuiteSparse_long}) =
     convert(Sparse, convert(SparseMatrixCSC, A))
-function convert{Tv<:VTypes,Ti<:ITypes}(::Type{Sparse}, A::SparseMatrixCSC{Tv,Ti})
+function convert(::Type{Sparse}, A::SparseMatrixCSC{<:VTypes,<:ITypes})
     o = Sparse(A, 0)
     # check if array is symmetric and change stype if it is
     if ishermitian(o)
@@ -924,7 +924,7 @@ function convert{Tv<:VTypes,Ti<:ITypes}(::Type{Sparse}, A::SparseMatrixCSC{Tv,Ti
     end
     o
 end
-convert{Ti<:ITypes}(::Type{Sparse}, A::SparseMatrixCSC{Complex{Float32},Ti}) =
+convert(::Type{Sparse}, A::SparseMatrixCSC{Complex{Float32},<:ITypes}) =
     convert(Sparse, convert(SparseMatrixCSC{Complex{Float64},SuiteSparse_long}, A))
 convert(::Type{Sparse}, A::Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}) =
     Sparse(A.data, A.uplo == 'L' ? -1 : 1)
@@ -1302,7 +1302,7 @@ Ac_mul_B(A::Sparse, B::VecOrMat) =  Ac_mul_B(A, Dense(B))
 ## Factorization methods
 
 ## Compute that symbolic factorization only
-function fact_{Tv<:VTypes}(A::Sparse{Tv}, cm::Array{UInt8};
+function fact_(A::Sparse{<:VTypes}, cm::Array{UInt8};
     perm::AbstractVector{SuiteSparse_long}=SuiteSparse_long[],
     postorder::Bool=true, userperm_only::Bool=true)
 
@@ -1645,7 +1645,7 @@ end
 
 det(L::Factor) = exp(logdet(L))
 
-function isposdef{Tv<:VTypes}(A::SparseMatrixCSC{Tv,SuiteSparse_long})
+function isposdef(A::SparseMatrixCSC{<:VTypes,SuiteSparse_long})
     if !ishermitian(A)
         return false
     end
