@@ -1006,7 +1006,7 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
     newrec->max_world = max_world;
     // compute the complexity of this type signature
     newrec->va = jl_is_va_tuple((jl_datatype_t*)ttype);
-    newrec->issimplesig = !jl_is_unionall(type); // a TypeVar environment needs an complex matching test
+    newrec->issimplesig = !jl_is_unionall(type); // a TypeVar environment needs a complex matching test
     newrec->isleafsig = newrec->issimplesig && !newrec->va; // entirely leaf types don't need to be sorted
     JL_GC_PUSH1(&newrec);
     assert(jl_is_tuple_type(ttype));

@@ -637,7 +637,7 @@ const ∈ = in
 Returns `true` if there is at least one element `y` in `itr` such that `fun(y,x)` is `true`.
 
 ```jldoctest
-julia> vec = [ 10, 100, 200 ]
+julia> vec = [10, 100, 200]
 3-element Array{Int64,1}:
   10
  100

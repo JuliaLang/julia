@@ -1583,7 +1583,7 @@ for (f, g) in ((:\, :A_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!), (:At_ldiv_B, :At_ldi
         end
     end
 end
-### Multiplication with triangle to the rigth and hence lhs cannot be transposed.
+### Multiplication with triangle to the right and hence lhs cannot be transposed.
 for (f, g) in ((:*, :A_mul_B!), (:A_mul_Bc, :A_mul_Bc!), (:A_mul_Bt, :A_mul_Bt!))
     mat != :AbstractVector && @eval begin
         function ($f)(A::$mat, B::AbstractTriangular)

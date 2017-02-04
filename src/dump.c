@@ -2698,7 +2698,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
 
 #ifndef NDEBUG
 // skip the performance optimizations of jl_types_equal and just use subtyping directly
-// ones of these types is invalid - that's why we're doing the recache type operation
+// one of these types is invalid - that's why we're doing the recache type operation
 static int jl_invalid_types_equal(jl_datatype_t *a, jl_datatype_t *b)
 {
     return jl_subtype((jl_value_t*)a, (jl_value_t*)b) && jl_subtype((jl_value_t*)b, (jl_value_t*)a);
