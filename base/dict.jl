@@ -503,7 +503,7 @@ false
 ```
 """
 haskey(h::Dict, key) = (ht_keyindex(h, key) >= 0)
-in{T<:Dict}(key, v::KeyIterator{T}) = (ht_keyindex(v.dict, key) >= 0)
+in(key, v::KeyIterator{<:Dict}) = (ht_keyindex(v.dict, key) >= 0)
 
 """
     getkey(collection, key, default)
@@ -581,8 +581,8 @@ next{K,V}(t::Dict{K,V}, i) = (Pair{K,V}(t.keys[i],t.vals[i]), skip_deleted(t,i+1
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
-next{T<:Dict}(v::KeyIterator{T}, i) = (v.dict.keys[i], skip_deleted(v.dict,i+1))
-next{T<:Dict}(v::ValueIterator{T}, i) = (v.dict.vals[i], skip_deleted(v.dict,i+1))
+next(v::KeyIterator{<:Dict}, i) = (v.dict.keys[i], skip_deleted(v.dict,i+1))
+next(v::ValueIterator{<:Dict}, i) = (v.dict.vals[i], skip_deleted(v.dict,i+1))
 
 # For these Associative types, it is safe to implement filter!
 # by deleting keys during iteration.
