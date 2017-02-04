@@ -65,7 +65,7 @@ function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=availa
     LibGit2.isattached(prepo) && return true
     LibGit2.need_update(prepo)
     try
-        LibGit2.revparseid(prepo, "HEAD:REQUIRE"))
+        LibGit2.revparseid(prepo, "HEAD:REQUIRE")
     catch e
         isfile(pkg,"REQUIRE") && return true
     end
