@@ -54,7 +54,7 @@ hash(s::Line, h::UInt) = hash(s.content, h + (0x3f5a631add21cb1a % UInt))
 
 # general machinery for parsing REQUIRE files
 
-function read{T<:AbstractString}(readable::Vector{T})
+function read(readable::Vector{<:AbstractString})
     lines = Line[]
     for line in readable
         line = chomp(line)
