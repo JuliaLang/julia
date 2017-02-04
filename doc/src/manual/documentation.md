@@ -247,8 +247,8 @@ end
 @doc "`subtract(a,b)` subtracts `b` from `a`" subtract
 ```
 
-Documentation written in non-toplevel blocks, such as `if`, `for`, and `let`, are not automatically
-added to the documentation system. `@doc` must be used in these cases. For example:
+Documentation written in non-toplevel blocks, such as `begin`, `if`, `for`, and `let`, is
+added to the documentation system as blocks are evaluated. For example:
 
 ```julia
 if VERSION > v"0.5"
@@ -257,15 +257,8 @@ if VERSION > v"0.5"
 end
 ```
 
-will not add any documentation to `f` even when the condition is `true` and must instead be written
-as:
-
-```julia
-if VERSION > v"0.5"
-    @doc "..." ->
-    f(x) = x
-end
-```
+will add documentation to `f(x)` when the condition is `true`. Note that even if `f(x)` goes
+out of scope at the end of the block, its documentation will remain.
 
 ### Dynamic documentation
 

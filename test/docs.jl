@@ -915,14 +915,23 @@ end
 
 let save_color = Base.have_color
     try
-        eval(Base, :(have_color = false))
+        @eval Base have_color = false
         @test sprint(Base.Docs.repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
         @test sprint(Base.Docs.repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
     finally
-        eval(Base, :(have_color = $save_color))
+        @eval Base have_color = $save_color
     end
 end
 
+# issue #15684
+begin
+    """
+    abc
+    """
+    f15684(x) = 1
+end
+
+@test string(@doc f15684) == "abc\n"
 
 # Dynamic docstrings
 
