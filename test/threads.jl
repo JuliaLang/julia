@@ -144,7 +144,7 @@ end
 
 @threads for i in 1:100
     for j in 1:100
-        eval(M14726, :(module_var14726 = $j))
+        @eval M14726 module_var14726 = $j
     end
 end
 @test isdefined(:orig_curmodule14726)

@@ -356,7 +356,7 @@ function __atreplinit(repl)
         end
     end
 end
-_atreplinit(repl) = eval(Main, :($__atreplinit($repl)))
+_atreplinit(repl) = @eval Main $__atreplinit($repl)
 
 function _start()
     empty!(ARGS)

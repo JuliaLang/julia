@@ -1148,7 +1148,7 @@ A = [[i i; i i] for i=1:2]
 @test cumsum(A) == Any[[1 1; 1 1], [3 3; 3 3]]
 @test cumprod(A) == Any[[1 1; 1 1], [4 4; 4 4]]
 
-isdefined(Main, :TestHelpers) || eval(Main, :(include("TestHelpers.jl")))
+isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
 using TestHelpers.OAs
 
 @testset "prepend/append" begin

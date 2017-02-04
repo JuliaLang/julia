@@ -1306,7 +1306,7 @@ end
 """
 `Base.LineEdit.tabwidth` controls the presumed tab width of code pasted into the REPL.
 
-You can modify it by doing `eval(Base.LineEdit, :(tabwidth = 4))`, for example.
+You can modify it by doing `@eval Base.LineEdit tabwidth = 4`, for example.
 
 Must satisfy `0 < tabwidth <= 16`.
 """
