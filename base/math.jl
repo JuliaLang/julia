@@ -34,6 +34,7 @@ using Base: sign_mask, exponent_mask, exponent_one, exponent_bias,
 
 using Core.Intrinsics: sqrt_llvm, powi_llvm
 
+typealias IEEEFloat Union{Float16,Float32,Float64}
 # non-type specific math functions
 
 """
@@ -503,7 +504,7 @@ julia> ldexp(5., 2)
 20.0
 ```
 """
-function ldexp{T<:AbstractFloat}(x::T, e::Integer)
+function ldexp{T<:IEEEFloat}(x::T, e::Integer)
     xu = reinterpret(Unsigned, x)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x # NaN or Inf
@@ -552,7 +553,7 @@ ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 
 Get the exponent of a normalized floating-point number.
 """
-function exponent{T<:AbstractFloat}(x::T)
+function exponent{T<:IEEEFloat}(x::T)
     xs = reinterpret(Unsigned, x) & ~sign_mask(T)
     xs >= exponent_mask(T) && return throw(DomainError()) # NaN or Inf
     k = Int(xs >> significand_bits(T))
@@ -579,7 +580,7 @@ julia> significand(15.2)*8
 15.2
 ```
 """
-function significand{T<:AbstractFloat}(x::T)
+function significand{T<:IEEEFloat}(x::T)
     xu = reinterpret(Unsigned, x)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x # NaN or Inf
@@ -599,7 +600,7 @@ end
 Return `(x,exp)` such that `x` has a magnitude in the interval ``[1/2, 1)`` or 0,
 and `val` is equal to ``x \\times 2^{exp}``.
 """
-function frexp{T<:AbstractFloat}(x::T)
+function frexp{T<:IEEEFloat}(x::T)
     xu = reinterpret(Unsigned, x)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x, 0 # NaN or Inf
