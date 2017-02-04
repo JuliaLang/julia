@@ -9,14 +9,14 @@ function decrement!{T<:Integer}(A::AbstractArray{T})
     for i in 1:length(A); A[i] -= oneunit(T) end
     A
 end
-decrement{T<:Integer}(A::AbstractArray{T}) = decrement!(copy(A))
+decrement(A::AbstractArray{<:Integer}) = decrement!(copy(A))
 
 # Convert from 0-based to 1-based indices
 function increment!{T<:Integer}(A::AbstractArray{T})
     for i in 1:length(A); A[i] += oneunit(T) end
     A
 end
-increment{T<:Integer}(A::AbstractArray{T}) = increment!(copy(A))
+increment(A::AbstractArray{<:Integer}) = increment!(copy(A))
 
 ## sparse matrix multiplication
 
@@ -284,11 +284,11 @@ function bwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
     B
 end
 
-A_ldiv_B!{T,Ti}(L::LowerTriangular{T,SparseMatrixCSC{T,Ti}}, B::StridedVecOrMat) = fwdTriSolve!(L.data, B)
-A_ldiv_B!{T,Ti}(U::UpperTriangular{T,SparseMatrixCSC{T,Ti}}, B::StridedVecOrMat) = bwdTriSolve!(U.data, B)
+A_ldiv_B!{T}(L::LowerTriangular{T,<:SparseMatrixCSC{T}}, B::StridedVecOrMat) = fwdTriSolve!(L.data, B)
+A_ldiv_B!{T}(U::UpperTriangular{T,<:SparseMatrixCSC{T}}, B::StridedVecOrMat) = bwdTriSolve!(U.data, B)
 
-(\){T,Ti}(L::LowerTriangular{T,SparseMatrixCSC{T,Ti}}, B::SparseMatrixCSC) = A_ldiv_B!(L, Array(B))
-(\){T,Ti}(U::UpperTriangular{T,SparseMatrixCSC{T,Ti}}, B::SparseMatrixCSC) = A_ldiv_B!(U, Array(B))
+(\){T}(L::LowerTriangular{T,<:SparseMatrixCSC{T}}, B::SparseMatrixCSC) = A_ldiv_B!(L, Array(B))
+(\){T}(U::UpperTriangular{T,<:SparseMatrixCSC{T}}, B::SparseMatrixCSC) = A_ldiv_B!(U, Array(B))
 
 ## triu, tril
 
