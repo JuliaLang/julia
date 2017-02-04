@@ -169,6 +169,8 @@ This section lists changes that do not have deprecation warnings.
   * `A=>B` expressions are now parsed as calls instead of using `=>` as the
     expression head ([#20327]).
 
+  * The `count` function no longer sums non-boolean values ([#20404])
+
 Library improvements
 --------------------
 
@@ -238,6 +240,8 @@ Library improvements
     `false` (in the case of `all`) value is found, and `mapreduce` will visit all members of the iterable.
 
   * Additional methods for `ones` and `zeros` functions to support the same signature as the `similar` function ([#19635]).
+
+  * `count` now has a `count(itr)` method equivalent to `count(identity, itr)` ([#20403]).
 
   * Methods for `map` and `filter` with `Nullable` arguments have been
     implemented; the semantics are as if the `Nullable` were a container with
