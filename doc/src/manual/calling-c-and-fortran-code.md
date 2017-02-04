@@ -99,12 +99,12 @@ which is a simplified version of the actual definition from [env.jl](https://git
 
 ```julia
 function getenv(var::AbstractString)
-  val = ccall((:getenv, "libc"),
-              Cstring, (Cstring,), var)
-  if val == C_NULL
-    error("getenv: undefined variable: ", var)
-  end
-  unsafe_string(val)
+    val = ccall((:getenv, "libc"),
+                Cstring, (Cstring,), var)
+    if val == C_NULL
+        error("getenv: undefined variable: ", var)
+    end
+    unsafe_string(val)
 end
 ```
 
@@ -859,8 +859,8 @@ macro dlsym(func, lib)
     quote
         let $zlocal::Ptr{Void} = $z::Ptr{Void}
             if $zlocal == C_NULL
-               $zlocal = dlsym($(esc(lib))::Ptr{Void}, $(esc(func)))
-               global $z = $zlocal
+                $zlocal = dlsym($(esc(lib))::Ptr{Void}, $(esc(func)))
+                global $z = $zlocal
             end
             $zlocal
         end
