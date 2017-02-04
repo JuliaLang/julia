@@ -165,10 +165,8 @@ mmap{T<:Array}(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=In
 mmap{T<:Array,N}(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) = mmap(Anonymous(), T, dims, Int64(0); shared=shared)
 mmap{T<:Array}(::Type{T}, i::Integer...; shared::Bool=true) = mmap(Anonymous(), T, convert(Tuple{Vararg{Int}},i), Int64(0); shared=shared)
 
-function mmap{T<:BitArray,N}(io::IOStream,
-                             ::Type{T},
-                             dims::NTuple{N,Integer},
-                             offset::Int64=position(io); grow::Bool=true, shared::Bool=true)
+function mmap{N}(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
+                 offset::Int64=position(io); grow::Bool=true, shared::Bool=true)
     n = prod(dims)
     nc = Base.num_bit_chunks(n)
     chunks = mmap(io, Vector{UInt64}, (nc,), offset; grow=grow, shared=shared)
