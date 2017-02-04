@@ -1773,4 +1773,15 @@ else
     import Base.isapprox
 end
 
-end # module
+module TypeUtils
+    using ..Compat: @static
+    @static if isdefined(Core, :UnionAll)
+        using Base: isabstract, parameter_upper_bound, typename
+    else
+        isabstract(t::DataType) = t.abstract
+        parameter_upper_bound(t::DataType, idx) = t.parameters[idx].ub
+        typename(t::DataType) = t.name
+    end
+    export isabstract, parameter_upper_bound, typename
+end # module TypeUtils
+end # module Compat
