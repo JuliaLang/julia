@@ -230,7 +230,7 @@ invperm(a::Tuple) = (invperm([a...])...,)
 """
     nextprod([k_1, k_2,...], n)
 
-Next integer greater or equal to `n` that can be written as ``\\prod k_i^{p_i}`` for integers
+Next integer greater than or equal to `n` that can be written as ``\\prod k_i^{p_i}`` for integers
 ``p_1``, ``p_2``, etc.
 
 ```jldoctest
