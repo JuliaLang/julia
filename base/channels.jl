@@ -383,6 +383,6 @@ function done(c::Channel, state::ChannelIterState)
         end
     end
 end
-next{T}(c::Channel{T}, state) = (v=state.val; state.hasval=false; (v, state))
+next(c::Channel, state) = (v=state.val; state.hasval=false; (v, state))
 
-iteratorsize{C<:Channel}(::Type{C}) = SizeUnknown()
+iteratorsize(::Type{<:Channel}) = SizeUnknown()
