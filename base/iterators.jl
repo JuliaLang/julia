@@ -208,7 +208,7 @@ done(f::Filter, s) = s[1]
 
 eltype{F,I}(::Type{Filter{F,I}}) = eltype(I)
 iteratoreltype{F,I}(::Type{Filter{F,I}}) = iteratoreltype(I)
-iteratorsize{T<:Filter}(::Type{T}) = SizeUnknown()
+iteratorsize(::Type{<:Filter}) = SizeUnknown()
 
 # Rest -- iterate starting at the given state
 
@@ -257,7 +257,7 @@ start(it::Count) = it.start
 next(it::Count, state) = (state, state + it.step)
 done(it::Count, state) = false
 
-iteratorsize{S}(::Type{Count{S}}) = IsInfinite()
+iteratorsize(::Type{<:Count}) = IsInfinite()
 
 # Take -- iterate through the first n elements
 
@@ -438,8 +438,8 @@ start(it::Repeated) = nothing
 next(it::Repeated, state) = (it.x, nothing)
 done(it::Repeated, state) = false
 
-iteratorsize{O}(::Type{Repeated{O}}) = IsInfinite()
-iteratoreltype{O}(::Type{Repeated{O}}) = HasEltype()
+iteratorsize(::Type{<:Repeated}) = IsInfinite()
+iteratoreltype(::Type{<:Repeated}) = HasEltype()
 
 
 # Product -- cartesian product of iterators
@@ -665,7 +665,7 @@ start(itr::PartitionIterator) = start(itr.c)
 
 done(itr::PartitionIterator, state) = done(itr.c, state)
 
-function next{T<:Vector}(itr::PartitionIterator{T}, state)
+function next(itr::PartitionIterator{<:Vector}, state)
     l = state
     r = min(state + itr.n-1, length(itr.c))
     return view(itr.c, l:r), r + 1
