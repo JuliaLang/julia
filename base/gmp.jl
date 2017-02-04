@@ -244,7 +244,7 @@ convert(::Type{Float64}, n::BigInt) = Float64(n,RoundNearest)
 convert(::Type{Float32}, n::BigInt) = Float32(n,RoundNearest)
 convert(::Type{Float16}, n::BigInt) = Float16(n,RoundNearest)
 
-promote_rule{T<:Integer}(::Type{BigInt}, ::Type{T}) = BigInt
+promote_rule(::Type{BigInt}, ::Type{<:Integer}) = BigInt
 
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
