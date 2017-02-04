@@ -24,11 +24,11 @@ broadcast!(f, X::AbstractArray, x::Number...) = (@inbounds for I in eachindex(X)
 
 # logic for deciding the resulting container type
 _containertype(::Type) = Any
-_containertype{T<:Ptr}(::Type{T}) = Any
-_containertype{T<:Tuple}(::Type{T}) = Tuple
-_containertype{T<:Ref}(::Type{T}) = Array
-_containertype{T<:AbstractArray}(::Type{T}) = Array
-_containertype{T<:Nullable}(::Type{T}) = Nullable
+_containertype(::Type{<:Ptr}) = Any
+_containertype(::Type{<:Tuple}) = Tuple
+_containertype(::Type{<:Ref}) = Array
+_containertype(::Type{<:AbstractArray}) = Array
+_containertype(::Type{<:Nullable}) = Nullable
 containertype(x) = _containertype(typeof(x))
 containertype(ct1, ct2) = promote_containertype(containertype(ct1), containertype(ct2))
 @inline containertype(ct1, ct2, cts...) = promote_containertype(containertype(ct1), containertype(ct2, cts...))
@@ -507,7 +507,7 @@ end
 
 Base.@propagate_inbounds dotview(args...) = getindex(args...)
 Base.@propagate_inbounds dotview(A::AbstractArray, args...) = view(A, args...)
-Base.@propagate_inbounds dotview{T<:AbstractArray}(A::AbstractArray{T}, args::Integer...) = getindex(A, args...)
+Base.@propagate_inbounds dotview(A::AbstractArray{<:AbstractArray}, args::Integer...) = getindex(A, args...)
 
 
 ############################################################
