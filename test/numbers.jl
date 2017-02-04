@@ -52,6 +52,8 @@ const ≣ = isequal # convenient for comparing NaNs
 @test Bool(1//1) == true
 @test_throws InexactError Bool(1//2)
 
+@test iszero(false) && !iszero(true)
+
 # basic arithmetic
 @test 2 + 3 == 5
 @test 2.0 + 3.0 == 5.
