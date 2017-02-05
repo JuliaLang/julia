@@ -80,7 +80,7 @@ size_t isLegalHA(jl_datatype_t *dt, Type *&base) const
     if (jl_is_structtype(dt)) {
         // Fast path checks before descending the type hierarchy
         // (4 x 128b vector == 64B max size)
-        if (jl_datatype_size(dt) > 64 || !dt->layout->pointerfree || dt->layout->haspadding)
+        if (jl_datatype_size(dt) > 64 || dt->layout->npointers || dt->layout->haspadding)
             return 0;
 
         base = NULL;

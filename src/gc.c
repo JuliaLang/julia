@@ -1474,7 +1474,7 @@ static void gc_scan_obj(jl_ptls_t ptls, jl_value_t *v, int d, uintptr_t tag)
     if (vt == jl_weakref_type)
         return;
     // fast path
-    if (vt->layout->pointerfree)
+    if (vt->layout->npointers == 0)
         return;
     d++;
     if (d >= MAX_MARK_DEPTH)
