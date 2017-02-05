@@ -23,6 +23,7 @@ export
     Markdown,
     Threads,
     Iterators,
+    Parallel,
 
 # Types
     AbstractChannel,
@@ -63,7 +64,6 @@ export
     Factorization,
     FileMonitor,
     StepRangeLen,
-    Future,
     Hermitian,
     UniformScaling,
     InsertionSort,
@@ -89,7 +89,6 @@ export
     Rational,
     Regex,
     RegexMatch,
-    RemoteChannel,
     RevString,
     RoundFromZero,
     RoundDown,
@@ -124,7 +123,6 @@ export
     Vector,
     VersionNumber,
     WeakKeyDict,
-    WorkerConfig,
 
 # Ccall types
     Cchar,
@@ -162,8 +160,6 @@ export
     MethodError,
     NullException,
     ParseError,
-    ProcessExitedException,
-    RemoteException,
     SystemError,
     TypeError,
     AssertionError,
@@ -968,6 +964,16 @@ export
     unlock,
     yield,
     yieldto,
+    wait,
+    timedwait,
+    asyncmap,
+    asyncmap!,
+
+# channels
+    take!,
+    put!,
+    isready,
+    fetch,
 
 # time
     sleep,
@@ -1150,38 +1156,6 @@ export
     TCPSocket,
     UDPSocket,
 
-# multiprocessing
-    addprocs,
-    asyncmap,
-    asyncmap!,
-    CachingPool,
-    clear!,
-    ClusterManager,
-    default_worker_pool,
-    fetch,
-    init_worker,
-    interrupt,
-    isready,
-    launch,
-    manage,
-    myid,
-    nprocs,
-    nworkers,
-    pmap,
-    procs,
-    put!,
-    remote,
-    remotecall,
-    remotecall_fetch,
-    remotecall_wait,
-    remote_do,
-    rmprocs,
-    take!,
-    timedwait,
-    wait,
-    workers,
-    WorkerPool,
-
 # multimedia I/O
     Display,
     display,
@@ -1358,14 +1332,6 @@ export
     @task,
     @threadcall,
 
-    # multiprocessing
-    @spawn,
-    @spawnat,
-    @fetch,
-    @fetchfrom,
-    @everywhere,
-    @parallel,
-
     # metaprogramming utilities
     @generated,
     @gensym,
@@ -1407,4 +1373,40 @@ export
     spzeros,
     rowvals,
     nzrange,
-    nnz
+    nnz,
+
+# Parallel module re-exports
+    @spawn,
+    @spawnat,
+    @fetch,
+    @fetchfrom,
+    @everywhere,
+    @parallel,
+
+    addprocs,
+    CachingPool,
+    clear!,
+    ClusterManager,
+    default_worker_pool,
+    init_worker,
+    interrupt,
+    launch,
+    manage,
+    myid,
+    nprocs,
+    nworkers,
+    pmap,
+    procs,
+    remote,
+    remotecall,
+    remotecall_fetch,
+    remotecall_wait,
+    remote_do,
+    rmprocs,
+    workers,
+    WorkerPool,
+    RemoteChannel,
+    Future,
+    WorkerConfig,
+    RemoteException,
+    ProcessExitedException
