@@ -74,7 +74,7 @@ convert{T}(::Type{TwicePrecision{T}}, x::TwicePrecision) =
 convert{T<:Number}(::Type{T}, x::TwicePrecision{T}) = convert(T, x.hi + x.lo)
 convert{T}(::Type{TwicePrecision{T}}, x::Number) = TwicePrecision{T}(convert(T, x), zero(T))
 
-float{T<:AbstractFloat}(x::TwicePrecision{T}) = x
+float(x::TwicePrecision{<:AbstractFloat}) = x
 float(x::TwicePrecision) = TwicePrecision(float(x.hi), float(x.lo))
 
 big(x::TwicePrecision) = big(x.hi) + big(x.lo)
@@ -180,15 +180,15 @@ end
 
 step{T,R,S<:TwicePrecision}(r::StepRangeLen{T,R,S}) = convert(eltype(S), r.step)
 
-start{T,R<:TwicePrecision,S<:TwicePrecision}(r::StepRangeLen{T,R,S}) = 1
-done{T,R<:TwicePrecision,S<:TwicePrecision}(r::StepRangeLen{T,R,S}, i::Int) = length(r) < i
-function next{T,R<:TwicePrecision,S<:TwicePrecision}(r::StepRangeLen{T,R,S}, i::Int)
+start(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision}) = 1
+done(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision}, i::Int) = length(r) < i
+function next(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision}, i::Int)
     @_inline_meta
     unsafe_getindex(r, i), i+1
 end
 
 # This assumes that r.step has already been split so that (0:len-1)*r.step.hi is exact
-function unsafe_getindex{T,R<:TwicePrecision,S<:TwicePrecision}(r::StepRangeLen{T,R,S}, i::Integer)
+function unsafe_getindex{T}(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, i::Integer)
     # Very similar to _getindex_hiprec, but optimized to avoid a 2nd call to add2
     @_inline_meta
     u = i - r.offset
@@ -197,7 +197,7 @@ function unsafe_getindex{T,R<:TwicePrecision,S<:TwicePrecision}(r::StepRangeLen{
     T(x_hi + (x_lo + (shift_lo + r.ref.lo)))
 end
 
-function _getindex_hiprec{T,R<:TwicePrecision,S<:TwicePrecision}(r::StepRangeLen{T,R,S}, i::Integer)
+function _getindex_hiprec(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision}, i::Integer)
     u = i - r.offset
     shift_hi, shift_lo = u*r.step.hi, u*r.step.lo
     x_hi, x_lo = add2(r.ref.hi, shift_hi)
@@ -205,7 +205,7 @@ function _getindex_hiprec{T,R<:TwicePrecision,S<:TwicePrecision}(r::StepRangeLen
     TwicePrecision(x_hi, x_lo)
 end
 
-function getindex{T,R<:TwicePrecision,S<:TwicePrecision,I<:Integer}(r::StepRangeLen{T,R,S}, s::OrdinalRange{I})
+function getindex{T}(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, s::OrdinalRange{<:Integer})
     @_inline_meta
     @boundscheck checkbounds(r, s)
     soffset = 1 + round(Int, (r.offset - first(s))/step(s))
@@ -223,10 +223,10 @@ function getindex{T,R<:TwicePrecision,S<:TwicePrecision,I<:Integer}(r::StepRange
     end
 end
 
-*{T<:Real,R<:TwicePrecision}(x::Real, r::StepRangeLen{T,R}) =
+*(x::Real, r::StepRangeLen{<:Real,<:TwicePrecision}) =
     StepRangeLen(x*r.ref, twiceprecision(x*r.step, nbitslen(r)), length(r), r.offset)
-*{T<:Real,R<:TwicePrecision}(r::StepRangeLen{T,R}, x::Real) = x*r
-/{T<:Real,R<:TwicePrecision}(r::StepRangeLen{T,R}, x::Real) =
+*(r::StepRangeLen{<:Real,<:TwicePrecision}, x::Real) = x*r
+/(r::StepRangeLen{<:Real,<:TwicePrecision}, x::Real) =
     StepRangeLen(r.ref/x, twiceprecision(r.step/x, nbitslen(r)), length(r), r.offset)
 
 convert{T<:AbstractFloat,R<:TwicePrecision,S<:TwicePrecision}(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{T,R,S}) = r
@@ -240,11 +240,11 @@ convert{T<:Union{Float16,Float32,Float64}}(::Type{StepRangeLen{T}}, r::StepRange
 convert{T<:Union{Float16,Float32,Float64}}(::Type{StepRangeLen{T}}, r::Range) =
     _convertSRL(StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}, r)
 
-function _convertSRL{T,R,S,I<:Integer}(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{I})
+function _convertSRL{T,R,S}(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{<:Integer})
     StepRangeLen{T,R,S}(R(r.ref), S(r.step), length(r), r.offset)
 end
 
-function _convertSRL{T,R,S,I<:Integer}(::Type{StepRangeLen{T,R,S}}, r::Range{I})
+function _convertSRL{T,R,S}(::Type{StepRangeLen{T,R,S}}, r::Range{<:Integer})
     StepRangeLen{T,R,S}(R(first(r)), S(step(r)), length(r))
 end
 
