@@ -4,7 +4,7 @@
 abstract IPAddr
 
 Base.isless{T<:IPAddr}(a::T, b::T) = isless(a.host, b.host)
-Base.convert{T<:Integer}(dt::Type{T}, ip::IPAddr) = dt(ip.host)
+Base.convert(dt::Type{<:Integer}, ip::IPAddr) = dt(ip.host)
 
 immutable IPv4 <: IPAddr
     host::UInt32

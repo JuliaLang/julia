@@ -256,7 +256,7 @@ typealias SharedMatrix{T} SharedArray{T,2}
 length(S::SharedArray) = prod(S.dims)
 size(S::SharedArray) = S.dims
 ndims(S::SharedArray) = length(S.dims)
-linearindexing{S<:SharedArray}(::Type{S}) = LinearFast()
+linearindexing(::Type{<:SharedArray}) = LinearFast()
 
 function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
     if length(a) != prod(dims)
@@ -420,7 +420,7 @@ function serialize(s::AbstractSerializer, S::SharedArray)
     end
 end
 
-function deserialize{T,N}(s::AbstractSerializer, t::Type{SharedArray{T,N}})
+function deserialize(s::AbstractSerializer, t::Type{<:SharedArray})
     S = invoke(deserialize, Tuple{AbstractSerializer,DataType}, s, t)
     init_loc_flds(S, true)
     S
