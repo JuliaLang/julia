@@ -43,7 +43,7 @@ end
 # On workers where this pool has been serialized to, instantiate with a dummy local channel.
 WorkerPool(ref::RemoteChannel) = WorkerPool(Channel{Int}(1), ref)
 
-function Base.serialize(S::AbstractSerializer, pool::WorkerPool)
+function serialize(S::AbstractSerializer, pool::WorkerPool)
     # Allow accessing a worker pool from other processors. When serialized,
     # initialize the `ref` to point to self and only send the ref.
     # Other workers will forward all put!, take!, calls to the process owning
@@ -52,7 +52,7 @@ function Base.serialize(S::AbstractSerializer, pool::WorkerPool)
     serialize(S, pool.ref)
 end
 
-Base.deserialize{T<:WorkerPool}(S::AbstractSerializer, t::Type{T}) = T(deserialize(S))
+deserialize{T<:WorkerPool}(S::AbstractSerializer, t::Type{T}) = T(deserialize(S))
 
 wp_local_push!(pool::AbstractWorkerPool, w::Int) = (push!(pool.workers, w); put!(pool.channel, w); pool)
 wp_local_length(pool::AbstractWorkerPool) = length(pool.workers)
