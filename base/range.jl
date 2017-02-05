@@ -213,7 +213,7 @@ julia> linspace(1.3,2.9,9)
 1.3:0.2:2.9
 ```
 """
-linspace(start, stop, len::Real=50) = linspace(start, stop, Int(len))
+linspace(start, stop, len::Real=50) = linspace(promote_noncircular(start, stop)..., Int(len))
 
 linspace(start::Real, stop::Real, len::Integer) = linspace(promote(start, stop)..., len)
 linspace{T<:Integer}(start::T, stop::T, len::Integer) = linspace(Float64, start, stop, len, 1)
