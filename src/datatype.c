@@ -131,7 +131,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
     jl_fielddesc8_t* desc8 = (jl_fielddesc8_t*)jl_dt_layout_fields(flddesc);
     jl_fielddesc16_t* desc16 = (jl_fielddesc16_t*)jl_dt_layout_fields(flddesc);
     jl_fielddesc32_t* desc32 = (jl_fielddesc32_t*)jl_dt_layout_fields(flddesc);
-    int ptrfree = 1;
+    uint32_t npointers = 0;
     for (size_t i = 0; i < nfields; i++) {
         if (fielddesc_type == 0) {
             desc8[i].offset = desc[i].offset;
@@ -148,10 +148,16 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
             desc32[i].size = desc[i].size;
             desc32[i].isptr = desc[i].isptr;
         }
-        if (desc[i].isptr)
-            ptrfree = 0;
+        if (desc[i].isptr) {
+            npointers++;
+        }
     }
-    flddesc->pointerfree = ptrfree;
+    uint32_t nexp = 0;
+    while (npointers >= 0x10000) {
+        nexp++;
+        npointers = npointers >> 1;
+    }
+    flddesc->npointers = npointers | (nexp << 16);
     return flddesc;
 }
 
@@ -353,7 +359,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
     else {
         t->uid = jl_assign_type_uid();
         if (t->types != NULL && t->isleaftype) {
-            static const jl_datatype_layout_t singleton_layout = {0, 1, 0, 1, 0};
+            static const jl_datatype_layout_t singleton_layout = {0, 1, 0, 0, 0};
             if (fnames == jl_emptysvec)
                 t->layout = &singleton_layout;
             else

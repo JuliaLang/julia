@@ -348,9 +348,9 @@ typedef struct {
 
 typedef struct {
     uint32_t nfields;
-    uint32_t alignment : 28;  // strictest alignment over all fields
-    uint32_t haspadding : 1;  // has internal undefined bytes
-    uint32_t pointerfree : 1; // has any julia gc pointers
+    uint32_t alignment : 9; // strictest alignment over all fields
+    uint32_t haspadding : 1; // has internal undefined bytes
+    uint32_t npointers : 20; // number of pointer fields, top 4 bits are exponent (under-approximation)
     uint32_t fielddesc_type : 2; // 0 -> 8, 1 -> 16, 2 -> 32
     // union {
     //     jl_fielddesc8_t field8[];
@@ -899,7 +899,8 @@ STATIC_INLINE int jl_is_structtype(void *v)
 STATIC_INLINE int jl_isbits(void *t)   // corresponding to isbits() in julia
 {
     return (jl_is_datatype(t) && ((jl_datatype_t*)t)->layout &&
-            !((jl_datatype_t*)t)->mutabl && ((jl_datatype_t*)t)->layout->pointerfree);
+            !((jl_datatype_t*)t)->mutabl &&
+            ((jl_datatype_t*)t)->layout->npointers == 0);
 }
 
 STATIC_INLINE int jl_is_datatype_singleton(jl_datatype_t *d)

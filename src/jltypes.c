@@ -1768,7 +1768,7 @@ void jl_init_types(void)
                         tv,
                         jl_emptysvec, jl_emptysvec, 0, 1, 0)->name->wrapper;
     jl_array_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type))->name;
-    static const jl_datatype_layout_t _jl_array_layout = { 0, sizeof(void*), 0, 0, 0 };
+    static const jl_datatype_layout_t _jl_array_layout = { 0, sizeof(void*), 0, 1, 0 };
     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type))->layout = &_jl_array_layout;
 
     jl_array_any_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_any_type, jl_box_long(1));
@@ -2019,8 +2019,8 @@ void jl_init_types(void)
     jl_compute_field_offsets(jl_sym_type);
 
     // TODO: don't modify layout objects
-    ((jl_datatype_layout_t*)jl_sym_type->layout)->pointerfree = 0;
-    ((jl_datatype_layout_t*)jl_simplevector_type->layout)->pointerfree = 0;
+    ((jl_datatype_layout_t*)jl_sym_type->layout)->npointers = 1;
+    ((jl_datatype_layout_t*)jl_simplevector_type->layout)->npointers = 1;
 
     jl_cfunction_list.unknown = jl_nothing;
 }
