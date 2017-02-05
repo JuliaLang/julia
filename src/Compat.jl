@@ -638,8 +638,12 @@ function _compat(ex::Expr)
         elseif VERSION < v"0.4.0-dev+5379" && f === :Union
             ex = Expr(:call,:Union,ex.args[2:end]...)
         elseif ex == :(Ptr{Void})
-            # Do no change Ptr{Void} to Ptr{Nothing}: 0.4.0-dev+768
+            # Do not change Ptr{Void} to Ptr{Nothing}: 0.4.0-dev+768
             return ex
+        elseif VERSION < v"0.6.0-dev.2575" #20414
+            ex = Expr(:curly, map(a -> isexpr(a, :call, 2) && a.args[1] == :(<:) ?
+                                  :($TypeVar($(QuoteNode(gensym(:T))), $(a.args[2]), false)) : a,
+                                  ex.args)...)
         end
     elseif ex.head === :macrocall
         f = ex.args[1]

@@ -67,6 +67,9 @@ Currently, the `@compat` macro supports the following syntaxes:
   includes expressions with lower precedence than `==` you should enclose it in parentheses `x .= (y)` to ensure the
   correct order of evaluation.
 
+* `@compat Array{<:Real}` and similar uses of `<:T` to define a set of parameterized types ([#20414]).
+  In 0.4 and 0.5, this only works for non-nested usages (e.g. you can't define `Array{<:Array{<:Real}}`).
+
 ## Type Aliases
 
 * In 0.5, `ASCIIString` and `ByteString` were deprecated, and `UTF8String` was renamed to the (now concrete) type `String`.
@@ -280,10 +283,14 @@ includes this fix. Find the minimum version from there.
 [#17302]: https://github.com/JuliaLang/julia/issues/17302
 [#17323]: https://github.com/JuliaLang/julia/issues/17323
 [#17510]: https://github.com/JuliaLang/julia/issues/17510
+[#17623]: https://github.com/JuliaLang/julia/issues/17623
 [#18380]: https://github.com/JuliaLang/julia/issues/18380
 [#18484]: https://github.com/JuliaLang/julia/issues/18484
 [#18510]: https://github.com/JuliaLang/julia/issues/18510
 [#18977]: https://github.com/JuliaLang/julia/issues/18977
 [#19088]: https://github.com/JuliaLang/julia/issues/19088
 [#19246]: https://github.com/JuliaLang/julia/issues/19246
+[#19841]: https://github.com/JuliaLang/julia/issues/19841
 [#19950]: https://github.com/JuliaLang/julia/issues/19950
+[#20022]: https://github.com/JuliaLang/julia/issues/20022
+[#20414]: https://github.com/JuliaLang/julia/issues/20414

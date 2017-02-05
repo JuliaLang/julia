@@ -1532,6 +1532,13 @@ end
 @test xor(1,5) == 4
 @test 1 ⊻ 5 == 4
 
+# julia#20414
+@compat let T = Array{<:Real}, f(x::AbstractVector{<:Real}) = 1
+    @test isa([3,4],T)
+    @test !isa([3,4im],T)
+    @test f(1:3) == f([1,2]) == 1
+end
+
 # julia#19246
 @test numerator(1//2) === 1
 @test denominator(1//2) === 2
