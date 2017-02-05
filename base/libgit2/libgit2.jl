@@ -498,9 +498,8 @@ The keyword arguments are:
     This is equivalent to the git CLI option `--ff-only`.
   * `merge_opts::MergeOptions=MergeOptions()`: `merge_opts` specifies options
     for the merge, such as merge strategy in case of conflicts.
-    For more information, see [`MergeOptions()`](@ref).
   * `checkout_opts::CheckoutOptions=CheckoutOptions()`: `checkout_opts` specifies
-    options for the checkout step. For more information, see [`CheckoutOptions()`](@ref).
+    options for the checkout step.
 
 Equivalent to `git merge [--ff-only] [<committish> | <branch>]`.
 """
