@@ -1356,11 +1356,14 @@ static jl_value_t *intersect_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_sten
     size_t lx = jl_nparams(xd), ly = jl_nparams(yd);
     if (lx == 0 && ly == 0)
         return (jl_value_t*)yd;
+    int vx=0, vy=0, vvx = (lx > 0 && jl_is_vararg_type(jl_tparam(xd, lx-1)));
+    int vvy = (ly > 0 && jl_is_vararg_type(jl_tparam(yd, ly-1)));
+    if (!vvx && !vvy && lx != ly)
+        return jl_bottom_type;
     jl_svec_t *params = jl_alloc_svec(lx > ly ? lx : ly);
     jl_value_t *res=NULL;
     JL_GC_PUSH1(&params);
     size_t i=0, j=0;
-    int vx=0, vy=0;
     jl_value_t *xi, *yi;
     while (1) {
         xi = i < lx ? jl_tparam(xd, i) : NULL;
