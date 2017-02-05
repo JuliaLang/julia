@@ -18,7 +18,7 @@ function reduced_indices{N}(inds::Indices{N}, d::Int, rd::AbstractUnitRange)
         return inds
     end
 end
-reduced_indices{N}(inds::Indices{N}, d::Int) = reduced_indices(inds, d, OneTo(1))
+reduced_indices(inds::Indices, d::Int) = reduced_indices(inds, d, OneTo(1))
 
 function reduced_indices0{N}(inds::Indices{N}, d::Int)
     d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
@@ -83,10 +83,10 @@ reducedim_initarray0{T}(A::AbstractArray, region, v0::T) = reducedim_initarray0(
 promote_union(T::Union) = promote_type(promote_union(T.a), promote_union(T.b))
 promote_union(T) = T
 
-function reducedim_init{S}(f, op::typeof(+), A::AbstractArray{S}, region)
+function reducedim_init(f, op::typeof(+), A::AbstractArray, region)
     _reducedim_init(f, op, zero, sum, A, region)
 end
-function reducedim_init{S}(f, op::typeof(*), A::AbstractArray{S}, region)
+function reducedim_init(f, op::typeof(*), A::AbstractArray, region)
     _reducedim_init(f, op, one, prod, A, region)
 end
 function _reducedim_init(f, op, fv, fop, A, region)
@@ -102,9 +102,9 @@ function _reducedim_init(f, op, fv, fop, A, region)
     return reducedim_initarray(A, region, z, Tr)
 end
 
-reducedim_init{T}(f, op::typeof(max), A::AbstractArray{T}, region) = reducedim_init(f, scalarmax, A, region)
-reducedim_init{T}(f, op::typeof(min), A::AbstractArray{T}, region) = reducedim_init(f, scalarmin, A, region)
-reducedim_init{T}(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray{T}, region) = reducedim_init(f, scalarmax, A, region)
+reducedim_init(f, op::typeof(max), A::AbstractArray, region) = reducedim_init(f, scalarmax, A, region)
+reducedim_init(f, op::typeof(min), A::AbstractArray, region) = reducedim_init(f, scalarmin, A, region)
+reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray, region) = reducedim_init(f, scalarmax, A, region)
 
 reducedim_init{T}(f, op::typeof(scalarmax), A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemin(f(zero(T))))
 reducedim_init{T}(f, op::typeof(scalarmin), A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemax(f(zero(T))))
@@ -169,7 +169,7 @@ function check_reducedims(R, A)
     return lsiz
 end
 
-function _mapreducedim!{T,N}(f, op, R::AbstractArray, A::AbstractArray{T,N})
+function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
     lsiz = check_reducedims(R,A)
     isempty(A) && return R
 
@@ -238,7 +238,7 @@ julia> mapreducedim(isodd, |, a, 1, true)
 """
 mapreducedim(f, op, A::AbstractArray, region, v0) =
     mapreducedim!(f, op, reducedim_initarray(A, region, v0), A)
-mapreducedim{T}(f, op, A::AbstractArray{T}, region) =
+mapreducedim(f, op, A::AbstractArray, region) =
     mapreducedim!(f, op, reducedim_init(f, op, A, region), A)
 
 """
@@ -627,10 +627,8 @@ end
 Find the minimum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 """
-function findmin!{R}(rval::AbstractArray{R},
-                     rind::AbstractArray,
-                     A::AbstractArray;
-                     init::Bool=true)
+function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
+                  init::Bool=true)
     findminmax!(<, initarray!(rval, scalarmin, init), rind, A)
 end
 
@@ -667,10 +665,8 @@ end
 Find the maximum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 """
-function findmax!{R}(rval::AbstractArray{R},
-                     rind::AbstractArray,
-                     A::AbstractArray;
-                     init::Bool=true)
+function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
+                  init::Bool=true)
     findminmax!(>, initarray!(rval, scalarmax, init), rind, A)
 end
 
