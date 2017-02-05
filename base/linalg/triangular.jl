@@ -1585,7 +1585,7 @@ for (f, g) in ((:\, :A_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!), (:At_ldiv_B, :At_ldi
 end
 ### Multiplication with triangle to the rigth and hence lhs cannot be transposed.
 for (f, g) in ((:*, :A_mul_B!), (:A_mul_Bc, :A_mul_Bc!), (:A_mul_Bt, :A_mul_Bt!))
-    @eval begin
+    mat != :AbstractVector && @eval begin
         function ($f)(A::$mat, B::AbstractTriangular)
             TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
             AA = similar(A, TAB, size(A))
@@ -1637,25 +1637,12 @@ At_mul_Bt(A::AbstractMatrix, B::AbstractTriangular) = A_mul_Bt(A.', B)
 
 # Specializations for RowVector
 @inline *(rowvec::RowVector, A::AbstractTriangular) = transpose(A * transpose(rowvec))
-*(::AbstractTriangular, ::RowVector) = throw(DimensionMismatch("Cannot right-multiply matrix by transposed vector"))
-
 @inline A_mul_Bt(rowvec::RowVector, A::AbstractTriangular) = transpose(A * transpose(rowvec))
 @inline A_mul_Bt(A::AbstractTriangular, rowvec::RowVector) = A * transpose(rowvec)
-
 @inline At_mul_Bt(A::AbstractTriangular, rowvec::RowVector) = A.' * transpose(rowvec)
-At_mul_Bt(::RowVector, ::AbstractTriangular) = throw(DimensionMismatch("Cannot left-multiply matrix by vector"))
-
-At_mul_B(::AbstractTriangular, ::RowVector) = throw(DimensionMismatch("Cannot right-multiply matrix by transposed vector"))
-At_mul_B(::RowVector, ::AbstractTriangular) = throw(DimensionMismatch("Cannot left-multiply matrix by vector"))
-
 @inline A_mul_Bc(rowvec::RowVector, A::AbstractTriangular) = ctranspose(A * ctranspose(rowvec))
 @inline A_mul_Bc(A::AbstractTriangular, rowvec::RowVector) = A * ctranspose(rowvec)
-
 @inline Ac_mul_Bc(A::AbstractTriangular, rowvec::RowVector) = A' * ctranspose(rowvec)
-Ac_mul_Bc(::RowVector, ::AbstractTriangular) = throw(DimensionMismatch("Cannot left-multiply matrix by vector"))
-
-Ac_mul_B(::AbstractTriangular, ::RowVector) = throw(DimensionMismatch("Cannot right-multiply matrix by transposed vector"))
-Ac_mul_B(::RowVector, ::AbstractTriangular) = throw(DimensionMismatch("Cannot left-multiply matrix by vector"))
 
 @inline /(rowvec::RowVector, A::Union{UpperTriangular,LowerTriangular}) = transpose(transpose(A) \ transpose(rowvec))
 @inline /(rowvec::RowVector, A::Union{UnitUpperTriangular,UnitLowerTriangular}) = transpose(transpose(A) \ transpose(rowvec))
