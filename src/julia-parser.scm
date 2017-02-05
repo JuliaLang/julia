@@ -74,7 +74,7 @@
 ; operators that are special forms, not function names
 (define syntactic-operators
   (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻=))
-           '(:= --> $= => && |\|\|| |.| ... ->)))
+           '(:= --> $= && |\|\|| |.| ... ->)))
 (define syntactic-unary-operators '($ & |::|))
 
 (define syntactic-op? (Set syntactic-operators))
@@ -122,9 +122,6 @@
 (define reserved-words (append initial-reserved-words '(end else catch finally true false))) ;; todo: make this more complete
 
 (define reserved-word? (Set reserved-words))
-
-(define (dict-literal? l)
-  (and (length= l 3) (eq? (car l) '=>)))
 
 ;; Parser state variables
 
@@ -755,7 +752,9 @@
                        (begin (ts:put-back! s t)
                               ex)
                        (list 'call t ex (parse-assignment s down)))
-                   (list t ex (parse-assignment s down)))))))
+                   (if (eq? t '=>)  ;; ~ and => are the only non-syntactic assignment-precedence operators
+                       (list 'call t ex (parse-assignment s down))
+                       (list       t ex (parse-assignment s down))))))))
 
 (define (parse-eq s)
   (let ((lno (input-port-line (ts:port s))))
@@ -895,9 +894,7 @@
           (else ex))))
 
 (define (invalid-identifier-name? ex)
-  ;; TODO: remove this hack when we remove the special Dict syntax
-  (or (and (not (eq? ex '=>)) (syntactic-op? ex))
-      (eq? ex '....)))
+  (or (syntactic-op? ex) (eq? ex '....)))
 
 (define (parse-unary s)
   (let ((t (require-token s)))
@@ -999,11 +996,6 @@
         (parse-where-chain s decl-sig)
         decl-sig)))
 
-(define (deprecated-dict-replacement ex)
-  (if (dict-literal? ex)
-      (string "Dict{" (deparse (cadr ex)) #\, (deparse (caddr ex)) "}")
-      "Dict"))
-
 (define (disallowed-space ex t)
   (error (string "space before \"" t "\" not allowed in \""
                  (deparse ex) " " (deparse t) "\"")))
@@ -1054,7 +1046,7 @@
              ;; ref is syntax, so we can distinguish
              ;; a[i] = x  from
              ;; ref(a,i) = x
-             (let ((al (with-end-symbol (parse-cat s #\] (dict-literal? ex)))))
+             (let ((al (with-end-symbol (parse-cat s #\]))))
                (if (null? al)
                    (loop (list 'ref ex))
                    (case (car al)
@@ -1064,11 +1056,6 @@
                       (loop (list* 'typed_vcat ex (cdr al))))
                      ((comprehension)
                       (loop (list* 'typed_comprehension ex (cdr al))))
-                     ((dict_comprehension)
-		      (syntax-deprecation
-		       s (string #\( (deparse ex) #\) "[a=>b for (a,b) in c]")
-		       (string (deprecated-dict-replacement ex) "(a=>b for (a,b) in c)"))
-                      (loop (list* 'typed_dict_comprehension ex (cdr al))))
                      (else (error "unknown parse-cat result (internal error)"))))))
             ((|.|)
              (if (ts:space? s) (disallowed-space ex t))
@@ -1177,8 +1164,7 @@
 
        ((if)
         (if (newline? (peek-token s))
-            (syntax-deprecation s "if with line break before condition" "")
-            #;(error (string "missing condition in \"if\" at " current-filename
+            (error (string "missing condition in \"if\" at " current-filename
                            ":" (- (input-port-line (ts:port s)) 1))))
         (let* ((test (parse-cond s))
                (then (if (memq (require-token s) '(else elseif))
@@ -1462,8 +1448,7 @@
 
 ;; as above, but allows both "i=r" and "i in r"
 (define (parse-iteration-spec s)
-  (let* ((paren? (eqv? (require-token s) #\())
-         (lhs (parse-pipes s))
+  (let* ((lhs (parse-pipes s))
          (t   (peek-token s)))
     (cond ((memq t '(= in ∈))
            (take-token s)
@@ -1476,13 +1461,6 @@
              `(= ,lhs ,rhs)))
           ((and (eq? lhs ':) (closing-token? t))
            ':)
-          ((and paren? (length= lhs 4) (eq? (car lhs) 'call)
-                (memq (cadr lhs) '(in ∈)))
-           (syntax-deprecation s "for (...)" "for ...")
-           `(= ,@(cddr lhs)))
-          ((and paren? (length= lhs 3) (eq? (car lhs) '=))
-           (syntax-deprecation s "for (...)" "for ...")
-           lhs)
           (else (error "invalid iteration specification")))))
 
 (define (parse-comma-separated-iters s)
@@ -1602,12 +1580,6 @@
          (take-token s))
      `(comprehension ,gen))))
 
-(define (parse-dict-comprehension s first closer)
-  (let ((c (parse-comprehension s first closer)))
-    (if (dict-literal? (cadr (cadr c)))
-        `(dict_comprehension ,@(cdr c))
-        (error "invalid dict comprehension"))))
-
 (define (parse-matrix s first closer gotnewline)
   (define (fix head v) (cons head (reverse v)))
   (define (update-outer v outer)
@@ -1653,32 +1625,26 @@
                (loop (peek-token s)))
         t)))
 
-(define (parse-cat s closer . isdict)
+(define (parse-cat s closer)
   (with-normal-ops
    (with-inside-vec
     (if (eqv? (require-token s) closer)
         (begin (take-token s)
                '())
-        (let ((first (parse-eq* s)))
-          (if (and (dict-literal? first)
-                   (or (null? isdict) (car isdict))
-                   (eq? (peek-non-newline-token s) 'for))
-              (begin
-                (take-token s)
-                (parse-dict-comprehension s first closer))
-              (let ((t (peek-token s)))
-                (cond ((or (eqv? t #\,) (eqv? t closer))
-                       (parse-vect s first closer))
-                      ((eq? t 'for)
-                       (take-token s)
-                       (parse-comprehension s first closer))
-                      ((eqv? t #\newline)
-                       (take-token s)
-                       (if (memv (peek-token s) (list #\, closer))
-                           (parse-vect s first closer)
-                           (parse-matrix s first closer #t)))
-                      (else
-                       (parse-matrix s first closer #f))))))))))
+        (let* ((first (parse-eq* s))
+               (t (peek-token s)))
+          (cond ((or (eqv? t #\,) (eqv? t closer))
+                 (parse-vect s first closer))
+                ((eq? t 'for)
+                 (take-token s)
+                 (parse-comprehension s first closer))
+                ((eqv? t #\newline)
+                 (take-token s)
+                 (if (memv (peek-token s) (list #\, closer))
+                     (parse-vect s first closer)
+                     (parse-matrix s first closer #t)))
+                (else
+                 (parse-matrix s first closer #f))))))))
 
 (define (kw-to-= e) (if (kwarg? e) (cons '= (cdr e)) e))
 (define (=-to-kw e) (if (assignment? e) (cons 'kw (cdr e)) e))
@@ -2042,15 +2008,13 @@
            (if (eqv? (require-token s) #\})
                (begin (take-token s)
                       '(cell1d))
-               (let ((vex (parse-cat s #\} #t)))
+               (let ((vex (parse-cat s #\})))
                  (if (null? vex)
                      '(cell1d)
                      (case (car vex)
                        ((vect) `(cell1d ,@(cdr vex)))
                        ((hcat) `(cell2d 1 ,(length (cdr vex)) ,@(cdr vex)))
                        ((comprehension)      (error "{a for a in b} syntax is discontinued"))
-                       ((dict_comprehension) (error "{a=>b for (a,b) in c} syntax is discontinued"))
-                       ((dict) `(cell1d ,@(cdr vec)))
                        (else
                         (if (and (pair? (cadr vex)) (eq? (caadr vex) 'row))
                             (let ((nr (length (cdr vex)))

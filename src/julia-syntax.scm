@@ -275,10 +275,6 @@
   (and (symbol? s)
        (eqv? (string.char (string s) 0) #\#)))
 
-(define (is-call-name? name)
-  (or (eq? name 'call) (and (pair? name) (sym-ref? name)
-                            (equal? (caddr name) '(inert call)))))
-
 (define (replace-vars e renames)
   (cond ((symbol? e)      (lookup e renames e))
         ((or (not (pair? e)) (quoted? e))  e)
@@ -331,9 +327,7 @@
            (error "function argument and static parameter names must be distinct")))
      (if (or (and name (not (sym-ref? name))) (eq? name 'true) (eq? name 'false))
          (error (string "invalid function name \"" (deparse name) "\"")))
-     (let* ((iscall (is-call-name? name))
-            (name  (if iscall #f name))
-            (types (llist-types argl))
+     (let* ((types (llist-types argl))
             (body  (method-lambda-expr argl body rett))
             ;; HACK: the typevars need to be bound to ssavalues, since this code
             ;; might be moved to a different scope by closure-convert.
@@ -364,13 +358,6 @@
                                                            types)))
                                  (call (core svec) ,@temps)))
                           ,body ,isstaged))))
-       (if (and iscall (not (null? argl)))
-           (let* ((n (arg-name (car argl)))
-                  (n (if (hidden-name? n) "" n))
-                  (t (deparse (arg-type (car argl)))))
-             (syntax-deprecation #f
-                                 (string "call(" n "::" t ", ...)")
-                                 (string "(" n "::" t ")(...)"))))
        (if (symbol? name)
            `(block (method ,name) ,mdef (unnecessary ,name))  ;; return the function
            mdef)))))
@@ -554,7 +541,7 @@
                                 (list `(... ,(arg-name (car vararg))))))))
           #f)
         ;; return primary function
-        ,(if (or (not (symbol? name)) (is-call-name? name))
+        ,(if (not (symbol? name))
              '(null) name)))))
 
 ;; prologue includes line number node and eventual meta nodes
@@ -1803,13 +1790,8 @@
                            (eq? (car (cadr e)) 'line))))
             (expand-forms (cadr e)))
            (else
-            `(block
-              ,.(map (lambda (x)
-                       (if (and (decl? x) (length= (cdr x) 2) (symbol? (cadr x)))
-                           `(impl-decl ,@(map expand-forms (cdr x)))
-                           (expand-forms x)))
-                     (butlast (cdr e)))
-              ,(expand-forms (last (cdr e)))))))
+            (cons 'block
+                  (map expand-forms (cdr e))))))
 
    '|.|
    (lambda (e) ; e = (|.| f x)
@@ -2088,9 +2070,6 @@
          (error "assignment not allowed inside tuple"))
      (expand-forms `(call (core tuple) ,@(cdr e))))
 
-   '=>
-   (lambda (e) `(call => ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
-
    'cell1d (lambda (e) (error "{ } vector syntax is discontinued"))
    'cell2d (lambda (e) (error "{ } matrix syntax is discontinued"))
 
@@ -2302,17 +2281,7 @@
                       ;; TODO: this is a hack to lower simple comprehensions to loops very
                       ;; early, to greatly reduce the # of functions and load on the compiler
                       (lower-comprehension (cadr e) (cadr (caddr e)) ranges))))
-          `(call (top collect) ,(cadr e) ,(caddr e)))))
-
-   'dict_comprehension
-   (lambda (e)
-     (syntax-deprecation #f "[a=>b for (a,b) in c]" "Dict(a=>b for (a,b) in c)")
-     (expand-forms `(call (top Dict) ,(cadr e))))
-
-   'typed_dict_comprehension
-   (lambda (e) (expand-forms
-                `(call (call (core apply_type) (top Dict) ,@(cdr (cadr e)))
-                       ,(caddr e))))))
+          `(call (top collect) ,(cadr e) ,(caddr e)))))))
 
 (define (lower-comprehension atype expr ranges)
   (let ((result    (make-ssavalue))
@@ -2644,7 +2613,7 @@
                (vinfo:set-called! vi #t))
            (for-each (lambda (x) (analyze-vars x env captvars sp))
                      (cdr e))))
-        ((decl impl-decl)
+        ((decl)
          ;; handle var::T declaration by storing the type in the var-info
          ;; record. for non-symbols or globals, emit a type assertion.
          (let ((vi (var-info-for (cadr e) env)))
@@ -3182,21 +3151,15 @@ f(x) = yt(x)
            (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp))
           ;; remaining `decl` expressions are only type assertions if the
           ;; argument is global or a non-symbol.
-          ((impl-decl)
-           (if (or (assq (cadr e) (car  (lam:vinfo lam)))
-                   (assq (cadr e) (cadr (lam:vinfo lam))))
-               (let ((str-e (deparse `(|::| ,@(cdr e)))))
-                    (syntax-deprecation #f str-e (string "local " str-e))
-                    '(null))
-               (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp)))
           ((decl)
-           (cond ((not (symbol? (cadr e)))
-                  (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp))
-                 ((or (assq (cadr e) (car  (lam:vinfo lam)))
-                      (assq (cadr e) (cadr (lam:vinfo lam))))
+           (cond ((and (symbol? (cadr e))
+                       (or (assq (cadr e) (car  (lam:vinfo lam)))
+                           (assq (cadr e) (cadr (lam:vinfo lam)))))
                   '(null))
-                 (else (syntax-deprecation #f (string "global " (deparse `(|::| ,@(cdr e)))) "typeassert")
-                       (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp))))
+                 (else
+                  (if (or (symbol? (cadr e)) (and (pair? (cadr e)) (eq? (caadr e) 'outerref)))
+                      (error "type declarations on global variables are not yet supported"))
+                  (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp))))
           ;; `with-static-parameters` expressions can be removed now; used only by analyze-vars
           ((with-static-parameters)
            (cl-convert (cadr e) fname lam namemap toplevel interp))

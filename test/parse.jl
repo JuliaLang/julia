@@ -438,8 +438,7 @@ let b = IOBuffer("""
 end
 
 # issue #15763
-# TODO enable post-0.5
-#test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
+test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
 test_parseerror("if false\nelseif\nend", "missing condition in \"elseif\" at none:2")
 
 # issue #15828
@@ -545,11 +544,11 @@ end
 @test_throws ParseError parse("{x=>y for (x,y) in zip([1,2,3],[4,5,6])}")
 #@test_throws ParseError parse("{:a=>1, :b=>2}")
 
+@test parse("A=>B") == Expr(:call, :(=>), :A, :B)
+
 # this now is parsed as getindex(Pair{Any,Any}, ...)
 @test_throws MethodError eval(parse("(Any=>Any)[]"))
 @test_throws MethodError eval(parse("(Any=>Any)[:a=>1,:b=>2]"))
-# to be removed post 0.5
-#@test_throws MethodError eval(parse("(Any=>Any)[x=>y for (x,y) in zip([1,2,3],[4,5,6])]"))
 
 # make sure base can be any Integer
 for T in (Int, BigInt)
