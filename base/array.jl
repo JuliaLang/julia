@@ -794,10 +794,19 @@ end
     deleteat!(a::Vector, inds)
 
 Remove the items at the indices given by `inds`, and return the modified `a`.
-Subsequent items are shifted to fill the resulting gap. `inds` must be sorted and unique.
+Subsequent items are shifted to fill the resulting gap.
+
+`inds` can be either an iterator or a collection of sorted and unique integer indices,
+or a boolean vector of the same length as `a` with `true` indicating entries to delete.
 
 ```jldoctest
 julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
+3-element Array{Int64,1}:
+ 5
+ 3
+ 1
+
+julia> deleteat!([6, 5, 4, 3, 2, 1], [true, false, true, false, true, false])
 3-element Array{Int64,1}:
  5
  3
@@ -833,6 +842,18 @@ function deleteat!(a::Vector, inds)
     while q <= n
         @inbounds a[p] = a[q]
         p += 1; q += 1
+    end
+    ccall(:jl_array_del_end, Void, (Any, UInt), a, n-p+1)
+    return a
+end
+
+function deleteat!(a::Vector, inds::AbstractVector{Bool})
+    n = length(a)
+    length(inds) == n || throw(BoundsError(a, inds))
+    p = 1
+    for (q, i) in enumerate(inds)
+        @inbounds a[p] = a[q]
+        p += !i
     end
     ccall(:jl_array_del_end, Void, (Any, UInt), a, n-p+1)
     return a
