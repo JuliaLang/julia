@@ -624,16 +624,19 @@ type Demo_20254
     arr::Array{String}
 end
 
-function Demo_20254(arr::AbstractArray=Any[])
-    Demo_20254(string.(arr))
-end
+# these cause stack overflows and are a little flaky on CI, ref #20256
+if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+    function Demo_20254(arr::AbstractArray=Any[])
+        Demo_20254(string.(arr))
+    end
 
-_unsafe_get_19433(x::NTuple{1}) = (unsafe_get(x[1]),)
-_unsafe_get_19433(xs::Vararg) = (unsafe_get(xs[1]), _unsafe_get_19433(xs[2:end])...)
+    _unsafe_get_19433(x::NTuple{1}) = (unsafe_get(x[1]),)
+    _unsafe_get_19433(xs::Vararg) = (unsafe_get(xs[1]), _unsafe_get_19433(xs[2:end])...)
 
-f_19433(f_19433, xs...) = f_19433(_unsafe_get_19433(xs)...)
+    f_19433(f_19433, xs...) = f_19433(_unsafe_get_19433(xs)...)
 
-@testset "test this does not crash, issue #19433 and #20254" begin
-    @test_throws StackOverflowError Demo_20254()
-    @test_throws StackOverflowError f_19433(+, 1, 2)
+    @testset "test this does not crash, issue #19433 and #20254" begin
+        @test_throws StackOverflowError Demo_20254()
+        @test_throws StackOverflowError f_19433(+, 1, 2)
+    end
 end
