@@ -5497,9 +5497,9 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/base.html#Base.ProcessExitedException",
+    "location": "stdlib/base.html#Base.Parallel.ProcessExitedException",
     "page": "Essentials",
-    "title": "Base.ProcessExitedException",
+    "title": "Base.Parallel.ProcessExitedException",
     "category": "Type",
     "text": "ProcessExitedException()\n\nAfter a client Julia process has exited, further attempts to reference the dead child will throw this exception.\n\n\n\n"
 },
@@ -6613,7 +6613,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Function",
-    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\nMerge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\nmerge!(repo::GitRepo; kwargs...) -> Bool\n\nPerform a git merge on the repository repo, merging commits with diverging history into the current branch. Returns true if the merge succeeded, false if not.\n\nThe keyword arguments are:\n\ncommittish::AbstractString=\"\": Merge the named commit(s) in committish.\nbranch::AbstractString=\"\": Merge the branch branch and all its commits since it diverged from the current branch.\nfastforward::Bool=false: If fastforward is true, only merge if the merge is a fast-forward (the current branch head is an ancestor of the commits to be merged), otherwise refuse to merge and return false. This is equivalent to the git CLI option --ff-only.\nmerge_opts::MergeOptions=MergeOptions(): merge_opts specifies options for the merge, such as merge strategy in case of conflicts.\ncheckout_opts::CheckoutOptions=CheckoutOptions(): checkout_opts specifies options for the checkout step.\n\nEquivalent to git merge [--ff-only] [<committish> | <branch>].\n\n\n\n"
+    "text": "Merge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\nmerge!(repo::GitRepo; kwargs...) -> Bool\n\nPerform a git merge on the repository repo, merging commits with diverging history into the current branch. Returns true if the merge succeeded, false if not.\n\nThe keyword arguments are:\n\ncommittish::AbstractString=\"\": Merge the named commit(s) in committish.\nbranch::AbstractString=\"\": Merge the branch branch and all its commits since it diverged from the current branch.\nfastforward::Bool=false: If fastforward is true, only merge if the merge is a fast-forward (the current branch head is an ancestor of the commits to be merged), otherwise refuse to merge and return false. This is equivalent to the git CLI option --ff-only.\nmerge_opts::MergeOptions=MergeOptions(): merge_opts specifies options for the merge, such as merge strategy in case of conflicts.\ncheckout_opts::CheckoutOptions=CheckoutOptions(): checkout_opts specifies options for the checkout step.\n\nEquivalent to git merge [--ff-only] [<committish> | <branch>].\n\n\n\nmerge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\n"
 },
 
 {
@@ -11665,113 +11665,113 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel.html#Base.addprocs",
+    "location": "stdlib/parallel.html#Base.Parallel.addprocs",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.addprocs",
+    "title": "Base.Parallel.addprocs",
     "category": "Function",
     "text": "addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers\n\nLaunches worker processes via the specified cluster manager.\n\nFor example, Beowulf clusters are supported via a custom cluster manager implemented in the package ClusterManagers.jl.\n\nThe number of seconds a newly launched worker waits for connection establishment from the master can be specified via variable JULIA_WORKER_TIMEOUT in the worker process's environment. Relevant only when using TCP/IP as transport.\n\n\n\naddprocs(machines; tunnel=false, sshflags=``, max_parallel=10, kwargs...) -> List of process identifiers\n\nAdd processes on remote machines via SSH. Requires julia to be installed in the same location on each node, or to be available via a shared file system.\n\nmachines is a vector of machine specifications. Workers are started for each specification.\n\nA machine specification is either a string machine_spec or a tuple - (machine_spec, count).\n\nmachine_spec is a string of the form [user@]host[:port] [bind_addr[:port]]. user defaults to current user, port to the standard ssh port. If [bind_addr[:port]] is specified, other workers will connect to this worker at the specified bind_addr and port.\n\ncount is the number of workers to be launched on the specified host. If specified as :auto it will launch as many workers as the number of cores on the specific host.\n\nKeyword arguments:\n\ntunnel: if true then SSH tunneling will be used to connect to the worker from the           master process. Default is false.\nsshflags: specifies additional ssh options, e.g. sshflags=`-i /home/foo/bar.pem`\nmax_parallel: specifies the maximum number of workers connected to in parallel at a host.                 Defaults to 10.\ndir: specifies the working directory on the workers. Defaults to the host's current        directory (as found by pwd())\nenable_threaded_blas: if true then  BLAS will run on multiple threads in added                          processes. Default is false.\nexename: name of the julia executable. Defaults to \"$JULIA_HOME/julia\" or            \"$JULIA_HOME/julia-debug\" as the case may be.\nexeflags: additional flags passed to the worker processes.\ntopology: Specifies how the workers connect to each other. Sending a message           between unconnected workers results in an error.\ntopology=:all_to_all  :  All processes are connected to each other.                   This is the default.\ntopology=:master_slave  :  Only the driver process, i.e. pid 1 connects to the                     workers. The workers do not connect to each other.\ntopology=:custom  :  The launch method of the cluster manager specifies the               connection topology via fields ident and connect_idents in               WorkerConfig. A worker with a cluster manager identity ident               will connect to all workers specified in connect_idents.\n\nEnvironment variables :\n\nIf the master process fails to establish a connection with a newly launched worker within 60.0 seconds, the worker treats it as a fatal situation and terminates. This timeout can be controlled via environment variable JULIA_WORKER_TIMEOUT. The value of JULIA_WORKER_TIMEOUT on the master process specifies the number of seconds a newly launched worker waits for connection establishment.\n\n\n\naddprocs(; kwargs...) -> List of process identifiers\n\nEquivalent to addprocs(Sys.CPU_CORES; kwargs...)\n\nNote that workers do not run a .juliarc.jl startup script, nor do they synchronize their global state (such as global variables, new method definitions, and loaded modules) with any of the other running processes.\n\n\n\naddprocs(np::Integer; restrict=true, kwargs...) -> List of process identifiers\n\nLaunches workers using the in-built LocalManager which only launches workers on the local host. This can be used to take advantage of multiple cores. addprocs(4) will add 4 processes on the local machine. If restrict is true, binding is restricted to 127.0.0.1. Keyword args dir, exename, exeflags, topology, and enable_threaded_blas have the same effect as documented for addprocs(machines).\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.nprocs",
+    "location": "stdlib/parallel.html#Base.Parallel.nprocs",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.nprocs",
+    "title": "Base.Parallel.nprocs",
     "category": "Function",
     "text": "nprocs()\n\nGet the number of available processes.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.nworkers",
+    "location": "stdlib/parallel.html#Base.Parallel.nworkers",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.nworkers",
+    "title": "Base.Parallel.nworkers",
     "category": "Function",
     "text": "nworkers()\n\nGet the number of available worker processes. This is one less than nprocs(). Equal to nprocs() if nprocs() == 1.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.procs-Tuple{}",
+    "location": "stdlib/parallel.html#Base.Parallel.procs-Tuple{}",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.procs",
+    "title": "Base.Parallel.procs",
     "category": "Method",
     "text": "procs()\n\nReturns a list of all process identifiers.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.procs-Tuple{Integer}",
+    "location": "stdlib/parallel.html#Base.Parallel.procs-Tuple{Integer}",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.procs",
+    "title": "Base.Parallel.procs",
     "category": "Method",
     "text": "procs(pid::Integer)\n\nReturns a list of all process identifiers on the same physical node. Specifically all workers bound to the same ip-address as pid are returned.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.workers",
+    "location": "stdlib/parallel.html#Base.Parallel.workers",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.workers",
+    "title": "Base.Parallel.workers",
     "category": "Function",
     "text": "workers()\n\nReturns a list of all worker process identifiers.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.rmprocs",
+    "location": "stdlib/parallel.html#Base.Parallel.rmprocs",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.rmprocs",
+    "title": "Base.Parallel.rmprocs",
     "category": "Function",
     "text": "rmprocs(pids...; waitfor=typemax(Int))\n\nRemoves the specified workers. Note that only process 1 can add or remove workers.\n\nArgument waitfor specifies how long to wait for the workers to shut down:     - If unspecified, rmprocs will wait until all requested pids are removed.     - An ErrorException is raised if all workers cannot be terminated before       the requested waitfor seconds.     - With a waitfor value of 0, the call returns immediately with the workers       scheduled for removal in a different task. The scheduled Task object is       returned. The user should call wait on the task before invoking any other       parallel calls.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.interrupt",
+    "location": "stdlib/parallel.html#Base.Parallel.interrupt",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.interrupt",
+    "title": "Base.Parallel.interrupt",
     "category": "Function",
     "text": "interrupt(pids::Integer...)\n\nInterrupt the current executing task on the specified workers. This is equivalent to pressing Ctrl-C on the local machine. If no arguments are given, all workers are interrupted.\n\n\n\ninterrupt(pids::AbstractVector=workers())\n\nInterrupt the current executing task on the specified workers. This is equivalent to pressing Ctrl-C on the local machine. If no arguments are given, all workers are interrupted.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.myid",
+    "location": "stdlib/parallel.html#Base.Parallel.myid",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.myid",
+    "title": "Base.Parallel.myid",
     "category": "Function",
     "text": "myid()\n\nGet the id of the current process.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.pmap",
+    "location": "stdlib/parallel.html#Base.Parallel.pmap",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.pmap",
+    "title": "Base.Parallel.pmap",
     "category": "Function",
     "text": "pmap([::AbstractWorkerPool], f, c...; distributed=true, batch_size=1, on_error=nothing, retry_delays=[]), retry_check=nothing) -> collection\n\nTransform collection c by applying f to each element using available workers and tasks.\n\nFor multiple collection arguments, apply f elementwise.\n\nNote that f must be made available to all worker processes; see Code Availability and Loading Packages for details.\n\nIf a worker pool is not specified, all available workers, i.e., the default worker pool is used.\n\nBy default, pmap distributes the computation over all specified workers. To use only the local process and distribute over tasks, specify distributed=false. This is equivalent to using asyncmap. For example, pmap(f, c; distributed=false) is equivalent to asyncmap(f,c; ntasks=()->nworkers())\n\npmap can also use a mix of processes and tasks via the batch_size argument. For batch sizes greater than 1, the collection is processed in multiple batches, each of length batch_size or less. A batch is sent as a single request to a free worker, where a local asyncmap processes elements from the batch using multiple concurrent tasks.\n\nAny error stops pmap from processing the remainder of the collection. To override this behavior you can specify an error handling function via argument on_error which takes in a single argument, i.e., the exception. The function can stop the processing by rethrowing the error, or, to continue, return any value which is then returned inline with the results to the caller.\n\nConsider the following two examples. The first one returns the exception object inline, the second a 0 in place of any exception:\n\njulia> pmap(x->iseven(x) ? error(\"foo\") : x, 1:4; on_error=identity)\n4-element Array{Any,1}:\n 1\n  ErrorException(\"foo\")\n 3\n  ErrorException(\"foo\")\n\njulia> pmap(x->iseven(x) ? error(\"foo\") : x, 1:4; on_error=ex->0)\n4-element Array{Int64,1}:\n 1\n 0\n 3\n 0\n\nErrors can also be handled by retrying failed computations. Keyword arguments retry_delays and retry_check are passed through to retry as keyword arguments delays and check respectively. If batching is specified, and an entire batch fails, all items in the batch are retried.\n\nNote that if both on_error and retry_delays are specified, the on_error hook is called before retrying. If on_error does not throw (or rethrow) an exception, the element will not be retried.\n\nExample: On errors, retry f on an element a maximum of 3 times without any delay between retries.\n\npmap(f, c; retry_delays = zeros(3))\n\nExample: Retry f only if the exception is not of type InexactError, with exponentially increasing delays up to 3 times. Return a NaN in place for all InexactError occurrences.\n\npmap(f, c; on_error = e->(isa(e, InexactError) ? NaN : rethrow(e)), retry_delays = ExponentialBackOff(n = 3))\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.RemoteException",
+    "location": "stdlib/parallel.html#Base.Parallel.RemoteException",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.RemoteException",
+    "title": "Base.Parallel.RemoteException",
     "category": "Type",
     "text": "RemoteException(captured)\n\nExceptions on remote computations are captured and rethrown locally.  A RemoteException wraps the pid of the worker and a captured exception. A CapturedException captures the remote exception and a serializable form of the call stack when the exception was raised.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.Future",
+    "location": "stdlib/parallel.html#Base.Parallel.Future",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.Future",
+    "title": "Base.Parallel.Future",
     "category": "Type",
     "text": "Future(pid::Integer=myid())\n\nCreate a Future on process pid. The default pid is the current process.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.RemoteChannel-Tuple{Integer}",
+    "location": "stdlib/parallel.html#Base.Parallel.RemoteChannel-Tuple{Integer}",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.RemoteChannel",
+    "title": "Base.Parallel.RemoteChannel",
     "category": "Method",
     "text": "RemoteChannel(pid::Integer=myid())\n\nMake a reference to a Channel{Any}(1) on process pid. The default pid is the current process.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.RemoteChannel-Tuple{Function,Integer}",
+    "location": "stdlib/parallel.html#Base.Parallel.RemoteChannel-Tuple{Function,Integer}",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.RemoteChannel",
+    "title": "Base.Parallel.RemoteChannel",
     "category": "Method",
     "text": "RemoteChannel(f::Function, pid::Integer=myid())\n\nCreate references to remote channels of a specific size and type. f() is a function that when executed on pid must return an implementation of an AbstractChannel.\n\nFor example, RemoteChannel(()->Channel{Int}(10), pid), will return a reference to a channel of type Int and size 10 on pid.\n\nThe default pid is the current process.\n\n\n\n"
 },
@@ -11793,33 +11793,33 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel.html#Base.remotecall-Tuple{Any,Integer,Vararg{Any,N} where N}",
+    "location": "stdlib/parallel.html#Base.Parallel.remotecall-Tuple{Any,Integer,Vararg{Any,N} where N}",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.remotecall",
+    "title": "Base.Parallel.remotecall",
     "category": "Method",
     "text": "remotecall(f, id::Integer, args...; kwargs...) -> Future\n\nCall a function f asynchronously on the given arguments on the specified process. Returns a Future. Keyword arguments, if any, are passed through to f.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.remotecall_wait-Tuple{Any,Integer,Vararg{Any,N} where N}",
+    "location": "stdlib/parallel.html#Base.Parallel.remotecall_wait-Tuple{Any,Integer,Vararg{Any,N} where N}",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.remotecall_wait",
+    "title": "Base.Parallel.remotecall_wait",
     "category": "Method",
     "text": "remotecall_wait(f, id::Integer, args...; kwargs...)\n\nPerform a faster wait(remotecall(...)) in one message on the Worker specified by worker id id. Keyword arguments, if any, are passed through to f.\n\nSee also wait and remotecall.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.remotecall_fetch-Tuple{Any,Integer,Vararg{Any,N} where N}",
+    "location": "stdlib/parallel.html#Base.Parallel.remotecall_fetch-Tuple{Any,Integer,Vararg{Any,N} where N}",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.remotecall_fetch",
+    "title": "Base.Parallel.remotecall_fetch",
     "category": "Method",
     "text": "remotecall_fetch(f, id::Integer, args...; kwargs...)\n\nPerform fetch(remotecall(...)) in one message. Keyword arguments, if any, are passed through to f. Any remote exceptions are captured in a RemoteException and thrown.\n\nSee also fetch and remotecall.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.remote_do-Tuple{Any,Integer,Vararg{Any,N} where N}",
+    "location": "stdlib/parallel.html#Base.Parallel.remote_do-Tuple{Any,Integer,Vararg{Any,N} where N}",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.remote_do",
+    "title": "Base.Parallel.remote_do",
     "category": "Method",
     "text": "remote_do(f, id::Integer, args...; kwargs...) -> nothing\n\nExecutes f on worker id asynchronously. Unlike remotecall, it does not store the result of computation, nor is there a way to wait for its completion.\n\nA successful invocation indicates that the request has been accepted for execution on the remote node.\n\nWhile consecutive remotecalls to the same worker are serialized in the order they are invoked, the order of executions on the remote worker is undetermined. For example, remote_do(f1, 2); remotecall(f2, 2); remote_do(f3, 2) will serialize the call to f1, followed by f2 and f3 in that order. However, it is not guaranteed that f1 is executed before f3 on worker 2.\n\nAny exceptions thrown by f are printed to STDERR on the remote worker.\n\nKeyword arguments, if any, are passed through to f.\n\n\n\n"
 },
@@ -11865,73 +11865,73 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel.html#Base.WorkerPool",
+    "location": "stdlib/parallel.html#Base.Parallel.WorkerPool",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.WorkerPool",
+    "title": "Base.Parallel.WorkerPool",
     "category": "Type",
     "text": "WorkerPool(workers::Vector{Int})\n\nCreate a WorkerPool from a vector of worker ids.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.CachingPool",
+    "location": "stdlib/parallel.html#Base.Parallel.CachingPool",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.CachingPool",
+    "title": "Base.Parallel.CachingPool",
     "category": "Type",
     "text": "CachingPool(workers::Vector{Int})\n\nAn implementation of an AbstractWorkerPool. remote, remotecall_fetch, pmap (and other remote calls which execute functions remotely) benefit from caching the serialized/deserialized functions on the worker nodes, especially closures (which may capture large amounts of data).\n\nThe remote cache is maintained for the lifetime of the returned CachingPool object. To clear the cache earlier, use clear!(pool).\n\nFor global variables, only the bindings are captured in a closure, not the data. let blocks can be used to capture global data.\n\nFor example:\n\nconst foo=rand(10^8);\nwp=CachingPool(workers())\nlet foo=foo\n    pmap(wp, i->sum(foo)+i, 1:100);\nend\n\nThe above would transfer foo only once to each worker.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.default_worker_pool",
+    "location": "stdlib/parallel.html#Base.Parallel.default_worker_pool",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.default_worker_pool",
+    "title": "Base.Parallel.default_worker_pool",
     "category": "Function",
     "text": "default_worker_pool()\n\nWorkerPool containing idle workers() - used by remote(f) and pmap (by default).\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.clear!-Tuple{CachingPool}",
+    "location": "stdlib/parallel.html#Base.Parallel.clear!-Tuple{CachingPool}",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.clear!",
+    "title": "Base.Parallel.clear!",
     "category": "Method",
     "text": "clear!(pool::CachingPool) -> pool\n\nRemoves all cached functions from all participating workers.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.remote",
+    "location": "stdlib/parallel.html#Base.Parallel.remote",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.remote",
+    "title": "Base.Parallel.remote",
     "category": "Function",
     "text": "remote([::AbstractWorkerPool], f) -> Function\n\nReturns an anonymous function that executes function f on an available worker using remotecall_fetch.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.remotecall-Tuple{Any,Base.AbstractWorkerPool,Vararg{Any,N} where N}",
+    "location": "stdlib/parallel.html#Base.Parallel.remotecall-Tuple{Any,Base.Parallel.AbstractWorkerPool,Vararg{Any,N} where N}",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.remotecall",
+    "title": "Base.Parallel.remotecall",
     "category": "Method",
     "text": "remotecall(f, pool::AbstractWorkerPool, args...; kwargs...) -> Future\n\nWorkerPool variant of remotecall(f, pid, ....). Waits for and takes a free worker from pool and performs a remotecall on it.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.remotecall_wait-Tuple{Any,Base.AbstractWorkerPool,Vararg{Any,N} where N}",
+    "location": "stdlib/parallel.html#Base.Parallel.remotecall_wait-Tuple{Any,Base.Parallel.AbstractWorkerPool,Vararg{Any,N} where N}",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.remotecall_wait",
+    "title": "Base.Parallel.remotecall_wait",
     "category": "Method",
     "text": "remotecall_wait(f, pool::AbstractWorkerPool, args...; kwargs...) -> Future\n\nWorkerPool variant of remotecall_wait(f, pid, ....). Waits for and takes a free worker from pool and performs a remotecall_wait on it.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.remotecall_fetch-Tuple{Any,Base.AbstractWorkerPool,Vararg{Any,N} where N}",
+    "location": "stdlib/parallel.html#Base.Parallel.remotecall_fetch-Tuple{Any,Base.Parallel.AbstractWorkerPool,Vararg{Any,N} where N}",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.remotecall_fetch",
+    "title": "Base.Parallel.remotecall_fetch",
     "category": "Method",
     "text": "remotecall_fetch(f, pool::AbstractWorkerPool, args...; kwargs...) -> result\n\nWorkerPool variant of remotecall_fetch(f, pid, ....). Waits for and takes a free worker from pool and performs a remotecall_fetch on it.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.remote_do-Tuple{Any,Base.AbstractWorkerPool,Vararg{Any,N} where N}",
+    "location": "stdlib/parallel.html#Base.Parallel.remote_do-Tuple{Any,Base.Parallel.AbstractWorkerPool,Vararg{Any,N} where N}",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.remote_do",
+    "title": "Base.Parallel.remote_do",
     "category": "Method",
     "text": "remote_do(f, pool::AbstractWorkerPool, args...; kwargs...) -> nothing\n\nWorkerPool variant of remote_do(f, pid, ....). Waits for and takes a free worker from pool and performs a remote_do on it.\n\n\n\n"
 },
@@ -11945,33 +11945,33 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel.html#Base.@spawn",
+    "location": "stdlib/parallel.html#Base.Parallel.@spawn",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.@spawn",
+    "title": "Base.Parallel.@spawn",
     "category": "Macro",
     "text": "@spawn\n\nCreates a closure around an expression and runs it on an automatically-chosen process, returning a Future to the result.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.@spawnat",
+    "location": "stdlib/parallel.html#Base.Parallel.@spawnat",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.@spawnat",
+    "title": "Base.Parallel.@spawnat",
     "category": "Macro",
     "text": "@spawnat\n\nAccepts two arguments, p and an expression. A closure is created around the expression and run asynchronously on process p. Returns a Future to the result.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.@fetch",
+    "location": "stdlib/parallel.html#Base.Parallel.@fetch",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.@fetch",
+    "title": "Base.Parallel.@fetch",
     "category": "Macro",
     "text": "@fetch\n\nEquivalent to fetch(@spawn expr). See fetch and @spawn.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.@fetchfrom",
+    "location": "stdlib/parallel.html#Base.Parallel.@fetchfrom",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.@fetchfrom",
+    "title": "Base.Parallel.@fetchfrom",
     "category": "Macro",
     "text": "@fetchfrom\n\nEquivalent to fetch(@spawnat p expr). See fetch and @spawnat.\n\n\n\n"
 },
@@ -11993,65 +11993,65 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel.html#Base.@parallel",
+    "location": "stdlib/parallel.html#Base.Parallel.@parallel",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.@parallel",
+    "title": "Base.Parallel.@parallel",
     "category": "Macro",
     "text": "@parallel\n\nA parallel for loop of the form :\n\n@parallel [reducer] for var = range\n    body\nend\n\nThe specified range is partitioned and locally executed across all workers. In case an optional reducer function is specified, @parallel performs local reductions on each worker with a final reduction on the calling process.\n\nNote that without a reducer function, @parallel executes asynchronously, i.e. it spawns independent tasks on all available workers and returns immediately without waiting for completion. To wait for completion, prefix the call with @sync, like :\n\n@sync @parallel for var = range\n    body\nend\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.@everywhere",
+    "location": "stdlib/parallel.html#Base.Parallel.@everywhere",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.@everywhere",
+    "title": "Base.Parallel.@everywhere",
     "category": "Macro",
     "text": "@everywhere expr\n\nExecute an expression under Main everywhere. Equivalent to calling eval(Main, expr) on all processes. Errors on any of the processes are collected into a CompositeException and thrown. For example :\n\n@everywhere bar=1\n\nwill define Main.bar on all processes.\n\nUnlike @spawn and @spawnat, @everywhere does not capture any local variables. Prefixing @everywhere with @eval allows us to broadcast local variables using interpolation :\n\nfoo = 1\n@eval @everywhere bar=$foo\n\nThe expression is evaluated under Main irrespective of where @everywhere is called from. For example :\n\nmodule FooBar\n    foo() = @everywhere bar()=myid()\nend\nFooBar.foo()\n\nwill result in Main.bar being defined on all processes and not FooBar.bar.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.clear!-Tuple{Any,Any}",
+    "location": "stdlib/parallel.html#Base.Parallel.clear!-Tuple{Any,Any}",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.clear!",
+    "title": "Base.Parallel.clear!",
     "category": "Method",
     "text": "clear!(syms, pids=workers(); mod=Main)\n\nClears global bindings in modules by initializing them to nothing. syms should be of type Symbol or a collection of Symbols . pids and mod identify the processes and the module in which global variables are to be reinitialized. Only those names found to be defined under mod are cleared.\n\nAn exception is raised if a global constant is requested to be cleared.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.remoteref_id",
+    "location": "stdlib/parallel.html#Base.Parallel.remoteref_id",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.remoteref_id",
+    "title": "Base.Parallel.remoteref_id",
     "category": "Function",
     "text": "Base.remoteref_id(r::AbstractRemoteRef) -> RRID\n\nFutures and RemoteChannels are identified by fields:\n\nwhere - refers to the node where the underlying object/storage referred to by the reference actually exists.\nwhence - refers to the node the remote reference was created from. Note that this is different from the node where the underlying object referred to actually exists. For example calling RemoteChannel(2) from the master process would result in a where value of 2 and a whence value of 1.\nid is unique across all references created from the worker specified by whence.\n\nTaken together,  whence and id uniquely identify a reference across all workers.\n\nBase.remoteref_id is a low-level API which returns a Base.RRID object that wraps whence and id values of a remote reference.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.channel_from_id",
+    "location": "stdlib/parallel.html#Base.Parallel.channel_from_id",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.channel_from_id",
+    "title": "Base.Parallel.channel_from_id",
     "category": "Function",
     "text": "Base.channel_from_id(id) -> c\n\nA low-level API which returns the backing AbstractChannel for an id returned by remoteref_id. The call is valid only on the node where the backing channel exists.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.worker_id_from_socket",
+    "location": "stdlib/parallel.html#Base.Parallel.worker_id_from_socket",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.worker_id_from_socket",
+    "title": "Base.Parallel.worker_id_from_socket",
     "category": "Function",
     "text": "Base.worker_id_from_socket(s) -> pid\n\nA low-level API which given a IO connection or a Worker, returns the pid of the worker it is connected to. This is useful when writing custom serialize methods for a type, which optimizes the data written out depending on the receiving process id.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.cluster_cookie-Tuple{}",
+    "location": "stdlib/parallel.html#Base.Parallel.cluster_cookie-Tuple{}",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.cluster_cookie",
+    "title": "Base.Parallel.cluster_cookie",
     "category": "Method",
     "text": "Base.cluster_cookie() -> cookie\n\nReturns the cluster cookie.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.cluster_cookie-Tuple{Any}",
+    "location": "stdlib/parallel.html#Base.Parallel.cluster_cookie-Tuple{Any}",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.cluster_cookie",
+    "title": "Base.Parallel.cluster_cookie",
     "category": "Method",
     "text": "Base.cluster_cookie(cookie) -> cookie\n\nSets the passed cookie as the cluster cookie, then returns it.\n\n\n\n"
 },
@@ -12061,7 +12061,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "General Parallel Computing Support",
     "category": "section",
-    "text": "Base.addprocs\nBase.nprocs\nBase.nworkers\nBase.procs()\nBase.procs(::Integer)\nBase.workers\nBase.rmprocs\nBase.interrupt\nBase.myid\nBase.pmap\nBase.RemoteException\nBase.Future\nBase.RemoteChannel(::Integer)\nBase.RemoteChannel(::Function, ::Integer)\nBase.wait\nBase.fetch(::Any)\nBase.remotecall(::Any, ::Integer, ::Any...)\nBase.remotecall_wait(::Any, ::Integer, ::Any...)\nBase.remotecall_fetch(::Any, ::Integer, ::Any...)\nBase.remote_do(::Any, ::Integer, ::Any...)\nBase.put!(::RemoteChannel, ::Any...)\nBase.put!(::Future, ::Any)\nBase.take!(::RemoteChannel, ::Any...)\nBase.isready(::RemoteChannel, ::Any...)\nBase.isready(::Future)\nBase.WorkerPool\nBase.CachingPool\nBase.default_worker_pool\nBase.clear!(::CachingPool)\nBase.remote\nBase.remotecall(::Any, ::Base.AbstractWorkerPool, ::Any...)\nBase.remotecall_wait(::Any, ::Base.AbstractWorkerPool, ::Any...)\nBase.remotecall_fetch(::Any, ::Base.AbstractWorkerPool, ::Any...)\nBase.remote_do(::Any, ::Base.AbstractWorkerPool, ::Any...)\nBase.timedwait\nBase.@spawn\nBase.@spawnat\nBase.@fetch\nBase.@fetchfrom\nBase.@async\nBase.@sync\nBase.@parallel\nBase.@everywhere\nBase.clear!(::Any, ::Any; ::Any)\nBase.remoteref_id\nBase.channel_from_id\nBase.worker_id_from_socket\nBase.cluster_cookie()\nBase.cluster_cookie(::Any)"
+    "text": "Base.addprocs\nBase.nprocs\nBase.nworkers\nBase.procs()\nBase.procs(::Integer)\nBase.workers\nBase.rmprocs\nBase.interrupt\nBase.myid\nBase.pmap\nBase.RemoteException\nBase.Future\nBase.RemoteChannel(::Integer)\nBase.RemoteChannel(::Function, ::Integer)\nBase.wait\nBase.fetch(::Any)\nBase.remotecall(::Any, ::Integer, ::Any...)\nBase.remotecall_wait(::Any, ::Integer, ::Any...)\nBase.remotecall_fetch(::Any, ::Integer, ::Any...)\nBase.remote_do(::Any, ::Integer, ::Any...)\nBase.put!(::RemoteChannel, ::Any...)\nBase.put!(::Future, ::Any)\nBase.take!(::RemoteChannel, ::Any...)\nBase.isready(::RemoteChannel, ::Any...)\nBase.isready(::Future)\nBase.WorkerPool\nBase.CachingPool\nBase.default_worker_pool\nBase.clear!(::CachingPool)\nBase.remote\nBase.remotecall(::Any, ::Base.Parallel.AbstractWorkerPool, ::Any...)\nBase.remotecall_wait(::Any, ::Base.Parallel.AbstractWorkerPool, ::Any...)\nBase.remotecall_fetch(::Any, ::Base.Parallel.AbstractWorkerPool, ::Any...)\nBase.remote_do(::Any, ::Base.Parallel.AbstractWorkerPool, ::Any...)\nBase.timedwait\nBase.@spawn\nBase.@spawnat\nBase.@fetch\nBase.@fetchfrom\nBase.@async\nBase.@sync\nBase.@parallel\nBase.@everywhere\nBase.clear!(::Any, ::Any; ::Any)\nBase.remoteref_id\nBase.channel_from_id\nBase.worker_id_from_socket\nBase.cluster_cookie()\nBase.cluster_cookie(::Any)"
 },
 
 {
@@ -12073,9 +12073,9 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel.html#Base.procs-Tuple{SharedArray}",
+    "location": "stdlib/parallel.html#Base.Parallel.procs-Tuple{SharedArray}",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.procs",
+    "title": "Base.Parallel.procs",
     "category": "Method",
     "text": "procs(S::SharedArray)\n\nGet the vector of processes mapping the shared array.\n\n\n\n"
 },
@@ -12361,17 +12361,17 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel.html#Base.launch",
+    "location": "stdlib/parallel.html#Base.Parallel.launch",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.launch",
+    "title": "Base.Parallel.launch",
     "category": "Function",
     "text": "launch(manager::ClusterManager, params::Dict, launched::Array, launch_ntfy::Condition)\n\nImplemented by cluster managers. For every Julia worker launched by this function, it should append a WorkerConfig entry to launched and notify launch_ntfy. The function MUST exit once all workers, requested by manager have been launched. params is a dictionary of all keyword arguments addprocs was called with.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/parallel.html#Base.manage",
+    "location": "stdlib/parallel.html#Base.Parallel.manage",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.manage",
+    "title": "Base.Parallel.manage",
     "category": "Function",
     "text": "manage(manager::ClusterManager, id::Integer, config::WorkerConfig. op::Symbol)\n\nImplemented by cluster managers. It is called on the master process, during a worker's lifetime, with appropriate op values:\n\nwith :register/:deregister when a worker is added / removed from the Julia worker pool.\nwith :interrupt when interrupt(workers) is called. The ClusterManager should signal the appropriate worker with an interrupt signal.\nwith :finalize for cleanup purposes.\n\n\n\n"
 },
@@ -12385,9 +12385,9 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel.html#Base.init_worker",
+    "location": "stdlib/parallel.html#Base.Parallel.init_worker",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.init_worker",
+    "title": "Base.Parallel.init_worker",
     "category": "Function",
     "text": "init_worker(cookie::AbstractString, manager::ClusterManager=DefaultClusterManager())\n\nCalled by cluster managers implementing custom transports. It initializes a newly launched process as a worker. Command line argument --worker has the effect of initializing a process as a worker using TCP/IP sockets for transport. cookie is a cluster_cookie.\n\n\n\n"
 },
@@ -12401,9 +12401,9 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel.html#Base.process_messages",
+    "location": "stdlib/parallel.html#Base.Parallel.process_messages",
     "page": "Tasks and Parallel Computing",
-    "title": "Base.process_messages",
+    "title": "Base.Parallel.process_messages",
     "category": "Function",
     "text": "Base.process_messages(r_stream::IO, w_stream::IO, incoming::Bool=true)\n\nCalled by cluster managers using custom transports. It should be called when the custom transport implementation receives the first message from a remote worker. The custom transport must manage a logical connection to the remote worker and provide two IO objects, one for incoming messages and the other for messages addressed to the remote worker. If incoming is true, the remote peer initiated the connection. Whichever of the pair initiates the connection sends the cluster cookie and its Julia version number to perform the authentication handshake.\n\nSee also cluster_cookie.\n\n\n\n"
 },
@@ -12541,7 +12541,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.lufact",
     "category": "Function",
-    "text": "lufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\n\n\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nlufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ncond ✓ \ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\n"
+    "text": "lufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ncond ✓ \ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\nlufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\n\n\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
 },
 
 {
@@ -12565,7 +12565,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.cholfact",
     "category": "Function",
-    "text": "cholfact(A, [uplo::Symbol,] Val{false}) -> Cholesky\n\nCompute the Cholesky factorization of a dense symmetric positive definite matrix A and return a Cholesky factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. In the latter case, the optional argument uplo may be :L for using the lower part or :U for the upper part of A. The default is to use :U. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for Cholesky objects: size, \\, inv, and det. A PosDefException exception is thrown in case the matrix is not positive definite.\n\nExample\n\njulia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]\n3×3 Array{Float64,2}:\n   4.0   12.0  -16.0\n  12.0   37.0  -43.0\n -16.0  -43.0   98.0\n\njulia> C = cholfact(A)\nBase.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:\n[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]\n\njulia> C[:U]\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 2.0  6.0  -8.0\n  ⋅   1.0   5.0\n  ⋅    ⋅    3.0\n\njulia> C[:L]\n3×3 LowerTriangular{Float64,Array{Float64,2}}:\n  2.0   ⋅    ⋅\n  6.0  1.0   ⋅\n -8.0  5.0  3.0\n\njulia> C[:L] * C[:U] == A\ntrue\n\n\n\ncholfact(A, [uplo::Symbol,] Val{true}; tol = 0.0) -> CholeskyPivoted\n\nCompute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix A and return a CholeskyPivoted factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. In the latter case, the optional argument uplo may be :L for using the lower part or :U for the upper part of A. The default is to use :U. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for PivotedCholesky objects: size, \\, inv, det, and rank. The argument tol determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.\n\n\n\ncholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor\n\nCompute the Cholesky factorization of a sparse positive definite matrix A. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = cholfact(A) is most frequently used to solve systems of equations with F\\b, but also the methods diag, det, and logdet are defined for F. You can also extract individual factors from F, using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it's typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P).\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\n"
+    "text": "cholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor\n\nCompute the Cholesky factorization of a sparse positive definite matrix A. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = cholfact(A) is most frequently used to solve systems of equations with F\\b, but also the methods diag, det, and logdet are defined for F. You can also extract individual factors from F, using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it's typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P).\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\ncholfact(A, [uplo::Symbol,] Val{false}) -> Cholesky\n\nCompute the Cholesky factorization of a dense symmetric positive definite matrix A and return a Cholesky factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. In the latter case, the optional argument uplo may be :L for using the lower part or :U for the upper part of A. The default is to use :U. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for Cholesky objects: size, \\, inv, and det. A PosDefException exception is thrown in case the matrix is not positive definite.\n\nExample\n\njulia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]\n3×3 Array{Float64,2}:\n   4.0   12.0  -16.0\n  12.0   37.0  -43.0\n -16.0  -43.0   98.0\n\njulia> C = cholfact(A)\nBase.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:\n[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]\n\njulia> C[:U]\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 2.0  6.0  -8.0\n  ⋅   1.0   5.0\n  ⋅    ⋅    3.0\n\njulia> C[:L]\n3×3 LowerTriangular{Float64,Array{Float64,2}}:\n  2.0   ⋅    ⋅\n  6.0  1.0   ⋅\n -8.0  5.0  3.0\n\njulia> C[:L] * C[:U] == A\ntrue\n\n\n\ncholfact(A, [uplo::Symbol,] Val{true}; tol = 0.0) -> CholeskyPivoted\n\nCompute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix A and return a CholeskyPivoted factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. In the latter case, the optional argument uplo may be :L for using the lower part or :U for the upper part of A. The default is to use :U. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for PivotedCholesky objects: size, \\, inv, det, and rank. The argument tol determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.\n\n\n\n"
 },
 
 {
@@ -12573,7 +12573,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.cholfact!",
     "category": "Function",
-    "text": "cholfact!(A, [uplo::Symbol,] Val{false}) -> Cholesky\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\nExample\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> cholfact!(A)\nERROR: InexactError()\n\n\n\ncholfact!(A, [uplo::Symbol,] Val{true}; tol = 0.0) -> CholeskyPivoted\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\n\n\ncholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the Cholesky (LL) factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also cholfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "cholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the Cholesky (LL) factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also cholfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\ncholfact!(A, [uplo::Symbol,] Val{false}) -> Cholesky\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\nExample\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> cholfact!(A)\nERROR: InexactError()\n\n\n\ncholfact!(A, [uplo::Symbol,] Val{true}; tol = 0.0) -> CholeskyPivoted\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\n\n\n"
 },
 
 {
@@ -12613,7 +12613,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.ldltfact",
     "category": "Function",
-    "text": "ldltfact(S::SymTridiagonal) -> LDLt\n\nCompute an LDLt factorization of a real symmetric tridiagonal matrix such that A = L*Diagonal(d)*L' where L is a unit lower triangular matrix and d is a vector. The main use of an LDLt factorization F = ldltfact(A) is to solve the linear system of equations Ax = b with F\\b.\n\n\n\nldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor\n\nCompute the LDL factorization of a sparse matrix A. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = ldltfact(A) is most frequently used to solve systems of equations A*x = b with F\\b. The returned factorization object F also supports the methods diag, det, and logdet. You can extract individual factors from F using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*D*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it is typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P). The complete list of supported factors is :L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP.\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\n"
+    "text": "ldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor\n\nCompute the LDL factorization of a sparse matrix A. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = ldltfact(A) is most frequently used to solve systems of equations A*x = b with F\\b. The returned factorization object F also supports the methods diag, det, and logdet. You can extract individual factors from F using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*D*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it is typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P). The complete list of supported factors is :L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP.\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\nldltfact(S::SymTridiagonal) -> LDLt\n\nCompute an LDLt factorization of a real symmetric tridiagonal matrix such that A = L*Diagonal(d)*L' where L is a unit lower triangular matrix and d is a vector. The main use of an LDLt factorization F = ldltfact(A) is to solve the linear system of equations Ax = b with F\\b.\n\n\n\n"
 },
 
 {
@@ -12621,7 +12621,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.ldltfact!",
     "category": "Function",
-    "text": "ldltfact!(S::SymTridiagonal) -> LDLt\n\nSame as ldltfact, but saves space by overwriting the input A, instead of creating a copy.\n\n\n\nldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the LDL factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also ldltfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "ldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the LDL factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also ldltfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nldltfact!(S::SymTridiagonal) -> LDLt\n\nSame as ldltfact, but saves space by overwriting the input A, instead of creating a copy.\n\n\n\n"
 },
 
 {
@@ -12645,7 +12645,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.qrfact",
     "category": "Function",
-    "text": "qrfact(A) -> SPQR.Factorization\n\nCompute the QR factorization of a sparse matrix A. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with \\. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.\n\n\n\nqrfact(A, pivot=Val{false}) -> F\n\nComputes the QR factorization of A. The return type of F depends on the element type of A and whether pivoting is specified (with pivot==Val{true}).\n\nReturn type eltype(A) pivot Relationship between F and A\nQR not BlasFloat either A==F[:Q]*F[:R]\nQRCompactWY BlasFloat Val{false} A==F[:Q]*F[:R]\nQRPivoted BlasFloat Val{true} A[:,F[:p]]==F[:Q]*F[:R]\n\nBlasFloat refers to any of: Float32, Float64, Complex64 or Complex128.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description QR QRCompactWY QRPivoted\nF[:Q] Q (orthogonal/unitary) part of QR ✓ (QRPackedQ) ✓ (QRCompactWYQ) ✓ (QRPackedQ)\nF[:R] R (upper right triangular) part of QR ✓ ✓ ✓\nF[:p] pivot Vector   ✓\nF[:P] (pivot) permutation Matrix   ✓\n\nThe following functions are available for the QR objects: size and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.The data contained in QR or QRPivoted can be used to construct the QRPackedQ type, which is a compact representation of the rotation matrix:Q = prod_i=1^min(mn) (I - tau_i v_i v_i^T)where tau_i is the scale factor and v_i is the projection vector associated with the i^th Householder elementary reflector.The data contained in QRCompactWY can be used to construct the QRCompactWYQ type, which is a compact representation of the rotation matrixQ = I + Y T Y^Twhere Y is m times r lower trapezoidal and T is r times r upper triangular. The compact WY representation [Schreiber1989] is not to be confused with the older, WY representation [Bischof1987]. (The LAPACK documentation uses V in lieu of Y.)[Bischof1987]: C Bischof and C Van Loan, \"The WY representation for products of Householder matrices\", SIAM J Sci Stat Comput 8 (1987), s2-s13. doi:10.1137/0908009[Schreiber1989]: R Schreiber and C Van Loan, \"A storage-efficient WY representation for products of Householder transformations\", SIAM J Sci Stat Comput 10 (1989), 53-57. doi:10.1137/0910005\n\n\n\n"
+    "text": "qrfact(A, pivot=Val{false}) -> F\n\nComputes the QR factorization of A. The return type of F depends on the element type of A and whether pivoting is specified (with pivot==Val{true}).\n\nReturn type eltype(A) pivot Relationship between F and A\nQR not BlasFloat either A==F[:Q]*F[:R]\nQRCompactWY BlasFloat Val{false} A==F[:Q]*F[:R]\nQRPivoted BlasFloat Val{true} A[:,F[:p]]==F[:Q]*F[:R]\n\nBlasFloat refers to any of: Float32, Float64, Complex64 or Complex128.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description QR QRCompactWY QRPivoted\nF[:Q] Q (orthogonal/unitary) part of QR ✓ (QRPackedQ) ✓ (QRCompactWYQ) ✓ (QRPackedQ)\nF[:R] R (upper right triangular) part of QR ✓ ✓ ✓\nF[:p] pivot Vector   ✓\nF[:P] (pivot) permutation Matrix   ✓\n\nThe following functions are available for the QR objects: size and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.The data contained in QR or QRPivoted can be used to construct the QRPackedQ type, which is a compact representation of the rotation matrix:Q = prod_i=1^min(mn) (I - tau_i v_i v_i^T)where tau_i is the scale factor and v_i is the projection vector associated with the i^th Householder elementary reflector.The data contained in QRCompactWY can be used to construct the QRCompactWYQ type, which is a compact representation of the rotation matrixQ = I + Y T Y^Twhere Y is m times r lower trapezoidal and T is r times r upper triangular. The compact WY representation [Schreiber1989] is not to be confused with the older, WY representation [Bischof1987]. (The LAPACK documentation uses V in lieu of Y.)[Bischof1987]: C Bischof and C Van Loan, \"The WY representation for products of Householder matrices\", SIAM J Sci Stat Comput 8 (1987), s2-s13. doi:10.1137/0908009[Schreiber1989]: R Schreiber and C Van Loan, \"A storage-efficient WY representation for products of Householder transformations\", SIAM J Sci Stat Comput 10 (1989), 53-57. doi:10.1137/0910005\n\n\n\nqrfact(A) -> SPQR.Factorization\n\nCompute the QR factorization of a sparse matrix A. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with \\. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.\n\n\n\n"
 },
 
 {
