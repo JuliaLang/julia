@@ -82,7 +82,7 @@ Note that the argument type tuple must be written as `(Cstring,)`, rather than `
 is because `(Cstring)` is just the expression `Cstring` surrounded by parentheses, rather than
 a 1-tuple containing `Cstring`:
 
-```julia
+```jldoctest
 julia> (Cstring)
 Cstring
 
@@ -99,12 +99,12 @@ which is a simplified version of the actual definition from [env.jl](https://git
 
 ```julia
 function getenv(var::AbstractString)
-  val = ccall((:getenv, "libc"),
-              Cstring, (Cstring,), var)
-  if val == C_NULL
-    error("getenv: undefined variable: ", var)
-  end
-  unsafe_string(val)
+    val = ccall((:getenv, "libc"),
+                Cstring, (Cstring,), var)
+    if val == C_NULL
+        error("getenv: undefined variable: ", var)
+    end
+    unsafe_string(val)
 end
 ```
 
@@ -175,10 +175,11 @@ using the `qsort` function (rather than Julia's built-in `sort` function). Befor
 calling `qsort` and passing arguments, we need to write a comparison function that works for some
 arbitrary type T:
 
-```julia
-function mycompare{T}(a::T, b::T)
-    return convert(Cint, a < b ? -1 : a > b ? +1 : 0)::Cint
-end
+```jldoctest mycompare
+julia> function mycompare{T}(a::T, b::T)
+           return convert(Cint, a < b ? -1 : a > b ? +1 : 0)::Cint
+       end
+mycompare (generic function with 1 method)
 ```
 
 Notice that we have to be careful about the return type: `qsort` expects a function returning
@@ -186,8 +187,8 @@ a C `int`, so we must be sure to return `Cint` via a call to `convert` and a `ty
 
 In order to pass this function to C, we obtain its address using the function `cfunction`:
 
-```julia
-const mycompare_c = cfunction(mycompare, Cint, (Ref{Cdouble}, Ref{Cdouble}))
+```jldoctest mycompare
+julia> const mycompare_c = cfunction(mycompare, Cint, (Ref{Cdouble}, Ref{Cdouble}));
 ```
 
 [`cfunction()`](@ref) accepts three arguments: the Julia function (`mycompare`), the return type
@@ -196,13 +197,26 @@ elements.
 
 The final call to `qsort` looks like this:
 
-```julia
-A = [1.3, -2.7, 4.4, 3.1]
-ccall(:qsort, Void, (Ptr{Cdouble}, Csize_t, Csize_t, Ptr{Void}),
-      A, length(A), sizeof(eltype(A)), mycompare_c)
+```jldoctest mycompare
+julia> A = [1.3, -2.7, 4.4, 3.1]
+4-element Array{Float64,1}:
+  1.3
+ -2.7
+  4.4
+  3.1
+
+julia> ccall(:qsort, Void, (Ptr{Cdouble}, Csize_t, Csize_t, Ptr{Void}),
+             A, length(A), sizeof(eltype(A)), mycompare_c)
+
+julia> A
+4-element Array{Float64,1}:
+ -2.7
+  1.3
+  3.1
+  4.4
 ```
 
-After this executes, `A` is changed to the sorted array `[-2.7, 1.3, 3.1, 4.4]`. Note that Julia
+As can be seen, `A` is changed to the sorted array `[-2.7, 1.3, 3.1, 4.4]`. Note that Julia
 knows how to convert an array into a `Ptr{Cdouble}`, how to compute the size of a type in bytes
 (identical to C's `sizeof` operator), and so on. For fun, try inserting a `println("mycompare($a,$b)")`
 line into `mycompare`, which will allow you to see the comparisons that `qsort` is performing
@@ -845,15 +859,15 @@ macro dlsym(func, lib)
     quote
         let $zlocal::Ptr{Void} = $z::Ptr{Void}
             if $zlocal == C_NULL
-               $zlocal = dlsym($(esc(lib))::Ptr{Void}, $(esc(func)))
-               global $z = $zlocal
+                $zlocal = dlsym($(esc(lib))::Ptr{Void}, $(esc(func)))
+                global $z = $zlocal
             end
             $zlocal
         end
     end
 end
 
-mylibvar = dlopen("mylib")
+mylibvar = Libdl.dlopen("mylib")
 ccall(@dlsym("myfunc", mylibvar), Void, ())
 ```
 
