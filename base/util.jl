@@ -357,14 +357,14 @@ julia> gctime
 
 julia> fieldnames(typeof(memallocs))
 9-element Array{Symbol,1}:
- :allocd    
- :malloc    
- :realloc   
- :poolalloc 
- :bigalloc  
- :freecall  
+ :allocd
+ :malloc
+ :realloc
+ :poolalloc
+ :bigalloc
+ :freecall
  :total_time
- :pause     
+ :pause
  :full_sweep
 
 julia> memallocs.total_time
