@@ -88,7 +88,7 @@ end
 unsafe_convert{T}(::Type{Ptr{Void}}, b::RefArray{T}) = convert(Ptr{Void}, unsafe_convert(Ptr{T}, b))
 
 # convert Arrays to pointer arrays for ccall
-function (::Type{Ref{P}}){P<:Union{Ptr,Cwstring,Cstring},T<:Union{Ptr,Cwstring,Cstring}}(a::Array{T}) # Ref{P<:Ptr}(a::Array{T<:Ptr})
+function (::Type{Ref{<:Union{Ptr,Cwstring,Cstring}}})(a::Array{<:Union{Ptr,Cwstring,Cstring}}) # Ref{P<:Ptr}(a::Array{T<:Ptr})
     return RefArray(a) # effectively a no-op
 end
 function (::Type{Ref{P}}){P<:Union{Ptr,Cwstring,Cstring},T}(a::Array{T}) # Ref{P<:Ptr}(a::Array)
@@ -107,7 +107,7 @@ function (::Type{Ref{P}}){P<:Union{Ptr,Cwstring,Cstring},T}(a::Array{T}) # Ref{P
         return RefArray(ptrs,1,roots)
     end
 end
-cconvert{P<:Ptr,T<:Ptr}(::Union{Type{Ptr{P}},Type{Ref{P}}}, a::Array{T}) = a
+cconvert{P<:Ptr}(::Union{Type{Ptr{P}},Type{Ref{P}}}, a::Array{<:Ptr}) = a
 cconvert{P<:Union{Ptr,Cwstring,Cstring}}(::Union{Type{Ptr{P}},Type{Ref{P}}}, a::Array) = Ref{P}(a)
 
 ###

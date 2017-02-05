@@ -41,7 +41,7 @@ if is_windows()
         @inbounds return rd.buffer[1] % T
     end
 
-    rand!{T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice, A::Array{T}) = (win32_SystemFunction036!(A); A)
+    rand!(rd::RandomDevice, A::Array{<:Union{Bool, Base.BitInteger}}) = (win32_SystemFunction036!(A); A)
 else # !windows
     immutable RandomDevice <: AbstractRNG
         file::IOStream
@@ -50,8 +50,8 @@ else # !windows
         RandomDevice(unlimited::Bool=true) = new(open(unlimited ? "/dev/urandom" : "/dev/random"), unlimited)
     end
 
-    rand{ T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice,  ::Type{T})  = read( rd.file, T)
-    rand!{T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice, A::Array{T}) = read!(rd.file, A)
+    rand{T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice, ::Type{T}) = read( rd.file, T)
+    rand!(rd::RandomDevice, A::Array{<:Union{Bool, Base.BitInteger}})  = read!(rd.file, A)
 end # os-test
 
 
@@ -473,7 +473,7 @@ function rand!{T<:Union{Float16, Float32}}(r::MersenneTwister, A::Array{T}, ::Ty
     A
 end
 
-rand!{T<:Union{Float16, Float32}}(r::MersenneTwister, A::Array{T}) = rand!(r, A, CloseOpen)
+rand!(r::MersenneTwister, A::Array{<:Union{Float16, Float32}}) = rand!(r, A, CloseOpen)
 
 
 function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
@@ -649,7 +649,7 @@ else
     end
 end
 
-rand{T<:Union{Signed,Unsigned,BigInt,Bool}}(rng::AbstractRNG, r::UnitRange{T}) = rand(rng, RangeGenerator(r))
+rand(rng::AbstractRNG, r::UnitRange{<:Union{Signed,Unsigned,BigInt,Bool}}) = rand(rng, RangeGenerator(r))
 
 
 # Randomly draw a sample from an AbstractArray r
@@ -663,7 +663,7 @@ function rand!(rng::AbstractRNG, A::AbstractArray, g::RangeGenerator)
     return A
 end
 
-rand!{T<:Union{Signed,Unsigned,BigInt,Bool,Char}}(rng::AbstractRNG, A::AbstractArray, r::UnitRange{T}) = rand!(rng, A, RangeGenerator(r))
+rand!(rng::AbstractRNG, A::AbstractArray, r::UnitRange{<:Union{Signed,Unsigned,BigInt,Bool,Char}}) = rand!(rng, A, RangeGenerator(r))
 
 function rand!(rng::AbstractRNG, A::AbstractArray, r::AbstractArray)
     g = RangeGenerator(1:(length(r)))
