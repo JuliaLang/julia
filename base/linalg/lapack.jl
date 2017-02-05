@@ -3681,8 +3681,8 @@ for (stev, stebz, stegr, stein, elty) in
             m = Array{BlasInt}(1)
             w = similar(dv, $elty, n)
             ldz = jobz == 'N' ? 1 : n
-            Z = similar(dv, $elty, ldz, n)
-            isuppz = similar(dv, BlasInt, 2n)
+            Z = similar(dv, $elty, ldz, range == 'I' ? iu-il+1 : n)
+            isuppz = similar(dv, BlasInt, 2*size(Z, 2))
             work = Array{$elty}(1)
             lwork = BlasInt(-1)
             iwork = Array{BlasInt}(1)
@@ -3708,7 +3708,7 @@ for (stev, stebz, stegr, stein, elty) in
                     iwork = Array{BlasInt}(liwork)
                 end
             end
-            w[1:m[1]], Z[:,1:m[1]]
+            m[1] == length(w) ? w : w[1:m[1]], m[1] == size(Z, 2) ? Z : Z[:,1:m[1]]
         end
 
         function stein!(dv::StridedVector{$elty}, ev_in::StridedVector{$elty}, w_in::StridedVector{$elty}, iblock_in::StridedVector{BlasInt}, isplit_in::StridedVector{BlasInt})
