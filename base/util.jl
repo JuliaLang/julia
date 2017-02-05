@@ -630,7 +630,7 @@ the compiler for objects about to be discarded, the `securezero!` function
 will always be called.
 """
 function securezero! end
-@noinline securezero!{T<:Number}(a::AbstractArray{T}) = fill!(a, 0)
+@noinline securezero!(a::AbstractArray{<:Number}) = fill!(a, 0)
 securezero!(s::String) = unsafe_securezero!(pointer(s), sizeof(s))
 @noinline unsafe_securezero!{T}(p::Ptr{T}, len::Integer=1) =
     ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
