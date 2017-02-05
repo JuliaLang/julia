@@ -135,7 +135,7 @@ function searchsorted(v::AbstractVector, x, ilo::Int, ihi::Int, o::Ordering)
     return (lo + 1) : (hi - 1)
 end
 
-function searchsortedlast{T<:Real}(a::Range{T}, x::Real, o::DirectOrdering)
+function searchsortedlast(a::Range{<:Real}, x::Real, o::DirectOrdering)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -144,7 +144,7 @@ function searchsortedlast{T<:Real}(a::Range{T}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedfirst{T<:Real}(a::Range{T}, x::Real, o::DirectOrdering)
+function searchsortedfirst(a::Range{<:Real}, x::Real, o::DirectOrdering)
     if step(a) == 0
         lt(o, first(a), x) ? length(a) + 1 : 1
     else
@@ -153,7 +153,7 @@ function searchsortedfirst{T<:Real}(a::Range{T}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedlast{T<:Integer}(a::Range{T}, x::Real, o::DirectOrdering)
+function searchsortedlast(a::Range{<:Integer}, x::Real, o::DirectOrdering)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -161,7 +161,7 @@ function searchsortedlast{T<:Integer}(a::Range{T}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedfirst{T<:Integer}(a::Range{T}, x::Real, o::DirectOrdering)
+function searchsortedfirst(a::Range{<:Integer}, x::Real, o::DirectOrdering)
     if step(a) == 0
         lt(o, first(a), x) ? length(a)+1 : 1
     else
@@ -169,7 +169,7 @@ function searchsortedfirst{T<:Integer}(a::Range{T}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedfirst{T<:Integer}(a::Range{T}, x::Unsigned, o::DirectOrdering)
+function searchsortedfirst(a::Range{<:Integer}, x::Unsigned, o::DirectOrdering)
     if lt(o, first(a), x)
         if step(a) == 0
             length(a) + 1
@@ -181,7 +181,7 @@ function searchsortedfirst{T<:Integer}(a::Range{T}, x::Unsigned, o::DirectOrderi
     end
 end
 
-function searchsortedlast{T<:Integer}(a::Range{T}, x::Unsigned, o::DirectOrdering)
+function searchsortedlast(a::Range{<:Integer}, x::Unsigned, o::DirectOrdering)
     if lt(o, x, first(a))
         0
     elseif step(a) == 0
@@ -191,7 +191,7 @@ function searchsortedlast{T<:Integer}(a::Range{T}, x::Unsigned, o::DirectOrderin
     end
 end
 
-searchsorted{T<:Real}(a::Range{T}, x::Real, o::DirectOrdering) =
+searchsorted(a::Range{<:Real}, x::Real, o::DirectOrdering) =
     searchsortedfirst(a, x, o) : searchsortedlast(a, x, o)
 
 for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
@@ -414,7 +414,7 @@ end
 ## generic sorting methods ##
 
 defalg(v::AbstractArray) = DEFAULT_STABLE
-defalg{T<:Number}(v::AbstractArray{T}) = DEFAULT_UNSTABLE
+defalg(v::AbstractArray{<:Number}) = DEFAULT_UNSTABLE
 
 function sort!(v::AbstractVector, alg::Algorithm, order::Ordering)
     inds = indices(v,1)
@@ -455,7 +455,7 @@ function sort!(v::AbstractVector;
 end
 
 # sort! for vectors of few unique integers
-function sort_int_range!{T<:Integer}(x::Vector{T}, rangelen, minval)
+function sort_int_range!(x::Vector{<:Integer}, rangelen, minval)
     offs = 1 - minval
     n = length(x)
 
@@ -489,13 +489,13 @@ sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 selectperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
     selectperm!(similar(Vector{eltype(k)}, indices(v,1)), v, k; kwargs..., initialized=false)
 
-function selectperm!{I<:Integer}(ix::AbstractVector{I}, v::AbstractVector,
-                                 k::Union{Int, OrdinalRange};
-                                 lt::Function=isless,
-                                 by::Function=identity,
-                                 rev::Bool=false,
-                                 order::Ordering=Forward,
-                                 initialized::Bool=false)
+function selectperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
+                     k::Union{Int, OrdinalRange};
+                     lt::Function=isless,
+                     by::Function=identity,
+                     rev::Bool=false,
+                     order::Ordering=Forward,
+                     initialized::Bool=false)
     if !initialized
         @inbounds for i = indices(ix,1)
             ix[i] = i
@@ -554,13 +554,13 @@ end
 Like [`sortperm`](@ref), but accepts a preallocated index vector `ix`.  If `initialized` is `false`
 (the default), ix is initialized to contain the values `1:length(v)`.
 """
-function sortperm!{I<:Integer}(x::AbstractVector{I}, v::AbstractVector;
-                               alg::Algorithm=DEFAULT_UNSTABLE,
-                               lt=isless,
-                               by=identity,
-                               rev::Bool=false,
-                               order::Ordering=Forward,
-                               initialized::Bool=false)
+function sortperm!(x::AbstractVector{<:Integer}, v::AbstractVector;
+                   alg::Algorithm=DEFAULT_UNSTABLE,
+                   lt=isless,
+                   by=identity,
+                   rev::Bool=false,
+                   order::Ordering=Forward,
+                   initialized::Bool=false)
     if indices(x,1) != indices(v,1)
         throw(ArgumentError("index vector must have the same indices as the source vector, $(indices(x,1)) != $(indices(v,1))"))
     end
@@ -573,7 +573,7 @@ function sortperm!{I<:Integer}(x::AbstractVector{I}, v::AbstractVector;
 end
 
 # sortperm for vectors of few unique integers
-function sortperm_int_range{T<:Integer}(x::Vector{T}, rangelen, minval)
+function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
     offs = 1 - minval
     n = length(x)
 
@@ -670,7 +670,7 @@ function sortcols(A::AbstractMatrix; kws...)
     A[:,p]
 end
 
-function slicetypeof{T,N}(A::AbstractArray{T,N}, i1, i2)
+function slicetypeof{T}(A::AbstractArray{T}, i1, i2)
     I = map(slice_dummy, to_indices(A, (i1, i2)))
     fast = isa(linearindexing(viewindexing(I), linearindexing(A)), LinearFast)
     SubArray{T,1,typeof(A),typeof(I),fast}
@@ -738,8 +738,8 @@ end
 
 nans2end!(v::AbstractVector, o::ForwardOrdering) = nans2right!(v,o)
 nans2end!(v::AbstractVector, o::ReverseOrdering) = nans2left!(v,o)
-nans2end!{O<:ForwardOrdering}(v::AbstractVector{Int}, o::Perm{O}) = nans2right!(v,o)
-nans2end!{O<:ReverseOrdering}(v::AbstractVector{Int}, o::Perm{O}) = nans2left!(v,o)
+nans2end!(v::AbstractVector{Int}, o::Perm{<:ForwardOrdering}) = nans2right!(v,o)
+nans2end!(v::AbstractVector{Int}, o::Perm{<:ReverseOrdering}) = nans2left!(v,o)
 
 issignleft(o::ForwardOrdering, x::Floats) = lt(o, x, zero(x))
 issignleft(o::ReverseOrdering, x::Floats) = lt(o, x, -zero(x))
@@ -763,8 +763,8 @@ end
 fpsort!(v::AbstractVector, a::Sort.PartialQuickSort, o::Ordering) =
     sort!(v, first(indices(v,1)), last(indices(v,1)), a, o)
 
-sort!{T<:Floats}(v::AbstractVector{T}, a::Algorithm, o::DirectOrdering) = fpsort!(v,a,o)
-sort!{O<:DirectOrdering,T<:Floats}(v::Vector{Int}, a::Algorithm, o::Perm{O,Vector{T}}) = fpsort!(v,a,o)
+sort!(v::AbstractVector{<:Floats}, a::Algorithm, o::DirectOrdering) = fpsort!(v,a,o)
+sort!(v::Vector{Int}, a::Algorithm, o::Perm{<:DirectOrdering,<:Vector{<:Floats}}) = fpsort!(v,a,o)
 
 end # module Sort.Float
 
