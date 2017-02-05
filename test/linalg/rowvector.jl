@@ -104,7 +104,7 @@ end
 
     @test (rv*v) === 14
     @test (rv*mat)::RowVector == [1 4 9]
-    @test_throws DimensionMismatch [1]*reshape([1],(1,1)) # no longer permitted
+    @test [1]*reshape([1],(1,1)) == reshape([1], (1,1)) # deprecated
     @test_throws DimensionMismatch rv*rv
     @test (v*rv)::Matrix == [1 2 3; 2 4 6; 3 6 9]
     @test_throws DimensionMismatch v*v # Was previously a missing method error, now an error message
@@ -112,7 +112,7 @@ end
 
     @test_throws DimensionMismatch rv*v.'
     @test (rv*mat.')::RowVector == [1 4 9]
-    @test_throws DimensionMismatch [1]*reshape([1],(1,1)).' # no longer permitted
+    @test [1]*reshape([1],(1,1)).' == reshape([1], (1,1)) # deprecated
     @test rv*rv.' === 14
     @test_throws DimensionMismatch v*rv.'
     @test (v*v.')::Matrix == [1 2 3; 2 4 6; 3 6 9]
@@ -142,7 +142,7 @@ end
 
     @test_throws DimensionMismatch cz*z'
     @test (cz*mat')::RowVector == [-2im 4 9]
-    @test_throws DimensionMismatch [1]*reshape([1],(1,1))' # no longer permitted
+    @test [1]*reshape([1],(1,1))' == reshape([1], (1,1)) # deprecated
     @test cz*cz' === 15 + 0im
     @test_throws DimensionMismatch z*cz'
     @test (z*z')::Matrix == [2 2+2im 3+3im; 2-2im 4 6; 3-3im 6 9]
@@ -217,19 +217,19 @@ end
     @test (ut*rv.')::Vector == [2,6,12]
 
     @test (ut.'*rv.')::Vector == [2,6,12]
-    @test_throws DimensionMismatch rv.'*ut.'
+    @test_throws MethodError rv.'*ut.'
 
     @test_throws DimensionMismatch ut.'*rv
-    @test_throws DimensionMismatch rv.'*ut
+    @test_throws MethodError rv.'*ut
 
     @test (rv*ut')::RowVector == [2 6 12]
     @test (ut*rv')::Vector == [2,6,12]
 
-    @test_throws DimensionMismatch rv'*ut'
+    @test_throws MethodError rv'*ut'
     @test (ut'*rv')::Vector == [2,6,12]
 
     @test_throws DimensionMismatch ut'*rv
-    @test_throws DimensionMismatch rv'*ut
+    @test_throws MethodError rv'*ut
 
     @test (rv/ut)::RowVector ≈ [2/1  3/2  4/3]
     @test (rv/ut.')::RowVector ≈ [2/1  3/2  4/3]
