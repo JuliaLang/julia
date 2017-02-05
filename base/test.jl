@@ -954,7 +954,7 @@ function parse_testset_args(args)
         elseif isa(arg, Expr) && arg.head == :(=)
             # we're building up a Dict literal here
             key = Expr(:quote, arg.args[1])
-            push!(options.args, Expr(:(=>), key, arg.args[2]))
+            push!(options.args, Expr(:call, :(=>), key, arg.args[2]))
         else
             error("Unexpected argument $arg to @testset")
         end

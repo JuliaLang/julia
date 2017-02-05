@@ -166,6 +166,9 @@ This section lists changes that do not have deprecation warnings.
       that internally uses twice-precision arithmetic.  These two
       outcomes exhibit differences in both precision and speed.
 
+  * `A=>B` expressions are now parsed as calls instead of using `=>` as the
+    expression head ([#20327]).
+
   * The `count` function no longer sums non-boolean values ([#20404])
 
 Library improvements

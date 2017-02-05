@@ -255,6 +255,20 @@ end
 z = convert(Complex{Float64},2)
 @test z == Complex(2.0,0.0)
 
+function typeassert_instead_of_decl()
+    local x
+    x = 1
+    x::Float64
+    return 0
+end
+@test_throws TypeError typeassert_instead_of_decl()
+
+# type declarations on globals not implemented yet
+@test_throws ErrorException eval(parse("global x20327::Int"))
+
+y20327 = 1
+@test_throws TypeError y20327::Float64
+
 # misc
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 @test fib(20) == 6765
