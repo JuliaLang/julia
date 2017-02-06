@@ -3516,36 +3516,19 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         # typeassert(x::S, T) => x, when S<:T
         if isType(atypes[3]) && isleaftype(atypes[3]) &&
             atypes[2] ⊑ atypes[3].parameters[1]
-            return (argexprs[2],())
+            return (argexprs[2], ())
         end
     end
     topmod = _topmod(sv)
     # special-case inliners for known pure functions that compute types
     if sv.params.inlining
         if isa(e.typ, Const) # || isconstType(e.typ)
-            # XXX: this is needlessly buggy and should just call `inline_as_constant`
             if (f === apply_type || f === fieldtype || f === typeof ||
                 istopfunction(topmod, f, :typejoin) ||
-                istopfunction(topmod, f, :promote_type))
-                # XXX: compute effect_free for the actual arguments
-                if length(argexprs) < 2 || effect_free(argexprs[2], sv.src, sv.mod, true)
-                    return (e.typ.val, ())
-                else
-                    return (e.typ.val, Any[argexprs[2]])
-                end
-            end
-        end
-        if istopfunction(topmod, f, :isbits) && length(atypes)==2 && isType(atypes[2]) &&
-            effect_free(argexprs[2], sv.src, sv.mod, true) && isleaftype(atypes[2].parameters[1])
-            # TODO: this is needlessly complicated and should just call `inline_as_constant`
-            return (isbits(atypes[2].parameters[1]),())
-        end
-        if f === Core.kwfunc && length(argexprs) == 2 && isa(e.typ, Const)
-            # TODO: replace with a call to `inline_as_constant`
-            if effect_free(argexprs[2], sv.src, sv.mod, true)
-                return (e.typ.val, ())
-            else
-                return (e.typ.val, Any[argexprs[2]])
+                istopfunction(topmod, f, :isbits) ||
+                istopfunction(topmod, f, :promote_type) ||
+                (f === Core.kwfunc && length(argexprs) == 2))
+                return inline_as_constant(e.typ.val, argexprs, sv, nothing)
             end
         end
     end
