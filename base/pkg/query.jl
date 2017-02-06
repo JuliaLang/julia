@@ -6,6 +6,15 @@ import ...Pkg.PkgError
 using ..Types
 
 function requirements(reqs::Dict, fix::Dict, avail::Dict)
+    bktrc = ResolveBacktrace()
+    for (p,f) in fix
+        bktrc[p] = ResolveBacktraceItem(:fixed, f.version)
+    end
+    for (p,vs) in reqs
+        bktrcp = get!(bktrc, p) do; ResolveBacktraceItem() end
+        push!(bktrcp, :required, vs)
+    end
+
     for (p1,f1) in fix
         for p2 in keys(f1.requires)
             haskey(avail, p2) || haskey(fix, p2) || throw(PkgError("unknown package $p2 required by $p1"))
@@ -18,13 +27,17 @@ function requirements(reqs::Dict, fix::Dict, avail::Dict)
         end
     end
     reqs = deepcopy(reqs)
-    for (p1,f1) in fix
-        merge_requires!(reqs, f1.requires)
+    for (p,f) in fix
+        merge_requires!(reqs, f.requires)
+        for (rp,rvs) in f.requires
+            bktrcp = get!(bktrc, rp) do; ResolveBacktraceItem() end
+            push!(bktrcp, p=>bktrc[p], rvs)
+        end
     end
     for (p,f) in fix
         delete!(reqs, p)
     end
-    reqs
+    reqs, bktrc
 end
 
 function dependencies(avail::Dict, fix::Dict = Dict{String,Fixed}("julia"=>Fixed(VERSION)))
@@ -194,20 +207,82 @@ function check_requirements(reqs::Requires, deps::Dict{String,Dict{VersionNumber
 end
 
 # If there are explicitly required packages, dicards all versions outside
-# the allowed range (checking for impossible ranges while at it).
+# the allowed range.
+# It also propagates requirements: when all allowed versions of a required package
+# require some other package, this creates a new implicit requirement.
+# The propagation is tracked so that in case a contradiction is detected the error
+# message allows to determine the cause.
 # This is a pre-pruning step, so it also creates some structures which are later used by pruning
-function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}})
-    # Parse requirements and store allowed versions.
-    allowed = Dict{String,Dict{VersionNumber, Bool}}()
-    for (p,vs) in reqs
-        @assert !haskey(allowed, p)
-        allowed[p] = Dict{VersionNumber,Bool}()
-        allowedp = allowed[p]
-        for vn in keys(deps[p])
-            allowedp[vn] = vn in vs
+function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}}, bktrc::ResolveBacktrace)
+    allowed = Dict{String,Dict{VersionNumber,Bool}}()
+    staged = copy(reqs)
+    while !isempty(staged)
+        staged_next = Requires()
+        for (p,vs) in staged
+            # Parse requirements and store allowed versions.
+            depsp = deps[p]
+            if !haskey(allowed, p)
+                allowedp = Dict{VersionNumber,Bool}(vn=>true for vn in keys(depsp))
+                allowed[p] = allowedp
+                seen = false
+            else
+                allowedp = allowed[p]
+                oldallowedp = copy(allowedp)
+                seen = true
+            end
+            for vn in keys(depsp)
+                allowedp[vn] &= vn ∈ vs
+            end
+            @assert !isempty(allowedp)
+            if !any(values(allowedp))
+                err_msg = "Unsatisfiable requirements detected for package $p:\n"
+                err_msg *= string(bktrc[p])
+                err_msg *= """The intersection of the requirements is $(bktrc[p].versionset).
+                              None of the available versions can satisfy this requirement."""
+                throw(PkgError(err_msg))
+            end
+
+            # If we've seen this package already and nothing has changed since
+            # the last time, we stop here.
+            seen && allowedp == oldallowedp && continue
+
+            # Propagate requirements:
+            # if all allowed versions of a required package require some other package,
+            # then compute the union of the allowed versions for that other package, and
+            # treat that as a new requirement.
+            # Start by filtering out the non-allowed versions
+            fdepsp = Dict{VersionNumber,Available}(vn=>depsp[vn] for vn in keys(depsp) if allowedp[vn])
+            # Collect all required packages
+            isreq = Dict{String,Bool}(rp=>true for a in values(fdepsp) for rp in keys(a.requires))
+            # Compute whether a required package appears in all requirements
+            for a in values(fdepsp), rp in keys(isreq)
+                haskey(a.requires, rp) || (isreq[rp] = false)
+            end
+            staged_new = Set{String}()
+            for a in values(fdepsp)
+                for (rp,rvs) in a.requires
+                    # Skip packages that may not be required
+                    isreq[rp] || continue
+                    # Compute the union of the version sets
+                    snvs = get!(staged_next, rp, copy(rvs))
+                    union!(snvs, rvs)
+                    push!(staged_new, rp)
+                end
+            end
+            for rp in staged_new
+                srvs = staged_next[rp]
+                isreq[rp] || continue
+                bktrcp = get!(bktrc, rp) do; ResolveBacktraceItem(); end
+                push!(bktrcp, p=>bktrc[p], srvs)
+                if isa(bktrcp.versionset, VersionSet) && isempty(bktrcp.versionset)
+                    err_msg = "Unsatisfiable requirements detected for package $rp:\n"
+                    err_msg *= string(bktrcp)
+                    err_msg *= "The intersection of the requirements is empty."
+                    throw(PkgError(err_msg))
+                end
+            end
         end
-        @assert !isempty(allowedp)
-        @assert any(values(allowedp))
+        staged = staged_next
     end
 
     filtered_deps = Dict{String,Dict{VersionNumber,Available}}()
@@ -233,8 +308,8 @@ end
 #      dependency relation, they are both required or both not required)
 #   2) They have the same dependencies
 # Preliminarily calls filter_versions.
-function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}})
-    filtered_deps, allowed = filter_versions(reqs, deps)
+function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}}, bktrc::ResolveBacktrace)
+    filtered_deps, allowed = filter_versions(reqs, deps, bktrc)
 
     # To each version in each package, we associate a BitVector.
     # It is going to hold a pattern such that all versions with
@@ -385,7 +460,9 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
     return new_deps, eq_classes
 end
 prune_versions(deps::Dict{String,Dict{VersionNumber,Available}}) =
-    prune_versions(Dict{String,VersionSet}(), deps)
+    prune_versions(Dict{String,VersionSet}(), deps, ResolveBacktrace())
+prune_versions(deps::Dict{String,Dict{VersionNumber,Available}}, bktrc::ResolveBacktrace) =
+    prune_versions(Dict{String,VersionSet}(), deps, bktrc)
 
 # Build a graph restricted to a subset of the packages
 function subdeps(deps::Dict{String,Dict{VersionNumber,Available}}, pkgs::Set{String})
@@ -458,8 +535,16 @@ function filter_dependencies(reqs::Requires, deps::Dict{String,Dict{VersionNumbe
 end
 
 function prune_dependencies(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}})
+    bktrc = ResolveBacktrace()
+    for (p,vs) in reqs
+        bktrc[p] = ResolveBacktraceItem(:required, vs)
+    end
+    return prune_dependencies(reqs, deps, bktrc)
+end
+
+function prune_dependencies(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}}, bktrc::ResolveBacktrace)
     deps = dependencies_subset(deps, Set{String}(keys(reqs)))
-    deps, _ = prune_versions(reqs, deps)
+    deps, _ = prune_versions(reqs, deps, bktrc)
 
     return deps
 end

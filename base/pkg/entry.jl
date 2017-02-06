@@ -473,7 +473,7 @@ function resolve(
     upkgs :: Set{String} = Set{String}()
 )
     orig_reqs = reqs
-    reqs = Query.requirements(reqs,fixed,avail)
+    reqs, bktrc = Query.requirements(reqs,fixed,avail)
     deps, conflicts = Query.dependencies(avail,fixed)
 
     for pkg in keys(reqs)
@@ -490,7 +490,7 @@ function resolve(
 
     Query.check_requirements(reqs,deps,fixed)
 
-    deps = Query.prune_dependencies(reqs,deps)
+    deps = Query.prune_dependencies(reqs,deps,bktrc)
     want = Resolve.resolve(reqs,deps)
 
     if !isempty(upkgs)
