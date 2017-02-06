@@ -39,7 +39,7 @@ end
 
 # An internal function that takes a pure function `f` and maps across two BitArrays
 # allowing the lengths to be different and altering b1 with the result
-function _matched_map!{F}(f::F, b1::BitArray, b2::BitArray)
+function _matched_map!(f, b1::BitArray, b2::BitArray)
     l1, l2 = length(b1), length(b2)
     if l1 == l2
         map!(f, b1, b1, b2)
