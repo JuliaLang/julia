@@ -122,7 +122,7 @@ SHA384_CTX = SHA2_384_CTX
 SHA512_CTX = SHA2_512_CTX
 
 # SHA1 is special; he needs extra workspace
-SHA1_CTX() = SHA1_CTX(copy(SHA1_initial_hash_value), 0, zeros(UInt8, blocklen(SHA1_CTX)), Array(UInt32, 80))
+SHA1_CTX() = SHA1_CTX(copy(SHA1_initial_hash_value), 0, zeros(UInt8, blocklen(SHA1_CTX)), Vector{UInt32}(80))
 
 
 # Copy functions
