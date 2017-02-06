@@ -52,7 +52,7 @@ function edit(path::AbstractString, line::Integer=0)
     elseif startswith(name, "notepad++")
         cmd = line != 0 ? `$command $path -n$line` : `$command $path`
     elseif is_windows() && (name == "start" || name == "open")
-        cmd = `cmd /c start /b $path`
+        cmd = `explorer $path`
         line_unsupported = true
     elseif is_apple() && (name == "start" || name == "open")
         cmd = `open -t $path`
