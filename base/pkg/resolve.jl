@@ -92,7 +92,18 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
         end
 
         sub_reqs = Dict{String,VersionSet}(p=>VersionSet([vn, nvn]))
-        sub_deps = Query.prune_dependencies(sub_reqs, deps)
+        local sub_deps::Dict{String,Dict{VersionNumber,Available}}
+        try
+            sub_deps = Query.prune_dependencies(sub_reqs, deps)
+        catch err
+            isa(err, PkgError) || rethrow(err)
+            ## info("ERROR MESSAGE:\n" * err.msg)
+            for vneq in eq_classes[p][vn]
+                push!(problematic, (p, vneq, ""))
+            end
+            i += 1
+            continue
+        end
         interface = Interface(sub_reqs, sub_deps)
 
         red_pkgs = interface.pkgs
