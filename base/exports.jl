@@ -382,6 +382,7 @@ export
     numerator,
     num2hex,
     one,
+    oneunit,
     powermod,
     prevfloat,
     prevpow,
