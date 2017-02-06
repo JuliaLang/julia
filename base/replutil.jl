@@ -588,9 +588,9 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
     end
 end
 
-function show_trace_entry(io, frame, n; prefix = " in ")
-    print(io, "\n")
-    show(io, frame, full_path=true; prefix = prefix)
+function show_trace_entry(io, frame, n; prefix = "")
+    print(io, "\n", prefix)
+    show(io, frame, full_path=true)
     n > 1 && print(io, " (repeats ", n, " times)")
 end
 

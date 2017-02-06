@@ -381,21 +381,21 @@ let err_str,
     @test stringmime("text/plain", Core.arraysize) == "arraysize (built-in function)"
 
     err_str = @except_stackframe Symbol() ErrorException
-    @test err_str == " in Symbol() at $sn:$(method_defs_lineno + 0)"
+    @test err_str == "Symbol() at $sn:$(method_defs_lineno + 0)"
     err_str = @except_stackframe :a() ErrorException
-    @test err_str == " in (::Symbol)() at $sn:$(method_defs_lineno + 1)"
+    @test err_str == "(::Symbol)() at $sn:$(method_defs_lineno + 1)"
     err_str = @except_stackframe EightBitType() ErrorException
-    @test err_str == " in $(curmod_prefix)EightBitType() at $sn:$(method_defs_lineno + 2)"
+    @test err_str == "$(curmod_prefix)EightBitType() at $sn:$(method_defs_lineno + 2)"
     err_str = @except_stackframe i() ErrorException
-    @test err_str == " in (::$(curmod_prefix)EightBitType)() at $sn:$(method_defs_lineno + 3)"
+    @test err_str == "(::$(curmod_prefix)EightBitType)() at $sn:$(method_defs_lineno + 3)"
     err_str = @except_stackframe EightBitTypeT() ErrorException
-    @test err_str == " in $(curmod_prefix)EightBitTypeT() at $sn:$(method_defs_lineno + 4)"
+    @test err_str == "$(curmod_prefix)EightBitTypeT() at $sn:$(method_defs_lineno + 4)"
     err_str = @except_stackframe EightBitTypeT{Int32}() ErrorException
-    @test err_str == " in $(curmod_prefix)EightBitTypeT{Int32}() at $sn:$(method_defs_lineno + 5)"
+    @test err_str == "$(curmod_prefix)EightBitTypeT{Int32}() at $sn:$(method_defs_lineno + 5)"
     err_str = @except_stackframe j() ErrorException
-    @test err_str == " in (::$(curmod_prefix)EightBitTypeT{Int32})() at $sn:$(method_defs_lineno + 6)"
+    @test err_str == "(::$(curmod_prefix)EightBitTypeT{Int32})() at $sn:$(method_defs_lineno + 6)"
     err_str = @except_stackframe FunctionLike()() ErrorException
-    @test err_str == " in (::$(curmod_prefix)FunctionLike)() at $sn:$(method_defs_lineno + 7)"
+    @test err_str == "(::$(curmod_prefix)FunctionLike)() at $sn:$(method_defs_lineno + 7)"
 end
 
 # Issue #13032
