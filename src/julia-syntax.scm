@@ -809,6 +809,13 @@
         (ctors-min-initialized (car expr))
         (ctors-min-initialized (cdr expr)))))
 
+(define (sequence- lst n)
+  (if (zero? n)
+    lst
+    (append (sequence- lst (- n 1))(list n))))
+
+(define (sequence n) (sequence- () n))
+
 (define (struct-def-expr- name params bounds super fields0 mut)
   (receive
    (fields defs) (separate (lambda (x) (or (symbol? x) (decl? x)))
@@ -817,7 +824,7 @@
           (locs        (if (and (pair? fields0) (pair? (car fields0)) (eq? (caar fields0) 'line))
                            (list (car fields0))
                            '()))
-          (field-names (map decl-var fields))
+          (field-names (map decl-var-or-invent fields (sequence (length fields))))
           (field-types (map decl-type fields))
           (defs2 (if (null? defs)
                      (default-inner-ctors name field-names field-types params bounds locs)

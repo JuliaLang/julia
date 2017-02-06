@@ -195,8 +195,13 @@
 (define (decl-var v)
   (if (decl? v) (cadr v) v))
 
+;; like above, except create a "hidden" name of the form #i
+(define (decl-var-or-invent v i)
+  (if (decl? v) (if (= (length v) 3) (cadr v) (symbol (string "#" i))) v))
+
+;; allows for the possibilities of x::T or ::T => T
 (define (decl-type v)
-  (if (decl? v) (caddr v) 'Any))
+  (if (decl? v) (if (= (length v) 3) (caddr v) (cadr v)) 'Any))
 
 (define (sym-dot? e)
   (and (length= e 3) (eq? (car e) '|.|)
