@@ -42,7 +42,7 @@ for (f1, f2) in ((:\, :A_ldiv_B!),
                  (:Ac_ldiv_B, :Ac_ldiv_B!))
     @eval begin
         function $f1(F::Factorization, B::AbstractVecOrMat)
-            TFB = typeof(one(eltype(F)) / one(eltype(B)))
+            TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
             BB = similar(B, TFB, size(B))
             copy!(BB, B)
             $f2(convert(Factorization{TFB}, F), BB)

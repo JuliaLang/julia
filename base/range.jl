@@ -112,13 +112,13 @@ function steprange_last_empty{T<:Integer}(start::T, step, stop)
     # start - step, which leads to a range that looks very large instead
     # of empty.
     if step > zero(step)
-        last = start - one(stop-start)
+        last = start - oneunit(stop-start)
     else
-        last = start + one(stop-start)
+        last = start + oneunit(stop-start)
     end
     last
 end
-# For types where x+one(x) may not be well-defined
+# For types where x+oneunit(x) may not be well-defined
 steprange_last_empty(start, step, stop) = start - step
 
 steprem(start,stop,step) = (stop-start) % step
@@ -134,10 +134,10 @@ UnitRange(start::T, stop::T) where T<:Real = UnitRange{T}(start, stop)
 
 unitrange_last(::Bool, stop::Bool) = stop
 unitrange_last{T<:Integer}(start::T, stop::T) =
-    ifelse(stop >= start, stop, convert(T,start-one(stop-start)))
+    ifelse(stop >= start, stop, convert(T,start-oneunit(stop-start)))
 unitrange_last{T}(start::T, stop::T) =
     ifelse(stop >= start, convert(T,start+floor(stop-start)),
-                          convert(T,start-one(stop-start)))
+                          convert(T,start-oneunit(stop-start)))
 
 """
     Base.OneTo(n)
@@ -388,7 +388,7 @@ let smallint = (Int === Int64 ?
 end
 
 first{T}(r::OrdinalRange{T}) = convert(T, r.start)
-first{T}(r::OneTo{T}) = one(T)
+first{T}(r::OneTo{T}) = oneunit(T)
 first(r::StepRangeLen) = unsafe_getindex(r, 1)
 first(r::LinSpace) = r.start
 
@@ -425,11 +425,11 @@ start{T}(r::StepRangeLen{T}) = (unsafe_getindex(r, 1), 1)
 next{T}(r::StepRangeLen{T}, s) = s[1], (T(s[1]+r.step), s[2]+1)
 done{T}(r::StepRangeLen{T}, s) = s[2] > length(r)
 
-start{T}(r::UnitRange{T}) = oftype(r.start + one(T), r.start)
-next{T}(r::AbstractUnitRange{T}, i) = (convert(T, i), i + one(T))
-done{T}(r::AbstractUnitRange{T}, i) = i == oftype(i, r.stop) + one(T)
+start{T}(r::UnitRange{T}) = oftype(r.start + oneunit(T), r.start)
+next{T}(r::AbstractUnitRange{T}, i) = (convert(T, i), i + oneunit(T))
+done{T}(r::AbstractUnitRange{T}, i) = i == oftype(i, r.stop) + oneunit(T)
 
-start{T}(r::OneTo{T}) = one(T)
+start{T}(r::OneTo{T}) = oneunit(T)
 
 # some special cases to favor default Int type to avoid overflow
 let smallint = (Int === Int64 ?

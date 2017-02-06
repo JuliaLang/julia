@@ -237,10 +237,10 @@ end
 `m`-by-`n` identity matrix.
 The default element type is `Float64`.
 """
-function eye(T::Type, m::Integer, n::Integer)
+function eye{T}(::Type{T}, m::Integer, n::Integer)
     a = zeros(T,m,n)
     for i = 1:min(m,n)
-        a[i,i] = one(T)
+        a[i,i] = oneunit(T)
     end
     return a
 end
@@ -251,7 +251,7 @@ end
 `m`-by-`n` identity matrix.
 """
 eye(m::Integer, n::Integer) = eye(Float64, m, n)
-eye(T::Type, n::Integer) = eye(T, n, n)
+eye{T}(::Type{T}, n::Integer) = eye(T, n, n)
 """
     eye([T::Type=Float64,] n::Integer)
 
@@ -281,13 +281,16 @@ julia> eye(A)
 
 Note the difference from [`ones`](@ref).
 """
-eye{T}(x::AbstractMatrix{T}) = eye(T, size(x, 1), size(x, 2))
+eye{T}(x::AbstractMatrix{T}) = eye(typeof(one(T)), size(x, 1), size(x, 2))
 
-function one{T}(x::AbstractMatrix{T})
+function _one{T}(unit::T, x::AbstractMatrix)
     m,n = size(x)
     m==n || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
     eye(T, m)
 end
+
+one{T}(x::AbstractMatrix{T}) = _one(one(T), x)
+oneunit{T}(x::AbstractMatrix{T}) = _one(oneunit(T), x)
 
 ## Conversions ##
 

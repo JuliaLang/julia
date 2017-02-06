@@ -445,7 +445,7 @@ function sort!(v::AbstractVector;
         if n > 1
             min, max = extrema(v)
             (diff, o1) = sub_with_overflow(max, min)
-            (rangelen, o2) = add_with_overflow(diff, one(diff))
+            (rangelen, o2) = add_with_overflow(diff, oneunit(diff))
             if !o1 && !o2 && rangelen < div(n,2)
                 return sort_int_range!(v, rangelen, min)
             end
@@ -534,7 +534,7 @@ function sortperm(v::AbstractVector;
         if n > 1
             min, max = extrema(v)
             (diff, o1) = sub_with_overflow(max, min)
-            (rangelen, o2) = add_with_overflow(diff, one(diff))
+            (rangelen, o2) = add_with_overflow(diff, oneunit(diff))
             if !o1 && !o2 && rangelen < div(n,2)
                 return sortperm_int_range(v, rangelen, min)
             end
@@ -676,7 +676,7 @@ function slicetypeof{T,N}(A::AbstractArray{T,N}, i1, i2)
     SubArray{T,1,typeof(A),typeof(I),fast}
 end
 slice_dummy(S::Slice) = S
-slice_dummy{T}(::AbstractUnitRange{T}) = one(T)
+slice_dummy{T}(::AbstractUnitRange{T}) = oneunit(T)
 
 ## fast clever sorting for floats ##
 

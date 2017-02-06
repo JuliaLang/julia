@@ -93,7 +93,7 @@ iszero(x::Bool) = !x
 ^(x::Integer, y::Bool) = ifelse(y, x, one(x))
 
 function +{T<:AbstractFloat}(x::Bool, y::T)::promote_type(Bool,T)
-    return ifelse(x, one(y) + y, y)
+    return ifelse(x, oneunit(y) + y, y)
 end
 +(y::AbstractFloat, x::Bool) = x + y
 

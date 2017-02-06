@@ -1334,13 +1334,13 @@ function LinAlg.axpy!(a::Number, x::AbstractSparseVector, y::StridedVector)
     nzval = nonzeros(x)
     m = length(nzind)
 
-    if a == one(a)
+    if a == oneunit(a)
         for i = 1:m
             @inbounds ii = nzind[i]
             @inbounds v = nzval[i]
             y[ii] += v
         end
-    elseif a == -one(a)
+    elseif a == -oneunit(a)
         for i = 1:m
             @inbounds ii = nzind[i]
             @inbounds v = nzval[i]

@@ -8,7 +8,7 @@ import Base: A_mul_Bt, At_ldiv_Bt, A_rdiv_Bc, At_ldiv_B, Ac_mul_Bc, A_mul_Bc, Ac
 import Base: USE_BLAS64, abs, big, broadcast, ceil, conj, convert, copy, copy!,
     ctranspose, eltype, eye, findmax, findmin, fill!, floor, full, getindex,
     hcat, imag, indices, inv, isapprox, kron, length, linearindexing, map,
-    ndims, parent, power_by_squaring, print_matrix, promote_rule, real, round,
+    ndims, oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round,
     setindex!, show, similar, size, transpose, trunc, typed_hcat
 using Base: promote_op, _length, iszero, @pure, @propagate_inbounds, LinearFast,
     reduce, hvcat_fill, typed_vcat, promote_typeof

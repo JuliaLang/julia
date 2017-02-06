@@ -109,7 +109,7 @@ julia> gcdx(240, 46)
 """
 function gcdx{T<:Integer}(a::T, b::T)
     # a0, b0 = a, b
-    s0, s1 = one(T), zero(T)
+    s0, s1 = oneunit(T), zero(T)
     t0, t1 = s1, s0
     # The loop invariant is: s0*a0 + t0*b0 == a
     while b != 0
@@ -242,7 +242,7 @@ julia> nextpow2(17)
 32
 ```
 """
-nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-one(x)))
+nextpow2(x::Unsigned) = oneunit(x)<<((sizeof(x)<<3)-leading_zeros(x-oneunit(x)))
 nextpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
 
 """

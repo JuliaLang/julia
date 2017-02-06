@@ -564,7 +564,8 @@ optimize the body of the loop. There are several possible fixes:
 
   * Initialize `x` with `x = 1.0`
   * Declare the type of `x`: `x::Float64 = 1`
-  * Use an explicit conversion: `x = one(T)`
+  * Use an explicit conversion: `x = oneunit(T)`
+  * Initialize with the first loop iteration, to `x = 1/bar()`, then loop `for i = 2:10`
 
 ## [Separate kernel functions (aka, function barriers)](@id kernal-functions)
 

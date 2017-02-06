@@ -48,7 +48,7 @@ julia> F[:Q] * F[:H] * F[:Q]'
 ```
 """
 function hessfact{T}(A::StridedMatrix{T})
-    S = promote_type(Float32, typeof(one(T)/norm(one(T))))
+    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
     return hessfact!(copy_oftype(A, S))
 end
 

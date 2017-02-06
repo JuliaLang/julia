@@ -165,7 +165,7 @@ tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
 function gradient(F::AbstractVector, h::Vector)
     n = length(F)
-    T = typeof(one(eltype(F))/one(eltype(h)))
+    T = typeof(oneunit(eltype(F))/oneunit(eltype(h)))
     g = similar(F, T)
     if n == 1
         g[1] = zero(T)
