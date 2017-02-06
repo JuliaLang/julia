@@ -207,9 +207,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
     end
 end
 
-function show(io::IO, frame::StackFrame; full_path::Bool=false,
-              prefix = " in ")
-    print(io, prefix)
+function show(io::IO, frame::StackFrame; full_path::Bool=false)
     show_spec_linfo(io, frame)
     if frame.file !== empty_sym
         file_info = full_path ? string(frame.file) : basename(string(frame.file))

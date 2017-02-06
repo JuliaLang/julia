@@ -10,10 +10,10 @@ The primary function used to obtain a stack trace is [`stacktrace()`](@ref):
 ```julia
 julia> stacktrace()
 4-element Array{StackFrame,1}:
-  in eval(::Module, ::Any) at boot.jl:236
-  in eval_user_input(::Any, ::Base.REPL.REPLBackend) at REPL.jl:66
-  in macro expansion at REPL.jl:97 [inlined]
-  in (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:73
+ eval(::Module, ::Any) at boot.jl:236
+ eval_user_input(::Any, ::Base.REPL.REPLBackend) at REPL.jl:66
+ macro expansion at REPL.jl:97 [inlined]
+ (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:73
 ```
 
 Calling [`stacktrace()`](@ref) returns a vector of [`StackFrame`](@ref) s. For ease of use, the
@@ -26,8 +26,8 @@ example (generic function with 1 method)
 
 julia> example()
 5-element Array{StackFrame,1}:
-  in example() at REPL[0]:1
-  in eval(::Module, ::Any) at boot.jl:236
+ example() at REPL[1]:1
+ eval(::Module, ::Any) at boot.jl:236
 [...]
 
 julia> @noinline child() = stacktrace()
@@ -41,9 +41,9 @@ grandparent (generic function with 1 method)
 
 julia> grandparent()
 7-element Array{StackFrame,1}:
-  in child() at REPL[2]:1
-  in parent() at REPL[3]:1
-  in grandparent() at REPL[4]:1
+ child() at REPL[3]:1
+ parent() at REPL[4]:1
+ grandparent() at REPL[5]:1
 [...]
 ```
 
@@ -57,11 +57,11 @@ example (generic function with 1 method)
 
 julia> example()
 5-element Array{StackFrame,1}:
-  in example() at REPL[1]:1
-  in eval(::Module, ::Any) at boot.jl:236
-  in eval_user_input(::Any, ::Base.REPL.REPLBackend) at REPL.jl:66
-  in macro expansion at REPL.jl:97 [inlined]
-  in (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:73
+ example() at REPL[1]:1
+ eval(::Module, ::Any) at boot.jl:236
+ eval_user_input(::Any, ::Base.REPL.REPLBackend) at REPL.jl:66
+ macro expansion at REPL.jl:97 [inlined]
+ (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:73
 ```
 
 ## Extracting useful information
@@ -73,7 +73,7 @@ returned by [`backtrace()`](@ref):
 
 ```julia
 julia> top_frame = stacktrace()[1]
- in eval(::Module, ::Any) at boot.jl:236
+eval(::Module, ::Any) at boot.jl:236
 
 julia> top_frame.func
 :eval
@@ -120,8 +120,8 @@ example (generic function with 1 method)
 
 julia> example()
 5-element Array{StackFrame,1}:
-  in example() at REPL[2]:4
-  in eval(::Module, ::Any) at boot.jl:236
+ example() at REPL[2]:4
+ eval(::Module, ::Any) at boot.jl:236
 [...]
 ```
 
@@ -148,8 +148,8 @@ example (generic function with 1 method)
 
 julia> example()
 6-element Array{StackFrame,1}:
-  in bad_function() at REPL[1]:1
-  in example() at REPL[2]:2
+ bad_function() at REPL[1]:1
+ example() at REPL[2]:2
 [...]
 ```
 
@@ -175,9 +175,9 @@ grandparent (generic function with 1 method)
 julia> grandparent()
 ERROR: Whoops!
 7-element Array{StackFrame,1}:
-  in child() at REPL[1]:1
-  in parent() at REPL[2]:1
-  in grandparent() at REPL[3]:3
+ child() at REPL[1]:1
+ parent() at REPL[2]:1
+ grandparent() at REPL[3]:3
 [...]
 ```
 
@@ -213,11 +213,11 @@ julia> trace = backtrace()
 
 julia> stacktrace(trace)
 5-element Array{StackFrame,1}:
-  in backtrace() at error.jl:46
-  in eval(::Module, ::Any) at boot.jl:236
-  in eval_user_input(::Any, ::Base.REPL.REPLBackend) at REPL.jl:66
-  in macro expansion at REPL.jl:97 [inlined]
-  in (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:73
+ backtrace() at error.jl:46
+ eval(::Module, ::Any) at boot.jl:236
+ eval_user_input(::Any, ::Base.REPL.REPLBackend) at REPL.jl:66
+ macro expansion at REPL.jl:97 [inlined]
+ (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:73
 ```
 
 Notice that the vector returned by [`backtrace()`](@ref) had 21 pointers, while the vector returned
@@ -227,33 +227,34 @@ you can do it like this:
 
 ```julia
 julia> stacktrace(trace, true)
-26-element Array{StackFrame,1}:
-  in jl_backtrace_from_here at stackwalk.c:103
-  in backtrace() at error.jl:46
-  in backtrace() at sys.so:?
-  in jl_call_method_internal at julia_internal.h:248 [inlined]
-  in jl_apply_generic at gf.c:2217
-  in do_call at interpreter.c:75
-  in eval at interpreter.c:215
-  in eval_body at interpreter.c:519
-  in jl_interpret_toplevel_thunk at interpreter.c:664
-  in jl_toplevel_eval_flex at toplevel.c:592
-  in jl_toplevel_eval_in at builtins.c:614
-  in eval(::Module, ::Any) at boot.jl:236
-  in eval(::Module, ::Any) at sys.so:?
-  in jl_call_method_internal at julia_internal.h:248 [inlined]
-  in jl_apply_generic at gf.c:2217
-  in eval_user_input(::Any, ::Base.REPL.REPLBackend) at REPL.jl:66
-  in ip:0x7f0ded345a86
-  in jl_call_method_internal at julia_internal.h:248 [inlined]
-  in jl_apply_generic at gf.c:2217
-  in macro expansion at REPL.jl:97 [inlined]
-  in (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:73
-  in ip:0x7f0ded34331f
-  in jl_call_method_internal at julia_internal.h:248 [inlined]
-  in jl_apply_generic at gf.c:2217
-  in jl_apply at julia.h:1411 [inlined]
-  in start_task at task.c:261
+27-element Array{StackFrame,1}:
+ jl_backtrace_from_here at stackwalk.c:103
+ backtrace() at error.jl:46
+ backtrace() at sys.so:?
+ jl_call_method_internal at julia_internal.h:248 [inlined]
+ jl_apply_generic at gf.c:2215
+ do_call at interpreter.c:75
+ eval at interpreter.c:215
+ eval_body at interpreter.c:519
+ jl_interpret_toplevel_thunk at interpreter.c:664
+ jl_toplevel_eval_flex at toplevel.c:592
+ jl_toplevel_eval_in at builtins.c:614
+ eval(::Module, ::Any) at boot.jl:236
+ eval(::Module, ::Any) at sys.so:?
+ jl_call_method_internal at julia_internal.h:248 [inlined]
+ jl_apply_generic at gf.c:2215
+ eval_user_input(::Any, ::Base.REPL.REPLBackend) at REPL.jl:66
+ ip:0x7f1c707f1846
+ jl_call_method_internal at julia_internal.h:248 [inlined]
+ jl_apply_generic at gf.c:2215
+ macro expansion at REPL.jl:97 [inlined]
+ (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:73
+ ip:0x7f1c707ea1ef
+ jl_call_method_internal at julia_internal.h:248 [inlined]
+ jl_apply_generic at gf.c:2215
+ jl_apply at julia.h:1411 [inlined]
+ start_task at task.c:261
+ ip:0xffffffffffffffff
 ```
 
 Individual pointers returned by [`backtrace()`](@ref) can be translated into [`StackFrame`](@ref)
@@ -264,7 +265,7 @@ julia> pointer = backtrace()[1];
 
 julia> frame = StackTraces.lookup(pointer)
 1-element Array{StackFrame,1}:
-  in jl_backtrace_from_here at stackwalk.c:103
+ jl_backtrace_from_here at stackwalk.c:103
 
 julia> println("The top frame is from $(frame[1].func)!")
 The top frame is from jl_backtrace_from_here!
