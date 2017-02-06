@@ -2,7 +2,8 @@
 
 module Types
 
-export VersionInterval, VersionSet, Requires, Available, Fixed, merge_requires!, satisfies
+export VersionInterval, VersionSet, Requires, Available, Fixed, merge_requires!, satisfies,
+       ResolveBacktraceItem, ResolveBacktrace
 import Base: show, isempty, in, intersect, union!, union, ==, hash, copy, deepcopy_internal, push!
 
 immutable VersionInterval
@@ -148,5 +149,96 @@ show(io::IO, f::Fixed) = isempty(f.requires) ?
 # TODO: Available & Fixed are almost the same – merge them?
 # Free could include the same information too, it just isn't
 # required by anything that processes these things.
+
+
+# This is used to keep track of dependency relations when propagating
+# requirements, so as to emit useful information in case of unsatisfiable
+# conditions.
+# The `versionset` field keeps track of the remaining allowed versions,
+# intersecting all requirements.
+# The `why` field is a Vector which keeps track of the requirements. Each
+# entry is a Tuple of two elements:
+# 1) the first element is the version requirement (can be a single VersionNumber
+#    or a VersionSet.
+# 2) the second element can be either :fixed (for requirements induced by
+#    fixed packages), :required (for requirements induced by explicitly
+#    required packages), or a Pair p=>backtrace_item (for requirements induced
+#    indirectly, where `p` is the package name and `backtrace_item` is
+#    another ResolveBacktraceItem.
+type ResolveBacktraceItem
+    versionset::Union{VersionNumber,VersionSet}
+    why::Vector
+    ResolveBacktraceItem() = new(VersionSet(), Any[])
+    ResolveBacktraceItem(reason, versionset::VersionSet) = new(versionset, Any[(versionset,reason)])
+    ResolveBacktraceItem(reason, version::VersionNumber) = new(version, Any[(version,reason)])
+end
+
+const empty_versionset = VersionSet([v"0.0",v"0.0"])
+
+function push!(ritem::ResolveBacktraceItem, reason, versionset::VersionSet)
+    if isa(ritem.versionset, VersionSet)
+        ritem.versionset = ritem.versionset ∩ versionset
+    elseif ritem.versionset ∉ versionset
+        ritem.versionset = empty_versionset
+    end
+    push!(ritem.why, (versionset,reason))
+end
+
+function push!(ritem::ResolveBacktraceItem, reason, version::VersionNumber)
+    if isa(ritem.versionset, VersionSet)
+        if version ∈ ritem.versionset
+            ritem.versionset = version
+        else
+            ritem.versionset = empty_versionset
+        end
+    elseif ritem.versionset ≠ version
+        ritem.versionset = empty_versionset
+    end
+    push!(ritem.why, (version,reason))
+end
+
+
+show(io::IO, ritem::ResolveBacktraceItem) = _show(io, ritem, "", Set{ResolveBacktraceItem}([ritem]))
+
+function _show(io::IO, ritem::ResolveBacktraceItem, indent::String, seen::Set{ResolveBacktraceItem})
+    l = length(ritem.why)
+    for (i,(vs,w)) in enumerate(ritem.why)
+        print(io, indent, (i==l ? '└' : '├'), '─')
+        if w ≡ :fixed
+            @assert isa(vs, VersionNumber)
+            println(io, "version $vs set by fixed requirement (package is checked out, dirty or pinned)")
+        elseif w ≡ :required
+            @assert isa(vs, VersionSet)
+            println(io, "version range $vs set by an explicit requirement")
+        else
+            @assert isa(w, Pair)
+            @assert isa(w[1], AbstractString)
+            @assert isa(w[2], ResolveBacktraceItem)
+            if isa(vs, VersionNumber)
+                print(io, "version $vs ")
+            else
+                print(io, "version range $vs ")
+            end
+            print(io, "required by package $(w[1]), ")
+            if isa(w[2].versionset, VersionSet)
+                if !isempty(w[2].versionset)
+                    println(io, "whose allowed version range is $(w[2].versionset):")
+                else
+                    println(io, "whose allowed version range is empty:")
+                end
+            else
+                println(io, "whose only allowed version is $(w[2].versionset):")
+            end
+            if w[2] ∈ seen
+                println(io, (i==l ? "  " : "│ ") * indent, "└─[see above for $(w[1]) backtrace]")
+                continue
+            end
+            push!(seen, w[2])
+            _show(io, w[2], (i==l ? "  " : "│ ") * indent, seen)
+        end
+    end
+end
+
+typealias ResolveBacktrace Dict{AbstractString,ResolveBacktraceItem}
 
 end # module
