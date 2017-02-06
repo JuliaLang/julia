@@ -64,7 +64,7 @@ function edit(path::AbstractString, line::Integer=0)
     end
 
     if is_windows() && name == "open"
-        ret = ccall((:ShellExecuteW,"shell32"), Int,
+        ret = ccall((:ShellExecuteW,"shell32"), stdcall, Int,
                     (Ptr{Void}, Cwstring, Cwstring, Ptr{Void}, Ptr{Void}, Cint),
                     C_NULL, "open", path, C_NULL, C_NULL, 10)
         systemerror(:edit, ret ≤ 32)
