@@ -607,7 +607,7 @@ function show_backtrace(io::IO, t::Vector)
     n_frames != 0 && print(io, "\nStacktrace:")
     process_entry = (last_frame, n) -> begin
         frame_counter += 1
-        show_trace_entry(io, last_frame, n, prefix = string(" [", frame_counter, "] "))
+        show_trace_entry(IOContext(io, :backtrace => true), last_frame, n, prefix = string(" [", frame_counter, "] "))
         push!(LAST_BACKTRACE_LINE_INFOS, (string(last_frame.file), last_frame.line))
     end
     process_backtrace(process_entry, t)
