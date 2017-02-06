@@ -1022,7 +1022,7 @@ function show_lambda_types(io::IO, li::Core.MethodInstance)
     # print a method signature tuple for a lambda definition
     local sig
     returned_from_do = false
-    Base.with_output_color(have_color ? stackframe_function_color() : :nothing, io) do io
+    Base.with_output_color(have_color && get(io, :backtrace, false) ? stackframe_function_color() : :nothing, io) do io
         if li.specTypes === Tuple
             print(io, li.def.name, "(...)")
             returned_from_do = true
