@@ -5,6 +5,11 @@
     NTuple{N, T}
 
 A compact way of representing the type for a tuple of length `N` where all elements are of type `T`.
+
+```jldoctest
+julia> isa((1, 2, 3, 4, 5, 6), NTuple{6, Int})
+true
+```
 """
 NTuple
 
@@ -83,6 +88,11 @@ end
 
 Create a tuple of length `n`, computing each element as `f(i)`,
 where `i` is the index of the element.
+
+```jldoctest
+julia> ntuple(i -> 2*i, 4)
+(2, 4, 6, 8)
+```
 """
 ntuple(f::Function, n::Integer) =
     n <= 0 ? () :

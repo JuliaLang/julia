@@ -23,6 +23,14 @@ end
     //(num, den)
 
 Divide two integers or rational numbers, giving a `Rational` result.
+
+```jldoctest
+julia> 3 // 5
+3//5
+
+julia> (3 // 5) // (2 // 1)
+3//10
+```
 """
 //(n::Integer,  d::Integer ) = Rational(n,d)
 
@@ -177,6 +185,14 @@ rationalize(x::AbstractFloat; kvs...) = rationalize(Int, x; kvs...)
     numerator(x)
 
 Numerator of the rational representation of `x`.
+
+```jldoctest
+julia> numerator(2//3)
+2
+
+julia> numerator(4)
+4
+```
 """
 numerator(x::Integer) = x
 numerator(x::Rational) = x.num
@@ -185,6 +201,14 @@ numerator(x::Rational) = x.num
     denominator(x)
 
 Denominator of the rational representation of `x`.
+
+```jldoctest
+julia> denominator(2//3)
+3
+
+julia> denominator(4)
+1
+```
 """
 denominator(x::Integer) = one(x)
 denominator(x::Rational) = x.den

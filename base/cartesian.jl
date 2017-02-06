@@ -72,8 +72,13 @@ end
 """
     @nref N A indexexpr
 
-Generate expressions like `A[i_1,i_2,...]`. `indexexpr` can either be an iteration-symbol
+Generate expressions like `A[i_1, i_2, ...]`. `indexexpr` can either be an iteration-symbol
 prefix, or an anonymous-function expression.
+
+```jldoctest
+julia> @macroexpand Base.Cartesian.@nref 3 A i
+:(A[i_1, i_2, i_3])
+```
 """
 macro nref(N, A, sym)
     _nref(N, A, sym)
@@ -114,6 +119,16 @@ end
     @nexprs N expr
 
 Generate `N` expressions. `expr` should be an anonymous-function expression.
+
+```jldoctest
+julia> @macroexpand Base.Cartesian.@nexprs 4 i -> y[i] = A[i+j]
+quote
+    y[1] = A[1 + j]
+    y[2] = A[2 + j]
+    y[3] = A[3 + j]
+    y[4] = A[4 + j]
+end
+```
 """
 macro nexprs(N, ex)
     _nexprs(N, ex)
