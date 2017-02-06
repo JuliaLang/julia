@@ -915,4 +915,74 @@ mktempdir() do dir
         end
     end
     =#
+
+    @testset "Hostname verification" begin
+        openssl_command = ""
+        if is_linux()
+            try
+                # OpenSSL needs to be on the path
+                openssl_command = strip(readstring(`which openssl`))
+            catch
+                warn("Skipping hostname verification tests (Are `which` and `openssl` installed?)")
+            end
+        end
+        if !isempty(openssl_command)
+            mktempdir() do root
+                hostname = replace(readchomp(`hostname`), r"\..*$", "")
+                key = joinpath(root, hostname * ".key")
+                cert = joinpath(root, hostname * ".crt")
+                pem = joinpath(root, hostname * ".pem")
+
+                # Generated a certificate which has the CN set correctly but no subjectAltName
+                run(pipeline(`openssl req -new -x509 -newkey rsa:2048 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$hostname"`, stderr=DevNull))
+                run(`openssl x509 -in $cert -out $pem -outform PEM`)
+
+                # Make a fake Julia package and minimal HTTPS server with our generated
+                # certificate. The minimal server can't actually serve a Git repository.
+                mkdir(joinpath(root, "Example.jl"))
+                pobj = cd(root) do
+                    spawn(`openssl s_server -key $key -cert $cert -WWW`)
+                end
+
+                errfile = joinpath(root, "error")
+                reponame = "https://$hostname:4433/Example.jl"
+                code = """
+                    dest = tempname()
+                    open("$errfile", "w+") do f
+                        try
+                            repo = LibGit2.clone("$reponame", dest)
+                        catch err
+                            serialize(f, err)
+                        finally
+                            isdir(dest) && rm(dest, recursive=true)
+                        end
+                    end
+                """
+
+                try
+                    # The generated certificate is normally invalid
+                    run(`$(Base.julia_cmd()) -e $code`)
+                    err = open(errfile, "r") do f
+                        deserialize(f)
+                    end
+                    @test err.code == LibGit2.Error.ECERTIFICATE
+
+                    rm(errfile)
+
+                    # Specify that Julia use onl the custom certificate. Note: we need to
+                    # spawn a new Julia process in order for this ENV variable to take effect.
+                    withenv("SSL_CERT_FILE" => pem) do
+                        run(`$(Base.julia_cmd()) -e $code`)
+                        err = open(errfile, "r") do f
+                            deserialize(f)
+                        end
+                        @test err.code == LibGit2.Error.ERROR
+                        @test err.msg == "Invalid Content-Type: text/plain"
+                    end
+                finally
+                    kill(pobj)
+                end
+            end
+        end
+    end
 end
