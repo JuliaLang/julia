@@ -111,9 +111,6 @@ type _FDWatcher
                 if !readable && !writable
                     throw(ArgumentError("must specify at least one of readable or writable to create a FDWatcher"))
                 end
-                if ccall(:jl_uv_unix_fd_is_watched, Int32, (Int32, Ptr{Void}, Ptr{Void}), fd.fd, C_NULL, eventloop()) == 1
-                    throw(ArgumentError("file descriptor $(fd.fd) is already being watched by libuv"))
-                end
                 fdnum = fd.fd + 1
                 if fdnum > length(FDWatchers)
                     old_len = length(FDWatchers)
@@ -123,6 +120,9 @@ type _FDWatcher
                     this = FDWatchers[fdnum]::_FDWatcher
                     this.refcount = (this.refcount[1] + Int(readable), this.refcount[2] + Int(writable))
                     return this
+                end
+                if ccall(:jl_uv_unix_fd_is_watched, Int32, (Int32, Ptr{Void}, Ptr{Void}), fd.fd, C_NULL, eventloop()) == 1
+                    throw(ArgumentError("file descriptor $(fd.fd) is already being watched by libuv"))
                 end
 
                 handle = Libc.malloc(_sizeof_uv_poll)
