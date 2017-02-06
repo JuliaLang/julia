@@ -280,9 +280,9 @@ let ex = :(a + b)
     ex.typ = Integer
     @test string(ex) == "(a + b)::Integer"
 end
-foo13825{T,N}(::Array{T,N}, ::Array, ::Vector) = nothing
+foo13825{T, N}(::Array{T,N}, ::Array, ::Vector) = nothing
 @test startswith(string(first(methods(foo13825))),
-                 "foo13825{T,N}(::Array{T,N}, ::Array, ::Array{T,1} where T)")
+                 "foo13825{T, N}(::Array{T,N}, ::Array, ::Array{T,1} where T)")
 
 type TLayout
     x::Int8
@@ -299,6 +299,10 @@ tlayout = TLayout(5,7,11)
 @test_throws BoundsError fieldtype(TLayout, 4)
 @test_throws BoundsError fieldname(TLayout, 4)
 @test_throws BoundsError fieldoffset(TLayout, 4)
+
+@test fieldtype(Tuple{Vararg{Int8}}, 1) === Int8
+@test fieldtype(Tuple{Vararg{Int8}}, 10) === Int8
+@test_throws BoundsError fieldtype(Tuple{Vararg{Int8}}, 0)
 
 @test fieldnames((1,2,3)) == fieldnames(NTuple{3, Int}) == [fieldname(NTuple{3, Int}, i) for i = 1:3] == [1, 2, 3]
 @test_throws BoundsError fieldname(NTuple{3, Int}, 0)
@@ -608,3 +612,37 @@ end
 @generated f18883() = nothing
 @test !isempty(sprint(io->code_llvm(io, f18883, Tuple{})))
 @test !isempty(sprint(io->code_native(io, f18883, Tuple{})))
+
+# PR #19964
+@test isempty(subtypes(Float64))
+
+# New reflection methods in 0.6
+immutable ReflectionExample{T<:AbstractFloat, N}
+    x::Tuple{T, N}
+end
+
+@test Base.isabstract(AbstractArray)
+@test !Base.isabstract(ReflectionExample)
+@test !Base.isabstract(Int)
+
+@test Base.parameter_upper_bound(ReflectionExample, 1) === AbstractFloat
+@test Base.parameter_upper_bound(ReflectionExample, 2) === Any
+@test Base.parameter_upper_bound(ReflectionExample{T, N} where T where N <: Real, 2) === Real
+
+let
+    wrapperT(T) = Base.typename(T).wrapper
+    @test @inferred wrapperT(ReflectionExample{Float64, Int64}) == ReflectionExample
+    @test @inferred wrapperT(ReflectionExample{Float64, N} where N) == ReflectionExample
+    @test @inferred wrapperT(ReflectionExample{T, Int64} where T) == ReflectionExample
+    @test @inferred wrapperT(ReflectionExample) == ReflectionExample
+    @test @inferred wrapperT(Union{ReflectionExample{Union{},1},ReflectionExample{Float64,1}}) == ReflectionExample
+    @test_throws ErrorException Base.typename(Union{Int, Float64})
+end
+
+# Issue #20086
+abstract A20086{T,N}
+immutable B20086{T,N} <: A20086{T,N} end
+@test subtypes(A20086) == [B20086]
+@test subtypes(A20086{Int}) == [B20086{Int}]
+@test subtypes(A20086{T,3} where T) == [B20086{T,3} where T]
+@test subtypes(A20086{Int,3}) == [B20086{Int,3}]

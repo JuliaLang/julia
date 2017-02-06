@@ -271,18 +271,30 @@ end
     @test typeof(Vector(3)) == Vector{Any}
     @test typeof(Vector()) == Vector{Any}
     @test typeof(Matrix{Int}(2,3)) == Matrix{Int}
-    @test typeof(Matrix{Int}()) == Matrix{Int}
     @test typeof(Matrix(2,3)) == Matrix{Any}
-    @test typeof(Matrix()) == Matrix{Any}
 
     @test size(Vector{Int}(3)) == (3,)
     @test size(Vector{Int}()) == (0,)
     @test size(Vector(3)) == (3,)
     @test size(Vector()) == (0,)
     @test size(Matrix{Int}(2,3)) == (2,3)
-    @test size(Matrix{Int}()) == (0,0)
     @test size(Matrix(2,3)) == (2,3)
-    @test size(Matrix()) == (0,0)
+
+    # TODO: will throw MethodError after 0.6 deprecations are deleted
+    dw = Base.JLOptions().depwarn
+    if dw == 2
+        @test_throws ErrorException Matrix{Int}()
+        @test_throws ErrorException Matrix()
+    elseif dw == 1
+        @test_warn "deprecated" Matrix{Int}()
+        @test_warn "deprecated" Matrix()
+    elseif dw == 0
+        @test size(Matrix{Int}()) == (0,0)
+        @test size(Matrix()) == (0,0)
+    else
+        error("unexpected depwarn value")
+    end
+    @test_throws MethodError Array{Int,3}()
 end
 @testset "get" begin
     A = reshape(1:24, 3, 8)
@@ -496,12 +508,18 @@ end
     c = convert(Array, s)
     for p in ([1,2,3], [1,3,2], [2,1,3], [2,3,1], [3,1,2], [3,2,1])
         @test permutedims(s, p) == permutedims(c, p)
-        @test Base.PermutedDimsArrays.PermutedDimsArray(s, p) == permutedims(c, p)
+        @test PermutedDimsArray(s, p) == permutedims(c, p)
     end
     @test_throws ArgumentError permutedims(a, (1,1,1))
     @test_throws ArgumentError permutedims(s, (1,1,1))
-    @test_throws ArgumentError Base.PermutedDimsArrays.PermutedDimsArray(a, (1,1,1))
-    @test_throws ArgumentError Base.PermutedDimsArrays.PermutedDimsArray(s, (1,1,1))
+    @test_throws ArgumentError PermutedDimsArray(a, (1,1,1))
+    @test_throws ArgumentError PermutedDimsArray(s, (1,1,1))
+    cp = PermutedDimsArray(c, (3,2,1))
+    @test pointer(cp) == pointer(c)
+    @test_throws ArgumentError pointer(cp, 2)
+    @test strides(cp) == (9,3,1)
+    ap = PermutedDimsArray(collect(a), (2,1,3))
+    @test strides(ap) == (3,1,12)
 
     for A in [rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1)]
         perm = randperm(4)
@@ -563,6 +581,12 @@ end
     @test isequal(cumsum(A,1),A1)
     @test isequal(cumsum(A,2),A2)
     @test isequal(cumsum(A,3),A3)
+
+    # issue 20112
+    A3 = reshape(repmat([1 2 3 4],UInt32(6),UInt32(1)),2,3,4)
+    @test isequal(cumsum(A,3),A3)
+    @test repmat([1,2,3,4], UInt32(1)) == [1,2,3,4]
+
 
     R = repeat([1, 2])
     @test R == [1, 2]
@@ -1130,7 +1154,7 @@ A = [[i i; i i] for i=1:2]
 @test cumsum(A) == Any[[1 1; 1 1], [3 3; 3 3]]
 @test cumprod(A) == Any[[1 1; 1 1], [4 4; 4 4]]
 
-isdefined(Main, :TestHelpers) || eval(Main, :(include("TestHelpers.jl")))
+isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
 using TestHelpers.OAs
 
 @testset "prepend/append" begin
@@ -1613,6 +1637,7 @@ B = 1.5:5.5
         @test_throws ArgumentError slicedim(A,0,1)
         @test slicedim(A, 3, 1) == A
         @test_throws BoundsError slicedim(A, 3, 2)
+        @test @inferred(slicedim(A, 1, 2:2)) == collect(2:4:20)'
     end
 end
 
@@ -1826,10 +1851,10 @@ end
     B = [-10.0,0.0,3.0]
     C = [1,im,0]
 
-    @test sign(A) == [-1,0,1]
-    @test sign(B) == [-1,0,1]
-    @test typeof(sign(A)) == Vector{Int}
-    @test typeof(sign(B)) == Vector{Float64}
+    @test sign.(A) == [-1,0,1]
+    @test sign.(B) == [-1,0,1]
+    @test typeof(sign.(A)) == Vector{Int}
+    @test typeof(sign.(B)) == Vector{Float64}
 
     @test conj(A) == A
     @test conj(B) == A

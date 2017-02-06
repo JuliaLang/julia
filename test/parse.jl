@@ -326,10 +326,10 @@ parse("""
 
 # issue #13302
 let p = parse("try
-           a
-       catch
-           b, c = t
-       end")
+            a
+        catch
+            b, c = t
+        end")
     @test isa(p,Expr) && p.head === :try
     @test p.args[2] === false
     @test p.args[3].args[end] == parse("b,c = t")
@@ -420,7 +420,7 @@ test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
 # issue #19861 make sure macro-expansion happens in the newest world for top-level expression
 @test eval(Base.parse_input_line("""
            macro X19861()
-             return 23341
+               return 23341
            end
            @X19861
            """)::Expr) == 23341
@@ -438,8 +438,7 @@ let b = IOBuffer("""
 end
 
 # issue #15763
-# TODO enable post-0.5
-#test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
+test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
 test_parseerror("if false\nelseif\nend", "missing condition in \"elseif\" at none:2")
 
 # issue #15828
@@ -545,11 +544,11 @@ end
 @test_throws ParseError parse("{x=>y for (x,y) in zip([1,2,3],[4,5,6])}")
 #@test_throws ParseError parse("{:a=>1, :b=>2}")
 
+@test parse("A=>B") == Expr(:call, :(=>), :A, :B)
+
 # this now is parsed as getindex(Pair{Any,Any}, ...)
 @test_throws MethodError eval(parse("(Any=>Any)[]"))
 @test_throws MethodError eval(parse("(Any=>Any)[:a=>1,:b=>2]"))
-# to be removed post 0.5
-#@test_throws MethodError eval(parse("(Any=>Any)[x=>y for (x,y) in zip([1,2,3],[4,5,6])]"))
 
 # make sure base can be any Integer
 for T in (Int, BigInt)

@@ -104,7 +104,7 @@ foldl(op, itr) = mapfoldl(identity, op, itr)
 function mapfoldr_impl(f, op, v0, itr, i::Integer)
     # Unroll the while loop once; if v0 is known, the call to op may
     # be evaluated at compile time
-    if i == 0
+    if isempty(itr)
         return r_promote(op, v0)
     else
         x = itr[i]
@@ -131,7 +131,13 @@ mapfoldr(f, op, v0, itr) = mapfoldr_impl(f, op, v0, itr, endof(itr))
 Like `mapfoldr(f, op, v0, itr)`, but using the first element of `itr` as `v0`. In general,
 this cannot be used with empty collections (see `reduce(op, itr)`).
 """
-mapfoldr(f, op, itr) = (i = endof(itr); mapfoldr_impl(f, op, f(itr[i]), itr, i-1))
+function mapfoldr(f, op, itr)
+    i = endof(itr)
+    if isempty(itr)
+        return Base.mr_empty_iter(f, op, itr, iteratoreltype(itr))
+    end
+    return mapfoldr_impl(f, op, f(itr[i]), itr, i-1)
+end
 
 """
     foldr(op, v0, itr)
@@ -469,10 +475,10 @@ Compute both the minimum and maximum element in a single pass, and return them a
 
 ```jldoctest
 julia> extrema(2:10)
-(2,10)
+(2, 10)
 
 julia> extrema([9,pi,4.5])
-(3.141592653589793,9.0)
+(3.141592653589793, 9.0)
 ```
 """
 function extrema(itr)
@@ -636,21 +642,35 @@ end
 
 """
     count(p, itr) -> Integer
+    count(itr) -> Integer
 
 Count the number of elements in `itr` for which predicate `p` returns `true`.
+If `p` is omitted, counts the number of `true` elements in `itr` (which
+should be a collection of boolean values).
 
 ```jldoctest
 julia> count(i->(4<=i<=6), [2,3,4,5,6])
+3
+
+julia> count([true, false, true, true])
 3
 ```
 """
 function count(pred, itr)
     n = 0
     for x in itr
-        n += pred(x)
+        n += pred(x)::Bool
     end
     return n
 end
+function count(pred, a::AbstractArray)
+    n = 0
+    for i in eachindex(a)
+        @inbounds n += pred(a[i])::Bool
+    end
+    return n
+end
+count(itr) = count(identity, itr)
 
 """
     countnz(A) -> Integer

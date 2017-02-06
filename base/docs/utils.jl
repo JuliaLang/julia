@@ -2,7 +2,7 @@
 
 # Text / HTML objects
 
-import Base: print, show
+import Base: print, show, ==, hash
 
 export HTML, @html_str
 
@@ -71,6 +71,9 @@ end
 print(io::IO, t::Text) = print(io, t.content)
 print{F <: Function}(io::IO, t::Text{F}) = t.content(io)
 show(io::IO, t::Text) = print(io, t)
+
+=={T<:Union{HTML, Text}}(t1::T, t2::T) = t1.content == t2.content
+hash{T<:Union{HTML, Text}}(t::T, h::UInt) = hash(T, hash(t.content, h))
 
 """
     @text_str -> Docs.Text
@@ -195,8 +198,10 @@ repl(io::IO, other) = :(@doc $(esc(other)))
 repl(x) = repl(STDOUT, x)
 
 function _repl(x)
-    docs = (isexpr(x, :call) && !any(isexpr(x, :(::)) for x in x.args)) ?
-        Base.gen_call_with_extracted_types(doc, x) : :(@doc $(esc(x)))
+    if (isexpr(x, :call) && !any(isexpr(x, :(::)) for x in x.args))
+        x.args[2:end] = [:(::typeof($arg)) for arg in x.args[2:end]]
+    end
+    docs = :(@doc $(esc(x)))
     if isfield(x)
         quote
             if isa($(esc(x.args[1])), DataType)

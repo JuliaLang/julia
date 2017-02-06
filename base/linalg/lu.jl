@@ -125,7 +125,9 @@ julia> A = [4 3; 6 3]
  6  3
 
 julia> F = lufact(A)
-Base.LinAlg.LU{Float64,Array{Float64,2}}([4.0 3.0; 1.5 -1.5],[1,2],0)
+Base.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:
+[1.0 0.0; 1.5 1.0]
+[4.0 3.0; 0.0 -1.5]
 
 julia> F[:L] * F[:U] == A[F[:p], :]
 true
@@ -175,12 +177,7 @@ julia> A = [4. 3.; 6. 3.]
  6.0  3.0
 
 julia> L, U, p = lu(A)
-(
-[1.0 0.0; 0.666667 1.0],
-
-[6.0 3.0; 0.0 1.0],
-
-[2,1])
+([1.0 0.0; 0.666667 1.0], [6.0 3.0; 0.0 1.0], [2, 1])
 
 julia> A[p, :] == L * U
 true
@@ -226,6 +223,13 @@ function getindex{T,S<:StridedMatrix}(F::LU{T,S}, d::Symbol)
     else
         throw(KeyError(d))
     end
+end
+
+function show(io::IO, C::LU)
+    println(io, "$(typeof(C)) with factors L and U:")
+    show(io, C[:L])
+    println(io)
+    show(io, C[:U])
 end
 
 A_ldiv_B!{T<:BlasFloat, S<:StridedMatrix}(A::LU{T, S}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('N', A.factors, A.ipiv, B) A.info

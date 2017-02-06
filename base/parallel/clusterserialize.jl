@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-import .Serializer: known_object_data, object_number, serialize_cycle, deserialize_cycle, writetag,
+using Base.Serializer: known_object_data, object_number, serialize_cycle, deserialize_cycle, writetag,
                       __deserialized_types__, serialize_typename, deserialize_typename,
-                      TYPENAME_TAG, object_numbers
+                      TYPENAME_TAG, object_numbers, reset_state, serialize_type
 
 type ClusterSerializer{I<:IO} <: AbstractSerializer
     io::I
@@ -136,9 +136,9 @@ function deserialize_global_from_main(s::ClusterSerializer, sym)
     sym_isconst = deserialize(s)
     v = deserialize(s)
     if sym_isconst
-        eval(Main, :(const $sym = $v))
+        @eval Main const $sym = $v
     else
-        eval(Main, :($sym = $v))
+        @eval Main $sym = $v
     end
 end
 
@@ -158,3 +158,75 @@ function cleanup_tname_glbs(s::ClusterSerializer, identifier)
 end
 
 # TODO: cleanup from s.tn_obj_sent
+
+
+# Specialized serialize-deserialize implementations for CapturedException to partially
+# recover from any deserialization errors in `CapturedException.ex`
+
+function serialize(s::ClusterSerializer, ex::CapturedException)
+    serialize_type(s, typeof(ex))
+    serialize(s, string(typeof(ex.ex))) # String type should not result in a deser error
+    serialize(s, ex.processed_bt)       # Currently should not result in a deser error
+    serialize(s, ex.ex)                 # can result in a UndefVarError on the remote node
+                                        # if a type used in ex.ex is undefined on the remote node.
+end
+
+function original_ex(s::ClusterSerializer, ex_str, remote_stktrace)
+    local pid_str = ""
+    try
+        pid_str = string(" from worker ", worker_id_from_socket(s.io))
+    end
+
+    stk_str = remote_stktrace ? "Remote" : "Local"
+    ErrorException(string("Error deserializing a remote exception", pid_str, "\n",
+                          "Remote(original) exception of type ", ex_str, "\n",
+                          stk_str,  " stacktrace : "))
+end
+
+function deserialize(s::ClusterSerializer, t::Type{T}) where T <: CapturedException
+    ex_str = deserialize(s)
+    local bt
+    local capex
+    try
+        bt = deserialize(s)
+    catch e
+        throw(CompositeException([
+            original_ex(s, ex_str, false),
+            CapturedException(e, catch_backtrace())
+        ]))
+    end
+
+    try
+        capex = deserialize(s)
+    catch e
+        throw(CompositeException([
+            CapturedException(original_ex(s, ex_str, true), bt),
+            CapturedException(e, catch_backtrace())
+        ]))
+    end
+
+    return CapturedException(capex, bt)
+end
+
+"""
+    clear!(syms, pids=workers(); mod=Main)
+
+Clears global bindings in modules by initializing them to `nothing`.
+`syms` should be of type `Symbol` or a collection of `Symbol`s . `pids` and `mod`
+identify the processes and the module in which global variables are to be
+reinitialized. Only those names found to be defined under `mod` are cleared.
+
+An exception is raised if a global constant is requested to be cleared.
+"""
+function clear!(syms, pids=workers(); mod=Main)
+    @sync for p in pids
+        @async remotecall_wait(clear_impl!, p, syms, mod)
+    end
+end
+clear!(sym::Symbol, pid::Int; mod=Main) = clear!([sym], [pid]; mod=mod)
+clear!(sym::Symbol, pids=workers(); mod=Main) = clear!([sym], pids; mod=mod)
+clear!(syms, pid::Int; mod=Main) = clear!(syms, [pid]; mod=mod)
+
+clear_impl!(syms, mod::Module) = foreach(x->clear_impl!(x,mod), syms)
+clear_impl!(sym::Symbol, mod::Module) = isdefined(mod, sym) && @eval(mod, global $sym = nothing)
+

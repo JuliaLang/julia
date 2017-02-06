@@ -256,15 +256,8 @@ end
 
 # Methods to resolve ambiguities with `Diagonal`
 @inline *(rowvec::RowVector, D::Diagonal) = transpose(D * transpose(rowvec))
-*(::Diagonal, ::RowVector) = throw(DimensionMismatch("Cannot right-multiply matrix by transposed vector"))
-
 @inline A_mul_Bt(D::Diagonal, rowvec::RowVector) = D*transpose(rowvec)
-
-At_mul_B(rowvec::RowVector, ::Diagonal) = throw(DimensionMismatch("Cannot left-multiply matrix by vector"))
-
 @inline A_mul_Bc(D::Diagonal, rowvec::RowVector) = D*ctranspose(rowvec)
-
-Ac_mul_B(rowvec::RowVector, ::Diagonal) = throw(DimensionMismatch("Cannot left-multiply matrix by vector"))
 
 conj(D::Diagonal) = Diagonal(conj(D.diag))
 transpose(D::Diagonal) = D

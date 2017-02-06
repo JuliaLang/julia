@@ -22,9 +22,9 @@ julia> fill!(A, 2.)
 
 julia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(3), a); a[1] = 2; A
 3-element Array{Array{Int64,1},1}:
- [2,1,1]
- [2,1,1]
- [2,1,1]
+ [2, 1, 1]
+ [2, 1, 1]
+ [2, 1, 1]
 
 julia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(3), f())
 3-element Array{Int64,1}:
@@ -96,6 +96,20 @@ bits
 
 Construct a 1-d array of the specified type. This is usually called with the syntax
 `Type[]`. Element values can be specified using `Type[a,b,c,...]`.
+
+```jldoctest
+julia> Int8[1, 2, 3]
+3-element Array{Int8,1}:
+ 1
+ 2
+ 3
+
+julia> getindex(Int8, 1, 2, 3)
+3-element Array{Int8,1}:
+ 1
+ 2
+ 3
+```
 """
 getindex(::Type, elements...)
 
@@ -334,7 +348,7 @@ If `T` is not a bitstype, an error is thrown.
 julia> sizeof(Base.LinAlg.LU)
 ERROR: argument is an abstract type; size is indeterminate
 Stacktrace:
- [1] sizeof(::Type{T}) at ./essentials.jl:99
+ [1] sizeof(::Type{T} where T) at ./essentials.jl:147
 ```
 """
 sizeof(::Type)
@@ -541,6 +555,11 @@ print_shortest
     tuple(xs...)
 
 Construct a tuple of the given objects.
+
+```jldoctest
+julia> tuple(1, 'a', pi)
+(1, 'a', π = 3.1415926535897...)
+```
 """
 tuple
 
@@ -768,6 +787,14 @@ showcompact
 
 Extract a named field from a `value` of composite type. The syntax `a.b` calls
 `getfield(a, :b)`.
+
+```jldoctest
+julia> a = 1//2
+1//2
+
+julia> getfield(a, :num)
+1
+```
 """
 getfield
 
@@ -829,6 +856,14 @@ union
     realmax(T)
 
 The highest finite value representable by the given floating-point DataType `T`.
+
+```jldoctest
+julia> realmax(Float16)
+Float16(6.55e4)
+
+julia> realmax(Float32)
+3.4028235f38
+```
 """
 realmax
 
@@ -847,6 +882,14 @@ serialize
     typemin(T)
 
 The lowest value representable by the given (real) numeric DataType `T`.
+
+```jldoctest
+julia> typemin(Float16)
+-Inf16
+
+julia> typemin(Float32)
+-Inf32
+```
 """
 typemin
 
@@ -959,10 +1002,10 @@ For a given iterable object and iteration state, return the current item and the
 
 ```jldoctest
 julia> next(1:5, 3)
-(3,4)
+(3, 4)
 
 julia> next(1:5, 5)
-(5,6)
+(5, 6)
 ```
 """
 next
@@ -1102,7 +1145,21 @@ false
 """
     bswap(n)
 
-Byte-swap an integer.
+Byte-swap an integer. Flip the bits of its binary representation.
+
+```jldoctest
+julia> a = bswap(4)
+288230376151711744
+
+julia> bswap(a)
+4
+
+julia> bin(1)
+"1"
+
+julia> bin(bswap(1))
+"100000000000000000000000000000000000000000000000000000000"
+```
 """
 bswap
 
@@ -1299,7 +1356,7 @@ spawn
 
 Tests whether an assignable location is defined. The arguments can be a module and a symbol
 or a composite object and field name (as a symbol) or index. With a single symbol argument,
-tests whether a global variable with that name is defined in `current_module()`.
+tests whether a global variable with that name is defined in [`current_module()`](@ref).
 """
 isdefined
 
@@ -1731,6 +1788,23 @@ matchall
 
 Return the value stored for the given key, or if no mapping for the key is present, store
 `key => default`, and return `default`.
+
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2, "c"=>3);
+
+julia> get!(d, "a", 5)
+1
+
+julia> get!(d, "d", 4)
+4
+
+julia> d
+Dict{String,Int64} with 4 entries:
+  "c" => 3
+  "b" => 2
+  "a" => 1
+  "d" => 4
+```
 """
 get!(collection,key,default)
 
@@ -1951,7 +2025,7 @@ julia> convert(Int, 3.0)
 julia> convert(Int, 3.5)
 ERROR: InexactError()
 Stacktrace:
- [1] convert(::Type{Int64}, ::Float64) at ./float.jl:656
+ [1] convert(::Type{Int64}, ::Float64) at ./float.jl:675
 ```
 
 If `T` is a `AbstractFloat` or `Rational` type,
@@ -2347,7 +2421,22 @@ Base.:(|)
     pop!(collection, key[, default])
 
 Delete and return the mapping for `key` if it exists in `collection`, otherwise return
-`default`, or throw an error if default is not specified.
+`default`, or throw an error if `default` is not specified.
+
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2, "c"=>3);
+
+julia> pop!(d, "a")
+1
+
+julia> pop!(d, "d")
+ERROR: KeyError: key "d" not found
+Stacktrace:
+ [1] pop!(::Dict{String,Int64}, ::String) at ./dict.jl:539
+
+julia> pop!(d, "e", 4)
+4
+```
 """
 pop!(collection,key,?)
 

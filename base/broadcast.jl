@@ -5,9 +5,9 @@ module Broadcast
 using Base.Cartesian
 using Base: linearindices, tail, OneTo, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
-            nullable_returntype, null_safe_eltype_op, hasvalue
+            nullable_returntype, null_safe_eltype_op, hasvalue, isoperator
 import Base: broadcast, broadcast!
-export broadcast_getindex, broadcast_setindex!, dotview
+export broadcast_getindex, broadcast_setindex!, dotview, @__dot__
 
 typealias ScalarType Union{Type{Any}, Type{Nullable}}
 
@@ -15,6 +15,8 @@ typealias ScalarType Union{Type{Any}, Type{Nullable}}
 # fallbacks for some special cases
 @inline broadcast(f, x::Number...) = f(x...)
 @inline broadcast{N}(f, t::NTuple{N,Any}, ts::Vararg{NTuple{N,Any}}) = map(f, t, ts...)
+broadcast!{T,S,N}(::typeof(identity), x::Array{T,N}, y::Array{S,N}) =
+    size(x) == size(y) ? copy!(x, y) : broadcast_c!(identity, Array, Array, x, y)
 
 # special cases for "X .= ..." (broadcast!) assignments
 broadcast!(::typeof(identity), X::AbstractArray, x::Number) = fill!(X, x)
@@ -369,10 +371,10 @@ julia> parse.(Int, ["1", "2"])
  2
 
 julia> abs.((1, -2))
-(1,2)
+(1, 2)
 
 julia> broadcast(+, 1.0, (0, -2.0))
-(1.0,-1.0)
+(1.0, -1.0)
 
 julia> broadcast(+, 1.0, (0, -2.0), Ref(1))
 2-element Array{Float64,1}:
@@ -381,8 +383,8 @@ julia> broadcast(+, 1.0, (0, -2.0), Ref(1))
 
 julia> (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1]))
 2-element Array{Array{Int64,1},1}:
- [1,1]
- [2,2]
+ [1, 1]
+ [2, 2]
 
 julia> string.(("one","two","three","four"), ": ", 1:4)
 4-element Array{String,1}:
@@ -505,6 +507,66 @@ end
 
 Base.@propagate_inbounds dotview(args...) = getindex(args...)
 Base.@propagate_inbounds dotview(A::AbstractArray, args...) = view(A, args...)
-Base.@propagate_inbounds dotview{T<:AbstractArray}(A::AbstractArray{T}, args...) = getindex(A, args...)
+Base.@propagate_inbounds dotview{T<:AbstractArray}(A::AbstractArray{T}, args::Integer...) = getindex(A, args...)
+
+
+############################################################
+# The parser turns @. into a call to the __dot__ macro,
+# which converts all function calls and assignments into
+# broadcasting "dot" calls/assignments:
+
+dottable(x) = false # avoid dotting spliced objects (e.g. view calls inserted by @view)
+dottable(x::Symbol) = !isoperator(x) || first(string(x)) != '.' || x == :.. # don't add dots to dot operators
+dottable(x::Expr) = x.head != :$
+undot(x) = x
+function undot(x::Expr)
+    if x.head == :.=
+        Expr(:(=), x.args...)
+    elseif x.head == :block # occurs in for x=..., y=...
+        Expr(:block, map(undot, x.args)...)
+    else
+        x
+    end
+end
+__dot__(x) = x
+function __dot__(x::Expr)
+    dotargs = map(__dot__, x.args)
+    if x.head == :call && dottable(x.args[1])
+        Expr(:., dotargs[1], Expr(:tuple, dotargs[2:end]...))
+    elseif x.head == :$
+        x.args[1]
+    elseif x.head == :let # don't add dots to "let x=... assignments
+        Expr(:let, dotargs[1], map(undot, dotargs[2:end])...)
+    elseif x.head == :for # don't add dots to for x=... assignments
+        Expr(:for, undot(dotargs[1]), dotargs[2])
+    elseif (x.head == :(=) || x.head == :function || x.head == :macro) &&
+           Meta.isexpr(x.args[1], :call) # function or macro definition
+        Expr(x.head, x.args[1], dotargs[2])
+    else
+        head = string(x.head)
+        if last(head) == '=' && first(head) != '.'
+            Expr(Symbol('.',head), dotargs...)
+        else
+            Expr(x.head, dotargs...)
+        end
+    end
+end
+"""
+    @. expr
+
+Convert every function call or operator in `expr` into a "dot call"
+(e.g. convert `f(x)` to `f.(x)`), and convert every assignment in `expr`
+to a "dot assignment" (e.g. convert `+=` to `.+=`).
+
+If you want to *avoid* adding dots for selected function calls in
+`expr`, splice those function calls in with `\$`.  For example,
+`@. sqrt(abs(\$sort(x)))` is equivalent to `sqrt.(abs.(sort(x)))`
+(no dot for `sort`).
+
+(`@.` is equivalent to a call to `@__dot__`.)
+"""
+macro __dot__(x)
+    esc(__dot__(x))
+end
 
 end # module

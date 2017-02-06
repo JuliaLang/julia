@@ -1673,7 +1673,6 @@ typedef struct {
     const char *julia_bin;
     const char *eval;
     const char *print;
-    const char *postboot;
     const char *load;
     const char *image_file;
     const char *cpu_target;

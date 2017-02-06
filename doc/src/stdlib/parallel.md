@@ -62,10 +62,10 @@ Base.CachingPool
 Base.default_worker_pool
 Base.clear!(::CachingPool)
 Base.remote
-Base.remotecall(::Any, ::Base.AbstractWorkerPool, ::Any...)
-Base.remotecall_wait(::Any, ::Base.AbstractWorkerPool, ::Any...)
-Base.remotecall_fetch(::Any, ::Base.AbstractWorkerPool, ::Any...)
-Base.remote_do(::Any, ::Base.AbstractWorkerPool, ::Any...)
+Base.remotecall(::Any, ::Base.Parallel.AbstractWorkerPool, ::Any...)
+Base.remotecall_wait(::Any, ::Base.Parallel.AbstractWorkerPool, ::Any...)
+Base.remotecall_fetch(::Any, ::Base.Parallel.AbstractWorkerPool, ::Any...)
+Base.remote_do(::Any, ::Base.Parallel.AbstractWorkerPool, ::Any...)
 Base.timedwait
 Base.@spawn
 Base.@spawnat

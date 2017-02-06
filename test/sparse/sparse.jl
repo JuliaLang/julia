@@ -806,6 +806,7 @@ end
     FI = Array(I)
     @test sparse(FS[FI]) == S[I] == S[FI]
     @test sum(S[FI]) + sum(S[!FI]) == sum(S)
+    @test countnz(I) == count(I)
 
     sumS1 = sum(S)
     sumFI = sum(S[FI])
@@ -1637,7 +1638,7 @@ end
     m = 5
     intmat = fill(1, m, m)
     ltintmat = LowerTriangular(rand(1:5, m, m))
-    @test isapprox(At_ldiv_B(ltintmat, sparse(intmat)), At_ldiv_B(ltintmat, intmat))
+    @test At_ldiv_B(ltintmat, sparse(intmat)) ≈ At_ldiv_B(ltintmat, intmat)
 end
 
 # Test temporary fix for issue #16548 in PR #16979. Brittle. Expect to remove with `\` revisions.
@@ -1699,4 +1700,8 @@ end
 # Check calling of unary minus method specialized for SparseMatrixCSCs
 @testset "issue #19503" begin
     @test which(-, (SparseMatrixCSC,)).module == Base.SparseArrays
+end
+
+@testset "issue #14398" begin
+    @test transpose(view(speye(10), 1:5, 1:5)) ≈ eye(5,5)
 end

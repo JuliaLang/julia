@@ -9,8 +9,8 @@ rules; this section spells them out in detail.
 
 Certain constructs in the language introduce *scope blocks*, which are regions of code that are
 eligible to be the scope of some set of variables. The scope of a variable cannot be an arbitrary
-set of source lines; instead, it will always line up with one of these blocks.  There are two
-main types of scopes in Julia, *global scope* and *local scope*, the latter can be nested.  The
+set of source lines; instead, it will always line up with one of these blocks. There are two
+main types of scopes in Julia, *global scope* and *local scope*, the latter can be nested. The
 constructs introducing scope blocks are:
 
 | Scope name           | block/construct introducing this kind of scope                                                           |
@@ -20,7 +20,7 @@ constructs introducing scope blocks are:
 | [Local Scope](@ref)  | [Hard Local Scope](@ref): functions (either syntax, anonymous & do-blocks), `type`, `immutable`, `macro` |
 
 Notably missing from this table are [begin blocks](@ref man-compound-expressions) and [if blocks](@ref man-conditional-evaluation), which do *not*
-introduce new scope blocks.  All three types of scopes follow somewhat different rules which will
+introduce new scope blocks. All three types of scopes follow somewhat different rules which will
 be explained below as well as some extra rules for certain blocks.
 
 Julia uses [lexical scoping](https://en.wikipedia.org/wiki/Scope_%28computer_science%29#Lexical_scoping_vs._dynamic_scoping),
@@ -28,17 +28,17 @@ meaning that a function's scope does not inherit from its caller's scope, but fr
 which the function was defined. For example, in the following code the `x` inside `foo` refers
 to the `x` in the global scope of its module `Bar`:
 
-```julia
+```jldoctest moduleBar
 julia> module Bar
-       x = 1
-       foo() = x
+           x = 1
+           foo() = x
        end;
 ```
 
 and not a `x` in the scope where `foo` is used:
 
-```julia
-julia> import Bar
+```jldoctest moduleBar
+julia> import .Bar
 
 julia> x = -1;
 
@@ -53,36 +53,34 @@ Thus *lexical scope* means that the scope of variables can be inferred from the 
 *Each module introduces a new global scope*, separate from the global scope of all other modules;
 there is no all-encompassing global scope. Modules can introduce variables of other modules into
 their scope through the [using or import](@ref modules) statements or through qualified access using the
-dot-notation, i.e. each module is a so-called *namespace*.  Note that variable bindings can only
+dot-notation, i.e. each module is a so-called *namespace*. Note that variable bindings can only
 be changed within their global scope and not from an outside module.
 
-```julia
+```jldoctest
 julia> module A
-       a = 1 # a global in A's scope
+           a = 1 # a global in A's scope
        end;
 
 julia> module B
            module C
-           c = 2
+               c = 2
            end
-       b = C.c # can access the namespace of a nested global scope
-               # through a qualified access
-       import A # makes module A available
-       d = A.a
+           b = C.c    # can access the namespace of a nested global scope
+                      # through a qualified access
+           import ..A # makes module A available
+           d = A.a
        end;
 
 julia> module D
            b = a # errors as D's global scope is separate from A's
        end;
 ERROR: UndefVarError: a not defined
-...
 
 julia> module E
-           import A # make module A available
-           A.a = 2 # throws below error
+           import ..A # make module A available
+           A.a = 2    # throws below error
        end;
 ERROR: cannot assign variables in other modules
-...
 ```
 
 Note that the interactive prompt (aka REPL) is in the global scope of the module `Main`.
@@ -91,23 +89,22 @@ Note that the interactive prompt (aka REPL) is in the global scope of the module
 
 A new local scope is introduced by most code-blocks, see above table for a complete list.
  A local scope *usually* inherits all the variables from its parent scope, both for reading and
-writing.  There are two subtypes of local scopes, hard and soft, with slightly different rules
-concerning what variables are inherited.  Unlike global scopes, local scopes are not namespaces,
+writing. There are two subtypes of local scopes, hard and soft, with slightly different rules
+concerning what variables are inherited. Unlike global scopes, local scopes are not namespaces,
 thus variables in an inner scope cannot be retrieved from the parent scope through some sort of
 qualified access.
 
-The following rules and examples pertain to both hard and soft local scopes.  A newly introduced
-variable in a local scope does not back-propagate to its parent scope.  For example, here the
+The following rules and examples pertain to both hard and soft local scopes. A newly introduced
+variable in a local scope does not back-propagate to its parent scope. For example, here the
 `z` is not introduced into the top-level scope:
 
-```julia
+```jldoctest
 julia> for i = 1:10
            z = i
        end
 
 julia> z
 ERROR: UndefVarError: z not defined
-...
 ```
 
 (Note, in this and all following examples it is assumed that their top-level is a global scope
@@ -115,7 +112,7 @@ with a clean workspace, for instance a newly started REPL.)
 
 Inside a local scope a variable can be forced to be a local variable using the `local` keyword:
 
-```julia
+```jldoctest
 julia> x = 0;
 
 julia> for i = 1:10
@@ -129,7 +126,7 @@ julia> x
 
 Inside a local scope a new global variable can be defined using the keyword `global`:
 
-```julia
+```jldoctest
 julia> for i = 1:10
            global z
            z = i
@@ -142,7 +139,7 @@ julia> z
 The location of both the `local` and `global` keywords within the scope block is irrelevant.
 The following is equivalent to the last example (although stylistically worse):
 
-```julia
+```jldoctest
 julia> for i = 1:10
            z = i
            global z
@@ -152,27 +149,18 @@ julia> z
 10
 ```
 
-Multiple global or local definitions can be on one line and can also be paired with assignments:
-
-```julia
-julia> for i = 1:10
-           global x = i, y, z
-           local a = 4, b, c = 1
-       end
-```
-
 ### Soft Local Scope
 
 > In a soft local scope, all variables are inherited from its parent scope unless a variable is
 > specifically marked with the keyword `local`.
 
 Soft local scopes are introduced by for-loops, while-loops, comprehensions, try-catch-finally-blocks,
-and let-blocks.  There are some extra rules for [Let Blocks](@ref) and for [For Loops and Comprehensions](@ref).
+and let-blocks. There are some extra rules for [Let Blocks](@ref) and for [For Loops and Comprehensions](@ref).
 
 In the following example the `x` and `y` refer always to the same variables as the soft local
 scope inherits both read and write variables:
 
-```julia
+```jldoctest
 julia> x, y = 0, 1;
 
 julia> for i = 1:10
@@ -183,7 +171,7 @@ julia> x
 12
 ```
 
-Within soft scopes, the *global* keyword is never necessary, although allowed.  The only case
+Within soft scopes, the *global* keyword is never necessary, although allowed. The only case
 when it would change the semantics is (currently) a syntax error:
 
 ```julia
@@ -194,7 +182,6 @@ julia> let
            end
        end
 ERROR: syntax: `global j`: j is local variable in the enclosing scope
-...
 ```
 
 ### Hard Local Scope
@@ -209,11 +196,11 @@ and macro-definitions.
 
 Thus global variables are only inherited for reading but not for writing:
 
-```julia
+```jldoctest
 julia> x, y = 1, 2;
 
 julia> function foo()
-           x = 2 # assignment introduces a new local
+           x = 2        # assignment introduces a new local
            return x + y # y refers to the global
        end;
 
@@ -226,7 +213,7 @@ julia> x
 
 An explicit `global` is needed to assign to a global variable:
 
-```julia
+```jldoctest
 julia> x = 1;
 
 julia> function foobar()
@@ -242,13 +229,13 @@ julia> x
 Note that *nested functions* can behave differently to functions defined in the global scope as
 they can modify their parent scope's *local* variables:
 
-```julia
+```jldoctest
 julia> x, y = 1, 2;
 
 julia> function baz()
            x = 2 # introduces a new local
            function bar()
-               x = 10 # modifies the parent's x
+               x = 10       # modifies the parent's x
                return x + y # y is global
            end
            return bar() + x # 12 + 10 (x is modified in call of bar())
@@ -258,14 +245,14 @@ julia> baz()
 22
 
 julia> x, y
-(1,2)
+(1, 2)
 ```
 
 The distinction between inheriting global and local variables for assignment can lead to some
-slight differences between functions defined in local vs. global scopes.  Consider the modification
+slight differences between functions defined in local vs. global scopes. Consider the modification
 of the last example by moving `bar` to the global scope:
 
-```julia
+```jldoctest
 julia> x, y = 1, 2;
 
 julia> function bar()
@@ -282,7 +269,7 @@ julia> quz()
 14
 
 julia> x, y
-(1,2)
+(1, 2)
 ```
 
 Note that above subtlety does not pertain to type and macro definitions as they can only appear
@@ -292,14 +279,14 @@ keyword function arguments which are described in the [Function section](@ref ma
 An assignment introducing a variable used inside a function, type or macro definition need not
 come before its inner usage:
 
-```julia
+```jldoctest
 julia> f = y -> y + a
-(::#2) (generic function with 1 method)
+(::#1) (generic function with 1 method)
 
 julia> f(3)
 ERROR: UndefVarError: a not defined
- in (::##2#3)(::Int64) at ./none:1
- ...
+Stacktrace:
+ [1] (::##1#2)(::Int64) at ./none:1
 
 julia> a = 1
 1
@@ -312,10 +299,10 @@ This behavior may seem slightly odd for a normal variable, but allows for named 
 are just normal variables holding function objects -- to be used before they are defined. This
 allows functions to be defined in whatever order is intuitive and convenient, rather than forcing
 bottom up ordering or requiring forward declarations, as long as they are defined by the time
-they are actually called.  As an example, here is an inefficient, mutually recursive way to test
+they are actually called. As an example, here is an inefficient, mutually recursive way to test
 if positive integers are even or odd:
 
-```julia
+```jldoctest
 julia> even(n) = n == 0 ? true : odd(n-1);
 
 julia> odd(n) = n == 0 ? false : even(n-1);
@@ -337,7 +324,7 @@ variables in their parent scope. Thus their default is to fully access all varia
 parent scope.
 
 Conversely, the code inside blocks which introduce a hard local scope (function, type, and macro
-definitions) can be executed at any place in a program.  Remotely changing the state of global
+definitions) can be executed at any place in a program. Remotely changing the state of global
 variables in other modules should be done with care and thus this is an opt-in feature requiring
 the `global` keyword.
 
@@ -369,7 +356,7 @@ This difference is usually not important, and is only detectable in the case of 
 outlive their scope via closures. The `let` syntax accepts a comma-separated series of assignments
 and variable names:
 
-```julia
+```jldoctest
 julia> x, y, z = -1, -1, -1;
 
 julia> let x = 1, z
@@ -378,7 +365,6 @@ julia> let x = 1, z
        end
 x: 1, y: -1
 ERROR: UndefVarError: z not defined
-...
 ```
 
 The assignments are evaluated in order, with each right-hand side evaluated in the scope before
@@ -386,7 +372,7 @@ the new variable on the left-hand side has been introduced. Therefore it makes s
 something like `let x = x` since the two `x` variables are distinct and have separate storage.
 Here is an example where the behavior of `let` is needed:
 
-```julia
+```jldoctest
 julia> Fs = Array{Any}(2); i = 1;
 
 julia> while i <= 2
@@ -405,7 +391,7 @@ Here we create and store two closures that return variable `i`. However, it is a
 variable `i`, so the two closures behave identically. We can use `let` to create a new binding
 for `i`:
 
-```julia
+```jldoctest
 julia> Fs = Array{Any}(2); i = 1;
 
 julia> while i <= 2
@@ -442,11 +428,11 @@ outer local `x`.
 ### For Loops and Comprehensions
 
 `for` loops and [Comprehensions](@ref) have the following behavior: any new variables introduced
-in their body scopes are freshly allocated for each loop iteration.  This is in contrast to `while`
+in their body scopes are freshly allocated for each loop iteration. This is in contrast to `while`
 loops which reuse the variables for all iterations. Therefore these constructs are similar to
 `while` loops with `let` blocks inside:
 
-```julia
+```jldoctest
 julia> Fs = Array{Any}(2);
 
 julia> for j = 1:2
@@ -462,7 +448,7 @@ julia> Fs[2]()
 
 `for` loops will reuse existing variables for its iteration variable:
 
-```julia
+```jldoctest
 julia> i = 0;
 
 julia> for i = 1:3
@@ -474,7 +460,7 @@ julia> i
 
 However, comprehensions do not do this, and always freshly allocate their iteration variables:
 
-```julia
+```jldoctest
 julia> x = 0;
 
 julia> [ x for x = 1:3 ];
@@ -488,7 +474,7 @@ julia> x
 A common use of variables is giving names to specific, unchanging values. Such variables are only
 assigned once. This intent can be conveyed to the compiler using the `const` keyword:
 
-```julia
+```jldoctest
 julia> const e  = 2.71828182845904523536;
 
 julia> const pi = 3.14159265358979323846;

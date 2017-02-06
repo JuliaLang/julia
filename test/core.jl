@@ -15,6 +15,10 @@ f47{T}(x::Vector{Vector{T}}) = 0
 @test_throws TypeError ([T] where T)
 @test_throws TypeError (Array{T} where T<:[])
 @test_throws TypeError (Array{T} where T>:[])
+@test_throws TypeError (Array{T} where T<:Vararg)
+@test_throws TypeError (Array{T} where T>:Vararg)
+@test_throws TypeError (Array{T} where T<:Vararg{Int})
+@test_throws TypeError (Array{T} where T<:Vararg{Int,2})
 
 # issue #8652
 args_morespecific(a, b) = ccall(:jl_type_morespecific, Cint, (Any,Any), a, b) != 0
@@ -175,7 +179,7 @@ type Circ_{T} x::Circ_{T} end
 
 abstract Sup2a_
 abstract Sup2b_{A <: Sup2a_, B} <: Sup2a_
-@test_throws ErrorException eval(:(abstract Qux2_{T} <: Sup2b_{Qux2_{Int}, T})) # wrapped in eval to avoid #16793
+@test_throws ErrorException @eval abstract Qux2_{T} <: Sup2b_{Qux2_{Int}, T} # wrapped in eval to avoid #16793
 
 # issue #3890
 type A3890{T1}
@@ -250,6 +254,20 @@ end
 
 z = convert(Complex{Float64},2)
 @test z == Complex(2.0,0.0)
+
+function typeassert_instead_of_decl()
+    local x
+    x = 1
+    x::Float64
+    return 0
+end
+@test_throws TypeError typeassert_instead_of_decl()
+
+# type declarations on globals not implemented yet
+@test_throws ErrorException eval(parse("global x20327::Int"))
+
+y20327 = 1
+@test_throws TypeError y20327::Float64
 
 # misc
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
@@ -1358,6 +1376,11 @@ end
 import Base: promote_rule
 promote_rule{T,T2,S,S2}(A::Type{SIQ{T,T2}},B::Type{SIQ{S,S2}}) = SIQ{promote_type(T,S)}
 @test_throws ErrorException promote_type(SIQ{Int},SIQ{Float64})
+f4731{T}(x::T...) = 0
+f4731(x...) = ""
+g4731() = f4731()
+@test f4731() == ""
+@test g4731() == ""
 
 # issue #4675
 f4675(x::StridedArray...) = 1
@@ -1938,7 +1961,7 @@ end
 
 # a method specificity issue
 c99991{T}(::Type{T},x::T) = 0
-c99991{T}(::Type{UnitRange{T}},x::FloatRange{T}) = 1
+c99991{T}(::Type{UnitRange{T}},x::StepRangeLen{T}) = 1
 c99991{T}(::Type{UnitRange{T}},x::Range{T}) = 2
 @test c99991(UnitRange{Float64}, 1.0:2.0) == 1
 @test c99991(UnitRange{Int}, 1:2) == 2
@@ -3086,10 +3109,12 @@ end
 
 # don't allow Vararg{} in Union{} type constructor
 @test_throws TypeError Union{Int,Vararg{Int}}
+@test_throws TypeError Union{Vararg{Int}}
 
-# don't allow Vararg{} in Tuple{} type constructor in non-trailing position
+# only allow Vararg{} in last position of Tuple{ }
 @test_throws TypeError Tuple{Vararg{Int32},Int64,Float64}
 @test_throws TypeError Tuple{Int64,Vararg{Int32},Float64}
+@test_throws TypeError Array{Vararg}
 
 # don't allow non-types in Union
 @test_throws TypeError Union{1}
@@ -3340,7 +3365,7 @@ macro m8846(a, b=0)
 end
 @test @m8846(a) === (:a, 0)
 @test @m8846(a,1) === (:a, 1)
-@test_throws MethodError eval(:(@m8846(a,b,c)))
+@test_throws MethodError @eval @m8846(a,b,c)
 
 # a simple case of parametric dispatch with unions
 let foo{T}(x::Union{T,Void},y::Union{T,Void}) = 1
@@ -3409,7 +3434,7 @@ end
 @test_throws UndefVarError @M6846.f()
 
 # issue #14758
-@test isa(eval(:(f14758(; $([]...)) = ())), Function)
+@test isa(@eval(f14758(; $([]...)) = ()), Function)
 
 # issue #14767
 @inline f14767(x) = x ? A14767 : ()
@@ -4168,6 +4193,13 @@ function f17613_2(x)::Float64
 end
 @test isa(f17613_2(1), Float64)
 
+# return type decl with `where`
+function where1090(x::Array{T})::T where T<:Real
+    return x[1] + 2.0
+end
+@test where1090([4]) === 6
+@test_throws MethodError where1090(String[])
+
 type A1090 end
 Base.convert(::Type{Int}, ::A1090) = "hey"
 f1090()::Int = A1090()
@@ -4428,7 +4460,7 @@ gc_enable(true)
 
 # issue #18710
 bad_tvars{T}() = 1
-@test isa(@which(bad_tvars()), Method)
+@test_throws ErrorException @which(bad_tvars())
 @test_throws MethodError bad_tvars()
 
 # issue #19059 - test for lowering of `let` with assignment not adding Box in simple cases
@@ -4557,15 +4589,15 @@ end
 @test M14893.f14893() == 14893
 
 # issue #18725
-@test_nowarn eval(Main, :(begin
+@test_nowarn @eval Main begin
     f18725(x) = 1
     f18725(x) = 2
-end))
+end
 @test Main.f18725(0) == 2
-@test_warn "WARNING: Method definition f18725(Any) in module Module18725" eval(Main, :(module Module18725
+@test_warn "WARNING: Method definition f18725(Any) in module Module18725" @eval Main module Module18725
     f18725(x) = 1
     f18725(x) = 2
-end))
+end
 
 # issue #19599
 f19599{T}(x::((S)->Vector{S})(T)...) = 1
@@ -4598,3 +4630,30 @@ end
 
 # issue #19963
 @test_nowarn ccall(:jl_free, Void, (Ptr{Void}, ), C_NULL)
+
+# Wrong string size on 64bits for large string.
+if Sys.WORD_SIZE == 64
+    @noinline function test_large_string20360(slot)
+        try
+            # Do no touch the string to avoid triggering OOM
+            slot[] = Base._string_n(2^32)
+            gc(false)
+        catch ex
+            # This can happen if there's a virtual address size limit
+            @test isa(ex, OutOfMemoryError)
+            @test_broken false
+        end
+        return
+    end
+    @noinline function tester20360()
+        gc()
+        # Makes sure the string is rooted during the `gc(false)`
+        # but is not before the last gc in this function.
+        slot = Ref{Any}()
+        test_large_string20360(slot)
+        slot[] = nothing
+        gc()
+        return
+    end
+    @test_nowarn tester20360()
+end

@@ -2,7 +2,7 @@
 
 module PermutedDimsArrays
 
-export permutedims
+export permutedims, PermutedDimsArray
 
 # Some day we will want storage-order-aware iteration, so put perm in the parameters
 immutable PermutedDimsArray{T,N,perm,iperm,AA<:AbstractArray} <: AbstractArray{T,N}
@@ -16,6 +16,29 @@ immutable PermutedDimsArray{T,N,perm,iperm,AA<:AbstractArray} <: AbstractArray{T
     end
 end
 
+"""
+    PermutedDimsArray(A, perm) -> B
+
+Given an AbstractArray `A`, create a view `B` such that the
+dimensions appear to be permuted. Similar to `permutedims`, except
+that no copying occurs (`B` shares storage with `A`).
+
+See also: [`permutedims`](@ref).
+
+# Example
+
+```jldoctest
+julia> A = rand(3,5,4);
+
+julia> B = PermutedDimsArray(A, (3,1,2));
+
+julia> size(B)
+(4, 3, 5)
+
+julia> B[3,1,2] == A[1,2,3]
+true
+```
+"""
 function PermutedDimsArray{T,N}(data::AbstractArray{T,N}, perm)
     length(perm) == N || throw(ArgumentError(string(perm, " is not a valid permutation of dimensions 1:", N)))
     iperm = invperm(perm)
@@ -25,6 +48,20 @@ end
 Base.parent(A::PermutedDimsArray) = A.parent
 Base.size{T,N,perm}(A::PermutedDimsArray{T,N,perm})    = genperm(size(parent(A)),    perm)
 Base.indices{T,N,perm}(A::PermutedDimsArray{T,N,perm}) = genperm(indices(parent(A)), perm)
+
+Base.unsafe_convert{T}(::Type{Ptr{T}}, A::PermutedDimsArray{T}) = Base.unsafe_convert(Ptr{T}, parent(A))
+
+# It's OK to return a pointer to the first element, and indeed quite
+# useful for wrapping C routines that require a different storage
+# order than used by Julia. But for an array with unconventional
+# storage order, a linear offset is ambiguous---is it a memory offset
+# or a linear index?
+Base.pointer{T}(A::PermutedDimsArray{T}, i::Integer) = throw(ArgumentError("pointer(A, i) is deliberately unsupported for PermutedDimsArray"))
+
+function Base.strides{T,N,perm}(A::PermutedDimsArray{T,N,perm})
+    s = strides(parent(A))
+    ntuple(d->s[perm[d]], Val{N})
+end
 
 @inline function Base.getindex{T,N,perm,iperm}(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N})
     @boundscheck checkbounds(A, I...)
@@ -49,6 +86,8 @@ _genperm(out, I) = out
 Permute the dimensions of array `A`. `perm` is a vector specifying a permutation of length
 `ndims(A)`. This is a generalization of transpose for multi-dimensional arrays. Transpose is
 equivalent to `permutedims(A, [2,1])`.
+
+See also: [`PermutedDimsArray`](@ref).
 
 ```jldoctest
 julia> A = reshape(collect(1:8), (2,2,2))

@@ -85,7 +85,7 @@ julia> macro m()
 @m (macro with 1 method)
 
 julia> M.f()
-(1,2)
+(1, 2)
 ```
 With `@macroexpand` the expression expands where `@macroexpand` appears in the code (module
 `M` in the example). With `macroexpand` the expression expands in the current module where
@@ -109,12 +109,16 @@ evaluates expressions in that module.
 Core.eval
 
 """
-    @eval
+    @eval [mod,] ex
 
-Evaluate an expression and return the value.
+Evaluate an expression with values interpolated into it using `eval`.
+If two arguments are provided, the first is the module to evaluate in.
 """
-macro eval(x)
-    :($(esc(:eval))($(Expr(:quote,x))))
+macro eval(ex)
+    :(eval($(current_module()), $(Expr(:quote,ex))))
+end
+macro eval(mod, ex)
+    :(eval($(esc(mod)), $(Expr(:quote,ex))))
 end
 
 """

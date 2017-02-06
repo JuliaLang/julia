@@ -467,10 +467,10 @@ sqr(x) = x^2
 @test Nullable(2) .^ Nullable{Int}()  |> isnull_oftype(Int)
 
 # multi-arg broadcast
-@test Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable(1) .+
-    Nullable(1) === Nullable(6)
-@test Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable{Int}() .+
-    Nullable(1) .+ Nullable(1) |> isnull_oftype(Int)
+@test (Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable(1) .+
+       Nullable(1) === Nullable(6))
+@test (Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable{Int}() .+
+       Nullable(1) .+ Nullable(1) |> isnull_oftype(Int))
 
 # these are not inferrable because there are too many arguments
 us = map(Nullable, 1:20)

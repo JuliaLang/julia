@@ -26,6 +26,8 @@ let x = spv_x1
     @test nonzeros(x) == [1.25, -0.75, 3.5]
 end
 
+@test count(SparseVector(8, [2, 5, 6], [true,false,true])) == 2
+
 # full
 
 for (x, xf) in [(spv_x1, x1_full)]
@@ -947,18 +949,18 @@ let m = 10
                 fspvec = convert(Array, spvec)
                 # test out-of-place left-division methods
                 for mat in (trimats..., unittrimats...), func in (\, At_ldiv_B, Ac_ldiv_B)
-                    @test isapprox((func)(mat, spvec), (func)(mat, fspvec))
+                    @test func(mat, spvec) ≈ func(mat, fspvec)
                 end
                 # test in-place left-division methods not involving quotients
                 if eltypevec == typeof(zero(eltypemat)*zero(eltypevec) + zero(eltypemat)*zero(eltypevec))
                     for mat in unittrimats, func in (A_ldiv_B!, Base.LinAlg.At_ldiv_B!, Base.LinAlg.Ac_ldiv_B!)
-                        @test isapprox((func)(mat, copy(spvec)), (func)(mat, copy(fspvec)))
+                        @test func(mat, copy(spvec)) ≈ func(mat, copy(fspvec))
                     end
                 end
                 # test in-place left-division methods involving quotients
                 if eltypevec == typeof((zero(eltypemat)*zero(eltypevec) + zero(eltypemat)*zero(eltypevec))/one(eltypemat))
                     for mat in trimats, func in (A_ldiv_B!, Base.LinAlg.At_ldiv_B!, Base.LinAlg.Ac_ldiv_B!)
-                        @test isapprox((func)(mat, copy(spvec)), (func)(mat, copy(fspvec)))
+                        @test func(mat, copy(spvec)) ≈ func(mat, copy(fspvec))
                     end
                 end
             end

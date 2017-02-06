@@ -44,7 +44,7 @@ behavior, should take care to create a copy of inputs that it may modify.
 
 Many functions for constructing and initializing arrays are provided. In the following list of
 such functions, calls with a `dims...` argument can either take a single tuple of dimension sizes
-or a series of dimension sizes passed as a variable number of arguments. Most of the functions
+or a series of dimension sizes passed as a variable number of arguments. Most of these functions
 also accept a first input `T`, which is the element type of the array. If the type `T` is
 omitted it will default to `Float64`.
 
@@ -193,8 +193,8 @@ us add a third argument to `map`:
 ```jldoctest
 julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1 3; 2 4])
 2×2 Array{Tuple{Float64,Int64},2}:
- (0.5,1)       (0.333333,3)
- (0.333333,2)  (0.25,4)
+ (0.5, 1)       (0.333333, 3)
+ (0.333333, 2)  (0.25, 4)
 ```
 
 Ranges in generators and comprehensions can depend on previous ranges by writing multiple `for`
@@ -203,12 +203,12 @@ keywords:
 ```jldoctest
 julia> [(i,j) for i=1:3 for j=1:i]
 6-element Array{Tuple{Int64,Int64},1}:
- (1,1)
- (2,1)
- (2,2)
- (3,1)
- (3,2)
- (3,3)
+ (1, 1)
+ (2, 1)
+ (2, 2)
+ (3, 1)
+ (3, 2)
+ (3, 3)
 ```
 
 In such cases, the result is always 1-d.
@@ -218,8 +218,8 @@ Generated values can be filtered using the `if` keyword:
 ```jldoctest
 julia> [(i,j) for i=1:3 for j=1:i if i+j == 4]
 2-element Array{Tuple{Int64,Int64},1}:
- (2,2)
- (3,1)
+ (2, 2)
+ (3, 1)
 ```
 
 ### [Indexing](@id man-array-indexing)
@@ -233,7 +233,7 @@ X = A[I_1, I_2, ..., I_n]
 where each `I_k` may be a scalar integer, an array of integers, or any other
 [supported index](@ref man-supported-index-types). This includes
 [`Colon`](@ref) (`:`) to select all indices within the entire dimension,
-ranges of the form `a:c` or `a:b:c` to select congiguous or strided
+ranges of the form `a:c` or `a:b:c` to select contiguous or strided
 subsections, and arrays of booleans to select elements at their `true` indices.
 
 If all the indices are scalars, then the result `X` is a single element from the array `A`. Otherwise,
@@ -299,7 +299,7 @@ A[I_1, I_2, ..., I_n] = X
 where each `I_k` may be a scalar integer, an array of integers, or any other
 [supported index](@ref man-supported-index-types). This includes
 [`Colon`](@ref) (`:`) to select all indices within the entire dimension,
-ranges of the form `a:c` or `a:b:c` to select congiguous or strided
+ranges of the form `a:c` or `a:b:c` to select contiguous or strided
 subsections, and arrays of booleans to select elements at their `true` indices.
 
 If `X` is an array, it must have the same number of elements as the product of the lengths of
@@ -427,7 +427,7 @@ julia> A[CartesianIndex.(indices(A, 1), indices(A, 2)), :]
 
     `CartesianIndex` and arrays of `CartesianIndex` are not compatible with the
     `end` keyword to represent the last index of a dimension. Do not use `end`
-    in indexing expressions that may contain either.
+    in indexing expressions that may contain either `CartesianIndex` or arrays thereof.
 
 #### Logical indexing
 
@@ -497,12 +497,12 @@ julia> B = view(A, 1:3, 2:3);
 julia> for i in eachindex(B)
            @show i
        end
-i = CartesianIndex{2}((1,1))
-i = CartesianIndex{2}((2,1))
-i = CartesianIndex{2}((3,1))
-i = CartesianIndex{2}((1,2))
-i = CartesianIndex{2}((2,2))
-i = CartesianIndex{2}((3,2))
+i = CartesianIndex{2}((1, 1))
+i = CartesianIndex{2}((2, 1))
+i = CartesianIndex{2}((3, 1))
+i = CartesianIndex{2}((1, 2))
+i = CartesianIndex{2}((2, 2))
+i = CartesianIndex{2}((3, 2))
 ```
 
 In contrast with `for i = 1:length(A)`, iterating with `eachindex` provides an efficient way to

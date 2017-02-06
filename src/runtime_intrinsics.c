@@ -847,37 +847,6 @@ cvt_iintrinsic(LLVMFPtoUI, fptoui)
 un_fintrinsic_withtype(fpcvt,fptrunc)
 un_fintrinsic_withtype(fpcvt,fpext)
 
-JL_DLLEXPORT jl_value_t *jl_fptoui_auto(jl_value_t *a)
-{
-    jl_datatype_t *ty;
-    switch (jl_datatype_size(jl_typeof(a))) {
-        case 4:
-            ty = jl_uint32_type;
-            break;
-        case 8:
-            ty = jl_uint64_type;
-            break;
-        default:
-            jl_error("fptoui: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
-    }
-    return jl_fptoui((jl_value_t*)ty, a);
-}
-JL_DLLEXPORT jl_value_t *jl_fptosi_auto(jl_value_t *a)
-{
-    jl_datatype_t *ty;
-    switch (jl_datatype_size(jl_typeof(a))) {
-        case 4:
-            ty = jl_int32_type;
-            break;
-        case 8:
-            ty = jl_int64_type;
-            break;
-        default:
-            jl_error("fptoui: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
-    }
-    return jl_fptosi((jl_value_t*)ty, a);
-}
-
 // checked conversion
 static inline int all_eq(char *p, char n, char v)
 {

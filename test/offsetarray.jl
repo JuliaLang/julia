@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-isdefined(Main, :TestHelpers) || eval(Main, :(include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))))
+isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using TestHelpers.OAs
 
 const OAs_name = join(fullname(OAs), ".")
@@ -155,11 +155,11 @@ targets1 = ["0-dimensional $OAs_name.OffsetArray{Float64,0,Array{Float64,0}}:\n1
             "$OAs_name.OffsetArray{Float64,2,Array{Float64,2}} with indices 2:2×3:3:\n 1.0",
             "$OAs_name.OffsetArray{Float64,3,Array{Float64,3}} with indices 2:2×3:3×4:4:\n[:, :, 4] =\n 1.0",
             "$OAs_name.OffsetArray{Float64,4,Array{Float64,4}} with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
-targets2 = ["(1.0,1.0)",
-            "([1.0],[1.0])",
-            "(\n[1.0],\n\n[1.0])",
-            "(\n[1.0],\n\n[1.0])",
-            "(\n[1.0],\n\n[1.0])"]
+targets2 = ["(1.0, 1.0)",
+            "([1.0], [1.0])",
+            "([1.0], [1.0])",
+            "([1.0], [1.0])",
+            "([1.0], [1.0])"]
 for n = 0:4
     a = OffsetArray(ones(Float64,ntuple(d->1,n)), ntuple(identity,n))
     show(IOContext(io, limit=true), MIME("text/plain"), a)
@@ -167,6 +167,9 @@ for n = 0:4
     show(IOContext(io, limit=true), MIME("text/plain"), (a,a))
     @test String(take!(io)) == targets2[n+1]
 end
+P = OffsetArray(rand(8,8), (1,1))
+PV = view(P, 2:3, :)
+@test endswith(summary(PV), "with indices Base.OneTo(2)×2:9")
 
 # Similar
 B = similar(A, Float32)

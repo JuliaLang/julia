@@ -563,12 +563,12 @@ end
 let
     old_have_color = Base.have_color
     try
-        eval(Base, :(have_color = true))
+        @eval Base have_color = true
         buf = IOBuffer()
         print_with_color(:red, buf, "foo")
         @test startswith(String(take!(buf)), Base.text_colors[:red])
     finally
-        eval(Base, :(have_color = $(old_have_color)))
+        @eval Base have_color = $(old_have_color)
     end
 end
 
@@ -585,7 +585,7 @@ end
 let
     old_have_color = Base.have_color
     try
-        eval(Base, :(have_color = true))
+        @eval Base have_color = true
         buf = IOBuffer()
         print_with_color(:red, buf, "foo")
         # Check that we get back to normal text color in the end
@@ -595,7 +595,7 @@ let
         print_with_color(:red, buf, "foo"; bold = true)
         @test String(take!(buf)) == "\e[1m\e[31mfoo\e[39m\e[22m"
     finally
-        eval(Base, :(have_color = $(old_have_color)))
+        @eval Base have_color = $(old_have_color)
     end
 end
 
@@ -618,4 +618,25 @@ let
 
     x_defined = Ref{String}("Test")
     @test isassigned(x_defined)
+end
+
+type Demo_20254
+    arr::Array{String}
+end
+
+# these cause stack overflows and are a little flaky on CI, ref #20256
+if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+    function Demo_20254(arr::AbstractArray=Any[])
+        Demo_20254(string.(arr))
+    end
+
+    _unsafe_get_19433(x::NTuple{1}) = (unsafe_get(x[1]),)
+    _unsafe_get_19433(xs::Vararg) = (unsafe_get(xs[1]), _unsafe_get_19433(xs[2:end])...)
+
+    f_19433(f_19433, xs...) = f_19433(_unsafe_get_19433(xs)...)
+
+    @testset "test this does not crash, issue #19433 and #20254" begin
+        @test_throws StackOverflowError Demo_20254()
+        @test_throws StackOverflowError f_19433(+, 1, 2)
+    end
 end

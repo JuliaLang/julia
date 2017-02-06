@@ -1,55 +1,57 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-##################################
-# Cross Plaform tests for spawn. #
-##################################
+###################################
+# Cross Platform tests for spawn. #
+###################################
 
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 
-yes = `yes`
-echo = `echo`
+yescmd = `yes`
+echocmd = `echo`
 sortcmd = `sort`
-printf = `printf`
+printfcmd = `printf`
 truecmd = `true`
 falsecmd = `false`
 catcmd = `cat`
 shcmd = `sh`
 sleepcmd = `sleep`
+lscmd = `ls`
 if is_windows()
     try # use busybox-w32 on windows
         success(`busybox`)
-        yes = `busybox yes`
-        echo = `busybox echo`
+        yescmd = `busybox yes`
+        echocmd = `busybox echo`
         sortcmd = `busybox sort`
-        printf = `busybox printf`
+        printfcmd = `busybox printf`
         truecmd = `busybox true`
         falsecmd = `busybox false`
         catcmd = `busybox cat`
         shcmd = `busybox sh`
         sleepcmd = `busybox sleep`
+        lscmd = `busybox ls`
     end
 end
 
 #### Examples used in the manual ####
 
-@test readstring(`$echo hello \| sort`) == "hello | sort\n"
-@test readstring(pipeline(`$echo hello`, sortcmd)) == "hello\n"
-@test length(spawn(pipeline(`$echo hello`, sortcmd)).processes) == 2
+@test readstring(`$echocmd hello \| sort`) == "hello | sort\n"
+@test readstring(pipeline(`$echocmd hello`, sortcmd)) == "hello\n"
+@test length(spawn(pipeline(`$echocmd hello`, sortcmd)).processes) == 2
 
-out = readstring(`$echo hello` & `$echo world`)
+out = readstring(`$echocmd hello` & `$echocmd world`)
 @test search(out,"world") != 0:-1
 @test search(out,"hello") != 0:-1
-@test readstring(pipeline(`$echo hello` & `$echo world`, sortcmd)) == "hello\nworld\n"
+@test readstring(pipeline(`$echocmd hello` & `$echocmd world`, sortcmd)) == "hello\nworld\n"
 
-@test (run(`$printf "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
+@test (run(`$printfcmd "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
 
 # Test for SIGPIPE being treated as normal termination (throws an error if broken)
-is_unix() && run(pipeline(yes, `head`, DevNull))
+is_unix() && run(pipeline(yescmd, `head`, DevNull))
 
 begin
     a = Base.Condition()
     @schedule begin
-        p = spawn(pipeline(yes,DevNull))
+        p = spawn(pipeline(yescmd,DevNull))
         Base.notify(a,p)
         @test !success(p)
     end
@@ -84,7 +86,7 @@ end
 
 # STDIN Redirection
 let file = tempname()
-    run(pipeline(`$echo hello world`, file))
+    run(pipeline(`$echocmd hello world`, file))
     @test readstring(pipeline(file, catcmd)) == "hello world\n"
     @test open(readstring, pipeline(file, catcmd), "r") == "hello world\n"
     rm(file)
@@ -104,7 +106,7 @@ if !is_windows() # WINNT reports operation not supported on socket (ENOTSUP) for
     end
     t2 = @async begin
         sock = connect(fetch(r))
-        run(pipeline(`$echo hello world`, sock))
+        run(pipeline(`$echocmd hello world`, sock))
         close(sock)
         return true
     end
@@ -212,7 +214,7 @@ if valgrind_off
 end
 
 # issue #6310
-@test readstring(pipeline(`$echo "2+2"`, `$exename --startup-file=no`)) == "4\n"
+@test readstring(pipeline(`$echocmd "2+2"`, `$exename --startup-file=no`)) == "4\n"
 
 # issue #5904
 @test run(pipeline(ignorestatus(falsecmd), truecmd)) === nothing
@@ -270,9 +272,9 @@ end
 # issue #10994: libuv can't handle strings containing NUL
 let bad = "bad\0name"
     @test_throws ArgumentError run(`$bad`)
-    @test_throws ArgumentError run(`$echo $bad`)
-    @test_throws ArgumentError run(setenv(`$echo hello`, bad=>"good"))
-    @test_throws ArgumentError run(setenv(`$echo hello`, "good"=>bad))
+    @test_throws ArgumentError run(`$echocmd $bad`)
+    @test_throws ArgumentError run(setenv(`$echocmd hello`, bad=>"good"))
+    @test_throws ArgumentError run(setenv(`$echocmd hello`, "good"=>bad))
 end
 
 # issue #12829
@@ -391,17 +393,17 @@ end
 # equality tests for Cmd
 @test Base.Cmd(``) == Base.Cmd(``)
 @test Base.Cmd(`lsof -i :9090`) == Base.Cmd(`lsof -i :9090`)
-@test Base.Cmd(`$echo test`) == Base.Cmd(`$echo test`)
-@test Base.Cmd(``) != Base.Cmd(`$echo test`)
+@test Base.Cmd(`$echocmd test`) == Base.Cmd(`$echocmd test`)
+@test Base.Cmd(``) != Base.Cmd(`$echocmd test`)
 @test Base.Cmd(``, ignorestatus=true) != Base.Cmd(``, ignorestatus=false)
 @test Base.Cmd(``, dir="TESTS") != Base.Cmd(``, dir="TEST")
 @test Base.Set([``, ``]) == Base.Set([``])
-@test Set([``, echo]) != Set([``, ``])
-@test Set([echo, ``, ``, echo]) == Set([echo, ``])
+@test Set([``, echocmd]) != Set([``, ``])
+@test Set([echocmd, ``, ``, echocmd]) == Set([echocmd, ``])
 
 # equality tests for AndCmds
-@test Base.AndCmds(`$echo abc`, `$echo def`) == Base.AndCmds(`$echo abc`, `$echo def`)
-@test Base.AndCmds(`$echo abc`, `$echo def`) != Base.AndCmds(`$echo abc`, `$echo xyz`)
+@test Base.AndCmds(`$echocmd abc`, `$echocmd def`) == Base.AndCmds(`$echocmd abc`, `$echocmd def`)
+@test Base.AndCmds(`$echocmd abc`, `$echocmd def`) != Base.AndCmds(`$echocmd abc`, `$echocmd xyz`)
 
 # test for correct error when an empty command is spawned (Issue 19094)
 @test_throws ArgumentError run(Base.Cmd(``))
@@ -411,13 +413,13 @@ end
 
 @test_throws ArgumentError spawn(Base.Cmd(``))
 @test_throws ArgumentError spawn(Base.AndCmds(``, ``))
-@test_throws ArgumentError spawn(Base.AndCmds(``, `$echo test`))
-@test_throws ArgumentError spawn(Base.AndCmds(`$echo test`, ``))
+@test_throws ArgumentError spawn(Base.AndCmds(``, `$echocmd test`))
+@test_throws ArgumentError spawn(Base.AndCmds(`$echocmd test`, ``))
 
 # tests for reducing over collection of Cmd
 @test_throws ArgumentError reduce(&, Base.AbstractCmd[])
 @test_throws ArgumentError reduce(&, Base.Cmd[])
-@test reduce(&, [`$echo abc`, `$echo def`, `$echo hij`]) == `$echo abc` & `$echo def` & `$echo hij`
+@test reduce(&, [`$echocmd abc`, `$echocmd def`, `$echocmd hij`]) == `$echocmd abc` & `$echocmd def` & `$echocmd hij`
 
 # test for proper handling of FD exhaustion
 if is_unix()
@@ -453,3 +455,6 @@ let p=Pipe()
     @async close(p.in)
     @test readstring(p.out) == "Int128(0xffffffffffffffffffffffffffffffff)"
 end
+
+# readlines(::Cmd), accidentally broken in #20203
+@test sort(readlines(`$lscmd -A`)) == sort(readdir())

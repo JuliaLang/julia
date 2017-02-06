@@ -165,7 +165,7 @@ tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
 function gradient(F::AbstractVector, h::Vector)
     n = length(F)
-    T = typeof(one(eltype(F))/one(eltype(h)))
+    T = typeof(oneunit(eltype(F))/oneunit(eltype(h)))
     g = similar(F, T)
     if n == 1
         g[1] = zero(T)
@@ -873,6 +873,8 @@ function sylvester{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T},C::Stri
     scale!(QA*A_mul_Bc(Y,QB), inv(scale))
 end
 sylvester{T<:Integer}(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) = sylvester(float(A), float(B), float(C))
+
+sylvester(a::Union{Real,Complex},b::Union{Real,Complex},c::Union{Real,Complex}) = -c / (a + b)
 
 # AX + XA' + C = 0
 

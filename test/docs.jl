@@ -915,14 +915,23 @@ end
 
 let save_color = Base.have_color
     try
-        eval(Base, :(have_color = false))
+        @eval Base have_color = false
         @test sprint(Base.Docs.repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
         @test sprint(Base.Docs.repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
     finally
-        eval(Base, :(have_color = $save_color))
+        @eval Base have_color = $save_color
     end
 end
 
+# issue #15684
+begin
+    """
+    abc
+    """
+    f15684(x) = 1
+end
+
+@test string(@doc f15684) == "abc\n"
 
 # Dynamic docstrings
 
@@ -930,9 +939,23 @@ type DynamicDocType
     x
 end
 
-Base.Docs.getdoc(d::DynamicDocType) = Base.Markdown.parse(d.x)
+Base.Docs.getdoc(d::DynamicDocType, sig) = "$(d.x) $(sig)"
 
 dynamic_test = DynamicDocType("test 1")
-@test docstrings_equal(@doc(dynamic_test), doc"test 1")
+@test @doc(dynamic_test) == "test 1 Union{}"
 dynamic_test.x = "test 2"
-@test docstrings_equal(@doc(dynamic_test), doc"test 2")
+@test @doc(dynamic_test) == "test 2 Union{}"
+@test @doc(dynamic_test(::String)) == "test 2 Tuple{String}"
+
+@test Docs._repl(:(dynamic_test(1.0))) == :(@doc $(Expr(:escape, :(dynamic_test(::typeof(1.0))))))
+@test Docs._repl(:(dynamic_test(::String))) == :(@doc $(Expr(:escape, :(dynamic_test(::String)))))
+
+
+# Equality testing
+
+@test Text("docstring") == Text("docstring")
+@test hash(Text("docstring")) == hash(Text("docstring"))
+@test HTML("<b>docstring</b>") == HTML("<b>docstring</b>")
+@test Text("docstring1") ≠ Text("docstring2")
+@test hash(Text("docstring1")) ≠ hash(Text("docstring2"))
+@test hash(Text("docstring")) ≠ hash(HTML("docstring"))

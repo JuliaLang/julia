@@ -95,7 +95,7 @@ macro enum(T,syms...)
             lo = min(lo, i)
             hi = max(hi, i)
         end
-        i += one(i)
+        i += oneunit(i)
     end
     values = basetype[i[2] for i in vals]
     if hasexpr && values != unique(values)

@@ -517,10 +517,10 @@ Dict{Char,Int64} with 2 entries:
   'a' => 2
 
 julia> getkey(a,'a',1)
-'a'
+'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 
 julia> getkey(a,'d','a')
-'a'
+'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 ```
 """
 function getkey{K,V}(h::Dict{K,V}, key, default)
@@ -662,7 +662,7 @@ end
 start(t::ImmutableDict) = t
 next{K,V}(::ImmutableDict{K,V}, t) = (Pair{K,V}(t.key, t.value), t.parent)
 done(::ImmutableDict, t) = !isdefined(t, :parent)
-length(t::ImmutableDict) = count(x->1, t)
+length(t::ImmutableDict) = count(x->true, t)
 isempty(t::ImmutableDict) = done(t, start(t))
 function similar(t::ImmutableDict)
     while isdefined(t, :parent)

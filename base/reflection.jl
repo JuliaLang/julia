@@ -43,7 +43,7 @@ Get the fully-qualified name of a module as a tuple of symbols. For example,
 
 ```jldoctest
 julia> fullname(Base.Pkg)
-(:Base,:Pkg)
+(:Base, :Pkg)
 
 julia> fullname(Main)
 ()
@@ -144,11 +144,12 @@ fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
 fieldnames{T<:Tuple}(t::Type{T}) = Int[n for n in 1:nfields(t)]
 
 """
-    Base.datatype_name(t::DataType) -> Symbol
+    Base.datatype_name(t) -> Symbol
 
-Get the name of a `DataType` (without its parent module) as a symbol.
+Get the name of a (potentially UnionAll-wrapped) `DataType` (without its parent module) as a symbol.
 """
 datatype_name(t::DataType) = t.name.name
+datatype_name(t::UnionAll) = datatype_name(unwrap_unionall(t))
 
 """
     Base.datatype_module(t::DataType) -> Module
@@ -233,6 +234,39 @@ a concrete type that can have instances.
 isleaftype(t::ANY) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
 
 """
+    Base.isabstract(T)
+
+Determine whether `T` was declared as an abstract type (i.e. using the
+`abstract` keyword).
+"""
+function isabstract(t::ANY)
+    @_pure_meta
+    t = unwrap_unionall(t)
+    isa(t,DataType) && t.abstract
+end
+
+"""
+    Base.parameter_upper_bound(t::UnionAll, idx)
+
+Determine the upper bound of a type parameter in the underlying type. E.g.:
+```jldoctest
+julia> immutable Foo{T<:AbstractFloat, N}
+           x::Tuple{T, N}
+       end
+
+julia> Base.parameter_upper_bound(Foo, 1)
+AbstractFloat
+
+julia> Base.parameter_upper_bound(Foo, 2)
+Any
+```
+"""
+function parameter_upper_bound(t::UnionAll, idx)
+    @_pure_meta
+    rewrap_unionall(unwrap_unionall(t).parameters[idx], t)
+end
+
+"""
     typeintersect(T, S)
 
 Compute a type that contains the intersection of `T` and `S`. Usually this will be the
@@ -252,18 +286,18 @@ julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i
 
 julia> structinfo(Base.Filesystem.StatStruct)
 12-element Array{Tuple{UInt64,Symbol,DataType},1}:
- (0x0000000000000000,:device,UInt64)
- (0x0000000000000008,:inode,UInt64)
- (0x0000000000000010,:mode,UInt64)
- (0x0000000000000018,:nlink,Int64)
- (0x0000000000000020,:uid,UInt64)
- (0x0000000000000028,:gid,UInt64)
- (0x0000000000000030,:rdev,UInt64)
- (0x0000000000000038,:size,Int64)
- (0x0000000000000040,:blksize,Int64)
- (0x0000000000000048,:blocks,Int64)
- (0x0000000000000050,:mtime,Float64)
- (0x0000000000000058,:ctime,Float64)
+ (0x0000000000000000, :device, UInt64)
+ (0x0000000000000008, :inode, UInt64)
+ (0x0000000000000010, :mode, UInt64)
+ (0x0000000000000018, :nlink, Int64)
+ (0x0000000000000020, :uid, UInt64)
+ (0x0000000000000028, :gid, UInt64)
+ (0x0000000000000030, :rdev, UInt64)
+ (0x0000000000000038, :size, Int64)
+ (0x0000000000000040, :blksize, Int64)
+ (0x0000000000000048, :blocks, Int64)
+ (0x0000000000000050, :mtime, Float64)
+ (0x0000000000000058, :ctime, Float64)
 ```
 """
 fieldoffset(x::DataType, idx::Integer) = (@_pure_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
@@ -298,22 +332,48 @@ enumerated types (see `@enum`).
 function instances end
 
 # subtypes
-function _subtypes(m::Module, x::DataType, sts=Set{DataType}(), visited=Set{Module}())
+function _subtypes(m::Module, x::Union{DataType,UnionAll},
+                   sts=Set{Union{DataType,UnionAll}}(), visited=Set{Module}())
     push!(visited, m)
+    xt = unwrap_unionall(x)
+    if !isa(xt, DataType)
+        return sts
+    end
+    xt = xt::DataType
     for s in names(m, true)
         if isdefined(m, s) && !isdeprecated(m, s)
             t = getfield(m, s)
-            if isa(t, DataType) && t.name.name == s && supertype(t).name == x.name
-                ti = typeintersect(t, x)
-                ti != Bottom && push!(sts, ti)
-            elseif isa(t, Module) && !in(t, visited)
-                _subtypes(t, x, sts, visited)
+            if isa(t, DataType)
+                t = t::DataType
+                if t.name.name === s && supertype(t).name == xt.name
+                    ti = typeintersect(t, x)
+                    ti != Bottom && push!(sts, ti)
+                end
+            elseif isa(t, UnionAll)
+                t = t::UnionAll
+                tt = unwrap_unionall(t)
+                isa(tt, DataType) || continue
+                tt = tt::DataType
+                if tt.name.name === s && supertype(tt).name == xt.name
+                    ti = typeintersect(t, x)
+                    ti != Bottom && push!(sts, ti)
+                end
+            elseif isa(t, Module)
+                t = t::Module
+                in(t, visited) || _subtypes(t, x, sts, visited)
             end
         end
     end
     return sts
 end
-subtypes(m::Module, x::DataType) = sort(collect(_subtypes(m, x)), by=string)
+function subtypes(m::Module, x::Union{DataType,UnionAll})
+    if isabstract(x)
+        sort!(collect(_subtypes(m, x)), by=string)
+    else
+        # Fast path
+        Union{DataType,UnionAll}[]
+    end
+end
 
 """
     subtypes(T::DataType)
@@ -330,7 +390,7 @@ julia> subtypes(Integer)
  Unsigned
 ```
 """
-subtypes(x::DataType) = subtypes(Main, x)
+subtypes(x::Union{DataType,UnionAll}) = subtypes(Main, x)
 
 function to_tuple_type(t::ANY)
     @_pure_meta
@@ -816,9 +876,14 @@ function method_exists(f::ANY, t::ANY)
         typemax(UInt)) != 0
 end
 
-function isambiguous(m1::Method, m2::Method)
+function isambiguous(m1::Method, m2::Method, allow_bottom_tparams::Bool=true)
     ti = typeintersect(m1.sig, m2.sig)
     ti === Bottom && return false
+    if !allow_bottom_tparams
+        (_, env) = ccall(:jl_match_method, Ref{SimpleVector}, (Any, Any),
+                         ti, m1.sig)
+        any(x->x === Bottom, env) && return false
+    end
     ml = _methods_by_ftype(ti, -1, typemax(UInt))
     isempty(ml) && return true
     for m in ml

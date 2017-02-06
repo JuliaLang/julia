@@ -33,7 +33,7 @@ system.
 
 Here are some simple examples using arithmetic operators:
 
-```julia
+```jldoctest
 julia> 1 + 2 + 3
 6
 
@@ -65,7 +65,7 @@ are supported on all primitive integer types:
 
 Here are some examples with bitwise operators:
 
-```julia
+```jldoctest
 julia> ~123
 -124
 
@@ -95,7 +95,7 @@ of the operation back into its left operand. The updating version of the binary 
 by placing a `=` immediately after the operator. For example, writing `x += 3` is equivalent to
 writing `x = x + 3`:
 
-```julia
+```jldoctest
 julia> x = 1
 1
 
@@ -116,40 +116,51 @@ The updating versions of all the binary arithmetic and bitwise operators are:
     An updating operator rebinds the variable on the left-hand side. As a result, the type of the
     variable may change.
 
-    ```julia
+    ```jldoctest
     julia> x = 0x01; typeof(x)
     UInt8
 
-    julia> x *= 2 #Same as x = x * 2
+    julia> x *= 2 # Same as x = x * 2
     2
 
-    julia> isa(x, Int)
-    true
+    julia> typeof(x)
+    Int64
     ```
 
 ## [Vectorized "dot" operators](@id man-dot-operators)
 
 For *every* binary operation like `^`, there is a corresponding
 "dot" operation `.^` that is *automatically* defined
-to perform `^` element-by-element on arrays.   For example,
+to perform `^` element-by-element on arrays. For example,
 `[1,2,3] ^ 3` is not defined, since there is no standard
 mathematical meaning to "cubing" an array, but `[1,2,3] .^ 3`
 is defined as computing the elementwise
-(or "vectorized") result `[1^3, 2^3, 3^3]`.
+(or "vectorized") result `[1^3, 2^3, 3^3]`.  Similarly for unary
+operators like `!` or `√`, there is a corresponding `.√` that
+applies the operator elementwise.
+
+```jldoctest
+julia> [1,2,3] .^ 3
+3-element Array{Int64,1}:
+  1
+  8
+ 27
+```
 
 More specifically, `a .^ b` is parsed as the ["dot" call](@ref man-vectorized)
 `(^).(a,b)`, which performs a [broadcast](@ref Broadcasting) operation:
 it can combine arrays and scalars, arrays of the same size (performing
 the operation elementwise), and even arrays of different shapes (e.g.
-combining row and column vectors to produce a matrix).   Moreover, like
+combining row and column vectors to produce a matrix). Moreover, like
 all vectorized "dot calls," these "dot operators" are
-*fusing*.  For example, if you compute `2 .* A.^2 .+ sin.(A)` for an
-array `A`, it performs a *single* loop over `A`, computing `2a^2 + sin(a)`
-for each element of `A`.  In particular, nested dot calls like `f.(g.(x))`
+*fusing*. For example, if you compute `2 .* A.^2 .+ sin.(A)` (or
+equivalently `@. 2A^2 + sin(A)`, using the [`@.`](@ref @__dot__) macro) for
+an array `A`, it performs a *single* loop over `A`, computing `2a^2 + sin(a)`
+for each element of `A`. In particular, nested dot calls like `f.(g.(x))`
 are fused, and "adjacent" binary operators like `x .+ 3 .* x.^2` are
 equivalent to nested dot calls `(+).(x, (*).(3, (^).(x, 2)))`.
 
-Furthermore, "dotted" updating operators like `a .+= b` are parsed
+Furthermore, "dotted" updating operators like `a .+= b` (or `@. a += b`) are parsed
 as `a .= a .+ b`, where `.=` is a fused *in-place* assignment operation
 (see the [dot syntax documentation](@ref man-vectorized)).
 
@@ -173,7 +184,7 @@ Standard comparison operations are defined for all the primitive numeric types:
 
 Here are some simple examples:
 
-```julia
+```jldoctest
 julia> 1 == 1
 true
 
@@ -219,7 +230,7 @@ are compared according to the [IEEE 754 standard](https://en.wikipedia.org/wiki/
 
 The last point is potentially surprising and thus worth noting:
 
-```julia
+```jldoctest
 julia> NaN == NaN
 false
 
@@ -235,7 +246,7 @@ false
 
 and can cause especial headaches with [Arrays](@ref):
 
-```julia
+```jldoctest
 julia> [1 NaN] == [1 NaN]
 false
 ```
@@ -252,20 +263,20 @@ situations like hash key comparisons:
 
 [`isequal()`](@ref) considers `NaN`s equal to each other:
 
-```julia
-julia> isequal(NaN,NaN)
+```jldoctest
+julia> isequal(NaN, NaN)
 true
 
 julia> isequal([1 NaN], [1 NaN])
 true
 
-julia> isequal(NaN,NaN32)
+julia> isequal(NaN, NaN32)
 true
 ```
 
-[`isequal()`](@ref) can also be used to distinguish signed zeros:
+`isequal()` can also be used to distinguish signed zeros:
 
-```julia
+```jldoctest
 julia> -0.0 == 0.0
 true
 
@@ -276,7 +287,7 @@ false
 Mixed-type comparisons between signed integers, unsigned integers, and floats can be tricky. A
 great deal of care has been taken to ensure that Julia does them correctly.
 
-For other types, [`isequal()`](@ref) defaults to calling [`==()`](@ref), so if you want to define
+For other types, `isequal()` defaults to calling [`==()`](@ref), so if you want to define
 equality for your own types then you only need to add a [`==()`](@ref) method.  If you define
 your own equality function, you should probably define a corresponding [`hash()`](@ref) method
 to ensure that `isequal(x,y)` implies `hash(x) == hash(y)`.
@@ -286,7 +297,7 @@ to ensure that `isequal(x,y)` implies `hash(x) == hash(y)`.
 Unlike most languages, with the [notable exception of Python](https://en.wikipedia.org/wiki/Python_syntax_and_semantics#Comparison_operators),
 comparisons can be arbitrarily chained:
 
-```julia
+```jldoctest
 julia> 1 < 2 <= 2 < 3 == 3 > 2 >= 1 == 1 < 3 != 5
 true
 ```
@@ -298,7 +309,7 @@ are true where the corresponding elements of `A` are between 0 and 1.
 
 Note the evaluation behavior of chained comparisons:
 
-```julia
+```jldoctest
 julia> v(x) = (println(x); x)
 v (generic function with 1 method)
 
@@ -366,29 +377,29 @@ conversions.
 
 The following examples show the different forms.
 
-```julia
+```jldoctest
 julia> Int8(127)
 127
 
 julia> Int8(128)
 ERROR: InexactError()
- in Int8(::Int64) at ./sysimg.jl:66
- ...
+Stacktrace:
+ [1] Int8(::Int64) at ./sysimg.jl:24
 
 julia> Int8(127.0)
 127
 
 julia> Int8(3.14)
 ERROR: InexactError()
- in convert(::Type{Int8}, ::Float64) at ./float.jl:635
- in Int8(::Float64) at ./sysimg.jl:66
- ...
+Stacktrace:
+ [1] convert(::Type{Int8}, ::Float64) at ./float.jl:654
+ [2] Int8(::Float64) at ./sysimg.jl:24
 
 julia> Int8(128.0)
 ERROR: InexactError()
- in convert(::Type{Int8}, ::Float64) at ./float.jl:635
- in Int8(::Float64) at ./sysimg.jl:66
- ...
+Stacktrace:
+ [1] convert(::Type{Int8}, ::Float64) at ./float.jl:654
+ [2] Int8(::Float64) at ./sysimg.jl:24
 
 julia> 127 % Int8
 127
@@ -401,9 +412,9 @@ julia> round(Int8,127.4)
 
 julia> round(Int8,127.6)
 ERROR: InexactError()
- in trunc(::Type{Int8}, ::Float64) at ./float.jl:628
- in round(::Type{Int8}, ::Float64) at ./float.jl:332
- ...
+Stacktrace:
+ [1] trunc(::Type{Int8}, ::Float64) at ./float.jl:647
+ [2] round(::Type{Int8}, ::Float64) at ./float.jl:333
 ```
 
 See [Conversion and Promotion](@ref conversion-and-promotion) for how to define your own conversions and promotions.

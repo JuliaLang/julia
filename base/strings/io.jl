@@ -11,6 +11,16 @@ if `io` is not given) a canonical (un-decorated) text representation
 of a value if there is one, otherwise call [`show`](@ref).
 The representation used by `print` includes minimal formatting and tries to
 avoid Julia-specific details.
+
+```jldoctest
+julia> print("Hello World!")
+Hello World!
+julia> io = IOBuffer();
+
+julia> print(io, "Hello World!")
+
+julia> String(take!(io))
+"Hello World!"
 """
 function print(io::IO, x)
     lock(io)
@@ -100,6 +110,10 @@ string_with_env(env, xs...) = print_to_string(xs...; env=env)
     string(xs...)
 
 Create a string from any values using the [`print`](@ref) function.
+
+```jldoctest
+julia> string("a", 1, true)
+"a1true"
 """
 string(xs...) = print_to_string(xs...)
 
@@ -137,6 +151,16 @@ end
     IOBuffer(string::String)
 
 Create a read-only `IOBuffer` on the data underlying the given string.
+
+```jldoctest
+julia> io = IOBuffer("Haho");
+
+julia> String(take!(io))
+"Haho"
+
+julia> String(take!(io))
+"Haho"
+```
 """
 IOBuffer(str::String) = IOBuffer(Vector{UInt8}(str))
 IOBuffer(s::SubString{String}) = IOBuffer(view(Vector{UInt8}(s.string), s.offset + 1 : s.offset + sizeof(s)))

@@ -106,21 +106,21 @@ function test_futures_dgc(id)
     fid = Base.remoteref_id(f)
 
     # remote value should be deleted after a fetch
-    @test remotecall_fetch(k->(yield();haskey(Base.PGRP.refs, k)), id, fid) == true
+    @test remotecall_fetch(k->(yield();haskey(Base.Parallel.PGRP.refs, k)), id, fid) == true
     @test isnull(f.v) == true
     @test fetch(f) == id
     @test isnull(f.v) == false
-    @test remotecall_fetch(k->(yield();haskey(Base.PGRP.refs, k)), id, fid) == false
+    @test remotecall_fetch(k->(yield();haskey(Base.Parallel.PGRP.refs, k)), id, fid) == false
 
 
     # if unfetched, it should be deleted after a finalize
     f = remotecall(myid, id)
     fid = Base.remoteref_id(f)
-    @test remotecall_fetch(k->(yield();haskey(Base.PGRP.refs, k)), id, fid) == true
+    @test remotecall_fetch(k->(yield();haskey(Base.Parallel.PGRP.refs, k)), id, fid) == true
     @test isnull(f.v) == true
     finalize(f)
-    Base.flush_gc_msgs()
-    @test remotecall_fetch(k->(yield();haskey(Base.PGRP.refs, k)), id, fid) == false
+    Base.Parallel.flush_gc_msgs()
+    @test remotecall_fetch(k->(yield();haskey(Base.Parallel.PGRP.refs, k)), id, fid) == false
 end
 
 test_futures_dgc(id_me)
@@ -136,22 +136,22 @@ fstore = RemoteChannel(wid2)
 put!(fstore, f)
 
 @test fetch(f) == wid1
-@test remotecall_fetch(k->haskey(Base.PGRP.refs, k), wid1, fid) == true
+@test remotecall_fetch(k->haskey(Base.Parallel.PGRP.refs, k), wid1, fid) == true
 remotecall_fetch(r->fetch(fetch(r)), wid2, fstore)
-@test remotecall_fetch(k->haskey(Base.PGRP.refs, k), wid1, fid) == false
+@test remotecall_fetch(k->haskey(Base.Parallel.PGRP.refs, k), wid1, fid) == false
 
 # put! should release remote reference since it would have been cached locally
 f = Future(wid1)
 fid = Base.remoteref_id(f)
 
 # should not be created remotely till accessed
-@test remotecall_fetch(k->haskey(Base.PGRP.refs, k), wid1, fid) == false
+@test remotecall_fetch(k->haskey(Base.Parallel.PGRP.refs, k), wid1, fid) == false
 # create it remotely
 isready(f)
 
-@test remotecall_fetch(k->haskey(Base.PGRP.refs, k), wid1, fid) == true
+@test remotecall_fetch(k->haskey(Base.Parallel.PGRP.refs, k), wid1, fid) == true
 put!(f, :OK)
-@test remotecall_fetch(k->haskey(Base.PGRP.refs, k), wid1, fid) == false
+@test remotecall_fetch(k->haskey(Base.Parallel.PGRP.refs, k), wid1, fid) == false
 @test fetch(f) == :OK
 
 # RemoteException should be thrown on a put! when another process has set the value
@@ -162,7 +162,7 @@ fstore = RemoteChannel(wid2)
 put!(fstore, f) # send f to wid2
 put!(f, :OK) # set value from master
 
-@test remotecall_fetch(k->haskey(Base.PGRP.refs, k), wid1, fid) == true
+@test remotecall_fetch(k->haskey(Base.Parallel.PGRP.refs, k), wid1, fid) == true
 
 testval = remotecall_fetch(wid2, fstore) do x
     try
@@ -185,12 +185,12 @@ function test_remoteref_dgc(id)
     rrid = Base.remoteref_id(rr)
 
     # remote value should be deleted after finalizing the ref
-    @test remotecall_fetch(k->(yield();haskey(Base.PGRP.refs, k)), id, rrid) == true
+    @test remotecall_fetch(k->(yield();haskey(Base.Parallel.PGRP.refs, k)), id, rrid) == true
     @test fetch(rr) == :OK
-    @test remotecall_fetch(k->(yield();haskey(Base.PGRP.refs, k)), id, rrid) == true
+    @test remotecall_fetch(k->(yield();haskey(Base.Parallel.PGRP.refs, k)), id, rrid) == true
     finalize(rr)
-    Base.flush_gc_msgs()
-    @test remotecall_fetch(k->(yield();haskey(Base.PGRP.refs, k)), id, rrid) == false
+    Base.Parallel.flush_gc_msgs()
+    @test remotecall_fetch(k->(yield();haskey(Base.Parallel.PGRP.refs, k)), id, rrid) == false
 end
 test_remoteref_dgc(id_me)
 test_remoteref_dgc(id_other)
@@ -204,12 +204,12 @@ rrid = Base.remoteref_id(rr)
 fstore = RemoteChannel(wid2)
 put!(fstore, rr)
 
-@test remotecall_fetch(k->haskey(Base.PGRP.refs, k), wid1, rrid) == true
-finalize(rr); Base.flush_gc_msgs() # finalize locally
-@test remotecall_fetch(k->haskey(Base.PGRP.refs, k), wid1, rrid) == true
-remotecall_fetch(r->(finalize(take!(r)); Base.flush_gc_msgs(); nothing), wid2, fstore) # finalize remotely
+@test remotecall_fetch(k->haskey(Base.Parallel.PGRP.refs, k), wid1, rrid) == true
+finalize(rr); Base.Parallel.flush_gc_msgs() # finalize locally
+@test remotecall_fetch(k->haskey(Base.Parallel.PGRP.refs, k), wid1, rrid) == true
+remotecall_fetch(r->(finalize(take!(r)); Base.Parallel.flush_gc_msgs(); nothing), wid2, fstore) # finalize remotely
 sleep(0.5) # to ensure that wid2 messages have been executed on wid1
-@test remotecall_fetch(k->haskey(Base.PGRP.refs, k), wid1, rrid) == false
+@test remotecall_fetch(k->haskey(Base.Parallel.PGRP.refs, k), wid1, rrid) == false
 
 @test fetch(@spawnat id_other myid()) == id_other
 @test (@fetchfrom id_other myid()) == id_other
@@ -770,7 +770,7 @@ end
 n = 10
 as = [rand(4,4) for i in 1:n]
 bs = deepcopy(as)
-cs = collect(Base.pgenerate(x->(sleep(rand()*0.1); svdfact(x)), bs))
+cs = collect(Base.Parallel.pgenerate(x->(sleep(rand()*0.1); svdfact(x)), bs))
 svdas = map(svdfact, as)
 for i in 1:n
     @test cs[i][:U] ≈ svdas[i][:U]
@@ -921,7 +921,7 @@ if DoFullTest
     all_w = workers()
     # Test sending fake data to workers. The worker processes will print an
     # error message but should not terminate.
-    for w in Base.PGRP.workers
+    for w in Base.Parallel.PGRP.workers
         if isa(w, Base.Worker)
             s = connect(get(w.config.host), get(w.config.port))
             write(s, randstring(32))
@@ -1195,7 +1195,7 @@ function get_remote_num_threads(processes_added)
 end
 
 function test_blas_config(pid, expected)
-    for worker in Base.PGRP.workers
+    for worker in Base.Parallel.PGRP.workers
         if worker.id == pid
             @test get(worker.config.enable_threaded_blas) == expected
             return
@@ -1380,7 +1380,7 @@ wrapped_var_ser_tests()
 global ids_cleanup = ones(6)
 global ids_func = ()->ids_cleanup
 
-clust_ser = (Base.worker_from_id(id_other)).w_serializer
+clust_ser = (Base.Parallel.worker_from_id(id_other)).w_serializer
 @test remotecall_fetch(ids_func, id_other) == ids_cleanup
 
 @test haskey(clust_ser.glbs_sent, object_id(ids_cleanup))
@@ -1463,3 +1463,19 @@ syms = setup_syms(3, workers())
 clear!(syms, workers())
 test_clear(syms, workers())
 
+# Test partial recovery from a deserialization error in CapturedException
+try
+    expr = quote
+                type DontExistOn1
+                    x
+                end
+                throw(BoundsError(DontExistOn1(1), 1))
+           end
+
+    remotecall_fetch(()->eval(expr), id_other)
+    error("unexpected")
+catch ex
+    @test isa(ex.captured.ex.exceptions[1].ex, ErrorException)
+    @test contains(ex.captured.ex.exceptions[1].ex.msg, "BoundsError")
+    @test ex.captured.ex.exceptions[2].ex == UndefVarError(:DontExistOn1)
+end

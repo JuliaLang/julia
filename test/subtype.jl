@@ -72,6 +72,9 @@ function test_2()
     @test issub_strict(Tuple{Int,Int}, Tuple{E,E,Vararg{E,N}} where E where N)
 
     @test issub(Type{Tuple{VecElement{Bool}}}, (Type{Tuple{Vararg{VecElement{T},N}}} where T where N))
+
+    @test isequal_type(Type{Tuple{Vararg{Int,N}} where N}, Type{Tuple{Vararg{Int,N} where N}})
+    @test Type{Tuple{Vararg{Int,N}} where N} !== Type{Tuple{Vararg{Int,N} where N}}
 end
 
 function test_diagonal()
@@ -792,15 +795,37 @@ function test_intersection()
     @test typeintersect(Union{DataType,Int}, Type) === DataType
     @test typeintersect(Union{DataType,Int}, Type{T} where T) === DataType
 
+    # since BottomType is a singleton we can deduce its intersection with Type{...}
+    @testintersect(Core.BottomType, (Type{T} where T<:Tuple), Type{Union{}})
+
     @testintersect((Type{Tuple{Vararg{T}}} where T), Type{Tuple}, Bottom)
     @testintersect(Tuple{Type{S}, Tuple{Any, Vararg{Any}}} where S<:Tuple{Any, Vararg{Any}},
                    Tuple{Type{T}, T} where T,
                    Tuple{Type{S},S} where S<:Tuple{Any,Vararg{Any,N} where N})
 
+    # part of issue #20450
+    @testintersect(Tuple{Array{Ref{T}, 1}, Array{Pair{M, V}, 1}} where V where T where M,
+                   Tuple{Array{Ref{T}, 1}, Array{Pair{M, T}, 1}, SS} where T where M where SS,
+                   Union{})
+
+    # TODO: these test cases currently hang
+    @test_skip typeintersect(Tuple{Array{Ref{T}, 1}, Array{Pair{M, V}, 1}, Int} where V where T where M,
+                             Tuple{Array{Ref{T}, 1}, Array{Pair{M, T}, 1}, Any} where T where M) ==
+                                 Tuple{Array{Ref{T}, 1}, Array{Pair{M, T}, 1}, Int}
+
+    @test_skip typeintersect(Tuple{Int, Ref{Pair{K,V}}} where V where K,
+                             Tuple{Any, Ref{Pair{T,T}} where T }) ==
+                                 Tuple{Int, Ref{Pair{T,T}} where T }
+
     @test_broken isequal_type(_type_intersect(Tuple{T,T} where T,
                                               Union{Tuple{S,Array{Int64,1}},Tuple{S,Array{S,1}}} where S),
                               Union{Tuple{Vector{Int64},Vector{Int64}},
                                     Tuple{Vector{T},Vector{T}} where T>:Vector})
+
+    # part of issue #20344
+    @testintersect(Tuple{Type{Tuple{Vararg{T, N} where N}}, Tuple} where T,
+                   Tuple{Type{Tuple{Vararg{T, N}}} where N where T, Any},
+                   Tuple{Type{Tuple{}}, Tuple})
 end
 
 function test_intersection_properties()
@@ -855,3 +880,30 @@ f18348{T<:Any}(::Type{T}, x::T) = 2
 # Issue #12721
 f12721{T<:Type{Int}}(::T) = true
 @test_throws MethodError f12721(Float64)
+
+# implicit "covariant" type parameters:
+type TwoParams{S,T}; x::S; y::T; end
+@test TwoParams{<:Real,<:Number} == (TwoParams{S,T} where S<:Real where T<:Number) ==
+      (TwoParams{S,<:Number} where S<:Real) == (TwoParams{<:Real,T} where T<:Number)
+@test TwoParams(3,0im) isa TwoParams{<:Real,<:Number}
+@test TwoParams(3,"foo") isa TwoParams{<:Real}
+@test !(TwoParams(3im,0im) isa TwoParams{<:Real,<:Number})
+@test !(TwoParams(3,"foo") isa TwoParams{<:Real,<:Number})
+ftwoparams(::TwoParams) = 1
+ftwoparams(::TwoParams{<:Real}) = 2
+ftwoparams(::TwoParams{<:Real,<:Real}) = 3
+@test ftwoparams(TwoParams('x',3)) == 1
+@test ftwoparams(TwoParams(3,'x')) == 2
+@test ftwoparams(TwoParams(3,4)) == 3
+@test !([TwoParams(3,4)] isa Vector{TwoParams{<:Real,<:Real}})
+@test TwoParams{<:Real,<:Real}[TwoParams(3,4)] isa Vector{TwoParams{<:Real,<:Real}}
+@test [TwoParams(3,4)] isa Vector{<:TwoParams{<:Real,<:Real}}
+@test [TwoParams(3,4)] isa (Vector{TwoParams{T,T}} where T<:Real)
+
+# implicit "contravariant" type parameters:
+@test TwoParams{>:Int,<:Number} == (TwoParams{S,T} where S>:Int where T<:Number) ==
+      (TwoParams{S,<:Number} where S>:Int) == (TwoParams{>:Int,T} where T<:Number)
+@test TwoParams(3,0im) isa TwoParams{>:Int,<:Number}
+@test TwoParams{Real,Complex}(3,0im) isa TwoParams{>:Int,<:Number}
+@test !(TwoParams(3.0,0im) isa TwoParams{>:Int,<:Number})
+@test !(TwoParams(3,'x') isa TwoParams{>:Int,<:Number})

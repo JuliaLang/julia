@@ -61,15 +61,16 @@ cd(dirname(@__FILE__)) do
                 while length(tests) > 0
                     test = shift!(tests)
                     local resp
+                    wrkr = p
                     try
-                        resp = remotecall_fetch(runtests, p, test)
+                        resp = remotecall_fetch(runtests, wrkr, test)
                     catch e
                         resp = [e]
                     end
                     push!(results, (test, resp))
                     if (isa(resp[end], Integer) && (resp[end] > max_worker_rss)) || isa(resp, Exception)
                         if n > 1
-                            rmprocs(p, waitfor=5.0)
+                            rmprocs(wrkr, waitfor=30)
                             p = addprocs(1; exename=test_exename, exeflags=test_exeflags)[1]
                             remotecall_fetch(()->include("testdefs.jl"), p)
                         else
@@ -78,7 +79,7 @@ cd(dirname(@__FILE__)) do
                         end
                     end
                     if !isa(resp[1], Exception)
-                        print_with_color(:white, rpad(test*" ($p)", name_align, " "), " | ")
+                        print_with_color(:white, rpad(test*" ($wrkr)", name_align, " "), " | ")
                         time_str = @sprintf("%7.2f",resp[2])
                         print_with_color(:white, rpad(time_str,elapsed_align," "), " | ")
                         gc_str = @sprintf("%5.2f",resp[5].total_time/10^9)
@@ -98,7 +99,7 @@ cd(dirname(@__FILE__)) do
         end
     end
     # Free up memory =)
-    n > 1 && rmprocs(workers(), waitfor=5.0)
+    n > 1 && rmprocs(workers(), waitfor=30)
     for t in node1_tests
         # As above, try to run each test
         # which must run on node 1. If

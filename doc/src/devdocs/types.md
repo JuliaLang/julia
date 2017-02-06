@@ -28,7 +28,7 @@ julia> typeintersect(Int, Float64)
 Union{}
 
 julia> Union{Int, Float64}
-Union{Float64,Int64}
+Union{Float64, Int64}
 
 julia> typejoin(Int, Float64)
 Real
@@ -37,7 +37,7 @@ julia> typeintersect(Signed, Union{UInt8, Int8})
 Int8
 
 julia> Union{Signed, Union{UInt8, Int8}}
-Union{Signed,UInt8}
+Union{Signed, UInt8}
 
 julia> typejoin(Signed, Union{UInt8, Int8})
 Integer
@@ -46,7 +46,7 @@ julia> typeintersect(Tuple{Integer,Float64}, Tuple{Int,Real})
 Tuple{Int64,Float64}
 
 julia> Union{Tuple{Integer,Float64}, Tuple{Int,Real}}
-Union{Tuple{Int64,Real},Tuple{Integer,Float64}}
+Union{Tuple{Int64,Real}, Tuple{Integer,Float64}}
 
 julia> typejoin(Tuple{Integer,Float64}, Tuple{Int,Real})
 Tuple{Integer,Real}
@@ -89,17 +89,17 @@ Let's look at these types a little more closely:
 
 ```jldoctest
 julia> dump(Array)
-   UnionAll
-     var: TypeVar
-       name: Symbol T
-       lb: Core.BottomType Union{}
-       ub: Any
-     body: UnionAll
-       var: TypeVar
-         name: Symbol N
-         lb: Core.BottomType Union{}
-         ub: Any
-       body: Array{T,N} <: DenseArray{T,N}
+UnionAll
+  var: TypeVar
+    name: Symbol T
+    lb: Core.BottomType Union{}
+    ub: Any
+  body: UnionAll
+    var: TypeVar
+      name: Symbol N
+      lb: Core.BottomType Union{}
+      ub: Any
+    body: Array{T,N} <: DenseArray{T,N}
 ```
 
 This indicates that `Array` actually names a `UnionAll` type. There is one `UnionAll` type for
@@ -157,7 +157,7 @@ The following two [`Array`](@ref) types are functionally equivalent, yet print d
 
 ```jldoctest
 julia> TV, NV = TypeVar(:T), TypeVar(:N)
-(T,N)
+(T, N)
 
 julia> Array
 Array
@@ -238,7 +238,7 @@ julia> MyType{Float32, 5}
 MyType{Float32,5}
 
 julia> MyType.body.body.name.cache
-svec(MyType{Float32,5},MyType{Int64,2},#undef,#undef,#undef,#undef,#undef,#undef)
+svec(MyType{Float32,5}, MyType{Int64,2}, #undef, #undef, #undef, #undef, #undef, #undef)
 ```
 
 (The cache is pre-allocated to have length 8, but only the first two entries are populated.) Consequently,

@@ -275,10 +275,6 @@
   (and (symbol? s)
        (eqv? (string.char (string s) 0) #\#)))
 
-(define (is-call-name? name)
-  (or (eq? name 'call) (and (pair? name) (sym-ref? name)
-                            (equal? (caddr name) '(inert call)))))
-
 (define (replace-vars e renames)
   (cond ((symbol? e)      (lookup e renames e))
         ((or (not (pair? e)) (quoted? e))  e)
@@ -331,9 +327,7 @@
            (error "function argument and static parameter names must be distinct")))
      (if (or (and name (not (sym-ref? name))) (eq? name 'true) (eq? name 'false))
          (error (string "invalid function name \"" (deparse name) "\"")))
-     (let* ((iscall (is-call-name? name))
-            (name  (if iscall #f name))
-            (types (llist-types argl))
+     (let* ((types (llist-types argl))
             (body  (method-lambda-expr argl body rett))
             ;; HACK: the typevars need to be bound to ssavalues, since this code
             ;; might be moved to a different scope by closure-convert.
@@ -364,13 +358,6 @@
                                                            types)))
                                  (call (core svec) ,@temps)))
                           ,body ,isstaged))))
-       (if (and iscall (not (null? argl)))
-           (let* ((n (arg-name (car argl)))
-                  (n (if (hidden-name? n) "" n))
-                  (t (deparse (arg-type (car argl)))))
-             (syntax-deprecation #f
-                                 (string "call(" n "::" t ", ...)")
-                                 (string "(" n "::" t ")(...)"))))
        (if (symbol? name)
            `(block (method ,name) ,mdef (unnecessary ,name))  ;; return the function
            mdef)))))
@@ -554,7 +541,7 @@
                                 (list `(... ,(arg-name (car vararg))))))))
           #f)
         ;; return primary function
-        ,(if (or (not (symbol? name)) (is-call-name? name))
+        ,(if (not (symbol? name))
              '(null) name)))))
 
 ;; prologue includes line number node and eventual meta nodes
@@ -649,15 +636,22 @@
       (map (lambda (x) (gensy)) field-names)
       field-names))
 
-(define (default-inner-ctors name field-names field-types gen-specific? locs)
+(define (with-wheres call wheres)
+  (if (pair? wheres)
+      `(where ,call ,@wheres)
+      call))
+
+(define (default-inner-ctors name field-names field-types params bounds locs)
   (let* ((field-names (safe-field-names field-names field-types))
          (any-ctor
           ;; definition with Any for all arguments
-          `(function (call ,name ,@field-names)
+          `(function ,(with-wheres
+                       `(call (curly ,name ,@params) ,@field-names)
+                       (map (lambda (b) (cons 'var-bounds b)) bounds))
                      (block
                       ,@locs
                       (call new ,@field-names)))))
-    (if (and gen-specific? (any (lambda (t) (not (eq? t 'Any))) field-types))
+    (if (and (null? params) (any (lambda (t) (not (eq? t 'Any))) field-types))
         (list
          ;; definition with field types for all arguments
          `(function (call ,name
@@ -670,9 +664,9 @@
 
 (define (default-outer-ctor name field-names field-types params bounds locs)
   (let ((field-names (safe-field-names field-names field-types)))
-    `(function (call (curly ,name
-                            ,@(map (lambda (b) (cons 'var-bounds b)) bounds))
-                     ,@(map make-decl field-names field-types))
+    `(function ,(with-wheres
+                 `(call ,name ,@(map make-decl field-names field-types))
+                 (map (lambda (b) (cons 'var-bounds b)) bounds))
                (block
                 ,@locs
                 (call (curly ,name ,@params) ,@field-names)))))
@@ -744,16 +738,23 @@
                          ,@sig)
                   new-params)))))
 
-(define (ctor-def keyword name Tname params bounds method-params sig ctor-body body)
-  (if (eq? name Tname)
-      (let* ((temp   (ctor-signature name params bounds method-params sig))
-             (sig    (car temp))
-             (params (cdr temp)))
-        `(,keyword ,sig ,(ctor-body body params)))
-      `(,keyword (call (curly ,name ,@method-params) ,@sig)
-                 ;; pass '() in order to require user-specified parameters with
-                 ;; new{...} inside a non-ctor inner definition.
-                 ,(ctor-body body '()))))
+(define (ctor-def keyword name Tname params bounds sig ctor-body body wheres)
+  (let* ((curly?     (and (pair? name) (eq? (car name) 'curly)))
+         (curlyargs  (if curly? (cddr name) '()))
+         (name       (if curly? (cadr name) name)))
+    (cond ((not (eq? name Tname))
+           `(,keyword ,(with-wheres `(call (curly ,name ,@curlyargs) ,@sig) wheres)
+                      ;; pass '() in order to require user-specified parameters with
+                      ;; new{...} inside a non-ctor inner definition.
+                      ,(ctor-body body '())))
+          (wheres
+           `(,keyword (where (call (curly ,name ,@curlyargs) ,@sig) ,@wheres)
+                      ,(ctor-body body curlyargs)))
+          (else
+           (let* ((temp   (ctor-signature name params bounds curlyargs sig))
+                  (sig    (car temp))
+                  (params (cdr temp)))
+             `(,keyword ,sig ,(ctor-body body params)))))))
 
 ;; rewrite calls to `new( ... )` to `new` expressions on the appropriate
 ;; type, determined by the containing constructor definition.
@@ -773,30 +774,38 @@
                      body))
   (pattern-replace
    (pattern-set
-    (pattern-lambda (function (call (curly name . p) . sig) body)
-                    (ctor-def 'function name Tname params bounds p sig ctor-body body))
-    (pattern-lambda (stagedfunction (call (curly name . p) . sig) body)
-                    (ctor-def 'stagedfunction name Tname params bounds p sig ctor-body body))
-    (pattern-lambda (function (call name . sig) body)
-                    (ctor-def 'function name Tname params bounds '() sig ctor-body body))
+    ;; definitions without `where`
+    (pattern-lambda (function       (call name . sig) body)
+                    (ctor-def (car __) name Tname params bounds sig ctor-body body #f))
     (pattern-lambda (stagedfunction (call name . sig) body)
-                    (ctor-def 'stagedfunction name Tname params bounds '() sig ctor-body body))
-    (pattern-lambda (= (call (curly name . p) . sig) body)
-                    (ctor-def 'function name Tname params bounds p sig ctor-body body))
+                    (ctor-def (car __) name Tname params bounds sig ctor-body body #f))
     (pattern-lambda (= (call name . sig) body)
-                    (ctor-def 'function name Tname params bounds '() sig ctor-body body)))
-   ctor))
+                    (ctor-def 'function name Tname params bounds sig ctor-body body #f))
+    ;; definitions with `where`
+    (pattern-lambda (function       (where (call name . sig) . wheres) body)
+                    (ctor-def (car __) name Tname params bounds sig ctor-body body wheres))
+    (pattern-lambda (stagedfunction (where (call name . sig) . wheres) body)
+                    (ctor-def (car __) name Tname params bounds sig ctor-body body wheres))
+    (pattern-lambda (= (where (call name . sig) . wheres) body)
+                    (ctor-def 'function name Tname params bounds sig ctor-body body wheres)))
+
+   ;; flatten `where`s first
+   (pattern-replace
+    (pattern-set
+     (pattern-lambda (where (where . rest1) . rest2)
+                     (flatten-where-expr __)))
+    ctor)))
 
 ;; check if there are any calls to new with fewer than n arguments
 (define (ctors-min-initialized expr)
   (and (pair? expr)
        (min
-        ((pattern-lambda
-          (call (-/ new) . args)
-          (length args)) (car expr))
-        ((pattern-lambda
-          (call (curly (-/ new) . p) . args)
-          (length args)) (car expr))
+        ((pattern-lambda (call (-/ new) . args)
+                         (length args))
+         (car expr))
+        ((pattern-lambda (call (curly (-/ new) . p) . args)
+                         (length args))
+         (car expr))
         (ctors-min-initialized (car expr))
         (ctors-min-initialized (cdr expr)))))
 
@@ -811,7 +820,7 @@
           (field-names (map decl-var fields))
           (field-types (map decl-type fields))
           (defs2 (if (null? defs)
-                     (default-inner-ctors name field-names field-types (null? params) locs)
+                     (default-inner-ctors name field-names field-types params bounds locs)
                      defs))
           (min-initialized (min (ctors-min-initialized defs) (length fields))))
      (let ((dups (has-dups field-names)))
@@ -932,6 +941,8 @@
          (where (if (and (pair? name) (eq? (car name) 'where))
                     (let ((w (flatten-where-expr name)))
                       (begin0 (cddr w)
+                              (if (not (and (pair? (cadr w)) (memq (caadr w) '(call |::|))))
+                                  (error (string "invalid assignment location \"" (deparse name) "\"")))
                               (set! name (cadr w))))
                     #f))
          (dcl   (and (pair? name) (eq? (car name) '|::|)))
@@ -976,7 +987,8 @@
                                #f name)))
              (expand-forms
               (method-def-expr name sparams argl (caddr e) isstaged rett))))
-          (else e))))
+          (else
+           (error (string "invalid assignment location \"" (deparse name) "\""))))))
 
 ;; handle ( )->( ) function expressions. blocks `(a;b=1)` on the left need to be
 ;; converted to argument lists with kwargs.
@@ -1727,6 +1739,31 @@
             (expand-forms e)
             (expand-forms `(call (top broadcast!) (top identity) ,lhs-view ,e))))))
 
+(define (expand-where body var)
+  (let* ((bounds (analyze-typevar var))
+         (v  (car bounds)))
+    `(let (call (core UnionAll) ,v ,body)
+       (= ,v ,(bounds-to-TypeVar bounds)))))
+
+(define (expand-wheres body vars)
+  (if (null? vars)
+      body
+      (expand-where (expand-wheres body (cdr vars)) (car vars))))
+
+; given e = (curly T params...), return (newparams . whereparams) where any <:X expression
+; in params is converted to T and T<:X is added to whereparams; similarly for >:X.
+; (This implements the syntactic sugar Foo{<:Bar} --> Foo{T} where T<:Bar.)
+(define (extract-implicit-whereparams e)
+  (define (extract params newparams whereparams)
+    (if (null? params)
+        (cons (reverse newparams) (reverse whereparams))
+        (let ((p (car params)))
+          (if (and (list? p) (= (length p) 3) (eq? (car p) 'call) (or (eq? (cadr p) '|<:|) (eq? (cadr p) '|>:|)))
+              (let ((T (gensy)))
+                (extract (cdr params) (cons T newparams) (cons (list (cadr p) T (caddr p)) whereparams)))
+              (extract (cdr params) (cons p newparams) whereparams)))))
+  (extract (cddr e) '() '()))
+
 ;; table mapping expression head to a function expanding that form
 (define expand-table
   (table
@@ -1753,13 +1790,8 @@
                            (eq? (car (cadr e)) 'line))))
             (expand-forms (cadr e)))
            (else
-            `(block
-              ,.(map (lambda (x)
-                       (if (and (decl? x) (length= (cdr x) 2) (symbol? (cadr x)))
-                           `(impl-decl ,@(map expand-forms (cdr x)))
-                           (expand-forms x)))
-                     (butlast (cdr e)))
-              ,(expand-forms (last (cdr e)))))))
+            (cons 'block
+                  (map expand-forms (cdr e))))))
 
    '|.|
    (lambda (e) ; e = (|.| f x)
@@ -1773,12 +1805,7 @@
    '|>:| syntactic-op-to-call
 
    'where
-   (lambda (e)
-     (let* ((bounds (analyze-typevar (caddr e)))
-            (v  (car bounds)))
-       (expand-forms
-        `(let (call (core UnionAll) ,v ,(cadr e))
-           (= ,v ,(bounds-to-TypeVar bounds))))))
+   (lambda (e) (expand-forms (expand-wheres (cadr e) (cddr e))))
 
    'const  expand-const-decl
    'local  expand-local-or-global-decl
@@ -1949,7 +1976,13 @@
            (expand-forms (partially-expand-ref e)))))
 
    'curly
-   (lambda (e) (expand-forms `(call (core apply_type) ,@(cdr e))))
+   (lambda (e)
+     (let* ((p (extract-implicit-whereparams e))
+            (curlyparams (car p))
+            (whereparams (cdr p)))
+       (if (null? whereparams)
+           (expand-forms `(call (core apply_type) ,@(cdr e)))
+           (expand-forms `(where (curly ,(cadr e) ,@curlyparams) ,@whereparams)))))
 
    'call
    (lambda (e)
@@ -2036,9 +2069,6 @@
      (if (any assignment? (cdr e))
          (error "assignment not allowed inside tuple"))
      (expand-forms `(call (core tuple) ,@(cdr e))))
-
-   '=>
-   (lambda (e) `(call => ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
 
    'cell1d (lambda (e) (error "{ } vector syntax is discontinued"))
    'cell2d (lambda (e) (error "{ } matrix syntax is discontinued"))
@@ -2251,17 +2281,7 @@
                       ;; TODO: this is a hack to lower simple comprehensions to loops very
                       ;; early, to greatly reduce the # of functions and load on the compiler
                       (lower-comprehension (cadr e) (cadr (caddr e)) ranges))))
-          `(call (top collect) ,(cadr e) ,(caddr e)))))
-
-   'dict_comprehension
-   (lambda (e)
-     (syntax-deprecation #f "[a=>b for (a,b) in c]" "Dict(a=>b for (a,b) in c)")
-     (expand-forms `(call (top Dict) ,(cadr e))))
-
-   'typed_dict_comprehension
-   (lambda (e) (expand-forms
-                `(call (call (core apply_type) (top Dict) ,@(cdr (cadr e)))
-                       ,(caddr e))))))
+          `(call (top collect) ,(cadr e) ,(caddr e)))))))
 
 (define (lower-comprehension atype expr ranges)
   (let ((result    (make-ssavalue))
@@ -2593,7 +2613,7 @@
                (vinfo:set-called! vi #t))
            (for-each (lambda (x) (analyze-vars x env captvars sp))
                      (cdr e))))
-        ((decl impl-decl)
+        ((decl)
          ;; handle var::T declaration by storing the type in the var-info
          ;; record. for non-symbols or globals, emit a type assertion.
          (let ((vi (var-info-for (cadr e) env)))
@@ -3131,21 +3151,15 @@ f(x) = yt(x)
            (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp))
           ;; remaining `decl` expressions are only type assertions if the
           ;; argument is global or a non-symbol.
-          ((impl-decl)
-           (if (or (assq (cadr e) (car  (lam:vinfo lam)))
-                   (assq (cadr e) (cadr (lam:vinfo lam))))
-               (let ((str-e (deparse `(|::| ,@(cdr e)))))
-                    (syntax-deprecation #f str-e (string "local " str-e))
-                    '(null))
-               (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp)))
           ((decl)
-           (cond ((not (symbol? (cadr e)))
-                  (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp))
-                 ((or (assq (cadr e) (car  (lam:vinfo lam)))
-                      (assq (cadr e) (cadr (lam:vinfo lam))))
+           (cond ((and (symbol? (cadr e))
+                       (or (assq (cadr e) (car  (lam:vinfo lam)))
+                           (assq (cadr e) (cadr (lam:vinfo lam)))))
                   '(null))
-                 (else (syntax-deprecation #f (string "global " (deparse `(|::| ,@(cdr e)))) "typeassert")
-                       (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp))))
+                 (else
+                  (if (or (symbol? (cadr e)) (and (pair? (cadr e)) (eq? (caadr e) 'outerref)))
+                      (error "type declarations on global variables are not yet supported"))
+                  (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp))))
           ;; `with-static-parameters` expressions can be removed now; used only by analyze-vars
           ((with-static-parameters)
            (cl-convert (cadr e) fname lam namemap toplevel interp))
@@ -3523,7 +3537,7 @@ f(x) = yt(x)
             ((...)
              (error "\"...\" expression outside call"))
             (else
-             (error (string "unhandled expr " e))))))
+             (error (string "invalid syntax " (deparse e)))))))
     ;; introduce new slots for assigned arguments
     (for-each (lambda (v)
                 (if (vinfo:asgn v)

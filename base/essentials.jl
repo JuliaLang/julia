@@ -83,6 +83,22 @@ function rewrap_unionall(t::ANY, u::ANY)
     return UnionAll(u.var, rewrap_unionall(t, u.body))
 end
 
+# replace TypeVars in all enclosing UnionAlls with fresh TypeVars
+function rename_unionall(u::ANY)
+    if !isa(u,UnionAll)
+        return u
+    end
+    body = rename_unionall(u.body)
+    if body === u.body
+        body = u
+    else
+        body = UnionAll(u.var, body)
+    end
+    var = u.var::TypeVar
+    nv = TypeVar(var.name, var.lb, var.ub)
+    return UnionAll(nv, body{nv})
+end
+
 const _va_typename = Vararg.body.body.name
 function isvarargtype(t::ANY)
     t = unwrap_unionall(t)
@@ -94,6 +110,15 @@ function unwrapva(t::ANY)
     t2 = unwrap_unionall(t)
     isvarargtype(t2) ? t2.parameters[1] : t
 end
+
+typename(a) = error("typename does not apply to this type")
+typename(a::DataType) = a.name
+function typename(a::Union)
+    ta = typename(a.a)
+    tb = typename(a.b)
+    ta === tb ? tb : error("typename does not apply to unions whose components have different typenames")
+end
+typename(union::UnionAll) = typename(union.body)
 
 convert{T<:Tuple{Any,Vararg{Any}}}(::Type{T}, x::Tuple{Any, Vararg{Any}}) =
     tuple(convert(tuple_type_head(T),x[1]), convert(tuple_type_tail(T), tail(x))...)

@@ -42,12 +42,12 @@ function entryid(te::GitTreeEntry)
     return GitHash(oid_ptr[])
 end
 
-function object(repo::GitRepo, te::GitTreeEntry)
+function (::Type{T}){T<:GitObject}(repo::GitRepo, te::GitTreeEntry)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_tree_entry_to_object, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Ref{Void}),
                    obj_ptr_ptr, repo.ptr, te.ptr)
-    return GitUnknownObject(repo, obj_ptr_ptr[])
+    return T(repo, obj_ptr_ptr[])
 end
 
 function Base.show(io::IO, te::GitTreeEntry)

@@ -51,7 +51,7 @@ function add(pkg::AbstractString, vers::VersionSet)
     @sync begin
         @async if !edit(Reqs.add,pkg,vers)
             ispath(pkg) || throw(PkgError("unknown package $pkg"))
-            info("Nothing to be done")
+            info("Package $pkg is already installed")
         end
         branch = Dir.getmetabranch()
         outdated = with(GitRepo, "METADATA") do repo
@@ -79,7 +79,7 @@ add(pkg::AbstractString, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
 function rm(pkg::AbstractString)
     edit(Reqs.rm,pkg) && return
-    ispath(pkg) || return info("Nothing to be done")
+    ispath(pkg) || return info("Package $pkg is not installed")
     info("Removing $pkg (unregistered)")
     Write.remove(pkg)
 end
@@ -301,7 +301,7 @@ function pin(pkg::AbstractString, head::AbstractString)
         else
             LibGit2.revparseid(repo, head)
         end
-        commit = LibGit2.get(LibGit2.GitCommit, repo, id)
+        commit = LibGit2.GitCommit(repo, id)
         try
             # note: changing the following naming scheme requires a corresponding change in Read.ispinned()
             branch = "pinned.$(string(id)[1:8]).tmp"
@@ -312,7 +312,7 @@ function pin(pkg::AbstractString, head::AbstractString)
             end
             ref = LibGit2.lookup_branch(repo, branch)
             try
-                if ref !== nothing
+                if !isnull(ref)
                     if LibGit2.revparseid(repo, branch) != id
                         throw(PkgError("Package $pkg: existing branch $branch has " *
                             "been edited and doesn't correspond to its original commit"))
@@ -320,17 +320,17 @@ function pin(pkg::AbstractString, head::AbstractString)
                     info("Package $pkg: checking out existing branch $branch")
                 else
                     info("Creating $pkg branch $branch")
-                    ref = LibGit2.create_branch(repo, branch, commit)
+                    ref = Nullable(LibGit2.create_branch(repo, branch, commit))
                 end
 
                 # checkout selected branch
-                with(LibGit2.peel(LibGit2.GitTree, ref)) do btree
+                with(LibGit2.peel(LibGit2.GitTree, get(ref))) do btree
                     LibGit2.checkout_tree(repo, btree)
                 end
                 # switch head to the branch
-                LibGit2.head!(repo, ref)
+                LibGit2.head!(repo, get(ref))
             finally
-                close(ref)
+                close(get(ref))
             end
         finally
             close(commit)

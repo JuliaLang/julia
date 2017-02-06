@@ -16,7 +16,7 @@ julia> size(A, 2)
 3
 
 julia> size(A,3,2)
-(4,3)
+(4, 3)
 ```
 """
 size{T,N}(t::AbstractArray{T,N}, d) = d <= N ? size(t)[d] : 1
@@ -48,7 +48,7 @@ Returns the tuple of valid indices for array `A`.
 julia> A = ones(5,6,7);
 
 julia> indices(A)
-(Base.OneTo(5),Base.OneTo(6),Base.OneTo(7))
+(Base.OneTo(5), Base.OneTo(6), Base.OneTo(7))
 ```
 """
 function indices(A)
@@ -84,7 +84,7 @@ julia> A = ones(5,6,7);
 julia> b = linearindices(A);
 
 julia> extrema(b)
-(1,210)
+(1, 210)
 ```
 """
 linearindices(A)                 = (@_inline_meta; OneTo(_length(A)))
@@ -199,7 +199,7 @@ Returns a tuple of the memory strides in each dimension.
 julia> A = ones(3,4,5);
 
 julia> strides(A)
-(1,3,12)
+(1, 3, 12)
 ```
 """
 strides(A::AbstractArray) = _strides((1,), A)
@@ -707,7 +707,7 @@ Example for a sparse 2-d array:
 
 ```jldoctest
 julia> A = sparse([1, 1, 2], [1, 3, 1], [1, 2, -5])
-2×3 sparse matrix with 3 Int64 nonzero entries:
+2×3 sparse matrix with 3 Int64 stored entries:
   [1, 1]  =  1
   [2, 1]  =  -5
   [1, 3]  =  2
@@ -716,17 +716,17 @@ julia> for iter in eachindex(A)
            @show iter.I[1], iter.I[2]
            @show A[iter]
        end
-(iter.I[1],iter.I[2]) = (1,1)
+(iter.I[1], iter.I[2]) = (1, 1)
 A[iter] = 1
-(iter.I[1],iter.I[2]) = (2,1)
+(iter.I[1], iter.I[2]) = (2, 1)
 A[iter] = -5
-(iter.I[1],iter.I[2]) = (1,2)
+(iter.I[1], iter.I[2]) = (1, 2)
 A[iter] = 0
-(iter.I[1],iter.I[2]) = (2,2)
+(iter.I[1], iter.I[2]) = (2, 2)
 A[iter] = 0
-(iter.I[1],iter.I[2]) = (1,3)
+(iter.I[1], iter.I[2]) = (1, 3)
 A[iter] = 2
-(iter.I[1],iter.I[2]) = (2,3)
+(iter.I[1], iter.I[2]) = (2, 3)
 A[iter] = 0
 ```
 
@@ -781,11 +781,9 @@ full(x::AbstractArray) = x
 
 map{T<:Real}(::Type{T}, r::StepRange) = T(r.start):T(r.step):T(last(r))
 map{T<:Real}(::Type{T}, r::UnitRange) = T(r.start):T(last(r))
-map{T<:AbstractFloat}(::Type{T}, r::FloatRange) = FloatRange(T(r.start), T(r.step), r.len, T(r.divisor))
+map{T<:AbstractFloat}(::Type{T}, r::StepRangeLen) = convert(StepRangeLen{T}, r)
 function map{T<:AbstractFloat}(::Type{T}, r::LinSpace)
-    new_len = T(r.len)
-    new_len == r.len || error("$r: too long for $T")
-    LinSpace(T(r.start), T(r.stop), new_len, T(r.divisor))
+    LinSpace(T(r.start), T(r.stop), length(r))
 end
 
 ## unsafe/pointer conversions ##
@@ -825,65 +823,45 @@ error_if_canonical_indexing(::LinearIndexing, ::AbstractArray, ::Any...) = nothi
 _getindex(::LinearIndexing, A::AbstractArray, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
 
 ## LinearFast Scalar indexing: canonical method is one Int
-_getindex(::LinearFast, A::AbstractVector, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
-_getindex(::LinearFast, A::AbstractArray,  i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
-_getindex{T}(::LinearFast, A::AbstractArray{T,0}) = A[1]
-function _getindex{T,N}(::LinearFast, A::AbstractArray{T,N}, I::Vararg{Int,N})
-    # We must check bounds for sub2ind; so we can then use @inbounds
+_getindex(::LinearFast, A::AbstractArray, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
+_getindex(::LinearFast, A::AbstractArray) = (@_propagate_inbounds_meta; getindex(A, _to_linear_index(A)))
+function _getindex(::LinearFast, A::AbstractArray, I::Int...)
     @_inline_meta
-    @boundscheck checkbounds(A, I...)
-    @inbounds r = getindex(A, sub2ind(A, I...))
+    @boundscheck checkbounds(A, I...) # generally _to_linear_index requires bounds checking
+    @inbounds r = getindex(A, _to_linear_index(A, I...))
     r
 end
-function _getindex(::LinearFast, A::AbstractVector, I1::Int, I::Int...)
-    @_inline_meta
-    @boundscheck checkbounds(A, I1, I...)
-    @inbounds r = getindex(A, I1)
-    r
-end
-function _getindex(::LinearFast, A::AbstractArray, I::Int...) # TODO: DEPRECATE FOR #14770
-    @_inline_meta
-    @boundscheck checkbounds(A, I...)
-    @inbounds r = getindex(A, sub2ind(A, I...))
-    r
-end
-
+_to_linear_index(A::AbstractArray, i::Int) = i
+_to_linear_index(A::AbstractVector, i::Int, I::Int...) = i # TODO: DEPRECATE FOR #14770
+_to_linear_index{T,N}(A::AbstractArray{T,N}, I::Vararg{Int,N}) = (@_inline_meta; sub2ind(A, I...))
+_to_linear_index(A::AbstractArray) = 1 # TODO: DEPRECATE FOR #14770
+_to_linear_index(A::AbstractArray, I::Int...) = (@_inline_meta; sub2ind(A, I...)) # TODO: DEPRECATE FOR #14770
 
 ## LinearSlow Scalar indexing: Canonical method is full dimensionality of Ints
-_getindex{T,N}(::LinearSlow, A::AbstractArray{T,N}, I::Vararg{Int, N}) = (@_propagate_inbounds_meta; getindex(A, I...))
-function _getindex(::LinearSlow, A::AbstractArray, i::Int)
-    # ind2sub requires all dimensions to be > 0; may as well just check bounds
+_getindex(::LinearSlow, A::AbstractArray) = (@_propagate_inbounds_meta; getindex(A, _to_subscript_indices(A)...))
+function _getindex(::LinearSlow, A::AbstractArray, I::Int...)
     @_inline_meta
-    @boundscheck checkbounds(A, i)
-    @inbounds r = getindex(A, ind2sub(A, i)...)
+    @boundscheck checkbounds(A, I...) # generally _to_subscript_indices requires bounds checking
+    @inbounds r = getindex(A, _to_subscript_indices(A, I...)...)
     r
 end
-@generated function _getindex{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, I::Int...) # TODO: DEPRECATE FOR #14770
-    N = length(I)
-    if N > AN
-        # Drop trailing ones
-        Isplat = Expr[:(I[$d]) for d = 1:AN]
-        Osplat = Expr[:(I[$d] == 1) for d = AN+1:N]
-        quote
-            @_propagate_inbounds_meta
-            @boundscheck (&)($(Osplat...)) || throw_boundserror(A, I)
-            getindex(A, $(Isplat...))
-        end
-    else
-        # Expand the last index into the appropriate number of indices
-        Isplat = Expr[:(I[$d]) for d = 1:N-1]
-        sz = Expr(:tuple)
-        sz.args = Expr[:(size(A, $d)) for d=max(N,1):AN]
-        szcheck = Expr[:(size(A, $d) > 0) for d=max(N,1):AN]
-        last_idx = N > 0 ? :(I[$N]) : 1
-        quote
-            # ind2sub requires all dimensions to be > 0:
-            @_propagate_inbounds_meta
-            @boundscheck (&)($(szcheck...)) || throw_boundserror(A, I)
-            getindex(A, $(Isplat...), ind2sub($sz, $last_idx)...)
-        end
-    end
+_getindex{T,N}(::LinearSlow, A::AbstractArray{T,N}, I::Vararg{Int, N}) = (@_propagate_inbounds_meta; getindex(A, I...))
+_to_subscript_indices(A::AbstractArray, i::Int) = (@_inline_meta; _unsafe_ind2sub(A, i))
+_to_subscript_indices{T,N}(A::AbstractArray{T,N}) = (@_inline_meta; fill_to_length((), 1, Val{N})) # TODO: DEPRECATE FOR #14770
+_to_subscript_indices{T}(A::AbstractArray{T,0}) = () # TODO: REMOVE FOR #14770
+_to_subscript_indices{T}(A::AbstractArray{T,0}, i::Int) = () # TODO: REMOVE FOR #14770
+_to_subscript_indices{T}(A::AbstractArray{T,0}, I::Int...) = () # TODO: DEPRECATE FOR #14770
+function _to_subscript_indices{T,N}(A::AbstractArray{T,N}, I::Int...) # TODO: DEPRECATE FOR #14770
+    @_inline_meta
+    J, _ = IteratorsMD.split(I, Val{N})    # (maybe) drop any trailing indices
+    sz = _remaining_size(J, size(A))       # compute trailing size (overlapping the final index)
+    (front(J)..., _unsafe_ind2sub(sz, last(J))...) # (maybe) extend the last index
 end
+_to_subscript_indices{T,N}(A::AbstractArray{T,N}, I::Vararg{Int,N}) = I
+_remaining_size(::Tuple{Any}, t::Tuple) = t
+_remaining_size(h::Tuple, t::Tuple) = (@_inline_meta; _remaining_size(tail(h), tail(t)))
+_unsafe_ind2sub(::Tuple{}, i) = () # ind2sub may throw(BoundsError()) in this case
+_unsafe_ind2sub(sz, i) = (@_inline_meta; ind2sub(sz, i))
 
 ## Setindex! is defined similarly. We first dispatch to an internal _setindex!
 # function that allows dispatch on array storage
@@ -901,64 +879,23 @@ end
 _setindex!(::LinearIndexing, A::AbstractArray, v, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
 
 ## LinearFast Scalar indexing
-_setindex!(::LinearFast, A::AbstractVector, v, i::Int) = (@_propagate_inbounds_meta; setindex!(A, v, i))
 _setindex!(::LinearFast, A::AbstractArray, v, i::Int) = (@_propagate_inbounds_meta; setindex!(A, v, i))
-_setindex!{T}(::LinearFast, A::AbstractArray{T,0}, v) = (@_propagate_inbounds_meta; setindex!(A, v, 1))
-function _setindex!{T,N}(::LinearFast, A::AbstractArray{T,N}, v, I::Vararg{Int,N})
-    # We must check bounds for sub2ind; so we can then use @inbounds
+_setindex!(::LinearFast, A::AbstractArray, v) = (@_propagate_inbounds_meta; setindex!(A, v, _to_linear_index(A)))
+function _setindex!(::LinearFast, A::AbstractArray, v, I::Int...)
     @_inline_meta
     @boundscheck checkbounds(A, I...)
-    @inbounds r = setindex!(A, v, sub2ind(A, I...))
-    r
-end
-function _setindex!(::LinearFast, A::AbstractVector, v, I1::Int, I::Int...)
-    @_inline_meta
-    @boundscheck checkbounds(A, I1, I...)
-    @inbounds r = setindex!(A, v, I1)
-    r
-end
-function _setindex!(::LinearFast, A::AbstractArray, v, I::Int...) # TODO: DEPRECATE FOR #14770
-    @_inline_meta
-    @boundscheck checkbounds(A, I...)
-    @inbounds r = setindex!(A, v, sub2ind(A, I...))
+    @inbounds r = setindex!(A, v, _to_linear_index(A, I...))
     r
 end
 
 # LinearSlow Scalar indexing
 _setindex!{T,N}(::LinearSlow, A::AbstractArray{T,N}, v, I::Vararg{Int, N}) = (@_propagate_inbounds_meta; setindex!(A, v, I...))
-function _setindex!(::LinearSlow, A::AbstractArray, v, i::Int)
-    # ind2sub requires all dimensions to be > 0; may as well just check bounds
+_setindex!(::LinearSlow, A::AbstractArray, v) = (@_propagate_inbounds_meta; setindex!(A, v, _to_subscript_indices(A)...))
+function _setindex!(::LinearSlow, A::AbstractArray, v, I::Int...)
     @_inline_meta
-    @boundscheck checkbounds(A, i)
-    @inbounds r = setindex!(A, v, ind2sub(A, i)...)
+    @boundscheck checkbounds(A, I...)
+    @inbounds r = setindex!(A, v, _to_subscript_indices(A, I...)...)
     r
-end
-@generated function _setindex!{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, v, I::Int...) # TODO: DEPRECATE FOR #14770
-    N = length(I)
-    if N > AN
-        # Drop trailing ones
-        Isplat = Expr[:(I[$d]) for d = 1:AN]
-        Osplat = Expr[:(I[$d] == 1) for d = AN+1:N]
-        quote
-            # We only check the trailing ones, so just propagate @inbounds state
-            @_propagate_inbounds_meta
-            @boundscheck (&)($(Osplat...)) || throw_boundserror(A, I)
-            setindex!(A, v, $(Isplat...))
-        end
-    else
-        # Expand the last index into the appropriate number of indices
-        Isplat = Expr[:(I[$d]) for d = 1:N-1]
-        sz = Expr(:tuple)
-        sz.args = Expr[:(size(A, $d)) for d=max(N,1):AN]
-        szcheck = Expr[:(size(A, $d) > 0) for d=max(N,1):AN]
-        last_idx = N > 0 ? :(I[$N]) : 1
-        quote
-            # ind2sub requires all dimensions to be > 0:
-            @_propagate_inbounds_meta
-            @boundscheck (&)($(szcheck...)) || throw_boundserror(A, I)
-            setindex!(A, v, $(Isplat...), ind2sub($sz, $last_idx)...)
-        end
-    end
 end
 
 ## get (getindex with a default value) ##
@@ -1205,10 +1142,7 @@ julia> vcat(a,b)
  11  12  13  14  15
 
 julia> c = ([1 2 3], [4 5 6])
-(
-[1 2 3],
-
-[4 5 6])
+([1 2 3], [4 5 6])
 
 julia> vcat(c...)
 2×3 Array{Int64,2}:
@@ -1248,7 +1182,7 @@ julia> hcat(a,b)
  5  14  15
 
 julia> c = ([1; 2; 3], [4; 5; 6])
-([1,2,3],[4,5,6])
+([1, 2, 3], [4, 5, 6])
 
 julia> hcat(c...)
 3×2 Array{Int64,2}:
@@ -1300,7 +1234,7 @@ row.
 
 ```jldoctest
 julia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6
-(1,2,3,4,5,6)
+(1, 2, 3, 4, 5, 6)
 
 julia> [a b c; d e f]
 2×3 Array{Int64,2}:
@@ -1507,10 +1441,10 @@ Returns a tuple of subscripts into array `a` corresponding to the linear index `
 julia> A = ones(5,6,7);
 
 julia> ind2sub(A,35)
-(5,1,2)
+(5, 1, 2)
 
 julia> ind2sub(A,70)
-(5,2,3)
+(5, 2, 3)
 ```
 """
 function ind2sub(A::AbstractArray, ind)
@@ -1580,13 +1514,13 @@ provides the indices of the maximum element.
 
 ```jldoctest
 julia> ind2sub((3,4),2)
-(2,1)
+(2, 1)
 
 julia> ind2sub((3,4),3)
-(3,1)
+(3, 1)
 
 julia> ind2sub((3,4),4)
-(1,2)
+(1, 2)
 ```
 """
 ind2sub(dims::DimsInteger, ind::Integer) = (@_inline_meta; _ind2sub(dims, ind-1))

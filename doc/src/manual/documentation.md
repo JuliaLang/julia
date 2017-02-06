@@ -3,10 +3,6 @@
 Julia enables package developers and users to document functions, types and other objects easily
 via a built-in documentation system since Julia 0.4.
 
-!!! tip
-    This documentation system can also be used in Julia 0.3 via the [Docile.jl](https://github.com/MichaelHatherly/Docile.jl)
-    package; see the documentation for that package for more details.
-
 The basic syntax is very simple: any string appearing at the top-level right before an object
 (function, macro, type or instance) will be interpreted as documenting it (these are called *docstrings*).
 Here is a very simple example:
@@ -189,8 +185,8 @@ not repeat the information provided elsewhere. For example:
 """
     *(x, y, z...)
 
-Multiplication operator. `x*y*z*...` calls this function with multiple
-arguments, i.e. `*(x,y,z...)`.
+Multiplication operator. `x * y * z *...` calls this function with multiple
+arguments, i.e. `*(x, y, z...)`.
 """
 function *(x, y, z...)
     # ... [implementation sold separately] ...
@@ -210,7 +206,7 @@ search: * .*
 
   *(x, y, z...)
 
-  Multiplication operator. x*y*z*... calls this function with multiple
+  Multiplication operator. x * y * z *... calls this function with multiple
   arguments, i.e. *(x,y,z...).
 
   *(x::AbstractString, y::AbstractString, z::AbstractString...)
@@ -251,25 +247,38 @@ end
 @doc "`subtract(a,b)` subtracts `b` from `a`" subtract
 ```
 
-Documentation written in non-toplevel blocks, such as `if`, `for`, and `let`, are not automatically
-added to the documentation system. `@doc` must be used in these cases. For example:
+Documentation written in non-toplevel blocks, such as `begin`, `if`, `for`, and `let`, is
+added to the documentation system as blocks are evaluated. For example:
 
 ```julia
-if VERSION > v"0.4"
+if VERSION > v"0.5"
     "..."
     f(x) = x
 end
 ```
 
-will not add any documentation to `f` even when the condition is `true` and must instead be written
-as:
+will add documentation to `f(x)` when the condition is `true`. Note that even if `f(x)` goes
+out of scope at the end of the block, its documentation will remain.
+
+### Dynamic documentation
+
+Sometimes the appropriate documentation for an instance of a type depends on the field values of that
+instance, rather than just on the type itself. In these cases, you can add a method to `Docs.getdoc`
+for your custom type that returns the documentation on a per-instance basis. For instance,
 
 ```julia
-if VERSION > v"0.4"
-    @doc "..." ->
-    f(x) = x
+type MyType
+    value::String
 end
+
+Docs.getdoc(t::MyType) = "Documentation for MyType with value $(t.value)"
+
+x = MyType("x")
+y = MyType("y")
 ```
+
+`?x` will display "Documentation for MyType with value x" while `?y` will display
+"Documentation for MyType with value y".
 
 ## Syntax Guide
 

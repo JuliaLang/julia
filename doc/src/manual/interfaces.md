@@ -60,21 +60,26 @@ end
 
 A simple example is an iterable sequence of square numbers with a defined length:
 
-```julia
+```jldoctest squaretype
 julia> immutable Squares
            count::Int
        end
-       Base.start(::Squares) = 1
-       Base.next(S::Squares, state) = (state*state, state+1)
-       Base.done(S::Squares, state) = state > S.count;
-       Base.eltype(::Type{Squares}) = Int # Note that this is defined for the type
-       Base.length(S::Squares) = S.count;
+
+julia> Base.start(::Squares) = 1
+
+julia> Base.next(S::Squares, state) = (state*state, state+1)
+
+julia> Base.done(S::Squares, state) = state > S.count
+
+julia> Base.eltype(::Type{Squares}) = Int # Note that this is defined for the type
+
+julia> Base.length(S::Squares) = S.count
 ```
 
 With only [`start`](@ref), [`next`](@ref), and [`done`](@ref) definitions, the `Squares` type is already pretty powerful.
 We can iterate over all the elements:
 
-```julia
+```jldoctest squaretype
 julia> for i in Squares(7)
            println(i)
        end
@@ -89,12 +94,15 @@ julia> for i in Squares(7)
 
 We can use many of the builtin methods that work with iterables, like [`in()`](@ref), [`mean()`](@ref) and [`std()`](@ref):
 
-```julia
+```jldoctest squaretype
 julia> 25 in Squares(10)
 true
 
-julia> mean(Squares(100)), std(Squares(100))
-(3383.5,3024.355854282583)
+julia> mean(Squares(100))
+3383.5
+
+julia> std(Squares(100))
+3024.355854282583
 ```
 
 There are a few more methods we can extend to give Julia more information about this iterable
@@ -106,24 +114,25 @@ we can extend [`length()`](@ref), too.
 Now, when we ask Julia to [`collect()`](@ref) all the elements into an array it can preallocate a `Vector{Int}`
 of the right size instead of blindly [`push!`](@ref)ing each element into a `Vector{Any}`:
 
-```julia
-julia> collect(Squares(100))' # transposed to save space
-1×100 Array{Int64,2}:
- 1  4  9  16  25  36  49  64  81  100  …  9025  9216  9409  9604  9801  10000
+```jldoctest squaretype
+julia> collect(Squares(10))' # transposed to save space
+1×10 RowVector{Int64,Array{Int64,1}}:
+ 1  4  9  16  25  36  49  64  81  100
 ```
 
 While we can rely upon generic implementations, we can also extend specific methods where we know
-there is a simpler algorithm.  For example, there's a formula to compute the sum of squares, so
+there is a simpler algorithm. For example, there's a formula to compute the sum of squares, so
 we can override the generic iterative version with a more performant solution:
 
-```julia
+```jldoctest squaretype
 julia> Base.sum(S::Squares) = (n = S.count; return n*(n+1)*(2n+1)÷6)
-       sum(Squares(1803))
+
+julia> sum(Squares(1803))
 1955361914
 ```
 
 This is a very common pattern throughout the Julia standard library: a small set of required methods
-define an informal interface that enable many fancier behaviors.  In some cases, types will want
+define an informal interface that enable many fancier behaviors. In some cases, types will want
 to additionally specialize those extra behaviors when they know a more efficient algorithm can
 be used in their specific case.
 
@@ -136,35 +145,39 @@ be used in their specific case.
 | `endof(X)`           | The last index, used in `X[end]` |
 
 For the `Squares` iterable above, we can easily compute the `i`th element of the sequence by squaring
-it.  We can expose this as an indexing expression `S[i]`.  To opt into this behavior, `Squares`
+it.  We can expose this as an indexing expression `S[i]`. To opt into this behavior, `Squares`
 simply needs to define [`getindex()`](@ref):
 
-```julia
+```jldoctest squaretype
 julia> function Base.getindex(S::Squares, i::Int)
            1 <= i <= S.count || throw(BoundsError(S, i))
            return i*i
        end
-       Squares(100)[23]
+
+julia> Squares(100)[23]
 529
 ```
 
 Additionally, to support the syntax `S[end]`, we must define [`endof()`](@ref) to specify the last valid
 index:
 
-```julia
+```jldoctest squaretype
 julia> Base.endof(S::Squares) = length(S)
-       Squares(23)[end]
+
+julia> Squares(23)[end]
 529
 ```
 
 Note, though, that the above *only* defines [`getindex()`](@ref) with one integer index. Indexing with
 anything other than an `Int` will throw a [`MethodError`](@ref) saying that there was no matching method.
- In order to support indexing with ranges or vectors of `Int`s, separate methods must be written:
+In order to support indexing with ranges or vectors of `Int`s, separate methods must be written:
 
-```julia
+```jldoctest squaretype
 julia> Base.getindex(S::Squares, i::Number) = S[convert(Int, i)]
-       Base.getindex(S::Squares, I) = [S[i] for i in I]
-       Squares(10)[[3,4.,5]]
+
+julia> Base.getindex(S::Squares, I) = [S[i] for i in I]
+
+julia> Squares(10)[[3,4.,5]]
 3-element Array{Int64,1}:
   9
  16
@@ -224,13 +237,16 @@ so it just defines `getindex(A::SparseMatrixCSC, i::Int, j::Int)()`.  The same h
 Returning to the sequence of squares from above, we could instead define it as a subtype of an
 `AbstractArray{Int, 1}`:
 
-```julia
+```jldoctest squarevectype
 julia> immutable SquaresVector <: AbstractArray{Int, 1}
            count::Int
        end
-       Base.size(S::SquaresVector) = (S.count,)
-       Base.linearindexing{T<:SquaresVector}(::Type{T}) = Base.LinearFast()
-       Base.getindex(S::SquaresVector, i::Int) = i*i;
+
+julia> Base.size(S::SquaresVector) = (S.count,)
+
+julia> Base.linearindexing{T<:SquaresVector}(::Type{T}) = Base.LinearFast()
+
+julia> Base.getindex(S::SquaresVector, i::Int) = i*i
 ```
 
 Note that it's very important to specify the two parameters of the `AbstractArray`; the first
@@ -238,7 +254,7 @@ defines the [`eltype()`](@ref), and the second defines the [`ndims()`](@ref). Th
 methods are all it takes for `SquaresVector` to be an iterable, indexable, and completely functional
 array:
 
-```julia
+```jldoctest squarevectype
 julia> s = SquaresVector(7)
 7-element SquaresVector:
   1
@@ -255,46 +271,52 @@ julia> s[s .> 20]
  36
  49
 
-julia> s \ rand(7,2)
+julia> s \ [1 2; 3 4; 5 6; 7 8; 9 10; 11 12; 13 14]
 1×2 Array{Float64,2}:
- 0.0151876  0.0179393
+ 0.305389  0.335329
+
+julia> s ⋅ s # dot(s, s)
+4676
 ```
 
 As a more complicated example, let's define our own toy N-dimensional sparse-like array type built
 on top of [`Dict`](@ref):
 
-```julia
+```jldoctest squarevectype
 julia> immutable SparseArray{T,N} <: AbstractArray{T,N}
            data::Dict{NTuple{N,Int}, T}
            dims::NTuple{N,Int}
        end
-       SparseArray{T}(::Type{T}, dims::Int...) = SparseArray(T, dims)
-       SparseArray{T,N}(::Type{T}, dims::NTuple{N,Int}) = SparseArray{T,N}(Dict{NTuple{N,Int}, T}(), dims)
-SparseArray{T,N}
+
+julia> SparseArray{T}(::Type{T}, dims::Int...) = SparseArray(T, dims);
+
+julia> SparseArray{T,N}(::Type{T}, dims::NTuple{N,Int}) = SparseArray{T,N}(Dict{NTuple{N,Int}, T}(), dims);
 
 julia> Base.size(A::SparseArray) = A.dims
-       Base.similar{T}(A::SparseArray, ::Type{T}, dims::Dims) = SparseArray(T, dims)
-       # Define scalar indexing and indexed assignment
-       Base.getindex{T,N}(A::SparseArray{T,N}, I::Vararg{Int,N})     = get(A.data, I, zero(T))
-       Base.setindex!{T,N}(A::SparseArray{T,N}, v, I::Vararg{Int,N}) = (A.data[I] = v)
+
+julia> Base.similar{T}(A::SparseArray, ::Type{T}, dims::Dims) = SparseArray(T, dims)
+
+julia> Base.getindex{T,N}(A::SparseArray{T,N}, I::Vararg{Int,N}) = get(A.data, I, zero(T))
+
+julia> Base.setindex!{T,N}(A::SparseArray{T,N}, v, I::Vararg{Int,N}) = (A.data[I] = v)
 ```
 
 Notice that this is a `LinearSlow` array, so we must manually define [`getindex()`](@ref) and [`setindex!()`](@ref)
-at the dimensionality of the array.  Unlike the `SquaresVector`, we are able to define [`setindex!()`](@ref),
+at the dimensionality of the array. Unlike the `SquaresVector`, we are able to define [`setindex!()`](@ref),
 and so we can mutate the array:
 
-```julia
-julia> A = SparseArray(Float64,3,3)
+```jldoctest squarevectype
+julia> A = SparseArray(Float64, 3, 3)
 3×3 SparseArray{Float64,2}:
  0.0  0.0  0.0
  0.0  0.0  0.0
  0.0  0.0  0.0
 
-julia> rand!(A)
+julia> fill!(A, 2)
 3×3 SparseArray{Float64,2}:
- 0.28119   0.0203749  0.0769509
- 0.209472  0.287702   0.640396
- 0.251379  0.859512   0.873544
+ 2.0  2.0  2.0
+ 2.0  2.0  2.0
+ 2.0  2.0  2.0
 
 julia> A[:] = 1:length(A); A
 3×3 SparseArray{Float64,2}:
@@ -309,7 +331,7 @@ appropriate size and element type, which is filled in using the basic indexing m
 above. However, when implementing an array wrapper you often want the result to be wrapped as
 well:
 
-```julia
+```jldoctest squarevectype
 julia> A[1:2,:]
 2×3 SparseArray{Float64,2}:
  1.0  4.0  7.0
@@ -319,21 +341,21 @@ julia> A[1:2,:]
 In this example it is accomplished by defining `Base.similar{T}(A::SparseArray, ::Type{T}, dims::Dims)`
 to create the appropriate wrapped array. (Note that while `similar` supports 1- and 2-argument
 forms, in most case you only need to specialize the 3-argument form.) For this to work it's important
-that `SparseArray` is mutable (supports `setindex!`). [`similar()`](@ref) is also used to allocate result
-arrays for arithmetic on `AbstractArrays`, for instance:
+that `SparseArray` is mutable (supports `setindex!`). Defining `similar()`, `getindex()` and
+`setindex!()` for `SparseArray` also makes it possible to [`copy()`](@ref) the array:
 
-```julia
-julia> A + 4
+```jldoctest squarevectype
+julia> copy(A)
 3×3 SparseArray{Float64,2}:
- 5.0   8.0  11.0
- 6.0   9.0  12.0
- 7.0  10.0  13.0
+ 1.0  4.0  7.0
+ 2.0  5.0  8.0
+ 3.0  6.0  9.0
 ```
 
 In addition to all the iterable and indexable methods from above, these types can also interact
-with each other and use all of the methods defined in the standard library for `AbstractArrays`:
+with each other and use most of the methods defined in the standard library for `AbstractArrays`:
 
-```julia
+```jldoctest squarevectype
 julia> A[SquaresVector(3)]
 3-element SparseArray{Float64,1}:
  1.0
@@ -345,7 +367,7 @@ julia> dot(A[:,1],A[:,2])
 ```
 
 If you are defining an array type that allows non-traditional indexing (indices that start at
-something other than 1), you should specialize `indices`.  You should also specialize [`similar`](@ref)
+something other than 1), you should specialize `indices`. You should also specialize [`similar`](@ref)
 so that the `dims` argument (ordinarily a `Dims` size-tuple) can accept `AbstractUnitRange` objects,
-perhaps range-types `Ind` of your own design.  For more information, see [Arrays with custom indices](@ref).
+perhaps range-types `Ind` of your own design. For more information, see [Arrays with custom indices](@ref).
 

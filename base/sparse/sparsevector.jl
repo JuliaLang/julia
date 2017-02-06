@@ -31,6 +31,7 @@ length(x::SparseVector) = x.n
 size(x::SparseVector) = (x.n,)
 nnz(x::SparseVector) = length(x.nzval)
 countnz(x::SparseVector) = countnz(x.nzval)
+count(x::SparseVector) = count(x.nzval)
 nonzeros(x::SparseVector) = x.nzval
 nonzeroinds(x::SparseVector) = x.nzind
 
@@ -1333,13 +1334,13 @@ function LinAlg.axpy!(a::Number, x::AbstractSparseVector, y::StridedVector)
     nzval = nonzeros(x)
     m = length(nzind)
 
-    if a == one(a)
+    if a == oneunit(a)
         for i = 1:m
             @inbounds ii = nzind[i]
             @inbounds v = nzval[i]
             y[ii] += v
         end
-    elseif a == -one(a)
+    elseif a == -oneunit(a)
         for i = 1:m
             @inbounds ii = nzind[i]
             @inbounds v = nzval[i]

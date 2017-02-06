@@ -56,7 +56,9 @@ include("options.jl")
 # core operations & types
 include("promotion.jl")
 include("tuple.jl")
+include("traits.jl")
 include("range.jl")
+include("twiceprecision.jl")
 include("expr.jl")
 include("error.jl")
 
@@ -94,7 +96,6 @@ include("subarray.jl")
 (::Type{Vector})() = Array{Any,1}(0)
 (::Type{Vector{T}}){T}(m::Integer) = Array{T,1}(Int(m))
 (::Type{Vector})(m::Integer) = Array{Any,1}(Int(m))
-(::Type{Matrix})() = Array{Any,2}(0, 0)
 (::Type{Matrix{T}}){T}(m::Integer, n::Integer) = Matrix{T}(Int(m), Int(n))
 (::Type{Matrix})(m::Integer, n::Integer) = Matrix{Any}(Int(m), Int(n))
 
@@ -282,18 +283,10 @@ importall .Enums
 include("serialize.jl")
 importall .Serializer
 include("channels.jl")
-include("clusterserialize.jl")
-include("multi.jl")
-include("workerpool.jl")
-include("managers.jl")
-
-# code loading
-include("loading.jl")
 
 # memory-mapped and shared arrays
 include("mmap.jl")
 import .Mmap
-include("sharedarray.jl")
 
 # utilities - timing, help, edit
 include("datafmt.jl")
@@ -361,9 +354,14 @@ import .Dates: Date, DateTime, DateFormat, @dateformat_str, now
 include("sparse/sparse.jl")
 importall .SparseArrays
 
-# parallel map
 include("asyncmap.jl")
-include("pmap.jl")
+
+include("parallel/Parallel.jl")
+importall .Parallel
+include("sharedarray.jl")
+
+# code loading
+include("loading.jl")
 
 # worker threads
 include("threadcall.jl")
@@ -387,7 +385,7 @@ function __init__()
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
     early_init()
     init_load_path()
-    init_parallel()
+    Parallel.init_parallel()
     init_threadcall()
 end
 

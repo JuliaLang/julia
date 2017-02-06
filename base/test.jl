@@ -39,7 +39,7 @@ function scrub_backtrace(bt)
     if do_test_ind != 0 && length(bt) > do_test_ind
         bt = bt[do_test_ind + 1:end]
     end
-    name_ind = findfirst(addr->ip_matches_func_and_name(addr, Symbol("macro expansion;"), ".", "test.jl"), bt)
+    name_ind = findfirst(addr->ip_matches_func_and_name(addr, Symbol("macro expansion"), ".", "test.jl"), bt)
     if name_ind != 0 && length(bt) != 0
         bt = bt[1:name_ind]
     end
@@ -420,7 +420,7 @@ macro test_warn(msg, expr)
     quote
         let fname = tempname(), have_color = Base.have_color
             try
-                eval(Base, :(have_color = false))
+                @eval Base have_color = false
                 ret = open(fname, "w") do f
                     redirect_stderr(f) do
                         $(esc(expr))
@@ -954,7 +954,7 @@ function parse_testset_args(args)
         elseif isa(arg, Expr) && arg.head == :(=)
             # we're building up a Dict literal here
             key = Expr(:quote, arg.args[1])
-            push!(options.args, Expr(:(=>), key, arg.args[2]))
+            push!(options.args, Expr(:call, :(=>), key, arg.args[2]))
         else
             error("Unexpected argument $arg to @testset")
         end
@@ -1040,14 +1040,14 @@ Variables:
 
 Body:
   begin
-      unless (Base.slt_int)(1,b::Int64)::Bool goto 3
+      unless (Base.slt_int)(1, b::Int64)::Bool goto 3
       return 1
       3:
       return 1.0
-  end::UNION{FLOAT64,INT64}
+  end::UNION{FLOAT64, INT64}
 
 julia> @inferred f(1,2,3)
-ERROR: return type Int64 does not match inferred return type Union{Float64,Int64}
+ERROR: return type Int64 does not match inferred return type Union{Float64, Int64}
 Stacktrace:
  [1] error(::String) at ./error.jl:21
 
@@ -1123,7 +1123,7 @@ defined in the specified modules. Use `imported=true` if you wish to
 also test functions that were imported into these modules from
 elsewhere.
 """
-function detect_ambiguities(mods...; imported::Bool=false)
+function detect_ambiguities(mods...; imported::Bool=false, allow_bottom::Bool=true)
     function sortdefs(m1, m2)
         ord12 = m1.file < m2.file
         if !ord12 && (m1.file == m2.file)
@@ -1145,7 +1145,7 @@ function detect_ambiguities(mods...; imported::Bool=false)
                 for m in mt
                     if m.ambig !== nothing
                         for m2 in m.ambig
-                            if Base.isambiguous(m, m2)
+                            if Base.isambiguous(m, m2, allow_bottom)
                                 push!(ambs, sortdefs(m, m2))
                             end
                         end

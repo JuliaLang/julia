@@ -287,6 +287,13 @@ extern "C" {
 
 namespace {
 
+// Use a local variable to hold the addresses to avoid generating a PLT
+// on the function call.
+// It messes up the GDB lookup logic with dynamically linked LLVM.
+// (Ref https://sourceware.org/bugzilla/show_bug.cgi?id=20633)
+// Use `volatile` to make sure the call always loads this slot.
+void (*volatile jit_debug_register_code)() = __jit_debug_register_code;
+
 using namespace llvm;
 using namespace llvm::object;
 using namespace llvm::orc;
@@ -305,7 +312,7 @@ void NotifyDebugger(jit_code_entry *JITCodeEntry)
     }
     __jit_debug_descriptor.first_entry = JITCodeEntry;
     __jit_debug_descriptor.relevant_entry = JITCodeEntry;
-    __jit_debug_register_code();
+    jit_debug_register_code();
 }
 }
 // ------------------------ END OF TEMPORARY COPY FROM LLVM -----------------
@@ -437,7 +444,11 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
                 auto Obj = object::ObjectFile::createObjectFile(ObjBuffer->getMemBufferRef());
 
                 if (!Obj) {
+#if JL_LLVM_VERSION >= 50000
+                    M.print(llvm::dbgs(), nullptr, false, true);
+#else
                     M.dump();
+#endif
 #if JL_LLVM_VERSION >= 30900
                     std::string Buf;
                     raw_string_ostream OS(Buf);

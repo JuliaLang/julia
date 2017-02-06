@@ -26,11 +26,14 @@ typealias DenseVecOrMat{T} Union{DenseVector{T}, DenseMatrix{T}}
 import Core: arraysize, arrayset, arrayref
 
 """
+    Array{T}(dims)
     Array{T,N}(dims)
 
-Construct an uninitialized `N`-dimensional dense array with element type `T`. `dims` may
-be a tuple or a series of integer arguments corresponding to the length in each dimension.
-If the rank `N` is omitted, i.e. `Array{T}(dims)`, the rank is determined based on `dims`.
+Construct an uninitialized `N`-dimensional dense array with element type `T`,
+where `N` is determined from the length or number of `dims`.  `dims` may
+be a tuple or a series of integer arguments corresponding to the lengths in each dimension.
+If the rank `N` is supplied explicitly as in `Array{T,N}(dims)`, then it must
+match the length or number of `dims`.
 """
 Array
 
@@ -234,10 +237,10 @@ end
 `m`-by-`n` identity matrix.
 The default element type is `Float64`.
 """
-function eye(T::Type, m::Integer, n::Integer)
+function eye{T}(::Type{T}, m::Integer, n::Integer)
     a = zeros(T,m,n)
     for i = 1:min(m,n)
-        a[i,i] = one(T)
+        a[i,i] = oneunit(T)
     end
     return a
 end
@@ -248,7 +251,7 @@ end
 `m`-by-`n` identity matrix.
 """
 eye(m::Integer, n::Integer) = eye(Float64, m, n)
-eye(T::Type, n::Integer) = eye(T, n, n)
+eye{T}(::Type{T}, n::Integer) = eye(T, n, n)
 """
     eye([T::Type=Float64,] n::Integer)
 
@@ -278,13 +281,16 @@ julia> eye(A)
 
 Note the difference from [`ones`](@ref).
 """
-eye{T}(x::AbstractMatrix{T}) = eye(T, size(x, 1), size(x, 2))
+eye{T}(x::AbstractMatrix{T}) = eye(typeof(one(T)), size(x, 1), size(x, 2))
 
-function one{T}(x::AbstractMatrix{T})
+function _one{T}(unit::T, x::AbstractMatrix)
     m,n = size(x)
     m==n || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
     eye(T, m)
 end
+
+one{T}(x::AbstractMatrix{T}) = _one(one(T), x)
+oneunit{T}(x::AbstractMatrix{T}) = _one(oneunit(T), x)
 
 ## Conversions ##
 
@@ -792,7 +798,7 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
 julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
 Stacktrace:
- [1] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:748
+ [1] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:808
 ```
 """
 function deleteat!(a::Vector, inds)
@@ -1426,7 +1432,7 @@ julia> A = [1 2 0; 0 0 3; 0 4 0]
  0  4  0
 
 julia> findn(A)
-([1,1,3,2],[1,2,2,3])
+([1, 1, 3, 2], [1, 2, 2, 3])
 
 julia> A = zeros(2,2)
 2×2 Array{Float64,2}:
@@ -1434,7 +1440,7 @@ julia> A = zeros(2,2)
  0.0  0.0
 
 julia> findn(A)
-(Int64[],Int64[])
+(Int64[], Int64[])
 ```
 """
 function findn(A::AbstractMatrix)
@@ -1466,7 +1472,7 @@ julia> A = [1 2 0; 0 0 3; 0 4 0]
  0  4  0
 
 julia> findnz(A)
-([1,1,3,2],[1,2,2,3],[1,2,4,3])
+([1, 1, 3, 2], [1, 2, 2, 3], [1, 2, 4, 3])
 ```
 """
 function findnz{T}(A::AbstractMatrix{T})
@@ -1500,13 +1506,13 @@ The collection must not be empty.
 
 ```jldoctest
 julia> findmax([8,0.1,-9,pi])
-(8.0,1)
+(8.0, 1)
 
 julia> findmax([1,7,7,6])
-(7,2)
+(7, 2)
 
 julia> findmax([1,7,7,NaN])
-(7.0,2)
+(7.0, 2)
 ```
 """
 function findmax(a)
@@ -1538,13 +1544,13 @@ The collection must not be empty.
 
 ```jldoctest
 julia> findmin([8,0.1,-9,pi])
-(-9.0,3)
+(-9.0, 3)
 
 julia> findmin([7,1,1,6])
-(1,2)
+(1, 2)
 
 julia> findmin([7,1,1,NaN])
-(1.0,2)
+(1.0, 2)
 ```
 """
 function findmin(a)

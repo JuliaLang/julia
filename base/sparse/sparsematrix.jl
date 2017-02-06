@@ -44,6 +44,7 @@ julia> nnz(A)
 """
 nnz(S::SparseMatrixCSC) = Int(S.colptr[end]-1)
 countnz(S::SparseMatrixCSC) = countnz(S.nzval)
+count(S::SparseMatrixCSC) = count(S.nzval)
 
 """
     nonzeros(A)
@@ -1379,7 +1380,7 @@ if not specified.
 `sparse(α*I, m, n)` can be used to efficiently create a sparse
 multiple `α` of the identity matrix.
 """
-speye(T::Type, m::Integer, n::Integer) = speye_scaled(T, one(T), m, n)
+speye(T::Type, m::Integer, n::Integer) = speye_scaled(T, oneunit(T), m, n)
 
 function one{T}(S::SparseMatrixCSC{T})
     m,n = size(S)
@@ -2933,7 +2934,7 @@ Concatenate matrices block-diagonally. Currently only implemented for sparse mat
 # Example
 ```jldoctest
 julia> blkdiag(speye(3), 2*speye(2))
-5×5 sparse matrix with 5 Float64 nonzero entries:
+5×5 sparse matrix with 5 Float64 stored entries:
   [1, 1]  =  1.0
   [2, 2]  =  1.0
   [3, 3]  =  1.0
