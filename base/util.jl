@@ -81,6 +81,17 @@ gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
 
 Set a timer to be read by the next call to [`toc`](@ref) or [`toq`](@ref). The
 macro call `@time expr` can also be used to time evaluation.
+
+```julia
+julia> tic()
+0x0000c45bc7abac95
+
+julia> sleep(0.3)
+
+julia> toc()
+elapsed time: 0.302745944 seconds
+0.302745944
+```
 """
 function tic()
     t0 = time_ns()
@@ -93,6 +104,16 @@ end
 
 Return, but do not print, the time elapsed since the last [`tic`](@ref). The
 macro calls `@timed expr` and `@elapsed expr` also return evaluation time.
+
+```julia
+julia> tic()
+0x0000c46477a9675d
+
+julia> sleep(0.3)
+
+julia> toq()
+0.302251004
+```
 """
 function toq()
     t1 = time_ns()
@@ -110,6 +131,17 @@ end
 
 Print and return the time elapsed since the last [`tic`](@ref). The macro call
 `@time expr` can also be used to time evaluation.
+
+```julia
+julia> tic()
+0x0000c45bc7abac95
+
+julia> sleep(0.3)
+
+julia> toc()
+elapsed time: 0.302745944 seconds
+0.302745944
+```
 """
 function toc()
     t = toq()
@@ -186,6 +218,17 @@ returning the value of the expression.
 
 See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
+
+```julia
+julia> @time rand(10^6);
+  0.001525 seconds (7 allocations: 7.630 MiB)
+
+julia> @time begin
+           sleep(0.3)
+           1+1
+       end
+  0.301395 seconds (8 allocations: 336 bytes)
+```
 """
 macro time(ex)
     quote
@@ -209,6 +252,15 @@ expression.
 
 See also [`@time`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
+
+```julia
+julia> @timev rand(10^6);
+  0.001006 seconds (7 allocations: 7.630 MiB)
+elapsed time (ns): 1005567
+bytes allocated:   8000256
+pool allocs:       6
+malloc() calls:    1
+```
 """
 macro timev(ex)
     quote
@@ -229,6 +281,11 @@ number of seconds it took to execute as a floating-point number.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@allocated`](@ref).
+
+```julia
+julia> @elapsed sleep(0.3)
+0.301391426
+```
 """
 macro elapsed(ex)
     quote
@@ -256,6 +313,11 @@ for the effects of compilation.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@elapsed`](@ref).
+
+```julia
+julia> @allocated rand(10^6)
+8000080
+```
 """
 macro allocated(ex)
     quote
@@ -280,6 +342,34 @@ counters.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
+
+```julia
+julia> val, t, bytes, gctime, memallocs = @timed rand(10^6);
+
+julia> t
+0.006634834
+
+julia> bytes
+8000256
+
+julia> gctime
+0.0055765
+
+julia> fieldnames(typeof(memallocs))
+9-element Array{Symbol,1}:
+ :allocd
+ :malloc
+ :realloc
+ :poolalloc
+ :bigalloc
+ :freecall
+ :total_time
+ :pause
+ :full_sweep
+
+julia> memallocs.total_time
+5576500
+```
 """
 macro timed(ex)
     quote
@@ -486,6 +576,11 @@ end
     warn(msg)
 
 Display a warning. Argument `msg` is a string describing the warning to be displayed.
+
+```jldoctest
+julia> warn("Beep Beep")
+WARNING: Beep Beep
+```
 """
 warn(msg...; kw...) = warn(STDERR, msg...; kw...)
 
@@ -681,7 +776,7 @@ expression. The default argument is supplied by declaring fields of the form `fi
 default`. If no default is provided then the default is provided by the `kwdef_val(T)`
 function.
 
-```
+```julia
 @kwdef immutable Foo
     a::Cint            # implied default Cint(0)
     b::Cint = 1        # specified default

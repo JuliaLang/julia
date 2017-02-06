@@ -34,6 +34,19 @@ end
 
 Construct an uninitialized `BitArray` with the given dimensions.
 Behaves identically to the [`Array`](@ref) constructor.
+
+```julia
+julia> BitArray(2, 2)
+2×2 BitArray{2}:
+ false  false
+ false  true
+
+julia> BitArray((3, 1))
+3×1 BitArray{2}:
+ false
+ true
+ false
+```
 """
 BitArray(dims::Integer...) = BitArray(map(Int,dims))
 BitArray{N}(dims::NTuple{N,Int}) = BitArray{N}(dims...)

@@ -111,6 +111,23 @@ to verify that `p` is a permutation.
 
 To return a new permutation, use `v[p]`. Note that this is generally faster than
 `permute!(v,p)` for large vectors.
+
+See also [`ipermute!`](@ref)
+
+```jldoctest
+julia> A = [1, 1, 3, 4];
+
+julia> perm = [2, 4, 3, 1];
+
+julia> permute!(A, perm);
+
+julia> A
+4-element Array{Int64,1}:
+ 1
+ 4
+ 3
+ 1
+```
 """
 permute!(a, p::AbstractVector) = permute!!(a, copymutable(p))
 
@@ -141,6 +158,21 @@ end
     ipermute!(v, p)
 
 Like `permute!`, but the inverse of the given permutation is applied.
+
+```jldoctest
+julia> A = [1, 1, 3, 4];
+
+julia> perm = [2, 4, 3, 1];
+
+julia> ipermute!(A, perm);
+
+julia> A
+4-element Array{Int64,1}:
+ 4
+ 1
+ 3
+ 1
+```
 """
 ipermute!(a, p::AbstractVector) = ipermute!!(a, copymutable(p))
 
@@ -196,10 +228,18 @@ invperm(a::Tuple) = (invperm([a...])...,)
 
 #XXX This function should be moved to Combinatorics.jl but is currently used by Base.DSP.
 """
-    nextprod([k_1,k_2,...], n)
+    nextprod([k_1, k_2,...], n)
 
-Next integer not less than `n` that can be written as ``\\prod k_i^{p_i}`` for integers
+Next integer greater than or equal to `n` that can be written as ``\\prod k_i^{p_i}`` for integers
 ``p_1``, ``p_2``, etc.
+
+```jldoctest
+julia> nextprod([2, 3], 105)
+108
+
+julia> 2^2 * 3^3
+108
+```
 """
 function nextprod(a::Vector{Int}, x)
     if x > typemax(Int)
