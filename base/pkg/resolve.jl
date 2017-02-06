@@ -83,13 +83,8 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
     i = 1
     psl = 0
     for (p,vn,nvn) in vers
-        if ndeps[p][vn] == 0
-            break
-        end
-        if checked[i]
-            i += 1
-            continue
-        end
+        ndeps[p][vn] == 0 && break
+        checked[i] && (i += 1; continue)
 
         sub_reqs = Dict{String,VersionSet}(p=>VersionSet([vn, nvn]))
         local sub_deps::Dict{String,Dict{VersionNumber,Available}}

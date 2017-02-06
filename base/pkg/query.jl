@@ -97,15 +97,19 @@ function partial_update_mask(instd::Dict{String,Tuple{VersionNumber,Bool}}, avai
     for p in keys(avail)
         !haskey(avail_new, p) && push!(dont_update, p)
     end
-    for (p,_) in instd
-        !haskey(avail_new, p) && !(p in upkgs) && push!(dont_update, p)
+    for p in keys(instd)
+        !haskey(avail_new, p) && p ∉ upkgs && push!(dont_update, p)
     end
     return dont_update
 end
 
 # Try to produce some helpful message in case of a partial update which does not go all the way
 # (Does not do a full analysis, it only checks requirements and direct dependents.)
-function check_partial_updates(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}}, want::Dict{String,VersionNumber}, fixed::Dict{String,Fixed}, upkgs::Set{String})
+function check_partial_updates(reqs::Requires,
+                               deps::Dict{String,Dict{VersionNumber,Available}},
+                               want::Dict{String,VersionNumber},
+                               fixed::Dict{String,Fixed},
+                               upkgs::Set{String})
     for p in upkgs
         if !haskey(want, p)
             if !haskey(fixed, p)
@@ -291,9 +295,7 @@ function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Av
         allowedp = get(allowed, p, Dict{VersionNumber,Bool}())
         fdepsp = filtered_deps[p]
         for (vn,a) in depsp
-            if !isempty(allowedp) && !allowedp[vn]
-                continue
-            end
+            get(allowedp, vn, true) || continue
             fdepsp[vn] = a
         end
     end
@@ -320,22 +322,19 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
     # and put together those which are equal.
     # While we're at it, we also collect all dependencies into alldeps
     alldeps = Dict{String,Set{VersionSet}}()
-    for (p, fdepsp) in filtered_deps
-
+    for (p,fdepsp) in filtered_deps
         # Extract unique dependencies lists (aka classes), thereby
         # assigning an index to each class.
         uniqdepssets = unique(a.requires for a in values(fdepsp))
 
         # Store all dependencies seen so far for later use
         for r in uniqdepssets, (rp,rvs) in r
-            haskey(alldeps, rp) || (alldeps[rp] = Set{VersionSet}())
+            get!(alldeps, rp) do; Set{VersionSet}() end
             push!(alldeps[rp], rvs)
         end
 
         # If the package has just one version, it's uninteresting
-        if length(deps[p]) == 1
-            continue
-        end
+        length(deps[p]) == 1 && continue
 
         # Grow the pattern by the number of classes
         luds = length(uniqdepssets)
@@ -358,14 +357,11 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
         # packages with just one version, or dependencies
         # which do not distiguish between versions, are not
         # interesting
-        if length(deps[p]) == 1 || vs == VersionSet()
-            continue
-        end
+        (length(deps[p]) == 1 || vs == VersionSet()) && continue
 
         # Store the dependency info in the patterns
         @assert haskey(vmask, p)
-        vmaskp = vmask[p]
-        for (vn,vm) in vmaskp
+        for (vn,vm) in vmask[p]
             push!(vm, vn in vs)
         end
     end
@@ -431,7 +427,7 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
         new_deps[p] = Dict{VersionNumber,Available}()
         pruned_versp = pruned_vers[p]
         for (vn,a) in depsp
-            in(vn, pruned_versp) || continue
+            vn ∈ pruned_versp || continue
             new_deps[p][vn] = a
         end
     end
@@ -470,7 +466,7 @@ function subdeps(deps::Dict{String,Dict{VersionNumber,Available}}, pkgs::Set{Str
     for p in pkgs
         haskey(sub_deps, p) || (sub_deps[p] = Dict{VersionNumber,Available}())
         sub_depsp = sub_deps[p]
-        for (vn, a) in deps[p]
+        for (vn,a) in deps[p]
             sub_depsp[vn] = a
         end
     end
@@ -486,9 +482,7 @@ function dependencies_subset(deps::Dict{String,Dict{VersionNumber,Available}}, p
     while !isempty(staged)
         staged_next = Set{String}()
         for p in staged, a in values(get(deps, p, Dict{VersionNumber,Available}())), rp in keys(a.requires)
-            if !(rp in allpkgs) && rp ≠ "julia"
-                push!(staged_next, rp)
-            end
+            rp ∉ allpkgs && rp ≠ "julia" && push!(staged_next, rp)
         end
         union!(allpkgs, staged_next)
         staged = staged_next
@@ -516,9 +510,7 @@ function undirected_dependencies_subset(deps::Dict{String,Dict{VersionNumber,Ava
     while !isempty(staged)
         staged_next = Set{String}()
         for p in staged, rp in graph[p]
-            if !(rp in allpkgs)
-                push!(staged_next, rp)
-            end
+            rp ∉ allpkgs && push!(staged_next, rp)
         end
         union!(allpkgs, staged_next)
         staged = staged_next
