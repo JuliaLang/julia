@@ -148,7 +148,7 @@ end
 
 clear(t::UnixTerminal) = write(t.out_stream, "\x1b[H\x1b[2J")
 clear_line(t::UnixTerminal) = write(t.out_stream, "\x1b[0G\x1b[0K")
-#beep(t::UnixTerminal) = write(t.err_stream,"\x7")
+beep(t::UnixTerminal) = haskey(ENV, "JULIA_NO_BELL") || write(t.err_stream,"\x7")
 
 if is_windows()
     hascolor(t::TTYTerminal) = true
