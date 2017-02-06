@@ -51,10 +51,7 @@ function edit(path::AbstractString, line::Integer=0)
         cmd = line != 0 ? `$command $path:$line` : `$command $path`
     elseif startswith(name, "notepad++")
         cmd = line != 0 ? `$command $path -n$line` : `$command $path`
-    elseif is_windows() && (name == "start" || name == "open")
-        cmd = `cmd /c start /b $path`
-        line_unsupported = true
-    elseif is_apple() && (name == "start" || name == "open")
+    elseif is_apple() && name == "open"
         cmd = `open -t $path`
         line_unsupported = true
     else
@@ -63,7 +60,12 @@ function edit(path::AbstractString, line::Integer=0)
         line_unsupported = true
     end
 
-    if background
+    if is_windows() && name == "open"
+        systemerror(:edit, ccall((:ShellExecuteW,"shell32"), stdcall, Int,
+                                 (Ptr{Void}, Cwstring, Cwstring, Ptr{Void}, Ptr{Void}, Cint),
+                                 C_NULL, "open", path, C_NULL, C_NULL, 10) ≤ 32)
+        line_unsupported = true
+    elseif background
         spawn(pipeline(cmd, stderr=STDERR))
     else
         run(cmd)
