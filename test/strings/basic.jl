@@ -172,9 +172,9 @@ gstr = GenericString("12")
 @test convert(Array{Char,1}, gstr) ==['1';'2']
 @test convert(Symbol, gstr)==Symbol("12")
 
-@test getindex(gstr, Bool(1))=='1'
-@test getindex(gstr,Bool(1):Bool(1))=="1"
-@test getindex(gstr,AbstractVector([Bool(1):Bool(1);]))=="1"
+@test gstr[1] == '1'
+@test gstr[1:1] == "1"
+@test gstr[[1]] == "1"
 
 @test done(eachindex("foobar"),7)
 @test eltype(Base.EachStringIndex) == Int
@@ -187,9 +187,8 @@ gstr = GenericString("12")
 
 @test length(GenericString(""))==0
 
-@test getindex(gstr,AbstractVector([Bool(1):Bool(1);]))=="1"
-
-@test nextind(AbstractArray([Bool(1):Bool(1);]),1)==2
+@test nextind(1:1, 1) == 2
+@test nextind([1], 1) == 2
 
 @test ind2chr(gstr,2)==2
 
@@ -461,3 +460,7 @@ Base.endof(x::CharStr) = endof(x.chars)
 # Case with Unicode characters
 @test cmp("\U1f596\U1f596", CharStr("\U1f596")) == 1   # Gives BoundsError with bug
 @test cmp(CharStr("\U1f596"), "\U1f596\U1f596") == -1
+
+# issue #12495: check that logical indexing attempt raises ArgumentError
+@test_throws ArgumentError "abc"[[true, false, true]]
+@test_throws ArgumentError "abc"[BitArray([true, false, true])]
