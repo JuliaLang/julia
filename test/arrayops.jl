@@ -1067,9 +1067,13 @@ end
 @testset "deleteat!" begin
     for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
                    8:9, 9:10, 6:9, 7:10]
-        # integer indexing
+        # integer indexing with AbstractArray
         a = [1:10;]; acopy = copy(a)
         @test deleteat!(a, idx) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
+
+        # integer indexing with non-AbstractArray iterable
+        a = [1:10;]; acopy = copy(a)
+        @test deleteat!(a, (i for i in idx)) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
 
         # logical indexing
         a = [1:10;]; acopy = copy(a)

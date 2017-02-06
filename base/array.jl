@@ -818,7 +818,10 @@ Stacktrace:
  [1] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:808
 ```
 """
-function deleteat!(a::Vector, inds)
+deleteat!(a::Vector, inds) = _deleteat!(a, inds)
+deleteat!(a::Vector, inds::AbstractVector) = _deleteat!(a, to_indices(a, (inds,))[1])
+
+function _deleteat!(a::Vector, inds)
     n = length(a)
     s = start(inds)
     done(inds, s) && return a
@@ -847,9 +850,10 @@ function deleteat!(a::Vector, inds)
     return a
 end
 
+# Simpler and more efficient version for logical indexing
 function deleteat!(a::Vector, inds::AbstractVector{Bool})
     n = length(a)
-    length(inds) == n || throw(BoundsError(a, inds))
+    @boundscheck length(inds) == n || throw(BoundsError(a, inds))
     p = 1
     for (q, i) in enumerate(inds)
         @inbounds a[p] = a[q]
