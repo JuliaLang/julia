@@ -272,6 +272,9 @@ Library improvements
 
   * `notify` now returns a count of tasks woken up ([#19841]).
 
+  * New nonstandard string literal `raw"..."` for creating strings
+    with no interpolation or unescaping ([#19900]).
+
   * A new `Dates.Time` type was added that supports representing the time of day with up to nanosecond resolution ([#12274]).
 
   * New `@macroexpand` macro as a convenient alternative to the `macroexpand` function ([#18660]).
@@ -370,6 +373,7 @@ Deprecated or removed
 [#19787]: https://github.com/JuliaLang/julia/issues/19787
 [#19800]: https://github.com/JuliaLang/julia/issues/19800
 [#19841]: https://github.com/JuliaLang/julia/issues/19841
+[#19900]: https://github.com/JuliaLang/julia/issues/19900
 [#19903]: https://github.com/JuliaLang/julia/issues/19903
 [#19919]: https://github.com/JuliaLang/julia/issues/19919
 [#19944]: https://github.com/JuliaLang/julia/issues/19944
