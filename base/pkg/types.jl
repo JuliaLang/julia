@@ -112,7 +112,7 @@ end
 hash(s::VersionSet, h::UInt) = hash(s.intervals, h + (0x2fd2ca6efa023f44 % UInt))
 deepcopy_internal(vs::VersionSet, ::ObjectIdDict) = copy(vs)
 
-typealias Requires Dict{String,VersionSet}
+const Requires = Dict{String,VersionSet}
 
 function merge_requires!(A::Requires, B::Requires)
     for (pkg,vers) in B
@@ -155,8 +155,8 @@ show(io::IO, f::Fixed) = isempty(f.requires) ?
 # required by anything that processes these things.
 
 
-typealias VersionReq Union{VersionNumber,VersionSet}
-typealias WhyReq Tuple{VersionReq,Any}
+const VersionReq = Union{VersionNumber,VersionSet}
+const WhyReq = Tuple{VersionReq,Any}
 
 # This is used to keep track of dependency relations when propagating
 # requirements, so as to emit useful information in case of unsatisfiable
@@ -241,6 +241,6 @@ function _show(io::IO, ritem::ResolveBacktraceItem, indent::String, seen::Set{Re
     end
 end
 
-typealias ResolveBacktrace Dict{AbstractString,ResolveBacktraceItem}
+const ResolveBacktrace = Dict{AbstractString,ResolveBacktraceItem}
 
 end # module

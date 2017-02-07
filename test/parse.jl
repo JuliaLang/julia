@@ -857,9 +857,7 @@ end
 @test method_exists(Mod18756.Type, ())
 
 # issue 18002
-@test parse("typealias a (Int)") == Expr(:typealias, :a, :Int)
-@test parse("typealias b (Int,)") == Expr(:typealias, :b, Expr(:tuple, :Int))
-@test parse("typealias Foo{T} Bar{T}") == Expr(:typealias, Expr(:curly, :Foo, :T), Expr(:curly, :Bar, :T))
+@test parse("Foo{T} = Bar{T}") == Expr(:(=), Expr(:curly, :Foo, :T), Expr(:curly, :Bar, :T))
 
 # don't insert push_loc for filename `none` at the top level
 let ex = expand(parse("""

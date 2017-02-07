@@ -67,7 +67,7 @@ end
 
 elseif is_windows()
 
-typealias DWORD Culong
+const DWORD = Culong
 
 const PAGE_READONLY          = DWORD(0x02)
 const PAGE_READWRITE         = DWORD(0x04)

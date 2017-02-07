@@ -58,7 +58,7 @@ struct OffsetArray{T,N,AA<:AbstractArray} <: AbstractArray{T,N}
     parent::AA
     offsets::NTuple{N,Int}
 end
-typealias OffsetVector{T,AA<:AbstractArray} OffsetArray{T,1,AA}
+OffsetVector{T,AA<:AbstractArray} = OffsetArray{T,1,AA}
 
 OffsetArray{T,N}(A::AbstractArray{T,N}, offsets::NTuple{N,Int}) = OffsetArray{T,N,typeof(A)}(A, offsets)
 OffsetArray{T,N}(A::AbstractArray{T,N}, offsets::Vararg{Int,N}) = OffsetArray(A, offsets)

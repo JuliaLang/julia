@@ -1197,7 +1197,7 @@ function logdet(A::AbstractMatrix)
     return d + log(s)
 end
 
-typealias NumberArray{T<:Number} AbstractArray{T}
+NumberArray{T<:Number} = AbstractArray{T}
 
 """
     promote_leaf_eltypes(itr)

@@ -853,24 +853,24 @@ vcat(Xin::Union{Vector, AbstractSparseVector}...) = vcat(map(sparse, Xin)...)
 
 # TODO: A definition similar to the third exists in base/linalg/bidiag.jl. These definitions
 # should be consolidated in a more appropriate location, e.g. base/linalg/special.jl.
-typealias _SparseArrays Union{SparseVector, SparseMatrixCSC}
-typealias _SpecialArrays Union{Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal}
-typealias _SparseConcatArrays Union{_SpecialArrays, _SparseArrays}
+const _SparseArrays = Union{SparseVector, SparseMatrixCSC}
+const _SpecialArrays = Union{Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal}
+const _SparseConcatArrays = Union{_SpecialArrays, _SparseArrays}
 
-typealias _Symmetric_SparseConcatArrays{T,A<:_SparseConcatArrays} Symmetric{T,A}
-typealias _Hermitian_SparseConcatArrays{T,A<:_SparseConcatArrays} Hermitian{T,A}
-typealias _Triangular_SparseConcatArrays{T,A<:_SparseConcatArrays} Base.LinAlg.AbstractTriangular{T,A}
-typealias _Annotated_SparseConcatArrays Union{_Triangular_SparseConcatArrays, _Symmetric_SparseConcatArrays, _Hermitian_SparseConcatArrays}
+const _Symmetric_SparseConcatArrays{T,A<:_SparseConcatArrays} = Symmetric{T,A}
+const _Hermitian_SparseConcatArrays{T,A<:_SparseConcatArrays} = Hermitian{T,A}
+const _Triangular_SparseConcatArrays{T,A<:_SparseConcatArrays} = Base.LinAlg.AbstractTriangular{T,A}
+const _Annotated_SparseConcatArrays = Union{_Triangular_SparseConcatArrays, _Symmetric_SparseConcatArrays, _Hermitian_SparseConcatArrays}
 
-typealias _Symmetric_DenseArrays{T,A<:Matrix} Symmetric{T,A}
-typealias _Hermitian_DenseArrays{T,A<:Matrix} Hermitian{T,A}
-typealias _Triangular_DenseArrays{T,A<:Matrix} Base.LinAlg.AbstractTriangular{T,A}
-typealias _Annotated_DenseArrays Union{_Triangular_DenseArrays, _Symmetric_DenseArrays, _Hermitian_DenseArrays}
-typealias _Annotated_Typed_DenseArrays{T} Union{_Triangular_DenseArrays{T}, _Symmetric_DenseArrays{T}, _Hermitian_DenseArrays{T}}
+const _Symmetric_DenseArrays{T,A<:Matrix} = Symmetric{T,A}
+const _Hermitian_DenseArrays{T,A<:Matrix} = Hermitian{T,A}
+const _Triangular_DenseArrays{T,A<:Matrix} = Base.LinAlg.AbstractTriangular{T,A}
+const _Annotated_DenseArrays = Union{_Triangular_DenseArrays, _Symmetric_DenseArrays, _Hermitian_DenseArrays}
+const _Annotated_Typed_DenseArrays{T} = Union{_Triangular_DenseArrays{T}, _Symmetric_DenseArrays{T}, _Hermitian_DenseArrays{T}}
 
-typealias _SparseConcatGroup Union{Vector, Matrix, _SparseConcatArrays, _Annotated_SparseConcatArrays, _Annotated_DenseArrays}
-typealias _DenseConcatGroup Union{Vector, Matrix, _Annotated_DenseArrays}
-typealias _TypedDenseConcatGroup{T} Union{Vector{T}, Matrix{T}, _Annotated_Typed_DenseArrays{T}}
+const _SparseConcatGroup = Union{Vector, Matrix, _SparseConcatArrays, _Annotated_SparseConcatArrays, _Annotated_DenseArrays}
+const _DenseConcatGroup = Union{Vector, Matrix, _Annotated_DenseArrays}
+const _TypedDenseConcatGroup{T} = Union{Vector{T}, Matrix{T}, _Annotated_Typed_DenseArrays{T}}
 
 # Concatenations involving un/annotated sparse/special matrices/vectors should yield sparse arrays
 function cat(catdims, Xin::_SparseConcatGroup...)

@@ -139,11 +139,11 @@ using .Iterators: zip, enumerate
 using .Iterators: Flatten, product  # for generators
 
 # Definition of StridedArray
-typealias StridedReshapedArray{T,N,A<:DenseArray} ReshapedArray{T,N,A}
-typealias StridedArray{T,N,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} Union{DenseArray{T,N}, SubArray{T,N,A,I}, StridedReshapedArray{T,N}}
-typealias StridedVector{T,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}}  Union{DenseArray{T,1}, SubArray{T,1,A,I}, StridedReshapedArray{T,1}}
-typealias StridedMatrix{T,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}}  Union{DenseArray{T,2}, SubArray{T,2,A,I}, StridedReshapedArray{T,2}}
-typealias StridedVecOrMat{T} Union{StridedVector{T}, StridedMatrix{T}}
+StridedReshapedArray{T,N,A<:DenseArray} = ReshapedArray{T,N,A}
+StridedArray{T,N,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} = Union{DenseArray{T,N}, SubArray{T,N,A,I}, StridedReshapedArray{T,N}}
+StridedVector{T,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} = Union{DenseArray{T,1}, SubArray{T,1,A,I}, StridedReshapedArray{T,1}}
+StridedMatrix{T,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} = Union{DenseArray{T,2}, SubArray{T,2,A,I}, StridedReshapedArray{T,2}}
+StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
 
 # For OS specific stuff
 include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)

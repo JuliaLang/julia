@@ -36,8 +36,8 @@ export Bignum
 
 const kMaxSignificantBits = 3584
 
-typealias Chunk UInt32
-typealias DoubleChunk UInt64
+const Chunk = UInt32
+const DoubleChunk = UInt64
 
 const kChunkSize = sizeof(Chunk) * 8
 const kDoubleChunkSize = sizeof(DoubleChunk) * 8

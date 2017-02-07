@@ -1249,27 +1249,19 @@
                             (scope-block ,catchb)))))
           (map expand-forms e))))
 
-(define (expand-typealias e)
-  (if (and (pair? (cadr e))
-           (eq? (car (cadr e)) 'curly))
-      (let ((name (cadr (cadr e)))
-            (params (cddr (cadr e)))
-            (type-ex (caddr e)))
-        (receive
-         (params bounds) (sparam-name-bounds params)
-         `(block
-           (const ,name)
-           (= ,name
-              (scope-block
-               (block
-                ,@(map (lambda (v) `(local ,v)) params)
-                ,@(map (lambda (l r) (make-assignment l (expand-forms (bounds-to-TypeVar r))))
-                       params bounds)
-                ,(foldl (lambda (var type) `(call (core UnionAll) ,var ,type))
-                        (expand-forms type-ex)
-                        (reverse params))))))))
+(define (expand-typealias name type-ex)
+  (if (and (pair? name)
+           (eq? (car name) 'curly))
+      (let ((name   (cadr name))
+            (params (cddr name)))
+        (if (null? params)
+            (error (string "empty type parameter list in \"" (deparse `(= (curly ,name) ,type-ex)) "\"")))
+        `(block
+          (const ,name)
+          ,(expand-forms
+            `(= ,name (where ,type-ex ,@params)))))
       (expand-forms
-       `(const (= ,(cadr e) ,(caddr e))))))
+       `(const (= ,name ,type-ex)))))
 
 ;; take apart e.g. `const a::Int = 0` into `const a; a::Int = 0`
 (define (expand-const-decl e)
@@ -1785,7 +1777,8 @@
    'macro          expand-macro-def
    'type           expand-type-def
    'try            expand-try
-   'typealias      expand-typealias
+   ;; deprecated in 0.6
+   'typealias      (lambda (e) (expand-typealias (cadr e) (caddr e)))
 
    'lambda
    (lambda (e)
@@ -1839,6 +1832,9 @@
        ;; allow defining functions that use comparison syntax
        (expand-forms (list* 'function
                             `(call ,(caddr lhs) ,(cadr lhs) ,(cadddr lhs)) (cddr e))))
+      ((and (pair? lhs)
+            (eq? (car lhs) 'curly))
+       (expand-typealias (cadr e) (caddr e)))
       ((assignment? (caddr e))
        ;; chain of assignments - convert a=b=c to `b=c; a=c`
        (let loop ((lhss (list lhs))

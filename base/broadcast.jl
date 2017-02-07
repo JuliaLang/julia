@@ -9,7 +9,7 @@ using Base: linearindices, tail, OneTo, to_shape,
 import Base: broadcast, broadcast!
 export broadcast_getindex, broadcast_setindex!, dotview, @__dot__
 
-typealias ScalarType Union{Type{Any}, Type{Nullable}}
+const ScalarType = Union{Type{Any}, Type{Nullable}}
 
 ## Broadcasting utilities ##
 # fallbacks for some special cases

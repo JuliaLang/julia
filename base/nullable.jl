@@ -177,14 +177,14 @@ vectorization.
 """
 null_safe_op(f::Any, ::Type, ::Type...) = false
 
-typealias NullSafeSignedInts Union{Type{Int128}, Type{Int16}, Type{Int32},
-                                   Type{Int64}, Type{Int8}}
-typealias NullSafeUnsignedInts Union{Type{Bool}, Type{UInt128}, Type{UInt16},
-                                     Type{UInt32}, Type{UInt64}, Type{UInt8}}
-typealias NullSafeInts Union{NullSafeSignedInts, NullSafeUnsignedInts}
-typealias NullSafeFloats Union{Type{Float16}, Type{Float32}, Type{Float64}}
-typealias NullSafeTypes Union{NullSafeInts, NullSafeFloats}
-typealias EqualOrLess Union{typeof(isequal), typeof(isless)}
+const NullSafeSignedInts = Union{Type{Int128}, Type{Int16}, Type{Int32},
+                                 Type{Int64}, Type{Int8}}
+const NullSafeUnsignedInts = Union{Type{Bool}, Type{UInt128}, Type{UInt16},
+                                   Type{UInt32}, Type{UInt64}, Type{UInt8}}
+const NullSafeInts = Union{NullSafeSignedInts, NullSafeUnsignedInts}
+const NullSafeFloats = Union{Type{Float16}, Type{Float32}, Type{Float64}}
+const NullSafeTypes = Union{NullSafeInts, NullSafeFloats}
+const EqualOrLess = Union{typeof(isequal), typeof(isless)}
 
 null_safe_op{T}(::typeof(identity), ::Type{T}) = isbits(T)
 

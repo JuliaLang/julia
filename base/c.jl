@@ -7,9 +7,9 @@ import Core.Intrinsics: cglobal, bitcast
 cfunction(f::Function, r, a) = ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
 
 if ccall(:jl_is_char_signed, Ref{Bool}, ())
-    typealias Cchar Int8
+    const Cchar = Int8
 else
-    typealias Cchar UInt8
+    const Cchar = UInt8
 end
 """
     Cchar
@@ -19,13 +19,13 @@ Equivalent to the native `char` c-type.
 Cchar
 
 if is_windows()
-    typealias Clong Int32
-    typealias Culong UInt32
-    typealias Cwchar_t UInt16
+    const Clong = Int32
+    const Culong = UInt32
+    const Cwchar_t = UInt16
 else
-    typealias Clong Int
-    typealias Culong UInt
-    typealias Cwchar_t Int32
+    const Clong = Int
+    const Culong = UInt
+    const Cwchar_t = Int32
 end
 
 """
@@ -52,11 +52,11 @@ Cwchar_t
 if !is_windows()
     const sizeof_mode_t = ccall(:jl_sizeof_mode_t, Cint, ())
     if sizeof_mode_t == 2
-        typealias Cmode_t Int16
+        const Cmode_t = Int16
     elseif sizeof_mode_t == 4
-        typealias Cmode_t Int32
+        const Cmode_t = Int32
     elseif sizeof_mode_t == 8
-        typealias Cmode_t Int64
+        const Cmode_t = Int64
     end
 end
 
