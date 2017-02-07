@@ -397,7 +397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Complex and Rational Numbers",
     "title": "Rational Numbers",
     "category": "section",
-    "text": "Julia has a rational number type to represent exact ratios of integers. Rationals are constructed using the // operator:julia> 2//3\n2//3If the numerator and denominator of a rational have common factors, they are reduced to lowest terms such that the denominator is non-negative:julia> 6//9\n2//3\n\njulia> -4//8\n-1//2\n\njulia> 5//-15\n-1//3\n\njulia> -4//-12\n1//3This normalized form for a ratio of integers is unique, so equality of rational values can be tested by checking for equality of the numerator and denominator. The standardized numerator and denominator of a rational value can be extracted using the numerator() and denominator() functions:julia> numerator(2//3)\n2\n\njulia> denominator(2//3)\n3Direct comparison of the numerator and denominator is generally not necessary, since the standard arithmetic and comparison operations are defined for rational values:julia> 2//3 == 6//9\ntrue\n\njulia> 2//3 == 9//27\nfalse\n\njulia> 3//7 < 1//2\ntrue\n\njulia> 3//4 > 2//3\ntrue\n\njulia> 2//4 + 1//6\n2//3\n\njulia> 5//12 - 1//4\n1//6\n\njulia> 5//8 * 3//12\n5//32\n\njulia> 6//5 / 10//7\n21//25Rationals can be easily converted to floating-point numbers:julia> float(3//4)\n0.75Conversion from rational to floating-point respects the following identity for any integral values of a and b, with the exception of the case a == 0 and b == 0:julia> a = 1; b = 2;\n\njulia> isequal(float(a//b), a/b)\ntrueConstructing infinite rational values is acceptable:julia> 5//0\n1//0\n\njulia> -3//0\n-1//0\n\njulia> typeof(ans)\nRational{Int64}Trying to construct a NaN rational value, however, is not:julia> 0//0\nERROR: ArgumentError: invalid rational: zero(Int64)//zero(Int64)\nStacktrace:\n [1] Rational{Int64}(::Int64, ::Int64) at ./rational.jl:8\n [2] //(::Int64, ::Int64) at ./rational.jl:34As usual, the promotion system makes interactions with other numeric types effortless:julia> 3//5 + 1\n8//5\n\njulia> 3//5 - 0.5\n0.09999999999999998\n\njulia> 2//7 * (1 + 2im)\n2//7 + 4//7*im\n\njulia> 2//7 * (1.5 + 2im)\n0.42857142857142855 + 0.5714285714285714im\n\njulia> 3//2 / (1 + 2im)\n3//10 - 3//5*im\n\njulia> 1//2 + 2im\n1//2 + 2//1*im\n\njulia> 1 + 2//3im\n1//1 - 2//3*im\n\njulia> 0.5 == 1//2\ntrue\n\njulia> 0.33 == 1//3\nfalse\n\njulia> 0.33 < 1//3\ntrue\n\njulia> 1//3 - 0.33\n0.0033333333333332993"
+    "text": "Julia has a rational number type to represent exact ratios of integers. Rationals are constructed using the // operator:julia> 2//3\n2//3If the numerator and denominator of a rational have common factors, they are reduced to lowest terms such that the denominator is non-negative:julia> 6//9\n2//3\n\njulia> -4//8\n-1//2\n\njulia> 5//-15\n-1//3\n\njulia> -4//-12\n1//3This normalized form for a ratio of integers is unique, so equality of rational values can be tested by checking for equality of the numerator and denominator. The standardized numerator and denominator of a rational value can be extracted using the numerator() and denominator() functions:julia> numerator(2//3)\n2\n\njulia> denominator(2//3)\n3Direct comparison of the numerator and denominator is generally not necessary, since the standard arithmetic and comparison operations are defined for rational values:julia> 2//3 == 6//9\ntrue\n\njulia> 2//3 == 9//27\nfalse\n\njulia> 3//7 < 1//2\ntrue\n\njulia> 3//4 > 2//3\ntrue\n\njulia> 2//4 + 1//6\n2//3\n\njulia> 5//12 - 1//4\n1//6\n\njulia> 5//8 * 3//12\n5//32\n\njulia> 6//5 / 10//7\n21//25Rationals can be easily converted to floating-point numbers:julia> float(3//4)\n0.75Conversion from rational to floating-point respects the following identity for any integral values of a and b, with the exception of the case a == 0 and b == 0:julia> a = 1; b = 2;\n\njulia> isequal(float(a//b), a/b)\ntrueConstructing infinite rational values is acceptable:julia> 5//0\n1//0\n\njulia> -3//0\n-1//0\n\njulia> typeof(ans)\nRational{Int64}Trying to construct a NaN rational value, however, is not:julia> 0//0\nERROR: ArgumentError: invalid rational: zero(Int64)//zero(Int64)\nStacktrace:\n [1] Rational{Int64}(::Int64, ::Int64) at ./rational.jl:8\n [2] //(::Int64, ::Int64) at ./rational.jl:27As usual, the promotion system makes interactions with other numeric types effortless:julia> 3//5 + 1\n8//5\n\njulia> 3//5 - 0.5\n0.09999999999999998\n\njulia> 2//7 * (1 + 2im)\n2//7 + 4//7*im\n\njulia> 2//7 * (1.5 + 2im)\n0.42857142857142855 + 0.5714285714285714im\n\njulia> 3//2 / (1 + 2im)\n3//10 - 3//5*im\n\njulia> 1//2 + 2im\n1//2 + 2//1*im\n\njulia> 1 + 2//3im\n1//1 - 2//3*im\n\njulia> 0.5 == 1//2\ntrue\n\njulia> 0.33 == 1//3\nfalse\n\njulia> 0.33 < 1//3\ntrue\n\njulia> 1//3 - 0.33\n0.0033333333333332993"
 },
 
 {
@@ -4453,7 +4453,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.ntuple",
     "category": "Function",
-    "text": "ntuple(f::Function, n::Integer)\n\nCreate a tuple of length n, computing each element as f(i), where i is the index of the element.\n\n\n\n"
+    "text": "ntuple(f::Function, n::Integer)\n\nCreate a tuple of length n, computing each element as f(i), where i is the index of the element.\n\njulia> ntuple(i -> 2*i, 4)\n(2, 4, 6, 8)\n\n\n\n"
 },
 
 {
@@ -5157,7 +5157,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.tic",
     "category": "Function",
-    "text": "tic()\n\nSet a timer to be read by the next call to toc or toq. The macro call @time expr can also be used to time evaluation.\n\n\n\n"
+    "text": "tic()\n\nSet a timer to be read by the next call to toc or toq. The macro call @time expr can also be used to time evaluation.\n\njulia> tic()\n0x0000c45bc7abac95\n\njulia> sleep(0.3)\n\njulia> toc()\nelapsed time: 0.302745944 seconds\n0.302745944\n\n\n\n"
 },
 
 {
@@ -5165,7 +5165,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.toc",
     "category": "Function",
-    "text": "toc()\n\nPrint and return the time elapsed since the last tic. The macro call @time expr can also be used to time evaluation.\n\n\n\n"
+    "text": "toc()\n\nPrint and return the time elapsed since the last tic. The macro call @time expr can also be used to time evaluation.\n\njulia> tic()\n0x0000c45bc7abac95\n\njulia> sleep(0.3)\n\njulia> toc()\nelapsed time: 0.302745944 seconds\n0.302745944\n\n\n\n"
 },
 
 {
@@ -5173,7 +5173,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.toq",
     "category": "Function",
-    "text": "toq()\n\nReturn, but do not print, the time elapsed since the last tic. The macro calls @timed expr and @elapsed expr also return evaluation time.\n\n\n\n"
+    "text": "toq()\n\nReturn, but do not print, the time elapsed since the last tic. The macro calls @timed expr and @elapsed expr also return evaluation time.\n\njulia> tic()\n0x0000c46477a9675d\n\njulia> sleep(0.3)\n\njulia> toq()\n0.302251004\n\n\n\n"
 },
 
 {
@@ -5181,7 +5181,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.@time",
     "category": "Macro",
-    "text": "@time\n\nA macro to execute an expression, printing the time it took to execute, the number of allocations, and the total number of bytes its execution caused to be allocated, before returning the value of the expression.\n\nSee also @timev, @timed, @elapsed, and @allocated.\n\n\n\n"
+    "text": "@time\n\nA macro to execute an expression, printing the time it took to execute, the number of allocations, and the total number of bytes its execution caused to be allocated, before returning the value of the expression.\n\nSee also @timev, @timed, @elapsed, and @allocated.\n\njulia> @time rand(10^6);\n  0.001525 seconds (7 allocations: 7.630 MiB)\n\njulia> @time begin\n           sleep(0.3)\n           1+1\n       end\n  0.301395 seconds (8 allocations: 336 bytes)\n\n\n\n"
 },
 
 {
@@ -5189,7 +5189,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.@timev",
     "category": "Macro",
-    "text": "@timev\n\nThis is a verbose version of the @time macro. It first prints the same information as @time, then any non-zero memory allocation counters, and then returns the value of the expression.\n\nSee also @time, @timed, @elapsed, and @allocated.\n\n\n\n"
+    "text": "@timev\n\nThis is a verbose version of the @time macro. It first prints the same information as @time, then any non-zero memory allocation counters, and then returns the value of the expression.\n\nSee also @time, @timed, @elapsed, and @allocated.\n\njulia> @timev rand(10^6);\n  0.001006 seconds (7 allocations: 7.630 MiB)\nelapsed time (ns): 1005567\nbytes allocated:   8000256\npool allocs:       6\nmalloc() calls:    1\n\n\n\n"
 },
 
 {
@@ -5197,7 +5197,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.@timed",
     "category": "Macro",
-    "text": "@timed\n\nA macro to execute an expression, and return the value of the expression, elapsed time, total bytes allocated, garbage collection time, and an object with various memory allocation counters.\n\nSee also @time, @timev, @elapsed, and @allocated.\n\n\n\n"
+    "text": "@timed\n\nA macro to execute an expression, and return the value of the expression, elapsed time, total bytes allocated, garbage collection time, and an object with various memory allocation counters.\n\nSee also @time, @timev, @elapsed, and @allocated.\n\njulia> val, t, bytes, gctime, memallocs = @timed rand(10^6);\n\njulia> t\n0.006634834\n\njulia> bytes\n8000256\n\njulia> gctime\n0.0055765\n\njulia> fieldnames(typeof(memallocs))\n9-element Array{Symbol,1}:\n :allocd\n :malloc\n :realloc\n :poolalloc\n :bigalloc\n :freecall\n :total_time\n :pause\n :full_sweep\n\njulia> memallocs.total_time\n5576500\n\n\n\n"
 },
 
 {
@@ -5205,7 +5205,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.@elapsed",
     "category": "Macro",
-    "text": "@elapsed\n\nA macro to evaluate an expression, discarding the resulting value, instead returning the number of seconds it took to execute as a floating-point number.\n\nSee also @time, @timev, @timed, and @allocated.\n\n\n\n"
+    "text": "@elapsed\n\nA macro to evaluate an expression, discarding the resulting value, instead returning the number of seconds it took to execute as a floating-point number.\n\nSee also @time, @timev, @timed, and @allocated.\n\njulia> @elapsed sleep(0.3)\n0.301391426\n\n\n\n"
 },
 
 {
@@ -5213,7 +5213,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.@allocated",
     "category": "Macro",
-    "text": "@allocated\n\nA macro to evaluate an expression, discarding the resulting value, instead returning the total number of bytes allocated during evaluation of the expression. Note: the expression is evaluated inside a local function, instead of the current context, in order to eliminate the effects of compilation, however, there still may be some allocations due to JIT compilation. This also makes the results inconsistent with the @time macros, which do not try to adjust for the effects of compilation.\n\nSee also @time, @timev, @timed, and @elapsed.\n\n\n\n"
+    "text": "@allocated\n\nA macro to evaluate an expression, discarding the resulting value, instead returning the total number of bytes allocated during evaluation of the expression. Note: the expression is evaluated inside a local function, instead of the current context, in order to eliminate the effects of compilation, however, there still may be some allocations due to JIT compilation. This also makes the results inconsistent with the @time macros, which do not try to adjust for the effects of compilation.\n\nSee also @time, @timev, @timed, and @elapsed.\n\njulia> @allocated rand(10^6)\n8000080\n\n\n\n"
 },
 
 {
@@ -6437,7 +6437,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.collect",
     "category": "Method",
-    "text": "collect(element_type, collection)\n\nReturn an Array with the given element type of all items in a collection or iterable. The result has the same shape and number of dimensions as collection.\n\n\n\n"
+    "text": "collect(element_type, collection)\n\nReturn an Array with the given element type of all items in a collection or iterable. The result has the same shape and number of dimensions as collection.\n\njulia> collect(Float64, 1:2:5)\n3-element Array{Float64,1}:\n 1.0\n 3.0\n 5.0\n\n\n\n"
 },
 
 {
@@ -7037,7 +7037,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.://",
     "category": "Function",
-    "text": "//(num, den)\n\nDivide two integers or rational numbers, giving a Rational result.\n\n\n\n"
+    "text": "//(num, den)\n\nDivide two integers or rational numbers, giving a Rational result.\n\njulia> 3 // 5\n3//5\n\njulia> (3 // 5) // (2 // 1)\n3//10\n\n\n\n"
 },
 
 {
@@ -7053,7 +7053,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.numerator",
     "category": "Function",
-    "text": "numerator(x)\n\nNumerator of the rational representation of x.\n\n\n\n"
+    "text": "numerator(x)\n\nNumerator of the rational representation of x.\n\njulia> numerator(2//3)\n2\n\njulia> numerator(4)\n4\n\n\n\n"
 },
 
 {
@@ -7061,7 +7061,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.denominator",
     "category": "Function",
-    "text": "denominator(x)\n\nDenominator of the rational representation of x.\n\n\n\n"
+    "text": "denominator(x)\n\nDenominator of the rational representation of x.\n\njulia> denominator(2//3)\n3\n\njulia> denominator(4)\n1\n\n\n\n"
 },
 
 {
@@ -8093,7 +8093,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.real",
     "category": "Method",
-    "text": "real(z)\n\nReturn the real part of the complex number z.\n\n\n\n"
+    "text": "real(z)\n\nReturn the real part of the complex number z.\n\njulia> real(1 + 3im)\n1\n\n\n\n"
 },
 
 {
@@ -8101,7 +8101,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.imag",
     "category": "Function",
-    "text": "imag(z)\n\nReturn the imaginary part of the complex number z.\n\n\n\n"
+    "text": "imag(z)\n\nReturn the imaginary part of the complex number z.\n\njulia> imag(1 + 3im)\n3\n\n\n\n"
 },
 
 {
@@ -8109,7 +8109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.reim",
     "category": "Function",
-    "text": "reim(z)\n\nReturn both the real and imaginary parts of the complex number z.\n\n\n\n"
+    "text": "reim(z)\n\nReturn both the real and imaginary parts of the complex number z.\n\njulia> reim(1 + 3im)\n(1, 3)\n\n\n\n"
 },
 
 {
@@ -8117,7 +8117,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\n\n\n"
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
 },
 
 {
@@ -8221,7 +8221,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.nextprod",
     "category": "Function",
-    "text": "nextprod([k_1,k_2,...], n)\n\nNext integer not less than n that can be written as prod k_i^p_i for integers p_1, p_2, etc.\n\n\n\n"
+    "text": "nextprod([k_1, k_2,...], n)\n\nNext integer greater than or equal to n that can be written as prod k_i^p_i for integers p_1, p_2, etc.\n\njulia> nextprod([2, 3], 105)\n108\n\njulia> 2^2 * 3^3\n108\n\n\n\n"
 },
 
 {
@@ -10397,7 +10397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.conj!",
     "category": "Function",
-    "text": "conj!(A)\n\nTransform an array to its complex conjugate in-place.\n\nSee also conj.\n\n\n\n"
+    "text": "conj!(A)\n\nTransform an array to its complex conjugate in-place.\n\nSee also conj.\n\njulia> A = [1+im 2-im; 2+2im 3+im]\n2×2 Array{Complex{Int64},2}:\n 1+1im  2-1im\n 2+2im  3+1im\n\njulia> conj!(A);\n\njulia> A\n2×2 Array{Complex{Int64},2}:\n 1-1im  2+1im\n 2-2im  3-1im\n\n\n\n"
 },
 
 {
@@ -10485,7 +10485,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.BitArray",
     "category": "Constant",
-    "text": "BitArray(dims::Integer...)\nBitArray{N}(dims::NTuple{N,Int})\n\nConstruct an uninitialized BitArray with the given dimensions. Behaves identically to the Array constructor.\n\n\n\nBitArray(itr)\n\nConstruct a BitArray generated by the given iterable object. The shape is inferred from the itr object.\n\njulia> BitArray([1 0; 0 1])\n2×2 BitArray{2}:\n  true  false\n false   true\n\njulia> BitArray(x+y == 3 for x = 1:2, y = 1:3)\n2×3 BitArray{2}:\n false   true  false\n  true  false  false\n\njulia> BitArray(x+y == 3 for x = 1:2 for y = 1:3)\n6-element BitArray{1}:\n false\n  true\n false\n  true\n false\n false\n\n\n\n"
+    "text": "BitArray(dims::Integer...)\nBitArray{N}(dims::NTuple{N,Int})\n\nConstruct an uninitialized BitArray with the given dimensions. Behaves identically to the Array constructor.\n\njulia> BitArray(2, 2)\n2×2 BitArray{2}:\n false  false\n false  true\n\njulia> BitArray((3, 1))\n3×1 BitArray{2}:\n false\n true\n false\n\n\n\nBitArray(itr)\n\nConstruct a BitArray generated by the given iterable object. The shape is inferred from the itr object.\n\njulia> BitArray([1 0; 0 1])\n2×2 BitArray{2}:\n  true  false\n false   true\n\njulia> BitArray(x+y == 3 for x = 1:2, y = 1:3)\n2×3 BitArray{2}:\n false   true  false\n  true  false  false\n\njulia> BitArray(x+y == 3 for x = 1:2 for y = 1:3)\n6-element BitArray{1}:\n false\n  true\n false\n  true\n false\n false\n\n\n\n"
 },
 
 {
@@ -10645,7 +10645,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.view",
     "category": "Function",
-    "text": "view(A, inds...)\n\nLike getindex, but returns a view into the parent array A with the given indices instead of making a copy.  Calling getindex or setindex! on the returned SubArray computes the indices to the parent array on the fly without checking bounds.\n\n\n\n"
+    "text": "view(A, inds...)\n\nLike getindex, but returns a view into the parent array A with the given indices instead of making a copy.  Calling getindex or setindex! on the returned SubArray computes the indices to the parent array on the fly without checking bounds.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> b = view(A, :, 1)\n2-element SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}:\n 1\n 3\n\njulia> fill!(b, 0)\n2-element SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}:\n 0\n 0\n\njulia> A # Note A has changed even though we modified b\n2×2 Array{Int64,2}:\n 0  2\n 0  4\n\n\n\n"
 },
 
 {
@@ -10653,7 +10653,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.@view",
     "category": "Macro",
-    "text": "@view A[inds...]\n\nCreates a SubArray from an indexing expression. This can only be applied directly to a reference expression (e.g. @view A[1,2:end]), and should not be used as the target of an assignment (e.g. @view(A[1,2:end]) = ...).  See also @views to switch an entire block of code to use views for slicing.\n\n\n\n"
+    "text": "@view A[inds...]\n\nCreates a SubArray from an indexing expression. This can only be applied directly to a reference expression (e.g. @view A[1,2:end]), and should not be used as the target of an assignment (e.g. @view(A[1,2:end]) = ...).  See also @views to switch an entire block of code to use views for slicing.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> b = @view A[:, 1]\n2-element SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}:\n 1\n 3\n\njulia> fill!(b, 0)\n2-element SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}:\n 0\n 0\n\njulia> A\n2×2 Array{Int64,2}:\n 0  2\n 0  4\n\n\n\n"
 },
 
 {
@@ -11165,7 +11165,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.permute!",
     "category": "Method",
-    "text": "permute!(v, p)\n\nPermute vector v in-place, according to permutation p. No checking is done to verify that p is a permutation.\n\nTo return a new permutation, use v[p]. Note that this is generally faster than permute!(v,p) for large vectors.\n\n\n\n"
+    "text": "permute!(v, p)\n\nPermute vector v in-place, according to permutation p. No checking is done to verify that p is a permutation.\n\nTo return a new permutation, use v[p]. Note that this is generally faster than permute!(v,p) for large vectors.\n\nSee also ipermute!\n\njulia> A = [1, 1, 3, 4];\n\njulia> perm = [2, 4, 3, 1];\n\njulia> permute!(A, perm);\n\njulia> A\n4-element Array{Int64,1}:\n 1\n 4\n 3\n 1\n\n\n\n"
 },
 
 {
@@ -11173,7 +11173,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.ipermute!",
     "category": "Function",
-    "text": "ipermute!(v, p)\n\nLike permute!, but the inverse of the given permutation is applied.\n\n\n\n"
+    "text": "ipermute!(v, p)\n\nLike permute!, but the inverse of the given permutation is applied.\n\njulia> A = [1, 1, 3, 4];\n\njulia> perm = [2, 4, 3, 1];\n\njulia> ipermute!(A, perm);\n\njulia> A\n4-element Array{Int64,1}:\n 4\n 1\n 3\n 1\n\n\n\n"
 },
 
 {
@@ -12149,7 +12149,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.Atomic",
     "category": "Constant",
-    "text": "Threads.Atomic{T}\n\nHolds a reference to an object of type T, ensuring that it is only accessed atomically, i.e. in a thread-safe manner.\n\nOnly certain \"simple\" types can be used atomically, namely the bitstypes integer and float-point types. These are Int8...Int128, UInt8...UInt128, and Float16...Float64.\n\nNew atomic objects can be created from a non-atomic values; if none is specified, the atomic object is initialized with zero.\n\nAtomic objects can be accessed using the [] notation:\n\nx::Atomic{Int}\nx[] = 1\nval = x[]\n\nAtomic operations use an atomic_ prefix, such as atomic_add!, atomic_xchg!, etc.\n\n\n\n"
+    "text": "Threads.Atomic{T}\n\nHolds a reference to an object of type T, ensuring that it is only accessed atomically, i.e. in a thread-safe manner.\n\nOnly certain \"simple\" types can be used atomically, namely the bitstypes integer and float-point types. These are Int8...Int128, UInt8...UInt128, and Float16...Float64.\n\nNew atomic objects can be created from a non-atomic values; if none is specified, the atomic object is initialized with zero.\n\nAtomic objects can be accessed using the [] notation:\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> x[] = 1\n1\n\njulia> x[]\n1\n\nAtomic operations use an atomic_ prefix, such as atomic_add!, atomic_xchg!, etc.\n\n\n\n"
 },
 
 {
@@ -12157,7 +12157,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.atomic_cas!",
     "category": "Function",
-    "text": "Threads.atomic_cas!{T}(x::Atomic{T}, cmp::T, newval::T)\n\nAtomically compare-and-set x\n\nAtomically compares the value in x with cmp. If equal, write newval to x. Otherwise, leaves x unmodified. Returns the old value in x. By comparing the returned value to cmp (via ===) one knows whether x was modified and now holds the new value newval.\n\nFor further details, see LLVM's cmpxchg instruction.\n\nThis function can be used to implement transactional semantics. Before the transaction, one records the value in x. After the transaction, the new value is stored only if x has not been modified in the mean time.\n\n\n\n"
+    "text": "Threads.atomic_cas!{T}(x::Atomic{T}, cmp::T, newval::T)\n\nAtomically compare-and-set x\n\nAtomically compares the value in x with cmp. If equal, write newval to x. Otherwise, leaves x unmodified. Returns the old value in x. By comparing the returned value to cmp (via ===) one knows whether x was modified and now holds the new value newval.\n\nFor further details, see LLVM's cmpxchg instruction.\n\nThis function can be used to implement transactional semantics. Before the transaction, one records the value in x. After the transaction, the new value is stored only if x has not been modified in the mean time.\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_cas!(x, 4, 2);\n\njulia> x\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_cas!(x, 3, 2);\n\njulia> x\nBase.Threads.Atomic{Int64}(2)\n\n\n\n"
 },
 
 {
@@ -12165,7 +12165,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.atomic_xchg!",
     "category": "Function",
-    "text": "Threads.atomic_xchg!{T}(x::Atomic{T}, newval::T)\n\nAtomically exchange the value in x\n\nAtomically exchanges the value in x with newval. Returns the old value.\n\nFor further details, see LLVM's atomicrmw xchg instruction.\n\n\n\n"
+    "text": "Threads.atomic_xchg!{T}(x::Atomic{T}, newval::T)\n\nAtomically exchange the value in x\n\nAtomically exchanges the value in x with newval. Returns the old value.\n\nFor further details, see LLVM's atomicrmw xchg instruction.\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_xchg!(x, 2)\n3\n\njulia> x[]\n2\n\n\n\n"
 },
 
 {
@@ -12173,7 +12173,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.atomic_add!",
     "category": "Function",
-    "text": "Threads.atomic_add!{T}(x::Atomic{T}, val::T)\n\nAtomically add val to x\n\nPerforms x[] += val atomically. Returns the old (!) value.\n\nFor further details, see LLVM's atomicrmw add instruction.\n\n\n\n"
+    "text": "Threads.atomic_add!{T}(x::Atomic{T}, val::T)\n\nAtomically add val to x\n\nPerforms x[] += val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw add instruction.\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_add!(x, 2)\n3\n\njulia> x[]\n5\n\n\n\n"
 },
 
 {
@@ -12181,7 +12181,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.atomic_sub!",
     "category": "Function",
-    "text": "Threads.atomic_sub!{T}(x::Atomic{T}, val::T)\n\nAtomically subtract val from x\n\nPerforms x[] -= val atomically. Returns the old (!) value.\n\nFor further details, see LLVM's atomicrmw sub instruction.\n\n\n\n"
+    "text": "Threads.atomic_sub!{T}(x::Atomic{T}, val::T)\n\nAtomically subtract val from x\n\nPerforms x[] -= val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw sub instruction.\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_sub!(x, 2)\n3\n\njulia> x[]\n1\n\n\n\n"
 },
 
 {
@@ -12189,7 +12189,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.atomic_and!",
     "category": "Function",
-    "text": "Threads.atomic_and!{T}(x::Atomic{T}, val::T)\n\nAtomically bitwise-and x with val\n\nPerforms x[] &= val atomically. Returns the old (!) value.\n\nFor further details, see LLVM's atomicrmw and instruction.\n\n\n\n"
+    "text": "Threads.atomic_and!{T}(x::Atomic{T}, val::T)\n\nAtomically bitwise-and x with val\n\nPerforms x[] &= val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw and instruction.\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_and!(x, 2)\n3\n\njulia> x[]\n2\n\n\n\n"
 },
 
 {
@@ -12197,7 +12197,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.atomic_nand!",
     "category": "Function",
-    "text": "Threads.atomic_nand!{T}(x::Atomic{T}, val::T)\n\nAtomically bitwise-nand (not-and) x with val\n\nPerforms x[] = ~(x[] & val) atomically. Returns the old (!) value.\n\nFor further details, see LLVM's atomicrmw nand instruction.\n\n\n\n"
+    "text": "Threads.atomic_nand!{T}(x::Atomic{T}, val::T)\n\nAtomically bitwise-nand (not-and) x with val\n\nPerforms x[] = ~(x[] & val) atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw nand instruction.\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_nand!(x, 2)\n3\n\njulia> x[]\n-3\n\n\n\n"
 },
 
 {
@@ -12205,7 +12205,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.atomic_or!",
     "category": "Function",
-    "text": "Threads.atomic_or!{T}(x::Atomic{T}, val::T)\n\nAtomically bitwise-or x with val\n\nPerforms x[] |= val atomically. Returns the old (!) value.\n\nFor further details, see LLVM's atomicrmw or instruction.\n\n\n\n"
+    "text": "Threads.atomic_or!{T}(x::Atomic{T}, val::T)\n\nAtomically bitwise-or x with val\n\nPerforms x[] |= val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw or instruction.\n\njulia> x = Threads.Atomic{Int}(5)\nBase.Threads.Atomic{Int64}(5)\n\njulia> Threads.atomic_or!(x, 7)\n5\n\njulia> x[]\n7\n\n\n\n"
 },
 
 {
@@ -12213,7 +12213,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.atomic_xor!",
     "category": "Function",
-    "text": "Threads.atomic_xor!{T}(x::Atomic{T}, val::T)\n\nAtomically bitwise-xor (exclusive-or) x with val\n\nPerforms x[] $= val atomically. Returns the old (!) value.\n\nFor further details, see LLVM's atomicrmw xor instruction.\n\n\n\n"
+    "text": "Threads.atomic_xor!{T}(x::Atomic{T}, val::T)\n\nAtomically bitwise-xor (exclusive-or) x with val\n\nPerforms x[] $= val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw xor instruction.\n\njulia> x = Threads.Atomic{Int}(5)\nBase.Threads.Atomic{Int64}(5)\n\njulia> Threads.atomic_xor!(x, 7)\n5\n\njulia> x[]\n2\n\n\n\n"
 },
 
 {
@@ -12221,7 +12221,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.atomic_max!",
     "category": "Function",
-    "text": "Threads.atomic_max!{T}(x::Atomic{T}, val::T)\n\nAtomically store the maximum of x and val in x\n\nPerforms x[] = max(x[], val) atomically. Returns the old (!) value.\n\nFor further details, see LLVM's atomicrmw min instruction.\n\n\n\n"
+    "text": "Threads.atomic_max!{T}(x::Atomic{T}, val::T)\n\nAtomically store the maximum of x and val in x\n\nPerforms x[] = max(x[], val) atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw max instruction.\n\njulia> x = Threads.Atomic{Int}(5)\nBase.Threads.Atomic{Int64}(5)\n\njulia> Threads.atomic_max!(x, 7)\n5\n\njulia> x[]\n7\n\n\n\n"
 },
 
 {
@@ -12229,7 +12229,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.atomic_min!",
     "category": "Function",
-    "text": "Threads.atomic_min!{T}(x::Atomic{T}, val::T)\n\nAtomically store the minimum of x and val in x\n\nPerforms x[] = min(x[], val) atomically. Returns the old (!) value.\n\nFor further details, see LLVM's atomicrmw max instruction.\n\n\n\n"
+    "text": "Threads.atomic_min!{T}(x::Atomic{T}, val::T)\n\nAtomically store the minimum of x and val in x\n\nPerforms x[] = min(x[], val) atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw min instruction.\n\njulia> x = Threads.Atomic{Int}(7)\nBase.Threads.Atomic{Int64}(7)\n\njulia> Threads.atomic_min!(x, 5)\n7\n\njulia> x[]\n5\n\n\n\n"
 },
 
 {
@@ -12653,7 +12653,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.qrfact",
     "category": "Function",
-    "text": "qrfact(A) -> SPQR.Factorization\n\nCompute the QR factorization of a sparse matrix A. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with \\. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.\n\n\n\nqrfact(A, pivot=Val{false}) -> F\n\nComputes the QR factorization of A. The return type of F depends on the element type of A and whether pivoting is specified (with pivot==Val{true}).\n\nReturn type eltype(A) pivot Relationship between F and A\nQR not BlasFloat either A==F[:Q]*F[:R]\nQRCompactWY BlasFloat Val{false} A==F[:Q]*F[:R]\nQRPivoted BlasFloat Val{true} A[:,F[:p]]==F[:Q]*F[:R]\n\nBlasFloat refers to any of: Float32, Float64, Complex64 or Complex128.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description QR QRCompactWY QRPivoted\nF[:Q] Q (orthogonal/unitary) part of QR ✓ (QRPackedQ) ✓ (QRCompactWYQ) ✓ (QRPackedQ)\nF[:R] R (upper right triangular) part of QR ✓ ✓ ✓\nF[:p] pivot Vector   ✓\nF[:P] (pivot) permutation Matrix   ✓\n\nThe following functions are available for the QR objects: size and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.The data contained in QR or QRPivoted can be used to construct the QRPackedQ type, which is a compact representation of the rotation matrix:Q = prod_i=1^min(mn) (I - tau_i v_i v_i^T)where tau_i is the scale factor and v_i is the projection vector associated with the i^th Householder elementary reflector.The data contained in QRCompactWY can be used to construct the QRCompactWYQ type, which is a compact representation of the rotation matrixQ = I + Y T Y^Twhere Y is m times r lower trapezoidal and T is r times r upper triangular. The compact WY representation [Schreiber1989] is not to be confused with the older, WY representation [Bischof1987]. (The LAPACK documentation uses V in lieu of Y.)[Bischof1987]: C Bischof and C Van Loan, \"The WY representation for products of Householder matrices\", SIAM J Sci Stat Comput 8 (1987), s2-s13. doi:10.1137/0908009[Schreiber1989]: R Schreiber and C Van Loan, \"A storage-efficient WY representation for products of Householder transformations\", SIAM J Sci Stat Comput 10 (1989), 53-57. doi:10.1137/0910005\n\n\n\n"
+    "text": "qrfact(A, pivot=Val{false}) -> F\n\nComputes the QR factorization of A. The return type of F depends on the element type of A and whether pivoting is specified (with pivot==Val{true}).\n\nReturn type eltype(A) pivot Relationship between F and A\nQR not BlasFloat either A==F[:Q]*F[:R]\nQRCompactWY BlasFloat Val{false} A==F[:Q]*F[:R]\nQRPivoted BlasFloat Val{true} A[:,F[:p]]==F[:Q]*F[:R]\n\nBlasFloat refers to any of: Float32, Float64, Complex64 or Complex128.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description QR QRCompactWY QRPivoted\nF[:Q] Q (orthogonal/unitary) part of QR ✓ (QRPackedQ) ✓ (QRCompactWYQ) ✓ (QRPackedQ)\nF[:R] R (upper right triangular) part of QR ✓ ✓ ✓\nF[:p] pivot Vector   ✓\nF[:P] (pivot) permutation Matrix   ✓\n\nThe following functions are available for the QR objects: size and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.The data contained in QR or QRPivoted can be used to construct the QRPackedQ type, which is a compact representation of the rotation matrix:Q = prod_i=1^min(mn) (I - tau_i v_i v_i^T)where tau_i is the scale factor and v_i is the projection vector associated with the i^th Householder elementary reflector.The data contained in QRCompactWY can be used to construct the QRCompactWYQ type, which is a compact representation of the rotation matrixQ = I + Y T Y^Twhere Y is m times r lower trapezoidal and T is r times r upper triangular. The compact WY representation [Schreiber1989] is not to be confused with the older, WY representation [Bischof1987]. (The LAPACK documentation uses V in lieu of Y.)[Bischof1987]: C Bischof and C Van Loan, \"The WY representation for products of Householder matrices\", SIAM J Sci Stat Comput 8 (1987), s2-s13. doi:10.1137/0908009[Schreiber1989]: R Schreiber and C Van Loan, \"A storage-efficient WY representation for products of Householder transformations\", SIAM J Sci Stat Comput 10 (1989), 53-57. doi:10.1137/0910005\n\n\n\nqrfact(A) -> SPQR.Factorization\n\nCompute the QR factorization of a sparse matrix A. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with \\. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.\n\n\n\n"
 },
 
 {
@@ -15605,7 +15605,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.warn",
     "category": "Function",
-    "text": "warn([io, ] msg..., [prefix=\"WARNING: \", once=false, key=nothing, bt=nothing, filename=nothing, lineno::Int=0])\n\nDisplay a warning. Argument msg is a string describing the warning to be displayed.  Set once to true and specify a key to only display msg the first time warn is called.  If bt is not nothing a backtrace is displayed. If filename is not nothing both it and lineno are displayed.\n\nSee also logging.\n\n\n\nwarn(msg)\n\nDisplay a warning. Argument msg is a string describing the warning to be displayed.\n\n\n\n"
+    "text": "warn([io, ] msg..., [prefix=\"WARNING: \", once=false, key=nothing, bt=nothing, filename=nothing, lineno::Int=0])\n\nDisplay a warning. Argument msg is a string describing the warning to be displayed.  Set once to true and specify a key to only display msg the first time warn is called.  If bt is not nothing a backtrace is displayed. If filename is not nothing both it and lineno are displayed.\n\nSee also logging.\n\n\n\nwarn(msg)\n\nDisplay a warning. Argument msg is a string describing the warning to be displayed.\n\njulia> warn(\"Beep Beep\")\nWARNING: Beep Beep\n\n\n\n"
 },
 
 {
@@ -18981,7 +18981,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.Cartesian",
     "title": "Base.Cartesian.@nref",
     "category": "Macro",
-    "text": "@nref N A indexexpr\n\nGenerate expressions like A[i_1,i_2,...]. indexexpr can either be an iteration-symbol prefix, or an anonymous-function expression.\n\n\n\n"
+    "text": "@nref N A indexexpr\n\nGenerate expressions like A[i_1, i_2, ...]. indexexpr can either be an iteration-symbol prefix, or an anonymous-function expression.\n\njulia> @macroexpand Base.Cartesian.@nref 3 A i\n:(A[i_1, i_2, i_3])\n\n\n\n"
 },
 
 {
@@ -18997,7 +18997,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.Cartesian",
     "title": "Base.Cartesian.@nexprs",
     "category": "Macro",
-    "text": "@nexprs N expr\n\nGenerate N expressions. expr should be an anonymous-function expression.\n\n\n\n"
+    "text": "@nexprs N expr\n\nGenerate N expressions. expr should be an anonymous-function expression.\n\njulia> @macroexpand Base.Cartesian.@nexprs 4 i -> y[i] = A[i+j]\nquote\n    y[1] = A[1 + j]\n    y[2] = A[2 + j]\n    y[3] = A[3 + j]\n    y[4] = A[4 + j]\nend\n\n\n\n"
 },
 
 {
