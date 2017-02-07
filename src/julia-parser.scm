@@ -609,8 +609,10 @@
 (define (eventually-call ex)
   (and (pair? ex)
        (or (eq? (car ex) 'call)
-           (and (eq? (car ex) 'where)
-                (eventually-call (cadr ex))))))
+           (and (eq? (car ex) 'curly)
+                (pair? (cdr ex))
+                (pair? (cadr ex))
+                (eq? (caadr ex) 'call)))))
 
 ;; insert line/file for short-form function defs, otherwise leave alone
 (define (short-form-function-loc ex lno)
