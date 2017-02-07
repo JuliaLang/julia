@@ -437,7 +437,7 @@ sqrt(x::Real) = sqrt(float(x))
 
 Compute the hypotenuse ``\\sqrt{x^2+y^2}`` avoiding overflow and underflow.
 
-```
+```jldoctest
 julia> a = 10^10;
 
 julia> hypot(a, a)
