@@ -113,12 +113,12 @@ function Base.find(path::String, idx::GitIndex)
     pos_ref = Ref{Csize_t}(0)
     ret = ccall((:git_index_find, :libgit2), Cint,
                   (Ref{Csize_t}, Ptr{Void}, Cstring), pos_ref, idx.ptr, path)
-    ret == Error.ENOTFOUND && return Nullable{Csize_t}()
+    ret == Cint(Error.ENOTFOUND) && return Nullable{Csize_t}()
     return Nullable(pos_ref[]+1)
 end
 
 stage(ie::IndexEntry) = ccall((:git_index_entry_stage, :libgit2), Cint, (Ptr{IndexEntry},), Ref(ie))
 
 function Base.show(io::IO, idx::GitIndex)
-    println(io, "GitIndex:\nRepository: ", repository(idk), "\nNumber of elements: ", count(idx))
+    println(io, "GitIndex:\nRepository: ", repository(idx), "\nNumber of elements: ", count(idx))
 end

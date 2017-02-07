@@ -110,9 +110,7 @@ tracked files in the working tree (if `cached=false`) or the index (if `cached=t
 Equivalent to `git diff-index <treeish> [-- <pathspecs>]`.
 """
 function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""; cached::Bool=false)
-    tree_oid = revparseid(repo, "$treeish^{tree}")
-    result = false
-    tree = GitTree(repo, tree_oid)
+    tree = GitTree(repo, "$treeish^{tree}")
     try
         diff = diff_tree(repo, tree, paths, cached=cached)
         result = count(diff) > 0

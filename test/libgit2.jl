@@ -596,6 +596,9 @@ mktempdir() do dir
                 i = find(test_file, idx)
                 @test !isnull(i)
                 @test idx[get(i)] !== nothing
+
+                i = find("zzz", idx)
+                @test isnull(i)
             end
 
             # check non-existent file status

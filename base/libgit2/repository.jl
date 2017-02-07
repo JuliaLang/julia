@@ -100,6 +100,11 @@ function (::Type{T}){T<:GitObject}(repo::GitRepo, spec::AbstractString)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_revparse_single, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Ptr{Void}, Cstring), obj_ptr_ptr, repo.ptr, spec)
+    # check object is of correct type
+    if T != GitObject && T != GitUnknownObject
+        t = Consts.OBJECT(obj_ptr_ptr[])
+        t == Consts.OBJECT(T) || throw(GitError(Error.Object, Error.ERROR, "Expected object of type $T, received object of type $(objtype(t))"))
+    end
     return T(repo, obj_ptr_ptr[])
 end
 

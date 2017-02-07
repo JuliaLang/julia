@@ -64,12 +64,9 @@ function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=availa
     LibGit2.isdirty(prepo) && return true
     LibGit2.isattached(prepo) && return true
     LibGit2.need_update(prepo)
-    try
-        LibGit2.revparseid(prepo, "HEAD:REQUIRE")
-    catch e
+    if isnull(find("REQUIRE", LibGit2.GitIndex(repo)))
         isfile(pkg,"REQUIRE") && return true
     end
-
     head = string(LibGit2.head_oid(prepo))
     for (ver,info) in avail
         head == info.sha1 && return false
@@ -186,11 +183,7 @@ function requires_path(pkg::AbstractString, avail::Dict=available(pkg))
     head = LibGit2.with(LibGit2.GitRepo, pkg) do repo
         LibGit2.isdirty(repo, "REQUIRE") && return pkgreq
         LibGit2.need_update(repo)
-        try
-            # check if the spec exists
-            LibGit2.GitObject(repo, "HEAD:REQUIRE")
-        catch e
-            # if not, check if the file exists
+        if isnull(find("REQUIRE", LibGit2.GitIndex(repo)))
             isfile(pkgreq) && return pkgreq
         end
         string(LibGit2.head_oid(repo))
