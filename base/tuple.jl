@@ -81,6 +81,42 @@ function _front(out, v, t...)
     _front((out..., v), t...)
 end
 
+abstract ReferenceTuple
+immutable ReferenceFront{TT<:Tuple} <: ReferenceTuple
+    t::TT
+end
+immutable ReferenceBack{TT<:Tuple} <: ReferenceTuple
+    t::TT
+end
+
+"""
+    split(t, ReferenceFront(ref)) -> front, back
+
+Splits a tuple or CartesianIndex `t` into two pieces, `front` and
+`back`, such that `t == (front..., back...)`. `front` has the same
+length as the reference `ref`.
+"""
+split(t::Tuple, ref::ReferenceFront) = _splitfront((), t, ref.t)
+_splitfront{N}(out::NTuple{N}, t, ref::NTuple{N}) = out, t
+_splitfront(out, ::Tuple{}, ref) =
+    (@_noinline_meta; throw(DimensionMismatch("front reference had $(length(ref)) elements, but input had only $(length(out))")))
+_splitfront(out, t, ref) =
+    (@_inline_meta; _splitfront((out..., t[1]), tail(t), ref))
+
+"""
+    split(t, ReferenceBack(ref)) -> front, back
+
+Splits a tuple or CartesianIndex `t` into two pieces, `front` and
+`back`, such that `t == (front..., back...)`. `front` has the same
+length as the reference `ref`.
+"""
+split(t::Tuple, ref::ReferenceBack) = _splitback((), t, ref.t)
+_splitback{N}(out, t::NTuple{N}, ref::NTuple{N}) = out, t
+_splitback(out, ::Tuple{}, ref) =
+    (@_noinline_meta; throw(DimensionMismatch("back reference had $(length(ref)) elements, but input had only $(length(out))")))
+_splitback(out, t, ref) =
+    (@_inline_meta; _splitback((out..., t[1]), tail(t), ref))
+
 ## mapping ##
 
 """

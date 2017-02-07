@@ -231,3 +231,6 @@ end
 @test Tuple{Int,Vararg{Any}}(Float64[1,2,3]) === (1, 2.0, 3.0)
 @test Tuple(ones(5)) === (1.0,1.0,1.0,1.0,1.0)
 @test_throws MethodError convert(Tuple, ones(5))
+
+@test @inferred(split((1,2,3), ReferenceFront((5,5)))) === ((1,2), (3,))
+@test @inferred(split((1,2,3), ReferenceBack((5,5))))  === ((1,), (2,3))

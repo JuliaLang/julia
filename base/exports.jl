@@ -87,6 +87,8 @@ export
     Range,
     RangeIndex,
     Rational,
+    ReferenceBack,
+    ReferenceFront,
     Regex,
     RegexMatch,
     RevString,
