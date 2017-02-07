@@ -715,11 +715,22 @@ function _compat(ex::Expr)
                 import Base.writemime
             end
         end
-    elseif VERSION < v"0.5.0-dev+5575" && isexpr(ex, :comparison) #17510
-        if length(ex.args) == 3 && ex.args[2] == :.=
-            return :(Base.broadcast!(Base.identity, $(_compat(ex.args[1])), $(_compat(ex.args[3]))))
-        elseif length(ex.args) > 3 && ex.args[2] == :.=
-            return :(Base.broadcast!(Base.identity, $(_compat(ex.args[1])), $(_compat(Expr(:comparison, ex.args[3:end]...)))))
+    elseif VERSION < v"0.5.0-dev+5575" #17510
+        if isexpr(ex, :comparison)
+            if length(ex.args) == 3 && ex.args[2] == :.=
+                return :(Base.broadcast!(Base.identity, $(_compat(todotview(ex.args[1]))), $(_compat(ex.args[3]))))
+            elseif length(ex.args) > 3 && ex.args[2] == :.=
+                return :(Base.broadcast!(Base.identity, $(_compat(todotview(ex.args[1]))), $(_compat(Expr(:comparison, ex.args[3:end]...)))))
+            end
+        elseif ex.head == :.= && length(ex.args) == 2 # may arise in macro-constructed expressions
+            return :(Base.broadcast!(Base.identity, $(_compat(todotview(ex.args[1]))), $(_compat(ex.args[2]))))
+        end
+    end
+    if VERSION < v"0.5.0-dev+5575" #17510
+        # transform e.g. x .+= y into x .= x .+ y:
+        shead = string(ex.head)
+        if first(shead) == '.' && length(shead) > 2 && last(shead) == '=' && length(ex.args) == 2
+            return _compat(Expr(:comparison, ex.args[1], :.=, Expr(:call, Symbol(shead[1:end-1]), ex.args...)))
         end
     end
     return Expr(ex.head, map(_compat, ex.args)...)
@@ -1795,4 +1806,8 @@ module TypeUtils
     end
     export isabstract, parameter_upper_bound, typename
 end # module TypeUtils
+
+# @view, @views, @__dot__
+include("arraymacros.jl")
+
 end # module Compat

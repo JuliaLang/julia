@@ -65,7 +65,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `@compat x .= y` converts to an in-place assignment to `x` (via `broadcast!`) ([#17510]).
   However, beware that `.=` in Julia 0.4 has the precedence of `==`, not of assignment `=`, so if the right-hand-side `y`
   includes expressions with lower precedence than `==` you should enclose it in parentheses `x .= (y)` to ensure the
-  correct order of evaluation.
+  correct order of evaluation.   Also, `x .+= y` converts to `x .= (x .+ y)`, and similarly for the other updating
+  assignment operators (`.*=` and so on).
 
 * `@compat Array{<:Real}` and similar uses of `<:T` to define a set of parameterized types ([#20414]).
   In 0.4 and 0.5, this only works for non-nested usages (e.g. you can't define `Array{<:Array{<:Real}}`).
@@ -80,7 +81,16 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `bytestring` has been replaced in most cases with additional `String` construction methods; for 0.4 compatibility, the usage involves replacing `bytestring(args...)` with `Compat.String(args...)`. However, for converting a `Ptr{UInt8}` to a string, use the new `unsafe_string(...)` method to make a copy or `unsafe_wrap(String, ...)` to avoid a copy.
 
-## New functions and methods
+## New functions, macros, and methods
+
+* `@views` takes an expression and converts all slices to views ([#20164]), while
+  `@view` ([#16564]) converts a single array reference to a view ([#20164]).
+
+* `@__dot__` takes an expression and converts all assignments, function calls,
+  and operators to their broadcasting "dot-call" equivalents ([#20321]).   In Julia 0.6, this
+  can be abbreviated `@.`, but that macro name does not parse in earlier Julia versions.
+  For this to work in older versions of Julia (prior to 0.5) that don't have dot calls,
+  you should instead use `@dotcompat`, which combines the `@__dot__` and `@compat` macros.
 
 * `foreach`, similar to `map` but when the return value is not needed ([#13744])
 
@@ -279,6 +289,7 @@ includes this fix. Find the minimum version from there.
 [#16154]: https://github.com/JuliaLang/julia/issues/16154
 [#16219]: https://github.com/JuliaLang/julia/issues/16219
 [#16563]: https://github.com/JuliaLang/julia/issues/16563
+[#16564]: https://github.com/JuliaLang/julia/issues/16564
 [#16603]: https://github.com/JuliaLang/julia/issues/16603
 [#16972]: https://github.com/JuliaLang/julia/issues/16972
 [#17155]: https://github.com/JuliaLang/julia/issues/17155
@@ -295,4 +306,6 @@ includes this fix. Find the minimum version from there.
 [#19841]: https://github.com/JuliaLang/julia/issues/19841
 [#19950]: https://github.com/JuliaLang/julia/issues/19950
 [#20022]: https://github.com/JuliaLang/julia/issues/20022
+[#20164]: https://github.com/JuliaLang/julia/issues/20164
+[#20321]: https://github.com/JuliaLang/julia/issues/20321
 [#20414]: https://github.com/JuliaLang/julia/issues/20414
