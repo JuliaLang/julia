@@ -32,8 +32,10 @@ reset(val::Integer, flag::Integer) = (val &= ~flag)
 toggle(val::Integer, flag::Integer) = (val |= flag)
 
 function prompt(msg::AbstractString; default::AbstractString="", password::Bool=false)
-    if is_windows() && password
-        error("Command line prompt not supported for password entry on windows. Use winprompt instead")
+    @static if is_windows()
+        if password
+            error("Command line prompt not supported for password entry on windows. Use winprompt instead")
+        end
     end
     msg = !isempty(default) ? msg*" [$default]:" : msg*":"
     uinput = if password
@@ -64,4 +66,36 @@ if is_windows()
     posixpath(path) = replace(path,'\\','/')
 else is_unix()
     posixpath(path) = path
+end
+
+function git_url(;
+    protocol::AbstractString="",
+    username::AbstractString="",
+    password::AbstractString="",
+    host::AbstractString="",
+    port::Union{AbstractString,Integer}="",
+    path::AbstractString="",
+)
+    port_str = string(port)
+    scp_syntax = isempty(protocol)
+
+    isempty(host) && error("A host needs to be specified")
+    scp_syntax && !isempty(port_str) && error("Port cannot be specified when using scp-like syntax")
+
+    io = IOBuffer()
+    if !isempty(protocol)
+        print(io, protocol, "://")
+    end
+
+    if !isempty(username) || !isempty(password)
+        print(io, username)
+        !isempty(password) && print(io, ':', password)
+        print(io, '@')
+    end
+
+    print(io, host)
+    !isempty(port) && print(io, ':', port)
+    print(io, scp_syntax && !isempty(path) ? ":" : "", path)
+
+    return readstring(seekstart(io))
 end

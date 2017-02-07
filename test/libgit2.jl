@@ -1,7 +1,8 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
-using TestHelpers
+import TestHelpers: challenge_prompt
+import Base.Iterators: repeated
 
 const LIBGIT2_MIN_VER = v"0.23.0"
 
@@ -830,16 +831,180 @@ mktempdir() do dir
         end
     end
 
-    @testset "Credentials" begin
-        creds_user = "USER"
-        creds_pass = "PASS"
-        creds = LibGit2.UserPasswordCredentials(creds_user, creds_pass)
-        @test !LibGit2.checkused!(creds)
-        @test !LibGit2.checkused!(creds)
-        @test !LibGit2.checkused!(creds)
-        @test LibGit2.checkused!(creds)
-        @test creds.user == creds_user
-        @test creds.pass == creds_pass
+    @testset "SSH credentials" begin
+        KEY_DIR = joinpath(dirname(@__FILE__), "libgit2")
+        valid_key = joinpath(KEY_DIR, "valid")
+        invalid_key = joinpath(KEY_DIR, "invalid")
+        valid_p_key = joinpath(KEY_DIR, "valid-passphrase")
+        passphrase = "secret"
+
+        ssh_cmd = """
+        valid_cred = LibGit2.SSHCredential("git", "", "$valid_key", "$valid_key.pub")
+        err = LibGit2.credential_loop(valid_cred)
+        err < 0 ? LibGit2.GitError(err) : err
+        """
+
+        ssh_p_cmd = """
+        valid_cred = LibGit2.SSHCredential("git", "$passphrase", "$valid_p_key", "$valid_p_key.pub")
+        err = LibGit2.credential_loop(valid_cred)
+        err < 0 ? LibGit2.GitError(err) : err
+        """
+
+        # Note: We cannot use the default ~/.ssh/id_rsa for tests since we cannot be sure
+        # a users will actually have these files. Instead we will use the ENV variables to
+        # set the default values.
+
+        # Default credentials are valid
+        withenv("SSH_KEY_PATH" => valid_key) do
+            @test challenge_prompt(ssh_cmd, []) == 0
+        end
+
+        # Default credentials are valid but requires a passphrase
+        withenv("SSH_KEY_PATH" => valid_p_key) do
+            challenges = [
+                "Passphrase for $valid_p_key:" => "$passphrase\n",
+            ]
+            @test challenge_prompt(ssh_p_cmd, challenges) == 0
+
+            # User mistypes passphrase.
+            # Note: In reality LibGit2 will raise an error upon using the invalid
+            # SSH credentials. Since we don't control the internals of LibGit2 though they
+            # could also just re-call the credential callback like they do for HTTP.
+            challenges = [
+                "Passphrase for $valid_p_key:" => "foo\n",
+                "Private key location for 'git@github.com' [$valid_p_key]:" => "\n",
+                "Passphrase for $valid_p_key:" => "$passphrase\n",
+            ]
+            @test challenge_prompt(ssh_p_cmd, challenges) == 0
+        end
+
+        withenv("SSH_KEY_PATH" => valid_p_key, "SSH_KEY_PASS" => passphrase) do
+            @test challenge_prompt(ssh_p_cmd, []) == 0
+        end
+
+        # Explicitly setting these env variables to be empty means the user will be given
+        # a prompt with no defaults set.
+        withenv("SSH_KEY_PATH" => "", "SSH_PUB_KEY_PATH" => "") do
+            # User provides valid credentials
+            challenges = [
+                "Private key location for 'git@github.com':" => "$valid_key\n",
+            ]
+            @test challenge_prompt(ssh_cmd, challenges) == 0
+
+            # User provides valid credentials that requires a passphrase
+            challenges = [
+                "Private key location for 'git@github.com':" => "$valid_p_key\n",
+                "Passphrase for $valid_p_key:" => "$passphrase\n",
+            ]
+            @test challenge_prompt(ssh_p_cmd, challenges) == 0
+        end
+
+        # Explicitly setting these env variables to an existing but invalid key pair means
+        # the user will be given a prompt with that defaults to the specified values.
+        withenv("SSH_KEY_PATH" => invalid_key, "SSH_PUB_KEY_PATH" => invalid_key * ".pub") do
+            challenges = [
+                "Private key location for 'git@github.com' [$invalid_key]:" => "$valid_key\n",
+            ]
+            @test challenge_prompt(ssh_cmd, challenges) == 0
+        end
+
+        # withenv("SSH_KEY_PATH" => invalid_key) do
+        #     challenges = [
+        #         "Private key location for 'git@github.com' [$invalid_key]:" => "\n",
+        #         "Public key location for 'git@github.com':" => "$valid_key.pub\n"
+        #     ]
+        # end
+
+        withenv("SSH_KEY_PATH" => valid_key, "SSH_PUB_KEY_PATH" => valid_key * ".public") do
+            @test !isfile(ENV["SSH_PUB_KEY_PATH"])
+
+            # User explicitly sets the SSH_PUB_KEY_PATH incorrectly.
+            challenges = [
+                "Private key location for 'git@github.com' [$valid_key]:" => "\n"
+                "Public key location for 'git@github.com':" => "$valid_key.pub\n"
+            ]
+            @test challenge_prompt(ssh_cmd, challenges) == 0
+        end
+    end
+
+    @testset "SSH credential cache" begin
+        KEY_DIR = joinpath(dirname(@__FILE__), "libgit2")
+        valid_key = joinpath(KEY_DIR, "valid")
+        invalid_key = joinpath(KEY_DIR, "invalid")
+        valid_p_key = joinpath(KEY_DIR, "valid-passphrase")
+        passphrase = "secret"
+
+        ssh_cmd = """
+        valid_cred = LibGit2.SSHCredential("git", "", "$valid_key", "$valid_key.pub")
+        cache = LibGit2.CachedCredentials()
+        LibGit2.approve(cache, "ssh://github.com", valid_cred)
+        err = LibGit2.credential_loop(valid_cred, cache=Nullable(cache))
+        err < 0 ? LibGit2.GitError(err) : err
+        """
+
+        ssh_p_cmd = """
+        valid_cred = LibGit2.SSHCredential("git", "$passphrase", "$valid_p_key", "$valid_p_key.pub")
+        cache = LibGit2.CachedCredentials()
+        LibGit2.approve(cache, "ssh://github.com", valid_cred)
+        err = LibGit2.credential_loop(valid_cred, cache=Nullable(cache))
+        err < 0 ? LibGit2.GitError(err) : err
+        """
+
+        # Credential cache provides correct SSH credentials with no prompts
+        @test challenge_prompt(ssh_cmd, []) == 0
+
+        # Credential cache provides correct SSH credentials including passphrase with no prompts
+        @test challenge_prompt(ssh_p_cmd, []) == 0
+    end
+
+    @testset "HTTPS credential prompt" begin
+        valid_username = "julia"
+        valid_password = randstring(16)
+
+        https_cmd = """
+        valid_cred = LibGit2.UserPasswordCredential("$valid_username", "$valid_password")
+        err = LibGit2.credential_loop(valid_cred)
+        err < 0 ? LibGit2.GitError(err) : err
+        """
+
+        # User provides a valid username and password
+        challenges = [
+            "Username for 'https://github.com':" => "$valid_username\n",
+            "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
+        ]
+        @test challenge_prompt(https_cmd, challenges) == 0
+    end
+
+    @testset "HTTPS credential cache" begin
+        valid_username = "julia"
+        valid_password = randstring(16)
+
+        https_cmd = """
+        valid_cred = LibGit2.UserPasswordCredential("$valid_username", "$valid_password")
+        cache = LibGit2.CachedCredentials()
+        LibGit2.approve(cache, "https://github.com", valid_cred)
+        err = LibGit2.credential_loop(valid_cred, cache=Nullable(cache))
+        err < 0 ? LibGit2.GitError(err) : err
+        """
+
+        # Credential cache provides correct credentials with no prompts
+        @test challenge_prompt(https_cmd, []) == 0
+    end
+
+    @testset "Unhandled credential" begin
+        allowed_types = UInt32(0)  # No allowed types
+        unhandled_exception = LibGit2.GitError(
+            LibGit2.Error.Callback, LibGit2.Error.EAUTH,
+            @sprintf("Aborting credential callback. Unable authenticate using allowed types 0x%08x", allowed_types)
+        )
+
+        err = LibGit2.credential_loop(
+            LibGit2.UserPasswordCredential(),
+            "https://github.com/test/package.jl",
+            "", allowed_types
+        )
+        @test err < 0
+        @test LibGit2.GitError(err) == unhandled_exception
     end
 
     #= temporarily disabled until working on the buildbots, ref https://github.com/JuliaLang/julia/pull/17651#issuecomment-238211150
