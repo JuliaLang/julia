@@ -364,7 +364,7 @@ show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(c.sz_max),sz_curr:$(
 type ChannelIterState{T}
     hasval::Bool
     val::T
-    ChannelIterState{T}(has::Bool) where T = new(has)
+    ChannelIterState{T}(has::Bool) where {T} = new(has)
 end
 
 start{T}(c::Channel{T}) = ChannelIterState{T}(false)

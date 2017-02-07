@@ -6,7 +6,7 @@ immutable Hessenberg{T,S<:AbstractMatrix} <: Factorization{T}
     Hessenberg{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} =
         new(factors, τ)
 end
-Hessenberg(factors::AbstractMatrix{T}, τ::Vector{T}) where T = Hessenberg{T,typeof(factors)}(factors, τ)
+Hessenberg(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = Hessenberg{T,typeof(factors)}(factors, τ)
 
 Hessenberg(A::StridedMatrix) = Hessenberg(LAPACK.gehrd!(A)...)
 

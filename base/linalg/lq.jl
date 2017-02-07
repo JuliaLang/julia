@@ -14,8 +14,8 @@ immutable LQPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     LQPackedQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
 
-LQ(factors::AbstractMatrix{T}, τ::Vector{T}) where T = LQ{T,typeof(factors)}(factors, τ)
-LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where T = LQPackedQ{T,typeof(factors)}(factors, τ)
+LQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQ{T,typeof(factors)}(factors, τ)
+LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQPackedQ{T,typeof(factors)}(factors, τ)
 
 """
     lqfact!(A) -> LQ

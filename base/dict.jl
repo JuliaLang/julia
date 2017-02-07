@@ -119,7 +119,7 @@ function Dict{K,V}(kv) where V where K
     end
     return h
 end
-Dict{K,V}(p::Pair) where V where K = setindex!(Dict{K,V}(), p.second, p.first)
+Dict{K,V}(p::Pair) where {K,V} = setindex!(Dict{K,V}(), p.second, p.first)
 function Dict{K,V}(ps::Pair...) where V where K
     h = Dict{K,V}()
     sizehint!(h, length(ps))
