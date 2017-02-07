@@ -61,7 +61,7 @@ end
 A simple example is an iterable sequence of square numbers with a defined length:
 
 ```jldoctest squaretype
-julia> immutable Squares
+julia> struct Squares
            count::Int
        end
 
@@ -238,7 +238,7 @@ Returning to the sequence of squares from above, we could instead define it as a
 `AbstractArray{Int, 1}`:
 
 ```jldoctest squarevectype
-julia> immutable SquaresVector <: AbstractArray{Int, 1}
+julia> struct SquaresVector <: AbstractArray{Int, 1}
            count::Int
        end
 
@@ -283,7 +283,7 @@ As a more complicated example, let's define our own toy N-dimensional sparse-lik
 on top of [`Dict`](@ref):
 
 ```jldoctest squarevectype
-julia> immutable SparseArray{T,N} <: AbstractArray{T,N}
+julia> struct SparseArray{T,N} <: AbstractArray{T,N}
            data::Dict{NTuple{N,Int}, T}
            dims::NTuple{N,Int}
        end

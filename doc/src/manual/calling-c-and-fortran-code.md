@@ -264,13 +264,13 @@ First, a review of some relevant Julia type terminology:
 
 | Syntax / Keyword              | Example                                     | Description                                                                                                                                                                                                                                                                    |
 |:----------------------------- |:------------------------------------------- |:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `mutable`                     | `String`                                    | "Leaf Type" :: A group of related data that includes a type-tag, is managed by the Julia GC, and is defined by object-identity. The type parameters of a leaf type must be fully defined (no `TypeVars` are allowed) in order for the instance to be constructed.              |
-| `abstract`                    | `Any`, `AbstractArray{T, N}`, `Complex{T}`  | "Super Type" :: A super-type (not a leaf-type) that cannot be instantiated, but can be used to describe a group of types.                                                                                                                                                      |
-| `{T}`                         | `Vector{Int}`                               | "Type Parameter" :: A specialization of a type (typically used for dispatch or storage optimization).                                                                                                                                                                          |
+| `mutable struct`              | `String`                                    | "Leaf Type" :: A group of related data that includes a type-tag, is managed by the Julia GC, and is defined by object-identity. The type parameters of a leaf type must be fully defined (no `TypeVars` are allowed) in order for the instance to be constructed.              |
+| `abstract type`               | `Any`, `AbstractArray{T, N}`, `Complex{T}`  | "Super Type" :: A super-type (not a leaf-type) that cannot be instantiated, but can be used to describe a group of types.                                                                                                                                                      |
+| `T{A}`                        | `Vector{Int}`                               | "Type Parameter" :: A specialization of a type (typically used for dispatch or storage optimization).                                                                                                                                                                          |
 |                               |                                             | "TypeVar" :: The `T` in the type parameter declaration is referred to as a TypeVar (short for type variable).                                                                                                                                                                  |
-| `bitstype`                    | `Int`, `Float64`                            | "Bits Type" :: A type with no fields, but a size. It is stored and defined by-value.                                                                                                                                                                                           |
+| `primitive type`              | `Int`, `Float64`                            | "Primitive Type" :: A type with no fields, but a size. It is stored and defined by-value.                                                                                                                                                                                           |
 | `struct`                      | `Pair{Int, Int}`                            | "Struct" :: A type with all fields defined to be constant. It is defined by-value. And may be stored with a type-tag.                                                                                                                                                       |
-|                               | `Complex128` (`isbits`)                     | "Is-Bits"   :: A `bitstype`, or a `struct` type where all fields are other `isbits` types. It is defined by-value, and is stored without a type-tag.                                                                                                                       |
+|                               | `Complex128` (`isbits`)                     | "Is-Bits"   :: A `primitive type`, or a `struct` type where all fields are other `isbits` types. It is defined by-value, and is stored without a type-tag.                                                                                                                       |
 | `struct ...; end`             | `nothing`                                   | "Singleton" :: a Leaf Type or Struct with no fields.                                                                                                                                                                                                                        |
 | `(...)` or `tuple(...)`       | `(1, 2, 3)`                                 | "Tuple" :: an immutable data-structure similar to an anonymous struct type, or a constant array. Represented as either an array or a struct.                                                                                                                                |
 | `typealias`                   | Not applicable here                         | Type aliases, and other similar mechanisms of doing type indirection, are resolved to their base type (this includes assigning a type to another name, or getting the type out of a function call).                                                                            |
@@ -491,7 +491,7 @@ the static parameters of the function are considered to be part of this static e
 The static parameters of the function may be used as type parameters in the `ccall` signature,
 as long as they don't affect the layout of the type.
 For example, `f{T}(x::T) = ccall(:valid, Ptr{T}, (Ptr{T},), x)`
-is valid, since `Ptr` is always a word-size bitstype.
+is valid, since `Ptr` is always a word-size primitive type.
 But, `g{T}(x::T) = ccall(:notvalid, T, (T,), x)`
 is not valid, since the type layout of `T` is not known statically.
 
@@ -504,7 +504,7 @@ Julia type is a homogeneous tuple of `VecElement` that naturally maps to the SIM
 
 >   * The tuple must be the same size as the SIMD type. For example, a tuple representing an `__m128`
 >     on x86 must have a size of 16 bytes.
->   * The element type of the tuple must be an instance of `VecElement{T}` where `T` is a bitstype that
+>   * The element type of the tuple must be an instance of `VecElement{T}` where `T` is a primitive type that
 >     is 1, 2, 4 or 8 bytes.
 
 For instance, consider this C routine that uses AVX intrinsics:
@@ -937,12 +937,12 @@ back to a Julia object reference by [`unsafe_pointer_to_objref(ptr)`](@ref). (Ju
 can be converted to `jl_value_t*` pointers, as `Ptr{Void}`, by calling [`pointer_from_objref(v)`](@ref).)
 
 The reverse operation (writing data to a `Ptr{T}`), can be performed using [`unsafe_store!(ptr, value, [index])`](@ref).
- Currently, this is only supported for bitstypes or other pointer-free (`isbits`) immutable struct types.
+Currently, this is only supported for primitive types or other pointer-free (`isbits`) immutable struct types.
 
 Any operation that throws an error is probably currently unimplemented and should be posted as
 a bug so that it can be resolved.
 
-If the pointer of interest is a plain-data array (bitstype or immutable struct), the function [`unsafe_wrap(Array, ptr,dims,[own])`](@ref)
+If the pointer of interest is a plain-data array (primitive type or immutable struct), the function [`unsafe_wrap(Array, ptr,dims,[own])`](@ref)
 may be more useful. The final parameter should be true if Julia should "take ownership" of the
 underlying buffer and call `free(ptr)` when the returned `Array` object is finalized.  If the
 `own` parameter is omitted or false, the caller must ensure the buffer remains in existence until
