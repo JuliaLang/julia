@@ -535,7 +535,7 @@ end
 
 ## Calling `GitObject(repo, ...)` will automatically resolve to the appropriate type.
 function GitObject(repo::GitRepo, ptr::Ptr{Void})
-    T = objtype(ccall((:git_object_type, :libgit2), Consts.OBJECT, (Ptr{Void},), ptr))
+    T = objtype(Consts.OBJECT(ptr))
     T(repo, ptr)
 end
 
@@ -601,6 +601,9 @@ Consts.OBJECT(::Type{GitBlob})          = Consts.OBJ_BLOB
 Consts.OBJECT(::Type{GitTag})           = Consts.OBJ_TAG
 Consts.OBJECT(::Type{GitUnknownObject}) = Consts.OBJ_ANY
 Consts.OBJECT(::Type{GitObject})        = Consts.OBJ_ANY
+
+Consts.OBJECT(ptr::Ptr{Void}) =
+    ccall((:git_object_type, :libgit2), Consts.OBJECT, (Ptr{Void},), ptr)
 
 """
     objtype(obj_type::Consts.OBJECT)
