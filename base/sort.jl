@@ -62,6 +62,17 @@ end
 
 Test whether a vector is in sorted order. The `by`, `lt` and `rev` keywords modify what
 order is considered to be sorted just as they do for [`sort`](@ref).
+
+```jldoctest
+julia> issorted([1, 2, 3])
+true
+
+julia> issorted([(1, "b"), (2, "a")], by = x -> x[1])
+true
+
+julia> issorted([(1, "b"), (2, "a")], by = x -> x[2])
+false
+```
 """
 issorted(itr;
     lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
@@ -432,6 +443,30 @@ providing a custom "less than" function; use `rev=true` to reverse the sorting o
 options are independent and can be used together in all possible combinations: if both `by`
 and `lt` are specified, the `lt` function is applied to the result of the `by` function;
 `rev=true` reverses whatever ordering specified via the `by` and `lt` keywords.
+
+```jldoctest
+julia> v = [3, 2, 1]; sort!(v); v
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> v = [3, 2, 1]; sort(v, rev = true); v
+3-element Array{Int64,1}:
+ 3
+ 2
+ 1
+
+julia> v = [(1, "b"), (2, "a")]; sort(v, by = x -> x[1]); v
+2-element Array{Tuple{Int64,String},1}:
+ (1, "b")
+ (2, "a")
+
+julia> v = [(1, "b"), (2, "a")]; sort!(v, by = x -> x[2]); v
+2-element Array{Tuple{Int64,String},1}:
+ (2, "a")
+ (1, "b")
+```
 """
 function sort!(v::AbstractVector;
                alg::Algorithm=defalg(v),
@@ -481,6 +516,22 @@ end
     sort(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
+
+```jldoctest
+julia> v = [3, 2, 1];
+
+julia> sort(v)
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> v
+3-element Array{Int64,1}:
+ 3
+ 2
+ 1
+```
 """
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 
@@ -521,6 +572,22 @@ a different permutation that puts the array into order may be returned. The orde
 specified using the same keywords as `sort!`.
 
 See also [`sortperm!`](@ref).
+
+```jldoctest
+julia> v = [3, 1, 2];
+
+julia> p = sortperm(v)
+3-element Array{Int64,1}:
+ 2
+ 3
+ 1
+
+julia> v[p]
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+```
 """
 function sortperm(v::AbstractVector;
                   alg::Algorithm=DEFAULT_UNSTABLE,
@@ -553,6 +620,22 @@ end
 
 Like [`sortperm`](@ref), but accepts a preallocated index vector `ix`.  If `initialized` is `false`
 (the default), ix is initialized to contain the values `1:length(v)`.
+
+```jldoctest
+julia> v = [3, 1, 2]; p = zeros(Int, 3);
+
+julia> sortperm!(p, v); p
+3-element Array{Int64,1}:
+ 2
+ 3
+ 1
+
+julia> v[p]
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+```
 """
 function sortperm!{I<:Integer}(x::AbstractVector{I}, v::AbstractVector;
                                alg::Algorithm=DEFAULT_UNSTABLE,
@@ -602,6 +685,23 @@ end
 Sort a multidimensional array `A` along the given dimension.
 See [`sort!`](@ref) for a description of possible
 keyword arguments.
+
+```jldoctest
+julia> A = [4 3; 1 2]
+2×2 Array{Int64,2}:
+ 4  3
+ 1  2
+
+julia> sort(A, 1)
+2×2 Array{Int64,2}:
+ 1  2
+ 4  3
+
+julia> sort(A, 2)
+2×2 Array{Int64,2}:
+ 3  4
+ 1  2
+```
 """
 function sort(A::AbstractArray, dim::Integer;
               alg::Algorithm=DEFAULT_UNSTABLE,
