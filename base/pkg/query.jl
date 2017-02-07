@@ -177,7 +177,7 @@ function check_partial_updates(reqs::Requires,
     end
 end
 
-typealias PackageState Union{Void,VersionNumber}
+const PackageState = Union{Void,VersionNumber}
 
 function diff(have::Dict, want::Dict, avail::Dict, fixed::Dict)
     change = Array{Tuple{String,Tuple{PackageState,PackageState}}}(0)

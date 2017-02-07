@@ -70,6 +70,9 @@ Language changes
   * The identifier `_` can be assigned, but accessing its value is deprecated,
     allowing this syntax to be used in the future for discarding values ([#9343], [#18251]).
 
+  * The `typealias` keyword is deprecated, and should be replaced with
+    `Vector{T} = Array{T,1}` or a `const` assignment.
+
 Breaking changes
 ----------------
 

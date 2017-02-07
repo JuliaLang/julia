@@ -894,12 +894,12 @@ end
 
 # SIMD Registers
 
-typealias VecReg{N,T} NTuple{N,VecElement{T}}
-typealias V2xF32 VecReg{2,Float32}
-typealias V4xF32 VecReg{4,Float32}
-typealias V2xF64 VecReg{2,Float64}
-typealias V2xI32 VecReg{2,Int32}
-typealias V4xI32 VecReg{4,Int32}
+const VecReg{N,T} = NTuple{N,VecElement{T}}
+const V2xF32 = VecReg{2,Float32}
+const V4xF32 = VecReg{4,Float32}
+const V2xF64 = VecReg{2,Float64}
+const V2xI32 = VecReg{2,Int32}
+const V4xI32 = VecReg{4,Int32}
 
 struct Struct_AA64_1
     v1::Int32

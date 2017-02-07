@@ -27,10 +27,10 @@ end
 
 @inline ConjArray{T,N}(a::AbstractArray{T,N}) = ConjArray{conj_type(T), N, typeof(a)}(a)
 
-typealias ConjVector{T, V <: AbstractVector} ConjArray{T, 1, V}
+ConjVector{T, V <: AbstractVector} = ConjArray{T, 1, V}
 @inline ConjVector{T}(v::AbstractVector{T}) = ConjArray{conj_type(T), 1, typeof(v)}(v)
 
-typealias ConjMatrix{T, M <: AbstractMatrix} ConjArray{T, 2, M}
+ConjMatrix{T, M <: AbstractMatrix} = ConjArray{T, 2, M}
 @inline ConjMatrix{T}(m::AbstractMatrix{T}) = ConjArray{conj_type(T), 2, typeof(m)}(m)
 
 # This type can cause the element type to change under conjugation - e.g. an array of complex arrays.

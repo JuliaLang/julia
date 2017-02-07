@@ -7,7 +7,7 @@ mutable struct Node
     Node(name) = new(name, Set{Node}())
 end
 
-typealias Graph Dict{String, Node}
+const Graph = Dict{String, Node}
 
 function get(G::Graph, name)
     if haskey(G, name)

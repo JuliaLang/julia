@@ -126,10 +126,10 @@ map(f, t::Tuple{Any, Any})      = (f(t[1]), f(t[2]))
 map(f, t::Tuple{Any, Any, Any}) = (f(t[1]), f(t[2]), f(t[3]))
 map(f, t::Tuple)                = (@_inline_meta; (f(t[1]), map(f,tail(t))...))
 # stop inlining after some number of arguments to avoid code blowup
-typealias Any16{N}   Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
-                           Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
-typealias All16{T,N} Tuple{T,T,T,T,T,T,T,T,
-                           T,T,T,T,T,T,T,T,Vararg{T,N}}
+Any16{N}   = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
+                   Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
+All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
+                   T,T,T,T,T,T,T,T,Vararg{T,N}}
 function map(f, t::Any16)
     n = length(t)
     A = Array{Any}(n)

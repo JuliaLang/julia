@@ -178,14 +178,14 @@ export
 # Constants
     I
 
-typealias BlasFloat Union{Float64,Float32,Complex128,Complex64}
-typealias BlasReal Union{Float64,Float32}
-typealias BlasComplex Union{Complex128,Complex64}
+const BlasFloat = Union{Float64,Float32,Complex128,Complex64}
+const BlasReal = Union{Float64,Float32}
+const BlasComplex = Union{Complex128,Complex64}
 
 if USE_BLAS64
-    typealias BlasInt Int64
+    const BlasInt = Int64
 else
-    typealias BlasInt Int32
+    const BlasInt = Int32
 end
 
 # Check that stride of matrix/vector is 1

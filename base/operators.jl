@@ -2,9 +2,9 @@
 
 ## types ##
 
-typealias Dims{N} NTuple{N,Int}
-typealias DimsInteger{N} NTuple{N,Integer}
-typealias Indices{N} NTuple{N,AbstractUnitRange}
+Dims{N} = NTuple{N,Int}
+DimsInteger{N} = NTuple{N,Integer}
+Indices{N} = NTuple{N,AbstractUnitRange}
 
 """
     <:(T1, T2)

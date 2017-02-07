@@ -49,8 +49,8 @@ const Slot_UsedUndef    = 32
 
 struct NotFound end
 const NF = NotFound()
-typealias LineNum Int
-typealias VarTable Array{Any,1}
+const LineNum = Int
+const VarTable = Array{Any,1}
 
 # The type of a variable load is either a value or an UndefVarError
 mutable struct VarState

@@ -1138,6 +1138,9 @@ end
     end
 end
 
+# TODO: remove `:typealias` from BINDING_HEADS in base/docs/Docs.jl
+# TODO: remove `'typealias` case in expand-table in julia-syntax.scm
+
 # FloatRange replaced by StepRangeLen
 
 @deprecate FloatRange{T}(start::T, step, len, den) Base.floatrange(T, start, step, len, den)

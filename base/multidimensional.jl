@@ -371,7 +371,7 @@ _maybe_linear_logical_index(::LinearFast, A, i) = LogicalIndex{Int}(i)
 @inline to_indices(A, inds, I::Tuple{Colon, Vararg{Any}}) =
     (uncolon(inds, I), to_indices(A, _maybetail(inds), tail(I))...)
 
-typealias CI0 Union{CartesianIndex{0}, AbstractArray{CartesianIndex{0}}}
+const CI0 = Union{CartesianIndex{0}, AbstractArray{CartesianIndex{0}}}
 uncolon(inds::Tuple{},    I::Tuple{Colon})              = Slice(OneTo(1))
 uncolon(inds::Tuple{},    I::Tuple{Colon, Vararg{Any}}) = Slice(OneTo(1))
 uncolon(inds::Tuple{},    I::Tuple{Colon, Vararg{CI0}}) = Slice(OneTo(1))

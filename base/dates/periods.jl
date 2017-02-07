@@ -393,7 +393,7 @@ end
 
 # Fixed-value Periods (periods corresponding to a well-defined time interval,
 # as opposed to variable calendar intervals like Year).
-typealias FixedPeriod Union{Week, Day, Hour, Minute, Second, Millisecond, Microsecond, Nanosecond}
+const FixedPeriod = Union{Week, Day, Hour, Minute, Second, Millisecond, Microsecond, Nanosecond}
 
 # like div but throw an error if remainder is nonzero
 function divexact(x, y)
@@ -430,7 +430,7 @@ end
 Base.isless{T<:FixedPeriod, S<:FixedPeriod}(x::T, y::S) = isless(promote(x, y)...)
 
 # other periods with fixed conversions but which aren't fixed time periods
-typealias OtherPeriod Union{Month, Year}
+const OtherPeriod = Union{Month, Year}
 let vmax = typemax(Int64) ÷ 12, vmin = typemin(Int64) ÷ 12
     @eval function Base.convert(::Type{Month}, x::Year)
         $vmin ≤ value(x) ≤ $vmax || throw(InexactError())
