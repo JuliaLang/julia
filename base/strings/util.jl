@@ -86,6 +86,7 @@ Remove a single trailing newline from a string.
 ```jldoctest
 julia> chomp("Hello\n")
 "Hello"
+```
 """
 function chomp(s::AbstractString)
     i = endof(s)
@@ -187,6 +188,7 @@ instead remove characters contained in it.
 ```jldoctest
 julia> strip("{3, 5}\n", ['{', '}', '\n'])
 "3, 5"
+```
 """
 strip(s::AbstractString) = lstrip(rstrip(s))
 strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
