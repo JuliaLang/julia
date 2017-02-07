@@ -123,7 +123,20 @@ function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""
     return result
 end
 
-""" git diff --name-only --diff-filter=<filter> <branch1> <branch2> """
+"""
+    diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractString; kwarg...) -> Vector{AbstractString}
+
+Show which files have changed in the git repository `repo` between branches `branch1`
+and `branch2`.
+
+The keyword argument is:
+  * `filter::Set{Cint}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED]))`,
+    and it sets options for the diff. The default is to show files added, modified, or deleted.
+
+Returns only the *names* of the files which have changed, *not* their contents.
+
+Equivalent to `git diff --name-only --diff-filter=<filter> <branch1> <branch2>`.
+"""
 function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractString;
                     filter::Set{Cint}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED]))
     b1_id = revparseid(repo, branch1*"^{tree}")
@@ -283,14 +296,22 @@ function branch(repo::GitRepo)
 end
 
 """
-    branch!(repo::GitRepo, branch_name::AbstractString, commit::AbstractString=""; track::AbstractString="", force::Bool=false, set_head::Bool=true)
+    branch!(repo::GitRepo, branch_name::AbstractString, commit::AbstractString=""; kwargs...)
+
+Checkout a new git branch in the `repo` repository. `commit` is the [`GitHash`](@ref),
+in string form, which will be the start of the new branch.
+
+The keyword arguments are:
+  * `track::AbstractString=""`: the name of the
+    remote branch this new branch should track, if any.
+    If empty (the default), no remote branch
+    will be tracked.
+  * `force::Bool=false`: if `true`, branch creation will
+    be forced.
+  * `set_head::Bool=true`: if `true`, after the branch creation
+    finishes the branch head will be set as the HEAD of `repo`.
 
 Equivalent to `git checkout [-b|-B] <branch_name> [<commit>] [--track <track>]`.
-Checkout a new git branch in the `repo` repository. `commit` is the [`GitHash`](@ref),
-in string form, which will be the start of the new branch. `track` is the name of the
-remote branch this new branch should track, if any. If empty (the default), no remote branch
-will be tracked. If `force` is `true`, branch creation will be forced. If `set_head` is
-`true`, after the branch creation finishes the branch head will be set as the HEAD of `repo`.
 """
 function branch!(repo::GitRepo, branch_name::AbstractString,
                  commit::AbstractString = ""; # start point
