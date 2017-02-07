@@ -52,7 +52,7 @@ julia> Bl = Bidiagonal(dv, ev, false) # ev is on the first subdiagonal
  ⋅  ⋅  9  4
 ```
 """
-Bidiagonal(dv::AbstractVector{T}, ev::AbstractVector{T}, isupper::Bool) where T = Bidiagonal{T}(collect(dv), collect(ev), isupper)
+Bidiagonal(dv::AbstractVector{T}, ev::AbstractVector{T}, isupper::Bool) where {T} = Bidiagonal{T}(collect(dv), collect(ev), isupper)
 Bidiagonal(dv::AbstractVector, ev::AbstractVector) = throw(ArgumentError("did you want an upper or lower Bidiagonal? Try again with an additional true (upper) or false (lower) argument."))
 
 """
@@ -197,7 +197,7 @@ full(A::Bidiagonal) = convert(Array, A)
 promote_rule{T,S}(::Type{Matrix{T}}, ::Type{Bidiagonal{S}})=Matrix{promote_type(T,S)}
 
 #Converting from Bidiagonal to Tridiagonal
-Tridiagonal(M::Bidiagonal{T}) where T = convert(Tridiagonal{T}, M)
+Tridiagonal(M::Bidiagonal{T}) where {T} = convert(Tridiagonal{T}, M)
 function convert{T}(::Type{Tridiagonal{T}}, A::Bidiagonal)
     z = zeros(T, size(A)[1]-1)
     A.isupper ? Tridiagonal(z, convert(Vector{T},A.dv), convert(Vector{T},A.ev)) : Tridiagonal(convert(Vector{T},A.ev), convert(Vector{T},A.dv), z)
