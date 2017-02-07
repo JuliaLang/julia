@@ -890,4 +890,4 @@ ordinary `String` objects which contain the enclosed contents exactly as
 entered with no interpolation or unescaping. This is useful for strings which
 contain code or markup in other languages which use `$` or `\` as special
 characters. The exception is quotation marks that still must be
-escaped, e.g. `raw"\""` is equivalent to "\"".
+escaped, e.g. `raw"\""` is equivalent to `"\""`.
