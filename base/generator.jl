@@ -5,9 +5,22 @@
 
 Given a function `f` and an iterator `iter`, construct an iterator that yields
 the values of `f` applied to the elements of `iter`.
-The syntax `f(x) [if cond(x)::Bool] for x in iter` is syntax for constructing an instance of this
+The syntax `f(x) for x in iter [if cond(x)::Bool]` is syntax for constructing an instance of this
 type. The `[if cond(x)::Bool]` expression is optional and acts as a "guard", effectively
 filtering out values where the condition is false.
+
+```jldoctest
+julia> gen = (sqrt(x) for x in 1:10 if x % 2 == 0);
+
+julia> for x in gen
+            println(x)
+       end
+1.4142135623730951
+2.0
+2.449489742783178
+2.8284271247461903
+3.1622776601683795
+```
 """
 immutable Generator{I,F}
     f::F
