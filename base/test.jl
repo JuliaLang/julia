@@ -610,7 +610,8 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
     # recursively walking the tree of test sets
     align = max(get_alignment(ts, 0), length("Test Summary:"))
     # Print the outer test set header once
-    print_with_color(:white, rpad("Test Summary:",align," "), " | "; bold = true)
+    pad = total == 0 ? "" : " "
+    print_with_color(:white, rpad("Test Summary:",align," "), " |", pad; bold = true)
     if pass_width > 0
         print_with_color(:green, lpad("Pass",pass_width," "), "  "; bold = true)
     end
