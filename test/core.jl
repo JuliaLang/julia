@@ -1070,7 +1070,7 @@ end
 # issue #2562
 type Node2562{T}
     value::T
-    Node2562(value::T) = new(value)
+    Node2562{T}(value::T) where T = new(value)
 end
 Node2562{T}(value::T, args...) = Node2562{T}(value, args...)
 makenode2562(value) = Node2562(value)
@@ -1080,7 +1080,7 @@ makenode2562(value) = Node2562(value)
 # issue #2619
 type I2619{T}
     v::T
-    I2619(v) = new(convert(T,v))
+    I2619{T}(v) where T = new(convert(T,v))
 end
 bad2619 = false
 function i2619()
@@ -1266,8 +1266,8 @@ convert_default_should_fail_here() = similar([1],typeof(zero(typeof(rand(2,2))))
 
 type Foo4376{T}
     x
-    Foo4376(x::T) = new(x)
-    Foo4376(a::Foo4376{Int}) = new(a.x)
+    Foo4376{T}(x::T) where T = new(x)
+    Foo4376{T}(a::Foo4376{Int}) where T = new(a.x)
 end
 
 @test isa(Foo4376{Float32}(Foo4376{Int}(2)), Foo4376{Float32})
@@ -1671,11 +1671,11 @@ end
 # issue #6404
 type type_2{T <: Integer, N} <: Number
     x::T
-    type_2(n::T) = new(n)
+    type_2{T,N}(n::T) where {T<:Integer,N} = new(n)
 end
 type type_1{T <: Number} <: Number
     x::Vector{T}
-    type_1(x::Vector{T}) = new(x)
+    type_1{T}(x::Vector{T}) where T<:Number = new(x)
 end
 type_1{T <: Number}(x::Vector{T}) = type_1{T}(x)
 type_1{T <: Number}(c::T) = type_1{T}([c])
@@ -2848,7 +2848,7 @@ end
 # issue #11675
 immutable T11675{T}
     x::T
-    T11675() = new()
+    T11675{T}() where T = new()
 end
 let x = T11675{Union{}}()
     function f11675(x)
@@ -3013,7 +3013,7 @@ failure12003(dt=DATE12003) = Dates.year(dt)
 # issue #12089
 type A12089{K, N}
     sz::NTuple{N, Int}
-    A12089(sz::NTuple{N, Int}) = new(sz)
+    A12089{K,N}(sz::NTuple{N, Int}) where {K,N} = new(sz)
 end
 A12089{-1, 1}((1,))
 

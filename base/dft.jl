@@ -241,10 +241,10 @@ type ScaledPlan{T,P,N} <: Plan{T}
     p::P
     scale::N # not T, to avoid unnecessary promotion to Complex
     pinv::Plan
-    ScaledPlan(p, scale) = new(p, scale)
+    ScaledPlan{T,P,N}(p, scale) where {T,P,N} = new(p, scale)
 end
-(::Type{ScaledPlan{T}}){T,P,N}(p::P, scale::N) = ScaledPlan{T,P,N}(p, scale)
-ScaledPlan{T}(p::Plan{T}, scale::Number) = ScaledPlan{T}(p, scale)
+ScaledPlan{T}(p::P, scale::N) where {T,P,N} = ScaledPlan{T,P,N}(p, scale)
+ScaledPlan(p::Plan{T}, scale::Number) where T = ScaledPlan{T}(p, scale)
 ScaledPlan(p::ScaledPlan, α::Number) = ScaledPlan(p.p, p.scale * α)
 
 size(p::ScaledPlan) = size(p.p)

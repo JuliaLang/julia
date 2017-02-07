@@ -6,7 +6,7 @@
 immutable SymTridiagonal{T} <: AbstractMatrix{T}
     dv::Vector{T}                        # diagonal
     ev::Vector{T}                        # subdiagonal
-    function SymTridiagonal(dv::Vector{T}, ev::Vector{T})
+    function SymTridiagonal{T}(dv::Vector{T}, ev::Vector{T}) where T
         if !(length(dv) - 1 <= length(ev) <= length(dv))
             throw(DimensionMismatch("subdiagonal has wrong length. Has length $(length(ev)), but should be either $(length(dv) - 1) or $(length(dv))."))
         end
@@ -46,9 +46,9 @@ julia> SymTridiagonal(dv, ev)
  ⋅  ⋅  9  4
 ```
 """
-SymTridiagonal{T}(dv::Vector{T}, ev::Vector{T}) = SymTridiagonal{T}(dv, ev)
+SymTridiagonal(dv::Vector{T}, ev::Vector{T}) where T = SymTridiagonal{T}(dv, ev)
 
-function SymTridiagonal{Td,Te}(dv::AbstractVector{Td}, ev::AbstractVector{Te})
+function SymTridiagonal(dv::AbstractVector{Td}, ev::AbstractVector{Te}) where {Td,Te}
     T = promote_type(Td,Te)
     SymTridiagonal(convert(Vector{T}, dv), convert(Vector{T}, ev))
 end

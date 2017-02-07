@@ -84,6 +84,17 @@ function kwarg_decl(m::Method, kwtype::DataType)
     return ()
 end
 
+function show_method_params(io::IO, tv)
+    if !isempty(tv)
+        print(io, " where ")
+        if length(tv) == 1
+            show(io, tv[1])
+        else
+            show_delim_array(io, tv, '{', ',', '}', false)
+        end
+    end
+end
+
 function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
@@ -107,9 +118,6 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
     else
         print(io, "(", d1[1], "::", d1[2], ")")
     end
-    if !isempty(tv)
-        show_delim_array(io, tv, '{', ',', '}', false)
-    end
     print(io, "(")
     join(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
                  ", ", ", ")
@@ -120,7 +128,9 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
             join(io, kwargs, ", ", ", ")
         end
     end
-    print(io, ") in ", m.module)
+    print(io, ")")
+    show_method_params(io, tv)
+    print(io, " in ", m.module)
     if line > 0
         print(io, " at ", file, ":", line)
     end

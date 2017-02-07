@@ -27,7 +27,10 @@ type RemoteChannel{T<:AbstractChannel} <: AbstractRemoteRef
     whence::Int
     id::Int
 
-    RemoteChannel(w::Int, rrid::RRID) = (r = new(w, rrid.whence, rrid.id); return test_existing_ref(r))
+    function RemoteChannel{T}(w::Int, rrid::RRID) where T<:AbstractChannel
+        r = new(w, rrid.whence, rrid.id)
+        return test_existing_ref(r)
+    end
 end
 
 function test_existing_ref(r::AbstractRemoteRef)
