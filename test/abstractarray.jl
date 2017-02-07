@@ -16,8 +16,8 @@ A = rand(5,4,3)
     @test checkbounds(Bool, A, 2, 2, 2, 1) == true  # extra indices
     @test checkbounds(Bool, A, 2, 2, 2, 2) == false
     @test checkbounds(Bool, A, 1, 1)  == true       # partial linear indexing (PLI)
-    # @test checkbounds(Bool, A, 1, 12) == true     # PLI TODO: Re-enable after partial linear indexing deprecation
-    # @test checkbounds(Bool, A, 5, 12) == true     # PLI TODO: Re-enable after partial linear indexing deprecation
+    # @test checkbounds(Bool, A, 1, 12) == false     # PLI TODO: Re-enable after partial linear indexing deprecation
+    # @test checkbounds(Bool, A, 5, 12) == false     # PLI TODO: Re-enable after partial linear indexing deprecation
     @test checkbounds(Bool, A, 1, 13) == false      # PLI
     # @test checkbounds(Bool, A, 6, 12) == false    # PLI TODO: Re-enable after partial linear indexing deprecation
 end
@@ -32,13 +32,13 @@ end
     @test checkbounds(Bool, A, CartesianIndex((5, 5, 3))) == false
     @test checkbounds(Bool, A, CartesianIndex((5, 4, 4))) == false
     @test checkbounds(Bool, A, CartesianIndex((1,))) == true
-    # @test checkbounds(Bool, A, CartesianIndex((60,))) == true     # TODO: Re-enable after partial linear indexing deprecation
+    # @test checkbounds(Bool, A, CartesianIndex((60,))) == false     # TODO: Re-enable after partial linear indexing deprecation
     @test checkbounds(Bool, A, CartesianIndex((61,))) == false
     @test checkbounds(Bool, A, CartesianIndex((2, 2, 2, 1,))) == true
     @test checkbounds(Bool, A, CartesianIndex((2, 2, 2, 2,))) == false
     @test checkbounds(Bool, A, CartesianIndex((1, 1,)))  == true
-    # @test checkbounds(Bool, A, CartesianIndex((1, 12,))) == true  # TODO: Re-enable after partial linear indexing deprecation
-    # @test checkbounds(Bool, A, CartesianIndex((5, 12,))) == true  # TODO: Re-enable after partial linear indexing deprecation
+    # @test checkbounds(Bool, A, CartesianIndex((1, 12,))) == false  # TODO: Re-enable after partial linear indexing deprecation
+    # @test checkbounds(Bool, A, CartesianIndex((5, 12,))) == false  # TODO: Re-enable after partial linear indexing deprecation
     @test checkbounds(Bool, A, CartesianIndex((1, 13,))) == false
     # @test checkbounds(Bool, A, CartesianIndex((6, 12,))) == false # TODO: Re-enable after partial linear indexing deprecation
 end
@@ -66,7 +66,8 @@ end
     @test checkbounds(Bool, A, 1:61) == false
     @test checkbounds(Bool, A, 2, 2, 2, 1:1) == true  # extra indices
     @test checkbounds(Bool, A, 2, 2, 2, 1:2) == false
-    # @test checkbounds(Bool, A, 1:5, 1:12) == true # TODO: Re-enable after partial linear indexing deprecation
+    @test checkbounds(Bool, A, 1:5, 1:4) == true
+    # @test checkbounds(Bool, A, 1:5, 1:12) == false # TODO: Re-enable after partial linear indexing deprecation
     @test checkbounds(Bool, A, 1:5, 1:13) == false
     # @test checkbounds(Bool, A, 1:6, 1:12) == false # TODO: Re-enable after partial linear indexing deprecation
 end
@@ -80,16 +81,16 @@ end
     @test checkbounds(Bool, A, trues(61)) == false
     @test checkbounds(Bool, A, 2, 2, 2, trues(1)) == true  # extra indices
     @test checkbounds(Bool, A, 2, 2, 2, trues(2)) == false
-    # @test checkbounds(Bool, A, trues(5), trues(12)) == true  # TODO: Re-enable after partial linear indexing deprecation
+    # @test checkbounds(Bool, A, trues(5), trues(12)) == false  # TODO: Re-enable after partial linear indexing deprecation
     @test checkbounds(Bool, A, trues(5), trues(13)) == false
     # @test checkbounds(Bool, A, trues(6), trues(12)) == false # TODO: Re-enable after partial linear indexing deprecation
     @test checkbounds(Bool, A, trues(5, 4, 3)) == true
     @test checkbounds(Bool, A, trues(5, 4, 2)) == false
     @test checkbounds(Bool, A, trues(5, 12)) == false
-    @test checkbounds(Bool, A, trues(1, 5), trues(1, 4, 1), trues(1, 1, 3)) == true
+    @test checkbounds(Bool, A, trues(1, 5), trues(1, 4, 1), trues(1, 1, 3)) == false
     @test checkbounds(Bool, A, trues(1, 5), trues(1, 4, 1), trues(1, 1, 2)) == false
     @test checkbounds(Bool, A, trues(1, 5), trues(1, 5, 1), trues(1, 1, 3)) == false
-    @test checkbounds(Bool, A, trues(1, 5), :, 2) == true
+    @test checkbounds(Bool, A, trues(1, 5), :, 2) == false
 end
 
 @testset "array of CartesianIndex" begin
@@ -383,12 +384,12 @@ function test_vector_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
         end
 
         idx1 = rand(1:size(A, 1), 3)
-        idx2 = rand(1:Base.trailingsize(A, 2), 4, 5)
+        idx2 = rand(1:size(A, 2), 4, 5)
         @testset "Test adding dimensions with matrices" begin
             @test B[idx1, idx2] == A[idx1, idx2] == reshape(A[idx1, vec(idx2)], 3, 4, 5) == reshape(B[idx1, vec(idx2)], 3, 4, 5)
             @test B[1, idx2] == A[1, idx2] == reshape(A[1, vec(idx2)], 4, 5) == reshape(B[1, vec(idx2)], 4, 5)
         end
-
+            # test removing dimensions with 0-d arrays
         @testset "test removing dimensions with 0-d arrays" begin
             idx0 = reshape([rand(1:size(A, 1))])
             @test B[idx0, idx2] == A[idx0, idx2] == reshape(A[idx0[], vec(idx2)], 4, 5) == reshape(B[idx0[], vec(idx2)], 4, 5)
@@ -400,7 +401,7 @@ function test_vector_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
             @test B[mask] == A[mask] == B[find(mask)] == A[find(mask)] == find(mask)
             @test B[vec(mask)] == A[vec(mask)] == find(mask)
             mask1 = bitrand(size(A, 1))
-            mask2 = bitrand(Base.trailingsize(A, 2))
+            mask2 = bitrand(size(A, 2))
             @test B[mask1, mask2] == A[mask1, mask2] == B[find(mask1), find(mask2)]
             @test B[mask1, 1] == A[mask1, 1] == find(mask1)
         end
@@ -776,7 +777,7 @@ end
 end
 
 @testset "isinteger and isreal" begin
-    @test isinteger(Diagonal(rand(1:5,5)))
+    @test all(isinteger, Diagonal(rand(1:5,5)))
     @test isreal(Diagonal(rand(5)))
 end
 
