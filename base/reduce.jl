@@ -357,29 +357,30 @@ sum(a::AbstractArray{Bool}) = countnz(a)
 """
     sum_kbn(A)
 
-Returns the sum of all array elements, using the Kahan-Babuska-Neumaier compensated
+Returns the sum of all elements of `A`, using the Kahan-Babuska-Neumaier compensated
 summation algorithm for additional accuracy.
 """
-function sum_kbn{T<:AbstractFloat}(A::AbstractArray{T})
+function sum_kbn(A)
+    T = _default_eltype(typeof(A))
     c = r_promote(+, zero(T)::T)
-    if isempty(A)
+    i = start(A)
+    if done(A, i)
         return c
     end
-    inds = linearindices(A)
-    s = A[first(inds)] + c
-    for i in first(inds)+1:last(inds)
-        @inbounds Ai = A[i]
+    Ai, i = next(A, i)
+    s = Ai - c
+    while !(done(A, i))
+        Ai, i = next(A, i)
         t = s + Ai
         if abs(s) >= abs(Ai)
-            c += ((s-t) + Ai)
+            c -= ((s-t) + Ai)
         else
-            c += ((Ai-t) + s)
+            c -= ((Ai-t) + s)
         end
         s = t
     end
-    s + c
+    s - c
 end
-
 
 ## prod
 """
