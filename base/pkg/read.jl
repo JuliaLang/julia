@@ -64,7 +64,7 @@ function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=availa
     LibGit2.isdirty(prepo) && return true
     LibGit2.isattached(prepo) && return true
     LibGit2.need_update(prepo)
-    if isnull(find("REQUIRE", LibGit2.GitIndex(repo)))
+    if isnull(find("REQUIRE", LibGit2.GitIndex(prepo)))
         isfile(pkg,"REQUIRE") && return true
     end
     head = string(LibGit2.head_oid(prepo))
