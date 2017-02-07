@@ -6,7 +6,7 @@ when applied to an argument tuple as a function. This much was already mentioned
 composite types were introduced. For example:
 
 ```jldoctest footype
-julia> type Foo
+julia> struct Foo
            bar
            baz
        end
@@ -88,7 +88,7 @@ the constraint that the first number is not greater than the second one. One cou
 like this:
 
 ```jldoctest pairtype
-julia> type OrderedPair
+julia> struct OrderedPair
            x::Real
            y::Real
            OrderedPair(x,y) = x > y ? error("out of order") : new(x,y)
@@ -108,17 +108,14 @@ Stacktrace:
  [1] OrderedPair(::Int64, ::Int64) at ./none:4
 ```
 
-You can still reach in and directly change the field values to violate this invariant, but messing
-around with an object's internals uninvited is considered poor form. You (or someone else) can
-also provide additional outer constructor methods at any later point, but once a type is declared,
-there is no way to add more inner constructor methods. Since outer constructor methods can only
-create objects by calling other constructor methods, ultimately, some inner constructor must be
-called to create an object. This guarantees that all objects of the declared type must come into
+If the type were declared `mutable`, you could reach in and directly change the field values to
+violate this invariant, but messing around with an object's internals uninvited is considered poor form.
+You (or someone else) can also provide additional outer constructor methods at any later point, but
+once a type is declared, there is no way to add more inner constructor methods. Since outer constructor
+methods can only create objects by calling other constructor methods, ultimately, some inner constructor
+must be called to create an object. This guarantees that all objects of the declared type must come into
 existence by a call to one of the inner constructor methods provided with the type, thereby giving
 some degree of enforcement of a type's invariants.
-
-Of course, if the type is declared as `immutable`, then its constructor-provided invariants are
-fully enforced. This is an important consideration when deciding whether a type should be immutable.
 
 If any inner constructor method is defined, no default constructor method is provided: it is presumed
 that you have supplied yourself with all the inner constructors you need. The default constructor
@@ -127,7 +124,7 @@ as parameters (constrained to be of the correct type, if the corresponding field
 and passes them to `new`, returning the resulting object:
 
 ```jldoctest
-julia> type Foo
+julia> struct Foo
            bar
            baz
            Foo(bar,baz) = new(bar,baz)
@@ -140,11 +137,11 @@ inner constructor method. The following two types are equivalent -- one with a d
 the other with an explicit constructor:
 
 ```jldoctest
-julia> type T1
+julia> struct T1
            x::Int64
        end
 
-julia> type T2
+julia> struct T2
            x::Int64
            T2(x) = new(x)
        end
@@ -175,7 +172,7 @@ or more generally, recursive data structures. Since the fundamental difficulty m
 obvious, let us briefly explain it. Consider the following recursive type declaration:
 
 ```jldoctest selfrefer
-julia> type SelfReferential
+julia> mutable struct SelfReferential
            obj::SelfReferential
        end
 
@@ -201,7 +198,7 @@ at defining the `SelfReferential` type, with a zero-argument inner constructor r
 having `obj` fields pointing to themselves:
 
 ```jldoctest selfrefer2
-julia> type SelfReferential
+julia> mutable struct SelfReferential
            obj::SelfReferential
            SelfReferential() = (x = new(); x.obj = x)
        end
@@ -227,7 +224,7 @@ Although it is generally a good idea to return a fully initialized object from a
 incompletely initialized objects can be returned:
 
 ```jldoctest incomplete
-julia> type Incomplete
+julia> mutable struct Incomplete
            xx
            Incomplete() = new()
        end
@@ -245,12 +242,12 @@ ERROR: UndefRefError: access to undefined reference
 
 This avoids the need to continually check for `null` values. However, not all object fields are
 references. Julia considers some types to be "plain data", meaning all of their data is self-contained
-and does not reference other objects. The plain data types consist of bits types (e.g. `Int`)
+and does not reference other objects. The plain data types consist of primitive types (e.g. `Int`)
 and immutable structs of other plain data types. The initial contents of a plain data type is
 undefined:
 
 ```julia
-julia> type HasPlain
+julia> struct HasPlain
            n::Int
            HasPlain() = new()
        end
@@ -264,7 +261,7 @@ Arrays of plain data types exhibit the same behavior.
 You can pass incomplete objects to other functions from inner constructors to delegate their completion:
 
 ```jldoctest
-julia> type Lazy
+julia> mutable struct Lazy
            xx
            Lazy(v) = complete_me(new(), v)
        end
@@ -282,7 +279,7 @@ given type parameters or with type parameters implied by the types of the argume
 constructor. Here are some examples:
 
 ```jldoctest parametric
-julia> type Point{T<:Real}
+julia> struct Point{T<:Real}
            x::T
            y::T
        end
@@ -331,7 +328,7 @@ outer `Point` constructor that takes pairs of real arguments, which must be of t
 This automatic provision of constructors is equivalent to the following explicit declaration:
 
 ```jldoctest parametric2
-julia> type Point{T<:Real}
+julia> struct Point{T<:Real}
            x::T
            y::T
            Point{T}(x,y) where T<:Real = new(x,y)
@@ -416,7 +413,7 @@ parametric composite type and its constructor methods. To that end, here is the 
 which implements Julia's [Rational Numbers](@ref):
 
 ```jldoctest rational
-julia> immutable OurRational{T<:Integer} <: Real
+julia> struct OurRational{T<:Integer} <: Real
            num::T
            den::T
            function OurRational{T}(num::T, den::T) where T<:Integer
@@ -462,7 +459,7 @@ julia> function //(x::Complex, y::Complex)
 // (generic function with 6 methods)
 ```
 
-The first line -- `immutable OurRational{T<:Integer} <: Real` -- declares that `OurRational` takes one
+The first line -- `struct OurRational{T<:Integer} <: Real` -- declares that `OurRational` takes one
 type parameter of an integer type, and is itself a real type. The field declarations `num::T`
 and `den::T` indicate that the data held in a `OurRational{T}` object are a pair of integers of type
 `T`, one representing the rational value's numerator and the other representing its denominator.
@@ -546,7 +543,7 @@ For example, say we define a type that stores a vector along with an accurate re
 its sum:
 
 ```jldoctest
-julia> type SummedArray{T<:Number,S<:Number}
+julia> struct SummedArray{T<:Number,S<:Number}
            data::Vector{T}
            sum::S
        end
@@ -562,7 +559,7 @@ Therefore we want to avoid an interface that allows the user to construct instan
 but inside the `type` definition block to suppress generation of default constructors:
 
 ```jldoctest
-julia> type SummedArray{T<:Number,S<:Number}
+julia> struct SummedArray{T<:Number,S<:Number}
            data::Vector{T}
            sum::S
            function SummedArray(a::Vector{T}) where T

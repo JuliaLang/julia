@@ -146,12 +146,12 @@ of a hierarchy of types, providing a context into which concrete types can fit. 
 for example, to easily program to any type that is an integer, without restricting an algorithm
 to a specific type of integer.
 
-Abstract types are declared using the `abstract` keyword. The general syntaxes for declaring an
+Abstract types are declared using the `abstract type` keyword. The general syntaxes for declaring an
 abstract type are:
 
 ```
-abstract «name»
-abstract «name» <: «supertype»
+abstract type «name» end
+abstract type «name» <: «supertype» end
 ```
 
 The `abstract` keyword introduces a new abstract type, whose name is given by `«name»`. This
@@ -167,12 +167,12 @@ opposite of `Any`: no object is an instance of `Union{}` and all types are super
 Let's consider some of the abstract types that make up Julia's numerical hierarchy:
 
 ```julia
-abstract Number
-abstract Real     <: Number
-abstract AbstractFloat <: Real
-abstract Integer  <: Real
-abstract Signed   <: Integer
-abstract Unsigned <: Integer
+abstract type Number end
+abstract type Real     <: Number end
+abstract type AbstractFloat <: Real end
+abstract type Integer  <: Real end
+abstract type Signed   <: Integer end
+abstract type Unsigned <: Integer end
 ```
 
 The `Number` type is a direct child type of `Any`, and `Real` is its child. In turn, `Real` has
@@ -231,42 +231,42 @@ a function whose arguments are abstract types, because it is recompiled for each
 concrete types with which it is invoked. (There may be a performance issue, however, in the case
 of function arguments that are containers of abstract types; see [Performance Tips](@ref man-performance-tips).)
 
-## Bits Types
+## Primitive Types
 
-A bits type is a concrete type whose data consists of plain old bits. Classic examples of bits
+A primitive type is a concrete type whose data consists of plain old bits. Classic examples of primitive
 types are integers and floating-point values. Unlike most languages, Julia lets you declare your
-own bits types, rather than providing only a fixed set of built-in bits types. In fact, the standard
-bits types are all defined in the language itself:
+own primitive types, rather than providing only a fixed set of built-in ones. In fact, the standard
+primitive types are all defined in the language itself:
 
 ```julia
-bitstype 16 Float16 <: AbstractFloat
-bitstype 32 Float32 <: AbstractFloat
-bitstype 64 Float64 <: AbstractFloat
+primitive type Float16 <: AbstractFloat 16 end
+primitive type Float32 <: AbstractFloat 32 end
+primitive type Float64 <: AbstractFloat 64 end
 
-bitstype 8  Bool <: Integer
-bitstype 32 Char
+primitive type Bool <: Integer 8 end
+primitive type Char 32 end
 
-bitstype 8  Int8     <: Signed
-bitstype 8  UInt8    <: Unsigned
-bitstype 16 Int16    <: Signed
-bitstype 16 UInt16   <: Unsigned
-bitstype 32 Int32    <: Signed
-bitstype 32 UInt32   <: Unsigned
-bitstype 64 Int64    <: Signed
-bitstype 64 UInt64   <: Unsigned
-bitstype 128 Int128  <: Signed
-bitstype 128 UInt128 <: Unsigned
+primitive type Int8    <: Signed   8 end
+primitive type UInt8   <: Unsigned 8 end
+primitive type Int16   <: Signed   16 end
+primitive type UInt16  <: Unsigned 16 end
+primitive type Int32   <: Signed   32 end
+primitive type UInt32  <: Unsigned 32 end
+primitive type Int64   <: Signed   64 end
+primitive type UInt64  <: Unsigned 64 end
+primitive type Int128  <: Signed   128 end
+primitive type UInt128 <: Unsigned 128 end
 ```
 
-The general syntaxes for declaration of a `bitstype` are:
+The general syntaxes for declaring a primitive type are:
 
 ```
-bitstype «bits» «name»
-bitstype «bits» «name» <: «supertype»
+primitive type «name» «bits» end
+primitive type «name» <: «supertype» «bits» end
 ```
 
 The number of bits indicates how much storage the type requires and the name gives the new type
-a name. A bits type can optionally be declared to be a subtype of some supertype. If a supertype
+a name. A primitive type can optionally be declared to be a subtype of some supertype. If a supertype
 is omitted, then the type defaults to having `Any` as its immediate supertype. The declaration
 of `Bool` above therefore means that a boolean value takes eight bits to store, and has `Integer`
 as its immediate supertype. Currently, only sizes that are multiples of 8 bits are supported.
@@ -284,8 +284,8 @@ be impossible to make `Bool` behave any differently than `Int8` or `UInt8`.
 
 ## Composite Types
 
-[Composite types](https://en.wikipedia.org/wiki/Composite_data_type) are called records, structures
-(`struct`s in C), or objects in various languages. A composite type is a collection of named fields,
+[Composite types](https://en.wikipedia.org/wiki/Composite_data_type) are called records, structs,
+or objects in various languages. A composite type is a collection of named fields,
 an instance of which can be treated as a single value. In many languages, composite types are
 the only kind of user-definable type, and they are by far the most commonly used user-defined
 type in Julia as well.
@@ -304,12 +304,11 @@ for more information on methods and dispatch). Thus, it would be inappropriate f
 named bags of methods "inside" each object ends up being a highly beneficial aspect of the language
 design.
 
-Since composite types are the most common form of user-defined concrete type, they are simply
-introduced with the `type` keyword followed by a block of field names, optionally annotated with
-types using the `::` operator:
+Composite types are introduced with the `struct` keyword followed by a block of field names, optionally
+annotated with types using the `::` operator:
 
 ```jldoctest footype
-julia> type Foo
+julia> struct Foo
            bar
            baz::Int
            qux::Float64
@@ -318,7 +317,7 @@ julia> type Foo
 
 Fields with no type annotation default to `Any`, and can accordingly hold any type of value.
 
-New objects of composite type `Foo` are created by applying the `Foo` type object like a function
+New objects of type `Foo` are created by applying the `Foo` type object like a function
 to values for its fields:
 
 ```jldoctest footype
@@ -369,20 +368,25 @@ julia> foo.qux
 1.5
 ```
 
-You can also change the values as one would expect:
+Composite objects declared with `struct` are *immutable*; they cannot be modified
+after construction. This may seem odd at first, but it has several advantages:
 
-```jldoctest footype
-julia> foo.qux = 2
-2
+  * It can be more efficient. Some structs can be packed efficiently into arrays, and in some cases the
+    compiler is able to avoid allocating immutable objects entirely.
+  * It is not possible to violate the invariants provided by the type's constructors.
+  * Code using immutable objects can be easier to reason about.
 
-julia> foo.bar = 1//2
-1//2
-```
+An immutable object might contain mutable objects, such as arrays, as fields. Those contained
+objects will remain mutable; only the fields of the immutable object itself cannot be changed
+to point to different objects.
+
+Where required, mutable composite objects can be declared with the keyword `mutable struct`, to be
+discussed in the next section.
 
 Composite types with no fields are singletons; there can be only one instance of such types:
 
 ```jldoctest
-julia> type NoFields
+julia> struct NoFields
        end
 
 julia> NoFields() === NoFields()
@@ -396,34 +400,33 @@ There is much more to say about how instances of composite types are created, bu
 depends on both [Parametric Types](@ref) and on [Methods](@ref), and is sufficiently important
 to be addressed in its own section: [Constructors](@ref man-constructors).
 
-## Immutable Composite Types
+## Mutable Composite Types
 
-It is also possible to define *immutable* composite types by using the keyword `immutable` instead
-of `type`:
+If a composite type is declared with `mutable struct` instead of `struct`, then instances of
+it can be modified:
 
-```julia
-immutable Complex
-    real::Float64
-    imag::Float64
-end
+```jldoctest bartype
+julia> mutable struct Bar
+           baz
+           qux::Float64
+       end
+
+julia> bar = Bar("Hello", 1.5);
+
+julia> bar.qux = 2.0
+2.0
+
+julia> bar.baz = 1//2
+1//2
 ```
 
-Such types behave much like other composite types, except that instances of them cannot be modified.
-Immutable types have several advantages:
-
-  * They are more efficient in some cases. Types like the `Complex` example above can be packed efficiently
-    into arrays, and in some cases the compiler is able to avoid allocating immutable objects entirely.
-  * It is not possible to violate the invariants provided by the type's constructors.
-  * Code using immutable objects can be easier to reason about.
-
-An immutable object might contain mutable objects, such as arrays, as fields. Those contained
-objects will remain mutable; only the fields of the immutable object itself cannot be changed
-to point to different objects.
-
-A useful way to think about immutable composites is that each instance is associated with specific
-field values -- the field values alone tell you everything about the object. In contrast, a mutable
-object is like a little container that might hold different values over time, and so is not identified
-with specific field values. In deciding whether to make a type immutable, ask whether two instances
+In order to support mutation, such objects are generally allocated on the heap, and have
+stable memory addresses.
+A mutable object is like a little container that might hold different values over time,
+and so can only be reliably identified with its address.
+In contrast, an instance of an immutable type is associated with specific field values ---
+the field values alone tell you everything about the object.
+In deciding whether to make a type mutable, ask whether two instances
 with the same field values would be considered identical, or if they might need to change independently
 over time. If they would be considered identical, the type should probably be immutable.
 
@@ -517,7 +520,7 @@ abstract types, and finally parametric bits types.
 Type parameters are introduced immediately after the type name, surrounded by curly braces:
 
 ```jldoctest pointtype
-julia> type Point{T}
+julia> struct Point{T}
            x::T
            y::T
        end
@@ -690,7 +693,7 @@ Parametric abstract type declarations declare a collection of abstract types, in
 way:
 
 ```jldoctest pointytype
-julia> abstract Pointy{T}
+julia> abstract type Pointy{T} end
 ```
 
 With this declaration, `Pointy{T}` is a distinct abstract type for each type or integer value
@@ -730,7 +733,7 @@ parametric abstract types serve the same purpose with respect to parametric comp
 could, for example, have declared `Point{T}` to be a subtype of `Pointy{T}` as follows:
 
 ```jldoctest pointytype
-julia> type Point{T} <: Pointy{T}
+julia> struct Point{T} <: Pointy{T}
            x::T
            y::T
        end
@@ -764,7 +767,7 @@ implementation that only requires a single coordinate because the point is on th
 *x = y*:
 
 ```jldoctest pointytype
-julia> type DiagPoint{T} <: Pointy{T}
+julia> struct DiagPoint{T} <: Pointy{T}
            x::T
        end
 ```
@@ -779,7 +782,7 @@ There are situations where it may not make sense for type parameters to range fr
 possible types. In such situations, one can constrain the range of `T` like so:
 
 ```jldoctest realpointytype
-julia> abstract Pointy{T<:Real}
+julia> abstract type Pointy{T<:Real} end
 ```
 
 With such a declaration, it is acceptable to use any type that is a subtype of `Real` in place
@@ -802,7 +805,7 @@ ERROR: TypeError: Pointy: in T, expected T<:Real, got Int64
 Type parameters for parametric composite types can be restricted in the same manner:
 
 ```julia
-type Point{T<:Real} <: Pointy{T}
+struct Point{T<:Real} <: Pointy{T}
     x::T
     y::T
 end
@@ -813,7 +816,7 @@ the actual definition of Julia's `Rational` immutable type (except that we omit 
 here for simplicity), representing an exact ratio of integers:
 
 ```julia
-immutable Rational{T<:Integer} <: Real
+struct Rational{T<:Integer} <: Real
     num::T
     den::T
 end
@@ -831,7 +834,7 @@ to a parameterized immutable type where each parameter is the type of one field.
 a 2-element tuple type resembles the following immutable type:
 
 ```julia
-immutable Tuple2{A,B}
+struct Tuple2{A,B}
     a::A
     b::B
 end
@@ -953,17 +956,17 @@ the term "singleton type" refers to a type whose only instance is a single value
 applies to Julia's singleton types, but with that caveat that only type objects have singleton
 types.
 
-### Parametric Bits Types
+### Parametric Primitive Types
 
-Bits types can also be declared parametrically. For example, pointers are represented as boxed
-bits types which would be declared in Julia like this:
+Primitive types can also be declared parametrically. For example, pointers are represented as
+primitive types which would be declared in Julia like this:
 
 ```julia
 # 32-bit system:
-bitstype 32 Ptr{T}
+primitive type Ptr{T} 32 end
 
 # 64-bit system:
-bitstype 64 Ptr{T}
+primitive type Ptr{T} 64 end
 ```
 
 The slightly odd feature of these declarations as compared to typical parametric composite types,
@@ -1159,7 +1162,7 @@ overloading the [`show()`](@ref) function.  For example, suppose we define a typ
 complex numbers in polar form:
 
 ```jldoctest polartype
-julia> type Polar{T<:Real} <: Number
+julia> struct Polar{T<:Real} <: Number
            r::T
            Θ::T
        end
@@ -1250,7 +1253,7 @@ elaborate hierarchy.
 `Val` is defined as:
 
 ```jldoctest valtype
-julia> immutable Val{T}
+julia> struct Val{T}
        end
 ```
 

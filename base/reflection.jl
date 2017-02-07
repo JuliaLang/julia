@@ -198,7 +198,7 @@ datatype_fielddesc_type(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefErro
 """
     isimmutable(v)
 
-Return `true` iff value `v` is immutable.  See [Immutable Composite Types](@ref)
+Return `true` iff value `v` is immutable.  See [Mutable Composite Types](@ref)
 for a discussion of immutability. Note that this function works on values, so if you give it
 a type, it will tell you that a value of `DataType` is mutable.
 """

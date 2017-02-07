@@ -154,7 +154,7 @@ uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
 
 ## Use naming conventions consistent with Julia's `base/`
 
-  * modules and type names use capitalization and camel case: `module SparseArrays`, `immutable UnitRange`.
+  * modules and type names use capitalization and camel case: `module SparseArrays`, `struct UnitRange`.
   * functions are lowercase ([`maximum()`](@ref), [`convert()`](@ref)) and, when readable, with multiple
     words squashed together ([`isequal()`](@ref), [`haskey()`](@ref)). When necessary, use underscores
     as word separators. Underscores are also used to indicate a combination of concepts ([`remotecall_fetch()`](@ref)
@@ -225,7 +225,7 @@ it.
 The preferred style is to use instances by default, and only add methods involving `Type{MyType}`
 later if they become necessary to solve some problem.
 
-If a type is effectively an enumeration, it should be defined as a single (ideally `immutable`)
+If a type is effectively an enumeration, it should be defined as a single (ideally immutable struct or primitive)
 type, with the enumeration values being instances of it. Constructors and conversions can check
 whether values are valid. This design is preferred over making the enumeration an abstract type,
 with the "values" as subtypes.
