@@ -15,7 +15,7 @@ type DCTPlan{T<:fftwNumber,K,inplace} <: Plan{T}
     nrm::Float64 # normalization factor
     region::Dims # dimensions being transformed
     pinv::DCTPlan{T}
-    DCTPlan(plan,r,nrm,region) = new(plan,r,nrm,region)
+    DCTPlan{T,K,inplace}(plan,r,nrm,region) where {T<:fftwNumber,K,inplace} = new(plan,r,nrm,region)
 end
 
 size(p::DCTPlan) = size(p.plan)

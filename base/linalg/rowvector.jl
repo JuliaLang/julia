@@ -15,7 +15,7 @@ scalar, but will otherwise behave similarly.
 """
 immutable RowVector{T,V<:AbstractVector} <: AbstractMatrix{T}
     vec::V
-    function RowVector(v::V)
+    function RowVector{T,V}(v::V) where V<:AbstractVector where T
         check_types(T,v)
         new(v)
     end
@@ -30,16 +30,16 @@ end
 @inline transpose_type{T}(::Type{T}) = promote_op(transpose, T)
 
 # Constructors that take a vector
-@inline RowVector{T}(vec::AbstractVector{T}) = RowVector{transpose_type(T),typeof(vec)}(vec)
-@inline (::Type{RowVector{T}}){T}(vec::AbstractVector{T}) = RowVector{T,typeof(vec)}(vec)
+@inline RowVector(vec::AbstractVector{T}) where T = RowVector{transpose_type(T),typeof(vec)}(vec)
+@inline RowVector{T}(vec::AbstractVector{T}) where T = RowVector{T,typeof(vec)}(vec)
 
 # Constructors that take a size and default to Array
-@inline (::Type{RowVector{T}}){T}(n::Int) = RowVector{T}(Vector{transpose_type(T)}(n))
-@inline (::Type{RowVector{T}}){T}(n1::Int, n2::Int) = n1 == 1 ?
+@inline RowVector{T}(n::Int) where T = RowVector{T}(Vector{transpose_type(T)}(n))
+@inline RowVector{T}(n1::Int, n2::Int) where T = n1 == 1 ?
     RowVector{T}(Vector{transpose_type(T)}(n2)) :
     error("RowVector expects 1×N size, got ($n1,$n2)")
-@inline (::Type{RowVector{T}}){T}(n::Tuple{Int}) = RowVector{T}(Vector{transpose_type(T)}(n[1]))
-@inline (::Type{RowVector{T}}){T}(n::Tuple{Int,Int}) = n[1] == 1 ?
+@inline RowVector{T}(n::Tuple{Int}) where T = RowVector{T}(Vector{transpose_type(T)}(n[1]))
+@inline RowVector{T}(n::Tuple{Int,Int}) where T = n[1] == 1 ?
     RowVector{T}(Vector{transpose_type(T)}(n[2])) :
     error("RowVector expects 1×N size, got $n")
 

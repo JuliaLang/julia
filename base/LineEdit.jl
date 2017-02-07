@@ -1014,10 +1014,10 @@ type HistoryPrompt{T<:HistoryProvider} <: TextInterface
     hp::T
     complete
     keymap_dict::Dict{Char,Any}
-    HistoryPrompt(hp) = new(hp, EmptyCompletionProvider())
+    HistoryPrompt{T}(hp) where T<:HistoryProvider = new(hp, EmptyCompletionProvider())
 end
 
-HistoryPrompt{T<:HistoryProvider}(hp::T) = HistoryPrompt{T}(hp)
+HistoryPrompt(hp::T) where T<:HistoryProvider = HistoryPrompt{T}(hp)
 init_state(terminal, p::HistoryPrompt) = SearchState(terminal, p, true, IOBuffer(), IOBuffer())
 
 type PrefixSearchState <: ModeState
@@ -1054,10 +1054,11 @@ type PrefixHistoryPrompt{T<:HistoryProvider} <: TextInterface
     parent_prompt::Prompt
     complete
     keymap_dict::Dict{Char,Any}
-    PrefixHistoryPrompt(hp, parent_prompt) = new(hp, parent_prompt, EmptyCompletionProvider())
+    PrefixHistoryPrompt{T}(hp, parent_prompt) where T<:HistoryProvider =
+        new(hp, parent_prompt, EmptyCompletionProvider())
 end
 
-PrefixHistoryPrompt{T<:HistoryProvider}(hp::T, parent_prompt) = PrefixHistoryPrompt{T}(hp, parent_prompt)
+PrefixHistoryPrompt(hp::T, parent_prompt) where T<:HistoryProvider = PrefixHistoryPrompt{T}(hp, parent_prompt)
 init_state(terminal, p::PrefixHistoryPrompt) = PrefixSearchState(terminal, p, "", IOBuffer())
 
 write_prompt(terminal, s::PrefixSearchState) = write_prompt(terminal, s.histprompt.parent_prompt)

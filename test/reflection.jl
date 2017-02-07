@@ -282,7 +282,7 @@ let ex = :(a + b)
 end
 foo13825{T, N}(::Array{T,N}, ::Array, ::Vector) = nothing
 @test startswith(string(first(methods(foo13825))),
-                 "foo13825{T, N}(::Array{T,N}, ::Array, ::Array{T,1} where T)")
+                 "foo13825(::Array{T,N}, ::Array, ::Array{T,1} where T)")
 
 type TLayout
     x::Int8

@@ -8,7 +8,7 @@ export permutedims, PermutedDimsArray
 immutable PermutedDimsArray{T,N,perm,iperm,AA<:AbstractArray} <: AbstractArray{T,N}
     parent::AA
 
-    function PermutedDimsArray(data::AA)
+    function PermutedDimsArray{T,N,perm,iperm,AA}(data::AA) where {T,N,perm,iperm,AA<:AbstractArray}
         (isa(perm, NTuple{N,Int}) && isa(iperm, NTuple{N,Int})) || error("perm and iperm must both be NTuple{$N,Int}")
         isperm(perm) || throw(ArgumentError(string(perm, " is not a valid permutation of dimensions 1:", N)))
         all(map(d->iperm[perm[d]]==d, 1:N)) || throw(ArgumentError(string(perm, " and ", iperm, " must be inverses")))
@@ -39,7 +39,7 @@ julia> B[3,1,2] == A[1,2,3]
 true
 ```
 """
-function PermutedDimsArray{T,N}(data::AbstractArray{T,N}, perm)
+function PermutedDimsArray(data::AbstractArray{T,N}, perm) where {T,N}
     length(perm) == N || throw(ArgumentError(string(perm, " is not a valid permutation of dimensions 1:", N)))
     iperm = invperm(perm)
     PermutedDimsArray{T,N,(perm...,),(iperm...,),typeof(data)}(data)

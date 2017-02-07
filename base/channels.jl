@@ -29,14 +29,14 @@ type Channel{T} <: AbstractChannel
     # Used when sz_max == 0, i.e., an unbuffered channel.
     takers::Array{Condition}
 
-    function Channel(sz::Float64)
+    function Channel{T}(sz::Float64) where T
         if sz == Inf
             Channel{T}(typemax(Int))
         else
             Channel{T}(convert(Int, sz))
         end
     end
-    function Channel(sz::Integer)
+    function Channel{T}(sz::Integer) where T
         if sz < 0
             throw(ArgumentError("Channel size must be either 0, a positive integer or Inf"))
         end
@@ -44,7 +44,7 @@ type Channel{T} <: AbstractChannel
     end
 
     # deprecated empty constructor
-    function Channel()
+    function Channel{T}() where T
         depwarn(string("The empty constructor Channel() is deprecated. ",
                         "The channel size needs to be specified explictly. ",
                         "Defaulting to Channel{$T}(32)."), :Channel)
@@ -364,7 +364,7 @@ show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(c.sz_max),sz_curr:$(
 type ChannelIterState{T}
     hasval::Bool
     val::T
-    ChannelIterState(x) = new(x)
+    ChannelIterState{T}(has::Bool) where T = new(has)
 end
 
 start{T}(c::Channel{T}) = ChannelIterState{T}(false)

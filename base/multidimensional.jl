@@ -15,16 +15,16 @@ module IteratorsMD
     # CartesianIndex
     immutable CartesianIndex{N} <: AbstractCartesianIndex{N}
         I::NTuple{N,Int}
-        CartesianIndex(index::NTuple{N,Integer}) = new(index)
+        CartesianIndex{N}(index::NTuple{N,Integer}) where N = new(index)
     end
 
-    CartesianIndex{N}(index::NTuple{N,Integer}) = CartesianIndex{N}(index)
-    (::Type{CartesianIndex})(index::Integer...) = CartesianIndex(index)
-    (::Type{CartesianIndex{N}}){N}(index::Vararg{Integer,N}) = CartesianIndex{N}(index)
+    CartesianIndex(index::NTuple{N,Integer}) where N = CartesianIndex{N}(index)
+    CartesianIndex(index::Integer...) = CartesianIndex(index)
+    CartesianIndex{N}(index::Vararg{Integer,N}) where N = CartesianIndex{N}(index)
     # Allow passing tuples smaller than N
-    (::Type{CartesianIndex{N}}){N}(index::Tuple) = CartesianIndex{N}(fill_to_length(index, 1, Val{N}))
-    (::Type{CartesianIndex{N}}){N}(index::Integer...) = CartesianIndex{N}(index)
-    (::Type{CartesianIndex{N}}){N}() = CartesianIndex{N}(())
+    CartesianIndex{N}(index::Tuple) where N = CartesianIndex{N}(fill_to_length(index, 1, Val{N}))
+    CartesianIndex{N}(index::Integer...) where N = CartesianIndex{N}(index)
+    CartesianIndex{N}() where N = CartesianIndex{N}(())
     # Un-nest passed CartesianIndexes
     CartesianIndex(index::Union{Integer, CartesianIndex}...) = CartesianIndex(flatten(index))
     flatten(I::Tuple{}) = I
@@ -276,10 +276,10 @@ wrapped with `LogicalIndex` upon calling `to_indices`.
 immutable LogicalIndex{T, A<:AbstractArray{Bool}} <: AbstractVector{T}
     mask::A
     sum::Int
-    LogicalIndex(mask::A) = new(mask, countnz(mask))
+    LogicalIndex{T,A}(mask::A) where {T,A<:AbstractArray{Bool}} = new(mask, countnz(mask))
 end
 LogicalIndex(mask::AbstractVector{Bool}) = LogicalIndex{Int, typeof(mask)}(mask)
-LogicalIndex{N}(mask::AbstractArray{Bool, N}) = LogicalIndex{CartesianIndex{N}, typeof(mask)}(mask)
+LogicalIndex(mask::AbstractArray{Bool, N}) where N = LogicalIndex{CartesianIndex{N}, typeof(mask)}(mask)
 (::Type{LogicalIndex{Int}})(mask::AbstractArray) = LogicalIndex{Int, typeof(mask)}(mask)
 size(L::LogicalIndex) = (L.sum,)
 length(L::LogicalIndex) = L.sum

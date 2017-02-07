@@ -152,6 +152,6 @@ immutable Nullable{T}
     hasvalue::Bool
     value::T
 
-    Nullable() = new(false)
-    Nullable(value::T, hasvalue::Bool=true) = new(hasvalue, value)
+    Nullable{T}() where T = new(false)
+    Nullable{T}(value::T, hasvalue::Bool=true) where T = new(hasvalue, value)
 end

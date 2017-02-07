@@ -269,9 +269,9 @@ Void() = nothing
 
 immutable VecElement{T}
     value::T
-    VecElement(value::T) = new(value) # disable converting constructor in Core
+    VecElement{T}(value::T) where T = new(value) # disable converting constructor in Core
 end
-VecElement{T}(arg::T) = VecElement{T}(arg)
+VecElement(arg::T) where T = VecElement{T}(arg)
 
 # used by lowering of splicing unquote
 splicedexpr(hd::Symbol, args::Array{Any,1}) = (e=Expr(hd); e.args=args; e)

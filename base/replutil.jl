@@ -458,9 +458,6 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
             if !isa(tv,SimpleVector)
                 tv = Any[tv]
             end
-            if !isempty(tv)
-                show_delim_array(buf, tv, '{', ',', '}', false)
-            end
             print(buf, "(")
             t_i = copy(arg_types_param)
             right_matches = 0
@@ -540,6 +537,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                     length(kwords) > 0 && print(buf, "; ", join(kwords, ", "))
                 end
                 print(buf, ")")
+                show_method_params(buf, tv)
                 print(buf, " at ", method.file, ":", method.line)
                 if !isempty(kwargs)
                     unexpected = Symbol[]

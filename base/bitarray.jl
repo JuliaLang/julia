@@ -8,7 +8,7 @@ type BitArray{N} <: DenseArray{Bool, N}
     chunks::Vector{UInt64}
     len::Int
     dims::NTuple{N,Int}
-    function BitArray(dims::Vararg{Int,N})
+    function BitArray{N}(dims::Vararg{Int,N}) where N
         n = 1
         i = 1
         for d in dims
@@ -49,7 +49,7 @@ julia> BitArray((3, 1))
 ```
 """
 BitArray(dims::Integer...) = BitArray(map(Int,dims))
-BitArray{N}(dims::NTuple{N,Int}) = BitArray{N}(dims...)
+BitArray(dims::NTuple{N,Int}) where N = BitArray{N}(dims...)
 
 typealias BitVector BitArray{1}
 typealias BitMatrix BitArray{2}

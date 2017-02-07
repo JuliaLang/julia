@@ -288,10 +288,10 @@ type SVDOperator{T<:BlasFloat,S} <: AbstractArray{T, 2}
     X::S
     m::Int
     n::Int
-    SVDOperator(X::AbstractMatrix) = new(X, size(X, 1), size(X, 2))
+    SVDOperator{T,S}(X::AbstractMatrix) where {T<:BlasFloat,S} = new(X, size(X, 1), size(X, 2))
 end
 
-function SVDOperator{T}(A::AbstractMatrix{T})
+function SVDOperator(A::AbstractMatrix{T}) where T
     Tnew = typeof(zero(T)/sqrt(one(T)))
     Anew = convert(AbstractMatrix{Tnew}, A)
     SVDOperator{Tnew,typeof(Anew)}(Anew)
