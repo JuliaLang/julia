@@ -454,6 +454,16 @@ mktempdir() do dir
                 close(repo)
             end
         end
+        @testset "trees" begin
+            repo = LibGit2.GitRepo(cache_repo)
+            try
+                @test_throws LibGit2.Error.GitError LibGit2.GitTree(repo, "HEAD")
+                @test isa(LibGit2.GitTree(repo, "HEAD^{tree}"), LibGit2.GitTree)
+                @test isa(LibGit2.GitObject(repo, "HEAD^{tree}"), LibGit2.GitTree)
+            finally
+                close(repo)
+            end
+        end
 
         @testset "diff" begin
             repo = LibGit2.GitRepo(cache_repo)
