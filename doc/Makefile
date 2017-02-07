@@ -32,32 +32,32 @@ cleanall: clean
 html: deps
 	@echo "Building HTML documentation."
 ifneq ($(OS),WINNT)
-	$(JULIA_EXECUTABLE) make.jl -- deploy
+	$(JULIA_EXECUTABLE) $(SRCDIR)/make.jl -- deploy
 else
 # work around issue #11727, windows output redirection breaking on buildbot
-	$(JULIA_EXECUTABLE) make.jl -- deploy > docbuild.log 2>&1
+	$(JULIA_EXECUTABLE) $(SRCDIR)/make.jl -- deploy > docbuild.log 2>&1
 	@cat docbuild.log
 endif
 	@echo "Build finished. The HTML pages are in _build/html."
 
 pdf: deps
 	@echo "Building PDF documentation."
-	$(JULIA_EXECUTABLE) make.jl -- pdf
+	$(JULIA_EXECUTABLE) $(SRCDIR)/make.jl -- pdf
 	@echo "Build finished."
 
 linkcheck: deps
 	@echo "Checking external documentation links."
-	$(JULIA_EXECUTABLE) make.jl -- linkcheck
+	$(JULIA_EXECUTABLE) $(SRCDIR)/make.jl -- linkcheck
 	@echo "Checks finished."
 
 doctest: deps
 	@echo "Running all embedded 'doctests'."
-	$(JULIA_EXECUTABLE) --color=yes make.jl -- doctest
+	$(JULIA_EXECUTABLE) --color=yes $(SRCDIR)/make.jl -- doctest
 	@echo "Checks finished."
 
 check: deps
 	@echo "Running all embedded 'doctests' and checking external links."
-	$(JULIA_EXECUTABLE) --color=yes make.jl -- doctest linkcheck
+	$(JULIA_EXECUTABLE) --color=yes $(SRCDIR)/make.jl -- doctest linkcheck
 	@echo "Checks finished."
 
 .PHONY: deps
