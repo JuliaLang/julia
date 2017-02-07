@@ -128,3 +128,61 @@ function set!(c::GitConfig, name::AbstractString, value::Int64)
     @check ccall((:git_config_set_int64, :libgit2), Cint,
                   (Ptr{Void}, Cstring, Cintmax_t), c.ptr, name, value)
 end
+
+function GitConfigIter(cfg::GitConfig)
+    ci_ptr = Ref{Ptr{Void}}(C_NULL)
+    @check ccall((:git_config_iterator_new, :libgit2), Cint,
+                  (Ptr{Ptr{Void}}, Ptr{Void}), ci_ptr, cfg.ptr)
+    return GitConfigIter(ci_ptr[])
+end
+
+function GitConfigIter(cfg::GitConfig, name::AbstractString)
+    ci_ptr = Ref{Ptr{Void}}(C_NULL)
+    @check ccall((:git_config_multivar_iterator_new, :libgit2), Cint,
+                  (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring),
+                  ci_ptr, cfg.ptr, name, C_NULL)
+    return GitConfigIter(ci_ptr[])
+end
+
+function GitConfigIter(cfg::GitConfig, name::AbstractString, value::Regex)
+    ci_ptr = Ref{Ptr{Void}}(C_NULL)
+    @check ccall((:git_config_multivar_iterator_new, :libgit2), Cint,
+                  (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring),
+                  ci_ptr, cfg.ptr, name, value.pattern)
+    return GitConfigIter(ci_ptr[])
+end
+
+function GitConfigIter(cfg::GitConfig, name::Regex)
+    ci_ptr = Ref{Ptr{Void}}(C_NULL)
+    @check ccall((:git_config_iterator_glob_new, :libgit2), Cint,
+                  (Ptr{Ptr{Void}}, Ptr{Void}, Cstring),
+                  ci_ptr, cfg.ptr, name.pattern)
+    return GitConfigIter(ci_ptr[])
+end
+
+function Base.start(ci::GitConfigIter)
+    entry_ptr_ptr = Ref{Ptr{ConfigEntry}}(C_NULL)
+    err = ccall((:git_config_next, :libgit2), Cint,
+                 (Ptr{Ptr{ConfigEntry}}, Ptr{Void}), entry_ptr_ptr, ci.ptr)
+    if err == Int(Error.GIT_OK)
+        unsafe_load(entry_ptr_ptr[])
+    else
+        nothing
+    end
+end
+
+Base.done(ci::GitConfigIter, state) = state === nothing
+
+function Base.next(ci::GitConfigIter, state)
+    entry = state
+    entry_ptr_ptr = Ref{Ptr{ConfigEntry}}(C_NULL)
+    err = ccall((:git_config_next, :libgit2), Cint,
+                 (Ptr{Ptr{ConfigEntry}}, Ptr{Void}), entry_ptr_ptr, ci.ptr)
+    if err == Int(Error.GIT_OK)
+        (entry, unsafe_load(entry_ptr_ptr[]))
+    else
+        (entry, nothing)
+    end
+end
+
+Base.iteratorsize(::Type{GitConfigIter}) = Base.SizeUnknown()
