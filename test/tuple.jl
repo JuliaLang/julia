@@ -231,3 +231,8 @@ end
 @test Tuple{Int,Vararg{Any}}(Float64[1,2,3]) === (1, 2.0, 3.0)
 @test Tuple(ones(5)) === (1.0,1.0,1.0,1.0,1.0)
 @test_throws MethodError convert(Tuple, ones(5))
+
+@testset "Multidimensional indexing (issue #20453)" begin
+    @test_throws MethodError (1,)[]
+    @test_throws MethodError (1,1,1)[1,1]
+end
