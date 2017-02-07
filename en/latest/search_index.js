@@ -6109,7 +6109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.maximum",
     "category": "Method",
-    "text": "maximum(A, dims)\n\nCompute the maximum value of an array over the given dimensions. See also the max(a,b) function to take the maximum of two or more arguments, which can be applied elementwise to arrays via max.(a,b).\n\n\n\n"
+    "text": "maximum(A, dims)\n\nCompute the maximum value of an array over the given dimensions. See also the max(a,b) function to take the maximum of two or more arguments, which can be applied elementwise to arrays via max.(a,b).\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> maximum(A, 1)\n1×2 Array{Int64,2}:\n 3  4\n\njulia> maximum(A, 2)\n2×1 Array{Int64,2}:\n 2\n 4\n\n\n\n"
 },
 
 {
@@ -6117,7 +6117,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.maximum!",
     "category": "Function",
-    "text": "maximum!(r, A)\n\nCompute the maximum value of A over the singleton dimensions of r, and write results to r.\n\n\n\n"
+    "text": "maximum!(r, A)\n\nCompute the maximum value of A over the singleton dimensions of r, and write results to r.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> maximum!([1; 1], A)\n2-element Array{Int64,1}:\n 2\n 4\n\njulia> maximum!([1 1], A)\n1×2 Array{Int64,2}:\n 3  4\n\n\n\n"
 },
 
 {
@@ -6141,7 +6141,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.minimum!",
     "category": "Function",
-    "text": "minimum!(r, A)\n\nCompute the minimum value of A over the singleton dimensions of r, and write results to r.\n\n\n\n"
+    "text": "minimum!(r, A)\n\nCompute the minimum value of A over the singleton dimensions of r, and write results to r.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> minimum!([1; 1], A)\n2-element Array{Int64,1}:\n 1\n 3\n\njulia> minimum!([1 1], A)\n1×2 Array{Int64,2}:\n 1  2\n\n\n\n"
 },
 
 {
@@ -6189,7 +6189,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.findmax",
     "category": "Method",
-    "text": "findmax(A, region) -> (maxval, index)\n\nFor an array input, returns the value and index of the maximum over the given region.\n\n\n\n"
+    "text": "findmax(A, region) -> (maxval, index)\n\nFor an array input, returns the value and index of the maximum over the given region.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> findmax(A,1)\n([3 4], [2 4])\n\njulia> findmax(A,2)\n([2; 4], [3; 4])\n\n\n\n"
 },
 
 {
@@ -6205,7 +6205,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.findmin",
     "category": "Method",
-    "text": "findmin(A, region) -> (minval, index)\n\nFor an array input, returns the value and index of the minimum over the given region.\n\n\n\n"
+    "text": "findmin(A, region) -> (minval, index)\n\nFor an array input, returns the value and index of the minimum over the given region.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> findmin(A, 1)\n([1 2], [1 3])\n\njulia> findmin(A, 2)\n([1; 3], [1; 2])\n\n\n\n"
 },
 
 {
@@ -6237,7 +6237,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.sum!",
     "category": "Function",
-    "text": "sum!(r, A)\n\nSum elements of A over the singleton dimensions of r, and write results to r.\n\n\n\n"
+    "text": "sum!(r, A)\n\nSum elements of A over the singleton dimensions of r, and write results to r.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> sum!([1; 1], A)\n2-element Array{Int64,1}:\n 3\n 7\n\njulia> sum!([1 1], A)\n1×2 Array{Int64,2}:\n 4  6\n\n\n\n"
 },
 
 {
@@ -6253,7 +6253,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.prod!",
     "category": "Function",
-    "text": "prod!(r, A)\n\nMultiply elements of A over the singleton dimensions of r, and write results to r.\n\n\n\n"
+    "text": "prod!(r, A)\n\nMultiply elements of A over the singleton dimensions of r, and write results to r.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> prod!([1; 1], A)\n2-element Array{Int64,1}:\n  2\n 12\n\njulia> prod!([1 1], A)\n1×2 Array{Int64,2}:\n 3  8\n\n\n\n"
 },
 
 {
@@ -6269,7 +6269,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.any",
     "category": "Method",
-    "text": "any(A, dims)\n\nTest whether any values along the given dimensions of an array are true.\n\n\n\n"
+    "text": "any(A, dims)\n\nTest whether any values along the given dimensions of an array are true.\n\njulia> A = [true false; true false]\n2×2 Array{Bool,2}:\n true  false\n true  false\n\njulia> any(A, 1)\n1×2 Array{Bool,2}:\n true  false\n\njulia> any(A, 2)\n2×1 Array{Bool,2}:\n true\n true\n\n\n\n"
 },
 
 {
@@ -6277,7 +6277,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.any!",
     "category": "Function",
-    "text": "any!(r, A)\n\nTest whether any values in A along the singleton dimensions of r are true, and write results to r.\n\n\n\n"
+    "text": "any!(r, A)\n\nTest whether any values in A along the singleton dimensions of r are true, and write results to r.\n\njulia> A = [true false; true false]\n2×2 Array{Bool,2}:\n true  false\n true  false\n\njulia> any!([1; 1], A)\n2-element Array{Int64,1}:\n 1\n 1\n\njulia> any!([1 1], A)\n1×2 Array{Int64,2}:\n 1  0\n\n\n\n"
 },
 
 {
@@ -6301,7 +6301,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.all!",
     "category": "Function",
-    "text": "all!(r, A)\n\nTest whether all values in A along the singleton dimensions of r are true, and write results to r.\n\n\n\n"
+    "text": "all!(r, A)\n\nTest whether all values in A along the singleton dimensions of r are true, and write results to r.\n\njulia> A = [true false; true false]\n2×2 Array{Bool,2}:\n true  false\n true  false\n\njulia> all!([1; 1], A)\n2-element Array{Int64,1}:\n 0\n 0\n\njulia> all!([1 1], A)\n1×2 Array{Int64,2}:\n 1  0\n\n\n\n"
 },
 
 {
@@ -12549,7 +12549,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.lufact",
     "category": "Function",
-    "text": "lufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ncond ✓ \ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\nlufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\n\n\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "lufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\n\n\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nlufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ncond ✓ \ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\n"
 },
 
 {
