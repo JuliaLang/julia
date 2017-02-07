@@ -754,10 +754,10 @@ sparse matrices instead, you can use the same names with an `sp` prefix:
 
 ```jldoctest
 julia> spzeros(3,5)
-3×5 sparse matrix with 0 Float64 stored entries
+3×5 SparseMatrixCSC{Float64,Int64} with 0 stored entries
 
 julia> speye(3,5)
-3×5 sparse matrix with 3 Float64 stored entries:
+3×5 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
   [1, 1]  =  1.0
   [2, 2]  =  1.0
   [3, 3]  =  1.0
@@ -771,7 +771,7 @@ values. `sparse(I,J,V)` constructs a sparse matrix such that `S[I[k], J[k]] = V[
 julia> I = [1, 4, 3, 5]; J = [4, 7, 18, 9]; V = [1, 2, -5, 3];
 
 julia> S = sparse(I,J,V)
-5×18 sparse matrix with 4 Int64 stored entries:
+5×18 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
   [1 ,  4]  =  1
   [4 ,  7]  =  2
   [5 ,  9]  =  3
@@ -794,7 +794,7 @@ the [`sparse()`](@ref) function:
 
 ```jldoctest
 julia> sparse(eye(5))
-5×5 sparse matrix with 5 Float64 stored entries:
+5×5 SparseMatrixCSC{Float64,Int64} with 5 stored entries:
   [1, 1]  =  1.0
   [2, 2]  =  1.0
   [3, 3]  =  1.0

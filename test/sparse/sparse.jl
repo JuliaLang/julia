@@ -1721,3 +1721,11 @@ end
     @test x.colptr == [1, 2, 4, 6]
     @test x[2, 3] == 0.0
 end
+
+@testset "show" begin
+    io = IOBuffer()
+    show(io, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
+    @test String(take!(io)) == "1×1 SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n  [1, 1]  =  1.0"
+    show(io, MIME"text/plain"(), spzeros(Float32, Int64, 2, 2))
+    @test String(take!(io)) == "2×2 SparseMatrixCSC{Float32,Int64} with 0 stored entries"
+end

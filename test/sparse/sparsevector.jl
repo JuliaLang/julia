@@ -1122,3 +1122,15 @@ end
 
 @test issparse([sprand(10,.1)  rand(10)])
 @test issparse([sprand(10,.1); rand(10)])
+
+@testset "show" begin
+    io = IOBuffer()
+    show(io, MIME"text/plain"(), sparsevec(Int64[1], [1.0]))
+    @test String(take!(io)) == "1-element SparseVector{Float64,Int64} with 1 stored entry:\n  [1]  =  1.0"
+    show(io, MIME"text/plain"(),  spzeros(Float64, Int64, 2))
+    @test String(take!(io)) == "2-element SparseVector{Float64,Int64} with 0 stored entries"
+end
+
+@testset "spzeros with index type" begin
+    @test typeof(spzeros(Float32, Int16, 3)) == SparseVector{Float32,Int16}
+end
