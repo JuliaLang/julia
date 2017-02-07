@@ -519,13 +519,6 @@ function undirected_dependencies_subset(deps::Dict{String,Dict{VersionNumber,Ava
     return subdeps(deps, allpkgs)
 end
 
-function filter_dependencies(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}})
-    deps = dependencies_subset(deps, Set{String}(keys(reqs)))
-    deps, _ = filter_versions(reqs, deps)
-
-    return deps
-end
-
 function prune_dependencies(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}})
     bktrc = ResolveBacktrace()
     for (p,vs) in reqs
