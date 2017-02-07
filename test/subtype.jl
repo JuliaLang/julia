@@ -444,7 +444,11 @@ function test_Type()
     @test isa(Tuple{Int}, (@UnionAll T<:Tuple Type{T}))
 
     # this matches with T==DataType, since DataType is concrete
-    @test issub(Tuple{Type{Int},Type{Int8}}, Tuple{T,T} where T)
+    @test  issub(Tuple{Type{Int},Type{Int8}}, Tuple{T,T} where T)
+    @test !issub(Tuple{Type{Int},Type{Union{}}}, Tuple{T,T} where T)
+
+    # issue #20476
+    @test issub(Tuple{Type{Union{Type{UInt32}, Type{UInt64}}}, Type{UInt32}}, Tuple{Type{T},T} where T)
 end
 
 # old subtyping tests from test/core.jl

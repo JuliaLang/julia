@@ -254,9 +254,6 @@ static jl_value_t *simple_join(jl_value_t *a, jl_value_t *b)
         return a;
     if (jl_is_kind(b) && jl_is_type_type(a) && jl_typeof(jl_tparam0(a)) == b)
         return b;
-    if (jl_is_type_type(a) && jl_is_type_type(b) && !jl_is_typevar(jl_tparam0(a)) &&
-        jl_typeof(jl_tparam0(a)) == jl_typeof(jl_tparam0(b)))
-        return jl_typeof(jl_tparam0(a));
     if (!jl_has_free_typevars(a) && !jl_has_free_typevars(b)) {
         if (jl_subtype(a, b)) return b;
         if (jl_subtype(b, a)) return a;
@@ -418,6 +415,19 @@ static int is_leaf_bound(jl_value_t *v)
     return 0;
 }
 
+static jl_value_t *widen_Type(jl_value_t *t)
+{
+    if (jl_is_type_type(t) && !jl_is_typevar(jl_tparam0(t)))
+        return jl_typeof(jl_tparam0(t));
+    if (jl_is_uniontype(t)) {
+        jl_value_t *a = widen_Type(((jl_uniontype_t*)t)->a);
+        jl_value_t *b = widen_Type(((jl_uniontype_t*)t)->b);
+        if (a == b)
+            return a;
+    }
+    return t;
+}
+
 // compare UnionAll type `u` to `t`. `R==1` if `u` came from the right side of A <: B.
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, int param)
 {
@@ -440,6 +450,9 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         e->envidx++;
         ans = subtype(t, u->body, e, param);
         e->envidx--;
+        // widen Type{x} to typeof(x) in argument position
+        if (!vb.occurs_inv)
+            vb.lb = widen_Type(vb.lb);
         // fill variable values into `envout` up to `envsz`
         if (e->envidx < e->envsz) {
             jl_value_t *val;
@@ -455,9 +468,6 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
                 val = (jl_value_t*)u->var;
             else
                 val = (jl_value_t*)jl_new_typevar(u->var->name, vb.lb, vb.ub);
-            // widen Type{x} to typeof(x) in argument position
-            if (jl_is_type_type(val) && !vb.occurs_inv && !jl_is_typevar(jl_tparam0(val)))
-                val = jl_typeof(jl_tparam0(val));
             e->envout[e->envidx] = val;
         }
     }
