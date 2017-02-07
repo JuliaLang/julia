@@ -10,16 +10,22 @@ type. The `[if cond(x)::Bool]` expression is optional and acts as a "guard", eff
 filtering out values where the condition is false.
 
 ```jldoctest
-julia> gen = (sqrt(x) for x in 1:10 if x % 2 == 0);
+julia> g = (abs2(x) for x in 1:5 if x != 3);
 
-julia> for x in gen
-            println(x)
+julia> for x in g
+           println(x)
        end
-1.4142135623730951
-2.0
-2.449489742783178
-2.8284271247461903
-3.1622776601683795
+1
+4
+16
+25
+
+julia> collect(g)
+4-element Array{Int64,1}:
+  1
+  4
+ 16
+ 25
 ```
 """
 immutable Generator{I,F}
