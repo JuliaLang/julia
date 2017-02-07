@@ -204,6 +204,8 @@ for `HermOrSym` such that using the new methods are backward compatible.
 
 * `Diagonal` and `*` methods support `SubArray`s even on 0.4.
 
+* Single-argument `min`, `max` and `minmax` are defined on 0.4.
+
 ## New types
 
 Currently, no new exported types are introduced by Compat.

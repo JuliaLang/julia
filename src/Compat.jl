@@ -1777,6 +1777,13 @@ else
     import Base.isapprox
 end
 
+# julia #13998 single-argument min and max
+if VERSION < v"0.5.0-dev+1279"
+    Base.min(x::Real) = x
+    Base.max(x::Real) = x
+    Base.minmax(x::Real) = (x, x)
+end
+
 module TypeUtils
     using ..Compat: @static
     @static if isdefined(Core, :UnionAll)
