@@ -119,7 +119,7 @@ julia> slicedim(A,2,3)
 function slicedim(A::AbstractArray, d::Integer, i)
     d >= 1 || throw(ArgumentError("dimension must be ≥ 1"))
     nd = ndims(A)
-    d > nd && (i == 1 || throw_boundserror(A, (ntuple(k->Colon(),nd)..., ntuple(k->1,d-1-nd)..., i)))
+    d > nd && (i == 1 || throw_boundserror(A, ntuple(k->Colon(),nd)..., ntuple(k->1,d-1-nd)..., i))
     A[setindex(indices(A), i, d)...]
 end
 

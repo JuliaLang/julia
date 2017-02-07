@@ -349,6 +349,16 @@ function checkindex(::Type{Bool}, inds::Tuple, I::AbstractArray{<:CartesianIndex
     b
 end
 
+## Go back and define a few more discrete signatures for throw_boundserror
+let args = Symbol[:i1, :i2] # One and two args are defined in abstractarray.jl
+    global throw_boundserror
+    for i=3:15
+        push!(args, Symbol(:i,i))
+        @eval @noinline throw_boundserror(A, $(args...)) = throw(BoundsError(A, ($(args...),)))
+    end
+end
+
+
 # combined count of all indices, including CartesianIndex and
 # AbstractArray{CartesianIndex}
 # rather than returning N, it returns an NTuple{N,Bool} so the result is inferrable
