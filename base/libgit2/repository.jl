@@ -18,6 +18,12 @@ function GitRepo(path::AbstractString)
     return GitRepo(repo_ptr_ptr[])
 end
 
+"""
+    LibGit2.GitRepoExt(path::AbstractString, flags::Cuint = Cuint(Consts.REPOSITORY_OPEN_DEFAULT))
+
+Opens a git repository at `path` with extended controls (for instance, if the current
+user must be a member of a special access group to read `path`).
+"""
 function GitRepoExt(path::AbstractString, flags::Cuint = Cuint(Consts.REPOSITORY_OPEN_DEFAULT))
     separator = @static is_windows() ? ";" : ":"
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -39,6 +45,13 @@ function cleanup(r::GitRepo)
     end
 end
 
+"""
+    LibGit2.init(path::AbstractString, bare::Bool=false) -> GitRepo
+
+Opens a new git repository at `path`. If `bare` is `false`,
+the working tree will be created in `path/.git`. If `bare`
+is `true`, no working directory will be created.
+"""
 function init(path::AbstractString, bare::Bool=false)
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_repository_init, :libgit2), Cint,
@@ -46,6 +59,12 @@ function init(path::AbstractString, bare::Bool=false)
     return GitRepo(repo_ptr_ptr[])
 end
 
+"""
+    LibGit2.head_oid(repo::GitRepo) -> GitHash
+
+Lookup the object id of the current HEAD of git
+repository `repo`.
+"""
 function head_oid(repo::GitRepo)
     head_ref = head(repo)
     try
@@ -55,6 +74,14 @@ function head_oid(repo::GitRepo)
     end
 end
 
+"""
+    LibGit2.headname(repo::GitRepo)
+
+Lookup the name of the current HEAD of git
+repository `repo`. If `repo` is currently
+detached, returns the name of the HEAD it's
+detached from.
+"""
 function headname(repo::GitRepo)
     with(head(repo)) do href
         if isattached(repo)
