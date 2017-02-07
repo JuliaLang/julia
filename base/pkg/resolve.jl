@@ -26,17 +26,26 @@ function resolve(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}
         try
             sol = maxsum(graph, msgs)
         catch err
-            if isa(err, UnsatError)
-                p = interface.pkgs[err.info]
-                msg = "unsatisfiable package requirements detected: " *
-                      "no feasible version could be found for package: $p"
-                if msgs.num_nondecimated != graph.np
-                    msg *= "\n  (you may try increasing the value of the" *
-                           "\n   JULIA_PKGRESOLVE_ACCURACY environment variable)"
-                end
-                throw(PkgError(msg))
+            isa(err, UnsatError) || retrhow(err)
+            p = interface.pkgs[err.info]
+            # TODO: build tools to analyze the problem, and suggest to use them here.
+            msg =
+                """
+                resolve is unable to satisfy package requirements.
+                  The problem was detected when trying to find a feasible version
+                  for package $p.
+                  However, this only means that package $p is involved in an
+                  unsatifiable or difficult dependency relation, and the root of
+                  the problem may be elsewhere.
+                """
+            if msgs.num_nondecimated != graph.np
+                msg *= """
+                         (you may try increasing the value of the JULIA_PKGRESOLVE_ACCURACY
+                          environment variable)
+                       """
             end
-            rethrow(err)
+            ## info("ERROR MESSAGE:\n" * msg)
+            throw(PkgError(msg))
         end
 
         # verify solution (debug code) and enforce its optimality
