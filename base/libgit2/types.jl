@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.@kwdef
-import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE
+import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE, GIT_CONFIG
 
 const OID_RAWSZ = 20
 const OID_HEXSZ = OID_RAWSZ * 2
@@ -516,6 +516,23 @@ function Base.show(io::IO, fh::FetchHead)
     println(io, "Merged: $(fh.ismerge)")
 end
 
+"""
+    LibGit2.ConfigEntry
+
+Matches the [`git_config_entry`](https://libgit2.github.com/libgit2/#HEAD/type/git_config_entry) struct.
+"""
+@kwdef struct ConfigEntry
+    name::Cstring
+    value::Cstring
+    level::GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT
+    free::Ptr{Void}
+    payload::Ptr{Void}
+end
+
+function Base.show(io::IO, ce::ConfigEntry)
+    print(io, "ConfigEntry(\"", unsafe_string(ce.name), "\", \"", unsafe_string(ce.value), "\")")
+end
+
 # Abstract object types
 abstract type AbstractGitObject end
 Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
@@ -536,6 +553,7 @@ for (typ, owntyp, sup, cname) in [
     (:GitRebase,         :GitRepo,              :AbstractGitObject, :git_rebase),
     (:GitStatus,         :GitRepo,              :AbstractGitObject, :git_status_list),
     (:GitBranchIter,     :GitRepo,              :AbstractGitObject, :git_branch_iterator),
+    (:GitConfigIter,     nothing,               :AbstractGitObject, :git_config_iterator),
     (:GitUnknownObject,  :GitRepo,              :GitObject,         :git_object),
     (:GitCommit,         :GitRepo,              :GitObject,         :git_commit),
     (:GitBlob,           :GitRepo,              :GitObject,         :git_blob),

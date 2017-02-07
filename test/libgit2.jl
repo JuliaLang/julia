@@ -229,6 +229,56 @@ mktempdir() do dir
             @test LibGit2.get(cfg, "tmp.int32", Int32(0)) == Int32(1)
             @test LibGit2.get(cfg, "tmp.int64", Int64(0)) == Int64(1)
             @test LibGit2.get(cfg, "tmp.bool", false) == true
+
+            # Ordering of entries appears random when using `LibGit2.set!`
+            count = 0
+            for entry in LibGit2.GitConfigIter(cfg, r"tmp.*")
+                count += 1
+                name, value = unsafe_string(entry.name), unsafe_string(entry.value)
+                if name == "tmp.str"
+                    @test value == "AAAA"
+                elseif name == "tmp.int32"
+                    @test value == "1"
+                elseif name == "tmp.int64"
+                    @test value == "1"
+                elseif name == "tmp.bool"
+                    @test value == "true"
+                else
+                    error("Found unexpected entry: $name")
+                end
+            end
+            @test count == 4
+        finally
+            close(cfg)
+        end
+    end
+
+    @testset "Configuration Iteration" begin
+        config_path = joinpath(dir, config_file)
+
+        # Write config entries with duplicate names
+        open(config_path, "a") do fp
+            write(fp, """
+            [credential]
+            \thelper = store
+            [credential]
+            \thelper = cache
+            """)
+        end
+
+        cfg = LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)
+        try
+            # Will only see the last entry
+            @test LibGit2.get(cfg, "credential.helper", "") == "cache"
+
+            count = 0
+            for entry in LibGit2.GitConfigIter(cfg, "credential.helper")
+                count += 1
+                name, value = unsafe_string(entry.name), unsafe_string(entry.value)
+                @test name == "credential.helper"
+                @test value == (count == 1 ? "store" : "cache")
+            end
+            @test count == 2
         finally
             close(cfg)
         end
