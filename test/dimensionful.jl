@@ -17,6 +17,9 @@ Base.convert{T}(::Type{Furlong{0,T}}, x::Furlong{0}) = Furlong{0,T}(convert(T, x
 Base.convert{T<:Number}(::Type{T}, x::Furlong{0}) = convert(T, x.val)
 Base.convert{T}(::Type{Furlong{0,T}}, x::Number) = Furlong{0,T}(convert(T, x))
 
+Base.promote_type{p,T,S}(::Type{Furlong{p,T}}, ::Type{Furlong{p,S}}) =
+    (Base.@_pure_meta; Furlong{p,promote_type(T,S)})
+
 Base.one{p,T}(x::Furlong{p,T}) = one(T)
 Base.one{p,T}(::Type{Furlong{p,T}}) = one(T)
 Base.zero{p,T}(x::Furlong{p,T}) = Furlong{p,T}(zero(T))
@@ -64,4 +67,5 @@ for op in (:rem, :mod)
 end
 Base.sqrt{p,T}(x::Furlong{p,T}) = _div(sqrt(x.val), x, Val{2})
 
-@test collect(Furlong(2):Furlong(10)) == collect(Furlong(2):Furlong(1):Furlong(10)) == Furlong{1}.(2:10)
+@test collect(Furlong(2):Furlong(10)) == collect(Furlong(2):Furlong(1):Furlong(10)) == Furlong.(2:10)
+@test collect(Furlong(1.0):Furlong(0.5):Furlong(10.0)) == Furlong.(1:0.5:10)
