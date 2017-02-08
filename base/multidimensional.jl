@@ -15,16 +15,16 @@ module IteratorsMD
     # CartesianIndex
     immutable CartesianIndex{N} <: AbstractCartesianIndex{N}
         I::NTuple{N,Int}
-        CartesianIndex{N}(index::NTuple{N,Integer}) where N = new(index)
+        CartesianIndex{N}(index::NTuple{N,Integer}) where {N} = new(index)
     end
 
-    CartesianIndex(index::NTuple{N,Integer}) where N = CartesianIndex{N}(index)
+    CartesianIndex(index::NTuple{N,Integer}) where {N} = CartesianIndex{N}(index)
     CartesianIndex(index::Integer...) = CartesianIndex(index)
-    CartesianIndex{N}(index::Vararg{Integer,N}) where N = CartesianIndex{N}(index)
+    CartesianIndex{N}(index::Vararg{Integer,N}) where {N} = CartesianIndex{N}(index)
     # Allow passing tuples smaller than N
-    CartesianIndex{N}(index::Tuple) where N = CartesianIndex{N}(fill_to_length(index, 1, Val{N}))
-    CartesianIndex{N}(index::Integer...) where N = CartesianIndex{N}(index)
-    CartesianIndex{N}() where N = CartesianIndex{N}(())
+    CartesianIndex{N}(index::Tuple) where {N} = CartesianIndex{N}(fill_to_length(index, 1, Val{N}))
+    CartesianIndex{N}(index::Integer...) where {N} = CartesianIndex{N}(index)
+    CartesianIndex{N}() where {N} = CartesianIndex{N}(())
     # Un-nest passed CartesianIndexes
     CartesianIndex(index::Union{Integer, CartesianIndex}...) = CartesianIndex(flatten(index))
     flatten(I::Tuple{}) = I
@@ -279,7 +279,7 @@ immutable LogicalIndex{T, A<:AbstractArray{Bool}} <: AbstractVector{T}
     LogicalIndex{T,A}(mask::A) where {T,A<:AbstractArray{Bool}} = new(mask, countnz(mask))
 end
 LogicalIndex(mask::AbstractVector{Bool}) = LogicalIndex{Int, typeof(mask)}(mask)
-LogicalIndex(mask::AbstractArray{Bool, N}) where N = LogicalIndex{CartesianIndex{N}, typeof(mask)}(mask)
+LogicalIndex(mask::AbstractArray{Bool, N}) where {N} = LogicalIndex{CartesianIndex{N}, typeof(mask)}(mask)
 (::Type{LogicalIndex{Int}})(mask::AbstractArray) = LogicalIndex{Int, typeof(mask)}(mask)
 size(L::LogicalIndex) = (L.sum,)
 length(L::LogicalIndex) = L.sum
