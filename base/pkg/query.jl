@@ -241,7 +241,7 @@ function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Av
             if !any(values(allowedp))
                 err_msg = "Unsatisfiable requirements detected for package $p:\n"
                 err_msg *= string(bktrc[p])
-                err_msg *= """The intersection of the requirements is $(bktrc[p].versionset).
+                err_msg *= """The intersection of the requirements is $(bktrc[p].versionreq).
                               None of the available versions can satisfy this requirement."""
                 throw(PkgError(err_msg))
             end
@@ -278,7 +278,7 @@ function filter_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Av
                 isreq[rp] || continue
                 bktrcp = get!(bktrc, rp) do; ResolveBacktraceItem(); end
                 push!(bktrcp, p=>bktrc[p], srvs)
-                if isa(bktrcp.versionset, VersionSet) && isempty(bktrcp.versionset)
+                if isa(bktrcp.versionreq, VersionSet) && isempty(bktrcp.versionreq)
                     err_msg = "Unsatisfiable requirements detected for package $rp:\n"
                     err_msg *= string(bktrcp)
                     err_msg *= "The intersection of the requirements is empty."

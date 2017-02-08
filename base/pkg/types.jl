@@ -70,12 +70,12 @@ function normalize!(A::VersionSet)
             lo = lo1
             continue
         end
-        fuse && splice!(ivals, (k+1):k0, [VersionInterval(lo, up),])
+        fuse && splice!(ivals, (k+1):k0, (VersionInterval(lo, up),))
         fuse = false
         lo, up = lo1, up1
         k0 = k
     end
-    fuse && splice!(ivals, 1:k0, [VersionInterval(lo, up),])
+    fuse && splice!(ivals, 1:k0, (VersionInterval(lo, up),))
     return A
 end
 
@@ -94,10 +94,10 @@ function union!(A::VersionSet, B::VersionSet)
         for k1 = k0:length(ivals)
             intA = ivals[k1]
             if uB < intA.lower
-                splice!(ivals, k0:(k1-1), [VersionInterval(lB, uB),])
+                splice!(ivals, k0:(k1-1), (VersionInterval(lB, uB),))
                 break
             elseif uB ∈ intA || k1 == length(ivals)
-                splice!(ivals, k0:k1, [VersionInterval(lB, max(uB, intA.upper)),])
+                splice!(ivals, k0:k1, (VersionInterval(lB, max(uB, intA.upper)),))
                 break
             end
         end
@@ -151,48 +151,50 @@ show(io::IO, f::Fixed) = isempty(f.requires) ?
 # required by anything that processes these things.
 
 
+typealias VersionReq Union{VersionNumber,VersionSet}
+typealias WhyReq Tuple{VersionReq,Any}
+
 # This is used to keep track of dependency relations when propagating
 # requirements, so as to emit useful information in case of unsatisfiable
 # conditions.
-# The `versionset` field keeps track of the remaining allowed versions,
+# The `versionreq` field keeps track of the remaining allowed versions,
 # intersecting all requirements.
 # The `why` field is a Vector which keeps track of the requirements. Each
 # entry is a Tuple of two elements:
 # 1) the first element is the version requirement (can be a single VersionNumber
-#    or a VersionSet.
+#    or a VersionSet).
 # 2) the second element can be either :fixed (for requirements induced by
 #    fixed packages), :required (for requirements induced by explicitly
 #    required packages), or a Pair p=>backtrace_item (for requirements induced
 #    indirectly, where `p` is the package name and `backtrace_item` is
 #    another ResolveBacktraceItem.
 type ResolveBacktraceItem
-    versionset::Union{VersionNumber,VersionSet}
-    why::Vector
-    ResolveBacktraceItem() = new(VersionSet(), Any[])
-    ResolveBacktraceItem(reason, versionset::VersionSet) = new(versionset, Any[(versionset,reason)])
-    ResolveBacktraceItem(reason, version::VersionNumber) = new(version, Any[(version,reason)])
+    versionreq::VersionReq
+    why::Vector{WhyReq}
+    ResolveBacktraceItem() = new(VersionSet(), WhyReq[])
+    ResolveBacktraceItem(reason, versionreq::VersionReq) = new(versionreq, WhyReq[(versionreq,reason)])
 end
 
 const empty_versionset = VersionSet([v"0.0",v"0.0"])
 
 function push!(ritem::ResolveBacktraceItem, reason, versionset::VersionSet)
-    if isa(ritem.versionset, VersionSet)
-        ritem.versionset = ritem.versionset ∩ versionset
-    elseif ritem.versionset ∉ versionset
-        ritem.versionset = empty_versionset
+    if isa(ritem.versionreq, VersionSet)
+        ritem.versionreq = ritem.versionreq ∩ versionset
+    elseif ritem.versionreq ∉ versionset
+        ritem.versionreq = empty_versionset
     end
     push!(ritem.why, (versionset,reason))
 end
 
 function push!(ritem::ResolveBacktraceItem, reason, version::VersionNumber)
-    if isa(ritem.versionset, VersionSet)
-        if version ∈ ritem.versionset
-            ritem.versionset = version
+    if isa(ritem.versionreq, VersionSet)
+        if version ∈ ritem.versionreq
+            ritem.versionreq = version
         else
-            ritem.versionset = empty_versionset
+            ritem.versionreq = empty_versionset
         end
-    elseif ritem.versionset ≠ version
-        ritem.versionset = empty_versionset
+    elseif ritem.versionreq ≠ version
+        ritem.versionreq = empty_versionset
     end
     push!(ritem.why, (version,reason))
 end
@@ -220,14 +222,14 @@ function _show(io::IO, ritem::ResolveBacktraceItem, indent::String, seen::Set{Re
                 print(io, "version range $vs ")
             end
             print(io, "required by package $(w[1]), ")
-            if isa(w[2].versionset, VersionSet)
-                if !isempty(w[2].versionset)
-                    println(io, "whose allowed version range is $(w[2].versionset):")
+            if isa(w[2].versionreq, VersionSet)
+                if !isempty(w[2].versionreq)
+                    println(io, "whose allowed version range is $(w[2].versionreq):")
                 else
                     println(io, "whose allowed version range is empty:")
                 end
             else
-                println(io, "whose only allowed version is $(w[2].versionset):")
+                println(io, "whose only allowed version is $(w[2].versionreq):")
             end
             if w[2] ∈ seen
                 println(io, (i==l ? "  " : "│ ") * indent, "└─[see above for $(w[1]) backtrace]")
