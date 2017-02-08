@@ -245,26 +245,12 @@ value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     return fl_ctx->F;
 }
 
-value_t fl_julia_smallnum(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
-{
-    argcount(fl_ctx, "julia-smallnum?", nargs, 1);
-    if (isfixnum(args[0]) && numval(args[0]) < 32 && numval(args[0]) > -32)
-        return fl_ctx->T;
-    else if (iscvalue(args[0]) && fl_ctx->jl_sym == cv_type((cvalue_t*)ptr(args[0]))) {
-        jl_value_t *v = *(jl_value_t**)cptr(args[0]);
-        if (jl_is_long(v) && jl_unbox_long(v) < 32 && jl_unbox_long(v) > -32)
-            return fl_ctx->T;
-    }
-    return fl_ctx->F;
-}
-
 static const builtinspec_t julia_flisp_ast_ext[] = {
     { "defined-julia-global", fl_defined_julia_global },
     { "invoke-julia-macro", fl_invoke_julia_macro },
     { "current-julia-module", fl_current_julia_module },
     { "current-julia-module-counter", fl_current_module_counter },
     { "julia-scalar?", fl_julia_scalar },
-    { "julia-smallnum?", fl_julia_smallnum },
     { NULL, NULL }
 };
 
