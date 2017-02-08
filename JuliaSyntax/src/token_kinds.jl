@@ -522,7 +522,7 @@
             CIRCLED_MINUS, # ⊖
             SQUARED_PLUS, # ⊞
             SQUARED_MINUS, # ⊟
-            VERTICAL_LINE, # |
+            OR, # |
             UNION, # ∪
             LOGICAL_OR, # ∨
             SQUARE_CUP, # ⊔
@@ -708,7 +708,6 @@
         NOT, # !
         PRIME, # '
         DDDOT, # ...
-        OR, # |
         TRANSPOSE, # .'
         ANON_FUNC, # ->
         
@@ -1123,7 +1122,7 @@ const UNICODE_OPS = Dict{Char, Kind}(
 '⊖' => CIRCLED_MINUS,
 '⊞' => SQUARED_PLUS,
 '⊟' => SQUARED_MINUS,
-'|' => VERTICAL_LINE,
+'|' => OR,
 '∪' => UNION,
 '∨' => LOGICAL_OR,
 '⊔' => SQUARE_CUP,
