@@ -1612,3 +1612,19 @@ end
 let A = sparse(UInt32[1,2,3], UInt32[1,2,3], [1.0,2.0,3.0])
     @test A[1,1:3] == A[1,:] == [1,0,0]
 end
+
+# dropstored issue #20513
+let x = sparse(rand(3,3))
+    Base.SparseArrays.dropstored!(x, 1, 1)
+    @test x[1, 1] == 0.0
+    @test x.colptr == [1, 3, 6, 9]
+    Base.SparseArrays.dropstored!(x, 2, 1)
+    @test x.colptr == [1, 2, 5, 8]
+    @test x[2, 1] == 0.0
+    Base.SparseArrays.dropstored!(x, 2, 2)
+    @test x.colptr == [1, 2, 4, 7]
+    @test x[2, 2] == 0.0
+    Base.SparseArrays.dropstored!(x, 2, 3)
+    @test x.colptr == [1, 2, 4, 6]
+    @test x[2, 3] == 0.0
+end
