@@ -40,7 +40,7 @@ Fully implemented by:
   * `Tuple`
   * `Number`
   * `AbstractArray`
-  * [`IntSet`](@ref)
+  * [`PositiveIntSet`](@ref)
   * [`ObjectIdDict`](@ref)
   * [`Dict`](@ref)
   * [`WeakKeyDict`](@ref)
@@ -64,7 +64,7 @@ Fully implemented by:
   * `Tuple`
   * `Number`
   * `AbstractArray`
-  * [`IntSet`](@ref)
+  * [`PositiveIntSet`](@ref)
   * [`ObjectIdDict`](@ref)
   * [`Dict`](@ref)
   * [`WeakKeyDict`](@ref)
@@ -210,7 +210,7 @@ Fully implemented by:
 
 Partially implemented by:
 
-  * [`IntSet`](@ref)
+  * [`PositiveIntSet`](@ref)
   * [`Set`](@ref)
   * [`EnvHash`](@ref Base.EnvHash)
   * [`Array`](@ref)
@@ -220,23 +220,23 @@ Partially implemented by:
 
 ```@docs
 Base.Set
-Base.IntSet
+Base.PositiveIntSet
 Base.union
 Base.union!
 Base.intersect
 Base.setdiff
 Base.setdiff!
 Base.symdiff
-Base.symdiff!(::IntSet, ::Integer)
-Base.symdiff!(::IntSet, ::Any)
-Base.symdiff!(::IntSet, ::IntSet)
+Base.symdiff!(::PositiveIntSet, ::Integer)
+Base.symdiff!(::PositiveIntSet, ::Any)
+Base.symdiff!(::PositiveIntSet, ::PositiveIntSet)
 Base.intersect!
 Base.issubset
 ```
 
 Fully implemented by:
 
-  * [`IntSet`](@ref)
+  * [`PositiveIntSet`](@ref)
   * [`Set`](@ref)
 
 Partially implemented by:

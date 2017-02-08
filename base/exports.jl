@@ -67,7 +67,7 @@ export
     Hermitian,
     UniformScaling,
     InsertionSort,
-    IntSet,
+    PositiveIntSet,
     IOBuffer,
     IOStream,
     LinSpace,

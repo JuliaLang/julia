@@ -1,24 +1,24 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-immutable IntSet <: AbstractSet{Int}
+immutable PositiveIntSet <: AbstractSet{Int}
     bits::BitVector
-    IntSet() = new(falses(256))
+    PositiveIntSet() = new(falses(256))
 end
-IntSet(itr) = union!(IntSet(), itr)
+PositiveIntSet(itr) = union!(PositiveIntSet(), itr)
 
-eltype(::Type{IntSet}) = Int
-similar(s::IntSet) = IntSet()
-copy(s1::IntSet) = copy!(IntSet(), s1)
-function copy!(dest::IntSet, src::IntSet)
+eltype(::Type{PositiveIntSet}) = Int
+similar(s::PositiveIntSet) = PositiveIntSet()
+copy(s1::PositiveIntSet) = copy!(PositiveIntSet(), s1)
+function copy!(dest::PositiveIntSet, src::PositiveIntSet)
     resize!(dest.bits, length(src.bits))
     copy!(dest.bits, src.bits)
     dest
 end
-eltype(s::IntSet) = Int
-sizehint!(s::IntSet, n::Integer) = (_resize0!(s.bits, max(n, length(s.bits))); s)
+eltype(s::PositiveIntSet) = Int
+sizehint!(s::PositiveIntSet, n::Integer) = (_resize0!(s.bits, max(n, length(s.bits))); s)
 
 # An internal function for setting the inclusion bit for a given integer n >= 0
-@inline function _setint!(s::IntSet, idx::Integer, b::Bool)
+@inline function _setint!(s::PositiveIntSet, idx::Integer, b::Bool)
     if idx > length(s.bits)
         b || return s # setting a bit to zero outside the set's bits is a no-op
         newlen = idx + idx>>1 # This operation may overflow; we want saturation
@@ -52,7 +52,7 @@ function _matched_map!(f, b1::BitArray, b2::BitArray)
             resize!(b1, l2)
             map!(f, b1, b1, b2)
         else
-            # We transiently extend b2 — as IntSet internal storage this is unobservable
+            # We transiently extend b2 — as PositiveIntSet internal storage this is unobservable
             _resize0!(b2, l1)
             map!(f, b1, b1, b2)
             resize!(b2, l2)
@@ -61,96 +61,96 @@ function _matched_map!(f, b1::BitArray, b2::BitArray)
     b1
 end
 
-@noinline _throw_intset_bounds_err() = throw(ArgumentError("elements of IntSet must be between 1 and typemax(Int)"))
+@noinline _throw_intset_bounds_err() = throw(ArgumentError("elements of PositiveIntSet must be between 1 and typemax(Int)"))
 @noinline _throw_keyerror(n) = throw(KeyError(n))
 
-@inline function push!(s::IntSet, n::Integer)
+@inline function push!(s::PositiveIntSet, n::Integer)
     0 < n <= typemax(Int) || _throw_intset_bounds_err()
     _setint!(s, n, true)
 end
-push!(s::IntSet, ns::Integer...) = (for n in ns; push!(s, n); end; s)
+push!(s::PositiveIntSet, ns::Integer...) = (for n in ns; push!(s, n); end; s)
 
-@inline function pop!(s::IntSet)
+@inline function pop!(s::PositiveIntSet)
     pop!(s, last(s))
 end
-@inline function pop!(s::IntSet, n::Integer)
+@inline function pop!(s::PositiveIntSet, n::Integer)
     n in s ? (_delete!(s, n); n) : _throw_keyerror(n)
 end
-@inline function pop!(s::IntSet, n::Integer, default)
+@inline function pop!(s::PositiveIntSet, n::Integer, default)
     n in s ? (_delete!(s, n); n) : default
 end
-@inline _delete!(s::IntSet, n::Integer) = _setint!(s, n, false)
-@inline delete!(s::IntSet, n::Integer) = n < 0 ? s : _delete!(s, n)
-shift!(s::IntSet) = pop!(s, first(s))
+@inline _delete!(s::PositiveIntSet, n::Integer) = _setint!(s, n, false)
+@inline delete!(s::PositiveIntSet, n::Integer) = n < 0 ? s : _delete!(s, n)
+shift!(s::PositiveIntSet) = pop!(s, first(s))
 
-empty!(s::IntSet) = (fill!(s.bits, false); s)
-isempty(s::IntSet) = !any(s.bits)
+empty!(s::PositiveIntSet) = (fill!(s.bits, false); s)
+isempty(s::PositiveIntSet) = !any(s.bits)
 
 # Mathematical set functions: union!, intersect!, setdiff!, symdiff!
 
-union(s::IntSet) = copy(s)
-union(s1::IntSet, s2::IntSet) = union!(copy(s1), s2)
-union(s1::IntSet, ss::IntSet...) = union(s1, union(ss...))
-union(s::IntSet, ns) = union!(copy(s), ns)
-union!(s::IntSet, ns) = (for n in ns; push!(s, n); end; s)
-function union!(s1::IntSet, s2::IntSet)
+union(s::PositiveIntSet) = copy(s)
+union(s1::PositiveIntSet, s2::PositiveIntSet) = union!(copy(s1), s2)
+union(s1::PositiveIntSet, ss::PositiveIntSet...) = union(s1, union(ss...))
+union(s::PositiveIntSet, ns) = union!(copy(s), ns)
+union!(s::PositiveIntSet, ns) = (for n in ns; push!(s, n); end; s)
+function union!(s1::PositiveIntSet, s2::PositiveIntSet)
     _matched_map!(|, s1.bits, s2.bits)
     s1
 end
 
-intersect(s1::IntSet) = copy(s1)
-intersect(s1::IntSet, ss::IntSet...) = intersect(s1, intersect(ss...))
-function intersect(s1::IntSet, ns)
-    s = IntSet()
+intersect(s1::PositiveIntSet) = copy(s1)
+intersect(s1::PositiveIntSet, ss::PositiveIntSet...) = intersect(s1, intersect(ss...))
+function intersect(s1::PositiveIntSet, ns)
+    s = PositiveIntSet()
     for n in ns
         n in s1 && push!(s, n)
     end
     s
 end
-intersect(s1::IntSet, s2::IntSet) =
+intersect(s1::PositiveIntSet, s2::PositiveIntSet) =
     (length(s1.bits) >= length(s2.bits) ? intersect!(copy(s1), s2) : intersect!(copy(s2), s1))
 """
-    intersect!(s1::IntSet, s2::IntSet)
+    intersect!(s1::PositiveIntSet, s2::PositiveIntSet)
 
 Intersects sets `s1` and `s2` and overwrites the set `s1` with the result. If needed, `s1`
 will be expanded to the size of `s2`.
 """
-function intersect!(s1::IntSet, s2::IntSet)
+function intersect!(s1::PositiveIntSet, s2::PositiveIntSet)
     _matched_map!(&, s1.bits, s2.bits)
     s1
 end
 
-setdiff(s::IntSet, ns) = setdiff!(copy(s), ns)
-setdiff!(s::IntSet, ns) = (for n in ns; _delete!(s, n); end; s)
-function setdiff!(s1::IntSet, s2::IntSet)
+setdiff(s::PositiveIntSet, ns) = setdiff!(copy(s), ns)
+setdiff!(s::PositiveIntSet, ns) = (for n in ns; _delete!(s, n); end; s)
+function setdiff!(s1::PositiveIntSet, s2::PositiveIntSet)
     _matched_map!(>, s1.bits, s2.bits)
     s1
 end
 
-symdiff(s::IntSet, ns) = symdiff!(copy(s), ns)
+symdiff(s::PositiveIntSet, ns) = symdiff!(copy(s), ns)
 """
     symdiff!(s, itr)
 
 For each element in `itr`, destructively toggle its inclusion in set `s`.
 """
-symdiff!(s::IntSet, ns) = (for n in ns; symdiff!(s, n); end; s)
+symdiff!(s::PositiveIntSet, ns) = (for n in ns; symdiff!(s, n); end; s)
 """
     symdiff!(s, n)
 
 The set `s` is destructively modified to toggle the inclusion of integer `n`.
 """
-function symdiff!(s::IntSet, n::Integer)
+function symdiff!(s::PositiveIntSet, n::Integer)
     0 <= n < typemax(Int) || _throw_intset_bounds_err()
     val = !(n in s)
     _setint!(s, n, val)
     s
 end
-function symdiff!(s1::IntSet, s2::IntSet)
+function symdiff!(s1::PositiveIntSet, s2::PositiveIntSet)
     _matched_map!(xor, s1.bits, s2.bits)
     s1
 end
 
-@inline function in(n::Integer, s::IntSet)
+@inline function in(n::Integer, s::PositiveIntSet)
     if 1 <= n <= length(s.bits)
         @inbounds b = s.bits[n]
     else
@@ -160,24 +160,24 @@ end
 end
 
 # Use the next-set index as the state to prevent looking it up again in done
-start(s::IntSet) = next(s, 0)[2]
-function next(s::IntSet, i)
+start(s::PositiveIntSet) = next(s, 0)[2]
+function next(s::PositiveIntSet, i)
     nextidx = i == typemax(Int) ? 0 : findnext(s.bits, i+1)
     (i, nextidx)
 end
-done(s::IntSet, i) = i <= 0
+done(s::PositiveIntSet, i) = i <= 0
 
 
 @noinline _throw_intset_notempty_error() = throw(ArgumentError("collection must be non-empty"))
-function last(s::IntSet)
+function last(s::PositiveIntSet)
     idx = findprev(s.bits, length(s.bits))
     idx == 0 ? _throw_intset_notempty_error() : idx
 end
 
-length(s::IntSet) = sum(s.bits)
+length(s::PositiveIntSet) = sum(s.bits)
 
-function show(io::IO, s::IntSet)
-    print(io, "IntSet([")
+function show(io::IO, s::PositiveIntSet)
+    print(io, "PositiveIntSet([")
     first = true
     for n in s
         !first && print(io, ", ")
@@ -187,7 +187,7 @@ function show(io::IO, s::IntSet)
     print(io, "])")
 end
 
-function ==(s1::IntSet, s2::IntSet)
+function ==(s1::PositiveIntSet, s2::PositiveIntSet)
     l1 = length(s1.bits)
     l2 = length(s2.bits)
     # If the lengths are the same, simply punt to bitarray comparison
@@ -211,12 +211,12 @@ function ==(s1::IntSet, s2::IntSet)
     return true
 end
 
-issubset(a::IntSet, b::IntSet) = isequal(a, intersect(a,b))
-<(a::IntSet, b::IntSet) = (a<=b) && !isequal(a,b)
-<=(a::IntSet, b::IntSet) = issubset(a, b)
+issubset(a::PositiveIntSet, b::PositiveIntSet) = isequal(a, intersect(a,b))
+<(a::PositiveIntSet, b::PositiveIntSet) = (a<=b) && !isequal(a,b)
+<=(a::PositiveIntSet, b::PositiveIntSet) = issubset(a, b)
 
 const hashis_seed = UInt === UInt64 ? 0x88989f1fc7dea67d : 0xc7dea67d
-function hash(s::IntSet, h::UInt)
+function hash(s::PositiveIntSet, h::UInt)
     h ⊻= hashis_seed
     bc = s.bits.chunks
     i = length(bc)

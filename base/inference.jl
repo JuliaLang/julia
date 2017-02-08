@@ -115,7 +115,7 @@ type InferenceState
     # return type
     bestguess #::Type
     # current active instruction pointers
-    ip::IntSet
+    ip::PositiveIntSet
     pc´´::Int
     nstmts::Int
     # current exception handler info
@@ -123,7 +123,7 @@ type InferenceState
     handler_at::Vector{Any}
     n_handlers::Int
     # ssavalue sparsity and restart info
-    ssavalue_uses::Vector{IntSet}
+    ssavalue_uses::Vector{PositiveIntSet}
     ssavalue_init::Vector{Any}
     # call-graph edges connecting from a caller to a callee (and back)
     # we shouldn't need to iterate edges very often, so we use it to optimize the lookup from edge -> linenum
@@ -232,7 +232,7 @@ type InferenceState
         handler_at = Any[ () for i=1:n ]
         n_handlers = 0
 
-        W = IntSet()
+        W = PositiveIntSet()
         push!(W, 1) #initial pc to visit
 
         if !toplevel
@@ -2170,7 +2170,7 @@ end
 genlabel(sv) = LabelNode(sv.label_counter += 1)
 
 function find_ssavalue_uses(body)
-    uses = IntSet[]
+    uses = PositiveIntSet[]
     for line = 1:length(body)
         find_ssavalue_uses(body[line], uses, line)
     end
@@ -2180,7 +2180,7 @@ function find_ssavalue_uses(e::ANY, uses, line)
     if isa(e,SSAValue)
         id = (e::SSAValue).id + 1
         while length(uses) < id
-            push!(uses, IntSet())
+            push!(uses, PositiveIntSet())
         end
         push!(uses[id], line)
     elseif isa(e,Expr)
@@ -2191,7 +2191,7 @@ function find_ssavalue_uses(e::ANY, uses, line)
             if isa(b.args[1],SSAValue)
                 id = (b.args[1]::SSAValue).id + 1
                 while length(uses) < id
-                    push!(uses, IntSet())
+                    push!(uses, PositiveIntSet())
                 end
             end
             find_ssavalue_uses(b.args[2], uses, line)
