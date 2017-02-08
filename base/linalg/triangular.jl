@@ -1880,7 +1880,7 @@ function sqrtm{T,realmatrix}(A::UpperTriangular{T},::Type{Val{realmatrix}})
             @simd for k = i+1:j-1
                 r -= R[i,k]*R[k,j]
             end
-            r==0 || (R[i,j] = sylvester(R[i,i],R[j,j],-r))
+            iszero(r) || (R[i,j] = sylvester(R[i,i],R[j,j],-r))
         end
     end
     return UpperTriangular(R)

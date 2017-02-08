@@ -27,11 +27,13 @@ Base.zero{p,T}(::Type{Furlong{p,T}}) = Furlong{p,T}(zero(T))
 Base.iszero(x::Furlong) = iszero(x.val)
 
 Base.abs{p,T}(x::Furlong{p,T}) = Furlong{p,T}(abs(x.val))
+@generated Base.inv{p,T}(x::Furlong{p,T}) = :(Furlong{$(-p)}(inv(x.val)))
+Base.sylvester(a::Furlong,b::Furlong,c::Furlong) = -c / (a + b)
 
 for f in (:isfinite, :isnan, :isreal)
     @eval Base.$f(x::Furlong) = $f(x.val)
 end
-for f in (:real,:imag,:complex)
+for f in (:real,:imag,:complex,:+,:-)
     @eval Base.$f{p,T}(x::Furlong{p,T}) = Furlong{p}($f(x.val))
 end
 
@@ -72,3 +74,7 @@ Base.sqrt{p,T}(x::Furlong{p,T}) = _div(sqrt(x.val), x, Val{2})
 @test collect(Furlong(2):Furlong(10)) == collect(Furlong(2):Furlong(1):Furlong(10)) == Furlong.(2:10)
 @test collect(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
       collect(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong.(1:0.5:10)
+
+let A = UpperTriangular([Furlong(1) Furlong(4); Furlong(0) Furlong(1)])
+    @test sqrtm(A) == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
+end
