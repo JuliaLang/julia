@@ -47,6 +47,18 @@ end
 
 Returns a shortened version of the name of `ref` that's
 "human-readable".
+
+```julia
+julia> repo = LibGit2.GitRepo(path_to_repo);
+
+julia> branch_ref = LibGit2.head(repo);
+
+julia> LibGit2.name(branch_ref)
+"refs/heads/master"
+
+julia> LibGit2.shortname(branch_ref)
+"master"
+```
 """
 function shortname(ref::GitReference)
     isempty(ref) && return ""
