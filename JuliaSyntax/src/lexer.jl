@@ -538,9 +538,19 @@ end
 function lex_i(l::Lexer)
     str = lex_identifier(l)
     if str.val=="in"
-        return emit(l, Tokens.IN, "in")
+        l.last_token = Tokens.IN
+        start_token!(l)
+        return Token(Tokens.IN, str.startpos,
+                str.endpos,
+                str.startbyte, str.endbyte,
+                str.val, str.token_error)
     elseif (VERSION >= v"0.6.0-dev.1471" && str.val == "isa")
-        return emit(l, Tokens.ISA, "isa")
+        l.last_token = Tokens.ISA
+        start_token!(l)
+        return Token(Tokens.ISA, str.startpos,
+                str.endpos,
+                str.startbyte, str.endbyte,
+                str.val, str.token_error)
     else
         return str
     end
