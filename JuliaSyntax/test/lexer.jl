@@ -137,6 +137,8 @@ end # testset
         @test untokenize(tokenize(str)) == str
         @test_throws ArgumentError untokenize("blabla")
     end
+
+    @test all((t.endbyte - t.startbyte)==sizeof(t.val) for t in tokenize(str))
 end # testset
 
 @testset "issue 5, '..'" begin

@@ -549,9 +549,19 @@ end
 function lex_bool(l::Lexer)
     str = lex_identifier(l)
     if str.val=="true"
-        return emit(l, Tokens.TRUE, "true")
+        l.last_token = Tokens.TRUE
+        start_token!(l)
+        return Token(Tokens.TRUE, str.startpos,
+                str.endpos,
+                str.startbyte, str.endbyte,
+                str.val, str.token_error)
     elseif str.val == "false"
-        return emit(l, Tokens.FALSE, "false")
+        l.last_token = Tokens.FALSE
+        start_token!(l)
+        return Token(Tokens.FALSE, str.startpos,
+                str.endpos,
+                str.startbyte, str.endbyte,
+                str.val, str.token_error)
     else
         return str
     end
