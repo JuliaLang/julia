@@ -767,13 +767,13 @@ function insert!{T}(a::Array{T,1}, i::Integer, item)
 end
 
 """
-    deleteat!(a::Vector, i::Integer)
+    delete!(a::Vector, i::Integer)
 
 Remove the item at the given `i` and return the modified `a`. Subsequent items
 are shifted to fill the resulting gap.
 
 ```jldoctest
-julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
+julia> delete!([6, 5, 4, 3, 2, 1], 2)
 5-element Array{Int64,1}:
  6
  4
@@ -782,34 +782,34 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
  1
 ```
 """
-deleteat!(a::Vector, i::Integer) = (_deleteat!(a, i, 1); a)
+delete!(a::Vector, i::Integer) = (_deleteat!(a, i, 1); a)
 
-function deleteat!{T<:Integer}(a::Vector, r::UnitRange{T})
+function delete!{T<:Integer}(a::Vector, r::UnitRange{T})
     n = length(a)
     isempty(r) || _deleteat!(a, first(r), length(r))
     return a
 end
 
 """
-    deleteat!(a::Vector, inds)
+    delete!(a::Vector, inds)
 
 Remove the items at the indices given by `inds`, and return the modified `a`.
 Subsequent items are shifted to fill the resulting gap. `inds` must be sorted and unique.
 
 ```jldoctest
-julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
+julia> delete!([6, 5, 4, 3, 2, 1], 1:2:5)
 3-element Array{Int64,1}:
  5
  3
  1
 
-julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
+julia> delete!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
 Stacktrace:
- [1] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:808
+ [1] delete!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:822
 ```
 """
-function deleteat!(a::Vector, inds)
+function delete!(a::Vector, inds)
     n = length(a)
     s = start(inds)
     done(inds, s) && return a
@@ -938,7 +938,7 @@ function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins=_default_splice)
     v = a[r]
     m = length(ins)
     if m == 0
-        deleteat!(a, r)
+        delete!(a, r)
         return v
     end
 
@@ -1746,7 +1746,7 @@ function filter!(f, a::Vector)
             insrt += 1
         end
     end
-    deleteat!(a, insrt:length(a))
+    delete!(a, insrt:length(a))
     return a
 end
 

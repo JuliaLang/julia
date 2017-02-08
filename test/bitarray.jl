@@ -593,15 +593,15 @@ timesofar("indexing")
     i1 = Array(b1)
     for m = v1:-1:1
         j = rand(1:m)
-        deleteat!(b1, j)
-        deleteat!(i1, j)
+        delete!(b1, j)
+        delete!(i1, j)
         @test isequal(Array(b1), i1)
         @test bitcheck(b1)
     end
     @test length(b1) == 0
     b1 = bitrand(v1)
-    @test_throws ArgumentError deleteat!(b1, [1, 1, 2])
-    @test_throws BoundsError deleteat!(b1, [1, length(b1)+1])
+    @test_throws ArgumentError delete!(b1, [1, 1, 2])
+    @test_throws BoundsError delete!(b1, [1, length(b1)+1])
 
     b1 = bitrand(v1)
     i1 = Array(b1)
@@ -617,8 +617,8 @@ timesofar("indexing")
     b1 = bitrand(v1)
     i1 = Array(b1)
     for j in [63, 64, 65, 127, 128, 129, 191, 192, 193]
-        deleteat!(b1, j)
-        deleteat!(i1, j)
+        delete!(b1, j)
+        delete!(i1, j)
         @test isequal(Array(b1), i1)
         @test bitcheck(b1)
     end
@@ -641,8 +641,8 @@ timesofar("indexing")
     for m1 = 1:v1, m2 = m1:v1
         b2 = copy(b1)
         i2 = copy(i1)
-        deleteat!(b2, m1:m2)
-        deleteat!(i2, m1:m2)
+        delete!(b2, m1:m2)
+        delete!(i2, m1:m2)
         @test isequal(Array(b2), i2)
         @test bitcheck(b2)
     end
@@ -703,8 +703,8 @@ timesofar("indexing")
         m = [m1:m2...][locs]
         b2 = copy(b1)
         i2 = copy(i1)
-        deleteat!(b2, m)
-        deleteat!(i2, m)
+        delete!(b2, m)
+        delete!(i2, m)
         @test isequal(Array(b2), i2)
         @test bitcheck(b2)
     end

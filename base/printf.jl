@@ -64,7 +64,7 @@ function parse(s::AbstractString)
                 end
                 list[i] *= list[j]
             end
-            deleteat!(list,i+1:j)
+            delete!(list,i+1:j)
         end
         i += 1
     end

@@ -246,7 +246,7 @@ try_include(path::AbstractString) = isfile(path) && include(path)
 function process_options(opts::JLOptions)
     if !isempty(ARGS)
         idxs = find(x -> x == "--", ARGS)
-        length(idxs) > 0 && deleteat!(ARGS, idxs[1])
+        length(idxs) > 0 && delete!(ARGS, idxs[1])
     end
     repl                  = true
     startup               = (opts.startupfile != 2)

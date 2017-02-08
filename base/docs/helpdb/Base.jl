@@ -1171,13 +1171,6 @@ The largest integer losslessly representable by the given floating-point DataTyp
 maxintfloat
 
 """
-    delete!(collection, key)
-
-Delete the mapping for the given key in a collection, and return the collection.
-"""
-delete!
-
-"""
     eps(T)
 
 The distance between 1.0 and the next larger representable floating-point value of

@@ -3066,8 +3066,8 @@ function type_annotate!(sv::InferenceState)
             end
             # This can create `Expr(:gotoifnot)` with dangling label, which we
             # clean up in `reindex_labels!`
-            deleteat!(body, i)
-            deleteat!(states, i)
+            delete!(body, i)
+            delete!(states, i)
             nexpr -= 1
             continue
         end
@@ -4898,7 +4898,7 @@ function alloc_elim_pass!(sv::InferenceState)
                 continue
             end
 
-            deleteat!(body, i)  # remove tuple allocation
+            delete!(body, i)  # remove tuple allocation
             # convert tuple allocation to a series of local var assignments
             n_ins = 0
             if var === nothing
@@ -4993,7 +4993,7 @@ function delete_void_use!(body, var::Slot, i0)
     while i <= narg
         a = body[i]
         if isa(a, Slot) && slot_id(a) == slot_id(var)
-            deleteat!(body, i)
+            delete!(body, i)
             if i + ndel < i0
                 ndel += 1
             end

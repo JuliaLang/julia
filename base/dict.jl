@@ -554,6 +554,14 @@ function _delete!(h::Dict, index)
     return h
 end
 
+"""
+    delete!(collection, keys)
+
+Delete the mapping for the given key(s) or index(es) in a collection, and return
+the collection.
+"""
+function delete! end
+
 function delete!(h::Dict, key)
     index = ht_keyindex(h, key)
     if index > 0

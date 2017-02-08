@@ -271,8 +271,8 @@ function copy!(A::SparseMatrixCSC, B::SparseMatrixCSC)
         lastmodptrA -= 1
         if lastmodptrA >= nnzB
             # A will have fewer non-zero elements; unmodified elements are kept at the end.
-            deleteat!(A.rowval, nnzB+1:lastmodptrA)
-            deleteat!(A.nzval, nnzB+1:lastmodptrA)
+            delete!(A.rowval, nnzB+1:lastmodptrA)
+            delete!(A.nzval, nnzB+1:lastmodptrA)
         else
             # A will have more non-zero elements; unmodified elements are kept at the end.
             resize!(A.rowval, nnzB + nnzA - lastmodptrA)
@@ -429,8 +429,8 @@ function sparse_IJ_sorted!{Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector
     # Allow up to 20% slack
     if ndups > 0.2*L
         numnz = L-ndups
-        deleteat!(I, (numnz+1):L)
-        deleteat!(V, (numnz+1):length(V))
+        delete!(I, (numnz+1):L)
+        delete!(V, (numnz+1):length(V))
     end
 
     return SparseMatrixCSC(m, n, colptr, I, V)
@@ -1172,8 +1172,8 @@ function findn{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 
     count -= 1
     if numnz != count
-        deleteat!(I, (count+1):numnz)
-        deleteat!(J, (count+1):numnz)
+        delete!(I, (count+1):numnz)
+        delete!(J, (count+1):numnz)
     end
 
     return (I, J)
@@ -1197,9 +1197,9 @@ function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 
     count -= 1
     if numnz != count
-        deleteat!(I, (count+1):numnz)
-        deleteat!(J, (count+1):numnz)
-        deleteat!(V, (count+1):numnz)
+        delete!(I, (count+1):numnz)
+        delete!(J, (count+1):numnz)
+        delete!(V, (count+1):numnz)
     end
 
     return (I, J, V)
@@ -2152,8 +2152,8 @@ function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractArray)
     end
     colptrB = cumsum(colptrB)
     if n > (idxB-1)
-        deleteat!(nzvalB, idxB:n)
-        deleteat!(rowvalB, idxB:n)
+        delete!(nzvalB, idxB:n)
+        delete!(rowvalB, idxB:n)
     end
     SparseMatrixCSC(outm, outn, colptrB, rowvalB, nzvalB)
 end
@@ -2363,8 +2363,8 @@ function _spsetnz_setindex!{Tv,TiI<:Integer,TiJ<:Integer}(A::SparseMatrixCSC{Tv}
 
     if nadd > 0
         A.colptr[n+1] = rowidx
-        deleteat!(rowvalA, rowidx:nnzA)
-        deleteat!(nzvalA, rowidx:nnzA)
+        delete!(rowvalA, rowidx:nnzA)
+        delete!(nzvalA, rowidx:nnzA)
     end
     return A
 end
@@ -2498,8 +2498,8 @@ function setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixC
         colB += 1
     end
 
-    deleteat!(rowvalA, colptrA[end]:length(rowvalA))
-    deleteat!(nzvalA, colptrA[end]:length(nzvalA))
+    delete!(rowvalA, colptrA[end]:length(rowvalA))
+    delete!(nzvalA, colptrA[end]:length(nzvalA))
 
     return A
 end
@@ -2612,8 +2612,8 @@ function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractMatrix{Bool})
     if (nadd != 0)
         n = length(nzvalB)
         if n > (bidx-1)
-            deleteat!(nzvalB, bidx:n)
-            deleteat!(rowvalB, bidx:n)
+            delete!(nzvalB, bidx:n)
+            delete!(rowvalB, bidx:n)
         end
     end
     A
@@ -2721,8 +2721,8 @@ function setindex!{Tv,Ti,T<:Real}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractVecto
 
         n = length(nzvalB)
         if n > (bidx-1)
-            deleteat!(nzvalB, bidx:n)
-            deleteat!(rowvalB, bidx:n)
+            delete!(nzvalB, bidx:n)
+            delete!(rowvalB, bidx:n)
         end
     end
     A
@@ -2743,8 +2743,8 @@ function dropstored!(A::SparseMatrixCSC, i::Integer, j::Integer)
     searchk = searchsortedfirst(A.rowval, i, coljfirstk, coljlastk, Base.Order.Forward)
     if searchk <= coljlastk && A.rowval[searchk] == i
         # Entry A[i,j] is stored. Drop and return.
-        deleteat!(A.rowval, searchk)
-        deleteat!(A.nzval, searchk)
+        delete!(A.rowval, searchk)
+        delete!(A.nzval, searchk)
         @simd for m in (j+1):(A.n + 1)
             @inbounds A.colptr[m] -= 1
         end
@@ -2815,8 +2815,8 @@ function dropstored!{TiI<:Integer,TiJ<:Integer}(A::SparseMatrixCSC,
 
     if ndel > 0
         A.colptr[n+1] = rowidx
-        deleteat!(rowvalA, rowidx:nnzA)
-        deleteat!(nzvalA, rowidx:nnzA)
+        delete!(rowvalA, rowidx:nnzA)
+        delete!(nzvalA, rowidx:nnzA)
     end
     return A
 end

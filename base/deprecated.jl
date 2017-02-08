@@ -605,8 +605,8 @@ function gen_broadcast_body_zpreserving(f::Function, is_first_sparse::Bool)
             end
             B.colptr[col+1] = ptrB
         end
-        deleteat!(B.rowval, B.colptr[end]:length(B.rowval))
-        deleteat!(B.nzval, B.colptr[end]:length(B.nzval))
+        delete!(B.rowval, B.colptr[end]:length(B.rowval))
+        delete!(B.nzval, B.colptr[end]:length(B.nzval))
         nothing
     end
 end
@@ -1226,6 +1226,8 @@ for name in ("alnum", "alpha", "cntrl", "digit", "number", "graph",
     f = Symbol("is",name)
     @eval @deprecate ($f)(s::AbstractString) all($f, s)
 end
+
+@deprecate deleteat! delete!
 
 # TODO: remove warning for using `_` in parse_input_line in base/client.jl
 

@@ -251,7 +251,6 @@ Base.pop!(::Any)
 Base.unshift!
 Base.shift!
 Base.insert!
-Base.deleteat!
 Base.splice!
 Base.resize!
 Base.append!

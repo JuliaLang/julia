@@ -194,7 +194,7 @@ end
         @test total_broken == 0
     end
     ts.anynonpass = false
-    deleteat!(Base.Test.get_testset().results,1)
+    delete!(Base.Test.get_testset().results,1)
 end
 
 @test .1+.1+.1 ≈ .3

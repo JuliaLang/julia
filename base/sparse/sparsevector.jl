@@ -226,8 +226,8 @@ function dropstored!(x::SparseVector, i::Integer)
     searchk = searchsortedfirst(x.nzind, i)
     if searchk <= length(x.nzind) && x.nzind[searchk] == i
         # Entry x[i] is stored. Drop and return.
-        deleteat!(x.nzind, searchk)
-        deleteat!(x.nzval, searchk)
+        delete!(x.nzind, searchk)
+        delete!(x.nzval, searchk)
     end
     return x
 end
@@ -322,8 +322,8 @@ function prep_sparsevec_copy_dest!(A::SparseVector, lB, nnzB)
         lastmodindA = searchsortedlast(A.nzind, lB)
         if lastmodindA >= nnzB
             # A will have fewer non-zero elements; unmodified elements are kept at the end.
-            deleteat!(A.nzind, nnzB+1:lastmodindA)
-            deleteat!(A.nzval, nnzB+1:lastmodindA)
+            delete!(A.nzind, nnzB+1:lastmodindA)
+            delete!(A.nzval, nnzB+1:lastmodindA)
         else
             # A will have more non-zero elements; unmodified elements are kept at the end.
             resize!(A.nzind, nnzB + nnzA - lastmodindA)
@@ -482,8 +482,8 @@ function _logical_index{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractArray{Bool})
         (rowB > n) && break
     end
     if nnzB > (c-1)
-        deleteat!(nzvalB, c:nnzB)
-        deleteat!(rowvalB, c:nnzB)
+        delete!(nzvalB, c:nnzB)
+        delete!(rowvalB, c:nnzB)
     end
     SparseVector(n, rowvalB, nzvalB)
 end
@@ -521,8 +521,8 @@ function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::UnitRange)
         end
     end
     if nnzB > (idxB-1)
-        deleteat!(nzvalB, idxB:nnzB)
-        deleteat!(rowvalB, idxB:nnzB)
+        delete!(nzvalB, idxB:nnzB)
+        delete!(rowvalB, idxB:nnzB)
     end
     SparseVector(n, rowvalB, nzvalB)
 end
@@ -558,8 +558,8 @@ function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractVector)
         end
     end
     if nnzB > (idxB-1)
-        deleteat!(nzvalB, idxB:nnzB)
-        deleteat!(rowvalB, idxB:nnzB)
+        delete!(nzvalB, idxB:nnzB)
+        delete!(rowvalB, idxB:nnzB)
     end
     SparseVector(n, rowvalB, nzvalB)
 end
@@ -581,7 +581,7 @@ function find{Tv,Ti}(x::SparseVector{Tv,Ti})
 
     count -= 1
     if numnz != count
-        deleteat!(I, (count+1):numnz)
+        delete!(I, (count+1):numnz)
     end
 
     return I
@@ -607,8 +607,8 @@ function findnz{Tv,Ti}(x::SparseVector{Tv,Ti})
 
     count -= 1
     if numnz != count
-        deleteat!(I, (count+1):numnz)
-        deleteat!(V, (count+1):numnz)
+        delete!(I, (count+1):numnz)
+        delete!(V, (count+1):numnz)
     end
 
     return (I, V)
@@ -1802,7 +1802,7 @@ function sort{Tv,Ti}(x::SparseVector{Tv,Ti}; kws...)
     z = findfirst(sinds,k)
     newnzind = collect(Ti,1:k-1)
     newnzind[z:end]+= n-k+1
-    newnzvals = allvals[deleteat!(sinds[1:k],z)]
+    newnzvals = allvals[delete!(sinds[1:k],z)]
     SparseVector(n,newnzind,newnzvals)
 end
 

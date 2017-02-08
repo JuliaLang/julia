@@ -204,7 +204,7 @@ function wait()
                     end
                     # return ourself to the runnable state
                     i = findfirst(Workqueue, ct)
-                    i == 0 || deleteat!(Workqueue, i)
+                    i == 0 || delete!(Workqueue, i)
                     ct.state = :runnable
                 end
                 rethrow(e)
