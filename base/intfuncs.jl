@@ -195,7 +195,7 @@ end
 ^(x::Number, p::Integer)  = power_by_squaring(x,p)
 ^(x, p::Integer)          = power_by_squaring(x,p)
 
-# x^p for small literal p is lowered to x^Val{p},
+# x^p for any literal integer p is lowered to x^Val{p},
 # to enable compile-time optimizations specialized to p.
 # However, we still need a fallback that calls the general ^:
 ^{p}(x, ::Type{Val{p}}) = x^p
