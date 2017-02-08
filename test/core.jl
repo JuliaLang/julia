@@ -105,6 +105,12 @@ h11840{T<:Tuple}(::Type{T}) = '4'
 @test h11840(Tuple) == '4'
 @test h11840(TT11840) == '4'
 
+# issue #20511
+f20511(x::DataType) = 0
+f20511(x) = 1
+Type{Integer}  # cache this
+@test f20511(Union{Integer,T} where T <: Unsigned) == 1
+
 # join
 @test typejoin(Int8,Int16) === Signed
 @test typejoin(Int,AbstractString) === Any
