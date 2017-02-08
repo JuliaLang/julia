@@ -1623,9 +1623,14 @@ end
 
 # julia#20006
 abstract AbstractFoo20006
-immutable ConcreteFoo20006{T<:Int} <: AbstractFoo20006
-end
+immutable ConcreteFoo20006{T<:Int} <: AbstractFoo20006 end
+immutable ConcreteFoo20006N{T<:Int,N} <: AbstractFoo20006 end
+typealias ConcreteFoo200061{T<:Int} ConcreteFoo20006N{T,1}
 @test Compat.TypeUtils.isabstract(AbstractFoo20006)
+@test !Compat.TypeUtils.isabstract(ConcreteFoo20006)
+@test !Compat.TypeUtils.isabstract(ConcreteFoo20006N)
+@test !Compat.TypeUtils.isabstract(ConcreteFoo200061)
+@test !Compat.TypeUtils.isabstract(StridedArray)
 @test Compat.TypeUtils.parameter_upper_bound(ConcreteFoo20006, 1) == Int
 @test isa(Compat.TypeUtils.typename(Array), TypeName)
 
