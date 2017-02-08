@@ -2745,7 +2745,7 @@ function dropstored!(A::SparseMatrixCSC, i::Integer, j::Integer)
         # Entry A[i,j] is stored. Drop and return.
         deleteat!(A.rowval, searchk)
         deleteat!(A.nzval, searchk)
-        @simd for m in j:(A.n + 1)
+        @simd for m in (j+1):(A.n + 1)
             @inbounds A.colptr[m] -= 1
         end
     end
