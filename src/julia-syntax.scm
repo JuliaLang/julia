@@ -1771,8 +1771,6 @@
               (extract (cdr params) (cons p newparams) whereparams)))))
   (extract (cddr e) '() '()))
 
-(define (smallnum? x) (and (integer? x) (< x 32) (> x -32)))
-
 ;; table mapping expression head to a function expanding that form
 (define expand-table
   (table
@@ -2059,7 +2057,7 @@
                     (expand-forms
                      `(call (core _apply) ,f ,@(tuple-wrap argl '())))))
 
-                 ((and (eq? f '^) (length= e 4) (smallnum? (cadddr e)))
+                 ((and (eq? f '^) (length= e 4) (integer? (cadddr e)))
                   (expand-forms
                    `(call ^ ,(caddr e) (call (core apply_type) (top Val) ,(cadddr e)))))
 
