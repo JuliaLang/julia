@@ -853,7 +853,7 @@ end
 # Simpler and more efficient version for logical indexing
 function deleteat!(a::Vector, inds::AbstractVector{Bool})
     n = length(a)
-    @boundscheck length(inds) == n || throw(BoundsError(a, inds))
+    length(inds) == n || throw(BoundsError(a, inds))
     p = 1
     for (q, i) in enumerate(inds)
         @inbounds a[p] = a[q]
