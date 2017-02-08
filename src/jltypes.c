@@ -956,7 +956,8 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
             }
             // normalize types equal to wrappers
             jl_value_t *tw = extract_wrapper(pi);
-            if (tw && tw != pi && jl_types_equal(pi, tw)) {
+            if (tw && tw != pi && (tn != jl_type_typename || jl_typeof(pi) == jl_typeof(tw)) &&
+                jl_types_equal(pi, tw)) {
                 iparams[i] = tw;
                 if (p) jl_gc_wb(p, tw);
             }
