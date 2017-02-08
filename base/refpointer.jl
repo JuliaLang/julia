@@ -37,8 +37,8 @@ unsafe_convert{T}(::Type{Ref{T}}, x) = unsafe_convert(Ptr{T}, x)
 
 type RefValue{T} <: Ref{T}
     x::T
-    RefValue{T}() where T = new()
-    RefValue{T}(x) where T = new(x)
+    RefValue{T}() where {T} = new()
+    RefValue{T}(x) where {T} = new(x)
 end
 RefValue{T}(x::T) = RefValue{T}(x)
 isassigned(x::RefValue) = isdefined(x, :x)

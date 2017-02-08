@@ -7,14 +7,14 @@ immutable QR{T,S<:AbstractMatrix} <: Factorization{T}
     τ::Vector{T}
     QR{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
-QR(factors::AbstractMatrix{T}, τ::Vector{T}) where T = QR{T,typeof(factors)}(factors, τ)
+QR(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QR{T,typeof(factors)}(factors, τ)
 # Note. For QRCompactWY factorization without pivoting, the WY representation based method introduced in LAPACK 3.4
 immutable QRCompactWY{S,M<:AbstractMatrix} <: Factorization{S}
     factors::M
     T::Matrix{S}
     QRCompactWY{S,M}(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) where {S,M<:AbstractMatrix} = new(factors, T)
 end
-QRCompactWY(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) where S = QRCompactWY{S,typeof(factors)}(factors, T)
+QRCompactWY(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) where {S} = QRCompactWY{S,typeof(factors)}(factors, T)
 
 immutable QRPivoted{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
@@ -23,7 +23,7 @@ immutable QRPivoted{T,S<:AbstractMatrix} <: Factorization{T}
     QRPivoted{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}, jpvt::Vector{BlasInt}) where {T,S<:AbstractMatrix} =
         new(factors, τ, jpvt)
 end
-QRPivoted(factors::AbstractMatrix{T}, τ::Vector{T}, jpvt::Vector{BlasInt}) where T =
+QRPivoted(factors::AbstractMatrix{T}, τ::Vector{T}, jpvt::Vector{BlasInt}) where {T} =
     QRPivoted{T,typeof(factors)}(factors, τ, jpvt)
 
 function qrfactUnblocked!{T}(A::AbstractMatrix{T})
@@ -346,14 +346,14 @@ immutable QRPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     τ::Vector{T}
     QRPackedQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
-QRPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where T = QRPackedQ{T,typeof(factors)}(factors, τ)
+QRPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QRPackedQ{T,typeof(factors)}(factors, τ)
 
 immutable QRCompactWYQ{S, M<:AbstractMatrix} <: AbstractMatrix{S}
     factors::M
     T::Matrix{S}
     QRCompactWYQ{S,M}(factors::AbstractMatrix{S}, T::Matrix{S}) where {S,M<:AbstractMatrix} = new(factors, T)
 end
-QRCompactWYQ(factors::AbstractMatrix{S}, T::Matrix{S}) where S = QRCompactWYQ{S,typeof(factors)}(factors, T)
+QRCompactWYQ(factors::AbstractMatrix{S}, T::Matrix{S}) where {S} = QRCompactWYQ{S,typeof(factors)}(factors, T)
 
 convert{T}(::Type{QRPackedQ{T}}, Q::QRPackedQ) = QRPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
 convert{T}(::Type{AbstractMatrix{T}}, Q::QRPackedQ{T}) = Q

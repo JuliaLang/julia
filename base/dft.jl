@@ -244,7 +244,7 @@ type ScaledPlan{T,P,N} <: Plan{T}
     ScaledPlan{T,P,N}(p, scale) where {T,P,N} = new(p, scale)
 end
 ScaledPlan{T}(p::P, scale::N) where {T,P,N} = ScaledPlan{T,P,N}(p, scale)
-ScaledPlan(p::Plan{T}, scale::Number) where T = ScaledPlan{T}(p, scale)
+ScaledPlan(p::Plan{T}, scale::Number) where {T} = ScaledPlan{T}(p, scale)
 ScaledPlan(p::ScaledPlan, α::Number) = ScaledPlan(p.p, p.scale * α)
 
 size(p::ScaledPlan) = size(p.p)

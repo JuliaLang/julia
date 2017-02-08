@@ -46,7 +46,7 @@ julia> SymTridiagonal(dv, ev)
  ⋅  ⋅  9  4
 ```
 """
-SymTridiagonal(dv::Vector{T}, ev::Vector{T}) where T = SymTridiagonal{T}(dv, ev)
+SymTridiagonal(dv::Vector{T}, ev::Vector{T}) where {T} = SymTridiagonal{T}(dv, ev)
 
 function SymTridiagonal(dv::AbstractVector{Td}, ev::AbstractVector{Te}) where {Td,Te}
     T = promote_type(Td,Te)
