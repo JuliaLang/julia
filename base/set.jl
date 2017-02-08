@@ -123,16 +123,45 @@ julia> unique([1; 2; 2; 6])
  6
 ```
 """
-function unique(C)
-    out = Vector{eltype(C)}()
-    seen = Set{eltype(C)}()
-    for x in C
+function unique(itr)
+    T = _default_eltype(typeof(itr))
+    out = Vector{T}()
+    seen = Set{T}()
+    i = start(itr)
+    if done(itr, i)
+        return out
+    end
+    x, i = next(itr, i)
+    if !isleaftype(T)
+        S = typeof(x)
+        return _unique_from(itr, S[x], Set{S}((x,)), i)
+    end
+    push!(seen, x)
+    push!(out, x)
+    return unique_from(itr, out, seen, i)
+end
+
+_unique_from(itr, out, seen, i) = unique_from(itr, out, seen, i)
+@inline function unique_from{T}(itr, out::Vector{T}, seen, i)
+    while !done(itr, i)
+        x, i = next(itr, i)
+        S = typeof(x)
+        if !(S === T || S <: T)
+            R = typejoin(S, T)
+            seenR = convert(Set{R}, seen)
+            outR = convert(Vector{R}, out)
+            if !in(x, seenR)
+                push!(seenR, x)
+                push!(outR, x)
+            end
+            return _unique_from(itr, outR, seenR, i)
+        end
         if !in(x, seen)
             push!(seen, x)
             push!(out, x)
         end
     end
-    out
+    return out
 end
 
 """
