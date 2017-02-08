@@ -1859,7 +1859,8 @@ function sqrtm(A::UpperTriangular)
     if isreal(A)
         realmatrix = true
         for i = 1:checksquare(A)
-            if real(A[i,i]) < 0
+            x = real(A[i,i])
+            if x < zero(x)
                 realmatrix = false
                 break
             end

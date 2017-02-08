@@ -6,7 +6,7 @@ colon{T<:Real}(start::T, stop::T) = UnitRange{T}(start, stop)
 
 range(a::Real, len::Integer) = UnitRange{typeof(a)}(a, oftype(a, a+len-1))
 
-colon{T}(start::T, stop::T) = colon(start, oneunit(stop-start), stop)
+colon{T}(start::T, stop::T) = colon(start, oftype(stop-start, 1), stop)
 
 range(a, len::Integer) = range(a, oneunit(a-a), len)
 
@@ -49,7 +49,7 @@ _range{T,S}(::Any, ::Any, a::T, step::S, len::Integer) = StepRangeLen{typeof(a+0
 
 # AbstractFloat specializations
 colon{T<:AbstractFloat}(a::T, b::T) = colon(a, T(1), b)
-range(a::AbstractFloat, len::Integer) = range(a, oneunit(a), len)
+range(a::AbstractFloat, len::Integer) = range(a, oftype(a, 1), len)
 
 colon{T<:Real}(a::T, b::AbstractFloat, c::T) = colon(promote(a,b,c)...)
 colon{T<:AbstractFloat}(a::T, b::AbstractFloat, c::T) = colon(promote(a,b,c)...)
