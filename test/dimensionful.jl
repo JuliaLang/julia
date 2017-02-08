@@ -24,6 +24,7 @@ Base.one{p,T}(x::Furlong{p,T}) = one(T)
 Base.one{p,T}(::Type{Furlong{p,T}}) = one(T)
 Base.zero{p,T}(x::Furlong{p,T}) = Furlong{p,T}(zero(T))
 Base.zero{p,T}(::Type{Furlong{p,T}}) = Furlong{p,T}(zero(T))
+Base.iszero(x::Furlong) = iszero(x.val)
 
 Base.abs{p,T}(x::Furlong{p,T}) = Furlong{p,T}(abs(x.val))
 
@@ -41,6 +42,7 @@ for op in (:+, :-)
         Furlong{p}(v)
     end
 end
+<(x::Furlong,r::Real) = iszero(r) ? x.val < 0 : error("can't compare Furlongs to nonzero real")
 for op in (:(==), :(!=), :<, :<=, :isless, :isequal)
     @eval $op{T,p,S}(x::Furlong{p,T}, y::Furlong{p,S}) = $op(x.val, y.val)
 end
@@ -48,7 +50,7 @@ end
 for (f,op) in ((:_plus,:+),(:_minus,:-),(:_times,:*),(:_div,://))
     @eval @generated function $f{T,p,q}(v::T, ::Furlong{p}, ::Union{Furlong{q},Type{Val{q}}})
         s = $op(p, q)
-        :(Furlong{$s,$T}(v))
+        isinteger(s) ? :(Furlong{$(Int(s)),$T}(v)) : :(Furlong{$s,$T}(v))
     end
 end
 for (op,eop) in ((:*, :_plus), (:/, :_minus), (://, :_minus), (:div, :_minus))
@@ -68,4 +70,5 @@ end
 Base.sqrt{p,T}(x::Furlong{p,T}) = _div(sqrt(x.val), x, Val{2})
 
 @test collect(Furlong(2):Furlong(10)) == collect(Furlong(2):Furlong(1):Furlong(10)) == Furlong.(2:10)
-@test collect(Furlong(1.0):Furlong(0.5):Furlong(10.0)) == Furlong.(1:0.5:10)
+@test collect(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
+      collect(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong.(1:0.5:10)
