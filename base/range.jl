@@ -8,7 +8,7 @@ range(a::Real, len::Integer) = UnitRange{typeof(a)}(a, oftype(a, a+len-1))
 
 colon{T}(start::T, stop::T) = colon(start, oftype(stop-start, 1), stop)
 
-range(a, len::Integer) = range(a, oneunit(a-a), len)
+range(a, len::Integer) = range(a, oftype(a-a, 1), len)
 
 # first promote start and stop, leaving step alone
 colon{A<:Real,C<:Real}(start::A, step, stop::C) = colon(convert(promote_type(A,C),start), step, convert(promote_type(A,C),stop))
