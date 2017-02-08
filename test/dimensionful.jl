@@ -25,10 +25,10 @@ Base.zero{p,T}(::Type{Furlong{p,T}}) = Furlong{p,T}(zero(T))
 Base.abs{p,T}(x::Furlong{p,T}) = Furlong{p,T}(abs(x.val))
 
 for f in (:isfinite, :isnan, :isreal)
-    @eval Base.$f(x::Furlong) = isfinite(x.val)
+    @eval Base.$f(x::Furlong) = $f(x.val)
 end
 for f in (:real,:imag,:complex)
-    @eval Base.$f{p,T}(x::Furlong{p,T}) = Furlong{p}(f(x.val))
+    @eval Base.$f{p,T}(x::Furlong{p,T}) = Furlong{p}($f(x.val))
 end
 
 import Base: +, -, ==, !=, <, <=, isless, isequal, *, /, //, div, rem, mod, ^
