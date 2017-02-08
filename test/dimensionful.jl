@@ -27,6 +27,7 @@ Base.zero{p,T}(::Type{Furlong{p,T}}) = Furlong{p,T}(zero(T))
 Base.iszero(x::Furlong) = iszero(x.val)
 
 Base.abs{p,T}(x::Furlong{p,T}) = Furlong{p,T}(abs(x.val))
+@generated Base.abs2{p,T}(x::Furlong{p,T}) = :(Furlong{$(2p),T}(abs2(x.val)))
 @generated Base.inv{p,T}(x::Furlong{p,T}) = :(Furlong{$(-p)}(inv(x.val)))
 Base.sylvester(a::Furlong,b::Furlong,c::Furlong) = -c / (a + b)
 
@@ -74,6 +75,12 @@ Base.sqrt{p,T}(x::Furlong{p,T}) = _div(sqrt(x.val), x, Val{2})
 @test collect(Furlong(2):Furlong(10)) == collect(Furlong(2):Furlong(1):Furlong(10)) == Furlong.(2:10)
 @test collect(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
       collect(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong.(1:0.5:10)
+
+@test sum(Furlong(1):Furlong(10)) == sum(collect(Furlong(1):Furlong(10))) == Furlong(55)
+@test cumsum(Furlong(1):Furlong(3)) == Furlong.([1,3,6])
+@test mean([Furlong(1), Furlong(2)]) == Furlong(1.5)
+@test var([Furlong(1), Furlong(2)]) == Furlong{2}(0.5)
+@test std([Furlong(1), Furlong(2)]) == Furlong{1}(sqrt(0.5))
 
 let A = UpperTriangular([Furlong(1) Furlong(4); Furlong(0) Furlong(1)])
     @test sqrtm(A) == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
