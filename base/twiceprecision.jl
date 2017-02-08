@@ -106,6 +106,10 @@ end
 
 function floatrange(a::AbstractFloat, st::AbstractFloat, len::Real, divisor::AbstractFloat)
     T = promote_type(typeof(a), typeof(st), typeof(divisor))
+    floatrange(T, a, st, len, divisor)
+end
+
+function floatrange{T}(::Type{T}, a::AbstractFloat, st::AbstractFloat, len::Real, divisor::AbstractFloat)
     m = maxintfloat(T)
     if abs(a) <= m && abs(st) <= m && abs(divisor) <= m
         ia, ist, idivisor = round(Int, a), round(Int, st), round(Int, divisor)
