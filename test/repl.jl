@@ -100,6 +100,13 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     end
     cd(origpwd)
 
+    # issue #20482
+    write(stdin_write, ";")
+    readuntil(stdout_read, "shell> ")
+    write(stdin_write, "echo hello >/dev/null\n")
+    readuntil(stdout_read, "\n")
+    readuntil(stdout_read, "\n")
+
     # Test that accepting a REPL result immediately shows up, not
     # just on the next keystroke
     write(stdin_write, "1+1\n") # populate history with a trivial input
