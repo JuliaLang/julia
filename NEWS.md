@@ -59,6 +59,9 @@ Language changes
   * `@.` is now parsed as `@__dot__`, and can be used to add dots to
     every function call, operator, and assignment in an expression ([#20321]).
 
+  * The identifier `_` can be assigned, but accessing its value is deprecated,
+    allowing this syntax to be used in the future for discarding values ([#9343], [#18251]).
+
 Breaking changes
 ----------------
 
