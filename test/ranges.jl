@@ -861,3 +861,18 @@ let r = linspace(-big(1.0),big(1.0),4)
     @test isa(@inferred(r[2]), BigFloat)
     @test r[2] ≈ big(-1.0)/3
 end
+
+# issue #20506
+let filename = tempname()
+    open(filename, "w") do f
+        redirect_stderr(f) do
+            r = FloatRange(10.0, 1.0, 11.0, 10.0)
+            @test first(r) == 1.0
+            @test step(r) == 0.1
+            @test length(r) == 11
+            @test last(r) == 2.0
+        end
+    end
+    @test contains(readstring(filename), "deprecated")
+    rm(filename)
+end
