@@ -341,9 +341,13 @@ end
 
 for T = (Float32, Float64,), i = 1:2^15, n = 1:5
     start, step = randn(T), randn(T)
+    step == 0 && continue
     stop = start + (n-1)*step
+    lo = hi = n
+    while start + (lo-1)*step == stop; lo -= 1; end
+    while start + (hi-1)*step == stop; hi += 1; end
     r = start:step:stop
-    @test n == length(r)
+    @test lo < length(r) < hi
     # FIXME: these fail some small portion of the time
     @test_skip start == first(r)
     @test_skip stop  == last(r)
