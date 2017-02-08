@@ -3135,7 +3135,7 @@ typealias PossiblyInvalidUnion{T} Union{T,Int}
 # issue #13007
 call13007{T,N}(::Type{Array{T,N}}) = 0
 call13007(::Type{Array}) = 1
-@test length(Base._methods(call13007, Tuple{Type{_} where _<:Array}, 4, typemax(UInt))) == 2
+@test length(Base._methods(call13007, Tuple{Type{x} where x<:Array}, 4, typemax(UInt))) == 2
 
 # detecting cycles during type intersection, e.g. #1631
 cycle_in_solve_tvar_constraints{S}(::Type{Nullable{S}}, x::S) = 0
@@ -4141,7 +4141,7 @@ end
 
 # issue #12096
 let a = Val{Val{TypeVar(:_, Int)}},
-    b = Val{Val{_} where _<:Int}
+    b = Val{Val{x} where x<:Int}
 
     @test !isdefined(a, :instance)
     @test  isdefined(b, :instance)
