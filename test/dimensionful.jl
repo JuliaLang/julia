@@ -5,6 +5,8 @@
 # represents a quantity in furlongs^p
 struct Furlong{p,T<:Number} <: Number
     val::T
+    Furlong(v::Number) = new(v)
+    Furlong(x::Furlong{p}) = new(x.val)
 end
 Furlong{T<:Number}(x::T) = Furlong{1,T}(x)
 (::Type{T}){p,T}(x::Furlong{p,T}) = x.val

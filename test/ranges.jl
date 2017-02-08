@@ -890,6 +890,6 @@ isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
 using TestHelpers.Furlong
 @test_throws MethodError collect(Furlong(2):Furlong(10)) # step size is ambiguous
 @test_throws MethodError range(Furlong(2), 9) # step size is ambiguous
-@test collect(Furlong(2):Furlong(1):Furlong(10)) == range(Furlong(2),Furlong(1),9) == Furlong.(2:10)
+@test collect(Furlong(2):Furlong(1):Furlong(10)) == collect(range(Furlong(2),Furlong(1),9)) == Furlong.(2:10)
 @test collect(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
       collect(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong.(1:0.5:10)
