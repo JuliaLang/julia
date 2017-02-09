@@ -147,9 +147,17 @@ function colon{T<:Union{Float16,Float32,Float64}}(start::T, step::T, stop::T)
         end
     end
     # Fallback, taking start and step literally
-    len = max(0, floor(Int, (stop-start)/step) + 1)
-    stop′ = start + len*step
-    len += (start < stop′ <= stop) + (start > stop′ >= stop)
+    lf = (stop-start)/step
+    if lf < 0
+        len = 0
+    elseif lf == 0
+        len = 1
+    else
+        len = round(Int, lf) + 1
+        stop′ = start + (len-1)*step
+        # if we've overshot the end, subtract one:
+        len -= (start < stop < stop′) + (start > stop > stop′)
+    end
     StepRangeLen(TwicePrecision(start, zero(T)), twiceprecision(step, nbitslen(T, len, 1)), len)
 end
 
