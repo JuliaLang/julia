@@ -61,6 +61,7 @@ endif
 else
 SRCS += anticodegen
 LLVM_LIBS := support
+USE_LLVM_SHLIB := 0
 endif
 
 # headers are used for dependency tracking, while public headers will be part of the dist

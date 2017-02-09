@@ -249,7 +249,7 @@ STATIC_INLINE jl_value_t *jl_call_method_internal(jl_method_instance_t *meth, jl
     else if (fptr.jlcall_api == 3)
         return fptr.fptr3(meth->sparam_vals, args[0], &args[1], nargs-1);
     else if (fptr.jlcall_api == 4)
-        return fptr.fptr4(meth, &args[0], nargs, meth->sparam_vals);
+        return fptr.fptr4(meth, &args[0], nargs);
     else
         abort();
 }

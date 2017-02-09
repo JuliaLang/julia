@@ -14,6 +14,8 @@ void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t
 int32_t jl_get_llvm_gv(jl_value_t *p) UNAVAILABLE
 void jl_write_malloc_log(void) UNAVAILABLE
 void jl_write_coverage_data(void) UNAVAILABLE
+int32_t jl_assign_functionID(void *function) UNAVAILABLE
+int32_t jl_jlcall_api(const void *function) UNAVAILABLE
 
 JL_DLLEXPORT void jl_clear_malloc_data(void) UNAVAILABLE
 JL_DLLEXPORT void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name) UNAVAILABLE
@@ -25,6 +27,7 @@ JL_DLLEXPORT void *jl_LLVMCreateDisasm(const char *TripleName, void *DisInfo, in
 JL_DLLEXPORT size_t jl_LLVMDisasmInstruction(void *DC, uint8_t *Bytes, uint64_t BytesSize, uint64_t PC, char *OutString, size_t OutStringSize) UNAVAILABLE
 
 void jl_init_codegen(void) { }
+
 void jl_fptr_to_llvm(jl_fptr_t fptr, jl_method_instance_t *lam, int specsig)
 {
     if (!specsig)
@@ -41,13 +44,22 @@ void jl_register_fptrs(uint64_t sysimage_base, void **fptrs, jl_method_instance_
     (void)sysimage_base; (void)fptrs; (void)linfos; (void)n;
 }
 
-void jl_compile_linfo(jl_method_instance_t *li) { }
+jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t *src, size_t world, const jl_cgparams_t *params)
+{
+    jl_llvm_functions_t decls = {NULL, NULL};
+    return decls;
+}
 
 jl_value_t *jl_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs);
-void jl_generate_fptr(jl_method_instance_t *li)
+
+jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, void *F, size_t world)
 {
-    li->fptr = (jl_fptr_t)&jl_interpret_call;
-    li->jlcall_api = 4;
+    jl_generic_fptr_t fptr;
+    fptr.fptr4 = jl_interpret_call;
+    fptr.jlcall_api = 4;
+    li->fptr = fptr.fptr;
+    li->jlcall_api = fptr.jlcall_api;
+    return fptr;
 }
 
 JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION(void)
