@@ -47,7 +47,7 @@ cache:
 branches:
   only:
     - master
-    - /release-.*/
+    - /^release-.*/
 notifications:
     email: false
     irc:
