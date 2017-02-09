@@ -160,7 +160,7 @@ end
 ## Windows entropy
 
 if is_windows()
-    function win32_SystemFunction036!{T}(a::Array{T})
+    function win32_SystemFunction036!(a::Array)
         ccall((:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Void}, UInt32), a, sizeof(a))
     end
 end

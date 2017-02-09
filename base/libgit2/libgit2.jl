@@ -202,7 +202,7 @@ function set_remote_url(path::AbstractString, url::AbstractString; remote::Abstr
     end
 end
 
-function make_payload{P<:AbstractCredentials}(payload::Nullable{P})
+function make_payload(payload::Nullable{<:AbstractCredentials})
     Ref{Nullable{AbstractCredentials}}(payload)
 end
 
@@ -223,11 +223,10 @@ The keyword arguments are:
 
 Equivalent to `git fetch [<remoteurl>|<repo>] [<refspecs>]`.
 """
-function fetch{T<:AbstractString, P<:AbstractCredentials}(repo::GitRepo;
-                                  remote::AbstractString="origin",
-                                  remoteurl::AbstractString="",
-                                  refspecs::Vector{T}=AbstractString[],
-                                  payload::Nullable{P}=Nullable{AbstractCredentials}())
+function fetch(repo::GitRepo; remote::AbstractString="origin",
+               remoteurl::AbstractString="",
+               refspecs::Vector{<:AbstractString}=AbstractString[],
+               payload::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}())
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
@@ -258,12 +257,11 @@ The keyword arguments are:
 
 Equivalent to `git push [<remoteurl>|<repo>] [<refspecs>]`.
 """
-function push{T<:AbstractString, P<:AbstractCredentials}(repo::GitRepo;
-              remote::AbstractString="origin",
+function push(repo::GitRepo; remote::AbstractString="origin",
               remoteurl::AbstractString="",
-              refspecs::Vector{T}=AbstractString[],
+              refspecs::Vector{<:AbstractString}=AbstractString[],
               force::Bool=false,
-              payload::Nullable{P}=Nullable{AbstractCredentials}())
+              payload::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}())
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
@@ -437,11 +435,11 @@ The keyword arguments are:
 
 Equivalent to `git clone [-b <branch>] [--bare] <repo_url> <repo_path>`.
 """
-function clone{P<:AbstractCredentials}(repo_url::AbstractString, repo_path::AbstractString;
+function clone(repo_url::AbstractString, repo_path::AbstractString;
                branch::AbstractString="",
                isbare::Bool = false,
                remote_cb::Ptr{Void} = C_NULL,
-               payload::Nullable{P}=Nullable{AbstractCredentials}())
+               payload::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}())
     # setup clone options
     lbranch = Base.cconvert(Cstring, branch)
     payload = make_payload(payload)

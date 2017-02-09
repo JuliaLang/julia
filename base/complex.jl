@@ -204,7 +204,7 @@ conj(z::Complex) = Complex(real(z),-imag(z))
 abs(z::Complex)  = hypot(real(z), imag(z))
 abs2(z::Complex) = real(z)*real(z) + imag(z)*imag(z)
 inv(z::Complex)  = conj(z)/abs2(z)
-inv{T<:Integer}(z::Complex{T}) = inv(float(z))
+inv(z::Complex{<:Integer}) = inv(float(z))
 
 -(z::Complex) = Complex(-real(z), -imag(z))
 +(z::Complex, w::Complex) = Complex(real(z) + real(w), imag(z) + imag(w))
@@ -288,7 +288,7 @@ function /{T<:Real}(a::Complex{T}, b::Complex{T})
     end
 end
 
-inv{T<:Union{Float16,Float32}}(z::Complex{T}) =
+inv(z::Complex{<:Union{Float16,Float32}}) =
     oftype(z, conj(widen(z))/abs2(widen(z)))
 
 /{T<:Union{Float16,Float32}}(z::Complex{T}, w::Complex{T}) =
@@ -377,7 +377,7 @@ function ssqs{T<:AbstractFloat}(x::T, y::T)
     ρ, k
 end
 
-function sqrt{T<:AbstractFloat}(z::Complex{T})
+function sqrt(z::Complex{<:AbstractFloat})
     x, y = reim(z)
     if x==y==0
         return Complex(zero(x),y)
@@ -659,12 +659,12 @@ end
 ^(z::Complex, n::Bool) = n ? z : one(z)
 ^(z::Complex, n::Integer) = z^Complex(n)
 
-^{T<:AbstractFloat}(z::Complex{T}, n::Bool) = n ? z : one(z)  # to resolve ambiguity
-^{T<:Integer}(z::Complex{T}, n::Bool) = n ? z : one(z)        # to resolve ambiguity
+^(z::Complex{<:AbstractFloat}, n::Bool) = n ? z : one(z)  # to resolve ambiguity
+^(z::Complex{<:Integer}, n::Bool) = n ? z : one(z)        # to resolve ambiguity
 
-^{T<:AbstractFloat}(z::Complex{T}, n::Integer) =
+^(z::Complex{<:AbstractFloat}, n::Integer) =
     n>=0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
-^{T<:Integer}(z::Complex{T}, n::Integer) = power_by_squaring(z,n) # DomainError for n<0
+^(z::Complex{<:Integer}, n::Integer) = power_by_squaring(z,n) # DomainError for n<0
 
 function sin{T}(z::Complex{T})
     F = float(T)
@@ -722,7 +722,7 @@ function asin(z::Complex)
     Complex(ξ,η)
 end
 
-function acos{T<:AbstractFloat}(z::Complex{T})
+function acos(z::Complex{<:AbstractFloat})
     zr, zi = reim(z)
     if isnan(zr)
         if isinf(zi) return Complex(zr, -zi)
@@ -863,7 +863,7 @@ breaking ties using the specified [`RoundingMode`](@ref)s. The first
 [`RoundingMode`](@ref) is used for rounding the real components while the
 second is used for rounding the imaginary components.
 """
-function round{T<:AbstractFloat, MR, MI}(z::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})
+function round{MR, MI}(z::Complex{<:AbstractFloat}, ::RoundingMode{MR}, ::RoundingMode{MI})
     Complex(round(real(z), RoundingMode{MR}()),
             round(imag(z), RoundingMode{MI}()))
 end
@@ -874,15 +874,15 @@ function round(z::Complex, digits::Integer, base::Integer=10)
             round(imag(z), digits, base))
 end
 
-float{T<:AbstractFloat}(z::Complex{T}) = z
+float(z::Complex{<:AbstractFloat}) = z
 float(z::Complex) = Complex(float(real(z)), float(imag(z)))
 
-big{T<:AbstractFloat}(z::Complex{T}) = Complex{BigFloat}(z)
-big{T<:Integer}(z::Complex{T}) = Complex{BigInt}(z)
+big(z::Complex{<:AbstractFloat}) = Complex{BigFloat}(z)
+big(z::Complex{<:Integer}) = Complex{BigInt}(z)
 
 ## Array operations on complex numbers ##
 
-complex{T<:Complex}(A::AbstractArray{T}) = A
+complex(A::AbstractArray{<:Complex}) = A
 
 function complex{T}(A::AbstractArray{T})
     if !isleaftype(T)

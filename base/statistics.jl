@@ -27,7 +27,7 @@ mean(iterable) = mean(identity, iterable)
 mean(f::Callable, A::AbstractArray) = sum(f, A) / _length(A)
 mean(A::AbstractArray) = sum(A) / _length(A)
 
-function mean!{T}(R::AbstractArray{T}, A::AbstractArray)
+function mean!(R::AbstractArray, A::AbstractArray)
     sum!(R, A; init=true)
     scale!(R, _length(R) / _length(A))
     return R
@@ -35,7 +35,7 @@ end
 
 momenttype{T}(::Type{T}) = typeof((zero(T) + zero(T)) / 2)
 momenttype(::Type{Float32}) = Float32
-momenttype{T<:Union{Float64,Int32,Int64,UInt32,UInt64}}(::Type{T}) = Float64
+momenttype(::Type{<:Union{Float64,Int32,Int64,UInt32,UInt64}}) = Float64
 
 """
     mean(v[, region])
@@ -100,7 +100,7 @@ centralize_sumabs2(A::AbstractArray, m::Number) =
 centralize_sumabs2(A::AbstractArray, m::Number, ifirst::Int, ilast::Int) =
     mapreduce_impl(centralizedabs2fun(m), +, A, ifirst, ilast)
 
-function centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, means::AbstractArray)
+function centralize_sumabs2!{S}(R::AbstractArray{S}, A::AbstractArray, means::AbstractArray)
     # following the implementation of _mapreducedim! at base/reducedim.jl
     lsiz = check_reducedims(R,A)
     isempty(R) || fill!(R, zero(S))
@@ -279,7 +279,7 @@ stdm(iterable, m::Number; corrected::Bool=true) =
 
 # auxiliary functions
 
-_conj{T<:Real}(x::AbstractArray{T}) = x
+_conj(x::AbstractArray{<:Real}) = x
 _conj(x::AbstractArray) = conj(x)
 
 _getnobs(x::AbstractVector, vardim::Int) = _length(x)
@@ -337,7 +337,7 @@ is scaled with `n-1`, whereas the sum is scaled with `n` if `corrected` is `fals
 """
 cov(x::AbstractVector, corrected::Bool) = covm(x, Base.mean(x), corrected)
 # This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
-cov{T<:AbstractVector}(x::T) = covm(x, Base.mean(x), true)
+cov(x::AbstractVector) = covm(x, Base.mean(x), true)
 
 """
     cov(X[, vardim=1, corrected=true])
@@ -349,7 +349,7 @@ if `corrected` is `false` where `n = size(X, vardim)`.
 cov(X::AbstractMatrix, vardim::Int, corrected::Bool=true) =
     covm(X, _vmean(X, vardim), vardim, corrected)
 # This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
-cov{T<:AbstractMatrix}(X::T) = cov(X, 1, true)
+cov(X::AbstractMatrix) = cov(X, 1, true)
 
 """
     cov(x, y[, corrected=true])
@@ -361,7 +361,7 @@ where `n = length(x) = length(y)`.
 cov(x::AbstractVector, y::AbstractVector, corrected::Bool) =
     covm(x, Base.mean(x), y, Base.mean(y), corrected)
 # This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
-cov{T<:AbstractVector,S<:AbstractVector}(x::T, y::S) =
+cov(x::AbstractVector, y::AbstractVector) =
     covm(x, Base.mean(x), y, Base.mean(y), true)
 
 """
@@ -476,7 +476,7 @@ corm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean, vardim::Int=1) =
 
 Return the number one.
 """
-cor{T<:AbstractVector}(x::T) = one(real(eltype(x)))
+cor(x::AbstractVector) = one(real(eltype(x)))
 # This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
 
 """
@@ -486,14 +486,14 @@ Compute the Pearson correlation matrix of the matrix `X` along the dimension `va
 """
 cor(X::AbstractMatrix, vardim::Int) = corm(X, _vmean(X, vardim), vardim)
 # This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
-cor{T<:AbstractMatrix}(X::T) = cor(X, 1)
+cor(X::AbstractMatrix) = cor(X, 1)
 
 """
     cor(x, y)
 
 Compute the Pearson correlation between the vectors `x` and `y`.
 """
-cor{T<:AbstractVector,S<:AbstractVector}(x::T, y::S) = corm(x, Base.mean(x), y, Base.mean(y))
+cor(x::AbstractVector, y::AbstractVector) = corm(x, Base.mean(x), y, Base.mean(y))
 # This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
 
 """
@@ -566,9 +566,9 @@ middle(a::AbstractArray) = ((v1, v2) = extrema(a); middle(v1, v2))
 
 Like [`median`](@ref), but may overwrite the input vector.
 """
-function median!{T}(v::AbstractVector{T})
+function median!(v::AbstractVector)
     isempty(v) && throw(ArgumentError("median of an empty array is undefined, $(repr(v))"))
-    if T<:AbstractFloat
+    if eltype(v)<:AbstractFloat
         @inbounds for x in v
             isnan(x) && return x
         end
@@ -583,7 +583,7 @@ function median!{T}(v::AbstractVector{T})
         return middle(m[1], m[2])
     end
 end
-median!{T}(v::AbstractArray{T}) = median!(vec(v))
+median!(v::AbstractArray) = median!(vec(v))
 median{T}(v::AbstractArray{T}) = median!(copy!(Array{T,1}(_length(v)), v))
 
 """
@@ -598,7 +598,7 @@ equivalent to calculating mean of two median elements.
     Julia does not ignore `NaN` values in the computation. For applications requiring the
     handling of missing data, the `DataArrays.jl` package is recommended.
 """
-median{T}(v::AbstractArray{T}, region) = mapslices(median!, v, region)
+median(v::AbstractArray, region) = mapslices(median!, v, region)
 
 # for now, use the R/S definition of quantile; may want variants later
 # see ?quantile in R -- this is type 7

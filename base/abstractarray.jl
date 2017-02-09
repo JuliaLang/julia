@@ -60,7 +60,7 @@ end
 # d)` for d=1. 1d arrays are heavily used, and the first dimension
 # comes up in other applications.
 indices1{T}(A::AbstractArray{T,0}) = OneTo(1)
-indices1{T}(A::AbstractArray{T})   = (@_inline_meta; indices(A)[1])
+indices1(A::AbstractArray)         = (@_inline_meta; indices(A)[1])
 indices1(iter) = OneTo(length(iter))
 
 unsafe_indices(A) = indices(A)
@@ -89,7 +89,7 @@ julia> extrema(b)
 """
 linearindices(A)                 = (@_inline_meta; OneTo(_length(A)))
 linearindices(A::AbstractVector) = (@_inline_meta; indices1(A))
-eltype(::Type{A}) where A<:AbstractArray{E} where E  = E
+eltype(::Type{<:AbstractArray{E}}) where {E} = E
 elsize{T}(::AbstractArray{T}) = sizeof(T)
 
 """
@@ -189,7 +189,7 @@ function stride(a::AbstractArray, i::Integer)
     return s
 end
 
-strides{T}(A::AbstractArray{T,0}) = ()
+strides(A::AbstractArray{<:Any,0}) = ()
 """
     strides(A)
 
@@ -204,7 +204,7 @@ julia> strides(A)
 """
 strides(A::AbstractArray) = _strides((1,), A)
 _strides{T,N}(out::NTuple{N,Any}, A::AbstractArray{T,N}) = out
-function _strides{M,T,N}(out::NTuple{M}, A::AbstractArray{T,N})
+function _strides{M}(out::NTuple{M}, A::AbstractArray)
     @_inline_meta
     _strides((out..., out[M]*size(A, M)), A)
 end
@@ -263,13 +263,13 @@ efficient generic code for all array types.
 An abstract array subtype `MyArray` that wishes to opt into fast linear indexing behaviors
 should define `linearindexing` in the type-domain:
 
-    Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearFast()
+    Base.linearindexing(::Type{<:MyArray}) = Base.LinearFast()
 """
 linearindexing(A::AbstractArray) = linearindexing(typeof(A))
 linearindexing(::Type{Union{}}) = LinearFast()
-linearindexing{T<:AbstractArray}(::Type{T}) = LinearSlow()
-linearindexing{T<:Array}(::Type{T}) = LinearFast()
-linearindexing{T<:Range}(::Type{T}) = LinearFast()
+linearindexing(::Type{<:AbstractArray}) = LinearSlow()
+linearindexing(::Type{<:Array}) = LinearFast()
+linearindexing(::Type{<:Range}) = LinearFast()
 
 linearindexing(A::AbstractArray, B::AbstractArray) = linearindexing(linearindexing(A), linearindexing(B))
 linearindexing(A::AbstractArray, B::AbstractArray...) = linearindexing(linearindexing(A), linearindexing(B...))
@@ -1575,7 +1575,7 @@ sub2ind_vec(inds, i, I) = (@_inline_meta; _sub2ind_vec(inds, (), i, I...))
 _sub2ind_vec(inds, out, i, I1, I...) = (@_inline_meta; _sub2ind_vec(inds, (out..., I1[i]), i, I...))
 _sub2ind_vec(inds, out, i) = (@_inline_meta; sub2ind(inds, out...))
 
-function ind2sub{N,T<:Integer}(inds::Union{DimsInteger{N},Indices{N}}, ind::AbstractVector{T})
+function ind2sub{N}(inds::Union{DimsInteger{N},Indices{N}}, ind::AbstractVector{<:Integer})
     M = length(ind)
     t = ntuple(n->similar(ind),Val{N})
     for (i,idx) in enumerate(ind)  # FIXME: change to eachindexvalue

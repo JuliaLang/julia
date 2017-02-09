@@ -32,7 +32,7 @@ function HTML(xs...)
 end
 
 show(io::IO, ::MIME"text/html", h::HTML) = print(io, h.content)
-show{F <: Function}(io::IO, ::MIME"text/html", h::HTML{F}) = h.content(io)
+show(io::IO, ::MIME"text/html", h::HTML{<:Function}) = h.content(io)
 
 """
     @html_str -> Docs.HTML
@@ -69,7 +69,7 @@ type Text{T}
 end
 
 print(io::IO, t::Text) = print(io, t.content)
-print{F <: Function}(io::IO, t::Text{F}) = t.content(io)
+print(io::IO, t::Text{<:Function}) = t.content(io)
 show(io::IO, t::Text) = print(io, t)
 
 =={T<:Union{HTML, Text}}(t1::T, t2::T) = t1.content == t2.content
@@ -421,7 +421,7 @@ stripmd(x::Markdown.BlockQuote) = "$(stripmd(x.content))"
 stripmd(x::Markdown.Admonition) = "$(stripmd(x.content))"
 stripmd(x::Markdown.Bold) = "$(stripmd(x.text))"
 stripmd(x::Markdown.Code) = "$(stripmd(x.code))"
-stripmd{N}(x::Markdown.Header{N}) = stripmd(x.text)
+stripmd(x::Markdown.Header) = stripmd(x.text)
 stripmd(x::Markdown.HorizontalRule) = " "
 stripmd(x::Markdown.Image) = "$(stripmd(x.alt)) $(x.url)"
 stripmd(x::Markdown.Italic) = "$(stripmd(x.text))"

@@ -185,7 +185,7 @@ function original_ex(s::ClusterSerializer, ex_str, remote_stktrace)
                           stk_str,  " stacktrace : "))
 end
 
-function deserialize(s::ClusterSerializer, t::Type{T}) where T <: CapturedException
+function deserialize(s::ClusterSerializer, t::Type{<:CapturedException})
     ex_str = deserialize(s)
     local bt
     local capex

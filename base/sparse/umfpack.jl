@@ -138,7 +138,7 @@ SuiteSparse. As this library only supports sparse matrices with `Float64` or
 `Complex128` elements, `lufact` converts `A` into a copy that is of type
 `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as appropriate.
 """
-function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
+function lufact(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes})
     zerobased = S.colptr[1] == 0
     res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
                     zerobased ? copy(S.colptr) : decrement(S.colptr),
@@ -147,9 +147,9 @@ function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
     finalizer(res, umfpack_free_symbolic)
     umfpack_numeric!(res)
 end
-lufact{Tv<:Union{Float16,Float32}, Ti<:UMFITypes}(A::SparseMatrixCSC{Tv,Ti}) =
+lufact{Ti<:UMFITypes}(A::SparseMatrixCSC{<:Union{Float16,Float32},Ti}) =
     lufact(convert(SparseMatrixCSC{Float64,Ti}, A))
-lufact{Tv<:Union{Complex32,Complex64}, Ti<:UMFITypes}(A::SparseMatrixCSC{Tv,Ti}) =
+lufact{Ti<:UMFITypes}(A::SparseMatrixCSC{<:Union{Complex32,Complex64},Ti}) =
     lufact(convert(SparseMatrixCSC{Complex128,Ti}, A))
 lufact{T<:AbstractFloat}(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}}) =
     throw(ArgumentError(string("matrix type ", typeof(A), "not supported. ",
@@ -386,9 +386,9 @@ end
 A_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) = A_ldiv_B!(B, lu, copy(B))
 At_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) = At_ldiv_B!(B, lu, copy(B))
 Ac_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) = Ac_ldiv_B!(B, lu, copy(B))
-A_ldiv_B!{Tb<:Complex}(lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) = A_ldiv_B!(B, lu, copy(B))
-At_ldiv_B!{Tb<:Complex}(lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) = At_ldiv_B!(B, lu, copy(B))
-Ac_ldiv_B!{Tb<:Complex}(lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) = Ac_ldiv_B!(B, lu, copy(B))
+A_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = A_ldiv_B!(B, lu, copy(B))
+At_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = At_ldiv_B!(B, lu, copy(B))
+Ac_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = Ac_ldiv_B!(B, lu, copy(B))
 
 A_ldiv_B!{T<:UMFVTypes}(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) =
     _Aq_ldiv_B!(X, lu, B, UMFPACK_A)

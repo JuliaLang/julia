@@ -531,7 +531,7 @@ julia> norm(A, Inf)
 6.0
 ```
 """
-function norm{T}(A::AbstractMatrix{T}, p::Real=2)
+function norm(A::AbstractMatrix, p::Real=2)
     if p == 2
         return norm2(A)
     elseif p == 1
@@ -545,7 +545,7 @@ end
 
 @inline norm(x::Number, p::Real=2) = vecnorm(x, p)
 
-@inline norm{T}(tv::RowVector{T}) = norm(transpose(tv))
+@inline norm(tv::RowVector) = norm(transpose(tv))
 
 """
     norm(rowvector, [q = 2])
@@ -557,7 +557,7 @@ The difference in norm between a vector space and its dual arises to preserve
 the relationship between duality and the inner product, and the result is
 consistent with the p-norm of `1 × n` matrix.
 """
-@inline norm{T}(tv::RowVector{T}, q::Real) = q == Inf ? norm(transpose(tv), 1) : norm(transpose(tv), q/(q-1))
+@inline norm(tv::RowVector, q::Real) = q == Inf ? norm(transpose(tv), 1) : norm(transpose(tv), q/(q-1))
 
 function vecdot(x::AbstractArray, y::AbstractArray)
     lx = _length(x)
@@ -1072,7 +1072,7 @@ function axpy!(α, x::AbstractArray, y::AbstractArray)
     y
 end
 
-function axpy!{Ti<:Integer,Tj<:Integer}(α, x::AbstractArray, rx::AbstractArray{Ti}, y::AbstractArray, ry::AbstractArray{Tj})
+function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractArray, ry::AbstractArray{<:Integer})
     if _length(rx) != _length(ry)
         throw(DimensionMismatch("rx has length $(_length(rx)), but ry has length $(_length(ry))"))
     elseif !checkindex(Bool, linearindices(x), rx)

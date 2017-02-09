@@ -17,9 +17,9 @@ Hessenberg(A::StridedMatrix) = Hessenberg(LAPACK.gehrd!(A)...)
 `hessfact!` is the same as [`hessfact`](@ref), but saves space by overwriting
 the input `A`, instead of creating a copy.
 """
-hessfact!{T<:BlasFloat}(A::StridedMatrix{T}) = Hessenberg(A)
+hessfact!(A::StridedMatrix{<:BlasFloat}) = Hessenberg(A)
 
-hessfact{T<:BlasFloat}(A::StridedMatrix{T}) = hessfact!(copy(A))
+hessfact(A::StridedMatrix{<:BlasFloat}) = hessfact!(copy(A))
 
 """
     hessfact(A) -> Hessenberg
@@ -78,7 +78,7 @@ function getindex(A::HessenbergQ, i::Integer, j::Integer)
 end
 
 ## reconstruct the original matrix
-convert{T<:BlasFloat}(::Type{Matrix}, A::HessenbergQ{T}) = LAPACK.orghr!(1, size(A.factors, 1), copy(A.factors), A.τ)
+convert(::Type{Matrix}, A::HessenbergQ{<:BlasFloat}) = LAPACK.orghr!(1, size(A.factors, 1), copy(A.factors), A.τ)
 convert(::Type{Array}, A::HessenbergQ) = convert(Matrix, A)
 full(A::HessenbergQ) = convert(Array, A)
 convert(::Type{AbstractMatrix}, F::Hessenberg) = (fq = Array(F[:Q]); (fq * F[:H]) * fq')
