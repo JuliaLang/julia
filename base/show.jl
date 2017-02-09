@@ -1225,9 +1225,11 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
                 else
                     # aliases to types
                     print(io, indent, "  ", m, ".", s, "{")
+                    tvar_io::IOContext = io
                     tp = t
                     while true
-                        print(io, tp.var.name)
+                        show(tvar_io, tp.var)
+                        tvar_io = IOContext(tvar_io, :unionall_env, tp.var)
                         tp = tp.body
                         if isa(tp, UnionAll)
                             print(io, ", ")
@@ -1236,7 +1238,7 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
                             break
                         end
                     end
-                    print(io, t)
+                    show(tvar_io, tp)
                 end
             elseif isa(t, Union) && directsubtype(t::Union, x)
                 println(io)
@@ -1245,7 +1247,8 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
                 println(io)
                 if t.name.module !== m || t.name.name != s
                     # aliases to types
-                    print(io, indent, "  ", m, ".", s, " = ", t)
+                    print(io, indent, "  ", m, ".", s, " = ")
+                    show(io, t)
                 else
                     # primary type binding
                     print(io, indent, "  ")

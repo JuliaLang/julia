@@ -564,12 +564,15 @@ let repr = sprint(dump, Int64)
     @test repr == "Int64 <: Signed\n"
 end
 # Make sure a `TypeVar` in a `Union` doesn't break subtype dump.
-typealias BreakDump17529{T} Union{T,Void}
+typealias BreakDump17529{T} Union{T, Void}
+# make sure dependent parameters are represented correctly
+typealias VectorVI{I, VI<:AbstractVector{I}} Vector{VI}
 let repr = sprint(dump, Any)
     @test length(repr) > 100000
     @test ismatch(r"^Any\n  [^ \t\n]", repr)
     @test endswith(repr, '\n')
-    @test contains(repr, "     Base.Vector{T} = Array{T,1} where T\n")
+    @test contains(repr, "     Base.Vector{T} = Array{T,1}\n")
+    @test contains(repr, ".VectorVI{I, VI<:AbstractArray{I,1}} = Array{VI,1}\n")
     @test !contains(repr, "Core.Vector{T}")
 end
 let repr = sprint(dump, Integer)
