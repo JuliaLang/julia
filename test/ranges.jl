@@ -346,8 +346,9 @@ for T = (Float32, Float64,), i = 1:2^15, n = 1:5
     lo = hi = n
     while start + (lo-1)*step == stop; lo -= 1; end
     while start + (hi-1)*step == stop; hi += 1; end
+    m = clamp(round(Int, (stop-start)/step) + 1, lo+1, hi-1)
     r = start:step:stop
-    @test lo < length(r) < hi
+    @test m == length(r)
     # FIXME: these fail some small portion of the time
     @test_skip start == first(r)
     @test_skip stop  == last(r)
