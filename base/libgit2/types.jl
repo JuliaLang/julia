@@ -174,27 +174,27 @@ function RemoteCallbacks(credentials::Ptr{Void}, payload::Ref{Nullable{AbstractC
     RemoteCallbacks(credentials=credentials_cb(), payload=pointer_from_objref(payload))
 end
 
-immutable ProxyOptions
-    version::Cuint
-    proxytype::Cint
-    url::Cstring
-    credential_cb::Ptr{Void}
-    certificate_cb::Ptr{Void}
-    payload::Ptr{Void}
-end
-ProxyOptions(; proxytype::Cint = zero(Cint),
-               url::Cstring = Cstring(C_NULL),
-               credential_cb::Ptr{Void} = C_NULL,
-               certificate_cb::Ptr{Void} = C_NULL,
-               payload::Ptr{Void} = C_NULL) =
-    ProxyOptions(one(Cuint),
-                 proxytype,
-                 url,
-                 credential_cb,
-                 certificate_cb,
-                 payload)
-
 if LibGit2.version() >= v"0.25.0"
+    immutable ProxyOptions
+        version::Cuint
+        proxytype::Cint
+        url::Cstring
+        credential_cb::Ptr{Void}
+        certificate_cb::Ptr{Void}
+        payload::Ptr{Void}
+    end
+    ProxyOptions(; proxytype::Cint = zero(Cint),
+                   url::Cstring = Cstring(C_NULL),
+                   credential_cb::Ptr{Void} = C_NULL,
+                   certificate_cb::Ptr{Void} = C_NULL,
+                   payload::Ptr{Void} = C_NULL) =
+        ProxyOptions(one(Cuint),
+                     proxytype,
+                     url,
+                     credential_cb,
+                     certificate_cb,
+                     payload)
+
     immutable FetchOptions
         version::Cuint
         callbacks::RemoteCallbacks
