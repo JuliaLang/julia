@@ -22,6 +22,10 @@ New language features
 Language changes
 ----------------
 
+  * `x^n` for integer literals `n` (e.g. `x^3` or `x^-3`) is now
+    lowered to `x^Val{n}`, to enable compile-time specialization
+    for literal integer exponents ([#20530]).
+
   * "Inner constructor" syntax for parametric types is deprecated. For example,
     in this definition:
     ```

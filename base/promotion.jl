@@ -253,6 +253,11 @@ end
 
 Exponentiation operator. If `x` is a matrix, computes matrix exponentiation.
 
+If `y` is an `Int` literal (e.g. `x^2` or `x^-3`), the Julia code
+`x^y` is transformed to `x^Val{y}`, to enable compile-time
+specialization on the value of the exponent.  (As a default fallback,
+however, `x^Val{y}` simply calls the `^(x,y)` function.)
+
 ```jldoctest
 julia> 3^5
 243
