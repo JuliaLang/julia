@@ -869,3 +869,10 @@ let r = linspace(1.3173739f0, 1.3173739f0, 3)
     @test last(r)  === 1.3173739f0
     @test r[2]     === 1.3173739f0
 end
+
+let r = linspace(1.0, 3+im, 4)
+    @test r[1] === 1.0+0.0im
+    @test r[2] ≈ (5/3)+(1/3)im
+    @test r[3] ≈ (7/3)+(2/3)im
+    @test r[4] === 3.0+im
+end
