@@ -611,6 +611,18 @@ function i20343()
     f20343([1,2,3]..., 4)
 end
 @test Base.return_types(i20343, ()) == [Int8]
+immutable Foo20518 <: AbstractVector{Int}; end # issue #20518; inference assumed AbstractArrays
+Base.getindex(::Foo20518, ::Int) = "oops"      # not to lie about their element type
+Base.indices(::Foo20518) = (Base.OneTo(4),)
+foo20518(xs::Any...) = -1
+foo20518(xs::Int...) = [0]
+bar20518(xs) = sum(foo20518(xs...))
+@test bar20518(Foo20518()) == -1
+f19957(::Int) = Int8(1)            # issue #19957, inference failure when splatting a number
+f19957(::Int...) = Int16(1)
+f19957(::Any...) = "no"
+g19957(x) = f19957(x...)
+@test all(t -> t<:Union{Int8,Int16}, Base.return_types(g19957, (Int,))) # with a full fix, this should just be Int8
 
 # Inference for some type-level computation
 fUnionAll{T}(::Type{T}) = Type{S} where S <: T

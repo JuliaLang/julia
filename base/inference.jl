@@ -1421,11 +1421,32 @@ function precise_container_type(arg, typ, vtypes::VarTable, sv)
         else
             return tti.parameters
         end
-    elseif tti <: AbstractArray
+    elseif tti <: Array
         return Any[Vararg{eltype(tti)}]
     else
-        return Any[Vararg{Any}]
+        return Any[Vararg{abstract_iteration(tti, vtypes, sv)}]
     end
+end
+
+# simulate iteration protocol on container type up to fixpoint
+function abstract_iteration(itertype, vtypes::VarTable, sv)
+    if !isdefined(Main, :Base) || !isdefined(Main.Base, :start) || !isdefined(Main.Base, :next)
+        return Any
+    end
+    statetype = abstract_call(Main.Base.start, (), Any[Const(Main.Base.start), itertype], vtypes, sv)
+    valtype = Bottom
+    while valtype !== Any
+        nt = abstract_call(Main.Base.next, (), Any[Const(Main.Base.next), itertype, statetype], vtypes, sv)
+        if !isa(nt, DataType) || !(nt <: Tuple) || isvatuple(nt) || length(nt.parameters) != 2
+            return Any
+        end
+        if nt.parameters[1] <: valtype && nt.parameters[2] <: statetype
+            break
+        end
+        valtype = tmerge(valtype, nt.parameters[1])
+        statetype = tmerge(statetype, nt.parameters[2])
+    end
+    return valtype
 end
 
 # do apply(af, fargs...), where af is a function value
