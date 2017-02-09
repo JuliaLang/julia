@@ -861,3 +861,11 @@ let r = linspace(-big(1.0),big(1.0),4)
     @test isa(@inferred(r[2]), BigFloat)
     @test r[2] ≈ big(-1.0)/3
 end
+
+# issue #20520
+let r = linspace(1.3173739f0, 1.3173739f0, 3)
+    @test length(r) == 3
+    @test first(r) === 1.3173739f0
+    @test last(r)  === 1.3173739f0
+    @test r[2]     === 1.3173739f0
+end
