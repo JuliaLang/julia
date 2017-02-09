@@ -1195,7 +1195,8 @@ function (-)(B::BitArray)
 end
 broadcast(::typeof(sign), B::BitArray) = copy(B)
 
-function (~)(B::BitArray)
+(~)(B::BitArray) = broadcast(~, B)
+function broadcast(::typeof(~), B::BitArray)
     C = similar(B)
     Bc = B.chunks
     if !isempty(Bc)
@@ -1236,7 +1237,6 @@ function flipbits!(B::BitArray)
     return B
 end
 
-!(B::BitArray) = ~B
 
 ## Binary arithmetic operators ##
 

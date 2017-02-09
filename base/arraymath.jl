@@ -29,7 +29,6 @@ for f in (:-, :~, :conj, :real, :imag)
     @eval ($f)(A::AbstractArray) = broadcast($f, A)
 end
 
-!(A::AbstractArray{Bool}) = broadcast(!, A)
 
 ## Binary arithmetic operators ##
 

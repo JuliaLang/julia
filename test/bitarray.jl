@@ -722,7 +722,7 @@ timesofar("dequeue")
 @testset "Unary operators" begin
     b1 = bitrand(n1, n2)
     @check_bit_operation (~)(b1)  BitMatrix
-    @check_bit_operation (!)(b1)  BitMatrix
+    @check_bit_operation broadcast(!, b1)  BitMatrix
     @check_bit_operation (-)(b1)  Matrix{Int}
     @check_bit_operation broadcast(sign, b1) BitMatrix
     @check_bit_operation real(b1) BitMatrix
@@ -731,7 +731,7 @@ timesofar("dequeue")
 
     b0 = falses(0)
     @check_bit_operation (~)(b0)  BitVector
-    @check_bit_operation (!)(b0)  BitVector
+    @check_bit_operation broadcast(!, b0)  BitVector
     @check_bit_operation (-)(b0)  Vector{Int}
     @check_bit_operation broadcast(sign, b0) BitVector
 
@@ -1116,7 +1116,7 @@ timesofar("nnz&find")
     n = maximum(elts)
     for c = [falses, trues]
         b1 = c(n)
-        b1[elts] = !b1[elts]
+        b1[elts] = .!b1[elts]
         b2 = ~b1
         i1 = Array(b1)
         for i = 1:n

@@ -346,7 +346,7 @@ function parse_flat(iplist, n, lidict::LineInfoFlatDict, C::Bool)
     # The ones with no line number might appear multiple times in a single
     # backtrace, giving the wrong impression about the total number of backtraces.
     # Delete them too.
-    keep = !Bool[x == UNKNOWN || x.line == 0 || (x.from_c && !C) for x in lilist]
+    keep = .!Bool[x == UNKNOWN || x.line == 0 || (x.from_c && !C) for x in lilist]
     n = n[keep]
     lilist = lilist[keep]
     return (lilist, n)
