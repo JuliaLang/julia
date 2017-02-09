@@ -1227,6 +1227,8 @@ for name in ("alnum", "alpha", "cntrl", "digit", "number", "graph",
     @eval @deprecate ($f)(s::AbstractString) all($f, s)
 end
 
+# TODO: remove warning for using `_` in parse_input_line in base/client.jl
+
 # END 0.6 deprecations
 
 # BEGIN 1.0 deprecations
