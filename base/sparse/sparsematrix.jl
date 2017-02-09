@@ -2775,7 +2775,7 @@ julia> A = sparse([1 2; 0 0])
 
 julia> Base.SparseArrays.dropstored!(A, 1, 2); A
 2×2 SparseMatrixCSC{Int64,Int64} with 1 stored entry:
-  [1, 2]  =  1
+  [1, 1]  =  1
 ```
 """
 function dropstored!(A::SparseMatrixCSC, i::Integer, j::Integer)
