@@ -861,3 +861,10 @@ let r = linspace(-big(1.0),big(1.0),4)
     @test isa(@inferred(r[2]), BigFloat)
     @test r[2] ≈ big(-1.0)/3
 end
+
+let r = linspace(1.0, 3+im, 4)
+    @test r[1] === 1.0+0.0im
+    @test r[2] ≈ (5/3)+(1/3)im
+    @test r[3] ≈ (7/3)+(2/3)im
+    @test r[4] === 3.0+im
+end
