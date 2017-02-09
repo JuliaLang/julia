@@ -42,7 +42,9 @@ macro deprecate(old,new,ex=true)
         else
             error("invalid usage of @deprecate")
         end
-        oldname = Expr(:quote, oldsym)
+        # work around #20220, deprecation for Array repeating over and over
+        # TODO: remove the special case when 0.6 deprecations are removed
+        oldname = Expr(:quote, oldsym in (:Array, :SharedArray) ? :Type : oldsym)
         Expr(:toplevel,
             Expr(:export,esc(oldsym)),
             :($(esc(old)) = begin
@@ -1140,6 +1142,7 @@ function partial_linear_indexing_warning(n)
 end
 
 # Deprecate Array(T, dims...) in favor of proper type constructors
+# TODO: when removing these, get rid of the special casing in the @deprecate macro up top
 @deprecate Array{T,N}(::Type{T}, d::NTuple{N,Int})               Array{T}(d)
 @deprecate Array{T}(::Type{T}, d::Int...)                        Array{T}(d...)
 @deprecate Array{T}(::Type{T}, m::Int)                           Array{T}(m)
