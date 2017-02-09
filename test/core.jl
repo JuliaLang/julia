@@ -1752,6 +1752,19 @@ let
     @test f5876(Int) === Int
 end
 
+# issue #20524
+macro m20524(ex)
+    quote
+        global f20524
+        function f20524()
+            $ex
+        end
+    end
+end
+@m20524 ((a,(b20524,c)) = (8,(1,5)); (a,b20524,c))
+@test f20524() === (8,1,5)
+@test !isdefined(:b20524)  # should not assign to a global
+
 # issue #6387
 bitstype 64 Date6387{C}
 
