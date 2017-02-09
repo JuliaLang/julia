@@ -445,27 +445,29 @@ and `lt` are specified, the `lt` function is applied to the result of the `by` f
 `rev=true` reverses whatever ordering specified via the `by` and `lt` keywords.
 
 ```jldoctest
-julia> v = [3, 2, 1]; sort!(v); v
+julia> v = [3, 1, 2]; sort!(v); v
 3-element Array{Int64,1}:
  1
  2
  3
 
-julia> v = [3, 2, 1]; sort(v, rev = true); v
+julia> v = [3, 2, 1]; sort!(v, rev = true); v
 3-element Array{Int64,1}:
  3
  2
  1
 
-julia> v = [(1, "b"), (2, "a")]; sort(v, by = x -> x[1]); v
-2-element Array{Tuple{Int64,String},1}:
- (1, "b")
- (2, "a")
+julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[1]); v
+3-element Array{Tuple{Int64,String},1}:
+ (1, "c")
+ (2, "b")
+ (3, "a")
 
-julia> v = [(1, "b"), (2, "a")]; sort!(v, by = x -> x[2]); v
-2-element Array{Tuple{Int64,String},1}:
- (2, "a")
- (1, "b")
+julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[2]); v
+3-element Array{Tuple{Int64,String},1}:
+ (3, "a")
+ (2, "b")
+ (1, "c")
 ```
 """
 function sort!(v::AbstractVector;
@@ -518,7 +520,7 @@ end
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
 ```jldoctest
-julia> v = [3, 2, 1];
+julia> v = [3, 1, 2];
 
 julia> sort(v)
 3-element Array{Int64,1}:
@@ -529,8 +531,8 @@ julia> sort(v)
 julia> v
 3-element Array{Int64,1}:
  3
- 2
  1
+ 2
 ```
 """
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
