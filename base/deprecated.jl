@@ -823,6 +823,10 @@ end
 @deprecate ifelse(c::AbstractArray{Bool}, x::AbstractArray, y) ifelse.(c, x, y)
 @deprecate ifelse(c::AbstractArray{Bool}, x::AbstractArray, y::AbstractArray) ifelse.(c, x, y)
 
+# Deprecate vectorized !
+@deprecate(!(A::AbstractArray{Bool}), .!A) # parens for #20541
+@deprecate(!(B::BitArray), .!B) # parens for #20541
+
 function frexp(A::Array{<:AbstractFloat})
     depwarn("`frexp(x::Array)` is discontinued.", :frexp)
     F = similar(A)
