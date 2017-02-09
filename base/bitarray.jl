@@ -1195,7 +1195,6 @@ function (-)(B::BitArray)
 end
 broadcast(::typeof(sign), B::BitArray) = copy(B)
 
-(~)(B::BitArray) = broadcast(~, B)
 function broadcast(::typeof(~), B::BitArray)
     C = similar(B)
     Bc = B.chunks
@@ -1269,7 +1268,7 @@ broadcast(::typeof(&), B::BitArray, x::Bool) = x ? copy(B) : falses(size(B))
 broadcast(::typeof(&), x::Bool, B::BitArray) = broadcast(&, B, x)
 broadcast(::typeof(|), B::BitArray, x::Bool) = x ? trues(size(B)) : copy(B)
 broadcast(::typeof(|), x::Bool, B::BitArray) = broadcast(|, B, x)
-broadcast(::typeof(xor), B::BitArray, x::Bool) = x ? ~B : copy(B)
+broadcast(::typeof(xor), B::BitArray, x::Bool) = x ? .~B : copy(B)
 broadcast(::typeof(xor), x::Bool, B::BitArray) = broadcast(xor, B, x)
 for f in (:&, :|, :xor)
     @eval begin
