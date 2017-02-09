@@ -318,6 +318,9 @@ end
 # For Float16, Float32, and Float64, linspace returns a StepRangeLen
 function linspace{T<:Union{Float16,Float32,Float64}}(start::T, stop::T, len::Integer)
     len < 2 && return _linspace1(T, start, stop, len)
+    if start == stop
+        return StepRangeLen(TwicePrecision(start,zero(T)), TwicePrecision(zero(T),zero(T)), len)
+    end
     # Attempt to find exact rational approximations
     start_n, start_d = rat(start)
     stop_n, stop_d = rat(stop)
