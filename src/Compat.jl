@@ -1797,7 +1797,7 @@ end
 
 module TypeUtils
     using ..Compat: @static
-    @static if isdefined(Core, :UnionAll)
+    @static if isdefined(Core, :isabstract)
         using Base: isabstract, parameter_upper_bound, typename
     else
         isabstract(t::DataType) = t.abstract
