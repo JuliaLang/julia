@@ -827,6 +827,10 @@ end
 @deprecate(!(A::AbstractArray{Bool}), .!A) # parens for #20541
 @deprecate(!(B::BitArray), .!B) # parens for #20541
 
+# Deprecate vectorized ~
+@deprecate ~(A::AbstractArray) .~A
+@deprecate ~(B::BitArray) .~B
+
 function frexp(A::Array{<:AbstractFloat})
     depwarn("`frexp(x::Array)` is discontinued.", :frexp)
     F = similar(A)

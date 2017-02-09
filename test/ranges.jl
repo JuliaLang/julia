@@ -784,8 +784,8 @@ let A = -1:1, B = -1.0:1.0
     @test conj(A) === A
     @test conj(B) === B
 
-    @test ~A == [0,-1,-2]
-    @test typeof(~A) == Vector{Int}
+    @test .~A == [0,-1,-2]
+    @test typeof(.~A) == Vector{Int}
 end
 
 # conversion to Array

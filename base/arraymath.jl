@@ -25,7 +25,7 @@ julia> A
 """
 conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
 
-for f in (:-, :~, :conj, :real, :imag)
+for f in (:-, :conj, :real, :imag)
     @eval ($f)(A::AbstractArray) = broadcast($f, A)
 end
 
