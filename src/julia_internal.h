@@ -340,6 +340,7 @@ jl_value_t *jl_type_intersection_env(jl_value_t *a, jl_value_t *b, jl_svec_t **p
 jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);
 JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals);
 jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val);
+jl_svec_t *jl_outer_unionall_vars(jl_value_t *u);
 jl_datatype_t *jl_new_uninitialized_datatype(void);
 jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
                                    jl_svec_t *parameters);
@@ -757,7 +758,7 @@ struct jl_typemap_info {
 };
 
 jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *parent,
-                                      jl_tupletype_t *type, jl_svec_t *tvars,
+                                      jl_tupletype_t *type,
                                       jl_tupletype_t *simpletype, jl_svec_t *guardsigs,
                                       jl_value_t *newvalue, int8_t offs,
                                       const struct jl_typemap_info *tparams,
