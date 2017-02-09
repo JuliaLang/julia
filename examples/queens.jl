@@ -1,21 +1,28 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-addqueen(queens::Array{Vector{Int}}, queen::Vector{Int}) = push!(copy(queens), queen)
+# n-queens (nqueens) solver, for nsquaresx-by-nsquaresy board
 
-hitsany(queen::Vector{Int}, queens::Array{Vector{Int}}) = any(x->hits(queen, x), queens)
-hits(a::Array{Int}, b::Array{Int}) = any(a .== b) || abs.(a-b)[1] == abs.(a-b)[2]
+immutable Queen
+    x::Int
+    y::Int
+end
+hitshorz(queena, queenb) = queena.x == queenb.x
+hitsvert(queena, queenb) = queena.y == queenb.y
+hitsdiag(queena, queenb) = abs(queena.x - queenb.x) == abs(queena.y - queenb.y)
+hitshvd(qa, qb) = hitshorz(qa, qb) || hitsvert(qa, qb) || hitsdiag(qa, qb)
+hitsany(testqueen, queens) = any(q -> hitshvd(testqueen, q), queens)
 
-function solve(x, y, n, d=Array{Vector{Int}}(0))
-  if n == 0
-    return d
-  end
-  for px = 1:x
-    for py = 1:y
-      if !hitsany([px, py], d)
-        s = solve(x, y, n-1, addqueen(d, [px, py]))
-        s !== nothing && return s
-      end
+function trysolve(nsquaresx, nsquaresy, nqueens, presqueens = ())
+    nqueens == 0 && return presqueens
+    for xsquare in 1:nsquaresx
+        for ysquare in 1:nsquaresy
+            testqueen = Queen(xsquare, ysquare)
+            if !hitsany(testqueen, presqueens)
+                tryqueens = (presqueens..., testqueen)
+                maybesol = trysolve(nsquaresx, nsquaresy, nqueens - 1, tryqueens)
+                maybesol !== nothing && return maybesol
+            end
+        end
     end
-  end
-  return nothing
+    return nothing
 end
