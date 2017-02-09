@@ -473,13 +473,13 @@ function resolve(
     reqs  :: Dict = Reqs.parse("REQUIRE"),
     avail :: Dict = Read.available(),
     instd :: Dict = Read.installed(avail),
-    fixed :: Dict = Read.fixed(avail,instd),
+    fixed :: Dict = Read.fixed(avail, instd),
     have  :: Dict = Read.free(instd),
     upkgs :: Set{String} = Set{String}()
 )
     orig_reqs = reqs
-    reqs = Query.requirements(reqs,fixed,avail)
-    deps, conflicts = Query.dependencies(avail,fixed)
+    reqs, bktrc = Query.requirements(reqs, fixed, avail)
+    deps, conflicts = Query.dependencies(avail, fixed)
 
     for pkg in keys(reqs)
         if !haskey(deps,pkg)
@@ -494,14 +494,14 @@ function resolve(
         end
     end
 
-    Query.check_requirements(reqs,deps,fixed)
+    Query.check_requirements(reqs, deps, fixed)
 
-    deps = Query.prune_dependencies(reqs,deps)
-    want = Resolve.resolve(reqs,deps)
+    deps = Query.prune_dependencies(reqs, deps, bktrc)
+    want = Resolve.resolve(reqs, deps)
 
     if !isempty(upkgs)
         orig_deps, _ = Query.dependencies(avail)
-        Query.check_partial_updates(orig_reqs,orig_deps,want,fixed,upkgs)
+        Query.check_partial_updates(orig_reqs, orig_deps, want, fixed, upkgs)
     end
 
     # compare what is installed with what should be
