@@ -451,7 +451,7 @@ julia> v = [3, 1, 2]; sort!(v); v
  2
  3
 
-julia> v = [3, 2, 1]; sort!(v, rev = true); v
+julia> v = [3, 1, 2]; sort!(v, rev = true); v
 3-element Array{Int64,1}:
  3
  2
