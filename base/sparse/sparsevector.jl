@@ -173,10 +173,10 @@ Create a sparse vector of length `m` where the nonzero indices are keys from
 the dictionary, and the nonzero values are the values from the dictionary.
 
 ```jldoctest
-julia> sparsevec(Dict(1 => 3, 2 => 2, 2 => 4))
+julia> sparsevec(Dict(1 => 3, 2 => 2))
 2-element SparseVector{Int64,Int64} with 2 stored entries:
   [1]  =  3
-  [2]  =  4
+  [2]  =  2
 ```
 """
 function sparsevec{Tv,Ti<:Integer}(dict::Associative{Ti,Tv})
