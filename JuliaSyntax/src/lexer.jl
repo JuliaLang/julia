@@ -536,46 +536,29 @@ function lex_xor(l::Lexer)
 end
 
 function lex_i(l::Lexer)
-    str = lex_identifier(l)
-    if str.val=="in"
-        l.last_token = Tokens.IN
-        start_token!(l)
-        return Token(Tokens.IN, str.startpos,
-                str.endpos,
-                str.startbyte, str.endbyte,
-                str.val, str.token_error)
-    elseif (VERSION >= v"0.6.0-dev.1471" && str.val == "isa")
-        l.last_token = Tokens.ISA
-        start_token!(l)
-        return Token(Tokens.ISA, str.startpos,
-                str.endpos,
-                str.startbyte, str.endbyte,
-                str.val, str.token_error)
+    accept_batch(l, is_identifier_char)
+    str = extract_tokenstring(l)
+    if str == "in"
+        return emit(l, Tokens.IN)
+    elseif (VERSION >= v"0.6.0-dev.1471" && str == "isa")
+        return emit(l, Tokens.ISA)
     else
-        return str
+        return emit(l, get(Tokens.KEYWORDS, str, Tokens.IDENTIFIER), str)
     end
 end
 
 function lex_bool(l::Lexer)
-    str = lex_identifier(l)
-    if str.val=="true"
-        l.last_token = Tokens.TRUE
-        start_token!(l)
-        return Token(Tokens.TRUE, str.startpos,
-                str.endpos,
-                str.startbyte, str.endbyte,
-                str.val, str.token_error)
-    elseif str.val == "false"
-        l.last_token = Tokens.FALSE
-        start_token!(l)
-        return Token(Tokens.FALSE, str.startpos,
-                str.endpos,
-                str.startbyte, str.endbyte,
-                str.val, str.token_error)
+    accept_batch(l, is_identifier_char)
+    str = extract_tokenstring(l)
+    if str == "true"
+        return emit(l, Tokens.TRUE)
+    elseif str == "false"
+       return emit(l, Tokens.FALSE)
     else
-        return str
+        return emit(l, get(Tokens.KEYWORDS, str, Tokens.IDENTIFIER), str)
     end
 end
+
 
 # A digit has been consumed
 function lex_digit(l::Lexer)
