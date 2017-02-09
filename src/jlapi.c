@@ -43,6 +43,8 @@ JL_DLLEXPORT void jl_init_with_image(const char *julia_home_dir,
     jl_options.julia_home = julia_home_dir;
     if (image_relative_path != NULL)
         jl_options.image_file = image_relative_path;
+    else
+        jl_options.image_file = jl_get_default_sysimg_path();
     julia_init(JL_IMAGE_JULIA_HOME);
     jl_exception_clear();
 }

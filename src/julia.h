@@ -1312,6 +1312,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
 JL_DLLEXPORT void jl_init(const char *julia_home_dir);
 JL_DLLEXPORT void jl_init_with_image(const char *julia_home_dir,
                                      const char *image_relative_path);
+JL_DLLEXPORT const char* jl_get_default_sysimg_path();
 JL_DLLEXPORT int jl_is_initialized(void);
 JL_DLLEXPORT void jl_atexit_hook(int status);
 JL_DLLEXPORT void JL_NORETURN jl_exit(int status);
