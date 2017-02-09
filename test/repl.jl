@@ -101,11 +101,13 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     cd(origpwd)
 
     # issue #20482
-    write(stdin_write, ";")
-    readuntil(stdout_read, "shell> ")
-    write(stdin_write, "echo hello >/dev/null\n")
-    readuntil(stdout_read, "\n")
-    readuntil(stdout_read, "\n")
+    if !is_windows()
+        write(stdin_write, ";")
+        readuntil(stdout_read, "shell> ")
+        write(stdin_write, "echo hello >/dev/null\n")
+        readuntil(stdout_read, "\n")
+        readuntil(stdout_read, "\n")
+    end
 
     # Test that accepting a REPL result immediately shows up, not
     # just on the next keystroke
