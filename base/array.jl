@@ -741,9 +741,9 @@ done(a::Array,i) = (@_inline_meta; i == length(a)+1)
 ## Boundscheck micro-optimization: Avoid calling max(0,sz) within OneTo's constructor
 checkbounds(::Type{Bool}, A::Array, i::Int) = (i-1) % UInt < length(A) % UInt
 checkbounds(::Type{Bool}, A::Array, i::Int, I::Int...) = (@_inline_meta; _checkarrayindex(size(A), i, I...))
-_checkarrayindex(::Tuple{}, i, I...) = (@_inline_meta; (i == 1) & _checkarrayindex((), I...))
-_checkarrayindex(sz::Tuple{Int}, i, I...) = (@_inline_meta; ((i-1) % UInt < sz[1] % UInt) & _checkarrayindex(tail(sz), I...))
-_checkarrayindex(sz::Tuple{Int, Vararg{Int}}, i, I...) = (@_inline_meta; ((i-1) % UInt < sz[1] % UInt) & _checkarrayindex(tail(sz), I...))
+_checkarrayindex(::Tuple{}, i, I...) = (@_inline_meta; (i == 1) && _checkarrayindex((), I...))
+_checkarrayindex(sz::Tuple{Int}, i, I...) = (@_inline_meta; ((i-1) % UInt < sz[1] % UInt) && _checkarrayindex(tail(sz), I...))
+_checkarrayindex(sz::Tuple{Int, Vararg{Int}}, i, I...) = (@_inline_meta; ((i-1) % UInt < sz[1] % UInt) && _checkarrayindex(tail(sz), I...))
 _checkarrayindex(::Tuple{}, i) = (i == 1)
 _checkarrayindex(sz::Tuple{Int}, i) = (i-1) % UInt < sz[1] % UInt
 function _checkarrayindex(sz::Tuple{Int, Vararg{Int}}, i)
