@@ -155,6 +155,7 @@ function colon{T<:Union{Float16,Float32,Float64}}(start::T, step::T, stop::T)
     else
         len = round(Int, lf) + 1
         stop′ = start + (len-1)*step
+        # if we've overshot the end, subtract one:
         len -= (start < stop < stop′) + (start > stop > stop′)
     end
     StepRangeLen(TwicePrecision(start, zero(T)), twiceprecision(step, nbitslen(T, len, 1)), len)
