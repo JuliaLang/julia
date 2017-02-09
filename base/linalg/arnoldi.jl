@@ -50,6 +50,19 @@ The following keyword arguments are supported:
 iterations `niter` and the number of matrix vector multiplications `nmult`, as well as the
 final residual vector `resid`.
 
+# Example
+
+```jldoctest
+julia> A = spdiagm(1:4);
+
+julia> λ, ϕ = eigs(A, nev = 2);
+
+julia> λ
+2-element Array{Float64,1}:
+ 4.0
+ 3.0
+```
+
 !!! note
     The `sigma` and `which` keywords interact: the description of eigenvalues
     searched for by `which` do *not* necessarily refer to the eigenvalues of
@@ -133,13 +146,18 @@ final residual vector `resid`.
 
 # Example
 
-```julia
-X = sprand(10, 5, 0.2)
-eigs(X, nsv = 2, tol = 1e-3)
+```jldoctest
+julia> A = speye(4, 4); B = spdiagm(1:4);
+
+julia> λ, ϕ = eigs(A, B, nev = 2);
+
+julia> λ
+2-element Array{Float64,1}:
+ 1.0
+ 0.5
 ```
 
 !!! note
-
     The `sigma` and `which` keywords interact: the description of eigenvalues searched for by
     `which` do *not* necessarily refer to the eigenvalue problem ``Av = Bv\\lambda``, but rather
     the linear operator constructed by the specification of the iteration mode implied by `sigma`.
@@ -344,17 +362,22 @@ iterations derived from [`eigs`](@ref).
 
 # Example
 
-```julia
-X = sprand(10, 5, 0.2)
-svds(X, nsv = 2)
+```jldoctest
+julia> A = spdiagm(1:4);
+
+julia> s = svds(A, nsv = 2)[1];
+
+julia> s[:S]
+2-element Array{Float64,1}:
+ 4.0
+ 3.0
 ```
 
 !!! note "Implementation"
-
-`svds(A)` is formally equivalent to calling [`eigs`](@ref) to perform implicitly restarted
-Lanczos tridiagonalization on the Hermitian matrix
-``\\begin{pmatrix} 0 & A^\\prime \\\\ A & 0 \\end{pmatrix}``, whose eigenvalues are
-plus and minus the singular values of ``A``.
+    `svds(A)` is formally equivalent to calling [`eigs`](@ref) to perform implicitly restarted
+    Lanczos tridiagonalization on the Hermitian matrix
+    ``\\begin{pmatrix} 0 & A^\\prime \\\\ A & 0 \\end{pmatrix}``, whose eigenvalues are
+    plus and minus the singular values of ``A``.
 """
 svds(A; kwargs...) = _svds(A; kwargs...)
 function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxiter::Int = 1000, ncv::Int = 2*nsv, u0::Vector=zeros(eltype(X),(0,)), v0::Vector=zeros(eltype(X),(0,)))
