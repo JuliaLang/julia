@@ -282,6 +282,10 @@ Library improvements
 
   * New `@macroexpand` macro as a convenient alternative to the `macroexpand` function ([#18660]).
 
+  * Introduced a wrapper type for lazy complex conjugation of arrays, `ConjArray`.
+    Currently, it is used by default for the new `RowVector` type only, and
+    enforces that both `transpose(vec)` and `ctranspose(vec)` are views not copies ([#20047]).
+
 Compiler/Runtime improvements
 -----------------------------
 
