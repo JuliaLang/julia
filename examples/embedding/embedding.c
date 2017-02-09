@@ -14,7 +14,7 @@ double my_c_sqrt(double x)
 
 int main()
 {
-    jl_init(NULL);
+    jl_init();
 
     {
         // Simple running Julia code
@@ -49,7 +49,7 @@ int main()
     {
         // 1D arrays
 
-        jl_value_t* array_type = jl_apply_array_type( jl_float64_type, 1 );
+        jl_value_t* array_type = jl_apply_array_type( (jl_value_t*)jl_float64_type, 1 );
         jl_array_t* x          = jl_alloc_array_1d(array_type , 10);
         JL_GC_PUSH1(&x);
 
@@ -97,6 +97,7 @@ int main()
             jl_show(jl_stderr_obj(), jl_exception_occurred());
             jl_printf(jl_stderr_stream(), "\n");
         }
+
     }
 
     int ret = 0;
