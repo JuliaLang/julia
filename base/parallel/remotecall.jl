@@ -283,12 +283,12 @@ function serialize(s::AbstractSerializer, rr::AbstractRemoteRef, addclient)
     invoke(serialize, Tuple{AbstractSerializer, Any}, s, rr)
 end
 
-function deserialize{T<:Future}(s::AbstractSerializer, t::Type{T})
+function deserialize(s::AbstractSerializer, t::Type{<:Future})
     f = deserialize_rr(s,t)
     Future(f.where, RRID(f.whence, f.id), f.v) # ctor adds to client_refs table
 end
 
-function deserialize{T<:RemoteChannel}(s::AbstractSerializer, t::Type{T})
+function deserialize(s::AbstractSerializer, t::Type{<:RemoteChannel})
     rr = deserialize_rr(s,t)
     # call ctor to make sure this rr gets added to the client_refs table
     RemoteChannel{channel_type(rr)}(rr.where, RRID(rr.whence, rr.id))

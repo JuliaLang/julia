@@ -430,7 +430,7 @@ end
 
 # splice! for IOBuffer: convert from 0-indexed positions, update the size,
 # and keep the cursor position stable with the text
-function splice_buffer!{T<:Integer}(buf::IOBuffer, r::UnitRange{T}, ins::AbstractString = "")
+function splice_buffer!(buf::IOBuffer, r::UnitRange{<:Integer}, ins::AbstractString = "")
     pos = position(buf)
     if !isempty(r) && pos in r
         seek(buf, first(r))
@@ -911,7 +911,7 @@ function validate_keymap(keymap)
     end
 end
 
-function keymap{D<:Dict}(keymaps::Array{D})
+function keymap(keymaps::Array{<:Dict})
     # keymaps is a vector of prioritized keymaps, with highest priority first
     ret = keymap_unify(map(normalize_keys, reverse(keymaps)))
     validate_keymap(ret)

@@ -14,7 +14,7 @@ Schur(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where Ty = S
 
 Same as [`schurfact`](@ref) but uses the input argument as workspace.
 """
-schurfact!{T<:BlasFloat}(A::StridedMatrix{T}) = Schur(LinAlg.LAPACK.gees!('V', A)...)
+schurfact!(A::StridedMatrix{<:BlasFloat}) = Schur(LinAlg.LAPACK.gees!('V', A)...)
 
 """
     schurfact(A::StridedMatrix) -> F::Schur
@@ -43,7 +43,7 @@ julia> F[:vectors] * F[:Schur] * F[:vectors]'
  -7.0  2.0   7.0
 ```
 """
-schurfact{T<:BlasFloat}(A::StridedMatrix{T}) = schurfact!(copy(A))
+schurfact(A::StridedMatrix{<:BlasFloat}) = schurfact!(copy(A))
 function schurfact{T}(A::StridedMatrix{T})
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))
     return schurfact!(copy_oftype(A, S))

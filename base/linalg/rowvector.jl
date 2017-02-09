@@ -74,18 +74,18 @@ julia> transpose(v)
 ```
 """
 @inline transpose(vec::AbstractVector) = RowVector(vec)
-@inline ctranspose{T}(vec::AbstractVector{T}) = RowVector(_conj(vec))
-@inline ctranspose{T<:Real}(vec::AbstractVector{T}) = RowVector(vec)
+@inline ctranspose(vec::AbstractVector) = RowVector(_conj(vec))
+@inline ctranspose(vec::AbstractVector{<:Real}) = RowVector(vec)
 
 @inline transpose(rowvec::RowVector) = rowvec.vec
 @inline transpose(rowvec::ConjRowVector) = copy(rowvec.vec) # remove the ConjArray wrapper from any raw vector
-@inline ctranspose{T}(rowvec::RowVector{T}) = conj(rowvec.vec)
-@inline ctranspose{T<:Real}(rowvec::RowVector{T}) = rowvec.vec
+@inline ctranspose(rowvec::RowVector) = conj(rowvec.vec)
+@inline ctranspose(rowvec::RowVector{<:Real}) = rowvec.vec
 
 parent(rowvec::RowVector) = rowvec.vec
 
 """
-    conj(rowvector)
+    conj(v::RowVector)
 
 Returns a [`ConjArray`](@ref) lazy view of the input, where each element is conjugated.
 
@@ -102,7 +102,7 @@ julia> conj(v)
 ```
 """
 @inline conj(rowvec::RowVector) = RowVector(_conj(rowvec.vec))
-@inline conj{T<:Real}(rowvec::RowVector{T}) = rowvec
+@inline conj(rowvec::RowVector{<:Real}) = rowvec
 
 # AbstractArray interface
 @inline length(rowvec::RowVector) =  length(rowvec.vec)
@@ -111,7 +111,7 @@ julia> conj(v)
 @inline indices(rowvec::RowVector) = (Base.OneTo(1), indices(rowvec.vec)[1])
 @inline indices(rowvec::RowVector, d) = ifelse(d == 2, indices(rowvec.vec)[1], Base.OneTo(1))
 linearindexing(::RowVector) = LinearFast()
-linearindexing{V<:RowVector}(::Type{V}) = LinearFast()
+linearindexing(::Type{<:RowVector}) = LinearFast()
 
 @propagate_inbounds getindex(rowvec::RowVector, i) = transpose(rowvec.vec[i])
 @propagate_inbounds setindex!(rowvec::RowVector, v, i) = setindex!(rowvec.vec, transpose(v), i)

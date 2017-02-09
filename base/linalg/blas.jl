@@ -439,7 +439,7 @@ for (fname, elty) in ((:daxpy_,:Float64),
         end
     end
 end
-function axpy!{T<:BlasFloat,Ta<:Number}(alpha::Ta, x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}})
+function axpy!{T<:BlasFloat}(alpha::Number, x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}})
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
@@ -447,7 +447,7 @@ function axpy!{T<:BlasFloat,Ta<:Number}(alpha::Ta, x::Union{DenseArray{T},Stride
     y
 end
 
-function axpy!{T<:BlasFloat,Ta<:Number,Ti<:Integer}(alpha::Ta, x::Array{T}, rx::Union{UnitRange{Ti},Range{Ti}},
+function axpy!{T<:BlasFloat,Ti<:Integer}(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},Range{Ti}},
                                          y::Array{T}, ry::Union{UnitRange{Ti},Range{Ti}})
 
     if length(rx) != length(ry)

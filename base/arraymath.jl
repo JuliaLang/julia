@@ -23,7 +23,7 @@ julia> A
  2-2im  3-1im
 ```
 """
-conj!{T<:Number}(A::AbstractArray{T}) = (@inbounds broadcast!(conj, A, A); A)
+conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
 
 for f in (:-, :~, :conj, :real, :imag)
     @eval ($f)(A::AbstractArray) = broadcast($f, A)
@@ -42,10 +42,10 @@ end
 
 for f in (:/, :\, :*, :+, :-)
     if f != :/
-        @eval ($f){T}(A::Number, B::AbstractArray{T}) = broadcast($f, A, B)
+        @eval ($f)(A::Number, B::AbstractArray) = broadcast($f, A, B)
     end
     if f != :\
-        @eval ($f){T}(A::AbstractArray{T}, B::Number) = broadcast($f, A, B)
+        @eval ($f)(A::AbstractArray, B::Number) = broadcast($f, A, B)
     end
 end
 

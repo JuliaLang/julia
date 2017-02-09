@@ -108,7 +108,7 @@ Base.HasEltype()
 iteratoreltype(x) = iteratoreltype(typeof(x))
 iteratoreltype(::Type) = HasEltype()  # HasEltype is the default
 
-iteratorsize{T<:AbstractArray}(::Type{T}) = HasShape()
+iteratorsize(::Type{<:AbstractArray}) = HasShape()
 iteratorsize{I,F}(::Type{Generator{I,F}}) = iteratorsize(I)
 length(g::Generator) = length(g.iter)
 size(g::Generator) = size(g.iter)

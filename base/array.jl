@@ -63,7 +63,7 @@ length(a::Array) = arraylen(a)
 elsize{T}(a::Array{T}) = isbits(T) ? sizeof(T) : sizeof(Ptr)
 sizeof(a::Array) = elsize(a) * length(a)
 
-function isassigned{T}(a::Array{T}, i::Int...)
+function isassigned(a::Array, i::Int...)
     ii = sub2ind(size(a), i...)
     1 <= ii <= length(a) || return false
     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii-1) == 1
@@ -576,7 +576,7 @@ function push!(a::Array{Any,1}, item::ANY)
     return a
 end
 
-function append!{T}(a::Array{T,1}, items::AbstractVector)
+function append!(a::Array{<:Any,1}, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
     ccall(:jl_array_grow_end, Void, (Any, UInt), a, n)
@@ -618,7 +618,7 @@ julia> prepend!([3],[1,2])
 """
 function prepend! end
 
-function prepend!{T}(a::Array{T,1}, items::AbstractVector)
+function prepend!(a::Array{<:Any,1}, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
     ccall(:jl_array_grow_beg, Void, (Any, UInt), a, n)
@@ -784,7 +784,7 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
 """
 deleteat!(a::Vector, i::Integer) = (_deleteat!(a, i, 1); a)
 
-function deleteat!{T<:Integer}(a::Vector, r::UnitRange{T})
+function deleteat!(a::Vector, r::UnitRange{<:Integer})
     n = length(a)
     isempty(r) || _deleteat!(a, first(r), length(r))
     return a
@@ -934,7 +934,7 @@ julia> A
  -1
 ```
 """
-function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins=_default_splice)
+function splice!(a::Vector, r::UnitRange{<:Integer}, ins=_default_splice)
     v = a[r]
     m = length(ins)
     if m == 0

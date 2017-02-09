@@ -110,7 +110,7 @@ _throw_reshape_colon_dimmismatch(A, pre, post) =
     throw(DimensionMismatch("array size $(length(A)) must be divisible by the product of the new dimensions $((pre..., :, post...))"))
 
 reshape{T,N}(parent::AbstractArray{T,N}, ndims::Type{Val{N}}) = parent
-function reshape{T,AN,N}(parent::AbstractArray{T,AN}, ndims::Type{Val{N}})
+function reshape{N}(parent::AbstractArray, ndims::Type{Val{N}})
     reshape(parent, rdims((), indices(parent), Val{N}))
 end
 # Move elements from inds to out until out reaches the desired
@@ -143,7 +143,7 @@ function _reshape(parent::AbstractArray, dims::Dims)
 end
 
 # Reshaping a ReshapedArray
-_reshape{T}(v::ReshapedArray{T,1}, dims::Dims{1}) = _reshape(v.parent, dims)
+_reshape(v::ReshapedArray{<:Any,1}, dims::Dims{1}) = _reshape(v.parent, dims)
 _reshape(R::ReshapedArray, dims::Dims) = _reshape(R.parent, dims)
 
 function __reshape(p::Tuple{AbstractArray,LinearSlow}, dims::Dims)
@@ -165,7 +165,7 @@ size_strides(out::Tuple) = out
 
 size(A::ReshapedArray) = A.dims
 similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype, dims)
-linearindexing{R<:ReshapedArrayLF}(::Type{R}) = LinearFast()
+linearindexing(::Type{<:ReshapedArrayLF}) = LinearFast()
 parent(A::ReshapedArray) = A.parent
 parentindexes(A::ReshapedArray) = map(s->1:s, size(parent(A)))
 reinterpret{T}(::Type{T}, A::ReshapedArray, dims::Dims) = reinterpret(T, parent(A), dims)

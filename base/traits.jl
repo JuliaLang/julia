@@ -7,8 +7,8 @@ immutable HasOrder <: TypeOrder end
 immutable Unordered <: TypeOrder end
 
 (::Type{TypeOrder})(instance) = TypeOrder(typeof(instance))
-(::Type{TypeOrder}){T<:Real}(::Type{T}) = HasOrder()
-(::Type{TypeOrder}){T}(::Type{T}) = Unordered()
+(::Type{TypeOrder})(::Type{<:Real}) = HasOrder()
+(::Type{TypeOrder})(::Type{<:Any}) = Unordered()
 
 # trait for objects that support arithmetic
 abstract TypeArithmetic
@@ -17,6 +17,6 @@ immutable ArithmeticOverflows <: TypeArithmetic end  #  most significant bits ca
 immutable ArithmeticUnknown <: TypeArithmetic end
 
 (::Type{TypeArithmetic})(instance) = TypeArithmetic(typeof(instance))
-(::Type{TypeArithmetic}){T<:AbstractFloat}(::Type{T}) = ArithmeticRounds()
-(::Type{TypeArithmetic}){T<:Integer}(::Type{T}) = ArithmeticOverflows()
-(::Type{TypeArithmetic}){T}(::Type{T}) = ArithmeticUnknown()
+(::Type{TypeArithmetic})(::Type{<:AbstractFloat}) = ArithmeticRounds()
+(::Type{TypeArithmetic})(::Type{<:Integer}) = ArithmeticOverflows()
+(::Type{TypeArithmetic})(::Type{<:Any}) = ArithmeticUnknown()

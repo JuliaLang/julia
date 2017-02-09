@@ -84,12 +84,12 @@ end
 for f in (:dct, :dct!, :idct, :idct!)
     pf = Symbol("plan_", f)
     @eval begin
-        $f{T<:fftwNumber}(x::AbstractArray{T}) = $pf(x) * x
-        $f{T<:fftwNumber}(x::AbstractArray{T}, region) = $pf(x, region) * x
+        $f(x::AbstractArray{<:fftwNumber}) = $pf(x) * x
+        $f(x::AbstractArray{<:fftwNumber}, region) = $pf(x, region) * x
         $pf(x::AbstractArray; kws...) = $pf(x, 1:ndims(x); kws...)
-        $f{T<:Real}(x::AbstractArray{T}, region=1:ndims(x)) = $f(fftwfloat(x), region)
-        $pf{T<:Real}(x::AbstractArray{T}, region; kws...) = $pf(fftwfloat(x), region; kws...)
-        $pf{T<:Complex}(x::AbstractArray{T}, region; kws...) = $pf(fftwcomplex(x), region; kws...)
+        $f(x::AbstractArray{<:Real}, region=1:ndims(x)) = $f(fftwfloat(x), region)
+        $pf(x::AbstractArray{<:Real}, region; kws...) = $pf(fftwfloat(x), region; kws...)
+        $pf(x::AbstractArray{<:Complex}, region; kws...) = $pf(fftwcomplex(x), region; kws...)
     end
 end
 

@@ -495,18 +495,18 @@ function Base.string(dt::Date)
 end
 
 # vectorized
-DateTime{T<:AbstractString}(Y::AbstractArray{T}, format::AbstractString;
+DateTime(Y::AbstractArray{<:AbstractString}, format::AbstractString;
     locale::Union{DateLocale, String}=ENGLISH) = DateTime(Y, DateFormat(format, locale))
-function DateTime{T<:AbstractString}(Y::AbstractArray{T}, df::DateFormat=ISODateTimeFormat)
+function DateTime(Y::AbstractArray{<:AbstractString}, df::DateFormat=ISODateTimeFormat)
     return reshape(DateTime[parse(DateTime, y, df) for y in Y], size(Y))
 end
-Date{T<:AbstractString}(Y::AbstractArray{T}, format::AbstractString;
+Date(Y::AbstractArray{<:AbstractString}, format::AbstractString;
     locale::Union{DateLocale, String}=ENGLISH) = Date(Y, DateFormat(format, locale))
-function Date{T<:AbstractString}(Y::AbstractArray{T}, df::DateFormat=ISODateFormat)
+function Date(Y::AbstractArray{<:AbstractString}, df::DateFormat=ISODateFormat)
     return reshape(Date[Date(parse(Date, y, df)) for y in Y], size(Y))
 end
 
-format{T<:TimeType}(Y::AbstractArray{T}, fmt::AbstractString;
+format(Y::AbstractArray{<:TimeType}, fmt::AbstractString;
     locale::Union{DateLocale, String}=ENGLISH) = format(Y, DateFormat(fmt, locale))
 function format(Y::AbstractArray{Date}, df::DateFormat=ISODateFormat)
     return reshape([format(y, df) for y in Y], size(Y))

@@ -46,27 +46,27 @@ end
 read_tree!(idx::GitIndex, hash::AbstractGitHash) =
     read_tree!(idx, GitTree(repository(idx), hash))
 
-function add!{T<:AbstractString}(idx::GitIndex, files::T...;
-             flags::Cuint = Consts.INDEX_ADD_DEFAULT)
+function add!(idx::GitIndex, files::AbstractString...;
+              flags::Cuint = Consts.INDEX_ADD_DEFAULT)
     @check ccall((:git_index_add_all, :libgit2), Cint,
                  (Ptr{Void}, Ptr{StrArrayStruct}, Cuint, Ptr{Void}, Ptr{Void}),
                  idx.ptr, collect(files), flags, C_NULL, C_NULL)
 end
 
-function update!{T<:AbstractString}(idx::GitIndex, files::T...)
+function update!(idx::GitIndex, files::AbstractString...)
     @check ccall((:git_index_update_all, :libgit2), Cint,
                  (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
                  idx.ptr, collect(files), C_NULL, C_NULL)
 end
 
-function remove!{T<:AbstractString}(idx::GitIndex, files::T...)
+function remove!(idx::GitIndex, files::AbstractString...)
     @check ccall((:git_index_remove_all, :libgit2), Cint,
                  (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
                  idx.ptr, collect(files), C_NULL, C_NULL)
 end
 
-function add!{T<:AbstractString}(repo::GitRepo, files::T...;
-             flags::Cuint = Consts.INDEX_ADD_DEFAULT)
+function add!(repo::GitRepo, files::AbstractString...;
+              flags::Cuint = Consts.INDEX_ADD_DEFAULT)
     with(GitIndex, repo) do idx
         add!(idx, files..., flags = flags)
         write!(idx)
@@ -74,7 +74,7 @@ function add!{T<:AbstractString}(repo::GitRepo, files::T...;
     return
 end
 
-function update!{T<:AbstractString}(repo::GitRepo, files::T...)
+function update!(repo::GitRepo, files::AbstractString...)
     with(GitIndex, repo) do idx
         update!(idx, files...)
         write!(idx)
@@ -82,7 +82,7 @@ function update!{T<:AbstractString}(repo::GitRepo, files::T...)
     return
 end
 
-function remove!{T<:AbstractString}(repo::GitRepo, files::T...)
+function remove!(repo::GitRepo, files::AbstractString...)
     with(GitIndex, repo) do idx
         remove!(idx, files...)
         write!(idx)

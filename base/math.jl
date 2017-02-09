@@ -63,7 +63,7 @@ clamp{X,L,H}(x::X, lo::L, hi::H) =
 Restrict values in `array` to the specified range, in-place.
 See also [`clamp`](@ref).
 """
-function clamp!{T}(x::AbstractArray{T}, lo, hi)
+function clamp!(x::AbstractArray, lo, hi)
     @inbounds for i in eachindex(x)
         x[i] = clamp(x[i], lo, hi)
     end
