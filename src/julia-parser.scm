@@ -1,7 +1,7 @@
 ;; Operator precedence table, lowest at top
 
 ; for most operators X there is a .X "elementwise" equivalent
-(define (add-dots ops) (append! ops (map (lambda (op) (symbol (string "." op))) ops)))
+(define (add-dots ops) (append! ops (map (lambda (op) (symbol (string "." op))) ops) (map (lambda (op) (symbol (string op "."))) ops)))
 
 ;; note: there are some strange-looking things in here because
 ;; the way the lexer works, every prefix of an operator must also

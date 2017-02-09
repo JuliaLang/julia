@@ -1132,7 +1132,7 @@ end
 @test isa(convert(Complex{Int16},1), Complex{Int16})
 @test Complex(1,2)+1 == Complex(2,2)
 @test Complex(1,2)+1.5 == Complex(2.5,2.0)
-@test 1/Complex(2,2) == Complex(.25,-.25)
+@test 1/Complex(2,2) == Complex(.25,-0.25)
 @test Complex(1.5,1.0) + 1//2 == Complex(2.0,1.0)
 @test real(Complex(1//2,2//3)) == 1//2
 @test imag(Complex(1//2,2//3)) == 2//3
@@ -1676,10 +1676,10 @@ end
 @test isnan(eps(Inf))
 @test isnan(eps(-Inf))
 
-@test .1+.1+.1 != .3
-@test .1+.1+.1 ≈ .3
-@test .1+.1+.1-.3 ≉ 0
-@test .1+.1+.1-.3 ≈ 0 atol=eps(.3)
+@test 0.1 + 0.1 + 0.1 != 0.3
+@test 0.1 + 0.1 + 0.1 ≈ 0.3
+@test 0.1 + 0.1 + 0.1 - 0.3 ≉ 0
+@test 0.1 + 0.1 + 0.1 - 0.3 ≈ 0 atol=eps(0.3)
 @test 1.1 ≈ 1.1f0
 
 @test div(1e50,1) == 1e50
@@ -1982,8 +1982,8 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @test approx_eq(round(pi,0), 3.)
 @test approx_eq(round(pi,1), 3.1)
 @test approx_eq(round(10*pi,-1), 30.)
-@test round(.1,0) == 0.
-@test round(-.1,0) == -0.
+@test round(0.1, 0) == 0.
+@test round(-0.1, 0) == -0.
 @test isnan(round(NaN, 2))
 @test isinf(round(Inf,2))
 @test isinf(round(-Inf,2))

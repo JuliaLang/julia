@@ -197,8 +197,8 @@ end
     deleteat!(Base.Test.get_testset().results,1)
 end
 
-@test .1+.1+.1 ≈ .3
-@test .1+.1+.1 ≉ .4
+@test 0.1 + 0.1 + 0.1 ≈ 0.3
+@test 0.1 + 0.1 + 0.1 ≉ 0.4
 
 ts = @testset "@testset should return the testset" begin
     @test true
