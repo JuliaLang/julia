@@ -158,7 +158,7 @@ julia> a = 1; b = 2; a + b*im
 ```
 
 However, this is *not* recommended; Use the [`complex()`](@ref) function instead to construct
-a complex value directly from its real and imaginary parts.:
+a complex value directly from its real and imaginary parts:
 
 ```jldoctest
 julia> a = 1; b = 2; complex(a, b)
