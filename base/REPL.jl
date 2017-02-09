@@ -633,7 +633,7 @@ function respond(f, repl, main; pass_empty = false)
         line = String(take!(buf))
         if !isempty(line) || pass_empty
             reset(repl)
-            val, bt = send_to_backend(f(line), backend(repl))
+            val, bt = send_to_backend(eval(:(($f)($line))), backend(repl))
             if !ends_with_semicolon(line) || bt !== nothing
                 print_response(repl, val, bt, true, Base.have_color)
             end
