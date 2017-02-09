@@ -65,8 +65,8 @@
                      t))
 (define (operator-precedence op) (get prec-table op 0))
 
-(define unary-ops (append! '(|<:| |>:| ~)
-                           (add-dots '(+ - ! ¬ √ ∛ ∜))))
+(define unary-ops (append! '(|<:| |>:|)
+                           (add-dots '(+ - ! ~ ¬ √ ∛ ∜))))
 
 ; operators that are both unary and binary
 (define unary-and-binary-ops '(+ - $ & ~ |.+| |.-|))
