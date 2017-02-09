@@ -79,7 +79,7 @@ function kwarg_decl(m::Method, kwtype::DataType)
         i = findfirst(x -> endswith(string(x), "..."), kws)
         i==0 && return kws
         push!(kws, kws[i])
-        return deleteat!(kws,i)
+        return delete!(kws,i)
     end
     return ()
 end

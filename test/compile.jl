@@ -341,7 +341,7 @@ let module_name = string("a",randstring())
     write(file_name, code)
     reload(module_name)
     @test isa(eval(Main, Symbol(module_name)), Module)
-    deleteat!(LOAD_PATH,1)
+    delete!(LOAD_PATH,1)
     rm(file_name)
 end
 

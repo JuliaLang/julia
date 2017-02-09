@@ -230,8 +230,8 @@ function popmeta!(body::Array{Any,1}, sym::Symbol)
         return false, []
     end
     ret = isa(metaargs[i], Expr) ? (metaargs[i]::Expr).args : []
-    deleteat!(metaargs, i)
-    isempty(metaargs) && deleteat!(blockargs, idx)
+    delete!(metaargs, i)
+    isempty(metaargs) && delete!(blockargs, idx)
     true, ret
 end
 

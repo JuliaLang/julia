@@ -94,7 +94,7 @@ function check_lines!(
             end
         end
     end
-    deleteat!(lines, remove)
+    delete!(lines, remove)
 end
 
 license_linenum(line) = startswith(strip(line), "#!") ? 2 : 1

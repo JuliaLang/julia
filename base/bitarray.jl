@@ -894,7 +894,7 @@ function resize!(B::BitVector, n::Integer)
     n == n0 && return B
     n >= 0 || throw(BoundsError(B, n))
     if n < n0
-        deleteat!(B, n+1:n0)
+        delete!(B, n+1:n0)
         return B
     end
     Bc = B.chunks
@@ -992,7 +992,7 @@ function insert!(B::BitVector, i::Integer, item)
     B
 end
 
-function _deleteat!(B::BitVector, i::Integer)
+function _delete!(B::BitVector, i::Integer)
     k, j = get_chunks_id(i)
 
     msk_bef = _msk64 >>> (63 - j)
@@ -1025,14 +1025,14 @@ function _deleteat!(B::BitVector, i::Integer)
     return B
 end
 
-function deleteat!(B::BitVector, i::Integer)
+function delete!(B::BitVector, i::Integer)
     n = length(B)
     1 <= i <= n || throw(BoundsError(B, i))
 
-    return _deleteat!(B, i)
+    return _delete!(B, i)
 end
 
-function deleteat!(B::BitVector, r::UnitRange{Int})
+function delete!(B::BitVector, r::UnitRange{Int})
     n = length(B)
     i_f = first(r)
     i_l = last(r)
@@ -1056,7 +1056,7 @@ function deleteat!(B::BitVector, r::UnitRange{Int})
     return B
 end
 
-function deleteat!(B::BitVector, inds)
+function delete!(B::BitVector, inds)
     n = new_l = length(B)
     s = start(inds)
     done(inds, s) && return B
@@ -1099,7 +1099,7 @@ function splice!(B::BitVector, i::Integer)
     1 <= i <= n || throw(BoundsError(B, i))
 
     v = B[i]   # TODO: change to a copy if/when subscripting becomes an ArrayView
-    _deleteat!(B, i)
+    _delete!(B, i)
     return v
 end
 
