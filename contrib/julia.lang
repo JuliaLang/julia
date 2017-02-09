@@ -154,11 +154,11 @@
       <keyword>in</keyword>
       <keyword>function</keyword>
       <keyword>if</keyword>
-      <keyword>immutable</keyword>
+      <keyword>struct</keyword>
       <keyword>let</keyword>
       <keyword>quote</keyword>
       <keyword>try</keyword>
-      <keyword>type</keyword>
+      <keyword>mutable type</keyword>
       <keyword>while</keyword>
       <keyword>catch</keyword>
       <keyword>finally</keyword>
@@ -166,8 +166,8 @@
       <keyword>elseif</keyword>
       <keyword>end</keyword>
       <!-- keywords -->
-      <keyword>abstract</keyword>
-      <keyword>bitstype</keyword>
+      <keyword>abstract type</keyword>
+      <keyword>primitive type</keyword>
       <keyword>break</keyword>
       <keyword>ccall</keyword>
       <keyword>const</keyword>
