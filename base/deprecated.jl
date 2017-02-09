@@ -20,6 +20,7 @@
 
 macro deprecate(old,new,ex=true)
     meta = Expr(:meta, :noinline)
+    @gensym oldmtname
     if isa(old,Symbol)
         oldname = Expr(:quote,old)
         newname = Expr(:quote,new)
@@ -28,31 +29,30 @@ macro deprecate(old,new,ex=true)
             :(function $(esc(old))(args...)
                   $meta
                   depwarn(string($oldname," is deprecated, use ",$newname," instead."),
-                          $oldname)
+                          $oldmtname)
                   $(esc(new))(args...)
-              end))
+              end),
+            :(const $oldmtname = Core.Typeof($(esc(old))).name.mt.name))
     elseif isa(old,Expr) && old.head == :call
         remove_linenums!(new)
         oldcall = sprint(show_unquoted, old)
         newcall = sprint(show_unquoted, new)
         oldsym = if isa(old.args[1],Symbol)
-            old.args[1]
+            old.args[1]::Symbol
         elseif isa(old.args[1],Expr) && old.args[1].head == :curly
-            old.args[1].args[1]
+            old.args[1].args[1]::Symbol
         else
             error("invalid usage of @deprecate")
         end
-        # work around #20220, deprecation for Array repeating over and over
-        # TODO: remove the special case when 0.6 deprecations are removed
-        oldname = Expr(:quote, oldsym in (:Array, :SharedArray) ? :Type : oldsym)
         Expr(:toplevel,
-            Expr(:export,esc(oldsym)),
+            ex ? Expr(:export,esc(oldsym)) : nothing,
             :($(esc(old)) = begin
                   $meta
                   depwarn(string($oldcall," is deprecated, use ",$newcall," instead."),
-                          $oldname)
+                          $oldmtname)
                   $(esc(new))
-              end))
+              end),
+            :(const $oldmtname = Core.Typeof($(esc(oldsym))).name.mt.name))
     else
         error("invalid usage of @deprecate")
     end
@@ -1142,7 +1142,6 @@ function partial_linear_indexing_warning(n)
 end
 
 # Deprecate Array(T, dims...) in favor of proper type constructors
-# TODO: when removing these, get rid of the special casing in the @deprecate macro up top
 @deprecate Array{T,N}(::Type{T}, d::NTuple{N,Int})               Array{T}(d)
 @deprecate Array{T}(::Type{T}, d::Int...)                        Array{T}(d...)
 @deprecate Array{T}(::Type{T}, m::Int)                           Array{T}(m)
