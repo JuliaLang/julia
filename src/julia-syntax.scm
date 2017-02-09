@@ -2381,7 +2381,7 @@
         ((=)
          (let ((v (decl-var (cadr e)))
                (rest (find-assigned-vars (caddr e) env)))
-           (if (or (ssavalue? v) (memq v env))
+           (if (or (ssavalue? v) (memq v env) (globalref? v))
                rest
                (cons v rest))))
         (else
