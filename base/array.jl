@@ -69,6 +69,8 @@ function isassigned{T}(a::Array{T}, i::Int...)
     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii-1) == 1
 end
 
+isassigned(a::Array, i::Integer...) = isassigned(a, map(Int, i)...)
+
 ## copy ##
 
 function unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, n)
