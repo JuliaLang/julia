@@ -1003,3 +1003,8 @@ end
 @testintersect(Tuple{A20992{R, D, d} where d where D, Int} where R,
                Tuple{C20992{S, n, T, D, d} where d where D where T where n where S, Any},
                Tuple{C20992, Int})
+
+# Issue #19414
+let ex = try struct A19414 <: Base.AbstractSet end catch e; e end
+    @test isa(ex, ErrorException) && ex.msg == "invalid subtyping in definition of A19414"
+end
