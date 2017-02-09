@@ -377,9 +377,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     m->called = called;
 
     jl_array_t *copy = NULL;
-    jl_svec_t *sparam_vars = m->tvars;
-    if (!jl_is_svec(sparam_vars))
-        sparam_vars = jl_svec1(sparam_vars);
+    jl_svec_t *sparam_vars = jl_outer_unionall_vars(m->sig);
     JL_GC_PUSH2(&copy, &sparam_vars);
     assert(jl_typeis(src->code, jl_array_any_type));
     jl_array_t *stmts = (jl_array_t*)src->code;
@@ -415,7 +413,6 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
         (jl_method_t*)jl_gc_alloc(ptls, sizeof(jl_method_t), jl_method_type);
     m->specializations.unknown = jl_nothing;
     m->sig = NULL;
-    m->tvars = NULL;
     m->sparam_syms = NULL;
     m->ambig = jl_nothing;
     m->roots = NULL;
@@ -465,10 +462,6 @@ jl_method_t *jl_new_method(jl_code_info_t *definition,
     m->sig = (jl_value_t*)sig;
     m->isva = isva;
     m->nargs = nargs;
-    if (jl_svec_len(tvars) == 1)
-        m->tvars = (jl_svec_t*)jl_svecref(tvars, 0);
-    else
-        m->tvars = tvars;
     jl_method_set_source(m, definition);
     if (isstaged) {
         // create and store generator for generated functions

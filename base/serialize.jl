@@ -347,7 +347,6 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.file)
     serialize(s, meth.line)
     serialize(s, meth.sig)
-    serialize(s, meth.tvars)
     serialize(s, meth.sparam_syms)
     serialize(s, meth.ambig)
     serialize(s, meth.nargs)
@@ -632,7 +631,6 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     file = deserialize(s)::Symbol
     line = deserialize(s)::Int32
     sig = deserialize(s)::DataType
-    tvars = deserialize(s)::Union{SimpleVector, TypeVar}
     sparam_syms = deserialize(s)::SimpleVector
     ambig = deserialize(s)::Union{Array{Any,1}, Void}
     nargs = deserialize(s)::Int32
@@ -645,7 +643,6 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.file = file
         meth.line = line
         meth.sig = sig
-        meth.tvars = tvars
         meth.sparam_syms = sparam_syms
         meth.ambig = ambig
         meth.isstaged = isstaged
