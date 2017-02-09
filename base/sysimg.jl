@@ -218,13 +218,6 @@ include("grisu/grisu.jl")
 import .Grisu.print_shortest
 include("methodshow.jl")
 
-# core math functions
-include("floatfuncs.jl")
-include("math.jl")
-importall .Math
-const (√)=sqrt
-const (∛)=cbrt
-
 let SOURCE_PATH = ""
     global function _include(path)
         prev = SOURCE_PATH
@@ -235,6 +228,17 @@ let SOURCE_PATH = ""
     end
 end
 INCLUDE_STATE = 2 # include = _include (from lines above)
+
+# core math functions
+include("floatfuncs.jl")
+include("math/math.jl")
+importall .Math
+const (√)=sqrt
+const (∛)=cbrt
+
+# special math functions
+include("special/special.jl")
+importall .SpecialFunctions
 
 # reduction along dims
 include("reducedim.jl")  # macros in this file relies on string.jl
