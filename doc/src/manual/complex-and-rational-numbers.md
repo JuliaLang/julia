@@ -149,7 +149,7 @@ julia> sqrt(-1 + 0im)
 0.0 + 1.0im
 ```
 
-The [literal numeric coefficient notation](@ref man-numeric-literal-coefficients) does not work when constructing complex number
+The [literal numeric coefficient notation](@ref man-numeric-literal-coefficients) does not work when constructing a complex number
 from variables. Instead, the multiplication must be explicitly written out:
 
 ```jldoctest
@@ -158,7 +158,7 @@ julia> a = 1; b = 2; a + b*im
 ```
 
 However, this is *not* recommended; Use the [`complex()`](@ref) function instead to construct
-a complex value directly from its real and imaginary parts.:
+a complex value directly from its real and imaginary parts:
 
 ```jldoctest
 julia> a = 1; b = 2; complex(a, b)

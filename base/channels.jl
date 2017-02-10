@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-abstract AbstractChannel
+abstract type AbstractChannel end
 
 """
     Channel{T}(sz::Int)
@@ -17,7 +17,7 @@ Other constructors:
 * `Channel(Inf)`: equivalent to `Channel{Any}(typemax(Int))`
 * `Channel(sz)`: equivalent to `Channel{Any}(sz)`
 """
-type Channel{T} <: AbstractChannel
+mutable struct Channel{T} <: AbstractChannel
     cond_take::Condition    # waiting for data to become available
     cond_put::Condition     # waiting for a writeable slot
     state::Symbol
@@ -29,14 +29,14 @@ type Channel{T} <: AbstractChannel
     # Used when sz_max == 0, i.e., an unbuffered channel.
     takers::Array{Condition}
 
-    function Channel(sz::Float64)
+    function Channel{T}(sz::Float64) where T
         if sz == Inf
             Channel{T}(typemax(Int))
         else
             Channel{T}(convert(Int, sz))
         end
     end
-    function Channel(sz::Integer)
+    function Channel{T}(sz::Integer) where T
         if sz < 0
             throw(ArgumentError("Channel size must be either 0, a positive integer or Inf"))
         end
@@ -44,7 +44,7 @@ type Channel{T} <: AbstractChannel
     end
 
     # deprecated empty constructor
-    function Channel()
+    function Channel{T}() where T
         depwarn(string("The empty constructor Channel() is deprecated. ",
                         "The channel size needs to be specified explictly. ",
                         "Defaulting to Channel{$T}(32)."), :Channel)
@@ -239,7 +239,7 @@ function close_chnl_on_taskdone(t::Task, ref::WeakRef)
     end
 end
 
-type InvalidStateException <: Exception
+mutable struct InvalidStateException <: Exception
     msg::AbstractString
     state::Symbol
 end
@@ -361,10 +361,10 @@ eltype{T}(::Type{Channel{T}}) = T
 
 show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(c.sz_max),sz_curr:$(n_avail(c)))")
 
-type ChannelIterState{T}
+mutable struct ChannelIterState{T}
     hasval::Bool
     val::T
-    ChannelIterState(x) = new(x)
+    ChannelIterState{T}(has::Bool) where {T} = new(has)
 end
 
 start{T}(c::Channel{T}) = ChannelIterState{T}(false)
@@ -383,6 +383,6 @@ function done(c::Channel, state::ChannelIterState)
         end
     end
 end
-next{T}(c::Channel{T}, state) = (v=state.val; state.hasval=false; (v, state))
+next(c::Channel, state) = (v=state.val; state.hasval=false; (v, state))
 
-iteratorsize{C<:Channel}(::Type{C}) = SizeUnknown()
+iteratorsize(::Type{<:Channel}) = SizeUnknown()

@@ -338,7 +338,7 @@ isgraphemebreak(c1::Char, c2::Char) =
 isgraphemebreak!(state::Ref{Int32}, c1::Char, c2::Char) =
     ccall(:utf8proc_grapheme_break_stateful, Bool, (UInt32, UInt32, Ref{Int32}), c1, c2, state)
 
-immutable GraphemeIterator{S<:AbstractString}
+struct GraphemeIterator{S<:AbstractString}
     s::S # original string (for generation of SubStrings)
 end
 

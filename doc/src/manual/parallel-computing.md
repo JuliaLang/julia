@@ -1029,7 +1029,7 @@ As an example let us see how the `LocalManager`, the manager responsible for sta
 on the same host, is implemented:
 
 ```
-immutable LocalManager <: ClusterManager
+struct LocalManager <: ClusterManager
     np::Integer
 end
 

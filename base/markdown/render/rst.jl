@@ -40,7 +40,7 @@ function rst(io::IO, list::List)
     for (i, item) in enumerate(list.items)
         bullet = isordered(list) ? "$(i + list.ordered - 1). " : "* "
         print(io, bullet)
-        lines = split(rstrip(sprint(buf -> rst(buf, item))), '\n')
+        lines = split(rstrip(sprint(rst, item)), '\n')
         for (n, line) in enumerate(lines)
             print(io, (n == 1 || isempty(line)) ? "" : " "^length(bullet), line)
             n < length(lines) && println(io)
@@ -50,7 +50,7 @@ function rst(io::IO, list::List)
 end
 
 function rst(io::IO, q::BlockQuote)
-    s = sprint(buf -> rst(buf, q.content))
+    s = sprint(rst, q.content)
     for line in split(rstrip(s), "\n")
         println(io, "    ", line)
     end
@@ -59,7 +59,7 @@ end
 
 function rst(io::IO, f::Footnote)
     print(io, ".. [", f.id, "]")
-    s = sprint(io -> rst(io, f.text))
+    s = sprint(rst, f.text)
     lines = split(rstrip(s), "\n")
     # Single line footnotes are printed on the same line as their label
     # rather than taking up an additional line.
@@ -75,7 +75,7 @@ function rst(io::IO, f::Footnote)
 end
 
 function rst(io::IO, md::Admonition)
-    s = sprint(buf -> rst(buf, md.content))
+    s = sprint(rst, md.content)
     title = md.title == ucfirst(md.category) ? "" : md.title
     println(io, ".. ", md.category, "::", isempty(title) ? "" : " $title")
     for line in split(rstrip(s), "\n")

@@ -2,7 +2,7 @@
 
 # data stored by the owner of a remote reference
 def_rv_channel() = Channel(1)
-type RemoteValue
+mutable struct RemoteValue
     c::AbstractChannel
     clientset::IntSet # Set of workerids that have a reference to this channel.
                       # Keeping ids instead of a count aids in cleaning up upon
@@ -16,7 +16,7 @@ end
 wait(rv::RemoteValue) = wait(rv.c)
 
 ## core messages: do, call, fetch, wait, ref, put! ##
-type RemoteException <: Exception
+mutable struct RemoteException <: Exception
     pid::Int
     captured::CapturedException
 end

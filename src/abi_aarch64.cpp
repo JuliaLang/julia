@@ -45,7 +45,7 @@ Type *get_llvm_vectype(jl_datatype_t *dt) const
     // the homogeneity check.
     jl_datatype_t *ft0 = (jl_datatype_t*)jl_field_type(dt, 0);
     // `ft0` should be a `VecElement` type and the true element type
-    // should be a `bitstype`
+    // should be a primitive type
     if (ft0->name != jl_vecelement_typename ||
         ((jl_datatype_t*)jl_field_type(ft0, 0))->layout->nfields)
         return nullptr;

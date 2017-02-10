@@ -92,8 +92,17 @@ for f in (sum3, sum4, sum7, sum8)
 end
 @test typeof(sum(Int8[])) == typeof(sum(Int8[1])) == typeof(sum(Int8[1 7]))
 
-@test sum_kbn([1,1e100,1,-1e100]) == 2
-@test sum_kbn(Float64[]) == 0.0
+@test sum_kbn([1,1e100,1,-1e100]) === 2.0
+@test sum_kbn(Float64[]) === 0.0
+@test sum_kbn(i for i=1.0:1.0:10.0) === 55.0
+@test sum_kbn(i for i=1:1:10) === 55
+@test sum_kbn([1 2 3]) === 6
+@test sum_kbn([2+im 3-im]) === 5+0im
+@test sum_kbn([1+im 2+3im]) === 3+4im
+@test sum_kbn([7 8 9]) === sum_kbn([8 9 7])
+@test sum_kbn(i for i=1:1:10) === sum_kbn(i for i=10:-1:1)
+@test sum_kbn([-0.0]) === -0.0
+@test sum_kbn([-0.0,-0.0]) === -0.0
 
 # prod
 
@@ -237,7 +246,7 @@ end
 
 # any and all with functors
 
-immutable SomeFunctor end
+struct SomeFunctor end
 (::SomeFunctor)(x) = true
 
 @test any(SomeFunctor(), 1:10)

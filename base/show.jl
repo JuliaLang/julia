@@ -10,10 +10,11 @@ print(io::IO, s::Symbol) = (write(io,s); nothing)
 In short, it is an immutable dictionary that is a subclass of `IO`. It supports standard
 dictionary operations such as [`getindex`](@ref), and can also be used as an I/O stream.
 """
-immutable IOContext{IO_t <: IO} <: AbstractPipe
+struct IOContext{IO_t <: IO} <: AbstractPipe
     io::IO_t
     dict::ImmutableDict{Symbol, Any}
-    function IOContext(io::IO_t, dict::ImmutableDict{Symbol, Any})
+
+    function IOContext{IO_t}(io::IO_t, dict::ImmutableDict{Symbol, Any}) where IO_t<:IO
         assert(!(IO_t <: IOContext))
         return new(io, dict)
     end
@@ -242,7 +243,7 @@ show(io::IO, n::Signed) = (write(io, dec(n)); nothing)
 show(io::IO, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
 print(io::IO, n::Unsigned) = print(io, dec(n))
 
-show{T}(io::IO, p::Ptr{T}) = print(io, typeof(p), " @0x$(hex(UInt(p), Sys.WORD_SIZE>>2))")
+show(io::IO, p::Ptr) = print(io, typeof(p), " @0x$(hex(UInt(p), Sys.WORD_SIZE>>2))")
 
 function show(io::IO, p::Pair)
     if typeof(p.first) != typeof(p).parameters[1] ||
@@ -835,12 +836,18 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     # type declaration
     elseif head === :type && nargs==3
-        show_block(io, args[1] ? :type : :immutable, args[2], args[3], indent)
+        show_block(io, args[1] ? Symbol("mutable struct") : Symbol("struct"), args[2], args[3], indent)
         print(io, "end")
 
     elseif head === :bitstype && nargs == 2
-        print(io, "bitstype ")
+        print(io, "primitive type ")
+        show_list(io, reverse(args), ' ', indent)
+        print(io, " end")
+
+    elseif head === :abstract && nargs == 1
+        print(io, "abstract type ")
         show_list(io, args, ' ', indent)
+        print(io, " end")
 
     # empty return (i.e. "function f() return end")
     elseif head === :return && nargs == 1 && args[1] === nothing
@@ -860,7 +867,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     elseif (nargs == 0 && head in (:break, :continue))
         print(io, head)
 
-    elseif (nargs == 1 && head in (:return, :abstract, :const)) ||
+    elseif (nargs == 1 && head in (:return, :const)) ||
                           head in (:local,  :global, :export)
         print(io, head, ' ')
         show_list(io, args, ", ", indent)
@@ -956,12 +963,18 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, head)
 
     # `where` syntax
-    elseif head === :where && length(args) == 2
+    elseif head === :where && length(args) > 1
         parens = 1 <= prec
         parens && print(io, "(")
         show_unquoted(io, args[1], indent, operator_precedence(:(::)))
         print(io, " where ")
-        show_unquoted(io, args[2], indent, 1)
+        if nargs == 2
+            show_unquoted(io, args[2], indent, 1)
+        else
+            print(io, "{")
+            show_list(io, args[2:end], ", ", indent)
+            print(io, "}")
+        end
         parens && print(io, ")")
 
     elseif head === :import || head === :importall || head === :using

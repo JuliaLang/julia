@@ -3,7 +3,7 @@
 ## basic task functions and TLS
 
 # Container for a captured exception and its backtrace. Can be serialized.
-type CapturedException <: Exception
+mutable struct CapturedException <: Exception
     ex::Any
     processed_bt::Vector{Any}
 
@@ -26,7 +26,7 @@ function showerror(io::IO, ce::CapturedException)
     showerror(io, ce.ex, ce.processed_bt, backtrace=true)
 end
 
-type CompositeException <: Exception
+mutable struct CompositeException <: Exception
     exceptions::Vector{Any}
     CompositeException() = new(Any[])
     CompositeException(exceptions) = new(exceptions)

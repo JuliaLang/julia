@@ -105,7 +105,7 @@ end
 # Example from Quantum Information Theory
 import Base: size, issymmetric, ishermitian
 
-type CPM{T<:Base.LinAlg.BlasFloat}<:AbstractMatrix{T} # completely positive map
+mutable struct CPM{T<:Base.LinAlg.BlasFloat}<:AbstractMatrix{T} # completely positive map
     kraus::Array{T,3} # kraus operator representation
 end
 size(Phi::CPM)=(size(Phi.kraus,1)^2,size(Phi.kraus,3)^2)

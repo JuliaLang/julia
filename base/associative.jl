@@ -25,10 +25,10 @@ function summary(t::Associative)
     return string(typeof(t), " with ", n, (n==1 ? " entry" : " entries"))
 end
 
-immutable KeyIterator{T<:Associative}
+struct KeyIterator{T<:Associative}
     dict::T
 end
-immutable ValueIterator{T<:Associative}
+struct ValueIterator{T<:Associative}
     dict::T
 end
 
@@ -290,7 +290,7 @@ and value type and thus its `eltype` is always `Pair{Any,Any}`.
 
 See [`Dict`](@ref) for further help.
 """
-type ObjectIdDict <: Associative{Any,Any}
+mutable struct ObjectIdDict <: Associative{Any,Any}
     ht::Vector{Any}
     ndel::Int
     ObjectIdDict() = new(Vector{Any}(32), 0)

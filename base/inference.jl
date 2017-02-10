@@ -6,7 +6,7 @@ import Core: _apply, svec, apply_type, Builtin, IntrinsicFunction, MethodInstanc
 const MAX_TYPEUNION_LEN = 3
 const MAX_TYPE_DEPTH = 8
 
-immutable InferenceParams
+struct InferenceParams
     world::UInt
 
     # optimization
@@ -47,20 +47,20 @@ const Slot_UsedUndef    = 32
 
 #### inference state types ####
 
-immutable NotFound end
+struct NotFound end
 const NF = NotFound()
 typealias LineNum Int
 typealias VarTable Array{Any,1}
 
 # The type of a variable load is either a value or an UndefVarError
-type VarState
+mutable struct VarState
     typ
     undef::Bool
     VarState(typ::ANY, undef::Bool) = new(typ, undef)
 end
 
 # The type of a value might be constant
-immutable Const
+struct Const
     val
     Const(v::ANY) = new(v)
 end
@@ -70,7 +70,7 @@ end
 # limit the type of some other variable
 # The Conditional type tracks the set of branches on variable type info
 # that was used to create the boolean condition
-type Conditional
+mutable struct Conditional
     var::Union{Slot,SSAValue}
     vtype
     elsetype
@@ -82,7 +82,7 @@ type Conditional
     end
 end
 
-immutable PartialTypeVar
+struct PartialTypeVar
     tv::TypeVar
     # N.B.: Currently unused, but would allow turning something back
     # into Const, if the bounds are pulled out of this TypeVar
@@ -97,7 +97,7 @@ function rewrap(t::ANY, u::ANY)
     return rewrap_unionall(t, u)
 end
 
-type InferenceState
+mutable struct InferenceState
     sp::SimpleVector     # static parameters
     label_counter::Int   # index of the current highest label for this function
     mod::Module
@@ -582,7 +582,7 @@ function typeof_tfunc(t::ANY)
         elseif t === Any
             return DataType
         else
-            return Type{_} where _<:t
+            return Type{<:t}
         end
     elseif isa(t, Union)
         a = widenconst(typeof_tfunc(t.a))
@@ -891,7 +891,7 @@ function fieldtype_tfunc(s0::ANY, name::ANY)
     if exact
         return Const(ft)
     end
-    return Type{_} where _<:ft
+    return Type{<:ft}
 end
 add_tfunc(fieldtype, 2, 2, fieldtype_tfunc)
 
@@ -1002,17 +1002,17 @@ function apply_type_tfunc(headtypetype::ANY, args::ANY...)
     catch ex
         # type instantiation might fail if one of the type parameters
         # doesn't match, which could happen if a type estimate is too coarse
-        return Type{_} where _<:headtype
+        return Type{<:headtype}
     end
     !uncertain && canconst && return Const(appl)
     if isvarargtype(headtype)
         return Type
     end
     if uncertain && type_too_complex(appl,0)
-        return Type{_} where _<:headtype
+        return Type{<:headtype}
     end
     if istuple
-        return Type{_} where _<:appl
+        return Type{<:appl}
     end
     ans = Type{appl}
     for i = length(outervars):-1:1
@@ -1471,7 +1471,7 @@ function return_type_tfunc(argtypes::ANY, vtypes::VarTable, sv::InferenceState)
                         # input arguments were known for certain
                         return Const(rt)
                     else
-                        return Type{R} where R <: rt
+                        return Type{<:rt}
                     end
                 end
             end
@@ -1935,7 +1935,7 @@ end
 
 #### handling for statement-position expressions ####
 
-type StateUpdate
+mutable struct StateUpdate
     var::Union{Slot,SSAValue}
     vtype
     state::VarTable
@@ -3315,7 +3315,7 @@ end
 
 #### post-inference optimizations ####
 
-immutable InvokeData
+struct InvokeData
     mt::MethodTable
     entry::TypeMapEntry
     types0
@@ -4898,7 +4898,7 @@ function alloc_elim_pass!(sv::InferenceState)
             nv, field_names = alloc
             tup = rhs.args
             # This makes sure the value doesn't escape so we can elide
-            # allocation of mutable types too
+            # allocation of mutable structs too
             if (var !== nothing &&
                 occurs_outside_getfield(bexpr, var, sv, nv, field_names))
                 i += 1

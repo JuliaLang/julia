@@ -36,7 +36,7 @@ include("callbacks.jl")
 
 using .Error
 
-immutable State
+struct State
     head::GitHash
     index::GitHash
     work::GitHash
@@ -110,9 +110,7 @@ tracked files in the working tree (if `cached=false`) or the index (if `cached=t
 Equivalent to `git diff-index <treeish> [-- <pathspecs>]`.
 """
 function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""; cached::Bool=false)
-    tree_oid = revparseid(repo, "$treeish^{tree}")
-    result = false
-    tree = GitTree(repo, tree_oid)
+    tree = GitTree(repo, "$treeish^{tree}")
     try
         diff = diff_tree(repo, tree, paths, cached=cached)
         result = count(diff) > 0
@@ -123,7 +121,20 @@ function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""
     return result
 end
 
-""" git diff --name-only --diff-filter=<filter> <branch1> <branch2> """
+"""
+    diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractString; kwarg...) -> Vector{AbstractString}
+
+Show which files have changed in the git repository `repo` between branches `branch1`
+and `branch2`.
+
+The keyword argument is:
+  * `filter::Set{Cint}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED]))`,
+    and it sets options for the diff. The default is to show files added, modified, or deleted.
+
+Returns only the *names* of the files which have changed, *not* their contents.
+
+Equivalent to `git diff --name-only --diff-filter=<filter> <branch1> <branch2>`.
+"""
 function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractString;
                     filter::Set{Cint}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED]))
     b1_id = revparseid(repo, branch1*"^{tree}")
@@ -191,7 +202,7 @@ function set_remote_url(path::AbstractString, url::AbstractString; remote::Abstr
     end
 end
 
-function make_payload{P<:AbstractCredentials}(payload::Nullable{P})
+function make_payload(payload::Nullable{<:AbstractCredentials})
     Ref{Nullable{AbstractCredentials}}(payload)
 end
 
@@ -212,11 +223,10 @@ The keyword arguments are:
 
 Equivalent to `git fetch [<remoteurl>|<repo>] [<refspecs>]`.
 """
-function fetch{T<:AbstractString, P<:AbstractCredentials}(repo::GitRepo;
-                                  remote::AbstractString="origin",
-                                  remoteurl::AbstractString="",
-                                  refspecs::Vector{T}=AbstractString[],
-                                  payload::Nullable{P}=Nullable{AbstractCredentials}())
+function fetch(repo::GitRepo; remote::AbstractString="origin",
+               remoteurl::AbstractString="",
+               refspecs::Vector{<:AbstractString}=AbstractString[],
+               payload::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}())
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
@@ -247,12 +257,11 @@ The keyword arguments are:
 
 Equivalent to `git push [<remoteurl>|<repo>] [<refspecs>]`.
 """
-function push{T<:AbstractString, P<:AbstractCredentials}(repo::GitRepo;
-              remote::AbstractString="origin",
+function push(repo::GitRepo; remote::AbstractString="origin",
               remoteurl::AbstractString="",
-              refspecs::Vector{T}=AbstractString[],
+              refspecs::Vector{<:AbstractString}=AbstractString[],
               force::Bool=false,
-              payload::Nullable{P}=Nullable{AbstractCredentials}())
+              payload::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}())
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
@@ -283,14 +292,22 @@ function branch(repo::GitRepo)
 end
 
 """
-    branch!(repo::GitRepo, branch_name::AbstractString, commit::AbstractString=""; track::AbstractString="", force::Bool=false, set_head::Bool=true)
+    branch!(repo::GitRepo, branch_name::AbstractString, commit::AbstractString=""; kwargs...)
+
+Checkout a new git branch in the `repo` repository. `commit` is the [`GitHash`](@ref),
+in string form, which will be the start of the new branch.
+
+The keyword arguments are:
+  * `track::AbstractString=""`: the name of the
+    remote branch this new branch should track, if any.
+    If empty (the default), no remote branch
+    will be tracked.
+  * `force::Bool=false`: if `true`, branch creation will
+    be forced.
+  * `set_head::Bool=true`: if `true`, after the branch creation
+    finishes the branch head will be set as the HEAD of `repo`.
 
 Equivalent to `git checkout [-b|-B] <branch_name> [<commit>] [--track <track>]`.
-Checkout a new git branch in the `repo` repository. `commit` is the [`GitHash`](@ref),
-in string form, which will be the start of the new branch. `track` is the name of the
-remote branch this new branch should track, if any. If empty (the default), no remote branch
-will be tracked. If `force` is `true`, branch creation will be forced. If `set_head` is
-`true`, after the branch creation finishes the branch head will be set as the HEAD of `repo`.
 """
 function branch!(repo::GitRepo, branch_name::AbstractString,
                  commit::AbstractString = ""; # start point
@@ -418,11 +435,11 @@ The keyword arguments are:
 
 Equivalent to `git clone [-b <branch>] [--bare] <repo_url> <repo_path>`.
 """
-function clone{P<:AbstractCredentials}(repo_url::AbstractString, repo_path::AbstractString;
+function clone(repo_url::AbstractString, repo_path::AbstractString;
                branch::AbstractString="",
                isbare::Bool = false,
                remote_cb::Ptr{Void} = C_NULL,
-               payload::Nullable{P}=Nullable{AbstractCredentials}())
+               payload::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}())
     # setup clone options
     lbranch = Base.cconvert(Cstring, branch)
     payload = make_payload(payload)

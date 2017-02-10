@@ -777,7 +777,7 @@ truncmask(x, mask) = x
 
 ## Array operations on floating point numbers ##
 
-float{T<:AbstractFloat}(A::AbstractArray{T}) = A
+float(A::AbstractArray{<:AbstractFloat}) = A
 
 function float{T}(A::AbstractArray{T})
     if !isleaftype(T)

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-immutable IntSet <: AbstractSet{Int}
+struct IntSet <: AbstractSet{Int}
     bits::BitVector
     IntSet() = new(falses(256))
 end

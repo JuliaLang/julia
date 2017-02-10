@@ -4,8 +4,8 @@
 
 isreal(x::AbstractArray) = all(isreal,x)
 iszero(x::AbstractArray) = all(iszero,x)
-isreal{T<:Real,n}(x::AbstractArray{T,n}) = true
-all{T<:Integer}(::typeof(isinteger), ::AbstractArray{T}) = true
+isreal(x::AbstractArray{<:Real}) = true
+all(::typeof(isinteger), ::AbstractArray{<:Integer}) = true
 
 ## Constructors ##
 
@@ -80,14 +80,14 @@ squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (Int(dim),))
 
 ## Unary operators ##
 
-conj{T<:Real}(x::AbstractArray{T}) = x
-conj!{T<:Real}(x::AbstractArray{T}) = x
+conj(x::AbstractArray{<:Real}) = x
+conj!(x::AbstractArray{<:Real}) = x
 
-real{T<:Real}(x::AbstractArray{T}) = x
-imag{T<:Real}(x::AbstractArray{T}) = zero(x)
+real(x::AbstractArray{<:Real}) = x
+imag(x::AbstractArray{<:Real}) = zero(x)
 
-+{T<:Number}(x::AbstractArray{T}) = x
-*{T<:Number}(x::AbstractArray{T,2}) = x
++(x::AbstractArray{<:Number}) = x
+*(x::AbstractArray{<:Number,2}) = x
 
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
 

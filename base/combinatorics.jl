@@ -82,7 +82,7 @@ isperm(p::Tuple{}) = true
 isperm(p::Tuple{Int}) = p[1] == 1
 isperm(p::Tuple{Int,Int}) = ((p[1] == 1) & (p[2] == 2)) | ((p[1] == 2) & (p[2] == 1))
 
-function permute!!{T<:Integer}(a, p::AbstractVector{T})
+function permute!!(a, p::AbstractVector{<:Integer})
     count = 0
     start = 0
     while count < length(a)
@@ -131,7 +131,7 @@ julia> A
 """
 permute!(a, p::AbstractVector) = permute!!(a, copymutable(p))
 
-function ipermute!!{T<:Integer}(a, p::AbstractVector{T})
+function ipermute!!(a, p::AbstractVector{<:Integer})
     count = 0
     start = 0
     while count < length(a)

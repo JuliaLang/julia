@@ -73,7 +73,7 @@ let xs = [[i:i+4;] for i in 1:10]
 end
 
 # issue #19714
-immutable T19714 <: Integer end
+struct T19714 <: Integer end
 Base.float(::T19714) = 19714.0
 Base.:/(::T19714, ::T19714) = T19714()
 Base.convert(::Type{T19714}, ::Int) = T19714()

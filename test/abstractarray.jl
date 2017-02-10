@@ -165,24 +165,26 @@ end
 
 # token type on which to dispatch testing methods in order to avoid potential
 # name conflicts elsewhere in the base test suite
-type TestAbstractArray end
+mutable struct TestAbstractArray end
 
 ## Tests for the abstract array interfaces with minimally defined array types
 
 # A custom linear fast array type with 24 elements that doesn't rely upon Array storage
-type T24Linear{T,N,dims} <: AbstractArray{T,N}
+mutable struct T24Linear{T,N,dims} <: AbstractArray{T,N}
     v1::T;  v2::T;  v3::T;  v4::T;  v5::T;  v6::T;  v7::T;  v8::T
     v9::T;  v10::T; v11::T; v12::T; v13::T; v14::T; v15::T; v16::T
     v17::T; v18::T; v19::T; v20::T; v21::T; v22::T; v23::T; v24::T
-    T24Linear() = (prod(dims) == 24 || throw(DimensionMismatch("T24Linear must have 24 elements")); new())
-    function T24Linear(v1,v2,v3,v4,v5,v6,v7,v8,v9,v10,v11,v12,v13,v14,v15,v16,v17,v18,v19,v20,v21,v22,v23,v24)
-        prod(dims) == 24 || throw(DimensionMismatch("T24Linear must have 24 elements"))
+    T24Linear{T,N,d}() where {T,N,d} =
+        (prod(d) == 24 || throw(DimensionMismatch("T24Linear must have 24 elements")); new())
+    function T24Linear{T,N,d}(v1,v2,v3,v4,v5,v6,v7,v8,v9,v10,v11,v12,
+                              v13,v14,v15,v16,v17,v18,v19,v20,v21,v22,v23,v24) where {T,N,d}
+        prod(d) == 24 || throw(DimensionMismatch("T24Linear must have 24 elements"))
         new(v1,v2,v3,v4,v5,v6,v7,v8,v9,v10,v11,v12,v13,v14,v15,v16,v17,v18,v19,v20,v21,v22,v23,v24)
     end
 end
 
-T24Linear{T}(::Type{T}, dims::Int...) = T24Linear(T, dims)
-T24Linear{T,N}(::Type{T}, dims::NTuple{N,Int}) = T24Linear{T,N,dims}()
+T24Linear(::Type{T}, dims::Int...) where T = T24Linear(T, dims)
+T24Linear(::Type{T}, dims::NTuple{N,Int}) where {T,N} = T24Linear{T,N,dims}()
 
 Base.convert{T,N  }(::Type{T24Linear     }, X::AbstractArray{T,N}) = convert(T24Linear{T,N}, X)
 Base.convert{T,N,_}(::Type{T24Linear{T  }}, X::AbstractArray{_,N}) = convert(T24Linear{T,N}, X)
@@ -195,7 +197,7 @@ Base.getindex(A::T24Linear, i::Int) = getfield(A, i)
 Base.setindex!{T}(A::T24Linear{T}, v, i::Int) = setfield!(A, i, convert(T, v))
 
 # A custom linear slow sparse-like array that relies upon Dict for its storage
-immutable TSlow{T,N} <: AbstractArray{T,N}
+struct TSlow{T,N} <: AbstractArray{T,N}
     data::Dict{NTuple{N,Int}, T}
     dims::NTuple{N,Int}
 end
@@ -431,7 +433,7 @@ function test_primitives{T}(::Type{T}, shape, ::Type{TestAbstractArray})
 end
 
 let
-    type TestThrowNoGetindex{T} <: AbstractVector{T} end
+    mutable struct TestThrowNoGetindex{T} <: AbstractVector{T} end
     Base.length(::TestThrowNoGetindex) = 2
     Base.size(::TestThrowNoGetindex) = (2,)
     @test_throws ErrorException isassigned(TestThrowNoGetindex{Float64}(), 1)
@@ -448,13 +450,13 @@ function test_in_bounds(::Type{TestAbstractArray})
     @test checkbounds(Bool, A, len + 1) == false
 end
 
-type UnimplementedFastArray{T, N} <: AbstractArray{T, N} end
+mutable struct UnimplementedFastArray{T, N} <: AbstractArray{T, N} end
 Base.linearindexing(::UnimplementedFastArray) = Base.LinearFast()
 
-type UnimplementedSlowArray{T, N} <: AbstractArray{T, N} end
+mutable struct UnimplementedSlowArray{T, N} <: AbstractArray{T, N} end
 Base.linearindexing(::UnimplementedSlowArray) = Base.LinearSlow()
 
-type UnimplementedArray{T, N} <: AbstractArray{T, N} end
+mutable struct UnimplementedArray{T, N} <: AbstractArray{T, N} end
 
 function test_getindex_internals{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     N = prod(shape)
@@ -588,7 +590,7 @@ function test_ind2sub(::Type{TestAbstractArray})
 end
 
 # A custom linear slow array that insists upon Cartesian indexing
-type TSlowNIndexes{T,N} <: AbstractArray{T,N}
+mutable struct TSlowNIndexes{T,N} <: AbstractArray{T,N}
     data::Array{T,N}
 end
 Base.linearindexing{A<:TSlowNIndexes}(::Type{A}) = Base.LinearSlow()
@@ -597,7 +599,7 @@ Base.getindex(A::TSlowNIndexes, index::Int...) = error("Must use $(ndims(A)) ind
 Base.getindex{T}(A::TSlowNIndexes{T,2}, i::Int, j::Int) = A.data[i,j]
 
 
-type GenericIterator{N} end
+mutable struct GenericIterator{N} end
 Base.start{N}(::GenericIterator{N}) = 1
 Base.next{N}(::GenericIterator{N}, i) = (i, i + 1)
 Base.done{N}(::GenericIterator{N}, i) = i > N ? true : false

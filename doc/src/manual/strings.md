@@ -29,7 +29,7 @@ There are a few noteworthy high-level features about Julia's strings:
     a string argument, you should declare the type as `AbstractString` in order to accept any string
     type.
   * Like C and Java, but unlike most dynamic languages, Julia has a first-class type representing
-    a single character, called `Char`. This is just a special kind of 32-bit bitstype whose numeric
+    a single character, called `Char`. This is just a special kind of 32-bit primitive type whose numeric
     value represents a Unicode code point.
   * As in Java, strings are immutable: the value of an `AbstractString` object cannot be changed.
     To construct a different string value, you construct a new string from parts of other strings.
@@ -41,7 +41,7 @@ There are a few noteworthy high-level features about Julia's strings:
 
 ## [Characters](@id man-characters)
 
-A `Char` value represents a single character: it is just a 32-bit bitstype with a special literal
+A `Char` value represents a single character: it is just a 32-bit primitive type with a special literal
 representation and appropriate arithmetic behaviors, whose numeric value is interpreted as a
 [Unicode code point](https://en.wikipedia.org/wiki/Code_point). Here is how `Char` values are
 input and shown:
@@ -885,7 +885,9 @@ in the `Pkg` module, to specify packages versions and their dependencies.
 ## [Raw String Literals](@id man-raw-string-literals)
 
 Raw strings without interpolation or unescaping can be expressed with
-non-standard string literals of the form `raw"..."`. Raw string literals
-create ordinary `String` objects which contain the enclosed contents exactly
-as entered with no interpolation or unescaping. This is useful for strings which
-contain code or markup in other languages which use `$` or `\` as special characters.
+non-standard string literals of the form `raw"..."`. Raw string literals create
+ordinary `String` objects which contain the enclosed contents exactly as
+entered with no interpolation or unescaping. This is useful for strings which
+contain code or markup in other languages which use `$` or `\` as special
+characters. The exception is quotation marks that still must be
+escaped, e.g. `raw"\""` is equivalent to `"\""`.

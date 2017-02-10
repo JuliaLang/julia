@@ -1,20 +1,20 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Schur decomposition
-immutable Schur{Ty,S<:AbstractMatrix} <: Factorization{Ty}
+struct Schur{Ty,S<:AbstractMatrix} <: Factorization{Ty}
     T::S
     Z::S
     values::Vector
-    Schur(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) = new(T, Z, values)
+    Schur{Ty,S}(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where {Ty,S} = new(T, Z, values)
 end
-Schur{Ty}(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) = Schur{Ty, typeof(T)}(T, Z, values)
+Schur(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where Ty = Schur{Ty, typeof(T)}(T, Z, values)
 
 """
     schurfact!(A::StridedMatrix) -> F::Schur
 
 Same as [`schurfact`](@ref) but uses the input argument as workspace.
 """
-schurfact!{T<:BlasFloat}(A::StridedMatrix{T}) = Schur(LinAlg.LAPACK.gees!('V', A)...)
+schurfact!(A::StridedMatrix{<:BlasFloat}) = Schur(LinAlg.LAPACK.gees!('V', A)...)
 
 """
     schurfact(A::StridedMatrix) -> F::Schur
@@ -43,7 +43,7 @@ julia> F[:vectors] * F[:Schur] * F[:vectors]'
  -7.0  2.0   7.0
 ```
 """
-schurfact{T<:BlasFloat}(A::StridedMatrix{T}) = schurfact!(copy(A))
+schurfact(A::StridedMatrix{<:BlasFloat}) = schurfact!(copy(A))
 function schurfact{T}(A::StridedMatrix{T})
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))
     return schurfact!(copy_oftype(A, S))
@@ -139,16 +139,22 @@ either both included or both excluded via `select`.
 ordschur{Ty<:BlasFloat}(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) =
     ordschur!(copy(T), copy(Z), select)
 
-immutable GeneralizedSchur{Ty,M<:AbstractMatrix} <: Factorization{Ty}
+struct GeneralizedSchur{Ty,M<:AbstractMatrix} <: Factorization{Ty}
     S::M
     T::M
     alpha::Vector
     beta::Vector{Ty}
     Q::M
     Z::M
-    GeneralizedSchur(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty}, alpha::Vector, beta::Vector{Ty}, Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) = new(S, T, alpha, beta, Q, Z)
+    function GeneralizedSchur{Ty,M}(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty}, alpha::Vector,
+                                    beta::Vector{Ty}, Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) where {Ty,M}
+        new(S, T, alpha, beta, Q, Z)
+    end
 end
-GeneralizedSchur{Ty}(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty}, alpha::Vector, beta::Vector{Ty}, Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) = GeneralizedSchur{Ty, typeof(S)}(S, T, alpha, beta, Q, Z)
+function GeneralizedSchur(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty}, alpha::Vector,
+                          beta::Vector{Ty}, Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) where Ty
+    GeneralizedSchur{Ty, typeof(S)}(S, T, alpha, beta, Q, Z)
+end
 
 """
     schurfact!(A::StridedMatrix, B::StridedMatrix) -> F::GeneralizedSchur

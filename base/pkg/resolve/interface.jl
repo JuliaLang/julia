@@ -9,7 +9,7 @@ export Interface, compute_output_dict, greedysolver,
 
 # A collection of objects which allow interfacing external (Pkg) and
 # internal (MaxSum) representation
-type Interface
+mutable struct Interface
     # requirements and dependencies, in external representation
     reqs::Requires
     deps::Dict{String,Dict{VersionNumber,Available}}

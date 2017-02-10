@@ -50,7 +50,7 @@ push!(LOAD_PATH, dir)
 LOAD_PATH[end] = GenericString(LOAD_PATH[end])
 @test Base.find_in_path("test_sourcepath") == joinpath(dir, "test_sourcepath.jl")
 
-immutable CustomLoader
+struct CustomLoader
     path::String
 end
 push!(LOAD_PATH, CustomLoader("abc"))

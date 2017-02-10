@@ -7,7 +7,7 @@ A token used in parsing or formatting a date time string. Each subtype must
 define the tryparsenext and format methods.
 
 """
-abstract AbstractDateToken
+abstract type AbstractDateToken end
 
 """
     tryparsenext(tok::AbstractDateToken, str::String, i::Int, len::Int, locale::DateLocale)
@@ -59,14 +59,14 @@ Base.show(io::IO, x::Time) = print(io, string(x))
 end
 
 # Information for parsing and formatting date time values.
-immutable DateFormat{S, T<:Tuple}
+struct DateFormat{S, T<:Tuple}
     tokens::T
     locale::DateLocale
 end
 
 ### Token types ###
 
-immutable DatePart{letter} <: AbstractDateToken
+struct DatePart{letter} <: AbstractDateToken
     width::Int
     fixed::Bool
 end
@@ -167,7 +167,7 @@ end
 
 ### Delimiters
 
-immutable Delim{T, length} <: AbstractDateToken
+struct Delim{T, length} <: AbstractDateToken
     d::T
 end
 
@@ -234,7 +234,7 @@ end
 
 ### DateFormat construction
 
-abstract DayOfWeekToken # special addition to Period types
+abstract type DayOfWeekToken end # special addition to Period types
 
 # mapping format specifiers to period types
 const SLOT_RULE = Dict{Char, Type}(
@@ -495,18 +495,18 @@ function Base.string(dt::Date)
 end
 
 # vectorized
-DateTime{T<:AbstractString}(Y::AbstractArray{T}, format::AbstractString;
+DateTime(Y::AbstractArray{<:AbstractString}, format::AbstractString;
     locale::Union{DateLocale, String}=ENGLISH) = DateTime(Y, DateFormat(format, locale))
-function DateTime{T<:AbstractString}(Y::AbstractArray{T}, df::DateFormat=ISODateTimeFormat)
+function DateTime(Y::AbstractArray{<:AbstractString}, df::DateFormat=ISODateTimeFormat)
     return reshape(DateTime[parse(DateTime, y, df) for y in Y], size(Y))
 end
-Date{T<:AbstractString}(Y::AbstractArray{T}, format::AbstractString;
+Date(Y::AbstractArray{<:AbstractString}, format::AbstractString;
     locale::Union{DateLocale, String}=ENGLISH) = Date(Y, DateFormat(format, locale))
-function Date{T<:AbstractString}(Y::AbstractArray{T}, df::DateFormat=ISODateFormat)
+function Date(Y::AbstractArray{<:AbstractString}, df::DateFormat=ISODateFormat)
     return reshape(Date[Date(parse(Date, y, df)) for y in Y], size(Y))
 end
 
-format{T<:TimeType}(Y::AbstractArray{T}, fmt::AbstractString;
+format(Y::AbstractArray{<:TimeType}, fmt::AbstractString;
     locale::Union{DateLocale, String}=ENGLISH) = format(Y, DateFormat(fmt, locale))
 function format(Y::AbstractArray{Date}, df::DateFormat=ISODateFormat)
     return reshape([format(y, df) for y in Y], size(Y))

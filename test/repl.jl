@@ -100,6 +100,15 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     end
     cd(origpwd)
 
+    # issue #20482
+    if !is_windows()
+        write(stdin_write, ";")
+        readuntil(stdout_read, "shell> ")
+        write(stdin_write, "echo hello >/dev/null\n")
+        readuntil(stdout_read, "\n")
+        readuntil(stdout_read, "\n")
+    end
+
     # Test that accepting a REPL result immediately shows up, not
     # just on the next keystroke
     write(stdin_write, "1+1\n") # populate history with a trivial input
@@ -428,7 +437,7 @@ begin
 
     # Test removal of prefix in multiple statement paste
     sendrepl2("""\e[200~
-            julia> type T17599; a::Int; end
+            julia> mutable struct T17599; a::Int; end
 
             julia> function foo(julia)
             julia> 3
@@ -538,7 +547,7 @@ end
 end # let exename
 
 # issue #19864:
-type Error19864 <: Exception; end
+mutable struct Error19864 <: Exception; end
 function test19864()
     @eval current_module() Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
     buf = IOBuffer()
