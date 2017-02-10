@@ -28,6 +28,26 @@
         END,  
     end_keywords,
 
+    begin_invisble_keywords,
+        BLOCK,
+        CALL,
+        CCALL,
+        COMPARISON,
+        COMPREHENSION,
+        CURLY,
+        GENERATOR,
+        KW,
+        LINE,
+        MACROCALL,
+        PARAMETERS,
+        REF,
+        TOPLEVEL,
+        TUPLE,
+        TYPED_COMPREHENSION,
+        VCAT,
+        VECT,
+    end_invisble_keywords,
+
     begin_literal,
         LITERAL, # general
         INTEGER, # 4
