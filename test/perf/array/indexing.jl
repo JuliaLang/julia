@@ -104,12 +104,12 @@ function sumvector(A, n)
     s
 end
 
-abstract MyArray{T,N} <: AbstractArray{T,N}
+abstract type MyArray{T,N} <: AbstractArray{T,N} end
 
-immutable ArrayLS{T,N} <: MyArray{T,N}  # LinearSlow
+struct ArrayLS{T,N} <: MyArray{T,N}  # LinearSlow
     data::Array{T,N}
 end
-immutable ArrayLSLS{T,N} <: MyArray{T,N}  # LinearSlow with LinearSlow similar
+struct ArrayLSLS{T,N} <: MyArray{T,N}  # LinearSlow with LinearSlow similar
     data::Array{T,N}
 end
 Base.similar{T}(A::ArrayLSLS, ::Type{T}, dims::Tuple{Vararg{Int}}) = ArrayLSLS(similar(A.data, T, dims))
@@ -117,16 +117,16 @@ Base.similar{T}(A::ArrayLSLS, ::Type{T}, dims::Tuple{Vararg{Int}}) = ArrayLSLS(s
 @inline Base.unsafe_setindex!(A::ArrayLSLS, v, I::Int...) = Base.unsafe_setindex!(A.data, v, I...)
 Base.first(A::ArrayLSLS) = first(A.data)
 
-immutable ArrayLF{T,N} <: MyArray{T,N}  # LinearFast
+struct ArrayLF{T,N} <: MyArray{T,N}  # LinearFast
     data::Array{T,N}
 end
-immutable ArrayStrides{T,N} <: MyArray{T,N}
+struct ArrayStrides{T,N} <: MyArray{T,N}
     data::Array{T,N}
     strides::NTuple{N,Int}
 end
 ArrayStrides(A::Array) = ArrayStrides(A, strides(A))
 
-immutable ArrayStrides1{T} <: MyArray{T,2}
+struct ArrayStrides1{T} <: MyArray{T,2}
     data::Matrix{T}
     stride1::Int
 end

@@ -17,7 +17,7 @@ constructs introducing scope blocks are:
 |:-------------------- |:-------------------------------------------------------------------------------------------------------- |
 | [Global Scope](@ref) | `module`, `baremodule`, at interactive prompt (REPL)                                                     |
 | [Local Scope](@ref)  | [Soft Local Scope](@ref): `for`, `while`, comprehensions, try-catch-finally, `let`                       |
-| [Local Scope](@ref)  | [Hard Local Scope](@ref): functions (either syntax, anonymous & do-blocks), `type`, `immutable`, `macro` |
+| [Local Scope](@ref)  | [Hard Local Scope](@ref): functions (either syntax, anonymous & do-blocks), `struct`, `macro`            |
 
 Notably missing from this table are [begin blocks](@ref man-compound-expressions) and [if blocks](@ref man-conditional-evaluation), which do *not*
 introduce new scope blocks. All three types of scopes follow somewhat different rules which will
@@ -186,7 +186,7 @@ ERROR: syntax: `global j`: j is local variable in the enclosing scope
 
 ### Hard Local Scope
 
-Hard local scopes are introduced by function definitions (in all their forms), type & immutable-blocks,
+Hard local scopes are introduced by function definitions (in all their forms), struct type definition blocks,
 and macro-definitions.
 
 > In a hard local scope, all variables are inherited from its parent scope unless:
@@ -488,7 +488,7 @@ not change, adding a `const` declaration solves this performance problem.
 Local constants are quite different. The compiler is able to determine automatically when a local
 variable is constant, so local constant declarations are not necessary for performance purposes.
 
-Special top-level assignments, such as those performed by the `function` and `type` keywords,
+Special top-level assignments, such as those performed by the `function` and `struct` keywords,
 are constant by default.
 
 Note that `const` only affects the variable binding; the variable may be bound to a mutable object

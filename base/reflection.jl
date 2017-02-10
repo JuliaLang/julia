@@ -172,7 +172,7 @@ isconst(m::Module, s::Symbol) =
 # return an integer such that object_id(x)==object_id(y) if x===y
 object_id(x::ANY) = ccall(:jl_object_id, UInt, (Any,), x)
 
-immutable DataTypeLayout
+struct DataTypeLayout
     nfields::UInt32
     alignment::UInt32
     # alignment : 28;
@@ -198,7 +198,7 @@ datatype_fielddesc_type(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefErro
 """
     isimmutable(v)
 
-Return `true` iff value `v` is immutable.  See [Immutable Composite Types](@ref)
+Return `true` iff value `v` is immutable.  See [Mutable Composite Types](@ref)
 for a discussion of immutability. Note that this function works on values, so if you give it
 a type, it will tell you that a value of `DataType` is mutable.
 
@@ -279,7 +279,7 @@ end
 
 Determine the upper bound of a type parameter in the underlying type. E.g.:
 ```jldoctest
-julia> immutable Foo{T<:AbstractFloat, N}
+julia> struct Foo{T<:AbstractFloat, N}
            x::Tuple{T, N}
        end
 
@@ -308,7 +308,7 @@ typeseq(a::ANY,b::ANY) = (@_pure_meta; a<:b && b<:a)
     fieldoffset(type, i)
 
 The byte offset of field `i` of a type relative to the data start. For example, we could
-use it in the following manner to summarize information about a struct type:
+use it in the following manner to summarize information about a struct:
 
 ```jldoctest
 julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:nfields(T)];
@@ -548,7 +548,7 @@ end
 # high-level, more convenient method lookup functions
 
 # type for reflecting and pretty-printing a subset of methods
-type MethodList
+mutable struct MethodList
     ms::Array{Method,1}
     mt::MethodTable
 end
@@ -647,7 +647,7 @@ function uncompressed_ast(m::Method, s::CodeInfo)
 end
 
 # this type mirrors jl_cghooks_t (documented in julia.h)
-immutable CodegenHooks
+struct CodegenHooks
     module_setup::Ptr{Void}
     module_activation::Ptr{Void}
     raise_exception::Ptr{Void}
@@ -659,7 +659,7 @@ immutable CodegenHooks
 end
 
 # this type mirrors jl_cgparams_t (documented in julia.h)
-immutable CodegenParams
+struct CodegenParams
     cached::Cint
 
     runtime::Cint

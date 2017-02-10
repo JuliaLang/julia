@@ -310,7 +310,7 @@ function chr2ind(s::AbstractString, i::Integer)
     end
 end
 
-immutable EachStringIndex{T<:AbstractString}
+struct EachStringIndex{T<:AbstractString}
     s::T
 end
 eachindex(s::AbstractString) = EachStringIndex(s)

@@ -342,7 +342,7 @@ julia> sizeof(Complex128)
 16
 ```
 
-If `T` is not a bitstype, an error is thrown.
+If `T` does not have a specific size, an error is thrown.
 
 ```jldoctest
 julia> sizeof(Base.LinAlg.LU)

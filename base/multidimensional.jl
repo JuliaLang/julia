@@ -13,7 +13,7 @@ module IteratorsMD
     export CartesianIndex, CartesianRange
 
     # CartesianIndex
-    immutable CartesianIndex{N} <: AbstractCartesianIndex{N}
+    struct CartesianIndex{N} <: AbstractCartesianIndex{N}
         I::NTuple{N,Int}
         CartesianIndex{N}(index::NTuple{N,Integer}) where {N} = new(index)
     end
@@ -77,7 +77,7 @@ module IteratorsMD
     icmp(a, b) = ifelse(isless(a,b), 1, ifelse(a==b, 0, -1))
 
     # Iteration
-    immutable CartesianRange{I<:CartesianIndex}
+    struct CartesianRange{I<:CartesianIndex}
         start::I
         stop::I
     end
@@ -273,7 +273,7 @@ where `mask[I]` is true. This specialized type does not support indexing
 directly as doing so would require O(n) lookup time. `AbstractArray{Bool}` are
 wrapped with `LogicalIndex` upon calling `to_indices`.
 """
-immutable LogicalIndex{T, A<:AbstractArray{Bool}} <: AbstractVector{T}
+struct LogicalIndex{T, A<:AbstractArray{Bool}} <: AbstractVector{T}
     mask::A
     sum::Int
     LogicalIndex{T,A}(mask::A) where {T,A<:AbstractArray{Bool}} = new(mask, countnz(mask))
@@ -1149,7 +1149,7 @@ end
 
 # TODO: this doesn't fit into the new hashing scheme in any obvious way
 
-immutable Prehashed
+struct Prehashed
     hash::UInt
 end
 hash(x::Prehashed) = x.hash

@@ -5,7 +5,7 @@ export ModInt
 
 import Base: +, -, *, /, inv
 
-immutable ModInt{n} <: Integer
+struct ModInt{n} <: Integer
     k::Int
     ModInt{n}(k) where n = new(mod(k,n))
 end

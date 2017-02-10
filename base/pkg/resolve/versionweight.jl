@@ -6,7 +6,7 @@ importall ....Base.Operators
 
 export VersionWeight
 
-immutable HierarchicalValue{T}
+struct HierarchicalValue{T}
     v::Vector{T}
     rest::T
 end
@@ -68,7 +68,7 @@ Base.:(==){T}(a::HierarchicalValue{T}, b::HierarchicalValue{T}) = cmp(a,b) == 0
 
 Base.abs{T}(a::HierarchicalValue{T}) = HierarchicalValue(T[abs(x) for x in a.v], abs(a.rest))
 
-immutable VWPreBuildItem
+struct VWPreBuildItem
     nonempty::Int
     s::HierarchicalValue{Int}
     i::Int
@@ -96,7 +96,7 @@ Base.:(==)(a::VWPreBuildItem, b::VWPreBuildItem) = cmp(a,b) == 0
 
 Base.abs(a::VWPreBuildItem) = VWPreBuildItem(abs(a.nonempty), abs(a.s), abs(a.i))
 
-immutable VWPreBuild
+struct VWPreBuild
     nonempty::Int
     w::HierarchicalValue{VWPreBuildItem}
 end
@@ -153,7 +153,7 @@ end
 
 # The numeric type used to determine how the different
 # versions of a package should be weighed
-immutable VersionWeight
+struct VersionWeight
     major::Int
     minor::Int
     patch::Int

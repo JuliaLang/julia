@@ -10,9 +10,9 @@ The `client_refs` lock is also used to synchronize access to `.refs` and associa
 """
 const client_refs = WeakKeyDict{Any, Void}() # used as a WeakKeySet
 
-abstract AbstractRemoteRef
+abstract type AbstractRemoteRef end
 
-type Future <: AbstractRemoteRef
+mutable struct Future <: AbstractRemoteRef
     where::Int
     whence::Int
     id::Int
@@ -22,7 +22,7 @@ type Future <: AbstractRemoteRef
     Future(w::Int, rrid::RRID, v) = (r = new(w,rrid.whence,rrid.id,v); return test_existing_ref(r))
 end
 
-type RemoteChannel{T<:AbstractChannel} <: AbstractRemoteRef
+mutable struct RemoteChannel{T<:AbstractChannel} <: AbstractRemoteRef
     where::Int
     whence::Int
     id::Int

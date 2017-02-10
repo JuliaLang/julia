@@ -58,14 +58,14 @@ range(a::AbstractFloat, st::Real, len::Integer) = range(a, float(st), len)
 
 ## 1-dimensional ranges ##
 
-abstract Range{T} <: AbstractArray{T,1}
+abstract type Range{T} <: AbstractArray{T,1} end
 
 ## ordinal ranges
 
-abstract OrdinalRange{T,S} <: Range{T}
-abstract AbstractUnitRange{T} <: OrdinalRange{T,Int}
+abstract type OrdinalRange{T,S} <: Range{T} end
+abstract type AbstractUnitRange{T} <: OrdinalRange{T,Int} end
 
-immutable StepRange{T,S} <: OrdinalRange{T,S}
+struct StepRange{T,S} <: OrdinalRange{T,S}
     start::T
     step::S
     stop::T
@@ -125,7 +125,7 @@ steprem(start,stop,step) = (stop-start) % step
 
 StepRange(start::T, step::S, stop::T) where {T,S} = StepRange{T,S}(start, step, stop)
 
-immutable UnitRange{T<:Real} <: AbstractUnitRange{T}
+struct UnitRange{T<:Real} <: AbstractUnitRange{T}
     start::T
     stop::T
     UnitRange{T}(start, stop) where T<:Real = new(start, unitrange_last(start,stop))
@@ -146,7 +146,7 @@ Define an `AbstractUnitRange` that behaves like `1:n`, with the added
 distinction that the lower limit is guaranteed (by the type system) to
 be 1.
 """
-immutable OneTo{T<:Integer} <: AbstractUnitRange{T}
+struct OneTo{T<:Integer} <: AbstractUnitRange{T}
     stop::T
     OneTo{T}(stop) where T<:Integer = new(max(zero(T), stop))
 end
@@ -164,7 +164,7 @@ value of `r[offset]` for some other index `1 <= offset <= len`.  In
 conjunction with `TwicePrecision` this can be used to implement ranges
 that are free of roundoff error.
 """
-immutable StepRangeLen{T,R,S} <: Range{T}
+struct StepRangeLen{T,R,S} <: Range{T}
     ref::R       # reference value (might be smallest-magnitude value in the range)
     step::S      # step value
     len::Int     # length of the range
@@ -182,7 +182,7 @@ StepRangeLen(ref::R, step::S, len::Integer, offset::Integer = 1) where {R,S} =
 
 ## linspace and logspace
 
-immutable LinSpace{T} <: Range{T}
+struct LinSpace{T} <: Range{T}
     start::T
     stop::T
     len::Int

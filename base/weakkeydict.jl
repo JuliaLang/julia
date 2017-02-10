@@ -9,7 +9,7 @@ referenced in a hash table.
 
 See [`Dict`](@ref) for further help.
 """
-type WeakKeyDict{K,V} <: Associative{K,V}
+mutable struct WeakKeyDict{K,V} <: Associative{K,V}
     ht::Dict{WeakRef,V}
     lock::Threads.RecursiveSpinLock
     finalizer::Function

@@ -4,7 +4,7 @@
 
 const sizeof_ios_t = Int(ccall(:jl_sizeof_ios_t, Cint, ()))
 
-type IOStream <: IO
+mutable struct IOStream <: IO
     handle::Ptr{Void}
     ios::Array{UInt8,1}
     name::AbstractString

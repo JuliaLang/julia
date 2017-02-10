@@ -2,7 +2,7 @@
 
 # Date Locales
 
-immutable DateLocale
+struct DateLocale
     months::Vector{String}
     months_abbr::Vector{String}
     days_of_week::Vector{String}

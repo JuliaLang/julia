@@ -41,7 +41,7 @@ Currently supported rounding modes are:
 - [`RoundUp`](@ref)
 - [`RoundDown`](@ref)
 """
-immutable RoundingMode{T} end
+struct RoundingMode{T} end
 
 """
     RoundNearest

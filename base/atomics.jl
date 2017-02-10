@@ -39,7 +39,7 @@ Holds a reference to an object of type `T`, ensuring that it is only
 accessed atomically, i.e. in a thread-safe manner.
 
 Only certain "simple" types can be used atomically, namely the
-bitstypes integer and float-point types. These are `Int8`...`Int128`,
+primitive integer and float-point types. These are `Int8`...`Int128`,
 `UInt8`...`UInt128`, and `Float16`...`Float64`.
 
 New atomic objects can be created from a non-atomic values; if none is
@@ -61,7 +61,7 @@ julia> x[]
 Atomic operations use an `atomic_` prefix, such as `atomic_add!`,
 `atomic_xchg!`, etc.
 """
-type Atomic{T<:AtomicTypes}
+mutable struct Atomic{T<:AtomicTypes}
     value::T
     Atomic{T}() where T<:AtomicTypes = new(zero(T))
     Atomic{T}(value) where T<:AtomicTypes = new(value)

@@ -1,4 +1,4 @@
-immutable SummarySize
+struct SummarySize
     seen::ObjectIdDict
     frontier_x::Vector{Any}
     frontier_i::Vector{Int}

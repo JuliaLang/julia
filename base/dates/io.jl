@@ -7,7 +7,7 @@ A token used in parsing or formatting a date time string. Each subtype must
 define the tryparsenext and format methods.
 
 """
-abstract AbstractDateToken
+abstract type AbstractDateToken end
 
 """
     tryparsenext(tok::AbstractDateToken, str::String, i::Int, len::Int, locale::DateLocale)
@@ -59,14 +59,14 @@ Base.show(io::IO, x::Time) = print(io, string(x))
 end
 
 # Information for parsing and formatting date time values.
-immutable DateFormat{S, T<:Tuple}
+struct DateFormat{S, T<:Tuple}
     tokens::T
     locale::DateLocale
 end
 
 ### Token types ###
 
-immutable DatePart{letter} <: AbstractDateToken
+struct DatePart{letter} <: AbstractDateToken
     width::Int
     fixed::Bool
 end
@@ -167,7 +167,7 @@ end
 
 ### Delimiters
 
-immutable Delim{T, length} <: AbstractDateToken
+struct Delim{T, length} <: AbstractDateToken
     d::T
 end
 
@@ -234,7 +234,7 @@ end
 
 ### DateFormat construction
 
-abstract DayOfWeekToken # special addition to Period types
+abstract type DayOfWeekToken end # special addition to Period types
 
 # mapping format specifiers to period types
 const SLOT_RULE = Dict{Char, Type}(

@@ -19,7 +19,7 @@ export FieldValue, Field, validmax, secondmax
 #  l4 : for favoring dependants over dependencies
 #  l5 : for symmetry-breaking random noise
 #
-immutable FieldValue
+struct FieldValue
     l0::Int
     l1::VersionWeight
     l2::VersionWeight

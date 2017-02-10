@@ -3,7 +3,7 @@
 ####################
 # LU Factorization #
 ####################
-immutable LU{T,S<:AbstractMatrix} <: Factorization{T}
+struct LU{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     ipiv::Vector{BlasInt}
     info::BlasInt
