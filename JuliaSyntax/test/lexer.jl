@@ -6,15 +6,11 @@ const T = Tokenize.Tokens
 
 @testset "tokens" begin
     for s in ["a", IOBuffer("a")]
-        # IOBuffer indexing starts at 0, string indexing at 1
-        # difference is only relevant for internals
-        ob1 = isa(s, IOBuffer) ? 1 : 0
-
         l = tokenize(s)
         @test Lexers.readchar(l) == 'a'
-        @test Lexers.prevpos(l) == 1 - ob1
+        @test Lexers.prevpos(l) == 0
 
-        @test l.current_pos == 2 - ob1
+        @test l.current_pos == 1
         l_old = l
         @test Lexers.prevchar(l) == 'a'
         @test l == l_old
@@ -23,7 +19,7 @@ const T = Tokenize.Tokens
 
         Lexers.backup!(l)
         @test Lexers.prevpos(l) == -1
-        @test l.current_pos == 2 - ob1
+        @test l.current_pos == 1
     end
 end # testset
 
@@ -138,7 +134,7 @@ end # testset
         @test_throws ArgumentError untokenize("blabla")
     end
 
-    @test all((t.endbyte - t.startbyte)==sizeof(t.val) for t in tokenize(str))
+    @test all((t.endbyte - t.startbyte + 1)==sizeof(t.val) for t in tokenize(str))
 end # testset
 
 @testset "issue 5, '..'" begin
@@ -231,5 +227,5 @@ end
 
 @testset "in/isa bytelength" begin
     t = collect(tokenize("x in y"))[3]
-    @test t.endbyte-t.startbyte==2
+    @test t.endbyte - t.startbyte + 1 == 2
 end

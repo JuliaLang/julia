@@ -21,7 +21,7 @@ end
 ishex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F')
 iswhitespace(c::Char) = Base.UTF8proc.isspace(c)
 
-type Lexer{IO_t <: Union{IO, AbstractString}}
+type Lexer{IO_t <: IO}
     io::IO_t
 
     token_start_row::Int
@@ -38,6 +38,7 @@ type Lexer{IO_t <: Union{IO, AbstractString}}
 end
 
 Lexer(io) = Lexer(io, 1, 1, Int64(-1), Int64(0), 1, 1, Int64(1), Tokens.ERROR)
+Lexer(str::AbstractString) = Lexer(IOBuffer(str))
 
 """
     tokenize(x)
@@ -73,7 +74,7 @@ end
 Base.done(l::Lexer, isdone) = isdone
 
 function Base.show(io::IO, l::Lexer)
-    println(io, "Lexer at position: ", position(l))
+    print(io, typeof(l), " at position: ", position(l))
 end
 
 """
@@ -104,47 +105,37 @@ Set the lexer's previous position.
 """
 prevpos!(l::Lexer, i::Integer) = l.prevpos = i
 
-Base.seekstart{I <: IO}(l::Lexer{I}) = seekstart(l.io)
-Base.seekstart{I <: String}(l::Lexer{I}) = seek(l, 1)
+Base.seekstart(l::Lexer) = seekstart(l.io)
 
 """
     seek2startpos!(l::Lexer)
 
 Sets the lexer's current position to the beginning of the latest `Token`.
 """
-function seek2startpos! end
-seek2startpos!{I <: IO}(l::Lexer{I}) = seek(l, startpos(l))
-seek2startpos!{I <: String}(l::Lexer{I}) = seek(l, startpos(l) + 1)
+seek2startpos!(l::Lexer) = seek(l, startpos(l))
 
 """
     peekchar(l::Lexer)
 
 Returns the next character without changing the lexer's state.
 """
-function peekchar end
-peekchar{I <: IO}(l::Lexer{I}) = peekchar(l.io)
-peekchar{I <: String}(l::Lexer{I}) = eof(l) ? EOF_CHAR : l.io[position(l)]
+peekchar(l::Lexer) = peekchar(l.io)
 
 """
     position(l::Lexer)
 
 Returns the current position.
 """
-function position end
-position{I <: String}(l::Lexer{I}) = l.current_pos
-position{I <: IO}(l::Lexer{I}) = Base.position(l.io)
+position(l::Lexer) = Base.position(l.io)
 
 """
     eof(l::Lexer)
 
-Determine whether the end of the lexer's underlying buffer or string has been reached.
+Determine whether the end of the lexer's underlying buffer has been reached.
 """
-function eof end
-eof{I <: IO}(l::Lexer{I}) = eof(l.io)
-eof{I <: String}(l::Lexer{I}) = position(l) > sizeof(l.io)
+eof(l::Lexer) = eof(l.io)
 
-Base.seek{I <: IO}(l::Lexer{I}, pos) = seek(l.io, pos)
-Base.seek{I <: String}(l::Lexer{I}, pos) = l.current_pos = pos
+Base.seek(l::Lexer, pos) = seek(l.io, pos)
 
 """
     start_token!(l::Lexer)
@@ -152,16 +143,8 @@ Base.seek{I <: String}(l::Lexer{I}, pos) = l.current_pos = pos
 Updates the lexer's state such that the next  `Token` will start at the current
 position.
 """
-function start_token! end
-
-function start_token!{I <: IO}(l::Lexer{I})
+function start_token!(l::Lexer)
     l.token_startpos = position(l)
-    l.token_start_row = l.current_row
-    l.token_start_col = l.current_col
-end
-
-function start_token!{I <: String}(l::Lexer{I})
-    l.token_startpos = position(l) - 1
     l.token_start_row = l.current_row
     l.token_start_col = l.current_col
 end
@@ -186,14 +169,6 @@ function readchar end
 function readchar{I <: IO}(l::Lexer{I})
     prevpos!(l, position(l))
     c = readchar(l.io)
-    return c
-end
-
-function readchar{I <: String}(l::Lexer{I})
-    prevpos!(l, position(l))
-    eof(l) && return EOF_CHAR
-    c = l.io[position(l)]
-    l.current_pos = nextind(l.io, position(l))
     return c
 end
 
