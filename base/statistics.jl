@@ -6,6 +6,14 @@
     mean(f::Function, v)
 
 Apply the function `f` to each element of `v` and take the mean.
+
+```jldoctest
+julia> mean(√, [1, 2, 3])
+1.3820881233139908
+
+julia> mean([√1, √2, √3])
+1.3820881233139908
+```
 """
 function mean(f::Callable, iterable)
     state = start(iterable)

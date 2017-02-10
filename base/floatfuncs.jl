@@ -170,7 +170,7 @@ end
 
 # isapprox: approximate equality of numbers
 """
-    isapprox(x, y; rtol::Real=sqrt(eps), atol::Real=0, nans::Bool=false)
+    isapprox(x, y; rtol::Real=sqrt(eps), atol::Real=0, nans::Bool=false, norm::Function)
 
 Inexact equality comparison: `true` if `norm(x-y) <= atol + rtol*max(norm(x), norm(y))`. The
 default `atol` is zero and the default `rtol` depends on the types of `x` and `y`. The keyword
@@ -188,6 +188,17 @@ approximately equal component-wise.
 
 The binary operator `≈` is equivalent to `isapprox` with the default arguments, and `x ≉ y`
 is equivalent to `!isapprox(x,y)`.
+
+```jldoctest
+julia> 0.1 ≈ (0.1 - 1e-10)
+true
+
+julia> isapprox(10, 11; atol = 2)
+true
+
+julia> isapprox([10.0^9, 1.0], [10.0^9, 2.0])
+true
+```
 """
 function isapprox(x::Number, y::Number; rtol::Real=rtoldefault(x,y), atol::Real=0, nans::Bool=false)
     x == y || (isfinite(x) && isfinite(y) && abs(x-y) <= atol + rtol*max(abs(x), abs(y))) || (nans && isnan(x) && isnan(y))
