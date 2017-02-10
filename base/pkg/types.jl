@@ -169,7 +169,7 @@ typealias WhyReq Tuple{VersionReq,Any}
 #    required packages), or a Pair p=>backtrace_item (for requirements induced
 #    indirectly, where `p` is the package name and `backtrace_item` is
 #    another ResolveBacktraceItem.
-type ResolveBacktraceItem
+mutable struct ResolveBacktraceItem
     versionreq::VersionReq
     why::Vector{WhyReq}
     ResolveBacktraceItem() = new(VersionSet(), WhyReq[])
