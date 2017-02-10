@@ -43,11 +43,11 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
 end
 
 function arg_decl_parts(m::Method)
-    tv = m.tvars
-    if !isa(tv,SimpleVector)
-        tv = Any[tv]
-    else
-        tv = Any[tv...]
+    tv = Any[]
+    sig = m.sig
+    while isa(sig, UnionAll)
+        push!(tv, sig.var)
+        sig = sig.body
     end
     if isdefined(m, :source)
         src = m.source
@@ -58,11 +58,10 @@ function arg_decl_parts(m::Method)
     line = m.line
     if src !== nothing && src.slotnames !== nothing
         argnames = src.slotnames[1:m.nargs]
-        sig = unwrap_unionall(m.sig)
         decls = Any[argtype_decl(:tvar_env => tv, argnames[i], sig, i, m.nargs, m.isva)
                     for i = 1:m.nargs]
     else
-        decls = Any[("", "") for i = 1:length(unwrap_unionall(m.sig).parameters)]
+        decls = Any[("", "") for i = 1:length(sig.parameters)]
     end
     return tv, decls, file, line
 end

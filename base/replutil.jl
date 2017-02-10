@@ -442,7 +442,12 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
     for (func,arg_types_param) in funcs
         for method in methods(func)
             buf = IOBuffer()
-            sig0 = unwrap_unionall(method.sig)
+            tv = Any[]
+            sig0 = method.sig
+            while isa(sig0, UnionAll)
+                push!(tv, sig0.var)
+                sig0 = sig0.body
+            end
             s1 = sig0.parameters[1]
             sig = sig0.parameters[2:end]
             print(buf, "  ")
@@ -453,10 +458,6 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                 # TODO: use the methodshow logic here
                 use_constructor_syntax = isa(func, Type)
                 print(buf, use_constructor_syntax ? func : typeof(func).name.mt.name)
-            end
-            tv = method.tvars
-            if !isa(tv,SimpleVector)
-                tv = Any[tv]
             end
             print(buf, "(")
             t_i = copy(arg_types_param)
