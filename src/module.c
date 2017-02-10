@@ -87,6 +87,7 @@ static jl_binding_t *new_binding(jl_sym_t *name)
     b->exportp = 0;
     b->imported = 0;
     b->deprecated = 0;
+    b->deprecation_preferred_name = NULL;
     return b;
 }
 
@@ -325,6 +326,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
             nb->owner = b->owner;
             nb->imported = (explici!=0);
             nb->deprecated = b->deprecated;
+            nb->deprecation_preferred_name = b->deprecation_preferred_name;
             *bp = nb;
             jl_gc_wb_buf(to, nb, sizeof(jl_binding_t));
         }
@@ -471,6 +473,15 @@ JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var)
     if (b) b->deprecated = 1;
 }
 
+JL_DLLEXPORT void jl_deprecate_binding_redirect(jl_module_t *m, jl_sym_t *var, jl_sym_t *preferred)
+{
+    jl_binding_t *b = jl_get_binding(m, var);
+    if (b) {
+        b->deprecated = 1;
+        b->deprecation_preferred_name = preferred;
+    }
+}
+
 JL_DLLEXPORT int jl_is_binding_deprecated(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_binding(m, var);
@@ -490,11 +501,16 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
                       jl_symbol_name(b->owner->name), jl_symbol_name(b->name));
         else
             jl_printf(JL_STDERR, "%s is deprecated", jl_symbol_name(b->name));
-        jl_value_t *v = b->value;
-        if (v && (jl_is_type(v) || jl_is_module(v)/* || (jl_is_function(v) && jl_is_gf(v))*/)) {
-            jl_printf(JL_STDERR, ", use ");
-            jl_static_show(JL_STDERR, v);
-            jl_printf(JL_STDERR, " instead");
+        if (b->deprecation_preferred_name) {
+            jl_printf(JL_STDERR, ", use %s instead", jl_symbol_name(b->deprecation_preferred_name));
+        }
+        else {
+            jl_value_t *v = b->value;
+            if (v && (jl_is_type(v) || jl_is_module(v)/* || (jl_is_function(v) && jl_is_gf(v))*/)) {
+                jl_printf(JL_STDERR, ", use ");
+                jl_static_show(JL_STDERR, v);
+                jl_printf(JL_STDERR, " instead");
+            }
         }
         jl_printf(JL_STDERR, ".\n");
 

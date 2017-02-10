@@ -99,6 +99,7 @@ end
 
 deprecate(s::Symbol) = deprecate(current_module(), s)
 deprecate(m::Module, s::Symbol) = ccall(:jl_deprecate_binding, Void, (Any, Any), m, s)
+deprecate(m::Module, s::Symbol, preferred::Symbol) = ccall(:jl_deprecate_binding_redirect, Void, (Any, Any, Any), m, s, preferred)
 
 macro deprecate_binding(old, new)
     Expr(:toplevel,

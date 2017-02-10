@@ -397,6 +397,7 @@ typedef struct {
     unsigned exportp:1;
     unsigned imported:1;
     unsigned deprecated:1;
+    jl_sym_t *deprecation_preferred_name;  // non-NULL when new type incompatible with old
 } jl_binding_t;
 
 typedef struct _jl_module_t {
