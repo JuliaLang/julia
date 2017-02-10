@@ -9,6 +9,11 @@ import Compat.String
 import ..Tokens
 import ..Tokens: Token, Kind, TokenError, UNICODE_OPS
 
+import ..Tokens: FUNCTION, ABSTRACT, IDENTIFIER, BAREMODULE, BEGIN, BITSTYPE, BREAK, CATCH, CONST, CONTINUE,
+                 DO, ELSE, ELSEIF, END, EXPORT, FALSE, FINALLY, FOR, FUNCTION, GLOBAL, LET, LOCAL, IF, IMMUTABLE,
+                 IMPORT, IMPORTALL, MACRO, MODULE, QUOTE, RETURN, TRUE, TRY, TYPE, TYPEALIAS, USING, WHILE, ISA, IN
+
+
 export tokenize
 
 # using Logging
@@ -51,7 +56,6 @@ tokenize(x) = Lexer(x)
 # Iterator interface
 Base.iteratorsize{IO_t}(::Type{Lexer{IO_t}}) = Base.SizeUnknown()
 Base.iteratoreltype{IO_t}(::Type{Lexer{IO_t}}) = Base.HasEltype()
-
 Base.eltype{IO_t}(::Type{Lexer{IO_t}}) = Token
 
 function Base.start(l::Lexer)
@@ -309,10 +313,8 @@ function next_token(l::Lexer)
     elseif c == '+'; return lex_plus(l);
     elseif c == '-'; return lex_minus(l);
     elseif c == '`'; return lex_cmd(l);
-    elseif c == 'i'; return lex_i(l);
-    elseif c == 't' || c == 'f'; return lex_bool(l);
     elseif isdigit(c); return lex_digit(l)
-    elseif is_identifier_start_char(c); return lex_identifier(l)
+    elseif is_identifier_start_char(c); return lex_identifier(l, c)
     elseif (k = get(UNICODE_OPS, c, Tokens.ERROR)) != Tokens.ERROR return emit(l, k)
     else emit_error(l)
     end
@@ -727,6 +729,253 @@ function lex_cmd(l::Lexer)
             return emit(l, Tokens.CMD)
         elseif eof(c)
             return emit_error(l, Tokens.EOF_CMD)
+        end
+    end
+end
+
+function tryread(l, str, k)
+    for s in str
+        c = readchar(l)
+        if c!=s
+            if !is_identifier_char(c)
+                backup!(l)
+                return emit(l, IDENTIFIER)
+            end
+            accept_batch(l, is_identifier_char)
+            return emit(l, IDENTIFIER) 
+        end
+    end
+    if is_identifier_char(peekchar(l))
+        accept_batch(l, is_identifier_char)
+        return emit(l, IDENTIFIER) 
+    end
+    return emit(l, k)
+end
+
+function readrest(l)
+    accept_batch(l, is_identifier_char)
+    return emit(l, IDENTIFIER)
+end
+
+
+function _doret(c, l)
+    if !is_identifier_char(c)
+        backup!(l)
+        return emit(l, IDENTIFIER)
+    else
+        return readrest(l)
+    end
+end
+
+function lex_identifier(l, c)
+    if c == 'a'
+        return tryread(l, ('b', 's', 't', 'r', 'a', 'c', 't'), ABSTRACT)
+    elseif c == 'b'
+        c = readchar(l)
+        if c == 'a'
+            return tryread(l, ('r', 'e', 'm', 'o', 'd', 'u', 'l', 'e'), BAREMODULE)
+        elseif c == 'e'
+            return tryread(l, ('g', 'i', 'n'), BEGIN)
+        elseif c == 'i'
+            return tryread(l, ('t', 's', 't', 'y', 'p', 'e'), BITSTYPE)
+        elseif c == 'r'
+            return tryread(l, ('e', 'a', 'k'), BREAK)
+        else
+            return _doret(c, l)
+        end
+    elseif c == 'c'
+        c = readchar(l)
+        if c == 'a'
+            return tryread(l, ('t', 'c', 'h'), CATCH)
+        elseif c == 'o'
+            c = readchar(l)
+            if c == 'n'
+                c = readchar(l)
+                if c == 's'
+                    return tryread(l, ('t',), CONST)
+                elseif c == 't'
+                    return tryread(l, ('i', 'n', 'u', 'e'), CONTINUE)
+                else
+                    return _doret(c, l)
+                end
+            else
+                return _doret(c, l)
+            end
+        else
+            return _doret(c, l)
+        end
+    elseif c == 'd'
+        return tryread(l, ('o'), DO)
+    elseif c == 'e'
+        c = readchar(l)
+        if c == 'l'
+            c = readchar(l)
+            if c == 's'
+                c = readchar(l)
+                if c == 'e'
+                    c = readchar(l)
+                    if !is_identifier_char(c)
+                        backup!(l)
+                        return emit(l, ELSE)
+                    elseif c == 'i'
+                        return tryread(l, ('f'), ELSEIF)
+                    else
+                        return _doret(c, l)
+                    end
+                else
+                    return _doret(c, l)
+                end
+            else
+                return _doret(c, l)
+            end
+        elseif c == 'n'
+            return tryread(l, ('d'), END)
+        elseif c == 'x'
+            return tryread(l, ('p', 'o', 'r', 't'), EXPORT)
+        else
+            return _doret(c, l)
+        end
+    elseif c == 'f'
+        c = readchar(l)
+        if c == 'a'
+            return tryread(l, ('l', 's', 'e'), FALSE)
+        elseif c == 'i'
+            return tryread(l, ('n', 'a', 'l', 'l', 'y'), FINALLY)
+        elseif c == 'o'
+            return tryread(l, ('r'), FOR)
+        elseif c == 'u'
+            return tryread(l, ('n', 'c', 't', 'i', 'o', 'n'), FUNCTION)
+        else
+            return _doret(c, l)
+        end
+    elseif c == 'g'
+        return tryread(l, ('l', 'o', 'b', 'a', 'l'), GLOBAL)
+    elseif c == 'i'
+        c = readchar(l)
+        if c == 'f'
+            c = readchar(l)
+            if !is_identifier_char(c)
+                skip(l.io, -Int(!eof(c)))
+                return emit(l, IF)
+            else
+                return readrest(l)
+            end
+        elseif c == 'm'
+            c = readchar(l)
+            if c == 'm'
+                return tryread(l, ('u', 't', 'a', 'b', 'l', 'e'), IMMUTABLE)
+            elseif c == 'p'
+                c = readchar(l)
+                if c == 'o'
+                    c = readchar(l)
+                    if c == 'r'
+                        c = readchar(l)
+                        if c == 't'
+                            c = readchar(l)
+                            if !is_identifier_char(c)
+                                skip(l.io, -Int(!eof(c)))
+                                return emit(l, IMPORT)
+                            elseif c == 'a'
+                                return tryread(l, ('l','l'), IMPORTALL)
+                            else
+                               return _doret(c, l)
+                            end
+                        else
+                            return _doret(c, l)
+                        end
+                    else
+                        return _doret(c, l)
+                    end
+                else
+                    return _doret(c, l)
+                end
+            else
+                return _doret(c, l)
+            end
+        elseif c == 'n'
+            c = readchar(l)
+            if !is_identifier_char(c)
+                skip(l.io, -Int(!eof(c)))
+                return emit(l, IN)
+            else
+                return readrest(l)
+            end
+        elseif (@static VERSION >= v"0.6.0-dev.1471" ? true : false) && c == 's'
+            return tryread(l, ('a'), ISA)
+        else
+            return _doret(c, l)
+        end
+    elseif c == 'l'
+        c = readchar(l)
+        if c == 'e'
+            return tryread(l, ('t'), LET)
+        elseif c == 'o'
+            return tryread(l, ('c', 'a', 'l'), LOCAL)
+        else
+            return _doret(c, l)
+        end
+    elseif c == 'm'
+        c = readchar(l)
+        if c == 'a'
+            return tryread(l, ('c', 'r', 'o'), MACRO)
+        elseif c == 'o'
+            return tryread(l, ('d', 'u', 'l', 'e'), MODULE)
+        else
+            return _doret(c, l)
+        end
+    elseif c == 'q'
+        return tryread(l, ('u', 'o', 't', 'e'), QUOTE)
+    elseif c == 'r'
+        return tryread(l, ('e', 't', 'u', 'r', 'n'), RETURN)
+    elseif c == 't'
+        c = readchar(l)
+        if c == 'r'
+            c = readchar(l)
+            if c == 'u'
+                return tryread(l, ('e'), TRUE)
+            elseif c == 'y'
+                return emit(l, TRY)
+            else
+                if !is_identifier_char(c)
+                    backup!(l)
+                    return emit(l, IDENTIFIER)
+                else
+                    return readrest(l)
+                end
+            end
+        elseif c == 'y'
+            c = readchar(l)
+            if c == 'p'
+                c = readchar(l)
+                if c == 'e'
+                    c = readchar(l)
+                    if !is_identifier_char(c)
+                        backup!(l)
+                        return emit(l, TYPE)
+                    elseif c == 'a'
+                        return tryread(l, ('l', 'i', 'a', 's'), TYPEALIAS)
+                    else
+                        return _doret(c, l)
+                    end
+                else
+                    return _doret(c, l)
+                end
+            else
+                return _doret(c, l)
+            end
+        else
+            return _doret(c, l)
+        end
+    elseif c == 'u'
+        return tryread(l, ('s', 'i', 'n', 'g'), USING)
+    elseif c == 'w'
+        return tryread(l, ('h', 'i', 'l', 'e'), WHILE)
+    else
+        if !is_identifier_char(c)
+            backup!(l)
+            return emit(l, IDENTIFIER)
+        else
+            return readrest(l)
         end
     end
 end
