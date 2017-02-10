@@ -313,8 +313,8 @@ let out =
       * list1
       * list2
     """
-    @test sprint(io -> show(io, "text/plain", book)) == out
-    @test sprint(io -> show(io, "text/markdown", book)) == out
+    @test sprint(show, "text/plain", book) == out
+    @test sprint(show, "text/markdown", book) == out
 end
 let out =
     """
@@ -332,7 +332,7 @@ let out =
     </li>
     </ul>
     </div>"""
-    @test sprint(io -> show(io, "text/html", book)) == out
+    @test sprint(show, "text/html", book) == out
 end
 let out =
     """
@@ -354,7 +354,7 @@ let out =
 
     \\end{itemize}
     """
-    @test sprint(io -> show(io, "text/latex", book)) == out
+    @test sprint(show, "text/latex", book) == out
 end
 let out =
     """
@@ -376,7 +376,7 @@ let out =
     * list1
     * list2
     """
-    @test sprint(io -> show(io, "text/rst", book)) == out
+    @test sprint(show, "text/rst", book) == out
 end
 
 # rst rendering
@@ -407,7 +407,7 @@ for (input, output) in (
 end
 
 # Interpolation / Custom types
-type Reference
+mutable struct Reference
     ref
 end
 

@@ -83,7 +83,10 @@
                 ((generator)
                  (string "(" (deparse (cadr e)) " for " (deparse-arglist (cddr e) ", ") ")"))
                 ((where)
-                 (string (deparse (cadr e)) " where " (deparse (caddr e))))
+                 (string (deparse (cadr e)) " where "
+                         (if (length= e 3)
+                             (deparse (caddr e))
+                             (deparse (cons 'cell1d (cddr e))))))
                 ((function for while)
                  (deparse-block (string (car e) " " (deparse (cadr e)))
                                 (block-stmts (caddr e))))
@@ -183,6 +186,9 @@
 
 (define (ssavalue? e)
   (and (pair? e) (eq? (car e) 'ssavalue)))
+
+(define (globalref? e)
+  (and (pair? e) (eq? (car e) 'globalref)))
 
 (define (symbol-like? e)
   (or (and (symbol? e) (not (eq? e 'true)) (not (eq? e 'false)))

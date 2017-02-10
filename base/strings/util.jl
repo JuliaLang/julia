@@ -86,6 +86,7 @@ Remove a single trailing newline from a string.
 ```jldoctest
 julia> chomp("Hello\n")
 "Hello"
+```
 """
 function chomp(s::AbstractString)
     i = endof(s)
@@ -187,6 +188,7 @@ instead remove characters contained in it.
 ```jldoctest
 julia> strip("{3, 5}\n", ['{', '}', '\n'])
 "3, 5"
+```
 """
 strip(s::AbstractString) = lstrip(rstrip(s))
 strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
@@ -272,7 +274,7 @@ julia> split(a,".")
 ```
 """
 split{T<:AbstractString}(str::T, splitter; limit::Integer=0, keep::Bool=true) = _split(str, splitter, limit, keep, SubString{T}[])
-function _split{T<:AbstractString,U<:Array}(str::T, splitter, limit::Integer, keep_empty::Bool, strs::U)
+function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     i = start(str)
     n = endof(str)
     r = search(str,splitter,i)
@@ -327,7 +329,7 @@ julia> rsplit(a,".";limit=2)
 ```
 """
 rsplit{T<:AbstractString}(str::T, splitter   ; limit::Integer=0, keep::Bool=true) = _rsplit(str, splitter, limit, keep, SubString{T}[])
-function _rsplit{T<:AbstractString,U<:Array}(str::T, splitter, limit::Integer, keep_empty::Bool, strs::U)
+function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     i = start(str)
     n = endof(str)
     r = rsearch(str,splitter)

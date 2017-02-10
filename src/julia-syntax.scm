@@ -634,7 +634,8 @@
   (if (any (lambda (v) (contains (lambda (e) (eq? e v)) field-types))
            field-names)
       (map (lambda (x) (gensy)) field-names)
-      field-names))
+      ;; use a different name for a field called `_`
+      (map (lambda (x) (if (eq? x '_) (gensy) x)) field-names)))
 
 (define (with-wheres call wheres)
   (if (pair? wheres)
@@ -754,6 +755,16 @@
            (let* ((temp   (ctor-signature name params bounds curlyargs sig))
                   (sig    (car temp))
                   (params (cdr temp)))
+             (if (pair? params)
+                 (let* ((lnos (filter (lambda (e) (and (pair? e) (eq? (car e) 'line)))
+                                      body))
+                        (lno (if (null? lnos) '() (car lnos))))
+                   (syntax-deprecation #f
+                                       (string "inner constructor " name "(...)"
+                                               (cond ((length= lno 2) (string " around line " (cadr lno)))
+                                                     ((length= lno 3) (string " around " (caddr lno) ":" (cadr lno)))
+                                                     (else "")))
+                                       (deparse `(where (call (curly ,name ,@params) ...) ,@params)))))
              `(,keyword ,sig ,(ctor-body body params)))))))
 
 ;; rewrite calls to `new( ... )` to `new` expressions on the appropriate
@@ -2370,7 +2381,7 @@
         ((=)
          (let ((v (decl-var (cadr e)))
                (rest (find-assigned-vars (caddr e) env)))
-           (if (or (ssavalue? v) (memq v env))
+           (if (or (ssavalue? v) (memq v env) (globalref? v))
                rest
                (cons v rest))))
         (else
@@ -3277,15 +3288,20 @@ f(x) = yt(x)
     (define (compile e break-labels value tail)
       (if (or (not (pair? e)) (memq (car e) '(null ssavalue quote inert top core copyast the_exception $
                                                    globalref outerref cdecl stdcall fastcall thiscall llvmcall)))
-          (let ((e (if (and arg-map (symbol? e))
-                       (get arg-map e e)
-                       e)))
-            (cond (tail  (emit-return e))
-                  (value e)
-                  ((or (eq? e 'true) (eq? e 'false)) #f)
-                  ((symbol? e) (emit e) #f)  ;; keep symbols for undefined-var checking
-                  ((and (pair? e) (eq? (car e) 'outerref)) (emit e) #f)  ;; keep globals for undefined-var checking
-                  ((and (pair? e) (eq? (car e) 'globalref)) (emit e) #f) ;; keep globals for undefined-var checking
+          (let ((e1 (if (and arg-map (symbol? e))
+                        (get arg-map e e)
+                        e)))
+            (if (and value (or (eq? e '_)
+                               (and (pair? e) (or (eq? (car e) 'outerref)
+                                                  (eq? (car e) 'globalref))
+                                    (eq? (cadr e) '_))))
+                (syntax-deprecation #f "_ as an rvalue" ""))
+            (cond (tail  (emit-return e1))
+                  (value e1)
+                  ((or (eq? e1 'true) (eq? e1 'false)) #f)
+                  ((symbol? e1) (emit e1) #f)  ;; keep symbols for undefined-var checking
+                  ((and (pair? e1) (eq? (car e1) 'outerref)) (emit e1) #f)  ;; keep globals for undefined-var checking
+                  ((and (pair? e1) (eq? (car e1) 'globalref)) (emit e1) #f) ;; keep globals for undefined-var checking
                   (else #f)))
           (case (car e)
             ((call new foreigncall)

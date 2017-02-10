@@ -165,7 +165,7 @@ end
 
 float(x::AbstractString) = parse(Float64,x)
 
-float{S<:AbstractString}(a::AbstractArray{S}) = map!(float, similar(a,typeof(float(0))), a)
+float(a::AbstractArray{<:AbstractString}) = map!(float, similar(a,typeof(float(0))), a)
 
 ## interface to parser ##
 

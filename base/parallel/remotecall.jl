@@ -10,9 +10,9 @@ The `client_refs` lock is also used to synchronize access to `.refs` and associa
 """
 const client_refs = WeakKeyDict{Any, Void}() # used as a WeakKeySet
 
-abstract AbstractRemoteRef
+abstract type AbstractRemoteRef end
 
-type Future <: AbstractRemoteRef
+mutable struct Future <: AbstractRemoteRef
     where::Int
     whence::Int
     id::Int
@@ -22,12 +22,15 @@ type Future <: AbstractRemoteRef
     Future(w::Int, rrid::RRID, v) = (r = new(w,rrid.whence,rrid.id,v); return test_existing_ref(r))
 end
 
-type RemoteChannel{T<:AbstractChannel} <: AbstractRemoteRef
+mutable struct RemoteChannel{T<:AbstractChannel} <: AbstractRemoteRef
     where::Int
     whence::Int
     id::Int
 
-    RemoteChannel(w::Int, rrid::RRID) = (r = new(w, rrid.whence, rrid.id); return test_existing_ref(r))
+    function RemoteChannel{T}(w::Int, rrid::RRID) where T<:AbstractChannel
+        r = new(w, rrid.whence, rrid.id)
+        return test_existing_ref(r)
+    end
 end
 
 function test_existing_ref(r::AbstractRemoteRef)
@@ -280,12 +283,12 @@ function serialize(s::AbstractSerializer, rr::AbstractRemoteRef, addclient)
     invoke(serialize, Tuple{AbstractSerializer, Any}, s, rr)
 end
 
-function deserialize{T<:Future}(s::AbstractSerializer, t::Type{T})
+function deserialize(s::AbstractSerializer, t::Type{<:Future})
     f = deserialize_rr(s,t)
     Future(f.where, RRID(f.whence, f.id), f.v) # ctor adds to client_refs table
 end
 
-function deserialize{T<:RemoteChannel}(s::AbstractSerializer, t::Type{T})
+function deserialize(s::AbstractSerializer, t::Type{<:RemoteChannel})
     rr = deserialize_rr(s,t)
     # call ctor to make sure this rr gets added to the client_refs table
     RemoteChannel{channel_type(rr)}(rr.where, RRID(rr.whence, rr.id))

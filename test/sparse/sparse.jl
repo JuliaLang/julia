@@ -1641,11 +1641,11 @@ end
     @test At_ldiv_B(ltintmat, sparse(intmat)) ≈ At_ldiv_B(ltintmat, intmat)
 end
 
-# Test temporary fix for issue #16548 in PR #16979. Brittle. Expect to remove with `\` revisions.
-# This is broken by the introduction of RowVector... see brittle comment above.
-#@testset "issue #16548" begin
-#    @test which(\, (SparseMatrixCSC, AbstractVecOrMat)).module == Base.SparseArrays
-#end
+# Test temporary fix for issue #16548 in PR #16979. Somewhat brittle. Expect to remove with `\` revisions.
+@testset "issue #16548" begin
+    ms = methods(\, (SparseMatrixCSC, AbstractVecOrMat)).ms
+    @test all(m -> m.module == Base.SparseArrays, ms)
+end
 
 @testset "row indexing a SparseMatrixCSC with non-Int integer type" begin
     A = sparse(UInt32[1,2,3], UInt32[1,2,3], [1.0,2.0,3.0])
@@ -1704,4 +1704,20 @@ end
 
 @testset "issue #14398" begin
     @test transpose(view(speye(10), 1:5, 1:5)) ≈ eye(5,5)
+end
+
+@testset "dropstored issue #20513" begin
+    x = sparse(rand(3,3))
+    Base.SparseArrays.dropstored!(x, 1, 1)
+    @test x[1, 1] == 0.0
+    @test x.colptr == [1, 3, 6, 9]
+    Base.SparseArrays.dropstored!(x, 2, 1)
+    @test x.colptr == [1, 2, 5, 8]
+    @test x[2, 1] == 0.0
+    Base.SparseArrays.dropstored!(x, 2, 2)
+    @test x.colptr == [1, 2, 4, 7]
+    @test x[2, 2] == 0.0
+    Base.SparseArrays.dropstored!(x, 2, 3)
+    @test x.colptr == [1, 2, 4, 6]
+    @test x[2, 3] == 0.0
 end

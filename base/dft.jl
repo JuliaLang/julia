@@ -3,7 +3,7 @@
 module DFT
 
 # DFT plan where the inputs are an array of eltype T
-abstract Plan{T}
+abstract type Plan{T} end
 
 import Base: show, summary, size, ndims, length, eltype,
              *, A_mul_B!, inv, \, A_ldiv_B!
@@ -28,8 +28,8 @@ _fftwfloat{T}(::Type{Complex{T}}) = Complex{_fftwfloat(T)}
 _fftwfloat{T}(::Type{T}) = error("type $T not supported")
 _fftwfloat{T}(x::T) = _fftwfloat(T)(x)
 
-complexfloat{T<:FFTWFloat}(x::StridedArray{Complex{T}}) = x
-realfloat{T<:FFTWFloat}(x::StridedArray{T}) = x
+complexfloat(x::StridedArray{Complex{<:FFTWFloat}}) = x
+realfloat(x::StridedArray{<:FFTWFloat}) = x
 
 # return an Array, rather than similar(x), to avoid an extra copy for FFTW
 # (which only works on StridedArray types).
@@ -201,13 +201,13 @@ bfft!
 for f in (:fft, :bfft, :ifft)
     pf = Symbol("plan_", f)
     @eval begin
-        $f{T<:Real}(x::AbstractArray{T}, region=1:ndims(x)) = $f(complexfloat(x), region)
-        $pf{T<:Real}(x::AbstractArray{T}, region; kws...) = $pf(complexfloat(x), region; kws...)
-        $f{T<:Union{Integer,Rational}}(x::AbstractArray{Complex{T}}, region=1:ndims(x)) = $f(complexfloat(x), region)
-        $pf{T<:Union{Integer,Rational}}(x::AbstractArray{Complex{T}}, region; kws...) = $pf(complexfloat(x), region; kws...)
+        $f(x::AbstractArray{<:Real}, region=1:ndims(x)) = $f(complexfloat(x), region)
+        $pf(x::AbstractArray{<:Real}, region; kws...) = $pf(complexfloat(x), region; kws...)
+        $f(x::AbstractArray{<:Complex{<:Union{Integer,Rational}}}, region=1:ndims(x)) = $f(complexfloat(x), region)
+        $pf(x::AbstractArray{<:Complex{<:Union{Integer,Rational}}}, region; kws...) = $pf(complexfloat(x), region; kws...)
     end
 end
-rfft{T<:Union{Integer,Rational}}(x::AbstractArray{T}, region=1:ndims(x)) = rfft(realfloat(x), region)
+rfft(x::AbstractArray{<:Union{Integer,Rational}}, region=1:ndims(x)) = rfft(realfloat(x), region)
 plan_rfft(x::AbstractArray, region; kws...) = plan_rfft(realfloat(x), region; kws...)
 
 # only require implementation to provide *(::Plan{T}, ::Array{T})
@@ -237,14 +237,14 @@ A_ldiv_B!(y::AbstractArray, p::Plan, x::AbstractArray) = A_mul_B!(y, inv(p), x)
 # implementations only need to provide the unnormalized backwards FFT,
 # similar to FFTW, and we do the scaling generically to get the ifft:
 
-type ScaledPlan{T,P,N} <: Plan{T}
+mutable struct ScaledPlan{T,P,N} <: Plan{T}
     p::P
     scale::N # not T, to avoid unnecessary promotion to Complex
     pinv::Plan
-    ScaledPlan(p, scale) = new(p, scale)
+    ScaledPlan{T,P,N}(p, scale) where {T,P,N} = new(p, scale)
 end
-(::Type{ScaledPlan{T}}){T,P,N}(p::P, scale::N) = ScaledPlan{T,P,N}(p, scale)
-ScaledPlan{T}(p::Plan{T}, scale::Number) = ScaledPlan{T}(p, scale)
+ScaledPlan{T}(p::P, scale::N) where {T,P,N} = ScaledPlan{T,P,N}(p, scale)
+ScaledPlan(p::Plan{T}, scale::Number) where {T} = ScaledPlan{T}(p, scale)
 ScaledPlan(p::ScaledPlan, α::Number) = ScaledPlan(p.p, p.scale * α)
 
 size(p::ScaledPlan) = size(p.p)
@@ -294,8 +294,8 @@ end
 
 for f in (:brfft, :irfft)
     @eval begin
-        $f{T<:Real}(x::AbstractArray{T}, d::Integer, region=1:ndims(x)) = $f(complexfloat(x), d, region)
-        $f{T<:Union{Integer,Rational}}(x::AbstractArray{Complex{T}}, d::Integer, region=1:ndims(x)) = $f(complexfloat(x), d, region)
+        $f(x::AbstractArray{<:Real}, d::Integer, region=1:ndims(x)) = $f(complexfloat(x), d, region)
+        $f(x::AbstractArray{<:Complex{<:Union{Integer,Rational}}}, d::Integer, region=1:ndims(x)) = $f(complexfloat(x), d, region)
     end
 end
 

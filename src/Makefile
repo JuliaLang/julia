@@ -35,6 +35,10 @@ else
 FLAGS += -DJL_BUILD_UNAME='"$(OS)"'
 endif
 
+ifeq ($(OS),FreeBSD)
+FLAGS += -I$(LOCALBASE)/include
+endif
+
 SRCS := \
 	jltypes gf typemap ast builtins module interpreter symbol \
 	dlload sys init task array dump toplevel jl_uv datatype \

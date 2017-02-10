@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-immutable NullException <: Exception
+struct NullException <: Exception
 end
 
 """
@@ -57,7 +57,7 @@ promote_rule{S,T}(::Type{Nullable{S}}, ::Type{Nullable{T}}) = Nullable{promote_t
 promote_op{S,T}(op::Any, ::Type{Nullable{S}}, ::Type{Nullable{T}}) = Nullable{promote_op(op, S, T)}
 promote_op{S,T}(op::Type, ::Type{Nullable{S}}, ::Type{Nullable{T}}) = Nullable{promote_op(op, S, T)}
 
-function show{T}(io::IO, x::Nullable{T})
+function show(io::IO, x::Nullable)
     if get(io, :compact, false)
         if isnull(x)
             print(io, "#NULL")
@@ -81,8 +81,8 @@ end
 Attempt to access the value of `x`. Returns the value if it is present;
 otherwise, returns `y` if provided, or throws a `NullException` if not.
 """
-@inline function get{S,T}(x::Nullable{S}, y::T)
-    if isbits(S)
+@inline function get{T}(x::Nullable{T}, y)
+    if isbits(T)
         ifelse(isnull(x), y, x.value)
     else
         isnull(x) ? y : x.value

@@ -12,7 +12,7 @@ If memory usage is your concern, you can always replace objects with ones that c
 with `A = 0`.  The memory will be released the next time the garbage collector runs; you can force
 this to happen with [`gc()`](@ref).
 
-### How can I modify the declaration of a type/immutable in my session?
+### How can I modify the declaration of a type in my session?
 
 Perhaps you've defined a type and then realize you need to add a new field.  If you try this at
 the REPL, you get the error:
@@ -610,7 +610,7 @@ that, rather than storing the result in the same location in memory as `x`, it a
 array to store the result.
 
 While this behavior might surprise some, the choice is deliberate. The main reason is the presence
-of `immutable` objects within Julia, which cannot change their value once created.  Indeed, a
+of immutable objects within Julia, which cannot change their value once created.  Indeed, a
 number is an immutable object; the statements `x = 5; x += 1` do not modify the meaning of `5`,
 they modify the value bound to `x`. For an immutable, the only way to change the value is to reassign
 it.

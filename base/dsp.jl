@@ -142,8 +142,8 @@ function conv{T<:Base.LinAlg.BlasFloat}(u::StridedVector{T}, v::StridedVector{T}
     return y[1:n]
 end
 conv{T<:Integer}(u::StridedVector{T}, v::StridedVector{T}) = round.(Int,conv(float(u), float(v)))
-conv{T<:Integer, S<:Base.LinAlg.BlasFloat}(u::StridedVector{T}, v::StridedVector{S}) = conv(float(u), v)
-conv{T<:Integer, S<:Base.LinAlg.BlasFloat}(u::StridedVector{S}, v::StridedVector{T}) = conv(u, float(v))
+conv(u::StridedVector{<:Integer}, v::StridedVector{<:Base.LinAlg.BlasFloat}) = conv(float(u), v)
+conv(u::StridedVector{<:Base.LinAlg.BlasFloat}, v::StridedVector{<:Integer}) = conv(u, float(v))
 
 """
     conv2(u,v,A)

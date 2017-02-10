@@ -7,7 +7,7 @@ export Enum, @enum
 
 function basetype end
 
-abstract Enum{T<:Integer}
+abstract type Enum{T<:Integer} end
 
 Base.convert{T<:Integer}(::Type{Integer}, x::Enum{T}) = bitcast(T, x)
 Base.convert{T<:Integer,T2<:Integer}(::Type{T}, x::Enum{T2}) = convert(T, bitcast(T2, x))
@@ -45,7 +45,7 @@ julia> f(apple)
 "I'm a Fruit with value: 1"
 ```
 
-`BaseType`, which defaults to `Int32`, must be a bitstype subtype of Integer. Member values can be converted between
+`BaseType`, which defaults to `Int32`, must be a primitive subtype of Integer. Member values can be converted between
 the enum type and `BaseType`. `read` and `write` perform these conversions automatically.
 """
 macro enum(T,syms...)
@@ -58,7 +58,7 @@ macro enum(T,syms...)
         typename = T.args[1]
         basetype = eval(current_module(),T.args[2])
         if !isa(basetype, DataType) || !(basetype <: Integer) || !isbits(basetype)
-            throw(ArgumentError("invalid base type for Enum $typename, $T=::$basetype; base type must be an integer bitstype"))
+            throw(ArgumentError("invalid base type for Enum $typename, $T=::$basetype; base type must be an integer primitive type"))
         end
     elseif !isa(T,Symbol)
         throw(ArgumentError("invalid type expression for enum $T"))
@@ -103,7 +103,7 @@ macro enum(T,syms...)
     end
     blk = quote
         # enum definition
-        Base.@__doc__(bitstype $(sizeof(basetype) * 8) $(esc(typename)) <: Enum{$(basetype)})
+        Base.@__doc__(primitive type $(esc(typename)) <: Enum{$(basetype)} $(sizeof(basetype) * 8) end)
         function Base.convert(::Type{$(esc(typename))}, x::Integer)
             $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x)
             return bitcast($(esc(typename)), convert($(basetype), x))

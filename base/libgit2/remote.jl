@@ -112,7 +112,7 @@ The keyword arguments are:
   * `options`: determines the options for the fetch, e.g. whether to prune afterwards.
   * `msg`: a message to insert into the reflogs.
 """
-function fetch{T<:AbstractString}(rmt::GitRemote, refspecs::Vector{T};
+function fetch(rmt::GitRemote, refspecs::Vector{<:AbstractString};
                options::FetchOptions = FetchOptions(),
                msg::AbstractString="")
     msg = "libgit2.fetch: $msg"
@@ -130,9 +130,8 @@ The keyword arguments are:
   * `force`: if `true`, a force-push will occur, disregarding conflicts.
   * `options`: determines the options for the push, e.g. which proxy headers to use.
 """
-function push{T<:AbstractString}(rmt::GitRemote, refspecs::Vector{T};
-                                 force::Bool = false,
-                                 options::PushOptions = PushOptions())
+function push(rmt::GitRemote, refspecs::Vector{<:AbstractString};
+              force::Bool = false, options::PushOptions = PushOptions())
     @check ccall((:git_remote_push, :libgit2), Cint,
                  (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{PushOptions}),
                  rmt.ptr, isempty(refspecs) ? C_NULL : refspecs, Ref(options))

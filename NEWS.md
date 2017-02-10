@@ -22,6 +22,26 @@ New language features
 Language changes
 ----------------
 
+  * "Inner constructor" syntax for parametric types is deprecated. For example,
+    in this definition:
+    ```
+    type Foo{T,S<:Real}
+        x
+        Foo(x) = new(x)
+    end
+    ```
+    the syntax `Foo(x) = new(x)` actually defined a constructor for `Foo{T,S}`,
+    i.e. the case where the type parameters are specified. For clarity, this
+    definition now must be written as `Foo{T,S}(x) where {T,S<:Real} = new(x)`. ([#11310])
+
+  * The keywords used to define types have changed ([#19157], [#20418]).
+    + `immutable` changes to `struct`
+    + `type` changes to `mutable struct`
+    + `abstract` changes to `abstract type ... end`
+    + `bitstype 32 Char` changes to `primitive type Char 32 end`
+    In 0.6, `immutable` and `type` are still allowed as synonyms without a deprecation
+    warning.
+
   * Multi-line and single-line nonstandard command literals have been added. A
     nonstandard command literal is like a nonstandard string literal, but the
     syntax uses backquotes (``` ` ```) instead of double quotes, and the
@@ -46,6 +66,9 @@ Language changes
 
   * `@.` is now parsed as `@__dot__`, and can be used to add dots to
     every function call, operator, and assignment in an expression ([#20321]).
+
+  * The identifier `_` can be assigned, but accessing its value is deprecated,
+    allowing this syntax to be used in the future for discarding values ([#9343], [#18251]).
 
 Breaking changes
 ----------------
@@ -260,9 +283,16 @@ Library improvements
 
   * `notify` now returns a count of tasks woken up ([#19841]).
 
+  * New nonstandard string literal `raw"..."` for creating strings
+    with no interpolation or unescaping ([#19900]).
+
   * A new `Dates.Time` type was added that supports representing the time of day with up to nanosecond resolution ([#12274]).
 
   * New `@macroexpand` macro as a convenient alternative to the `macroexpand` function ([#18660]).
+
+  * Introduced a wrapper type for lazy complex conjugation of arrays, `ConjArray`.
+    Currently, it is used by default for the new `RowVector` type only, and
+    enforces that both `transpose(vec)` and `ctranspose(vec)` are views not copies ([#20047]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -358,6 +388,7 @@ Deprecated or removed
 [#19787]: https://github.com/JuliaLang/julia/issues/19787
 [#19800]: https://github.com/JuliaLang/julia/issues/19800
 [#19841]: https://github.com/JuliaLang/julia/issues/19841
+[#19900]: https://github.com/JuliaLang/julia/issues/19900
 [#19903]: https://github.com/JuliaLang/julia/issues/19903
 [#19919]: https://github.com/JuliaLang/julia/issues/19919
 [#19944]: https://github.com/JuliaLang/julia/issues/19944

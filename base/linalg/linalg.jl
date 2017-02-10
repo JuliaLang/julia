@@ -22,6 +22,9 @@ export
 
 # Types
     RowVector,
+    ConjArray,
+    ConjVector,
+    ConjMatrix,
     SymTridiagonal,
     Tridiagonal,
     Bidiagonal,
@@ -234,9 +237,10 @@ function char_uplo(uplo::Symbol)
     end
 end
 
-copy_oftype{T,N}(A::AbstractArray{T,N}, ::Type{T}) = copy(A)
+copy_oftype{T}(A::AbstractArray{T}, ::Type{T}) = copy(A)
 copy_oftype{T,N,S}(A::AbstractArray{T,N}, ::Type{S}) = convert(AbstractArray{S,N}, A)
 
+include("conjarray.jl")
 include("transpose.jl")
 include("rowvector.jl")
 

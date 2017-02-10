@@ -230,8 +230,6 @@ typedef struct _jl_method_t {
 
     // method's type signature. redundant with TypeMapEntry->specTypes
     jl_value_t *sig;
-    // bound type variables (static parameters)
-    jl_svec_t *tvars;
     size_t min_world;
     size_t max_world;
 
@@ -241,7 +239,7 @@ typedef struct _jl_method_t {
     // table of all argument types for which we've inferred or compiled this code
     union jl_typemap_t specializations;
 
-    jl_svec_t *sparam_syms;  // symbols corresponding to the tvars vector
+    jl_svec_t *sparam_syms;  // symbols giving static parameter names
     jl_code_info_t *source;  // original code template, null for builtins
     struct _jl_method_instance_t *unspecialized;  // unspecialized executable method instance, or null
     struct _jl_method_instance_t *generator;  // executable code-generating function if isstaged
@@ -268,7 +266,7 @@ typedef struct _jl_method_instance_t {
     JL_DATA_TYPE
     jl_value_t *specTypes;  // argument types this was specialized for
     jl_value_t *rettype; // return type for fptr
-    jl_svec_t *sparam_vals; // the values for the tvars, indexed by def->sparam_syms
+    jl_svec_t *sparam_vals; // static parameter values, indexed by def->sparam_syms
     jl_array_t *backedges;
     jl_value_t *inferred;  // inferred jl_code_info_t, or value of the function if jlcall_api == 2, or null
     jl_value_t *inferred_const; // inferred constant return value, or null
@@ -415,7 +413,6 @@ typedef struct _jl_typemap_entry_t {
     JL_DATA_TYPE
     struct _jl_typemap_entry_t *next; // invasive linked list
     jl_tupletype_t *sig; // the type signature for this entry
-    jl_svec_t *tvars; // the bound type variables for sig
     jl_tupletype_t *simplesig; // a simple signature for fast rejection
     jl_svec_t *guardsigs;
     size_t min_world;

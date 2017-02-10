@@ -2,9 +2,9 @@
 
 import Base: convert, show
 
-abstract Ty
+abstract type Ty end
 
-type TypeName
+mutable struct TypeName
     name::Symbol
     abs::Bool
     super::Ty    # actually TagT
@@ -17,7 +17,7 @@ end
 
 show(io::IO, x::TypeName) = print(io, x.name)
 
-type TagT <: Ty
+mutable struct TagT <: Ty
     name::TypeName
     params
     vararg::Bool
@@ -40,12 +40,12 @@ function show(io::IO, t::TagT)
     print(io, '}')
 end
 
-type BottomTy <: Ty
+mutable struct BottomTy <: Ty
 end
 
 show(io::IO, ::BottomTy) = print(io, "BottomT")
 
-type UnionT <: Ty
+mutable struct UnionT <: Ty
     a
     b
     UnionT() = BottomT
@@ -69,7 +69,7 @@ function show(io::IO, t::UnionT)
     print(io, ')')
 end
 
-type Var
+mutable struct Var
     name::Symbol
     lb
     ub
@@ -96,7 +96,7 @@ end
 
 show(io::IO, v::Var) = print(io, v.name)
 
-type UnionAllT <: Ty
+mutable struct UnionAllT <: Ty
     var::Var
     T
     UnionAllT(v::Var, t) = new(v, t)
@@ -151,7 +151,7 @@ subst(t, env) = t
 
 isequal_type(x, y) = issub(x, y) && issub(y, x)
 
-type Bounds
+mutable struct Bounds
     # record current lower and upper bounds of a Var
     # right: whether this Var is on the right-hand side of A <: B
     lb
@@ -159,14 +159,14 @@ type Bounds
     right::Bool
 end
 
-type UnionState
+mutable struct UnionState
     depth::Int           # number of union decision points we're inside
     more::Bool           # new union found; need to grow stack
     stack::Vector{Bool}  # stack of decisions
     UnionState() = new(1,0,Bool[])
 end
 
-type Env
+mutable struct Env
     vars::Dict{Var,Bounds}
     Lunions::UnionState
     Runions::UnionState

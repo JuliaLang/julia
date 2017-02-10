@@ -5,11 +5,30 @@
 
 Given a function `f` and an iterator `iter`, construct an iterator that yields
 the values of `f` applied to the elements of `iter`.
-The syntax `f(x) [if cond(x)::Bool] for x in iter` is syntax for constructing an instance of this
+The syntax `f(x) for x in iter [if cond(x)::Bool]` is syntax for constructing an instance of this
 type. The `[if cond(x)::Bool]` expression is optional and acts as a "guard", effectively
 filtering out values where the condition is false.
+
+```jldoctest
+julia> g = (abs2(x) for x in 1:5 if x != 3);
+
+julia> for x in g
+           println(x)
+       end
+1
+4
+16
+25
+
+julia> collect(g)
+4-element Array{Int64,1}:
+  1
+  4
+ 16
+ 25
+```
 """
-immutable Generator{I,F}
+struct Generator{I,F}
     f::F
     iter::I
 end
@@ -29,11 +48,11 @@ end
 
 ## iterator traits
 
-abstract IteratorSize
-immutable SizeUnknown <: IteratorSize end
-immutable HasLength <: IteratorSize end
-immutable HasShape <: IteratorSize end
-immutable IsInfinite <: IteratorSize end
+abstract type IteratorSize end
+struct SizeUnknown <: IteratorSize end
+struct HasLength <: IteratorSize end
+struct HasShape <: IteratorSize end
+struct IsInfinite <: IteratorSize end
 
 """
     iteratorsize(itertype::Type) -> IteratorSize
@@ -63,9 +82,9 @@ Base.HasLength()
 iteratorsize(x) = iteratorsize(typeof(x))
 iteratorsize(::Type) = HasLength()  # HasLength is the default
 
-abstract IteratorEltype
-immutable EltypeUnknown <: IteratorEltype end
-immutable HasEltype <: IteratorEltype end
+abstract type IteratorEltype end
+struct EltypeUnknown <: IteratorEltype end
+struct HasEltype <: IteratorEltype end
 
 """
     iteratoreltype(itertype::Type) -> IteratorEltype
@@ -89,7 +108,7 @@ Base.HasEltype()
 iteratoreltype(x) = iteratoreltype(typeof(x))
 iteratoreltype(::Type) = HasEltype()  # HasEltype is the default
 
-iteratorsize{T<:AbstractArray}(::Type{T}) = HasShape()
+iteratorsize(::Type{<:AbstractArray}) = HasShape()
 iteratorsize{I,F}(::Type{Generator{I,F}}) = iteratorsize(I)
 length(g::Generator) = length(g.iter)
 size(g::Generator) = size(g.iter)
