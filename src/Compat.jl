@@ -1801,7 +1801,7 @@ module TypeUtils
         using Base: isabstract, parameter_upper_bound, typename
     else
         isabstract(t::DataType) = t.abstract
-        @static if isdefined(Base, :TypeConstructor)
+        if isdefined(Base, :TypeConstructor)
             isabstract(t::TypeConstructor) = isabstract(t.body)
         end
         isabstract(t::ANY) = false
