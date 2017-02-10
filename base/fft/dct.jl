@@ -9,7 +9,7 @@ export dct, idct, dct!, idct!, plan_dct, plan_idct, plan_dct!, plan_idct!
 # Unlike Matlab we compute the multidimensional transform by default,
 # similar to the Julia fft functions.
 
-type DCTPlan{T<:fftwNumber,K,inplace} <: Plan{T}
+mutable struct DCTPlan{T<:fftwNumber,K,inplace} <: Plan{T}
     plan::r2rFFTWPlan{T}
     r::Array{UnitRange{Int}} # array of indices for rescaling
     nrm::Float64 # normalization factor

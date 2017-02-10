@@ -4,7 +4,7 @@ using Base.Serializer: known_object_data, object_number, serialize_cycle, deseri
                       __deserialized_types__, serialize_typename, deserialize_typename,
                       TYPENAME_TAG, object_numbers, reset_state, serialize_type
 
-type ClusterSerializer{I<:IO} <: AbstractSerializer
+mutable struct ClusterSerializer{I<:IO} <: AbstractSerializer
     io::I
     counter::Int
     table::ObjectIdDict
@@ -86,7 +86,7 @@ end
 # Send/resend a global object if
 # a) has not been sent previously, i.e., we are seeing this object_id for the first time, or,
 # b) hash value has changed or
-# c) is a bitstype
+# c) is a bits type
 function syms_2b_sent(s::ClusterSerializer, identifier)
     lst = Symbol[]
     check_syms = get(s.glbs_in_tnobj, identifier, [])

@@ -5,7 +5,7 @@
 
 A system call failed with an error code (in the `errno` global variable).
 """
-type SystemError <: Exception
+mutable struct SystemError <: Exception
     prefix::AbstractString
     errnum::Int32
     extrainfo
@@ -20,7 +20,7 @@ end
 The expression passed to the `parse` function could not be interpreted as a valid Julia
 expression.
 """
-type ParseError <: Exception
+mutable struct ParseError <: Exception
     msg::AbstractString
 end
 
@@ -30,13 +30,9 @@ end
 The parameters to a function call do not match a valid signature. Argument `msg` is a
 descriptive error string.
 """
-type ArgumentError <: Exception
+mutable struct ArgumentError <: Exception
     msg::AbstractString
 end
-
-#type UnboundError <: Exception
-#    var::Symbol
-#end
 
 """
     KeyError(key)
@@ -44,7 +40,7 @@ end
 An indexing operation into an `Associative` (`Dict`) or `Set` like object tried to access or
 delete a non-existent element.
 """
-type KeyError <: Exception
+mutable struct KeyError <: Exception
     key
 end
 
@@ -54,7 +50,7 @@ end
 A method with the required type signature does not exist in the given generic function.
 Alternatively, there is no unique most-specific method.
 """
-type MethodError <: Exception
+mutable struct MethodError <: Exception
     f
     args
     world::UInt
@@ -67,7 +63,7 @@ MethodError(f::ANY, args::ANY) = MethodError(f, args, typemax(UInt))
 
 No more data was available to read from a file or stream.
 """
-type EOFError <: Exception end
+mutable struct EOFError <: Exception end
 
 """
     DimensionMismatch([msg])
@@ -75,7 +71,7 @@ type EOFError <: Exception end
 The objects called do not have matching dimensionality. Optional argument `msg` is a
 descriptive error string.
 """
-type DimensionMismatch <: Exception
+mutable struct DimensionMismatch <: Exception
     msg::AbstractString
 end
 DimensionMismatch() = DimensionMismatch("")
@@ -86,7 +82,7 @@ DimensionMismatch() = DimensionMismatch("")
 The asserted condition did not evaluate to `true`.
 Optional argument `msg` is a descriptive error string.
 """
-type AssertionError <: Exception
+mutable struct AssertionError <: Exception
     msg::AbstractString
     AssertionError() = new("")
     AssertionError(msg) = new(msg)
@@ -94,7 +90,7 @@ end
 
 #Generic wrapping of arbitrary exceptions
 #Subtypes should put the exception in an 'error' field
-abstract WrappedException <: Exception
+abstract type WrappedException <: Exception end
 
 """
     LoadError(file::AbstractString, line::Int, error)
@@ -102,7 +98,7 @@ abstract WrappedException <: Exception
 An error occurred while `include`ing, `require`ing, or `using` a file. The error specifics
 should be available in the `.error` field.
 """
-type LoadError <: WrappedException
+mutable struct LoadError <: WrappedException
     file::AbstractString
     line::Int
     error
@@ -114,7 +110,7 @@ end
 An error occurred when running a module's `__init__` function. The actual error thrown is
 available in the `.error` field.
 """
-type InitError <: WrappedException
+mutable struct InitError <: WrappedException
     mod::Symbol
     error
 end
@@ -148,7 +144,7 @@ finalize(o::ANY) = ccall(:jl_finalize_th, Void, (Ptr{Void}, Any,),
 gc(full::Bool=true) = ccall(:jl_gc_collect, Void, (Int32,), full)
 gc_enable(on::Bool) = ccall(:jl_gc_enable, Int32, (Int32,), on) != 0
 
-immutable Nullable{T}
+struct Nullable{T}
     hasvalue::Bool
     value::T
 

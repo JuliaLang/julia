@@ -35,7 +35,7 @@ import Base:
 
 ## TextTerminal ##
 
-abstract TextTerminal <: Base.AbstractPipe
+abstract type TextTerminal <: Base.AbstractPipe end
 
 # INTERFACE
 pipe_reader(::TextTerminal) = error("Unimplemented")
@@ -89,16 +89,16 @@ disable_bracketed_paste(t::TextTerminal) = nothing
 
 ## UnixTerminal ##
 
-abstract UnixTerminal <: TextTerminal
+abstract type UnixTerminal <: TextTerminal end
 
 pipe_reader(t::UnixTerminal) = t.in_stream
 pipe_writer(t::UnixTerminal) = t.out_stream
 
-type TerminalBuffer <: UnixTerminal
+mutable struct TerminalBuffer <: UnixTerminal
     out_stream::Base.IO
 end
 
-type TTYTerminal <: UnixTerminal
+mutable struct TTYTerminal <: UnixTerminal
     term_type::String
     in_stream::Base.TTY
     out_stream::Base.TTY

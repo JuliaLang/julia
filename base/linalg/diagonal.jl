@@ -2,7 +2,7 @@
 
 ## Diagonal matrices
 
-immutable Diagonal{T} <: AbstractMatrix{T}
+struct Diagonal{T} <: AbstractMatrix{T}
     diag::Vector{T}
 end
 """

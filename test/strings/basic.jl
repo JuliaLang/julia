@@ -158,7 +158,7 @@ end
 @test lcfirst("*")=="*"
 
 # test AbstractString functions at beginning of string.jl
-immutable tstStringType <: AbstractString
+struct tstStringType <: AbstractString
     data::Array{UInt8,1}
 end
 tstr = tstStringType("12")
@@ -444,7 +444,7 @@ end
 # Test cmp with AbstractStrings that don't index the same as UTF-8, which would include
 # (LegacyString.)UTF16String and (LegacyString.)UTF32String, among others.
 
-type CharStr <: AbstractString
+mutable struct CharStr <: AbstractString
     chars::Vector{Char}
     CharStr(x) = new(collect(x))
 end

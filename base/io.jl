@@ -101,7 +101,7 @@ end
 
 
 # Generic wrappers around other IO objects
-abstract AbstractPipe <: IO
+abstract type AbstractPipe <: IO end
 function pipe_reader end
 function pipe_writer end
 
@@ -538,7 +538,7 @@ readstring(filename::AbstractString) = open(readstring, filename)
 
 ## high-level iterator interfaces ##
 
-type EachLine
+mutable struct EachLine
     stream::IO
     ondone::Function
     chomp::Bool

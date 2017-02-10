@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Singular Value Decomposition
-immutable SVD{T,Tr,M<:AbstractArray} <: Factorization{T}
+struct SVD{T,Tr,M<:AbstractArray} <: Factorization{T}
     U::M
     S::Vector{Tr}
     Vt::M
@@ -170,7 +170,7 @@ function A_ldiv_B!{T}(A::SVD{T}, B::StridedVecOrMat)
 end
 
 # Generalized svd
-immutable GeneralizedSVD{T,S} <: Factorization{T}
+struct GeneralizedSVD{T,S} <: Factorization{T}
     U::S
     V::S
     Q::S

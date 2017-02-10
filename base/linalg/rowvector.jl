@@ -11,7 +11,7 @@ vector can be multiplied by a matrix on its right (such that `v.' * A = (A.' * v
 differs from a `1×n`-sized matrix by the facts that its transpose returns a vector and the
 inner product `v1.' * v2` returns a scalar, but will otherwise behave similarly.
 """
-immutable RowVector{T,V<:AbstractVector} <: AbstractMatrix{T}
+struct RowVector{T,V<:AbstractVector} <: AbstractMatrix{T}
     vec::V
     function RowVector{T,V}(v::V) where V<:AbstractVector where T
         check_types(T,v)

@@ -47,7 +47,7 @@ a[1,1,1,1,1] = 10
                 "Thrown: ErrorException")
 
 # Test printing of Fail results
-type NoThrowTestSet <: Base.Test.AbstractTestSet
+mutable struct NoThrowTestSet <: Base.Test.AbstractTestSet
     results::Vector
     NoThrowTestSet(desc) = new([])
 end
@@ -265,7 +265,7 @@ redirect_stderr(OLD_STDERR)
 import Base.Test: record, finish
 using Base.Test: get_testset_depth, get_testset
 using Base.Test: AbstractTestSet, Result, Pass, Fail, Error
-immutable CustomTestSet <: Base.Test.AbstractTestSet
+struct CustomTestSet <: Base.Test.AbstractTestSet
     description::AbstractString
     foo::Int
     results::Vector
@@ -374,7 +374,7 @@ end
 
 # Test that @inferred works with A[i] expressions
 @test @inferred((1:3)[2]) == 2
-immutable SillyArray <: AbstractArray{Float64,1} end
+struct SillyArray <: AbstractArray{Float64,1} end
 Base.getindex(a::SillyArray, i) = rand() > 0.5 ? 0 : false
 test_result = @test_throws ErrorException @inferred(SillyArray()[2])
 @test contains(test_result.value.msg, "Bool")

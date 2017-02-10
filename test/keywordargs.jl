@@ -172,7 +172,7 @@ end
 @test (@TEST4538_3) == 3
 
 # issue #4801
-type T4801{X}
+mutable struct T4801{X}
     T4801{X}(;k=0) where X = new()
 end
 @test isa(T4801{Any}(k=0), T4801{Any})

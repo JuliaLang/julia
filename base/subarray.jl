@@ -1,11 +1,11 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-abstract AbstractCartesianIndex{N} # This is a hacky forward declaration for CartesianIndex
+abstract type AbstractCartesianIndex{N} end # This is a hacky forward declaration for CartesianIndex
 typealias ViewIndex Union{Real, AbstractArray}
 typealias ScalarIndex Real
 
 # L is true if the view itself supports fast linear indexing
-immutable SubArray{T,N,P,I,L} <: AbstractArray{T,N}
+struct SubArray{T,N,P,I,L} <: AbstractArray{T,N}
     parent::P
     indexes::I
     offset1::Int       # for linear indexing and pointer, only valid when L==true

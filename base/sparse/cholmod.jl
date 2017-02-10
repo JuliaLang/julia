@@ -175,7 +175,7 @@ end
 # Type definitions #
 ####################
 
-abstract SuiteSparseStruct
+abstract type SuiteSparseStruct end
 
 # The three core data types for CHOLMOD: Dense, Sparse and Factor.
 # CHOLMOD manages the memory, so the Julia versions only wrap a
@@ -183,7 +183,7 @@ abstract SuiteSparseStruct
 # time a pointer is returned from CHOLMOD.
 
 # Dense
-immutable C_Dense{T<:VTypes} <: SuiteSparseStruct
+struct C_Dense{T<:VTypes} <: SuiteSparseStruct
     nrow::Csize_t
     ncol::Csize_t
     nzmax::Csize_t
@@ -194,12 +194,12 @@ immutable C_Dense{T<:VTypes} <: SuiteSparseStruct
     dtype::Cint
 end
 
-type Dense{T<:VTypes} <: DenseMatrix{T}
+mutable struct Dense{T<:VTypes} <: DenseMatrix{T}
     p::Ptr{C_Dense{T}}
 end
 
 # Sparse
-immutable C_Sparse{Tv<:VTypes} <: SuiteSparseStruct
+struct C_Sparse{Tv<:VTypes} <: SuiteSparseStruct
     nrow::Csize_t
     ncol::Csize_t
     nzmax::Csize_t
@@ -219,7 +219,7 @@ end
 # Corresponds to the exact definition of cholmod_sparse_struct in the library.
 # Useful when reading matrices of unknown type from files as in
 # cholmod_read_sparse
-immutable C_SparseVoid <: SuiteSparseStruct
+struct C_SparseVoid <: SuiteSparseStruct
     nrow::Csize_t
     ncol::Csize_t
     nzmax::Csize_t
@@ -236,7 +236,7 @@ immutable C_SparseVoid <: SuiteSparseStruct
     packed::Cint
 end
 
-type Sparse{Tv<:VTypes} <: AbstractSparseMatrix{Tv,SuiteSparse_long}
+mutable struct Sparse{Tv<:VTypes} <: AbstractSparseMatrix{Tv,SuiteSparse_long}
     p::Ptr{C_Sparse{Tv}}
     function Sparse{Tv}(p::Ptr{C_Sparse{Tv}}) where Tv<:VTypes
         if p == C_NULL
@@ -251,7 +251,7 @@ Sparse(p::Ptr{C_Sparse{Tv}}) where Tv<:VTypes = Sparse{Tv}(p)
 # Factor
 
 if build_version >= v"2.1.0" # CHOLMOD version 2.1.0 or later
-    immutable C_Factor{Tv<:VTypes} <: SuiteSparseStruct
+    struct C_Factor{Tv<:VTypes} <: SuiteSparseStruct
         n::Csize_t
         minor::Csize_t
         Perm::Ptr{SuiteSparse_long}
@@ -283,7 +283,7 @@ if build_version >= v"2.1.0" # CHOLMOD version 2.1.0 or later
         dtype::Cint
     end
 else
-    immutable C_Factor{Tv<:VTypes} <: SuiteSparseStruct
+    struct C_Factor{Tv<:VTypes} <: SuiteSparseStruct
         n::Csize_t
         minor::Csize_t
         Perm::Ptr{SuiteSparse_long}
@@ -315,7 +315,7 @@ else
     end
 end
 
-type Factor{Tv} <: Factorization{Tv}
+mutable struct Factor{Tv} <: Factorization{Tv}
     p::Ptr{C_Factor{Tv}}
     function Factor{Tv}(p::Ptr{C_Factor{Tv}}) where Tv
         if p == C_NULL
@@ -341,7 +341,7 @@ function get{T<:SuiteSparseStruct}(p::Ptr{T})
 end
 
 # FactorComponent, for encoding particular factors from a factorization
-type FactorComponent{Tv,S} <: AbstractMatrix{Tv}
+mutable struct FactorComponent{Tv,S} <: AbstractMatrix{Tv}
     F::Factor{Tv}
 
     function FactorComponent{Tv,S}(F::Factor{Tv}) where {Tv,S}

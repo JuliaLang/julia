@@ -4,7 +4,7 @@
 ## LD for BunchKaufman, UL for CholeskyDense, LU for LUDense and
 ## define size methods for Factorization types using it.
 
-immutable BunchKaufman{T,S<:AbstractMatrix} <: Factorization{T}
+struct BunchKaufman{T,S<:AbstractMatrix} <: Factorization{T}
     LD::S
     ipiv::Vector{BlasInt}
     uplo::Char

@@ -4,7 +4,7 @@
 
 # notes: bits are stored in contiguous chunks
 #        unused bits must always be set to 0
-type BitArray{N} <: DenseArray{Bool, N}
+mutable struct BitArray{N} <: DenseArray{Bool, N}
     chunks::Vector{UInt64}
     len::Int
     dims::NTuple{N,Int}

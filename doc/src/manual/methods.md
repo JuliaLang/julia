@@ -590,7 +590,7 @@ For example, you can define a type that stores the coefficients of a polynomial,
 a function evaluating the polynomial:
 
 ```jldoctest polynomial
-julia> immutable Polynomial{R}
+julia> struct Polynomial{R}
            coeffs::Vector{R}
        end
 

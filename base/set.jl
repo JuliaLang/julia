@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-type Set{T} <: AbstractSet{T}
+mutable struct Set{T} <: AbstractSet{T}
     dict::Dict{T,Void}
 
     Set{T}() where {T} = new(Dict{T,Void}())

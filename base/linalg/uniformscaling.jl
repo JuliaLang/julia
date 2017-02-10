@@ -4,7 +4,7 @@ import Base: copy, ctranspose, getindex, show, transpose, one, zero, inv,
              @_pure_meta, hcat, vcat, hvcat
 import Base.LinAlg: SingularException
 
-immutable UniformScaling{T<:Number}
+struct UniformScaling{T<:Number}
     λ::T
 end
 

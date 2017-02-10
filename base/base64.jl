@@ -22,7 +22,7 @@ base64-encoded ASCII bytes written to `ostream`.
 Calling [`close`](@ref) on the `Base64EncodePipe` stream
 is necessary to complete the encoding (but does not close `ostream`).
 """
-type Base64EncodePipe <: IO
+mutable struct Base64EncodePipe <: IO
     io::IO
     # writing works in groups of 3, so we need to cache last two bytes written
     b0::UInt8
@@ -188,7 +188,7 @@ base64encode(x...) = base64encode(write, x...)
 
 Returns a new read-only I/O stream, which decodes base64-encoded data read from `istream`.
 """
-type Base64DecodePipe <: IO
+mutable struct Base64DecodePipe <: IO
     io::IO
     # reading works in blocks of 4 characters that are decoded into 3 bytes and 2 of them cached
     cache::Vector{UInt8}

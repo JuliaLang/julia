@@ -577,7 +577,7 @@ Stacktrace:
 You may define your own exceptions in the following way:
 
 ```jldoctest
-julia> type MyCustomException <: Exception end
+julia> struct MyCustomException <: Exception end
 ```
 
 ### The [`throw()`](@ref) function
@@ -621,7 +621,7 @@ This mechanism can be implemented easily by custom exception types following the
 is written:
 
 ```jldoctest
-julia> type MyUndefVarError <: Exception
+julia> struct MyUndefVarError <: Exception
            var::Symbol
        end
 

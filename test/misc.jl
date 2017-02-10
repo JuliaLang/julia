@@ -226,10 +226,10 @@ end
 # test methodswith
 # `methodswith` relies on exported symbols
 export func4union, Base
-immutable NoMethodHasThisType end
+struct NoMethodHasThisType end
 @test isempty(methodswith(NoMethodHasThisType))
 @test !isempty(methodswith(Int))
-immutable Type4Union end
+struct Type4Union end
 func4union(::Union{Type4Union,Int}) = ()
 @test !isempty(methodswith(Type4Union))
 
@@ -599,10 +599,10 @@ let
     end
 end
 
-abstract DA_19281{T, N} <: AbstractArray{T, N}
+abstract type DA_19281{T, N} <: AbstractArray{T, N} end
 Base.convert{S,T,N}(::Type{Array{S, N}}, ::DA_19281{T, N}) = error()
 x_19281 = [(), (1,)]
-type Foo_19281
+mutable struct Foo_19281
     f::Vector{Tuple}
     Foo_19281() = new(x_19281)
 end
@@ -620,7 +620,7 @@ let
     @test isassigned(x_defined)
 end
 
-type Demo_20254
+mutable struct Demo_20254
     arr::Array{String}
 end
 
