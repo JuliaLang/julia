@@ -746,8 +746,53 @@ function _compat(ex::Symbol)
 end
 _compat(ex) = ex
 
-macro compat(ex)
-    esc(_compat(ex))
+function _get_typebody(ex::Expr)
+    args = ex.args
+    if ex.head !== :type || length(args) != 3 || args[1] !== true
+        throw(ArgumentError("Invalid usage of @compat: $ex"))
+    end
+    name = args[2]
+    if !isexpr(args[3], :block)
+        throw(ArgumentError("Invalid type declaration: $ex"))
+    end
+    body = (args[3]::Expr).args
+    filter!(body) do e
+        if isa(e, LineNumberNode) || isexpr(e, :line)
+            return false
+        end
+        return true
+    end
+    return name, body
+end
+
+function _compat_primitive(typedecl)
+    name, body = _get_typebody(typedecl)
+    if length(body) != 1
+        throw(ArgumentError("Invalid primitive type declaration: $typedecl"))
+    end
+    return Expr(:bitstype, body[1], name)
+end
+
+function _compat_abstract(typedecl)
+    name, body = _get_typebody(typedecl)
+    if length(body) != 0
+        throw(ArgumentError("Invalid abstract type declaration: $typedecl"))
+    end
+    return Expr(:abstract, name)
+end
+
+macro compat(ex...)
+    if VERSION < v"0.6.0-dev.2746" && length(ex) == 2 && ex[1] === :primitive
+        return esc(_compat_primitive(ex[2]))
+    elseif length(ex) != 1
+        throw(ArgumentError("@compat called with wrong number of arguments: $ex"))
+    elseif (VERSION < v"0.6.0-dev.2746" && isexpr(ex[1], :abstract) &&
+            length(ex[1].args) == 1 && isexpr(ex[1].args[1], :type))
+        # This can in principle be handled in nested case but we do not
+        # do that to be consistent with primitive types.
+        return esc(_compat_abstract(ex[1].args[1]))
+    end
+    esc(_compat(ex[1]))
 end
 
 export @compat, @inline, @noinline
