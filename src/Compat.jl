@@ -1801,7 +1801,9 @@ module TypeUtils
         using Base: isabstract, parameter_upper_bound, typename
     else
         isabstract(t::DataType) = t.abstract
-        isabstract(t::TypeConstructor) = isabstract(t.body)
+        if isdefined(Base, :TypeConstructor)
+            isabstract(t::TypeConstructor) = isabstract(t.body)
+        end
         isabstract(t::ANY) = false
         parameter_upper_bound(t::DataType, idx) = t.parameters[idx].ub
         typename(t::DataType) = t.name
