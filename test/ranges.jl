@@ -637,8 +637,8 @@ replstrmime(x) = sprint((io,x) -> show(IOContext(io, limit=true), MIME("text/pla
 @test replstrmime(linspace(0,100, 10000)) == "0.0:0.010001000100010001:100.0"
 @test replstrmime(LinSpace{Float64}(0,100, 10000)) == "10000-element LinSpace{Float64}:\n 0.0,0.010001,0.020002,0.030003,0.040004,…,99.95,99.96,99.97,99.98,99.99,100.0"
 
-@test sprint(io -> show(io,UnitRange(1,2))) == "1:2"
-@test sprint(io -> show(io,StepRange(1,2,5))) == "1:2:5"
+@test sprint(show, UnitRange(1, 2)) == "1:2"
+@test sprint(show, StepRange(1, 2, 5)) == "1:2:5"
 
 
 # Issue 11049 and related

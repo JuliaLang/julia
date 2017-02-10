@@ -585,13 +585,13 @@ WARNING: Beep Beep
 warn(msg...; kw...) = warn(STDERR, msg...; kw...)
 
 warn(io::IO, err::Exception; prefix="ERROR: ", kw...) =
-    warn(io, sprint(buf->showerror(buf, err)), prefix=prefix; kw...)
+    warn(io, sprint(showerror, err), prefix=prefix; kw...)
 
 warn(err::Exception; prefix="ERROR: ", kw...) =
     warn(STDERR, err, prefix=prefix; kw...)
 
 info(io::IO, err::Exception; prefix="ERROR: ", kw...) =
-    info(io, sprint(buf->showerror(buf, err)), prefix=prefix; kw...)
+    info(io, sprint(showerror, err), prefix=prefix; kw...)
 
 info(err::Exception; prefix="ERROR: ", kw...) =
     info(STDERR, err, prefix=prefix; kw...)

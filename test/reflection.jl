@@ -610,8 +610,8 @@ end
 
 # Issue #18883, code_llvm/code_native for generated functions
 @generated f18883() = nothing
-@test !isempty(sprint(io->code_llvm(io, f18883, Tuple{})))
-@test !isempty(sprint(io->code_native(io, f18883, Tuple{})))
+@test !isempty(sprint(code_llvm, f18883, Tuple{}))
+@test !isempty(sprint(code_native, f18883, Tuple{}))
 
 # PR #19964
 @test isempty(subtypes(Float64))
