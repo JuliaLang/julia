@@ -33,8 +33,8 @@ macro deprecate(old,new,ex=true)
               end))
     elseif isa(old,Expr) && old.head == :call
         remove_linenums!(new)
-        oldcall = sprint(io->show_unquoted(io,old))
-        newcall = sprint(io->show_unquoted(io,new))
+        oldcall = sprint(show_unquoted, old)
+        newcall = sprint(show_unquoted, new)
         oldsym = if isa(old.args[1],Symbol)
             old.args[1]
         elseif isa(old.args[1],Expr) && old.args[1].head == :curly

@@ -399,22 +399,22 @@ end
 @test Base.inbase(LinAlg)
 @test !Base.inbase(Core)
 
-let repr = sprint(io -> show(io,"text/plain", methods(Base.inbase)))
+let repr = sprint(show, "text/plain", methods(Base.inbase))
     @test contains(repr, "inbase(m::Module)")
 end
-let repr = sprint(io -> show(io,"text/html", methods(Base.inbase)))
+let repr = sprint(show, "text/html", methods(Base.inbase))
     @test contains(repr, "inbase(m::<b>Module</b>)")
 end
 
 f5971(x, y...; z=1, w...) = nothing
-let repr = sprint(io -> show(io,"text/plain", methods(f5971)))
+let repr = sprint(show, "text/plain", methods(f5971))
     @test contains(repr, "f5971(x, y...; z, w...)")
 end
-let repr = sprint(io -> show(io,"text/html", methods(f5971)))
+let repr = sprint(show, "text/html", methods(f5971))
     @test contains(repr, "f5971(x, y...; <i>z, w...</i>)")
 end
 f16580(x, y...; z=1, w=y+x, q...) = nothing
-let repr = sprint(io -> show(io,"text/html", methods(f16580)))
+let repr = sprint(show, "text/html", methods(f16580))
     @test contains(repr, "f16580(x, y...; <i>z, w, q...</i>)")
 end
 

@@ -36,7 +36,7 @@ end
 function plain(io::IO, list::List)
     for (i, item) in enumerate(list.items)
         print(io, isordered(list) ? "$(i + list.ordered - 1). " : "  * ")
-        lines = split(rstrip(sprint(buf -> plain(buf, item))), "\n")
+        lines = split(rstrip(sprint(plain, item)), "\n")
         for (n, line) in enumerate(lines)
             print(io, (n == 1 || isempty(line)) ? "" : "    ", line)
             n < length(lines) && println(io)
@@ -46,7 +46,7 @@ function plain(io::IO, list::List)
 end
 
 function plain(io::IO, q::BlockQuote)
-    s = sprint(buf -> plain(buf, q.content))
+    s = sprint(plain, q.content)
     for line in split(rstrip(s), "\n")
         println(io, isempty(line) ? ">" : "> ", line)
     end
@@ -55,7 +55,7 @@ end
 
 function plain(io::IO, f::Footnote)
     print(io, "[^", f.id, "]:")
-    s = sprint(io -> plain(io, f.text))
+    s = sprint(plain, f.text)
     lines = split(rstrip(s), "\n")
     # Single line footnotes are printed on the same line as their label
     # rather than taking up an additional line.
@@ -71,7 +71,7 @@ function plain(io::IO, f::Footnote)
 end
 
 function plain(io::IO, md::Admonition)
-    s = sprint(buf -> plain(buf, md.content))
+    s = sprint(plain, md.content)
     title = md.title == ucfirst(md.category) ? "" : " \"$(md.title)\""
     println(io, "!!! ", md.category, title)
     for line in split(rstrip(s), "\n")
