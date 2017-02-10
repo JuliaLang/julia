@@ -4185,7 +4185,7 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
     }
     if (sf == NULL) {
         sf = jl_typemap_insert(&jl_cfunction_list, (jl_value_t*)jl_cfunction_list.unknown, (jl_tupletype_t*)cfunc_sig,
-            jl_emptysvec, NULL, jl_emptysvec, NULL, /*offs*/0, &cfunction_cache, 1, ~(size_t)0, NULL);
+            NULL, jl_emptysvec, NULL, /*offs*/0, &cfunction_cache, 1, ~(size_t)0, NULL);
     }
 
     // Backup the info for the nested compile

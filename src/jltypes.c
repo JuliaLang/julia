@@ -1722,10 +1722,9 @@ void jl_init_types(void)
 
     jl_typemap_entry_type =
         jl_new_datatype(jl_symbol("TypeMapEntry"), jl_any_type, jl_emptysvec,
-                        jl_svec(11,
+                        jl_svec(10,
                             jl_symbol("next"),
                             jl_symbol("sig"),
-                            jl_symbol("tvars"),
                             jl_symbol("simplesig"),
                             jl_symbol("guardsigs"),
                             jl_symbol("min_world"),
@@ -1734,10 +1733,9 @@ void jl_init_types(void)
                             jl_symbol("isleafsig"),
                             jl_symbol("issimplesig"),
                             jl_symbol("va")),
-                        jl_svec(11,
+                        jl_svec(10,
                             jl_any_type, // Union{TypeMapEntry, Void}
                             jl_type_type, // TupleType
-                            jl_any_type, // Union{SimpleVector{TypeVar}, TypeVar}
                             jl_any_type, // TupleType
                             jl_any_type, // SimpleVector{TupleType}
                             jl_long_type, // Int
@@ -1746,7 +1744,7 @@ void jl_init_types(void)
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type),
-                        0, 1, 5);
+                        0, 1, 4);
 
     jl_function_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Function"), jl_any_type, jl_emptysvec);
     jl_builtin_type  = jl_new_abstracttype((jl_value_t*)jl_symbol("Builtin"), jl_function_type, jl_emptysvec);
@@ -1851,13 +1849,12 @@ void jl_init_types(void)
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"),
                         jl_any_type, jl_emptysvec,
-                        jl_svec(21,
+                        jl_svec(20,
                                 jl_symbol("name"),
                                 jl_symbol("module"),
                                 jl_symbol("file"),
                                 jl_symbol("line"),
                                 jl_symbol("sig"),
-                                jl_symbol("tvars"),
                                 jl_symbol("min_world"),
                                 jl_symbol("max_world"),
                                 jl_symbol("ambig"),
@@ -1873,13 +1870,12 @@ void jl_init_types(void)
                                 jl_symbol("isva"),
                                 jl_symbol("isstaged"),
                                 jl_symbol("needs_sparam_vals_ducttape")),
-                        jl_svec(21,
+                        jl_svec(20,
                                 jl_sym_type,
                                 jl_module_type,
                                 jl_sym_type,
                                 jl_int32_type,
                                 jl_type_type,
-                                jl_any_type, // Union{TypeVar, SimpleVector}
                                 jl_long_type,
                                 jl_long_type,
                                 jl_any_type, // Union{Array, Void}
@@ -1895,7 +1891,7 @@ void jl_init_types(void)
                                 jl_bool_type,
                                 jl_bool_type,
                                 jl_bool_type),
-                        0, 1, 11);
+                        0, 1, 10);
 
     jl_method_instance_type =
         jl_new_datatype(jl_symbol("MethodInstance"),
@@ -1999,8 +1995,8 @@ void jl_init_types(void)
     jl_svecset(jl_methtable_type->types, 7, jl_int32_type); // DWORD
 #endif
     jl_svecset(jl_methtable_type->types, 8, jl_int32_type); // uint32_t
+    jl_svecset(jl_method_type->types, 11, jl_method_instance_type);
     jl_svecset(jl_method_type->types, 12, jl_method_instance_type);
-    jl_svecset(jl_method_type->types, 13, jl_method_instance_type);
     jl_svecset(jl_method_instance_type->types, 12, jl_voidpointer_type);
     jl_svecset(jl_method_instance_type->types, 13, jl_voidpointer_type);
     jl_svecset(jl_method_instance_type->types, 14, jl_voidpointer_type);
