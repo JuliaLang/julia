@@ -1212,7 +1212,91 @@ end
 
 # FloatRange replaced by StepRangeLen
 
-@deprecate FloatRange{T}(start::T, step, len, den) Base.floatrange(T, start, step, len, den)
+## Old-style floating point ranges. We reimplement them here because
+## the replacement StepRangeLen also has 4 real-valued fields, which
+## makes deprecation tricky. See #20506.
+
+immutable FloatRangeDeprecated{T<:AbstractFloat} <: Range{T}
+    start::T
+    step::T
+    len::T
+    divisor::T
+end
+
+export FloatRange
+const FloatRange = FloatRangeDeprecated
+deprecate(Base, :FloatRange, :StepRangeLen)
+
+FloatRangeDeprecated(a::AbstractFloat, s::AbstractFloat, l::Real, d::AbstractFloat) =
+    FloatRangeDeprecated{promote_type(typeof(a),typeof(s),typeof(d))}(a,s,l,d)
+
+isempty(r::FloatRangeDeprecated) = length(r) == 0
+
+step(r::FloatRangeDeprecated) = r.step/r.divisor
+
+length(r::FloatRangeDeprecated) = Integer(r.len)
+
+first{T}(r::FloatRangeDeprecated{T}) = convert(T, r.start/r.divisor)
+
+last{T}(r::FloatRangeDeprecated{T}) = convert(T, (r.start + (r.len-1)*r.step)/r.divisor)
+
+start(r::FloatRangeDeprecated) = 0
+done(r::FloatRangeDeprecated, i::Int) = length(r) <= i
+next{T}(r::FloatRangeDeprecated{T}, i::Int) =
+    (convert(T, (r.start + i*r.step)/r.divisor), i+1)
+
+function getindex{T}(r::FloatRangeDeprecated{T}, i::Integer)
+    @_inline_meta
+    @boundscheck checkbounds(r, i)
+    convert(T, (r.start + (i-1)*r.step)/r.divisor)
+end
+
+function getindex(r::FloatRangeDeprecated, s::OrdinalRange)
+    @_inline_meta
+    @boundscheck checkbounds(r, s)
+    FloatRangeDeprecated(r.start + (first(s)-1)*r.step, step(s)*r.step, length(s), r.divisor)
+end
+
+-(r::FloatRangeDeprecated)   = FloatRangeDeprecated(-r.start, -r.step, r.len, r.divisor)
++(x::Real, r::FloatRangeDeprecated) = FloatRangeDeprecated(r.divisor*x + r.start, r.step, r.len, r.divisor)
+-(x::Real, r::FloatRangeDeprecated) = FloatRangeDeprecated(r.divisor*x - r.start, -r.step, r.len, r.divisor)
+-(r::FloatRangeDeprecated, x::Real) = FloatRangeDeprecated(r.start - r.divisor*x, r.step, r.len, r.divisor)
+*(x::Real, r::FloatRangeDeprecated)   = FloatRangeDeprecated(x*r.start, x*r.step, r.len, r.divisor)
+*(r::FloatRangeDeprecated, x::Real)   = x * r
+/(r::FloatRangeDeprecated, x::Real)   = FloatRangeDeprecated(r.start/x, r.step/x, r.len, r.divisor)
+promote_rule{T1,T2}(::Type{FloatRangeDeprecated{T1}},::Type{FloatRangeDeprecated{T2}}) =
+    FloatRangeDeprecated{promote_type(T1,T2)}
+convert{T<:AbstractFloat}(::Type{FloatRangeDeprecated{T}}, r::FloatRangeDeprecated{T}) = r
+convert{T<:AbstractFloat}(::Type{FloatRangeDeprecated{T}}, r::FloatRangeDeprecated) =
+    FloatRangeDeprecated{T}(r.start,r.step,r.len,r.divisor)
+
+promote_rule{F,OR<:OrdinalRange}(::Type{FloatRangeDeprecated{F}}, ::Type{OR}) =
+    FloatRangeDeprecated{promote_type(F,eltype(OR))}
+convert{T<:AbstractFloat}(::Type{FloatRangeDeprecated{T}}, r::OrdinalRange) =
+    FloatRangeDeprecated{T}(first(r), step(r), length(r), one(T))
+convert{T}(::Type{FloatRangeDeprecated}, r::OrdinalRange{T}) =
+    FloatRangeDeprecated{typeof(float(first(r)))}(first(r), step(r), length(r), one(T))
+
+promote_rule{F,OR<:FloatRangeDeprecated}(::Type{LinSpace{F}}, ::Type{OR}) =
+    LinSpace{promote_type(F,eltype(OR))}
+convert{T<:AbstractFloat}(::Type{LinSpace{T}}, r::FloatRangeDeprecated) =
+    linspace(convert(T, first(r)), convert(T, last(r)), convert(T, length(r)))
+convert{T<:AbstractFloat}(::Type{LinSpace}, r::FloatRangeDeprecated{T}) =
+    convert(LinSpace{T}, r)
+
+reverse(r::FloatRangeDeprecated)   = FloatRangeDeprecated(r.start + (r.len-1)*r.step, -r.step, r.len, r.divisor)
+
+function sum(r::FloatRangeDeprecated)
+    l = length(r)
+    if iseven(l)
+        s = r.step * (l-1) * (l>>1)
+    else
+        s = (r.step * l) * ((l-1)>>1)
+    end
+    return (l * r.start + s)/r.divisor
+end
+
+## end of FloatRange
 
 @noinline zero_arg_matrix_constructor(prefix::String) =
     depwarn("$prefix() is deprecated, use $prefix(0, 0) instead.", :zero_arg_matrix_constructor)
