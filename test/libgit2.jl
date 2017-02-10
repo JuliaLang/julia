@@ -958,10 +958,11 @@ mktempdir() do dir
                         end
                     end
                 """
+                cmd = `$(Base.julia_cmd()) --startup-file=no -e $code`
 
                 try
                     # The generated certificate is normally invalid
-                    run(`$(Base.julia_cmd()) -e $code`)
+                    run(cmd)
                     err = open(errfile, "r") do f
                         deserialize(f)
                     end
@@ -972,7 +973,7 @@ mktempdir() do dir
                     # Specify that Julia use onl the custom certificate. Note: we need to
                     # spawn a new Julia process in order for this ENV variable to take effect.
                     withenv("SSL_CERT_FILE" => pem) do
-                        run(`$(Base.julia_cmd()) -e $code`)
+                        run(cmd)
                         err = open(errfile, "r") do f
                             deserialize(f)
                         end
