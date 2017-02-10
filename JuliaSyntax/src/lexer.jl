@@ -538,13 +538,11 @@ end
 function lex_i(l::Lexer)
     accept_batch(l, is_identifier_char)
     str = extract_tokenstring(l)
-    if str == "in"
-        return emit(l, Tokens.IN)
-    elseif (VERSION >= v"0.6.0-dev.1471" && str == "isa")
-        return emit(l, Tokens.ISA)
-    else
-        return emit(l, get(Tokens.KEYWORDS, str, Tokens.IDENTIFIER), str)
+    str == "in" && return emit(l, Tokens.IN)
+    @static if VERSION >= v"0.6.0-dev.1471"
+        str == "isa" && return emit(l, Tokens.ISA)
     end
+    return emit(l, get(Tokens.KEYWORDS, str, Tokens.IDENTIFIER), str)
 end
 
 function lex_bool(l::Lexer)
