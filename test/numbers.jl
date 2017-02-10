@@ -2744,8 +2744,8 @@ let
     io = IOBuffer()
     rational1 = Rational(1465, 8593)
     rational2 = Rational(-4500, 9000)
-    @test sprint(io -> show(io, rational1)) == "1465//8593"
-    @test sprint(io -> show(io, rational2)) == "-1//2"
+    @test sprint(show, rational1) == "1465//8593"
+    @test sprint(show, rational2) == "-1//2"
     let
         io1 = IOBuffer()
         write(io1, rational1)
