@@ -436,6 +436,19 @@ sqrt(x::Real) = sqrt(float(x))
     hypot(x, y)
 
 Compute the hypotenuse ``\\sqrt{x^2+y^2}`` avoiding overflow and underflow.
+
+```jldoctest
+julia> a = 10^10;
+
+julia> hypot(a, a)
+1.4142135623730951e10
+
+julia> √(a^2 + a^2) # a^2 overflows
+ERROR: DomainError:
+sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
+Stacktrace:
+ [1] sqrt(::Int64) at ./math.jl:433
+```
 """
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
 function hypot{T<:Number}(x::T, y::T)
@@ -912,6 +925,14 @@ mod2pi(x) = rem2pi(x,RoundDown)
 Combined multiply-add, computes `x*y+z` in an efficient manner. This may on some systems be
 equivalent to `x*y+z`, or to `fma(x,y,z)`. `muladd` is used to improve performance.
 See [`fma`](@ref).
+
+```jldoctest
+julia> muladd(3, 2, 1)
+7
+
+julia> 3 * 2 + 1
+7
+```
 """
 muladd(x,y,z) = x*y+z
 

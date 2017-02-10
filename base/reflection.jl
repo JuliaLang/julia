@@ -201,6 +201,14 @@ datatype_fielddesc_type(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefErro
 Return `true` iff value `v` is immutable.  See [Immutable Composite Types](@ref)
 for a discussion of immutability. Note that this function works on values, so if you give it
 a type, it will tell you that a value of `DataType` is mutable.
+
+```jldoctest
+julia> isimmutable(1)
+true
+
+julia> isimmutable([1,2])
+false
+```
 """
 isimmutable(x::ANY) = (@_pure_meta; (isa(x,Tuple) || !typeof(x).mutable))
 isstructtype(t::DataType) = (@_pure_meta; nfields(t) != 0 || (t.size==0 && !t.abstract))
@@ -230,6 +238,19 @@ isbits(x) = (@_pure_meta; isbits(typeof(x)))
 
 Determine whether `T`'s only subtypes are itself and `Union{}`. This means `T` is
 a concrete type that can have instances.
+
+```jldoctest
+julia> isleaftype(Complex)
+false
+
+julia> isleaftype(Complex{Float32})
+true
+
+julia> isleaftype(Vector{Complex})
+true
+
+julia> isleaftype(Vector{Complex{Float32}})
+true
 """
 isleaftype(t::ANY) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
 
@@ -238,6 +259,14 @@ isleaftype(t::ANY) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
 
 Determine whether `T` was declared as an abstract type (i.e. using the
 `abstract` keyword).
+
+```jldoctest
+julia> Base.isabstract(AbstractArray)
+true
+
+julia> Base.isabstract(Vector)
+false
+```
 """
 function isabstract(t::ANY)
     @_pure_meta
@@ -306,6 +335,19 @@ fieldoffset(x::DataType, idx::Integer) = (@_pure_meta; ccall(:jl_get_field_offse
     fieldtype(T, name::Symbol | index::Int)
 
 Determine the declared type of a field (specified by name or index) in a composite DataType `T`.
+
+```jldoctest
+julia> immutable Foo
+           x::Int64
+           y::String
+       end
+
+julia> fieldtype(Foo, :x)
+Int64
+
+julia> fieldtype(Foo, 2)
+String
+```
 """
 fieldtype
 
@@ -314,6 +356,21 @@ fieldtype
 
 Get the index of a named field, throwing an error if the field does not exist (when err==true)
 or returning 0 (when err==false).
+
+```jldoctest
+julia> immutable Foo
+           x::Int64
+           y::String
+       end
+
+julia> Base.fieldindex(Foo, :z)
+ERROR: type Foo has no field z
+Stacktrace:
+ [1] fieldindex at ./reflection.jl:319 [inlined] (repeats 2 times)
+
+julia> Base.fieldindex(Foo, :z, false)
+0
+```
 """
 function fieldindex(T::DataType, name::Symbol, err::Bool=true)
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
@@ -328,6 +385,13 @@ type_alignment(x::DataType) = (@_pure_meta; ccall(:jl_get_alignment, Csize_t, (A
 
 Return a collection of all instances of the given type, if applicable. Mostly used for
 enumerated types (see `@enum`).
+
+```jldoctest
+julia> @enum Colors Red Blue Green
+
+julia> instances(Colors)
+(Red::Colors = 0, Blue::Colors = 1, Green::Colors = 2)
+```
 """
 function instances end
 
@@ -383,7 +447,7 @@ are included, including those not visible in the current module.
 
 ```jldoctest
 julia> subtypes(Integer)
-4-element Array{DataType,1}:
+4-element Array{Union{DataType, UnionAll},1}:
  BigInt
  Bool
  Signed
