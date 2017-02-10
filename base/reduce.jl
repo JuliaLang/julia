@@ -232,7 +232,7 @@ mr_empty(f, op, T) = _empty_reduce_error()
 # use zero(T)::T to improve type information when zero(T) is not defined
 # f::Callable = Union{Type, Function}; when f::Type, we can do better
 mr_empty(S::Type, op::typeof(+), T) = r_promote(op, zero(S)::S)
-mr_empty(s::Type, op::typeof(*), T) = r_promote(op, one(S)::S)
+mr_empty(S::Type, op::typeof(*), T) = r_promote(op, one(S)::S)
 mr_empty(::typeof(identity), op::typeof(+), T) = r_promote(op, zero(T)::T)
 mr_empty(::typeof(abs), op::typeof(+), T) = r_promote(op, abs(zero(T)::T))
 mr_empty(::typeof(abs2), op::typeof(+), T) = r_promote(op, abs2(zero(T)::T))
