@@ -10,18 +10,10 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        acosd, acotd, acscd, asecd, asind, atand, atan2,
        rad2deg, deg2rad,
        log, log2, log10, log1p, exponent, exp, exp2, exp10, expm1,
-       cbrt, sqrt, erf, erfc, erfcx, erfi, dawson,
-       significand,
+       cbrt, sqrt, significand,
        lgamma, hypot, gamma, lfact, max, min, minmax, ldexp, frexp,
        clamp, clamp!, modf, ^, mod2pi, rem2pi,
-       airyai, airyaiprime, airybi, airybiprime,
-       airyaix, airyaiprimex, airybix, airybiprimex,
-       besselj0, besselj1, besselj, besseljx,
-       bessely0, bessely1, bessely, besselyx,
-       hankelh1, hankelh2, hankelh1x, hankelh2x,
-       besseli, besselix, besselk, besselkx, besselh, besselhx,
-       beta, lbeta, eta, zeta, polygamma, invdigamma, digamma, trigamma,
-       erfinv, erfcinv, @evalpoly
+       beta, lbeta, @evalpoly
 
 import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
@@ -225,27 +217,12 @@ Compute the inverse hyperbolic sine of `x`.
 asinh(x)
 
 """
-    erf(x)
-
-Compute the error function of `x`, defined by ``\\frac{2}{\\sqrt{\\pi}} \\int_0^x e^{-t^2} dt``
-for arbitrary complex `x`.
-"""
-erf(x)
-
-"""
-    erfc(x)
-
-Compute the complementary error function of `x`, defined by ``1 - \\operatorname{erf}(x)``.
-"""
-erfc(x)
-
-"""
     expm1(x)
 
 Accurately compute ``e^x-1``.
 """
 expm1(x)
-for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :erf, :erfc, :exp2, :expm1)
+for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp2, :expm1)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
@@ -284,7 +261,7 @@ julia> exp2(5)
 ```
 """
 exp2(x::AbstractFloat) = 2^x
-for f in (:sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :expm1)
+for f in (:sinh, :cosh, :tanh, :atan, :asinh, :exp, :expm1)
     @eval ($f)(x::AbstractFloat) = error("not implemented for ", typeof(x))
 end
 
@@ -939,7 +916,7 @@ muladd(x,y,z) = x*y+z
 # Float16 definitions
 
 for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
-             :atanh,:exp,:log,:log2,:log10,:sqrt,:lgamma,:log1p,:erf,:erfc)
+             :atanh,:exp,:log,:log2,:log10,:sqrt,:lgamma,:log1p)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
         $func(a::Complex32) = Complex32($func(Complex64(a)))
@@ -956,8 +933,6 @@ cbrt(a::Float16) = Float16(cbrt(Float32(a)))
 
 # More special functions
 include("special/trig.jl")
-include("special/bessel.jl")
-include("special/erf.jl")
 include("special/gamma.jl")
 
 module JuliaLibm

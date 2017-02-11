@@ -228,14 +228,9 @@ for f in (
         # base/special/log.jl
         :log, :log1p,
         # base/special/gamma.jl
-        :gamma, :lfact, :digamma, :trigamma, :zeta, :eta,
-        # base/special/erf.jl
-        :erfcx, :erfi, :dawson,
-        # base/special/bessel.jl
-        :airyai, :airyaiprime, :airybi, :airybiprime,
-        :besselj0, :besselj1, :bessely0, :bessely1,
+        :gamma, :lfact,
         # base/math.jl
-        :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2,
+        :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :exp2,
         :expm1, :exp10, :sin, :cos, :tan, :asin, :acos, :acosh, :atanh,
         #=:log,=# :log2, :log10, :lgamma, #=:log1p,=# :sqrt,
         # base/floatfuncs.jl
@@ -254,8 +249,6 @@ for f in ( :acos_fast, :acosh_fast, :angle_fast, :asin_fast, :asinh_fast,
     @eval FastMath Base.@dep_vectorize_1arg Number $f
 end
 for f in (
-        :invdigamma, # base/special/gamma.jl
-        :erfinc, :erfcinv, # base/special/erf.jl
         :trunc, :floor, :ceil, :round, # base/floatfuncs.jl
         :rad2deg, :deg2rad, :exponent, :significand, # base/math.jl
         :sind, :cosd, :tand, :asind, :acosd, :atand, :asecd, :acscd, :acotd, # base/special/trig.jl
@@ -294,11 +287,7 @@ end
 # Deprecate @vectorize_2arg-vectorized functions from...
 for f in (
         # base/special/gamma.jl
-        :polygamma, :zeta, :beta, :lbeta,
-        # base/special/bessel.jl
-        :besseli, :besselix, :besselj, :besseljx,
-        :besselk, :besselkx, :bessely, :besselyx, :besselh,
-        :besselhx, :hankelh1, :hankelh2, :hankelh1x, :hankelh2x,
+        :beta, :lbeta,
         # base/math.jl
         :log, :hypot, :atan2,
     )
@@ -673,65 +662,6 @@ end
 
 # Deprecate isimag (#19947).
 @deprecate isimag(z::Number) iszero(real(z))
-
-@deprecate airy(z::Number) airyai(z)
-@deprecate airyx(z::Number) airyaix(z)
-@deprecate airyprime(z::Number) airyaiprime(z)
-@deprecate airy(x::AbstractArray{<:Number}) airyai.(x)
-@deprecate airyx(x::AbstractArray{<:Number}) airyaix.(x)
-@deprecate airyprime(x::AbstractArray{<:Number}) airyprime.(x)
-
-function _airy(k::Integer, z::Complex128)
-    depwarn("`airy(k,x)` is deprecated, use `airyai(x)`, `airyaiprime(x)`, `airybi(x)` or `airybiprime(x)` instead.",:airy)
-    id = Int32(k==1 || k==3)
-    if k == 0 || k == 1
-        return Base.Math._airy(z, id, Int32(1))
-    elseif k == 2 || k == 3
-        return Base.Math._biry(z, id, Int32(1))
-    else
-        throw(ArgumentError("k must be between 0 and 3"))
-    end
-end
-function _airyx(k::Integer, z::Complex128)
-    depwarn("`airyx(k,x)` is deprecated, use `airyaix(x)`, `airyaiprimex(x)`, `airybix(x)` or `airybiprimex(x)` instead.",:airyx)
-    id = Int32(k==1 || k==3)
-    if k == 0 || k == 1
-        return Base.Math._airy(z, id, Int32(2))
-    elseif k == 2 || k == 3
-        return Base.Math._biry(z, id, Int32(2))
-    else
-        throw(ArgumentError("k must be between 0 and 3"))
-    end
-end
-
-for afn in (:airy,:airyx)
-    _afn = Symbol("_"*string(afn))
-    suf  = string(afn)[5:end]
-    @eval begin
-        function $afn(k::Integer, z::Complex128)
-            afn = $(QuoteNode(afn))
-            suf = $(QuoteNode(suf))
-            depwarn("`$afn(k,x)` is deprecated, use `airyai$suf(x)`, `airyaiprime$suf(x)`, `airybi$suf(x)` or `airybiprime$suf(x)` instead.",$(QuoteNode(afn)))
-            $_afn(k,z)
-        end
-
-        $afn(k::Integer, z::Complex) = $afn(k, float(z))
-        $afn(k::Integer, z::Complex{<:AbstractFloat}) = throw(MethodError($afn,(k,z)))
-        $afn(k::Integer, z::Complex64) = Complex64($afn(k, Complex128(z)))
-        $afn(k::Integer, x::Real) = $afn(k, float(x))
-        $afn(k::Integer, x::AbstractFloat) = real($afn(k, complex(x)))
-
-        function $afn(k::Number, x::AbstractArray{<:Number})
-            $afn.(k,x)
-        end
-        function $afn(k::AbstractArray{<:Number}, x::Number)
-            $afn.(k,x)
-        end
-        function $afn(k::AbstractArray{<:Number}, x::AbstractArray{<:Number})
-            $afn.(k,x)
-        end
-    end
-end
 
 # Deprecate vectorized xor in favor of compact broadcast syntax
 @deprecate xor(a::Bool, B::BitArray)                xor.(a, B)
@@ -1230,6 +1160,24 @@ for name in ("alnum", "alpha", "cntrl", "digit", "number", "graph",
 end
 
 # TODO: remove warning for using `_` in parse_input_line in base/client.jl
+
+# Special functions have been moved to a package
+for f in (:airyai, :airyaiprime, :airybi, :airybiprime, :airyaix, :airyaiprimex, :airybix, :airybiprimex,
+          :besselh, :besselhx, :besseli, :besselix, :besselj, :besselj0, :besselj1, :besseljx, :besselk,
+          :besselkx, :bessely, :bessely0, :bessely1, :besselyx,
+          :dawson, :erf, :erfc, :erfcinv, :erfcx, :erfi, :erfinv,
+          :eta, :zeta, :digamma, :invdigamma, :polygamma, :trigamma,
+          :hankelh1, :hankelh1x, :hankelh2, :hankelh2x,
+          :airy, :airyx, :airyprime)
+    @eval begin
+        function $f(args...; kwargs...)
+            error(string($f, args, " has been moved to the package SpecialFunctions.jl.\n",
+                         "Run Pkg.add(\"SpecialFunctions\") to install SpecialFunctions on Julia v0.6 and later,\n",
+                         "and then run `using SpecialFunctions`."))
+        end
+        export $f
+    end
+end
 
 # END 0.6 deprecations
 

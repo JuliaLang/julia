@@ -8,13 +8,12 @@ export
     big_str
 
 import
-    Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1, bessely,
-        bessely0, bessely1, ceil, cmp, convert, copysign, div,
+    Base: (*), +, -, /, <, <=, ==, >, >=, ^, ceil, cmp, convert, copysign, div,
         exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show,
         sum, sqrt, string, print, trunc, precision, exp10, expm1,
-        gamma, lgamma, digamma, erf, erfc, zeta, eta, log1p, airyai,
+        gamma, lgamma, log1p,
         eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, rounding,
@@ -505,8 +504,7 @@ end
 ^(x::BigFloat, y::Integer)  = typemin(Clong)  <= y <= typemax(Clong)  ? x^Clong(y)  : x^BigInt(y)
 ^(x::BigFloat, y::Unsigned) = typemin(Culong) <= y <= typemax(Culong) ? x^Culong(y) : x^BigInt(y)
 
-for f in (:exp, :exp2, :exp10, :expm1, :digamma, :erf, :erfc, :zeta,
-          :cosh,:sinh,:tanh,:sech,:csch,:coth, :cbrt)
+for f in (:exp, :exp2, :exp10, :expm1, :cosh, :sinh, :tanh, :sech, :csch, :coth, :cbrt)
     @eval function $f(x::BigFloat)
         z = BigFloat()
         ccall(($(string(:mpfr_,f)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
@@ -522,17 +520,6 @@ function big_ln2()
     return c
 end
 
-function eta(x::BigFloat)
-    x == 1 && return big_ln2()
-    return -zeta(x) * expm1(big_ln2()*(1-x))
-end
-
-function airyai(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_ai, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
-    return z
-end
-
 function ldexp(x::BigFloat, n::Clong)
     z = BigFloat()
     ccall((:mpfr_mul_2si, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Clong, Int32), &z, &x, n, ROUNDING_MODE[])
@@ -546,51 +533,6 @@ end
 ldexp(x::BigFloat, n::ClongMax) = ldexp(x, convert(Clong, n))
 ldexp(x::BigFloat, n::CulongMax) = ldexp(x, convert(Culong, n))
 ldexp(x::BigFloat, n::Integer) = x*exp2(BigFloat(n))
-
-function besselj0(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_j0, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
-    return z
-end
-
-function besselj1(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_j1, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
-    return z
-end
-
-function besselj(n::Integer, x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_jn, :libmpfr), Int32, (Ptr{BigFloat}, Clong, Ptr{BigFloat}, Int32), &z, n, &x, ROUNDING_MODE[])
-    return z
-end
-
-function bessely0(x::BigFloat)
-    if x < 0
-        throw(DomainError())
-    end
-    z = BigFloat()
-    ccall((:mpfr_y0, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
-    return z
-end
-
-function bessely1(x::BigFloat)
-    if x < 0
-        throw(DomainError())
-    end
-    z = BigFloat()
-    ccall((:mpfr_y1, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
-    return z
-end
-
-function bessely(n::Integer, x::BigFloat)
-    if x < 0
-        throw(DomainError())
-    end
-    z = BigFloat()
-    ccall((:mpfr_yn, :libmpfr), Int32, (Ptr{BigFloat}, Clong, Ptr{BigFloat}, Int32), &z, n, &x, ROUNDING_MODE[])
-    return z
-end
 
 function factorial(x::BigFloat)
     if x < 0 || !isinteger(x)
