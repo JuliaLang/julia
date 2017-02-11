@@ -9,7 +9,8 @@ TESTS = all linalg $(filter-out TestHelpers runtests testdefs,$(patsubst $(SRCDI
 default: all
 
 $(TESTS):
-	@cd $(SRCDIR) && $(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no ./runtests.jl $@)
+	@cd $(SRCDIR) && \
+	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no ./runtests.jl $@)
 
 perf:
 	@$(MAKE) -C $(SRCDIR)/perf all
