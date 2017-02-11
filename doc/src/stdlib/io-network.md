@@ -51,7 +51,6 @@ Base.readavailable
 Base.IOContext
 Base.IOContext(::IO, ::Pair)
 Base.IOContext(::IO, ::IOContext)
-Base.IOContext(::IO)
 ```
 
 ## Text I/O

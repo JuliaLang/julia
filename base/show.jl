@@ -25,21 +25,24 @@ end
 
 The same as `IOContext(io::IO, KV::Pair)`, but accepting properties as keyword arguments.
 """
-IOContext(io::IO; kws...) = IOContext(IOContext(io, ImmutableDict{Symbol,Any}()); kws...)
+IOContext(io::IO; kws...) = IOContext(convert(IOContext, io); kws...)
 function IOContext(io::IOContext; kws...)
     for (k, v) in kws
         io = IOContext(io, k, v)
     end
-    io
+    return io
 end
+
+convert(::Type{IOContext}, io::IOContext) = io
+convert(::Type{IOContext}, io::IO) = IOContext(io, ImmutableDict{Symbol, Any}())
 
 IOContext(io::IOContext, dict::ImmutableDict) = typeof(io)(io.io, dict)
 IOContext(io::IO, dict::ImmutableDict) = IOContext{typeof(io)}(io, dict)
 
+IOContext(io::IOContext, key, value) = IOContext(io.io, ImmutableDict{Symbol, Any}(io.dict, key, value))
 IOContext(io::IO, key, value) = IOContext(io, ImmutableDict{Symbol, Any}(key, value))
-IOContext(io::IOContext, key, value) = IOContext(io, ImmutableDict{Symbol, Any}(io.dict, key, value))
 
-IOContext(io::IO, context::IO) = IOContext(io)
+IOContext(io::IO, context::IO) = convert(IOContext, io)
 
 """
     IOContext(io::IO, context::IOContext)
@@ -184,32 +187,14 @@ function show(io::IO, x::UnionAll)
     if print_without_params(x)
         return show(io, unwrap_unionall(x).name)
     end
-    tvar_env = get(io, :tvar_env, false)
-    if tvar_env !== false && isa(tvar_env, AbstractVector)
-        tvar_env = Any[tvar_env..., x.var]
-    else
-        tvar_env = Any[x.var]
-    end
-    show(IOContext(io, tvar_env = tvar_env), x.body)
+    show(IOContext(io, :unionall_env => x.var), x.body)
     print(io, " where ")
     show(io, x.var)
-end
-
-function show_type_parameter(io::IO, p::ANY, has_tvar_env::Bool)
-    if has_tvar_env
-        show(io, p)
-    else
-        show(IOContext(io, :tvar_env, true), p)
-    end
 end
 
 show(io::IO, x::DataType) = show_datatype(io, x)
 
 function show_datatype(io::IO, x::DataType)
-    # tvar_env is a `::Vector{Any}` when we are printing a method signature
-    # and `true` if we are printing type parameters outside a method signature.
-    has_tvar_env = get(io, :tvar_env, false) !== false
-
     if (!isempty(x.parameters) || x.name === Tuple.name) && x !== Tuple
         n = length(x.parameters)
 
@@ -224,7 +209,7 @@ function show_datatype(io::IO, x::DataType)
             # since this information is still useful.
             print(io, '{')
             for (i, p) in enumerate(x.parameters)
-                show_type_parameter(io, p, has_tvar_env)
+                show(io, p)
                 i < n && print(io, ',')
             end
             print(io, '}')
@@ -1076,16 +1061,12 @@ function ismodulecall(ex::Expr)
 end
 
 function show(io::IO, tv::TypeVar)
-    # If `tvar_env` exist and we are in it, the type constraint are
-    # already printed and we don't need to print it again.
+    # If we are in the `unionall_env`, the type-variable is bound
+    # and the type constraints are already printed.
+    # We don't need to print it again.
     # Otherwise, the lower bound should be printed if it is not `Bottom`
     # and the upper bound should be printed if it is not `Any`.
-    tvar_env = isa(io, IOContext) && get(io, :tvar_env, false)
-    if isa(tvar_env, Vector{Any})
-        in_env = (tv in tvar_env::Vector{Any})
-    else
-        in_env = false
-    end
+    in_env = (:unionall_env => tv) in io
     function show_bound(io::IO, b::ANY)
         parens = isa(b,UnionAll) && !print_without_params(b)
         parens && print(io, "(")
@@ -1204,15 +1185,21 @@ function dump(io::IO, x::DataType, n::Int, indent)
     if x !== Any
         print(io, " <: ", supertype(x))
     end
-    if !(x <: Tuple)
-        tvar_io = IOContext(io, :tvar_env => Any[x.parameters...])
-        fields = fieldnames(x)
-        if n > 0
-            for idx in 1:length(fields)
-                println(io)
-                print(io, indent, "  ", fields[idx], "::")
-                print(tvar_io, fieldtype(x, idx))
+    if n > 0 && !(x <: Tuple)
+        tvar_io::IOContext = io
+        for tparam in x.parameters
+            # approximately recapture the list of tvar parameterization
+            # that may be used by the internal fields
+            if isa(tparam, TypeVar)
+                tvar_io = IOContext(tvar_io, :unionall_env => tparam)
             end
+        end
+        fields = fieldnames(x)
+        fieldtypes = x.types
+        for idx in 1:length(fields)
+            println(io)
+            print(io, indent, "  ", fields[idx], "::")
+            print(tvar_io, fieldtypes[idx])
         end
     end
     nothing
@@ -1242,9 +1229,30 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
                 # recurse into primary module bindings
                 dumpsubtypes(io, x, t, n, indent)
             elseif isa(t, UnionAll) && directsubtype(t::UnionAll, x)
+                dt = unwrap_unionall(t)
                 println(io)
-                print(io, indent, "  ", m, ".", s)
-                print(io, " = ", t)
+                if isa(dt, DataType) && dt.name.wrapper === t
+                    # primary type binding
+                    print(io, indent, "  ")
+                    dumptype(io, dt, n - 1, string(indent, "  "))
+                else
+                    # aliases to types
+                    print(io, indent, "  ", m, ".", s, "{")
+                    tvar_io::IOContext = io
+                    tp = t
+                    while true
+                        show(tvar_io, tp.var)
+                        tvar_io = IOContext(tvar_io, :unionall_env, tp.var)
+                        tp = tp.body
+                        if isa(tp, UnionAll)
+                            print(io, ", ")
+                        else
+                            print(io, "} = ")
+                            break
+                        end
+                    end
+                    show(tvar_io, tp)
+                end
             elseif isa(t, Union) && directsubtype(t::Union, x)
                 println(io)
                 print(io, indent, "  ", m, ".", s, " = ", t)
@@ -1252,7 +1260,8 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
                 println(io)
                 if t.name.module !== m || t.name.name != s
                     # aliases to types
-                    print(io, indent, "  ", m, ".", s, " = ", t)
+                    print(io, indent, "  ", m, ".", s, " = ")
+                    show(io, t)
                 else
                     # primary type binding
                     print(io, indent, "  ")
@@ -1647,7 +1656,7 @@ function showarray(io::IO, X::AbstractArray, repr::Bool = true; header = true)
         return show_vector(io, X, "[", "]")
     end
     if !haskey(io, :compact)
-        io = IOContext(io, compact=true)
+        io = IOContext(io, :compact => true)
     end
     if !repr && get(io, :limit, false) && eltype(X) === Method
         # override usual show method for Vector{Method}: don't abbreviate long lists

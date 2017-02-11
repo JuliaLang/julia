@@ -434,14 +434,14 @@ static int jl_typemap_intersection_array_visitor(struct jl_ordereddict_t *a, jl_
             if (tparam)
                 t = jl_tparam0(t);
         }
+        // `t` is a leaftype, so intersection test becomes subtype
         if (ty == (jl_value_t*)jl_any_type || // easy case: Any always matches
-            (tparam ?  // need to compute `ty <: Type{t}`
-             (jl_is_uniontype(ty) || // punt on Union{...} right now
-              jl_typeof(t) == ty || // deal with kinds (e.g. ty == DataType && t == Type{t})
-              jl_isa(t, ty)) // deal with ty == Type{T}
-             : jl_subtype(t, ty))) // `t` is a leaftype, so intersection test becomes subtype
-            if (!jl_typemap_intersection_visitor(ml, offs+1, closure))
+            (tparam
+             ? (jl_typeof(t) == ty || jl_isa(t, ty)) // (Type{t} <: ty), where is_leaf_type(t) => isa(t, ty)
+             : (t == ty || jl_subtype(t, ty)))) {
+            if (!jl_typemap_intersection_visitor(ml, offs + 1, closure))
                 return 0;
+        }
     }
     return 1;
 }
