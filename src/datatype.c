@@ -179,7 +179,7 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
         return 0;               // nfields has more than two 1s
     assert(jl_datatype_nfields(t)==1);
     jl_value_t *ty = jl_field_type(t, 0);
-    if (!jl_is_bitstype(ty))
+    if (!jl_is_primitivetype(ty))
         // LLVM requires that a vector element be a primitive type.
         // LLVM allows pointer types as vector elements, but until a
         // motivating use case comes up for Julia, we reject pointers.
@@ -364,8 +364,8 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
     return t;
 }
 
-JL_DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *super,
-                                            jl_svec_t *parameters, size_t nbits)
+JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_datatype_t *super,
+                                                 jl_svec_t *parameters, size_t nbits)
 {
     jl_datatype_t *bt = jl_new_datatype((jl_sym_t*)name, super, parameters,
                                         jl_emptysvec, jl_emptysvec, 0, 0, 0);
@@ -457,7 +457,7 @@ BOXN_FUNC(64, 2)
 #define UNBOX_FUNC(j_type,c_type)                                       \
     JL_DLLEXPORT c_type jl_unbox_##j_type(jl_value_t *v)                \
     {                                                                   \
-        assert(jl_is_bitstype(jl_typeof(v)));                           \
+        assert(jl_is_primitivetype(jl_typeof(v)));                           \
         assert(jl_datatype_size(jl_typeof(v)) == sizeof(c_type));       \
         return *(c_type*)jl_data_ptr(v);                                \
     }

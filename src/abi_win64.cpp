@@ -70,7 +70,7 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
 Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
 {
     size_t size = jl_datatype_size(dt);
-    if (size > 0 && win64_reg_size(size) && !jl_is_bitstype(dt))
+    if (size > 0 && win64_reg_size(size) && !jl_is_primitivetype(dt))
         return Type::getIntNTy(jl_LLVMContext, jl_datatype_nbits(dt));
     return NULL;
 }

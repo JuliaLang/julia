@@ -151,7 +151,7 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
         return DIType((llvm::MDNode*)jdt->ditype);
 #endif
     }
-    if (jl_is_bitstype(jt)) {
+    if (jl_is_primitivetype(jt)) {
         uint64_t SizeInBits = jl_datatype_nbits(jdt);
     #if JL_LLVM_VERSION >= 40000
         llvm::DIType *t = dbuilder->createBasicType(
@@ -365,7 +365,7 @@ JL_DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt, bool *isboxed)
     if (jt == (jl_value_t*)jl_bottom_type)
         return T_void;
     if (jl_is_leaf_type(jt)) {
-        if ((jl_is_bitstype(jt) || jl_isbits(jt))) {
+        if ((jl_is_primitivetype(jt) || jl_isbits(jt))) {
             if (jl_datatype_nbits(jt) == 0)
                 return T_void;
             Type *t = julia_struct_to_llvm(jt, NULL, isboxed);
@@ -381,7 +381,7 @@ JL_DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt, bool *isboxed)
 // converts a julia bitstype into the equivalent LLVM bitstype
 static Type *bitstype_to_llvm(jl_value_t *bt)
 {
-    assert(jl_is_bitstype(bt));
+    assert(jl_is_primitivetype(bt));
     if (bt == (jl_value_t*)jl_bool_type)
         return T_int8;
     if (bt == (jl_value_t*)jl_long_type)
@@ -414,7 +414,7 @@ static Type *bitstype_to_llvm(jl_value_t *bt)
 // fields depend on any of the parameters of the containing type)
 static bool julia_struct_has_layout(jl_datatype_t *dt, jl_unionall_t *ua)
 {
-    if (dt->layout || dt->struct_decl || jl_is_bitstype(dt) || jl_isbits(dt))
+    if (dt->layout || dt->struct_decl || jl_is_primitivetype(dt) || jl_isbits(dt))
         return true;
     if (ua) {
         size_t i, ntypes = jl_datatype_nfields(dt);
@@ -435,7 +435,7 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
     if (isboxed) *isboxed = false;
     if (jt == (jl_value_t*)jl_bottom_type)
         return T_void;
-    if (jl_is_bitstype(jt))
+    if (jl_is_primitivetype(jt))
         return bitstype_to_llvm(jt);
     bool isTuple = jl_is_tuple_type(jt);
     if ((isTuple || jl_is_structtype(jt)) && !jl_is_array_type(jt)) {
