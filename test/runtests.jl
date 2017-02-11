@@ -138,19 +138,6 @@ let x = rand(rng, Int64, 3,4)
     @test x == rand(rng, Int64, (3,4))
 end
 
-module CartesianTest
-    using Base.Cartesian, Compat
-    @ngenerate N NTuple{N,Int} function f(X::NTuple{N,Int}...)
-        @ncall N tuple X
-    end
-end
-
-@test CartesianTest.f(1) == (1,)
-@test CartesianTest.f(1,2) == (1,2)
-@test CartesianTest.f(1,2,3) == (1,2,3)
-@test CartesianTest.f(1,2,3,4) == (1,2,3,4)
-@test CartesianTest.f(1,2,3,4,5) == (1,2,3,4,5)
-
 extrapath = is_windows() ? joinpath(JULIA_HOME,"..","Git","usr","bin")*";" : ""
 @compat withenv("PATH" => extrapath * ENV["PATH"]) do
     cmd1 = pipeline(`echo hello`, `sort`)
@@ -1726,4 +1713,4 @@ end
 @test isbits(Primitive20418{Int})
 @test sizeof(Primitive20418{Int}) == 2
 
-include("deprecated.jl")
+include("to-be-deprecated.jl")

@@ -1,3 +1,6 @@
+# Once we drop 0.4 support, we want the following to return depwarns
+# info("Beginning of tests with deprecation warnings")
+
 v = 1
 d = Dict{Int,Int}()
 d[1] = 1
@@ -43,3 +46,16 @@ d = Dict(zip([1, 2], [3, 4]))
     Dict(a => b)
 end
 @test f() == d2
+
+module CartesianTest
+    using Base.Cartesian, Compat
+    @ngenerate N NTuple{N,Int} function f(X::NTuple{N,Int}...)
+        @ncall N tuple X
+    end
+end
+
+@test CartesianTest.f(1) == (1,)
+@test CartesianTest.f(1,2) == (1,2)
+@test CartesianTest.f(1,2,3) == (1,2,3)
+@test CartesianTest.f(1,2,3,4) == (1,2,3,4)
+@test CartesianTest.f(1,2,3,4,5) == (1,2,3,4,5)

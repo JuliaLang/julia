@@ -1216,6 +1216,6 @@ end # module TypeUtils
 # @view, @views, @__dot__
 include("arraymacros.jl")
 
-include("deprecated.jl")
+include("to-be-deprecated.jl")
 
 end # module Compat
