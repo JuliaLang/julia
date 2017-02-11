@@ -119,9 +119,9 @@ nzrange(S::SparseMatrixCSC, col::Integer) = S.colptr[col]:(S.colptr[col+1]-1)
 
 function Base.show(io::IO, ::MIME"text/plain", S::SparseMatrixCSC)
     xnnz = nnz(S)
-    print(io, S.m, "×", S.n, " ", typeof(S), " with ", nnz(S), " stored ",
+    print(io, S.m, "×", S.n, " ", typeof(S), " with ", xnnz, " stored ",
               xnnz == 1 ? "entry" : "entries")
-    if nnz(S) != 0
+    if xnnz != 0
         print(io, ":")
         show(io, S)
     end
