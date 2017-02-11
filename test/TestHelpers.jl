@@ -2,6 +2,9 @@
 
 module TestHelpers
 
+include("dimensionful.jl")
+export Furlong
+
 mutable struct FakeTerminal <: Base.Terminals.UnixTerminal
     in_stream::Base.IO
     out_stream::Base.IO

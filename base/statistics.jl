@@ -41,7 +41,7 @@ function mean!(R::AbstractArray, A::AbstractArray)
     return R
 end
 
-momenttype{T}(::Type{T}) = typeof((zero(T) + zero(T)) / 2)
+momenttype{T}(::Type{T}) = typeof((zero(T)*zero(T) + zero(T)*zero(T)) / 2)
 momenttype(::Type{Float32}) = Float32
 momenttype(::Type{<:Union{Float64,Int32,Int64,UInt32,UInt64}}) = Float64
 
