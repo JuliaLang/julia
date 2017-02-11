@@ -64,7 +64,6 @@ function edit(path::AbstractString, line::Integer=0)
         systemerror(:edit, ccall((:ShellExecuteW,"shell32"), stdcall, Int,
                                  (Ptr{Void}, Cwstring, Cwstring, Ptr{Void}, Ptr{Void}, Cint),
                                  C_NULL, "open", path, C_NULL, C_NULL, 10) ≤ 32)
-        line_unsupported = true
     elseif background
         spawn(pipeline(cmd, stderr=STDERR))
     else
