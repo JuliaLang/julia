@@ -25,6 +25,7 @@
                ;; successfully printed as a julia value
                (string.sub s 9 (string.dec s (length s)))
                s)))
+        ((char? e) (string "'" e "'"))
         ((atom? e) (string e))
         ((eq? (car e) '|.|)
          (string (deparse (cadr e)) '|.|
@@ -37,7 +38,7 @@
         ((memq (car e) '(... |'| |.'|))
          (string (deparse (cadr e)) (car e)))
         ((or (syntactic-op? (car e)) (eq? (car e) '|<:|) (eq? (car e) '|>:|))
-         (string (deparse (cadr e)) (car e) (deparse (caddr e))))
+         (string (deparse (cadr e)) " " (car e) " " (deparse (caddr e))))
         ((memq (car e) '($ &))
          (string (car e) (deparse (cadr e))))
         ((eq? (car e) '|::|)
