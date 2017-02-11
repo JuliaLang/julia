@@ -1667,15 +1667,15 @@ void jl_init_types(void)
 
     // non-primitive definitions follow
     jl_int32_type = NULL;
-    jl_int32_type = jl_new_bitstype((jl_value_t*)jl_symbol("Int32"),
-                                    jl_any_type, jl_emptysvec, 32);
+    jl_int32_type = jl_new_primitivetype((jl_value_t*)jl_symbol("Int32"),
+                                         jl_any_type, jl_emptysvec, 32);
     jl_int64_type = NULL;
-    jl_int64_type = jl_new_bitstype((jl_value_t*)jl_symbol("Int64"),
-                                    jl_any_type, jl_emptysvec, 64);
+    jl_int64_type = jl_new_primitivetype((jl_value_t*)jl_symbol("Int64"),
+                                         jl_any_type, jl_emptysvec, 64);
 
     jl_uint8_type = NULL;
-    jl_uint8_type = jl_new_bitstype((jl_value_t*)jl_symbol("UInt8"),
-                                    jl_any_type, jl_emptysvec, 8);
+    jl_uint8_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt8"),
+                                         jl_any_type, jl_emptysvec, 8);
 
     jl_ssavalue_type = jl_new_datatype(jl_symbol("SSAValue"), jl_any_type, jl_emptysvec,
                                        jl_svec1(jl_symbol("id")),
@@ -1695,8 +1695,8 @@ void jl_init_types(void)
     jl_init_int32_int64_cache();
 
     jl_bool_type = NULL;
-    jl_bool_type = jl_new_bitstype((jl_value_t*)jl_symbol("Bool"),
-                                   jl_any_type, jl_emptysvec, 8);
+    jl_bool_type = jl_new_primitivetype((jl_value_t*)jl_symbol("Bool"),
+                                        jl_any_type, jl_emptysvec, 8);
     jl_false = jl_box8(jl_bool_type, 0);
     jl_true  = jl_box8(jl_bool_type, 1);
 
@@ -1934,8 +1934,8 @@ void jl_init_types(void)
     jl_unionall_type->name->mt = jl_uniontype_type->name->mt = jl_datatype_type->name->mt =
         jl_type_typename->mt;
 
-    jl_intrinsic_type = jl_new_bitstype((jl_value_t*)jl_symbol("IntrinsicFunction"),
-                                        jl_builtin_type, jl_emptysvec, 32);
+    jl_intrinsic_type = jl_new_primitivetype((jl_value_t*)jl_symbol("IntrinsicFunction"),
+                                             jl_builtin_type, jl_emptysvec, 32);
 
     tv = jl_svec1(tvar("T"));
     jl_ref_type = (jl_unionall_t*)
@@ -1943,9 +1943,9 @@ void jl_init_types(void)
 
     tv = jl_svec1(tvar("T"));
     jl_pointer_type = (jl_unionall_t*)
-        jl_new_bitstype((jl_value_t*)jl_symbol("Ptr"),
-                        (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_ref_type, jl_svec_data(tv), 1), tv,
-                        sizeof(void*)*8)->name->wrapper;
+        jl_new_primitivetype((jl_value_t*)jl_symbol("Ptr"),
+                             (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_ref_type, jl_svec_data(tv), 1), tv,
+                             sizeof(void*)*8)->name->wrapper;
     jl_pointer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_pointer_type))->name;
 
     // Type{T} where T<:Tuple
