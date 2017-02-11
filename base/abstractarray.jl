@@ -853,10 +853,15 @@ _to_subscript_indices{T}(A::AbstractArray{T,0}, i::Int) = () # TODO: REMOVE FOR 
 _to_subscript_indices{T}(A::AbstractArray{T,0}, I::Int...) = () # TODO: DEPRECATE FOR #14770
 function _to_subscript_indices{T,N}(A::AbstractArray{T,N}, I::Int...) # TODO: DEPRECATE FOR #14770
     @_inline_meta
-    J, _ = IteratorsMD.split(I, Val{N})    # (maybe) drop any trailing indices
-    sz = _remaining_size(J, size(A))       # compute trailing size (overlapping the final index)
+    J, Jrem = IteratorsMD.split(I, Val{N})
+    _to_subscript_indices(A, J, Jrem)
+end
+function _to_subscript_indices(A::AbstractArray, J::Tuple, Jrem::Tuple{})
+    @_inline_meta
+    sz = _remaining_size(J, indices(A))    # compute trailing size (overlapping the final index)
     (front(J)..., _unsafe_ind2sub(sz, last(J))...) # (maybe) extend the last index
 end
+_to_subscript_indices(A, J::Tuple, Jrem::Tuple) = J # already bounds-checked, safe to drop
 _to_subscript_indices{T,N}(A::AbstractArray{T,N}, I::Vararg{Int,N}) = I
 _remaining_size(::Tuple{Any}, t::Tuple) = t
 _remaining_size(h::Tuple, t::Tuple) = (@_inline_meta; _remaining_size(tail(h), tail(t)))
