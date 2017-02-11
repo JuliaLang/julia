@@ -274,3 +274,12 @@ end
 @testset "issue in PR #45" begin
     @test length(collect(tokenize("x)")))==3
 end
+
+@testset "errors" begin
+    @test collect(tokenize("#=   #=   =#"))[1].kind == T.ERROR
+    @test collect(tokenize("'dsadsa"))[1].kind == T.ERROR
+    @test collect(tokenize("aa **"))[3].kind == T.ERROR
+    @test collect(tokenize("aa \"   "))[3].kind == T.ERROR
+    @test collect(tokenize("aa \"\"\" \"dsad\" \"\""))[3].kind == T.ERROR
+
+end
