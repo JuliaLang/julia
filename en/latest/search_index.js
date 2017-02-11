@@ -365,7 +365,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Special functions",
     "category": "section",
-    "text": "Function Description\nerf(x) error function at x\nerfc(x) complementary error function, i.e. the accurate version of 1-erf(x) for large x\nerfinv(x) inverse function to erf()\nerfcinv(x) inverse function to erfc()\nerfi(x) imaginary error function defined as -im * erf(x * im), where im is the imaginary unit\nerfcx(x) scaled complementary error function, i.e. accurate exp(x^2) * erfc(x) for large x\ndawson(x) scaled imaginary error function, a.k.a. Dawson function, i.e. accurate exp(-x^2) * erfi(x) * sqrt(pi) / 2 for large x\ngamma(x) gamma function at x\nlgamma(x) accurate log(gamma(x)) for large x\nlfact(x) accurate log(factorial(x)) for large x; same as lgamma(x+1) for x > 1, zero otherwise\ndigamma(x) digamma function (i.e. the derivative of lgamma()) at x\nbeta(x,y) beta function at x,y\nlbeta(x,y) accurate log(beta(x,y)) for large x or y\neta(x) Dirichlet eta function at x\nzeta(x) Riemann zeta function at x\nairyai(z) Airy Ai function at z\nairyaiprime(z) derivative of the Airy Ai function at z\nairybi(z) Airy Bi function at z\nairybiprime(z) derivative of the Airy Bi function at z\nairyaix(z), airyaiprimex(z), airybix(z), airybiprimex(z) scaled Airy AI function and k th derivatives at z\nbesselj(nu,z) Bessel function of the first kind of order nu at z\nbesselj0(z) besselj(0,z)\nbesselj1(z) besselj(1,z)\nbesseljx(nu,z) scaled Bessel function of the first kind of order nu at z\nbessely(nu,z) Bessel function of the second kind of order nu at z\nbessely0(z) bessely(0,z)\nbessely1(z) bessely(1,z)\nbesselyx(nu,z) scaled Bessel function of the second kind of order nu at z\nbesselh(nu,k,z) Bessel function of the third kind (a.k.a. Hankel function) of order nu at z; k must be either 1 or 2\nhankelh1(nu,z) besselh(nu, 1, z)\nhankelh1x(nu,z) scaled besselh(nu, 1, z)\nhankelh2(nu,z) besselh(nu, 2, z)\nhankelh2x(nu,z) scaled besselh(nu, 2, z)\nbesseli(nu,z) modified Bessel function of the first kind of order nu at z\nbesselix(nu,z) scaled modified Bessel function of the first kind of order nu at z\nbesselk(nu,z) modified Bessel function of the second kind of order nu at z\nbesselkx(nu,z) scaled modified Bessel function of the second kind of order nu at z"
+    "text": "Function Description\ngamma(x) gamma function at x\nlgamma(x) accurate log(gamma(x)) for large x\nlfact(x) accurate log(factorial(x)) for large x; same as lgamma(x+1) for x > 1, zero otherwise\nbeta(x,y) beta function at x,y\nlbeta(x,y) accurate log(beta(x,y)) for large x or y"
 },
 
 {
@@ -6621,7 +6621,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Function",
-    "text": "Merge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\nmerge!(repo::GitRepo; kwargs...) -> Bool\n\nPerform a git merge on the repository repo, merging commits with diverging history into the current branch. Returns true if the merge succeeded, false if not.\n\nThe keyword arguments are:\n\ncommittish::AbstractString=\"\": Merge the named commit(s) in committish.\nbranch::AbstractString=\"\": Merge the branch branch and all its commits since it diverged from the current branch.\nfastforward::Bool=false: If fastforward is true, only merge if the merge is a fast-forward (the current branch head is an ancestor of the commits to be merged), otherwise refuse to merge and return false. This is equivalent to the git CLI option --ff-only.\nmerge_opts::MergeOptions=MergeOptions(): merge_opts specifies options for the merge, such as merge strategy in case of conflicts.\ncheckout_opts::CheckoutOptions=CheckoutOptions(): checkout_opts specifies options for the checkout step.\n\nEquivalent to git merge [--ff-only] [<committish> | <branch>].\n\n\n\nmerge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\n"
+    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\nMerge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\nmerge!(repo::GitRepo; kwargs...) -> Bool\n\nPerform a git merge on the repository repo, merging commits with diverging history into the current branch. Returns true if the merge succeeded, false if not.\n\nThe keyword arguments are:\n\ncommittish::AbstractString=\"\": Merge the named commit(s) in committish.\nbranch::AbstractString=\"\": Merge the branch branch and all its commits since it diverged from the current branch.\nfastforward::Bool=false: If fastforward is true, only merge if the merge is a fast-forward (the current branch head is an ancestor of the commits to be merged), otherwise refuse to merge and return false. This is equivalent to the git CLI option --ff-only.\nmerge_opts::MergeOptions=MergeOptions(): merge_opts specifies options for the merge, such as merge strategy in case of conflicts.\ncheckout_opts::CheckoutOptions=CheckoutOptions(): checkout_opts specifies options for the checkout step.\n\nEquivalent to git merge [--ff-only] [<committish> | <branch>].\n\n\n\n"
 },
 
 {
@@ -8041,62 +8041,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/math.html#Base.Math.erf",
-    "page": "Mathematics",
-    "title": "Base.Math.erf",
-    "category": "Function",
-    "text": "erf(x)\n\nCompute the error function of x, defined by frac2sqrtpi int_0^x e^-t^2 dt for arbitrary complex x.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.erfc",
-    "page": "Mathematics",
-    "title": "Base.Math.erfc",
-    "category": "Function",
-    "text": "erfc(x)\n\nCompute the complementary error function of x, defined by 1 - operatornameerf(x).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.erfcx",
-    "page": "Mathematics",
-    "title": "Base.Math.erfcx",
-    "category": "Function",
-    "text": "erfcx(x)\n\nCompute the scaled complementary error function of x, defined by e^x^2 operatornameerfc(x). Note also that operatornameerfcx(-ix) computes the Faddeeva function w(x).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.erfi",
-    "page": "Mathematics",
-    "title": "Base.Math.erfi",
-    "category": "Function",
-    "text": "erfi(x)\n\nCompute the imaginary error function of x, defined by -i operatornameerf(ix).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.dawson",
-    "page": "Mathematics",
-    "title": "Base.Math.dawson",
-    "category": "Function",
-    "text": "dawson(x)\n\nCompute the Dawson function (scaled imaginary error function) of x, defined by fracsqrtpi2 e^-x^2 operatornameerfi(x).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.erfinv",
-    "page": "Mathematics",
-    "title": "Base.Math.erfinv",
-    "category": "Function",
-    "text": "erfinv(x)\n\nCompute the inverse error function of a real x, defined by operatornameerf(operatornameerfinv(x)) = x.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.erfcinv",
-    "page": "Mathematics",
-    "title": "Base.Math.erfcinv",
-    "category": "Function",
-    "text": "erfcinv(x)\n\nCompute the inverse error complementary function of a real x, defined by operatornameerfc(operatornameerfcinv(x)) = x.\n\n\n\n"
-},
-
-{
     "location": "stdlib/math.html#Base.real-Tuple{Complex}",
     "page": "Mathematics",
     "title": "Base.real",
@@ -8125,7 +8069,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
 },
 
 {
@@ -8273,246 +8217,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/math.html#Base.Math.digamma",
-    "page": "Mathematics",
-    "title": "Base.Math.digamma",
-    "category": "Function",
-    "text": "digamma(x)\n\nCompute the digamma function of x (the logarithmic derivative of gamma(x)).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.invdigamma",
-    "page": "Mathematics",
-    "title": "Base.Math.invdigamma",
-    "category": "Function",
-    "text": "invdigamma(x)\n\nCompute the inverse digamma function of x.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.trigamma",
-    "page": "Mathematics",
-    "title": "Base.Math.trigamma",
-    "category": "Function",
-    "text": "trigamma(x)\n\nCompute the trigamma function of x (the logarithmic second derivative of gamma(x)).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.polygamma",
-    "page": "Mathematics",
-    "title": "Base.Math.polygamma",
-    "category": "Function",
-    "text": "polygamma(m, x)\n\nCompute the polygamma function of order m of argument x (the (m+1)th derivative of the logarithm of gamma(x))\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.airyai",
-    "page": "Mathematics",
-    "title": "Base.Math.airyai",
-    "category": "Function",
-    "text": "airyai(x)\n\nAiry function of the first kind operatornameAi(x).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.airyaiprime",
-    "page": "Mathematics",
-    "title": "Base.Math.airyaiprime",
-    "category": "Function",
-    "text": "airyaiprime(x)\n\nDerivative of the Airy function of the first kind operatornameAi(x).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.airyaix",
-    "page": "Mathematics",
-    "title": "Base.Math.airyaix",
-    "category": "Function",
-    "text": "airyaix(x)\n\nScaled Airy function of the first kind operatornameAi(x) e^frac23 x sqrtx.  Throws DomainError for negative Real arguments.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.airyaiprimex",
-    "page": "Mathematics",
-    "title": "Base.Math.airyaiprimex",
-    "category": "Function",
-    "text": "airyaiprimex(x)\n\nScaled derivative of the Airy function of the first kind operatornameAi(x) e^frac23 x sqrtx.  Throws DomainError for negative Real arguments.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.airybi",
-    "page": "Mathematics",
-    "title": "Base.Math.airybi",
-    "category": "Function",
-    "text": "airybi(x)\n\nAiry function of the second kind operatornameBi(x).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.airybiprime",
-    "page": "Mathematics",
-    "title": "Base.Math.airybiprime",
-    "category": "Function",
-    "text": "airybiprime(x)\n\nDerivative of the Airy function of the second kind operatornameBi(x).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.airybix",
-    "page": "Mathematics",
-    "title": "Base.Math.airybix",
-    "category": "Function",
-    "text": "airybix(x)\n\nScaled Airy function of the second kind operatornameBi(x) e^- left operatornameRe left( frac23 x sqrtx right) right.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.airybiprimex",
-    "page": "Mathematics",
-    "title": "Base.Math.airybiprimex",
-    "category": "Function",
-    "text": "airybiprimex(x)\n\nScaled derivative of the Airy function of the second kind operatornameBi(x) e^- left operatornameRe left( frac23 x sqrtx right) right.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.besselj0",
-    "page": "Mathematics",
-    "title": "Base.Math.besselj0",
-    "category": "Function",
-    "text": "besselj0(x)\n\nBessel function of the first kind of order 0, J_0(x).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.besselj1",
-    "page": "Mathematics",
-    "title": "Base.Math.besselj1",
-    "category": "Function",
-    "text": "besselj1(x)\n\nBessel function of the first kind of order 1, J_1(x).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.besselj",
-    "page": "Mathematics",
-    "title": "Base.Math.besselj",
-    "category": "Function",
-    "text": "besselj(nu, x)\n\nBessel function of the first kind of order nu, J_nu(x).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.besseljx",
-    "page": "Mathematics",
-    "title": "Base.Math.besseljx",
-    "category": "Function",
-    "text": "besseljx(nu, x)\n\nScaled Bessel function of the first kind of order nu, J_nu(x) e^-  operatornameIm(x) .\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.bessely0",
-    "page": "Mathematics",
-    "title": "Base.Math.bessely0",
-    "category": "Function",
-    "text": "bessely0(x)\n\nBessel function of the second kind of order 0, Y_0(x).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.bessely1",
-    "page": "Mathematics",
-    "title": "Base.Math.bessely1",
-    "category": "Function",
-    "text": "bessely1(x)\n\nBessel function of the second kind of order 1, Y_1(x).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.bessely",
-    "page": "Mathematics",
-    "title": "Base.Math.bessely",
-    "category": "Function",
-    "text": "bessely(nu, x)\n\nBessel function of the second kind of order nu, Y_nu(x).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.besselyx",
-    "page": "Mathematics",
-    "title": "Base.Math.besselyx",
-    "category": "Function",
-    "text": "besselyx(nu, x)\n\nScaled Bessel function of the second kind of order nu, Y_nu(x) e^-  operatornameIm(x) .\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.hankelh1",
-    "page": "Mathematics",
-    "title": "Base.Math.hankelh1",
-    "category": "Function",
-    "text": "hankelh1(nu, x)\n\nBessel function of the third kind of order nu, H^(1)_nu(x).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.hankelh1x",
-    "page": "Mathematics",
-    "title": "Base.Math.hankelh1x",
-    "category": "Function",
-    "text": "hankelh1x(nu, x)\n\nScaled Bessel function of the third kind of order nu, H^(1)_nu(x) e^-x i.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.hankelh2",
-    "page": "Mathematics",
-    "title": "Base.Math.hankelh2",
-    "category": "Function",
-    "text": "hankelh2(nu, x)\n\nBessel function of the third kind of order nu, H^(2)_nu(x).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.hankelh2x",
-    "page": "Mathematics",
-    "title": "Base.Math.hankelh2x",
-    "category": "Function",
-    "text": "hankelh2x(nu, x)\n\nScaled Bessel function of the third kind of order nu, H^(2)_nu(x) e^x i.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.besselh",
-    "page": "Mathematics",
-    "title": "Base.Math.besselh",
-    "category": "Function",
-    "text": "besselh(nu, [k=1,] x)\n\nBessel function of the third kind of order nu (the Hankel function). k is either 1 or 2, selecting hankelh1 or hankelh2, respectively. k defaults to 1 if it is omitted. (See also besselhx for an exponentially scaled variant.)\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.besselhx",
-    "page": "Mathematics",
-    "title": "Base.Math.besselhx",
-    "category": "Function",
-    "text": "besselhx(nu, [k=1,] z)\n\nCompute the scaled Hankel function exp(iz) H_^(k)(z), where k is 1 or 2, H_^(k)(z) is besselh(nu, k, z), and  is - for k=1 and + for k=2.  k defaults to 1 if it is omitted.\n\nThe reason for this function is that H_^(k)(z) is asymptotically proportional to exp(iz)sqrtz for large z, and so the besselh function is susceptible to overflow or underflow when z has a large imaginary part.  The besselhx function cancels this exponential factor (analytically), so it avoids these problems.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.besseli",
-    "page": "Mathematics",
-    "title": "Base.Math.besseli",
-    "category": "Function",
-    "text": "besseli(nu, x)\n\nModified Bessel function of the first kind of order nu, I_nu(x).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.besselix",
-    "page": "Mathematics",
-    "title": "Base.Math.besselix",
-    "category": "Function",
-    "text": "besselix(nu, x)\n\nScaled modified Bessel function of the first kind of order nu, I_nu(x) e^-  operatornameRe(x) .\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.besselk",
-    "page": "Mathematics",
-    "title": "Base.Math.besselk",
-    "category": "Function",
-    "text": "besselk(nu, x)\n\nModified Bessel function of the second kind of order nu, K_nu(x).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.besselkx",
-    "page": "Mathematics",
-    "title": "Base.Math.besselkx",
-    "category": "Function",
-    "text": "besselkx(nu, x)\n\nScaled modified Bessel function of the second kind of order nu, K_nu(x) e^x.\n\n\n\n"
-},
-
-{
     "location": "stdlib/math.html#Base.Math.beta",
     "page": "Mathematics",
     "title": "Base.Math.beta",
@@ -8526,30 +8230,6 @@ var documenterSearchIndex = {"docs": [
     "title": "Base.Math.lbeta",
     "category": "Function",
     "text": "lbeta(x, y)\n\nNatural logarithm of the absolute value of the beta function log(operatornameB(xy)).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.eta",
-    "page": "Mathematics",
-    "title": "Base.Math.eta",
-    "category": "Function",
-    "text": "eta(x)\n\nDirichlet eta function eta(s) = sum^infty_n=1(-1)^n-1n^s.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.zeta-Tuple{Complex}",
-    "page": "Mathematics",
-    "title": "Base.Math.zeta",
-    "category": "Method",
-    "text": "zeta(s)\n\nRiemann zeta function zeta(s).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.Math.zeta-Tuple{Any,Any}",
-    "page": "Mathematics",
-    "title": "Base.Math.zeta",
-    "category": "Method",
-    "text": "zeta(s, z)\n\nGeneralized zeta function zeta(s z), defined by the sum sum_k=0^infty ((k+z)^2)^-s2, where any term with k+z=0 is excluded.  For Re z  0, this definition is equivalent to the Hurwitz zeta function sum_k=0^infty (k+z)^-s.   For z=1, it yields the Riemann zeta function zeta(s).\n\n\n\n"
 },
 
 {
@@ -8581,7 +8261,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Mathematical Functions",
     "category": "section",
-    "text": "Base.isapprox\nBase.sin\nBase.cos\nBase.tan\nBase.Math.sind\nBase.Math.cosd\nBase.Math.tand\nBase.Math.sinpi\nBase.Math.cospi\nBase.sinh\nBase.cosh\nBase.tanh\nBase.asin\nBase.acos\nBase.atan\nBase.Math.atan2\nBase.Math.asind\nBase.Math.acosd\nBase.Math.atand\nBase.Math.sec\nBase.Math.csc\nBase.Math.cot\nBase.Math.secd\nBase.Math.cscd\nBase.Math.cotd\nBase.Math.asec\nBase.Math.acsc\nBase.Math.acot\nBase.Math.asecd\nBase.Math.acscd\nBase.Math.acotd\nBase.Math.sech\nBase.Math.csch\nBase.Math.coth\nBase.asinh\nBase.acosh\nBase.atanh\nBase.Math.asech\nBase.Math.acsch\nBase.Math.acoth\nBase.Math.sinc\nBase.Math.cosc\nBase.Math.deg2rad\nBase.Math.rad2deg\nBase.Math.hypot\nBase.log(::Any)\nBase.log(::Number, ::Number)\nBase.log2\nBase.log10\nBase.log1p\nBase.Math.frexp\nBase.exp\nBase.exp2\nBase.exp10\nBase.Math.ldexp\nBase.Math.modf\nBase.expm1\nBase.round(::Type, ::Any)\nBase.Rounding.RoundingMode\nBase.Rounding.RoundNearest\nBase.Rounding.RoundNearestTiesAway\nBase.Rounding.RoundNearestTiesUp\nBase.Rounding.RoundToZero\nBase.Rounding.RoundUp\nBase.Rounding.RoundDown\nBase.round{T <: AbstractFloat, MR, MI}(::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})\nBase.ceil\nBase.floor\nBase.trunc\nBase.unsafe_trunc\nBase.signif\nBase.min\nBase.max\nBase.minmax\nBase.Math.clamp\nBase.Math.clamp!\nBase.abs\nBase.Checked.checked_abs\nBase.Checked.checked_neg\nBase.Checked.checked_add\nBase.Checked.checked_sub\nBase.Checked.checked_mul\nBase.Checked.checked_div\nBase.Checked.checked_rem\nBase.Checked.checked_fld\nBase.Checked.checked_mod\nBase.Checked.checked_cld\nBase.Checked.add_with_overflow\nBase.Checked.sub_with_overflow\nBase.Checked.mul_with_overflow\nBase.abs2\nBase.copysign\nBase.sign\nBase.signbit\nBase.flipsign\nBase.sqrt\nBase.isqrt\nBase.Math.cbrt\nBase.Math.erf\nBase.Math.erfc\nBase.Math.erfcx\nBase.Math.erfi\nBase.Math.dawson\nBase.Math.erfinv\nBase.Math.erfcinv\nBase.real(::Complex)\nBase.imag\nBase.reim\nBase.conj\nBase.angle\nBase.cis\nBase.binomial\nBase.factorial\nBase.gcd\nBase.lcm\nBase.gcdx\nBase.ispow2\nBase.nextpow2\nBase.prevpow2\nBase.nextpow\nBase.prevpow\nBase.nextprod\nBase.invmod\nBase.powermod\nBase.Math.gamma\nBase.Math.lgamma\nBase.Math.lfact\nBase.Math.digamma\nBase.Math.invdigamma\nBase.Math.trigamma\nBase.Math.polygamma\nBase.Math.airyai\nBase.Math.airyaiprime\nBase.Math.airyaix\nBase.Math.airyaiprimex\nBase.Math.airybi\nBase.Math.airybiprime\nBase.Math.airybix\nBase.Math.airybiprimex\nBase.Math.besselj0\nBase.Math.besselj1\nBase.Math.besselj\nBase.Math.besseljx\nBase.Math.bessely0\nBase.Math.bessely1\nBase.Math.bessely\nBase.Math.besselyx\nBase.Math.hankelh1\nBase.Math.hankelh1x\nBase.Math.hankelh2\nBase.Math.hankelh2x\nBase.Math.besselh\nBase.Math.besselhx\nBase.Math.besseli\nBase.Math.besselix\nBase.Math.besselk\nBase.Math.besselkx\nBase.Math.beta\nBase.Math.lbeta\nBase.Math.eta\nBase.Math.zeta(::Complex)\nBase.Math.zeta(::Any, ::Any)\nBase.ndigits\nBase.widemul\nBase.Math.@evalpoly"
+    "text": "Base.isapprox\nBase.sin\nBase.cos\nBase.tan\nBase.Math.sind\nBase.Math.cosd\nBase.Math.tand\nBase.Math.sinpi\nBase.Math.cospi\nBase.sinh\nBase.cosh\nBase.tanh\nBase.asin\nBase.acos\nBase.atan\nBase.Math.atan2\nBase.Math.asind\nBase.Math.acosd\nBase.Math.atand\nBase.Math.sec\nBase.Math.csc\nBase.Math.cot\nBase.Math.secd\nBase.Math.cscd\nBase.Math.cotd\nBase.Math.asec\nBase.Math.acsc\nBase.Math.acot\nBase.Math.asecd\nBase.Math.acscd\nBase.Math.acotd\nBase.Math.sech\nBase.Math.csch\nBase.Math.coth\nBase.asinh\nBase.acosh\nBase.atanh\nBase.Math.asech\nBase.Math.acsch\nBase.Math.acoth\nBase.Math.sinc\nBase.Math.cosc\nBase.Math.deg2rad\nBase.Math.rad2deg\nBase.Math.hypot\nBase.log(::Any)\nBase.log(::Number, ::Number)\nBase.log2\nBase.log10\nBase.log1p\nBase.Math.frexp\nBase.exp\nBase.exp2\nBase.exp10\nBase.Math.ldexp\nBase.Math.modf\nBase.expm1\nBase.round(::Type, ::Any)\nBase.Rounding.RoundingMode\nBase.Rounding.RoundNearest\nBase.Rounding.RoundNearestTiesAway\nBase.Rounding.RoundNearestTiesUp\nBase.Rounding.RoundToZero\nBase.Rounding.RoundUp\nBase.Rounding.RoundDown\nBase.round{T <: AbstractFloat, MR, MI}(::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})\nBase.ceil\nBase.floor\nBase.trunc\nBase.unsafe_trunc\nBase.signif\nBase.min\nBase.max\nBase.minmax\nBase.Math.clamp\nBase.Math.clamp!\nBase.abs\nBase.Checked.checked_abs\nBase.Checked.checked_neg\nBase.Checked.checked_add\nBase.Checked.checked_sub\nBase.Checked.checked_mul\nBase.Checked.checked_div\nBase.Checked.checked_rem\nBase.Checked.checked_fld\nBase.Checked.checked_mod\nBase.Checked.checked_cld\nBase.Checked.add_with_overflow\nBase.Checked.sub_with_overflow\nBase.Checked.mul_with_overflow\nBase.abs2\nBase.copysign\nBase.sign\nBase.signbit\nBase.flipsign\nBase.sqrt\nBase.isqrt\nBase.Math.cbrt\nBase.real(::Complex)\nBase.imag\nBase.reim\nBase.conj\nBase.angle\nBase.cis\nBase.binomial\nBase.factorial\nBase.gcd\nBase.lcm\nBase.gcdx\nBase.ispow2\nBase.nextpow2\nBase.prevpow2\nBase.nextpow\nBase.prevpow\nBase.nextprod\nBase.invmod\nBase.powermod\nBase.Math.gamma\nBase.Math.lgamma\nBase.Math.lfact\nBase.Math.beta\nBase.Math.lbeta\nBase.ndigits\nBase.widemul\nBase.Math.@evalpoly"
 },
 
 {
