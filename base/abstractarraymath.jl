@@ -324,7 +324,8 @@ function repmat(a::AbstractVector, m::Int)
     return b
 end
 
-@inline repmat(a, m::Integer...) = repmat(a, convert(Dims, m)...)
+@inline repmat(a::AbstractVecOrMat, m::Integer, n::Integer=1) = repmat(a, Int(m), Int(n))
+@inline repmat(a::AbstractVector, m::Integer) = repmat(a, Int(m))
 
 """
     repeat(A::AbstractArray; inner=ntuple(x->1, ndims(A)), outer=ntuple(x->1, ndims(A)))

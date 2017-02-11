@@ -586,6 +586,11 @@ end
     A3 = reshape(repmat([1 2 3 4],UInt32(6),UInt32(1)),2,3,4)
     @test isequal(cumsum(A,3),A3)
     @test repmat([1,2,3,4], UInt32(1)) == [1,2,3,4]
+    @test repmat([1 2], UInt32(2)) == repmat([1 2], UInt32(2), UInt32(1))
+
+    # issue 20564
+    @test_throws MethodError repmat(1, 2, 3)
+    @test_throws MethodError repmat([1, 2], 1, 2, 3)
 
 
     R = repeat([1, 2])
