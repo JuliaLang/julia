@@ -1,8 +1,8 @@
 # Type hierarchy to aid in splitting up of SHA2 algorithms
 # as SHA224/256 are similar, and SHA-384/512 are similar
-abstract SHA_CTX
-abstract SHA2_CTX <: SHA_CTX
-abstract SHA3_CTX <: SHA_CTX
+@compat abstract type SHA_CTX end
+@compat abstract type SHA2_CTX <: SHA_CTX end
+@compat abstract type SHA3_CTX <: SHA_CTX end
 import Base: copy
 
 # We derive SHA1_CTX straight from SHA_CTX since it doesn't have a
