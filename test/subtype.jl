@@ -911,3 +911,7 @@ ftwoparams(::TwoParams{<:Real,<:Real}) = 3
 @test TwoParams{Real,Complex}(3,0im) isa TwoParams{>:Int,<:Number}
 @test !(TwoParams(3.0,0im) isa TwoParams{>:Int,<:Number})
 @test !(TwoParams(3,'x') isa TwoParams{>:Int,<:Number})
+
+# supertype operator
+@test !(Int >: Integer)
+@test Integer >: Int
