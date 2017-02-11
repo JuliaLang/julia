@@ -916,17 +916,18 @@ mktempdir() do dir
     end
     =#
 
+    # Note: Tests only work on linux as SSL_CERT_FILE is only respected on linux systems.
     @testset "Hostname verification" begin
-        openssl_command = ""
+        openssl_installed = false
         if is_linux()
             try
                 # OpenSSL needs to be on the path
-                openssl_command = strip(readstring(`which openssl`))
+                openssl_installed = !isempty(readstring(`openssl version`))
             catch
-                warn("Skipping hostname verification tests (Are `which` and `openssl` installed?)")
+                warn("Skipping hostname verification tests. Is `openssl` on the path?")
             end
         end
-        if !isempty(openssl_command)
+        if openssl_installed
             mktempdir() do root
                 hostname = replace(readchomp(`hostname`), r"\..*$", "")
                 key = joinpath(root, hostname * ".key")
