@@ -242,6 +242,8 @@ end
             @test hypot(T(Inf), T(x)) === T(Inf)
             @test hypot(T(Inf), T(NaN)) === T(Inf)
             @test isnan(hypot(T(x), T(NaN)))
+
+            @test invoke(cbrt, Tuple{AbstractFloat}, -1.0) == -1.0 # no domain error is thrown for negative values
         end
     end
 end
@@ -996,11 +998,37 @@ end
     end
 end
 
-@test Base.Math.f32(complex(1.0,1.0)) == complex(Float32(1.),Float32(1.))
-@test Base.Math.f16(complex(1.0,1.0)) == complex(Float16(1.),Float16(1.))
+@testset "issue #17474" begin
+    @test Base.Math.f64(complex(1f0,1f0)) == complex(1.0, 1.0)
+    @test Base.Math.f64(1f0) == 1.0
 
-# no domain error is thrown for negative values
-@test invoke(cbrt, Tuple{AbstractFloat}, -1.0) == -1.0
+    @test typeof(eta(big"2")) == BigFloat
+    @test typeof(zeta(big"2")) == BigFloat
+    @test typeof(digamma(big"2")) == BigFloat
+
+    @test_throws MethodError trigamma(big"2")
+    @test_throws MethodError trigamma(big"2.0")
+    @test_throws MethodError invdigamma(big"2")
+    @test_throws MethodError invdigamma(big"2.0")
+
+    @test_throws MethodError eta(Complex(big"2"))
+    @test_throws MethodError eta(Complex(big"2.0"))
+    @test_throws MethodError zeta(Complex(big"2"))
+    @test_throws MethodError zeta(Complex(big"2.0"))
+    @test_throws MethodError zeta(1.0,big"2")
+    @test_throws MethodError zeta(1.0,big"2.0")
+    @test_throws MethodError zeta(big"1.0",2.0)
+    @test_throws MethodError zeta(big"1",2.0)
+
+
+    @test typeof(polygamma(3, 0x2)) == Float64
+    @test typeof(polygamma(big"3", 2f0)) == Float32
+    @test typeof(zeta(1, 2.0)) == Float64
+    @test typeof(zeta(1, 2f0)) == Float64 # BitIntegers result in Float64 returns
+    @test typeof(zeta(2f0, complex(2f0,0f0))) == Complex{Float32}
+    @test typeof(zeta(complex(1,1), 2f0)) == Complex{Float64}
+    @test typeof(zeta(complex(1), 2.0)) == Complex{Float64}
+end
 
 @testset "promote Float16 irrational #15359" begin
     @test typeof(Float16(.5) * pi) == Float16
