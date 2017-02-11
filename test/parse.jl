@@ -932,3 +932,6 @@ end
 # a :block for its body
 short_where_call = :(f(x::T) where T = T)
 @test short_where_call.args[2].head == :block
+
+# issue #20541
+@test parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :(.!), :b))
