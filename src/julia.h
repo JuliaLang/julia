@@ -880,7 +880,7 @@ STATIC_INLINE int jl_is_type(jl_value_t *v)
     return jl_is_kind(jl_typeof(v));
 }
 
-STATIC_INLINE int jl_is_bitstype(void *v)
+STATIC_INLINE int jl_is_primitivetype(void *v)
 {
     return (jl_is_datatype(v) && jl_is_immutable(v) &&
             ((jl_datatype_t*)(v))->layout &&
@@ -1004,9 +1004,9 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
                                             jl_svec_t *fnames, jl_svec_t *ftypes,
                                             int abstract, int mutabl,
                                             int ninitialized);
-JL_DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name,
-                                            jl_datatype_t *super,
-                                            jl_svec_t *parameters, size_t nbits);
+JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name,
+                                                 jl_datatype_t *super,
+                                                 jl_svec_t *parameters, size_t nbits);
 
 // constructors
 JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *bt, void *data);

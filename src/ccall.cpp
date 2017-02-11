@@ -549,7 +549,7 @@ static Value *julia_to_address(Type *to, jl_value_t *jlto, jl_unionall_t *jlto_e
                 // yes copy
                 Value *nbytes;
                 AllocaInst *ai;
-                if (jl_is_leaf_type(ety) || jl_is_bitstype(ety)) {
+                if (jl_is_leaf_type(ety) || jl_is_primitivetype(ety)) {
                     int nb = jl_datatype_size(ety);
                     nbytes = ConstantInt::get(T_int32, nb);
                     ai = emit_static_alloca(T_int8, nb, ctx);
@@ -1306,7 +1306,7 @@ std::string generate_func_sig()
             isboxed = false;
         }
         else {
-            if (jl_is_bitstype(tti)) {
+            if (jl_is_primitivetype(tti)) {
                 // see pull req #978. need to annotate signext/zeroext for
                 // small integer arguments.
                 jl_datatype_t *bt = (jl_datatype_t*)tti;
