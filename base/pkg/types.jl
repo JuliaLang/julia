@@ -37,16 +37,7 @@ function VersionSet(versions::Vector{VersionNumber})
 end
 VersionSet(versions::VersionNumber...) = VersionSet(VersionNumber[versions...])
 
-show(io::IO, s::VersionSet) = join(io, s.intervals, " ∪ ")
-isempty(s::VersionSet) = all(isempty, s.intervals)
-in(v::VersionNumber, s::VersionSet) = any(i->in(v,i), s.intervals)
-function intersect(A::VersionSet, B::VersionSet)
-    ivals = [intersect(a,b) for a in A.intervals for b in B.intervals]
-    filter!(i->!isempty(i), ivals)
-    sort!(ivals, by=i->i.lower)
-    VersionSet(ivals)
-end
-copy(A::VersionSet) = VersionSet(copy(A.intervals))
+const empty_versionset = VersionSet([v"0.0",v"0.0"])
 
 function normalize!(A::VersionSet)
     # removes empty intervals and fuses intervals without gaps
@@ -78,6 +69,18 @@ function normalize!(A::VersionSet)
     fuse && splice!(ivals, 1:k0, (VersionInterval(lo, up),))
     return A
 end
+
+show(io::IO, s::VersionSet) = join(io, s.intervals, " ∪ ")
+isempty(s::VersionSet) = all(isempty, s.intervals)
+in(v::VersionNumber, s::VersionSet) = any(i->in(v,i), s.intervals)
+function intersect(A::VersionSet, B::VersionSet)
+    (isempty(A) || isempty(B)) && return normalize!(copy(empty_versionset))
+    ivals = [intersect(a,b) for a in A.intervals for b in B.intervals]
+    filter!(i->!isempty(i), ivals)
+    sort!(ivals, by=i->i.lower)
+    VersionSet(ivals)
+end
+copy(A::VersionSet) = VersionSet(copy(A.intervals))
 
 union(A::VersionSet, B::VersionSet) = union!(copy(A), B)
 function union!(A::VersionSet, B::VersionSet)
@@ -176,13 +179,11 @@ mutable struct ResolveBacktraceItem
     ResolveBacktraceItem(reason, versionreq::VersionReq) = new(versionreq, WhyReq[(versionreq,reason)])
 end
 
-const empty_versionset = VersionSet([v"0.0",v"0.0"])
-
 function push!(ritem::ResolveBacktraceItem, reason, versionset::VersionSet)
     if isa(ritem.versionreq, VersionSet)
         ritem.versionreq = ritem.versionreq ∩ versionset
     elseif ritem.versionreq ∉ versionset
-        ritem.versionreq = empty_versionset
+        ritem.versionreq = copy(empty_versionset)
     end
     push!(ritem.why, (versionset,reason))
 end
@@ -192,10 +193,10 @@ function push!(ritem::ResolveBacktraceItem, reason, version::VersionNumber)
         if version ∈ ritem.versionreq
             ritem.versionreq = version
         else
-            ritem.versionreq = empty_versionset
+            ritem.versionreq = copy(empty_versionset)
         end
     elseif ritem.versionreq ≠ version
-        ritem.versionreq = empty_versionset
+        ritem.versionreq = copy(empty_versionset)
     end
     push!(ritem.why, (version,reason))
 end
