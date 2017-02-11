@@ -861,6 +861,7 @@ Int8
 """
 eltype(::Type) = Any
 eltype(::Type{Any}) = Any
+eltype(::Type{Bottom}) = throw(ArgumentError("Union{} does not have elements"))
 eltype(t::DataType) = eltype(supertype(t))
 eltype(x) = eltype(typeof(x))
 
