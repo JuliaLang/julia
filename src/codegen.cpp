@@ -738,7 +738,7 @@ static void CreateTrap(IRBuilder<> &builder)
 static bool isbits_spec(jl_value_t *jt, bool allow_unsized = true)
 {
     return jl_isbits(jt) && jl_is_leaf_type(jt) && (allow_unsized ||
-        ((jl_is_bitstype(jt) && jl_datatype_size(jt) > 0) ||
+        ((jl_is_primitivetype(jt) && jl_datatype_size(jt) > 0) ||
          (jl_is_datatype(jt) && jl_datatype_nfields(jt)>0)));
 }
 
