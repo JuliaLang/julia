@@ -6418,7 +6418,7 @@ extern "C" void jl_init_codegen(void)
     const char *const argv_copyprop[] = {"", "-disable-copyprop"}; // llvm bug 21743
     cl::ParseCommandLineOptions(sizeof(argv_copyprop)/sizeof(argv_copyprop[0]), argv_copyprop, "disable-copyprop\n");
 #endif
-#ifdef JL_DEBUG_BUILD
+#if defined(JL_DEBUG_BUILD) || defined(USE_POLLY)
     cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
 #endif
 
