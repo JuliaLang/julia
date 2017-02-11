@@ -799,10 +799,3 @@ end
 
 # dispatch loop introduced in #19305
 @test [(1:2) zeros(2,2); ones(3,3)] == [[1,2] zeros(2,2); ones(3,3)] == [reshape([1,2],2,1) zeros(2,2); ones(3,3)]
-
-# isassigned on mixed integers
-let r = rand(3,3)
-    @test isassigned(r, Int32(1), Int32(1))
-    @test isassigned(r, Int64(1), Int64(1))
-    @test isassigned(r, Int32(1), Int64(1))
-end
