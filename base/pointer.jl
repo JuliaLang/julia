@@ -67,7 +67,7 @@ function unsafe_wrap{T}(::Union{Type{Array},Type{Array{T}},Type{Array{T,1}}},
     ccall(:jl_ptr_to_array_1d, Array{T,1},
           (Any, Ptr{Void}, Csize_t, Cint), Array{T,1}, p, d, own)
 end
-unsafe_wrap{N,I<:Integer}(Atype::Type, p::Ptr, dims::NTuple{N,I}, own::Bool=false) =
+unsafe_wrap{N}(Atype::Type, p::Ptr, dims::NTuple{N,<:Integer}, own::Bool=false) =
     unsafe_wrap(Atype, p, convert(Tuple{Vararg{Int}}, dims), own)
 
 """

@@ -2,7 +2,7 @@
 
 using  Base.MultiplicativeInverses: SignedMultiplicativeInverse
 
-immutable ReshapedArray{T,N,P<:AbstractArray,MI<:Tuple{Vararg{SignedMultiplicativeInverse{Int}}}} <: AbstractArray{T,N}
+struct ReshapedArray{T,N,P<:AbstractArray,MI<:Tuple{Vararg{SignedMultiplicativeInverse{Int}}}} <: AbstractArray{T,N}
     parent::P
     dims::NTuple{N,Int}
     mi::MI
@@ -13,7 +13,7 @@ ReshapedArray{T,N}(parent::AbstractArray{T}, dims::NTuple{N,Int}, mi) = Reshaped
 typealias ReshapedArrayLF{T,N,P<:AbstractArray} ReshapedArray{T,N,P,Tuple{}}
 
 # Fast iteration on ReshapedArrays: use the parent iterator
-immutable ReshapedArrayIterator{I,M}
+struct ReshapedArrayIterator{I,M}
     iter::I
     mi::NTuple{M,SignedMultiplicativeInverse{Int}}
 end
@@ -23,7 +23,7 @@ function _rs_iterator{M}(P, mi::NTuple{M})
     ReshapedArrayIterator{typeof(iter),M}(iter, mi)
 end
 
-immutable ReshapedIndex{T}
+struct ReshapedIndex{T}
     parentindex::T
 end
 
@@ -110,7 +110,7 @@ _throw_reshape_colon_dimmismatch(A, pre, post) =
     throw(DimensionMismatch("array size $(length(A)) must be divisible by the product of the new dimensions $((pre..., :, post...))"))
 
 reshape{T,N}(parent::AbstractArray{T,N}, ndims::Type{Val{N}}) = parent
-function reshape{T,AN,N}(parent::AbstractArray{T,AN}, ndims::Type{Val{N}})
+function reshape{N}(parent::AbstractArray, ndims::Type{Val{N}})
     reshape(parent, rdims((), indices(parent), Val{N}))
 end
 # Move elements from inds to out until out reaches the desired
@@ -143,7 +143,7 @@ function _reshape(parent::AbstractArray, dims::Dims)
 end
 
 # Reshaping a ReshapedArray
-_reshape{T}(v::ReshapedArray{T,1}, dims::Dims{1}) = _reshape(v.parent, dims)
+_reshape(v::ReshapedArray{<:Any,1}, dims::Dims{1}) = _reshape(v.parent, dims)
 _reshape(R::ReshapedArray, dims::Dims) = _reshape(R.parent, dims)
 
 function __reshape(p::Tuple{AbstractArray,LinearSlow}, dims::Dims)
@@ -165,7 +165,7 @@ size_strides(out::Tuple) = out
 
 size(A::ReshapedArray) = A.dims
 similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype, dims)
-linearindexing{R<:ReshapedArrayLF}(::Type{R}) = LinearFast()
+linearindexing(::Type{<:ReshapedArrayLF}) = LinearFast()
 parent(A::ReshapedArray) = A.parent
 parentindexes(A::ReshapedArray) = map(s->1:s, size(parent(A)))
 reinterpret{T}(::Type{T}, A::ReshapedArray, dims::Dims) = reinterpret(T, parent(A), dims)

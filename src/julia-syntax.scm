@@ -756,8 +756,15 @@
                   (sig    (car temp))
                   (params (cdr temp)))
              (if (pair? params)
-                 (syntax-deprecation #f (string "inner constructor " name "(...)")
-                                     (deparse `(where (call (curly ,name ,@params) ...) ,@params))))
+                 (let* ((lnos (filter (lambda (e) (and (pair? e) (eq? (car e) 'line)))
+                                      body))
+                        (lno (if (null? lnos) '() (car lnos))))
+                   (syntax-deprecation #f
+                                       (string "inner constructor " name "(...)"
+                                               (cond ((length= lno 2) (string " around line " (cadr lno)))
+                                                     ((length= lno 3) (string " around " (caddr lno) ":" (cadr lno)))
+                                                     (else "")))
+                                       (deparse `(where (call (curly ,name ,@params) ...) ,@params)))))
              `(,keyword ,sig ,(ctor-body body params)))))))
 
 ;; rewrite calls to `new( ... )` to `new` expressions on the appropriate
@@ -2374,7 +2381,7 @@
         ((=)
          (let ((v (decl-var (cadr e)))
                (rest (find-assigned-vars (caddr e) env)))
-           (if (or (ssavalue? v) (memq v env))
+           (if (or (ssavalue? v) (memq v env) (globalref? v))
                rest
                (cons v rest))))
         (else

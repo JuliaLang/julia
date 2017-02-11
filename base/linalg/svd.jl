@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Singular Value Decomposition
-immutable SVD{T,Tr,M<:AbstractArray} <: Factorization{T}
+struct SVD{T,Tr,M<:AbstractArray} <: Factorization{T}
     U::M
     S::Vector{Tr}
     Vt::M
@@ -131,7 +131,7 @@ Returns the singular values of `A`, saving space by overwriting the input.
 See also [`svdvals`](@ref).
 """
 svdvals!{T<:BlasFloat}(A::StridedMatrix{T}) = findfirst(size(A), 0) > 0 ? zeros(T, 0) : LAPACK.gesdd!('N', A)[2]
-svdvals{T<:BlasFloat}(A::AbstractMatrix{T}) = svdvals!(copy(A))
+svdvals(A::AbstractMatrix{<:BlasFloat}) = svdvals!(copy(A))
 
 """
     svdvals(A)
@@ -161,16 +161,16 @@ function svdvals{T}(A::AbstractMatrix{T})
     svdvals!(copy_oftype(A, S))
 end
 svdvals(x::Number) = abs(x)
-svdvals{T, Tr}(S::SVD{T, Tr}) = (S[:S])::Vector{Tr}
+svdvals{T}(S::SVD{<:Any,T}) = (S[:S])::Vector{T}
 
 # SVD least squares
-function A_ldiv_B!{Ta,Tb}(A::SVD{Ta}, B::StridedVecOrMat{Tb})
-    k = searchsortedlast(A.S, eps(real(Ta))*A.S[1], rev=true)
+function A_ldiv_B!{T}(A::SVD{T}, B::StridedVecOrMat)
+    k = searchsortedlast(A.S, eps(real(T))*A.S[1], rev=true)
     view(A.Vt,1:k,:)' * (view(A.S,1:k) .\ (view(A.U,:,1:k)' * B))
 end
 
 # Generalized svd
-immutable GeneralizedSVD{T,S} <: Factorization{T}
+struct GeneralizedSVD{T,S} <: Factorization{T}
     U::S
     V::S
     Q::S

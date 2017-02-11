@@ -376,7 +376,7 @@ let s = "foo"
 end
 
 # Ensure that even strange constructors that break `T(x)::T` work with broadcast
-immutable StrangeType18623 end
+struct StrangeType18623 end
 StrangeType18623(x) = x
 StrangeType18623(x,y) = (x,y)
 @test @inferred(broadcast(StrangeType18623, 1:3)) == [1,2,3]
@@ -415,7 +415,7 @@ end
 @test let z = 1; A = broadcast!(x -> z += x, zeros(2), 1); A[1] != A[2]; end
 
 # broadcasting for custom AbstractArray
-immutable Array19745{T,N} <: AbstractArray{T,N}
+struct Array19745{T,N} <: AbstractArray{T,N}
     data::Array{T,N}
 end
 Base.getindex(A::Array19745, i::Integer...) = A.data[i...]

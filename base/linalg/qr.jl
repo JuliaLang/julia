@@ -2,21 +2,21 @@
 
 # QR and Hessenberg Factorizations
 
-immutable QR{T,S<:AbstractMatrix} <: Factorization{T}
+struct QR{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     τ::Vector{T}
     QR{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
 QR(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QR{T,typeof(factors)}(factors, τ)
 # Note. For QRCompactWY factorization without pivoting, the WY representation based method introduced in LAPACK 3.4
-immutable QRCompactWY{S,M<:AbstractMatrix} <: Factorization{S}
+struct QRCompactWY{S,M<:AbstractMatrix} <: Factorization{S}
     factors::M
     T::Matrix{S}
     QRCompactWY{S,M}(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) where {S,M<:AbstractMatrix} = new(factors, T)
 end
 QRCompactWY(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) where {S} = QRCompactWY{S,typeof(factors)}(factors, T)
 
-immutable QRPivoted{T,S<:AbstractMatrix} <: Factorization{T}
+struct QRPivoted{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     τ::Vector{T}
     jpvt::Vector{BlasInt}
@@ -87,9 +87,9 @@ function qrfactPivotedUnblocked!(A::StridedMatrix)
 end
 
 # LAPACK version
-qrfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{false}}) = QRCompactWY(LAPACK.geqrt!(A, min(minimum(size(A)), 36))...)
-qrfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{true}}) = QRPivoted(LAPACK.geqp3!(A)...)
-qrfact!{T<:BlasFloat}(A::StridedMatrix{T}) = qrfact!(A, Val{false})
+qrfact!(A::StridedMatrix{<:BlasFloat}, ::Type{Val{false}}) = QRCompactWY(LAPACK.geqrt!(A, min(minimum(size(A)), 36))...)
+qrfact!(A::StridedMatrix{<:BlasFloat}, ::Type{Val{true}}) = QRPivoted(LAPACK.geqp3!(A)...)
+qrfact!(A::StridedMatrix{<:BlasFloat}) = qrfact!(A, Val{false})
 
 # Generic fallbacks
 
@@ -135,6 +135,8 @@ solution and if the solution is not unique, the one with smallest norm is return
 Multiplication with respect to either thin or full `Q` is allowed, i.e. both `F[:Q]*F[:R]`
 and `F[:Q]*A` are supported. A `Q` matrix can be converted into a regular matrix with
 [`full`](@ref) which has a named argument `thin`.
+
+# Example
 
 ```jldoctest
 julia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]
@@ -341,14 +343,14 @@ end
 getq(A::QRCompactWY) = QRCompactWYQ(A.factors,A.T)
 getq(A::Union{QR, QRPivoted}) = QRPackedQ(A.factors,A.τ)
 
-immutable QRPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
+struct QRPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     factors::S
     τ::Vector{T}
     QRPackedQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
 QRPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QRPackedQ{T,typeof(factors)}(factors, τ)
 
-immutable QRCompactWYQ{S, M<:AbstractMatrix} <: AbstractMatrix{S}
+struct QRCompactWYQ{S, M<:AbstractMatrix} <: AbstractMatrix{S}
     factors::M
     T::Matrix{S}
     QRCompactWYQ{S,M}(factors::AbstractMatrix{S}, T::Matrix{S}) where {S,M<:AbstractMatrix} = new(factors, T)

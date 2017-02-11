@@ -1821,6 +1821,23 @@ JL_DLLEXPORT jl_value_t *jl_intersect_types(jl_value_t *x, jl_value_t *y)
     return intersect_all(x, y, &e);
 }
 
+// return a SimpleVector of all vars from UnionAlls wrapping a given type
+jl_svec_t *jl_outer_unionall_vars(jl_value_t *u)
+{
+    int ntvars = jl_subtype_env_size((jl_value_t*)u);
+    jl_svec_t *vec = jl_alloc_svec_uninit(ntvars);
+    JL_GC_PUSH1(&vec);
+    jl_unionall_t *ua = (jl_unionall_t*)u;
+    int i;
+    for(i=0; i < ntvars; i++) {
+        assert(jl_is_unionall(ua));
+        jl_svecset(vec, i, ua->var);
+        ua = (jl_unionall_t*)ua->body;
+    }
+    JL_GC_POP();
+    return vec;
+}
+
 // sets *issubty to 1 iff `a` is a subtype of `b`
 jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t **penv, int *issubty)
 {

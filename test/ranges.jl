@@ -341,9 +341,17 @@ end
 
 for T = (Float32, Float64,), i = 1:2^15, n = 1:5
     start, step = randn(T), randn(T)
+    step == 0 && continue
     stop = start + (n-1)*step
+    # `n` is not necessarily unique s.t. `start + (n-1)*step == stop`
+    # so test that `length(start:step:stop)` satisfies this identity
+    # and is the closest value to `(stop-start)/step` to do so
+    lo = hi = n
+    while start + (lo-1)*step == stop; lo -= 1; end
+    while start + (hi-1)*step == stop; hi += 1; end
+    m = clamp(round(Int, (stop-start)/step) + 1, lo+1, hi-1)
     r = start:step:stop
-    @test n == length(r)
+    @test m == length(r)
     # FIXME: these fail some small portion of the time
     @test_skip start == first(r)
     @test_skip stop  == last(r)
@@ -618,7 +626,7 @@ end
 
 # stringmime/show should display the range or linspace nicely
 # to test print_range in range.jl
-replstrmime(x) = sprint((io,x) -> show(IOContext(io, limit=true), MIME("text/plain"), x), x)
+replstrmime(x) = sprint((io,x) -> show(IOContext(io, :limit => true), MIME("text/plain"), x), x)
 @test replstrmime(1:4) == "1:4"
 @test stringmime("text/plain", 1:4) == "1:4"
 @test stringmime("text/plain", linspace(1,5,7)) == "1.0:0.6666666666666666:5.0"
@@ -632,8 +640,8 @@ replstrmime(x) = sprint((io,x) -> show(IOContext(io, limit=true), MIME("text/pla
 @test replstrmime(linspace(0,100, 10000)) == "0.0:0.010001000100010001:100.0"
 @test replstrmime(LinSpace{Float64}(0,100, 10000)) == "10000-element LinSpace{Float64}:\n 0.0,0.010001,0.020002,0.030003,0.040004,…,99.95,99.96,99.97,99.98,99.99,100.0"
 
-@test sprint(io -> show(io,UnitRange(1,2))) == "1:2"
-@test sprint(io -> show(io,StepRange(1,2,5))) == "1:2:5"
+@test sprint(show, UnitRange(1, 2)) == "1:2"
+@test sprint(show, StepRange(1, 2, 5)) == "1:2:5"
 
 
 # Issue 11049 and related
@@ -860,4 +868,19 @@ end
 let r = linspace(-big(1.0),big(1.0),4)
     @test isa(@inferred(r[2]), BigFloat)
     @test r[2] ≈ big(-1.0)/3
+end
+
+# issue #20520
+let r = linspace(1.3173739f0, 1.3173739f0, 3)
+    @test length(r) == 3
+    @test first(r) === 1.3173739f0
+    @test last(r)  === 1.3173739f0
+    @test r[2]     === 1.3173739f0
+end
+
+let r = linspace(1.0, 3+im, 4)
+    @test r[1] === 1.0+0.0im
+    @test r[2] ≈ (5/3)+(1/3)im
+    @test r[3] ≈ (7/3)+(2/3)im
+    @test r[4] === 3.0+im
 end

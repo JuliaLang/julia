@@ -13,7 +13,7 @@ unsigned(::Type{Int64}) = UInt64
 unsigned(::Type{Int128}) = UInt128
 unsigned{T<:Unsigned}(::Type{T}) = T
 
-abstract MultiplicativeInverse{T}
+abstract type  MultiplicativeInverse{T} end
 
 # Computes integer division by a constant using multiply, add, and bitshift.
 
@@ -43,7 +43,7 @@ abstract MultiplicativeInverse{T}
 #
 # Further details can be found in Hacker's Delight, Chapter 10.
 
-immutable SignedMultiplicativeInverse{T<:Signed} <: MultiplicativeInverse{T}
+struct SignedMultiplicativeInverse{T<:Signed} <: MultiplicativeInverse{T}
     divisor::T
     multiplier::T
     addmul::Int8
@@ -88,7 +88,7 @@ immutable SignedMultiplicativeInverse{T<:Signed} <: MultiplicativeInverse{T}
 end
 SignedMultiplicativeInverse(x::Signed) = SignedMultiplicativeInverse{typeof(x)}(x)
 
-immutable UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
+struct UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
     divisor::T
     multiplier::T
     add::Bool

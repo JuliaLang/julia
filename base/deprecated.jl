@@ -20,6 +20,7 @@
 
 macro deprecate(old,new,ex=true)
     meta = Expr(:meta, :noinline)
+    @gensym oldmtname
     if isa(old,Symbol)
         oldname = Expr(:quote,old)
         newname = Expr(:quote,new)
@@ -28,29 +29,30 @@ macro deprecate(old,new,ex=true)
             :(function $(esc(old))(args...)
                   $meta
                   depwarn(string($oldname," is deprecated, use ",$newname," instead."),
-                          $oldname)
+                          $oldmtname)
                   $(esc(new))(args...)
-              end))
+              end),
+            :(const $oldmtname = Core.Typeof($(esc(old))).name.mt.name))
     elseif isa(old,Expr) && old.head == :call
         remove_linenums!(new)
-        oldcall = sprint(io->show_unquoted(io,old))
-        newcall = sprint(io->show_unquoted(io,new))
+        oldcall = sprint(show_unquoted, old)
+        newcall = sprint(show_unquoted, new)
         oldsym = if isa(old.args[1],Symbol)
-            old.args[1]
+            old.args[1]::Symbol
         elseif isa(old.args[1],Expr) && old.args[1].head == :curly
-            old.args[1].args[1]
+            old.args[1].args[1]::Symbol
         else
             error("invalid usage of @deprecate")
         end
-        oldname = Expr(:quote, oldsym)
         Expr(:toplevel,
-            Expr(:export,esc(oldsym)),
+            ex ? Expr(:export,esc(oldsym)) : nothing,
             :($(esc(old)) = begin
                   $meta
                   depwarn(string($oldcall," is deprecated, use ",$newcall," instead."),
-                          $oldname)
+                          $oldmtname)
                   $(esc(new))
-              end))
+              end),
+            :(const $oldmtname = Core.Typeof($(esc(oldsym))).name.mt.name))
     else
         error("invalid usage of @deprecate")
     end
@@ -226,14 +228,9 @@ for f in (
         # base/special/log.jl
         :log, :log1p,
         # base/special/gamma.jl
-        :gamma, :lfact, :digamma, :trigamma, :zeta, :eta,
-        # base/special/erf.jl
-        :erfcx, :erfi, :dawson,
-        # base/special/bessel.jl
-        :airyai, :airyaiprime, :airybi, :airybiprime,
-        :besselj0, :besselj1, :bessely0, :bessely1,
+        :gamma, :lfact,
         # base/math.jl
-        :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2,
+        :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :exp2,
         :expm1, :exp10, :sin, :cos, :tan, :asin, :acos, :acosh, :atanh,
         #=:log,=# :log2, :log10, :lgamma, #=:log1p,=# :sqrt,
         # base/floatfuncs.jl
@@ -252,8 +249,6 @@ for f in ( :acos_fast, :acosh_fast, :angle_fast, :asin_fast, :asinh_fast,
     @eval FastMath Base.@dep_vectorize_1arg Number $f
 end
 for f in (
-        :invdigamma, # base/special/gamma.jl
-        :erfinc, :erfcinv, # base/special/erf.jl
         :trunc, :floor, :ceil, :round, # base/floatfuncs.jl
         :rad2deg, :deg2rad, :exponent, :significand, # base/math.jl
         :sind, :cosd, :tand, :asind, :acosd, :atand, :asecd, :acscd, :acotd, # base/special/trig.jl
@@ -292,11 +287,7 @@ end
 # Deprecate @vectorize_2arg-vectorized functions from...
 for f in (
         # base/special/gamma.jl
-        :polygamma, :zeta, :beta, :lbeta,
-        # base/special/bessel.jl
-        :besseli, :besselix, :besselj, :besseljx,
-        :besselk, :besselkx, :bessely, :besselyx, :besselh,
-        :besselhx, :hankelh1, :hankelh2, :hankelh1x, :hankelh2x,
+        :beta, :lbeta,
         # base/math.jl
         :log, :hypot, :atan2,
     )
@@ -469,7 +460,7 @@ Filesystem.stop_watching(stream::Filesystem._FDWatcher) = depwarn("stop_watching
 
 # #19288
 @eval Base.Dates begin
-    function recur{T<:TimeType}(fun::Function, dr::StepRange{T}; negate::Bool=false, limit::Int=10000)
+    function recur(fun::Function, dr::StepRange{<:TimeType}; negate::Bool=false, limit::Int=10000)
         Base.depwarn("Dates.recur is deprecated, use filter instead.",:recur)
         if negate
             filter(x -> !fun(x), dr)
@@ -636,9 +627,9 @@ _broadcast_zpreserving(f, As...) =
     broadcast!(f, similar(Array{_promote_eltype_op(f, As...)}, Base.Broadcast.broadcast_indices(As...)), As...)
 _broadcast_zpreserving{Tv1,Ti1,Tv2,Ti2}(f::Function, A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) =
     _broadcast_zpreserving!(f, spzeros(promote_type(Tv1, Tv2), promote_type(Ti1, Ti2), Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
-_broadcast_zpreserving{Tv,Ti}(f::Function, A_1::SparseMatrixCSC{Tv,Ti}, A_2::Union{Array,BitArray,Number}) =
+_broadcast_zpreserving{Ti}(f::Function, A_1::SparseMatrixCSC{<:Any,Ti}, A_2::Union{Array,BitArray,Number}) =
     _broadcast_zpreserving!(f, spzeros(promote_eltype(A_1, A_2), Ti, Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
-_broadcast_zpreserving{Tv,Ti}(f::Function, A_1::Union{Array,BitArray,Number}, A_2::SparseMatrixCSC{Tv,Ti}) =
+_broadcast_zpreserving{Ti}(f::Function, A_1::Union{Array,BitArray,Number}, A_2::SparseMatrixCSC{<:Any,Ti}) =
     _broadcast_zpreserving!(f, spzeros(promote_eltype(A_1, A_2), Ti, Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
 
 function _depstring_bczpres()
@@ -671,65 +662,6 @@ end
 
 # Deprecate isimag (#19947).
 @deprecate isimag(z::Number) iszero(real(z))
-
-@deprecate airy(z::Number) airyai(z)
-@deprecate airyx(z::Number) airyaix(z)
-@deprecate airyprime(z::Number) airyaiprime(z)
-@deprecate airy{T<:Number}(x::AbstractArray{T}) airyai.(x)
-@deprecate airyx{T<:Number}(x::AbstractArray{T}) airyaix.(x)
-@deprecate airyprime{T<:Number}(x::AbstractArray{T}) airyprime.(x)
-
-function _airy(k::Integer, z::Complex128)
-    depwarn("`airy(k,x)` is deprecated, use `airyai(x)`, `airyaiprime(x)`, `airybi(x)` or `airybiprime(x)` instead.",:airy)
-    id = Int32(k==1 || k==3)
-    if k == 0 || k == 1
-        return Base.Math._airy(z, id, Int32(1))
-    elseif k == 2 || k == 3
-        return Base.Math._biry(z, id, Int32(1))
-    else
-        throw(ArgumentError("k must be between 0 and 3"))
-    end
-end
-function _airyx(k::Integer, z::Complex128)
-    depwarn("`airyx(k,x)` is deprecated, use `airyaix(x)`, `airyaiprimex(x)`, `airybix(x)` or `airybiprimex(x)` instead.",:airyx)
-    id = Int32(k==1 || k==3)
-    if k == 0 || k == 1
-        return Base.Math._airy(z, id, Int32(2))
-    elseif k == 2 || k == 3
-        return Base.Math._biry(z, id, Int32(2))
-    else
-        throw(ArgumentError("k must be between 0 and 3"))
-    end
-end
-
-for afn in (:airy,:airyx)
-    _afn = Symbol("_"*string(afn))
-    suf  = string(afn)[5:end]
-    @eval begin
-        function $afn(k::Integer, z::Complex128)
-            afn = $(QuoteNode(afn))
-            suf = $(QuoteNode(suf))
-            depwarn("`$afn(k,x)` is deprecated, use `airyai$suf(x)`, `airyaiprime$suf(x)`, `airybi$suf(x)` or `airybiprime$suf(x)` instead.",$(QuoteNode(afn)))
-            $_afn(k,z)
-        end
-
-        $afn(k::Integer, z::Complex) = $afn(k, float(z))
-        $afn{T<:AbstractFloat}(k::Integer, z::Complex{T}) = throw(MethodError($afn,(k,z)))
-        $afn(k::Integer, z::Complex64) = Complex64($afn(k, Complex128(z)))
-        $afn(k::Integer, x::Real) = $afn(k, float(x))
-        $afn(k::Integer, x::AbstractFloat) = real($afn(k, complex(x)))
-
-        function $afn{T<:Number}(k::Number, x::AbstractArray{T})
-            $afn.(k,x)
-        end
-        function $afn{S<:Number}(k::AbstractArray{S}, x::Number)
-            $afn.(k,x)
-        end
-        function $afn{S<:Number,T<:Number}(k::AbstractArray{S}, x::AbstractArray{T})
-            $afn.(k,x)
-        end
-    end
-end
 
 # Deprecate vectorized xor in favor of compact broadcast syntax
 @deprecate xor(a::Bool, B::BitArray)                xor.(a, B)
@@ -767,14 +699,14 @@ export Collections
 
 # Not exported, but used outside Base
 _promote_array_type(F, ::Type, ::Type, T::Type) = T
-_promote_array_type{S<:Real, A<:AbstractFloat}(F, ::Type{S}, ::Type{A}, ::Type) = A
-_promote_array_type{S<:Integer, A<:Integer}(F, ::Type{S}, ::Type{A}, ::Type) = A
-_promote_array_type{S<:Integer, A<:Integer}(::typeof(/), ::Type{S}, ::Type{A}, T::Type) = T
-_promote_array_type{S<:Integer, A<:Integer}(::typeof(\), ::Type{S}, ::Type{A}, T::Type) = T
-_promote_array_type{S<:Integer}(::typeof(/), ::Type{S}, ::Type{Bool}, T::Type) = T
-_promote_array_type{S<:Integer}(::typeof(\), ::Type{S}, ::Type{Bool}, T::Type) = T
-_promote_array_type{S<:Integer}(F, ::Type{S}, ::Type{Bool}, T::Type) = T
-_promote_array_type{S<:Union{Complex, Real}, T<:AbstractFloat}(F, ::Type{S}, ::Type{Complex{T}}, ::Type) = Complex{T}
+_promote_array_type{A<:AbstractFloat}(F, ::Type{<:Real}, ::Type{A}, ::Type) = A
+_promote_array_type{A<:Integer}(F, ::Type{<:Integer}, ::Type{A}, ::Type) = A
+_promote_array_type(::typeof(/), ::Type{<:Integer}, ::Type{<:Integer}, T::Type) = T
+_promote_array_type(::typeof(\), ::Type{<:Integer}, ::Type{<:Integer}, T::Type) = T
+_promote_array_type(::typeof(/), ::Type{<:Integer}, ::Type{Bool}, T::Type) = T
+_promote_array_type(::typeof(\), ::Type{<:Integer}, ::Type{Bool}, T::Type) = T
+_promote_array_type(F, ::Type{<:Integer}, ::Type{Bool}, T::Type) = T
+_promote_array_type{T<:AbstractFloat}(F, ::Type{<:Union{Complex, Real}}, ::Type{Complex{T}}, ::Type) = Complex{T}
 function promote_array_type(F, R, S, T)
     Base.depwarn("`promote_array_type` is deprecated as it is no longer needed " *
                  "in Base. See https://github.com/JuliaLang/julia/issues/19669 " *
@@ -792,7 +724,7 @@ end
 for f in (:sec, :sech, :secd, :asec, :asech,
             :csc, :csch, :cscd, :acsc, :acsch,
             :cot, :coth, :cotd, :acot, :acoth)
-    @eval @deprecate $f{T<:Number}(A::AbstractArray{T}) $f.(A)
+    @eval @deprecate $f(A::AbstractArray{<:Number}) $f.(A)
 end
 
 # Deprecate vectorized two-argument complex in favor of compact broadcast syntax
@@ -808,7 +740,7 @@ end
 @deprecate round(M::Tridiagonal) round.(M)
 @deprecate round(M::SymTridiagonal) round.(M)
 @deprecate round{T}(::Type{T}, x::AbstractArray) round.(T, x)
-@deprecate round{T}(::Type{T}, x::AbstractArray, r::RoundingMode) round.(x, r)
+@deprecate round{T}(::Type{T}, x::AbstractArray, r::RoundingMode) round.(T, x, r)
 @deprecate round(x::AbstractArray, r::RoundingMode) round.(x, r)
 @deprecate round(x::AbstractArray, digits::Integer, base::Integer = 10) round.(x, digits, base)
 
@@ -838,16 +770,16 @@ end
 @deprecate big(r::StepRange) big.(r)
 @deprecate big(r::StepRangeLen) big.(r)
 @deprecate big(r::LinSpace) big.(r)
-@deprecate big{T<:Integer,N}(x::AbstractArray{T,N}) big.(x)
-@deprecate big{T<:AbstractFloat,N}(x::AbstractArray{T,N}) big.(x)
+@deprecate big(x::AbstractArray{<:Integer}) big.(x)
+@deprecate big(x::AbstractArray{<:AbstractFloat}) big.(x)
 @deprecate big(A::LowerTriangular) big.(A)
 @deprecate big(A::UpperTriangular) big.(A)
 @deprecate big(A::Base.LinAlg.UnitLowerTriangular) big.(A)
 @deprecate big(A::Base.LinAlg.UnitUpperTriangular) big.(A)
 @deprecate big(B::Bidiagonal) big.(B)
-@deprecate big{T<:Integer,N}(A::AbstractArray{Complex{T},N}) big.(A)
-@deprecate big{T<:AbstractFloat,N}(A::AbstractArray{Complex{T},N}) big.(A)
-@deprecate big{T<:Integer,N}(x::AbstractArray{Complex{Rational{T}},N}) big.(A)
+@deprecate big(A::AbstractArray{<:Complex{<:Integer}}) big.(A)
+@deprecate big(A::AbstractArray{<:Complex{<:AbstractFloat}}) big.(A)
+@deprecate big(x::AbstractArray{<:Complex{<:Rational{<:Integer}}}) big.(A)
 
 # Deprecate manually vectorized div methods in favor of compact broadcast syntax
 @deprecate div(A::Number, B::AbstractArray) div.(A, B)
@@ -860,7 +792,7 @@ end
 
 # Deprecate manually vectorized div, mod, and % methods for dates
 @deprecate div{P<:Dates.Period}(X::StridedArray{P}, y::P)         div.(X, y)
-@deprecate div{P<:Dates.Period}(X::StridedArray{P}, y::Integer)   div.(X, y)
+@deprecate div(X::StridedArray{<:Dates.Period}, y::Integer)       div.(X, y)
 @deprecate (%){P<:Dates.Period}(X::StridedArray{P}, y::P)         X .% y
 @deprecate mod{P<:Dates.Period}(X::StridedArray{P}, y::P)         mod.(X, y)
 
@@ -868,8 +800,8 @@ end
 @deprecate mod(B::BitArray, x::Bool) mod.(B, x)
 @deprecate mod(x::Bool, B::BitArray) mod.(x, B)
 @deprecate mod(A::AbstractArray, B::AbstractArray) mod.(A, B)
-@deprecate mod{T}(x::Number, A::AbstractArray{T}) mod.(x, A)
-@deprecate mod{T}(A::AbstractArray{T}, x::Number) mod.(A, x)
+@deprecate mod(x::Number, A::AbstractArray) mod.(x, A)
+@deprecate mod(A::AbstractArray, x::Number) mod.(A, x)
 
 # Deprecate vectorized & in favor of dot syntax
 @deprecate (&)(a::Bool, B::BitArray)                a .& B
@@ -891,7 +823,7 @@ end
 @deprecate ifelse(c::AbstractArray{Bool}, x::AbstractArray, y) ifelse.(c, x, y)
 @deprecate ifelse(c::AbstractArray{Bool}, x::AbstractArray, y::AbstractArray) ifelse.(c, x, y)
 
-function frexp{T<:AbstractFloat}(A::Array{T})
+function frexp(A::Array{<:AbstractFloat})
     depwarn("`frexp(x::Array)` is discontinued.", :frexp)
     F = similar(A)
     E = Array{Int}(size(A))
@@ -1225,6 +1157,26 @@ for name in ("alnum", "alpha", "cntrl", "digit", "number", "graph",
              "lower", "print", "punct", "space", "upper", "xdigit")
     f = Symbol("is",name)
     @eval @deprecate ($f)(s::AbstractString) all($f, s)
+end
+
+# TODO: remove warning for using `_` in parse_input_line in base/client.jl
+
+# Special functions have been moved to a package
+for f in (:airyai, :airyaiprime, :airybi, :airybiprime, :airyaix, :airyaiprimex, :airybix, :airybiprimex,
+          :besselh, :besselhx, :besseli, :besselix, :besselj, :besselj0, :besselj1, :besseljx, :besselk,
+          :besselkx, :bessely, :bessely0, :bessely1, :besselyx,
+          :dawson, :erf, :erfc, :erfcinv, :erfcx, :erfi, :erfinv,
+          :eta, :zeta, :digamma, :invdigamma, :polygamma, :trigamma,
+          :hankelh1, :hankelh1x, :hankelh2, :hankelh2x,
+          :airy, :airyx, :airyprime)
+    @eval begin
+        function $f(args...; kwargs...)
+            error(string($f, args, " has been moved to the package SpecialFunctions.jl.\n",
+                         "Run Pkg.add(\"SpecialFunctions\") to install SpecialFunctions on Julia v0.6 and later,\n",
+                         "and then run `using SpecialFunctions`."))
+        end
+        export $f
+    end
 end
 
 # END 0.6 deprecations

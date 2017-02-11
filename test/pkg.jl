@@ -40,7 +40,7 @@ temp_pkg_dir() do
     @test isfile(joinpath(Pkg.dir(),"REQUIRE"))
     @test isfile(joinpath(Pkg.dir(),"META_BRANCH"))
     @test isempty(Pkg.installed())
-    @test sprint(io -> Pkg.status(io)) == "No packages installed\n"
+    @test sprint(Pkg.status) == "No packages installed\n"
     @test !isempty(Pkg.available())
 
     # 18325

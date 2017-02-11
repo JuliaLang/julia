@@ -246,7 +246,7 @@ end
 
 # any and all with functors
 
-immutable SomeFunctor end
+struct SomeFunctor end
 (::SomeFunctor)(x) = true
 
 @test any(SomeFunctor(), 1:10)

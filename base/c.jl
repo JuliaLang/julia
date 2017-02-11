@@ -61,7 +61,7 @@ if !is_windows()
 end
 
 # construction from typed pointers
-convert{T<:Union{Int8,UInt8}}(::Type{Cstring}, p::Ptr{T}) = bitcast(Cstring, p)
+convert(::Type{Cstring}, p::Ptr{<:Union{Int8,UInt8}}) = bitcast(Cstring, p)
 convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = bitcast(Cwstring, p)
 convert{T<:Union{Int8,UInt8}}(::Type{Ptr{T}}, p::Cstring) = bitcast(Ptr{T}, p)
 convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = bitcast(Ptr{Cwchar_t}, p)
@@ -161,7 +161,7 @@ function transcode end
 transcode{T<:Union{UInt8,UInt16,UInt32,Int32}}(::Type{T}, src::Vector{T}) = src
 transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::String) = T[T(c) for c in src]
 transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::Vector{UInt8}) = transcode(T, String(src))
-function transcode{S<:Union{Int32,UInt32}}(::Type{UInt8}, src::Vector{S})
+function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
     buf = IOBuffer()
     for c in src; print(buf, Char(c)); end
     take!(buf)

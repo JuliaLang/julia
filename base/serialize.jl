@@ -8,7 +8,7 @@ using Base: ViewIndex, Slice, index_lengths, unwrap_unionall
 
 export serialize, deserialize, SerializationState
 
-type SerializationState{I<:IO} <: AbstractSerializer
+mutable struct SerializationState{I<:IO} <: AbstractSerializer
     io::I
     counter::Int
     table::ObjectIdDict
@@ -347,7 +347,6 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.file)
     serialize(s, meth.line)
     serialize(s, meth.sig)
-    serialize(s, meth.tvars)
     serialize(s, meth.sparam_syms)
     serialize(s, meth.ambig)
     serialize(s, meth.nargs)
@@ -632,7 +631,6 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     file = deserialize(s)::Symbol
     line = deserialize(s)::Int32
     sig = deserialize(s)::DataType
-    tvars = deserialize(s)::Union{SimpleVector, TypeVar}
     sparam_syms = deserialize(s)::SimpleVector
     ambig = deserialize(s)::Union{Array{Any,1}, Void}
     nargs = deserialize(s)::Int32
@@ -645,7 +643,6 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.file = file
         meth.line = line
         meth.sig = sig
-        meth.tvars = tvars
         meth.sparam_syms = sparam_syms
         meth.ambig = ambig
         meth.isstaged = isstaged
@@ -784,7 +781,7 @@ function deserialize_typename(s::AbstractSerializer, number)
     types = deserialize(s)::SimpleVector
     has_instance = deserialize(s)::Bool
     abstr = deserialize(s)::Bool
-    mutable = deserialize(s)::Bool
+    mutabl = deserialize(s)::Bool
     ninitialized = deserialize(s)::Int32
 
     if makenew
@@ -794,7 +791,7 @@ function deserialize_typename(s::AbstractSerializer, number)
         # tn.wrapper and throw UndefRefException before we get to this point
         ndt = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Cint, Cint, Cint),
                     tn, super, parameters, names, types,
-                    abstr, mutable, ninitialized)
+                    abstr, mutabl, ninitialized)
         tn.wrapper = ndt.name.wrapper
         ccall(:jl_set_const, Void, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
         ty = tn.wrapper

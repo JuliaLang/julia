@@ -310,6 +310,11 @@
         ((eq? (car e) 'curly)  (decl-var* (cadr e)))
         (else                  (decl-var e))))
 
+(define (decl-vars* e)
+  (if (and (pair? e) (eq? (car e) 'tuple))
+      (apply append (map decl-vars* (cdr e)))
+      (list (decl-var* e))))
+
 (define (function-def? e)
   (and (pair? e) (or (eq? (car e) 'function) (eq? (car e) '->)
                      (and (eq? (car e) '=) (length= e 3)
@@ -340,11 +345,7 @@
                (list fname)
                '())))
         ((and (eq? (car e) '=) (not (function-def? e)))
-         (append! (filter
-                   symbol?
-                   (if (and (pair? (cadr e)) (eq? (car (cadr e)) 'tuple))
-                       (map decl-var* (cdr (cadr e)))
-                       (list (decl-var* (cadr e)))))
+         (append! (filter symbol? (decl-vars* (cadr e)))
                   (find-assigned-vars-in-expansion (caddr e) #f)))
         (else
          (apply append! (map (lambda (x)

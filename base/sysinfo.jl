@@ -67,7 +67,7 @@ function __init__()
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
 end
 
-type UV_cpu_info_t
+mutable struct UV_cpu_info_t
     model::Ptr{UInt8}
     speed::Int32
     cpu_times!user::UInt64
@@ -76,7 +76,7 @@ type UV_cpu_info_t
     cpu_times!idle::UInt64
     cpu_times!irq::UInt64
 end
-type CPUinfo
+mutable struct CPUinfo
     model::String
     speed::Int32
     cpu_times!user::UInt64

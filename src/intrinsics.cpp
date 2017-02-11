@@ -409,10 +409,10 @@ static jl_cgval_t generic_bitcast(const jl_cgval_t *argv, jl_codectx_t *ctx)
         if (!jl_is_bitstype(v.typ)) {
             if (isboxed) {
                 Value *isbits = emit_datatype_isbitstype(typ);
-                error_unless(isbits, "bitcast: expected bitstype value for second argument", ctx);
+                error_unless(isbits, "bitcast: expected primitive type value for second argument", ctx);
             }
             else {
-                emit_error("bitcast: expected bitstype value for second argument", ctx);
+                emit_error("bitcast: expected primitive type value for second argument", ctx);
                 return jl_cgval_t();
             }
         }

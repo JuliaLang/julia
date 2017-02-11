@@ -922,7 +922,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         else {
             assert(m->max_world == ~(size_t)0 && "method replacement cannot be handled by incremental serializer");
         }
-        jl_serialize_value(s, (jl_value_t*)m->tvars);
         if (external_mt)
             jl_serialize_value(s, jl_nothing);
         else
@@ -1659,8 +1658,6 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
         m->min_world = jl_world_counter;
         m->max_world = ~(size_t)0;
     }
-    m->tvars = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&m->tvars);
-    jl_gc_wb(m, m->tvars);
     m->ambig = jl_deserialize_value(s, (jl_value_t**)&m->ambig);
     jl_gc_wb(m, m->ambig);
     m->called = read_int8(s->s);

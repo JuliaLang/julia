@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-type Set{T} <: AbstractSet{T}
+mutable struct Set{T} <: AbstractSet{T}
     dict::Dict{T,Void}
 
     Set{T}() where {T} = new(Dict{T,Void}())
@@ -41,7 +41,7 @@ delete!(s::Set, x) = (delete!(s.dict, x); s)
 copy(s::Set) = union!(similar(s), s)
 
 sizehint!(s::Set, newsz) = (sizehint!(s.dict, newsz); s)
-empty!{T}(s::Set{T}) = (empty!(s.dict); s)
+empty!(s::Set) = (empty!(s.dict); s)
 rehash!(s::Set) = (rehash!(s.dict); s)
 
 start(s::Set)       = start(s.dict)
@@ -250,4 +250,4 @@ function hash(s::Set, h::UInt)
 end
 
 convert{T}(::Type{Set{T}}, s::Set{T}) = s
-convert{T,S}(::Type{Set{T}}, x::Set{S}) = Set{T}(x)
+convert{T}(::Type{Set{T}}, x::Set) = Set{T}(x)

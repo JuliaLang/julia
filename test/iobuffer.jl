@@ -207,7 +207,7 @@ let bstream = BufferStream()
     @test isreadable(bstream)
     @test iswritable(bstream)
     @test nb_available(bstream) == 0
-    @test sprint(io -> show(io,bstream)) == "BufferStream() bytes waiting:$(nb_available(bstream.buffer)), isopen:true"
+    @test sprint(show, bstream) == "BufferStream() bytes waiting:$(nb_available(bstream.buffer)), isopen:true"
     a = rand(UInt8,10)
     write(bstream,a)
     @test !eof(bstream)

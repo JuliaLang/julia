@@ -463,7 +463,7 @@ map!(x->1, d, d)
 @test 3.0 == remotecall_fetch(D->D[1], id_other, Base.shmem_fill(3.0, 1; pids=[id_me, id_other]))
 
 # Shared arrays of singleton immutables
-@everywhere immutable ShmemFoo end
+@everywhere struct ShmemFoo end
 for T in [Void, ShmemFoo]
     s = @inferred(SharedArray{T}(10))
     @test T() === remotecall_fetch(x->x[3], workers()[1], s)
@@ -1075,7 +1075,7 @@ end
 @test remotecall_fetch(x->(y->2y)(x)+1, workers()[1], 3) == 7
 
 # issue #16091
-type T16091 end
+mutable struct T16091 end
 wid = workers()[1]
 @test try
     remotecall_fetch(()->T16091, wid)
@@ -1294,7 +1294,7 @@ end
 
 @everywhere begin
     global testsercnt_d = Dict()
-    type TestSerCnt
+    mutable struct TestSerCnt
         v
     end
     import Base.hash, Base.==
@@ -1466,7 +1466,7 @@ test_clear(syms, workers())
 # Test partial recovery from a deserialization error in CapturedException
 try
     expr = quote
-                type DontExistOn1
+                mutable struct DontExistOn1
                     x
                 end
                 throw(BoundsError(DontExistOn1(1), 1))

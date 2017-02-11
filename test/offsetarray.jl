@@ -139,7 +139,7 @@ smry = summary(v)
 @test contains(smry, "OffsetArray{Float64,1")
 @test contains(smry, "with indices -1:1")
 function cmp_showf(printfunc, io, A)
-    ioc = IOContext(io, limit=true, compact=true)
+    ioc = IOContext(IOContext(io, :limit => true), :compact => true)
     printfunc(ioc, A)
     str1 = String(take!(io))
     printfunc(ioc, parent(A))
@@ -162,9 +162,9 @@ targets2 = ["(1.0, 1.0)",
             "([1.0], [1.0])"]
 for n = 0:4
     a = OffsetArray(ones(Float64,ntuple(d->1,n)), ntuple(identity,n))
-    show(IOContext(io, limit=true), MIME("text/plain"), a)
+    show(IOContext(io, :limit => true), MIME("text/plain"), a)
     @test String(take!(io)) == targets1[n+1]
-    show(IOContext(io, limit=true), MIME("text/plain"), (a,a))
+    show(IOContext(io, :limit => true), MIME("text/plain"), (a,a))
     @test String(take!(io)) == targets2[n+1]
 end
 P = OffsetArray(rand(8,8), (1,1))
@@ -406,7 +406,7 @@ end # let
 # (#18107)
 module SimilarUR
     using Base.Test
-    immutable MyURange <: AbstractUnitRange{Int}
+    struct MyURange <: AbstractUnitRange{Int}
         start::Int
         stop::Int
     end

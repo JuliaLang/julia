@@ -2,14 +2,14 @@
 
 ## general machinery for irrational mathematical constants
 
-immutable Irrational{sym} <: Real end
+struct Irrational{sym} <: Real end
 
 show{sym}(io::IO, x::Irrational{sym}) = print(io, "$sym = $(string(float(x))[1:15])...")
 
-promote_rule{s}(::Type{Irrational{s}}, ::Type{Float16}) = Float16
-promote_rule{s}(::Type{Irrational{s}}, ::Type{Float32}) = Float32
-promote_rule{s,t}(::Type{Irrational{s}}, ::Type{Irrational{t}}) = Float64
-promote_rule{s,T<:Number}(::Type{Irrational{s}}, ::Type{T}) = promote_type(Float64,T)
+promote_rule(::Type{<:Irrational}, ::Type{Float16}) = Float16
+promote_rule(::Type{<:Irrational}, ::Type{Float32}) = Float32
+promote_rule(::Type{<:Irrational}, ::Type{<:Irrational}) = Float64
+promote_rule{T<:Number}(::Type{<:Irrational}, ::Type{T}) = promote_type(Float64, T)
 
 convert(::Type{AbstractFloat}, x::Irrational) = Float64(x)
 convert(::Type{Float16}, x::Irrational) = Float16(Float32(x))
@@ -65,7 +65,7 @@ end
 @pure function rationalize{T<:Integer}(::Type{T}, x::Irrational; tol::Real=0)
     return rationalize(T, big(x), tol=tol)
 end
-@pure function lessrational{T<:Integer}(rx::Rational{T}, x::Irrational)
+@pure function lessrational(rx::Rational{<:Integer}, x::Irrational)
     # an @pure version of `<` for determining if the rationalization of
     # an irrational number required rounding up or down
     return rx < big(x)

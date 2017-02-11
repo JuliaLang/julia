@@ -1,19 +1,17 @@
 """
     RowVector(vector)
 
-A lazy-view wrapper of an `AbstractVector`, which turns a length-`n` vector into
-a `1×n` shaped row vector and represents the transpose of a vector (the elements
-are also transposed recursively). This type is usually constructed (and
-unwrapped) via the `transpose()` function or `.'` operator (or related
-`ctranspose()` or `'` operator).
+A lazy-view wrapper of an `AbstractVector`, which turns a length-`n` vector into a `1×n`
+shaped row vector and represents the transpose of a vector (the elements are also transposed
+recursively). This type is usually constructed (and unwrapped) via the [`transpose`](@ref)
+function or `.'` operator (or related [`ctranspose`](@ref) or `'` operator).
 
-By convention, a vector can be multiplied by a matrix on its left (`A * v`)
-whereas a row vector can be multiplied by a matrix on its right (such that
-`v.' * A = (A.' * v).'`). It differs from a `1×n`-sized matrix by the facts that
-its transpose returns a vector and the inner product `v1.' * v2` returns a
-scalar, but will otherwise behave similarly.
+By convention, a vector can be multiplied by a matrix on its left (`A * v`) whereas a row
+vector can be multiplied by a matrix on its right (such that `v.' * A = (A.' * v).'`). It
+differs from a `1×n`-sized matrix by the facts that its transpose returns a vector and the
+inner product `v1.' * v2` returns a scalar, but will otherwise behave similarly.
 """
-immutable RowVector{T,V<:AbstractVector} <: AbstractMatrix{T}
+struct RowVector{T,V<:AbstractVector} <: AbstractMatrix{T}
     vec::V
     function RowVector{T,V}(v::V) where V<:AbstractVector where T
         check_types(T,v)
@@ -21,10 +19,11 @@ immutable RowVector{T,V<:AbstractVector} <: AbstractMatrix{T}
     end
 end
 
-
 @inline check_types{T1,T2}(::Type{T1},::AbstractVector{T2}) = check_types(T1, T2)
 @pure check_types{T1,T2}(::Type{T1},::Type{T2}) = T1 === transpose_type(T2) ? nothing :
     error("Element type mismatch. Tried to create a `RowVector{$T1}` from an `AbstractVector{$T2}`")
+
+typealias ConjRowVector{T, CV <: ConjVector} RowVector{T, CV}
 
 # The element type may be transformed as transpose is recursive
 @inline transpose_type{T}(::Type{T}) = promote_op(transpose, T)
@@ -47,10 +46,12 @@ end
 convert{T,V<:AbstractVector}(::Type{RowVector{T,V}}, rowvec::RowVector) =
     RowVector{T,V}(convert(V,rowvec.vec))
 
-# similar()
-@inline similar(rowvec::RowVector) = RowVector(similar(rowvec.vec))
-@inline similar{T}(rowvec::RowVector, ::Type{T}) = RowVector(similar(rowvec.vec, transpose_type(T)))
-# There is no resizing similar() because it would be ambiguous if the result were a Matrix or a RowVector
+# similar tries to maintain the RowVector wrapper and the parent type
+@inline similar(rowvec::RowVector) = RowVector(similar(parent(rowvec)))
+@inline similar{T}(rowvec::RowVector, ::Type{T}) = RowVector(similar(parent(rowvec), transpose_type(T)))
+
+# Resizing similar currently loses its RowVector property.
+@inline similar{T,N}(rowvec::RowVector, ::Type{T}, dims::Dims{N}) = similar(parent(rowvec), T, dims)
 
 # Basic methods
 """
@@ -73,19 +74,35 @@ julia> transpose(v)
 ```
 """
 @inline transpose(vec::AbstractVector) = RowVector(vec)
-@inline ctranspose{T}(vec::AbstractVector{T}) = RowVector(conj(vec))
-@inline ctranspose{T<:Real}(vec::AbstractVector{T}) = RowVector(vec)
+@inline ctranspose(vec::AbstractVector) = RowVector(_conj(vec))
+@inline ctranspose(vec::AbstractVector{<:Real}) = RowVector(vec)
 
 @inline transpose(rowvec::RowVector) = rowvec.vec
-@inline ctranspose{T}(rowvec::RowVector{T}) = conj(rowvec.vec)
-@inline ctranspose{T<:Real}(rowvec::RowVector{T}) = rowvec.vec
+@inline transpose(rowvec::ConjRowVector) = copy(rowvec.vec) # remove the ConjArray wrapper from any raw vector
+@inline ctranspose(rowvec::RowVector) = conj(rowvec.vec)
+@inline ctranspose(rowvec::RowVector{<:Real}) = rowvec.vec
 
 parent(rowvec::RowVector) = rowvec.vec
 
-# Strictly, these are unnecessary but will make things stabler if we introduce
-# a "view" for conj(::AbstractArray)
-@inline conj(rowvec::RowVector) = RowVector(conj(rowvec.vec))
-@inline conj{T<:Real}(rowvec::RowVector{T}) = rowvec
+"""
+    conj(v::RowVector)
+
+Returns a [`ConjArray`](@ref) lazy view of the input, where each element is conjugated.
+
+### Example
+
+```jldoctest
+julia> v = [1+im, 1-im].'
+1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:
+ 1+1im  1-1im
+
+julia> conj(v)
+1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:
+ 1-1im  1+1im
+```
+"""
+@inline conj(rowvec::RowVector) = RowVector(_conj(rowvec.vec))
+@inline conj(rowvec::RowVector{<:Real}) = rowvec
 
 # AbstractArray interface
 @inline length(rowvec::RowVector) =  length(rowvec.vec)
@@ -94,7 +111,7 @@ parent(rowvec::RowVector) = rowvec.vec
 @inline indices(rowvec::RowVector) = (Base.OneTo(1), indices(rowvec.vec)[1])
 @inline indices(rowvec::RowVector, d) = ifelse(d == 2, indices(rowvec.vec)[1], Base.OneTo(1))
 linearindexing(::RowVector) = LinearFast()
-linearindexing{V<:RowVector}(::Type{V}) = LinearFast()
+linearindexing(::Type{<:RowVector}) = LinearFast()
 
 @propagate_inbounds getindex(rowvec::RowVector, i) = transpose(rowvec.vec[i])
 @propagate_inbounds setindex!(rowvec::RowVector, v, i) = setindex!(rowvec.vec, transpose(v), i)
@@ -147,6 +164,11 @@ end
 
 # Multiplication #
 
+# inner product -> dot product specializations
+@inline *{T<:Real}(rowvec::RowVector{T}, vec::AbstractVector{T}) = dot(parent(rowvec), vec)
+@inline *(rowvec::ConjRowVector, vec::AbstractVector) = dot(rowvec', vec)
+
+# Generic behavior
 @inline function *(rowvec::RowVector, vec::AbstractVector)
     if length(rowvec) != length(vec)
         throw(DimensionMismatch("A has dimensions $(size(rowvec)) but B has dimensions $(size(vec))"))

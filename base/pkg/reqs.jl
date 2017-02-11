@@ -8,11 +8,11 @@ using ..Types
 
 # representing lines of REQUIRE files
 
-abstract Line
-immutable Comment <: Line
+abstract type Line end
+struct Comment <: Line
     content::AbstractString
 end
-immutable Requirement <: Line
+struct Requirement <: Line
     content::AbstractString
     package::AbstractString
     versions::VersionSet
@@ -54,7 +54,7 @@ hash(s::Line, h::UInt) = hash(s.content, h + (0x3f5a631add21cb1a % UInt))
 
 # general machinery for parsing REQUIRE files
 
-function read{T<:AbstractString}(readable::Vector{T})
+function read(readable::Vector{<:AbstractString})
     lines = Line[]
     for line in readable
         line = chomp(line)

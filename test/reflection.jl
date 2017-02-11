@@ -71,10 +71,10 @@ tag = Base.have_color ? Base.error_color() : "UNION"
 @test warntype_hastag(pos_unstable, Tuple{Float64}, tag)
 @test !warntype_hastag(pos_stable, Tuple{Float64}, tag)
 
-type Stable{T,N}
+mutable struct Stable{T,N}
     A::Array{T,N}
 end
-type Unstable{T}
+mutable struct Unstable{T}
     A::Array{T}
 end
 Base.getindex(A::Stable, i) = A.A[i]
@@ -177,7 +177,7 @@ d7648 = 9
 const f7648 = 10
 foo7648(x) = x
 function foo7648_nomethods end
-type Foo7648 end
+mutable struct Foo7648 end
 
 module TestModSub9475
     using Base.Test
@@ -284,7 +284,7 @@ foo13825{T, N}(::Array{T,N}, ::Array, ::Vector) = nothing
 @test startswith(string(first(methods(foo13825))),
                  "foo13825(::Array{T,N}, ::Array, ::Array{T,1} where T)")
 
-type TLayout
+mutable struct TLayout
     x::Int8
     y::Int16
     z::Int32
@@ -575,7 +575,7 @@ let a = @code_typed 1 + 1
     @test length(b) == 0
 end
 
-type A18434
+mutable struct A18434
 end
 (::Type{A18434})(x; y=1) = 1
 
@@ -610,14 +610,14 @@ end
 
 # Issue #18883, code_llvm/code_native for generated functions
 @generated f18883() = nothing
-@test !isempty(sprint(io->code_llvm(io, f18883, Tuple{})))
-@test !isempty(sprint(io->code_native(io, f18883, Tuple{})))
+@test !isempty(sprint(code_llvm, f18883, Tuple{}))
+@test !isempty(sprint(code_native, f18883, Tuple{}))
 
 # PR #19964
 @test isempty(subtypes(Float64))
 
 # New reflection methods in 0.6
-immutable ReflectionExample{T<:AbstractFloat, N}
+struct ReflectionExample{T<:AbstractFloat, N}
     x::Tuple{T, N}
 end
 
@@ -640,8 +640,8 @@ let
 end
 
 # Issue #20086
-abstract A20086{T,N}
-immutable B20086{T,N} <: A20086{T,N} end
+abstract type A20086{T,N} end
+struct B20086{T,N} <: A20086{T,N} end
 @test subtypes(A20086) == [B20086]
 @test subtypes(A20086{Int}) == [B20086{Int}]
 @test subtypes(A20086{T,3} where T) == [B20086{T,3} where T]

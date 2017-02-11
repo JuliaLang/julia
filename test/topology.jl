@@ -32,7 +32,7 @@ end
 remove_workers_and_test()
 
 # connect even pids to other even pids, odd to odd.
-type TopoTestManager <: ClusterManager
+mutable struct TopoTestManager <: ClusterManager
     np::Integer
 end
 

@@ -30,6 +30,11 @@ function isorphan(repo::GitRepo)
     r != 0
 end
 
+"""
+    LibGit2.head(repo::GitRepo) -> GitReference
+
+Returns a `GitReference` to the current HEAD of `repo`.
+"""
 function head(repo::GitRepo)
     head_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_repository_head, :libgit2), Cint,
@@ -37,6 +42,24 @@ function head(repo::GitRepo)
     return GitReference(repo, head_ptr_ptr[])
 end
 
+"""
+    LibGit2.shortname(ref::GitReference)
+
+Returns a shortened version of the name of `ref` that's
+"human-readable".
+
+```julia
+julia> repo = LibGit2.GitRepo(path_to_repo);
+
+julia> branch_ref = LibGit2.head(repo);
+
+julia> LibGit2.name(branch_ref)
+"refs/heads/master"
+
+julia> LibGit2.shortname(branch_ref)
+"master"
+```
+"""
 function shortname(ref::GitReference)
     isempty(ref) && return ""
     name_ptr = ccall((:git_reference_shorthand, :libgit2), Cstring, (Ptr{Void},), ref.ptr)
@@ -44,10 +67,25 @@ function shortname(ref::GitReference)
     return unsafe_string(name_ptr)
 end
 
+"""
+    LibGit2.reftype(ref::GitReference) -> Cint
+
+Returns a `Cint` corresponding to the type of `ref`:
+  * `0` if the reference is invalid
+  * `1` if the reference is an object id
+  * `2` if the reference is symbolic
+"""
 function reftype(ref::GitReference)
     return ccall((:git_reference_type, :libgit2), Cint, (Ptr{Void},), ref.ptr)
 end
 
+"""
+    LibGit2.fullname(ref::GitReference)
+
+Return the name of the reference pointed to by the
+symbolic reference `ref`. If `ref` is not a symbolic
+reference, returns an empty string.
+"""
 function fullname(ref::GitReference)
     isempty(ref) && return ""
     reftype(ref) == Consts.REF_OID && return ""
@@ -56,6 +94,11 @@ function fullname(ref::GitReference)
     return unsafe_string(rname)
 end
 
+"""
+    LibGit2.name(ref::GitReference)
+
+Return the full name of `ref`.
+"""
 function name(ref::GitReference)
     isempty(ref) && return ""
     name_ptr = ccall((:git_reference_name, :libgit2), Cstring, (Ptr{Void},), ref.ptr)
@@ -132,6 +175,11 @@ function peel{T<:GitObject}(::Type{T}, ref::GitReference)
 end
 peel(ref::GitReference) = peel(GitObject, ref)
 
+"""
+    LibGit2.ref_list(repo::GitRepo) -> Vector{String}
+
+Get a list of all reference names in the `repo` repository.
+"""
 function ref_list(repo::GitRepo)
     sa_ref = Ref(StrArrayStruct())
     @check ccall((:git_reference_list, :libgit2), Cint,
@@ -141,6 +189,15 @@ function ref_list(repo::GitRepo)
     res
 end
 
+"""
+    LibGit2.create_branch(repo::GitRepo, bname::AbstractString, commit_obj::GitCommit; force::Bool=false)
+
+Create a new branch in the repository `repo` with name `bname`, which
+points to commit `commit_obj` (which has to be part of `repo`). If
+`force` is `true`, overwrite an existing branch named `bname` if it
+exists. If `force` is `false` and a branch already exists named `bname`,
+this function will throw an error.
+"""
 function create_branch(repo::GitRepo,
                        bname::AbstractString,
                        commit_obj::GitCommit;
@@ -152,10 +209,20 @@ function create_branch(repo::GitRepo,
     return GitReference(repo, ref_ptr_ptr[])
 end
 
+"""
+    LibGit2.delete_branch(branch::GitReference)
+
+Delete the branch pointed to by `branch`.
+"""
 function delete_branch(branch::GitReference)
     @check ccall((:git_branch_delete, :libgit2), Cint, (Ptr{Void},), branch.ptr)
 end
 
+"""
+    LibGit2.head!(repo::GitRepo, ref::GitReference) -> GitReference
+
+Set the HEAD of `repo` to the object pointed to by `ref`.
+"""
 function head!(repo::GitRepo, ref::GitReference)
     ref_name = name(ref)
     @check ccall((:git_repository_set_head, :libgit2), Cint,
@@ -170,7 +237,7 @@ Determine if the branch specified by `branch_name` exists in the repository `rep
 If `remote` is `true`, `repo` is assumed to be a remote git repository. Otherwise, it
 is part of the local filesystem.
 
-`lookup_branch` returns a `Nullable`, which will be null if the requested branch does
+`lookup_branch` returns a [`Nullable`](@ref), which will be null if the requested branch does
 not exist yet. If the branch does exist, the `Nullable` contains a `GitReference` to
 the branch.
 """
@@ -199,7 +266,7 @@ end
 
 Determine if the branch containing `ref` has a specified upstream branch.
 
-`upstream` returns a `Nullable`, which will be null if the requested branch does
+`upstream` returns a [`Nullable`](@ref), which will be null if the requested branch does
 not have an upstream counterpart. If the upstream branch does exist, the `Nullable`
 contains a `GitReference` to the upstream branch.
 """

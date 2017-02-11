@@ -71,7 +71,7 @@ end
 # Generic AbstractArrays
 module MyArray15367
     using Base.Test
-    immutable MyArray{T,N} <: AbstractArray{T,N}
+    struct MyArray{T,N} <: AbstractArray{T,N}
         data::Array{T,N}
     end
 
@@ -321,7 +321,7 @@ let
 end
 
 # Number types that lack conversion to the destination type (#14293)
-immutable RootInt
+struct RootInt
     i::Int
 end
 import Base: *, transpose
@@ -398,14 +398,14 @@ end
 module TestPR18218
     using Base.Test
     import Base.*, Base.+, Base.zero
-    immutable TypeA
+    struct TypeA
         x::Int
     end
     Base.convert(::Type{TypeA}, x::Int) = TypeA(x)
-    immutable TypeB
+    struct TypeB
         x::Int
     end
-    immutable TypeC
+    struct TypeC
         x::Int
     end
     Base.convert(::Type{TypeC}, x::Int) = TypeC(x)

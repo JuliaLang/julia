@@ -5,7 +5,7 @@ module PermutedDimsArrays
 export permutedims, PermutedDimsArray
 
 # Some day we will want storage-order-aware iteration, so put perm in the parameters
-immutable PermutedDimsArray{T,N,perm,iperm,AA<:AbstractArray} <: AbstractArray{T,N}
+struct PermutedDimsArray{T,N,perm,iperm,AA<:AbstractArray} <: AbstractArray{T,N}
     parent::AA
 
     function PermutedDimsArray{T,N,perm,iperm,AA}(data::AA) where {T,N,perm,iperm,AA<:AbstractArray}
@@ -56,7 +56,7 @@ Base.unsafe_convert{T}(::Type{Ptr{T}}, A::PermutedDimsArray{T}) = Base.unsafe_co
 # order than used by Julia. But for an array with unconventional
 # storage order, a linear offset is ambiguous---is it a memory offset
 # or a linear index?
-Base.pointer{T}(A::PermutedDimsArray{T}, i::Integer) = throw(ArgumentError("pointer(A, i) is deliberately unsupported for PermutedDimsArray"))
+Base.pointer(A::PermutedDimsArray, i::Integer) = throw(ArgumentError("pointer(A, i) is deliberately unsupported for PermutedDimsArray"))
 
 function Base.strides{T,N,perm}(A::PermutedDimsArray{T,N,perm})
     s = strides(parent(A))
@@ -111,7 +111,7 @@ julia> permutedims(A, [3, 2, 1])
  6  8
 ```
 """
-function Base.permutedims{T,N}(A::AbstractArray{T,N}, perm)
+function Base.permutedims(A::AbstractArray, perm)
     dest = similar(A, genperm(indices(A), perm))
     permutedims!(dest, A, perm)
 end

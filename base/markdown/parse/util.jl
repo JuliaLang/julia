@@ -91,7 +91,7 @@ function startswith(stream::IO, c::Char; eat = true)
     end
 end
 
-function startswith{T<:AbstractString}(stream::IO, ss::Vector{T}; kws...)
+function startswith(stream::IO, ss::Vector{<:AbstractString}; kws...)
     any(s->startswith(stream, s; kws...), ss)
 end
 

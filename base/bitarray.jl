@@ -4,7 +4,7 @@
 
 # notes: bits are stored in contiguous chunks
 #        unused bits must always be set to 0
-type BitArray{N} <: DenseArray{Bool, N}
+mutable struct BitArray{N} <: DenseArray{Bool, N}
     chunks::Vector{UInt64}
     len::Int
     dims::NTuple{N,Int}
@@ -67,9 +67,9 @@ size(B::BitArray) = B.dims
     ifelse(d == 1, B.len, 1)
 end
 
-isassigned{N}(B::BitArray{N}, i::Int) = 1 <= i <= length(B)
+isassigned(B::BitArray, i::Int) = 1 <= i <= length(B)
 
-linearindexing{A<:BitArray}(::Type{A}) = LinearFast()
+linearindexing(::Type{<:BitArray}) = LinearFast()
 
 ## aux functions ##
 
@@ -335,7 +335,7 @@ end
 @inline try_bool_conversion(x::Real) = x == 0 || x == 1 || throw(InexactError())
 @inline unchecked_bool_convert(x::Real) = x == 1
 
-function copy_to_bitarray_chunks!{T<:Real}(Bc::Vector{UInt64}, pos_d::Int, C::Array{T}, pos_s::Int, numbits::Int)
+function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{<:Real}, pos_s::Int, numbits::Int)
     @inbounds for i = (1:numbits) + pos_s - 1
         try_bool_conversion(C[i])
     end

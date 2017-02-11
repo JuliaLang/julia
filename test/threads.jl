@@ -176,7 +176,7 @@ end
 @test_throws TypeError Atomic{Complex128}
 
 # Test atomic memory ordering with load/store
-type CommBuf
+mutable struct CommBuf
     var1::Atomic{Int}
     var2::Atomic{Int}
     correct_write::Bool
@@ -221,7 +221,7 @@ test_atomic()
 
 # Test ordering with fences using Peterson's algorithm
 # Example adapted from <https://en.wikipedia.org/wiki/Peterson%27s_algorithm>
-type Peterson
+mutable struct Peterson
     # State for Peterson's algorithm
     flag::Vector{Atomic{Int}}
     turn::Atomic{Int}

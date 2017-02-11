@@ -28,7 +28,7 @@ julia> collect(g)
  25
 ```
 """
-immutable Generator{I,F}
+struct Generator{I,F}
     f::F
     iter::I
 end
@@ -48,11 +48,11 @@ end
 
 ## iterator traits
 
-abstract IteratorSize
-immutable SizeUnknown <: IteratorSize end
-immutable HasLength <: IteratorSize end
-immutable HasShape <: IteratorSize end
-immutable IsInfinite <: IteratorSize end
+abstract type IteratorSize end
+struct SizeUnknown <: IteratorSize end
+struct HasLength <: IteratorSize end
+struct HasShape <: IteratorSize end
+struct IsInfinite <: IteratorSize end
 
 """
     iteratorsize(itertype::Type) -> IteratorSize
@@ -82,9 +82,9 @@ Base.HasLength()
 iteratorsize(x) = iteratorsize(typeof(x))
 iteratorsize(::Type) = HasLength()  # HasLength is the default
 
-abstract IteratorEltype
-immutable EltypeUnknown <: IteratorEltype end
-immutable HasEltype <: IteratorEltype end
+abstract type IteratorEltype end
+struct EltypeUnknown <: IteratorEltype end
+struct HasEltype <: IteratorEltype end
 
 """
     iteratoreltype(itertype::Type) -> IteratorEltype
@@ -108,7 +108,7 @@ Base.HasEltype()
 iteratoreltype(x) = iteratoreltype(typeof(x))
 iteratoreltype(::Type) = HasEltype()  # HasEltype is the default
 
-iteratorsize{T<:AbstractArray}(::Type{T}) = HasShape()
+iteratorsize(::Type{<:AbstractArray}) = HasShape()
 iteratorsize{I,F}(::Type{Generator{I,F}}) = iteratorsize(I)
 length(g::Generator) = length(g.iter)
 size(g::Generator) = size(g.iter)

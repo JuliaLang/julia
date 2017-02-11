@@ -49,7 +49,7 @@ const kBigitMask = Chunk((1 << kBigitSize) - 1)
 # grow. There are no checks if the stack-allocated space is sufficient.
 const kBigitCapacity = div(kMaxSignificantBits,kBigitSize)
 
-type Bignum
+mutable struct Bignum
     bigits::Array{UInt32,1}
     used_digits::Int32
     exponent::Int32

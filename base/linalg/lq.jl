@@ -2,13 +2,13 @@
 
 # LQ Factorizations
 
-immutable LQ{T,S<:AbstractMatrix} <: Factorization{T}
+struct LQ{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     τ::Vector{T}
     LQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
 
-immutable LQPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
+struct LQPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     factors::Matrix{T}
     τ::Vector{T}
     LQPackedQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
@@ -23,13 +23,13 @@ LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQPackedQ{T,typ
 Compute the LQ factorization of `A`, using the input
 matrix as a workspace. See also [`lq`](@ref).
 """
-lqfact!{T<:BlasFloat}(A::StridedMatrix{T}) = LQ(LAPACK.gelqf!(A)...)
+lqfact!(A::StridedMatrix{<:BlasFloat}) = LQ(LAPACK.gelqf!(A)...)
 """
     lqfact(A) -> LQ
 
 Compute the LQ factorization of `A`. See also [`lq`](@ref).
 """
-lqfact{T<:BlasFloat}(A::StridedMatrix{T})  = lqfact!(copy(A))
+lqfact(A::StridedMatrix{<:BlasFloat})  = lqfact!(copy(A))
 lqfact(x::Number) = lqfact(fill(x,1,1))
 
 """

@@ -39,7 +39,7 @@ function show{K,V}(io::IO, ::MIME"text/plain", t::Associative{K,V})
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit::Bool = get(io, :limit, false)
     if !haskey(io, :compact)
-        recur_io = IOContext(recur_io, compact=true)
+        recur_io = IOContext(recur_io, :compact => true)
     end
 
     print(io, summary(t))
@@ -223,7 +223,7 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
         if !code.from_c
             if code.func == :nan_dom_err
                 continue
-            elseif code.func in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
+            elseif code.func in (:log, :log2, :log10, :sqrt)
                 print(io, "\n$(code.func) will only return a complex result if called ",
                     "with a complex argument. Try $(string(code.func))(complex(x)).")
             elseif (code.func == :^ && code.file == Symbol("intfuncs.jl")) ||
@@ -442,7 +442,12 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
     for (func,arg_types_param) in funcs
         for method in methods(func)
             buf = IOBuffer()
-            sig0 = unwrap_unionall(method.sig)
+            tv = Any[]
+            sig0 = method.sig
+            while isa(sig0, UnionAll)
+                push!(tv, sig0.var)
+                sig0 = sig0.body
+            end
             s1 = sig0.parameters[1]
             sig = sig0.parameters[2:end]
             print(buf, "  ")
@@ -453,10 +458,6 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                 # TODO: use the methodshow logic here
                 use_constructor_syntax = isa(func, Type)
                 print(buf, use_constructor_syntax ? func : typeof(func).name.mt.name)
-            end
-            tv = method.tvars
-            if !isa(tv,SimpleVector)
-                tv = Any[tv]
             end
             print(buf, "(")
             t_i = copy(arg_types_param)

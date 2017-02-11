@@ -389,7 +389,7 @@ function mktempdir(fn::Function, parent=tempdir())
     end
 end
 
-immutable uv_dirent_t
+struct uv_dirent_t
     name::Ptr{UInt8}
     typ::Cint
 end
