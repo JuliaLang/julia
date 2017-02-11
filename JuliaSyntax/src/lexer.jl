@@ -855,7 +855,7 @@ function lex_identifier(l, c)
         if c == 'f'
             c = readchar(l)
             if !is_identifier_char(c)
-                skip(l.io, -Int(!eof(c)))
+                backup!(l)
                 return emit(l, IF)
             else
                 return readrest(l)
@@ -873,7 +873,7 @@ function lex_identifier(l, c)
                         if c == 't'
                             c = readchar(l)
                             if !is_identifier_char(c)
-                                skip(l.io, -Int(!eof(c)))
+                                backup!(l)
                                 return emit(l, IMPORT)
                             elseif c == 'a'
                                 return tryread(l, ('l','l'), IMPORTALL)
@@ -895,7 +895,7 @@ function lex_identifier(l, c)
         elseif c == 'n'
             c = readchar(l)
             if !is_identifier_char(c)
-                skip(l.io, -Int(!eof(c)))
+                backup!(l)
                 return emit(l, IN)
             else
                 return readrest(l)
@@ -934,14 +934,15 @@ function lex_identifier(l, c)
             if c == 'u'
                 return tryread(l, ('e'), TRUE)
             elseif c == 'y'
-                return emit(l, TRY)
-            else
+                c = readchar(l)
                 if !is_identifier_char(c)
                     backup!(l)
-                    return emit(l, IDENTIFIER)
+                    return emit(l, TRY)
                 else
-                    return readrest(l)
+                    return _doret(c, l)
                 end
+            else
+                return _doret(c, l)
             end
         elseif c == 'y'
             c = readchar(l)
@@ -971,12 +972,7 @@ function lex_identifier(l, c)
     elseif c == 'w'
         return tryread(l, ('h', 'i', 'l', 'e'), WHILE)
     else
-        if !is_identifier_char(c)
-            backup!(l)
-            return emit(l, IDENTIFIER)
-        else
-            return readrest(l)
-        end
+        return _doret(c, l)
     end
 end
 
