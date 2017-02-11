@@ -742,7 +742,7 @@ mktempdir() do dir
 
 
             verbose && println("$name read...")
-            @test @compat read(io()) == UInt8[convert(UInt8, _) for _ in text]
+            @test @compat read(io()) == UInt8[convert(UInt8, x) for x in text]
 
             @test read(io()) == read(filename)
 
@@ -843,7 +843,7 @@ mktempdir() do dir
         @test readstring("$filename.to") == text
 
         verbose && println("$name write(::IOBuffer, ...)")
-        @compat to = IOBuffer(UInt8[convert(UInt8, _) for _ in text], false, true)
+        @compat to = IOBuffer(UInt8[convert(UInt8, x) for x in text], false, true)
         write(to, io())
         @test String(take!(to)) == text
 
@@ -1353,8 +1353,11 @@ end
 end
 @test do_boundscheck() == true
 
-@test Compat.promote_eltype_op(@functorize(+), ones(2,2), 1) === Float64
-@test Compat.promote_eltype_op(@functorize(*), ones(Int, 2), zeros(Int16,2)) === Int
+if VERSION < v"0.6.0-dev.1886"
+    # `promote_eltype_op` is deprecated
+    @test Compat.promote_eltype_op(@functorize(+), ones(2,2), 1) === Float64
+    @test Compat.promote_eltype_op(@functorize(*), ones(Int, 2), zeros(Int16,2)) === Int
+end
 
 #Add test for Base.normalize and Base.normalize!
 let
@@ -1622,7 +1625,7 @@ for x in (3.1, -17, 3//4, big(111.1), Inf)
 end
 
 # julia#20006
-abstract AbstractFoo20006
+@compat abstract type AbstractFoo20006 end
 immutable ConcreteFoo20006{T<:Int} <: AbstractFoo20006 end
 immutable ConcreteFoo20006N{T<:Int,N} <: AbstractFoo20006 end
 typealias ConcreteFoo200061{T<:Int} ConcreteFoo20006N{T,1}
@@ -1752,3 +1755,11 @@ let x = [1,2,3]
     @dotcompat f(x) = x^2
     @test f(x) == [1,4,9]
 end
+
+# PR #20418
+@compat abstract type Abstract20418{T} <: Ref{T} end
+@test Compat.TypeUtils.isabstract(Abstract20418)
+@compat primitive type Primitive20418{T} <: Ref{T} 16 end
+@test !Compat.TypeUtils.isabstract(Primitive20418)
+@test isbits(Primitive20418{Int})
+@test sizeof(Primitive20418{Int}) == 2

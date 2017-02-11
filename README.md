@@ -71,6 +71,10 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `@compat Array{<:Real}` and similar uses of `<:T` to define a set of parameterized types ([#20414]).
   In 0.4 and 0.5, this only works for non-nested usages (e.g. you can't define `Array{<:Array{<:Real}}`).
 
+* `@compat abstract type T end` and `@compat primitive type T 8 end`
+  to declare abstract and primitive types. [#20418]
+  This only works when `@compat` is applied directly on the declaration.
+
 ## Type Aliases
 
 * In 0.5, `ASCIIString` and `ByteString` were deprecated, and `UTF8String` was renamed to the (now concrete) type `String`.
