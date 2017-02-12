@@ -1667,7 +1667,6 @@ JL_DLLEXPORT JL_STREAM *jl_stdin_stream(void);
 JL_DLLEXPORT JL_STREAM *jl_stderr_stream(void);
 
 // showing and std streams
-JL_DLLEXPORT void jl_show(jl_value_t *stream, jl_value_t *v);
 JL_DLLEXPORT void jl_flush_cstdio(void);
 JL_DLLEXPORT jl_value_t *jl_stdout_obj(void);
 JL_DLLEXPORT jl_value_t *jl_stderr_obj(void);
