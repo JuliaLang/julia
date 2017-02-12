@@ -1220,6 +1220,12 @@ f15032(a) = @compat sin.(a)
 @inferred f15032([1, 2, 3])
 @inferred f15032([1.0, 2.0, 3.0])
 
+# Issue #291
+if VERSION ≥ v"0.5.0-dev+4002"
+    @test (1, 2) == @compat abs.((1, -2))
+    @test broadcast(+, (1.0, 1.0), (0, -2.0)) == (1.0,-1.0)
+end
+
 if VERSION ≥ v"0.4.0-dev+3732"
     @test Symbol("foo") === :foo
     @test Symbol("foo", "bar") === :foobar

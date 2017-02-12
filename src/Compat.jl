@@ -1725,6 +1725,11 @@ if VERSION < v"0.5.0-dev+4677"
     Base.cholfact!(A::HermOrSym, T::Type) = cholfact!(A.data, Symbol(A.uplo), T)
 end
 
+# broadcast over same length tuples, from julia#16986
+if v"0.5.0-dev+4002" ≤ VERSION < v"0.6.0-dev.693"
+    Base.Broadcast.broadcast{N}(f, t::NTuple{N}, ts::Vararg{NTuple{N}}) = map(f, t, ts...)
+end
+
 # julia#18510
 if VERSION < v"0.6.0-dev.826"
     _Nullable_field2(x) = !x
