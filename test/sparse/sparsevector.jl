@@ -1127,7 +1127,7 @@ end
 type t20488 end
 
 @testset "similar" begin
-    x = sparsevec(rand(3))
+    x = sparsevec(rand(3) .+ 0.1)
     @test length(similar(x, t20488).nzval) == 3
     @test typeof(similar(x, Float32, Int32)) == SparseVector{Float32, Int32}
     @test typeof(similar(x, Float32)) == SparseVector{Float32, Int}
@@ -1139,7 +1139,7 @@ end
     @test String(take!(io)) == "1-element SparseVector{Float64,Int64} with 1 stored entry:\n  [1]  =  1.0"
     show(io, MIME"text/plain"(),  spzeros(Float64, Int64, 2))
     @test String(take!(io)) == "2-element SparseVector{Float64,Int64} with 0 stored entries"
-    show(io, similar(sparsevec(rand(3)), t20488))
+    show(io, similar(sparsevec(rand(3) .+ 0.1), t20488))
     @test String(take!(io)) == "  [1]  =  #undef\n  [2]  =  #undef\n  [3]  =  #undef"
 end
 
