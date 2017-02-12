@@ -68,6 +68,9 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
                     try
                         value = eval(Main, Expr(:call, ast))
                     catch err
+                        if !isa(err, MethodError)
+                            rethrow(err)
+                        end
                     end
                 end
                 backend.in_eval = false
