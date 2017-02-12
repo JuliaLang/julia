@@ -368,7 +368,7 @@ function test_scalar_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
 end
 
 function test_vector_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
-    @testset "test_vector_indexing{T}" begin
+    @testset "test_vector_indexing{$(T)}" begin
         N = prod(shape)
         A = reshape(collect(1:N), shape)
         B = T(A)
@@ -455,13 +455,11 @@ function test_primitives{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     @test_throws MethodError convert(Matrix, X)
 end
 
-let
-    mutable struct TestThrowNoGetindex{T} <: AbstractVector{T} end
-    @testset "ErrorException if getindex is not defined" begin
-        Base.length(::TestThrowNoGetindex) = 2
-        Base.size(::TestThrowNoGetindex) = (2,)
-        @test_throws ErrorException isassigned(TestThrowNoGetindex{Float64}(), 1)
-    end
+mutable struct TestThrowNoGetindex{T} <: AbstractVector{T} end
+@testset "ErrorException if getindex is not defined" begin
+    Base.length(::TestThrowNoGetindex) = 2
+    Base.size(::TestThrowNoGetindex) = (2,)
+    @test_throws ErrorException isassigned(TestThrowNoGetindex{Float64}(), 1)
 end
 
 function test_in_bounds(::Type{TestAbstractArray})
