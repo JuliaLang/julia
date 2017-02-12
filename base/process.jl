@@ -158,8 +158,8 @@ uvtype(::Ptr) = UV_STREAM
 uvhandle(x::RawFD) = convert(Ptr{Void}, x.fd % UInt)
 uvtype(x::RawFD) = UV_RAW_FD
 
-typealias Redirectable Union{IO, FileRedirect, RawFD}
-typealias StdIOSet NTuple{3, Union{Redirectable, Ptr{Void}}} # XXX: remove Ptr{Void} once libuv is refactored to use upstream release
+const Redirectable = Union{IO, FileRedirect, RawFD}
+const StdIOSet = NTuple{3, Union{Redirectable, Ptr{Void}}} # XXX: remove Ptr{Void} once libuv is refactored to use upstream release
 
 struct CmdRedirect <: AbstractCmd
     cmd::AbstractCmd

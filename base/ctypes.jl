@@ -8,7 +8,7 @@
 
 Equivalent to the native `unsigned char` c-type (`UInt8`).
 """
-typealias Cuchar UInt8
+const Cuchar = UInt8
 
 
 """
@@ -16,7 +16,7 @@ typealias Cuchar UInt8
 
 Equivalent to the native `signed short` c-type (`Int16`).
 """
-typealias Cshort Int16
+const Cshort = Int16
 
 
 """
@@ -24,7 +24,7 @@ typealias Cshort Int16
 
 Equivalent to the native `unsigned short` c-type (`UInt16`).
 """
-typealias Cushort UInt16
+const Cushort = UInt16
 
 
 """
@@ -32,7 +32,7 @@ typealias Cushort UInt16
 
 Equivalent to the native `signed int` c-type (`Int32`).
 """
-typealias Cint Int32
+const Cint = Int32
 
 
 """
@@ -40,7 +40,7 @@ typealias Cint Int32
 
 Equivalent to the native `unsigned int` c-type (`UInt32`).
 """
-typealias Cuint UInt32
+const Cuint = UInt32
 
 
 """
@@ -48,7 +48,7 @@ typealias Cuint UInt32
 
 Equivalent to the native `ptrdiff_t` c-type (`Int`).
 """
-typealias Cptrdiff_t Int
+const Cptrdiff_t = Int
 
 
 """
@@ -56,7 +56,7 @@ typealias Cptrdiff_t Int
 
 Equivalent to the native `size_t` c-type (`UInt`).
 """
-typealias Csize_t UInt
+const Csize_t = UInt
 
 
 """
@@ -64,7 +64,7 @@ typealias Csize_t UInt
 
 Equivalent to the native `ssize_t` c-type.
 """
-typealias Cssize_t Int
+const Cssize_t = Int
 
 
 """
@@ -72,7 +72,7 @@ typealias Cssize_t Int
 
 Equivalent to the native `intmax_t` c-type (`Int64`).
 """
-typealias Cintmax_t Int64
+const Cintmax_t = Int64
 
 
 """
@@ -80,7 +80,7 @@ typealias Cintmax_t Int64
 
 Equivalent to the native `uintmax_t` c-type (`UInt64`).
 """
-typealias Cuintmax_t UInt64
+const Cuintmax_t = UInt64
 
 
 """
@@ -88,7 +88,7 @@ typealias Cuintmax_t UInt64
 
 Equivalent to the native `signed long long` c-type (`Int64`).
 """
-typealias Clonglong Int64
+const Clonglong = Int64
 
 
 """
@@ -96,7 +96,7 @@ typealias Clonglong Int64
 
 Equivalent to the native `unsigned long long` c-type (`UInt64`).
 """
-typealias Culonglong UInt64
+const Culonglong = UInt64
 
 
 """
@@ -104,7 +104,7 @@ typealias Culonglong UInt64
 
 Equivalent to the native `float` c-type (`Float32`).
 """
-typealias Cfloat Float32
+const Cfloat = Float32
 
 
 """
@@ -112,4 +112,4 @@ typealias Cfloat Float32
 
 Equivalent to the native `double` c-type (`Float64`).
 """
-typealias Cdouble Float64
+const Cdouble = Float64

@@ -152,7 +152,7 @@ function Dict(kv)
     end
 end
 
-typealias TP{K,V} Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
+TP{K,V} = Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
 
 associative_with_eltype{K,V}(DT_apply, kv, ::TP{K,V}) = DT_apply(K, V)(kv)
 associative_with_eltype{K,V}(DT_apply, kv::Generator, ::TP{K,V}) = DT_apply(K, V)(kv)

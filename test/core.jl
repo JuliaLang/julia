@@ -59,7 +59,7 @@ _bound_vararg_specificity_1{T}(::Type{Array{T,1}}, d::Int) = 1
 @test _bound_vararg_specificity_1(Array{Int,2}, 1, 1) == 0
 
 # issue #11840
-typealias TT11840{T} Tuple{T,T}
+TT11840{T} = Tuple{T,T}
 f11840(::Type) = "Type"
 f11840(::DataType) = "DataType"
 f11840(::UnionAll) = "UnionAll"
@@ -569,7 +569,7 @@ let
 end
 
 mutable struct _AA{T}; a::T; end
-typealias _AoA{T} _AA{_AA{T}}
+_AoA{T} = _AA{_AA{T}}
 let
     local g, a
     g{T}(a::_AA{_AA{T}}) = a
@@ -785,7 +785,7 @@ end
 # issue #814
 let
     local MatOrNot, my_func, M
-    typealias MatOrNot{T} Union{AbstractMatrix{T}, Vector{Union{}}}
+    MatOrNot{T} = Union{AbstractMatrix{T}, Vector{Union{}}}
     my_func{T<:Real}(A::MatOrNot{T}, B::MatOrNot{T}, C::MatOrNot{T}) = 0
     M = [ 2. 1. ; 1. 1. ]
     @test my_func(Union{}[], M, M) == 0
@@ -1102,7 +1102,7 @@ i2619()
 @test isa(e2619,UndefVarError) && e2619.var === :f
 
 # issue #2919
-typealias Foo2919 Int
+const Foo2919 = Int
 mutable struct Baz2919; Foo2919::Foo2919; end
 @test Baz2919(3).Foo2919 === 3
 
@@ -1140,8 +1140,8 @@ end
 @test isa(f3471(Any[1.0,2.0]), Vector{Float64})
 
 # issue #3729
-typealias A3729{B} Vector{Vector{B}}
-typealias C3729{D} Vector{Vector{D}}
+A3729{B} = Vector{Vector{B}}
+C3729{D} = Vector{Vector{D}}
 @test Vector{Vector{Int}} === A3729{Int} === C3729{Int}
 
 # issue #3789
@@ -1204,7 +1204,7 @@ end
 # issue #4115
 #mutable struct Foo4115
 #end
-#typealias Foo4115s NTuple{3,Union{Foo4115,Type{Foo4115}}}
+#const Foo4115s = NTuple{3,Union{Foo4115,Type{Foo4115}}}
 #baz4115(x::Foo4115s) = x
 #@test baz4115(convert(Tuple{Type{Foo4115},Type{Foo4115},Foo4115},
 #                      (Foo4115,Foo4115,Foo4115()))) == (Foo4115,Foo4115,Foo4115())
@@ -1843,7 +1843,7 @@ f6980(::Union{Int, Float64}, ::B6980) = true
 @test f6980(1, B6980())
 
 # issue #7049
-typealias Maybe7049{T} Union{T,Void}
+Maybe7049{T} = Union{T,Void}
 function ttt7049(;init::Maybe7049{Union{AbstractString,Tuple{Int,Char}}} = nothing)
     string("init=", init)
 end
@@ -1986,7 +1986,7 @@ c99991{T}(::Type{UnitRange{T}},x::Range{T}) = 2
 @test c99991(UnitRange{Int}, 1:2) == 2
 
 # issue #17016, method specificity involving vararg tuples
-typealias T_17016{N} Tuple{Any,Any,Vararg{Any,N}}
+T_17016{N} = Tuple{Any,Any,Vararg{Any,N}}
 f17016(f, t::T_17016) = 0
 f17016(f, t1::Tuple) = 1
 @test f17016(0, (1,2,3)) == 0
@@ -2217,7 +2217,7 @@ y8d003 = 777
 # issue #9378
 abstract type Foo9378{T,S} end
 struct B9378{T} end
-typealias FooB9378{T} Foo9378{T,B9378}
+FooB9378{T} = Foo9378{T,B9378}
 struct CFoo9378 <: FooB9378{Float64} end
 @test isa(CFoo9378(),FooB9378)
 
@@ -2791,12 +2791,12 @@ gc()
 @test collect(enumerate((Tuple,3))) == [(1,Tuple), (2,3)]
 
 # issue #10978
-typealias TupleType10978{T<:Tuple} Type{T}
+TupleType10978{T<:Tuple} = Type{T}
 f10978(T::TupleType10978) = isa(T, TupleType10978)
 @test f10978(Tuple{Int})
 
 # issue #10995
-#typealias TupleType{T<:Tuple} Type{T}
+#TupleType{T<:Tuple} = Type{T}
 f10995(::Any) = (while false; end; nothing)
 f10995(T::TupleType10978) = (while false; end; @assert isa(T, TupleType10978))
 g10995(x) = f10995(typeof(x))
@@ -3138,7 +3138,7 @@ end
 # don't allow non-types in Union
 @test_throws TypeError Union{1}
 @test_throws TypeError Union{Int,0}
-typealias PossiblyInvalidUnion{T} Union{T,Int}
+PossiblyInvalidUnion{T} = Union{T,Int}
 @test_throws TypeError PossiblyInvalidUnion{1}
 
 # issue #12569
@@ -3157,7 +3157,7 @@ cycle_in_solve_tvar_constraints{T}(::Type{T}, x::Val{T}) = 1
 
 # issue #12967
 foo12967(x, ::ANY) = 1
-typealias TupleType12967{T<:Tuple} Type{T}
+TupleType12967{T<:Tuple} = Type{T}
 foo12967(x, ::TupleType12967) = 2
 @test foo12967(1, Int) == 1
 @test foo12967(1, Tuple{}) == 2
@@ -3180,7 +3180,7 @@ struct A11888{T}
     a::NTuple{16,T}
 end
 
-typealias B11888{T} A11888{A11888{A11888{T}}}
+B11888{T} = A11888{A11888{A11888{T}}}
 
 @test sizeof(B11888{B11888{Int64}}) == (1 << 24) * 8
 

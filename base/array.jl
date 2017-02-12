@@ -4,22 +4,22 @@
 
 ## Type aliases for convenience ##
 
-typealias AbstractVector{T} AbstractArray{T,1}
-typealias AbstractMatrix{T} AbstractArray{T,2}
-typealias AbstractVecOrMat{T} Union{AbstractVector{T}, AbstractMatrix{T}}
-typealias RangeIndex Union{Int, Range{Int}, AbstractUnitRange{Int}}
-typealias DimOrInd Union{Integer, AbstractUnitRange}
-typealias IntOrInd Union{Int, AbstractUnitRange}
-typealias DimsOrInds{N} NTuple{N,DimOrInd}
-typealias NeedsShaping Union{Tuple{Integer,Vararg{Integer}}, Tuple{OneTo,Vararg{OneTo}}}
+const AbstractVector{T} = AbstractArray{T,1}
+const AbstractMatrix{T} = AbstractArray{T,2}
+const AbstractVecOrMat{T} = Union{AbstractVector{T}, AbstractMatrix{T}}
+const RangeIndex = Union{Int, Range{Int}, AbstractUnitRange{Int}}
+const DimOrInd = Union{Integer, AbstractUnitRange}
+const IntOrInd = Union{Int, AbstractUnitRange}
+const DimsOrInds{N} = NTuple{N,DimOrInd}
+const NeedsShaping = Union{Tuple{Integer,Vararg{Integer}}, Tuple{OneTo,Vararg{OneTo}}}
 
-typealias Vector{T} Array{T,1}
-typealias Matrix{T} Array{T,2}
-typealias VecOrMat{T} Union{Vector{T}, Matrix{T}}
+const Vector{T} = Array{T,1}
+const Matrix{T} = Array{T,2}
+const VecOrMat{T} = Union{Vector{T}, Matrix{T}}
 
-typealias DenseVector{T} DenseArray{T,1}
-typealias DenseMatrix{T} DenseArray{T,2}
-typealias DenseVecOrMat{T} Union{DenseVector{T}, DenseMatrix{T}}
+const DenseVector{T} = DenseArray{T,1}
+const DenseMatrix{T} = DenseArray{T,2}
+const DenseVecOrMat{T} = Union{DenseVector{T}, DenseMatrix{T}}
 
 ## Basic functions ##
 

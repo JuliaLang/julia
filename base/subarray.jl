@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 abstract type AbstractCartesianIndex{N} end # This is a hacky forward declaration for CartesianIndex
-typealias ViewIndex Union{Real, AbstractArray}
-typealias ScalarIndex Real
+const ViewIndex = Union{Real, AbstractArray}
+const ScalarIndex = Real
 
 # L is true if the view itself supports fast linear indexing
 struct SubArray{T,N,P,I,L} <: AbstractArray{T,N}
@@ -146,7 +146,7 @@ end
 # * Parent index is Colon  -> just use the sub-index as provided
 # * Parent index is scalar -> that dimension was dropped, so skip the sub-index and use the index as is
 
-typealias AbstractZeroDimArray{T} AbstractArray{T, 0}
+AbstractZeroDimArray{T} = AbstractArray{T, 0}
 
 reindex(V, ::Tuple{}, ::Tuple{}) = ()
 
@@ -178,7 +178,7 @@ reindex(V, idxs::Tuple{AbstractMatrix, Vararg{Any}}, subidxs::Tuple{Any, Any, Va
 end
 
 # In general, we simply re-index the parent indices by the provided ones
-typealias SlowSubArray{T,N,P,I} SubArray{T,N,P,I,false}
+SlowSubArray{T,N,P,I} = SubArray{T,N,P,I,false}
 function getindex{T,N}(V::SlowSubArray{T,N}, I::Vararg{Int,N})
     @_inline_meta
     @boundscheck checkbounds(V, I...)
@@ -186,7 +186,7 @@ function getindex{T,N}(V::SlowSubArray{T,N}, I::Vararg{Int,N})
     r
 end
 
-typealias FastSubArray{T,N,P,I} SubArray{T,N,P,I,true}
+FastSubArray{T,N,P,I} = SubArray{T,N,P,I,true}
 function getindex(V::FastSubArray, i::Int)
     @_inline_meta
     @boundscheck checkbounds(V, i)
@@ -194,7 +194,7 @@ function getindex(V::FastSubArray, i::Int)
     r
 end
 # We can avoid a multiplication if the first parent index is a Colon or UnitRange
-typealias FastContiguousSubArray{T,N,P,I<:Tuple{Union{Slice, UnitRange}, Vararg{Any}}} SubArray{T,N,P,I,true}
+FastContiguousSubArray{T,N,P,I<:Tuple{Union{Slice, UnitRange}, Vararg{Any}}} = SubArray{T,N,P,I,true}
 function getindex(V::FastContiguousSubArray, i::Int)
     @_inline_meta
     @boundscheck checkbounds(V, i)

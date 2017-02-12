@@ -26,7 +26,7 @@ using Base: sign_mask, exponent_mask, exponent_one, exponent_bias,
 
 using Core.Intrinsics: sqrt_llvm, powi_llvm
 
-typealias IEEEFloat Union{Float16,Float32,Float64}
+const IEEEFloat = Union{Float16,Float32,Float64}
 # non-type specific math functions
 
 """

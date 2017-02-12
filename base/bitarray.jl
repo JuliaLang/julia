@@ -51,8 +51,8 @@ julia> BitArray((3, 1))
 BitArray(dims::Integer...) = BitArray(map(Int,dims))
 BitArray(dims::NTuple{N,Int}) where {N} = BitArray{N}(dims...)
 
-typealias BitVector BitArray{1}
-typealias BitMatrix BitArray{2}
+const BitVector = BitArray{1}
+const BitMatrix = BitArray{2}
 
 BitVector() = BitArray{1}(0)
 

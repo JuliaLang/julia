@@ -23,7 +23,7 @@ end
 @pure check_types{T1,T2}(::Type{T1},::Type{T2}) = T1 === transpose_type(T2) ? nothing :
     error("Element type mismatch. Tried to create a `RowVector{$T1}` from an `AbstractVector{$T2}`")
 
-typealias ConjRowVector{T, CV <: ConjVector} RowVector{T, CV}
+ConjRowVector{T, CV <: ConjVector} = RowVector{T, CV}
 
 # The element type may be transformed as transpose is recursive
 @inline transpose_type{T}(::Type{T}) = promote_op(transpose, T)

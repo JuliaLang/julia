@@ -2,7 +2,7 @@
 
 using Core: CodeInfo
 
-typealias Callable Union{Function,Type}
+const Callable = Union{Function,Type}
 
 const Bottom = Union{}
 

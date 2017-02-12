@@ -83,8 +83,8 @@ function Hermitian(A::AbstractMatrix, uplo::Symbol=:U)
     Hermitian{eltype(A),typeof(A)}(A, char_uplo(uplo))
 end
 
-typealias HermOrSym{T,S} Union{Hermitian{T,S}, Symmetric{T,S}}
-typealias RealHermSymComplexHerm{T<:Real,S} Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}
+HermOrSym{T,S} = Union{Hermitian{T,S}, Symmetric{T,S}}
+RealHermSymComplexHerm{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}
 
 size(A::HermOrSym, d) = size(A.data, d)
 size(A::HermOrSym) = size(A.data)

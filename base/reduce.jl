@@ -5,15 +5,15 @@
 ###### Generic (map)reduce functions ######
 
 if Int === Int32
-typealias SmallSigned Union{Int8,Int16}
-typealias SmallUnsigned Union{UInt8,UInt16}
+const SmallSigned = Union{Int8,Int16}
+const SmallUnsigned = Union{UInt8,UInt16}
 else
-typealias SmallSigned Union{Int8,Int16,Int32}
-typealias SmallUnsigned Union{UInt8,UInt16,UInt32}
+const SmallSigned = Union{Int8,Int16,Int32}
+const SmallUnsigned = Union{UInt8,UInt16,UInt32}
 end
 
-typealias CommonReduceResult Union{UInt64,UInt128,Int64,Int128,Float32,Float64}
-typealias WidenReduceResult Union{SmallSigned, SmallUnsigned, Float16}
+const CommonReduceResult = Union{UInt64,UInt128,Int64,Int128,Float32,Float64}
+const WidenReduceResult = Union{SmallSigned, SmallUnsigned, Float16}
 
 # r_promote_type: promote T to the type of reduce(op, ::Array{T})
 # (some "extra" methods are required here to avoid ambiguity warnings)

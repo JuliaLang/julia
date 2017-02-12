@@ -73,8 +73,8 @@ Clear any existing backtraces from the internal buffer.
 """
 clear() = ccall(:jl_profile_clear_data, Void, ())
 
-typealias LineInfoDict Dict{UInt64, Vector{StackFrame}}
-typealias LineInfoFlatDict Dict{UInt64, StackFrame}
+const LineInfoDict = Dict{UInt64, Vector{StackFrame}}
+const LineInfoFlatDict = Dict{UInt64, StackFrame}
 
 struct ProfileFormat
     maxdepth::Int

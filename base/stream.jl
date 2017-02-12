@@ -143,7 +143,7 @@ mutable struct PipeServer <: LibuvServer
     end
 end
 
-typealias LibuvPipe Union{PipeEndpoint, PipeServer}
+const LibuvPipe = Union{PipeEndpoint, PipeServer}
 
 function PipeServer()
     p = PipeServer(Libc.malloc(_sizeof_uv_named_pipe), StatusUninit)

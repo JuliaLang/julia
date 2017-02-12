@@ -1560,7 +1560,7 @@ for (T, f) in ((:Dense, :solve), (:Sparse, :spsolve))
     end
 end
 
-typealias SparseVecOrMat{Tv,Ti} Union{SparseVector{Tv,Ti}, SparseMatrixCSC{Tv,Ti}}
+SparseVecOrMat{Tv,Ti} = Union{SparseVector{Tv,Ti}, SparseMatrixCSC{Tv,Ti}}
 
 function (\)(L::FactorComponent, b::Vector)
     reshape(convert(Matrix, L\Dense(b)), length(b))
