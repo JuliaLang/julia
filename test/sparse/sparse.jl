@@ -1731,7 +1731,7 @@ end
 end
 
 @testset "similar aliasing" begin
-    a = sparse(rand(3,3))
+    a = sparse(rand(3,3) .+ 0.1)
     b = similar(a, Float32, Int32)
     c = similar(b, Float32, Int32)
     Base.SparseArrays.dropstored!(b, 1, 1)
