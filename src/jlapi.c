@@ -80,7 +80,6 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
         jl_exception_clear();
     }
     JL_CATCH {
-        //jl_show(jl_stderr_obj(), jl_exception_in_transit);
         r = NULL;
     }
     return r;

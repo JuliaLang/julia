@@ -94,7 +94,7 @@ int main()
         jl_eval_string("this_function_does_not_exist()");
 
         if (jl_exception_occurred()) {
-            jl_show(jl_stderr_obj(), jl_exception_occurred());
+            jl_call2(jl_get_function(jl_base_module, "show"), jl_stderr_obj(), jl_exception_occurred());
             jl_printf(jl_stderr_stream(), "\n");
         }
 
