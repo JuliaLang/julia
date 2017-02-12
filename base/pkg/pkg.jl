@@ -9,7 +9,7 @@ export dir, init, rm, add, available, installed, status, clone, checkout,
 const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "metadata-v2"
 
-type PkgError <: Exception
+mutable struct PkgError <: Exception
     msg::AbstractString
     ex::Nullable{Exception}
 end

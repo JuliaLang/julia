@@ -10,12 +10,12 @@ export UnsatError, Graph, Messages, maxsum
 
 # An exception type used internally to signal that an unsatisfiable
 # constraint was detected
-type UnsatError <: Exception
+mutable struct UnsatError <: Exception
     info
 end
 
 # Some parameters to drive the decimation process
-type MaxSumParams
+mutable struct MaxSumParams
     nondec_iterations # number of initial iterations before starting
                       # decimation
     dec_interval # number of iterations between decimations
@@ -36,7 +36,7 @@ end
 
 # Graph holds the graph structure onto which max-sum is run, in
 # sparse format
-type Graph
+mutable struct Graph
     # adjacency matrix:
     #   for each package, has the list of neighbors
     #   indices (both dependencies and dependants)
@@ -158,7 +158,7 @@ end
 # Messages has the cavity messages and the total fields, and
 # gets updated iteratively (and occasionally decimated) until
 # convergence
-type Messages
+mutable struct Messages
     # cavity incoming messages: for each package p0,
     #                           for each neighbor p1 of p0,
     #                           msg[p0][p1] is a vector of length spp[p0]

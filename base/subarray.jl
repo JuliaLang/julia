@@ -1,16 +1,16 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-abstract AbstractCartesianIndex{N} # This is a hacky forward declaration for CartesianIndex
+abstract type AbstractCartesianIndex{N} end # This is a hacky forward declaration for CartesianIndex
 typealias ViewIndex Union{Real, AbstractArray}
 typealias ScalarIndex Real
 
 # L is true if the view itself supports fast linear indexing
-immutable SubArray{T,N,P,I,L} <: AbstractArray{T,N}
+struct SubArray{T,N,P,I,L} <: AbstractArray{T,N}
     parent::P
     indexes::I
     offset1::Int       # for linear indexing and pointer, only valid when L==true
     stride1::Int       # used only for linear indexing
-    function SubArray(parent, indexes, offset1, stride1)
+    function SubArray{T,N,P,I,L}(parent, indexes, offset1, stride1) where {T,N,P,I,L}
         @_inline_meta
         check_parent_index_match(parent, indexes)
         new(parent, indexes, offset1, stride1)
@@ -21,11 +21,11 @@ function SubArray(parent::AbstractArray, indexes::Tuple)
     @_inline_meta
     SubArray(linearindexing(viewindexing(indexes), linearindexing(parent)), parent, ensure_indexable(indexes), index_dimsum(indexes...))
 end
-function SubArray{P, I, N}(::LinearSlow, parent::P, indexes::I, ::NTuple{N,Any})
+function SubArray(::LinearSlow, parent::P, indexes::I, ::NTuple{N,Any}) where {P,I,N}
     @_inline_meta
     SubArray{eltype(P), N, P, I, false}(parent, indexes, 0, 0)
 end
-function SubArray{P, I, N}(::LinearFast, parent::P, indexes::I, ::NTuple{N,Any})
+function SubArray(::LinearFast, parent::P, indexes::I, ::NTuple{N,Any}) where {P,I,N}
     @_inline_meta
     # Compute the stride and offset
     stride1 = compute_stride1(parent, indexes)
@@ -126,10 +126,10 @@ end
 # `CartesianIndex`, and if so, we punt and keep two layers of indirection.
 unsafe_view(V::SubArray, I::ViewIndex...) = (@_inline_meta; _maybe_reindex(V, I))
 _maybe_reindex(V, I) = (@_inline_meta; _maybe_reindex(V, I, I))
-_maybe_reindex{C<:AbstractCartesianIndex}(V, I, ::Tuple{AbstractArray{C}, Vararg{Any}}) =
+_maybe_reindex(V, I, ::Tuple{AbstractArray{<:AbstractCartesianIndex}, Vararg{Any}}) =
     (@_inline_meta; SubArray(V, I))
 # But allow arrays of CartesianIndex{1}; they behave just like arrays of Ints
-_maybe_reindex{C<:AbstractCartesianIndex{1}}(V, I, A::Tuple{AbstractArray{C}, Vararg{Any}}) =
+_maybe_reindex(V, I, A::Tuple{AbstractArray{<:AbstractCartesianIndex{1}}, Vararg{Any}}) =
     (@_inline_meta; _maybe_reindex(V, I, tail(A)))
 _maybe_reindex(V, I, A::Tuple{Any, Vararg{Any}}) = (@_inline_meta; _maybe_reindex(V, I, tail(A)))
 function _maybe_reindex(V, I, ::Tuple{})
@@ -221,12 +221,12 @@ function setindex!(V::FastContiguousSubArray, x, i::Int)
     V
 end
 
-linearindexing{T<:FastSubArray}(::Type{T}) = LinearFast()
-linearindexing{T<:SubArray}(::Type{T}) = LinearSlow()
+linearindexing(::Type{<:FastSubArray}) = LinearFast()
+linearindexing(::Type{<:SubArray}) = LinearSlow()
 
 # Strides are the distance between adjacent elements in a given dimension,
 # so they are well-defined even for non-linear memory layouts
-strides{T,N,P,I}(V::SubArray{T,N,P,I}) = substrides(V.parent, V.indexes)
+strides(V::SubArray) = substrides(V.parent, V.indexes)
 
 substrides(parent, I::Tuple) = substrides(1, parent, 1, I)
 substrides(s, parent, dim, ::Tuple{}) = ()
@@ -247,8 +247,8 @@ compute_stride1(s, inds, I::Tuple{Slice, Vararg{Any}}) = s
 compute_stride1(s, inds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("invalid strided index type $(typeof(I[1]))"))
 
 iscontiguous(A::SubArray) = iscontiguous(typeof(A))
-iscontiguous{S<:SubArray}(::Type{S}) = false
-iscontiguous{F<:FastContiguousSubArray}(::Type{F}) = true
+iscontiguous(::Type{<:SubArray}) = false
+iscontiguous(::Type{<:FastContiguousSubArray}) = true
 
 first_index(V::FastSubArray) = V.offset1 + V.stride1 # cached for fast linear SubArrays
 function first_index(V::SubArray)
@@ -294,16 +294,16 @@ _find_extended_dims(dims, inds, dim, ::ScalarIndex, I...) =
 _find_extended_dims(dims, inds, dim, i1, I...) =
     (@_inline_meta; _find_extended_dims((dims..., dim), (inds..., i1), dim+1, I...))
 
-unsafe_convert{T,N,P,I<:Tuple{Vararg{RangeIndex}}}(::Type{Ptr{T}}, V::SubArray{T,N,P,I}) =
+unsafe_convert{T,N,P}(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) =
     unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
 
 pointer(V::FastSubArray, i::Int) = pointer(V.parent, V.offset1 + V.stride1*i)
 pointer(V::FastContiguousSubArray, i::Int) = pointer(V.parent, V.offset1 + i)
 pointer(V::SubArray, i::Int) = _pointer(V, i)
-_pointer{T}(V::SubArray{T,1}, i::Int) = pointer(V, (i,))
+_pointer(V::SubArray{<:Any,1}, i::Int) = pointer(V, (i,))
 _pointer(V::SubArray, i::Int) = pointer(V, ind2sub(indices(V), i))
 
-function pointer{T,N,P<:Array,I<:Tuple{Vararg{RangeIndex}}}(V::SubArray{T,N,P,I}, is::Tuple{Vararg{Int}})
+function pointer{T,N}(V::SubArray{T,N,<:Array,<:Tuple{Vararg{RangeIndex}}}, is::Tuple{Vararg{Int}})
     index = first_index(V)
     strds = strides(V)
     for d = 1:length(is)

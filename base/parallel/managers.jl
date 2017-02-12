@@ -2,7 +2,7 @@
 
 # Built-in SSH and Local Managers
 
-immutable SSHManager <: ClusterManager
+struct SSHManager <: ClusterManager
     machines::Dict
 
     function SSHManager(machines)
@@ -282,7 +282,7 @@ end
 
 
 # LocalManager
-immutable LocalManager <: ClusterManager
+struct LocalManager <: ClusterManager
     np::Integer
     restrict::Bool  # Restrict binding to 127.0.0.1 only
 end
@@ -365,7 +365,7 @@ manage
 
 # DefaultClusterManager for the default TCP transport - used by both SSHManager and LocalManager
 
-immutable DefaultClusterManager <: ClusterManager
+struct DefaultClusterManager <: ClusterManager
 end
 
 const tunnel_hosts_map = Dict{AbstractString, Semaphore}()

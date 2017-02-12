@@ -359,15 +359,15 @@ Adds docstring `"..."` to the macro named `@m`.
 
 ```
 "..."
-abstract T1
+abstract type T1 end
 
 "..."
-type T2
+mutable struct T2
     ...
 end
 
 "..."
-immutable T3
+struct T3
     ...
 end
 ```
@@ -376,7 +376,7 @@ Adds the docstring `"..."` to types `T1`, `T2`, and `T3`.
 
 ```julia
 "..."
-type T
+struct T
     "x"
     x
     "y"
@@ -385,7 +385,7 @@ end
 ```
 
 Adds docstring `"..."` to type `T`, `"x"` to field `T.x` and `"y"` to field `T.y`. Also applicable
-to `immutable` types.
+to `mutable struct` types.
 
 ```julia
 "..."

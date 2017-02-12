@@ -333,6 +333,37 @@ for T = (Float32, Float64,),# BigFloat),
     @test [r[n:-2:1];] == [r;][n:-2:1]
 end
 
+# issue #20373 (unliftable ranges with exact end points)
+@test [3*0.05:0.05:0.2;]    == [linspace(3*0.05,0.2,2);]   == [3*0.05,0.2]
+@test [0.2:-0.05:3*0.05;]   == [linspace(0.2,3*0.05,2);]   == [0.2,3*0.05]
+@test [-3*0.05:-0.05:-0.2;] == [linspace(-3*0.05,-0.2,2);] == [-3*0.05,-0.2]
+@test [-0.2:0.05:-3*0.05;]  == [linspace(-0.2,-3*0.05,2);] == [-0.2,-3*0.05]
+
+for T = (Float32, Float64,), i = 1:2^15, n = 1:5
+    start, step = randn(T), randn(T)
+    step == 0 && continue
+    stop = start + (n-1)*step
+    # `n` is not necessarily unique s.t. `start + (n-1)*step == stop`
+    # so test that `length(start:step:stop)` satisfies this identity
+    # and is the closest value to `(stop-start)/step` to do so
+    lo = hi = n
+    while start + (lo-1)*step == stop; lo -= 1; end
+    while start + (hi-1)*step == stop; hi += 1; end
+    m = clamp(round(Int, (stop-start)/step) + 1, lo+1, hi-1)
+    r = start:step:stop
+    @test m == length(r)
+    # FIXME: these fail some small portion of the time
+    @test_skip start == first(r)
+    @test_skip stop  == last(r)
+    # FIXME: linspace construction fails on 32-bit
+    Sys.WORD_SIZE == 64 || continue
+    l = linspace(start,stop,n)
+    @test n == length(l)
+    # FIXME: these fail some small portion of the time
+    @test_skip start == first(l)
+    @test_skip stop  == last(l)
+end
+
 # linspace & ranges with very small endpoints
 for T = (Float32, Float64)
     z = zero(T)
@@ -595,7 +626,7 @@ end
 
 # stringmime/show should display the range or linspace nicely
 # to test print_range in range.jl
-replstrmime(x) = sprint((io,x) -> show(IOContext(io, limit=true), MIME("text/plain"), x), x)
+replstrmime(x) = sprint((io,x) -> show(IOContext(io, :limit => true), MIME("text/plain"), x), x)
 @test replstrmime(1:4) == "1:4"
 @test stringmime("text/plain", 1:4) == "1:4"
 @test stringmime("text/plain", linspace(1,5,7)) == "1.0:0.6666666666666666:5.0"
@@ -609,8 +640,8 @@ replstrmime(x) = sprint((io,x) -> show(IOContext(io, limit=true), MIME("text/pla
 @test replstrmime(linspace(0,100, 10000)) == "0.0:0.010001000100010001:100.0"
 @test replstrmime(LinSpace{Float64}(0,100, 10000)) == "10000-element LinSpace{Float64}:\n 0.0,0.010001,0.020002,0.030003,0.040004,…,99.95,99.96,99.97,99.98,99.99,100.0"
 
-@test sprint(io -> show(io,UnitRange(1,2))) == "1:2"
-@test sprint(io -> show(io,StepRange(1,2,5))) == "1:2:5"
+@test sprint(show, UnitRange(1, 2)) == "1:2"
+@test sprint(show, StepRange(1, 2, 5)) == "1:2:5"
 
 
 # Issue 11049 and related
@@ -838,3 +869,27 @@ let r = linspace(-big(1.0),big(1.0),4)
     @test isa(@inferred(r[2]), BigFloat)
     @test r[2] ≈ big(-1.0)/3
 end
+
+# issue #20520
+let r = linspace(1.3173739f0, 1.3173739f0, 3)
+    @test length(r) == 3
+    @test first(r) === 1.3173739f0
+    @test last(r)  === 1.3173739f0
+    @test r[2]     === 1.3173739f0
+end
+
+let r = linspace(1.0, 3+im, 4)
+    @test r[1] === 1.0+0.0im
+    @test r[2] ≈ (5/3)+(1/3)im
+    @test r[3] ≈ (7/3)+(2/3)im
+    @test r[4] === 3.0+im
+end
+
+# dimensional correctness:
+isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
+using TestHelpers.Furlong
+@test_throws MethodError collect(Furlong(2):Furlong(10)) # step size is ambiguous
+@test_throws MethodError range(Furlong(2), 9) # step size is ambiguous
+@test collect(Furlong(2):Furlong(1):Furlong(10)) == collect(range(Furlong(2),Furlong(1),9)) == Furlong.(2:10)
+@test collect(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
+      collect(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong.(1:0.5:10)

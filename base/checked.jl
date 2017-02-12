@@ -91,7 +91,7 @@ function checked_neg{T<:Integer}(x::T)
     checked_sub(T(0), x)
 end
 if BrokenSignedInt != Union{}
-function checked_neg{T<:BrokenSignedInt}(x::T)
+function checked_neg(x::BrokenSignedInt)
     r = -x
     (x<0) & (r<0) && throw(OverflowError())
     r

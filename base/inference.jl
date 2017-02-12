@@ -6,7 +6,7 @@ import Core: _apply, svec, apply_type, Builtin, IntrinsicFunction, MethodInstanc
 const MAX_TYPEUNION_LEN = 3
 const MAX_TYPE_DEPTH = 8
 
-immutable InferenceParams
+struct InferenceParams
     world::UInt
 
     # optimization
@@ -47,20 +47,20 @@ const Slot_UsedUndef    = 32
 
 #### inference state types ####
 
-immutable NotFound end
+struct NotFound end
 const NF = NotFound()
 typealias LineNum Int
 typealias VarTable Array{Any,1}
 
 # The type of a variable load is either a value or an UndefVarError
-type VarState
+mutable struct VarState
     typ
     undef::Bool
     VarState(typ::ANY, undef::Bool) = new(typ, undef)
 end
 
 # The type of a value might be constant
-immutable Const
+struct Const
     val
     Const(v::ANY) = new(v)
 end
@@ -70,7 +70,7 @@ end
 # limit the type of some other variable
 # The Conditional type tracks the set of branches on variable type info
 # that was used to create the boolean condition
-type Conditional
+mutable struct Conditional
     var::Union{Slot,SSAValue}
     vtype
     elsetype
@@ -82,7 +82,7 @@ type Conditional
     end
 end
 
-immutable PartialTypeVar
+struct PartialTypeVar
     tv::TypeVar
     # N.B.: Currently unused, but would allow turning something back
     # into Const, if the bounds are pulled out of this TypeVar
@@ -97,7 +97,7 @@ function rewrap(t::ANY, u::ANY)
     return rewrap_unionall(t, u)
 end
 
-type InferenceState
+mutable struct InferenceState
     sp::SimpleVector     # static parameters
     label_counter::Int   # index of the current highest label for this function
     mod::Module
@@ -582,7 +582,7 @@ function typeof_tfunc(t::ANY)
         elseif t === Any
             return DataType
         else
-            return Type{_} where _<:t
+            return Type{<:t}
         end
     elseif isa(t, Union)
         a = widenconst(typeof_tfunc(t.a))
@@ -891,7 +891,7 @@ function fieldtype_tfunc(s0::ANY, name::ANY)
     if exact
         return Const(ft)
     end
-    return Type{_} where _<:ft
+    return Type{<:ft}
 end
 add_tfunc(fieldtype, 2, 2, fieldtype_tfunc)
 
@@ -1002,17 +1002,17 @@ function apply_type_tfunc(headtypetype::ANY, args::ANY...)
     catch ex
         # type instantiation might fail if one of the type parameters
         # doesn't match, which could happen if a type estimate is too coarse
-        return Type{_} where _<:headtype
+        return Type{<:headtype}
     end
     !uncertain && canconst && return Const(appl)
     if isvarargtype(headtype)
         return Type
     end
     if uncertain && type_too_complex(appl,0)
-        return Type{_} where _<:headtype
+        return Type{<:headtype}
     end
     if istuple
-        return Type{_} where _<:appl
+        return Type{<:appl}
     end
     ans = Type{appl}
     for i = length(outervars):-1:1
@@ -1471,7 +1471,7 @@ function return_type_tfunc(argtypes::ANY, vtypes::VarTable, sv::InferenceState)
                         # input arguments were known for certain
                         return Const(rt)
                     else
-                        return Type{R} where R <: rt
+                        return Type{<:rt}
                     end
                 end
             end
@@ -1704,6 +1704,12 @@ function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vect
             return Const(rty.val === false)
         end
         return rty
+    elseif length(fargs) == 3 && istopfunction(tm, f, :(>:))
+        # swap T1 and T2 arguments and call issubtype
+        fargs = Any[issubtype, fargs[3], fargs[2]]
+        argtypes = Any[typeof(issubtype), argtypes[3], argtypes[2]]
+        rty = abstract_call(issubtype, fargs, argtypes, vtypes, sv)
+        return rty
     end
 
     if length(argtypes)>2 && argtypes[3] ⊑ Int
@@ -1929,7 +1935,7 @@ end
 
 #### handling for statement-position expressions ####
 
-type StateUpdate
+mutable struct StateUpdate
     var::Union{Slot,SSAValue}
     vtype
     state::VarTable
@@ -2586,8 +2592,8 @@ function typeinf_frame(frame)
             local pc´::Int = pc + 1 # next program-counter (after executing instruction)
             if pc == frame.pc´´
                 # need to update pc´´ to point at the new lowest instruction in W
-                min_pc = next(W, Int64(pc) + 1)[1]
-                if min_pc >= W.limit
+                min_pc = next(W, pc)[2]
+                if done(W, min_pc)
                     frame.pc´´ = max(min_pc, n + 1)
                 else
                     frame.pc´´ = min_pc
@@ -3309,7 +3315,7 @@ end
 
 #### post-inference optimizations ####
 
-immutable InvokeData
+struct InvokeData
     mt::MethodTable
     entry::TypeMapEntry
     types0
@@ -3510,36 +3516,19 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         # typeassert(x::S, T) => x, when S<:T
         if isType(atypes[3]) && isleaftype(atypes[3]) &&
             atypes[2] ⊑ atypes[3].parameters[1]
-            return (argexprs[2],())
+            return (argexprs[2], ())
         end
     end
     topmod = _topmod(sv)
     # special-case inliners for known pure functions that compute types
     if sv.params.inlining
         if isa(e.typ, Const) # || isconstType(e.typ)
-            # XXX: this is needlessly buggy and should just call `inline_as_constant`
             if (f === apply_type || f === fieldtype || f === typeof ||
                 istopfunction(topmod, f, :typejoin) ||
-                istopfunction(topmod, f, :promote_type))
-                # XXX: compute effect_free for the actual arguments
-                if length(argexprs) < 2 || effect_free(argexprs[2], sv.src, sv.mod, true)
-                    return (e.typ.val, ())
-                else
-                    return (e.typ.val, Any[argexprs[2]])
-                end
-            end
-        end
-        if istopfunction(topmod, f, :isbits) && length(atypes)==2 && isType(atypes[2]) &&
-            effect_free(argexprs[2], sv.src, sv.mod, true) && isleaftype(atypes[2].parameters[1])
-            # TODO: this is needlessly complicated and should just call `inline_as_constant`
-            return (isbits(atypes[2].parameters[1]),())
-        end
-        if f === Core.kwfunc && length(argexprs) == 2 && isa(e.typ, Const)
-            # TODO: replace with a call to `inline_as_constant`
-            if effect_free(argexprs[2], sv.src, sv.mod, true)
-                return (e.typ.val, ())
-            else
-                return (e.typ.val, Any[argexprs[2]])
+                istopfunction(topmod, f, :isbits) ||
+                istopfunction(topmod, f, :promote_type) ||
+                (f === Core.kwfunc && length(argexprs) == 2))
+                return inline_as_constant(e.typ.val, argexprs, sv, nothing)
             end
         end
     end
@@ -3605,6 +3594,24 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         not_is.typ = Bool
         not_is.args[2].typ = Bool
         return (not_is, ())
+    elseif length(atypes) == 3 && istopfunction(topmod, f, :(>:))
+        # special-case inliner for issupertype
+        # that works, even though inference generally avoids inferring the `>:` Method
+        if isa(e.typ, Const)
+            return inline_as_constant(e.typ.val, argexprs, sv, nothing)
+        end
+        arg_T1 = argexprs[2]
+        arg_T2 = argexprs[3]
+        issubtype_stmts = ()
+        if !effect_free(arg_T2, sv.src, sv.mod, false)
+            # spill first argument to preserve order-of-execution
+            issubtype_vnew = newvar!(sv, widenconst(exprtype(arg_T1, sv.src, sv.mod)))
+            issubtype_stmts = Any[ Expr(:(=), issubtype_vnew, arg_T1) ]
+            arg_T1 = issubtype_vnew
+        end
+        issubtype_expr = Expr(:call, GlobalRef(Core, :issubtype), arg_T2, arg_T1)
+        issubtype_expr.typ = Bool
+        return (issubtype_expr, issubtype_stmts)
     end
 
     if length(atype_unlimited.parameters) - 1 > sv.params.MAX_TUPLETYPE_LEN
@@ -4891,7 +4898,7 @@ function alloc_elim_pass!(sv::InferenceState)
             nv, field_names = alloc
             tup = rhs.args
             # This makes sure the value doesn't escape so we can elide
-            # allocation of mutable types too
+            # allocation of mutable structs too
             if (var !== nothing &&
                 occurs_outside_getfield(bexpr, var, sv, nv, field_names))
                 i += 1

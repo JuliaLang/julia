@@ -941,7 +941,7 @@ end
 # broadcast shape promotion for combinations of sparse arrays and other types
 broadcast_indices(::Type{AbstractSparseArray}, A) = indices(A)
 # broadcast container type promotion for combinations of sparse arrays and other types
-_containertype{T<:SparseVecOrMat}(::Type{T}) = AbstractSparseArray
+_containertype(::Type{<:SparseVecOrMat}) = AbstractSparseArray
 # combinations of sparse arrays with broadcast scalars should yield sparse arrays
 promote_containertype(::Type{Any}, ::Type{AbstractSparseArray}) = AbstractSparseArray
 promote_containertype(::Type{AbstractSparseArray}, ::Type{Any}) = AbstractSparseArray
@@ -1002,11 +1002,11 @@ broadcast{Tf,T}(f::Tf, A::SparseMatrixCSC, ::Type{T}) = broadcast(x -> f(x, T), 
 
 
 # first (Broadcast containertype) dispatch layer's promotion logic
-immutable PromoteToSparse end
+struct PromoteToSparse end
 
 # broadcast containertype definitions for structured matrices
 StructuredMatrix = Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}
-_containertype{T<:StructuredMatrix}(::Type{T}) = PromoteToSparse
+_containertype(::Type{<:StructuredMatrix}) = PromoteToSparse
 
 # combinations explicitly involving Tuples and PromoteToSparse collections
 # divert to the generic AbstractArray broadcast code
@@ -1029,13 +1029,13 @@ promote_containertype(::Type{Array}, ::Type{AbstractSparseArray}) = PromoteToSpa
 # mostly just disambiguates Array from the main containertype promotion mechanism
 # AbstractArray serves as a marker to shunt to the generic AbstractArray broadcast code
 _spcontainertype(x) = _containertype(x)
-_spcontainertype{T<:Vector}(::Type{T}) = Vector
-_spcontainertype{T<:Matrix}(::Type{T}) = Matrix
-_spcontainertype{T<:Ref}(::Type{T}) = AbstractArray
-_spcontainertype{T<:AbstractArray}(::Type{T}) = AbstractArray
+_spcontainertype(::Type{<:Vector}) = Vector
+_spcontainertype(::Type{<:Matrix}) = Matrix
+_spcontainertype(::Type{<:Ref}) = AbstractArray
+_spcontainertype(::Type{<:AbstractArray}) = AbstractArray
 # need the following two methods to override the immediately preceding method
-_spcontainertype{T<:StructuredMatrix}(::Type{T}) = PromoteToSparse
-_spcontainertype{T<:SparseVecOrMat}(::Type{T}) = AbstractSparseArray
+_spcontainertype(::Type{<:StructuredMatrix}) = PromoteToSparse
+_spcontainertype(::Type{<:SparseVecOrMat}) = AbstractSparseArray
 spcontainertype(x) = _spcontainertype(typeof(x))
 spcontainertype(ct1, ct2) = promote_spcontainertype(spcontainertype(ct1), spcontainertype(ct2))
 @inline spcontainertype(ct1, ct2, cts...) = promote_spcontainertype(spcontainertype(ct1), spcontainertype(ct2, cts...))
@@ -1043,13 +1043,13 @@ spcontainertype(ct1, ct2) = promote_spcontainertype(spcontainertype(ct1), spcont
 promote_spcontainertype{T}(::Type{T}, ::Type{T}) = T
 # combinations involving AbstractArrays and/or Tuples divert to the generic AbstractArray broadcast code
 DivertToAbsArrayBC = Union{Type{AbstractArray},Type{Tuple}}
-promote_spcontainertype{T<:DivertToAbsArrayBC}(::T, ct) = AbstractArray
-promote_spcontainertype{T<:DivertToAbsArrayBC}(ct, ::T) = AbstractArray
-promote_spcontainertype{S<:DivertToAbsArrayBC,T<:DivertToAbsArrayBC}(::S, ::T) = AbstractArray
+promote_spcontainertype(::DivertToAbsArrayBC, ct) = AbstractArray
+promote_spcontainertype(ct, ::DivertToAbsArrayBC) = AbstractArray
+promote_spcontainertype(::DivertToAbsArrayBC, ::DivertToAbsArrayBC) = AbstractArray
 # combinations involving scalars, sparse arrays, structured matrices (PromoteToSparse),
 # dense vectors/matrices, and PromoteToSparse collections continue in the promote-to-sparse funnel
 FunnelToSparseBC = Union{Type{Any},Type{Vector},Type{Matrix},Type{PromoteToSparse},Type{AbstractSparseArray}}
-promote_spcontainertype{S<:FunnelToSparseBC,T<:FunnelToSparseBC}(::S, ::T) = PromoteToSparse
+promote_spcontainertype(::FunnelToSparseBC, ::FunnelToSparseBC) = PromoteToSparse
 
 
 # first (Broadcast containertype) dispatch layer

@@ -16,7 +16,7 @@
 (define prec-lazy-or     '(|\|\||))
 (define prec-lazy-and    '(&&))
 (define prec-comparison
-  (append! '(|<:| |>:| |.!| in isa)
+  (append! '(|<:| |>:| in isa)
            (add-dots '(> < >= ≥ <= ≤ == === ≡ != ≠ !== ≢ ∈ ∉ ∋ ∌ ⊆ ⊈ ⊂ ⊄ ⊊ ∝ ∊ ∍ ∥ ∦ ∷ ∺ ∻ ∽ ∾ ≁ ≃ ≄ ≅ ≆ ≇ ≈ ≉ ≊ ≋ ≌ ≍ ≎ ≐ ≑ ≒ ≓ ≔ ≕ ≖ ≗ ≘ ≙ ≚ ≛ ≜ ≝ ≞ ≟ ≣ ≦ ≧ ≨ ≩ ≪ ≫ ≬ ≭ ≮ ≯ ≰ ≱ ≲ ≳ ≴ ≵ ≶ ≷ ≸ ≹ ≺ ≻ ≼ ≽ ≾ ≿ ⊀ ⊁ ⊃ ⊅ ⊇ ⊉ ⊋ ⊏ ⊐ ⊑ ⊒ ⊜ ⊩ ⊬ ⊮ ⊰ ⊱ ⊲ ⊳ ⊴ ⊵ ⊶ ⊷ ⋍ ⋐ ⋑ ⋕ ⋖ ⋗ ⋘ ⋙ ⋚ ⋛ ⋜ ⋝ ⋞ ⋟ ⋠ ⋡ ⋢ ⋣ ⋤ ⋥ ⋦ ⋧ ⋨ ⋩ ⋪ ⋫ ⋬ ⋭ ⋲ ⋳ ⋴ ⋵ ⋶ ⋷ ⋸ ⋹ ⋺ ⋻ ⋼ ⋽ ⋾ ⋿ ⟈ ⟉ ⟒ ⦷ ⧀ ⧁ ⧡ ⧣ ⧤ ⧥ ⩦ ⩧ ⩪ ⩫ ⩬ ⩭ ⩮ ⩯ ⩰ ⩱ ⩲ ⩳ ⩴ ⩵ ⩶ ⩷ ⩸ ⩹ ⩺ ⩻ ⩼ ⩽ ⩾ ⩿ ⪀ ⪁ ⪂ ⪃ ⪄ ⪅ ⪆ ⪇ ⪈ ⪉ ⪊ ⪋ ⪌ ⪍ ⪎ ⪏ ⪐ ⪑ ⪒ ⪓ ⪔ ⪕ ⪖ ⪗ ⪘ ⪙ ⪚ ⪛ ⪜ ⪝ ⪞ ⪟ ⪠ ⪡ ⪢ ⪣ ⪤ ⪥ ⪦ ⪧ ⪨ ⪩ ⪪ ⪫ ⪬ ⪭ ⪮ ⪯ ⪰ ⪱ ⪲ ⪳ ⪴ ⪵ ⪶ ⪷ ⪸ ⪹ ⪺ ⪻ ⪼ ⪽ ⪾ ⪿ ⫀ ⫁ ⫂ ⫃ ⫄ ⫅ ⫆ ⫇ ⫈ ⫉ ⫊ ⫋ ⫌ ⫍ ⫎ ⫏ ⫐ ⫑ ⫒ ⫓ ⫔ ⫕ ⫖ ⫗ ⫘ ⫙ ⫷ ⫸ ⫹ ⫺ ⊢ ⊣))))
 (define prec-pipe        (add-dots '(|\|>| |<\||)))
 (define prec-colon       '(: |..|))
@@ -113,8 +113,9 @@
 (define operator? (Set operators))
 
 (define initial-reserved-words '(begin while if for try return break continue
-                         function macro quote let local global const
-                         abstract typealias type bitstype immutable do
+                         function macro quote let local global const do
+                         struct
+                         abstract typealias bitstype type immutable  ;; to be deprecated
                          module baremodule using import export importall))
 
 (define initial-reserved-word? (Set initial-reserved-words))
@@ -586,8 +587,8 @@
      (if (eq? t 'where)
          (begin (take-token s)
                 (let ((var (parse-comparison s)))
-                  (loop (if (and (pair? var) (eq? (car var) 'tuple))
-                            (list* 'where ex (cdr var))  ;; form `x where (T,S)`
+                  (loop (if (and (pair? var) (eq? (car var) 'cell1d))
+                            (list* 'where ex (cdr var))  ;; form `x where {T,S}`
                             (list 'where ex var))
                         (peek-token s))))
          ex))))
@@ -978,7 +979,7 @@
 ;; also handles looking for syntactic reserved words
 (define (parse-call s)
   (let ((ex (parse-unary-prefix s)))
-    (if (initial-reserved-word? ex)
+    (if (or (initial-reserved-word? ex) (memq ex '(mutable primitive)))
         (parse-resword s ex)
         (parse-call-chain s ex #f))))
 
@@ -1134,6 +1135,13 @@
            (and (eq? (car sig) 'where)
                 (valid-func-sig? paren (cadr sig))))))
 
+(define (parse-struct-def s mut? word)
+  (if (reserved-word? (peek-token s))
+      (error (string "invalid type name \"" (take-token s) "\"")))
+  (let ((sig (parse-subtype-spec s)))
+    (begin0 (list 'type (if mut? 'true 'false) sig (parse-block s))
+            (expect-end s word))))
+
 ;; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
   (with-bindings
@@ -1254,22 +1262,51 @@
                      (body  (parse-block s)))
                 (expect-end s word)
                 (list word def body)))))
+
        ((abstract)
-        (list 'abstract (parse-subtype-spec s)))
-       ((type immutable)
-        (let ((immu? (eq? word 'immutable)))
-          (if (reserved-word? (peek-token s))
-              (error (string "invalid type name \"" (take-token s) "\"")))
-          (let ((sig (parse-subtype-spec s)))
-            (begin0 (list 'type (if (eq? word 'type) 'true 'false)
-                          sig (parse-block s))
-                    (expect-end s word)))))
+        (let ((ty (eq? (peek-token s) 'type)))
+          (if ty
+              (take-token s))
+          (let ((spec (parse-subtype-spec s)))
+            (if (not ty)
+                (syntax-deprecation s (string "abstract " (deparse spec))
+                                    (string "abstract type " (deparse spec) " end")))
+            (begin0 (list 'abstract spec)
+                    (if ty (expect-end s "abstract type"))))))
+       ((struct)
+        (begin (take-token s)
+               (parse-struct-def s #f word)))
+       ((mutable)
+        (if (not (eq? (peek-token s) 'struct))
+            (parse-call-chain s word #f)
+            (begin (take-token s)
+                   (parse-struct-def s #t word))))
+       ((primitive)
+        (if (not (eq? (peek-token s) 'type))
+            (parse-call-chain s word #f)
+            (begin (take-token s)
+                   (let* ((spec (with-space-sensitive (parse-subtype-spec s)))
+                          (nb   (with-space-sensitive (parse-cond s))))
+                     (begin0 (list 'bitstype nb spec)
+                             (expect-end s "primitive type"))))))
+       ;; deprecated type keywords
+       ((type)
+        ;; TODO fully deprecate post-0.6
+        ;;(syntax-deprecation s "type" "mutable struct")
+        (parse-struct-def s #t word))
+       ((immutable)
+        ;;(syntax-deprecation s "immutable" "struct")
+        (parse-struct-def s #f word))
        ((bitstype)
-        (list 'bitstype (with-space-sensitive (parse-cond s))
-              (parse-subtype-spec s)))
+        (let* ((nb   (with-space-sensitive (parse-cond s)))
+               (spec (parse-subtype-spec s)))
+          (syntax-deprecation s (string "bitstype " (deparse nb) " " (deparse spec))
+                              (string "primitive type " (deparse spec) " " (deparse nb) " end"))
+          (list 'bitstype nb spec)))
        ((typealias)
         (let ((lhs (with-space-sensitive (parse-call s))))
-              (list 'typealias lhs (parse-where s))))
+          (list 'typealias lhs (parse-where s))))
+
        ((try)
         (let ((try-block (if (memq (require-token s) '(catch finally))
                              '(block)

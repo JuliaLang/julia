@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-type BatchProcessingError <: Exception
+mutable struct BatchProcessingError <: Exception
     data
     ex
 end

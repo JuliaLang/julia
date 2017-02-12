@@ -4,8 +4,8 @@
 
 isreal(x::AbstractArray) = all(isreal,x)
 iszero(x::AbstractArray) = all(iszero,x)
-isreal{T<:Real,n}(x::AbstractArray{T,n}) = true
-all{T<:Integer}(::typeof(isinteger), ::AbstractArray{T}) = true
+isreal(x::AbstractArray{<:Real}) = true
+all(::typeof(isinteger), ::AbstractArray{<:Integer}) = true
 
 ## Constructors ##
 
@@ -80,14 +80,14 @@ squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (Int(dim),))
 
 ## Unary operators ##
 
-conj{T<:Real}(x::AbstractArray{T}) = x
-conj!{T<:Real}(x::AbstractArray{T}) = x
+conj(x::AbstractArray{<:Real}) = x
+conj!(x::AbstractArray{<:Real}) = x
 
-real{T<:Real}(x::AbstractArray{T}) = x
-imag{T<:Real}(x::AbstractArray{T}) = zero(x)
+real(x::AbstractArray{<:Real}) = x
+imag(x::AbstractArray{<:Real}) = zero(x)
 
-+{T<:Number}(x::AbstractArray{T}) = x
-*{T<:Number}(x::AbstractArray{T,2}) = x
++(x::AbstractArray{<:Number}) = x
+*(x::AbstractArray{<:Number,2}) = x
 
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
 
@@ -324,7 +324,8 @@ function repmat(a::AbstractVector, m::Int)
     return b
 end
 
-@inline repmat(a, m::Integer...) = repmat(a, convert(Dims, m)...)
+@inline repmat(a::AbstractVecOrMat, m::Integer, n::Integer=1) = repmat(a, Int(m), Int(n))
+@inline repmat(a::AbstractVector, m::Integer) = repmat(a, Int(m))
 
 """
     repeat(A::AbstractArray; inner=ntuple(x->1, ndims(A)), outer=ntuple(x->1, ndims(A)))

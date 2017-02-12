@@ -110,11 +110,11 @@ let x = BigFloat[1:1000;], y, z, v
 end
 
 # issue #19921
-type Foo19921
+mutable struct Foo19921
     a::String
 end
 
-type Bar19921
+mutable struct Bar19921
     foo::Foo19921
     fooDict::Dict{Foo19921, Int64}
 end

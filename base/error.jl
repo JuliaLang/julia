@@ -82,7 +82,7 @@ macro assert(ex, msgs...)
     return :($(esc(ex)) ? $(nothing) : throw(Main.Base.AssertionError($msg)))
 end
 
-immutable ExponentialBackOff
+struct ExponentialBackOff
     n::Int
     first_delay::Float64
     max_delay::Float64

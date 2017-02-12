@@ -9,7 +9,7 @@ typealias Indices{N} NTuple{N,AbstractUnitRange}
 """
     <:(T1, T2)
 
-Subtype operator, equivalent to `issubtype(T1,T2)`.
+Subtype operator, equivalent to `issubtype(T1, T2)`.
 
 ```jldoctest
 julia> Float64 <: AbstractFloat
@@ -23,6 +23,13 @@ false
 ```
 """
 const (<:) = issubtype
+
+"""
+    >:(T1, T2)
+
+Supertype operator, equivalent to `issubtype(T2, T1)`.
+"""
+const (>:)(a::ANY, b::ANY) = issubtype(b, a)
 
 """
     supertype(T::DataType)
@@ -854,6 +861,7 @@ Int8
 """
 eltype(::Type) = Any
 eltype(::Type{Any}) = Any
+eltype(::Type{Bottom}) = throw(ArgumentError("Union{} does not have elements"))
 eltype(t::DataType) = eltype(supertype(t))
 eltype(x) = eltype(typeof(x))
 
@@ -1049,13 +1057,13 @@ setindex_shape_check(X::AbstractArray) =
 setindex_shape_check(X::AbstractArray, i::Integer) =
     (_length(X)==i || throw_setindex_mismatch(X, (i,)))
 
-setindex_shape_check{T}(X::AbstractArray{T,1}, i::Integer) =
+setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer) =
     (_length(X)==i || throw_setindex_mismatch(X, (i,)))
 
-setindex_shape_check{T}(X::AbstractArray{T,1}, i::Integer, j::Integer) =
+setindex_shape_check(X::AbstractArray{<:Any,1}, i::Integer, j::Integer) =
     (_length(X)==i*j || throw_setindex_mismatch(X, (i,j)))
 
-function setindex_shape_check{T}(X::AbstractArray{T,2}, i::Integer, j::Integer)
+function setindex_shape_check(X::AbstractArray{<:Any,2}, i::Integer, j::Integer)
     if length(X) != i*j
         throw_setindex_mismatch(X, (i,j))
     end
@@ -1093,7 +1101,7 @@ indexing behaviors. This must return either an `Int` or an `AbstractArray` of
 to_index(i::Integer) = convert(Int,i)::Int
 to_index(I::AbstractArray{Bool}) = LogicalIndex(I)
 to_index(I::AbstractArray) = I
-to_index{T<:Union{AbstractArray, Colon}}(I::AbstractArray{T}) = throw(ArgumentError("invalid index: $I"))
+to_index(I::AbstractArray{<:Union{AbstractArray, Colon}}) = throw(ArgumentError("invalid index: $I"))
 to_index(::Colon) = throw(ArgumentError("colons must be converted by to_indices(...)"))
 to_index(i) = throw(ArgumentError("invalid index: $i"))
 
@@ -1138,7 +1146,7 @@ ranges with the same indices as those they wrap. This means that indexing into
 Slice objects with an integer always returns that exact integer, and they
 iterate over all the wrapped indices, even supporting offset indices.
 """
-immutable Slice{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
+struct Slice{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
     indices::T
 end
 indices(S::Slice) = (S.indices,)
@@ -1191,7 +1199,7 @@ end
 
 # Pair
 
-immutable Pair{A,B}
+struct Pair{A,B}
     first::A
     second::B
 end

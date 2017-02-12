@@ -63,7 +63,7 @@ length(a::Array) = arraylen(a)
 elsize{T}(a::Array{T}) = isbits(T) ? sizeof(T) : sizeof(Ptr)
 sizeof(a::Array) = elsize(a) * length(a)
 
-function isassigned{T}(a::Array{T}, i::Int...)
+function isassigned(a::Array, i::Int...)
     ii = sub2ind(size(a), i...)
     1 <= ii <= length(a) || return false
     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii-1) == 1
@@ -117,10 +117,10 @@ end
 
 function reinterpret{T,S,N}(::Type{T}, a::Array{S}, dims::NTuple{N,Int})
     if !isbits(T)
-        throw(ArgumentError("cannot reinterpret Array{$(S)} to ::Type{Array{$(T)}}, type $(T) is not a bitstype"))
+        throw(ArgumentError("cannot reinterpret Array{$(S)} to ::Type{Array{$(T)}}, type $(T) is not a bits type"))
     end
     if !isbits(S)
-        throw(ArgumentError("cannot reinterpret Array{$(S)} to ::Type{Array{$(T)}}, type $(S) is not a bitstype"))
+        throw(ArgumentError("cannot reinterpret Array{$(S)} to ::Type{Array{$(T)}}, type $(S) is not a bits type"))
     end
     nel = div(length(a)*sizeof(S),sizeof(T))
     if prod(dims) != nel
@@ -576,7 +576,7 @@ function push!(a::Array{Any,1}, item::ANY)
     return a
 end
 
-function append!{T}(a::Array{T,1}, items::AbstractVector)
+function append!(a::Array{<:Any,1}, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
     ccall(:jl_array_grow_end, Void, (Any, UInt), a, n)
@@ -618,7 +618,7 @@ julia> prepend!([3],[1,2])
 """
 function prepend! end
 
-function prepend!{T}(a::Array{T,1}, items::AbstractVector)
+function prepend!(a::Array{<:Any,1}, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
     ccall(:jl_array_grow_beg, Void, (Any, UInt), a, n)
@@ -784,7 +784,7 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
 """
 deleteat!(a::Vector, i::Integer) = (_deleteat!(a, i, 1); a)
 
-function deleteat!{T<:Integer}(a::Vector, r::UnitRange{T})
+function deleteat!(a::Vector, r::UnitRange{<:Integer})
     n = length(a)
     isempty(r) || _deleteat!(a, first(r), length(r))
     return a
@@ -794,10 +794,19 @@ end
     deleteat!(a::Vector, inds)
 
 Remove the items at the indices given by `inds`, and return the modified `a`.
-Subsequent items are shifted to fill the resulting gap. `inds` must be sorted and unique.
+Subsequent items are shifted to fill the resulting gap.
+
+`inds` can be either an iterator or a collection of sorted and unique integer indices,
+or a boolean vector of the same length as `a` with `true` indicating entries to delete.
 
 ```jldoctest
 julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
+3-element Array{Int64,1}:
+ 5
+ 3
+ 1
+
+julia> deleteat!([6, 5, 4, 3, 2, 1], [true, false, true, false, true, false])
 3-element Array{Int64,1}:
  5
  3
@@ -809,7 +818,10 @@ Stacktrace:
  [1] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:808
 ```
 """
-function deleteat!(a::Vector, inds)
+deleteat!(a::Vector, inds) = _deleteat!(a, inds)
+deleteat!(a::Vector, inds::AbstractVector) = _deleteat!(a, to_indices(a, (inds,))[1])
+
+function _deleteat!(a::Vector, inds)
     n = length(a)
     s = start(inds)
     done(inds, s) && return a
@@ -833,6 +845,19 @@ function deleteat!(a::Vector, inds)
     while q <= n
         @inbounds a[p] = a[q]
         p += 1; q += 1
+    end
+    ccall(:jl_array_del_end, Void, (Any, UInt), a, n-p+1)
+    return a
+end
+
+# Simpler and more efficient version for logical indexing
+function deleteat!(a::Vector, inds::AbstractVector{Bool})
+    n = length(a)
+    length(inds) == n || throw(BoundsError(a, inds))
+    p = 1
+    for (q, i) in enumerate(inds)
+        @inbounds a[p] = a[q]
+        p += !i
     end
     ccall(:jl_array_del_end, Void, (Any, UInt), a, n-p+1)
     return a
@@ -934,7 +959,7 @@ julia> A
  -1
 ```
 """
-function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins=_default_splice)
+function splice!(a::Vector, r::UnitRange{<:Integer}, ins=_default_splice)
     v = a[r]
     m = length(ins)
     if m == 0

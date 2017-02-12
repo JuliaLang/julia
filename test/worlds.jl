@@ -54,7 +54,7 @@ begin
 end
 
 # test constructor narrowing
-type A265{T}
+mutable struct A265{T}
     field1::T
 end
 A265_() = A265(1)
@@ -63,10 +63,10 @@ A265(fld::Int) = A265(Float64(fld))
 @test (A265_()::A265{Float64}).field1 === 1.0e0
 
 # test constructor widening
-type B265{T}
+mutable struct B265{T}
     field1::T
     # dummy arg is present to prevent (::Type{T}){T}(arg) from matching the test calls
-    B265(field1::Any, dummy::Void) = new(field1) # prevent generation of outer ctor
+    B265{T}(field1::Any, dummy::Void) where T = new(field1) # prevent generation of outer ctor
 end
   # define some constructors
 B265(x::Int, dummy::Void) = B265{Int}(x, dummy)

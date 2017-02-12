@@ -2,7 +2,7 @@
 
 # Date Locales
 
-immutable DateLocale
+struct DateLocale
     months::Vector{String}
     months_abbr::Vector{String}
     days_of_week::Vector{String}
@@ -13,7 +13,7 @@ immutable DateLocale
     day_of_week_abbr_value::Dict{String, Int}
 end
 
-function locale_dict{S<:AbstractString}(names::Vector{S})
+function locale_dict(names::Vector{<:AbstractString})
     result = Dict{String, Int}()
 
     # Keep both the common case-sensitive version of the name and an all lowercase

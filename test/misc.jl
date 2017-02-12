@@ -3,25 +3,25 @@
 # Tests that do not really go anywhere else
 
 # Test info
-@test contains(sprint(io->info(io,"test")), "INFO:")
-@test contains(sprint(io->info(io,"test")), "INFO: test")
-@test contains(sprint(io->info(io,"test ",1,2,3)), "INFO: test 123")
+@test contains(sprint(info, "test"), "INFO:")
+@test contains(sprint(info, "test"), "INFO: test")
+@test contains(sprint(info, "test ", 1, 2, 3), "INFO: test 123")
 @test contains(sprint(io->info(io,"test", prefix="MYINFO: ")), "MYINFO: test")
 
 # Test warn
-@test contains(sprint(io->Base.warn_once(io,"test")), "WARNING: test")
-@test isempty(sprint(io->Base.warn_once(io,"test")))
+@test contains(sprint(Base.warn_once, "test"), "WARNING: test")
+@test isempty(sprint(Base.warn_once, "test"))
 
-@test contains(sprint(io->warn(io)), "WARNING:")
-@test contains(sprint(io->warn(io, "test")), "WARNING: test")
-@test contains(sprint(io->warn(io, "test ",1,2,3)), "WARNING: test 123")
+@test contains(sprint(warn), "WARNING:")
+@test contains(sprint(warn, "test"), "WARNING: test")
+@test contains(sprint(warn, "test ", 1, 2, 3), "WARNING: test 123")
 @test contains(sprint(io->warn(io, "test", prefix="MYWARNING: ")), "MYWARNING: test")
 @test contains(sprint(io->warn(io, "testonce", once=true)), "WARNING: testonce")
 @test isempty(sprint(io->warn(io, "testonce", once=true)))
 @test !isempty(sprint(io->warn(io, "testonce", once=true, key=hash("testonce",hash("testanother")))))
 let bt = backtrace()
-    ws = split(chomp(sprint(io->warn(io,"test", bt))), '\n')
-    bs = split(chomp(sprint(io->Base.show_backtrace(io,bt))), '\n')
+    ws = split(chomp(sprint(warn, "test", bt)), '\n')
+    bs = split(chomp(sprint(Base.show_backtrace, bt)), '\n')
     @test contains(ws[1],"WARNING: test")
     for (l,b) in zip(ws[2:end],bs)
         @test contains(l, b)
@@ -226,10 +226,10 @@ end
 # test methodswith
 # `methodswith` relies on exported symbols
 export func4union, Base
-immutable NoMethodHasThisType end
+struct NoMethodHasThisType end
 @test isempty(methodswith(NoMethodHasThisType))
 @test !isempty(methodswith(Int))
-immutable Type4Union end
+struct Type4Union end
 func4union(::Union{Type4Union,Int}) = ()
 @test !isempty(methodswith(Type4Union))
 
@@ -599,10 +599,10 @@ let
     end
 end
 
-abstract DA_19281{T, N} <: AbstractArray{T, N}
+abstract type DA_19281{T, N} <: AbstractArray{T, N} end
 Base.convert{S,T,N}(::Type{Array{S, N}}, ::DA_19281{T, N}) = error()
 x_19281 = [(), (1,)]
-type Foo_19281
+mutable struct Foo_19281
     f::Vector{Tuple}
     Foo_19281() = new(x_19281)
 end
@@ -620,7 +620,7 @@ let
     @test isassigned(x_defined)
 end
 
-type Demo_20254
+mutable struct Demo_20254
     arr::Array{String}
 end
 

@@ -21,6 +21,7 @@ julia> print(io, "Hello World!")
 
 julia> String(take!(io))
 "Hello World!"
+```
 """
 function print(io::IO, x)
     lock(io)
@@ -114,6 +115,7 @@ Create a string from any values using the [`print`](@ref) function.
 ```jldoctest
 julia> string("a", 1, true)
 "a1true"
+```
 """
 string(xs...) = print_to_string(xs...)
 
