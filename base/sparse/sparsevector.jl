@@ -35,6 +35,8 @@ count(x::SparseVector) = count(x.nzval)
 nonzeros(x::SparseVector) = x.nzval
 nonzeroinds(x::SparseVector) = x.nzind
 
+similar(x::SparseVector, Tv::Type=eltype(x)) = SparseVector(x.n, copy(x.nzind), Array{Tv}(length(x.nzval)))
+similar{Tv,Ti}(x::SparseVector, ::Type{Tv}, ::Type{Ti}) = SparseVector(x.n, copy!(similar(x.nzind, Ti), x.nzind), copy!(similar(x.nzval, Tv), x.nzval))
 similar{T}(x::SparseVector, ::Type{T}, D::Dims) = spzeros(T, D...)
 
 ### Construct empty sparse vector
@@ -758,7 +760,11 @@ function show(io::IOContext, x::AbstractSparseVector)
     for k = 1:length(nzind)
         if k < half_screen_rows || k > xnnz - half_screen_rows
             print(io, "  ", '[', rpad(nzind[k], pad), "]  =  ")
-            Base.show(io, nzval[k])
+            if isassigned(nzval, Int(k))
+                 show(io, nzval[k])
+            else
+                 print(io, Base.undef_ref_str)
+            end
             k != length(nzind) && println(io)
         elseif k == half_screen_rows
             println(io, "   ", " "^pad, "   \u22ee")

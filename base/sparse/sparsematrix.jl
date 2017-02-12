@@ -150,7 +150,7 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
         if k < half_screen_rows || k > nnz(S)-half_screen_rows
             print(io, sep, '[', rpad(S.rowval[k], pad), ", ", lpad(col, pad), "]  =  ")
             if isassigned(S.nzval, Int(k))
-                Base.show(io, S.nzval[k])
+                show(io, S.nzval[k])
             else
                 print(io, Base.undef_ref_str)
             end
@@ -293,7 +293,12 @@ function copy!(A::SparseMatrixCSC, B::SparseMatrixCSC)
 end
 
 similar(S::SparseMatrixCSC, Tv::Type=eltype(S)) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), Array{Tv}(length(S.nzval)))
-similar{Tv,Ti}(S::SparseMatrixCSC, ::Type{Tv}, ::Type{Ti}) = SparseMatrixCSC(S.m, S.n, convert(Array{Ti}, S.colptr), convert(Array{Ti}, S.rowval), Array{Tv}(length(S.nzval)))
+function similar{Tv,Ti}(S::SparseMatrixCSC, ::Type{Tv}, ::Type{Ti})
+    new_colptr = copy!(similar(S.colptr, Ti), S.colptr)
+    new_rowval = copy!(similar(S.rowval, Ti), S.rowval)
+    new_nzval =  copy!(similar(S.nzval,  Tv), S.nzval)
+    SparseMatrixCSC(S.m, S.n, new_colptr, new_rowval, new_nzval)
+end
 @inline similar{Tv}(S::SparseMatrixCSC, ::Type{Tv}, d::Dims) = spzeros(Tv, d...)
 
 # convert'ing between SparseMatrixCSC types
