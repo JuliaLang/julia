@@ -55,3 +55,7 @@ void jl_generate_fptr(jl_lambda_info_t *li)
     li->fptr = (jl_fptr_t)&jl_interpret_call;
     li->jlcall_api = 3;
 }
+
+int32_t jl_assign_functionID(void *function) {
+    return 0;
+}

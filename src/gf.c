@@ -1600,6 +1600,8 @@ static void _compile_all_deq(jl_array_t *found)
             if (linfo != templ) {
                 templ->jlcall_api = 2;
                 templ->constval = linfo->constval;
+                if (templ->constval)
+                    jl_gc_wb(templ, templ->constval);
             }
             continue;
         }
@@ -1612,6 +1614,8 @@ static void _compile_all_deq(jl_array_t *found)
             if (linfo != templ) {
                 templ->jlcall_api = 2;
                 templ->constval = linfo->constval;
+                if (templ->constval)
+                    jl_gc_wb(templ, templ->constval);
             }
             continue;
         }
@@ -1632,7 +1636,8 @@ static void _compile_all_deq(jl_array_t *found)
                 templ->functionObjectsDecls = linfo->functionObjectsDecls;
                 templ->jlcall_api = linfo->jlcall_api;
                 templ->constval = linfo->constval;
-                if (templ->constval) jl_gc_wb(templ, templ->constval);
+                if (templ->constval)
+                    jl_gc_wb(templ, templ->constval);
                 templ->rettype = linfo->rettype;
                 jl_gc_wb(templ, templ->rettype);
                 templ->fptr = NULL;

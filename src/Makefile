@@ -60,6 +60,7 @@ endif
 else
 SRCS += anticodegen
 LLVM_LIBS := support
+USE_LLVM_SHLIB := 0
 endif
 
 HEADERS := $(addprefix $(SRCDIR)/,julia.h julia_threads.h julia_internal.h options.h timing.h) $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(LIBUV_INC)/uv.h
