@@ -539,7 +539,7 @@ end
     end
 
     if done(p.a, s1)
-        return (v1,v2), (start(p.a), s2, oftype(nv2,nothing), done(p.b,s2))
+        return (v1,v2), (start(p.a), s2, Nullable{eltype(nv2)}(), done(p.b,s2))
     end
     return (v1,v2), (s1, s2, Nullable(v2), false)
 end
