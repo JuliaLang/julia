@@ -89,7 +89,7 @@ function complete_keyword(s::String)
         "finally", "for", "function", "global", "if", "import",
         "importall", "let", "local", "macro", "module", "mutable struct",
         "primitive type", "quote", "return", "struct",
-        "true", "try", "typealias", "using", "while"]
+        "true", "try", "using", "while"]
     r = searchsorted(sorted_keywords, s)
     i = first(r)
     n = length(sorted_keywords)

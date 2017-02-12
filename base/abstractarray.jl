@@ -900,7 +900,7 @@ end
 
 ## get (getindex with a default value) ##
 
-typealias RangeVecIntList{A<:AbstractVector{Int}} Union{Tuple{Vararg{Union{Range, AbstractVector{Int}}}}, AbstractVector{UnitRange{Int}}, AbstractVector{Range{Int}}, AbstractVector{A}}
+RangeVecIntList{A<:AbstractVector{Int}} = Union{Tuple{Vararg{Union{Range, AbstractVector{Int}}}}, AbstractVector{UnitRange{Int}}, AbstractVector{Range{Int}}, AbstractVector{A}}
 
 get(A::AbstractArray, i::Integer, default) = checkbounds(Bool, A, i) ? A[i] : default
 get(A::AbstractArray, I::Tuple{}, default) = similar(A, typeof(default), 0)

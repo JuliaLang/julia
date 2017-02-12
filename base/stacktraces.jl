@@ -67,7 +67,7 @@ StackFrame(func, file, line) = StackFrame(func, file, line, Nullable{Core.Method
 An alias for `Vector{StackFrame}` provided for convenience; returned by calls to
 `stacktrace` and `catch_stacktrace`.
 """
-typealias StackTrace Vector{StackFrame}
+const StackTrace = Vector{StackFrame}
 
 const empty_sym = Symbol("")
 const UNKNOWN = StackFrame(empty_sym, empty_sym, -1, Nullable{Core.MethodInstance}(), true, false, 0) # === lookup(C_NULL)

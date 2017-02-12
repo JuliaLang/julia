@@ -273,7 +273,6 @@ First, a review of some relevant Julia type terminology:
 |                               | `Complex128` (`isbits`)                     | "Is-Bits"   :: A `primitive type`, or a `struct` type where all fields are other `isbits` types. It is defined by-value, and is stored without a type-tag.                                                                                                                       |
 | `struct ...; end`             | `nothing`                                   | "Singleton" :: a Leaf Type or Struct with no fields.                                                                                                                                                                                                                        |
 | `(...)` or `tuple(...)`       | `(1, 2, 3)`                                 | "Tuple" :: an immutable data-structure similar to an anonymous struct type, or a constant array. Represented as either an array or a struct.                                                                                                                                |
-| `typealias`                   | Not applicable here                         | Type aliases, and other similar mechanisms of doing type indirection, are resolved to their base type (this includes assigning a type to another name, or getting the type out of a function call).                                                                            |
 
 ### Bits Types:
 
@@ -521,7 +520,7 @@ __m256 dist( __m256 a, __m256 b ) {
 The following Julia code calls `dist` using `ccall`:
 
 ```julia
-typealias m256 NTuple{8, VecElement{Float32}}
+const m256 = NTuple{8, VecElement{Float32}}
 
 a = m256(ntuple(i -> VecElement(sin(Float32(i))), 8))
 b = m256(ntuple(i -> VecElement(cos(Float32(i))), 8))

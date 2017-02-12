@@ -28,9 +28,9 @@ end
 const floattypes = (Float16, Float32, Float64)
 # TODO: Support Bool, Ptr
 const atomictypes = (inttypes..., floattypes...)
-typealias IntTypes Union{inttypes...}
-typealias FloatTypes Union{floattypes...}
-typealias AtomicTypes Union{atomictypes...}
+const IntTypes = Union{inttypes...}
+const FloatTypes = Union{floattypes...}
+const AtomicTypes = Union{atomictypes...}
 
 """
     Threads.Atomic{T}

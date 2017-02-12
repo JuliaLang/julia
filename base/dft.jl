@@ -20,7 +20,7 @@ export fft, ifft, bfft, fft!, ifft!, bfft!,
        plan_fft, plan_ifft, plan_bfft, plan_fft!, plan_ifft!, plan_bfft!,
        rfft, irfft, brfft, plan_rfft, plan_irfft, plan_brfft
 
-typealias FFTWFloat Union{Float32,Float64}
+const FFTWFloat = Union{Float32,Float64}
 fftwfloat(x) = _fftwfloat(float(x))
 _fftwfloat{T<:FFTWFloat}(::Type{T}) = T
 _fftwfloat(::Type{Float16}) = Float32

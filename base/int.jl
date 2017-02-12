@@ -14,14 +14,14 @@ const BitSigned_types     = (BitSigned64_types..., Int128)
 const BitUnsigned_types   = (BitUnsigned64_types..., UInt128)
 const BitInteger_types    = (BitSigned_types..., BitUnsigned_types...)
 
-typealias BitSigned64   Union{BitSigned64_types...}
-typealias BitUnsigned64 Union{BitUnsigned64_types...}
-typealias BitInteger64  Union{BitInteger64_types...}
-typealias BitSigned     Union{BitSigned_types...}
-typealias BitUnsigned   Union{BitUnsigned_types...}
-typealias BitInteger    Union{BitInteger_types...}
-typealias BitSigned64T  Union{Type{Int8}, Type{Int16}, Type{Int32}, Type{Int64}}
-typealias BitUnsigned64T Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt64}}
+const BitSigned64    = Union{BitSigned64_types...}
+const BitUnsigned64  = Union{BitUnsigned64_types...}
+const BitInteger64   = Union{BitInteger64_types...}
+const BitSigned      = Union{BitSigned_types...}
+const BitUnsigned    = Union{BitUnsigned_types...}
+const BitInteger     = Union{BitInteger_types...}
+const BitSigned64T   = Union{Type{Int8}, Type{Int16}, Type{Int32}, Type{Int64}}
+const BitUnsigned64T = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt64}}
 
 ## integer comparisons ##
 

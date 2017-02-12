@@ -47,7 +47,7 @@ See also RecursiveSpinLock for a version that permits recursion.
 
 See also Mutex for a more efficient version on one core or if the lock may be held for a considerable length of time.
 """
-typealias SpinLock TatasLock
+const SpinLock = TatasLock
 
 function lock(l::TatasLock)
     while true
@@ -103,7 +103,7 @@ See also SpinLock for a slightly faster version.
 
 See also Mutex for a more efficient version on one core or if the lock may be held for a considerable length of time.
 """
-typealias RecursiveSpinLock RecursiveTatasLock
+const RecursiveSpinLock = RecursiveTatasLock
 
 function lock(l::RecursiveTatasLock)
     if l.ownertid[] == threadid()

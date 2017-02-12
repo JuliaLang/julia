@@ -250,8 +250,8 @@ function finalize_refs{T,N}(S::SharedArray{T,N})
     S
 end
 
-typealias SharedVector{T} SharedArray{T,1}
-typealias SharedMatrix{T} SharedArray{T,2}
+SharedVector{T} = SharedArray{T,1}
+SharedMatrix{T} = SharedArray{T,2}
 
 length(S::SharedArray) = prod(S.dims)
 size(S::SharedArray) = S.dims

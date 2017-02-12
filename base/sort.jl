@@ -790,7 +790,7 @@ import Core.Intrinsics: slt_int
 import ..Sort: sort!
 import ...Order: lt, DirectOrdering
 
-typealias Floats Union{Float32,Float64}
+const Floats = Union{Float32,Float64}
 
 struct Left <: Ordering end
 struct Right <: Ordering end
