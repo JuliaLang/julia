@@ -64,6 +64,12 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
             else
                 backend.in_eval = true
                 value = eval(Main, ast)
+                if isa(value, Function) && isa(ast, Symbol)
+                    try
+                        value = eval(Main, Expr(:call, ast))
+                    catch err
+                    end
+                end
                 backend.in_eval = false
                 # note: value wrapped in a closure to ensure it doesn't get passed through expand
                 eval(Main, Expr(:body, Expr(:(=), :ans, QuoteNode(value)), Expr(:return, nothing)))
