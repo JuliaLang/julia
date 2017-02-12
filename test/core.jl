@@ -4676,3 +4676,5 @@ if Sys.WORD_SIZE == 64
     end
     @test_nowarn tester20360()
 end
+
+@test_throws ArgumentError eltype(Bottom)
