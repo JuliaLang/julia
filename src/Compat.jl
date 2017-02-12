@@ -213,16 +213,15 @@ end
 istopsymbol(ex, mod, sym) = ex in (sym, Expr(:(.), mod, Expr(:quote, sym)))
 
 if VERSION < v"0.5.0-dev+4002"
-    typealias Array0D{T} Array{T,0}
     @inline broadcast_getindex(arg, idx) = arg[(idx - 1) % length(arg) + 1]
     # Optimize for single element
     @inline broadcast_getindex(arg::Number, idx) = arg
-    @inline broadcast_getindex(arg::Array0D, idx) = arg[1]
+    @inline broadcast_getindex{T}(arg::Array{T,0}, idx) = arg[1]
 
     # If we know from syntax level that we don't need wrapping
     @inline broadcast_getindex_naive(arg, idx) = arg[idx]
     @inline broadcast_getindex_naive(arg::Number, idx) = arg
-    @inline broadcast_getindex_naive(arg::Array0D, idx) = arg[1]
+    @inline broadcast_getindex_naive{T}(arg::Array{T,0}, idx) = arg[1]
 
     # For vararg support
     @inline getindex_vararg(idx) = ()
@@ -269,7 +268,7 @@ if VERSION < v"0.5.0-dev+4002"
 
     @inline need_full_getindex(shp) = false
     @inline need_full_getindex(shp, arg1::Number) = false
-    @inline need_full_getindex(shp, arg1::Array0D) = false
+    @inline need_full_getindex{T}(shp, arg1::Array{T,0}) = false
     @inline need_full_getindex(shp, arg1) = shp != size(arg1)
     @inline need_full_getindex(shp, arg1, arg2) =
         need_full_getindex(shp, arg1) || need_full_getindex(shp, arg2)
@@ -349,6 +348,16 @@ if VERSION < v"0.5.0-dev+4002"
     end
 end
 
+if VERSION < v"0.6.0-dev.2782"
+    function new_style_typealias(ex::ANY)
+        isexpr(ex, :(=)) || return false
+        ex = ex::Expr
+        return length(ex.args) == 2 && isexpr(ex.args[1], :curly)
+    end
+else
+    new_style_typealias(ex) = false
+end
+
 function _compat(ex::Expr)
     if ex.head === :call
         f = ex.args[1]
@@ -424,6 +433,11 @@ function _compat(ex::Expr)
             # f.(arg) -> broadcast(f, arg)
             return rewrite_broadcast(_compat(ex.args[1]), [_compat(ex.args[2])])
         end
+    elseif new_style_typealias(ex)
+        ex.head = :typealias
+    elseif ex.head === :const && length(ex.args) == 1 && new_style_typealias(ex.args[1])
+        ex = ex.args[1]::Expr
+        ex.head = :typealias
     elseif ex.head === :import
         if VERSION < v"0.5.0-dev+4340" && length(ex.args) == 2 && ex.args[1] === :Base && ex.args[2] === :show
             return quote
@@ -908,10 +922,10 @@ import Base: srand, rand, rand!
 
 if isdefined(Core, :String) && isdefined(Core, :AbstractString)
     # Not exported in order to not break code on 0.5
-    typealias UTF8String Core.String
-    typealias ASCIIString Core.String
+    const UTF8String = Core.String
+    const ASCIIString = Core.String
 else
-    typealias String Base.ByteString
+    const String = Base.ByteString
     if VERSION >= v"0.4.0-dev+5243"
         @compat (::Type{Base.ByteString})(io::Base.AbstractIOBuffer) = bytestring(io)
     elseif VERSION >= v"0.4.0-dev+1246"
@@ -1167,7 +1181,7 @@ end
 if VERSION < v"0.5.0-dev+3669"
     using Base: promote_op
     import Base: *
-    typealias SubMatrix{T} SubArray{T,2}
+    eval(Expr(:typealias, :(SubMatrix{T}), :(SubArray{T,2})))
     (*)(A::SubMatrix, D::Diagonal) =
         scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A, D.diag)
     (*)(D::Diagonal, A::SubMatrix) =

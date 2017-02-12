@@ -1577,7 +1577,7 @@ end
 @compat abstract type AbstractFoo20006 end
 immutable ConcreteFoo20006{T<:Int} <: AbstractFoo20006 end
 immutable ConcreteFoo20006N{T<:Int,N} <: AbstractFoo20006 end
-typealias ConcreteFoo200061{T<:Int} ConcreteFoo20006N{T,1}
+@compat ConcreteFoo200061{T<:Int} = ConcreteFoo20006N{T,1}
 @test Compat.TypeUtils.isabstract(AbstractFoo20006)
 @test !Compat.TypeUtils.isabstract(ConcreteFoo20006)
 @test !Compat.TypeUtils.isabstract(ConcreteFoo20006N)
@@ -1712,5 +1712,13 @@ end
 @test !Compat.TypeUtils.isabstract(Primitive20418)
 @test isbits(Primitive20418{Int})
 @test sizeof(Primitive20418{Int}) == 2
+
+# PR #20500
+@compat A20500{T<:Integer} = Array{T,20500}
+@compat const A20500_2{T<:Union{Int,Float32}} = Pair{T,T}
+f20500() = A20500
+f20500_2() = A20500_2
+@inferred f20500()
+@inferred f20500_2()
 
 include("to-be-deprecated.jl")
