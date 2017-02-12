@@ -183,8 +183,6 @@ end
 # simple Array{Any} operations needed for bootstrap
 setindex!(A::Array{Any}, x::ANY, i::Int) = Core.arrayset(A, x, i)
 
-map(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
-
 function precompile(f::ANY, args::Tuple)
     ccall(:jl_compile_hint, Int32, (Any,), Tuple{Core.Typeof(f), args...}) != 0
 end
