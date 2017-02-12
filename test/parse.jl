@@ -199,6 +199,27 @@ macro f(args...) end; @f ""
 @test parse(Int,'3') == 3
 @test parse(Int,'3', 8) == 3
 
+# Issue 20587
+let input_strings = ["", " ", "  "]
+    # Without a base (handles things like "0x00001111", etc)
+    for T in vcat(subtypes(Signed), subtypes(Unsigned))
+        for s in input_strings
+            result = @test_throws ArgumentError parse(T, s)
+            the_exception = result.value
+            @test the_exception.msg == "input string is empty or only contains whitespace"
+        end
+    end
+
+    # With a base
+    for T in vcat(subtypes(Signed), subtypes(Unsigned))
+        for s in input_strings
+            result = @test_throws ArgumentError parse(T, s, 16)
+            the_exception = result.value
+            @test the_exception.msg == "input string is empty or only contains whitespace"
+        end
+    end
+end
+
 parsebin(s) = parse(Int,s,2)
 parseoct(s) = parse(Int,s,8)
 parsehex(s) = parse(Int,s,16)

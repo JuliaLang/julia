@@ -58,6 +58,10 @@ end
 
 function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool)
     _n = Nullable{T}()
+    if isempty(strip(s))
+        raise && throw(ArgumentError("input string is empty or only contains whitespace"))
+        return _n
+    end
     sgn, base, i = parseint_preamble(T<:Signed, Int(base_), s, startpos, endpos)
     if !(2 <= base <= 62)
         raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
@@ -132,21 +136,35 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString},
         p, "true", 4)) && (return Nullable(true))
     (len == 5) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
         p, "false", 5)) && (return Nullable(false))
-    raise && throw(ArgumentError("invalid Bool representation: " *
-        repr(SubString(sbuff, startpos, endpos))))
-    Nullable{Bool}()
+    _n = Nullable{Bool}()
+    if isempty(strip(sbuff))
+        raise && throw(ArgumentError("input string is empty or only contains whitespace"))
+        return _n
+    end
+    raise && throw(ArgumentError("invalid Bool representation: $(repr(SubString(sbuff, startpos, endpos)))"))
+    return _n
 end
 
-check_valid_base(base) = 2 <= base <= 62 ? base :
+@inline function check_valid_base(base)
+    if 2 <= base <= 62
+        return base
+    end
     throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
+end
+
 tryparse{T<:Integer}(::Type{T}, s::AbstractString, base::Integer) =
     tryparse_internal(T, s, start(s), endof(s), check_valid_base(base), false)
 tryparse{T<:Integer}(::Type{T}, s::AbstractString) =
     tryparse_internal(T, s, start(s), endof(s), 0, false)
-parse{T<:Integer}(::Type{T}, s::AbstractString, base::Integer) =
+
+function parse{T<:Integer}(::Type{T}, s::AbstractString, base::Integer)
     get(tryparse_internal(T, s, start(s), endof(s), check_valid_base(base), true))
-parse{T<:Integer}(::Type{T}, s::AbstractString) =
-    get(tryparse_internal(T, s, start(s), endof(s), 0, true))
+end
+
+function parse{T<:Integer}(::Type{T}, s::AbstractString)
+    get(tryparse_internal(T, s, start(s), endof(s), 0, true)) # Zero means, "figure it out"
+end
+
 
 ## string to float functions ##
 
@@ -159,8 +177,11 @@ tryparse(::Type{Float32}, s::SubString{String}) = ccall(:jl_try_substrtof, Nulla
 tryparse{T<:Union{Float32,Float64}}(::Type{T}, s::AbstractString) = tryparse(T, String(s))
 
 function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString)
-    nf = tryparse(T, s)
-    isnull(nf) ? throw(ArgumentError("invalid number format $(repr(s)) for $T")) : get(nf)
+    result = tryparse(T, s)
+    if isnull(result)
+        throw(ArgumentError("cannot parse $(repr(s)) as $T"))
+    end
+    return get(result)
 end
 
 float(x::AbstractString) = parse(Float64,x)
