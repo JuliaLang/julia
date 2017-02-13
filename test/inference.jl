@@ -589,6 +589,41 @@ g11015(::Type{Bool}, ::Bool) = 2.0
 @test Int <: Base.return_types(f11015, (AT11015,))[1]
 @test f11015(AT11015(true)) === 1
 
+# better inference of apply (#20343)
+f20343(::String, ::Int) = 1
+f20343(::Int, ::String, ::Int, ::Int) = 1
+f20343(::Int, ::Int, ::String, ::Int, ::Int, ::Int) = 1
+f20343(::Union{Int,String}...) = Int8(1)
+f20343(::Any...) = "no"
+function g20343()
+    n = rand(1:3)
+    i = ntuple(i->n==i ? "" : 0, 2n)::Union{Tuple{String,Int},Tuple{Int,String,Int,Int},Tuple{Int,Int,String,Int,Int,Int}}
+    f20343(i...)
+end
+@test Base.return_types(g20343, ()) == [Int]
+function h20343()
+    n = rand(1:3)
+    i = ntuple(i->n==i ? "" : 0, 3)::Union{Tuple{String,Int,Int},Tuple{Int,String,Int},Tuple{Int,Int,String}}
+    f20343(i..., i...)
+end
+@test all(t -> t<:Integer, Base.return_types(h20343, ()))
+function i20343()
+    f20343([1,2,3]..., 4)
+end
+@test Base.return_types(i20343, ()) == [Int8]
+immutable Foo20518 <: AbstractVector{Int}; end # issue #20518; inference assumed AbstractArrays
+Base.getindex(::Foo20518, ::Int) = "oops"      # not to lie about their element type
+Base.indices(::Foo20518) = (Base.OneTo(4),)
+foo20518(xs::Any...) = -1
+foo20518(xs::Int...) = [0]
+bar20518(xs) = sum(foo20518(xs...))
+@test bar20518(Foo20518()) == -1
+f19957(::Int) = Int8(1)            # issue #19957, inference failure when splatting a number
+f19957(::Int...) = Int16(1)
+f19957(::Any...) = "no"
+g19957(x) = f19957(x...)
+@test all(t -> t<:Union{Int8,Int16}, Base.return_types(g19957, (Int,))) # with a full fix, this should just be Int8
+
 # Inference for some type-level computation
 fUnionAll{T}(::Type{T}) = Type{S} where S <: T
 @inferred fUnionAll(Real) == Type{T} where T <: Real

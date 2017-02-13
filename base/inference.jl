@@ -17,6 +17,7 @@ struct InferenceParams
     MAX_TUPLE_DEPTH::Int
     MAX_TUPLE_SPLAT::Int
     MAX_UNION_SPLITTING::Int
+    MAX_APPLY_UNION_ENUM::Int
 
     # reasonable defaults
     function InferenceParams(world::UInt;
@@ -24,9 +25,10 @@ struct InferenceParams
                     tupletype_len::Int = 15,
                     tuple_depth::Int = 4,
                     tuple_splat::Int = 16,
-                    union_splitting::Int = 4)
+                    union_splitting::Int = 4,
+                    apply_union_enum::Int = 8)
         return new(world, inlining, tupletype_len,
-            tuple_depth, tuple_splat, union_splitting)
+            tuple_depth, tuple_splat, union_splitting, apply_union_enum)
     end
 end
 
@@ -1385,67 +1387,116 @@ function abstract_evals_to_constant(ex, c::ANY, vtypes, sv)
     return isa(av,Const) && av.val === c
 end
 
-# `types` is an array of inferred types for expressions in `args`.
-# if an expression constructs a container (e.g. `svec(x,y,z)`),
-# refine its type to an array of element types. returns an array of
-# arrays of types, or `nothing`.
-function precise_container_types(args, types, vtypes::VarTable, sv)
-    n = length(args)
-    assert(n == length(types))
-    result = Vector{Any}(n)
-    for i = 1:n
-        ai = args[i]
-        ti = types[i]
-        tti = widenconst(ti)
-        tti = unwrap_unionall(tti)
-        if isa(ti, Const) && (isa(ti.val, SimpleVector) || isa(ti.val, Tuple))
-            result[i] = Any[ abstract_eval_constant(x) for x in ti.val ]
-        elseif isa(ai, Expr) && ai.head === :call && (abstract_evals_to_constant(ai.args[1], svec, vtypes, sv) ||
-                                                      abstract_evals_to_constant(ai.args[1], tuple, vtypes, sv))
-            aa = ai.args
-            result[i] = Any[ (isa(aa[j],Expr) ? aa[j].typ : abstract_eval(aa[j],vtypes,sv)) for j=2:length(aa) ]
-            if _any(isvarargtype, result[i])
-                return nothing
-            end
-        elseif isa(tti, Union)
-            return nothing
-        elseif isa(tti,DataType) && tti <: Tuple
-            if i == n
-                if isvatuple(tti) && length(tti.parameters) == 1
-                    result[i] = Any[Vararg{unwrapva(tti.parameters[1])}]
-                else
-                    result[i] = tti.parameters
-                end
-            elseif isknownlength(tti)
-                result[i] = tti.parameters
-            else
-                return nothing
-            end
-        elseif tti <: AbstractArray && i == n
-            result[i] = Any[Vararg{eltype(tti)}]
-        else
-            return nothing
+# `typ` is the inferred type for expression `arg`.
+# if the expression constructs a container (e.g. `svec(x,y,z)`),
+# refine its type to an array of element types.
+# Union of Tuples of the same length is converted to Tuple of Unions.
+# returns an array of types, or `nothing`.
+function precise_container_type(arg, typ, vtypes::VarTable, sv)
+    tti = widenconst(typ)
+    tti = unwrap_unionall(tti)
+    if isa(typ, Const) && (isa(typ.val, SimpleVector) || isa(typ.val, Tuple))
+        return Any[ abstract_eval_constant(x) for x in typ.val ]
+    elseif isa(arg, Expr) && arg.head === :call && (abstract_evals_to_constant(arg.args[1], svec, vtypes, sv) ||
+                                                    abstract_evals_to_constant(arg.args[1], tuple, vtypes, sv))
+        aa = arg.args
+        result = Any[ (isa(aa[j],Expr) ? aa[j].typ : abstract_eval(aa[j],vtypes,sv)) for j=2:length(aa) ]
+        if _any(isvarargtype, result)
+            return Any[Vararg{Any}]
         end
+        return result
+    elseif isa(tti, Union)
+        utis = uniontypes(tti)
+        if _any(t -> !isa(t,DataType) || !(t <: Tuple) || !isknownlength(t), utis)
+            return Any[Vararg{Any}]
+        end
+        result = Any[utis[1].parameters...]
+        for t in utis[2:end]
+            if length(t.parameters) != length(result)
+                return Any[Vararg{Any}]
+            end
+            for j in 1:length(t.parameters)
+                result[j] = tmerge(result[j], t.parameters[j])
+            end
+        end
+        return result
+    elseif isa(tti,DataType) && tti <: Tuple
+        if isvatuple(tti) && length(tti.parameters) == 1
+            return Any[Vararg{unwrapva(tti.parameters[1])}]
+        else
+            return tti.parameters
+        end
+    elseif tti <: Array
+        return Any[Vararg{eltype(tti)}]
+    else
+        return Any[Vararg{abstract_iteration(tti, vtypes, sv)}]
     end
-    return result
+end
+
+# simulate iteration protocol on container type up to fixpoint
+function abstract_iteration(itertype, vtypes::VarTable, sv)
+    if !isdefined(Main, :Base) || !isdefined(Main.Base, :start) || !isdefined(Main.Base, :next)
+        return Any
+    end
+    statetype = abstract_call(Main.Base.start, (), Any[Const(Main.Base.start), itertype], vtypes, sv)
+    valtype = Bottom
+    while valtype !== Any
+        nt = abstract_call(Main.Base.next, (), Any[Const(Main.Base.next), itertype, statetype], vtypes, sv)
+        if !isa(nt, DataType) || !(nt <: Tuple) || isvatuple(nt) || length(nt.parameters) != 2
+            return Any
+        end
+        if nt.parameters[1] <: valtype && nt.parameters[2] <: statetype
+            break
+        end
+        valtype = tmerge(valtype, nt.parameters[1])
+        statetype = tmerge(statetype, nt.parameters[2])
+    end
+    return valtype
 end
 
 # do apply(af, fargs...), where af is a function value
 function abstract_apply(af::ANY, fargs, aargtypes::Vector{Any}, vtypes::VarTable, sv)
-    ctypes = precise_container_types(fargs, aargtypes, vtypes, sv)
-    if ctypes !== nothing
-        # apply with known func with known tuple types
-        # can be collapsed to a call to the applied func
-        at = append_any(Any[Const(af)], ctypes...)
-        n = length(at)
-        if n-1 > sv.params.MAX_TUPLETYPE_LEN
-            tail = foldl((a,b)->tmerge(a,unwrapva(b)), Bottom, at[sv.params.MAX_TUPLETYPE_LEN+1:n])
-            at = vcat(at[1:sv.params.MAX_TUPLETYPE_LEN], Any[Vararg{widenconst(tail)}])
+    res = Union{}
+    nargs = length(fargs)
+    assert(nargs == length(aargtypes))
+    splitunions = countunionsplit(aargtypes) <= sv.params.MAX_APPLY_UNION_ENUM
+    ctypes = Any[Any[]]
+    for i = 1:nargs
+        if aargtypes[i] === Any
+            # bail out completely and infer as f(::Any...)
+            # instead could keep what we got so far and just append a Vararg{Any} (by just
+            # using the normal logic from below), but that makes the time of the subarray
+            # test explode
+            ctypes = Any[Any[Vararg{Any}]]
+            break
         end
-        return abstract_call(af, (), at, vtypes, sv)
+        ctypes´ = []
+        for ti in (splitunions ? uniontypes(aargtypes[i]) : Any[aargtypes[i]])
+            cti = precise_container_type(fargs[i], ti, vtypes, sv)
+            for ct in ctypes
+                if !isempty(ct) && isvarargtype(ct[end])
+                    tail = foldl((a,b)->tmerge(a,unwrapva(b)), unwrapva(ct[end]), cti)
+                    push!(ctypes´, push!(ct[1:end-1], Vararg{widenconst(tail)}))
+                else
+                    push!(ctypes´, append_any(ct, cti))
+                end
+            end
+        end
+        ctypes = ctypes´
     end
-    # apply known function with unknown args => f(Any...)
-    return abstract_call(af, (), Any[Const(af), Vararg{Any}], vtypes, sv)
+    for ct in ctypes
+        if length(ct) > sv.params.MAX_TUPLETYPE_LEN
+            tail = foldl((a,b)->tmerge(a,unwrapva(b)), Bottom, ct[sv.params.MAX_TUPLETYPE_LEN:end])
+            resize!(ct, sv.params.MAX_TUPLETYPE_LEN)
+            ct[end] = Vararg{widenconst(tail)}
+        end
+        at = append_any(Any[Const(af)], ct)
+        res = tmerge(res, abstract_call(af, (), at, vtypes, sv))
+        if res === Any
+            break
+        end
+    end
+    return res
 end
 
 function return_type_tfunc(argtypes::ANY, vtypes::VarTable, sv::InferenceState)
