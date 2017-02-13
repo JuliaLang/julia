@@ -501,11 +501,13 @@ foo_9965(x::Int) = 2x
 end
 
 # Issue #20556
-abstract type AbstractTypeNoConstructors end
-@test sprint(showerror, (MethodError(AbstractTypeNoConstructors, ()))) == "MethodError: no constructors have been defined for $AbstractTypeNoConstructors"
-AbstractTypeNoConstructors(x, y) = x + y
-@test startswith(sprint(showerror, (MethodError(AbstractTypeNoConstructors, ()))), "MethodError: no method matching $AbstractTypeNoConstructors()")
-@test !contains(sprint(showerror, (MethodError(AbstractTypeNoConstructors, ()))), "where T at sysimg.jl")
-for method_string in Base.REPLCompletions.complete_methods(:(AbstractTypeNoConstructors()))
+module EnclosingModule
+    abstract type AbstractTypeNoConstructors end
+end
+@test sprint(showerror, (MethodError(EnclosingModule.AbstractTypeNoConstructors, ()))) == "MethodError: no constructors have been defined for $(EnclosingModule.AbstractTypeNoConstructors)"
+EnclosingModule.AbstractTypeNoConstructors(x, y) = x + y
+@test startswith(sprint(showerror, (MethodError(EnclosingModule.AbstractTypeNoConstructors, ()))), "MethodError: no method matching $(EnclosingModule.AbstractTypeNoConstructors)()")
+@test !contains(sprint(showerror, (MethodError(EnclosingModule.AbstractTypeNoConstructors, ()))), "where T at sysimg.jl")
+for method_string in Base.REPLCompletions.complete_methods(:(EnclosingModule.AbstractTypeNoConstructors()))
     @test method_string != "(::Type{T})(arg) where T in Base at sysimg.jl"
 end
