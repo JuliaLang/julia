@@ -35,12 +35,17 @@ count(x::SparseVector) = count(x.nzval)
 nonzeros(x::SparseVector) = x.nzval
 nonzeroinds(x::SparseVector) = x.nzind
 
+similar(x::SparseVector, Tv::Type=eltype(x)) = SparseVector(x.n, copy(x.nzind), Array{Tv}(length(x.nzval)))
+function similar{Tv,Ti}(x::SparseVector, ::Type{Tv}, ::Type{Ti})
+    return SparseVector(x.n, copy!(similar(x.nzind, Ti), x.nzind), copy!(similar(x.nzval, Tv), x.nzval))
+end
 similar{T}(x::SparseVector, ::Type{T}, D::Dims) = spzeros(T, D...)
 
 ### Construct empty sparse vector
 
 spzeros(len::Integer) = spzeros(Float64, len)
 spzeros{T}(::Type{T}, len::Integer) = SparseVector(len, Int[], T[])
+spzeros{Tv, Ti <: Integer}(::Type{Tv}, ::Type{Ti}, len::Integer) = SparseVector(len, Ti[], Tv[])
 
 # Construction of same structure, but with all ones
 spones{T}(x::SparseVector{T}) = SparseVector(x.n, copy(x.nzind), ones(T, length(x.nzval)))
@@ -97,6 +102,28 @@ Create a sparse vector `S` of length `m` such that `S[I[k]] = V[k]`.
 Duplicates are combined using the `combine` function, which defaults to
 `+` if no `combine` argument is provided, unless the elements of `V` are Booleans
 in which case `combine` defaults to `|`.
+
+```jldoctest
+julia> II = [1, 3, 3, 5]; V = [0.1, 0.2, 0.3, 0.2];
+
+julia> sparsevec(II, V)
+5-element SparseVector{Float64,Int64} with 3 stored entries:
+  [1]  =  0.1
+  [3]  =  0.5
+  [5]  =  0.2
+
+julia> sparsevec(II, V, 8, -)
+8-element SparseVector{Float64,Int64} with 3 stored entries:
+  [1]  =  0.1
+  [3]  =  -0.1
+  [5]  =  0.2
+
+julia> sparsevec([1, 3, 1, 2, 2], [true, true, false, false, false])
+3-element SparseVector{Bool,Int64} with 3 stored entries:
+  [1]  =  true
+  [2]  =  false
+  [3]  =  true
+```
 """
 function sparsevec(I::AbstractVector{<:Integer}, V::AbstractVector, combine::Function)
     length(I) == length(V) ||
@@ -144,10 +171,17 @@ sparsevec(I::AbstractVector, v::Number, len::Integer, combine::Function) =
 
 ### Construction from dictionary
 """
-    sparsevec(D::Dict, [m])
+    sparsevec(d::Dict, [m])
 
 Create a sparse vector of length `m` where the nonzero indices are keys from
 the dictionary, and the nonzero values are the values from the dictionary.
+
+```jldoctest
+julia> sparsevec(Dict(1 => 3, 2 => 2))
+2-element SparseVector{Int64,Int64} with 2 stored entries:
+  [1]  =  3
+  [2]  =  2
+```
 """
 function sparsevec{Tv,Ti<:Integer}(dict::Associative{Ti,Tv})
     m = length(dict)
@@ -218,6 +252,21 @@ setindex!{Tv, Ti<:Integer}(x::SparseVector{Tv,Ti}, v, i::Integer) =
     dropstored!(x::SparseVector, i::Integer)
 
 Drop entry `x[i]` from `x` if `x[i]` is stored and otherwise do nothing.
+
+```jldoctest
+julia> x = sparsevec([1, 3], [1.0, 2.0])
+3-element SparseVector{Float64,Int64} with 2 stored entries:
+  [1]  =  1.0
+  [3]  =  2.0
+
+julia> Base.SparseArrays.dropstored!(x, 3)
+3-element SparseVector{Float64,Int64} with 1 stored entry:
+  [1]  =  1.0
+
+julia> Base.SparseArrays.dropstored!(x, 2)
+3-element SparseVector{Float64,Int64} with 1 stored entry:
+  [1]  =  1.0
+```
 """
 function dropstored!(x::SparseVector, i::Integer)
     if !(1 <= i <= x.n)
@@ -255,6 +304,14 @@ convert{Tv,Ti}(::Type{SparseVector}, s::SparseMatrixCSC{Tv,Ti}) =
     sparsevec(A)
 
 Convert a vector `A` into a sparse vector of length `m`.
+
+```jldoctest
+julia> sparsevec([1.0, 2.0, 0.0, 0.0, 3.0, 0.0])
+6-element SparseVector{Float64,Int64} with 3 stored entries:
+  [1]  =  1.0
+  [2]  =  2.0
+  [5]  =  3.0
+```
 """
 sparsevec{T}(a::AbstractVector{T}) = convert(SparseVector{T, Int}, a)
 sparsevec(a::AbstractArray) = sparsevec(vec(a))
@@ -677,8 +734,13 @@ getindex(x::AbstractSparseVector, ::Colon) = copy(x)
 ### show and friends
 
 function show(io::IO, ::MIME"text/plain", x::AbstractSparseVector)
-    println(io, summary(x))
-    show(io, x)
+    xnnz = length(nonzeros(x))
+    print(io, length(x), "-element ", typeof(x), " with ", xnnz,
+           " stored ", xnnz == 1 ? "entry" : "entries")
+    if xnnz != 0
+        println(io, ":")
+        show(io, x)
+    end
 end
 
 show(io::IO, x::AbstractSparseVector) = show(convert(IOContext, io), x)
@@ -688,28 +750,28 @@ function show(io::IOContext, x::AbstractSparseVector)
     nzind = nonzeroinds(x)
     nzval = nonzeros(x)
     xnnz = length(nzind)
-
+    if length(nzind) == 0
+        return show(io, MIME("text/plain"), x)
+    end
     limit::Bool = get(io, :limit, false)
     half_screen_rows = limit ? div(displaysize(io)[1] - 8, 2) : typemax(Int)
     pad = ndigits(n)
-    sep = "\n\t"
     if !haskey(io, :compact)
         io = IOContext(io, :compact => true)
     end
     for k = 1:length(nzind)
         if k < half_screen_rows || k > xnnz - half_screen_rows
             print(io, "  ", '[', rpad(nzind[k], pad), "]  =  ")
-            Base.show(io, nzval[k])
-            println(io)
+            if isassigned(nzval, Int(k))
+                show(io, nzval[k])
+            else
+                print(io, Base.undef_ref_str)
+            end
+            k != length(nzind) && println(io)
         elseif k == half_screen_rows
             println(io, "   ", " "^pad, "   \u22ee")
         end
     end
-end
-
-function summary(x::AbstractSparseVector)
-    string("Sparse vector of length ", length(x), " with ", length(nonzeros(x)),
-           " ",  eltype(x), " nonzero entries:")
 end
 
 ### Conversion to matrix
