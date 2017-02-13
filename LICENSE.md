@@ -1,6 +1,7 @@
-The Compatibility.jl package is licensed under the MIT "Expat" License:
+The Compat.jl package is licensed under the MIT "Expat" License:
 
-> Copyright (c) 2014: Stefan Karpinski.
+> Copyright (c) 2014, 2015, 2016, 2017: Stefan Karpinski and other
+> contributors.
 >
 > Permission is hereby granted, free of charge, to any person obtaining
 > a copy of this software and associated documentation files (the
