@@ -847,3 +847,39 @@ end
 in(x::Integer, r::AbstractUnitRange{<:Integer}) = (first(r) <= x) & (x <= last(r))
 in{T<:Integer}(x, r::Range{T}) = isinteger(x) && !isempty(r) && x>=minimum(r) && x<=maximum(r) && (mod(convert(T,x),step(r))-mod(first(r),step(r)) == 0)
 in(x::Char, r::Range{Char}) = !isempty(r) && x >= minimum(r) && x <= maximum(r) && (mod(Int(x) - Int(first(r)), step(r)) == 0)
+
+# Addition/subtraction of ranges
+
+function _define_range_op(f::ANY)
+    @eval begin
+        function $f(r1::OrdinalRange, r2::OrdinalRange)
+            r1l = length(r1)
+            (r1l == length(r2) ||
+             throw(DimensionMismatch("argument dimensions must match")))
+            range($f(first(r1),first(r2)), $f(step(r1),step(r2)), r1l)
+        end
+
+        function $f{T}(r1::LinSpace{T}, r2::LinSpace{T})
+            len = r1.len
+            (len == r2.len ||
+             throw(DimensionMismatch("argument dimensions must match")))
+            linspace(convert(T, $f(first(r1), first(r2))),
+                     convert(T, $f(last(r1), last(r2))), len)
+        end
+
+        $f(r1::Union{StepRangeLen, OrdinalRange, LinSpace},
+           r2::Union{StepRangeLen, OrdinalRange, LinSpace}) =
+               $f(promote_noncircular(r1, r2)...)
+    end
+end
+_define_range_op(:+)
+_define_range_op(:-)
+
+function +{T,S}(r1::StepRangeLen{T,S}, r2::StepRangeLen{T,S})
+    len = length(r1)
+    (len == length(r2) ||
+        throw(DimensionMismatch("argument dimensions must match")))
+    StepRangeLen(first(r1)+first(r2), step(r1)+step(r2), len)
+end
+
+-(r1::StepRangeLen, r2::StepRangeLen) = +(r1, -r2)
