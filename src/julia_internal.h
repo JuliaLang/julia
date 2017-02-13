@@ -596,6 +596,7 @@ extern JL_DLLEXPORT jl_value_t *jl_segv_exception;
 
 // -- Runtime intrinsics -- //
 JL_DLLEXPORT const char *jl_intrinsic_name(int f);
+unsigned jl_intrinsic_nargs(int f);
 
 JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v);
 JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t *align);
