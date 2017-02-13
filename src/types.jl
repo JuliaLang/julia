@@ -40,10 +40,10 @@ type SHA2_512_CTX <: SHA2_CTX
 end
 
 # Typealias common nicknames for SHA2 family of functions
-typealias SHA224_CTX SHA2_224_CTX
-typealias SHA256_CTX SHA2_256_CTX
-typealias SHA384_CTX SHA2_384_CTX
-typealias SHA512_CTX SHA2_512_CTX
+const SHA224_CTX = SHA2_224_CTX
+const SHA256_CTX = SHA2_256_CTX
+const SHA384_CTX = SHA2_384_CTX
+const SHA512_CTX = SHA2_512_CTX
 
 
 # SHA3 224/256/384/512-bit context structures
