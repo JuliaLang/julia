@@ -1713,6 +1713,30 @@ end
 @test isbits(Primitive20418{Int})
 @test sizeof(Primitive20418{Int}) == 2
 
+# julia #18839
+module Test18839
+
+using Compat
+using Compat.Iterators
+using Base.Test
+
+@test collect(take(countfrom(2), 3)) == [2, 3, 4]
+@test collect(take(cycle(5:8), 9)) == [5:8; 5:8; 5]
+@test collect(drop([1, 2, 3], 2)) == [3]
+@test collect(enumerate([4, 5, 6])) == [(1,4), (2,5), (3,6)]
+@test collect(flatten(Any[1:2, 4:5, Any[-1, 4]])) == [1,2,4,5,-1,4]
+@test vec(collect(product([1, 2], [3, 4]))) == [(1,3), (2,3), (1,4), (2,4)]
+@test vec(collect(product(1:2, 1:2, 1:2))) == [
+    (1,1,1), (2,1,1), (1,2,1), (2,2,1),
+    (1,1,2), (2,1,2), (1,2,2), (2,2,2)]
+@test collect(take(repeated(10), 5)) == [10,10,10,10,10]
+@test collect(rest(1:10, 5)) == [5,6,7,8,9,10]
+@test collect(take([1, 2, 3], 2)) == [1, 2]
+@test collect(zip([1,2], [3,4])) == [(1,3), (2,4)]
+@test collect(partition(1:5, 2)) == Any[[1,2],[3,4],[5]]
+
+end
+
 # PR #20500
 @compat A20500{T<:Integer} = Array{T,20500}
 @compat const A20500_2{T<:Union{Int,Float32}} = Pair{T,T}

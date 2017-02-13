@@ -1230,6 +1230,160 @@ end # module TypeUtils
 # @view, @views, @__dot__
 include("arraymacros.jl")
 
+# julia #18839
+if VERSION < v"0.6.0-dev.1024"
+    @eval module Iterators
+        export countfrom, cycle, drop, enumerate, flatten, product, repeated,
+               rest, take, zip, partition
+
+        import Base: eltype, start, next, done, length, size, ndims
+        using Base: tuple_type_cons
+        using Base: countfrom, cycle, drop, enumerate, repeated, rest, take,
+                    zip
+        using Compat
+
+        # julia #14805
+        if VERSION < v"0.5.0-dev+3256"
+            immutable Flatten{I}
+                it::I
+            end
+
+            flatten(itr) = Flatten(itr)
+
+            eltype{I}(::Type{Flatten{I}}) = eltype(eltype(I))
+
+            function start(f::Flatten)
+                local inner, s2
+                s = start(f.it)
+                d = done(f.it, s)
+                # this is a simple way to make this function type stable
+                d && throw(ArgumentError("argument to Flatten must contain at least one iterator"))
+                while !d
+                    inner, s = next(f.it, s)
+                    s2 = start(inner)
+                    !done(inner, s2) && break
+                    d = done(f.it, s)
+                end
+                return s, inner, s2
+            end
+
+            @inline function next(f::Flatten, state)
+                s, inner, s2 = state
+                val, s2 = next(inner, s2)
+                while done(inner, s2) && !done(f.it, s)
+                    inner, s = next(f.it, s)
+                    s2 = start(inner)
+                end
+                return val, (s, inner, s2)
+            end
+
+            @inline function done(f::Flatten, state)
+                s, inner, s2 = state
+                return done(f.it, s) && done(inner, s2)
+            end
+        else
+            using Base: flatten
+        end
+
+        # julia #14596
+        if VERSION < v"0.5.0-dev+2305"
+            # Product -- cartesian product of iterators
+            @compat abstract type AbstractProdIterator end
+
+            immutable Prod2{I1, I2} <: AbstractProdIterator
+                a::I1
+                b::I2
+            end
+
+            product(a) = Zip1(a)
+            product(a, b) = Prod2(a, b)
+            eltype{I1,I2}(::Type{Prod2{I1,I2}}) = Tuple{eltype(I1), eltype(I2)}
+            length(p::AbstractProdIterator) = length(p.a)*length(p.b)
+
+            function start(p::AbstractProdIterator)
+                s1, s2 = start(p.a), start(p.b)
+                s1, s2, Nullable{eltype(p.b)}(), (done(p.a,s1) || done(p.b,s2))
+            end
+
+            @inline function prod_next(p, st)
+                s1, s2 = st[1], st[2]
+                v1, s1 = next(p.a, s1)
+
+                nv2 = st[3]
+                if isnull(nv2)
+                    v2, s2 = next(p.b, s2)
+                else
+                    v2 = nv2.value
+                end
+
+                if done(p.a, s1)
+                    return (v1,v2), (start(p.a), s2, oftype(nv2,nothing), done(p.b,s2))
+                end
+                return (v1,v2), (s1, s2, Nullable(v2), false)
+            end
+
+            @inline next(p::Prod2, st) = prod_next(p, st)
+            @inline done(p::AbstractProdIterator, st) = st[4]
+
+            immutable Prod{I1, I2<:AbstractProdIterator} <: AbstractProdIterator
+                a::I1
+                b::I2
+            end
+
+            product(a, b, c...) = Prod(a, product(b, c...))
+            eltype{I1,I2}(::Type{Prod{I1,I2}}) = tuple_type_cons(eltype(I1), eltype(I2))
+
+            @inline function next{I1,I2}(p::Prod{I1,I2}, st)
+                x = prod_next(p, st)
+                ((x[1][1],x[1][2]...), x[2])
+            end
+        else
+            using Base: product
+        end
+
+        # julia #15409
+        if VERSION < v"0.5.0-dev+3510"
+            partition{T}(c::T, n::Int) = PartitionIterator{T}(c, n)
+
+            type PartitionIterator{T}
+                c::T
+                n::Int
+            end
+
+            eltype{T}(::Type{PartitionIterator{T}}) = Vector{eltype(T)}
+
+            function length(itr::PartitionIterator)
+                l = length(itr.c)
+                return div(l, itr.n) + ((mod(l, itr.n) > 0) ? 1 : 0)
+            end
+
+            start(itr::PartitionIterator) = start(itr.c)
+
+            done(itr::PartitionIterator, state) = done(itr.c, state)
+
+            function next{T<:Vector}(itr::PartitionIterator{T}, state)
+                l = state
+                r = min(state + itr.n-1, length(itr.c))
+                return sub(itr.c, l:r), r + 1
+            end
+
+            function next(itr::PartitionIterator, state)
+                v = Vector{eltype(itr.c)}(itr.n)
+                i = 0
+                while !done(itr.c, state) && i < itr.n
+                    i += 1
+                    v[i], state = next(itr.c, state)
+                end
+                return resize!(v, i), state
+            end
+        else
+            using Base: partition
+        end
+    end
+else
+    using Base: Iterators
+end
+
 include("to-be-deprecated.jl")
 
 end # module Compat
