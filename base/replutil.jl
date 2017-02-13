@@ -456,6 +456,10 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
             buf = IOBuffer()
             tv = Any[]
             sig0 = method.sig
+            # @Hardcoded: don't display the sysimg.jl method
+            if sig0 == Tuple{Type{T},Any} where T && method.module == Base && method.file == Symbol("sysimg.jl")
+                continue
+            end
             while isa(sig0, UnionAll)
                 push!(tv, sig0.var)
                 sig0 = sig0.body

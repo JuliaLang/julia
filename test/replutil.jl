@@ -505,3 +505,4 @@ abstract type X end
 @test sprint(showerror, (MethodError(X, ()))) == "MethodError: no constructors have been defined for X"
 X(x, y) = x + y
 @test startswith(sprint(showerror, (MethodError(X, ()))), "MethodError: no method matching X()")
+@test !contains(sprint(showerror, (MethodError(X, ()))), "where T at sysimg.jl:24")
