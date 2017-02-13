@@ -322,6 +322,18 @@ function showerror(io::IO, ex::MethodError)
             f_is_function = true
             print(io, "no method matching ", name)
         elseif isa(f, Type)
+            if isa(f, DataType) && f.abstract
+                ms = methods(f)
+                if length(ms) == 1
+                    m = first(ms)
+                    if m.module == Base && m.file == Symbol("sysimg.jl") && m.sig == Tuple{Type{T},Any} where T # @Hardcoded
+                        # This is the sysimg automatic constructor: "Type{T}(::Any) where T"
+                        # If this is the only method on this type, we have not defined any other constructors.
+                        print(io, "no constructors have been defined for $f")
+                        return
+                    end
+                end
+            end
             print(io, "no method matching ", f)
         else
             print(io, "no method matching (::", ft, ")")

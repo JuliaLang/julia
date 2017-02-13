@@ -499,3 +499,9 @@ foo_9965(x::Int) = 2x
     Base.show_method_candidates(io, ex, [(:w,true)])
     @test contains(String(take!(io)), "got unsupported keyword argument \"w\"")
 end
+
+# Issue #20556
+abstract type X end
+@test sprint(showerror, (MethodError(X, ()))) == "MethodError: no constructors have been defined for X"
+X(x, y) = x + y
+@test startswith(sprint(showerror, (MethodError(X, ()))), "MethodError: no method matching X()")
