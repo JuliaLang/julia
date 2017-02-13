@@ -200,22 +200,32 @@ macro f(args...) end; @f ""
 @test parse(Int,'3', 8) == 3
 
 # Issue 20587
-let input_strings = ["", " ", "  "]
-    # Without a base (handles things like "0x00001111", etc)
-    for T in vcat(subtypes(Signed), subtypes(Unsigned))
-        for s in input_strings
-            result = @test_throws ArgumentError parse(T, s)
-            the_exception = result.value
-            @test the_exception.msg == "input string is empty or only contains whitespace"
+for T in vcat(subtypes(Signed), subtypes(Unsigned))
+    for s in ["", " ", "  "]
+         # Without a base (handles things like "0x00001111", etc)
+        result = @test_throws ArgumentError parse(T, s)
+        exception_without_base = result.value
+        if T == Bool
+            if s == ""
+                @test exception_without_base.msg == "input string is empty"
+            else
+                @test exception_without_base.msg == "input string only contains whitespace"
+            end
+        else
+            @test exception_without_base.msg == "input string is empty or only contains whitespace"
         end
-    end
 
-    # With a base
-    for T in vcat(subtypes(Signed), subtypes(Unsigned))
-        for s in input_strings
-            result = @test_throws ArgumentError parse(T, s, 16)
-            the_exception = result.value
-            @test the_exception.msg == "input string is empty or only contains whitespace"
+        # With a base
+        result = @test_throws ArgumentError parse(T, s, 16)
+        exception_with_base = result.value
+        if T == Bool
+            if s == ""
+                @test exception_with_base.msg == "input string is empty"
+            else
+                @test exception_with_base.msg == "input string only contains whitespace"
+            end
+        else
+            @test exception_with_base.msg == "input string is empty or only contains whitespace"
         end
     end
 end

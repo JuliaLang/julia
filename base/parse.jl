@@ -58,11 +58,11 @@ end
 
 function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool)
     _n = Nullable{T}()
-    if isempty(strip(s))
+    sgn, base, i = parseint_preamble(T<:Signed, Int(base_), s, startpos, endpos)
+    if sgn == 0 && base == 0 && i == 0
         raise && throw(ArgumentError("input string is empty or only contains whitespace"))
         return _n
     end
-    sgn, base, i = parseint_preamble(T<:Signed, Int(base_), s, startpos, endpos)
     if !(2 <= base <= 62)
         raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
         return _n
@@ -130,19 +130,27 @@ end
 
 function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString},
         startpos::Int, endpos::Int, base::Integer, raise::Bool)
-    len = endpos-startpos+1
-    p = pointer(sbuff)+startpos-1
+    null = Nullable{Bool}()
+
+    if isempty(sbuff)
+        raise && throw(ArgumentError("input string is empty"))
+        return null
+    end
+
+    len = endpos - startpos + 1
+    p   = pointer(sbuff) + startpos - 1
     (len == 4) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
         p, "true", 4)) && (return Nullable(true))
     (len == 5) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
         p, "false", 5)) && (return Nullable(false))
-    _n = Nullable{Bool}()
-    if isempty(strip(sbuff))
-        raise && throw(ArgumentError("input string is empty or only contains whitespace"))
-        return _n
+
+    substr = SubString(sbuff, startpos, endpos)
+    if count(isspace, sbuff) == len # all chars were whitespace
+        raise && throw(ArgumentError("input string only contains whitespace"))
+    else
+        raise && throw(ArgumentError("invalid Bool representation: $(repr(substr))"))
     end
-    raise && throw(ArgumentError("invalid Bool representation: $(repr(SubString(sbuff, startpos, endpos)))"))
-    return _n
+    return null
 end
 
 @inline function check_valid_base(base)
