@@ -1,3 +1,5 @@
+# Uncomment the depwarns when we drop 0.4 support
+
 module CompatCartesian
 
 export @ngenerate, @nsplat
@@ -7,7 +9,8 @@ macro ngenerate(itersym, returntypeexpr, funcexpr)
         funcexpr = Base._inline(funcexpr.args[2])
     end
     isfuncexpr(funcexpr) || error("Requires a function expression")
-    esc(_ngenerate(itersym, funcexpr))
+    esc(Expr(:block, # :(Base.depwarn("@ngenerate is deprecated, used @generated function or (preferably) tuples/CartesianIndex instead", Symbol("@ngenerate"))),
+             _ngenerate(itersym, funcexpr)))
 end
 
 function _ngenerate(itersym::Symbol, funcexpr::Expr)
@@ -41,7 +44,8 @@ macro nsplat(itersym, args...)
     varname, T = get_splatinfo(prototype, itersym)
     isempty(varname) && error("Last argument must be a splat")
     prototype, body = _nsplat(prototype, body, varname, T, itersym)
-    esc(Expr(:stagedfunction, prototype, body))
+        esc(Expr(:block, # :(Base.depwarn("@nsplat is deprecated, using inlining instead", Symbol("@nsplat"))),
+                 Expr(:stagedfunction, prototype, body)))
 end
 
 function _nsplat(prototype, body, varname, T, itersym)
