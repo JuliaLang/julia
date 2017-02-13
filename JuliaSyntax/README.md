@@ -20,16 +20,15 @@ It takes a string or a buffer and creates an iterator that will sequentially ret
 
 ```jl
 julia> collect(tokenize("function f(x) end"))
-9-element Array{Tokenize.Tokens.Token,1}:
- 1,1-1,8:   KEYWORD "function"
- 1,9-1,9:   WHITESPACE  " "
- 1,10-1,10:   IDENTIFIER    "f"
- 1,11-1,11:   LPAREN    "("
- 1,12-1,12:   IDENTIFIER    "x"
- 1,13-1,13:   RPAREN    ")"
- 1,14-1,14:   WHITESPACE    " "
- 1,15-1,17:   KEYWORD   "end"
- 1,18-1,17:   ENDMARKER ""
+ 1,1-1,8          KEYWORD        "function"
+ 1,9-1,9          WHITESPACE     " "
+ 1,10-1,10        IDENTIFIER     "f"
+ 1,11-1,11        LPAREN         "("
+ 1,12-1,12        IDENTIFIER     "x"
+ 1,13-1,13        RPAREN         ")"
+ 1,14-1,14        WHITESPACE     " "
+ 1,15-1,17        KEYWORD        "end"
+ 1,18-1,17        ENDMARKER      ""
 ```
 
 #### `Token`s
@@ -40,12 +39,12 @@ The API for a `Token` (non exported from the `Tokenize.Tokens` module) is.
 
 ```julia
 startpos(t)::Tuple{Int, Int} # row and column where the token start
-endpos(t)::Tuple{Int, Int} # row and column where the token ends
-startbyte(T)::Int64 # byte offset where the token start
-endbyte(t)::Int64 # byte offset where the token ends
-untokenize(t)::String # the string representation of the token
-kind(t)::Token.Kind # The type of the token
-exactkind(t)::Token.Kind # The exact type of the token
+endpos(t)::Tuple{Int, Int}   # row and column where the token ends
+startbyte(T)::Int64          # byte offset where the token start
+endbyte(t)::Int64            # byte offset where the token ends
+untokenize(t)::String        # string representation of the token
+kind(t)::Token.Kind          # kind of the token
+exactkind(t)::Token.Kind     # exact kind of the token
 ```
 
 The difference between `kind` and `exactkind` is that `kind` returns `OP` for all operators and `KEYWORD` for all keywords while `exactkind` returns a unique kind for all different operators and keywords, ex;
@@ -53,11 +52,11 @@ The difference between `kind` and `exactkind` is that `kind` returns `OP` for al
 ```jl
 julia> tok = collect(tokenize("⇒"))[1];
 
-julia> Tokenize.Tokens.kind(tok)
-OP::Tokenize.Tokens.Kind = 60
+julia> Tokens.kind(tok)
+OP::Tokenize.Tokens.Kind = 90
 
-julia> Tokenize.Tokens.exactkind(tok)
-RIGHTWARDS_DOUBLE_ARROW::Tokenize.Tokens.Kind = 129
+julia> Tokens.exactkind(tok)
+RIGHTWARDS_DOUBLE_ARROW::Tokenize.Tokens.Kind = 128
 ```
 
 All the different `Token.Kind` can be seen in the [`token_kinds.jl` file](https://github.com/KristofferC/Tokenize.jl/blob/master/src/token_kinds.jl)
