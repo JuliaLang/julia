@@ -769,6 +769,7 @@ Inf
 
 julia> x + prevfloat(eps(x)/2) # rounds down
 1.7976931348623157e308
+```
 """
 eps(::AbstractFloat)
 
