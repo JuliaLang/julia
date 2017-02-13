@@ -255,16 +255,24 @@ function chkint(a::VersionSet)
     return true
 end
 
-# VersionSet unions
+const empty_versionset = VersionSet(VersionInterval[])
+@test isempty(empty_versionset)
+
+# VersionSet intersections and unions
+@test empty_versionset ∩ empty_versionset == empty_versionset
+@test empty_versionset ∪ empty_versionset == empty_versionset
 for t = 1:1_000
-    a = VersionSet(map(x->VersionNumber(x, rand(0:3)), sort!(unique(rand(0:8, rand(0:10)))))...)
-    b = VersionSet(map(x->VersionNumber(x, rand(0:3)), sort!(unique(rand(0:8, rand(0:10)))))...)
+    a = VersionSet(sort!(map(v->VersionNumber(v...), [(rand(0:8),rand(0:3)) for i = 1:rand(0:10)]))...)
+    b = VersionSet(sort!(map(v->VersionNumber(v...), [(rand(0:8),rand(0:3)) for i = 1:rand(0:10)]))...)
     @assert chkint(a)
     @assert chkint(b)
-    u = union(a, b)
+    u = a ∪ b
     @test chkint(u)
+    i = a ∩ b
+    @test chkint(i)
     for vM = 0:9, vm = 0:5
         v = VersionNumber(vM, vm)
         @test (v ∈ a || v ∈ b) ? (v ∈ u) : (v ∉ u)
+        @test (v ∈ a && v ∈ b) ? (v ∈ i) : (v ∉ i)
     end
 end
