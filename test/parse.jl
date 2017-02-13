@@ -228,6 +228,21 @@ for T in vcat(subtypes(Signed), subtypes(Unsigned))
             @test exception_with_base.msg == "input string is empty or only contains whitespace"
         end
     end
+
+    # Test `tryparse_internal` with part of a string
+    let b = "                   "
+        result = @test_throws ArgumentError get(Base.tryparse_internal(Bool, b, 7, 11, 0, true)) == true
+        exception_bool = result.value
+        @test exception_bool.msg == "input string only contains whitespace"
+
+        result = @test_throws ArgumentError get(Base.tryparse_internal(Int, b, 7, 11, 0, true)) == true
+        exception_int = result.value
+        @test exception_int.msg == "input string is empty or only contains whitespace"
+
+        result = @test_throws ArgumentError get(Base.tryparse_internal(UInt128, b, 7, 11, 0, true)) == true
+        exception_uint = result.value
+        @test exception_uint.msg == "input string is empty or only contains whitespace"
+    end
 end
 
 parsebin(s) = parse(Int,s,2)

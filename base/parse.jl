@@ -145,7 +145,7 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString},
         p, "false", 5)) && (return Nullable(false))
 
     substr = SubString(sbuff, startpos, endpos)
-    if count(isspace, sbuff) == len # all chars were whitespace
+    if count(isspace, substr) == len # all chars were whitespace
         raise && throw(ArgumentError("input string only contains whitespace"))
     else
         raise && throw(ArgumentError("invalid Bool representation: $(repr(substr))"))
