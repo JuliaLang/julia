@@ -199,6 +199,52 @@ macro f(args...) end; @f ""
 @test parse(Int,'3') == 3
 @test parse(Int,'3', 8) == 3
 
+# Issue 20587
+for T in vcat(subtypes(Signed), subtypes(Unsigned))
+    for s in ["", " ", "  "]
+        # Without a base (handles things like "0x00001111", etc)
+        result = @test_throws ArgumentError parse(T, s)
+        exception_without_base = result.value
+        if T == Bool
+            if s == ""
+                @test exception_without_base.msg == "input string is empty"
+            else
+                @test exception_without_base.msg == "input string only contains whitespace"
+            end
+        else
+            @test exception_without_base.msg == "input string is empty or only contains whitespace"
+        end
+
+        # With a base
+        result = @test_throws ArgumentError parse(T, s, 16)
+        exception_with_base = result.value
+        if T == Bool
+            if s == ""
+                @test exception_with_base.msg == "input string is empty"
+            else
+                @test exception_with_base.msg == "input string only contains whitespace"
+            end
+        else
+            @test exception_with_base.msg == "input string is empty or only contains whitespace"
+        end
+    end
+
+    # Test `tryparse_internal` with part of a string
+    let b = "                   "
+        result = @test_throws ArgumentError get(Base.tryparse_internal(Bool, b, 7, 11, 0, true))
+        exception_bool = result.value
+        @test exception_bool.msg == "input string only contains whitespace"
+
+        result = @test_throws ArgumentError get(Base.tryparse_internal(Int, b, 7, 11, 0, true))
+        exception_int = result.value
+        @test exception_int.msg == "input string is empty or only contains whitespace"
+
+        result = @test_throws ArgumentError get(Base.tryparse_internal(UInt128, b, 7, 11, 0, true))
+        exception_uint = result.value
+        @test exception_uint.msg == "input string is empty or only contains whitespace"
+    end
+end
+
 parsebin(s) = parse(Int,s,2)
 parseoct(s) = parse(Int,s,8)
 parsehex(s) = parse(Int,s,16)
