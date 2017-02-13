@@ -175,9 +175,16 @@ function colon{T<:AbstractFloat}(start::T, step::T, stop::T)
             end
         end
     end
-    len = max(0, floor(r) + 1)
-    stop′ = start + len*step
-    len += (start < stop′ <= stop) + (start > stop′ >= stop)
+    if r < 0
+        len = 0
+    elseif r == 0
+        len = 1
+    else
+        len = round(Int, r) + 1
+        stop′ = start + (len-1)*step
+        # if we've overshot the end, subtract one:
+        len -= (start < stop < stop′) + (start > stop > stop′)
+    end
     FloatRange{T}(start, step, len, one(step))
 end
 
