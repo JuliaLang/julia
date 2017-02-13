@@ -456,21 +456,6 @@ JL_DLLEXPORT size_t jl_array_len_(jl_array_t *a)
 }
 #endif
 
-JL_CALLABLE(jl_f_arraysize)
-{
-    JL_NARGS(arraysize, 2, 2);
-    JL_TYPECHK(arraysize, array, args[0]);
-    jl_array_t *a = (jl_array_t*)args[0];
-    size_t nd = jl_array_ndims(a);
-    JL_TYPECHK(arraysize, long, args[1]);
-    int dno = jl_unbox_long(args[1]);
-    if (dno < 1)
-        jl_error("arraysize: dimension out of range");
-    if (dno > nd)
-        return jl_box_long(1);
-    return jl_box_long((&a->nrows)[dno-1]);
-}
-
 JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 {
     assert(i < jl_array_len(a));
@@ -486,38 +471,6 @@ JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
         }
     }
     return elt;
-}
-
-static size_t array_nd_index(jl_array_t *a, jl_value_t **args, size_t nidxs,
-                             const char *fname)
-{
-    size_t i=0;
-    size_t k, stride=1;
-    size_t nd = jl_array_ndims(a);
-    for(k=0; k < nidxs; k++) {
-        if (!jl_is_long(args[k]))
-            jl_type_error(fname, (jl_value_t*)jl_long_type, args[k]);
-        size_t ii = jl_unbox_long(args[k])-1;
-        i += ii * stride;
-        size_t d = k>=nd ? 1 : jl_array_dim(a, k);
-        if (k < nidxs-1 && ii >= d)
-            jl_bounds_error_v((jl_value_t*)a, args, nidxs);
-        stride *= d;
-    }
-    for(; k < nd; k++)
-        stride *= jl_array_dim(a, k);
-    if (i >= stride)
-        jl_bounds_error_v((jl_value_t*)a, args, nidxs);
-    return i;
-}
-
-JL_CALLABLE(jl_f_arrayref)
-{
-    JL_NARGSV(arrayref, 2);
-    JL_TYPECHK(arrayref, array, args[0]);
-    jl_array_t *a = (jl_array_t*)args[0];
-    size_t i = array_nd_index(a, &args[1], nargs-1, "arrayref");
-    return jl_arrayref(a, i);
 }
 
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
@@ -574,16 +527,6 @@ JL_DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
         ((jl_value_t**)a->data)[i] = rhs;
         jl_gc_wb(jl_array_owner(a), rhs);
     }
-}
-
-JL_CALLABLE(jl_f_arrayset)
-{
-    JL_NARGSV(arrayset, 3);
-    JL_TYPECHK(arrayset, array, args[0]);
-    jl_array_t *a = (jl_array_t*)args[0];
-    size_t i = array_nd_index(a, &args[2], nargs-2, "arrayset");
-    jl_arrayset(a, args[1], i);
-    return args[0];
 }
 
 JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i)
