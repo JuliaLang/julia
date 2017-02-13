@@ -506,3 +506,6 @@ abstract type X end
 X(x, y) = x + y
 @test startswith(sprint(showerror, (MethodError(X, ()))), "MethodError: no method matching X()")
 @test !contains(sprint(showerror, (MethodError(X, ()))), "where T at sysimg.jl:24")
+for method_string in Base.REPLCompletions.complete_methods(:(X()))
+    @test method_string != "(::Type{T})(arg) where T in Base at sysimg.jl:24"
+end

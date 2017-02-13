@@ -330,8 +330,15 @@ function complete_methods(ex_org::Expr)
     kwtype = isdefined(ml.mt, :kwsorter) ? Nullable{DataType}(typeof(ml.mt.kwsorter)) : Nullable{DataType}()
     io = IOBuffer()
     for method in ml
-        # Check if the method's type signature intersects the input types
         ms = method.sig
+
+        # Do not complete the "Type{T}(::Any) where T" constructor from sysimg.jl
+        # Note that we must check if it is a Type, and not a DataType since we eval'd this.
+        if method.module == Base && method.file == Symbol("sysimg.jl") && method.sig == Tuple{Type{T},Any} where T # @Hardcoded
+            continue
+        end
+
+        # Check if the method's type signature intersects the input types
         if typeintersect(Base.rewrap_unionall(Tuple{Base.unwrap_unionall(ms).parameters[1 : min(na, end)]...}, ms), t_in) != Union{}
             show(io, method, kwtype=kwtype)
             push!(out, String(take!(io)))
