@@ -78,6 +78,19 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `@compat A{T} = B{T}` or `@compat const A{T} = B{T}` to declare type alias with free
   parameters. [#20500]. Use `const A = B` for type alias without free parameters.
 
+## Module Aliases
+
+* In 0.6, some 0.5 iterator functions have been moved to the `Base.Iterators`
+  module. Code can be written to work on both 0.5 and 0.6 by `import`ing or
+  `using` the `Compat.Iterators` module instead. ([#18839])
+
+* The `Compat.Iterators` module is also available on 0.4, including the
+  iterator functions `partition`, `product`, and `flatten`, which were
+  introduced in Julia 0.5. However, because of a variety of other changes to
+  the iterator system between 0.4 and 0.5, these functions behave slightly
+  differently. For example, the `Iterators.product` function on 0.4 does not
+  return objects with shapes. ([#14596], [#14805], [#15409])
+
 ## Type Aliases
 
 * In 0.5, `ASCIIString` and `ByteString` were deprecated, and `UTF8String` was renamed to the (now concrete) type `String`.
@@ -285,12 +298,15 @@ includes this fix. Find the minimum version from there.
 [#13744]: https://github.com/JuliaLang/julia/issues/13744
 [#14082]: https://github.com/JuliaLang/julia/issues/14082
 [#14338]: https://github.com/JuliaLang/julia/issues/14338
+[#14596]: https://github.com/JuliaLang/julia/issues/14596
 [#14601]: https://github.com/JuliaLang/julia/issues/14601
 [#14660]: https://github.com/JuliaLang/julia/issues/14660
 [#14766]: https://github.com/JuliaLang/julia/issues/14766
 [#14777]: https://github.com/JuliaLang/julia/issues/14777
+[#14805]: https://github.com/JuliaLang/julia/issues/14805
 [#15032]: https://github.com/JuliaLang/julia/issues/15032
 [#15192]: https://github.com/JuliaLang/julia/issues/15192
+[#15409]: https://github.com/JuliaLang/julia/issues/15409
 [#15708]: https://github.com/JuliaLang/julia/issues/15708
 [#15914]: https://github.com/JuliaLang/julia/issues/15914
 [#16154]: https://github.com/JuliaLang/julia/issues/16154
@@ -307,6 +323,7 @@ includes this fix. Find the minimum version from there.
 [#18380]: https://github.com/JuliaLang/julia/issues/18380
 [#18484]: https://github.com/JuliaLang/julia/issues/18484
 [#18510]: https://github.com/JuliaLang/julia/issues/18510
+[#18839]: https://github.com/JuliaLang/julia/issues/18839
 [#18977]: https://github.com/JuliaLang/julia/issues/18977
 [#19088]: https://github.com/JuliaLang/julia/issues/19088
 [#19246]: https://github.com/JuliaLang/julia/issues/19246
@@ -316,3 +333,4 @@ includes this fix. Find the minimum version from there.
 [#20164]: https://github.com/JuliaLang/julia/issues/20164
 [#20321]: https://github.com/JuliaLang/julia/issues/20321
 [#20414]: https://github.com/JuliaLang/julia/issues/20414
+[#20418]: https://github.com/JuliaLang/julia/issues/20418
