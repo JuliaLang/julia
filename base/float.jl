@@ -748,7 +748,7 @@ with the exception of the smallest and largest finite values (`nextfloat(-Inf)` 
 `prevfloat(Inf)`), which round to the smaller of the values.
 
 The rationale for this choice is that under default `RoundNearest` behaviour, for any
-realy number ``y`` which rounds to `x`, the absolute difference between ``y`` and `x` is
+real number ``y`` which rounds to `x`, the absolute difference between ``y`` and `x` is
 bounded by half of `eps(x)`.
 
 ```jldoctest
