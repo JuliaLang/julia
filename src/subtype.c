@@ -942,17 +942,18 @@ int jl_tuple_isa(jl_value_t **child, size_t cl, jl_datatype_t *pdt)
 }
 
 // returns true if the intersection of `t` and `Type` is non-empty and not a kind
-static int has_intersect_type_not_kind(jl_value_t *t)
+// this is sufficient to determine if `isa(x, T)` can instead simply check for `typeof(x) <: T`
+int jl_has_intersect_type_not_kind(jl_value_t *t)
 {
     t = jl_unwrap_unionall(t);
     if (t == (jl_value_t*)jl_any_type)
         return 1;
     if (jl_is_uniontype(t)) {
-        return has_intersect_type_not_kind(((jl_uniontype_t*)t)->a) ||
-               has_intersect_type_not_kind(((jl_uniontype_t*)t)->b);
+        return jl_has_intersect_type_not_kind(((jl_uniontype_t*)t)->a) ||
+               jl_has_intersect_type_not_kind(((jl_uniontype_t*)t)->b);
     }
     if (jl_is_typevar(t)) {
-        return has_intersect_type_not_kind(((jl_tvar_t*)t)->ub);
+        return jl_has_intersect_type_not_kind(((jl_tvar_t*)t)->ub);
     }
     if (jl_is_datatype(t)) {
         if (((jl_datatype_t*)t)->name == jl_type_typename)
@@ -991,7 +992,7 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
             }
             if (jl_subtype(jl_typeof(x), t))
                 return 1;
-            if (has_intersect_type_not_kind(t2)) {
+            if (jl_has_intersect_type_not_kind(t2)) {
                 JL_GC_PUSH1(&x);
                 x = (jl_value_t*)jl_wrap_Type(x);  // TODO jb/subtype avoid jl_wrap_Type
                 int ans = jl_subtype(x, t);
