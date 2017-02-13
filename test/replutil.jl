@@ -502,9 +502,9 @@ end
 
 # Issue #20556
 abstract type AbstractTypeNoConstructors end
-@test sprint(showerror, (MethodError(AbstractTypeNoConstructors, ()))) == "MethodError: no constructors have been defined for AbstractTypeNoConstructors"
+@test sprint(showerror, (MethodError(AbstractTypeNoConstructors, ()))) == "MethodError: no constructors have been defined for $AbstractTypeNoConstructors"
 AbstractTypeNoConstructors(x, y) = x + y
-@test startswith(sprint(showerror, (MethodError(AbstractTypeNoConstructors, ()))), "MethodError: no method matching AbstractTypeNoConstructors()")
+@test startswith(sprint(showerror, (MethodError(AbstractTypeNoConstructors, ()))), "MethodError: no method matching $AbstractTypeNoConstructors()")
 @test !contains(sprint(showerror, (MethodError(AbstractTypeNoConstructors, ()))), "where T at sysimg.jl")
 for method_string in Base.REPLCompletions.complete_methods(:(AbstractTypeNoConstructors()))
     @test method_string != "(::Type{T})(arg) where T in Base at sysimg.jl"
