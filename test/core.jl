@@ -4678,3 +4678,66 @@ if Sys.WORD_SIZE == 64
 end
 
 @test_throws ArgumentError eltype(Bottom)
+
+# issue #16424, re-evaluating type definitions
+struct A16424
+    x
+    y
+end
+
+struct A16424  # allowed
+    x
+    y
+end
+
+@test_throws ErrorException @eval struct A16424
+    x
+    z
+end
+
+@test_throws ErrorException @eval struct A16424
+    x
+    y::Real
+end
+
+struct B16424{T}
+    a
+end
+
+struct B16424{T}
+    a
+end
+
+@test_throws ErrorException @eval struct B16424{S}
+    a
+end
+
+struct C16424{T,S}
+    x::T
+    y::S
+end
+
+struct C16424{T,S}
+    x::T
+    y::S
+end
+
+@test_throws ErrorException @eval struct C16424{T,S}
+    x::S
+    y::T
+end
+
+struct D16424{T<:Real,S<:T}
+    x::Vector{S}
+    y::Vector{T}
+end
+
+struct D16424{T<:Real,S<:T}
+    x::Vector{S}
+    y::Vector{T}
+end
+
+@test_throws ErrorException struct D16424{T<:Real,S<:Real}
+    x::Vector{S}
+    y::Vector{T}
+end
