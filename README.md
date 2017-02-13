@@ -75,6 +75,9 @@ Currently, the `@compat` macro supports the following syntaxes:
   to declare abstract and primitive types. [#20418]
   This only works when `@compat` is applied directly on the declaration.
 
+* `@compat A{T} = B{T}` or `@compat const A{T} = B{T}` to declare type alias with free
+  parameters. [#20500]. Use `const A = B` for type alias without free parameters.
+
 ## Type Aliases
 
 * In 0.5, `ASCIIString` and `ByteString` were deprecated, and `UTF8String` was renamed to the (now concrete) type `String`.
