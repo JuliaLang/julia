@@ -193,19 +193,32 @@ end
 """
 	unique!(itr)
 
-Removes recurrences of items and returns the modified collection
+Remove duplicate items and return the modified collection,
+as determined by [`isequal`](@ref).
+
+```jldoctest
+julia> unique!([1, 1, 1])
+1-element Array{Int64,1}:
+ 1
+
+julia>  unique!([7, 3, 2, 3, 7, 5])
+4-element Array{Int64,1}:
+ 7
+ 3
+ 2
+ 5
+```
 """
-function unique!(itr)
-    T = eltype(itr)
-    seen = Set{T}()
-    index_iterator = eachindex(itr)
+function unique!(c)
+    seen = Set{eltype(c)}()
+    index_iterator = eachindex(c)
     inds = Vector{eltype(index_iterator)}()
     @inbounds for i in index_iterator
-        x = itr[i]
+        x = c[i]
         x in seen ? push!(inds, i) : push!(seen, x)
     end
-    deleteat!(itr, inds)
-    return itr
+    deleteat!(c, inds)
+    return c
 end
 
 """
