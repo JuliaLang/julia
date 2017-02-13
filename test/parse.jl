@@ -202,7 +202,7 @@ macro f(args...) end; @f ""
 # Issue 20587
 for T in vcat(subtypes(Signed), subtypes(Unsigned))
     for s in ["", " ", "  "]
-         # Without a base (handles things like "0x00001111", etc)
+        # Without a base (handles things like "0x00001111", etc)
         result = @test_throws ArgumentError parse(T, s)
         exception_without_base = result.value
         if T == Bool
