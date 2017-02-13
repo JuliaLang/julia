@@ -124,15 +124,15 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `iszero(x)` efficiently checks whether `x == zero(x)` (including arrays) can be used in 0.5 and earlier ([#19950]).
 
-* `.&` and `.|` are short syntax for `broadcast(&, xs...)` and `broadcast(|, xs...)` (respectively) in Julia 0.6 (only supported on Julia 0.5 and above) [#17623](https://github.com/JuliaLang/julia/pull/17623)
+* `.&` and `.|` are short syntax for `broadcast(&, xs...)` and `broadcast(|, xs...)` (respectively) in Julia 0.6 (only supported on Julia 0.5 and above) ([#17623])
 
-* `Compat.isapprox` with `nans` keyword argument [#20022](https://github.com/JuliaLang/julia/pull/20022)
+* `Compat.isapprox` with `nans` keyword argument ([#20022])
 
-* `take!` method for `Task`s since some functions now return `Channel`s instead of `Task`s [#19841](https://github.com/JuliaLang/julia/pull/19841).
+* `take!` method for `Task`s since some functions now return `Channel`s instead of `Task`s ([#19841])
 
 * The `isabstract`, `parameter_upper_bound`, `typename` reflection methods were added in Julia 0.6. This package re-exports these from the `Compat.TypeUtils` submodule. On earlier versions of julia, that module contains the same functions, but operating on the pre-0.6 type system representation.
 
-* `broadcast` is supported on tuples of the same lengths on 0.5. [#16986](https://github.com/JuliaLang/julia/pull/16986)
+* `broadcast` is supported on tuples of the same lengths on 0.5. ([#16986])
 
 ## Renamed functions
 
@@ -213,7 +213,7 @@ Currently, the `@compat` macro supports the following syntaxes:
   Compat provides an unexported `Compat.AsyncCondition` type that is aliased to
   `Base.SingleAsyncWork` on Julia 0.4 and `Base.AsyncCondition` on Julia 0.5.
 
-* `repeat` now accepts any `AbstractArray` [#14082](https://github.com/JuliaLang/julia/pull/14082): `Compat.repeat` supports this new API on Julia 0.4, and calls `Base.repeat` on 0.5.
+* `repeat` now accepts any `AbstractArray` ([#14082]): `Compat.repeat` supports this new API on Julia 0.4, and calls `Base.repeat` on 0.5.
 
 * `OS_NAME` is now `Sys.KERNEL`. OS information available as `is_apple`, `is_bsd`, `is_linux`, `is_unix`, and `is_windows` ([#16219])
 
@@ -301,6 +301,7 @@ includes this fix. Find the minimum version from there.
 [#16564]: https://github.com/JuliaLang/julia/issues/16564
 [#16603]: https://github.com/JuliaLang/julia/issues/16603
 [#16972]: https://github.com/JuliaLang/julia/issues/16972
+[#16986]: https://github.com/JuliaLang/julia/issues/16986
 [#17155]: https://github.com/JuliaLang/julia/issues/17155
 [#17302]: https://github.com/JuliaLang/julia/issues/17302
 [#17323]: https://github.com/JuliaLang/julia/issues/17323
@@ -318,3 +319,5 @@ includes this fix. Find the minimum version from there.
 [#20164]: https://github.com/JuliaLang/julia/issues/20164
 [#20321]: https://github.com/JuliaLang/julia/issues/20321
 [#20414]: https://github.com/JuliaLang/julia/issues/20414
+[#20418]: https://github.com/JuliaLang/julia/issues/20418
+[#20500]: https://github.com/JuliaLang/julia/issues/20500
