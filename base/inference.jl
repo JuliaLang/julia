@@ -162,18 +162,19 @@ mutable struct InferenceState
             sp = linfo.sparam_vals
         end
 
-        nslots = length(src.slotnames)
-        src.slottypes = Any[ Any for i = 1:nslots ]
         src.ssavaluetypes = Any[ NF for i = 1:(src.ssavaluetypes::Int) ]
 
         n = length(code)
-        s_types = Any[ () for i = 1:n ]
-        # initial types
-        s_types[1] = Any[ VarState(Bottom, true) for i = 1:nslots ]
         s_edges = Any[ () for i = 1:n ]
+        s_types = Any[ () for i = 1:n ]
+
+        # initial types
+        nslots = length(src.slotnames)
+        s_types[1] = Any[ VarState(Bottom, true) for i = 1:nslots ]
+        src.slottypes = Any[ Bottom for i = 1:nslots ]
 
         atypes = unwrap_unionall(linfo.specTypes)
-        nargs = toplevel ? 0 : linfo.def.nargs
+        nargs::Int = toplevel ? 0 : linfo.def.nargs
         la = nargs
         if la > 0
             if linfo.def.isva
@@ -181,13 +182,14 @@ mutable struct InferenceState
                     if la > 1
                         atypes = Tuple{Any[Any for i = 1:(la - 1)]..., Tuple.parameters[1]}
                     end
-                    s_types[1][la] = VarState(Tuple, false)
+                    vararg_type = Tuple
                 else
-                    s_types[1][la] = VarState(rewrap(tuple_tfunc(limit_tuple_depth(params,
-                                                                                   tupletype_tail(atypes, la))),
-                                                     linfo.specTypes),
-                                              false)
+                    vararg_type = limit_tuple_depth(params, tupletype_tail(atypes, la))
+                    vararg_type = tuple_tfunc(vararg_type) # returns a Const object, if applicable
+                    vararg_type = rewrap(vararg_type, linfo.specTypes)
                 end
+                s_types[1][la] = VarState(vararg_type, false)
+                src.slottypes[la] = widenconst(vararg_type)
                 la -= 1
             end
         end
@@ -216,9 +218,11 @@ mutable struct InferenceState
                 end
                 i == laty && (lastatype = atyp)
                 s_types[1][i] = VarState(atyp, false)
+                src.slottypes[i] = widenconst(atyp)
             end
             for i = (atail + 1):la
                 s_types[1][i] = VarState(lastatype, false)
+                src.slottypes[i] = widenconst(lastatype)
             end
         else
             @assert la == 0 # wrong number of arguments
@@ -252,7 +256,8 @@ mutable struct InferenceState
         frame = new(
             sp, nl, inmodule, 0, params,
             linfo, src, min_valid, max_valid,
-            nargs, s_types, s_edges, Union{}, W, 1, n,
+            nargs, s_types, s_edges,
+            Union{}, W, 1, n,
             cur_hand, handler_at, n_handlers,
             ssavalue_uses, ssavalue_init,
             ObjectIdDict(), # Dict{InferenceState, Vector{LineNum}}(),
@@ -1896,7 +1901,7 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
     else
         t = Any
     end
-    if isa(t,TypeVar)
+    if isa(t, TypeVar)
         # no need to use a typevar as the type of an expression
         t = t.ub
     end
@@ -1904,7 +1909,11 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
         # replace singleton types with their equivalent Const object
         t = Const(t.instance)
     end
-    e.typ = t
+    if isa(t, Conditional)
+        e.typ = Bool
+    else
+        e.typ = t
+    end
     return t
 end
 
@@ -1937,7 +1946,7 @@ end
 
 mutable struct StateUpdate
     var::Union{Slot,SSAValue}
-    vtype
+    vtype::VarState
     state::VarTable
 end
 
@@ -2604,7 +2613,7 @@ function typeinf_frame(frame)
             frame.cur_hand = frame.handler_at[pc]
             frame.stmt_edges[pc] === () || empty!(frame.stmt_edges[pc])
             stmt = frame.src.code[pc]
-            changes = abstract_interpret(stmt, s[pc]::Array{Any,1}, frame)
+            changes = abstract_interpret(stmt, s[pc]::VarTable, frame)
             if changes === ()
                 break # this line threw an error and so there is no need to continue
                 # changes = s[pc]
@@ -2621,22 +2630,11 @@ function typeinf_frame(frame)
                     push!(W, l)
                 end
             end
-            if isa(changes, StateUpdate) && isa((changes::StateUpdate).var, SSAValue)
-                # directly forward changes to an SSAValue to the applicable line
-                changes = changes::StateUpdate
-                id = (changes.var::SSAValue).id + 1
-                new = changes.vtype.typ
-                old = frame.src.ssavaluetypes[id]
-                if old === NF || !(new ⊑ old)
-                    frame.src.ssavaluetypes[id] = tmerge(old, new)
-                    for r in frame.ssavalue_uses[id]
-                        if s[r] !== () # s[r] === () => unreached statement
-                            if r < frame.pc´´
-                                frame.pc´´ = r
-                            end
-                            push!(W, r)
-                        end
-                    end
+            if isa(changes, StateUpdate)
+                changes_var = changes.var
+                if isa(changes_var, SSAValue)
+                    # directly forward changes to an SSAValue to the applicable line
+                    record_ssa_assign(changes_var.id + 1, changes.vtype.typ, frame)
                 end
             elseif isa(stmt, GotoNode)
                 pc´ = (stmt::GotoNode).label
@@ -2783,6 +2781,24 @@ function unmark_fixedpoint(frame::InferenceState)
     end
 end
 
+function record_ssa_assign(ssa_id::Int, new::ANY, frame::InferenceState)
+    old = frame.src.ssavaluetypes[ssa_id]
+    if old === NF || !(new ⊑ old)
+        frame.src.ssavaluetypes[ssa_id] = tmerge(old, new)
+        W = frame.ip
+        s = frame.stmt_types
+        for r in frame.ssavalue_uses[ssa_id]
+            if s[r] !== () # s[r] === () => unreached statement
+                if r < frame.pc´´
+                    frame.pc´´ = r
+                end
+                push!(W, r)
+            end
+        end
+    end
+    nothing
+end
+
 
 #### finalize and record the result of running type inference ####
 
@@ -2823,12 +2839,6 @@ function optimize(me::InferenceState)
     @assert me.inworkq
 
     # annotate fulltree with type information
-    gt = me.src.ssavaluetypes
-    for i = 1:length(gt)
-        if gt[i] === NF
-            gt[i] = Union{}
-        end
-    end
     type_annotate!(me)
 
     # run optimization passes on fulltree
@@ -2852,6 +2862,8 @@ function optimize(me::InferenceState)
         force_noinline = popmeta!(me.src.code::Array{Any,1}, :noinline)[1]
         reindex_labels!(me)
     end
+
+    # convert all type information into the form consumed by the code-generator
     widen_all_consts!(me.src)
 
     if isa(me.bestguess, Const) || isconstType(me.bestguess)
@@ -2986,68 +2998,94 @@ function finish(me::InferenceState)
     nothing
 end
 
-function record_slot_type!(id, vt::ANY, slottypes)
-    if vt !== Bottom
-        otherTy = slottypes[id]
-        if otherTy === Bottom
-            slottypes[id] = vt
-        elseif otherTy !== Any && !typeseq(otherTy, vt)
-            slottypes[id] = Any
+function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
+    head = e.head
+    i0 = 1
+    if is_meta_expr_head(head) || head === :const
+        return
+    end
+    if head === :(=) || head === :method
+        i0 = 2
+    end
+    for i = i0:length(e.args)
+        subex = e.args[i]
+        if isa(subex, Expr)
+            annotate_slot_load!(subex, vtypes, sv, undefs)
+        elseif isa(subex, Slot)
+            id = slot_id(subex)
+            s = vtypes[id]
+            vt = widenconst(s.typ)
+            if s.undef
+                # find used-undef variables
+                undefs[id] = true
+            end
+            #  add type annotations where needed
+            if !(sv.src.slottypes[id] <: vt)
+                e.args[i] = TypedSlot(id, vt)
+            end
         end
     end
 end
 
-function eval_annotate(e::ANY, vtypes::ANY, sv::InferenceState, undefs::Array{Bool,1}, pass::Int)
-    if isa(e, Slot)
-        id = slot_id(e)
-        s = vtypes[id]
-        vt = widenconst(s.typ)
-        if pass == 1
-            # first pass: find used-undef variables and type-constant variables
-            if s.undef
-                undefs[id] = true
+function record_slot_assign!(sv::InferenceState)
+    # look at all assignments to slots
+    # and union the set of types stored there
+    # to compute a lower bound on the storage required
+    states = sv.stmt_types
+    body = sv.src.code::Vector{Any}
+    slottypes = sv.src.slottypes::Vector{Any}
+    for i = 1:length(body)
+        expr = body[i]
+        st_i = states[i]
+        # find all reachable assignments to locals
+        if isa(st_i, VarTable) && isa(expr, Expr) && expr.head === :(=)
+            lhs = expr.args[1]
+            rhs = expr.args[2]
+            if isa(lhs, Slot)
+                id = slot_id(lhs)
+                if isa(rhs, Slot)
+                    # exprtype isn't yet computed for slots
+                    vt = st_i[slot_id(rhs)].typ
+                else
+                    vt = exprtype(rhs, sv.src, sv.mod)
+                end
+                vt = widenconst(vt)
+                if vt !== Bottom
+                    otherTy = slottypes[id]
+                    if otherTy === Bottom
+                        slottypes[id] = vt
+                    elseif otherTy === Any
+                        slottypes[id] = Any
+                    else
+                        slottypes[id] = tmerge(otherTy, vt)
+                    end
+                end
             end
-            record_slot_type!(id, vt, sv.src.slottypes)
-            return e
-        end
-        # second pass: add type annotations where needed
-        return vt === sv.src.slottypes[id] ? e : TypedSlot(id, vt)
-    end
-
-    if !isa(e,Expr)
-        return e
-    end
-
-    e = e::Expr
-    head = e.head
-    if is_meta_expr_head(head) || head === :const
-        return e
-    elseif head === :(=)
-        e.args[2] = eval_annotate(e.args[2], vtypes, sv, undefs, pass)
-        return e
-    end
-    i0 = head === :method ? 2 : 1
-    for i=i0:length(e.args)
-        subex = e.args[i]
-        if !(isa(subex,Number) || isa(subex,AbstractString))
-            e.args[i] = eval_annotate(subex, vtypes, sv, undefs, pass)
         end
     end
-    return e
 end
 
 # annotate types of all symbols in AST
 function type_annotate!(sv::InferenceState)
+    # remove all unused ssa values
+    gt = sv.src.ssavaluetypes
+    for i = 1:length(gt)
+        if gt[i] === NF
+            gt[i] = Union{}
+        end
+    end
+
+    # compute the required type for each slot
+    # to hold all of the items assigned into it
+    record_slot_assign!(sv)
+
+    # annotate variables load types
+    # remove dead code
+    # and compute which variables may be used undef
     src = sv.src
     states = sv.stmt_types
     nargs = sv.nargs
     nslots = length(states[1])
-    for i = 1:nargs
-        src.slottypes[i] = widenconst(states[1][i].typ)
-    end
-    for i = nargs+1:nslots
-        src.slottypes[i] = Bottom
-    end
     undefs = fill(false, nslots)
     body = src.code::Array{Any,1}
     nexpr = length(body)
@@ -3055,23 +3093,26 @@ function type_annotate!(sv::InferenceState)
     while i <= nexpr
         st_i = states[i]
         expr = body[i]
-        if st_i !== ()
+        if isa(st_i, VarTable)
             # st_i === ()  =>  unreached statement  (see issue #7836)
-            eval_annotate(expr, st_i, sv, undefs, 1)
-            if isa(expr, Expr) && expr.head == :(=) && i < nexpr && isa(expr.args[1], Slot) && states[i + 1] !== ()
-                # record type of assigned slot by looking at the next statement.
-                # this is needed in case the slot is never used (which makes eval_annotate miss it).
-                id = slot_id(expr.args[1])
-                record_slot_type!(id, widenconst(states[i + 1][id].typ), src.slottypes)
+            if isa(expr, Expr)
+                annotate_slot_load!(expr, st_i, sv, undefs)
+            elseif isa(expr, Slot)
+                id = slot_id(expr)
+                if st_i[slot_id(expr)].undef
+                    # find used-undef variables in statement position
+                    undefs[id] = true
+                end
             end
         elseif sv.optimize
-            if ((isa(expr, Expr) && is_meta_expr(expr::Expr)) ||
-                isa(expr, LineNumberNode))
+            if ((isa(expr, Expr) && is_meta_expr(expr)) ||
+                 isa(expr, LineNumberNode))
+                # keep any lexically scoped expressions
                 i += 1
                 continue
             end
             # This can create `Expr(:gotoifnot)` with dangling label, which we
-            # clean up in `reindex_labels!`
+            # will clean up in `reindex_labels!`
             deleteat!(body, i)
             deleteat!(states, i)
             nexpr -= 1
@@ -3079,14 +3120,8 @@ function type_annotate!(sv::InferenceState)
         end
         i += 1
     end
-    for i = 1:nexpr
-        st_i = states[i]
-        if st_i !== ()
-            body[i] = eval_annotate(body[i], st_i, sv, undefs, 2)
-        end
-    end
 
-    # mark used-undef variables
+    # finish marking used-undef variables
     for i = 1:nslots
         if undefs[i]
             src.slotflags[i] |= Slot_UsedUndef
@@ -3096,23 +3131,55 @@ function type_annotate!(sv::InferenceState)
 end
 
 # widen all Const elements in type annotations
-_widen_all_consts(x::ANY) = x
-_widen_all_consts(x::TypedSlot) = TypedSlot(x.id, widenconst(x.typ))
-function _widen_all_consts(x::Expr)
-    x.typ = widenconst(x.typ)
-    for i = 1:length(x.args)
-        x.args[i] = _widen_all_consts(x.args[i])
+function _widen_all_consts!(e::Expr, untypedload::Vector{Bool})
+    e.typ = widenconst(e.typ)
+    for i = 1:length(e.args)
+        x = e.args[i]
+        if isa(x, Expr)
+            _widen_all_consts!(x, untypedload)
+        elseif isa(x, Slot) && (i != 1 || e.head !== :(=))
+            untypedload[slot_id(x)] = true
+        end
     end
-    return x
+    nothing
 end
 function widen_all_consts!(src::CodeInfo)
     for i = 1:length(src.ssavaluetypes)
         src.ssavaluetypes[i] = widenconst(src.ssavaluetypes[i])
     end
+    nslots = length(src.slottypes)
+    untypedload = fill(false, nslots)
     for i = 1:length(src.code)
-        src.code[i] = _widen_all_consts(src.code[i])
+        x = src.code[i]
+        isa(x, Expr) && _widen_all_consts!(x, untypedload)
+    end
+    for i = 1:nslots
+        src.slottypes[i] = widen_slot_type(src.slottypes[i], untypedload[i])
     end
     return src
+end
+
+# widen all slots to their optimal storage layout
+# we also need to preserve the type for any untyped load of a DataType
+# since codegen optimizations of functions like `is` will depend on knowing it
+function widen_slot_type(ty::ANY, untypedload::Bool)
+    if isa(ty, DataType)
+        if untypedload || isbits(ty) || isdefined(ty, :instance)
+            return ty
+        end
+    elseif isa(ty, Union)
+        ty_a = widen_slot_type(ty.a, false)
+        ty_b = widen_slot_type(ty.b, false)
+        if ty_a !== Any || ty_b !== Any
+            # TODO: better optimized codegen for unions?
+            return ty
+        end
+    elseif isa(ty, UnionAll)
+        if untypedload
+            return ty
+        end
+    end
+    return Any
 end
 
 # replace slots 1:na with argexprs, static params with spvals, and increment
@@ -3432,7 +3499,9 @@ function invoke_NF(argexprs, etype::ANY, atypes, sv, atype_unlimited::ANY,
                         local match = splitunion(atypes, i - 1)
                         if match !== false
                             after = genlabel(sv)
-                            unshift!(match, Expr(:gotoifnot, Expr(:call, GlobalRef(Core, :isa), aei, ty), after.label))
+                            isa_ty = Expr(:call, GlobalRef(Core, :isa), aei, ty)
+                            isa_ty.typ = Bool
+                            unshift!(match, Expr(:gotoifnot, isa_ty, after.label))
                             append!(stmts, match)
                             push!(stmts, after)
                         else
@@ -3496,9 +3565,10 @@ function invoke_NF(argexprs, etype::ANY, atypes, sv, atype_unlimited::ANY,
             end
         end
         newvar = newvar!(sv, atypes[1])
-        stmts = Any[invoke_fexpr, :($newvar = $(argexprs[1])),
+        stmts = Any[invoke_fexpr,
+                    :($newvar = $(argexprs[2])),
                     invoke_texpr]
-        argexprs[1] = newvar
+        argexprs[2] = newvar
         return ex, stmts
     end
     return NF
@@ -4235,6 +4305,7 @@ function inlining_pass(e::Expr, sv::InferenceState)
                         res = inlining_pass(e, sv)
                     else
                         e.args = Any[GlobalRef(Main.Base,:*), Expr(:call, GlobalRef(Main.Base,:*), a1, a1), a1]
+                        e.args[2].typ = e.typ
                         res = inlining_pass(e, sv)
                     end
                     if isa(res, Tuple)
@@ -5111,7 +5182,7 @@ end
 # especially try to make sure any recursive and leaf functions have concrete signatures,
 # since we won't be able to specialize & infer them at runtime
 
-let fs = Any[typeinf_ext, typeinf_loop, typeinf_edge, occurs_outside_getfield, eval_annotate, pure_eval_call]
+let fs = Any[typeinf_ext, typeinf_loop, typeinf_edge, occurs_outside_getfield, pure_eval_call]
     for x in t_ffunc_val
         push!(fs, x[3])
     end
