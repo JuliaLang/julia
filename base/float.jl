@@ -718,6 +718,20 @@ end
 Returns the *machine epsilon* of the floating point type `T` (`T = Float64` by
 default). This is defined as the gap between 1 and the next largest value representable by
 `T`, and is equivalent to `eps(one(T))`.
+
+```jldoctest
+julia> eps()
+2.220446049250313e-16
+
+julia> eps(Float32)
+1.1920929f-7
+
+julia> 1.0 + eps()
+1.0000000000000002
+
+julia> 1.0 + eps()/2
+1.0
+```
 """
 eps{T<:AbstractFloat}(::Type{T})
 
@@ -733,9 +747,28 @@ the distance on either side is different, then the larger of the two is taken, t
 with the exception of the smallest and largest finite values (`nextfloat(-Inf)` and
 `prevfloat(Inf)`), which round to the smaller of the values.
 
-The rationale for this choice is that under default `RoundNearest` behaviour, if ``y`` is
-a real number which rounds to `x`, then the absolute difference between ``y`` and `x` is
+The rationale for this choice is that under default `RoundNearest` behaviour, for any
+realy number ``y`` which rounds to `x`, the absolute difference between ``y`` and `x` is
 bounded by half of `eps(x)`.
+
+```jldoctest
+julia> eps(1.0)
+2.220446049250313e-16
+
+julia> eps(prevfloat(2.0))
+2.220446049250313e-16
+
+julia> eps(2.0)
+4.440892098500626e-16
+
+julia> x = prevfloat(Inf)  # largest finite Float64
+1.7976931348623157e308
+
+julia> x + eps(x)/2            # rounds up
+Inf
+
+julia> x + prevfloat(eps(x)/2) # rounds down
+1.7976931348623157e308
 """
 eps(::AbstractFloat)
 
