@@ -23,6 +23,7 @@ include("options.jl")
 # core operations & types
 include("promotion.jl")
 include("tuple.jl")
+include("pair.jl")
 include("traits.jl")
 include("range.jl")
 include("expr.jl")
@@ -38,6 +39,7 @@ const checked_add = +
 const checked_sub = -
 
 # core array operations
+include("indices.jl")
 include("array.jl")
 include("abstractarray.jl")
 

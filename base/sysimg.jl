@@ -56,6 +56,7 @@ include("options.jl")
 # core operations & types
 include("promotion.jl")
 include("tuple.jl")
+include("pair.jl")
 include("traits.jl")
 include("range.jl")
 include("twiceprecision.jl")
@@ -83,6 +84,7 @@ broadcast(f) = f()
 broadcast!(f, X::AbstractArray) = (@inbounds for I in eachindex(X); X[I] = f(); end; X)
 
 # array structures
+include("indices.jl")
 include("array.jl")
 include("abstractarray.jl")
 include("subarray.jl")
