@@ -44,6 +44,19 @@ macro generated(f)
     end
 end
 
+"""
+    @eval [mod,] ex
+
+Evaluate an expression with values interpolated into it using `eval`.
+If two arguments are provided, the first is the module to evaluate in.
+"""
+macro eval(ex)
+    :(eval($(current_module()), $(Expr(:quote,ex))))
+end
+macro eval(mod, ex)
+    :(eval($(esc(mod)), $(Expr(:quote,ex))))
+end
+
 argtail(x, rest...) = rest
 tail(x::Tuple) = argtail(x...)
 
