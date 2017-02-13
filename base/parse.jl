@@ -130,11 +130,9 @@ end
 
 function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString},
         startpos::Int, endpos::Int, base::Integer, raise::Bool)
-    null = Nullable{Bool}()
-
     if isempty(sbuff)
         raise && throw(ArgumentError("input string is empty"))
-        return null
+        return Nullable{Bool}()
     end
 
     len = endpos - startpos + 1
@@ -144,13 +142,15 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString},
     (len == 5) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
         p, "false", 5)) && (return Nullable(false))
 
-    substr = SubString(sbuff, startpos, endpos)
-    if count(isspace, substr) == len # all chars were whitespace
-        raise && throw(ArgumentError("input string only contains whitespace"))
-    else
-        raise && throw(ArgumentError("invalid Bool representation: $(repr(substr))"))
+    if raise
+        substr = SubString(sbuff, startpos, endpos)
+        if all(isspace, substr)
+            throw(ArgumentError("input string only contains whitespace"))
+        else
+            throw(ArgumentError("invalid Bool representation: $(repr(substr))"))
+        end
     end
-    return null
+    return Nullable{Bool}()
 end
 
 @inline function check_valid_base(base)
@@ -189,7 +189,7 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString)
     if isnull(result)
         throw(ArgumentError("cannot parse $(repr(s)) as $T"))
     end
-    return get(result)
+    return unsafe_get(result)
 end
 
 float(x::AbstractString) = parse(Float64,x)
