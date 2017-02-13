@@ -739,8 +739,8 @@ eps{T<:AbstractFloat}(::Type{T})
     eps(x::AbstractFloat)
 
 Returns the *unit in last place* (ulp) of `x`. This is the distance between consecutive
-representable floating point values at `x` of the same type as `x`. In most cases, if `x`
-the distance on either side is different, then the larger of the two is taken, that is
+representable floating point values at `x` of the same type as `x`. In most cases, if the
+distance on either side of `x` is different then the larger of the two is taken, that is
 
     eps(x) == max(x-prevfloat(x), nextfloat(x)-x)
 
@@ -761,7 +761,7 @@ julia> eps(prevfloat(2.0))
 julia> eps(2.0)
 4.440892098500626e-16
 
-julia> x = prevfloat(Inf)  # largest finite Float64
+julia> x = prevfloat(Inf)      # largest finite Float64
 1.7976931348623157e308
 
 julia> x + eps(x)/2            # rounds up
