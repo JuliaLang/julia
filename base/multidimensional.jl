@@ -197,8 +197,10 @@ end
 # Indexing into Array with mixtures of Integers and CartesianIndices is
 # extremely performance-sensitive. While the abstract fallbacks support this,
 # codegen has extra support for SIMDification that sub2ind doesn't (yet) support
+@propagate_inbounds getindex(A::Array, I::Integer...) = _getindex(LinearFast(), A, to_indices(A, I)...)
 @propagate_inbounds getindex(A::Array, i1::Union{Integer, CartesianIndex}, I::Union{Integer, CartesianIndex}...) =
     A[to_indices(A, (i1, I...))...]
+@propagate_inbounds setindex!(A::Array, v, I::Integer...) = _setindex!(LinearFast(), A, v, to_indices(A, I)...)
 @propagate_inbounds setindex!(A::Array, v, i1::Union{Integer, CartesianIndex}, I::Union{Integer, CartesianIndex}...) =
     (A[to_indices(A, (i1, I...))...] = v; A)
 

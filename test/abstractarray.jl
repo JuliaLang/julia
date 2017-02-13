@@ -241,6 +241,7 @@ Base.setindex!{T}(A::TSlow{T,5}, v, i1::Int, i2::Int, i3::Int, i4::Int, i5::Int)
     (A.data[(i1,i2,i3,i4,i5)] = v)
 
 const can_inline = Base.JLOptions().can_inline != 0
+const depwarns_not_error = Base.JLOptions().depwarn < 2
 function test_scalar_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     N = prod(shape)
     A = reshape(collect(1:N), shape)
@@ -263,27 +264,44 @@ function test_scalar_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
         end
     end
     # Test linear indexing and partial linear indexing
+    @test A == B
     i=0
     for i1 = 1:length(B)
         i += 1
         @test A[i1] == B[i1] == i
     end
-    i=0
-    for i2 = 1:size(B, 2)
-        for i1 = 1:size(B, 1)
-            i += 1
-            @test A[i1,i2] == B[i1,i2] == i
-        end
-    end
-    @test A == B
-    i=0
-    for i3 = 1:size(B, 3)
-        for i2 = 1:size(B, 2)
-            for i1 = 1:size(B, 1)
-                i += 1
-                @test A[i1,i2,i3] == B[i1,i2,i3] == i
+    # TODO (#14770): run only for ndims(A) <= 2, elim. redirect_stderr stuff
+    if ndims(A) <= 2 || depwarns_not_error
+        filename = tempname()
+        open(filename, "w") do f
+            redirect_stderr(f) do
+                i=0
+                for i2 = 1:size(B, 2)
+                    for i1 = 1:size(B, 1)
+                        i += 1
+                        @test A[i1,i2] == B[i1,i2] == i
+                    end
+                end
             end
         end
+        rm(filename)
+    end
+    if ndims(A) <= 3 || depwarns_not_error
+        filename = tempname()
+        open(filename, "w") do f
+            redirect_stderr(f) do
+                i=0
+                for i3 = 1:size(B, 3)
+                    for i2 = 1:size(B, 2)
+                        for i1 = 1:size(B, 1)
+                            i += 1
+                            @test A[i1,i2,i3] == B[i1,i2,i3] == i
+                        end
+                    end
+                end
+            end
+        end
+        rm(filename)
     end
     # Test zero-dimensional accesses
     @test A[] == B[] == A[1] == B[1] == 1
@@ -369,22 +387,49 @@ function test_vector_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     # Test adding dimensions with matrices
     idx1 = rand(1:size(A, 1), 3)
     idx2 = rand(1:size(A, 2), 4, 5)
-    @test B[idx1, idx2] == A[idx1, idx2] == reshape(A[idx1, vec(idx2)], 3, 4, 5) == reshape(B[idx1, vec(idx2)], 3, 4, 5)
-    @test B[1, idx2] == A[1, idx2] == reshape(A[1, vec(idx2)], 4, 5) == reshape(B[1, vec(idx2)], 4, 5)
+    # #14770
+    if ndims(A) <= 2 || depwarns_not_error
+        filename = tempname()
+        open(filename, "w") do f
+            redirect_stderr(f) do
+                @test B[idx1, idx2] == A[idx1, idx2] == reshape(A[idx1, vec(idx2)], 3, 4, 5) == reshape(B[idx1, vec(idx2)], 3, 4, 5)
+                @test B[1, idx2] == A[1, idx2] == reshape(A[1, vec(idx2)], 4, 5) == reshape(B[1, vec(idx2)], 4, 5)
+            end
+        end
+        rm(filename)
+    end
 
     # test removing dimensions with 0-d arrays
     idx0 = reshape([rand(1:size(A, 1))])
-    @test B[idx0, idx2] == A[idx0, idx2] == reshape(A[idx0[], vec(idx2)], 4, 5) == reshape(B[idx0[], vec(idx2)], 4, 5)
-    # @test B[reshape([end]), reshape([end])] == A[reshape([end]), reshape([end])] == reshape([A[end,end]]) == reshape([B[end,end]]) # TODO: Re-enable after partial linear indexing deprecation
+    # TODO (#14770): run only for ndims(A) <= 2, elim. redirect_stderr stuff
+    if ndims(A) <= 2 || depwarns_not_error
+        filename = tempname()
+        open(filename, "w") do f
+            redirect_stderr(f) do
+                @test B[idx0, idx2] == A[idx0, idx2] == reshape(A[idx0[], vec(idx2)], 4, 5) == reshape(B[idx0[], vec(idx2)], 4, 5)
+                # @test B[reshape([end]), reshape([end])] == A[reshape([end]), reshape([end])] == reshape([A[end,end]]) == reshape([B[end,end]]) # TODO: Re-enable after partial linear indexing deprecation
+            end
+        end
+        rm(filename)
+    end
 
     # test logical indexing
     mask = bitrand(shape)
     @test B[mask] == A[mask] == B[find(mask)] == A[find(mask)] == find(mask)
     @test B[vec(mask)] == A[vec(mask)] == find(mask)
     mask1 = bitrand(size(A, 1))
-    mask2 = bitrand(size(A, 2))
-    @test B[mask1, mask2] == A[mask1, mask2] == B[find(mask1), find(mask2)]
-    @test B[mask1, 1] == A[mask1, 1] == find(mask1)
+    mask2 = bitrand(prod(Base.tail(size(A))))
+    # TODO (#14770): run only for ndims(A) <= 2, elim. redirect_stderr stuff
+    if ndims(A) <= 2 || depwarns_not_error
+        filename = tempname()
+        open(filename, "w") do f
+            redirect_stderr(f) do
+                @test B[mask1, mask2] == A[mask1, mask2] == B[find(mask1), find(mask2)]
+                @test B[mask1, 1] == A[mask1, 1] == find(mask1)
+            end
+        end
+        rm(filename)
+    end
 end
 
 function test_primitives{T}(::Type{T}, shape, ::Type{TestAbstractArray})

@@ -1032,43 +1032,19 @@ isempty(::Task) = error("isempty not defined for Tasks")
 end
 
 # Deprecate partial linear indexing
-function partial_linear_indexing_warning_lookup(nidxs_remaining)
-    # We need to figure out how many indices were passed for a sensible deprecation warning
-    opts = JLOptions()
-    if opts.depwarn > 0
-        # Find the caller -- this is very expensive so we don't want to do it twice
-        bt = backtrace()
-        found = false
-        call = StackTraces.UNKNOWN
-        caller = StackTraces.UNKNOWN
-        for frame in bt
-            lkups = StackTraces.lookup(frame)
-            for caller in lkups
-                if caller === StackTraces.UNKNOWN
-                    continue
-                end
-                found && @goto found
-                if caller.func in (:getindex, :setindex!, :view)
-                    found = true
-                    call = caller
-                end
-            end
-        end
-        @label found
-        fn = "`reshape`"
-        if call != StackTraces.UNKNOWN && !isnull(call.linfo)
-            # Try to grab the number of dimensions in the parent array
-            mi = get(call.linfo)
-            args = mi.specTypes.parameters
-            if length(args) >= 2 && args[2] <: AbstractArray
-                fn = "`reshape(A, Val{$(ndims(args[2]) - nidxs_remaining + 1)})`"
-            end
-        end
-        _depwarn("Partial linear indexing is deprecated. Use $fn to make the dimensionality of the array match the number of indices.", opts, bt, caller)
-    end
+check_oneto(A::AbstractArray) = check_oneto(indices(A))
+check_oneto(inds::Tuple{Vararg{OneTo}}) = nothing
+check_oneto(inds::Tuple{AbstractUnitRange,Vararg{AbstractUnitRange}}) = error("partial linear indexing is not supported for arrays with non-1 indexing")
+function _to_linear_index(A::AbstractArray, J::Tuple, Jrem::Tuple{})
+    check_oneto(A)
+    depwarn("partial linear indexing is deprecated. Use `reshape(A, Val{$(length(J))})` to make the dimensionality of the array match the number of indices", :_to_linear_index)
+    sub2ind(A, J...)
 end
-function partial_linear_indexing_warning(n)
-    depwarn("Partial linear indexing is deprecated. Use `reshape(A, Val{$n})` to make the dimensionality of the array match the number of indices.", (:getindex, :setindex!, :view))
+function _to_subscript_indices(A::AbstractArray, J::Tuple, Jrem::Tuple{})
+    check_oneto(A)
+    depwarn("partial linear indexing is deprecated. Use `reshape(A, Val{$(length(J))})` to make the dimensionality of the array match the number of indices", :_to_subscript_indices)
+    sz = _remaining_size(J, indices(A))    # compute trailing size (overlapping the final index)
+    (front(J)..., _unsafe_ind2sub(sz, last(J))...)
 end
 
 # Deprecate Array(T, dims...) in favor of proper type constructors
@@ -1262,6 +1238,8 @@ for f in (:airyai, :airyaiprime, :airybi, :airybiprime, :airyaix, :airyaiprimex,
 end
 
 # END 0.6 deprecations
+# IMPORTANT: when the 0.6 deprecations are removed, uncomment error messages for
+# _to_linear_index and _to_subscript_indices in abstractarray.jl
 
 # BEGIN 1.0 deprecations
 # END 1.0 deprecations
