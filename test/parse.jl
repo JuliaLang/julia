@@ -933,3 +933,6 @@ short_where_call = :(f(x::T) where T = T)
 
 # issue #20541
 @test parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :(.!), :b))
+
+@test expand(:(a{1} = b)) == Expr(:error, "invalid type parameter name \"1\"")
+@test expand(:(a{2<:Any} = b)) == Expr(:error, "invalid type parameter name \"2\"")
