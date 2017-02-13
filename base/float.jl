@@ -711,6 +711,35 @@ end
     eps() = eps(Float64)
 end
 
+"""
+    eps{T<:AbstractFloat}(::Type{T})
+    eps()
+
+Returns the *machine epsilon* of the floating point type `T` (`T = Float64` by
+default). This is defined as the gap between 1 and the next largest value representable by
+`T`, and is equivalent to `eps(one(T))`.
+"""
+eps{T<:AbstractFloat}(::Type{T})
+
+"""
+    eps(x::AbstractFloat)
+
+Returns the *unit in last place* (ulp) of `x`. This is the distance between consecutive
+representable floating point values at `x` of the same type as `x`. In most cases, if `x`
+the distance on either side is different, then the larger of the two is taken, that is
+
+    eps(x) == max(x-prevfloat(x), nextfloat(x)-x)
+
+with the exception of the smallest and largest finite values (`nextfloat(-Inf)` and
+`prevfloat(Inf)`), which round to the smaller of the values.
+
+The rationale for this choice is that under default `RoundNearest` behaviour, if ``y`` is
+a real number which rounds to `x`, then the absolute difference between ``y`` and `x` is
+bounded by half of `eps(x)`.
+"""
+eps(::AbstractFloat)
+
+
 ## byte order swaps for arbitrary-endianness serialization/deserialization ##
 bswap(x::Float32) = bswap_int(x)
 bswap(x::Float64) = bswap_int(x)
