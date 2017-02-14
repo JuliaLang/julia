@@ -894,4 +894,9 @@ function Base.deepcopy_internal(x::BigFloat, stackdict::ObjectIdDict)
     return y
 end
 
+function lerpi(j::Integer, d::Integer, a::BigFloat, b::BigFloat)
+    t = BigFloat(j)/d
+    fma(t, b, fma(-t, a, a))
+end
+
 end #module
