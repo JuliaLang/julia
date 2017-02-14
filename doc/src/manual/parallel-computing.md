@@ -44,15 +44,15 @@ Generally it makes sense for `n` to equal the number of CPU cores on the machine
 $ ./julia -p 2
 
 julia> r = remotecall(rand, 2, 2, 2)
-Future(2,1,3,Nullable{Any}())
+Future(2, 1, 4, Nullable{Any}())
 
 julia> s = @spawnat 2 1 .+ fetch(r)
-Future(2,1,6,Nullable{Any}())
+Future(2, 1, 5, Nullable{Any}())
 
 julia> fetch(s)
 2×2 Array{Float64,2}:
- 1.60401  1.50111
- 1.17457  1.15741
+ 1.18526  1.50912
+ 1.16296  1.60607
 ```
 
 The first argument to [`remotecall()`](@ref) is the function to call. Most parallel programming
@@ -73,7 +73,7 @@ but is more efficient.
 
 ```julia
 julia> remotecall_fetch(getindex, 2, r, 1, 1)
-0.10824216411304866
+0.18526337335308085
 ```
 
 Remember that [`getindex(r,1,1)`](@ref) is [equivalent](@ref man-array-indexing) to `r[1,1]`, so this call fetches
@@ -85,14 +85,15 @@ the operation for you:
 
 ```julia
 julia> r = @spawn rand(2,2)
-Future(2,1,4,Nullable{Any}())
+Future(2, 1, 4, Nullable{Any}())
 
 julia> s = @spawn 1 .+ fetch(r)
-Future(3,1,5,Nullable{Any}())
+Future(3, 1, 5, Nullable{Any}())
 
 julia> fetch(s)
-1.10824216411304866 1.13798233877923116
-1.12376292706355074 1.18750497916607167
+2×2 Array{Float64,2}:
+ 1.38854  1.9098
+ 1.20939  1.57158
 ```
 
 Note that we used `1 .+ fetch(r)` instead of `1 .+ r`. This is because we do not know where the
@@ -114,7 +115,7 @@ the Julia prompt:
 
 ```julia
 julia> function rand2(dims...)
-         return 2*rand(dims...)
+           return 2*rand(dims...)
        end
 
 julia> rand2(2,2)
@@ -123,14 +124,14 @@ julia> rand2(2,2)
  1.15119   0.918912
 
 julia> fetch(@spawn rand2(2,2))
-ERROR: On worker 2:
-function rand2 not defined on process 2
+ERROR: RemoteException(2, CapturedException(UndefVarError(Symbol("#rand2"))
+[...]
 ```
 
 Process 1 knew about the function `rand2`, but process 2 did not.
 
 Most commonly you'll be loading code from files or packages, and you have a considerable amount
-of flexibility in controlling which processes load code.  Consider a file, `"DummyModule.jl"`,
+of flexibility in controlling which processes load code. Consider a file, `"DummyModule.jl"`,
 containing the following code:
 
 ```julia
@@ -138,7 +139,7 @@ module DummyModule
 
 export MyType, f
 
-type MyType
+mutable struct MyType
     a::Int
 end
 
@@ -213,17 +214,26 @@ that an object be moved to the local machine. [`@spawn`](@ref) (and a few relate
 also moves data, but this is not as obvious, hence it can be called an implicit data movement
 operation. Consider these two approaches to constructing and squaring a random matrix:
 
-```
-# method 1
-A = rand(1000,1000)
-Bref = @spawn A^2
-...
-fetch(Bref)
+Method 1:
 
-# method 2
-Bref = @spawn rand(1000,1000)^2
-...
-fetch(Bref)
+```julia
+julia> A = rand(1000,1000);
+
+julia> Bref = @spawn A^2;
+
+[...]
+
+julia> fetch(Bref);
+```
+
+Method 2:
+
+```julia
+julia> Bref = @spawn rand(1000,1000)^2;
+
+[...]
+
+julia> fetch(Bref);
 ```
 
 The difference seems trivial, but in fact is quite significant due to the behavior of [`@spawn`](@ref).
@@ -264,13 +274,13 @@ with embedded global references (under `Main` module only) manage globals as fol
   if its value has changed. Also, the cluster does not synchronize global bindings across nodes.
   For example:
 
-```julia
-A = rand(10,10)
-remotecall_fetch(()->foo(A), 2)  # worker 2
-A = rand(10,10)
-remotecall_fetch(()->foo(A), 3)  # worker 3
-A = nothing
-```
+  ```julia
+  A = rand(10,10)
+  remotecall_fetch(()->foo(A), 2) # worker 2
+  A = rand(10,10)
+  remotecall_fetch(()->foo(A), 3) # worker 3
+  A = nothing
+  ```
 
   Executing the above snippet results in `Main.A` on worker 2 having a different value from
   `Main.A` on worker 3, while the value of `Main.A` on node 1 is set to `nothing`.
@@ -299,11 +309,10 @@ julia> let B = B
 
 julia> @spawnat 2 whos();
 
-julia> 	From worker 2:	                             A    800 bytes  10×10 Array{Float64,2}
-	From worker 2:	                          Base               Module
-	From worker 2:	                          Core               Module
-	From worker 2:	                          Main               Module
-
+julia>  From worker 2:                               A    800 bytes  10×10 Array{Float64,2}
+        From worker 2:                            Base               Module
+        From worker 2:                            Core               Module
+        From worker 2:                            Main               Module
 ```
 
 As can be seen, global variable `A` is defined on worker 2, but `B` is captured as a local variable
@@ -320,7 +329,7 @@ function in `count_heads.jl`:
 ```julia
 function count_heads(n)
     c::Int = 0
-    for i=1:n
+    for i = 1:n
         c += rand(Bool)
     end
     c
@@ -331,11 +340,16 @@ The function `count_heads` simply adds together `n` random bits. Here is how we 
 trials on two machines, and add together the results:
 
 ```julia
-@everywhere include("count_heads.jl")
+julia> @everywhere include("count_heads.jl")
 
-a = @spawn count_heads(100000000)
-b = @spawn count_heads(100000000)
-fetch(a)+fetch(b)
+julia> a = @spawn count_heads(100000000)
+Future(2, 1, 6, Nullable{Any}())
+
+julia> b = @spawn count_heads(100000000)
+Future(3, 1, 7, Nullable{Any}())
+
+julia> fetch(a)+fetch(b)
+100001564
 ```
 
 This example demonstrates a powerful and often-used parallel programming pattern. Many iterations
@@ -353,8 +367,8 @@ of processes, we can use a *parallel for loop*, which can be written in Julia us
 like this:
 
 ```julia
-nheads = @parallel (+) for i=1:200000000
-  Int(rand(Bool))
+nheads = @parallel (+) for i = 1:200000000
+    Int(rand(Bool))
 end
 ```
 
@@ -372,8 +386,8 @@ For example, the following code will not work as intended:
 
 ```julia
 a = zeros(100000)
-@parallel for i=1:100000
-  a[i] = i
+@parallel for i = 1:100000
+    a[i] = i
 end
 ```
 
@@ -383,8 +397,8 @@ to get around this limitation:
 
 ```julia
 a = SharedArray{Float64}(10)
-@parallel for i=1:10
-  a[i] = i
+@parallel for i = 1:10
+    a[i] = i
 end
 ```
 
@@ -392,8 +406,8 @@ Using "outside" variables in parallel loops is perfectly reasonable if the varia
 
 ```julia
 a = randn(1000)
-@parallel (+) for i=1:100000
-  f(a[rand(1:end)])
+@parallel (+) for i = 1:100000
+    f(a[rand(1:end)])
 end
 ```
 
@@ -411,8 +425,9 @@ operation called *parallel map*, implemented in Julia as the [`pmap()`](@ref) fu
 we could compute the singular values of several large random matrices in parallel as follows:
 
 ```julia
-M = Matrix{Float64}[rand(1000,1000) for i=1:10]
-pmap(svd, M)
+julia> M = Matrix{Float64}[rand(1000,1000) for i = 1:10];
+
+julia> pmap(svd, M);
 ```
 
 Julia's [`pmap()`](@ref) is designed for the case where each function call does a large amount
@@ -439,8 +454,9 @@ work to processes only when they finish their current tasks.
 As an example, consider computing the singular values of matrices of different sizes:
 
 ```julia
-M = Matrix{Float64}[rand(800,800), rand(600,600), rand(800,800), rand(600,600)]
-pmap(svd, M)
+julia> M = Matrix{Float64}[rand(800,800), rand(600,600), rand(800,800), rand(600,600)];
+
+julia> pmap(svd, M);
 ```
 
 If one process handles both 800×800 matrices and another handles both 600×600 matrices, we will
@@ -514,7 +530,7 @@ A channel can be visualized as a pipe, i.e., it has a write end and read end.
     function foo()
         while true
             data = take!(c1)
-            .......             # process data
+            [...]               # process data
             put!(c2, result)    # write out result
         end
     end
@@ -538,34 +554,34 @@ A channel can be visualized as a pipe, i.e., it has a write end and read end.
     On a closed [`Channel`](@ref), [`put!()`](@ref) will fail. For example:
 
 ```julia
-julia> c=Channel(2);
+julia> c = Channel(2);
 
-julia> put!(c,1)   # `put!` on an open channel succeeds
+julia> put!(c, 1) # `put!` on an open channel succeeds
 1
 
 julia> close(c);
 
-julia> put!(c,2)   # `put!` on a closed channel throws an exception.
+julia> put!(c, 2) # `put!` on a closed channel throws an exception.
 ERROR: InvalidStateException("Channel is closed.",:closed)
-...
+[...]
 ```
 
   * [`take!()`](@ref) and [`fetch()`](@ref) (which retrieves but does not remove the value) on a closed
     channel successfully return any existing values until it is emptied. Continuing the above example:
 
 ```julia
-julia> fetch(c)     # Any number of `fetch` calls succeed.
+julia> fetch(c) # Any number of `fetch` calls succeed.
 1
 
 julia> fetch(c)
 1
 
-julia> take!(c)     # The first `take!` removes the value.
+julia> take!(c) # The first `take!` removes the value.
 1
 
-julia> take!(c)     # No more data available on a closed channel.
+julia> take!(c) # No more data available on a closed channel.
 ERROR: InvalidStateException("Channel is closed.",:closed)
-...
+[...]
 ```
 
 A `Channel` can be used as an iterable object in a `for` loop, in which case the loop runs as
@@ -575,25 +591,27 @@ long as the `Channel` has data or is open. The loop variable takes on all values
 For example, the following would cause the `for` loop to wait for more data:
 
 ```julia
-c=Channel{Int}(10)
-foreach(i->put!(c, i), 1:3)    # add a few entries
-data = [i for i in c]
+julia> c = Channel{Int}(10);
+
+julia> foreach(i->put!(c, i), 1:3) # add a few entries
+
+julia> data = [i for i in c]
 ```
 
 while this will return after reading all data:
 
 ```julia
-julia> c=Channel{Int}(10);
+julia> c = Channel{Int}(10);
 
-julia> foreach(i->put!(c, i), 1:3);    # add a few entries
+julia> foreach(i->put!(c, i), 1:3); # add a few entries
 
-julia> close(c);                       # `for` loops can exit
+julia> close(c);                    # `for` loops can exit
 
 julia> data = [i for i in c]
 3-element Array{Int64,1}:
-1
-2
-3
+ 1
+ 2
+ 3
 ```
 
 Consider a simple example using channels for inter-task communication. We start 4 tasks to process
@@ -603,39 +621,51 @@ a tuple of `job_id` and the simulated time to the results channel. Finally all t
 printed out.
 
 ```julia
-const jobs = Channel{Int}(32)
-const results = Channel{Tuple}(32)
+julia> const jobs = Channel{Int}(32);
 
-function do_work()
-    for job_id in jobs
-        exec_time = rand()
-        sleep(exec_time)                # simulates elapsed time doing actual work
-                                        # typically performed externally.
-        put!(results, (job_id, exec_time))
-    end
-end
+julia> const results = Channel{Tuple}(32);
 
-function make_jobs(n)
-    for i in 1:n
-        put!(jobs, i)
-    end
-end
+julia> function do_work()
+           for job_id in jobs
+               exec_time = rand()
+               sleep(exec_time)                # simulates elapsed time doing actual work
+                                               # typically performed externally.
+               put!(results, (job_id, exec_time))
+           end
+       end;
 
-# feed the jobs channel with "n" jobs
-n = 12
-@schedule make_jobs(n)
+julia> function make_jobs(n)
+           for i in 1:n
+               put!(jobs, i)
+           end
+       end;
 
-# start 4 tasks to process requests in parallel
-for i in 1:4
-    @schedule do_work()
-end
+julia> n = 12;
 
-# print out results
-@elapsed while n > 0
-    job_id, exec_time = take!(results)
-    println("$job_id finished in $(round(exec_time,2)) seconds")
-    n = n - 1
-end
+julia> @schedule make_jobs(n); # feed the jobs channel with "n" jobs
+
+julia> for i in 1:4 # start 4 tasks to process requests in parallel
+           @schedule do_work()
+       end
+
+julia> @elapsed while n > 0 # print out results
+           job_id, exec_time = take!(results)
+           println("$job_id finished in $(round(exec_time,2)) seconds")
+           n = n - 1
+       end
+4 finished in 0.22 seconds
+3 finished in 0.45 seconds
+1 finished in 0.5 seconds
+7 finished in 0.14 seconds
+2 finished in 0.78 seconds
+5 finished in 0.9 seconds
+9 finished in 0.36 seconds
+6 finished in 0.87 seconds
+8 finished in 0.79 seconds
+10 finished in 0.64 seconds
+12 finished in 0.5 seconds
+11 finished in 0.97 seconds
+0.029772311
 ```
 
 The current version of Julia multiplexes all tasks onto a single OS thread. Thus, while tasks
@@ -687,51 +717,62 @@ remote store.
     deserialized [`RemoteChannel`](@ref) object (on any worker), therefore also points to the same
     backing store as the original.
 
-The channels example from above channels example can be modified for interprocess communication,
+The channels example from above can be modified for interprocess communication,
 as shown below.
 
 We start 4 workers to process a single `jobs` remote channel. Jobs, identified by an id (`job_id`),
 are written to the channel. Each remotely executing task in this simulation reads a `job_id`,
-waits for a random amout of time and writes back a tuple of `job_id`, time taken and its own
+waits for a random amount of time and writes back a tuple of `job_id`, time taken and its own
 `pid` to the results channel. Finally all the `results` are printed out on the master process.
 
 ```julia
-addprocs(4)         # add worker processes
+julia> addprocs(4); # add worker processes
 
-const jobs = RemoteChannel(()->Channel{Int}(32))
-const results = RemoteChannel(()->Channel{Tuple}(32))
+julia> const jobs = RemoteChannel(()->Channel{Int}(32));
 
-# define work function everywhere
-@everywhere function do_work(jobs, results)
-    while true
-        job_id = take!(jobs)
-        exec_time = rand()
-        sleep(exec_time)                # simulates elapsed time doing actual work
-        put!(results, (job_id, exec_time, myid()))
-    end
-end
+julia> const results = RemoteChannel(()->Channel{Tuple}(32));
 
-function make_jobs(n)
-    for i in 1:n
-        put!(jobs, i)
-    end
-end
+julia> @everywhere function do_work(jobs, results) # define work function everywhere
+           while true
+               job_id = take!(jobs)
+               exec_time = rand()
+               sleep(exec_time) # simulates elapsed time doing actual work
+               put!(results, (job_id, exec_time, myid()))
+           end
+       end
 
-# feed the jobs channel with "n" jobs
-n = 12
-@schedule make_jobs(n)
+julia> function make_jobs(n)
+           for i in 1:n
+               put!(jobs, i)
+           end
+       end;
 
-# start tasks on the workers to process requests in parallel
-for p in workers()
-    @async remote_do(do_work, p, jobs, results)
-end
+julia> n = 12;
 
-# print out results
-@elapsed while n > 0
-    job_id, exec_time, where = take!(results)
-    println("$job_id finished in $(round(exec_time,2)) seconds on worker $where")
-    n = n - 1
-end
+julia> @schedule make_jobs(n); # feed the jobs channel with "n" jobs
+
+julia> for p in workers() # start tasks on the workers to process requests in parallel
+           @async remote_do(do_work, p, jobs, results)
+       end
+
+julia> @elapsed while n > 0 # print out results
+           job_id, exec_time, where = take!(results)
+           println("$job_id finished in $(round(exec_time,2)) seconds on worker $where")
+           n = n - 1
+       end
+1 finished in 0.18 seconds on worker 4
+2 finished in 0.26 seconds on worker 5
+6 finished in 0.12 seconds on worker 4
+7 finished in 0.18 seconds on worker 4
+5 finished in 0.35 seconds on worker 5
+4 finished in 0.68 seconds on worker 2
+3 finished in 0.73 seconds on worker 3
+11 finished in 0.01 seconds on worker 3
+12 finished in 0.02 seconds on worker 3
+9 finished in 0.26 seconds on worker 5
+8 finished in 0.57 seconds on worker 4
+10 finished in 0.58 seconds on worker 2
+0.055971741
 ```
 
 ## Remote References and Distributed Garbage Collection
@@ -772,7 +813,7 @@ Once finalized, a reference becomes invalid and cannot be used in any further ca
 
 ## [Shared Arrays](@id man-shared-arrays)
 
-Shared Arrays use system shared memory to map the same array across many processes.  While there
+Shared Arrays use system shared memory to map the same array across many processes. While there
 are some similarities to a [DArray](https://github.com/JuliaParallel/DistributedArrays.jl), the
 behavior of a [`SharedArray`](@ref) is quite different. In a [DArray](https://github.com/JuliaParallel/DistributedArrays.jl),
 each process has local access to just a chunk of the data, and no two processes share the same
@@ -781,8 +822,8 @@ entire array.  A [`SharedArray`](@ref) is a good choice when you want to have a 
 data jointly accessible to two or more processes on the same machine.
 
 [`SharedArray`](@ref) indexing (assignment and accessing values) works just as with regular arrays,
-and is efficient because the underlying memory is available to the local process.  Therefore,
-most algorithms work naturally on [`SharedArray`](@ref)s, albeit in single-process mode.  In cases
+and is efficient because the underlying memory is available to the local process. Therefore,
+most algorithms work naturally on [`SharedArray`](@ref)s, albeit in single-process mode. In cases
 where an algorithm insists on an [`Array`](@ref) input, the underlying array can be retrieved
 from a [`SharedArray`](@ref) by calling [`sdata()`](@ref). For other `AbstractArray` types, [`sdata()`](@ref)
 just returns the object itself, so it's safe to use [`sdata()`](@ref) on any `Array`-type object.
@@ -794,12 +835,12 @@ SharedArray{T,N}(dims::NTuple; init=false, pids=Int[])
 ```
 
 which creates an `N`-dimensional shared array of a bits type `T` and size `dims` across the processes specified
-by `pids`.  Unlike distributed arrays, a shared array is accessible only from those participating
+by `pids`. Unlike distributed arrays, a shared array is accessible only from those participating
 workers specified by the `pids` named argument (and the creating process too, if it is on the
 same host).
 
 If an `init` function, of signature `initfn(S::SharedArray)`, is specified, it is called on all
-the participating workers.  You can specify that each worker runs the `init` function on a distinct
+the participating workers. You can specify that each worker runs the `init` function on a distinct
 portion of the array, thereby parallelizing initialization.
 
 Here's a brief example:
@@ -840,7 +881,7 @@ julia> S = SharedArray{Int,2}((3,4), init = S -> S[indexpids(S):length(procs(S))
 ```
 
 Since all processes have access to the underlying data, you do have to be careful not to set up
-conflicts.  For example:
+conflicts. For example:
 
 ```julia
 @sync begin
@@ -865,81 +906,86 @@ q[i,j,t+1] = q[i,j,t] + u[i,j,t]
 In this case, if we try to split up the work using a one-dimensional index, we are likely to run
 into trouble: if `q[i,j,t]` is near the end of the block assigned to one worker and `q[i,j,t+1]`
 is near the beginning of the block assigned to another, it's very likely that `q[i,j,t]` will
-not be ready at the time it's needed for computing `q[i,j,t+1]`.  In such cases, one is better
-off chunking the array manually.  Let's split along the second dimension:
+not be ready at the time it's needed for computing `q[i,j,t+1]`. In such cases, one is better
+off chunking the array manually. Let's split along the second dimension.
+Define a function that returns the `(irange, jrange)` indexes assigned to this worker:
 
 ```julia
-# This function retuns the (irange,jrange) indexes assigned to this worker
-@everywhere function myrange(q::SharedArray)
-    idx = indexpids(q)
-    if idx == 0
-        # This worker is not assigned a piece
-        return 1:0, 1:0
-    end
-    nchunks = length(procs(q))
-    splits = [round(Int, s) for s in linspace(0,size(q,2),nchunks+1)]
-    1:size(q,1), splits[idx]+1:splits[idx+1]
-end
+julia> @everywhere function myrange(q::SharedArray)
+           idx = indexpids(q)
+           if idx == 0 # This worker is not assigned a piece
+               return 1:0, 1:0
+           end
+           nchunks = length(procs(q))
+           splits = [round(Int, s) for s in linspace(0,size(q,2),nchunks+1)]
+           1:size(q,1), splits[idx]+1:splits[idx+1]
+       end
+```
 
-# Here's the kernel
-@everywhere function advection_chunk!(q, u, irange, jrange, trange)
-    @show (irange, jrange, trange)  # display so we can see what's happening
-    for t in trange, j in jrange, i in irange
-        q[i,j,t+1] = q[i,j,t] +  u[i,j,t]
-    end
-    q
-end
+Next, define the kernel:
 
-# Here's a convenience wrapper for a SharedArray implementation
-@everywhere advection_shared_chunk!(q, u) = advection_chunk!(q, u, myrange(q)..., 1:size(q,3)-1)
+```julia
+julia> @everywhere function advection_chunk!(q, u, irange, jrange, trange)
+           @show (irange, jrange, trange)  # display so we can see what's happening
+           for t in trange, j in jrange, i in irange
+               q[i,j,t+1] = q[i,j,t] +  u[i,j,t]
+           end
+           q
+       end
+```
+
+We also define a convenience wrapper for a `SharedArray` implementation
+
+```julia
+julia> @everywhere advection_shared_chunk!(q, u) =
+           advection_chunk!(q, u, myrange(q)..., 1:size(q,3)-1)
 ```
 
 Now let's compare three different versions, one that runs in a single process:
 
 ```julia
-advection_serial!(q, u) = advection_chunk!(q, u, 1:size(q,1), 1:size(q,2), 1:size(q,3)-1)
+julia> advection_serial!(q, u) = advection_chunk!(q, u, 1:size(q,1), 1:size(q,2), 1:size(q,3)-1);
 ```
 
 one that uses [`@parallel`](@ref):
 
 ```julia
-function advection_parallel!(q, u)
-    for t = 1:size(q,3)-1
-        @sync @parallel for j = 1:size(q,2)
-            for i = 1:size(q,1)
-                q[i,j,t+1]= q[i,j,t] + u[i,j,t]
-            end
-        end
-    end
-    q
-end
+julia> function advection_parallel!(q, u)
+           for t = 1:size(q,3)-1
+               @sync @parallel for j = 1:size(q,2)
+                   for i = 1:size(q,1)
+                       q[i,j,t+1]= q[i,j,t] + u[i,j,t]
+                   end
+               end
+           end
+           q
+       end;
 ```
 
 and one that delegates in chunks:
 
 ```julia
-function advection_shared!(q, u)
-    @sync begin
-        for p in procs(q)
-            @async remotecall_wait(advection_shared_chunk!, p, q, u)
-        end
-    end
-    q
-end
+julia> function advection_shared!(q, u)
+           @sync begin
+               for p in procs(q)
+                   @async remotecall_wait(advection_shared_chunk!, p, q, u)
+               end
+           end
+           q
+       end;
 ```
 
 If we create `SharedArray`s and time these functions, we get the following results (with `julia -p 4`):
 
 ```julia
-q = SharedArray{Float64,3}((500,500,500))
-u = SharedArray{Float64,3}((500,500,500))
+julia> q = SharedArray{Float64,3}((500,500,500));
 
-# Run once to JIT-compile
-advection_serial!(q, u)
-advection_parallel!(q, u)
-advection_shared!(q,u)
+julia> u = SharedArray{Float64,3}((500,500,500));
+```
 
-# Now the real results:
+Run the functions once to JIT-compile and [`@time`](@ref) them on the second run:
+
+```julia
 julia> @time advection_serial!(q, u);
 (irange,jrange,trange) = (1:500,1:500,1:499)
  830.220 milliseconds (216 allocations: 13820 bytes)
@@ -1015,30 +1061,30 @@ Thus, a minimal cluster manager would need to:
 
 [`addprocs(manager::FooManager)`](@ref addprocs) requires `FooManager` to implement:
 
-```
+```julia
 function launch(manager::FooManager, params::Dict, launched::Array, c::Condition)
-    ...
+    [...]
 end
 
 function manage(manager::FooManager, id::Integer, config::WorkerConfig, op::Symbol)
-    ...
+    [...]
 end
 ```
 
 As an example let us see how the `LocalManager`, the manager responsible for starting workers
 on the same host, is implemented:
 
-```
+```julia
 struct LocalManager <: ClusterManager
     np::Integer
 end
 
 function launch(manager::LocalManager, params::Dict, launched::Array, c::Condition)
-    ...
+    [...]
 end
 
 function manage(manager::LocalManager, id::Integer, config::WorkerConfig, op::Symbol)
-    ...
+    [...]
 end
 ```
 
@@ -1066,8 +1112,8 @@ before using any of the parallel constructs.
 For every worker launched, the [`launch()`](@ref) method must add a `WorkerConfig` object (with
 appropriate fields initialized) to `launched`
 
-```
-type WorkerConfig
+```julia
+mutable struct WorkerConfig
     # Common fields relevant to all cluster managers
     io::Nullable{IO}
     host::Nullable{AbstractString}
@@ -1090,7 +1136,7 @@ type WorkerConfig
 
     connect_at::Nullable{Any}
 
-    .....
+    [...]
 end
 ```
 
@@ -1261,7 +1307,7 @@ julia> Threads.nthreads()
 The number of threads Julia starts up with is controlled by an environment variable called `JULIA_NUM_THREADS`.
 Now, let's start up Julia with 4 threads:
 
-```julia
+```
 export JULIA_NUM_THREADS=4
 ```
 
@@ -1287,7 +1333,7 @@ julia> Threads.threadid()
 
 Let's work a simple example using our native threads. Let us create an array of zeros:
 
-```julia
+```jldoctest
 julia> a = zeros(10)
 10-element Array{Float64,1}:
  0.0
@@ -1309,9 +1355,9 @@ Julia supports parallel loops using the [`Threads.@threads`](@ref) macro. This m
 in front of a `for` loop to indicate to Julia that the loop is a multi-threaded region:
 
 ```julia
-Threads.@threads for i = 1:10
-    a[i] = Threads.threadid()
-end
+julia> Threads.@threads for i = 1:10
+           a[i] = Threads.threadid()
+       end
 ```
 
 The iteration space is split amongst the threads, after which each thread writes its thread ID
