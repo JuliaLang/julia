@@ -504,10 +504,29 @@ end
 module EnclosingModule
     abstract type AbstractTypeNoConstructors end
 end
-@test sprint(showerror, (MethodError(EnclosingModule.AbstractTypeNoConstructors, ()))) == "MethodError: no constructors have been defined for $(EnclosingModule.AbstractTypeNoConstructors)"
-EnclosingModule.AbstractTypeNoConstructors(x, y) = x + y
-@test startswith(sprint(showerror, (MethodError(EnclosingModule.AbstractTypeNoConstructors, ()))), "MethodError: no method matching $(EnclosingModule.AbstractTypeNoConstructors)()")
-@test !contains(sprint(showerror, (MethodError(EnclosingModule.AbstractTypeNoConstructors, ()))), "where T at sysimg.jl")
-for method_string in Base.REPLCompletions.complete_methods(:(EnclosingModule.AbstractTypeNoConstructors()))
-    @test method_string != "(::Type{T})(arg) where T in Base at sysimg.jl"
+let
+    method_error = MethodError(EnclosingModule.AbstractTypeNoConstructors, ())
+
+    @test sprint(
+        showerror,
+        method_error
+    ) == "MethodError: no constructors have been defined for $(EnclosingModule.AbstractTypeNoConstructors)"
+
+    EnclosingModule.AbstractTypeNoConstructors(x, y) = x + y
+
+    @test startswith(sprint(
+            showerror,
+            method_error
+        ), "MethodError: no method matching $(EnclosingModule.AbstractTypeNoConstructors)()"
+    )
+    @test !contains(sprint(
+            showerror,
+            method_error
+        ),
+        "where T at sysimg.jl"
+    )
+
+    for method_string in Base.REPLCompletions.complete_methods(:(EnclosingModule.AbstractTypeNoConstructors()))
+        @test !startswith(method_string, "(::Type{T})(arg) where T in Base at sysimg.jl")
+    end
 end
