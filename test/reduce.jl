@@ -126,8 +126,8 @@ end
 prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test prod(Int[]) === prod2(Int[]) === 1
 @test prod(Int[7]) === prod2(Int[7]) === 7
-@test typeof(prod(Int8[])) == typeof(prod(Int8[1])) == typeof(prod(Int8[1, 7])) == Int32
-@test typeof(prod2(Int8[])) == typeof(prod2(Int8[1])) == typeof(prod2(Int8[1 7])) == Int32
+@test typeof(prod(Int8[])) == typeof(prod(Int8[1])) == typeof(prod(Int8[1, 7])) == Int
+@test typeof(prod2(Int8[])) == typeof(prod2(Int8[1])) == typeof(prod2(Int8[1 7])) == Int
 
 # maximum & minimum & extrema
 
