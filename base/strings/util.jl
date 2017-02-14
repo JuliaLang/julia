@@ -84,7 +84,7 @@ chop(s::AbstractString) = SubString(s, 1, endof(s)-1)
 Remove a single trailing newline from a string.
 
 ```jldoctest
-julia> chomp("Hello\n")
+julia> chomp("Hello\\n")
 "Hello"
 ```
 """
@@ -186,7 +186,7 @@ If `chars` (a character, or vector or set of characters) is provided,
 instead remove characters contained in it.
 
 ```jldoctest
-julia> strip("{3, 5}\n", ['{', '}', '\n'])
+julia> strip("{3, 5}\\n", ['{', '}', '\\n'])
 "3, 5"
 ```
 """
