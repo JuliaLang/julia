@@ -365,7 +365,7 @@ function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple{Any})
     @_inline_meta
     checkbounds_linear_indices(Bool, IA, I[1])
 end
-function checkbounds_linear_indices(::Type{Bool}, IA::Tuple, i)
+function checkbounds_linear_indices(::Type{Bool}, IA::Tuple{Vararg{OneTo}}, i)
     @_inline_meta
     if checkindex(Bool, IA[1], i)
         return true
@@ -374,6 +374,10 @@ function checkbounds_linear_indices(::Type{Bool}, IA::Tuple, i)
         return true # TODO: Return false after the above function is removed in deprecated.jl
     end
     return false
+end
+function checkbounds_linear_indices(::Type{Bool}, IA::Tuple{AbstractUnitRange,Vararg{AbstractUnitRange}}, i)
+    @_inline_meta
+    checkindex(Bool, IA[1], i)
 end
 function checkbounds_linear_indices(::Type{Bool}, IA::Tuple, i::Union{Slice,Colon})
     partial_linear_indexing_warning_lookup(length(IA))
@@ -853,10 +857,24 @@ _to_subscript_indices{T}(A::AbstractArray{T,0}, i::Int) = () # TODO: REMOVE FOR 
 _to_subscript_indices{T}(A::AbstractArray{T,0}, I::Int...) = () # TODO: DEPRECATE FOR #14770
 function _to_subscript_indices{T,N}(A::AbstractArray{T,N}, I::Int...) # TODO: DEPRECATE FOR #14770
     @_inline_meta
-    J, _ = IteratorsMD.split(I, Val{N})    # (maybe) drop any trailing indices
-    sz = _remaining_size(J, size(A))       # compute trailing size (overlapping the final index)
+    J, Jrem = IteratorsMD.split(I, Val{N})
+    _to_subscript_indices(A, J, Jrem)
+end
+_to_subscript_indices(A::AbstractArray, J::Tuple, Jrem::Tuple{}) =
+    __to_subscript_indices(A, indices(A), J, Jrem)
+# We allow partial linear indexing deprecation for OneTo arrays
+function __to_subscript_indices(A::AbstractArray, ::Tuple{Vararg{OneTo}}, J::Tuple, Jrem::Tuple{})
+    @_inline_meta
+    sz = _remaining_size(J, indices(A))    # compute trailing size (overlapping the final index)
     (front(J)..., _unsafe_ind2sub(sz, last(J))...) # (maybe) extend the last index
 end
+# After the partial linear indexing deprecation is removed, this next method can
+# become the new normal. For now, it's limited to non-OneTo arrays.
+function __to_subscript_indices(A::AbstractArray, ::Tuple{AbstractUnitRange,Vararg{AbstractUnitRange}}, J::Tuple, Jrem::Tuple{})
+    @_inline_meta
+    (J..., map(first, tail(_remaining_size(J, indices(A))))...)
+end
+_to_subscript_indices(A, J::Tuple, Jrem::Tuple) = J # already bounds-checked, safe to drop
 _to_subscript_indices{T,N}(A::AbstractArray{T,N}, I::Vararg{Int,N}) = I
 _remaining_size(::Tuple{Any}, t::Tuple) = t
 _remaining_size(h::Tuple, t::Tuple) = (@_inline_meta; _remaining_size(tail(h), tail(t)))
