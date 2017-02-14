@@ -382,14 +382,16 @@ for s = -5:5
     for i = 1:5
         thisa = OffsetArray(a[i], (s,))
         thisc = c[mod1(i+s+5,5)]
-        @test_approx_eq fft(thisa) thisc
-        @test_approx_eq fft(thisa, 1) thisc
-        @test_approx_eq ifft(fft(thisa)) Base.circcopy!(a1, thisa)
-        @test_approx_eq ifft(fft(thisa, 1), 1) Base.circcopy!(a1, thisa)
-        @test_approx_eq rfft(thisa) thisc[1:3]
-        @test_approx_eq rfft(thisa, 1) thisc[1:3]
-        @test_approx_eq irfft(rfft(thisa, 1), 5, 1) a1
-        @test_approx_eq irfft(rfft(thisa, 1), 5, 1) a1
+        if Base.USE_GPL_LIBS
+            @test_approx_eq fft(thisa) thisc
+            @test_approx_eq fft(thisa, 1) thisc
+            @test_approx_eq ifft(fft(thisa)) Base.circcopy!(a1, thisa)
+            @test_approx_eq ifft(fft(thisa, 1), 1) Base.circcopy!(a1, thisa)
+            @test_approx_eq rfft(thisa) thisc[1:3]
+            @test_approx_eq rfft(thisa, 1) thisc[1:3]
+            @test_approx_eq irfft(rfft(thisa, 1), 5, 1) a1
+            @test_approx_eq irfft(rfft(thisa, 1), 5, 1) a1
+        end
     end
 end
 
