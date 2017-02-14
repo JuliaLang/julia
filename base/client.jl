@@ -414,7 +414,8 @@ function _start()
             end
         end
     catch err
-        display_error(err,catch_backtrace())
+        eval(Main, Expr(:body, Expr(:return, Expr(:call, Base.display_error,
+                                                  QuoteNode(err), catch_backtrace()))))
         exit(1)
     end
     if is_interactive && have_color
