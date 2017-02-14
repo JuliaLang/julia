@@ -126,6 +126,8 @@ function test_linear(A::ANY, B::ANY)
 end
 
 # "mixed" means 2 indexes even for N-dimensional arrays
+# TODO (#14770): eliminate this test when deprecations removed
+const depwarns_not_error = Base.JLOptions().depwarn < 2
 test_mixed{T}(::AbstractArray{T,1}, ::Array) = nothing
 test_mixed{T}(::AbstractArray{T,2}, ::Array) = nothing
 test_mixed(A, B::Array) = _test_mixed(A, reshape(B, size(A)))
@@ -133,10 +135,17 @@ function _test_mixed(A::ANY, B::ANY)
     m = size(A, 1)
     n = size(A, 2)
     isgood = true
-    for j = 1:n, i = 1:m
-        if A[i,j] != B[i,j]
-            isgood = false
-            break
+    if depwarns_not_error
+        filename = tempname()
+        open(filename, "w") do f
+            redirect_stderr(f) do
+                for j = 1:n, i = 1:m
+                    if A[i,j] != B[i,j]
+                        isgood = false
+                        break
+                    end
+                end
+            end
         end
     end
     if !isgood
@@ -229,9 +238,11 @@ function runviews(SB::AbstractArray, indexN, indexNN, indexNNN)
         ndims(SB) > 3 && i3 isa Colon && continue # TODO: Re-enable once Colon no longer spans partial trailing dimensions
         runsubarraytests(SB, i1, i2, i3)
     end
-    for i2 in indexN, i1 in indexN
-        i2 isa Colon && continue # TODO: Re-enable once Colon no longer spans partial trailing dimensions
-        runsubarraytests(SB, i1, i2)
+    if depwarns_not_error
+        for i2 in indexN, i1 in indexN
+            i2 isa Colon && continue # TODO: Re-enable once Colon no longer spans partial trailing dimensions
+            runsubarraytests(SB, i1, i2)
+        end
     end
     for i1 in indexNNN
         runsubarraytests(SB, i1)

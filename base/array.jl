@@ -494,8 +494,9 @@ done(a::Array,i) = (@_inline_meta; i == length(a)+1)
 ## Indexing: getindex ##
 
 # This is more complicated than it needs to be in order to get Win64 through bootstrap
+getindex{T}(A::Array{T,0}) = arrayref(A, 1)
 getindex(A::Array, i1::Int) = arrayref(A, i1)
-getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref(A, i1, i2, I...)) # TODO: REMOVE FOR #14770
+getindex{T,N}(A::Array{T,N}, I::Vararg{Int,N}) = (@_inline_meta; arrayref(A, I...))
 
 # Faster contiguous indexing using copy! for UnitRange and Colon
 function getindex(A::Array, I::UnitRange{Int})
@@ -523,8 +524,9 @@ function getindex{S}(A::Array{S}, I::Range{Int})
 end
 
 ## Indexing: setindex! ##
+setindex!{T}(A::Array{T,0}, x) = arrayset(A, convert(T,x)::T, 1)
 setindex!{T}(A::Array{T}, x, i1::Int) = arrayset(A, convert(T,x)::T, i1)
-setindex!{T}(A::Array{T}, x, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayset(A, convert(T,x)::T, i1, i2, I...)) # TODO: REMOVE FOR #14770
+setindex!{T,N}(A::Array{T,N}, x, I::Vararg{Int,N}) = (@_inline_meta; arrayset(A, convert(T,x)::T, I...))
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})
@@ -571,6 +573,7 @@ function setindex!{T}(A::Array{T}, X::Array{T}, c::Colon)
 end
 
 setindex!(A::Array, x::Number, ::Colon) = fill!(A, x)
+setindex!{T}(A::Array{T,0}, x::Number)  = fill!(A, x)  # ambiguity resolution
 setindex!{T, N}(A::Array{T, N}, x::Number, ::Vararg{Colon, N}) = fill!(A, x)
 
 # efficiently grow an array

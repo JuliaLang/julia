@@ -69,7 +69,7 @@ unsafe_indices(r::Range) = (OneTo(unsafe_length(r)),) # Ranges use checked_sub f
 """
     linearindices(A)
 
-Returns a `UnitRange` specifying the valid range of indices for `A[i]`
+Returns a `AbstractUnitRange` specifying the valid range of indices for `A[i]`
 where `i` is an `Int`. For arrays with conventional indexing (indices
 start at 1), or any multidimensional array, this is `1:length(A)`;
 however, for one-dimensional arrays with unconventional indices, this
@@ -89,6 +89,9 @@ julia> extrema(b)
 """
 linearindices(A)                 = (@_inline_meta; OneTo(_length(A)))
 linearindices(A::AbstractVector) = (@_inline_meta; indices1(A))
+linearindices(inds::Tuple{Vararg{AbstractUnitRange}}) =
+    (@_inline_meta; OneTo(prod(map(unsafe_length, inds))))
+
 eltype(::Type{<:AbstractArray{E}}) where {E} = E
 elsize{T}(::AbstractArray{T}) = sizeof(T)
 
@@ -363,21 +366,7 @@ function checkbounds_indices(::Type{Bool}, IA::Tuple{Any}, I::Tuple{Any})
 end
 function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple{Any})
     @_inline_meta
-    checkbounds_linear_indices(Bool, IA, I[1])
-end
-function checkbounds_linear_indices(::Type{Bool}, IA::Tuple, i)
-    @_inline_meta
-    if checkindex(Bool, IA[1], i)
-        return true
-    elseif checkindex(Bool, OneTo(trailingsize(IA)), i)  # partial linear indexing
-        partial_linear_indexing_warning_lookup(length(IA))
-        return true # TODO: Return false after the above function is removed in deprecated.jl
-    end
-    return false
-end
-function checkbounds_linear_indices(::Type{Bool}, IA::Tuple, i::Union{Slice,Colon})
-    partial_linear_indexing_warning_lookup(length(IA))
-    true
+    checkbounds_indices(Bool, (linearindices(IA),), I)
 end
 checkbounds_indices(::Type{Bool}, ::Tuple, ::Tuple{}) = true
 
@@ -824,18 +813,32 @@ _getindex(::LinearIndexing, A::AbstractArray, I...) = error("indexing $(typeof(A
 
 ## LinearFast Scalar indexing: canonical method is one Int
 _getindex(::LinearFast, A::AbstractArray, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
-_getindex(::LinearFast, A::AbstractArray) = (@_propagate_inbounds_meta; getindex(A, _to_linear_index(A)))
+_getindex(::LinearFast, A::AbstractArray) = (@_propagate_inbounds_meta; getindex(A, 1))
 function _getindex(::LinearFast, A::AbstractArray, I::Int...)
     @_inline_meta
     @boundscheck checkbounds(A, I...) # generally _to_linear_index requires bounds checking
     @inbounds r = getindex(A, _to_linear_index(A, I...))
     r
 end
+_to_linear_index(A::AbstractVector)        = (@_inline_meta; first(indices1(A)))
+_to_linear_index(A::AbstractArray)         = 1
 _to_linear_index(A::AbstractArray, i::Int) = i
-_to_linear_index(A::AbstractVector, i::Int, I::Int...) = i # TODO: DEPRECATE FOR #14770
 _to_linear_index{T,N}(A::AbstractArray{T,N}, I::Vararg{Int,N}) = (@_inline_meta; sub2ind(A, I...))
-_to_linear_index(A::AbstractArray) = 1 # TODO: DEPRECATE FOR #14770
-_to_linear_index(A::AbstractArray, I::Int...) = (@_inline_meta; sub2ind(A, I...)) # TODO: DEPRECATE FOR #14770
+function _to_linear_index{T,N}(A::AbstractArray{T,N}, I::Int...)
+    @_inline_meta
+    J, Jrem = IteratorsMD.split(I, Val{N})
+    _to_linear_index(A, J, Jrem)
+end
+# It's safe to drop Jrem, because we've already bounds-checked
+_to_linear_index(A::AbstractVector, J::Tuple, Jrem::Tuple) = (@_inline_meta; J[1])
+_to_linear_index(A::AbstractArray, J::Tuple, Jrem::Tuple) = (@_inline_meta; sub2ind(A, J...))
+# TODO: uncomment when deprecation period for partial linear indexing has ended
+# function _to_linear_index(A::AbstractVector, J::Tuple, Jrem::Tuple{})
+#     throw(ArgumentError("partial linear indexing is not allowed. Use `reshape(A, Val{$(length(J))})` to make the dimensionality of the array match the number of indices"))
+# end
+# function _to_linear_index(A::AbstractArray, J::Tuple, Jrem::Tuple{})
+#     throw(ArgumentError("partial linear indexing is not allowed. Use `reshape(A, Val{$(length(J))})` to make the dimensionality of the array match the number of indices"))
+# end
 
 ## LinearSlow Scalar indexing: Canonical method is full dimensionality of Ints
 _getindex(::LinearSlow, A::AbstractArray) = (@_propagate_inbounds_meta; getindex(A, _to_subscript_indices(A)...))
@@ -847,16 +850,18 @@ function _getindex(::LinearSlow, A::AbstractArray, I::Int...)
 end
 _getindex{T,N}(::LinearSlow, A::AbstractArray{T,N}, I::Vararg{Int, N}) = (@_propagate_inbounds_meta; getindex(A, I...))
 _to_subscript_indices(A::AbstractArray, i::Int) = (@_inline_meta; _unsafe_ind2sub(A, i))
-_to_subscript_indices{T,N}(A::AbstractArray{T,N}) = (@_inline_meta; fill_to_length((), 1, Val{N})) # TODO: DEPRECATE FOR #14770
-_to_subscript_indices{T}(A::AbstractArray{T,0}) = () # TODO: REMOVE FOR #14770
-_to_subscript_indices{T}(A::AbstractArray{T,0}, i::Int) = () # TODO: REMOVE FOR #14770
-_to_subscript_indices{T}(A::AbstractArray{T,0}, I::Int...) = () # TODO: DEPRECATE FOR #14770
-function _to_subscript_indices{T,N}(A::AbstractArray{T,N}, I::Int...) # TODO: DEPRECATE FOR #14770
+_to_subscript_indices{T,N}(A::AbstractArray{T,N}) = (@_inline_meta; map(first, indices(A)))
+_to_subscript_indices{T}(A::AbstractArray{T,0}, I::Int...) = ()
+function _to_subscript_indices{T,N}(A::AbstractArray{T,N}, I::Int...)
     @_inline_meta
-    J, _ = IteratorsMD.split(I, Val{N})    # (maybe) drop any trailing indices
-    sz = _remaining_size(J, size(A))       # compute trailing size (overlapping the final index)
-    (front(J)..., _unsafe_ind2sub(sz, last(J))...) # (maybe) extend the last index
+    J, Jrem = IteratorsMD.split(I, Val{N})
+    _to_subscript_indices(A, J, Jrem)
 end
+_to_subscript_indices(A, J::Tuple, Jrem::Tuple) = J # already bounds-checked, safe to drop Jrem
+# TODO: uncomment when deprecation period for partial linear indexing has ended
+# function _to_subscript_indices(A::AbstractArray, J::Tuple, Jrem::Tuple{})
+#     throw(ArgumentError("partial linear indexing is not allowed. Use `reshape(A, Val{$(length(J))})` to make the dimensionality of the array match the number of indices"))
+# end
 _to_subscript_indices{T,N}(A::AbstractArray{T,N}, I::Vararg{Int,N}) = I
 _remaining_size(::Tuple{Any}, t::Tuple) = t
 _remaining_size(h::Tuple, t::Tuple) = (@_inline_meta; _remaining_size(tail(h), tail(t)))
@@ -926,7 +931,6 @@ end
 
 get(A::AbstractArray, I::Range, default) = get!(similar(A, typeof(default), index_shape(I)), A, I, default)
 
-# TODO: DEPRECATE FOR #14770 (just the partial linear indexing part)
 function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::RangeVecIntList, default::T)
     fill!(X, default)
     dst, src = indcopy(size(A), I)
