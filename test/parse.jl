@@ -252,22 +252,22 @@ for T in vcat(subtypes(Signed), subtypes(Unsigned))
 
     # Test that leading and trailing whitespace is ignored.
     for v in (1, 2, 3)
-         @test parse(Int, "    $v"    ) == v
-         @test parse(Int, "    $v\n"  ) == v
-         @test parse(Int, "$v    "    ) == v
-         @test parse(Int, "    $v    ") == v
+        @test parse(Int, "    $v"    ) == v
+        @test parse(Int, "    $v\n"  ) == v
+        @test parse(Int, "$v    "    ) == v
+        @test parse(Int, "    $v    ") == v
     end
     for v in (true, false)
-         @test parse(Bool, "    $v"    ) == v
-         @test parse(Bool, "    $v\n"  ) == v
-         @test parse(Bool, "$v    "    ) == v
-         @test parse(Bool, "    $v    ") == v
+        @test parse(Bool, "    $v"    ) == v
+        @test parse(Bool, "    $v\n"  ) == v
+        @test parse(Bool, "$v    "    ) == v
+        @test parse(Bool, "    $v    ") == v
     end
     for v in (0.05, -0.05, 2.5, -2.5)
-         @test parse(Float64, "    $v"    ) == v
-         @test parse(Float64, "    $v\n"  ) == v
-         @test parse(Float64, "$v    "    ) == v
-         @test parse(Float64, "    $v    ") == v
+        @test parse(Float64, "    $v"    ) == v
+        @test parse(Float64, "    $v\n"  ) == v
+        @test parse(Float64, "$v    "    ) == v
+        @test parse(Float64, "    $v    ") == v
     end
     @test parse(Float64, "    .5"    ) == 0.5
     @test parse(Float64, "    .5\n"  ) == 0.5
