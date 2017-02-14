@@ -688,3 +688,11 @@ let Apre = sprandn(10, 10, 0.2) - I
     end
 end
 
+# Check inputs to Sparse. Related to #20024
+for A in (SparseMatrixCSC(2, 2, [1, 2], CHOLMOD.SuiteSparse_long[], Float64[]),
+          SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[]),
+          SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[], Float64[1.0]),
+          SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[1.0]))
+    @test_throws ArgumentError CHOLMOD.Sparse(size(A)..., A.colptr - 1, A.rowval - 1, A.nzval)
+    @test_throws ArgumentError CHOLMOD.Sparse(A)
+end

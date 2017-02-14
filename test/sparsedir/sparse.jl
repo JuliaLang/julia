@@ -1628,3 +1628,17 @@ let x = sparse(rand(3,3))
     @test x.colptr == [1, 2, 4, 6]
     @test x[2, 3] == 0.0
 end
+
+# check buffers
+for n in 1:3
+    colptr = [1,2,3,4]
+    rowval = [1,2,3]
+    nzval1  = ones(0)
+    nzval2  = ones(3)
+    A = SparseMatrixCSC(n, n, colptr, rowval, nzval1)
+    @test nnz(A) == n
+    @test_throws BoundsError A[n,n]
+    A = SparseMatrixCSC(n, n, colptr, rowval, nzval2)
+    @test nnz(A) == n
+    @test A      == eye(n)
+end

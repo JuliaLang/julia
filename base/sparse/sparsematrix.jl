@@ -31,7 +31,7 @@ size(S::SparseMatrixCSC) = (S.m, S.n)
 
 Returns the number of stored (filled) elements in a sparse array.
 """
-nnz(S::SparseMatrixCSC) = Int(S.colptr[end]-1)
+nnz(S::SparseMatrixCSC) = Int(S.colptr[S.n + 1]-1)
 countnz(S::SparseMatrixCSC) = countnz(S.nzval)
 
 """
