@@ -750,7 +750,7 @@ the values.
 
 The rationale for this behavior is that `eps` bounds the floating point rounding
 error. Under the default `RoundNearest` rounding mode, if ``y`` is a real number and ``x``
-is the nearest floating point number ``y``, then
+is the nearest floating point number to ``y``, then
 
 ```math
 |y-x| \\leq \\operatorname{eps}(x)/2.
