@@ -359,15 +359,15 @@ Adds docstring `"..."` to the macro named `@m`.
 
 ```
 "..."
-abstract T1
+abstract type T1 end
 
 "..."
-type T2
+mutable struct T2
     ...
 end
 
 "..."
-immutable T3
+struct T3
     ...
 end
 ```
@@ -376,7 +376,7 @@ Adds the docstring `"..."` to types `T1`, `T2`, and `T3`.
 
 ```julia
 "..."
-type T
+struct T
     "x"
     x
     "y"
@@ -385,17 +385,7 @@ end
 ```
 
 Adds docstring `"..."` to type `T`, `"x"` to field `T.x` and `"y"` to field `T.y`. Also applicable
-to `immutable` types.
-
-```julia
-"..."
-typealias A T
-```
-
-Adds docstring `"..."` to the `Binding``A`.
-
-`Binding`s are used to store a reference to a particular `Symbol` in a `Module` without storing
-the referenced value itself.
+to `mutable struct` types.
 
 ### Modules
 
@@ -448,6 +438,9 @@ global c = 3
 ```
 
 Adds docstring `"..."` to the `Binding`s `a`, `b`, and `c`.
+
+`Binding`s are used to store a reference to a particular `Symbol` in a `Module` without storing
+the referenced value itself.
 
 !!! note
     When a `const` definition is only used to define an alias of another definition, such as is the

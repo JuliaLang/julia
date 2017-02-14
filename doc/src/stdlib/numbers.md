@@ -50,6 +50,7 @@ Base.bytes2hex
 
 ```@docs
 Base.one
+Base.oneunit
 Base.zero
 Base.pi
 Base.im

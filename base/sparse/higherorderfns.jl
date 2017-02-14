@@ -248,14 +248,14 @@ function _map_zeropres!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B::Spar
             if Ai == Bi
                 Ai == rowsentinelA && break # column complete
                 Cx, Ci::indtype(C) = f(storedvals(A)[Ak], storedvals(B)[Bk]), Ai
-                Ak += one(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
-                Bk += one(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
             elseif Ai < Bi
                 Cx, Ci = f(storedvals(A)[Ak], zero(eltype(B))), Ai
-                Ak += one(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
             else # Bi < Ai
                 Cx, Ci = f(zero(eltype(A)), storedvals(B)[Bk]), Bi
-                Bk += one(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
             end
             # NOTE: The ordering of the conditional chain above impacts which matrices this
             # method performs best for. In the map situation (arguments have same shape, and
@@ -293,14 +293,14 @@ function _map_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseVecOrMat, A::SparseVec
             if Ai == Bi
                 Ai == rowsentinelA && break # column complete
                 Cx, Ci::indtype(C) = f(storedvals(A)[Ak], storedvals(B)[Bk]), Ai
-                Ak += one(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
-                Bk += one(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
             elseif Ai < Bi
                 Cx, Ci = f(storedvals(A)[Ak], zero(eltype(B))), Ai
-                Ak += one(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
             else # Bi < Ai
                 Cx, Ci = f(zero(eltype(A)), storedvals(B)[Bk]), Bi
-                Bk += one(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
             end
             Cx != fillvalue && (storedvals(C)[jo + Ci] = Cx)
         end
@@ -396,7 +396,7 @@ end
 # @inline _gatherargs(activerows, ks, As) = (
 #     _gatherarg(first(activerows), first(ks), first(As)),
 #     _gatherargs(tail(activerows), tail(ks), tail(As))...)
-# @inline _updateind(isactiverow, k) = isactiverow ? (k + one(k)) : k
+# @inline _updateind(isactiverow, k) = isactiverow ? (k + oneunit(k)) : k
 # @inline _updateind_all(::Tuple{}, ::Tuple{}) = ()
 # @inline _updateind_all(activerows, ks) = (
 #     _updateind(first(activerows), first(ks)),
@@ -410,7 +410,7 @@ end
 @inline function _fusedupdate(rowsentinel, activerow, row, k, stopk, A)
     # returns (val, nextk, nextrow)
     if row == activerow
-        nextk = k + one(k)
+        nextk = k + oneunit(k)
         (storedvals(A)[k], nextk, (nextk < stopk ? storedinds(A)[nextk] : oftype(row, rowsentinel)))
     else
         (zero(eltype(A)), k, row)
@@ -543,17 +543,17 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B
                 if Ai != Bi
                     if Ai < Bi
                         Cx, Ci = f(storedvals(A)[Ak], zero(eltype(B))), Ai
-                        Ak += one(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                        Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
                     else # Ai > Bi
                         Cx, Ci = f(zero(eltype(A)), storedvals(B)[Bk]), Bi
-                        Bk += one(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                        Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
                     end
                 elseif #= Ai == Bi && =# Ai == rowsentinelA
                     break # column complete
                 else #= Ai == Bi != rowsentinel =#
                     Cx, Ci::indtype(C) = f(storedvals(A)[Ak], storedvals(B)[Bk]), Ai
-                    Ak += one(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
-                    Bk += one(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                    Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                    Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
                 end
                 # NOTE: The ordering of the conditional chain above impacts which matrices
                 # this method perform best for. In contrast to the map situation (arguments
@@ -592,7 +592,7 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B
                         storedvals(C)[Ck] = Cx
                         Ck += 1
                     end
-                    Bk += one(Bk)
+                    Bk += oneunit(Bk)
                 end
             else
                 # A's jth column is nonempty and f(Ax, zero(eltype(B))) is not zero, so
@@ -601,7 +601,7 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B
                 for Ci::indtype(C) in 1:numrows(C)
                     if Bi == Ci
                         Cx = f(Ax, storedvals(B)[Bk])
-                        Bk += one(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                        Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
                     else
                         Cx = fvAzB
                     end
@@ -633,7 +633,7 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B
                         storedvals(C)[Ck] = Cx
                         Ck += 1
                     end
-                    Ak += one(Ak)
+                    Ak += oneunit(Ak)
                 end
             else
                 # B's jth column is nonempty and f(zero(eltype(A)), Bx) is not zero, so
@@ -642,7 +642,7 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B
                 for Ci::indtype(C) in 1:numrows(C)
                     if Ai == Ci
                         Cx = f(storedvals(A)[Ak], Bx)
-                        Ak += one(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                        Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
                     else
                         Cx = fzAvB
                     end
@@ -678,16 +678,16 @@ function _broadcast_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseVecOrMat, A::Spa
             while true
                 if Ai < Bi
                     Cx, Ci = f(storedvals(A)[Ak], zero(eltype(B))), Ai
-                    Ak += one(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                    Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
                 elseif Ai > Bi
                     Cx, Ci = f(zero(eltype(A)), storedvals(B)[Bk]), Bi
-                    Bk += one(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                    Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
                 elseif #= Ai == Bi && =# Ai == rowsentinelA
                     break # column complete
                 else #= Ai == Bi != rowsentinel =#
                     Cx, Ci::indtype(C) = f(storedvals(A)[Ak], storedvals(B)[Bk]), Ai
-                    Ak += one(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
-                    Bk += one(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                    Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                    Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
                 end
                 Cx != fillvalue && (storedvals(C)[jo + Ci] = Cx)
             end
@@ -703,14 +703,14 @@ function _broadcast_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseVecOrMat, A::Spa
                 while Bk < stopBk
                     Cx = f(Ax, storedvals(B)[Bk])
                     Cx != fillvalue && (storedvals(C)[jo + storedinds(B)[Bk]] = Cx)
-                    Bk += one(Bk)
+                    Bk += oneunit(Bk)
                 end
             else
                 Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
                 for Ci::indtype(C) in 1:numrows(C)
                     if Bi == Ci
                         Cx = f(Ax, storedvals(B)[Bk])
-                        Bk += one(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                        Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
                     else
                         Cx = fvAzB
                     end
@@ -728,14 +728,14 @@ function _broadcast_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseVecOrMat, A::Spa
                 while Ak < stopAk
                     Cx = f(storedvals(A)[Ak], Bx)
                     Cx != fillvalue && (storedvals(C)[jo + storedinds(A)[Ak]] = Cx)
-                    Ak += one(Ak)
+                    Ak += oneunit(Ak)
                 end
             else
                 Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
                 for Ci::indtype(C) in 1:numrows(C)
                     if Ai == Ci
                         Cx = f(storedvals(A)[Ak], Bx)
-                        Ak += one(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                        Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
                     else
                         Cx = fzAvB
                     end
@@ -905,7 +905,7 @@ end
 # @inline _gatherbcargs(activerows, defargs, ks, As) = (
 #     _gatherbcarg(first(activerows), first(defargs), first(ks), first(As)),
 #     _gatherbcargs(tail(activerows), tail(defargs), tail(ks), tail(As))...)
-# @inline _updateind(isactiverow, k) = isactiverow ? (k + one(k)) : k
+# @inline _updateind(isactiverow, k) = isactiverow ? (k + oneunit(k)) : k
 # @inline _updateind_all(::Tuple{}, ::Tuple{}) = ()
 # @inline _updateind_all(activerows, ks) = (
 #     _updateind(first(activerows), first(ks)),
@@ -919,7 +919,7 @@ end
 @inline function _fusedupdatebc(rowsentinel, activerow, row, defarg, k, stopk, A)
     # returns (val, nextk, nextrow)
     if row == activerow
-        nextk = k + one(k)
+        nextk = k + oneunit(k)
         (storedvals(A)[k], nextk, (nextk < stopk ? storedinds(A)[nextk] : oftype(row, rowsentinel)))
     else
         (defarg, k, row)
@@ -941,7 +941,7 @@ end
 # broadcast shape promotion for combinations of sparse arrays and other types
 broadcast_indices(::Type{AbstractSparseArray}, A) = indices(A)
 # broadcast container type promotion for combinations of sparse arrays and other types
-_containertype{T<:SparseVecOrMat}(::Type{T}) = AbstractSparseArray
+_containertype(::Type{<:SparseVecOrMat}) = AbstractSparseArray
 # combinations of sparse arrays with broadcast scalars should yield sparse arrays
 promote_containertype(::Type{Any}, ::Type{AbstractSparseArray}) = AbstractSparseArray
 promote_containertype(::Type{AbstractSparseArray}, ::Type{Any}) = AbstractSparseArray
@@ -1002,11 +1002,11 @@ broadcast{Tf,T}(f::Tf, A::SparseMatrixCSC, ::Type{T}) = broadcast(x -> f(x, T), 
 
 
 # first (Broadcast containertype) dispatch layer's promotion logic
-immutable PromoteToSparse end
+struct PromoteToSparse end
 
 # broadcast containertype definitions for structured matrices
 StructuredMatrix = Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}
-_containertype{T<:StructuredMatrix}(::Type{T}) = PromoteToSparse
+_containertype(::Type{<:StructuredMatrix}) = PromoteToSparse
 
 # combinations explicitly involving Tuples and PromoteToSparse collections
 # divert to the generic AbstractArray broadcast code
@@ -1029,13 +1029,13 @@ promote_containertype(::Type{Array}, ::Type{AbstractSparseArray}) = PromoteToSpa
 # mostly just disambiguates Array from the main containertype promotion mechanism
 # AbstractArray serves as a marker to shunt to the generic AbstractArray broadcast code
 _spcontainertype(x) = _containertype(x)
-_spcontainertype{T<:Vector}(::Type{T}) = Vector
-_spcontainertype{T<:Matrix}(::Type{T}) = Matrix
-_spcontainertype{T<:Ref}(::Type{T}) = AbstractArray
-_spcontainertype{T<:AbstractArray}(::Type{T}) = AbstractArray
+_spcontainertype(::Type{<:Vector}) = Vector
+_spcontainertype(::Type{<:Matrix}) = Matrix
+_spcontainertype(::Type{<:Ref}) = AbstractArray
+_spcontainertype(::Type{<:AbstractArray}) = AbstractArray
 # need the following two methods to override the immediately preceding method
-_spcontainertype{T<:StructuredMatrix}(::Type{T}) = PromoteToSparse
-_spcontainertype{T<:SparseVecOrMat}(::Type{T}) = AbstractSparseArray
+_spcontainertype(::Type{<:StructuredMatrix}) = PromoteToSparse
+_spcontainertype(::Type{<:SparseVecOrMat}) = AbstractSparseArray
 spcontainertype(x) = _spcontainertype(typeof(x))
 spcontainertype(ct1, ct2) = promote_spcontainertype(spcontainertype(ct1), spcontainertype(ct2))
 @inline spcontainertype(ct1, ct2, cts...) = promote_spcontainertype(spcontainertype(ct1), spcontainertype(ct2, cts...))
@@ -1043,13 +1043,13 @@ spcontainertype(ct1, ct2) = promote_spcontainertype(spcontainertype(ct1), spcont
 promote_spcontainertype{T}(::Type{T}, ::Type{T}) = T
 # combinations involving AbstractArrays and/or Tuples divert to the generic AbstractArray broadcast code
 DivertToAbsArrayBC = Union{Type{AbstractArray},Type{Tuple}}
-promote_spcontainertype{T<:DivertToAbsArrayBC}(::T, ct) = AbstractArray
-promote_spcontainertype{T<:DivertToAbsArrayBC}(ct, ::T) = AbstractArray
-promote_spcontainertype{S<:DivertToAbsArrayBC,T<:DivertToAbsArrayBC}(::S, ::T) = AbstractArray
+promote_spcontainertype(::DivertToAbsArrayBC, ct) = AbstractArray
+promote_spcontainertype(ct, ::DivertToAbsArrayBC) = AbstractArray
+promote_spcontainertype(::DivertToAbsArrayBC, ::DivertToAbsArrayBC) = AbstractArray
 # combinations involving scalars, sparse arrays, structured matrices (PromoteToSparse),
 # dense vectors/matrices, and PromoteToSparse collections continue in the promote-to-sparse funnel
 FunnelToSparseBC = Union{Type{Any},Type{Vector},Type{Matrix},Type{PromoteToSparse},Type{AbstractSparseArray}}
-promote_spcontainertype{S<:FunnelToSparseBC,T<:FunnelToSparseBC}(::S, ::T) = PromoteToSparse
+promote_spcontainertype(::FunnelToSparseBC, ::FunnelToSparseBC) = PromoteToSparse
 
 
 # first (Broadcast containertype) dispatch layer

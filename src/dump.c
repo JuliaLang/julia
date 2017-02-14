@@ -627,12 +627,10 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt)
         }
         write_uint8(s->s, layout);
         if (layout == 0) {
-            size_t nf = dt->layout->nfields;
-            write_uint16(s->s, nf);
-            write_int8(s->s, dt->layout->fielddesc_type);
-            write_int32(s->s, dt->layout->alignment);
-            write_int8(s->s, dt->layout->haspadding);
-            write_int8(s->s, dt->layout->pointerfree);
+            uint32_t nf = dt->layout->nfields;
+            write_int32(s->s, nf);
+            uint32_t alignment = ((uint32_t*)dt->layout)[1];
+            write_int32(s->s, alignment);
             size_t fieldsize = jl_fielddesc_size(dt->layout->fielddesc_type);
             ios_write(s->s, (char*)(&dt->layout[1]), nf * fieldsize);
         }
@@ -922,7 +920,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         else {
             assert(m->max_world == ~(size_t)0 && "method replacement cannot be handled by incremental serializer");
         }
-        jl_serialize_value(s, (jl_value_t*)m->tvars);
         if (external_mt)
             jl_serialize_value(s, jl_nothing);
         else
@@ -1432,16 +1429,22 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
         }
         else {
             assert(layout == 0);
-            uint16_t nf = read_uint16(s->s);
-            uint8_t fielddesc_type = read_int8(s->s);
+            uint32_t nf = read_int32(s->s);
+            uint32_t alignment = read_int32(s->s);
+            union {
+                struct {
+                    uint32_t nf;
+                    uint32_t alignment;
+                } buffer;
+                jl_datatype_layout_t layout;
+            } header;
+            header.buffer.nf = nf;
+            header.buffer.alignment = alignment;
+            uint8_t fielddesc_type = header.layout.fielddesc_type;
             size_t fielddesc_size = nf > 0 ? jl_fielddesc_size(fielddesc_type) : 0;
             jl_datatype_layout_t *layout = (jl_datatype_layout_t*)jl_gc_perm_alloc(
                     sizeof(jl_datatype_layout_t) + nf * fielddesc_size);
-            layout->nfields = nf;
-            layout->fielddesc_type = fielddesc_type;
-            layout->alignment = read_int32(s->s);
-            layout->haspadding = read_int8(s->s);
-            layout->pointerfree = read_int8(s->s);
+            *layout = header.layout;
             ios_read(s->s, (char*)&layout[1], nf * fielddesc_size);
             dt->layout = layout;
         }
@@ -1659,8 +1662,6 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
         m->min_world = jl_world_counter;
         m->max_world = ~(size_t)0;
     }
-    m->tvars = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&m->tvars);
-    jl_gc_wb(m, m->tvars);
     m->ambig = jl_deserialize_value(s, (jl_value_t**)&m->ambig);
     jl_gc_wb(m, m->ambig);
     m->called = read_int8(s->s);

@@ -23,7 +23,7 @@ end
 
 
 # issue #1628
-type I1628{X}
+mutable struct I1628{X}
     x::X
 end
 let
@@ -65,19 +65,19 @@ end
 
 # issue #5906
 
-abstract Outer5906{T}
+abstract type Outer5906{T} end
 
-immutable Inner5906{T}
+struct Inner5906{T}
     a:: T
 end
 
-immutable Empty5906{T} <: Outer5906{T}
+struct Empty5906{T} <: Outer5906{T}
 end
 
-immutable Hanoi5906{T} <: Outer5906{T}
+struct Hanoi5906{T} <: Outer5906{T}
     a::T
     succ :: Outer5906{Inner5906{T}}
-    Hanoi5906(a) = new(a, Empty5906{Inner5906{T}}())
+    Hanoi5906{T}(a) where T = new(a, Empty5906{Inner5906{T}}())
 end
 
 function f5906{T}(h::Hanoi5906{T})
@@ -91,13 +91,13 @@ end
 
 # issue on the flight from DFW
 # (type inference deducing Type{:x} rather than Symbol)
-type FooBarDFW{s}; end
+mutable struct FooBarDFW{s}; end
 fooDFW(p::Type{FooBarDFW}) = string(p.parameters[1])
 fooDFW(p) = string(p.parameters[1])
 @test fooDFW(FooBarDFW{:x}) == "x" # not ":x"
 
 # Type inference for tuple parameters
-immutable fooTuple{s}; end
+struct fooTuple{s}; end
 barTuple1() = fooTuple{(:y,)}()
 barTuple2() = fooTuple{tuple(:y)}()
 
@@ -124,8 +124,8 @@ Base.return_types(getindex, (Vector{nothing},))
 # issue #12636
 module MyColors
 
-abstract Paint{T}
-immutable RGB{T<:AbstractFloat} <: Paint{T}
+abstract type Paint{T} end
+struct RGB{T<:AbstractFloat} <: Paint{T}
     r::T
     g::T
     b::T
@@ -148,13 +148,13 @@ f12826{I<:Integer}(v::Vector{I}) = v[1]
 
 # non-terminating inference, issue #14009
 # non-terminating codegen, issue #16201
-type A14009{T}; end
+mutable struct A14009{T}; end
 A14009{T}(a::T) = A14009{T}()
 f14009(a) = rand(Bool) ? f14009(A14009(a)) : a
 code_typed(f14009, (Int,))
 code_llvm(DevNull, f14009, (Int,))
 
-type B14009{T}; end
+mutable struct B14009{T}; end
 g14009(a) = g14009(B14009{a})
 code_typed(g14009, (Type{Int},))
 code_llvm(DevNull, f14009, (Int,))
@@ -164,7 +164,7 @@ code_llvm(DevNull, f14009, (Int,))
 arithtype9232{T<:Real}(::Type{T},::Type{T}) = arithtype9232(T)
 result_type9232{T1<:Number,T2<:Number}(::Type{T1}, ::Type{T2}) = arithtype9232(T1, T2)
 # this gave a "type too large", but not reliably
-@test length(code_typed(result_type9232, Tuple{(Type{_} where _<:Union{Float32,Float64}), Type{T2} where T2<:Number})) == 1
+@test length(code_typed(result_type9232, Tuple{(Type{x} where x<:Union{Float32,Float64}), Type{T2} where T2<:Number})) == 1
 
 
 # issue #10878
@@ -199,7 +199,7 @@ end
 
 
 # pr #15259
-immutable A15259
+struct A15259
     x
     y
 end
@@ -217,7 +217,7 @@ end
 
 
 # issue #7810
-type Foo7810{T<:AbstractVector}
+mutable struct Foo7810{T<:AbstractVector}
     v::T
 end
 bar7810() = [Foo7810([(a,b) for a in 1:2]) for b in 3:4]
@@ -291,7 +291,7 @@ let g() = Int <: Real ? 1 : ""
     @test Base.return_types(g, Tuple{}) == [Int]
 end
 
-typealias NInt{N} Tuple{Vararg{Int, N}}
+NInt{N} = Tuple{Vararg{Int, N}}
 @test Base.eltype(NInt) === Int
 fNInt(x::NInt) = (x...)
 gNInt() = fNInt(x)
@@ -310,11 +310,11 @@ let f(x) = (x===nothing) ? 1 : 1.0
 end
 
 # issue #16530
-type Foo16530a{dim}
+mutable struct Foo16530a{dim}
     c::Vector{NTuple{dim, Float64}}
     d::Vector
 end
-type Foo16530b{dim}
+mutable struct Foo16530b{dim}
     c::Vector{NTuple{dim, Float64}}
 end
 f16530a() = fieldtype(Foo16530a, :c)
@@ -348,7 +348,7 @@ let T1 = Tuple{Int, Float64},
 end
 
 # issue #18015
-type Triple18015
+mutable struct Triple18015
     a::Int
     b::Int
     c::Int
@@ -371,7 +371,7 @@ g18222(x) = f18222(x)
 
 # issue #18399
 # TODO: this test is rather brittle
-type TSlow18399{T}
+mutable struct TSlow18399{T}
     x::T
 end
 function hvcat18399(as)
@@ -485,14 +485,14 @@ end
 @test Type{Tuple{Vararg{Int}}} <: Base.return_types(maybe_vararg_tuple_2, ())[1]
 
 # inference of `fieldtype`
-type UndefField__
+mutable struct UndefField__
     x::Union{}
 end
 f_infer_undef_field() = fieldtype(UndefField__, :x)
 @test Base.return_types(f_infer_undef_field, ()) == Any[Type{Union{}}]
 @test f_infer_undef_field() === Union{}
 
-type HasAbstractlyTypedField
+mutable struct HasAbstractlyTypedField
     x::Union{Int,String}
 end
 f_infer_abstract_fieldtype() = fieldtype(HasAbstractlyTypedField, :x)
@@ -528,8 +528,8 @@ test_fast_le(a, b) = @fastmath a <= b
 @inferred test_fast_lt(1.0, 1.0)
 @inferred test_fast_le(1.0, 1.0)
 
-abstract AbstractMyType18457{T,F,G}
-immutable MyType18457{T,F,G}<:AbstractMyType18457{T,F,G} end
+abstract type AbstractMyType18457{T,F,G} end
+struct MyType18457{T,F,G}<:AbstractMyType18457{T,F,G} end
 tpara18457{I}(::Type{AbstractMyType18457{I}}) = I
 tpara18457{A<:AbstractMyType18457}(::Type{A}) = tpara18457(supertype(A))
 @test tpara18457(MyType18457{true}) === true
@@ -579,7 +579,7 @@ f_inferred_union_int(::Any) = "broken"
 @test @inferred(f_inferred_union()) in (1, 2, 3)
 
 # issue #11015
-type AT11015
+mutable struct AT11015
     f::Union{Bool,Function}
 end
 
@@ -588,6 +588,41 @@ f11015(a::AT11015) = g11015(Base.fieldtype(typeof(a), :f), true)
 g11015(::Type{Bool}, ::Bool) = 2.0
 @test Int <: Base.return_types(f11015, (AT11015,))[1]
 @test f11015(AT11015(true)) === 1
+
+# better inference of apply (#20343)
+f20343(::String, ::Int) = 1
+f20343(::Int, ::String, ::Int, ::Int) = 1
+f20343(::Int, ::Int, ::String, ::Int, ::Int, ::Int) = 1
+f20343(::Union{Int,String}...) = Int8(1)
+f20343(::Any...) = "no"
+function g20343()
+    n = rand(1:3)
+    i = ntuple(i->n==i ? "" : 0, 2n)::Union{Tuple{String,Int},Tuple{Int,String,Int,Int},Tuple{Int,Int,String,Int,Int,Int}}
+    f20343(i...)
+end
+@test Base.return_types(g20343, ()) == [Int]
+function h20343()
+    n = rand(1:3)
+    i = ntuple(i->n==i ? "" : 0, 3)::Union{Tuple{String,Int,Int},Tuple{Int,String,Int},Tuple{Int,Int,String}}
+    f20343(i..., i...)
+end
+@test all(t -> t<:Integer, Base.return_types(h20343, ()))
+function i20343()
+    f20343([1,2,3]..., 4)
+end
+@test Base.return_types(i20343, ()) == [Int8]
+immutable Foo20518 <: AbstractVector{Int}; end # issue #20518; inference assumed AbstractArrays
+Base.getindex(::Foo20518, ::Int) = "oops"      # not to lie about their element type
+Base.indices(::Foo20518) = (Base.OneTo(4),)
+foo20518(xs::Any...) = -1
+foo20518(xs::Int...) = [0]
+bar20518(xs) = sum(foo20518(xs...))
+@test bar20518(Foo20518()) == -1
+f19957(::Int) = Int8(1)            # issue #19957, inference failure when splatting a number
+f19957(::Int...) = Int16(1)
+f19957(::Any...) = "no"
+g19957(x) = f19957(x...)
+@test all(t -> t<:Union{Int8,Int16}, Base.return_types(g19957, (Int,))) # with a full fix, this should just be Int8
 
 # Inference for some type-level computation
 fUnionAll{T}(::Type{T}) = Type{S} where S <: T
@@ -601,7 +636,7 @@ let pub = Base.parameter_upper_bound, x = fComplicatedUnionAll(Real)
 end
 
 # issue #20267
-type T20267{T}
+mutable struct T20267{T}
     inds::Vector{T}
 end
 # infinite type growth via lower bounds (formed by intersection)

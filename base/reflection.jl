@@ -118,7 +118,7 @@ julia> fieldname(SparseMatrixCSC,5)
 """
 fieldname(t::DataType, i::Integer) = t.name.names[i]::Symbol
 fieldname(t::UnionAll, i::Integer) = fieldname(unwrap_unionall(t), i)
-fieldname{T<:Tuple}(t::Type{T}, i::Integer) = i < 1 || i > nfields(t) ? throw(BoundsError(t, i)) : Int(i)
+fieldname(t::Type{<:Tuple}, i::Integer) = i < 1 || i > nfields(t) ? throw(BoundsError(t, i)) : Int(i)
 
 """
     fieldnames(x::DataType)
@@ -141,7 +141,7 @@ function fieldnames(v)
 end
 fieldnames(t::DataType) = Symbol[fieldname(t, n) for n in 1:nfields(t)]
 fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
-fieldnames{T<:Tuple}(t::Type{T}) = Int[n for n in 1:nfields(t)]
+fieldnames(t::Type{<:Tuple}) = Int[n for n in 1:nfields(t)]
 
 """
     Base.datatype_name(t) -> Symbol
@@ -172,7 +172,7 @@ isconst(m::Module, s::Symbol) =
 # return an integer such that object_id(x)==object_id(y) if x===y
 object_id(x::ANY) = ccall(:jl_object_id, UInt, (Any,), x)
 
-immutable DataTypeLayout
+struct DataTypeLayout
     nfields::UInt32
     alignment::UInt32
     # alignment : 28;
@@ -184,13 +184,13 @@ end
 
 # type predicates
 datatype_alignment(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
-    Int(unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment & 0x0FFFFFFF)
+    Int(unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment & 0x1FF)
 
 datatype_haspadding(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
-    (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 28) & 1 == 1
+    (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 9) & 1 == 1
 
 datatype_pointerfree(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
-    (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 29) & 1 == 1
+    (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 10) & 0xFFFFF == 0
 
 datatype_fielddesc_type(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
     (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 30) & 3
@@ -198,9 +198,17 @@ datatype_fielddesc_type(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefErro
 """
     isimmutable(v)
 
-Return `true` iff value `v` is immutable.  See [Immutable Composite Types](@ref)
+Return `true` iff value `v` is immutable.  See [Mutable Composite Types](@ref)
 for a discussion of immutability. Note that this function works on values, so if you give it
 a type, it will tell you that a value of `DataType` is mutable.
+
+```jldoctest
+julia> isimmutable(1)
+true
+
+julia> isimmutable([1,2])
+false
+```
 """
 isimmutable(x::ANY) = (@_pure_meta; (isa(x,Tuple) || !typeof(x).mutable))
 isstructtype(t::DataType) = (@_pure_meta; nfields(t) != 0 || (t.size==0 && !t.abstract))
@@ -230,6 +238,19 @@ isbits(x) = (@_pure_meta; isbits(typeof(x)))
 
 Determine whether `T`'s only subtypes are itself and `Union{}`. This means `T` is
 a concrete type that can have instances.
+
+```jldoctest
+julia> isleaftype(Complex)
+false
+
+julia> isleaftype(Complex{Float32})
+true
+
+julia> isleaftype(Vector{Complex})
+true
+
+julia> isleaftype(Vector{Complex{Float32}})
+true
 """
 isleaftype(t::ANY) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
 
@@ -238,6 +259,14 @@ isleaftype(t::ANY) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
 
 Determine whether `T` was declared as an abstract type (i.e. using the
 `abstract` keyword).
+
+```jldoctest
+julia> Base.isabstract(AbstractArray)
+true
+
+julia> Base.isabstract(Vector)
+false
+```
 """
 function isabstract(t::ANY)
     @_pure_meta
@@ -250,7 +279,7 @@ end
 
 Determine the upper bound of a type parameter in the underlying type. E.g.:
 ```jldoctest
-julia> immutable Foo{T<:AbstractFloat, N}
+julia> struct Foo{T<:AbstractFloat, N}
            x::Tuple{T, N}
        end
 
@@ -279,7 +308,7 @@ typeseq(a::ANY,b::ANY) = (@_pure_meta; a<:b && b<:a)
     fieldoffset(type, i)
 
 The byte offset of field `i` of a type relative to the data start. For example, we could
-use it in the following manner to summarize information about a struct type:
+use it in the following manner to summarize information about a struct:
 
 ```jldoctest
 julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:nfields(T)];
@@ -306,6 +335,19 @@ fieldoffset(x::DataType, idx::Integer) = (@_pure_meta; ccall(:jl_get_field_offse
     fieldtype(T, name::Symbol | index::Int)
 
 Determine the declared type of a field (specified by name or index) in a composite DataType `T`.
+
+```jldoctest
+julia> immutable Foo
+           x::Int64
+           y::String
+       end
+
+julia> fieldtype(Foo, :x)
+Int64
+
+julia> fieldtype(Foo, 2)
+String
+```
 """
 fieldtype
 
@@ -314,6 +356,21 @@ fieldtype
 
 Get the index of a named field, throwing an error if the field does not exist (when err==true)
 or returning 0 (when err==false).
+
+```jldoctest
+julia> immutable Foo
+           x::Int64
+           y::String
+       end
+
+julia> Base.fieldindex(Foo, :z)
+ERROR: type Foo has no field z
+Stacktrace:
+ [1] fieldindex at ./reflection.jl:319 [inlined] (repeats 2 times)
+
+julia> Base.fieldindex(Foo, :z, false)
+0
+```
 """
 function fieldindex(T::DataType, name::Symbol, err::Bool=true)
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
@@ -328,6 +385,13 @@ type_alignment(x::DataType) = (@_pure_meta; ccall(:jl_get_alignment, Csize_t, (A
 
 Return a collection of all instances of the given type, if applicable. Mostly used for
 enumerated types (see `@enum`).
+
+```jldoctest
+julia> @enum Colors Red Blue Green
+
+julia> instances(Colors)
+(Red::Colors = 0, Blue::Colors = 1, Green::Colors = 2)
+```
 """
 function instances end
 
@@ -383,7 +447,7 @@ are included, including those not visible in the current module.
 
 ```jldoctest
 julia> subtypes(Integer)
-4-element Array{DataType,1}:
+4-element Array{Union{DataType, UnionAll},1}:
  BigInt
  Bool
  Signed
@@ -484,7 +548,7 @@ end
 # high-level, more convenient method lookup functions
 
 # type for reflecting and pretty-printing a subset of methods
-type MethodList
+mutable struct MethodList
     ms::Array{Method,1}
     mt::MethodTable
 end
@@ -583,7 +647,7 @@ function uncompressed_ast(m::Method, s::CodeInfo)
 end
 
 # this type mirrors jl_cghooks_t (documented in julia.h)
-immutable CodegenHooks
+struct CodegenHooks
     module_setup::Ptr{Void}
     module_activation::Ptr{Void}
     raise_exception::Ptr{Void}
@@ -595,7 +659,7 @@ immutable CodegenHooks
 end
 
 # this type mirrors jl_cgparams_t (documented in julia.h)
-immutable CodegenParams
+struct CodegenParams
     cached::Cint
 
     runtime::Cint

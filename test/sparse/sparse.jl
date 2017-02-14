@@ -805,7 +805,7 @@ end
     FS = Array(S)
     FI = Array(I)
     @test sparse(FS[FI]) == S[I] == S[FI]
-    @test sum(S[FI]) + sum(S[!FI]) == sum(S)
+    @test sum(S[FI]) + sum(S[.!FI]) == sum(S)
     @test countnz(I) == count(I)
 
     sumS1 = sum(S)
@@ -1641,11 +1641,11 @@ end
     @test At_ldiv_B(ltintmat, sparse(intmat)) ≈ At_ldiv_B(ltintmat, intmat)
 end
 
-# Test temporary fix for issue #16548 in PR #16979. Brittle. Expect to remove with `\` revisions.
-# This is broken by the introduction of RowVector... see brittle comment above.
-#@testset "issue #16548" begin
-#    @test which(\, (SparseMatrixCSC, AbstractVecOrMat)).module == Base.SparseArrays
-#end
+# Test temporary fix for issue #16548 in PR #16979. Somewhat brittle. Expect to remove with `\` revisions.
+@testset "issue #16548" begin
+    ms = methods(\, (SparseMatrixCSC, AbstractVecOrMat)).ms
+    @test all(m -> m.module == Base.SparseArrays, ms)
+end
 
 @testset "row indexing a SparseMatrixCSC with non-Int integer type" begin
     A = sparse(UInt32[1,2,3], UInt32[1,2,3], [1.0,2.0,3.0])
@@ -1704,4 +1704,37 @@ end
 
 @testset "issue #14398" begin
     @test transpose(view(speye(10), 1:5, 1:5)) ≈ eye(5,5)
+end
+
+@testset "dropstored issue #20513" begin
+    x = sparse(rand(3,3))
+    Base.SparseArrays.dropstored!(x, 1, 1)
+    @test x[1, 1] == 0.0
+    @test x.colptr == [1, 3, 6, 9]
+    Base.SparseArrays.dropstored!(x, 2, 1)
+    @test x.colptr == [1, 2, 5, 8]
+    @test x[2, 1] == 0.0
+    Base.SparseArrays.dropstored!(x, 2, 2)
+    @test x.colptr == [1, 2, 4, 7]
+    @test x[2, 2] == 0.0
+    Base.SparseArrays.dropstored!(x, 2, 3)
+    @test x.colptr == [1, 2, 4, 6]
+    @test x[2, 3] == 0.0
+end
+
+@testset "show" begin
+    io = IOBuffer()
+    show(io, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
+    @test String(take!(io)) == "1×1 SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n  [1, 1]  =  1.0"
+    show(io, MIME"text/plain"(), spzeros(Float32, Int64, 2, 2))
+    @test String(take!(io)) == "2×2 SparseMatrixCSC{Float32,Int64} with 0 stored entries"
+end
+
+@testset "similar aliasing" begin
+    a = sparse(rand(3,3) .+ 0.1)
+    b = similar(a, Float32, Int32)
+    c = similar(b, Float32, Int32)
+    Base.SparseArrays.dropstored!(b, 1, 1)
+    @test length(c.rowval) == 9
+    @test length(c.nzval) == 9
 end

@@ -35,12 +35,16 @@ else
 FLAGS += -DJL_BUILD_UNAME='"$(OS)"'
 endif
 
+ifeq ($(OS),FreeBSD)
+FLAGS += -I$(LOCALBASE)/include
+endif
+
 SRCS := \
 	jltypes gf typemap ast builtins module interpreter symbol \
 	dlload sys init task array dump toplevel jl_uv datatype \
 	simplevector APInt-C runtime_intrinsics runtime_ccall \
 	threadgroup threading stackwalk gc gc-debug gc-pages method \
-	jlapi signal-handling safepoint jloptions timing subtype
+	jlapi signal-handling safepoint jloptions timing subtype rtutils
 
 ifeq ($(USEMSVC), 1)
 SRCS += getopt
@@ -57,6 +61,9 @@ LLVMLINK += -lPolly -lPollyISL
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --src-root)/tools/polly/include
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --obj-root)/tools/polly/include
 FLAGS += -DUSE_POLLY
+ifeq ($(USE_POLLY_OPENMP),1)
+FLAGS += -fopenmp
+endif
 endif
 else
 SRCS += anticodegen

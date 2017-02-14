@@ -55,7 +55,7 @@ function show{K,V}(io::IO, t::Associative{K,V})
     end
 end
 
-abstract AbstractSerializer
+abstract type AbstractSerializer end
 
 # Dict
 
@@ -89,7 +89,7 @@ Dict{String,Int64} with 2 entries:
   "A" => 1
 ```
 """
-type Dict{K,V} <: Associative{K,V}
+mutable struct Dict{K,V} <: Associative{K,V}
     slots::Array{UInt8,1}
     keys::Array{K,1}
     vals::Array{V,1}
@@ -99,27 +99,11 @@ type Dict{K,V} <: Associative{K,V}
     idxfloor::Int  # an index <= the indexes of all used slots
     maxprobe::Int
 
-    function Dict()
+    function Dict{K,V}() where V where K
         n = 16
         new(zeros(UInt8,n), Array{K,1}(n), Array{V,1}(n), 0, 0, 0, 1, 0)
     end
-    function Dict(kv)
-        h = Dict{K,V}()
-        for (k,v) in kv
-            h[k] = v
-        end
-        return h
-    end
-    Dict(p::Pair) = setindex!(Dict{K,V}(), p.second, p.first)
-    function Dict(ps::Pair...)
-        h = Dict{K,V}()
-        sizehint!(h, length(ps))
-        for p in ps
-            h[p.first] = p.second
-        end
-        return h
-    end
-    function Dict(d::Dict{K,V})
+    function Dict{K,V}(d::Dict{K,V}) where V where K
         if d.ndel > 0
             rehash!(d)
         end
@@ -128,6 +112,22 @@ type Dict{K,V} <: Associative{K,V}
             d.maxprobe)
     end
 end
+function Dict{K,V}(kv) where V where K
+    h = Dict{K,V}()
+    for (k,v) in kv
+        h[k] = v
+    end
+    return h
+end
+Dict{K,V}(p::Pair) where {K,V} = setindex!(Dict{K,V}(), p.second, p.first)
+function Dict{K,V}(ps::Pair...) where V where K
+    h = Dict{K,V}()
+    sizehint!(h, length(ps))
+    for p in ps
+        h[p.first] = p.second
+    end
+    return h
+end
 # Note the constructors of WeakKeyDict mirror these here, keep in sync.
 Dict() = Dict{Any,Any}()
 Dict(kv::Tuple{}) = Dict()
@@ -135,10 +135,10 @@ copy(d::Dict) = Dict(d)
 
 const AnyDict = Dict{Any,Any}
 
-Dict{K,V}(ps::Pair{K,V}...)            = Dict{K,V}(ps)
-Dict{K  }(ps::Pair{K}...,)             = Dict{K,Any}(ps)
-Dict{V  }(ps::(Pair{K,V} where K)...,) = Dict{Any,V}(ps)
-Dict(     ps::Pair...)                 = Dict{Any,Any}(ps)
+Dict(ps::Pair{K,V}...) where {K,V}        = Dict{K,V}(ps)
+Dict(ps::Pair{K}...,) where K             = Dict{K,Any}(ps)
+Dict(ps::(Pair{K,V} where K)...,) where V = Dict{Any,V}(ps)
+Dict(ps::Pair...)                         = Dict{Any,Any}(ps)
 
 function Dict(kv)
     try
@@ -152,7 +152,7 @@ function Dict(kv)
     end
 end
 
-typealias TP{K,V} Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
+TP{K,V} = Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
 
 associative_with_eltype{K,V}(DT_apply, kv, ::TP{K,V}) = DT_apply(K, V)(kv)
 associative_with_eltype{K,V}(DT_apply, kv::Generator, ::TP{K,V}) = DT_apply(K, V)(kv)
@@ -503,7 +503,7 @@ false
 ```
 """
 haskey(h::Dict, key) = (ht_keyindex(h, key) >= 0)
-in{T<:Dict}(key, v::KeyIterator{T}) = (ht_keyindex(v.dict, key) >= 0)
+in(key, v::KeyIterator{<:Dict}) = (ht_keyindex(v.dict, key) >= 0)
 
 """
     getkey(collection, key, default)
@@ -581,8 +581,8 @@ next{K,V}(t::Dict{K,V}, i) = (Pair{K,V}(t.keys[i],t.vals[i]), skip_deleted(t,i+1
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
-next{T<:Dict}(v::KeyIterator{T}, i) = (v.dict.keys[i], skip_deleted(v.dict,i+1))
-next{T<:Dict}(v::ValueIterator{T}, i) = (v.dict.vals[i], skip_deleted(v.dict,i+1))
+next(v::KeyIterator{<:Dict}, i) = (v.dict.keys[i], skip_deleted(v.dict,i+1))
+next(v::ValueIterator{<:Dict}, i) = (v.dict.vals[i], skip_deleted(v.dict,i+1))
 
 # For these Associative types, it is safe to implement filter!
 # by deleting keys during iteration.
@@ -595,13 +595,13 @@ function filter!(f, d::Union{ObjectIdDict,Dict})
     return d
 end
 
-immutable ImmutableDict{K, V} <: Associative{K,V}
+struct ImmutableDict{K, V} <: Associative{K,V}
     parent::ImmutableDict{K, V}
     key::K
     value::V
-    ImmutableDict() = new() # represents an empty dictionary
-    ImmutableDict(key, value) = (empty = new(); new(empty, key, value))
-    ImmutableDict(parent::ImmutableDict, key, value) = new(parent, key, value)
+    ImmutableDict{K,V}() where {K,V} = new() # represents an empty dictionary
+    ImmutableDict{K,V}(key, value) where {K,V} = (empty = new(); new(empty, key, value))
+    ImmutableDict{K,V}(parent::ImmutableDict, key, value) where {K,V} = new(parent, key, value)
 end
 
 """
@@ -621,8 +621,8 @@ Create a new entry in the Immutable Dictionary for the key => value pair
 
 """
 ImmutableDict
-ImmutableDict{K,V}(KV::Pair{K,V}) = ImmutableDict{K,V}(KV[1], KV[2])
-ImmutableDict{K,V}(t::ImmutableDict{K,V}, KV::Pair) = ImmutableDict{K,V}(t, KV[1], KV[2])
+ImmutableDict(KV::Pair{K,V}) where {K,V} = ImmutableDict{K,V}(KV[1], KV[2])
+ImmutableDict(t::ImmutableDict{K,V}, KV::Pair) where {K,V} = ImmutableDict{K,V}(t, KV[1], KV[2])
 
 function in(key_value::Pair, dict::ImmutableDict, valcmp=(==))
     key, value = key_value

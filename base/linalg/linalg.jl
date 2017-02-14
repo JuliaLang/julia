@@ -8,7 +8,7 @@ import Base: A_mul_Bt, At_ldiv_Bt, A_rdiv_Bc, At_ldiv_B, Ac_mul_Bc, A_mul_Bc, Ac
 import Base: USE_BLAS64, abs, big, broadcast, ceil, conj, convert, copy, copy!,
     ctranspose, eltype, eye, findmax, findmin, fill!, floor, full, getindex,
     hcat, imag, indices, inv, isapprox, kron, length, linearindexing, map,
-    ndims, parent, power_by_squaring, print_matrix, promote_rule, real, round,
+    ndims, oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round,
     setindex!, show, similar, size, transpose, trunc, typed_hcat
 using Base: promote_op, _length, iszero, @pure, @propagate_inbounds, LinearFast,
     reduce, hvcat_fill, typed_vcat, promote_typeof
@@ -22,6 +22,9 @@ export
 
 # Types
     RowVector,
+    ConjArray,
+    ConjVector,
+    ConjMatrix,
     SymTridiagonal,
     Tridiagonal,
     Bidiagonal,
@@ -175,14 +178,14 @@ export
 # Constants
     I
 
-typealias BlasFloat Union{Float64,Float32,Complex128,Complex64}
-typealias BlasReal Union{Float64,Float32}
-typealias BlasComplex Union{Complex128,Complex64}
+const BlasFloat = Union{Float64,Float32,Complex128,Complex64}
+const BlasReal = Union{Float64,Float32}
+const BlasComplex = Union{Complex128,Complex64}
 
 if USE_BLAS64
-    typealias BlasInt Int64
+    const BlasInt = Int64
 else
-    typealias BlasInt Int32
+    const BlasInt = Int32
 end
 
 # Check that stride of matrix/vector is 1
@@ -234,9 +237,10 @@ function char_uplo(uplo::Symbol)
     end
 end
 
-copy_oftype{T,N}(A::AbstractArray{T,N}, ::Type{T}) = copy(A)
+copy_oftype{T}(A::AbstractArray{T}, ::Type{T}) = copy(A)
 copy_oftype{T,N,S}(A::AbstractArray{T,N}, ::Type{S}) = convert(AbstractArray{S,N}, A)
 
+include("conjarray.jl")
 include("transpose.jl")
 include("rowvector.jl")
 

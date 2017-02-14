@@ -127,7 +127,7 @@ which helps to reduce total precompiled image size.
 The `.data` fields stores several values related to the docstring, such as: path,
 linenumber, source code, and fielddocs.
 """
-type DocStr
+mutable struct DocStr
     text   :: Core.SimpleVector
     object :: Nullable
     data   :: Dict{Symbol, Any}
@@ -199,7 +199,7 @@ is stored as `Union{Tuple{T}, Tuple{T, Any}}`.
 
 Note: The `Function`/`DataType` object's signature is always `Union{}`.
 """
-type MultiDoc
+mutable struct MultiDoc
     "Ordered (via definition order) vector of object signatures."
     order::Vector{Type}
     "Documentation for each object. Keys are signatures."
@@ -370,9 +370,11 @@ function summarize(io::IO, T::DataType, binding)
     println(io, "**Summary:**")
     println(io, "```")
     println(io,
-        T.abstract ? "abstract" : T.mutable ? "type" : "immutable",
-        " ", T, " <: ", supertype(T)
-    )
+            T.abstract ? "abstract type" :
+            T.mutable  ? "mutable struct" :
+            Base.isstructtype(T) ? "struct" : "primitive type",
+            " ", T, " <: ", supertype(T)
+            )
     println(io, "```")
     if !isempty(fieldnames(T))
         println(io, "**Fields:**")
@@ -617,7 +619,7 @@ finddoc(λ, def) = false
 # Predicates and helpers for `docm` expression selection:
 
 const FUNC_HEADS    = [:function, :stagedfunction, :macro, :(=)]
-const BINDING_HEADS = [:typealias, :const, :global, :(=)]
+const BINDING_HEADS = [:typealias, :const, :global, :(=)]  # deprecation: remove `typealias` post-0.6
 # For the special `:@mac` / `:(Base.@mac)` syntax for documenting a macro after definition.
 isquotedmacrocall(x) =
     isexpr(x, :copyast, 1) &&
@@ -667,7 +669,6 @@ function docm(meta, ex, define = true)
 
     # "Bindings". Names that resolve to objects with different names, ie.
     #
-    #   typealias T S
     #   const T = S
     #   T = S
     #   global T = S

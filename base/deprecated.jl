@@ -20,6 +20,7 @@
 
 macro deprecate(old,new,ex=true)
     meta = Expr(:meta, :noinline)
+    @gensym oldmtname
     if isa(old,Symbol)
         oldname = Expr(:quote,old)
         newname = Expr(:quote,new)
@@ -28,29 +29,30 @@ macro deprecate(old,new,ex=true)
             :(function $(esc(old))(args...)
                   $meta
                   depwarn(string($oldname," is deprecated, use ",$newname," instead."),
-                          $oldname)
+                          $oldmtname)
                   $(esc(new))(args...)
-              end))
+              end),
+            :(const $oldmtname = Core.Typeof($(esc(old))).name.mt.name))
     elseif isa(old,Expr) && old.head == :call
         remove_linenums!(new)
-        oldcall = sprint(io->show_unquoted(io,old))
-        newcall = sprint(io->show_unquoted(io,new))
+        oldcall = sprint(show_unquoted, old)
+        newcall = sprint(show_unquoted, new)
         oldsym = if isa(old.args[1],Symbol)
-            old.args[1]
+            old.args[1]::Symbol
         elseif isa(old.args[1],Expr) && old.args[1].head == :curly
-            old.args[1].args[1]
+            old.args[1].args[1]::Symbol
         else
             error("invalid usage of @deprecate")
         end
-        oldname = Expr(:quote, oldsym)
         Expr(:toplevel,
-            Expr(:export,esc(oldsym)),
+            ex ? Expr(:export,esc(oldsym)) : nothing,
             :($(esc(old)) = begin
                   $meta
                   depwarn(string($oldcall," is deprecated, use ",$newcall," instead."),
-                          $oldname)
+                          $oldmtname)
                   $(esc(new))
-              end))
+              end),
+            :(const $oldmtname = Core.Typeof($(esc(oldsym))).name.mt.name))
     else
         error("invalid usage of @deprecate")
     end
@@ -141,7 +143,7 @@ function convert(::Type{Base.LinAlg.UnitUpperTriangular}, A::Diagonal)
         "that convert `Diagonal`/`Bidiagonal` to `<:AbstractTriangular` are deprecated. ",
         "Consider calling the `UnitUpperTriangular` constructor directly ",
         "(`Base.LinAlg.UnitUpperTriangular(A)`) instead."), :convert)
-    if !all(x -> x == one(x), A.diag)
+    if !all(x -> x == oneunit(x), A.diag)
         throw(ArgumentError("matrix cannot be represented as UnitUpperTriangular"))
     end
     Base.LinAlg.UnitUpperTriangular(Array(A))
@@ -151,7 +153,7 @@ function convert(::Type{Base.LinAlg.UnitLowerTriangular}, A::Diagonal)
         "that convert `Diagonal`/`Bidiagonal` to `<:AbstractTriangular` are deprecated. ",
         "Consider calling the `UnitLowerTriangular` constructor directly ",
         "(`Base.LinAlg.UnitLowerTriangular(A)`) instead."), :convert)
-    if !all(x -> x == one(x), A.diag)
+    if !all(x -> x == oneunit(x), A.diag)
         throw(ArgumentError("matrix cannot be represented as UnitLowerTriangular"))
     end
     Base.LinAlg.UnitLowerTriangular(Array(A))
@@ -226,14 +228,9 @@ for f in (
         # base/special/log.jl
         :log, :log1p,
         # base/special/gamma.jl
-        :gamma, :lfact, :digamma, :trigamma, :zeta, :eta,
-        # base/special/erf.jl
-        :erfcx, :erfi, :dawson,
-        # base/special/bessel.jl
-        :airyai, :airyaiprime, :airybi, :airybiprime,
-        :besselj0, :besselj1, :bessely0, :bessely1,
+        :gamma, :lfact,
         # base/math.jl
-        :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2,
+        :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :exp2,
         :expm1, :exp10, :sin, :cos, :tan, :asin, :acos, :acosh, :atanh,
         #=:log,=# :log2, :log10, :lgamma, #=:log1p,=# :sqrt,
         # base/floatfuncs.jl
@@ -252,8 +249,6 @@ for f in ( :acos_fast, :acosh_fast, :angle_fast, :asin_fast, :asinh_fast,
     @eval FastMath Base.@dep_vectorize_1arg Number $f
 end
 for f in (
-        :invdigamma, # base/special/gamma.jl
-        :erfinc, :erfcinv, # base/special/erf.jl
         :trunc, :floor, :ceil, :round, # base/floatfuncs.jl
         :rad2deg, :deg2rad, :exponent, :significand, # base/math.jl
         :sind, :cosd, :tand, :asind, :acosd, :atand, :asecd, :acscd, :acotd, # base/special/trig.jl
@@ -292,11 +287,7 @@ end
 # Deprecate @vectorize_2arg-vectorized functions from...
 for f in (
         # base/special/gamma.jl
-        :polygamma, :zeta, :beta, :lbeta,
-        # base/special/bessel.jl
-        :besseli, :besselix, :besselj, :besseljx,
-        :besselk, :besselkx, :bessely, :besselyx, :besselh,
-        :besselhx, :hankelh1, :hankelh2, :hankelh1x, :hankelh2x,
+        :beta, :lbeta,
         # base/math.jl
         :log, :hypot, :atan2,
     )
@@ -469,7 +460,7 @@ Filesystem.stop_watching(stream::Filesystem._FDWatcher) = depwarn("stop_watching
 
 # #19288
 @eval Base.Dates begin
-    function recur{T<:TimeType}(fun::Function, dr::StepRange{T}; negate::Bool=false, limit::Int=10000)
+    function recur(fun::Function, dr::StepRange{<:TimeType}; negate::Bool=false, limit::Int=10000)
         Base.depwarn("Dates.recur is deprecated, use filter instead.",:recur)
         if negate
             filter(x -> !fun(x), dr)
@@ -636,9 +627,9 @@ _broadcast_zpreserving(f, As...) =
     broadcast!(f, similar(Array{_promote_eltype_op(f, As...)}, Base.Broadcast.broadcast_indices(As...)), As...)
 _broadcast_zpreserving{Tv1,Ti1,Tv2,Ti2}(f::Function, A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) =
     _broadcast_zpreserving!(f, spzeros(promote_type(Tv1, Tv2), promote_type(Ti1, Ti2), Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
-_broadcast_zpreserving{Tv,Ti}(f::Function, A_1::SparseMatrixCSC{Tv,Ti}, A_2::Union{Array,BitArray,Number}) =
+_broadcast_zpreserving{Ti}(f::Function, A_1::SparseMatrixCSC{<:Any,Ti}, A_2::Union{Array,BitArray,Number}) =
     _broadcast_zpreserving!(f, spzeros(promote_eltype(A_1, A_2), Ti, Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
-_broadcast_zpreserving{Tv,Ti}(f::Function, A_1::Union{Array,BitArray,Number}, A_2::SparseMatrixCSC{Tv,Ti}) =
+_broadcast_zpreserving{Ti}(f::Function, A_1::Union{Array,BitArray,Number}, A_2::SparseMatrixCSC{<:Any,Ti}) =
     _broadcast_zpreserving!(f, spzeros(promote_eltype(A_1, A_2), Ti, Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
 
 function _depstring_bczpres()
@@ -671,65 +662,6 @@ end
 
 # Deprecate isimag (#19947).
 @deprecate isimag(z::Number) iszero(real(z))
-
-@deprecate airy(z::Number) airyai(z)
-@deprecate airyx(z::Number) airyaix(z)
-@deprecate airyprime(z::Number) airyaiprime(z)
-@deprecate airy{T<:Number}(x::AbstractArray{T}) airyai.(x)
-@deprecate airyx{T<:Number}(x::AbstractArray{T}) airyaix.(x)
-@deprecate airyprime{T<:Number}(x::AbstractArray{T}) airyprime.(x)
-
-function _airy(k::Integer, z::Complex128)
-    depwarn("`airy(k,x)` is deprecated, use `airyai(x)`, `airyaiprime(x)`, `airybi(x)` or `airybiprime(x)` instead.",:airy)
-    id = Int32(k==1 || k==3)
-    if k == 0 || k == 1
-        return Base.Math._airy(z, id, Int32(1))
-    elseif k == 2 || k == 3
-        return Base.Math._biry(z, id, Int32(1))
-    else
-        throw(ArgumentError("k must be between 0 and 3"))
-    end
-end
-function _airyx(k::Integer, z::Complex128)
-    depwarn("`airyx(k,x)` is deprecated, use `airyaix(x)`, `airyaiprimex(x)`, `airybix(x)` or `airybiprimex(x)` instead.",:airyx)
-    id = Int32(k==1 || k==3)
-    if k == 0 || k == 1
-        return Base.Math._airy(z, id, Int32(2))
-    elseif k == 2 || k == 3
-        return Base.Math._biry(z, id, Int32(2))
-    else
-        throw(ArgumentError("k must be between 0 and 3"))
-    end
-end
-
-for afn in (:airy,:airyx)
-    _afn = Symbol("_"*string(afn))
-    suf  = string(afn)[5:end]
-    @eval begin
-        function $afn(k::Integer, z::Complex128)
-            afn = $(QuoteNode(afn))
-            suf = $(QuoteNode(suf))
-            depwarn("`$afn(k,x)` is deprecated, use `airyai$suf(x)`, `airyaiprime$suf(x)`, `airybi$suf(x)` or `airybiprime$suf(x)` instead.",$(QuoteNode(afn)))
-            $_afn(k,z)
-        end
-
-        $afn(k::Integer, z::Complex) = $afn(k, float(z))
-        $afn{T<:AbstractFloat}(k::Integer, z::Complex{T}) = throw(MethodError($afn,(k,z)))
-        $afn(k::Integer, z::Complex64) = Complex64($afn(k, Complex128(z)))
-        $afn(k::Integer, x::Real) = $afn(k, float(x))
-        $afn(k::Integer, x::AbstractFloat) = real($afn(k, complex(x)))
-
-        function $afn{T<:Number}(k::Number, x::AbstractArray{T})
-            $afn.(k,x)
-        end
-        function $afn{S<:Number}(k::AbstractArray{S}, x::Number)
-            $afn.(k,x)
-        end
-        function $afn{S<:Number,T<:Number}(k::AbstractArray{S}, x::AbstractArray{T})
-            $afn.(k,x)
-        end
-    end
-end
 
 # Deprecate vectorized xor in favor of compact broadcast syntax
 @deprecate xor(a::Bool, B::BitArray)                xor.(a, B)
@@ -767,14 +699,14 @@ export Collections
 
 # Not exported, but used outside Base
 _promote_array_type(F, ::Type, ::Type, T::Type) = T
-_promote_array_type{S<:Real, A<:AbstractFloat}(F, ::Type{S}, ::Type{A}, ::Type) = A
-_promote_array_type{S<:Integer, A<:Integer}(F, ::Type{S}, ::Type{A}, ::Type) = A
-_promote_array_type{S<:Integer, A<:Integer}(::typeof(/), ::Type{S}, ::Type{A}, T::Type) = T
-_promote_array_type{S<:Integer, A<:Integer}(::typeof(\), ::Type{S}, ::Type{A}, T::Type) = T
-_promote_array_type{S<:Integer}(::typeof(/), ::Type{S}, ::Type{Bool}, T::Type) = T
-_promote_array_type{S<:Integer}(::typeof(\), ::Type{S}, ::Type{Bool}, T::Type) = T
-_promote_array_type{S<:Integer}(F, ::Type{S}, ::Type{Bool}, T::Type) = T
-_promote_array_type{S<:Union{Complex, Real}, T<:AbstractFloat}(F, ::Type{S}, ::Type{Complex{T}}, ::Type) = Complex{T}
+_promote_array_type{A<:AbstractFloat}(F, ::Type{<:Real}, ::Type{A}, ::Type) = A
+_promote_array_type{A<:Integer}(F, ::Type{<:Integer}, ::Type{A}, ::Type) = A
+_promote_array_type(::typeof(/), ::Type{<:Integer}, ::Type{<:Integer}, T::Type) = T
+_promote_array_type(::typeof(\), ::Type{<:Integer}, ::Type{<:Integer}, T::Type) = T
+_promote_array_type(::typeof(/), ::Type{<:Integer}, ::Type{Bool}, T::Type) = T
+_promote_array_type(::typeof(\), ::Type{<:Integer}, ::Type{Bool}, T::Type) = T
+_promote_array_type(F, ::Type{<:Integer}, ::Type{Bool}, T::Type) = T
+_promote_array_type{T<:AbstractFloat}(F, ::Type{<:Union{Complex, Real}}, ::Type{Complex{T}}, ::Type) = Complex{T}
 function promote_array_type(F, R, S, T)
     Base.depwarn("`promote_array_type` is deprecated as it is no longer needed " *
                  "in Base. See https://github.com/JuliaLang/julia/issues/19669 " *
@@ -792,7 +724,7 @@ end
 for f in (:sec, :sech, :secd, :asec, :asech,
             :csc, :csch, :cscd, :acsc, :acsch,
             :cot, :coth, :cotd, :acot, :acoth)
-    @eval @deprecate $f{T<:Number}(A::AbstractArray{T}) $f.(A)
+    @eval @deprecate $f(A::AbstractArray{<:Number}) $f.(A)
 end
 
 # Deprecate vectorized two-argument complex in favor of compact broadcast syntax
@@ -808,7 +740,7 @@ end
 @deprecate round(M::Tridiagonal) round.(M)
 @deprecate round(M::SymTridiagonal) round.(M)
 @deprecate round{T}(::Type{T}, x::AbstractArray) round.(T, x)
-@deprecate round{T}(::Type{T}, x::AbstractArray, r::RoundingMode) round.(x, r)
+@deprecate round{T}(::Type{T}, x::AbstractArray, r::RoundingMode) round.(T, x, r)
 @deprecate round(x::AbstractArray, r::RoundingMode) round.(x, r)
 @deprecate round(x::AbstractArray, digits::Integer, base::Integer = 10) round.(x, digits, base)
 
@@ -838,16 +770,16 @@ end
 @deprecate big(r::StepRange) big.(r)
 @deprecate big(r::StepRangeLen) big.(r)
 @deprecate big(r::LinSpace) big.(r)
-@deprecate big{T<:Integer,N}(x::AbstractArray{T,N}) big.(x)
-@deprecate big{T<:AbstractFloat,N}(x::AbstractArray{T,N}) big.(x)
+@deprecate big(x::AbstractArray{<:Integer}) big.(x)
+@deprecate big(x::AbstractArray{<:AbstractFloat}) big.(x)
 @deprecate big(A::LowerTriangular) big.(A)
 @deprecate big(A::UpperTriangular) big.(A)
 @deprecate big(A::Base.LinAlg.UnitLowerTriangular) big.(A)
 @deprecate big(A::Base.LinAlg.UnitUpperTriangular) big.(A)
 @deprecate big(B::Bidiagonal) big.(B)
-@deprecate big{T<:Integer,N}(A::AbstractArray{Complex{T},N}) big.(A)
-@deprecate big{T<:AbstractFloat,N}(A::AbstractArray{Complex{T},N}) big.(A)
-@deprecate big{T<:Integer,N}(x::AbstractArray{Complex{Rational{T}},N}) big.(A)
+@deprecate big(A::AbstractArray{<:Complex{<:Integer}}) big.(A)
+@deprecate big(A::AbstractArray{<:Complex{<:AbstractFloat}}) big.(A)
+@deprecate big(x::AbstractArray{<:Complex{<:Rational{<:Integer}}}) big.(A)
 
 # Deprecate manually vectorized div methods in favor of compact broadcast syntax
 @deprecate div(A::Number, B::AbstractArray) div.(A, B)
@@ -860,7 +792,7 @@ end
 
 # Deprecate manually vectorized div, mod, and % methods for dates
 @deprecate div{P<:Dates.Period}(X::StridedArray{P}, y::P)         div.(X, y)
-@deprecate div{P<:Dates.Period}(X::StridedArray{P}, y::Integer)   div.(X, y)
+@deprecate div(X::StridedArray{<:Dates.Period}, y::Integer)       div.(X, y)
 @deprecate (%){P<:Dates.Period}(X::StridedArray{P}, y::P)         X .% y
 @deprecate mod{P<:Dates.Period}(X::StridedArray{P}, y::P)         mod.(X, y)
 
@@ -868,8 +800,8 @@ end
 @deprecate mod(B::BitArray, x::Bool) mod.(B, x)
 @deprecate mod(x::Bool, B::BitArray) mod.(x, B)
 @deprecate mod(A::AbstractArray, B::AbstractArray) mod.(A, B)
-@deprecate mod{T}(x::Number, A::AbstractArray{T}) mod.(x, A)
-@deprecate mod{T}(A::AbstractArray{T}, x::Number) mod.(A, x)
+@deprecate mod(x::Number, A::AbstractArray) mod.(x, A)
+@deprecate mod(A::AbstractArray, x::Number) mod.(A, x)
 
 # Deprecate vectorized & in favor of dot syntax
 @deprecate (&)(a::Bool, B::BitArray)                a .& B
@@ -891,7 +823,15 @@ end
 @deprecate ifelse(c::AbstractArray{Bool}, x::AbstractArray, y) ifelse.(c, x, y)
 @deprecate ifelse(c::AbstractArray{Bool}, x::AbstractArray, y::AbstractArray) ifelse.(c, x, y)
 
-function frexp{T<:AbstractFloat}(A::Array{T})
+# Deprecate vectorized !
+@deprecate(!(A::AbstractArray{Bool}), .!A) # parens for #20541
+@deprecate(!(B::BitArray), .!B) # parens for #20541
+
+# Deprecate vectorized ~
+@deprecate ~(A::AbstractArray) .~A
+@deprecate ~(B::BitArray) .~B
+
+function frexp(A::Array{<:AbstractFloat})
     depwarn("`frexp(x::Array)` is discontinued.", :frexp)
     F = similar(A)
     E = Array{Int}(size(A))
@@ -1189,6 +1129,7 @@ end
      @deprecate revparse(repo::GitRepo, objname::AbstractString) GitObject(repo, objname) false
      @deprecate object(repo::GitRepo, te::GitTreeEntry) GitObject(repo, te) false
      @deprecate commit(ann::GitAnnotated) GitHash(ann) false
+     @deprecate cat{T<:GitObject}(repo::GitRepo, ::Type{T}, object::AbstractString) cat(repo, object)
 end
 
 # when this deprecation is deleted, remove all calls to it, and all
@@ -1205,9 +1146,94 @@ end
     end
 end
 
+# TODO: remove `:typealias` from BINDING_HEADS in base/docs/Docs.jl
+# TODO: remove `'typealias` case in expand-table in julia-syntax.scm
+
 # FloatRange replaced by StepRangeLen
 
-@deprecate FloatRange{T}(start::T, step, len, den) Base.floatrange(T, start, step, len, den)
+## Old-style floating point ranges. We reimplement them here because
+## the replacement StepRangeLen also has 4 real-valued fields, which
+## makes deprecation tricky. See #20506.
+
+immutable Use_StepRangeLen_Instead{T<:AbstractFloat} <: Range{T}
+    start::T
+    step::T
+    len::T
+    divisor::T
+end
+
+Use_StepRangeLen_Instead(a::AbstractFloat, s::AbstractFloat, l::Real, d::AbstractFloat) =
+    Use_StepRangeLen_Instead{promote_type(typeof(a),typeof(s),typeof(d))}(a,s,l,d)
+
+isempty(r::Use_StepRangeLen_Instead) = length(r) == 0
+
+step(r::Use_StepRangeLen_Instead) = r.step/r.divisor
+
+length(r::Use_StepRangeLen_Instead) = Integer(r.len)
+
+first{T}(r::Use_StepRangeLen_Instead{T}) = convert(T, r.start/r.divisor)
+
+last{T}(r::Use_StepRangeLen_Instead{T}) = convert(T, (r.start + (r.len-1)*r.step)/r.divisor)
+
+start(r::Use_StepRangeLen_Instead) = 0
+done(r::Use_StepRangeLen_Instead, i::Int) = length(r) <= i
+next{T}(r::Use_StepRangeLen_Instead{T}, i::Int) =
+    (convert(T, (r.start + i*r.step)/r.divisor), i+1)
+
+function getindex{T}(r::Use_StepRangeLen_Instead{T}, i::Integer)
+    @_inline_meta
+    @boundscheck checkbounds(r, i)
+    convert(T, (r.start + (i-1)*r.step)/r.divisor)
+end
+
+function getindex(r::Use_StepRangeLen_Instead, s::OrdinalRange)
+    @_inline_meta
+    @boundscheck checkbounds(r, s)
+    Use_StepRangeLen_Instead(r.start + (first(s)-1)*r.step, step(s)*r.step, length(s), r.divisor)
+end
+
+-(r::Use_StepRangeLen_Instead)   = Use_StepRangeLen_Instead(-r.start, -r.step, r.len, r.divisor)
++(x::Real, r::Use_StepRangeLen_Instead) = Use_StepRangeLen_Instead(r.divisor*x + r.start, r.step, r.len, r.divisor)
+-(x::Real, r::Use_StepRangeLen_Instead) = Use_StepRangeLen_Instead(r.divisor*x - r.start, -r.step, r.len, r.divisor)
+-(r::Use_StepRangeLen_Instead, x::Real) = Use_StepRangeLen_Instead(r.start - r.divisor*x, r.step, r.len, r.divisor)
+*(x::Real, r::Use_StepRangeLen_Instead)   = Use_StepRangeLen_Instead(x*r.start, x*r.step, r.len, r.divisor)
+*(r::Use_StepRangeLen_Instead, x::Real)   = x * r
+/(r::Use_StepRangeLen_Instead, x::Real)   = Use_StepRangeLen_Instead(r.start/x, r.step/x, r.len, r.divisor)
+promote_rule{T1,T2}(::Type{Use_StepRangeLen_Instead{T1}},::Type{Use_StepRangeLen_Instead{T2}}) =
+    Use_StepRangeLen_Instead{promote_type(T1,T2)}
+convert{T<:AbstractFloat}(::Type{Use_StepRangeLen_Instead{T}}, r::Use_StepRangeLen_Instead{T}) = r
+convert{T<:AbstractFloat}(::Type{Use_StepRangeLen_Instead{T}}, r::Use_StepRangeLen_Instead) =
+    Use_StepRangeLen_Instead{T}(r.start,r.step,r.len,r.divisor)
+
+promote_rule{F,OR<:OrdinalRange}(::Type{Use_StepRangeLen_Instead{F}}, ::Type{OR}) =
+    Use_StepRangeLen_Instead{promote_type(F,eltype(OR))}
+convert{T<:AbstractFloat}(::Type{Use_StepRangeLen_Instead{T}}, r::OrdinalRange) =
+    Use_StepRangeLen_Instead{T}(first(r), step(r), length(r), one(T))
+convert{T}(::Type{Use_StepRangeLen_Instead}, r::OrdinalRange{T}) =
+    Use_StepRangeLen_Instead{typeof(float(first(r)))}(first(r), step(r), length(r), one(T))
+
+promote_rule{F,OR<:Use_StepRangeLen_Instead}(::Type{LinSpace{F}}, ::Type{OR}) =
+    LinSpace{promote_type(F,eltype(OR))}
+convert{T<:AbstractFloat}(::Type{LinSpace{T}}, r::Use_StepRangeLen_Instead) =
+    linspace(convert(T, first(r)), convert(T, last(r)), convert(T, length(r)))
+convert{T<:AbstractFloat}(::Type{LinSpace}, r::Use_StepRangeLen_Instead{T}) =
+    convert(LinSpace{T}, r)
+
+reverse(r::Use_StepRangeLen_Instead)   = Use_StepRangeLen_Instead(r.start + (r.len-1)*r.step, -r.step, r.len, r.divisor)
+
+function sum(r::Use_StepRangeLen_Instead)
+    l = length(r)
+    if iseven(l)
+        s = r.step * (l-1) * (l>>1)
+    else
+        s = (r.step * l) * ((l-1)>>1)
+    end
+    return (l * r.start + s)/r.divisor
+end
+
+@deprecate_binding FloatRange Use_StepRangeLen_Instead
+
+## end of FloatRange
 
 @noinline zero_arg_matrix_constructor(prefix::String) =
     depwarn("$prefix() is deprecated, use $prefix(0, 0) instead.", :zero_arg_matrix_constructor)
@@ -1224,6 +1250,26 @@ for name in ("alnum", "alpha", "cntrl", "digit", "number", "graph",
              "lower", "print", "punct", "space", "upper", "xdigit")
     f = Symbol("is",name)
     @eval @deprecate ($f)(s::AbstractString) all($f, s)
+end
+
+# TODO: remove warning for using `_` in parse_input_line in base/client.jl
+
+# Special functions have been moved to a package
+for f in (:airyai, :airyaiprime, :airybi, :airybiprime, :airyaix, :airyaiprimex, :airybix, :airybiprimex,
+          :besselh, :besselhx, :besseli, :besselix, :besselj, :besselj0, :besselj1, :besseljx, :besselk,
+          :besselkx, :bessely, :bessely0, :bessely1, :besselyx,
+          :dawson, :erf, :erfc, :erfcinv, :erfcx, :erfi, :erfinv,
+          :eta, :zeta, :digamma, :invdigamma, :polygamma, :trigamma,
+          :hankelh1, :hankelh1x, :hankelh2, :hankelh2x,
+          :airy, :airyx, :airyprime)
+    @eval begin
+        function $f(args...; kwargs...)
+            error(string($f, args, " has been moved to the package SpecialFunctions.jl.\n",
+                         "Run Pkg.add(\"SpecialFunctions\") to install SpecialFunctions on Julia v0.6 and later,\n",
+                         "and then run `using SpecialFunctions`."))
+        end
+        export $f
+    end
 end
 
 # END 0.6 deprecations

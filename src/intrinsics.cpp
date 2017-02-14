@@ -168,7 +168,7 @@ static Constant *julia_const_to_llvm(void *ptr, jl_value_t *bt)
 
     if (jl_is_cpointer_type(bt))
         return ConstantExpr::getIntToPtr(ConstantInt::get(T_size, *(uintptr_t*)ptr), julia_type_to_llvm(bt));
-    if (jl_is_bitstype(bt)) {
+    if (jl_is_primitivetype(bt)) {
         int nb = jl_datatype_size(bt);
         // TODO: non-power-of-2 size datatypes may not be interpreted correctly on big-endian systems
         switch (nb) {
@@ -368,7 +368,7 @@ static jl_value_t *staticeval_bitstype(const jl_cgval_t &targ)
     // evaluate an argument at compile time to determine what type it is
     if (jl_is_type_type(targ.typ)) {
         jl_value_t *bt = jl_tparam0(targ.typ);
-        if (jl_is_bitstype(bt))
+        if (jl_is_primitivetype(bt))
             return bt;
     }
     return NULL;
@@ -404,15 +404,15 @@ static jl_cgval_t generic_bitcast(const jl_cgval_t *argv, jl_codectx_t *ctx)
     bool isboxed;
     Type *vxt = julia_type_to_llvm(v.typ, &isboxed);
 
-    if (!jl_is_bitstype(v.typ) || jl_datatype_size(v.typ) != nb) {
+    if (!jl_is_primitivetype(v.typ) || jl_datatype_size(v.typ) != nb) {
         Value *typ = emit_typeof_boxed(v, ctx);
-        if (!jl_is_bitstype(v.typ)) {
+        if (!jl_is_primitivetype(v.typ)) {
             if (isboxed) {
                 Value *isbits = emit_datatype_isbitstype(typ);
-                error_unless(isbits, "bitcast: expected bitstype value for second argument", ctx);
+                error_unless(isbits, "bitcast: expected primitive type value for second argument", ctx);
             }
             else {
-                emit_error("bitcast: expected bitstype value for second argument", ctx);
+                emit_error("bitcast: expected primitive type value for second argument", ctx);
                 return jl_cgval_t();
             }
         }
@@ -475,7 +475,7 @@ static jl_cgval_t generic_cast(
     const jl_cgval_t &targ = argv[0];
     const jl_cgval_t &v = argv[1];
     jl_value_t *jlto = staticeval_bitstype(targ);
-    if (!jlto || !jl_is_bitstype(v.typ))
+    if (!jlto || !jl_is_primitivetype(v.typ))
         return emit_runtime_call(f, argv, 2, ctx);
     Type *to = bitstype_to_llvm(jlto);
     Type *vt = bitstype_to_llvm(v.typ);
@@ -748,9 +748,9 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     assert(f < num_intrinsics);
     if (f == cglobal && nargs == 1)
         f = cglobal_auto;
-    unsigned expected_nargs = intrinsic_nargs[f];
+    unsigned expected_nargs = jl_intrinsic_nargs((int)f);
     if (expected_nargs && expected_nargs != nargs) {
-        jl_errorf("intrinsic #%d %s: wrong number of arguments", f, JL_I::jl_intrinsic_name((int)f));
+        jl_errorf("intrinsic #%d %s: wrong number of arguments", f, jl_intrinsic_name((int)f));
     }
 
     if (f == llvmcall)
@@ -838,7 +838,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 
     case not_int: {
         const jl_cgval_t &x = argv[0];
-        if (!jl_is_bitstype(x.typ))
+        if (!jl_is_primitivetype(x.typ))
             return emit_runtime_call(f, argv, nargs, ctx);
         Type *xt = INTT(bitstype_to_llvm(x.typ));
         Value *from = emit_unbox(xt, x, x.typ);
@@ -853,7 +853,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     case powi_llvm: {
         const jl_cgval_t &x = argv[0];
         const jl_cgval_t &y = argv[1];
-        if (!jl_is_bitstype(x.typ) || !jl_is_bitstype(y.typ) || jl_datatype_size(y.typ) != 4)
+        if (!jl_is_primitivetype(x.typ) || !jl_is_primitivetype(y.typ) || jl_datatype_size(y.typ) != 4)
             return emit_runtime_call(f, argv, nargs, ctx);
         Type *xt = FLOATT(bitstype_to_llvm(x.typ));
         Type *yt = T_int32;
@@ -882,7 +882,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         const jl_cgval_t &xinfo = argv[0];
 
         // verify argument types
-        if (!jl_is_bitstype(xinfo.typ))
+        if (!jl_is_primitivetype(xinfo.typ))
             return emit_runtime_call(f, argv, nargs, ctx);
         Type *xtyp = bitstype_to_llvm(xinfo.typ);
         if (float_func[f])
@@ -896,7 +896,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         argt[0] = xtyp;
 
         if (f == shl_int || f == lshr_int || f == ashr_int) {
-            if (!jl_is_bitstype(argv[1].typ))
+            if (!jl_is_primitivetype(argv[1].typ))
                 return emit_runtime_call(f, argv, nargs, ctx);
             argt[1] = INTT(bitstype_to_llvm(argv[1].typ));
         }

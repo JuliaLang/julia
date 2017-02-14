@@ -5,7 +5,7 @@ print(xs...)   = print(STDOUT::IO, xs...)
 println(xs...) = println(STDOUT::IO, xs...)
 println(io::IO) = print(io, '\n')
 
-immutable DevNullStream <: IO end
+struct DevNullStream <: IO end
 const DevNull = DevNullStream()
 isreadable(::DevNullStream) = false
 iswritable(::DevNullStream) = true

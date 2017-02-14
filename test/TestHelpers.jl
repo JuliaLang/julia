@@ -2,7 +2,10 @@
 
 module TestHelpers
 
-type FakeTerminal <: Base.Terminals.UnixTerminal
+include("dimensionful.jl")
+export Furlong
+
+mutable struct FakeTerminal <: Base.Terminals.UnixTerminal
     in_stream::Base.IO
     out_stream::Base.IO
     err_stream::Base.IO
@@ -54,11 +57,11 @@ using Base: Indices, LinearSlow, LinearFast, tail
 
 export OffsetArray
 
-immutable OffsetArray{T,N,AA<:AbstractArray} <: AbstractArray{T,N}
+struct OffsetArray{T,N,AA<:AbstractArray} <: AbstractArray{T,N}
     parent::AA
     offsets::NTuple{N,Int}
 end
-typealias OffsetVector{T,AA<:AbstractArray} OffsetArray{T,1,AA}
+OffsetVector{T,AA<:AbstractArray} = OffsetArray{T,1,AA}
 
 OffsetArray{T,N}(A::AbstractArray{T,N}, offsets::NTuple{N,Int}) = OffsetArray{T,N,typeof(A)}(A, offsets)
 OffsetArray{T,N}(A::AbstractArray{T,N}, offsets::Vararg{Int,N}) = OffsetArray(A, offsets)

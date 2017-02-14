@@ -94,7 +94,7 @@ function sanity_tst(deps_data, expected_result; pkgs=[])
     result = sanity_check(deps, Set(String[pkgs...]))
     length(result) == length(expected_result) || return false
     for (p, vn, pp) in result
-        in((p, vn), expected_result) || return  false
+        (p, vn) ∈ expected_result || return  false
     end
     return true
 end

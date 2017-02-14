@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-@testset "RowVector" begin
-
 @testset "Core" begin
     v = [1,2,3]
     z = [1+im,2,3]
@@ -104,7 +102,7 @@ end
 
     @test (rv*v) === 14
     @test (rv*mat)::RowVector == [1 4 9]
-    @test_throws DimensionMismatch [1]*reshape([1],(1,1)) # no longer permitted
+    @test [1]*reshape([1],(1,1)) == reshape([1], (1,1))
     @test_throws DimensionMismatch rv*rv
     @test (v*rv)::Matrix == [1 2 3; 2 4 6; 3 6 9]
     @test_throws DimensionMismatch v*v # Was previously a missing method error, now an error message
@@ -112,7 +110,7 @@ end
 
     @test_throws DimensionMismatch rv*v.'
     @test (rv*mat.')::RowVector == [1 4 9]
-    @test_throws DimensionMismatch [1]*reshape([1],(1,1)).' # no longer permitted
+    @test [1]*reshape([1],(1,1)).' == reshape([1], (1,1))
     @test rv*rv.' === 14
     @test_throws DimensionMismatch v*rv.'
     @test (v*v.')::Matrix == [1 2 3; 2 4 6; 3 6 9]
@@ -142,7 +140,7 @@ end
 
     @test_throws DimensionMismatch cz*z'
     @test (cz*mat')::RowVector == [-2im 4 9]
-    @test_throws DimensionMismatch [1]*reshape([1],(1,1))' # no longer permitted
+    @test [1]*reshape([1],(1,1))' == reshape([1], (1,1))
     @test cz*cz' === 15 + 0im
     @test_throws DimensionMismatch z*cz'
     @test (z*z')::Matrix == [2 2+2im 3+3im; 2-2im 4 6; 3-3im 6 9]
@@ -238,5 +236,16 @@ end
     @test_throws DimensionMismatch ut\rv
 end
 
-
-end # @testset "RowVector"
+# issue #20389
+@testset "1 row/col vec*mat" begin
+    let x=[1,2,3], A=ones(1,4), y=x', B=A', C=x.*A
+        @test x*A == y'*A == x*B' == y'*B' == C
+        @test A'*x' == A'*y == B*x' == B*y == C'
+    end
+end
+@testset "complex 1 row/col vec*mat" begin
+    let x=[1,2,3]*im, A=ones(1,4)*im, y=x', B=A', C=x.*A
+        @test x*A == y'*A == x*B' == y'*B' == C
+        @test A'*x' == A'*y == B*x' == B*y == C'
+    end
+end

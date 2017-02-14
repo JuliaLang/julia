@@ -495,3 +495,10 @@ end
 
 # Issue 16196
 @test UpperTriangular(eye(3)) \ view(ones(3), [1,2,3]) == ones(3)
+
+# dimensional correctness:
+isdefined(Main, :TestHelpers) || @eval Main include("../TestHelpers.jl")
+using TestHelpers.Furlong
+let A = UpperTriangular([Furlong(1) Furlong(4); Furlong(0) Furlong(1)])
+    @test sqrtm(A) == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
+end

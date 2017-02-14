@@ -444,7 +444,11 @@ function test_Type()
     @test isa(Tuple{Int}, (@UnionAll T<:Tuple Type{T}))
 
     # this matches with T==DataType, since DataType is concrete
-    @test issub(Tuple{Type{Int},Type{Int8}}, Tuple{T,T} where T)
+    @test  issub(Tuple{Type{Int},Type{Int8}}, Tuple{T,T} where T)
+    @test !issub(Tuple{Type{Int},Type{Union{}}}, Tuple{T,T} where T)
+
+    # issue #20476
+    @test issub(Tuple{Type{Union{Type{UInt32}, Type{UInt64}}}, Type{UInt32}}, Tuple{Type{T},T} where T)
 end
 
 # old subtyping tests from test/core.jl
@@ -595,17 +599,17 @@ macro testintersect(a, b, result)
     end)
 end
 
-abstract IT4805_2{N, T}
-abstract AbstractThing{T,N}
-type ConcreteThing{T<:AbstractFloat,N} <: AbstractThing{T,N}
+abstract type IT4805_2{N, T} end
+abstract type AbstractThing{T,N} end
+mutable struct ConcreteThing{T<:AbstractFloat,N} <: AbstractThing{T,N}
 end
-type A11136 end
-type B11136 end
-abstract Foo11367
+mutable struct A11136 end
+mutable struct B11136 end
+abstract type Foo11367 end
 
-abstract AbstractTriangular{T,S<:AbstractMatrix} <: AbstractMatrix{T}
-immutable UpperTriangular{T,S<:AbstractMatrix} <: AbstractTriangular{T,S} end
-immutable UnitUpperTriangular{T,S<:AbstractMatrix} <: AbstractTriangular{T,S} end
+abstract type AbstractTriangular{T,S<:AbstractMatrix} <: AbstractMatrix{T} end
+struct UpperTriangular{T,S<:AbstractMatrix} <: AbstractTriangular{T,S} end
+struct UnitUpperTriangular{T,S<:AbstractMatrix} <: AbstractTriangular{T,S} end
 
 function test_intersection()
     @testintersect(Vector{Float64}, Vector{Union{Float64,Float32}}, Bottom)
@@ -803,6 +807,20 @@ function test_intersection()
                    Tuple{Type{T}, T} where T,
                    Tuple{Type{S},S} where S<:Tuple{Any,Vararg{Any,N} where N})
 
+    # part of issue #20450
+    @testintersect(Tuple{Array{Ref{T}, 1}, Array{Pair{M, V}, 1}} where V where T where M,
+                   Tuple{Array{Ref{T}, 1}, Array{Pair{M, T}, 1}, SS} where T where M where SS,
+                   Union{})
+
+    # TODO: these test cases currently hang
+    @test_skip typeintersect(Tuple{Array{Ref{T}, 1}, Array{Pair{M, V}, 1}, Int} where V where T where M,
+                             Tuple{Array{Ref{T}, 1}, Array{Pair{M, T}, 1}, Any} where T where M) ==
+                                 Tuple{Array{Ref{T}, 1}, Array{Pair{M, T}, 1}, Int}
+
+    @test_skip typeintersect(Tuple{Int, Ref{Pair{K,V}}} where V where K,
+                             Tuple{Any, Ref{Pair{T,T}} where T }) ==
+                                 Tuple{Int, Ref{Pair{T,T}} where T }
+
     @test_broken isequal_type(_type_intersect(Tuple{T,T} where T,
                                               Union{Tuple{S,Array{Int64,1}},Tuple{S,Array{S,1}}} where S),
                               Union{Tuple{Vector{Int64},Vector{Int64}},
@@ -847,8 +865,8 @@ test_intersection_properties()
 @test NTuple{170,Matrix{Int}} <: (Tuple{Vararg{Union{Array{T,1},Array{T,2},Array{T,3}}}} where T)
 
 # Issue #12580
-abstract AbstractMyType12580{T}
-immutable MyType12580{T}<:AbstractMyType12580{T} end
+abstract type AbstractMyType12580{T} end
+struct MyType12580{T}<:AbstractMyType12580{T} end
 tpara{A<:AbstractMyType12580}(::Type{A}) = tpara(supertype(A))
 tpara{I}(::Type{AbstractMyType12580{I}}) = I
 @test tpara(MyType12580{true})
@@ -868,7 +886,7 @@ f12721{T<:Type{Int}}(::T) = true
 @test_throws MethodError f12721(Float64)
 
 # implicit "covariant" type parameters:
-type TwoParams{S,T}; x::S; y::T; end
+mutable struct TwoParams{S,T}; x::S; y::T; end
 @test TwoParams{<:Real,<:Number} == (TwoParams{S,T} where S<:Real where T<:Number) ==
       (TwoParams{S,<:Number} where S<:Real) == (TwoParams{<:Real,T} where T<:Number)
 @test TwoParams(3,0im) isa TwoParams{<:Real,<:Number}
@@ -893,3 +911,7 @@ ftwoparams(::TwoParams{<:Real,<:Real}) = 3
 @test TwoParams{Real,Complex}(3,0im) isa TwoParams{>:Int,<:Number}
 @test !(TwoParams(3.0,0im) isa TwoParams{>:Int,<:Number})
 @test !(TwoParams(3,'x') isa TwoParams{>:Int,<:Number})
+
+# supertype operator
+@test !(Int >: Integer)
+@test Integer >: Int

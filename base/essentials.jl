@@ -2,12 +2,12 @@
 
 using Core: CodeInfo
 
-typealias Callable Union{Function,Type}
+const Callable = Union{Function,Type}
 
 const Bottom = Union{}
 
-abstract AbstractSet{T}
-abstract Associative{K,V}
+abstract type AbstractSet{T} end
+abstract type Associative{K,V} end
 
 # The real @inline macro is not available until after array.jl, so this
 # internal macro splices the meta Expr directly into the function body.
@@ -44,6 +44,19 @@ macro generated(f)
     end
 end
 
+"""
+    @eval [mod,] ex
+
+Evaluate an expression with values interpolated into it using `eval`.
+If two arguments are provided, the first is the module to evaluate in.
+"""
+macro eval(ex)
+    :(eval($(current_module()), $(Expr(:quote,ex))))
+end
+macro eval(mod, ex)
+    :(eval($(esc(mod)), $(Expr(:quote,ex))))
+end
+
 argtail(x, rest...) = rest
 tail(x::Tuple) = argtail(x...)
 
@@ -63,7 +76,7 @@ function tuple_type_tail(T::DataType)
     return Tuple{argtail(T.parameters...)...}
 end
 
-tuple_type_cons{S}(::Type{S}, ::Type{Union{}}) = Union{}
+tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
 function tuple_type_cons{S,T<:Tuple}(::Type{S}, ::Type{T})
     @_pure_meta
     Tuple{S, T.parameters...}
@@ -135,7 +148,7 @@ ptr_arg_unsafe_convert{T}(::Type{Ptr{T}}, x) = unsafe_convert(T, x)
 ptr_arg_unsafe_convert(::Type{Ptr{Void}}, x) = x
 
 cconvert(T::Type, x) = convert(T, x) # do the conversion eagerly in most cases
-cconvert{P<:Ptr}(::Type{P}, x) = x # but defer the conversion to Ptr to unsafe_convert
+cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_convert
 unsafe_convert{T}(::Type{T}, x::T) = x # unsafe_convert (like convert) defaults to assuming the convert occurred
 unsafe_convert{T<:Ptr}(::Type{T}, x::T) = x  # to resolve ambiguity with the next method
 unsafe_convert{P<:Ptr}(::Type{P}, x::Ptr) = convert(P, x)
@@ -286,12 +299,12 @@ Very few operations are defined on Colons directly; instead they are converted
 by `to_indices` to an internal vector type (`Base.Slice`) to represent the
 collection of indices they span before being used.
 """
-immutable Colon
+struct Colon
 end
 const (:) = Colon()
 
 # For passing constants through type inference
-immutable Val{T}
+struct Val{T}
 end
 
 # used by interpolating quote and some other things in the front end

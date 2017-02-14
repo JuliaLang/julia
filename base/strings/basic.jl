@@ -32,10 +32,12 @@ done(s::AbstractString,i) = (i > endof(s))
 getindex(s::AbstractString, i::Int) = next(s,i)[1]
 getindex(s::AbstractString, i::Integer) = s[Int(i)]
 getindex(s::AbstractString, i::Colon) = s
-getindex{T<:Integer}(s::AbstractString, r::UnitRange{T}) = s[Int(first(r)):Int(last(r))]
+getindex(s::AbstractString, r::UnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
 # TODO: handle other ranges with stride ±1 specially?
-getindex(s::AbstractString, v::AbstractVector) =
+getindex(s::AbstractString, v::AbstractVector{<:Integer}) =
     sprint(length(v), io->(for i in v; write(io,s[i]) end))
+getindex(s::AbstractString, v::AbstractVector{Bool}) =
+    throw(ArgumentError("logical indexing not supported for strings"))
 
 Symbol(s::AbstractString) = Symbol(String(s))
 
@@ -51,7 +53,7 @@ julia> sizeof("❤")
 """
 sizeof(s::AbstractString) = error("type $(typeof(s)) has no canonical binary representation")
 
-eltype{T<:AbstractString}(::Type{T}) = Char
+eltype(::Type{<:AbstractString}) = Char
 
 """
 ```
@@ -236,10 +238,10 @@ function nextind(s::AbstractString, i::Integer)
 end
 
 checkbounds(s::AbstractString, i::Integer) = start(s) <= i <= endof(s) || throw(BoundsError(s, i))
-checkbounds{T<:Integer}(s::AbstractString, r::Range{T}) = isempty(r) || (minimum(r) >= start(s) && maximum(r) <= endof(s)) || throw(BoundsError(s, r))
-# The following will end up using a deprecated checkbounds, when T is not Integer
-checkbounds{T<:Real}(s::AbstractString, I::AbstractArray{T}) = all(i -> checkbounds(s, i), I)
-checkbounds{T<:Integer}(s::AbstractString, I::AbstractArray{T}) = all(i -> checkbounds(s, i), I)
+checkbounds(s::AbstractString, r::Range{<:Integer}) = isempty(r) || (minimum(r) >= start(s) && maximum(r) <= endof(s)) || throw(BoundsError(s, r))
+# The following will end up using a deprecated checkbounds, when the covariant parameter is not Integer
+checkbounds(s::AbstractString, I::AbstractArray{<:Real}) = all(i -> checkbounds(s, i), I)
+checkbounds(s::AbstractString, I::AbstractArray{<:Integer}) = all(i -> checkbounds(s, i), I)
 
 ind2chr(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end
 chr2ind(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end
@@ -308,7 +310,7 @@ function chr2ind(s::AbstractString, i::Integer)
     end
 end
 
-immutable EachStringIndex{T<:AbstractString}
+struct EachStringIndex{T<:AbstractString}
     s::T
 end
 eachindex(s::AbstractString) = EachStringIndex(s)
@@ -344,7 +346,7 @@ isascii(s::AbstractString) = all(isascii, s)
 
 ## string promotion rules ##
 
-promote_rule{S<:AbstractString,T<:AbstractString}(::Type{S}, ::Type{T}) = String
+promote_rule(::Type{<:AbstractString}, ::Type{<:AbstractString}) = String
 
 """
     isxdigit(c::Char) -> Bool

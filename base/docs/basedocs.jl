@@ -2,7 +2,7 @@
 
 module BaseDocs
 
-immutable Keyword
+struct Keyword
     name :: Symbol
 end
 macro kw_str(text) Keyword(Symbol(text)) end
@@ -76,17 +76,17 @@ made available to the user. For example:
 kw"export"
 
 """
-`abstract` declares a type that cannot be instantiated, and serves only as a node in the
+`abstract type` declares a type that cannot be instantiated, and serves only as a node in the
 type graph, thereby describing sets of related concrete types: those concrete types
 which are their descendants. Abstract types form the conceptual hierarchy which makes
 Julia’s type system more than just a collection of object implementations. For example:
 
-    abstract Number
-    abstract Real <: Number
+    abstract type Number end
+    abstract type Real <: Number end
 
-`abstract Number` has no supertype, whereas `abstract Real` is an abstract subtype of `Number`.
+`Number` has no supertype, whereas `Real` is an abstract subtype of `Number`.
 """
-kw"abstract"
+kw"abstract type"
 
 """
 `module` declares a Module, which is a separate global variable workspace.  Within a
@@ -118,19 +118,19 @@ or a definition of `eval`.  It does still import `Core`.
 kw"baremodule"
 
 """
-`bitstype` declares a concrete type whose data consists of plain old bits. Classic
-examples of bits types are integers and floating-point values. Some example built-in
-bits type declarations:
+`primitive type` declares a concrete type whose data consists only of a series of bits. Classic
+examples of primitive types are integers and floating-point values. Some example built-in
+primitive type declarations:
 
-    bitstype 32 Char
-    bitstype 8  Bool <: Integer
+    primitive type Char 32 end
+    primitive type Bool <: Integer 8 end
 
-The first parameter indicates how many bits of storage the type requires. Currently,
-only sizes that are multiples of 8 bits are supported. The second parameter gives the
-name of the type.  The `Bool` declaration shows how a bits type can be optionally
+The number after the name indicates how many bits of storage the type requires. Currently,
+only sizes that are multiples of 8 bits are supported.
+The `Bool` declaration shows how a primitive type can be optionally
 declared to be a subtype of some supertype.
 """
-kw"bitstype"
+kw"primitive type"
 
 """
 `macro` defines a method to include generated code in the final body of a program. A
@@ -613,52 +613,39 @@ implicitly begin blocks of code. See also `;`.
 kw"begin"
 
 """
-At their most basic, Julia types are specified as a name and a set of fields.
+The most commonly used kind of type in Julia is a struct, specified as a name and a
+set of fields.
 
-    type Point
+    struct Point
         x
         y
     end
 
-Fields can have type restrictions, which may be parametrised:
+Fields can have type restrictions, which may be parameterized:
 
-    type Point{X}
+    struct Point{X}
         x::X
         y::Float64
     end
 
-Type can also declare an abstract super type via `<:` syntax:
+A struct can also declare an abstract super type via `<:` syntax:
 
-    type Point <: AbstractPoint
+    struct Point <: AbstractPoint
         ...
 
-See the manual for more details, such as information on inner constructors.
+Structs are immutable by default; an instance of one of these types cannot
+be modified after construction. Use `mutable struct` instead to declare a
+type whose instances can be modified.
+
+See the manual for more details, such as how to define constructors.
 """
-kw"type"
+kw"struct"
 
 """
-Introduce a new name for an already expressible type. For example, in `base/boot.jl`,
-`UInt` is type aliased to either `UInt64` or `UInt32` as appropriate for the size of
-pointers on the system:
-
-    if Int === Int64
-        typealias UInt UInt64
-    else
-        typealias UInt UInt32
-    end
-
-For parametric types, `typealias` can be convenient for providing names in cases where
-some parameter choices are fixed.  In `base` for example:
-
-    typealias Vector{T} Array{T,1}
+`mutable struct` is similar to  `struct`, but additionally allows the fields of the type
+to be set after construction. See `struct` and the manual for more information.
 """
-kw"typealias"
-
-"""
-`immutable` acts in the same way as `type`, but declares that the fields of the type may
-not be set after construction. See `type` and the manual for more information.
-"""
-kw"immutable"
+kw"mutable struct"
 
 """
     @__LINE__ -> Int

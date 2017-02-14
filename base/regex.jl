@@ -7,7 +7,7 @@ include("pcre.jl")
 const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.NO_UTF_CHECK | PCRE.ALT_BSUX
 const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 
-type Regex
+mutable struct Regex
     pattern::String
     compile_options::UInt32
     match_options::UInt32
@@ -104,7 +104,7 @@ end
 # TODO: map offsets into strings in other encodings back to original indices.
 # or maybe it's better to just fail since that would be quite slow
 
-immutable RegexMatch
+struct RegexMatch
     match::SubString{String}
     captures::Vector{Union{Void,SubString{String}}}
     offset::Int
@@ -226,7 +226,7 @@ search(s::AbstractString, r::Regex, idx::Integer) = throw(ArgumentError(
 ))
 search(s::AbstractString, r::Regex) = search(s,r,start(s))
 
-immutable SubstitutionString{T<:AbstractString} <: AbstractString
+struct SubstitutionString{T<:AbstractString} <: AbstractString
     string::T
 end
 
@@ -309,7 +309,7 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
     end
 end
 
-immutable RegexMatchIterator
+struct RegexMatchIterator
     regex::Regex
     string::String
     overlap::Bool

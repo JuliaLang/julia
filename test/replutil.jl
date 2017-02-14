@@ -56,8 +56,8 @@ method_c2(x::Int32, y::Int32, z::Int32) = true
 method_c2{T<:Real}(x::T, y::T, z::T) = true
 
 Base.show_method_candidates(buf, Base.MethodError(method_c2,(1., 1., 2)))
-color = "\e[0m\nClosest candidates are:\n  method_c2(\e[1m\e[31m::Int32\e[0m, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(\e[1m\e[31m::Int32\e[0m, ::Any...)$cfile$(c2line+1)\n  method_c2{T<:Real}(::T<:Real, ::T<:Real, \e[1m\e[31m::T<:Real\e[0m)$cfile$(c2line+5)\n  ...\e[0m"
-no_color = no_color = "\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(!Matched::Int32, ::Any...)$cfile$(c2line+1)\n  method_c2{T<:Real}(::T<:Real, ::T<:Real, !Matched::T<:Real)$cfile$(c2line+5)\n  ..."
+color = "\e[0m\nClosest candidates are:\n  method_c2(\e[1m\e[31m::Int32\e[0m, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(\e[1m\e[31m::Int32\e[0m, ::Any...)$cfile$(c2line+1)\n  method_c2(::T<:Real, ::T<:Real, \e[1m\e[31m::T<:Real\e[0m)$cfile$(c2line+5)\n  ...\e[0m"
+no_color = no_color = "\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(!Matched::Int32, ::Any...)$cfile$(c2line+1)\n  method_c2(::T<:Real, ::T<:Real, !Matched::T<:Real) where T<:Real$cfile$(c2line+5)\n  ..."
 test_have_color(buf, color, no_color)
 
 c3line = @__LINE__ + 1
@@ -86,7 +86,7 @@ Base.show_method_candidates(buf, MethodError(method_c5,(Int32,)))
 test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c5(\e[1m\e[31m::Type{Float64}\e[0m)$cfile$c5line\e[0m",
                 "\nClosest candidates are:\n  method_c5(!Matched::Type{Float64})$cfile$c5line")
 
-type Test_type end
+mutable struct Test_type end
 test_type = Test_type()
 for f in [getindex, setindex!]
     Base.show_method_candidates(buf, MethodError(f,(test_type, 1,1)))
@@ -94,7 +94,7 @@ for f in [getindex, setindex!]
 end
 
 PR16155line = @__LINE__ + 2
-type PR16155
+mutable struct PR16155
     a::Int64
     b
 end
@@ -102,12 +102,12 @@ PR16155line2 = @__LINE__ + 1
 (::Type{T}){T<:PR16155}(arg::Any) = "replace call-to-convert method from sysimg"
 
 Base.show_method_candidates(buf, MethodError(PR16155,(1.0, 2.0, Int64(3))))
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(\e[1m\e[31m::Int64\e[0m, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155{T<:$(curmod_prefix)PR16155}(::Any)$cfile$PR16155line2\n  ...\e[0m",
-                     "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(!Matched::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155{T<:$(curmod_prefix)PR16155}(::Any)$cfile$PR16155line2\n  ...")
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(\e[1m\e[31m::Int64\e[0m, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\n  ...\e[0m",
+                     "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(!Matched::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\n  ...")
 
 Base.show_method_candidates(buf, MethodError(PR16155,(Int64(3), 2.0, Int64(3))))
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155{T<:$(curmod_prefix)PR16155}(::Any)$cfile$PR16155line2\n  ...\e[0m",
-                     "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155{T<:$(curmod_prefix)PR16155}(::Any)$cfile$PR16155line2\n  ...")
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\n  ...\e[0m",
+                     "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\n  ...")
 
 c6line = @__LINE__
 method_c6(; x=1) = x
@@ -215,9 +215,9 @@ macro except_stackframe(expr, err_type)
 end
 
 # Pull Request 11007
-abstract InvokeType11007
-abstract MethodType11007 <: InvokeType11007
-type InstanceType11007 <: MethodType11007
+abstract type InvokeType11007 end
+abstract type MethodType11007 <: InvokeType11007 end
+mutable struct InstanceType11007 <: MethodType11007
 end
 let
     f11007(::MethodType11007) = nothing
@@ -252,13 +252,13 @@ let
     @test contains(err_str, "column vector")
 end
 
-abstract T11007
+abstract type T11007 end
 let
     err_str = @except_str T11007() MethodError
     @test contains(err_str, "no method matching $(curmod_prefix)T11007()")
 end
 
-immutable TypeWithIntParam{T <: Integer} end
+struct TypeWithIntParam{T <: Integer} end
 let undefvar
     err_str = @except_strbt sqrt(-1) DomainError
     @test contains(err_str, "Try sqrt(complex(x)).")
@@ -319,9 +319,9 @@ let
 end
 
 # Issue #14884
-bitstype 8 EightBitType
-bitstype 8 EightBitTypeT{T}
-immutable FunctionLike <: Function; end
+primitive type EightBitType 8 end
+primitive type EightBitTypeT{T} 8 end
+struct FunctionLike <: Function; end
 let err_str,
     i = reinterpret(EightBitType, 0x54),
     j = reinterpret(EightBitTypeT{Int32}, 0x54)
@@ -373,7 +373,7 @@ let err_str,
     @test sprint(show, which(EightBitType, Tuple{})) == "$(curmod_prefix)EightBitType() in $curmod_str at $sp:$(method_defs_lineno + 2)"
     @test sprint(show, which(reinterpret(EightBitType, 0x54), Tuple{})) == "(::$(curmod_prefix)EightBitType)() in $curmod_str at $sp:$(method_defs_lineno + 3)"
     @test sprint(show, which(EightBitTypeT, Tuple{})) == "(::Type{$(curmod_prefix)EightBitTypeT})() in $curmod_str at $sp:$(method_defs_lineno + 4)"
-    @test sprint(show, which(EightBitTypeT{Int32}, Tuple{})) == "(::Type{$(curmod_prefix)EightBitTypeT{T}}){T}() in $curmod_str at $sp:$(method_defs_lineno + 5)"
+    @test sprint(show, which(EightBitTypeT{Int32}, Tuple{})) == "(::Type{$(curmod_prefix)EightBitTypeT{T}})() where T in $curmod_str at $sp:$(method_defs_lineno + 5)"
     @test sprint(show, which(reinterpret(EightBitTypeT{Int32}, 0x54), Tuple{})) == "(::$(curmod_prefix)EightBitTypeT)() in $curmod_str at $sp:$(method_defs_lineno + 6)"
     @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{Vararg{Any}})), "@doc(x...) in Core at boot.jl:")
     @test startswith(sprint(show, which(FunctionLike(), Tuple{})), "(::$(curmod_prefix)FunctionLike)() in $curmod_str at $sp:$(method_defs_lineno + 7)")
@@ -381,21 +381,21 @@ let err_str,
     @test stringmime("text/plain", Core.arraysize) == "arraysize (built-in function)"
 
     err_str = @except_stackframe Symbol() ErrorException
-    @test err_str == " in Symbol() at $sn:$(method_defs_lineno + 0)"
+    @test err_str == "Symbol() at $sn:$(method_defs_lineno + 0)"
     err_str = @except_stackframe :a() ErrorException
-    @test err_str == " in (::Symbol)() at $sn:$(method_defs_lineno + 1)"
+    @test err_str == "(::Symbol)() at $sn:$(method_defs_lineno + 1)"
     err_str = @except_stackframe EightBitType() ErrorException
-    @test err_str == " in $(curmod_prefix)EightBitType() at $sn:$(method_defs_lineno + 2)"
+    @test err_str == "$(curmod_prefix)EightBitType() at $sn:$(method_defs_lineno + 2)"
     err_str = @except_stackframe i() ErrorException
-    @test err_str == " in (::$(curmod_prefix)EightBitType)() at $sn:$(method_defs_lineno + 3)"
+    @test err_str == "(::$(curmod_prefix)EightBitType)() at $sn:$(method_defs_lineno + 3)"
     err_str = @except_stackframe EightBitTypeT() ErrorException
-    @test err_str == " in $(curmod_prefix)EightBitTypeT() at $sn:$(method_defs_lineno + 4)"
+    @test err_str == "$(curmod_prefix)EightBitTypeT() at $sn:$(method_defs_lineno + 4)"
     err_str = @except_stackframe EightBitTypeT{Int32}() ErrorException
-    @test err_str == " in $(curmod_prefix)EightBitTypeT{Int32}() at $sn:$(method_defs_lineno + 5)"
+    @test err_str == "$(curmod_prefix)EightBitTypeT{Int32}() at $sn:$(method_defs_lineno + 5)"
     err_str = @except_stackframe j() ErrorException
-    @test err_str == " in (::$(curmod_prefix)EightBitTypeT{Int32})() at $sn:$(method_defs_lineno + 6)"
+    @test err_str == "(::$(curmod_prefix)EightBitTypeT{Int32})() at $sn:$(method_defs_lineno + 6)"
     err_str = @except_stackframe FunctionLike()() ErrorException
-    @test err_str == " in (::$(curmod_prefix)FunctionLike)() at $sn:$(method_defs_lineno + 7)"
+    @test err_str == "(::$(curmod_prefix)FunctionLike)() at $sn:$(method_defs_lineno + 7)"
 end
 
 # Issue #13032

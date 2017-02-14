@@ -16,7 +16,7 @@ let f = Any[Core.Intrinsics.add_int, Core.Intrinsics.sub_int]
 end
 
 # issue #4581
-bitstype 64 Date4581{T}
+primitive type Date4581{T} 64 end
 let
     x = Core.Intrinsics.bitcast(Date4581{Int}, Int64(1234))
     xs = Date4581[x]
@@ -34,8 +34,8 @@ let d = Core.Intrinsics.bitcast(Date4581{Int}, Int64(1))
     @test isa(f6591(d), Date4581)
 end
 
-# test functionality of non-power-of-2 bitstype constants
-bitstype 24 Int24
+# test functionality of non-power-of-2 primitive type constants
+primitive type Int24 24 end
 Int24(x::Int) = Core.Intrinsics.trunc_int(Int24, x)
 Int(x::Int24) = Core.Intrinsics.zext_int(Int, x)
 let x, y, f

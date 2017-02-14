@@ -5,15 +5,15 @@
 ###### Generic (map)reduce functions ######
 
 if Int === Int32
-typealias SmallSigned Union{Int8,Int16}
-typealias SmallUnsigned Union{UInt8,UInt16}
+const SmallSigned = Union{Int8,Int16}
+const SmallUnsigned = Union{UInt8,UInt16}
 else
-typealias SmallSigned Union{Int8,Int16,Int32}
-typealias SmallUnsigned Union{UInt8,UInt16,UInt32}
+const SmallSigned = Union{Int8,Int16,Int32}
+const SmallUnsigned = Union{UInt8,UInt16,UInt32}
 end
 
-typealias CommonReduceResult Union{UInt64,UInt128,Int64,Int128,Float32,Float64}
-typealias WidenReduceResult Union{SmallSigned, SmallUnsigned, Float16}
+const CommonReduceResult = Union{UInt64,UInt128,Int64,Int128,Float32,Float64}
+const WidenReduceResult = Union{SmallSigned, SmallUnsigned, Float16}
 
 # r_promote_type: promote T to the type of reduce(op, ::Array{T})
 # (some "extra" methods are required here to avoid ambiguity warnings)
@@ -272,7 +272,7 @@ function _mapreduce{T}(f, op, ::LinearFast, A::AbstractArray{T})
     end
 end
 
-_mapreduce{T}(f, op, ::LinearSlow, A::AbstractArray{T}) = mapfoldl(f, op, A)
+_mapreduce(f, op, ::LinearSlow, A::AbstractArray) = mapfoldl(f, op, A)
 
 mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, linearindexing(A), A)
 mapreduce(f, op, a::Number) = f(a)
@@ -357,29 +357,30 @@ sum(a::AbstractArray{Bool}) = countnz(a)
 """
     sum_kbn(A)
 
-Returns the sum of all array elements, using the Kahan-Babuska-Neumaier compensated
+Returns the sum of all elements of `A`, using the Kahan-Babuska-Neumaier compensated
 summation algorithm for additional accuracy.
 """
-function sum_kbn{T<:AbstractFloat}(A::AbstractArray{T})
+function sum_kbn(A)
+    T = _default_eltype(typeof(A))
     c = r_promote(+, zero(T)::T)
-    if isempty(A)
+    i = start(A)
+    if done(A, i)
         return c
     end
-    inds = linearindices(A)
-    s = A[first(inds)] + c
-    for i in first(inds)+1:last(inds)
-        @inbounds Ai = A[i]
+    Ai, i = next(A, i)
+    s = Ai - c
+    while !(done(A, i))
+        Ai, i = next(A, i)
         t = s + Ai
         if abs(s) >= abs(Ai)
-            c += ((s-t) + Ai)
+            c -= ((s-t) + Ai)
         else
-            c += ((Ai-t) + s)
+            c -= ((Ai-t) + s)
         end
         s = t
     end
-    s + c
+    s - c
 end
-
 
 ## prod
 """
@@ -630,6 +631,31 @@ const ∈ = in
 ∋(itr, x)= ∈(x, itr)
 ∌(itr, x)=!∋(itr, x)
 
+"""
+    contains(fun, itr, x) -> Bool
+
+Returns `true` if there is at least one element `y` in `itr` such that `fun(y,x)` is `true`.
+
+```jldoctest
+julia> vec = [ 10, 100, 200 ]
+3-element Array{Int64,1}:
+  10
+ 100
+ 200
+
+julia> contains(==, vec, 200)
+true
+
+julia> contains(==, vec, 300)
+false
+
+julia> contains(>, vec, 100)
+true
+
+julia> contains(>, vec, 200)
+false
+```
+"""
 function contains(eq::Function, itr, x)
     for y in itr
         eq(y, x) && return true

@@ -18,10 +18,10 @@ const unsigned int host_char_bit = 8;
 JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
 {
     JL_TYPECHK(bitcast, datatype, ty);
-    if (!jl_is_leaf_type(ty) || !jl_is_bitstype(ty))
-        jl_error("bitcast: target type not a leaf bitstype");
-    if (!jl_is_bitstype(jl_typeof(v)))
-        jl_error("bitcast: value not a bitstype");
+    if (!jl_is_leaf_type(ty) || !jl_is_primitivetype(ty))
+        jl_error("bitcast: target type not a leaf primitive type");
+    if (!jl_is_primitivetype(jl_typeof(v)))
+        jl_error("bitcast: value not a primitive type");
     if (jl_datatype_size(jl_typeof(v)) != jl_datatype_size(ty))
         jl_error("bitcast: argument size does not match size of target type");
     if (ty == jl_typeof(v))
@@ -321,10 +321,10 @@ jl_value_t *jl_iintrinsic_1(jl_value_t *ty, jl_value_t *a, const char *name,
                             char (*getsign)(void*, unsigned),
                             jl_value_t *(*lambda1)(jl_value_t*, void*, unsigned, unsigned, const void*), const void *list)
 {
-    if (!jl_is_bitstype(jl_typeof(a)))
-        jl_errorf("%s: value is not a bitstype", name);
-    if (!jl_is_bitstype(ty))
-        jl_errorf("%s: type is not a bitstype", name);
+    if (!jl_is_primitivetype(jl_typeof(a)))
+        jl_errorf("%s: value is not a primitive type", name);
+    if (!jl_is_primitivetype(ty))
+        jl_errorf("%s: type is not a primitive type", name);
     void *pa = jl_data_ptr(a);
     unsigned isize = jl_datatype_size(jl_typeof(a));
     unsigned isize2 = next_power_of_two(isize);
@@ -390,10 +390,10 @@ static inline jl_value_t *jl_intrinsic_cvt(jl_value_t *ty, jl_value_t *a, const 
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *aty = jl_typeof(a);
-    if (!jl_is_bitstype(aty))
-        jl_errorf("%s: value is not a bitstype", name);
-    if (!jl_is_bitstype(ty))
-        jl_errorf("%s: type is not a bitstype", name);
+    if (!jl_is_primitivetype(aty))
+        jl_errorf("%s: value is not a primitive type", name);
+    if (!jl_is_primitivetype(ty))
+        jl_errorf("%s: type is not a primitive type", name);
     void *pa = jl_data_ptr(a);
     unsigned isize = jl_datatype_size(aty);
     unsigned osize = jl_datatype_size(ty);
@@ -429,10 +429,10 @@ typedef void (fintrinsic_op1)(unsigned, void*, void*);
 static inline jl_value_t *jl_fintrinsic_1(jl_value_t *ty, jl_value_t *a, const char *name, fintrinsic_op1 *floatop, fintrinsic_op1 *doubleop)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (!jl_is_bitstype(jl_typeof(a)))
-        jl_errorf("%s: value is not a bitstype", name);
-    if (!jl_is_bitstype(ty))
-        jl_errorf("%s: type is not a bitstype", name);
+    if (!jl_is_primitivetype(jl_typeof(a)))
+        jl_errorf("%s: value is not a primitive type", name);
+    if (!jl_is_primitivetype(ty))
+        jl_errorf("%s: type is not a primitive type", name);
     unsigned sz2 = jl_datatype_size(ty);
     jl_value_t *newv = jl_gc_alloc(ptls, sz2, ty);
     void *pa = jl_data_ptr(a), *pr = jl_data_ptr(newv);
@@ -541,11 +541,11 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
     if (tyb != ty) {
         if (!cvtb)
             jl_errorf("%s: types of a and b must match", name);
-        if (!jl_is_bitstype(tyb))
-            jl_errorf("%s: b is not a bitstypes", name);
+        if (!jl_is_primitivetype(tyb))
+            jl_errorf("%s: b is not a primitive type", name);
     }
-    if (!jl_is_bitstype(ty))
-        jl_errorf("%s: a is not a bitstypes", name);
+    if (!jl_is_primitivetype(ty))
+        jl_errorf("%s: a is not a primitive type", name);
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b);
     unsigned sz = jl_datatype_size(ty);
     unsigned sz2 = next_power_of_two(sz);
@@ -627,8 +627,8 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
     jl_value_t *ty = jl_typeof(a); \
     if (jl_typeof(b) != ty) \
         jl_error(#name ": types of a and b must match"); \
-    if (!jl_is_bitstype(ty)) \
-        jl_error(#name ": values are not bitstypes"); \
+    if (!jl_is_primitivetype(ty)) \
+        jl_error(#name ": values are not primitive types"); \
     int sz = jl_datatype_size(ty); \
     jl_value_t *newv = jl_gc_alloc(ptls, sz, ty);          \
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b), *pr = jl_data_ptr(newv); \
@@ -654,8 +654,8 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
     jl_value_t *ty = jl_typeof(a); \
     if (jl_typeof(b) != ty) \
         jl_error(#name ": types of a and b must match"); \
-    if (!jl_is_bitstype(ty)) \
-        jl_error(#name ": values are not bitstypes"); \
+    if (!jl_is_primitivetype(ty)) \
+        jl_error(#name ": values are not primitive types"); \
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b); \
     int sz = jl_datatype_size(ty); \
     int cmp; \
@@ -682,8 +682,8 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) 
     jl_value_t *ty = jl_typeof(a); \
     if (jl_typeof(b) != ty || jl_typeof(c) != ty) \
         jl_error(#name ": types of a, b, and c must match"); \
-    if (!jl_is_bitstype(ty)) \
-        jl_error(#name ": values are not bitstypes"); \
+    if (!jl_is_primitivetype(ty)) \
+        jl_error(#name ": values are not primitive types"); \
     int sz = jl_datatype_size(ty);                                      \
     jl_value_t *newv = jl_gc_alloc(ptls, sz, ty);                       \
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b), *pc = jl_data_ptr(c), *pr = jl_data_ptr(newv); \
@@ -870,8 +870,8 @@ cvt_iintrinsic_checked(LLVMTrunc, check_trunc_uint, checked_trunc_uint)
 JL_DLLEXPORT jl_value_t *jl_check_top_bit(jl_value_t *a)
 {
     jl_value_t *ty = jl_typeof(a);
-    if (!jl_is_bitstype(ty))
-        jl_error("check_top_bit: value is not a bitstype");
+    if (!jl_is_primitivetype(ty))
+        jl_error("check_top_bit: value is not a primitive type");
     if (signbitbyte(jl_data_ptr(a), jl_datatype_size(ty)))
         jl_throw(jl_inexact_exception);
     return a;
@@ -929,10 +929,10 @@ JL_DLLEXPORT jl_value_t *jl_powi_llvm(jl_value_t *a, jl_value_t *b)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *ty = jl_typeof(a);
-    if (!jl_is_bitstype(ty))
-        jl_error("powi_llvm: a is not a bitstype");
-    if (!jl_is_bitstype(jl_typeof(b)) || jl_datatype_size(jl_typeof(b)) != 4)
-        jl_error("powi_llvm: b is not a 32-bit bitstype");
+    if (!jl_is_primitivetype(ty))
+        jl_error("powi_llvm: a is not a primitive type");
+    if (!jl_is_primitivetype(jl_typeof(b)) || jl_datatype_size(jl_typeof(b)) != 4)
+        jl_error("powi_llvm: b is not a 32-bit primitive type");
     int sz = jl_datatype_size(ty);
     jl_value_t *newv = jl_gc_alloc(ptls, sz, ty);
     void *pa = jl_data_ptr(a), *pr = jl_data_ptr(newv);

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-immutable Rational{T<:Integer} <: Real
+struct Rational{T<:Integer} <: Real
     num::T
     den::T
 
@@ -23,6 +23,14 @@ end
     //(num, den)
 
 Divide two integers or rational numbers, giving a `Rational` result.
+
+```jldoctest
+julia> 3 // 5
+3//5
+
+julia> (3 // 5) // (2 // 1)
+3//10
+```
 """
 //(n::Integer,  d::Integer ) = Rational(n,d)
 
@@ -85,7 +93,7 @@ end
 convert(::Type{Rational}, x::Float64) = convert(Rational{Int64}, x)
 convert(::Type{Rational}, x::Float32) = convert(Rational{Int}, x)
 
-big{T<:Integer}(z::Complex{Rational{T}}) = Complex{Rational{BigInt}}(z)
+big(z::Complex{<:Rational{<:Integer}}) = Complex{Rational{BigInt}}(z)
 
 promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
 promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
@@ -177,6 +185,14 @@ rationalize(x::AbstractFloat; kvs...) = rationalize(Int, x; kvs...)
     numerator(x)
 
 Numerator of the rational representation of `x`.
+
+```jldoctest
+julia> numerator(2//3)
+2
+
+julia> numerator(4)
+4
+```
 """
 numerator(x::Integer) = x
 numerator(x::Rational) = x.num
@@ -185,6 +201,14 @@ numerator(x::Rational) = x.num
     denominator(x)
 
 Denominator of the rational representation of `x`.
+
+```jldoctest
+julia> denominator(2//3)
+3
+
+julia> denominator(4)
+1
+```
 """
 denominator(x::Integer) = one(x)
 denominator(x::Rational) = x.den
@@ -225,7 +249,7 @@ function *(x::Rational, y::Rational)
     checked_mul(xn,yn) // checked_mul(xd,yd)
 end
 /(x::Rational, y::Rational) = x//y
-/{T<:Union{Integer,Rational}}(x::Rational, y::Complex{T}) = x//y
+/(x::Rational, y::Complex{<:Union{Integer,Rational}}) = x//y
 
 fma(x::Rational, y::Rational, z::Rational) = x*y+z
 
@@ -395,8 +419,8 @@ end
 ^{T<:AbstractFloat}(x::T, y::Rational) = x^convert(T,y)
 ^{T<:AbstractFloat}(x::Complex{T}, y::Rational) = x^convert(T,y)
 
-^{T<:Rational}(z::Complex{T}, n::Bool) = n ? z : one(z) # to resolve ambiguity
-function ^{T<:Rational}(z::Complex{T}, n::Integer)
+^(z::Complex{<:Rational}, n::Bool) = n ? z : one(z) # to resolve ambiguity
+function ^(z::Complex{<:Rational}, n::Integer)
     n >= 0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
 end
 

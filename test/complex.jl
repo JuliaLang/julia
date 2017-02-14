@@ -10,8 +10,8 @@ for T in (Int64, Float64)
 end
 
 #showcompact
-@test sprint(io -> showcompact(io,complex(1,0))) == "1+0im"
-@test sprint(io -> show(io,complex(true,true))) == "Complex(true,true)"
+@test sprint(showcompact, complex(1, 0)) == "1+0im"
+@test sprint(show, complex(true, true)) == "Complex(true,true)"
 
 @testset "arithmetic" begin
     @testset for T in (Float16, Float32, Float64, BigFloat)

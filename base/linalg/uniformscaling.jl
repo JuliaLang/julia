@@ -4,7 +4,7 @@ import Base: copy, ctranspose, getindex, show, transpose, one, zero, inv,
              @_pure_meta, hcat, vcat, hvcat
 import Base.LinAlg: SingularException
 
-immutable UniformScaling{T<:Number}
+struct UniformScaling{T<:Number}
     λ::T
 end
 
@@ -39,6 +39,8 @@ ctranspose(J::UniformScaling) = UniformScaling(conj(J.λ))
 
 one{T}(::Type{UniformScaling{T}}) = UniformScaling(one(T))
 one{T}(J::UniformScaling{T}) = one(UniformScaling{T})
+oneunit{T}(::Type{UniformScaling{T}}) = UniformScaling(oneunit(T))
+oneunit{T}(J::UniformScaling{T}) = oneunit(UniformScaling{T})
 zero{T}(::Type{UniformScaling{T}}) = UniformScaling(zero(T))
 zero{T}(J::UniformScaling{T}) = zero(UniformScaling{T})
 
@@ -48,7 +50,7 @@ issymmetric(::UniformScaling) = true
 ishermitian(J::UniformScaling) = isreal(J.λ)
 
 (+)(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ+J2.λ)
-(+){T}(B::BitArray{2},J::UniformScaling{T}) = Array(B) + J
+(+)(B::BitArray{2}, J::UniformScaling)      = Array(B) + J
 (+)(J::UniformScaling, B::BitArray{2})      = J + Array(B)
 (+)(J::UniformScaling, A::AbstractMatrix)   = A + J
 

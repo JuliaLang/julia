@@ -5,6 +5,11 @@
     NTuple{N, T}
 
 A compact way of representing the type for a tuple of length `N` where all elements are of type `T`.
+
+```jldoctest
+julia> isa((1, 2, 3, 4, 5, 6), NTuple{6, Int})
+true
+```
 """
 NTuple
 
@@ -15,7 +20,7 @@ endof(t::Tuple) = length(t)
 size(t::Tuple, d) = d==1 ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
 getindex(t::Tuple, i::Int) = getfield(t, i)
 getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i))
-getindex{T}(t::Tuple, r::AbstractArray{T,1}) = tuple([t[ri] for ri in r]...)
+getindex(t::Tuple, r::AbstractArray{<:Any,1}) = tuple([t[ri] for ri in r]...)
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t,find(b)) : throw(BoundsError(t, b))
 
 # returns new tuple; N.B.: becomes no-op if i is out-of-bounds
@@ -57,7 +62,7 @@ first(t::Tuple) = t[1]
 # eltype
 
 eltype(::Type{Tuple{}}) = Bottom
-eltype{E, T <: Tuple{Vararg{E}}}(::Type{T}) = E
+eltype(::Type{<:Tuple{Vararg{E}}}) where {E} = E
 
 # version of tail that doesn't throw on empty tuples (used in array indexing)
 safe_tail(t::Tuple) = tail(t)
@@ -83,6 +88,11 @@ end
 
 Create a tuple of length `n`, computing each element as `f(i)`,
 where `i` is the index of the element.
+
+```jldoctest
+julia> ntuple(i -> 2*i, 4)
+(2, 4, 6, 8)
+```
 """
 ntuple(f::Function, n::Integer) =
     n <= 0 ? () :
@@ -116,10 +126,10 @@ map(f, t::Tuple{Any, Any})      = (f(t[1]), f(t[2]))
 map(f, t::Tuple{Any, Any, Any}) = (f(t[1]), f(t[2]), f(t[3]))
 map(f, t::Tuple)                = (@_inline_meta; (f(t[1]), map(f,tail(t))...))
 # stop inlining after some number of arguments to avoid code blowup
-typealias Any16{N}   Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
-                           Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
-typealias All16{T,N} Tuple{T,T,T,T,T,T,T,T,
-                           T,T,T,T,T,T,T,T,Vararg{T,N}}
+Any16{N}   = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
+                   Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
+All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
+                   T,T,T,T,T,T,T,T,Vararg{T,N}}
 function map(f, t::Any16)
     n = length(t)
     A = Array{Any}(n)

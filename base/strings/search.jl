@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-typealias Chars Union{Char,Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}
+const Chars = Union{Char,Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}
 
 """
     search(string::AbstractString, chars::Chars, [start::Integer])

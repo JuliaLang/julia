@@ -42,20 +42,20 @@ For example, consider the following definitions of a function `addone` that retu
 argument:
 
 ```julia
-addone(x::Int) = x + 1             # works only for Int
-addone(x::Integer) = x + one(x)    # any integer type
-addone(x::Number) = x + one(x)     # any numeric type
-addone(x) = x + one(x)             # any type supporting + and one
+addone(x::Int) = x + 1                 # works only for Int
+addone(x::Integer) = x + oneunit(x)    # any integer type
+addone(x::Number) = x + oneunit(x)     # any numeric type
+addone(x) = x + oneunit(x)             # any type supporting + and oneunit
 ```
 
-The last definition of `addone` handles any type supporting [`one()`](@ref) (which returns 1 in
+The last definition of `addone` handles any type supporting [`oneunit`](@ref) (which returns 1 in
 the same type as `x`, which avoids unwanted type promotion) and the [`+`](@ref) function with
 those arguments. The key thing to realize is that there is *no performance penalty* to defining
-*only* the general `addone(x) = x + one(x)`, because Julia will automatically compile specialized
+*only* the general `addone(x) = x + oneunit(x)`, because Julia will automatically compile specialized
 versions as needed. For example, the first time you call `addone(12)`, Julia will automatically
-compile a specialized `addone` function for `x::Int` arguments, with the call to [`one()`](@ref)
+compile a specialized `addone` function for `x::Int` arguments, with the call to `oneunit`
 replaced by its inlined value `1`. Therefore, the first three definitions of `addone` above are
-completely redundant.
+completely redundant with the fourth definition.
 
 ## Handle excess argument diversity in the caller
 
@@ -154,7 +154,7 @@ uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
 
 ## Use naming conventions consistent with Julia's `base/`
 
-  * modules and type names use capitalization and camel case: `module SparseArrays`, `immutable UnitRange`.
+  * modules and type names use capitalization and camel case: `module SparseArrays`, `struct UnitRange`.
   * functions are lowercase ([`maximum()`](@ref), [`convert()`](@ref)) and, when readable, with multiple
     words squashed together ([`isequal()`](@ref), [`haskey()`](@ref)). When necessary, use underscores
     as word separators. Underscores are also used to indicate a combination of concepts ([`remotecall_fetch()`](@ref)
@@ -225,7 +225,7 @@ it.
 The preferred style is to use instances by default, and only add methods involving `Type{MyType}`
 later if they become necessary to solve some problem.
 
-If a type is effectively an enumeration, it should be defined as a single (ideally `immutable`)
+If a type is effectively an enumeration, it should be defined as a single (ideally immutable struct or primitive)
 type, with the enumeration values being instances of it. Constructors and conversions can check
 whether values are valid. This design is preferred over making the enumeration an abstract type,
 with the "values" as subtypes.

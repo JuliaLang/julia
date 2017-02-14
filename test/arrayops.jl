@@ -558,7 +558,7 @@ D = cat(3, B, B)
 @test unique(D, 3) == cat(3, B)
 
 # With hash collisions
-immutable HashCollision
+struct HashCollision
     x::Float64
 end
 Base.hash(::HashCollision, h::UInt) = h
@@ -586,6 +586,11 @@ end
     A3 = reshape(repmat([1 2 3 4],UInt32(6),UInt32(1)),2,3,4)
     @test isequal(cumsum(A,3),A3)
     @test repmat([1,2,3,4], UInt32(1)) == [1,2,3,4]
+    @test repmat([1 2], UInt32(2)) == repmat([1 2], UInt32(2), UInt32(1))
+
+    # issue 20564
+    @test_throws MethodError repmat(1, 2, 3)
+    @test_throws MethodError repmat([1, 2], 1, 2, 3)
 
 
     R = repeat([1, 2])
@@ -1067,8 +1072,17 @@ end
 @testset "deleteat!" begin
     for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
                    8:9, 9:10, 6:9, 7:10]
+        # integer indexing with AbstractArray
         a = [1:10;]; acopy = copy(a)
         @test deleteat!(a, idx) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
+
+        # integer indexing with non-AbstractArray iterable
+        a = [1:10;]; acopy = copy(a)
+        @test deleteat!(a, (i for i in idx)) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
+
+        # logical indexing
+        a = [1:10;]; acopy = copy(a)
+        @test deleteat!(a, map(i -> i in idx, 1:length(a))) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
     end
     a = [1:10;]
     @test deleteat!(a, 11:10) == [1:10;]
@@ -1077,6 +1091,9 @@ end
     @test_throws BoundsError deleteat!(a, [1,13])
     @test_throws ArgumentError deleteat!(a, [5,3])
     @test_throws BoundsError deleteat!(a, 5:20)
+    @test_throws BoundsError deleteat!(a, Bool[])
+    @test_throws BoundsError deleteat!(a, [true])
+    @test_throws BoundsError deleteat!(a, falses(11))
 end
 
 @testset "comprehensions" begin
@@ -1602,7 +1619,7 @@ module RetTypeDecl
     using Base.Test
     import Base: +, *, broadcast, convert
 
-    immutable MeterUnits{T,P} <: Number
+    struct MeterUnits{T,P} <: Number
         val::T
     end
     MeterUnits{T}(val::T, pow::Int) = MeterUnits{T,pow}(val)
@@ -1644,7 +1661,7 @@ end
 ###
 ### LinearSlow workout
 ###
-immutable LinSlowMatrix{T} <: DenseArray{T,2}
+struct LinSlowMatrix{T} <: DenseArray{T,2}
     data::Matrix{T}
 end
 
@@ -1734,7 +1751,7 @@ x13250[UInt(1):UInt(2)] = 1.0
 @test x13250[2] == 1.0
 @test x13250[3] == 0.0
 
-immutable SquaresVector <: AbstractArray{Int, 1}
+struct SquaresVector <: AbstractArray{Int, 1}
     count::Int
 end
 Base.size(S::SquaresVector) = (S.count,)
@@ -1800,7 +1817,7 @@ end
 @inferred map(Int8, Int[0])
 
 # make sure @inbounds isn't used too much
-type OOB_Functor{T}; a::T; end
+mutable struct OOB_Functor{T}; a::T; end
 (f::OOB_Functor)(i::Int) = f.a[i]
 let f = OOB_Functor([1,2])
     @test_throws BoundsError map(f, [1,2,3,4,5])
@@ -1863,8 +1880,8 @@ end
     @test typeof(conj(B)) == Vector{Float64}
     @test typeof(conj(C)) == Vector{Complex{Int}}
 
-    @test ~A == [9,-1,-4]
-    @test typeof(~A) == Vector{Int}
+    @test .~A == [9,-1,-4]
+    @test typeof(.~A) == Vector{Int}
 end
 
 @testset "issue #16247" begin
@@ -1879,7 +1896,7 @@ module AutoRetType
 
 using Base.Test
 
-immutable Foo end
+struct Foo end
 for op in (:+, :*, :÷, :%, :<<, :>>, :-, :/, :\, ://, :^)
     @eval import Base.$(op)
     @eval $(op)(::Foo, ::Foo) = Foo()
@@ -2030,7 +2047,7 @@ end
 end
 
 # issue #11053
-type T11053
+mutable struct T11053
     a::Float64
 end
 Base.:*(a::T11053, b::Real) = T11053(a.a*b)

@@ -32,13 +32,13 @@ import ..LineEdit:
     accept_result,
     terminal
 
-abstract AbstractREPL
+abstract type AbstractREPL end
 
 answer_color(::AbstractREPL) = ""
 
 const JULIA_PROMPT = "julia> "
 
-type REPLBackend
+mutable struct REPLBackend
     "channel for AST"
     repl_channel::Channel
     "channel for results: (value, nothing) or (error, backtrace)"
@@ -110,7 +110,7 @@ function ip_matches_func(ip, func::Symbol)
     return false
 end
 
-immutable REPLDisplay{R<:AbstractREPL} <: Display
+struct REPLDisplay{R<:AbstractREPL} <: Display
     repl::R
 end
 
@@ -167,7 +167,7 @@ function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::B
 end
 
 # A reference to a backend
-immutable REPLBackendRef
+struct REPLBackendRef
     repl_channel::Channel
     response_channel::Channel
 end
@@ -183,7 +183,7 @@ end
 
 ## BasicREPL ##
 
-type BasicREPL <: AbstractREPL
+mutable struct BasicREPL <: AbstractREPL
     terminal::TextTerminal
     waserror::Bool
     BasicREPL(t) = new(t,false)
@@ -241,7 +241,7 @@ end
 
 ## LineEditREPL ##
 
-type LineEditREPL <: AbstractREPL
+mutable struct LineEditREPL <: AbstractREPL
     t::TextTerminal
     hascolor::Bool
     prompt_color::String
@@ -275,11 +275,11 @@ LineEditREPL(t::TextTerminal, envcolors = false) =  LineEditREPL(t,
                                               Base.text_colors[:yellow],
                                               false, false, false, envcolors)
 
-type REPLCompletionProvider <: CompletionProvider; end
+mutable struct REPLCompletionProvider <: CompletionProvider; end
 
-type ShellCompletionProvider <: CompletionProvider; end
+mutable struct ShellCompletionProvider <: CompletionProvider; end
 
-immutable LatexCompletions <: CompletionProvider; end
+struct LatexCompletions <: CompletionProvider; end
 
 beforecursor(buf::IOBuffer) = String(buf.data[1:buf.ptr-1])
 
@@ -306,7 +306,7 @@ function complete_line(c::LatexCompletions, s)
 end
 
 
-type REPLHistoryProvider <: HistoryProvider
+mutable struct REPLHistoryProvider <: HistoryProvider
     history::Array{String,1}
     history_file
     start_idx::Int
@@ -633,7 +633,7 @@ function respond(f, repl, main; pass_empty = false)
         line = String(take!(buf))
         if !isempty(line) || pass_empty
             reset(repl)
-            val, bt = send_to_backend(f(line), backend(repl))
+            val, bt = send_to_backend(eval(:(($f)($line))), backend(repl))
             if !ends_with_semicolon(line) || bt !== nothing
                 print_response(repl, val, bt, true, Base.have_color)
             end
@@ -742,7 +742,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         # and pass into Base.repl_cmd for processing (handles `ls` and `cd`
         # special)
         on_done = respond(repl, julia_prompt) do line
-            Expr(:call, :(Base.repl_cmd), macroexpand(Expr(:macrocall, Symbol("@cmd"),line)), outstream(repl))
+            Expr(:call, :(Base.repl_cmd), Cmd(Base.shell_split(line)), outstream(repl))
         end)
 
 
@@ -945,7 +945,7 @@ end
 
 ## StreamREPL ##
 
-type StreamREPL <: AbstractREPL
+mutable struct StreamREPL <: AbstractREPL
     stream::IO
     prompt_color::String
     input_color::String

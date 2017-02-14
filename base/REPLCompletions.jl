@@ -84,11 +84,12 @@ end
 
 function complete_keyword(s::String)
     const sorted_keywords = [
-        "abstract", "baremodule", "begin", "bitstype", "break", "catch", "ccall",
+        "abstract type", "baremodule", "begin", "break", "catch", "ccall",
         "const", "continue", "do", "else", "elseif", "end", "export", "false",
-        "finally", "for", "function", "global", "if", "immutable", "import",
-        "importall", "let", "local", "macro", "module", "quote", "return",
-        "true", "try", "type", "typealias", "using", "while"]
+        "finally", "for", "function", "global", "if", "import",
+        "importall", "let", "local", "macro", "module", "mutable struct",
+        "primitive type", "quote", "return", "struct",
+        "true", "try", "using", "while"]
     r = searchsorted(sorted_keywords, s)
     i = first(r)
     n = length(sorted_keywords)

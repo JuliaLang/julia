@@ -179,7 +179,7 @@ end
 @test_throws BoundsError ()[[false]]
 @test_throws BoundsError ()[[true]]
 
-immutable BitPerm_19352
+struct BitPerm_19352
     p::NTuple{8,UInt8}
     function BitPerm(p::NTuple{8,UInt8})
         sort(collect(p)) != collect(0:7) && error("$p is not a permutation of 0:7")
@@ -195,11 +195,11 @@ end
 
 # issue #15703
 let
-    immutable A_15703{N}
+    struct A_15703{N}
         keys::NTuple{N, Int}
     end
 
-    immutable B_15703
+    struct B_15703
         x::A_15703
     end
 
@@ -231,3 +231,8 @@ end
 @test Tuple{Int,Vararg{Any}}(Float64[1,2,3]) === (1, 2.0, 3.0)
 @test Tuple(ones(5)) === (1.0,1.0,1.0,1.0,1.0)
 @test_throws MethodError convert(Tuple, ones(5))
+
+@testset "Multidimensional indexing (issue #20453)" begin
+    @test_throws MethodError (1,)[]
+    @test_throws MethodError (1,1,1)[1,1]
+end

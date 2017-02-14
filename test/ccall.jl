@@ -44,7 +44,7 @@ macro ccall_echo_objref(x, T, U)
     gen_ccall_echo(x, :(Ptr{$T}), U, :unsafe_pointer_to_objref)
 end
 
-type IntLike
+mutable struct IntLike
     x::Int
 end
 @test @ccall_echo_load(132, Ptr{Int}, Ref{Int}) === 132
@@ -128,11 +128,11 @@ end
 
 ## Tests for various sized data types (ByVal)
 
-type Struct1
+mutable struct Struct1
     x::Float32
     y::Float64
 end
-immutable Struct1I
+struct Struct1I
     x::Float32
     y::Float64
 end
@@ -212,12 +212,12 @@ let a, b, x, y, z
     @test z == a + 1*b
 end
 
-type Struct4
+mutable struct Struct4
     x::Int32
     y::Int32
     z::Int32
 end
-immutable Struct4I
+struct Struct4I
     x::Int32
     y::Int32
     z::Int32
@@ -240,13 +240,13 @@ end
 test_struct4(Struct4)
 test_struct4(Struct4I)
 
-type Struct5
+mutable struct Struct5
     x::Int32
     y::Int32
     z::Int32
     a::Int32
 end
-immutable Struct5I
+struct Struct5I
     x::Int32
     y::Int32
     z::Int32
@@ -271,12 +271,12 @@ end
 test_struct5(Struct5)
 test_struct5(Struct5I)
 
-type Struct6
+mutable struct Struct6
     x::Int64
     y::Int64
     z::Int64
 end
-immutable Struct6I
+struct Struct6I
     x::Int64
     y::Int64
     z::Int64
@@ -299,11 +299,11 @@ end
 test_struct6(Struct6)
 test_struct6(Struct6I)
 
-type Struct7
+mutable struct Struct7
     x::Int64
     y::Cchar
 end
-immutable Struct7I
+struct Struct7I
     x::Int64
     y::Cchar
 end
@@ -324,11 +324,11 @@ end
 test_struct7(Struct7)
 test_struct7(Struct7I)
 
-type Struct8
+mutable struct Struct8
     x::Int32
     y::Cchar
 end
-immutable Struct8I
+struct Struct8I
     x::Int32
     y::Cchar
 end
@@ -349,11 +349,11 @@ end
 test_struct8(Struct8)
 test_struct8(Struct8I)
 
-type Struct9
+mutable struct Struct9
     x::Int32
     y::Int16
 end
-immutable Struct9I
+struct Struct9I
     x::Int32
     y::Int16
 end
@@ -374,13 +374,13 @@ end
 test_struct9(Struct9)
 test_struct9(Struct9I)
 
-type Struct10
+mutable struct Struct10
     x::Cchar
     y::Cchar
     z::Cchar
     a::Cchar
 end
-immutable Struct10I
+struct Struct10I
     x::Cchar
     y::Cchar
     z::Cchar
@@ -405,10 +405,10 @@ end
 test_struct10(Struct10)
 test_struct10(Struct10I)
 
-type Struct11
+mutable struct Struct11
     x::Complex64
 end
-immutable Struct11I
+struct Struct11I
     x::Complex64
 end
 
@@ -427,11 +427,11 @@ end
 test_struct11(Struct11)
 test_struct11(Struct11I)
 
-type Struct12
+mutable struct Struct12
     x::Complex64
     y::Complex64
 end
-immutable Struct12I
+struct Struct12I
     x::Complex64
     y::Complex64
 end
@@ -452,10 +452,10 @@ end
 test_struct12(Struct12)
 test_struct12(Struct12I)
 
-type Struct13
+mutable struct Struct13
     x::Complex128
 end
-immutable Struct13I
+struct Struct13I
     x::Complex128
 end
 
@@ -474,11 +474,11 @@ end
 test_struct13(Struct13)
 test_struct13(Struct13I)
 
-type Struct14
+mutable struct Struct14
     x::Float32
     y::Float32
 end
-immutable Struct14I
+struct Struct14I
     x::Float32
     y::Float32
 end
@@ -499,11 +499,11 @@ end
 test_struct14(Struct14)
 test_struct14(Struct14I)
 
-type Struct15
+mutable struct Struct15
     x::Float64
     y::Float64
 end
-immutable Struct15I
+struct Struct15I
     x::Float64
     y::Float64
 end
@@ -524,7 +524,7 @@ end
 test_struct15(Struct15)
 test_struct15(Struct15I)
 
-type Struct16
+mutable struct Struct16
     x::Float32
     y::Float32
     z::Float32
@@ -532,7 +532,7 @@ type Struct16
     b::Float64
     c::Float64
 end
-immutable Struct16I
+struct Struct16I
     x::Float32
     y::Float32
     z::Float32
@@ -562,11 +562,11 @@ end
 test_struct16(Struct16)
 test_struct16(Struct16I)
 
-type Struct17
+mutable struct Struct17
     a::Int8
     b::Int16
 end
-immutable Struct17I
+struct Struct17I
     a::Int8
     b::Int16
 end
@@ -587,12 +587,12 @@ end
 test_struct17(Struct17)
 test_struct17(Struct17I)
 
-type Struct18
+mutable struct Struct18
     a::Int8
     b::Int8
     c::Int8
 end
-immutable Struct18I
+struct Struct18I
     a::Int8
     b::Int8
     c::Int8
@@ -625,12 +625,12 @@ let a, b, x
     @test a == Int128(0x7f00123456789abc)<<64 + typemax(UInt64)
 end
 
-type Struct_Big
+mutable struct Struct_Big
     x::Int
     y::Int
     z::Int8
 end
-immutable Struct_BigI
+struct Struct_BigI
     x::Int
     y::Int
     z::Int8
@@ -670,30 +670,30 @@ const Struct_huge1a = NTuple{8, Int64}
 const Struct_huge1b = NTuple{9, Int64}
 const Struct_huge2a = NTuple{8, Cdouble}
 const Struct_huge2b = NTuple{9, Cdouble}
-type Struct_huge3a
+mutable struct Struct_huge3a
     cf::NTuple{3, Complex{Cfloat}}
     f7::Cfloat
     f8::Cfloat
 end
-type Struct_huge3b
+mutable struct Struct_huge3b
     cf::NTuple{7, Complex{Cfloat}}
     r8a::Cfloat
     r8b::Cfloat
 end
-type Struct_huge3c
+mutable struct Struct_huge3c
     cf::NTuple{7, Complex{Cfloat}}
     r8a::Cfloat
     r8b::Cfloat
     r9::Cfloat
 end
-type Struct_huge4a
+mutable struct Struct_huge4a
     r12::Complex{Cdouble}
     r34::Complex{Cdouble}
     r5::Complex{Cfloat}
     r67::Complex{Cdouble}
     r8::Cdouble
 end
-type Struct_huge4b
+mutable struct Struct_huge4b
     r12::Complex{Cdouble}
     r34::Complex{Cdouble}
     r5::Complex{Cfloat}
@@ -894,86 +894,86 @@ end
 
 # SIMD Registers
 
-typealias VecReg{N,T} NTuple{N,VecElement{T}}
-typealias V2xF32 VecReg{2,Float32}
-typealias V4xF32 VecReg{4,Float32}
-typealias V2xF64 VecReg{2,Float64}
-typealias V2xI32 VecReg{2,Int32}
-typealias V4xI32 VecReg{4,Int32}
+const VecReg{N,T} = NTuple{N,VecElement{T}}
+const V2xF32 = VecReg{2,Float32}
+const V4xF32 = VecReg{4,Float32}
+const V2xF64 = VecReg{2,Float64}
+const V2xI32 = VecReg{2,Int32}
+const V4xI32 = VecReg{4,Int32}
 
-immutable Struct_AA64_1
+struct Struct_AA64_1
     v1::Int32
     v2::Int128
 end
-immutable Struct_AA64_2
+struct Struct_AA64_2
     v1::Float16
     v2::Float64
 end
 
 # This is a homogenious short vector aggregate
-immutable Struct_AA64_3
+struct Struct_AA64_3
     v1::VecReg{8,Int8}
     v2::VecReg{2,Float32}
 end
 # This is NOT a homogenious short vector aggregate
-immutable Struct_AA64_4
+struct Struct_AA64_4
     v2::VecReg{2,Float32}
     v1::VecReg{8,Int16}
 end
 
-type Struct_huge1_ppc64
+mutable struct Struct_huge1_ppc64
     m::Int64
     v::V4xF32
 end
 
-type Struct_huge2_ppc64
+mutable struct Struct_huge2_ppc64
     v1::V4xF32
     v2::V2xI32
 end
 
-type Struct_huge3_ppc64
+mutable struct Struct_huge3_ppc64
     v1::V4xF32
     f::NTuple{4,Float32}
 end
 
-type Struct_huge4_ppc64
+mutable struct Struct_huge4_ppc64
     v1::V2xF32
     v2::V2xF64
 end
 
-type Struct_huge5_ppc64
+mutable struct Struct_huge5_ppc64
     v1::NTuple{9,V4xF32}
 end
 
-type Struct_huge6_ppc64
+mutable struct Struct_huge6_ppc64
     v1::NTuple{8,V4xF32}
     v2::V4xF32
 end
 
-type Struct_huge7_ppc64
+mutable struct Struct_huge7_ppc64
     v1::VecReg{3,Int32}
     v2::VecReg{3,Int32}
 end
 
-type Struct_huge1_ppc64_hva
+mutable struct Struct_huge1_ppc64_hva
     v1::NTuple{8,V4xF32}
 end
 
-type Struct_huge2_ppc64_hva
+mutable struct Struct_huge2_ppc64_hva
     v1::NTuple{2,NTuple{2,V4xF32}}
 end
 
-type Struct_huge3_ppc64_hva
+mutable struct Struct_huge3_ppc64_hva
     vf1::V4xF32
     vf2::Tuple{NTuple{2,V4xF32}}
 end
 
-type Struct_huge4_ppc64_hva
+mutable struct Struct_huge4_ppc64_hva
     v1::V4xI32
     v2::V4xF32
 end
 
-type Struct_huge5_ppc64_hva
+mutable struct Struct_huge5_ppc64_hva
     v1::V4xI32
     v2::V2xF64
 end
@@ -1156,7 +1156,7 @@ for i in 1:3
     ccall((:test_echo_p, libccalltest), Ptr{Void}, (Any,), f17413())
 end
 
-immutable SpillPint
+struct SpillPint
     a::Ptr{Cint}
     b::Ptr{Cint}
 end

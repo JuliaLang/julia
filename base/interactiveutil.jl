@@ -49,6 +49,8 @@ function edit(path::AbstractString, line::Integer=0)
         cmd = line != 0 ? `$command $path -l $line` : `$command $path`
     elseif startswith(name, "subl") || startswith(name, "atom")
         cmd = line != 0 ? `$command $path:$line` : `$command $path`
+    elseif startswith(name, "notepad++")
+        cmd = line != 0 ? `$command $path -n$line` : `$command $path`
     elseif is_windows() && (name == "start" || name == "open")
         cmd = `cmd /c start /b $path`
         line_unsupported = true
@@ -172,7 +174,7 @@ elseif is_windows()
         systemerror(:SetClipboardData, pdata!=p)
         ccall((:CloseClipboard, "user32"), stdcall, Void, ())
     end
-    clipboard(x) = clipboard(sprint(io->print(io,x))::String)
+    clipboard(x) = clipboard(sprint(print, x)::String)
     function clipboard()
         systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Void},), C_NULL))
         pdata = ccall((:GetClipboardData, "user32"), stdcall, Ptr{UInt16}, (UInt32,), 13)

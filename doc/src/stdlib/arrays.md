@@ -78,6 +78,7 @@ Base.flipdim
 Base.circshift
 Base.circshift!
 Base.circcopy!
+Base.contains(::Function, ::Any, ::Any)
 Base.find(::Any)
 Base.find(::Function, ::Any)
 Base.findn

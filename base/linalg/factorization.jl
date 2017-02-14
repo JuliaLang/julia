@@ -2,7 +2,7 @@
 
 ## Matrix factorizations and decompositions
 
-abstract Factorization{T}
+abstract type Factorization{T} end
 
 eltype{T}(::Type{Factorization{T}}) = T
 transpose(F::Factorization) = error("transpose not implemented for $(typeof(F))")
@@ -42,7 +42,7 @@ for (f1, f2) in ((:\, :A_ldiv_B!),
                  (:Ac_ldiv_B, :Ac_ldiv_B!))
     @eval begin
         function $f1(F::Factorization, B::AbstractVecOrMat)
-            TFB = typeof(one(eltype(F)) / one(eltype(B)))
+            TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
             BB = similar(B, TFB, size(B))
             copy!(BB, B)
             $f2(convert(Factorization{TFB}, F), BB)
@@ -57,7 +57,7 @@ for f in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!)
 end
 
 # fallback methods for transposed solves
-At_ldiv_B{T<:Real}(F::Factorization{T}, B::AbstractVecOrMat) = Ac_ldiv_B(F, B)
+At_ldiv_B(F::Factorization{<:Real}, B::AbstractVecOrMat) = Ac_ldiv_B(F, B)
 At_ldiv_B(F::Factorization, B) = conj.(Ac_ldiv_B(F, conj.(B)))
 
 """

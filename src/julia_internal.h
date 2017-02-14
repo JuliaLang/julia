@@ -265,7 +265,7 @@ void jl_gc_count_allocd(size_t sz);
 void jl_gc_run_all_finalizers(jl_ptls_t ptls);
 
 void gc_queue_binding(jl_binding_t *bnd);
-void gc_setmark_buf(jl_ptls_t ptls, void *buf, int8_t, size_t);
+void gc_setmark_buf(jl_ptls_t ptls, void *buf, uint8_t, size_t);
 
 STATIC_INLINE void jl_gc_wb_binding(jl_binding_t *bnd, void *val) // val isa jl_value_t*
 {
@@ -328,6 +328,7 @@ typedef struct _typeenv {
 
 int jl_tuple_isa(jl_value_t **child, size_t cl, jl_datatype_t *pdt);
 
+int jl_has_intersect_type_not_kind(jl_value_t *t);
 int jl_subtype_invariant(jl_value_t *a, jl_value_t *b, int ta);
 jl_value_t *jl_type_match(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_type_match_morespecific(jl_value_t *a, jl_value_t *b);
@@ -340,6 +341,7 @@ jl_value_t *jl_type_intersection_env(jl_value_t *a, jl_value_t *b, jl_svec_t **p
 jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);
 JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals);
 jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val);
+jl_svec_t *jl_outer_unionall_vars(jl_value_t *u);
 jl_datatype_t *jl_new_uninitialized_datatype(void);
 jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
                                    jl_svec_t *parameters);
@@ -595,6 +597,7 @@ extern JL_DLLEXPORT jl_value_t *jl_segv_exception;
 
 // -- Runtime intrinsics -- //
 JL_DLLEXPORT const char *jl_intrinsic_name(int f);
+unsigned jl_intrinsic_nargs(int f);
 
 JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v);
 JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t *align);
@@ -757,7 +760,7 @@ struct jl_typemap_info {
 };
 
 jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *parent,
-                                      jl_tupletype_t *type, jl_svec_t *tvars,
+                                      jl_tupletype_t *type,
                                       jl_tupletype_t *simpletype, jl_svec_t *guardsigs,
                                       jl_value_t *newvalue, int8_t offs,
                                       const struct jl_typemap_info *tparams,

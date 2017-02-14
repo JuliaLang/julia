@@ -103,41 +103,56 @@ extern int jl_boot_file_loaded;
 extern int inside_typedef;
 
 // this is a heuristic for allowing "redefining" a type to something identical
-static int equiv_svec_dt(jl_svec_t *sa, jl_svec_t *sb)
-{
-    size_t i, l = jl_svec_len(sa);
-    if (l != jl_svec_len(sb)) return 0;
-    for (i = 0; i < l; i++) {
-        jl_value_t *a = jl_svecref(sa, i);
-        jl_value_t *b = jl_svecref(sb, i);
-        if (jl_typeof(a) != jl_typeof(b))
-            return 0;
-        if (jl_is_typevar(a) && ((jl_tvar_t*)a)->name != ((jl_tvar_t*)b)->name)
-            return 0;
-        if (!jl_subtype(a, b) || !jl_subtype(b, a))
-            return 0;
-    }
-    return 1;
-}
 static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
 {
-    // TODO: revisit after jb/subtype
-    return (jl_typeof(dta) == jl_typeof(dtb) &&
-            dta->name->name == dtb->name->name &&
-            dta->abstract == dtb->abstract &&
-            dta->mutabl == dtb->mutabl &&
-            dta->size == dtb->size &&
-            dta->ninitialized == dtb->ninitialized &&
-            equiv_svec_dt(dta->parameters, dtb->parameters) &&
-            equiv_svec_dt(dta->types, dtb->types) &&
-            jl_subtype((jl_value_t*)dta->super, (jl_value_t*)dtb->super) &&
-            jl_subtype((jl_value_t*)dtb->super, (jl_value_t*)dta->super) &&
-            jl_egal((jl_value_t*)dta->name->names, (jl_value_t*)dtb->name->names));
+    if (!(jl_typeof(dta) == jl_typeof(dtb) &&
+          dta->name->name == dtb->name->name &&
+          dta->abstract == dtb->abstract &&
+          dta->mutabl == dtb->mutabl &&
+          dta->size == dtb->size &&
+          dta->ninitialized == dtb->ninitialized &&
+          jl_egal((jl_value_t*)dta->name->names, (jl_value_t*)dtb->name->names) &&
+          jl_nparams(dta) == jl_nparams(dtb) &&
+          jl_field_count(dta) == jl_field_count(dtb)))
+        return 0;
+    jl_value_t *a=NULL, *b=NULL;
+    JL_GC_PUSH2(&a, &b);
+    a = jl_rewrap_unionall((jl_value_t*)dta->super, dta->name->wrapper);
+    b = jl_rewrap_unionall((jl_value_t*)dtb->super, dtb->name->wrapper);
+    if (!jl_types_equal(a, b))
+        goto no;
+    int ok = 1;
+    JL_TRY {
+        a = jl_apply_type(dtb->name->wrapper, jl_svec_data(dta->parameters), jl_nparams(dta));
+    }
+    JL_CATCH {
+        ok = 0;
+    }
+    if (!ok) goto no;
+    assert(jl_is_datatype(a));
+    if (!jl_egal((jl_value_t*)((jl_datatype_t*)a)->types, (jl_value_t*)dta->types))
+        goto no;
+    a = dta->name->wrapper;
+    b = dtb->name->wrapper;
+    while (jl_is_unionall(a)) {
+        jl_unionall_t *ua = (jl_unionall_t*)a;
+        jl_unionall_t *ub = (jl_unionall_t*)b;
+        if (!jl_egal(ua->var->lb, ub->var->lb) || !jl_egal(ua->var->ub, ub->var->ub) ||
+            ua->var->name != ub->var->name)
+            goto no;
+        a = jl_instantiate_unionall(ua, (jl_value_t*)ub->var);
+        b = ub->body;
+    }
+    JL_GC_POP();
+    return 1;
+ no:
+    JL_GC_POP();
+    return 0;
 }
 
-static void check_can_assign_type(jl_binding_t *b)
+static void check_can_assign_type(jl_binding_t *b, jl_value_t *rhs)
 {
-    if (b->constp && b->value != NULL && !jl_is_datatype(b->value))
+    if (b->constp && b->value != NULL && jl_typeof(b->value) != jl_typeof(rhs))
         jl_errorf("invalid redefinition of constant %s",
                   jl_symbol_name(b->name));
 }
@@ -324,7 +339,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         w = dt->name->wrapper;
         jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name);
         temp = b->value;
-        check_can_assign_type(b);
+        check_can_assign_type(b, w);
         b->value = w;
         jl_gc_wb_binding(b, w);
         JL_TRY {
@@ -368,11 +383,11 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         if (nb < 1 || nb>=(1<<23) || (nb&7) != 0)
             jl_errorf("invalid number of bits in type %s",
                       jl_symbol_name((jl_sym_t*)name));
-        dt = jl_new_bitstype(name, NULL, (jl_svec_t*)para, nb);
+        dt = jl_new_primitivetype(name, NULL, (jl_svec_t*)para, nb);
         w = dt->name->wrapper;
         jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name);
         temp = b->value;
-        check_can_assign_type(b);
+        check_can_assign_type(b, w);
         b->value = w;
         jl_gc_wb_binding(b, w);
         JL_TRY {
@@ -418,7 +433,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name);
         temp = b->value;  // save old value
         // temporarily assign so binding is available for field types
-        check_can_assign_type(b);
+        check_can_assign_type(b, w);
         b->value = w;
         jl_gc_wb_binding(b,w);
 

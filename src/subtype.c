@@ -254,9 +254,6 @@ static jl_value_t *simple_join(jl_value_t *a, jl_value_t *b)
         return a;
     if (jl_is_kind(b) && jl_is_type_type(a) && jl_typeof(jl_tparam0(a)) == b)
         return b;
-    if (jl_is_type_type(a) && jl_is_type_type(b) && !jl_is_typevar(jl_tparam0(a)) &&
-        jl_typeof(jl_tparam0(a)) == jl_typeof(jl_tparam0(b)))
-        return jl_typeof(jl_tparam0(a));
     if (!jl_has_free_typevars(a) && !jl_has_free_typevars(b)) {
         if (jl_subtype(a, b)) return b;
         if (jl_subtype(b, a)) return a;
@@ -418,6 +415,19 @@ static int is_leaf_bound(jl_value_t *v)
     return 0;
 }
 
+static jl_value_t *widen_Type(jl_value_t *t)
+{
+    if (jl_is_type_type(t) && !jl_is_typevar(jl_tparam0(t)))
+        return jl_typeof(jl_tparam0(t));
+    if (jl_is_uniontype(t)) {
+        jl_value_t *a = widen_Type(((jl_uniontype_t*)t)->a);
+        jl_value_t *b = widen_Type(((jl_uniontype_t*)t)->b);
+        if (a == b)
+            return a;
+    }
+    return t;
+}
+
 // compare UnionAll type `u` to `t`. `R==1` if `u` came from the right side of A <: B.
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, int param)
 {
@@ -440,6 +450,9 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         e->envidx++;
         ans = subtype(t, u->body, e, param);
         e->envidx--;
+        // widen Type{x} to typeof(x) in argument position
+        if (!vb.occurs_inv)
+            vb.lb = widen_Type(vb.lb);
         // fill variable values into `envout` up to `envsz`
         if (e->envidx < e->envsz) {
             jl_value_t *val;
@@ -455,9 +468,6 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
                 val = (jl_value_t*)u->var;
             else
                 val = (jl_value_t*)jl_new_typevar(u->var->name, vb.lb, vb.ub);
-            // widen Type{x} to typeof(x) in argument position
-            if (jl_is_type_type(val) && !vb.occurs_inv && !jl_is_typevar(jl_tparam0(val)))
-                val = jl_typeof(jl_tparam0(val));
             e->envout[e->envidx] = val;
         }
     }
@@ -932,17 +942,18 @@ int jl_tuple_isa(jl_value_t **child, size_t cl, jl_datatype_t *pdt)
 }
 
 // returns true if the intersection of `t` and `Type` is non-empty and not a kind
-static int has_intersect_type_not_kind(jl_value_t *t)
+// this is sufficient to determine if `isa(x, T)` can instead simply check for `typeof(x) <: T`
+int jl_has_intersect_type_not_kind(jl_value_t *t)
 {
     t = jl_unwrap_unionall(t);
     if (t == (jl_value_t*)jl_any_type)
         return 1;
     if (jl_is_uniontype(t)) {
-        return has_intersect_type_not_kind(((jl_uniontype_t*)t)->a) ||
-               has_intersect_type_not_kind(((jl_uniontype_t*)t)->b);
+        return jl_has_intersect_type_not_kind(((jl_uniontype_t*)t)->a) ||
+               jl_has_intersect_type_not_kind(((jl_uniontype_t*)t)->b);
     }
     if (jl_is_typevar(t)) {
-        return has_intersect_type_not_kind(((jl_tvar_t*)t)->ub);
+        return jl_has_intersect_type_not_kind(((jl_tvar_t*)t)->ub);
     }
     if (jl_is_datatype(t)) {
         if (((jl_datatype_t*)t)->name == jl_type_typename)
@@ -981,7 +992,7 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
             }
             if (jl_subtype(jl_typeof(x), t))
                 return 1;
-            if (has_intersect_type_not_kind(t2)) {
+            if (jl_has_intersect_type_not_kind(t2)) {
                 JL_GC_PUSH1(&x);
                 x = (jl_value_t*)jl_wrap_Type(x);  // TODO jb/subtype avoid jl_wrap_Type
                 int ans = jl_subtype(x, t);
@@ -1356,11 +1367,14 @@ static jl_value_t *intersect_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_sten
     size_t lx = jl_nparams(xd), ly = jl_nparams(yd);
     if (lx == 0 && ly == 0)
         return (jl_value_t*)yd;
+    int vx=0, vy=0, vvx = (lx > 0 && jl_is_vararg_type(jl_tparam(xd, lx-1)));
+    int vvy = (ly > 0 && jl_is_vararg_type(jl_tparam(yd, ly-1)));
+    if (!vvx && !vvy && lx != ly)
+        return jl_bottom_type;
     jl_svec_t *params = jl_alloc_svec(lx > ly ? lx : ly);
     jl_value_t *res=NULL;
     JL_GC_PUSH1(&params);
     size_t i=0, j=0;
-    int vx=0, vy=0;
     jl_value_t *xi, *yi;
     while (1) {
         xi = i < lx ? jl_tparam(xd, i) : NULL;
@@ -1806,6 +1820,23 @@ JL_DLLEXPORT jl_value_t *jl_intersect_types(jl_value_t *x, jl_value_t *y)
     init_stenv(&e, NULL, 0);
     e.intersection = 1;
     return intersect_all(x, y, &e);
+}
+
+// return a SimpleVector of all vars from UnionAlls wrapping a given type
+jl_svec_t *jl_outer_unionall_vars(jl_value_t *u)
+{
+    int ntvars = jl_subtype_env_size((jl_value_t*)u);
+    jl_svec_t *vec = jl_alloc_svec_uninit(ntvars);
+    JL_GC_PUSH1(&vec);
+    jl_unionall_t *ua = (jl_unionall_t*)u;
+    int i;
+    for(i=0; i < ntvars; i++) {
+        assert(jl_is_unionall(ua));
+        jl_svecset(vec, i, ua->var);
+        ua = (jl_unionall_t*)ua->body;
+    }
+    JL_GC_POP();
+    return vec;
 }
 
 // sets *issubty to 1 iff `a` is a subtype of `b`

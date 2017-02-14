@@ -20,7 +20,7 @@ const WHITE_TERRITORY = 3
 const BLACK_TERRITORY = 4
 const UNKNOWN = 5
 
-type XorRand
+mutable struct XorRand
   state::UInt32
 end
 
@@ -42,7 +42,7 @@ const deltai = (-1, 1, 0, 0)
 const deltaj = (0, 0, -1, 1)
 neighbor(i::Int, j::Int, k::Int) = (i + deltai[k], j + deltaj[k])
 
-type Board
+mutable struct Board
   size::Int
   komi::Float64
 

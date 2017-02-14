@@ -73,10 +73,10 @@ Clear any existing backtraces from the internal buffer.
 """
 clear() = ccall(:jl_profile_clear_data, Void, ())
 
-typealias LineInfoDict Dict{UInt64, Vector{StackFrame}}
-typealias LineInfoFlatDict Dict{UInt64, StackFrame}
+const LineInfoDict = Dict{UInt64, Vector{StackFrame}}
+const LineInfoFlatDict = Dict{UInt64, StackFrame}
 
-immutable ProfileFormat
+struct ProfileFormat
     maxdepth::Int
     mincount::Int
     noisefloor::Float64
@@ -121,7 +121,7 @@ The keyword arguments can be any combination of:
  - `mincount` can also be used to limit the printout to only those
    lines with at least mincount occurrences.
 """
-function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::LineInfoDict = getdict(data);
+function print(io::IO, data::Vector{<:Unsigned} = fetch(), lidict::LineInfoDict = getdict(data);
         format = :tree,
         C = false,
         combine = true,
@@ -138,7 +138,7 @@ function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::LineInfoD
         format)
 end
 
-function print{T<:Unsigned}(io::IO, data::Vector{T}, lidict::LineInfoDict, fmt::ProfileFormat, format::Symbol)
+function print(io::IO, data::Vector{<:Unsigned}, lidict::LineInfoDict, fmt::ProfileFormat, format::Symbol)
     cols::Int = Base.displaysize(io)[2]
     if format == :tree
         tree(io, data, lidict, cols, fmt)
@@ -158,7 +158,7 @@ a dictionary `lidict` of line information.
 
 See `Profile.print([io], data)` for an explanation of the valid keyword arguments.
 """
-print{T<:Unsigned}(data::Vector{T} = fetch(), lidict::LineInfoDict = getdict(data); kwargs...) =
+print(data::Vector{<:Unsigned} = fetch(), lidict::LineInfoDict = getdict(data); kwargs...) =
     print(STDOUT, data, lidict; kwargs...)
 
 """
@@ -346,7 +346,7 @@ function parse_flat(iplist, n, lidict::LineInfoFlatDict, C::Bool)
     # The ones with no line number might appear multiple times in a single
     # backtrace, giving the wrong impression about the total number of backtraces.
     # Delete them too.
-    keep = !Bool[x == UNKNOWN || x.line == 0 || (x.from_c && !C) for x in lilist]
+    keep = .!Bool[x == UNKNOWN || x.line == 0 || (x.from_c && !C) for x in lilist]
     n = n[keep]
     lilist = lilist[keep]
     return (lilist, n)

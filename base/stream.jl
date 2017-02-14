@@ -6,9 +6,9 @@ if is_windows()
 end
 
 ## types ##
-abstract IOServer
-abstract LibuvServer <: IOServer
-abstract LibuvStream <: IO
+abstract type IOServer end
+abstract type LibuvServer <: IOServer end
+abstract type LibuvStream <: IO end
 
 # IO
 # +- AbstractIOBuffer{T<:AbstractArray{UInt8,1}} (not exported)
@@ -99,7 +99,7 @@ function uv_status_string(x)
     return "invalid status"
 end
 
-type PipeEndpoint <: LibuvStream
+mutable struct PipeEndpoint <: LibuvStream
     handle::Ptr{Void}
     status::Int
     buffer::IOBuffer
@@ -127,7 +127,7 @@ type PipeEndpoint <: LibuvStream
     end
 end
 
-type PipeServer <: LibuvServer
+mutable struct PipeServer <: LibuvServer
     handle::Ptr{Void}
     status::Int
     connectnotify::Condition
@@ -143,14 +143,14 @@ type PipeServer <: LibuvServer
     end
 end
 
-typealias LibuvPipe Union{PipeEndpoint, PipeServer}
+const LibuvPipe = Union{PipeEndpoint, PipeServer}
 
 function PipeServer()
     p = PipeServer(Libc.malloc(_sizeof_uv_named_pipe), StatusUninit)
     return init_pipe!(p; readable=true)
 end
 
-type TTY <: LibuvStream
+mutable struct TTY <: LibuvStream
     handle::Ptr{Void}
     status::Int
     buffer::IOBuffer
@@ -529,7 +529,7 @@ end
 #  (composed of two half-pipes: .in and .out)
 ##########################################
 
-type Pipe <: AbstractPipe
+mutable struct Pipe <: AbstractPipe
     in::PipeEndpoint # writable
     out::PipeEndpoint # readable
 end
@@ -1103,7 +1103,7 @@ reset(x::LibuvStream)    = reset(x.buffer)
 ismarked(x::LibuvStream) = ismarked(x.buffer)
 
 # BufferStream's are non-OS streams, backed by a regular IOBuffer
-type BufferStream <: LibuvStream
+mutable struct BufferStream <: LibuvStream
     buffer::IOBuffer
     r_c::Condition
     close_c::Condition

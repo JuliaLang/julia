@@ -14,7 +14,7 @@ Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps
 time_ns() = ccall(:jl_hrtime, UInt64, ())
 
 # This type must be kept in sync with the C struct in src/gc.h
-immutable GC_Num
+struct GC_Num
     allocd      ::Int64 # GC internal
     deferred_alloc::Int64 # GC internal
     freed       ::Int64 # GC internal
@@ -34,7 +34,7 @@ end
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
 
 # This type is to represent differences in the counters, so fields may be negative
-immutable GC_Diff
+struct GC_Diff
     allocd      ::Int64 # Bytes allocated
     malloc      ::Int64 # Number of GC aware malloc()
     realloc     ::Int64 # Number of GC aware realloc()
@@ -81,6 +81,17 @@ gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
 
 Set a timer to be read by the next call to [`toc`](@ref) or [`toq`](@ref). The
 macro call `@time expr` can also be used to time evaluation.
+
+```julia
+julia> tic()
+0x0000c45bc7abac95
+
+julia> sleep(0.3)
+
+julia> toc()
+elapsed time: 0.302745944 seconds
+0.302745944
+```
 """
 function tic()
     t0 = time_ns()
@@ -93,6 +104,16 @@ end
 
 Return, but do not print, the time elapsed since the last [`tic`](@ref). The
 macro calls `@timed expr` and `@elapsed expr` also return evaluation time.
+
+```julia
+julia> tic()
+0x0000c46477a9675d
+
+julia> sleep(0.3)
+
+julia> toq()
+0.302251004
+```
 """
 function toq()
     t1 = time_ns()
@@ -110,6 +131,17 @@ end
 
 Print and return the time elapsed since the last [`tic`](@ref). The macro call
 `@time expr` can also be used to time evaluation.
+
+```julia
+julia> tic()
+0x0000c45bc7abac95
+
+julia> sleep(0.3)
+
+julia> toc()
+elapsed time: 0.302745944 seconds
+0.302745944
+```
 """
 function toc()
     t = toq()
@@ -186,6 +218,17 @@ returning the value of the expression.
 
 See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
+
+```julia
+julia> @time rand(10^6);
+  0.001525 seconds (7 allocations: 7.630 MiB)
+
+julia> @time begin
+           sleep(0.3)
+           1+1
+       end
+  0.301395 seconds (8 allocations: 336 bytes)
+```
 """
 macro time(ex)
     quote
@@ -209,6 +252,15 @@ expression.
 
 See also [`@time`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
+
+```julia
+julia> @timev rand(10^6);
+  0.001006 seconds (7 allocations: 7.630 MiB)
+elapsed time (ns): 1005567
+bytes allocated:   8000256
+pool allocs:       6
+malloc() calls:    1
+```
 """
 macro timev(ex)
     quote
@@ -229,6 +281,11 @@ number of seconds it took to execute as a floating-point number.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@allocated`](@ref).
+
+```julia
+julia> @elapsed sleep(0.3)
+0.301391426
+```
 """
 macro elapsed(ex)
     quote
@@ -256,6 +313,11 @@ for the effects of compilation.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@elapsed`](@ref).
+
+```julia
+julia> @allocated rand(10^6)
+8000080
+```
 """
 macro allocated(ex)
     quote
@@ -280,6 +342,34 @@ counters.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
+
+```julia
+julia> val, t, bytes, gctime, memallocs = @timed rand(10^6);
+
+julia> t
+0.006634834
+
+julia> bytes
+8000256
+
+julia> gctime
+0.0055765
+
+julia> fieldnames(typeof(memallocs))
+9-element Array{Symbol,1}:
+ :allocd
+ :malloc
+ :realloc
+ :poolalloc
+ :bigalloc
+ :freecall
+ :total_time
+ :pause
+ :full_sweep
+
+julia> memallocs.total_time
+5576500
+```
 """
 macro timed(ex)
     quote
@@ -486,17 +576,22 @@ end
     warn(msg)
 
 Display a warning. Argument `msg` is a string describing the warning to be displayed.
+
+```jldoctest
+julia> warn("Beep Beep")
+WARNING: Beep Beep
+```
 """
 warn(msg...; kw...) = warn(STDERR, msg...; kw...)
 
 warn(io::IO, err::Exception; prefix="ERROR: ", kw...) =
-    warn(io, sprint(buf->showerror(buf, err)), prefix=prefix; kw...)
+    warn(io, sprint(showerror, err), prefix=prefix; kw...)
 
 warn(err::Exception; prefix="ERROR: ", kw...) =
     warn(STDERR, err, prefix=prefix; kw...)
 
 info(io::IO, err::Exception; prefix="ERROR: ", kw...) =
-    info(io, sprint(buf->showerror(buf, err)), prefix=prefix; kw...)
+    info(io, sprint(showerror, err), prefix=prefix; kw...)
 
 info(err::Exception; prefix="ERROR: ", kw...) =
     info(STDERR, err, prefix=prefix; kw...)
@@ -535,7 +630,7 @@ the compiler for objects about to be discarded, the `securezero!` function
 will always be called.
 """
 function securezero! end
-@noinline securezero!{T<:Number}(a::AbstractArray{T}) = fill!(a, 0)
+@noinline securezero!(a::AbstractArray{<:Number}) = fill!(a, 0)
 securezero!(s::String) = unsafe_securezero!(pointer(s), sizeof(s))
 @noinline unsafe_securezero!{T}(p::Ptr{T}, len::Integer=1) =
     ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
@@ -575,7 +670,7 @@ end
 
 # Windows authentication prompt
 if is_windows()
-    immutable CREDUI_INFO
+    struct CREDUI_INFO
         cbSize::UInt32
         parent::Ptr{Void}
         pszMessageText::Ptr{UInt16}
@@ -676,13 +771,13 @@ crc32c(a::Union{Array{UInt8},String}, crc::UInt32=0x00000000) =
     @kwdef typedef
 
 This is a helper macro that automatically defines a keyword-based constructor for the type
-declared in the expression `typedef`, which must be a `type` or `immutable`
+declared in the expression `typedef`, which must be a `struct` or `mutable struct`
 expression. The default argument is supplied by declaring fields of the form `field::T =
 default`. If no default is provided then the default is provided by the `kwdef_val(T)`
 function.
 
-```
-@kwdef immutable Foo
+```julia
+@kwdef struct Foo
     a::Cint            # implied default Cint(0)
     b::Cint = 1        # specified default
     z::Cstring         # implied default Cstring(C_NULL)

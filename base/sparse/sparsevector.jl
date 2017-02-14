@@ -9,12 +9,12 @@ import Base.LinAlg: promote_to_array_type, promote_to_arrays_
 
 ### Types
 
-immutable SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
+struct SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
     n::Int              # the number of elements
     nzind::Vector{Ti}   # the indices of nonzeros
     nzval::Vector{Tv}   # the values of nonzeros
 
-    function SparseVector(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv})
+    function SparseVector{Tv,Ti}(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) where {Tv,Ti<:Integer}
         n >= 0 || throw(ArgumentError("The number of elements must be non-negative."))
         length(nzind) == length(nzval) ||
             throw(ArgumentError("index and value vectors must be the same length"))
@@ -22,7 +22,7 @@ immutable SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
     end
 end
 
-SparseVector{Tv,Ti}(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) =
+SparseVector(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) where {Tv,Ti} =
     SparseVector{Tv,Ti}(n, nzind, nzval)
 
 ### Basic properties
@@ -35,19 +35,24 @@ count(x::SparseVector) = count(x.nzval)
 nonzeros(x::SparseVector) = x.nzval
 nonzeroinds(x::SparseVector) = x.nzind
 
+similar(x::SparseVector, Tv::Type=eltype(x)) = SparseVector(x.n, copy(x.nzind), Array{Tv}(length(x.nzval)))
+function similar{Tv,Ti}(x::SparseVector, ::Type{Tv}, ::Type{Ti})
+    return SparseVector(x.n, copy!(similar(x.nzind, Ti), x.nzind), copy!(similar(x.nzval, Tv), x.nzval))
+end
 similar{T}(x::SparseVector, ::Type{T}, D::Dims) = spzeros(T, D...)
 
 ### Construct empty sparse vector
 
 spzeros(len::Integer) = spzeros(Float64, len)
 spzeros{T}(::Type{T}, len::Integer) = SparseVector(len, Int[], T[])
+spzeros{Tv, Ti <: Integer}(::Type{Tv}, ::Type{Ti}, len::Integer) = SparseVector(len, Ti[], Tv[])
 
 # Construction of same structure, but with all ones
 spones{T}(x::SparseVector{T}) = SparseVector(x.n, copy(x.nzind), ones(T, length(x.nzval)))
 
 ### Construction from lists of indices and values
 
-function _sparsevector!{Ti<:Integer}(I::Vector{Ti}, V::Vector, len::Integer)
+function _sparsevector!(I::Vector{<:Integer}, V::Vector, len::Integer)
     # pre-condition: no duplicate indexes in I
     if !isempty(I)
         p = sortperm(I)
@@ -57,7 +62,7 @@ function _sparsevector!{Ti<:Integer}(I::Vector{Ti}, V::Vector, len::Integer)
     SparseVector(len, I, V)
 end
 
-function _sparsevector!{Tv,Ti<:Integer}(I::Vector{Ti}, V::Vector{Tv}, len::Integer, combine::Function)
+function _sparsevector!(I::Vector{<:Integer}, V::Vector, len::Integer, combine::Function)
     if !isempty(I)
         p = sortperm(I)
         permute!(I, p)
@@ -97,8 +102,30 @@ Create a sparse vector `S` of length `m` such that `S[I[k]] = V[k]`.
 Duplicates are combined using the `combine` function, which defaults to
 `+` if no `combine` argument is provided, unless the elements of `V` are Booleans
 in which case `combine` defaults to `|`.
+
+```jldoctest
+julia> II = [1, 3, 3, 5]; V = [0.1, 0.2, 0.3, 0.2];
+
+julia> sparsevec(II, V)
+5-element SparseVector{Float64,Int64} with 3 stored entries:
+  [1]  =  0.1
+  [3]  =  0.5
+  [5]  =  0.2
+
+julia> sparsevec(II, V, 8, -)
+8-element SparseVector{Float64,Int64} with 3 stored entries:
+  [1]  =  0.1
+  [3]  =  -0.1
+  [5]  =  0.2
+
+julia> sparsevec([1, 3, 1, 2, 2], [true, true, false, false, false])
+3-element SparseVector{Bool,Int64} with 3 stored entries:
+  [1]  =  true
+  [2]  =  false
+  [3]  =  true
+```
 """
-function sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, V::AbstractVector, combine::Function)
+function sparsevec(I::AbstractVector{<:Integer}, V::AbstractVector, combine::Function)
     length(I) == length(V) ||
         throw(ArgumentError("index and value vectors must be the same length"))
     len = 0
@@ -111,7 +138,7 @@ function sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, V::AbstractVector, combin
     _sparsevector!(collect(I), collect(V), len, combine)
 end
 
-function sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, V::AbstractVector, len::Integer, combine::Function)
+function sparsevec(I::AbstractVector{<:Integer}, V::AbstractVector, len::Integer, combine::Function)
     length(I) == length(V) ||
         throw(ArgumentError("index and value vectors must be the same length"))
     for i in I
@@ -144,10 +171,17 @@ sparsevec(I::AbstractVector, v::Number, len::Integer, combine::Function) =
 
 ### Construction from dictionary
 """
-    sparsevec(D::Dict, [m])
+    sparsevec(d::Dict, [m])
 
 Create a sparse vector of length `m` where the nonzero indices are keys from
 the dictionary, and the nonzero values are the values from the dictionary.
+
+```jldoctest
+julia> sparsevec(Dict(1 => 3, 2 => 2))
+2-element SparseVector{Int64,Int64} with 2 stored entries:
+  [1]  =  3
+  [2]  =  2
+```
 """
 function sparsevec{Tv,Ti<:Integer}(dict::Associative{Ti,Tv})
     m = length(dict)
@@ -218,6 +252,21 @@ setindex!{Tv, Ti<:Integer}(x::SparseVector{Tv,Ti}, v, i::Integer) =
     dropstored!(x::SparseVector, i::Integer)
 
 Drop entry `x[i]` from `x` if `x[i]` is stored and otherwise do nothing.
+
+```jldoctest
+julia> x = sparsevec([1, 3], [1.0, 2.0])
+3-element SparseVector{Float64,Int64} with 2 stored entries:
+  [1]  =  1.0
+  [3]  =  2.0
+
+julia> Base.SparseArrays.dropstored!(x, 3)
+3-element SparseVector{Float64,Int64} with 1 stored entry:
+  [1]  =  1.0
+
+julia> Base.SparseArrays.dropstored!(x, 2)
+3-element SparseVector{Float64,Int64} with 1 stored entry:
+  [1]  =  1.0
+```
 """
 function dropstored!(x::SparseVector, i::Integer)
     if !(1 <= i <= x.n)
@@ -255,6 +304,14 @@ convert{Tv,Ti}(::Type{SparseVector}, s::SparseMatrixCSC{Tv,Ti}) =
     sparsevec(A)
 
 Convert a vector `A` into a sparse vector of length `m`.
+
+```jldoctest
+julia> sparsevec([1.0, 2.0, 0.0, 0.0, 3.0, 0.0])
+6-element SparseVector{Float64,Int64} with 3 stored entries:
+  [1]  =  1.0
+  [2]  =  2.0
+  [5]  =  3.0
+```
 """
 sparsevec{T}(a::AbstractVector{T}) = convert(SparseVector{T, Int}, a)
 sparsevec(a::AbstractArray) = sparsevec(vec(a))
@@ -301,11 +358,11 @@ convert{Tv}(::Type{SparseVector}, s::AbstractVector{Tv}) =
 # convert between different types of SparseVector
 convert{Tv}(::Type{SparseVector{Tv}}, s::SparseVector{Tv}) = s
 convert{Tv,Ti}(::Type{SparseVector{Tv,Ti}}, s::SparseVector{Tv,Ti}) = s
-convert{Tv,Ti,TvS,TiS}(::Type{SparseVector{Tv,Ti}}, s::SparseVector{TvS,TiS}) =
+convert{Tv,Ti}(::Type{SparseVector{Tv,Ti}}, s::SparseVector) =
     SparseVector{Tv,Ti}(s.n, convert(Vector{Ti}, s.nzind), convert(Vector{Tv}, s.nzval))
 
-convert{Tv,TvS,TiS}(::Type{SparseVector{Tv}}, s::SparseVector{TvS,TiS}) =
-    SparseVector{Tv,TiS}(s.n, s.nzind, convert(Vector{Tv}, s.nzval))
+convert{Tv,Ti}(::Type{SparseVector{Tv}}, s::SparseVector{<:Any,Ti}) =
+    SparseVector{Tv,Ti}(s.n, s.nzind, convert(Vector{Tv}, s.nzval))
 
 
 ### copying
@@ -409,14 +466,13 @@ function getindex(x::SparseMatrixCSC, I::UnitRange, j::Integer)
 end
 
 # In the general case, we piggy back upon SparseMatrixCSC's optimized solution
-@inline function getindex{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::Integer)
+@inline function getindex(A::SparseMatrixCSC, I::AbstractVector, J::Integer)
     M = A[I, [J]]
     SparseVector(M.m, M.rowval, M.nzval)
 end
 
 # Row slices
 getindex(A::SparseMatrixCSC, i::Integer, ::Colon) = A[i, 1:end]
-getindex{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, i::Integer, J::AbstractVector{Bool}) = A[i, find(J)]
 function Base.getindex{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, i::Integer, J::AbstractVector)
     checkbounds(A, i, J)
     nJ = length(J)
@@ -448,8 +504,8 @@ end
 
 
 # Logical and linear indexing into SparseMatrices
-getindex{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractVector{Bool}) = _logical_index(A, I) # Ambiguities
-getindex{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractArray{Bool}) = _logical_index(A, I)
+getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}) = _logical_index(A, I) # Ambiguities
+getindex(A::SparseMatrixCSC, I::AbstractArray{Bool}) = _logical_index(A, I)
 function _logical_index{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractArray{Bool})
     checkbounds(A, I)
     n = sum(I)
@@ -564,7 +620,7 @@ function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractVector)
     SparseVector(n, rowvalB, nzvalB)
 end
 
-function find{Tv,Ti}(x::SparseVector{Tv,Ti})
+function find{Ti}(x::SparseVector{<:Any,Ti})
     numnz = nnz(x)
     I = Array{Ti,1}(numnz)
 
@@ -623,7 +679,7 @@ function _spgetindex{Tv,Ti}(m::Int, nzind::AbstractVector{Ti}, nzval::AbstractVe
     (ii <= m && nzind[ii] == i) ? nzval[ii] : zero(Tv)
 end
 
-function getindex{Tv}(x::AbstractSparseVector{Tv}, i::Integer)
+function getindex(x::AbstractSparseVector, i::Integer)
     checkbounds(x, i)
     _spgetindex(nnz(x), nonzeroinds(x), nonzeros(x), i)
 end
@@ -659,15 +715,15 @@ function getindex{Tv,Ti}(x::AbstractSparseVector{Tv,Ti}, I::UnitRange)
     SparseVector(length(I), rind, rval)
 end
 
-getindex{Tv,Ti}(x::AbstractSparseVector{Tv,Ti}, I::AbstractVector{Bool}) = x[find(I)]
-getindex{Tv,Ti}(x::AbstractSparseVector{Tv,Ti}, I::AbstractArray{Bool}) = x[find(I)]
-@inline function getindex{Tv,Ti}(x::AbstractSparseVector{Tv,Ti}, I::AbstractVector)
+getindex(x::AbstractSparseVector, I::AbstractVector{Bool}) = x[find(I)]
+getindex(x::AbstractSparseVector, I::AbstractArray{Bool}) = x[find(I)]
+@inline function getindex(x::AbstractSparseVector, I::AbstractVector)
     # SparseMatrixCSC has a nicely optimized routine for this; punt
     S = SparseMatrixCSC(x.n, 1, [1,length(x.nzind)+1], x.nzind, x.nzval)
     S[I, 1]
 end
 
-function getindex{Tv,Ti}(x::AbstractSparseVector{Tv,Ti}, I::AbstractArray)
+function getindex(x::AbstractSparseVector, I::AbstractArray)
     # punt to SparseMatrixCSC
     S = SparseMatrixCSC(x.n, 1, [1,length(x.nzind)+1], x.nzind, x.nzval)
     S[I]
@@ -678,58 +734,63 @@ getindex(x::AbstractSparseVector, ::Colon) = copy(x)
 ### show and friends
 
 function show(io::IO, ::MIME"text/plain", x::AbstractSparseVector)
-    println(io, summary(x))
-    show(io, x)
+    xnnz = length(nonzeros(x))
+    print(io, length(x), "-element ", typeof(x), " with ", xnnz,
+           " stored ", xnnz == 1 ? "entry" : "entries")
+    if xnnz != 0
+        println(io, ":")
+        show(io, x)
+    end
 end
 
-function show(io::IO, x::AbstractSparseVector)
+show(io::IO, x::AbstractSparseVector) = show(convert(IOContext, io), x)
+function show(io::IOContext, x::AbstractSparseVector)
     # TODO: make this a one-line form
     n = length(x)
     nzind = nonzeroinds(x)
     nzval = nonzeros(x)
     xnnz = length(nzind)
-
+    if length(nzind) == 0
+        return show(io, MIME("text/plain"), x)
+    end
     limit::Bool = get(io, :limit, false)
     half_screen_rows = limit ? div(displaysize(io)[1] - 8, 2) : typemax(Int)
     pad = ndigits(n)
-    sep = "\n\t"
-    io = IOContext(io)
     if !haskey(io, :compact)
         io = IOContext(io, :compact => true)
     end
     for k = 1:length(nzind)
         if k < half_screen_rows || k > xnnz - half_screen_rows
             print(io, "  ", '[', rpad(nzind[k], pad), "]  =  ")
-            Base.show(io, nzval[k])
-            println(io)
+            if isassigned(nzval, Int(k))
+                show(io, nzval[k])
+            else
+                print(io, Base.undef_ref_str)
+            end
+            k != length(nzind) && println(io)
         elseif k == half_screen_rows
             println(io, "   ", " "^pad, "   \u22ee")
         end
     end
 end
 
-function summary(x::AbstractSparseVector)
-    string("Sparse vector of length ", length(x), " with ", length(nonzeros(x)),
-           " ",  eltype(x), " nonzero entries:")
-end
-
 ### Conversion to matrix
 
-function convert{TvD,TiD,Tv,Ti}(::Type{SparseMatrixCSC{TvD,TiD}}, x::AbstractSparseVector{Tv,Ti})
+function convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, x::AbstractSparseVector)
     n = length(x)
     xnzind = nonzeroinds(x)
     xnzval = nonzeros(x)
     m = length(xnzind)
-    colptr = TiD[1, m+1]
+    colptr = Ti[1, m+1]
     # Note that this *cannot* share data like normal array conversions, since
     # modifying one would put the other in an inconsistent state
-    rowval = collect(TiD, xnzind)
-    nzval = collect(TvD, xnzval)
+    rowval = collect(Ti, xnzind)
+    nzval = collect(Tv, xnzval)
     SparseMatrixCSC(n, 1, colptr, rowval, nzval)
 end
 
-convert{TvD,Tv,Ti}(::Type{SparseMatrixCSC{TvD}}, x::AbstractSparseVector{Tv,Ti}) =
-    convert(SparseMatrixCSC{TvD,Ti}, x)
+convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv}}, x::AbstractSparseVector{<:Any,Ti}) =
+    convert(SparseMatrixCSC{Tv,Ti}, x)
 
 convert{Tv,Ti}(::Type{SparseMatrixCSC}, x::AbstractSparseVector{Tv,Ti}) =
     convert(SparseMatrixCSC{Tv,Ti}, x)
@@ -762,11 +823,11 @@ function reinterpret{T,Tv}(::Type{T}, x::AbstractSparseVector{Tv})
     SparseVector(length(x), copy(nonzeroinds(x)), reinterpret(T, nonzeros(x)))
 end
 
-float{Tv<:AbstractFloat}(x::AbstractSparseVector{Tv}) = x
+float(x::AbstractSparseVector{<:AbstractFloat}) = x
 float(x::AbstractSparseVector) =
     SparseVector(length(x), copy(nonzeroinds(x)), float(nonzeros(x)))
 
-complex{Tv<:Complex}(x::AbstractSparseVector{Tv}) = x
+complex(x::AbstractSparseVector{<:Complex}) = x
 complex(x::AbstractSparseVector) =
     SparseVector(length(x), copy(nonzeroinds(x)), complex(nonzeros(x)))
 
@@ -854,24 +915,24 @@ vcat(Xin::Union{Vector, AbstractSparseVector}...) = vcat(map(sparse, Xin)...)
 
 # TODO: A definition similar to the third exists in base/linalg/bidiag.jl. These definitions
 # should be consolidated in a more appropriate location, e.g. base/linalg/special.jl.
-typealias _SparseArrays Union{SparseVector, SparseMatrixCSC}
-typealias _SpecialArrays Union{Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal}
-typealias _SparseConcatArrays Union{_SpecialArrays, _SparseArrays}
+const _SparseArrays = Union{SparseVector, SparseMatrixCSC}
+const _SpecialArrays = Union{Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal}
+const _SparseConcatArrays = Union{_SpecialArrays, _SparseArrays}
 
-typealias _Symmetric_SparseConcatArrays{T,A<:_SparseConcatArrays} Symmetric{T,A}
-typealias _Hermitian_SparseConcatArrays{T,A<:_SparseConcatArrays} Hermitian{T,A}
-typealias _Triangular_SparseConcatArrays{T,A<:_SparseConcatArrays} Base.LinAlg.AbstractTriangular{T,A}
-typealias _Annotated_SparseConcatArrays Union{_Triangular_SparseConcatArrays, _Symmetric_SparseConcatArrays, _Hermitian_SparseConcatArrays}
+const _Symmetric_SparseConcatArrays{T,A<:_SparseConcatArrays} = Symmetric{T,A}
+const _Hermitian_SparseConcatArrays{T,A<:_SparseConcatArrays} = Hermitian{T,A}
+const _Triangular_SparseConcatArrays{T,A<:_SparseConcatArrays} = Base.LinAlg.AbstractTriangular{T,A}
+const _Annotated_SparseConcatArrays = Union{_Triangular_SparseConcatArrays, _Symmetric_SparseConcatArrays, _Hermitian_SparseConcatArrays}
 
-typealias _Symmetric_DenseArrays{T,A<:Matrix} Symmetric{T,A}
-typealias _Hermitian_DenseArrays{T,A<:Matrix} Hermitian{T,A}
-typealias _Triangular_DenseArrays{T,A<:Matrix} Base.LinAlg.AbstractTriangular{T,A}
-typealias _Annotated_DenseArrays Union{_Triangular_DenseArrays, _Symmetric_DenseArrays, _Hermitian_DenseArrays}
-typealias _Annotated_Typed_DenseArrays{T} Union{_Triangular_DenseArrays{T}, _Symmetric_DenseArrays{T}, _Hermitian_DenseArrays{T}}
+const _Symmetric_DenseArrays{T,A<:Matrix} = Symmetric{T,A}
+const _Hermitian_DenseArrays{T,A<:Matrix} = Hermitian{T,A}
+const _Triangular_DenseArrays{T,A<:Matrix} = Base.LinAlg.AbstractTriangular{T,A}
+const _Annotated_DenseArrays = Union{_Triangular_DenseArrays, _Symmetric_DenseArrays, _Hermitian_DenseArrays}
+const _Annotated_Typed_DenseArrays{T} = Union{_Triangular_DenseArrays{T}, _Symmetric_DenseArrays{T}, _Hermitian_DenseArrays{T}}
 
-typealias _SparseConcatGroup Union{Vector, Matrix, _SparseConcatArrays, _Annotated_SparseConcatArrays, _Annotated_DenseArrays}
-typealias _DenseConcatGroup Union{Vector, Matrix, _Annotated_DenseArrays}
-typealias _TypedDenseConcatGroup{T} Union{Vector{T}, Matrix{T}, _Annotated_Typed_DenseArrays{T}}
+const _SparseConcatGroup = Union{Vector, Matrix, _SparseConcatArrays, _Annotated_SparseConcatArrays, _Annotated_DenseArrays}
+const _DenseConcatGroup = Union{Vector, Matrix, _Annotated_DenseArrays}
+const _TypedDenseConcatGroup{T} = Union{Vector{T}, Matrix{T}, _Annotated_Typed_DenseArrays{T}}
 
 # Concatenations involving un/annotated sparse/special matrices/vectors should yield sparse arrays
 function cat(catdims, Xin::_SparseConcatGroup...)
@@ -902,7 +963,7 @@ end
 # make sure UniformScaling objects are converted to sparse matrices for concatenation
 promote_to_array_type(A::Tuple{Vararg{Union{_SparseConcatGroup,UniformScaling}}}) = (@_pure_meta; SparseMatrixCSC)
 promote_to_array_type(A::Tuple{Vararg{Union{_DenseConcatGroup,UniformScaling}}}) = (@_pure_meta; Matrix)
-promote_to_arrays_{T}(n::Int, ::Type{SparseMatrixCSC}, J::UniformScaling{T}) = sparse(J, n,n)
+promote_to_arrays_(n::Int, ::Type{SparseMatrixCSC}, J::UniformScaling) = sparse(J, n, n)
 
 # Concatenations strictly involving un/annotated dense matrices/vectors should yield dense arrays
 cat(catdims, xs::_DenseConcatGroup...) = Base.cat_t(catdims, promote_eltype(xs...), xs...)
@@ -957,7 +1018,7 @@ macro unarymap_nz2z_z2z(op, TF)
     end)
 end
 
-real{T<:Real}(x::AbstractSparseVector{T}) = x
+real(x::AbstractSparseVector{<:Real}) = x
 @unarymap_nz2z_z2z real Complex
 
 imag{Tv<:Real,Ti<:Integer}(x::AbstractSparseVector{Tv,Ti}) = SparseVector(length(x), Ti[], Tv[])
@@ -978,7 +1039,7 @@ end
 
 macro unarymap_z2nz(op, TF)
     esc(quote
-        function $(op){Tv<:$(TF),Ti<:Integer}(x::AbstractSparseVector{Tv,Ti})
+        function $(op){Tv<:$(TF)}(x::AbstractSparseVector{Tv,<:Integer})
             v0 = $(op)(zero(Tv))
             R = typeof(v0)
             xnzind = nonzeroinds(x)
@@ -1270,19 +1331,19 @@ end
 
 # definition of other binary functions
 
-broadcast{Tx<:Real,Ty<:Real}(::typeof(min), x::SparseVector{Tx}, y::SparseVector{Ty}) = _binarymap(min, x, y, 2)
-broadcast{Tx<:Real,Ty<:Real}(::typeof(min), x::AbstractSparseVector{Tx}, y::AbstractSparseVector{Ty}) = _binarymap(min, x, y, 2)
-broadcast{Tx<:Real,Ty<:Real}(::typeof(min), x::StridedVector{Tx}, y::AbstractSparseVector{Ty}) = _binarymap(min, x, y, 2)
-broadcast{Tx<:Real,Ty<:Real}(::typeof(min), x::AbstractSparseVector{Tx}, y::StridedVector{Ty}) = _binarymap(min, x, y, 2)
+broadcast(::typeof(min), x::SparseVector{<:Real}, y::SparseVector{<:Real}) = _binarymap(min, x, y, 2)
+broadcast(::typeof(min), x::AbstractSparseVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(min, x, y, 2)
+broadcast(::typeof(min), x::StridedVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(min, x, y, 2)
+broadcast(::typeof(min), x::AbstractSparseVector{<:Real}, y::StridedVector{<:Real}) = _binarymap(min, x, y, 2)
 
-broadcast{Tx<:Real,Ty<:Real}(::typeof(max), x::SparseVector{Tx}, y::SparseVector{Ty}) = _binarymap(max, x, y, 2)
-broadcast{Tx<:Real,Ty<:Real}(::typeof(max), x::AbstractSparseVector{Tx}, y::AbstractSparseVector{Ty}) = _binarymap(max, x, y, 2)
-broadcast{Tx<:Real,Ty<:Real}(::typeof(max), x::StridedVector{Tx}, y::AbstractSparseVector{Ty}) = _binarymap(max, x, y, 2)
-broadcast{Tx<:Real,Ty<:Real}(::typeof(max), x::AbstractSparseVector{Tx}, y::StridedVector{Ty}) = _binarymap(max, x, y, 2)
+broadcast(::typeof(max), x::SparseVector{<:Real}, y::SparseVector{<:Real}) = _binarymap(max, x, y, 2)
+broadcast(::typeof(max), x::AbstractSparseVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(max, x, y, 2)
+broadcast(::typeof(max), x::StridedVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(max, x, y, 2)
+broadcast(::typeof(max), x::AbstractSparseVector{<:Real}, y::StridedVector{<:Real}) = _binarymap(max, x, y, 2)
 
-complex{Tx<:Real,Ty<:Real}(x::AbstractSparseVector{Tx}, y::AbstractSparseVector{Ty}) = _binarymap(complex, x, y, 1)
-complex{Tx<:Real,Ty<:Real}(x::StridedVector{Tx}, y::AbstractSparseVector{Ty}) = _binarymap(complex, x, y, 1)
-complex{Tx<:Real,Ty<:Real}(x::AbstractSparseVector{Tx}, y::StridedVector{Ty}) = _binarymap(complex, x, y, 1)
+complex(x::AbstractSparseVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(complex, x, y, 1)
+complex(x::StridedVector{<:Real}, y::AbstractSparseVector{<:Real}) = _binarymap(complex, x, y, 1)
+complex(x::AbstractSparseVector{<:Real}, y::StridedVector{<:Real}) = _binarymap(complex, x, y, 1)
 
 ### Reduction
 
@@ -1334,13 +1395,13 @@ function LinAlg.axpy!(a::Number, x::AbstractSparseVector, y::StridedVector)
     nzval = nonzeros(x)
     m = length(nzind)
 
-    if a == one(a)
+    if a == oneunit(a)
         for i = 1:m
             @inbounds ii = nzind[i]
             @inbounds v = nzval[i]
             y[ii] += v
         end
-    elseif a == -one(a)
+    elseif a == -oneunit(a)
         for i = 1:m
             @inbounds ii = nzind[i]
             @inbounds v = nzval[i]
@@ -1419,7 +1480,7 @@ function _spdot(f::Function,
     s
 end
 
-function dot{Tx<:Number,Ty<:Number}(x::AbstractSparseVector{Tx}, y::AbstractSparseVector{Ty})
+function dot(x::AbstractSparseVector{<:Number}, y::AbstractSparseVector{<:Number})
     x === y && return sum(abs2, x)
     n = length(x)
     length(y) == n || throw(DimensionMismatch())
@@ -1578,18 +1639,18 @@ end
 At_mul_B!{Tx,Ty}(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) =
     At_mul_B!(one(Tx), A, x, zero(Ty), y)
 
-At_mul_B!{Tx,Ty}(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}, β::Number, y::StridedVector{Ty}) =
+At_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector) =
     _At_or_Ac_mul_B!(*, α, A, x, β, y)
 
 Ac_mul_B!{Tx,Ty}(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) =
     Ac_mul_B!(one(Tx), A, x, zero(Ty), y)
 
-Ac_mul_B!{Tx,Ty}(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}, β::Number, y::StridedVector{Ty}) =
+Ac_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector) =
     _At_or_Ac_mul_B!(dot, α, A, x, β, y)
 
-function _At_or_Ac_mul_B!{Tx,Ty}(tfun::Function,
-                                 α::Number, A::SparseMatrixCSC, x::AbstractSparseVector{Tx},
-                                 β::Number, y::StridedVector{Ty})
+function _At_or_Ac_mul_B!(tfun::Function,
+                          α::Number, A::SparseMatrixCSC, x::AbstractSparseVector,
+                          β::Number, y::StridedVector)
     m, n = size(A)
     length(x) == m && length(y) == n || throw(DimensionMismatch())
     n == 0 && return y
@@ -1679,7 +1740,7 @@ for isunittri in (true, false), islowertri in (true, false)
         (true,  :(Ac_ldiv_B), :(Ac_ldiv_B!)) )
 
         # broad method where elements are Numbers
-        @eval function ($func){TA<:Number,Tb<:Number,S<:AbstractMatrix}(A::$tritype{TA,S}, b::SparseVector{Tb})
+        @eval function ($func){TA<:Number,Tb<:Number}(A::$tritype{TA,<:AbstractMatrix}, b::SparseVector{Tb})
             TAb = $(isunittri ?
                 :(typeof(zero(TA)*zero(Tb) + zero(TA)*zero(Tb))) :
                 :(typeof((zero(TA)*zero(Tb) + zero(TA)*zero(Tb))/one(TA))) )
@@ -1688,7 +1749,7 @@ for isunittri in (true, false), islowertri in (true, false)
 
         # faster method requiring good view support of the
         # triangular matrix type. hence the StridedMatrix restriction.
-        @eval function ($func){TA<:Number,Tb<:Number,S<:StridedMatrix}(A::$tritype{TA,S}, b::SparseVector{Tb})
+        @eval function ($func){TA<:Number,Tb<:Number}(A::$tritype{TA,<:StridedMatrix}, b::SparseVector{Tb})
             TAb = $(isunittri ?
                 :(typeof(zero(TA)*zero(Tb) + zero(TA)*zero(Tb))) :
                 :(typeof((zero(TA)*zero(Tb) + zero(TA)*zero(Tb))/one(TA))) )
@@ -1720,7 +1781,7 @@ for isunittri in (true, false), islowertri in (true, false)
         # the generic in-place left-division methods handle these cases, but
         # we can achieve greater efficiency where the triangular matrix provides
         # good view support. hence the StridedMatrix restriction.
-        @eval function ($func){TA,Tb,S<:StridedMatrix}(A::$tritype{TA,S}, b::SparseVector{Tb})
+        @eval function ($func)(A::$tritype{<:Any,<:StridedMatrix}, b::SparseVector)
             # If b has no nonzero entries, the result is necessarily zero and this call
             # reduces to a no-op. If b has nonzero entries, then...
             if nnz(b) != 0

@@ -168,7 +168,7 @@ let
 end
 
 # issue #1438
-type I1438T
+mutable struct I1438T
     id
 end
 import Base.hash
@@ -268,7 +268,7 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
     for cols in (12, 40, 80), rows in (2, 10, 24)
         # Ensure output is limited as requested
         s = IOBuffer()
-        io = Base.IOContext(s, limit=true, displaysize=(rows, cols))
+        io = Base.IOContext(Base.IOContext(s, :limit => true), :displaysize => (rows, cols))
         Base.show(io, MIME("text/plain"), d)
         out = split(String(take!(s)),'\n')
         for line in out[2:end]
@@ -278,7 +278,7 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
 
         for f in (keys, values)
             s = IOBuffer()
-            io = Base.IOContext(s, limit=true, displaysize=(rows, cols))
+            io = Base.IOContext(Base.IOContext(s, :limit => true), :displaysize => (rows, cols))
             Base.show(io, MIME("text/plain"), f(d))
             out = split(String(take!(s)),'\n')
             for line in out[2:end]
@@ -308,10 +308,10 @@ let d = Dict((1=>2) => (3=>45), (3=>10) => (10=>11))
 end
 
 # issue #9463
-type Alpha end
+mutable struct Alpha end
 Base.show(io::IO, ::Alpha) = print(io,"α")
 let sbuff = IOBuffer(),
-    io = Base.IOContext(sbuff, limit=true, displaysize=(10, 20))
+    io = Base.IOContext(Base.IOContext(sbuff, :limit => true), :displaysize => (10, 20))
 
     Base.show(io, MIME("text/plain"), Dict(Alpha()=>1))
     @test !contains(String(sbuff), "…")
@@ -359,7 +359,7 @@ let d = Dict()
 end
 
 # issue #10647
-type T10647{T}; x::T; end
+mutable struct T10647{T}; x::T; end
 let a = ObjectIdDict()
     a[1] = a
     a[a] = 2
@@ -514,7 +514,7 @@ let d = Dict(zip(1:1000,1:1000)), f = (k,v) -> iseven(k)
 end
 
 # issue #15077
-immutable MyString <: AbstractString
+struct MyString <: AbstractString
     str::String
 end
 import Base.==
@@ -565,7 +565,7 @@ let badKeys = [
     end
 end
 
-immutable MyInt <: Integer
+struct MyInt <: Integer
     val::UInt
 end
 
@@ -651,7 +651,7 @@ end
     @test hash(a) != hash(b)
 end
 
-type Foo_15776
+mutable struct Foo_15776
     x::Vector{Pair{Tuple{Function, Vararg{Int}}, Int}}
 end
 @testset "issue #15776, convert for pair" begin
@@ -667,7 +667,7 @@ end
     @test_throws UndefVarError Dict(x => y for x in 1:10)
 end
 
-type Error19179 <: Exception
+mutable struct Error19179 <: Exception
 end
 
 @testset "issue #19179 throwing error in dict constructor" begin

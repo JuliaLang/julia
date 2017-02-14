@@ -19,7 +19,7 @@ export FieldValue, Field, validmax, secondmax
 #  l4 : for favoring dependants over dependencies
 #  l5 : for symmetry-breaking random noise
 #
-immutable FieldValue
+struct FieldValue
     l0::Int
     l1::VersionWeight
     l2::VersionWeight
@@ -34,7 +34,7 @@ FieldValue(l0::Integer, l1::VersionWeight) = FieldValue(l0, l1, zero(VersionWeig
 FieldValue(l0::Integer) = FieldValue(l0, zero(VersionWeight))
 FieldValue() = FieldValue(0)
 
-typealias Field Vector{FieldValue}
+const Field = Vector{FieldValue}
 
 Base.zero(::Type{FieldValue}) = FieldValue()
 

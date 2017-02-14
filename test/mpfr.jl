@@ -420,16 +420,6 @@ setprecision(256) do
     @test_throws DomainError factorial(BigFloat(331.3))
 end
 
-# bessel functions
-setprecision(53) do
-    @test besselj(4, BigFloat(2)) ≈ besselj(4, 2.)
-    @test besselj0(BigFloat(2)) ≈ besselj0(2.)
-    @test besselj1(BigFloat(2)) ≈ besselj1(2.)
-    @test bessely(4, BigFloat(2)) ≈ bessely(4, 2.)
-    @test bessely0(BigFloat(2)) ≈ bessely0(2.)
-    @test bessely1(BigFloat(2)) ≈ bessely1(2.)
-end
-
 # trigonometric functions
 setprecision(53) do
     for f in (:sin,:cos,:tan,:sec,:csc,:cot,:acos,:asin,:atan,
@@ -848,11 +838,6 @@ i3 = trunc(Integer,f)
 @test i3+1 > f
 @test i3+1 >= f
 
-let err(z, x) = abs(z - x) / abs(x)
-    @test 1e-60 > err(eta(parse(BigFloat,"1.005")), parse(BigFloat,"0.693945708117842473436705502427198307157819636785324430166786"))
-    @test 1e-60 > err(exp(eta(big(1.0))), 2.0)
-end
-
 # issue #8318
 @test convert(Int64,big(500_000_000_000_000.)) == 500_000_000_000_000
 
@@ -893,4 +878,10 @@ for prec in (10, 100, 1000)
             (val != 3.1) && @test e > d     # rounding has no effect when constructing from Float64
         end
     end
+end
+
+setprecision(256) do
+    @test string(big(Inf)) == "BigFloat(Inf, 256)"
+    @test string(big(-Inf)) == "BigFloat(-Inf, 256)"
+    @test string(big(NaN)) == "BigFloat(NaN, 256)"
 end

@@ -126,10 +126,10 @@ function ctranspose(A::AbstractMatrix)
     ctranspose!(B, A)
 end
 
-@inline ctranspose{T<:Real}(A::AbstractVecOrMat{T}) = transpose(A)
+@inline ctranspose(A::AbstractVecOrMat{<:Real}) = transpose(A)
 
-function copy_transpose!{R,S}(B::AbstractVecOrMat{R}, ir_dest::Range{Int}, jr_dest::Range{Int},
-                              A::AbstractVecOrMat{S}, ir_src::Range{Int}, jr_src::Range{Int})
+function copy_transpose!(B::AbstractVecOrMat, ir_dest::Range{Int}, jr_dest::Range{Int},
+                         A::AbstractVecOrMat, ir_src::Range{Int}, jr_src::Range{Int})
     if length(ir_dest) != length(jr_src)
         throw(ArgumentError(string("source and destination must have same size (got ",
                                    length(jr_src)," and ",length(ir_dest),")")))

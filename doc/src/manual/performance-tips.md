@@ -162,7 +162,7 @@ specific instances where declarations are helpful.
 Types can be declared without specifying the types of their fields:
 
 ```jldoctest myambig
-julia> type MyAmbiguousType
+julia> struct MyAmbiguousType
            a
        end
 ```
@@ -196,7 +196,7 @@ You can do better by declaring the type of `a`. Here, we are focused on the case
 be any one of several types, in which case the natural solution is to use parameters. For example:
 
 ```jldoctest myambig2
-julia> type MyType{T<:AbstractFloat}
+julia> mutable struct MyType{T<:AbstractFloat}
            a::T
        end
 ```
@@ -204,7 +204,7 @@ julia> type MyType{T<:AbstractFloat}
 This is a better choice than
 
 ```jldoctest myambig2
-julia> type MyStillAmbiguousType
+julia> mutable struct MyStillAmbiguousType
            a::AbstractFloat
        end
 ```
@@ -296,11 +296,11 @@ to resolve the type at run-time. This results in shorter and faster code.
 The same best practices also work for container types:
 
 ```jldoctest containers
-julia> type MySimpleContainer{A<:AbstractVector}
+julia> mutable struct MySimpleContainer{A<:AbstractVector}
            a::A
        end
 
-julia> type MyAmbiguousContainer{T}
+julia> mutable struct MyAmbiguousContainer{T}
            a::AbstractVector{T}
        end
 ```
@@ -372,7 +372,7 @@ or other abstract types. To prevent such tedium, you can use two parameters in t
 of `MyContainer`:
 
 ```jldoctest containers2
-julia> type MyContainer{T, A<:AbstractVector}
+julia> mutable struct MyContainer{T, A<:AbstractVector}
            a::A
        end
 
@@ -439,7 +439,7 @@ MyContainer{Int64,UnitRange{Float64}}
 To prevent this, we can add an inner constructor:
 
 ```jldoctest containers3
-julia> type MyBetterContainer{T<:Real, A<:AbstractVector}
+julia> mutable struct MyBetterContainer{T<:Real, A<:AbstractVector}
            a::A
            MyBetterContainer(v::AbstractVector{T}) = new(v)
        end
@@ -564,7 +564,8 @@ optimize the body of the loop. There are several possible fixes:
 
   * Initialize `x` with `x = 1.0`
   * Declare the type of `x`: `x::Float64 = 1`
-  * Use an explicit conversion: `x = one(T)`
+  * Use an explicit conversion: `x = oneunit(T)`
+  * Initialize with the first loop iteration, to `x = 1/bar()`, then loop `for i = 2:10`
 
 ## [Separate kernel functions (aka, function barriers)](@id kernal-functions)
 
@@ -730,7 +731,7 @@ and try to use it for everything. For example, you might imagine using it to sto
 e.g.
 
 ```
-immutable Car{Make,Model}
+struct Car{Make,Model}
     year::Int
     ...more fields...
 end

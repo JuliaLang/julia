@@ -14,20 +14,20 @@ const BitSigned_types     = (BitSigned64_types..., Int128)
 const BitUnsigned_types   = (BitUnsigned64_types..., UInt128)
 const BitInteger_types    = (BitSigned_types..., BitUnsigned_types...)
 
-typealias BitSigned64   Union{BitSigned64_types...}
-typealias BitUnsigned64 Union{BitUnsigned64_types...}
-typealias BitInteger64  Union{BitInteger64_types...}
-typealias BitSigned     Union{BitSigned_types...}
-typealias BitUnsigned   Union{BitUnsigned_types...}
-typealias BitInteger    Union{BitInteger_types...}
-typealias BitSigned64T  Union{Type{Int8}, Type{Int16}, Type{Int32}, Type{Int64}}
-typealias BitUnsigned64T Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt64}}
+const BitSigned64    = Union{BitSigned64_types...}
+const BitUnsigned64  = Union{BitUnsigned64_types...}
+const BitInteger64   = Union{BitInteger64_types...}
+const BitSigned      = Union{BitSigned_types...}
+const BitUnsigned    = Union{BitUnsigned_types...}
+const BitInteger     = Union{BitInteger_types...}
+const BitSigned64T   = Union{Type{Int8}, Type{Int16}, Type{Int32}, Type{Int64}}
+const BitUnsigned64T = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt64}}
 
 ## integer comparisons ##
 
 <{T<:BitSigned}(x::T, y::T)  = slt_int(x, y)
 
--{T<:BitInteger}(x::T)       = neg_int(x)
+-(x::BitInteger)             = neg_int(x)
 -{T<:BitInteger}(x::T, y::T) = sub_int(x, y)
 +{T<:BitInteger}(x::T, y::T) = add_int(x, y)
 *{T<:BitInteger}(x::T, y::T) = mul_int(x, y)
@@ -166,13 +166,13 @@ end
 
 ## integer bitwise operations ##
 
-(~){T<:BitInteger}(x::T)       = not_int(x)
+(~)(x::BitInteger)             = not_int(x)
 (&){T<:BitInteger}(x::T, y::T) = and_int(x, y)
 (|){T<:BitInteger}(x::T, y::T) = or_int(x, y)
 xor{T<:BitInteger}(x::T, y::T) = xor_int(x, y)
 
-bswap{T<:Union{Int8, UInt8}}(x::T) = x
-bswap{T<:Union{Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}}(x::T) =
+bswap(x::Union{Int8, UInt8}) = x
+bswap(x::Union{Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}) =
     bswap_int(x)
 
 """
@@ -185,7 +185,7 @@ julia> count_ones(7)
 3
 ```
 """
-count_ones{T<:BitInteger}(x::T) = Int(ctpop_int(x))
+count_ones(x::BitInteger) = Int(ctpop_int(x))
 
 """
     leading_zeros(x::Integer) -> Integer
@@ -197,7 +197,7 @@ julia> leading_zeros(Int32(1))
 31
 ```
 """
-leading_zeros{T<:BitInteger}(x::T) = Int(ctlz_int(x))
+leading_zeros(x::BitInteger) = Int(ctlz_int(x))
 
 """
     trailing_zeros(x::Integer) -> Integer
@@ -209,7 +209,7 @@ julia> trailing_zeros(2)
 1
 ```
 """
-trailing_zeros{T<:BitInteger}(x::T) = Int(cttz_int(x))
+trailing_zeros(x::BitInteger) = Int(cttz_int(x))
 
 """
     count_zeros(x::Integer) -> Integer
@@ -263,10 +263,10 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 ## integer shifts ##
 
 # unsigned shift counts always shift in the same direction
->>{T<:BitSigned,S<:BitUnsigned}(x::T, y::S) = ashr_int(x, y)
->>{T<:BitUnsigned,S<:BitUnsigned}(x::T, y::S) = lshr_int(x, y)
-<<{T<:BitInteger,S<:BitUnsigned}(x::T,  y::S) = shl_int(x, y)
->>>{T<:BitInteger,S<:BitUnsigned}(x::T, y::S) = lshr_int(x, y)
+>>(x::BitSigned,   y::BitUnsigned) = ashr_int(x, y)
+>>(x::BitUnsigned, y::BitUnsigned) = lshr_int(x, y)
+<<(x::BitInteger,  y::BitUnsigned) = shl_int(x, y)
+>>>(x::BitInteger, y::BitUnsigned) = lshr_int(x, y)
 # signed shift counts can shift in either direction
 # note: this early during bootstrap, `>=` is not yet available
 # note: we only define Int shift counts here; the generic case is handled later
@@ -331,8 +331,8 @@ for (Ts, Tu) in ((Int8, UInt8), (Int16, UInt16), (Int32, UInt32), (Int64, UInt64
     @eval convert(::Type{Unsigned}, x::$Ts) = convert($Tu, x)
 end
 
-convert{T<:Union{Float32, Float64, Bool}}(::Type{Signed}, x::T) = convert(Int, x)
-convert{T<:Union{Float32, Float64, Bool}}(::Type{Unsigned}, x::T) = convert(UInt, x)
+convert(::Type{Signed}, x::Union{Float32, Float64, Bool}) = convert(Int, x)
+convert(::Type{Unsigned}, x::Union{Float32, Float64, Bool}) = convert(UInt, x)
 
 convert(::Type{Integer}, x::Integer) = x
 convert(::Type{Integer}, x::Real) = convert(Signed, x)
@@ -370,25 +370,25 @@ end
 
 promote_rule(::Type{Int8}, ::Type{Int16})   = Int16
 promote_rule(::Type{UInt8}, ::Type{UInt16}) = UInt16
-promote_rule{T<:Union{Int8,Int16}}(::Type{Int32}, ::Type{T})    = Int32
-promote_rule{T<:Union{UInt8,UInt16}}(::Type{UInt32}, ::Type{T}) = UInt32
-promote_rule{T<:Union{Int8,Int16,Int32}}(::Type{Int64}, ::Type{T})     = Int64
-promote_rule{T<:Union{UInt8,UInt16,UInt32}}(::Type{UInt64}, ::Type{T}) = UInt64
-promote_rule{T<:BitSigned64}(::Type{Int128}, ::Type{T})    = Int128
-promote_rule{T<:BitUnsigned64}(::Type{UInt128}, ::Type{T}) = UInt128
+promote_rule(::Type{Int32}, ::Type{<:Union{Int8,Int16}})    = Int32
+promote_rule(::Type{UInt32}, ::Type{<:Union{UInt8,UInt16}}) = UInt32
+promote_rule(::Type{Int64}, ::Type{<:Union{Int8,Int16,Int32}})     = Int64
+promote_rule(::Type{UInt64}, ::Type{<:Union{UInt8,UInt16,UInt32}}) = UInt64
+promote_rule(::Type{Int128}, ::Type{<:BitSigned64})    = Int128
+promote_rule(::Type{UInt128}, ::Type{<:BitUnsigned64}) = UInt128
 for T in BitSigned_types
-    @eval promote_rule{S<:Union{UInt8,UInt16}}(::Type{S}, ::Type{$T}) =
+    @eval promote_rule(::Type{<:Union{UInt8,UInt16}}, ::Type{$T}) =
         $(sizeof(T) < sizeof(Int) ? Int : T)
 end
-@eval promote_rule{T<:Union{Int8,Int16,Int32}}(::Type{UInt32}, ::Type{T}) =
+@eval promote_rule(::Type{UInt32}, ::Type{<:Union{Int8,Int16,Int32}}) =
     $(Core.sizeof(Int) == 8 ? Int : UInt)
 promote_rule(::Type{UInt32}, ::Type{Int64}) = Int64
-promote_rule{T<:BitSigned64}(::Type{UInt64}, ::Type{T}) = UInt64
-promote_rule{T<:Union{UInt32, UInt64}}(::Type{T}, ::Type{Int128}) = Int128
-promote_rule{T<:BitSigned}(::Type{UInt128}, ::Type{T}) = UInt128
+promote_rule(::Type{UInt64}, ::Type{<:BitSigned64}) = UInt64
+promote_rule(::Type{<:Union{UInt32, UInt64}}, ::Type{Int128}) = Int128
+promote_rule(::Type{UInt128}, ::Type{<:BitSigned}) = UInt128
 
-_default_type(T::Type{Unsigned}) = UInt
-_default_type(T::Union{Type{Integer},Type{Signed}}) = Int
+_default_type(::Type{Unsigned}) = UInt
+_default_type(::Union{Type{Integer},Type{Signed}}) = Int
 
 ## traits ##
 
@@ -413,10 +413,10 @@ typemax(::Type{UInt64}) = 0xffffffffffffffff
 @eval typemin(::Type{Int128} ) = $(convert(Int128, 1) << 127)
 @eval typemax(::Type{Int128} ) = $(bitcast(Int128, typemax(UInt128) >> 1))
 
-widen{T<:Union{Int8, Int16}}(::Type{T}) = Int32
+widen(::Type{<:Union{Int8, Int16}}) = Int32
 widen(::Type{Int32}) = Int64
 widen(::Type{Int64}) = Int128
-widen{T<:Union{UInt8, UInt16}}(::Type{T}) = UInt32
+widen(::Type{<:Union{UInt8, UInt16}}) = UInt32
 widen(::Type{UInt32}) = UInt64
 widen(::Type{UInt64}) = UInt128
 

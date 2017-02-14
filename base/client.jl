@@ -204,8 +204,13 @@ function parse_input_line(s::String; filename::String="none")
     #     throw(ParseError("extra input after end of expression"))
     # end
     # expr
-    ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
-        s, sizeof(s), filename, sizeof(filename))
+    ex = ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
+               s, sizeof(s), filename, sizeof(filename))
+    if ex === :_
+        # remove with 0.6 deprecation
+        expand(ex)  # to get possible warning about using _ as an rvalue
+    end
+    return ex
 end
 parse_input_line(s::AbstractString) = parse_input_line(String(s))
 
