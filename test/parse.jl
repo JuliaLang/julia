@@ -244,6 +244,12 @@ for T in vcat(subtypes(Signed), subtypes(Unsigned))
         @test exception_uint.msg == "input string is empty or only contains whitespace"
     end
 
+    # Test that the entire input string appears in error messages
+    let s = "     false    true     "
+        result = @test_throws ArgumentError get(Base.tryparse_internal(Bool, s, start(s), endof(s), 0, true))
+        @test result.value.msg == "invalid Bool representation: $(repr(s))"
+    end
+
     # Test that leading and trailing whitespace is ignored.
     for v in (1, 2, 3)
          @test parse(Int, "    $v"    ) == v
@@ -263,8 +269,9 @@ for T in vcat(subtypes(Signed), subtypes(Unsigned))
          @test parse(Float64, "$v    "    ) == v
          @test parse(Float64, "    $v    ") == v
     end
-    @test parse(Float64, "    .5    ") == 0.5
     @test parse(Float64, "    .5"    ) == 0.5
+    @test parse(Float64, "    .5\n"  ) == 0.5
+    @test parse(Float64, "    .5    ") == 0.5
     @test parse(Float64, ".5    "    ) == 0.5
 end
 
