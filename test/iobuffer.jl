@@ -5,7 +5,7 @@ ioslength(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
 let io = IOBuffer()
 @test eof(io)
 @test_throws EOFError read(io,UInt8)
-@test write(io,"abc") == 3
+@test write(io,"abc") === 3
 @test isreadable(io)
 @test iswritable(io)
 @test isopen(io)
@@ -29,7 +29,7 @@ truncate(io, 0)
 truncate(io, 10)
 @test position(io) == 0
 @test all(io.data .== 0)
-@test write(io,Int16[1,2,3,4,5,6]) == 12
+@test write(io,Int16[1,2,3,4,5,6]) === 12
 seek(io, 2)
 truncate(io, 10)
 @test ioslength(io) == 10
@@ -39,8 +39,8 @@ truncate(io, 0)
 @test write(io,"boston\ncambridge\n") > 0
 @test String(take!(io)) == "boston\ncambridge\n"
 @test String(take!(io)) == ""
-@test write(io, Complex{Float64}(0)) == 16
-@test write(io, Rational{Int64}(1//2)) == 16
+@test write(io, Complex{Float64}(0)) === 16
+@test write(io, Rational{Int64}(1//2)) === 16
 close(io)
 @test_throws ArgumentError write(io,UInt8[0])
 @test_throws ArgumentError seek(io,0)
@@ -115,11 +115,11 @@ write(io,[1,2,3])
 @test ioslength(io) == 75
 @test length(io.data) == 75
 skip(io,1)
-@test write(io,UInt8(104)) == 1
+@test write(io,UInt8(104)) === 1
 skip(io,3)
-@test write(io,b"apples") == 3
+@test write(io,b"apples") === 3
 skip(io,71)
-@test write(io,'y') == 1
+@test write(io,'y') === 1
 @test readstring(io) == "happy"
 @test eof(io)
 write(io,zeros(UInt8,73))
