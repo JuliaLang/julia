@@ -946,16 +946,17 @@ mktempdir() do dir
                 end
 
                 errfile = joinpath(root, "error")
-                reponame = "https://$hostname:4433/Example.jl"
+                repo_url = "https://$hostname:4433/Example.jl"
+                repo_dir = joinpath(root, "dest")
                 code = """
-                    dest = tempname()
+                    dest_dir = "$repo_dir"
                     open("$errfile", "w+") do f
                         try
-                            repo = LibGit2.clone("$reponame", dest)
+                            repo = LibGit2.clone("$repo_url", dest_dir)
                         catch err
                             serialize(f, err)
                         finally
-                            isdir(dest) && rm(dest, recursive=true)
+                            isdir(dest_dir) && rm(dest_dir, recursive=true)
                         end
                     end
                 """
@@ -971,7 +972,7 @@ mktempdir() do dir
 
                     rm(errfile)
 
-                    # Specify that Julia use onl the custom certificate. Note: we need to
+                    # Specify that Julia use only the custom certificate. Note: we need to
                     # spawn a new Julia process in order for this ENV variable to take effect.
                     withenv("SSL_CERT_FILE" => pem) do
                         run(cmd)
