@@ -341,7 +341,7 @@ If `T` does not have a specific size, an error is thrown.
 julia> sizeof(Base.LinAlg.LU)
 ERROR: argument is an abstract type; size is indeterminate
 Stacktrace:
- [1] sizeof(::Type{T} where T) at ./essentials.jl:147
+ [1] sizeof(::Type{T} where T) at ./essentials.jl:160
 ```
 """
 sizeof(::Type)

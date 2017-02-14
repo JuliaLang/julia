@@ -228,8 +228,8 @@ julia> A = [0 im; -1 0]
 julia> eigmax(A)
 ERROR: DomainError:
 Stacktrace:
- [1] #eigmax#38(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:234
- [2] eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:232
+ [1] #eigmax#40(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:238
+ [2] eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:236
 ```
 """
 function eigmax(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
@@ -270,8 +270,8 @@ julia> A = [0 im; -1 0]
 julia> eigmin(A)
 ERROR: DomainError:
 Stacktrace:
- [1] #eigmin#39(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:276
- [2] eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:274
+ [1] #eigmin#41(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:280
+ [2] eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:278
 ```
 """
 function eigmin(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
