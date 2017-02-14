@@ -22,12 +22,20 @@ S = OffsetArray(view(A0, 1:2, 1:2), (-1,2))   # LinearSlow
 @test_throws ErrorException size(A, 1)
 
 # Scalar indexing
-@test A[0,3] == A[1] == S[0,3] == S[1] == 1
-@test A[1,3] == A[2] == S[1,3] == S[2] == 2
-@test A[0,4] == A[3] == S[0,4] == S[3] == 3
-@test A[1,4] == A[4] == S[1,4] == S[4] == 4
+@test A[0,3] == A[1] == A[0,3,1] == S[0,3] == S[1] == S[0,3,1] == 1
+@test A[1,3] == A[2] == A[1,3,1] == S[1,3] == S[2] == S[1,3,1] == 2
+@test A[0,4] == A[3] == A[0,4,1] == S[0,4] == S[3] == S[0,4,1] == 3
+@test A[1,4] == A[4] == A[1,4,1] == S[1,4] == S[4] == S[1,4,1] == 4
 @test_throws BoundsError A[1,1]
 @test_throws BoundsError S[1,1]
+@test_throws BoundsError A[0,3,2]
+@test_throws BoundsError S[0,3,2]
+# partial indexing
+S3 = OffsetArray(view(reshape(collect(1:4*3*2), 4, 3, 2), 1:3, 1:2, :), (-1,-2,1))
+@test S3[1,-1] == 2
+@test S3[1,0] == 6
+@test_throws BoundsError S3[1,1]
+@test_throws BoundsError S3[1,-2]
 
 # Vector indexing
 @test A[:, 3] == S[:, 3] == OffsetArray([1,2], (A.offsets[1],))
