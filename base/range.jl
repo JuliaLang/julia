@@ -18,6 +18,11 @@ colon{T<:Real}(start::T, step::Real, stop::T) = colon(promote(start, step, stop)
     colon(start, [step], stop)
 
 Called by `:` syntax for constructing ranges.
+
+```jldoctest
+julia> colon(1, 2, 5)
+1:2:5
+```
 """
 colon{T<:AbstractFloat}(start::T, step::T, stop::T) = _colon(TypeOrder(T), TypeArithmetic(T), start, step, stop)
 colon{T<:Real}(start::T, step::T, stop::T) = _colon(TypeOrder(T), TypeArithmetic(T), start, step, stop)

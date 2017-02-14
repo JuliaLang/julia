@@ -122,6 +122,20 @@ end
 
 Update collection with pairs from the other collections.
 See also [`merge`](@ref).
+
+```jldoctest
+julia> d1 = Dict(1 => 2, 3 => 4);
+
+julia> d2 = Dict(1 => 4, 4 => 5);
+
+julia> merge!(d1, d2);
+
+julia> d1
+Dict{Int64,Int64} with 3 entries:
+  4 => 5
+  3 => 4
+  1 => 4
+```
 """
 function merge!(d::Associative, others::Associative...)
     for other in others
@@ -145,6 +159,11 @@ end
     keytype(type)
 
 Get the key type of an associative collection type. Behaves similarly to [`eltype`](@ref).
+
+```jldoctest
+julia> keytype(Dict(Int32(1) => "foo"))
+Int32
+```
 """
 keytype{K,V}(::Type{Associative{K,V}}) = K
 keytype(a::Associative) = keytype(typeof(a))
@@ -154,6 +173,11 @@ keytype{A<:Associative}(::Type{A}) = keytype(supertype(A))
     valtype(type)
 
 Get the value type of an associative collection type. Behaves similarly to [`eltype`](@ref).
+
+```jldoctest
+julia> valtype(Dict(Int32(1) => "foo"))
+String
+```
 """
 valtype{K,V}(::Type{Associative{K,V}}) = V
 valtype{A<:Associative}(::Type{A}) = valtype(supertype(A))
