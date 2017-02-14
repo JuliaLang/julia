@@ -396,14 +396,16 @@ for s = -5:5
     for i = 1:5
         thisa = OffsetArray(a[i], (s,))
         thisc = c[mod1(i+s+5,5)]
-        @test fft(thisa) ≈ thisc
-        @test fft(thisa, 1) ≈ thisc
-        @test ifft(fft(thisa)) ≈ circcopy!(a1, thisa)
-        @test ifft(fft(thisa, 1), 1) ≈ circcopy!(a1, thisa)
-        @test rfft(thisa) ≈ thisc[1:3]
-        @test rfft(thisa, 1) ≈ thisc[1:3]
-        @test irfft(rfft(thisa, 1), 5, 1) ≈ a1
-        @test irfft(rfft(thisa, 1), 5, 1) ≈ a1
+        if Base.USE_GPL_LIBS
+            @test fft(thisa) ≈ thisc
+            @test fft(thisa, 1) ≈ thisc
+            @test ifft(fft(thisa)) ≈ circcopy!(a1, thisa)
+            @test ifft(fft(thisa, 1), 1) ≈ circcopy!(a1, thisa)
+            @test rfft(thisa) ≈ thisc[1:3]
+            @test rfft(thisa, 1) ≈ thisc[1:3]
+            @test irfft(rfft(thisa, 1), 5, 1) ≈ a1
+            @test irfft(rfft(thisa, 1), 5, 1) ≈ a1
+        end
     end
 end
 
