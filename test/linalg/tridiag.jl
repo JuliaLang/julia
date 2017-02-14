@@ -50,9 +50,21 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     @test ctranspose(T) == Tridiagonal(conj(du), conj(d), conj(dl))
 
     @test abs.(T) == Tridiagonal(abs.(dl),abs.(d),abs.(du))
+    if elty <: Real
+        @test round.(T) == Tridiagonal(round.(dl),round.(d),round.(du))
+        @test trunc.(T) == Tridiagonal(trunc.(dl),trunc.(d),trunc.(du))
+        @test floor.(T) == Tridiagonal(floor.(dl),floor.(d),floor.(du))
+        @test ceil.(T) == Tridiagonal(ceil.(dl),ceil.(d),ceil.(du))
+    end
     @test real(T) == Tridiagonal(real(dl),real(d),real(du))
     @test imag(T) == Tridiagonal(imag(dl),imag(d),imag(du))
     @test abs.(Ts) == SymTridiagonal(abs.(d),abs.(dl))
+    if elty <: Real
+        @test round.(Ts) == SymTridiagonal(round.(d),round.(dl))
+        @test trunc.(Ts) == SymTridiagonal(trunc.(d),trunc.(dl))
+        @test floor.(Ts) == SymTridiagonal(floor.(d),floor.(dl))
+        @test ceil.(Ts) == SymTridiagonal(ceil.(d),ceil.(dl))
+    end
     @test real(Ts) == SymTridiagonal(real(d),real(dl))
     @test imag(Ts) == SymTridiagonal(imag(d),imag(dl))
 
