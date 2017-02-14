@@ -4764,7 +4764,7 @@ static std::unique_ptr<Module> emit_function(
         }
         else if (varinfo.isArgument) {
             // if we can unbox it, just use the input pointer
-            if (i != ctx.vaSlot && isbits_spec(jt, false))
+            if (i != (size_t)ctx.vaSlot && isbits_spec(jt, false))
                 continue;
         }
         else if (isbits_spec(jt, false)) {
