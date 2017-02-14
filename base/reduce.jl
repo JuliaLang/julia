@@ -13,20 +13,23 @@ const SmallUnsigned = Union{UInt8,UInt16,UInt32}
 end
 
 const CommonReduceResult = Union{UInt64,UInt128,Int64,Int128,Float32,Float64}
-const WidenReduceResult = Union{SmallSigned, SmallUnsigned, Float16}
+const SmallReduceResult = Union{SmallSigned, SmallUnsigned, Float16}
 
+promote_sys_size{T}(::Type{T}) = T
+promote_sys_size{T<:SmallSigned}(::Type{T}) = Int
+promote_sys_size{T<:SmallUnsigned}(::Type{T}) = UInt
 # r_promote_type: promote T to the type of reduce(op, ::Array{T})
 # (some "extra" methods are required here to avoid ambiguity warnings)
 r_promote_type{T}(op, ::Type{T}) = T
-r_promote_type{T<:WidenReduceResult}(op, ::Type{T}) = widen(T)
-r_promote_type{T<:WidenReduceResult}(::typeof(+), ::Type{T}) = widen(T)
-r_promote_type{T<:WidenReduceResult}(::typeof(*), ::Type{T}) = widen(T)
+r_promote_type{T<:SmallReduceResult}(op, ::Type{T}) = promote_sys_size(T)
+r_promote_type{T<:SmallReduceResult}(::typeof(+), ::Type{T}) = promote_sys_size(T)
+r_promote_type{T<:SmallReduceResult}(::typeof(*), ::Type{T}) = promote_sys_size(T)
 r_promote_type{T<:Number}(::typeof(+), ::Type{T}) = typeof(zero(T)+zero(T))
 r_promote_type{T<:Number}(::typeof(*), ::Type{T}) = typeof(one(T)*one(T))
-r_promote_type{T<:WidenReduceResult}(::typeof(scalarmax), ::Type{T}) = T
-r_promote_type{T<:WidenReduceResult}(::typeof(scalarmin), ::Type{T}) = T
-r_promote_type{T<:WidenReduceResult}(::typeof(max), ::Type{T}) = T
-r_promote_type{T<:WidenReduceResult}(::typeof(min), ::Type{T}) = T
+r_promote_type{T<:SmallReduceResult}(::typeof(scalarmax), ::Type{T}) = T
+r_promote_type{T<:SmallReduceResult}(::typeof(scalarmin), ::Type{T}) = T
+r_promote_type{T<:SmallReduceResult}(::typeof(max), ::Type{T}) = T
+r_promote_type{T<:SmallReduceResult}(::typeof(min), ::Type{T}) = T
 
 # r_promote: promote x to the type of reduce(op, [x])
 r_promote{T}(op, x::T) = convert(r_promote_type(op, T), x)
