@@ -217,12 +217,11 @@ u = unique([1,1,2])
 @test unique(x for x in Any[1,1.0])::Vector{Real} == [1]
 
 # unique!
-u = [1,1,2,3,1]
-unique!(u)
-@test length(u) == 3
-@test in(1,u)
-@test in(2,u)
-@test in(3,u)
+@testset "unique!" begin 
+    u = [1,1,3,2,1]
+    unique!(u)
+    @test u == [1,3,2]
+end
 
 # allunique
 @test allunique([])
