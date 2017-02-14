@@ -135,6 +135,14 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString},
         return Nullable{Bool}()
     end
 
+    # Ignore leading and trailing whitespace
+    while isspace(sbuff[startpos]) && startpos <= endpos
+        startpos += 1
+    end
+    while isspace(sbuff[endpos]) && endpos >= startpos
+        endpos -= 1
+    end
+
     len = endpos - startpos + 1
     p   = pointer(sbuff) + startpos - 1
     (len == 4) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
