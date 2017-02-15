@@ -201,7 +201,7 @@ julia> unique!([1, 1, 1])
 1-element Array{Int64,1}:
  1
 
-julia>  unique!([7, 3, 2, 3, 7, 5])
+julia> unique!([7, 3, 2, 3, 7, 5])
 4-element Array{Int64,1}:
  7
  3
