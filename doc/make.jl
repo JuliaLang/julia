@@ -11,7 +11,7 @@ using Documenter
 
 baremodule GenStdLib end
 isdefined(:build_sysimg) || @eval module BuildSysImg
-    include(joinpath(JULIA_HOME, "..", "..", "contrib", "build_sysimg.jl"))
+    include(joinpath(@__DIR__, "..", "contrib", "build_sysimg.jl"))
 end
 
 # Documenter Setup.
@@ -113,7 +113,7 @@ const PAGES = [
 ]
 
 makedocs(
-    build     = "_build/html/en",
+    build     = joinpath(pwd(), "_build/html/en"),
     modules   = [Base, Core, BuildSysImg],
     clean     = false,
     doctest   = "doctest" in ARGS,
