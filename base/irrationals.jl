@@ -145,6 +145,11 @@ big(x::Irrational) = convert(BigFloat,x)
     π
 
 The constant pi.
+
+```jldoctest
+julia> pi
+π = 3.1415926535897...
+```
 """
 const pi = π
 
@@ -153,6 +158,11 @@ const pi = π
     eu
 
 The constant e.
+
+```jldoctest
+julia> e
+e = 2.7182818284590...
+```
 """
 const eu = e
 
@@ -161,6 +171,11 @@ const eu = e
     eulergamma
 
 Euler's constant.
+
+```jldoctest
+julia> eulergamma
+γ = 0.5772156649015...
+```
 """
 const eulergamma = γ
 
@@ -169,6 +184,11 @@ const eulergamma = γ
     golden
 
 The golden ratio.
+
+```jldoctest
+julia> golden
+φ = 1.6180339887498...
+```
 """
 const golden = φ
 
@@ -176,6 +196,11 @@ const golden = φ
     catalan
 
 Catalan's constant.
+
+```jldoctest
+julia> catalan
+catalan = 0.9159655941772...
+```
 """
 catalan
 

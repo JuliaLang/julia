@@ -26,7 +26,7 @@ false
 julia> !false
 true
 
-julia> ![true false true]
+julia> .![true false true]
 1×3 BitArray{2}:
  false  true  false
 ```

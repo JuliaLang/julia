@@ -215,6 +215,7 @@ end
 Eliminates array bounds checking within expressions.
 
 In the example below the bound check of array A is skipped to improve performance.
+
 ```julia
 function sum(A::AbstractArray)
     r = zero(eltype(A))
@@ -224,6 +225,7 @@ function sum(A::AbstractArray)
     return r
 end
 ```
+
 !!! Warning
 
     Using `@inbounds` may return incorrect results/crashes/corruption
@@ -281,6 +283,25 @@ getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]..
 
 Tests whether the given array has a value associated with index `i`. Returns `false`
 if the index is out of bounds, or has an undefined reference.
+
+```jldoctest
+julia> isassigned(rand(3, 3), 5)
+true
+
+julia> isassigned(rand(3, 3), 3 * 3 + 1)
+false
+
+julia> mutable struct Foo end
+
+julia> v = similar(rand(3), Foo)
+3-element Array{Foo,1}:
+ #undef
+ #undef
+ #undef
+
+julia> isassigned(v, 1)
+false
+```
 """
 function isassigned end
 

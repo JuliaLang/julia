@@ -70,6 +70,22 @@ The following properties are in common use:
  - `:displaysize`: A `Tuple{Int,Int}` giving the size in rows and columns to use for text
    output. This can be used to override the display size for called functions, but to
    get the size of the screen use the `displaysize` function.
+
+```jldoctest
+julia> function f(io::IO)
+           if get(io, :short, false)
+               print(io, "short")
+           else
+               print(io, "loooooong")
+           end
+       end
+f (generic function with 1 method)
+
+julia> f(STDOUT)
+loooooong
+julia> f(IOContext(STDOUT, :short => true))
+short
+```
 """
 IOContext(io::IO, KV::Pair) = IOContext(io, KV[1], KV[2])
 

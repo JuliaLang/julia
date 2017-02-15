@@ -25,6 +25,11 @@ end
     IPv4(host::Integer) -> IPv4
 
 Returns an IPv4 object from ip address `host` formatted as an `Integer`.
+
+```jldoctest
+julia> IPv4(3223256218)
+ip"192.30.252.154"
+```
 """
 function IPv4(host::Integer)
     if host < 0
@@ -72,6 +77,11 @@ end
     IPv6(host::Integer) -> IPv6
 
 Returns an IPv6 object from ip address `host` formatted as an `Integer`.
+
+```jldoctest
+julia> IPv6(3223256218)
+ip"::c01e:fc9a"
+```
 """
 function IPv6(host::Integer)
     if host < 0
