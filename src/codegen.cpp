@@ -892,9 +892,9 @@ static jl_cgval_t convert_julia_type(const jl_cgval_t &v, jl_value_t *typ, jl_co
         bool makeboxed = false;
         if (v.TIndex) {
             // previous value was a split union, compute new index, or box
-            new_tindex = ConstantInt::get(T_int8, 0);
+            new_tindex = ConstantInt::get(T_int8, 0x80);
             SmallBitVector skip_box(1, true);
-            Value *tindex = v.TIndex;
+            Value *tindex = builder.CreateAnd(v.TIndex, ConstantInt::get(T_int8, 0x7f));
             if (jl_is_uniontype(typ)) {
                 // compute the TIndex mapping from v.typ -> typ
                 unsigned counter = 0;
@@ -904,7 +904,8 @@ static jl_cgval_t convert_julia_type(const jl_cgval_t &v, jl_value_t *typ, jl_co
                             unsigned new_idx = get_box_tindex(jt, typ);
                             bool t;
                             if (new_idx) {
-                                // found a matching element
+                                // found a matching element,
+                                // match it against either the unboxed index
                                 Value *cmp = builder.CreateICmpEQ(tindex, ConstantInt::get(T_int8, idx));
                                 new_tindex = builder.CreateSelect(cmp, ConstantInt::get(T_int8, new_idx), new_tindex);
                                 t = true;
@@ -925,31 +926,82 @@ static jl_cgval_t convert_julia_type(const jl_cgval_t &v, jl_value_t *typ, jl_co
                         v.typ,
                         counter);
             }
+
+            // some of the values are still unboxed
             if (!isa<Constant>(new_tindex)) {
+                Value *wasboxed = NULL;
+                // check if some of the old values might have been boxed
+                // and copy that information over into the new tindex
+                if (v.ispointer() && v.V && !isa<AllocaInst>(v.V)) {
+                    wasboxed = builder.CreateAnd(v.TIndex, ConstantInt::get(T_int8, 0x80));
+                    new_tindex = builder.CreateOr(wasboxed, new_tindex);
+                    wasboxed = builder.CreateICmpNE(wasboxed, ConstantInt::get(T_int8, 0));
+
+                    // may need to handle compute_box_tindex for some of the values
+                    BasicBlock *currBB = builder.GetInsertBlock();
+                    Value *union_box_dt = NULL;
+                    Value *union_box_tindex = ConstantInt::get(T_int8, 0x80);
+                    unsigned counter = 0;
+                    for_each_uniontype_small(
+                            // for each new union-split value
+                            [&](unsigned idx, jl_datatype_t *jt) {
+                                unsigned old_idx = get_box_tindex(jt, v.typ);
+                                if (old_idx == 0) {
+                                    if (!union_box_dt) {
+                                        BasicBlock *isaBB = BasicBlock::Create(jl_LLVMContext, "union_isa", ctx->f);
+                                        builder.SetInsertPoint(isaBB);
+                                        union_box_dt = emit_typeof(v.V);
+                                    }
+                                    // didn't handle this item before, select its new union index
+                                    Value *cmp = builder.CreateICmpEQ(literal_pointer_val((jl_value_t*)jt), union_box_dt);
+                                    union_box_tindex = builder.CreateSelect(cmp, ConstantInt::get(T_int8, 0x80 | idx), union_box_tindex);
+                                }
+                            },
+                            typ,
+                            counter);
+                    if (union_box_dt) {
+                        BasicBlock *isaBB = builder.GetInsertBlock();
+                        BasicBlock *postBB = BasicBlock::Create(jl_LLVMContext, "post_union_isa", ctx->f);
+                        builder.CreateBr(postBB);
+                        builder.SetInsertPoint(currBB);
+                        Value *wasunknown = builder.CreateICmpEQ(v.TIndex, ConstantInt::get(T_int8, 0x80));
+                        builder.CreateCondBr(wasunknown, isaBB, postBB);
+                        builder.SetInsertPoint(postBB);
+                        PHINode *tindex_phi = builder.CreatePHI(T_int8, 2);
+                        tindex_phi->addIncoming(new_tindex, currBB);
+                        tindex_phi->addIncoming(union_box_tindex, isaBB);
+                        new_tindex = tindex_phi;
+                    }
+
+                }
+
                 if (!skip_box.all()) {
                     // some values weren't unboxed in the new union
-                    // box them now (tindex above already selected 0 = box for them)
+                    // box them now (tindex above already selected 0x80 = box for them)
                     // root the result, and return a new mark_julia_slot over the result
                     Value *boxv = box_union(v, ctx, skip_box);
                     Value *froot = NULL;
+                    // XXX: need to clone the value from `v.gcroot` if this isn't a new box
                     if (needsroot) {
+                        // build a new gc-root, as needed
                         froot = emit_local_root(ctx);
-                        if (v.V) { // oldbox might be all ghost values
-                            Value *oldbox = v.ispointer() ? v.V : V_null;
-                            boxv = builder.CreateSelect(builder.CreateICmpEQ(tindex, ConstantInt::get(T_int8, 0)),
-                                                        emit_bitcast(oldbox, boxv->getType()), boxv);
+                        Value *newroot = boxv;
+                        if (wasboxed) { // oldbox might be all ghost values (which don't need roots)
+                            // store either the old box or the new box into the gc-root (skip_box ensures these are mutually-exclusive)
+                            Value *oldroot = v.V;
+                            newroot = builder.CreateSelect(wasboxed, emit_bitcast(oldroot, boxv->getType()), newroot);
                         }
-                        builder.CreateStore(boxv, froot);
+                        builder.CreateStore(newroot, froot);
                     }
-                    Value *isnewbox = builder.CreateIsNotNull(boxv);
-                    Value *slotv;
-                    MDNode *tbaa;
-                    bool isimmutable;
                     if (v.V == NULL) {
                         // v.V might be NULL if it was all ghost objects before
                         return jl_cgval_t(boxv, froot, false, typ, new_tindex);
                     }
                     else {
+                        Value *isboxv = builder.CreateIsNotNull(boxv);
+                        Value *slotv;
+                        MDNode *tbaa;
+                        bool isimmutable;
                         if (v.ispointer()) {
                             slotv = v.V;
                             tbaa = v.tbaa;
@@ -961,7 +1013,7 @@ static jl_cgval_t convert_julia_type(const jl_cgval_t &v, jl_value_t *typ, jl_co
                             tbaa = tbaa_stack;
                             isimmutable = true;
                         }
-                        slotv = builder.CreateSelect(isnewbox, boxv, emit_bitcast(slotv, boxv->getType()));
+                        slotv = builder.CreateSelect(isboxv, boxv, emit_bitcast(slotv, boxv->getType()));
                         jl_cgval_t newv = jl_cgval_t(slotv, froot, false, typ, new_tindex);
                         newv.tbaa = tbaa;
                         newv.isimmutable = isimmutable;
@@ -3181,12 +3233,15 @@ static jl_cgval_t emit_call_function_object(jl_method_instance_t *li, const jl_c
                                          jlretty,
                                          builder.CreateExtractValue(call, 1),
                                          tbaa_stack);
-                // root this, if the return value was a box
+                // root this, if the return value was a box (tindex & 0x80) != 0
                 retval.gcroot = emit_local_root(ctx);
                 builder.CreateStore(
-                    builder.CreateSelect(builder.CreateICmpEQ(retval.TIndex, ConstantInt::get(T_int8, 0)),
-                                         retval.V,
-                                         V_null),
+                    builder.CreateSelect(
+                        builder.CreateICmpEQ(
+                                builder.CreateAnd(retval.TIndex, ConstantInt::get(T_int8, 0x80)),
+                                ConstantInt::get(T_int8, 0)),
+                        V_null,
+                        retval.V),
                     retval.gcroot);
                 break;
             case jl_returninfo_t::Ghosts:
@@ -3473,12 +3528,14 @@ static jl_cgval_t emit_local(jl_value_t *slotload, jl_codectx_t *ctx)
              box_isnull = builder.CreateICmpNE(boxed, V_null);
         if (vi.pTIndex) {
             // value is either boxed in the stack slot, or unboxed in value
-            // as indicated by comparing pTIndex to 0
-            Value *load_box = builder.CreateICmpEQ(v.TIndex, ConstantInt::get(T_int8, 0));
+            // as indicated by testing (pTIndex & 0x80)
+            Value *load_unbox = builder.CreateICmpEQ(
+                        builder.CreateAnd(v.TIndex, ConstantInt::get(T_int8, 0x80)),
+                        ConstantInt::get(T_int8, 0));
             if (vi.usedUndef)
-                isnull = builder.CreateSelect(load_box, box_isnull, isnull);
+                isnull = builder.CreateSelect(load_unbox, isnull, box_isnull);
             if (v.V) // v.V will be null if it is a union of all ghost values
-                v.V = builder.CreateSelect(load_box, boxed, emit_bitcast(v.V, boxed->getType()));
+                v.V = builder.CreateSelect(load_unbox, emit_bitcast(v.V, boxed->getType()), boxed);
             else
                 v.V = boxed;
             v = update_julia_type(v, typ, ctx);
@@ -3536,28 +3593,31 @@ static Value *try_emit_union_alloca(jl_uniontype_t *ut, bool &allunbox, size_t &
     return NULL;
 }
 
+static Value *compute_box_tindex(Value *datatype, jl_value_t *supertype, jl_value_t *ut, jl_codectx_t *ctx)
+{
+    Value *tindex = ConstantInt::get(T_int8, 0);
+    unsigned counter = 0;
+    for_each_uniontype_small(
+            [&](unsigned idx, jl_datatype_t *jt) {
+                if (jl_subtype((jl_value_t*)jt, supertype)) {
+                    Value *cmp = builder.CreateICmpEQ(literal_pointer_val((jl_value_t*)jt), datatype);
+                    tindex = builder.CreateSelect(cmp, ConstantInt::get(T_int8, idx), tindex);
+                }
+            },
+            ut,
+            counter);
+    return tindex;
+}
+
+// get the runtime tindex value
 static Value *compute_tindex_unboxed(const jl_cgval_t &val, jl_value_t *typ, jl_codectx_t *ctx)
 {
     if (val.constant)
         return ConstantInt::get(T_int8, get_box_tindex((jl_datatype_t*)jl_typeof(val.constant), typ));
     if (val.isboxed)
-        return compute_box_tindex(emit_typeof_boxed(val, ctx), typ, ctx);
+        return compute_box_tindex(emit_typeof_boxed(val, ctx), val.typ, typ, ctx);
     assert(val.TIndex);
-    if (!val.V || isa<AllocaInst>(val.V))
-        return val.TIndex;
-    Value *isboxed = builder.CreateICmpEQ(val.TIndex, ConstantInt::get(T_int8, 0));
-    BasicBlock *currBB = builder.GetInsertBlock();
-    BasicBlock *boxedBB = BasicBlock::Create(jl_LLVMContext, "tindex_boxed", ctx->f);
-    BasicBlock *postBB = BasicBlock::Create(jl_LLVMContext, "post_tindex", ctx->f);
-    builder.CreateCondBr(isboxed, boxedBB, postBB);
-    builder.SetInsertPoint(boxedBB);
-    Value *tindex_boxed = compute_box_tindex(emit_typeof(val.V), typ, ctx);
-    builder.CreateBr(postBB);
-    builder.SetInsertPoint(postBB);
-    PHINode *tindex = builder.CreatePHI(T_int8, 2);
-    tindex->addIncoming(val.TIndex, currBB);
-    tindex->addIncoming(tindex_boxed, boxedBB);
-    return tindex;
+    return builder.CreateAnd(val.TIndex, ConstantInt::get(T_int8, 0x7f));
 }
 
 static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
@@ -3589,7 +3649,9 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                 dest = try_emit_union_alloca(((jl_uniontype_t*)jt), allunbox, min_align, ctx);
                 Value *isboxed = NULL;
                 if (slot.ispointer() && slot.V != NULL && !isa<AllocaInst>(slot.V)) {
-                    isboxed = builder.CreateICmpEQ(slot.TIndex, ConstantInt::get(T_int8, 0));
+                    isboxed = builder.CreateICmpNE(
+                            builder.CreateAnd(slot.TIndex, ConstantInt::get(T_int8, 0x80)),
+                            ConstantInt::get(T_int8, 0));
                 }
                 if (dest) {
                     Value *copy_bytes = emit_sizeof(slot, ctx);
@@ -3689,42 +3751,53 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             assign_arrayvar(*av, rval_info, ctx);
     }
 
+    // compute / store tindex info
+    if (vi.pTIndex) {
+        Value *tindex;
+        if (rval_info.TIndex) {
+            tindex = rval_info.TIndex;
+            if (!vi.boxroot)
+                tindex = builder.CreateAnd(tindex, ConstantInt::get(T_int8, 0x7f));
+        }
+        else {
+            assert(rval_info.isboxed || rval_info.constant);
+            tindex = compute_tindex_unboxed(rval_info, vi.value.typ, ctx);
+            if (vi.boxroot)
+                tindex = builder.CreateOr(tindex, ConstantInt::get(T_int8, 0x80));
+        }
+        builder.CreateStore(tindex, vi.pTIndex, vi.isVolatile);
+    }
+
+    // store boxed variables
     Value *isboxed = NULL;
     if (vi.boxroot) {
-        // boxed variables
         if (isa<AllocaInst>(vi.boxroot) && needs_root)
             emit_local_root(ctx, &vi); // promote variable slot to a gcroot
         Value *rval;
         if (vi.pTIndex && rval_info.TIndex) {
             builder.CreateStore(rval_info.TIndex, vi.pTIndex, vi.isVolatile);
-            isboxed = builder.CreateICmpEQ(rval_info.TIndex, ConstantInt::get(T_int8, 0));
+            isboxed = builder.CreateICmpNE(
+                    builder.CreateAnd(rval_info.TIndex, ConstantInt::get(T_int8, 0x80)),
+                    ConstantInt::get(T_int8, 0));
             rval = V_null;
-            if (rval_info.V) // might be all ghost values
+            if (rval_info.ispointer() && rval_info.V != NULL && !isa<AllocaInst>(rval_info.V)) // might be all ghost values or otherwise definitely not boxed
                 rval = builder.CreateSelect(isboxed, emit_bitcast(rval_info.V, rval->getType()), rval);
             assert(!vi.value.constant);
-            // will handle tindex later
         }
         else {
             assert(!vi.pTIndex || rval_info.isboxed || rval_info.constant);
-            if (vi.pTIndex)
-                builder.CreateStore(ConstantInt::get(T_int8, 0), vi.pTIndex, vi.isVolatile);
             rval = boxed(rval_info, ctx, false);
         }
         builder.CreateStore(rval, vi.boxroot, vi.isVolatile);
     }
 
+    // store unboxed variables
     if (!vi.boxroot || (vi.pTIndex && rval_info.TIndex)) {
-        // store unboxed variables
         if (vi.usedUndef)
             store_def_flag(vi, true);
 
         if (!vi.value.constant) { // check that this is not a virtual store
             assert(vi.value.ispointer() || (vi.pTIndex && vi.value.V == NULL));
-            // store tindex info (if not handled above)
-            if (vi.pTIndex && !vi.boxroot) {
-                Value *tindex_no_zero = compute_tindex_unboxed(rval_info, vi.value.typ, ctx);
-                builder.CreateStore(tindex_no_zero, vi.pTIndex, vi.isVolatile);
-            }
             // store value
             if (vi.value.V == NULL) {
                 // all ghost values in destination - nothing to copy or store
@@ -3759,7 +3832,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             }
             else {
                 if (rval_info.typ != vi.value.typ && !vi.pTIndex && !rval_info.TIndex) {
-                    // cast-on-assignment is invalid. this branch should emit dead-code.
+                    // isbits cast-on-assignment is invalid. this branch should be dead-code.
                     CreateTrap(builder);
                 }
                 else {
@@ -4601,8 +4674,10 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         case jl_returninfo_t::Union: {
             Type *retty = theFptr->getReturnType();
             Value *gf_retval = UndefValue::get(retty);
+            Value *tindex = compute_box_tindex(gf_ret, (jl_value_t*)jl_any_type, astrt, &ctx);
+            tindex = builder.CreateOr(tindex, ConstantInt::get(T_int8, 0x80));
             gf_retval = builder.CreateInsertValue(gf_retval, gf_ret, 0);
-            gf_retval = builder.CreateInsertValue(gf_retval, ConstantInt::get(T_int8, 0), 1);
+            gf_retval = builder.CreateInsertValue(gf_retval, tindex, 1);
             builder.CreateRet(gf_retval);
             break;
         }
@@ -5882,7 +5957,7 @@ static std::unique_ptr<Module> emit_function(
                 continue;
             }
 
-            Value *isboxed_union = NULL;
+            Value *isunboxed_union = NULL;
             Value *retval;
             Value *sret = ctx.has_sret ? &*f->arg_begin() : NULL;
             Type *retty = f->getReturnType();
@@ -5903,26 +5978,29 @@ static std::unique_ptr<Module> emit_function(
                 Value *data, *tindex;
                 if (retvalinfo.TIndex) {
                     tindex = retvalinfo.TIndex;
-                    if (!retvalinfo.V) {
+                    if (retvalinfo.V == NULL) {
                         // treat this as a simple Ghosts
                         data = V_null;
                         sret = NULL;
                     }
                     else {
                         data = emit_bitcast(sret, T_pjlvalue);
-                        if (!isa<AllocaInst>(retvalinfo.V)) {
+                        if (retvalinfo.ispointer() && !isa<AllocaInst>(retvalinfo.V)) {
                             // also need to account for the possibility the return object is boxed
                             // and avoid / skip copying it to the stack
-                            isboxed_union = builder.CreateICmpEQ(tindex, ConstantInt::get(T_int8, 0));
-                            data = builder.CreateSelect(isboxed_union, emit_bitcast(retvalinfo.V, T_pjlvalue), data);
+                            isunboxed_union = builder.CreateICmpEQ(
+                                    builder.CreateAnd(tindex, ConstantInt::get(T_int8, 0x80)),
+                                    ConstantInt::get(T_int8, 0));
+                            data = builder.CreateSelect(isunboxed_union, data, emit_bitcast(retvalinfo.V, T_pjlvalue));
                         }
                     }
                 }
                 else {
                     // treat this as a simple boxed returninfo
                     //assert(retvalinfo.isboxed);
+                    tindex = compute_tindex_unboxed(retvalinfo, jlrettype, &ctx);
+                    tindex = builder.CreateOr(tindex, ConstantInt::get(T_int8, 0x80));
                     data = boxed(retvalinfo, &ctx, false); // skip the gcroot on the return path
-                    tindex = ConstantInt::get(T_int8, 0);
                     sret = NULL;
                 }
                 retval = UndefValue::get(retty);
@@ -5943,8 +6021,8 @@ static std::unique_ptr<Module> emit_function(
                     }
                     else {
                         copy_bytes = emit_sizeof(retvalinfo, &ctx);
-                        if (isboxed_union)
-                            copy_bytes = builder.CreateSelect(isboxed_union, ConstantInt::get(copy_bytes->getType(), 0), copy_bytes);
+                        if (isunboxed_union)
+                            copy_bytes = builder.CreateSelect(isunboxed_union, copy_bytes, ConstantInt::get(copy_bytes->getType(), 0));
                     }
                     builder.CreateMemCpy(sret,
                                          data_pointer(retvalinfo, &ctx, T_pint8),
