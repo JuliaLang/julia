@@ -712,7 +712,7 @@ end
 end
 
 """
-    eps(::Type{T}) where T<:AbstractFloat
+    eps(::Type{<:AbstractFloat})
     eps()
 
 Returns the *machine epsilon* of the floating point type `T` (`T = Float64` by

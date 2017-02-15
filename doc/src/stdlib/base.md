@@ -97,7 +97,7 @@ Base.realmin
 Base.realmax
 Base.maxintfloat
 Base.sizeof(::Type)
-Base.eps{T<:AbstractFloat}(::Type{T})
+Base.eps(::Type{<:AbstractFloat})
 Base.eps(::AbstractFloat)
 Base.promote_type
 Base.promote_rule
