@@ -404,6 +404,7 @@ end
     @test findfirst(a.==0) == 1
     @test findfirst(a.==5) == 0
     @test findfirst([1,2,4,1,2,3,4], 3) == 6
+    @test findfirst(isodd, (2,4,6,3,9,2,0)) == 4
     @test findfirst(isodd, [2,4,6,3,9,2,0]) == 4
     @test findfirst(isodd, [2,4,6,2,0]) == 0
     @test findnext(a,4) == 4
@@ -424,6 +425,20 @@ end
     @test findprev(a,1,8) == 6
     @test findprev(isodd, [2,4,5,3,9,2,0], 7) == 5
     @test findprev(isodd, [2,4,5,3,9,2,0], 2) == 0
+    @test findprev(isodd, (2,4,5,3,9,2,0), 2) == 0
+    str = "𝐴 ∈ ℝⁿˣⁿ, 𝐯 ∈ ℝⁿ, λᵢ ∈ ℝ: 𝐯"
+    idx = findnext(str, 'λ', 1)
+    @test str[idx] == 'λ'
+    idx = findnext(str, 'ᵢ', idx)
+    @test str[idx] == 'ᵢ'
+    idx = findnext(str, '𝐯', endof(str))
+    @test idx == endof(str)
+    idx = findprev(str, 'λ', endof(str))
+    @test str[idx] == 'λ'
+    idx = findprev(str, 'ⁿ', idx)
+    @test str[idx] == 'ⁿ'
+    idx = findprev(str, '𝐴', 1)
+    @test idx == 1
 end
 @testset "find with general iterables" begin
     s = "julia"
