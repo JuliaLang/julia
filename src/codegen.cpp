@@ -432,6 +432,12 @@ extern "C" {
     int globalUnique = 0;
 }
 
+static bool isbits_spec(jl_value_t *jt, bool allow_singleton = true)
+{
+    return jl_isbits(jt) && jl_is_leaf_type(jt) &&
+        (allow_singleton || (jl_datatype_size(jt) > 0) || (jl_datatype_nfields(jt) > 0));
+}
+
 // metadata tracking for a llvm Value* during codegen
 struct jl_cgval_t {
     Value *V; // may be of type T* or T, or set to NULL if ghost (or if the value has not been initialized yet, for a variable definition)
@@ -727,6 +733,40 @@ static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_datatype_t *
     return mark_julia_type(v, isboxed, (jl_value_t*)typ, ctx, needsroot);
 }
 
+// see if it might be profitable (and cheap) to change the type of v to typ
+static inline jl_cgval_t update_julia_type(const jl_cgval_t &v, jl_value_t *typ, jl_codectx_t *ctx)
+{
+    if (v.typ == typ || v.typ == jl_bottom_type || jl_egal(v.typ, typ) || typ == (jl_value_t*)jl_any_type)
+        return v; // fast-path
+    if (jl_is_leaf_type(v.typ) && !jl_is_kind(v.typ)) {
+        if (jl_is_leaf_type(typ) && !jl_is_kind(typ) && !((jl_datatype_t*)typ)->abstract && !((jl_datatype_t*)v.typ)->abstract) {
+            // type mismatch: changing from one leaftype to another
+            CreateTrap(builder);
+            return jl_cgval_t();
+        }
+        return v; // doesn't improve type info
+    }
+    if (v.TIndex) {
+        if (!jl_is_leaf_type(typ))
+            return v; // not worth trying to improve type info
+        if (!isbits_spec(typ)) {
+            // discovered that this union-split type must actually be isboxed
+            if (v.V) {
+                return jl_cgval_t(v.V, v.gcroot, true, typ, NULL);
+            }
+            else {
+                // type mismatch (there wasn't any boxed values in the union)
+                CreateTrap(builder);
+                return jl_cgval_t();
+            }
+        }
+    }
+    Type *T = julia_type_to_llvm(typ);
+    if (type_is_ghost(T))
+        return ghostValue(typ);
+    return jl_cgval_t(v, typ, NULL);
+}
+
 static inline jl_cgval_t mark_julia_const(jl_value_t *jv)
 {
     jl_value_t *typ;
@@ -743,12 +783,6 @@ static inline jl_cgval_t mark_julia_const(jl_value_t *jv)
 }
 
 // --- allocating local variables ---
-
-static bool isbits_spec(jl_value_t *jt, bool allow_singleton = true)
-{
-    return jl_isbits(jt) && jl_is_leaf_type(jt) &&
-        (allow_singleton || (jl_datatype_size(jt) > 0) || (jl_datatype_nfields(jt) > 0));
-}
 
 static jl_sym_t *slot_symbol(int s, jl_codectx_t *ctx)
 {
@@ -826,7 +860,7 @@ static void jl_rethrow_with_add(const char *fmt, ...)
 }
 
 // given a value marked with type `v.typ`, compute the mapping and/or boxing to return a value of type `typ`
-static inline jl_cgval_t remark_julia_type(const jl_cgval_t &v, jl_value_t *typ, jl_codectx_t *ctx, bool needsroot = true)
+static jl_cgval_t convert_julia_type(const jl_cgval_t &v, jl_value_t *typ, jl_codectx_t *ctx, bool needsroot = true)
 {
     if (v.typ == typ || v.typ == jl_bottom_type || jl_egal(v.typ, typ))
         return v; // fast-path
@@ -834,7 +868,27 @@ static inline jl_cgval_t remark_julia_type(const jl_cgval_t &v, jl_value_t *typ,
     if (type_is_ghost(T))
         return ghostValue(typ);
     Value *new_tindex = NULL;
-    if (!jl_is_leaf_type(typ)) {
+    if (jl_is_leaf_type(typ)) {
+        if (v.TIndex && !isbits_spec(typ)) {
+            // discovered that this union-split type must actually be isboxed
+            if (v.V) {
+                return jl_cgval_t(v.V, v.gcroot, true, typ, NULL);
+            }
+            else {
+                // type mismatch: there wasn't any boxed values in the union
+                CreateTrap(builder);
+                return jl_cgval_t();
+            }
+        }
+        if (jl_is_leaf_type(v.typ) && !jl_is_kind(v.typ) && !((jl_datatype_t*)v.typ)->abstract) {
+            if (jl_is_leaf_type(typ) && !jl_is_kind(typ) && !((jl_datatype_t*)typ)->abstract) {
+                // type mismatch: changing from one leaftype to another
+                CreateTrap(builder);
+                return jl_cgval_t();
+            }
+        }
+    }
+    else {
         bool makeboxed = false;
         if (v.TIndex) {
             // previous value was a split union, compute new index, or box
@@ -957,19 +1011,6 @@ static inline jl_cgval_t remark_julia_type(const jl_cgval_t &v, jl_value_t *typ,
                 builder.CreateStore(boxv, froot);
             }
             return jl_cgval_t(boxv, froot, true, typ, NULL);
-        }
-    }
-    else {
-        if (v.TIndex && !isbits_spec(typ)) {
-            // discovered that this union-split type must actually be isboxed
-            if (v.V) {
-                return jl_cgval_t(v.V, v.gcroot, true, typ, NULL);
-            }
-            else {
-                // type mismatch (there wasn't any boxed values in the union)
-                CreateTrap(builder);
-                return jl_cgval_t();
-            }
         }
     }
     return jl_cgval_t(v, typ, new_tindex);
@@ -2479,9 +2520,9 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         }
         // FIXME: v.typ is roughly equiv. to expr_type, but with typeof(T) == Type{T} instead of DataType in a few cases
         if (v1.typ == (jl_value_t*)jl_datatype_type)
-            v1 = remark_julia_type(v1, expr_type(args[1], ctx), ctx); // patch up typ if necessary
+            v1 = update_julia_type(v1, expr_type(args[1], ctx), ctx); // patch up typ if necessary
         if (v2.typ == (jl_value_t*)jl_datatype_type)
-            v2 = remark_julia_type(v2, expr_type(args[2], ctx), ctx); // patch up typ if necessary
+            v2 = update_julia_type(v2, expr_type(args[2], ctx), ctx); // patch up typ if necessary
         // emit comparison test
         Value *ans = emit_f_is(v1, v2, ctx);
         mark_gc_use(v1);
@@ -2508,8 +2549,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             if (!jl_subtype(arg, tp0))
                 emit_typecheck(*ret, tp0, "typeassert", ctx);
             ty = expr_type(expr, ctx); rt2 = ty;
-            if (ret->isboxed || (ret->TIndex && jl_is_leaf_type(ty))) // see if it might be profitable (cheap) to remark the type
-                *ret = remark_julia_type(*ret, ty, ctx);
+            *ret = update_julia_type(*ret, ty, ctx);
             JL_GC_POP();
             return true;
         }
@@ -2791,7 +2831,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             *ret = emit_getfield(args[1],
                                  (jl_sym_t*)jl_fieldref(args[2],0), ctx);
             if (ret->typ == (jl_value_t*)jl_any_type) // improve the type, if known from the expr
-                *ret = remark_julia_type(*ret, expr_type(expr, ctx), ctx);
+                *ret = update_julia_type(*ret, expr_type(expr, ctx), ctx);
             JL_GC_POP();
             return true;
         }
@@ -3155,7 +3195,7 @@ static jl_cgval_t emit_call_function_object(jl_method_instance_t *li, const jl_c
         }
         // see if inference has a different / better type for the call than the lambda
         if (inferred_retty != retval.typ)
-            retval = remark_julia_type(retval, inferred_retty, ctx);
+            retval = update_julia_type(retval, inferred_retty, ctx);
         return retval;
     }
     Value *ret = emit_jlcall(theFptr, boxed(theF, ctx), &args[1], nargs, ctx);
@@ -3215,7 +3255,7 @@ static jl_cgval_t emit_call(jl_expr_t *ex, jl_codectx_t *ctx)
         if (jl_typeis(f, jl_intrinsic_type)) {
             result = emit_intrinsic((intrinsic)*(uint32_t*)jl_data_ptr(f), args, nargs, ctx);
             if (result.typ == (jl_value_t*)jl_any_type) // the select_value intrinsic may be missing type information
-                result = remark_julia_type(result, expr_type(expr, ctx), ctx);
+                result = update_julia_type(result, expr_type(expr, ctx), ctx);
             JL_GC_POP();
             return result;
         }
@@ -3419,8 +3459,8 @@ static jl_cgval_t emit_local(jl_value_t *slotload, jl_codectx_t *ctx)
                  tindex = builder.CreateLoad(vi.pTIndex, /*volatile*/true);
             v = mark_julia_slot(slot, vi.value.typ, tindex, tbaa_stack);
         }
-        if (vi.boxroot == NULL && typ != v.typ)
-            v = remark_julia_type(v, typ, ctx);
+        if (vi.boxroot == NULL)
+            v = update_julia_type(v, typ, ctx);
         if (vi.usedUndef) {
             assert(vi.defFlag);
             isnull = builder.CreateLoad(vi.defFlag, vi.isVolatile);
@@ -3441,7 +3481,7 @@ static jl_cgval_t emit_local(jl_value_t *slotload, jl_codectx_t *ctx)
                 v.V = builder.CreateSelect(load_box, boxed, emit_bitcast(v.V, boxed->getType()));
             else
                 v.V = boxed;
-            v = remark_julia_type(v, typ, ctx);
+            v = update_julia_type(v, typ, ctx);
         }
         else {
             v = mark_julia_type(boxed, true, typ, ctx,
@@ -3534,7 +3574,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             if (jl_is_array(ssavalue_types)) {
                 jl_value_t *declType = jl_array_ptr_ref(ssavalue_types, idx);
                 if (declType != slot.typ) {
-                    slot = remark_julia_type(slot, declType, ctx);
+                    slot = update_julia_type(slot, declType, ctx);
                 }
             }
         }
@@ -3636,7 +3676,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
 
     // convert rval-type to lval-type
     jl_value_t *slot_type = vi.value.typ;
-    rval_info = remark_julia_type(rval_info, slot_type, ctx, /*needs-root*/false);
+    rval_info = convert_julia_type(rval_info, slot_type, ctx, /*needs-root*/false);
     if (rval_info.typ == jl_bottom_type)
         return;
 
@@ -3907,9 +3947,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         // some intrinsics (e.g. typeassert) can return a wider type
         // than what's actually possible
         jl_value_t *expr_t = expr_type((jl_value_t*)ex, ctx);
-        if (res.typ != expr_t && res.isboxed && !jl_is_leaf_type(res.typ)) {
-            res = remark_julia_type(res, expr_t, ctx);
-        }
+        res = update_julia_type(res, expr_t, ctx);
         if (res.typ == jl_bottom_type || expr_t == jl_bottom_type) {
             CreateTrap(builder);
         }
@@ -5837,7 +5875,7 @@ static std::unique_ptr<Module> emit_function(
             // this is basically a copy of emit_assignment,
             // but where the assignment slot is the retval
             jl_cgval_t retvalinfo = emit_expr(jl_exprarg(expr, 0), &ctx);
-            retvalinfo = remark_julia_type(retvalinfo, jlrettype, &ctx, /*needs-root*/false);
+            retvalinfo = convert_julia_type(retvalinfo, jlrettype, &ctx, /*needs-root*/false);
             if (retvalinfo.typ == jl_bottom_type) {
                 builder.CreateUnreachable();
                 find_next_stmt(-1);
