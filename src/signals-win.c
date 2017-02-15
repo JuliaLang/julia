@@ -326,18 +326,53 @@ volatile HANDLE hBtThread = 0;
 static DWORD WINAPI profile_bt( LPVOID lparam )
 {
     // Note: illegal to use jl_* functions from this thread
-
     TIMECAPS tc;
     if (MMSYSERR_NOERROR!=timeGetDevCaps(&tc, sizeof(tc))) {
         fputs("failed to get timer resolution",stderr);
         hBtThread = 0;
         return 0;
     }
+
+	//Precision timer
+	LARGE_INTEGER StartingTime, EndingTime, ElapsedMicroseconds;
+	LARGE_INTEGER Frequency;
+	QueryPerformanceFrequency(&Frequency);
+
+
     while (1) {
         if (running && bt_size_cur < bt_size_max) {
-            DWORD timeout = nsecprof/GIGA;
-            timeout = min(max(timeout,tc.wPeriodMin*2),tc.wPeriodMax/2);
-            Sleep(timeout);
+			//calculate start time for high precision sleep
+			QueryPerformanceCounter(&StartingTime);
+			//multiply timeout(microseconds) by random factor between 0 and 2
+            DWORD timeout = (int)((nsecprof*((double)rand() / (double)RAND_MAX*2.0)/1000));
+			//if timeout is greater than a millisecond use Sleep
+			if (timeout < 1000)
+			{
+				int time_elapsed = 0;
+				while (time_elapsed ==0)
+				{	
+					QueryPerformanceCounter(&EndingTime);
+					
+					ElapsedMicroseconds.QuadPart = EndingTime.QuadPart - StartingTime.QuadPart;
+					ElapsedMicroseconds.QuadPart *= 1000000;
+					ElapsedMicroseconds.QuadPart /= Frequency.QuadPart;
+
+					if (ElapsedMicroseconds.QuadPart >= timeout)
+					{
+						time_elapsed = 1;
+					}
+					else
+					{
+						//if time has not elasped offer up processor to another thread
+						Sleep(0);
+					}
+				}
+			}
+			else
+			{
+				Sleep((int)(timeout/1000));
+			}
+
             if ((DWORD)-1 == SuspendThread(hMainThread)) {
                 fputs("failed to suspend main thread. aborting profiling.",stderr);
                 break;
