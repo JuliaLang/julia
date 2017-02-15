@@ -602,20 +602,6 @@ static bool for_each_uniontype_small(
 
 static Value *emit_typeof_boxed(const jl_cgval_t &p, jl_codectx_t *ctx);
 
-static Value *compute_box_tindex(Value *datatype, jl_value_t *ut, jl_codectx_t *ctx)
-{
-    Value *tindex = ConstantInt::get(T_int8, 0);
-    unsigned counter = 0;
-    for_each_uniontype_small(
-            [&](unsigned idx, jl_datatype_t *jt) {
-                Value *cmp = builder.CreateICmpEQ(literal_pointer_val((jl_value_t*)jt), datatype);
-                tindex = builder.CreateSelect(cmp, ConstantInt::get(T_int8, idx), tindex);
-            },
-            ut,
-            counter);
-    return tindex;
-}
-
 static unsigned get_box_tindex(jl_datatype_t *jt, jl_value_t *ut)
 {
     unsigned new_idx = 0;
@@ -686,6 +672,7 @@ static Value* mask_gc_bits(Value *tag)
 
 static Value *emit_typeof(Value *tt)
 {
+    assert(tt != NULL && !isa<AllocaInst>(tt) && "expected a conditionally boxed value");
     // given p, a jl_value_t*, compute its type tag
     tt = tbaa_decorate(tbaa_tag, builder.CreateLoad(emit_typeptr_addr(tt)));
     return mask_gc_bits(tt);
@@ -700,13 +687,19 @@ static jl_cgval_t emit_typeof(const jl_cgval_t &p, jl_codectx_t *ctx)
         return mark_julia_type(emit_typeof(p.V), true, jl_datatype_type, ctx, /*needsroot*/false);
     }
     if (p.TIndex) {
-        Value *tindex = p.TIndex;
+        Value *tindex = builder.CreateAnd(p.TIndex, ConstantInt::get(T_int8, 0x7f));
         Value *pdatatype;
-        if (p.V && !isa<AllocaInst>(p.V))
-            pdatatype = emit_typeptr_addr(p.V);
-        else
+        unsigned counter;
+        counter = 0;
+        bool allunboxed = for_each_uniontype_small(
+                [&](unsigned idx, jl_datatype_t *jt) { },
+                p.typ,
+                counter);
+        if (allunboxed)
             pdatatype = Constant::getNullValue(T_ppjlvalue);
-        unsigned counter = 0;
+        else
+            pdatatype = emit_typeptr_addr(p.V);
+        counter = 0;
         for_each_uniontype_small(
                 [&](unsigned idx, jl_datatype_t *jt) {
                     Value *cmp = builder.CreateICmpEQ(tindex, ConstantInt::get(T_int8, idx));
@@ -715,7 +708,7 @@ static jl_cgval_t emit_typeof(const jl_cgval_t &p, jl_codectx_t *ctx)
                 p.typ,
                 counter);
         Value *datatype;
-        if (p.V == NULL || isa<AllocaInst>(p.V)) {
+        if (allunboxed) {
             datatype = tbaa_decorate(tbaa_const, builder.CreateLoad(pdatatype));
         }
         else {
@@ -774,21 +767,23 @@ static Value *emit_datatype_size(Value *dt)
 static Value *emit_sizeof(const jl_cgval_t &p, jl_codectx_t *ctx)
 {
     if (p.TIndex) {
-        Value *tindex = p.TIndex;
+        Value *tindex = builder.CreateAnd(p.TIndex, ConstantInt::get(T_int8, 0x7f));
         Value *size = ConstantInt::get(T_int32, -1);
         unsigned counter = 0;
-        for_each_uniontype_small(
+        bool allunboxed = for_each_uniontype_small(
                 [&](unsigned idx, jl_datatype_t *jt) {
                     Value *cmp = builder.CreateICmpEQ(tindex, ConstantInt::get(T_int8, idx));
                     size = builder.CreateSelect(cmp, ConstantInt::get(T_int32, jl_datatype_size(jt)), size);
                 },
                 p.typ,
                 counter);
-        if (p.V != NULL && !isa<AllocaInst>(p.V)) {
+        if (!allunboxed && p.ispointer() && p.V && !isa<AllocaInst>(p.V)) {
             BasicBlock *currBB = builder.GetInsertBlock();
             BasicBlock *dynloadBB = BasicBlock::Create(jl_LLVMContext, "dyn_sizeof", ctx->f);
             BasicBlock *postBB = BasicBlock::Create(jl_LLVMContext, "post_sizeof", ctx->f);
-            Value *isboxed = builder.CreateICmpEQ(tindex, ConstantInt::get(T_int8, 0));
+            Value *isboxed = builder.CreateICmpNE(
+                    builder.CreateAnd(p.TIndex, ConstantInt::get(T_int8, 0x80)),
+                    ConstantInt::get(T_int8, 0));
             builder.CreateCondBr(isboxed, dynloadBB, postBB);
             builder.SetInsertPoint(dynloadBB);
             Value *datatype = emit_typeof(p.V);
@@ -984,19 +979,14 @@ static Value *emit_isa(const jl_cgval_t &x, jl_value_t *type, const std::string 
     if (jl_is_leaf_type(type)) {
         if (x.TIndex) {
             unsigned tindex = get_box_tindex((jl_datatype_t*)type, x.typ);
-            if (!x.V || isa<AllocaInst>(x.V)) {
+            if (tindex > 0) {
                 // optimize more when we know that this is a split union-type where tindex = 0 is invalid
-                assert(tindex > 0 && "x.typ should have been a union of leaftypes at this point");
-                return builder.CreateICmpEQ(x.TIndex, ConstantInt::get(T_int8, tindex));
+                Value *xtindex = builder.CreateAnd(x.TIndex, ConstantInt::get(T_int8, 0x7f));
+                return builder.CreateICmpEQ(xtindex, ConstantInt::get(T_int8, tindex));
             }
             else {
-                // test for ((tindex > 0 && x.TIndex == tindex) || (x.TIndex == 0 && typeof(x.V) == type))
-                Value *istype_union = NULL;
-                if (tindex > 0)
-                    istype_union = builder.CreateICmpEQ(x.TIndex, ConstantInt::get(T_int8, tindex));
-                else
-                    istype_union = ConstantInt::get(T_int1, 0);
-                Value *isboxed = builder.CreateICmpEQ(x.TIndex, ConstantInt::get(T_int8, 0));
+                // test for (x.TIndex == 0x80 && typeof(x.V) == type)
+                Value *isboxed = builder.CreateICmpEQ(x.TIndex, ConstantInt::get(T_int8, 0x80));
                 BasicBlock *currBB = builder.GetInsertBlock();
                 BasicBlock *isaBB = BasicBlock::Create(jl_LLVMContext, "isa", ctx->f);
                 BasicBlock *postBB = BasicBlock::Create(jl_LLVMContext, "post_isa", ctx->f);
@@ -1006,7 +996,7 @@ static Value *emit_isa(const jl_cgval_t &x, jl_value_t *type, const std::string 
                 builder.CreateBr(postBB);
                 builder.SetInsertPoint(postBB);
                 PHINode *istype = builder.CreatePHI(T_int1, 2);
-                istype->addIncoming(istype_union, currBB);
+                istype->addIncoming(ConstantInt::get(T_int1, 0), currBB);
                 istype->addIncoming(istype_boxed, isaBB);
                 return istype;
             }
@@ -1906,6 +1896,8 @@ static Value *box_union(const jl_cgval_t &vinfo, jl_codectx_t *ctx, const SmallB
             counter);
     builder.SetInsertPoint(defaultBB);
     if (skip.size() > 0 && skip[0]) {
+        // skip[0] specifies where to return NULL or the original pointer
+        // if the value was not handled above
         box_merge->addIncoming(V_null, defaultBB);
         builder.CreateBr(postBB);
     }
