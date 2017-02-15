@@ -332,9 +332,8 @@ function complete_methods(ex_org::Expr)
     for method in ml
         ms = method.sig
 
-        # Do not complete the "Type{T}(::Any) where T" constructor from sysimg.jl
-        # Note that we must check if it is a Type, and not a DataType since we eval'd this.
-        if method.module == Base && method.file == Symbol("sysimg.jl") && method.sig == Tuple{Type{T},Any} where T # @Hardcoded
+        # Do not suggest the default method from sysimg.jl.
+        if Base.is_default_method(method)
             continue
         end
 
