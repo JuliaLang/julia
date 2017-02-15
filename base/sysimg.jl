@@ -358,8 +358,8 @@ importall .SparseArrays
 
 include("asyncmap.jl")
 
-include("parallel/Parallel.jl")
-importall .Parallel
+include("distributed/Distributed.jl")
+importall .Distributed
 include("sharedarray.jl")
 
 # code loading
@@ -387,7 +387,7 @@ function __init__()
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
     early_init()
     init_load_path()
-    Parallel.init_parallel()
+    Distributed.init_parallel()
     init_threadcall()
 end
 
