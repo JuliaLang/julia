@@ -291,7 +291,7 @@ true
 julia> isassigned(rand(3, 3), 3 * 3 + 1)
 false
 
-julia> type Foo end
+julia> mutable struct Foo end
 
 julia> v = similar(rand(3), Foo)
 3-element Array{Foo,1}:
