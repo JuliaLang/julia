@@ -441,7 +441,7 @@ To prevent this, we can add an inner constructor:
 ```jldoctest containers3
 julia> mutable struct MyBetterContainer{T<:Real, A<:AbstractVector}
            a::A
-           MyBetterContainer(v::AbstractVector{T}) = new(v)
+           MyBetterContainer{T,A}(v::AbstractVector{T}) where {T,A} = new(v)
        end
 
 julia> MyBetterContainer(v::AbstractVector) = MyBetterContainer{eltype(v),typeof(v)}(v)

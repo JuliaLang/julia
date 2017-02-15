@@ -301,6 +301,22 @@ if they need to provide custom bounds checking behaviors; however, in
 many cases one can rely on `A`'s indices and [`checkindex`](@ref).
 
 See also [`checkindex`](@ref).
+
+```jldoctest
+julia> A = rand(3, 3);
+
+julia> checkbounds(Bool, A, 2)
+true
+
+julia> checkbounds(Bool, A, 3, 4)
+false
+
+julia> checkbounds(Bool, A, 1:3)
+true
+
+julia> checkbounds(Bool, A, 1:3, 2:4)
+false
+```
 """
 function checkbounds(::Type{Bool}, A::AbstractArray, I...)
     @_inline_meta
@@ -346,6 +362,8 @@ bounds-check for a single dimension of the array.
 There are two important exceptions to the 1-1 rule: linear indexing and
 CartesianIndex{N}, both of which may "consume" more than one element
 of `IA`.
+
+See also [`checkbounds`](@ref).
 """
 function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple)
     @_inline_meta
@@ -443,25 +461,31 @@ default is an `Array{element_type}(dims...)`.
 For example, `similar(1:10, 1, 4)` returns an uninitialized `Array{Int,2}` since ranges are
 neither mutable nor support 2 dimensions:
 
-    julia> similar(1:10, 1, 4)
-    1×4 Array{Int64,2}:
-     4419743872  4374413872  4419743888  0
+```julia
+julia> similar(1:10, 1, 4)
+1×4 Array{Int64,2}:
+ 4419743872  4374413872  4419743888  0
+```
 
 Conversely, `similar(trues(10,10), 2)` returns an uninitialized `BitVector` with two
 elements since `BitArray`s are both mutable and can support 1-dimensional arrays:
 
-    julia> similar(trues(10,10), 2)
-    2-element BitArray{1}:
-     false
-     false
+```julia
+julia> similar(trues(10,10), 2)
+2-element BitArray{1}:
+ false
+ false
+```
 
 Since `BitArray`s can only store elements of type `Bool`, however, if you request a
 different element type it will create a regular `Array` instead:
 
-    julia> similar(falses(10), Float64, 2, 4)
-    2×4 Array{Float64,2}:
-     2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
-     2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
+```julia
+julia> similar(falses(10), Float64, 2, 4)
+2×4 Array{Float64,2}:
+ 2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
+ 2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
+```
 
 """
 similar{T}(a::AbstractArray{T})                             = similar(a, T)
@@ -675,6 +699,17 @@ Make a mutable copy of an array or iterable `a`.  For `a::Array`,
 this is equivalent to `copy(a)`, but for other array types it may
 differ depending on the type of `similar(a)`.  For generic iterables
 this is equivalent to `collect(a)`.
+
+```jldoctest
+julia> tup = (1, 2, 3)
+(1, 2, 3)
+
+julia> Base.copymutable(tup)
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+```
 """
 function copymutable(a::AbstractArray)
     @_propagate_inbounds_meta
@@ -1629,7 +1664,7 @@ needed, for example in `foreach(println, array)`.
 ```jldoctest
 julia> a = 1:3:7;
 
-julia> foreach(x->println(x^2),a)
+julia> foreach(x -> println(x^2), a)
 1
 16
 49
@@ -1783,7 +1818,7 @@ Transform collection `c` by applying `f` to each element. For multiple collectio
 apply `f` elementwise.
 
 ```jldoctest
-julia> map((x) -> x * 2, [1, 2, 3])
+julia> map(x -> x * 2, [1, 2, 3])
 3-element Array{Int64,1}:
  2
  4
@@ -1823,6 +1858,18 @@ end
 
 Like [`map`](@ref), but stores the result in `destination` rather than a new
 collection. `destination` must be at least as large as the first collection.
+
+```jldoctest
+julia> x = zeros(3);
+
+julia> map!(x -> x * 2, x, [1, 2, 3]);
+
+julia> x
+3-element Array{Float64,1}:
+ 2.0
+ 4.0
+ 6.0
+```
 """
 map!{F}(f::F, dest::AbstractArray, As::AbstractArray...) = map_n!(f, dest, As)
 

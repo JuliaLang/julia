@@ -143,7 +143,7 @@ julia> sqrt(-1)
 ERROR: DomainError:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
 Stacktrace:
- [1] sqrt(::Int64) at ./math.jl:432
+ [1] sqrt(::Int64) at ./math.jl:410
 
 julia> sqrt(-1 + 0im)
 0.0 + 1.0im
@@ -284,7 +284,7 @@ julia> 0//0
 ERROR: ArgumentError: invalid rational: zero(Int64)//zero(Int64)
 Stacktrace:
  [1] Rational{Int64}(::Int64, ::Int64) at ./rational.jl:8
- [2] //(::Int64, ::Int64) at ./rational.jl:27
+ [2] //(::Int64, ::Int64) at ./rational.jl:35
 ```
 
 As usual, the promotion system makes interactions with other numeric types effortless:

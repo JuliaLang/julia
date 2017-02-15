@@ -680,8 +680,8 @@ to `Point` have the same type. When this isn't the case, the constructor will fa
 julia> Point(1,2.5)
 ERROR: MethodError: no method matching Point(::Int64, ::Float64)
 Closest candidates are:
-  Point{T}(::Any) at sysimg.jl:24
-  Point{T}(::T, !Matched::T) at none:2
+  Point(::Any) where T at sysimg.jl:24
+  Point(::T, !Matched::T) where T at none:2
 ```
 
 Constructor methods to appropriately handle such mixed cases can be defined, but that will not
@@ -1156,8 +1156,8 @@ is raised:
 julia> supertype(Union{Float64,Int64})
 ERROR: MethodError: no method matching supertype(::Type{Union{Float64, Int64}})
 Closest candidates are:
-  supertype(!Matched::DataType) at operators.jl:38
-  supertype(!Matched::UnionAll) at operators.jl:43
+  supertype(!Matched::DataType) at operators.jl:41
+  supertype(!Matched::UnionAll) at operators.jl:46
 ```
 
 ## Custom pretty-printing

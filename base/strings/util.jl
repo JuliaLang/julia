@@ -84,7 +84,7 @@ chop(s::AbstractString) = SubString(s, 1, endof(s)-1)
 Remove a single trailing newline from a string.
 
 ```jldoctest
-julia> chomp("Hello\n")
+julia> chomp("Hello\\n")
 "Hello"
 ```
 """
@@ -186,7 +186,7 @@ If `chars` (a character, or vector or set of characters) is provided,
 instead remove characters contained in it.
 
 ```jldoctest
-julia> strip("{3, 5}\n", ['{', '}', '\n'])
+julia> strip("{3, 5}\\n", ['{', '}', '\\n'])
 "3, 5"
 ```
 """
@@ -487,7 +487,7 @@ throwing an `ArgumentError` indicating the position of the first non-ASCII byte.
 julia> ascii("abcdeγfgh")
 ERROR: ArgumentError: invalid ASCII at index 6 in "abcdeγfgh"
 Stacktrace:
- [1] ascii(::String) at ./strings/util.jl:473
+ [1] ascii(::String) at ./strings/util.jl:475
 
 julia> ascii("abcdefgh")
 "abcdefgh"
