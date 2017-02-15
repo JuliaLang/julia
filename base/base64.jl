@@ -213,7 +213,7 @@ julia> io = IOBuffer();
 julia> iob64_decode = Base64DecodePipe(io);
 
 julia> write(io, "SGVsbG8h")
-0x0000000000000008
+8
 
 julia> seekstart(io);
 
