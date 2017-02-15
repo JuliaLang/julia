@@ -919,6 +919,7 @@ mktempdir() do dir
     # Note: Tests only work on linux as SSL_CERT_FILE is only respected on linux systems.
     @testset "Hostname verification" begin
         openssl_installed = false
+        common_name = ""
         if is_linux()
             try
                 # OpenSSL needs to be on the path
@@ -926,16 +927,27 @@ mktempdir() do dir
             catch
                 warn("Skipping hostname verification tests. Is `openssl` on the path?")
             end
+
+            # Find a hostname that is mapped to the loopback address
+            hostname = replace(readchomp(`hostname`), r"\..*$", "")
+            loopback = ip"127.0.0.1"
+
+            if getaddrinfo(hostname) == loopback
+                common_name = hostname
+            elseif getaddrinfo("localhost") == loopback
+                common_name = "localhost"
+            else
+                warn("Unable to determine hostname that maps to the loopback address")
+            end
         end
-        if openssl_installed
+        if openssl_installed && !isempty(common_name)
             mktempdir() do root
-                hostname = replace(readchomp(`hostname`), r"\..*$", "")
-                key = joinpath(root, hostname * ".key")
-                cert = joinpath(root, hostname * ".crt")
-                pem = joinpath(root, hostname * ".pem")
+                key = joinpath(root, common_name * ".key")
+                cert = joinpath(root, common_name * ".crt")
+                pem = joinpath(root, common_name * ".pem")
 
                 # Generated a certificate which has the CN set correctly but no subjectAltName
-                run(pipeline(`openssl req -new -x509 -newkey rsa:2048 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$hostname"`, stderr=DevNull))
+                run(pipeline(`openssl req -new -x509 -newkey rsa:2048 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`, stderr=DevNull))
                 run(`openssl x509 -in $cert -out $pem -outform PEM`)
 
                 # Make a fake Julia package and minimal HTTPS server with our generated
@@ -946,7 +958,7 @@ mktempdir() do dir
                 end
 
                 errfile = joinpath(root, "error")
-                repo_url = "https://$hostname:4433/Example.jl"
+                repo_url = "https://$common_name:4433/Example.jl"
                 repo_dir = joinpath(root, "dest")
                 code = """
                     dest_dir = "$repo_dir"
