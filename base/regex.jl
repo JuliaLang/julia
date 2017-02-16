@@ -153,6 +153,9 @@ function ismatch(r::Regex, s::SubString, offset::Integer=0)
                      r.match_data)
 end
 
+ismatch(rm::RegexMatch) = true
+ismatch(rm::Void) = false
+
 (r::Regex)(s) = ismatch(r, s)
 
 function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, add_opts::UInt32=UInt32(0))
