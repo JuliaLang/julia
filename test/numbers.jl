@@ -2902,6 +2902,18 @@ end
     @test rem2pi(T(-4), RoundUp)      == -4
 end
 
+import Base.^
+immutable PR20530; end
+^(::PR20530, p::Int) = 1
+^{p}(::PR20530, ::Type{Val{p}}) = 2
+@testset "literal powers" begin
+    x = PR20530()
+    p = 2
+    @test x^p == 1
+    @test x^2 == 2
+    @test [x,x,x].^2 == [2,2,2]
+end
+
 @testset "iszero" begin
     # Numeric scalars
     for T in [Float16, Float32, Float64, BigFloat,
