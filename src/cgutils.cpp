@@ -956,8 +956,7 @@ static Value *emit_isa(const jl_cgval_t &x, jl_value_t *type, const std::string 
         return ConstantInt::get(T_int1, maybe_isa);
 
     // intersection with Type needs to be handled specially
-    if (jl_has_intersect_type_not_kind(x.typ) ||
-        jl_has_intersect_type_not_kind(type)) {
+    if (jl_has_intersect_type_not_kind(type)) {
         Value *vx = boxed(x, ctx);
         if (msg && *msg == "typeassert") {
 #if JL_LLVM_VERSION >= 30700
