@@ -301,7 +301,7 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *d
             // bools may be stored internally as int8
             unboxed = builder.CreateZExt(unboxed, T_int8);
         }
-        else {
+        else if (ty != to) {
             unboxed = builder.CreateBitCast(unboxed, to);
         }
         if (!dest)

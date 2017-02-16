@@ -3809,7 +3809,29 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             if (vi.value.V == NULL) {
                 // all ghost values in destination - nothing to copy or store
             }
-            else if (rval_info.ispointer()) {
+            else if (rval_info.constant || !rval_info.ispointer()) {
+                if (rval_info.isghost) {
+                    // all ghost values in source - nothing to copy or store
+                }
+                else {
+                    if (rval_info.typ != vi.value.typ && !vi.pTIndex && !rval_info.TIndex) {
+                        // isbits cast-on-assignment is invalid. this branch should be dead-code.
+                        CreateTrap(builder);
+                    }
+                    else {
+                        Value *dest = vi.value.V;
+                        Type *store_ty = julia_type_to_llvm(rval_info.constant ? jl_typeof(rval_info.constant) : rval_info.typ);
+                        Type *dest_ty = store_ty->getPointerTo();
+                        if (dest_ty != dest->getType())
+                            dest = emit_bitcast(dest, dest_ty);
+                        tbaa_decorate(tbaa_stack, builder.CreateStore(
+                                          emit_unbox(store_ty, rval_info, rval_info.typ),
+                                          dest,
+                                          vi.isVolatile));
+                    }
+                }
+            }
+            else {
                 MDNode *tbaa = rval_info.tbaa;
                 // the memcpy intrinsic does not allow to specify different alias tags
                 // for the load part (x.tbaa) and the store part (tbaa_stack).
@@ -3833,26 +3855,6 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                                      /*TODO: min_align*/1,
                                      vi.isVolatile,
                                      tbaa);
-            }
-            else if (rval_info.V == NULL) {
-                // all ghost values in source - nothing to copy or store
-            }
-            else {
-                if (rval_info.typ != vi.value.typ && !vi.pTIndex && !rval_info.TIndex) {
-                    // isbits cast-on-assignment is invalid. this branch should be dead-code.
-                    CreateTrap(builder);
-                }
-                else {
-                    Value *dest = vi.value.V;
-                    Type *store_ty = julia_type_to_llvm(rval_info.typ);
-                    Type *dest_ty = store_ty->getPointerTo();
-                    if (dest_ty != dest->getType())
-                        dest = emit_bitcast(dest, dest_ty);
-                    tbaa_decorate(tbaa_stack, builder.CreateStore(
-                                      emit_unbox(store_ty, rval_info, rval_info.typ),
-                                      dest,
-                                      vi.isVolatile));
-                }
             }
         }
         else {
