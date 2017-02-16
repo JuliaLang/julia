@@ -224,18 +224,14 @@ julia> A
 ```
 """
 function unique!(c)
-    if issorted(c) || issorted(reverse(c))
-        idxs = eachindex(c)
-        # When we loop through c, we only need to remember one state and one
-        # item in the collection.
-        currentstate = start(idxs)
-        currentitem = c[currentstate]
-        count = 1
-        for x in c
+    if issorted(c) || issorted(c, rev=true)
+        done(c, 1) ? count = 0 : count = 1
+        for i in indices(c, 1)
+            x = c[i]
+            currentitem = c[count]
             if x != currentitem
-                _, currentstate = next(idxs, currentstate)
-                currentitem = c[currentstate] = x
                 count += 1
+                c[count] = x
             end
         end
     else
