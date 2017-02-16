@@ -510,33 +510,18 @@ function readuntil(s::IO, delim::T) where T
     return out
 end
 
-# based on code by Glen Hertz
 function readuntil(s::IO, t::AbstractString)
     l = length(t)
     if l == 0
         return ""
     end
-    if l > 40
-        warn("readuntil(IO,AbstractString) will perform poorly with a long string")
-    end
     out = IOBuffer()
-    m = Vector{Char}(l)  # last part of stream to match
-    t = collect(t)
-    i = 0
+    i = 1
     while !eof(s)
-        i += 1
         c = read(s, Char)
         write(out, c)
-        if i <= l
-            m[i] = c
-        else
-            # shift to last part of s
-            for j = 2:l
-                m[j-1] = m[j]
-            end
-            m[l] = c
-        end
-        if i >= l && m == t
+        i = c == t[i] ? i + 1 : 1
+        if i > l
             break
         end
     end
