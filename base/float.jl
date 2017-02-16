@@ -712,7 +712,7 @@ end
 end
 
 """
-    eps(::Type{<:AbstractFloat})
+    eps(::Type{T}) where T<:AbstractFloat
     eps()
 
 Returns the *machine epsilon* of the floating point type `T` (`T = Float64` by
@@ -733,7 +733,7 @@ julia> 1.0 + eps()/2
 1.0
 ```
 """
-eps{T<:AbstractFloat}(::Type{T})
+eps(::Type{<:AbstractFloat})
 
 """
     eps(x::AbstractFloat)
