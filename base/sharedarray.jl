@@ -256,7 +256,7 @@ SharedMatrix{T} = SharedArray{T,2}
 length(S::SharedArray) = prod(S.dims)
 size(S::SharedArray) = S.dims
 ndims(S::SharedArray) = length(S.dims)
-linearindexing(::Type{<:SharedArray}) = LinearFast()
+IndexStyle(::Type{<:SharedArray}) = IndexLinear()
 
 function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
     if length(a) != prod(dims)

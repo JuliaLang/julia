@@ -53,7 +53,7 @@ end
 
 module OAs
 
-using Base: Indices, LinearSlow, LinearFast, tail
+using Base: Indices, IndexCartesian, IndexLinear, tail
 
 export OffsetArray
 
@@ -69,7 +69,7 @@ OffsetArray{T,N}(A::AbstractArray{T,N}, offsets::Vararg{Int,N}) = OffsetArray(A,
 (::Type{OffsetArray{T,N}}){T,N}(inds::Indices{N}) = OffsetArray{T,N,Array{T,N}}(Array{T,N}(map(length, inds)), map(indsoffset, inds))
 (::Type{OffsetArray{T}}){T,N}(inds::Indices{N}) = OffsetArray{T,N}(inds)
 
-Base.linearindexing{T<:OffsetArray}(::Type{T}) = Base.linearindexing(parenttype(T))
+Base.IndexStyle{T<:OffsetArray}(::Type{T}) = Base.IndexStyle(parenttype(T))
 parenttype{T,N,AA}(::Type{OffsetArray{T,N,AA}}) = AA
 parenttype(A::OffsetArray) = parenttype(typeof(A))
 
@@ -78,8 +78,8 @@ Base.parent(A::OffsetArray) = A.parent
 errmsg(A) = error("size not supported for arrays with indices $(indices(A)); see http://docs.julialang.org/en/latest/devdocs/offset-arrays/")
 Base.size(A::OffsetArray) = errmsg(A)
 Base.size(A::OffsetArray, d) = errmsg(A)
-Base.eachindex(::LinearSlow, A::OffsetArray) = CartesianRange(indices(A))
-Base.eachindex(::LinearFast, A::OffsetVector) = indices(A, 1)
+Base.eachindex(::IndexCartesian, A::OffsetArray) = CartesianRange(indices(A))
+Base.eachindex(::IndexLinear, A::OffsetVector) = indices(A, 1)
 
 # Implementations of indices and indices1. Since bounds-checking is
 # performance-critical and relies on indices, these are usually worth

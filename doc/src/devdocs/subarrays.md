@@ -139,10 +139,10 @@ a given set of indices supports fast linear indexing with the internal `Base.vie
 
 ```julia
 julia> Base.viewindexing(S1.indexes)
-Base.LinearSlow()
+IndexCartesian()
 
 julia> Base.viewindexing(S2.indexes)
-Base.LinearFast()
+IndexLinear()
 ```
 
 This is computed during construction of the `SubArray` and stored in the `L` type parameter as

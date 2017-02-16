@@ -2,7 +2,7 @@
 
 module Sort
 
-using Base: Order, Checked, copymutable, linearindices, linearindexing, viewindexing, LinearFast, _length
+using Base: Order, Checked, copymutable, linearindices, IndexStyle, viewindexing, IndexLinear, _length
 
 import
     Base.sort,
@@ -774,7 +774,7 @@ end
 
 function slicetypeof{T}(A::AbstractArray{T}, i1, i2)
     I = map(slice_dummy, to_indices(A, (i1, i2)))
-    fast = isa(linearindexing(viewindexing(I), linearindexing(A)), LinearFast)
+    fast = isa(IndexStyle(viewindexing(I), IndexStyle(A)), IndexLinear)
     SubArray{T,1,typeof(A),typeof(I),fast}
 end
 slice_dummy(S::Slice) = S

@@ -246,9 +246,9 @@ mr_empty_iter(f, op::typeof(&), itr, ::EltypeUnknown) = true
 mr_empty_iter(f, op::typeof(|), itr, ::EltypeUnknown) = false
 mr_empty_iter(f, op, itr, ::EltypeUnknown) = _empty_reduce_error()
 
-_mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, linearindexing(A), A)
+_mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
 
-function _mapreduce{T}(f, op, ::LinearFast, A::AbstractArray{T})
+function _mapreduce{T}(f, op, ::IndexLinear, A::AbstractArray{T})
     inds = linearindices(A)
     n = length(inds)
     @inbounds begin
@@ -272,9 +272,9 @@ function _mapreduce{T}(f, op, ::LinearFast, A::AbstractArray{T})
     end
 end
 
-_mapreduce(f, op, ::LinearSlow, A::AbstractArray) = mapfoldl(f, op, A)
+_mapreduce(f, op, ::IndexCartesian, A::AbstractArray) = mapfoldl(f, op, A)
 
-mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, linearindexing(A), A)
+mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
 mapreduce(f, op, a::Number) = f(a)
 
 """

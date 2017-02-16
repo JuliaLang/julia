@@ -69,7 +69,7 @@ end
 
 isassigned(B::BitArray, i::Int) = 1 <= i <= length(B)
 
-linearindexing(::Type{<:BitArray}) = LinearFast()
+IndexStyle(::Type{<:BitArray}) = IndexLinear()
 
 ## aux functions ##
 
