@@ -134,6 +134,12 @@ srand(1)
             @test_throws DimensionMismatch T \ ones(elty,n+1,2)
             @test_throws DimensionMismatch T.' \ ones(elty,n+1,2)
             @test_throws DimensionMismatch T' \ ones(elty,n+1,2)
+
+            @test_throws DimensionMismatch T \ RowVector(ones(elty,n+1))
+            @test_throws DimensionMismatch T.' \ RowVector(ones(elty,n+1))
+            @test_throws DimensionMismatch T' \ RowVector(ones(elty,n+1))
+            @test_throws DimensionMismatch Base.LinAlg.At_ldiv_B(T, RowVector(ones(elty,n+1)))
+            @test_throws DimensionMismatch Base.LinAlg.Ac_ldiv_B(T, RowVector(ones(elty,n+1)))
             let bb = b, cc = c
                 for atype in ("Array", "SubArray")
                     if atype == "Array"
@@ -168,6 +174,14 @@ srand(1)
                 @test isa(round.(Int, T), Bidiagonal)
                 @test ceil.(Int,T) == Bidiagonal(ceil.(Int,T.dv), ceil.(Int,T.ev), T.isupper)
                 @test isa(ceil.(Int,T), Bidiagonal)
+                @test floor.(T) == Bidiagonal(floor.(T.dv), floor.(T.ev), T.isupper)
+                @test isa(floor.(T), Bidiagonal)
+                @test trunc.(T) == Bidiagonal(trunc.(T.dv), trunc.(T.ev), T.isupper)
+                @test isa(trunc.(T), Bidiagonal)
+                @test round.(T) == Bidiagonal(round.(T.dv), round.(T.ev), T.isupper)
+                @test isa(round.(T), Bidiagonal)
+                @test ceil.(T) == Bidiagonal(ceil.(T.dv), ceil.(T.ev), T.isupper)
+                @test isa(ceil.(T), Bidiagonal)
             end
         end
 
