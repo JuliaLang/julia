@@ -189,7 +189,7 @@ end
     @test convert(Vector{Float64}, b) == b
 end
 
-@testset "operations with LinearFast ReshapedArray" begin
+@testset "operations with IndexLinear ReshapedArray" begin
     b = collect(1:12)
     a = Base.ReshapedArray(b, (4,3), ())
     @test a[3,2] == 7
@@ -1333,11 +1333,11 @@ end
 
 @testset "linear indexing" begin
     a = [1:5;]
-    @test isa(Base.linearindexing(a), Base.LinearFast)
+    @test isa(Base.IndexStyle(a), Base.IndexLinear)
     b = view(a, :)
-    @test isa(Base.linearindexing(b), Base.LinearFast)
-    @test isa(Base.linearindexing(trues(2)), Base.LinearFast)
-    @test isa(Base.linearindexing(BitArray{2}), Base.LinearFast)
+    @test isa(Base.IndexStyle(b), Base.IndexLinear)
+    @test isa(Base.IndexStyle(trues(2)), Base.IndexLinear)
+    @test isa(Base.IndexStyle(BitArray{2}), Base.IndexLinear)
     aa = fill(99, 10)
     aa[1:2:9] = a
     shp = [5]
@@ -1347,7 +1347,7 @@ end
         @test mdsum2(A) == 15
         AA = reshape(aa, tuple(2, shp...))
         B = view(AA, 1:1, ntuple(i->Colon(), i)...)
-        @test isa(Base.linearindexing(B), Base.IteratorsMD.LinearSlow)
+        @test isa(Base.IndexStyle(B), Base.IteratorsMD.IndexCartesian)
         @test mdsum(B) == 15
         @test mdsum2(B) == 15
         unshift!(shp, 1)
@@ -1528,8 +1528,8 @@ R = CartesianRange((0,3))
 R = CartesianRange((3,0))
 @test done(R, start(R)) == true
 
-@test @inferred(eachindex(Base.LinearSlow(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == CartesianRange((3,2,2))
-@test @inferred(eachindex(Base.LinearFast(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == 1:8
+@test @inferred(eachindex(Base.IndexCartesian(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == CartesianRange((3,2,2))
+@test @inferred(eachindex(Base.IndexLinear(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == 1:8
 @test @inferred(eachindex(zeros(3),view(zeros(3,3),1:2,1:2),zeros(2,2,2),zeros(2,2))) == CartesianRange((3,2,2))
 @test @inferred(eachindex(zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == 1:8
 
@@ -1659,14 +1659,14 @@ B = 1.5:5.5
 end
 
 ###
-### LinearSlow workout
+### IndexCartesian workout
 ###
 struct LinSlowMatrix{T} <: DenseArray{T,2}
     data::Matrix{T}
 end
 
 # This is the default, but just to be sure
-Base.linearindexing{A<:LinSlowMatrix}(::Type{A}) = Base.LinearSlow()
+Base.IndexStyle{A<:LinSlowMatrix}(::Type{A}) = Base.IndexCartesian()
 
 Base.size(A::LinSlowMatrix) = size(A.data)
 
@@ -1755,7 +1755,7 @@ struct SquaresVector <: AbstractArray{Int, 1}
     count::Int
 end
 Base.size(S::SquaresVector) = (S.count,)
-Base.linearindexing(::Type{SquaresVector}) = Base.LinearFast()
+Base.IndexStyle(::Type{SquaresVector}) = Base.IndexLinear()
 Base.getindex(S::SquaresVector, i::Int) = i*i
 foo_squares = SquaresVector(5)
 @test convert(Array{Int}, foo_squares) == [1,4,9,16,25]

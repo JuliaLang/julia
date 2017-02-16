@@ -1522,7 +1522,7 @@ function _mapreducezeros(f, op, T::Type, nzeros::Int, v0)
     v
 end
 
-function Base._mapreduce{T}(f, op, ::Base.LinearSlow, A::SparseMatrixCSC{T})
+function Base._mapreduce{T}(f, op, ::Base.IndexCartesian, A::SparseMatrixCSC{T})
     z = nnz(A)
     n = length(A)
     if z == 0

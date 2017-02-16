@@ -3,7 +3,7 @@
 module MultiplicativeInverses
 
 import Base: div, divrem, rem, unsigned
-using  Base: LinearFast, LinearSlow, tail
+using  Base: IndexLinear, IndexCartesian, tail
 export multiplicativeinverse
 
 unsigned(::Type{Int8}) = UInt8

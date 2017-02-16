@@ -106,10 +106,10 @@ end
 
 abstract type MyArray{T,N} <: AbstractArray{T,N} end
 
-struct ArrayLS{T,N} <: MyArray{T,N}  # LinearSlow
+struct ArrayLS{T,N} <: MyArray{T,N}  # IndexCartesian
     data::Array{T,N}
 end
-struct ArrayLSLS{T,N} <: MyArray{T,N}  # LinearSlow with LinearSlow similar
+struct ArrayLSLS{T,N} <: MyArray{T,N}  # IndexCartesian with IndexCartesian similar
     data::Array{T,N}
 end
 Base.similar{T}(A::ArrayLSLS, ::Type{T}, dims::Tuple{Vararg{Int}}) = ArrayLSLS(similar(A.data, T, dims))
@@ -117,7 +117,7 @@ Base.similar{T}(A::ArrayLSLS, ::Type{T}, dims::Tuple{Vararg{Int}}) = ArrayLSLS(s
 @inline Base.unsafe_setindex!(A::ArrayLSLS, v, I::Int...) = Base.unsafe_setindex!(A.data, v, I...)
 Base.first(A::ArrayLSLS) = first(A.data)
 
-struct ArrayLF{T,N} <: MyArray{T,N}  # LinearFast
+struct ArrayLF{T,N} <: MyArray{T,N}  # IndexLinear
     data::Array{T,N}
 end
 struct ArrayStrides{T,N} <: MyArray{T,N}
@@ -145,10 +145,10 @@ Base.size(A::MyArray) = size(A.data)
 @inline Base.unsafe_getindex{T}(A::ArrayStrides{T,2}, i::Real, j::Real) = unsafe_getindex(A.data, 1+A.strides[1]*(i-1)+A.strides[2]*(j-1))
 @inline Base.unsafe_getindex(A::ArrayStrides1, i::Real, j::Real) = unsafe_getindex(A.data, i + A.stride1*(j-1))
 
-# Using the qualified Base.LinearFast() in the linearindexing definition
+# Using the qualified Base.IndexLinear() in the IndexStyle definition
 # requires looking up the symbol in the module on each call.
-import Base: LinearFast
-Base.linearindexing{T<:ArrayLF}(::Type{T}) = LinearFast()
+import Base: IndexLinear
+Base.IndexStyle{T<:ArrayLF}(::Type{T}) = IndexLinear()
 
 if !applicable(unsafe_getindex, [1 2], 1:1, 2)
     @inline Base.unsafe_getindex(A::Array, I...) = @inbounds return A[I...]

@@ -245,36 +245,47 @@ end
 
 ## Traits for array types ##
 
-abstract type LinearIndexing end
-struct LinearFast <: LinearIndexing end
-struct LinearSlow <: LinearIndexing end
+abstract type IndexStyle end
+struct IndexLinear <: IndexStyle end
+struct IndexCartesian <: IndexStyle end
 
 """
-    Base.linearindexing(A)
+    IndexStyle(A)
+    IndexStyle(typeof(A))
 
-`linearindexing` defines how an AbstractArray most efficiently accesses its elements. If
-`Base.linearindexing(A)` returns `Base.LinearFast()`, this means that linear indexing with
-only one index is an efficient operation. If it instead returns `Base.LinearSlow()` (by
-default), this means that the array intrinsically accesses its elements with indices
-specified for every dimension. Since converting a linear index to multiple indexing
-subscripts is typically very expensive, this provides a traits-based mechanism to enable
-efficient generic code for all array types.
+`IndexStyle` specifies the "native indexing style" for array `A`. When
+you define a new `AbstractArray` type, you can choose to implement
+either linear indexing or cartesian indexing.  If you decide to
+implement linear indexing, then you must set this trait for your array
+type:
 
-An abstract array subtype `MyArray` that wishes to opt into fast linear indexing behaviors
-should define `linearindexing` in the type-domain:
+    Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
 
-    Base.linearindexing(::Type{<:MyArray}) = Base.LinearFast()
+The default is `IndexCartesian()`.
+
+Julia's internal indexing machinery will automatically (and invisibly)
+convert all indexing operations into the preferred style using
+[`sub2ind`](@ref) or [`ind2sub`](@ref). This allows users to access
+elements of your array using any indexing style, even when explicit
+methods have not been provided.
+
+If you define both styles of indexing for your `AbstractArray`, this
+trait can be used to select the most performant indexing style. Some
+methods check this trait on their inputs, and dispatch to different
+algorithms depending on the most efficient access pattern. In
+particular, [`eachindex`](@ref) creates an iterator whose type depends
+on the setting of this trait.
 """
-linearindexing(A::AbstractArray) = linearindexing(typeof(A))
-linearindexing(::Type{Union{}}) = LinearFast()
-linearindexing(::Type{<:AbstractArray}) = LinearSlow()
-linearindexing(::Type{<:Array}) = LinearFast()
-linearindexing(::Type{<:Range}) = LinearFast()
+IndexStyle(A::AbstractArray) = IndexStyle(typeof(A))
+IndexStyle(::Type{Union{}}) = IndexLinear()
+IndexStyle(::Type{<:AbstractArray}) = IndexCartesian()
+IndexStyle(::Type{<:Array}) = IndexLinear()
+IndexStyle(::Type{<:Range}) = IndexLinear()
 
-linearindexing(A::AbstractArray, B::AbstractArray) = linearindexing(linearindexing(A), linearindexing(B))
-linearindexing(A::AbstractArray, B::AbstractArray...) = linearindexing(linearindexing(A), linearindexing(B...))
-linearindexing(::LinearFast, ::LinearFast) = LinearFast()
-linearindexing(::LinearIndexing, ::LinearIndexing) = LinearSlow()
+IndexStyle(A::AbstractArray, B::AbstractArray) = IndexStyle(IndexStyle(A), IndexStyle(B))
+IndexStyle(A::AbstractArray, B::AbstractArray...) = IndexStyle(IndexStyle(A), IndexStyle(B...))
+IndexStyle(::IndexLinear, ::IndexLinear) = IndexLinear()
+IndexStyle(::IndexStyle, ::IndexStyle) = IndexCartesian()
 
 ## Bounds checking ##
 
@@ -617,9 +628,9 @@ end
 ## since a single index variable can be used.
 
 copy!(dest::AbstractArray, src::AbstractArray) =
-    copy!(linearindexing(dest), dest, linearindexing(src), src)
+    copy!(IndexStyle(dest), dest, IndexStyle(src), src)
 
-function copy!(::LinearIndexing, dest::AbstractArray, ::LinearIndexing, src::AbstractArray)
+function copy!(::IndexStyle, dest::AbstractArray, ::IndexStyle, src::AbstractArray)
     destinds, srcinds = linearindices(dest), linearindices(src)
     isempty(srcinds) || (first(srcinds) ∈ destinds && last(srcinds) ∈ destinds) || throw(BoundsError(dest, srcinds))
     @inbounds for i in srcinds
@@ -628,7 +639,7 @@ function copy!(::LinearIndexing, dest::AbstractArray, ::LinearIndexing, src::Abs
     return dest
 end
 
-function copy!(::LinearIndexing, dest::AbstractArray, ::LinearSlow, src::AbstractArray)
+function copy!(::IndexStyle, dest::AbstractArray, ::IndexCartesian, src::AbstractArray)
     destinds, srcinds = linearindices(dest), linearindices(src)
     isempty(srcinds) || (first(srcinds) ∈ destinds && last(srcinds) ∈ destinds) || throw(BoundsError(dest, srcinds))
     i = 0
@@ -720,16 +731,16 @@ copymutable(itr) = collect(itr)
 zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
 
 ## iteration support for arrays by iterating over `eachindex` in the array ##
-# Allows fast iteration by default for both LinearFast and LinearSlow arrays
+# Allows fast iteration by default for both IndexLinear and IndexCartesian arrays
 
-# While the definitions for LinearFast are all simple enough to inline on their
-# own, LinearSlow's CartesianRange is more complicated and requires explicit
+# While the definitions for IndexLinear are all simple enough to inline on their
+# own, IndexCartesian's CartesianRange is more complicated and requires explicit
 # inlining.
 start(A::AbstractArray) = (@_inline_meta; itr = eachindex(A); (itr, start(itr)))
 next(A::AbstractArray,i) = (@_propagate_inbounds_meta; (idx, s) = next(i[1], i[2]); (A[idx], (i[1], s)))
 done(A::AbstractArray,i) = (@_propagate_inbounds_meta; done(i[1], i[2]))
 
-# eachindex iterates over all indices. LinearSlow definitions are later.
+# eachindex iterates over all indices. IndexCartesian definitions are later.
 eachindex(A::AbstractVector) = (@_inline_meta(); indices1(A))
 
 """
@@ -776,18 +787,18 @@ otherwise).
 If the arrays have different sizes and/or dimensionalities, `eachindex` returns an
 iterable that spans the largest range along each dimension.
 """
-eachindex(A::AbstractArray) = (@_inline_meta(); eachindex(linearindexing(A), A))
+eachindex(A::AbstractArray) = (@_inline_meta(); eachindex(IndexStyle(A), A))
 
 function eachindex(A::AbstractArray, B::AbstractArray)
     @_inline_meta
-    eachindex(linearindexing(A,B), A, B)
+    eachindex(IndexStyle(A,B), A, B)
 end
 function eachindex(A::AbstractArray, B::AbstractArray...)
     @_inline_meta
-    eachindex(linearindexing(A,B...), A, B...)
+    eachindex(IndexStyle(A,B...), A, B...)
 end
-eachindex(::LinearFast, A::AbstractArray) = linearindices(A)
-function eachindex(::LinearFast, A::AbstractArray, B::AbstractArray...)
+eachindex(::IndexLinear, A::AbstractArray) = linearindices(A)
+function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
     @_inline_meta
     1:_maxlength(A, B...)
 end
@@ -838,15 +849,15 @@ pointer{T}(x::AbstractArray{T}, i::Integer) = (@_inline_meta; unsafe_convert(Ptr
 # That dispatches to an (inlined) internal _getindex function, where the goal is
 # to transform the indices such that we can call the only getindex method that
 # we require the type A{T,N} <: AbstractArray{T,N} to define; either:
-#       getindex(::A, ::Int) # if linearindexing(A) == LinearFast() OR
-#       getindex{T,N}(::A{T,N}, ::Vararg{Int, N}) # if LinearSlow()
+#       getindex(::A, ::Int) # if IndexStyle(A) == IndexLinear() OR
+#       getindex{T,N}(::A{T,N}, ::Vararg{Int, N}) # if IndexCartesian()
 # If the subtype hasn't defined the required method, it falls back to the
 # _getindex function again where an error is thrown to prevent stack overflows.
 
 function getindex(A::AbstractArray, I...)
     @_propagate_inbounds_meta
-    error_if_canonical_indexing(linearindexing(A), A, I...)
-    _getindex(linearindexing(A), A, to_indices(A, I)...)
+    error_if_canonical_indexing(IndexStyle(A), A, I...)
+    _getindex(IndexStyle(A), A, to_indices(A, I)...)
 end
 function unsafe_getindex(A::AbstractArray, I...)
     @_inline_meta
@@ -854,17 +865,17 @@ function unsafe_getindex(A::AbstractArray, I...)
     r
 end
 
-error_if_canonical_indexing(::LinearFast, A::AbstractArray, ::Int) = error("indexing not defined for ", typeof(A))
-error_if_canonical_indexing{T,N}(::LinearSlow, A::AbstractArray{T,N}, ::Vararg{Int, N}) = error("indexing not defined for ", typeof(A))
-error_if_canonical_indexing(::LinearIndexing, ::AbstractArray, ::Any...) = nothing
+error_if_canonical_indexing(::IndexLinear, A::AbstractArray, ::Int) = error("indexing not defined for ", typeof(A))
+error_if_canonical_indexing{T,N}(::IndexCartesian, A::AbstractArray{T,N}, ::Vararg{Int, N}) = error("indexing not defined for ", typeof(A))
+error_if_canonical_indexing(::IndexStyle, ::AbstractArray, ::Any...) = nothing
 
 ## Internal definitions
-_getindex(::LinearIndexing, A::AbstractArray, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
+_getindex(::IndexStyle, A::AbstractArray, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
 
-## LinearFast Scalar indexing: canonical method is one Int
-_getindex(::LinearFast, A::AbstractArray, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
-_getindex(::LinearFast, A::AbstractArray) = (@_propagate_inbounds_meta; getindex(A, _to_linear_index(A)))
-function _getindex(::LinearFast, A::AbstractArray, I::Int...)
+## IndexLinear Scalar indexing: canonical method is one Int
+_getindex(::IndexLinear, A::AbstractArray, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
+_getindex(::IndexLinear, A::AbstractArray) = (@_propagate_inbounds_meta; getindex(A, _to_linear_index(A)))
+function _getindex(::IndexLinear, A::AbstractArray, I::Int...)
     @_inline_meta
     @boundscheck checkbounds(A, I...) # generally _to_linear_index requires bounds checking
     @inbounds r = getindex(A, _to_linear_index(A, I...))
@@ -876,15 +887,15 @@ _to_linear_index{T,N}(A::AbstractArray{T,N}, I::Vararg{Int,N}) = (@_inline_meta;
 _to_linear_index(A::AbstractArray) = 1 # TODO: DEPRECATE FOR #14770
 _to_linear_index(A::AbstractArray, I::Int...) = (@_inline_meta; sub2ind(A, I...)) # TODO: DEPRECATE FOR #14770
 
-## LinearSlow Scalar indexing: Canonical method is full dimensionality of Ints
-_getindex(::LinearSlow, A::AbstractArray) = (@_propagate_inbounds_meta; getindex(A, _to_subscript_indices(A)...))
-function _getindex(::LinearSlow, A::AbstractArray, I::Int...)
+## IndexCartesian Scalar indexing: Canonical method is full dimensionality of Ints
+_getindex(::IndexCartesian, A::AbstractArray) = (@_propagate_inbounds_meta; getindex(A, _to_subscript_indices(A)...))
+function _getindex(::IndexCartesian, A::AbstractArray, I::Int...)
     @_inline_meta
     @boundscheck checkbounds(A, I...) # generally _to_subscript_indices requires bounds checking
     @inbounds r = getindex(A, _to_subscript_indices(A, I...)...)
     r
 end
-_getindex{T,N}(::LinearSlow, A::AbstractArray{T,N}, I::Vararg{Int, N}) = (@_propagate_inbounds_meta; getindex(A, I...))
+_getindex{T,N}(::IndexCartesian, A::AbstractArray{T,N}, I::Vararg{Int, N}) = (@_propagate_inbounds_meta; getindex(A, I...))
 _to_subscript_indices(A::AbstractArray, i::Int) = (@_inline_meta; _unsafe_ind2sub(A, i))
 _to_subscript_indices{T,N}(A::AbstractArray{T,N}) = (@_inline_meta; fill_to_length((), 1, Val{N})) # TODO: DEPRECATE FOR #14770
 _to_subscript_indices{T}(A::AbstractArray{T,0}) = () # TODO: REMOVE FOR #14770
@@ -920,8 +931,8 @@ _unsafe_ind2sub(sz, i) = (@_inline_meta; ind2sub(sz, i))
 # function that allows dispatch on array storage
 function setindex!(A::AbstractArray, v, I...)
     @_propagate_inbounds_meta
-    error_if_canonical_indexing(linearindexing(A), A, I...)
-    _setindex!(linearindexing(A), A, v, to_indices(A, I)...)
+    error_if_canonical_indexing(IndexStyle(A), A, I...)
+    _setindex!(IndexStyle(A), A, v, to_indices(A, I)...)
 end
 function unsafe_setindex!(A::AbstractArray, v, I...)
     @_inline_meta
@@ -929,22 +940,22 @@ function unsafe_setindex!(A::AbstractArray, v, I...)
     r
 end
 ## Internal defitions
-_setindex!(::LinearIndexing, A::AbstractArray, v, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
+_setindex!(::IndexStyle, A::AbstractArray, v, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
 
-## LinearFast Scalar indexing
-_setindex!(::LinearFast, A::AbstractArray, v, i::Int) = (@_propagate_inbounds_meta; setindex!(A, v, i))
-_setindex!(::LinearFast, A::AbstractArray, v) = (@_propagate_inbounds_meta; setindex!(A, v, _to_linear_index(A)))
-function _setindex!(::LinearFast, A::AbstractArray, v, I::Int...)
+## IndexLinear Scalar indexing
+_setindex!(::IndexLinear, A::AbstractArray, v, i::Int) = (@_propagate_inbounds_meta; setindex!(A, v, i))
+_setindex!(::IndexLinear, A::AbstractArray, v) = (@_propagate_inbounds_meta; setindex!(A, v, _to_linear_index(A)))
+function _setindex!(::IndexLinear, A::AbstractArray, v, I::Int...)
     @_inline_meta
     @boundscheck checkbounds(A, I...)
     @inbounds r = setindex!(A, v, _to_linear_index(A, I...))
     r
 end
 
-# LinearSlow Scalar indexing
-_setindex!{T,N}(::LinearSlow, A::AbstractArray{T,N}, v, I::Vararg{Int, N}) = (@_propagate_inbounds_meta; setindex!(A, v, I...))
-_setindex!(::LinearSlow, A::AbstractArray, v) = (@_propagate_inbounds_meta; setindex!(A, v, _to_subscript_indices(A)...))
-function _setindex!(::LinearSlow, A::AbstractArray, v, I::Int...)
+# IndexCartesian Scalar indexing
+_setindex!{T,N}(::IndexCartesian, A::AbstractArray{T,N}, v, I::Vararg{Int, N}) = (@_propagate_inbounds_meta; setindex!(A, v, I...))
+_setindex!(::IndexCartesian, A::AbstractArray, v) = (@_propagate_inbounds_meta; setindex!(A, v, _to_subscript_indices(A)...))
+function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Int...)
     @_inline_meta
     @boundscheck checkbounds(A, I...)
     @inbounds r = setindex!(A, v, _to_subscript_indices(A, I...)...)

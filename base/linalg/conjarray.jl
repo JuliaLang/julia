@@ -42,8 +42,8 @@ ConjMatrix{T, M <: AbstractMatrix} = ConjArray{T, 2, M}
 @inline parent_type{T,N,A}(::Type{ConjArray{T,N,A}}) = A
 
 @inline size(a::ConjArray) = size(a.parent)
-linearindexing{CA <: ConjArray}(::CA) = linearindexing(parent_type(CA))
-linearindexing{CA <: ConjArray}(::Type{CA}) = linearindexing(parent_type(CA))
+IndexStyle{CA <: ConjArray}(::CA) = IndexStyle(parent_type(CA))
+IndexStyle{CA <: ConjArray}(::Type{CA}) = IndexStyle(parent_type(CA))
 
 @propagate_inbounds getindex{T,N}(a::ConjArray{T,N}, i::Int) = conj(getindex(a.parent, i))
 @propagate_inbounds getindex{T,N}(a::ConjArray{T,N}, i::Vararg{Int,N}) = conj(getindex(a.parent, i...))

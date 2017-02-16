@@ -194,12 +194,12 @@ ourselves, we can officially define it as a subtype of an `AbstractArray`.
 | Methods to implement                            |                                          | Brief description                                                                     |
 |:----------------------------------------------- |:---------------------------------------- |:------------------------------------------------------------------------------------- |
 | `size(A)`                                       |                                          | Returns a tuple containing the dimensions of `A`                                      |
-| `getindex(A, i::Int)`                           |                                          | (if `LinearFast`) Linear scalar indexing                                              |
-| `getindex(A, I::Vararg{Int, N})`                |                                          | (if `LinearSlow`, where `N = ndims(A)`) N-dimensional scalar indexing                 |
-| `setindex!(A, v, i::Int)`                       |                                          | (if `LinearFast`) Scalar indexed assignment                                           |
-| `setindex!(A, v, I::Vararg{Int, N})`            |                                          | (if `LinearSlow`, where `N = ndims(A)`) N-dimensional scalar indexed assignment       |
+| `getindex(A, i::Int)`                           |                                          | (if `IndexLinear`) Linear scalar indexing                                              |
+| `getindex(A, I::Vararg{Int, N})`                |                                          | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexing                 |
+| `setindex!(A, v, i::Int)`                       |                                          | (if `IndexLinear`) Scalar indexed assignment                                           |
+| `setindex!(A, v, I::Vararg{Int, N})`            |                                          | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexed assignment       |
 | **Optional methods**                            | **Default definition**                   | **Brief description**                                                                 |
-| `Base.linearindexing(::Type)`                   | `Base.LinearSlow()`                      | Returns either `Base.LinearFast()` or `Base.LinearSlow()`. See the description below. |
+| `IndexStyle(::Type)`                            | `IndexCartesian()`                       | Returns either `IndexLinear()` or `IndexCartesian()`. See the description below.      |
 | `getindex(A, I...)`                             | defined in terms of scalar `getindex()`  | [Multidimensional and nonscalar indexing](@ref man-array-indexing)                    |
 | `setindex!(A, I...)`                            | defined in terms of scalar `setindex!()` | [Multidimensional and nonscalar indexed assignment](@ref man-array-indexing)          |
 | `start()`/`next()`/`done()`                     | defined in terms of scalar `getindex()`  | Iteration                                                                             |
@@ -217,19 +217,19 @@ If a type is defined as a subtype of `AbstractArray`, it inherits a very large s
 including iteration and multidimensional indexing built on top of single-element access.  See
 the [arrays manual page](@ref man-multi-dim-arrays) and [standard library section](@ref lib-arrays) for more supported methods.
 
-A key part in defining an `AbstractArray` subtype is [`Base.linearindexing()`](@ref). Since indexing is
+A key part in defining an `AbstractArray` subtype is [`IndexStyle`](@ref). Since indexing is
 such an important part of an array and often occurs in hot loops, it's important to make both
 indexing and indexed assignment as efficient as possible.  Array data structures are typically
 defined in one of two ways: either it most efficiently accesses its elements using just one index
 (linear indexing) or it intrinsically accesses the elements with indices specified for every dimension.
- These two modalities are identified by Julia as `Base.LinearFast()` and `Base.LinearSlow()`.
+ These two modalities are identified by Julia as `IndexLinear()` and `IndexCartesian()`.
  Converting a linear index to multiple indexing subscripts is typically very expensive, so this
 provides a traits-based mechanism to enable efficient generic code for all array types.
 
-This distinction determines which scalar indexing methods the type must define. `LinearFast()`
+This distinction determines which scalar indexing methods the type must define. `IndexLinear()`
 arrays are simple: just define `getindex(A::ArrayType, i::Int)`.  When the array is subsequently
 indexed with a multidimensional set of indices, the fallback `getindex(A::AbstractArray, I...)()`
-efficiently converts the indices into one linear index and then calls the above method. `LinearSlow()`
+efficiently converts the indices into one linear index and then calls the above method. `IndexCartesian()`
 arrays, on the other hand, require methods to be defined for each supported dimensionality with
 `ndims(A)``Int` indices.  For example, the builtin `SparseMatrixCSC` type only supports two dimensions,
 so it just defines `getindex(A::SparseMatrixCSC, i::Int, j::Int)()`.  The same holds for `setindex!()`.
@@ -244,7 +244,7 @@ julia> struct SquaresVector <: AbstractArray{Int, 1}
 
 julia> Base.size(S::SquaresVector) = (S.count,)
 
-julia> Base.linearindexing{T<:SquaresVector}(::Type{T}) = Base.LinearFast()
+julia> Base.IndexStyle(::Type{<:SquaresVector}) = IndexLinear()
 
 julia> Base.getindex(S::SquaresVector, i::Int) = i*i
 ```
@@ -301,7 +301,7 @@ julia> Base.getindex{T,N}(A::SparseArray{T,N}, I::Vararg{Int,N}) = get(A.data, I
 julia> Base.setindex!{T,N}(A::SparseArray{T,N}, v, I::Vararg{Int,N}) = (A.data[I] = v)
 ```
 
-Notice that this is a `LinearSlow` array, so we must manually define [`getindex()`](@ref) and [`setindex!()`](@ref)
+Notice that this is an `IndexCartesian` array, so we must manually define [`getindex()`](@ref) and [`setindex!()`](@ref)
 at the dimensionality of the array. Unlike the `SquaresVector`, we are able to define [`setindex!()`](@ref),
 and so we can mutate the array:
 
@@ -370,4 +370,3 @@ If you are defining an array type that allows non-traditional indexing (indices 
 something other than 1), you should specialize `indices`. You should also specialize [`similar`](@ref)
 so that the `dims` argument (ordinarily a `Dims` size-tuple) can accept `AbstractUnitRange` objects,
 perhaps range-types `Ind` of your own design. For more information, see [Arrays with custom indices](@ref).
-

@@ -191,8 +191,8 @@ Base.convert{T,N,_}(::Type{T24Linear{T  }}, X::AbstractArray{_,N}) = convert(T24
 Base.convert{T,N  }(::Type{T24Linear{T,N}}, X::AbstractArray     ) = T24Linear{T,N,size(X)}(X...)
 
 Base.size{T,N,dims}(::T24Linear{T,N,dims}) = dims
-import Base: LinearFast
-Base.linearindexing{A<:T24Linear}(::Type{A}) = LinearFast()
+import Base: IndexLinear
+Base.IndexStyle{A<:T24Linear}(::Type{A}) = IndexLinear()
 Base.getindex(A::T24Linear, i::Int) = getfield(A, i)
 Base.setindex!{T}(A::T24Linear{T}, v, i::Int) = setfield!(A, i, convert(T, v))
 
@@ -217,8 +217,8 @@ end
 
 Base.size(A::TSlow) = A.dims
 Base.similar{T}(A::TSlow, ::Type{T}, dims::Dims) = TSlow(T, dims)
-import Base: LinearSlow
-Base.linearindexing{A<:TSlow}(::Type{A}) = LinearSlow()
+import Base: IndexCartesian
+Base.IndexStyle{A<:TSlow}(::Type{A}) = IndexCartesian()
 # Until #11242 is merged, we need to define each dimension independently
 Base.getindex{T}(A::TSlow{T,0}) = get(A.data, (), zero(T))
 Base.getindex{T}(A::TSlow{T,1}, i1::Int) = get(A.data, (i1,), zero(T))
@@ -451,10 +451,10 @@ function test_in_bounds(::Type{TestAbstractArray})
 end
 
 mutable struct UnimplementedFastArray{T, N} <: AbstractArray{T, N} end
-Base.linearindexing(::UnimplementedFastArray) = Base.LinearFast()
+Base.IndexStyle(::UnimplementedFastArray) = Base.IndexLinear()
 
 mutable struct UnimplementedSlowArray{T, N} <: AbstractArray{T, N} end
-Base.linearindexing(::UnimplementedSlowArray) = Base.LinearSlow()
+Base.IndexStyle(::UnimplementedSlowArray) = Base.IndexCartesian()
 
 mutable struct UnimplementedArray{T, N} <: AbstractArray{T, N} end
 
@@ -593,7 +593,7 @@ end
 mutable struct TSlowNIndexes{T,N} <: AbstractArray{T,N}
     data::Array{T,N}
 end
-Base.linearindexing{A<:TSlowNIndexes}(::Type{A}) = Base.LinearSlow()
+Base.IndexStyle{A<:TSlowNIndexes}(::Type{A}) = Base.IndexCartesian()
 Base.size(A::TSlowNIndexes) = size(A.data)
 Base.getindex(A::TSlowNIndexes, index::Int...) = error("Must use $(ndims(A)) indexes")
 Base.getindex{T}(A::TSlowNIndexes{T,2}, i::Int, j::Int) = A.data[i,j]
