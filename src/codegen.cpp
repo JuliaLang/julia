@@ -981,17 +981,24 @@ static jl_cgval_t convert_julia_type(const jl_cgval_t &v, jl_value_t *typ, jl_co
                     // root the result, and return a new mark_julia_slot over the result
                     Value *boxv = box_union(v, ctx, skip_box);
                     Value *froot = NULL;
-                    // XXX: need to clone the value from `v.gcroot` if this isn't a new box
                     if (needsroot) {
                         // build a new gc-root, as needed
                         froot = emit_local_root(ctx);
                         Value *newroot = boxv;
-                        if (wasboxed) { // oldbox might be all ghost values (which don't need roots)
+                        if (wasboxed || v.gcroot) { // oldbox might be all ghost values (which don't need roots)
                             // store either the old box or the new box into the gc-root (skip_box ensures these are mutually-exclusive)
-                            Value *oldroot = v.V;
+                            // need to clone the value from `v.gcroot` if this isn't a new box
+                            Value *oldroot;
+                            if (v.gcroot)
+                                oldroot = builder.CreateLoad(v.gcroot);
+                            else
+                                oldroot = v.V;
                             newroot = builder.CreateSelect(wasboxed, emit_bitcast(oldroot, boxv->getType()), newroot);
                         }
                         builder.CreateStore(newroot, froot);
+                    }
+                    else {
+                        mark_gc_use(v);
                     }
                     if (v.V == NULL) {
                         // v.V might be NULL if it was all ghost objects before
