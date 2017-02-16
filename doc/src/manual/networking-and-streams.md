@@ -216,15 +216,21 @@ TCPServer(active)
 julia> listen(IPv6(0),2001) # Listens on port 2001 on all IPv6 interfaces
 TCPServer(active)
 
-julia> listen("testsocket") # Listens on a UNIX domain socket/named pipe
+julia> listen("testsocket") # Listens on a UNIX domain socket
+PipeServer(active)
+
+julia> listen("\\\\.\\pipe\\testsocket") # Listens on a Windows named pipe
 PipeServer(active)
 ```
 
 Note that the return type of the last invocation is different. This is because this server does
-not listen on TCP, but rather on a named pipe (Windows) or UNIX domain socket. The difference
-is subtle and has to do with the [`accept()`](@ref) and [`connect()`](@ref) methods. The [`accept()`](@ref)
-method retrieves a connection to the client that is connecting on the server we just created,
-while the [`connect()`](@ref) function connects to a server using the specified method. The [`connect()`](@ref)
+not listen on TCP, but rather on a named pipe (Windows) or UNIX domain socket.
+Also note that Windows named pipe format has to be a specific pattern such that
+their name prefix (\\.\pipe\) uniquely identifies the [filetype](https://msdn.microsoft.com/en-us/library/windows/desktop/aa365783(v=vs.85).aspx).
+The difference is subtle and has to do with the [`accept()`](@ref) and
+[`connect()`](@ref) methods. The [`accept()`](@ref) method retrieves a connection
+to the client that is connecting on the server we just created, while the
+[`connect()`](@ref) function connects to a server using the specified method. The [`connect()`](@ref)
 function takes the same arguments as [`listen()`](@ref), so, assuming the environment (i.e. host,
 cwd, etc.) is the same you should be able to pass the same arguments to [`connect()`](@ref) as
 you did to listen to establish the connection. So let's try that out (after having created the
