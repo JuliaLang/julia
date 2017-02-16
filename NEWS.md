@@ -22,10 +22,6 @@ New language features
 Language changes
 ----------------
 
-  * `x^n` for integer literals `n` (e.g. `x^3` or `x^-3`) is now
-    lowered to `x^Val{n}`, to enable compile-time specialization
-    for literal integer exponents ([#20530]).
-
   * "Inner constructor" syntax for parametric types is deprecated. For example,
     in this definition:
     ```
@@ -76,6 +72,10 @@ Language changes
 
   * The `typealias` keyword is deprecated, and should be replaced with
     `Vector{T} = Array{T,1}` or a `const` assignment.
+
+  * Experimental feature: `x^n` for integer literals `n` (e.g. `x^3`
+    or `x^-3`) is now lowered to `x^Val{n}`, to enable compile-time
+    specialization for literal integer exponents ([#20530]).
 
 Breaking changes
 ----------------
