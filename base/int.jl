@@ -132,11 +132,34 @@ fld(x::Unsigned, y::Signed) = div(x, y) - (signbit(y) & (rem(x, y) != 0))
 """
     mod(x, y)
 
-Modulus after flooring division, returning in the range ``[0,y)``, if `y` is positive, or
+Modulus after flooring division, returning a value in the range ``[0,y)``, if `y` is positive, or
 ``(y,0]`` if `y` is negative.
 
 ```julia
 x == fld(x,y)*y + mod(x,y)
+```
+
+!!! note
+
+    If either `x` or `y` are floating point numbers, and they opposite signs, then the
+    result may be inexact and be rounded to the nearest representable value. In
+    particular, if the true answer is very close to `y`, then the result may return `y`.
+
+```jldoctest
+julia> mod(8, 3)
+2
+
+julia> mod(9, 3)
+0
+
+julia> mod(8.9, 3)
+2.9000000000000004
+
+julia> mod(eps(), 3)
+2.220446049250313e-16
+
+julia> mod(-eps(), 3)
+3.0
 ```
 """
 function mod{T<:Integer}(x::T, y::T)
