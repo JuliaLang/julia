@@ -45,6 +45,11 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         @test isa(similar(A1, (3,2)), Matrix{elty1})
         @test isa(similar(A1, Int, (3,2)), Matrix{Int})
 
+        #copy!
+        simA1 = similar(A1)
+        copy!(simA1, A1)
+        @test simA1 == A1
+
         # getindex
         ## Linear indexing
         for i = 1:length(A1)
@@ -226,6 +231,10 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         # Determinant
         @test det(A1) ≈ det(lufact(full(A1))) atol=sqrt(eps(real(float(one(elty1)))))*n*n
         @test logdet(A1) ≈ logdet(lufact(full(A1))) atol=sqrt(eps(real(float(one(elty1)))))*n*n
+        lada, ladb = logabsdet(A1)
+        flada, fladb = logabsdet(lufact(full(A1)))
+        @test lada ≈ flada atol=sqrt(eps(real(float(one(elty1)))))*n*n
+        @test ladb ≈ fladb atol=sqrt(eps(real(float(one(elty1)))))*n*n
 
         # Matrix square root
         @test sqrtm(A1) |> t -> t*t ≈ A1
