@@ -1121,6 +1121,15 @@ end
     end
 end
 
+@testset "eachindexvalue" begin
+    A14 = [11 13; 12 14]
+    R = CartesianRange(indices(A14))
+    @test [a for (a,b) in enumerate(IndexLinear(),    A14)] == [1,2,3,4]
+    @test [a for (a,b) in enumerate(IndexCartesian(), A14)] == vec(collect(R))
+    @test [b for (a,b) in enumerate(IndexLinear(),    A14)] == [11,12,13,14]
+    @test [b for (a,b) in enumerate(IndexCartesian(), A14)] == [11,12,13,14]
+end
+
 @testset "reverse" begin
     @test reverse([2,3,1]) == [1,3,2]
     @test reverse([1:10;],1,4) == [4,3,2,1,5,6,7,8,9,10]

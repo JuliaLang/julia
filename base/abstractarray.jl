@@ -1642,7 +1642,7 @@ _sub2ind_vec(inds, out, i) = (@_inline_meta; sub2ind(inds, out...))
 function ind2sub{N}(inds::Union{DimsInteger{N},Indices{N}}, ind::AbstractVector{<:Integer})
     M = length(ind)
     t = ntuple(n->similar(ind),Val{N})
-    for (i,idx) in enumerate(ind)  # FIXME: change to eachindexvalue
+    for (i,idx) in enumerate(IndexLinear(), ind)
         sub = ind2sub(inds, idx)
         for j = 1:N
             t[j][i] = sub[j]
