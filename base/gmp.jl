@@ -443,8 +443,10 @@ end
 ^(x::Integer, y::BigInt ) = bigint_pow(BigInt(x), y)
 ^(x::Bool   , y::BigInt ) = Base.power_by_squaring(x, y)
 
-# override default inlining of x^2 and x^3 etc.
-^{p}(x::BigInt, ::Type{Val{p}}) = x^p
+@generated function ^{p}(x::BigInt, ::Type{Val{p}})
+    p < 0 && return :(inv(x)^-p)
+    return :(x^p)
+end
 
 function powermod(x::BigInt, p::BigInt, m::BigInt)
     r = BigInt()

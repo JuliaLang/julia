@@ -219,6 +219,36 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 @inline internal_pow(x::HWNumber, ::Type{Val{2}}) = x*x
 @inline internal_pow(x::HWNumber, ::Type{Val{3}}) = x*x*x
 
+# for numbers, inline the power_by_squaring method for literal p.
+# (this also allows integer^-p to give a floating-point result
+#  in a type-stable fashion).
+@generated function internal_pow{p}(x::Number, ::Type{Val{p}})
+    p == 0 && return :(one(x))
+    ex = Union{Expr,Symbol}[]
+    if p < 0
+        x_ = :x0
+        push!(ex, :(x0 = inv(x)))
+        p_ = -p
+    else
+        x_ = :x
+        p_ = p
+    end
+    y_ = 1
+    while p_ > 1
+        xp = gensym()
+        push!(ex, :($xp = $x_ * $x_))
+        if isodd(p_)
+            yp = gensym()
+            push!(ex, y_ === 1 ? :($yp = $x_) : :($yp = $x_ * $y_))
+            y_ = yp
+        end
+        x_ = xp
+        p_ >>= 1
+    end
+    push!(ex, y_ === 1 ? x_ : :($x_ * $y_))
+    return Expr(:block, ex...)
+end
+
 # b^p mod m
 
 """
