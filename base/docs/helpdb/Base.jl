@@ -1127,28 +1127,6 @@ Delete the mapping for the given key in a collection, and return the collection.
 """
 delete!
 
-"""
-    eps(T)
-
-The distance between 1.0 and the next larger representable floating-point value of
-`DataType` `T`. Only floating-point types are sensible arguments.
-"""
-eps(::Union{Type{BigFloat},Type{Float64},Type{Float32},Type{Float16}})
-
-"""
-    eps()
-
-The distance between 1.0 and the next larger representable floating-point value of `Float64`.
-"""
-eps()
-
-"""
-    eps(x)
-
-The distance between `x` and the next larger representable floating-point value of the same
-`DataType` as `x`.
-"""
-eps(::AbstractFloat)
 
 """
     searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
