@@ -97,8 +97,7 @@ Base.realmin
 Base.realmax
 Base.maxintfloat
 Base.sizeof(::Type)
-Base.eps(::Union{Type{BigFloat},Type{Float64},Type{Float32},Type{Float16}})
-Base.eps()
+Base.eps(::Type{<:AbstractFloat})
 Base.eps(::AbstractFloat)
 Base.promote_type
 Base.promote_rule
