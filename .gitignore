@@ -1,3 +1,4 @@
+/tmp
+*.jl.mem
 *.jl.cov
 *.jl.*.cov
-*.jl.mem
