@@ -402,9 +402,9 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
         for c in CartesianRange(indices(A))
             for i in 1:ndims(A)
                 n = inner[i]
-                inner_indices[i] = (1:n) + ((c.I[i] - 1) * n)
+                inner_indices[i] = (1:n) + ((c[i] - 1) * n)
             end
-            R[inner_indices...] = A[c.I...]
+            R[inner_indices...] = A[c]
         end
     end
 
