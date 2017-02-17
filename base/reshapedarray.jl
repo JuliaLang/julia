@@ -9,7 +9,7 @@ struct ReshapedArray{T,N,P<:AbstractArray,MI<:Tuple{Vararg{SignedMultiplicativeI
 end
 ReshapedArray{T,N}(parent::AbstractArray{T}, dims::NTuple{N,Int}, mi) = ReshapedArray{T,N,typeof(parent),typeof(mi)}(parent, dims, mi)
 
-# LinearFast ReshapedArray
+# IndexLinear ReshapedArray
 ReshapedArrayLF{T,N,P<:AbstractArray} = ReshapedArray{T,N,P,Tuple{}}
 
 # Fast iteration on ReshapedArrays: use the parent iterator
@@ -139,14 +139,14 @@ end
 function _reshape(parent::AbstractArray, dims::Dims)
     n = _length(parent)
     prod(dims) == n || throw(DimensionMismatch("parent has $n elements, which is incompatible with size $dims"))
-    __reshape((parent, linearindexing(parent)), dims)
+    __reshape((parent, IndexStyle(parent)), dims)
 end
 
 # Reshaping a ReshapedArray
 _reshape(v::ReshapedArray{<:Any,1}, dims::Dims{1}) = _reshape(v.parent, dims)
 _reshape(R::ReshapedArray, dims::Dims) = _reshape(R.parent, dims)
 
-function __reshape(p::Tuple{AbstractArray,LinearSlow}, dims::Dims)
+function __reshape(p::Tuple{AbstractArray,IndexCartesian}, dims::Dims)
     parent = p[1]
     strds = front(size_strides(parent))
     strds1 = map(s->max(1,s), strds)  # for resizing empty arrays
@@ -154,7 +154,7 @@ function __reshape(p::Tuple{AbstractArray,LinearSlow}, dims::Dims)
     ReshapedArray(parent, dims, reverse(mi))
 end
 
-function __reshape(p::Tuple{AbstractArray,LinearFast}, dims::Dims)
+function __reshape(p::Tuple{AbstractArray,IndexLinear}, dims::Dims)
     parent = p[1]
     ReshapedArray(parent, dims, ())
 end
@@ -165,7 +165,7 @@ size_strides(out::Tuple) = out
 
 size(A::ReshapedArray) = A.dims
 similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype, dims)
-linearindexing(::Type{<:ReshapedArrayLF}) = LinearFast()
+IndexStyle(::Type{<:ReshapedArrayLF}) = IndexLinear()
 parent(A::ReshapedArray) = A.parent
 parentindexes(A::ReshapedArray) = map(s->1:s, size(parent(A)))
 reinterpret{T}(::Type{T}, A::ReshapedArray, dims::Dims) = reinterpret(T, parent(A), dims)

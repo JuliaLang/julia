@@ -15,8 +15,8 @@ h = OffsetArray([-1,1,-2,2,0], (-3,))
 @test_throws ErrorException size(v, 1)
 
 A0 = [1 3; 2 4]
-A = OffsetArray(A0, (-1,2))                   # LinearFast
-S = OffsetArray(view(A0, 1:2, 1:2), (-1,2))   # LinearSlow
+A = OffsetArray(A0, (-1,2))                   # IndexLinear
+S = OffsetArray(view(A0, 1:2, 1:2), (-1,2))   # IndexCartesian
 @test indices(A) == indices(S) == (0:1, 3:4)
 @test_throws ErrorException size(A)
 @test_throws ErrorException size(A, 1)

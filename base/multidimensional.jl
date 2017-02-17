@@ -3,12 +3,12 @@
 ### Multidimensional iterators
 module IteratorsMD
     import Base: eltype, length, size, start, done, next, last, in, getindex,
-                 setindex!, linearindexing, min, max, zero, one, isless, eachindex,
+                 setindex!, IndexStyle, min, max, zero, one, isless, eachindex,
                  ndims, iteratorsize, convert
 
     importall ..Base.Operators
     import Base: simd_outer_range, simd_inner_length, simd_index
-    using Base: LinearFast, LinearSlow, AbstractCartesianIndex, fill_to_length, tail
+    using Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail
 
     export CartesianIndex, CartesianRange
 
@@ -100,9 +100,9 @@ module IteratorsMD
     ndims(R::CartesianRange) = length(R.start)
     ndims{I<:CartesianIndex}(::Type{CartesianRange{I}}) = length(I)
 
-    eachindex(::LinearSlow, A::AbstractArray) = CartesianRange(indices(A))
+    eachindex(::IndexCartesian, A::AbstractArray) = CartesianRange(indices(A))
 
-    @inline eachindex(::LinearSlow, A::AbstractArray, B::AbstractArray...) =
+    @inline eachindex(::IndexCartesian, A::AbstractArray, B::AbstractArray...) =
         CartesianRange(maxsize((), A, B...))
     maxsize(sz) = sz
     @inline maxsize(sz, A, B...) = maxsize(maxt(sz, size(A)), B...)
@@ -363,9 +363,9 @@ end
 end
 # As an optimization, we allow trailing Array{Bool} and BitArray to be linear over trailing dimensions
 @inline to_indices{N}(A, inds, I::Tuple{Union{Array{Bool,N}, BitArray{N}}}) =
-    (_maybe_linear_logical_index(linearindexing(A), A, I[1]),)
-_maybe_linear_logical_index(::LinearIndexing, A, i) = to_index(A, i)
-_maybe_linear_logical_index(::LinearFast, A, i) = LogicalIndex{Int}(i)
+    (_maybe_linear_logical_index(IndexStyle(A), A, I[1]),)
+_maybe_linear_logical_index(::IndexStyle, A, i) = to_index(A, i)
+_maybe_linear_logical_index(::IndexLinear, A, i) = LogicalIndex{Int}(i)
 
 # Colons get converted to slices by `uncolon`
 @inline to_indices(A, inds, I::Tuple{Colon, Vararg{Any}}) =
@@ -389,7 +389,7 @@ getindex(t::Tuple,  i::CartesianIndex{1}) = getindex(t, i.I[1])
 # These are not defined on directly on getindex to avoid
 # ambiguities for AbstractArray subtypes. See the note in abstractarray.jl
 
-@generated function _getindex(l::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray}...)
+@generated function _getindex(l::IndexStyle, A::AbstractArray, I::Union{Real, AbstractArray}...)
     N = length(I)
     quote
         @_inline_meta
@@ -397,14 +397,14 @@ getindex(t::Tuple,  i::CartesianIndex{1}) = getindex(t, i.I[1])
         _unsafe_getindex(l, _maybe_reshape(l, A, I...), I...)
     end
 end
-# But we can speed up LinearSlow arrays by reshaping them to the appropriate dimensionality:
-_maybe_reshape(::LinearFast, A::AbstractArray, I...) = A
-_maybe_reshape(::LinearSlow, A::AbstractVector, I...) = A
-@inline _maybe_reshape(::LinearSlow, A::AbstractArray, I...) = __maybe_reshape(A, index_ndims(I...))
+# But we can speed up IndexCartesian arrays by reshaping them to the appropriate dimensionality:
+_maybe_reshape(::IndexLinear, A::AbstractArray, I...) = A
+_maybe_reshape(::IndexCartesian, A::AbstractVector, I...) = A
+@inline _maybe_reshape(::IndexCartesian, A::AbstractArray, I...) = __maybe_reshape(A, index_ndims(I...))
 @inline __maybe_reshape{T,N}(A::AbstractArray{T,N}, ::NTuple{N,Any}) = A
 @inline __maybe_reshape{N}(A::AbstractArray, ::NTuple{N,Any}) = reshape(A, Val{N})
 
-@generated function _unsafe_getindex(::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray}...)
+@generated function _unsafe_getindex(::IndexStyle, A::AbstractArray, I::Union{Real, AbstractArray}...)
     N = length(I)
     quote
         # This is specifically not inlined to prevent exessive allocations in type unstable code
@@ -435,7 +435,7 @@ end
 @noinline throw_checksize_error(A, sz) = throw(DimensionMismatch("output array is the wrong size; expected $sz, got $(size(A))"))
 
 ## setindex! ##
-@generated function _setindex!(l::LinearIndexing, A::AbstractArray, x, I::Union{Real, AbstractArray}...)
+@generated function _setindex!(l::IndexStyle, A::AbstractArray, x, I::Union{Real, AbstractArray}...)
     N = length(I)
     quote
         @_inline_meta
@@ -447,7 +447,7 @@ end
 
 _iterable(v::AbstractArray) = v
 _iterable(v) = Iterators.repeated(v)
-@generated function _unsafe_setindex!(::LinearIndexing, A::AbstractArray, x, I::Union{Real,AbstractArray}...)
+@generated function _unsafe_setindex!(::IndexStyle, A::AbstractArray, x, I::Union{Real,AbstractArray}...)
     N = length(I)
     quote
         X = _iterable(x)
@@ -749,7 +749,7 @@ end
 
 function copy!{T,N}(dest::AbstractArray{T,N}, src::AbstractArray{T,N})
     @boundscheck checkbounds(dest, indices(src)...)
-    for I in eachindex(linearindexing(src,dest), src)
+    for I in eachindex(IndexStyle(src,dest), src)
         @inbounds dest[I] = src[I]
     end
     dest

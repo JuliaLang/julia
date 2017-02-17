@@ -19,13 +19,13 @@ end
 # Compute the linear indexability of the indices, and combine it with the linear indexing of the parent
 function SubArray(parent::AbstractArray, indexes::Tuple)
     @_inline_meta
-    SubArray(linearindexing(viewindexing(indexes), linearindexing(parent)), parent, ensure_indexable(indexes), index_dimsum(indexes...))
+    SubArray(IndexStyle(viewindexing(indexes), IndexStyle(parent)), parent, ensure_indexable(indexes), index_dimsum(indexes...))
 end
-function SubArray(::LinearSlow, parent::P, indexes::I, ::NTuple{N,Any}) where {P,I,N}
+function SubArray(::IndexCartesian, parent::P, indexes::I, ::NTuple{N,Any}) where {P,I,N}
     @_inline_meta
     SubArray{eltype(P), N, P, I, false}(parent, indexes, 0, 0)
 end
-function SubArray(::LinearFast, parent::P, indexes::I, ::NTuple{N,Any}) where {P,I,N}
+function SubArray(::IndexLinear, parent::P, indexes::I, ::NTuple{N,Any}) where {P,I,N}
     @_inline_meta
     # Compute the stride and offset
     stride1 = compute_stride1(parent, indexes)
@@ -38,19 +38,19 @@ check_parent_index_match{N}(parent, ::NTuple{N, Bool}) =
     throw(ArgumentError("number of indices ($N) must match the parent dimensionality ($(ndims(parent)))"))
 
 # This computes the linear indexing compatability for a given tuple of indices
-viewindexing() = LinearFast()
+viewindexing() = IndexLinear()
 # Leading scalar indexes simply increase the stride
 viewindexing(I::Tuple{ScalarIndex, Vararg{Any}}) = (@_inline_meta; viewindexing(tail(I)))
 # Slices may begin a section which may be followed by any number of Slices
 viewindexing(I::Tuple{Slice, Slice, Vararg{Any}}) = (@_inline_meta; viewindexing(tail(I)))
 # A UnitRange can follow Slices, but only if all other indices are scalar
-viewindexing(I::Tuple{Slice, UnitRange, Vararg{ScalarIndex}}) = LinearFast()
+viewindexing(I::Tuple{Slice, UnitRange, Vararg{ScalarIndex}}) = IndexLinear()
 # In general, ranges are only fast if all other indices are scalar
-viewindexing(I::Tuple{Union{Range, Slice}, Vararg{ScalarIndex}}) = LinearFast()
+viewindexing(I::Tuple{Union{Range, Slice}, Vararg{ScalarIndex}}) = IndexLinear()
 # All other index combinations are slow
-viewindexing(I::Tuple{Vararg{Any}}) = LinearSlow()
+viewindexing(I::Tuple{Vararg{Any}}) = IndexCartesian()
 # Of course, all other array types are slow
-viewindexing(I::Tuple{AbstractArray, Vararg{Any}}) = LinearSlow()
+viewindexing(I::Tuple{AbstractArray, Vararg{Any}}) = IndexCartesian()
 
 # Simple utilities
 size(V::SubArray) = (@_inline_meta; map(n->Int(unsafe_length(n)), indices(V)))
@@ -221,8 +221,8 @@ function setindex!(V::FastContiguousSubArray, x, i::Int)
     V
 end
 
-linearindexing(::Type{<:FastSubArray}) = LinearFast()
-linearindexing(::Type{<:SubArray}) = LinearSlow()
+IndexStyle(::Type{<:FastSubArray}) = IndexLinear()
+IndexStyle(::Type{<:SubArray}) = IndexCartesian()
 
 # Strides are the distance between adjacent elements in a given dimension,
 # so they are well-defined even for non-linear memory layouts

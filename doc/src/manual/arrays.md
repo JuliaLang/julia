@@ -513,11 +513,11 @@ iterate over any array type.
 If you write a custom `AbstractArray` type, you can specify that it has fast linear indexing using
 
 ```julia
-Base.linearindexing{T<:MyArray}(::Type{T}) = LinearFast()
+Base.IndexStyle{T<:MyArray}(::Type{T}) = IndexLinear()
 ```
 
 This setting will cause `eachindex` iteration over a `MyArray` to use integers. If you don't
-specify this trait, the default value `LinearSlow()` is used.
+specify this trait, the default value `IndexCartesian()` is used.
 
 ### Vectorized Operators and Functions
 
