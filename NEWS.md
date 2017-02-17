@@ -76,6 +76,8 @@ Language changes
   * Experimental feature: `x^n` for integer literals `n` (e.g. `x^3`
     or `x^-3`) is now lowered to `x^Val{n}`, to enable compile-time
     specialization for literal integer exponents ([#20530]).
+    `x^p` for `x::Number` and `p=0,1,2,3` is now lowered to
+    `one(x)`, `x`, `x*x`, and `x*x*x`, respectively ([#20648]).
 
 Breaking changes
 ----------------
