@@ -33,6 +33,8 @@ end
 
     @test LibGit2.GitShortHash(z, 20) == LibGit2.GitShortHash(rs[1:20])
     @test_throws ArgumentError LibGit2.GitHash(Ptr{UInt8}(C_NULL))
+    @test_throws ArgumentError LibGit2.GitHash(rand(UInt8, 2*LibGit2.OID_RAWSZ))
+    @test_throws ArgumentError LibGit2.GitHash("a")
 end
 
 @testset "StrArrayStruct" begin
@@ -621,6 +623,8 @@ mktempdir() do dir
 
                 i = find("zzz", idx)
                 @test isnull(i)
+                idx_str = sprint(show, idx)
+                @test idx_str == "GitIndex:\nRepository: $(LibGit2.repository(idx))\nNumber of elements: 1\n"
             end
 
             # check non-existent file status
