@@ -1130,6 +1130,7 @@ end
      @deprecate object(repo::GitRepo, te::GitTreeEntry) GitObject(repo, te) false
      @deprecate commit(ann::GitAnnotated) GitHash(ann) false
      @deprecate cat{T<:GitObject}(repo::GitRepo, ::Type{T}, object::AbstractString) cat(repo, object)
+     @deprecate lookup(repo::GitRepo, oid::GitHash) GitBlob(repo, oid) false
 end
 
 # when this deprecation is deleted, remove all calls to it, and all

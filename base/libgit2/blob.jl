@@ -25,14 +25,6 @@ function isbinary(blob::GitBlob)
     return bin_flag == 1
 end
 
-function lookup(repo::GitRepo, oid::GitHash)
-    blob_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    @check ccall((:git_blob_lookup, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}, Ref{GitHash}),
-                   blob_ptr_ptr, repo.ptr, Ref(oid))
-    return GitBlob(blob_ptr_ptr[])
-end
-
 """
     LibGit2.addblob!(repo::GitRepo, path::AbstractString)
 

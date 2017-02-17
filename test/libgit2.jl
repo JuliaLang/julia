@@ -446,10 +446,15 @@ mktempdir() do dir
                 id = LibGit2.addblob!(repo, blob_file)
                 blob = LibGit2.GitBlob(repo, id)
                 @test LibGit2.isbinary(blob)
+                len1 = length(blob)
                 blob_show_strs = split(sprint(show, blob), "\n")
                 @test blob_show_strs[1] == "GitBlob:"
                 @test contains(blob_show_strs[2], "Blob id:")
                 @test blob_show_strs[3] == "Contents are binary."
+
+                blob2 = LibGit2.GitBlob(repo, LibGit2.GitHash(blob))
+                @test LibGit2.isbinary(blob2)
+                @test length(blob2) == len1
             finally
                 close(repo)
             end
