@@ -443,9 +443,8 @@ end
 ^(x::Integer, y::BigInt ) = bigint_pow(BigInt(x), y)
 ^(x::Bool   , y::BigInt ) = Base.power_by_squaring(x, y)
 
-# override default inlining of x^2 and x^3 as x*x and x*x*x
-^(x::BigInt, ::Type{Val{2}}) = x^convert(Culong, 2)
-^(x::BigInt, ::Type{Val{3}}) = x^convert(Culong, 3)
+# override default inlining of x^2 and x^3 etc.
+^{p}(x::BigInt, ::Type{Val{p}}) = x^Culong(p)
 
 function powermod(x::BigInt, p::BigInt, m::BigInt)
     r = BigInt()

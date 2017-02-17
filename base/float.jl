@@ -367,6 +367,7 @@ _default_type(T::Union{Type{Real},Type{AbstractFloat}}) = Float64
 for op in (:+, :-, :*, :/, :\, :^)
     @eval ($op)(a::Float16, b::Float16) = Float16(($op)(Float32(a), Float32(b)))
 end
+^{p}(x::Float16, ::Type{Val{p}}) = Float16(Float32(x)^Val{p})
 +(x::Float32, y::Float32) = add_float(x, y)
 +(x::Float64, y::Float64) = add_float(x, y)
 -(x::Float32, y::Float32) = sub_float(x, y)
