@@ -95,6 +95,11 @@ close(s)
 push!(l, ("PipeEndpoint", io))
 
 
+# readuntil
+@test readuntil(IOBuffer("aaabc"), "aab") == "aaab"
+@test readuntil(IOBuffer("assassassinass"), "assassin") == "assassassin"
+
+
 #FIXME See https://github.com/JuliaLang/julia/issues/14747
 #      Reading from open(::Command) seems to deadlock on Linux/Travis
 #=

@@ -510,18 +510,35 @@ function readuntil(s::IO, delim::T) where T
     return out
 end
 
-function readuntil(s::IO, t::AbstractString)
-    l = length(t)
+function readuntil(s::IO, target::AbstractString)
+    l = length(target)
     if l == 0
         return ""
     end
+    t = collect(target)
+    backtrack = zeros(Int, l)
+    for i = 2:l
+        b = backtrack[i - 1] + 1
+        if t[i] == t[b]
+            backtrack[i] = b
+        end
+    end
     out = IOBuffer()
-    i = 1
+    i = 0
     while !eof(s)
         c = read(s, Char)
         write(out, c)
-        i = c == t[i] ? i + 1 : 1
-        if i > l
+        while i != 0 && c != t[i + 1]
+            if i > 0
+                i = backtrack[i]
+            else
+                i = 0
+            end
+        end
+        if c == t[i + 1]
+            i += 1
+        end
+        if i == l
             break
         end
     end
