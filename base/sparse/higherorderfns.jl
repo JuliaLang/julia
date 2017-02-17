@@ -64,7 +64,8 @@ end
 
 
 # (2) map[!] entry points
-map{Tf}(f::Tf, A::SparseVecOrMat) = _noshapecheck_map(f, A)
+map{Tf}(f::Tf, A::SparseVector) = _noshapecheck_map(f, A)
+map{Tf}(f::Tf, A::SparseMatrixCSC) = _noshapecheck_map(f, A)
 map{Tf,N}(f::Tf, A::SparseMatrixCSC, Bs::Vararg{SparseMatrixCSC,N}) =
     (_checksameshape(A, Bs...); _noshapecheck_map(f, A, Bs...))
 map{Tf,N}(f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMat,N}) =
@@ -90,7 +91,8 @@ function _noshapecheck_map{Tf,N}(f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseVecO
                         _map_notzeropres!(f, fofzeros, C, A, Bs...)
 end
 # (3) broadcast[!] entry points
-broadcast{Tf}(f::Tf, A::SparseVecOrMat) = _noshapecheck_map(f, A)
+broadcast{Tf}(f::Tf, A::SparseVector) = _noshapecheck_map(f, A)
+broadcast{Tf}(f::Tf, A::SparseMatrixCSC) = _noshapecheck_map(f, A)
 function broadcast!{Tf}(f::Tf, C::SparseVecOrMat)
     isempty(C) && return _finishempty!(C)
     fofnoargs = f()
