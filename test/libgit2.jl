@@ -240,8 +240,11 @@ mktempdir() do dir
                 @test isdir(test_repo)
                 @test LibGit2.path(repo) == LibGit2.posixpath(realpath(test_repo))
                 @test isdir(joinpath(test_repo, ".git"))
+                @test LibGit2.workdir(repo) == LibGit2.path(repo)*"/"
                 @test LibGit2.isattached(repo)
                 @test LibGit2.isorphan(repo)
+                repo_str = sprint(show, repo)
+                @test repo_str == "LibGit2.GitRepo($(sprint(show,LibGit2.path(repo))))"
             finally
                 close(repo)
             end
@@ -285,11 +288,17 @@ mktempdir() do dir
                 cmt = LibGit2.GitCommit(repo, commit_oid1)
                 try
                     @test commit_oid1 == LibGit2.GitHash(cmt)
+                    short_oid1 = LibGit2.GitShortHash(string(commit_oid1))
+                    @test cmp(commit_oid1,short_oid1) == 0
                     auth = LibGit2.author(cmt)
                     @test isa(auth, LibGit2.Signature)
                     @test auth.name == test_sig.name
                     @test auth.time == test_sig.time
                     @test auth.email == test_sig.email
+                    short_auth = LibGit2.author(LibGit2.GitCommit(repo, short_oid1))
+                    @test short_auth.name == test_sig.name
+                    @test short_auth.time == test_sig.time
+                    @test short_auth.email == test_sig.email
                     cmtr = LibGit2.committer(cmt)
                     @test isa(cmtr, LibGit2.Signature)
                     @test cmtr.name == test_sig.name
@@ -736,6 +745,16 @@ mktempdir() do dir
             @test isfile(joinpath(test_repo, "CCC"))
             @test !isfile(joinpath(test_repo, "BBB"))
             @test isfile(joinpath(test_repo, test_file))
+        finally
+            close(repo)
+        end
+    end
+    @testset "checkout/headname" begin
+        repo = LibGit2.GitRepo(cache_repo)
+        try
+            LibGit2.checkout!(repo, string(commit_oid1))
+            @test !LibGit2.isattached(repo)
+            @test LibGit2.headname(repo) == "(detached from $(string(commit_oid1)[1:7]))"
         finally
             close(repo)
         end
