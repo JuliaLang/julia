@@ -78,6 +78,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `@compat A{T} = B{T}` or `@compat const A{T} = B{T}` to declare type alias with free
   parameters. [#20500]. Use `const A = B` for type alias without free parameters.
 
+* `@compat Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()` and `@compat Base.IndexStyle(::Type{<:MyArray}) = IndexCartesian()` to define traits for abstract arrays, replacing the former `Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearFast()` and `Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearSlow()`, respectively.
+
 ## Module Aliases
 
 * In 0.6, some 0.5 iterator functions have been moved to the `Base.Iterators`

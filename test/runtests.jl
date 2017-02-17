@@ -1745,4 +1745,22 @@ f20500_2() = A20500_2
 @inferred f20500()
 @inferred f20500_2()
 
+module CompatArray
+using Compat
+immutable CartesianArray{T,N} <: AbstractArray{T,N}
+    parent::Array{T,N}
+end
+immutable LinearArray{T,N} <: AbstractArray{T,N}
+    parent::Array{T,N}
+end
+@compat Base.IndexStyle(::Type{<:LinearArray}) = IndexLinear()
+end
+@test IndexStyle(Array{Float32,2}) === IndexLinear()
+@test IndexStyle(CompatArray.CartesianArray{Float32,2}) === IndexCartesian()
+@test IndexStyle(CompatArray.LinearArray{Float32,2}) === IndexLinear()
+let a = CompatArray.CartesianArray(rand(2,3)), b = CompatArray.LinearArray(rand(2,3))
+    @test IndexStyle(a) === IndexCartesian()
+    @test IndexStyle(b) === IndexLinear()
+end
+
 include("to-be-deprecated.jl")
