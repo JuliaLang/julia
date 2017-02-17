@@ -928,15 +928,24 @@ mktempdir() do dir
                 warn("Skipping hostname verification tests. Is `openssl` on the path?")
             end
 
-            # Find a hostname that is mapped to the loopback address
+            # Find a hostname that maps to the loopback address
             hostname = replace(readchomp(`hostname`), r"\..*$", "")
             loopback = ip"127.0.0.1"
 
-            if getaddrinfo(hostname) == loopback
-                common_name = hostname
-            elseif getaddrinfo("localhost") == loopback
-                common_name = "localhost"
-            else
+            for host in (hostname, "localhost")
+                try
+                    addr = getaddrinfo(host)
+                catch
+                    continue
+                end
+
+                if addr == loopback
+                    common_name = host
+                    break
+                end
+            end
+
+            if isempty(common_name)
                 warn("Unable to determine hostname that maps to the loopback address")
             end
         end
