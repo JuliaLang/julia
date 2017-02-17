@@ -606,6 +606,15 @@ end
 @test convert(LinSpace, 0.0:0.1:0.3) === LinSpace{Float64}(0.0, 0.3, 4)
 @test convert(LinSpace, 0:3) === LinSpace{Int}(0, 3, 4)
 
+@test start(LinSpace(0,3,4)) == 1
+@test 2*LinSpace(0,3,4) == LinSpace(0,6,4)
+@test LinSpace(0,3,4)*2 == LinSpace(0,6,4)
+@test LinSpace(0,3,4)/3 == LinSpace(0,1,4)
+@test 2-LinSpace(0,3,4) == LinSpace(2,-1,4)
+@test 2+LinSpace(0,3,4) == LinSpace(2,5,4)
+@test -LinSpace(0,3,4) == LinSpace(0,-3,4)
+@test reverse(LinSpace(0,3,4)) == LinSpace(3,0,4)
+
 # Issue #11245
 let io = IOBuffer()
     show(io, linspace(1, 2, 3))
