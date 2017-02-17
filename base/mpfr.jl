@@ -504,6 +504,11 @@ end
 ^(x::BigFloat, y::Integer)  = typemin(Clong)  <= y <= typemax(Clong)  ? x^Clong(y)  : x^BigInt(y)
 ^(x::BigFloat, y::Unsigned) = typemin(Culong) <= y <= typemax(Culong) ? x^Culong(y) : x^BigInt(y)
 
+# override default inlining of x^2 and x^3 as x*x and x*x*x
+^(x::BigFloat, ::Type{Val{2}}) = x^convert(Culong, 2)
+^(x::BigFloat, ::Type{Val{3}}) = x^convert(Culong, 3)
+^(x::BigFloat, ::Type{Val{1}}) = x^convert(Culong, 1) # might change precision
+
 for f in (:exp, :exp2, :exp10, :expm1, :cosh, :sinh, :tanh, :sech, :csch, :coth, :cbrt)
     @eval function $f(x::BigFloat)
         z = BigFloat()

@@ -200,6 +200,13 @@ end
 # However, we still need a fallback that calls the general ^:
 ^{p}(x, ::Type{Val{p}}) = x^p
 
+# inference.jl has complicated logic to inline x^2 and x^3 for
+# numeric types.  In terms of Val we can do it much more simply:
+^(x::Number, ::Type{Val{0}}) = one(x)
+^(x::Number, ::Type{Val{1}}) = x
+^(x::Number, ::Type{Val{2}}) = x*x
+^(x::Number, ::Type{Val{3}}) = x*x*x
+
 # b^p mod m
 
 """
