@@ -229,7 +229,7 @@ function cumsum_kbn{T<:AbstractFloat}(v::AbstractVector{T})
 end
 
 # Uses K-B-N summation
-# TODO: Needs a separate LinearSlow method, this is only fast for LinearIndexing
+# TODO: Needs a separate IndexCartesian method, this is only fast for IndexLinear
 
 """
     cumsum_kbn(A, [dim::Integer=1])

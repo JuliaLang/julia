@@ -3,7 +3,7 @@
 module CHOLMOD
 
 import Base: (*), convert, copy, eltype, get, getindex, show, size,
-             linearindexing, LinearFast, LinearSlow, ctranspose
+             IndexStyle, IndexLinear, IndexCartesian, ctranspose
 
 import Base.LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
                  cholfact, cholfact!, det, diag, ishermitian, isposdef,
@@ -1225,7 +1225,7 @@ function size(F::Factor, i::Integer)
 end
 size(F::Factor) = (size(F, 1), size(F, 2))
 
-linearindexing(::Dense) = LinearFast()
+IndexStyle(::Dense) = IndexLinear()
 
 size(FC::FactorComponent, i::Integer) = size(FC.F, i)
 size(FC::FactorComponent) = size(FC.F)
@@ -1246,7 +1246,7 @@ function getindex(A::Dense, i::Integer)
     unsafe_load(s.x, i)
 end
 
-linearindexing(::Sparse) = LinearSlow()
+IndexStyle(::Sparse) = IndexCartesian()
 function getindex{T}(A::Sparse{T}, i0::Integer, i1::Integer)
     s = unsafe_load(get(A.p))
     !(1 <= i0 <= s.nrow && 1 <= i1 <= s.ncol) && throw(BoundsError())
