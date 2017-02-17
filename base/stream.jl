@@ -660,9 +660,11 @@ function start_reading(stream::LibuvStream)
         if !isreadable(stream)
             error("tried to read a stream that is not readable")
         end
+        # libuv may call the alloc callback immediately
+        # for a TTY on Windows, so ensure the status is set first
+        stream.status = StatusActive
         ret = ccall(:uv_read_start, Cint, (Ptr{Void}, Ptr{Void}, Ptr{Void}),
                     stream, uv_jl_alloc_buf::Ptr{Void}, uv_jl_readcb::Ptr{Void})
-        stream.status = StatusActive
         return ret
     elseif stream.status == StatusPaused
         stream.status = StatusActive
@@ -682,8 +684,8 @@ if is_windows()
     # causes all other operations on that stream to lockup
     function stop_reading(stream::LibuvStream)
         if stream.status == StatusActive
-            ccall(:uv_read_stop, Cint, (Ptr{Void},), stream)
             stream.status = StatusOpen
+            ccall(:uv_read_stop, Cint, (Ptr{Void},), stream)
         end
         nothing
     end
