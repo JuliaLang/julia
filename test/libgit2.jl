@@ -946,7 +946,7 @@ mktempdir() do dir
             end
 
             if isempty(common_name)
-                warn("Unable to determine hostname that maps to the loopback address")
+                warn("Skipping hostname verification tests. Unable to determine a hostname which maps to the loopback address")
             end
         end
         if openssl_installed && !isempty(common_name)
