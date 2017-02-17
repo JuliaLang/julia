@@ -74,6 +74,10 @@ Base.@fetchfrom
 Base.@async
 Base.@sync
 Base.@parallel
+Base.DistributedRef
+Base.push!(::DistributedRef)
+Base.reduce(op, ::DistributedRef)
+Base.clear!(::DistributedRef)
 Base.@everywhere
 Base.clear!(::Any, ::Any; ::Any)
 Base.remoteref_id

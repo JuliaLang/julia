@@ -353,17 +353,19 @@ of processes, we can use a *parallel for loop*, which can be written in Julia us
 like this:
 
 ```julia
-nheads = @parallel (+) for i=1:200000000
-  Int(rand(Bool))
+acc = DistributedRef(0)
+@parallel for i=1:200000000
+  acc[] += Int(rand(Bool))
 end
+nheads = reduce(+, acc)
 ```
 
-This construct implements the pattern of assigning iterations to multiple processes, and combining
-them with a specified reduction (in this case `(+)`). The result of each iteration is taken as
-the value of the last expression inside the loop. The whole parallel loop expression itself evaluates
-to the final answer.
+This construct implements the pattern of partitioning iterations across multiple processes, and combining
+them with a specified reduction (in this case `(+)`). The result of each iteration is accumulated locally
+by the [`DistributedRef`](@ref). A final reduction performed explicitly on the caller on the set
+of accumulated values.
 
-Note that although parallel for loops look like serial for loops, their behavior is dramatically
+Note that although parallel for loops look like serial for loops, their behavior is quite
 different. In particular, the iterations do not happen in a specified order, and writes to variables
 or arrays will not be globally visible since iterations run on different processes. Any variables
 used inside the parallel loop will be copied and broadcast to each process.
@@ -378,8 +380,8 @@ end
 ```
 
 This code will not initialize all of `a`, since each process will have a separate copy of it.
-Parallel for loops like these must be avoided. Fortunately, [Shared Arrays](@ref man-shared-arrays) can be used
-to get around this limitation:
+Parallel for loops like these must be avoided. Fortunately, [Shared Arrays](@ref man-shared-arrays) and
+[`DistributedRef`](@ref)s can be used to get around this limitation:
 
 ```julia
 a = SharedArray{Float64}(10)
@@ -392,18 +394,14 @@ Using "outside" variables in parallel loops is perfectly reasonable if the varia
 
 ```julia
 a = randn(1000)
-@parallel (+) for i=1:100000
-  f(a[rand(1:end)])
+acc = DistributedRef(0)
+@parallel for i=1:200000000
+  acc[] += f(a[rand(1:end)])
 end
+result = reduce(+, acc)
 ```
 
 Here each iteration applies `f` to a randomly-chosen sample from a vector `a` shared by all processes.
-
-As you could see, the reduction operator can be omitted if it is not needed. In that case, the
-loop executes asynchronously, i.e. it spawns independent tasks on all available workers and returns
-an array of [`Future`](@ref) immediately without waiting for completion. The caller can wait for
-the [`Future`](@ref) completions at a later point by calling [`fetch()`](@ref) on them, or wait
-for completion at the end of the loop by prefixing it with [`@sync`](@ref), like `@sync @parallel for`.
 
 In some cases no reduction operator is needed, and we merely wish to apply a function to all integers
 in some range (or, more generally, to all elements in some collection). This is another useful
@@ -418,8 +416,8 @@ pmap(svd, M)
 Julia's [`pmap()`](@ref) is designed for the case where each function call does a large amount
 of work. In contrast, `@parallel for` can handle situations where each iteration is tiny, perhaps
 merely summing two numbers. Only worker processes are used by both [`pmap()`](@ref) and `@parallel for`
-for the parallel computation. In case of `@parallel for`, the final reduction is done on the calling
-process.
+for the parallel computation. In case of `@parallel for` used in conjunction with [`DistributedRef`](@ref)s,
+the final reduction is done on the calling process.
 
 ## Synchronization With Remote References
 
