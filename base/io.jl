@@ -115,8 +115,6 @@ unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader
 read(io::AbstractPipe) = read(pipe_reader(io))
 readuntil(io::AbstractPipe, arg::UInt8)          = readuntil(pipe_reader(io), arg)
 readuntil(io::AbstractPipe, arg::Char)           = readuntil(pipe_reader(io), arg)
-readuntil(io::AbstractPipe, arg::AbstractString) = readuntil(pipe_reader(io), arg)
-readuntil(io::AbstractPipe, arg)                 = readuntil(pipe_reader(io), arg)
 readavailable(io::AbstractPipe) = readavailable(pipe_reader(io))
 
 isreadable(io::AbstractPipe) = isreadable(pipe_reader(io))
@@ -434,7 +432,7 @@ function readuntil(s::IO, delim::Char)
 end
 
 function readuntil{T}(s::IO, delim::T)
-    out = T[]
+    out = (T === UInt8 ? StringVector(0) : Vector{T}())
     while !eof(s)
         c = read(s, T)
         push!(out, c)
@@ -445,37 +443,78 @@ function readuntil{T}(s::IO, delim::T)
     return out
 end
 
-# based on code by Glen Hertz
-function readuntil(s::IO, t::AbstractString)
-    l = length(t)
-    if l == 0
+function _rfind_sub_c(target, endc, endstate)
+    # find the largest i (< endstate) such that "target[(end - i + 1):(end - 1)] * c" == "target[1:i]"
+    # (equivalently, find the smallest tii' such that "target[tii':(end - 1)] * c" == "target[1:(end - tii' + 1)]")
+    # this assumes that the `target` iterator is pure and supports equality comparison for its state
+    # and that endstate is a valid state for target
+    tii = start(target)
+    i = start(target)
+    ti = tii
+    while tii != endstate
+        c, i = next(target, i)
+        tc, ti = next(target, ti)
+        if ti == endstate
+            if c == endc
+                return i
+            end
+        else
+            if tc == c
+                continue
+            end
+        end
+        tii = next(target, tii)[2]
+        i = start(target)
+        ti = tii
+    end
+    return start(target)
+end
+
+function readuntil(s::IO, target::AbstractString)
+    ti = start(target)
+    if done(target, ti)
         return ""
     end
-    if l > 40
-        warn("readuntil(IO,AbstractString) will perform poorly with a long string")
+    c1, tc1 = next(target, ti)
+    if done(target, tc1) && c1 < Char(0x80)
+        return readuntil_string(s, c1 % UInt8)
     end
     out = IOBuffer()
-    m = Array{Char}(l)  # last part of stream to match
-    t = collect(t)
-    i = 0
     while !eof(s)
-        i += 1
         c = read(s, Char)
         write(out, c)
-        if i <= l
-            m[i] = c
+        tc, ti = next(target, ti)
+        if c == tc
+            done(target, ti) && break
         else
-            # shift to last part of s
-            for j = 2:l
-                m[j-1] = m[j]
-            end
-            m[l] = c
-        end
-        if i >= l && m == t
-            break
+            ti = _rfind_sub_c(target, c, ti)
         end
     end
     return String(take!(out))
+end
+
+function readuntil(s::IO, target::String)
+    ti = start(target)
+    if done(target, ti)
+        return ""
+    end
+    c1, tc1 = next(target, ti)
+    if done(target, tc1) && c1 < Char(0x80)
+        return readuntil_string(s, c1 % UInt8)
+    end
+    targetb = Vector{UInt8}(target) # convert String to a utf8-byte-iterator
+    out = StringVector(0)
+    while !eof(s)
+        c = read(s, UInt8)
+        push!(out, c)
+        tc, ti = next(targetb, ti)
+        if c == tc
+            done(targetb, ti) && break
+        else
+            ti = _rfind_sub_c(targetb, c, ti)
+        end
+    end
+    return String(out)
 end
 
 """
@@ -521,10 +560,12 @@ Read at most `nb` bytes from `s`, returning a `Vector{UInt8}` of the bytes read.
 function read(s::IO, nb=typemax(Int))
     # Let readbytes! grow the array progressively by default
     # instead of taking of risk of over-allocating
-    b = Array{UInt8}(nb == typemax(Int) ? 1024 : nb)
+    b = Vector{UInt8}(nb == typemax(Int) ? 1024 : nb)
     nr = readbytes!(s, b, nb)
     return resize!(b, nr)
 end
+
+read(s::IO, T::Type) = error("The IO stream does not support reading objects of type $T.")
 
 """
     readstring(stream::IO)
