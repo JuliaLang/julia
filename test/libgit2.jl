@@ -283,6 +283,9 @@ mktempdir() do dir
                     @test auth.time == test_sig.time
                     @test auth.email == test_sig.email
                 end
+                @test LibGit2.is_ancestor_of(string(commit_oid1), string(commit_oid2), repo)
+                @test LibGit2.iscommit(string(commit_oid1), repo)
+                @test LibGit2.iscommit(string(commit_oid2), repo)
 
                 # lookup commits
                 cmt = LibGit2.GitCommit(repo, commit_oid1)
