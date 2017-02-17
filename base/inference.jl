@@ -698,7 +698,12 @@ function limit_type_depth(t::ANY, d::Int, cov::Bool=true, vars::Vector{TypeVar}=
     stillcov = cov && (t.name === Tuple.name)
     Q = map(x->limit_type_depth(x, d+1, stillcov, vars), P)
     R = t.name.wrapper{Q...}
-    return (cov && !stillcov) ? foldr(UnionAll, R, vars) : R
+    if cov && !stillcov
+        for var in vars
+            R = UnionAll(var, R)
+        end
+    end
+    return R
 end
 
 const DataType_name_fieldindex = fieldindex(DataType, :name)
