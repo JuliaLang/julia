@@ -94,12 +94,6 @@ s = io(text)
 close(s)
 push!(l, ("PipeEndpoint", io))
 
-
-# readuntil
-@test readuntil(IOBuffer("aaabc"), "aab") == "aaab"
-@test readuntil(IOBuffer("assassassinass"), "assassin") == "assassassin"
-
-
 #FIXME See https://github.com/JuliaLang/julia/issues/14747
 #      Reading from open(::Command) seems to deadlock on Linux/Travis
 #=
@@ -141,10 +135,24 @@ end
 
 verbose = false
 
-
 for (name, f) in l
     local f
-    io = ()->(s=f(text); push!(open_streams, s); s)
+    local function io(text=text)
+        local s = f(text)
+        push!(open_streams, s)
+        return s
+    end
+
+    verbose && println("$name readuntil...")
+    for (t, s, m) in [
+            ("aaabc", "aab", "aaab"),
+            ("assassassinass", "assassin", "assassassin")]
+        local t, s, m
+        @test readuntil(io(t), s) == m
+
+        s = SubString(s, start(s), endof(s))
+        @test readuntil(io(t), s) == m
+    end
 
     write(filename, text)
 
