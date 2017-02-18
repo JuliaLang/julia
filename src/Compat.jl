@@ -147,6 +147,12 @@ function is_quote_symbol(ex::ANY, val::Symbol)
     return false
 end
 
+is_index_style(ex::Expr) = ex == :(Compat.IndexStyle) || ex == :(Base.IndexStyle) ||
+    (ex.head == :(.) && (ex.args[1] == :Compat || ex.args[1] == :Base) &&
+         ex.args[2] == Expr(:quote, :IndexStyle))
+
+is_index_style(arg) = false
+
 # rewrites accesses to IOContext dicts
 function rewrite_iocontext!(expr::Expr)
     args = expr.args
@@ -461,6 +467,18 @@ function _compat(ex::Expr)
         shead = string(ex.head)
         if first(shead) == '.' && length(shead) > 2 && last(shead) == '=' && length(ex.args) == 2
             return _compat(Expr(:comparison, ex.args[1], :.=, Expr(:call, Symbol(shead[1:end-1]), ex.args...)))
+        end
+    end
+    if VERSION < v"0.6.0-dev.2840"
+        if ex.head == :(=) && isa(ex.args[1], Expr) && ex.args[1].head == :call
+            a = ex.args[1].args[1]
+            if is_index_style(a)
+                ex.args[1].args[1] = :(Base.linearindexing)
+            elseif isa(a, Expr) && a.head == :curly
+                if is_index_style(a.args[1])
+                    ex.args[1].args[1].args[1] = :(Base.linearindexing)
+                end
+            end
         end
     end
     return Expr(ex.head, map(_compat, ex.args)...)
@@ -1382,6 +1400,15 @@ if VERSION < v"0.6.0-dev.1024"
     end
 else
     using Base: Iterators
+end
+
+if VERSION < v"0.6.0-dev.2840"
+    export IndexStyle, IndexLinear, IndexCartesian
+    eval(Expr(:typealias, :IndexStyle, :(Base.LinearIndexing)))
+    eval(Expr(:typealias, :IndexLinear, :(Base.LinearFast)))
+    eval(Expr(:typealias, :IndexCartesian, :(Base.LinearSlow)))
+    IndexStyle{T}(::Type{T}) = Base.linearindexing(T)
+    IndexStyle(args...) = Base.linearindexing(args...)
 end
 
 include("to-be-deprecated.jl")
