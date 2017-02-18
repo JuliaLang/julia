@@ -463,8 +463,15 @@ mktempdir() do dir
             repo = LibGit2.GitRepo(cache_repo)
             try
                 @test_throws LibGit2.Error.GitError LibGit2.GitTree(repo, "HEAD")
-                @test isa(LibGit2.GitTree(repo, "HEAD^{tree}"), LibGit2.GitTree)
+                tree = LibGit2.GitTree(repo, "HEAD^{tree}")
+                @test isa(tree, LibGit2.GitTree)
                 @test isa(LibGit2.GitObject(repo, "HEAD^{tree}"), LibGit2.GitTree)
+                @test count(tree) == 1
+                @test_throws BoundsError tree[0]
+                @test_throws BoundsError tree[2]
+                tree_entry = tree[1]
+                te_str = sprint(show, tree_entry)
+                @test te_str == "GitTreeEntry:\nEntry name: testfile\nEntry type: Base.LibGit2.GitBlob\nEntry OID: $(LibGit2.entryid(tree_entry))\n"
             finally
                 close(repo)
             end
