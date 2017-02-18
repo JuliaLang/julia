@@ -354,6 +354,7 @@ log(x)
 
 Compute the logarithm of `x` to base 2. Throws [`DomainError`](@ref) for negative `Real` arguments.
 
+# Example
 ```jldoctest
 julia> log2(4)
 2.0
@@ -370,6 +371,7 @@ log2(x)
 Compute the logarithm of `x` to base 10.
 Throws [`DomainError`](@ref) for negative `Real` arguments.
 
+# Example
 ```jldoctest
 julia> log10(100)
 2.0
@@ -387,6 +389,15 @@ Accurate natural logarithm of `1+x`. Throws [`DomainError`](@ref) for `Real` arg
 
 There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
 faster and more accurate.
+
+# Examples
+```jldoctest
+julia> log1p(-0.5)
+-0.6931471805599453
+
+julia> log1p(0)
+0.0
+```
 """
 log1p(x)
 for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
@@ -414,6 +425,7 @@ sqrt(x::Real) = sqrt(float(x))
 
 Compute the hypotenuse ``\\sqrt{x^2+y^2}`` avoiding overflow and underflow.
 
+# Examples
 ```jldoctest
 julia> a = 10^10;
 
@@ -424,7 +436,7 @@ julia> √(a^2 + a^2) # a^2 overflows
 ERROR: DomainError:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
 Stacktrace:
- [1] sqrt(::Int64) at ./math.jl:410
+ [1] sqrt(::Int64) at ./math.jl:421
 ```
 """
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
@@ -489,6 +501,7 @@ minmax{T<:AbstractFloat}(x::T, y::T) =
 
 Compute ``x \\times 2^n``.
 
+# Example
 ```jldoctest
 julia> ldexp(5., 2)
 20.0
@@ -562,6 +575,7 @@ Extract the `significand(s)` (a.k.a. mantissa), in binary representation, of a
 floating-point number. If `x` is a non-zero finite number, then the result will be
 a number of the same type on the interval ``[1,2)``. Otherwise `x` is returned.
 
+# Examples
 ```jldoctest
 julia> significand(15.2)/15.2
 0.125
@@ -649,6 +663,7 @@ rem(x::Float16, y::Float16, r::RoundingMode{:Nearest}) = Float16(rem(Float32(x),
 Return a tuple (fpart,ipart) of the fractional and integral parts of a number. Both parts
 have the same sign as the argument.
 
+# Example
 ```jldoctest
 julia> modf(3.5)
 (0.5, 3.0)
@@ -753,6 +768,7 @@ without any intermediate rounding. This internally uses a high precision approxi
 
 - if `r == RoundUp`, then the result is in the interval ``[-2π, 0]``.
 
+# Example
 ```jldoctest
 julia> rem2pi(7pi/4, RoundNearest)
 -0.7853981633974485
@@ -887,6 +903,7 @@ This function computes a floating point representation of the modulus after divi
 numerically exact `2π`, and is therefore not exactly the same as `mod(x,2π)`, which would
 compute the modulus of `x` relative to division by the floating-point number `2π`.
 
+# Example
 ```jldoctest
 julia> mod2pi(9*pi/4)
 0.7853981633974481
@@ -903,6 +920,7 @@ Combined multiply-add, computes `x*y+z` in an efficient manner. This may on some
 equivalent to `x*y+z`, or to `fma(x,y,z)`. `muladd` is used to improve performance.
 See [`fma`](@ref).
 
+# Example
 ```jldoctest
 julia> muladd(3, 2, 1)
 7
