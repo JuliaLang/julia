@@ -258,7 +258,7 @@ end
 function fetchhead_foreach_callback(ref_name::Cstring, remote_url::Cstring,
                         oid::Ptr{GitHash}, is_merge::Cuint, payload::Ptr{Void})
     fhead_vec = unsafe_pointer_to_objref(payload)::Vector{FetchHead}
-    push!(fhead_vec, FetchHead(unsafe_string(ref_name), unsafe_string(remote_url), GitHash(oid), is_merge == 1))
+    push!(fhead_vec, FetchHead(unsafe_string(ref_name), unsafe_string(remote_url), unsafe_load(oid), is_merge == 1))
     return Cint(0)
 end
 
