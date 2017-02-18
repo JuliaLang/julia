@@ -1053,7 +1053,7 @@ function show_lambda_types(io::IO, li::Core.MethodInstance)
     end
     returned_from_do && return
     first = true
-    print_style = have_color ? :bold : :nothing
+    print_style = have_color && get(io, :backtrace, false) ? :bold : :nothing
     print_with_color(print_style, io, "(")
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
