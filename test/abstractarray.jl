@@ -784,9 +784,10 @@ end
 end
 
 @testset "unary ops" begin
-    A = Diagonal(rand(1:5,5))
-    @test +(A) == A
-    @test *(A) == A
+    let A = Diagonal(rand(1:5,5))
+        @test +(A) == A
+        @test *(A) == A
+    end
 end
 
 @testset "flipdim on empty" begin
