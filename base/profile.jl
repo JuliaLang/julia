@@ -103,23 +103,22 @@ will be used.
 
 The keyword arguments can be any combination of:
 
- - `format` can be `:tree` (default) or `:flat`.
+ - `format` -- Determines how the backtraces are printed. Can be `:tree` (default) or `:flat`.
 
- - If `C` is `true`, backtraces from C and Fortran code are shown (normally they are excluded).
+ - `C` -- If `true`, backtraces from C and Fortran code are shown (normally they are excluded).
 
- - If `combine` is `true` (default), instruction pointers are merged that correspond to the same line of code.
+ - `combine` -- If true` (default), instruction pointers are merged that correspond to the same line of code.
 
- - `maxdepth` can be used to limit the depth of printing in `:tree` format,
-   while `sortedby` can be used to control the order in `:flat` format
-   `:filefuncline` (default) sorts by the source line, whereas `:count`
-   sorts in order of number of collected samples.
+ - `maxdepth` -- limits the depth higher than `maxdepth` in the `:tree` format
 
- - `noisefloor` only shows frames that exceed the heuristic noise floor of the sample (only applies to format `:tree`).
-   A suggested value to try for this is 2.0 (the default is 0). This parameter hides samples for which `n <= noisefloor * √N`,
-   where `n` is the number of samples on this line, and `N` is the number of samples for the callee.
+ - `sortedby` -- controls the order in `:flat` format. `:filefuncline` (default) sorts by the source
+    line, whereas `:count` sorts in order of number of collected samples.
 
- - `mincount` can also be used to limit the printout to only those
-   lines with at least mincount occurrences.
+ - `noisefloor` -- limits frames that exceed the heuristic noise floor of the sample (only applies to format `:tree`).
+    A suggested value to try for this is 2.0 (the default is 0). This parameter hides samples for which `n <= noisefloor * √N`,
+    where `n` is the number of samples on this line, and `N` is the number of samples for the callee.
+
+ - `mincount` -- limits the printout to only those lines with at least `mincount` occurrences.
 """
 function print(io::IO, data::Vector{<:Unsigned} = fetch(), lidict::LineInfoDict = getdict(data);
         format = :tree,

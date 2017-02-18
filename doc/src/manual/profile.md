@@ -82,15 +82,15 @@ julia> Profile.print()
 
 Each line of this display represents a particular spot (line number) in the code. Indentation
 is used to indicate the nested sequence of function calls, with more-indented lines being deeper
-in the sequence of calls. In each line, the first "field" indicates the number of backtraces
-(samples) taken *at this line or in any functions executed by this line*. The second field is
-the file name, followed by a colon and the line number; the third is the function name.
+in the sequence of calls. In each line, the first "field" is the number of backtraces
+(samples) taken *at this line or in any functions executed by this line*.
+The second field is the file name and line number and the third field is the function name.
 Note that the specific line numbers may change as Julia's
 code changes; if you want to follow along, it's best to run this example yourself.
 
 In this example, we can see that the top level function called is in the file `event.jl`. This is the
-function that schedules the task that runs the REPL. If you examine line 97 of `REPL.jl`,
-you'll see this calls `eval_user_input()`. This is the function that interprets
+function that runs the REPL when you launch Julia. If you examine line 97 of `REPL.jl`,
+you'll see this is where the function `eval_user_input()` is called. This is the function that evaluates
 what you type at the REPL, and since we're working interactively these functions were invoked
 when we entered `@profile myfunc()`. The next line reflects actions taken in the [`@profile`](@ref)
 macro.
@@ -108,7 +108,7 @@ The first "important" line in this output is this one:
 
 `REPL` refers to the fact that we defined `myfunc` in the REPL, rather than putting it in a file;
 if we had used a file, this would show the file name. The `[1]` shows that the function `myfunc`
-was the first expression that got evaluated in the REPL. Line 2 of `myfunc()` contains the call to
+was the first expression evaluated in this REPL session. Line 2 of `myfunc()` contains the call to
 `rand`, and there were 52 (out of 80) backtraces that occurred at this line. Below that, you can
 see a call to `dsfmt_fill_array_close_open!` inside `dSFMT.jl`.
 
@@ -211,11 +211,11 @@ be very useful, but sometimes you want to start fresh; you can do so with [`Prof
 function print(io::IO = STDOUT, data = fetch(); kwargs...)
 ```
 
-Let's first discuss the two first arguments and then later all the different possible keyword arguments:
+Let's first discuss the two positional arguments, and later the keyword arguments:
 
-  * The first argument `io` allows you to save the results to a buffer, e.g. a file, but the default is to print to `STDOUT`
+  * `io` -- Allows you to save the results to a buffer, e.g. a file, but the default is to print to `STDOUT`
     (the console).
-  * The second argument `data` contains the data you want to analyze; by default that is obtained from [`Profile.fetch()`](@ref),
+  * `data` -- Contains the data you want to analyze; by default that is obtained from [`Profile.fetch()`](@ref),
     which pulls out the backtraces from a pre-allocated buffer. For example, if you want to profile
     the profiler, you could say:
 
@@ -228,17 +228,23 @@ Let's first discuss the two first arguments and then later all the different pos
 
 The keyword arguments can be any combination of:
 
-  * `format` which was introduced above. The possible choices are `:tree` and
-    `:flat`.
-  * If `C` is `true`, backtraces from C and Fortran code are shown (normally they are excluded).
-  * If `combine` is `true` (default), instruction pointers are merged that correspond to the same line of code.
-  * `maxdepth` can be used to limit the depth of printing in `:tree` format
-  * `sortedby` can be used to control the order in `:flat` format. `:filefuncline` (default) sorts by the source
+  * `format` -- Introduced above, this argument determines how the backtraces are printed. The possible choices are `:tree` and `:flat`.
+  * `C` -- If `true`, backtraces from C and Fortran code are shown (normally they are excluded). Try running the introductory
+    example with `Profile.print(C = true)`. This can be extremely helpful in deciding whether it's
+    Julia code or C code that is causing a bottleneck; setting `C = true` also improves the interpretability
+    of the nesting, at the cost of longer profile dumps.
+  * `combine` -- Some lines of code contain multiple operations; for example, `s += A[i]` contains both an array
+    reference (`A[i]`) and a sum operation. These correspond to different lines in the generated
+    machine code, and hence there may be two or more different addresses captured during backtraces
+    on this line. `combine = true` lumps them together, and is probably what you typically want, but
+    you can generate an output separately for each unique instruction pointer with `combine = false`
+  * `maxdepth` -- limits frames at a depth higher than `maxdepth` in the `:tree` format
+  * `sortedby` -- controls the order in `:flat` format. `:filefuncline` (default) sorts by the source
     line, whereas `:count` sorts in order of number of collected samples.
-  * `noisefloor` only shows frames that exceed the heuristic noise floor of the sample (only applies to format `:tree`).
+  * `noisefloor` -- limits frames that are below the heuristic noise floor of the sample (only applies to format `:tree`).
     A suggested value to try for this is 2.0 (the default is 0). This parameter hides samples for which `n <= noisefloor * √N`,
     where `n` is the number of samples on this line, and `N` is the number of samples for the callee.
-   * `mincount` can also be used to limit the printout to only those lines with at least `mincount` occurrences.
+  * `mincount` -- limits frames with less than `mincount` occurrences.
 
 File/function names are sometimes truncated (with `...`), and indentation is truncated with a
 `+n` at the beginning, where `n` is the number of extra spaces that would have been inserted,
@@ -247,7 +253,7 @@ to save to a file using a wide `displaysize` in an [`IOContext`](@ref):
 
 ```julia
 open("/tmp/prof.txt", "w") do s
-  Profile.print(IOContext(s, :displaysize => (24, 500)))
+    Profile.print(IOContext(s, :displaysize => (24, 500)))
 end
 ```
 
