@@ -23,13 +23,13 @@ function SubArray(parent::AbstractArray, indexes::Tuple)
 end
 function SubArray(::IndexCartesian, parent::P, indexes::I, ::NTuple{N,Any}) where {P,I,N}
     @_inline_meta
-    SubArray{eltype(P), N, P, I, false}(parent, indexes, 0, 0)
+    SubArray{indexed_eltype(parent, indexes...), N, P, I, false}(parent, indexes, 0, 0)
 end
 function SubArray(::IndexLinear, parent::P, indexes::I, ::NTuple{N,Any}) where {P,I,N}
     @_inline_meta
     # Compute the stride and offset
     stride1 = compute_stride1(parent, indexes)
-    SubArray{eltype(P), N, P, I, true}(parent, indexes, compute_offset1(parent, stride1, indexes), stride1)
+    SubArray{indexed_eltype(parent, indexes...), N, P, I, true}(parent, indexes, compute_offset1(parent, stride1, indexes), stride1)
 end
 
 check_parent_index_match(parent, indexes) = check_parent_index_match(parent, index_ndims(indexes...))
