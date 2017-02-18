@@ -212,6 +212,7 @@ catalan
 for T in (Irrational, Rational, Integer, Number)
     ^(::Irrational{:e}, x::T) = exp(x)
 end
+^{p}(::Irrational{:e}, ::Type{Val{p}}) = exp(p)
 
 log(::Irrational{:e}) = 1 # use 1 to correctly promote expressions like log(x)/log(e)
 log(::Irrational{:e}, x::Number) = log(x)
