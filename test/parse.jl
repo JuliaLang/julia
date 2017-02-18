@@ -982,3 +982,15 @@ short_where_call = :(f(x::T) where T = T)
 
 @test expand(:(a{1} = b)) == Expr(:error, "invalid type parameter name \"1\"")
 @test expand(:(a{2<:Any} = b)) == Expr(:error, "invalid type parameter name \"2\"")
+
+# issue #20653
+@test_throws UndefVarError Base.call(::Int) = 1
+module Test20653
+using Base.Test
+struct A
+end
+call(::A) = 1
+const a = A()
+@test_throws MethodError a()
+@test call(a) === 1
+end
