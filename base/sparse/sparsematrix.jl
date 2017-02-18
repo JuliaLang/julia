@@ -2801,7 +2801,7 @@ function dropstored!(A::SparseMatrixCSC, i::Integer, j::Integer)
     return A
 end
 """
-    dropstored!(A::SparseMatrix, I::AbstractVector{<:Integer}, J::AbstractVector{<:Integer})
+    dropstored!(A::SparseMatrixCSC, I::AbstractVector{<:Integer}, J::AbstractVector{<:Integer})
 
 For each `(i,j)` where `i in I` and `j in J`, drop entry `A[i,j]` from `A` if `A[i,j]` is
 stored and otherwise do nothing. Derivative forms:
