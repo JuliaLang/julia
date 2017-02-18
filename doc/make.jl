@@ -18,6 +18,7 @@ end
 
 const PAGES = [
     "Home" => "index.md",
+    hide("NEWS" => "NEWS.md"),
     "Manual" => [
         "manual/introduction.md",
         "manual/getting-started.md",
