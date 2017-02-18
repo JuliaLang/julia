@@ -95,7 +95,7 @@ what you type at the REPL, and since we're working interactively these functions
 when we entered `@profile myfunc()`. The next line reflects actions taken in the [`@profile`](@ref)
 macro.
 
-The first line shows that 80 backtraces were taken at line 73 of `client.jl`, but it's not that
+The first line shows that 80 backtraces were taken at line 73 of `event.jl`, but it's not that
 this line was "expensive" on its own: the third line reveals that all 80 of these backtraces
 were actually triggered inside its call to `eval_user_input`, and so on. To find out which operations
 are actually taking the time, we need to look deeper in the call chain.
@@ -237,14 +237,14 @@ The keyword arguments can be any combination of:
     reference (`A[i]`) and a sum operation. These correspond to different lines in the generated
     machine code, and hence there may be two or more different addresses captured during backtraces
     on this line. `combine = true` lumps them together, and is probably what you typically want, but
-    you can generate an output separately for each unique instruction pointer with `combine = false`
-  * `maxdepth` -- limits frames at a depth higher than `maxdepth` in the `:tree` format
-  * `sortedby` -- controls the order in `:flat` format. `:filefuncline` (default) sorts by the source
+    you can generate an output separately for each unique instruction pointer with `combine = false`.
+  * `maxdepth` -- Limits frames at a depth higher than `maxdepth` in the `:tree` format.
+  * `sortedby` -- Controls the order in `:flat` format. `:filefuncline` (default) sorts by the source
     line, whereas `:count` sorts in order of number of collected samples.
-  * `noisefloor` -- limits frames that are below the heuristic noise floor of the sample (only applies to format `:tree`).
+  * `noisefloor` -- Limits frames that are below the heuristic noise floor of the sample (only applies to format `:tree`).
     A suggested value to try for this is 2.0 (the default is 0). This parameter hides samples for which `n <= noisefloor * √N`,
     where `n` is the number of samples on this line, and `N` is the number of samples for the callee.
-  * `mincount` -- limits frames with less than `mincount` occurrences.
+  * `mincount` -- Limits frames with less than `mincount` occurrences.
 
 File/function names are sometimes truncated (with `...`), and indentation is truncated with a
 `+n` at the beginning, where `n` is the number of extra spaces that would have been inserted,

@@ -109,16 +109,16 @@ The keyword arguments can be any combination of:
 
  - `combine` -- If true` (default), instruction pointers are merged that correspond to the same line of code.
 
- - `maxdepth` -- limits the depth higher than `maxdepth` in the `:tree` format
+ - `maxdepth` -- Limits the depth higher than `maxdepth` in the `:tree` format.
 
- - `sortedby` -- controls the order in `:flat` format. `:filefuncline` (default) sorts by the source
+ - `sortedby` -- Controls the order in `:flat` format. `:filefuncline` (default) sorts by the source
     line, whereas `:count` sorts in order of number of collected samples.
 
- - `noisefloor` -- limits frames that exceed the heuristic noise floor of the sample (only applies to format `:tree`).
+ - `noisefloor` -- Limits frames that exceed the heuristic noise floor of the sample (only applies to format `:tree`).
     A suggested value to try for this is 2.0 (the default is 0). This parameter hides samples for which `n <= noisefloor * √N`,
     where `n` is the number of samples on this line, and `N` is the number of samples for the callee.
 
- - `mincount` -- limits the printout to only those lines with at least `mincount` occurrences.
+ - `mincount` -- Limits the printout to only those lines with at least `mincount` occurrences.
 """
 function print(io::IO, data::Vector{<:Unsigned} = fetch(), lidict::LineInfoDict = getdict(data);
         format = :tree,
