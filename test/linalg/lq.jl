@@ -71,9 +71,19 @@ bimg  = randn(n,2)/2
                     @test a*q ≈ a*full(q,thin=false) atol=100ε
                     @test a*q.' ≈ a*full(q,thin=false).' atol=100ε
                     @test a*q' ≈ a*full(q,thin=false)' atol=100ε
+                    @test a'*q ≈ a'*full(q,thin=false) atol=100ε
+                    @test a'*q' ≈ a'*full(q,thin=false)' atol=100ε
                     @test_throws DimensionMismatch q*b[1:n1 + 1]
                     @test_throws DimensionMismatch Ac_mul_B(q,ones(eltya,n+2,n+2))
                     @test_throws DimensionMismatch ones(eltyb,n+2,n+2)*q
+                    if isa(a, DenseArray) && isa(b, DenseArray)
+                        #use this to test 2nd branch in mult code
+                        pad_a = vcat(eye(a), a)
+                        pad_b = hcat(eye(b), b)
+                        @test pad_a*q ≈ pad_a*full(q,thin=false) atol=100ε
+                        @test q.'*pad_b ≈ full(q,thin=false).'*pad_b atol=100ε
+                        @test q'*pad_b ≈ full(q,thin=false)'*pad_b atol=100ε
+                    end
                 end
             end
         end
