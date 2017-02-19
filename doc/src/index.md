@@ -6,7 +6,7 @@ Welcome to the documentation for Julia 0.6!
 
 Please see the [Release notes](NEWS.md) for a list of new features, changes and deprecations from 0.5 to 0.6.
 
-For more in detail analysis of some of the new functionalities in 0.6, see the following blog posts:
+For a closer look at some of 0.6's new features, see the following blog posts:
 
 * [More Dots: Syntactic Loop Fusion in Julia](http://julialang.org/blog/2017/01/moredots)
 
