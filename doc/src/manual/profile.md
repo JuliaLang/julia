@@ -229,7 +229,7 @@ Let's first discuss the two positional arguments, and later the keyword argument
 The keyword arguments can be any combination of:
 
   * `format` -- Introduced above, determines whether backtraces are printed
-     with (default, :tree) or without (:flat) indentation indicating tree
+     with (default, `:tree`) or without (`:flat`) indentation indicating tree
      structure.
   * `C` -- If `true`, backtraces from C and Fortran code are shown (normally they are excluded). Try running the introductory
     example with `Profile.print(C = true)`. This can be extremely helpful in deciding whether it's
