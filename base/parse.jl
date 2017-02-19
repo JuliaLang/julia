@@ -135,6 +135,17 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString},
         return Nullable{Bool}()
     end
 
+    orig_start = startpos
+    orig_end   = endpos
+
+    # Ignore leading and trailing whitespace
+    while isspace(sbuff[startpos]) && startpos <= endpos
+        startpos += 1
+    end
+    while isspace(sbuff[endpos]) && endpos >= startpos
+        endpos -= 1
+    end
+
     len = endpos - startpos + 1
     p   = pointer(sbuff) + startpos - 1
     (len == 4) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
@@ -143,7 +154,7 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString},
         p, "false", 5)) && (return Nullable(false))
 
     if raise
-        substr = SubString(sbuff, startpos, endpos)
+        substr = SubString(sbuff, orig_start, orig_end) # show input string in the error to avoid confusion
         if all(isspace, substr)
             throw(ArgumentError("input string only contains whitespace"))
         else
