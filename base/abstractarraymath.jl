@@ -393,6 +393,9 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
     shape, inner_shape = rep_shapes(A, inner, outer)
 
     R = similar(A, shape)
+    if any(iszero, shape)
+        return R
+    end
 
     # fill the first inner block
     if all(x -> x == 1, inner)
@@ -420,8 +423,7 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
             dest_indices[i] += inner_shape[i]
             R[dest_indices...] = B
         end
-        src_indices[i] = 1:dest_indices[i][end]
-        copy!(dest_indices, src_indices)
+        src_indices[i] = dest_indices[i] = 1:shape[i]
     end
 
     return R
