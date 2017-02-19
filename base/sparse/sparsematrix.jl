@@ -2250,8 +2250,9 @@ setindex!(A::SparseMatrixCSC, x, i::Union{Integer, AbstractVector}, ::Colon) = s
 function setindex!{Tv}(A::SparseMatrixCSC{Tv}, x::Number,
         I::AbstractVector{<:Integer}, J::AbstractVector{<:Integer})
     if isempty(I) || isempty(J); return A; end
-    if !issorted(I); I = sort(I); end
-    if !issorted(J); J = sort(J); end
+    # lt=≤ to check for strict sorting
+    if !issorted(I, lt=≤); I = sort!(unique(I)); end
+    if !issorted(J, lt=≤); J = sort!(unique(J)); end
     if (I[1] < 1 || I[end] > A.m) || (J[1] < 1 || J[end] > A.n)
         throw(BoundsError(A, (I, J)))
     end
