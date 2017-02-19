@@ -103,7 +103,8 @@ will be used.
 
 The keyword arguments can be any combination of:
 
- - `format` -- Determines how the backtraces are printed. Can be `:tree` (default) or `:flat`.
+ - `format` -- Determines whether backtraces are printed with (default, :tree) or without (:flat)
+   indentation indicating tree structure.
 
  - `C` -- If `true`, backtraces from C and Fortran code are shown (normally they are excluded).
 
