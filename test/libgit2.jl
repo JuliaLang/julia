@@ -206,6 +206,12 @@ mktempdir() do dir
                 LibGit2.set_remote_url(cache_repo, repo_url, remote="upstream")
                 remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
                 @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: $repo_url"
+                LibGit2.add_fetch!(repo, remote, "upstream")
+                @test LibGit2.fetch_refspecs(remote) == String["+refs/heads/*:refs/remotes/upstream/*"]
+                LibGit2.add_push!(repo, remote, "refs/heads/master")
+                close(remote)
+                remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
+                @test LibGit2.push_refspecs(remote) == String["refs/heads/master"]
                 close(remote)
 
                 remote = LibGit2.GitRemoteAnon(repo, repo_url)

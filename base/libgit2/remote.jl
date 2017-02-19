@@ -103,6 +103,18 @@ function push_refspecs(rmt::GitRemote)
     res
 end
 
+function add_fetch!(repo::GitRepo, rmt::GitRemote, fetch_spec::String)
+    @check ccall((:git_remote_add_fetch, :libgit2), Cint,
+                 (Ptr{Void}, Cstring, Cstring), repo.ptr,
+                 name(rmt), fetch_spec)
+end
+
+function add_push!(repo::GitRepo, rmt::GitRemote, push_spec::String)
+    @check ccall((:git_remote_add_push, :libgit2), Cint,
+                 (Ptr{Void}, Cstring, Cstring), repo.ptr,
+                 name(rmt), push_spec)
+end
+
 """
     fetch(rmt::GitRemote, refspecs; options::FetchOptions=FetchOptions(), msg="")
 
