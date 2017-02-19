@@ -496,6 +496,53 @@ temp_pkg_dir() do
     end
 end
 
+@testset "Pkg functions with .jl extension" begin
+    temp_pkg_dir() do
+        @test Pkg.installed("Example.jl") === nothing
+        Pkg.add("Example.jl")
+        @test [keys(Pkg.installed())...] == ["Example"]
+        iob = IOBuffer()
+        Pkg.checkout("Example.jl")
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test startswith(str, " - Example")
+        @test endswith(str, "master")
+        Pkg.free("Example.jl")
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test endswith(str, string(Pkg.installed("Example.jl")))
+        Pkg.checkout("Example.jl")
+        Pkg.free(("Example.jl",))
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test endswith(str, string(Pkg.installed("Example.jl")))
+        Pkg.rm("Example.jl")
+        @test isempty(Pkg.installed())
+        @test !isempty(Pkg.available("Example.jl"))
+        @test !in("Example", keys(Pkg.installed()))
+        Pkg.rm("Example.jl")
+        @test isempty(Pkg.installed())
+        @test !isempty(Pkg.available("Example.jl"))
+        @test !in("Example", keys(Pkg.installed()))
+        Pkg.clone("https://github.com/JuliaLang/Example.jl.git")
+        @test [keys(Pkg.installed())...] == ["Example"]
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test startswith(str, " - Example")
+        @test endswith(str, "master")
+        Pkg.free("Example.jl")
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test endswith(str, string(Pkg.installed("Example.jl")))
+        Pkg.checkout("Example.jl")
+        Pkg.free(("Example.jl",))
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test endswith(str, string(Pkg.installed("Example.jl")))
+        @test isempty(Pkg.dependents("Example.jl"))
+    end
+end
+
 let io = IOBuffer()
     Base.showerror(io, Base.Pkg.Entry.PkgTestError("ppp"), backtrace())
     @test !contains(String(take!(io)), "backtrace()")
