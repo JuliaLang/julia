@@ -1,10 +1,10 @@
-# Julia v0.6.0 Documentation
+# Julia v0.6 Documentation
 
-Welcome to the documentation for Julia 0.6.0!
+Welcome to the documentation for Julia 0.6!
 
-### What is new in Julia 0.6.0
+### What's new in Julia 0.6
 
-Please see the [Release notes](NEWS.md) for a list of new features, changes and deprecations from 0.5 to 0.6.0.
+Please see the [Release notes](NEWS.md) for a list of new features, changes and deprecations from 0.5 to 0.6.
 
 For more in detail analysis of some of the new functionalities in 0.6, see the following blog posts:
 
