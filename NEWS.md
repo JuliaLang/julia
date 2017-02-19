@@ -203,6 +203,12 @@ This section lists changes that do not have deprecation warnings.
 
   * The `count` function no longer sums non-boolean values ([#20404])
 
+  * Bessel, Hankel, Airy, error, Dawson, eta, zeta, digamma, inverse digamma,
+    trigamma, and polygamma special functions have been moved from Base to
+    the
+    [SpecialFunctions.jl package](https://github.com/JuliaMath/SpecialFunctions.jl)
+    ([#20427]).
+
 Library improvements
 --------------------
 
