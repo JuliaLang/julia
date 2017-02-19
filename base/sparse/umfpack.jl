@@ -132,11 +132,10 @@ The relation between `F` and `A` is
 - [`det`](@ref)
 
 !!! note
-
-`lufact(A::SparseMatrixCSC)` uses the UMFPACK library that is part of
-SuiteSparse. As this library only supports sparse matrices with `Float64` or
-`Complex128` elements, `lufact` converts `A` into a copy that is of type
-`SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as appropriate.
+    `lufact(A::SparseMatrixCSC)` uses the UMFPACK library that is part of
+    SuiteSparse. As this library only supports sparse matrices with `Float64` or
+    `Complex128` elements, `lufact` converts `A` into a copy that is of type
+    `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as appropriate.
 """
 function lufact(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes})
     zerobased = S.colptr[1] == 0

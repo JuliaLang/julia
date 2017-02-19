@@ -571,7 +571,7 @@ julia> sqrt(-1)
 ERROR: DomainError:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
 Stacktrace:
- [1] sqrt(::Int64) at ./math.jl:410
+ [1] sqrt(::Int64) at ./math.jl:421
 ```
 
 You may define your own exceptions in the following way:
