@@ -209,6 +209,9 @@ This section lists changes that do not have deprecation warnings.
     [SpecialFunctions.jl package](https://github.com/JuliaMath/SpecialFunctions.jl)
     ([#20427]).
 
+  * `write` on an `IOBuffer` now returns a signed integer in order to be
+    consistent with other buffers ([#20609]).
+
 Library improvements
 --------------------
 
