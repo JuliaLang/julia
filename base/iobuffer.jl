@@ -322,7 +322,7 @@ end
 function unsafe_write(to::AbstractIOBuffer, p::Ptr{UInt8}, nb::UInt)
     ensureroom(to, nb)
     ptr = (to.append ? to.size+1 : to.ptr)
-    written = min(nb, length(to.data) - ptr + 1)
+    written = Int(min(nb, length(to.data) - ptr + 1))
     towrite = written
     d = to.data
     while towrite > 0
