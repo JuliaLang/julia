@@ -58,12 +58,12 @@ enumerate(iter) = Enumerate(iter)
 
 length(e::Enumerate) = length(e.itr)
 size(e::Enumerate) = size(e.itr)
-start(e::Enumerate) = (1, start(e.itr))
-function next(e::Enumerate, state)
+@inline start(e::Enumerate) = (1, start(e.itr))
+@inline function next(e::Enumerate, state)
     n = next(e.itr,state[2])
     (state[1],n[1]), (state[1]+1,n[2])
 end
-done(e::Enumerate, state) = done(e.itr, state[2])
+@inline done(e::Enumerate, state) = done(e.itr, state[2])
 
 eltype{I}(::Type{Enumerate{I}}) = Tuple{Int, eltype(I)}
 
