@@ -389,7 +389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Complex and Rational Numbers",
     "title": "Complex Numbers",
     "category": "section",
-    "text": "The global constant im is bound to the complex number i, representing the principal square root of -1. It was deemed harmful to co-opt the name i for a global constant, since it is such a popular index variable name. Since Julia allows numeric literals to be juxtaposed with identifiers as coefficients, this binding suffices to provide convenient syntax for complex numbers, similar to the traditional mathematical notation:julia> 1 + 2im\n1 + 2imYou can perform all the standard arithmetic operations with complex numbers:julia> (1 + 2im)*(2 - 3im)\n8 + 1im\n\njulia> (1 + 2im)/(1 - 2im)\n-0.6 + 0.8im\n\njulia> (1 + 2im) + (1 - 2im)\n2 + 0im\n\njulia> (-3 + 2im) - (5 - 1im)\n-8 + 3im\n\njulia> (-1 + 2im)^2\n-3 - 4im\n\njulia> (-1 + 2im)^2.5\n2.7296244647840084 - 6.960664459571898im\n\njulia> (-1 + 2im)^(1 + 1im)\n-0.27910381075826657 + 0.08708053414102428im\n\njulia> 3(2 - 5im)\n6 - 15im\n\njulia> 3(2 - 5im)^2\n-63 - 60im\n\njulia> 3(2 - 5im)^-1.0\n0.20689655172413796 + 0.5172413793103449imThe promotion mechanism ensures that combinations of operands of different types just work:julia> 2(1 - 1im)\n2 - 2im\n\njulia> (2 + 3im) - 1\n1 + 3im\n\njulia> (1 + 2im) + 0.5\n1.5 + 2.0im\n\njulia> (2 + 3im) - 0.5im\n2.0 + 2.5im\n\njulia> 0.75(1 + 2im)\n0.75 + 1.5im\n\njulia> (2 + 3im) / 2\n1.0 + 1.5im\n\njulia> (1 - 3im) / (2 + 2im)\n-0.5 - 1.0im\n\njulia> 2im^2\n-2 + 0im\n\njulia> 1 + 3/4im\n1.0 - 0.75imNote that 3/4im == 3/(4*im) == -(3/4*im), since a literal coefficient binds more tightly than division.Standard functions to manipulate complex values are provided:julia> z = 1 + 2im\n1 + 2im\n\njulia> real(1 + 2im) # real part of z\n1\n\njulia> imag(1 + 2im) # imaginary part of z\n2\n\njulia> conj(1 + 2im) # complex conjugate of z\n1 - 2im\n\njulia> abs(1 + 2im) # absolute value of z\n2.23606797749979\n\njulia> abs2(1 + 2im) # squared absolute value\n5\n\njulia> angle(1 + 2im) # phase angle in radians\n1.1071487177940904As usual, the absolute value (abs()) of a complex number is its distance from zero. abs2() gives the square of the absolute value, and is of particular use for complex numbers where it avoids taking a square root. angle() returns the phase angle in radians (also known as the argument or arg function). The full gamut of other Elementary Functions is also defined for complex numbers:julia> sqrt(1im)\n0.7071067811865476 + 0.7071067811865475im\n\njulia> sqrt(1 + 2im)\n1.272019649514069 + 0.7861513777574233im\n\njulia> cos(1 + 2im)\n2.0327230070196656 - 3.0518977991518im\n\njulia> exp(1 + 2im)\n-1.1312043837568135 + 2.4717266720048188im\n\njulia> sinh(1 + 2im)\n-0.4890562590412937 + 1.4031192506220405imNote that mathematical functions typically return real values when applied to real numbers and complex values when applied to complex numbers. For example, sqrt() behaves differently when applied to -1 versus -1 + 0im even though -1 == -1 + 0im:julia> sqrt(-1)\nERROR: DomainError:\nsqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).\nStacktrace:\n [1] sqrt(::Int64) at ./math.jl:410\n\njulia> sqrt(-1 + 0im)\n0.0 + 1.0imThe literal numeric coefficient notation does not work when constructing a complex number from variables. Instead, the multiplication must be explicitly written out:julia> a = 1; b = 2; a + b*im\n1 + 2imHowever, this is not recommended; Use the complex() function instead to construct a complex value directly from its real and imaginary parts:julia> a = 1; b = 2; complex(a, b)\n1 + 2imThis construction avoids the multiplication and addition operations.Inf and NaN propagate through complex numbers in the real and imaginary parts of a complex number as described in the Special floating-point values section:julia> 1 + Inf*im\n1.0 + Inf*im\n\njulia> 1 + NaN*im\n1.0 + NaN*im"
+    "text": "The global constant im is bound to the complex number i, representing the principal square root of -1. It was deemed harmful to co-opt the name i for a global constant, since it is such a popular index variable name. Since Julia allows numeric literals to be juxtaposed with identifiers as coefficients, this binding suffices to provide convenient syntax for complex numbers, similar to the traditional mathematical notation:julia> 1 + 2im\n1 + 2imYou can perform all the standard arithmetic operations with complex numbers:julia> (1 + 2im)*(2 - 3im)\n8 + 1im\n\njulia> (1 + 2im)/(1 - 2im)\n-0.6 + 0.8im\n\njulia> (1 + 2im) + (1 - 2im)\n2 + 0im\n\njulia> (-3 + 2im) - (5 - 1im)\n-8 + 3im\n\njulia> (-1 + 2im)^2\n-3 - 4im\n\njulia> (-1 + 2im)^2.5\n2.7296244647840084 - 6.960664459571898im\n\njulia> (-1 + 2im)^(1 + 1im)\n-0.27910381075826657 + 0.08708053414102428im\n\njulia> 3(2 - 5im)\n6 - 15im\n\njulia> 3(2 - 5im)^2\n-63 - 60im\n\njulia> 3(2 - 5im)^-1.0\n0.20689655172413796 + 0.5172413793103449imThe promotion mechanism ensures that combinations of operands of different types just work:julia> 2(1 - 1im)\n2 - 2im\n\njulia> (2 + 3im) - 1\n1 + 3im\n\njulia> (1 + 2im) + 0.5\n1.5 + 2.0im\n\njulia> (2 + 3im) - 0.5im\n2.0 + 2.5im\n\njulia> 0.75(1 + 2im)\n0.75 + 1.5im\n\njulia> (2 + 3im) / 2\n1.0 + 1.5im\n\njulia> (1 - 3im) / (2 + 2im)\n-0.5 - 1.0im\n\njulia> 2im^2\n-2 + 0im\n\njulia> 1 + 3/4im\n1.0 - 0.75imNote that 3/4im == 3/(4*im) == -(3/4*im), since a literal coefficient binds more tightly than division.Standard functions to manipulate complex values are provided:julia> z = 1 + 2im\n1 + 2im\n\njulia> real(1 + 2im) # real part of z\n1\n\njulia> imag(1 + 2im) # imaginary part of z\n2\n\njulia> conj(1 + 2im) # complex conjugate of z\n1 - 2im\n\njulia> abs(1 + 2im) # absolute value of z\n2.23606797749979\n\njulia> abs2(1 + 2im) # squared absolute value\n5\n\njulia> angle(1 + 2im) # phase angle in radians\n1.1071487177940904As usual, the absolute value (abs()) of a complex number is its distance from zero. abs2() gives the square of the absolute value, and is of particular use for complex numbers where it avoids taking a square root. angle() returns the phase angle in radians (also known as the argument or arg function). The full gamut of other Elementary Functions is also defined for complex numbers:julia> sqrt(1im)\n0.7071067811865476 + 0.7071067811865475im\n\njulia> sqrt(1 + 2im)\n1.272019649514069 + 0.7861513777574233im\n\njulia> cos(1 + 2im)\n2.0327230070196656 - 3.0518977991518im\n\njulia> exp(1 + 2im)\n-1.1312043837568135 + 2.4717266720048188im\n\njulia> sinh(1 + 2im)\n-0.4890562590412937 + 1.4031192506220405imNote that mathematical functions typically return real values when applied to real numbers and complex values when applied to complex numbers. For example, sqrt() behaves differently when applied to -1 versus -1 + 0im even though -1 == -1 + 0im:julia> sqrt(-1)\nERROR: DomainError:\nsqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).\nStacktrace:\n [1] sqrt(::Int64) at ./math.jl:421\n\njulia> sqrt(-1 + 0im)\n0.0 + 1.0imThe literal numeric coefficient notation does not work when constructing a complex number from variables. Instead, the multiplication must be explicitly written out:julia> a = 1; b = 2; a + b*im\n1 + 2imHowever, this is not recommended; Use the complex() function instead to construct a complex value directly from its real and imaginary parts:julia> a = 1; b = 2; complex(a, b)\n1 + 2imThis construction avoids the multiplication and addition operations.Inf and NaN propagate through complex numbers in the real and imaginary parts of a complex number as described in the Special floating-point values section:julia> 1 + Inf*im\n1.0 + Inf*im\n\njulia> 1 + NaN*im\n1.0 + NaN*im"
 },
 
 {
@@ -693,7 +693,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Control Flow",
     "title": "Built-in Exceptions",
     "category": "section",
-    "text": "Exceptions are thrown when an unexpected condition has occurred. The built-in Exceptions listed below all interrupt the normal flow of control.Exception\nArgumentError\nBoundsError\nCompositeException\nDivideError\nDomainError\nEOFError\nErrorException\nInexactError\nInitError\nInterruptException\nInvalidStateException\nKeyError\nLoadError\nOutOfMemoryError\nReadOnlyMemoryError\nRemoteException\nMethodError\nOverflowError\nParseError\nSystemError\nTypeError\nUndefRefError\nUndefVarError\nUnicodeErrorFor example, the sqrt() function throws a DomainError if applied to a negative real value:julia> sqrt(-1)\nERROR: DomainError:\nsqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).\nStacktrace:\n [1] sqrt(::Int64) at ./math.jl:410You may define your own exceptions in the following way:julia> struct MyCustomException <: Exception end"
+    "text": "Exceptions are thrown when an unexpected condition has occurred. The built-in Exceptions listed below all interrupt the normal flow of control.Exception\nArgumentError\nBoundsError\nCompositeException\nDivideError\nDomainError\nEOFError\nErrorException\nInexactError\nInitError\nInterruptException\nInvalidStateException\nKeyError\nLoadError\nOutOfMemoryError\nReadOnlyMemoryError\nRemoteException\nMethodError\nOverflowError\nParseError\nSystemError\nTypeError\nUndefRefError\nUndefVarError\nUnicodeErrorFor example, the sqrt() function throws a DomainError if applied to a negative real value:julia> sqrt(-1)\nERROR: DomainError:\nsqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).\nStacktrace:\n [1] sqrt(::Int64) at ./math.jl:421You may define your own exceptions in the following way:julia> struct MyCustomException <: Exception end"
 },
 
 {
@@ -3901,7 +3901,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Frequently Asked Questions",
     "title": "Why does Julia give a DomainError for certain seemingly-sensible operations?",
     "category": "section",
-    "text": "Certain operations make mathematical sense but result in errors:julia> sqrt(-2.0)\nERROR: DomainError:\nsqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).\nStacktrace:\n [1] sqrt(::Float64) at ./math.jl:401\n\njulia> 2^-5\nERROR: DomainError:\nCannot raise an integer x to a negative power -n.\nMake x a float by adding a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.\nStacktrace:\n [1] power_by_squaring(::Int64, ::Int64) at ./intfuncs.jl:170\n [2] ^(::Int64, ::Int64) at ./intfuncs.jl:194This behavior is an inconvenient consequence of the requirement for type-stability.  In the case of sqrt(), most users want sqrt(2.0) to give a real number, and would be unhappy if it produced the complex number 1.4142135623730951 + 0.0im.  One could write the sqrt() function to switch to a complex-valued output only when passed a negative number (which is what sqrt() does in some other languages), but then the result would not be type-stable and the sqrt() function would have poor performance.In these and other cases, you can get the result you want by choosing an input type that conveys your willingness to accept an output type in which the result can be represented:julia> sqrt(-2.0+0im)\n0.0 + 1.4142135623730951im\n\njulia> 2.0^-5\n0.03125"
+    "text": "Certain operations make mathematical sense but result in errors:julia> sqrt(-2.0)\nERROR: DomainError:\nsqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).\nStacktrace:\n [1] sqrt(::Float64) at ./math.jl:412\n\njulia> 2^-5\nERROR: DomainError:\nCannot raise an integer x to a negative power -n.\nMake x a float by adding a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.\nStacktrace:\n [1] power_by_squaring(::Int64, ::Int64) at ./intfuncs.jl:170\n [2] ^(::Int64, ::Type{Val{-5}}) at ./intfuncs.jl:201This behavior is an inconvenient consequence of the requirement for type-stability.  In the case of sqrt(), most users want sqrt(2.0) to give a real number, and would be unhappy if it produced the complex number 1.4142135623730951 + 0.0im.  One could write the sqrt() function to switch to a complex-valued output only when passed a negative number (which is what sqrt() does in some other languages), but then the result would not be type-stable and the sqrt() function would have poor performance.In these and other cases, you can get the result you want by choosing an input type that conveys your willingness to accept an output type in which the result can be represented:julia> sqrt(-2.0+0im)\n0.0 + 1.4142135623730951im\n\njulia> 2.0^-5\n0.03125"
 },
 
 {
@@ -6933,7 +6933,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.muladd",
     "category": "Function",
-    "text": "muladd(x, y, z)\n\nCombined multiply-add, computes x*y+z in an efficient manner. This may on some systems be equivalent to x*y+z, or to fma(x,y,z). muladd is used to improve performance. See fma.\n\njulia> muladd(3, 2, 1)\n7\n\njulia> 3 * 2 + 1\n7\n\n\n\n"
+    "text": "muladd(x, y, z)\n\nCombined multiply-add, computes x*y+z in an efficient manner. This may on some systems be equivalent to x*y+z, or to fma(x,y,z). muladd is used to improve performance. See fma.\n\nExample\n\njulia> muladd(3, 2, 1)\n7\n\njulia> 3 * 2 + 1\n7\n\n\n\n"
 },
 
 {
@@ -6981,7 +6981,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.Math.rem2pi",
     "category": "Function",
-    "text": "rem2pi(x, r::RoundingMode)\n\nCompute the remainder of x after integer division by 2π, with the quotient rounded according to the rounding mode r. In other words, the quantity\n\nx - 2π*round(x/(2π),r)\n\nwithout any intermediate rounding. This internally uses a high precision approximation of 2π, and so will give a more accurate result than rem(x,2π,r)\n\nif r == RoundNearest, then the result is in the interval - . This will generally be the most accurate result.\nif r == RoundToZero, then the result is in the interval 0 2 if x is positive,. or -2 0 otherwise.\nif r == RoundDown, then the result is in the interval 0 2.\nif r == RoundUp, then the result is in the interval -2 0.\n\njulia> rem2pi(7pi/4, RoundNearest)\n-0.7853981633974485\n\njulia> rem2pi(7pi/4, RoundDown)\n5.497787143782138\n\n\n\n"
+    "text": "rem2pi(x, r::RoundingMode)\n\nCompute the remainder of x after integer division by 2π, with the quotient rounded according to the rounding mode r. In other words, the quantity\n\nx - 2π*round(x/(2π),r)\n\nwithout any intermediate rounding. This internally uses a high precision approximation of 2π, and so will give a more accurate result than rem(x,2π,r)\n\nif r == RoundNearest, then the result is in the interval - . This will generally be the most accurate result.\nif r == RoundToZero, then the result is in the interval 0 2 if x is positive,. or -2 0 otherwise.\nif r == RoundDown, then the result is in the interval 0 2.\nif r == RoundUp, then the result is in the interval -2 0.\n\nExample\n\njulia> rem2pi(7pi/4, RoundNearest)\n-0.7853981633974485\n\njulia> rem2pi(7pi/4, RoundDown)\n5.497787143782138\n\n\n\n"
 },
 
 {
@@ -6989,7 +6989,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.Math.mod2pi",
     "category": "Function",
-    "text": "mod2pi(x)\n\nModulus after division by 2π, returning in the range 02).\n\nThis function computes a floating point representation of the modulus after division by numerically exact 2π, and is therefore not exactly the same as mod(x,2π), which would compute the modulus of x relative to division by the floating-point number 2π.\n\njulia> mod2pi(9*pi/4)\n0.7853981633974481\n\n\n\n"
+    "text": "mod2pi(x)\n\nModulus after division by 2π, returning in the range 02).\n\nThis function computes a floating point representation of the modulus after division by numerically exact 2π, and is therefore not exactly the same as mod(x,2π), which would compute the modulus of x relative to division by the floating-point number 2π.\n\nExample\n\njulia> mod2pi(9*pi/4)\n0.7853981633974481\n\n\n\n"
 },
 
 {
@@ -7605,7 +7605,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.Math.hypot",
     "category": "Function",
-    "text": "hypot(x, y)\n\nCompute the hypotenuse sqrtx^2+y^2 avoiding overflow and underflow.\n\njulia> a = 10^10;\n\njulia> hypot(a, a)\n1.4142135623730951e10\n\njulia> √(a^2 + a^2) # a^2 overflows\nERROR: DomainError:\nsqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).\nStacktrace:\n [1] sqrt(::Int64) at ./math.jl:410\n\n\n\nhypot(x...)\n\nCompute the hypotenuse sqrtsum x_i^2 avoiding overflow and underflow.\n\n\n\n"
+    "text": "hypot(x, y)\n\nCompute the hypotenuse sqrtx^2+y^2 avoiding overflow and underflow.\n\nExamples\n\njulia> a = 10^10;\n\njulia> hypot(a, a)\n1.4142135623730951e10\n\njulia> √(a^2 + a^2) # a^2 overflows\nERROR: DomainError:\nsqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).\nStacktrace:\n [1] sqrt(::Int64) at ./math.jl:421\n\n\n\nhypot(x...)\n\nCompute the hypotenuse sqrtsum x_i^2 avoiding overflow and underflow.\n\n\n\n"
 },
 
 {
@@ -7629,7 +7629,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.log2",
     "category": "Function",
-    "text": "log2(x)\n\nCompute the logarithm of x to base 2. Throws DomainError for negative Real arguments.\n\njulia> log2(4)\n2.0\n\njulia> log2(10)\n3.321928094887362\n\n\n\n"
+    "text": "log2(x)\n\nCompute the logarithm of x to base 2. Throws DomainError for negative Real arguments.\n\nExample\n\njulia> log2(4)\n2.0\n\njulia> log2(10)\n3.321928094887362\n\n\n\n"
 },
 
 {
@@ -7637,7 +7637,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.log10",
     "category": "Function",
-    "text": "log10(x)\n\nCompute the logarithm of x to base 10. Throws DomainError for negative Real arguments.\n\njulia> log10(100)\n2.0\n\njulia> log10(2)\n0.3010299956639812\n\n\n\n"
+    "text": "log10(x)\n\nCompute the logarithm of x to base 10. Throws DomainError for negative Real arguments.\n\nExample\n\njulia> log10(100)\n2.0\n\njulia> log10(2)\n0.3010299956639812\n\n\n\n"
 },
 
 {
@@ -7645,7 +7645,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.log1p",
     "category": "Function",
-    "text": "log1p(x)\n\nAccurate natural logarithm of 1+x. Throws DomainError for Real arguments less than -1.\n\nThere is an experimental variant in the Base.Math.JuliaLibm module, which is typically faster and more accurate.\n\n\n\n"
+    "text": "log1p(x)\n\nAccurate natural logarithm of 1+x. Throws DomainError for Real arguments less than -1.\n\nThere is an experimental variant in the Base.Math.JuliaLibm module, which is typically faster and more accurate.\n\nExamples\n\njulia> log1p(-0.5)\n-0.6931471805599453\n\njulia> log1p(0)\n0.0\n\n\n\n"
 },
 
 {
@@ -7685,7 +7685,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.Math.ldexp",
     "category": "Function",
-    "text": "ldexp(x, n)\n\nCompute x times 2^n.\n\njulia> ldexp(5., 2)\n20.0\n\n\n\n"
+    "text": "ldexp(x, n)\n\nCompute x times 2^n.\n\nExample\n\njulia> ldexp(5., 2)\n20.0\n\n\n\n"
 },
 
 {
@@ -7693,7 +7693,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.Math.modf",
     "category": "Function",
-    "text": "modf(x)\n\nReturn a tuple (fpart,ipart) of the fractional and integral parts of a number. Both parts have the same sign as the argument.\n\njulia> modf(3.5)\n(0.5, 3.0)\n\n\n\n"
+    "text": "modf(x)\n\nReturn a tuple (fpart,ipart) of the fractional and integral parts of a number. Both parts have the same sign as the argument.\n\nExample\n\njulia> modf(3.5)\n(0.5, 3.0)\n\n\n\n"
 },
 
 {
@@ -8061,7 +8061,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
+    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
 },
 
 {
@@ -8829,7 +8829,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.Math.significand",
     "category": "Function",
-    "text": "significand(x)\n\nExtract the significand(s) (a.k.a. mantissa), in binary representation, of a floating-point number. If x is a non-zero finite number, then the result will be a number of the same type on the interval 12). Otherwise x is returned.\n\njulia> significand(15.2)/15.2\n0.125\n\njulia> significand(15.2)*8\n15.2\n\n\n\n"
+    "text": "significand(x)\n\nExtract the significand(s) (a.k.a. mantissa), in binary representation, of a floating-point number. If x is a non-zero finite number, then the result will be a number of the same type on the interval 12). Otherwise x is returned.\n\nExamples\n\njulia> significand(15.2)/15.2\n0.125\n\njulia> significand(15.2)*8\n15.2\n\n\n\n"
 },
 
 {
@@ -12237,7 +12237,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.lufact",
     "category": "Function",
-    "text": "lufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ncond ✓ \ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\nlufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\n\n\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "lufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nlufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ncond ✓ \ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\n"
 },
 
 {
