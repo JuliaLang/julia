@@ -844,6 +844,15 @@ function test_intersection()
     _, E = intersection_env(Tuple{Tuple{Vararg{Int}}, Any},
                             Tuple{Union{Base.DimsInteger{N},Base.Indices{N}}, Int} where N)
     @test length(E)==1 && isa(E[1],TypeVar)
+
+    @testintersect(Tuple{Dict{Int,Int}, Ref{Pair{K,V}}} where V where K,
+                   Tuple{Associative{Int,Int}, Ref{Pair{T,T}} where T},
+                   Tuple{Dict{Int,Int}, Ref{Pair{K,K}}} where K)
+
+    # issue #20643
+    @testintersect(Tuple{Ref{Pair{p2,T2}}, Pair{p1,Pair}} where T2 where p2 where p1,
+                   Tuple{Ref{Pair{p3,T3}}, Pair{p3}} where T3 where p3,
+                   Tuple{Ref{Pair{p1,T2}}, Pair{p1,Pair}} where T2 where p1)
 end
 
 function test_intersection_properties()
