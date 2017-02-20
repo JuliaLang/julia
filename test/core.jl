@@ -23,11 +23,11 @@ f47{T}(x::Vector{Vector{T}}) = 0
 # issue #8652
 args_morespecific(a, b) = ccall(:jl_type_morespecific, Cint, (Any,Any), a, b) != 0
 let
-    a = Tuple{Type{T1}, T1} where T1<:Integer
+    a  = Tuple{Type{T1}, T1} where T1<:Integer
     b2 = Tuple{Type{T2}, Integer} where T2<:Integer
     @test args_morespecific(a, b2)
     @test !args_morespecific(b2, a)
-    a = Tuple{Type{T1}, Ptr{T1}} where T1<:Integer
+    a  = Tuple{Type{T1}, Ptr{T1}} where T1<:Integer
     b2 = Tuple{Type{T2}, Ptr{Integer}} where T2<:Integer
     @test args_morespecific(a, b2)
     @test !args_morespecific(b2, a)
@@ -50,6 +50,18 @@ let
     @test !args_morespecific(a, b)
     @test  args_morespecific(b, a)
 end
+
+# another specificity issue
+_z_z_z_(x, y) = 1
+_z_z_z_(::Int, ::Int, ::Vector) = 2
+_z_z_z_(::Int, c...) = 3
+@test _z_z_z_(1, 1, []) == 2
+
+@test  args_morespecific(Tuple{T,Vararg{T}} where T<:Number,  Tuple{Number,Number,Vararg{Number}})
+@test !args_morespecific(Tuple{Number,Number,Vararg{Number}}, Tuple{T,Vararg{T}} where T<:Number)
+
+@test args_morespecific(Tuple{Array{T} where T<:Union{Float32,Float64,Complex64,Complex128}, Any},
+                        Tuple{Array{T} where T<:Real, Any})
 
 # with bound varargs
 

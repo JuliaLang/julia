@@ -31,6 +31,7 @@ eltype{T}(x::Type{Ref{T}}) = T
 convert{T}(::Type{Ref{T}}, x::Ref{T}) = x
 
 # create Ref objects for general object conversion
+unsafe_convert{T}(::Type{Ref{T}}, x::Ref{T}) = unsafe_convert(Ptr{T}, x)
 unsafe_convert{T}(::Type{Ref{T}}, x) = unsafe_convert(Ptr{T}, x)
 
 ### Methods for a Ref object that can store a single value of any type
@@ -107,8 +108,10 @@ function (::Type{Ref{P}}){P<:Union{Ptr,Cwstring,Cstring},T}(a::Array{T}) # Ref{P
         return RefArray(ptrs,1,roots)
     end
 end
-cconvert{P<:Ptr}(::Union{Type{Ptr{P}},Type{Ref{P}}}, a::Array{<:Ptr}) = a
-cconvert{P<:Union{Ptr,Cwstring,Cstring}}(::Union{Type{Ptr{P}},Type{Ref{P}}}, a::Array) = Ref{P}(a)
+cconvert{P<:Ptr}(::Type{Ptr{P}}, a::Array{<:Ptr}) = a
+cconvert{P<:Ptr}(::Type{Ref{P}}, a::Array{<:Ptr}) = a
+cconvert{P<:Union{Ptr,Cwstring,Cstring}}(::Type{Ptr{P}}, a::Array) = Ref{P}(a)
+cconvert{P<:Union{Ptr,Cwstring,Cstring}}(::Type{Ref{P}}, a::Array) = Ref{P}(a)
 
 ###
 
