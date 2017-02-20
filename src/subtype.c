@@ -701,6 +701,17 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             if (x == y) return 1;
             jl_varbinding_t *xx = lookup(e, (jl_tvar_t*)x);
             jl_varbinding_t *yy = lookup(e, (jl_tvar_t*)y);
+            jl_value_t *xub = xx ? xx->ub : ((jl_tvar_t*)x)->ub;
+            jl_value_t *ylb = yy ? yy->lb : ((jl_tvar_t*)y)->lb;
+            if (e->intersection) {
+                jl_value_t *xlb = xx ? xx->lb : ((jl_tvar_t*)x)->lb;
+                jl_value_t *yub = yy ? yy->ub : ((jl_tvar_t*)y)->ub;
+                // find equivalence class for typevars during intersection
+                if (xub == xlb && jl_is_typevar(xub))
+                    return subtype(xub, y, e, param);
+                if (yub == ylb && jl_is_typevar(yub))
+                    return subtype(x, yub, e, param);
+            }
             int xr = xx && xx->right;  // treat free variables as "forall" (left)
             int yr = yy && yy->right;
             if (xr) {
@@ -715,8 +726,6 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
                 if (xx) record_var_occurrence(xx, e, param);
                 return var_gt((jl_tvar_t*)y, x, e, param);
             }
-            jl_value_t *xub = xx ? xx->ub : ((jl_tvar_t*)x)->ub;
-            jl_value_t *ylb = yy ? yy->lb : ((jl_tvar_t*)y)->lb;
             // check ∀x,y . x<:y
             // the bounds of left-side variables never change, and can only lead
             // to other left-side variables, so using || here is safe.
