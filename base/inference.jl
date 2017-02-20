@@ -660,21 +660,27 @@ function type_depth(t::ANY)
     return 0
 end
 
-function limit_type_depth(t::ANY, d::Int, cov::Bool=true, var::Union{Void,TypeVar}=nothing)
+function limit_type_depth(t::ANY, d::Int)
+    r = limit_type_depth(t, d, true, TypeVar[])
+    @assert !isa(t, Type) || t <: r
+    return r
+end
+
+function limit_type_depth(t::ANY, d::Int, cov::Bool, vars::Vector{TypeVar}=TypeVar[])
     if isa(t,Union)
         if d > MAX_TYPE_DEPTH
             return Any
         end
-        return Union{map(x->limit_type_depth(x, d+1, cov, var), (t.a,t.b))...}
+        return Union{map(x->limit_type_depth(x, d+1, cov, vars), (t.a,t.b))...}
     elseif isa(t,UnionAll)
         v = t.var
         if v.ub === Any
             if v.lb === Bottom
-                return UnionAll(t.var, limit_type_depth(t.body, d, cov, var))
+                return UnionAll(t.var, limit_type_depth(t.body, d, cov, vars))
             end
             ub = Any
         else
-            ub = limit_type_depth(v.ub, d+1, true, nothing)
+            ub = limit_type_depth(v.ub, d+1, true)
         end
         if v.lb === Bottom || type_depth(v.lb) > MAX_TYPE_DEPTH
             # note: lower bounds need to be widened by making them lower
@@ -683,7 +689,7 @@ function limit_type_depth(t::ANY, d::Int, cov::Bool=true, var::Union{Void,TypeVa
             lb = v.lb
         end
         v2 = TypeVar(v.name, lb, ub)
-        return UnionAll(v2, limit_type_depth(t{v2}, d, cov, var))
+        return UnionAll(v2, limit_type_depth(t{v2}, d, cov, vars))
     elseif !isa(t,DataType)
         return t
     end
@@ -691,17 +697,19 @@ function limit_type_depth(t::ANY, d::Int, cov::Bool=true, var::Union{Void,TypeVa
     isempty(P) && return t
     if d > MAX_TYPE_DEPTH
         cov && return t.name.wrapper
-        # TODO mutating a TypeVar is not great style
-        var.ub = t.name.wrapper
+        var = TypeVar(:_, t.name.wrapper)
+        push!(vars, var)
         return var
     end
     stillcov = cov && (t.name === Tuple.name)
-    if cov && !stillcov
-        var = TypeVar(:_)
-    end
-    Q = map(x->limit_type_depth(x, d+1, stillcov, var), P)
+    Q = map(x->limit_type_depth(x, d+1, stillcov, vars), P)
     R = t.name.wrapper{Q...}
-    return (cov && !stillcov) ? UnionAll(var, R) : R
+    if cov && !stillcov
+        for var in vars
+            R = UnionAll(var, R)
+        end
+    end
+    return R
 end
 
 const DataType_name_fieldindex = fieldindex(DataType, :name)
