@@ -341,13 +341,13 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
 
     while (1) {
         if (running && bt_size_cur < bt_size_max) {
-			//calculate start time for high precision sleep
-			QueryPerformanceCounter(&StartingTime);
 			//multiply timeout(microseconds) by random factor between 0 and 2
             DWORD timeout = (int)((nsecprof*((double)rand() / (double)RAND_MAX*2.0)/1000));
 			//if timeout is greater than a millisecond use Sleep
 			if (timeout < 1000)
 			{
+				//calculate start time for high precision sleep
+				QueryPerformanceCounter(&StartingTime);
 				int time_elapsed = 0;
 				while (time_elapsed ==0)
 				{	
