@@ -642,3 +642,9 @@ end
 # infinite type growth via lower bounds (formed by intersection)
 f20267(x::T20267{T}, y::T) where (T) = f20267(Any[1][1], x.inds)
 @test Base.return_types(f20267, (Any, Any)) == Any[Union{}]
+
+# issue #20615
+let A = 1:2, z = zip(A, A, A, A, A, A, A, A, A, A, A, A)
+    @test z isa Core.Inference.limit_type_depth(typeof(z), 0)
+    @test start(z) == (1, (1, (1, (1, (1, (1, (1, (1, (1, (1, (1, 1)))))))))))
+end
