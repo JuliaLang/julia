@@ -34,12 +34,26 @@ end
 
 function entrytype(te::GitTreeEntry)
     otype = ccall((:git_tree_entry_type, :libgit2), Cint, (Ptr{Void},), te.ptr)
-    return getobjecttype(otype)
+    return objtype(Consts.OBJECT(otype))
 end
 
 function entryid(te::GitTreeEntry)
-    oid_ptr = ccall((:git_tree_entry_id, :libgit2), Cint, (Ptr{Void},), te.ptr)
-    return GitHash(oid_ptr[])
+    oid_ptr = ccall((:git_tree_entry_id, :libgit2), Ptr{UInt8}, (Ptr{Void},), te.ptr)
+    return GitHash(oid_ptr)
+end
+
+function Base.count(tree::GitTree)
+    return ccall((:git_tree_entrycount, :libgit2), Csize_t, (Ptr{Void},), tree.ptr)
+end
+
+function Base.getindex(tree::GitTree, i::Integer)
+    if i < 1 || i > count(tree)
+        throw(BoundsError(tree, i))
+    end
+    te_ptr = ccall((:git_tree_entry_byindex, :libgit2),
+                   Ptr{Void},
+                   (Ptr{Void}, Csize_t), tree.ptr, i-1)
+    return GitTreeEntry(te_ptr, false)
 end
 
 function (::Type{T}){T<:GitObject}(repo::GitRepo, te::GitTreeEntry)
