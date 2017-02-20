@@ -827,6 +827,7 @@ void jl_add_linfo_in_flight(StringRef name, jl_method_instance_t *linfo, const D
 extern "C"
 jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t *src, size_t world, const jl_cgparams_t *params)
 {
+    // N.B.: `src` may have not been rooted by the caller.
     JL_TIMING(CODEGEN);
     jl_method_instance_t *li = *pli;
     assert(jl_is_method_instance(li));
@@ -836,148 +837,143 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
         !compare_cgparams(params, &jl_default_cgparams) && params->cached)
         jl_error("functions compiled with custom codegen params mustn't be cached");
 
-    // Step 1. See if it is already compiled,
-    //         Get the codegen lock,
-    //         And get the source
-    if (li->def == NULL) {
-        JL_LOCK(&codegen_lock);
-        src = (jl_code_info_t*)li->inferred;
+    // Fast path for the already-compiled case
+    if (li->def != NULL) {
         decls = li->functionObjectsDecls;
-        if (decls.functionObject != NULL || !src || !jl_is_code_info(src) || li->jlcall_api == 2) {
-            JL_UNLOCK(&codegen_lock);
+        bool already_compiled = params->cached && decls.functionObject != NULL;
+        if (!src) {
+            if ((already_compiled || li->jlcall_api == 2) &&
+                (li->min_world <= world && li->max_world >= world)) {
+                return decls;
+            }
+        } else if (already_compiled) {
             return decls;
         }
     }
-    else if (!src) {
-        // Step 1a. If the caller didn't provide the source,
-        //          try to infer it for ourself
-        // first see if it is already compiled
-        decls = li->functionObjectsDecls;
-        if ((params->cached && decls.functionObject != NULL) || li->jlcall_api == 2) {
-            if (li->min_world <= world && li->max_world >= world)
-                return decls;
-        }
-        JL_LOCK(&codegen_lock);
-        assert(li->min_world <= world && li->max_world >= world);
-        decls = li->functionObjectsDecls;
-        if ((params->cached && decls.functionObject != NULL) || li->jlcall_api == 2) {
-            JL_UNLOCK(&codegen_lock);
-            return decls;
-        }
 
-        // see if it is inferred
-        src = (jl_code_info_t*)li->inferred;
-        if (src) {
-            if (!jl_is_code_info(src)) {
-                src = jl_type_infer(pli, world, 0);
-                li = *pli;
-            }
-            if (!src || li->jlcall_api == 2) {
-                JL_UNLOCK(&codegen_lock);
-                return decls;
-            }
-        }
-        else {
-            // declare a failure to compile
-            JL_UNLOCK(&codegen_lock);
-            return decls;
-        }
-    }
-    else {
-        // similar to above, but never returns a NULL
-        // decl (unless compile fails), even if jlcall_api == 2
-        decls = li->functionObjectsDecls;
-        if (params->cached && decls.functionObject != NULL) {
-            return decls;
-        }
-        JL_LOCK(&codegen_lock);
-        decls = li->functionObjectsDecls;
-        if (params->cached && decls.functionObject != NULL) {
-            JL_UNLOCK(&codegen_lock);
-            return decls;
-        }
-    }
     JL_GC_PUSH1(&src);
-    assert(jl_is_code_info(src));
+    JL_LOCK(&codegen_lock);
+    decls = li->functionObjectsDecls;
 
-    // Step 2: setup global state
-    IRBuilderBase::InsertPoint old = builder.saveAndClearIP();
-    DebugLoc olddl = builder.getCurrentDebugLocation();
-    bool last_n_c = nested_compile;
-    if (!nested_compile && dump_compiles_stream != NULL)
-        last_time = jl_hrtime();
-    nested_compile = true;
+    // Codegen lock held in this block
+    {
+        // Step 1: Re-check if this was already compiled (it may have been while
+        // we waited at the lock).
+        if (li->def == NULL) {
+            src = (jl_code_info_t*)li->inferred;
+            if (decls.functionObject != NULL || !src || !jl_is_code_info(src) || li->jlcall_api == 2) {
+                goto locked_out;
+            }
+        }
+        else if (!src) {
+            // If the caller didn't provide the source,
+            // try to infer it for ourself, but first, re-check if it's already compiled.
+            assert(li->min_world <= world && li->max_world >= world);
+            if ((params->cached && decls.functionObject != NULL) || li->jlcall_api == 2)
+                goto locked_out;
 
-    // Step 3. actually do the work of emitting the function
-    std::unique_ptr<Module> m;
-    JL_TRY {
-        jl_llvm_functions_t *pdecls;
-        if (!params->cached)
-            pdecls = &decls;
-        else if (li->min_world <= world && li->max_world >= world)
-            pdecls = &li->functionObjectsDecls;
-        else if (li->def == NULL)
-            pdecls = &li->functionObjectsDecls;
-        else
-            pdecls = &decls;
-        m = emit_function(li, src, world, pdecls, params);
-        if (params->cached && world)
-            decls = li->functionObjectsDecls;
-        //n_emit++;
-    }
-    JL_CATCH {
-        // something failed! this is very bad, since other WIP may be pointing to this function
-        // but there's not much we can do now. try to clear much of the WIP anyways.
-        li->functionObjectsDecls.functionObject = NULL;
-        li->functionObjectsDecls.specFunctionObject = NULL;
-        nested_compile = last_n_c;
+            // see if it is inferred
+            src = (jl_code_info_t*)li->inferred;
+            if (src) {
+                if (!jl_is_code_info(src)) {
+                    src = jl_type_infer(pli, world, 0);
+                    li = *pli;
+                }
+                if (!src || li->jlcall_api == 2)
+                    goto locked_out;
+            }
+            else {
+                // declare a failure to compile
+                goto locked_out;
+            }
+        }
+        else if (params->cached && decls.functionObject != NULL) {
+            // similar to above, but never returns a NULL
+            // decl (unless compile fails), even if jlcall_api == 2
+            goto locked_out;
+        }
+        assert(jl_is_code_info(src));
+
+        // Step 2: setup global state
+        IRBuilderBase::InsertPoint old = builder.saveAndClearIP();
+        DebugLoc olddl = builder.getCurrentDebugLocation();
+        bool last_n_c = nested_compile;
+        if (!nested_compile && dump_compiles_stream != NULL)
+            last_time = jl_hrtime();
+        nested_compile = true;
+
+        // Step 3. actually do the work of emitting the function
+        std::unique_ptr<Module> m;
+        JL_TRY {
+            jl_llvm_functions_t *pdecls;
+            if (!params->cached)
+                pdecls = &decls;
+            else if (li->min_world <= world && li->max_world >= world)
+                pdecls = &li->functionObjectsDecls;
+            else if (li->def == NULL)
+                pdecls = &li->functionObjectsDecls;
+            else
+                pdecls = &decls;
+            m = emit_function(li, src, world, pdecls, params);
+            if (params->cached && world)
+                decls = li->functionObjectsDecls;
+            //n_emit++;
+        }
+        JL_CATCH {
+            // something failed! this is very bad, since other WIP may be pointing to this function
+            // but there's not much we can do now. try to clear much of the WIP anyways.
+            li->functionObjectsDecls.functionObject = NULL;
+            li->functionObjectsDecls.specFunctionObject = NULL;
+            nested_compile = last_n_c;
+            builder.restoreIP(old);
+            builder.SetCurrentDebugLocation(olddl);
+            JL_UNLOCK(&codegen_lock); // Might GC
+            jl_rethrow_with_add("error compiling %s", jl_symbol_name(li->def ? li->def->name : anonymous_sym));
+        }
+        Function *f = (Function*)decls.functionObject;
+        Function *specf = (Function*)decls.specFunctionObject;
+
+
+        if (JL_HOOK_TEST(params, module_activation)) {
+            JL_HOOK_CALL(params, module_activation, 1, jl_box_voidpointer(wrap(m.release())));
+        } else {
+            // Step 4. Prepare debug info to receive this function
+            // record that this function name came from this linfo,
+            // so we can build a reverse mapping for debug-info.
+            bool toplevel = li->def == NULL;
+            if (!toplevel) {
+                const DataLayout &DL =
+    #if JL_LLVM_VERSION >= 30500
+                    m->getDataLayout();
+    #else
+                    *jl_data_layout;
+    #endif
+                // but don't remember toplevel thunks because
+                // they may not be rooted in the gc for the life of the program,
+                // and the runtime doesn't notify us when the code becomes unreachable :(
+                jl_add_linfo_in_flight((specf ? specf : f)->getName(), li, DL);
+            }
+
+            // Step 5. Add the result to the execution engine now
+            jl_finalize_module(m.release(), !toplevel);
+        }
+
+        if (world && li->jlcall_api != 2) {
+            // if not inlineable, code won't be needed again
+            if (JL_DELETE_NON_INLINEABLE && jl_options.debug_level <= 1 &&
+                li->def && li->inferred && jl_is_code_info(li->inferred) &&
+                !((jl_code_info_t*)li->inferred)->inlineable &&
+                li != li->def->unspecialized && !imaging_mode) {
+                li->inferred = jl_nothing;
+            }
+        }
+
+        // Step 6: Done compiling: Restore global state
         builder.restoreIP(old);
         builder.SetCurrentDebugLocation(olddl);
-        JL_UNLOCK(&codegen_lock); // Might GC
-        jl_rethrow_with_add("error compiling %s", jl_symbol_name(li->def ? li->def->name : anonymous_sym));
-    }
-    Function *f = (Function*)decls.functionObject;
-    Function *specf = (Function*)decls.specFunctionObject;
-
-
-    if (JL_HOOK_TEST(params, module_activation)) {
-        JL_HOOK_CALL(params, module_activation, 1, jl_box_voidpointer(wrap(m.release())));
-    } else {
-        // Step 4. Prepare debug info to receive this function
-        // record that this function name came from this linfo,
-        // so we can build a reverse mapping for debug-info.
-        bool toplevel = li->def == NULL;
-        if (!toplevel) {
-            const DataLayout &DL =
-#if JL_LLVM_VERSION >= 30500
-                m->getDataLayout();
-#else
-                *jl_data_layout;
-#endif
-            // but don't remember toplevel thunks because
-            // they may not be rooted in the gc for the life of the program,
-            // and the runtime doesn't notify us when the code becomes unreachable :(
-            jl_add_linfo_in_flight((specf ? specf : f)->getName(), li, DL);
-        }
-
-        // Step 5. Add the result to the execution engine now
-        jl_finalize_module(m.release(), !toplevel);
+        nested_compile = last_n_c;
     }
 
-    if (world && li->jlcall_api != 2) {
-        // if not inlineable, code won't be needed again
-        if (JL_DELETE_NON_INLINEABLE && jl_options.debug_level <= 1 &&
-            li->def && li->inferred && jl_is_code_info(li->inferred) &&
-            !((jl_code_info_t*)li->inferred)->inlineable &&
-            li != li->def->unspecialized && !imaging_mode) {
-            li->inferred = jl_nothing;
-        }
-    }
-
-    // Step 6: Done compiling: Restore global state
-    builder.restoreIP(old);
-    builder.SetCurrentDebugLocation(olddl);
-    nested_compile = last_n_c;
     JL_UNLOCK(&codegen_lock); // Might GC
 
     if (dump_compiles_stream != NULL) {
@@ -987,6 +983,11 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
         jl_printf(dump_compiles_stream, "\"\n");
         last_time = this_time;
     }
+    JL_GC_POP();
+    return decls;
+
+locked_out:
+    JL_UNLOCK(&codegen_lock);
     JL_GC_POP();
     return decls;
 }
