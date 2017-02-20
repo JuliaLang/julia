@@ -248,6 +248,123 @@ julia> rpad("March",20)
 rpad(s, n::Integer, p=" ") = rpad(string(s),n,string(p))
 cpad(s, n::Integer, p=" ") = rpad(lpad(s,div(n+strwidth(s),2),p),n,p)
 
+immutable SplitIterator
+    str::AbstractString
+    splitter
+    limit::Integer
+    keep_empty::Bool
+end
+
+iteratorsize(::Type{SplitIterator}) = SizeUnknown()
+iteratoreltype(::Type{SplitIterator}) = HasEltype()
+eltype(::SplitIterator) = SubString
+
+type SplitIteratorState
+    i::Int
+    j::Int
+    k::Int
+    n::Int
+    s::Int
+end
+
+"""
+    eachsplit(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
+
+Return an iterator of substrings by splitting the given string on occurrences of the given
+character delimiters, which may be specified in any of the formats allowed by `search`'s
+second argument (i.e. a single character, collection of characters, string, or regular
+expression). If `chars` is omitted, it defaults to the set of all space characters, and
+`keep` is taken to be `false`. The two keyword arguments are optional: they are a
+maximum size for the result and a flag determining whether empty fields should be kept in
+the result.
+
+This method is typically slower than `split`, but it does not preemptively allocate an
+array.
+
+```jldoctest
+julia> a = "Ma.rch"
+"Ma.rch"
+
+julia> collect(eachsplit(a,"."))
+2-element Array{SubString{String},1}:
+ "Ma"
+ "rch"
+```
+"""
+function eachsplit(str::AbstractString, splitter; limit::Integer=0, keep::Bool=true)
+    _eachsplit(str, splitter, limit, keep)
+end
+
+eachsplit(str::AbstractString) = _eachsplit(_default_delims; limit=0, keep=false)
+
+function _eachsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool)
+    # Empty string splitter means you want to iterate over the characters
+    splitter == "" ? graphemes(str) : SplitIterator(str, splitter, limit, keep_empty)
+end
+
+function start(iter::SplitIterator)
+    i = start(iter.str)
+    n = endof(iter.str)
+
+    r = search(iter.str, iter.splitter, i)
+    j, k = first(r), nextind(iter.str, last(r))
+
+    # Could not find the splitter in the string
+    if j == 0
+        j = k = nextind(iter.str, n)
+    end
+
+    # Eat the prefix that matches the splitter
+    while !iter.keep_empty && i == j && i <= n
+        i = k
+        r = search(iter.str, iter.splitter, i)
+        j, k = first(r), nextind(iter.str, last(r))
+
+        # Could not find the splitter in the string
+        if j == 0
+            j = k = nextind(iter.str, n)
+        end
+    end
+
+    SplitIteratorState(i, j, k, n, 0)
+end
+
+function done(iter::SplitIterator, state::SplitIteratorState)
+  state.i > state.n || (iter.limit > 0 && state.s == iter.limit)
+end
+
+function next(iter::SplitIterator, state::SplitIteratorState)
+    result = SubString(iter.str, state.i, prevind(iter.str, state.j))
+    # Move our iterator to the next position of a potential substring
+    state.i = state.k
+    state.s += 1
+
+    if done(iter, state)
+        return result, state
+    end
+
+    # Update the state to find the next end point, j, of the next substring
+    r = search(iter.str, iter.splitter, state.i)
+    state.j, state.k = first(r), nextind(iter.str, last(r))
+
+    if state.j == 0
+        state.j = state.k = nextind(iter.str, state.n)
+    end
+
+    while !iter.keep_empty && state.i == state.j && state.i <= state.n
+        state.i = state.k
+        r = search(iter.str, iter.splitter, state.i)
+        state.j, state.k = first(r), nextind(iter.str, last(r))
+
+        # Could not find the splitter in the string
+        if state.j == 0
+            state.j = state.k = nextind(iter.str, state.n)
+        end
+    end
+
+    result, state
+end
+
 # splitter can be a Char, Vector{Char}, AbstractString, Regex, ...
 # any splitter that provides search(s::AbstractString, splitter)
 split{T<:SubString}(str::T, splitter; limit::Integer=0, keep::Bool=true) = _split(str, splitter, limit, keep, T[])

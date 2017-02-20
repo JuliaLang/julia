@@ -77,6 +77,24 @@ end
 #@test isequal(rsplit("a b c"), ["a","b","c"])
 #@test isequal(rsplit("a  b \t c\n"), ["a","b","c"])
 
+@test isequal(collect(eachsplit("foo,bar,baz", 'x')), ["foo,bar,baz"])
+@test isequal(collect(eachsplit("foo,bar,baz", ',')), ["foo","bar","baz"])
+@test isequal(collect(eachsplit("foo,bar,baz", ",")), ["foo","bar","baz"])
+@test isequal(collect(eachsplit("foo,bar,baz", r",")), ["foo","bar","baz"])
+@test isequal(collect(eachsplit("foo,bar,baz", ','; limit=0)), ["foo","bar","baz"])
+@test isequal(collect(eachsplit("foo,bar,baz", ','; limit=1)), ["foo,bar,baz"])
+@test isequal(collect(eachsplit("foo,bar,baz", ','; limit=2)), ["foo","bar,baz"])
+@test isequal(collect(eachsplit("foo,bar,baz", ','; limit=3)), ["foo","bar","baz"])
+@test isequal(collect(eachsplit("foo,bar", "o,b")), ["fo","ar"])
+
+@test isequal(collect(eachsplit("", ',')), [""])
+@test isequal(collect(eachsplit(",", ',')), ["",""])
+@test isequal(collect(eachsplit(",,", ',')), ["","",""])
+@test isequal(collect(eachsplit(",,", ','; limit=2)), [",",""])
+@test isequal(collect(eachsplit("", ','  ; keep=false)), [])
+@test isequal(collect(eachsplit(",", ',' ; keep=false)), [])
+@test isequal(collect(eachsplit(",,", ','; keep=false)), [])
+
 let str = "a.:.ba..:..cba.:.:.dcba.:."
 @test isequal(split(str, ".:."), ["a","ba.",".cba",":.dcba",""])
 @test isequal(split(str, ".:."; keep=false), ["a","ba.",".cba",":.dcba"])
@@ -93,6 +111,14 @@ let str = "a.:.ba..:..cba.:.:.dcba.:."
 @test isequal(rsplit(str, ".:."; limit=4), ["a.:.ba.", ".cba.:", "dcba", ""])
 @test isequal(rsplit(str, ".:."; limit=5), ["a", "ba.", ".cba.:", "dcba", ""])
 @test isequal(rsplit(str, ".:."; limit=6), ["a", "ba.", ".cba.:", "dcba", ""])
+
+@test isequal(collect(eachsplit(str, ".:.")), ["a","ba.",".cba.:","dcba",""])
+@test isequal(collect(eachsplit(str, ".:."; keep=false)), ["a","ba.",".cba.:","dcba"])
+@test isequal(collect(eachsplit(str, ".:."; limit=2)), ["a.:.ba..:..cba.:.:.dcba", ""])
+@test isequal(collect(eachsplit(str, ".:."; limit=3)), ["a.:.ba..:..cba.:", "dcba", ""])
+@test isequal(collect(eachsplit(str, ".:."; limit=4)), ["a.:.ba.", ".cba.:", "dcba", ""])
+@test isequal(collect(eachsplit(str, ".:."; limit=5)), ["a", "ba.", ".cba.:", "dcba", ""])
+@test isequal(collect(eachsplit(str, ".:."; limit=6)), ["a", "ba.", ".cba.:", "dcba", ""])
 end
 
 # zero-width splits
@@ -112,6 +138,21 @@ end
 @test isequal(split("abcd", r"d*"), ["a","b","c",""])
 @test isequal(split("abcd", r"d+"), ["abc",""])
 @test isequal(split("abcd", r"[ad]?"), ["","b","c",""])
+
+@test isequal(collect(eachsplit("", "")), [""])
+@test isequal(collect(eachsplit("", r"")), [""])
+@test isequal(collect(eachsplit("abc", "")), ["a","b","c"])
+@test isequal(collect(eachsplit("abc", r"")), ["a","b","c"])
+@test isequal(collect(eachsplit("abcd", r"b?")), ["a","c","d"])
+@test isequal(collect(eachsplit("abcd", r"b*")), ["a","c","d"])
+@test isequal(collect(eachsplit("abcd", r"b+")), ["a","cd"])
+@test isequal(collect(eachsplit("abcd", r"b?c?")), ["a","d"])
+@test isequal(collect(eachsplit("abcd", r"[bc]?")), ["a","","d"])
+@test isequal(collect(eachsplit("abcd", r"a*")), ["","b","c","d"])
+@test isequal(collect(eachsplit("abcd", r"a+")), ["","bcd"])
+@test isequal(collect(eachsplit("abcd", r"d*")), ["a","b","c",""])
+@test isequal(collect(eachsplit("abcd", r"d+")), ["abc",""])
+@test isequal(collect(eachsplit("abcd", r"[ad]?")), ["","b","c",""])
 
 # replace
 @test replace("\u2202", '*', '\0') == "\u2202"

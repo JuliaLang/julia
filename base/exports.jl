@@ -753,6 +753,7 @@ export
     digits!,
     dump,
     eachmatch,
+    eachsplit,
     endswith,
     escape_string,
     graphemes,
