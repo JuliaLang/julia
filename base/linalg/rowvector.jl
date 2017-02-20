@@ -75,7 +75,6 @@ julia> transpose(v)
 """
 @inline transpose(vec::AbstractVector) = RowVector(vec)
 @inline ctranspose(vec::AbstractVector) = RowVector(_conj(vec))
-@inline ctranspose(vec::AbstractVector{<:Real}) = RowVector(vec)
 
 @inline transpose(rowvec::RowVector) = rowvec.vec
 @inline transpose(rowvec::ConjRowVector) = copy(rowvec.vec) # remove the ConjArray wrapper from any raw vector
