@@ -347,7 +347,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 QueryPerformanceCounter(&StartingTime);
                 int time_elapsed = 0;
                 while (time_elapsed ==0)
-                {    
+                {
                     QueryPerformanceCounter(&EndingTime);
                     ElapsedMicroseconds.QuadPart = EndingTime.QuadPart - StartingTime.QuadPart;
                     ElapsedMicroseconds.QuadPart *= 1000000;
