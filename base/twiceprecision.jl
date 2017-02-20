@@ -210,7 +210,7 @@ function getindex{T}(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, s::Or
     @boundscheck checkbounds(r, s)
     soffset = 1 + round(Int, (r.offset - first(s))/step(s))
     soffset = clamp(soffset, 1, length(s))
-    ioffset = start(s) + (soffset-1)*step(s)
+    ioffset = first(s) + (soffset-1)*step(s)
     if step(s) == 1 || length(s) < 2
         newstep = r.step
     else

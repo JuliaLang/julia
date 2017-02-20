@@ -408,7 +408,11 @@ function checkbounds_linear_indices(::Type{Bool}, IA::Tuple{AbstractUnitRange,Va
     @_inline_meta
     checkindex(Bool, IA[1], i)
 end
-function checkbounds_linear_indices(::Type{Bool}, IA::Tuple, i::Union{Slice,Colon})
+function checkbounds_linear_indices(::Type{Bool}, IA::Tuple{Vararg{OneTo}}, i::Union{Slice,Colon})
+    partial_linear_indexing_warning_lookup(length(IA))
+    true
+end
+function checkbounds_linear_indices(::Type{Bool}, IA::Tuple{AbstractUnitRange,Vararg{AbstractUnitRange}}, i::Union{Slice,Colon})
     partial_linear_indexing_warning_lookup(length(IA))
     true
 end
