@@ -1722,6 +1722,17 @@ end
     @test x[2, 3] == 0.0
 end
 
+@testset "setindex issue #20657" begin
+    A = spzeros(3, 3)
+    I = [1, 1, 1]; J = [1, 1, 1]
+    A[I, 1] = 1
+    @test nnz(A) == 1
+    A[1, J] = 1
+    @test nnz(A) == 1
+    A[I, J] = 1
+    @test nnz(A) == 1
+end
+
 @testset "show" begin
     io = IOBuffer()
     show(io, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
