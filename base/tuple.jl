@@ -114,7 +114,7 @@ end
 
 # Build up the output until it has length N
 _ntuple{F,N}(out::NTuple{N,Any}, f::F, ::Type{Val{N}}) = out
-function _ntuple{F,N,M}(out::NTuple{M}, f::F, ::Type{Val{N}})
+function _ntuple{F,N,M}(out::NTuple{M,Any}, f::F, ::Type{Val{N}})
     @_inline_meta
     _ntuple((out..., f(M+1)), f, Val{N})
 end
