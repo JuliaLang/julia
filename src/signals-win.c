@@ -333,45 +333,46 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
         return 0;
     }
 
-	//Precision timer
-	LARGE_INTEGER StartingTime, EndingTime, ElapsedMicroseconds;
-	LARGE_INTEGER Frequency;
-	QueryPerformanceFrequency(&Frequency);
+    //Precision timer
+    LARGE_INTEGER StartingTime, EndingTime, ElapsedMicroseconds;
+    LARGE_INTEGER Frequency;
+    QueryPerformanceFrequency(&Frequency);
 
 
     while (1) {
         if (running && bt_size_cur < bt_size_max) {
-			//multiply timeout(microseconds) by random factor between 0 and 2
+            
+            //multiply timeout(microseconds) by random factor between 0 and 2
             DWORD timeout = (int)((nsecprof*((double)rand() / (double)RAND_MAX*2.0)/1000));
-			//if timeout is greater than a millisecond use Sleep
-			if (timeout < 1000)
-			{
-				//calculate start time for high precision sleep
-				QueryPerformanceCounter(&StartingTime);
-				int time_elapsed = 0;
-				while (time_elapsed ==0)
-				{	
-					QueryPerformanceCounter(&EndingTime);
-					
-					ElapsedMicroseconds.QuadPart = EndingTime.QuadPart - StartingTime.QuadPart;
-					ElapsedMicroseconds.QuadPart *= 1000000;
-					ElapsedMicroseconds.QuadPart /= Frequency.QuadPart;
+            //if timeout is greater than a millisecond use Sleep
+            if (timeout < 1000)
+            {
+                //calculate start time for high precision sleep
+                QueryPerformanceCounter(&StartingTime);
+                int time_elapsed = 0;
+                while (time_elapsed ==0)
+                {    
+                    QueryPerformanceCounter(&EndingTime);
+                    
+                    ElapsedMicroseconds.QuadPart = EndingTime.QuadPart - StartingTime.QuadPart;
+                    ElapsedMicroseconds.QuadPart *= 1000000;
+                    ElapsedMicroseconds.QuadPart /= Frequency.QuadPart;
 
-					if (ElapsedMicroseconds.QuadPart >= timeout)
-					{
-						time_elapsed = 1;
-					}
-					else
-					{
-						//if time has not elasped offer up processor to another thread
-						Sleep(0);
-					}
-				}
-			}
-			else
-			{
-				Sleep((int)(timeout/1000));
-			}
+                    if (ElapsedMicroseconds.QuadPart >= timeout)
+                    {
+                        time_elapsed = 1;
+                    }
+                    else
+                    {
+                        //if time has not elasped offer up processor to another thread
+                        Sleep(0);
+                    }
+                }
+            }
+            else
+            {
+                Sleep((int)(timeout/1000));
+            }
 
             if ((DWORD)-1 == SuspendThread(hMainThread)) {
                 fputs("failed to suspend main thread. aborting profiling.",stderr);
