@@ -58,9 +58,9 @@ function issorted(itr, order::Ordering)
 end
 
 """
-    issorted(v, by=identity, rev:Bool=false, order::Ordering=Forward)
+    issorted(v, lt=isless, by=identity, rev:Bool=false, order::Ordering=Forward)
 
-Test whether a vector is in sorted order. The `by`, `lt` and `rev` keywords modify what
+Test whether a vector is in sorted order. The `lt`, `by` and `rev` keywords modify what
 order is considered to be sorted just as they do for [`sort`](@ref).
 
 ```jldoctest
