@@ -691,7 +691,7 @@ function limit_type_depth(t::ANY, d::Int, cov::Bool=true, vars::Vector{TypeVar}=
     isempty(P) && return t
     if d > MAX_TYPE_DEPTH
         cov && return t.name.wrapper
-        var = TypeVar(gensym(), t.name.wrapper)
+        var = TypeVar(:_, t.name.wrapper)
         push!(vars, var)
         return var
     end
