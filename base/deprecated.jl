@@ -1278,6 +1278,8 @@ end
 @deprecate_binding LinearSlow IndexCartesian false
 @deprecate_binding linearindexing IndexStyle false
 
+@deprecate isleaftype isconcrete
+
 # END 0.6 deprecations
 
 # BEGIN 1.0 deprecations

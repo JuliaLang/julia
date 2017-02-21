@@ -4170,7 +4170,7 @@ let a = Val{Val{TypeVar(:_, Int)}},
 
     @test !isdefined(a, :instance)
     @test  isdefined(b, :instance)
-    @test isleaftype(b)
+    @test isconcrete(b)
 end
 
 # A return type widened to Type{Union{T,Void}} should not confuse

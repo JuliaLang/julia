@@ -532,13 +532,13 @@ static jl_tupletype_t *join_tsig(jl_tupletype_t *tt, jl_tupletype_t *sig)
             // if the declared type was not Any or Union{Type, ...},
             // then the match must been with UnionAll or DataType
             // and the result of matching the type signature
-            // needs to be corrected to the leaf type 'kind'
+            // needs to be corrected to the concrete type 'kind'
             jl_value_t *kind = jl_typeof(jl_tparam0(elt));
             if (jl_subtype(kind, decl_i)) {
                 if (!jl_subtype((jl_value_t*)jl_type_type, decl_i)) {
                     // UnionAlls are problematic because they can be alternate
                     // representations of any type. If we matched this method because
-                    // it matched the leaf type UnionAll, then don't cache something
+                    // it matched the concrete type UnionAll, then don't cache something
                     // different since that doesn't necessarily actually apply.
                     //
                     // similarly, if we matched Type{T<:Any}::DataType,
@@ -718,7 +718,7 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
             // if the declared type was not Any or Union{Type, ...},
             // then the match must been with TypeConstructor or DataType
             // and the result of matching the type signature
-            // needs to be corrected to the leaf type 'kind'
+            // needs to be corrected to the concrete type 'kind'
             jl_value_t *kind = jl_typeof(jl_tparam0(elt));
             if (kind != (jl_value_t*)jl_tvar_type && jl_subtype(kind, decl_i)) {
                 if (!jl_subtype((jl_value_t*)jl_type_type, decl_i))
@@ -800,7 +800,7 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
                 return 0;
             continue;
         }
-        else if (!jl_is_leaf_type(elt)) {
+        else if (!jl_is_concrete_type(elt)) {
             return 0;
         }
     }
@@ -854,7 +854,7 @@ static jl_method_instance_t *cache_method(jl_methtable_t *mt, union jl_typemap_t
         // then specialize as (Any...)
         //
         // note: this also protects the work join_tsig did to correct `types` for the
-        // leaftype signatures TypeConstructor and DataType
+        // concrete type signatures TypeConstructor and DataType
         // (assuming those made an unlikely appearance in Varargs position)
         size_t j = i;
         int all_are_subtypes = 1;
@@ -1449,7 +1449,7 @@ jl_tupletype_t *arg_type_tuple(jl_value_t **args, size_t nargs)
             else
                 types[i] = jl_typeof(ai);
         }
-        // if `ai` has free type vars this will not be a leaf type.
+        // if `ai` has free type vars this will not be a concrete type.
         // TODO: it would be really nice to only dispatch and cache those as
         // `jl_typeof(ai)`, but that will require some redesign of the caching
         // logic.
@@ -1491,7 +1491,7 @@ jl_method_instance_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_
         JL_UNLOCK(&mt->writelock);
         return linfo;
     }
-    if (jl_is_leaf_type((jl_value_t*)types))
+    if (jl_is_concrete_type((jl_value_t*)types))
         cache = 1;
     jl_method_instance_t *sf = jl_mt_assoc_by_type(mt, types, cache, inexact, allow_exec, world);
     if (cache) {
@@ -1616,7 +1616,7 @@ jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **pli, size_t w
 jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world)
 {
     JL_TIMING(METHOD_LOOKUP_COMPILE);
-    if (!jl_is_leaf_type((jl_value_t*)types) || jl_has_free_typevars((jl_value_t*)types))
+    if (!jl_is_concrete_type((jl_value_t*)types) || jl_has_free_typevars((jl_value_t*)types))
         return NULL;
 
     jl_value_t *args = jl_unwrap_unionall((jl_value_t*)types);
@@ -1734,9 +1734,9 @@ static int _compile_all_tvar_union(jl_tupletype_t *methsig, jl_svec_t *tvars)
         tvs = (jl_tvar_t**)jl_svec_data(tvars);
         tvarslen = jl_svec_len(tvars);
         if (tvarslen == 0) {
-            if (jl_is_leaf_type((jl_value_t*)methsig)) {
+            if (jl_is_concrete_type((jl_value_t*)methsig)) {
                 // usually can create a specialized version of the function,
-                // if the signature is already a leaftype
+                // if the signature is already a concrete type
                 if (jl_compile_hint(methsig)) {
                     return 1;
                 }
@@ -1769,7 +1769,7 @@ static int _compile_all_tvar_union(jl_tupletype_t *methsig, jl_svec_t *tvars)
         if (sig == jl_bottom_type || tupletype_any_bottom(sig)) {
             goto getnext; // signature wouldn't be callable / is invalid -- skip it
         }
-        if (jl_is_leaf_type(sig)) {
+        if (jl_is_concrete_type(sig)) {
             if (jl_compile_hint((jl_tupletype_t*)sig)) {
                 if (!jl_has_typevars((jl_value_t*)sig)) goto getnext; // success
             }
@@ -1789,7 +1789,7 @@ getnext:
                 }
                 else {
                     jl_value_t *ty = jl_svecref(ub->types, j);
-                    if (!jl_is_leaf_type(ty))
+                    if (!jl_is_concrete_type(ty))
                         ty = (jl_value_t*)jl_new_typevar(tv->name, tv->lb, ty);
                     env[2 * i + 1] = ty;
                     idx[i] = j + 1;
@@ -2133,7 +2133,7 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
 
     /*
       search order:
-      check associative hash based on callsite address for leafsig match
+      check associative hash based on callsite address for concrete sig match
       look at concrete signatures
       if there is an exact match, return it
       otherwise look for a matching generic signature
@@ -2169,8 +2169,8 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
         jl_value_t *F = args[0];
         mt = jl_gf_mtable(F);
         entry = jl_typemap_assoc_exact(mt->cache, args, nargs, jl_cachearg_offset(mt), world);
-        if (entry && entry->isleafsig && entry->simplesig == (void*)jl_nothing && entry->guardsigs == jl_emptysvec) {
-            // put the entry into the cache if it's valid for a leaftype lookup,
+        if (entry && entry->isconcretesig && entry->simplesig == (void*)jl_nothing && entry->guardsigs == jl_emptysvec) {
+            // put the entry into the cache if it's valid for a concrete type lookup,
             // using pick_which to slightly randomize where it ends up
             call_cache[cache_idx[++pick_which[cache_idx[0]] & 3]] = entry;
         }
@@ -2326,7 +2326,7 @@ JL_DLLEXPORT jl_value_t *jl_get_invoke_lambda(jl_methtable_t *mt,
                                               jl_tupletype_t *tt,
                                               size_t world)
 {
-    if (!jl_is_leaf_type((jl_value_t*)tt) || tupletype_has_datatype(tt, NULL))
+    if (!jl_is_concrete_type((jl_value_t*)tt) || tupletype_has_datatype(tt, NULL))
         return jl_nothing;
 
     jl_method_t *method = entry->func.method;
@@ -2531,9 +2531,9 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
         // the "limited" mode used by type inference.
         for (i = 0; i < len; i++) {
             jl_value_t *prior_ti = jl_svecref(jl_array_ptr_ref(closure->t, i), 0);
-            // TODO: should be possible to remove the `jl_is_leaf_type` check,
+            // TODO: should be possible to remove the `jl_is_concrete_type` check,
             // but we still need it in case an intersection was approximate.
-            if (jl_is_leaf_type(prior_ti) && jl_subtype(closure->match.ti, prior_ti)) {
+            if (jl_is_concrete_type(prior_ti) && jl_subtype(closure->match.ti, prior_ti)) {
                 skip = 1;
                 break;
             }
@@ -2562,7 +2562,7 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
             // if the queried type is a subtype, but not all tvars matched, then
             // this method is excluded by the static-parameters-must-have-values rule
             if (!matched_all_tvars((jl_value_t*)ml->sig, jl_svec_data(env), jl_svec_len(env)))
-                return_this_match = !jl_is_leaf_type(closure->match.type);
+                return_this_match = !jl_is_concrete_type(closure->match.type);
             else
                 done = 1;  // stop; signature fully covers queried type
         }

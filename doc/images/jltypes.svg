@@ -281,7 +281,7 @@
 	<rect x="656.534" y="492.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="207" height="157"/>
 	<text transform="matrix(1 0 0 1 659.8589 510.583)" font-family="'SourceSansPro-Regular'" font-size="18">valid as type tags</text>
 	<rect x="663.034" y="517.597" fill="none" width="205.664" height="129.946"/>
-	<text transform="matrix(1 0 0 1 663.0342 526.1406)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="12"> - has uid assigned</tspan><tspan x="0" y="14.4" font-family="'SourceSansPro-Regular'" font-size="12"> - not an abstract type</tspan><tspan x="0" y="28.8" font-family="'SourceSansPro-Regular'" font-size="12"> - none of the direct type parameters</tspan><tspan x="0" y="43.2" font-family="'SourceSansPro-Regular'" font-size="12">are a TypeVar</tspan><tspan x="0" y="57.6" font-family="'SourceSansPro-Regular'" font-size="12"> - no type parameter is a bound </tspan><tspan x="0" y="72" font-family="'SourceSansPro-Regular'" font-size="12">TypeVar*, recursively tested</tspan><tspan x="0" y="86.4" font-family="'SourceSansPro-Regular'" font-size="12"> - if this is a Tuple type, then there is an </tspan><tspan x="0" y="100.8" font-family="'SourceSansPro-Regular'" font-size="12">additional restriction that all type </tspan><tspan x="0" y="115.2" font-family="'SourceSansPro-Regular'" font-size="12">parameters are leaf types</tspan></text>
+	<text transform="matrix(1 0 0 1 663.0342 526.1406)"><tspan x="0" y="0" font-family="'SourceSansPro-Regular'" font-size="12"> - has uid assigned</tspan><tspan x="0" y="14.4" font-family="'SourceSansPro-Regular'" font-size="12"> - not an abstract type</tspan><tspan x="0" y="28.8" font-family="'SourceSansPro-Regular'" font-size="12"> - none of the direct type parameters</tspan><tspan x="0" y="43.2" font-family="'SourceSansPro-Regular'" font-size="12">are a TypeVar</tspan><tspan x="0" y="57.6" font-family="'SourceSansPro-Regular'" font-size="12"> - no type parameter is a bound </tspan><tspan x="0" y="72" font-family="'SourceSansPro-Regular'" font-size="12">TypeVar*, recursively tested</tspan><tspan x="0" y="86.4" font-family="'SourceSansPro-Regular'" font-size="12"> - if this is a Tuple type, then there is an </tspan><tspan x="0" y="100.8" font-family="'SourceSansPro-Regular'" font-size="12">additional restriction that all type </tspan><tspan x="0" y="115.2" font-family="'SourceSansPro-Regular'" font-size="12">parameters are concrete types</tspan></text>
 </g>
 <g>
 	<rect x="519.534" y="492.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="126" height="34"/>
@@ -333,7 +333,7 @@
 </g>
 <g>
 	<rect x="598.534" y="405.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="102" height="60"/>
-	<text transform="matrix(1 0 0 1 608.4956 424.5967)" font-family="'SourceSansPro-Regular'" font-size="18">is leaf type</text>
+	<text transform="matrix(1 0 0 1 608.4956 424.5967)" font-family="'SourceSansPro-Regular'" font-size="18">is concrete type</text>
 </g>
 <g>
 	<rect x="900.534" y="630.097" fill="#FFFFFF" stroke="#000000" stroke-miterlimit="10" width="144" height="37"/>

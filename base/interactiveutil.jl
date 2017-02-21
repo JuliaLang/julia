@@ -315,8 +315,8 @@ versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 
 Prints lowered and type-inferred ASTs for the methods matching the given generic function
 and type signature to `io` which defaults to `STDOUT`. The ASTs are annotated in such a way
-as to cause "non-leaf" types to be emphasized (if color is available, displayed in red).
-This serves as a warning of potential type instability. Not all non-leaf types are particularly
+as to cause non-concrete types to be emphasized (if color is available, displayed in red).
+This serves as a warning of potential type instability. Not all non-concrete types are particularly
 problematic for performance, so the results need to be used judiciously.
 See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
@@ -502,7 +502,7 @@ Evaluates the arguments to the function or macro call, determines their types, a
 function type_close_enough(x::ANY, t::ANY)
     x == t && return true
     return (isa(x,DataType) && isa(t,DataType) && x.name === t.name &&
-            !isleaftype(t) && x <: t) ||
+            !isconcrete(t) && x <: t) ||
            (isa(x,Union) && isa(t,DataType) && (type_close_enough(x.a, t) || type_close_enough(x.b, t)))
 end
 

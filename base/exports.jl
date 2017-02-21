@@ -979,7 +979,7 @@ export
     fieldoffset,
     fieldname,
     fieldnames,
-    isleaftype,
+    isconcrete,
     oftype,
     promote,
     promote_rule,

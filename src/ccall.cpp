@@ -549,7 +549,7 @@ static Value *julia_to_address(Type *to, jl_value_t *jlto, jl_unionall_t *jlto_e
                 // yes copy
                 Value *nbytes;
                 AllocaInst *ai;
-                if (jl_is_leaf_type(ety) || jl_is_primitivetype(ety)) {
+                if (jl_is_concrete_type(ety) || jl_is_primitivetype(ety)) {
                     int nb = jl_datatype_size(ety);
                     nbytes = ConstantInt::get(T_int32, nb);
                     ai = emit_static_alloca(T_int8, nb, ctx);
@@ -1188,8 +1188,8 @@ static jl_cgval_t mark_or_box_ccall_result(Value *result, bool isboxed, jl_value
     if (!static_rt) {
         assert(!isboxed && ctx->spvals_ptr && unionall && jl_is_datatype(rt));
         Value *runtime_dt = runtime_apply_type(rt, unionall, ctx);
-        // TODO: is this leaf check actually necessary, or is it structurally guaranteed?
-        emit_leafcheck(runtime_dt, "ccall: return type must be a leaf DataType", ctx);
+        // TODO: is this concrete check actually necessary, or is it structurally guaranteed?
+        emit_concrete_check(runtime_dt, "ccall: return type must be a concrete DataType", ctx);
 #if JL_LLVM_VERSION >= 30600
         const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
 #else
@@ -1430,11 +1430,11 @@ static const std::string verify_ccall_sig(size_t nargs, jl_value_t *&rt, jl_valu
     }
 
     if (!retboxed && static_rt) {
-        if (!jl_is_leaf_type(rt)) {
+        if (!jl_is_concrete_type(rt)) {
             if (jl_is_cpointer_type(rt))
                 return "ccall: return type Ptr should have an element type (not Ptr{_<:T})";
             else if (rt != jl_bottom_type)
-                return "ccall: return type must be a leaf DataType";
+                return "ccall: return type must be a concrete DataType";
         }
     }
 
@@ -1681,17 +1681,17 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         builder.SetInsertPoint(contBB);
         return ghostValue(jl_void_type);
     }
-    if (fptr == (void(*)(void))&jl_is_leaf_type ||
+    if (fptr == (void(*)(void))&jl_is_concrete_type ||
         ((f_lib==NULL || (intptr_t)f_lib==2)
-         && f_name && !strcmp(f_name, "jl_is_leaf_type"))) {
+         && f_name && !strcmp(f_name, "jl_is_concrete_type"))) {
         assert(nargt == 1);
         assert(!isVa && !llvmcall);
         jl_value_t *arg = args[4];
         jl_value_t *ty = expr_type(arg, ctx);
         if (jl_is_type_type(ty) && !jl_is_typevar(jl_tparam0(ty))) {
-            int isleaf = jl_is_leaf_type(jl_tparam0(ty));
+            int isconcrete = jl_is_concrete_type(jl_tparam0(ty));
             JL_GC_POP();
-            return mark_or_box_ccall_result(ConstantInt::get(T_int32, isleaf),
+            return mark_or_box_ccall_result(ConstantInt::get(T_int32, isconcrete),
                     false, rt, unionall, static_rt, ctx);
         }
     }
@@ -1717,7 +1717,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 if (jl_is_type_type((jl_value_t*)fargt))
                     fargt = jl_tparam0(fargt);
             }
-            if (jl_is_tuple_type(fargt) && jl_is_leaf_type(fargt)) {
+            if (jl_is_tuple_type(fargt) && jl_is_concrete_type(fargt)) {
                 frt = jl_tparam0(frt);
                 Value *llvmf = NULL;
                 JL_TRY {
@@ -1831,7 +1831,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         jl_cgval_t &arg = argv[ai];
 
         // if we know the function sparams, try to fill those in now
-        // so that the julia_to_native type checks are more likely to be doable (e.g. leaf types) at compile-time
+        // so that the julia_to_native type checks are more likely to be doable (e.g. concrete types) at compile-time
         jl_value_t *jargty_in_env = jargty;
         if (ctx->spvals_ptr == NULL && !toboxed && unionall_env && jl_has_typevar_from_unionall(jargty, unionall_env)) {
             jargty_in_env = jl_instantiate_type_in_env(jargty_in_env, unionall_env, jl_svec_data(ctx->linfo->sparam_vals));

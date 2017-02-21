@@ -193,8 +193,8 @@ end
 end
 let
     ast12474 = code_typed(f12474, Tuple{Float64})
-    @test isleaftype(ast12474[1][2])
-    @test all(isleaftype, ast12474[1][1].slottypes)
+    @test isconcrete(ast12474[1][2])
+    @test all(isconcrete, ast12474[1][1].slottypes)
 end
 
 
@@ -226,7 +226,7 @@ bar7810() = [Foo7810([(a,b) for a in 1:2]) for b in 3:4]
 
 # issue #11366
 f11366{T}(x::Type{Ref{T}}) = Ref{x}
-@test !isleaftype(Base.return_types(f11366, (Any,))[1])
+@test !isconcrete(Base.return_types(f11366, (Any,))[1])
 
 
 let f(T) = Type{T}
@@ -442,10 +442,10 @@ function is_typed_expr(e::Expr)
     return false
 end
 test_inferred_static(other::ANY) = true
-test_inferred_static(slot::TypedSlot) = @test isleaftype(slot.typ)
+test_inferred_static(slot::TypedSlot) = @test isconcrete(slot.typ)
 function test_inferred_static(expr::Expr)
     if is_typed_expr(expr)
-        @test isleaftype(expr.typ)
+        @test isconcrete(expr.typ)
     end
     for a in expr.args
         test_inferred_static(a)
@@ -453,10 +453,10 @@ function test_inferred_static(expr::Expr)
 end
 function test_inferred_static(arrow::Pair)
     code, rt = arrow
-    @test isleaftype(rt)
+    @test isconcrete(rt)
     @test code.inferred
-    @test all(x->isleaftype(x), code.slottypes)
-    @test all(x->isleaftype(x), code.ssavaluetypes)
+    @test all(x->isconcrete(x), code.slottypes)
+    @test all(x->isconcrete(x), code.ssavaluetypes)
     for e in code.code
         test_inferred_static(e)
     end

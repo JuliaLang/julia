@@ -347,7 +347,7 @@ const _Type_name = Type.body.name
 isType(t::ANY) = isa(t, DataType) && (t::DataType).name === _Type_name
 
 # true if Type is inlineable as constant (is a singleton)
-isconstType(t::ANY) = isType(t) && (isleaftype(t.parameters[1]) || t.parameters[1] === Union{})
+isconstType(t::ANY) = isType(t) && (isconcrete(t.parameters[1]) || t.parameters[1] === Union{})
 
 const IInf = typemax(Int) # integer infinity
 const n_ifunc = reinterpret(Int32,arraylen)+1
@@ -544,7 +544,7 @@ add_tfunc(nfields, 1, 1,
         isa(x,Const) && return Const(nfields(x.val))
         isa(x,Conditional) && return Const(nfields(Bool))
         if isType(x)
-            isleaftype(x.parameters[1]) && return Const(nfields(x.parameters[1]))
+            isconcrete(x.parameters[1]) && return Const(nfields(x.parameters[1]))
         elseif isa(x,DataType) && !x.abstract && !(x.name === Tuple.name && isvatuple(x))
             return Const(length(x.types))
         end
@@ -578,13 +578,13 @@ function typeof_tfunc(t::ANY)
         return Const(Bool)
     elseif isType(t)
         tp = t.parameters[1]
-        if !isleaftype(tp)
+        if !isconcrete(tp)
             return DataType # typeof(Kind::Type)::DataType
         else
             return Const(typeof(tp)) # XXX: this is not necessarily true
         end
     elseif isa(t, DataType)
-        if isleaftype(t) || isvarargtype(t)
+        if isconcrete(t) || isvarargtype(t)
             return Const(t)
         elseif t === Any
             return DataType
@@ -625,11 +625,11 @@ add_tfunc(isa, 2, 2,
               if t !== Any && !has_free_typevars(t)
                   if v ⊑ t
                       return Const(true)
-                  elseif isa(v, Const) || isa(v, Conditional) || isleaftype(v)
+                  elseif isa(v, Const) || isa(v, Conditional) || isconcrete(v)
                       return Const(false)
                   end
               end
-              # TODO: handle non-leaftype(t) by testing against lower and upper bounds
+              # TODO: handle non-concrete t by testing against lower and upper bounds
               return Bool
           end)
 add_tfunc(issubtype, 2, 2,
@@ -739,7 +739,7 @@ function getfield_tfunc(s00::ANY, name)
     s = unwrap_unionall(s00)
     if isType(s)
         p1 = s.parameters[1]
-        if !isleaftype(p1)
+        if !isconcrete(p1)
             return Any
         end
         s = DataType # typeof(p1)
@@ -826,7 +826,7 @@ function getfield_tfunc(s00::ANY, name)
     if fld < 1 || fld > nf
         return Bottom
     end
-    if isType(s00) && isleaftype(s00.parameters[1])
+    if isType(s00) && isconcrete(s00.parameters[1])
         sp = s00.parameters[1]
     elseif isa(s00, Const) && isa(s00.val, DataType)
         sp = s00.val
@@ -926,7 +926,7 @@ has_free_typevars(t::ANY) = ccall(:jl_has_free_typevars, Cint, (Any,), t)!=0
 function apply_type_tfunc(headtypetype::ANY, args::ANY...)
     if isa(headtypetype, Const)
         headtype = headtypetype.val
-    elseif isType(headtypetype) && isleaftype(headtypetype.parameters[1])
+    elseif isType(headtypetype) && isconcrete(headtypetype.parameters[1])
         headtype = headtypetype.parameters[1]
     else
         return Any
@@ -949,7 +949,7 @@ function apply_type_tfunc(headtypetype::ANY, args::ANY...)
             ai = args[i]
             if isType(ai)
                 aty = ai.parameters[1]
-                isleaftype(aty) || (allconst = false)
+                isconcrete(aty) || (allconst = false)
             else
                 aty = (ai::Const).val
             end
@@ -970,7 +970,7 @@ function apply_type_tfunc(headtypetype::ANY, args::ANY...)
         ai = args[i]
         if isType(ai)
             aip1 = ai.parameters[1]
-            canconst &= isleaftype(aip1)
+            canconst &= isconcrete(aip1)
             push!(tparams, aip1)
         elseif isa(ai, Const) && (isa(ai.val, Type) || isa(ai.val, TypeVar) || valid_tparam(ai.val))
             push!(tparams, ai.val)
@@ -1045,7 +1045,7 @@ add_tfunc(apply_type, 1, IInf, apply_type_tfunc)
 end
 
 function invoke_tfunc(f::ANY, types::ANY, argtype::ANY, sv::InferenceState)
-    if !isleaftype(Type{types})
+    if !isconcrete(Type{types})
         return Any
     end
     argtype = typeintersect(types,limit_tuple_type(argtype, sv.params))
@@ -1513,7 +1513,7 @@ function return_type_tfunc(argtypes::ANY, vtypes::VarTable, sv::InferenceState)
         if isa(tt, Const) || (isType(tt) && !has_free_typevars(tt))
             aft = argtypes[2]
             if isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
-                   (isleaftype(aft) && !(aft <: Builtin) && !(aft <: IntrinsicFunction))
+                   (isconcrete(aft) && !(aft <: Builtin) && !(aft <: IntrinsicFunction))
                 af_argtype = isa(tt, Const) ? tt.val : tt.parameters[1]
                 if isa(af_argtype, DataType) && af_argtype <: Tuple
                     argtypes_vec = Any[aft, af_argtype.parameters...]
@@ -1527,7 +1527,7 @@ function return_type_tfunc(argtypes::ANY, vtypes::VarTable, sv::InferenceState)
                     if isa(rt, Const)
                         # output was computed to be constant
                         return Const(typeof(rt.val))
-                    elseif isleaftype(rt)
+                    elseif isconcrete(rt)
                         # output type was known for certain
                         return Const(rt)
                     elseif (isa(tt, Const) || isconstType(tt)) &&
@@ -1614,9 +1614,9 @@ function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vect
         if isa(aft, Const)
             af = aft.val
         else
-            if isType(aft) && isleaftype(aft.parameters[1])
+            if isType(aft) && isconcrete(aft.parameters[1])
                 af = aft.parameters[1]
-            elseif isleaftype(aft) && isdefined(aft, :instance)
+            elseif isconcrete(aft) && isdefined(aft, :instance)
                 af = aft.instance
             else
                 # TODO jb/functions: take advantage of case where non-constant `af`'s type is known
@@ -1847,9 +1847,9 @@ function abstract_eval_call(e::Expr, vtypes::VarTable, sv::InferenceState)
     if isa(ft, Const)
         f = ft.val
     else
-        if isType(ft) && isleaftype(ft.parameters[1])
+        if isType(ft) && isconcrete(ft.parameters[1])
             f = ft.parameters[1]
-        elseif isleaftype(ft) && isdefined(ft, :instance)
+        elseif isconcrete(ft) && isdefined(ft, :instance)
             f = ft.instance
         else
             for i = 2:(length(argtypes)-1)
@@ -1858,7 +1858,7 @@ function abstract_eval_call(e::Expr, vtypes::VarTable, sv::InferenceState)
                 end
             end
             # non-constant function, but type is known
-            if (isleaftype(ft) || ft <: Type) && !(ft <: Builtin) && !(ft <: IntrinsicFunction)
+            if (isconcrete(ft) || ft <: Type) && !(ft <: Builtin) && !(ft <: IntrinsicFunction)
                 return abstract_call_gf_by_type(nothing, argtypes_to_type(argtypes), sv)
             end
             return Any
@@ -2370,7 +2370,7 @@ function code_for_method(method::Method, atypes::ANY, sparams::SimpleVector, wor
     if world < min_world(method) || world > max_world(method)
         return nothing
     end
-    if method.isstaged && !isleaftype(atypes)
+    if method.isstaged && !isconcrete(atypes)
         # don't call staged functions on abstract types.
         # (see issues #8504, #10230)
         # we can't guarantee that their type behavior is monotonic.
@@ -3397,7 +3397,7 @@ function effect_free(e::ANY, src::CodeInfo, mod::Module, allow_volatile::Bool)
                         return false
                     elseif is_known_call(e, getfield, src, mod)
                         et = exprtype(e, src, mod)
-                        if !isa(et,Const) && !(isType(et) && isleaftype(et))
+                        if !isa(et,Const) && !(isType(et) && isconcrete(et))
                             # first argument must be immutable to ensure e is affect_free
                             a = ea[2]
                             typ = widenconst(exprtype(a, src, mod))
@@ -3635,7 +3635,7 @@ end
 
 # inline functions whose bodies are "inline_worthy"
 # where the function body doesn't contain any argument more than once.
-# static parameters are ok if all the static parameter values are leaf types,
+# static parameters are ok if all the static parameter values are concrete types,
 # meaning they are fully known.
 # `ft` is the type of the function. `f` is the exact function if known, or else `nothing`.
 function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::InferenceState)
@@ -3643,7 +3643,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
 
     if (f === typeassert || ft ⊑ typeof(typeassert)) && length(atypes)==3
         # typeassert(x::S, T) => x, when S<:T
-        if isType(atypes[3]) && isleaftype(atypes[3]) &&
+        if isType(atypes[3]) && isconcrete(atypes[3]) &&
             atypes[2] ⊑ atypes[3].parameters[1]
             return (argexprs[2], ())
         end
@@ -3667,7 +3667,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     if f === Core.invoke && length(atypes) >= 3
         ft = widenconst(atypes[2])
         invoke_tt = widenconst(atypes[3])
-        if !isleaftype(ft) || !isleaftype(invoke_tt) || !isType(invoke_tt)
+        if !isconcrete(ft) || !isconcrete(invoke_tt) || !isType(invoke_tt)
             return NF
         end
         if !(isa(invoke_tt.parameters[1], Type) &&
@@ -4333,7 +4333,7 @@ function inlining_pass(e::Expr, sv::InferenceState)
         ft = Bool
     else
         f = nothing
-        if !( isleaftype(ft) || ft<:Type )
+        if !( isconcrete(ft) || ft<:Type )
             return (e, stmts)
         end
     end
@@ -4438,7 +4438,7 @@ function inlining_pass(e::Expr, sv::InferenceState)
                 ft = Bool
             else
                 f = nothing
-                if !( isleaftype(ft) || ft<:Type )
+                if !( isconcrete(ft) || ft<:Type )
                     return (e,stmts)
                 end
             end
@@ -4950,7 +4950,7 @@ function is_allocation(e::ANY, sv::InferenceState)
         return (length(e.args)-1,())
     elseif e.head === :new
         typ = widenconst(exprtype(e, sv.src, sv.mod))
-        if isa(typ, DataType) && isleaftype(typ)
+        if isa(typ, DataType) && isconcrete(typ)
             nf = length(e.args) - 1
             names = fieldnames(typ)
             @assert(nf <= nfields(typ))

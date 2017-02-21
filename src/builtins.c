@@ -256,7 +256,7 @@ JL_CALLABLE(jl_f_sizeof)
             jl_error("type does not have a canonical binary representation");
         if (!(dx->name->names == jl_emptysvec && jl_datatype_size(dx) > 0)) {
             // names===() and size > 0  =>  bitstype, size always known
-            if (dx->abstract || !jl_is_leaf_type(x))
+            if (dx->abstract || !jl_is_concrete_type(x))
                 jl_error("argument is an abstract type; size is indeterminate");
         }
         return jl_box_long(jl_datatype_size(x));

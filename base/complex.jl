@@ -885,7 +885,7 @@ big(z::Complex{<:Integer}) = Complex{BigInt}(z)
 complex(A::AbstractArray{<:Complex}) = A
 
 function complex{T}(A::AbstractArray{T})
-    if !isleaftype(T)
+    if !isconcrete(T)
         error("`complex` not defined on abstractly-typed arrays; please convert to a more specific type")
     end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)

@@ -197,9 +197,9 @@ static int obviously_unequal(jl_value_t *a, jl_value_t *b)
 {
     if (a == b)
         return 0;
-    if (jl_is_leaf_type(a) && !((jl_datatype_t*)a)->abstract)
+    if (jl_is_concrete_type(a) && !((jl_datatype_t*)a)->abstract)
         return 1;
-    if (jl_is_leaf_type(b) && !((jl_datatype_t*)b)->abstract)
+    if (jl_is_concrete_type(b) && !((jl_datatype_t*)b)->abstract)
         return 1;
     if (jl_is_unionall(a)) a = jl_unwrap_unionall(a);
     if (jl_is_unionall(b)) b = jl_unwrap_unionall(b);
@@ -398,7 +398,7 @@ static int is_leaf_bound(jl_value_t *v)
 {
     if (v == jl_bottom_type) return 1;
     if (jl_is_datatype(v)) {
-        if (((jl_datatype_t*)v)->isleaftype) return 1;
+        if (((jl_datatype_t*)v)->isconcrete) return 1;
         if (((jl_datatype_t*)v)->abstract) {
             if (jl_is_type_type(v))
                 return 1;//!jl_has_free_typevars(jl_tparam0(v));
@@ -634,7 +634,7 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
         }
         if (xi == lastx &&
             ((yi == lasty && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) ||
-             (yi == lasty && !vx && vy && jl_is_leaf_type(xi)))) {
+             (yi == lasty && !vx && vy && jl_is_concrete_type(xi)))) {
             // fast path for repeated elements
         }
         else if (e->Runions.depth == 0 && e->Lunions.depth == 0 && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) {
@@ -755,7 +755,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
                 // TODO this is not strictly correct, but we don't yet have any other way for
                 // e.g. the argument `Int` to match a `::DataType` slot. Most correct would be:
                 // Int isa DataType, Int isa Type{Int}, Type{Int} more specific than DataType,
-                // !(Type{Int} <: DataType), !isleaftype(Type{Int}), because non-DataTypes can
+                // !(Type{Int} <: DataType), !isconcrete(Type{Int}), because non-DataTypes can
                 // be type-equal to `Int`.
                 return jl_typeof(tp0) == (jl_value_t*)yd;
             }
@@ -1007,7 +1007,7 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
         if (t == (jl_value_t*)jl_type_type)
             return 1;
         if (!jl_has_free_typevars(x)) {
-            if (jl_is_leaf_type(t)) {
+            if (jl_is_concrete_type(t)) {
                 if (jl_is_type_type(t))
                     return jl_types_equal(x, jl_tparam0(t));
                 return 0;
@@ -1039,7 +1039,7 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
             return 0;
         }
     }
-    if (jl_is_leaf_type(t))
+    if (jl_is_concrete_type(t))
         return 0;
     return jl_subtype(jl_typeof(x), t);
 }
@@ -1913,7 +1913,7 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         *ans = b;
     }
     else {
-        int lta = jl_is_leaf_type(a), ltb = jl_is_leaf_type(b);
+        int lta = jl_is_concrete_type(a), ltb = jl_is_concrete_type(b);
         if (lta && ltb)
             goto bot;
         jl_stenv_t e;
@@ -1933,10 +1933,10 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         else {
             sz = szb;
             // TODO: compute better `env` directly during intersection.
-            // we assume that if the intersection is a leaf type, we have
+            // we assume that if the intersection is a concrete type, we have
             // full information in `env`. however the intersection algorithm
             // does not yet provide that in all cases so use subtype.
-            if (szb > 0 && jl_is_leaf_type(*ans) && !jl_types_equal(b, (jl_value_t*)jl_type_type)) {
+            if (szb > 0 && jl_is_concrete_type(*ans) && !jl_types_equal(b, (jl_value_t*)jl_type_type)) {
                 if (jl_subtype_env(*ans, b, env, szb)) {
                     for(i=0; i < sz; i++) {
                         if (jl_is_typevar(env[i])) {

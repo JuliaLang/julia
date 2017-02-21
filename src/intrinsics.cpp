@@ -459,7 +459,7 @@ static jl_cgval_t generic_bitcast(const jl_cgval_t *argv, jl_codectx_t *ctx)
             vx = emit_bitcast(vx, llvmt);
     }
 
-    if (jl_is_leaf_type(bt))
+    if (jl_is_concrete_type(bt))
         return mark_julia_type(vx, false, bt, ctx);
     else
         return mark_julia_type(
@@ -605,7 +605,7 @@ static jl_cgval_t emit_pointerref(jl_cgval_t *argv, jl_codectx_t *ctx)
                     true,
                     ety, ctx);
         }
-        if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_leaf_type(ety)) {
+        if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_concrete_type(ety)) {
             emit_error("pointerref: invalid pointer type", ctx);
             return jl_cgval_t();
         }
@@ -666,7 +666,7 @@ static jl_cgval_t emit_pointerset(jl_cgval_t *argv, jl_codectx_t *ctx)
 
     Value *thePtr;
     if (!jl_isbits(ety) && ety != (jl_value_t*)jl_any_type) {
-        if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_leaf_type(ety)) {
+        if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_concrete_type(ety)) {
             emit_error("pointerset: invalid pointer type", ctx);
             return jl_cgval_t();
         }

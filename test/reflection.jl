@@ -29,7 +29,7 @@ end
 function test_code_reflections(tester, freflect)
     test_code_reflection(freflect, ismatch,
                          Tuple{Regex, AbstractString}, tester) # abstract type
-    test_code_reflection(freflect, +, Tuple{Int, Int}, tester) # leaftype signature
+    test_code_reflection(freflect, +, Tuple{Int, Int}, tester) # concrete type signature
     test_code_reflection(freflect, +,
                          Tuple{Array{Float32}, Array{Float32}}, tester) # incomplete types
     test_code_reflection(freflect, Module, Tuple{}, tester) # Module() constructor (transforms to call)
@@ -133,11 +133,11 @@ end
 @test isbits(Tuple{Vararg{Any, 0}})
 
 # issue #16670
-@test isleaftype(Tuple{Int, Vararg{Int, 2}})
-@test !isleaftype(Tuple{Integer, Vararg{Int, 2}})
-@test !isleaftype(Tuple{Int, Vararg{Int}})
-@test isleaftype(Type{Tuple{Integer, Vararg{Int}}})
-@test isleaftype(Type{Vector})
+@test isconcrete(Tuple{Int, Vararg{Int, 2}})
+@test !isconcrete(Tuple{Integer, Vararg{Int, 2}})
+@test !isconcrete(Tuple{Int, Vararg{Int}})
+@test isconcrete(Type{Tuple{Integer, Vararg{Int}}})
+@test isconcrete(Type{Vector})
 
 # issue #10165
 i10165(::Type) = 0

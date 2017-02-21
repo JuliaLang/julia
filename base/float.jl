@@ -848,7 +848,7 @@ truncmask(x, mask) = x
 float(A::AbstractArray{<:AbstractFloat}) = A
 
 function float{T}(A::AbstractArray{T})
-    if !isleaftype(T)
+    if !isconcrete(T)
         error("`float` not defined on abstractly-typed arrays; please convert to a more specific type")
     end
     convert(AbstractArray{typeof(float(zero(T)))}, A)

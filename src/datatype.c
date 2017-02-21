@@ -85,7 +85,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     jl_datatype_t *t = (jl_datatype_t*)jl_gc_alloc(ptls, sizeof(jl_datatype_t), jl_datatype_type);
     t->depth = 0;
     t->hasfreetypevars = 0;
-    t->isleaftype = 1;
+    t->isconcrete = 1;
     t->layout = NULL;
     return t;
 }
@@ -228,7 +228,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     for (size_t i = 0; i < nfields; i++) {
         jl_value_t *ty = jl_field_type(st, i);
         size_t fsz, al;
-        if (jl_isbits(ty) && jl_is_leaf_type(ty) && ((jl_datatype_t*)ty)->layout) {
+        if (jl_isbits(ty) && jl_is_concrete_type(ty) && ((jl_datatype_t*)ty)->layout) {
             fsz = jl_datatype_size(ty);
             // Should never happen
             if (__unlikely(fsz > max_size))
@@ -358,7 +358,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
     }
     else {
         t->uid = jl_assign_type_uid();
-        if (t->types != NULL && t->isleaftype) {
+        if (t->types != NULL && t->isconcrete) {
             static const jl_datatype_layout_t singleton_layout = {0, 1, 0, 0, 0};
             if (fnames == jl_emptysvec)
                 t->layout = &singleton_layout;
@@ -732,7 +732,7 @@ JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
 JL_DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
 {
     if (ty->layout == NULL)
-        jl_error("non-leaf type doesn't have an alignment");
+        jl_error("non-concrete type doesn't have an alignment");
     return ty->layout->alignment;
 }
 

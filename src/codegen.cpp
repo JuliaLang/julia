@@ -453,7 +453,7 @@ struct jl_cgval_t {
         isboxed(isboxed),
         isghost(false),
         isimmutable(isboxed && jl_is_immutable_datatype(typ)),
-        tbaa(isboxed ? (jl_is_leaf_type(typ) ?
+        tbaa(isboxed ? (jl_is_concrete_type(typ) ?
                         (jl_is_mutable(typ) ? tbaa_mutab : tbaa_immut) :
                         tbaa_value) : nullptr)
     {
@@ -658,7 +658,7 @@ static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_value_t *typ
         // no need to explicitly load/store a constant/ghost value
         return ghostValue(typ);
     }
-    if (jl_is_type_type(typ) && jl_is_leaf_type(jl_tparam0(typ))) {
+    if (jl_is_type_type(typ) && jl_is_concrete_type(jl_tparam0(typ))) {
         // replace T::Type{T} with T
         jl_cgval_t constant(NULL, NULL, true, typ);
         constant.constant = jl_tparam0(typ);
@@ -753,7 +753,7 @@ static void CreateTrap(IRBuilder<> &builder)
 
 static bool isbits_spec(jl_value_t *jt, bool allow_singleton = true)
 {
-    return jl_isbits(jt) && jl_is_leaf_type(jt) &&
+    return jl_isbits(jt) && jl_is_concrete_type(jt) &&
         (allow_singleton || (jl_datatype_size(jt) > 0) || (jl_datatype_nfields(jt) > 0));
 }
 
@@ -2050,7 +2050,7 @@ static Value *make_jlcall(ArrayRef<const jl_cgval_t*> args, jl_codectx_t *ctx)
 
 static void jl_add_method_root(jl_codectx_t *ctx, jl_value_t *val)
 {
-    if (jl_is_leaf_type(val) || jl_is_bool(val) || jl_is_symbol(val) ||
+    if (jl_is_concrete_type(val) || jl_is_bool(val) || jl_is_symbol(val) ||
             val == (jl_value_t*)jl_any_type || val == (jl_value_t*)jl_bottom_type)
         return;
     JL_GC_PUSH1(&val);
@@ -2098,10 +2098,10 @@ static jl_cgval_t emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *
 
     jl_datatype_t *sty = (jl_datatype_t*)expr_type(expr, ctx);
     JL_GC_PUSH1(&sty);
-    if (jl_is_type_type((jl_value_t*)sty) && jl_is_leaf_type(jl_tparam0(sty)))
+    if (jl_is_type_type((jl_value_t*)sty) && jl_is_concrete_type(jl_tparam0(sty)))
         sty = (jl_datatype_t*)jl_typeof(jl_tparam0(sty));
     if (jl_is_structtype(sty) && sty != jl_module_type && sty->uid != 0 &&
-        jl_is_leaf_type((jl_value_t*)sty)) {
+        jl_is_concrete_type((jl_value_t*)sty)) {
         unsigned idx = jl_field_index(sty, name, 0);
         if (idx != (unsigned)-1) {
             jl_cgval_t strct = emit_expr(expr, ctx);
@@ -2126,7 +2126,7 @@ static jl_cgval_t emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *
     Value *result = builder.CreateCall3(prepare_call(jlgetfield_func), V_null, myargs,
                                         ConstantInt::get(T_int32,2));
 #endif
-    bool needsgcroot = true; // !arg1.isimmutable || !jl_is_leaf_type(arg1.typ) || !is_datatype_all_pointers((jl_datatype_t*)arg1.typ); // TODO: probably want this as a llvm pass
+    bool needsgcroot = true; // !arg1.isimmutable || !jl_is_concrete_type(arg1.typ) || !is_datatype_all_pointers((jl_datatype_t*)arg1.typ); // TODO: probably want this as a llvm pass
     jl_cgval_t ret = mark_julia_type(result, true, jl_any_type, ctx, needsgcroot); // (typ will be patched up by caller)
     return ret;
 }
@@ -2210,12 +2210,12 @@ static Value *emit_bits_compare(const jl_cgval_t &arg1, const jl_cgval_t &arg2, 
 static Value *emit_f_is(const jl_cgval_t &arg1, const jl_cgval_t &arg2, jl_codectx_t *ctx)
 {
     jl_value_t *rt1 = arg1.typ, *rt2 = arg2.typ;
-    bool isleaf = jl_is_leaf_type(rt1) && jl_is_leaf_type(rt2);
-    if (isleaf && rt1 != rt2 && !jl_is_type_type(rt1) && !jl_is_type_type(rt2))
-        // disjoint leaf types are never equal (quick test)
+    bool isconcrete = jl_is_concrete_type(rt1) && jl_is_concrete_type(rt2);
+    if (isconcrete && rt1 != rt2 && !jl_is_type_type(rt1) && !jl_is_type_type(rt2))
+        // disjoint concrete types are never equal (quick test)
         return ConstantInt::get(T_int1, 0);
-    bool ghost1 = arg1.isghost || (isleaf && jl_is_datatype_singleton((jl_datatype_t*)rt1));
-    bool ghost2 = arg2.isghost || (isleaf && jl_is_datatype_singleton((jl_datatype_t*)rt2));
+    bool ghost1 = arg1.isghost || (isconcrete && jl_is_datatype_singleton((jl_datatype_t*)rt1));
+    bool ghost2 = arg2.isghost || (isconcrete && jl_is_datatype_singleton((jl_datatype_t*)rt2));
     if (ghost1 || ghost2) {
         // comparing singleton objects
         if (ghost1 && ghost2) {
@@ -2231,7 +2231,7 @@ static Value *emit_f_is(const jl_cgval_t &arg1, const jl_cgval_t &arg2, jl_codec
     if (jl_type_intersection(rt1, rt2) == (jl_value_t*)jl_bottom_type) // types are disjoint (exhaustive test)
         return ConstantInt::get(T_int1, 0);
 
-    bool isbits = isleaf && jl_isbits(rt1) && jl_types_equal(rt1, rt2);
+    bool isbits = isconcrete && jl_isbits(rt1) && jl_types_equal(rt1, rt2);
     if (isbits) { // whether this type is unique'd by value
         return emit_bits_compare(arg1, arg2, ctx);
     }
@@ -2243,8 +2243,8 @@ static Value *emit_f_is(const jl_cgval_t &arg1, const jl_cgval_t &arg2, jl_codec
     if (jl_subtype(rt1, (jl_value_t*)jl_type_type) ||
         jl_subtype(rt2, (jl_value_t*)jl_type_type)) // use typeseq for datatypes
         ptr_comparable = 0;
-    if ((jl_is_type_type(rt1) && jl_is_leaf_type(jl_tparam0(rt1))) ||
-        (jl_is_type_type(rt2) && jl_is_leaf_type(jl_tparam0(rt2)))) // can compare leaf types by pointer
+    if ((jl_is_type_type(rt1) && jl_is_concrete_type(jl_tparam0(rt1))) ||
+        (jl_is_type_type(rt2) && jl_is_concrete_type(jl_tparam0(rt2)))) // can compare concrete types by pointer
         ptr_comparable = 1;
     if (ptr_comparable) {
         assert(arg1.isboxed && arg2.isboxed); // only boxed types are valid for pointer comparison
@@ -2405,7 +2405,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         }
         if (ctx->source->inferred) {
             rt1 = expr_type(expr, ctx);
-            if (jl_is_tuple_type(rt1) && jl_is_leaf_type(rt1) && nargs == jl_datatype_nfields(rt1)) {
+            if (jl_is_tuple_type(rt1) && jl_is_concrete_type(rt1) && nargs == jl_datatype_nfields(rt1)) {
                 *ret = emit_new_struct(rt1, nargs+1, args, ctx);
                 JL_GC_POP();
                 return true;
@@ -2618,7 +2618,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             return true;
         }
 
-        if (fldt == (jl_value_t*)jl_long_type && jl_is_leaf_type((jl_value_t*)stt)) {
+        if (fldt == (jl_value_t*)jl_long_type && jl_is_concrete_type((jl_value_t*)stt)) {
             if ((jl_is_structtype(stt) || jl_is_tuple_type(stt)) && !jl_subtype((jl_value_t*)jl_module_type, (jl_value_t*)stt)) {
                 size_t nfields = jl_datatype_nfields(stt);
                 jl_cgval_t strct = emit_expr(args[1], ctx);
@@ -2655,7 +2655,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                 jl_value_t *ft = jl_svecref(sty->types, idx);
                 jl_value_t *rhst = expr_type(args[3], ctx);
                 rt2 = rhst;
-                if (jl_is_leaf_type((jl_value_t*)sty) && jl_subtype(rhst, ft)) {
+                if (jl_is_concrete_type((jl_value_t*)sty) && jl_subtype(rhst, ft)) {
                     // TODO: attempt better codegen for approximate types
                     jl_cgval_t strct = emit_expr(args[1], ctx); // emit lhs
                     *ret = emit_expr(args[3], ctx);
@@ -2677,7 +2677,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
         if (jl_is_type_type(aty)) {
             jl_value_t *tp0 = jl_tparam0(aty);
-            if (jl_is_leaf_type(tp0)) {
+            if (jl_is_concrete_type(tp0)) {
                 emit_expr(args[1], ctx);
                 assert(jl_is_datatype(tp0));
                 *ret = mark_julia_type(ConstantInt::get(T_size, jl_datatype_nfields(tp0)), false, jl_long_type, ctx);
@@ -2685,7 +2685,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                 return true;
             }
         }
-        else if (jl_is_leaf_type(aty)) {
+        else if (jl_is_concrete_type(aty)) {
             jl_cgval_t arg1 = emit_expr(args[1], ctx);
             Value *sz;
             if (arg1.constant) {
@@ -2738,7 +2738,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             // exclude DataType, since each DataType has its own size, not sizeof(DataType).
             // this is issue #8798
             sty != (jl_value_t*)jl_datatype_type) {
-            if (jl_is_leaf_type(sty) ||
+            if (jl_is_concrete_type(sty) ||
                 (((jl_datatype_t*)sty)->name->names == jl_emptysvec && jl_datatype_size(sty) > 0)) {
                 *ret = mark_julia_type(ConstantInt::get(T_size, jl_datatype_size(sty)), false, jl_long_type, ctx);
                 JL_GC_POP();
@@ -2760,7 +2760,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         }
         if (i > nargs) {
             jl_value_t *ty = static_eval(expr, ctx, true, true);
-            if (ty!=NULL && jl_is_leaf_type(ty)) {
+            if (ty!=NULL && jl_is_concrete_type(ty)) {
                 if (jl_has_free_typevars(ty)) {
                     // add root for types not cached. issue #7065
                     jl_add_method_root(ctx, ty);
@@ -2774,7 +2774,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
 
     else if (f == jl_builtin_isdefined && nargs == 2) {
         jl_datatype_t *stt = (jl_datatype_t*)expr_type(args[1], ctx);
-        if (!jl_is_leaf_type((jl_value_t*)stt) || jl_is_array_type(stt) ||
+        if (!jl_is_concrete_type((jl_value_t*)stt) || jl_is_array_type(stt) ||
             stt == jl_module_type) {
             JL_GC_POP();
             return false;
@@ -3452,7 +3452,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         // some intrinsics (e.g. typeassert) can return a wider type
         // than what's actually possible
         jl_value_t *expr_t = expr_type((jl_value_t*)ex, ctx);
-        if (res.typ != expr_t && res.isboxed && !jl_is_leaf_type(res.typ)) {
+        if (res.typ != expr_t && res.isboxed && !jl_is_concrete_type(res.typ)) {
             res = remark_julia_type(res, expr_t, ctx);
         }
         if (res.typ == jl_bottom_type || expr_t == jl_bottom_type) {
@@ -3532,7 +3532,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         size_t nargs = jl_array_len(ex->args);
         if (jl_is_type_type(ty) &&
             jl_is_datatype(jl_tparam0(ty)) &&
-            jl_is_leaf_type(jl_tparam0(ty))) {
+            jl_is_concrete_type(jl_tparam0(ty))) {
             assert(nargs <= jl_datatype_nfields(jl_tparam0(ty))+1);
             return emit_new_struct(jl_tparam0(ty),nargs,args,ctx);
         }
@@ -4108,7 +4108,7 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
             jl_error("cfunction: return type Ref should have an element type, not Ref{T}");
         if (declrt == (jl_value_t*)jl_any_type)
             jl_error("cfunction: return type Ref{Any} is invalid. Use Any or Ptr{Any} instead.");
-        if (!jl_is_leaf_type(declrt))
+        if (!jl_is_concrete_type(declrt))
             jl_svecset(cfunc_sig, nargs + 1, declrt); // Ref{Abstract} is the same calling convention as Abstract
         crt = (jl_value_t*)jl_any_type;
     }
@@ -4125,7 +4125,7 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
             ati = jl_tparam0(ati);
             if (jl_is_typevar(ati))
                 jl_error("cfunction: argument type Ref should have an element type, not Ref{T}");
-            if (ati != (jl_value_t*)jl_any_type && !jl_is_leaf_type(ati))
+            if (ati != (jl_value_t*)jl_any_type && !jl_is_concrete_type(ati))
                 jl_svecset(cfunc_sig, i + 1, ati); // Ref{Abstract} is the same calling convention as Abstract
         }
         if (jl_is_pointer(ati) && jl_is_typevar(jl_tparam0(ati)))
