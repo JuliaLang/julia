@@ -37,15 +37,19 @@ end
 length(R::ReshapedArrayIterator) = length(R.iter)
 
 """
-    reshape(A, dims...)
-    reshape(A, dims)
+    reshape(A, dims...) -> R
+    reshape(A, dims) -> R
 
-Return an array with the same data as the given array, but with different dimensions.
+Return an array `R` with the same data as `A`, but with different
+dimension sizes or number of dimensions. The two arrays share the same
+underlying data, so that setting elements of `R` alters the values of
+`A` and vice versa.
 
-The new dimensions may be specified either as a list of arguments or as a shape
-tuple. At most one dimension may be specified with a `:`, in which case its
-length is computed such that its product with all the specified dimensions is
-equal to the length of the original array A.
+The new dimensions may be specified either as a list of arguments or
+as a shape tuple. At most one dimension may be specified with a `:`,
+in which case its length is computed such that its product with all
+the specified dimensions is equal to the length of the original array
+`A`. The total number of elements must not change.
 
 ```jldoctest
 julia> A = collect(1:16)
