@@ -98,15 +98,15 @@ module Consts
     const DIFF_FORMAT_NAME_ONLY    = Cuint(4)
     const DIFF_FORMAT_NAME_STATUS  = Cuint(5)
 
-    const DELTA_UNMODIFIED = Cint(0)
-    const DELTA_ADDED      = Cint(1)
-    const DELTA_DELETED    = Cint(2)
-    const DELTA_MODIFIED   = Cint(3)
-    const DELTA_RENAMED    = Cint(4)
-    const DELTA_COPIED     = Cint(5)
-    const DELTA_IGNORED    = Cint(6)
-    const DELTA_UNTRACKED  = Cint(7)
-    const DELTA_TYPECHANGE = Cint(8)
+    @enum(DELTA_STATUS, DELTA_UNMODIFIED = Cint(0),
+                        DELTA_ADDED      = Cint(1),
+                        DELTA_DELETED    = Cint(2),
+                        DELTA_MODIFIED   = Cint(3),
+                        DELTA_RENAMED    = Cint(4),
+                        DELTA_COPIED     = Cint(5),
+                        DELTA_IGNORED    = Cint(6),
+                        DELTA_UNTRACKED  = Cint(7),
+                        DELTA_TYPECHANGE = Cint(8))
 
     # index
     const IDXENTRY_NAMEMASK   = (0x0fff)
