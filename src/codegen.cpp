@@ -448,7 +448,7 @@ struct jl_cgval_t {
     bool isboxed; // whether this value is a jl_value_t* allocated on the heap with the right type tag
     bool isghost; // whether this value is "ghost"
     bool isimmutable; // V points to something that is definitely immutable (e.g. single-assignment, but including memory)
-    MDNode *tbaa; // The related tbaa node. Non-NULL iff this is not a pointer.
+    MDNode *tbaa; // The related tbaa node. Non-NULL iff this holds an address.
     bool ispointer() const
     {
         // whether this value is compatible with `data_pointer`
