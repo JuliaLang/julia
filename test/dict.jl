@@ -682,3 +682,32 @@ let
         @test pair[1] == tupl[1] && pair[2] == tupl[2]
     end
 end
+
+@testset "Dict merge" begin
+    d1 = Dict("A" => 1, "B" => 2)
+    d2 = Dict("B" => 3.0, "C" => 4.0)
+    d3 = merge(d1, d2)
+    @test d3 == Dict("A" => 1, "B" => 3, "C" => 4)
+    # merge with combiner function
+    d4 = merge(+, d1, d2)
+    @test d4 == Dict("A" => 1, "B" => 5, "C" => 4)
+    d5 = merge(*, d1, d2)
+    @test d5 == Dict("A" => 1, "B" => 6, "C" => 4)
+    d6 = merge(-, d1, d2)
+    @test d6 == Dict("A" => 1, "B" => -1, "C" => 4)
+    @test typeof(d3) == typeof(d4) == typeof(d5) == typeof(d6) == Dict{String,Float64}
+end
+
+@testset "Dict merge!" begin
+    d1 = Dict("A" => 1, "B" => 2)
+    d2 = Dict("B" => 3, "C" => 4)
+    merge!(d1, d2)
+    @test d1 == Dict("A" => 1, "B" => 3, "C" => 4)
+    # merge! with combiner function
+    merge!(+, d1, d2)
+    @test d1 == Dict("A" => 1, "B" => 6, "C" => 8)
+    merge!(*, d1, d2)
+    @test d1 == Dict("A" => 1, "B" => 18, "C" => 32)
+    merge!(-, d1, d2)
+    @test d1 == Dict("A" => 1, "B" => 15, "C" => 28)
+end
