@@ -449,6 +449,16 @@ struct FetchHead
     ismerge::Bool
 end
 
+function Base.show(io::IO, fh::FetchHead)
+    println(io, "FetchHead:")
+    println(io, "Name: $(fh.name)")
+    println(io, "URL: $(fh.url)")
+    print(io, "OID: ")
+    show(io, fh.oid)
+    println(io)
+    println(io, "Is merged: $(fh.ismerge)")
+end
+
 # Abstract object types
 abstract type AbstractGitObject end
 Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)

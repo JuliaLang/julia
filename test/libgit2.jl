@@ -579,6 +579,11 @@ mktempdir() do dir
             @test fetch_heads[3].ismerge == false
             for fh in fetch_heads
                 @test fh.url == cache_repo
+                fh_strs = split(sprint(show, fh), '\n')
+                @test fh_strs[1] == "FetchHead:"
+                @test fh_strs[2] == "Name: $(fh.name)"
+                @test fh_strs[3] == "URL: $(fh.url)"
+                @test fh_strs[5] == "Is merged: $(fh.ismerge)"
             end
         finally
             close(repo)
