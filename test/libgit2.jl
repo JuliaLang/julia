@@ -563,6 +563,16 @@ mktempdir() do dir
             # Switch to the master branch
             LibGit2.branch!(repo, master_branch)
 
+            fetch_heads = LibGit2.fetchheads(repo)
+            @test fetch_heads[1].name == "refs/heads/master"
+            @test fetch_heads[1].ismerge == true #we just merged master
+            @test fetch_heads[2].name == "refs/heads/test_branch"
+            @test fetch_heads[2].ismerge == false
+            @test fetch_heads[3].name == "refs/tags/tag2"
+            @test fetch_heads[3].ismerge == false
+            for fh in fetch_heads
+                @test fh.url == cache_repo
+            end
         finally
             close(repo)
         end
