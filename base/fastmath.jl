@@ -92,6 +92,9 @@ const rewrite_op =
 function make_fastmath(expr::Expr)
     if expr.head === :quote
         return expr
+    elseif expr.head == :call && expr.args[1] == :^ && expr.args[3] isa Integer
+        # literal integer powers can be inlined with @fastmath
+        return Expr(:call, :pow_fast, expr.args[2], :(Val{$(expr.args[3])}))
     end
     op = get(rewrite_op, expr.head, :nothing)
     if op !== :nothing
@@ -245,6 +248,7 @@ end
 
 pow_fast(x::Float32, y::Integer) = ccall("llvm.powi.f32", llvmcall, Float32, (Float32, Int32), x, y)
 pow_fast(x::Float64, y::Integer) = ccall("llvm.powi.f64", llvmcall, Float64, (Float64, Int32), x, y)
+@generated pow_fast{p}(x::Base.HWNumber, ::Type{Val{p}}) = Base.inlined_pow(:x, p)
 
 # TODO: Change sqrt_llvm intrinsic to avoid nan checking; add nan
 # checking to sqrt in math.jl; remove sqrt_llvm_fast intrinsic
