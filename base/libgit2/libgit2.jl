@@ -32,6 +32,7 @@ include("diff.jl")
 include("rebase.jl")
 include("status.jl")
 include("tree.jl")
+include("gitcredential.jl")
 include("callbacks.jl")
 
 using .Error

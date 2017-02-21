@@ -17,6 +17,17 @@ const GIT_URL_REGEX = r"""
 (?<path>.*?)$
 """x
 
+const URL_REGEX = r"""
+^(?:(?<protocol>.*?)://)?
+(?:
+    (?<user>.*?)
+    (?:\:(?<password>.*?))?@
+)?
+(?<host>[A-Za-z0-9\-\.]+)
+(?:\:(?<port>\d+))?
+(?<path>/.*)?$
+"""x
+
 function version()
     major = Ref{Cint}(0)
     minor = Ref{Cint}(0)

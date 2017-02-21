@@ -143,6 +143,67 @@ end
     end
 end
 
+@testset "Git Credential" begin
+    @testset "empty" begin
+        str = ""
+        cred = read(IOBuffer(str), LibGit2.GitCredential)
+        @test cred == LibGit2.GitCredential()
+        buf = IOBuffer(); write(buf, cred)
+        @test readstring(seekstart(buf)) == str
+    end
+
+    @testset "basic" begin
+        str = """
+        protocol=https
+        host=example.com
+        username=alice
+        password=xxxxx
+        """
+        cred = read(IOBuffer(str), LibGit2.GitCredential)
+        @test cred == LibGit2.GitCredential("https", "example.com", "", "alice", "xxxxx")
+        buf = IOBuffer(); write(buf, cred)
+        @test readstring(seekstart(buf)) == str
+    end
+
+    @testset "url field" begin
+        str = """
+        host=example.com
+        password=bar
+        url=https://a@b/c
+        username=foo
+        """
+        expected = """
+        protocol=https
+        host=b
+        path=/c
+        username=foo
+        password=bar
+        """
+        cred = read(IOBuffer(str), LibGit2.GitCredential)
+        @test cred == LibGit2.GitCredential("https", "b", "/c", "foo", "bar")
+        buf = IOBuffer(); write(buf, cred)
+        @test readstring(seekstart(buf)) == expected
+    end
+
+    @testset "contains" begin
+        @test contains(
+            LibGit2.GitCredential(),
+            LibGit2.GitCredential())
+        @test contains(
+            LibGit2.GitCredential("https", "", "", "", ""),
+            LibGit2.GitCredential("", "", "", "", ""))
+        @test !contains(
+            LibGit2.GitCredential("", "", "", "", ""),
+            LibGit2.GitCredential("https", "", "", "", ""))
+        @test !contains(
+            LibGit2.GitCredential("ssh", "", "", "", ""),
+            LibGit2.GitCredential("https", "", "", "", ""))
+        @test contains(
+            LibGit2.GitCredential("https", "hostname", "", "user", ""),
+            LibGit2.GitCredential("https", "hostname", "", "", ""))
+    end
+end
+
 mktempdir() do dir
     # test parameters
     repo_url = "https://github.com/JuliaLang/Example.jl"

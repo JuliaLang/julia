@@ -730,6 +730,30 @@ function reject(cache::CachedCredentials, cred_id)
     nothing
 end
 
+struct GitCredentialHelper
+    cmd::Cmd
+end
+
+"""
+    GitCredential
+
+Git credential helpers [input/output fields](https://git-scm.com/docs/git-credential#IOFMT).
+"""
+mutable struct GitCredential
+    protocol::String
+    host::String
+    path::String
+    username::String
+    password::String
+end
+
+function GitCredential(;
+    protocol::AbstractString="", host::AbstractString="", path::AbstractString="",
+    username::AbstractString="", password::AbstractString="",
+)
+    GitCredential(protocol, host, path, username, password)
+end
+
 mutable struct RemotePayload
     cache::Nullable{CachedCredentials}
     config::GitConfig
