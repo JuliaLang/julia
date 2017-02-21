@@ -732,6 +732,7 @@ end
 
 mutable struct RemotePayload
     cache::Nullable{CachedCredentials}
+    config::GitConfig
     state::Dict{Symbol,Char}
     prompts_remaining::Int
     credential::Nullable{AbstractCredential}
@@ -741,9 +742,10 @@ mutable struct RemotePayload
     username::String
 end
 
-function RemotePayload(cache::Nullable{CachedCredentials})
+function RemotePayload(cache::Nullable{CachedCredentials}, config::GitConfig=GitConfig())
     RemotePayload(
         cache,
+        config,
         Dict{Symbol,Char}(),
         3,
         Nullable{AbstractCredential}(),

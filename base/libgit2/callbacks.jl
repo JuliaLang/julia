@@ -344,11 +344,11 @@ fetchhead_foreach_cb() = cfunction(fetchhead_foreach_callback, Cint, (Cstring, C
 
 function credential_loop(
     valid_credential::AbstractCredential, url::AbstractString, user::AbstractString, allowed_types::UInt32,
-    cache::Nullable{CachedCredentials}=Nullable{CachedCredentials}(),
+    cache::Nullable{CachedCredentials}=Nullable{CachedCredentials}(), config::Nullable{GitConfig}=Nullable{GitConfig}(),
 )
     cb = credentials_cb()
     libgitcred_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    payload_ptr = Ref(RemotePayload(cache))
+    payload_ptr = Ref(isnull(config) ? RemotePayload(cache) : RemotePayload(cache, Base.get(config)))
     payload = payload_ptr[]
 
     # Emulate how LibGit2 uses the credential callback by repeatedly calling the function
@@ -375,12 +375,14 @@ end
 
 function credential_loop(
     valid_credential::UserPasswordCredential;
-    url="https://github.com/test/package.jl", user="", cache=Nullable{CachedCredentials}())
-    credential_loop(valid_credential, url, user, 0x000001, cache)
+    url="https://github.com/test/package.jl", user="", cache=Nullable{CachedCredentials}(),
+    config=Nullable{GitConfig}())
+    credential_loop(valid_credential, url, user, 0x000001, cache, config)
 end
 
 function credential_loop(
     valid_credential::SSHCredential;
-    url="git@github.com/test/package.jl", user="git", cache=Nullable{CachedCredentials}())
-    credential_loop(valid_credential, url, user, 0x000046, cache)
+    url="git@github.com/test/package.jl", user="git", cache=Nullable{CachedCredentials}(),
+    config=Nullable{GitConfig}())
+    credential_loop(valid_credential, url, user, 0x000046, cache, config)
 end

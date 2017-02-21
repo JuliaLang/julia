@@ -230,7 +230,7 @@ function fetch(repo::GitRepo;
         GitRemoteAnon(repo, remoteurl)
     end
 
-    payload = RemotePayload(credentials)
+    payload = RemotePayload(credentials, GitConfig(repo))
     try
         fo = FetchOptions(callbacks=RemoteCallbacks(credentials_cb(), payload))
         result = fetch(rmt, refspecs, msg="from $(url(rmt))", options = fo)
@@ -272,7 +272,7 @@ function push(repo::GitRepo;
         GitRemoteAnon(repo, remoteurl)
     end
 
-    payload = RemotePayload(credentials)
+    payload = RemotePayload(credentials, GitConfig(repo))
     try
         push_opts=PushOptions(callbacks=RemoteCallbacks(credentials_cb(), payload))
         result = push(rmt, refspecs, force=force, options=push_opts)
