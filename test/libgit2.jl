@@ -516,6 +516,13 @@ mktempdir() do dir
                 @test LibGit2.isdiff(repo, "HEAD")
                 @test LibGit2.isdirty(repo, cached=true)
                 @test LibGit2.isdiff(repo, "HEAD", cached=true)
+                tree = LibGit2.GitTree(repo, "HEAD^{tree}")
+                diff = LibGit2.diff_tree(repo, tree, "", cached=true)
+                @test count(diff) == 1
+                @test_throws BoundsError diff[0]
+                @test_throws BoundsError diff[2]
+                @test diff[1].status == LibGit2.Consts.DELTA_MODIFIED
+                @test diff[1].nfiles == 2
                 LibGit2.commit(repo, "zzz")
                 @test !LibGit2.isdirty(repo)
                 @test !LibGit2.isdiff(repo, "HEAD")
