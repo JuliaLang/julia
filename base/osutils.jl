@@ -30,7 +30,7 @@ is_linux(os::Symbol) = (os == :Linux)
 Predicate for testing if the OS is a derivative of BSD.
 See documentation in [Handling Operating System Variation](@ref).
 """
-is_bsd(os::Symbol) = (os == :FreeBSD || os == :OpenBSD || os == :NetBSD || os == :Darwin || os == :Apple)
+is_bsd(os::Symbol) = (os == :FreeBSD || os == :OpenBSD || os == :NetBSD || os == :DragonFly || os == :Darwin || os == :Apple)
 
 """
     is_windows([os])

@@ -105,7 +105,7 @@ end
 # Example from Quantum Information Theory
 import Base: size, issymmetric, ishermitian
 
-type CPM{T<:Base.LinAlg.BlasFloat}<:AbstractMatrix{T} # completely positive map
+mutable struct CPM{T<:Base.LinAlg.BlasFloat}<:AbstractMatrix{T} # completely positive map
     kraus::Array{T,3} # kraus operator representation
 end
 size(Phi::CPM)=(size(Phi.kraus,1)^2,size(Phi.kraus,3)^2)
@@ -135,9 +135,9 @@ let
     @test d[1] ≈ 1. # largest eigenvalue should be 1.
     v=reshape(v,(50,50)) # reshape to matrix
     v/=trace(v) # factor out arbitrary phase
-    @test isapprox(vecnorm(imag(v)),0.) # it should be real
+    @test vecnorm(imag(v)) ≈ 0. # it should be real
     v=real(v)
-    # @test isapprox(vecnorm(v-v')/2,0.) # it should be Hermitian
+    # @test vecnorm(v-v')/2 ≈ 0. # it should be Hermitian
     # Since this fails sometimes (numerical precision error),this test is commented out
     v=(v+v')/2
     @test isposdef(v)
@@ -153,8 +153,7 @@ let
 end
 
 @testset "real svds" begin
-    let # svds test
-        A = sparse([1, 1, 2, 3, 4], [2, 1, 1, 3, 1], [2.0, -1.0, 6.1, 7.0, 1.5])
+    let A = sparse([1, 1, 2, 3, 4], [2, 1, 1, 3, 1], [2.0, -1.0, 6.1, 7.0, 1.5])
         S1 = svds(A, nsv = 2)
         S2 = svd(Array(A))
 
@@ -198,8 +197,7 @@ end
 end
 
 @testset "complex svds" begin
-    let # complex svds test
-        A = sparse([1, 1, 2, 3, 4], [2, 1, 1, 3, 1], exp.(im*[2.0:2:10;]))
+    let A = sparse([1, 1, 2, 3, 4], [2, 1, 1, 3, 1], exp.(im*[2.0:2:10;]))
         S1 = svds(A, nsv = 2)
         S2 = svd(Array(A))
 
@@ -242,8 +240,7 @@ end
 end
 
 # Symmetric generalized with singular B
-let
-    n = 10
+let n = 10
     k = 3
     A = randn(n,n); A = A'A
     B = randn(n,k);  B = B*B'

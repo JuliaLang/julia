@@ -45,7 +45,7 @@ Type *get_llvm_vectype(jl_datatype_t *dt) const
     // the homogeneity check.
     jl_datatype_t *ft0 = (jl_datatype_t*)jl_field_type(dt, 0);
     // `ft0` should be a `VecElement` type and the true element type
-    // should be a `bitstype`
+    // should be a primitive type
     if (ft0->name != jl_vecelement_typename ||
         ((jl_datatype_t*)jl_field_type(ft0, 0))->layout->nfields)
         return nullptr;
@@ -87,7 +87,7 @@ Type *get_llvm_fptype(jl_datatype_t *dt) const
 Type *get_llvm_fp_or_vectype(jl_datatype_t *dt) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
-    if (dt->mutabl || !dt->layout->pointerfree || dt->layout->haspadding)
+    if (dt->mutabl || dt->layout->npointers || dt->layout->haspadding)
         return nullptr;
     return dt->layout->nfields ? get_llvm_vectype(dt) : get_llvm_fptype(dt);
 }
@@ -179,7 +179,7 @@ Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele) const
     // uniquely addressable members.
     // Maximum HFA and HVA size is 64 bytes (4 x fp128 or 16bytes vector)
     size_t dsz = jl_datatype_size(dt);
-    if (dsz > 64 || !dt->layout || !dt->layout->pointerfree || dt->layout->haspadding)
+    if (dsz > 64 || !dt->layout || dt->layout->npointers || dt->layout->haspadding)
         return NULL;
     nele = 0;
     ElementType eltype;

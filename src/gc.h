@@ -113,27 +113,25 @@ typedef struct _mallocarray_t {
 
 // pool page metadata
 typedef struct {
-    struct {
-        // index of pool that owns this page
-        uint16_t pool_n : 8;
-        // Whether any cell in the page is marked
-        // This bit is set before sweeping iff there's live cells in the page.
-        // Note that before marking or after sweeping there can be live
-        // (and young) cells in the page for `!has_marked`.
-        uint16_t has_marked: 1;
-        // Whether any cell was live and young **before sweeping**.
-        // For a normal sweep (quick sweep that is NOT preceded by a
-        // full sweep) this bit is set iff there are young or newly dead
-        // objects in the page and the page needs to be swept.
-        //
-        // For a full sweep, this bit should be ignored.
-        //
-        // For a quick sweep preceded by a full sweep. If this bit is set,
-        // the page needs to be swept. If this bit is not set, there could
-        // still be old dead objects in the page and `nold` and `prev_nold`
-        // should be used to determine if the page needs to be swept.
-        uint16_t has_young: 1;
-    };
+    // index of pool that owns this page
+    uint8_t pool_n;
+    // Whether any cell in the page is marked
+    // This bit is set before sweeping iff there are live cells in the page.
+    // Note that before marking or after sweeping there can be live
+    // (and young) cells in the page for `!has_marked`.
+    uint8_t has_marked;
+    // Whether any cell was live and young **before sweeping**.
+    // For a normal sweep (quick sweep that is NOT preceded by a
+    // full sweep) this bit is set iff there are young or newly dead
+    // objects in the page and the page needs to be swept.
+    //
+    // For a full sweep, this bit should be ignored.
+    //
+    // For a quick sweep preceded by a full sweep. If this bit is set,
+    // the page needs to be swept. If this bit is not set, there could
+    // still be old dead objects in the page and `nold` and `prev_nold`
+    // should be used to determine if the page needs to be swept.
+    uint8_t has_young;
     // number of old objects in this page
     uint16_t nold;
     // number of old objects in this page during the previous full sweep
@@ -236,7 +234,6 @@ NOINLINE uintptr_t gc_get_stack_ptr(void);
 
 STATIC_INLINE region_t *find_region(void *ptr)
 {
-    // on 64bit systems we could probably use a single region and remove this loop
     for (int i = 0; i < REGION_COUNT && regions[i].pages; i++) {
         region_t *region = &regions[i];
         char *begin = region->pages->data;
@@ -248,16 +245,18 @@ STATIC_INLINE region_t *find_region(void *ptr)
     return NULL;
 }
 
-STATIC_INLINE jl_gc_pagemeta_t *page_metadata_(void *data, region_t *r)
+STATIC_INLINE jl_gc_pagemeta_t *page_metadata(void *_data)
 {
-    assert(r != NULL);
-    int pg_idx = page_index(r, (char*)data - GC_PAGE_OFFSET);
-    return &r->meta[pg_idx];
-}
-
-STATIC_INLINE jl_gc_pagemeta_t *page_metadata(void *data)
-{
-    return page_metadata_(data, find_region(data));
+    uintptr_t data = ((uintptr_t)_data) - 1;
+    for (int i = 0; i < REGION_COUNT && regions[i].pages; i++) {
+        region_t *region = &regions[i];
+        uintptr_t begin = (uintptr_t)region->pages->data;
+        uintptr_t offset = data - begin;
+        if (offset < region->pg_cnt * sizeof(jl_gc_page_t)) {
+            return &region->meta[offset >> GC_PAGE_LG2];
+        }
+    }
+    return NULL;
 }
 
 STATIC_INLINE void gc_big_object_unlink(const bigval_t *hdr)
@@ -277,7 +276,7 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list)
     *list = hdr;
 }
 
-void pre_mark(jl_ptls_t ptls);
+void mark_all_roots(jl_ptls_t ptls);
 void gc_mark_object_list(jl_ptls_t ptls, arraylist_t *list, size_t start);
 void visit_mark_stack(jl_ptls_t ptls);
 void gc_debug_init(void);

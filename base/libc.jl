@@ -15,7 +15,7 @@ include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","errno_h.jl"))  # include($B
 ## RawFD ##
 
 # Wrapper for an OS file descriptor (on both Unix and Windows)
-immutable RawFD
+struct RawFD
     fd::Int32
     RawFD(fd::Integer) = new(fd)
     RawFD(fd::RawFD) = fd
@@ -30,7 +30,7 @@ dup(src::RawFD, target::RawFD) = systemerror("dup", -1 ==
 
 # Wrapper for an OS file descriptor (for Windows)
 if is_windows()
-    immutable WindowsRawSocket
+    struct WindowsRawSocket
         handle::Ptr{Void}   # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows
     end
     Base.cconvert(::Type{Ptr{Void}}, fd::WindowsRawSocket) = fd.handle
@@ -42,7 +42,7 @@ end
 
 ## FILE (not auto-finalized) ##
 
-immutable FILE
+struct FILE
     ptr::Ptr{Void}
 end
 
@@ -96,7 +96,7 @@ else
     error("systemsleep undefined for this OS")
 end
 
-immutable TimeVal
+struct TimeVal
    sec::Int64
    usec::Int64
 end
@@ -114,7 +114,7 @@ end
 Convert a number of seconds since the epoch to broken-down format, with fields `sec`, `min`,
 `hour`, `mday`, `month`, `year`, `wday`, `yday`, and `isdst`.
 """
-type TmStruct
+mutable struct TmStruct
     sec::Int32
     min::Int32
     hour::Int32
@@ -270,23 +270,23 @@ Convert a Win32 system call error code to a descriptive string [only available o
 function FormatMessage end
 
 if is_windows()
-    GetLastError() = ccall(:GetLastError,stdcall,UInt32,())
+    GetLastError() = ccall(:GetLastError, stdcall, UInt32, ())
 
     function FormatMessage(e=GetLastError())
         const FORMAT_MESSAGE_ALLOCATE_BUFFER = UInt32(0x100)
         const FORMAT_MESSAGE_FROM_SYSTEM = UInt32(0x1000)
         const FORMAT_MESSAGE_IGNORE_INSERTS = UInt32(0x200)
         const FORMAT_MESSAGE_MAX_WIDTH_MASK = UInt32(0xFF)
-        lpMsgBuf = Array{Ptr{UInt16},0}()
-        lpMsgBuf[1] = 0
-        len = ccall(:FormatMessageW,stdcall,UInt32,(Cint, Ptr{Void}, Cint, Cint, Ptr{Ptr{UInt16}}, Cint, Ptr{Void}),
+        lpMsgBuf = Ref{Ptr{UInt16}}()
+        lpMsgBuf[] = 0
+        len = ccall(:FormatMessageW, stdcall, UInt32, (Cint, Ptr{Void}, Cint, Cint, Ptr{Ptr{UInt16}}, Cint, Ptr{Void}),
                     FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
                     C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
-        p = lpMsgBuf[1]
+        p = lpMsgBuf[]
         len == 0 && return ""
         buf = Array{UInt16}(len)
         unsafe_copy!(pointer(buf), p, len)
-        ccall(:LocalFree,stdcall,Ptr{Void},(Ptr{Void},),p)
+        ccall(:LocalFree, stdcall, Ptr{Void}, (Ptr{Void},), p)
         return transcode(String, buf)
     end
 end

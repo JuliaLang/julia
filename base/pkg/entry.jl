@@ -51,7 +51,7 @@ function add(pkg::AbstractString, vers::VersionSet)
     @sync begin
         @async if !edit(Reqs.add,pkg,vers)
             ispath(pkg) || throw(PkgError("unknown package $pkg"))
-            info("Nothing to be done")
+            info("Package $pkg is already installed")
         end
         branch = Dir.getmetabranch()
         outdated = with(GitRepo, "METADATA") do repo
@@ -79,7 +79,7 @@ add(pkg::AbstractString, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
 function rm(pkg::AbstractString)
     edit(Reqs.rm,pkg) && return
-    ispath(pkg) || return info("Nothing to be done")
+    ispath(pkg) || return info("Package $pkg is not installed")
     info("Removing $pkg (unregistered)")
     Write.remove(pkg)
 end
@@ -301,7 +301,7 @@ function pin(pkg::AbstractString, head::AbstractString)
         else
             LibGit2.revparseid(repo, head)
         end
-        commit = LibGit2.get(LibGit2.GitCommit, repo, id)
+        commit = LibGit2.GitCommit(repo, id)
         try
             # note: changing the following naming scheme requires a corresponding change in Read.ispinned()
             branch = "pinned.$(string(id)[1:8]).tmp"
@@ -312,7 +312,7 @@ function pin(pkg::AbstractString, head::AbstractString)
             end
             ref = LibGit2.lookup_branch(repo, branch)
             try
-                if ref !== nothing
+                if !isnull(ref)
                     if LibGit2.revparseid(repo, branch) != id
                         throw(PkgError("Package $pkg: existing branch $branch has " *
                             "been edited and doesn't correspond to its original commit"))
@@ -320,17 +320,17 @@ function pin(pkg::AbstractString, head::AbstractString)
                     info("Package $pkg: checking out existing branch $branch")
                 else
                     info("Creating $pkg branch $branch")
-                    ref = LibGit2.create_branch(repo, branch, commit)
+                    ref = Nullable(LibGit2.create_branch(repo, branch, commit))
                 end
 
                 # checkout selected branch
-                with(LibGit2.peel(LibGit2.GitTree, ref)) do btree
+                with(LibGit2.peel(LibGit2.GitTree, get(ref))) do btree
                     LibGit2.checkout_tree(repo, btree)
                 end
                 # switch head to the branch
-                LibGit2.head!(repo, ref)
+                LibGit2.head!(repo, get(ref))
             finally
-                close(ref)
+                close(get(ref))
             end
         finally
             close(commit)
@@ -473,13 +473,13 @@ function resolve(
     reqs  :: Dict = Reqs.parse("REQUIRE"),
     avail :: Dict = Read.available(),
     instd :: Dict = Read.installed(avail),
-    fixed :: Dict = Read.fixed(avail,instd),
+    fixed :: Dict = Read.fixed(avail, instd),
     have  :: Dict = Read.free(instd),
     upkgs :: Set{String} = Set{String}()
 )
     orig_reqs = reqs
-    reqs = Query.requirements(reqs,fixed,avail)
-    deps, conflicts = Query.dependencies(avail,fixed)
+    reqs, bktrc = Query.requirements(reqs, fixed, avail)
+    deps, conflicts = Query.dependencies(avail, fixed)
 
     for pkg in keys(reqs)
         if !haskey(deps,pkg)
@@ -494,14 +494,14 @@ function resolve(
         end
     end
 
-    Query.check_requirements(reqs,deps,fixed)
+    Query.check_requirements(reqs, deps, fixed)
 
-    deps = Query.prune_dependencies(reqs,deps)
-    want = Resolve.resolve(reqs,deps)
+    deps = Query.prune_dependencies(reqs, deps, bktrc)
+    want = Resolve.resolve(reqs, deps)
 
     if !isempty(upkgs)
         orig_deps, _ = Query.dependencies(avail)
-        Query.check_partial_updates(orig_reqs,orig_deps,want,fixed,upkgs)
+        Query.check_partial_updates(orig_reqs, orig_deps, want, fixed, upkgs)
     end
 
     # compare what is installed with what should be
@@ -600,16 +600,17 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
     # are serialized to errfile for later retrieval into errs[pkg]
     errfile = tempname()
     close(open(errfile, "w")) # create empty file
+    # TODO: serialize the same way the load cache does, not with strings
+    LOAD_PATH = filter(x -> x isa AbstractString, Base.LOAD_PATH)
     code = """
         empty!(Base.LOAD_PATH)
-        append!(Base.LOAD_PATH, $(repr(Base.LOAD_PATH)))
+        append!(Base.LOAD_PATH, $(repr(LOAD_PATH)))
         empty!(Base.LOAD_CACHE_PATH)
         append!(Base.LOAD_CACHE_PATH, $(repr(Base.LOAD_CACHE_PATH)))
         empty!(Base.DL_LOAD_PATH)
         append!(Base.DL_LOAD_PATH, $(repr(Base.DL_LOAD_PATH)))
         open("$(escape_string(errfile))", "a") do f
-            for path_ in eachline(STDIN)
-                path = chomp(path_)
+            for path in eachline(STDIN)
                 pkg = basename(dirname(dirname(path)))
                 try
                     info("Building \$pkg")
@@ -731,7 +732,7 @@ function test!(pkg::AbstractString,
     isfile(reqs_path) && resolve()
 end
 
-type PkgTestError <: Exception
+mutable struct PkgTestError <: Exception
     msg::String
 end
 

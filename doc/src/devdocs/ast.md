@@ -271,7 +271,7 @@ for important details on how to modify these fields safely.
 
     The ABI to use when calling `fptr`. Some significant ones include:
 
-      * 0 - Not compiled yet.
+      * 0 - Not compiled yet
       * 1 - JL_CALLABLE `jl_value_t *(*)(jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
       * 2 - Constant (value stored in `inferred`)
       * 3 - With Static-parameters forwarded `jl_value_t *(*)(jl_svec_t *sparams, jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
@@ -422,7 +422,6 @@ call. Finally, chains of comparisons have their own special expression structure
 | `x"y"z`         | `(macrocall @x_str "y" "z")` |
 | `"x = $x"`      | `(string "x = " x)`          |
 | ``` `a b c` ``` | `(macrocall @cmd "a b c")`   |
-| `x ~ distr`     | `(macrocall @~ x distr)`     |
 
 Doc string syntax:
 

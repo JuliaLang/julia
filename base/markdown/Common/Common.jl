@@ -7,4 +7,5 @@ include("inline.jl")
                 paragraph,
 
                 linebreak, escapes, inline_code,
-                asterisk_bold, asterisk_italic, image, footnote_link, link]
+                asterisk_bold, asterisk_italic, image, footnote_link, link, autolink]
+

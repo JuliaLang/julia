@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <setjmp.h>
 #include <stdarg.h>
 #include <assert.h>
 #include <ctype.h>

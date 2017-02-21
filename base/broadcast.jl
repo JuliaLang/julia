@@ -5,16 +5,18 @@ module Broadcast
 using Base.Cartesian
 using Base: linearindices, tail, OneTo, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
-            nullable_returntype, null_safe_eltype_op, hasvalue
+            nullable_returntype, null_safe_eltype_op, hasvalue, isoperator
 import Base: broadcast, broadcast!
-export broadcast_getindex, broadcast_setindex!, dotview
+export broadcast_getindex, broadcast_setindex!, dotview, @__dot__
 
-typealias ScalarType Union{Type{Any}, Type{Nullable}}
+const ScalarType = Union{Type{Any}, Type{Nullable}}
 
 ## Broadcasting utilities ##
 # fallbacks for some special cases
 @inline broadcast(f, x::Number...) = f(x...)
 @inline broadcast{N}(f, t::NTuple{N,Any}, ts::Vararg{NTuple{N,Any}}) = map(f, t, ts...)
+broadcast!{T,S,N}(::typeof(identity), x::Array{T,N}, y::Array{S,N}) =
+    size(x) == size(y) ? copy!(x, y) : broadcast_c!(identity, Array, Array, x, y)
 
 # special cases for "X .= ..." (broadcast!) assignments
 broadcast!(::typeof(identity), X::AbstractArray, x::Number) = fill!(X, x)
@@ -22,11 +24,11 @@ broadcast!(f, X::AbstractArray, x::Number...) = (@inbounds for I in eachindex(X)
 
 # logic for deciding the resulting container type
 _containertype(::Type) = Any
-_containertype{T<:Ptr}(::Type{T}) = Any
-_containertype{T<:Tuple}(::Type{T}) = Tuple
-_containertype{T<:Ref}(::Type{T}) = Array
-_containertype{T<:AbstractArray}(::Type{T}) = Array
-_containertype{T<:Nullable}(::Type{T}) = Nullable
+_containertype(::Type{<:Ptr}) = Any
+_containertype(::Type{<:Tuple}) = Tuple
+_containertype(::Type{<:Ref}) = Array
+_containertype(::Type{<:AbstractArray}) = Array
+_containertype(::Type{<:Nullable}) = Nullable
 containertype(x) = _containertype(typeof(x))
 containertype(ct1, ct2) = promote_containertype(containertype(ct1), containertype(ct2))
 @inline containertype(ct1, ct2, cts...) = promote_containertype(containertype(ct1), containertype(ct2, cts...))
@@ -328,7 +330,7 @@ the following rules:
  - If the arguments are tuples and zero or more scalars, it returns a tuple.
  - If the arguments contain at least one array or `Ref`, it returns an array
    (expanding singleton dimensions), and treats `Ref`s as 0-dimensional arrays,
-   and tuples as a 1-dimensional arrays.
+   and tuples as 1-dimensional arrays.
 
 The following additional rule applies to `Nullable` arguments: If there is at
 least one `Nullable`, and all the arguments are scalars or `Nullable`, it
@@ -369,10 +371,10 @@ julia> parse.(Int, ["1", "2"])
  2
 
 julia> abs.((1, -2))
-(1,2)
+(1, 2)
 
 julia> broadcast(+, 1.0, (0, -2.0))
-(1.0,-1.0)
+(1.0, -1.0)
 
 julia> broadcast(+, 1.0, (0, -2.0), Ref(1))
 2-element Array{Float64,1}:
@@ -381,8 +383,8 @@ julia> broadcast(+, 1.0, (0, -2.0), Ref(1))
 
 julia> (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1]))
 2-element Array{Array{Int64,1},1}:
- [1,1]
- [2,2]
+ [1, 1]
+ [2, 2]
 
 julia> string.(("one","two","three","four"), ": ", 1:4)
 4-element Array{String,1}:
@@ -503,16 +505,68 @@ end
 # explicit calls to view.   (All of this can go away if slices
 # are changed to generate views by default.)
 
-dotview(args...) = getindex(args...)
-dotview(A::AbstractArray, args...) = view(A, args...)
-dotview{T<:AbstractArray}(A::AbstractArray{T}, args...) = getindex(A, args...)
-# avoid splatting penalty in common cases:
-for nargs = 0:5
-    args = Symbol[Symbol("x",i) for i = 1:nargs]
-    eval(Expr(:(=), Expr(:call, :dotview, args...),
-                    Expr(:call, :getindex, args...)))
-    eval(Expr(:(=), Expr(:call, :dotview, :(A::AbstractArray), args...),
-                    Expr(:call, :view, :A, args...)))
+Base.@propagate_inbounds dotview(args...) = getindex(args...)
+Base.@propagate_inbounds dotview(A::AbstractArray, args...) = view(A, args...)
+Base.@propagate_inbounds dotview(A::AbstractArray{<:AbstractArray}, args::Integer...) = getindex(A, args...)
+
+
+############################################################
+# The parser turns @. into a call to the __dot__ macro,
+# which converts all function calls and assignments into
+# broadcasting "dot" calls/assignments:
+
+dottable(x) = false # avoid dotting spliced objects (e.g. view calls inserted by @view)
+dottable(x::Symbol) = !isoperator(x) || first(string(x)) != '.' || x == :.. # don't add dots to dot operators
+dottable(x::Expr) = x.head != :$
+undot(x) = x
+function undot(x::Expr)
+    if x.head == :.=
+        Expr(:(=), x.args...)
+    elseif x.head == :block # occurs in for x=..., y=...
+        Expr(:block, map(undot, x.args)...)
+    else
+        x
+    end
+end
+__dot__(x) = x
+function __dot__(x::Expr)
+    dotargs = map(__dot__, x.args)
+    if x.head == :call && dottable(x.args[1])
+        Expr(:., dotargs[1], Expr(:tuple, dotargs[2:end]...))
+    elseif x.head == :$
+        x.args[1]
+    elseif x.head == :let # don't add dots to "let x=... assignments
+        Expr(:let, dotargs[1], map(undot, dotargs[2:end])...)
+    elseif x.head == :for # don't add dots to for x=... assignments
+        Expr(:for, undot(dotargs[1]), dotargs[2])
+    elseif (x.head == :(=) || x.head == :function || x.head == :macro) &&
+           Meta.isexpr(x.args[1], :call) # function or macro definition
+        Expr(x.head, x.args[1], dotargs[2])
+    else
+        head = string(x.head)
+        if last(head) == '=' && first(head) != '.'
+            Expr(Symbol('.',head), dotargs...)
+        else
+            Expr(x.head, dotargs...)
+        end
+    end
+end
+"""
+    @. expr
+
+Convert every function call or operator in `expr` into a "dot call"
+(e.g. convert `f(x)` to `f.(x)`), and convert every assignment in `expr`
+to a "dot assignment" (e.g. convert `+=` to `.+=`).
+
+If you want to *avoid* adding dots for selected function calls in
+`expr`, splice those function calls in with `\$`.  For example,
+`@. sqrt(abs(\$sort(x)))` is equivalent to `sqrt.(abs.(sort(x)))`
+(no dot for `sort`).
+
+(`@.` is equivalent to a call to `@__dot__`.)
+"""
+macro __dot__(x)
+    esc(__dot__(x))
 end
 
 end # module

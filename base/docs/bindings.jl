@@ -2,7 +2,7 @@
 
 export @var
 
-immutable Binding
+struct Binding
     mod::Module
     var::Symbol
 

@@ -74,7 +74,7 @@ static const jl_fptr_t id_to_fptrs[] = {
   NULL, NULL,
   jl_f_throw, jl_f_is, jl_f_typeof, jl_f_issubtype, jl_f_isa,
   jl_f_typeassert, jl_f__apply, jl_f__apply_pure, jl_f_isdefined,
-  jl_f_tuple, jl_f_svec, jl_f_intrinsic_call,
+  jl_f_tuple, jl_f_svec, jl_f_intrinsic_call, jl_f_invoke_kwsorter,
   jl_f_getfield, jl_f_setfield, jl_f_fieldtype, jl_f_nfields,
   jl_f_arrayref, jl_f_arrayset, jl_f_arraysize, jl_f_apply_type,
   jl_f_applicable, jl_f_invoke, jl_unprotect_stack, jl_f_sizeof, jl_f__expr,
@@ -432,15 +432,15 @@ static void jl_update_all_fptrs(void)
     for (i = 0; i < delayed_fptrs_n; i++) {
         jl_method_instance_t *li = delayed_fptrs[i].li;
         assert(li->def);
-        int32_t func = delayed_fptrs[i].func - 1;
-        if (func >= 0) {
-            jl_fptr_to_llvm((jl_fptr_t)fvars[func], li, 0);
-            linfos[func] = li;
-        }
         int32_t cfunc = delayed_fptrs[i].cfunc - 1;
         if (cfunc >= 0) {
             jl_fptr_to_llvm((jl_fptr_t)fvars[cfunc], li, 1);
             linfos[cfunc] = li;
+        }
+        int32_t func = delayed_fptrs[i].func - 1;
+        if (func >= 0) {
+            jl_fptr_to_llvm((jl_fptr_t)fvars[func], li, 0);
+            linfos[func] = li;
         }
     }
     jl_register_fptrs(sysimage_base, fvars, linfos, sysimg_fvars_max);
@@ -627,12 +627,10 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt)
         }
         write_uint8(s->s, layout);
         if (layout == 0) {
-            size_t nf = dt->layout->nfields;
-            write_uint16(s->s, nf);
-            write_int8(s->s, dt->layout->fielddesc_type);
-            write_int32(s->s, dt->layout->alignment);
-            write_int8(s->s, dt->layout->haspadding);
-            write_int8(s->s, dt->layout->pointerfree);
+            uint32_t nf = dt->layout->nfields;
+            write_int32(s->s, nf);
+            uint32_t alignment = ((uint32_t*)dt->layout)[1];
+            write_int32(s->s, alignment);
             size_t fieldsize = jl_fielddesc_size(dt->layout->fielddesc_type);
             ios_write(s->s, (char*)(&dt->layout[1]), nf * fieldsize);
         }
@@ -922,7 +920,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         else {
             assert(m->max_world == ~(size_t)0 && "method replacement cannot be handled by incremental serializer");
         }
-        jl_serialize_value(s, (jl_value_t*)m->tvars);
         if (external_mt)
             jl_serialize_value(s, jl_nothing);
         else
@@ -937,7 +934,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)m->unspecialized);
         jl_serialize_value(s, (jl_value_t*)m->generator);
         jl_serialize_value(s, (jl_value_t*)m->invokes.unknown);
-        write_int8(s->s, m->needs_sparam_vals_ducttape);
     }
     else if (jl_is_method_instance(v)) {
         writetag(s->s, jl_method_instance_type);
@@ -1433,16 +1429,22 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
         }
         else {
             assert(layout == 0);
-            uint16_t nf = read_uint16(s->s);
-            uint8_t fielddesc_type = read_int8(s->s);
+            uint32_t nf = read_int32(s->s);
+            uint32_t alignment = read_int32(s->s);
+            union {
+                struct {
+                    uint32_t nf;
+                    uint32_t alignment;
+                } buffer;
+                jl_datatype_layout_t layout;
+            } header;
+            header.buffer.nf = nf;
+            header.buffer.alignment = alignment;
+            uint8_t fielddesc_type = header.layout.fielddesc_type;
             size_t fielddesc_size = nf > 0 ? jl_fielddesc_size(fielddesc_type) : 0;
             jl_datatype_layout_t *layout = (jl_datatype_layout_t*)jl_gc_perm_alloc(
                     sizeof(jl_datatype_layout_t) + nf * fielddesc_size);
-            layout->nfields = nf;
-            layout->fielddesc_type = fielddesc_type;
-            layout->alignment = read_int32(s->s);
-            layout->haspadding = read_int8(s->s);
-            layout->pointerfree = read_int8(s->s);
+            *layout = header.layout;
             ios_read(s->s, (char*)&layout[1], nf * fielddesc_size);
             dt->layout = layout;
         }
@@ -1660,8 +1662,6 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
         m->min_world = jl_world_counter;
         m->max_world = ~(size_t)0;
     }
-    m->tvars = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&m->tvars);
-    jl_gc_wb(m, m->tvars);
     m->ambig = jl_deserialize_value(s, (jl_value_t**)&m->ambig);
     jl_gc_wb(m, m->ambig);
     m->called = read_int8(s->s);
@@ -1685,7 +1685,6 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
         jl_gc_wb(m, m->generator);
     m->invokes.unknown = jl_deserialize_value(s, (jl_value_t**)&m->invokes);
     jl_gc_wb(m, m->invokes.unknown);
-    m->needs_sparam_vals_ducttape = read_int8(s->s);
     m->traced = 0;
     JL_MUTEX_INIT(&m->writelock);
     return (jl_value_t*)m;
@@ -2887,7 +2886,7 @@ jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *li, size_
     jl_datatype_t *argtypes = (jl_datatype_t*)li->specTypes;
     jl_set_typeof(li, (void*)(intptr_t)0x40); // invalidate the old value to help catch errors
     jl_svec_t *env = jl_emptysvec;
-    jl_value_t *ti = jl_type_intersection_matching((jl_value_t*)argtypes, (jl_value_t*)m->sig, &env);
+    jl_value_t *ti = jl_type_intersection_env((jl_value_t*)argtypes, (jl_value_t*)m->sig, &env);
     //assert(ti != jl_bottom_type); (void)ti;
     if (ti == jl_bottom_type)
         env = jl_emptysvec; // the intersection may fail now if the type system had made an incorrect subtype env in the past
@@ -3090,7 +3089,7 @@ void jl_init_serializer(void)
                      jl_abstractslot_type, jl_methtable_type, jl_typemap_level_type,
                      jl_voidpointer_type, jl_newvarnode_type, jl_abstractstring_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
-                     jl_typeof(jl_emptytuple), jl_array_uint8_type, jl_symbol_type->name,
+                     jl_emptytuple_type, jl_array_uint8_type, jl_symbol_type->name,
                      jl_ssavalue_type->name, jl_tuple_typename, jl_code_info_type, jl_bottomtype_type,
                      ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_ref_type))->name,
                      jl_pointer_typename, jl_simplevector_type->name, jl_datatype_type->name,

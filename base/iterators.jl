@@ -4,7 +4,7 @@ module Iterators
 
 import Base: start, done, next, isempty, length, size, eltype, iteratorsize, iteratoreltype, indices, ndims
 
-using Base: tuple_type_cons, SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo
+using Base: tuple_type_cons, SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds
 
 export enumerate, zip, rest, countfrom, take, drop, cycle, repeated, product, flatten, partition
 
@@ -28,7 +28,7 @@ and_iteratoreltype(a, b) = EltypeUnknown()
 
 # enumerate
 
-immutable Enumerate{I}
+struct Enumerate{I}
     itr::I
 end
 
@@ -40,7 +40,8 @@ and `x` is the `i`th value from the given iterator. It's useful when
 you need not only the values `x` over which you are iterating, but
 also the number of iterations so far. Note that `i` may not be valid
 for indexing `iter`; it's also possible that `x != iter[i]`, if `iter`
-has indices that do not start at 1.
+has indices that do not start at 1. See the `enumerate(IndexLinear(),
+iter)` method if you want to ensure that `i` is an index.
 
 ```jldoctest
 julia> a = ["a", "b", "c"];
@@ -57,21 +58,91 @@ enumerate(iter) = Enumerate(iter)
 
 length(e::Enumerate) = length(e.itr)
 size(e::Enumerate) = size(e.itr)
-start(e::Enumerate) = (1, start(e.itr))
-function next(e::Enumerate, state)
+@inline start(e::Enumerate) = (1, start(e.itr))
+@inline function next(e::Enumerate, state)
     n = next(e.itr,state[2])
     (state[1],n[1]), (state[1]+1,n[2])
 end
-done(e::Enumerate, state) = done(e.itr, state[2])
+@inline done(e::Enumerate, state) = done(e.itr, state[2])
 
 eltype{I}(::Type{Enumerate{I}}) = Tuple{Int, eltype(I)}
 
 iteratorsize{I}(::Type{Enumerate{I}}) = iteratorsize(I)
 iteratoreltype{I}(::Type{Enumerate{I}}) = iteratoreltype(I)
 
+struct IndexValue{I,A<:AbstractArray}
+    data::A
+    itr::I
+end
+
+"""
+    enumerate(IndexLinear(), A)
+    enumerate(IndexCartesian(), A)
+    enumerate(IndexStyle(A), A)
+
+An iterator that accesses each element of the array `A`, returning
+`(i, x)`, where `i` is the index for the element and `x = A[i]`.  This
+is similar to `enumerate(A)`, except `i` will always be a valid index
+for `A`.
+
+Specifying `IndexLinear()` ensures that `i` will be an integer;
+specifying `IndexCartesian()` ensures that `i` will be a
+`CartesianIndex`; specifying `IndexStyle(A)` chooses whichever has
+been defined as the native indexing style for array `A`.
+
+```jldoctest
+julia> A = ["a" "d"; "b" "e"; "c" "f"];
+
+julia> for (index, value) in enumerate(IndexStyle(A), A)
+           println("\$index \$value")
+       end
+1 a
+2 b
+3 c
+4 d
+5 e
+6 f
+
+julia> S = view(A, 1:2, :);
+
+julia> for (index, value) in enumerate(IndexStyle(S), S)
+           println("\$index \$value")
+       end
+CartesianIndex{2}((1, 1)) a
+CartesianIndex{2}((2, 1)) b
+CartesianIndex{2}((1, 2)) d
+CartesianIndex{2}((2, 2)) e
+```
+
+Note that `enumerate(A)` returns `i` as a *counter* (always starting
+at 1), whereas `enumerate(IndexLinear(), A)` returns `i` as an *index*
+(starting at the first linear index of `A`, which may or may not be
+1).
+
+See also: [`IndexStyle`](@ref), [`indices`](@ref).
+"""
+enumerate(::IndexLinear,    A::AbstractArray) = IndexValue(A, linearindices(A))
+enumerate(::IndexCartesian, A::AbstractArray) = IndexValue(A, CartesianRange(indices(A)))
+
+length(v::IndexValue)  = length(v.itr)
+indices(v::IndexValue) = indices(v.itr)
+size(v::IndexValue)    = size(v.itr)
+@inline start(v::IndexValue) = start(v.itr)
+@propagate_inbounds function next(v::IndexValue, state)
+    indx, n = next(v.itr, state)
+    item = v.data[indx]
+    (indx, item), n
+end
+@inline done(v::IndexValue, state) = done(v.itr, state)
+
+eltype{I,A}(::Type{IndexValue{I,A}}) = Tuple{eltype(I), eltype(A)}
+
+iteratorsize{I}(::Type{IndexValue{I}}) = iteratorsize(I)
+iteratoreltype{I}(::Type{IndexValue{I}}) = iteratoreltype(I)
+
 # zip
 
-abstract AbstractZipIterator
+abstract type AbstractZipIterator end
 
 zip_iteratorsize(a, b) = and_iteratorsize(a,b) # as `and_iteratorsize` but inherit `Union{HasLength,IsInfinite}` of the shorter iterator
 zip_iteratorsize(::HasLength, ::IsInfinite) = HasLength()
@@ -80,7 +151,7 @@ zip_iteratorsize(a::IsInfinite, b) = zip_iteratorsize(b,a)
 zip_iteratorsize(a::IsInfinite, b::IsInfinite) = IsInfinite()
 
 
-immutable Zip1{I} <: AbstractZipIterator
+struct Zip1{I} <: AbstractZipIterator
     a::I
 end
 zip(a) = Zip1(a)
@@ -98,7 +169,7 @@ end
 iteratorsize{I}(::Type{Zip1{I}}) = iteratorsize(I)
 iteratoreltype{I}(::Type{Zip1{I}}) = iteratoreltype(I)
 
-immutable Zip2{I1, I2} <: AbstractZipIterator
+struct Zip2{I1, I2} <: AbstractZipIterator
     a::I1
     b::I2
 end
@@ -118,7 +189,7 @@ end
 iteratorsize{I1,I2}(::Type{Zip2{I1,I2}}) = zip_iteratorsize(iteratorsize(I1),iteratorsize(I2))
 iteratoreltype{I1,I2}(::Type{Zip2{I1,I2}}) = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
 
-immutable Zip{I, Z<:AbstractZipIterator} <: AbstractZipIterator
+struct Zip{I, Z<:AbstractZipIterator} <: AbstractZipIterator
     a::I
     z::Z
 end
@@ -144,13 +215,13 @@ julia> b = ["e","d","b","c","a"]
  "a"
 
 julia> c = zip(a,b)
-Base.Iterators.Zip2{UnitRange{Int64},Array{String,1}}(1:5,String["e","d","b","c","a"])
+Base.Iterators.Zip2{UnitRange{Int64},Array{String,1}}(1:5, String["e", "d", "b", "c", "a"])
 
 julia> length(c)
 5
 
 julia> first(c)
-(1,"e")
+(1, "e")
 ```
 """
 zip(a, b, c...) = Zip(a, zip(b, c...))
@@ -171,7 +242,7 @@ iteratoreltype{I1,I2}(::Type{Zip{I1,I2}}) = and_iteratoreltype(iteratoreltype(I1
 
 # filter
 
-immutable Filter{F,I}
+struct Filter{F,I}
     flt::F
     itr::I
 end
@@ -208,11 +279,11 @@ done(f::Filter, s) = s[1]
 
 eltype{F,I}(::Type{Filter{F,I}}) = eltype(I)
 iteratoreltype{F,I}(::Type{Filter{F,I}}) = iteratoreltype(I)
-iteratorsize{T<:Filter}(::Type{T}) = SizeUnknown()
+iteratorsize(::Type{<:Filter}) = SizeUnknown()
 
 # Rest -- iterate starting at the given state
 
-immutable Rest{I,S}
+struct Rest{I,S}
     itr::I
     st::S
 end
@@ -237,7 +308,7 @@ iteratorsize{I,S}(::Type{Rest{I,S}}) = rest_iteratorsize(iteratorsize(I))
 
 # Count -- infinite counting
 
-immutable Count{S<:Number}
+struct Count{S<:Number}
     start::S
     step::S
 end
@@ -248,7 +319,7 @@ end
 An iterator that counts forever, starting at `start` and incrementing by `step`.
 """
 countfrom(start::Number, step::Number) = Count(promote(start, step)...)
-countfrom(start::Number)               = Count(start, one(start))
+countfrom(start::Number)               = Count(start, oneunit(start))
 countfrom()                            = Count(1, 1)
 
 eltype{S}(::Type{Count{S}}) = S
@@ -257,11 +328,11 @@ start(it::Count) = it.start
 next(it::Count, state) = (state, state + it.step)
 done(it::Count, state) = false
 
-iteratorsize{S}(::Type{Count{S}}) = IsInfinite()
+iteratorsize(::Type{<:Count}) = IsInfinite()
 
 # Take -- iterate through the first n elements
 
-immutable Take{I}
+struct Take{I}
     xs::I
     n::Int
 end
@@ -316,7 +387,7 @@ end
 
 # Drop -- iterator through all but the first n elements
 
-immutable Drop{I}
+struct Drop{I}
     xs::I
     n::Int
 end
@@ -374,7 +445,7 @@ done(it::Drop, state) = done(it.xs, state)
 
 # Cycle an iterator forever
 
-immutable Cycle{I}
+struct Cycle{I}
     xs::I
 end
 
@@ -408,7 +479,7 @@ done(it::Cycle, state) = state[2]
 
 # Repeated - repeat an object infinitely many times
 
-immutable Repeated{O}
+struct Repeated{O}
     x::O
 end
 repeated(x) = Repeated(x)
@@ -438,13 +509,13 @@ start(it::Repeated) = nothing
 next(it::Repeated, state) = (it.x, nothing)
 done(it::Repeated, state) = false
 
-iteratorsize{O}(::Type{Repeated{O}}) = IsInfinite()
-iteratoreltype{O}(::Type{Repeated{O}}) = HasEltype()
+iteratorsize(::Type{<:Repeated}) = IsInfinite()
+iteratoreltype(::Type{<:Repeated}) = HasEltype()
 
 
 # Product -- cartesian product of iterators
 
-abstract AbstractProdIterator
+abstract type AbstractProdIterator end
 
 length(p::AbstractProdIterator) = prod(size(p))
 _length(p::AbstractProdIterator) = prod(map(unsafe_length, indices(p)))
@@ -476,7 +547,7 @@ _prod_indices(a, b, A, B) =
     throw(ArgumentError("Cannot construct indices for objects of types $(typeof(a)) and $(typeof(b))"))
 
 # one iterator
-immutable Prod1{I} <: AbstractProdIterator
+struct Prod1{I} <: AbstractProdIterator
     a::I
 end
 product(a) = Prod1(a)
@@ -496,7 +567,7 @@ iteratoreltype{I}(::Type{Prod1{I}}) = iteratoreltype(I)
 iteratorsize{I}(::Type{Prod1{I}}) = iteratorsize(I)
 
 # two iterators
-immutable Prod2{I1, I2} <: AbstractProdIterator
+struct Prod2{I1, I2} <: AbstractProdIterator
     a::I1
     b::I2
 end
@@ -511,8 +582,8 @@ changes the fastest. Example:
 ```jldoctest
 julia> collect(Iterators.product(1:2,3:5))
 2×3 Array{Tuple{Int64,Int64},2}:
- (1,3)  (1,4)  (1,5)
- (2,3)  (2,4)  (2,5)
+ (1, 3)  (1, 4)  (1, 5)
+ (2, 3)  (2, 4)  (2, 5)
 ```
 """
 product(a, b) = Prod2(a, b)
@@ -539,7 +610,7 @@ end
     end
 
     if done(p.a, s1)
-        return (v1,v2), (start(p.a), s2, oftype(nv2,nothing), done(p.b,s2))
+        return (v1,v2), (start(p.a), s2, Nullable{eltype(nv2)}(), done(p.b,s2))
     end
     return (v1,v2), (s1, s2, Nullable(v2), false)
 end
@@ -548,7 +619,7 @@ end
 @inline done(p::AbstractProdIterator, st) = st[4]
 
 # n iterators
-immutable Prod{I1, I2<:AbstractProdIterator} <: AbstractProdIterator
+struct Prod{I1, I2<:AbstractProdIterator} <: AbstractProdIterator
     a::I1
     b::I2
 end
@@ -574,7 +645,7 @@ prod_iteratorsize(a, b) = SizeUnknown()
 
 # flatten an iterator of iterators
 
-immutable Flatten{I}
+struct Flatten{I}
     it::I
 end
 
@@ -641,15 +712,15 @@ Iterate over a collection `n` elements at a time.
 ```jldoctest
 julia> collect(Iterators.partition([1,2,3,4,5], 2))
 3-element Array{Array{Int64,1},1}:
- [1,2]
- [3,4]
+ [1, 2]
+ [3, 4]
  [5]
 ```
 """
 partition{T}(c::T, n::Integer) = PartitionIterator{T}(c, Int(n))
 
 
-type PartitionIterator{T}
+mutable struct PartitionIterator{T}
     c::T
     n::Int
 end
@@ -665,7 +736,7 @@ start(itr::PartitionIterator) = start(itr.c)
 
 done(itr::PartitionIterator, state) = done(itr.c, state)
 
-function next{T<:Vector}(itr::PartitionIterator{T}, state)
+function next(itr::PartitionIterator{<:Vector}, state)
     l = state
     r = min(state + itr.n-1, length(itr.c))
     return view(itr.c, l:r), r + 1

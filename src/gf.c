@@ -24,7 +24,7 @@
 extern "C" {
 #endif
 
-size_t jl_world_counter = 1;
+JL_DLLEXPORT size_t jl_world_counter = 1;
 JL_DLLEXPORT size_t jl_get_world_counter(void)
 {
     return jl_world_counter;
@@ -169,7 +169,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m, 
     else {
         li->max_world = world;
     }
-    jl_typemap_insert(&m->specializations, (jl_value_t*)m, (jl_tupletype_t*)type, jl_emptysvec,
+    jl_typemap_insert(&m->specializations, (jl_value_t*)m, (jl_tupletype_t*)type,
             NULL, jl_emptysvec, (jl_value_t*)li, 0, &tfunc_cache,
             li->min_world, li->max_world, NULL);
     JL_UNLOCK(&m->writelock);
@@ -198,8 +198,6 @@ JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_tupletype_t 
 // ----- MethodInstance specialization instantiation ----- //
 
 JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void);
-static jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name,
-    jl_module_t *module, jl_datatype_t *st, int iskw);
 void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_t fptr)
 {
     jl_sym_t *sname = jl_symbol(name);
@@ -215,18 +213,20 @@ void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_t fptr)
     li->min_world = 1;
     li->max_world = ~(size_t)0;
 
+    JL_GC_PUSH1(&li);
     li->def = jl_new_method_uninit();
+    jl_gc_wb(li, li->def);
     li->def->name = sname;
     li->def->module = jl_core_module;
     li->def->isva = 1;
     li->def->nargs = 2;
     li->def->sig = (jl_value_t*)jl_anytuple_type;
-    li->def->tvars = jl_emptysvec;
     li->def->sparam_syms = jl_emptysvec;
 
     jl_methtable_t *mt = dt->name->mt;
-    jl_typemap_insert(&mt->cache, (jl_value_t*)mt, jl_anytuple_type, jl_emptysvec,
+    jl_typemap_insert(&mt->cache, (jl_value_t*)mt, jl_anytuple_type,
         NULL, jl_emptysvec, (jl_value_t*)li, 0, &lambda_cache, 1, ~(size_t)0, NULL);
+    JL_GC_POP();
 }
 
 // run type inference on lambda "li" for given argument types.
@@ -397,7 +397,7 @@ JL_DLLEXPORT jl_method_instance_t* jl_set_method_inferred(
                 li->min_world = min_world;
                 li->max_world = max_world;
                 jl_typemap_insert(&li->def->specializations, (jl_value_t*)li->def,
-                        (jl_tupletype_t*)li->specTypes, jl_emptysvec, NULL, jl_emptysvec,
+                        (jl_tupletype_t*)li->specTypes, NULL, jl_emptysvec,
                         (jl_value_t*)li, 0, &tfunc_cache,
                         li->min_world, li->max_world, NULL);
             }
@@ -877,12 +877,12 @@ static jl_method_instance_t *cache_method(jl_methtable_t *mt, union jl_typemap_t
             if (nsp > 0) {
                 jl_svec_t *env = jl_alloc_svec_uninit(2 * nsp);
                 temp2 = (jl_value_t*)env;
+                jl_unionall_t *ua = (jl_unionall_t*)m->sig;
                 for (j = 0; j < nsp; j++) {
-                    if (j == 0 && jl_is_typevar(m->tvars))
-                        jl_svecset(env, 0, m->tvars);
-                    else
-                        jl_svecset(env, j * 2, jl_svecref(m->tvars, j));
+                    assert(jl_is_unionall(ua));
+                    jl_svecset(env, j * 2, ua->var);
                     jl_svecset(env, j * 2 + 1, jl_svecref(sparams, j));
+                    ua = (jl_unionall_t*)ua->body;
                 }
                 lastdeclt = (jl_value_t*)jl_instantiate_type_with((jl_value_t*)lastdeclt,
                                                                   jl_svec_data(env), nsp);
@@ -956,7 +956,7 @@ static jl_method_instance_t *cache_method(jl_methtable_t *mt, union jl_typemap_t
                     jl_svecset(guardsigs, guards, (jl_tupletype_t*)jl_svecref(m, 0));
                     guards++;
                     //jl_typemap_insert(cache, parent, (jl_tupletype_t*)jl_svecref(m, 0),
-                    //        jl_emptysvec, NULL, jl_emptysvec, /*guard*/NULL, jl_cachearg_offset(mt), &lambda_cache, other->min_world, other->max_world, NULL);
+                    //        NULL, jl_emptysvec, /*guard*/NULL, jl_cachearg_offset(mt), &lambda_cache, other->min_world, other->max_world, NULL);
                 }
             }
         }
@@ -1005,7 +1005,7 @@ static jl_method_instance_t *cache_method(jl_methtable_t *mt, union jl_typemap_t
         }
     }
 
-    jl_typemap_insert(cache, parent, origtype, jl_emptysvec, type, guardsigs,
+    jl_typemap_insert(cache, parent, origtype, type, guardsigs,
             (jl_value_t*)newmeth, jl_cachearg_offset(mt), &lambda_cache,
             min_valid, max_valid, NULL);
 
@@ -1094,22 +1094,21 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
     jl_method_t *m = closure->newentry->func.method;
     jl_tupletype_t *sig = oldentry->sig;
     jl_value_t *isect = closure->match.ti;
-    if (jl_types_equal(isect, (jl_value_t*)(closure->after ? sig : type))) {
-        // we're ok if the new definition is actually the one we just
-        // inferred to be required (see issue #3609). ideally this would
-        // never happen, since if New ⊓ Old == New then we should have
-        // considered New more specific, but jl_type_morespecific is not
-        // perfect, so this is a useful fallback.
-        return 1;
-    }
 
     // we know type ∩ sig != Union{} and
-    // we know !jl_type_morespecific(type, sig) [before]
-    //      or !jl_type_morespecific(sig, type) [after]
+    // we are assuming that
+    //        !jl_type_morespecific(type, sig) [before]
+    //     or !jl_type_morespecific(sig, type) [after]
+    // based on their sort order in the typemap
     // now we are checking that the reverse is true
     if (!jl_type_morespecific((jl_value_t*)(closure->after ? type : sig),
                               (jl_value_t*)(closure->after ? sig : type))) {
-        jl_typemap_entry_t *l = jl_typemap_assoc_by_type(map, (jl_tupletype_t*)isect, NULL, 0, 0, 0,
+        // see if the intersection is covered by another existing method
+        // that will resolve the ambiguity (by being more specific than either)
+        // (if type-morespecific made a mistake, this also might end up finding
+        // that isect == type or isect == sig and return the original match)
+        jl_typemap_entry_t *l = jl_typemap_assoc_by_type(
+                map, (jl_tupletype_t*)isect, NULL, 0, 0, 0,
                 closure->newentry->min_world);
         if (l != NULL) // ok, intersection is covered
             return 1;
@@ -1336,14 +1335,13 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     assert(jl_is_method(method));
     assert(jl_is_mtable(mt));
     jl_value_t *type = method->sig;
-    jl_svec_t *tvars = method->tvars;
     jl_value_t *oldvalue = NULL;
     struct invalidate_conflicting_env env;
     env.max_world = method->min_world - 1;
     JL_GC_PUSH1(&oldvalue);
     JL_LOCK(&mt->writelock);
     jl_typemap_entry_t *newentry = jl_typemap_insert(&mt->defs, (jl_value_t*)mt,
-            (jl_tupletype_t*)type, tvars, simpletype, jl_emptysvec, (jl_value_t*)method, 0, &method_defs,
+            (jl_tupletype_t*)type, simpletype, jl_emptysvec, (jl_value_t*)method, 0, &method_defs,
             method->min_world, method->max_world, &oldvalue);
     if (oldvalue) {
         method->ambig = ((jl_method_t*)oldvalue)->ambig;
@@ -1475,7 +1473,7 @@ jl_tupletype_t *arg_type_tuple(jl_value_t **args, size_t nargs)
 }
 
 jl_method_instance_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,
-                                           int cache, int inexact, int allow_exec, size_t world)
+                                               int cache, int inexact, int allow_exec, size_t world)
 {
     jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(mt->cache, types, NULL, 0, 1, jl_cachearg_offset(mt), world);
     if (entry) {
@@ -1592,7 +1590,7 @@ jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **pli, size_t w
         if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF) {
             jl_printf(JL_STDERR, "code missing for ");
             jl_static_show(JL_STDERR, (jl_value_t*)li);
-            jl_printf(JL_STDERR, "  sysimg may not have been built with --compile=all\n");
+            jl_printf(JL_STDERR, " : sysimg may not have been built with --compile=all\n");
         }
     }
     jl_llvm_functions_t decls = li->functionObjectsDecls;
@@ -2002,7 +2000,7 @@ static void _precompile_enq_module(jl_module_t *m, jl_array_t *unspec)
     // removes all method caches
     size_t i;
     void **table = m->bindings.table;
-    for(i=1; i < m->bindings.size; i+=2) {
+    for (i = 1; i < m->bindings.size; i += 2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
             if (b->owner == m && b->value && b->constp) {
@@ -2272,8 +2270,8 @@ jl_value_t *jl_gf_invoke(jl_tupletype_t *types0, jl_value_t **args, size_t nargs
         }
         else {
             tt = arg_type_tuple(args, nargs);
-            if (entry->tvars != jl_emptysvec) {
-                jl_value_t *ti = jl_lookup_match((jl_value_t*)tt, (jl_value_t*)entry->sig, &tpenv);
+            if (jl_is_unionall(entry->sig)) {
+                jl_value_t *ti = jl_type_intersection_env((jl_value_t*)tt, (jl_value_t*)entry->sig, &tpenv);
                 assert(ti != (jl_value_t*)jl_bottom_type);
                 (void)ti;
             }
@@ -2354,9 +2352,9 @@ JL_DLLEXPORT jl_value_t *jl_get_invoke_lambda(jl_methtable_t *mt,
     jl_svec_t *tpenv = jl_emptysvec;
     jl_tupletype_t *sig = NULL;
     JL_GC_PUSH2(&tpenv, &sig);
-    if (entry->tvars != jl_emptysvec) {
+    if (jl_is_unionall(entry->sig)) {
         jl_value_t *ti =
-            jl_lookup_match((jl_value_t*)tt, (jl_value_t*)entry->sig, &tpenv);
+            jl_type_intersection_env((jl_value_t*)tt, (jl_value_t*)entry->sig, &tpenv);
         assert(ti != (jl_value_t*)jl_bottom_type);
         (void)ti;
     }
@@ -2373,7 +2371,8 @@ JL_DLLEXPORT jl_value_t *jl_get_invoke_lambda(jl_methtable_t *mt,
     return (jl_value_t*)mfunc;
 }
 
-static jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, int iskw)
+// Return value is rooted globally
+jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, int iskw)
 {
     // type name is function name prefixed with #
     size_t l = strlen(jl_symbol_name(name));
@@ -2427,7 +2426,7 @@ JL_DLLEXPORT jl_svec_t *jl_match_method(jl_value_t *type, jl_value_t *sig)
     jl_svec_t *env = jl_emptysvec;
     jl_value_t *ti=NULL;
     JL_GC_PUSH2(&env, &ti);
-    ti = jl_lookup_match(type, (jl_value_t*)sig, &env);
+    ti = jl_type_intersection_env(type, (jl_value_t*)sig, &env);
     jl_svec_t *result = jl_svec2(ti, env);
     JL_GC_POP();
     return result;
@@ -2436,26 +2435,46 @@ JL_DLLEXPORT jl_svec_t *jl_match_method(jl_value_t *type, jl_value_t *sig)
 // Determine whether a typevar exists inside at most one DataType.
 // These are the typevars that will always be matched by any matching
 // arguments.
-static int tvar_exists_at_top_level(jl_value_t *tv, jl_tupletype_t *sig, int attop)
+static int tvar_exists_at_top_level(jl_tvar_t *tv, jl_value_t *sig)
 {
-    sig = (jl_tupletype_t*)jl_unwrap_unionall((jl_value_t*)sig);
+    sig = jl_unwrap_unionall(sig);
     int i, l=jl_nparams(sig);
     for(i=0; i < l; i++) {
         jl_value_t *a = jl_tparam(sig, i);
+        a = jl_unwrap_unionall(a);
         if (jl_is_vararg_type(a))
-            a = jl_unwrap_vararg(a);
-        if (a == tv)
+            return 0;
+        if (jl_is_type_type(a))
+            a = jl_unwrap_unionall(jl_tparam0(a));
+        if (a == (jl_value_t*)tv)
             return 1;
-        if (attop && jl_is_datatype(a)) {
+        if (jl_is_datatype(a)) {
             jl_svec_t *p = ((jl_datatype_t*)a)->parameters;
             int j;
             for(j=0; j < jl_svec_len(p); j++) {
-                if (jl_svecref(p,j) == tv)
+                if (jl_svecref(p,j) == (jl_value_t*)tv)
                     return 1;
             }
         }
     }
     return 0;
+}
+
+static int matched_all_tvars(jl_value_t *sig, jl_value_t **env, int envsz)
+{
+    size_t i;
+    jl_value_t *temp = sig;
+    for (i = 0; i < envsz; i++) {
+        assert(jl_is_unionall(temp));
+        if (jl_is_typevar(env[i]) &&
+            // if tvar is at the top level it will definitely be matched.
+            // see issue #5575
+            !tvar_exists_at_top_level(((jl_unionall_t*)temp)->var, sig)) {
+            return 0;
+        }
+        temp = ((jl_unionall_t*)temp)->body;
+    }
+    return 1;
 }
 
 struct ml_matches_env {
@@ -2512,7 +2531,8 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
         // the "limited" mode used by type inference.
         for (i = 0; i < len; i++) {
             jl_value_t *prior_ti = jl_svecref(jl_array_ptr_ref(closure->t, i), 0);
-            // TODO: should be possible to remove the `jl_is_leaf_type` check
+            // TODO: should be possible to remove the `jl_is_leaf_type` check,
+            // but we still need it in case an intersection was approximate.
             if (jl_is_leaf_type(prior_ti) && jl_subtype(closure->match.ti, prior_ti)) {
                 skip = 1;
                 break;
@@ -2532,46 +2552,31 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
     if (!skip) {
         /*
           Check whether all static parameters matched. If not, then we
-          have an argument type like Vector{T{Int,_}}, and a signature like
-          f{A,B}(::Vector{T{A,B}}). If "_" turns out to be a non-typevar
-          at runtime then this method matches, otherwise it doesn't. So we
-          have to look for more matches. This caused issue #4731.
+          might have argument type `Tuple{}` and signature type `Tuple{Vararg{T}}`,
+          which doesn't match due to there being no value for `T`.
+          This is a remaining case of issue #4731 after introducing UnionAll.
         */
-        int matched_all_typevars = 1;
-        size_t l = jl_svec_len(closure->match.env);
-        for (i = 0; i < l; i++) {
-            jl_value_t *tv;
-            if (jl_is_typevar(ml->tvars))
-                tv = (jl_value_t*)ml->tvars;
-            else
-                tv = jl_svecref(ml->tvars, i);
-            if (jl_is_typevar(jl_svecref(closure->match.env, i)) &&
-                // if tvar is at the top level it will definitely be matched.
-                // see issue #5575
-                !tvar_exists_at_top_level(tv, ml->sig, 1)) {
-                matched_all_typevars = 0;
-                break;
-            }
-        }
         int done = 0, return_this_match = 1;
-        // (type ∩ ml->sig == type) ⇒ (type ⊆ ml->sig)
-        // NOTE: jl_subtype check added in case the intersection is
-        // over-approximated.
-        if (matched_all_typevars && jl_types_equal(closure->match.ti, closure->match.type) &&
-            jl_subtype(closure->match.type, (jl_value_t*)ml->sig)) {
-            done = 1; // terminate visiting method list
+        jl_svec_t *env = closure->match.env;
+        if (closure0->issubty) {
+            // if the queried type is a subtype, but not all tvars matched, then
+            // this method is excluded by the static-parameters-must-have-values rule
+            if (!matched_all_tvars((jl_value_t*)ml->sig, jl_svec_data(env), jl_svec_len(env)))
+                return_this_match = !jl_is_leaf_type(closure->match.type);
+            else
+                done = 1;  // stop; signature fully covers queried type
         }
-        // here we have reached a definition that fully covers the arguments.
-        // however, if there are ambiguities this method might not actually
-        // match, so we shouldn't add it to the results.
-        if (meth->ambig != jl_nothing && (!closure->include_ambiguous || done)) {
+        // if we reach a definition that fully covers the arguments but there are
+        // ambiguities, then this method might not actually match, so we shouldn't
+        // add it to the results.
+        if (return_this_match && meth->ambig != jl_nothing && (!closure->include_ambiguous || done)) {
             jl_svec_t *env = NULL;
             JL_GC_PUSH1(&env);
             for (size_t j = 0; j < jl_array_len(meth->ambig); j++) {
                 jl_method_t *mambig = (jl_method_t*)jl_array_ptr_ref(meth->ambig, j);
                 env = jl_emptysvec;
-                jl_value_t *mti = jl_type_intersection_matching((jl_value_t*)closure->match.type,
-                                                                (jl_value_t*)mambig->sig, &env);
+                jl_value_t *mti = jl_type_intersection_env((jl_value_t*)closure->match.type,
+                                                           (jl_value_t*)mambig->sig, &env);
                 if (mti != (jl_value_t*)jl_bottom_type) {
                     if (closure->include_ambiguous) {
                         assert(done);
@@ -2585,16 +2590,14 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
                                 closure->t = (jl_value_t*)jl_alloc_vec_any(0);
                             }
                             jl_array_ptr_1d_push((jl_array_t*)closure->t,
-                                            (jl_value_t*)jl_svec(3, mti, env, mambig));
+                                                 (jl_value_t*)jl_svec(3, mti, env, mambig));
                             len++;
                         }
                     }
                     else {
-                        // the current method doesn't match if there is an intersection with an
-                        // ambiguous method that covers our intersection with this one.
-                        jl_value_t *ambi = jl_type_intersection_matching((jl_value_t*)ml->sig,
-                                                                         (jl_value_t*)mambig->sig, &env);
-                        if (jl_subtype(closure->match.ti, ambi)) {
+                        // the current method definitely never matches if the intersection with this method
+                        // is also fully covered by an ambiguous method's signature
+                        if (jl_subtype(closure->match.ti, mambig->sig)) {
                             return_this_match = 0;
                             break;
                         }

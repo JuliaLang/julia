@@ -199,6 +199,82 @@ macro f(args...) end; @f ""
 @test parse(Int,'3') == 3
 @test parse(Int,'3', 8) == 3
 
+# Issue 20587
+for T in vcat(subtypes(Signed), subtypes(Unsigned))
+    for s in ["", " ", "  "]
+        # Without a base (handles things like "0x00001111", etc)
+        result = @test_throws ArgumentError parse(T, s)
+        exception_without_base = result.value
+        if T == Bool
+            if s == ""
+                @test exception_without_base.msg == "input string is empty"
+            else
+                @test exception_without_base.msg == "input string only contains whitespace"
+            end
+        else
+            @test exception_without_base.msg == "input string is empty or only contains whitespace"
+        end
+
+        # With a base
+        result = @test_throws ArgumentError parse(T, s, 16)
+        exception_with_base = result.value
+        if T == Bool
+            if s == ""
+                @test exception_with_base.msg == "input string is empty"
+            else
+                @test exception_with_base.msg == "input string only contains whitespace"
+            end
+        else
+            @test exception_with_base.msg == "input string is empty or only contains whitespace"
+        end
+    end
+
+    # Test `tryparse_internal` with part of a string
+    let b = "                   "
+        result = @test_throws ArgumentError get(Base.tryparse_internal(Bool, b, 7, 11, 0, true))
+        exception_bool = result.value
+        @test exception_bool.msg == "input string only contains whitespace"
+
+        result = @test_throws ArgumentError get(Base.tryparse_internal(Int, b, 7, 11, 0, true))
+        exception_int = result.value
+        @test exception_int.msg == "input string is empty or only contains whitespace"
+
+        result = @test_throws ArgumentError get(Base.tryparse_internal(UInt128, b, 7, 11, 0, true))
+        exception_uint = result.value
+        @test exception_uint.msg == "input string is empty or only contains whitespace"
+    end
+
+    # Test that the entire input string appears in error messages
+    let s = "     false    true     "
+        result = @test_throws ArgumentError get(Base.tryparse_internal(Bool, s, start(s), endof(s), 0, true))
+        @test result.value.msg == "invalid Bool representation: $(repr(s))"
+    end
+
+    # Test that leading and trailing whitespace is ignored.
+    for v in (1, 2, 3)
+        @test parse(Int, "    $v"    ) == v
+        @test parse(Int, "    $v\n"  ) == v
+        @test parse(Int, "$v    "    ) == v
+        @test parse(Int, "    $v    ") == v
+    end
+    for v in (true, false)
+        @test parse(Bool, "    $v"    ) == v
+        @test parse(Bool, "    $v\n"  ) == v
+        @test parse(Bool, "$v    "    ) == v
+        @test parse(Bool, "    $v    ") == v
+    end
+    for v in (0.05, -0.05, 2.5, -2.5)
+        @test parse(Float64, "    $v"    ) == v
+        @test parse(Float64, "    $v\n"  ) == v
+        @test parse(Float64, "$v    "    ) == v
+        @test parse(Float64, "    $v    ") == v
+    end
+    @test parse(Float64, "    .5"    ) == 0.5
+    @test parse(Float64, "    .5\n"  ) == 0.5
+    @test parse(Float64, "    .5    ") == 0.5
+    @test parse(Float64, ".5    "    ) == 0.5
+end
+
 parsebin(s) = parse(Int,s,2)
 parseoct(s) = parse(Int,s,8)
 parsehex(s) = parse(Int,s,16)
@@ -326,10 +402,10 @@ parse("""
 
 # issue #13302
 let p = parse("try
-           a
-       catch
-           b, c = t
-       end")
+            a
+        catch
+            b, c = t
+        end")
     @test isa(p,Expr) && p.head === :try
     @test p.args[2] === false
     @test p.args[3].args[end] == parse("b,c = t")
@@ -384,6 +460,9 @@ end
 @test parse("x<:y<:z").head === :comparison
 @test parse("x>:y<:z").head === :comparison
 
+# reason PR #19765, <- operator, was reverted
+@test -2<-1 # DO NOT ADD SPACES
+
 # issue #11169
 uncalled(x) = @test false
 fret() = uncalled(return true)
@@ -417,7 +496,7 @@ test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
 # issue #19861 make sure macro-expansion happens in the newest world for top-level expression
 @test eval(Base.parse_input_line("""
            macro X19861()
-             return 23341
+               return 23341
            end
            @X19861
            """)::Expr) == 23341
@@ -435,8 +514,7 @@ let b = IOBuffer("""
 end
 
 # issue #15763
-# TODO enable post-0.5
-#test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
+test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
 test_parseerror("if false\nelseif\nend", "missing condition in \"elseif\" at none:2")
 
 # issue #15828
@@ -542,11 +620,11 @@ end
 @test_throws ParseError parse("{x=>y for (x,y) in zip([1,2,3],[4,5,6])}")
 #@test_throws ParseError parse("{:a=>1, :b=>2}")
 
+@test parse("A=>B") == Expr(:call, :(=>), :A, :B)
+
 # this now is parsed as getindex(Pair{Any,Any}, ...)
 @test_throws MethodError eval(parse("(Any=>Any)[]"))
 @test_throws MethodError eval(parse("(Any=>Any)[:a=>1,:b=>2]"))
-# to be removed post 0.5
-#@test_throws MethodError eval(parse("(Any=>Any)[x=>y for (x,y) in zip([1,2,3],[4,5,6])]"))
 
 # make sure base can be any Integer
 for T in (Int, BigInt)
@@ -644,12 +722,12 @@ end
 for (str, tag) in Dict("" => :none, "\"" => :string, "#=" => :comment, "'" => :char,
                        "`" => :cmd, "begin;" => :block, "quote;" => :block,
                        "let;" => :block, "for i=1;" => :block, "function f();" => :block,
-                       "f() do x;" => :block, "module X;" => :block, "type X;" => :block,
-                       "immutable X;" => :block, "(" => :other, "[" => :other,
+                       "f() do x;" => :block, "module X;" => :block, "mutable struct X;" => :block,
+                       "struct X;" => :block, "(" => :other, "[" => :other,
                        "begin" => :other, "quote" => :other,
                        "let" => :other, "for" => :other, "function" => :other,
-                       "f() do" => :other, "module" => :other, "type" => :other,
-                       "immutable" => :other)
+                       "f() do" => :other, "module" => :other, "mutable struct" => :other,
+                       "struct" => :other)
     @test Base.incomplete_tag(parse(str, raise=false)) == tag
 end
 
@@ -849,15 +927,13 @@ end
 
 # issue 18756
 module Mod18756
-type Type
+mutable struct Type
 end
 end
 @test method_exists(Mod18756.Type, ())
 
 # issue 18002
-@test parse("typealias a (Int)") == Expr(:typealias, :a, :Int)
-@test parse("typealias b (Int,)") == Expr(:typealias, :b, Expr(:tuple, :Int))
-@test parse("typealias Foo{T} Bar{T}") == Expr(:typealias, Expr(:curly, :Foo, :T), Expr(:curly, :Bar, :T))
+@test parse("Foo{T} = Bar{T}") == Expr(:(=), Expr(:curly, :Foo, :T), Expr(:curly, :Bar, :T))
 
 # don't insert push_loc for filename `none` at the top level
 let ex = expand(parse("""
@@ -921,3 +997,30 @@ let
 end
 @test c8925 == 3 && isconst(:c8925)
 @test d8925 == 4 && isconst(:d8925)
+
+# issue #18754: parse ccall as a regular function
+@test parse("ccall([1], 2)[3]") == Expr(:ref, Expr(:call, :ccall, Expr(:vect, 1), 2), 3)
+@test parse("ccall(a).member") == Expr(:., Expr(:call, :ccall, :a), QuoteNode(:member))
+
+# Check that the body of a `where`-qualified short form function definition gets
+# a :block for its body
+short_where_call = :(f(x::T) where T = T)
+@test short_where_call.args[2].head == :block
+
+# issue #20541
+@test parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :(.!), :b))
+
+@test expand(:(a{1} = b)) == Expr(:error, "invalid type parameter name \"1\"")
+@test expand(:(a{2<:Any} = b)) == Expr(:error, "invalid type parameter name \"2\"")
+
+# issue #20653
+@test_throws UndefVarError Base.call(::Int) = 1
+module Test20653
+using Base.Test
+struct A
+end
+call(::A) = 1
+const a = A()
+@test_throws MethodError a()
+@test call(a) === 1
+end

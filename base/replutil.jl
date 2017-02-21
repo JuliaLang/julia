@@ -39,7 +39,7 @@ function show{K,V}(io::IO, ::MIME"text/plain", t::Associative{K,V})
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit::Bool = get(io, :limit, false)
     if !haskey(io, :compact)
-        recur_io = IOContext(recur_io, compact=true)
+        recur_io = IOContext(recur_io, :compact => true)
     end
 
     print(io, summary(t))
@@ -101,7 +101,7 @@ function show(io::IO, ::MIME"text/plain", f::Function)
     mt = ft.name.mt
     if isa(f, Core.IntrinsicFunction)
         show(io, f)
-        id = Core.Intrinsics.box(Int32, f)
+        id = Core.Intrinsics.bitcast(Int32, f)
         print(io, " (intrinsic function #$id)")
     elseif isa(f, Core.Builtin)
         print(io, mt.name, " (built-in function)")
@@ -170,7 +170,7 @@ function showerror(io::IO, ex::BoundsError)
             if isa(ex.i, Range)
                 print(io, ex.i)
             else
-                join(io, ex.i, ',')
+                join(io, ex.i, ", ")
             end
             print(io, ']')
         end
@@ -223,7 +223,7 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
         if !code.from_c
             if code.func == :nan_dom_err
                 continue
-            elseif code.func in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
+            elseif code.func in (:log, :log2, :log10, :sqrt)
                 print(io, "\n$(code.func) will only return a complex result if called ",
                     "with a complex argument. Try $(string(code.func))(complex(x)).")
             elseif (code.func == :^ && code.file == Symbol("intfuncs.jl")) ||
@@ -442,7 +442,12 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
     for (func,arg_types_param) in funcs
         for method in methods(func)
             buf = IOBuffer()
-            sig0 = unwrap_unionall(method.sig)
+            tv = Any[]
+            sig0 = method.sig
+            while isa(sig0, UnionAll)
+                push!(tv, sig0.var)
+                sig0 = sig0.body
+            end
             s1 = sig0.parameters[1]
             sig = sig0.parameters[2:end]
             print(buf, "  ")
@@ -453,13 +458,6 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                 # TODO: use the methodshow logic here
                 use_constructor_syntax = isa(func, Type)
                 print(buf, use_constructor_syntax ? func : typeof(func).name.mt.name)
-            end
-            tv = method.tvars
-            if !isa(tv,SimpleVector)
-                tv = Any[tv]
-            end
-            if !isempty(tv)
-                show_delim_array(buf, tv, '{', ',', '}', false)
             end
             print(buf, "(")
             t_i = copy(arg_types_param)
@@ -515,6 +513,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                     # If the methods args is longer than input then the method
                     # arguments is printed as not a match
                     for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
+                        sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
                         if Base.isvarargtype(sigtype)
                             sigstr = string(sigtype.parameters[1], "...")
                         else
@@ -539,6 +538,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                     length(kwords) > 0 && print(buf, "; ", join(kwords, ", "))
                 end
                 print(buf, ")")
+                show_method_params(buf, tv)
                 print(buf, " at ", method.file, ":", method.line)
                 if !isempty(kwargs)
                     unexpected = Symbol[]
@@ -587,9 +587,9 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
     end
 end
 
-function show_trace_entry(io, frame, n; prefix = " in ")
-    print(io, "\n")
-    show(io, frame, full_path=true; prefix = prefix)
+function show_trace_entry(io, frame, n; prefix = "")
+    print(io, "\n", prefix)
+    show(io, frame, full_path=true)
     n > 1 && print(io, " (repeats ", n, " times)")
 end
 
@@ -606,7 +606,7 @@ function show_backtrace(io::IO, t::Vector)
     n_frames != 0 && print(io, "\nStacktrace:")
     process_entry = (last_frame, n) -> begin
         frame_counter += 1
-        show_trace_entry(io, last_frame, n, prefix = string(" [", frame_counter, "] "))
+        show_trace_entry(IOContext(io, :backtrace => true), last_frame, n, prefix = string(" [", frame_counter, "] "))
         push!(LAST_BACKTRACE_LINE_INFOS, (string(last_frame.file), last_frame.line))
     end
     process_backtrace(process_entry, t)

@@ -203,7 +203,7 @@
    m inarg))
 
 (define (resolve-expansion-vars- e env m inarg)
-  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end))
+  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end) (eq? e 'ccall))
          e)
         ((symbol? e)
          (let ((a (assq e env)))
@@ -278,17 +278,6 @@
                           (cadr e))
                      ,(resolve-expansion-vars- (caddr e) env m inarg))))
 
-           ((localize)
-            (let ((expr (cadr e))
-                  (lvars (map unescape (cddr e))))
-              (let ((vs (delete-duplicates
-                         (expr-find-all (lambda (v)
-                                          (and (symbol? v) (or (memq v lvars)
-                                                               (assq v env))))
-                                        expr identity)))
-                    (e2 (resolve-expansion-vars-with-new-env expr env m inarg)))
-                `(call (-> (tuple ,@vs) ,e2) ,@vs))))
-
            ((let)
             (let* ((newenv (new-expansion-env-for e env))
                    (body   (resolve-expansion-vars- (cadr e) newenv m inarg)))
@@ -321,6 +310,11 @@
         ((eq? (car e) 'curly)  (decl-var* (cadr e)))
         (else                  (decl-var e))))
 
+(define (decl-vars* e)
+  (if (and (pair? e) (eq? (car e) 'tuple))
+      (apply append (map decl-vars* (cdr e)))
+      (list (decl-var* e))))
+
 (define (function-def? e)
   (and (pair? e) (or (eq? (car e) 'function) (eq? (car e) '->)
                      (and (eq? (car e) '=) (length= e 3)
@@ -329,7 +323,6 @@
 (define (find-declared-vars-in-expansion e decl (outer #t))
   (cond ((or (not (pair? e)) (quoted? e)) '())
         ((eq? (car e) 'escape)  '())
-        ((eq? (car e) 'localize) '())
         ((eq? (car e) decl)     (map decl-var* (cdr e)))
         ((and (not outer) (function-def? e)) '())
         (else
@@ -340,7 +333,6 @@
 (define (find-assigned-vars-in-expansion e (outer #t))
   (cond ((or (not (pair? e)) (quoted? e))  '())
         ((eq? (car e) 'escape)  '())
-        ((eq? (car e) 'localize) '())
         ((and (not outer) (function-def? e))
          ;; pick up only function name
          (let ((fname (cond ((eq? (car e) '=) (cadr (cadr e)))
@@ -353,11 +345,7 @@
                (list fname)
                '())))
         ((and (eq? (car e) '=) (not (function-def? e)))
-         (append! (filter
-                   symbol?
-                   (if (and (pair? (cadr e)) (eq? (car (cadr e)) 'tuple))
-                       (map decl-var* (cdr (cadr e)))
-                       (list (decl-var* (cadr e)))))
+         (append! (filter symbol? (decl-vars* (cadr e)))
                   (find-assigned-vars-in-expansion (caddr e) #f)))
         (else
          (apply append! (map (lambda (x)

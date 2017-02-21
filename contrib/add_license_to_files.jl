@@ -135,7 +135,7 @@ function add_license_line!(unprocessed::Vector, src::AbstractString, new_license
             if ext in keys(ext_prefix)
                 prefix = ext_prefix[ext]
                 f = open(path, "r")
-                lines = readlines(f)
+                lines = readlines(f, chomp=false)
                 close(f)
                 isempty(lines) && (push!(unprocessed, path); continue)
                 isempty(old_license) || check_lines!(path, lines, old_license, prefix, true)

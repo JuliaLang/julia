@@ -219,10 +219,10 @@ is_assigned_char(c) = category_code(c) != UTF8PROC_CATEGORY_CN
 ## libc character class predicates ##
 
 """
-    islower(c::Union{Char,AbstractString}) -> Bool
+    islower(c::Char) -> Bool
 
-Tests whether a character is a lowercase letter, or whether this is true for all elements of
-a string. A character is classified as lowercase if it belongs to Unicode category Ll,
+Tests whether a character is a lowercase letter.
+A character is classified as lowercase if it belongs to Unicode category Ll,
 Letter: Lowercase.
 """
 islower(c::Char) = (category_code(c) == UTF8PROC_CATEGORY_LL)
@@ -230,10 +230,10 @@ islower(c::Char) = (category_code(c) == UTF8PROC_CATEGORY_LL)
 # true for Unicode upper and mixed case
 
 """
-    isupper(c::Union{Char,AbstractString}) -> Bool
+    isupper(c::Char) -> Bool
 
-Tests whether a character is an uppercase letter, or whether this is true for all elements
-of a string. A character is classified as uppercase if it belongs to Unicode category Lu,
+Tests whether a character is an uppercase letter.
+A character is classified as uppercase if it belongs to Unicode category Lu,
 Letter: Uppercase, or Lt, Letter: Titlecase.
 """
 function isupper(c::Char)
@@ -242,36 +242,35 @@ function isupper(c::Char)
 end
 
 """
-    isdigit(c::Union{Char,AbstractString}) -> Bool
+    isdigit(c::Char) -> Bool
 
-Tests whether a character is a numeric digit (0-9), or whether this is true for all elements
-of a string.
+Tests whether a character is a numeric digit (0-9).
 """
 isdigit(c::Char)  = ('0' <= c <= '9')
 
 """
-    isalpha(c::Union{Char,AbstractString}) -> Bool
+    isalpha(c::Char) -> Bool
 
-Tests whether a character is alphabetic, or whether this is true for all elements of a
-string. A character is classified as alphabetic if it belongs to the Unicode general
+Tests whether a character is alphabetic.
+A character is classified as alphabetic if it belongs to the Unicode general
 category Letter, i.e. a character whose category code begins with 'L'.
 """
 isalpha(c::Char)  = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_LO)
 
 """
-    isnumber(c::Union{Char,AbstractString}) -> Bool
+    isnumber(c::Char) -> Bool
 
-Tests whether a character is numeric, or whether this is true for all elements of a string.
+Tests whether a character is numeric.
 A character is classified as numeric if it belongs to the Unicode general category Number,
 i.e. a character whose category code begins with 'N'.
 """
 isnumber(c::Char) = (UTF8PROC_CATEGORY_ND <= category_code(c) <= UTF8PROC_CATEGORY_NO)
 
 """
-    isalnum(c::Union{Char,AbstractString}) -> Bool
+    isalnum(c::Char) -> Bool
 
-Tests whether a character is alphanumeric, or whether this is true for all elements of a
-string. A character is classified as alphabetic if it belongs to the Unicode general
+Tests whether a character is alphanumeric.
+A character is classified as alphabetic if it belongs to the Unicode general
 category Letter or Number, i.e. a character whose category code begins with 'L' or 'N'.
 """
 function isalnum(c::Char)
@@ -283,66 +282,49 @@ end
 # following C++ only control characters from the Latin-1 subset return true
 
 """
-    iscntrl(c::Union{Char,AbstractString}) -> Bool
+    iscntrl(c::Char) -> Bool
 
-Tests whether a character is a control character, or whether this is true for all elements
-of a string. Control characters are the non-printing characters of the Latin-1 subset of Unicode.
+Tests whether a character is a control character.
+Control characters are the non-printing characters of the Latin-1 subset of Unicode.
 """
 iscntrl(c::Char) = (c <= Char(0x1f) || Char(0x7f) <= c <= Char(0x9f))
 
 """
-    ispunct(c::Union{Char,AbstractString}) -> Bool
+    ispunct(c::Char) -> Bool
 
 Tests whether a character belongs to the Unicode general category Punctuation, i.e. a
-character whose category code begins with 'P'. For strings, tests whether this is true for
-all elements of the string.
+character whose category code begins with 'P'.
 """
 ispunct(c::Char) = (UTF8PROC_CATEGORY_PC <= category_code(c) <= UTF8PROC_CATEGORY_PO)
 
 # \u85 is the Unicode Next Line (NEL) character
 
 """
-    isspace(c::Union{Char,AbstractString}) -> Bool
+    isspace(c::Char) -> Bool
 
 Tests whether a character is any whitespace character. Includes ASCII characters '\\t',
 '\\n', '\\v', '\\f', '\\r', and ' ', Latin-1 character U+0085, and characters in Unicode
-category Zs. For strings, tests whether this is true for all elements of the string.
+category Zs.
 """
 @inline isspace(c::Char) = c == ' ' || '\t' <= c <='\r' || c == '\u85' || '\ua0' <= c && category_code(c) == UTF8PROC_CATEGORY_ZS
 
 """
-    isprint(c::Union{Char,AbstractString}) -> Bool
+    isprint(c::Char) -> Bool
 
-Tests whether a character is printable, including spaces, but not a control character. For
-strings, tests whether this is true for all elements of the string.
+Tests whether a character is printable, including spaces, but not a control character.
 """
 isprint(c::Char) = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_ZS)
 
 # true in principal if a printer would use ink
 
 """
-    isgraph(c::Union{Char,AbstractString}) -> Bool
+    isgraph(c::Char) -> Bool
 
-Tests whether a character is printable, and not a space, or whether this is true for all
-elements of a string. Any character that would cause a printer to use ink should be
+Tests whether a character is printable, and not a space.
+Any character that would cause a printer to use ink should be
 classified with `isgraph(c)==true`.
 """
 isgraph(c::Char) = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_SO)
-
-for name = ("alnum", "alpha", "cntrl", "digit", "number", "graph",
-            "lower", "print", "punct", "space", "upper")
-    f = Symbol("is",name)
-    @eval begin
-        function $f(s::AbstractString)
-            for c in s
-                if !$f(c)
-                    return false
-                end
-            end
-            return true
-        end
-    end
-end
 
 ############################################################################
 # iterators for grapheme segmentation
@@ -356,7 +338,7 @@ isgraphemebreak(c1::Char, c2::Char) =
 isgraphemebreak!(state::Ref{Int32}, c1::Char, c2::Char) =
     ccall(:utf8proc_grapheme_break_stateful, Bool, (UInt32, UInt32, Ref{Int32}), c1, c2, state)
 
-immutable GraphemeIterator{S<:AbstractString}
+struct GraphemeIterator{S<:AbstractString}
     s::S # original string (for generation of SubStrings)
 end
 

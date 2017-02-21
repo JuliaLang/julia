@@ -67,7 +67,7 @@ for T in types
 end
 
 
-# immutable NullException <: Exception
+# struct NullException <: Exception
 @test isa(NullException(), NullException)
 @test_throws NullException throw(NullException())
 
@@ -103,13 +103,13 @@ for (i, T) in enumerate(types)
     @test String(take!(io1)) == @sprintf("Nullable{%s}(%s)", T, String(take!(io2)))
 
     a1 = [x2]
-    show(IOContext(io1, compact=false), a1)
-    show(IOContext(io2, compact=false), x2)
+    show(IOContext(io1, :compact => false), a1)
+    show(IOContext(io2, :compact => false), x2)
     @test String(take!(io1)) ==
         @sprintf("Nullable{%s}[%s]", string(T), String(take!(io2)))
 
     show(io1, a1)
-    show(IOContext(io2, compact=true), x2)
+    show(IOContext(io2, :compact => true), x2)
     @test String(take!(io1)) ==
         @sprintf("Nullable{%s}[%s]", string(T), String(take!(io2)))
 end
@@ -283,7 +283,7 @@ for T in types
     @test hash(x3) != hash(x4)
 end
 
-type TestNType{T}
+mutable struct TestNType{T}
     v::Nullable{T}
 end
 
@@ -467,10 +467,10 @@ sqr(x) = x^2
 @test Nullable(2) .^ Nullable{Int}()  |> isnull_oftype(Int)
 
 # multi-arg broadcast
-@test Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable(1) .+
-    Nullable(1) === Nullable(6)
-@test Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable{Int}() .+
-    Nullable(1) .+ Nullable(1) |> isnull_oftype(Int)
+@test (Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable(1) .+
+       Nullable(1) === Nullable(6))
+@test (Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable{Int}() .+
+       Nullable(1) .+ Nullable(1) |> isnull_oftype(Int))
 
 # these are not inferrable because there are too many arguments
 us = map(Nullable, 1:20)

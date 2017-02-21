@@ -7,7 +7,6 @@ n=12 #Size of matrix problem to test
 srand(1)
 
 @testset for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
-
     d=convert(Vector{elty}, randn(n))
     v=convert(Vector{elty}, randn(n))
     U=convert(Matrix{elty}, randn(n,n))

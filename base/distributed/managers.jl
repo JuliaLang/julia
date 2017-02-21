@@ -2,7 +2,7 @@
 
 # Built-in SSH and Local Managers
 
-immutable SSHManager <: ClusterManager
+struct SSHManager <: ClusterManager
     machines::Dict
 
     function SSHManager(machines)
@@ -185,7 +185,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     cmd = `cd $dir '&&' $tval $exename $exeflags`
 
     # shell login (-l) with string command (-c) to launch julia process
-    cmd = `sh -l -c $(shell_escape(cmd))`
+    cmd = `sh -l -c $(Base.shell_escape(cmd))`
 
     # remote launch with ssh with given ssh flags / host / port information
     # -T → disable pseudo-terminal allocation
@@ -195,7 +195,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     #                          forwarded connections are causing collisions
     # -n → Redirects stdin from /dev/null (actually, prevents reading from stdin).
     #      Used when running ssh in the background.
-    cmd = `ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host $(shell_escape(cmd))`
+    cmd = `ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host $(Base.shell_escape(cmd))`
 
     # launch the remote Julia process
 
@@ -282,7 +282,7 @@ end
 
 
 # LocalManager
-immutable LocalManager <: ClusterManager
+struct LocalManager <: ClusterManager
     np::Integer
     restrict::Bool  # Restrict binding to 127.0.0.1 only
 end
@@ -365,7 +365,7 @@ manage
 
 # DefaultClusterManager for the default TCP transport - used by both SSHManager and LocalManager
 
-immutable DefaultClusterManager <: ClusterManager
+struct DefaultClusterManager <: ClusterManager
 end
 
 const tunnel_hosts_map = Dict{AbstractString, Semaphore}()

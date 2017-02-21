@@ -17,7 +17,7 @@ function choosetests(choices = [])
     testnames = [
         "linalg", "subarray", "core", "inference", "worlds",
         "keywordargs", "numbers", "subtype",
-        "printf", "char", "strings", "triplequote", "unicode",
+        "printf", "char", "strings", "triplequote", "unicode", "intrinsics",
         "dates", "dict", "hashing", "iobuffer", "staged", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "random", "abstractarray",
         "intfuncs", "simdloop", "vecelement", "blas", "sparse",
@@ -29,11 +29,11 @@ function choosetests(choices = [])
         "floatapprox", "datafmt", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
         "euler", "show", "lineedit", "replcompletions", "repl",
-        "replutil", "sets", "test", "goto", "llvmcall", "grisu",
+        "replutil", "sets", "test", "goto", "llvmcall", "llvmcall2", "grisu",
         "nullable", "meta", "stacktraces", "profile", "libgit2", "docs",
         "markdown", "base64", "serialize", "misc", "threads",
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
-        "checked", "intset", "floatfuncs", "compile", "parallel", "inline",
+        "checked", "intset", "floatfuncs", "compile", "distributed", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "asmvariant", "osutils",
         "channels"
     ]
@@ -130,7 +130,7 @@ function choosetests(choices = [])
                    "linalg/diagonal", "linalg/pinv", "linalg/givens",
                    "linalg/cholesky", "linalg/lu", "linalg/symmetric",
                    "linalg/generic", "linalg/uniformscaling", "linalg/lq",
-                   "linalg/hessenberg", "linalg/rowvector"]
+                   "linalg/hessenberg", "linalg/rowvector", "linalg/conjarray"]
     if Base.USE_GPL_LIBS
         push!(linalgtests, "linalg/arnoldi")
     end
@@ -143,7 +143,7 @@ function choosetests(choices = [])
         prepend!(tests, linalgtests)
     end
 
-    net_required_for = ["socket", "parallel", "libgit2"]
+    net_required_for = ["socket", "distributed", "libgit2"]
     net_on = true
     try
         ipa = getipaddr()

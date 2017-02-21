@@ -2,7 +2,7 @@
 
 ## Diagonal matrices
 
-immutable Diagonal{T} <: AbstractMatrix{T}
+struct Diagonal{T} <: AbstractMatrix{T}
     diag::Vector{T}
 end
 """
@@ -100,7 +100,7 @@ end
 
 parent(D::Diagonal) = D.diag
 
-ishermitian{T<:Real}(D::Diagonal{T}) = true
+ishermitian(D::Diagonal{<:Real}) = true
 ishermitian(D::Diagonal) = isreal(D.diag)
 issymmetric(D::Diagonal) = true
 isposdef(D::Diagonal) = all(x -> x > 0, D.diag)
@@ -138,9 +138,9 @@ end
 +(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag + Db.diag)
 -(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag - Db.diag)
 
-*{T<:Number}(x::T, D::Diagonal) = Diagonal(x * D.diag)
-*{T<:Number}(D::Diagonal, x::T) = Diagonal(D.diag * x)
-/{T<:Number}(D::Diagonal, x::T) = Diagonal(D.diag / x)
+*(x::Number, D::Diagonal) = Diagonal(x * D.diag)
+*(D::Diagonal, x::Number) = Diagonal(D.diag * x)
+/(D::Diagonal, x::Number) = Diagonal(D.diag / x)
 *(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
 *(D::Diagonal, V::AbstractVector) = D.diag .* V
 
@@ -256,15 +256,8 @@ end
 
 # Methods to resolve ambiguities with `Diagonal`
 @inline *(rowvec::RowVector, D::Diagonal) = transpose(D * transpose(rowvec))
-*(::Diagonal, ::RowVector) = throw(DimensionMismatch("Cannot right-multiply matrix by transposed vector"))
-
 @inline A_mul_Bt(D::Diagonal, rowvec::RowVector) = D*transpose(rowvec)
-
-At_mul_B(rowvec::RowVector, ::Diagonal) = throw(DimensionMismatch("Cannot left-multiply matrix by vector"))
-
 @inline A_mul_Bc(D::Diagonal, rowvec::RowVector) = D*ctranspose(rowvec)
-
-Ac_mul_B(rowvec::RowVector, ::Diagonal) = throw(DimensionMismatch("Cannot left-multiply matrix by vector"))
 
 conj(D::Diagonal) = Diagonal(conj(D.diag))
 transpose(D::Diagonal) = D
@@ -273,10 +266,10 @@ ctranspose(D::Diagonal) = conj(D)
 diag(D::Diagonal) = D.diag
 trace(D::Diagonal) = sum(D.diag)
 det(D::Diagonal) = prod(D.diag)
-logdet{T<:Real}(D::Diagonal{T}) = sum(log, D.diag)
-function logdet{T<:Complex}(D::Diagonal{T}) #Make sure branch cut is correct
-    x = sum(log, D.diag)
-    -pi<imag(x)<pi ? x : real(x)+(mod2pi(imag(x)+pi)-pi)*im
+logdet(D::Diagonal{<:Real}) = sum(log, D.diag)
+function logdet(D::Diagonal{<:Complex}) # make sure branch cut is correct
+    z = sum(log, D.diag)
+    complex(real(z), rem2pi(imag(z), RoundNearest))
 end
 # identity matrices via eye(Diagonal{type},n)
 eye{T}(::Type{Diagonal{T}}, n::Int) = Diagonal(ones(T,n))
@@ -339,15 +332,15 @@ function pinv{T}(D::Diagonal{T}, tol::Real)
 end
 
 #Eigensystem
-eigvals{T<:Number}(D::Diagonal{T}) = D.diag
+eigvals(D::Diagonal{<:Number}) = D.diag
 eigvals(D::Diagonal) = [eigvals(x) for x in D.diag] #For block matrices, etc.
 eigvecs(D::Diagonal) = eye(D)
 eigfact(D::Diagonal) = Eigen(eigvals(D), eigvecs(D))
 
 #Singular system
-svdvals{T<:Number}(D::Diagonal{T}) = sort!(abs.(D.diag), rev = true)
+svdvals(D::Diagonal{<:Number}) = sort!(abs.(D.diag), rev = true)
 svdvals(D::Diagonal) = [svdvals(v) for v in D.diag]
-function svd{T<:Number}(D::Diagonal{T})
+function svd(D::Diagonal{<:Number})
     S   = abs.(D.diag)
     piv = sortperm(S, rev = true)
     U   = Diagonal(D.diag ./ S)

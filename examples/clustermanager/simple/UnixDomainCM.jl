@@ -2,7 +2,7 @@
 
 import Base: launch, manage, connect, exit
 
-type UnixDomainCM <: ClusterManager
+mutable struct UnixDomainCM <: ClusterManager
     np::Integer
 end
 
@@ -82,7 +82,7 @@ end
 function print_worker_stdout(io, pid)
     @schedule while !eof(io)
         line = readline(io)
-        print("\tFrom worker $(pid):\t$line")
+        println("\tFrom worker $(pid):\t$line")
     end
 end
 

@@ -30,7 +30,7 @@ function scale!{T<:BlasComplex}(X::Array{T}, s::Real)
 end
 
 #Test whether a matrix is positive-definite
-isposdef!{T<:BlasFloat}(A::StridedMatrix{T}, UL::Symbol) = LAPACK.potrf!(char_uplo(UL), A)[2] == 0
+isposdef!(A::StridedMatrix{<:BlasFloat}, UL::Symbol) = LAPACK.potrf!(char_uplo(UL), A)[2] == 0
 
 """
     isposdef!(A) -> Bool
@@ -165,7 +165,7 @@ tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
 function gradient(F::AbstractVector, h::Vector)
     n = length(F)
-    T = typeof(one(eltype(F))/one(eltype(h)))
+    T = typeof(oneunit(eltype(F))/oneunit(eltype(h)))
     g = similar(F, T)
     if n == 1
         g[1] = zero(T)
@@ -352,8 +352,8 @@ julia> expm(A)
  0.0      2.71828
 ```
 """
-expm{T<:BlasFloat}(A::StridedMatrix{T}) = expm!(copy(A))
-expm{T<:Integer}(A::StridedMatrix{T}) = expm!(float(A))
+expm(A::StridedMatrix{<:BlasFloat}) = expm!(copy(A))
+expm(A::StridedMatrix{<:Integer}) = expm!(float(A))
 expm(x::Number) = exp(x)
 
 ## Destructive matrix exponential using algorithm from Higham, 2008,
@@ -442,7 +442,7 @@ function expm!{T<:BlasFloat}(A::StridedMatrix{T})
 end
 
 ## Swap rows i and j and columns i and j in X
-function rcswap!{T<:Number}(i::Integer, j::Integer, X::StridedMatrix{T})
+function rcswap!(i::Integer, j::Integer, X::StridedMatrix{<:Number})
     for k = 1:size(X,1)
         X[k,i], X[k,j] = X[k,j], X[k,i]
     end
@@ -509,7 +509,7 @@ function logm(A::StridedMatrix)
         end
     end
 
-    if isreal(A) && ~np_real_eigs
+    if isreal(A) && !np_real_eigs
         return real(retmat)
     else
         return retmat
@@ -553,7 +553,7 @@ julia> sqrtm(A)
  0.0  2.0
 ```
 """
-function sqrtm{T<:Real}(A::StridedMatrix{T})
+function sqrtm(A::StridedMatrix{<:Real})
     if issymmetric(A)
         return full(sqrtm(Symmetric(A)))
     end
@@ -566,7 +566,7 @@ function sqrtm{T<:Real}(A::StridedMatrix{T})
         return SchurF[:vectors] * R * SchurF[:vectors]'
     end
 end
-function sqrtm{T<:Complex}(A::StridedMatrix{T})
+function sqrtm(A::StridedMatrix{<:Complex})
     if ishermitian(A)
         return full(sqrtm(Hermitian(A)))
     end
@@ -791,7 +791,7 @@ function pinv{T}(A::StridedMatrix{T}, tol::Real)
     Sinv        = zeros(Stype, length(SVD.S))
     index       = SVD.S .> tol*maximum(SVD.S)
     Sinv[index] = one(Stype) ./ SVD.S[index]
-    Sinv[find(!isfinite.(Sinv))] = zero(Stype)
+    Sinv[find(.!isfinite.(Sinv))] = zero(Stype)
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
 function pinv{T}(A::StridedMatrix{T})
@@ -873,6 +873,8 @@ function sylvester{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T},C::Stri
     scale!(QA*A_mul_Bc(Y,QB), inv(scale))
 end
 sylvester{T<:Integer}(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) = sylvester(float(A), float(B), float(C))
+
+sylvester(a::Union{Real,Complex},b::Union{Real,Complex},c::Union{Real,Complex}) = -c / (a + b)
 
 # AX + XA' + C = 0
 

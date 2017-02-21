@@ -43,11 +43,11 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
 end
 
 function arg_decl_parts(m::Method)
-    tv = m.tvars
-    if !isa(tv,SimpleVector)
-        tv = Any[tv]
-    else
-        tv = Any[tv...]
+    tv = Any[]
+    sig = m.sig
+    while isa(sig, UnionAll)
+        push!(tv, sig.var)
+        sig = sig.body
     end
     if isdefined(m, :source)
         src = m.source
@@ -58,11 +58,14 @@ function arg_decl_parts(m::Method)
     line = m.line
     if src !== nothing && src.slotnames !== nothing
         argnames = src.slotnames[1:m.nargs]
-        sig = unwrap_unionall(m.sig)
-        decls = Any[argtype_decl(:tvar_env => tv, argnames[i], sig, i, m.nargs, m.isva)
+        show_env = ImmutableDict{Symbol, Any}()
+        for t in tv
+            show_env = ImmutableDict(show_env, :unionall_env => t)
+        end
+        decls = Any[argtype_decl(show_env, argnames[i], sig, i, m.nargs, m.isva)
                     for i = 1:m.nargs]
     else
-        decls = Any[("", "") for i = 1:length(unwrap_unionall(m.sig).parameters)]
+        decls = Any[("", "") for i = 1:length(sig.parameters)]
     end
     return tv, decls, file, line
 end
@@ -84,10 +87,21 @@ function kwarg_decl(m::Method, kwtype::DataType)
     return ()
 end
 
+function show_method_params(io::IO, tv)
+    if !isempty(tv)
+        print(io, " where ")
+        if length(tv) == 1
+            show(io, tv[1])
+        else
+            show_delim_array(io, tv, '{', ',', '}', false)
+        end
+    end
+end
+
 function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
-    ft = sig.parameters[1]
+    ft = unwrap_unionall(sig.parameters[1])
     d1 = decls[1]
     if sig === Tuple
         print(io, m.name)
@@ -107,9 +121,6 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
     else
         print(io, "(", d1[1], "::", d1[2], ")")
     end
-    if !isempty(tv)
-        show_delim_array(io, tv, '{', ',', '}', false)
-    end
     print(io, "(")
     join(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
                  ", ", ", ")
@@ -120,7 +131,9 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
             join(io, kwargs, ", ", ", ")
         end
     end
-    print(io, ") in ", m.module)
+    print(io, ")")
+    show_method_params(io, tv)
+    print(io, " in ", m.module)
     if line > 0
         print(io, " at ", file, ":", line)
     end

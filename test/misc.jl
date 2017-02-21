@@ -3,25 +3,25 @@
 # Tests that do not really go anywhere else
 
 # Test info
-@test contains(sprint(io->info(io,"test")), "INFO:")
-@test contains(sprint(io->info(io,"test")), "INFO: test")
-@test contains(sprint(io->info(io,"test ",1,2,3)), "INFO: test 123")
+@test contains(sprint(info, "test"), "INFO:")
+@test contains(sprint(info, "test"), "INFO: test")
+@test contains(sprint(info, "test ", 1, 2, 3), "INFO: test 123")
 @test contains(sprint(io->info(io,"test", prefix="MYINFO: ")), "MYINFO: test")
 
 # Test warn
-@test contains(sprint(io->Base.warn_once(io,"test")), "WARNING: test")
-@test isempty(sprint(io->Base.warn_once(io,"test")))
+@test contains(sprint(Base.warn_once, "test"), "WARNING: test")
+@test isempty(sprint(Base.warn_once, "test"))
 
-@test contains(sprint(io->warn(io)), "WARNING:")
-@test contains(sprint(io->warn(io, "test")), "WARNING: test")
-@test contains(sprint(io->warn(io, "test ",1,2,3)), "WARNING: test 123")
+@test contains(sprint(warn), "WARNING:")
+@test contains(sprint(warn, "test"), "WARNING: test")
+@test contains(sprint(warn, "test ", 1, 2, 3), "WARNING: test 123")
 @test contains(sprint(io->warn(io, "test", prefix="MYWARNING: ")), "MYWARNING: test")
 @test contains(sprint(io->warn(io, "testonce", once=true)), "WARNING: testonce")
 @test isempty(sprint(io->warn(io, "testonce", once=true)))
 @test !isempty(sprint(io->warn(io, "testonce", once=true, key=hash("testonce",hash("testanother")))))
 let bt = backtrace()
-    ws = split(chomp(sprint(io->warn(io,"test", bt))), '\n')
-    bs = split(chomp(sprint(io->Base.show_backtrace(io,bt))), '\n')
+    ws = split(chomp(sprint(warn, "test", bt)), '\n')
+    bs = split(chomp(sprint(Base.show_backtrace, bt)), '\n')
     @test contains(ws[1],"WARNING: test")
     for (l,b) in zip(ws[2:end],bs)
         @test contains(l, b)
@@ -226,10 +226,10 @@ end
 # test methodswith
 # `methodswith` relies on exported symbols
 export func4union, Base
-immutable NoMethodHasThisType end
+struct NoMethodHasThisType end
 @test isempty(methodswith(NoMethodHasThisType))
 @test !isempty(methodswith(Int))
-immutable Type4Union end
+struct Type4Union end
 func4union(::Union{Type4Union,Int}) = ()
 @test !isempty(methodswith(Type4Union))
 
@@ -293,8 +293,17 @@ v11801, t11801 = @timed sin(1)
 # interactive utilities
 
 import Base.summarysize
-@test summarysize(Core) > summarysize(Core.Inference) > Core.sizeof(Core)
-@test summarysize(Base) > 10_000*sizeof(Int)
+@test summarysize(Core) > (summarysize(Core.Inference) + Base.summarysize(Core.Intrinsics)) > Core.sizeof(Core)
+@test summarysize(Base) > 100_000 * sizeof(Ptr)
+
+let R = Ref{Any}(nothing), depth = 10^6
+    for i = 1:depth
+        R = Ref{Any}(R)
+    end
+    R = Core.svec(R, R)
+    @test summarysize(R) == (depth + 4) * sizeof(Ptr)
+end
+
 module _test_whos_
 export x
 x = 1.0
@@ -554,12 +563,12 @@ end
 let
     old_have_color = Base.have_color
     try
-        eval(Base, :(have_color = true))
+        @eval Base have_color = true
         buf = IOBuffer()
         print_with_color(:red, buf, "foo")
         @test startswith(String(take!(buf)), Base.text_colors[:red])
     finally
-        eval(Base, :(have_color = $(old_have_color)))
+        @eval Base have_color = $(old_have_color)
     end
 end
 
@@ -576,7 +585,7 @@ end
 let
     old_have_color = Base.have_color
     try
-        eval(Base, :(have_color = true))
+        @eval Base have_color = true
         buf = IOBuffer()
         print_with_color(:red, buf, "foo")
         # Check that we get back to normal text color in the end
@@ -586,6 +595,48 @@ let
         print_with_color(:red, buf, "foo"; bold = true)
         @test String(take!(buf)) == "\e[1m\e[31mfoo\e[39m\e[22m"
     finally
-        eval(Base, :(have_color = $(old_have_color)))
+        @eval Base have_color = $(old_have_color)
+    end
+end
+
+abstract type DA_19281{T, N} <: AbstractArray{T, N} end
+Base.convert{S,T,N}(::Type{Array{S, N}}, ::DA_19281{T, N}) = error()
+x_19281 = [(), (1,)]
+mutable struct Foo_19281
+    f::Vector{Tuple}
+    Foo_19281() = new(x_19281)
+end
+
+@testset "test this does not segfault #19281" begin
+    @test Foo_19281().f[1] == ()
+    @test Foo_19281().f[2] == (1, )
+end
+
+let
+    x_notdefined = Ref{String}()
+    @test !isassigned(x_notdefined)
+
+    x_defined = Ref{String}("Test")
+    @test isassigned(x_defined)
+end
+
+mutable struct Demo_20254
+    arr::Array{String}
+end
+
+# these cause stack overflows and are a little flaky on CI, ref #20256
+if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+    function Demo_20254(arr::AbstractArray=Any[])
+        Demo_20254(string.(arr))
+    end
+
+    _unsafe_get_19433(x::NTuple{1}) = (unsafe_get(x[1]),)
+    _unsafe_get_19433(xs::Vararg) = (unsafe_get(xs[1]), _unsafe_get_19433(xs[2:end])...)
+
+    f_19433(f_19433, xs...) = f_19433(_unsafe_get_19433(xs)...)
+
+    @testset "test this does not crash, issue #19433 and #20254" begin
+        @test_throws StackOverflowError Demo_20254()
+        @test_throws StackOverflowError f_19433(+, 1, 2)
     end
 end

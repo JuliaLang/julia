@@ -81,8 +81,7 @@ h["a","b","c"] = 4
 @test keytype(h) == Any
 @test valtype(h) == Any
 
-let
-    td = Dict{AbstractString,Float64}()
+let td = Dict{AbstractString,Float64}()
     @test eltype(td) == Pair{AbstractString,Float64}
     @test keytype(td) == AbstractString
     @test valtype(td) == Float64
@@ -90,8 +89,7 @@ let
     @test valtype(Dict{AbstractString,Float64}) === Float64
 end
 
-let
-    z = Dict()
+let z = Dict()
     get_KeyError = false
     try
         z["a"]
@@ -104,8 +102,7 @@ end
 _d = Dict("a"=>0)
 @test isa([k for k in filter(x->length(x)==1, collect(keys(_d)))], Vector{String})
 
-let
-    d = Dict(((1, 2), (3, 4)))
+let d = Dict(((1, 2), (3, 4)))
     @test d[1] === 2
     @test d[3] === 4
     d2 = Dict(1 => 2, 3 => 4)
@@ -154,8 +151,7 @@ end
 @test_throws KeyError Dict("a"=>2)[Base.secret_table_token]
 
 # issue #1821
-let
-    d = Dict{String, Vector{Int}}()
+let d = Dict{String, Vector{Int}}()
     d["a"] = [1, 2]
     @test_throws MethodError d["b"] = 1
     @test isa(repr(d), AbstractString)  # check that printable without error
@@ -172,7 +168,7 @@ let
 end
 
 # issue #1438
-type I1438T
+mutable struct I1438T
     id
 end
 import Base.hash
@@ -244,9 +240,7 @@ d4[1001] = randstring(3)
 @test isequal(Dict{Int,Int}(), Dict{AbstractString,AbstractString}())
 
 # get! (get with default values assigned to the given location)
-
 let f(x) = x^2, d = Dict(8=>19)
-
     @test get!(d, 8, 5) == 19
     @test get!(d, 19, 2) == 2
 
@@ -274,7 +268,7 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
     for cols in (12, 40, 80), rows in (2, 10, 24)
         # Ensure output is limited as requested
         s = IOBuffer()
-        io = Base.IOContext(s, limit=true, displaysize=(rows, cols))
+        io = Base.IOContext(Base.IOContext(s, :limit => true), :displaysize => (rows, cols))
         Base.show(io, MIME("text/plain"), d)
         out = split(String(take!(s)),'\n')
         for line in out[2:end]
@@ -284,7 +278,7 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
 
         for f in (keys, values)
             s = IOBuffer()
-            io = Base.IOContext(s, limit=true, displaysize=(rows, cols))
+            io = Base.IOContext(Base.IOContext(s, :limit => true), :displaysize => (rows, cols))
             Base.show(io, MIME("text/plain"), f(d))
             out = split(String(take!(s)),'\n')
             for line in out[2:end]
@@ -314,10 +308,10 @@ let d = Dict((1=>2) => (3=>45), (3=>10) => (10=>11))
 end
 
 # issue #9463
-type Alpha end
+mutable struct Alpha end
 Base.show(io::IO, ::Alpha) = print(io,"α")
 let sbuff = IOBuffer(),
-    io = Base.IOContext(sbuff, limit=true, displaysize=(10, 20))
+    io = Base.IOContext(Base.IOContext(sbuff, :limit => true), :displaysize => (10, 20))
 
     Base.show(io, MIME("text/plain"), Dict(Alpha()=>1))
     @test !contains(String(sbuff), "…")
@@ -345,15 +339,13 @@ for k5886 in keys(d5886)
 end
 
 # issue #8877
-let
-    a = Dict("foo"  => 0.0, "bar" => 42.0)
-    b = Dict("フー" => 17, "バー" => 4711)
+let a = Dict("foo"  => 0.0, "bar" => 42.0),
+        b = Dict("フー" => 17, "バー" => 4711)
     @test typeof(merge(a, b)) === Dict{String,Float64}
 end
 
 # issue 9295
-let
-    d = Dict()
+let d = Dict()
     @test push!(d, 'a' => 1) === d
     @test d['a'] == 1
     @test push!(d, 'b' => 2, 'c' => 3) === d
@@ -367,9 +359,8 @@ let
 end
 
 # issue #10647
-type T10647{T}; x::T; end
-let
-    a = ObjectIdDict()
+mutable struct T10647{T}; x::T; end
+let a = ObjectIdDict()
     a[1] = a
     a[a] = 2
     a[3] = T10647(a)
@@ -442,6 +433,11 @@ d = Dict(:a=>"a")
 @test_throws ArgumentError Dict(0)
 @test_throws ArgumentError Dict([1])
 @test_throws ArgumentError Dict([(1,2),0])
+
+# test Dict constructor's argument checking (for an iterable of pairs or tuples)
+# make sure other errors can propagate when the nature of the iterator is not the problem
+@test_throws InexactError Dict(convert(Int,1.5) for i=1:1)
+@test_throws InexactError WeakKeyDict(convert(Int,1.5) for i=1:1)
 
 # ImmutableDict
 import Base.ImmutableDict
@@ -518,8 +514,7 @@ let d = Dict(zip(1:1000,1:1000)), f = (k,v) -> iseven(k)
 end
 
 # issue #15077
-
-immutable MyString <: AbstractString
+struct MyString <: AbstractString
     str::String
 end
 import Base.==
@@ -570,7 +565,7 @@ let badKeys = [
     end
 end
 
-immutable MyInt <: Integer
+struct MyInt <: Integer
     val::UInt
 end
 
@@ -585,7 +580,6 @@ let badKeys = UInt16[0xb800,0xa501,0xcdff,0x6303,0xe40a,0xcf0e,0xf3df,0xae99,0x9
                      0xd02c,0x862d,0x8f34,0xe529,0xf938,0x4f39,0xd03a,0x473b,0x1e3b,0x1d3a,
                      0xcc39,0x7339,0xcf40,0x8740,0x813d,0xe640,0xc443,0x6344,0x3744,0x2c3d,
                      0x8c48,0xdf49,0x5743]
-
     # Walk through all possible hash values (mod size of hash table)
     for offset = 0:1023
         d2 = Dict{MyInt, Int}()
@@ -626,7 +620,7 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test isa(WeakKeyDict(A=>2, B=>3, C=>4), WeakKeyDict{Array{Int,1},Int})
     @test WeakKeyDict(a=>i+1 for (i,a) in enumerate([A,B,C]) ) == wkd
     @test WeakKeyDict([(A,2), (B,3), (C,4)]) == wkd
-
+    @test copy(wkd) == wkd
 
     @test length(wkd) == 3
     @test !isempty(wkd)
@@ -650,10 +644,41 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test isa(wkd, WeakKeyDict)
 end
 
-# issue 19995
-
-@test hash(Dict(Dict(1=>2) => 3, Dict(4=>5) => 6)) != hash(Dict(Dict(4=>5) => 3, Dict(1=>2) => 6))
-let a = Dict(Dict(3 => 4, 2 => 3) => 2, Dict(1 => 2, 5 => 6) => 1)
+@testset "issue #19995, hash of dicts" begin
+    @test hash(Dict(Dict(1=>2) => 3, Dict(4=>5) => 6)) != hash(Dict(Dict(4=>5) => 3, Dict(1=>2) => 6))
+    a = Dict(Dict(3 => 4, 2 => 3) => 2, Dict(1 => 2, 5 => 6) => 1)
     b = Dict(Dict(1 => 2, 2 => 3, 5 => 6) => 1, Dict(3 => 4) => 2)
     @test hash(a) != hash(b)
+end
+
+mutable struct Foo_15776
+    x::Vector{Pair{Tuple{Function, Vararg{Int}}, Int}}
+end
+@testset "issue #15776, convert for pair" begin
+    z = [Pair((+,1,5,7), 3), Pair((-,6,5,3,5,8), 1)]
+    f = Foo_15776(z)
+    @test f.x[1].first == (+, 1, 5, 7)
+    @test f.x[1].second == 3
+    @test f.x[2].first == (-, 6, 5, 3, 5, 8)
+    @test f.x[2].second == 1
+end
+
+@testset "issue #18708 error type for dict constructor" begin
+    @test_throws UndefVarError Dict(x => y for x in 1:10)
+end
+
+mutable struct Error19179 <: Exception
+end
+
+@testset "issue #19179 throwing error in dict constructor" begin
+    @test_throws Error19179 Dict(i => throw(Error19179()) for i in 1:10)
+end
+
+# issue #18090
+let
+    d = Dict(i => i^2 for i in 1:10_000)
+    z = zip(keys(d), values(d))
+    for (pair, tupl) in zip(d, z)
+        @test pair[1] == tupl[1] && pair[2] == tupl[2]
+    end
 end

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-typealias Chars Union{Char,Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}
+const Chars = Union{Char,Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}
 
 """
     search(string::AbstractString, chars::Chars, [start::Integer])
@@ -151,6 +151,17 @@ searchindex(s::ByteArray, t::ByteArray, i) = _searchindex(s,t,i)
 
 Similar to [`search`](@ref), but return only the start index at which
 the substring is found, or `0` if it is not.
+
+```jldoctest
+julia> searchindex("Hello to the world", "z")
+0
+
+julia> searchindex("JuliaLang","Julia")
+1
+
+julia> searchindex("JuliaLang","Lang")
+6
+```
 """
 searchindex(s::AbstractString, t::AbstractString, i::Integer) = _searchindex(s,t,i)
 searchindex(s::AbstractString, t::AbstractString) = searchindex(s,t,start(s))
@@ -304,6 +315,14 @@ rsearchindex(s::ByteArray, t::ByteArray, i::Integer) = _rsearchindex(s,t,i)
     rsearchindex(s::AbstractString, substring, [start::Integer])
 
 Similar to [`rsearch`](@ref), but return only the start index at which the substring is found, or `0` if it is not.
+
+```jldoctest
+julia> rsearchindex("aaabbb","b")
+6
+
+julia> rsearchindex("aaabbb","a")
+3
+```
 """
 rsearchindex(s::AbstractString, t::AbstractString, i::Integer) = _rsearchindex(s,t,i)
 rsearchindex(s::AbstractString, t::AbstractString) = (isempty(s) && isempty(t)) ? 1 : rsearchindex(s,t,endof(s))

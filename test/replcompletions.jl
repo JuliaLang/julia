@@ -4,10 +4,10 @@ using Base.REPLCompletions
 
 ex = quote
     module CompletionFoo
-    type Test_y
+    mutable struct Test_y
         yy
     end
-    type Test_x
+    mutable struct Test_x
         xx :: Test_y
     end
     type_test = Test_x(Test_y(1))
@@ -22,7 +22,7 @@ ex = quote
     end
 
     # Support non-Dict Associatives, #19441
-    type CustomDict{K, V} <: Associative{K, V}
+    mutable struct CustomDict{K, V} <: Associative{K, V}
         mydict::Dict{K, V}
     end
 
@@ -724,7 +724,7 @@ function test_dict_completion(dict_name)
     @test c == Any["66]"]
     s = "$dict_name[("
     c, r = test_complete(s)
-    @test c == Any["(\"q\",3)]"]
+    @test c == Any["(\"q\", 3)]"]
     s = "$dict_name[\"\\alp"
     c, r = test_complete(s)
     @test c == String["\\alpha"]

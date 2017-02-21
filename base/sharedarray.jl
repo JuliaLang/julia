@@ -2,7 +2,7 @@
 
 import .Serializer: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG
 
-type SharedArray{T,N} <: DenseArray{T,N}
+mutable struct SharedArray{T,N} <: DenseArray{T,N}
     dims::NTuple{N,Int}
     pids::Vector{Int}
     refs::Vector
@@ -23,16 +23,19 @@ type SharedArray{T,N} <: DenseArray{T,N}
     # a subset of workers.
     loc_subarr_1d::SubArray{T,1,Array{T,1},Tuple{UnitRange{Int}},true}
 
-    function SharedArray(d,p,r,sn,s)
+    function SharedArray{T,N}(d,p,r,sn,s) where {T,N}
         new(d,p,r,sn,s,0,view(Array{T}(ntuple(d->0,N)), 1:0))
     end
 end
 
 """
-    SharedArray{T,N}(dims::NTuple; init=false, pids=Int[])
+    SharedArray{T}(dims::NTuple; init=false, pids=Int[])
+    SharedArray{T,N}(...)
 
-Construct a `SharedArray` of a bitstype `T` and size `dims` across the processes specified
-by `pids` - all of which have to be on the same host.
+Construct a `SharedArray` of a bits type `T` and size `dims` across the
+processes specified by `pids` - all of which have to be on the same
+host.  If `N` is specified by calling `SharedArray{T,N}(dims)`, then
+`N` must match the length of `dims`.
 
 If `pids` is left unspecified, the shared array will be mapped across all processes on the
 current host, including the master. But, `localindexes` and `indexpids` will only refer to
@@ -42,10 +45,11 @@ computation with the master process acting as a driver.
 If an `init` function of the type `initfn(S::SharedArray)` is specified, it is called on all
 the participating workers.
 
-    SharedArray{T,N}(filename::AbstractString, dims::NTuple, [offset=0]; mode=nothing, init=false, pids=Int[])
+    SharedArray{T}(filename::AbstractString, dims::NTuple, [offset=0]; mode=nothing, init=false, pids=Int[])
+    SharedArray{T,N}(...)
 
 Construct a `SharedArray` backed by the file `filename`, with element
-type `T` (must be a `bitstype`) and size `dims`, across the processes
+type `T` (must be a bits type) and size `dims`, across the processes
 specified by `pids` - all of which have to be on the same host. This
 file is mmapped into the host memory, with the following consequences:
 
@@ -246,13 +250,13 @@ function finalize_refs{T,N}(S::SharedArray{T,N})
     S
 end
 
-typealias SharedVector{T} SharedArray{T,1}
-typealias SharedMatrix{T} SharedArray{T,2}
+SharedVector{T} = SharedArray{T,1}
+SharedMatrix{T} = SharedArray{T,2}
 
 length(S::SharedArray) = prod(S.dims)
 size(S::SharedArray) = S.dims
 ndims(S::SharedArray) = length(S.dims)
-linearindexing{S<:SharedArray}(::Type{S}) = LinearFast()
+IndexStyle(::Type{<:SharedArray}) = IndexLinear()
 
 function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
     if length(a) != prod(dims)
@@ -416,7 +420,7 @@ function serialize(s::AbstractSerializer, S::SharedArray)
     end
 end
 
-function deserialize{T,N}(s::AbstractSerializer, t::Type{SharedArray{T,N}})
+function deserialize(s::AbstractSerializer, t::Type{<:SharedArray})
     S = invoke(deserialize, Tuple{AbstractSerializer,DataType}, s, t)
     init_loc_flds(S, true)
     S

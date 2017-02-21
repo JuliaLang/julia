@@ -368,3 +368,14 @@ let a = rand(10,10)
     x = std(a, 2)
     @test b == a
 end
+
+# dimensional correctness
+isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
+using TestHelpers.Furlong
+let r = Furlong(1):Furlong(1):Furlong(2), a = collect(r)
+    @test sum(r) == sum(a) == Furlong(3)
+    @test cumsum(r) == Furlong.([1,3])
+    @test mean(r) == mean(a) == median(a) == median(r) == Furlong(1.5)
+    @test var(r) == var(a) == Furlong{2}(0.5)
+    @test std(r) == std(a) == Furlong{1}(sqrt(0.5))
+end

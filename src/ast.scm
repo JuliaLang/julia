@@ -5,6 +5,16 @@
 (define (deparse-arglist l (sep ",")) (string.join (map deparse l) sep))
 
 (define (deparse e)
+  (define (block-stmts e)
+    (if (and (pair? e) (eq? (car e) 'block))
+        (cdr e)
+        (list e)))
+  (define (deparse-block head lst)
+    (string head "\n"
+            (string.join (map (lambda (ex) (string "    " (deparse ex)))
+                              lst)
+                         "\n")
+            "\nend"))
   (cond ((or (symbol? e) (number? e)) (string e))
         ((string? e) (print-to-string e))
         ((eq? e #t) "true")
@@ -67,17 +77,19 @@
                             (string "# line " (cadr e))
                             (string "# " (caddr e) ", line " (cadr e))))
                 ((block)
-                 (string "begin\n"
-                         (string.join (map (lambda (ex) (string "    " (deparse ex)))
-                                           (cdr e))
-                                      "\n")
-                         "\nend"))
+                 (deparse-block "begin" (cdr e)))
                 ((comprehension)
                  (string "[ " (deparse (cadr e)) " for " (deparse-arglist (cddr e) ", ") " ]"))
                 ((generator)
                  (string "(" (deparse (cadr e)) " for " (deparse-arglist (cddr e) ", ") ")"))
                 ((where)
-                 (string (deparse (cadr e)) " where " (deparse (caddr e))))
+                 (string (deparse (cadr e)) " where "
+                         (if (length= e 3)
+                             (deparse (caddr e))
+                             (deparse (cons 'cell1d (cddr e))))))
+                ((function for while)
+                 (deparse-block (string (car e) " " (deparse (cadr e)))
+                                (block-stmts (caddr e))))
                 (else
                  (string e))))))
 
@@ -174,6 +186,9 @@
 
 (define (ssavalue? e)
   (and (pair? e) (eq? (car e) 'ssavalue)))
+
+(define (globalref? e)
+  (and (pair? e) (eq? (car e) 'globalref)))
 
 (define (symbol-like? e)
   (or (and (symbol? e) (not (eq? e 'true)) (not (eq? e 'false)))

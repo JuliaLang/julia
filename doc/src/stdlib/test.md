@@ -169,6 +169,17 @@ As calculations on floating-point values can be imprecise, you can perform appro
 checks using either `@test a ≈ b` (where `≈`, typed via tab completion of `\approx`, is the
 [`isapprox()`](@ref) function) or use [`isapprox()`](@ref) directly.
 
+```julia
+julia> @test 1 ≈ 0.999999999
+
+julia> @test 1 ≈ 0.999999
+ERROR: test failed: 1 isapprox 0.999999
+ in expression: 1 ≈ 0.999999
+ in error at error.jl:21
+ in default_handler at test.jl:30
+ in do_test at test.jl:53
+```
+
 ```@docs
 Base.Test.@inferred
 Base.Test.@test_warn

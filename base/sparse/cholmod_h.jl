@@ -60,17 +60,17 @@ const MM_HERMITIAN_POSDIAG  = 7
 if Int(ccall((:jl_cholmod_sizeof_long, :libsuitesparse_wrapper),Csize_t,())) == 4
     const SuiteSparse_long = Int32
     const IndexTypes = (:Int32, )
-    typealias ITypes Union{Int32}
+    const ITypes = Union{Int32}
 else
     const SuiteSparse_long = Int64
     const IndexTypes = (:Int32, :Int64)
-    typealias ITypes Union{Int32, Int64}
+    const ITypes = Union{Int32, Int64}
 end
 
-typealias VTypes Union{Complex128, Float64}
-typealias VRealTypes Union{Float64}
+const VTypes = Union{Complex128, Float64}
+const VRealTypes = Union{Float64}
 
-type CHOLMODException <: Exception
+mutable struct CHOLMODException <: Exception
     msg::AbstractString
 end
 

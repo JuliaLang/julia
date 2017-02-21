@@ -12,13 +12,13 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              iszero
 
 if Clong == Int32
-    typealias ClongMax Union{Int8, Int16, Int32}
-    typealias CulongMax Union{UInt8, UInt16, UInt32}
+    const ClongMax = Union{Int8, Int16, Int32}
+    const CulongMax = Union{UInt8, UInt16, UInt32}
 else
-    typealias ClongMax Union{Int8, Int16, Int32, Int64}
-    typealias CulongMax Union{UInt8, UInt16, UInt32, UInt64}
+    const ClongMax = Union{Int8, Int16, Int32, Int64}
+    const CulongMax = Union{UInt8, UInt16, UInt32, UInt64}
 end
-typealias CdoubleMax Union{Float16, Float32, Float64}
+const CdoubleMax = Union{Float16, Float32, Float64}
 
 gmp_version() = VersionNumber(unsafe_string(unsafe_load(cglobal((:__gmp_version, :libgmp), Ptr{Cchar}))))
 gmp_bits_per_limb() = Int(unsafe_load(cglobal((:__gmp_bits_per_limb, :libgmp), Cint)))
@@ -30,15 +30,15 @@ const GMP_BITS_PER_LIMB = gmp_bits_per_limb()
 # `unsigned int` or `unsigned long long int`. The correct unsigned type is here named Limb, and must
 # be used whenever mp_limb_t is in the signature of ccall'ed GMP functions.
 if GMP_BITS_PER_LIMB == 32
-    typealias Limb UInt32
+    const Limb = UInt32
 elseif GMP_BITS_PER_LIMB == 64
-    typealias Limb UInt64
+    const Limb = UInt64
 else
     error("GMP: cannot determine the type mp_limb_t (__gmp_bits_per_limb == $GMP_BITS_PER_LIMB)")
 end
 
 
-type BigInt <: Integer
+mutable struct BigInt <: Integer
     alloc::Cint
     size::Cint
     d::Ptr{Limb}
@@ -244,7 +244,7 @@ convert(::Type{Float64}, n::BigInt) = Float64(n,RoundNearest)
 convert(::Type{Float32}, n::BigInt) = Float32(n,RoundNearest)
 convert(::Type{Float16}, n::BigInt) = Float16(n,RoundNearest)
 
-promote_rule{T<:Integer}(::Type{BigInt}, ::Type{T}) = BigInt
+promote_rule(::Type{BigInt}, ::Type{<:Integer}) = BigInt
 
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
@@ -442,6 +442,9 @@ end
 ^(x::BigInt , y::Integer) = bigint_pow(x, y)
 ^(x::Integer, y::BigInt ) = bigint_pow(BigInt(x), y)
 ^(x::Bool   , y::BigInt ) = Base.power_by_squaring(x, y)
+
+# override default inlining of x^2 and x^3 etc.
+^{p}(x::BigInt, ::Type{Val{p}}) = x^Culong(p)
 
 function powermod(x::BigInt, p::BigInt, m::BigInt)
     r = BigInt()

@@ -512,6 +512,7 @@ $(eval $(call LLVM_PATCH,llvm-PR278321)) # Issue #19976, Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-PR278923)) # Issue #19976, Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D28759-loopclearance))
 $(eval $(call LLVM_PATCH,llvm-D28786-callclearance))
+$(eval $(call LLVM_PATCH,llvm-rL293230-icc17-cmake)) # Remove for 4.0
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
@@ -564,7 +565,7 @@ ifeq ($(OS),$(BUILD_OS))
 	cd $(LLVM_BUILDDIR_withtype) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
 		$(if $(filter $(LLVM_USE_CMAKE),1), \
-		  $(CMAKE) --build . check, \
+		  $(CMAKE) --build . --target check, \
 		  $(MAKE) $(LLVM_MFLAGS) check)
 endif
 	echo 1 > $@

@@ -4,7 +4,7 @@
 
 const sizeof_ios_t = Int(ccall(:jl_sizeof_ios_t, Cint, ()))
 
-type IOStream <: IO
+mutable struct IOStream <: IO
     handle::Ptr{Void}
     ios::Array{UInt8,1}
     name::AbstractString
@@ -166,7 +166,7 @@ function unsafe_write(s::IOStream, p::Ptr{UInt8}, nb::UInt)
     return Int(ccall(:ios_write, Csize_t, (Ptr{Void}, Ptr{Void}, Csize_t), s.ios, p, nb))
 end
 
-function write{T,N,A<:Array}(s::IOStream, a::SubArray{T,N,A})
+function write{T,N}(s::IOStream, a::SubArray{T,N,<:Array})
     if !isbits(T) || stride(a,1)!=1
         return invoke(write, Tuple{Any, AbstractArray}, s, a)
     end
@@ -222,11 +222,16 @@ take!(s::IOStream) =
     ccall(:jl_take_buffer, Vector{UInt8}, (Ptr{Void},), s.ios)
 
 function readuntil(s::IOStream, delim::UInt8)
-    ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Void}, UInt8, UInt8), s.ios, delim, 0)
+    ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Void}, UInt8, UInt8, UInt8), s.ios, delim, 0, 0)
 end
 
-function readline(s::IOStream)
-    ccall(:jl_readuntil, Ref{String}, (Ptr{Void}, UInt8, UInt8), s.ios, '\n', 1)
+# like readuntil, above, but returns a String without requiring a copy
+function readuntil_string(s::IOStream, delim::UInt8)
+    ccall(:jl_readuntil, Ref{String}, (Ptr{Void}, UInt8, UInt8, UInt8), s.ios, delim, 1, false)
+end
+
+function readline(s::IOStream; chomp::Bool=true)
+    ccall(:jl_readuntil, Ref{String}, (Ptr{Void}, UInt8, UInt8, UInt8), s.ios, '\n', 1, chomp)
 end
 
 function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)

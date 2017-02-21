@@ -47,7 +47,7 @@ a[1,1,1,1,1] = 10
                 "Thrown: ErrorException")
 
 # Test printing of Fail results
-type NoThrowTestSet <: Base.Test.AbstractTestSet
+mutable struct NoThrowTestSet <: Base.Test.AbstractTestSet
     results::Vector
     NoThrowTestSet(desc) = new([])
 end
@@ -107,13 +107,13 @@ end
         @test true
     end
     @test typeof(ts) == Base.Test.DefaultTestSet
-    @test typeof(ts.results[1]) == Base.Test.Pass
+    @test ts.n_passed == 1
     tss = @testset "@testset/for should return an array of testsets: $i" for i in 1:3
         @test true
     end
     @test length(tss) == 3
     @test typeof(tss[1]) == Base.Test.DefaultTestSet
-    @test typeof(tss[1].results[1]) == Base.Test.Pass
+    @test tss[1].n_passed == 1
 end
 @testset "accounting" begin
     local ts
@@ -196,23 +196,22 @@ end
     ts.anynonpass = false
     deleteat!(Base.Test.get_testset().results,1)
 end
-# Test @test_approx_eq
-# TODO
-@test isapprox(.1+.1+.1, .3)
-@test !isapprox(.1+.1+.1, .4)
+
+@test .1+.1+.1 ≈ .3
+@test .1+.1+.1 ≉ .4
 
 ts = @testset "@testset should return the testset" begin
     @test true
 end
 @test typeof(ts) == Base.Test.DefaultTestSet
-@test typeof(ts.results[1]) == Base.Test.Pass
+@test ts.n_passed == 1
 
 tss = @testset "@testset/for should return an array of testsets: $i" for i in 1:3
     @test true
 end
 @test length(tss) == 3
 @test typeof(tss[1]) == Base.Test.DefaultTestSet
-@test typeof(tss[1].results[1]) == Base.Test.Pass
+@test tss[1].n_passed == 1
 
 # Issue #17908 (return)
 testset_depth17908 = Test.get_testset_depth()
@@ -266,7 +265,7 @@ redirect_stderr(OLD_STDERR)
 import Base.Test: record, finish
 using Base.Test: get_testset_depth, get_testset
 using Base.Test: AbstractTestSet, Result, Pass, Fail, Error
-immutable CustomTestSet <: Base.Test.AbstractTestSet
+struct CustomTestSet <: Base.Test.AbstractTestSet
     description::AbstractString
     foo::Int
     results::Vector
@@ -375,7 +374,7 @@ end
 
 # Test that @inferred works with A[i] expressions
 @test @inferred((1:3)[2]) == 2
-immutable SillyArray <: AbstractArray{Float64,1} end
+struct SillyArray <: AbstractArray{Float64,1} end
 Base.getindex(a::SillyArray, i) = rand() > 0.5 ? 0 : false
 test_result = @test_throws ErrorException @inferred(SillyArray()[2])
 @test contains(test_result.value.msg, "Bool")
@@ -408,16 +407,14 @@ str = String(take!(io))
 @test contains(str, "test.jl")
 @test !contains(str, "boot.jl")
 
-let
-    io = IOBuffer()
+let io = IOBuffer()
     exc = Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}())
     Base.showerror(io, exc, backtrace())
     @test !contains(String(take!(io)), "backtrace()")
 end
 
 # 19750
-let
-    io = IOBuffer()
+let io = IOBuffer()
     exc = Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}())
     Base.showerror(io, exc, backtrace())
     @test !contains(String(take!(io)), "backtrace()")
@@ -428,3 +425,39 @@ let
     @test contains(str, "msg")
     @test !contains(str, "backtrace()")
 end
+
+msg = readstring(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e '
+using Base.Test
+
+foo(x) = length(x)^2
+
+@testset "Foo Tests" begin
+    @testset "Animals" begin
+        @testset "Felines" begin
+            @test foo("cat") == 9
+        end
+        @testset "Canines" begin
+            @test foo("dog") == 11
+        end
+    end
+    @testset "Arrays" begin
+        @test foo(zeros(2)) == 4
+        @test foo(ones(4)) == 15
+    end
+end'`), stderr=DevNull))
+
+@test contains(msg,
+"""
+Test Summary: | Pass  Fail  Total
+Foo Tests     |    2     2      4
+  Animals     |    1     1      2
+    Felines   |    1            1
+    Canines   |          1      1
+  Arrays      |    1     1      2
+""")
+
+# 20489
+msg = split(readstring(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e '
+Test.print_test_results(Test.DefaultTestSet(""))'`), stderr=DevNull)), "\n")[1]
+
+@test msg == rstrip(msg)
