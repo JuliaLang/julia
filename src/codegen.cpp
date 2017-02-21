@@ -3660,15 +3660,8 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                             builder.CreateAnd(slot.TIndex, ConstantInt::get(T_int8, 0x80)),
                             ConstantInt::get(T_int8, 0));
                 }
-                if (dest) {
-                    Value *copy_bytes = emit_sizeof(slot, ctx);
-                    if (isboxed)
-                        copy_bytes = builder.CreateSelect(isboxed, ConstantInt::get(copy_bytes->getType(), 0), copy_bytes);
-                    builder.CreateMemCpy(dest,
-                                         data_pointer(slot, ctx, T_pint8),
-                                         copy_bytes,
-                                         min_align);
-                }
+                if (dest)
+                    emit_unionmove(dest, slot, isboxed, false, NULL, ctx);
                 Value *gcroot = NULL;
                 if (isboxed) {
                     if (slot.gcroot)
@@ -3771,6 +3764,8 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             tindex = compute_tindex_unboxed(rval_info, vi.value.typ, ctx);
             if (vi.boxroot)
                 tindex = builder.CreateOr(tindex, ConstantInt::get(T_int8, 0x80));
+            if (!vi.boxroot)
+                rval_info.TIndex = tindex;
         }
         builder.CreateStore(tindex, vi.pTIndex, vi.isVolatile);
     }
@@ -3839,22 +3834,19 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                 // x.tbaa ∪ tbaa_stack = tbaa_root if x.tbaa != tbaa_stack
                 if (tbaa != tbaa_stack)
                     tbaa = NULL;
-                Value *copy_bytes;
                 if (vi.pTIndex == NULL) {
                     assert(jl_is_leaf_type(vi.value.typ));
-                    copy_bytes = ConstantInt::get(T_int32, jl_datatype_size(vi.value.typ));
+                    Value *copy_bytes = ConstantInt::get(T_int32, jl_datatype_size(vi.value.typ));
+                    builder.CreateMemCpy(vi.value.V,
+                                         data_pointer(rval_info, ctx, T_pint8),
+                                         copy_bytes,
+                                         /*TODO: min_align*/1,
+                                         vi.isVolatile,
+                                         tbaa);
                 }
                 else {
-                    copy_bytes = emit_sizeof(rval_info, ctx);
-                    if (isboxed)
-                        copy_bytes = builder.CreateSelect(isboxed, ConstantInt::get(copy_bytes->getType(), 0), copy_bytes);
+                    emit_unionmove(vi.value.V, rval_info, isboxed, vi.isVolatile, tbaa, ctx);
                 }
-                builder.CreateMemCpy(vi.value.V,
-                                     data_pointer(rval_info, ctx, T_pint8),
-                                     copy_bytes,
-                                     /*TODO: min_align*/1,
-                                     vi.isVolatile,
-                                     tbaa);
             }
         }
         else {
@@ -5966,7 +5958,7 @@ static std::unique_ptr<Module> emit_function(
                 continue;
             }
 
-            Value *isunboxed_union = NULL;
+            Value *isboxed_union = NULL;
             Value *retval;
             Value *sret = ctx.has_sret ? &*f->arg_begin() : NULL;
             Type *retty = f->getReturnType();
@@ -5997,10 +5989,10 @@ static std::unique_ptr<Module> emit_function(
                         if (retvalinfo.ispointer() && !isa<AllocaInst>(retvalinfo.V)) {
                             // also need to account for the possibility the return object is boxed
                             // and avoid / skip copying it to the stack
-                            isunboxed_union = builder.CreateICmpEQ(
+                            isboxed_union = builder.CreateICmpNE(
                                     builder.CreateAnd(tindex, ConstantInt::get(T_int8, 0x80)),
                                     ConstantInt::get(T_int8, 0));
-                            data = builder.CreateSelect(isunboxed_union, data, emit_bitcast(retvalinfo.V, T_pjlvalue));
+                            data = builder.CreateSelect(isboxed_union, emit_bitcast(retvalinfo.V, T_pjlvalue), data);
                         }
                     }
                 }
@@ -6023,20 +6015,17 @@ static std::unique_ptr<Module> emit_function(
             }
             if (sret) {
                 if (retvalinfo.ispointer()) {
-                    Value *copy_bytes;
                     if (returninfo.cc == jl_returninfo_t::SRet) {
                         assert(jl_is_leaf_type(jlrettype));
-                        copy_bytes = ConstantInt::get(T_int32, jl_datatype_size(jlrettype));
+                        Value *copy_bytes = ConstantInt::get(T_int32, jl_datatype_size(jlrettype));
+                        builder.CreateMemCpy(sret,
+                                             data_pointer(retvalinfo, &ctx, T_pint8),
+                                             copy_bytes,
+                                             returninfo.union_minalign);
                     }
                     else {
-                        copy_bytes = emit_sizeof(retvalinfo, &ctx);
-                        if (isunboxed_union)
-                            copy_bytes = builder.CreateSelect(isunboxed_union, copy_bytes, ConstantInt::get(copy_bytes->getType(), 0));
+                        emit_unionmove(sret, retvalinfo, isboxed_union, false, NULL, &ctx);
                     }
-                    builder.CreateMemCpy(sret,
-                                         data_pointer(retvalinfo, &ctx, T_pint8),
-                                         copy_bytes,
-                                         returninfo.union_minalign);
                 }
                 else {
                     Type *store_ty = julia_type_to_llvm(retvalinfo.typ);
