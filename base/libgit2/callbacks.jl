@@ -34,6 +34,12 @@ function require_passphrase(private_key::AbstractString)
      end
 end
 
+function user_abort()
+    # TODO: Maybe just throw a Julia error
+    ccall((:giterr_set_str, :libgit2), Void, (Cint, Cstring), Cint(Error.Callback), "Aborting, user cancelled credential request.")
+    return Cint(Error.EAUTH)
+end
+
 function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, username_ptr, p::RemotePayload)
     c = Base.get(p.credential)::SSHCredential
     c.passphrase = ""
@@ -89,9 +95,11 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, username_ptr, p::Remot
     while get!(state, :prompt, 'Y') == 'Y' && (!modified || !isfilled(c))
         if prompt_for_keys
             last_private_key = isfile(c.private_key) ? c.private_key : ""
-            c.private_key = prompt(
+            private_key = prompt(
                 "Private key location for '$prompt_url'",
                 default=last_private_key)
+            isnull(private_key) && return user_abort()
+            c.private_key = unsafe_get(private_key)
 
             # Update the public key to reflect the change to the private key
             if c.private_key != last_private_key
@@ -100,7 +108,9 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, username_ptr, p::Remot
 
             # Avoid asking about the public key as typically this will just annoy users.
             if isfile(c.private_key) && !isfile(c.public_key)
-                c.public_key = prompt("Public key location for '$prompt_url'")
+                public_key = prompt("Public key location for '$prompt_url'")
+                isnull(public_key) && return user_abort()
+                c.public_key = unsafe_get(public_key)
             end
         else
             # Always prompt for private key on future iterations
@@ -112,10 +122,13 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, username_ptr, p::Remot
                 res = Base.winprompt(
                     "Your SSH Key requires a password, please enter it now:",
                     "Passphrase required", c.private_key; prompt_username = false)
-                isnull(res) && return Cint(Error.EAUTH)
+                isnull(res) && return user_abort()
                 c.passphrase = unsafe_get(res)[2]
             else
-                c.passphrase = prompt("Passphrase for $(c.private_key)", password=true)
+                passphrase = prompt("Passphrase for $(c.private_key)", password=true)
+                isnull(passphrase) && return user_abort()
+                c.passphrase = unsafe_get(passphrase)
+                isempty(c.passphrase) && return user_abort()
             end
         end
 
@@ -173,14 +186,19 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::RemotePayload)
                 "Credentials required",
                 c.username;
                 prompt_username=true)
-            isnull(res) && return Cint(Error.EAUTH)
+            isnull(res) && return user_abort()
             c.username, c.password = unsafe_get(res)
         else
-            c.username = prompt("Username for '$prompt_url'", default=c.username)
+            username = prompt("Username for '$prompt_url'", default=c.username)
+            isnull(username) && return user_abort()
+            c.username = unsafe_get(username)
 
             if !isempty(c.username)
                 prompt_url = git_url(protocol=p.protocol, host=p.host, username=c.username)
-                c.password = prompt("Password for '$prompt_url'", password=true)
+                password = prompt("Password for '$prompt_url'", password=true)
+                isnull(password) && return user_abort()
+                c.password = unsafe_get(password)
+                isempty(c.password) && return user_abort()
             end
         end
 

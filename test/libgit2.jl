@@ -838,6 +838,7 @@ mktempdir() do dir
         valid_p_key = joinpath(KEY_DIR, "valid-passphrase")
         passphrase = "secret"
 
+        abort_prompt = LibGit2.GitError(LibGit2.Error.Callback, LibGit2.Error.EAUTH, "Aborting, user cancelled credential request.")
         max_prompts = LibGit2.GitError(LibGit2.Error.Callback, LibGit2.Error.EAUTH, "Aborting, maximum number of user prompts reached.")
 
         ssh_cmd = """
@@ -905,6 +906,19 @@ mktempdir() do dir
                 "Private key location for 'git@github.com':" => "foo\n",
             ]
             @test challenge_prompt(ssh_cmd, repmat(challenges, 3)) == max_prompts
+
+            # User sends EOF in private key prompt which aborts the credential request
+            challenges = [
+                "Private key location for 'git@github.com':" => "\x04",
+            ]
+            @test challenge_prompt(ssh_cmd, challenges) == abort_prompt
+
+            # User sends EOF in passphrase prompt which aborts the credential request
+            challenges = [
+                "Private key location for 'git@github.com':" => "$valid_p_key\n",
+                "Passphrase for $valid_p_key:" => "\x04",
+            ]
+            @test challenge_prompt(ssh_p_cmd, challenges) == abort_prompt
         end
 
         # Explicitly setting these env variables to an existing but invalid key pair means
@@ -939,6 +953,13 @@ mktempdir() do dir
                 "Public key location for 'git@github.com':" => "$valid_key.pub\n"
             ]
             @test challenge_prompt(ssh_cmd, challenges) == 0
+
+            # User provides an empty public key which aborts the credential request
+            challenges = [
+                "Private key location for 'git@github.com' [$valid_key]:" => "\n"
+                "Public key location for 'git@github.com':" => "\x04"
+            ]
+            @test challenge_prompt(ssh_cmd, challenges) == abort_prompt
         end
     end
 
@@ -976,6 +997,7 @@ mktempdir() do dir
         valid_username = "julia"
         valid_password = randstring(16)
 
+        abort_prompt = LibGit2.GitError(LibGit2.Error.Callback, LibGit2.Error.EAUTH, "Aborting, user cancelled credential request.")
         max_prompts = LibGit2.GitError(LibGit2.Error.Callback, LibGit2.Error.EAUTH, "Aborting, maximum number of user prompts reached.")
 
         https_cmd = """
@@ -991,11 +1013,32 @@ mktempdir() do dir
         ]
         @test challenge_prompt(https_cmd, challenges) == 0
 
+        # User sends EOF in username prompt which aborts the credential request
+        challenges = [
+            "Username for 'https://github.com':" => "\x04",
+        ]
+        @test challenge_prompt(https_cmd, challenges) == abort_prompt
+
         # User provides an empty username which triggers a re-prompt
         challenges = [
             "Username for 'https://github.com':" => "\n",
         ]
         @test challenge_prompt(https_cmd, repmat(challenges, 3)) == max_prompts
+
+        # User sends EOF in password prompt which aborts the credential request
+        challenges = [
+            "Username for 'https://github.com':" => "foo\n",
+            "Password for 'https://foo@github.com':" => "\x04",
+        ]
+        @test challenge_prompt(https_cmd, challenges) == abort_prompt
+
+        # User provides an empty password which aborts the credential request since we
+        # cannot tell it apart from an EOF.
+        challenges = [
+            "Username for 'https://github.com':" => "foo\n",
+            "Password for 'https://foo@github.com':" => "\n",
+        ]
+        @test challenge_prompt(https_cmd, challenges) == abort_prompt
 
         # User repeatedly chooses invalid username/password until the prompt limit is reached
         challenges = [
