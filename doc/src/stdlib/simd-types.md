@@ -17,7 +17,7 @@ the following program, when compiled with `julia -O3` generates two SIMD additio
 (`addps`) on x86 systems:
 
 ```julia
-typealias m128 NTuple{4,VecElement{Float32}}
+const m128 = NTuple{4,VecElement{Float32}}
 
 function add(a::m128, b::m128)
     (VecElement(a[1].value+b[1].value),

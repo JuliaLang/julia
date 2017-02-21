@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-typealias InnerConfig Dict{Char, Vector{Function}}
+const InnerConfig = Dict{Char, Vector{Function}}
 
-type Config
+mutable struct Config
     breaking::Vector{Function}
     regular::Vector{Function}
     inner::InnerConfig

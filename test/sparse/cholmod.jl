@@ -149,7 +149,6 @@ pred = afiro'*sol
 @test norm(afiro * (convert(Matrix, y) - convert(Matrix, pred))) < 1e-8
 
 let # Issue 9160
-
     A = sprand(10, 10, 0.1)
     A = convert(SparseMatrixCSC{Float64,CHOLMOD.SuiteSparse_long}, A)
     cmA = CHOLMOD.Sparse(A)
@@ -174,7 +173,6 @@ let # Issue 9160
     A = 0.5*(A + A')
     cmA = CHOLMOD.Sparse(A)
     @test sparse(cmA*cmA') ≈ A*A'
-
 end
 
 # Issue #9915
@@ -675,7 +673,6 @@ let Apre = sprandn(10, 10, 0.2) - I
     for A in (Symmetric(Apre), Hermitian(Apre),
               Symmetric(Apre + 10I), Hermitian(Apre + 10I),
               Hermitian(complex(Apre)), Hermitian(complex(Apre) + 10I))
-
         x = ones(10)
         b = A*x
         @test x ≈ A\b
@@ -693,5 +690,15 @@ let A = sprandn(10, 10, 0.1)
         unsafe_store!(Ptr{Int8}(C.p), uplo, Int(o) + 1)
         @test convert(Symmetric{Float64,SparseMatrixCSC{Float64,Int}}, C) == Symmetric(A'A)
     end
+end
+
+@testset "Check inputs to Sparse. Related to #20024" for A in (
+    SparseMatrixCSC(2, 2, [1, 2], CHOLMOD.SuiteSparse_long[], Float64[]),
+    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[]),
+    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[], Float64[1.0]),
+    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[1.0]))
+
+    @test_throws ArgumentError CHOLMOD.Sparse(size(A)..., A.colptr - 1, A.rowval - 1, A.nzval)
+    @test_throws ArgumentError CHOLMOD.Sparse(A)
 end
 

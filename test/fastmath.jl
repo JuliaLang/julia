@@ -39,12 +39,10 @@ fm_fast_64_upd(x) = @fastmath (r=x; r+=eps64_2; r+=eps64_2)
        fm_fast_64_upd(one64) == one64 + eps64 > one64)
 
 let epsf = 1.0f0/2^15, one_epsf = 1+epsf
-    @test isapprox((@fastmath one_epsf * one_epsf - 1),
-                   Float32(65537/1073741824))
+    @test @fastmath(one_epsf * one_epsf - 1) ≈ Float32(65537/1073741824)
 end
 let eps = 1.0/2^30, one_eps = 1+eps
-    @test isapprox((@fastmath one_eps * one_eps - 1),
-                   2147483649/1152921504606846976)
+    @test @fastmath(one_eps * one_eps - 1) ≈ 2147483649/1152921504606846976
 end
 
 for T in (Float32, Float64, BigFloat)
@@ -53,52 +51,52 @@ for T in (Float32, Float64, BigFloat)
     two = convert(T, 2) + 1//10
     three = convert(T, 3) + 1//100
 
-    @test isapprox((@fastmath +two), +two)
-    @test isapprox((@fastmath -two), -two)
-    @test isapprox((@fastmath zero+one+two), zero+one+two)
-    @test isapprox((@fastmath zero-one-two), zero-one-two)
-    @test isapprox((@fastmath one*two*three), one*two*three)
-    @test isapprox((@fastmath one/two/three), one/two/three)
-    @test isapprox((@fastmath rem(two, three)), rem(two, three))
-    @test isapprox((@fastmath mod(two, three)), mod(two, three))
-    @test (@fastmath cmp(two, two)) == cmp(two, two)
-    @test (@fastmath cmp(two, three)) == cmp(two, three)
-    @test (@fastmath cmp(three, two)) == cmp(three, two)
-    @test (@fastmath one/zero) == convert(T, Inf)
-    @test (@fastmath -one/zero) == -convert(T, Inf)
-    @test isnan(@fastmath zero/zero) # must not throw
+    @test @fastmath(+two) ≈ +two
+    @test @fastmath(-two) ≈ -two
+    @test @fastmath(zero+one+two) ≈ zero+one+two
+    @test @fastmath(zero-one-two) ≈ zero-one-two
+    @test @fastmath(one*two*three) ≈ one*two*three
+    @test @fastmath(one/two/three) ≈ one/two/three
+    @test @fastmath(rem(two,three)) ≈ rem(two,three)
+    @test @fastmath(mod(two,three)) ≈ mod(two,three)
+    @test @fastmath(cmp(two,two)) == cmp(two,two)
+    @test @fastmath(cmp(two,three)) == cmp(two,three)
+    @test @fastmath(cmp(three,two)) == cmp(three,two)
+    @test @fastmath(one/zero) == convert(T,Inf)
+    @test @fastmath(-one/zero) == -convert(T,Inf)
+    @test isnan(@fastmath(zero/zero)) # must not throw
 
     for x in (zero, two, convert(T, Inf), convert(T, NaN))
-        @test (@fastmath isfinite(x))
-        @test !(@fastmath isinf(x))
-        @test !(@fastmath isnan(x))
-        @test !(@fastmath issubnormal(x))
+        @test @fastmath(isfinite(x))
+        @test !@fastmath(isinf(x))
+        @test !@fastmath(isnan(x))
+        @test !@fastmath(issubnormal(x))
     end
 end
 
 for T in (Complex64, Complex128, Complex{BigFloat})
-    zero = convert(T, 0)
-    one = convert(T, 1) + im*eps(real(convert(T,1)))
-    two = convert(T, 2) + im//10
-    three = convert(T, 3) + im//100
+    zero = convert(T,0)
+    one = convert(T,1) + im*eps(real(convert(T,1)))
+    two = convert(T,2) + im//10
+    three = convert(T,3) + im//100
 
-    @test isapprox((@fastmath +two), +two)
-    @test isapprox((@fastmath -two), -two)
-    @test isapprox((@fastmath zero+one+two), zero+one+two)
-    @test isapprox((@fastmath zero-one-two), zero-one-two)
-    @test isapprox((@fastmath one*two*three), one*two*three)
-    @test isapprox((@fastmath one/two/three), one/two/three)
-    @test (@fastmath three == two) == (three == two)
-    @test (@fastmath three != two) == (three != two)
-    @test isnan(@fastmath one/zero)  # must not throw
-    @test isnan(@fastmath -one/zero) # must not throw
-    @test isnan(@fastmath zero/zero) # must not throw
+    @test @fastmath(+two) ≈ +two
+    @test @fastmath(-two) ≈ -two
+    @test @fastmath(zero+one+two) ≈ zero+one+two
+    @test @fastmath(zero-one-two) ≈ zero-one-two
+    @test @fastmath(one*two*three) ≈ one*two*three
+    @test @fastmath(one/two/three) ≈ one/two/three
+    @test @fastmath(three == two) == (three == two)
+    @test @fastmath(three != two) == (three != two)
+    @test isnan(@fastmath(one/zero))  # must not throw
+    @test isnan(@fastmath(-one/zero)) # must not throw
+    @test isnan(@fastmath(zero/zero)) # must not throw
 
     for x in (zero, two, convert(T, Inf), convert(T, NaN))
-        @test (@fastmath isfinite(x))
-        @test !(@fastmath isinf(x))
-        @test !(@fastmath isnan(x))
-        @test !(@fastmath issubnormal(x))
+        @test @fastmath(isfinite(x))
+        @test !@fastmath(isinf(x))
+        @test !@fastmath(isnan(x))
+        @test !@fastmath(issubnormal(x))
     end
 end
 
@@ -107,36 +105,38 @@ end
 
 # real arithmetic
 for T in (Float32, Float64, BigFloat)
-    half = 1/convert(T, 2)
-    third = 1/convert(T, 3)
+    half = 1/convert(T,2)
+    third = 1/convert(T,3)
 
     for f in (:+, :-, :abs, :abs2, :conj, :inv, :sign,
               :acos, :asin, :asinh, :atan, :atanh, :cbrt, :cos, :cosh,
               :exp10, :exp2, :exp, :expm1, :lgamma, :log10, :log1p,
               :log2, :log, :sin, :sinh, :sqrt, :tan, :tanh)
-        @test isapprox((@eval @fastmath $f($half)), (@eval $f($half)))
-        @test isapprox((@eval @fastmath $f($third)), (@eval $f($third)))
+        @eval begin
+            @test @fastmath($f($half)) ≈ $f($half)
+            @test @fastmath($f($third)) ≈ $f($third)
+        end
     end
     for f in (:acosh,)
-        @test isapprox((@eval @fastmath $f(1+$half)), (@eval $f(1+$half)))
-        @test isapprox((@eval @fastmath $f(1+$third)), (@eval $f(1+$third)))
+        @eval begin
+            @test @fastmath($f(1+$half)) ≈ $f(1+$half)
+            @test @fastmath($f(1+$third)) ≈ $f(1+$third)
+        end
     end
     for f in (:+, :-, :*, :/, :%, :(==), :!=, :<, :<=, :>, :>=, :^,
               :atan2, :hypot, :max, :min)
-        @test isapprox((@eval @fastmath $f($half, $third)),
-                       (@eval $f($half, $third)))
-        @test isapprox((@eval @fastmath $f($third, $half)),
-                       (@eval $f($third, $half)))
+        @eval begin
+            @test @fastmath($f($half, $third)) ≈ $f($half, $third)
+            @test @fastmath($f($third, $half)) ≈ $f($third, $half)
+        end
     end
     for f in (:minmax,)
-        @test isapprox((@eval @fastmath $f($half, $third))[1],
-                       (@eval $f($half, $third))[1])
-        @test isapprox((@eval @fastmath $f($half, $third))[2],
-                       (@eval $f($half, $third))[2])
-        @test isapprox((@eval @fastmath $f($third, $half))[1],
-                       (@eval $f($third, $half))[1])
-        @test isapprox((@eval @fastmath $f($third, $half))[2],
-                       (@eval $f($third, $half))[2])
+        @eval begin
+            @test @fastmath($f($half, $third)[1]) ≈ $f($half, $third)[1]
+            @test @fastmath($f($half, $third)[2]) ≈ $f($half, $third)[2]
+            @test @fastmath($f($third, $half)[1]) ≈ $f($third, $half)[1]
+            @test @fastmath($f($third, $half)[2]) ≈ $f($third, $half)[2]
+        end
     end
 end
 
@@ -153,14 +153,16 @@ for T in (Complex64, Complex128, Complex{BigFloat})
               :acos, :acosh, :asin, :asinh, :atan, :atanh, :cis, :cos,
               :cosh, :exp10, :exp2, :exp, :expm1, :log10, :log1p,
               :log2, :log, :sin, :sinh, :sqrt, :tan, :tanh)
-        @test isapprox((@eval @fastmath $f($half)), (@eval $f($half)), rtol=rtol)
-        @test isapprox((@eval @fastmath $f($third)), (@eval $f($third)), rtol=rtol)
+        @eval begin
+            @test @fastmath($f($half)) ≈ $f($half) rtol=$rtol
+            @test @fastmath($f($third)) ≈ $f($third) rtol=$rtol
+        end
     end
     for f in (:+, :-, :*, :/, :(==), :!=, :^)
-        @test isapprox((@eval @fastmath $f($half, $third)),
-                       (@eval $f($half, $third)), rtol=rtol)
-        @test isapprox((@eval @fastmath $f($third, $half)),
-                       (@eval $f($third, $half)), rtol=rtol)
+        @eval begin
+            @test @fastmath($f($half, $third)) ≈ $f($half, $third) rtol=$rtol
+            @test @fastmath($f($third, $half)) ≈ $f($third, $half) rtol=$rtol
+        end
     end
 end
 
@@ -173,32 +175,29 @@ for T in (Float32, Float64, BigFloat)
     cthird = (1-1im)/CT(3)
 
     for f in (:+, :-, :*, :/, :(==), :!=, :^)
-        @test isapprox((@eval @fastmath $f($chalf, $third)),
-                       (@eval $f($chalf, $third)))
-        @test isapprox((@eval @fastmath $f($half, $cthird)),
-                       (@eval $f($half, $cthird)))
-        @test isapprox((@eval @fastmath $f($cthird, $half)),
-                       (@eval $f($cthird, $half)))
-        @test isapprox((@eval @fastmath $f($third, $chalf)),
-                       (@eval $f($third, $chalf)))
+        @eval begin
+            @test @fastmath($f($chalf, $third)) ≈ $f($chalf, $third)
+            @test @fastmath($f($half, $cthird)) ≈ $f($half, $cthird)
+            @test @fastmath($f($cthird, $half)) ≈ $f($cthird, $half)
+            @test @fastmath($f($third, $chalf)) ≈ $f($third, $chalf)
+        end
     end
 
-    @test isapprox((@fastmath third^3), third^3)
-
-    @test isapprox((@fastmath chalf/third), chalf/third)
-    @test isapprox((@fastmath chalf^3), chalf^3)
-    @test isapprox((@fastmath cis(third)), cis(third))
+    @test @fastmath(third^3) ≈ third^3
+    @test @fastmath(chalf/third) ≈ chalf/third
+    @test @fastmath(chalf^3) ≈ chalf^3
+    @test @fastmath(cis(third)) ≈ cis(third)
 end
 
 # issue #10544
 let a = ones(2,2), b = ones(2,2)
-    @test isapprox((@fastmath a[1] += 2.0), b[1] += 2.0)
-    @test isapprox((@fastmath a[2] -= 2.0), b[2] -= 2.0)
-    @test isapprox((@fastmath a[1,1] *= 2.0), b[1,1] *= 2.0)
-    @test isapprox((@fastmath a[2,2] /= 2.0), b[2,2] /= 2.0)
-    @test isapprox((@fastmath a[1,2] ^= 2.0), b[1,2] ^= 2.0)
+    @test @fastmath(a[1] += 2.0) ≈ (b[1] += 2.0)
+    @test @fastmath(a[2] -= 2.0) ≈ (b[2] -= 2.0)
+    @test @fastmath(a[1,1] *= 2.0) ≈ (b[1,1] *= 2.0)
+    @test @fastmath(a[2,2] /= 2.0) ≈ (b[2,2] /= 2.0)
+    @test @fastmath(a[1,2] ^= 2.0) ≈ (b[1,2] ^= 2.0)
 
     # test fallthrough for unsupported ops
     local c = 0
-    @test Bool((@fastmath c |= 1))
+    @test @fastmath(c |= 1) == 1
 end

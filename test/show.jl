@@ -4,21 +4,21 @@ const curmod = current_module()
 const curmod_name = fullname(curmod)
 const curmod_prefix = "$(["$m." for m in curmod_name]...)"
 
-replstr(x) = sprint((io,x) -> show(IOContext(io, limit=true), MIME("text/plain"), x), x)
+replstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true), MIME("text/plain"), x), x)
 
 @test replstr(Array{Any}(2)) == "2-element Array{Any,1}:\n #undef\n #undef"
 @test replstr(Array{Any}(2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
 @test replstr(Array{Any}(2,2,2)) == "2×2×2 Array{Any,3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
 @test replstr([1f10]) == "1-element Array{Float32,1}:\n 1.0f10"
 
-immutable T5589
+struct T5589
     names::Vector{String}
 end
-@test replstr(T5589(Array{String,1}(100))) == "$(curmod_prefix)T5589(String[#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef  …  #undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef])"
+@test replstr(T5589(Array{String,1}(100))) == "$(curmod_prefix)T5589(String[#undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef  …  #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef])"
 
-@test replstr(parse("type X end")) == ":(type X # none, line 1:\n    end)"
-@test replstr(parse("immutable X end")) == ":(immutable X # none, line 1:\n    end)"
-s = "ccall(:f,Int,(Ptr{Void},),&x)"
+@test replstr(parse("mutable struct X end")) == ":(mutable struct X # none, line 1:\n    end)"
+@test replstr(parse("struct X end")) == ":(struct X # none, line 1:\n    end)"
+s = "ccall(:f, Int, (Ptr{Void},), &x)"
 @test replstr(parse(s)) == ":($s)"
 
 # recursive array printing
@@ -64,7 +64,7 @@ end
 @test_repr "x + y"
 @test_repr "2e"
 @test_repr "!x"
-@test_repr "f(1,2,3)"
+@test_repr "f(1, 2, 3)"
 @test_repr "x = ~y"
 @test_repr ":(:x, :y)"
 @test_repr ":(:(:(x)))"
@@ -94,7 +94,7 @@ end
 @test_repr "(a == b == c) != (c == d < e)"
 
 # control structures (shamelessly stolen from base/bitarray.jl)
-@test_repr """type BitArray{N} <: AbstractArray{Bool, N}
+@test_repr """mutable struct BitArray{N} <: AbstractArray{Bool, N}
     chunks::Vector{UInt64}
     len::Int
     dims::NTuple{N,Int}
@@ -176,7 +176,7 @@ end"""
 @test sprint(show, :end) == ":end"
 
 # issue #12477
-@test sprint(show, Union{Int64,Int32,Int16,Int8,Float64}) == "Union{Float64,Int16,Int32,Int64,Int8}"
+@test sprint(show,  Union{Int64, Int32, Int16, Int8, Float64}) == "Union{Float64, Int16, Int32, Int64, Int8}"
 
 # Function and array reference precedence
 @test_repr "([2] + 3)[1]"
@@ -185,7 +185,8 @@ end"""
 @test_repr "(foo + bar)()"
 
 # issue #7921
-@test replace(sprint(show, Expr(:function, :(==(a, b)), Expr(:block,:(return a == b)))), r"\s+", " ") == ":(function ==(a,b) return a == b end)"
+@test replace(sprint(show, Expr(:function, :(==(a, b)), Expr(:block,:(return a == b)))),
+              r"\s+", " ") == ":(function ==(a, b) return a == b end)"
 
 # unicode operator printing
 @test sprint(show, :(1 ⊕ (2 ⊗ 3))) == ":(1 ⊕ 2 ⊗ 3)"
@@ -231,7 +232,7 @@ for s in ("(1::Int64 == 1::Int64)::Bool", "(1:2:3) + 4", "x = 1:2:3")
 end
 
 # parametric type instantiation printing
-immutable TParametricPrint{a}; end
+struct TParametricPrint{a}; end
 @test sprint(show, :(TParametricPrint{false}())) == ":(TParametricPrint{false}())"
 
 # issue #9797
@@ -256,8 +257,8 @@ end
 @test ismatch(r"^Set\(\[.+….+\]\)$", replstr(Set(1:100)))
 
 # issue #11413
-@test string(:(*{1,2})) == "*{1,2}"
-@test string(:(*{1,x})) == "*{1,x}"
+@test string(:(*{1, 2})) == "*{1, 2}"
+@test string(:(*{1, x})) == "*{1, x}"
 @test string(:(-{x}))   == "-{x}"
 
 # issue #11393
@@ -284,10 +285,10 @@ end
 @test_repr "(1 => 2) => 3"
 
 # pr 12008
-@test_repr "bitstype A B"
-@test_repr "bitstype 100 B"
-@test repr(:(bitstype A B)) == ":(bitstype A B)"
-@test repr(:(bitstype 100 B)) == ":(bitstype 100 B)"
+@test_repr "primitive type A B end"
+@test_repr "primitive type B 100 end"
+@test repr(:(primitive type A B end)) == ":(primitive type A B end)"
+@test repr(:(primitive type B 100 end)) == ":(primitive type B 100 end)"
 
 # `where` syntax
 @test_repr "A where T<:B"
@@ -366,7 +367,7 @@ let filename = tempname()
 end
 
 # issue #12960
-type T12960 end
+mutable struct T12960 end
 let
     A = speye(3)
     B = similar(A, T12960)
@@ -398,22 +399,22 @@ end
 @test Base.inbase(LinAlg)
 @test !Base.inbase(Core)
 
-let repr = sprint(io -> show(io,"text/plain", methods(Base.inbase)))
+let repr = sprint(show, "text/plain", methods(Base.inbase))
     @test contains(repr, "inbase(m::Module)")
 end
-let repr = sprint(io -> show(io,"text/html", methods(Base.inbase)))
+let repr = sprint(show, "text/html", methods(Base.inbase))
     @test contains(repr, "inbase(m::<b>Module</b>)")
 end
 
 f5971(x, y...; z=1, w...) = nothing
-let repr = sprint(io -> show(io,"text/plain", methods(f5971)))
+let repr = sprint(show, "text/plain", methods(f5971))
     @test contains(repr, "f5971(x, y...; z, w...)")
 end
-let repr = sprint(io -> show(io,"text/html", methods(f5971)))
+let repr = sprint(show, "text/html", methods(f5971))
     @test contains(repr, "f5971(x, y...; <i>z, w...</i>)")
 end
 f16580(x, y...; z=1, w=y+x, q...) = nothing
-let repr = sprint(io -> show(io,"text/html", methods(f16580)))
+let repr = sprint(show, "text/html", methods(f16580))
     @test contains(repr, "f16580(x, y...; <i>z, w, q...</i>)")
 end
 
@@ -493,18 +494,18 @@ show_f1(x...) = [x...]
 show_f2(x::Vararg{Any}) = [x...]
 show_f3(x::Vararg) = [x...]
 show_f4(x::Vararg{Any,3}) = [x...]
-show_f5{T,N}(A::AbstractArray{T,N}, indexes::Vararg{Int,N}) = [indexes...]
+show_f5{T, N}(A::AbstractArray{T,N}, indexes::Vararg{Int,N}) = [indexes...]
 test_mt(show_f1, "show_f1(x...)")
 test_mt(show_f2, "show_f2(x...)")
 test_mt(show_f3, "show_f3(x...)")
 test_mt(show_f4, "show_f4(x::Vararg{Any,3})")
-test_mt(show_f5, "show_f5{T,N}(A::AbstractArray{T,N}, indexes::Vararg{$Int,N})")
+test_mt(show_f5, "show_f5(A::AbstractArray{T,N}, indexes::Vararg{$Int,N})")
 
 # Issue #15525, printing of vcat
 @test sprint(show, :([a;])) == ":([a;])"
-@test sprint(show, :([a;b])) == ":([a;b])"
+@test sprint(show, :([a; b])) == ":([a; b])"
 @test_repr "[a;]"
-@test_repr "[a;b]"
+@test_repr "[a; b]"
 
 # Printing of :(function f end)
 @test sprint(show, :(function f end)) == ":(function f end)"
@@ -532,21 +533,21 @@ end
 
 # PR #16651
 @test !contains(repr(ones(10,10)), "\u2026")
-@test contains(sprint((io,x)->show(IOContext(io,:limit=>true), x), ones(30,30)), "\u2026")
+@test contains(sprint((io, x) -> show(IOContext(io, :limit => true), x), ones(30, 30)), "\u2026")
 
 # showcompact() also sets :multiline=>false (#16817)
 let io = IOBuffer()
     x = [1, 2]
     showcompact(io, x)
-    @test String(take!(io)) == "[1,2]"
-    showcompact(IOContext(io, :compact=>true), x)
-    @test String(take!(io)) == "[1,2]"
+    @test String(take!(io)) == "[1, 2]"
+    showcompact(IOContext(io, :compact => true), x)
+    @test String(take!(io)) == "[1, 2]"
 end
 
 # PR 17117
 # test show array
 let s = IOBuffer(Array{UInt8}(0), true, true)
-    Base.showarray(s, [1,2,3], false, header = false)
+    Base.showarray(s, [1, 2, 3], false, header = false)
     @test String(resize!(s.data, s.size)) == " 1\n 2\n 3"
 end
 
@@ -563,12 +564,15 @@ let repr = sprint(dump, Int64)
     @test repr == "Int64 <: Signed\n"
 end
 # Make sure a `TypeVar` in a `Union` doesn't break subtype dump.
-typealias BreakDump17529{T} Union{T,Void}
+BreakDump17529{T} = Union{T, Void}
+# make sure dependent parameters are represented correctly
+VectorVI{I, VI<:AbstractVector{I}} = Vector{VI}
 let repr = sprint(dump, Any)
     @test length(repr) > 100000
     @test ismatch(r"^Any\n  [^ \t\n]", repr)
     @test endswith(repr, '\n')
-    @test_broken contains(repr, "     Base.Vector{T} = Array{T,1}\n")
+    @test contains(repr, "     Base.Vector{T} = Array{T,1}\n")
+    @test contains(repr, ".VectorVI{I, VI<:AbstractArray{I,1}} = Array{VI,1}\n")
     @test !contains(repr, "Core.Vector{T}")
 end
 let repr = sprint(dump, Integer)
@@ -576,7 +580,7 @@ let repr = sprint(dump, Integer)
     @test !contains(repr, "Any")
 end
 let repr = sprint(dump, Union{Integer, Float32})
-    @test repr == "Union{Integer,Float32}\n" || repr == "Union{Float32,Integer}\n"
+    @test repr == "Union{Integer, Float32}\n" || repr == "Union{Float32, Integer}\n"
 end
 let repr = sprint(dump, Core.svec())
     @test repr == "empty SimpleVector\n"
@@ -602,7 +606,7 @@ let a = Array{Any}(10000)
 end
 
 # issue #17338
-@test repr(Core.svec(1,2)) == "svec(1,2)"
+@test repr(Core.svec(1, 2)) == "svec(1, 2)"
 
 # showing generator and comprehension expressions
 @test repr(:(x for x in y for z in w)) == ":((x for x = y for z = w))"
@@ -616,7 +620,7 @@ for op in (:(.=), :(.+=), :(.&=))
 end
 
 # pretty-printing of compact broadcast expressions (#17289)
-@test repr(:(f.(X,Y))) == ":(f.(X,Y))"
+@test repr(:(f.(X, Y))) == ":(f.(X, Y))"
 @test repr(:(f.(X))) == ":(f.(X))"
 @test repr(:(f.())) == ":(f.())"
 
@@ -630,3 +634,15 @@ end
 
 # don't use julia-specific `f` in Float32 printing (PR #18053)
 @test sprint(print, 1f-7) == "1.0e-7"
+
+# test that the REPL TextDisplay works for displaying arbitrary textual MIME types
+let d = TextDisplay(IOBuffer())
+    display(d, "text/csv", [3 1 4])
+    @test String(take!(d.io)) == "3,1,4\n"
+    @test_throws MethodError display(d, "text/foobar", [3 1 4])
+    try
+        display(d, "text/foobar", [3 1 4])
+    catch e
+        @test e.f == show
+    end
+end

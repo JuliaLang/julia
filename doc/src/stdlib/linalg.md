@@ -100,6 +100,7 @@ Base.LinAlg.istriu
 Base.LinAlg.isdiag
 Base.LinAlg.ishermitian
 Base.LinAlg.RowVector
+Base.LinAlg.ConjArray
 Base.transpose
 Base.transpose!
 Base.ctranspose

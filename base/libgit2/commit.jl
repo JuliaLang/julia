@@ -74,13 +74,13 @@ function commit(repo::GitRepo, msg::AbstractString;
     commit_id  = GitHash()
 
     # get necessary objects
-    tree = get(GitTree, repo, tree_id)
+    tree = GitTree(repo, tree_id)
     auth_sig = convert(GitSignature, author)
     comm_sig = convert(GitSignature, committer)
     parents = GitCommit[]
     try
-        for parent in parent_ids
-            push!(parents, get(GitCommit, repo, parent))
+        for id in parent_ids
+            push!(parents, GitCommit(repo, id))
         end
         commit_id = commit(repo, refname, msg, auth_sig, comm_sig, tree, parents...)
     finally

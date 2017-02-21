@@ -57,9 +57,9 @@ include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","file_constants.jl"))  # inc
 
 ## Operations with File (fd) objects ##
 
-abstract AbstractFile <: IO
+abstract type AbstractFile <: IO end
 
-type File <: AbstractFile
+mutable struct File <: AbstractFile
     open::Bool
     handle::RawFD
     File(fd::RawFD) = new(true, fd)
@@ -69,7 +69,8 @@ end
 uvhandle(file::File) = convert(Ptr{Void}, Base.cconvert(Cint, file.handle) % UInt)
 uvtype(::File) = Base.UV_RAW_FD
 
-function open(path::AbstractString, flags::Integer, mode::Integer=0) # FS.open, not Base.open
+# Filesystem.open, not Base.open
+function open(path::AbstractString, flags::Integer, mode::Integer=0)
     req = Libc.malloc(_sizeof_uv_fs)
     local handle
     try

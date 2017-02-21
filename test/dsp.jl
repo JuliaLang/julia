@@ -26,12 +26,24 @@ si = [0.9967207836936347,-1.4940914728163142,1.2841226760316475,-0.4524417279474
 @test_throws ArgumentError filt!([1, 2], [1], [1], [1])
 @test xcorr([1, 2], [3, 4]) == [4, 11, 6]
 
+# Shift-Functions
 @test fftshift([1 2 3]) == [3 1 2]
 @test fftshift([1, 2, 3]) == [3, 1, 2]
 @test fftshift([1 2 3; 4 5 6]) == [6 4 5; 3 1 2]
+
+@test fftshift([1 2 3; 4 5 6], 1) == [4 5 6; 1 2 3]
+@test fftshift([1 2 3; 4 5 6], ()) == [1 2 3; 4 5 6]
+@test fftshift([1 2 3; 4 5 6], (1,2)) == [6 4 5; 3 1 2]
+@test fftshift([1 2 3; 4 5 6], 1:2) == [6 4 5; 3 1 2]
+
 @test ifftshift([1 2 3]) == [2 3 1]
 @test ifftshift([1, 2, 3]) == [2, 3, 1]
 @test ifftshift([1 2 3; 4 5 6]) == [5 6 4; 2 3 1]
+
+@test ifftshift([1 2 3; 4 5 6], 1) == [4 5 6; 1 2 3]
+@test ifftshift([1 2 3; 4 5 6], ()) == [1 2 3; 4 5 6]
+@test ifftshift([1 2 3; 4 5 6], (1,2)) == [5 6 4; 2 3 1]
+@test ifftshift([1 2 3; 4 5 6], 1:2) == [5 6 4; 2 3 1]
 
 # Convolution
 a = [1., 2., 1., 2.]

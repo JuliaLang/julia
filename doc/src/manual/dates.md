@@ -41,7 +41,7 @@ BC/BCE, etc.
 [`Date`](@ref) and [`DateTime`](@ref) types can be constructed by integer or [`Period`](@ref)
 types, by parsing, or through adjusters (more on those later):
 
-```julia
+```jldoctest
 julia> DateTime(2013)
 2013-01-01T00:00:00
 
@@ -106,14 +106,22 @@ if only called a few times. If there are many similarly formatted date strings t
 it is much more efficient to first create a [`Dates.DateFormat`](@ref), and pass it instead of
 a raw format string.
 
-```julia
-julia> df = Dates.DateFormat("y-m-d");
+```jldoctest
+julia> df = DateFormat("y-m-d");
 
 julia> dt = Date("2015-01-01",df)
 2015-01-01
 
 julia> dt2 = Date("2015-01-02",df)
 2015-01-02
+```
+
+You can also use the `dateformat""` string macro. This macro creates the `DateFormat` object once when the macro is expanded and uses the same `DateFormat` object even if a code snippet is run multiple times.
+
+```jldoctest
+julia> for i=1:10^5
+           Date("2015-01-01",dateformat"y-m-d")
+       end
 ```
 
 A full suite of parsing and formatting tests and examples is available in [tests/dates/io.jl](https://github.com/JuliaLang/julia/blob/master/test/dates/io.jl).
@@ -126,7 +134,7 @@ The difference between [`Date`](@ref) is returned in the number of [`Day`](@ref)
 in the number of [`Millisecond`](@ref). Similarly, comparing [`TimeType`](@ref) is a simple matter
 of comparing the underlying machine instants (which in turn compares the internal `Int64` values).
 
-```julia
+```jldoctest
 julia> dt = Date(2012,2,29)
 2012-02-29
 
@@ -135,15 +143,15 @@ julia> dt2 = Date(2000,2,1)
 
 julia> dump(dt)
 Date
-  instant: UTInstant{Day}
-    periods: Day
+  instant: Base.Dates.UTInstant{Base.Dates.Day}
+    periods: Base.Dates.Day
       value: Int64 734562
 
 julia> dump(dt2)
 Date
-instant: UTInstant{Day}
-  periods: Day
-    value: Int64 730151
+  instant: Base.Dates.UTInstant{Base.Dates.Day}
+    periods: Base.Dates.Day
+      value: Int64 730151
 
 julia> dt > dt2
 true
@@ -152,13 +160,16 @@ julia> dt != dt2
 true
 
 julia> dt + dt2
-Operation not defined for TimeTypes
+ERROR: MethodError: no method matching +(::Date, ::Date)
+[...]
 
 julia> dt * dt2
-Operation not defined for TimeTypes
+ERROR: MethodError: no method matching *(::Date, ::Date)
+[...]
 
 julia> dt / dt2
-Operation not defined for TimeTypes
+ERROR: MethodError: no method matching /(::Date, ::Date)
+[...]
 
 julia> dt - dt2
 4411 days
@@ -173,7 +184,7 @@ julia> dt2 = DateTime(2000,2,1)
 2000-02-01T00:00:00
 
 julia> dt - dt2
-381110402000 milliseconds
+381110400000 milliseconds
 ```
 
 ## Accessor Functions
@@ -182,8 +193,8 @@ Because the [`Date`](@ref) and [`DateTime`](@ref) types are stored as single `In
 parts or fields can be retrieved through accessor functions. The lowercase accessors return the
 field as an integer:
 
-```julia
-julia> t = Date(2014,1,31)
+```jldoctest tdate
+julia> t = Date(2014, 1, 31)
 2014-01-31
 
 julia> Dates.year(t)
@@ -201,7 +212,7 @@ julia> Dates.day(t)
 
 While propercase return the same value in the corresponding [`Period`](@ref) type:
 
-```julia
+```jldoctest tdate
 julia> Dates.Year(t)
 2014 years
 
@@ -212,28 +223,28 @@ julia> Dates.Day(t)
 Compound methods are provided, as they provide a measure of efficiency if multiple fields are
 needed at the same time:
 
-```julia
+```jldoctest tdate
 julia> Dates.yearmonth(t)
-(2014,1)
+(2014, 1)
 
 julia> Dates.monthday(t)
-(1,31)
+(1, 31)
 
 julia> Dates.yearmonthday(t)
-(2014,1,31)
+(2014, 1, 31)
 ```
 
 One may also access the underlying `UTInstant` or integer value:
 
-```julia
+```jldoctest tdate
 julia> dump(t)
 Date
-instant: UTInstant{Day}
-  periods: Day
-    value: Int64 735264
+  instant: Base.Dates.UTInstant{Base.Dates.Day}
+    periods: Base.Dates.Day
+      value: Int64 735264
 
 julia> t.instant
-UTInstant{Day}(735264 days)
+Base.Dates.UTInstant{Base.Dates.Day}(735264 days)
 
 julia> Dates.value(t)
 735264
@@ -244,8 +255,8 @@ julia> Dates.value(t)
 Query functions provide calendrical information about a [`TimeType`](@ref). They include information
 about the day of the week:
 
-```julia
-julia> t = Date(2014,1,31)
+```jldoctest tdate2
+julia> t = Date(2014, 1, 31)
 2014-01-31
 
 julia> Dates.dayofweek(t)
@@ -254,13 +265,13 @@ julia> Dates.dayofweek(t)
 julia> Dates.dayname(t)
 "Friday"
 
-julia> Dates.dayofweekofmonth(t)
-5  # 5th Friday of January
+julia> Dates.dayofweekofmonth(t) # 5th Friday of January
+5
 ```
 
 Month of the year:
 
-```julia
+```jldoctest tdate2
 julia> Dates.monthname(t)
 "January"
 
@@ -270,7 +281,7 @@ julia> Dates.daysinmonth(t)
 
 As well as information about the [`TimeType`](@ref)'s year and quarter:
 
-```julia
+```jldoctest tdate2
 julia> Dates.isleapyear(t)
 false
 
@@ -285,20 +296,47 @@ julia> Dates.dayofquarter(t)
 ```
 
 The [`dayname()`](@ref) and [`monthname()`](@ref) methods can also take an optional `locale` keyword
-that can be used to return the name of the day or month of the year for other languages/locales:
+that can be used to return the name of the day or month of the year for other languages/locales.
+There are also versions of these functions returning the abbreviated names, namely
+[`dayabbr()`](@ref) and [`monthabbr()`](@ref).
+First the mapping is loaded into the `LOCALES` variable:
 
-```julia
-julia> const french_daysofweek = Dict(1=>"Lundi",2=>"Mardi",3=>"Mercredi",4=>"Jeudi",5=>"Vendredi",6=>"Samedi",7=>"Dimanche");
+```jldoctest tdate2
+julia> french_months = ["janvier", "février", "mars", "avril", "mai", "juin",
+                        "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
 
-# Load the mapping into the Dates module under locale name "french"
-julia> Dates.VALUETODAYOFWEEK["french"] = french_daysofweek;
+julia> french_monts_abbrev = ["janv","févr","mars","avril","mai","juin",
+                              "juil","août","sept","oct","nov","déc"];
 
-julia> Dates.dayname(t;locale="french")
-"Vendredi"
+julia> french_days = ["lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"];
+
+julia> Dates.LOCALES["french"] = Dates.DateLocale(french_months, french_monts_abbrev, french_days, [""]);
 ```
 
-Similarly for the [`monthname()`](@ref) function, a mapping of `locale=>Dict{Int,String}` should
-be loaded in `VALUETOMONTH`.
+ The above mentioned functions can then be used to perform the queries:
+
+```jldoctest tdate2
+julia> Dates.dayname(t;locale="french")
+"vendredi"
+
+julia> Dates.monthname(t;locale="french")
+"janvier"
+
+julia> Dates.monthabbr(t;locale="french")
+"janv"
+```
+
+Since the abbreviated versions of the days are not loaded, trying to use the
+function `dayabbr()` will error.
+
+```jldoctest tdate2
+julia> Dates.dayabbr(t;locale="french")
+ERROR: BoundsError: attempt to access 1-element Array{String,1} at index [5]
+Stacktrace:
+ [1] #dayabbr#6(::String, ::Function, ::Int64) at ./dates/query.jl:114
+ [2] (::Base.Dates.#kw##dayabbr)(::Array{Any,1}, ::Base.Dates.#dayabbr, ::Int64) at ./<missing>:0 (repeats 2 times)
+```
+
 
 ## TimeType-Period Arithmetic
 
@@ -328,7 +366,7 @@ to our original date, 2014-01-31, then we end up with 2014-03-31, as expected. T
 of this approach is a loss in associativity when a specific ordering is forced (i.e. adding things
 in different orders results in different outcomes). For example:
 
-```julia
+```jldoctest
 julia> (Date(2014,1,29)+Dates.Day(1)) + Dates.Month(1)
 2014-02-28
 
@@ -345,7 +383,7 @@ Periods' *types*, not their value or positional order; this means `Year` will al
 first, then `Month`, then `Week`, etc. Hence the following *does* result in associativity and
 Just Works:
 
-```julia
+```jldoctest
 julia> Date(2014,1,29) + Dates.Day(1) + Dates.Month(1)
 2014-03-01
 
@@ -361,7 +399,7 @@ of dealing with daylight savings, leap seconds, etc.).
 
 As a bonus, all period arithmetic objects work directly with ranges:
 
-```julia
+```jldoctest
 julia> dr = Date(2014,1,29):Date(2014,2,3)
 2014-01-29:1 day:2014-02-03
 
@@ -401,17 +439,14 @@ aid in simply and succinctly expressing temporal rules. The first group of adjus
 with the first and last of weeks, months, quarters, and years. They each take a single [`TimeType`](@ref)
 as input and return or *adjust to* the first or last of the desired period relative to the input.
 
-```julia
-# Adjusts the input to the Monday of the input's week
-julia> Dates.firstdayofweek(Date(2014,7,16))
+```jldoctest
+julia> Dates.firstdayofweek(Date(2014,7,16)) # Adjusts the input to the Monday of the input's week
 2014-07-14
 
-# Adjusts to the last day of the input's month
-julia> Dates.lastdayofmonth(Date(2014,7,16))
+julia> Dates.lastdayofmonth(Date(2014,7,16)) # Adjusts to the last day of the input's month
 2014-07-31
 
-# Adjusts to the last day of the input's quarter
-julia> Dates.lastdayofquarter(Date(2014,7,16))
+julia> Dates.lastdayofquarter(Date(2014,7,16)) # Adjusts to the last day of the input's quarter
 2014-09-30
 ```
 
@@ -421,51 +456,51 @@ with temporal expressions by taking a `DateFunction` as first argument, along wi
 [`TimeType`](@ref) as input and returns a `Bool`, `true` indicating a satisfied adjustment criterion.
 For example:
 
-```julia
-julia> istuesday = x->Dates.dayofweek(x) == Dates.Tuesday  # Returns true if the day of the week of x is Tuesday
-(anonymous function)
+```jldoctest
+julia> istuesday = x->Dates.dayofweek(x) == Dates.Tuesday # Returns true if the day of the week of x is Tuesday
+(::#1) (generic function with 1 method)
 
 julia> Dates.tonext(istuesday, Date(2014,7,13)) # 2014-07-13 is a Sunday
 2014-07-15
 
-# Convenience method provided for day of the week adjustments
-julia> Dates.tonext(Date(2014,7,13), Dates.Tuesday)
+julia> Dates.tonext(Date(2014,7,13), Dates.Tuesday) # Convenience method provided for day of the week adjustments
 2014-07-15
 ```
 
 This is useful with the do-block syntax for more complex temporal expressions:
 
-```julia
+```jldoctest
 julia> Dates.tonext(Date(2014,7,13)) do x
-          # Return true on the 4th Thursday of November (Thanksgiving)
-          Dates.dayofweek(x) == Dates.Thursday &&
-          Dates.dayofweekofmonth(x) == 4 &&
-          Dates.month(x) == Dates.November
-      end
+           # Return true on the 4th Thursday of November (Thanksgiving)
+           Dates.dayofweek(x) == Dates.Thursday &&
+           Dates.dayofweekofmonth(x) == 4 &&
+           Dates.month(x) == Dates.November
+       end
 2014-11-27
 ```
 
 The [`Base.filter()`](@ref) method can be used to obtain all valid dates/moments in a specified
 range:
 
-```julia
+```jldoctest
 # Pittsburgh street cleaning; Every 2nd Tuesday from April to November
 # Date range from January 1st, 2014 to January 1st, 2015
 julia> dr = Dates.Date(2014):Dates.Date(2015);
+
 julia> filter(dr) do x
            Dates.dayofweek(x) == Dates.Tue &&
            Dates.April <= Dates.month(x) <= Dates.Nov &&
            Dates.dayofweekofmonth(x) == 2
        end
- 8-element Array{Date,1}:
-  2014-04-08
-  2014-05-13
-  2014-06-10
-  2014-07-08
-  2014-08-12
-  2014-09-09
-  2014-10-14
-  2014-11-11
+8-element Array{Date,1}:
+ 2014-04-08
+ 2014-05-13
+ 2014-06-10
+ 2014-07-08
+ 2014-08-12
+ 2014-09-09
+ 2014-10-14
+ 2014-11-11
 ```
 
 Additional examples and tests are available in [test/dates/adjusters.jl](https://github.com/JuliaLang/julia/blob/master/test/dates/adjusters.jl).
@@ -479,7 +514,7 @@ simple `Int64` wrappers and are constructed by wrapping any `Int64` convertible 
 or `Month(3.0)`. Arithmetic between [`Period`](@ref) of the same type behave like integers, and
 limited `Period-Real` arithmetic is available.
 
-```julia
+```jldoctest
 julia> y1 = Dates.Year(1)
 1 year
 
@@ -493,19 +528,13 @@ julia> y1 + y2
 3 years
 
 julia> div(y3,y2)
-5 years
+5
 
 julia> y3 - y2
 8 years
 
-julia> y3 * y2
-20 years
-
 julia> y3 % y2
 0 years
-
-julia> y1 + 20
-21 years
 
 julia> div(y3,3) # mirrors integer division
 3 years
@@ -516,7 +545,7 @@ julia> div(y3,3) # mirrors integer division
 [`Date`](@ref) and [`DateTime`](@ref) values can be rounded to a specified resolution (e.g., 1
 month or 15 minutes) with [`floor()`](@ref), [`ceil()`](@ref), or [`round()`](@ref):
 
-```julia
+```jldoctest
 julia> floor(Date(1985, 8, 16), Dates.Month)
 1985-08-01
 
@@ -542,7 +571,7 @@ into the next largest period (in this case, `Dates.Minute(1)`). But rounding beh
 in which this is not true may lead to confusion. What is the expected result of rounding a [`DateTime`](@ref)
 to the nearest 10 hours?
 
-```julia
+```jldoctest
 julia> round(DateTime(2016, 7, 17, 11, 55), Dates.Hour(10))
 2016-07-17T12:00:00
 ```
@@ -567,7 +596,7 @@ Here is a related case in which the expected behaviour is not necessarily obviou
 when we round to the nearest `P(2)`, where `P` is a [`Period`](@ref) type? In some cases (specifically,
 when `P <: Dates.TimePeriod`) the answer is clear:
 
-```julia
+```jldoctest
 julia> round(DateTime(2016, 7, 17, 8, 55, 30), Dates.Hour(2))
 2016-07-17T08:00:00
 
@@ -579,7 +608,7 @@ This seems obvious, because two of each of these periods still divides evenly in
 order period. But in the case of two months (which still divides evenly into one year), the answer
 may be surprising:
 
-```julia
+```jldoctest
 julia> round(DateTime(2016, 7, 17, 8, 55, 30), Dates.Month(2))
 2016-07-01T00:00:00
 ```

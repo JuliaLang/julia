@@ -75,8 +75,8 @@ lcm(a::Integer, b::Integer) = lcm(promote(a,b)...)
 gcd(a::Integer, b::Integer...) = gcd(a, gcd(b...))
 lcm(a::Integer, b::Integer...) = lcm(a, lcm(b...))
 
-gcd{T<:Integer}(abc::AbstractArray{T}) = reduce(gcd,abc)
-lcm{T<:Integer}(abc::AbstractArray{T}) = reduce(lcm,abc)
+gcd(abc::AbstractArray{<:Integer}) = reduce(gcd,abc)
+lcm(abc::AbstractArray{<:Integer}) = reduce(lcm,abc)
 
 # return (gcd(a,b),x,y) such that ax+by == gcd(a,b)
 """
@@ -88,12 +88,12 @@ coefficients, i.e. the integer coefficients `u` and `v` that satisfy
 
 ```jldoctest
 julia> gcdx(12, 42)
-(6,-3,1)
+(6, -3, 1)
 ```
 
 ```jldoctest
 julia> gcdx(240, 46)
-(2,-9,47)
+(2, -9, 47)
 ```
 
 !!! note
@@ -109,7 +109,7 @@ julia> gcdx(240, 46)
 """
 function gcdx{T<:Integer}(a::T, b::T)
     # a0, b0 = a, b
-    s0, s1 = one(T), zero(T)
+    s0, s1 = oneunit(T), zero(T)
     t0, t1 = s1, s0
     # The loop invariant is: s0*a0 + t0*b0 == a
     while b != 0
@@ -195,6 +195,21 @@ end
 ^(x::Number, p::Integer)  = power_by_squaring(x,p)
 ^(x, p::Integer)          = power_by_squaring(x,p)
 
+# x^p for any literal integer p is lowered to x^Val{p},
+# to enable compile-time optimizations specialized to p.
+# However, we still need a fallback that calls the general ^.
+# To avoid ambiguities for methods that dispatch on the
+# first argument, we dispatch the fallback via internal_pow:
+^(x, p) = internal_pow(x, p)
+internal_pow{p}(x, ::Type{Val{p}}) = x^p
+
+# inference.jl has complicated logic to inline x^2 and x^3 for
+# numeric types.  In terms of Val we can do it much more simply:
+internal_pow(x::Number, ::Type{Val{0}}) = one(x)
+internal_pow(x::Number, ::Type{Val{1}}) = x
+internal_pow(x::Number, ::Type{Val{2}}) = x*x
+internal_pow(x::Number, ::Type{Val{3}}) = x*x*x
+
 # b^p mod m
 
 """
@@ -242,7 +257,7 @@ julia> nextpow2(17)
 32
 ```
 """
-nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-one(x)))
+nextpow2(x::Unsigned) = oneunit(x)<<((sizeof(x)<<3)-leading_zeros(x-oneunit(x)))
 nextpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
 
 """

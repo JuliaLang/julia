@@ -39,7 +39,7 @@ function scrub_backtrace(bt)
     if do_test_ind != 0 && length(bt) > do_test_ind
         bt = bt[do_test_ind + 1:end]
     end
-    name_ind = findfirst(addr->ip_matches_func_and_name(addr, Symbol("macro expansion;"), ".", "test.jl"), bt)
+    name_ind = findfirst(addr->ip_matches_func_and_name(addr, Symbol("macro expansion"), ".", "test.jl"), bt)
     if name_ind != 0 && length(bt) != 0
         bt = bt[1:name_ind]
     end
@@ -52,7 +52,7 @@ end
 All tests produce a result object. This object may or may not be
 stored, depending on whether the test is part of a test set.
 """
-abstract Result
+abstract type Result end
 
 """
     Pass
@@ -60,7 +60,7 @@ abstract Result
 The test condition was true, i.e. the expression evaluated to true or
 the correct exception was thrown.
 """
-immutable Pass <: Result
+struct Pass <: Result
     test_type::Symbol
     orig_expr
     data
@@ -87,7 +87,7 @@ end
 The test condition was false, i.e. the expression evaluated to false or
 the correct exception was not thrown.
 """
-type Fail <: Result
+mutable struct Fail <: Result
     test_type::Symbol
     orig_expr
     data
@@ -119,7 +119,7 @@ it evaluated to something other than a `Bool`.
 In the case of `@test_broken` it is used to indicate that an
 unexpected `Pass` `Result` occurred.
 """
-type Error <: Result
+mutable struct Error <: Result
     test_type::Symbol
     orig_expr
     value
@@ -159,7 +159,7 @@ end
 The test condition is the expected (failed) result of a broken test,
 or was explicitly skipped with `@test_skip`.
 """
-type Broken <: Result
+mutable struct Broken <: Result
     test_type::Symbol
     orig_expr
 end
@@ -174,14 +174,14 @@ end
 
 #-----------------------------------------------------------------------
 
-abstract ExecutionResult
+abstract type ExecutionResult end
 
-immutable Returned <: ExecutionResult
+struct Returned <: ExecutionResult
     value
     data
 end
 
-immutable Threw <: ExecutionResult
+struct Threw <: ExecutionResult
     exception
     backtrace
 end
@@ -420,7 +420,7 @@ macro test_warn(msg, expr)
     quote
         let fname = tempname(), have_color = Base.have_color
             try
-                eval(Base, :(have_color = false))
+                @eval Base have_color = false
                 ret = open(fname, "w") do f
                     redirect_stderr(f) do
                         $(esc(expr))
@@ -455,7 +455,7 @@ end
 #   Called by do_test after a test is evaluated
 # finish(AbstractTestSet)
 #   Called after the test set has been popped from the test set stack
-abstract AbstractTestSet
+abstract type AbstractTestSet end
 
 """
     record(ts::AbstractTestSet, res::Result)
@@ -482,7 +482,7 @@ function finish end
 
 Thrown when a test set finishes and not all tests passed.
 """
-type TestSetException <: Exception
+mutable struct TestSetException <: Exception
     pass::Int
     fail::Int
     error::Int
@@ -509,11 +509,11 @@ end
 
 A simple fallback test set that throws immediately on a failure.
 """
-immutable FallbackTestSet <: AbstractTestSet
+struct FallbackTestSet <: AbstractTestSet
 end
 fallback_testset = FallbackTestSet()
 
-type FallbackTestSetException <: Exception
+mutable struct FallbackTestSetException <: Exception
     msg::String
 end
 
@@ -540,15 +540,18 @@ If using the DefaultTestSet, the test results will be recorded. If there
 are any `Fail`s or `Error`s, an exception will be thrown only at the end,
 along with a summary of the test results.
 """
-type DefaultTestSet <: AbstractTestSet
+mutable struct DefaultTestSet <: AbstractTestSet
     description::AbstractString
     results::Vector
+    n_passed::Int
     anynonpass::Bool
 end
-DefaultTestSet(desc) = DefaultTestSet(desc, [], false)
+DefaultTestSet(desc) = DefaultTestSet(desc, [], 0, false)
 
-# For a passing or broken result, simply store the result
-record(ts::DefaultTestSet, t::Union{Pass,Broken}) = (push!(ts.results, t); t)
+# For a broken result, simply store the result
+record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
+# For a passed result, do not store the result since it uses a lot of memory
+record(ts::DefaultTestSet, t::Pass) = (ts.n_passed += 1; t)
 
 # For the other result types, immediately print the error message
 # but do not terminate. Print a backtrace.
@@ -607,7 +610,8 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
     # recursively walking the tree of test sets
     align = max(get_alignment(ts, 0), length("Test Summary:"))
     # Print the outer test set header once
-    print_with_color(:white, rpad("Test Summary:",align," "), " | "; bold = true)
+    pad = total == 0 ? "" : " "
+    print_with_color(:white, rpad("Test Summary:",align," "), " |", pad; bold = true)
     if pass_width > 0
         print_with_color(:green, lpad("Pass",pass_width," "), "  "; bold = true)
     end
@@ -628,6 +632,9 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
     print_counts(ts, depth_pad, align, pass_width, fail_width, error_width, broken_width, total_width)
 end
 
+
+const TESTSET_PRINT_ENABLE = Ref(true)
+
 # Called at the end of a @testset, behaviour depends on whether
 # this is a child of another testset, or the "root" testset
 function finish(ts::DefaultTestSet)
@@ -645,6 +652,11 @@ function finish(ts::DefaultTestSet)
     total_error  = errors + c_errors
     total_broken = broken + c_broken
     total = total_pass + total_fail + total_error + total_broken
+
+    if TESTSET_PRINT_ENABLE[]
+        print_test_results(ts)
+    end
+
     # Finally throw an error as we are the outermost test set
     if total != total_pass + total_broken
         # Get all the error/failures and bring them along for the ride
@@ -691,10 +703,9 @@ end
 # Recursive function that counts the number of test results of each
 # type directly in the testset, and totals across the child testsets
 function get_test_counts(ts::DefaultTestSet)
-    passes, fails, errors, broken = 0, 0, 0, 0
+    passes, fails, errors, broken = ts.n_passed, 0, 0, 0
     c_passes, c_fails, c_errors, c_broken = 0, 0, 0, 0
     for t in ts.results
-        isa(t, Pass)   && (passes += 1)
         isa(t, Fail)   && (fails  += 1)
         isa(t, Error)  && (errors += 1)
         isa(t, Broken) && (broken += 1)
@@ -720,7 +731,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
     subtotal = passes + fails + errors + broken + c_passes + c_fails + c_errors + c_broken
     # Print test set header, with an alignment that ensures all
     # the test results appear above each other
-    print(rpad(string(lpad("  ",depth), ts.description), align, " "), " | ")
+    print(rpad(string("  "^depth, ts.description), align, " "), " | ")
 
     np = passes + c_passes
     if np > 0
@@ -944,7 +955,7 @@ function parse_testset_args(args)
         elseif isa(arg, Expr) && arg.head == :(=)
             # we're building up a Dict literal here
             key = Expr(:quote, arg.args[1])
-            push!(options.args, Expr(:(=>), key, arg.args[2]))
+            push!(options.args, Expr(:call, :(=>), key, arg.args[2]))
         else
             error("Unexpected argument $arg to @testset")
         end
@@ -1030,14 +1041,14 @@ Variables:
 
 Body:
   begin
-      unless (Base.slt_int)(1,b::Int64)::Bool goto 3
+      unless (Base.slt_int)(1, b::Int64)::Bool goto 3
       return 1
       3:
       return 1.0
-  end::UNION{FLOAT64,INT64}
+  end::UNION{FLOAT64, INT64}
 
 julia> @inferred f(1,2,3)
-ERROR: return type Int64 does not match inferred return type Union{Float64,Int64}
+ERROR: return type Int64 does not match inferred return type Union{Float64, Int64}
 Stacktrace:
  [1] error(::String) at ./error.jl:21
 
@@ -1113,7 +1124,7 @@ defined in the specified modules. Use `imported=true` if you wish to
 also test functions that were imported into these modules from
 elsewhere.
 """
-function detect_ambiguities(mods...; imported::Bool=false)
+function detect_ambiguities(mods...; imported::Bool=false, allow_bottom::Bool=true)
     function sortdefs(m1, m2)
         ord12 = m1.file < m2.file
         if !ord12 && (m1.file == m2.file)
@@ -1135,7 +1146,7 @@ function detect_ambiguities(mods...; imported::Bool=false)
                 for m in mt
                     if m.ambig !== nothing
                         for m2 in m.ambig
-                            if Base.isambiguous(m, m2)
+                            if Base.isambiguous(m, m2, allow_bottom)
                                 push!(ambs, sortdefs(m, m2))
                             end
                         end
@@ -1152,7 +1163,7 @@ The `GenericString` can be used to test generic string APIs that program to
 the `AbstractString` interface, in order to ensure that functions can work
 with string types besides the standard `String` type.
 """
-immutable GenericString <: AbstractString
+struct GenericString <: AbstractString
     string::AbstractString
 end
 Base.convert(::Type{GenericString}, s::AbstractString) = GenericString(s)

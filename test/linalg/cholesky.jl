@@ -169,6 +169,7 @@ debug && println("\ntype of a: ", eltya, " type of b: ", eltyb, "\n")
                     @test norm(apd * (lapd\b) - b)/norm(b) <= ε*κ*n
                     @test norm(apd * (lapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
                 end
+                @test_throws DimensionMismatch lapd\RowVector(ones(n))
 
 debug && println("pivoted Cholesky decomposition")
                 if eltya != BigFloat && eltyb != BigFloat # Note! Need to implement pivoted Cholesky decomposition in julia
@@ -179,6 +180,8 @@ debug && println("pivoted Cholesky decomposition")
                     lpapd = cholfact(apd, :L, Val{true})
                     @test norm(apd * (lpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
                     @test norm(apd * (lpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
+
+                    @test_throws BoundsError lpapd\RowVector(ones(n))
                 end
             end
         end

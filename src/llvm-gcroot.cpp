@@ -1009,7 +1009,7 @@ void JuliaGCAllocator::allocate_frame()
     DIBuilder dbuilder(M, false);
 #endif
     unsigned argSpaceSize = 0;
-    for(BasicBlock::iterator I = gcframe->getParent()->begin(), E(gcframe); I != E; ) {
+    for (BasicBlock::iterator I = gcframe->getParent()->begin(), E(gcframe); I != E; ) {
         Instruction* inst = &*I;
         ++I;
         if (CallInst* callInst = dyn_cast<CallInst>(inst)) {
@@ -1059,6 +1059,7 @@ void JuliaGCAllocator::allocate_frame()
         }
         else if (AllocaInst *allocaInst = dyn_cast<AllocaInst>(inst)) {
             if (allocaInst->getAllocatedType() == V_null->getType()) {
+                // TODO: this is overly aggressive at zeroing allocas that may not actually need to be zeroed
                 StoreInst *store = new StoreInst(V_null, allocaInst);
                 store->insertAfter(allocaInst);
             }

@@ -16,7 +16,7 @@ julia> size(A, 2)
 3
 
 julia> size(A,3,2)
-(4,3)
+(4, 3)
 ```
 """
 size{T,N}(t::AbstractArray{T,N}, d) = d <= N ? size(t)[d] : 1
@@ -48,7 +48,7 @@ Returns the tuple of valid indices for array `A`.
 julia> A = ones(5,6,7);
 
 julia> indices(A)
-(Base.OneTo(5),Base.OneTo(6),Base.OneTo(7))
+(Base.OneTo(5), Base.OneTo(6), Base.OneTo(7))
 ```
 """
 function indices(A)
@@ -60,7 +60,7 @@ end
 # d)` for d=1. 1d arrays are heavily used, and the first dimension
 # comes up in other applications.
 indices1{T}(A::AbstractArray{T,0}) = OneTo(1)
-indices1{T}(A::AbstractArray{T})   = (@_inline_meta; indices(A)[1])
+indices1(A::AbstractArray)         = (@_inline_meta; indices(A)[1])
 indices1(iter) = OneTo(length(iter))
 
 unsafe_indices(A) = indices(A)
@@ -84,12 +84,12 @@ julia> A = ones(5,6,7);
 julia> b = linearindices(A);
 
 julia> extrema(b)
-(1,210)
+(1, 210)
 ```
 """
 linearindices(A)                 = (@_inline_meta; OneTo(_length(A)))
 linearindices(A::AbstractVector) = (@_inline_meta; indices1(A))
-eltype(::Type{A}) where A<:AbstractArray{E} where E  = E
+eltype(::Type{<:AbstractArray{E}}) where {E} = E
 elsize{T}(::AbstractArray{T}) = sizeof(T)
 
 """
@@ -120,10 +120,10 @@ julia> length(A)
 60
 ```
 """
-length(t::AbstractArray) = prod(size(t))
-_length(A::AbstractArray) = prod(map(unsafe_length, indices(A))) # circumvent missing size
-_length(A) = length(A)
-endof(a::AbstractArray) = length(a)
+length(t::AbstractArray) = (@_inline_meta; prod(size(t)))
+_length(A::AbstractArray) = (@_inline_meta; prod(map(unsafe_length, indices(A)))) # circumvent missing size
+_length(A) = (@_inline_meta; length(A))
+endof(a::AbstractArray) = (@_inline_meta; length(a))
 first(a::AbstractArray) = a[first(eachindex(a))]
 
 """
@@ -189,7 +189,7 @@ function stride(a::AbstractArray, i::Integer)
     return s
 end
 
-strides{T}(A::AbstractArray{T,0}) = ()
+strides(A::AbstractArray{<:Any,0}) = ()
 """
     strides(A)
 
@@ -199,12 +199,12 @@ Returns a tuple of the memory strides in each dimension.
 julia> A = ones(3,4,5);
 
 julia> strides(A)
-(1,3,12)
+(1, 3, 12)
 ```
 """
 strides(A::AbstractArray) = _strides((1,), A)
 _strides{T,N}(out::NTuple{N,Any}, A::AbstractArray{T,N}) = out
-function _strides{M,T,N}(out::NTuple{M}, A::AbstractArray{T,N})
+function _strides{M}(out::NTuple{M,Any}, A::AbstractArray)
     @_inline_meta
     _strides((out..., out[M]*size(A, M)), A)
 end
@@ -245,36 +245,47 @@ end
 
 ## Traits for array types ##
 
-abstract LinearIndexing
-immutable LinearFast <: LinearIndexing end
-immutable LinearSlow <: LinearIndexing end
+abstract type IndexStyle end
+struct IndexLinear <: IndexStyle end
+struct IndexCartesian <: IndexStyle end
 
 """
-    Base.linearindexing(A)
+    IndexStyle(A)
+    IndexStyle(typeof(A))
 
-`linearindexing` defines how an AbstractArray most efficiently accesses its elements. If
-`Base.linearindexing(A)` returns `Base.LinearFast()`, this means that linear indexing with
-only one index is an efficient operation. If it instead returns `Base.LinearSlow()` (by
-default), this means that the array intrinsically accesses its elements with indices
-specified for every dimension. Since converting a linear index to multiple indexing
-subscripts is typically very expensive, this provides a traits-based mechanism to enable
-efficient generic code for all array types.
+`IndexStyle` specifies the "native indexing style" for array `A`. When
+you define a new `AbstractArray` type, you can choose to implement
+either linear indexing or cartesian indexing.  If you decide to
+implement linear indexing, then you must set this trait for your array
+type:
 
-An abstract array subtype `MyArray` that wishes to opt into fast linear indexing behaviors
-should define `linearindexing` in the type-domain:
+    Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
 
-    Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearFast()
+The default is `IndexCartesian()`.
+
+Julia's internal indexing machinery will automatically (and invisibly)
+convert all indexing operations into the preferred style using
+[`sub2ind`](@ref) or [`ind2sub`](@ref). This allows users to access
+elements of your array using any indexing style, even when explicit
+methods have not been provided.
+
+If you define both styles of indexing for your `AbstractArray`, this
+trait can be used to select the most performant indexing style. Some
+methods check this trait on their inputs, and dispatch to different
+algorithms depending on the most efficient access pattern. In
+particular, [`eachindex`](@ref) creates an iterator whose type depends
+on the setting of this trait.
 """
-linearindexing(A::AbstractArray) = linearindexing(typeof(A))
-linearindexing(::Type{Union{}}) = LinearFast()
-linearindexing{T<:AbstractArray}(::Type{T}) = LinearSlow()
-linearindexing{T<:Array}(::Type{T}) = LinearFast()
-linearindexing{T<:Range}(::Type{T}) = LinearFast()
+IndexStyle(A::AbstractArray) = IndexStyle(typeof(A))
+IndexStyle(::Type{Union{}}) = IndexLinear()
+IndexStyle(::Type{<:AbstractArray}) = IndexCartesian()
+IndexStyle(::Type{<:Array}) = IndexLinear()
+IndexStyle(::Type{<:Range}) = IndexLinear()
 
-linearindexing(A::AbstractArray, B::AbstractArray) = linearindexing(linearindexing(A), linearindexing(B))
-linearindexing(A::AbstractArray, B::AbstractArray...) = linearindexing(linearindexing(A), linearindexing(B...))
-linearindexing(::LinearFast, ::LinearFast) = LinearFast()
-linearindexing(::LinearIndexing, ::LinearIndexing) = LinearSlow()
+IndexStyle(A::AbstractArray, B::AbstractArray) = IndexStyle(IndexStyle(A), IndexStyle(B))
+IndexStyle(A::AbstractArray, B::AbstractArray...) = IndexStyle(IndexStyle(A), IndexStyle(B...))
+IndexStyle(::IndexLinear, ::IndexLinear) = IndexLinear()
+IndexStyle(::IndexStyle, ::IndexStyle) = IndexCartesian()
 
 ## Bounds checking ##
 
@@ -301,10 +312,31 @@ if they need to provide custom bounds checking behaviors; however, in
 many cases one can rely on `A`'s indices and [`checkindex`](@ref).
 
 See also [`checkindex`](@ref).
+
+```jldoctest
+julia> A = rand(3, 3);
+
+julia> checkbounds(Bool, A, 2)
+true
+
+julia> checkbounds(Bool, A, 3, 4)
+false
+
+julia> checkbounds(Bool, A, 1:3)
+true
+
+julia> checkbounds(Bool, A, 1:3, 2:4)
+false
+```
 """
 function checkbounds(::Type{Bool}, A::AbstractArray, I...)
     @_inline_meta
     checkbounds_indices(Bool, indices(A), I)
+end
+# Linear indexing is explicitly allowed when there is only one (non-cartesian) index
+function checkbounds(::Type{Bool}, A::AbstractArray, i)
+    @_inline_meta
+    checkindex(Bool, linearindices(A), i)
 end
 # As a special extension, allow using logical arrays that match the source array exactly
 function checkbounds{_,N}(::Type{Bool}, A::AbstractArray{_,N}, I::AbstractArray{Bool,N})
@@ -341,6 +373,8 @@ bounds-check for a single dimension of the array.
 There are two important exceptions to the 1-1 rule: linear indexing and
 CartesianIndex{N}, both of which may "consume" more than one element
 of `IA`.
+
+See also [`checkbounds`](@ref).
 """
 function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple)
     @_inline_meta
@@ -358,7 +392,29 @@ function checkbounds_indices(::Type{Bool}, IA::Tuple{Any}, I::Tuple{Any})
 end
 function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple{Any})
     @_inline_meta
-    checkindex(Bool, OneTo(trailingsize(IA)), I[1])  # linear indexing
+    checkbounds_linear_indices(Bool, IA, I[1])
+end
+function checkbounds_linear_indices(::Type{Bool}, IA::Tuple{Vararg{OneTo}}, i)
+    @_inline_meta
+    if checkindex(Bool, IA[1], i)
+        return true
+    elseif checkindex(Bool, OneTo(trailingsize(IA)), i)  # partial linear indexing
+        partial_linear_indexing_warning_lookup(length(IA))
+        return true # TODO: Return false after the above function is removed in deprecated.jl
+    end
+    return false
+end
+function checkbounds_linear_indices(::Type{Bool}, IA::Tuple{AbstractUnitRange,Vararg{AbstractUnitRange}}, i)
+    @_inline_meta
+    checkindex(Bool, IA[1], i)
+end
+function checkbounds_linear_indices(::Type{Bool}, IA::Tuple{Vararg{OneTo}}, i::Union{Slice,Colon})
+    partial_linear_indexing_warning_lookup(length(IA))
+    true
+end
+function checkbounds_linear_indices(::Type{Bool}, IA::Tuple{AbstractUnitRange,Vararg{AbstractUnitRange}}, i::Union{Slice,Colon})
+    partial_linear_indexing_warning_lookup(length(IA))
+    true
 end
 checkbounds_indices(::Type{Bool}, ::Tuple, ::Tuple{}) = true
 
@@ -420,25 +476,31 @@ default is an `Array{element_type}(dims...)`.
 For example, `similar(1:10, 1, 4)` returns an uninitialized `Array{Int,2}` since ranges are
 neither mutable nor support 2 dimensions:
 
-    julia> similar(1:10, 1, 4)
-    1×4 Array{Int64,2}:
-     4419743872  4374413872  4419743888  0
+```julia
+julia> similar(1:10, 1, 4)
+1×4 Array{Int64,2}:
+ 4419743872  4374413872  4419743888  0
+```
 
 Conversely, `similar(trues(10,10), 2)` returns an uninitialized `BitVector` with two
 elements since `BitArray`s are both mutable and can support 1-dimensional arrays:
 
-    julia> similar(trues(10,10), 2)
-    2-element BitArray{1}:
-     false
-     false
+```julia
+julia> similar(trues(10,10), 2)
+2-element BitArray{1}:
+ false
+ false
+```
 
 Since `BitArray`s can only store elements of type `Bool`, however, if you request a
 different element type it will create a regular `Array` instead:
 
-    julia> similar(falses(10), Float64, 2, 4)
-    2×4 Array{Float64,2}:
-     2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
-     2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
+```julia
+julia> similar(falses(10), Float64, 2, 4)
+2×4 Array{Float64,2}:
+ 2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
+ 2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
+```
 
 """
 similar{T}(a::AbstractArray{T})                             = similar(a, T)
@@ -570,9 +632,9 @@ end
 ## since a single index variable can be used.
 
 copy!(dest::AbstractArray, src::AbstractArray) =
-    copy!(linearindexing(dest), dest, linearindexing(src), src)
+    copy!(IndexStyle(dest), dest, IndexStyle(src), src)
 
-function copy!(::LinearIndexing, dest::AbstractArray, ::LinearIndexing, src::AbstractArray)
+function copy!(::IndexStyle, dest::AbstractArray, ::IndexStyle, src::AbstractArray)
     destinds, srcinds = linearindices(dest), linearindices(src)
     isempty(srcinds) || (first(srcinds) ∈ destinds && last(srcinds) ∈ destinds) || throw(BoundsError(dest, srcinds))
     @inbounds for i in srcinds
@@ -581,7 +643,7 @@ function copy!(::LinearIndexing, dest::AbstractArray, ::LinearIndexing, src::Abs
     return dest
 end
 
-function copy!(::LinearIndexing, dest::AbstractArray, ::LinearSlow, src::AbstractArray)
+function copy!(::IndexStyle, dest::AbstractArray, ::IndexCartesian, src::AbstractArray)
     destinds, srcinds = linearindices(dest), linearindices(src)
     isempty(srcinds) || (first(srcinds) ∈ destinds && last(srcinds) ∈ destinds) || throw(BoundsError(dest, srcinds))
     i = 0
@@ -652,6 +714,17 @@ Make a mutable copy of an array or iterable `a`.  For `a::Array`,
 this is equivalent to `copy(a)`, but for other array types it may
 differ depending on the type of `similar(a)`.  For generic iterables
 this is equivalent to `collect(a)`.
+
+```jldoctest
+julia> tup = (1, 2, 3)
+(1, 2, 3)
+
+julia> Base.copymutable(tup)
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+```
 """
 function copymutable(a::AbstractArray)
     @_propagate_inbounds_meta
@@ -662,16 +735,16 @@ copymutable(itr) = collect(itr)
 zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
 
 ## iteration support for arrays by iterating over `eachindex` in the array ##
-# Allows fast iteration by default for both LinearFast and LinearSlow arrays
+# Allows fast iteration by default for both IndexLinear and IndexCartesian arrays
 
-# While the definitions for LinearFast are all simple enough to inline on their
-# own, LinearSlow's CartesianRange is more complicated and requires explicit
+# While the definitions for IndexLinear are all simple enough to inline on their
+# own, IndexCartesian's CartesianRange is more complicated and requires explicit
 # inlining.
 start(A::AbstractArray) = (@_inline_meta; itr = eachindex(A); (itr, start(itr)))
 next(A::AbstractArray,i) = (@_propagate_inbounds_meta; (idx, s) = next(i[1], i[2]); (A[idx], (i[1], s)))
 done(A::AbstractArray,i) = (@_propagate_inbounds_meta; done(i[1], i[2]))
 
-# eachindex iterates over all indices. LinearSlow definitions are later.
+# eachindex iterates over all indices. IndexCartesian definitions are later.
 eachindex(A::AbstractVector) = (@_inline_meta(); indices1(A))
 
 """
@@ -688,7 +761,7 @@ Example for a sparse 2-d array:
 
 ```jldoctest
 julia> A = sparse([1, 1, 2], [1, 3, 1], [1, 2, -5])
-2×3 sparse matrix with 3 Int64 nonzero entries:
+2×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
   [1, 1]  =  1
   [2, 1]  =  -5
   [1, 3]  =  2
@@ -697,17 +770,17 @@ julia> for iter in eachindex(A)
            @show iter.I[1], iter.I[2]
            @show A[iter]
        end
-(iter.I[1],iter.I[2]) = (1,1)
+(iter.I[1], iter.I[2]) = (1, 1)
 A[iter] = 1
-(iter.I[1],iter.I[2]) = (2,1)
+(iter.I[1], iter.I[2]) = (2, 1)
 A[iter] = -5
-(iter.I[1],iter.I[2]) = (1,2)
+(iter.I[1], iter.I[2]) = (1, 2)
 A[iter] = 0
-(iter.I[1],iter.I[2]) = (2,2)
+(iter.I[1], iter.I[2]) = (2, 2)
 A[iter] = 0
-(iter.I[1],iter.I[2]) = (1,3)
+(iter.I[1], iter.I[2]) = (1, 3)
 A[iter] = 2
-(iter.I[1],iter.I[2]) = (2,3)
+(iter.I[1], iter.I[2]) = (2, 3)
 A[iter] = 0
 ```
 
@@ -718,18 +791,18 @@ otherwise).
 If the arrays have different sizes and/or dimensionalities, `eachindex` returns an
 iterable that spans the largest range along each dimension.
 """
-eachindex(A::AbstractArray) = (@_inline_meta(); eachindex(linearindexing(A), A))
+eachindex(A::AbstractArray) = (@_inline_meta(); eachindex(IndexStyle(A), A))
 
 function eachindex(A::AbstractArray, B::AbstractArray)
     @_inline_meta
-    eachindex(linearindexing(A,B), A, B)
+    eachindex(IndexStyle(A,B), A, B)
 end
 function eachindex(A::AbstractArray, B::AbstractArray...)
     @_inline_meta
-    eachindex(linearindexing(A,B...), A, B...)
+    eachindex(IndexStyle(A,B...), A, B...)
 end
-eachindex(::LinearFast, A::AbstractArray) = linearindices(A)
-function eachindex(::LinearFast, A::AbstractArray, B::AbstractArray...)
+eachindex(::IndexLinear, A::AbstractArray) = linearindices(A)
+function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
     @_inline_meta
     1:_maxlength(A, B...)
 end
@@ -762,11 +835,9 @@ full(x::AbstractArray) = x
 
 map{T<:Real}(::Type{T}, r::StepRange) = T(r.start):T(r.step):T(last(r))
 map{T<:Real}(::Type{T}, r::UnitRange) = T(r.start):T(last(r))
-map{T<:AbstractFloat}(::Type{T}, r::FloatRange) = FloatRange(T(r.start), T(r.step), r.len, T(r.divisor))
+map{T<:AbstractFloat}(::Type{T}, r::StepRangeLen) = convert(StepRangeLen{T}, r)
 function map{T<:AbstractFloat}(::Type{T}, r::LinSpace)
-    new_len = T(r.len)
-    new_len == r.len || error("$r: too long for $T")
-    LinSpace(T(r.start), T(r.stop), new_len, T(r.divisor))
+    LinSpace(T(r.start), T(r.stop), length(r))
 end
 
 ## unsafe/pointer conversions ##
@@ -782,15 +853,15 @@ pointer{T}(x::AbstractArray{T}, i::Integer) = (@_inline_meta; unsafe_convert(Ptr
 # That dispatches to an (inlined) internal _getindex function, where the goal is
 # to transform the indices such that we can call the only getindex method that
 # we require the type A{T,N} <: AbstractArray{T,N} to define; either:
-#       getindex(::A, ::Int) # if linearindexing(A) == LinearFast() OR
-#       getindex{T,N}(::A{T,N}, ::Vararg{Int, N}) # if LinearSlow()
+#       getindex(::A, ::Int) # if IndexStyle(A) == IndexLinear() OR
+#       getindex{T,N}(::A{T,N}, ::Vararg{Int, N}) # if IndexCartesian()
 # If the subtype hasn't defined the required method, it falls back to the
 # _getindex function again where an error is thrown to prevent stack overflows.
 
 function getindex(A::AbstractArray, I...)
     @_propagate_inbounds_meta
-    error_if_canonical_indexing(linearindexing(A), A, I...)
-    _getindex(linearindexing(A), A, to_indices(A, I)...)
+    error_if_canonical_indexing(IndexStyle(A), A, I...)
+    _getindex(IndexStyle(A), A, to_indices(A, I)...)
 end
 function unsafe_getindex(A::AbstractArray, I...)
     @_inline_meta
@@ -798,80 +869,74 @@ function unsafe_getindex(A::AbstractArray, I...)
     r
 end
 
-error_if_canonical_indexing(::LinearFast, A::AbstractArray, ::Int) = error("indexing not defined for ", typeof(A))
-error_if_canonical_indexing{T,N}(::LinearSlow, A::AbstractArray{T,N}, ::Vararg{Int, N}) = error("indexing not defined for ", typeof(A))
-error_if_canonical_indexing(::LinearIndexing, ::AbstractArray, ::Any...) = nothing
+error_if_canonical_indexing(::IndexLinear, A::AbstractArray, ::Int) = error("indexing not defined for ", typeof(A))
+error_if_canonical_indexing{T,N}(::IndexCartesian, A::AbstractArray{T,N}, ::Vararg{Int, N}) = error("indexing not defined for ", typeof(A))
+error_if_canonical_indexing(::IndexStyle, ::AbstractArray, ::Any...) = nothing
 
 ## Internal definitions
-_getindex(::LinearIndexing, A::AbstractArray, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
+_getindex(::IndexStyle, A::AbstractArray, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
 
-## LinearFast Scalar indexing: canonical method is one Int
-_getindex(::LinearFast, A::AbstractVector, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
-_getindex(::LinearFast, A::AbstractArray,  i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
-_getindex{T}(::LinearFast, A::AbstractArray{T,0}) = A[1]
-function _getindex{T,N}(::LinearFast, A::AbstractArray{T,N}, I::Vararg{Int,N})
-    # We must check bounds for sub2ind; so we can then use @inbounds
+## IndexLinear Scalar indexing: canonical method is one Int
+_getindex(::IndexLinear, A::AbstractArray, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
+_getindex(::IndexLinear, A::AbstractArray) = (@_propagate_inbounds_meta; getindex(A, _to_linear_index(A)))
+function _getindex(::IndexLinear, A::AbstractArray, I::Int...)
     @_inline_meta
-    @boundscheck checkbounds(A, I...)
-    @inbounds r = getindex(A, sub2ind(A, I...))
+    @boundscheck checkbounds(A, I...) # generally _to_linear_index requires bounds checking
+    @inbounds r = getindex(A, _to_linear_index(A, I...))
     r
 end
-function _getindex(::LinearFast, A::AbstractVector, I1::Int, I::Int...)
-    @_inline_meta
-    @boundscheck checkbounds(A, I1, I...)
-    @inbounds r = getindex(A, I1)
-    r
-end
-function _getindex(::LinearFast, A::AbstractArray, I::Int...) # TODO: DEPRECATE FOR #14770
-    @_inline_meta
-    @boundscheck checkbounds(A, I...)
-    @inbounds r = getindex(A, sub2ind(A, I...))
-    r
-end
+_to_linear_index(A::AbstractArray, i::Int) = i
+_to_linear_index(A::AbstractVector, i::Int, I::Int...) = i # TODO: DEPRECATE FOR #14770
+_to_linear_index{T,N}(A::AbstractArray{T,N}, I::Vararg{Int,N}) = (@_inline_meta; sub2ind(A, I...))
+_to_linear_index(A::AbstractArray) = 1 # TODO: DEPRECATE FOR #14770
+_to_linear_index(A::AbstractArray, I::Int...) = (@_inline_meta; sub2ind(A, I...)) # TODO: DEPRECATE FOR #14770
 
-
-## LinearSlow Scalar indexing: Canonical method is full dimensionality of Ints
-_getindex{T,N}(::LinearSlow, A::AbstractArray{T,N}, I::Vararg{Int, N}) = (@_propagate_inbounds_meta; getindex(A, I...))
-function _getindex(::LinearSlow, A::AbstractArray, i::Int)
-    # ind2sub requires all dimensions to be > 0; may as well just check bounds
+## IndexCartesian Scalar indexing: Canonical method is full dimensionality of Ints
+_getindex(::IndexCartesian, A::AbstractArray) = (@_propagate_inbounds_meta; getindex(A, _to_subscript_indices(A)...))
+function _getindex(::IndexCartesian, A::AbstractArray, I::Int...)
     @_inline_meta
-    @boundscheck checkbounds(A, i)
-    @inbounds r = getindex(A, ind2sub(A, i)...)
+    @boundscheck checkbounds(A, I...) # generally _to_subscript_indices requires bounds checking
+    @inbounds r = getindex(A, _to_subscript_indices(A, I...)...)
     r
 end
-@generated function _getindex{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, I::Int...) # TODO: DEPRECATE FOR #14770
-    N = length(I)
-    if N > AN
-        # Drop trailing ones
-        Isplat = Expr[:(I[$d]) for d = 1:AN]
-        Osplat = Expr[:(I[$d] == 1) for d = AN+1:N]
-        quote
-            @_propagate_inbounds_meta
-            @boundscheck (&)($(Osplat...)) || throw_boundserror(A, I)
-            getindex(A, $(Isplat...))
-        end
-    else
-        # Expand the last index into the appropriate number of indices
-        Isplat = Expr[:(I[$d]) for d = 1:N-1]
-        sz = Expr(:tuple)
-        sz.args = Expr[:(size(A, $d)) for d=max(N,1):AN]
-        szcheck = Expr[:(size(A, $d) > 0) for d=max(N,1):AN]
-        last_idx = N > 0 ? :(I[$N]) : 1
-        quote
-            # ind2sub requires all dimensions to be > 0:
-            @_propagate_inbounds_meta
-            @boundscheck (&)($(szcheck...)) || throw_boundserror(A, I)
-            getindex(A, $(Isplat...), ind2sub($sz, $last_idx)...)
-        end
-    end
+_getindex{T,N}(::IndexCartesian, A::AbstractArray{T,N}, I::Vararg{Int, N}) = (@_propagate_inbounds_meta; getindex(A, I...))
+_to_subscript_indices(A::AbstractArray, i::Int) = (@_inline_meta; _unsafe_ind2sub(A, i))
+_to_subscript_indices{T,N}(A::AbstractArray{T,N}) = (@_inline_meta; fill_to_length((), 1, Val{N})) # TODO: DEPRECATE FOR #14770
+_to_subscript_indices{T}(A::AbstractArray{T,0}) = () # TODO: REMOVE FOR #14770
+_to_subscript_indices{T}(A::AbstractArray{T,0}, i::Int) = () # TODO: REMOVE FOR #14770
+_to_subscript_indices{T}(A::AbstractArray{T,0}, I::Int...) = () # TODO: DEPRECATE FOR #14770
+function _to_subscript_indices{T,N}(A::AbstractArray{T,N}, I::Int...) # TODO: DEPRECATE FOR #14770
+    @_inline_meta
+    J, Jrem = IteratorsMD.split(I, Val{N})
+    _to_subscript_indices(A, J, Jrem)
 end
+_to_subscript_indices(A::AbstractArray, J::Tuple, Jrem::Tuple{}) =
+    __to_subscript_indices(A, indices(A), J, Jrem)
+# We allow partial linear indexing deprecation for OneTo arrays
+function __to_subscript_indices(A::AbstractArray, ::Tuple{Vararg{OneTo}}, J::Tuple, Jrem::Tuple{})
+    @_inline_meta
+    sz = _remaining_size(J, indices(A))    # compute trailing size (overlapping the final index)
+    (front(J)..., _unsafe_ind2sub(sz, last(J))...) # (maybe) extend the last index
+end
+# After the partial linear indexing deprecation is removed, this next method can
+# become the new normal. For now, it's limited to non-OneTo arrays.
+function __to_subscript_indices(A::AbstractArray, ::Tuple{AbstractUnitRange,Vararg{AbstractUnitRange}}, J::Tuple, Jrem::Tuple{})
+    @_inline_meta
+    (J..., map(first, tail(_remaining_size(J, indices(A))))...)
+end
+_to_subscript_indices(A, J::Tuple, Jrem::Tuple) = J # already bounds-checked, safe to drop
+_to_subscript_indices{T,N}(A::AbstractArray{T,N}, I::Vararg{Int,N}) = I
+_remaining_size(::Tuple{Any}, t::Tuple) = t
+_remaining_size(h::Tuple, t::Tuple) = (@_inline_meta; _remaining_size(tail(h), tail(t)))
+_unsafe_ind2sub(::Tuple{}, i) = () # ind2sub may throw(BoundsError()) in this case
+_unsafe_ind2sub(sz, i) = (@_inline_meta; ind2sub(sz, i))
 
 ## Setindex! is defined similarly. We first dispatch to an internal _setindex!
 # function that allows dispatch on array storage
 function setindex!(A::AbstractArray, v, I...)
     @_propagate_inbounds_meta
-    error_if_canonical_indexing(linearindexing(A), A, I...)
-    _setindex!(linearindexing(A), A, v, to_indices(A, I)...)
+    error_if_canonical_indexing(IndexStyle(A), A, I...)
+    _setindex!(IndexStyle(A), A, v, to_indices(A, I)...)
 end
 function unsafe_setindex!(A::AbstractArray, v, I...)
     @_inline_meta
@@ -879,72 +944,31 @@ function unsafe_setindex!(A::AbstractArray, v, I...)
     r
 end
 ## Internal defitions
-_setindex!(::LinearIndexing, A::AbstractArray, v, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
+_setindex!(::IndexStyle, A::AbstractArray, v, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
 
-## LinearFast Scalar indexing
-_setindex!(::LinearFast, A::AbstractVector, v, i::Int) = (@_propagate_inbounds_meta; setindex!(A, v, i))
-_setindex!(::LinearFast, A::AbstractArray, v, i::Int) = (@_propagate_inbounds_meta; setindex!(A, v, i))
-_setindex!{T}(::LinearFast, A::AbstractArray{T,0}, v) = (@_propagate_inbounds_meta; setindex!(A, v, 1))
-function _setindex!{T,N}(::LinearFast, A::AbstractArray{T,N}, v, I::Vararg{Int,N})
-    # We must check bounds for sub2ind; so we can then use @inbounds
+## IndexLinear Scalar indexing
+_setindex!(::IndexLinear, A::AbstractArray, v, i::Int) = (@_propagate_inbounds_meta; setindex!(A, v, i))
+_setindex!(::IndexLinear, A::AbstractArray, v) = (@_propagate_inbounds_meta; setindex!(A, v, _to_linear_index(A)))
+function _setindex!(::IndexLinear, A::AbstractArray, v, I::Int...)
     @_inline_meta
     @boundscheck checkbounds(A, I...)
-    @inbounds r = setindex!(A, v, sub2ind(A, I...))
-    r
-end
-function _setindex!(::LinearFast, A::AbstractVector, v, I1::Int, I::Int...)
-    @_inline_meta
-    @boundscheck checkbounds(A, I1, I...)
-    @inbounds r = setindex!(A, v, I1)
-    r
-end
-function _setindex!(::LinearFast, A::AbstractArray, v, I::Int...) # TODO: DEPRECATE FOR #14770
-    @_inline_meta
-    @boundscheck checkbounds(A, I...)
-    @inbounds r = setindex!(A, v, sub2ind(A, I...))
+    @inbounds r = setindex!(A, v, _to_linear_index(A, I...))
     r
 end
 
-# LinearSlow Scalar indexing
-_setindex!{T,N}(::LinearSlow, A::AbstractArray{T,N}, v, I::Vararg{Int, N}) = (@_propagate_inbounds_meta; setindex!(A, v, I...))
-function _setindex!(::LinearSlow, A::AbstractArray, v, i::Int)
-    # ind2sub requires all dimensions to be > 0; may as well just check bounds
+# IndexCartesian Scalar indexing
+_setindex!{T,N}(::IndexCartesian, A::AbstractArray{T,N}, v, I::Vararg{Int, N}) = (@_propagate_inbounds_meta; setindex!(A, v, I...))
+_setindex!(::IndexCartesian, A::AbstractArray, v) = (@_propagate_inbounds_meta; setindex!(A, v, _to_subscript_indices(A)...))
+function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Int...)
     @_inline_meta
-    @boundscheck checkbounds(A, i)
-    @inbounds r = setindex!(A, v, ind2sub(A, i)...)
+    @boundscheck checkbounds(A, I...)
+    @inbounds r = setindex!(A, v, _to_subscript_indices(A, I...)...)
     r
-end
-@generated function _setindex!{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, v, I::Int...) # TODO: DEPRECATE FOR #14770
-    N = length(I)
-    if N > AN
-        # Drop trailing ones
-        Isplat = Expr[:(I[$d]) for d = 1:AN]
-        Osplat = Expr[:(I[$d] == 1) for d = AN+1:N]
-        quote
-            # We only check the trailing ones, so just propagate @inbounds state
-            @_propagate_inbounds_meta
-            @boundscheck (&)($(Osplat...)) || throw_boundserror(A, I)
-            setindex!(A, v, $(Isplat...))
-        end
-    else
-        # Expand the last index into the appropriate number of indices
-        Isplat = Expr[:(I[$d]) for d = 1:N-1]
-        sz = Expr(:tuple)
-        sz.args = Expr[:(size(A, $d)) for d=max(N,1):AN]
-        szcheck = Expr[:(size(A, $d) > 0) for d=max(N,1):AN]
-        last_idx = N > 0 ? :(I[$N]) : 1
-        quote
-            # ind2sub requires all dimensions to be > 0:
-            @_propagate_inbounds_meta
-            @boundscheck (&)($(szcheck...)) || throw_boundserror(A, I)
-            setindex!(A, v, $(Isplat...), ind2sub($sz, $last_idx)...)
-        end
-    end
 end
 
 ## get (getindex with a default value) ##
 
-typealias RangeVecIntList{A<:AbstractVector{Int}} Union{Tuple{Vararg{Union{Range, AbstractVector{Int}}}}, AbstractVector{UnitRange{Int}}, AbstractVector{Range{Int}}, AbstractVector{A}}
+RangeVecIntList{A<:AbstractVector{Int}} = Union{Tuple{Vararg{Union{Range, AbstractVector{Int}}}}, AbstractVector{UnitRange{Int}}, AbstractVector{Range{Int}}, AbstractVector{A}}
 
 get(A::AbstractArray, i::Integer, default) = checkbounds(Bool, A, i) ? A[i] : default
 get(A::AbstractArray, I::Tuple{}, default) = similar(A, typeof(default), 0)
@@ -1186,10 +1210,7 @@ julia> vcat(a,b)
  11  12  13  14  15
 
 julia> c = ([1 2 3], [4 5 6])
-(
-[1 2 3],
-
-[4 5 6])
+([1 2 3], [4 5 6])
 
 julia> vcat(c...)
 2×3 Array{Int64,2}:
@@ -1229,7 +1250,7 @@ julia> hcat(a,b)
  5  14  15
 
 julia> c = ([1; 2; 3], [4; 5; 6])
-([1,2,3],[4,5,6])
+([1, 2, 3], [4, 5, 6])
 
 julia> hcat(c...)
 3×2 Array{Int64,2}:
@@ -1281,7 +1302,7 @@ row.
 
 ```jldoctest
 julia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6
-(1,2,3,4,5,6)
+(1, 2, 3, 4, 5, 6)
 
 julia> [a b c; d e f]
 2×3 Array{Int64,2}:
@@ -1488,10 +1509,10 @@ Returns a tuple of subscripts into array `a` corresponding to the linear index `
 julia> A = ones(5,6,7);
 
 julia> ind2sub(A,35)
-(5,1,2)
+(5, 1, 2)
 
 julia> ind2sub(A,70)
-(5,2,3)
+(5, 2, 3)
 ```
 """
 function ind2sub(A::AbstractArray, ind)
@@ -1561,13 +1582,13 @@ provides the indices of the maximum element.
 
 ```jldoctest
 julia> ind2sub((3,4),2)
-(2,1)
+(2, 1)
 
 julia> ind2sub((3,4),3)
-(3,1)
+(3, 1)
 
 julia> ind2sub((3,4),4)
-(1,2)
+(1, 2)
 ```
 """
 ind2sub(dims::DimsInteger, ind::Integer) = (@_inline_meta; _ind2sub(dims, ind-1))
@@ -1622,10 +1643,10 @@ sub2ind_vec(inds, i, I) = (@_inline_meta; _sub2ind_vec(inds, (), i, I...))
 _sub2ind_vec(inds, out, i, I1, I...) = (@_inline_meta; _sub2ind_vec(inds, (out..., I1[i]), i, I...))
 _sub2ind_vec(inds, out, i) = (@_inline_meta; sub2ind(inds, out...))
 
-function ind2sub{N,T<:Integer}(inds::Union{DimsInteger{N},Indices{N}}, ind::AbstractVector{T})
+function ind2sub{N}(inds::Union{DimsInteger{N},Indices{N}}, ind::AbstractVector{<:Integer})
     M = length(ind)
     t = ntuple(n->similar(ind),Val{N})
-    for (i,idx) in enumerate(ind)  # FIXME: change to eachindexvalue
+    for (i,idx) in enumerate(IndexLinear(), ind)
         sub = ind2sub(inds, idx)
         for j = 1:N
             t[j][i] = sub[j]
@@ -1658,7 +1679,7 @@ needed, for example in `foreach(println, array)`.
 ```jldoctest
 julia> a = 1:3:7;
 
-julia> foreach(x->println(x^2),a)
+julia> foreach(x -> println(x^2), a)
 1
 16
 49
@@ -1812,7 +1833,7 @@ Transform collection `c` by applying `f` to each element. For multiple collectio
 apply `f` elementwise.
 
 ```jldoctest
-julia> map((x) -> x * 2, [1, 2, 3])
+julia> map(x -> x * 2, [1, 2, 3])
 3-element Array{Int64,1}:
  2
  4
@@ -1852,6 +1873,18 @@ end
 
 Like [`map`](@ref), but stores the result in `destination` rather than a new
 collection. `destination` must be at least as large as the first collection.
+
+```jldoctest
+julia> x = zeros(3);
+
+julia> map!(x -> x * 2, x, [1, 2, 3]);
+
+julia> x
+3-element Array{Float64,1}:
+ 2.0
+ 4.0
+ 6.0
+```
 """
 map!{F}(f::F, dest::AbstractArray, As::AbstractArray...) = map_n!(f, dest, As)
 

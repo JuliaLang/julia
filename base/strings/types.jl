@@ -4,12 +4,12 @@
 
 ## substrings reference original strings ##
 
-immutable SubString{T<:AbstractString} <: AbstractString
+struct SubString{T<:AbstractString} <: AbstractString
     string::T
     offset::Int
     endof::Int
 
-    function SubString(s::T, i::Int, j::Int)
+    function SubString{T}(s::T, i::Int, j::Int) where T<:AbstractString
         if i > endof(s) || j<i
             return new(s, i-1, 0)
         else
@@ -26,7 +26,7 @@ immutable SubString{T<:AbstractString} <: AbstractString
         end
     end
 end
-SubString{T<:AbstractString}(s::T, i::Int, j::Int) = SubString{T}(s, i, j)
+SubString(s::T, i::Int, j::Int) where T<:AbstractString = SubString{T}(s, i, j)
 SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
 SubString(s::AbstractString, i::Integer, j::Integer) = SubString(s, Int(i), Int(j))
 SubString(s::AbstractString, i::Integer) = SubString(s, i, endof(s))
@@ -37,7 +37,7 @@ sizeof(s::SubString{String}) = s.endof == 0 ? 0 : nextind(s, s.endof) - 1
 # default implementation will work but it's slow
 # can this be delegated efficiently somehow?
 # that may require additional string interfaces
-length{T<:DirectIndexString}(s::SubString{T}) = endof(s)
+length(s::SubString{<:DirectIndexString}) = endof(s)
 
 function length(s::SubString{String})
     return s.endof==0 ? 0 : Int(ccall(:u8_charnum, Csize_t, (Ptr{UInt8}, Csize_t),
@@ -65,10 +65,10 @@ function isvalid(s::SubString, i::Integer)
     return (start(s) <= i <= endof(s)) && isvalid(s.string, s.offset+i)
 end
 
-isvalid{T<:DirectIndexString}(s::SubString{T}, i::Integer) = (start(s) <= i <= endof(s))
+isvalid(s::SubString{<:DirectIndexString}, i::Integer) = (start(s) <= i <= endof(s))
 
-ind2chr{T<:DirectIndexString}(s::SubString{T}, i::Integer) = begin checkbounds(s,i); i end
-chr2ind{T<:DirectIndexString}(s::SubString{T}, i::Integer) = begin checkbounds(s,i); i end
+ind2chr(s::SubString{<:DirectIndexString}, i::Integer) = begin checkbounds(s,i); i end
+chr2ind(s::SubString{<:DirectIndexString}, i::Integer) = begin checkbounds(s,i); i end
 
 nextind(s::SubString, i::Integer) = nextind(s.string, i+s.offset)-s.offset
 prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
@@ -100,7 +100,7 @@ end
 
 ## reversed strings without data movement ##
 
-immutable RevString{T<:AbstractString} <: AbstractString
+struct RevString{T<:AbstractString} <: AbstractString
     string::T
 end
 

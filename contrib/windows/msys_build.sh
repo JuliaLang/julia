@@ -160,7 +160,7 @@ if [ -z "`which make 2>/dev/null`" ]; then
 fi
 
 if ! [ -e usr/bin/busybox.exe ]; then
-  f=busybox-w32-FRP-483-g31277ab.exe
+  f=busybox-w32-FRP-875-gc6ec14a.exe
   echo "Downloading $f"
   $curlflags -o usr/bin/busybox.exe http://frippery.org/files/busybox/$f
 fi

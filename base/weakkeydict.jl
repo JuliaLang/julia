@@ -9,13 +9,13 @@ referenced in a hash table.
 
 See [`Dict`](@ref) for further help.
 """
-type WeakKeyDict{K,V} <: Associative{K,V}
+mutable struct WeakKeyDict{K,V} <: Associative{K,V}
     ht::Dict{WeakRef,V}
     lock::Threads.RecursiveSpinLock
     finalizer::Function
 
     # Constructors mirror Dict's
-    function WeakKeyDict()
+    function WeakKeyDict{K,V}() where V where K
         t = new(Dict{Any,V}(), Threads.RecursiveSpinLock(), identity)
         t.finalizer = function (k)
             # when a weak key is finalized, remove from dictionary if it is still there
@@ -24,22 +24,22 @@ type WeakKeyDict{K,V} <: Associative{K,V}
         end
         return t
     end
-    function WeakKeyDict(kv)
-        h = WeakKeyDict{K,V}()
-        for (k,v) in kv
-            h[k] = v
-        end
-        return h
+end
+function WeakKeyDict{K,V}(kv) where V where K
+    h = WeakKeyDict{K,V}()
+    for (k,v) in kv
+        h[k] = v
     end
-    WeakKeyDict(p::Pair) = setindex!(WeakKeyDict{K,V}(), p.second, p.first)
-    function WeakKeyDict(ps::Pair...)
-        h = WeakKeyDict{K,V}()
-        sizehint!(h, length(ps))
-        for p in ps
-            h[p.first] = p.second
-        end
-        return h
+    return h
+end
+WeakKeyDict{K,V}(p::Pair) where V where K = setindex!(WeakKeyDict{K,V}(), p.second, p.first)
+function WeakKeyDict{K,V}(ps::Pair...) where V where K
+    h = WeakKeyDict{K,V}()
+    sizehint!(h, length(ps))
+    for p in ps
+        h[p.first] = p.second
     end
+    return h
 end
 WeakKeyDict() = WeakKeyDict{Any,Any}()
 
@@ -55,8 +55,7 @@ function WeakKeyDict(kv)
     try
         Base.associative_with_eltype((K, V) -> WeakKeyDict{K, V}, kv, eltype(kv))
     catch e
-        if any(x->isempty(methods(x, (typeof(kv),))), [start, next, done]) ||
-            !all(x->isa(x,Union{Tuple,Pair}),kv)
+        if !applicable(start, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
             throw(ArgumentError("WeakKeyDict(kv): kv needs to be an iterator of tuples or pairs"))
         else
             rethrow(e)

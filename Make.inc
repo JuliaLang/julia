@@ -237,6 +237,7 @@ BUILD_LLVM_CLANG := 0
 # see http://lldb.llvm.org/build.html for dependencies
 BUILD_LLDB := 0
 USE_POLLY := 0
+USE_POLLY_OPENMP := 0
 
 # Cross-compile
 #XC_HOST := i686-w64-mingw32
@@ -499,6 +500,12 @@ ifeq ($(OS),WINNT)
 build_shlibdir := $(build_bindir)
 else
 build_shlibdir := $(build_libdir)
+endif
+
+ifeq ($(OS), FreeBSD)
+LOCALBASE ?= /usr/local
+else
+LOCALBASE ?= /usr
 endif
 
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
@@ -837,8 +844,8 @@ LIBMNAME := libopenlibm
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV), 1)
-  LIBUV := /usr/lib/libuv-julia.a
-  LIBUV_INC := /usr/include
+  LIBUV := $(LOCALBASE)/lib/libuv-julia.a
+  LIBUV_INC := $(LOCALBASE)/include
 else
   LIBUV := $(build_libdir)/libuv.a
   LIBUV_INC := $(build_includedir)
@@ -846,7 +853,7 @@ endif
 
 ifeq ($(USE_SYSTEM_UTF8PROC), 1)
   LIBUTF8PROC := -lutf8proc
-  UTF8PROC_INC := /usr/include
+  UTF8PROC_INC := $(LOCALBASE)/include
 else
   LIBUTF8PROC := $(build_libdir)/libutf8proc.a
   UTF8PROC_INC := $(build_includedir)

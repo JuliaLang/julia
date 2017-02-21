@@ -5,7 +5,7 @@ const curmod_name = fullname(curmod)
 const curmod_prefix = "$(["$m." for m in curmod_name]...)"
 
 # REPL tests
-isdefined(Main, :TestHelpers) || eval(Main, :(include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))))
+isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using TestHelpers
 import Base: REPL, LineEdit
 
@@ -99,6 +99,15 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         @test pwd() == realpath(homedir())
     end
     cd(origpwd)
+
+    # issue #20482
+    if !is_windows()
+        write(stdin_write, ";")
+        readuntil(stdout_read, "shell> ")
+        write(stdin_write, "echo hello >/dev/null\n")
+        readuntil(stdout_read, "\n")
+        readuntil(stdout_read, "\n")
+    end
 
     # Test that accepting a REPL result immediately shows up, not
     # just on the next keystroke
@@ -428,7 +437,7 @@ begin
 
     # Test removal of prefix in multiple statement paste
     sendrepl2("""\e[200~
-            julia> type T17599; a::Int; end
+            julia> mutable struct T17599; a::Int; end
 
             julia> function foo(julia)
             julia> 3
@@ -511,7 +520,6 @@ let exename = Base.julia_cmd()
 # Test REPL in dumb mode
 if !is_windows()
     TestHelpers.with_fake_pty() do slave, master
-
         nENV = copy(ENV)
         nENV["TERM"] = "dumb"
         p = spawn(setenv(`$exename --startup-file=no --quiet`,nENV),slave,slave,slave)
@@ -527,7 +535,6 @@ if !is_windows()
         output = readuntil(master,' ')
         @test output == "1\r\nquit()\r\n1\r\n\r\njulia> "
         @test nb_available(master) == 0
-
     end
 end
 
@@ -540,9 +547,9 @@ end
 end # let exename
 
 # issue #19864:
-type Error19864 <: Exception; end
+mutable struct Error19864 <: Exception; end
 function test19864()
-    eval(current_module(), :(Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")))
+    @eval current_module() Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
     buf = IOBuffer()
     REPL.print_response(buf, Error19864(), [], false, false, nothing)
     return String(take!(buf))
@@ -552,7 +559,8 @@ end
 # Test containers in error messages are limited #18726
 let io = IOBuffer()
     Base.display_error(io,
-        try [][trues(6000)]
+        try
+            [][trues(6000)]
         catch e
             e
         end, [])
@@ -567,7 +575,7 @@ function test_replinit()
     slot = Ref(false)
     # Create a closure from a newer world to check if `_atreplinit`
     # can run it correctly
-    atreplinit(eval(:(repl::Base.REPL.LineEditREPL->($slot[] = true))))
+    atreplinit(@eval(repl::Base.REPL.LineEditREPL->($slot[] = true)))
     Base._atreplinit(repl)
     @test slot[]
     @test_throws MethodError Base.repl_hooks[1](repl)

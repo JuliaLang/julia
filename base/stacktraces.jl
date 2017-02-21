@@ -42,7 +42,7 @@ Stack information representing execution context, with the following fields:
   Representation of the pointer to the execution context as returned by `backtrace`.
 
 """
-immutable StackFrame # this type should be kept platform-agnostic so that profiles can be dumped on one machine and read on another
+struct StackFrame # this type should be kept platform-agnostic so that profiles can be dumped on one machine and read on another
     "the name of the function containing the execution context"
     func::Symbol
     "the path to the file containing the execution context"
@@ -67,7 +67,7 @@ StackFrame(func, file, line) = StackFrame(func, file, line, Nullable{Core.Method
 An alias for `Vector{StackFrame}` provided for convenience; returned by calls to
 `stacktrace` and `catch_stacktrace`.
 """
-typealias StackTrace Vector{StackFrame}
+const StackTrace = Vector{StackFrame}
 
 const empty_sym = Symbol("")
 const UNKNOWN = StackFrame(empty_sym, empty_sym, -1, Nullable{Core.MethodInstance}(), true, false, 0) # === lookup(C_NULL)
@@ -195,7 +195,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         if frame.func === empty_sym
             @printf(io, "ip:%#x", frame.pointer)
         else
-            print_with_color(Base.have_color ? Base.stackframe_function_color() : :nothing, io, string(frame.func))
+            print_with_color(Base.have_color && get(io, :backtrace, false) ? Base.stackframe_function_color() : :nothing, io, string(frame.func))
         end
     else
         linfo = get(frame.linfo)
@@ -207,14 +207,12 @@ function show_spec_linfo(io::IO, frame::StackFrame)
     end
 end
 
-function show(io::IO, frame::StackFrame; full_path::Bool=false,
-              prefix = " in ")
-    print(io, prefix)
+function show(io::IO, frame::StackFrame; full_path::Bool=false)
     show_spec_linfo(io, frame)
     if frame.file !== empty_sym
         file_info = full_path ? string(frame.file) : basename(string(frame.file))
         print(io, " at ")
-        Base.with_output_color(Base.have_color ? Base.stackframe_lineinfo_color() : :nothing, io) do io
+        Base.with_output_color(Base.have_color && get(io, :backtrace, false) ? Base.stackframe_lineinfo_color() : :nothing, io) do io
             print(io, file_info, ":")
             if frame.line >= 0
                 print(io, frame.line)

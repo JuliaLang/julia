@@ -8,14 +8,27 @@
 Transform an array to its complex conjugate in-place.
 
 See also [`conj`](@ref).
-"""
-conj!{T<:Number}(A::AbstractArray{T}) = (@inbounds broadcast!(conj, A, A); A)
 
-for f in (:-, :~, :conj, :sign, :real, :imag)
+```jldoctest
+julia> A = [1+im 2-im; 2+2im 3+im]
+2×2 Array{Complex{Int64},2}:
+ 1+1im  2-1im
+ 2+2im  3+1im
+
+julia> conj!(A);
+
+julia> A
+2×2 Array{Complex{Int64},2}:
+ 1-1im  2+1im
+ 2-2im  3-1im
+```
+"""
+conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
+
+for f in (:-, :conj, :real, :imag)
     @eval ($f)(A::AbstractArray) = broadcast($f, A)
 end
 
-!(A::AbstractArray{Bool}) = broadcast(!, A)
 
 ## Binary arithmetic operators ##
 
@@ -28,10 +41,10 @@ end
 
 for f in (:/, :\, :*, :+, :-)
     if f != :/
-        @eval ($f){T}(A::Number, B::AbstractArray{T}) = broadcast($f, A, B)
+        @eval ($f)(A::Number, B::AbstractArray) = broadcast($f, A, B)
     end
     if f != :\
-        @eval ($f){T}(A::AbstractArray{T}, B::Number) = broadcast($f, A, B)
+        @eval ($f)(A::AbstractArray, B::Number) = broadcast($f, A, B)
     end
 end
 

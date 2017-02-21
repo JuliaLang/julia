@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-immutable NullException <: Exception
+struct NullException <: Exception
 end
 
 """
@@ -57,7 +57,7 @@ promote_rule{S,T}(::Type{Nullable{S}}, ::Type{Nullable{T}}) = Nullable{promote_t
 promote_op{S,T}(op::Any, ::Type{Nullable{S}}, ::Type{Nullable{T}}) = Nullable{promote_op(op, S, T)}
 promote_op{S,T}(op::Type, ::Type{Nullable{S}}, ::Type{Nullable{T}}) = Nullable{promote_op(op, S, T)}
 
-function show{T}(io::IO, x::Nullable{T})
+function show(io::IO, x::Nullable)
     if get(io, :compact, false)
         if isnull(x)
             print(io, "#NULL")
@@ -81,8 +81,8 @@ end
 Attempt to access the value of `x`. Returns the value if it is present;
 otherwise, returns `y` if provided, or throws a `NullException` if not.
 """
-@inline function get{S,T}(x::Nullable{S}, y::T)
-    if isbits(S)
+@inline function get{T}(x::Nullable{T}, y)
+    if isbits(T)
         ifelse(isnull(x), y, x.value)
     else
         isnull(x) ? y : x.value
@@ -113,7 +113,7 @@ Nullable{String}()
 julia> unsafe_get(x)
 ERROR: UndefRefError: access to undefined reference
 Stacktrace:
- [1] unsafe_get(::Nullable{String}) at ./nullable.jl:124
+ [1] unsafe_get(::Nullable{String}) at ./nullable.jl:125
 
 julia> x = 1
 1
@@ -177,14 +177,14 @@ vectorization.
 """
 null_safe_op(f::Any, ::Type, ::Type...) = false
 
-typealias NullSafeSignedInts Union{Type{Int128}, Type{Int16}, Type{Int32},
-                                   Type{Int64}, Type{Int8}}
-typealias NullSafeUnsignedInts Union{Type{Bool}, Type{UInt128}, Type{UInt16},
-                                     Type{UInt32}, Type{UInt64}, Type{UInt8}}
-typealias NullSafeInts Union{NullSafeSignedInts, NullSafeUnsignedInts}
-typealias NullSafeFloats Union{Type{Float16}, Type{Float32}, Type{Float64}}
-typealias NullSafeTypes Union{NullSafeInts, NullSafeFloats}
-typealias EqualOrLess Union{typeof(isequal), typeof(isless)}
+const NullSafeSignedInts = Union{Type{Int128}, Type{Int16}, Type{Int32},
+                                 Type{Int64}, Type{Int8}}
+const NullSafeUnsignedInts = Union{Type{Bool}, Type{UInt128}, Type{UInt16},
+                                   Type{UInt32}, Type{UInt64}, Type{UInt8}}
+const NullSafeInts = Union{NullSafeSignedInts, NullSafeUnsignedInts}
+const NullSafeFloats = Union{Type{Float16}, Type{Float32}, Type{Float64}}
+const NullSafeTypes = Union{NullSafeInts, NullSafeFloats}
+const EqualOrLess = Union{typeof(isequal), typeof(isless)}
 
 null_safe_op{T}(::typeof(identity), ::Type{T}) = isbits(T)
 

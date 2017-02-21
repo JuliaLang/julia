@@ -141,9 +141,9 @@ end
 #
 # DLMOffsets: Keep offsets (when result dimensions are not known)
 # DLMStore: Store values directly into a result store (when result dimensions are known)
-abstract DLMHandler
+abstract type DLMHandler end
 
-type DLMOffsets <: DLMHandler
+mutable struct DLMOffsets <: DLMHandler
     oarr::Vector{Vector{Int}}
     offidx::Int
     thresh::Int
@@ -194,7 +194,7 @@ function result(dlmoffsets::DLMOffsets)
     dlmoffsets.oarr
 end
 
-type DLMStore{T} <: DLMHandler
+mutable struct DLMStore{T} <: DLMHandler
     hdr::Array{AbstractString, 2}
     data::Array{T, 2}
 
@@ -363,23 +363,16 @@ end
 
 const valid_opts = [:header, :has_header, :use_mmap, :quotes, :comments, :dims, :comment_char, :skipstart, :skipblanks]
 const valid_opt_types = [Bool, Bool, Bool, Bool, Bool, NTuple{2,Integer}, Char, Integer, Bool]
-const deprecated_opts = Dict(:has_header => :header)
 
 function val_opts(opts)
     d = Dict{Symbol,Union{Bool,NTuple{2,Integer},Char,Integer}}()
     for (opt_name, opt_val) in opts
-        if opt_name == :ignore_invalid_chars
-            Base.depwarn("the ignore_invalid_chars option is no longer supported and will be ignored", :val_opts)
-            continue
-        end
         in(opt_name, valid_opts) ||
             throw(ArgumentError("unknown option $opt_name"))
         opt_typ = valid_opt_types[findfirst(valid_opts, opt_name)]
         isa(opt_val, opt_typ) ||
             throw(ArgumentError("$opt_name should be of type $opt_typ, got $(typeof(opt_val))"))
         d[opt_name] = opt_val
-        haskey(deprecated_opts, opt_name) &&
-            Base.depwarn("$opt_name is deprecated, use $(deprecated_opts[opt_name]) instead", :val_opts)
     end
     return d
 end
@@ -430,7 +423,7 @@ function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{Float32,
     isnull(n) || (cells[row, col] = get(n))
     isnull(n)
 end
-function colval{T<:AbstractString}(sbuff::String, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int)
+function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{<:AbstractString,2}, row::Int, col::Int)
     cells[row, col] = SubString(sbuff, startpos, endpos)
     return false
 end
@@ -453,7 +446,7 @@ function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{Any,2}, 
     cells[row, col] = SubString(sbuff, startpos, endpos)
     false
 end
-function colval{T<:Char}(sbuff::String, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int)
+function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{<:Char,2}, row::Int, col::Int)
     if startpos == endpos
         cells[row, col] = next(sbuff, startpos)[1]
         return false
@@ -651,7 +644,7 @@ function writedlm(io::IO, a::AbstractMatrix, dlm; opts...)
     nothing
 end
 
-writedlm{T}(io::IO, a::AbstractArray{T,0}, dlm; opts...) = writedlm(io, reshape(a,1), dlm; opts...)
+writedlm(io::IO, a::AbstractArray{<:Any,0}, dlm; opts...) = writedlm(io, reshape(a,1), dlm; opts...)
 
 # write an iterable row as dlm-separated items
 function writedlm_row(io::IO, row, dlm, quotes)

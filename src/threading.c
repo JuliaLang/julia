@@ -266,6 +266,9 @@ static void ti_initthread(int16_t tid)
     ptls->tid = tid;
     ptls->pgcstack = NULL;
     ptls->gc_state = 0; // GC unsafe
+    ptls->gc_cache.perm_scanned_bytes = 0;
+    ptls->gc_cache.scanned_bytes = 0;
+    ptls->gc_cache.nbig_obj = 0;
     // Conditionally initialize the safepoint address. See comment in
     // `safepoint.c`
     if (tid == 0) {
@@ -693,10 +696,8 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_svec_t *args)
     user_ns[ptls->tid] += (trun - tfork);
 #endif
 
-    jl_gc_state_set(ptls, JL_GC_STATE_SAFE, 0);
     // wait for completion (TODO: nowait?)
     ti_threadgroup_join(tgworld, ptls->tid);
-    jl_gc_state_set(ptls, 0, JL_GC_STATE_SAFE);
 
 #if PROFILE_JL_THREADING
     uint64_t tjoin = uv_hrtime();

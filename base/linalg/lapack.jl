@@ -655,7 +655,7 @@ Compute the `LQ` factorization of `A`, `A = LQ`.
 Returns `A`, modified in-place, and `tau`, which contains scalars
 which parameterize the elementary reflectors of the factorization.
 """
-gelqf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); gelqf!(A,similar(A,T,min(m,n))))
+gelqf!(A::StridedMatrix{<:BlasFloat}) = ((m,n) = size(A); gelqf!(A, similar(A, min(m, n))))
 
 """
     geqlf!(A) -> (A, tau)
@@ -665,7 +665,7 @@ Compute the `QL` factorization of `A`, `A = QL`.
 Returns `A`, modified in-place, and `tau`, which contains scalars
 which parameterize the elementary reflectors of the factorization.
 """
-geqlf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); geqlf!(A,similar(A,T,min(m,n))))
+geqlf!(A::StridedMatrix{<:BlasFloat}) = ((m,n) = size(A); geqlf!(A, similar(A, min(m, n))))
 
 """
     geqrt!(A, nb) -> (A, T)
@@ -677,7 +677,7 @@ Returns `A`, modified in-place, and `T`, which contains upper
 triangular block reflectors which parameterize the elementary reflectors of
 the factorization.
 """
-geqrt!{T<:BlasFloat}(A::StridedMatrix{T}, nb::Integer) = geqrt!(A,similar(A,T,nb,minimum(size(A))))
+geqrt!(A::StridedMatrix{<:BlasFloat}, nb::Integer) = geqrt!(A, similar(A, nb, minimum(size(A))))
 
 """
     geqrt3!(A) -> (A, T)
@@ -687,7 +687,7 @@ Recursively computes the blocked `QR` factorization of `A`, `A = QR`.
 Returns `A`, modified in-place, and `T`, which contains upper triangular block
 reflectors which parameterize the elementary reflectors of the factorization.
 """
-geqrt3!{T<:BlasFloat}(A::StridedMatrix{T}) = (n=size(A,2); geqrt3!(A,similar(A,T,n,n)))
+geqrt3!(A::StridedMatrix{<:BlasFloat}) = (n = size(A, 2); geqrt3!(A, similar(A, n, n)))
 
 """
     geqrf!(A) -> (A, tau)
@@ -697,7 +697,7 @@ Compute the `QR` factorization of `A`, `A = QR`.
 Returns `A`, modified in-place, and `tau`, which contains scalars
 which parameterize the elementary reflectors of the factorization.
 """
-geqrf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); geqrf!(A,similar(A,T,min(m,n))))
+geqrf!(A::StridedMatrix{<:BlasFloat}) = ((m,n) = size(A); geqrf!(A, similar(A, min(m, n))))
 
 """
     gerqf!(A) -> (A, tau)
@@ -707,7 +707,7 @@ Compute the `RQ` factorization of `A`, `A = RQ`.
 Returns `A`, modified in-place, and `tau`, which contains scalars
 which parameterize the elementary reflectors of the factorization.
 """
-gerqf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); gerqf!(A,similar(A,T,min(m,n))))
+gerqf!(A::StridedMatrix{<:BlasFloat}) = ((m,n) = size(A); gerqf!(A, similar(A, min(m, n))))
 
 """
     geqp3!(A, jpvt) -> (A, jpvt, tau)
@@ -719,9 +719,9 @@ greater than or equal to `n` if `A` is an `(m x n)` matrix.
 Returns `A` and `jpvt`, modified in-place, and `tau`, which stores the elementary
 reflectors.
 """
-function geqp3!{T<:BlasFloat}(A::StridedMatrix{T},jpvt::StridedVector{BlasInt})
-    m,n = size(A)
-    geqp3!(A,jpvt,similar(A,T,min(m,n)))
+function geqp3!(A::StridedMatrix{<:BlasFloat}, jpvt::StridedVector{BlasInt})
+    m, n = size(A)
+    geqp3!(A, jpvt, similar(A, min(m, n)))
 end
 
 """
@@ -732,9 +732,9 @@ Compute the pivoted `QR` factorization of `A`, `AP = QR` using BLAS level 3.
 Returns `A`, modified in-place, `jpvt`, which represents the pivoting matrix `P`,
 and `tau`, which stores the elementary reflectors.
 """
-function geqp3!{T<:BlasFloat}(A::StridedMatrix{T})
-    m,n = size(A)
-    geqp3!(A,zeros(BlasInt,n),similar(A,T,min(m,n)))
+function geqp3!(A::StridedMatrix{<:BlasFloat})
+    m, n = size(A)
+    geqp3!(A, zeros(BlasInt, n), similar(A, min(m, n)))
 end
 
 ## Complete orthogonaliztion tools
@@ -3683,8 +3683,8 @@ for (stev, stebz, stegr, stein, elty) in
             m = Array{BlasInt}(1)
             w = similar(dv, $elty, n)
             ldz = jobz == 'N' ? 1 : n
-            Z = similar(dv, $elty, ldz, n)
-            isuppz = similar(dv, BlasInt, 2n)
+            Z = similar(dv, $elty, ldz, range == 'I' ? iu-il+1 : n)
+            isuppz = similar(dv, BlasInt, 2*size(Z, 2))
             work = Array{$elty}(1)
             lwork = BlasInt(-1)
             iwork = Array{BlasInt}(1)
@@ -3710,7 +3710,7 @@ for (stev, stebz, stegr, stein, elty) in
                     iwork = Array{BlasInt}(liwork)
                 end
             end
-            w[1:m[1]], Z[:,1:m[1]]
+            m[1] == length(w) ? w : w[1:m[1]], m[1] == size(Z, 2) ? Z : Z[:,1:m[1]]
         end
 
         function stein!(dv::StridedVector{$elty}, ev_in::StridedVector{$elty}, w_in::StridedVector{$elty}, iblock_in::StridedVector{BlasInt}, isplit_in::StridedVector{BlasInt})

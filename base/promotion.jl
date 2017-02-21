@@ -136,9 +136,20 @@ promote_type{T}(::Type{Bottom}, ::Type{T}) = (@_pure_meta; T)
 
 Determine a type big enough to hold values of each argument type without loss, whenever
 possible. In some cases, where no type exists to which both types can be promoted
-losslessly, some loss is tolerated; for example, `promote_type(Int64,Float64)` returns
+losslessly, some loss is tolerated; for example, `promote_type(Int64, Float64)` returns
 `Float64` even though strictly, not all `Int64` values can be represented exactly as
 `Float64` values.
+
+```jldoctest
+julia> promote_type(Int64, Float64)
+Float64
+
+julia> promote_type(Int32, Int64)
+Int64
+
+julia> promote_type(Float32, BigInt)
+BigFloat
+```
 """
 function promote_type{T,S}(::Type{T}, ::Type{S})
     @_pure_meta
@@ -240,7 +251,27 @@ end
 """
     ^(x, y)
 
-Exponentiation operator.
+Exponentiation operator. If `x` is a matrix, computes matrix exponentiation.
+
+If `y` is an `Int` literal (e.g. `2` in `x^2` or `-3` in `x^-3`), the Julia code
+`x^y` is transformed by the compiler to `x^Val{y}`, to enable compile-time
+specialization on the value of the exponent.  (As a default fallback,
+however, `x^Val{y}` simply calls the `^(x,y)` function.)
+
+```jldoctest
+julia> 3^5
+243
+
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> A^3
+2×2 Array{Int64,2}:
+ 37   54
+ 81  118
+```
 """
 ^(x::Number, y::Number) = ^(promote(x,y)...)
 

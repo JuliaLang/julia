@@ -45,23 +45,23 @@ import Base: size
 import Base.LinAlg: qrfact
 import ..SparseArrays.CHOLMOD: convert, free!
 
-immutable C_Factorization{Tv<:VTypes} <: SuiteSparseStruct
+struct C_Factorization{Tv<:VTypes} <: SuiteSparseStruct
     xtype::Cint
     factors::Ptr{Tv}
 end
 
-type Factorization{Tv<:VTypes} <: Base.LinAlg.Factorization{Tv}
+mutable struct Factorization{Tv<:VTypes} <: Base.LinAlg.Factorization{Tv}
     m::Int
     n::Int
     p::Ptr{C_Factorization{Tv}}
-    function Factorization(m::Integer, n::Integer, p::Ptr{C_Factorization{Tv}})
+    function Factorization{Tv}(m::Integer, n::Integer, p::Ptr{C_Factorization{Tv}}) where Tv<:VTypes
         if p == C_NULL
             throw(ArgumentError("factorization failed for unknown reasons. Please submit a bug report."))
         end
         new(m, n, p)
     end
 end
-Factorization{Tv<:VTypes}(m::Integer, n::Integer, p::Ptr{C_Factorization{Tv}}) = Factorization{Tv}(m, n, p)
+Factorization(m::Integer, n::Integer, p::Ptr{C_Factorization{Tv}}) where Tv<:VTypes = Factorization{Tv}(m, n, p)
 
 size(F::Factorization) = (F.m, F.n)
 function size(F::Factorization, i::Integer)

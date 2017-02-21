@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-typealias ByteArray Union{Vector{UInt8},Vector{Int8}}
+const ByteArray = Union{Vector{UInt8},Vector{Int8}}
 
 ## constructors and conversions ##
 

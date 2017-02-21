@@ -250,7 +250,7 @@ JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s)
     return a;
 }
 
-JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str)
+JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint8_t chomp)
 {
     jl_array_t *a;
     // manually inlined common case
@@ -258,7 +258,11 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str)
     if (pd) {
         size_t n = pd-(s->buf+s->bpos)+1;
         if (str) {
-            jl_value_t *str = jl_pchar_to_string(s->buf + s->bpos, n);
+            size_t nchomp = 0;
+            if (chomp) {
+                nchomp = ios_nchomp(s, n);
+            }
+            jl_value_t *str = jl_pchar_to_string(s->buf + s->bpos, n - nchomp);
             s->bpos += n;
             return str;
         }
@@ -271,7 +275,7 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str)
         ios_t dest;
         ios_mem(&dest, 0);
         ios_setbuf(&dest, (char*)a->data, 80, 0);
-        size_t n = ios_copyuntil(&dest, s, delim);
+        size_t n = ios_copyuntil(&dest, s, delim, chomp);
         if (dest.buf != a->data) {
             a = jl_take_buffer(&dest);
         }
@@ -654,20 +658,6 @@ JL_DLLEXPORT long jl_SC_CLK_TCK(void)
 #else
     return 0;
 #endif
-}
-
-JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
-{
-    if (ty->layout == NULL || field > jl_datatype_nfields(ty) || field < 1)
-        jl_bounds_error_int((jl_value_t*)ty, field);
-    return jl_field_offset(ty, field - 1);
-}
-
-JL_DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
-{
-    if (ty->layout == NULL)
-        jl_error("non-leaf type doesn't have an alignment");
-    return ty->layout->alignment;
 }
 
 // Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
