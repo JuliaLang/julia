@@ -131,13 +131,15 @@ fld(x::Unsigned, y::Signed) = div(x, y) - (signbit(y) & (rem(x, y) != 0))
 
 """
     mod(x, y)
+    rem(x, y, RoundDown)
 
-Modulus after flooring division, returning a value in the range ``[0,y)``, if `y` is positive, or
-``(y,0]`` if `y` is negative.
+The reduction of `x` modulo `y`, or equivelently, the remainder of `x` after floored division by `y`. This will return a value with the same sign as `y` whose magnitude less than `abs(y)` (except possibly in the case of floating point values, see note below).
 
+This has the property that
 ```julia
 x == fld(x,y)*y + mod(x,y)
 ```
+if computed without intermediate rounding.
 
 !!! note
 
