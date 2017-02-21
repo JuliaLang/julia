@@ -2051,6 +2051,9 @@ static int eq_msp(jl_value_t *a, jl_value_t *b, jl_typeenv_t *env)
     if ((a == (jl_value_t*)jl_any_type && b == jl_ANY_flag) ||
         (b == (jl_value_t*)jl_any_type && a == jl_ANY_flag))
         return 1;
+    if (!(jl_is_type(a) || jl_is_typevar(a)) ||
+        !(jl_is_type(b) || jl_is_typevar(b)))
+        return jl_egal(a, b);
     JL_GC_PUSH2(&a, &b);
     jl_typeenv_t *e = env;
     while (e != NULL) {
