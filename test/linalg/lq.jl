@@ -57,6 +57,9 @@ bimg  = randn(n,2)/2
                     @test l*q ≈ a
                     @test full(lqa) ≈ a
                     @test full(copy(lqa)) ≈ a
+                    lstring = sprint(show,l)
+                    qstring = sprint(show,q)
+                    @test sprint(show,lqa) == "$(typeof(lqa)) with factors L and Q:\n$lstring\n$qstring"
                 end
                 @testset "Binary ops" begin
                     @test a*(lqa\b) ≈ b atol=3000ε
