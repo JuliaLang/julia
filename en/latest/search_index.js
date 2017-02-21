@@ -1081,11 +1081,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/methods.html#Method-Ambiguities-1",
+    "location": "manual/methods.html#man-ambiguities-1",
     "page": "Methods",
     "title": "Method Ambiguities",
     "category": "section",
-    "text": "It is possible to define a set of function methods such that there is no unique most specific method applicable to some combinations of arguments:julia> g(x::Float64, y) = 2x + y\ng (generic function with 1 method)\n\njulia> g(x, y::Float64) = x + 2y\ng (generic function with 2 methods)\n\njulia> g(2.0, 3)\n7.0\n\njulia> g(2, 3.0)\n8.0\n\njulia> g(2.0, 3.0)\nERROR: MethodError: g(::Float64, ::Float64) is ambiguous.\n[...]Here the call g(2.0, 3.0) could be handled by either the g(Float64, Any) or the g(Any, Float64) method, and neither is more specific than the other. In such cases, Julia raises a MethodError rather than arbitrarily picking a method. You can avoid method ambiguities by specifying an appropriate method for the intersection case:julia> g(x::Float64, y::Float64) = 2x + 2y\ng (generic function with 3 methods)\n\njulia> g(2.0, 3)\n7.0\n\njulia> g(2, 3.0)\n8.0\n\njulia> g(2.0, 3.0)\n10.0It is recommended that the disambiguating method be defined first, since otherwise the ambiguity exists, if transiently, until the more specific method is defined."
+    "text": "It is possible to define a set of function methods such that there is no unique most specific method applicable to some combinations of arguments:julia> g(x::Float64, y) = 2x + y\ng (generic function with 1 method)\n\njulia> g(x, y::Float64) = x + 2y\ng (generic function with 2 methods)\n\njulia> g(2.0, 3)\n7.0\n\njulia> g(2, 3.0)\n8.0\n\njulia> g(2.0, 3.0)\nERROR: MethodError: g(::Float64, ::Float64) is ambiguous.\n[...]Here the call g(2.0, 3.0) could be handled by either the g(Float64, Any) or the g(Any, Float64) method, and neither is more specific than the other. In such cases, Julia raises a MethodError rather than arbitrarily picking a method. You can avoid method ambiguities by specifying an appropriate method for the intersection case:julia> g(x::Float64, y::Float64) = 2x + 2y\ng (generic function with 3 methods)\n\njulia> g(2.0, 3)\n7.0\n\njulia> g(2, 3.0)\n8.0\n\njulia> g(2.0, 3.0)\n10.0It is recommended that the disambiguating method be defined first, since otherwise the ambiguity exists, if transiently, until the more specific method is defined.In more complex cases, resolving method ambiguities involves a certain element of design; this topic is explored further below."
 },
 
 {
@@ -1133,7 +1133,55 @@ var documenterSearchIndex = {"docs": [
     "page": "Methods",
     "title": "Empty generic functions",
     "category": "section",
-    "text": "Occasionally it is useful to introduce a generic function without yet adding methods. This can be used to separate interface definitions from implementations. It might also be done for the purpose of documentation or code readability. The syntax for this is an empty function block without a tuple of arguments:function emptyfunc\nend[Clarke61]: Arthur C. Clarke, Profiles of the Future (1961): Clarke's Third Law."
+    "text": "Occasionally it is useful to introduce a generic function without yet adding methods. This can be used to separate interface definitions from implementations. It might also be done for the purpose of documentation or code readability. The syntax for this is an empty function block without a tuple of arguments:function emptyfunc\nend"
+},
+
+{
+    "location": "manual/methods.html#man-method-design-ambiguities-1",
+    "page": "Methods",
+    "title": "Method design and the avoidance of ambiguities",
+    "category": "section",
+    "text": "Julia's method polymorphism is one of its most powerful features, yet exploiting this power can pose design challenges.  In particular, in more complex method hierarchies it is not uncommon for ambiguities to arise.Above, it was pointed out that one can resolve ambiguities likef(x, y::Int) = 1\nf(x::Int, y) = 2by defining a methodf(x::Int, y::Int) = 3This is often the right strategy; however, there are circumstances where following this advice blindly can be counterproductive. In particular, the more methods a generic function has, the more possibilities there are for ambiguities. When your method hierarchies get more complicated than this simple example, it can be worth your while to think carefully about alternative strategies.Below we discuss particular challenges and some alternative ways to resolve such issues."
+},
+
+{
+    "location": "manual/methods.html#Tuple-and-NTuple-arguments-1",
+    "page": "Methods",
+    "title": "Tuple and NTuple arguments",
+    "category": "section",
+    "text": "Tuple (and NTuple) arguments present special challenges. For example,f{N}(x::NTuple{N,Int}) = 1\nf{N}(x::NTuple{N,Float64}) = 2are ambiguous because of the possibility that N == 0: there are no elements to determine whether the Int or Float64 variant should be called. To resolve the ambiguity, one approach is define a method for the empty tuple:f(x::Tuple{}) = 3Alternatively, for all methods but one you can insist that there is at least one element in the tuple:f{N}(x::NTuple{N,Int}) = 1                  # this is the fallback\nf(x::Tuple{Float64, Vararg{Float64}}) = 2   # this requires at least one Float64"
+},
+
+{
+    "location": "manual/methods.html#man-methods-orthogonalize-1",
+    "page": "Methods",
+    "title": "Orthogonalize your design",
+    "category": "section",
+    "text": "When you might be tempted to dispatch on two or more arguments, consider whether a \"wrapper\" function might make for a simpler design. For example, instead of writing multiple variants:f(x::A, y::A) = ...\nf(x::A, y::B) = ...\nf(x::B, y::A) = ...\nf(x::B, y::B) = ...you might consider definingf(x::A, y::A) = ...\nf(x, y) = f(g(x), g(y))where g converts the argument to type A. This is a very specific example of the more general principle of orthogonal design, in which separate concepts are assigned to separate methods. Here, g will most likely need a fallback definitiong(x::A) = xA related strategy exploits promote to bring x and y to a common type:f{T}(x::T, y::T) = ...\nf(x, y) = f(promote(x, y)...)One risk with this design is the possibility that if there is no suitable promotion method converting x and y to the same type, the second method will recurse on itself infinitely and trigger a stack overflow. The non-exported function Base.promote_noncircular can be used as an alternative; when promotion fails it will still throw an error, but one that fails faster with a more specific error message."
+},
+
+{
+    "location": "manual/methods.html#Dispatch-on-one-argument-at-a-time-1",
+    "page": "Methods",
+    "title": "Dispatch on one argument at a time",
+    "category": "section",
+    "text": "If you need to dispatch on multiple arguments, and there are many fallbacks with too many combinations to make it practical to define all possible variants, then consider introducing a \"name cascade\" where (for example) you dispatch on the first argument and then call an internal method:f(x::A, y) = _fA(x, y)\nf(x::B, y) = _fB(x, y)Then the internal methods _fA and _fB can dispatch on y without concern about ambiguities with each other with respect to x.Be aware that this strategy has at least one major disadvantage: in many cases, it is not possible for users to further customize the behavior of f by defining further specializations of your exported function f. Instead, they have to define specializations for your internal methods _fA and _fB, and this blurs the lines between exported and internal methods."
+},
+
+{
+    "location": "manual/methods.html#Abstract-containers-and-element-types-1",
+    "page": "Methods",
+    "title": "Abstract containers and element types",
+    "category": "section",
+    "text": "Where possible, try to avoid defining methods that dispatch on specific element types of abstract containers. For example,-{T<:Date}(A::AbstractArray{T}, b::Date)generates ambiguities for anyone who defines a method-{T}(A::MyArrayType{T}, b::T)The best approach is to avoid defining either of these methods: instead, rely on a generic method -(A::AbstractArray, b) and make sure this method is implemented with generic calls (like similar and -) that do the right thing for each container type and element type separately. This is just a more complex variant of the advice to orthogonalize your methods.When this approach is not possible, it may be worth starting a discussion with other developers about resolving the ambiguity; just because one method was defined first does not necessarily mean that it can't be modified or eliminated.  As a last resort, one developer can define the \"band-aid\" method-{T<:Date}(A::MyArrayType{T}, b::Date) = ...that resolves the ambiguity by brute force."
+},
+
+{
+    "location": "manual/methods.html#Complex-method-\"cascades\"-with-default-arguments-1",
+    "page": "Methods",
+    "title": "Complex method \"cascades\" with default arguments",
+    "category": "section",
+    "text": "If you are defining a method \"cascade\" that supplies defaults, be careful about dropping any arguments that correspond to potential defaults. For example, suppose you're writing a digital filtering algorithm and you have a method that handles the edges of the signal by applying padding:function myfilter(A, kernel, ::Replicate)\n    Apadded = replicate_edges(A, size(kernel))\n    myfilter(Apadded, kernel)  # now perform the \"real\" computation\nendThis will run afoul of a method that supplies default padding:myfilter(A, kernel) = myfilter(A, kernel, Replicate()) # replicate the edge by defaultTogether, these two methods generate an infinite recursion with A constantly growing bigger.The better design would be to define your call hierarchy like this:struct NoPad end  # indicate that no padding is desired, or that it's already applied\n\nmyfilter(A, kernel) = myfilter(A, kernel, Replicate())  # default boundary conditions\n\nfunction myfilter(A, kernel, ::Replicate)\n    Apadded = pad(A, kernel)\n    myfilter(Apadded, kernel, NoPad())  # indicate the new boundary conditions\nend\n\n# other padding methods go here\n\nfunction myfilter(A, kernel, ::NoPad)\n     # Here's the \"real\" implementation of the core computation\nendNoPad is supplied in the same argument position as any other kind of padding, so it keeps the dispatch hierarchy well organized and with reduced likelihood of ambiguities. Moreover, it extends the \"public\" myfilter interface: a user who wants to control the padding explicitly can call the NoPad variant directly.[Clarke61]: Arthur C. Clarke, Profiles of the Future (1961): Clarke's Third Law."
 },
 
 {
@@ -6613,7 +6661,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Function",
-    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\njulia> d1 = Dict(1 => 2, 3 => 4);\n\njulia> d2 = Dict(1 => 4, 4 => 5);\n\njulia> merge!(d1, d2);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 5\n  3 => 4\n  1 => 4\n\n\n\nMerge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\nmerge!(repo::GitRepo; kwargs...) -> Bool\n\nPerform a git merge on the repository repo, merging commits with diverging history into the current branch. Returns true if the merge succeeded, false if not.\n\nThe keyword arguments are:\n\ncommittish::AbstractString=\"\": Merge the named commit(s) in committish.\nbranch::AbstractString=\"\": Merge the branch branch and all its commits since it diverged from the current branch.\nfastforward::Bool=false: If fastforward is true, only merge if the merge is a fast-forward (the current branch head is an ancestor of the commits to be merged), otherwise refuse to merge and return false. This is equivalent to the git CLI option --ff-only.\nmerge_opts::MergeOptions=MergeOptions(): merge_opts specifies options for the merge, such as merge strategy in case of conflicts.\ncheckout_opts::CheckoutOptions=CheckoutOptions(): checkout_opts specifies options for the checkout step.\n\nEquivalent to git merge [--ff-only] [<committish> | <branch>].\n\n\n\n"
+    "text": "Merge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\nmerge!(repo::GitRepo; kwargs...) -> Bool\n\nPerform a git merge on the repository repo, merging commits with diverging history into the current branch. Returns true if the merge succeeded, false if not.\n\nThe keyword arguments are:\n\ncommittish::AbstractString=\"\": Merge the named commit(s) in committish.\nbranch::AbstractString=\"\": Merge the branch branch and all its commits since it diverged from the current branch.\nfastforward::Bool=false: If fastforward is true, only merge if the merge is a fast-forward (the current branch head is an ancestor of the commits to be merged), otherwise refuse to merge and return false. This is equivalent to the git CLI option --ff-only.\nmerge_opts::MergeOptions=MergeOptions(): merge_opts specifies options for the merge, such as merge strategy in case of conflicts.\ncheckout_opts::CheckoutOptions=CheckoutOptions(): checkout_opts specifies options for the checkout step.\n\nEquivalent to git merge [--ff-only] [<committish> | <branch>].\n\n\n\nmerge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\njulia> d1 = Dict(1 => 2, 3 => 4);\n\njulia> d2 = Dict(1 => 4, 4 => 5);\n\njulia> merge!(d1, d2);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 5\n  3 => 4\n  1 => 4\n\n\n\n"
 },
 
 {
@@ -8061,7 +8109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
+    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
 },
 
 {
@@ -12237,7 +12285,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.lufact",
     "category": "Function",
-    "text": "lufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nlufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ncond ✓ \ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\n"
+    "text": "lufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ncond ✓ \ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\nlufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
 },
 
 {
