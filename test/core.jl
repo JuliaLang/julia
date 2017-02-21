@@ -63,6 +63,8 @@ _z_z_z_(::Int, c...) = 3
 @test args_morespecific(Tuple{Array{T} where T<:Union{Float32,Float64,Complex64,Complex128}, Any},
                         Tuple{Array{T} where T<:Real, Any})
 
+@test args_morespecific(Tuple{1,T} where T, Tuple{Any})
+
 # with bound varargs
 
 _bound_vararg_specificity_1{T,N}(::Type{Array{T,N}}, d::Vararg{Int, N}) = 0
