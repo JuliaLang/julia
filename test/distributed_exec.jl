@@ -922,7 +922,7 @@ if DoFullTest
     # Test sending fake data to workers. The worker processes will print an
     # error message but should not terminate.
     for w in Base.Distributed.PGRP.workers
-        if isa(w, Base.Worker)
+        if isa(w, Base.Distributed.Worker)
             s = connect(get(w.config.host), get(w.config.port))
             write(s, randstring(32))
         end

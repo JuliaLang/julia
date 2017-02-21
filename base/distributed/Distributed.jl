@@ -4,7 +4,7 @@ module Distributed
 
 # imports for extension
 import Base: getindex, wait, put!, take!, fetch, isready, push!, length,
-             hash, ==, connect, kill, serialize, deserialize, close
+             hash, ==, connect, kill, serialize, deserialize, close, showerror
 
 # imports for use
 using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, wait_connected,
