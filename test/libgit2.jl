@@ -838,6 +838,8 @@ mktempdir() do dir
         valid_p_key = joinpath(KEY_DIR, "valid-passphrase")
         passphrase = "secret"
 
+        max_prompts = LibGit2.GitError(LibGit2.Error.Callback, LibGit2.Error.EAUTH, "Aborting, maximum number of user prompts reached.")
+
         ssh_cmd = """
         valid_cred = LibGit2.SSHCredential("git", "", "$valid_key", "$valid_key.pub")
         err = LibGit2.credential_loop(valid_cred)
@@ -897,6 +899,12 @@ mktempdir() do dir
                 "Passphrase for $valid_p_key:" => "$passphrase\n",
             ]
             @test challenge_prompt(ssh_p_cmd, challenges) == 0
+
+            # User provides an invalid private key until prompt limit reached
+            challenges = [
+                "Private key location for 'git@github.com':" => "foo\n",
+            ]
+            @test challenge_prompt(ssh_cmd, repmat(challenges, 3)) == max_prompts
         end
 
         # Explicitly setting these env variables to an existing but invalid key pair means
@@ -906,6 +914,13 @@ mktempdir() do dir
                 "Private key location for 'git@github.com' [$invalid_key]:" => "$valid_key\n",
             ]
             @test challenge_prompt(ssh_cmd, challenges) == 0
+
+            # User repeatedly chooses the default invalid private key until prompt limit reached
+            # challenge = "Private key location for 'git@github.com' [$invalid_key]:" => "\n"
+            challenges = [
+                "Private key location for 'git@github.com' [$invalid_key]:" => "\n",
+            ]
+            @test challenge_prompt(ssh_cmd, repmat(challenges, 3)) == max_prompts
         end
 
         # withenv("SSH_KEY_PATH" => invalid_key) do
@@ -961,6 +976,8 @@ mktempdir() do dir
         valid_username = "julia"
         valid_password = randstring(16)
 
+        max_prompts = LibGit2.GitError(LibGit2.Error.Callback, LibGit2.Error.EAUTH, "Aborting, maximum number of user prompts reached.")
+
         https_cmd = """
         valid_cred = LibGit2.UserPasswordCredential("$valid_username", "$valid_password")
         err = LibGit2.credential_loop(valid_cred)
@@ -973,6 +990,26 @@ mktempdir() do dir
             "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
         ]
         @test challenge_prompt(https_cmd, challenges) == 0
+
+        # User provides an empty username which triggers a re-prompt
+        challenges = [
+            "Username for 'https://github.com':" => "\n",
+        ]
+        @test challenge_prompt(https_cmd, repmat(challenges, 3)) == max_prompts
+
+        # User repeatedly chooses invalid username/password until the prompt limit is reached
+        challenges = [
+            "Username for 'https://github.com'" => "foo\n",
+            "Password for 'https://foo@github.com':" => "bar\n",
+        ]
+        @test challenge_prompt(https_cmd, repmat(challenges, 3)) == max_prompts
+
+        # User repeatedly chooses invalid username/password until the prompt limit is reached
+        a = "Username for 'https://github.com':" => "foo\n"
+        b = "Password for 'https://foo@github.com':" => "bar\n"
+        c = "Username for 'https://github.com' [foo]:" => "\n"
+        challenges = [a, b, c, b, c, b]
+        @test challenge_prompt(https_cmd, challenges) == max_prompts
     end
 
     @testset "HTTPS credential cache" begin

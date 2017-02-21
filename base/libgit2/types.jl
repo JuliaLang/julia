@@ -715,6 +715,7 @@ end
 mutable struct RemotePayload
     cache::Nullable{CachedCredentials}
     state::Dict{Symbol,Char}
+    prompts_remaining::Int
     credential::Nullable{AbstractCredential}
     protocol::String
     host::String
@@ -726,6 +727,7 @@ function RemotePayload(cache::Nullable{CachedCredentials})
     RemotePayload(
         cache,
         Dict{Symbol,Char}(),
+        3,
         Nullable{AbstractCredential}(),
         "", "", "", "",
     )

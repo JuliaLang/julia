@@ -120,6 +120,13 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, username_ptr, p::Remot
         end
 
         modified = true
+
+        p.prompts_remaining -= 1
+        if p.prompts_remaining <= 0
+            state[:prompt] = 'N'
+            ccall((:giterr_set_str, :libgit2), Void, (Cint, Cstring), Cint(Error.Callback), "Aborting, maximum number of user prompts reached.")
+            return Cint(Error.EAUTH)
+        end
     end
 
     # LibGit2 will only complain about the public key being missing if both the private key and
@@ -175,6 +182,13 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::RemotePayload)
                 prompt_url = git_url(protocol=p.protocol, host=p.host, username=c.username)
                 c.password = prompt("Password for '$prompt_url'", password=true)
             end
+        end
+
+        p.prompts_remaining -= 1
+        if p.prompts_remaining <= 0
+            state[:prompt] = 'N'
+            ccall((:giterr_set_str, :libgit2), Void, (Cint, Cstring), Cint(Error.Callback), "Aborting, maximum number of user prompts reached.")
+            return Cint(Error.EAUTH)
         end
     end
 
