@@ -141,9 +141,9 @@ x == fld(x,y)*y + mod(x,y)
 
 !!! note
 
-    If either `x` or `y` are floating point numbers, and they opposite signs, then the
-    result may be inexact and be rounded to the nearest representable value. In
-    particular, if the true answer is very close to `y`, then the result may return `y`.
+    When used with floating point values, the exact modulus may not be exactly
+    representable by the type, and so may incur rounding error. In particular, if the
+    exact answer is very close to `y`, then the result may be rounded to `y`.
 
 ```jldoctest
 julia> mod(8, 3)
