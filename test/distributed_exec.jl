@@ -1269,6 +1269,7 @@ end
 if DoFullTest
     pids=addprocs(4);
     @test_throws ErrorException rmprocs(pids; waitfor=0.001);
+    rmprocs(pids)
 end
 
 # Auto serialization of globals from Main.
