@@ -1113,7 +1113,12 @@ mktempdir() do dir
 
         https_cmd = """
         valid_cred = LibGit2.UserPasswordCredential("$valid_username", "$valid_password")
-        err = LibGit2.credential_loop(valid_cred)
+        # Use of config which contains no git credential helpers
+        err = mktemp("$dir") do config_path, fp
+            cfg = LibGit2.GitConfig(config_path)
+            @assert isempty(LibGit2.helpers!(cfg, LibGit2.GitCredential()))
+            LibGit2.credential_loop(valid_cred, config=Nullable(cfg))
+        end
         err < 0 ? LibGit2.GitError(err) : err
         """
 
@@ -1166,6 +1171,59 @@ mktempdir() do dir
         @test challenge_prompt(https_cmd, challenges) == max_prompts
     end
 
+    @testset "HTTPS git credential helper" begin
+        valid_username = "julia"
+        valid_password = randstring(16)
+
+        abort_prompt = LibGit2.GitError(LibGit2.Error.Callback, LibGit2.Error.EAUTH, "Aborting, user cancelled credential request.")
+
+        # Setup a cache git credential helper.
+        config_path = joinpath(dir, "gitconfig")
+        @assert !isfile(config_path)
+        touch(config_path)
+
+        # Make sure to use a different socket so we do not add random credentials into the
+        # user's cache.
+        socket_path = joinpath(dir, "git-credential-cache", "socket")
+        @assert !isfile(socket_path)
+        @assert !isdir(dirname(socket_path))
+        mkdir(dirname(socket_path), 0o700)
+
+        cfg = LibGit2.GitConfig(config_path)
+        LibGit2.set!(cfg, "credential.helper", "cache --socket $socket_path")
+
+        # Add the fake credentials into the cache
+        git_cred = LibGit2.GitCredential(
+            protocol="https",
+            host="github.com",
+            path="/test/package.jl",
+            username=valid_username,
+            password=valid_password,
+        )
+        helpers = LibGit2.helpers!(cfg, git_cred)
+        @assert length(helpers) == 1
+        LibGit2.approve(helpers, git_cred)
+
+        https_git_cmd(url) = """
+            valid_cred = LibGit2.UserPasswordCredential("$valid_username", "$valid_password")
+            cfg = LibGit2.GitConfig("$config_path")
+            err = LibGit2.credential_loop(valid_cred,
+                url="$url",
+                config=Nullable(cfg))
+            err < 0 ? LibGit2.GitError(err) : err
+            """
+
+        # Git credential helper provides correct credentials with no prompts
+        @test challenge_prompt(https_git_cmd("https://github.com/test/package.jl"), []) == 0
+
+        # Git credential helper doesn't know about credentials for "example.com" so we need
+        # to fall back to a prompt.
+        @test challenge_prompt(
+            https_git_cmd("https://example.com/test/package.jl"),
+            ["Username for 'https://example.com':" => "\x04"],
+        ) == abort_prompt
+    end
+
     @testset "HTTPS credential cache" begin
         valid_username = "julia"
         valid_password = randstring(16)
@@ -1174,7 +1232,12 @@ mktempdir() do dir
         valid_cred = LibGit2.UserPasswordCredential("$valid_username", "$valid_password")
         cache = LibGit2.CachedCredentials()
         LibGit2.approve(cache, "https://github.com", valid_cred)
-        err = LibGit2.credential_loop(valid_cred, cache=Nullable(cache))
+        # Use of config which contains no git credential helpers
+        err = mktemp("$dir") do config_path, fp
+            cfg = LibGit2.GitConfig(config_path)
+            @assert isempty(LibGit2.helpers!(cfg, LibGit2.GitCredential()))
+            LibGit2.credential_loop(valid_cred, config=Nullable(cfg), cache=Nullable(cache))
+        end
         err < 0 ? LibGit2.GitError(err) : err
         """
 

@@ -167,6 +167,7 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::RemotePayload)
     c = Base.get(p.credential)::UserPasswordCredential
     c.password = ""
     state = p.state
+    config = p.config
 
     if get!(state, :cache, 'Y') == 'Y' && !isnull(p.cache) && !isfilled(c)
         cred_id = "$(isempty(p.protocol) ? "ssh" : p.protocol)://$(p.host)"
@@ -176,6 +177,23 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::RemotePayload)
         c.password = cached_cred.password
 
         state[:cache] == 'U'
+    end
+
+    if get!(state, :git_credential_helper, 'Y') == 'Y' && !isfilled(c)
+        cred = GitCredential(
+            protocol=p.protocol,
+            host=p.host,
+            path=p.path,
+            username=c.username,
+            password=c.password,
+        )
+        helpers = helpers!(config, cred)
+        fill!(helpers, cred)
+
+        c.username = cred.username
+        c.password = cred.password
+
+        state[:git_credential_helper] = 'U'  # used git-credentials only one time
     end
 
     if get!(state, :prompt, 'Y') == 'Y' && !isfilled(c)
@@ -302,6 +320,19 @@ function credentials_approve(p::RemotePayload)
 
     c = Base.get(p.credential)
     cred_id = "$(isempty(p.protocol) ? "ssh" : p.protocol)://$(p.host)"
+    config = p.config
+
+    if isa(c, UserPasswordCredential)
+        cred = GitCredential(
+            protocol=p.protocol,
+            host=p.host,
+            path=p.path,
+            username=c.username,
+            password=c.password,
+        )
+        helpers = helpers!(config, cred)
+        approve(helpers, cred)
+    end
 
     if !isnull(p.cache)
         cache = Base.get(p.cache)
@@ -320,6 +351,19 @@ function credentials_reject(p::RemotePayload)
 
     c = Base.get(p.credential)
     cred_id = "$(isempty(p.protocol) ? "ssh" : p.protocol)://$(p.host)"
+    config = p.config
+
+    if isa(c, UserPasswordCredential)
+        cred = GitCredential(
+            protocol=p.protocol,
+            host=p.host,
+            path=p.path,
+            username=c.username,
+            password=c.password,
+        )
+        helpers = helpers!(config, cred)
+        reject(helpers, cred)
+    end
 
     if !isnull(p.cache)
         cache = Base.get(p.cache)
