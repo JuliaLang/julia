@@ -57,56 +57,90 @@ end
     @test sig3.email == sig.email
 end
 
-#@testset "URL parsing" begin
-    # HTTPS URL
-    m = match(LibGit2.URL_REGEX, "https://user:pass@server.com:80/org/project.git")
-    @test m[:scheme] == "https"
-    @test m[:user] == "user"
-    @test m[:password] == "pass"
-    @test m[:host] == "server.com"
-    @test m[:port] == "80"
-    @test m[:path] == "/org/project.git"
+@testset "Git URL parsing" begin
+    @testset "HTTPS URL" begin
+        m = match(LibGit2.GIT_URL_REGEX, "https://user:pass@server.com:80/org/project.git")
+        @test m[:protocol] == "https"
+        @test m[:user] == "user"
+        @test m[:password] == "pass"
+        @test m[:host] == "server.com"
+        @test m[:port] == "80"
+        @test m[:path] == "/org/project.git"
+    end
 
-    # SSH URL
-    m = match(LibGit2.URL_REGEX, "ssh://user:pass@server:22/project.git")
-    @test m[:scheme] == "ssh"
-    @test m[:user] == "user"
-    @test m[:password] == "pass"
-    @test m[:host] == "server"
-    @test m[:port] == "22"
-    @test m[:path] == "/project.git"
+    @testset "SSH URL" begin
+        m = match(LibGit2.GIT_URL_REGEX, "ssh://user:pass@server:22/project.git")
+        @test m[:protocol] == "ssh"
+        @test m[:user] == "user"
+        @test m[:password] == "pass"
+        @test m[:host] == "server"
+        @test m[:port] == "22"
+        @test m[:path] == "/project.git"
+    end
 
-    # SSH URL using scp-like syntax
-    m = match(LibGit2.URL_REGEX, "user@server:project.git")
-    @test m[:scheme] === nothing
-    @test m[:user] == "user"
-    @test m[:password] === nothing
-    @test m[:host] == "server"
-    @test m[:port] === nothing
-    @test m[:path] == "project.git"
+    @testset "scp-like syntax" begin
+        m = match(LibGit2.GIT_URL_REGEX, "user@server:project.git")
+        @test m[:protocol] === nothing
+        @test m[:user] == "user"
+        @test m[:password] == nothing
+        @test m[:host] == "server"
+        @test m[:port] === nothing
+        @test m[:path] == "project.git"
+    end
+
+    # scp-like syntax corner case. The SCP syntax does not support port so everything after
+    # the colon is part of the path.
+    @testset "scp-like syntax, no port" begin
+        m = match(LibGit2.GIT_URL_REGEX, "server:1234/repo")
+        @test m[:protocol] === nothing
+        @test m[:user] == nothing
+        @test m[:password] == nothing
+        @test m[:host] == "server"
+        @test m[:port] === nothing
+        @test m[:path] == "1234/repo"
+    end
 
     # Realistic example from GitHub using HTTPS
-    m = match(LibGit2.URL_REGEX, "https://github.com/JuliaLang/Example.jl.git")
-    @test m[:scheme] == "https"
-    @test m[:user] === nothing
-    @test m[:password] === nothing
-    @test m[:host] == "github.com"
-    @test m[:port] === nothing
-    @test m[:path] == "/JuliaLang/Example.jl.git"
+    @testset "HTTPS URL GitHub" begin
+        m = match(LibGit2.GIT_URL_REGEX, "https://github.com/JuliaLang/Example.jl.git")
+        @test m[:protocol] == "https"
+        @test m[:user] === nothing
+        @test m[:password] == nothing
+        @test m[:host] == "github.com"
+        @test m[:port] === nothing
+        @test m[:path] == "/JuliaLang/Example.jl.git"
+    end
 
     # Realistic example from GitHub using SSH
-    m = match(LibGit2.URL_REGEX, "git@github.com:JuliaLang/Example.jl.git")
-    @test m[:scheme] === nothing
-    @test m[:user] == "git"
-    @test m[:password] === nothing
-    @test m[:host] == "github.com"
-    @test m[:port] === nothing
-    @test m[:path] == "JuliaLang/Example.jl.git"
+    @testset "SSH URL GitHub" begin
+        m = match(LibGit2.GIT_URL_REGEX, "git@github.com:JuliaLang/Example.jl.git")
+        @test m[:protocol] === nothing
+        @test m[:user] == "git"
+        @test m[:password] == nothing
+        @test m[:host] == "github.com"
+        @test m[:port] === nothing
+        @test m[:path] == "JuliaLang/Example.jl.git"
+    end
 
     # Make sure usernames can contain special characters
-    m = match(LibGit2.URL_REGEX, "user-name@hostname.com")
-    @test m[:user] == "user-name"
-#end
+    @testset "username special charaters" begin
+        m = match(LibGit2.GIT_URL_REGEX, "user-name@hostname.com:path")
+        @test m[:user] == "user-name"
+    end
+
+    @testset "HTTPS URL, no path" begin
+        m = match(LibGit2.GIT_URL_REGEX, "https://user:pass@server.com:80")
+        @test m[:path] == ""
+    end
+
+    @testset "scp-like syntax, no path" begin
+        m = match(LibGit2.GIT_URL_REGEX, "user@server:")
+        @test m[:path] == ""
+
+        m = match(LibGit2.GIT_URL_REGEX, "user@server")
+        @test m[:path] == ""
+    end
+end
 
 mktempdir() do dir
     # test parameters

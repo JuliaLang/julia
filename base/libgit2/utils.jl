@@ -1,10 +1,19 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-const URL_REGEX = r"""
-^(?:(?<scheme>https?|git|ssh)\:\/\/)?
-(?:(?<user>.*?)(?:\:(?<password>.*?))?@)?
+# Parse GIT URLs and scp-like syntax.
+# https://git-scm.com/docs/git-clone#_git_urls_a_id_urls_a
+const GIT_URL_REGEX = r"""
+^(?:(?<protocol>ssh|git|https?)://)?
+(?:
+    (?<user>.*?)
+    (?:\:(?<password>.*?))?@
+)?
 (?<host>[A-Za-z0-9\-\.]+)
-(?:\:(?<port>\d+)?)?
+(?(<protocol>)
+    (?:\:(?<port>\d+))?  # only parse port when not using SCP-like syntax
+    |
+    :?
+)
 (?<path>.*?)$
 """x
 

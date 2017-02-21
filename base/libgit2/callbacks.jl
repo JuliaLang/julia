@@ -210,7 +210,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
     url = unsafe_string(url_ptr)
 
     # parse url for schema and host
-    urlparts = match(URL_REGEX, url)
+    urlparts = match(GIT_URL_REGEX, url)
     schema = urlparts[:scheme] === nothing ? "" : urlparts[:scheme] * "://"
     urlusername = urlparts[:user] === nothing ? "" : urlparts[:user]
     host = urlparts[:host]
