@@ -151,6 +151,11 @@ unitrange_last{T}(start::T, stop::T) =
     ifelse(stop >= start, convert(T,start+floor(stop-start)),
                           convert(T,start-oneunit(stop-start)))
 
+if isdefined(Main, :Base)
+    getindex(t::Tuple, r::AbstractUnitRange{<:Real}) =
+        (o = first(r) - 1; ntuple(n -> t[o + n], length(r)))
+end
+
 """
     Base.OneTo(n)
 
