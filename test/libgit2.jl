@@ -57,7 +57,7 @@ end
     @test sig3.email == sig.email
 end
 
-@testset "URL parsing" begin
+@testset "Git URL parsing" begin
     @testset "HTTPS URL" begin
         m = match(LibGit2.URL_REGEX, "https://user:pass@server.com:80/org/project.git")
         @test m[:scheme] == "https"
@@ -88,6 +88,18 @@ end
         @test m[:path] == "project.git"
     end
 
+    # scp-like syntax corner case. The SCP syntax does not support port so everything after
+    # the colon is part of the path.
+    @testset "scp-like syntax, no port" begin
+        m = match(LibGit2.URL_REGEX, "server:1234/repo")
+        @test m[:scheme] === nothing
+        @test m[:user] == nothing
+        @test m[:password] == nothing
+        @test m[:host] == "server"
+        @test m[:port] === nothing
+        @test m[:path] == "1234/repo"
+    end
+
     @testset "HTTPS URL, realistic" begin
         m = match(LibGit2.URL_REGEX, "https://github.com/JuliaLang/Example.jl.git")
         @test m[:scheme] == "https"
@@ -111,6 +123,19 @@ end
     @testset "usernames with special characters" begin
         m = match(LibGit2.URL_REGEX, "user-name@hostname.com")
         @test m[:user] == "user-name"
+    end
+
+    @testset "HTTPS URL, no path" begin
+        m = match(LibGit2.URL_REGEX, "https://user:pass@server.com:80")
+        @test m[:path] == ""
+    end
+
+    @testset "scp-like syntax, no path" begin
+        m = match(LibGit2.URL_REGEX, "user@server:")
+        @test m[:path] == ""
+
+        m = match(LibGit2.URL_REGEX, "user@server")
+        @test m[:path] == ""
     end
 end
 
