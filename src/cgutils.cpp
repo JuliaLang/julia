@@ -153,14 +153,14 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
     }
     if (jl_is_primitivetype(jt)) {
         uint64_t SizeInBits = jl_datatype_nbits(jdt);
-    #if JL_LLVM_VERSION >= 40000
+#if JL_LLVM_VERSION >= 40000
         llvm::DIType *t = dbuilder->createBasicType(
                 jl_symbol_name(jdt->name->name),
                 SizeInBits,
                 llvm::dwarf::DW_ATE_unsigned);
         jdt->ditype = t;
         return t;
-    #elif JL_LLVM_VERSION >= 30700
+#elif JL_LLVM_VERSION >= 30700
         llvm::DIType *t = dbuilder->createBasicType(
                 jl_symbol_name(jdt->name->name),
                 SizeInBits,
@@ -168,7 +168,7 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
                 llvm::dwarf::DW_ATE_unsigned);
         jdt->ditype = t;
         return t;
-    #else
+#else
         DIType t = dbuilder->createBasicType(
                 jl_symbol_name(jdt->name->name),
                 SizeInBits,
@@ -177,9 +177,9 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
         MDNode *M = t;
         jdt->ditype = M;
         return t;
-    #endif
+#endif
     }
-    #if JL_LLVM_VERSION >= 30700
+#if JL_LLVM_VERSION >= 30700
     else if (!jl_is_leaf_type(jt)) {
         jdt->ditype = jl_pvalue_dillvmt;
         return jl_pvalue_dillvmt;
@@ -217,7 +217,7 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
             jl_symbol_name(jdt->name->name), NULL, 0, NULL);
         return (llvm::DIType*)jdt->ditype;
     }
-    #endif
+#endif
     // TODO: Fixme
     return jl_pvalue_dillvmt;
 }
