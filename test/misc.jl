@@ -52,12 +52,12 @@ end
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
 
-logging(DevNull, TestMain_misc.Logging, :bar;  kind=:info)
+logging(DevNull, Logging, :bar;  kind=:info)
 @test all(contains.(sprint(Logging.bar), ["WARNING: barwarn", "ERROR: \"barerror\""]))
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
-logging(DevNull, TestMain_misc.Logging;  kind=:info)
+logging(DevNull, Logging;  kind=:info)
 @test all(contains.(sprint(Logging.bar), ["WARNING: barwarn", "ERROR: \"barerror\""]))
 @test all(contains.(sprint(Logging.pooh), ["WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
@@ -73,12 +73,12 @@ logging(kind=:info)
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
 
-logging(DevNull, TestMain_misc.Logging, :bar;  kind=:warn)
+logging(DevNull, Logging, :bar;  kind=:warn)
 @test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "ERROR: \"barerror\""]))
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
-logging(DevNull, TestMain_misc.Logging;  kind=:warn)
+logging(DevNull, Logging;  kind=:warn)
 @test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "ERROR: \"barerror\""]))
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
@@ -94,12 +94,12 @@ logging(kind=:warn)
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
 
-logging(DevNull, TestMain_misc.Logging, :bar;  kind=:error)
+logging(DevNull, Logging, :bar;  kind=:error)
 @test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "WARNING: barwarn"]))
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
-logging(DevNull, TestMain_misc.Logging;  kind=:error)
+logging(DevNull, Logging;  kind=:error)
 @test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "WARNING: barwarn"]))
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn"]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
@@ -115,12 +115,12 @@ logging(kind=:error)
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
 
-logging(DevNull, TestMain_misc.Logging, :bar)
+logging(DevNull, Logging, :bar)
 @test sprint(Logging.bar) == ""
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
-logging(DevNull, TestMain_misc.Logging)
+logging(DevNull, Logging)
 @test sprint(Logging.bar) == ""
 @test sprint(Logging.pooh) == ""
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
