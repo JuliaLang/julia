@@ -133,7 +133,9 @@ fld(x::Unsigned, y::Signed) = div(x, y) - (signbit(y) & (rem(x, y) != 0))
     mod(x, y)
     rem(x, y, RoundDown)
 
-The reduction of `x` modulo `y`, or equivelently, the remainder of `x` after floored division by `y`. This will return a value with the same sign as `y` whose magnitude less than `abs(y)` (except possibly in the case of floating point values, see note below).
+The reduction of `x` modulo `y`, or equivalently, the remainder of `x` after floored
+division by `y`. Returns a value with the same sign as `y` whose magnitude less than
+`abs(y)` (except possibly in the case of floating point values, see note below).
 
 This has the property that
 ```julia
@@ -143,9 +145,9 @@ if computed without intermediate rounding.
 
 !!! note
 
-    When used with floating point values, the exact modulus may not be exactly
-    representable by the type, and so may incur rounding error. In particular, if the
-    exact answer is very close to `y`, then the result may be rounded to `y`.
+    When used with floating point values, the exact result may not be representable by the
+    type, and so rounding error may occur. In particular, if the exact result is very
+    close to `y`, then it may be rounded to `y`.
 
 ```jldoctest
 julia> mod(8, 3)
