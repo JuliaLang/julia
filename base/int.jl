@@ -140,7 +140,7 @@ x - y*fld(x,y)
 ```
 if computed without intermediate rounding.
 
-The result will have same sign as `y`, and magnitude less than `abs(y)` (with some
+The result will have the same sign as `y`, and magnitude less than `abs(y)` (with some
 exceptions, see note below).
 
 !!! note
