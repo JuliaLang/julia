@@ -320,7 +320,7 @@ static Value *literal_pointer_val_slot(jl_value_t *p)
 static Value *literal_pointer_val(jl_value_t *p)
 {
     if (p == NULL)
-        return ConstantPointerNull::get((PointerType*)T_pjlvalue);
+        return V_null;
     if (!imaging_mode)
         return literal_static_pointer_val(p, T_pjlvalue);
     Value *pgv = literal_pointer_val_slot(p);
@@ -331,7 +331,7 @@ static Value *literal_pointer_val(jl_binding_t *p)
 {
     // emit a pointer to any jl_value_t which will be valid across reloading code
     if (p == NULL)
-        return ConstantPointerNull::get((PointerType*)T_pjlvalue);
+        return V_null;
     if (!imaging_mode)
         return literal_static_pointer_val(p, T_pjlvalue);
     // bindings are prefixed with jl_bnd#
@@ -764,6 +764,7 @@ static Value *emit_datatype_size(Value *dt)
     return size;
 }
 
+/* this is valid code, it's simply unused
 static Value *emit_sizeof(const jl_cgval_t &p, jl_codectx_t *ctx)
 {
     if (p.TIndex) {
@@ -810,6 +811,7 @@ static Value *emit_sizeof(const jl_cgval_t &p, jl_codectx_t *ctx)
         return dyn_size;
     }
 }
+*/
 
 static Value *emit_datatype_mutabl(Value *dt)
 {
@@ -1954,6 +1956,70 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
         builder.CreateStore(box, froot);
     }
     return box;
+}
+
+// copy src to dest, if src is isbits. if skip is true, the value of dest is undefined
+static void emit_unionmove(Value *dest, const jl_cgval_t &src, Value *skip, bool isVolatile, MDNode *tbaa, jl_codectx_t *ctx)
+{
+    if (jl_is_leaf_type(src.typ) || src.constant) {
+        jl_value_t *typ = src.constant ? jl_typeof(src.constant) : src.typ;
+        Type *store_ty = julia_type_to_llvm(typ);
+        assert(skip || jl_isbits(typ));
+        if (jl_isbits(typ)) {
+            if (!src.ispointer() || src.constant) {
+                emit_unbox(store_ty, src, typ, dest, isVolatile);
+            }
+            else {
+                Value *src_ptr = data_pointer(src, ctx, T_pint8);
+                if (dest->getType() != T_pint8)
+                    dest = emit_bitcast(dest, T_pint8);
+                if (skip) // copy dest -> dest to simulate an undef value / conditional copy
+                    src_ptr = builder.CreateSelect(skip, dest, src_ptr);
+                unsigned nb = jl_datatype_size(typ);
+                unsigned alignment = 0;
+                builder.CreateMemCpy(dest, src_ptr, nb, alignment, tbaa);
+            }
+        }
+    }
+    else if (src.TIndex) {
+        Value *tindex = builder.CreateAnd(src.TIndex, ConstantInt::get(T_int8, 0x7f));
+        Value *copy_bytes = ConstantInt::get(T_int32, -1);
+        unsigned counter = 0;
+        bool allunboxed = for_each_uniontype_small(
+                [&](unsigned idx, jl_datatype_t *jt) {
+                    Value *cmp = builder.CreateICmpEQ(tindex, ConstantInt::get(T_int8, idx));
+                    copy_bytes = builder.CreateSelect(cmp, ConstantInt::get(T_int32, jl_datatype_size(jt)), copy_bytes);
+                },
+                src.typ,
+                counter);
+        Value *src_ptr = data_pointer(src, ctx, T_pint8);
+        if (dest->getType() != T_pint8)
+            dest = emit_bitcast(dest, T_pint8);
+        if (skip) {
+            if (allunboxed) // copy dest -> dest to simulate an undef value / conditional copy
+                src_ptr = builder.CreateSelect(skip, dest, src_ptr);
+            else
+                copy_bytes = builder.CreateSelect(skip, ConstantInt::get(copy_bytes->getType(), 0), copy_bytes);
+        }
+#ifndef NDEBUG
+        // try to catch codegen errors early, before it uses this to memcpy over the entire stack
+        CreateConditionalAbort(builder, builder.CreateICmpEQ(copy_bytes, ConstantInt::get(T_int32, -1)));
+#endif
+        builder.CreateMemCpy(dest,
+                             src_ptr,
+                             copy_bytes,
+                             /*TODO: min-align*/1);
+    }
+    else {
+        Value *datatype = emit_typeof_boxed(src, ctx);
+        Value *copy_bytes = emit_datatype_size(datatype);
+        if (skip)
+            copy_bytes = builder.CreateSelect(skip, ConstantInt::get(copy_bytes->getType(), 0), copy_bytes);
+        builder.CreateMemCpy(dest,
+                             data_pointer(src, ctx, T_pint8),
+                             copy_bytes,
+                             /*TODO: min-align*/1);
+    }
 }
 
 
