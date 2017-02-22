@@ -468,7 +468,6 @@ add_tfunc(floor_llvm, 1, 1, math_tfunc)
 add_tfunc(trunc_llvm, 1, 1, math_tfunc)
 add_tfunc(rint_llvm, 1, 1, math_tfunc)
 add_tfunc(sqrt_llvm, 1, 1, math_tfunc)
-add_tfunc(powi_llvm, 2, 2, math_tfunc)
 add_tfunc(sqrt_llvm_fast, 1, 1, math_tfunc)
     ## same-type comparisons ##
 cmp_tfunc(x::ANY, y::ANY) = Bool

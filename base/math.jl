@@ -24,7 +24,7 @@ using Base: sign_mask, exponent_mask, exponent_one, exponent_bias,
             exponent_half, exponent_max, exponent_raw_max, fpinttype,
             significand_mask, significand_bits, exponent_bits
 
-using Core.Intrinsics: sqrt_llvm, powi_llvm
+using Core.Intrinsics: sqrt_llvm
 
 const IEEEFloat = Union{Float16,Float32,Float64}
 # non-type specific math functions
@@ -286,6 +286,8 @@ exp10(x::Float32) = 10.0f0^x
 exp10(x::Integer) = exp10(float(x))
 
 # utility for converting NaN return to DomainError
+# the branch in nan_dom_err prevents its callers from inlining, so be sure to force it
+# until the heuristics can be improved
 @inline nan_dom_err(f, x) = isnan(f) & !isnan(x) ? throw(DomainError()) : f
 
 # functions that return NaN on non-NaN argument for domain error
@@ -403,9 +405,9 @@ log1p(x)
 for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
           :lgamma, :log1p)
     @eval begin
-        ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)),libm), Float64, (Float64,), x), x)
-        ($f)(x::Float32) = nan_dom_err(ccall(($(string(f,"f")),libm), Float32, (Float32,), x), x)
-        ($f)(x::Real) = ($f)(float(x))
+        @inline ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), x)
+        @inline ($f)(x::Float32) = nan_dom_err(ccall(($(string(f, "f")), libm), Float32, (Float32,), x), x)
+        @inline ($f)(x::Real) = ($f)(float(x))
     end
 end
 
@@ -683,14 +685,11 @@ function modf(x::Float64)
     f, _modf_temp[]
 end
 
-^(x::Float64, y::Float64) = nan_dom_err(ccall((:pow,libm),  Float64, (Float64,Float64), x, y), x+y)
-^(x::Float32, y::Float32) = nan_dom_err(ccall((:powf,libm), Float32, (Float32,Float32), x, y), x+y)
-
-^(x::Float64, y::Integer) = x^Int32(y)
-^(x::Float64, y::Int32) = powi_llvm(x, y)
-^(x::Float32, y::Integer) = x^Int32(y)
-^(x::Float32, y::Int32) = powi_llvm(x, y)
-^(x::Float16, y::Integer) = Float16(Float32(x)^y)
+@inline ^(x::Float64, y::Float64) = nan_dom_err(ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, y), x + y)
+@inline ^(x::Float32, y::Float32) = nan_dom_err(ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, y), x + y)
+@inline ^(x::Float64, y::Integer) = x ^ Float64(y)
+@inline ^(x::Float32, y::Integer) = x ^ Float32(y)
+@inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ Float32(y))
 ^{p}(x::Float16, ::Type{Val{p}}) = Float16(Float32(x)^Val{p})
 
 function angle_restrict_symm(theta)
