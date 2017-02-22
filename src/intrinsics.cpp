@@ -71,7 +71,6 @@ static void jl_init_intrinsic_functions_codegen(Module *m)
     float_func[rint_llvm] = true;
     float_func[sqrt_llvm] = true;
     float_func[sqrt_llvm_fast] = true;
-    float_func[powi_llvm] = true;
 }
 
 extern "C"
@@ -848,33 +847,6 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             ans = builder.CreateXor(from, ConstantInt::get(T_int8, 1, true));
         else
             ans = builder.CreateXor(from, ConstantInt::get(xt, -1, true));
-        return mark_julia_type(ans, false, x.typ, ctx);
-    }
-
-    case powi_llvm: {
-        const jl_cgval_t &x = argv[0];
-        const jl_cgval_t &y = argv[1];
-        if (!jl_is_primitivetype(x.typ) || !jl_is_primitivetype(y.typ) || jl_datatype_size(y.typ) != 4)
-            return emit_runtime_call(f, argv, nargs, ctx);
-        Type *xt = FLOATT(bitstype_to_llvm(x.typ));
-        Type *yt = T_int32;
-        if (!xt)
-            return emit_runtime_call(f, argv, nargs, ctx);
-
-        Value *xv = emit_unbox(xt, x, x.typ);
-        Value *yv = emit_unbox(yt, y, y.typ);
-#if JL_LLVM_VERSION >= 30600
-        Value *powi = Intrinsic::getDeclaration(jl_Module, Intrinsic::powi, makeArrayRef(xt));
-#if JL_LLVM_VERSION >= 30700
-        Value *ans = builder.CreateCall(powi, {xv, yv});
-#else
-        Value *ans = builder.CreateCall2(powi, xv, yv);
-#endif
-#else
-        // issue #6506
-        Value *ans = builder.CreateCall2(prepare_call(xt == T_float64 ? jlpow_func : jlpowf_func),
-                xv, builder.CreateSIToFP(yv, xt));
-#endif
         return mark_julia_type(ans, false, x.typ, ctx);
     }
 

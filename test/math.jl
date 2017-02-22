@@ -590,6 +590,18 @@ end
     end
 end
 
+@testset "issue #19872" begin
+    f19872a(x) = x ^ 5
+    f19872b(x) = x ^ (-1024)
+    @test 0 < f19872b(2.0) < 1e-300
+    @test issubnormal(2.0 ^ (-1024))
+    @test issubnormal(f19872b(2.0))
+    @test !issubnormal(f19872b(0.0))
+    @test f19872a(2.0) === 32.0
+    @test !issubnormal(f19872a(2.0))
+    @test !issubnormal(0.0)
+end
+
 # no domain error is thrown for negative values
 @test invoke(cbrt, Tuple{AbstractFloat}, -1.0) == -1.0
 
