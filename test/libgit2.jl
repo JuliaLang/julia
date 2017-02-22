@@ -534,6 +534,13 @@ mktempdir() do dir
                 @test contains(diff_strs[8], "Size:")
                 @test isempty(diff_strs[9])
                 @test diff_strs[10] == "New file:"
+                diff_strs = split(sprint(show, diff), '\n')
+                @test diff_strs[1] == "GitDiff:"
+                @test diff_strs[2] == "Number of deltas: 1"
+                @test diff_strs[3] == "GitDiffStats:"
+                @test diff_strs[4] == "Files changed: 1"
+                @test diff_strs[5] == "Insertions: 1"
+                @test diff_strs[6] == "Deletions: 0"
                 LibGit2.commit(repo, "zzz")
                 @test !LibGit2.isdirty(repo)
                 @test !LibGit2.isdiff(repo, "HEAD")
