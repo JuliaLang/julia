@@ -71,6 +71,8 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
             @test inv(capds)*apds ≈ eye(n)
             @test abs((det(capds) - det(apd))/det(capds)) <= ε*κ*n
         end
+        ulstring = sprint(show,capds[:UL])
+        @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring"
     else
         capdh = cholfact(apdh)
         @test inv(capdh)*apdh ≈ eye(n)
@@ -84,6 +86,8 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         capdh = cholfact!(copy(apd), :L)
         @test inv(capdh)*apdh ≈ eye(n)
         @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
+        ulstring = sprint(show,capdh[:UL])
+        @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring"
     end
 
     # test chol of 2x2 Strang matrix
