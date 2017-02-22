@@ -938,3 +938,6 @@ ftwoparams(::TwoParams{<:Real,<:Real}) = 3
 # supertype operator
 @test !(Int >: Integer)
 @test Integer >: Int
+
+# tolerate non-types in Tuples
+@test typeintersect(Tuple{0}, Tuple{T} where T) === Tuple{0}

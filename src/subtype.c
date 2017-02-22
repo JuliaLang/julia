@@ -414,7 +414,7 @@ static int is_leaf_bound(jl_value_t *v)
         }
         return 1;
     }
-    return 0;
+    return !jl_is_type(v) && !jl_is_typevar(v);
 }
 
 static jl_value_t *widen_Type(jl_value_t *t)
