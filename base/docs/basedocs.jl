@@ -7,9 +7,6 @@ struct Keyword
 end
 macro kw_str(text) Keyword(Symbol(text)) end
 
-"Hello, Human."
-kw"hello", kw"hi"
-
 """
 **Welcome to Julia $(string(VERSION)).** The full manual is available at
 
