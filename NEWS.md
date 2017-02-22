@@ -126,8 +126,9 @@ This section lists changes that do not have deprecation warnings.
     The flip-side of this is that new method definitions should now reliably actually
     take effect, and be called when evaluating new code ([#265]).
 
-  * The array-scalar operations `div`, `mod`, `rem`, `&`, `|`, `xor`, `/`, `\`, `*`, `+`, and `-`
-    now follow broadcast promotion rules ([#19692]).
+  * The array-scalar methods of `/`, `\`, `*`, `+`, and `-` now follow broadcast promotion
+    rules. (Likewise for the now-deprecated array-scalar methods of `div`, `mod`, `rem`,
+    `&`, `|`, and `xor`; see "Deprecated or removed" below.) ([#19692]).
 
   * `broadcast!(f, A)` now calls `f()` for each element of `A`, rather than doing `fill!(A, f())` ([#19722]).
 
