@@ -475,7 +475,7 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
                 return inv(LAPACK.trcon!('O', $uploc, $isunitc, A.data))
             elseif p == Inf
                 return inv(LAPACK.trcon!('I', $uploc, $isunitc, A.data))
-            else #use fallback
+            else # use fallback
                 return cond(full(A), p)
             end
         end
