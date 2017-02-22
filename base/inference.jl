@@ -2241,8 +2241,6 @@ function is_pure_builtin(f::ANY)
              f === Intrinsics.llvmcall ||   # this one is never effect-free
              f === Intrinsics.checked_trunc_sint ||
              f === Intrinsics.checked_trunc_uint ||
-             f === Intrinsics.checked_fptosi ||
-             f === Intrinsics.checked_fptoui ||
              f === Intrinsics.checked_sadd_int ||
              f === Intrinsics.checked_uadd_int ||
              f === Intrinsics.checked_ssub_int ||
