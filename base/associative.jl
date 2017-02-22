@@ -285,12 +285,13 @@ Dict{String,Float64} with 3 entries:
 merge(combine::Function, d::Associative, others::Associative...) =
     merge!(combine, emptymergedict(d, others...), d, others...)
 
+promoteK(K) = K
+promoteV(V) = V
+promoteK(K, d, ds...) = promoteK(promote_type(K, keytype(d)), ds...)
+promoteV(V, d, ds...) = promoteV(promote_type(V, valtype(d)), ds...)
 function emptymergedict(d::Associative, others::Associative...)
-    K, V = keytype(d), valtype(d)
-    for other in others
-        K = promote_type(K, keytype(other))
-        V = promote_type(V, valtype(other))
-    end
+    K = promoteK(keytype(d), others...)
+    V = promoteV(valtype(d), others...)
     Dict{K,V}()
 end
 
