@@ -32,6 +32,7 @@ include("diff.jl")
 include("rebase.jl")
 include("status.jl")
 include("tree.jl")
+include("gitcredential.jl")
 include("callbacks.jl")
 
 using .Error
@@ -202,10 +203,6 @@ function set_remote_url(path::AbstractString, url::AbstractString; remote::Abstr
     end
 end
 
-function make_payload(payload::Nullable{<:AbstractCredentials})
-    Ref{Nullable{AbstractCredentials}}(payload)
-end
-
 """
     fetch(repo::GitRepo; kwargs...)
 
@@ -218,24 +215,31 @@ The keyword arguments are:
   * `remoteurl::AbstractString=""`: the URL of `remote`. If not specified,
     will be assumed based on the given name of `remote`.
   * `refspecs=AbstractString[]`: determines properties of the fetch.
-  * `payload=Nullable{AbstractCredentials}()`: provides credentials, if necessary,
+  * `credentials=Nullable{CachedCredentials}()`: provides credentials, if necessary,
     for instance if `remote` is a private repository.
 
 Equivalent to `git fetch [<remoteurl>|<repo>] [<refspecs>]`.
 """
-function fetch(repo::GitRepo; remote::AbstractString="origin",
+function fetch(repo::GitRepo;
+               remote::AbstractString="origin",
                remoteurl::AbstractString="",
                refspecs::Vector{<:AbstractString}=AbstractString[],
-               payload::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}())
+               credentials::Nullable{CachedCredentials}=Nullable{CachedCredentials}())
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
         GitRemoteAnon(repo, remoteurl)
     end
+
+    payload = RemotePayload(credentials, GitConfig(repo))
     try
-        payload = make_payload(payload)
         fo = FetchOptions(callbacks=RemoteCallbacks(credentials_cb(), payload))
-        fetch(rmt, refspecs, msg="from $(url(rmt))", options = fo)
+        result = fetch(rmt, refspecs, msg="from $(url(rmt))", options = fo)
+        credentials_approve(payload)
+        return result
+    catch err
+        isa(err, GitError) && err.code == Error.EAUTH && credentials_reject(payload)
+        rethrow()
     finally
         close(rmt)
     end
@@ -252,25 +256,32 @@ The keyword arguments are:
   * `refspecs=AbstractString[]`: determines properties of the push.
   * `force::Bool=false`: determines if the push will be a force push,
      overwriting the remote branch.
-  * `payload=Nullable{AbstractCredentials}()`: provides credentials, if necessary,
+  * `credentials=Nullable{CachedCredentials}()`: provides credentials, if necessary,
     for instance if `remote` is a private repository.
 
 Equivalent to `git push [<remoteurl>|<repo>] [<refspecs>]`.
 """
-function push(repo::GitRepo; remote::AbstractString="origin",
+function push(repo::GitRepo;
+              remote::AbstractString="origin",
               remoteurl::AbstractString="",
               refspecs::Vector{<:AbstractString}=AbstractString[],
               force::Bool=false,
-              payload::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}())
+              credentials::Nullable{CachedCredentials}=Nullable{CachedCredentials}())
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
         GitRemoteAnon(repo, remoteurl)
     end
+
+    payload = RemotePayload(credentials, GitConfig(repo))
     try
-        payload = make_payload(payload)
         push_opts=PushOptions(callbacks=RemoteCallbacks(credentials_cb(), payload))
-        push(rmt, refspecs, force=force, options=push_opts)
+        result = push(rmt, refspecs, force=force, options=push_opts)
+        credentials_approve(payload)
+        return result
+    catch err
+        isa(err, GitError) && err.code == Error.EAUTH && credentials_reject(payload)
+        rethrow()
     finally
         close(rmt)
     end
@@ -429,7 +440,7 @@ The keyword arguments are:
   * `remote_cb::Ptr{Void}=C_NULL`: a callback which will be used to create the remote
     before it is cloned. If `C_NULL` (the default), no attempt will be made to create
     the remote - it will be assumed to already exist.
-  * `payload::Nullable{P<:AbstractCredentials}=Nullable{AbstractCredentials}()`:
+  * `credentials::Nullable{CachedCredentials}=Nullable{CachedCredentials}()`:
     provides credentials if necessary, for instance if the remote is a private
     repository.
 
@@ -439,10 +450,10 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
                branch::AbstractString="",
                isbare::Bool = false,
                remote_cb::Ptr{Void} = C_NULL,
-               payload::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}())
+               credentials::Nullable{CachedCredentials}=Nullable{CachedCredentials}())
     # setup clone options
     lbranch = Base.cconvert(Cstring, branch)
-    payload = make_payload(payload)
+    payload = RemotePayload(credentials)
     fetch_opts=FetchOptions(callbacks = RemoteCallbacks(credentials_cb(), payload))
     clone_opts = CloneOptions(
                 bare = Cint(isbare),
@@ -450,7 +461,14 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
                 fetch_opts=fetch_opts,
                 remote_cb = remote_cb
             )
-    return clone(repo_url, repo_path, clone_opts)
+    try
+        repo = clone(repo_url, repo_path, clone_opts)
+        credentials_approve(payload)
+        return repo
+    catch err
+        isa(err, GitError) && err.code == Error.EAUTH && credentials_reject(payload)
+        rethrow()
+    end
 end
 
 """ git reset [<committish>] [--] <pathspecs>... """

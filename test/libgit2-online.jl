@@ -19,19 +19,6 @@ mktempdir() do dir
                 close(repo)
             end
         end
-
-        @testset "with incorrect url" begin
-            try
-                repo_path = joinpath(dir, "Example2")
-                # credentials are required because github tries to authenticate on unknown repo
-                cred = LibGit2.UserPasswordCredentials("","") # empty credentials cause authentication error
-                LibGit2.clone(repo_url*randstring(10), repo_path, payload=Nullable(cred))
-                error("unexpected")
-            catch ex
-                @test isa(ex, LibGit2.Error.GitError)
-                @test ex.code == LibGit2.Error.EAUTH
-            end
-        end
     end
 end
 

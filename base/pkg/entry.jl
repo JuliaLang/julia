@@ -427,7 +427,7 @@ function update(branch::AbstractString, upkgs::Set{String})
                         prev_sha = string(LibGit2.head_oid(repo))
                         success = true
                         try
-                            LibGit2.fetch(repo, payload = Nullable(creds))
+                            LibGit2.fetch(repo, credentials=Nullable(creds))
                             LibGit2.reset!(creds)
                             LibGit2.merge!(repo, fastforward=true)
                         catch err

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 import Base.@kwdef
-import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE
+import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE, GIT_CONFIG
 
 const OID_RAWSZ = 20
 const OID_HEXSZ = OID_RAWSZ * 2
@@ -117,15 +117,6 @@ function free(buf_ref::Base.Ref{Buffer})
     ccall((:git_buf_free, :libgit2), Void, (Ptr{Buffer},), buf_ref)
 end
 
-"Abstract credentials payload"
-abstract type AbstractCredentials end
-
-"Checks if credentials were used"
-checkused!(p::AbstractCredentials) = true
-checkused!(p::Void) = false
-"Resets credentials for another use"
-reset!(p::AbstractCredentials, cnt::Int=3) = nothing
-
 """
     LibGit2.CheckoutOptions
 
@@ -182,10 +173,6 @@ Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/ty
     push_negotiation::Ptr{Void}
     transport::Ptr{Void}
     payload::Ptr{Void}
-end
-
-function RemoteCallbacks(credentials::Ptr{Void}, payload::Ref{Nullable{AbstractCredentials}})
-    RemoteCallbacks(credentials=credentials_cb(), payload=pointer_from_objref(payload))
 end
 
 """
@@ -464,6 +451,23 @@ struct FetchHead
     ismerge::Bool
 end
 
+"""
+    LibGit2.ConfigEntry
+
+Matches the [`git_config_entry`](https://libgit2.github.com/libgit2/#HEAD/type/git_config_entry) struct.
+"""
+@kwdef struct ConfigEntry
+    name::Cstring
+    value::Cstring
+    level::GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT
+    free::Ptr{Void}
+    payload::Ptr{Void}
+end
+
+function Base.show(io::IO, ce::ConfigEntry)
+    print(io, "ConfigEntry(\"", unsafe_string(ce.name), "\", \"", unsafe_string(ce.value), "\")")
+end
+
 # Abstract object types
 abstract type AbstractGitObject end
 Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
@@ -487,7 +491,8 @@ for (typ, reporef, sup, cname) in [
     (:GitCommit,     :GitRepo,  :GitObject,         :git_commit),
     (:GitBlob,       :GitRepo,  :GitObject,         :git_blob),
     (:GitTree,       :GitRepo,  :GitObject,         :git_tree),
-    (:GitTag,        :GitRepo,  :GitObject,         :git_tag)]
+    (:GitTag,        :GitRepo,  :GitObject,         :git_tag),
+    (:GitConfigIter, nothing,   :AbstractGitObject, :git_config_iterator)]
 
     if reporef === nothing
         @eval mutable struct $typ <: $sup
@@ -643,83 +648,154 @@ end
 
 import Base.securezero!
 
+abstract type AbstractCredential end
+
 "Credentials that support only `user` and `password` parameters"
-mutable struct UserPasswordCredentials <: AbstractCredentials
-    user::String
-    pass::String
-    prompt_if_incorrect::Bool    # Whether to allow interactive prompting if the credentials are incorrect
-    count::Int                   # authentication failure protection count
-    function UserPasswordCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool=false)
-        c = new(u,p,prompt_if_incorrect,3)
+mutable struct UserPasswordCredential <: AbstractCredential
+    username::String
+    password::String
+    function UserPasswordCredential(username::AbstractString="", password::AbstractString="")
+        c = new(username, password)
         finalizer(c, securezero!)
         return c
     end
-    UserPasswordCredentials(prompt_if_incorrect::Bool=false) = UserPasswordCredentials("","",prompt_if_incorrect)
 end
 
-function securezero!(cred::UserPasswordCredentials)
-    securezero!(cred.user)
-    securezero!(cred.pass)
-    cred.count = 0
+function isfilled(cred::UserPasswordCredential)
+    !isempty(cred.username) && !isempty(cred.password)
+end
+
+function securezero!(cred::UserPasswordCredential)
+    securezero!(cred.username)
+    securezero!(cred.password)
     return cred
 end
 
-"SSH credentials type"
-mutable struct SSHCredentials <: AbstractCredentials
-    user::String
-    pass::String
-    pubkey::String
-    prvkey::String
-    usesshagent::String  # used for ssh-agent authentication
-    prompt_if_incorrect::Bool    # Whether to allow interactive prompting if the credentials are incorrect
-    count::Int
+function Base.:(==)(a::UserPasswordCredential, b::UserPasswordCredential)
+    a.username == b.username && a.password == b.password
+end
 
-    function SSHCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool=false)
-        c = new(u,p,"","","Y",prompt_if_incorrect,3)
+mutable struct SSHCredential <: AbstractCredential
+    username::String
+    passphrase::String
+    private_key::String
+    public_key::String
+    function SSHCredential(
+            username::AbstractString="", passphrase::AbstractString="",
+            private_key::AbstractString="", public_key::AbstractString="")
+        c = new(username, passphrase, private_key, public_key)
         finalizer(c, securezero!)
         return c
     end
-    SSHCredentials(prompt_if_incorrect::Bool=false) = SSHCredentials("","",prompt_if_incorrect)
 end
-function securezero!(cred::SSHCredentials)
-    securezero!(cred.user)
-    securezero!(cred.pass)
-    securezero!(cred.pubkey)
-    securezero!(cred.prvkey)
-    cred.count = 0
+
+function isfilled(c::SSHCredential)
+    !isempty(c.username) && isfile(c.private_key) && isfile(c.public_key) &&
+    (!isempty(c.passphrase) || !require_passphrase(c.private_key))
+end
+
+function securezero!(cred::SSHCredential)
+    securezero!(cred.username)
+    securezero!(cred.passphrase)
+    securezero!(cred.private_key)
+    securezero!(cred.public_key)
     return cred
+end
+
+function Base.:(==)(a::SSHCredential, b::SSHCredential)
+    return (
+        a.username == b.username &&
+        a.passphrase == b.passphrase &&
+        a.private_key == b.private_key &&
+        a.public_key == b.public_key
+    )
 end
 
 "Credentials that support caching"
-mutable struct CachedCredentials <: AbstractCredentials
-    cred::Dict{String,AbstractCredentials}
-    count::Int            # authentication failure protection count
-    CachedCredentials() = new(Dict{String,AbstractCredentials}(),3)
-end
-
-"Checks if credentials were used or failed authentication, see `LibGit2.credentials_callback`"
-function checkused!(p::Union{UserPasswordCredentials, SSHCredentials})
-    p.count <= 0 && return true
-    p.count -= 1
-    return false
-end
-reset!(p::Union{UserPasswordCredentials, SSHCredentials}, cnt::Int=3) = (p.count = cnt; p)
-reset!(p::CachedCredentials) = (foreach(reset!, values(p.cred)); p)
-
-"Obtain the cached credentials for the given host+protocol (credid), or return and store the default if not found"
-get_creds!(collection::CachedCredentials, credid, default) = get!(collection.cred, credid, default)
-get_creds!(creds::AbstractCredentials, credid, default) = creds
-get_creds!(creds::Void, credid, default) = default
-function get_creds!(creds::Ref{Nullable{AbstractCredentials}}, credid, default)
-    if isnull(creds[])
-        creds[] = Nullable{AbstractCredentials}(default)
-        return default
-    else
-        get_creds!(Base.get(creds[]), credid, default)
+mutable struct CachedCredentials
+    cred::Dict{String,AbstractCredential}
+    function CachedCredentials()
+        c = new(Dict{String,AbstractCredential}())
+        finalizer(c, securezero!)
+        return c
     end
 end
 
 function securezero!(p::CachedCredentials)
     foreach(securezero!, values(p.cred))
     return p
+end
+
+function get_cred{C<:AbstractCredential}(cache::CachedCredentials, id::AbstractString, ::Type{C})
+    default = C()
+    credential = Base.get(cache.cred, id, default)
+    return isa(credential, C) ? credential : default
+end
+
+function approve(cache::CachedCredentials, cred_id, cred::AbstractCredential)
+    cache.cred[cred_id] = cred
+    nothing
+end
+
+function reject(cache::CachedCredentials, cred_id)
+    if haskey(cache.cred, credid)
+        securezero!(cache.cred[cred_id])
+        delete!(cache.cred, credid)
+    end
+    nothing
+end
+
+struct GitCredentialHelper
+    cmd::Cmd
+end
+
+"""
+    GitCredential
+
+Git credential helpers [input/output fields](https://git-scm.com/docs/git-credential#IOFMT).
+"""
+mutable struct GitCredential
+    protocol::String
+    host::String
+    path::String
+    username::String
+    password::String
+end
+
+function GitCredential(;
+    protocol::AbstractString="", host::AbstractString="", path::AbstractString="",
+    username::AbstractString="", password::AbstractString="",
+)
+    GitCredential(protocol, host, path, username, password)
+end
+
+mutable struct RemotePayload
+    cache::Nullable{CachedCredentials}
+    config::GitConfig
+    state::Dict{Symbol,Char}
+    prompts_remaining::Int
+    credential::Nullable{AbstractCredential}
+    protocol::String
+    host::String
+    path::String
+    username::String
+end
+
+function RemotePayload(cache::Nullable{CachedCredentials}, config::GitConfig=GitConfig())
+    RemotePayload(
+        cache,
+        config,
+        Dict{Symbol,Char}(),
+        3,
+        Nullable{AbstractCredential}(),
+        "", "", "", "",
+    )
+end
+
+function RemoteCallbacks(credentials::Ptr{Void}, payload::Ref{RemotePayload})
+    RemoteCallbacks(credentials=credentials, payload=pointer_from_objref(payload))
+end
+
+function RemoteCallbacks(credentials::Ptr{Void}, payload::RemotePayload)
+    RemoteCallbacks(credentials, Ref{RemotePayload}(payload))
 end

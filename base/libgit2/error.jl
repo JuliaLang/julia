@@ -89,6 +89,10 @@ function GitError(code::Integer)
     return GitError(err_class, err_code, err_msg)
 end
 
+function Base.:(==)(a::GitError, b::GitError)
+    a.class == b.class && a.code == b.code && a.msg == b.msg
+end
+
 end # Error module
 
 macro check(git_func)
