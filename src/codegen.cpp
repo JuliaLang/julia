@@ -33,6 +33,7 @@
 #include <cstdio>
 #include <cassert>
 #include <iostream>
+#include <functional>
 
 // target machine computation
 #include <llvm/Target/TargetSubtargetInfo.h>
