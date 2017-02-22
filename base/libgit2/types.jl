@@ -286,6 +286,13 @@ struct DiffFile
     end
 end
 
+function Base.show(io::IO, df::DiffFile)
+    println(io, "DiffFile:")
+    println(io, "Oid: $(df.id))")
+    println(io, "Path: $(df.path)")
+    println(io, "Size: $(df.size)")
+end
+
 """
     LibGit2.DiffDelta
 
@@ -299,6 +306,14 @@ struct DiffDelta
     nfiles::UInt16
     old_file::DiffFile
     new_file::DiffFile
+end
+
+function Base.show(io::IO, dd::DiffDelta)
+    println(io, "DiffDelta:")
+    println(io, "Status: $(Consts.DELTA_STATUS(dd.status))")
+    println(io, "Number of files: $(dd.nfiles)")
+    println(io, "Old file:\n$(dd.old_file)")
+    println(io, "New file:\n$(dd.new_file)")
 end
 
 """
