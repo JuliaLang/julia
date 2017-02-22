@@ -21,7 +21,7 @@ include("coreio.jl")
 
 eval(x) = Core.eval(Base, x)
 eval(m, x) = Core.eval(m, x)
-(::Type{T}){T}(arg) = convert(T, arg)::T
+(::Type{T}){T}(arg) = convert(T, arg)::T # Hidden from the REPL.
 (::Type{VecElement{T}}){T}(arg) = VecElement{T}(convert(T, arg))
 convert{T<:VecElement}(::Type{T}, arg) = T(arg)
 convert{T<:VecElement}(::Type{T}, arg::T) = arg
