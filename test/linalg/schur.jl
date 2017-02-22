@@ -38,6 +38,10 @@ aimg  = randn(n,n)/2
         @test AbstractArray(f) ≈ a
         @test_throws KeyError f[:A]
 
+        tstring = sprint(show,f[:T])
+        zstring = sprint(show,f[:Z])
+        vstring = sprint(show,f[:values])
+        @test sprint(show,f) == "$(typeof(f)) with factors T and Z:\n$tstring\n$(zstring)\nand values:\n$vstring"
         @testset "Reorder Schur" begin
             # use asym for real schur to enforce tridiag structure
             # avoiding partly selection of conj. eigenvalues

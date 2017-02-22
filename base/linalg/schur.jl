@@ -61,6 +61,16 @@ function getindex(F::Schur, d::Symbol)
     end
 end
 
+function show(io::IO, F::Schur)
+    println(io, "$(typeof(F)) with factors T and Z:")
+    show(io, F[:T])
+    println(io)
+    show(io, F[:Z])
+    println(io)
+    println(io, "and values:")
+    show(io, F[:values])
+end
+
 """
     schur(A::StridedMatrix) -> T::Matrix, Z::Matrix, λ::Vector
 
