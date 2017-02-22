@@ -820,7 +820,7 @@ struct NoPad end  # indicate that no padding is desired, or that it's already ap
 myfilter(A, kernel) = myfilter(A, kernel, Replicate())  # default boundary conditions
 
 function myfilter(A, kernel, ::Replicate)
-    Apadded = pad(A, kernel)
+    Apadded = replicate_edges(A, size(kernel))
     myfilter(Apadded, kernel, NoPad())  # indicate the new boundary conditions
 end
 
