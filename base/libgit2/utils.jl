@@ -65,3 +65,41 @@ if Sys.iswindows()
 else Sys.isunix()
     posixpath(path) = path
 end
+
+function git_url(;
+        scheme::AbstractString="",
+        username::AbstractString="",
+        password::AbstractString="",
+        host::AbstractString="",
+        port::Union{AbstractString,Integer}="",
+        path::AbstractString="")
+
+    port_str = string(port)
+    scp_syntax = isempty(scheme)
+
+    isempty(host) && throw(ArgumentError("A host needs to be specified"))
+    scp_syntax && !isempty(port_str) && throw(ArgumentError("Port cannot be specified when using scp-like syntax"))
+
+    io = IOBuffer()
+    !isempty(scheme) && print(io, scheme, "://")
+
+    if !isempty(username) || !isempty(password)
+        print(io, username)
+        !isempty(password) && print(io, ':', password)
+        print(io, '@')
+    end
+
+    print(io, host)
+    !isempty(port_str) && print(io, ':', port_str)
+
+    if !isempty(path)
+        if scp_syntax
+            print(io, ':')
+        elseif !startswith(path, '/')
+            print(io, '/')
+        end
+        print(io, path)
+    end
+
+    return String(take!(io))
+end
