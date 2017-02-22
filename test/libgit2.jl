@@ -583,7 +583,7 @@ mktempdir() do dir
                 @test fh_strs[1] == "FetchHead:"
                 @test fh_strs[2] == "Name: $(fh.name)"
                 @test fh_strs[3] == "URL: $(fh.url)"
-                @test fh_strs[5] == "Is merged: $(fh.ismerge)"
+                @test fh_strs[5] == "Merged: $(fh.ismerge)"
             end
         finally
             close(repo)

@@ -456,7 +456,7 @@ function Base.show(io::IO, fh::FetchHead)
     print(io, "OID: ")
     show(io, fh.oid)
     println(io)
-    println(io, "Is merged: $(fh.ismerge)")
+    println(io, "Merged: $(fh.ismerge)")
 end
 
 # Abstract object types
