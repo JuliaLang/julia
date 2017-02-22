@@ -505,7 +505,7 @@ end
 ^(x::BigFloat, y::Unsigned) = typemin(Culong) <= y <= typemax(Culong) ? x^Culong(y) : x^BigInt(y)
 
 # override default inlining of x^2 etc.
-^{p}(x::BigFloat, ::Type{Val{p}}) = x^Culong(p)
+^{p}(x::BigFloat, ::Type{Val{p}}) = x^p
 
 for f in (:exp, :exp2, :exp10, :expm1, :cosh, :sinh, :tanh, :sech, :csch, :coth, :cbrt)
     @eval function $f(x::BigFloat)
