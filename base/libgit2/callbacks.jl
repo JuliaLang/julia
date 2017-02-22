@@ -28,16 +28,8 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
         username_ptr, schema, host)
     isusedcreds = checkused!(creds)
 
-    errcls, errmsg = Error.last_error()
-    if errcls != Error.None
-        # Check if we used ssh-agent
-        if creds.usesshagent == "U"
-            creds.usesshagent = "E" # reported ssh-agent error, disables ssh agent use for the future
-        end
-    end
-
     # first try ssh-agent if credentials support its usage
-    if creds.usesshagent == "Y" || creds.usesshagent == "U"
+    if creds.usesshagent == "Y"
         err = ccall((:git_cred_ssh_key_from_agent, :libgit2), Cint,
                      (Ptr{Ptr{Void}}, Cstring), libgit2credptr, username_ptr)
         creds.usesshagent = "U" # used ssh-agent only one time

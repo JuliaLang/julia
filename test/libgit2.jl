@@ -1095,6 +1095,125 @@ mktempdir() do dir
     # which use the `getpass` function. At the moment we can only fake this on UNIX based
     # systems.
     if is_unix()
+        @testset "SSH credential prompt" begin
+            url = "git@github.com/test/package.jl"
+
+            key_dir = joinpath(dirname(@__FILE__), "libgit2")
+            valid_key = joinpath(key_dir, "valid")
+            invalid_key = joinpath(key_dir, "invalid")
+            valid_p_key = joinpath(key_dir, "valid-passphrase")
+            passphrase = "secret"
+
+            ssh_cmd = """
+            valid_cred = LibGit2.SSHCredentials("git", "", "$valid_key", "$valid_key.pub")
+            err, auth_attempts = LibGit2.credential_loop(valid_cred, "$url", "git")
+            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
+            """
+
+            ssh_p_cmd = """
+            valid_cred = LibGit2.SSHCredentials("git", "$passphrase", "$valid_p_key", "$valid_p_key.pub")
+            err, auth_attempts = LibGit2.credential_loop(valid_cred, "$url", "git")
+            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
+            """
+
+            # Note: We cannot use the default ~/.ssh/id_rsa for tests since we cannot be
+            # sure a users will actually have these files. Instead we will use the ENV
+            # variables to set the default values.
+
+            # Default credentials are valid
+            withenv("SSH_KEY_PATH" => valid_key) do
+                err, auth_attempts = challenge_prompt(ssh_cmd, [])
+                @test err == 0
+                @test auth_attempts == 2
+            end
+
+            # Default credentials are valid but requires a passphrase
+            withenv("SSH_KEY_PATH" => valid_p_key) do
+                challenges = [
+                    "Passphrase for $valid_p_key:" => "$passphrase\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_p_cmd, challenges)
+                @test err == 0
+                @test auth_attempts == 2
+
+                # User mistypes passphrase.
+                # Note: In reality LibGit2 will raise an error upon using the invalid SSH
+                # credentials. Since we don't control the internals of LibGit2 though they
+                # could also just re-call the credential callback like they do for HTTP.
+                challenges = [
+                    "Passphrase for $valid_p_key:" => "foo\n",
+                    # "Private key location for 'git@github.com' [$valid_p_key]:" => "\n",
+                    "Passphrase for $valid_p_key:" => "$passphrase\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_p_cmd, challenges)
+                @test err == 0
+                @test auth_attempts == 6
+            end
+
+            withenv("SSH_KEY_PATH" => valid_p_key, "SSH_KEY_PASS" => passphrase) do
+                err, auth_attempts = challenge_prompt(ssh_p_cmd, [])
+                @test err == 0
+                @test auth_attempts == 2
+            end
+
+            # TODO: Tests are currently broken. Credential callback prompts for:
+            # "Passphrase for :"
+            #=
+            # Explicitly setting these env variables to be empty means the user will be
+            # given a prompt with no defaults set.
+            withenv("SSH_KEY_PATH" => "", "SSH_PUB_KEY_PATH" => "") do
+                # User provides valid credentials
+                challenges = [
+                    "Private key location for 'git@github.com':" => "$valid_key\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_cmd, challenges)
+                @test err == 0
+                @test auth_attempts == 2
+
+                # User provides valid credentials that requires a passphrase
+                challenges = [
+                    "Private key location for 'git@github.com':" => "$valid_p_key\n",
+                    "Passphrase for $valid_p_key:" => "$passphrase\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_p_cmd, challenges)
+                @test err == 0
+                @test auth_attempts == 2
+            end
+            =#
+
+            # TODO: Tests are currently broken. Credential callback currently infinite loops
+            # and never prompts user to change private keys.
+            #=
+            # Explicitly setting these env variables to an existing but invalid key pair
+            # means the user will be given a prompt with that defaults to the given values.
+            withenv("SSH_KEY_PATH" => invalid_key, "SSH_PUB_KEY_PATH" => invalid_key * ".pub") do
+                challenges = [
+                    "Private key location for 'git@github.com' [$invalid_key]:" => "$valid_key\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_cmd, challenges)
+                @test err == 0
+                @test auth_attempts == 2
+            end
+            =#
+
+            # TODO: Tests are currently broken. Credential callback currently infinite loops
+            # and never prompts user to change private keys.
+            #=
+            withenv("SSH_KEY_PATH" => valid_key, "SSH_PUB_KEY_PATH" => valid_key * ".public") do
+                @test !isfile(ENV["SSH_PUB_KEY_PATH"])
+
+                # User explicitly sets the SSH_PUB_KEY_PATH incorrectly.
+                challenges = [
+                    "Private key location for 'git@github.com' [$valid_key]:" => "\n"
+                    "Public key location for 'git@github.com':" => "$valid_key.pub\n"
+                ]
+                err, auth_attempts = challenge_prompt(ssh_cmd, challenges)
+                @test err == 0
+                @test auth_attempts == 2
+            end
+            =#
+        end
+
         @testset "HTTPS credential prompt" begin
             url = "https://github.com/test/package.jl"
 
