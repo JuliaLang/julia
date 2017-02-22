@@ -37,7 +37,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Home",
     "title": "Developer Documentation",
     "category": "section",
-    "text": "Reflection and introspection\nDocumentation of Julia's Internals\nInitialization of the Julia runtime\nEval of Julia code\nJulia ASTs\nMore about types\nMemory layout of Julia Objects\nJulia Functions\nCalling Conventions\nBase.Cartesian\nTalking to the compiler (the :meta mechanism)\nSubArrays\nSystem Image Building\nWorking with LLVM\nprintf() and stdio in the Julia runtime\nBounds checking\nProper maintenance and care of multi-threading locks\nArrays with custom indices\nDeveloping/debugging Julia's C code\nReporting and analyzing crashes (segfaults)\ngdb debugging tips\nUsing Valgrind with Julia\nSanitizer support"
+    "text": "Reflection and introspection\nDocumentation of Julia's Internals\nInitialization of the Julia runtime\nJulia ASTs\nMore about types\nMemory layout of Julia Objects\nEval of Julia code\nCalling Conventions\nHigh-level Overview of the Native-Code Generation Process\nJulia Functions\nBase.Cartesian\nTalking to the compiler (the :meta mechanism)\nSubArrays\nSystem Image Building\nWorking with LLVM\nprintf() and stdio in the Julia runtime\nBounds checking\nProper maintenance and care of multi-threading locks\nArrays with custom indices\nDeveloping/debugging Julia's C code\nReporting and analyzing crashes (segfaults)\ngdb debugging tips\nUsing Valgrind with Julia\nSanitizer support"
 },
 
 {
@@ -8109,7 +8109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
+    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
 },
 
 {
@@ -12285,7 +12285,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.lufact",
     "category": "Function",
-    "text": "lufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ncond ✓ \ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\nlufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "lufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nlufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ncond ✓ \ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\n"
 },
 
 {
@@ -12389,7 +12389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.qrfact",
     "category": "Function",
-    "text": "qrfact(A) -> SPQR.Factorization\n\nCompute the QR factorization of a sparse matrix A. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with \\. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.\n\n\n\nqrfact(A, pivot=Val{false}) -> F\n\nComputes the QR factorization of A. The return type of F depends on the element type of A and whether pivoting is specified (with pivot==Val{true}).\n\nReturn type eltype(A) pivot Relationship between F and A\nQR not BlasFloat either A==F[:Q]*F[:R]\nQRCompactWY BlasFloat Val{false} A==F[:Q]*F[:R]\nQRPivoted BlasFloat Val{true} A[:,F[:p]]==F[:Q]*F[:R]\n\nBlasFloat refers to any of: Float32, Float64, Complex64 or Complex128.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description QR QRCompactWY QRPivoted\nF[:Q] Q (orthogonal/unitary) part of QR ✓ (QRPackedQ) ✓ (QRCompactWYQ) ✓ (QRPackedQ)\nF[:R] R (upper right triangular) part of QR ✓ ✓ ✓\nF[:p] pivot Vector   ✓\nF[:P] (pivot) permutation Matrix   ✓\n\nThe following functions are available for the QR objects: size and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nExample\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.The data contained in QR or QRPivoted can be used to construct the QRPackedQ type, which is a compact representation of the rotation matrix:Q = prod_i=1^min(mn) (I - tau_i v_i v_i^T)where tau_i is the scale factor and v_i is the projection vector associated with the i^th Householder elementary reflector.The data contained in QRCompactWY can be used to construct the QRCompactWYQ type, which is a compact representation of the rotation matrixQ = I + Y T Y^Twhere Y is m times r lower trapezoidal and T is r times r upper triangular. The compact WY representation [Schreiber1989] is not to be confused with the older, WY representation [Bischof1987]. (The LAPACK documentation uses V in lieu of Y.)[Bischof1987]: C Bischof and C Van Loan, \"The WY representation for products of Householder matrices\", SIAM J Sci Stat Comput 8 (1987), s2-s13. doi:10.1137/0908009[Schreiber1989]: R Schreiber and C Van Loan, \"A storage-efficient WY representation for products of Householder transformations\", SIAM J Sci Stat Comput 10 (1989), 53-57. doi:10.1137/0910005\n\n\n\n"
+    "text": "qrfact(A, pivot=Val{false}) -> F\n\nComputes the QR factorization of A. The return type of F depends on the element type of A and whether pivoting is specified (with pivot==Val{true}).\n\nReturn type eltype(A) pivot Relationship between F and A\nQR not BlasFloat either A==F[:Q]*F[:R]\nQRCompactWY BlasFloat Val{false} A==F[:Q]*F[:R]\nQRPivoted BlasFloat Val{true} A[:,F[:p]]==F[:Q]*F[:R]\n\nBlasFloat refers to any of: Float32, Float64, Complex64 or Complex128.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description QR QRCompactWY QRPivoted\nF[:Q] Q (orthogonal/unitary) part of QR ✓ (QRPackedQ) ✓ (QRCompactWYQ) ✓ (QRPackedQ)\nF[:R] R (upper right triangular) part of QR ✓ ✓ ✓\nF[:p] pivot Vector   ✓\nF[:P] (pivot) permutation Matrix   ✓\n\nThe following functions are available for the QR objects: size and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nExample\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.The data contained in QR or QRPivoted can be used to construct the QRPackedQ type, which is a compact representation of the rotation matrix:Q = prod_i=1^min(mn) (I - tau_i v_i v_i^T)where tau_i is the scale factor and v_i is the projection vector associated with the i^th Householder elementary reflector.The data contained in QRCompactWY can be used to construct the QRCompactWYQ type, which is a compact representation of the rotation matrixQ = I + Y T Y^Twhere Y is m times r lower trapezoidal and T is r times r upper triangular. The compact WY representation [Schreiber1989] is not to be confused with the older, WY representation [Bischof1987]. (The LAPACK documentation uses V in lieu of Y.)[Bischof1987]: C Bischof and C Van Loan, \"The WY representation for products of Householder matrices\", SIAM J Sci Stat Comput 8 (1987), s2-s13. doi:10.1137/0908009[Schreiber1989]: R Schreiber and C Van Loan, \"A storage-efficient WY representation for products of Householder transformations\", SIAM J Sci Stat Comput 10 (1989), 53-57. doi:10.1137/0910005\n\n\n\nqrfact(A) -> SPQR.Factorization\n\nCompute the QR factorization of a sparse matrix A. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with \\. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.\n\n\n\n"
 },
 
 {
@@ -18225,70 +18225,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "devdocs/eval.html#",
-    "page": "Eval of Julia code",
-    "title": "Eval of Julia code",
-    "category": "page",
-    "text": ""
-},
-
-{
-    "location": "devdocs/eval.html#Eval-of-Julia-code-1",
-    "page": "Eval of Julia code",
-    "title": "Eval of Julia code",
-    "category": "section",
-    "text": "One of the hardest parts about learning how the Julia Language runs code is learning how all of the pieces work together to execute a block of code.Each chunk of code typically makes a trip through many esoteric acronyms such as (in no particular order), flisp, AST, C++, LLVM, eval, typeinf, macroexpand, sysimg (or system image), bootstrapping, compile, parse, execute, JIT, interpret, box, unbox, intrinsic function, primitive function before turning into the desired result (hopefully).sidebar: Definitions\nREPL\nREPL stands for Read-Eval-Print Loop. It's just what we call the command line environment for short.\nAST\nAbstract Syntax Tree The AST is the digital representation of the code structure. In this form the code has been tokenized for meaning so that it is more suitable for manipulation and execution."
-},
-
-{
-    "location": "devdocs/eval.html#Julia-Execution-1",
-    "page": "Eval of Julia code",
-    "title": "Julia Execution",
-    "category": "section",
-    "text": "The 10,000 foot view of the whole process is as follows:The user starts julia.\nThe C function main() from ui/repl.c gets called. This function processes the command line arguments, filling in the jl_options struct and setting the variable ARGS. It then initializes Julia (by calling julia_init in task.c, which may load a previously compiled sysimg). Finally, it passes off control to Julia by calling Base._start().\nWhen _start() takes over control, the subsequent sequence of commands depends on the command line arguments given. For example, if a filename was supplied, it will proceed to execute that file. Otherwise, it will start an interactive REPL.\nSkipping the details about how the REPL interacts with the user, let's just say the program ends up with a block of code that it wants to run.\nIf the block of code to run is in a file, jl_load(char *filename) gets invoked to load the file and parse it. Each fragment of code is then passed to eval to execute.\nEach fragment of code (or AST), is handed off to eval() to turn into results.\neval() takes each code fragment and tries to run it in jl_toplevel_eval_flex().\njl_toplevel_eval_flex() decides whether the code is a \"toplevel\" action (such as using or module), which would be invalid inside a function. If so, it passes off the code to the toplevel interpreter.\njl_toplevel_eval_flex() then expands the code to eliminate any macros and to \"lower\" the AST to make it simpler to execute.\njl_toplevel_eval_flex() then uses some simple heuristics to decide whether to JIT compiler the  AST or to interpret it directly.\nThe bulk of the work to interpret code is handled by eval in interpreter.c.\nIf instead, the code is compiled, the bulk of the work is handled by codegen.cpp. Whenever a  Julia function is called for the first time with a given set of argument types, type inference  will be run on that function. This information is used by the codegen step to generate  faster code.\nEventually, the user quits the REPL, or the end of the program is reached, and the _start()  method returns.\nJust before exiting, main() calls jl_atexit_hook(exit_code).  This calls Base._atexit() (which calls any functions registered to atexit() inside  Julia). Then it calls jl_gc_run_all_finalizers().  Finally, it gracefully cleans up all libuv handles and waits for them to flush and close."
-},
-
-{
-    "location": "devdocs/eval.html#dev-parsing-1",
-    "page": "Eval of Julia code",
-    "title": "Parsing",
-    "category": "section",
-    "text": "The Julia parser is a small lisp program written in femtolisp, the source-code for which is distributed inside Julia in src/flisp.The interface functions for this are primarily defined in jlfrontend.scm. The code in ast.c handles this handoff on the Julia side.The other relevant files at this stage are julia-parser.scm, which handles tokenizing Julia code and turning it into an AST, and julia-syntax.scm, which handles transforming complex AST representations into simpler, \"lowered\" AST representations which are more suitable for analysis and execution."
-},
-
-{
-    "location": "devdocs/eval.html#dev-macro-expansion-1",
-    "page": "Eval of Julia code",
-    "title": "Macro Expansion",
-    "category": "section",
-    "text": "When eval() encounters a macro, it expands that AST node before attempting to evaluate the expression. Macro expansion involves a handoff from eval() (in Julia), to the parser function jl_macroexpand() (written in flisp) to the Julia macro itself (written in - what else - Julia) via fl_invoke_julia_macro(), and back.Typically, macro expansion is invoked as a first step during a call to expand()/jl_expand(), although it can also be invoked directly by a call to macroexpand()/jl_macroexpand()."
-},
-
-{
-    "location": "devdocs/eval.html#dev-type-inference-1",
-    "page": "Eval of Julia code",
-    "title": "Type Inference",
-    "category": "section",
-    "text": "Type inference is implemented in Julia by typeinf() in inference.jl. Type inference is the process of examining a Julia function and determining bounds for the types of each of its variables, as well as bounds on the type of the return value from the function. This enables many future optimizations, such as unboxing of known immutable values, and compile-time hoisting of various run-time operations such as computing field offsets and function pointers. Type inference may also include other steps such as constant propagation and inlining.sidebar: More Definitions\nJIT\nJust-In-Time Compilation The process of generating native-machine code into memory right when it is needed.\nLLVM\nLow-Level Virtual Machine (a compiler) The Julia JIT compiler is a program/library called libLLVM. Codegen in Julia refers both to the process of taking a Julia AST and turning it into LLVM instructions, and the process of LLVM optimizing that and turning it into native assembly instructions.\nC++\nThe programming language that LLVM is implemented in, which means that codegen is also implemented in this language. The rest of Julia's library is implemented in C, in part because it's smaller feature set makes it more usable as a cross-language interface layer.\nbox\nThis term is used to describe the process of taking a value and allocating a wrapper around the data that is tracked by the garbage collector (gc) and is tagged with the object's type.\nunbox\nThe reverse of boxing a value. This operation enables more efficient manipulation of data when the type of that data is fully known at compile-time (through type inference).\ngeneric function\nA Julia function composed of multiple \"methods\" that are selected for dynamic dispatch based on the argument type-signature\nanonymous function or \"method\"\nA Julia function without a name and without type-dispatch capabilities\nprimitive function\nA function implemented in C but exposed in Julia as a named function \"method\" (albeit without generic function dispatch capabilities, similar to a anonymous function)\nintrinsic function\nA low-level operation exposed as a function in Julia. These pseudo-functions implement operations on raw bits such as add and sign extend that cannot be expressed directly in any other way. Since they operate on bits directly, they must be compiled into a function and surrounded by a call to Core.Intrinsics.box(T, ...) to reassign type information to the value."
-},
-
-{
-    "location": "devdocs/eval.html#dev-codegen-1",
-    "page": "Eval of Julia code",
-    "title": "JIT Code Generation",
-    "category": "section",
-    "text": "Codegen is the process of turning a Julia AST into native machine code.The JIT environment is initialized by an early call to jl_init_codegen in codegen.cpp.On demand, a Julia method is converted into a native function by the function emit_function(jl_method_instance_t*). (note, when using the MCJIT (in LLVM v3.4+), each function must be JIT into a new module.) This function recursively calls emit_expr() until the entire function has been emitted.Much of the remaining bulk of this file is devoted to various manual optimizations of specific code patterns. For example, emit_known_call() knows how to inline many of the primitive functions (defined in builtins.c) for various combinations of argument types.Other parts of codegen are handled by various helper files:debuginfo.cpp\nHandles backtraces for JIT functions\nccall.cpp\nHandles the ccall and llvmcall FFI, along with various abi_*.cpp files\nintrinsics.cpp\nHandles the emission of various low-level intrinsic functionssidebar: Bootstrapping\nThe process of creating a new system image is called \"bootstrapping\".The etymology of this word comes from the phrase \"pulling one's self up by the bootstraps\", and refers to the idea of starting from a very limited set of available functions and definitions and ending with the creation of a full-featured environment."
-},
-
-{
-    "location": "devdocs/eval.html#dev-sysimg-1",
-    "page": "Eval of Julia code",
-    "title": "System Image",
-    "category": "section",
-    "text": "The system image is a precompiled archive of a set of Julia files. The sys.ji file distributed with Julia is one such system image, generated by executing the file sysimg.jl, and serializing the resulting environment (including Types, Functions, Modules, and all other defined values) into a file. Therefore, it contains a frozen version of the Main, Core, and Base modules (and whatever else was in the environment at the end of bootstrapping). This serializer/deserializer is implemented by jl_save_system_image/jl_restore_system_image in dump.c.If there is no sysimg file (jl_options.image_file == NULL), this also implies that --build was given on the command line, so the final result should be a new sysimg file. During Julia initialization, minimal Core and Main modules are created. Then a file named boot.jl is evaluated from the current directory. Julia then evaluates any file given as a command line argument until it reaches the end. Finally, it saves the resulting environment to a \"sysimg\" file for use as a starting point for a future Julia run."
-},
-
-{
     "location": "devdocs/ast.html#",
     "page": "Julia ASTs",
     "title": "Julia ASTs",
@@ -18529,6 +18465,158 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "devdocs/eval.html#",
+    "page": "Eval of Julia code",
+    "title": "Eval of Julia code",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "devdocs/eval.html#Eval-of-Julia-code-1",
+    "page": "Eval of Julia code",
+    "title": "Eval of Julia code",
+    "category": "section",
+    "text": "One of the hardest parts about learning how the Julia Language runs code is learning how all of the pieces work together to execute a block of code.Each chunk of code typically makes a trip through many esoteric acronyms such as (in no particular order), flisp, AST, C++, LLVM, eval, typeinf, macroexpand, sysimg (or system image), bootstrapping, compile, parse, execute, JIT, interpret, box, unbox, intrinsic function, primitive function before turning into the desired result (hopefully).sidebar: Definitions\nREPL\nREPL stands for Read-Eval-Print Loop. It's just what we call the command line environment for short.\nAST\nAbstract Syntax Tree The AST is the digital representation of the code structure. In this form the code has been tokenized for meaning so that it is more suitable for manipulation and execution."
+},
+
+{
+    "location": "devdocs/eval.html#Julia-Execution-1",
+    "page": "Eval of Julia code",
+    "title": "Julia Execution",
+    "category": "section",
+    "text": "The 10,000 foot view of the whole process is as follows:The user starts julia.\nThe C function main() from ui/repl.c gets called. This function processes the command line arguments, filling in the jl_options struct and setting the variable ARGS. It then initializes Julia (by calling julia_init in task.c, which may load a previously compiled sysimg). Finally, it passes off control to Julia by calling Base._start().\nWhen _start() takes over control, the subsequent sequence of commands depends on the command line arguments given. For example, if a filename was supplied, it will proceed to execute that file. Otherwise, it will start an interactive REPL.\nSkipping the details about how the REPL interacts with the user, let's just say the program ends up with a block of code that it wants to run.\nIf the block of code to run is in a file, jl_load(char *filename) gets invoked to load the file and parse it. Each fragment of code is then passed to eval to execute.\nEach fragment of code (or AST), is handed off to eval() to turn into results.\neval() takes each code fragment and tries to run it in jl_toplevel_eval_flex().\njl_toplevel_eval_flex() decides whether the code is a \"toplevel\" action (such as using or module), which would be invalid inside a function. If so, it passes off the code to the toplevel interpreter.\njl_toplevel_eval_flex() then expands the code to eliminate any macros and to \"lower\" the AST to make it simpler to execute.\njl_toplevel_eval_flex() then uses some simple heuristics to decide whether to JIT compiler the  AST or to interpret it directly.\nThe bulk of the work to interpret code is handled by eval in interpreter.c.\nIf instead, the code is compiled, the bulk of the work is handled by codegen.cpp. Whenever a  Julia function is called for the first time with a given set of argument types, type inference  will be run on that function. This information is used by the codegen step to generate  faster code.\nEventually, the user quits the REPL, or the end of the program is reached, and the _start()  method returns.\nJust before exiting, main() calls jl_atexit_hook(exit_code).  This calls Base._atexit() (which calls any functions registered to atexit() inside  Julia). Then it calls jl_gc_run_all_finalizers().  Finally, it gracefully cleans up all libuv handles and waits for them to flush and close."
+},
+
+{
+    "location": "devdocs/eval.html#dev-parsing-1",
+    "page": "Eval of Julia code",
+    "title": "Parsing",
+    "category": "section",
+    "text": "The Julia parser is a small lisp program written in femtolisp, the source-code for which is distributed inside Julia in src/flisp.The interface functions for this are primarily defined in jlfrontend.scm. The code in ast.c handles this handoff on the Julia side.The other relevant files at this stage are julia-parser.scm, which handles tokenizing Julia code and turning it into an AST, and julia-syntax.scm, which handles transforming complex AST representations into simpler, \"lowered\" AST representations which are more suitable for analysis and execution."
+},
+
+{
+    "location": "devdocs/eval.html#dev-macro-expansion-1",
+    "page": "Eval of Julia code",
+    "title": "Macro Expansion",
+    "category": "section",
+    "text": "When eval() encounters a macro, it expands that AST node before attempting to evaluate the expression. Macro expansion involves a handoff from eval() (in Julia), to the parser function jl_macroexpand() (written in flisp) to the Julia macro itself (written in - what else - Julia) via fl_invoke_julia_macro(), and back.Typically, macro expansion is invoked as a first step during a call to expand()/jl_expand(), although it can also be invoked directly by a call to macroexpand()/jl_macroexpand()."
+},
+
+{
+    "location": "devdocs/eval.html#dev-type-inference-1",
+    "page": "Eval of Julia code",
+    "title": "Type Inference",
+    "category": "section",
+    "text": "Type inference is implemented in Julia by typeinf() in inference.jl. Type inference is the process of examining a Julia function and determining bounds for the types of each of its variables, as well as bounds on the type of the return value from the function. This enables many future optimizations, such as unboxing of known immutable values, and compile-time hoisting of various run-time operations such as computing field offsets and function pointers. Type inference may also include other steps such as constant propagation and inlining.sidebar: More Definitions\nJIT\nJust-In-Time Compilation The process of generating native-machine code into memory right when it is needed.\nLLVM\nLow-Level Virtual Machine (a compiler) The Julia JIT compiler is a program/library called libLLVM. Codegen in Julia refers both to the process of taking a Julia AST and turning it into LLVM instructions, and the process of LLVM optimizing that and turning it into native assembly instructions.\nC++\nThe programming language that LLVM is implemented in, which means that codegen is also implemented in this language. The rest of Julia's library is implemented in C, in part because it's smaller feature set makes it more usable as a cross-language interface layer.\nbox\nThis term is used to describe the process of taking a value and allocating a wrapper around the data that is tracked by the garbage collector (gc) and is tagged with the object's type.\nunbox\nThe reverse of boxing a value. This operation enables more efficient manipulation of data when the type of that data is fully known at compile-time (through type inference).\ngeneric function\nA Julia function composed of multiple \"methods\" that are selected for dynamic dispatch based on the argument type-signature\nanonymous function or \"method\"\nA Julia function without a name and without type-dispatch capabilities\nprimitive function\nA function implemented in C but exposed in Julia as a named function \"method\" (albeit without generic function dispatch capabilities, similar to a anonymous function)\nintrinsic function\nA low-level operation exposed as a function in Julia. These pseudo-functions implement operations on raw bits such as add and sign extend that cannot be expressed directly in any other way. Since they operate on bits directly, they must be compiled into a function and surrounded by a call to Core.Intrinsics.box(T, ...) to reassign type information to the value."
+},
+
+{
+    "location": "devdocs/eval.html#dev-codegen-1",
+    "page": "Eval of Julia code",
+    "title": "JIT Code Generation",
+    "category": "section",
+    "text": "Codegen is the process of turning a Julia AST into native machine code.The JIT environment is initialized by an early call to jl_init_codegen in codegen.cpp.On demand, a Julia method is converted into a native function by the function emit_function(jl_method_instance_t*). (note, when using the MCJIT (in LLVM v3.4+), each function must be JIT into a new module.) This function recursively calls emit_expr() until the entire function has been emitted.Much of the remaining bulk of this file is devoted to various manual optimizations of specific code patterns. For example, emit_known_call() knows how to inline many of the primitive functions (defined in builtins.c) for various combinations of argument types.Other parts of codegen are handled by various helper files:debuginfo.cpp\nHandles backtraces for JIT functions\nccall.cpp\nHandles the ccall and llvmcall FFI, along with various abi_*.cpp files\nintrinsics.cpp\nHandles the emission of various low-level intrinsic functionssidebar: Bootstrapping\nThe process of creating a new system image is called \"bootstrapping\".The etymology of this word comes from the phrase \"pulling one's self up by the bootstraps\", and refers to the idea of starting from a very limited set of available functions and definitions and ending with the creation of a full-featured environment."
+},
+
+{
+    "location": "devdocs/eval.html#dev-sysimg-1",
+    "page": "Eval of Julia code",
+    "title": "System Image",
+    "category": "section",
+    "text": "The system image is a precompiled archive of a set of Julia files. The sys.ji file distributed with Julia is one such system image, generated by executing the file sysimg.jl, and serializing the resulting environment (including Types, Functions, Modules, and all other defined values) into a file. Therefore, it contains a frozen version of the Main, Core, and Base modules (and whatever else was in the environment at the end of bootstrapping). This serializer/deserializer is implemented by jl_save_system_image/jl_restore_system_image in dump.c.If there is no sysimg file (jl_options.image_file == NULL), this also implies that --build was given on the command line, so the final result should be a new sysimg file. During Julia initialization, minimal Core and Main modules are created. Then a file named boot.jl is evaluated from the current directory. Julia then evaluates any file given as a command line argument until it reaches the end. Finally, it saves the resulting environment to a \"sysimg\" file for use as a starting point for a future Julia run."
+},
+
+{
+    "location": "devdocs/callconv.html#",
+    "page": "Calling Conventions",
+    "title": "Calling Conventions",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "devdocs/callconv.html#Calling-Conventions-1",
+    "page": "Calling Conventions",
+    "title": "Calling Conventions",
+    "category": "section",
+    "text": "Julia uses three calling conventions for four distinct purposes:Name Prefix Purpose\nNative julia_ Speed via specialized signatures\nJL Call jlcall_ Wrapper for generic calls\nJL Call jl_ Builtins\nC ABI jlcapi_ Wrapper callable from C"
+},
+
+{
+    "location": "devdocs/callconv.html#Julia-Native-Calling-Convention-1",
+    "page": "Calling Conventions",
+    "title": "Julia Native Calling Convention",
+    "category": "section",
+    "text": "The native calling convention is designed for fast non-generic calls. It usually uses a specialized signature.LLVM ghosts (zero-length types) are omitted.\nLLVM scalars and vectors are passed by value.\nLLVM aggregates (arrays and structs) are passed by reference.A small return values is returned as LLVM return values. A large return values is returned via the \"structure return\" (sret) convention, where the caller provides a pointer to a return slot.An argument or return values thta is a homogeneous tuple is sometimes represented as an LLVM vector instead of an LLVM array."
+},
+
+{
+    "location": "devdocs/callconv.html#JL-Call-Convention-1",
+    "page": "Calling Conventions",
+    "title": "JL Call Convention",
+    "category": "section",
+    "text": "The JL Call convention is for builtins and generic dispatch. Hand-written functions using this convention are declared via the macro JL_CALLABLE. The convention uses exactly 3 parameters:F  - Julia representation of function that is being applied\nargs - pointer to array of pointers to boxes\nnargs - length of the arrayThe return value is a pointer to a box."
+},
+
+{
+    "location": "devdocs/callconv.html#C-ABI-1",
+    "page": "Calling Conventions",
+    "title": "C ABI",
+    "category": "section",
+    "text": "C ABI wrappers enable calling Julia from C. The wrapper calls a function using the native calling convention.Tuples are always represented as C arrays."
+},
+
+{
+    "location": "devdocs/compiler.html#",
+    "page": "High-level Overview of the Native-Code Generation Process",
+    "title": "High-level Overview of the Native-Code Generation Process",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "devdocs/compiler.html#High-level-Overview-of-the-Native-Code-Generation-Process-1",
+    "page": "High-level Overview of the Native-Code Generation Process",
+    "title": "High-level Overview of the Native-Code Generation Process",
+    "category": "section",
+    "text": "<placeholder>"
+},
+
+{
+    "location": "devdocs/compiler.html#Representation-of-Pointers-1",
+    "page": "High-level Overview of the Native-Code Generation Process",
+    "title": "Representation of Pointers",
+    "category": "section",
+    "text": "When emitting code to an object file, pointers will be emitted as relocations. The deserialization code will ensure any object that pointed to one of these constants gets recreated and contains the right runtime pointer.Otherwise, they will be emitted as literal constants.To emit one of these objects, call literal_pointer_val. It'll handle tracking the Julia value and the LLVM global, ensuring they are valid both for the current runtime and after deserialization.When emitted into the object file, these globals are stored as references in a large gvals table. This allows the deserializer to reference them by index, and implement a custom manual GOT-like mechanism to restore them.Function pointers are handled similarly. They are stored as values in a large fvals table. Like globals, this allows the deserializer to reference them by index.Note that extern functions are handled separately, with names, via the usual symbol resolution mechanism in the linker.Note too that ccall functions are also handled separately, via a manual GOT + PLT."
+},
+
+{
+    "location": "devdocs/compiler.html#Representation-of-Intermediate-Values-1",
+    "page": "High-level Overview of the Native-Code Generation Process",
+    "title": "Representation of Intermediate Values",
+    "category": "section",
+    "text": "Values are passed around in a jl_cgval_t struct. This represents an R-value, and includes enough information to determine how to assign or pass it somewhere.They are created via one of the helper constructors, usually: mark_julia_type (for immediate values) and mark_julia_slot (for pointers to values).The function convert_julia_type can transform between any two types. It returns an R-value with cgval.typ set to typ. It'll cast the object to the requested representation, making heap boxes, allocating stack copies, and computing tagged unions as needed to change the representation.By contrast update_julia_type will change cgval.typ to typ, only if it can be done at zero-cost (i.e. without emitting any code)."
+},
+
+{
+    "location": "devdocs/compiler.html#Union-representation-1",
+    "page": "High-level Overview of the Native-Code Generation Process",
+    "title": "Union representation",
+    "category": "section",
+    "text": "Inferred union types may be stack allocated via a tagged type representation.The primitive routines that need to be able to handle tagged unions are:mark-type\nload-local\nstore-local\nisa\nis\nemit_typeof\nemit_sizeof\nboxed\nunbox\nspecialized cc-retEverything else should be possible to handle in inference by using these primitives to implement union-splitting.The representation of the tagged-union is as a pair of < void* union, byte selector >. The selector is fixed-size as byte & 0x7f, and will union-tag the first 126 isbits. It records the one-based depth-first count into the type-union of the isbits objects inside. An index of zero indicates that the union* is actually a tagged heap-allocated jl_value_t*, and needs to be treated as normal for a boxed object rather than as a tagged union.The high bit of the selector (byte & 0x80) can be tested to determine if the void* is actually a heap-allocated (jl_value_t*) box, thus avoiding the cost of re-allocating a box, while maintaining the ability to efficiently handle union-splitting based on the low bits.It is guaranteed that byte & 0x7f is an exact test for the type, if the value can be represented by a tag – it will never be marked byte = 0x80. It is not necessary to also test the type-tag when testing isa.The union* memory region may be allocated at any size. The only constraint is that it is big enough to contain the data currently specified by selector. It might not be big enough to contain the union of all types that could be stored there according to the associated Union type field. Use appropriate care when copying."
+},
+
+{
+    "location": "devdocs/compiler.html#Specialized-Calling-Convention-Signature-Representation-1",
+    "page": "High-level Overview of the Native-Code Generation Process",
+    "title": "Specialized Calling Convention Signature Representation",
+    "category": "section",
+    "text": "A jl_returninfo_t object describes the calling convention details of any callable.If any of the arguments or return type of a method can be represented unboxed, and the method is not varargs, it'll be given an optimized calling convention signature based on its specTypes and rettype fields.The general principles are that:Primitive types get passed in int/float registers.\nTuples of VecElement types get passed in vector registers.\nStructs get passed on the stack.\nReturn values are handle similarly to arguments, with a size-cutoff at which they will instead be returned via a hidden sret argument.The total logic for this is implemented by get_specsig_function and deserves_sret.Additionally, if the return type is a union, it may be returned as a pair of values (a pointer and a tag). If the union values can be stack-allocated, then sufficient space to store them will also be passed as a hidden first argument. It is up to the callee whether the returned pointer will point to this space, a boxed object, or even other constant memory."
+},
+
+{
     "location": "devdocs/functions.html#",
     "page": "Julia Functions",
     "title": "Julia Functions",
@@ -18614,46 +18702,6 @@ var documenterSearchIndex = {"docs": [
     "title": "Compiler efficiency issues",
     "category": "section",
     "text": "Generating a new type for every function has potentially serious consequences for compiler resource use when combined with Julia's \"specialize on all arguments by default\" design. Indeed, the initial implementation of this design suffered from much longer build and test times, higher memory use, and a system image nearly 2x larger than the baseline. In a naive implementation, the problem is bad enough to make the system nearly unusable. Several significant optimizations were needed to make the design practical.The first issue is excessive specialization of functions for different values of function-valued arguments. Many functions simply \"pass through\" an argument to somewhere else, e.g. to another function or to a storage location. Such functions do not need to be specialized for every closure that might be passed in. Fortunately this case is easy to distinguish by simply considering whether a function calls one of its arguments (i.e. the argument appears in \"head position\" somewhere). Performance-critical higher-order functions like map certainly call their argument function and so will still be specialized as expected. This optimization is implemented by recording which arguments are called during the analyze-variables pass in the front end. When cache_method sees an argument in the Function type hierarchy passed to a slot declared as Any or Function, it pretends the slot was declared as ANY (the \"don't specialize\" hint). This heuristic seems to be extremely effective in practice.The next issue concerns the structure of method cache hash tables. Empirical studies show that the vast majority of dynamically-dispatched calls involve one or two arguments. In turn, many of these cases can be resolved by considering only the first argument. (Aside: proponents of single dispatch would not be surprised by this at all. However, this argument means \"multiple dispatch is easy to optimize in practice\", and that we should therefore use it, not \"we should use single dispatch\"!) So the method cache uses the type of the first argument as its primary key. Note, however, that this corresponds to the second element of the tuple type for a function call (the first element being the type of the function itself). Typically, type variation in head position is extremely low – indeed, the majority of functions belong to singleton types with no parameters. However, this is not the case for constructors, where a single method table holds constructors for every type. Therefore the Type method table is special-cased to use the first tuple type element instead of the second.The front end generates type declarations for all closures. Initially, this was implemented by generating normal type declarations. However, this produced an extremely large number of constructors, all of which were trivial (simply passing all arguments through to new). Since methods are partially ordered, inserting all of these methods is O(n^2), plus there are just too many of them to keep around. This was optimized by generating composite_type expressions directly (bypassing default constructor generation), and using new directly to create closure instances. Not the prettiest thing ever, but you do what you gotta do.The next problem was the @test macro, which generated a 0-argument closure for each test case. This is not really necessary, since each test case is simply run once in place. Therefore I modified @test to expand to a try-catch block that records the test result (true, false, or exception raised) and calls the test suite handler on it.However this caused a new problem. When many tests are grouped together in a single function, e.g. a single top level expression, or some other test grouping function, that function could have a very large number of exception handlers. This triggered a kind of dataflow analysis worst case, where type inference spun around for minutes enumerating possible paths through the forest of handlers. This was fixed by simply bailing out of type inference when it encounters more than some number of handlers (currently 25). Presumably no performance-critical function will have more than 25 exception handlers. If one ever does, I'm willing to raise the limit to 26.A minor issue occurs during the bootstrap process due to storing all constructors in a single method table. In the second bootstrap step, where inference.ji is compiled using inference0.ji, constructors for inference0's types remain in the table, so there are still references to the old inference module and inference.ji is 2x the size it should be. This was fixed in dump.c by filtering definitions from \"replaced modules\" out of method tables and caches before saving a system image. A \"replaced module\" is one that satisfies the condition m != jl_get_global(m->parent, m->name) – in other words, some newer module has taken its name and place.Another type inference worst case was triggered by the following code from the QuadGK.jl package, formerly part of Base:function do_quadgk{Tw}(f, s, n, ::Type{Tw}, abstol, reltol, maxevals, nrm)\n    if eltype(s) <: Real # check for infinite or semi-infinite intervals\n        s1 = s[1]; s2 = s[end]; inf1 = isinf(s1); inf2 = isinf(s2)\n        if inf1 || inf2\n            if inf1 && inf2 # x = t/(1-t^2) coordinate transformation\n                return do_quadgk(t -> begin t2 = t*t; den = 1 / (1 - t2);\n                                            f(t*den) * (1+t2)*den*den; end,\n                                 map(x -> isinf(x) ? copysign(one(x), x) : 2x / (1+hypot(1,2x)), s),\n                                 n, Tw, abstol, reltol, maxevals, nrm)\n            end\n            s0,si = inf1 ? (s2,s1) : (s1,s2)\n            if si < 0 # x = s0 - t/(1-t)\n                return do_quadgk(t -> begin den = 1 / (1 - t);\n                                            f(s0 - t*den) * den*den; end,\n                                 reverse!(map(x -> 1 / (1 + 1 / (s0 - x)), s)),\n                                 n, Tw, abstol, reltol, maxevals, nrm)\n            else # x = s0 + t/(1-t)\n                return do_quadgk(t -> begin den = 1 / (1 - t);\n                                            f(s0 + t*den) * den*den; end,\n                                 map(x -> 1 / (1 + 1 / (x - s0)), s),\n                                 n, Tw, abstol, reltol, maxevals, nrm)\n            end\n        end\n    endThis code has a 3-way tail recursion, where each call wraps the current function argument f in a different new closure. Inference must consider 3^n (where n is the call depth) possible signatures. This blows up way too quickly, so logic was added to typeinf_uncached to immediately widen any argument that is a subtype of Function and that grows in depth down the stack."
-},
-
-{
-    "location": "devdocs/callconv.html#",
-    "page": "Calling Conventions",
-    "title": "Calling Conventions",
-    "category": "page",
-    "text": ""
-},
-
-{
-    "location": "devdocs/callconv.html#Calling-Conventions-1",
-    "page": "Calling Conventions",
-    "title": "Calling Conventions",
-    "category": "section",
-    "text": "Julia uses three calling conventions for four distinct purposes:Name Prefix Purpose\nNative julia_ Speed via specialized signatures\nJL Call jlcall_ Wrapper for generic calls\nJL Call jl_ Builtins\nC ABI jlcapi_ Wrapper callable from C"
-},
-
-{
-    "location": "devdocs/callconv.html#Julia-Native-Calling-Convention-1",
-    "page": "Calling Conventions",
-    "title": "Julia Native Calling Convention",
-    "category": "section",
-    "text": "The native calling convention is designed for fast non-generic calls. It usually uses a specialized signature.LLVM ghosts (zero-length types) are omitted.\nLLVM scalars and vectors are passed by value.\nLLVM aggregates (arrays and structs) are passed by reference.A small return values is returned as LLVM return values. A large return values is returned via the \"structure return\" (sret) convention, where the caller provides a pointer to a return slot.An argument or return values thta is a homogeneous tuple is sometimes represented as an LLVM vector instead of an LLVM array."
-},
-
-{
-    "location": "devdocs/callconv.html#JL-Call-Convention-1",
-    "page": "Calling Conventions",
-    "title": "JL Call Convention",
-    "category": "section",
-    "text": "The JL Call convention is for builtins and generic dispatch. Hand-written functions using this convention are declared via the macro JL_CALLABLE. The convention uses exactly 3 parameters:F  - Julia representation of function that is being applied\nargs - pointer to array of pointers to boxes\nnargs - length of the arrayThe return value is a pointer to a box."
-},
-
-{
-    "location": "devdocs/callconv.html#C-ABI-1",
-    "page": "Calling Conventions",
-    "title": "C ABI",
-    "category": "section",
-    "text": "C ABI wrappers enable calling Julia from C. The wrapper calls a function using the native calling convention.Tuples are always represented as C arrays."
 },
 
 {
