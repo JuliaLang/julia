@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
-using TestHelpers
+import TestHelpers: challenge_prompt
 
 const LIBGIT2_MIN_VER = v"0.23.0"
 
@@ -1089,6 +1089,45 @@ mktempdir() do dir
         @test LibGit2.checkused!(creds)
         @test creds.user == creds_user
         @test creds.pass == creds_pass
+    end
+
+    # The following tests require that we can fake a TTY so that we can provide passwords
+    # which use the `getpass` function. At the moment we can only fake this on UNIX based
+    # systems.
+    if is_unix()
+        @testset "HTTPS credential prompt" begin
+            url = "https://github.com/test/package.jl"
+
+            valid_username = "julia"
+            valid_password = randstring(16)
+
+            https_cmd = """
+            valid_cred = LibGit2.UserPasswordCredentials("$valid_username", "$valid_password")
+            err, auth_attempts = LibGit2.credential_loop(valid_cred, "$url")
+            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
+            """
+
+            # User provides a valid username and password
+            challenges = [
+                "Username for 'https://github.com':" => "$valid_username\n",
+                "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
+            ]
+            err, auth_attempts = challenge_prompt(https_cmd, challenges)
+            @test err == 0
+            @test auth_attempts == 1
+
+            # User repeatedly chooses invalid username/password until the prompt limit is
+            # reached
+            challenges = [
+                "Username for 'https://github.com':" => "foo\n",
+                "Password for 'https://foo@github.com':" => "bar\n",
+                "Username for 'https://github.com' [foo]:" => "$valid_username\n",
+                "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
+            ]
+            err, auth_attempts = challenge_prompt(https_cmd, challenges)
+            @test err == 0
+            @test auth_attempts == 5
+        end
     end
 
     #= temporarily disabled until working on the buildbots, ref https://github.com/JuliaLang/julia/pull/17651#issuecomment-238211150
