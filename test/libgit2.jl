@@ -521,8 +521,19 @@ mktempdir() do dir
                 @test count(diff) == 1
                 @test_throws BoundsError diff[0]
                 @test_throws BoundsError diff[2]
-                @test diff[1].status == LibGit2.Consts.DELTA_MODIFIED
+                @test LibGit2.Consts.DELTA_STATUS(diff[1].status) == LibGit2.Consts.DELTA_MODIFIED
                 @test diff[1].nfiles == 2
+                diff_strs = split(sprint(show, diff[1]), '\n')
+                @test diff_strs[1] == "DiffDelta:"
+                @test diff_strs[2] == "Status: DELTA_MODIFIED"
+                @test diff_strs[3] == "Number of files: 2"
+                @test diff_strs[4] == "Old file:"
+                @test diff_strs[5] == "DiffFile:"
+                @test contains(diff_strs[6], "Oid:")
+                @test contains(diff_strs[7], "Path:")
+                @test contains(diff_strs[8], "Size:")
+                @test isempty(diff_strs[9])
+                @test diff_strs[10] == "New file:"
                 LibGit2.commit(repo, "zzz")
                 @test !LibGit2.isdirty(repo)
                 @test !LibGit2.isdiff(repo, "HEAD")
