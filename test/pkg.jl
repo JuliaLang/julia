@@ -124,7 +124,6 @@ temp_pkg_dir() do
     Pkg.status("Example", iob)
     str = chomp(String(take!(iob)))
     @test endswith(str, string(Pkg.installed("Example")))
-    @test isempty(Pkg.dependents("Example"))
 
     # 17364 - a, Pkg.checkout with specific local branch
     let branch_name = "test-branch-1",
@@ -462,6 +461,11 @@ temp_pkg_dir() do
             LibGit2.reset!(repo, LibGit2.GitHash(old_commit), LibGit2.Consts.RESET_HARD)
         end
 
+        # run these at an old metadata commit where it's guaranteed no
+        # packages depend on Example.jl
+        @test isempty(Pkg.dependents("Example"))
+        @test isempty(Pkg.dependents("Example.jl"))
+
         @test_warn ("INFO: Installing Colors v0.6.4",
                     "INFO: Installing ColorTypes v0.2.2",
                     "INFO: Installing FixedPointNumbers v0.1.3",
@@ -539,7 +543,6 @@ end
         Pkg.status("Example.jl", iob)
         str = chomp(String(take!(iob)))
         @test endswith(str, string(Pkg.installed("Example.jl")))
-        @test isempty(Pkg.dependents("Example.jl"))
     end
 end
 
