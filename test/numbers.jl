@@ -2912,6 +2912,17 @@ immutable PR20530; end
     @test x^p == 1
     @test x^2 == 2
     @test [x,x,x].^2 == [2,2,2]
+    for T in (Float16, Float32, Float64, BigFloat, Int8, Int, BigInt, Complex{Int}, Complex{Float64})
+        for p in -4:4
+            if p < 0 && real(T) <: Integer
+                @test_throws DomainError eval(:($T(2)^$p))
+            else
+                v = eval(:($T(2)^$p))
+                @test 2.0^p == T(2)^p == v
+                @test v isa T
+            end
+        end
+    end
 end
 
 @testset "iszero" begin
