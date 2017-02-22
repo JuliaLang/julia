@@ -251,6 +251,7 @@ true
 
 julia> isconcrete(Vector{Complex{Float32}})
 true
+```
 """
 isconcrete(t::ANY) = (@_pure_meta; isa(t, DataType) && t.isconcrete)
 
