@@ -635,6 +635,13 @@ let pub = Base.parameter_upper_bound, x = fComplicatedUnionAll(Real)
     @test pub(pub(x, 1), 2) == Int || pub(pub(x, 1), 2) == Float64
 end
 
+# issue #20733
+# run this test in a separate process to avoid interfering with `getindex`
+let def = "Base.getindex(t::NTuple{3,NTuple{2,Int}}, i::Int, j::Int, k::Int) = (t[1][i], t[2][j], t[3][k])"
+    @test readstring(`$(Base.julia_cmd()) --startup-file=no -E "$def;test(t) = t[2,1,2];test(((3,4), (5,6), (7,8)))"`) ==
+        "(4, 5, 8)\n"
+end
+
 # issue #20267
 mutable struct T20267{T}
     inds::Vector{T}
