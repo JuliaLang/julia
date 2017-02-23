@@ -1013,18 +1013,22 @@ mktempdir() do dir
             end
 
             # Find a hostname that maps to the loopback address
-            hostname = replace(readchomp(`hostname`), r"\..*$", "")
-            loopback = ip"127.0.0.1"
+            hostnames = ["localhost"]
+            try
+                # In minimal environments a hostname might not be available (issue #20758)
+                unshift!(hostnames, replace(gethostname(), r"\..*$", ""))
+            end
 
-            for host in (hostname, "localhost")
+            loopback = ip"127.0.0.1"
+            for hostname in hostnames
                 try
-                    addr = getaddrinfo(host)
+                    addr = getaddrinfo(hostname)
                 catch
                     continue
                 end
 
                 if addr == loopback
-                    common_name = host
+                    common_name = hostname
                     break
                 end
             end
