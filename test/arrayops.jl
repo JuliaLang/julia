@@ -834,6 +834,8 @@ end
     @test isequal(c[1,:], cv2)
     @test isequal(c[3,:], cv)
     @test isequal(c[:,4], [2.0,2.0,2.0,2.0]*1000)
+
+    @test repeat(BitMatrix(eye(2)), inner = (2,1), outer = (1,2)) == repeat(eye(2), inner = (2,1), outer = (1,2))
 end
 
 @testset "indexing with bools" begin
