@@ -24,6 +24,21 @@ function mirror_callback(remote::Ptr{Ptr{Void}}, repo_ptr::Ptr{Void},
     return Cint(0)
 end
 
+"""
+    LibGit2.is_passphrase_required(private_key) -> Bool
+
+Returns `true` if the `private_key` file requires a passphrase, `false` otherwise.
+"""
+function is_passphrase_required(private_key::AbstractString)
+    !isfile(private_key) && return false
+
+    # In encrypted private keys, the second line is "Proc-Type: 4,ENCRYPTED"
+    return open(private_key) do f
+        readline(f)
+        readline(f) == "Proc-Type: 4,ENCRYPTED"
+    end
+end
+
 function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
         username_ptr, schema, host)
     isusedcreds = checkused!(creds)
@@ -73,6 +88,8 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
             keydefpath
         end
 
+        isfile(privatekey) || warn("Private key not found")
+
         # If the private key changed, invalidate the cached public key
         (privatekey != creds.prvkey) &&
             (creds.pubkey = "")
@@ -93,22 +110,11 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
             keydefpath
         end
 
-        passphrase_required = true
-        if !isfile(privatekey)
-            warn("Private key not found")
-        else
-            # In encrypted private keys, the second line is "Proc-Type: 4,ENCRYPTED"
-            open(privatekey) do f
-                readline(f)
-                passphrase_required = readline(f) == "Proc-Type: 4,ENCRYPTED"
-            end
-        end
-
         passphrase = if haskey(ENV,"SSH_KEY_PASS")
             ENV["SSH_KEY_PASS"]
         else
             passdef = creds.pass # check if credentials were already used
-            if passphrase_required && (isempty(passdef) || isusedcreds)
+            if (isempty(passdef) || isusedcreds) && is_passphrase_required(privatekey)
                 if Sys.iswindows()
                     passdef = Base.winprompt(
                         "Your SSH Key requires a password, please enter it now:",
