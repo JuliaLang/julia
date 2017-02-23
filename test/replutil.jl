@@ -502,18 +502,22 @@ end
 let
     method_error = MethodError(EnclosingModule.AbstractTypeNoConstructors, ())
 
+    # Test that it shows a special message when no constructors have been defined by the user.
     @test sprint(
         showerror,
         method_error
     ) == "MethodError: no constructors have been defined for $(EnclosingModule.AbstractTypeNoConstructors)"
 
+    # Does it go back to previous behaviour when there *is* at least
+    # one constructor defined?
     EnclosingModule.AbstractTypeNoConstructors(x, y) = x + y
-
     @test startswith(sprint(
             showerror,
             method_error
         ), "MethodError: no method matching $(EnclosingModule.AbstractTypeNoConstructors)()"
     )
+
+    # Test that the 'default' sysimg.jl method is not displayed.
     @test !contains(sprint(
             showerror,
             method_error
@@ -521,6 +525,7 @@ let
         "where T at sysimg.jl"
     )
 
+    # Test that tab-completion will not show the 'default' sysimg.jl method.
     for method_string in Base.REPLCompletions.complete_methods(:(EnclosingModule.AbstractTypeNoConstructors()))
         @test !startswith(method_string, "(::Type{T})(arg) where T in Base at sysimg.jl")
     end
