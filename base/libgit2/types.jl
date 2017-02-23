@@ -481,23 +481,24 @@ Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
 abstract type GitObject <: AbstractGitObject end
 
 for (typ, reporef, sup, cname) in [
-    (:GitRepo,       nothing,   :AbstractGitObject, :git_repository),
-    (:GitTreeEntry,  nothing,   :AbstractGitObject, :git_tree_entry),
-    (:GitConfig,     :Nullable, :AbstractGitObject, :git_config),
-    (:GitIndex,      :Nullable, :AbstractGitObject, :git_index),
-    (:GitRemote,     :GitRepo,  :AbstractGitObject, :git_remote),
-    (:GitRevWalker,  :GitRepo,  :AbstractGitObject, :git_revwalk),
-    (:GitReference,  :GitRepo,  :AbstractGitObject, :git_reference),
-    (:GitDiff,       :GitRepo,  :AbstractGitObject, :git_diff),
-    (:GitAnnotated,  :GitRepo,  :AbstractGitObject, :git_annotated_commit),
-    (:GitRebase,     :GitRepo,  :AbstractGitObject, :git_rebase),
-    (:GitStatus,     :GitRepo,  :AbstractGitObject, :git_status_list),
-    (:GitBranchIter, :GitRepo,  :AbstractGitObject, :git_branch_iterator),
-    (:GitUnknownObject,  :GitRepo,  :GitObject,         :git_object),
-    (:GitCommit,     :GitRepo,  :GitObject,         :git_commit),
-    (:GitBlob,       :GitRepo,  :GitObject,         :git_blob),
-    (:GitTree,       :GitRepo,  :GitObject,         :git_tree),
-    (:GitTag,        :GitRepo,  :GitObject,         :git_tag)]
+    (:GitRepo,          nothing,   :AbstractGitObject, :git_repository),
+    (:GitTreeEntry,     nothing,   :AbstractGitObject, :git_tree_entry),
+    (:GitDiffStats,     nothing,   :AbstractGitObject, :git_diff_stats),
+    (:GitConfig,        :Nullable, :AbstractGitObject, :git_config),
+    (:GitIndex,         :Nullable, :AbstractGitObject, :git_index),
+    (:GitRemote,        :GitRepo,  :AbstractGitObject, :git_remote),
+    (:GitRevWalker,     :GitRepo,  :AbstractGitObject, :git_revwalk),
+    (:GitReference,     :GitRepo,  :AbstractGitObject, :git_reference),
+    (:GitDiff,          :GitRepo,  :AbstractGitObject, :git_diff),
+    (:GitAnnotated,     :GitRepo,  :AbstractGitObject, :git_annotated_commit),
+    (:GitRebase,        :GitRepo,  :AbstractGitObject, :git_rebase),
+    (:GitStatus,        :GitRepo,  :AbstractGitObject, :git_status_list),
+    (:GitBranchIter,    :GitRepo,  :AbstractGitObject, :git_branch_iterator),
+    (:GitUnknownObject, :GitRepo,  :GitObject,         :git_object),
+    (:GitCommit,        :GitRepo,  :GitObject,         :git_commit),
+    (:GitBlob,          :GitRepo,  :GitObject,         :git_blob),
+    (:GitTree,          :GitRepo,  :GitObject,         :git_tree),
+    (:GitTag,           :GitRepo,  :GitObject,         :git_tag)]
 
     if reporef === nothing
         @eval mutable struct $typ <: $sup
