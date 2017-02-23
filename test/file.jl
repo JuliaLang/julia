@@ -236,7 +236,11 @@ function test_monitor_wait(tval)
     end
     fname, events = wait(fm)
     close(fm)
-    @test fname == basename(file)
+    if is_linux() || is_windows() || is_apple()
+        @test fname == basename(file)
+    else
+        @test fname == ""  # platforms where F_GETPATH is not available
+    end
     @test events.changed
 end
 
