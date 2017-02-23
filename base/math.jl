@@ -698,7 +698,7 @@ end
 @inline ^(x::Float64, y::Integer) = x ^ Float64(y)
 @inline ^(x::Float32, y::Integer) = x ^ Float32(y)
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ Float32(y))
-^{p}(x::Float16, ::Type{Val{p}}) = Float16(Float32(x)^Val{p})
+@inline ^{p}(x::Float16, ::Type{Val{p}}) = Float16(Float32(x) ^ Val{p})
 
 function angle_restrict_symm(theta)
     const P1 = 4 * 7.8539812564849853515625e-01
