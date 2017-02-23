@@ -680,7 +680,6 @@ to `Point` have the same type. When this isn't the case, the constructor will fa
 julia> Point(1,2.5)
 ERROR: MethodError: no method matching Point(::Int64, ::Float64)
 Closest candidates are:
-  Point(::Any) where T at sysimg.jl:24
   Point(::T, !Matched::T) where T at none:2
 ```
 
