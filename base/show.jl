@@ -211,11 +211,12 @@ end
 show(io::IO, x::DataType) = show_datatype(io, x)
 
 function show_datatype(io::IO, x::DataType)
-    if (!isempty(x.parameters) || x.name === Tuple.name) && x !== Tuple
+    istuple = x.name === Tuple.name
+    if (!isempty(x.parameters) || istuple) && x !== Tuple
         n = length(x.parameters)
 
         # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
-        if n > 3 && all(i -> (x.parameters[1] === i), x.parameters)
+        if istuple && n > 3 && all(i -> (x.parameters[1] === i), x.parameters)
             print(io, "NTuple{", n, ',', x.parameters[1], "}")
         else
             show(io, x.name)
