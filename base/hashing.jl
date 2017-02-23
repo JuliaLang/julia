@@ -7,7 +7,7 @@ hash(w::WeakRef, h::UInt) = hash(w.value, h)
 
 ## hashing general objects ##
 
-hash(x::ANY, h::UInt) = hash_uint(3*object_id(x) - h)
+hash(x::ANY, h::UInt) = hash_uint(3h - object_id(x))
 
 ## core data hashing functions ##
 
