@@ -332,6 +332,21 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
     end
 end
 
+"""
+    rem(x, T)
+    mod(x, T)
+    %(x, T)
+
+For an integer type T, finds z::T such that x ≡ z (mod n), where n is the cardinality of T
+and z is restricted to the interval of values representable by T.
+
+```jldoctest
+julia> 129 % Int8
+-127
+```
+"""
+rem, mod
+
 rem{T<:Integer}(x::T, ::Type{T}) = x
 rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
 mod{T<:Integer}(x::Integer, ::Type{T}) = rem(x, T)
