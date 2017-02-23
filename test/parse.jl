@@ -1024,3 +1024,12 @@ const a = A()
 @test_throws MethodError a()
 @test call(a) === 1
 end
+
+# issue #20729
+macro m20729()
+    ex = Expr(:head)
+    resize!(ex.args, 1)
+    return ex
+end
+
+@test_throws ErrorException expand(:(@m20729))
