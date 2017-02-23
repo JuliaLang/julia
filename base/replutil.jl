@@ -672,7 +672,5 @@ Determines whether a method is the default method which is provided to all types
 Such a method is usually undesirable to be displayed to the user in the REPL.
 """
 function is_default_method(m::Method)
-    return m.module == Base 
-        &&   m.file == Symbol("sysimg.jl") 
-        &&    m.sig == Tuple{Type{T},Any} where T
+    return m.module == Base && m.file == Symbol("sysimg.jl") && m.sig == Tuple{Type{T},Any} where T
 end
