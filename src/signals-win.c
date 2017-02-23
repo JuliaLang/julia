@@ -338,8 +338,8 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
     QueryPerformanceFrequency(&Frequency);
     while (1) {
         if (running && bt_size_cur < bt_size_max) {
-            //multiply timeout(microseconds) by random factor between 0 and 2
-            DWORD timeout = (int)((nsecprof*((double)rand() / (double)RAND_MAX*2.0)/1000));
+            //Convert timeout to microseconds
+            DWORD timeout = nsecprof/1000;
             //if timeout is greater than a millisecond use Sleep
             if (timeout < 1000)
             {
