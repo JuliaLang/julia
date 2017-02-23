@@ -1066,8 +1066,8 @@ abstract type AbstractCredentials end
 mutable struct UserPasswordCredentials <: AbstractCredentials
     user::String
     pass::String
-    function UserPasswordCredentials(u::AbstractString="", p::AbstractString="")
-        c = new(u, p)
+    function UserPasswordCredentials(user::AbstractString="", pass::AbstractString="")
+        c = new(user, pass)
         finalizer(c, securezero!)
         return c
     end
@@ -1099,8 +1099,9 @@ mutable struct SSHCredentials <: AbstractCredentials
     pass::String
     prvkey::String
     pubkey::String
-    function SSHCredentials(u::AbstractString="", p::AbstractString="", prvkey::AbstractString="", pubkey::AbstractString="")
-        c = new(u, p, prvkey, pubkey)
+    function SSHCredentials(user::AbstractString="", pass::AbstractString="",
+                            prvkey::AbstractString="", pubkey::AbstractString="")
+        c = new(user, pass, prvkey, pubkey)
         finalizer(c, securezero!)
         return c
     end
