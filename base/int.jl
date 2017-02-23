@@ -337,8 +337,8 @@ end
     mod(x, T)
     %(x, T)
 
-For an integer type T, finds z::T such that x ≡ z (mod n), where n is the cardinality of T
-and z is restricted to the interval of values representable by T.
+For an integer type `T`, finds `z::T` such that `x` ≡ `z` (mod n), where n is the
+cardinality of `T` and `z` is restricted to the interval of values representable by `T`.
 
 ```jldoctest
 julia> 129 % Int8
