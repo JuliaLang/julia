@@ -427,7 +427,6 @@ function update(branch::AbstractString, upkgs::Set{String})
                         success = true
                         try
                             LibGit2.fetch(repo, payload = Nullable(creds))
-                            LibGit2.reset!(creds)
                             LibGit2.merge!(repo, fastforward=true)
                         catch err
                             cex = CapturedException(err, catch_backtrace())
