@@ -1626,7 +1626,8 @@ function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vect
         return abstract_apply(af, fargs[3:end], argtypes[3:end], vtypes, sv)
     end
 
-    for i = 2:(length(argtypes) - 1)
+    la = length(argtypes)
+    for i = 2:(la - 1)
         if isvarargtype(argtypes[i])
             return Any
         end
@@ -1776,9 +1777,9 @@ function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vect
         return rty
     end
 
-    if length(argtypes)>2 && argtypes[3] ⊑ Int
+    if la>2 && argtypes[3] ⊑ Int
         at2 = widenconst(argtypes[2])
-        if at2 <: SimpleVector && istopfunction(tm, f, :getindex)
+        if la==3 && at2 <: SimpleVector && istopfunction(tm, f, :getindex)
             if isa(argtypes[2], Const) && isa(argtypes[3], Const)
                 svecval = argtypes[2].val
                 idx = argtypes[3].val
@@ -1788,15 +1789,15 @@ function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vect
                 end
             end
         elseif (at2 <: Tuple ||
-            (isa(at2, DataType) && (at2::DataType).name === Pair_name()))
+                (isa(at2, DataType) && (at2::DataType).name === Pair_name()))
             # allow tuple indexing functions to take advantage of constant
             # index arguments.
-            if istopfunction(tm, f, :getindex)
+            if istopfunction(tm, f, :getindex) && la==3
                 return getfield_tfunc(argtypes[2], argtypes[3])
-            elseif istopfunction(tm, f, :next)
+            elseif istopfunction(tm, f, :next) && la==3
                 t1 = widenconst(getfield_tfunc(argtypes[2], argtypes[3]))
                 return t1===Bottom ? Bottom : Tuple{t1, Int}
-            elseif istopfunction(tm, f, :indexed_next)
+            elseif istopfunction(tm, f, :indexed_next) && la==4
                 t1 = widenconst(getfield_tfunc(argtypes[2], argtypes[3]))
                 return t1===Bottom ? Bottom : Tuple{t1, Int}
             end
@@ -3814,8 +3815,10 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     force_infer = false
     if !method.isstaged
         if method.module == _topmod(method.module) || (isdefined(Main, :Base) && method.module == Main.Base)
-            if method.name == :getindex || method.name == :next || method.name == :indexed_next
-                if length(atypes) > 2 && atypes[3] ⊑ Int
+            la = length(atypes)
+            if (la==3 && (method.name == :getindex || method.name == :next)) ||
+                (la==4 && method.name == :indexed_next)
+                if atypes[3] ⊑ Int
                     at2 = widenconst(atypes[2])
                     if (at2 <: Tuple || at2 <: SimpleVector ||
                         (isa(at2, DataType) && (at2::DataType).name === Pair_name()))
