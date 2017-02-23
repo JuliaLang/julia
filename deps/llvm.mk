@@ -488,7 +488,7 @@ $(eval $(call LLVM_PATCH,llvm-r282182)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-3.9.0_cygwin)) # R283427, Remove for 4.0
 endif
 $(eval $(call LLVM_PATCH,llvm-PR22923)) # Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-arm-fix-prel31))
+$(eval $(call LLVM_PATCH,llvm-arm-fix-prel31)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D25865-cmakeshlib)) # Remove for 4.0
 # Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
 $(eval $(call LLVM_PATCH,llvm-3.9.0_threads))
@@ -505,6 +505,13 @@ $(eval $(call LLVM_PATCH,llvm-D27397)) # Julia issue #19792, Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D28009)) # Julia issue #19792, Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D28215_FreeBSD_shlib))
 $(eval $(call LLVM_PATCH,llvm-D28221-avx512)) # mentioned in issue #19797
+$(eval $(call LLVM_PATCH,llvm-PR276266)) # Issue #19976, Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-PR278088)) # Issue #19976, Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-PR277939)) # Issue #19976, Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-PR278321)) # Issue #19976, Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-PR278923)) # Issue #19976, Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-D28759-loopclearance))
+$(eval $(call LLVM_PATCH,llvm-D28786-callclearance))
 $(eval $(call LLVM_PATCH,llvm-rL293230-icc17-cmake)) # Remove for 4.0
 endif # LLVM_VER
 
