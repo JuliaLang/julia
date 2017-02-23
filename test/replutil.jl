@@ -20,6 +20,7 @@ method_c1(x::Float64, s::AbstractString...) = true
 buf = IOBuffer()
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, "")))
 no_color = "\nClosest candidates are:\n  method_c1(!Matched::Float64, !Matched::AbstractString...)$cfile$c1line"
+@assert length(methods(method_c1)) <= 3
 test_have_color(buf,
                 "\e[0m\nClosest candidates are:\n  method_c1(\e[1m\e[31m::Float64\e[0m, \e[1m\e[31m::AbstractString...\e[0m)$cfile$c1line\e[0m",
                 no_color)
@@ -102,12 +103,12 @@ PR16155line2 = @__LINE__ + 1
 (::Type{T}){T<:PR16155}(arg::Any) = "replace call-to-convert method from sysimg"
 
 Base.show_method_candidates(buf, MethodError(PR16155,(1.0, 2.0, Int64(3))))
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(\e[1m\e[31m::Int64\e[0m, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\n  ...\e[0m",
-                     "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(!Matched::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\n  ...")
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(\e[1m\e[31m::Int64\e[0m, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\e[0m",
+                     "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(!Matched::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2")
 
 Base.show_method_candidates(buf, MethodError(PR16155,(Int64(3), 2.0, Int64(3))))
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\n  ...\e[0m",
-                     "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\n  ...")
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\e[0m",
+                     "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2")
 
 c6line = @__LINE__
 method_c6(; x=1) = x
@@ -250,12 +251,6 @@ let
     err_str = @except_str g11007([[1] [1]]) MethodError
     @test contains(err_str, "row vector")
     @test contains(err_str, "column vector")
-end
-
-abstract type T11007 end
-let
-    err_str = @except_str T11007() MethodError
-    @test contains(err_str, "no method matching $(curmod_prefix)T11007()")
 end
 
 struct TypeWithIntParam{T <: Integer} end
