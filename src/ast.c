@@ -693,6 +693,8 @@ static value_t julia_to_list2(fl_context_t *fl_ctx, jl_value_t *a, jl_value_t *b
 
 static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
 {
+    if (v == NULL)
+        jl_error("undefined reference in AST");
     if (jl_is_symbol(v))
         return symbol(fl_ctx, jl_symbol_name((jl_sym_t*)v));
     if (v == jl_true)
