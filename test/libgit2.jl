@@ -1921,9 +1921,8 @@ mktempdir() do dir
                 include($LIBGIT2_HELPER_PATH)
                 valid_cred = LibGit2.SSHCredentials($username, $passphrase, $valid_p_key, $(valid_p_key * ".pub"))
                 invalid_cred = LibGit2.SSHCredentials($username, "", $invalid_key, $(invalid_key * ".pub"))
-                invalid_cred.usesshagent = "N"  # Disable SSH agent use
                 payload = CredentialPayload(Nullable(invalid_cred))
-                credential_loop(valid_cred, $url, $username, payload)
+                credential_loop(valid_cred, $url, $username, payload, use_ssh_agent=false)
             end
 
             # Explicitly provided credential is correct

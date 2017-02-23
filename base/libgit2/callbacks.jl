@@ -61,16 +61,16 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
     errcls, errmsg = Error.last_error()
     if errcls != Error.None
         # Check if we used ssh-agent
-        if creds.usesshagent == "U"
-            creds.usesshagent = "E" # reported ssh-agent error, disables ssh agent use for the future
+        if p.use_ssh_agent == 'U'
+            p.use_ssh_agent = 'E' # reported ssh-agent error, disables ssh agent use for the future
         end
     end
 
     # first try ssh-agent if credentials support its usage
-    if creds.usesshagent == "Y" || creds.usesshagent == "U"
+    if p.use_ssh_agent == 'Y' || p.use_ssh_agent == 'U'
         err = ccall((:git_cred_ssh_key_from_agent, :libgit2), Cint,
                      (Ptr{Ptr{Void}}, Cstring), libgit2credptr, username_ptr)
-        creds.usesshagent = "U" # used ssh-agent only one time
+        p.use_ssh_agent = 'U' # used ssh-agent only one time
         err == 0 && return Cint(0)
     end
 
@@ -221,7 +221,7 @@ For `LibGit2.Consts.CREDTYPE_SSH_KEY` type, if the payload contains fields:
 Typing `^D` (control key together with the `d` key) will abort the credential prompt.
 
 Credentials are checked in the following order (if supported):
-- ssh key pair (`ssh-agent` if specified in payload's `usesshagent` field)
+- ssh key pair (`ssh-agent` if specified in payload's `use_ssh_agent` field)
 - plain text
 
 **Note**: Due to the specifics of the `libgit2` authentication procedure, when
