@@ -56,22 +56,16 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         creds.pass = ""
     end
 
-    # Note: The same SSHCredentials can be used to authenticate separate requests using the
-    # same credential cache. e.g. using Pkg.update when there are two private packages.
-    errcls, errmsg = Error.last_error()
-    if errcls != Error.None
-        # Check if we used ssh-agent
-        if p.use_ssh_agent == 'U'
-            p.use_ssh_agent = 'E' # reported ssh-agent error, disables ssh agent use for the future
-        end
-    end
-
     # first try ssh-agent if credentials support its usage
-    if p.use_ssh_agent == 'Y' || p.use_ssh_agent == 'U'
+    if p.use_ssh_agent == 'Y'
         err = ccall((:git_cred_ssh_key_from_agent, :libgit2), Cint,
-                     (Ptr{Ptr{Void}}, Cstring), libgit2credptr, username_ptr)
-        p.use_ssh_agent = 'U' # used ssh-agent only one time
-        err == 0 && return Cint(0)
+                    (Ptr{Ptr{Void}}, Cstring), libgit2credptr, username_ptr)
+        if err == 0
+            p.use_ssh_agent = 'U'  # used ssh-agent only one time
+            return Cint(0)
+        else
+            p.use_ssh_agent = 'E'
+        end
     end
 
     if creds.prompt_if_incorrect
