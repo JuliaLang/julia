@@ -130,10 +130,9 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
         isusedcreds && return Cint(Error.EAUTH)
     end
 
-    err = ccall((:git_cred_ssh_key_new, :libgit2), Cint,
+    return ccall((:git_cred_ssh_key_new, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Cstring, Cstring, Cstring, Cstring),
                  libgit2credptr, creds.user, creds.pubkey, creds.prvkey, creds.pass)
-    return err
 end
 
 function authenticate_userpass(creds::UserPasswordCredentials, libgit2credptr::Ptr{Ptr{Void}},
@@ -164,10 +163,9 @@ function authenticate_userpass(creds::UserPasswordCredentials, libgit2credptr::P
         isusedcreds && return Cint(Error.EAUTH)
     end
 
-    err = ccall((:git_cred_userpass_plaintext_new, :libgit2), Cint,
+    return ccall((:git_cred_userpass_plaintext_new, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Cstring, Cstring),
                  libgit2credptr, creds.user, creds.pass)
-    err == 0 && return Cint(0)
 end
 
 
@@ -200,7 +198,7 @@ counting strategy that prevents repeated usage of faulty credentials.
 function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
                               username_ptr::Cstring,
                               allowed_types::Cuint, payload_ptr::Ptr{Void})
-    err = 0
+    err = Cint(0)
     url = unsafe_string(url_ptr)
 
     # parse url for schema and host
@@ -246,7 +244,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
         end
         err = Cint(Error.EAUTH)
     end
-    return Cint(err)
+    return err
 end
 
 function fetchhead_foreach_callback(ref_name::Cstring, remote_url::Cstring,
