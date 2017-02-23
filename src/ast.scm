@@ -50,6 +50,7 @@
                 ((call)   (string (deparse (cadr e)) #\( (deparse-arglist (cddr e)) #\)))
                 ((ref)    (string (deparse (cadr e)) #\[ (deparse-arglist (cddr e)) #\]))
                 ((curly)  (string (deparse (cadr e)) #\{ (deparse-arglist (cddr e)) #\}))
+                ((macrocall) (string (cadr e) " " (deparse-arglist (cddr e) " ")))
                 ((quote inert)
                  (if (and (symbol? (cadr e))
                           (not (= (string.char (string (cadr e)) 0) #\=)))
