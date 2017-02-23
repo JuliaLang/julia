@@ -20,13 +20,23 @@ import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              max, min, minmax, ^, exp2, muladd, rem,
              exp10, expm1, log1p
 
-using Base: sign_mask, exponent_mask, exponent_one, exponent_bias,
-            exponent_half, exponent_max, exponent_raw_max, fpinttype,
-            significand_mask, significand_bits, exponent_bits
+using Base: sign_mask, exponent_mask, exponent_one,
+            exponent_half, fpinttype, significand_mask
 
 using Core.Intrinsics: sqrt_llvm
 
-const IEEEFloat = Union{Float16,Float32,Float64}
+const IEEEFloat = Union{Float16, Float32, Float64}
+
+for T in (Float16, Float32, Float64)
+    @eval significand_bits(::Type{$T}) = $(trailing_ones(significand_mask(T)))
+    @eval exponent_bits(::Type{$T}) = $(sizeof(T)*8 - significand_bits(T) - 1)
+    @eval exponent_bias(::Type{$T}) = $(Int(exponent_one(T) >> significand_bits(T)))
+    # maximum float exponent
+    @eval exponent_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T))
+    # maximum float exponent without bias
+    @eval exponent_raw_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)))
+end
+
 # non-type specific math functions
 
 """
@@ -229,8 +239,6 @@ for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp2, :expm1)
         ($f)(x::Real) = ($f)(float(x))
     end
 end
-# pure julia exp function
-include("special/exp.jl")
 exp(x::Real) = exp(float(x))
 
 # fallback definitions to prevent infinite loop from $f(x::Real) def above
@@ -950,6 +958,7 @@ end
 cbrt(a::Float16) = Float16(cbrt(Float32(a)))
 
 # More special functions
+include("special/exp.jl")
 include("special/trig.jl")
 include("special/gamma.jl")
 
