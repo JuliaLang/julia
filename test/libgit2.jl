@@ -294,7 +294,12 @@ mktempdir() do dir
                 try
                     @test commit_oid1 == LibGit2.GitHash(cmt)
                     short_oid1 = LibGit2.GitShortHash(string(commit_oid1))
-                    @test cmp(commit_oid1,short_oid1) == 0
+                    @test hex(commit_oid1) == hex(short_oid1)
+                    @test cmp(commit_oid1, short_oid1) == 0
+                    @test cmp(short_oid1, commit_oid1) == 0
+                    @test !(short_oid1 < commit_oid1)
+                    short_str = sprint(show, short_oid1)
+                    @test short_str == "GitShortHash(\"$(string(short_oid1))\")"
                     auth = LibGit2.author(cmt)
                     @test isa(auth, LibGit2.Signature)
                     @test auth.name == test_sig.name
