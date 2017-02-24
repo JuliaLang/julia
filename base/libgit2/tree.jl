@@ -59,7 +59,7 @@ function (::Type{T}){T<:GitObject}(te::GitTreeEntry)
     @check ccall((:git_tree_entry_to_object, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Ref{Void}),
                    obj_ptr_ptr, repo.ptr, te.ptr)
-    return T(repo.ptr, obj_ptr_ptr[])
+    return T(repo, obj_ptr_ptr[])
 end
 
 function Base.show(io::IO, te::GitTreeEntry)
