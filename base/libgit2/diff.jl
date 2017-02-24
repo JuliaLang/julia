@@ -39,7 +39,7 @@ function GitDiffStats(diff::GitDiff)
     @check ccall((:git_diff_get_stats, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}),
                   diff_stat_ptr_ptr, diff.ptr)
-    return GitDiffStats(diff_stat_ptr_ptr[])
+    return GitDiffStats(diff.repo, diff_stat_ptr_ptr[])
 end
 
 function files_changed(diff_stat::GitDiffStats)
