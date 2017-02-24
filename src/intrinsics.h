@@ -91,7 +91,6 @@
     ADD_I(trunc_llvm, 1) \
     ADD_I(rint_llvm, 1) \
     ADD_I(sqrt_llvm, 1) \
-    ADD_I(powi_llvm, 2) \
     ALIAS(sqrt_llvm_fast, sqrt_llvm) \
     /*  pointer access */ \
     ADD_I(pointerref, 3) \
