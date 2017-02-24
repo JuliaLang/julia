@@ -92,6 +92,7 @@
             PAIR_ARROW, # =>
             APPROX, # ~
             EX_OR_EQ, # $=
+            XOR_EQ, # ⊻=
         end_assignments,
 
         # Level 2

@@ -284,6 +284,11 @@ end
 
 end
 
+@testset "xor_eq" begin
+    @test collect(tokenize("1 ⊻= 2"))[3].kind==T.XOR_EQ
+end
+
 @testset "lex binary" begin
     @test collect(tokenize("0b0101"))[1].kind==T.INTEGER
 end
+

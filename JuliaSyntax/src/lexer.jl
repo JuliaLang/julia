@@ -294,7 +294,8 @@ function next_token(l::Lexer)
     elseif c == '^'; return lex_circumflex(l);
     elseif c == '@'; return emit(l, Tokens.AT_SIGN)
     elseif c == '?'; return emit(l, Tokens.CONDITIONAL)
-    elseif c == '$'; return lex_xor(l);
+    elseif c == '$'; return lex_dollar(l);
+    elseif c == '⊻'; return lex_xor(l);
     elseif c == '~'; return emit(l, Tokens.APPROX)
     elseif c == '#'; return lex_comment(l)
     elseif c == '='; return lex_equal(l)
@@ -506,11 +507,18 @@ function lex_division(l::Lexer)
     return emit(l, Tokens.DIVISION_SIGN)
 end
 
-function lex_xor(l::Lexer)
+function lex_dollar(l::Lexer)
     if accept(l, '=')
         return emit(l, Tokens.EX_OR_EQ)
     end
     return emit(l, Tokens.EX_OR)
+end
+
+function lex_xor(l::Lexer)
+    if accept(l, '=')
+        return emit(l, Tokens.XOR_EQ)
+    end
+    return emit(l, Tokens.XOR)
 end
 
 # A digit has been consumed
