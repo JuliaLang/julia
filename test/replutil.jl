@@ -20,7 +20,7 @@ method_c1(x::Float64, s::AbstractString...) = true
 buf = IOBuffer()
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, "")))
 no_color = "\nClosest candidates are:\n  method_c1(!Matched::Float64, !Matched::AbstractString...)$cfile$c1line"
-@assert length(methods(method_c1)) <= 3
+@test length(methods(method_c1)) <= 3 # because of '...' in candidate printing
 test_have_color(buf,
                 "\e[0m\nClosest candidates are:\n  method_c1(\e[1m\e[31m::Float64\e[0m, \e[1m\e[31m::AbstractString...\e[0m)$cfile$c1line\e[0m",
                 no_color)
