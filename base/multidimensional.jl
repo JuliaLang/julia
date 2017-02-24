@@ -12,7 +12,22 @@ module IteratorsMD
 
     export CartesianIndex, CartesianRange
 
-    # CartesianIndex
+    """
+        CartesianIndex(i, j, k...)   -> I
+        CartesianIndex((i, j, k...)) -> I
+
+    Create a multidimensional index `I`, which can be used for
+    indexing a multidimensional array `A`.  In particular, `A[I]` is
+    equivalent to `A[i,j,k...]`.  One can freely mix integer and
+    `CartesianIndex` indices; for example, `A[Ipre, i, Ipost]` (where
+    `Ipre` and `Ipost` are `CartesianIndex` indices and `i` is an
+    `Int`) can be a useful expression when writing algorithms that
+    work along a single dimension of an array of arbitrary
+    dimensionality.
+
+    A `CartesianIndex` is sometimes produced by [`eachindex`](@ref), and
+    always when iterating with an explicit [`CartesianRange`](@ref).
+    """
     struct CartesianIndex{N} <: AbstractCartesianIndex{N}
         I::NTuple{N,Int}
         CartesianIndex{N}(index::NTuple{N,Integer}) where {N} = new(index)
@@ -77,6 +92,25 @@ module IteratorsMD
     icmp(a, b) = ifelse(isless(a,b), 1, ifelse(a==b, 0, -1))
 
     # Iteration
+    """
+        CartesianRange(Istart::CartesianIndex, Istop::CartesianIndex) -> R
+        CartesianRange(sz::Dims) -> R
+        CartesianRange(istart:istop, jstart:jstop, ...) -> R
+
+    Define a region `R` spanning a multidimensional rectangular range
+    of integer indices. These are most commonly encountered in the
+    context of iteration, where `for I in R ... end` will return
+    [`CartesianIndex`](@ref) indices `I` equivalent to the nested loops
+
+        for j = jstart:jstop
+            for i = istart:istop
+                ...
+            end
+        end
+
+    Consequently these can be useful for writing algorithms that
+    work in arbitrary dimensions.
+    """
     struct CartesianRange{I<:CartesianIndex}
         start::I
         stop::I
