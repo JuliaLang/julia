@@ -100,9 +100,9 @@ end
 
 mutable struct TTYTerminal <: UnixTerminal
     term_type::String
-    in_stream::Base.TTY
-    out_stream::Base.TTY
-    err_stream::Base.TTY
+    in_stream::IO
+    out_stream::IO
+    err_stream::IO
 end
 
 const CSI = "\x1b["
