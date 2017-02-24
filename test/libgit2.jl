@@ -1014,8 +1014,11 @@ mktempdir() do dir
 
             # Find a hostname that maps to the loopback address
             hostnames = ["localhost"]
+
+            # In minimal environments a hostname might not be available (issue #20758)
             try
-                # In minimal environments a hostname might not be available (issue #20758)
+                # Some environments, namely Macs, the hostname "macbook.local" bound to the
+                # external address while "macbook" is bound to the loopback address.
                 unshift!(hostnames, replace(gethostname(), r"\..*$", ""))
             end
 
