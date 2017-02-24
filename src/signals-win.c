@@ -346,7 +346,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 //calculate start time for high precision sleep
                 QueryPerformanceCounter(&StartingTime);
                 int time_elapsed = 0;
-                while (time_elapsed ==0)
+                while (time_elapsed == 0)
                 {
                     QueryPerformanceCounter(&EndingTime);
                     ElapsedMicroseconds.QuadPart = EndingTime.QuadPart - StartingTime.QuadPart;
@@ -358,7 +358,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                     }
                     else
                     {
-                        //if time has not elasped offer up processor to another thread
+                        //if time has not elapsed offer up processor to another thread
                         Sleep(0);
                     }
                 }
