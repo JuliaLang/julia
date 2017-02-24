@@ -337,8 +337,8 @@ end
     mod(x, T)
     %(x, T)
 
-For an integer type `T`, finds `z::T` such that `x` ≡ `z` (mod n), where n is the
-cardinality of `T` and `z` is restricted to the interval of values representable by `T`.
+For an integer type `T`, finds `y::T` such that `x` ≡ `y` (mod n), where n is the
+number of elements representable by `T`, and `y` is in `[typemin(T),typemax(T)]`.
 
 ```jldoctest
 julia> 129 % Int8
