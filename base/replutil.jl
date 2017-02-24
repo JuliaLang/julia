@@ -323,6 +323,18 @@ function showerror(io::IO, ex::MethodError)
             f_is_function = true
             print(io, "no method matching ", name)
         elseif isa(f, Type)
+            if isa(f, DataType) && f.abstract
+                # Print a more appropriate message if the only method
+                # on the type is the default one from sysimg.jl.
+                ms = methods(f)
+                if length(ms) == 1
+                    m = first(ms)
+                    if Base.is_default_method(m)
+                        print(io, "no constructors have been defined for $f")
+                        return
+                    end
+                end
+            end
             print(io, "no method matching ", f)
         else
             print(io, "no method matching (::", ft, ")")
@@ -445,6 +457,9 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
             buf = IOBuffer()
             tv = Any[]
             sig0 = method.sig
+            if Base.is_default_method(method)
+                continue
+            end
             while isa(sig0, UnionAll)
                 push!(tv, sig0.var)
                 sig0 = sig0.body
@@ -650,4 +665,12 @@ function process_backtrace(process_func::Function, t::Vector, limit::Int=typemax
     if n > 0
         process_func(last_frame, n)
     end
+end
+
+"""
+Determines whether a method is the default method which is provided to all types from sysimg.jl.
+Such a method is usually undesirable to be displayed to the user in the REPL.
+"""
+function is_default_method(m::Method)
+    return m.module == Base && m.file == Symbol("sysimg.jl") && m.sig == Tuple{Type{T},Any} where T
 end
