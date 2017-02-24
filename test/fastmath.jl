@@ -59,6 +59,7 @@ for T in (Float32, Float64, BigFloat)
     @test @fastmath(one/two/three) ≈ one/two/three
     @test @fastmath(rem(two,three)) ≈ rem(two,three)
     @test @fastmath(mod(two,three)) ≈ mod(two,three)
+    @test @fastmath(mod(three,three)) ≈ mod(three,three)
     @test @fastmath(cmp(two,two)) == cmp(two,two)
     @test @fastmath(cmp(two,three)) == cmp(two,three)
     @test @fastmath(cmp(three,two)) == cmp(three,two)
