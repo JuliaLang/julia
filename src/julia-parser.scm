@@ -1020,27 +1020,24 @@
             ((#\( )
              (if (ts:space? s) (disallowed-space ex t))
              (take-token s)
-             (if macrocall?
-                 (let ((args (if (eqv? (require-token s) #\) )
-                                 (begin (take-token s) '())
-                                 (begin0 (with-normal-ops
-                                          (with-whitespace-newline
-                                           (parse-comma-separated s parse-eq* #t)))
-                                         (if (not (eqv? (require-token s) #\) ))
-                                             (error "missing ) in argument list"))
-                                         (take-token s)))))
-                   `(call ,ex ,@args))
-                 (loop (let ((al (parse-arglist s #\) )))
-                         (receive
-                          (params args) (separate (lambda (x)
-                                                    (and (pair? x)
-                                                         (eq? (car x) 'parameters)))
-                                                  al)
-                          (if (eq? (peek-token s) 'do)
-                              (begin
-                                (take-token s)
-                                `(call ,ex ,@params ,(parse-do s) ,@args))
-                              `(call ,ex ,@al)))))))
+             (let ((c (let ((al (parse-arglist s #\) )))
+                        (receive
+                         (params args) (separate (lambda (x)
+                                                   (and (pair? x)
+                                                        (eq? (car x) 'parameters)))
+                                                 al)
+                         (if (eq? (peek-token s) 'do)
+                             (begin
+                               (take-token s)
+                               `(call ,ex ,@params ,(parse-do s) ,@args))
+                             `(call ,ex ,@al))))))
+               (if macrocall?
+                   (map (lambda (x)  ;; parse `a=b` as `=` instead of `kw` in macrocall
+                          (if (and (pair? x) (eq? (car x) 'kw))
+                              `(= ,@(cdr x))
+                              x))
+                        c)
+                   (loop c))))
             ((#\[ )
              (if (ts:space? s) (disallowed-space ex t))
              (take-token s)
@@ -1473,15 +1470,13 @@
         `(,word ,@(reverse path)))))))
 
 ;; parse comma-separated assignments, like "i=1:n,j=1:m,..."
-(define (parse-comma-separated s what (in-parens #f))
+(define (parse-comma-separated s what)
   (let loop ((exprs '()))
     (let ((r (what s)))
       (case (peek-token s)
         ((#\,)
          (take-token s)
-         (if (and in-parens (eqv? (require-token s) #\) ))
-             (reverse! (cons r exprs))
-             (loop (cons r exprs))))
+         (loop (cons r exprs)))
         (else   (reverse! (cons r exprs)))))))
 
 (define (parse-comma-separated-assignments s)
