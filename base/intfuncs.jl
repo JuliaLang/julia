@@ -195,20 +195,20 @@ end
 ^(x::Number, p::Integer)  = power_by_squaring(x,p)
 ^(x, p::Integer)          = power_by_squaring(x,p)
 
-# x^p for any literal integer p is lowered to x^Val{p},
+# x^p for any literal integer p is lowered to x^Val{p}(),
 # to enable compile-time optimizations specialized to p.
 # However, we still need a fallback that calls the general ^.
 # To avoid ambiguities for methods that dispatch on the
 # first argument, we dispatch the fallback via internal_pow:
 ^(x, p) = internal_pow(x, p)
-internal_pow{p}(x, ::Type{Val{p}}) = x^p
+internal_pow{p}(x, ::Val{p}) = x^p
 
 # inference.jl has complicated logic to inline x^2 and x^3 for
 # numeric types.  In terms of Val we can do it much more simply:
-internal_pow(x::Number, ::Type{Val{0}}) = one(x)
-internal_pow(x::Number, ::Type{Val{1}}) = x
-internal_pow(x::Number, ::Type{Val{2}}) = x*x
-internal_pow(x::Number, ::Type{Val{3}}) = x*x*x
+internal_pow(x::Number, ::Val{0}) = one(x)
+internal_pow(x::Number, ::Val{1}) = x
+internal_pow(x::Number, ::Val{2}) = x*x
+internal_pow(x::Number, ::Val{3}) = x*x*x
 
 # b^p mod m
 

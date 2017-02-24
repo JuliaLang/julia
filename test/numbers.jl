@@ -2905,7 +2905,7 @@ end
 import Base.^
 immutable PR20530; end
 ^(::PR20530, p::Int) = 1
-^{p}(::PR20530, ::Type{Val{p}}) = 2
+^{p}(::PR20530, ::Val{p}) = 2
 @testset "literal powers" begin
     x = PR20530()
     p = 2
