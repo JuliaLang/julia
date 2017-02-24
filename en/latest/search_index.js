@@ -6661,7 +6661,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Function",
-    "text": "Merge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\nmerge!(repo::GitRepo; kwargs...) -> Bool\n\nPerform a git merge on the repository repo, merging commits with diverging history into the current branch. Returns true if the merge succeeded, false if not.\n\nThe keyword arguments are:\n\ncommittish::AbstractString=\"\": Merge the named commit(s) in committish.\nbranch::AbstractString=\"\": Merge the branch branch and all its commits since it diverged from the current branch.\nfastforward::Bool=false: If fastforward is true, only merge if the merge is a fast-forward (the current branch head is an ancestor of the commits to be merged), otherwise refuse to merge and return false. This is equivalent to the git CLI option --ff-only.\nmerge_opts::MergeOptions=MergeOptions(): merge_opts specifies options for the merge, such as merge strategy in case of conflicts.\ncheckout_opts::CheckoutOptions=CheckoutOptions(): checkout_opts specifies options for the checkout step.\n\nEquivalent to git merge [--ff-only] [<committish> | <branch>].\n\n\n\nmerge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\njulia> d1 = Dict(1 => 2, 3 => 4);\n\njulia> d2 = Dict(1 => 4, 4 => 5);\n\njulia> merge!(d1, d2);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 5\n  3 => 4\n  1 => 4\n\n\n\nmerge!(combine, d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. Values with the same key will be combined using the combiner function.\n\njulia> d1 = Dict(1 => 2, 3 => 4);\n\njulia> d2 = Dict(1 => 4, 4 => 5);\n\njulia> merge!(+, d1, d2);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 5\n  3 => 4\n  1 => 6\n\njulia> merge!(-, d1, d1);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 0\n  3 => 0\n  1 => 0\n\n\n\n"
+    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\njulia> d1 = Dict(1 => 2, 3 => 4);\n\njulia> d2 = Dict(1 => 4, 4 => 5);\n\njulia> merge!(d1, d2);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 5\n  3 => 4\n  1 => 4\n\n\n\nmerge!(combine, d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. Values with the same key will be combined using the combiner function.\n\njulia> d1 = Dict(1 => 2, 3 => 4);\n\njulia> d2 = Dict(1 => 4, 4 => 5);\n\njulia> merge!(+, d1, d2);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 5\n  3 => 4\n  1 => 6\n\njulia> merge!(-, d1, d1);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 0\n  3 => 0\n  1 => 0\n\n\n\nMerge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\nmerge!(repo::GitRepo; kwargs...) -> Bool\n\nPerform a git merge on the repository repo, merging commits with diverging history into the current branch. Returns true if the merge succeeded, false if not.\n\nThe keyword arguments are:\n\ncommittish::AbstractString=\"\": Merge the named commit(s) in committish.\nbranch::AbstractString=\"\": Merge the branch branch and all its commits since it diverged from the current branch.\nfastforward::Bool=false: If fastforward is true, only merge if the merge is a fast-forward (the current branch head is an ancestor of the commits to be merged), otherwise refuse to merge and return false. This is equivalent to the git CLI option --ff-only.\nmerge_opts::MergeOptions=MergeOptions(): merge_opts specifies options for the merge, such as merge strategy in case of conflicts.\ncheckout_opts::CheckoutOptions=CheckoutOptions(): checkout_opts specifies options for the checkout step.\n\nEquivalent to git merge [--ff-only] [<committish> | <branch>].\n\n\n\n"
 },
 
 {
@@ -8109,7 +8109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
 },
 
 {
@@ -10249,14 +10249,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays.html#Base.reshape",
-    "page": "Arrays",
-    "title": "Base.reshape",
-    "category": "Function",
-    "text": "reshape(A, dims...)\nreshape(A, dims)\n\nReturn an array with the same data as the given array, but with different dimensions.\n\nThe new dimensions may be specified either as a list of arguments or as a shape tuple. At most one dimension may be specified with a :, in which case its length is computed such that its product with all the specified dimensions is equal to the length of the original array A.\n\njulia> A = collect(1:16)\n16-element Array{Int64,1}:\n  1\n  2\n  3\n  4\n  5\n  6\n  7\n  8\n  9\n 10\n 11\n 12\n 13\n 14\n 15\n 16\n\njulia> reshape(A, (4, 4))\n4×4 Array{Int64,2}:\n 1  5   9  13\n 2  6  10  14\n 3  7  11  15\n 4  8  12  16\n\njulia> reshape(A, 2, :)\n2×8 Array{Int64,2}:\n 1  3  5  7   9  11  13  15\n 2  4  6  8  10  12  14  16\n\n\n\n"
-},
-
-{
     "location": "stdlib/arrays.html#Base.similar-Tuple{AbstractArray}",
     "page": "Arrays",
     "title": "Base.similar",
@@ -10270,14 +10262,6 @@ var documenterSearchIndex = {"docs": [
     "title": "Base.similar",
     "category": "Method",
     "text": "similar(storagetype, indices)\n\nCreate an uninitialized mutable array analogous to that specified by storagetype, but with indices specified by the last argument. storagetype might be a type or a function.\n\nExamples:\n\nsimilar(Array{Int}, indices(A))\n\ncreates an array that \"acts like\" an Array{Int} (and might indeed be backed by one), but which is indexed identically to A. If A has conventional indexing, this will be identical to Array{Int}(size(A)), but if A has unconventional indexing then the indices of the result will match A.\n\nsimilar(BitArray, (indices(A, 2),))\n\nwould create a 1-dimensional logical array whose indices match those of the columns of A.\n\nsimilar(dims->zeros(Int, dims), indices(A))\n\nwould create an array of Int, initialized to zero, matching the indices of A.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.reinterpret",
-    "page": "Arrays",
-    "title": "Base.reinterpret",
-    "category": "Function",
-    "text": "reinterpret(type, A)\n\nChange the type-interpretation of a block of memory. For arrays, this constructs an array with the same binary data as the given array, but with the specified element type. For example, reinterpret(Float32, UInt32(7)) interprets the 4 bytes corresponding to UInt32(7) as a Float32.\n\njulia> reinterpret(Float32, UInt32(7))\n1.0f-44\n\njulia> reinterpret(Float32, UInt32[1 2 3 4 5])\n1×5 Array{Float32,2}:\n 1.4013f-45  2.8026f-45  4.2039f-45  5.60519f-45  7.00649f-45\n\n\n\n"
 },
 
 {
@@ -10305,11 +10289,27 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/arrays.html#Base.Random.randsubseq",
+    "page": "Arrays",
+    "title": "Base.Random.randsubseq",
+    "category": "Function",
+    "text": "randsubseq(A, p) -> Vector\n\nReturn a vector consisting of a random subsequence of the given array A, where each element of A is included (in order) with independent probability p. (Complexity is linear in p*length(A), so this function is efficient even if p is small and A is large.) Technically, this process is known as \"Bernoulli sampling\" of A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.Random.randsubseq!",
+    "page": "Arrays",
+    "title": "Base.Random.randsubseq!",
+    "category": "Function",
+    "text": "randsubseq!(S, A, p)\n\nLike randsubseq, but the results are stored in S (which is resized as needed).\n\n\n\n"
+},
+
+{
     "location": "stdlib/arrays.html#Constructors-1",
     "page": "Arrays",
     "title": "Constructors",
     "category": "section",
-    "text": "Core.Array\nBase.getindex(::Type, ::Any...)\nBase.zeros\nBase.ones\nBase.BitArray\nBase.trues\nBase.falses\nBase.fill\nBase.fill!\nBase.reshape\nBase.similar(::AbstractArray)\nBase.similar(::Any, ::Tuple)\nBase.reinterpret\nBase.eye\nBase.linspace\nBase.logspace"
+    "text": "Core.Array\nBase.getindex(::Type, ::Any...)\nBase.zeros\nBase.ones\nBase.BitArray\nBase.trues\nBase.falses\nBase.fill\nBase.fill!\nBase.similar(::AbstractArray)\nBase.similar(::Any, ::Tuple)\nBase.eye\nBase.linspace\nBase.logspace\nBase.Random.randsubseq\nBase.Random.randsubseq!"
 },
 
 {
@@ -10369,6 +10369,78 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/arrays.html#Base.setindex!-Tuple{AbstractArray,Any,Vararg{Any,N} where N}",
+    "page": "Arrays",
+    "title": "Base.setindex!",
+    "category": "Method",
+    "text": "setindex!(A, X, inds...)\n\nStore values from array X within some subset of A as specified by inds.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.isassigned",
+    "page": "Arrays",
+    "title": "Base.isassigned",
+    "category": "Function",
+    "text": "isassigned(array, i) -> Bool\n\nTests whether the given array has a value associated with index i. Returns false if the index is out of bounds, or has an undefined reference.\n\njulia> isassigned(rand(3, 3), 5)\ntrue\n\njulia> isassigned(rand(3, 3), 3 * 3 + 1)\nfalse\n\njulia> mutable struct Foo end\n\njulia> v = similar(rand(3), Foo)\n3-element Array{Foo,1}:\n #undef\n #undef\n #undef\n\njulia> isassigned(v, 1)\nfalse\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.Colon",
+    "page": "Arrays",
+    "title": "Base.Colon",
+    "category": "Type",
+    "text": "Colon()\n\nColons (:) are used to signify indexing entire objects or dimensions at once.\n\nVery few operations are defined on Colons directly; instead they are converted by to_indices to an internal vector type (Base.Slice) to represent the collection of indices they span before being used.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.IteratorsMD.CartesianIndex",
+    "page": "Arrays",
+    "title": "Base.IteratorsMD.CartesianIndex",
+    "category": "Constant",
+    "text": "CartesianIndex(i, j, k...)   -> I\nCartesianIndex((i, j, k...)) -> I\n\nCreate a multidimensional index I, which can be used for indexing a multidimensional array A.  In particular, A[I] is equivalent to A[i,j,k...].  One can freely mix integer and CartesianIndex indices; for example, A[Ipre, i, Ipost] (where Ipre and Ipost are CartesianIndex indices and i is an Int) can be a useful expression when writing algorithms that work along a single dimension of an array of arbitrary dimensionality.\n\nA CartesianIndex is sometimes produced by eachindex, and always when iterating with an explicit CartesianRange.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.IteratorsMD.CartesianRange",
+    "page": "Arrays",
+    "title": "Base.IteratorsMD.CartesianRange",
+    "category": "Constant",
+    "text": "CartesianRange(Istart::CartesianIndex, Istop::CartesianIndex) -> R\nCartesianRange(sz::Dims) -> R\nCartesianRange(istart:istop, jstart:jstop, ...) -> R\n\nDefine a region R spanning a multidimensional rectangular range of integer indices. These are most commonly encountered in the context of iteration, where for I in R ... end will return CartesianIndex indices I equivalent to the nested loops\n\nfor j = jstart:jstop\n    for i = istart:istop\n        ...\n    end\nend\n\nConsequently these can be useful for writing algorithms that work in arbitrary dimensions.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.to_indices",
+    "page": "Arrays",
+    "title": "Base.to_indices",
+    "category": "Function",
+    "text": "to_indices(A, I::Tuple)\n\nConvert the tuple I to a tuple of indices for use in indexing into array A.\n\nThe returned tuple must only contain either Ints or AbstractArrays of scalar indices that are supported by array A. It will error upon encountering a novel index type that it does not know how to process.\n\nFor simple index types, it defers to the unexported Base.to_index(A, i) to process each index i. While this internal function is not intended to be called directly, Base.to_index may be extended by custom array or index types to provide custom indexing behaviors.\n\nMore complicated index types may require more context about the dimension into which they index. To support those cases, to_indices(A, I) calls to_indices(A, indices(A), I), which then recursively walks through both the given tuple of indices and the dimensional indices of A in tandem. As such, not all index types are guaranteed to propagate to Base.to_index.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.checkbounds",
+    "page": "Arrays",
+    "title": "Base.checkbounds",
+    "category": "Function",
+    "text": "checkbounds(Bool, A, I...)\n\nReturn true if the specified indices I are in bounds for the given array A. Subtypes of AbstractArray should specialize this method if they need to provide custom bounds checking behaviors; however, in many cases one can rely on A's indices and checkindex.\n\nSee also checkindex.\n\njulia> A = rand(3, 3);\n\njulia> checkbounds(Bool, A, 2)\ntrue\n\njulia> checkbounds(Bool, A, 3, 4)\nfalse\n\njulia> checkbounds(Bool, A, 1:3)\ntrue\n\njulia> checkbounds(Bool, A, 1:3, 2:4)\nfalse\n\n\n\ncheckbounds(A, I...)\n\nThrow an error if the specified indices I are not in bounds for the given array A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.checkindex",
+    "page": "Arrays",
+    "title": "Base.checkindex",
+    "category": "Function",
+    "text": "checkindex(Bool, inds::AbstractUnitRange, index)\n\nReturn true if the given index is within the bounds of inds. Custom types that would like to behave as indices for all arrays can extend this method in order to provide a specialized bounds checking implementation.\n\njulia> checkindex(Bool,1:20,8)\ntrue\n\njulia> checkindex(Bool,1:20,21)\nfalse\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Indexing-and-assignment-1",
+    "page": "Arrays",
+    "title": "Indexing and assignment",
+    "category": "section",
+    "text": "Base.getindex(::AbstractArray, ::Any...)\nBase.setindex!(::AbstractArray, ::Any, ::Any...)\nBase.isassigned\nBase.Colon\nBase.CartesianIndex\nBase.CartesianRange\nBase.to_indices\nBase.checkbounds\nBase.checkindex"
+},
+
+{
     "location": "stdlib/arrays.html#Base.view",
     "page": "Arrays",
     "title": "Base.view",
@@ -10390,22 +10462,6 @@ var documenterSearchIndex = {"docs": [
     "title": "Base.@views",
     "category": "Macro",
     "text": "@views expression\n\nConvert every array-slicing operation in the given expression (which may be a begin/end block, loop, function, etc.) to return a view.   Scalar indices, non-array types, and explicit getindex calls (as opposed to array[...]) are unaffected.\n\nNote that the @views macro only affects array[...] expressions that appear explicitly in the given expression, not array slicing that occurs in functions called by that code.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.to_indices",
-    "page": "Arrays",
-    "title": "Base.to_indices",
-    "category": "Function",
-    "text": "to_indices(A, I::Tuple)\n\nConvert the tuple I to a tuple of indices for use in indexing into array A.\n\nThe returned tuple must only contain either Ints or AbstractArrays of scalar indices that are supported by array A. It will error upon encountering a novel index type that it does not know how to process.\n\nFor simple index types, it defers to the unexported Base.to_index(A, i) to process each index i. While this internal function is not intended to be called directly, Base.to_index may be extended by custom array or index types to provide custom indexing behaviors.\n\nMore complicated index types may require more context about the dimension into which they index. To support those cases, to_indices(A, I) calls to_indices(A, indices(A), I), which then recursively walks through both the given tuple of indices and the dimensional indices of A in tandem. As such, not all index types are guaranteed to propagate to Base.to_index.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.Colon",
-    "page": "Arrays",
-    "title": "Base.Colon",
-    "category": "Type",
-    "text": "Colon()\n\nColons (:) are used to signify indexing entire objects or dimensions at once.\n\nVery few operations are defined on Colons directly; instead they are converted by to_indices to an internal vector type (Base.Slice) to represent the collection of indices they span before being used.\n\n\n\n"
 },
 
 {
@@ -10433,19 +10489,43 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays.html#Base.setindex!-Tuple{AbstractArray,Any,Vararg{Any,N} where N}",
+    "location": "stdlib/arrays.html#Base.reinterpret",
     "page": "Arrays",
-    "title": "Base.setindex!",
-    "category": "Method",
-    "text": "setindex!(A, X, inds...)\n\nStore values from array X within some subset of A as specified by inds.\n\n\n\n"
+    "title": "Base.reinterpret",
+    "category": "Function",
+    "text": "reinterpret(type, A)\n\nChange the type-interpretation of a block of memory. For arrays, this constructs an array with the same binary data as the given array, but with the specified element type. For example, reinterpret(Float32, UInt32(7)) interprets the 4 bytes corresponding to UInt32(7) as a Float32.\n\njulia> reinterpret(Float32, UInt32(7))\n1.0f-44\n\njulia> reinterpret(Float32, UInt32[1 2 3 4 5])\n1×5 Array{Float32,2}:\n 1.4013f-45  2.8026f-45  4.2039f-45  5.60519f-45  7.00649f-45\n\n\n\n"
 },
 
 {
-    "location": "stdlib/arrays.html#Base.isassigned",
+    "location": "stdlib/arrays.html#Base.reshape",
     "page": "Arrays",
-    "title": "Base.isassigned",
+    "title": "Base.reshape",
     "category": "Function",
-    "text": "isassigned(array, i) -> Bool\n\nTests whether the given array has a value associated with index i. Returns false if the index is out of bounds, or has an undefined reference.\n\njulia> isassigned(rand(3, 3), 5)\ntrue\n\njulia> isassigned(rand(3, 3), 3 * 3 + 1)\nfalse\n\njulia> mutable struct Foo end\n\njulia> v = similar(rand(3), Foo)\n3-element Array{Foo,1}:\n #undef\n #undef\n #undef\n\njulia> isassigned(v, 1)\nfalse\n\n\n\n"
+    "text": "reshape(A, dims...) -> R\nreshape(A, dims) -> R\n\nReturn an array R with the same data as A, but with different dimension sizes or number of dimensions. The two arrays share the same underlying data, so that setting elements of R alters the values of A and vice versa.\n\nThe new dimensions may be specified either as a list of arguments or as a shape tuple. At most one dimension may be specified with a :, in which case its length is computed such that its product with all the specified dimensions is equal to the length of the original array A. The total number of elements must not change.\n\njulia> A = collect(1:16)\n16-element Array{Int64,1}:\n  1\n  2\n  3\n  4\n  5\n  6\n  7\n  8\n  9\n 10\n 11\n 12\n 13\n 14\n 15\n 16\n\njulia> reshape(A, (4, 4))\n4×4 Array{Int64,2}:\n 1  5   9  13\n 2  6  10  14\n 3  7  11  15\n 4  8  12  16\n\njulia> reshape(A, 2, :)\n2×8 Array{Int64,2}:\n 1  3  5  7   9  11  13  15\n 2  4  6  8  10  12  14  16\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.squeeze",
+    "page": "Arrays",
+    "title": "Base.squeeze",
+    "category": "Function",
+    "text": "squeeze(A, dims)\n\nRemove the dimensions specified by dims from array A. Elements of dims must be unique and within the range 1:ndims(A). size(A,i) must equal 1 for all i in dims.\n\njulia> a = reshape(collect(1:4),(2,2,1,1))\n2×2×1×1 Array{Int64,4}:\n[:, :, 1, 1] =\n 1  3\n 2  4\n\njulia> squeeze(a,3)\n2×2×1 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 2  4\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.vec",
+    "page": "Arrays",
+    "title": "Base.vec",
+    "category": "Function",
+    "text": "vec(a::AbstractArray) -> Vector\n\nReshape array a as a one-dimensional column vector.\n\njulia> a = [1 2 3; 4 5 6]\n2×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n\njulia> vec(a)\n6-element Array{Int64,1}:\n 1\n 4\n 2\n 5\n 3\n 6\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Views-(SubArrays-and-other-view-types)-1",
+    "page": "Arrays",
+    "title": "Views (SubArrays and other view types)",
+    "category": "section",
+    "text": "Base.view\nBase.@view\nBase.@views\nBase.parent\nBase.parentindexes\nBase.slicedim\nBase.reinterpret\nBase.reshape\nBase.squeeze\nBase.vec"
 },
 
 {
@@ -10673,22 +10753,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays.html#Base.squeeze",
-    "page": "Arrays",
-    "title": "Base.squeeze",
-    "category": "Function",
-    "text": "squeeze(A, dims)\n\nRemove the dimensions specified by dims from array A. Elements of dims must be unique and within the range 1:ndims(A). size(A,i) must equal 1 for all i in dims.\n\njulia> a = reshape(collect(1:4),(2,2,1,1))\n2×2×1×1 Array{Int64,4}:\n[:, :, 1, 1] =\n 1  3\n 2  4\n\njulia> squeeze(a,3)\n2×2×1 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 2  4\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.vec",
-    "page": "Arrays",
-    "title": "Base.vec",
-    "category": "Function",
-    "text": "vec(a::AbstractArray) -> Vector\n\nReshape array a as a one-dimensional column vector.\n\njulia> a = [1 2 3; 4 5 6]\n2×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n\njulia> vec(a)\n6-element Array{Int64,1}:\n 1\n 4\n 2\n 5\n 3\n 6\n\n\n\n"
-},
-
-{
     "location": "stdlib/arrays.html#Base.promote_shape",
     "page": "Arrays",
     "title": "Base.promote_shape",
@@ -10697,43 +10761,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays.html#Base.checkbounds",
+    "location": "stdlib/arrays.html#Concatenation-and-permutation-1",
     "page": "Arrays",
-    "title": "Base.checkbounds",
-    "category": "Function",
-    "text": "checkbounds(Bool, A, I...)\n\nReturn true if the specified indices I are in bounds for the given array A. Subtypes of AbstractArray should specialize this method if they need to provide custom bounds checking behaviors; however, in many cases one can rely on A's indices and checkindex.\n\nSee also checkindex.\n\njulia> A = rand(3, 3);\n\njulia> checkbounds(Bool, A, 2)\ntrue\n\njulia> checkbounds(Bool, A, 3, 4)\nfalse\n\njulia> checkbounds(Bool, A, 1:3)\ntrue\n\njulia> checkbounds(Bool, A, 1:3, 2:4)\nfalse\n\n\n\ncheckbounds(A, I...)\n\nThrow an error if the specified indices I are not in bounds for the given array A.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.checkindex",
-    "page": "Arrays",
-    "title": "Base.checkindex",
-    "category": "Function",
-    "text": "checkindex(Bool, inds::AbstractUnitRange, index)\n\nReturn true if the given index is within the bounds of inds. Custom types that would like to behave as indices for all arrays can extend this method in order to provide a specialized bounds checking implementation.\n\njulia> checkindex(Bool,1:20,8)\ntrue\n\njulia> checkindex(Bool,1:20,21)\nfalse\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.Random.randsubseq",
-    "page": "Arrays",
-    "title": "Base.Random.randsubseq",
-    "category": "Function",
-    "text": "randsubseq(A, p) -> Vector\n\nReturn a vector consisting of a random subsequence of the given array A, where each element of A is included (in order) with independent probability p. (Complexity is linear in p*length(A), so this function is efficient even if p is small and A is large.) Technically, this process is known as \"Bernoulli sampling\" of A.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.Random.randsubseq!",
-    "page": "Arrays",
-    "title": "Base.Random.randsubseq!",
-    "category": "Function",
-    "text": "randsubseq!(S, A, p)\n\nLike randsubseq, but the results are stored in S (which is resized as needed).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Indexing,-Assignment,-and-Concatenation-1",
-    "page": "Arrays",
-    "title": "Indexing, Assignment, and Concatenation",
+    "title": "Concatenation and permutation",
     "category": "section",
-    "text": "Base.getindex(::AbstractArray, ::Any...)\nBase.view\nBase.@view\nBase.@views\nBase.to_indices\nBase.Colon\nBase.parent\nBase.parentindexes\nBase.slicedim\nBase.setindex!(::AbstractArray, ::Any, ::Any...)\nBase.isassigned\nBase.cat\nBase.vcat\nBase.hcat\nBase.hvcat\nBase.flipdim\nBase.circshift\nBase.circshift!\nBase.circcopy!\nBase.contains(::Function, ::Any, ::Any)\nBase.find(::Any)\nBase.find(::Function, ::Any)\nBase.findn\nBase.findnz\nBase.findfirst(::Any)\nBase.findfirst(::Any, ::Any)\nBase.findfirst(::Function, ::Any)\nBase.findlast(::Any)\nBase.findlast(::Any, ::Any)\nBase.findlast(::Function, ::Any)\nBase.findnext(::Any, ::Integer)\nBase.findnext(::Function, ::Any, ::Integer)\nBase.findnext(::Any, ::Any, ::Integer)\nBase.findprev(::Any, ::Integer)\nBase.findprev(::Function, ::Any, ::Integer)\nBase.findprev(::Any, ::Any, ::Integer)\nBase.permutedims\nBase.permutedims!\nBase.PermutedDimsArray\nBase.squeeze\nBase.vec\nBase.promote_shape\nBase.checkbounds\nBase.checkindex\nBase.Random.randsubseq\nBase.Random.randsubseq!"
+    "text": "Base.cat\nBase.vcat\nBase.hcat\nBase.hvcat\nBase.flipdim\nBase.circshift\nBase.circshift!\nBase.circcopy!\nBase.contains(::Function, ::Any, ::Any)\nBase.find(::Any)\nBase.find(::Function, ::Any)\nBase.findn\nBase.findnz\nBase.findfirst(::Any)\nBase.findfirst(::Any, ::Any)\nBase.findfirst(::Function, ::Any)\nBase.findlast(::Any)\nBase.findlast(::Any, ::Any)\nBase.findlast(::Function, ::Any)\nBase.findnext(::Any, ::Integer)\nBase.findnext(::Function, ::Any, ::Integer)\nBase.findnext(::Any, ::Any, ::Integer)\nBase.findprev(::Any, ::Integer)\nBase.findprev(::Function, ::Any, ::Integer)\nBase.findprev(::Any, ::Any, ::Integer)\nBase.permutedims\nBase.permutedims!\nBase.PermutedDimsArray\nBase.promote_shape"
 },
 
 {
@@ -12309,7 +12341,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.cholfact",
     "category": "Function",
-    "text": "cholfact(A, [uplo::Symbol,] Val{false}) -> Cholesky\n\nCompute the Cholesky factorization of a dense symmetric positive definite matrix A and return a Cholesky factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. In the latter case, the optional argument uplo may be :L for using the lower part or :U for the upper part of A. The default is to use :U. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for Cholesky objects: size, \\, inv, and det. A PosDefException exception is thrown in case the matrix is not positive definite.\n\nExample\n\njulia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]\n3×3 Array{Float64,2}:\n   4.0   12.0  -16.0\n  12.0   37.0  -43.0\n -16.0  -43.0   98.0\n\njulia> C = cholfact(A)\nBase.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:\n[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]\n\njulia> C[:U]\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 2.0  6.0  -8.0\n  ⋅   1.0   5.0\n  ⋅    ⋅    3.0\n\njulia> C[:L]\n3×3 LowerTriangular{Float64,Array{Float64,2}}:\n  2.0   ⋅    ⋅\n  6.0  1.0   ⋅\n -8.0  5.0  3.0\n\njulia> C[:L] * C[:U] == A\ntrue\n\n\n\ncholfact(A, [uplo::Symbol,] Val{true}; tol = 0.0) -> CholeskyPivoted\n\nCompute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix A and return a CholeskyPivoted factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. In the latter case, the optional argument uplo may be :L for using the lower part or :U for the upper part of A. The default is to use :U. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for PivotedCholesky objects: size, \\, inv, det, and rank. The argument tol determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.\n\n\n\ncholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor\n\nCompute the Cholesky factorization of a sparse positive definite matrix A. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = cholfact(A) is most frequently used to solve systems of equations with F\\b, but also the methods diag, det, and logdet are defined for F. You can also extract individual factors from F, using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it's typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P).\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\n"
+    "text": "cholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor\n\nCompute the Cholesky factorization of a sparse positive definite matrix A. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = cholfact(A) is most frequently used to solve systems of equations with F\\b, but also the methods diag, det, and logdet are defined for F. You can also extract individual factors from F, using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it's typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P).\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\ncholfact(A, [uplo::Symbol,] Val{false}) -> Cholesky\n\nCompute the Cholesky factorization of a dense symmetric positive definite matrix A and return a Cholesky factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. In the latter case, the optional argument uplo may be :L for using the lower part or :U for the upper part of A. The default is to use :U. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for Cholesky objects: size, \\, inv, and det. A PosDefException exception is thrown in case the matrix is not positive definite.\n\nExample\n\njulia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]\n3×3 Array{Float64,2}:\n   4.0   12.0  -16.0\n  12.0   37.0  -43.0\n -16.0  -43.0   98.0\n\njulia> C = cholfact(A)\nBase.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:\n[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]\n\njulia> C[:U]\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 2.0  6.0  -8.0\n  ⋅   1.0   5.0\n  ⋅    ⋅    3.0\n\njulia> C[:L]\n3×3 LowerTriangular{Float64,Array{Float64,2}}:\n  2.0   ⋅    ⋅\n  6.0  1.0   ⋅\n -8.0  5.0  3.0\n\njulia> C[:L] * C[:U] == A\ntrue\n\n\n\ncholfact(A, [uplo::Symbol,] Val{true}; tol = 0.0) -> CholeskyPivoted\n\nCompute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix A and return a CholeskyPivoted factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. In the latter case, the optional argument uplo may be :L for using the lower part or :U for the upper part of A. The default is to use :U. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for PivotedCholesky objects: size, \\, inv, det, and rank. The argument tol determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.\n\n\n\n"
 },
 
 {
@@ -12317,7 +12349,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.cholfact!",
     "category": "Function",
-    "text": "cholfact!(A, [uplo::Symbol,] Val{false}) -> Cholesky\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\nExample\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> cholfact!(A)\nERROR: InexactError()\n\n\n\ncholfact!(A, [uplo::Symbol,] Val{true}; tol = 0.0) -> CholeskyPivoted\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\n\n\ncholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the Cholesky (LL) factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also cholfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "cholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the Cholesky (LL) factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also cholfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\ncholfact!(A, [uplo::Symbol,] Val{false}) -> Cholesky\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\nExample\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> cholfact!(A)\nERROR: InexactError()\n\n\n\ncholfact!(A, [uplo::Symbol,] Val{true}; tol = 0.0) -> CholeskyPivoted\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\n\n\n"
 },
 
 {
@@ -12357,7 +12389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.ldltfact",
     "category": "Function",
-    "text": "ldltfact(S::SymTridiagonal) -> LDLt\n\nCompute an LDLt factorization of a real symmetric tridiagonal matrix such that A = L*Diagonal(d)*L' where L is a unit lower triangular matrix and d is a vector. The main use of an LDLt factorization F = ldltfact(A) is to solve the linear system of equations Ax = b with F\\b.\n\n\n\nldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor\n\nCompute the LDL factorization of a sparse matrix A. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = ldltfact(A) is most frequently used to solve systems of equations A*x = b with F\\b. The returned factorization object F also supports the methods diag, det, and logdet. You can extract individual factors from F using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*D*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it is typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P). The complete list of supported factors is :L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP.\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\n"
+    "text": "ldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor\n\nCompute the LDL factorization of a sparse matrix A. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = ldltfact(A) is most frequently used to solve systems of equations A*x = b with F\\b. The returned factorization object F also supports the methods diag, det, and logdet. You can extract individual factors from F using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*D*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it is typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P). The complete list of supported factors is :L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP.\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\nldltfact(S::SymTridiagonal) -> LDLt\n\nCompute an LDLt factorization of a real symmetric tridiagonal matrix such that A = L*Diagonal(d)*L' where L is a unit lower triangular matrix and d is a vector. The main use of an LDLt factorization F = ldltfact(A) is to solve the linear system of equations Ax = b with F\\b.\n\n\n\n"
 },
 
 {
@@ -12365,7 +12397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.ldltfact!",
     "category": "Function",
-    "text": "ldltfact!(S::SymTridiagonal) -> LDLt\n\nSame as ldltfact, but saves space by overwriting the input A, instead of creating a copy.\n\n\n\nldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the LDL factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also ldltfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "ldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the LDL factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also ldltfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nldltfact!(S::SymTridiagonal) -> LDLt\n\nSame as ldltfact, but saves space by overwriting the input A, instead of creating a copy.\n\n\n\n"
 },
 
 {
