@@ -53,7 +53,7 @@ function Base.getindex(tree::GitTree, i::Integer)
     te_ptr = ccall((:git_tree_entry_byindex, :libgit2),
                    Ptr{Void},
                    (Ptr{Void}, Csize_t), tree.ptr, i-1)
-    return GitTreeEntry(te_ptr, false)
+    return GitTreeEntry(tree, te_ptr, false)
 end
 
 function (::Type{T}){T<:GitObject}(repo::GitRepo, te::GitTreeEntry)
