@@ -1040,3 +1040,7 @@ macro err20000()
 end
 
 @test expand(:(@err20000)) == Expr(:error, "oops!")
+
+# issue #20000
+@test parse("@m(a; b=c)") == Expr(:macrocall, Symbol("@m"),
+                                  Expr(:parameters, Expr(:kw, :b, :c)), :a)
