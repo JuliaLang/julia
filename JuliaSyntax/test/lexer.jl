@@ -283,3 +283,7 @@ end
     @test collect(tokenize("aa \"\"\" \"dsad\" \"\""))[3].kind == T.ERROR
 
 end
+
+@testset "lex binary" begin
+    @test collect(tokenize("0b0101"))[1].kind==T.INTEGER
+end

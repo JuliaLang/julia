@@ -24,6 +24,7 @@ macro debug(ex)
 end
 
 ishex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F')
+isbinary(c::Char) = c == '0' || c == '1'
 iswhitespace(c::Char) = Base.UTF8proc.isspace(c)
 
 type Lexer{IO_t <: IO}
@@ -565,10 +566,17 @@ function lex_digit(l::Lexer)
     seek2startpos!(l)
 
     # 0x[0-9A-Fa-f]+
-    if accept(l, '0') && accept(l, 'x')
-        accept(l, "o")
-        if accept_batch(l, ishex) && position(l) > longest
-            longest, kind = position(l), Tokens.INTEGER
+    if accept(l, '0') 
+        if accept(l, 'x')
+            accept(l, "o")
+            if accept_batch(l, ishex) && position(l) > longest
+                longest, kind = position(l), Tokens.INTEGER
+            end
+        elseif accept(l, 'b')
+            accept(l, "o")
+            if accept_batch(l, isbinary) && position(l) > longest
+                longest, kind = position(l), Tokens.INTEGER
+            end
         end
     end
 
