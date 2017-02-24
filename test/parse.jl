@@ -1032,4 +1032,15 @@ macro m20729()
     return ex
 end
 
-@test_throws ErrorException expand(:(@m20729))
+@test_throws ErrorException eval(:(@m20729))
+@test expand(:(@m20729)) == Expr(:error, "undefined reference in AST")
+
+macro err20000()
+    return Expr(:error, "oops!")
+end
+
+@test expand(:(@err20000)) == Expr(:error, "oops!")
+
+# issue #20000
+@test parse("@m(a; b=c)") == Expr(:macrocall, Symbol("@m"),
+                                  Expr(:parameters, Expr(:kw, :b, :c)), :a)

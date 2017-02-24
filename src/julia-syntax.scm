@@ -3559,6 +3559,8 @@ f(x) = yt(x)
                '(null)))
             ((...)
              (error "\"...\" expression outside call"))
+            ((error)
+             (error (cadr e)))
             (else
              (error (string "invalid syntax " (deparse e)))))))
     ;; introduce new slots for assigned arguments
