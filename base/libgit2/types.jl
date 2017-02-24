@@ -498,7 +498,7 @@ for (typ, owntyp, sup, cname) in [
     (:GitBlob,          :GitRepo,              :GitObject,         :git_blob),
     (:GitTree,          :GitRepo,              :GitObject,         :git_tree),
     (:GitTag,           :GitRepo,              :GitObject,         :git_tag),
-    (:GitTreeEntry,     :(Nullable{GitTree}),  :AbstractGitObject, :git_tree_entry),
+    (:GitTreeEntry,     :GitTree,              :AbstractGitObject, :git_tree_entry),
     ]
 
     if owntyp === nothing

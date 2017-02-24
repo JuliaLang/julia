@@ -16,11 +16,8 @@ function treewalk(f::Function, tree::GitTree, payload=Any[], post::Bool = false)
     return cbf_payload
 end
 
-function repository(tree::GitTree)
-    repo_ptr = ccall((:git_tree_owner, :libgit2), Ptr{Void},
-                 (Ptr{Void},), tree.ptr)
-    return GitRepo(repo_ptr)
-end
+repository(tree::GitTree) = tree.owner
+repository(te::GitTreeEntry) = repository(te.owner)
 
 function filename(te::GitTreeEntry)
     str = ccall((:git_tree_entry_name, :libgit2), Cstring, (Ptr{Void},), te.ptr)
@@ -56,12 +53,13 @@ function Base.getindex(tree::GitTree, i::Integer)
     return GitTreeEntry(tree, te_ptr, false)
 end
 
-function (::Type{T}){T<:GitObject}(repo::GitRepo, te::GitTreeEntry)
+function (::Type{T}){T<:GitObject}(te::GitTreeEntry)
+    repo = repository(te)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_tree_entry_to_object, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Ref{Void}),
                    obj_ptr_ptr, repo.ptr, te.ptr)
-    return T(repo, obj_ptr_ptr[])
+    return T(repo.ptr, obj_ptr_ptr[])
 end
 
 function Base.show(io::IO, te::GitTreeEntry)
