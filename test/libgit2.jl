@@ -1017,8 +1017,8 @@ mktempdir() do dir
 
             # In minimal environments a hostname might not be available (issue #20758)
             try
-                # Some environments, namely Macs, the hostname "macbook.local" bound to the
-                # external address while "macbook" is bound to the loopback address.
+                # In some environments, namely Macs, the hostname "macbook.local" is bound
+                # to the external address while "macbook" is bound to the loopback address.
                 unshift!(hostnames, replace(gethostname(), r"\..*$", ""))
             end
 
