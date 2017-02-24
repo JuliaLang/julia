@@ -1231,6 +1231,7 @@ JL_DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from,
 JL_DLLEXPORT void jl_module_importall(jl_module_t *to, jl_module_t *from);
 JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
+JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_module_t *jl_new_main_module(void);
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m);
 STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
