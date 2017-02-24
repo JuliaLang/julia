@@ -646,3 +646,7 @@ let d = TextDisplay(IOBuffer())
         @test e.f == show
     end
 end
+
+struct TypeWith4Params{a,b,c,d}
+end
+@test endswith(string(TypeWith4Params{Int8,Int8,Int8,Int8}), "TypeWith4Params{Int8,Int8,Int8,Int8}")
