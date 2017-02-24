@@ -444,7 +444,7 @@ end
 ^(x::Bool   , y::BigInt ) = Base.power_by_squaring(x, y)
 
 # override default inlining of x^2 and x^3 etc.
-^{p}(x::BigInt, ::Type{Val{p}}) = x^p
+^{p}(x::BigInt, ::Val{p}) = x^p
 
 function powermod(x::BigInt, p::BigInt, m::BigInt)
     r = BigInt()

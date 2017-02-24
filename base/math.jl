@@ -691,7 +691,7 @@ end
 ^(x::Float32, y::Integer) = x^Int32(y)
 ^(x::Float32, y::Int32) = powi_llvm(x, y)
 ^(x::Float16, y::Integer) = Float16(Float32(x)^y)
-^{p}(x::Float16, ::Type{Val{p}}) = Float16(Float32(x)^Val{p})
+^{p}(x::Float16, y::Val{p}) = Float16(Float32(x)^y)
 
 function angle_restrict_symm(theta)
     const P1 = 4 * 7.8539812564849853515625e-01
