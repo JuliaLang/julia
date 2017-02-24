@@ -1196,7 +1196,8 @@ end
 
 Print `args` using C `printf()` style format specification string, with some caveats:
 `Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,
-`%e`, `%E`, `%f`, `%F`, `%g`, and `%G`.
+`%e`, `%E`, `%f`, `%F`, `%g`, and `%G`. Furthermore, when floating point numbers are
+rounded, the rounding is done away from zero.
 
 Optionally, an `IOStream`
 may be passed as the first argument to redirect output.
@@ -1206,6 +1207,9 @@ may be passed as the first argument to redirect output.
 ```jldoctest
 julia> @printf("%f %F %f %F\\n", Inf, Inf, NaN, NaN)
 Inf Inf NaN NaN\n
+
+julia> @printf "%f\\n" -0.0078125
+-0.007813
 ```
 """
 macro printf(args...)
