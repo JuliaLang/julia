@@ -1038,7 +1038,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_code_info_t *f, jl_value_
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo);
 JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src);
 JL_DLLEXPORT size_t jl_get_world_counter(void);
-JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_typename_t *tn);
+JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_value_t *ty);
 JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x);
 JL_DLLEXPORT jl_value_t *jl_box_int8(int8_t x);
 JL_DLLEXPORT jl_value_t *jl_box_uint8(uint8_t x);

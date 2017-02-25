@@ -576,6 +576,12 @@ JL_DLLEXPORT jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes)
     return first_arg_datatype(argtypes, 0);
 }
 
+// get DataType implied by a single given type
+jl_datatype_t *jl_argument_datatype(jl_value_t *argt)
+{
+    return first_arg_datatype(argt, 1);
+}
+
 extern tracer_cb jl_newmeth_tracer;
 JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                                 jl_code_info_t *f,
