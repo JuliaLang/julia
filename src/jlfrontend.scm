@@ -7,6 +7,8 @@
 (load "julia-parser.scm")
 (load "julia-syntax.scm")
 
+(define current-lineno 0)
+
 
 ;; exception handler for parser. turns known errors into special expressions,
 ;; and prevents throwing an exception past a C caller.
@@ -77,7 +79,7 @@
 ;; note: expansion of stuff inside module is delayed, so the contents obey
 ;; toplevel expansion order (don't expand until stuff before is evaluated).
 (define (expand-toplevel-expr-- e)
-  (let ((ex0 (julia-expand-macros e)))
+  (let ((ex0 (julia-expand-macros e current-lineno)))
     (if (and (pair? ex0) (eq? (car ex0) 'toplevel))
         ex0
         (let* ((ex (julia-expand0 ex0))
@@ -118,7 +120,7 @@
 
 ;; construct default definitions of `eval` for non-bare modules
 ;; called by jl_eval_module_expr
-(define (module-default-defs e)
+(define (module-default-defs e lineno)
   (jl-expand-to-thunk
    (let ((name (caddr e))
          (body (cadddr e)))
@@ -132,7 +134,8 @@
          (= (call eval m x)
             (block
              ,loc
-             (call (core eval) m x))))))))
+             (call (core eval) m x))))))
+   lineno))
 
 ;; parse only, returning end position, no expansion.
 (define (jl-parse-one-string s pos0 greedy)
@@ -149,7 +152,7 @@
     (parser-wrap (lambda ()
                  (let ((inp  (make-token-stream (open-input-string s))))
                    ;; parse all exprs into a (toplevel ...) form
-                   (let loop ((exprs '()))
+                   (let loop ((exprs `((line 1 ,filename))))
                      ;; delay expansion so macros run in the Task executing
                      ;; the input, not the task parsing it (issue #2378)
                      ;; used to be (expand-toplevel-expr expr)
@@ -212,15 +215,15 @@
     prev))
 
 ; expand a piece of raw surface syntax to an executable thunk
-(define (jl-expand-to-thunk expr)
+(define (jl-expand-to-thunk expr lineno)
   (parser-wrap (lambda ()
-                 (expand-toplevel-expr expr))))
+                 (with-bindings ((current-lineno lineno)) (expand-toplevel-expr expr)))))
 
 ; macroexpand only
-(define (jl-macroexpand expr)
+(define (jl-macroexpand expr lineno)
   (reset-gensyms)
   (parser-wrap (lambda ()
-                 (julia-expand-macros expr))))
+                 (julia-expand-macros expr lineno))))
 
 ; run whole frontend on a string. useful for testing.
 (define (fe str)

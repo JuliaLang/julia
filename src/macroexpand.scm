@@ -226,10 +226,14 @@
                               `(global ,(resolve-expansion-vars-with-new-env arg env m inarg))))))
            ((using import importall export meta line inbounds boundscheck simdloop) (map unescape e))
            ((macrocall)
-            (if (or (eq? (cadr e) '@label) (eq? (cadr e) '@goto)) e
-                `(macrocall ,.(map (lambda (x)
-                                     (resolve-expansion-vars-with-new-env x env m inarg))
-                                   (cdr e)))))
+            (cond ((or (eq? (cadr e) '@label) (eq? (cadr e) '@goto))
+                   e)
+                  ((eq? (cadr e) '@__LOCATION__)
+                   current-lineno)
+                  (else
+                   `(macrocall ,.(map (lambda (x)
+                                        (resolve-expansion-vars-with-new-env x env m inarg))
+                                      (cdr e))))))
            ((symboliclabel) e)
            ((symbolicgoto) e)
            ((type)
@@ -392,17 +396,28 @@
          (relabel (pair-with-gensyms labels)))
     (rename-symbolic-labels- e relabel)))
 
-;; macro expander entry point
+(define (expand-with-lineno exs lineno)
+  (let loop ((exs exs) (lineno lineno) (out '()))
+    (if (not (pair? exs))
+        (reverse! out)
+        (let ((e (car exs)))
+          (if (and (pair? e) (eq? (car e) 'line))
+              (loop (cdr exs) (cadr e) (cons e out))
+              (loop (cdr exs) lineno
+              (cons (julia-expand-macros e lineno) out)))))))
 
-(define (julia-expand-macros e)
+;; macro expander entry point
+(define (julia-expand-macros e lineno)
   (cond ((not (pair? e))     e)
         ((eq? (car e) 'quote)
          ;; backquote is essentially a built-in macro at the moment
-         (julia-expand-macros (julia-bq-expand (cadr e) 0)))
+         (julia-expand-macros (julia-bq-expand (cadr e) 0) lineno))
         ((eq? (car e) 'inert) e)
         ((eq? (car e) 'macrocall)
          ;; expand macro
-         (let ((form (apply invoke-julia-macro (cadr e) (cddr e))))
+         (let ((form (if (eq? (cadr e) '@__LOCATION__)
+                         `(,lineno)
+                         (apply invoke-julia-macro (cadr e) (cddr e)))))
            (if (not form)
                (error (string "macro \"" (cadr e) "\" not defined")))
            (if (and (pair? form) (eq? (car form) 'error))
@@ -412,7 +427,12 @@
              ;; m is the macro's def module
              (rename-symbolic-labels
               (julia-expand-macros
-               (resolve-expansion-vars form m))))))
+               (with-bindings ((current-lineno lineno)) (resolve-expansion-vars form m))
+               lineno)))))
+        ((eq? (car e) 'block)
+         ;; track line number of enclosing scope when in a block
+         `(block ,@(expand-with-lineno (cdr e) lineno)))
         ((eq? (car e) 'module) e)
         (else
-         (map julia-expand-macros e))))
+         (map (lambda (e) (julia-expand-macros e lineno)) e))))
+

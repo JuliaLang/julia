@@ -853,7 +853,8 @@ jl_value_t *jl_parse_eval_all(const char *fname,
             value_t expansion;
             {
                 JL_TIMING(LOWERING);
-                expansion = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-expand-to-thunk")), car_(ast));
+                expansion = fl_applyn(fl_ctx, 2, symbol_value(symbol(fl_ctx, "jl-expand-to-thunk")),
+                                      car_(ast), fixnum((fixnum_t)jl_lineno));
             }
             jl_get_ptls_states()->world_age = jl_world_counter;
             form = scm_to_julia(fl_ctx, expansion, 0);
@@ -925,14 +926,16 @@ static int jl_parse_deperror(fl_context_t *fl_ctx, int err)
     return prev == fl_ctx->T ? 1 : 0;
 }
 
-// returns either an expression or a thunk
-jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr)
+// Call flisp function as (func expr lineno)
+// Returns either an expression or a thunk.
+jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, int lineno)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
     JL_AST_PRESERVE_PUSH(ctx, roots, old_roots);
     value_t arg = julia_to_scm(fl_ctx, expr);
-    value_t e = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, funcname)), arg);
+    value_t e = fl_applyn(fl_ctx, 2, symbol_value(symbol(fl_ctx, funcname)),
+                          arg, fixnum((fixnum_t)lineno));
     jl_value_t *result = scm_to_julia(fl_ctx, e, 0);
     JL_AST_PRESERVE_POP(ctx, old_roots);
     jl_ast_ctx_leave(ctx);
@@ -942,13 +945,13 @@ jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr)
 JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr)
 {
     JL_TIMING(LOWERING);
-    return jl_call_scm_on_ast("jl-expand-to-thunk", expr);
+    return jl_call_scm_on_ast("jl-expand-to-thunk", expr, jl_lineno); // FIXME?
 }
 
 JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr)
 {
     JL_TIMING(LOWERING);
-    return jl_call_scm_on_ast("jl-macroexpand", expr);
+    return jl_call_scm_on_ast("jl-macroexpand", expr, 0);
 }
 
 // wrap expr in a thunk AST
