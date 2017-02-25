@@ -337,8 +337,8 @@ end
     mod(x, T)
     %(x, T)
 
-For an integer type `T`, finds `y::T` such that `x` ≡ `y` (mod n), where n is the
-number of elements representable by `T`, and `y` is in `[typemin(T),typemax(T)]`.
+For an integer type `T`, find `y::T` such that `x` ≡ `y` (mod n), where n is the number
+of integers representable in `T`, and `y` is an integer in `[typemin(T),typemax(T)]`.
 
 ```jldoctest
 julia> 129 % Int8
