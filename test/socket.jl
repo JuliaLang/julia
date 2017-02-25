@@ -255,10 +255,14 @@ let
     end
     a, b, c = [create_socket() for i = 1:3]
     try
-        @sync begin
-            send(c, bcastdst, 2000, "hello")
-            recvs = [@async @test String(recv(s)) == "hello" for s in (a, b)]
-            map(wait, recvs)
+        # bsd family do not allow broadcasting to ip"255.255.255.255"
+        # or ip"127.255.255.255"
+        @static if !is_bsd() || is_apple()
+            @sync begin
+                send(c, bcastdst, 2000, "hello")
+                recvs = [@async @test String(recv(s)) == "hello" for s in (a, b)]
+                map(wait, recvs)
+            end
         end
     catch e
         if isa(e, Base.UVError) && Base.uverrorname(e) == "EPERM"
