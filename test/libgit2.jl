@@ -344,6 +344,10 @@ mktempdir() do dir
                     @test LibGit2.shortname(brref) == master_branch
                     @test LibGit2.ishead(brref)
                     @test isnull(LibGit2.upstream(brref))
+                    show_strs = split(sprint(show, brref), "\n")
+                    @test show_strs[1] == "GitReference:"
+                    @test show_strs[2] == "Branch with name refs/heads/master"
+                    @test show_strs[3] == "Branch is HEAD."
                     @test repo.ptr == LibGit2.repository(brref).ptr
                     @test brnch == master_branch
                     @test LibGit2.headname(repo) == master_branch
