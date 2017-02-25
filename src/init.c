@@ -139,7 +139,7 @@ static void jl_find_stack_bottom(void)
 
     // When using the sanitizers, increase stack size because they bloat
     // stack usage
-    const rlim_t kStackSize = 32 * 1024 * 1024;   // 32MB stack
+    const rlim_t kStackSize = 64 * 1024 * 1024;   // 64MiB stack
     int result;
 
     result = getrlimit(RLIMIT_STACK, &rl);
