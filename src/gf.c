@@ -1216,22 +1216,31 @@ static void update_max_args(jl_methtable_t *mt, jl_value_t *type)
         mt->max_args = na;
 }
 
+static int JL_DEBUG_METHOD_INVALIDATION = 0;
 
 // invalidate cached methods that had an edge to a replaced method
-static void invalidate_method_instance(jl_method_instance_t *replaced, size_t max_world)
+static void invalidate_method_instance(jl_method_instance_t *replaced, size_t max_world, int depth)
 {
     JL_LOCK_NOGC(&replaced->def->writelock);
     jl_array_t *backedges = replaced->backedges;
     if (replaced->max_world > max_world) {
         // recurse to all backedges to update their valid range also
         assert(replaced->min_world <= max_world && "attempting to set invalid world constraints");
+        if (JL_DEBUG_METHOD_INVALIDATION) {
+            int d0 = depth;
+            char space = ' ', nl = '\n';
+            while (d0-- > 0)
+                jl_uv_puts(JL_STDOUT, &space, 1);
+            jl_static_show(JL_STDOUT, (jl_value_t*)replaced);
+            jl_uv_puts(JL_STDOUT, &nl, 1);
+        }
         replaced->max_world = max_world;
         update_world_bound(replaced, set_max_world2, max_world);
         if (backedges) {
             size_t i, l = jl_array_len(backedges);
             for (i = 0; i < l; i++) {
                 jl_method_instance_t *replaced = (jl_method_instance_t*)jl_array_ptr_ref(backedges, i);
-                invalidate_method_instance(replaced, max_world);
+                invalidate_method_instance(replaced, max_world, depth + 1);
             }
         }
     }
@@ -1268,7 +1277,7 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
             size_t i, l = jl_array_len(backedges);
             jl_method_instance_t **replaced = (jl_method_instance_t**)jl_array_data(backedges);
             for (i = 0; i < l; i++) {
-                invalidate_method_instance(replaced[i], closure->max_world);
+                invalidate_method_instance(replaced[i], closure->max_world, 0);
             }
         }
         def.replaced->backedges = NULL;
@@ -1357,7 +1366,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                 jl_value_t *backedgetyp = backedges[i - 1];
                 if (jl_type_intersection(backedgetyp, (jl_value_t*)type) != (jl_value_t*)jl_bottom_type) {
                     jl_method_instance_t *backedge = (jl_method_instance_t*)backedges[i];
-                    invalidate_method_instance(backedge, env.max_world);
+                    invalidate_method_instance(backedge, env.max_world, 0);
                 }
                 else {
                     backedges[ins++] = backedges[i - 1];
