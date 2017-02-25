@@ -206,3 +206,4 @@ cat Make.user
 make -j3 VERBOSE=1
 make build-stats
 #make debug
+make VERBOSE=1 -C examples
