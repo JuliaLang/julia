@@ -248,3 +248,13 @@ f7045(x::Real; y=true) = y ? 2 : 3
 @test f7045(1.0) === 1
 @test f7045(1, y=false) === 3
 @test f7045(1.0, y=false) === 3
+
+# issue #20804
+struct T20804{T}
+    y::T
+end
+(f::T20804)(;x=10) = f.y + x
+let x = T20804(4)
+    @test x() == 14
+    @test x(x=8) == 12
+end
