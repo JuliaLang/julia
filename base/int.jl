@@ -333,12 +333,12 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
 end
 
 """
-    rem(x, T)
-    mod(x, T)
-    %(x, T)
+    rem(x::Integer, T<:Integer)
+    mod(x::Integer, T<:Integer)
+    %(x::Integer, T<:Integer)
 
-For an integer type `T`, find `y::T` such that `x` ≡ `y` (mod n), where n is the number
-of integers representable in `T`, and `y` is an integer in `[typemin(T),typemax(T)]`.
+Find `y::T` such that `x` ≡ `y` (mod n), where n is the number of integers representable
+in `T`, and `y` is an integer in `[typemin(T),typemax(T)]`.
 
 ```jldoctest
 julia> 129 % Int8
