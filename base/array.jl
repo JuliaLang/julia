@@ -181,6 +181,8 @@ similar{T}(a::Array{T}, m::Int)              = Array{T,1}(m)
 similar{N}(a::Array, T::Type, dims::Dims{N}) = Array{T,N}(dims)
 similar{T,N}(a::Array{T}, dims::Dims{N})     = Array{T,N}(dims)
 
+similar{T,A<:Array{T},N}(::Type{A}, dims::Dims{N}) = Array{T, N}(dims)
+
 # T[x...] constructs Array{T,1}
 function getindex{T}(::Type{T}, vals...)
     a = Array{T,1}(length(vals))

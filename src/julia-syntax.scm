@@ -1518,7 +1518,7 @@
                    ,(expand-update-operator op op= (car e) rhs T))))
         (else
          (if (and (pair? lhs)
-                  (not (memq (car lhs) '(|.| tuple vcat typed_hcat typed_vcat))))
+                  (not (memq (car lhs) '(|.| tuple vcat eltyped_hcat eltyped_vcat))))
              (error (string "invalid assignment location \"" (deparse lhs) "\"")))
          (expand-update-operator- op op= lhs rhs declT))))
 
@@ -1914,9 +1914,9 @@
                            (iota (length lhss))
                            lhss)
                     (unnecessary ,xx))))))
-         ((typed_hcat)
+         ((eltyped_hcat)
           (error "invalid spacing in left side of indexed assignment"))
-         ((typed_vcat)
+         ((eltyped_vcat)
           (error "unexpected \";\" in left side of indexed assignment"))
          ((ref)
           ;; (= (ref a . idxs) rhs)
@@ -2210,10 +2210,10 @@
                          ,.(apply append rows)))
                 `(call vcat ,@a))))))
 
-   'typed_hcat
-   (lambda (e) `(call (top typed_hcat) ,(expand-forms (cadr e)) ,.(map expand-forms (cddr e))))
+   'eltyped_hcat
+   (lambda (e) `(call (top eltyped_hcat) ,(expand-forms (cadr e)) ,.(map expand-forms (cddr e))))
 
-   'typed_vcat
+   'eltyped_vcat
    (lambda (e)
      (let ((t (cadr e))
            (a (cddr e)))
@@ -2227,10 +2227,10 @@
                                    (cdr x)
                                    (list x)))
                              a)))
-              `(call (top typed_hvcat) ,t
+              `(call (top eltyped_hvcat) ,t
                      (tuple ,.(map length rows))
                      ,.(apply append rows)))
-            `(call (top typed_vcat) ,t ,@a)))))
+            `(call (top eltyped_vcat) ,t ,@a)))))
 
    '|'|  (lambda (e) `(call ctranspose ,(expand-forms (cadr e))))
    '|.'| (lambda (e) `(call  transpose ,(expand-forms (cadr e))))

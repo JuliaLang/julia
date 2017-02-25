@@ -928,16 +928,25 @@ const _Symmetric_DenseArrays{T,A<:Matrix} = Symmetric{T,A}
 const _Hermitian_DenseArrays{T,A<:Matrix} = Hermitian{T,A}
 const _Triangular_DenseArrays{T,A<:Matrix} = Base.LinAlg.AbstractTriangular{T,A}
 const _Annotated_DenseArrays = Union{_Triangular_DenseArrays, _Symmetric_DenseArrays, _Hermitian_DenseArrays}
-const _Annotated_Typed_DenseArrays{T} = Union{_Triangular_DenseArrays{T}, _Symmetric_DenseArrays{T}, _Hermitian_DenseArrays{T}}
 
 const _SparseConcatGroup = Union{Vector, Matrix, _SparseConcatArrays, _Annotated_SparseConcatArrays, _Annotated_DenseArrays}
 const _DenseConcatGroup = Union{Vector, Matrix, _Annotated_DenseArrays}
-const _TypedDenseConcatGroup{T} = Union{Vector{T}, Matrix{T}, _Annotated_Typed_DenseArrays{T}}
+
+promote_type_cat(::Type{S}, ::Type{T}) where {S<:AbstractArray,
+                                              T<:Union{_SparseConcatArrays,_Annotated_SparseConcatArrays}} =
+    SparseMatrixCSC{promote_type(eltype(S), eltype(T))}
+promote_type_cat(::Type{S}, ::Type{T}) where {S<:Union{_SparseConcatArrays,_Annotated_SparseConcatArrays},
+                                              T<:AbstractArray} =
+    SparseMatrixCSC{promote_type(eltype(S), eltype(T))}
+promote_type_cat(::Type{S}, ::Type{T}) where {S<:Union{_SparseConcatArrays,_Annotated_SparseConcatArrays},
+                                              T<:Union{_SparseConcatArrays,_Annotated_SparseConcatArrays}} =
+    SparseMatrixCSC{promote_type(eltype(S), eltype(T))}
 
 # Concatenations involving un/annotated sparse/special matrices/vectors should yield sparse arrays
 function cat(catdims, Xin::_SparseConcatGroup...)
+    # FIXME: still needed? (same below)
     X = map(x -> SparseMatrixCSC(issparse(x) ? x : sparse(x)), Xin)
-    T = promote_eltype(Xin...)
+    T = promote_typeof_cat(Xin...)
     Base.cat_t(catdims, T, X...)
 end
 function hcat(Xin::_SparseConcatGroup...)
@@ -965,18 +974,14 @@ promote_to_array_type(A::Tuple{Vararg{Union{_SparseConcatGroup,UniformScaling}}}
 promote_to_array_type(A::Tuple{Vararg{Union{_DenseConcatGroup,UniformScaling}}}) = (@_pure_meta; Matrix)
 promote_to_arrays_(n::Int, ::Type{SparseMatrixCSC}, J::UniformScaling) = sparse(J, n, n)
 
+# FIXME: these should be unnecessary now, and _DenseConcatGroup too
 # Concatenations strictly involving un/annotated dense matrices/vectors should yield dense arrays
-cat(catdims, xs::_DenseConcatGroup...) = Base.cat_t(catdims, promote_eltype(xs...), xs...)
-vcat(A::Vector...) = Base.typed_vcat(promote_eltype(A...), A...)
-vcat(A::_DenseConcatGroup...) = Base.typed_vcat(promote_eltype(A...), A...)
-hcat(A::Vector...) = Base.typed_hcat(promote_eltype(A...), A...)
-hcat(A::_DenseConcatGroup...) = Base.typed_hcat(promote_eltype(A...), A...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::_DenseConcatGroup...) = Base.typed_hvcat(promote_eltype(xs...), rows, xs...)
-# For performance, specially handle the case where the matrices/vectors have homogeneous eltype
-cat{T}(catdims, xs::_TypedDenseConcatGroup{T}...) = Base.cat_t(catdims, T, xs...)
-vcat{T}(A::_TypedDenseConcatGroup{T}...) = Base.typed_vcat(T, A...)
-hcat{T}(A::_TypedDenseConcatGroup{T}...) = Base.typed_hcat(T, A...)
-hvcat{T}(rows::Tuple{Vararg{Int}}, xs::_TypedDenseConcatGroup{T}...) = Base.typed_hvcat(T, rows, xs...)
+cat(catdims, xs::_DenseConcatGroup...) = Base.cat_t(catdims, promote_typeof_cat(xs...), xs...)
+vcat(A::Vector...) = Base.typed_vcat(promote_typeof_cat(A...), A...)
+vcat(A::_DenseConcatGroup...) = Base.typed_vcat(promote_typeof_cat(A...), A...)
+hcat(A::Vector...) = Base.typed_hcat(promote_typeof_cat(A...), A...)
+hcat(A::_DenseConcatGroup...) = Base.typed_hcat(promote_typeof_cat(A...), A...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::_DenseConcatGroup...) = Base.typed_hvcat(promote_typeof_cat(xs...), rows, xs...)
 
 
 ### math functions
