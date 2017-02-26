@@ -85,7 +85,7 @@ end
 function Base.show(io::IO, t::Token)
   start_r, start_c = startpos(t)
   end_r, end_c = endpos(t)
-  str = kind(t) == ENDMARKER ? "" : untokenize(t)
+  str = kind(t) == ENDMARKER ? "" : escape_string(untokenize(t))
   print(io, rpad(string(start_r, ",", start_c, "-", end_r, ",", end_c), 17, " "))
   print(io, rpad(kind(t), 15, " "))
   print(io, "\"", str, "\"")

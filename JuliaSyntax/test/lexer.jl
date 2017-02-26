@@ -292,3 +292,8 @@ end
     @test collect(tokenize("0b0101"))[1].kind==T.INTEGER
 end
 
+@testset "show" begin
+    io = IOBuffer()
+    show(io, collect(tokenize("\"abc\nd\"ef"))[1])
+    @test String(take!(io)) == "1,1-2,2          STRING         \"\\\"abc\\nd\\\"\""
+end
