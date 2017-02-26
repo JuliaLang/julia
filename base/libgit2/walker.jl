@@ -48,7 +48,7 @@ function Base.sort!(w::GitRevWalker; by::Cint = Consts.SORT_NONE, rev::Bool=fals
     return w
 end
 
-repository(w::GitRevWalker) = w.repo
+repository(w::GitRevWalker) = w.owner
 
 function Base.map(f::Function, walker::GitRevWalker;
                   oid::GitHash=GitHash(),
