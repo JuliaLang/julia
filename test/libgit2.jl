@@ -294,7 +294,12 @@ mktempdir() do dir
                 try
                     @test commit_oid1 == LibGit2.GitHash(cmt)
                     short_oid1 = LibGit2.GitShortHash(string(commit_oid1))
-                    @test cmp(commit_oid1,short_oid1) == 0
+                    @test hex(commit_oid1) == hex(short_oid1)
+                    @test cmp(commit_oid1, short_oid1) == 0
+                    @test cmp(short_oid1, commit_oid1) == 0
+                    @test !(short_oid1 < commit_oid1)
+                    short_str = sprint(show, short_oid1)
+                    @test short_str == "GitShortHash(\"$(string(short_oid1))\")"
                     auth = LibGit2.author(cmt)
                     @test isa(auth, LibGit2.Signature)
                     @test auth.name == test_sig.name
@@ -339,6 +344,10 @@ mktempdir() do dir
                     @test LibGit2.shortname(brref) == master_branch
                     @test LibGit2.ishead(brref)
                     @test isnull(LibGit2.upstream(brref))
+                    show_strs = split(sprint(show, brref), "\n")
+                    @test show_strs[1] == "GitReference:"
+                    @test show_strs[2] == "Branch with name refs/heads/master"
+                    @test show_strs[3] == "Branch is HEAD."
                     @test repo.ptr == LibGit2.repository(brref).ptr
                     @test brnch == master_branch
                     @test LibGit2.headname(repo) == master_branch
@@ -486,6 +495,9 @@ mktempdir() do dir
                 tree_entry = tree[1]
                 te_str = sprint(show, tree_entry)
                 @test te_str == "GitTreeEntry:\nEntry name: testfile\nEntry type: Base.LibGit2.GitBlob\nEntry OID: $(LibGit2.entryid(tree_entry))\n"
+                blob = LibGit2.GitBlob(repo, tree_entry)
+                blob_str = sprint(show, blob)
+                @test blob_str == "GitBlob:\nBlob id: $(LibGit2.GitHash(blob))\nContents:\n$(LibGit2.content(blob))\n"
             finally
                 close(repo)
             end
