@@ -380,15 +380,14 @@ function update(branch::AbstractString, upkgs::Set{String})
                 Pkg.dir("METADATA") * ".", cex))
         end
     end
-    deferred_errors = CompositeException()
+    deferred_warnings = String[]
     avail = Read.available()
     # this has to happen before computing free/fixed
     for pkg in filter(Read.isinstalled, collect(keys(avail)))
         try
             Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
         catch err
-            cex = CapturedException(err, catch_backtrace())
-            push!(deferred_errors, PkgError("Package $pkg: unable to update cache.", cex))
+            push!(deferred_warnings, string("Package $pkg: unable to update cache\n    └ ", err, "\n"))
         end
     end
     instd = Read.installed(avail)
@@ -406,8 +405,7 @@ function update(branch::AbstractString, upkgs::Set{String})
         try
             Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
         catch err
-            cex = CapturedException(err, catch_backtrace())
-            push!(deferred_errors, PkgError("Package $pkg: unable to update cache.", cex))
+            push!(deferred_warnings, string("Package $pkg: unable to update cache\n    └ ", err, "\n"))
         end
     end
     fixed = Read.fixed(avail,instd,dont_update)
@@ -431,8 +429,7 @@ function update(branch::AbstractString, upkgs::Set{String})
                             LibGit2.reset!(creds)
                             LibGit2.merge!(repo, fastforward=true)
                         catch err
-                            cex = CapturedException(err, catch_backtrace())
-                            push!(deferred_errors, PkgError("Package $pkg cannot be updated.", cex))
+                            push!(deferred_warnings, string("Package $pkg cannot be updated\n    └ ", err, "\n"))
                             success = false
                             stopupdate = isa(err, InterruptException)
                         end
@@ -450,8 +447,7 @@ function update(branch::AbstractString, upkgs::Set{String})
                 try
                     Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
                 catch err
-                    cex = CapturedException(err, catch_backtrace())
-                    push!(deferred_errors, PkgError("Package $pkg: unable to update cache.", cex))
+                    push!(deferred_warnings, string("Package $pkg: unable to update cache\n    └ ", err, "\n"))
                 end
             end
         end
@@ -464,7 +460,7 @@ function update(branch::AbstractString, upkgs::Set{String})
     updatehook(sort!(collect(keys(installed()))))
 
     # Print deferred errors
-    length(deferred_errors) > 0 && throw(PkgError("Update finished with errors.", deferred_errors))
+    length(deferred_warnings) > 0 && warn("Update finished with errors:\n", join(deferred_warnings))
     nothing
 end
 
