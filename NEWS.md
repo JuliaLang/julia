@@ -206,7 +206,10 @@ This section lists changes that do not have deprecation warnings.
     trigamma, and polygamma special functions have been moved from Base to
     the
     [SpecialFunctions.jl package](https://github.com/JuliaMath/SpecialFunctions.jl)
-    ([#20427]).
+    ([#20427]).  Note that `airy`, `airyx` and `airyprime` have been deprecated
+    in favor of more specific functions (`airyai`, `airybi`, `airyaiprime`,
+    `airybiprimex`, `airyaix`, `airybix`, `airyaiprimex`, `airybiprimex`)
+    ([#18050]).
 
   * `write` on an `IOBuffer` now returns a signed integer in order to be
     consistent with other buffers ([#20609]).
@@ -345,10 +348,6 @@ Deprecated or removed
   * `sumabs` and `sumabs2` have been deprecated in favor of `sum(abs, x)` and `sum(abs2, x)`, respectively.
     `maxabs` and `minabs` have similarly been deprecated in favor of `maximum(abs, x)` and `minimum(abs, x)`.
     Likewise for the in-place counterparts of these functions ([#19598]).
-
-  * `airy`, `airyx` and `airyprime` have been deprecated in favor of more specific
-    functions (`airyai`, `airybi`, `airyaiprime`, `airybiprimex`, `airyaix`, `airybix`,
-    `airyaiprimex`, `airybiprimex`) ([#18050]).
 
   * `produce`, `consume` and iteration over a Task object have been deprecated in favor of
     using Channels for inter-task communication  ([#19841]).
