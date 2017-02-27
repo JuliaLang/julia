@@ -495,7 +495,7 @@ mktempdir() do dir
                 tree_entry = tree[1]
                 te_str = sprint(show, tree_entry)
                 @test te_str == "GitTreeEntry:\nEntry name: testfile\nEntry type: Base.LibGit2.GitBlob\nEntry OID: $(LibGit2.entryid(tree_entry))\n"
-                blob = LibGit2.GitBlob(repo, tree_entry)
+                blob = LibGit2.GitBlob(tree_entry)
                 blob_str = sprint(show, blob)
                 @test blob_str == "GitBlob:\nBlob id: $(LibGit2.GitHash(blob))\nContents:\n$(LibGit2.content(blob))\n"
             finally
