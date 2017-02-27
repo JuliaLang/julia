@@ -347,7 +347,7 @@ JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
 
 // TODO: hook up RegisterJITEventListener, instead of hard-coding the GDB and JuliaListener targets
 template <typename ObjSetT, typename LoadResult>
-void JuliaOJIT::DebugObjectRegistrar::operator()(ObjectLinkingLayerBase::ObjSetHandleT H,
+void JuliaOJIT::DebugObjectRegistrar::operator()(RTDyldObjectLinkingLayerBase::ObjSetHandleT H,
                 const ObjSetT &Objects, const LoadResult &LOS)
 {
 #if JL_LLVM_VERSION < 30800
