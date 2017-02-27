@@ -124,7 +124,6 @@ temp_pkg_dir() do
     Pkg.status("Example", iob)
     str = chomp(String(take!(iob)))
     @test endswith(str, string(Pkg.installed("Example")))
-    @test isempty(Pkg.dependents("Example"))
 
     # 17364 - a, Pkg.checkout with specific local branch
     let branch_name = "test-branch-1",
@@ -462,6 +461,11 @@ temp_pkg_dir() do
             LibGit2.reset!(repo, LibGit2.GitHash(old_commit), LibGit2.Consts.RESET_HARD)
         end
 
+        # run these at an old metadata commit where it's guaranteed no
+        # packages depend on Example.jl
+        @test isempty(Pkg.dependents("Example"))
+        @test isempty(Pkg.dependents("Example.jl"))
+
         @test_warn ("INFO: Installing Colors v0.6.4",
                     "INFO: Installing ColorTypes v0.2.2",
                     "INFO: Installing FixedPointNumbers v0.1.3",
@@ -493,6 +497,52 @@ temp_pkg_dir() do
         msg = readstring(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e
             "redirect_stderr(STDOUT); using Example; Pkg.update(\"$package\")"`))
         @test contains(msg, "- $package\nRestart Julia to use the updated versions.")
+    end
+end
+
+@testset "Pkg functions with .jl extension" begin
+    temp_pkg_dir() do
+        @test Pkg.installed("Example.jl") === nothing
+        Pkg.add("Example.jl")
+        @test [keys(Pkg.installed())...] == ["Example"]
+        iob = IOBuffer()
+        Pkg.checkout("Example.jl")
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test startswith(str, " - Example")
+        @test endswith(str, "master")
+        Pkg.free("Example.jl")
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test endswith(str, string(Pkg.installed("Example.jl")))
+        Pkg.checkout("Example.jl")
+        Pkg.free(("Example.jl",))
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test endswith(str, string(Pkg.installed("Example.jl")))
+        Pkg.rm("Example.jl")
+        @test isempty(Pkg.installed())
+        @test !isempty(Pkg.available("Example.jl"))
+        @test !in("Example", keys(Pkg.installed()))
+        Pkg.rm("Example.jl")
+        @test isempty(Pkg.installed())
+        @test !isempty(Pkg.available("Example.jl"))
+        @test !in("Example", keys(Pkg.installed()))
+        Pkg.clone("https://github.com/JuliaLang/Example.jl.git")
+        @test [keys(Pkg.installed())...] == ["Example"]
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test startswith(str, " - Example")
+        @test endswith(str, "master")
+        Pkg.free("Example.jl")
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test endswith(str, string(Pkg.installed("Example.jl")))
+        Pkg.checkout("Example.jl")
+        Pkg.free(("Example.jl",))
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test endswith(str, string(Pkg.installed("Example.jl")))
     end
 end
 

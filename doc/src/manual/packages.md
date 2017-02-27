@@ -171,6 +171,15 @@ git config --global url."https://".insteadOf git://
 
 However, this change will be system-wide and thus the use of [`Pkg.setprotocol!()`](@ref) is preferable.
 
+!!! note
+    The package manager functions also accept the `.jl` suffix on package names, though the suffix is
+    stripped internally. For example:
+
+    ```julia
+    Pkg.add("Distributions.jl")
+    Pkg.rm("Distributions.jl")
+    ```
+
 ## Offline Installation of Packages
 
 For machines with no Internet connection, packages may be installed by copying the package root
