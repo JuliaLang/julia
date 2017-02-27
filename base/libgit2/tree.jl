@@ -68,3 +68,9 @@ function Base.show(io::IO, te::GitTreeEntry)
     println(io, "Entry type: ", entrytype(te))
     println(io, "Entry OID: ", entryid(te))
 end
+
+function Base.show(io::IO, tree::GitTree)
+    println(io, "GitTree:")
+    println(io, "Owner: ", repository(tree))
+    println(io, "Number of entries: ", count(tree))
+end
