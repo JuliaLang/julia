@@ -317,11 +317,14 @@ function inlined_pow(x::Symbol, p::Int)
 end
 inlined_pow(x::Symbol, p::Integer) = inlined_pow(x, Int(p))
 
-# for numbers, where we default to power_by_squaring, inline
+# for cases where we use power_by_squaring, inline
 # the unrolled expression for literal p
 # (this also allows integer^-p to give a floating-point result
 #  in a type-stable fashion).
-@generated internal_pow{p}(x::Number, ::Type{Val{p}}) = inlined_pow(:x, p)
+@inline @generated internal_pow{p}(x::HWNumber, ::Type{Val{p}}) = inlined_pow(:x, p)
+
+# Float32/Float64 may not inline without @fastmath, for accuracy
+internal_pow{p}(x::Union{Float32,Float64}, ::Type{Val{p}}) = x^p
 
 # b^p mod m
 

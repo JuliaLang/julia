@@ -248,7 +248,8 @@ end
 
 pow_fast(x::Float32, y::Integer) = ccall("llvm.powi.f32", llvmcall, Float32, (Float32, Int32), x, y)
 pow_fast(x::Float64, y::Integer) = ccall("llvm.powi.f64", llvmcall, Float64, (Float64, Int32), x, y)
-@generated pow_fast{p}(x::Base.HWNumber, ::Type{Val{p}}) = Base.inlined_pow(:x, p)
+@inline @generated pow_fast{p}(x::Base.HWNumber, ::Type{Val{p}}) = Base.inlined_pow(:x, p)
+pow_fast{p}(x::FloatTypes, ::Type{Val{p}}) = pow_fast(x, p) # inlines already via llvm.powi
 
 # TODO: Change sqrt_llvm intrinsic to avoid nan checking; add nan
 # checking to sqrt in math.jl; remove sqrt_llvm_fast intrinsic
