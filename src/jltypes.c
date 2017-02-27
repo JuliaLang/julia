@@ -307,6 +307,35 @@ static int count_union_components(jl_value_t **types, size_t n)
     return c;
 }
 
+int jl_count_union_components(jl_value_t *v)
+{
+    if (!jl_is_uniontype(v)) return 1;
+    jl_uniontype_t *u = (jl_uniontype_t*)v;
+    return jl_count_union_components(u->a) + jl_count_union_components(u->b);
+}
+
+// Return the `*pi`th element of a nested type union, according to a
+// standard traversal order. Anything that is not itself a `Union` is
+// considered an "element". `*pi` is destroyed in the process.
+static jl_value_t *nth_union_component(jl_value_t *v, int *pi)
+{
+    if (!jl_is_uniontype(v)) {
+        if (*pi == 0)
+            return v;
+        (*pi)--;
+        return NULL;
+    }
+    jl_uniontype_t *u = (jl_uniontype_t*)v;
+    jl_value_t *a = nth_union_component(u->a, pi);
+    if (a) return a;
+    return nth_union_component(u->b, pi);
+}
+
+jl_value_t *jl_nth_union_component(jl_value_t *v, int i)
+{
+    return nth_union_component(v, &i);
+}
+
 static void flatten_type_union(jl_value_t **types, size_t n, jl_value_t **out, size_t *idx)
 {
     size_t i;
@@ -1363,12 +1392,14 @@ static jl_value_t *_jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *en
 
 JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals)
 {
-    jl_value_t *typ;
-    JL_TRY {
-        typ = _jl_instantiate_type_in_env(ty, env, vals, NULL);
-    }
-    JL_CATCH {
-        typ = jl_bottom_type;
+    jl_value_t *typ = ty;
+    if (jl_is_unionall(env)) {
+        JL_TRY {
+            typ = _jl_instantiate_type_in_env(ty, env, vals, NULL);
+        }
+        JL_CATCH {
+            typ = jl_bottom_type;
+        }
     }
     return typ;
 }

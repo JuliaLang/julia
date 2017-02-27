@@ -1464,7 +1464,7 @@ static const std::string verify_ccall_sig(size_t nargs, jl_value_t *&rt, jl_valu
     }
     else {
         static_rt = retboxed || !jl_has_typevar_from_unionall(rt, unionall_env);
-        if (!static_rt && sparam_vals != NULL) {
+        if (!static_rt && sparam_vals != NULL && jl_svec_len(sparam_vals) > 0) {
             rt = jl_instantiate_type_in_env(rt, unionall_env, jl_svec_data(sparam_vals));
             // `rt` is gc-rooted by the caller
             static_rt = true;
@@ -1875,7 +1875,8 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         // if we know the function sparams, try to fill those in now
         // so that the julia_to_native type checks are more likely to be doable (e.g. leaf types) at compile-time
         jl_value_t *jargty_in_env = jargty;
-        if (ctx->spvals_ptr == NULL && !toboxed && unionall_env && jl_has_typevar_from_unionall(jargty, unionall_env)) {
+        if (ctx->spvals_ptr == NULL && !toboxed && unionall_env && jl_has_typevar_from_unionall(jargty, unionall_env) &&
+            jl_svec_len(ctx->linfo->sparam_vals) > 0) {
             jargty_in_env = jl_instantiate_type_in_env(jargty_in_env, unionall_env, jl_svec_data(ctx->linfo->sparam_vals));
             if (jargty_in_env != jargty)
                 jl_add_method_root(ctx, jargty_in_env);
