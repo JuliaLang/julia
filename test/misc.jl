@@ -572,6 +572,25 @@ let
     end
 end
 
+# Test that `print_with_color` accepts non-string values, just as `print` does
+let
+    old_have_color = Base.have_color
+    try
+        @eval Base have_color = true
+        buf_color = IOBuffer()
+        args = (3.2, "foo", :testsym)
+        print_with_color(:red, buf_color, args...)
+        buf_plain = IOBuffer()
+        print(buf_plain, args...)
+        expected_str = string(Base.text_colors[:red],
+                              String(take!(buf_plain)),
+                              Base.text_colors[:default])
+        @test expected_str == String(take!(buf_color))
+    finally
+        @eval Base have_color = $(old_have_color)
+    end
+end
+
 let
     global c_18711 = 0
     buf = IOContext(IOBuffer(), :hascontext => true)
