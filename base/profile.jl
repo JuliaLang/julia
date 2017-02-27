@@ -108,7 +108,7 @@ The keyword arguments can be any combination of:
 
  - `C` -- If `true`, backtraces from C and Fortran code are shown (normally they are excluded).
 
- - `combine` -- If true` (default), instruction pointers are merged that correspond to the same line of code.
+ - `combine` -- If `true` (default), instruction pointers are merged that correspond to the same line of code.
 
  - `maxdepth` -- Limits the depth higher than `maxdepth` in the `:tree` format.
 

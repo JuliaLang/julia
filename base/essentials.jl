@@ -224,7 +224,7 @@ function sum(A::AbstractArray)
 end
 ```
 
-!!! Warning
+!!! warning
 
     Using `@inbounds` may return incorrect results/crashes/corruption
     for out-of-bounds indices. The user is responsible for checking it manually.
