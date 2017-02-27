@@ -655,3 +655,32 @@ let A = 1:2, z = zip(A, A, A, A, A, A, A, A, A, A, A, A)
     @test z isa Core.Inference.limit_type_depth(typeof(z), 0)
     @test start(z) == (1, (1, (1, (1, (1, (1, (1, (1, (1, (1, (1, 1)))))))))))
 end
+
+# issue #20704
+f20704(::Int) = 1
+Base.@pure b20704(x::ANY) = f20704(x)
+@test b20704(42) === 1
+@test_throws MethodError b20704(42.0)
+
+bb20704() = b20704(Any[1.0][1])
+@test_throws MethodError bb20704()
+
+v20704() = Val{b20704(Any[1.0][1])}
+@test_throws MethodError v20704()
+@test Base.return_types(v20704, ()) == Any[Type{Val{1}}]
+
+Base.@pure g20704(::Int) = 1
+h20704(x::ANY) = g20704(x)
+@test g20704(1) === 1
+@test_throws MethodError h20704(1.2)
+
+Base.@pure c20704() = (f20704(1.0); 1)
+d20704() = c20704()
+@test_throws MethodError d20704()
+
+Base.@pure function a20704(x)
+    rand()
+    42
+end
+aa20704(x) = x(nothing)
+@test code_typed(aa20704, (typeof(a20704),))[1][1].pure
