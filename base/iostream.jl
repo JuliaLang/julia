@@ -314,24 +314,11 @@ function peek(s::IOStream)
 end
 
 function skipchars(io::IO, pred; linecomment=nothing)
-    _skipchars_impl(_get_comment_skipper(io, linecomment), io, pred)
-end
-
-_get_comment_skipper(io, linecomment::Void) = c->false
-_get_comment_skipper(io, linecomment::Char) =
-    function(c)
-        if c == linecomment
-            readline(io)
-            return true
-        else
-            return false
-        end
-    end
-
-@noinline function _skipchars_impl(skipcomment, io::IO, pred)
     while !eof(io)
         c = read(io, Char)
-        if !skipcomment(c) && !pred(c)
+        if c === linecomment
+            readline(io)
+        elseif !pred(c)
             seek(io,position(io)-sizeof(string(c)))
             break
         end
