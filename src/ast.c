@@ -192,7 +192,6 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
         margs[0] = jl_toplevel_eval(margs[0]);
         mfunc = jl_method_lookup(jl_gf_mtable(margs[0]), margs, nargs, 1, world);
         if (mfunc == NULL) {
-            JL_GC_POP();
             jl_method_error((jl_function_t*)margs[0], margs, nargs, world);
             // unreachable
         }
