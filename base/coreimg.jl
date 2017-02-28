@@ -13,6 +13,8 @@ const include = Core.include
 # conditional to allow redefining Core.Inference after base exists
 isdefined(Main, :Base) || ((::Type{T}){T}(arg) = convert(T, arg)::T)
 
+function return_type end
+
 ## Load essential files and libraries
 include("essentials.jl")
 include("ctypes.jl")
