@@ -312,7 +312,7 @@ end
 const _chtmp = Array{Char}(1)
 function peekchar(s::IOStream)
     if ccall(:ios_peekutf8, Cint, (Ptr{Void}, Ptr{Char}), s, _chtmp) < 0
-      return typemax(Char)
+        return typemax(Char)
     end
     return _chtmp[1]
 end
