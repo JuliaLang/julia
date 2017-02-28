@@ -41,6 +41,11 @@ function Base.next(rb::GitRebase)
     return unsafe_load(rb_op_ptr_ptr[])
 end
 
+function Base.show(io::IO, rb::GitRebase)
+    println(io, "GitRebase:")
+    println(io, "Number: ", count(rb))
+    println(io, "Currently performing operation: ",current(rb)+1)
+end
 
 """
     LibGit2.commit(rb::GitRebase, sig::GitSignature)

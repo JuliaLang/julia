@@ -177,12 +177,12 @@ module Consts
     const RESET_HARD  = Cint(3) # MIXED plus changes in working tree discarded
 
     #rebase
-    const REBASE_OPERATION_PICK   = Cint(0)
-    const REBASE_OPERATION_REWORD = Cint(1)
-    const REBASE_OPERATION_EDIT   = Cint(2)
-    const REBASE_OPERATION_SQUASH = Cint(3)
-    const REBASE_OPERATION_FIXUP  = Cint(4)
-    const REBASE_OPERATION_EXEC   = Cint(5)
+    @enum(GIT_REBASE_OPERATION, REBASE_OPERATION_PICK   = Cint(0),
+                                REBASE_OPERATION_REWORD = Cint(1),
+                                REBASE_OPERATION_EDIT   = Cint(2),
+                                REBASE_OPERATION_SQUASH = Cint(3),
+                                REBASE_OPERATION_FIXUP  = Cint(4),
+                                REBASE_OPERATION_EXEC   = Cint(5))
 
     # fetch_prune
     const FETCH_PRUNE_UNSPECIFIED = Cint(0)
