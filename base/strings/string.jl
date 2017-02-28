@@ -68,7 +68,7 @@ codeunit(s::AbstractString, i::Integer)
     unsafe_load(pointer(s),i)
 end
 
-write(io::IO, s::String) = unsafe_write(io, pointer(s), UInt(s.len))
+write(io::IO, s::String) = unsafe_write(io, pointer(s), reinterpret(UInt, s.len))
 
 ## comparison ##
 
