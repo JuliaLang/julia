@@ -412,6 +412,7 @@ import .Dates: Date, DateTime, DateFormat, @dateformat_str, now
 include("sparse/sparse.jl")
 using .SparseArrays
 
+include("readuntil.jl")
 include("asyncmap.jl")
 
 include("distributed/Distributed.jl")
