@@ -778,6 +778,10 @@ mktempdir() do dir
 
             newhead = LibGit2.head_oid(repo)
 
+            files = LibGit2.diff_files(repo, "branch/a", "branch/b", filter=Set([LibGit2.Consts.DELTA_ADDED]))
+            @test files == ["file3"]
+            files = LibGit2.diff_files(repo, "branch/a", "branch/b", filter=Set([LibGit2.Consts.DELTA_MODIFIED]))
+            @test files == []
             # switch back and rebase
             LibGit2.branch!(repo, "branch/a")
             newnewhead = LibGit2.rebase!(repo, "branch/b")
