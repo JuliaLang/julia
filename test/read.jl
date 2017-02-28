@@ -146,7 +146,7 @@ for (name, f) in l
     verbose && println("$name readuntil...")
     for (t, s, m) in [
             ("aaabc", "aab", "aaab"),
-            ("assassassinass", "assassin", "assassassin")]
+            ("barbarbarians", "barbarian", "barbarbarian")]
         local t, s, m
         @test readuntil(io(t), s) == m
 
