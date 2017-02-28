@@ -1236,3 +1236,6 @@ for i in 1:100
     @test_spill_n 9 int32args float32args
     @test_spill_n 10 int32args float32args
 end
+
+# issue #20835
+@test_throws ErrorException eval(:(f20835(x) = ccall(:fn, Void, (Ptr{typeof(x)},), x)))
