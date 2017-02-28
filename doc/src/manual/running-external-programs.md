@@ -86,12 +86,13 @@ To execute a command in an environment that is temporarily modified (not replace
 
 ```jldoctest
 julia> withenv("FOO"=>"bar") do
-                  run(`bash -c "echo FOO is \$FOO"`)
-                end
+           run(`bash -c "echo FOO is \$FOO"`)
+       end
 FOO is bar
 ```
 
 For more information on `Cmd` objects and pipelining of commands see [`Cmd`](@ref) and [`pipeline`](@ref).
+
 ## [Interpolation](@id command-interpolation)
 
 Suppose you want to do something a bit more complicated and use the name of a file in the variable
