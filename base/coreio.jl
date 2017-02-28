@@ -12,6 +12,7 @@ iswritable(::DevNullStream) = true
 isopen(::DevNullStream) = true
 read(::DevNullStream, ::Type{UInt8}) = throw(EOFError())
 write(::DevNullStream, ::UInt8) = 1
+unsafe_write(::DevNullStream, ::Ptr{UInt8}, n::UInt)::Int = n
 close(::DevNullStream) = nothing
 flush(::DevNullStream) = nothing
 wait_connected(::DevNullStream) = nothing
