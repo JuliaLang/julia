@@ -835,6 +835,23 @@ mktempdir() do dir
 
             newerhead = LibGit2.head_oid(repo)
             @test newerhead == newhead
+
+            # add yet another file
+            open(joinpath(LibGit2.path(repo),"file5"),"w") do f
+                write(f, "555\n")
+            end
+            LibGit2.add!(repo, "file5")
+            LibGit2.commit(repo, "add file5")
+
+            # Rebase type
+            head_ann = LibGit2.GitAnnotated(repo, "branch/a")
+            upst_ann = LibGit2.GitAnnotated(repo, "master")
+            rb = LibGit2.GitRebase(repo, head_ann, upst_ann)
+            rbo = next(rb)
+            rbo_str = sprint(show, rbo)
+            @test rbo_str == "RebaseOperation($(string(rbo.id)))\nOperation type: REBASE_OPERATION_PICK\n"
+            rb_str = sprint(show, rb)
+            @test rb_str == "GitRebase:\nNumber: 1\nCurrently performing operation: 1\n"
         finally
             close(repo)
         end
