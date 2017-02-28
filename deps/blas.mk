@@ -49,11 +49,6 @@ endif
 OPENBLAS_FFLAGS :=
 OPENBLAS_CFLAGS :=
 
-# Work around OpenBLAS#942
-ifeq ($(USECLANG),1)
-OPENBLAS_CFLAGS += -no-integrated-as
-endif
-
 # Decide whether to build for 32-bit or 64-bit arch
 ifneq ($(BUILD_OS),$(OS))
 OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 HOSTCC=$(HOSTCC) CROSS_SUFFIX=$(CROSS_COMPILE)
