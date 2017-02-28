@@ -68,32 +68,30 @@ julia> Cmd(`echo "Hello world"`, ignorestatus=true, detach=false)
 `echo 'Hello world'`
 ```
 
-There are some keyword arguments available to customize the `Cmd` object usage. You can set the working directory for the command by using the `dir` kwarg, e.g.
+There are some keyword arguments available to customize the `Cmd` object's usage. You can set the working directory for the command by using the `dir` kwarg, e.g.
 
 ```jldoctest
-julia> Cmd(`pwd`, dir ="..")
+julia> Cmd(`pwd`, dir = "..")
 setenv(`pwd`; dir="..")
 ```
 
 You can use [`setenv`](@ref) function to set the environment variables to use while running the given command, e.g.
 
 ```jldoctest
-julia> setenv(`echo "home"`,"JL_DOC"=>"julia_docs")
+julia> setenv(`echo "home"`, "JL_DOC"=>"julia_docs")
 setenv(`echo home`,String["JL_DOC=julia_docs"])
 ```
 
-To execute the given command in an environment that is temporarily modified (not replaced as in `setenv`) by zero or more "var"=>val arguments kv you can use [`withenv`](@ref), e.g.
+To execute a command in an environment that is temporarily modified (not replaced as in `setenv`) by zero or more `"var" => val` arguments, you can use [`withenv`](@ref), e.g.
 
 ```jldoctest
 julia> withenv("FOO"=>"bar") do
-
                   run(`bash -c "echo FOO is \$FOO"`)
-
-              end
+                end
 FOO is bar
 ```
 
-For more information on Cmd objects and pipeline see [`Cmd`](@ref).
+For more information on `Cmd` objects and pipelining of commands see [`Cmd`](@ref) and [`pipeline`](@ref).
 ## [Interpolation](@id command-interpolation)
 
 Suppose you want to do something a bit more complicated and use the name of a file in the variable
