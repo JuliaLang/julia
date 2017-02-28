@@ -395,15 +395,6 @@ julia> Z[:V]
 2×5 Array{Float64,2}:
  -2.35514e-16  0.0  -7.85046e-16  7.06542e-16  1.0
   1.57009e-16  0.0   5.88785e-17  1.0          3.92523e-16
-
-julia> A = spdiagm(1:4);
-
-julia> s = svds(A, nsv = 2)[1];
-
-julia> s[:S]
-2-element Array{Float64,1}:
- 4.0
- 3.0
 ```
 
 !!! note "Implementation"
