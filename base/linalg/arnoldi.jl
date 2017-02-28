@@ -356,7 +356,7 @@ iterations derived from [`eigs`](@ref).
 
 * `svd`: An `SVD` object containing the left singular vectors, the requested values, and the right singular vectors.
 If `ritzvec = false`, the left and right singular vectors will be empty. U, S, V and Vt can be obtained from the SVD
-object with `Z[:U], Z[:S], Z[:V] and Z[:Vt]` (where `Z = svds(A)[1]`), such that `A = U*diagm(S)*Vt`.
+object with `Z[:U]`, `Z[:S]`, `Z[:V]` and `Z[:Vt]` (where `Z = svds(A)[1]`), such that `A = U*diagm(S)*Vt`.
 Internally Vt is stored and hence Vt is more efficient to extract than V, because in contrast to LAPACK, which produces Vt, the algorithm used by ARPACK actually produces V.
 * `nconv`: Number of converged singular values.
 * `niter`: Number of iterations.
