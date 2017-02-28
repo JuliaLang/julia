@@ -765,8 +765,9 @@ function stale_cachefile(modpath::String, cachefile::String)
         end
         for (f, ftime_req) in files
             # Issue #13606: compensate for Docker images rounding mtimes
+            # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
             ftime = mtime(f)
-            if ftime != ftime_req && ftime != floor(ftime_req)
+            if ftime != ftime_req && ftime != floor(ftime_req) && ftime != trunc(ftime_req, 6)
                 DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed.")
                 return true
             end
