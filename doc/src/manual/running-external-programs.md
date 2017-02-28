@@ -10,7 +10,7 @@ julia> `echo hello`
 
 differs in several aspects from the behavior in various shells, Perl, or Ruby:
 
-  * Instead of immediately running the command, backticks create a [`Cmd Object`](#cmd-object) to represent the command.
+  * Instead of immediately running the command, backticks create a [`Cmd`](#cmd-object) object to represent the command.
     You can use this object to connect the command to others via pipes, run it, and read or write
     to it.
   * When the command is run, Julia does not capture its output unless you specifically arrange for
@@ -59,32 +59,41 @@ julia> open(`less`, "w", STDOUT) do io
 2
 3
 ```
+
 ## Cmd Object
-Normally, to create a Cmd object in the first place, one uses backticks, e.g.
+Normally, to create a `Cmd` object in the first place, one uses backticks, e.g.
+
 ```jldoctest
 julia> Cmd(`echo "Hello world"`, ignorestatus=true, detach=false)
 `echo 'Hello world'`
 ```
-There are some kwargs available to customize the `Cmd` object usage. You can set the working directory for the command by using the `dir` kwarg, e.g.
+
+There are some keyword arguments available to customize the `Cmd` object usage. You can set the working directory for the command by using the `dir` kwarg, e.g.
+
 ```jldoctest
 julia> Cmd(`pwd`, dir ="..")
 setenv(`pwd`; dir="..")
 ```
-You can use `setenv(command::Cmd, env; dir="")` function to set the environment variables to use while running the given command, e.g.
-```jldocktest
+
+You can use [`setenv`](@ref) function to set the environment variables to use while running the given command, e.g.
+
+```jldoctest
 julia> setenv(`echo "home"`,"JL_DOC"=>"julia_docs")
 setenv(`echo home`,String["JL_DOC=julia_docs"])
 ```
-To execute f() in an environment that is temporarily modified (not replaced as in setenv) by zero or more "var"=>val arguments kv you can use `withenv(f::Function, kv::Pair...)`, e.g.
+
+To execute the given command in an environment that is temporarily modified (not replaced as in `setenv`) by zero or more "var"=>val arguments kv you can use [`withenv`](@ref), e.g.
+
 ```jldoctest
-jjulia> withenv("FOO"=>"bar") do
+julia> withenv("FOO"=>"bar") do
 
                   run(`bash -c "echo FOO is \$FOO"`)
 
               end
 FOO is bar
 ```
-For more information on Cmd objects and pipeline see [`Base.Cmd`](@ref),
+
+For more information on Cmd objects and pipeline see [`Cmd`](@ref).
 ## [Interpolation](@id command-interpolation)
 
 Suppose you want to do something a bit more complicated and use the name of a file in the variable
