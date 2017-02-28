@@ -3363,6 +3363,9 @@ function is_pure_builtin(f::ANY)
             return true
         end
     end
+    if f === return_type
+        return true
+    end
     return false
 end
 
@@ -3394,22 +3397,33 @@ function effect_free(e::ANY, src::CodeInfo, mod::Module, allow_volatile::Bool)
             return true
         end
         ea = e.args
-        if head === :call && !isa(e.args[1], SSAValue) && !isa(e.args[1], Slot)
+        if head === :call
             if is_known_call_p(e, is_pure_builtin, src, mod)
                 if !allow_volatile
                     if is_known_call(e, arrayref, src, mod) || is_known_call(e, arraylen, src, mod)
                         return false
                     elseif is_known_call(e, getfield, src, mod)
+                        length(ea) == 3 || return false
                         et = exprtype(e, src, mod)
                         if !isa(et,Const) && !(isType(et) && isleaftype(et))
                             # first argument must be immutable to ensure e is affect_free
                             a = ea[2]
                             typ = widenconst(exprtype(a, src, mod))
-                            if !isa(typ, DataType) || typ.mutable || typ.abstract
+                            if isconstType(typ)
+                                if Const(:uid) ⊑ exprtype(ea[3], src, mod)
+                                    return false    # DataType uid field can change
+                                end
+                            elseif !isa(typ, DataType) || typ.mutable || typ.abstract
                                 return false
                             end
                         end
                     end
+                end
+                # fall-through
+            elseif is_known_call(e, _apply, src, mod) && length(ea) > 1
+                ft = exprtype(ea[2], src, mod)
+                if !isa(ft, Const) || !contains_is(_pure_builtins, ft.val)
+                    return false
                 end
                 # fall-through
             else

@@ -305,7 +305,7 @@ minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 _default_type(T::Type) = (@_pure_meta; T)
 
 if isdefined(Core, :Inference)
-    _return_type(f::ANY, t::ANY) = Core.Inference.return_type(f, t)
+    const _return_type = Core.Inference.return_type
 else
     _return_type(f::ANY, t::ANY) = Any
 end
