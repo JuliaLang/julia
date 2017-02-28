@@ -1,10 +1,116 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-@unix_only @test expanduser("~")[1] != ENV["HOME"]
+for S in (String, GenericString)
+    dir = pwd()
+    sep = Base.Filesystem.path_separator
 
-@unix_only @test isabspath("/") == true
+    @test abspath(S("foo")) == "$dir$(sep)foo"
+    @test abspath(S("foo"), S("bar")) == "$dir$(sep)foo$(sep)bar"
+
+    @test basename(S("foo$(sep)bar")) == "bar"
+    @test dirname(S("foo$(sep)bar")) == "foo"
+
+    @test expanduser(S("x")) == "x"
+    @test expanduser(S("~")) == (is_windows() ? "~" : homedir())
+
+    @test isabspath(S(homedir()))
+    @test !isabspath(S("foo"))
+
+    @test !isdirpath(S("foo"))
+    @test isdirpath(S("foo$sep"))
+    @test isdirpath(S(""))
+    @test isdirpath(S("."))
+    @test isdirpath(S(".."))
+
+    @test joinpath(S("foo")) == "foo"
+    @test joinpath(S("foo"), S("bar")) == "foo$(sep)bar"
+    @test joinpath(S("foo"), S(homedir())) == homedir()
+    @test joinpath(S(abspath("foo")), S(homedir())) == homedir()
+
+    @test normpath(S(joinpath("."))) == "."
+    @test normpath(S(joinpath(".."))) == ".."
+    @test normpath(S(joinpath("..","."))) == ".."
+    @test normpath(S(joinpath(".",".."))) == ".."
+    @test normpath(S(joinpath("..",".."))) == "..$(sep).."
+    @test normpath(S(joinpath(".","..",".."))) == "..$(sep).."
+    @test normpath(S(joinpath("..",".",".."))) == "..$(sep).."
+    @test normpath(S(joinpath("..","..","."))) == "..$(sep).."
+
+    @test normpath(S(joinpath("foo","."))) == "foo$sep"
+    @test normpath(S(joinpath("foo",".."))) == "."
+    @test normpath(S(joinpath("foo","..","."))) == "."
+    @test normpath(S(joinpath("foo",".",".."))) == "."
+    @test normpath(S(joinpath("foo","..",".."))) == ".."
+    @test normpath(S(joinpath("foo",".","..",".."))) == ".."
+    @test normpath(S(joinpath("foo","..",".",".."))) == ".."
+    @test normpath(S(joinpath("foo","..","..","."))) == ".."
+
+    @test normpath(S(joinpath(".","bar"))) == "bar"
+    @test normpath(S(joinpath("..","bar"))) == "..$(sep)bar"
+    @test normpath(S(joinpath("..",".","bar"))) == "..$(sep)bar"
+    @test normpath(S(joinpath(".","..","bar"))) == "..$(sep)bar"
+    @test normpath(S(joinpath("..","..","bar"))) == "..$(sep)..$(sep)bar"
+    @test normpath(S(joinpath(".","..","..","bar"))) == "..$(sep)..$(sep)bar"
+    @test normpath(S(joinpath("..",".","..","bar"))) == "..$(sep)..$(sep)bar"
+    @test normpath(S(joinpath("..","..",".","bar"))) == "..$(sep)..$(sep)bar"
+
+    @test normpath(S(joinpath("foo",".","bar"))) == "foo$(sep)bar"
+    @test normpath(S(joinpath("foo","..","bar"))) == "bar"
+    @test normpath(S(joinpath("foo","..",".","bar"))) == "bar"
+    @test normpath(S(joinpath("foo",".","..","bar"))) == "bar"
+    @test normpath(S(joinpath("foo","..","..","bar"))) == "..$(sep)bar"
+    @test normpath(S(joinpath("foo",".","..","..","bar"))) == "..$(sep)bar"
+    @test normpath(S(joinpath("foo","..",".","..","bar"))) == "..$(sep)bar"
+    @test normpath(S(joinpath("foo","..","..",".","bar"))) == "..$(sep)bar"
+
+    @test relpath(S(joinpath("foo","bar")), S("foo")) == "bar"
+
+    @test joinpath(splitdir(S(homedir()))...) == homedir()
+    @test string(splitdrive(S(homedir()))...) == homedir()
+
+    if is_windows()
+        @test splitdrive(S("\\\\servername\\hello.world\\filename.ext")) ==
+            ("\\\\servername\\hello.world","\\filename.ext")
+        @test splitdrive(S("\\\\servername.com\\hello.world\\filename.ext")) ==
+            ("\\\\servername.com\\hello.world","\\filename.ext")
+        @test splitdrive(S("C:\\foo\\bar")) ==
+            ("C:","\\foo\\bar")
+    end
+
+    @test splitext(S("")) == ("", "")
+    @test splitext(S(".")) == (".", "")
+    @test_broken splitext(S("..")) == ("..", "")
+    @test_broken splitext(S("...")) == ("...", "")
+    @test splitext(S("foo")) == ("foo", "")
+    @test splitext(S("foo.")) == ("foo", ".")
+    @test_broken splitext(S("foo..")) == ("foo", "..")
+    @test_broken splitext(S("foo...")) == ("foo", "...")
+    @test splitext(S("foo.bar")) == ("foo", ".bar")
+    @test splitext(S(".foo")) == (".foo", "")
+    @test splitext(S(".foo.")) == (".foo", ".")
+    @test_broken splitext(S(".foo..")) == (".foo", "..")
+    @test_broken splitext(S(".foo...")) == (".foo", "...")
+    @test splitext(S(".foo.bar")) == (".foo", ".bar")
+end
+
 @test isabspath("~") == false
-@unix_only @test isabspath(expanduser("~")) == true
+@test isabspath("/") == true # on windows, this is relatively absolute
+@test isabspath("A:/") == is_windows()
+@test isabspath("B:\\") == is_windows()
+@test isabspath("./") == false
+@test isabspath("C:") == false
+@test isabspath("C:.") == false
+@test isabspath("α:/") == false
+@test isabspath(".:/") == false
+#@test isabspath("_:/") == false # FIXME?
+#@test isabspath("AB:/") == false # FIXME?
+@test isabspath("\\\\") == is_windows()
+if is_unix()
+    @test isabspath(expanduser("~")) == true
+    @test startswith(expanduser("~"), homedir())
+else
+    @test expanduser("~") == "~"
+end
 
 ############################################
 # This section tests relpath computation. #

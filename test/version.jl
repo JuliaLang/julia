@@ -80,7 +80,7 @@
 # show
 io = IOBuffer()
 show(io,v"4.3.2+1.a")
-@test length(takebuf_string(io)) == 12
+@test length(String(take!(io))) == 12
 
 # conversion from Int
 @test convert(VersionNumber, 2) == v"2.0.0"
@@ -116,6 +116,7 @@ import Base.issupbuild
 # basic comparison
 VersionNumber(2, 3, 1) == VersionNumber(Int8(2), UInt32(3), Int32(1)) == v"2.3.1"
 @test v"2.3.0" < v"2.3.1" < v"2.4.8" < v"3.7.2"
+@test v"0.6.0-" < v"0.6.0-dev" < v"0.6.0-dev.123" < v"0.6.0-dev.unknown" < v"0.6.0-pre" < v"0.6.0"
 
 #lowerbound and upperbound
 import Base: lowerbound, upperbound
@@ -203,28 +204,28 @@ end
 
 # check_new_version
 import Base.check_new_version
-@test check_new_version([v"1", v"2"], v"3") == nothing
+@test check_new_version([v"1", v"2"], v"3") === nothing
 @test_throws AssertionError check_new_version([v"2", v"1"], v"3")
 @test_throws ErrorException check_new_version([v"1", v"2"], v"2")
-@test check_new_version(VersionNumber[], v"0") == nothing
-@test check_new_version(VersionNumber[], v"0.0.1") == nothing
+@test check_new_version(VersionNumber[], v"0") === nothing
+@test check_new_version(VersionNumber[], v"0.0.1") === nothing
 @test_throws ErrorException check_new_version(VersionNumber[], v"0.0.2")
-@test check_new_version(VersionNumber[], v"0.1") == nothing
+@test check_new_version(VersionNumber[], v"0.1") === nothing
 @test_throws ErrorException check_new_version(VersionNumber[], v"0.2")
-@test check_new_version(VersionNumber[], v"1") == nothing
+@test check_new_version(VersionNumber[], v"1") === nothing
 @test_throws ErrorException check_new_version(VersionNumber[], v"2")
 @test_throws ErrorException check_new_version(VersionNumber[v"1", v"2", v"3"], v"2")
 @test_throws ErrorException check_new_version([v"1", v"2"], v"4")
 @test_throws ErrorException check_new_version([v"1", v"2"], v"2-rc")
-@test check_new_version([v"1", v"2"], v"2.0.1") == nothing
-@test check_new_version([v"1", v"2"], v"2.1") == nothing
-@test check_new_version([v"1", v"2"], v"3") == nothing
+@test check_new_version([v"1", v"2"], v"2.0.1") === nothing
+@test check_new_version([v"1", v"2"], v"2.1") === nothing
+@test check_new_version([v"1", v"2"], v"3") === nothing
 
 # banner
 import Base.banner
 io = IOBuffer()
-@test banner(io) == nothing
-@test length(takebuf_string(io)) > 50
+@test banner(io) === nothing
+@test length(String(take!(io))) > 50
 
 # julia_version.h version test
 @test VERSION.major == ccall(:jl_ver_major, Cint, ())
@@ -237,6 +238,41 @@ io = IOBuffer()
 @test VersionNumber(true, 0x2) == v"1.2"
 @test VersionNumber(true, 0x2, Int128(3)) == v"1.2.3"
 @test VersionNumber(true, 0x2, Int128(3)) == v"1.2.3"
-@test VersionNumber(true, 0x2, Int128(3), (utf16("rc"), 0x1)) == v"1.2.3-rc.1"
-@test VersionNumber(true, 0x2, Int128(3), (utf16("rc"), 0x1)) == v"1.2.3-rc.1"
-@test VersionNumber(true, 0x2, Int128(3), (), (utf16("sp"), 0x2)) == v"1.2.3+sp.2"
+@test VersionNumber(true, 0x2, Int128(3), (GenericString("rc"), 0x1)) == v"1.2.3-rc.1"
+@test VersionNumber(true, 0x2, Int128(3), (GenericString("rc"), 0x1)) == v"1.2.3-rc.1"
+@test VersionNumber(true, 0x2, Int128(3), (), (GenericString("sp"), 0x2)) == v"1.2.3+sp.2"
+
+# VersionSet tests
+
+import Base.Pkg.Types: VersionInterval, VersionSet
+
+function chkint(a::VersionSet)
+    ints = a.intervals
+    for k = 1:length(ints)
+        ints[k].lower < ints[k].upper || return false
+        k < length(ints) && (ints[k].upper < ints[k+1].lower || return false)
+    end
+    return true
+end
+
+const empty_versionset = VersionSet(VersionInterval[])
+@test isempty(empty_versionset)
+
+# VersionSet intersections and unions
+@test empty_versionset ∩ empty_versionset == empty_versionset
+@test empty_versionset ∪ empty_versionset == empty_versionset
+for t = 1:1_000
+    a = VersionSet(sort!(map(v->VersionNumber(v...), [(rand(0:8),rand(0:3)) for i = 1:rand(0:10)]))...)
+    b = VersionSet(sort!(map(v->VersionNumber(v...), [(rand(0:8),rand(0:3)) for i = 1:rand(0:10)]))...)
+    @assert chkint(a)
+    @assert chkint(b)
+    u = a ∪ b
+    @test chkint(u)
+    i = a ∩ b
+    @test chkint(i)
+    for vM = 0:9, vm = 0:5
+        v = VersionNumber(vM, vm)
+        @test (v ∈ a || v ∈ b) ? (v ∈ u) : (v ∉ u)
+        @test (v ∈ a && v ∈ b) ? (v ∈ i) : (v ∉ i)
+    end
+end

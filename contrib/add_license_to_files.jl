@@ -34,25 +34,31 @@ const skipfiles = [
     # files to check - already copyright
     # see: https://github.com/JuliaLang/julia/pull/11073#issuecomment-98099389
     "../base/special/trig.jl",
-    "../base/sparse/csparse.jl",
+    "../base/special/exp.jl"
     "../base/linalg/givens.jl",
     #
     "../src/abi_llvm.cpp",
+    "../src/abi_ppc64le.cpp",
     "../src/abi_win32.cpp",
     "../src/abi_win64.cpp",
     "../src/abi_x86.cpp",
     "../src/abi_x86_64.cpp",
     "../src/disasm.cpp",
+    "../src/getopt.c",
+    "../src/getopt.h",
     "../src/support/END.h",
     "../src/support/ENTRY.amd64.h",
     "../src/support/ENTRY.i387.h",
     "../src/support/MurmurHash3.c",
     "../src/support/MurmurHash3.h",
     "../src/support/asprintf.c",
+    "../src/support/dirname.c",
     "../src/support/strptime.c",
     "../src/support/strtod.c",
     "../src/support/tzfile.h",
     "../src/support/utf8.c",
+    "../test/perf/micro/randmtzig.c",
+    "../src/support/crc32c.c",
 ]
 
 const ext_prefix = Dict([
@@ -129,7 +135,7 @@ function add_license_line!(unprocessed::Vector, src::AbstractString, new_license
             if ext in keys(ext_prefix)
                 prefix = ext_prefix[ext]
                 f = open(path, "r")
-                lines = readlines(f)
+                lines = readlines(f, chomp=false)
                 close(f)
                 isempty(lines) && (push!(unprocessed, path); continue)
                 isempty(old_license) || check_lines!(path, lines, old_license, prefix, true)

@@ -1,32 +1,30 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 Main.Core.eval(Main.Core, :(baremodule Inference
-using Core.TopModule, Core.Intrinsics
+using Core.Intrinsics
+import Core: print, println, show, write, unsafe_write, STDOUT, STDERR
+
 ccall(:jl_set_istopmod, Void, (Bool,), false)
 
-eval(x) = Core.eval(Inference,x)
-eval(m,x) = Core.eval(m,x)
+eval(x) = Core.eval(Inference, x)
+eval(m, x) = Core.eval(m, x)
 
-include = Core.include
-
-# simple print definitions for debugging.
-show(x::ANY) = ccall(:jl_static_show, Void, (Ptr{Void}, Any),
-                     pointerref(cglobal(:jl_uv_stdout,Ptr{Void}),1), x)
-print(x::ANY) = show(x)
-println(x::ANY) = ccall(:jl_, Void, (Any,), x) # includes a newline
-print(a::ANY...) = for x=a; print(x); end
+const include = Core.include
+# conditional to allow redefining Core.Inference after base exists
+isdefined(Main, :Base) || ((::Type{T}){T}(arg) = convert(T, arg)::T)
 
 ## Load essential files and libraries
 include("essentials.jl")
+include("ctypes.jl")
 include("generator.jl")
 include("reflection.jl")
 include("options.jl")
 
 # core operations & types
-typealias Cint Int32
-typealias Csize_t UInt
 include("promotion.jl")
 include("tuple.jl")
+include("pair.jl")
+include("traits.jl")
 include("range.jl")
 include("expr.jl")
 include("error.jl")
@@ -39,21 +37,12 @@ include("operators.jl")
 include("pointer.jl")
 const checked_add = +
 const checked_sub = -
-if !isdefined(Main, :Base)
-    # conditional to allow redefining Core.Inference after base exists
-    (::Type{T}){T}(arg) = convert(T, arg)::T
-end
-
-# Symbol constructors
-Symbol(s::String) = Symbol(s.data)
-Symbol(a::Array{UInt8,1}) =
-    ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int32), a, length(a))
 
 # core array operations
-include("abstractarray.jl")
+include("indices.jl")
 include("array.jl")
+include("abstractarray.jl")
 
-#TODO: eliminate Dict from inference
 include("hashing.jl")
 include("nofloat_hashing.jl")
 
@@ -64,9 +53,9 @@ end
 include("reduce.jl")
 
 ## core structures
+include("bitarray.jl")
 include("intset.jl")
-include("dict.jl")
-include("iterator.jl")
+include("associative.jl")
 
 # core docsystem
 include("docs/core.jl")

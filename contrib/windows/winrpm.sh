@@ -141,7 +141,7 @@ for i in $toinstall; do
   checksum=$(echo $pkgi | $xp "/package/checksum/text()" -)
   eval $(echo $pkgi | $xp "/package/location/@href" -)
   echo "downloading $href"
-  $(dirname "$0")/../../deps/jldownload $href $url/$href
+  $(dirname "$0")/../../deps/tools/jldownload $href $url/$href
   echo "$checksum *$href" | sha256sum -c
   7z x -y $href
   cpiofile=$(basename $href | sed 's/.rpm$/.cpio/')

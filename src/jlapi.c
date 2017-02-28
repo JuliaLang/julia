@@ -12,9 +12,13 @@
 #include <string.h>
 #include <assert.h>
 #include "julia.h"
+#include "options.h"
 
 #ifdef __cplusplus
+#include <cfenv>
 extern "C" {
+#else
+#include <fenv.h>
 #endif
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
@@ -52,11 +56,14 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
 {
     jl_value_t *r;
     JL_TRY {
-        char *filename = "none";
+        const char *filename = "none";
         jl_value_t *ast = jl_parse_input_line(str, strlen(str),
                 filename, strlen(filename));
         JL_GC_PUSH1(&ast);
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
         r = jl_toplevel_eval(ast);
+        jl_get_ptls_states()->world_age = last_age;
         JL_GC_POP();
         jl_exception_clear();
     }
@@ -69,13 +76,15 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
 
 JL_DLLEXPORT jl_value_t *jl_exception_occurred(void)
 {
-    return jl_exception_in_transit == jl_nothing ? NULL :
-        jl_exception_in_transit;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    return ptls->exception_in_transit == jl_nothing ? NULL :
+        ptls->exception_in_transit;
 }
 
 JL_DLLEXPORT void jl_exception_clear(void)
 {
-    jl_exception_in_transit = jl_nothing;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    ptls->exception_in_transit = jl_nothing;
 }
 
 // get the name of a type as a string
@@ -107,7 +116,7 @@ JL_DLLEXPORT size_t jl_array_size(jl_value_t *a, int d)
     return jl_array_dim(a, d);
 }
 
-JL_DLLEXPORT const char *jl_bytestring_ptr(jl_value_t *s)
+JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s)
 {
     return jl_string_data(s);
 }
@@ -121,7 +130,10 @@ JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t na
         argv[0] = (jl_value_t*)f;
         for(int i=1; i<nargs+1; i++)
             argv[i] = args[i-1];
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
         v = jl_apply(argv, nargs+1);
+        jl_get_ptls_states()->world_age = last_age;
         JL_GC_POP();
         jl_exception_clear();
     }
@@ -136,7 +148,10 @@ JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f)
     jl_value_t *v;
     JL_TRY {
         JL_GC_PUSH1(&f);
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
         v = jl_apply(&f, 1);
+        jl_get_ptls_states()->world_age = last_age;
         JL_GC_POP();
         jl_exception_clear();
     }
@@ -153,7 +168,10 @@ JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
         jl_value_t **argv;
         JL_GC_PUSHARGS(argv, 2);
         argv[0] = f; argv[1] = a;
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
         v = jl_apply(argv, 2);
+        jl_get_ptls_states()->world_age = last_age;
         JL_GC_POP();
         jl_exception_clear();
     }
@@ -170,7 +188,10 @@ JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b
         jl_value_t **argv;
         JL_GC_PUSHARGS(argv, 3);
         argv[0] = f; argv[1] = a; argv[2] = b;
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
         v = jl_apply(argv, 3);
+        jl_get_ptls_states()->world_age = last_age;
         JL_GC_POP();
         jl_exception_clear();
     }
@@ -188,7 +209,10 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
         jl_value_t **argv;
         JL_GC_PUSHARGS(argv, 4);
         argv[0] = f; argv[1] = a; argv[2] = b; argv[3] = c;
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
         v = jl_apply(argv, 4);
+        jl_get_ptls_states()->world_age = last_age;
         JL_GC_POP();
         jl_exception_clear();
     }
@@ -229,7 +253,8 @@ JL_DLLEXPORT void jl_sigatomic_begin(void)
 
 JL_DLLEXPORT void jl_sigatomic_end(void)
 {
-    if (jl_get_ptls_states()->defer_signal == 0)
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (ptls->defer_signal == 0)
         jl_error("sigatomic_end called in non-sigatomic region");
     JL_SIGATOMIC_END();
 }
@@ -237,6 +262,14 @@ JL_DLLEXPORT void jl_sigatomic_end(void)
 JL_DLLEXPORT int jl_is_debugbuild(void)
 {
 #ifdef JL_DEBUG_BUILD
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+JL_DLLEXPORT int8_t jl_is_memdebug(void) {
+#ifdef MEMDEBUG
     return 1;
 #else
     return 0;
@@ -326,27 +359,32 @@ JL_DLLEXPORT jl_value_t *(jl_typeof)(jl_value_t *v)
 
 JL_DLLEXPORT int8_t (jl_gc_unsafe_enter)(void)
 {
-    return jl_gc_unsafe_enter();
+    jl_ptls_t ptls = jl_get_ptls_states();
+    return jl_gc_unsafe_enter(ptls);
 }
 
 JL_DLLEXPORT void (jl_gc_unsafe_leave)(int8_t state)
 {
-    jl_gc_unsafe_leave(state);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_gc_unsafe_leave(ptls, state);
 }
 
 JL_DLLEXPORT int8_t (jl_gc_safe_enter)(void)
 {
-    return jl_gc_safe_enter();
+    jl_ptls_t ptls = jl_get_ptls_states();
+    return jl_gc_safe_enter(ptls);
 }
 
 JL_DLLEXPORT void (jl_gc_safe_leave)(int8_t state)
 {
-    jl_gc_safe_leave(state);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_gc_safe_leave(ptls, state);
 }
 
 JL_DLLEXPORT void (jl_gc_safepoint)(void)
 {
-    jl_gc_safepoint();
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_gc_safepoint_(ptls);
 }
 
 JL_DLLEXPORT void (jl_cpu_pause)(void)
@@ -357,6 +395,19 @@ JL_DLLEXPORT void (jl_cpu_pause)(void)
 JL_DLLEXPORT void (jl_cpu_wake)(void)
 {
     jl_cpu_wake();
+}
+
+JL_DLLEXPORT void jl_get_fenv_consts(int *ret)
+{
+    ret[0] = FE_INEXACT;
+    ret[1] = FE_UNDERFLOW;
+    ret[2] = FE_OVERFLOW;
+    ret[3] = FE_DIVBYZERO;
+    ret[4] = FE_INVALID;
+    ret[5] = FE_TONEAREST;
+    ret[6] = FE_UPWARD;
+    ret[7] = FE_DOWNWARD;
+    ret[8] = FE_TOWARDZERO;
 }
 
 #ifdef __cplusplus

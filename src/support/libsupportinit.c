@@ -20,6 +20,8 @@ void libsupport_init(void)
 
         ios_init_stdstreams();
 
+        jl_crc32c_init(0);
+
         isInitialized=1;
     }
 }

@@ -43,11 +43,11 @@ function revcomp(infile="revcomp-input.txt")
     input = open(infile, "r")
     buff = UInt8[]
     while true
-        line = readline(input).data
+        line = readuntil(input, UInt8('\n'))
         if isempty(line)
 #            print_buff(buff)
             return
-        elseif line[1] == '>'
+        elseif line[1] == UInt8('>')
 #            print_buff(buff)
             buff = UInt8[]
 #            write(line)

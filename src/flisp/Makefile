@@ -28,7 +28,7 @@ LIBS += -lpthread
 endif
 
 FLAGS := -I$(LLTDIR) $(CFLAGS) $(HFILEDIRS:%=-I%) \
-        -I$(LIBUV_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \
+        -I$(LIBUV_INC) -I$(UTF8PROC_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \
         -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -DUSE_COMPUTED_GOTO -fvisibility=hidden -Wpointer-arith -Wundef
@@ -77,13 +77,13 @@ CCLD := $(LD)
 endif
 
 $(BUILDDIR)/$(EXENAME)-debug: $(DOBJS) $(LIBFILES_debug) $(BUILDDIR)/$(LIBTARGET)-debug.a $(BUILDDIR)/flmain.dbg.obj | $(BUILDDIR)/flisp.boot
-	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj -o $@ $(BUILDDIR)/$(LIBTARGET)-debug.a $(LIBFILES_debug) $(LIBS) $(OSLIBS))
+	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(LDFLAGS) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj -o $@ $(BUILDDIR)/$(LIBTARGET)-debug.a $(LIBFILES_debug) $(LIBS) $(OSLIBS))
 
 $(BUILDDIR)/$(EXENAME): $(OBJS) $(LIBFILES_release) $(BUILDDIR)/$(LIBTARGET).a $(BUILDDIR)/flmain.o | $(BUILDDIR)/flisp.boot
-	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(OBJS) $(BUILDDIR)/flmain.o -o $@ $(BUILDDIR)/$(LIBTARGET).a $(LIBFILES_release) $(LIBS) $(OSLIBS))
+	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(LDFLAGS) $(OBJS) $(BUILDDIR)/flmain.o -o $@ $(BUILDDIR)/$(LIBTARGET).a $(LIBFILES_release) $(LIBS) $(OSLIBS))
 
 ifneq ($(BUILDDIR),.)
-$(BUILDDIR)/flisp.boot: flisp.boot
+$(BUILDDIR)/flisp.boot: flisp.boot | $(BUILDDIR)
 	cp $< $@
 endif
 

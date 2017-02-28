@@ -2,7 +2,17 @@
 
 ## condition variables
 
-type Condition
+"""
+    Condition()
+
+Create an edge-triggered event source that tasks can wait for. Tasks that call [`wait`](@ref) on a
+`Condition` are suspended and queued. Tasks are woken up when [`notify`](@ref) is later called on
+the `Condition`. Edge triggering means that only tasks waiting at the time [`notify`](@ref) is
+called can be woken up. For level-triggered notifications, you must keep extra state to keep
+track of whether a notification has happened. The [`Channel`](@ref) type does
+this, and so can be used for level-triggered events.
+"""
+mutable struct Condition
     waitq::Vector{Any}
 
     Condition() = new([])
@@ -21,30 +31,47 @@ function wait(c::Condition)
     end
 end
 
+"""
+    notify(condition, val=nothing; all=true, error=false)
+
+Wake up tasks waiting for a condition, passing them `val`. If `all` is `true` (the default),
+all waiting tasks are woken, otherwise only one is. If `error` is `true`, the passed value
+is raised as an exception in the woken tasks.
+
+Returns the count of tasks woken up. Returns 0 if no tasks are waiting on `condition`.
+"""
 notify(c::Condition, arg::ANY=nothing; all=true, error=false) = notify(c, arg, all, error)
 function notify(c::Condition, arg, all, error)
+    cnt = 0
     if all
+        cnt = length(c.waitq)
         for t in c.waitq
-            schedule(t, arg, error=error)
+            error ? schedule(t, arg, error=error) : schedule(t, arg)
         end
         empty!(c.waitq)
     elseif !isempty(c.waitq)
+        cnt = 1
         t = shift!(c.waitq)
-        schedule(t, arg, error=error)
+        error ? schedule(t, arg, error=error) : schedule(t, arg)
     end
-    nothing
+    cnt
 end
 
-notify1(c::Condition, arg=nothing) = notify(c, arg, all=false)
+notify_error(c::Condition, err) = notify(c, err, true, true)
 
-notify_error(c::Condition, err) = notify(c, err, error=true)
-notify1_error(c::Condition, err) = notify(c, err, error=true, all=false)
-
+n_waiters(c::Condition) = length(c.waitq)
 
 # schedule an expression to run asynchronously, with minimal ceremony
+"""
+    @schedule
+
+Wrap an expression in a [`Task`](@ref) and add it to the local machine's scheduler queue.
+Similar to [`@async`](@ref) except that an enclosing `@sync` does NOT wait for tasks
+started with an `@schedule`.
+"""
 macro schedule(expr)
-    expr = :(()->($expr))
-    :(enq_work(Task($(esc(expr)))))
+    thunk = esc(:(()->($expr)))
+    :(enq_work(Task($thunk)))
 end
 
 ## scheduler and work queue
@@ -61,6 +88,35 @@ end
 
 schedule(t::Task) = enq_work(t)
 
+"""
+    schedule(t::Task, [val]; error=false)
+
+Add a [`Task`](@ref) to the scheduler's queue. This causes the task to run constantly when the system
+is otherwise idle, unless the task performs a blocking operation such as [`wait`](@ref).
+
+If a second argument `val` is provided, it will be passed to the task (via the return value of
+[`yieldto`](@ref)) when it runs again. If `error` is `true`, the value is raised as an exception in
+the woken task.
+
+```jldoctest
+julia> a5() = det(rand(1000, 1000));
+
+julia> b = Task(a5);
+
+julia> istaskstarted(b)
+false
+
+julia> schedule(b);
+
+julia> yield();
+
+julia> istaskstarted(b)
+true
+
+julia> istaskdone(b)
+true
+```
+"""
 function schedule(t::Task, arg; error=false)
     # schedule a task to be (re)started with the given value or exception
     if error
@@ -84,8 +140,23 @@ function schedule_and_wait(t::Task, v=nothing)
     return wait()
 end
 
+"""
+    yield()
+
+Switch to the scheduler to allow another scheduled task to run. A task that calls this
+function is still runnable, and will be restarted immediately if there are no other runnable
+tasks.
+"""
 yield() = (enq_work(current_task()); wait())
 
+"""
+    yieldto(t::Task, arg = nothing)
+
+Switch to the given task. The first time a task is switched to, the task's function is
+called with no arguments. On subsequent switches, `arg` is returned from the task's last
+call to `yieldto`. This is a low-level call that only switches tasks, not considering states
+or scheduling in any way. Its use is discouraged.
+"""
 yieldto(t::Task, x::ANY = nothing) = ccall(:jl_switchto, Any, (Any, Any), t, x)
 
 # yield to a task, throwing an exception in it
@@ -146,9 +217,10 @@ function wait()
     assert(false)
 end
 
-function pause()
-    @unix_only    ccall(:pause, Void, ())
-    @windows_only ccall(:Sleep,stdcall, Void, (UInt32,), 0xffffffff)
+if is_windows()
+    pause() = ccall(:Sleep, stdcall, Void, (UInt32,), 0xffffffff)
+else
+    pause() = ccall(:pause, Void, ())
 end
 
 
@@ -157,19 +229,20 @@ end
 """
     AsyncCondition()
 
-Create a async condition that wakes up tasks waiting for it (by calling `wait` on the object)
-when notified from C by a call to uv_async_send.
-Waiting tasks are woken with an error when the object is closed (by `close`).
-Use `isopen` to check whether it is still active.
+Create a async condition that wakes up tasks waiting for it
+(by calling [`wait`](@ref) on the object)
+when notified from C by a call to `uv_async_send`.
+Waiting tasks are woken with an error when the object is closed (by [`close`](@ref).
+Use [`isopen`](@ref) to check whether it is still active.
 """
-type AsyncCondition
+mutable struct AsyncCondition
     handle::Ptr{Void}
     cond::Condition
 
     function AsyncCondition()
         this = new(Libc.malloc(_sizeof_uv_async), Condition())
         associate_julia_struct(this.handle, this)
-        preserve_handle(this)
+        preserve_handle_new(this)
         err = ccall(:uv_async_init, Cint, (Ptr{Void}, Ptr{Void}, Ptr{Void}),
             eventloop(), this, uv_jl_asynccb::Ptr{Void})
         this
@@ -231,11 +304,11 @@ end
 """
     Timer(delay, repeat=0)
 
-Create a timer that wakes up tasks waiting for it (by calling `wait` on the timer object) at
+Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object) at
 a specified interval.  Times are in seconds.  Waiting tasks are woken with an error when the
-timer is closed (by `close`). Use `isopen` to check whether a timer is still active.
+timer is closed (by [`close`](@ref). Use [`isopen`](@ref) to check whether a timer is still active.
 """
-type Timer
+mutable struct Timer
     handle::Ptr{Void}
     cond::Condition
     isopen::Bool
@@ -254,7 +327,7 @@ type Timer
         end
 
         associate_julia_struct(this.handle, this)
-        preserve_handle(this)
+        preserve_handle_new(this)
 
         ccall(:uv_update_time, Void, (Ptr{Void},), eventloop())
         ccall(:uv_timer_start,  Cint,  (Ptr{Void}, Ptr{Void}, UInt64, UInt64),
@@ -321,7 +394,7 @@ Create a timer to call the given `callback` function. The `callback` is passed o
 the timer object itself. The callback will be invoked after the specified initial `delay`,
 and then repeating with the given `repeat` interval. If `repeat` is `0`, the timer is only
 triggered once. Times are in seconds. A timer is stopped and has its resources freed by
-calling `close` on it.
+calling [`close`](@ref) on it.
 """
 function Timer(cb::Function, timeout::Real, repeat::Real=0.0)
     t = Timer(timeout, repeat)

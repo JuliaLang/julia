@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+import Base.Checked: add_with_overflow, mul_with_overflow
+
 ## string to integer functions ##
 
 function parse{T<:Integer}(::Type{T}, c::Char, base::Integer=36)
@@ -54,23 +56,17 @@ function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos:
     return sgn, base, j
 end
 
-function tryparse_internal(::Type{Bool}, sbuff::String, startpos::Int, endpos::Int, raise::Bool)
-    len = endpos-startpos+1
-    p = pointer(sbuff)+startpos-1
-    (len == 4) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), p, "true", 4)) && (return Nullable(true))
-    (len == 5) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), p, "false", 5)) && (return Nullable(false))
-    raise && throw(ArgumentError("invalid Bool representation: $(repr(SubString(s,startpos,endpos)))"))
-    Nullable{Bool}()
-end
-
-safe_add{T<:Integer}(n1::T, n2::T) = ((n2 > 0) ? (n1 > (typemax(T) - n2)) : (n1 < (typemin(T) - n2))) ? Nullable{T}() : Nullable{T}(n1 + n2)
-safe_mul{T<:Integer}(n1::T, n2::T) = ((n2 >   0) ? ((n1 > div(typemax(T),n2)) || (n1 < div(typemin(T),n2))) :
-                                      (n2 <  -1) ? ((n1 > div(typemin(T),n2)) || (n1 < div(typemax(T),n2))) :
-                                      ((n2 == -1) && n1 == typemin(T))) ? Nullable{T}() : Nullable{T}(n1 * n2)
-
-function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base::Int, a::Int, raise::Bool)
+function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool)
     _n = Nullable{T}()
-    sgn, base, i = parseint_preamble(T<:Signed, base, s, startpos, endpos)
+    sgn, base, i = parseint_preamble(T<:Signed, Int(base_), s, startpos, endpos)
+    if sgn == 0 && base == 0 && i == 0
+        raise && throw(ArgumentError("input string is empty or only contains whitespace"))
+        return _n
+    end
+    if !(2 <= base <= 62)
+        raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
+        return _n
+    end
     if i == 0
         raise && throw(ArgumentError("premature end of integer: $(repr(SubString(s,startpos,endpos)))"))
         return _n
@@ -84,6 +80,7 @@ function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::I
     base = convert(T,base)
     m::T = div(typemax(T)-base+1,base)
     n::T = 0
+    a::Int = base <= 36 ? 10 : 36
     while n <= m
         d::T = '0' <= c <= '9' ? c-'0'    :
                'A' <= c <= 'Z' ? c-'A'+10 :
@@ -112,13 +109,12 @@ function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::I
         end
         (T <: Signed) && (d *= sgn)
 
-        safe_n = safe_mul(n, base)
-        isnull(safe_n) || (safe_n = safe_add(get(safe_n), d))
-        if isnull(safe_n)
+        n, ov_mul = mul_with_overflow(n, base)
+        n, ov_add = add_with_overflow(n, d)
+        if ov_mul | ov_add
             raise && throw(OverflowError())
             return _n
         end
-        n = get(safe_n)
         (i > endpos) && return Nullable{T}(n)
         c, i = next(s,i)
     end
@@ -131,19 +127,63 @@ function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::I
     end
     return Nullable{T}(n)
 end
-tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, base::Int, raise::Bool) =
-    tryparse_internal(T,s,start(s),endof(s),base,raise)
-tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base::Int, raise::Bool) =
-    tryparse_internal(T, s, startpos, endpos, base, base <= 36 ? 10 : 36, raise)
-tryparse{T<:Integer}(::Type{T}, s::AbstractString, base::Int) =
-    2 <= base <= 62 ? tryparse_internal(T,s,Int(base),false) : throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
-tryparse{T<:Integer}(::Type{T}, s::AbstractString) = tryparse_internal(T,s,0,false)
+
+function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString},
+        startpos::Int, endpos::Int, base::Integer, raise::Bool)
+    if isempty(sbuff)
+        raise && throw(ArgumentError("input string is empty"))
+        return Nullable{Bool}()
+    end
+
+    orig_start = startpos
+    orig_end   = endpos
+
+    # Ignore leading and trailing whitespace
+    while isspace(sbuff[startpos]) && startpos <= endpos
+        startpos += 1
+    end
+    while isspace(sbuff[endpos]) && endpos >= startpos
+        endpos -= 1
+    end
+
+    len = endpos - startpos + 1
+    p   = pointer(sbuff) + startpos - 1
+    (len == 4) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
+        p, "true", 4)) && (return Nullable(true))
+    (len == 5) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
+        p, "false", 5)) && (return Nullable(false))
+
+    if raise
+        substr = SubString(sbuff, orig_start, orig_end) # show input string in the error to avoid confusion
+        if all(isspace, substr)
+            throw(ArgumentError("input string only contains whitespace"))
+        else
+            throw(ArgumentError("invalid Bool representation: $(repr(substr))"))
+        end
+    end
+    return Nullable{Bool}()
+end
+
+@inline function check_valid_base(base)
+    if 2 <= base <= 62
+        return base
+    end
+    throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
+end
+
+tryparse{T<:Integer}(::Type{T}, s::AbstractString, base::Integer) =
+    tryparse_internal(T, s, start(s), endof(s), check_valid_base(base), false)
+tryparse{T<:Integer}(::Type{T}, s::AbstractString) =
+    tryparse_internal(T, s, start(s), endof(s), 0, false)
 
 function parse{T<:Integer}(::Type{T}, s::AbstractString, base::Integer)
-    (2 <= base <= 62) || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
-    get(tryparse_internal(T, s, base, true))
+    get(tryparse_internal(T, s, start(s), endof(s), check_valid_base(base), true))
 end
-parse{T<:Integer}(::Type{T}, s::AbstractString) = get(tryparse_internal(T, s, 0, true))
+
+function parse{T<:Integer}(::Type{T}, s::AbstractString)
+    get(tryparse_internal(T, s, start(s), endof(s), 0, true)) # Zero means, "figure it out"
+end
+
 
 ## string to float functions ##
 
@@ -153,34 +193,37 @@ tryparse(::Type{Float64}, s::SubString{String}) = ccall(:jl_try_substrtod, Nulla
 tryparse(::Type{Float32}, s::String) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
 tryparse(::Type{Float32}, s::SubString{String}) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.endof)
 
-tryparse{T<:Union{Float32,Float64}}(::Type{T}, s::AbstractString) = tryparse(T, bytestring(s))
+tryparse{T<:Union{Float32,Float64}}(::Type{T}, s::AbstractString) = tryparse(T, String(s))
 
 function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString)
-    nf = tryparse(T, s)
-    isnull(nf) ? throw(ArgumentError("invalid number format $(repr(s)) for $T")) : get(nf)
+    result = tryparse(T, s)
+    if isnull(result)
+        throw(ArgumentError("cannot parse $(repr(s)) as $T"))
+    end
+    return unsafe_get(result)
 end
 
 float(x::AbstractString) = parse(Float64,x)
 
-float{S<:AbstractString}(a::AbstractArray{S}) = map!(float, similar(a,typeof(float(0))), a)
+float(a::AbstractArray{<:AbstractString}) = map!(float, similar(a,typeof(float(0))), a)
 
 ## interface to parser ##
 
 function parse(str::AbstractString, pos::Int; greedy::Bool=true, raise::Bool=true)
     # pos is one based byte offset.
     # returns (expr, end_pos). expr is () in case of parse error.
-    bstr = bytestring(str)
+    bstr = String(str)
     ex, pos = ccall(:jl_parse_string, Any,
                     (Ptr{UInt8}, Csize_t, Int32, Int32),
                     bstr, sizeof(bstr), pos-1, greedy ? 1:0)
-    if raise && isa(ex,Expr) && is(ex.head,:error)
+    if raise && isa(ex,Expr) && ex.head === :error
         throw(ParseError(ex.args[1]))
     end
-    if ex == ()
+    if ex === ()
         raise && throw(ParseError("end of input"))
         ex = Expr(:error, "end of input")
     end
-    ex, pos+1 # C is zero-based, Julia is 1-based
+    return ex, pos+1 # C is zero-based, Julia is 1-based
 end
 
 function parse(str::AbstractString; raise::Bool=true)

@@ -1,4 +1,5 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
+
 // GCC command line: gcc -fopenmp -mavx2 laplace3d.c -o laplace3d
 
 /* Laplace 3D

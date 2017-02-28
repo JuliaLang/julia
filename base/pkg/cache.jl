@@ -18,13 +18,15 @@ function mkcachedir()
         return
     end
 
-    @unix_only if Dir.isversioned(pwd())
-        rootcache = joinpath(realpath(".."), ".cache")
-        if !isdir(rootcache)
-            mkdir(rootcache)
+    @static if is_unix()
+        if Dir.isversioned(pwd())
+            rootcache = joinpath(realpath(".."), ".cache")
+            if !isdir(rootcache)
+                mkdir(rootcache)
+            end
+            symlink(rootcache, cache)
+            return
         end
-        symlink(rootcache, cache)
-        return
     end
     mkdir(cache)
 end
@@ -43,8 +45,15 @@ function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
             # clone repo, free it at the end
             LibGit2.clone(normalized_url, cache, isbare = true, remote_cb = LibGit2.mirror_cb())
         catch err
+            errmsg = if isa(err, LibGit2.Error.GitError)
+                "Cannot clone $pkg from $normalized_url. $(err.msg)"
+            elseif isa(err, InterruptException)
+                "Package `$pkg` prefetching was interrupted."
+            else
+                "Unknown error: $err"
+            end
             isdir(cache) && rm(cache, recursive=true)
-            throw(PkgError("Cannot clone $pkg from $normalized_url. $(err.msg)"))
+            throw(PkgError(errmsg))
         end
     end
     try
@@ -55,9 +64,9 @@ function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
             LibGit2.fetch(repo)
             in_cache = BitArray(map(sha1->LibGit2.iscommit(sha1, repo), sha1s))
         end
-        sha1s[!in_cache]
+        sha1s[.!in_cache]
     finally
-        finalize(repo) # closing repo opened/created above
+        close(repo) # closing repo opened/created above
     end
 end
 prefetch(pkg::AbstractString, url::AbstractString, sha1::AbstractString...) =
@@ -79,7 +88,6 @@ function normalize_url(url::AbstractString)
     m = match(GITHUB_REGEX,url)
     (m === nothing || rewrite_url_to === nothing) ?
         url : "$rewrite_url_to://github.com/$(m.captures[1]).git"
-
 end
 
 end # module

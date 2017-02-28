@@ -149,7 +149,7 @@ value_t fl_applyn(fl_context_t *fl_ctx, uint32_t n, value_t f, ...);
 value_t fl_cons(fl_context_t *fl_ctx, value_t a, value_t b);
 value_t fl_list2(fl_context_t *fl_ctx, value_t a, value_t b);
 value_t fl_listn(fl_context_t *fl_ctx, size_t n, ...);
-value_t symbol(fl_context_t *fl_ctx, char *str);
+value_t symbol(fl_context_t *fl_ctx, const char *str);
 char *symbol_name(fl_context_t *fl_ctx, value_t v);
 int fl_is_keyword_name(const char *str, size_t len);
 value_t alloc_vector(fl_context_t *fl_ctx, size_t n, int init);
@@ -161,14 +161,31 @@ uintptr_t hash_lispvalue(fl_context_t *fl_ctx, value_t a);
 int isnumtok_base(fl_context_t *fl_ctx, char *tok, value_t *pval, int base);
 
 /* safe casts */
-cons_t *tocons(fl_context_t *fl_ctx, value_t v, char *fname);
-symbol_t *tosymbol(fl_context_t *fl_ctx, value_t v, char *fname);
-fixnum_t tofixnum(fl_context_t *fl_ctx, value_t v, char *fname);
-char *tostring(fl_context_t *fl_ctx, value_t v, char *fname);
+cons_t *tocons(fl_context_t *fl_ctx, value_t v, const char *fname);
+symbol_t *tosymbol(fl_context_t *fl_ctx, value_t v, const char *fname);
+fixnum_t tofixnum(fl_context_t *fl_ctx, value_t v, const char *fname);
+char *tostring(fl_context_t *fl_ctx, value_t v, const char *fname);
 
 /* error handling */
+#if defined(_OS_WINDOWS_)
+#define fl_jmp_buf jmp_buf
+#if defined(_COMPILER_MINGW_)
+int __attribute__ ((__nothrow__,__returns_twice__)) (jl_setjmp)(jmp_buf _Buf);
+__declspec(noreturn) __attribute__ ((__nothrow__)) void (jl_longjmp)(jmp_buf _Buf, int _Value);
+#else
+int (jl_setjmp)(jmp_buf _Buf);
+void (jl_longjmp)(jmp_buf _Buf, int _Value);
+#endif
+#define fl_setjmp(a) (jl_setjmp)((a))
+#define fl_longjmp(a, b) (jl_longjmp)((a), (b))
+#else // !_OS_WINDOWS_
+#define fl_jmp_buf sigjmp_buf
+#define fl_setjmp(a) sigsetjmp((a), 0)
+#define fl_longjmp(a, b) siglongjmp((a), (b))
+#endif
+
 typedef struct _ectx_t {
-    jmp_buf buf;
+    fl_jmp_buf buf;
     uint32_t sp;
     uint32_t frame;
     uint32_t ngchnd;
@@ -179,7 +196,7 @@ typedef struct _ectx_t {
 #define FL_TRY_EXTERN(fl_ctx)                                           \
   fl_exception_context_t _ctx; int l__tr, l__ca;                        \
   fl_savestate(fl_ctx, &_ctx); fl_ctx->exc_ctx = &_ctx;                      \
-  if (!setjmp(_ctx.buf))                                                \
+  if (!fl_setjmp(_ctx.buf))                                                \
       for (l__tr=1; l__tr; l__tr=0, (void)(fl_ctx->exc_ctx=fl_ctx->exc_ctx->prev))
 
 #define FL_CATCH_EXTERN(fl_ctx)                                         \
@@ -187,17 +204,17 @@ typedef struct _ectx_t {
         for(l__ca=1; l__ca; l__ca=0, fl_restorestate(fl_ctx, &_ctx))
 
 #if defined(_OS_WINDOWS_)
-__declspec(noreturn) void lerrorf(fl_context_t *fl_ctx, value_t e, char *format, ...);
+__declspec(noreturn) void lerrorf(fl_context_t *fl_ctx, value_t e, const char *format, ...);
 __declspec(noreturn) void lerror(fl_context_t *fl_ctx, value_t e, const char *msg);
 __declspec(noreturn) void fl_raise(fl_context_t *fl_ctx, value_t e);
-__declspec(noreturn) void type_error(fl_context_t *fl_ctx, char *fname, char *expected, value_t got);
-__declspec(noreturn) void bounds_error(fl_context_t *fl_ctx, char *fname, value_t arr, value_t ind);
+__declspec(noreturn) void type_error(fl_context_t *fl_ctx, const char *fname, const char *expected, value_t got);
+__declspec(noreturn) void bounds_error(fl_context_t *fl_ctx, const char *fname, value_t arr, value_t ind);
 #else
-void lerrorf(fl_context_t *fl_ctx, value_t e, char *format, ...) __attribute__ ((__noreturn__));
+void lerrorf(fl_context_t *fl_ctx, value_t e, const char *format, ...) __attribute__ ((__noreturn__));
 void lerror(fl_context_t *fl_ctx, value_t e, const char *msg) __attribute__ ((__noreturn__));
 void fl_raise(fl_context_t *fl_ctx, value_t e) __attribute__ ((__noreturn__));
-void type_error(fl_context_t *fl_ctx, char *fname, char *expected, value_t got) __attribute__ ((__noreturn__));
-void bounds_error(fl_context_t *fl_ctx, char *fname, value_t arr, value_t ind) __attribute__ ((__noreturn__));
+void type_error(fl_context_t *fl_ctx, const char *fname, const char *expected, value_t got) __attribute__ ((__noreturn__));
+void bounds_error(fl_context_t *fl_ctx, const char *fname, value_t arr, value_t ind) __attribute__ ((__noreturn__));
 #endif
 
 void fl_savestate(fl_context_t *fl_ctx, fl_exception_context_t *_ctx);
@@ -214,7 +231,7 @@ typedef struct {
 value_t relocate_lispvalue(fl_context_t *fl_ctx, value_t v);
 void print_traverse(fl_context_t *fl_ctx, value_t v);
 void fl_print_chr(fl_context_t *fl_ctx, char c, ios_t *f);
-void fl_print_str(fl_context_t *fl_ctx, char *s, ios_t *f);
+void fl_print_str(fl_context_t *fl_ctx, const char *s, ios_t *f);
 void fl_print_child(fl_context_t *fl_ctx, ios_t *f, value_t v);
 
 typedef int (*cvinitfunc_t)(fl_context_t *fl_ctx, struct _fltype_t*, value_t, void*);
@@ -310,10 +327,10 @@ size_t ctype_sizeof(fl_context_t *fl_ctx, value_t type, int *palign);
 value_t cvalue_copy(fl_context_t *fl_ctx, value_t v);
 value_t cvalue_from_data(fl_context_t *fl_ctx, fltype_t *type, void *data, size_t sz);
 value_t cvalue_from_ref(fl_context_t *fl_ctx, fltype_t *type, void *ptr, size_t sz, value_t parent);
-value_t cbuiltin(fl_context_t *fl_ctx, char *name, builtin_t f);
+value_t cbuiltin(fl_context_t *fl_ctx, const char *name, builtin_t f);
 size_t cvalue_arraylen(value_t v);
 value_t size_wrap(fl_context_t *fl_ctx, size_t sz);
-size_t tosize(fl_context_t *fl_ctx, value_t n, char *fname);
+size_t tosize(fl_context_t *fl_ctx, value_t n, const char *fname);
 value_t cvalue_string(fl_context_t *fl_ctx, size_t sz);
 value_t cvalue_static_cstrn(fl_context_t *fl_ctx, const char *str, size_t n);
 value_t cvalue_static_cstring(fl_context_t *fl_ctx, const char *str);
@@ -323,11 +340,11 @@ int fl_isstring(fl_context_t *fl_ctx, value_t v);
 int fl_isnumber(fl_context_t *fl_ctx, value_t v);
 int fl_isgensym(fl_context_t *fl_ctx, value_t v);
 int fl_isiostream(fl_context_t *fl_ctx, value_t v);
-ios_t *fl_toiostream(fl_context_t *fl_ctx, value_t v, char *fname);
+ios_t *fl_toiostream(fl_context_t *fl_ctx, value_t v, const char *fname);
 value_t cvalue_compare(value_t a, value_t b);
 int numeric_compare(fl_context_t *fl_ctx, value_t a, value_t b, int eq, int eqnans, char *fname);
 
-void to_sized_ptr(fl_context_t *fl_ctx, value_t v, char *fname, char **pdata, size_t *psz);
+void to_sized_ptr(fl_context_t *fl_ctx, value_t v, const char *fname, char **pdata, size_t *psz);
 
 fltype_t *get_type(fl_context_t *fl_ctx, value_t t);
 fltype_t *get_array_type(fl_context_t *fl_ctx, value_t eltype);
@@ -343,7 +360,7 @@ value_t return_from_uint64(fl_context_t *fl_ctx, uint64_t Uaccum);
 value_t return_from_int64(fl_context_t *fl_ctx, int64_t Saccum);
 
 typedef struct {
-    char *name;
+    const char *name;
     builtin_t fptr;
 } builtinspec_t;
 
@@ -389,6 +406,7 @@ struct _fl_context_t {
     fltype_t *builtintype;
 
     htable_t equal_eq_hashtable;
+    htable_t jl_charmap;
 
     value_t tablesym;
     fltype_t *tabletype;
@@ -482,7 +500,7 @@ struct _fl_context_t {
     void *jlbuf;
 };
 
-static inline void argcount(fl_context_t *fl_ctx, char *fname, uint32_t nargs, uint32_t c)
+static inline void argcount(fl_context_t *fl_ctx, const char *fname, uint32_t nargs, uint32_t c)
 {
     if (__unlikely(nargs != c))
         lerrorf(fl_ctx, fl_ctx->ArgError,"%s: too %s arguments", fname, nargs<c ? "few":"many");

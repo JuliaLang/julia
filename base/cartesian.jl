@@ -13,22 +13,22 @@ export @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @nany, @ntuple, @nif
 
 Generate `N` nested loops, using `itersym` as the prefix for the iteration variables.
 `rangeexpr` may be an anonymous-function expression, or a simple symbol `var` in which case
-the range is `1:size(var,d)` for dimension `d`.
+the range is `indices(var, d)` for dimension `d`.
 
 Optionally, you can provide "pre" and "post" expressions. These get executed first and last,
 respectively, in the body of each loop. For example:
 
-    @nloops 2 i A d->j_d=min(i_d,5) begin
+    @nloops 2 i A d -> j_d = min(i_d, 5) begin
         s += @nref 2 A j
     end
 
 would generate:
 
-    for i_2 = 1:size(A, 2)
+    for i_2 = indices(A, 2)
         j_2 = min(i_2, 5)
-        for i_1 = 1:size(A, 1)
+        for i_1 = indices(A, 1)
             j_1 = min(i_1, 5)
-            s += A[j_1,j_2]
+            s += A[j_1, j_2]
         end
     end
 
@@ -41,7 +41,7 @@ end
 
 function _nloops(N::Int, itersym::Symbol, arraysym::Symbol, args::Expr...)
     @gensym d
-    _nloops(N, itersym, :($d->1:size($arraysym, $d)), args...)
+    _nloops(N, itersym, :($d->indices($arraysym, $d)), args...)
 end
 
 function _nloops(N::Int, itersym::Symbol, rangeexpr::Expr, args::Expr...)
@@ -72,8 +72,13 @@ end
 """
     @nref N A indexexpr
 
-Generate expressions like `A[i_1,i_2,...]`. `indexexpr` can either be an iteration-symbol
+Generate expressions like `A[i_1, i_2, ...]`. `indexexpr` can either be an iteration-symbol
 prefix, or an anonymous-function expression.
+
+```jldoctest
+julia> @macroexpand Base.Cartesian.@nref 3 A i
+:(A[i_1, i_2, i_3])
+```
 """
 macro nref(N, A, sym)
     _nref(N, A, sym)
@@ -114,6 +119,16 @@ end
     @nexprs N expr
 
 Generate `N` expressions. `expr` should be an anonymous-function expression.
+
+```jldoctest
+julia> @macroexpand Base.Cartesian.@nexprs 4 i -> y[i] = A[i+j]
+quote
+    y[1] = A[1 + j]
+    y[2] = A[2 + j]
+    y[3] = A[3 + j]
+    y[4] = A[4 + j]
+end
+```
 """
 macro nexprs(N, ex)
     _nexprs(N, ex)
@@ -258,7 +273,7 @@ function inlineanonymous(ex::Expr, val)
 end
 
 # Given :i and 3, this generates :i_3
-inlineanonymous(base::Symbol, ext) = Symbol(base,"_",string(ext))
+inlineanonymous(base::Symbol, ext) = Symbol(base,'_',ext)
 
 # Replace a symbol by a value or a "coded" symbol
 # E.g., for d = 3,
@@ -266,7 +281,7 @@ inlineanonymous(base::Symbol, ext) = Symbol(base,"_",string(ext))
 #    lreplace(:i_d, :d, 3) -> :i_3
 #    lreplace(:i_{d-1}, :d, 3) -> :i_2
 # This follows LaTeX notation.
-immutable LReplace{S<:AbstractString}
+struct LReplace{S<:AbstractString}
     pat_sym::Symbol
     pat_str::S
     val::Int
@@ -321,7 +336,7 @@ end
 function lreplace!(ex::Expr, r::LReplace)
     # Curly-brace notation, which acts like parentheses
     if ex.head == :curly && length(ex.args) == 2 && isa(ex.args[1], Symbol) && endswith(string(ex.args[1]), "_")
-        excurly = Base.Cartesian.exprresolve(lreplace!(ex.args[2], r))
+        excurly = exprresolve(lreplace!(ex.args[2], r))
         if isa(excurly, Number)
             return Symbol(ex.args[1],excurly)
         else
@@ -369,8 +384,8 @@ exprresolve_arith(arg) = false, 0
 
 exprresolve_conditional(b::Bool) = true, b
 function exprresolve_conditional(ex::Expr)
-    if ex.head == :comparison && isa(ex.args[1], Number) && isa(ex.args[3], Number)
-        return true, exprresolve_cond_dict[ex.args[2]](ex.args[1], ex.args[3])
+    if ex.head == :call && ex.args[1] ∈ keys(exprresolve_cond_dict) && isa(ex.args[2], Number) && isa(ex.args[3], Number)
+        return true, exprresolve_cond_dict[ex.args[1]](ex.args[2], ex.args[3])
     end
     false, false
 end

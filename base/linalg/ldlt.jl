@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-immutable LDLt{T,S<:AbstractMatrix} <: Factorization{T}
+struct LDLt{T,S<:AbstractMatrix} <: Factorization{T}
     data::S
 end
 
@@ -12,14 +12,14 @@ convert{T,S}(::Type{LDLt{T,S}}, F::LDLt) = LDLt{T,S}(convert(S, F.data))
 #       to avoid an ambiguity warning (see issue #6383)
 convert{T,S,U<:AbstractMatrix}(::Type{LDLt{T}}, F::LDLt{S,U}) = convert(LDLt{T,U}, F)
 
+convert{T}(::Type{Factorization{T}}, F::LDLt{T}) = F
 convert{T,S,U}(::Type{Factorization{T}}, F::LDLt{S,U}) = convert(LDLt{T,U}, F)
 
 # SymTridiagonal
 """
+    ldltfact!(S::SymTridiagonal) -> LDLt
 
-    ldltfact!(::SymTridiagonal) -> LDLt
-
-Same as `ldltfact`, but saves space by overwriting the input `A`, instead of creating a copy.
+Same as [`ldltfact`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
 """
 function ldltfact!{T<:Real}(S::SymTridiagonal{T})
     n = size(S,1)
@@ -33,7 +33,7 @@ function ldltfact!{T<:Real}(S::SymTridiagonal{T})
 end
 
 """
-    ldltfact(::SymTridiagonal) -> LDLt
+    ldltfact(S::SymTridiagonal) -> LDLt
 
 Compute an `LDLt` factorization of a real symmetric tridiagonal matrix such that `A = L*Diagonal(d)*L'`
 where `L` is a unit lower triangular matrix and `d` is a vector. The main use of an `LDLt`
@@ -76,11 +76,16 @@ function A_ldiv_B!{T}(S::LDLt{T,SymTridiagonal{T}}, B::AbstractVecOrMat{T})
     return B
 end
 
-## reconstruct the original matrix, which is tridiagonal
-function full(F::LDLt)
+# Conversion methods
+function convert(::Type{SymTridiagonal}, F::LDLt)
     e = copy(F.data.ev)
     d = copy(F.data.dv)
     e .*= d[1:end-1]
     d[2:end] += e .* F.data.ev
     SymTridiagonal(d, e)
 end
+convert(::Type{AbstractMatrix}, F::LDLt) = convert(SymTridiagonal, F)
+convert(::Type{AbstractArray}, F::LDLt) = convert(AbstractMatrix, F)
+convert(::Type{Matrix}, F::LDLt) = convert(Array, convert(AbstractArray, F))
+convert(::Type{Array}, F::LDLt) = convert(Matrix, F)
+full(F::LDLt) = convert(AbstractArray, F)

@@ -87,8 +87,8 @@ end
 
 ## initialize and run
 function laplace3d(nx=290, ny=290, nz=290; iters=1000, verify=false)
-    u1 = Array(Float32, nx, ny, nz)
-    u3 = Array(Float32, nx, ny, nz)
+    u1 = Array{Float32}(nx, ny, nz)
+    u3 = Array{Float32}(nx, ny, nz)
     @nloops 3 k u1 begin
         if @nany 3 d->(k_d == 1 || k_d == size(u1, d))
             (@nref 3 u3 k) = (@nref 3 u1 k) = 1.0
@@ -106,8 +106,8 @@ function laplace3d(nx=290, ny=290, nz=290; iters=1000, verify=false)
         u3 = foo
     end
     if verify
-        u1_orig = Array(Float32, nx, ny, nz)
-        u3_orig = Array(Float32, nx, ny, nz)
+        u1_orig = Array{Float32}(nx, ny, nz)
+        u3_orig = Array{Float32}(nx, ny, nz)
         @nloops 3 k u1_orig begin
             if @nany 3 d->(k_d == 1 || k_d == size(u1_orig, d))
                 (@nref 3 u3_orig k) = (@nref 3 u1_orig k) = 1.0
@@ -133,4 +133,3 @@ end
 
 @time laplace3d()
 #ccall(:jl_threading_profile, Void, ())
-

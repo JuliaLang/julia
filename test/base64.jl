@@ -13,18 +13,18 @@ fname = tempname()
 open(fname, "w") do f
     opipe = Base64EncodePipe(f)
     write(opipe,inputText)
-    close(opipe)
+    @test close(opipe) === nothing
 end
 
 open(fname, "r") do f
     ipipe = Base64DecodePipe(f)
     @test readstring(ipipe) == inputText
-    close(ipipe)
+    @test close(ipipe) === nothing
 end
 rm(fname)
 
 # Encode to string and decode
-@test utf8(base64decode(base64encode(inputText))) == inputText
+@test String(base64decode(base64encode(inputText))) == inputText
 
 # Decode with max line chars = 76 and padding
 ipipe = Base64DecodePipe(IOBuffer(encodedMaxLine76))

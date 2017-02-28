@@ -18,7 +18,7 @@ end
 function ndgrid{T}(vs::AbstractVector{T}...)
     n = length(vs)
     sz = map(length, vs)
-    out = ntuple(i->Array(T, sz), n)
+    out = ntuple(i->Array{T}(sz), n)
     s = 1
     for i=1:n
         a = out[i]::Array

@@ -2,11 +2,13 @@
 
 @test ip"127.0.0.1" == IPv4(127,0,0,1)
 @test ip"192.0" == IPv4(192,0,0,0)
-@test ip"192.0xFFF" == IPv4(192,0,15,255)
-@test ip"192.0xFFFF" == IPv4(192,0,255,255)
-@test ip"192.0xFFFFF" == IPv4(192,15,255,255)
-@test ip"192.0xFFFFFF" == IPv4(192,255,255,255)
-@test ip"022.0.0.1" == IPv4(18,0,0,1)
+
+# These used to work, but are now disallowed. Check that they error
+@test_throws ArgumentError parse(IPv4, "192.0xFFF") # IPv4(192,0,15,255)
+@test_throws ArgumentError parse(IPv4, "192.0xFFFF") # IPv4(192,0,255,255)
+@test_throws ArgumentError parse(IPv4, "192.0xFFFFF") # IPv4(192,15,255,255)
+@test_throws ArgumentError parse(IPv4, "192.0xFFFFFF") # IPv4(192,255,255,255)
+@test_throws ArgumentError parse(IPv4, "022.0.0.1") # IPv4(18,0,0,1)
 
 @test UInt(IPv4(0x01020304)) == 0x01020304
 @test Int(IPv4("1.2.3.4")) == Int(0x01020304) == Int32(0x01020304)
@@ -90,7 +92,7 @@ wait(port)
 wait(tsk)
 
 mktempdir() do tmpdir
-    socketname = @windows ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
+    socketname = is_windows() ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
     c = Base.Condition()
     tsk = @async begin
         s = listen(socketname)
@@ -140,30 +142,31 @@ close(server2)
 begin
     a = UDPSocket()
     b = UDPSocket()
-    bind(a,ip"127.0.0.1",port)
-    bind(b,ip"127.0.0.1",port+1)
+    bind(a, ip"127.0.0.1", port)
+    bind(b, ip"127.0.0.1", port + 1)
 
     c = Condition()
     tsk = @async begin
-        @test bytestring(recv(a)) == "Hello World"
-    # Issue 6505
-        @async begin
-            @test bytestring(recv(a)) == "Hello World"
+        @test String(recv(a)) == "Hello World"
+        # Issue 6505
+        tsk2 = @async begin
+            @test String(recv(a)) == "Hello World"
             notify(c)
         end
-        send(b,ip"127.0.0.1",port,"Hello World")
+        send(b, ip"127.0.0.1", port, "Hello World")
+        wait(tsk2)
     end
-    send(b,ip"127.0.0.1",port,"Hello World")
+    send(b, ip"127.0.0.1", port, "Hello World")
     wait(c)
     wait(tsk)
 
     tsk = @async begin
         @test begin
             (addr,data) = recvfrom(a)
-            addr == ip"127.0.0.1" && bytestring(data) == "Hello World"
+            addr == ip"127.0.0.1" && String(data) == "Hello World"
         end
     end
-    send(b, ip"127.0.0.1",port,"Hello World")
+    send(b, ip"127.0.0.1", port, "Hello World")
     wait(tsk)
 
     @test_throws MethodError bind(UDPSocket(),port)
@@ -171,7 +174,7 @@ begin
     close(a)
     close(b)
 end
-if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
+if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     a = UDPSocket()
     b = UDPSocket()
     bind(a, ip"::1", UInt16(port))
@@ -180,7 +183,7 @@ if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
     tsk = @async begin
         @test begin
             (addr, data) = recvfrom(a)
-            addr == ip"::1" && bytestring(data) == "Hello World"
+            addr == ip"::1" && String(data) == "Hello World"
         end
     end
     send(b, ip"::1", port, "Hello World")
@@ -243,7 +246,7 @@ end
 # Local-machine broadcast
 let
     # (Mac OS X's loopback interface doesn't support broadcasts)
-    bcastdst = @osx ? ip"255.255.255.255" : ip"127.255.255.255"
+    bcastdst = is_apple() ? ip"255.255.255.255" : ip"127.255.255.255"
 
     function create_socket()
         s = UDPSocket()
@@ -254,7 +257,7 @@ let
     try
         @sync begin
             send(c, bcastdst, 2000, "hello")
-            recvs = [@async @test bytestring(recv(s)) == "hello" for s in (a, b)]
+            recvs = [@async @test String(recv(s)) == "hello" for s in (a, b)]
             map(wait, recvs)
         end
     catch e
@@ -276,14 +279,28 @@ let P = Pipe()
     @test !eof(P)
     @test read(P, Char) === 'e'
     @test isopen(P)
-    close(P.in)
-    @test isopen(P)
-    @test !eof(P)
-    @test readuntil(P, 'o') == "llo"
-    @test isopen(P)
+    t = @async begin
+        # feed uv_read one more event so that it triggers the transition from active -> open
+        write(P, "w")
+        while P.out.status != Base.StatusOpen
+            yield() # wait for that transition
+        end
+        close(P.in)
+    end
+    # on unix, this proves that the kernel can buffer a single byte
+    # even with no registered active call to read
+    # on windows, the kernel fails to do even that
+    # causing the `write` call to freeze
+    # so we end up forced to do a slightly weaker test here
+    is_windows() || wait(t)
+    @test isopen(P) # without an active uv_reader, P shouldn't be closed yet
+    @test !eof(P) # should already know this,
+    @test isopen(P) #  so it still shouldn't have an active uv_reader
+    @test readuntil(P, 'w') == "llow"
+    is_windows() && wait(t)
     @test eof(P)
-    @test !isopen(P)
-    close(P)
+    @test !isopen(P) # eof test should have closed this by now
+    close(P) # should be a no-op, just make sure
     @test !isopen(P)
     @test eof(P)
 end
@@ -300,7 +317,7 @@ let
 
         t0 = TCPSocket()
         t = t0
-        @assert is(t,t0)
+        @assert t === t0
 
         try
             t = connect(addr)
@@ -308,7 +325,7 @@ let
             close(srv)
         end
 
-        test = !is(t,t0)
+        test = t !== t0
         close(t)
 
         return test

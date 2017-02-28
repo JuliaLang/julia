@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-immutable RUsage
+struct RUsage
     ru_utime_sec::Clong         #  user CPU time used
     ru_utime_usec::Clong        #  user CPU time used
     ru_stime_sec::Clong         #  system CPU time used
@@ -22,7 +22,7 @@ immutable RUsage
 end
 
 function get_vmsize()
-    ru = Array(RUsage, 1)
+    ru = Array{RUsage}(1)
     ccall(:getrusage, Cint, (Cint, Ptr{Void}), 0, ru)
     return ru[1].ru_maxrss
 end

@@ -10,8 +10,17 @@ LastMain.f(2)
 # PR #12990
 io = IOBuffer()
 show(io, Pair)
-@assert takebuf_string(io) == "Pair{A,B}"
+@assert String(take!(io)) == "Pair"
 @assert !Base.inbase(LastMain)
 """
 exename = Base.julia_cmd()
-run(`$exename -f -e $script`)
+run(`$exename --startup-file=no -e $script`)
+
+# issue #17764
+script2 = """
+mutable struct Foo end
+workspace()
+mutable struct Foo end
+@assert Tuple{Type{LastMain.Foo}} !== Tuple{Type{Main.Foo}}
+"""
+run(`$exename --startup-file=no -e $script2`)

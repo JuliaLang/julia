@@ -18,7 +18,7 @@ length(c::Char) = 1
 endof(c::Char) = 1
 getindex(c::Char) = c
 getindex(c::Char, i::Integer) = i == 1 ? c : throw(BoundsError())
-getindex(c::Char, I::Integer...) = all(Predicate(x -> x == 1), I) ? c : throw(BoundsError())
+getindex(c::Char, I::Integer...) = all(x -> x == 1, I) ? c : throw(BoundsError())
 first(c::Char) = c
 last(c::Char) = c
 eltype(::Type{Char}) = Char
@@ -32,14 +32,13 @@ in(x::Char, y::Char) = x == y
 ==(x::Char, y::Char) = UInt32(x) == UInt32(y)
 isless(x::Char, y::Char) = UInt32(x) < UInt32(y)
 
+const hashchar_seed = 0xd4d64234
+hash(x::Char, h::UInt) = hash_uint64(((UInt64(x)+hashchar_seed)<<32) ⊻ UInt64(h))
+
 -(x::Char, y::Char) = Int(x) - Int(y)
 -(x::Char, y::Integer) = Char(Int32(x) - Int32(y))
 +(x::Char, y::Integer) = Char(Int32(x) + Int32(y))
 +(x::Integer, y::Char) = y + x
-
-Base.promote_op{I<:Integer}(::typeof(-), ::Type{Char}, ::Type{I}) = Char
-Base.promote_op{I<:Integer}(::typeof(+), ::Type{Char}, ::Type{I}) = Char
-Base.promote_op{I<:Integer}(::typeof(+), ::Type{I}, ::Type{Char}) = Char
 
 bswap(x::Char) = Char(bswap(UInt32(x)))
 
@@ -77,4 +76,11 @@ function show(io::IO, c::Char)
         write(io, 0x27)
     end
     return
+end
+
+function show(io::IO, ::MIME"text/plain", c::Char)
+    show(io, c)
+    u = UInt32(c)
+    print(io, ": ", isascii(c) ? "ASCII/" : "", "Unicode U+", hex(u, u > 0xffff ? 6 : 4))
+    print(io, " (category ", UTF8proc.category_abbrev(c), ": ", UTF8proc.category_string(c), ")")
 end

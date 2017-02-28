@@ -1,4 +1,4 @@
-This is a simple proof-of-concept that uses Unix Domain Sockets as transport.
+This is a simple proof-of-concept that uses UNIX domain sockets as transport.
 
 All commands must be run from `examples/clustermanager/simple` directory
 

@@ -1,7 +1,12 @@
 # Julia binaries for ARM
 
 [Nightly builds](https://status.julialang.org/download/linux-arm) are
-available for ARM.
+available for ARMv7-A.
+
+# Hardware requirements
+
+Julia requires at least `armv6` and `vfpv2` instruction sets. It's recommended
+to use at least `armv7-a`. `armv5` or soft float are not supported.
 
 # Building Julia on ARM
 

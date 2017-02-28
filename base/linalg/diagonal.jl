@@ -2,17 +2,58 @@
 
 ## Diagonal matrices
 
-immutable Diagonal{T} <: AbstractMatrix{T}
+struct Diagonal{T} <: AbstractMatrix{T}
     diag::Vector{T}
 end
+"""
+    Diagonal(A::AbstractMatrix)
+
+Constructs a matrix from the diagonal of `A`.
+
+# Example
+
+```jldoctest
+julia> A = [1 2 3; 4 5 6; 7 8 9]
+3×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+ 7  8  9
+
+julia> Diagonal(A)
+3×3 Diagonal{Int64}:
+ 1  ⋅  ⋅
+ ⋅  5  ⋅
+ ⋅  ⋅  9
+```
+"""
 Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
+"""
+    Diagonal(V::AbstractVector)
+
+Constructs a matrix with `V` as its diagonal.
+
+# Example
+
+```jldoctest
+julia> V = [1; 2]
+2-element Array{Int64,1}:
+ 1
+ 2
+
+julia> Diagonal(V)
+2×2 Diagonal{Int64}:
+ 1  ⋅
+ ⋅  2
+```
+"""
 Diagonal(V::AbstractVector) = Diagonal(collect(V))
 
 convert{T}(::Type{Diagonal{T}}, D::Diagonal{T}) = D
 convert{T}(::Type{Diagonal{T}}, D::Diagonal) = Diagonal{T}(convert(Vector{T}, D.diag))
 convert{T}(::Type{AbstractMatrix{T}}, D::Diagonal) = convert(Diagonal{T}, D)
-convert{T}(::Type{UpperTriangular}, A::Diagonal{T}) = UpperTriangular(A)
-convert{T}(::Type{LowerTriangular}, A::Diagonal{T}) = LowerTriangular(A)
+convert(::Type{Matrix}, D::Diagonal) = diagm(D.diag)
+convert(::Type{Array}, D::Diagonal) = convert(Matrix, D)
+full(D::Diagonal) = convert(Array, D)
 
 function similar{T}(D::Diagonal, ::Type{T})
     return Diagonal{T}(similar(D.diag, T))
@@ -28,10 +69,6 @@ function size(D::Diagonal,d::Integer)
     end
     return d<=2 ? length(D.diag) : 1
 end
-
-fill!(D::Diagonal, x) = (fill!(D.diag, x); D)
-
-full(D::Diagonal) = diagm(D.diag)
 
 @inline function getindex(D::Diagonal, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
@@ -63,14 +100,14 @@ end
 
 parent(D::Diagonal) = D.diag
 
-ishermitian{T<:Real}(D::Diagonal{T}) = true
-ishermitian(D::Diagonal) = all(D.diag .== real(D.diag))
+ishermitian(D::Diagonal{<:Real}) = true
+ishermitian(D::Diagonal) = isreal(D.diag)
 issymmetric(D::Diagonal) = true
-isposdef(D::Diagonal) = all(D.diag .> 0)
+isposdef(D::Diagonal) = all(x -> x > 0, D.diag)
 
 factorize(D::Diagonal) = D
 
-abs(D::Diagonal) = Diagonal(abs(D.diag))
+broadcast(::typeof(abs), D::Diagonal) = Diagonal(abs.(D.diag))
 real(D::Diagonal) = Diagonal(real(D.diag))
 imag(D::Diagonal) = Diagonal(imag(D.diag))
 
@@ -101,21 +138,92 @@ end
 +(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag + Db.diag)
 -(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag - Db.diag)
 
-*{T<:Number}(x::T, D::Diagonal) = Diagonal(x * D.diag)
-*{T<:Number}(D::Diagonal, x::T) = Diagonal(D.diag * x)
-/{T<:Number}(D::Diagonal, x::T) = Diagonal(D.diag / x)
+*(x::Number, D::Diagonal) = Diagonal(x * D.diag)
+*(D::Diagonal, x::Number) = Diagonal(D.diag * x)
+/(D::Diagonal, x::Number) = Diagonal(D.diag / x)
 *(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
 *(D::Diagonal, V::AbstractVector) = D.diag .* V
-*(A::AbstractMatrix, D::Diagonal) =
+
+(*)(A::AbstractTriangular, D::Diagonal) = A_mul_B!(copy(A), D)
+(*)(D::Diagonal, B::AbstractTriangular) = A_mul_B!(D, copy(B))
+
+(*)(A::AbstractMatrix, D::Diagonal) =
     scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A, D.diag)
-*(D::Diagonal, A::AbstractMatrix) =
+(*)(D::Diagonal, A::AbstractMatrix) =
     scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), D.diag, A)
 
-A_mul_B!(A::Diagonal,B::AbstractMatrix) = scale!(A.diag,B)
-At_mul_B!(A::Diagonal,B::AbstractMatrix)= scale!(A.diag,B)
-Ac_mul_B!(A::Diagonal,B::AbstractMatrix)= scale!(conj(A.diag),B)
+A_mul_B!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal) =
+    typeof(A)(A_mul_B!(A.data, D))
+function A_mul_B!(A::UnitLowerTriangular, D::Diagonal)
+    A_mul_B!(A.data, D)
+    for i = 1:size(A, 1)
+        A.data[i,i] = D.diag[i]
+    end
+    LowerTriangular(A.data)
+end
+function A_mul_B!(A::UnitUpperTriangular, D::Diagonal)
+    A_mul_B!(A.data, D)
+    for i = 1:size(A, 1)
+        A.data[i,i] = D.diag[i]
+    end
+    UpperTriangular(A.data)
+end
+function A_mul_B!(D::Diagonal, B::UnitLowerTriangular)
+    A_mul_B!(D, B.data)
+    for i = 1:size(B, 1)
+        B.data[i,i] = D.diag[i]
+    end
+    LowerTriangular(B.data)
+end
+function A_mul_B!(D::Diagonal, B::UnitUpperTriangular)
+    A_mul_B!(D, B.data)
+    for i = 1:size(B, 1)
+        B.data[i,i] = D.diag[i]
+    end
+    UpperTriangular(B.data)
+end
 
-/(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag )
+Ac_mul_B(A::AbstractTriangular, D::Diagonal) = A_mul_B!(ctranspose(A), D)
+function Ac_mul_B(A::AbstractMatrix, D::Diagonal)
+    Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
+    ctranspose!(Ac, A)
+    A_mul_B!(Ac, D)
+end
+
+At_mul_B(A::AbstractTriangular, D::Diagonal) = A_mul_B!(transpose(A), D)
+function At_mul_B(A::AbstractMatrix, D::Diagonal)
+    At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
+    transpose!(At, A)
+    A_mul_B!(At, D)
+end
+
+A_mul_Bc(D::Diagonal, B::AbstractTriangular) = A_mul_B!(D, ctranspose(B))
+A_mul_Bc(D::Diagonal, Q::Union{Base.LinAlg.QRCompactWYQ,Base.LinAlg.QRPackedQ}) = A_mul_Bc!(Array(D), Q)
+function A_mul_Bc(D::Diagonal, A::AbstractMatrix)
+    Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
+    ctranspose!(Ac, A)
+    A_mul_B!(D, Ac)
+end
+
+A_mul_Bt(D::Diagonal, B::AbstractTriangular) = A_mul_B!(D, transpose(B))
+function A_mul_Bt(D::Diagonal, A::AbstractMatrix)
+    At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
+    transpose!(At, A)
+    A_mul_B!(D, At)
+end
+
+A_mul_B!(A::Diagonal,B::Diagonal)  = throw(MethodError(A_mul_B!, Tuple{Diagonal,Diagonal}))
+At_mul_B!(A::Diagonal,B::Diagonal) = throw(MethodError(At_mul_B!, Tuple{Diagonal,Diagonal}))
+Ac_mul_B!(A::Diagonal,B::Diagonal) = throw(MethodError(Ac_mul_B!, Tuple{Diagonal,Diagonal}))
+A_mul_B!(A::Base.LinAlg.QRPackedQ, D::Diagonal) = throw(MethodError(A_mul_B!, Tuple{Diagonal,Diagonal}))
+A_mul_B!(A::Diagonal,B::AbstractMatrix)  = scale!(A.diag,B)
+At_mul_B!(A::Diagonal,B::AbstractMatrix) = scale!(A.diag,B)
+Ac_mul_B!(A::Diagonal,B::AbstractMatrix) = scale!(conj(A.diag),B)
+A_mul_B!(A::AbstractMatrix,B::Diagonal)  = scale!(A,B.diag)
+A_mul_Bt!(A::AbstractMatrix,B::Diagonal) = scale!(A,B.diag)
+A_mul_Bc!(A::AbstractMatrix,B::Diagonal) = scale!(A,conj(B.diag))
+
+/(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
 function A_ldiv_B!{T}(D::Diagonal{T}, v::AbstractVector{T})
     if length(v) != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(length(v)) rows"))
@@ -146,6 +254,11 @@ function A_ldiv_B!{T}(D::Diagonal{T}, V::AbstractMatrix{T})
     V
 end
 
+# Methods to resolve ambiguities with `Diagonal`
+@inline *(rowvec::RowVector, D::Diagonal) = transpose(D * transpose(rowvec))
+@inline A_mul_Bt(D::Diagonal, rowvec::RowVector) = D*transpose(rowvec)
+@inline A_mul_Bc(D::Diagonal, rowvec::RowVector) = D*ctranspose(rowvec)
+
 conj(D::Diagonal) = Diagonal(conj(D.diag))
 transpose(D::Diagonal) = D
 ctranspose(D::Diagonal) = conj(D)
@@ -153,17 +266,17 @@ ctranspose(D::Diagonal) = conj(D)
 diag(D::Diagonal) = D.diag
 trace(D::Diagonal) = sum(D.diag)
 det(D::Diagonal) = prod(D.diag)
-logdet{T<:Real}(D::Diagonal{T}) = sum(log(D.diag))
-function logdet{T<:Complex}(D::Diagonal{T}) #Make sure branch cut is correct
-    x = sum(log(D.diag))
-    -pi<imag(x)<pi ? x : real(x)+(mod2pi(imag(x)+pi)-pi)*im
+logdet(D::Diagonal{<:Real}) = sum(log, D.diag)
+function logdet(D::Diagonal{<:Complex}) # make sure branch cut is correct
+    z = sum(log, D.diag)
+    complex(real(z), rem2pi(imag(z), RoundNearest))
 end
 # identity matrices via eye(Diagonal{type},n)
 eye{T}(::Type{Diagonal{T}}, n::Int) = Diagonal(ones(T,n))
 
-expm(D::Diagonal) = Diagonal(exp(D.diag))
-logm(D::Diagonal) = Diagonal(log(D.diag))
-sqrtm(D::Diagonal) = Diagonal(sqrt(D.diag))
+expm(D::Diagonal) = Diagonal(exp.(D.diag))
+logm(D::Diagonal) = Diagonal(log.(D.diag))
+sqrtm(D::Diagonal) = Diagonal(sqrt.(D.diag))
 
 #Linear solver
 function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)
@@ -185,7 +298,7 @@ function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)
 end
 (\)(D::Diagonal, A::AbstractMatrix) = D.diag .\ A
 (\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
-(\)(Da::Diagonal, Db::Diagonal) = Diagonal(Db.diag ./ Da.diag)
+(\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .\ Db.diag)
 
 function inv{T}(D::Diagonal{T})
     Di = similar(D.diag, typeof(inv(zero(T))))
@@ -207,7 +320,7 @@ function pinv{T}(D::Diagonal{T})
 end
 function pinv{T}(D::Diagonal{T}, tol::Real)
     Di = similar(D.diag, typeof(inv(zero(T))))
-    if( !isempty(D.diag) ) maxabsD = maximum(abs(D.diag)) end
+    if( !isempty(D.diag) ) maxabsD = maximum(abs.(D.diag)) end
     for i = 1:length(D.diag)
         if( abs(D.diag[i]) > tol*maxabsD && isfinite(inv(D.diag[i])) )
             Di[i]=inv(D.diag[i])
@@ -219,20 +332,20 @@ function pinv{T}(D::Diagonal{T}, tol::Real)
 end
 
 #Eigensystem
-eigvals{T<:Number}(D::Diagonal{T}) = D.diag
+eigvals(D::Diagonal{<:Number}) = D.diag
 eigvals(D::Diagonal) = [eigvals(x) for x in D.diag] #For block matrices, etc.
 eigvecs(D::Diagonal) = eye(D)
 eigfact(D::Diagonal) = Eigen(eigvals(D), eigvecs(D))
 
 #Singular system
-svdvals{T<:Number}(D::Diagonal{T}) = sort(abs(D.diag), rev = true)
+svdvals(D::Diagonal{<:Number}) = sort!(abs.(D.diag), rev = true)
 svdvals(D::Diagonal) = [svdvals(v) for v in D.diag]
-function svd{T<:Number}(D::Diagonal{T})
-    S   = abs(D.diag)
+function svd(D::Diagonal{<:Number})
+    S   = abs.(D.diag)
     piv = sortperm(S, rev = true)
-    U   = full(Diagonal(D.diag ./ S))
+    U   = Diagonal(D.diag ./ S)
     Up  = hcat([U[:,i] for i = 1:length(D.diag)][piv]...)
-    V   = eye(D)
+    V   = Diagonal(ones(D.diag))
     Vp  = hcat([V[:,i] for i = 1:length(D.diag)][piv]...)
     return (Up, S[piv], Vp)
 end

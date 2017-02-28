@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#if defined _CPU_ARM_
 #ifndef __ARM_EABI__
 #  error "the Julia ARM ABI implementation only supports EABI"
 #endif
@@ -18,30 +19,23 @@
 #ifndef __ARM_PCS_VFP
 #  error "the Julia ARM ABI implementation requires VFP support"
 #endif
+#endif
 
-namespace {
+struct ABI_ARMLayout : AbiLayout {
 
-typedef bool AbiState;
-AbiState default_abi_state = 0;
-
-void needPassByRef(AbiState *state,jl_value_t *ty, bool *byRef, bool *inReg)
-{
-    return;
-}
-
-bool need_private_copy(jl_value_t *ty, bool byRef)
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
 {
     return false;
 }
 
-static Type *get_llvm_fptype(jl_datatype_t *dt)
+Type *get_llvm_fptype(jl_datatype_t *dt) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
     if (dt->mutabl || jl_datatype_nfields(dt) != 0)
         return NULL;
     Type *lltype;
     // Check size first since it's cheaper.
-    switch (dt->size) {
+    switch (jl_datatype_size(dt)) {
     case 2:
         lltype = T_float16;
         break;
@@ -54,16 +48,15 @@ static Type *get_llvm_fptype(jl_datatype_t *dt)
     default:
         return NULL;
     }
-    return jl_is_floattype((jl_value_t*)dt) ? lltype : NULL;
+    return ((jl_floatingpoint_type && jl_is_floattype((jl_value_t*)dt)) ?
+            lltype : NULL);
 }
-
-static size_t isLegalHA(jl_datatype_t *dt, Type *&base);
 
 // Check whether a type contained by a candidate homogeneous aggregate is valid
 // fundamental type.
 //
 // Returns the corresponding LLVM type.
-static Type *isLegalHAType(jl_datatype_t *dt)
+Type *isLegalHAType(jl_datatype_t *dt) const
 {
     // single- or double-precision floating-point type
     if (Type *fp = get_llvm_fptype(dt))
@@ -79,7 +72,7 @@ static Type *isLegalHAType(jl_datatype_t *dt)
 //
 // Legality of the HA is determined by a nonzero return value.
 // In case of a non-legal HA, the value of 'base' is undefined.
-static size_t isLegalHA(jl_datatype_t *dt, Type *&base)
+size_t isLegalHA(jl_datatype_t *dt, Type *&base) const
 {
     // Homogeneous aggregates are only used for VFP registers,
     // so use that definition of legality (section 6.1.2.1)
@@ -87,7 +80,7 @@ static size_t isLegalHA(jl_datatype_t *dt, Type *&base)
     if (jl_is_structtype(dt)) {
         // Fast path checks before descending the type hierarchy
         // (4 x 128b vector == 64B max size)
-        if (dt->size > 64 || !dt->pointerfree || dt->haspadding)
+        if (jl_datatype_size(dt) > 64 || dt->layout->npointers || dt->layout->haspadding)
             return 0;
 
         base = NULL;
@@ -125,7 +118,7 @@ static size_t isLegalHA(jl_datatype_t *dt, Type *&base)
 // Determine if an argument can be passed through a coprocessor register.
 //
 // All the out parameters should be default to `false`.
-static void classify_cprc(jl_datatype_t *dt, bool *vfp)
+void classify_cprc(jl_datatype_t *dt, bool *vfp) const
 {
     // Based on section 6.1 of the Procedure Call Standard
 
@@ -148,12 +141,9 @@ static void classify_cprc(jl_datatype_t *dt, bool *vfp)
     }
 }
 
-static void classify_return_arg(jl_value_t *ty, bool *reg,
-                                bool *onstack, bool *need_rewrite)
+void classify_return_arg(jl_datatype_t *dt, bool *reg,
+                         bool *onstack, bool *need_rewrite) const
 {
-    // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
-
     // Based on section 5.4 of the Procedure Call Standard
 
     // VFP standard variant: see 6.1.2.2
@@ -176,8 +166,8 @@ static void classify_return_arg(jl_value_t *ty, bool *reg,
     // - A double-word sized Fundamental Data Type (e.g., long long, double and
     //   64-bit containerized vectors) is returned in r0 and r1.
     // - A word-sized Fundamental Data Type (eg., int, float) is returned in r0.
-    // NOTE: assuming "fundamental type" == jl_is_bitstype, might need exact def
-    if (jl_is_bitstype(dt) && dt->size <= 8) {
+    // NOTE: assuming "fundamental type" == jl_is_primitivetype, might need exact def
+    if (jl_is_primitivetype(dt) && jl_datatype_size(dt) <= 8) {
         *reg = true;
         return;
     }
@@ -198,20 +188,18 @@ static void classify_return_arg(jl_value_t *ty, bool *reg,
     //   an address passed as an extra argument when the function was called
     //   (§5.5, rule A.4). The memory to be used for the result may be modified
     //   at any point during the function call.
-    if (dt->size <= 4)
+    if (jl_datatype_size(dt) <= 4)
         *reg = true;
     else
         *onstack = true;
 }
 
-bool use_sret(AbiState *state, jl_value_t *ty)
+bool use_sret(jl_datatype_t *dt) override
 {
-    // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
-
     bool reg = false;
     bool onstack = false;
     bool need_rewrite = false;
-    classify_return_arg(ty, &reg, &onstack, &need_rewrite);
+    classify_return_arg(dt, &reg, &onstack, &need_rewrite);
 
     return onstack;
 }
@@ -227,12 +215,9 @@ bool use_sret(AbiState *state, jl_value_t *ty)
 // If the argument has to be passed on stack, we need to use sret.
 //
 // All the out parameters should be default to `false`.
-static void classify_arg(jl_value_t *ty, bool *reg,
-                         bool *onstack, bool *need_rewrite)
+void classify_arg(jl_datatype_t *dt, bool *reg,
+                  bool *onstack, bool *need_rewrite) const
 {
-    // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
-
     // Based on section 5.5 of the Procedure Call Standard
 
     // C.1.cp
@@ -244,7 +229,7 @@ static void classify_arg(jl_value_t *ty, bool *reg,
         return;
 
     // Handle fundamental types
-    if (jl_is_bitstype(dt) && dt->size <= 8) {
+    if (jl_is_primitivetype(dt) && jl_datatype_size(dt) <= 8) {
         *reg = true;
         return;
     }
@@ -252,12 +237,8 @@ static void classify_arg(jl_value_t *ty, bool *reg,
     *need_rewrite = true;
 }
 
-Type *preferred_llvm_type(jl_value_t *ty, bool isret)
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
 {
-    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty))
-        return NULL;
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
-
     if (Type *fptype = get_llvm_fptype(dt))
         return fptype;
 
@@ -265,9 +246,9 @@ Type *preferred_llvm_type(jl_value_t *ty, bool isret)
     bool onstack = false;
     bool need_rewrite = false;
     if (isret)
-        classify_return_arg(ty, &reg, &onstack, &need_rewrite);
+        classify_return_arg(dt, &reg, &onstack, &need_rewrite);
     else
-        classify_arg(ty, &reg, &onstack, &need_rewrite);
+        classify_arg(dt, &reg, &onstack, &need_rewrite);
 
     if (!need_rewrite)
         return NULL;
@@ -287,14 +268,14 @@ Type *preferred_llvm_type(jl_value_t *ty, bool isret)
     //   For a Composite Type, the alignment of the copy will have 4-byte
     //   alignment if its natural alignment is <= 4 and 8-byte alignment if
     //   its natural alignment is >= 8
-    size_t align = dt->alignment;
+    size_t align = dt->layout->alignment;
     if (align < 4)
         align = 4;
     if (align > 8)
         align = 8;
 
     Type *T = Type::getIntNTy(jl_LLVMContext, align*8);
-    return ArrayType::get(T, (dt->size + align - 1) / align);
+    return ArrayType::get(T, (jl_datatype_size(dt) + align - 1) / align);
 }
 
-}
+};

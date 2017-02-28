@@ -1,7 +1,9 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module MultiplicativeInverses
 
 import Base: div, divrem, rem, unsigned
-using  Base: LinearFast, LinearSlow, tail
+using  Base: IndexLinear, IndexCartesian, tail
 export multiplicativeinverse
 
 unsigned(::Type{Int8}) = UInt8
@@ -11,7 +13,7 @@ unsigned(::Type{Int64}) = UInt64
 unsigned(::Type{Int128}) = UInt128
 unsigned{T<:Unsigned}(::Type{T}) = T
 
-abstract MultiplicativeInverse{T}
+abstract type  MultiplicativeInverse{T} end
 
 # Computes integer division by a constant using multiply, add, and bitshift.
 
@@ -41,13 +43,13 @@ abstract MultiplicativeInverse{T}
 #
 # Further details can be found in Hacker's Delight, Chapter 10.
 
-immutable SignedMultiplicativeInverse{T<:Signed} <: MultiplicativeInverse{T}
+struct SignedMultiplicativeInverse{T<:Signed} <: MultiplicativeInverse{T}
     divisor::T
     multiplier::T
     addmul::Int8
     shift::UInt8
 
-    function SignedMultiplicativeInverse(d::T)
+    function SignedMultiplicativeInverse{T}(d::T) where T<:Signed
         d == 0 && throw(ArgumentError("cannot compute magic for d == $d"))
         signedmin = unsigned(typemin(T))
         UT = unsigned(T)
@@ -86,13 +88,13 @@ immutable SignedMultiplicativeInverse{T<:Signed} <: MultiplicativeInverse{T}
 end
 SignedMultiplicativeInverse(x::Signed) = SignedMultiplicativeInverse{typeof(x)}(x)
 
-immutable UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
+struct UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
     divisor::T
     multiplier::T
     add::Bool
     shift::UInt8
 
-    function UnsignedMultiplicativeInverse(d::T)
+    function UnsignedMultiplicativeInverse{T}(d::T) where T<:Unsigned
         d == 0 && throw(ArgumentError("cannot compute magic for d == $d"))
         u2 = convert(T, 2)
         add = false

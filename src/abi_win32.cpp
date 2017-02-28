@@ -37,42 +37,35 @@
 //===----------------------------------------------------------------------===//
 
 
-typedef bool AbiState;
-AbiState default_abi_state = 0;
+struct ABI_Win32Layout : AbiLayout {
 
-bool use_sret(AbiState *state, jl_value_t *ty)
+bool use_sret(jl_datatype_t *dt) override
 {
-    // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
     // Use sret if the size of the argument is not one of 1, 2, 4, 8 bytes
     // This covers the special case of Complex64
-    size_t size = dt->size;
+    size_t size = jl_datatype_size(dt);
     if (size == 1 || size == 2 || size == 4 || size == 8)
         return false;
     return true;
 }
 
-void needPassByRef(AbiState *state, jl_value_t *ty, bool *byRef, bool *inReg)
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
 {
-    // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
     // Use pass by reference for all structs
-    *byRef = dt->nfields > 0;
-}
-
-Type *preferred_llvm_type(jl_value_t *ty, bool isret)
-{
-    // Arguments are either scalar or passed by value
-    if (!isret || !jl_is_datatype(ty) || jl_is_abstracttype(ty))
-        return NULL;
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
-    // rewrite integer sized (non-sret) struct to the corresponding integer
-    if (!dt->nfields || use_sret(NULL, ty))
-        return NULL;
-    return Type::getIntNTy(jl_LLVMContext, dt->size * 8);
-}
-
-bool need_private_copy(jl_value_t *ty, bool byRef)
-{
+    if (dt->layout->nfields > 0) {
+        ab.addAttribute(Attribute::ByVal);
+        return true;
+    }
     return false;
 }
+
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
+{
+    // Arguments are either scalar or passed by value
+    // rewrite integer sized (non-sret) struct to the corresponding integer
+    if (!dt->layout->nfields)
+        return NULL;
+    return Type::getIntNTy(jl_LLVMContext, jl_datatype_nbits(dt));
+}
+
+};

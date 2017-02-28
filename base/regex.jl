@@ -7,7 +7,7 @@ include("pcre.jl")
 const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.NO_UTF_CHECK | PCRE.ALT_BSUX
 const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 
-type Regex
+mutable struct Regex
     pattern::String
     compile_options::UInt32
     match_options::UInt32
@@ -18,7 +18,7 @@ type Regex
 
     function Regex(pattern::AbstractString, compile_options::Integer,
                    match_options::Integer)
-        pattern = bytestring(pattern)
+        pattern = String(pattern)
         compile_options = UInt32(compile_options)
         match_options = UInt32(match_options)
         if (compile_options & ~PCRE.COMPILE_MASK) != 0
@@ -104,7 +104,7 @@ end
 # TODO: map offsets into strings in other encodings back to original indices.
 # or maybe it's better to just fail since that would be quite slow
 
-immutable RegexMatch
+struct RegexMatch
     match::SubString{String}
     captures::Vector{Union{Void,SubString{String}}}
     offset::Int
@@ -143,7 +143,7 @@ getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
 
 function ismatch(r::Regex, s::AbstractString, offset::Integer=0)
     compile(r)
-    return PCRE.exec(r.regex, bytestring(s), offset, r.match_options,
+    return PCRE.exec(r.regex, String(s), offset, r.match_options,
                      r.match_data)
 end
 
@@ -171,12 +171,13 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, a
 end
 
 match(r::Regex, s::AbstractString) = match(r, s, start(s))
-match(r::Regex, s::AbstractString, i::Integer) =
-    throw(ArgumentError("regex matching is only available for bytestrings; use bytestring(s) to convert"))
+match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
+    "regex matching is only available for the String type; use String(s) to convert"
+))
 
 function matchall(re::Regex, str::String, overlap::Bool=false)
     regex = compile(re).regex
-    n = length(str.data)
+    n = sizeof(str)
     matches = SubString{String}[]
     offset = UInt32(0)
     opts = re.match_options
@@ -208,8 +209,8 @@ function matchall(re::Regex, str::String, overlap::Bool=false)
     matches
 end
 
-matchall(re::Regex, str::Union{String,SubString}, overlap::Bool=false) =
-    matchall(re, utf8(str), overlap)
+matchall(re::Regex, str::SubString, overlap::Bool=false) =
+    matchall(re, String(str), overlap)
 
 function search(str::Union{String,SubString}, re::Regex, idx::Integer)
     if idx > nextind(str,endof(str))
@@ -220,11 +221,12 @@ function search(str::Union{String,SubString}, re::Regex, idx::Integer)
     PCRE.exec(re.regex, str, idx-1, opts, re.match_data) ?
         ((Int(re.ovec[1])+1):prevind(str,Int(re.ovec[2])+1)) : (0:-1)
 end
-search(s::AbstractString, r::Regex, idx::Integer) =
-    throw(ArgumentError("regex search is only available for bytestrings; use bytestring(s) to convert"))
+search(s::AbstractString, r::Regex, idx::Integer) = throw(ArgumentError(
+    "regex search is only available for the String type; use String(s) to convert"
+))
 search(s::AbstractString, r::Regex) = search(s,r,start(s))
 
-immutable SubstitutionString{T<:AbstractString} <: AbstractString
+struct SubstitutionString{T<:AbstractString} <: AbstractString
     string::T
 end
 
@@ -289,7 +291,7 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
                 end
                 #  TODO: avoid this allocation
                 groupname = SubString(repl, groupstart, prevind(repl, i))
-                if isnumber(groupname)
+                if all(isnumber,groupname)
                     _write_capture(io, re, parse(Int, groupname))
                 else
                     group = PCRE.substring_number_from_name(re.regex, groupname)
@@ -307,7 +309,7 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
     end
 end
 
-immutable RegexMatchIterator
+struct RegexMatchIterator
     regex::Regex
     string::String
     overlap::Bool
@@ -342,7 +344,7 @@ function next(itr::RegexMatchIterator, prev_match)
                     prevempty ? opts_nonempty : UInt32(0))
 
         if mat === nothing
-            if prevempty && offset <= length(itr.string.data)
+            if prevempty && offset <= sizeof(itr.string)
                 offset = nextind(itr.string, offset)
                 prevempty = false
                 continue

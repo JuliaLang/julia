@@ -4,7 +4,7 @@
 
 const sizeof_ios_t = Int(ccall(:jl_sizeof_ios_t, Cint, ()))
 
-type IOStream <: IO
+mutable struct IOStream <: IO
     handle::Ptr{Void}
     ios::Array{UInt8,1}
     name::AbstractString
@@ -13,7 +13,7 @@ type IOStream <: IO
     IOStream(name::AbstractString, buf::Array{UInt8,1}) = new(pointer(buf), buf, name, -1)
 end
 # TODO: delay adding finalizer, e.g. for memio with a small buffer, or
-# in the case where we takebuf it.
+# in the case where we take! it.
 function IOStream(name::AbstractString, finalize::Bool)
     buf = zeros(UInt8,sizeof_ios_t)
     x = IOStream(name, buf)
@@ -35,7 +35,6 @@ function flush(s::IOStream)
     bad = ccall(:ios_flush, Cint, (Ptr{Void},), s.ios) != 0
     sigatomic_end()
     systemerror("flush", bad)
-    s
 end
 iswritable(s::IOStream) = ccall(:ios_get_writable, Cint, (Ptr{Void},), s.ios)!=0
 isreadable(s::IOStream) = ccall(:ios_get_readable, Cint, (Ptr{Void},), s.ios)!=0
@@ -77,6 +76,14 @@ eof(s::IOStream) = ccall(:ios_eof_blocking, Cint, (Ptr{Void},), s.ios)!=0
 ## constructing and opening streams ##
 
 # "own" means the descriptor will be closed with the IOStream
+
+"""
+    fdio([name::AbstractString, ]fd::Integer[, own::Bool=false]) -> IOStream
+
+Create an `IOStream` object from an integer file descriptor. If `own` is `true`, closing
+this object will close the underlying descriptor. By default, an `IOStream` is closed when
+it is garbage collected. `name` allows you to associate the descriptor with a named file.
+"""
 function fdio(name::AbstractString, fd::Integer, own::Bool=false)
     s = IOStream(name)
     ccall(:ios_fd, Ptr{Void}, (Ptr{Void}, Clong, Cint, Cint),
@@ -85,6 +92,13 @@ function fdio(name::AbstractString, fd::Integer, own::Bool=false)
 end
 fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
 
+
+"""
+    open(filename::AbstractString, [read::Bool, write::Bool, create::Bool, truncate::Bool, append::Bool]) -> IOStream
+
+Open a file in a mode specified by five boolean arguments. The default is to open files for
+reading only. Returns a stream for accessing the file.
+"""
 function open(fname::AbstractString, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
     s = IOStream(string("<file ",fname,">"))
     systemerror("opening file $fname",
@@ -98,6 +112,22 @@ function open(fname::AbstractString, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff:
 end
 open(fname::AbstractString) = open(fname, true, false, false, false, false)
 
+"""
+    open(filename::AbstractString, [mode::AbstractString]) -> IOStream
+
+Alternate syntax for open, where a string-based mode specifier is used instead of the five
+booleans. The values of `mode` correspond to those from `fopen(3)` or Perl `open`, and are
+equivalent to setting the following boolean groups:
+
+| Mode | Description                   |
+|:-----|:------------------------------|
+| r    | read                          |
+| r+   | read, write                   |
+| w    | write, create, truncate       |
+| w+   | read, write, create, truncate |
+| a    | write, create, append         |
+| a+   | read, write, create, append   |
+"""
 function open(fname::AbstractString, mode::AbstractString)
     mode == "r"  ? open(fname, true , false, false, false, false) :
     mode == "r+" ? open(fname, true , true , false, false, false) :
@@ -108,6 +138,14 @@ function open(fname::AbstractString, mode::AbstractString)
     throw(ArgumentError("invalid open mode: $mode"))
 end
 
+"""
+    open(f::Function, args...)
+
+Apply the function `f` to the result of `open(args...)` and close the resulting file
+descriptor upon completion.
+
+**Example**: `open(readstring, "file.txt")`
+"""
 function open(f::Function, args...)
     io = open(args...)
     try
@@ -128,7 +166,7 @@ function unsafe_write(s::IOStream, p::Ptr{UInt8}, nb::UInt)
     return Int(ccall(:ios_write, Csize_t, (Ptr{Void}, Ptr{Void}, Csize_t), s.ios, p, nb))
 end
 
-function write{T,N,A<:Array}(s::IOStream, a::SubArray{T,N,A})
+function write{T,N}(s::IOStream, a::SubArray{T,N,<:Array})
     if !isbits(T) || stride(a,1)!=1
         return invoke(write, Tuple{Any, AbstractArray}, s, a)
     end
@@ -180,22 +218,20 @@ function write(s::IOStream, c::Char)
 end
 read(s::IOStream, ::Type{Char}) = Char(ccall(:jl_getutf8, UInt32, (Ptr{Void},), s.ios))
 
-takebuf_string(s::IOStream) =
-    ccall(:jl_takebuf_string, Ref{String}, (Ptr{Void},), s.ios)
-
-takebuf_array(s::IOStream) =
-    ccall(:jl_takebuf_array, Vector{UInt8}, (Ptr{Void},), s.ios)
-
-function takebuf_raw(s::IOStream)
-    sz = position(s)
-    buf = ccall(:jl_takebuf_raw, Ptr{UInt8}, (Ptr{Void},), s.ios)
-    return buf, sz
-end
-
-write(x) = write(STDOUT::IO, x)
+take!(s::IOStream) =
+    ccall(:jl_take_buffer, Vector{UInt8}, (Ptr{Void},), s.ios)
 
 function readuntil(s::IOStream, delim::UInt8)
-    ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Void}, UInt8), s.ios, delim)
+    ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Void}, UInt8, UInt8, UInt8), s.ios, delim, 0, 0)
+end
+
+# like readuntil, above, but returns a String without requiring a copy
+function readuntil_string(s::IOStream, delim::UInt8)
+    ccall(:jl_readuntil, Ref{String}, (Ptr{Void}, UInt8, UInt8, UInt8), s.ios, delim, 1, false)
+end
+
+function readline(s::IOStream; chomp::Bool=true)
+    ccall(:jl_readuntil, Ref{String}, (Ptr{Void}, UInt8, UInt8, UInt8), s.ios, '\n', 1, chomp)
 end
 
 function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
@@ -229,6 +265,15 @@ function readbytes_some!(s::IOStream, b::Array{UInt8}, nb)
     return nr
 end
 
+"""
+    readbytes!(stream::IOStream, b::AbstractVector{UInt8}, nb=length(b); all::Bool=true)
+
+Read at most `nb` bytes from `stream` into `b`, returning the number of bytes read.
+The size of `b` will be increased if needed (i.e. if `nb` is greater than `length(b)`
+and enough bytes could be read), but it will never be decreased.
+
+See [`read`](@ref) for a description of the `all` option.
+"""
 function readbytes!(s::IOStream, b::Array{UInt8}, nb=length(b); all::Bool=true)
     return all ? readbytes_all!(s, b, nb) : readbytes_some!(s, b, nb)
 end
@@ -242,19 +287,29 @@ function read(s::IOStream)
             sz -= pos
         end
     end
-    b = Array(UInt8, sz<=0 ? 1024 : sz)
+    b = Array{UInt8,1}(sz<=0 ? 1024 : sz)
     nr = readbytes_all!(s, b, typemax(Int))
     resize!(b, nr)
 end
 
+"""
+    read(s::IOStream, nb::Integer; all=true)
+
+Read at most `nb` bytes from `s`, returning a `Vector{UInt8}` of the bytes read.
+
+If `all` is `true` (the default), this function will block repeatedly trying to read all
+requested bytes, until an error or end-of-file occurs. If `all` is `false`, at most one
+`read` call is performed, and the amount of data returned is device-dependent. Note that not
+all stream types support the `all` option.
+"""
 function read(s::IOStream, nb::Integer; all::Bool=true)
-    b = Array(UInt8, nb)
+    b = Array{UInt8,1}(nb)
     nr = readbytes!(s, b, nb, all=all)
     resize!(b, nr)
 end
 
 ## Character streams ##
-const _chtmp = Array(Char, 1)
+const _chtmp = Array{Char}(1)
 function peekchar(s::IOStream)
     if ccall(:ios_peekutf8, Cint, (Ptr{Void}, Ptr{Char}), s, _chtmp) < 0
         return Char(-1)

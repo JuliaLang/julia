@@ -2,32 +2,52 @@
 
 baremodule Base
 
-using Core.TopModule, Core.Intrinsics
+using Core.Intrinsics
 ccall(:jl_set_istopmod, Void, (Bool,), true)
+function include(path::AbstractString)
+    local result
+    if INCLUDE_STATE === 1
+        result = Core.include(path)
+    elseif INCLUDE_STATE === 2
+        result = _include(path)
+    elseif INCLUDE_STATE === 3
+        result = include_from_node1(path)
+    end
+    result
+end
+INCLUDE_STATE = 1 # include = Core.include
 
-include = Core.include
+include("coreio.jl")
 
-eval(x) = Core.eval(Base,x)
-eval(m,x) = Core.eval(m,x)
+eval(x) = Core.eval(Base, x)
+eval(m, x) = Core.eval(m, x)
+(::Type{T}){T}(arg) = convert(T, arg)::T # Hidden from the REPL.
+(::Type{VecElement{T}}){T}(arg) = VecElement{T}(convert(T, arg))
+convert{T<:VecElement}(::Type{T}, arg) = T(arg)
+convert{T<:VecElement}(::Type{T}, arg::T) = arg
 
 # init core docsystem
 import Core: @doc, @__doc__, @doc_str
-Core.atdoc!(Core.Inference.CoreDocs.docm)
+if isdefined(Core, :Inference)
+    import Core.Inference.CoreDocs
+    Core.atdoc!(CoreDocs.docm)
+end
 
 include("exports.jl")
 
 if false
     # simple print definitions for debugging. enable these if something
     # goes wrong during bootstrap before printing code is available.
-    show(x::ANY) = ccall(:jl_static_show, Void, (Ptr{Void}, Any),
-                         pointerref(cglobal(:jl_uv_stdout,Ptr{Void}),1), x)
-    print(x::ANY) = show(x)
-    println(x::ANY) = ccall(:jl_, Void, (Any,), x)
-    print(a::ANY...) = for x=a; print(x); end
+    # otherwise, they just just eventually get (noisily) overwritten later
+    global show, print, println
+    show(io::IO, x::ANY) = Core.show(io, x)
+    print(io::IO, a::ANY...) = Core.print(io, a...)
+    println(io::IO, x::ANY...) = Core.println(io, x...)
 end
 
 ## Load essential files and libraries
 include("essentials.jl")
+include("ctypes.jl")
 include("base.jl")
 include("generator.jl")
 include("reflection.jl")
@@ -36,7 +56,10 @@ include("options.jl")
 # core operations & types
 include("promotion.jl")
 include("tuple.jl")
+include("pair.jl")
+include("traits.jl")
 include("range.jl")
+include("twiceprecision.jl")
 include("expr.jl")
 include("error.jl")
 
@@ -47,17 +70,24 @@ include("int.jl")
 include("operators.jl")
 include("pointer.jl")
 include("refpointer.jl")
-(::Type{T}){T}(arg) = convert(T, arg)::T
 include("checked.jl")
 importall .Checked
 
 # vararg Symbol constructor
 Symbol(x...) = Symbol(string(x...))
 
+# Define the broadcast function, which is mostly implemented in
+# broadcast.jl, so that we can overload broadcast methods for
+# specific array types etc.
+#  --Here, just define fallback routines for broadcasting with no arguments
+broadcast(f) = f()
+broadcast!(f, X::AbstractArray) = (@inbounds for I in eachindex(X); X[I] = f(); end; X)
+
 # array structures
+include("indices.jl")
+include("array.jl")
 include("abstractarray.jl")
 include("subarray.jl")
-include("array.jl")
 
 # Array convenience converting constructors
 (::Type{Array{T}}){T}(m::Integer) = Array{T,1}(Int(m))
@@ -68,15 +98,8 @@ include("array.jl")
 (::Type{Vector})() = Array{Any,1}(0)
 (::Type{Vector{T}}){T}(m::Integer) = Array{T,1}(Int(m))
 (::Type{Vector})(m::Integer) = Array{Any,1}(Int(m))
-(::Type{Matrix})() = Array{Any,2}(0, 0)
 (::Type{Matrix{T}}){T}(m::Integer, n::Integer) = Matrix{T}(Int(m), Int(n))
 (::Type{Matrix})(m::Integer, n::Integer) = Matrix{Any}(Int(m), Int(n))
-
-# TODO: possibly turn these into deprecations
-Array{T}(::Type{T}, d::Integer...) = Array{T}(convert(Tuple{Vararg{Int}}, d))
-Array{T}(::Type{T}, m::Integer)                       = Array{T,1}(Int(m))
-Array{T}(::Type{T}, m::Integer,n::Integer)            = Array{T,2}(Int(m),Int(n))
-Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) = Array{T,3}(Int(m),Int(n),Int(o))
 
 # numeric operations
 include("hashing.jl")
@@ -90,6 +113,15 @@ using .MultiplicativeInverses
 include("abstractarraymath.jl")
 include("arraymath.jl")
 
+# define MIME"foo/bar" early so that we can overload 3-arg show
+struct MIME{mime} end
+macro MIME_str(s)
+    :(MIME{$(Expr(:quote, Symbol(s)))})
+end
+
+include("char.jl")
+include("strings/string.jl")
+
 # SIMD loops
 include("simdloop.jl")
 importall .SimdLoop
@@ -101,22 +133,32 @@ include("reduce.jl")
 include("reshapedarray.jl")
 include("bitarray.jl")
 include("intset.jl")
+include("associative.jl")
 include("dict.jl")
 include("set.jl")
-include("iterator.jl")
+include("iterators.jl")
+using .Iterators: zip, enumerate
+using .Iterators: Flatten, product  # for generators
 
 # Definition of StridedArray
-typealias StridedReshapedArray{T,N,A<:DenseArray} ReshapedArray{T,N,A}
-typealias StridedArray{T,N,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}}} Union{DenseArray{T,N}, SubArray{T,N,A,I}, StridedReshapedArray{T,N}}
-typealias StridedVector{T,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}}}  Union{DenseArray{T,1}, SubArray{T,1,A,I}, StridedReshapedArray{T,1}}
-typealias StridedMatrix{T,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}}}  Union{DenseArray{T,2}, SubArray{T,2,A,I}, StridedReshapedArray{T,2}}
-typealias StridedVecOrMat{T} Union{StridedVector{T}, StridedMatrix{T}}
+StridedReshapedArray{T,N,A<:DenseArray} = ReshapedArray{T,N,A}
+StridedArray{T,N,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} = Union{DenseArray{T,N}, SubArray{T,N,A,I}, StridedReshapedArray{T,N}}
+StridedVector{T,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} = Union{DenseArray{T,1}, SubArray{T,1,A,I}, StridedReshapedArray{T,1}}
+StridedMatrix{T,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} = Union{DenseArray{T,2}, SubArray{T,2,A,I}, StridedReshapedArray{T,2}}
+StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
 
 # For OS specific stuff
-include(String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "build_h.jl".data))) # include($BUILDROOT/base/build_h.jl)
-include(String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "version_git.jl".data))) # include($BUILDROOT/base/version_git.jl)
+include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
+include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
+
 include("osutils.jl")
 include("c.jl")
+include("sysinfo.jl")
+
+if !isdefined(Core, :Inference)
+    include("docs/core.jl")
+    Core.atdoc!(CoreDocs.docm)
+end
 
 # Core I/O
 include("io.jl")
@@ -124,16 +166,32 @@ include("iostream.jl")
 include("iobuffer.jl")
 
 # strings & printing
-include("char.jl")
-include("ascii.jl")
-include("string.jl")
-include("unicode.jl")
+include("intfuncs.jl")
+include("strings/strings.jl")
 include("parse.jl")
 include("shell.jl")
 include("regex.jl")
 include("show.jl")
+
+# multidimensional arrays
+include("cartesian.jl")
+using .Cartesian
+include("multidimensional.jl")
+include("permuteddimsarray.jl")
+using .PermutedDimsArrays
+
+# nullable types
+include("nullable.jl")
+
+include("broadcast.jl")
+importall .Broadcast
+
+# base64 conversions (need broadcast)
 include("base64.jl")
 importall .Base64
+
+# version
+include("version.jl")
 
 # system & environment
 include("libc.jl")
@@ -141,16 +199,14 @@ using .Libc: getpid, gethostname, time
 include("libdl.jl")
 using .Libdl: DL_LOAD_PATH
 include("env.jl")
-include("intfuncs.jl")
-
-# nullable types
-include("nullable.jl")
 
 # Scheduling
 include("libuv.jl")
 include("event.jl")
 include("task.jl")
 include("lock.jl")
+include("threads.jl")
+include("weakkeydict.jl")
 
 # I/O
 include("stream.jl")
@@ -160,7 +216,7 @@ importall .Filesystem
 include("process.jl")
 include("multimedia.jl")
 importall .Multimedia
-include("grisu.jl")
+include("grisu/grisu.jl")
 import .Grisu.print_shortest
 include("methodshow.jl")
 
@@ -170,19 +226,9 @@ include("math.jl")
 importall .Math
 const (√)=sqrt
 const (∛)=cbrt
-include("float16.jl")
-
-# multidimensional arrays
-include("cartesian.jl")
-using .Cartesian
-include("multidimensional.jl")
-include("permuteddimsarray.jl")
-using .PermutedDimsArrays
-
-include("primes.jl")
 
 let SOURCE_PATH = ""
-    global include = function(path)
+    global function _include(path)
         prev = SOURCE_PATH
         path = joinpath(dirname(prev),path)
         SOURCE_PATH = path
@@ -190,6 +236,7 @@ let SOURCE_PATH = ""
         SOURCE_PATH = prev
     end
 end
+INCLUDE_STATE = 2 # include = _include (from lines above)
 
 # reduction along dims
 include("reducedim.jl")  # macros in this file relies on string.jl
@@ -197,14 +244,12 @@ include("reducedim.jl")  # macros in this file relies on string.jl
 # basic data structures
 include("ordering.jl")
 importall .Order
-include("collections.jl")
 
 # Combinatorics
 include("sort.jl")
 importall .Sort
 
-# version
-include("version.jl")
+function deepcopy_internal end
 
 # BigInts and BigFloats
 include("gmp.jl")
@@ -213,7 +258,7 @@ include("mpfr.jl")
 importall .MPFR
 big(n::Integer) = convert(BigInt,n)
 big(x::AbstractFloat) = convert(BigFloat,x)
-big(q::Rational) = big(num(q))//big(den(q))
+big(q::Rational) = big(numerator(q))//big(denominator(q))
 
 include("combinatorics.jl")
 
@@ -240,25 +285,17 @@ importall .Enums
 include("serialize.jl")
 importall .Serializer
 include("channels.jl")
-include("multi.jl")
-include("workerpool.jl")
-include("pmap.jl")
-include("managers.jl")
-include("asyncmap.jl")
-
-# code loading
-include("loading.jl")
 
 # memory-mapped and shared arrays
 include("mmap.jl")
 import .Mmap
-include("sharedarray.jl")
 
 # utilities - timing, help, edit
 include("datafmt.jl")
 importall .DataFmt
 include("deepcopy.jl")
 include("interactiveutil.jl")
+include("summarysize.jl")
 include("replutil.jl")
 include("test.jl")
 include("i18n.jl")
@@ -272,16 +309,18 @@ include("REPLCompletions.jl")
 include("REPL.jl")
 include("client.jl")
 
+# Stack frames and traces
+include("stacktraces.jl")
+importall .StackTraces
+
 # misc useful functions & macros
 include("util.jl")
 
 # dense linear algebra
-include("linalg.jl")
+include("linalg/linalg.jl")
 importall .LinAlg
 const ⋅ = dot
 const × = cross
-include("broadcast.jl")
-importall .Broadcast
 
 # statistics
 include("statistics.jl")
@@ -295,43 +334,38 @@ importall .DFT
 include("dsp.jl")
 importall .DSP
 
-# system information
-include("sysinfo.jl")
-import .Sys.CPU_CORES
-
-# Numerical integration
-include("quadgk.jl")
-importall .QuadGK
-
 # Fast math
 include("fastmath.jl")
 importall .FastMath
 
 # libgit2 support
-include("libgit2.jl")
+include("libgit2/libgit2.jl")
 
 # package manager
-include("pkg.jl")
-const Git = Pkg.Git
-
-# Stack frames and traces
-include("stacktraces.jl")
-importall .StackTraces
+include("pkg/pkg.jl")
 
 # profiler
 include("profile.jl")
 importall .Profile
 
 # dates
-include("Dates.jl")
-import .Dates: Date, DateTime, now
+include("dates/Dates.jl")
+import .Dates: Date, DateTime, DateFormat, @dateformat_str, now
 
 # sparse matrices, vectors, and sparse linear algebra
-include("sparse.jl")
+include("sparse/sparse.jl")
 importall .SparseArrays
 
-# threads
-include("threads.jl")
+include("asyncmap.jl")
+
+include("distributed/Distributed.jl")
+importall .Distributed
+include("sharedarray.jl")
+
+# code loading
+include("loading.jl")
+
+# worker threads
 include("threadcall.jl")
 
 # deprecated functions
@@ -345,7 +379,7 @@ include("docs/basedocs.jl")
 include("markdown/Markdown.jl")
 include("docs/Docs.jl")
 using .Docs, .Markdown
-Docs.loaddocs(Core.Inference.CoreDocs.DOCS)
+isdefined(Core, :Inference) && Docs.loaddocs(Core.Inference.CoreDocs.DOCS)
 
 function __init__()
     # Base library init
@@ -353,11 +387,11 @@ function __init__()
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
     early_init()
     init_load_path()
-    init_parallel()
+    Distributed.init_parallel()
     init_threadcall()
 end
 
-include = include_from_node1
+INCLUDE_STATE = 3 # include = include_from_node1
 include("precompile.jl")
 
 end # baremodule Base

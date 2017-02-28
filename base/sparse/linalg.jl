@@ -6,22 +6,17 @@ import Base.LinAlg: checksquare
 
 # Convert from 1-based to 0-based indices
 function decrement!{T<:Integer}(A::AbstractArray{T})
-    for i in 1:length(A); A[i] -= one(T) end
+    for i in 1:length(A); A[i] -= oneunit(T) end
     A
 end
-decrement{T<:Integer}(A::AbstractArray{T}) = decrement!(copy(A))
+decrement(A::AbstractArray{<:Integer}) = decrement!(copy(A))
 
 # Convert from 0-based to 1-based indices
 function increment!{T<:Integer}(A::AbstractArray{T})
-    for i in 1:length(A); A[i] += one(T) end
+    for i in 1:length(A); A[i] += oneunit(T) end
     A
 end
-increment{T<:Integer}(A::AbstractArray{T}) = increment!(copy(A))
-
-## Multiplication with UniformScaling (scaled identity matrices)
-
-(*)(S::SparseMatrixCSC, J::UniformScaling) = J.λ == 1 ? S : J.λ*S
-(*){Tv,Ti}(J::UniformScaling, S::SparseMatrixCSC{Tv,Ti}) = J.λ == 1 ? S : S*J.λ
+increment(A::AbstractArray{<:Integer}) = increment!(copy(A))
 
 ## sparse matrix multiplication
 
@@ -151,9 +146,9 @@ function spmatmul{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
     colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
     # TODO: Need better estimation of result space
     nnzC = min(mA*nB, length(nzvalA) + length(nzvalB))
-    colptrC = Array(Ti, nB+1)
-    rowvalC = Array(Ti, nnzC)
-    nzvalC = Array(Tv, nnzC)
+    colptrC = Array{Ti}(nB+1)
+    rowvalC = Array{Ti}(nnzC)
+    nzvalC = Array{Tv}(nnzC)
 
     @inbounds begin
         ip = 1
@@ -289,11 +284,11 @@ function bwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
     B
 end
 
-A_ldiv_B!{T,Ti}(L::LowerTriangular{T,SparseMatrixCSC{T,Ti}}, B::StridedVecOrMat) = fwdTriSolve!(L.data, B)
-A_ldiv_B!{T,Ti}(U::UpperTriangular{T,SparseMatrixCSC{T,Ti}}, B::StridedVecOrMat) = bwdTriSolve!(U.data, B)
+A_ldiv_B!{T}(L::LowerTriangular{T,<:SparseMatrixCSC{T}}, B::StridedVecOrMat) = fwdTriSolve!(L.data, B)
+A_ldiv_B!{T}(U::UpperTriangular{T,<:SparseMatrixCSC{T}}, B::StridedVecOrMat) = bwdTriSolve!(U.data, B)
 
-(\){T,Ti}(L::LowerTriangular{T,SparseMatrixCSC{T,Ti}}, B::SparseMatrixCSC) = A_ldiv_B!(L, full(B))
-(\){T,Ti}(U::UpperTriangular{T,SparseMatrixCSC{T,Ti}}, B::SparseMatrixCSC) = A_ldiv_B!(U, full(B))
+(\){T}(L::LowerTriangular{T,<:SparseMatrixCSC{T}}, B::SparseMatrixCSC) = A_ldiv_B!(L, Array(B))
+(\){T}(U::UpperTriangular{T,<:SparseMatrixCSC{T}}, B::SparseMatrixCSC) = A_ldiv_B!(U, Array(B))
 
 ## triu, tril
 
@@ -302,7 +297,7 @@ function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0)
     if (k > 0 && k > n) || (k < 0 && -k > m)
         throw(BoundsError())
     end
-    colptr = Array(Ti, n+1)
+    colptr = Array{Ti}(n+1)
     nnz = 0
     for col = 1 : min(max(k+1,1), n+1)
         colptr[col] = 1
@@ -314,8 +309,8 @@ function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0)
         end
         colptr[col+1] = nnz+1
     end
-    rowval = Array(Ti, nnz)
-    nzval = Array(Tv, nnz)
+    rowval = Array{Ti}(nnz)
+    nzval = Array{Tv}(nnz)
     A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
     for col = max(k+1,1) : n
         c1 = S.colptr[col]
@@ -333,7 +328,7 @@ function tril{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0)
     if (k > 0 && k > n) || (k < 0 && -k > m)
         throw(BoundsError())
     end
-    colptr = Array(Ti, n+1)
+    colptr = Array{Ti}(n+1)
     nnz = 0
     colptr[1] = 1
     for col = 1 : min(n, m+k)
@@ -347,8 +342,8 @@ function tril{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0)
     for col = max(min(n, m+k)+2,1) : n+1
         colptr[col] = nnz+1
     end
-    rowval = Array(Ti, nnz)
-    nzval = Array(Tv, nnz)
+    rowval = Array{Ti}(nnz)
+    nzval = Array{Tv}(nnz)
     A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
     for col = 1 : min(n, m+k)
         c1 = S.colptr[col+1]-1
@@ -367,10 +362,10 @@ end
 function sparse_diff1{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     m,n = size(S)
     m > 1 || return SparseMatrixCSC(0, n, ones(Ti,n+1), Ti[], Tv[])
-    colptr = Array(Ti, n+1)
+    colptr = Array{Ti}(n+1)
     numnz = 2 * nnz(S) # upper bound; will shrink later
-    rowval = Array(Ti, numnz)
-    nzval = Array(Tv, numnz)
+    rowval = Array{Ti}(numnz)
+    nzval = Array{Tv}(numnz)
     numnz = 0
     colptr[1] = 1
     for col = 1 : n
@@ -406,10 +401,10 @@ end
 
 function sparse_diff2{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti})
     m,n = size(a)
-    colptr = Array(Ti, max(n,1))
+    colptr = Array{Ti}(max(n,1))
     numnz = 2 * nnz(a) # upper bound; will shrink later
-    rowval = Array(Ti, numnz)
-    nzval = Array(Tv, numnz)
+    rowval = Array{Ti}(numnz)
+    nzval = Array{Tv}(numnz)
 
     z = zero(Tv)
 
@@ -504,7 +499,7 @@ function norm(A::SparseMatrixCSC,p::Real=2)
         return float(real(zero(eltype(A))))
     elseif m == 1 || n == 1
         # TODO: compute more efficiently using A.nzval directly
-        return norm(full(A), p)
+        return norm(Array(A), p)
     else
         Tnorm = typeof(float(real(zero(eltype(A)))))
         Tsum = promote_type(Float64,Tnorm)
@@ -519,7 +514,7 @@ function norm(A::SparseMatrixCSC,p::Real=2)
             end
             return convert(Tnorm, nA)
         elseif p==2
-            throw(ArgumentError("2-norm not yet implemented for sparse matrices. Try norm(full(A)) or norm(A, p) where p=1 or Inf."))
+            throw(ArgumentError("2-norm not yet implemented for sparse matrices. Try norm(Array(A)) or norm(A, p) where p=1 or Inf."))
         elseif p==Inf
             rowSum = zeros(Tsum,m)
             for i=1:length(A.nzval)
@@ -544,7 +539,7 @@ function cond(A::SparseMatrixCSC, p::Real=2)
         normA = norm(A, Inf)
         return normA * normAinv
     elseif p == 2
-        throw(ArgumentError("2-norm condition number is not implemented for sparse matrices, try cond(full(A), 2) instead"))
+        throw(ArgumentError("2-norm condition number is not implemented for sparse matrices, try cond(Array(A), 2) instead"))
     else
         throw(ArgumentError("second argument must be either 1 or Inf, got $p"))
     end
@@ -561,8 +556,8 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)
     if t > n
         throw(ArgumentError("number of blocks must not be greater than $n"))
     end
-    ind = Array(Int64, n)
-    ind_hist = Array(Int64, maxiter * t)
+    ind = Array{Int64}(n)
+    ind_hist = Array{Int64}(maxiter * t)
 
     Ti = typeof(float(zero(T)))
 
@@ -584,11 +579,11 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)
     end
 
     # Generate the block matrix
-    X = Array(Ti, n, t)
+    X = Array{Ti}(n, t)
     X[1:n,1] = 1
     for j = 2:t
         while true
-            _rand_pm1!(slice(X,1:n,j))
+            _rand_pm1!(view(X,1:n,j))
             yaux = X[1:n,j]' * X[1:n,1:j-1]
             if !_any_abs_eq(yaux,n)
                 break
@@ -649,7 +644,7 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)
                         end
                     end
                     if repeated
-                        _rand_pm1!(slice(S,1:n,j))
+                        _rand_pm1!(view(S,1:n,j))
                     else
                         break
                     end
@@ -734,9 +729,9 @@ function kron{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti})
 
     m,n = mA*mB, nA*nB
 
-    colptr = Array(Ti, n+1)
-    rowval = Array(Ti, numnz)
-    nzval = Array(Tv, numnz)
+    colptr = Array{Ti}(n+1)
+    rowval = Array{Ti}(numnz)
+    nzval = Array{Tv}(numnz)
 
     colptr[1] = 1
 
@@ -856,6 +851,29 @@ end
 scale!(A::SparseMatrixCSC, b::Number) = (scale!(A.nzval, b); A)
 scale!(b::Number, A::SparseMatrixCSC) = (scale!(b, A.nzval); A)
 
+function (\)(A::SparseMatrixCSC, B::AbstractVecOrMat)
+    m, n = size(A)
+    if m == n
+        if istril(A)
+            if istriu(A)
+                return Diagonal(A) \ B
+            else
+                return LowerTriangular(A) \ B
+            end
+        elseif istriu(A)
+            return UpperTriangular(A) \ B
+        end
+        if ishermitian(A)
+            Hermitian(A) \ B
+        end
+        return lufact(A) \ B
+    else
+        return qrfact(A) \ B
+    end
+end
+
+(\)(::SparseMatrixCSC, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+
 function factorize(A::SparseMatrixCSC)
     m, n = size(A)
     if m == n
@@ -868,13 +886,12 @@ function factorize(A::SparseMatrixCSC)
         elseif istriu(A)
             return UpperTriangular(A)
         end
-        AC = CHOLMOD.Sparse(A)
-        if ishermitian(AC)
+        if ishermitian(A)
             try
-                return cholfact(A)
+                return cholfact(Hermitian(A))
             catch e
                 isa(e, PosDefException) || rethrow(e)
-                return ldltfact(A)
+                return ldltfact(Hermitian(A))
             end
         end
         return lufact(A)

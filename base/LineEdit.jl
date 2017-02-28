@@ -9,16 +9,16 @@ import ..Terminals: raw!, width, height, cmove, getX,
 
 import Base: ensureroom, peek, show, AnyDict
 
-abstract TextInterface
-abstract ModeState
+abstract type TextInterface end
+abstract type ModeState end
 
 export run_interface, Prompt, ModalInterface, transition, reset_state, edit_insert, keymap
 
-immutable ModalInterface <: TextInterface
+struct ModalInterface <: TextInterface
     modes
 end
 
-type MIState
+mutable struct MIState
     interface::ModalInterface
     current_mode
     aborted::Bool
@@ -33,7 +33,7 @@ function show(io::IO, s::MIState)
     print(io, "MI State (", s.current_mode, " active)")
 end
 
-type Prompt <: TextInterface
+mutable struct Prompt <: TextInterface
     prompt
     # A string or function to be printed before the prompt. May not change the length of the prompt.
     # This may be used for changing the color, issuing other terminal escape codes, etc.
@@ -51,12 +51,12 @@ end
 
 show(io::IO, x::Prompt) = show(io, string("Prompt(\"", x.prompt, "\",...)"))
 
-immutable InputAreaState
+struct InputAreaState
     num_rows::Int64
     curs_row::Int64
 end
 
-type PromptState <: ModeState
+mutable struct PromptState <: ModeState
     terminal
     p::Prompt
     input_buffer::IOBuffer
@@ -64,7 +64,7 @@ type PromptState <: ModeState
     indent::Int
 end
 
-input_string(s::PromptState) = bytestring(s.input_buffer)
+input_string(s::PromptState) = String(s.input_buffer)
 
 input_string_newlines(s::PromptState) = count(c->(c == '\n'), input_string(s))
 function input_string_newlines_aftercursor(s::PromptState)
@@ -74,13 +74,13 @@ function input_string_newlines_aftercursor(s::PromptState)
     return count(c->(c == '\n'), rest)
 end
 
-abstract HistoryProvider
-abstract CompletionProvider
+abstract type HistoryProvider end
+abstract type CompletionProvider end
 
-type EmptyCompletionProvider <: CompletionProvider
+mutable struct EmptyCompletionProvider <: CompletionProvider
 end
 
-type EmptyHistoryProvider <: HistoryProvider
+mutable struct EmptyHistoryProvider <: HistoryProvider
 end
 
 reset_state(::EmptyHistoryProvider) = nothing
@@ -106,7 +106,7 @@ function common_prefix(completions)
         for c in completions
             (i > endof(c) || c[i] != cc) && return ret
         end
-        ret *= string(cc)
+        ret = string(ret, cc)
         i >= endof(c1) && return ret
         i = nexti
         cc, nexti = next(c1, i)
@@ -204,14 +204,14 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     write_prompt(termbuf, prompt)
     prompt = prompt_string(prompt)
     # Count the '\n' at the end of the line if the terminal emulator does (specific to DOS cmd prompt)
-    miscountnl = @windows ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !Base.ispty(Terminals.pipe_reader(terminal))) : false
+    miscountnl = @static is_windows() ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !Base.ispty(Terminals.pipe_reader(terminal))) : false
     lindent = strwidth(prompt)
 
     # Now go through the buffer line by line
     seek(buf, 0)
     moreinput = true # add a blank line if there is a trailing newline on the last line
     while moreinput
-        l = readline(buf)
+        l = readline(buf, chomp=false)
         moreinput = endswith(l, "\n")
         # We need to deal with on-screen characters, so use strwidth to compute occupied columns
         llength = strwidth(l)
@@ -267,7 +267,7 @@ function refresh_multi_line(terminal::UnixTerminal, args...; kwargs...)
     termbuf = TerminalBuffer(outbuf)
     ret = refresh_multi_line(termbuf, terminal, args...;kwargs...)
     # Output the entire refresh at once
-    write(terminal, takebuf_array(outbuf))
+    write(terminal, take!(outbuf))
     flush(terminal)
     return ret
 end
@@ -386,7 +386,7 @@ function edit_move_up(buf::IOBuffer)
     npos = rsearch(buf.data, '\n', position(buf))
     npos == 0 && return false # we're in the first line
     # We're interested in character count, not byte count
-    offset = length(bytestring(buf.data[(npos+1):(position(buf))]))
+    offset = length(String(buf.data[(npos+1):(position(buf))]))
     npos2 = rsearch(buf.data, '\n', npos-1)
     seek(buf, npos2)
     for _ = 1:offset
@@ -407,7 +407,7 @@ end
 function edit_move_down(buf::IOBuffer)
     npos = rsearch(buf.data[1:buf.size], '\n', position(buf))
     # We're interested in character count, not byte count
-    offset = length(bytestring(buf.data[(npos+1):(position(buf))]))
+    offset = length(String(buf.data[(npos+1):(position(buf))]))
     npos2 = search(buf.data[1:buf.size], '\n', position(buf)+1)
     if npos2 == 0 #we're in the last line
         return false
@@ -430,14 +430,14 @@ end
 
 # splice! for IOBuffer: convert from 0-indexed positions, update the size,
 # and keep the cursor position stable with the text
-function splice_buffer!{T<:Integer}(buf::IOBuffer, r::UnitRange{T}, ins::AbstractString = "")
+function splice_buffer!(buf::IOBuffer, r::UnitRange{<:Integer}, ins::AbstractString = "")
     pos = position(buf)
     if !isempty(r) && pos in r
         seek(buf, first(r))
     elseif pos > last(r)
         seek(buf, pos - length(r))
     end
-    splice!(buf.data, r .+ 1, ins.data) # position(), etc, are 0-indexed
+    splice!(buf.data, r + 1, Vector{UInt8}(ins)) # position(), etc, are 0-indexed
     buf.size = buf.size + sizeof(ins) - length(r)
     seek(buf, position(buf) + sizeof(ins))
 end
@@ -447,10 +447,19 @@ function edit_replace(s, from, to, str)
 end
 
 function edit_insert(s::PromptState, c)
+    buf = s.input_buffer
+    function line_size()
+        p = position(buf)
+        seek(buf, rsearch(buf.data, '\n', p))
+        ls = p - position(buf)
+        seek(buf, p)
+        return ls
+    end
     str = string(c)
-    edit_insert(s.input_buffer, str)
-    if !('\n' in str) && eof(s.input_buffer) &&
-        ((position(s.input_buffer) + sizeof(s.p.prompt) + sizeof(str) - 1) < width(terminal(s)))
+    edit_insert(buf, str)
+    offset = s.ias.curs_row == 1 ? sizeof(s.p.prompt) : s.indent
+    if !('\n' in str) && eof(buf) &&
+        ((line_size() + offset + sizeof(str) - 1) < width(terminal(s)))
         # Avoid full update when appending characters to the end
         # and an update of curs_row isn't necessary (conservatively estimated)
         write(terminal(s), str)
@@ -540,7 +549,7 @@ end
 function edit_kill_line(s::MIState)
     buf = buffer(s)
     pos = position(buf)
-    killbuf = readline(buf)
+    killbuf = readline(buf, chomp=false)
     if length(killbuf) > 1 && killbuf[end] == '\n'
         killbuf = killbuf[1:end-1]
         char_move_left(buf)
@@ -617,9 +626,10 @@ default_enter_cb(_) = true
 
 write_prompt(terminal, s::PromptState) = write_prompt(terminal, s.p)
 function write_prompt(terminal, p::Prompt)
-    prefix = isa(p.prompt_prefix,Function) ? p.prompt_prefix() : p.prompt_prefix
-    suffix = isa(p.prompt_suffix,Function) ? p.prompt_suffix() : p.prompt_suffix
+    prefix = isa(p.prompt_prefix,Function) ? eval(Expr(:call, p.prompt_prefix)) : p.prompt_prefix
+    suffix = isa(p.prompt_suffix,Function) ? eval(Expr(:call, p.prompt_suffix)) : p.prompt_suffix
     write(terminal, prefix)
+    write(terminal, Base.text_colors[:bold])
     write(terminal, p.prompt)
     write(terminal, Base.text_colors[:normal])
     write(terminal, suffix)
@@ -659,7 +669,7 @@ function normalize_key(key::AbstractString)
             write(buf, c)
         end
     end
-    return takebuf_string(buf)
+    return String(take!(buf))
 end
 
 function normalize_keys(keymap::Dict)
@@ -702,7 +712,7 @@ end
 # Redirect a key as if `seq` had been the keysequence instead in a lazy fashion.
 # This is different from the default eager redirect, which only looks at the current and lower
 # layers of the stack.
-immutable KeyAlias
+struct KeyAlias
     seq::String
     KeyAlias(seq) = new(normalize_key(seq))
 end
@@ -724,7 +734,7 @@ end
 keymap_fcn(f::Void, c) = (s, p) -> return :ok
 function keymap_fcn(f::Function, c)
     return function (s, p)
-        r = f(s, p, c)
+        r = eval(Expr(:call,f,s, p, c))
         if isa(r, Symbol)
             return r
         else
@@ -854,7 +864,7 @@ function keymap_merge(target,source)
     for key in setdiff(keys(source), keys(direct_keys))
         # We first resolve redirects in the source
         value = source[key]
-        visited = Array(Any,0)
+        visited = Array{Any}(0)
         while isa(value, Union{Char,AbstractString})
             value = normalize_key(value)
             if value in visited
@@ -901,7 +911,7 @@ function validate_keymap(keymap)
     end
 end
 
-function keymap{D<:Dict}(keymaps::Array{D})
+function keymap(keymaps::Array{<:Dict})
     # keymaps is a vector of prioritized keymaps, with highest priority first
     ret = keymap_unify(map(normalize_keys, reverse(keymaps)))
     validate_keymap(ret)
@@ -909,7 +919,7 @@ function keymap{D<:Dict}(keymaps::Array{D})
 end
 
 const escape_defaults = merge!(
-    AnyDict([Char(i) => nothing for i=vcat(1:26, 28:31)]), # Ignore control characters by default
+    AnyDict(Char(i) => nothing for i=vcat(1:26, 28:31)), # Ignore control characters by default
     AnyDict( # And ignore other escape sequences by default
         "\e*" => nothing,
         "\e[*" => nothing,
@@ -941,9 +951,9 @@ const escape_defaults = merge!(
         "\eOF"  => KeyAlias("\e[F"),
     ),
     # set mode commands
-    AnyDict(["\e[$(c)h" => nothing for c in 1:20]),
+    AnyDict("\e[$(c)h" => nothing for c in 1:20),
     # reset mode commands
-    AnyDict(["\e[$(c)l" => nothing for c in 1:20])
+    AnyDict("\e[$(c)l" => nothing for c in 1:20)
     )
 
 function write_response_buffer(s::PromptState, data)
@@ -956,7 +966,7 @@ function write_response_buffer(s::PromptState, data)
     refresh_line(s)
 end
 
-type SearchState <: ModeState
+mutable struct SearchState <: ModeState
     terminal
     histprompt
     #rsearch (true) or ssearch (false)
@@ -986,7 +996,7 @@ function history_set_backward(s::SearchState, backward)
     s.backward = backward
 end
 
-input_string(s::SearchState) = bytestring(s.query_buffer)
+input_string(s::SearchState) = String(s.query_buffer)
 
 function reset_state(s::SearchState)
     if s.query_buffer.size != 0
@@ -1000,17 +1010,17 @@ function reset_state(s::SearchState)
     reset_state(s.histprompt.hp)
 end
 
-type HistoryPrompt{T<:HistoryProvider} <: TextInterface
+mutable struct HistoryPrompt{T<:HistoryProvider} <: TextInterface
     hp::T
     complete
     keymap_dict::Dict{Char,Any}
-    HistoryPrompt(hp) = new(hp, EmptyCompletionProvider())
+    HistoryPrompt{T}(hp) where T<:HistoryProvider = new(hp, EmptyCompletionProvider())
 end
 
-HistoryPrompt{T<:HistoryProvider}(hp::T) = HistoryPrompt{T}(hp)
+HistoryPrompt(hp::T) where T<:HistoryProvider = HistoryPrompt{T}(hp)
 init_state(terminal, p::HistoryPrompt) = SearchState(terminal, p, true, IOBuffer(), IOBuffer())
 
-type PrefixSearchState <: ModeState
+mutable struct PrefixSearchState <: ModeState
     terminal
     histprompt
     prefix::String
@@ -1035,19 +1045,20 @@ refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal,
     s::Union{PromptState,PrefixSearchState}) = s.ias =
     refresh_multi_line(termbuf, terminal, buffer(s), s.ias, s, indent = s.indent)
 
-input_string(s::PrefixSearchState) = bytestring(s.response_buffer)
+input_string(s::PrefixSearchState) = String(s.response_buffer)
 
 # a meta-prompt that presents itself as parent_prompt, but which has an independent keymap
 # for prefix searching
-type PrefixHistoryPrompt{T<:HistoryProvider} <: TextInterface
+mutable struct PrefixHistoryPrompt{T<:HistoryProvider} <: TextInterface
     hp::T
     parent_prompt::Prompt
     complete
     keymap_dict::Dict{Char,Any}
-    PrefixHistoryPrompt(hp, parent_prompt) = new(hp, parent_prompt, EmptyCompletionProvider())
+    PrefixHistoryPrompt{T}(hp, parent_prompt) where T<:HistoryProvider =
+        new(hp, parent_prompt, EmptyCompletionProvider())
 end
 
-PrefixHistoryPrompt{T<:HistoryProvider}(hp::T, parent_prompt) = PrefixHistoryPrompt{T}(hp, parent_prompt)
+PrefixHistoryPrompt(hp::T, parent_prompt) where T<:HistoryProvider = PrefixHistoryPrompt{T}(hp, parent_prompt)
 init_state(terminal, p::PrefixHistoryPrompt) = PrefixSearchState(terminal, p, "", IOBuffer())
 
 write_prompt(terminal, s::PrefixSearchState) = write_prompt(terminal, s.histprompt.parent_prompt)
@@ -1153,7 +1164,7 @@ function enter_prefix_search(s::MIState, p::PrefixHistoryPrompt, backward::Bool)
         pss = state(s, p)
         pss.parent = parent
         pss.histprompt.parent_prompt = parent
-        pss.prefix = bytestring(pointer(buf.data), position(buf))
+        pss.prefix = String(buf.data[1:position(buf)])
         copybuf!(pss.response_buffer, buf)
         pss.indent = state(s, parent).indent
         pss.mi = s
@@ -1296,7 +1307,7 @@ end
 """
 `Base.LineEdit.tabwidth` controls the presumed tab width of code pasted into the REPL.
 
-You can modify it by doing `eval(Base.LineEdit, :(tabwidth = 4))`, for example.
+You can modify it by doing `@eval Base.LineEdit tabwidth = 4`, for example.
 
 Must satisfy `0 < tabwidth <= 16`.
 """
@@ -1456,11 +1467,11 @@ const prefix_history_keymap = merge!(
         "\e[200~" => "*"
     ),
     # VT220 editing commands
-    AnyDict(["\e[$(n)~" => "*" for n in 1:8]),
+    AnyDict("\e[$(n)~" => "*" for n in 1:8),
     # set mode commands
-    AnyDict(["\e[$(c)h" => "*" for c in 1:20]),
+    AnyDict("\e[$(c)h" => "*" for c in 1:20),
     # reset mode commands
-    AnyDict(["\e[$(c)l" => "*" for c in 1:20])
+    AnyDict("\e[$(c)l" => "*" for c in 1:20)
 )
 
 function setup_prefix_keymap(hp, parent_prompt)
@@ -1492,13 +1503,13 @@ end
 activate(m::ModalInterface, s::MIState, termbuf, term::TextTerminal) =
     activate(s.current_mode, s, termbuf, term)
 
-commit_changes(t::UnixTerminal, termbuf) = write(t, takebuf_array(termbuf.out_stream))
+commit_changes(t::UnixTerminal, termbuf) = write(t, take!(termbuf.out_stream))
 function transition(f::Function, s::MIState, mode)
-    if mode == :abort
+    if mode === :abort
         s.aborted = true
         return
     end
-    if mode == :reset
+    if mode === :reset
         reset_state(s)
         return
     end
@@ -1564,7 +1575,7 @@ function run_interface(terminal, m::ModalInterface)
         p = s.current_mode
         buf, ok, suspend = prompt!(terminal, m, s)
         while suspend
-            @unix_only ccall(:jl_repl_raise_sigtstp, Cint, ())
+            @static if is_unix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
             buf, ok, suspend = prompt!(terminal, m, s)
         end
         mode(state(s, s.current_mode)).on_done(s, buf, ok)
@@ -1599,16 +1610,16 @@ function prompt!(term, prompt, s = init_state(term, prompt))
                 warn(e)
                 state = :done
             end
-            if state == :abort
+            if state === :abort
                 return buffer(s), false, false
-            elseif state == :done
+            elseif state === :done
                 return buffer(s), true, false
-            elseif state == :suspend
-                @unix_only begin
+            elseif state === :suspend
+                if is_unix()
                     return buffer(s), true, true
                 end
             else
-                @assert state == :ok
+                @assert state === :ok
             end
         end
     finally

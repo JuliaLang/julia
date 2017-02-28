@@ -21,9 +21,6 @@ function euler2(n)
 end
 @test euler2(4000000) == 4613732
 
-#3: 6857
-@test maximum(keys(factor(600851475143))) == 6857
-
 #4: 906609
 function euler4(n)
     m = 1
@@ -47,10 +44,6 @@ end
 #6: 25164150
 @test sum(1:100)^2 - sum((1:100).^2) == 25164150
 
-#7: 104743
-euler7(n) = primes(floor(Int,n*log(n*log(n))))[n]
-@test euler7(10001) == 104743
-
 #8: 40824
 function euler8(n,m)
     d = digits(n)
@@ -68,8 +61,6 @@ function euler9(n)
 end
 @test euler9(1000) == 31875000
 
-#10: 142913828922
-@test sum(map(Int64,primes(2000000))) == 142913828922
 
 #11: 70600674
 function euler11(grid,n)

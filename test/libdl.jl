@@ -5,7 +5,7 @@
 dlls = Libdl.dllist()
 @test !isempty(dlls)
 @test length(dlls) > 3 # at a bare minimum, probably have some version of libstdc, libgcc, libjulia, ...
-if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
+if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     for dl in dlls
         if isfile(dl) && (Libdl.dlopen_e(dl) != C_NULL)
             @test Base.samefile(Libdl.dlpath(dl), dl)
@@ -22,11 +22,17 @@ end
 
 cd(dirname(@__FILE__)) do
 
-# Find the private library directory by finding the path of libjulia (or libjulia-debug, as the case may be)
+# Find the library directory by finding the path of libjulia (or libjulia-debug, as the case may be)
+# and then adding on /julia to that directory path to get the private library directory, if we need
+# to (where "need to" is defined as private_libdir/julia/libccalltest.dlext exists
 private_libdir = if ccall(:jl_is_debugbuild, Cint, ()) != 0
     dirname(abspath(Libdl.dlpath("libjulia-debug")))
 else
     dirname(abspath(Libdl.dlpath("libjulia")))
+end
+
+if isfile(joinpath(private_libdir,"julia","libccalltest."*Libdl.dlext))
+    private_libdir = joinpath(private_libdir, "julia")
 end
 
 @test !isempty(Libdl.find_library(["libccalltest"], [private_libdir]))
@@ -154,6 +160,12 @@ end
 # opening a library that does not exist throws an ErrorException
 @test_throws ErrorException Libdl.dlopen("./foo")
 
+# opening a versioned library that does not exist does not result in adding extension twice
+err = @test_throws ErrorException Libdl.dlopen("./foo.$(Libdl.dlext).0")
+@test !contains(err.value.msg, "foo.$(Libdl.dlext).0.$(Libdl.dlext)")
+err = @test_throws ErrorException Libdl.dlopen("./foo.$(Libdl.dlext).0.22.1")
+@test !contains(err.value.msg, "foo.$(Libdl.dlext).0.22.1.$(Libdl.dlext)")
+
 # test dlsym
 let dl = C_NULL
     try
@@ -169,6 +181,10 @@ let dl = C_NULL
     finally
         Libdl.dlclose(dl)
     end
+end
+
+if Sys.KERNEL in (:Linux, :FreeBSD)
+    ccall(:jl_read_sonames, Void, ())
 end
 
 end

@@ -32,7 +32,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <setjmp.h>
 #include <stdint.h>
 #include <stdarg.h>
 #include <assert.h>
@@ -59,7 +58,7 @@ JL_DLLEXPORT char * dirname(char *);
 #include <libgen.h>
 #endif
 
-static char *const builtin_names[] =
+static const char *const builtin_names[] =
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
       NULL, NULL, NULL, NULL,
       // predicates
@@ -117,7 +116,7 @@ static void free_readstate(fl_readstate_t *rs)
   fl_exception_context_t _ctx; int l__tr, l__ca; \
   _ctx.sp=fl_ctx->SP; _ctx.frame=fl_ctx->curr_frame; _ctx.rdst=fl_ctx->readstate; _ctx.prev=fl_ctx->exc_ctx; \
   _ctx.ngchnd = fl_ctx->N_GCHND; fl_ctx->exc_ctx = &_ctx;                                    \
-  if (!setjmp(_ctx.buf)) \
+  if (!fl_setjmp(_ctx.buf)) \
     for (l__tr=1; l__tr; l__tr=0, (void)(fl_ctx->exc_ctx=fl_ctx->exc_ctx->prev))
 
 #define FL_CATCH(fl_ctx)                                                \
@@ -156,17 +155,17 @@ void fl_raise(fl_context_t *fl_ctx, value_t e)
     fl_exception_context_t *thisctx = fl_ctx->exc_ctx;
     if (fl_ctx->exc_ctx->prev)   // don't throw past toplevel
         fl_ctx->exc_ctx = fl_ctx->exc_ctx->prev;
-    longjmp(thisctx->buf, 1);
+    fl_longjmp(thisctx->buf, 1);
 }
 
-static value_t make_error_msg(fl_context_t *fl_ctx, char *format, va_list args)
+static value_t make_error_msg(fl_context_t *fl_ctx, const char *format, va_list args)
 {
     char msgbuf[512];
     size_t len = vsnprintf(msgbuf, sizeof(msgbuf), format, args);
     return string_from_cstrn(fl_ctx, msgbuf, len);
 }
 
-void lerrorf(fl_context_t *fl_ctx, value_t e, char *format, ...)
+void lerrorf(fl_context_t *fl_ctx, value_t e, const char *format, ...)
 {
     va_list args;
     PUSH(fl_ctx, e);
@@ -186,12 +185,12 @@ void lerror(fl_context_t *fl_ctx, value_t e, const char *msg)
     fl_raise(fl_ctx, fl_list2(fl_ctx, e, m));
 }
 
-void type_error(fl_context_t *fl_ctx, char *fname, char *expected, value_t got)
+void type_error(fl_context_t *fl_ctx, const char *fname, const char *expected, value_t got)
 {
     fl_raise(fl_ctx, fl_listn(fl_ctx, 4, fl_ctx->TypeError, symbol(fl_ctx, fname), symbol(fl_ctx, expected), got));
 }
 
-void bounds_error(fl_context_t *fl_ctx, char *fname, value_t arr, value_t ind)
+void bounds_error(fl_context_t *fl_ctx, const char *fname, value_t arr, value_t ind)
 {
     fl_raise(fl_ctx, fl_listn(fl_ctx, 4, fl_ctx->BoundsError, symbol(fl_ctx, fname), arr, ind));
 }
@@ -200,7 +199,7 @@ void bounds_error(fl_context_t *fl_ctx, char *fname, value_t arr, value_t ind)
 
 #define isstring(v) fl_isstring(fl_ctx, v)
 #define SAFECAST_OP(type,ctype,cnvt)                                    \
-    ctype to##type(fl_context_t *fl_ctx, value_t v, char *fname)        \
+    ctype to##type(fl_context_t *fl_ctx, value_t v, const char *fname)  \
     {                                                                   \
         if (is##type(v))                                                \
             return (ctype)cnvt(v);                                      \
@@ -261,7 +260,7 @@ static symbol_t **symtab_lookup(symbol_t **ptree, const char *str)
     return ptree;
 }
 
-value_t symbol(fl_context_t *fl_ctx, char *str)
+value_t symbol(fl_context_t *fl_ctx, const char *str)
 {
     symbol_t **pnode = symtab_lookup(&fl_ctx->symtab, str);
     if (*pnode == NULL)
@@ -606,7 +605,7 @@ void gc(fl_context_t *fl_ctx, int mustgrow)
         free(&((void**)temp)[-1]);
         temp = next;
     }
-    fl_n_ctx->allocd = 0;
+    fl_ctx->n_allocd = 0;
 #else
 #ifdef VERBOSEGC
     printf("GC: found %d/%d live conses\n",
@@ -2305,6 +2304,7 @@ static const builtinspec_t core_builtin_info[] = {
 
 extern void builtins_init(fl_context_t *fl_ctx);
 extern void comparehash_init(fl_context_t *fl_ctx);
+extern void jl_charmap_init(fl_context_t *fl_ctx);
 
 static void lisp_init(fl_context_t *fl_ctx, size_t initial_heapsize)
 {
@@ -2337,6 +2337,7 @@ static void lisp_init(fl_context_t *fl_ctx, size_t initial_heapsize)
     fl_ctx->consflags = bitvector_new(fl_ctx->heapsize/sizeof(cons_t), 1);
     fl_print_init(fl_ctx);
     comparehash_init(fl_ctx);
+    jl_charmap_init(fl_ctx);
     fl_ctx->N_STACK = 262144;
     fl_ctx->Stack = (value_t*)malloc(fl_ctx->N_STACK*sizeof(value_t));
     CHECK_ALIGN8(fl_ctx->Stack);

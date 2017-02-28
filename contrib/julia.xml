@@ -38,11 +38,11 @@
       <item> for </item>
       <item> function </item>
       <item> if </item>
-      <item> immutable </item>
+      <item> struct </item>
       <item> let </item>
       <item> quote </item>
       <item> try </item>
-      <item> type </item>
+      <item> mutable struct </item>
       <item> while </item>
     </list>
     <list name="block_eb">
@@ -55,8 +55,8 @@
       <item> end </item>
     </list>
     <list name="keywords">
-      <item> abstract </item>
-      <item> bitstype </item>
+      <item> abstract type </item>
+      <item> primitive type </item>
       <item> break </item>
       <item> ccall </item>
       <item> const </item>
@@ -77,12 +77,12 @@
     <list name="types">
       <item> AbstractArray </item>
       <item> AbstractMatrix </item>
+      <item> AbstractRemoteRef </item>
       <item> AbstractSparseMatrix </item>
       <item> AbstractVector </item>
       <item> Any </item>
       <item> Array </item>
       <item> Associative </item>
-      <item> AsyncStream </item>
       <item> Bidiagonal </item>
       <item> BitArray </item>
       <item> BigFloat </item>
@@ -157,11 +157,9 @@
       <item> Regex </item>
       <item> RegexMatch </item>
       <item> RegexMatchIterator </item>
-      <item> RemoteRef </item>
       <item> RepString </item>
       <item> RevString </item>
       <item> Reverse </item>
-      <item> RopeString </item>
       <item> Schur </item>
       <item> Set </item>
       <item> Signed </item>
@@ -180,8 +178,8 @@
       <item> Symbol </item>
       <item> Symmetric </item>
       <item> SymTridiagonal </item>
+      <item> TCPSocket </item>
       <item> Task </item>
-      <item> TcpSocket </item>
       <item> TimeoutAsyncWork </item>
       <item> TmStruct </item>
       <item> Triangular </item>
@@ -281,7 +279,6 @@
       <item> C_NULL </item>
       <item> CPU_CORES </item>
       <item> DL_LOAD_PATH </item>
-      <item> OS_NAME </item>
       <item> ENDIAN_BOM </item>
       <item> ENV </item>
       <item> Inf </item>

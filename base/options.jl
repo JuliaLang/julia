@@ -1,13 +1,12 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # NOTE: This type needs to be kept in sync with jl_options in src/julia.h
-immutable JLOptions
+struct JLOptions
     quiet::Int8
     julia_home::Ptr{UInt8}
     julia_bin::Ptr{UInt8}
     eval::Ptr{UInt8}
     print::Ptr{UInt8}
-    postboot::Ptr{UInt8}
     load::Ptr{UInt8}
     image_file::Ptr{UInt8}
     cpu_target::Ptr{UInt8}
@@ -21,11 +20,13 @@ immutable JLOptions
     code_coverage::Int8
     malloc_log::Int8
     opt_level::Int8
+    debug_level::Int8
     check_bounds::Int8
     depwarn::Int8
     can_inline::Int8
+    polly::Int8
     fast_math::Int8
-    worker::Int8
+    worker::Ptr{UInt8}
     handle_signals::Int8
     use_precompiled::Int8
     use_compilecache::Int8
@@ -45,7 +46,7 @@ function show(io::IO, opt::JLOptions)
     for (i,f) in enumerate(fieldnames(opt))
         v = getfield(opt,f)
         if isa(v, Ptr{UInt8})
-            v = v != C_NULL ? bytestring(v) : ""
+            v = v != C_NULL ? unsafe_string(v) : ""
         end
         println(io, "  ", f, " = ", repr(v), i < nfields ? "," : "")
     end

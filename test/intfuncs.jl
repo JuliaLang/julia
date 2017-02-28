@@ -2,6 +2,7 @@
 
 # Int32 and Int64 take different code paths -- test both
 for T in (Int32, Int64)
+    @test gcd(T(3)) === T(3)
     @test gcd(T(3), T(5)) === T(1)
     @test gcd(T(3), T(15)) === T(3)
     @test gcd(T(0), T(15)) === T(15)
@@ -16,6 +17,8 @@ for T in (Int32, Int64)
     @test gcd(typemin(T), T(1)) === T(1)
     @test_throws OverflowError gcd(typemin(T), typemin(T))
 
+    @test lcm(T(0)) === T(0)
+    @test lcm(T(2)) === T(2)
     @test lcm(T(2), T(3)) === T(6)
     @test lcm(T(4), T(6)) === T(12)
     @test lcm(T(3), T(0)) === T(0)
@@ -35,10 +38,13 @@ end
 @test gcdx(5, -12) == (1, 5, 2)
 @test gcdx(-25, -4) == (1, -1, 6)
 
-@test invmod(6, 31) == 26
-@test invmod(-1, 3) == 2
-@test invmod(-1, -3) == 2
-@test_throws ErrorException invmod(0, 3)
+@test invmod(6, 31) === 26
+@test invmod(-1, 3) === 2
+@test invmod(1, -3) === -2
+@test invmod(-1, -3) === -1
+@test invmod(0x2, 0x3) === 0x2
+@test invmod(2, 0x3) === 2
+@test_throws DomainError invmod(0, 3)
 
 @test powermod(2, 3, 5) == 3
 @test powermod(2, 3, -5) == -2
@@ -79,6 +85,16 @@ end
 
 @test ndigits(146, -3) == 5
 
+let n = rand(Int)
+    @test ndigits(n) == ndigits(big(n)) == ndigits(n, 10)
+end
+@test ndigits(Int8(5)) == ndigits(5)
+
+# issue #19367
+@test ndigits(Int128(2)^64, 256) == 9
+
+@test bin('3') == "110011"
+@test bin('3',7) == "0110011"
 @test bin(3) == "11"
 @test bin(3, 2) == "11"
 @test bin(3, 3) == "011"
@@ -96,8 +112,11 @@ end
 
 @test base(2, 5, 7) == "0000101"
 
+@test bits(Int16(3)) == "0000000000000011"
+@test bits('3') == "00000000000000000000000000110011"
 @test bits(1035) == (Int == Int32 ? "00000000000000000000010000001011" :
     "0000000000000000000000000000000000000000000000000000010000001011")
+@test bits(Int128(3)) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
 
 @test digits(4, 2) == [0, 0, 1]
 @test digits(5, 3) == [2, 1]
@@ -109,8 +128,15 @@ end
 
 @test count_zeros(Int64(1)) == 63
 
+@test factorial(3) == 6
+@test factorial(Int8(3)) === 6
+@test_throws DomainError factorial(-3)
+@test_throws DomainError factorial(Int8(-3))
+
 @test isqrt(4) == 2
 @test isqrt(5) == 2
+@test isqrt(Int8(4)) === Int8(2)
+@test isqrt(Int8(5)) === Int8(2)
 # issue #4884
 @test isqrt(9223372030926249000) == 3037000498
 @test isqrt(typemax(Int128)) == parse(Int128,"13043817825332782212")

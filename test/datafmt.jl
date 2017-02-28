@@ -117,10 +117,10 @@ end
 
 let x = ["\"hello\"", "world\""], io = IOBuffer()
     writedlm(io, x, quotes=false)
-    @test takebuf_string(io) == "\"hello\"\nworld\"\n"
+    @test String(take!(io)) == "\"hello\"\nworld\"\n"
 
     writedlm(io, x)
-    @test takebuf_string(io) == "\"\"\"hello\"\"\"\n\"world\"\"\"\n"
+    @test String(take!(io)) == "\"\"\"hello\"\"\"\n\"world\"\"\"\n"
 end
 
 # test comments
@@ -210,7 +210,7 @@ let i18n_data = ["Origin (English)", "Name (English)", "Origin (Native)", "Name 
         "Yugoslavia (Cyrillic)", "Djordje Balasevic", "Југославија", "Ђорђе Балашевић",
         "Yugoslavia (Latin)", "Djordje Balasevic", "Jugoslavija", "Đorđe Balašević"]
 
-    i18n_arr = transpose(reshape(i18n_data, 4, Int(floor(length(i18n_data)/4))))
+    i18n_arr = permutedims(reshape(i18n_data, 4, Int(floor(length(i18n_data)/4))), [2, 1])
     i18n_buff = PipeBuffer()
     writedlm(i18n_buff, i18n_arr, ',')
     @test i18n_arr == readcsv(i18n_buff)
@@ -233,7 +233,7 @@ end
 for data in ["A B C", "A B C\n"]
     data,hdr = readdlm(IOBuffer(data), header=true)
     @test hdr == AbstractString["A" "B" "C"]
-    @test data == Array(Float64, 0, 3)
+    @test data == Array{Float64}(0, 3)
 end
 
 # fix #13179 parsing unicode lines with default delmiters
@@ -244,11 +244,11 @@ let data = "1 2 3"
     readdlm(IOBuffer(data), ' ', BigInt) == BigInt[1 2 3]
 end
 
-# test writemime
-@test sprint(io -> writemime(io, "text/csv", [1 2; 3 4])) == "1,2\n3,4\n"
+# test show with MIME types
+@test sprint(show, "text/csv", [1 2; 3 4]) == "1,2\n3,4\n"
 
-for writefunc in ((io,x) -> writemime(io, "text/csv", x),
-                  (io,x) -> invoke(writedlm, (IO, Any, Any), io, x, ","))
+for writefunc in ((io,x) -> show(io, "text/csv", x),
+                  (io,x) -> invoke(writedlm, Tuple{IO,Any,Any}, io, x, ","))
     # iterable collections of iterable rows:
     let x = [(1,2), (3,4)], io = IOBuffer()
         writefunc(io, x)
@@ -263,3 +263,12 @@ for writefunc in ((io,x) -> writemime(io, "text/csv", x),
     end
 end
 
+# Test that we can read a write protected file
+let fn = tempname()
+    open(fn, "w") do f
+        write(f, "Julia")
+    end
+    chmod(fn, 0o444)
+    readdlm(fn)[] == "Julia"
+    rm(fn)
+end

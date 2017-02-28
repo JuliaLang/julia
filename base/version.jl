@@ -2,7 +2,7 @@
 
 ## semantic version numbers (http://semver.org)
 
-immutable VersionNumber
+struct VersionNumber
     major::Int
     minor::Int
     patch::Int
@@ -54,11 +54,11 @@ function print(io::IO, v::VersionNumber)
     print(io, v.patch)
     if !isempty(v.prerelease)
         print(io, '-')
-        print_joined(io, v.prerelease,'.')
+        join(io, v.prerelease,'.')
     end
     if !isempty(v.build)
         print(io, '+')
-        print_joined(io, v.build,'.')
+        join(io, v.build,'.')
     end
 end
 show(io::IO, v::VersionNumber) = print(io, "v\"", v, "\"")
@@ -82,7 +82,7 @@ function split_idents(s::AbstractString)
     idents = split(s, '.')
     ntuple(length(idents)) do i
         ident = idents[i]
-        ismatch(r"^\d+$", ident) ? parse(Int, ident) : bytestring(ident)
+        ismatch(r"^\d+$", ident) ? parse(Int, ident) : String(ident)
     end
 end
 
@@ -96,8 +96,8 @@ function VersionNumber(v::AbstractString)
     if prerl !== nothing && !isempty(prerl) && prerl[1] == '-'
         prerl = prerl[2:end] # strip leading '-'
     end
-    prerl = prerl !== nothing ? split_idents(prerl) : minus == "-" ? ("",) : ()
-    build = build !== nothing ? split_idents(build) : plus  == "+" ? ("",) : ()
+    prerl = prerl !== nothing ? split_idents(prerl) : minus !== nothing ? ("",) : ()
+    build = build !== nothing ? split_idents(build) : plus  !== nothing ? ("",) : ()
     VersionNumber(major, minor, patch, prerl, build)
 end
 
@@ -199,13 +199,28 @@ end
 
 ## julia version info
 
-# Include build number if we've got at least some distance from a tag (e.g. a release)
-try
-    build_number = GIT_VERSION_INFO.build_number != 0 ? "+$(GIT_VERSION_INFO.build_number)" : ""
-    global const VERSION = convert(VersionNumber, "$(VERSION_STRING)$(build_number)")
+"""
+    VERSION
+
+A `VersionNumber` object describing which version of Julia is in use. For details see
+[Version Number Literals](@ref man-version-number-literals).
+"""
+const VERSION = try
+    ver = convert(VersionNumber, VERSION_STRING)
+    if !isempty(ver.prerelease)
+        if GIT_VERSION_INFO.build_number >= 0
+            ver = VersionNumber(ver.major, ver.minor, ver.patch, (ver.prerelease..., GIT_VERSION_INFO.build_number), ver.build)
+        else
+            println("WARNING: no build number found for pre-release version")
+            ver = VersionNumber(ver.major, ver.minor, ver.patch, (ver.prerelease..., "unknown"), ver.build)
+        end
+    elseif GIT_VERSION_INFO.build_number > 0
+        println("WARNING: ignoring non-zero build number for VERSION")
+    end
+    ver
 catch e
     println("while creating Base.VERSION, ignoring error $e")
-    global const VERSION = VersionNumber(0)
+    VersionNumber(0)
 end
 
 function banner(io::IO = STDOUT)
@@ -230,14 +245,15 @@ function banner(io::IO = STDOUT)
     commit_date = GIT_VERSION_INFO.date_string != "" ? " ($(GIT_VERSION_INFO.date_string))": ""
 
     if have_color
-        tx = "\033[0m\033[1m" # text
-        jl = "\033[0m\033[1m" # julia
-        d1 = "\033[34m" # first dot
-        d2 = "\033[31m" # second dot
-        d3 = "\033[32m" # third dot
-        d4 = "\033[35m" # fourth dot
+        c = text_colors
+        tx = c[:normal] # text
+        jl = c[:normal] # julia
+        d1 = c[:bold] * c[:light_blue]    # first dot
+        d2 = c[:bold] * c[:light_red]     # second dot
+        d3 = c[:bold] * c[:light_green]   # third dot
+        d4 = c[:bold] * c[:light_magenta] # fourth dot
 
-        print(io,"""\033[1m               $(d3)_$(tx)
+        print(io,"""               $(d3)_$(tx)
            $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  A fresh approach to technical computing
           $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: http://docs.julialang.org
            $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?help\" for help.
@@ -246,7 +262,7 @@ function banner(io::IO = STDOUT)
          $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
         $(jl)|__/$(tx)                   |  $(Sys.MACHINE)
 
-        \033[0m""")
+        """)
     else
         print(io,"""
                        _

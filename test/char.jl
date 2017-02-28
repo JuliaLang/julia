@@ -75,6 +75,8 @@ let
     #size(c::Char) = ()
     for x in testarrays
         @test size(x) == ()
+        @test_throws BoundsError size(x,0)
+        @test size(x,1) == 1
     end
 
     #ndims(c::Char) = 0
@@ -193,3 +195,6 @@ let
 end
 
 @test !isequal('x', 120)
+
+@test sprint(show, "text/plain", '$') == "'\$': ASCII/Unicode U+0024 (category Sc: Symbol, currency)"
+@test repr('$') == "'\$'"

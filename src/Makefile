@@ -6,7 +6,11 @@ include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/deps/llvm-ver.make
 
 override CFLAGS += $(JCFLAGS)
+ifeq ($(LLVM_VER),3.3)
+override CXXFLAGS += $(JCXXFLAGS) -std=c++11
+else
 override CXXFLAGS += $(JCXXFLAGS)
+endif
 override CPPFLAGS += $(JCPPFLAGS)
 
 # -I BUILDDIR comes before -I SRCDIR so that the user can override <options.h> on a per-build-directory basis
@@ -24,35 +28,77 @@ FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden 
 override CFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 endif
 
+FLAGS += -DJL_BUILD_ARCH='"$(ARCH)"'
+ifeq ($(OS),WINNT)
+FLAGS += -DJL_BUILD_UNAME='"NT"'
+else
+FLAGS += -DJL_BUILD_UNAME='"$(OS)"'
+endif
+
+ifeq ($(OS),FreeBSD)
+FLAGS += -I$(LOCALBASE)/include
+endif
+
 SRCS := \
-	jltypes gf typemap ast builtins module interpreter \
-	alloc dlload sys init task array dump toplevel jl_uv jlapi signal-handling \
+	jltypes gf typemap ast builtins module interpreter symbol \
+	dlload sys init task array dump toplevel jl_uv datatype \
 	simplevector APInt-C runtime_intrinsics runtime_ccall \
-	threadgroup threading stackwalk gc safepoint
+	threadgroup threading stackwalk gc gc-debug gc-pages method \
+	jlapi signal-handling safepoint jloptions timing subtype rtutils
+
+ifeq ($(USEMSVC), 1)
+SRCS += getopt
+endif
+
+LLVMLINK :=
 
 ifeq ($(JULIACODEGEN),LLVM)
-SRCS += codegen disasm debuginfo llvm-simdloop llvm-gcroot
+SRCS += codegen jitlayers disasm debuginfo llvm-simdloop llvm-ptls llvm-gcroot cgmemmgr
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 LLVM_LIBS := all
+ifeq ($(USE_POLLY),1)
+LLVMLINK += -lPolly -lPollyISL
+FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --src-root)/tools/polly/include
+FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --obj-root)/tools/polly/include
+FLAGS += -DUSE_POLLY
+ifeq ($(USE_POLLY_OPENMP),1)
+FLAGS += -fopenmp
+endif
+endif
 else
 SRCS += anticodegen
 LLVM_LIBS := support
 endif
 
-HEADERS := $(addprefix $(SRCDIR)/,julia.h julia_threads.h julia_internal.h options.h) $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(LIBUV_INC)/uv.h
+# headers are used for dependency tracking, while public headers will be part of the dist
+HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_threads.h julia_internal.h options.h timing.h)
+PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_threads.h)
+ifeq ($(USE_SYSTEM_LIBUV),0)
+ifeq ($(OS),WINNT)
+HEADERS += $(build_includedir)/tree.h
+PUBLIC_HEADERS += $(build_includedir)/tree.h
+endif
+HEADERS += $(LIBUV_INC)/uv.h
+PUBLIC_HEADERS += $(LIBUV_INC)/uv*
+endif
+PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLIC_HEADERS)))
 
 # In LLVM < 3.4, --ldflags includes both options and libraries, so use it both before and after --libs
 # In LLVM >= 3.4, --ldflags has only options, and --system-libs has the libraries.
 ifneq ($(USE_LLVM_SHLIB),1)
-LLVMLINK := $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --libs $(LLVM_LIBS)) $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
+LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --libs $(LLVM_LIBS)) $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
 else
 ifeq ($(LLVM_USE_CMAKE),1)
-LLVMLINK := $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM
+LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM
 else
-LLVMLINK := $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM-$(shell $(LLVM_CONFIG_HOST) --version)
-endif
+ifeq ($(OS),WINNT)
+LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM-$(LLVM_VER_SHORT)
+else
+LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM-$(shell $(LLVM_CONFIG_HOST) --version)
+endif # OS == WINNT
+endif # LLVM_USE_CMAKE == 1
 FLAGS += -DLLVM_SHLIB
-endif
+endif # USE_LLVM_SHLIB == 1
 
 COMMON_LIBS := -L$(build_shlibdir) -L$(build_libdir) $(LIBUV) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LLVMLINK) $(OSLIBS)
 DEBUG_LIBS := $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp-debug.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport-debug.a $(COMMON_LIBS)
@@ -66,6 +112,10 @@ SHIPFLAGS += $(FLAGS)
 # if not absolute, then relative to the directory of the julia executable
 SHIPFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.$(SHLIB_EXT)\""
 DEBUGFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys-debug.$(SHLIB_EXT)\""
+
+ifneq ($(CPUID_SPECIFIC_BINARIES), 0)
+override CPPFLAGS += "-DCPUID_SPECIFIC_BINARIES=1"
+endif
 
 FLISP_EXECUTABLE_debug := $(BUILDDIR)/flisp/flisp-debug
 FLISP_EXECUTABLE_release := $(BUILDDIR)/flisp/flisp
@@ -95,16 +145,43 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONF
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(shell $(LLVM_CONFIG_HOST) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
+# public header rules
+$(eval $(call dir_target,$(build_includedir)/julia))
+define public_header_target
+TARGET = $(build_includedir)/julia/$(notdir $(1))
+$$(TARGET): $(1) | $(build_includedir)/julia
+	$(INSTALL_F) $$^ $(build_includedir)/julia/
+endef
+$(foreach HEADER,$(PUBLIC_HEADERS),$(eval $(call public_header_target,$(HEADER))))
+
 libccalltest: $(build_shlibdir)/libccalltest.$(SHLIB_EXT)
+
+ifeq ($(OS), Linux)
+JULIA_SPLITDEBUG := 1
+else
+JULIA_SPLITDEBUG := 0
+endif
 $(build_shlibdir)/libccalltest.$(SHLIB_EXT): $(SRCDIR)/ccalltest.c
-	@$(call PRINT_CC, $(CC) $(CFLAGS) $(CPPFLAGS) $(DEBUGFLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS))
+	@$(call PRINT_CC, $(CC) $(CFLAGS) $(CPPFLAGS) $(DEBUGFLAGS) -O3 $< $(fPIC) -shared -o $@.tmp $(LDFLAGS))
+ifeq ($(JULIA_SPLITDEBUG),1)
+	@# Create split debug info file for libccalltest stacktraces test
+	@# packagers should disable this by setting JULIA_SPLITDEBUG=0 if this is already done by your build system
+	$(OBJCOPY) --only-keep-debug $@.tmp $@.debug
+	$(OBJCOPY) --strip-debug $@.tmp
+	$(OBJCOPY) --add-gnu-debuglink=$@.debug $@.tmp
+endif
+	@## clang should have made the dSYM split-debug directory,
+	@## but we are intentionally not going to give it the correct name
+	@## because we want to test the non-default debug configuration
+	@#rm -r $@.dSYM && mv $@.tmp.dSYM $@.dSYM
+	mv $@.tmp $@
 
 julia_flisp.boot.inc.phony: $(BUILDDIR)/julia_flisp.boot.inc
 
 $(BUILDDIR)/julia_flisp.boot.inc: $(BUILDDIR)/julia_flisp.boot $(FLISP_EXECUTABLE_release)
 	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE_release)) $(call cygpath_w,$(SRCDIR)/bin2hex.scm) < $< > $@)
 
-$(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm \
+$(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm flisp/aliases.scm flisp/profile.scm \
 		julia-parser.scm julia-syntax.scm match.scm utils.scm ast.scm macroexpand.scm mk_julia_flisp_boot.scm) \
 		$(FLISP_EXECUTABLE_release)
 	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE_release)) \
@@ -112,12 +189,15 @@ $(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm \
 
 # additional dependency links
 $(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
-$(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,intrinsics.cpp jitlayers.cpp intrinsics.h codegen_internal.h cgutils.cpp ccall.cpp abi_*.cpp)
+$(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,intrinsics.cpp jitlayers.h intrinsics.h codegen_internal.h cgutils.cpp ccall.cpp abi_*.cpp)
 $(BUILDDIR)/anticodegen.o $(BUILDDIR)/anticodegen.dbg.obj: $(SRCDIR)/intrinsics.h
 $(BUILDDIR)/debuginfo.o $(BUILDDIR)/debuginfo.dbg.obj: $(SRCDIR)/codegen_internal.h
 $(BUILDDIR)/disasm.o $(BUILDDIR)/disasm.dbg.obj: $(SRCDIR)/codegen_internal.h
+$(BUILDDIR)/jitlayers.o $(BUILDDIR)/jitlayers.dbg.obj: $(SRCDIR)/jitlayers.h
 $(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: $(SRCDIR)/table.c
-$(BUILDDIR)/gc.o $(BUILDDIR)/gc.dbg.obj: $(SRCDIR)/gc-debug.c
+$(BUILDDIR)/gc.o $(BUILDDIR)/gc.dbg.obj: $(SRCDIR)/gc.h
+$(BUILDDIR)/gc-debug.o $(BUILDDIR)/gc-debug.dbg.obj: $(SRCDIR)/gc.h
+$(BUILDDIR)/gc-pages.o $(BUILDDIR)/gc-pages.dbg.obj: $(SRCDIR)/gc.h
 $(BUILDDIR)/signal-handling.o $(BUILDDIR)/signal-handling.dbg.obj: $(addprefix $(SRCDIR)/,signals-*.c)
 $(BUILDDIR)/dump.o $(BUILDDIR)/dump.dbg.obj: $(addprefix $(SRCDIR)/,common_symbols1.inc common_symbols2.inc)
 $(addprefix $(BUILDDIR)/,threading.o threading.dbg.obj gc.o gc.dbg.obj init.c init.dbg.obj task.o task.dbg.obj): $(addprefix $(SRCDIR)/,threading.h threadgroup.h)
@@ -160,34 +240,61 @@ else
 CXXLD = $(LD) -dll -export:jl_setjmp -export:jl_longjmp
 endif
 
-$(build_shlibdir)/libjulia-debug.$(SHLIB_EXT): $(SRCDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV)
-	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(DEBUGFLAGS) $(DOBJS) $(RPATH_ORIGIN) -o $@ $(LDFLAGS) $(JLIBLDFLAGS) $(DEBUG_LIBS))
+# If we're on windows, don't do versioned shared libraries.  If we're on OSX,
+# put the version number before the .dylib.  Otherwise, put it after.
+ifeq ($(OS), WINNT)
+JL_MAJOR_MINOR_SHLIB_EXT := $(SHLIB_EXT)
+else
+ifeq ($(OS), Darwin)
+JL_MAJOR_MINOR_SHLIB_EXT := $(SOMAJOR).$(SOMINOR).$(SHLIB_EXT)
+JL_MAJOR_SHLIB_EXT := $(SOMAJOR).$(SHLIB_EXT)
+else
+JL_MAJOR_MINOR_SHLIB_EXT := $(SHLIB_EXT).$(SOMAJOR).$(SOMINOR)
+JL_MAJOR_SHLIB_EXT := $(SHLIB_EXT).$(SOMAJOR)
+endif
+endif
+
+ifeq ($(SHLIB_EXT), so)
+  SONAME       := -Wl,-soname=libjulia.$(JL_MAJOR_SHLIB_EXT)
+  SONAME_DEBUG := -Wl,-soname=libjulia-debug.$(JL_MAJOR_SHLIB_EXT)
+else
+  SONAME       :=
+  SONAME_DEBUG :=
+endif
+
+$(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV)
+	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(DEBUGFLAGS) $(DOBJS) $(RPATH_LIB) -o $@ $(LDFLAGS) $(JLIBLDFLAGS) $(DEBUG_LIBS) $(SONAME_DEBUG))
 	$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@
+ifneq ($(OS), WINNT)
+	@ln -sf libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_SHLIB_EXT)
+	@ln -sf libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT)
+endif
 	$(DSYMUTIL) $@
+
 $(BUILDDIR)/libjulia-debug.a: $(SRCDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a
 	rm -f $@
 	@$(call PRINT_LINK, ar -rcs $@ $(DOBJS))
-libjulia-debug: $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT)
 
-ifeq ($(SHLIB_EXT), so)
-  SONAME := -Wl,-soname=libjulia.so
-else
-  SONAME :=
-endif
+libjulia-debug: $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT) $(PUBLIC_HEADER_TARGETS)
 
-$(build_shlibdir)/libjulia.$(SHLIB_EXT): $(SRCDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV)
-	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(SHIPFLAGS) $(OBJS) $(RPATH_ORIGIN) -o $@ $(LDFLAGS) $(JLIBLDFLAGS) $(RELEASE_LIBS) $(SONAME)) $(CXXLDFLAGS)
+$(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV)
+	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(SHIPFLAGS) $(OBJS) $(RPATH_LIB) -o $@ $(LDFLAGS) $(JLIBLDFLAGS) $(RELEASE_LIBS) $(SONAME))
 	$(INSTALL_NAME_CMD)libjulia.$(SHLIB_EXT) $@
+ifneq ($(OS), WINNT)
+	@ln -sf libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia.$(JL_MAJOR_SHLIB_EXT)
+	@ln -sf libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia.$(SHLIB_EXT)
+endif
 	$(DSYMUTIL) $@
+
 $(BUILDDIR)/libjulia.a: julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a
 	rm -f $@
 	@$(call PRINT_LINK, ar -rcs $@ $(OBJS))
-libjulia-release: $(build_shlibdir)/libjulia.$(SHLIB_EXT)
+libjulia-release: $(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT) $(PUBLIC_HEADER_TARGETS)
 
 clean:
 	-rm -fr $(build_shlibdir)/libjulia* $(build_shlibdir)/libccalltest*
 	-rm -f $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/julia_flisp.boot.inc
-	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a
+	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.dwo $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a
 	-rm -f $(BUILDDIR)/julia_version.h
 
 clean-flisp:

@@ -393,6 +393,5 @@ end
 for f in (:log,:log1p)
     @eval begin
         ($f)(x::Real) = ($f)(float(x))
-        @vectorize_1arg Number $f
     end
 end

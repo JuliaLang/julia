@@ -21,8 +21,9 @@ JL_DLLEXPORT jl_svec_t *jl_svec(size_t n, ...)
 
 JL_DLLEXPORT jl_svec_t *jl_svec1(void *a)
 {
-    jl_svec_t *v = (jl_svec_t*)jl_gc_alloc_2w();
-    jl_set_typeof(v, jl_simplevector_type);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_svec_t *v = (jl_svec_t*)jl_gc_alloc(ptls, sizeof(void*) * 2,
+                                           jl_simplevector_type);
     jl_svec_set_len_unsafe(v, 1);
     jl_svecset(v, 0, a);
     return v;
@@ -30,8 +31,9 @@ JL_DLLEXPORT jl_svec_t *jl_svec1(void *a)
 
 JL_DLLEXPORT jl_svec_t *jl_svec2(void *a, void *b)
 {
-    jl_svec_t *v = (jl_svec_t*)jl_gc_alloc_3w();
-    jl_set_typeof(v, jl_simplevector_type);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_svec_t *v = (jl_svec_t*)jl_gc_alloc(ptls, sizeof(void*) * 3,
+                                           jl_simplevector_type);
     jl_svec_set_len_unsafe(v, 2);
     jl_svecset(v, 0, a);
     jl_svecset(v, 1, b);
@@ -40,8 +42,10 @@ JL_DLLEXPORT jl_svec_t *jl_svec2(void *a, void *b)
 
 JL_DLLEXPORT jl_svec_t *jl_alloc_svec_uninit(size_t n)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (n == 0) return jl_emptysvec;
-    jl_svec_t *jv = (jl_svec_t*)newobj((jl_value_t*)jl_simplevector_type, n+1);
+    jl_svec_t *jv = (jl_svec_t*)jl_gc_alloc(ptls, (n + 1) * sizeof(void*),
+                                            jl_simplevector_type);
     jl_svec_set_len_unsafe(jv, n);
     return jv;
 }

@@ -47,8 +47,8 @@ function test_threaded_atomic_minmax{T}(m::T,n::T)
     mid = m + (n-m)>>1
     x = Atomic{T}(mid)
     y = Atomic{T}(mid)
-    oldx = Array(T,n-m+1)
-    oldy = Array(T,n-m+1)
+    oldx = Array{T}(n-m+1)
+    oldy = Array{T}(n-m+1)
     @threads for i = m:n
         oldx[i-m+1] = atomic_min!(x, T(i))
         oldy[i-m+1] = atomic_max!(y, T(i))
@@ -64,37 +64,70 @@ test_threaded_atomic_minmax(Int16(-5000),Int16(5000))
 test_threaded_atomic_minmax(UInt16(27000),UInt16(37000))
 
 function threaded_add_locked{LockT}(::Type{LockT}, x, n)
-    lock = LockT()
+    critical = LockT()
     @threads for i = 1:n
-        lock!(lock)
+        @test lock(critical) === nothing
+        @test islocked(critical)
         x = x + 1
-        unlock!(lock)
+        @test unlock(critical) === nothing
     end
+    @test !islocked(critical)
+    nentered = 0
+    nfailed = Atomic()
+    @threads for i = 1:n
+        if trylock(critical)
+            @test islocked(critical)
+            nentered += 1
+            @test unlock(critical) === nothing
+        else
+            atomic_add!(nfailed, 1)
+        end
+    end
+    @test 0 < nentered <= n
+    @test nentered + nfailed[] == n
+    @test !islocked(critical)
     return x
 end
 
 @test threaded_add_locked(SpinLock, 0, 10000) == 10000
-@test threaded_add_locked(Threads.RecursiveSpinLock, 0, 10000) == 10000
+@test threaded_add_locked(RecursiveSpinLock, 0, 10000) == 10000
 @test threaded_add_locked(Mutex, 0, 10000) == 10000
 
 # Check if the recursive lock can be locked and unlocked correctly.
-let lock = Threads.RecursiveSpinLock()
-    @test lock!(lock) == 0
-    @test lock!(lock) == 0
-    @test unlock!(lock) == 0
-    @test unlock!(lock) == 0
-    @test unlock!(lock) == 1
+let critical = RecursiveSpinLock()
+    @test !islocked(critical)
+    @test_throws AssertionError unlock(critical)
+    @test lock(critical) === nothing
+    @test islocked(critical)
+    @test lock(critical) === nothing
+    @test trylock(critical) == true
+    @test islocked(critical)
+    @test unlock(critical) === nothing
+    @test islocked(critical)
+    @test unlock(critical) === nothing
+    @test islocked(critical)
+    @test unlock(critical) === nothing
+    @test !islocked(critical)
+    @test_throws AssertionError unlock(critical)
+    @test trylock(critical) == true
+    @test islocked(critical)
+    @test unlock(critical) === nothing
+    @test !islocked(critical)
+    @test_throws AssertionError unlock(critical)
+    @test !islocked(critical)
 end
 
 # Make sure doing a GC while holding a lock doesn't cause dead lock
 # PR 14190. (This is only meaningful for threading)
 function threaded_gc_locked{LockT}(::Type{LockT})
-    lock = LockT()
+    critical = LockT()
     @threads for i = 1:20
-        lock!(lock)
+        @test lock(critical) === nothing
+        @test islocked(critical)
         gc(false)
-        unlock!(lock)
+        @test unlock(critical) === nothing
     end
+    @test !islocked(critical)
 end
 
 threaded_gc_locked(SpinLock)
@@ -111,7 +144,7 @@ end
 
 @threads for i in 1:100
     for j in 1:100
-        eval(M14726, :(module_var14726 = $j))
+        @eval M14726 module_var14726 = $j
     end
 end
 @test isdefined(:orig_curmodule14726)
@@ -129,7 +162,7 @@ module M14726_2
 using Base.Test
 using Base.Threads
 @threads for i in 1:100
-    # Make sure current module is the same with the one on the thread that
+    # Make sure current module is the same as the one on the thread that
     # pushes the work onto the threads.
     # The @test might not be particularly meaningful currently since the
     # thread infrastructures swallows the error. (See also above)
@@ -143,7 +176,7 @@ end
 @test_throws TypeError Atomic{Complex128}
 
 # Test atomic memory ordering with load/store
-type CommBuf
+mutable struct CommBuf
     var1::Atomic{Int}
     var2::Atomic{Int}
     correct_write::Bool
@@ -188,7 +221,7 @@ test_atomic()
 
 # Test ordering with fences using Peterson's algorithm
 # Example adapted from <https://en.wikipedia.org/wiki/Peterson%27s_algorithm>
-type Peterson
+mutable struct Peterson
     # State for Peterson's algorithm
     flag::Vector{Atomic{Int}}
     turn::Atomic{Int}
@@ -240,7 +273,10 @@ let atomic_types = [Int8, Int16, Int32, Int64, Int128,
                     Float16, Float32, Float64]
     # Temporarily omit 128-bit types on 32bit x86
     # 128-bit atomics do not exist on AArch32.
-    if Base.ARCH === :i686 || startswith(string(Base.ARCH), "arm")
+    # And we don't support them yet on power, because they are lowered
+    # to `__sync_lock_test_and_set_16`.
+    if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm") ||
+       Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
         filter!(T -> sizeof(T)<=8, atomic_types)
     end
     for T in atomic_types
@@ -311,35 +347,57 @@ for T in (Int32, Int64, Float32, Float64)
     @test varmax[] === T(maximum(1:nloops))
     @test varmin[] === T(0)
 end
-
-let async = Base.AsyncCondition(), t
-    c = Condition()
-    task = schedule(Task(function()
+for period in (0.06, Dates.Millisecond(60))
+    let async = Base.AsyncCondition(), t
+        c = Condition()
+        task = schedule(Task(function()
+            notify(c)
+            wait(c)
+            t = Timer(period)
+            wait(t)
+            ccall(:uv_async_send, Void, (Ptr{Void},), async)
+            ccall(:uv_async_send, Void, (Ptr{Void},), async)
+            wait(c)
+            sleep(period)
+            ccall(:uv_async_send, Void, (Ptr{Void},), async)
+            ccall(:uv_async_send, Void, (Ptr{Void},), async)
+        end))
+        wait(c)
         notify(c)
-        wait(c)
-        t = Timer(0.06)
-        wait(t)
-        ccall(:uv_async_send, Void, (Ptr{Void},), async)
-        ccall(:uv_async_send, Void, (Ptr{Void},), async)
-        wait(c)
-        sleep(0.06)
-        ccall(:uv_async_send, Void, (Ptr{Void},), async)
-        ccall(:uv_async_send, Void, (Ptr{Void},), async)
-    end))
-    wait(c)
-    notify(c)
-    delay1 = @elapsed wait(async)
-    notify(c)
-    delay2 = @elapsed wait(async)
-    @test istaskdone(task)
-    @test delay1 > 0.05
-    @test delay2 > 0.05
-    @test isopen(async)
-    @test !isopen(t)
-    close(t)
-    close(async)
-    @test_throws EOFError wait(async)
-    @test !isopen(async)
-    @test_throws EOFError wait(t)
-    @test_throws EOFError wait(async)
+        delay1 = @elapsed wait(async)
+        notify(c)
+        delay2 = @elapsed wait(async)
+        @test istaskdone(task)
+        @test delay1 > 0.05
+        @test delay2 > 0.05
+        @test isopen(async)
+        @test !isopen(t)
+        close(t)
+        close(async)
+        @test_throws EOFError wait(async)
+        @test !isopen(async)
+        @test_throws EOFError wait(t)
+        @test_throws EOFError wait(async)
+    end
 end
+
+# Compare the two ways of checking if threading is enabled.
+# `jl_tls_states` should only be defined on non-threading build.
+if ccall(:jl_threading_enabled, Cint, ()) == 0
+    @test nthreads() == 1
+    cglobal(:jl_tls_states) != C_NULL
+else
+    @test_throws ErrorException cglobal(:jl_tls_states)
+end
+
+# Thread safety of `jl_load_and_lookup`.
+function test_load_and_lookup_18020(n)
+    @threads for i in 1:n
+        try
+            ccall(:jl_load_and_lookup,
+                  Ptr{Void}, (Cstring, Cstring, Ref{Ptr{Void}}),
+                  "$i", :f, C_NULL)
+        end
+    end
+end
+test_load_and_lookup_18020(10000)

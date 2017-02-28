@@ -20,7 +20,7 @@ const WHITE_TERRITORY = 3
 const BLACK_TERRITORY = 4
 const UNKNOWN = 5
 
-type XorRand
+mutable struct XorRand
   state::UInt32
 end
 
@@ -29,9 +29,9 @@ function xor_srand(rand::XorRand, seed::UInt32)
 end
 
 function xor_randn(rand::XorRand, n::UInt32)
-  rand.state $= rand.state << 13
-  rand.state $= rand.state >> 17
-  rand.state $= rand.state << 5
+  rand.state ⊻= rand.state << 13
+  rand.state ⊻= rand.state >> 17
+  rand.state ⊻= rand.state << 5
   rand.state % n
 end
 
@@ -42,7 +42,7 @@ const deltai = (-1, 1, 0, 0)
 const deltaj = (0, 0, -1, 1)
 neighbor(i::Int, j::Int, k::Int) = (i + deltai[k], j + deltaj[k])
 
-type Board
+mutable struct Board
   size::Int
   komi::Float64
 
@@ -269,7 +269,7 @@ function play_move(board::Board, i::Int, j::Int, color::Int)
     # may happen if the same string neighbors the new stone in more
     # than one direction.
     if on_board(board, ai, aj) && board[pos2] == color && !same_string(board, pos, pos2)
-      # The strings are linked together simply by swapping the the
+      # The strings are linked together simply by swapping the
       # next_stone pointers.
       (board.next_stone[pos], board.next_stone[pos2]) = (board.next_stone[pos2], board.next_stone[pos])
     end
@@ -403,7 +403,7 @@ function compute_final_status(board::Board)
         # Set the final status of the pos vertex to either black
         # or white territory.
         if board.final_status[i, j] == UNKNOWN
-          if (board.final_status[ai, aj] == ALIVE) $ (board[ai, aj] == WHITE)
+          if (board.final_status[ai, aj] == ALIVE) ⊻ (board[ai, aj] == WHITE)
             board.final_status[i, j] = BLACK_TERRITORY
           else
             board.final_status[i, j] = WHITE_TERRITORY
@@ -425,7 +425,7 @@ function compute_score(board::Board)
       score -= 1.0
     elseif status == WHITE_TERRITORY
       score += 1.0
-    elseif (status == ALIVE) $ (board[i, j] == WHITE)
+    elseif (status == ALIVE) ⊻ (board[i, j] == WHITE)
       score -= 1.0
     else
       score += 1.0
@@ -478,7 +478,7 @@ end
 function main(args)
   n = 10
   if length(args) > 0
-    n = parseint(args[1])
+    n = parse(Int, args[1])
   end
   @time benchmark(n)
 end

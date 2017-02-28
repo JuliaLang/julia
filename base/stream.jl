@@ -1,14 +1,14 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 import .Libc: RawFD, dup
-@windows_only import .Libc: WindowsRawSocket
+if is_windows()
+    import .Libc: WindowsRawSocket
+end
 
 ## types ##
-typealias Callback Union{Function,Bool}
-
-abstract IOServer
-abstract LibuvServer <: IOServer
-abstract LibuvStream <: IO
+abstract type IOServer end
+abstract type LibuvServer <: IOServer end
+abstract type LibuvStream <: IO end
 
 # IO
 # +- AbstractIOBuffer{T<:AbstractArray{UInt8,1}} (not exported)
@@ -54,7 +54,7 @@ function eof(s::LibuvStream)
         return nb_available(s) <= 0
     end
     wait_readnb(s,1)
-    !isopen(s) && nb_available(s) <= 0
+    return !isopen(s) && nb_available(s) <= 0
 end
 
 const DEFAULT_READ_BUFFER_SZ = 10485760           # 10 MB
@@ -67,6 +67,7 @@ const StatusActive      = 4 # handle is listening for read/write/connect events
 const StatusClosing     = 5 # handle is closing / being closed
 const StatusClosed      = 6 # handle is closed
 const StatusEOF         = 7 # handle is a TTY that has seen an EOF event
+const StatusPaused      = 8 # handle is Active, but not consuming events, and will transition to Open if it receives an event
 function uv_status_string(x)
     s = x.status
     if x.handle == C_NULL
@@ -86,6 +87,8 @@ function uv_status_string(x)
         return "open"
     elseif s == StatusActive
         return "active"
+    elseif s == StatusPaused
+        return "paused"
     elseif s == StatusClosing
         return "closing"
     elseif s == StatusClosed
@@ -96,105 +99,103 @@ function uv_status_string(x)
     return "invalid status"
 end
 
-type PipeEndpoint <: LibuvStream
+mutable struct PipeEndpoint <: LibuvStream
     handle::Ptr{Void}
     status::Int
     buffer::IOBuffer
-    line_buffered::Bool
-    readcb::Callback
     readnotify::Condition
-    ccb::Callback
     connectnotify::Condition
-    closecb::Callback
     closenotify::Condition
     sendbuf::Nullable{IOBuffer}
     lock::ReentrantLock
     throttle::Int
 
-    PipeEndpoint(handle::Ptr{Void} = C_NULL) = new(
-        handle,
-        StatusUninit,
-        PipeBuffer(),
-        true,
-        false,Condition(),
-        false,Condition(),
-        false,Condition(),
-        nothing, ReentrantLock(),
-        DEFAULT_READ_BUFFER_SZ)
-end
-
-type PipeServer <: LibuvServer
-    handle::Ptr{Void}
-    status::Int
-    ccb::Callback
-    connectnotify::Condition
-    closecb::Callback
-    closenotify::Condition
-    PipeServer(handle) = new(
-        handle,
-        StatusUninit,
-        false,Condition(),
-        false,Condition())
-end
-
-typealias LibuvPipe Union{PipeEndpoint, PipeServer}
-
-function PipeServer()
-    handle = Libc.malloc(_sizeof_uv_named_pipe)
-    try
-        ret = PipeServer(handle)
-        associate_julia_struct(ret.handle,ret)
-        finalizer(ret,uvfinalize)
-        return init_pipe!(ret;readable=true)
-    catch
-        Libc.free(handle)
-        rethrow()
+    PipeEndpoint() = PipeEndpoint(Libc.malloc(_sizeof_uv_named_pipe), StatusUninit)
+    function PipeEndpoint(handle::Ptr{Void}, status)
+        p = new(handle,
+                status,
+                PipeBuffer(),
+                Condition(),
+                Condition(),
+                Condition(),
+                nothing,
+                ReentrantLock(),
+                DEFAULT_READ_BUFFER_SZ)
+        associate_julia_struct(handle, p)
+        finalizer(p, uvfinalize)
+        return p
     end
 end
 
-type TTY <: LibuvStream
+mutable struct PipeServer <: LibuvServer
     handle::Ptr{Void}
     status::Int
-    line_buffered::Bool
+    connectnotify::Condition
+    closenotify::Condition
+    function PipeServer(handle::Ptr{Void}, status)
+        p = new(handle,
+                status,
+                Condition(),
+                Condition())
+        associate_julia_struct(p.handle, p)
+        finalizer(p, uvfinalize)
+        return p
+    end
+end
+
+const LibuvPipe = Union{PipeEndpoint, PipeServer}
+
+function PipeServer()
+    p = PipeServer(Libc.malloc(_sizeof_uv_named_pipe), StatusUninit)
+    return init_pipe!(p; readable=true)
+end
+
+mutable struct TTY <: LibuvStream
+    handle::Ptr{Void}
+    status::Int
     buffer::IOBuffer
-    readcb::Callback
     readnotify::Condition
-    closecb::Callback
     closenotify::Condition
     sendbuf::Nullable{IOBuffer}
     lock::ReentrantLock
     throttle::Int
-    @windows_only ispty::Bool
-    function TTY(handle)
+    @static if is_windows(); ispty::Bool; end
+    TTY() = TTY(Libc.malloc(_sizeof_uv_tty), StatusUninit)
+    function TTY(handle::Ptr{Void}, status)
         tty = new(
             handle,
-            StatusUninit,
-            true,
+            status,
             PipeBuffer(),
-            false,Condition(),
-            false,Condition(),
+            Condition(),
+            Condition(),
             nothing, ReentrantLock(),
             DEFAULT_READ_BUFFER_SZ)
-        @windows_only tty.ispty = ccall(:jl_ispty, Cint, (Ptr{Void},), handle)!=0
-        tty
+        associate_julia_struct(handle, tty)
+        finalizer(tty, uvfinalize)
+        @static if is_windows()
+            tty.ispty = ccall(:jl_ispty, Cint, (Ptr{Void},), handle) != 0
+        end
+        return tty
     end
 end
 
 function TTY(fd::RawFD; readable::Bool = false)
-    handle = Libc.malloc(_sizeof_uv_tty)
-    ret = TTY(handle)
-    associate_julia_struct(handle,ret)
-    finalizer(ret,uvfinalize)
+    tty = TTY()
     # This needs to go after associate_julia_struct so that there
     # is no garbage in the ->data field
-    uv_error("TTY",ccall(:uv_tty_init,Int32,(Ptr{Void},Ptr{Void},Int32,Int32),eventloop(),handle,fd.fd,readable))
-    ret.status = StatusOpen
-    ret.line_buffered = false
-    ret
+    err = ccall(:uv_tty_init, Int32, (Ptr{Void}, Ptr{Void}, Int32, Int32),
+            eventloop(), tty.handle, fd.fd, readable)
+    uv_error("TTY", err)
+    tty.status = StatusOpen
+    return tty
 end
 
-show(io::IO,stream::LibuvServer) = print(io, typeof(stream), "(", uv_status_string(stream), ")")
-show(io::IO, stream::LibuvStream) = print(io, typeof(stream), "(", uv_status_string(stream), ", ",
+show(io::IO, stream::LibuvServer) = print(io, typeof(stream), "(",
+    _fd(stream), " ",
+    uv_status_string(stream), ")")
+show(io::IO, stream::LibuvStream) = print(io, typeof(stream), "(",
+    _fd(stream), " ",
+    uv_status_string(stream), ", ",
     nb_available(stream.buffer)," bytes waiting)")
 
 # Shared LibuvStream object interface
@@ -226,18 +227,14 @@ function init_stdio(handle::Ptr{Void})
 #       return File(RawFD(ccall(:jl_uv_file_handle,Int32,(Ptr{Void},),handle)))
     else
         if t == UV_TTY
-            ret = TTY(handle)
+            ret = TTY(handle, StatusOpen)
         elseif t == UV_TCP
-            ret = TCPSocket(handle)
+            ret = TCPSocket(handle, StatusOpen)
         elseif t == UV_NAMED_PIPE
-            ret = PipeEndpoint(handle)
+            ret = PipeEndpoint(handle, StatusOpen)
         else
             throw(ArgumentError("invalid stdio type: $t"))
         end
-        ret.status = StatusOpen
-        ret.line_buffered = false
-        associate_julia_struct(ret.handle, ret)
-        finalizer(ret, uvfinalize)
         return ret
     end
 end
@@ -299,11 +296,11 @@ function wait_readnb(x::LibuvStream, nb::Int)
             wait(x.readnotify)
         end
     finally
-        if oldthrottle <= x.throttle <= nb
-            x.throttle = oldthrottle
-        end
         if isempty(x.readnotify.waitq)
             stop_reading(x) # stop reading iff there are currently no other read clients of the stream
+        end
+        if oldthrottle <= x.throttle <= nb
+            x.throttle = oldthrottle
         end
         unpreserve_handle(x)
     end
@@ -318,14 +315,35 @@ function wait_close(x::Union{LibuvStream, LibuvServer})
 end
 
 function close(stream::Union{LibuvStream, LibuvServer})
-    if isopen(stream) && stream.status != StatusClosing
-        ccall(:jl_close_uv,Void, (Ptr{Void},), stream.handle)
-        stream.status = StatusClosing
+    if stream.status == StatusInit
+        ccall(:jl_forceclose_uv, Void, (Ptr{Void},), stream.handle)
+    elseif isopen(stream)
+        if stream.status != StatusClosing
+            ccall(:jl_close_uv, Void, (Ptr{Void},), stream.handle)
+            stream.status = StatusClosing
+        end
+        if uv_handle_data(stream) != C_NULL
+            stream_wait(stream, stream.closenotify)
+        end
     end
     nothing
 end
 
-@windows_only begin
+function uvfinalize(uv::Union{LibuvStream, LibuvServer})
+    if uv.handle != C_NULL
+        disassociate_julia_struct(uv.handle) # not going to call the usual close hooks
+        if uv.status != StatusUninit
+            close(uv)
+        else
+            Libc.free(uv.handle)
+        end
+        uv.status = StatusClosed
+        uv.handle = C_NULL
+    end
+    nothing
+end
+
+if is_windows()
     ispty(s::TTY) = s.ispty
     ispty(s::IO) = false
 end
@@ -340,15 +358,17 @@ function displaysize(io::TTY)
     local h::Int, w::Int
     default_size = displaysize()
 
-    @windows_only if ispty(io)
-        # io is actually a libuv pipe but a cygwin/msys2 pty
-        try
-            h, w = map(x -> parse(Int, x), split(readstring(open(Base.Cmd(String["stty", "size"]), "r", io)[1])))
-            h > 0 || (h = default_size[1])
-            w > 0 || (w = default_size[2])
-            return h, w
-        catch
-            return default_size
+    @static if is_windows()
+        if ispty(io)
+            # io is actually a libuv pipe but a cygwin/msys2 pty
+            try
+                h, w = map(x -> parse(Int, x), split(readstring(open(Base.Cmd(String["stty", "size"]), "r", io)[1])))
+                h > 0 || (h = default_size[1])
+                w > 0 || (w = default_size[2])
+                return h, w
+            catch
+                return default_size
+            end
         end
     end
 
@@ -373,15 +393,12 @@ function uv_connectcb(conn::Ptr{Void}, status::Cint)
     @assert sock.status == StatusConnecting
     if status >= 0
         sock.status = StatusOpen
-        err = nothing
+        notify(sock.connectnotify)
     else
         sock.status = StatusInit
-        err = UVError("connect",status)
+        err = UVError("connect", status)
+        notify_error(sock.connectnotify, err)
     end
-    if isa(sock.ccb,Function)
-        sock.ccb(sock, status)
-    end
-    err===nothing ? notify(sock.connectnotify) : notify_error(sock.connectnotify, err)
     Libc.free(conn)
     nothing
 end
@@ -390,24 +407,34 @@ end
 function uv_connectioncb(stream::Ptr{Void}, status::Cint)
     sock = @handle_as stream LibuvServer
     if status >= 0
-        err = nothing
+        notify(sock.connectnotify)
     else
-        err = UVError("connection",status)
+        err = UVError("connection", status)
+        notify_error(sock.connectnotify, err)
     end
-    if isa(sock.ccb, Function)
-        sock.ccb(sock, status)
-    end
-    err === nothing ? notify(sock.connectnotify) : notify_error(sock.connectnotify, err)
     nothing
 end
 
 ## BUFFER ##
-## Allocate a simple buffer
+## Allocate space in buffer (for immediate use)
 function alloc_request(buffer::IOBuffer, recommended_size::UInt)
     ensureroom(buffer, Int(recommended_size))
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
-    return (pointer(buffer.data, ptr), length(buffer.data) - ptr + 1)
+    nb = length(buffer.data) - ptr + 1
+    return (pointer(buffer.data, ptr), nb)
 end
+
+notify_filled(buffer::IOBuffer, nread::Int, base::Ptr{Void}, len::UInt) = notify_filled(buffer, nread)
+
+function notify_filled(buffer::IOBuffer, nread::Int)
+    if buffer.append
+        buffer.size += nread
+    else
+        buffer.ptr += nread
+    end
+end
+
+alloc_buf_hook(stream::LibuvStream, size::UInt) = alloc_request(stream.buffer, UInt(size))
 
 function uv_alloc_buf(handle::Ptr{Void}, size::Csize_t, buf::Ptr{Void})
     hd = uv_handle_data(handle)
@@ -417,78 +444,66 @@ function uv_alloc_buf(handle::Ptr{Void}, size::Csize_t, buf::Ptr{Void})
     end
     stream = unsafe_pointer_to_objref(hd)::LibuvStream
 
-    (data, newsize) = alloc_buf_hook(stream, UInt(size))
+    local data::Ptr{Void}, newsize::Csize_t
+    if stream.status != StatusActive
+        data = C_NULL
+        newsize = 0
+    else
+        (data, newsize) = alloc_buf_hook(stream, UInt(size))
+        if data == C_NULL
+            newsize = 0
+        end
+    end
 
     ccall(:jl_uv_buf_set_base, Void, (Ptr{Void}, Ptr{Void}), buf, data)
     ccall(:jl_uv_buf_set_len, Void, (Ptr{Void}, Csize_t), buf, newsize)
-
     nothing
-end
-
-alloc_buf_hook(stream::LibuvStream, size::UInt) = alloc_request(stream.buffer, UInt(size))
-
-function notify_filled(buffer::IOBuffer, nread::Int, base::Ptr{Void}, len::UInt)
-    if buffer.append
-        buffer.size += nread
-    else
-        buffer.ptr += nread
-    end
-end
-
-function notify_filled(stream::LibuvStream, nread::Int)
-    more = true
-    while more
-        if isa(stream.readcb,Function)
-            nreadable = (stream.line_buffered ? Int(search(stream.buffer, '\n')) : nb_available(stream.buffer))
-            if nreadable > 0
-                more = stream.readcb(stream, nreadable)
-            else
-                more = false
-            end
-        else
-            more = false
-        end
-    end
 end
 
 function uv_readcb(handle::Ptr{Void}, nread::Cssize_t, buf::Ptr{Void})
-    stream = @handle_as handle LibuvStream
-    nread = Int(nread)
-    base = ccall(:jl_uv_buf_base, Ptr{Void}, (Ptr{Void},), buf)
-    len = UInt(ccall(:jl_uv_buf_len, Csize_t, (Ptr{Void},), buf))
-
-    if nread < 0
-        if nread == UV_ENOBUFS && len == 0
-            # remind the client that stream.buffer is full
-            notify(stream.readnotify)
-        elseif nread == UV_EOF
-            if isa(stream, TTY)
-                stream.status = StatusEOF # libuv called stop_reading already
+    stream_unknown_type = @handle_as handle LibuvStream
+    nrequested = ccall(:jl_uv_buf_len, Csize_t, (Ptr{Void},), buf)
+    function readcb_specialized(stream::LibuvStream, nread::Int, nrequested::UInt)
+        if nread < 0
+            if nread == UV_ENOBUFS && nrequested == 0
+                # remind the client that stream.buffer is full
                 notify(stream.readnotify)
-                notify(stream.closenotify)
+            elseif nread == UV_EOF
+                if isa(stream, TTY)
+                    stream.status = StatusEOF # libuv called uv_stop_reading already
+                    notify(stream.readnotify)
+                    notify(stream.closenotify)
+                elseif stream.status != StatusClosing
+                    # begin shutdown of the stream
+                    ccall(:jl_close_uv, Void, (Ptr{Void},), stream.handle)
+                    stream.status = StatusClosing
+                end
             else
-                close(stream)
+                # This is a fatal connection error. Shutdown requests as per the usual
+                # close function won't work and libuv will fail with an assertion failure
+                ccall(:jl_forceclose_uv, Void, (Ptr{Void},), stream)
+                notify_error(stream.readnotify, UVError("read", nread))
             end
         else
-            # This is a fatal connection error. Shutdown requests as per the usual
-            # close function won't work and libuv will fail with an assertion failure
-            ccall(:jl_forceclose_uv, Void, (Ptr{Void},), stream)
-            notify_error(stream.readnotify, UVError("readcb",nread))
+            notify_filled(stream.buffer, nread)
+            notify(stream.readnotify)
         end
-    else
-        notify_filled(stream.buffer, nread, base, len)
-        notify_filled(stream, nread)
-        notify(stream.readnotify)
-    end
 
-    # Stop background reading when
-    # 1) we have accumulated a lot of unread data OR
-    # 2) we have an alternate buffer that has reached its limit.
-    if (nb_available(stream.buffer) >= stream.throttle) ||
-       (nb_available(stream.buffer) >= stream.buffer.maxsize)
-        stop_reading(stream)
+        # Stop background reading when
+        # 1) there's nobody paying attention to the data we are reading
+        # 2) we have accumulated a lot of unread data OR
+        # 3) we have an alternate buffer that has reached its limit.
+        if stream.status == StatusPaused ||
+           (stream.status == StatusActive &&
+            ((nb_available(stream.buffer) >= stream.throttle) ||
+             (nb_available(stream.buffer) >= stream.buffer.maxsize)))
+            # save cycles by stopping kernel notifications from arriving
+            ccall(:uv_read_stop, Cint, (Ptr{Void},), stream)
+            stream.status = StatusOpen
+        end
+        nothing
     end
-    nothing
+    readcb_specialized(stream_unknown_type, Int(nread), UInt(nrequested))
 end
 
 function reseteof(x::TTY)
@@ -501,12 +516,10 @@ end
 function _uv_hook_close(uv::Union{LibuvStream, LibuvServer})
     uv.handle = C_NULL
     uv.status = StatusClosed
-    if isa(uv.closecb, Function)
-        uv.closecb(uv)
-    end
+    # notify any listeners that exist on this libuv stream type
     notify(uv.closenotify)
-    try notify(uv.readnotify) end
-    try notify(uv.connectnotify) end
+    isdefined(uv, :readnotify) && notify(uv.readnotify)
+    isdefined(uv, :connectnotify) && notify(uv.connectnotify)
     nothing
 end
 
@@ -516,7 +529,7 @@ end
 #  (composed of two half-pipes: .in and .out)
 ##########################################
 
-type Pipe <: AbstractPipe
+mutable struct Pipe <: AbstractPipe
     in::PipeEndpoint # writable
     out::PipeEndpoint # readable
 end
@@ -532,7 +545,9 @@ end
 
 show(io::IO, stream::Pipe) = print(io,
     "Pipe(",
+    _fd(stream.in), " ",
     uv_status_string(stream.in), " => ",
+    _fd(stream.out), " ",
     uv_status_string(stream.out), ", ",
     nb_available(stream), " bytes waiting)")
 
@@ -546,22 +561,21 @@ function init_pipe!(pipe::LibuvPipe;
     if pipe.status != StatusUninit
         error("pipe is already initialized")
     end
-    if pipe.handle == C_NULL
-        malloc_julia_pipe!(pipe)
-    end
-    uv_error("init_pipe",ccall(:jl_init_pipe, Cint,
+    err = ccall(:jl_init_pipe, Cint,
         (Ptr{Void}, Int32, Int32, Int32),
-        pipe.handle, writable, readable, julia_only))
+        pipe.handle, writable, readable, julia_only)
+    uv_error(
+        if readable && writable
+            "init_pipe(ipc)"
+        elseif readable
+            "init_pipe(read)"
+        elseif writable
+            "init_pipe(write)"
+        else
+            "init_pipe(none)"
+        end, err)
     pipe.status = StatusInit
     return pipe
-end
-
-function malloc_julia_pipe!(x::LibuvPipe)
-    assert(x.handle == C_NULL)
-    x.handle = Libc.malloc(_sizeof_uv_named_pipe)
-    associate_julia_struct(x.handle, x)
-    finalizer(x, uvfinalize)
-    nothing
 end
 
 function _link_pipe(read_end::Ptr{Void}, write_end::Ptr{Void})
@@ -595,9 +609,6 @@ end
 
 function link_pipe(read_end::PipeEndpoint, readable_julia_only::Bool,
                    write_end::Ptr{Void}, writable_julia_only::Bool)
-    if read_end.handle == C_NULL
-        malloc_julia_pipe!(read_end)
-    end
     init_pipe!(read_end;
         readable = true, writable = false, julia_only = readable_julia_only)
     uv_error("init_pipe",
@@ -609,9 +620,6 @@ end
 
 function link_pipe(read_end::Ptr{Void}, readable_julia_only::Bool,
                    write_end::PipeEndpoint, writable_julia_only::Bool)
-    if write_end.handle == C_NULL
-        malloc_julia_pipe!(write_end)
-    end
     uv_error("init_pipe",
         ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), read_end, 0, 1, readable_julia_only))
     init_pipe!(write_end;
@@ -623,12 +631,6 @@ end
 
 function link_pipe(read_end::PipeEndpoint, readable_julia_only::Bool,
                    write_end::PipeEndpoint, writable_julia_only::Bool)
-    if write_end.handle == C_NULL
-        malloc_julia_pipe!(write_end)
-    end
-    if read_end.handle == C_NULL
-        malloc_julia_pipe!(read_end)
-    end
     init_pipe!(read_end;
         readable = true, writable = false, julia_only = readable_julia_only)
     init_pipe!(write_end;
@@ -651,15 +653,22 @@ end
 
 ## Functions for any LibuvStream ##
 
+# flow control
+
 function start_reading(stream::LibuvStream)
     if stream.status == StatusOpen
         if !isreadable(stream)
             error("tried to read a stream that is not readable")
         end
+        # libuv may call the alloc callback immediately
+        # for a TTY on Windows, so ensure the status is set first
+        stream.status = StatusActive
         ret = ccall(:uv_read_start, Cint, (Ptr{Void}, Ptr{Void}, Ptr{Void}),
                     stream, uv_jl_alloc_buf::Ptr{Void}, uv_jl_readcb::Ptr{Void})
-        stream.status = StatusActive
         return ret
+    elseif stream.status == StatusPaused
+        stream.status = StatusActive
+        return Int32(0)
     elseif stream.status == StatusActive
         return Int32(0)
     else
@@ -667,33 +676,29 @@ function start_reading(stream::LibuvStream)
     end
 end
 
-function start_reading(stream::LibuvStream, cb::Function)
-    failure = start_reading(stream)
-    stream.readcb = cb
-    nread = nb_available(stream.buffer)
-    if nread > 0
-        notify_filled(stream, nread)
+if is_windows()
+    # the low performance version of stop_reading is required
+    # on Windows due to a NT kernel bug that we can't use a blocking
+    # stream for non-blocking (overlapped) calls,
+    # and a ReadFile call blocking on one thread
+    # causes all other operations on that stream to lockup
+    function stop_reading(stream::LibuvStream)
+        if stream.status == StatusActive
+            stream.status = StatusOpen
+            ccall(:uv_read_stop, Cint, (Ptr{Void},), stream)
+        end
+        nothing
     end
-    return failure_code
-end
-
-function start_reading(stream::LibuvStream, cb::Bool)
-    failure_code = start_reading(stream)
-    stream.readcb = cb
-    return failure_code
-end
-
-function stop_reading(stream::LibuvStream)
-    if stream.status == StatusActive
-        ret = ccall(:uv_read_stop, Cint, (Ptr{Void},), stream)
-        stream.status = StatusOpen
-        return ret
-    elseif stream.status == StatusOpen
-        return Int32(0)
-    else
-        return Int32(-1)
+else
+    function stop_reading(stream::LibuvStream)
+        if stream.status == StatusActive
+            stream.status = StatusPaused
+        end
+        nothing
     end
 end
+
+# bulk read / write
 
 readbytes!(s::LibuvStream, a::Vector{UInt8}, nb = length(a)) = readbytes!(s, a, Int(nb))
 function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
@@ -730,7 +735,7 @@ end
 
 function read(stream::LibuvStream)
     wait_readnb(stream, typemax(Int))
-    return takebuf_array(stream.buffer)
+    return take!(stream.buffer)
 end
 
 function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
@@ -748,7 +753,7 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
     else
         try
             stop_reading(s) # Just playing it safe, since we are going to switch buffers.
-            newbuf = PipeBuffer(pointer_to_array(p, nb), #=maxsize=# Int(nb))
+            newbuf = PipeBuffer(unsafe_wrap(Array, p, nb), #=maxsize=# Int(nb))
             newbuf.size = 0 # reset the write pointer to the beginning
             s.buffer = newbuf
             write(newbuf, sbuf)
@@ -775,7 +780,7 @@ function readavailable(this::LibuvStream)
     wait_readnb(this, 1)
     buf = this.buffer
     @assert buf.seekable == false
-    return takebuf_array(buf)
+    return take!(buf)
 end
 
 function readuntil(this::LibuvStream, c::UInt8)
@@ -831,14 +836,14 @@ end
 
 function flush(s::LibuvStream)
     if isnull(s.sendbuf)
-        return s
+        return
     end
     buf = get(s.sendbuf)
     if nb_available(buf) > 0
-        arr = takebuf_array(buf)        # Array of UInt8s
+        arr = take!(buf)        # Array of UInt8s
         uv_write(s, arr)
     end
-    return s
+    return
 end
 
 buffer_writes(s::LibuvStream, bufsize) = (s.sendbuf=PipeBuffer(bufsize); s)
@@ -865,19 +870,21 @@ end
 
 function accept_nonblock(server::PipeServer,client::PipeEndpoint)
     if client.status != StatusInit
-        error(client.status == StatusUninit ? "client is not initialized" :
+        error(client.status == StatusUninit ?
+              "client is not initialized" :
               "client is already in use or has been closed")
     end
-    err = ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server.handle,client.handle)
+    err = ccall(:uv_accept, Int32, (Ptr{Void}, Ptr{Void}), server.handle, client.handle)
     if err == 0
         client.status = StatusOpen
     end
-    err
+    return err
 end
+
 function accept_nonblock(server::PipeServer)
     client = init_pipe!(PipeEndpoint(); readable=true, writable=true, julia_only=true)
-    uv_error("accept", accept_nonblock(server,client) != 0)
-    client
+    uv_error("accept", accept_nonblock(server, client) != 0)
+    return client
 end
 
 function accept(server::LibuvServer, client::LibuvStream)
@@ -885,25 +892,30 @@ function accept(server::LibuvServer, client::LibuvStream)
         throw(ArgumentError("server not connected, make sure \"listen\" has been called"))
     end
     while isopen(server)
-        err = accept_nonblock(server,client)
+        err = accept_nonblock(server, client)
         if err == 0
             return client
         elseif err != UV_EAGAIN
-            uv_error("accept",err)
+            uv_error("accept", err)
         end
-        stream_wait(server,server.connectnotify)
+        stream_wait(server, server.connectnotify)
     end
     uv_error("accept", UV_ECONNABORTED)
 end
 
 const BACKLOG_DEFAULT = 511
 
-function _listen(sock::LibuvServer; backlog::Integer=BACKLOG_DEFAULT)
+function listen(sock::LibuvServer; backlog::Integer=BACKLOG_DEFAULT)
+    uv_error("listen", trylisten(sock))
+    return sock
+end
+
+function trylisten(sock::LibuvServer; backlog::Integer=BACKLOG_DEFAULT)
     check_open(sock)
     err = ccall(:uv_listen, Cint, (Ptr{Void}, Cint, Ptr{Void}),
                 sock, backlog, uv_jl_connectioncb::Ptr{Void})
     sock.status = StatusActive
-    err
+    return err
 end
 
 function bind(server::PipeServer, name::AbstractString)
@@ -919,15 +931,18 @@ function bind(server::PipeServer, name::AbstractString)
         end
     end
     server.status = StatusOpen
-    true
+    return true
 end
 
+"""
+    listen(path::AbstractString) -> PipeServer
 
+Create and listen on a named pipe / UNIX domain socket.
+"""
 function listen(path::AbstractString)
     sock = PipeServer()
     bind(sock, path) || throw(ArgumentError("could not listen on path $path"))
-    uv_error("listen", _listen(sock))
-    sock
+    return listen(sock)
 end
 
 function connect!(sock::PipeEndpoint, path::AbstractString)
@@ -936,34 +951,52 @@ function connect!(sock::PipeEndpoint, path::AbstractString)
     uv_req_set_data(req,C_NULL)
     ccall(:uv_pipe_connect, Void, (Ptr{Void}, Ptr{Void}, Cstring, Ptr{Void}), req, sock.handle, path, uv_jl_connectcb::Ptr{Void})
     sock.status = StatusConnecting
-    sock
+    return sock
 end
 
 function connect(sock::LibuvStream, args...)
     connect!(sock, args...)
     wait_connected(sock)
-    sock
+    return sock
 end
 
 # Libuv will internally reset read/writability, which is uses to
 # mark that this is an invalid pipe.
+
+"""
+    connect(path::AbstractString) -> PipeEndpoint
+
+Connect to the named pipe / UNIX domain socket at `path`.
+"""
 connect(path::AbstractString) = connect(init_pipe!(PipeEndpoint(); readable=false, writable=false, julia_only=true),path)
 
+const OS_HANDLE = is_windows() ? WindowsRawSocket : RawFD
+const INVALID_OS_HANDLE = is_windows() ? WindowsRawSocket(Ptr{Void}(-1)) : RawFD(-1)
 _fd(x::IOStream) = RawFD(fd(x))
-@unix_only _fd(x::LibuvStream) = RawFD(ccall(:jl_uv_handle,Int32,(Ptr{Void},),x.handle))
-@windows_only _fd(x::LibuvStream) = WindowsRawSocket(
-    ccall(:jl_uv_handle,Ptr{Void},(Ptr{Void},),x.handle))
+function _fd(x::Union{LibuvStream, LibuvServer})
+    fd = Ref{OS_HANDLE}(INVALID_OS_HANDLE)
+    if x.status != StatusUninit && x.status != StatusClosed
+        err = ccall(:uv_fileno, Int32, (Ptr{Void}, Ptr{OS_HANDLE}), x.handle, fd)
+        # handle errors by returning INVALID_OS_HANDLE
+    end
+    return fd[]
+end
 
-for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,true,1,:jl_uv_stdout),(:STDERR,true,2,:jl_uv_stderr))
+for (x, writable, unix_fd, c_symbol) in
+        ((:STDIN, false, 0, :jl_uv_stdin),
+         (:STDOUT, true, 1, :jl_uv_stdout),
+         (:STDERR, true, 2, :jl_uv_stderr))
     f = Symbol("redirect_",lowercase(string(x)))
     _f = Symbol("_",f)
     @eval begin
         function ($_f)(stream)
             global $x
-            @windows? (
+            @static if is_windows()
                 ccall(:SetStdHandle,stdcall,Int32,(Int32,Ptr{Void}),
-                    $(-10-unix_fd), Libc._get_osfhandle(_fd(stream)).handle) ) : (
-                dup(_fd(stream),  RawFD($unix_fd)) )
+                    $(-10 - unix_fd), Libc._get_osfhandle(_fd(stream)).handle)
+            else
+                dup(_fd(stream),  RawFD($unix_fd))
+            end
             $x = stream
         end
         function ($f)(handle::Union{LibuvStream,IOStream})
@@ -981,13 +1014,98 @@ for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,tru
     end
 end
 
+"""
+    redirect_stdout([stream]) -> (rd, wr)
+
+Create a pipe to which all C and Julia level [`STDOUT`](@ref) output
+will be redirected.
+Returns a tuple `(rd, wr)` representing the pipe ends.
+Data written to [`STDOUT`](@ref) may now be read from the `rd` end of
+the pipe. The `wr` end is given for convenience in case the old
+[`STDOUT`](@ref) object was cached by the user and needs to be replaced
+elsewhere.
+
+!!! note
+    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+"""
+redirect_stdout
+
+"""
+    redirect_stderr([stream]) -> (rd, wr)
+
+Like [`redirect_stdout`](@ref), but for [`STDERR`](@ref).
+
+!!! note
+    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+"""
+redirect_stderr
+
+"""
+    redirect_stdin([stream]) -> (rd, wr)
+
+Like [`redirect_stdout`](@ref), but for [`STDIN`](@ref).
+Note that the order of the return tuple is still `(rd, wr)`,
+i.e. data to be read from [`STDIN`](@ref) may be written to `wr`.
+
+!!! note
+    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+"""
+redirect_stdin
+
+for (F,S) in ((:redirect_stdin, :STDIN), (:redirect_stdout, :STDOUT), (:redirect_stderr, :STDERR))
+    @eval function $F(f::Function, stream)
+        STDOLD = $S
+        local ret
+        $F(stream)
+        try
+            ret = f()
+        finally
+            $F(STDOLD)
+        end
+        ret
+    end
+end
+
+"""
+    redirect_stdout(f::Function, stream)
+
+Run the function `f` while redirecting [`STDOUT`](@ref) to `stream`.
+Upon completion, [`STDOUT`](@ref) is restored to its prior setting.
+
+!!! note
+    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+"""
+redirect_stdout(f::Function, stream)
+
+"""
+    redirect_stderr(f::Function, stream)
+
+Run the function `f` while redirecting [`STDERR`](@ref) to `stream`.
+Upon completion, [`STDERR`](@ref) is restored to its prior setting.
+
+!!! note
+    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+"""
+redirect_stderr(f::Function, stream)
+
+"""
+    redirect_stdin(f::Function, stream)
+
+Run the function `f` while redirecting [`STDIN`](@ref) to `stream`.
+Upon completion, [`STDIN`](@ref) is restored to its prior setting.
+
+!!! note
+    `stream` must be a `TTY`, a `Pipe`, or a `TCPSocket`.
+"""
+redirect_stdin(f::Function, stream)
+
 mark(x::LibuvStream)     = mark(x.buffer)
 unmark(x::LibuvStream)   = unmark(x.buffer)
 reset(x::LibuvStream)    = reset(x.buffer)
 ismarked(x::LibuvStream) = ismarked(x.buffer)
 
 # BufferStream's are non-OS streams, backed by a regular IOBuffer
-type BufferStream <: LibuvStream
+mutable struct BufferStream <: LibuvStream
     buffer::IOBuffer
     r_c::Condition
     close_c::Condition
@@ -999,7 +1117,14 @@ type BufferStream <: LibuvStream
 end
 
 isopen(s::BufferStream) = s.is_open
-close(s::BufferStream) = (s.is_open = false; notify(s.r_c; all=true); notify(s.close_c; all=true); nothing)
+function close(s::BufferStream)
+    s.is_open = false
+    notify(s.r_c)
+    notify(s.close_c)
+    nothing
+end
+uvfinalize(s::BufferStream) = nothing
+
 read(s::BufferStream, ::Type{UInt8}) = (wait_readnb(s, 1); read(s.buffer, UInt8))
 unsafe_read(s::BufferStream, a::Ptr{UInt8}, nb::UInt) = (wait_readnb(s, Int(nb)); unsafe_read(s.buffer, a, nb))
 nb_available(s::BufferStream) = nb_available(s.buffer)
@@ -1022,12 +1147,13 @@ function wait_readbyte(s::BufferStream, c::UInt8)
 end
 
 wait_close(s::BufferStream) = if isopen(s); wait(s.close_c); end
-start_reading(s::BufferStream) = nothing
+start_reading(s::BufferStream) = Int32(0)
+stop_reading(s::BufferStream) = nothing
 
 write(s::BufferStream, b::UInt8) = write(s, Ref{UInt8}(b))
 function unsafe_write(s::BufferStream, p::Ptr{UInt8}, nb::UInt)
     rv = unsafe_write(s.buffer, p, nb)
-    !(s.buffer_writes) && notify(s.r_c; all=true)
+    !(s.buffer_writes) && notify(s.r_c)
     return rv
 end
 
@@ -1038,4 +1164,4 @@ end
 
 # If buffer_writes is called, it will delay notifying waiters till a flush is called.
 buffer_writes(s::BufferStream, bufsize=0) = (s.buffer_writes=true; s)
-flush(s::BufferStream) = (notify(s.r_c; all=true); s)
+flush(s::BufferStream) = (notify(s.r_c); nothing)

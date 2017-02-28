@@ -1,17 +1,17 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-type Table
+mutable struct Table
     rows::Vector{Vector{Any}}
     align::Vector{Symbol}
 end
 
 function parserow(stream::IO)
     withstream(stream) do
-        line = readline(stream) |> chomp
-        row = split(line, "|")
+        line = readline(stream)
+        row = split(line, r"(?<!\\)\|")
         length(row) == 1 && return
         row[1] == "" && shift!(row)
-        map!(strip, row)
+        map!(x -> strip(replace(x, "\\|", "|")), row, row)
         row[end] == "" && pop!(row)
         return row
     end
@@ -78,7 +78,7 @@ end
 mapmap(f, xss) = map(xs->map(f, xs), xss)
 
 colwidths(rows; len = length, min = 0) =
-    reduce(max, [min; convert(Vector{Vector{Int}}, mapmap(len, rows))])
+    reduce((x,y) -> max.(x,y), [min; convert(Vector{Vector{Int}}, mapmap(len, rows))])
 
 padding(width, twidth, a) =
     a == :l ? (0, twidth - width) :
@@ -88,7 +88,7 @@ padding(width, twidth, a) =
 
 function padcells!(rows, align; len = length, min = 0)
     widths = colwidths(rows, len = len, min = min)
-    for i = 1:length(rows), j = 1:length(rows[1])  # fixme (iter): can we make indexing more general here?
+    for i = 1:length(rows), j = indices(rows[1],1)
         cell = rows[i][j]
         lpad, rpad = padding(len(cell), widths[j], align[j])
         rows[i][j] = " "^lpad * cell * " "^rpad
@@ -103,15 +103,17 @@ _dash(width, align) =
     throw(ArgumentError("Invalid alignment $align"))
 
 function plain(io::IO, md::Table)
-    cells = mapmap(plaininline, md.rows)
+    cells = mapmap(md.rows) do each
+        replace(plaininline(each), "|", "\\|")
+    end
     padcells!(cells, md.align, len = length, min = 3)
-    for i = 1:length(cells) # fixme (iter): can we make indexing more general here?
+    for i = indices(cells,1)
         print(io, "| ")
-        print_joined(io, cells[i], " | ")
+        join(io, cells[i], " | ")
         println(io, " |")
         if i == 1
             print(io, "|")
-            print_joined(io, [_dash(length(cells[i][j]), md.align[j]) for j = 1:length(cells[1])], "|")
+            join(io, [_dash(length(cells[i][j]), md.align[j]) for j = indices(cells[1],1)], "|")
             println(io, "|")
         end
     end
@@ -124,7 +126,7 @@ function rst(io::IO, md::Table)
     double = ["="^length(c) for c in cells[1]]
     function print_row(row, row_sep, col_sep)
         print(io, col_sep, row_sep)
-        print_joined(io, row, string(row_sep, col_sep, row_sep))
+        join(io, row, string(row_sep, col_sep, row_sep))
         println(io, row_sep, col_sep)
     end
     print_row(single, '-', '+')
@@ -139,10 +141,10 @@ function term(io::IO, md::Table, columns)
     cells = mapmap(terminline, md.rows)
     padcells!(cells, md.align, len = ansi_length)
     for i = 1:length(cells)
-        print_joined(io, cells[i], " ")
+        join(io, cells[i], " ")
         println(io)
         if i == 1
-            print_joined(io, ["–"^ansi_length(cells[i][j]) for j = 1:length(cells[1])], " ")
+            join(io, ["–"^ansi_length(cells[i][j]) for j = 1:length(cells[1])], " ")
             println(io)
         end
     end

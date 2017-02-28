@@ -29,75 +29,31 @@ int cmp_lt(void *a, numerictype_t atag, void *b, numerictype_t btag);
 int cmp_eq(void *a, numerictype_t atag, void *b, numerictype_t btag,
            int equalnans);
 
-#ifdef __x86_64__
-#  define LEGACY_REGS "=Q"
-#else
-#  define LEGACY_REGS "=q"
-#endif
-
-#if (!defined(__INTEL_COMPILER) || defined(__clang__)) && (defined(__i386__) || defined(__x86_64__))
-STATIC_INLINE uint16_t ByteSwap16(uint16_t x)
-{
-  __asm("xchgb %b0,%h0" :
-        LEGACY_REGS (x) :
-        "0" (x));
-    return x;
-}
-#define bswap_16(x) ByteSwap16(x)
-
-STATIC_INLINE uint32_t ByteSwap32(uint32_t x)
-{
- __asm("bswap   %0":
-      "=r" (x)     :
-      "0" (x));
-  return x;
-}
-
-#define bswap_32(x) ByteSwap32(x)
-
-STATIC_INLINE uint64_t ByteSwap64(uint64_t x)
-{
-#ifdef __x86_64__
-  __asm("bswap  %0":
-        "=r" (x)     :
-        "0" (x));
-  return x;
-#else
-  register union { __extension__ uint64_t __ll;
-          uint32_t __l[2]; } __x;
-  asm("xchgl    %0,%1":
-      "=r"(__x.__l[0]),"=r"(__x.__l[1]):
-      "0"(bswap_32((unsigned long)x)),"1"(bswap_32((unsigned long)(x>>32))));
-  return __x.__ll;
-#endif
-}
-#define bswap_64(x) ByteSwap64(x)
-
-#else
-
-#define bswap_16(x) (((x) & 0x00ff) << 8 | ((x) & 0xff00) >> 8)
-
-#if defined(__INTEL_COMPILER) && !defined(__clang__)
+#if defined(__clang__) || (defined(__GNUC__) && (__GNUC__ > 4 || __GNUC_MINOR__ >= 8))
+#define bswap_16(x) __builtin_bswap16(x)
+#define bswap_32(x) __builtin_bswap32(x)
+#define bswap_64(x) __builtin_bswap64(x)
+#elif defined(_MSC_VER)
+#define bswap_16(x) _byteswap_ushort(x)
+#define bswap_32(x) _byteswap_ulong(x)
+#define bswap_64(x) _byteswap_uint64(x)
+#elif defined(__INTEL_COMPILER)
+#define bswap_16(x) _bswap16(x)
 #define bswap_32(x) _bswap(x)
+#define bswap_64(x) _bswap64(x)
 #else
+#define bswap_16(x) (((x) & 0x00ff) << 8 | ((x) & 0xff00) >> 8)
 #define bswap_32(x) \
      ((((x) & 0xff000000) >> 24) | (((x) & 0x00ff0000) >>  8) | \
       (((x) & 0x0000ff00) <<  8) | (((x) & 0x000000ff) << 24))
-#endif
-
 STATIC_INLINE uint64_t ByteSwap64(uint64_t x)
 {
-    union {
-        uint64_t ll;
-        uint32_t l[2];
-    } w, r;
-    w.ll = x;
-    r.l[0] = bswap_32 (w.l[1]);
-    r.l[1] = bswap_32 (w.l[0]);
-    return r.ll;
+    uint32_t high = (uint32_t) (x >> 32);
+    uint32_t low  = (uint32_t)  x;
+    return  ((uint64_t) bswap_32 (high)) |
+           (((uint64_t) bswap_32 (low)) << 32);
 }
 #define bswap_64(x) ByteSwap64(x)
-
 #endif
 
 #ifdef __cplusplus

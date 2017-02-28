@@ -33,16 +33,16 @@ let n=10
     aimg  = randn(n,n)/2
     debug && println("symmetric eigendecomposition")
     for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
-        a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
+        a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
         asym = a'+a                 # symmetric indefinite
         ε = εa = eps(abs(float(one(eltya))))
 
         x = randn(n)
         y = randn(n)
         b = randn(n,n)/2
-        x = eltya == Int ? rand(1:7, n) : convert(Vector{eltya}, eltya <: Complex ? complex(x, zeros(n)) : x)
-        y = eltya == Int ? rand(1:7, n) : convert(Vector{eltya}, eltya <: Complex ? complex(y, zeros(n)) : y)
-        b = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(b, zeros(n,n)) : b)
+        x = eltya == Int ? rand(1:7, n) : convert(Vector{eltya}, eltya <: Complex ? complex.(x, zeros(n)) : x)
+        y = eltya == Int ? rand(1:7, n) : convert(Vector{eltya}, eltya <: Complex ? complex.(y, zeros(n)) : y)
+        b = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(b, zeros(n,n)) : b)
 
         debug && println("\ntype of a: ", eltya, "\n")
 
@@ -105,16 +105,16 @@ let n=10
         @test asym*v[:,1] ≈ d[1]*v[:,1]
         @test v*Diagonal(d)*v' ≈ asym
         @test isequal(eigvals(asym[1]), eigvals(asym[1:1,1:1]))
-        @test abs(eigfact(Hermitian(asym), 1:2)[:vectors]'v[:,1:2]) ≈ eye(eltya, 2)
+        @test abs.(eigfact(Hermitian(asym), 1:2)[:vectors]'v[:,1:2]) ≈ eye(eltya, 2)
         eig(Hermitian(asym), 1:2) # same result, but checks that method works
-        @test abs(eigfact(Hermitian(asym), d[1] - 1, (d[2] + d[3])/2)[:vectors]'v[:,1:2]) ≈ eye(eltya, 2)
+        @test abs.(eigfact(Hermitian(asym), d[1] - 1, (d[2] + d[3])/2)[:vectors]'v[:,1:2]) ≈ eye(eltya, 2)
         eig(Hermitian(asym), d[1] - 1, (d[2] + d[3])/2) # same result, but checks that method works
         @test eigvals(Hermitian(asym), 1:2) ≈ d[1:2]
         @test eigvals(Hermitian(asym), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
         @test full(eigfact(asym)) ≈ asym
 
         # relation to svdvals
-        @test sum(sort(abs(eigvals(Hermitian(asym))))) == sum(sort(svdvals(Hermitian(asym))))
+        @test sum(sort(abs.(eigvals(Hermitian(asym))))) == sum(sort(svdvals(Hermitian(asym))))
 
         # cond
         @test cond(Hermitian(asym)) ≈ cond(asym)
@@ -174,6 +174,8 @@ let n=10
         @test inv(Hermitian(asym)) ≈ inv(asym)
         if eltya <: Real && eltya != Int
             @test inv(Symmetric(asym)) ≈ inv(asym)
+            @test inv(Hermitian(a)) ≈ inv(full(Hermitian(a)))
+            @test inv(Symmetric(a)) ≈ inv(full(Symmetric(a)))
         end
 
         # conversion
@@ -235,4 +237,51 @@ end
 let A = Symmetric(randn(5,5))
     B = -A
     @test A + B ≈ zeros(5,5)
+end
+
+# 17780
+let a = randn(2,2)
+    a = a'a
+    b = complex.(a,a)
+    c = Symmetric(b)
+    @test conj(c) == conj(Array(c))
+    cc = copy(c)
+    @test conj!(c) == conj(Array(cc))
+    c = Hermitian(b + b')
+    @test conj(c) == conj(Array(c))
+    cc = copy(c)
+    @test conj!(c) == conj(Array(c))
+end
+
+# 19225
+let X = [1 -1; -1 1]
+    for T in (Symmetric, Hermitian)
+        Y = T(copy(X))
+        _Y = similar(Y)
+        copy!(_Y, Y)
+        @test _Y == Y
+
+        W = T(copy(X), :L)
+        copy!(W, Y)
+        @test W.data == Y.data
+        @test W.uplo != Y.uplo
+
+        W[1,1] = 4
+        @test W == T([4 -1; -1 1])
+        @test_throws ArgumentError (W[1,2] = 2)
+
+        @test Y + I == T([2 -1; -1 2])
+        @test Y - I == T([0 -1; -1 0])
+        @test Y * I == Y
+
+        @test Y + 1 == T([2 0; 0 2])
+        @test Y - 1 == T([0 -2; -2 0])
+        @test Y * 2 == T([2 -2; -2 2])
+        @test Y / 1 == Y
+
+        @test T([true false; false true]) + true == T([2 1; 1 2])
+    end
+
+    @test_throws ArgumentError Hermitian(X) + 2im*I
+    @test_throws ArgumentError Hermitian(X) - 2im*I
 end

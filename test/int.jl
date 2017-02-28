@@ -54,7 +54,7 @@ end
 @test bswap(Int128(2)^(15*8)) == Int128(1)
 @test bswap(UInt128(2)^(15*8)) == UInt128(1)
 
-@test count_zeros(10) == WORD_SIZE - 2
+@test count_zeros(10) == Sys.WORD_SIZE - 2
 @test count_zeros(UInt8(10)) == 6
 
 @test convert(Signed, UInt128(3)) === Int128(3)
@@ -86,7 +86,7 @@ end
 @test round(UInt8, 123) == 123
 @test mod(123, UInt8) == 0x7b
 
-bitstype 8 MyBitsType <: Integer
+primitive type MyBitsType <: Integer 8 end
 @test_throws MethodError ~reinterpret(MyBitsType, 0x7b)
 
 UItypes = Base.BitUnsigned_types
@@ -187,3 +187,17 @@ end
 # issue #3596
 @test Int128(1)<<0 == 1
 @test repr(Int128(1)<<1) == "2"
+
+# issue #16700
+@test_throws MethodError 1.0 >> 8
+
+# PR #16988
+@test true << 2 === 1 << 2
+@test true >> 2 === 1 >> 2
+@test true >>> 2 === 1 >>> 2
+
+@test @inferred(unsafe_trunc(Int8, 127)) === Int8(127)
+@test unsafe_trunc(Int8, 128) === Int8(-128)
+@test unsafe_trunc(Int8, -127) === Int8(-127)
+@test unsafe_trunc(Int8, -128) === Int8(-128)
+@test unsafe_trunc(Int8, -129) === Int8(127)

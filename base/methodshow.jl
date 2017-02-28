@@ -2,7 +2,11 @@
 
 # Method and method table pretty-printing
 
-function argtype_decl(env, n, t) # -> (argname, argtype)
+function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (argname, argtype)
+    t = sig.parameters[i]
+    if i == nargs && isva && !isvarargtype(t)
+        t = Vararg{t,length(sig.parameters)-nargs+1}
+    end
     if isa(n,Expr)
         n = n.args[1]  # handle n::T in arg list
     end
@@ -15,83 +19,99 @@ function argtype_decl(env, n, t) # -> (argname, argtype)
         return s, ""
     end
     if isvarargtype(t)
-        tt, tn = t.parameters[1], t.parameters[2]
-        if isa(tn, TypeVar) && !tn.bound
-            if tt === Any || (isa(tt, TypeVar) && !tt.bound)
+        v1, v2 = nothing, nothing
+        if isa(t, UnionAll)
+            v1 = t.var
+            t = t.body
+            if isa(t, UnionAll)
+                v2 = t.var
+                t = t.body
+            end
+        end
+        ut = unwrap_unionall(t)
+        tt, tn = ut.parameters[1], ut.parameters[2]
+        if isa(tn, TypeVar) && (tn === v1 || tn === v2)
+            if tt === Any || (isa(tt, TypeVar) && (tt === v1 || tt === v2))
                 return string(s, "..."), ""
             else
                 return s, string_with_env(env, tt) * "..."
             end
         end
         return s, string_with_env(env, "Vararg{", tt, ",", tn, "}")
-    elseif t == String
-        return s, "String"
     end
     return s, string_with_env(env, t)
 end
 
-function argtype_decl_vararg(env, n, t)
-    if isa(n, Expr)
-        s = string(n.args[1])
-        if n.args[2].head == :...
-            # x... or x::T... declaration
-            if t.parameters[1] === Any
-                return string(s, "..."), ""
-            else
-                return s, string_with_env(env, t.parameters[1]) * "..."
-            end
-        elseif t == String
-            return s, "String"
-        end
-    end
-    # x::Vararg, x::Vararg{T}, or x::Vararg{T,N} declaration
-    s, length(n.args[2].args) < 4 ?
-       string_with_env(env, "Vararg{", t.parameters[1], "}") :
-       string_with_env(env, "Vararg{", t.parameters[1], ",", t.parameters[2], "}")
-end
-
 function arg_decl_parts(m::Method)
-    tv = m.tvars
-    if !isa(tv,SimpleVector)
-        tv = Any[tv]
-    else
-        tv = Any[tv...]
+    tv = Any[]
+    sig = m.sig
+    while isa(sig, UnionAll)
+        push!(tv, sig.var)
+        sig = sig.body
     end
-    li = m.lambda_template
-    file, line = "", 0
-    if li !== nothing
-        argnames = li.slotnames[1:li.nargs]
-        s = Symbol("?")
-        decls = Any[argtype_decl(:tvar_env => tv, get(argnames, i, s), m.sig.parameters[i])
-                    for i = 1:length(m.sig.parameters)]
-        if isdefined(li, :def)
-            file, line = li.def.file, li.def.line
-        end
+    if isdefined(m, :source)
+        src = m.source
     else
-        decls = Any["" for i = 1:length(m.sig.parameters)]
+        src = nothing
+    end
+    file = m.file
+    line = m.line
+    if src !== nothing && src.slotnames !== nothing
+        argnames = src.slotnames[1:m.nargs]
+        show_env = ImmutableDict{Symbol, Any}()
+        for t in tv
+            show_env = ImmutableDict(show_env, :unionall_env => t)
+        end
+        decls = Any[argtype_decl(show_env, argnames[i], sig, i, m.nargs, m.isva)
+                    for i = 1:m.nargs]
+    else
+        decls = Any[("", "") for i = 1:length(sig.parameters)]
     end
     return tv, decls, file, line
 end
 
-function kwarg_decl(sig::ANY, kwtype::DataType)
-    sig = Tuple{kwtype, Array, sig.parameters...}
-    kwli = ccall(:jl_methtable_lookup, Any, (Any, Any), kwtype.name.mt, sig)
+function kwarg_decl(m::Method, kwtype::DataType)
+    sig = rewrap_unionall(Tuple{kwtype, Core.AnyVector, unwrap_unionall(m.sig).parameters...}, m.sig)
+    kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, max_world(m))
     if kwli !== nothing
         kwli = kwli::Method
-        return filter(x->!('#' in string(x)), kwli.lambda_template.slotnames[kwli.lambda_template.nargs+1:end])
+        src = kwli.source
+        kws = filter(x->!('#' in string(x)), src.slotnames[kwli.nargs+1:end])
+        # ensure the kwarg... is always printed last. The order of the arguments are not
+        # necessarily the same as defined in the function
+        i = findfirst(x -> endswith(string(x), "..."), kws)
+        i==0 && return kws
+        push!(kws, kws[i])
+        return deleteat!(kws,i)
     end
     return ()
 end
 
+function show_method_params(io::IO, tv)
+    if !isempty(tv)
+        print(io, " where ")
+        if length(tv) == 1
+            show(io, tv[1])
+        else
+            show_delim_array(io, tv, '{', ',', '}', false)
+        end
+    end
+end
+
 function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
-    ft = m.sig.parameters[1]
+    sig = unwrap_unionall(m.sig)
+    ft = unwrap_unionall(sig.parameters[1])
     d1 = decls[1]
-    if ft <: Function &&
+    if sig === Tuple
+        print(io, m.name)
+        decls = Any[(), ("...", "")]
+    elseif ft <: Function &&
             isdefined(ft.name.module, ft.name.mt.name) &&
+                # TODO: more accurate test? (tn.name === "#" name)
             ft == typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && is(ft.name, Type.name) && isleaftype(ft)
+    elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
         f = ft.parameters[1]
         if isa(f, DataType) && isempty(f.parameters)
             print(io, f)
@@ -101,20 +121,19 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
     else
         print(io, "(", d1[1], "::", d1[2], ")")
     end
-    if !isempty(tv)
-        show_delim_array(io, tv, '{', ',', '}', false)
-    end
     print(io, "(")
-    print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
+    join(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
                  ", ", ", ")
     if !isnull(kwtype)
-        kwargs = kwarg_decl(m.sig, get(kwtype))
+        kwargs = kwarg_decl(m, get(kwtype))
         if !isempty(kwargs)
             print(io, "; ")
-            print_joined(io, kwargs, ", ", ", ")
+            join(io, kwargs, ", ", ", ")
         end
     end
     print(io, ")")
+    show_method_params(io, tv)
+    print(io, " in ", m.module)
     if line > 0
         print(io, " at ", file, ":", line)
     end
@@ -174,6 +193,7 @@ function url(m::Method)
     file = string(m.file)
     line = m.line
     line <= 0 || ismatch(r"In\[[0-9]+\]", file) && return ""
+    is_windows() && (file = replace(file, '\\', '/'))
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
             # this url will only work if we're on a tagged release
@@ -190,7 +210,7 @@ function url(m::Method)
                     u = match(LibGit2.GITHUB_REGEX,u).captures[1]
                     commit = string(LibGit2.head_oid(repo))
                     root = LibGit2.path(repo)
-                    if startswith(file, root)
+                    if startswith(file, root) || startswith(realpath(file), root)
                         "https://github.com/$u/tree/$commit/"*file[length(root)+1:end]*"#L$line"
                     else
                         fileurl(file)
@@ -203,15 +223,16 @@ function url(m::Method)
     end
 end
 
-function writemime(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
+function show(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
-    ft = m.sig.parameters[1]
+    sig = unwrap_unionall(m.sig)
+    ft = sig.parameters[1]
     d1 = decls[1]
     if ft <: Function &&
             isdefined(ft.name.module, ft.name.mt.name) &&
             ft == typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && is(ft.name, Type.name) && isleaftype(ft)
+    elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
         f = ft.parameters[1]
         if isa(f, DataType) && isempty(f.parameters)
             print(io, f)
@@ -227,13 +248,13 @@ function writemime(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataTy
         print(io,"</i>")
     end
     print(io, "(")
-    print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
+    join(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
                       for d in decls[2:end]], ", ", ", ")
     if !isnull(kwtype)
-        kwargs = kwarg_decl(m.sig, get(kwtype))
+        kwargs = kwarg_decl(m, get(kwtype))
         if !isempty(kwargs)
             print(io, "; <i>")
-            print_joined(io, kwargs, ", ", ", ")
+            join(io, kwargs, ", ", ", ")
             print(io, "</i>")
         end
     end
@@ -249,7 +270,7 @@ function writemime(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataTy
     end
 end
 
-function writemime(io::IO, mime::MIME"text/html", ms::MethodList)
+function show(io::IO, mime::MIME"text/html", ms::MethodList)
     mt = ms.mt
     name = mt.name
     n = length(ms)
@@ -260,28 +281,24 @@ function writemime(io::IO, mime::MIME"text/html", ms::MethodList)
     kwtype = isdefined(mt, :kwsorter) ? Nullable{DataType}(typeof(mt.kwsorter)) : Nullable{DataType}()
     for meth in ms
         print(io, "<li> ")
-        writemime(io, mime, meth; kwtype=kwtype)
+        show(io, mime, meth; kwtype=kwtype)
         print(io, "</li> ")
     end
     print(io, "</ul>")
 end
 
-writemime(io::IO, mime::MIME"text/html", mt::MethodTable) = writemime(io, mime, MethodList(mt))
+show(io::IO, mime::MIME"text/html", mt::MethodTable) = show(io, mime, MethodList(mt))
 
 # pretty-printing of Vector{Method} for output of methodswith:
 
-function writemime(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
+function show(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
     print(io, summary(mt))
     if !isempty(mt)
         print(io, ":<ul>")
         for d in mt
             print(io, "<li> ")
-            writemime(io, mime, d)
+            show(io, mime, d)
         end
         print(io, "</ul>")
     end
 end
-
-# override usual show method for Vector{Method}: don't abbreviate long lists
-writemime(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method}) =
-    showarray(IOContext(io, :limit_output => false), mt)

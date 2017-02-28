@@ -57,7 +57,7 @@ function complete_symbol(sym, ffunc)
         # We will exclude the results that the user does not want, as well
         # as excluding Main.Main.Main, etc., because that's most likely not what
         # the user wants
-        p = s->(ffunc(mod, s) && s != module_name(mod))
+        p = s->(!Base.isdeprecated(mod, s) && s != module_name(mod) && ffunc(mod, s))
         # Looking for a binding in a module
         if mod == context_module
             # Also look in modules we got through `using`
@@ -84,11 +84,12 @@ end
 
 function complete_keyword(s::String)
     const sorted_keywords = [
-        "abstract", "baremodule", "begin", "bitstype", "break", "catch", "ccall",
+        "abstract type", "baremodule", "begin", "break", "catch", "ccall",
         "const", "continue", "do", "else", "elseif", "end", "export", "false",
-        "finally", "for", "function", "global", "if", "immutable", "import",
-        "importall", "let", "local", "macro", "module", "quote", "return",
-        "true", "try", "type", "typealias", "using", "while"]
+        "finally", "for", "function", "global", "if", "import",
+        "importall", "let", "local", "macro", "module", "mutable struct",
+        "primitive type", "quote", "return", "struct",
+        "true", "try", "using", "while"]
     r = searchsorted(sorted_keywords, s)
     i = first(r)
     n = length(sorted_keywords)
@@ -100,7 +101,7 @@ function complete_keyword(s::String)
 end
 
 function complete_path(path::AbstractString, pos; use_envpath=false)
-    if Base.is_unix(OS_NAME) && ismatch(r"^~(?:/|$)", path)
+    if Base.is_unix() && ismatch(r"^~(?:/|$)", path)
         # if the path is just "~", don't consider the expanded username as a prefix
         if path == "~"
             dir, prefix = homedir(), ""
@@ -128,13 +129,13 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
         if startswith(file, prefix)
             id = try isdir(joinpath(dir, file)) catch; false end
             # joinpath is not used because windows needs to complete with double-backslash
-            push!(matches, id ? file * (@windows? "\\\\" : "/") : file)
+            push!(matches, id ? file * (@static is_windows() ? "\\\\" : "/") : file)
         end
     end
 
     if use_envpath && length(dir) == 0
         # Look for files in PATH as well
-        local pathdirs = split(ENV["PATH"], @unix? ":" : ";")
+        local pathdirs = split(ENV["PATH"], @static is_windows() ? ";" : ":")
 
         for pathdir in pathdirs
             local actualpath
@@ -235,7 +236,7 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     braces != 1 && return 0:-1, -1
     method_name_end = reverseind(r, i)
     startind = nextind(s, rsearch(s, non_identifier_chars, method_name_end))
-    return startind:endof(s), method_name_end
+    return (startind:endof(s), method_name_end)
 end
 
 # Returns the value in a expression if sym is defined in current namespace fn.
@@ -249,18 +250,18 @@ function get_value(sym::Expr, fn)
         fn, found = get_value(ex, fn)
         !found && return (nothing, false)
     end
-    fn, true
+    return (fn, true)
 end
 get_value(sym::Symbol, fn) = isdefined(fn, sym) ? (getfield(fn, sym), true) : (nothing, false)
 get_value(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? (getfield(fn, sym.value), true) : (nothing, false)
-get_value(sym, fn) = sym, true
+get_value(sym, fn) = (sym, true)
 
 # Return the value of a getfield call expression
 function get_value_getfield(ex::Expr, fn)
     # Example :((top(getfield))(Base,:max))
     val, found = get_value_getfield(ex.args[2],fn) #Look up Base in Main and returns the module
     found || return (nothing, false)
-    get_value_getfield(ex.args[3],val) #Look up max in Base and returns the function if found.
+    return get_value_getfield(ex.args[3], val) #Look up max in Base and returns the function if found.
 end
 get_value_getfield(sym, fn) = get_value(sym, fn)
 
@@ -268,8 +269,8 @@ get_value_getfield(sym, fn) = get_value(sym, fn)
 function get_type_call(expr::Expr)
     f_name = expr.args[1]
     # The if statement should find the f function. How f is found depends on how f is referenced
-    if isa(f_name, TopNode)
-        ft = typeof(getfield(Base, f_name.name))
+    if isa(f_name, GlobalRef) && isconst(f_name.mod,f_name.name) && isdefined(f_name.mod,f_name.name)
+        ft = typeof(eval(f_name))
         found = true
     else
         ft, found = get_type(f_name, Main)
@@ -281,13 +282,15 @@ function get_type_call(expr::Expr)
         found ? push!(args, typ) : push!(args, Any)
     end
     # use _methods_by_ftype as the function is supplied as a type
-    mt = Base._methods_by_ftype(Tuple{ft, args...}, -1)
+    world = typemax(UInt)
+    mt = Base._methods_by_ftype(Tuple{ft, args...}, -1, world)
     length(mt) == 1 || return (Any, false)
     m = first(mt)
     # Typeinference
-    linfo = Base.func_for_method_checked(m[3], Tuple{args...})
-    (tree, return_type) = Core.Inference.typeinf(linfo, m[1], m[2])
-    return return_type, true
+    params = Core.Inference.InferenceParams(world)
+    return_type = Core.Inference.typeinf_type(m[3], m[1], m[2], true, params)
+    return_type === nothing && return (Any, false)
+    return (return_type, true)
 end
 # Returns the return type. example: get_type(:(Base.strip("",' ')),Main) returns (String,true)
 function get_type(sym::Expr, fn)
@@ -297,13 +300,15 @@ function get_type(sym::Expr, fn)
     if sym.head === :call
         # getfield call is special cased as the evaluation of getfield provides good type information,
         # is inexpensive and it is also performed in the complete_symbol function.
-        if sym.args[1] === TopNode(:getfield)
+        a1 = sym.args[1]
+        if isa(a1,GlobalRef) && isconst(a1.mod,a1.name) && isdefined(a1.mod,a1.name) &&
+            eval(a1) === Core.getfield
             val, found = get_value_getfield(sym, Main)
             return found ? Base.typesof(val).parameters[1] : Any, found
         end
         return get_type_call(sym)
     end
-    (Any, false)
+    return (Any, false)
 end
 function get_type(sym, fn)
     val, found = get_value(sym, fn)
@@ -311,7 +316,7 @@ function get_type(sym, fn)
 end
 # Method completion on function call expression that look like :(max(1))
 function complete_methods(ex_org::Expr)
-    args_ex = DataType[]
+    args_ex = Any[]
     func, found = get_value(ex_org.args[1], Main)
     !found && return String[]
     for ex in ex_org.args[2:end]
@@ -321,10 +326,22 @@ function complete_methods(ex_org::Expr)
     out = String[]
     t_in = Tuple{Core.Typeof(func), args_ex...} # Input types
     na = length(args_ex)+1
-    for method in methods(func)
+    ml = methods(func)
+    kwtype = isdefined(ml.mt, :kwsorter) ? Nullable{DataType}(typeof(ml.mt.kwsorter)) : Nullable{DataType}()
+    io = IOBuffer()
+    for method in ml
+        ms = method.sig
+
+        # Do not suggest the default method from sysimg.jl.
+        if Base.is_default_method(method)
+            continue
+        end
+
         # Check if the method's type signature intersects the input types
-        typeintersect(Tuple{method.sig.parameters[1 : min(na, end)]...}, t_in) != Union{} &&
-            push!(out,string(method))
+        if typeintersect(Base.rewrap_unionall(Tuple{Base.unwrap_unionall(ms).parameters[1 : min(na, end)]...}, ms), t_in) != Union{}
+            show(io, method, kwtype=kwtype)
+            push!(out, String(take!(io)))
+        end
     end
     return out
 end
@@ -369,14 +386,51 @@ function bslash_completions(string, pos)
         # return possible matches; these cannot be mixed with regular
         # Julian completions as only latex / emoji symbols contain the leading \
         if startswith(s, "\\:") # emoji
-            emoji_names = filter(k -> startswith(k, s), keys(emoji_symbols))
+            emoji_names = Iterators.filter(k -> startswith(k, s), keys(emoji_symbols))
             return (true, (sort!(collect(emoji_names)), slashpos:pos, true))
         else # latex
-            latex_names = filter(k -> startswith(k, s), keys(latex_symbols))
+            latex_names = Iterators.filter(k -> startswith(k, s), keys(latex_symbols))
             return (true, (sort!(collect(latex_names)), slashpos:pos, true))
         end
     end
     return (false, (String[], 0:-1, false))
+end
+
+function dict_identifier_key(str,tag)
+    if tag === :string
+        str_close = str*"\""
+    elseif tag === :cmd
+        str_close = str*"`"
+    else
+        str_close = str
+    end
+
+    frange, end_of_indentifier = find_start_brace(str_close, c_start='[', c_end=']')
+    isempty(frange) && return (nothing, nothing, nothing)
+    obj = Main
+    for name in split(str[frange[1]:end_of_indentifier], '.')
+        Base.isidentifier(name) || return (nothing, nothing, nothing)
+        sym = Symbol(name)
+        isdefined(obj, sym) || return (nothing, nothing, nothing)
+        obj = getfield(obj, sym)
+        # Avoid `isdefined(::Array, ::Symbol)`
+        isa(obj, Array) && return (nothing, nothing, nothing)
+    end
+    begin_of_key = findnext(x->!in(x,whitespace_chars), str, end_of_indentifier+2)
+    begin_of_key==0 && return (true, nothing, nothing)
+    partial_key = str[begin_of_key:end]
+    (isa(obj, Associative) && length(obj) < 1e6) || return (true, nothing, nothing)
+    return (obj, partial_key, begin_of_key)
+end
+
+# This needs to be a separate non-inlined function, see #19441
+@noinline function find_dict_matches(identifier, partial_key)
+    matches = []
+    for key in keys(identifier)
+        rkey = repr(key)
+        startswith(rkey,partial_key) && push!(matches,rkey)
+    end
+    return matches
 end
 
 function completions(string, pos)
@@ -385,6 +439,20 @@ function completions(string, pos)
     inc_tag = Base.syntax_deprecation_warnings(false) do
         Base.incomplete_tag(parse(partial, raise=false))
     end
+
+    # if completing a key in a Dict
+    identifier, partial_key, loc = dict_identifier_key(partial,inc_tag)
+    if identifier !== nothing
+        if partial_key !== nothing
+            matches = find_dict_matches(identifier, partial_key)
+            length(matches)==1 && (length(string) <= pos || string[pos+1] != ']') && (matches[1]*="]")
+            length(matches)>0 && return sort!(matches), loc:pos, true
+        else
+            return String[], 0:-1, false
+        end
+    end
+
+    # otherwise...
     if inc_tag in [:cmd, :string]
         m = match(r"[\t\n\r\"'`@\$><=;|&\{]| (?!\\)", reverse(partial))
         startpos = nextind(partial, reverseind(partial, m.offset))
@@ -397,7 +465,7 @@ function completions(string, pos)
             paths[1] *= "\""
         end
         #Latex symbols can be completed for strings
-        (success || inc_tag==:cmd) && return sort(paths), r, success
+        (success || inc_tag==:cmd) && return sort!(paths), r, success
     end
 
     ok, ret = bslash_completions(string, pos)
@@ -406,7 +474,7 @@ function completions(string, pos)
     # Make sure that only bslash_completions is working on strings
     inc_tag==:string && return String[], 0:-1, false
 
-     if inc_tag == :other && should_method_complete(partial)
+    if inc_tag == :other && should_method_complete(partial)
         frange, method_name_end = find_start_brace(partial)
         ex = Base.syntax_deprecation_warnings(false) do
             parse(partial[frange] * ")", raise=false)
@@ -433,7 +501,7 @@ function completions(string, pos)
         s = string[startpos:pos]
         if dotpos <= startpos
             for dir in [Pkg.dir(); LOAD_PATH; pwd()]
-                isdir(dir) || continue
+                dir isa AbstractString && isdir(dir) || continue
                 for pname in readdir(dir)
                     if pname[1] != '.' && pname != "METADATA" &&
                         pname != "REQUIRE" && startswith(pname, s)
@@ -477,7 +545,7 @@ function completions(string, pos)
                 elseif c==']'
                     c_start='['; c_end=']'
                 end
-                frange, end_off_indentifier = find_start_brace(string[1:prevind(string, i)], c_start=c_start, c_end=c_end)
+                frange, end_of_indentifier = find_start_brace(string[1:prevind(string, i)], c_start=c_start, c_end=c_end)
                 startpos = start(frange)
                 i = prevind(string, startpos)
             elseif c in ["\'\"\`"...]
@@ -490,7 +558,7 @@ function completions(string, pos)
         end
     end
     append!(suggestions, complete_symbol(s, ffunc))
-    return sort(unique(suggestions)), (dotpos+1):pos, true
+    return sort!(unique(suggestions)), (dotpos+1):pos, true
 end
 
 function shell_completions(string, pos)

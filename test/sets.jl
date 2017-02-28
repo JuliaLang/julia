@@ -3,14 +3,20 @@
 # Set tests
 
 # Construction, collect
-@test is(typeof(Set([1,2,3])), Set{Int})
-@test is(typeof(Set{Int}([3])), Set{Int})
+@test ===(typeof(Set([1,2,3])), Set{Int})
+@test ===(typeof(Set{Int}([3])), Set{Int})
 data_in = (1,"banana", ())
 s = Set(data_in)
 data_out = collect(s)
-@test is(typeof(data_out), Array{Any,1})
+@test ===(typeof(data_out), Array{Any,1})
 @test all(map(d->in(d,data_out), data_in))
 @test length(data_out) == length(data_in)
+let f17741 = x -> x < 0 ? false : 1
+    @test isa(Set(x for x = 1:3), Set{Int})
+    @test isa(Set(sin(x) for x = 1:3), Set{Float64})
+    @test isa(Set(f17741(x) for x = 1:3), Set{Int})
+    @test isa(Set(f17741(x) for x = -1:1), Set{Integer})
+end
 
 # hash
 s1 = Set(["bar", "foo"])
@@ -39,13 +45,13 @@ s3 = Set(["baz"])
 # eltype, similar
 s1 = similar(Set([1,"hello"]))
 @test isequal(s1, Set())
-@test is(eltype(s1), Any)
+@test ===(eltype(s1), Any)
 s2 = similar(Set{Float32}([2.0f0,3.0f0,4.0f0]))
 @test isequal(s2, Set())
-@test is(eltype(s2), Float32)
+@test ===(eltype(s2), Float32)
 s3 = similar(Set([1,"hello"]),Float32)
 @test isequal(s3, Set())
-@test is(eltype(s3), Float32)
+@test ===(eltype(s3), Float32)
 
 # show
 @test sprint(show, Set()) == "Set{Any}()"
@@ -101,10 +107,10 @@ let
     Base.rehash!(s)
     @test length(k) == length(s.dict.keys)
     for i in 1:length(k)
-        if isdefined(k, i)
+        if isassigned(k, i)
             @test k[i] == s.dict.keys[i]
         else
-            @test !isdefined(s.dict.keys, i)
+            @test !isassigned(s.dict.keys, i)
         end
     end
     s == Set(["a", "b", "c"])
@@ -206,6 +212,9 @@ u = unique([1,1,2])
 @test length(u) == 2
 @test unique(iseven, [5,1,8,9,3,4,10,7,2,6]) == [5,8]
 @test unique(n->n % 3, [5,1,8,9,3,4,10,7,2,6]) == [5,1,9]
+# issue 20105
+@test @inferred(unique(x for x in 1:1)) == [1]
+@test unique(x for x in Any[1,1.0])::Vector{Real} == [1]
 
 # allunique
 @test allunique([])
@@ -246,3 +255,19 @@ end
 @test pop!(Set(1:2), 2, nothing) == 2
 
 @test length(Set(['x',120])) == 2
+
+# convert
+let
+    iset = Set([17, 4711])
+    cfset = convert(Set{Float64}, iset)
+    @test typeof(cfset) == Set{Float64}
+    @test cfset == iset
+    fset = Set([17.0, 4711.0])
+    ciset = convert(Set{Int}, fset)
+    @test typeof(ciset) == Set{Int}
+    @test ciset == fset
+    ssset = Set(split("foo bar"))
+    cssset = convert(Set{String}, ssset)
+    @test typeof(cssset) == Set{String}
+    @test cssset == Set(["foo", "bar"])
+end

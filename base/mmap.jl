@@ -2,10 +2,10 @@
 
 module Mmap
 
-const PAGESIZE = Int(@unix ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
+const PAGESIZE = Int(is_unix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
 
 # for mmaps not backed by files
-type Anonymous <: IO
+mutable struct Anonymous <: IO
     name::AbstractString
     readonly::Bool
     create::Bool
@@ -21,14 +21,14 @@ const INVALID_HANDLE_VALUE = -1
 gethandle(io::Anonymous) = INVALID_HANDLE_VALUE
 
 # platform-specific mmap utilities
-@unix_only begin
+if is_unix()
 
-const PROT_READ     = convert(Cint,1)
-const PROT_WRITE    = convert(Cint,2)
-const MAP_SHARED    = convert(Cint,1)
-const MAP_PRIVATE   = convert(Cint,2)
-const MAP_ANONYMOUS = convert(Cint, @osx? 0x1000 : 0x20)
-const F_GETFL       = convert(Cint,3)
+const PROT_READ     = Cint(1)
+const PROT_WRITE    = Cint(2)
+const MAP_SHARED    = Cint(1)
+const MAP_PRIVATE   = Cint(2)
+const MAP_ANONYMOUS = Cint(is_bsd() ? 0x1000 : 0x20)
+const F_GETFL       = Cint(3)
 
 gethandle(io::IO) = fd(io)
 
@@ -64,11 +64,10 @@ function grow!(io::IO, offset::Integer, len::Integer)
     seek(io, pos)
     return
 end
-end # @unix_only
 
-@windows_only begin
+elseif is_windows()
 
-typealias DWORD Culong
+const DWORD = Culong
 
 const PAGE_READONLY          = DWORD(0x02)
 const PAGE_READWRITE         = DWORD(0x04)
@@ -89,9 +88,12 @@ end
 
 settings(sh::Anonymous) = sh.name, sh.readonly, sh.create
 settings(io::IO) = Ptr{Cwchar_t}(0), isreadonly(io), true
-end # @windows_only
 
-# core impelementation of mmap
+else
+    error("mmap not defined for this OS")
+end # os-test
+
+# core implementation of mmap
 function mmap{T,N}(io::IO,
                    ::Type{Array{T,N}}=Vector{UInt8},
                    dims::NTuple{N,Integer}=(div(filesize(io)-position(io),sizeof(T)),),
@@ -102,7 +104,7 @@ function mmap{T,N}(io::IO,
 
     len = prod(dims) * sizeof(T)
     len >= 0 || throw(ArgumentError("requested size must be ≥ 0, got $len"))
-    len == 0 && return Array(T,ntuple(x->0,N))
+    len == 0 && return Array{T}(ntuple(x->0,Val{N}))
     len < typemax(Int) - PAGESIZE || throw(ArgumentError("requested size must be < $(typemax(Int)-PAGESIZE), got $len"))
 
     offset >= 0 || throw(ArgumentError("requested offset must be ≥ 0, got $offset"))
@@ -114,15 +116,13 @@ function mmap{T,N}(io::IO,
 
     file_desc = gethandle(io)
     # platform-specific mmapping
-    @unix_only begin
+    @static if is_unix()
         prot, flags, iswrite = settings(file_desc, shared)
         iswrite && grow && grow!(io, offset, len)
         # mmap the file
         ptr = ccall(:jl_mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, Int64), C_NULL, mmaplen, prot, flags, file_desc, offset_page)
         systemerror("memory mapping failed", reinterpret(Int,ptr) == -1)
-    end # @unix_only
-
-    @windows_only begin
+    else
         name, readonly, create = settings(io)
         szfile = convert(Csize_t, len + offset)
         readonly && szfile > filesize(io) && throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
@@ -134,14 +134,17 @@ function mmap{T,N}(io::IO,
         ptr = ccall(:MapViewOfFile, stdcall, Ptr{Void}, (Ptr{Void}, DWORD, DWORD, DWORD, Csize_t),
                     handle, readonly ? FILE_MAP_READ : FILE_MAP_WRITE, offset_page >> 32, offset_page & typemax(UInt32), (offset - offset_page) + len)
         ptr == C_NULL && error("could not create mapping view: $(Libc.FormatMessage())")
-    end # @windows_only
+    end # os-test
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
-    A = pointer_to_array(convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
-    @unix_only finalizer(A, x -> systemerror("munmap", ccall(:munmap,Cint,(Ptr{Void},Int),ptr,mmaplen) != 0))
-    @windows_only finalizer(A, x -> begin
-        status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), ptr)!=0
-        status |= ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), handle)!=0
-        status || error("could not unmap view: $(Libc.FormatMessage())")
+    A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
+    finalizer(A, function(x)
+        @static if is_unix()
+            systemerror("munmap",  ccall(:munmap, Cint, (Ptr{Void}, Int), ptr, mmaplen) != 0)
+        else
+            status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), ptr)!=0
+            status |= ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), handle)!=0
+            status || error("could not unmap view: $(Libc.FormatMessage())")
+        end
     end)
     return A
 end
@@ -162,10 +165,8 @@ mmap{T<:Array}(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=In
 mmap{T<:Array,N}(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) = mmap(Anonymous(), T, dims, Int64(0); shared=shared)
 mmap{T<:Array}(::Type{T}, i::Integer...; shared::Bool=true) = mmap(Anonymous(), T, convert(Tuple{Vararg{Int}},i), Int64(0); shared=shared)
 
-function mmap{T<:BitArray,N}(io::IOStream,
-                             ::Type{T},
-                             dims::NTuple{N,Integer},
-                             offset::Int64=position(io); grow::Bool=true, shared::Bool=true)
+function mmap{N}(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
+                 offset::Int64=position(io); grow::Bool=true, shared::Bool=true)
     n = prod(dims)
     nc = Base.num_bit_chunks(n)
     chunks = mmap(io, Vector{UInt64}, (nc,), offset; grow=grow, shared=shared)
@@ -176,7 +177,7 @@ function mmap{T<:BitArray,N}(io::IOStream,
             throw(ArgumentError("the given file does not contain a valid BitArray of size $(join(dims, 'x')) (open with \"r+\" mode to override)"))
         end
     end
-    B = BitArray{N}(ntuple(i->0,N)...)
+    B = BitArray{N}(ntuple(i->0,Val{N})...)
     B.chunks = chunks
     B.len = n
     if N != 1
@@ -206,9 +207,13 @@ const MS_SYNC = 4
 function sync!{T}(m::Array{T}, flags::Integer=MS_SYNC)
     offset = rem(UInt(pointer(m)), PAGESIZE)
     ptr = pointer(m) - offset
-    @unix_only systemerror("msync", ccall(:msync, Cint, (Ptr{Void}, Csize_t, Cint), ptr, length(m)*sizeof(T), flags) != 0)
-    @windows_only systemerror("could not FlushViewOfFile: $(Libc.FormatMessage())",
+    @static if is_unix()
+        systemerror("msync",
+                    ccall(:msync, Cint, (Ptr{Void}, Csize_t, Cint), ptr, length(m) * sizeof(T), flags) != 0)
+    else
+        systemerror("could not FlushViewOfFile: $(Libc.FormatMessage())",
                     ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Void}, Csize_t), ptr, length(m)) == 0)
+    end
 end
 sync!(B::BitArray, flags::Integer=MS_SYNC) = sync!(B.chunks, flags)
 

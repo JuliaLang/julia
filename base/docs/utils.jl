@@ -2,7 +2,7 @@
 
 # Text / HTML objects
 
-import Base: print, writemime
+import Base: print, show, ==, hash
 
 export HTML, @html_str
 
@@ -19,20 +19,20 @@ You can also use a stream for large amounts of data:
       println(io, "<div>foo</div>")
     end
 """
-type HTML{T}
+mutable struct HTML{T}
     content::T
 end
 
 function HTML(xs...)
     HTML() do io
         for x in xs
-            writemime(io, MIME"text/html"(), x)
+            show(io, MIME"text/html"(), x)
         end
     end
 end
 
-writemime(io::IO, ::MIME"text/html", h::HTML) = print(io, h.content)
-writemime{F <: Function}(io::IO, ::MIME"text/html", h::HTML{F}) = h.content(io)
+show(io::IO, ::MIME"text/html", h::HTML) = print(io, h.content)
+show(io::IO, ::MIME"text/html", h::HTML{<:Function}) = h.content(io)
 
 """
     @html_str -> Docs.HTML
@@ -46,7 +46,7 @@ end
 function catdoc(xs::HTML...)
     HTML() do io
         for x in xs
-            writemime(io, MIME"text/html"(), x)
+            show(io, MIME"text/html"(), x)
         end
     end
 end
@@ -64,13 +64,16 @@ You can also use a stream for large amounts of data:
       println(io, "foo")
     end
 """
-type Text{T}
+mutable struct Text{T}
     content::T
 end
 
 print(io::IO, t::Text) = print(io, t.content)
-print{F <: Function}(io::IO, t::Text{F}) = t.content(io)
-writemime(io::IO, ::MIME"text/plain", t::Text) = print(io, t)
+print(io::IO, t::Text{<:Function}) = t.content(io)
+show(io::IO, t::Text) = print(io, t)
+
+=={T<:Union{HTML, Text}}(t1::T, t2::T) = t1.content == t2.content
+hash{T<:Union{HTML, Text}}(t::T, h::UInt) = hash(T, hash(t.content, h))
 
 """
     @text_str -> Docs.Text
@@ -84,14 +87,14 @@ end
 function catdoc(xs::Text...)
     Text() do io
         for x in xs
-            writemime(io, MIME"text/plain"(), x)
+            show(io, MIME"text/plain"(), x)
         end
     end
 end
 
 # REPL help
 
-function helpmode(line::AbstractString)
+function helpmode(io::IO, line::AbstractString)
     line = strip(line)
     expr =
         if haskey(keywords, Symbol(line))
@@ -109,8 +112,11 @@ function helpmode(line::AbstractString)
             # definition if it exists.
             (isexpr(x, :macrocall, 1) && !endswith(line, "()")) ? quot(x) : x
         end
-    :(Base.Docs.@repl $expr)
+    # the following must call repl(io, expr) via the @repl macro
+    # so that the resulting expressions are evaluated in the Base.Docs namespace
+    :(Base.Docs.@repl $io $expr)
 end
+helpmode(line::AbstractString) = helpmode(STDOUT, line)
 
 function repl_search(io::IO, s)
     pre = "search:"
@@ -118,7 +124,6 @@ function repl_search(io::IO, s)
     printmatches(io, s, completions(s), cols = displaysize(io)[2] - length(pre))
     println(io, "\n")
 end
-
 repl_search(s) = repl_search(STDOUT, s)
 
 function repl_corrections(io::IO, s)
@@ -128,34 +133,75 @@ function repl_corrections(io::IO, s)
     end
     print_correction(io, s)
 end
-
 repl_corrections(s) = repl_corrections(STDOUT, s)
 
-macro repl(ex) repl(ex) end
+# inverse of latex_symbols Dict, lazily created as needed
+const symbols_latex = Dict{String,String}()
+function symbol_latex(s::String)
+    if isempty(symbols_latex)
+        for (k,v) in Base.REPLCompletions.latex_symbols
+            symbols_latex[v] = k
+        end
+    end
+    return get(symbols_latex, s, "")
+end
+function repl_latex(io::IO, s::String)
+    latex = symbol_latex(s)
+    if !isempty(latex)
+        print(io, "\"")
+        Markdown.with_output_format(:cyan, io) do io
+            print(io, s)
+        end
+        print(io, "\" can be typed by ")
+        Markdown.with_output_format(:cyan, io) do io
+            print(io, latex, "<tab>")
+        end
+        println(io, '\n')
+    elseif any(c -> haskey(symbols_latex, string(c)), s)
+        print(io, "\"")
+        Markdown.with_output_format(:cyan, io) do io
+            print(io, s)
+        end
+        print(io, "\" can be typed by ")
+        Markdown.with_output_format(:cyan, io) do io
+            for c in s
+                cstr = string(c)
+                if haskey(symbols_latex, cstr)
+                    print(io, symbols_latex[cstr], "<tab>")
+                else
+                    print(io, c)
+                end
+            end
+        end
+        println(io, '\n')
+    end
+end
+repl_latex(s::String) = repl_latex(STDOUT, s)
 
-function repl(s::Symbol)
+macro repl(ex) repl(ex) end
+macro repl(io, ex) repl(io, ex) end
+
+function repl(io::IO, s::Symbol)
+    str = string(s)
     quote
-        repl_search($(string(s)))
-        ($(isdefined(s) || haskey(keywords, s))) || repl_corrections($(string(s)))
+        repl_latex($io, $str)
+        repl_search($io, $str)
+        ($(isdefined(s) || haskey(keywords, s))) || repl_corrections($io, $str)
         $(_repl(s))
     end
 end
+isregex(x) = isexpr(x, :macrocall, 2) && x.args[1] === Symbol("@r_str") && !isempty(x.args[2])
+repl(io::IO, ex::Expr) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex)
+repl(io::IO, str::AbstractString) = :(apropos($io, $str))
+repl(io::IO, other) = :(@doc $(esc(other)))
 
-isregex(x) = isexpr(x, :macrocall, 2) && x.args[1] == Symbol("@r_str") && !isempty(x.args[2])
-
-repl(ex::Expr) = isregex(ex) ? :(apropos($ex)) : _repl(ex)
-
-repl(str::AbstractString) = :(apropos($str))
-
-repl(other) = :(@doc $(esc(other)))
+repl(x) = repl(STDOUT, x)
 
 function _repl(x)
-    docs = :(@doc $(esc(x)))
-    if isexpr(x, :call)
-        # Handles function call syntax where each argument is an atom (symbol, number, etc.)
-        t = Base.gen_call_with_extracted_types(doc, x)
-        (isexpr(t, :call, 3) && t.args[1] == doc) && (docs = t)
+    if (isexpr(x, :call) && !any(isexpr(x, :(::)) for x in x.args))
+        x.args[2:end] = [:(::typeof($arg)) for arg in x.args[2:end]]
     end
+    docs = :(@doc $(esc(x)))
     if isfield(x)
         quote
             if isa($(esc(x.args[1])), DataType)
@@ -223,7 +269,7 @@ function levenshtein(s1, s2)
     a, b = collect(s1), collect(s2)
     m = length(a)
     n = length(b)
-    d = Array(Int, m+1, n+1)
+    d = Array{Int}(m+1, n+1)
 
     d[1:m+1, 1] = 0:m
     d[1, 1:n+1] = 0:n
@@ -284,7 +330,7 @@ function print_joined_cols(io::IO, ss, delim = "", last = delim; cols = displays
         total += length(ss[i])
         total + max(i-2,0)*length(delim) + (i>1?1:0)*length(last) > cols && (i-=1; break)
     end
-    print_joined(io, ss[1:i], delim, last)
+    join(io, ss[1:i], delim, last)
 end
 
 print_joined_cols(args...; cols = displaysize(STDOUT)[2]) = print_joined_cols(STDOUT, args...; cols=cols)
@@ -302,19 +348,19 @@ print_correction(word) = print_correction(STDOUT, word)
 
 # Completion data
 
-const builtins = ["abstract", "baremodule", "begin", "bitstype", "break",
+const builtins = ["abstract type", "baremodule", "begin", "break",
                   "catch", "ccall", "const", "continue", "do", "else",
                   "elseif", "end", "export", "finally", "for", "function",
-                  "global", "if", "immutable", "import", "importall", "let",
-                  "local", "macro", "module", "quote", "return", "try", "type",
-                  "typealias", "using", "while"]
+                  "global", "if", "import", "importall", "let",
+                  "local", "macro", "module", "mutable struct", "primitive type",
+                  "quote", "return", "struct", "try", "using", "while"]
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
 filtervalid(names) = filter(x->!ismatch(r"#", x), map(string, names))
 
 accessible(mod::Module) =
-    [names(mod, true, true);
+    [filter!(s->Base.isdeprecated(mod, s), names(mod, true, true));
      map(names, moduleusings(mod))...;
      builtins] |> unique |> filtervalid
 
@@ -372,9 +418,10 @@ stripmd(x::AbstractString) = x  # base case
 stripmd(x::Void) = " "
 stripmd(x::Vector) = string(map(stripmd, x)...)
 stripmd(x::Markdown.BlockQuote) = "$(stripmd(x.content))"
+stripmd(x::Markdown.Admonition) = "$(stripmd(x.content))"
 stripmd(x::Markdown.Bold) = "$(stripmd(x.text))"
 stripmd(x::Markdown.Code) = "$(stripmd(x.code))"
-stripmd{N}(x::Markdown.Header{N}) = stripmd(x.text)
+stripmd(x::Markdown.Header) = stripmd(x.text)
 stripmd(x::Markdown.HorizontalRule) = " "
 stripmd(x::Markdown.Image) = "$(stripmd(x.alt)) $(x.url)"
 stripmd(x::Markdown.Italic) = "$(stripmd(x.text))"

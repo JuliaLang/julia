@@ -1,2 +1,4 @@
-UnicodeData.txt
+deps/
 _build/
+UnicodeData.txt
+

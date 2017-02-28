@@ -11,13 +11,13 @@ function getDivGrad(n1,n2,n3)
     # DIV from faces to cell-centers
     Div = [D1 D2 D3]
 
-    return Div*Div';
+    return Div*Div'
 end
 
 #----------------- 1D finite difference on staggered grid
 function ddx(n)
 # generate 1D derivatives
-    return d = spdiags(ones(n)*[-1 1],[0,1],n,n+1)
+    return d = spdiags(ones(n)*[-1, 1]',[0,1],n,n+1)
 end
 
 #------------- Build a diagonal matrix

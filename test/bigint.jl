@@ -164,7 +164,7 @@ end
 @test ~BigInt(123) == -124
 @test BigInt(123) & BigInt(234) == 106
 @test BigInt(123) | BigInt(234) == 251
-@test BigInt(123) $ BigInt(234) == 145
+@test BigInt(123) ⊻ BigInt(234) == 145
 
 @test gcd(BigInt(48), BigInt(180)) == 12
 @test lcm(BigInt(48), BigInt(180)) == 720
@@ -199,11 +199,11 @@ g = parse(BigInt,"-1")
 @test *(a, b, c, d, f) == parse(BigInt,"-45258849200337190631492857400003938881995610529251881450243326128168934937055005474972396281351684800")
 @test *(a, b, c, d, f, g) == parse(BigInt,"45258849200337190631492857400003938881995610529251881450243326128168934937055005474972396281351684800")
 
-@test ($)(a, b) == parse(BigInt,"327299")
-@test ($)(a, b, c) == parse(BigInt,"3426495623485904783798472")
-@test ($)(a, b, c, d) == parse(BigInt,"-3426495623485906178489610")
-@test ($)(a, b, c, d, f) == parse(BigInt,"-2413804710837418037418307081437316711364709261074607933698")
-@test ($)(a, b, c, d, f, g) == parse(BigInt,"2413804710837418037418307081437316711364709261074607933697")
+@test xor(a, b) == parse(BigInt,"327299")
+@test xor(a, b, c) == parse(BigInt,"3426495623485904783798472")
+@test xor(a, b, c, d) == parse(BigInt,"-3426495623485906178489610")
+@test xor(a, b, c, d, f) == parse(BigInt,"-2413804710837418037418307081437316711364709261074607933698")
+@test xor(a, b, c, d, f, g) == parse(BigInt,"2413804710837418037418307081437316711364709261074607933697")
 
 @test (&)(a, b) == parse(BigInt,"124")
 @test (&)(a, b, c) == parse(BigInt,"72")
@@ -217,12 +217,6 @@ g = parse(BigInt,"-1")
 @test (|)(a, b, c, d, f) == parse(BigInt,"-1358954753")
 @test (|)(a, b, c, d, f, g) == parse(BigInt,"-1")
 
-@test isprime(BigInt(1000000007))
-@test isprime(BigInt(1000000007), 1)
-@test isprime(BigInt(10000000019))
-@test isprime(parse(BigInt,"359334085968622831041960188598043661065388726959079837"))
-@test !isprime(BigInt(1))
-@test !isprime(BigInt(10000000020))
 
 @test trailing_ones(a) == 8
 @test trailing_zeros(b) == 2
@@ -232,7 +226,7 @@ g = parse(BigInt,"-1")
 # from Bill Hart, https://groups.google.com/group/julia-dev/browse_frm/thread/798e2d1322daf633
 function mul(a::Vector{BigInt}, b::Vector{BigInt})
    x = a[2]*b[2]
-   c = Array(BigInt,3)
+   c = Array{BigInt,1}(3)
    c[1] = a[1]*b[1] + x
    c[2] = a[1]*b[2] + a[2]*b[3]
    c[3] = x + a[3]*b[3]
@@ -263,8 +257,7 @@ s = string(n)
 @test startswith(s, "316047687386689")
 
 # serialization (#5133)
-let
-    n = parse(BigInt,"359334085968622831041960188598043661065388726959079837")
+let n = parse(BigInt,"359334085968622831041960188598043661065388726959079837")
     b = IOBuffer()
     serialize(b,n)
     seek(b,0)
@@ -279,6 +272,16 @@ ndigits_mismatch(n) = ndigits(n) != ndigits(BigInt(n))
 @test !any(ndigits_mismatch, 64:99)
 @test !any(ndigits_mismatch, 512:999)
 @test !any(ndigits_mismatch, 8192:9999)
+
+# The following should not crash (#16579)
+ndigits(rand(big.(-999:999)), rand(63:typemax(Int)))
+ndigits(rand(big.(-999:999)), big(2)^rand(2:999))
+
+for i in big.([-20:-1;1:20])
+    for b in -10:1
+        @test_throws DomainError ndigits(i, b)
+    end
+end
 
 # conversion from float
 @test BigInt(2.0) == BigInt(2.0f0) == BigInt(big(2.0)) == 2
@@ -300,3 +303,55 @@ ndigits_mismatch(n) = ndigits(n) != ndigits(BigInt(n))
 @test_throws InexactError round(BigInt,Inf)
 @test_throws InexactError floor(BigInt,Inf)
 @test_throws InexactError ceil(BigInt,Inf)
+
+@test bin(big(3)) == "11"
+@test oct(big(9)) == "11"
+@test oct(-big(9)) == "-11"
+@test hex(big(12)) == "c"
+
+# Issue #18849: bin, oct, dec, hex should not call sizeof on BigInts
+# when padding is desired
+let padding = 4, low = big(4), high = big(2^20)
+    @test bin(low, padding) == "0100"
+    @test oct(low, padding) == "0004"
+    @test dec(low, padding) == "0004"
+    @test hex(low, padding) == "0004"
+
+    @test bin(high, padding) == "100000000000000000000"
+    @test oct(high, padding) == "4000000"
+    @test dec(high, padding) == "1048576"
+    @test hex(high, padding) == "100000"
+
+    @test bin(-low, padding) == "-0100" # handle negative numbers correctly
+    @test oct(-low, padding) == "-0004"
+    @test dec(-low, padding) == "-0004"
+    @test hex(-low, padding) == "-0004"
+
+    @test bin(-high, padding) == "-100000000000000000000"
+    @test oct(-high, padding) == "-4000000"
+    @test dec(-high, padding) == "-1048576"
+    @test hex(-high, padding) == "-100000"
+end
+
+@test isqrt(big(4)) == 2
+@test isqrt(big(5)) == 2
+
+@test big(5)^true == big(5)
+@test big(5)^false == one(BigInt)
+
+
+# operations that when applied to Int64 give Float64, should give BigFloat
+@test typeof(exp(a)) == BigFloat
+@test typeof(exp2(a)) == BigFloat
+@test typeof(exp10(a)) == BigFloat
+@test typeof(expm1(a)) == BigFloat
+@test typeof(cosh(a)) == BigFloat
+@test typeof(sinh(a)) == BigFloat
+@test typeof(tanh(a)) == BigFloat
+@test typeof(sech(a)) == BigFloat
+@test typeof(csch(a)) == BigFloat
+@test typeof(coth(a)) == BigFloat
+@test typeof(cbrt(a)) == BigFloat
+@test typeof(tan(a)) == BigFloat
+@test typeof(cos(a)) == BigFloat
+@test typeof(sin(a)) == BigFloat

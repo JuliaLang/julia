@@ -2,33 +2,60 @@
 
 # LQ Factorizations
 
-immutable LQ{T,S<:AbstractMatrix} <: Factorization{T}
+struct LQ{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     τ::Vector{T}
-    LQ(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
+    LQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
 
-immutable LQPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
+struct LQPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     factors::Matrix{T}
     τ::Vector{T}
-    LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
+    LQPackedQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
 
-LQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = LQ{T,typeof(factors)}(factors, τ)
-LQPackedQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = LQPackedQ{T,typeof(factors)}(factors, τ)
+LQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQ{T,typeof(factors)}(factors, τ)
+LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQPackedQ{T,typeof(factors)}(factors, τ)
 
-lqfact!{T<:BlasFloat}(A::StridedMatrix{T}) = LQ(LAPACK.gelqf!(A)...)
-lqfact{T<:BlasFloat}(A::StridedMatrix{T})  = lqfact!(copy(A))
+"""
+    lqfact!(A) -> LQ
+
+Compute the LQ factorization of `A`, using the input
+matrix as a workspace. See also [`lq`](@ref).
+"""
+lqfact!(A::StridedMatrix{<:BlasFloat}) = LQ(LAPACK.gelqf!(A)...)
+"""
+    lqfact(A) -> LQ
+
+Compute the LQ factorization of `A`. See also [`lq`](@ref).
+"""
+lqfact(A::StridedMatrix{<:BlasFloat})  = lqfact!(copy(A))
 lqfact(x::Number) = lqfact(fill(x,1,1))
 
+"""
+    lq(A; [thin=true]) -> L, Q
+
+Perform an LQ factorization of `A` such that `A = L*Q`. The
+default is to compute a thin factorization. The LQ factorization
+is the QR factorization of `A.'`. `L` is not extended with
+zeros if the full `Q` is requested.
+"""
 function lq(A::Union{Number, AbstractMatrix}; thin::Bool=true)
     F = lqfact(A)
     F[:L], full(F[:Q], thin=thin)
 end
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
+
 convert{T}(::Type{LQ{T}},A::LQ) = LQ(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
+convert{T}(::Type{Factorization{T}}, A::LQ{T}) = A
 convert{T}(::Type{Factorization{T}}, A::LQ) = convert(LQ{T}, A)
+convert(::Type{AbstractMatrix}, A::LQ) = A[:L]*A[:Q]
+convert(::Type{AbstractArray}, A::LQ) = convert(AbstractMatrix, A)
+convert(::Type{Matrix}, A::LQ) = convert(Array, convert(AbstractArray, A))
+convert(::Type{Array}, A::LQ) = convert(Matrix, A)
+full(A::LQ) = convert(AbstractArray, A)
+
 ctranspose{T}(A::LQ{T}) = QR{T,typeof(A.factors)}(A.factors', A.τ)
 
 function getindex(A::LQ, d::Symbol)
@@ -52,8 +79,30 @@ end
 
 getq(A::LQ) = LQPackedQ(A.factors, A.τ)
 
+function show(io::IO, C::LQ)
+    println(io, "$(typeof(C)) with factors L and Q:")
+    show(io, C[:L])
+    println(io)
+    show(io, C[:Q])
+end
+
 convert{T}(::Type{LQPackedQ{T}}, Q::LQPackedQ) = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
 convert{T}(::Type{AbstractMatrix{T}}, Q::LQPackedQ) = convert(LQPackedQ{T}, Q)
+convert(::Type{Matrix}, A::LQPackedQ) = LAPACK.orglq!(copy(A.factors),A.τ)
+convert(::Type{Array}, A::LQPackedQ) = convert(Matrix, A)
+function full{T}(A::LQPackedQ{T}; thin::Bool = true)
+    #= We construct the full eye here, even though it seems inefficient, because
+    every element in the output matrix is a function of all the elements of
+    the input matrix. The eye is modified by the elementary reflectors held
+    in A, so this is not just an indexing operation. Note that in general
+    explicitly constructing Q, rather than using the ldiv or mult methods,
+    may be a wasteful allocation. =#
+    if thin
+        convert(Array, A)
+    else
+        A_mul_B!(A, eye(T, size(A.factors,2), size(A.factors,1)))
+    end
+end
 
 size(A::LQ, dim::Integer) = size(A.factors, dim)
 size(A::LQ) = size(A.factors)
@@ -68,23 +117,6 @@ function size(A::LQPackedQ, dim::Integer)
 end
 
 size(A::LQPackedQ) = size(A.factors)
-
-full(A::LQ) = A[:L]*A[:Q]
-#=
-We construct the full eye here, even though it seems ineffecient, because
-every element in the output matrix is a function of all the elements of
-the input matrix. The eye is modified by the elementary reflectors held
-in A, so this is not just an indexing operation. Note that in general
-explicitly constructing Q, rather than using the ldiv or mult methods,
-may be a wasteful allocation.
-=#
-function full{T}(A::LQPackedQ{T}; thin::Bool=true)
-    if thin
-        LAPACK.orglq!(copy(A.factors),A.τ)
-    else
-        A_mul_B!(A, eye(T, size(A.factors,2), size(A.factors,1)))
-    end
-end
 
 ## Multiplication by LQ
 A_mul_B!{T<:BlasFloat}(A::LQ{T}, B::StridedVecOrMat{T}) = A[:L]*LAPACK.ormlq!('L','N',A.factors,A.τ,B)
@@ -106,22 +138,35 @@ end
 ## Multiplication by Q
 ### QB
 A_mul_B!{T<:BlasFloat}(A::LQPackedQ{T}, B::StridedVecOrMat{T})   = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
-function *{TA,TB}(A::LQPackedQ{TA},B::StridedVecOrMat{TB})
-    TAB = promote_type(TA, TB)
+function (*)(A::LQPackedQ,B::StridedVecOrMat)
+    TAB = promote_type(eltype(A), eltype(B))
     A_mul_B!(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB))
 end
 
 ### QcB
 Ac_mul_B!{T<:BlasReal}(A::LQPackedQ{T}, B::StridedVecOrMat{T})    = LAPACK.ormlq!('L','T',A.factors,A.τ,B)
 Ac_mul_B!{T<:BlasComplex}(A::LQPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormlq!('L','C',A.factors,A.τ,B)
-function Ac_mul_B{TA,TB}(A::LQPackedQ{TA}, B::StridedVecOrMat{TB})
-    TAB = promote_type(TA,TB)
+function Ac_mul_B(A::LQPackedQ, B::StridedVecOrMat)
+    TAB = promote_type(eltype(A), eltype(B))
     if size(B,1) == size(A.factors,2)
         Ac_mul_B!(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB))
     elseif size(B,1) == size(A.factors,1)
         Ac_mul_B!(convert(AbstractMatrix{TAB}, A), [B; zeros(TAB, size(A.factors, 2) - size(A.factors, 1), size(B, 2))])
     else
         throw(DimensionMismatch("first dimension of B, $(size(B,1)), must equal one of the dimensions of A, $(size(A))"))
+    end
+end
+
+### QBc/QcBc
+for (f1, f2) in ((:A_mul_Bc, :A_mul_B!),
+                 (:Ac_mul_Bc, :Ac_mul_B!))
+    @eval begin
+        function ($f1)(A::LQPackedQ, B::StridedVecOrMat)
+            TAB = promote_type(eltype(A), eltype(B))
+            BB = similar(B, TAB, (size(B, 2), size(B, 1)))
+            ctranspose!(BB, B)
+            return ($f2)(A, BB)
+        end
     end
 end
 
@@ -146,6 +191,19 @@ function A_mul_Bc{TA<:Number,TB<:Number}( A::StridedVecOrMat{TA}, B::LQPackedQ{T
     A_mul_Bc!(copy_oftype(A, TAB), convert(AbstractMatrix{TAB},(B)))
 end
 
+### AcQ/AcQc
+for (f1, f2) in ((:Ac_mul_B, :A_mul_B!),
+                 (:Ac_mul_Bc, :A_mul_Bc!))
+    @eval begin
+        function ($f1)(A::StridedMatrix, B::LQPackedQ)
+            TAB = promote_type(eltype(A), eltype(B))
+            AA = similar(A, TAB, (size(A, 2), size(A, 1)))
+            ctranspose!(AA, A)
+            return ($f2)(AA, B)
+        end
+    end
+end
+
 function \{TA,Tb}(A::LQ{TA}, b::StridedVector{Tb})
     S = promote_type(TA,Tb)
     m = checksquare(A)
@@ -162,6 +220,15 @@ function \{TA,TB}(A::LQ{TA},B::StridedMatrix{TB})
     X = A_ldiv_B!(AA, copy_oftype(B, S))
     return X
 end
+# With a real lhs and complex rhs with the same precision, we can reinterpret
+# the complex rhs as a real rhs with twice the number of columns
+function (\){T<:BlasReal}(F::LQ{T}, B::VecOrMat{Complex{T}})
+    c2r = reshape(transpose(reinterpret(T, B, (2, length(B)))), size(B, 1), 2*size(B, 2))
+    x = A_ldiv_B!(F, c2r)
+    return reinterpret(Complex{T}, transpose(reshape(x, div(length(x), 2), 2)),
+        isa(B, AbstractVector) ? (size(F,2),) : (size(F,2), size(B,2)))
+end
+
 
 function A_ldiv_B!{T}(A::LQ{T}, B::StridedVecOrMat{T})
     Ac_mul_B!(A[:Q], A_ldiv_B!(LowerTriangular(A[:L]),B))

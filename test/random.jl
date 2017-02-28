@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Issue #6573
-srand(0); rand(); x = rand(384);
+srand(0); rand(); x = rand(384)
 @test find(x .== rand()) == []
 
 @test rand() != rand()
@@ -10,8 +10,8 @@ srand(0); rand(); x = rand(384);
 @test -10 <= rand(-10:-5) <= -5
 @test -10 <= rand(-10:5) <= 5
 @test minimum([rand(Int32(1):Int32(7^7)) for i = 1:100000]) > 0
-@test(typeof(rand(false:true)) === Bool)
-@test(typeof(rand(Char)) === Char)
+@test typeof(rand(false:true)) === Bool
+@test typeof(rand(Char)) === Char
 @test length(randn(4, 5)) == 20
 @test length(bitrand(4, 5)) == 20
 
@@ -41,17 +41,23 @@ A = zeros(UInt128, 2, 2)
 let mt = MersenneTwister()
     srand(mt)
     @test rand(mt, 0:3:1000) in 0:3:1000
-    @test issubset(rand!(mt, Array(Int, 100), 0:3:1000), 0:3:1000)
+    @test issubset(rand!(mt, Array{Int}(100), 0:3:1000), 0:3:1000)
     coll = Any[2, UInt128(128), big(619), "string"]
     @test rand(mt, coll) in coll
     @test issubset(rand(mt, coll, 2, 3), coll)
 
     # check API with default RNG:
     rand(0:3:1000)
-    rand!(Array(Int, 100), 0:3:1000)
+    rand!(Array{Int}(100), 0:3:1000)
     rand(coll)
     rand(coll, 2, 3)
 end
+
+# rand using Dict, Set
+adict = Dict(1=>2, 3=>4, 5=>6)
+@test rand(adict) in adict
+aset = Set(1:10)
+@test rand(aset) in aset
 
 # randn
 @test randn(MersenneTwister(42)) == -0.5560268761463861
@@ -114,23 +120,24 @@ end
 ziggurat_table_size = 256
 nmantissa           = Int64(2)^51 # one bit for the sign
 ziggurat_nor_r      = parse(BigFloat,"3.65415288536100879635194725185604664812733315920964488827246397029393565706474")
-nor_section_area    = ziggurat_nor_r*exp(-ziggurat_nor_r^2/2) + erfc(ziggurat_nor_r/sqrt(BigFloat(2)))*sqrt(big(π)/2)
+erfc_zigg_root2     = parse(BigFloat,"2.580324876539008898343885504487203185398584536409033046076029509351995983934371e-04")
+nor_section_area    = ziggurat_nor_r*exp(-ziggurat_nor_r^2/2) + erfc_zigg_root2*sqrt(big(π)/2)
 emantissa           = Int64(2)^52
 ziggurat_exp_r      = parse(BigFloat,"7.69711747013104971404462804811408952334296818528283253278834867283241051210533")
 exp_section_area    = (ziggurat_exp_r + 1)*exp(-ziggurat_exp_r)
 
-ki = Array(UInt64, ziggurat_table_size)
-wi = Array(Float64, ziggurat_table_size)
-fi = Array(Float64, ziggurat_table_size)
+ki = Array{UInt64}(ziggurat_table_size)
+wi = Array{Float64}(ziggurat_table_size)
+fi = Array{Float64}(ziggurat_table_size)
 # Tables for exponential variates
-ke = Array(UInt64, ziggurat_table_size)
-we = Array(Float64, ziggurat_table_size)
-fe = Array(Float64, ziggurat_table_size)
+ke = Array{UInt64}(ziggurat_table_size)
+we = Array{Float64}(ziggurat_table_size)
+fe = Array{Float64}(ziggurat_table_size)
 function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
-    wib = big(wi)
-    fib = big(fi)
-    web = big(we)
-    feb = big(fe)
+    wib = big.(wi)
+    fib = big.(fi)
+    web = big.(we)
+    feb = big.(fe)
     # Ziggurat tables for the normal distribution
     x1 = ziggurat_nor_r
     wib[256] = x1/nmantissa
@@ -216,8 +223,8 @@ u1 = uuid1()
 u4 = uuid4()
 @test uuid_version(u1) == 1
 @test uuid_version(u4) == 4
-@test u1 == UUID(string(u1)) == UUID(utf16(string(u1))) == UUID(utf32(string(u1)))
-@test u4 == UUID(string(u4)) == UUID(utf16(string(u4))) == UUID(utf32(string(u4)))
+@test u1 == UUID(string(u1)) == UUID(GenericString(string(u1)))
+@test u4 == UUID(string(u4)) == UUID(GenericString(string(u4)))
 @test u1 == UUID(UInt128(u1))
 @test u4 == UUID(UInt128(u4))
 @test uuid4(MersenneTwister()) == uuid4(MersenneTwister())
@@ -234,7 +241,7 @@ end
 # test code paths of rand!
 
 let mt = MersenneTwister(0)
-    A128 = Array(UInt128, 0)
+    A128 = Array{UInt128}(0)
     @test length(rand!(mt, A128)) == 0
     for (i,n) in enumerate([1, 3, 5, 6, 10, 11, 30])
         resize!(A128, n)
@@ -251,8 +258,8 @@ let mt = MersenneTwister(0)
 
     srand(mt,0)
     for (i,T) in enumerate([Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, Float16, Float32])
-        A = Array(T, 16)
-        B = Array(T, 31)
+        A = Array{T}(16)
+        B = Array{T}(31)
         rand!(mt, A)
         rand!(mt, B)
         @test A[end] == Any[21,0x7b,17385,0x3086,-1574090021,0xadcb4460,6797283068698303107,0x4e91c9c4d4f5f759,
@@ -263,7 +270,7 @@ let mt = MersenneTwister(0)
     end
 
     srand(mt,0)
-    AF64 = Array(Float64, Base.Random.dsfmt_get_min_array_size()-1)
+    AF64 = Array{Float64}(Base.Random.dsfmt_get_min_array_size()-1)
     @test rand!(mt, AF64)[end] == 0.957735065345398
     @test rand!(mt, AF64)[end] == 0.6492481059865669
     resize!(AF64, 2*length(mt.vals))
@@ -272,10 +279,10 @@ end
 
 # Issue #9037
 let mt = MersenneTwister()
-    a = Array(Float64, 0)
+    a = Array{Float64}(0)
     resize!(a, 1000) # could be 8-byte aligned
-    b = Array(Float64, 1000) # should be 16-byte aligned
-    c8 = Array(UInt64, 1001)
+    b = Array{Float64}(1000) # should be 16-byte aligned
+    c8 = Array{UInt64}(1001)
     pc8 = pointer(c8)
     if Int(pc8) % 16 == 0
         # Make sure pc8 is not 16-byte aligned since that's what we want to test.
@@ -283,7 +290,7 @@ let mt = MersenneTwister()
         # certain architectures (e.g. ARM)
         pc8 += 8
     end
-    c = pointer_to_array(Ptr{Float64}(pc8), 1000) # Int(pointer(c)) % 16 == 8
+    c = unsafe_wrap(Array, Ptr{Float64}(pc8), 1000) # Int(pointer(c)) % 16 == 8
 
     for A in (a, b, c)
         srand(mt, 0)
@@ -300,14 +307,43 @@ end
 
 # test all rand APIs
 for rng in ([], [MersenneTwister()], [RandomDevice()])
+    types = [Base.BitInteger_types..., Bool, Float16, Float32, Float64, Char]
+    ftypes = [Float16, Float32, Float64]
+    b2 = big(2)
+    u3 = UInt(3)
     for f in [rand, randn, randexp]
-        f(rng...)        ::Float64
-        f(rng..., 5)     ::Vector{Float64}
-        f(rng..., 2, 3)  ::Array{Float64, 2}
+        f(rng...)                     ::Float64
+        f(rng..., 5)                  ::Vector{Float64}
+        f(rng..., 2, 3)               ::Array{Float64, 2}
+        f(rng..., b2, u3)             ::Array{Float64, 2}
+        f(rng..., (2, 3))             ::Array{Float64, 2}
+        for T in (f === rand ? types : ftypes)
+            a0 = f(rng..., T)         ::T
+            a1 = f(rng..., T, 5)      ::Vector{T}
+            a2 = f(rng..., T, 2, 3)   ::Array{T, 2}
+            a3 = f(rng..., T, b2, u3) ::Array{T, 2}
+            a4 = f(rng..., T, (2, 3)) ::Array{T, 2}
+            if T <: AbstractFloat && f === rand
+                for a in [a0, a1..., a2..., a3..., a4...]
+                    @test 0.0 <= a < 1.0
+                end
+            end
+        end
     end
-    for f! in [randn!, randexp!]
-        f!(rng..., Array(Float64, 5))    ::Vector{Float64}
-        f!(rng..., Array(Float64, 2, 3)) ::Array{Float64, 2}
+    for f! in [rand!, randn!, randexp!]
+        for T in (f! === rand! ? types : ftypes)
+            X = T == Bool ? T[0,1] : T[0,1,2]
+            for A in (Array{T}(5), Array{T}(2, 3))
+                f!(rng..., A)                    ::typeof(A)
+                if f! === rand!
+                    f!(rng..., A, X)             ::typeof(A)
+                    if T !== Char # Char/Integer comparison
+                        f!(rng..., sparse(A))    ::typeof(sparse(A))
+                        f!(rng..., sparse(A), X) ::typeof(sparse(A))
+                    end
+                end
+            end
+        end
     end
 
     bitrand(rng..., 5)             ::BitArray{1}
@@ -315,36 +351,41 @@ for rng in ([], [MersenneTwister()], [RandomDevice()])
     rand!(rng..., BitArray(5))     ::BitArray{1}
     rand!(rng..., BitArray(2, 3))  ::BitArray{2}
 
-    for T in [Base.BitInteger_types..., Bool, Float16, Float32, Float64]
-        a0 = rand(rng..., T)       ::T
-        a1 = rand(rng..., T, 5)    ::Vector{T}
-        a2 = rand(rng..., T, 2, 3) ::Array{T, 2}
-        if T <: AbstractFloat
-            for a in [a0, a1..., a2...]
-                @test 0.0 <= a < 1.0
-            end
-        end
-        for A in (Array(T, 5), Array(T, 2, 3))
-            X = T == Bool ? T[0,1] : T[0,1,2]
-            rand!(rng..., A)            ::typeof(A)
-            rand!(rng..., A, X)  ::typeof(A)
-            rand!(rng..., sparse(A))            ::typeof(sparse(A))
-            rand!(rng..., sparse(A), X)  ::typeof(sparse(A))
-        end
+    # Test that you cannot call randn or randexp with non-Float types.
+    for r in [randn, randexp, randn!, randexp!]
+        @test_throws MethodError r(Int)
+        @test_throws MethodError r(Int32)
+        @test_throws MethodError r(Bool)
+        @test_throws MethodError r(String)
+        @test_throws MethodError r(AbstractFloat)
+        # TODO(#17627): Consider adding support for randn(BigFloat) and removing this test.
+        @test_throws MethodError r(BigFloat)
+
+        @test_throws MethodError r(Int64, (2,3))
+        @test_throws MethodError r(String, 1)
+
+        @test_throws MethodError r(rng..., Number, (2,3))
+        @test_throws MethodError r(rng..., Any, 1)
     end
 end
 
+function hist(X,n)
+    v = zeros(Int,n)
+    for x in X
+        v[floor(Int,x*n)+1] += 1
+    end
+    v
+end
+
 # test uniform distribution of floats
-let bins = [prevfloat(0.0):0.25:1.0;]
-    for rng in [srand(MersenneTwister()), RandomDevice()]
-        for T in [Float16,Float32,Float64]
-            # array version
-            _, counts = hist(rand(rng, T, 2000), bins)
-            @test minimum(counts) > 300 # should fail with proba < 1e-26
-            # scalar version
-            _, counts = hist([rand(rng, T) for i in 1:2000], bins)
-            @test minimum(counts) > 300
-        end
+for rng in [srand(MersenneTwister()), RandomDevice()]
+    for T in [Float16,Float32,Float64]
+        # array version
+        counts = hist(rand(rng, T, 2000), 4)
+        @test minimum(counts) > 300 # should fail with proba < 1e-26
+        # scalar version
+        counts = hist([rand(rng, T) for i in 1:2000], 4)
+        @test minimum(counts) > 300
     end
 end
 
@@ -370,8 +411,11 @@ let mta = MersenneTwister(42), mtb = MersenneTwister(42)
 
     @test shuffle(mta,collect(1:10)) == shuffle(mtb,collect(1:10))
     @test shuffle!(mta,collect(1:10)) == shuffle!(mtb,collect(1:10))
+    @test shuffle(mta,collect(2:11)) == shuffle(mtb,2:11)
 
     @test randperm(mta,10) == randperm(mtb,10)
+    @test sort!(randperm(10)) == sort!(shuffle(1:10)) == collect(1:10)
+    @test randperm(mta,big(10)) == randperm(mtb,big(10)) # cf. #16376
     @test randperm(0) == []
     @test_throws ErrorException randperm(-1)
 
@@ -400,4 +444,38 @@ let mta = MersenneTwister(seed), mtb = MersenneTwister(seed)
     for j in 1:(size * step)
         @test rand(mtb, Float64) == tmp[j]
     end
+end
+
+# test that the following is not an error (#16925)
+srand(typemax(UInt))
+srand(typemax(UInt128))
+
+# copy and ==
+let seed = rand(UInt32, 10)
+    r = MersenneTwister(seed)
+    @test r == MersenneTwister(seed) # r.vals should be all zeros
+    s = copy(r)
+    @test s == r && s !== r
+    skip, len = rand(0:2000, 2)
+    for j=1:skip
+        rand(r)
+        rand(s)
+    end
+    @test rand(r, len) == rand(s, len)
+    @test s == r
+end
+
+# MersenneTwister initialization with invalid values
+@test_throws DomainError Base.dSFMT.DSFMT_state(zeros(Int32, rand(0:Base.dSFMT.JN32-1)))
+@test_throws DomainError MersenneTwister(zeros(UInt32, 1), Base.dSFMT.DSFMT_state(),
+                                         zeros(Float64, 10), 0)
+@test_throws DomainError MersenneTwister(zeros(UInt32, 1), Base.dSFMT.DSFMT_state(),
+                                         zeros(Float64, Base.Random.MTCacheLength), -1)
+
+# seed is private to MersenneTwister
+let seed = rand(UInt32, 10)
+    r = MersenneTwister(seed)
+    @test r.seed == seed && r.seed !== seed
+    resize!(seed, 4)
+    @test r.seed != seed
 end

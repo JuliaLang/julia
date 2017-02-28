@@ -1,7 +1,11 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+const curmod = current_module()
+const curmod_name = fullname(curmod)
+const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+
 # REPL tests
-isdefined(:TestHelpers) || include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
+isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using TestHelpers
 import Base: REPL, LineEdit
 
@@ -28,7 +32,7 @@ ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
+if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     stdin_write, stdout_read, stderr_read, repl = fake_repl()
 
     repl.specialdisplay = Base.REPL.REPLDisplay(repl)
@@ -38,12 +42,15 @@ if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
         Base.REPL.run_repl(repl)
     end
 
-    sendrepl(cmd) = write(stdin_write,"inc || wait(b); r = $cmd; notify(c); r\r")
+    sendrepl(cmd) = begin
+        write(stdin_write,"$(curmod_prefix)inc || wait($(curmod_prefix)b); r = $cmd; notify($(curmod_prefix)c); r\r")
+    end
 
     inc = false
     b = Condition()
     c = Condition()
     sendrepl("\"Hello REPL\"")
+
     inc=true
     begin
         notify(b)
@@ -67,31 +74,40 @@ if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
     # calling readuntil() to suppress the warning it (currently) gives for
     # long strings.
     origpwd = pwd()
-    tmpdir = mktempdir()
-    write(stdin_write, ";")
-    readuntil(stdout_read, "shell> ")
-    write(stdin_write, "cd $(escape_string(tmpdir))\n")
-    readuntil(stdout_read, "cd $(escape_string(tmpdir))"[max(1,end-39):end])
-    readuntil(stdout_read, realpath(tmpdir)[max(1,end-39):end])
-    readuntil(stdout_read, "\n")
-    readuntil(stdout_read, "\n")
-    @test pwd() == realpath(tmpdir)
-    write(stdin_write, ";")
-    readuntil(stdout_read, "shell> ")
-    write(stdin_write, "cd -\n")
-    readuntil(stdout_read, origpwd[max(1,end-39):end])
-    readuntil(stdout_read, "\n")
-    readuntil(stdout_read, "\n")
-    @test pwd() == origpwd
-    write(stdin_write, ";")
-    readuntil(stdout_read, "shell> ")
-    write(stdin_write, "cd\n")
-    readuntil(stdout_read, homedir()[max(1,end-39):end])
-    readuntil(stdout_read, "\n")
-    readuntil(stdout_read, "\n")
-    @test pwd() == homedir()
-    rm(tmpdir)
+    mktempdir() do tmpdir
+        write(stdin_write, ";")
+        readuntil(stdout_read, "shell> ")
+        write(stdin_write, "cd $(escape_string(tmpdir))\n")
+        readuntil(stdout_read, "cd $(escape_string(tmpdir))"[max(1,end-39):end])
+        readuntil(stdout_read, realpath(tmpdir)[max(1,end-39):end])
+        readuntil(stdout_read, "\n")
+        readuntil(stdout_read, "\n")
+        @test pwd() == realpath(tmpdir)
+        write(stdin_write, ";")
+        readuntil(stdout_read, "shell> ")
+        write(stdin_write, "cd -\n")
+        readuntil(stdout_read, origpwd[max(1,end-39):end])
+        readuntil(stdout_read, "\n")
+        readuntil(stdout_read, "\n")
+        @test pwd() == origpwd
+        write(stdin_write, ";")
+        readuntil(stdout_read, "shell> ")
+        write(stdin_write, "cd\n")
+        readuntil(stdout_read, realpath(homedir())[max(1,end-39):end])
+        readuntil(stdout_read, "\n")
+        readuntil(stdout_read, "\n")
+        @test pwd() == realpath(homedir())
+    end
     cd(origpwd)
+
+    # issue #20482
+    if !is_windows()
+        write(stdin_write, ";")
+        readuntil(stdout_read, "shell> ")
+        write(stdin_write, "echo hello >/dev/null\n")
+        readuntil(stdout_read, "\n")
+        readuntil(stdout_read, "\n")
+    end
 
     # Test that accepting a REPL result immediately shows up, not
     # just on the next keystroke
@@ -130,7 +146,7 @@ if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
         isopen(t) || return
         error("Stuck waiting for history test")
     end
-    s1 = "12345678"; s2 = "23456789";
+    s1 = "12345678"; s2 = "23456789"
     write(stdin_write, s1, '\n')
     readuntil(stdout_read, s1)
     write(stdin_write, s2, '\n')
@@ -190,7 +206,7 @@ function AddCustomMode(repl)
     b = Dict{Any,Any}[skeymap, mk, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
     foobar_mode.keymap_dict = LineEdit.keymap(b)
 
-    main_mode.keymap_dict = LineEdit.keymap_merge(main_mode.keymap_dict, foobar_keymap);
+    main_mode.keymap_dict = LineEdit.keymap_merge(main_mode.keymap_dict, foobar_keymap)
     foobar_mode, search_prompt
 end
 
@@ -245,7 +261,7 @@ begin
                                                    :shell => shell_mode,
                                                    :help  => help_mode))
 
-    REPL.hist_from_file(hp, IOBuffer(fakehistory))
+    REPL.hist_from_file(hp, IOBuffer(fakehistory), "fakehistorypath")
     REPL.history_reset_state(hp)
 
     histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
@@ -397,8 +413,67 @@ begin
     # Try entering search mode while in custom repl mode
     LineEdit.enter_search(s, custom_histp, true)
 end
+
+# Test removal of prompt in bracket pasting
+begin
+    stdin_write, stdout_read, stderr_read, repl = fake_repl()
+
+    repl.interface = REPL.setup_interface(repl)
+    repl_mode = repl.interface.modes[1]
+    shell_mode = repl.interface.modes[2]
+    help_mode = repl.interface.modes[3]
+
+    repltask = @async begin
+        Base.REPL.run_repl(repl)
+    end
+
+    c = Condition()
+    sendrepl2(cmd) = write(stdin_write,"$cmd\n notify($(curmod_prefix)c)\n")
+
+    # Test removal of prefix in single statement paste
+    sendrepl2("\e[200~julia> A = 2\e[201~\n")
+    wait(c)
+    @test Main.A == 2
+
+    # Test removal of prefix in multiple statement paste
+    sendrepl2("""\e[200~
+            julia> mutable struct T17599; a::Int; end
+
+            julia> function foo(julia)
+            julia> 3
+                end
+
+                    julia> A = 3\e[201~
+             """)
+    wait(c)
+    @test Main.A == 3
+    @test Main.foo(4)
+    @test Main.T17599(3).a == 3
+    @test !Main.foo(2)
+
+    sendrepl2("""\e[200~
+            julia> goo(x) = x + 1
+            error()
+
+            julia> A = 4
+            4\e[201~
+             """)
+    wait(c)
+    @test Main.A == 4
+    @test Main.goo(4) == 5
+
+    # Test prefix removal only active in bracket paste mode
+    sendrepl2("julia = 4\n julia> 3 && (A = 1)\n")
+    wait(c)
+    @test Main.A == 1
+
+    # Close repl
+    write(stdin_write, '\x04')
+    wait(repltask)
+end
+
 # Simple non-standard REPL tests
-if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
+if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     stdin_write, stdout_read, stdout_read, repl = fake_repl()
     panel = LineEdit.Prompt("testπ";
         prompt_prefix="\e[38;5;166m",
@@ -418,7 +493,7 @@ if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
         if !ok
             LineEdit.transition(s,:abort)
         end
-        line = strip(takebuf_string(buf))
+        line = strip(String(take!(buf)))
         LineEdit.reset_state(s)
         return notify(c,line)
     end
@@ -443,47 +518,67 @@ ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
 let exename = Base.julia_cmd()
 
 # Test REPL in dumb mode
-@unix_only begin
-    const O_RDWR = Base.Filesystem.JL_O_RDWR
-    const O_NOCTTY = Base.Filesystem.JL_O_NOCTTY
+if !is_windows()
+    TestHelpers.with_fake_pty() do slave, master
+        nENV = copy(ENV)
+        nENV["TERM"] = "dumb"
+        p = spawn(setenv(`$exename --startup-file=no --quiet`,nENV),slave,slave,slave)
+        output = readuntil(master,"julia> ")
+        if ccall(:jl_running_on_valgrind,Cint,()) == 0
+            # If --trace-children=yes is passed to valgrind, we will get a
+            # valgrind banner here, not just the prompt.
+            @test output == "julia> "
+        end
+        write(master,"1\nquit()\n")
 
-    fdm = ccall(:posix_openpt, Cint, (Cint,), O_RDWR|O_NOCTTY)
-    fdm == -1 && error("Failed to open PTY master")
-    rc = ccall(:grantpt, Cint, (Cint,), fdm)
-    rc != 0 && error("grantpt failed")
-    rc = ccall(:unlockpt, Cint, (Cint,), fdm)
-    rc != 0 && error("unlockpt")
-
-    fds = ccall(:open, Cint, (Ptr{UInt8}, Cint),
-        ccall(:ptsname, Ptr{UInt8}, (Cint,), fdm), O_RDWR|O_NOCTTY)
-
-    # slave
-    slave   = RawFD(fds)
-    master = Base.TTY(RawFD(fdm); readable = true)
-
-    nENV = copy(ENV)
-    nENV["TERM"] = "dumb"
-    p = spawn(setenv(`$exename --startup-file=no --quiet`,nENV),slave,slave,slave)
-    output = readuntil(master,"julia> ")
-    if ccall(:jl_running_on_valgrind,Cint,()) == 0
-        # If --trace-children=yes is passed to valgrind, we will get a
-        # valgrind banner here, not just the prompt.
-        @test output == "julia> "
+        wait(p)
+        output = readuntil(master,' ')
+        @test output == "1\r\nquit()\r\n1\r\n\r\njulia> "
+        @test nb_available(master) == 0
     end
-    write(master,"1\nquit()\n")
-
-    wait(p)
-    output = readuntil(master,' ')
-    @test output == "1\r\nquit()\r\n1\r\n\r\njulia> "
-    @test nb_available(master) == 0
-    ccall(:close,Cint,(Cint,),fds) # XXX: this causes the kernel to throw away all unread data on the pty
-    close(master)
 end
 
 # Test stream mode
-if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
+if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     outs, ins, p = readandwrite(`$exename --startup-file=no --quiet`)
     write(ins,"1\nquit()\n")
     @test readstring(outs) == "1\n"
 end
+end # let exename
+
+# issue #19864:
+mutable struct Error19864 <: Exception; end
+function test19864()
+    @eval current_module() Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
+    buf = IOBuffer()
+    REPL.print_response(buf, Error19864(), [], false, false, nothing)
+    return String(take!(buf))
 end
+@test contains(test19864(), "correct19864")
+
+# Test containers in error messages are limited #18726
+let io = IOBuffer()
+    Base.display_error(io,
+        try
+            [][trues(6000)]
+        catch e
+            e
+        end, [])
+    @test length(String(take!(io))) < 1500
+end
+
+function test_replinit()
+    stdin_write, stdout_read, stdout_read, repl = fake_repl()
+    # Relies on implementation detail to make sure we only have the single
+    # replinit callback we want to test.
+    saved_replinit = copy(Base.repl_hooks)
+    slot = Ref(false)
+    # Create a closure from a newer world to check if `_atreplinit`
+    # can run it correctly
+    atreplinit(@eval(repl::Base.REPL.LineEditREPL->($slot[] = true)))
+    Base._atreplinit(repl)
+    @test slot[]
+    @test_throws MethodError Base.repl_hooks[1](repl)
+    copy!(Base.repl_hooks, saved_replinit)
+end
+test_replinit()

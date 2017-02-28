@@ -20,7 +20,7 @@ vals = vcat(
 
 function coerce(T::Type, x)
     if T<:Rational
-        convert(T, coerce(typeof(num(zero(T))), x))
+        convert(T, coerce(typeof(numerator(zero(T))), x))
     elseif !(T<:Integer)
         convert(T, x)
     else
@@ -67,7 +67,7 @@ vals = Any[
     (1,2,3,4), (1.0,2.0,3.0,4.0), (1,3,2,4),
     ("a","b"), (SubString("a",1,1), SubString("b",1,1)),
     # issue #6900
-    [x => x for x in 1:10],
+    Dict(x => x for x in 1:10),
     Dict(7=>7,9=>9,4=>4,10=>10,2=>2,3=>3,8=>8,5=>5,6=>6,1=>1),
     [], [1], [2], [1, 1], [1, 2], [1, 3], [2, 2], [1, 2, 2], [1, 3, 3],
     zeros(2, 2), spzeros(2, 2), eye(2, 2), speye(2, 2),
@@ -83,13 +83,13 @@ end
 @test hash(:(X.x)) == hash(:(X.x))
 @test hash(:(X.x)) != hash(:(X.y))
 
-@test hash([1,2]) == hash(sub([1,2,3,4],1:2))
+@test hash([1,2]) == hash(view([1,2,3,4],1:2))
 
 # test explicit zeros in SparseMatrixCSC
 x = sprand(10, 10, 0.5)
 x[1] = 1
 x.nzval[1] = 0
-@test hash(x) == hash(full(x))
+@test hash(x) == hash(Array(x))
 
 let a = QuoteNode(1), b = QuoteNode(1.0)
     @test (hash(a)==hash(b)) == (a==b)
@@ -117,3 +117,6 @@ for prec in [3, 11, 15, 16, 31, 32, 33, 63, 64, 65, 254, 255, 256, 257, 258, 102
         @test isequal(x, y)
     end
 end
+
+# issue #20744
+@test hash(:c, hash(:b, hash(:a))) != hash(:a, hash(:b, hash(:c)))

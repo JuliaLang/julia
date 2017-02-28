@@ -93,7 +93,7 @@ void jl_safepoint_init(void)
     char *addr = (char*)VirtualAlloc(NULL, pgsz * 3, MEM_COMMIT, PAGE_READONLY);
 #else
     char *addr = (char*)mmap(0, pgsz * 3, PROT_READ,
-                             MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                             MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (addr == MAP_FAILED)
         addr = NULL;
 #endif

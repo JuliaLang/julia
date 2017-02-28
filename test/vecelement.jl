@@ -3,7 +3,7 @@
 make_value{T<:Integer}(::Type{T}, i::Integer) = 3*i%T
 make_value{T<:AbstractFloat}(::Type{T},i::Integer) = T(3*i)
 
-typealias Vec{N,T} NTuple{N,Base.VecElement{T}}
+Vec{N,T} = NTuple{N,Base.VecElement{T}}
 
 # Crash report for #15244 motivated this test.
 @generated function thrice_iota{N,T}(::Type{Vec{N,T}})
@@ -24,7 +24,7 @@ for i=1:20
 end
 
 # Another crash report for #15244 motivated this test.
-immutable Bunch{N,T}
+struct Bunch{N,T}
     elts::NTuple{N,Base.VecElement{T}}
 end
 
@@ -38,9 +38,9 @@ b = Bunch((VecElement(1.0), VecElement(2.0)))
 
 @test rewrap(b)===VecElement(1.0)
 
-immutable Herd{N,T}
+struct Herd{N,T}
     elts::NTuple{N,Base.VecElement{T}}
-    Herd(elts::NTuple{N,T}) = new(ntuple(i->Base.VecElement{T}(elts[i]), N))
+    Herd{N,T}(elts::NTuple{N,T}) where {N,T} = new(ntuple(i->Base.VecElement{T}(elts[i]), N))
 end
 
 function check{N,T}(x::Herd{N,T})
@@ -53,7 +53,7 @@ check(Herd{1,Int}((1,)))
 check(Herd{2,Int}((4,5)))
 check(Herd{4,Int}((16,17,18,19)))
 
-immutable Gr{N, T}
+struct Gr{N, T}
     u::T
     v::Bunch{N,T}
     w::T
@@ -63,3 +63,5 @@ a = Vector{Gr{2,Float64}}(2)
 a[2] = Gr(1.0, Bunch((VecElement(2.0), VecElement(3.0))), 4.0)
 a[1] = Gr(5.0, Bunch((VecElement(6.0), VecElement(7.0))), 8.0)
 @test a[2] == Gr(1.0, Bunch((VecElement(2.0), VecElement(3.0))), 4.0)
+
+@test isa(VecElement((1,2)), VecElement{Tuple{Int,Int}})

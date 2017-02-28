@@ -9,7 +9,7 @@ kwf1(ones; tens=0, hundreds=0) = ones + 10*tens + 100*hundreds
 @test kwf1(3, tens=7, hundreds=2) == 273
 
 @test_throws MethodError kwf1()             # no method, too few args
-@test_throws ErrorException kwf1(1, z=0)    # unsupported keyword
+@test_throws MethodError kwf1(1, z=0)       # unsupported keyword
 @test_throws MethodError kwf1(1, 2)         # no method, too many positional args
 
 # keyword args plus varargs
@@ -18,8 +18,15 @@ kwf2(x, rest...; y=1) = (x, y, rest)
 @test isequal(kwf2(0,1,2), (0, 1, (1,2)))
 @test isequal(kwf2(0,1,2,y=88), (0, 88, (1,2)))
 @test isequal(kwf2(0,y=88,1,2), (0, 88, (1,2)))
-@test_throws ErrorException kwf2(0, z=1)
+@test_throws MethodError kwf2(0, z=1)
 @test_throws MethodError kwf2(y=1)
+
+# Test for #13919
+test13919(x::Vararg{Int}; key=100) = (x, key)
+@test test13919(1, 1)[1] === (1, 1)
+@test test13919(1, 1)[2] === 100
+@test test13919(1, 1, key=10)[1] === (1, 1)
+@test test13919(1, 1, key=10)[2] === 10
 
 # keyword arg with declared type
 kwf3(x; y::Float64 = 1.0) = x + y
@@ -92,6 +99,12 @@ extravagant_args(x,y=0,rest...;color="blue",kw...) =
 
 # passing empty kw container to function with no kwargs
 @test sin(1.0) == sin(1.0; Dict()...)
+# issue #18845
+@test (@eval sin(1.0; $([]...))) == sin(1.0)
+f18845() = 2
+@test f18845(;) == 2
+@test f18845(; []...) == 2
+@test (@eval f18845(; $([]...))) == 2
 
 # passing junk kw container
 @test_throws BoundsError extravagant_args(1; Any[[]]...)
@@ -159,8 +172,8 @@ end
 @test (@TEST4538_3) == 3
 
 # issue #4801
-type T4801{X}
-    T4801(;k=0) = new()
+mutable struct T4801{X}
+    T4801{X}(;k=0) where X = new()
 end
 @test isa(T4801{Any}(k=0), T4801{Any})
 
@@ -191,10 +204,57 @@ let f = (x;a=1,b=2)->(x, a, b)
     @test f(0) === (0, 1, 2)
     @test f(1,a=10,b=20) === (1,10,20)
     @test f(0,b=88) === (0, 1, 88)
-    @test_throws ErrorException f(0,z=1)
+    @test_throws MethodError f(0,z=1)
 end
 @test ((a=2)->10a)(3) == 30
 @test ((a=2)->10a)() == 20
 @test ((a=1,b=2)->(a,b))() == (1,2)
 @test ((a=1,b=2)->(a,b))(5) == (5,2)
 @test ((a=1,b=2)->(a,b))(5,6) == (5,6)
+
+# issue #9948
+f9948, getx9948 = let
+    x = 3
+    h(;x=x) = x
+    getx() = x
+    h, getx
+end
+@test_throws UndefVarError f9948()
+@test getx9948() == 3
+@test f9948(x=5) == 5
+@test_throws UndefVarError f9948()
+@test getx9948() == 3
+
+# issue #17785 - handle all sources of kwargs left-to-right
+g17785(; a=1, b=2) = (a, b)
+let opts = (:a=>3, :b=>4)
+    @test g17785(; a=5, opts...) == (3, 4)
+    @test g17785(; opts..., a=5) == (5, 4)
+    @test g17785(; opts..., a=5, b=6) == (5, 6)
+    @test g17785(; b=0, opts..., a=5) == (5, 4)
+end
+
+# pr #18396, kwargs before Base is defined
+@eval Core.Inference begin
+    f18396(;kwargs...) = g18396(;kwargs...)
+    g18396(;x=1,y=2) = x+y
+end
+@test Core.Inference.f18396() == 3
+
+# issue #7045, `invoke` with keyword args
+f7045(x::Float64; y=true) = y ? 1 : invoke(f7045,Tuple{Real},x,y=y)
+f7045(x::Real; y=true) = y ? 2 : 3
+@test f7045(1) === 2
+@test f7045(1.0) === 1
+@test f7045(1, y=false) === 3
+@test f7045(1.0, y=false) === 3
+
+# issue #20804
+struct T20804{T}
+    y::T
+end
+(f::T20804)(;x=10) = f.y + x
+let x = T20804(4)
+    @test x() == 14
+    @test x(x=8) == 12
+end

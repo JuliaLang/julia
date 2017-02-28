@@ -2,69 +2,72 @@
 
 # definitions related to C interface
 
-import Core.Intrinsics: cglobal, box
+import Core.Intrinsics: cglobal, bitcast
 
 cfunction(f::Function, r, a) = ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
 
 if ccall(:jl_is_char_signed, Ref{Bool}, ())
-    typealias Cchar Int8
+    const Cchar = Int8
 else
-    typealias Cchar UInt8
+    const Cchar = UInt8
 end
-typealias Cuchar UInt8
-typealias Cshort Int16
-typealias Cushort UInt16
-typealias Cint Int32
-typealias Cuint UInt32
-if OS_NAME === :Windows
-    typealias Clong Int32
-    typealias Culong UInt32
-    typealias Cwchar_t UInt16
-else
-    typealias Clong Int
-    typealias Culong UInt
-    typealias Cwchar_t Int32
-end
-typealias Cptrdiff_t Int
-typealias Csize_t UInt
-typealias Cssize_t Int
-typealias Cintmax_t Int64
-typealias Cuintmax_t UInt64
-typealias Clonglong Int64
-typealias Culonglong UInt64
-typealias Cfloat Float32
-typealias Cdouble Float64
+"""
+    Cchar
 
-if OS_NAME !== :Windows
+Equivalent to the native `char` c-type.
+"""
+Cchar
+
+if is_windows()
+    const Clong = Int32
+    const Culong = UInt32
+    const Cwchar_t = UInt16
+else
+    const Clong = Int
+    const Culong = UInt
+    const Cwchar_t = Int32
+end
+
+"""
+    Clong
+
+Equivalent to the native `signed long` c-type.
+"""
+Clong
+
+"""
+    Culong
+
+Equivalent to the native `unsigned long` c-type.
+"""
+Culong
+
+"""
+    Cwchar_t
+
+Equivalent to the native `wchar_t` c-type (`Int32`).
+"""
+Cwchar_t
+
+if !is_windows()
     const sizeof_mode_t = ccall(:jl_sizeof_mode_t, Cint, ())
     if sizeof_mode_t == 2
-        typealias Cmode_t Int16
+        const Cmode_t = Int16
     elseif sizeof_mode_t == 4
-        typealias Cmode_t Int32
+        const Cmode_t = Int32
     elseif sizeof_mode_t == 8
-        typealias Cmode_t Int64
+        const Cmode_t = Int64
     end
 end
 
-# C NUL-terminated string pointers; these can be used in ccall
-# instead of Ptr{Cchar} and Ptr{Cwchar_t}, respectively, to enforce
-# a check for embedded NUL chars in the string (to avoid silent truncation).
-if Int === Int64
-    bitstype 64 Cstring
-    bitstype 64 Cwstring
-else
-    bitstype 32 Cstring
-    bitstype 32 Cwstring
-end
-
 # construction from typed pointers
-convert{T<:Union{Int8,UInt8}}(::Type{Cstring}, p::Ptr{T}) = box(Cstring, p)
-convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = box(Cwstring, p)
-convert{T<:Union{Int8,UInt8}}(::Type{Ptr{T}}, p::Cstring) = box(Ptr{T}, p)
-convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = box(Ptr{Cwchar_t}, p)
+convert(::Type{Cstring}, p::Ptr{<:Union{Int8,UInt8}}) = bitcast(Cstring, p)
+convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = bitcast(Cwstring, p)
+convert{T<:Union{Int8,UInt8}}(::Type{Ptr{T}}, p::Cstring) = bitcast(Ptr{T}, p)
+convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = bitcast(Ptr{Cwchar_t}, p)
 
 # construction from untyped pointers
-convert{T<:Union{Cstring,Cwstring}}(::Type{T}, p::Ptr{Void}) = box(T, p)
+convert{T<:Union{Cstring,Cwstring}}(::Type{T}, p::Ptr{Void}) = bitcast(T, p)
 
 pointer(p::Cstring) = convert(Ptr{UInt8}, p)
 pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)
@@ -73,37 +76,101 @@ pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)
 ==(x::Union{Cstring,Cwstring}, y::Ptr) = pointer(x) == y
 ==(x::Ptr, y::Union{Cstring,Cwstring}) = x == pointer(y)
 
-# here, not in pointer.jl, to avoid bootstrapping problems in coreimg.jl
-pointer_to_string(p::Cstring, own::Bool=false) = pointer_to_string(convert(Ptr{UInt8}, p), own)
+unsafe_string(s::Cstring) = unsafe_string(convert(Ptr{UInt8}, s))
 
 # convert strings to String etc. to pass as pointers
-cconvert(::Type{Cstring}, s::AbstractString) = bytestring(s)
-cconvert(::Type{Cwstring}, s::AbstractString) = wstring(s)
+cconvert(::Type{Cstring}, s::String) = s
+cconvert(::Type{Cstring}, s::AbstractString) =
+    cconvert(Cstring, String(s)::String)
 
-containsnul(p::Ptr, len) = C_NULL != ccall(:memchr, Ptr{Cchar}, (Ptr{Cchar}, Cint, Csize_t), p, 0, len)
-function unsafe_convert(::Type{Cstring}, s::String)
+function cconvert(::Type{Cwstring}, s::AbstractString)
+    v = transcode(Cwchar_t, Vector{UInt8}(String(s)))
+    !isempty(v) && v[end] == 0 || push!(v, 0)
+    return v
+end
+
+eltype(::Type{Cstring}) = UInt8
+eltype(::Type{Cwstring}) = Cwchar_t
+
+containsnul(p::Ptr, len) =
+    C_NULL != ccall(:memchr, Ptr{Cchar}, (Ptr{Cchar}, Cint, Csize_t), p, 0, len)
+containsnul(s::String) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
+containsnul(s::AbstractString) = '\0' in s
+
+function unsafe_convert(::Type{Cstring}, s::Union{String,Vector{UInt8}})
     p = unsafe_convert(Ptr{Cchar}, s)
-    if containsnul(p, sizeof(s))
+    containsnul(p, sizeof(s)) &&
         throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
-    end
     return Cstring(p)
+end
+
+function unsafe_convert(::Type{Cwstring}, v::Vector{Cwchar_t})
+    for i = 1:length(v)-1
+        v[i] == 0 &&
+            throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(v))"))
+    end
+    v[end] == 0 ||
+        throw(ArgumentError("C string data must be NUL terminated: $(repr(v))"))
+    p = unsafe_convert(Ptr{Cwchar_t}, v)
+    return Cwstring(p)
 end
 
 # symbols are guaranteed not to contain embedded NUL
 convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
 
-# in string.jl: unsafe_convert(::Type{Cwstring}, s::WString)
+if is_windows()
+"""
+    Base.cwstring(s)
 
-# FIXME: this should be handled by implicit conversion to Cwstring, but good luck with that
-@windows_only function cwstring(s::AbstractString)
-    bytes = bytestring(s).data
+Converts a string `s` to a NUL-terminated `Vector{Cwchar_t}`, suitable for passing to C
+functions expecting a `Ptr{Cwchar_t}`. The main advantage of using this over the implicit
+conversion provided by `Cwstring` is if the function is called multiple times with the
+same argument.
+
+This is only available on Windows.
+"""
+function cwstring(s::AbstractString)
+    bytes = Vector{UInt8}(String(s))
     0 in bytes && throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
-    return push!(utf8to16(bytes), 0)
+    return push!(transcode(UInt16, bytes), 0)
+end
 end
 
-# conversions between UTF-8 and UTF-16 for Windows APIs
+# transcoding between data in UTF-8 and UTF-16 for Windows APIs,
+# and also UTF-32 for APIs using Cwchar_t on other platforms.
 
-function utf8to16(src::Vector{UInt8})
+"""
+    transcode(T, src)
+
+Convert string data between Unicode encodings. `src` is either a
+`String` or a `Vector{UIntXX}` of UTF-XX code units, where
+`XX` is 8, 16, or 32. `T` indicates the encoding of the return value:
+`String` to return a (UTF-8 encoded) `String` or `UIntXX`
+to return a `Vector{UIntXX}` of UTF-`XX` data.   (The alias `Cwchar_t`
+can also be used as the integer type, for converting `wchar_t*` strings
+used by external C libraries.)
+
+The `transcode` function succeeds as long as the input data can be
+reasonably represented in the target encoding; it always succeeds for
+conversions between UTF-XX encodings, even for invalid Unicode data.
+
+Only conversion to/from UTF-8 is currently supported.
+"""
+function transcode end
+
+transcode{T<:Union{UInt8,UInt16,UInt32,Int32}}(::Type{T}, src::Vector{T}) = src
+transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::String) = T[T(c) for c in src]
+transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::Vector{UInt8}) = transcode(T, String(src))
+function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
+    buf = IOBuffer()
+    for c in src; print(buf, Char(c)); end
+    take!(buf)
+end
+transcode(::Type{String}, src::String) = src
+transcode(T, src::String) = transcode(T, Vector{UInt8}(src))
+transcode(::Type{String}, src) = String(transcode(UInt8, src))
+
+function transcode(::Type{UInt16}, src::Vector{UInt8})
     dst = UInt16[]
     i, n = 1, length(src)
     n > 0 || return dst
@@ -117,24 +184,24 @@ function utf8to16(src::Vector{UInt8})
                 push!(dst, a)
                 a = b; continue
             elseif a < 0xe0 # 2-byte UTF-8
-                push!(dst, 0x3080 $ (UInt16(a) << 6) $ b)
+                push!(dst, xor(0x3080, UInt16(a) << 6, b))
             elseif i < n # 3/4-byte character
                 c = src[i += 1]
                 if -64 <= (c % Int8) # invalid UTF-8 (non-continuation)
                     push!(dst, a, b)
                     a = c; continue
                 elseif a < 0xf0 # 3-byte UTF-8
-                    push!(dst, 0x2080 $ (UInt16(a) << 12) $ (UInt16(b) << 6) $ c)
+                    push!(dst, xor(0x2080, UInt16(a) << 12, UInt16(b) << 6, c))
                 elseif i < n
                     d = src[i += 1]
                     if -64 <= (d % Int8) # invalid UTF-8 (non-continuation)
                         push!(dst, a, b, c)
                         a = d; continue
                     elseif a == 0xf0 && b < 0x90 # overlong encoding
-                        push!(dst, 0x2080 $ (UInt16(b) << 12) $ (UInt16(c) << 6) $ d)
+                        push!(dst, xor(0x2080, UInt16(b) << 12, UInt16(c) << 6, d))
                     else # 4-byte UTF-8
                         push!(dst, 0xe5b8 + (UInt16(a) << 8) + (UInt16(b) << 2) + (c >> 4),
-                                   0xdc80 $ (UInt16(c & 0xf) << 6) $ d)
+                                   xor(0xdc80, UInt16(c & 0xf) << 6, d))
                     end
                 else # too short
                     push!(dst, a, b, c)
@@ -153,39 +220,70 @@ function utf8to16(src::Vector{UInt8})
     return dst
 end
 
-function utf16to8(src::Vector{UInt16})
-    dst = UInt8[]
-    i, n = 1, length(src)
-    n > 0 || return dst
-    sizehint!(dst, n)
+function transcode(::Type{UInt8}, src::Vector{UInt16})
+    n = length(src)
+    n == 0 && return UInt8[]
+
+    # Precompute m = sizeof(dst).   This involves annoying duplication
+    # of the loop over the src array.   However, this is not just an
+    # optimization: it is problematic for security reasons to grow
+    # dst dynamically, because Base.winprompt uses this function to
+    # convert passwords to UTF-8 and we don't want to make unintentional
+    # copies of the password data.
     a = src[1]
+    i, m = 1, 0
     while true
-        if a < 0x80 # ASCII
-            push!(dst, a % UInt8)
+        if a < 0x80
+            m += 1
         elseif a < 0x800 # 2-byte UTF-8
-            push!(dst, 0xc0 | ((a >> 6) % UInt8),
-                       0x80 | ((a % UInt8) & 0x3f))
-        elseif a & 0xfc00 == 0xd800 && i < n
+            m += 2
+        elseif a & 0xfc00 == 0xd800 && i < length(src)
             b = src[i += 1]
-            if (b & 0xfc00) == 0xdc00
-                # 2-unit UTF-16 sequence => 4-byte UTF-8
-                a += 0x2840
-                push!(dst, 0xf0 | ((a >> 8) % UInt8),
-                           0x80 | ((a % UInt8) >> 2),
-                           0xf0 $ ((((a % UInt8) << 4) & 0x3f) $ (b >> 6) % UInt8),
-                           0x80 | ((b % UInt8) & 0x3f))
+            if (b & 0xfc00) == 0xdc00 # 2-unit UTF-16 sequence => 4-byte UTF-8
+                m += 4
             else
-                push!(dst, 0xe0 | ((a >> 12) % UInt8),
-                           0x80 | (((a >> 6) % UInt8) & 0x3f),
-                           0x80 | ((a % UInt8) & 0x3f))
+                m += 3
                 a = b; continue
             end
         else
             # 1-unit high UTF-16 or unpaired high surrogate
             # either way, encode as 3-byte UTF-8 code point
-            push!(dst, 0xe0 | ((a >> 12) % UInt8),
-                       0x80 | (((a >> 6) % UInt8) & 0x3f),
-                       0x80 | ((a % UInt8) & 0x3f))
+            m += 3
+        end
+        i < n || break
+        a = src[i += 1]
+    end
+
+    dst = StringVector(m)
+    a = src[1]
+    i, j = 1, 0
+    while true
+        if a < 0x80 # ASCII
+            dst[j += 1] = a % UInt8
+        elseif a < 0x800 # 2-byte UTF-8
+            dst[j += 1] = 0xc0 | ((a >> 6) % UInt8)
+            dst[j += 1] = 0x80 | ((a % UInt8) & 0x3f)
+        elseif a & 0xfc00 == 0xd800 && i < n
+            b = src[i += 1]
+            if (b & 0xfc00) == 0xdc00
+                # 2-unit UTF-16 sequence => 4-byte UTF-8
+                a += 0x2840
+                dst[j += 1] = 0xf0 | ((a >> 8) % UInt8)
+                dst[j += 1] = 0x80 | ((a % UInt8) >> 2)
+                dst[j += 1] = xor(0xf0, ((a % UInt8) << 4) & 0x3f, (b >> 6) % UInt8)
+                dst[j += 1] = 0x80 | ((b % UInt8) & 0x3f)
+            else
+                dst[j += 1] = 0xe0 | ((a >> 12) % UInt8)
+                dst[j += 1] = 0x80 | (((a >> 6) % UInt8) & 0x3f)
+                dst[j += 1] = 0x80 | ((a % UInt8) & 0x3f)
+                a = b; continue
+            end
+        else
+            # 1-unit high UTF-16 or unpaired high surrogate
+            # either way, encode as 3-byte UTF-8 code point
+            dst[j += 1] = 0xe0 | ((a >> 12) % UInt8)
+            dst[j += 1] = 0x80 | (((a >> 6) % UInt8) & 0x3f)
+            dst[j += 1] = 0x80 | ((a % UInt8) & 0x3f)
         end
         i < n || break
         a = src[i += 1]

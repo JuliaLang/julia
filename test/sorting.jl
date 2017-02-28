@@ -8,12 +8,12 @@ using Base.Order: Forward
 @test sort(['a':'z';], rev=true) == ['z':-1:'a';]
 @test sortperm([2,3,1]) == [3,1,2]
 @test sortperm!([1,2,3], [2,3,1]) == [3,1,2]
-let s = sub([1,2,3,4], 1:3)
+let s = view([1,2,3,4], 1:3)
     r = sortperm!(s, [2,3,1])
     @test r == [3,1,2]
     @test r === s
 end
-@test_throws ArgumentError sortperm!(sub([1,2,3,4], 1:4), [2,3,1])
+@test_throws ArgumentError sortperm!(view([1,2,3,4], 1:4), [2,3,1])
 @test !issorted([2,3,1])
 @test issorted([1,2,3])
 @test reverse([2,3,1]) == [1,3,2]
@@ -95,7 +95,7 @@ end
 @test searchsortedlast(500:1.0:600, 1.0e20) == 101
 
 # exercise the codepath in searchsorted* methods for ranges that check for zero step range
-immutable ConstantRange{T} <: Range{T}
+struct ConstantRange{T} <: Range{T}
    val::T
    len::Int
 end
@@ -125,7 +125,7 @@ for alg in [InsertionSort, MergeSort]
     @test issorted(b)
     @test a[ix] == b
 
-    sortperm!(sub(ix, 1:100), sub(a, 1:100), alg=alg)
+    sortperm!(view(ix, 1:100), view(a, 1:100), alg=alg)
     b = a[ix][1:100]
     @test issorted(b)
 
@@ -141,7 +141,7 @@ for alg in [InsertionSort, MergeSort]
     @test issorted(b, rev=true)
     @test a[ix] == b
 
-    sortperm!(sub(ix, 1:100), sub(a, 1:100), alg=alg, rev=true)
+    sortperm!(view(ix, 1:100), view(a, 1:100), alg=alg, rev=true)
     b = a[ix][1:100]
     @test issorted(b, rev=true)
 
@@ -157,7 +157,7 @@ for alg in [InsertionSort, MergeSort]
     @test issorted(b, by=x->1/x)
     @test a[ix] == b
 
-    sortperm!(sub(ix, 1:100), sub(a, 1:100), by=x->1/x)
+    sortperm!(view(ix, 1:100), view(a, 1:100), by=x->1/x)
     b = a[ix][1:100]
     @test issorted(b, by=x->1/x)
 
@@ -225,7 +225,7 @@ srand(0xdeadbeef)
 for n in [0:10; 100; 101; 1000; 1001]
     r = -5:5
     v = rand(r,n)
-    h = hist(v,r)
+    h = [sum(v .== x) for x in r]
 
     for rev in [false,true]
         # insertion sort (stable) as reference
@@ -233,7 +233,7 @@ for n in [0:10; 100; 101; 1000; 1001]
         @test pi == sortperm(float(v), alg=InsertionSort, rev=rev)
         @test isperm(pi)
         si = v[pi]
-        @test hist(si,r) == h
+        @test [sum(si .== x) for x in r] == h
         @test issorted(si, rev=rev)
         @test all(issorted,[pi[si.==x] for x in r])
         c = copy(v)
@@ -275,7 +275,7 @@ for n in [0:10; 100; 101; 1000; 1001]
         # test float sorting with NaNs
         s = sort(v, alg=alg, rev=rev)
         @test issorted(s, rev=rev)
-        @test reinterpret(UInt64,v[isnan(v)]) == reinterpret(UInt64,s[isnan(s)])
+        @test reinterpret(UInt64,v[isnan.(v)]) == reinterpret(UInt64,s[isnan.(s)])
 
         # test float permutation with NaNs
         p = sortperm(v, alg=alg, rev=rev)
@@ -337,7 +337,7 @@ end
 @test sortperm([-1.0, 1.0, 1.0], rev=true) == [2, 3, 1]
 
 # issue #8825 - stability of min/max
-type Twain
+mutable struct Twain
     a :: Int
     b :: Int
 end
@@ -348,3 +348,14 @@ end
 
 # issue #12833 - type stability of sort
 @test Base.return_types(sort, (Vector{Int},)) == [Vector{Int}]
+
+# PR #18791
+@test sort([typemax(Int),typemin(Int)]) == [typemin(Int),typemax(Int)]
+@test sort([typemax(UInt),0]) == [0,typemax(UInt)]
+
+# issue #19005
+@test searchsortedfirst(0:256, 0x80) == 129
+@test searchsortedlast(0:256, 0x80) == 129
+
+# https://discourse.julialang.org/t/sorting-big-int-with-v-0-6/1241
+@test sort([big(3), big(2)]) == [big(2), big(3)]

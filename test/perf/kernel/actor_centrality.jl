@@ -1,13 +1,13 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-type Node
+mutable struct Node
     name::String
     n::Set{Node}
 
     Node(name) = new(name, Set{Node}())
 end
 
-typealias Graph Dict{String, Node}
+const Graph = Dict{String, Node}
 
 function get(G::Graph, name)
     if haskey(G, name)
@@ -41,7 +41,7 @@ function read_graph()
     G = Graph()
     actors = Set()
 
-    open(joinpath(JULIA_HOME,"..","..","test","perf","kernel","imdb-1.tsv"), "r") do io
+    open(joinpath(@__DIR__, "imdb-1.tsv"), "r") do io
         while !eof(io)
             k = split(strip(readline(io)), "\t")
             actor, movie = k[1], join(k[2:3], "_")

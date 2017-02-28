@@ -4,22 +4,23 @@ module GMP
 
 export BigInt
 
-import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
+import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
-             ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
+             ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
-             bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0z, widen, signed, unsafe_trunc, trunc
+             bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0z, widen, signed, unsafe_trunc, trunc,
+             iszero
 
 if Clong == Int32
-    typealias ClongMax Union{Int8, Int16, Int32}
-    typealias CulongMax Union{UInt8, UInt16, UInt32}
+    const ClongMax = Union{Int8, Int16, Int32}
+    const CulongMax = Union{UInt8, UInt16, UInt32}
 else
-    typealias ClongMax Union{Int8, Int16, Int32, Int64}
-    typealias CulongMax Union{UInt8, UInt16, UInt32, UInt64}
+    const ClongMax = Union{Int8, Int16, Int32, Int64}
+    const CulongMax = Union{UInt8, UInt16, UInt32, UInt64}
 end
-typealias CdoubleMax Union{Float16, Float32, Float64}
+const CdoubleMax = Union{Float16, Float32, Float64}
 
-gmp_version() = VersionNumber(bytestring(unsafe_load(cglobal((:__gmp_version, :libgmp), Ptr{Cchar}))))
+gmp_version() = VersionNumber(unsafe_string(unsafe_load(cglobal((:__gmp_version, :libgmp), Ptr{Cchar}))))
 gmp_bits_per_limb() = Int(unsafe_load(cglobal((:__gmp_bits_per_limb, :libgmp), Cint)))
 
 const GMP_VERSION = gmp_version()
@@ -29,28 +30,25 @@ const GMP_BITS_PER_LIMB = gmp_bits_per_limb()
 # `unsigned int` or `unsigned long long int`. The correct unsigned type is here named Limb, and must
 # be used whenever mp_limb_t is in the signature of ccall'ed GMP functions.
 if GMP_BITS_PER_LIMB == 32
-    typealias Limb UInt32
+    const Limb = UInt32
 elseif GMP_BITS_PER_LIMB == 64
-    typealias Limb UInt64
+    const Limb = UInt64
 else
     error("GMP: cannot determine the type mp_limb_t (__gmp_bits_per_limb == $GMP_BITS_PER_LIMB)")
 end
 
 
-type BigInt <: Integer
+mutable struct BigInt <: Integer
     alloc::Cint
     size::Cint
     d::Ptr{Limb}
     function BigInt()
         b = new(zero(Cint), zero(Cint), C_NULL)
         ccall((:__gmpz_init,:libgmp), Void, (Ptr{BigInt},), &b)
-        finalizer(b, _gmp_clear_func)
+        finalizer(b, cglobal((:__gmpz_clear, :libgmp)))
         return b
     end
 end
-
-_gmp_clear_func = C_NULL
-_mpfr_clear_func = C_NULL
 
 function __init__()
     try
@@ -60,8 +58,6 @@ function __init__()
                          "Please rebuild Julia."))
         end
 
-        global _gmp_clear_func = cglobal((:__gmpz_clear, :libgmp))
-        global _mpfr_clear_func = cglobal((:mpfr_clear, :libmpfr))
         ccall((:__gmp_set_memory_functions, :libgmp), Void,
               (Ptr{Void},Ptr{Void},Ptr{Void}),
               cglobal(:jl_gc_counted_malloc),
@@ -81,13 +77,17 @@ signed(x::BigInt) = x
 
 convert(::Type{BigInt}, x::BigInt) = x
 
-function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base::Int, raise::Bool)
+function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool)
     _n = Nullable{BigInt}()
 
-    # don't make a copy in the common case where we are parsing a whole bytestring
-    bstr = startpos == start(s) && endpos == endof(s) ? bytestring(s) : bytestring(SubString(s,startpos,endpos))
+    # don't make a copy in the common case where we are parsing a whole String
+    bstr = startpos == start(s) && endpos == endof(s) ? String(s) : String(SubString(s,startpos,endpos))
 
-    sgn, base, i = Base.parseint_preamble(true,base,bstr,start(bstr),endof(bstr))
+    sgn, base, i = Base.parseint_preamble(true,Int(base_),bstr,start(bstr),endof(bstr))
+    if !(2 <= base <= 62)
+        raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
+        return _n
+    end
     if i == 0
         raise && throw(ArgumentError("premature end of integer: $(repr(bstr))"))
         return _n
@@ -195,30 +195,30 @@ function convert{T<:Signed}(::Type{T}, x::BigInt)
     else
         0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError())
         y = x % T
-        (x.size > 0) $ (y > 0) && throw(InexactError()) # catch overflow
+        (x.size > 0) ⊻ (y > 0) && throw(InexactError()) # catch overflow
         y
     end
 end
 
 
-function call(::Type{Float64}, n::BigInt, ::RoundingMode{:ToZero})
+function (::Type{Float64})(n::BigInt, ::RoundingMode{:ToZero})
     ccall((:__gmpz_get_d, :libgmp), Float64, (Ptr{BigInt},), &n)
 end
 
-function call{T<:Union{Float16,Float32}}(::Type{T}, n::BigInt, ::RoundingMode{:ToZero})
+function (::Type{T}){T<:Union{Float16,Float32}}(n::BigInt, ::RoundingMode{:ToZero})
     T(Float64(n,RoundToZero),RoundToZero)
 end
 
-function call{T<:CdoubleMax}(::Type{T}, n::BigInt, ::RoundingMode{:Down})
+function (::Type{T}){T<:CdoubleMax}(n::BigInt, ::RoundingMode{:Down})
     x = T(n,RoundToZero)
     x > n ? prevfloat(x) : x
 end
-function call{T<:CdoubleMax}(::Type{T}, n::BigInt, ::RoundingMode{:Up})
+function (::Type{T}){T<:CdoubleMax}(n::BigInt, ::RoundingMode{:Up})
     x = T(n,RoundToZero)
     x < n ? nextfloat(x) : x
 end
 
-function call{T<:CdoubleMax}(::Type{T}, n::BigInt, ::RoundingMode{:Nearest})
+function (::Type{T}){T<:CdoubleMax}(n::BigInt, ::RoundingMode{:Nearest})
     x = T(n,RoundToZero)
     if maxintfloat(T) <= abs(x) < T(Inf)
         r = n-BigInt(x)
@@ -244,13 +244,13 @@ convert(::Type{Float64}, n::BigInt) = Float64(n,RoundNearest)
 convert(::Type{Float32}, n::BigInt) = Float32(n,RoundNearest)
 convert(::Type{Float16}, n::BigInt) = Float16(n,RoundNearest)
 
-promote_rule{T<:Integer}(::Type{BigInt}, ::Type{T}) = BigInt
+promote_rule(::Type{BigInt}, ::Type{<:Integer}) = BigInt
 
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
                  (:fld, :fdiv_q), (:div, :tdiv_q), (:mod, :fdiv_r), (:rem, :tdiv_r),
                  (:gcd, :gcd), (:lcm, :lcm),
-                 (:&, :and), (:|, :ior), (:$, :xor))
+                 (:&, :and), (:|, :ior), (:xor, :xor))
     @eval begin
         function ($fJ)(x::BigInt, y::BigInt)
             z = BigInt()
@@ -260,20 +260,29 @@ for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
     end
 end
 
+/(x::BigInt, y::BigInt) = float(x)/float(y)
+
 function invmod(x::BigInt, y::BigInt)
-    z = BigInt()
-    y = abs(y)
-    if y == 1
-        return big(0)
+    z = zero(BigInt)
+    ya = abs(y)
+    if ya == 1
+        return z
     end
-    if (y==0 || ccall((:__gmpz_invert, :libgmp), Cint, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &x, &y) == 0)
-        error("no inverse exists")
+    if (y==0 || ccall((:__gmpz_invert, :libgmp), Cint, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &x, &ya) == 0)
+        throw(DomainError())
     end
+    # GMP always returns a positive inverse; we instead want to
+    # normalize such that div(z, y) == 0, i.e. we want a negative z
+    # when y is negative.
+    if y < 0
+        z = z + y
+    end
+    # The postcondition is: mod(z * x, y) == mod(big(1), m) && div(z, y) == 0
     return z
 end
 
 # More efficient commutative operations
-for (fJ, fC) in ((:+, :add), (:*, :mul), (:&, :and), (:|, :ior), (:$, :xor))
+for (fJ, fC) in ((:+, :add), (:*, :mul), (:&, :and), (:|, :ior), (:xor, :xor))
     @eval begin
         function ($fJ)(a::BigInt, b::BigInt, c::BigInt)
             z = BigInt()
@@ -334,6 +343,9 @@ function *(x::BigInt, c::ClongMax)
     return z
 end
 *(c::ClongMax, x::BigInt) = x * c
+
+/(x::BigInt, y::Union{ClongMax,CulongMax}) = float(x)/y
+/(x::Union{ClongMax,CulongMax}, y::BigInt) = x/float(y)
 
 # unary ops
 for (fJ, fC) in ((:-, :neg), (:~, :com))
@@ -429,6 +441,10 @@ end
 ^(x::BigInt , y::Bool   ) = y ? x : one(x)
 ^(x::BigInt , y::Integer) = bigint_pow(x, y)
 ^(x::Integer, y::BigInt ) = bigint_pow(BigInt(x), y)
+^(x::Bool   , y::BigInt ) = Base.power_by_squaring(x, y)
+
+# override default inlining of x^2 and x^3 etc.
+^{p}(x::BigInt, ::Type{Val{p}}) = x^p
 
 function powermod(x::BigInt, p::BigInt, m::BigInt)
     r = BigInt()
@@ -490,6 +506,7 @@ binomial(n::BigInt, k::Integer) = k < 0 ? BigInt(0) : binomial(n, UInt(k))
 ==(i::Integer, x::BigInt) = cmp(x,i) == 0
 ==(x::BigInt, f::CdoubleMax) = isnan(f) ? false : cmp(x,f) == 0
 ==(f::CdoubleMax, x::BigInt) = isnan(f) ? false : cmp(x,f) == 0
+iszero(x::BigInt) = x == Clong(0)
 
 <=(x::BigInt, y::BigInt) = cmp(x,y) <= 0
 <=(x::BigInt, i::Integer) = cmp(x,i) <= 0
@@ -511,21 +528,41 @@ oct(n::BigInt) = base( 8, n)
 dec(n::BigInt) = base(10, n)
 hex(n::BigInt) = base(16, n)
 
+bin(n::BigInt, pad::Int) = base( 2, n, pad)
+oct(n::BigInt, pad::Int) = base( 8, n, pad)
+dec(n::BigInt, pad::Int) = base(10, n, pad)
+hex(n::BigInt, pad::Int) = base(16, n, pad)
+
 function base(b::Integer, n::BigInt)
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
-    p = ccall((:__gmpz_get_str,:libgmp), Ptr{UInt8}, (Ptr{UInt8}, Cint, Ptr{BigInt}), C_NULL, b, &n)
-    len = Int(ccall(:strlen, Csize_t, (Cstring,), p))
-    String(pointer_to_array(p,len,true))
+    nd = ndigits(n, b)
+    str = Base._string_n(n < 0 ? nd+1 : nd)
+    ccall((:__gmpz_get_str,:libgmp), Ptr{UInt8}, (Ptr{UInt8}, Cint, Ptr{BigInt}), str, b, &n)
+    return str
+end
+
+function base(b::Integer, n::BigInt, pad::Integer)
+    s = base(b, n)
+    buf = IOBuffer()
+    if n < 0
+        s = s[2:end]
+        write(buf, '-')
+    end
+    for i in 1:pad-sizeof(s) # `s` is known to be ASCII, and `length` is slower
+        write(buf, '0')
+    end
+    write(buf, s)
+    String(buf)
 end
 
 function ndigits0z(x::BigInt, b::Integer=10)
     b < 2 && throw(DomainError())
-    if ispow2(b)
-        Int(ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, b))
+    if ispow2(b) && 2 <= b <= 62 # GMP assumes b is in this range
+        Int(ccall((:__gmpz_sizeinbase,:libgmp), Csize_t, (Ptr{BigInt}, Cint), &x, b))
     else
         # non-base 2 mpz_sizeinbase might return an answer 1 too big
         # use property that log(b, x) < ndigits(x, b) <= log(b, x) + 1
-        n = Int(ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, 2))
+        n = Int(ccall((:__gmpz_sizeinbase,:libgmp), Csize_t, (Ptr{BigInt}, Cint), &x, 2))
         lb = log2(b) # assumed accurate to <1ulp (true for openlibm)
         q,r = divrem(n,lb)
         iq = Int(q)
@@ -541,8 +578,6 @@ function ndigits0z(x::BigInt, b::Integer=10)
 end
 ndigits(x::BigInt, b::Integer=10) = x.size == 0 ? 1 : ndigits0z(x,b)
 
-isprime(x::BigInt, reps=25) = ccall((:__gmpz_probab_prime_p,:libgmp), Cint, (Ptr{BigInt}, Cint), &x, reps) > 0
-
 prevpow2(x::BigInt) = x.size < 0 ? -prevpow2(-x) : (x <= 2 ? x : one(BigInt) << (ndigits(x, 2)-1))
 nextpow2(x::BigInt) = x.size < 0 ? -nextpow2(-x) : (x <= 2 ? x : one(BigInt) << ndigits(x-1, 2))
 
@@ -556,5 +591,18 @@ Base.checked_rem(a::BigInt, b::BigInt) = rem(a, b)
 Base.checked_fld(a::BigInt, b::BigInt) = fld(a, b)
 Base.checked_mod(a::BigInt, b::BigInt) = mod(a, b)
 Base.checked_cld(a::BigInt, b::BigInt) = cld(a, b)
+Base.add_with_overflow(a::BigInt, b::BigInt) = a + b, false
+Base.sub_with_overflow(a::BigInt, b::BigInt) = a - b, false
+Base.mul_with_overflow(a::BigInt, b::BigInt) = a * b, false
+
+function Base.deepcopy_internal(x::BigInt, stackdict::ObjectIdDict)
+    if haskey(stackdict, x)
+        return stackdict[x]
+    end
+    y = BigInt()
+    ccall((:__gmpz_set,:libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}), &y, &x)
+    stackdict[x] = y
+    return y
+end
 
 end # module

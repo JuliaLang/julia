@@ -76,7 +76,7 @@ function goto_test6()
     @label a
 end
 
-@test goto_test6() == nothing
+@test goto_test6() === nothing
 
 
 function goto_test7(x)
@@ -86,7 +86,7 @@ function goto_test7(x)
     end
 end
 
-@test goto_test7(false) == nothing
+@test goto_test7(false) === nothing
 
 module GotoMacroTest
     macro goto_test8_macro()

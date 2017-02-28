@@ -11,19 +11,60 @@
 //
 //===----------------------------------------------------------------------===//
 
-namespace {
+struct ABI_AArch64Layout : AbiLayout {
 
-typedef bool AbiState;
-static const AbiState default_abi_state = 0;
-
-static Type *get_llvm_fptype(jl_datatype_t *dt)
+Type *get_llvm_vectype(jl_datatype_t *dt) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
-    if (dt->mutabl || jl_datatype_nfields(dt) != 0)
-        return NULL;
+    // `!dt->mutabl && dt->pointerfree && !dt->haspadding && dt->nfields > 0`
+    if (dt->layout == NULL)
+        return nullptr;
+    size_t nfields = dt->layout->nfields;
+    assert(nfields > 0);
+    if (nfields < 2)
+        return nullptr;
+    static Type *T_vec64 = VectorType::get(T_int32, 2);
+    static Type *T_vec128 = VectorType::get(T_int32, 4);
+    Type *lltype;
+    // Short vector should be either 8 bytes or 16 bytes.
+    // Note that there are only two distinct fundamental types for
+    // short vectors so we normalize them to <2 x i32> and <4 x i32>
+    switch (jl_datatype_size(dt)) {
+    case 8:
+        lltype = T_vec64;
+        break;
+    case 16:
+        lltype = T_vec128;
+        break;
+    default:
+        return nullptr;
+    }
+    // Since `dt` is pointer free and has no padding and is 8 or 16 in size,
+    // `ft0` must be concrete, immutable with no padding and we don't need
+    // to check if its size is legal since it is included in
+    // the homogeneity check.
+    jl_datatype_t *ft0 = (jl_datatype_t*)jl_field_type(dt, 0);
+    // `ft0` should be a `VecElement` type and the true element type
+    // should be a primitive type
+    if (ft0->name != jl_vecelement_typename ||
+        ((jl_datatype_t*)jl_field_type(ft0, 0))->layout->nfields)
+        return nullptr;
+    for (size_t i = 1; i < nfields; i++) {
+        if (jl_field_type(dt, i) != (jl_value_t*)ft0) {
+            // Not homogeneous
+            return nullptr;
+        }
+    }
+    return lltype;
+}
+
+Type *get_llvm_fptype(jl_datatype_t *dt) const
+{
+    // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
+    // `!dt->mutabl && dt->pointerfree && !dt->haspadding && dt->nfields == 0`
     Type *lltype;
     // Check size first since it's cheaper.
-    switch (dt->size) {
+    switch (jl_datatype_size(dt)) {
     case 2:
         lltype = T_float16;
         break;
@@ -37,9 +78,18 @@ static Type *get_llvm_fptype(jl_datatype_t *dt)
         lltype = T_float128;
         break;
     default:
-        return NULL;
+        return nullptr;
     }
-    return jl_is_floattype((jl_value_t*)dt) ? lltype : NULL;
+    return ((jl_floatingpoint_type && jl_is_floattype((jl_value_t*)dt)) ?
+            lltype : nullptr);
+}
+
+Type *get_llvm_fp_or_vectype(jl_datatype_t *dt) const
+{
+    // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
+    if (dt->mutabl || dt->layout->npointers || dt->layout->haspadding)
+        return nullptr;
+    return dt->layout->nfields ? get_llvm_vectype(dt) : get_llvm_fptype(dt);
 }
 
 struct ElementType {
@@ -50,18 +100,17 @@ struct ElementType {
 
 // Whether a type is a homogeneous floating-point aggregates (HFA) or a
 // homogeneous short-vector aggregates (HVA). Returns the element type.
-// We only handle HFA of HP, SP, DP and QP here since these are the only ones we
-// have (no vectors).
 // An Homogeneous Aggregate is a Composite Type where all of the Fundamental
 // Data Types of the members that compose the type are the same.
 // Note that it is the fundamental types that are important and not the member
 // types.
-static bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele)
+bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele) const
 {
     // Assume:
     //     dt is a pointerfree type, (all members are isbits)
-    //     dsz == dt->size > 0
+    //     dsz == jl_datatype_size(dt) > 0
     //     0 <= nele <= 3
+    //     dt has no padding
 
     // We ignore zero sized member here. This isn't really consistent with
     // GCC for zero-sized array members. GCC seems to treat structs with
@@ -82,6 +131,14 @@ static bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType 
         if (fieldsz == dsz) {
             dt = (jl_datatype_t*)jl_field_type(dt, i);
             continue;
+        }
+        if (Type *vectype = get_llvm_vectype(dt)) {
+            if ((ele.sz && dsz != ele.sz) || (ele.type && ele.type != vectype))
+                return false;
+            ele.type = vectype;
+            ele.sz = dsz;
+            nele++;
+            return true;
         }
         // Otherwise, process each members
         for (;i < nfields;i++) {
@@ -110,7 +167,7 @@ static bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType 
     return false;
 }
 
-static Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele)
+Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
 
@@ -121,8 +178,8 @@ static Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele)
     // with a Fundamental Data Type that is a Short-Vector type and at most four
     // uniquely addressable members.
     // Maximum HFA and HVA size is 64 bytes (4 x fp128 or 16bytes vector)
-    size_t dsz = dt->size;
-    if (dsz > 64 || !dt->pointerfree || dt->haspadding)
+    size_t dsz = jl_datatype_size(dt);
+    if (dsz > 64 || !dt->layout || dt->layout->npointers || dt->layout->haspadding)
         return NULL;
     nele = 0;
     ElementType eltype;
@@ -131,16 +188,14 @@ static Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele)
     return NULL;
 }
 
-void needPassByRef(AbiState*, jl_value_t *ty, bool *byRef, bool*)
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
 {
-    // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
     // B.2
     //   If the argument type is an HFA or an HVA, then the argument is used
     //   unmodified.
     size_t size;
     if (isHFAorHVA(dt, size))
-        return;
+        return false;
     // B.3
     //   If the argument type is a Composite Type that is larger than 16 bytes,
     //   then the argument is copied to memory allocated by the caller and the
@@ -148,15 +203,10 @@ void needPassByRef(AbiState*, jl_value_t *ty, bool *byRef, bool*)
     // We only check for the total size and not whether it is a composite type
     // since there's no corresponding C type and we just treat such large
     // bitstype as a composite type of the right size.
-    *byRef = dt->size > 16;
+    return jl_datatype_size(dt) > 16;
     // B.4
     //   If the argument type is a Composite Type then the size of the argument
     //   is rounded up to the nearest multiple of 8 bytes.
-}
-
-bool need_private_copy(jl_value_t*, bool)
-{
-    return false;
 }
 
 // Determine which kind of register the argument will be passed in and
@@ -170,12 +220,9 @@ bool need_private_copy(jl_value_t*, bool)
 // If the argument has to be passed on stack, we need to use sret.
 //
 // All the out parameters should be default to `false`.
-static Type *classify_arg(jl_value_t *ty, bool *fpreg, bool *onstack,
-                          size_t *rewrite_len)
+Type *classify_arg(jl_datatype_t *dt, bool *fpreg, bool *onstack,
+                   size_t *rewrite_len) const
 {
-    // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
-
     // Based on section 5.4 C of the Procedure Call Standard
     // C.1
     //   If the argument is a Half-, Single-, Double- or Quad- precision
@@ -183,9 +230,7 @@ static Type *classify_arg(jl_value_t *ty, bool *fpreg, bool *onstack,
     //   the argument is allocated to the least significant bits of register
     //   v[NSRN]. The NSRN is incremented by one. The argument has now been
     //   allocated.
-    // Note that this is missing QP float as well as short vector types since we
-    // don't really have those types.
-    if (get_llvm_fptype(dt)) {
+    if (get_llvm_fp_or_vectype(dt)) {
         *fpreg = true;
         return NULL;
     }
@@ -209,7 +254,7 @@ static Type *classify_arg(jl_value_t *ty, bool *fpreg, bool *onstack,
     // done before starting step C but we do this here to avoid checking for
     // HFA and HVA twice. We don't check whether it is a composite type.
     // See `needPassByRef` above.
-    if (dt->size > 16) {
+    if (jl_datatype_size(dt) > 16) {
         *onstack = true;
         return NULL;
     }
@@ -242,8 +287,9 @@ static Type *classify_arg(jl_value_t *ty, bool *fpreg, bool *onstack,
     // pointers. We don't need to worry about floating points here since they
     // are handled above.
     if (jl_is_immutable(dt) && jl_datatype_nfields(dt) == 0 &&
-        (dt->size == 1 || dt->size == 2 || dt->size == 4 ||
-         dt->size == 8 || dt->size == 16))
+        (jl_datatype_size(dt) == 1 || jl_datatype_size(dt) == 2 ||
+         jl_datatype_size(dt) == 4 || jl_datatype_size(dt) == 8 ||
+         jl_datatype_size(dt) == 16))
         return NULL;
 
     // C.8
@@ -272,10 +318,10 @@ static Type *classify_arg(jl_value_t *ty, bool *fpreg, bool *onstack,
     // The type can fit in 8 x 8 bytes since it is handled by
     // need_pass_by_ref otherwise.
     // 0-size types (Void) won't be rewritten and that is what we want
-    assert(dt->size <= 16); // Should be pass by reference otherwise
-    *rewrite_len = (dt->size + 7) >> 3;
+    assert(jl_datatype_size(dt) <= 16); // Should be pass by reference otherwise
+    *rewrite_len = (jl_datatype_size(dt) + 7) >> 3;
     // Rewrite to [n x Int64] where n is the **size in dword**
-    return dt->size ? T_int64 : NULL;
+    return jl_datatype_size(dt) ? T_int64 : NULL;
 
     // C.11
     //   The NGRN is set to 8.
@@ -299,9 +345,8 @@ static Type *classify_arg(jl_value_t *ty, bool *fpreg, bool *onstack,
     // <handled by C.10 above>
 }
 
-bool use_sret(AbiState*, jl_value_t *ty)
+bool use_sret(jl_datatype_t *dt) override
 {
-    // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
     // Section 5.5
     // If the type, T, of the result of a function is such that
     //
@@ -314,23 +359,20 @@ bool use_sret(AbiState*, jl_value_t *ty)
     bool fpreg = false;
     bool onstack = false;
     size_t rewrite_len = 0;
-    classify_arg(ty, &fpreg, &onstack, &rewrite_len);
+    classify_arg(dt, &fpreg, &onstack, &rewrite_len);
     return onstack;
 }
 
-Type *preferred_llvm_type(jl_value_t *ty, bool)
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
 {
-    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty))
-        return NULL;
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
-    if (Type *fptype = get_llvm_fptype(dt))
+    if (Type *fptype = get_llvm_fp_or_vectype(dt))
         return fptype;
     bool fpreg = false;
     bool onstack = false;
     size_t rewrite_len = 0;
-    if (Type *rewrite_ty = classify_arg(ty, &fpreg, &onstack, &rewrite_len))
+    if (Type *rewrite_ty = classify_arg(dt, &fpreg, &onstack, &rewrite_len))
         return ArrayType::get(rewrite_ty, rewrite_len);
     return NULL;
 }
 
-}
+};

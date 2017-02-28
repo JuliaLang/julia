@@ -8,7 +8,7 @@
 # Based on the Javascript program
 #
 function fannkuch(n)
-    p = Array(Int32,n)
+    p = Array{Int32}(n)
     for i = 1:n
         p[i] = i
     end

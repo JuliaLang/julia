@@ -2,6 +2,11 @@
 
 using Base.Test
 
+# Check that serializer hasn't gone out-of-frame
+@test Serializer.sertag(Symbol) == 2
+@test Serializer.sertag(()) == 45
+@test Serializer.sertag(false) == 121
+
 function create_serialization_stream(f::Function)
     s = IOBuffer()
     f(s)
@@ -11,17 +16,17 @@ end
 # Tags
 create_serialization_stream() do s
     Serializer.writetag(s, Serializer.sertag(Bool))
-    @test takebuf_array(s)[end] == UInt8(Serializer.sertag(Bool))
+    @test take!(s)[end] == UInt8(Serializer.sertag(Bool))
 end
 
 create_serialization_stream() do s
     Serializer.write_as_tag(s, Serializer.sertag(Bool))
-    @test takebuf_array(s)[end] == UInt8(Serializer.sertag(Bool))
+    @test take!(s)[end] == UInt8(Serializer.sertag(Bool))
 end
 
 create_serialization_stream() do s
     Serializer.write_as_tag(s, Serializer.sertag(Symbol))
-    data = takebuf_array(s)
+    data = take!(s)
     @test data[end-1] == 0x00
     @test data[end] == UInt8(Serializer.sertag(Symbol))
 end
@@ -72,6 +77,14 @@ create_serialization_stream() do s
     @test deserialize(s) === Tuple{}
 end
 
+# Dict
+create_serialization_stream() do s
+    dct = Dict("A"=>1, "B"=>2)
+    serialize(s, dct)
+    seek(s, 0)
+    @test deserialize(s) == dct
+end
+
 # Symbol
 create_serialization_stream() do s
     gensym(len) = Symbol(repeat("A", len))
@@ -94,7 +107,7 @@ end
 # Module
 create_serialization_stream() do s # user-defined module
     mod = b"SomeModule"
-    modstring = bytestring(mod)
+    modstring = String(mod)
     eval(parse("module $(modstring); end"))
     modtype = eval(parse("$(modstring)"))
     serialize(s, modtype)
@@ -116,7 +129,7 @@ end
 
 create_serialization_stream() do s # user-defined type
     usertype = "SerializeSomeType"
-    eval(parse("abstract $(usertype)"))
+    eval(parse("abstract type $(usertype) end"))
     utype = eval(parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
@@ -125,7 +138,7 @@ end
 
 create_serialization_stream() do s # user-defined type
     usertype = "SerializeSomeType1"
-    eval(parse("type $(usertype); end"))
+    eval(parse("mutable struct $(usertype); end"))
     utype = eval(parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
@@ -134,43 +147,43 @@ end
 
 create_serialization_stream() do s # user-defined type
     usertype = "SerializeSomeType2"
-    eval(parse("abstract $(usertype){T}"))
+    eval(parse("abstract type $(usertype){T} end"))
     utype = eval(parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
-    @test deserialize(s) === utype
+    @test deserialize(s) == utype
 end
 
-create_serialization_stream() do s # immutable type with 1 field
+create_serialization_stream() do s # immutable struct with 1 field
     usertype = "SerializeSomeType3"
-    eval(parse("immutable $(usertype){T}; a::T; end"))
+    eval(parse("struct $(usertype){T}; a::T; end"))
     utype = eval(parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
-    @test deserialize(s) === utype
+    @test deserialize(s) == utype
 end
 
-create_serialization_stream() do s # immutable type with 2 field
+create_serialization_stream() do s # immutable struct with 2 field
     usertype = "SerializeSomeType4"
-    eval(parse("immutable $(usertype){T}; a::T; b::T; end"))
+    eval(parse("struct $(usertype){T}; a::T; b::T; end"))
     utval = eval(parse("$(usertype)(1,2)"))
     serialize(s, utval)
     seek(s, 0)
     @test deserialize(s) === utval
 end
 
-create_serialization_stream() do s # immutable type with 3 field
+create_serialization_stream() do s # immutable struct with 3 field
     usertype = "SerializeSomeType5"
-    eval(parse("immutable $(usertype){T}; a::T; b::T; c::T; end"))
+    eval(parse("struct $(usertype){T}; a::T; b::T; c::T; end"))
     utval = eval(parse("$(usertype)(1,2,3)"))
     serialize(s, utval)
     seek(s, 0)
     @test deserialize(s) === utval
 end
 
-create_serialization_stream() do s # immutable type with 4 field
+create_serialization_stream() do s # immutable struct with 4 field
     usertype = "SerializeSomeType6"
-    eval(parse("immutable $(usertype){T}; a::T; b::T; c::T; d::T; end"))
+    eval(parse("struct $(usertype){T}; a::T; b::T; c::T; d::T; end"))
     utval = eval(parse("$(usertype)(1,2,3,4)"))
     serialize(s, utval)
     seek(s, 0)
@@ -191,7 +204,7 @@ create_serialization_stream() do s
 end
 
 # Array
-type TA1
+mutable struct TA1
     v::UInt8
 end
 create_serialization_stream() do s # small 1d array
@@ -204,7 +217,7 @@ create_serialization_stream() do s # small 1d array
     arr4 = reshape([true, false, false, false, true, false, false, false, true], 3, 3)
     serialize(s, arr4)       # boolean array
 
-    arr5 = Array(TA1, 3)
+    arr5 = Array{TA1}(3)
     arr5[2] = TA1(0x01)
     serialize(s, arr5)
 
@@ -215,16 +228,16 @@ create_serialization_stream() do s # small 1d array
     @test deserialize(s) == arr4
 
     result = deserialize(s)
-    @test !isdefined(result,1)
-    @test !isdefined(result,3)
+    @test !isassigned(result,1)
+    @test !isassigned(result,3)
     @test result[2].v == arr5[2].v
 end
 
 # SubArray
 create_serialization_stream() do s # slices
-    slc1 = slice(ones(UInt8, 4), 2:3)
+    slc1 = view(ones(UInt8, 4), 2:3)
     serialize(s, slc1)
-    slc2 = slice(ones(UInt8, 4, 4) .+ [0x00, 0x01, 0x02, 0x03], 1, 2:4)
+    slc2 = view(ones(UInt8, 4, 4) .+ [0x00, 0x01, 0x02, 0x03], 1, 2:4)
     serialize(s, slc2)
 
     seek(s, 0)
@@ -235,9 +248,10 @@ end
 # Objects that have a SubArray as a type in a type-parameter list
 module ArrayWrappers
 
-immutable ArrayWrapper{T,N,A<:AbstractArray} <: AbstractArray{T,N}
+struct ArrayWrapper{T,N,A<:AbstractArray} <: AbstractArray{T,N}
     data::A
 end
+ArrayWrapper{T,N}(data::AbstractArray{T,N}) = ArrayWrapper{T,N,typeof(data)}(data)
 Base.size(A::ArrayWrapper) = size(A.data)
 Base.size(A::ArrayWrapper, d) = size(A.data, d)
 Base.getindex(A::ArrayWrapper, i::Real...) = getindex(A.data, i...)
@@ -245,8 +259,8 @@ Base.getindex(A::ArrayWrapper, i::Real...) = getindex(A.data, i...)
 end
 
 let A = rand(3,4)
-    for B in (sub(A, :, 2:4), slice(A, 2, 1:3))
-        C = ArrayWrappers.ArrayWrapper{Float64,2,typeof(B)}(B)
+    for B in (view(A, :, 2:4), view(A, 2, 1:3))
+        C = ArrayWrappers.ArrayWrapper(B)
         io = IOBuffer()
         serialize(io, C)
         seek(io, 0)
@@ -272,6 +286,24 @@ create_serialization_stream() do s # Base generic function
     @test deserialize(s)() === 1
 end
 
+# Anonymous Functions
+main_ex = quote
+    $create_serialization_stream() do s
+        local g() = :magic_token_anon_fun_test
+        serialize(s, g)
+        serialize(s, g)
+
+        seekstart(s)
+        local g2 = deserialize(s)
+        $Test.@test g2 !== g
+        $Test.@test g2() == :magic_token_anon_fun_test
+        $Test.@test g2() == :magic_token_anon_fun_test
+        $Test.@test deserialize(s) === g2
+    end
+end
+# This needs to be run on `Main` since the serializer treats it differently.
+eval(Main, main_ex)
+
 # Task
 create_serialization_stream() do s # user-defined type array
     f = () -> begin task_local_storage(:v, 2); return 1+1 end
@@ -282,10 +314,10 @@ create_serialization_stream() do s # user-defined type array
     r = deserialize(s)
     @test r.storage[:v] == 2
     @test r.state == :done
-    @test r.exception == nothing
+    @test r.exception === nothing
 end
 
-immutable MyErrorTypeTest <: Exception end
+struct MyErrorTypeTest <: Exception end
 create_serialization_stream() do s # user-defined type array
     t = Task(()->throw(MyErrorTypeTest()))
     @test_throws MyErrorTypeTest wait(schedule(t))
@@ -296,7 +328,7 @@ create_serialization_stream() do s # user-defined type array
     @test isa(t.exception, MyErrorTypeTest)
 end
 
-# corner case: undefined inside immutable type
+# corner case: undefined inside immutable struct
 create_serialization_stream() do s
     serialize(s, Nullable{Any}())
     seekstart(s)
@@ -363,14 +395,14 @@ end
 using .Shell, .Instance1
 io = IOBuffer()
 serialize(io, foo)
-str = takebuf_string(io)
+str = String(take!(io))
 @test isempty(search(str, "Instance1"))
 @test !isempty(search(str, "Shell"))
 
 end  # module Test13452
 
 # issue #15163
-type B15163{T}
+mutable struct B15163{T}
     x::Array{T}
 end
 let b = IOBuffer()
@@ -379,6 +411,13 @@ let b = IOBuffer()
     c = deserialize(b)
     @test isa(c,B15163) && c.x == [1]
 end
+# related issue #20066
+let b = IOBuffer()
+    serialize(b, Dict{Vector, Vector}())
+    seekstart(b)
+    c = deserialize(b)
+    @test isa(c, Dict{Vector, Vector})
+end
 
 # issue #15849
 let b = IOBuffer()
@@ -386,4 +425,22 @@ let b = IOBuffer()
     serialize(b, vt)
     seekstart(b)
     @test deserialize(b) == vt
+end
+
+# issue #1770
+let a = ['T', 'e', 's', 't']
+    f = IOBuffer()
+    serialize(f, a)
+    seek(f, 0)
+    @test deserialize(f) == a
+    f = IOBuffer()
+    serialize(f, a)
+    seek(f, 0)
+    @test deserialize(f) == a
+
+    # issue #4414
+    seek(f,0)
+    serialize(f, :β)
+    seek(f,0)
+    @test deserialize(f) === :β
 end

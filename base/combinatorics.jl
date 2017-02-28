@@ -60,17 +60,29 @@ end
     isperm(v) -> Bool
 
 Returns `true` if `v` is a valid permutation.
+
+```jldoctest
+julia> isperm([1; 2])
+true
+
+julia> isperm([1; 3])
+false
+```
 """
 function isperm(A)
     n = length(A)
     used = falses(n)
     for a in A
-        (0 < a <= n) && (used[a] $= true) || return false
+        (0 < a <= n) && (used[a] ⊻= true) || return false
     end
     true
 end
 
-function permute!!{T<:Integer}(a, p::AbstractVector{T})
+isperm(p::Tuple{}) = true
+isperm(p::Tuple{Int}) = p[1] == 1
+isperm(p::Tuple{Int,Int}) = ((p[1] == 1) & (p[2] == 2)) | ((p[1] == 2) & (p[2] == 1))
+
+function permute!!(a, p::AbstractVector{<:Integer})
     count = 0
     start = 0
     while count < length(a)
@@ -99,10 +111,27 @@ to verify that `p` is a permutation.
 
 To return a new permutation, use `v[p]`. Note that this is generally faster than
 `permute!(v,p)` for large vectors.
-"""
-permute!(a, p::AbstractVector) = permute!!(a, copy!(similar(p), p))
 
-function ipermute!!{T<:Integer}(a, p::AbstractVector{T})
+See also [`ipermute!`](@ref)
+
+```jldoctest
+julia> A = [1, 1, 3, 4];
+
+julia> perm = [2, 4, 3, 1];
+
+julia> permute!(A, perm);
+
+julia> A
+4-element Array{Int64,1}:
+ 1
+ 4
+ 3
+ 1
+```
+"""
+permute!(a, p::AbstractVector) = permute!!(a, copymutable(p))
+
+function ipermute!!(a, p::AbstractVector{<:Integer})
     count = 0
     start = 0
     while count < length(a)
@@ -129,13 +158,56 @@ end
     ipermute!(v, p)
 
 Like `permute!`, but the inverse of the given permutation is applied.
+
+```jldoctest
+julia> A = [1, 1, 3, 4];
+
+julia> perm = [2, 4, 3, 1];
+
+julia> ipermute!(A, perm);
+
+julia> A
+4-element Array{Int64,1}:
+ 4
+ 1
+ 3
+ 1
+```
 """
-ipermute!(a, p::AbstractVector) = ipermute!!(a, copy!(similar(p), p))
+ipermute!(a, p::AbstractVector) = ipermute!!(a, copymutable(p))
 
 """
     invperm(v)
 
-Return the inverse permutation of `v`
+Return the inverse permutation of `v`.
+If `B = A[v]`, then `A == B[invperm(v)]`.
+
+```jldoctest
+julia> v = [2; 4; 3; 1];
+
+julia> invperm(v)
+4-element Array{Int64,1}:
+ 4
+ 1
+ 3
+ 2
+
+julia> A = ['a','b','c','d'];
+
+julia> B = A[v]
+4-element Array{Char,1}:
+ 'b'
+ 'd'
+ 'c'
+ 'a'
+
+julia> B[invperm(v)]
+4-element Array{Char,1}:
+ 'a'
+ 'b'
+ 'c'
+ 'd'
+```
 """
 function invperm(a::AbstractVector)
     b = zero(a) # similar vector of zeros
@@ -148,18 +220,26 @@ function invperm(a::AbstractVector)
     b
 end
 
+function invperm(p::Union{Tuple{},Tuple{Int},Tuple{Int,Int}})
+    isperm(p) || throw(ArgumentError("argument is not a permutation"))
+    p  # in dimensions 0-2, every permutation is its own inverse
+end
+invperm(a::Tuple) = (invperm([a...])...,)
+
 #XXX This function should be moved to Combinatorics.jl but is currently used by Base.DSP.
 """
-    nextprod([k_1,k_2,...], n)
+    nextprod([k_1, k_2,...], n)
 
-Next integer not less than `n` that can be written as ``\\prod k_i^{p_i}`` for integers
+Next integer greater than or equal to `n` that can be written as ``\\prod k_i^{p_i}`` for integers
 ``p_1``, ``p_2``, etc.
 
-For a list of integers i1, i2, i3, find the smallest
+```jldoctest
+julia> nextprod([2, 3], 105)
+108
 
-    i1^n1 * i2^n2 * i3^n3 >= x
-
-for integer n1, n2, n3
+julia> 2^2 * 3^3
+108
+```
 """
 function nextprod(a::Vector{Int}, x)
     if x > typemax(Int)

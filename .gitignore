@@ -12,6 +12,7 @@
 
 *.exe
 *.dll
+*.dwo
 *.do
 *.o
 *.obj

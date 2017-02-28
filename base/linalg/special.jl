@@ -3,66 +3,57 @@
 # Methods operating on different special matrix types
 
 # Interconversion between special matrix types
-convert{T}(::Type{Bidiagonal}, A::Diagonal{T})=Bidiagonal(A.diag, zeros(T, size(A.diag,1)-1), true)
-convert{T}(::Type{SymTridiagonal}, A::Diagonal{T})=SymTridiagonal(A.diag, zeros(T, size(A.diag,1)-1))
-convert{T}(::Type{Tridiagonal}, A::Diagonal{T})=Tridiagonal(zeros(T, size(A.diag,1)-1), A.diag, zeros(T, size(A.diag,1)-1))
-convert(::Type{LowerTriangular}, A::Bidiagonal) = !A.isupper ? LowerTriangular(full(A)) : throw(ArgumentError("Bidiagonal matrix must have lower off diagonal to be converted to LowerTriangular"))
-convert(::Type{UpperTriangular}, A::Bidiagonal) = A.isupper ? UpperTriangular(full(A)) : throw(ArgumentError("Bidiagonal matrix must have upper off diagonal to be converted to UpperTriangular"))
-convert(::Type{Matrix}, D::Diagonal) = diagm(D.diag)
-
-function convert(::Type{UnitUpperTriangular}, A::Diagonal)
-    if !all(A.diag .== one(eltype(A)))
-        throw(ArgumentError("matrix cannot be represented as UnitUpperTriangular"))
-    end
-    UnitUpperTriangular(full(A))
-end
-
-function convert(::Type{UnitLowerTriangular}, A::Diagonal)
-    if !all(A.diag .== one(eltype(A)))
-        throw(ArgumentError("matrix cannot be represented as UnitLowerTriangular"))
-    end
-    UnitLowerTriangular(full(A))
-end
+convert{T}(::Type{Bidiagonal}, A::Diagonal{T}) =
+    Bidiagonal(A.diag, zeros(T, size(A.diag,1)-1), true)
+convert{T}(::Type{SymTridiagonal}, A::Diagonal{T}) =
+    SymTridiagonal(A.diag, zeros(T, size(A.diag,1)-1))
+convert{T}(::Type{Tridiagonal}, A::Diagonal{T}) =
+    Tridiagonal(zeros(T, size(A.diag,1)-1), A.diag, zeros(T, size(A.diag,1)-1))
 
 function convert(::Type{Diagonal}, A::Union{Bidiagonal, SymTridiagonal})
-    if !all(A.ev .== 0)
+    if !iszero(A.ev)
         throw(ArgumentError("matrix cannot be represented as Diagonal"))
     end
     Diagonal(A.dv)
 end
 
 function convert(::Type{SymTridiagonal}, A::Bidiagonal)
-    if !all(A.ev .== 0)
+    if !iszero(A.ev)
         throw(ArgumentError("matrix cannot be represented as SymTridiagonal"))
     end
     SymTridiagonal(A.dv, A.ev)
 end
 
-convert{T}(::Type{Tridiagonal}, A::Bidiagonal{T})=Tridiagonal(A.isupper?zeros(T, size(A.dv,1)-1):A.ev, A.dv, A.isupper?A.ev:zeros(T, size(A.dv,1)-1))
+convert{T}(::Type{Tridiagonal}, A::Bidiagonal{T}) =
+    Tridiagonal(A.isupper ? zeros(T, size(A.dv,1)-1) : A.ev, A.dv,
+                A.isupper ? A.ev:zeros(T, size(A.dv,1)-1))
 
 function convert(::Type{Bidiagonal}, A::SymTridiagonal)
-    if !all(A.ev .== 0)
+    if !iszero(A.ev)
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
     end
     Bidiagonal(A.dv, A.ev, true)
 end
 
 function convert(::Type{Diagonal}, A::Tridiagonal)
-    if !(all(A.dl .== 0) && all(A.du .== 0))
+    if !(iszero(A.dl) && iszero(A.du))
         throw(ArgumentError("matrix cannot be represented as Diagonal"))
     end
     Diagonal(A.d)
 end
 
 function convert(::Type{Bidiagonal}, A::Tridiagonal)
-    if all(A.dl .== 0) return Bidiagonal(A.d, A.du, true)
-    elseif all(A.du .== 0) return Bidiagonal(A.d, A.dl, false)
-    else throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
+    if iszero(A.dl)
+        return Bidiagonal(A.d, A.du, true)
+    elseif iszero(A.du)
+        return Bidiagonal(A.d, A.dl, false)
+    else
+        throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
     end
 end
 
 function convert(::Type{SymTridiagonal}, A::Tridiagonal)
-    if !all(A.dl .== A.du)
+    if A.dl != A.du
         throw(ArgumentError("matrix cannot be represented as SymTridiagonal"))
     end
     SymTridiagonal(A.d, A.dl)
@@ -90,7 +81,8 @@ function convert(::Type{Bidiagonal}, A::AbstractTriangular)
     end
 end
 
-convert(::Type{SymTridiagonal}, A::AbstractTriangular) = convert(SymTridiagonal, convert(Tridiagonal, A))
+convert(::Type{SymTridiagonal}, A::AbstractTriangular) =
+    convert(SymTridiagonal, convert(Tridiagonal, A))
 
 function convert(::Type{Tridiagonal}, A::AbstractTriangular)
     fA = full(A)
@@ -148,8 +140,8 @@ for op in (:+, :-)
                                           (:LowerTriangular,:LowerTriangular),
                                           (:UnitLowerTriangular,:LowerTriangular))
             @eval begin
-                ($op)(A::($matrixtype1), B::($matrixtype2)) = ($op)(convert(($matrixtype3), A), B)
-                ($op)(A::($matrixtype2), B::($matrixtype1)) = ($op)(A, convert(($matrixtype3), B))
+                ($op)(A::($matrixtype1), B::($matrixtype2)) = ($op)(($matrixtype3)(A), B)
+                ($op)(A::($matrixtype2), B::($matrixtype1)) = ($op)(A, ($matrixtype3)(B))
             end
         end
     end

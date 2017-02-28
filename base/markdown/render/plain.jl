@@ -35,16 +35,47 @@ end
 
 function plain(io::IO, list::List)
     for (i, item) in enumerate(list.items)
-        print(io, list.ordered ? "$i. " : "  * ")
-        plaininline(io, item)
+        print(io, isordered(list) ? "$(i + list.ordered - 1). " : "  * ")
+        lines = split(rstrip(sprint(plain, item)), "\n")
+        for (n, line) in enumerate(lines)
+            print(io, (n == 1 || isempty(line)) ? "" : "    ", line)
+            n < length(lines) && println(io)
+        end
         println(io)
     end
 end
 
 function plain(io::IO, q::BlockQuote)
-    s = sprint(buf -> plain(buf, q.content))
+    s = sprint(plain, q.content)
     for line in split(rstrip(s), "\n")
         println(io, isempty(line) ? ">" : "> ", line)
+    end
+    println(io)
+end
+
+function plain(io::IO, f::Footnote)
+    print(io, "[^", f.id, "]:")
+    s = sprint(plain, f.text)
+    lines = split(rstrip(s), "\n")
+    # Single line footnotes are printed on the same line as their label
+    # rather than taking up an additional line.
+    if length(lines) == 1
+        println(io, " ", lines[1])
+    else
+        println(io)
+        for line in lines
+            println(io, isempty(line) ? "" : "    ", line)
+        end
+        println(io)
+    end
+end
+
+function plain(io::IO, md::Admonition)
+    s = sprint(plain, md.content)
+    title = md.title == ucfirst(md.category) ? "" : " \"$(md.title)\""
+    println(io, "!!! ", md.category, title)
+    for line in split(rstrip(s), "\n")
+        println(io, isempty(line) ? "" : "    ", line)
     end
     println(io)
 end
@@ -60,7 +91,7 @@ function plain(io::IO, l::LaTeX)
 end
 
 function plain(io::IO, md)
-    writemime(io,  MIME"text/plain"(), md)
+    show(io,  MIME"text/plain"(), md)
     println(io)
 end
 
@@ -76,12 +107,9 @@ end
 
 plaininline(io::IO, md::Vector) = !isempty(md) && plaininline(io, md...)
 
-plaininline(io::IO, link::Link) = plaininline(io, "[", link.text, "](", link.url, ")")
+plaininline(io::IO, f::Footnote) = print(io, "[^", f.id, "]")
 
-function plaininline(io::IO, md::Footnote)
-    print(io, "[^", md.id, "]")
-    md.text ≡ nothing || (print(io, ":"); plaininline(io, md.text))
-end
+plaininline(io::IO, link::Link) = plaininline(io, "[", link.text, "](", link.url, ")")
 
 plaininline(io::IO, md::Image) = plaininline(io, "![", md.alt, "](", md.url, ")")
 
@@ -91,13 +119,22 @@ plaininline(io::IO, md::Bold) = plaininline(io, "**", md.text, "**")
 
 plaininline(io::IO, md::Italic) = plaininline(io, "*", md.text, "*")
 
-plaininline(io::IO, md::Code) = print(io, "`", md.code, "`")
+function plaininline(io::IO, md::Code)
+    if contains(md.code, "`")
+        n = maximum(length(m) for m in matchall(r"(`+)", md.code))
+        s = "`"^((iseven(n) ? 1 : 2) + n)
+        print(io, s, Base.startswith(md.code, "`") ? " " : "")
+        print(io, md.code, endswith(md.code, "`") ? " " : "", s)
+    else
+        print(io, "`", md.code, "`")
+    end
+end
 
 plaininline(io::IO, br::LineBreak) = println(io)
 
-plaininline(io::IO, x) = writemime(io, MIME"text/plain"(), x)
+plaininline(io::IO, x) = show(io, MIME"text/plain"(), x)
 
-# writemime
+# show
 
-Base.writemime(io::IO, ::MIME"text/plain", md::MD) = plain(io, md)
-Base.writemime(io::IO, ::MIME"text/markdown", md::MD) = plain(io, md)
+Base.show(io::IO, md::MD) = plain(io, md)
+Base.show(io::IO, ::MIME"text/markdown", md::MD) = plain(io, md)

@@ -42,10 +42,12 @@ export File,
 import Base:
     UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
     nb_available, position, read, read!, readavailable, seek, seekend, show,
-    skip, stat, unsafe_read, unsafe_write, utf16to8, utf8to16, uv_error,
-    uvhandle, uvtype, write
+    skip, stat, unsafe_read, unsafe_write, transcode, uv_error, uvhandle,
+    uvtype, write
 
-@windows_only import Base: cwstring
+if is_windows()
+    import Base: cwstring
+end
 
 include("path.jl")
 include("stat.jl")
@@ -55,9 +57,9 @@ include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","file_constants.jl"))  # inc
 
 ## Operations with File (fd) objects ##
 
-abstract AbstractFile <: IO
+abstract type AbstractFile <: IO end
 
-type File <: AbstractFile
+mutable struct File <: AbstractFile
     open::Bool
     handle::RawFD
     File(fd::RawFD) = new(true, fd)
@@ -67,7 +69,8 @@ end
 uvhandle(file::File) = convert(Ptr{Void}, Base.cconvert(Cint, file.handle) % UInt)
 uvtype(::File) = Base.UV_RAW_FD
 
-function open(path::AbstractString, flags::Integer, mode::Integer=0) # FS.open, not Base.open
+# Filesystem.open, not Base.open
+function open(path::AbstractString, flags::Integer, mode::Integer=0)
     req = Libc.malloc(_sizeof_uv_fs)
     local handle
     try
@@ -96,7 +99,7 @@ function close(f::File)
     uv_error("close", err)
     f.handle = RawFD(-1)
     f.open = false
-    return f
+    return nothing
 end
 
 # sendfile is the most efficient way to copy a file (or any file descriptor)
@@ -171,9 +174,9 @@ function readbytes!(f::File, b::Array{UInt8}, nb=length(b))
     uv_error("read",ret)
     return ret
 end
-read(io::File) = read!(io, Array(UInt8, nb_available(io)))
+read(io::File) = read!(io, Base.StringVector(nb_available(io)))
 readavailable(io::File) = read(io)
-read(io::File, nb::Integer) = read!(io, Array(UInt8, min(nb, nb_available(io))))
+read(io::File, nb::Integer) = read!(io, Base.StringVector(min(nb, nb_available(io))))
 
 const SEEK_SET = Int32(0)
 const SEEK_CUR = Int32(1)

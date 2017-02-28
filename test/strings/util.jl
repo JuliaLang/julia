@@ -21,7 +21,7 @@
 
 for s in ("", " ", " abc", "abc ", "  abc  "), f in (lstrip, rstrip, strip)
     fs = f(s)
-    for T = (String, UTF16String, UTF32String)
+    for T = (String, GenericString)
         t = convert(T,s)
         ft = f(t)
         @test s == t
@@ -210,7 +210,9 @@ end
 
 # chomp/chop
 @test chomp("foo\n") == "foo"
-@test chop("foob") == "foo"
+@test chop("fooε") == "foo"
+@test isa(chomp("foo"), SubString)
+@test isa(chop("foo"), SubString)
 
 # bytes2hex and hex2bytes
 hex_str = "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"

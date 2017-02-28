@@ -26,7 +26,7 @@ const _htmlescape_chars = Dict('<'=>"&lt;",   '>'=>"&gt;",
                                '"'=>"&quot;", '&'=>"&amp;",
                                # ' '=>"&nbsp;",
                                )
-for ch in "'`!@\$\%()=+{}[]"
+for ch in "'`!\$\%()=+{}[]"
     _htmlescape_chars[ch] = "&#$(Int(ch));"
 end
 
@@ -88,12 +88,31 @@ function html(io::IO, md::BlockQuote)
     end
 end
 
+function html(io::IO, f::Footnote)
+    withtag(io, :div, :class => "footnote", :id => "footnote-$(f.id)") do
+        withtag(io, :p, :class => "footnote-title") do
+            print(io, f.id)
+        end
+        html(io, f.text)
+    end
+end
+
+function html(io::IO, md::Admonition)
+    withtag(io, :div, :class => "admonition $(md.category)") do
+        withtag(io, :p, :class => "admonition-title") do
+            print(io, md.title)
+        end
+        html(io, md.content)
+    end
+end
+
 function html(io::IO, md::List)
-    withtag(io, md.ordered ? :ol : :ul) do
+    maybe_attr = md.ordered > 1 ? Any[:start => string(md.ordered)] : []
+    withtag(io, isordered(md) ? :ol : :ul, maybe_attr...) do
         for item in md.items
             println(io)
             withtag(io, :li) do
-                htmlinline(io, item)
+                html(io, item)
             end
         end
         println(io)
@@ -140,6 +159,13 @@ function htmlinline(io::IO, md::Image)
     tag(io, :img, :src=>md.url, :alt=>md.alt)
 end
 
+
+function htmlinline(io::IO, f::Footnote)
+    withtag(io, :a, :href => "#footnote-$(f.id)", :class => "footnote") do
+        print(io, "[", f.id, "]")
+    end
+end
+
 function htmlinline(io::IO, link::Link)
     withtag(io, :a, :href=>link.url) do
         htmlinline(io, link.text)
@@ -158,7 +184,7 @@ export html
 
 html(md) = sprint(html, md)
 
-function writemime(io::IO, ::MIME"text/html", md::MD)
+function show(io::IO, ::MIME"text/html", md::MD)
     withtag(io, :div, :class=>"markdown") do
         html(io, md)
     end

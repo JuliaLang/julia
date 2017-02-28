@@ -13,7 +13,7 @@ function add_method(gf, an, at, body)
 end
 
 macro staged(fdef)
-    if !isa(fdef,Expr) || !is(fdef.head,:function)
+    if !isa(fdef,Expr) || fdef.head !== :function
         error("@staged: expected method definition")
     end
     fname = fdef.args[1].args[1]

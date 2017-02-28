@@ -12,7 +12,7 @@ for elty in (Float32,Float64)
     @test flipsign(x,big(-1.0)) == convert(elty,-2.0)
 end
 
-#maxintfloat
+# maxintfloat
 
 @test maxintfloat(Float16) == Float16(2048f0)
 for elty in (Float16,Float32,Float64)
@@ -35,36 +35,36 @@ for elty in (Float16,Float32,Float64)
     @test !isinteger(elty(NaN))
 end
 
-#num2hex
-for elty in (Float16,Float32,Float64)
+# num2hex, hex2num
+for elty in (Float16,Float32,Float64), _ = 1:10
     x = rand(elty)
-    @test_approx_eq hex2num(num2hex(x)) x
+    @test hex2num(num2hex(x)) ≈ x
 end
 
-#round
+# round
 for elty in (Float32,Float64)
     x = rand(elty)
     A = fill(x,(10,10))
-    @test round(A,RoundToZero) == fill(trunc(x),(10,10))
-    @test round(A,RoundUp) == fill(ceil(x),(10,10))
-    @test round(A,RoundDown) == fill(floor(x),(10,10))
+    @test round.(A,RoundToZero) == fill(trunc(x),(10,10))
+    @test round.(A,RoundUp) == fill(ceil(x),(10,10))
+    @test round.(A,RoundDown) == fill(floor(x),(10,10))
     A = fill(x,(10,10,10))
-    @test round(A,RoundToZero) == fill(trunc(x),(10,10,10))
-    @test round(A,RoundUp) == fill(ceil(x),(10,10,10))
-    @test round(A,RoundDown) == fill(floor(x),(10,10,10))
+    @test round.(A,RoundToZero) == fill(trunc(x),(10,10,10))
+    @test round.(A,RoundUp) == fill(ceil(x),(10,10,10))
+    @test round.(A,RoundDown) == fill(floor(x),(10,10,10))
     for elty2 in (Int32,Int64)
         A = fill(x,(10,))
-        @test round(elty2,A,RoundToZero) == fill(trunc(elty2,x),(10,))
-        @test round(elty2,A,RoundUp) == fill(ceil(elty2,x),(10,))
-        @test round(elty2,A,RoundDown) == fill(floor(elty2,x),(10,))
+        @test round.(elty2,A,RoundToZero) == fill(trunc(elty2,x),(10,))
+        @test round.(elty2,A,RoundUp) == fill(ceil(elty2,x),(10,))
+        @test round.(elty2,A,RoundDown) == fill(floor(elty2,x),(10,))
         A = fill(x,(10,10))
-        @test round(elty2,A,RoundToZero) == fill(trunc(elty2,x),(10,10))
-        @test round(elty2,A,RoundUp) == fill(ceil(elty2,x),(10,10))
-        @test round(elty2,A,RoundDown) == fill(floor(elty2,x),(10,10))
+        @test round.(elty2,A,RoundToZero) == fill(trunc(elty2,x),(10,10))
+        @test round.(elty2,A,RoundUp) == fill(ceil(elty2,x),(10,10))
+        @test round.(elty2,A,RoundDown) == fill(floor(elty2,x),(10,10))
         A = fill(x,(10,10,10))
-        @test round(elty2,A,RoundToZero) == fill(trunc(elty2,x),(10,10,10))
-        @test round(elty2,A,RoundUp) == fill(ceil(elty2,x),(10,10,10))
-        @test round(elty2,A,RoundDown) == fill(floor(elty2,x),(10,10,10))
-        @test round(elty2,A) == fill(round(elty2,x),(10,10,10))
+        @test round.(elty2,A,RoundToZero) == fill(trunc(elty2,x),(10,10,10))
+        @test round.(elty2,A,RoundUp) == fill(ceil(elty2,x),(10,10,10))
+        @test round.(elty2,A,RoundDown) == fill(floor(elty2,x),(10,10,10))
+        @test round.(elty2,A) == fill(round(elty2,x),(10,10,10))
     end
 end

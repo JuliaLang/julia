@@ -2,7 +2,20 @@
 
 ## initdefs.jl - initialization and runtime management definitions
 
+"""
+    PROGRAM_FILE
+
+A string containing the script name passed to Julia from the command line. Note that the
+script name remains unchanged from within included files. Alternatively see
+[`@__FILE__`](@ref).
+"""
 PROGRAM_FILE = ""
+
+"""
+    ARGS
+
+An array of the command line arguments passed to Julia, as strings.
+"""
 const ARGS = String[]
 
 exit(n) = ccall(:jl_exit, Void, (Int32,), n)
@@ -14,42 +27,34 @@ const roottask = current_task()
 is_interactive = false
 isinteractive() = (is_interactive::Bool)
 
-const LOAD_PATH = String[]
+"""
+    LOAD_PATH
+
+An array of paths as strings or custom loader objects for the `require`
+function and `using` and `import` statements to consider when loading
+code. To create a custom loader type, define the type and then add
+appropriate methods to the `Base.load_hook` function with the following
+signature:
+
+    Base.load_hook(loader::Loader, name::String, found::Any)
+
+The `loader` argument is the current value in `LOAD_PATH`, `name` is the
+name of the module to load, and `found` is the path of any previously
+found code to provide `name`. If no provider has been found earlier in
+`LOAD_PATH` then the value of `found` will be `nothing`. Custom loader
+functionality is experimental and may break or change in Julia 1.0.
+"""
+const LOAD_PATH = Any[]
 const LOAD_CACHE_PATH = String[]
+
 function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"
-    if haskey(ENV,"JULIA_LOAD_PATH")
-        prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @windows? ';' : ':'))
+    if haskey(ENV, "JULIA_LOAD_PATH")
+        prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @static is_windows() ? ';' : ':'))
     end
-    push!(LOAD_PATH,abspath(JULIA_HOME,"..","local","share","julia","site",vers))
-    push!(LOAD_PATH,abspath(JULIA_HOME,"..","share","julia","site",vers))
-    push!(LOAD_CACHE_PATH,abspath(JULIA_HOME,"..","usr","lib","julia")) #TODO: fixme
-end
-
-# initialize the local proc network address / port
-function init_bind_addr()
-    opts = JLOptions()
-    if opts.bindto != C_NULL
-        bind_to = split(bytestring(opts.bindto), ":")
-        bind_addr = string(parse(IPAddr, bind_to[1]))
-        if length(bind_to) > 1
-            bind_port = parse(Int,bind_to[2])
-        else
-            bind_port = 0
-        end
-    else
-        bind_port = 0
-        try
-            bind_addr = string(getipaddr())
-        catch
-            # All networking is unavailable, initialize bind_addr to the loopback address
-            # Will cause an exception to be raised only when used.
-            bind_addr = "127.0.0.1"
-        end
-    end
-    global LPROC
-    LPROC.bind_addr = bind_addr
-    LPROC.bind_port = UInt16(bind_port)
+    push!(LOAD_PATH, abspath(JULIA_HOME, "..", "local", "share", "julia", "site", vers))
+    push!(LOAD_PATH, abspath(JULIA_HOME, "..", "share", "julia", "site", vers))
+    #push!(LOAD_CACHE_PATH, abspath(JULIA_HOME, "..", "lib", "julia")) #TODO: add a builtin location?
 end
 
 function early_init()
@@ -57,25 +62,18 @@ function early_init()
     # make sure OpenBLAS does not set CPU affinity (#1070, #9639)
     ENV["OPENBLAS_MAIN_FREE"] = get(ENV, "OPENBLAS_MAIN_FREE",
                                     get(ENV, "GOTOBLAS_MAIN_FREE", "1"))
-    if CPU_CORES > 8 && !("OPENBLAS_NUM_THREADS" in keys(ENV)) && !("OMP_NUM_THREADS" in keys(ENV))
+    if Sys.CPU_CORES > 8 && !("OPENBLAS_NUM_THREADS" in keys(ENV)) && !("OMP_NUM_THREADS" in keys(ENV))
         # Prevent openblas from starting too many threads, unless/until specifically requested
         ENV["OPENBLAS_NUM_THREADS"] = 8
     end
 end
 
-function init_parallel()
-    start_gc_msgs_task()
-    atexit(terminate_all_workers)
+"""
+    JULIA_HOME
 
-    init_bind_addr()
-
-    # start in "head node" mode, if worker, will override later.
-    global PGRP
-    global LPROC
-    LPROC.id = 1
-    assert(isempty(PGRP.workers))
-    register_worker(LPROC)
-end
+A string containing the full path to the directory containing the `julia` executable.
+"""
+:JULIA_HOME
 
 const atexit_hooks = []
 

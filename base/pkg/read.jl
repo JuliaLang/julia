@@ -8,7 +8,8 @@ using ..Types
 readstrip(path...) = strip(readstring(joinpath(path...)))
 
 url(pkg::AbstractString) = readstrip(Dir.path("METADATA"), pkg, "url")
-sha1(pkg::AbstractString, ver::VersionNumber) = readstrip(Dir.path("METADATA"), pkg, "versions", string(ver), "sha1")
+sha1(pkg::AbstractString, ver::VersionNumber) =
+    readstrip(Dir.path("METADATA"), pkg, "versions", string(ver), "sha1")
 
 function available(names=readdir("METADATA"))
     pkgs = Dict{String,Dict{VersionNumber,Available}}()
@@ -63,8 +64,9 @@ function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=availa
     LibGit2.isdirty(prepo) && return true
     LibGit2.isattached(prepo) && return true
     LibGit2.need_update(prepo)
-    LibGit2.iszero(LibGit2.revparseid(prepo, "HEAD:REQUIRE")) && isfile(pkg,"REQUIRE") && return true
-
+    if isnull(find("REQUIRE", LibGit2.GitIndex(prepo)))
+        isfile(pkg,"REQUIRE") && return true
+    end
     head = string(LibGit2.head_oid(prepo))
     for (ver,info) in avail
         head == info.sha1 && return false
@@ -95,9 +97,23 @@ function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=availa
             end
         end
     finally
-        cache_has_head && LibGit2.finalize(crepo)
+        cache_has_head && LibGit2.close(crepo)
     end
     return res
+end
+
+function ispinned(pkg::AbstractString)
+    ispath(pkg,".git") || return false
+    LibGit2.with(LibGit2.GitRepo, pkg) do repo
+        return ispinned(repo)
+    end
+end
+
+function ispinned(prepo::LibGit2.GitRepo)
+    LibGit2.isattached(prepo) || return false
+    br = LibGit2.branch(prepo)
+    # note: regex is based on the naming scheme used in Entry.pin()
+    return ismatch(r"^pinned\.[0-9a-f]{8}\.tmp$", br)
 end
 
 function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=available(pkg))
@@ -145,7 +161,7 @@ function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::D
             string(base) == head && push!(descendants,ver)
         end
     finally
-        cache_has_head && LibGit2.finalize(crepo)
+        cache_has_head && LibGit2.close(crepo)
     end
     both = sort!(intersect(ancestors,descendants))
     isempty(both) || warn("$pkg: some versions are both ancestors and descendants of head: $both")
@@ -167,7 +183,9 @@ function requires_path(pkg::AbstractString, avail::Dict=available(pkg))
     head = LibGit2.with(LibGit2.GitRepo, pkg) do repo
         LibGit2.isdirty(repo, "REQUIRE") && return pkgreq
         LibGit2.need_update(repo)
-        LibGit2.iszero(LibGit2.revparseid(repo, "HEAD:REQUIRE")) && isfile(pkgreq) && return pkgreq
+        if isnull(find("REQUIRE", LibGit2.GitIndex(repo)))
+            isfile(pkgreq) && return pkgreq
+        end
         string(LibGit2.head_oid(repo))
     end
     for (ver,info) in avail
@@ -202,11 +220,11 @@ function installed(avail::Dict=available())
     return pkgs
 end
 
-function fixed(avail::Dict=available(), inst::Dict=installed(avail),
+function fixed(avail::Dict=available(), inst::Dict=installed(avail), dont_update::Set{String}=Set{String}(),
     julia_version::VersionNumber=VERSION)
     pkgs = Dict{String,Fixed}()
     for (pkg,(ver,fix)) in inst
-        fix || continue
+        (fix || pkg in dont_update) || continue
         ap = get(avail,pkg,Dict{VersionNumber,Available}())
         pkgs[pkg] = Fixed(ver,requires_dict(pkg,ap))
     end
@@ -214,10 +232,10 @@ function fixed(avail::Dict=available(), inst::Dict=installed(avail),
     return pkgs
 end
 
-function free(inst::Dict=installed())
+function free(inst::Dict=installed(), dont_update::Set{String}=Set{String}())
     pkgs = Dict{String,VersionNumber}()
     for (pkg,(ver,fix)) in inst
-        fix && continue
+        (fix || pkg in dont_update) && continue
         pkgs[pkg] = ver
     end
     return pkgs

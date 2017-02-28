@@ -31,12 +31,14 @@ for (fmt, val) in (("%i", "42"),
 end
 
 # pointers
-if WORD_SIZE == 64
+if Sys.WORD_SIZE == 64
     @test (@sprintf "%20p" 0) == "  0x0000000000000000"
     @test (@sprintf "%-20p" 0) == "0x0000000000000000  "
-elseif WORD_SIZE == 32
+elseif Sys.WORD_SIZE == 32
     @test (@sprintf "%20p" 0) == "          0x00000000"
     @test (@sprintf "%-20p" 0) == "0x00000000          "
+else
+    @test false
 end
 
 # float / BigFloat
@@ -220,6 +222,15 @@ end
 @test (@sprintf "%#s" :test) == ":test"
 @test (@sprintf "%#8s" :test) == "   :test"
 @test (@sprintf "%#-8s" :test) == ":test   "
+
+@test (@sprintf "%8.3s" "test") == "     tes"
+@test (@sprintf "%#8.3s" "test") == "     \"te"
+@test (@sprintf "%-8.3s" "test") == "tes     "
+@test (@sprintf "%#-8.3s" "test") == "\"te     "
+@test (@sprintf "%.3s" "test") == "tes"
+@test (@sprintf "%#.3s" "test") == "\"te"
+@test (@sprintf "%-.3s" "test") == "tes"
+@test (@sprintf "%#-.3s" "test") == "\"te"
 
 # reasonably complex
 @test (@sprintf "Test: %s%c%C%c%#-.0f." "t" 65 66 67 -42) == "Test: tABC-42.."

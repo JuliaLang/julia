@@ -23,6 +23,7 @@ export GitError
             ECERTIFICATE    = Cint(-17), # server certificate is invalid
             EAPPLIED        = Cint(-18), # patch/merge has already been applied
             EPEEL           = Cint(-19), # the requested peel operation is not possible
+            EEOF            = Cint(-20), # Unexpted EOF
             PASSTHROUGH     = Cint(-30), # internal only
             ITEROVER        = Cint(-31)) # signals end of iteration
 
@@ -57,12 +58,12 @@ export GitError
              Describe,
              Rebase)
 
-immutable ErrorStruct
+struct ErrorStruct
     message::Ptr{UInt8}
     class::Cint
 end
 
-immutable GitError <: Exception
+struct GitError <: Exception
     class::Class
     code::Code
     msg::AbstractString
@@ -74,7 +75,7 @@ function last_error()
     if err != C_NULL
         err_obj   = unsafe_load(err)
         err_class = Class[err_obj.class][]
-        err_msg   = bytestring(err_obj.message)
+        err_msg   = unsafe_string(err_obj.message)
     else
         err_class = Class[0][]
         err_msg = "No errors"

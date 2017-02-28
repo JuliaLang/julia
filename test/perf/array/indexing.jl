@@ -104,12 +104,12 @@ function sumvector(A, n)
     s
 end
 
-abstract MyArray{T,N} <: AbstractArray{T,N}
+abstract type MyArray{T,N} <: AbstractArray{T,N} end
 
-immutable ArrayLS{T,N} <: MyArray{T,N}  # LinearSlow
+struct ArrayLS{T,N} <: MyArray{T,N}  # IndexCartesian
     data::Array{T,N}
 end
-immutable ArrayLSLS{T,N} <: MyArray{T,N}  # LinearSlow with LinearSlow similar
+struct ArrayLSLS{T,N} <: MyArray{T,N}  # IndexCartesian with IndexCartesian similar
     data::Array{T,N}
 end
 Base.similar{T}(A::ArrayLSLS, ::Type{T}, dims::Tuple{Vararg{Int}}) = ArrayLSLS(similar(A.data, T, dims))
@@ -117,16 +117,16 @@ Base.similar{T}(A::ArrayLSLS, ::Type{T}, dims::Tuple{Vararg{Int}}) = ArrayLSLS(s
 @inline Base.unsafe_setindex!(A::ArrayLSLS, v, I::Int...) = Base.unsafe_setindex!(A.data, v, I...)
 Base.first(A::ArrayLSLS) = first(A.data)
 
-immutable ArrayLF{T,N} <: MyArray{T,N}  # LinearFast
+struct ArrayLF{T,N} <: MyArray{T,N}  # IndexLinear
     data::Array{T,N}
 end
-immutable ArrayStrides{T,N} <: MyArray{T,N}
+struct ArrayStrides{T,N} <: MyArray{T,N}
     data::Array{T,N}
     strides::NTuple{N,Int}
 end
 ArrayStrides(A::Array) = ArrayStrides(A, strides(A))
 
-immutable ArrayStrides1{T} <: MyArray{T,2}
+struct ArrayStrides1{T} <: MyArray{T,2}
     data::Matrix{T}
     stride1::Int
 end
@@ -145,10 +145,10 @@ Base.size(A::MyArray) = size(A.data)
 @inline Base.unsafe_getindex{T}(A::ArrayStrides{T,2}, i::Real, j::Real) = unsafe_getindex(A.data, 1+A.strides[1]*(i-1)+A.strides[2]*(j-1))
 @inline Base.unsafe_getindex(A::ArrayStrides1, i::Real, j::Real) = unsafe_getindex(A.data, i + A.stride1*(j-1))
 
-# Using the qualified Base.LinearFast() in the linearindexing definition
+# Using the qualified Base.IndexLinear() in the IndexStyle definition
 # requires looking up the symbol in the module on each call.
-import Base: LinearFast
-Base.linearindexing{T<:ArrayLF}(::Type{T}) = LinearFast()
+import Base: IndexLinear
+Base.IndexStyle{T<:ArrayLF}(::Type{T}) = IndexLinear()
 
 if !applicable(unsafe_getindex, [1 2], 1:1, 2)
     @inline Base.unsafe_getindex(A::Array, I...) = @inbounds return A[I...]
@@ -167,7 +167,7 @@ function makearrays{T}(::Type{T}, sz)
     Astrd1 = ArrayStrides1(A)
     outersz = (sz[1]+1,sz[2]+2)
     B = reshape(convert(Vector{T}, [1:prod(outersz);]), outersz)
-    Asub = sub(B, 1:sz[1], 2:sz[2]+1)
+    Asub = view(B, 1:sz[1], 2:sz[2]+1)
     Bit = trues(sz)
     (A, AF, AS, ASS, Asub, Bit,)
 end

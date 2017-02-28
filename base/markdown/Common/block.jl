@@ -4,7 +4,7 @@
 # Paragraphs
 # ––––––––––
 
-type Paragraph
+mutable struct Paragraph
     content
 end
 
@@ -19,7 +19,7 @@ function paragraph(stream::IO, md::MD)
     while !eof(stream)
         char = read(stream, Char)
         if char == '\n' || char == '\r'
-            char == '\r' && peek(stream) == '\n' && read(stream, Char)
+            char == '\r' && !eof(stream) && Char(peek(stream)) == '\n' && read(stream, Char)
             if prev_char == '\\'
                 write(buffer, '\n')
             elseif blankline(stream) || parse(stream, md, breaking = true)
@@ -40,7 +40,7 @@ end
 # Headers
 # –––––––
 
-type Header{level}
+mutable struct Header{level}
     text
 end
 
@@ -61,7 +61,7 @@ function hashheader(stream::IO, md::MD)
             return false
 
         if c != '\n' # Empty header
-            h = readline(stream) |> strip
+            h = strip(readline(stream))
             h = match(r"(.*?)( +#+)?$", h).captures[1]
             buffer = IOBuffer()
             print(buffer, h)
@@ -76,11 +76,11 @@ end
 function setextheader(stream::IO, md::MD)
     withstream(stream) do
         eatindent(stream) || return false
-        header = readline(stream) |> strip
+        header = strip(readline(stream))
         header == "" && return false
 
         eatindent(stream) || return false
-        underline = readline(stream) |> strip
+        underline = strip(readline(stream))
         length(underline) < 3 && return false
         u = underline[1]
         u in "-=" || return false
@@ -96,7 +96,7 @@ end
 # Code
 # ––––
 
-type Code
+mutable struct Code
     language::String
     code::String
 end
@@ -108,16 +108,51 @@ function indentcode(stream::IO, block::MD)
         buffer = IOBuffer()
         while !eof(stream)
             if startswith(stream, "    ") || startswith(stream, "\t")
-                write(buffer, readline(stream))
+                write(buffer, readline(stream, chomp=false))
             elseif blankline(stream)
                 write(buffer, '\n')
             else
                 break
             end
         end
-        code = takebuf_string(buffer)
+        code = String(take!(buffer))
         !isempty(code) && (push!(block, Code(rstrip(code))); return true)
         return false
+    end
+end
+
+# --------
+# Footnote
+# --------
+
+mutable struct Footnote
+    id::String
+    text
+end
+
+function footnote(stream::IO, block::MD)
+    withstream(stream) do
+        regex = r"^\[\^(\w+)\]:"
+        str = startswith(stream, regex)
+        if isempty(str)
+            return false
+        else
+            ref = match(regex, str).captures[1]
+            buffer = IOBuffer()
+            write(buffer, readline(stream, chomp=false))
+            while !eof(stream)
+                if startswith(stream, "    ")
+                    write(buffer, readline(stream, chomp=false))
+                elseif blankline(stream)
+                    write(buffer, '\n')
+                else
+                    break
+                end
+            end
+            content = parse(seekstart(buffer)).content
+            push!(block, Footnote(ref, content))
+            return true
+        end
     end
 end
 
@@ -125,7 +160,7 @@ end
 # Quotes
 # ––––––
 
-type BlockQuote
+mutable struct BlockQuote
     content
 end
 
@@ -139,13 +174,71 @@ function blockquote(stream::IO, block::MD)
         empty = true
         while eatindent(stream) && startswith(stream, '>')
             startswith(stream, " ")
-            write(buffer, readline(stream))
+            write(buffer, readline(stream, chomp=false))
             empty = false
         end
         empty && return false
 
-        md = takebuf_string(buffer)
+        md = String(take!(buffer))
         push!(block, BlockQuote(parse(md, flavor = config(block)).content))
+        return true
+    end
+end
+
+# -----------
+# Admonitions
+# -----------
+
+mutable struct Admonition
+    category::String
+    title::String
+    content::Vector
+end
+
+@breaking true ->
+function admonition(stream::IO, block::MD)
+    withstream(stream) do
+        # Admonition syntax:
+        #
+        # !!! category "optional explicit title within double quotes"
+        #     Any number of other indented markdown elements.
+        #
+        #     This is the second paragraph.
+        #
+        startswith(stream, "!!! ") || return false
+        # Extract the category of admonition and its title:
+        category, title =
+            let untitled = r"^([a-z]+)$",          # !!! <CATEGORY_NAME>
+                titled   = r"^([a-z]+) \"(.*)\"$", # !!! <CATEGORY_NAME> "<TITLE>"
+                line     = strip(readline(stream))
+                if ismatch(untitled, line)
+                    m = match(untitled, line)
+                    # When no title is provided we use CATEGORY_NAME, capitalising it.
+                    m.captures[1], ucfirst(m.captures[1])
+                elseif ismatch(titled, line)
+                    m = match(titled, line)
+                    # To have a blank TITLE provide an explicit empty string as TITLE.
+                    m.captures[1], m.captures[2]
+                else
+                    # Admonition header is invalid so we give up parsing here and move
+                    # on to the next parser.
+                    return false
+                end
+            end
+        # Consume the following indented (4 spaces) block.
+        buffer = IOBuffer()
+        while !eof(stream)
+            if startswith(stream, "    ")
+                write(buffer, readline(stream, chomp=false))
+            elseif blankline(stream)
+                write(buffer, '\n')
+            else
+                break
+            end
+        end
+        # Parse the nested block as markdown and create a new Admonition block.
+        nested = parse(String(take!(buffer)), flavor = config(block))
+        push!(block, Admonition(category, title, nested.content))
         return true
     end
 end
@@ -154,72 +247,92 @@ end
 # Lists
 # –––––
 
-type List
+mutable struct List
     items::Vector{Any}
-    ordered::Bool
+    ordered::Int # `-1` is unordered, `>= 0` is ordered.
 
-    List(x::AbstractVector, b::Bool) = new(x, b)
-    List(x::AbstractVector) = new(x, false)
-    List(b::Bool) = new(Any[], b)
+    List(x::AbstractVector, b::Integer) = new(x, b)
+    List(x::AbstractVector) = new(x, -1)
+    List(b::Integer) = new(Any[], b)
 end
 
 List(xs...) = List(vcat(xs...))
 
-const bullets = "*•+-"
-const num_or_bullets = r"^(\*|•|\+|-|\d+(\.|\))) "
+isordered(list::List) = list.ordered >= 0
 
-# Todo: ordered lists, inline formatting
+const BULLETS = r"^ {0,3}(\*|\+|-)( |$)"
+const NUM_OR_BULLETS = r"^ {0,3}(\*|\+|-|\d+(\.|\)))( |$)"
+
+@breaking true ->
 function list(stream::IO, block::MD)
     withstream(stream) do
-        eatindent(stream) || return false
-        b = startswith(stream, num_or_bullets)
-        (b === nothing || b == "") && return false
-        ordered = !(b[1] in bullets)
-        if ordered
-            b = b[end - 1] == '.' ? r"^\d+\. " : r"^\d+\) "
-            # TODO start value
-        end
-        the_list = List(ordered)
-
-        buffer = IOBuffer()
-        fresh_line = false
-        while !eof(stream)
-            if fresh_line
-                sp = startswith(stream, r"^ {0,3}")
-                if !(startswith(stream, b) in [false, ""])
-                    push!(the_list.items, parseinline(takebuf_string(buffer), block))
-                    buffer = IOBuffer()
-                else
-                    # TODO write a newline here, and deal with nested
-                    write(buffer, ' ', sp)
-                end
-                fresh_line = false
+        bullet = startswith(stream, NUM_OR_BULLETS; eat = false)
+        indent = isempty(bullet) ? (return false) : length(bullet)
+        # Calculate the starting number and regex to use for bullet matching.
+        initial, regex =
+            if ismatch(BULLETS, bullet)
+                # An unordered list. Use `-1` to flag the list as unordered.
+                -1, BULLETS
+            elseif ismatch(r"^ {0,3}\d+(\.|\))( |$)", bullet)
+                # An ordered list. Either with `1. ` or `1) ` style numbering.
+                r = contains(bullet, ".") ? r"^ {0,3}(\d+)\.( |$)" : r"^ {0,3}(\d+)\)( |$)"
+                Base.parse(Int, match(r, bullet).captures[1]), r
             else
-                c = read(stream, Char)
-                if c == '\n'
-                    eof(stream) && break
-                    next = Char(peek(stream)) # ok since we only compare with ASCII
-                    if next == '\n'
+                # Failed to match any bullets. This branch shouldn't actually be needed
+                # since the `NUM_OR_BULLETS` regex should cover this, but we include it
+                # simply for thoroughness.
+                return false
+            end
+
+        # Initialise the empty list object: either ordered or unordered.
+        list = List(initial)
+
+        buffer = IOBuffer() # For capturing nested text for recursive parsing.
+        newline = false     # For checking if we have two consecutive newlines: end of list.
+        count = 0           # Count of list items. Used to check if we need to push remaining
+                            # content in `buffer` after leaving the `while` loop.
+        while !eof(stream)
+            if startswith(stream, "\n")
+                if newline
+                    # Double newline ends the current list.
+                    pushitem!(list, buffer)
+                    break
+                else
+                    newline = true
+                    println(buffer)
+                end
+            else
+                newline = false
+                if startswith(stream, " "^indent)
+                    # Indented text that is part of the current list item.
+                    print(buffer, readline(stream, chomp=false))
+                else
+                    matched = startswith(stream, regex)
+                    if isempty(matched)
+                        # Unindented text meaning we have left the current list.
+                        pushitem!(list, buffer)
                         break
                     else
-                        fresh_line = true
+                        # Start of a new list item.
+                        count += 1
+                        count > 1 && pushitem!(list, buffer)
+                        print(buffer, readline(stream, chomp=false))
                     end
-                else
-                    write(buffer, c)
                 end
             end
         end
-        push!(the_list.items, parseinline(takebuf_string(buffer), block))
-        push!(block, the_list)
+        count == length(list.items) || pushitem!(list, buffer)
+        push!(block, list)
         return true
     end
 end
+pushitem!(list, buffer) = push!(list.items, parse(String(take!(buffer))).content)
 
 # ––––––––––––––
 # HorizontalRule
 # ––––––––––––––
 
-type HorizontalRule
+mutable struct HorizontalRule
 end
 
 function horizontalrule(stream::IO, block::MD)

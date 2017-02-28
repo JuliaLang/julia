@@ -10,19 +10,23 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#ifdef _OS_WINDOWS_
-#include <psapi.h>
-#else
-#include <sys/sysctl.h>
-#include <sys/wait.h>
-#include <sys/ptrace.h>
-#include <unistd.h>
-#include <sys/mman.h>
-#include <dlfcn.h>
-#endif
 #include <errno.h>
 #include <signal.h>
 #include <fcntl.h>
+
+#ifdef _OS_WINDOWS_
+#include <psapi.h>
+#else
+#include <unistd.h>
+#if !defined(_SC_NPROCESSORS_ONLN) || defined(_OS_FREEBSD_) || defined(_OS_DARWIN_)
+// try secondary location for _SC_NPROCESSORS_ONLN, or for HW_AVAILCPU on BSDs
+#include <sys/sysctl.h>
+#endif
+#include <sys/wait.h>
+#include <sys/ptrace.h>
+#include <sys/mman.h>
+#include <dlfcn.h>
+#endif
 
 #ifndef _OS_WINDOWS_
 // for getrusage
@@ -48,10 +52,8 @@
 #include <intrin.h>
 #endif
 
-#ifdef __has_feature
-#if __has_feature(memory_sanitizer)
+#ifdef JL_MSAN_ENABLED
 #include <sanitizer/msan_interface.h>
-#endif
 #endif
 
 #ifdef __cplusplus
@@ -231,7 +233,7 @@ JL_DLLEXPORT double jl_stat_ctime(char *statbuf)
 
 // --- buffer manipulation ---
 
-JL_DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s)
+JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s)
 {
     size_t n;
     jl_array_t *a;
@@ -242,37 +244,28 @@ JL_DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s)
         ios_trunc(s, 0);
     }
     else {
-        char *b = ios_takebuf(s, &n);
+        char *b = ios_take_buffer(s, &n);
         a = jl_ptr_to_array_1d(jl_array_uint8_type, b, n-1, 1);
     }
     return a;
 }
 
-JL_DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s)
-{
-    jl_array_t *a = jl_takebuf_array(s);
-    JL_GC_PUSH1(&a);
-    jl_value_t *str = jl_array_to_string(a);
-    JL_GC_POP();
-    return str;
-}
-
-// the returned buffer must be manually freed. To determine the size,
-// call position(s) before using this function.
-JL_DLLEXPORT void *jl_takebuf_raw(ios_t *s)
-{
-    size_t sz;
-    void *buf = ios_takebuf(s, &sz);
-    return buf;
-}
-
-JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
+JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint8_t chomp)
 {
     jl_array_t *a;
     // manually inlined common case
     char *pd = (char*)memchr(s->buf+s->bpos, delim, (size_t)(s->size - s->bpos));
     if (pd) {
         size_t n = pd-(s->buf+s->bpos)+1;
+        if (str) {
+            size_t nchomp = 0;
+            if (chomp) {
+                nchomp = ios_nchomp(s, n);
+            }
+            jl_value_t *str = jl_pchar_to_string(s->buf + s->bpos, n - nchomp);
+            s->bpos += n;
+            return str;
+        }
         a = jl_alloc_array_1d(jl_array_uint8_type, n);
         memcpy(jl_array_data(a), s->buf + s->bpos, n);
         s->bpos += n;
@@ -282,9 +275,9 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
         ios_t dest;
         ios_mem(&dest, 0);
         ios_setbuf(&dest, (char*)a->data, 80, 0);
-        size_t n = ios_copyuntil(&dest, s, delim);
+        size_t n = ios_copyuntil(&dest, s, delim, chomp);
         if (dest.buf != a->data) {
-            a = jl_takebuf_array(&dest);
+            a = jl_take_buffer(&dest);
         }
         else {
 #ifdef STORE_ARRAY_LEN
@@ -292,6 +285,12 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
 #endif
             a->nrows = n;
             ((char*)a->data)[n] = '\0';
+        }
+        if (str) {
+            JL_GC_PUSH1(&a);
+            jl_value_t *st = jl_array_to_string(a);
+            JL_GC_POP();
+            return st;
         }
     }
     return (jl_value_t*)a;
@@ -357,7 +356,10 @@ JL_DLLEXPORT int jl_cpu_cores(void)
     }
     return count;
 #elif defined(_SC_NPROCESSORS_ONLN)
-    return sysconf(_SC_NPROCESSORS_ONLN);
+    long count = sysconf(_SC_NPROCESSORS_ONLN);
+    if (count < 1)
+        return 1;
+    return count;
 #elif defined(_OS_WINDOWS_)
     //Try to get WIN7 API method
     GAPC gapc = (GAPC) jl_dlsym_e(
@@ -374,9 +376,11 @@ JL_DLLEXPORT int jl_cpu_cores(void)
         return info.dwNumberOfProcessors;
     }
 #else
+#warning "cpu core detection not defined for this platform"
     return 1;
 #endif
 }
+
 
 // -- high resolution timers --
 // Returns time in nanosec
@@ -463,7 +467,30 @@ JL_DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
     );
 #endif
 }
+JL_DLLEXPORT uint64_t jl_cpuid_tag(void)
+{
+    uint32_t info[4];
+    jl_cpuid((int32_t *)info, 1);
+    return (((uint64_t)info[2]) | (((uint64_t)info[3]) << 32));
+}
+#elif defined(CPUID_SPECIFIC_BINARIES)
+#error "CPUID not available on this CPU. Turn off CPUID_SPECIFIC_BINARIES"
+#else
+// For architectures that don't have CPUID
+JL_DLLEXPORT uint64_t jl_cpuid_tag(void)
+{
+    return 0;
+}
 #endif
+
+JL_DLLEXPORT int jl_uses_cpuid_tag(void)
+{
+#ifdef CPUID_SPECIFIC_BINARIES
+    return 1;
+#else
+    return 0;
+#endif
+}
 
 // -- set/clear the FZ/DAZ flags on x86 & x86-64 --
 #ifdef __SSE__
@@ -499,7 +526,7 @@ static int32_t get_subnormal_flags(void)
 }
 
 // Returns non-zero if subnormals go to 0; zero otherwise.
-JL_DLLEXPORT int32_t jl_get_zero_subnormals(int8_t isZero)
+JL_DLLEXPORT int32_t jl_get_zero_subnormals(void)
 {
     uint32_t flags = get_subnormal_flags();
     return _mm_getcsr() & flags;
@@ -524,9 +551,39 @@ JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
     }
 }
 
+#elif defined(_CPU_AARCH64_)
+
+// FZ, bit [24]
+static const uint32_t fpcr_fz_mask = 1 << 24;
+
+static inline uint32_t get_fpcr_aarch64(void)
+{
+    uint32_t fpcr;
+    asm volatile("mrs %0, fpcr" : "=r"(fpcr));
+    return fpcr;
+}
+
+static inline void set_fpcr_aarch64(uint32_t fpcr)
+{
+    asm volatile("msr fpcr, %0" :: "r"(fpcr));
+}
+
+JL_DLLEXPORT int32_t jl_get_zero_subnormals(void)
+{
+    return (get_fpcr_aarch64() & fpcr_fz_mask) != 0;
+}
+
+JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
+{
+    uint32_t fpcr = get_fpcr_aarch64();
+    fpcr = isZero ? (fpcr | fpcr_fz_mask) : (fpcr & ~fpcr_fz_mask);
+    set_fpcr_aarch64(fpcr);
+    return 0;
+}
+
 #else
 
-JL_DLLEXPORT int32_t jl_get_zero_subnormals(int8_t isZero)
+JL_DLLEXPORT int32_t jl_get_zero_subnormals(void)
 {
     return 0;
 }
@@ -603,18 +660,6 @@ JL_DLLEXPORT long jl_SC_CLK_TCK(void)
 #endif
 }
 
-JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
-{
-    if (field > jl_datatype_nfields(ty) || field < 1)
-        jl_bounds_error_int((jl_value_t*)ty, field);
-    return jl_field_offset(ty, field - 1);
-}
-
-JL_DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
-{
-    return ty->alignment;
-}
-
 // Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
 JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 {
@@ -661,14 +706,12 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 
     struct link_map *map;
     dlinfo(handle, RTLD_DI_LINKMAP, &map);
-#ifdef __has_feature
-#if __has_feature(memory_sanitizer)
+#ifdef JL_MSAN_ENABLED
     __msan_unpoison(&map,sizeof(struct link_map*));
     if (map) {
         __msan_unpoison(map, sizeof(struct link_map));
         __msan_unpoison_string(map->l_name);
     }
-#endif
 #endif
     if (map)
         return map->l_name;
@@ -688,7 +731,7 @@ static BOOL CALLBACK jl_EnumerateLoadedModulesProc64(
     jl_array_grow_end((jl_array_t*)a, 1);
     //XXX: change to jl_arrayset if array storage allocation for Array{String,1} changes:
     jl_value_t *v = jl_cstr_to_string(ModuleName);
-    jl_cellset(a, jl_array_dim0(a)-1, v);
+    jl_array_ptr_set(a, jl_array_dim0(a)-1, v);
     return TRUE;
 }
 // Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
@@ -708,28 +751,14 @@ JL_DLLEXPORT void jl_raise_debugger(void)
 #endif // _OS_WINDOWS_
 }
 
-JL_DLLEXPORT jl_sym_t *jl_get_OS_NAME(void)
+JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void)
 {
-#if defined(_OS_WINDOWS_)
-    return jl_symbol("Windows");
-#elif defined(_OS_LINUX_)
-    return jl_symbol("Linux");
-#elif defined(_OS_FREEBSD_)
-    return jl_symbol("FreeBSD");
-#elif defined(_OS_DARWIN_)
-    return jl_symbol("Darwin");
-#else
-#warning OS_NAME is Unknown
-    return jl_symbol("Unknown");
-#endif
+    return jl_symbol(JL_BUILD_UNAME);
 }
 
 JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void)
 {
-    static jl_sym_t *ARCH = NULL;
-    if (!ARCH)
-        ARCH = (jl_sym_t*) jl_get_global(jl_base_module, jl_symbol("ARCH"));
-    return ARCH;
+    return jl_symbol(JL_BUILD_ARCH);
 }
 
 JL_DLLEXPORT size_t jl_maxrss(void)
@@ -751,6 +780,15 @@ JL_DLLEXPORT size_t jl_maxrss(void)
 
 #else
     return (size_t)0;
+#endif
+}
+
+JL_DLLEXPORT int jl_threading_enabled(void)
+{
+#ifdef JULIA_ENABLE_THREADING
+    return 1;
+#else
+    return 0;
 #endif
 }
 

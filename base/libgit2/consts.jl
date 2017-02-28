@@ -7,12 +7,13 @@ module Consts
     const REMOTE_ORIGIN = "origin"
 
     # objs
-    const OBJ_ANY    = Cint(-2)
-    const OBJ_BAD    = Cint(-1)
-    const OBJ_COMMIT = Cint(1)
-    const OBJ_TREE   = Cint(2)
-    const OBJ_BLOB   = Cint(3)
-    const OBJ_TAG    = Cint(4)
+    @enum(OBJECT,
+          OBJ_ANY    = -2,
+          OBJ_BAD    = -1,
+          OBJ_COMMIT = 1,
+          OBJ_TREE   = 2,
+          OBJ_BLOB   = 3,
+          OBJ_TAG    = 4)
 
     #revwalk
     const SORT_NONE        = Cint(0)
@@ -97,15 +98,15 @@ module Consts
     const DIFF_FORMAT_NAME_ONLY    = Cuint(4)
     const DIFF_FORMAT_NAME_STATUS  = Cuint(5)
 
-    const DELTA_UNMODIFIED = Cint(0)
-    const DELTA_ADDED      = Cint(1)
-    const DELTA_DELETED    = Cint(2)
-    const DELTA_MODIFIED   = Cint(3)
-    const DELTA_RENAMED    = Cint(4)
-    const DELTA_COPIED     = Cint(5)
-    const DELTA_IGNORED    = Cint(6)
-    const DELTA_UNTRACKED  = Cint(7)
-    const DELTA_TYPECHANGE = Cint(8)
+    @enum(DELTA_STATUS, DELTA_UNMODIFIED = Cint(0),
+                        DELTA_ADDED      = Cint(1),
+                        DELTA_DELETED    = Cint(2),
+                        DELTA_MODIFIED   = Cint(3),
+                        DELTA_RENAMED    = Cint(4),
+                        DELTA_COPIED     = Cint(5),
+                        DELTA_IGNORED    = Cint(6),
+                        DELTA_UNTRACKED  = Cint(7),
+                        DELTA_TYPECHANGE = Cint(8))
 
     # index
     const IDXENTRY_NAMEMASK   = (0x0fff)
@@ -273,6 +274,11 @@ Option flags for `GitRepo`.
                         CREDTYPE_SSH_INTERACTIVE    = Cuint(1 << 4),
                         CREDTYPE_USERNAME           = Cuint(1 << 5),
                         CREDTYPE_SSH_MEMORY         = Cuint(1 << 6))
+
+    @enum(GIT_FEATURE, FEATURE_THREADS = Cuint(1 << 0),
+                       FEATURE_HTTPS   = Cuint(1 << 1),
+                       FEATURE_SSH     = Cuint(1 << 2),
+                       FEATURE_NSEC    = Cuint(1 << 3))
 
 if LibGit2.version() >= v"0.24.0"
     """

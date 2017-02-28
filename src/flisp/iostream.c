@@ -4,7 +4,6 @@
 #include <string.h>
 #include <assert.h>
 #include <sys/types.h>
-#include <setjmp.h>
 #include "flisp.h"
 
 #ifdef __cplusplus
@@ -61,14 +60,14 @@ value_t fl_eof_objectp(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     return (fl_ctx->FL_EOF == args[0]) ? fl_ctx->T : fl_ctx->F;
 }
 
-static ios_t *toiostream(fl_context_t *fl_ctx, value_t v, char *fname)
+static ios_t *toiostream(fl_context_t *fl_ctx, value_t v, const char *fname)
 {
     if (!fl_isiostream(fl_ctx, v))
         type_error(fl_ctx, fname, "iostream", v);
     return value2c(ios_t*, v);
 }
 
-ios_t *fl_toiostream(fl_context_t *fl_ctx, value_t v, char *fname)
+ios_t *fl_toiostream(fl_context_t *fl_ctx, value_t v, const char *fname)
 {
     return toiostream(fl_ctx, v, fname);
 }
@@ -334,7 +333,7 @@ value_t fl_ioreaduntil(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     ios_setbuf(&dest, data, 80, 0);
     char delim = get_delim_arg(fl_ctx, args[1], "io.readuntil");
     ios_t *src = toiostream(fl_ctx, args[0], "io.readuntil");
-    size_t n = ios_copyuntil(&dest, src, delim);
+    size_t n = ios_copyuntil(&dest, src, delim, 0);
     cv->len = n;
     if (dest.buf != data) {
         // outgrew initial space
@@ -353,7 +352,7 @@ value_t fl_iocopyuntil(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     ios_t *dest = toiostream(fl_ctx, args[0], "io.copyuntil");
     ios_t *src = toiostream(fl_ctx, args[1], "io.copyuntil");
     char delim = get_delim_arg(fl_ctx, args[2], "io.copyuntil");
-    return size_wrap(fl_ctx, ios_copyuntil(dest, src, delim));
+    return size_wrap(fl_ctx, ios_copyuntil(dest, src, delim, 0));
 }
 
 value_t fl_iocopy(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
@@ -382,7 +381,7 @@ value_t stream_to_string(fl_context_t *fl_ctx, value_t *ps)
         ios_trunc(st, 0);
     }
     else {
-        char *b = ios_takebuf(st, &n); n--;
+        char *b = ios_take_buffer(st, &n); n--;
         b[n] = '\0';
         str = cvalue_from_ref(fl_ctx, fl_ctx->stringtype, b, n, fl_ctx->NIL);
         cv_autorelease(fl_ctx, (cvalue_t*)ptr(str));

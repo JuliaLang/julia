@@ -9,13 +9,13 @@ export dct, idct, dct!, idct!, plan_dct, plan_idct, plan_dct!, plan_idct!
 # Unlike Matlab we compute the multidimensional transform by default,
 # similar to the Julia fft functions.
 
-type DCTPlan{T<:fftwNumber,K,inplace} <: Plan{T}
+mutable struct DCTPlan{T<:fftwNumber,K,inplace} <: Plan{T}
     plan::r2rFFTWPlan{T}
     r::Array{UnitRange{Int}} # array of indices for rescaling
     nrm::Float64 # normalization factor
     region::Dims # dimensions being transformed
     pinv::DCTPlan{T}
-    DCTPlan(plan,r,nrm,region) = new(plan,r,nrm,region)
+    DCTPlan{T,K,inplace}(plan,r,nrm,region) where {T<:fftwNumber,K,inplace} = new(plan,r,nrm,region)
 end
 
 size(p::DCTPlan) = size(p.plan)
@@ -41,7 +41,7 @@ end
 """
     plan_dct!(A [, dims [, flags [, timelimit]]])
 
-Same as [`plan_dct`](:func:`plan_dct`), but operates in-place on `A`.
+Same as [`plan_dct`](@ref), but operates in-place on `A`.
 """
 plan_dct!
 
@@ -49,9 +49,9 @@ plan_dct!
     plan_idct(A [, dims [, flags [, timelimit]]])
 
 Pre-plan an optimized inverse discrete cosine transform (DCT), similar to
-[`plan_fft`](:func:`plan_fft`) except producing a function that computes
-[`idct`](:func:`idct`). The first two arguments have the same meaning as for
-[`idct`](:func:`idct`).
+[`plan_fft`](@ref) except producing a function that computes
+[`idct`](@ref). The first two arguments have the same meaning as for
+[`idct`](@ref).
 """
 plan_idct
 
@@ -59,21 +59,21 @@ plan_idct
     plan_dct(A [, dims [, flags [, timelimit]]])
 
 Pre-plan an optimized discrete cosine transform (DCT), similar to
-[`plan_fft`](:func:`plan_fft`) except producing a function that computes
-[`dct`](:func:`dct`). The first two arguments have the same meaning as for
-[`dct`](:func:`dct`).
+[`plan_fft`](@ref) except producing a function that computes
+[`dct`](@ref). The first two arguments have the same meaning as for
+[`dct`](@ref).
 """
 plan_dct
 
 """
     plan_idct!(A [, dims [, flags [, timelimit]]])
 
-Same as [`plan_idct`](:func:`plan_idct`), but operates in-place on `A`.
+Same as [`plan_idct`](@ref), but operates in-place on `A`.
 """
 plan_idct!
 
 function plan_inv{T,K,inplace}(p::DCTPlan{T,K,inplace})
-    X = Array(T, p.plan.sz)
+    X = Array{T}(p.plan.sz)
     iK = inv_kind[K]
     DCTPlan{T,iK,inplace}(inplace ?
                           plan_r2r!(X, iK, p.region, flags=p.plan.flags) :
@@ -84,12 +84,12 @@ end
 for f in (:dct, :dct!, :idct, :idct!)
     pf = Symbol("plan_", f)
     @eval begin
-        $f{T<:fftwNumber}(x::AbstractArray{T}) = $pf(x) * x
-        $f{T<:fftwNumber}(x::AbstractArray{T}, region) = $pf(x, region) * x
+        $f(x::AbstractArray{<:fftwNumber}) = $pf(x) * x
+        $f(x::AbstractArray{<:fftwNumber}, region) = $pf(x, region) * x
         $pf(x::AbstractArray; kws...) = $pf(x, 1:ndims(x); kws...)
-        $f{T<:Real}(x::AbstractArray{T}, region=1:ndims(x)) = $f(fftwfloat(x), region)
-        $pf{T<:Real}(x::AbstractArray{T}, region; kws...) = $pf(fftwfloat(x), region; kws...)
-        $pf{T<:Complex}(x::AbstractArray{T}, region; kws...) = $pf(fftwcomplex(x), region; kws...)
+        $f(x::AbstractArray{<:Real}, region=1:ndims(x)) = $f(fftwfloat(x), region)
+        $pf(x::AbstractArray{<:Real}, region; kws...) = $pf(fftwfloat(x), region; kws...)
+        $pf(x::AbstractArray{<:Complex}, region; kws...) = $pf(fftwcomplex(x), region; kws...)
     end
 end
 
@@ -100,7 +100,7 @@ Performs a multidimensional type-II discrete cosine transform (DCT) of the array
 the unitary normalization of the DCT. The optional `dims` argument specifies an iterable
 subset of dimensions (e.g. an integer, range, tuple, or array) to transform along.  Most
 efficient if the size of `A` along the transformed dimensions is a product of small primes;
-see [`nextprod`](:func:`nextprod`). See also [`plan_dct`](:func:`plan_dct`) for even greater
+see [`nextprod`](@ref). See also [`plan_dct`](@ref) for even greater
 efficiency.
 """
 dct
@@ -112,15 +112,15 @@ Computes the multidimensional inverse discrete cosine transform (DCT) of the arr
 (technically, a type-III DCT with the unitary normalization). The optional `dims` argument
 specifies an iterable subset of dimensions (e.g. an integer, range, tuple, or array) to
 transform along.  Most efficient if the size of `A` along the transformed dimensions is a
-product of small primes; see [`nextprod`](:func:`nextprod`).  See also
-[`plan_idct`](:func:`plan_idct`) for even greater efficiency.
+product of small primes; see [`nextprod`](@ref).  See also
+[`plan_idct`](@ref) for even greater efficiency.
 """
 idct
 
 """
     dct!(A [, dims])
 
-Same as [`dct!`](:func:`dct!`), except that it operates in-place on `A`, which must be an
+Same as [`dct!`](@ref), except that it operates in-place on `A`, which must be an
 array of real or complex floating-point values.
 """
 dct!
@@ -128,7 +128,7 @@ dct!
 """
     idct!(A [, dims])
 
-Same as [`idct!`](:func:`idct!`), but operates in-place on `A`.
+Same as [`idct!`](@ref), but operates in-place on `A`.
 """
 idct!
 
@@ -168,9 +168,9 @@ function A_mul_B!{T}(y::StridedArray{T}, p::DCTPlan{T,REDFT01},
 end
 
 *{T}(p::DCTPlan{T,REDFT10,false}, x::StridedArray{T}) =
-    A_mul_B!(Array(T, p.plan.osz), p, x)
+    A_mul_B!(Array{T}(p.plan.osz), p, x)
 
 *{T}(p::DCTPlan{T,REDFT01,false}, x::StridedArray{T}) =
-    A_mul_B!(Array(T, p.plan.osz), p, copy(x)) # need copy to preserve input
+    A_mul_B!(Array{T}(p.plan.osz), p, copy(x)) # need copy to preserve input
 
 *{T,K}(p::DCTPlan{T,K,true}, x::StridedArray{T}) = A_mul_B!(x, p, x)

@@ -99,13 +99,19 @@ static int _os_read(long fd, void *buf, size_t n, size_t *nread)
 {
     ssize_t r;
 
+    n = LIMIT_IO_SIZE(n);
     while (1) {
         set_io_wait_begin(1);
-        r = read((int)fd, buf, LIMIT_IO_SIZE(n));
+        r = read((int)fd, buf, n);
         set_io_wait_begin(0);
         if (r > -1) {
             *nread = (size_t)r;
             return 0;
+        }
+        // This test is a hack to fix #11481 for Windows 7. Unnecessary for Windows 10.
+        if (errno == ENOMEM && n > 80) {
+            n >>= 3;
+            continue;
         }
         if (!_enonfatal(errno)) {
             *nread = 0;
@@ -677,7 +683,7 @@ static void _buf_init(ios_t *s, bufmode_t bm)
     s->size = s->bpos = 0;
 }
 
-char *ios_takebuf(ios_t *s, size_t *psize)
+char *ios_take_buffer(ios_t *s, size_t *psize)
 {
     char *buf;
 
@@ -796,7 +802,7 @@ size_t ios_copyall(ios_t *to, ios_t *from)
 
 #define LINE_CHUNK_SIZE 160
 
-size_t ios_copyuntil(ios_t *to, ios_t *from, char delim)
+size_t ios_copyuntil(ios_t *to, ios_t *from, char delim, uint8_t chomp)
 {
     size_t total = 0, avail = (size_t)(from->size - from->bpos);
     while (!ios_eof(from)) {
@@ -815,7 +821,11 @@ size_t ios_copyuntil(ios_t *to, ios_t *from, char delim)
         }
         else {
             size_t ntowrite = pd - (from->buf+from->bpos) + 1;
-            written = ios_write(to, from->buf+from->bpos, ntowrite);
+            size_t nchomp = 0;
+            if (chomp) {
+                nchomp = ios_nchomp(from, ntowrite);
+            }
+            written = ios_write(to, from->buf+from->bpos, ntowrite - nchomp);
             from->bpos += ntowrite;
             total += written;
             return total;
@@ -823,6 +833,19 @@ size_t ios_copyuntil(ios_t *to, ios_t *from, char delim)
     }
     from->_eof = 1;
     return total;
+}
+
+size_t ios_nchomp(ios_t *from, size_t ntowrite)
+{
+    assert(ntowrite > 0);
+    size_t nchomp;
+    if (ntowrite > 1 && from->buf[from->bpos+ntowrite - 2] == '\r') {
+        nchomp = 2;
+    }
+    else {
+        nchomp = 1;
+    }
+    return nchomp;
 }
 
 static void _ios_init(ios_t *s)
@@ -892,7 +915,10 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
     fd = _wopen(fname_w, flags | O_BINARY | O_NOINHERIT, _S_IREAD | _S_IWRITE);
     set_io_wait_begin(0);
 #else
-    fd = open_cloexec(fname, flags, S_IRUSR | S_IWUSR /* 0600 */ | S_IRGRP | S_IROTH /* 0644 */);
+    // The mode of the created file is (mode & ~umask), which resolves with
+    // default umask to u=rw,g=r,o=r
+    fd = open_cloexec(fname, flags,
+                      S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 #endif
     s = ios_fd(s, fd, 1, 1);
     if (fd == -1)
@@ -1126,9 +1152,9 @@ char *ios_readline(ios_t *s)
 {
     ios_t dest;
     ios_mem(&dest, 0);
-    ios_copyuntil(&dest, s, '\n');
+    ios_copyuntil(&dest, s, '\n', 0);
     size_t n;
-    return ios_takebuf(&dest, &n);
+    return ios_take_buffer(&dest, &n);
 }
 
 extern int vasprintf(char **strp, const char *fmt, va_list ap);

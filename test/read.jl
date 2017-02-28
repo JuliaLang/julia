@@ -83,7 +83,7 @@ push!(l, ("TCPSocket", io))
 io = (text) -> begin
     a = "\\\\.\\pipe\\uv-test-$(randstring(6))"
     b = joinpath(dir, "socket-$(randstring(6))")
-    socketname = @windows ? a : b
+    socketname = is_windows() ? a : b
     srv = listen(socketname)
     run_test_server(srv, text)
     connect(socketname)
@@ -98,7 +98,7 @@ push!(l, ("PipeEndpoint", io))
 #FIXME See https://github.com/JuliaLang/julia/issues/14747
 #      Reading from open(::Command) seems to deadlock on Linux/Travis
 #=
-@windows ? nothing : begin
+if !is_windows()
 
 # Windows type command not working?
 # See "could not spawn `type 'C:\Users\appveyor\AppData\Local\Temp\1\jul3516.tmp\file.txt'`"
@@ -107,7 +107,7 @@ push!(l, ("PipeEndpoint", io))
 # Pipe
 io = (text) -> begin
     write(filename, text)
-    open(`$(@windows ? "type" : "cat") $filename`)[1]
+    open(`$(is_windows() ? "type" : "cat") $filename`)[1]
 #    Was open(`echo -n $text`)[1]
 #    See https://github.com/JuliaLang/julia/issues/14747
 end
@@ -202,7 +202,7 @@ for (name, f) in l
         verbose && println("$name readbytes!...")
         l = length(text)
         for n = [1, 2, l-2, l-1, l, l+1, l+2]
-            a1 = Vector{UInt8}(n);
+            a1 = Vector{UInt8}(n)
             a2 = Vector{UInt8}(n)
             s1 = io()
             s2 = IOBuffer(text)
@@ -241,14 +241,18 @@ for (name, f) in l
         cleanup()
 
         verbose && println("$name readline...")
-        @test readline(io()) == readline(IOBuffer(text))
-        @test readline(io()) == readline(filename)
+        @test readline(io(), chomp=false) == readline(IOBuffer(text), chomp=false)
+        @test readline(io(), chomp=false) == readline(filename, chomp=false)
 
         verbose && println("$name readlines...")
+        @test readlines(io(), chomp=false) == readlines(IOBuffer(text), chomp=false)
+        @test readlines(io(), chomp=false) == readlines(filename, chomp=false)
         @test readlines(io()) == readlines(IOBuffer(text))
         @test readlines(io()) == readlines(filename)
+        @test collect(eachline(io(), chomp=false)) == collect(eachline(IOBuffer(text), chomp=false))
+        @test collect(eachline(io(), chomp=false)) == collect(eachline(filename, chomp=false))
         @test collect(eachline(io())) == collect(eachline(IOBuffer(text)))
-        @test collect(eachline(io())) == collect(eachline(filename))
+        @test collect(@inferred(eachline(io()))) == collect(@inferred(eachline(filename))) #20351
 
         cleanup()
 
@@ -296,9 +300,9 @@ for (name, f) in l
     @test readstring("$filename.to") == text
 
     verbose && println("$name write(::IOBuffer, ...)")
-    to = IOBuffer(copy(text.data), false, true)
+    to = IOBuffer(copy(Vector{UInt8}(text)), false, true)
     write(to, io())
-    @test takebuf_string(to) == text
+    @test String(take!(to)) == text
 
     cleanup()
 end
@@ -365,14 +369,14 @@ test_read_nbyte()
 
 
 let s = "qwerty"
-    @test read(IOBuffer(s)) == s.data
-    @test read(IOBuffer(s), 10) == s.data
-    @test read(IOBuffer(s), 1) == s.data[1:1]
+    @test read(IOBuffer(s)) == Vector{UInt8}(s)
+    @test read(IOBuffer(s), 10) == Vector{UInt8}(s)
+    @test read(IOBuffer(s), 1) == Vector{UInt8}(s)[1:1]
 
     # Test growing output array
     x = UInt8[]
     n = readbytes!(IOBuffer(s), x, 10)
-    @test x == s.data
+    @test x == Vector{UInt8}(s)
     @test n == length(x)
 end
 
@@ -411,13 +415,14 @@ rm(f)
 io = Base.Filesystem.open(f, Base.Filesystem.JL_O_WRONLY | Base.Filesystem.JL_O_CREAT | Base.Filesystem.JL_O_EXCL, 0o000)
 @test write(io, "abc") == 3
 close(io)
-@unix_only if get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") != "/root"
+if !is_windows() && get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") != "/root"
     # msvcrt _wchmod documentation states that all files are readable,
     # so we don't test that it correctly set the umask on windows
     @test_throws SystemError open(f)
     @test_throws Base.UVError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
 else
-    warn("file permissions tests skipped due to running tests as root (not recommended)")
+    is_windows() || warn("file permissions tests skipped due to running tests as root (not recommended)")
+    close(open(f))
 end
 chmod(f, 0o400)
 f1 = open(f)
@@ -473,7 +478,8 @@ f2 = Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
 @test skip(f2, 10) == f2
 @test eof(f1)
 @test eof(f2)
-@test write(f1, '*') == 1; @test flush(f1) == f1
+@test write(f1, '*') == 1
+@test flush(f1) === nothing
 @test !eof(f2)
 @test skip(f2, 1) == f2
 @test write(f2, '*') == 1

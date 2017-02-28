@@ -108,7 +108,6 @@
       <keyword>ARGS</keyword>
       <keyword>LOAD_PATH</keyword>
       <keyword>CPU_CORES</keyword>
-      <keyword>OS_NAME</keyword>
       <keyword>C_NULL</keyword>
       <keyword>WORD_SIZE</keyword>
       <keyword>VERSION</keyword>
@@ -155,11 +154,11 @@
       <keyword>in</keyword>
       <keyword>function</keyword>
       <keyword>if</keyword>
-      <keyword>immutable</keyword>
+      <keyword>struct</keyword>
       <keyword>let</keyword>
       <keyword>quote</keyword>
       <keyword>try</keyword>
-      <keyword>type</keyword>
+      <keyword>mutable type</keyword>
       <keyword>while</keyword>
       <keyword>catch</keyword>
       <keyword>finally</keyword>
@@ -167,8 +166,8 @@
       <keyword>elseif</keyword>
       <keyword>end</keyword>
       <!-- keywords -->
-      <keyword>abstract</keyword>
-      <keyword>bitstype</keyword>
+      <keyword>abstract type</keyword>
+      <keyword>primitive type</keyword>
       <keyword>break</keyword>
       <keyword>ccall</keyword>
       <keyword>const</keyword>
@@ -256,7 +255,6 @@
       <keyword>(Error|Interrupt|Disconnect)?Exception</keyword>
       <keyword>Algorithm</keyword>
       <keyword>Associative</keyword>
-      <keyword>AsyncStream</keyword>
       <keyword>Box</keyword>
       <keyword>BunchKaufman</keyword>
       <keyword>CPUinfo</keyword>
@@ -285,8 +283,8 @@
       <keyword>Hermitian</keyword>
       <keyword>Hessenberg</keyword>
       <keyword>IO(Buffer|Stream)?</keyword>
+      <keyword>IPAddr|IPv[46]</keyword>
       <keyword>InetAddr</keyword>
-      <keyword>IpAddr|IPv[46]</keyword>
       <keyword>(Key|Value)Iterator</keyword>
       <keyword>LambdaInfo</keyword>
       <keyword>LocalProcess</keyword>
@@ -309,7 +307,6 @@
       <keyword>RawOrBoxedHandle</keyword>
       <keyword>Redirectable</keyword>
       <keyword>Regex(Match(Iterator)?)?</keyword>
-      <keyword>RemoteRef</keyword>
       <keyword>Rest</keyword>
       <keyword>Reverse</keyword>
       <keyword>(Generalized)?(SVD|Schur)</keyword>
@@ -321,14 +318,14 @@
       <keyword>StateUpdate</keyword>
       <keyword>StaticVarInfo</keyword>
       <keyword>Symbol(Node)?</keyword>
+      <keyword>TCPSocket</keyword>
       <keyword>TTY</keyword>
       <keyword>Task</keyword>
-      <keyword>TcpSocket</keyword>
       <keyword>TmStruct</keyword>
       <keyword>Top(Node)?</keyword>
       <keyword>Triangular</keyword>
       <keyword>UV(Handle|PollingWatcher|Stream)</keyword>
-      <keyword>UdpSocket</keyword>
+      <keyword>UDPSocket</keyword>
       <keyword>Undef(RefTag)?</keyword>
       <keyword>VarTable</keyword>
       <keyword>Vararg</keyword>

@@ -4,6 +4,10 @@
 ##   It is generally preferable to change these options, for
 ##   your local machine, in a file named `Make.user` in the toplevel
 ##   and build directories
+##
+## For developers, take care to not insert comments on the same line as
+## variable declarations. The spaces between the variable value and the
+## comment will be included in the value.
 
 # OPENBLAS build options
 OPENBLAS_TARGET_ARCH:=
@@ -36,11 +40,14 @@ USE_SYSTEM_ARPACK:=0
 USE_SYSTEM_SUITESPARSE:=0
 USE_SYSTEM_LIBUV:=0
 USE_SYSTEM_UTF8PROC:=0
+USE_SYSTEM_MBEDTLS:=0
+USE_SYSTEM_LIBSSH2:=0
+USE_SYSTEM_CURL:=0
 USE_SYSTEM_LIBGIT2:=0
 USE_SYSTEM_PATCHELF:=0
 
 # Link to the LLVM shared library
-USE_LLVM_SHLIB := 0
+USE_LLVM_SHLIB := 1
 
 ## Settings for various Intel tools
 # Set to 1 to use MKL
@@ -54,6 +61,9 @@ USE_INTEL_JITEVENTS ?= 0
 # Set to 1 to use Intel C, C++, and FORTRAN compilers
 USEICC  ?= 0
 USEIFC  ?= 0
+
+# Enable threading with one thread
+JULIA_THREADS := 1
 
 ifeq ($(USE_MKL), 1)
 $(warning "The julia make variable USE_MKL has been renamed to USE_INTEL_MKL")
@@ -72,6 +82,11 @@ HAVE_SSP := 0
 # GC debugging options
 WITH_GC_VERIFY := 0
 WITH_GC_DEBUG_ENV := 0
+
+# When set, give julia binaries CPUID specific names. This is useful in cluster environments
+# with heterogeneous architectures. N.B.: will not be automatically rebuilt for all
+# architectures if julia is updated.
+CPUID_SPECIFIC_BINARIES ?= 0
 
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
@@ -125,7 +140,33 @@ else
 NO_GIT := 1
 endif
 
+# Julia's Semantic Versioning system labels the three decimal places in a version number as
+# the major, minor and patch versions.  Typically the major version would be incremented
+# whenever a backwards-incompatible change is made, the minor version would be incremented
+# whenever major backwards-compatible changes are made, and the patch version would be
+# incremented whenever smaller changes are made.  However, before v1.0.0, the major
+# version number is always zero and the meanings shift down a place; the minor version
+# number becomes the major version number, the patch version number becomes the minor
+# version number, and there is no patch version number to speak of.  In this case, the
+# version v0.4.1 has backwards-compatible changes as compared to v0.4.0, and the
+# version v0.5.0 has major backwards-incompatible changes as compared to v0.4.X.
 JULIA_VERSION := $(shell cat $(JULIAHOME)/VERSION)
+JULIA_MAJOR_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.' -f 1)
+JULIA_MINOR_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.' -f 2)
+JULIA_PATCH_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.' -f 3)
+
+# libjulia's SONAME will follow the format libjulia.so.$(SOMAJOR). Before v1.0.0,
+# SOMAJOR will be a two-decimal value, e.g. libjulia.so.0.5, whereas at and beyond
+# v1.0.0, SOMAJOR will be simply the major version number, e.g. libjulia.so.1
+# The file itself will ultimately symlink to libjulia.so.$(SOMAJOR).$(SOMINOR)
+ifeq ($(JULIA_MAJOR_VERSION),0)
+SOMAJOR := $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION)
+SOMINOR := $(JULIA_PATCH_VERSION)
+else
+SOMAJOR := $(JULIA_MAJOR_VERSION)
+SOMINOR := $(JULIA_MINOR_VERSION)
+endif
+
 ifneq ($(NO_GIT), 1)
 JULIA_COMMIT := $(shell git rev-parse --short=10 HEAD)
 else
@@ -151,6 +192,7 @@ sysconfdir := $(prefix)/etc
 build_prefix := $(BUILDROOT)/usr
 build_staging := $(build_prefix)-staging
 build_bindir := $(build_prefix)/bin
+build_depsbindir := $(build_prefix)/tools
 build_libdir := $(build_prefix)/lib
 build_libexecdir := $(build_prefix)/libexec
 build_datarootdir := $(build_prefix)/share
@@ -188,12 +230,14 @@ INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
 LLVMROOT := $(build_prefix)
 LLVM_ASSERTIONS := 0
 LLVM_DEBUG := 0
-#LLVM_USE_CMAKE: defined in deps/Makefile as it depends on LLVM_VER_SHORT
+#LLVM_USE_CMAKE: defined in deps/llvm-ver.mk as it depends on LLVM_VER_SHORT
 # set to 1 to get clang and compiler-rt
 BUILD_LLVM_CLANG := 0
 # set to 1 to get lldb (often does not work, no chance with llvm3.2 and earlier)
 # see http://lldb.llvm.org/build.html for dependencies
 BUILD_LLDB := 0
+USE_POLLY := 0
+USE_POLLY_OPENMP := 0
 
 # Cross-compile
 #XC_HOST := i686-w64-mingw32
@@ -219,7 +263,7 @@ CROSS_COMPILE:=
 HOSTCC = $(CC)
 else
 HOSTCC := gcc
-override OPENBLAS_DYNAMIC_ARCH := 1
+OPENBLAS_DYNAMIC_ARCH := 1
 override CROSS_COMPILE:=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
 override OS := WINNT
@@ -234,8 +278,8 @@ endif
 endif
 STD_LIB_PATH ?= $(PATH)
 
-JLDOWNLOAD := $(JULIAHOME)/deps/jldownload
-JLCHECKSUM := $(JULIAHOME)/deps/jlchecksum
+JLDOWNLOAD := $(JULIAHOME)/deps/tools/jldownload
+JLCHECKSUM := $(JULIAHOME)/deps/tools/jlchecksum
 
 # Figure out OS and architecture
 OS := $(BUILD_OS)
@@ -307,6 +351,11 @@ endif
 
 STDLIBCPP_FLAG :=
 
+ifeq ($(OS), FreeBSD)
+USEGCC := 0
+USECLANG := 1
+endif
+
 ifeq ($(OS), Darwin)
 DARWINVER := $(shell uname -r | cut -b 1-2)
 DARWINVER_GTE13 := $(shell expr `uname -r | cut -b 1-2` \>= 13)
@@ -342,7 +391,7 @@ JCFLAGS := -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS := -fasynchronous-unwind-tables
 JCXXFLAGS := -pipe $(fPIC) -fno-rtti
 ifneq ($(OS), WINNT)
-# Do no enable on windows to avoid warnings from libuv.
+# Do not enable on windows to avoid warnings from libuv.
 JCXXFLAGS += -pedantic
 endif
 DEBUGFLAGS := -O0 -ggdb2 -DJL_DEBUG_BUILD -fstack-protector-all
@@ -360,12 +409,14 @@ DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS := -O3 -g
 ifeq ($(OS), Darwin)
 ifeq ($(USE_LIBCPP), 1)
-CC += -stdlib=libc++ -mmacosx-version-min=10.7
-CXX += -stdlib=libc++ -mmacosx-version-min=10.7
-FC += -mmacosx-version-min=10.7
+MACOSX_VERSION_MIN := 10.8
+CC += -stdlib=libc++ -mmacosx-version-min=$(MACOSX_VERSION_MIN)
+CXX += -stdlib=libc++ -mmacosx-version-min=$(MACOSX_VERSION_MIN)
+FC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 else
-CC += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
-CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
+MACOSX_VERSION_MIN := 10.6
+CC += $(STDLIBCPP_FLAG) -mmacosx-version-min=$(MACOSX_VERSION_MIN)
+CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 endif
 JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
@@ -389,12 +440,16 @@ endif
 
 ifeq ($(USECCACHE), 1)
 # expand CC and CXX at declaration time because we will redefine them
-CC_ARG   := $(CC)         # Expand CC and CXX here already because we want
-CXX_ARG  := $(CXX)        # the original definition and not the ccache version.
-CC_FULL  := ccache $(CC)  # Expand CC and CXX here already to avoid recursive
-CXX_FULL := ccache $(CXX) # referencing.
-CC       := $(CC_FULL)    # Add an extra indirection to make CC/CXX non-simple
-CXX      := $(CXX_FULL)   # vars (because of how -m$(BINARY) is added later on).
+# Expand CC and CXX here already because we want the original definition and not the ccache version.
+CC_ARG   := $(CC)
+CXX_ARG  := $(CXX)
+# Expand CC and CXX here already to avoid recursive referencing.
+CC_FULL  := ccache $(CC)
+CXX_FULL := ccache $(CXX)
+# Add an extra indirection to make CC/CXX non-simple vars
+# (because of how -m$(BINARY) is added later on).
+CC       := $(CC_FULL)
+CXX      := $(CXX_FULL)
 CC_BASE  := ccache
 CXX_BASE := ccache
 ifeq ($(USECLANG),1)
@@ -407,7 +462,9 @@ export CCACHE_CPP2 := yes
 endif
 else #USECCACHE
 CC_BASE := $(shell echo $(CC) | cut -d' ' -f1)
+CC_ARG := $(shell echo $(CC) | cut -s -d' ' -f2-)
 CXX_BASE := $(shell echo $(CXX) | cut -d' ' -f1)
+CXX_ARG := $(shell echo $(CXX) | cut -s -d' ' -f2-)
 endif
 
 JFFLAGS := -O2 $(fPIC)
@@ -427,6 +484,7 @@ endif #ARCH
 LD := link
 endif #USEMSVC
 RANLIB := $(CROSS_COMPILE)ranlib
+OBJCOPY := $(CROSS_COMPILE)objcopy
 
 # file extensions
 ifeq ($(OS), WINNT)
@@ -444,11 +502,21 @@ else
 build_shlibdir := $(build_libdir)
 endif
 
+ifeq ($(OS), FreeBSD)
+LOCALBASE ?= /usr/local
+else
+LOCALBASE ?= /usr
+endif
+
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
 endif
 ifeq (exists, $(shell [ -e $(BUILDROOT)/Make.user ] && echo exists ))
 include $(BUILDROOT)/Make.user
+endif
+
+ifneq ($(CC_BASE)$(CXX_BASE),$(shell echo $(CC) | cut -d' ' -f1)$(shell echo $(CXX) | cut -d' ' -f1))
+    $(error Forgot override directive on CC or CXX in Make.user? Cowardly refusing to build)
 endif
 
 ifeq ($(SANITIZE),1)
@@ -469,7 +537,7 @@ LDFLAGS += $(SANITIZE_LDFLAGS)
 #DEPS_CXXFLAGS += $(SANITIZE_OPTS)
 endif
 
-TAR=`which gtar 2>/dev/null || which tar 2>/dev/null`
+TAR := $(shell which gtar 2>/dev/null || which tar 2>/dev/null)
 TAR_TEST := $(shell $(TAR) --help 2>&1  | egrep 'bsdtar|strip-components')
 ifeq (,$(findstring components,$(TAR_TEST)))
 ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
@@ -555,29 +623,6 @@ $(error Pre-SSE2 CPU targets not supported. To create a generic 32-bit x86 binar
 pass 'MARCH=pentium4'.)
 endif
 
-ifneq ($(MARCH),)
-CC += -march=$(MARCH)
-CXX += -march=$(MARCH)
-FC += -march=$(MARCH)
-JULIA_CPU_TARGET ?= $(MARCH)
-ifeq ($(OS),Darwin)
-# on Darwin, the standalone `as` program doesn't know
-# how to handle AVX instructions, but it does know how
-# to dispatch to the clang assembler (if we ask it to)
-ifeq ($(USECLANG),1)
-CC += -integrated-as
-CXX += -integrated-as
-else
-CC += -Wa,-q
-CXX += -Wa,-q
-endif
-FC += -Wa,-q
-AS += -q
-endif
-endif
-
-JULIA_CPU_TARGET ?= native
-
 # We map amd64 to x86_64 for compatibility with systems that identify 64-bit systems as such
 ifeq ($(ARCH),amd64)
 override ARCH := x86_64
@@ -606,19 +651,58 @@ else
 ISX86:=0
 endif
 
+# If we are running on powerpc64le or ppc64le, set certain options automatically
+ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
+JCFLAGS += -fsigned-char
+OPENBLAS_DYNAMIC_ARCH:=0
+OPENBLAS_TARGET_ARCH:=POWER8
+# GCC doesn't do -march= on ppc64le
+MARCH=
+endif
+
+# If we are running on powerpc64 or ppc64, fail out dramatically
+ifneq (,$(filter $(ARCH), powerpc64 ppc64))
+$(error Big-endian PPC64 is not supported, to ignore this error, set ARCH=ppc64le)
+endif
+
 # If we are running on ARM, set certain options automatically
 ifneq (,$(findstring arm,$(ARCH)))
 JCFLAGS += -fsigned-char
-
-LLVM_ASSERTIONS=1
-#LLVM_FLAGS+="--with-float=hard --with-abi=aapcs-vfp"
-
-override USE_BLAS64:=0
-override OPENBLAS_DYNAMIC_ARCH:=0
-override OPENBLAS_TARGET_ARCH:=ARMV7
-override USE_SYSTEM_LIBM:=1
-
+USE_BLAS64:=0
+OPENBLAS_DYNAMIC_ARCH:=0
+OPENBLAS_TARGET_ARCH:=ARMV7
+USE_SYSTEM_LIBM:=1
 endif
+
+# If we are running on aarch64 (e.g. ARMv8 or ARM64), set certain options automatically
+ifneq (,$(findstring aarch64,$(ARCH)))
+OPENBLAS_DYNAMIC_ARCH:=0
+OPENBLAS_TARGET_ARCH:=ARMV8
+endif
+
+# Set MARCH-specific flags
+ifneq ($(MARCH),)
+CC += -march=$(MARCH)
+CXX += -march=$(MARCH)
+FC += -march=$(MARCH)
+JULIA_CPU_TARGET ?= $(MARCH)
+ifeq ($(OS),Darwin)
+# on Darwin, the standalone `as` program doesn't know
+# how to handle AVX instructions, but it does know how
+# to dispatch to the clang assembler (if we ask it to)
+ifeq ($(USECLANG),1)
+CC += -integrated-as
+CXX += -integrated-as
+else
+CC += -Wa,-q
+CXX += -Wa,-q
+endif
+FC += -Wa,-q
+AS += -q
+endif
+endif
+
+JULIA_CPU_TARGET ?= native
 
 # Set some ARCH-specific flags
 ifneq ($(USEICC),1)
@@ -633,8 +717,10 @@ endif
 
 ifeq ($(OS),WINNT)
 ifneq ($(ARCH),x86_64)
+ifneq ($(USECLANG),1)
 JCFLAGS += -mincoming-stack-boundary=2
 JCXXFLAGS += -mincoming-stack-boundary=2
+endif
 endif
 endif
 
@@ -668,7 +754,7 @@ ifeq ($(origin LLVM_CONFIG), undefined)
 ifeq ($(USE_SYSTEM_LLVM), 1)
 LLVM_CONFIG := llvm-config$(EXE)
 else
-LLVM_CONFIG := $(build_bindir)/llvm-config$(EXE)
+LLVM_CONFIG := $(build_depsbindir)/llvm-config$(EXE)
 endif
 endif # LLVM_CONFIG undefined
 
@@ -695,7 +781,7 @@ endif
 ifeq ($(USE_SYSTEM_PCRE), 1)
 PCRE_CONFIG := pcre2-config
 else
-PCRE_CONFIG := $(build_bindir)/pcre2-config
+PCRE_CONFIG := $(build_depsbindir)/pcre2-config
 endif
 
 # Use ILP64 BLAS interface when building openblas from source on 64-bit architectures
@@ -758,8 +844,8 @@ LIBMNAME := libopenlibm
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV), 1)
-  LIBUV := /usr/lib/libuv-julia.a
-  LIBUV_INC := /usr/include
+  LIBUV := $(LOCALBASE)/lib/libuv-julia.a
+  LIBUV_INC := $(LOCALBASE)/include
 else
   LIBUV := $(build_libdir)/libuv.a
   LIBUV_INC := $(build_includedir)
@@ -767,7 +853,7 @@ endif
 
 ifeq ($(USE_SYSTEM_UTF8PROC), 1)
   LIBUTF8PROC := -lutf8proc
-  UTF8PROC_INC := /usr/include
+  UTF8PROC_INC := $(LOCALBASE)/include
 else
   LIBUTF8PROC := $(build_libdir)/libutf8proc.a
   UTF8PROC_INC := $(build_includedir)
@@ -799,12 +885,18 @@ endif
 ifeq ($(OS), WINNT)
   RPATH :=
   RPATH_ORIGIN :=
+  RPATH_ESCAPED_ORIGIN :=
+  RPATH_LIB :=
 else ifeq ($(OS), Darwin)
-  RPATH := -Wl,-rpath,'@executable_path/$(build_private_libdir_rel)' -Wl,-rpath,'@executable_path/$(build_libdir_rel)'
+  RPATH := -Wl,-rpath,'@executable_path/$(build_libdir_rel)'
   RPATH_ORIGIN := -Wl,-rpath,'@loader_path/'
+  RPATH_ESCAPED_ORIGIN := $(RPATH_ORIGIN)
+  RPATH_LIB := -Wl,-rpath,'@loader_path/' -Wl,-rpath,'@loader_path/julia/'
 else
-  RPATH := -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)' -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-z,origin
+  RPATH := -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-rpath-link,$(build_shlibdir) -Wl,-z,origin
   RPATH_ORIGIN := -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
+  RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin
+  RPATH_LIB := -Wl,-rpath,'$$ORIGIN' -Wl,-rpath,'$$ORIGIN/julia' -Wl,-z,origin
 endif
 
 # --whole-archive
@@ -818,6 +910,11 @@ endif
 
 ifeq ($(OS), Linux)
 OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -Wl,--export-dynamic,--as-needed,--no-whole-archive $(LIBUNWIND)
+# Detect if ifunc is supported
+IFUNC_DETECT_SRC := 'void (*f0(void))(void) { return (void(*)(void))0L; }; void f(void) __attribute__((ifunc("f0")));'
+ifeq (supported, $(shell echo $(IFUNC_DETECT_SRC) | $(CC) -Werror -x c - -S -o /dev/null > /dev/null 2>&1 && echo supported))
+JCPPFLAGS += -DJULIA_HAS_IFUNC_SUPPORT=1
+endif
 ifneq ($(SANITIZE),1)
 ifneq ($(SANITIZE_MEMORY),1)
 ifneq ($(LLVM_SANITIZE),1)
@@ -870,7 +967,7 @@ endif
 
 # Threads
 ifneq ($(JULIA_THREADS), 0)
-JCPPFLAGS += -DJULIA_ENABLE_THREADING
+JCPPFLAGS += -DJULIA_ENABLE_THREADING -DJULIA_NUM_THREADS=$(JULIA_THREADS)
 endif
 
 # Intel VTune Amplifier
@@ -929,9 +1026,8 @@ endif
 
 # ATLAS
 
-# ATLAS must have been previously built with "make -C deps compile-atlas" (without -jN),
-# or installed to usr/lib/libatlas from some another source (built as
-# a shared library, for your platform, single threaded)
+# ATLAS must have been previously  installed to usr/lib/libatlas
+# (built as a shared library, for your platform, single threaded)
 USE_ATLAS := 0
 ATLAS_LIBDIR := $(build_libdir)
 #or ATLAS_LIBDIR := /path/to/system/atlas/lib

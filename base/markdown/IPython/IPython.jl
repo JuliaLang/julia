@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-type LaTeX
+mutable struct LaTeX
     formula::String
 end
 
@@ -22,7 +22,7 @@ function blocktex(stream::IO, md::MD)
     end
 end
 
-writemime(io::IO, ::MIME"text/plain", tex::LaTeX) =
+show(io::IO, tex::LaTeX) =
     print(io, '$', tex.formula, '$')
 
 latex(io::IO, tex::LaTeX) =

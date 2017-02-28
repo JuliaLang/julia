@@ -22,9 +22,14 @@ breal = randn(n,2)/2
 bimg  = randn(n,2)/2
 
 for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
-    a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
-    a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(a2real, a2img) : a2real)
+    a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
+    a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     apd  = a'*a                  # symmetric positive-definite
+
+    apds  = Symmetric(apd)
+    apdsL = Symmetric(apd, :L)
+    apdh  = Hermitian(apd)
+    apdhL = Hermitian(apd, :L)
     ε = εa = eps(abs(float(one(eltya))))
 
     @inferred cholfact(apd)
@@ -41,34 +46,85 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     #these tests were failing on 64-bit linux when inside the inner loop
     #for eltya = Complex64 and eltyb = Int. The E[i,j] had NaN32 elements
     #but only with srand(1234321) set before the loops.
-    E = abs(apd - r'*r)
+    E = abs.(apd - r'*r)
     for i=1:n, j=1:n
         @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
     end
-    E = abs(apd - full(capd))
+    E = abs.(apd - full(capd))
     for i=1:n, j=1:n
         @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
     end
-    @test_approx_eq apd * inv(capd) eye(n)
+    @test apd*inv(capd) ≈ eye(n)
     @test abs((det(capd) - det(apd))/det(capd)) <= ε*κ*n # Ad hoc, but statistically verified, revisit
-    @test_approx_eq @inferred(logdet(capd)) log(det(capd)) # logdet is less likely to overflow
+    @test @inferred(logdet(capd)) ≈ log(det(capd)) # logdet is less likely to overflow
 
     apos = apd[1,1]            # test chol(x::Number), needs x>0
-    @test_approx_eq cholfact(apos).factors √apos
+    @test all(x -> x ≈ √apos, cholfact(apos).factors)
     @test_throws ArgumentError chol(-one(eltya))
+
+    if eltya <: Real
+        capds = cholfact(apds)
+        @test inv(capds)*apds ≈ eye(n)
+        @test abs((det(capds) - det(apd))/det(capds)) <= ε*κ*n
+        if eltya <: BlasReal
+            capds = cholfact!(copy(apds))
+            @test inv(capds)*apds ≈ eye(n)
+            @test abs((det(capds) - det(apd))/det(capds)) <= ε*κ*n
+        end
+        ulstring = sprint(show,capds[:UL])
+        @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring"
+    else
+        capdh = cholfact(apdh)
+        @test inv(capdh)*apdh ≈ eye(n)
+        @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
+        capdh = cholfact!(copy(apdh))
+        @test inv(capdh)*apdh ≈ eye(n)
+        @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
+        capdh = cholfact!(copy(apd))
+        @test inv(capdh)*apdh ≈ eye(n)
+        @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
+        capdh = cholfact!(copy(apd), :L)
+        @test inv(capdh)*apdh ≈ eye(n)
+        @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
+        ulstring = sprint(show,capdh[:UL])
+        @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring"
+    end
 
     # test chol of 2x2 Strang matrix
     S = convert(AbstractMatrix{eltya},full(SymTridiagonal([2,2],[-1])))
     U = Bidiagonal([2,sqrt(eltya(3))],[-1],true) / sqrt(eltya(2))
-    @test_approx_eq full(chol(S)) full(U)
+    @test full(chol(S)) ≈ full(U)
 
     #lower Cholesky factor
     lapd = cholfact(apd, :L)
-    @test_approx_eq full(lapd) apd
+    @test full(lapd) ≈ apd
     l = lapd[:L]
-    @test_approx_eq l*l' apd
+    @test l*l' ≈ apd
     @test triu(capd.factors) ≈ lapd[:U]
     @test tril(lapd.factors) ≈ capd[:L]
+    if eltya <: Real
+        capds = cholfact(apds)
+        lapds = cholfact(apdsL)
+        cl    = chol(apdsL)
+        ls = lapds[:L]
+        @test ls*ls' ≈ apd
+        @test triu(capds.factors) ≈ lapds[:U]
+        @test tril(lapds.factors) ≈ capds[:L]
+        @test istriu(cl)
+        @test cl'cl ≈ apds
+        @test cl'cl ≈ apdsL
+    else
+        capdh = cholfact(apdh)
+        lapdh = cholfact(apdhL)
+        cl    = chol(apdhL)
+        ls = lapdh[:L]
+        @test ls*ls' ≈ apd
+        @test triu(capdh.factors) ≈ lapdh[:U]
+        @test tril(lapdh.factors) ≈ capdh[:L]
+        @test istriu(cl)
+        @test cl'cl ≈ apdh
+        @test cl'cl ≈ apdhL
+    end
 
     #pivoted upper Cholesky
     if eltya != BigFloat
@@ -78,7 +134,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         @test rank(cpapd) == n
         @test all(diff(diag(real(cpapd.factors))).<=0.) # diagonal should be non-increasing
         if isreal(apd)
-            @test_approx_eq apd * inv(cpapd) eye(n)
+            @test apd*inv(cpapd) ≈ eye(n)
         end
         @test full(cpapd) ≈ apd
         #getindex
@@ -87,38 +143,51 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         @test size(cpapd) == size(apd)
         @test full(copy(cpapd)) ≈ apd
         @test det(cpapd) ≈ det(apd)
+        @test logdet(cpapd) ≈ logdet(apd)
         @test cpapd[:P]*cpapd[:L]*cpapd[:U]*cpapd[:P]' ≈ apd
     end
 
     for eltyb in (Float32, Float64, Complex64, Complex128, Int)
-        b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
+        b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
 
 debug && println("\ntype of a: ", eltya, " type of b: ", eltyb, "\n")
+        let Bs = b
+            for atype in ("Array", "SubArray")
+                if atype == "Array"
+                    b = Bs
+                else
+                    b = view(Bs, 1:n, 1)
+                end
 
-        # Test error bound on linear solver: LAWNS 14, Theorem 2.1
-        # This is a surprisingly loose bound
-        x = capd\b
-        @test norm(x-apd\b,1)/norm(x,1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-        @test norm(apd*x-b,1)/norm(b,1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                # Test error bound on linear solver: LAWNS 14, Theorem 2.1
+                # This is a surprisingly loose bound
+                x = capd\b
+                @test norm(x-apd\b,1)/norm(x,1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                @test norm(apd*x-b,1)/norm(b,1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
 
-        @test norm(a*(capd\(a'*b)) - b,1)/norm(b,1) <= ε*κ*n # Ad hoc, revisit
+                @test norm(a*(capd\(a'*b)) - b,1)/norm(b,1) <= ε*κ*n # Ad hoc, revisit
 
-        if eltya != BigFloat && eltyb != BigFloat
-            @test norm(apd * (lapd\b) - b)/norm(b) <= ε*κ*n
-            @test norm(apd * (lapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
-        end
+                if eltya != BigFloat && eltyb != BigFloat
+                    @test norm(apd * (lapd\b) - b)/norm(b) <= ε*κ*n
+                    @test norm(apd * (lapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
+                end
+                @test_throws DimensionMismatch lapd\RowVector(ones(n))
 
-debug && println("pivoted Choleksy decomposition")
-        if eltya != BigFloat && eltyb != BigFloat # Note! Need to implement pivoted cholesky decomposition in julia
+debug && println("pivoted Cholesky decomposition")
+                if eltya != BigFloat && eltyb != BigFloat # Note! Need to implement pivoted Cholesky decomposition in julia
 
-            @test norm(apd * (cpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
-            @test norm(apd * (cpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
+                    @test norm(apd * (cpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
+                    @test norm(apd * (cpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
 
-            lpapd = cholfact(apd, :L, Val{true})
-            @test norm(apd * (lpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
-            @test norm(apd * (lpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
+                    lpapd = cholfact(apd, :L, Val{true})
+                    @test norm(apd * (lpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
+                    @test norm(apd * (lpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
+
+                    @test_throws BoundsError lpapd\RowVector(ones(n))
+                end
+            end
         end
     end
 end
@@ -127,8 +196,8 @@ begin
     # Cholesky factor of Matrix with non-commutative elements, here 2x2-matrices
 
     X = Matrix{Float64}[0.1*rand(2,2) for i in 1:3, j = 1:3]
-    L = full(Base.LinAlg.chol!(X*X', LowerTriangular))
-    U = full(Base.LinAlg.chol!(X*X', UpperTriangular))
+    L = full(Base.LinAlg._chol!(X*X', LowerTriangular))
+    U = full(Base.LinAlg._chol!(X*X', UpperTriangular))
     XX = full(X*X')
 
     @test sum(sum(norm, L*L' - XX)) < eps()
@@ -138,22 +207,27 @@ end
 # Test generic cholfact!
 for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
     if elty <: Complex
-        A = complex(randn(5,5), randn(5,5))
+        A = complex.(randn(5,5), randn(5,5))
     else
         A = randn(5,5)
     end
     A = convert(Matrix{elty}, A'A)
-    @test_approx_eq full(cholfact(A)[:L]) full(invoke(Base.LinAlg.chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular))
-    @test_approx_eq full(cholfact(A)[:U]) full(invoke(Base.LinAlg.chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular))
+    @test full(cholfact(A)[:L]) ≈ full(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular))
+    @test full(cholfact(A)[:U]) ≈ full(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular))
 end
 
 # Test up- and downdates
-let A = complex(randn(10,5), randn(10, 5)), v = complex(randn(5), randn(5))
+let A = complex.(randn(10,5), randn(10, 5)), v = complex.(randn(5), randn(5))
     for uplo in (:U, :L)
         AcA = A'A
+        BcB = AcA + v*v'
+        BcB = (BcB + BcB')/2
         F = cholfact(AcA, uplo)
-        @test LinAlg.lowrankupdate(F, v)[uplo] ≈ cholfact(AcA + v*v')[uplo]
-        @test LinAlg.lowrankdowndate(F, v)[uplo] ≈ cholfact(AcA - v*v')[uplo]
+        G = cholfact(BcB, uplo)
+        @test LinAlg.lowrankupdate(F, v)[uplo] ≈ G[uplo]
+        @test_throws DimensionMismatch LinAlg.lowrankupdate(F, ones(eltype(v), length(v)+1))
+        @test LinAlg.lowrankdowndate(G, v)[uplo] ≈ F[uplo]
+        @test_throws DimensionMismatch LinAlg.lowrankdowndate(G, ones(eltype(v), length(v)+1))
     end
 end
 
@@ -180,10 +254,21 @@ let apd = [5.8525753f0 + 0.0f0im -0.79540455f0 + 0.7066077f0im 0.98274714f0 + 1.
         -1.0568488936791578 - 0.06025820467086475im 0.12696236014017806 - 0.09853584666755086im]
     cholfact(apd, :L, Val{true}) \ b
     r = factorize(apd)[:U]
-    E = abs(apd - r'*r)
+    E = abs.(apd - r'*r)
     ε = eps(abs(float(one(Complex64))))
     n = 10
     for i=1:n, j=1:n
         @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
     end
 end
+
+# Fail if non-Hermitian
+@test_throws ArgumentError cholfact(randn(5,5))
+@test_throws ArgumentError cholfact(complex.(randn(5,5), randn(5,5)))
+@test_throws ArgumentError Base.LinAlg.chol!(randn(5,5))
+@test_throws ArgumentError Base.LinAlg.cholfact!(randn(5,5),:U,Val{false})
+@test_throws ArgumentError Base.LinAlg.cholfact!(randn(5,5),:U,Val{true})
+@test_throws ArgumentError cholfact(randn(5,5),:U,Val{false})
+
+# Fail for non-BLAS element types
+@test_throws ArgumentError cholfact!(Hermitian(rand(Float16, 5,5)), Val{true})
