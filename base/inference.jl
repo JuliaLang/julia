@@ -64,7 +64,9 @@ end
 # The type of a value might be constant
 struct Const
     val
-    Const(v::ANY) = new(v)
+    actual::Bool  # if true, we obtained `val` by actually calling a @pure function
+    Const(v::ANY) = new(v, false)
+    Const(v::ANY, a::Bool) = new(v, a)
 end
 
 # The type of a value might be Bool,
@@ -191,7 +193,7 @@ mutable struct InferenceState
                     vararg_type = rewrap(vararg_type, linfo.specTypes)
                 end
                 s_types[1][la] = VarState(vararg_type, false)
-                src.slottypes[la] = widenconst(vararg_type)
+                src.slottypes[la] = vararg_type
                 la -= 1
             end
         end
@@ -220,11 +222,11 @@ mutable struct InferenceState
                 end
                 i == laty && (lastatype = atyp)
                 s_types[1][i] = VarState(atyp, false)
-                src.slottypes[i] = widenconst(atyp)
+                src.slottypes[i] = atyp
             end
             for i = (atail + 1):la
                 s_types[1][i] = VarState(lastatype, false)
-                src.slottypes[i] = widenconst(lastatype)
+                src.slottypes[i] = lastatype
             end
         else
             @assert la == 0 # wrong number of arguments
@@ -321,6 +323,8 @@ function contains_is(itr, x::ANY)
     end
     return false
 end
+
+anymap(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
 
 _topmod(sv::InferenceState) = _topmod(sv.mod)
 _topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
@@ -670,7 +674,8 @@ function limit_type_depth(t::ANY, d::Int, cov::Bool, vars::Vector{TypeVar}=TypeV
         if d > MAX_TYPE_DEPTH
             return Any
         end
-        return Union{map(x->limit_type_depth(x, d+1, cov, vars), (t.a,t.b))...}
+        return Union{limit_type_depth(t.a, d+1, cov, vars),
+                     limit_type_depth(t.b, d+1, cov, vars)}
     elseif isa(t,UnionAll)
         v = t.var
         if v.ub === Any
@@ -1084,7 +1089,7 @@ function builtin_tfunction(f::ANY, argtypes::Array{Any,1}, sv::InferenceState)
                 return tuple_tfunc(limit_tuple_depth(sv.params, argtypes_to_type(argtypes)))
             end
         end
-        return Const(tuple(map(a->a.val, argtypes)...))
+        return Const(tuple(anymap(a->a.val, argtypes)...))
     elseif f === svec
         return SimpleVector
     elseif f === arrayset
@@ -1543,7 +1548,7 @@ function return_type_tfunc(argtypes::ANY, vtypes::VarTable, sv::InferenceState)
     return NF
 end
 
-function pure_eval_call(f::ANY, argtypes::ANY, atype::ANY, vtypes::VarTable, sv::InferenceState)
+function pure_eval_call(f::ANY, argtypes::ANY, atype::ANY, sv::InferenceState)
     for i = 2:length(argtypes)
         a = argtypes[i]
         if !(isa(a,Const) || isconstType(a))
@@ -1568,13 +1573,13 @@ function pure_eval_call(f::ANY, argtypes::ANY, atype::ANY, vtypes::VarTable, sv:
     try
         value = Core._apply_pure(f, args)
         # TODO: add some sort of edge(s)
-        return abstract_eval_constant(value)
+        return Const(value, true)
     catch
         return false
     end
 end
 
-argtypes_to_type(argtypes::Array{Any,1}) = Tuple{map(widenconst, argtypes)...}
+argtypes_to_type(argtypes::Array{Any,1}) = Tuple{anymap(widenconst, argtypes)...}
 
 _Pair_name = nothing
 function Pair_name()
@@ -1804,7 +1809,7 @@ function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vect
     end
 
     atype = argtypes_to_type(argtypes)
-    t = pure_eval_call(f, argtypes, atype, vtypes, sv)
+    t = pure_eval_call(f, argtypes, atype, sv)
     t !== false && return t
 
     if istopfunction(tm, f, :promote_type) || istopfunction(tm, f, :typejoin)
@@ -1976,14 +1981,7 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
     return t
 end
 
-const Type_Array = Const(Array)
-
-function abstract_eval_constant(x::ANY)
-    if x === Array
-        return Type_Array
-    end
-    return Const(x)
-end
+const abstract_eval_constant = Const
 
 function abstract_eval_global(M::Module, s::Symbol)
     if isdefined(M,s) && isconst(M,s)
@@ -2927,28 +2925,33 @@ function optimize(me::InferenceState)
 
     if isa(me.bestguess, Const) || isconstType(me.bestguess)
         me.const_ret = true
-        ispure = me.src.pure
-        if !ispure && length(me.src.code) < 10
-            ispure = true
+        proven_pure = false
+        # must be proven pure to use const_api; otherwise we might skip throwing errors
+        # (issue #20704)
+        # TODO: Improve this analysis; if a function is marked @pure we should really
+        # only care about certain errors (e.g. method errors and type errors).
+        if length(me.src.code) < 10
+            proven_pure = true
             for stmt in me.src.code
                 if !statement_effect_free(stmt, me.src, me.mod)
-                    ispure = false
+                    proven_pure = false
                     break
                 end
             end
-            if ispure
+            if proven_pure
                 for fl in me.src.slotflags
                     if (fl & Slot_UsedUndef) != 0
-                        ispure = false
+                        proven_pure = false
                         break
                     end
                 end
             end
         end
-        me.src.pure = ispure
+        if proven_pure
+            me.src.pure = true
+        end
 
-        do_coverage = coverage_enabled()
-        if ispure && !do_coverage
+        if proven_pure && !coverage_enabled()
             # use constant calling convention
             # Do not emit `jlcall_api == 2` if coverage is enabled
             # so that we don't need to add coverage support
@@ -3079,7 +3082,7 @@ function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, unde
                 undefs[id] = true
             end
             #  add type annotations where needed
-            if !(sv.src.slottypes[id] <: vt)
+            if !(sv.src.slottypes[id] ⊑ vt)
                 e.args[i] = TypedSlot(id, vt)
             end
         end
@@ -3222,6 +3225,7 @@ end
 # we also need to preserve the type for any untyped load of a DataType
 # since codegen optimizations of functions like `is` will depend on knowing it
 function widen_slot_type(ty::ANY, untypedload::Bool)
+    ty = widenconst(ty)
     if isa(ty, DataType)
         if untypedload || isbits(ty) || isdefined(ty, :instance)
             return ty
@@ -3767,21 +3771,24 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
                                   atype_unlimited, method.sig)
         methsp = methsp::SimpleVector
     end
-    # check whether call can be inlined to just a quoted constant value
-    if isa(f, widenconst(ft)) && !method.isstaged && (method.source.pure || f === return_type)
-        if isconstType(e.typ)
-            return inline_as_constant(e.typ.parameters[1], argexprs, sv,
-                                      invoke_data)
-        elseif isa(e.typ,Const)
-            return inline_as_constant(e.typ.val, argexprs, sv,
-                                      invoke_data)
-        end
-    end
 
     methsig = method.sig
     if !(atype <: metharg)
         return invoke_NF(argexprs, e.typ, atypes, sv, atype_unlimited,
                          invoke_data)
+    end
+
+    # check whether call can be inlined to just a quoted constant value
+    if isa(f, widenconst(ft)) && !method.isstaged
+        if f === return_type
+            if isconstType(e.typ)
+                return inline_as_constant(e.typ.parameters[1], argexprs, sv, invoke_data)
+            elseif isa(e.typ,Const)
+                return inline_as_constant(e.typ.val, argexprs, sv, invoke_data)
+            end
+        elseif method.source.pure && isa(e.typ,Const) && e.typ.actual
+            return inline_as_constant(e.typ.val, argexprs, sv, invoke_data)
+        end
     end
 
     argexprs0 = argexprs

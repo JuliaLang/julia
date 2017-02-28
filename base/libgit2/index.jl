@@ -25,10 +25,10 @@ function write_tree!(idx::GitIndex)
 end
 
 function repository(idx::GitIndex)
-    if isnull(idx.nrepo)
+    if isnull(idx.owner)
         throw(GitError(Error.Index, Error.ENOTFOUND, "Index does not have an owning repository."))
     else
-        return Base.get(idx.nrepo)
+        return Base.get(idx.owner)
     end
 end
 

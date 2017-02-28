@@ -1366,7 +1366,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     }
     if (tag == 9) {
         jl_datatype_t *primarydt = (jl_datatype_t*)jl_deserialize_value(s, NULL);
-        jl_value_t *dtv = jl_typeof(jl_get_kwsorter(primarydt->name));
+        jl_value_t *dtv = jl_typeof(jl_get_kwsorter((jl_value_t*)primarydt));
         backref_list.items[pos] = dtv;
         return dtv;
     }

@@ -251,6 +251,7 @@ true
 
 julia> isleaftype(Vector{Complex{Float32}})
 true
+```
 """
 isleaftype(t::ANY) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
 

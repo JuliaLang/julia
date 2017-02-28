@@ -206,12 +206,18 @@ end
 @inline ^(x, p) = internal_pow(x, p)
 @inline internal_pow{p}(x, ::Type{Val{p}}) = x^p
 
+# Restrict inlining to hardware-supported arithmetic types, which
+# are fast enough to benefit from inlining.  This also makes it
+# easier to override ^ without having to override the Val method.
+const HWReal = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64,Float32,Float64}
+const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
+
 # inference.jl has complicated logic to inline x^2 and x^3 for
 # numeric types.  In terms of Val we can do it much more simply:
-@inline internal_pow(x::Number, ::Type{Val{0}}) = one(x)
-@inline internal_pow(x::Number, ::Type{Val{1}}) = x
-@inline internal_pow(x::Number, ::Type{Val{2}}) = x*x
-@inline internal_pow(x::Number, ::Type{Val{3}}) = x*x*x
+@inline internal_pow(x::HWNumber, ::Type{Val{0}}) = one(x)
+@inline internal_pow(x::HWNumber, ::Type{Val{1}}) = x
+@inline internal_pow(x::HWNumber, ::Type{Val{2}}) = x*x
+@inline internal_pow(x::HWNumber, ::Type{Val{3}}) = x*x*x
 
 # b^p mod m
 

@@ -235,7 +235,7 @@ function peel{T<:GitObject}(::Type{T}, obj::GitObject)
     @check ccall((:git_object_peel, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{Void}, Cint), new_ptr_ptr, obj.ptr, Consts.OBJECT(T))
 
-    return T(obj.repo, new_ptr_ptr[])
+    return T(obj.owner, new_ptr_ptr[])
 end
 peel(obj::GitObject) = peel(GitObject, obj)
 

@@ -992,7 +992,7 @@ count (`length(q) == A.n`). Row-permutation `p`'s length must match `A`'s row co
 (`length(p) == A.m`).
 
 `C`'s dimensions must match those of `transpose(A)` (`C.m == A.n` and `C.n == A.m`), and `C`
-must have enough storage to accommodate all allocated entries in `A` (`length(C.rowval)` >= nnz(A)`
+must have enough storage to accommodate all allocated entries in `A` (`length(C.rowval) >= nnz(A)`
 and `length(C.nzval) >= nnz(A)`).
 
 For additional (algorithmic) information, and for versions of these methods that forgo
@@ -1272,7 +1272,7 @@ julia> sprand(rng, Bool, 2, 2, 0.5)
 julia> sprand(rng, Float64, 3, 0.75)
 3-element SparseVector{Float64,Int64} with 1 stored entry:
   [3]  =  0.298614
-````
+```
 """
 function sprand{T}(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat,
                 rfn::Function, ::Type{T}=eltype(rfn(r,1)))

@@ -650,3 +650,16 @@ end
 struct TypeWith4Params{a,b,c,d}
 end
 @test endswith(string(TypeWith4Params{Int8,Int8,Int8,Int8}), "TypeWith4Params{Int8,Int8,Int8,Int8}")
+
+# issues #20332 and #20781
+struct T20332{T}
+end
+
+(::T20332{T})(x) where T = 0
+
+let m = which(T20332{Int}(), (Int,)),
+    mi = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
+               m, Tuple{T20332{T}, Int} where T, Core.svec(), typemax(UInt))
+    # test that this doesn't throw an error
+    @test contains(repr(mi), "MethodInstance for")
+end

@@ -46,6 +46,9 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: | $(BUILDDIR)/objconv/build-comp
 endif
 endif
 
+OPENBLAS_FFLAGS :=
+OPENBLAS_CFLAGS :=
+
 # Decide whether to build for 32-bit or 64-bit arch
 ifneq ($(BUILD_OS),$(OS))
 OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 HOSTCC=$(HOSTCC) CROSS_SUFFIX=$(CROSS_COMPILE)
@@ -53,11 +56,14 @@ endif
 ifeq ($(OS),WINNT)
 ifneq ($(ARCH),x86_64)
 ifneq ($(USECLANG),1)
-OPENBLAS_BUILD_OPTS += CFLAGS="$(CFLAGS) -mincoming-stack-boundary=2"
+OPENBLAS_CFLAGS += $(CFLAGS) -mincoming-stack-boundary=2
 endif
-OPENBLAS_BUILD_OPTS += FFLAGS="$(FFLAGS) -mincoming-stack-boundary=2"
+OPENBLAS_FFLAGS += $(FFLAGS) -mincoming-stack-boundary=2
 endif
 endif
+
+OPENBLAS_BUILD_OPTS += CFLAGS="$(OPENBLAS_CFLAGS)"
+OPENBLAS_BUILD_OPTS += FFLAGS="$(OPENBLAS_FFLAGS)"
 
 # Debug OpenBLAS
 ifeq ($(OPENBLAS_DEBUG), 1)
