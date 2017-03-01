@@ -20,7 +20,7 @@ for f in (:-, :~, :conj, :sign)
                 end
             else
                 for (iF, iA) in zip(RF, RA)
-                   F[iF] = ($f)(A[iA])
+                    F[iF] = ($f)(A[iA])
                 end
             end
             return F
