@@ -2824,19 +2824,20 @@ testmi(typemax(UInt32)-UInt32(1000):typemax(UInt32), map(UInt32, 1:100))
 @test_throws MethodError 3 // 4.5im
 
 # PR #16995
-let types = (Base.BitInteger_types..., BigInt, Bool,
+@testset "promotion of +, -, *, /, ^" begin
+    types = (Base.BitInteger_types..., BigInt, Bool,
              Rational{Int}, Rational{BigInt},
              Float16, Float32, Float64, BigFloat,
              Complex{Int}, Complex{UInt}, Complex32, Complex64, Complex128)
-    for S in types
-        for op in (+, -)
+    @testset for S in types
+        @testset for op in (+, -)
             T = @inferred Base.promote_op(op, S)
             t = @inferred op(one(S))
             @test T === typeof(t)
         end
 
-        for R in types
-            for op in (+, -, *, /, ^)
+        @testset for R in types
+            @testset for op in (+, -, *, /, ^)
                 T = @inferred Base.promote_op(op, S, R)
                 t = @inferred op(one(S), one(R))
                 @test T === typeof(t)

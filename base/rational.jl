@@ -14,12 +14,12 @@ Rational(n::T, d::T) where T<:Integer = Rational{T}(n,d)
 Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
 Rational(n::Integer) = Rational(n,one(n))
 
-function divgcd(x::Integer,y::Integer)
-    if x == zero(x) && y == zero(y)
+function divgcd(x::Integer, y::Integer)
+    if iszero(x) && iszero(y)
         promote(x, y)
     else
-        g = gcd(x,y)
-        div(x,g), div(y,g)
+        g = gcd(x, y)
+        promote(div(x, g), div(y, g))
     end
 end
 
