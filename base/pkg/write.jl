@@ -15,9 +15,7 @@ function fetch(repo::GitRepo, pkg::AbstractString, sha1::AbstractString)
     LibGit2.fetch(repo, remoteurl=cache, refspecs=["+refs/*:refs/remotes/cache/*"])
     LibGit2.need_update(repo)
     LibGit2.iscommit(sha1, repo) && return
-    f = with(GitRepo, cache) do repo
-         LibGit2.iscommit(sha1, repo)
-    end ? "fetch" : "prefetch"
+    f = LibGit2.iscommit(sha1, GitRepo(cache)) ? "fetch" : "prefetch"
     url = Read.issue_url(pkg)
     if isempty(url)
         throw(PkgError("$pkg: $f failed to get commit $(sha1[1:10]), please file a bug report with the package author."))
@@ -39,20 +37,15 @@ function install(pkg::AbstractString, sha1::AbstractString)
     else
         LibGit2.clone(Cache.path(pkg), pkg)
     end
-    try
-        fetch(repo, pkg, sha1)
-        checkout(repo, pkg, sha1)
-    finally
-        close(repo)
-    end
+    fetch(repo, pkg, sha1)
+    checkout(repo, pkg, sha1)
 end
 
 function update(pkg::AbstractString, sha1::AbstractString)
     prefetch(pkg, sha1)
-    with(GitRepo, pkg) do repo
-        fetch(repo, pkg, sha1)
-        checkout(repo, pkg, sha1)
-    end
+    repo = GitRepo(pkg)
+    fetch(repo, pkg, sha1)
+    checkout(repo, pkg, sha1)
 end
 
 function remove(pkg::AbstractString)

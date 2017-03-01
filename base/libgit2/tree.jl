@@ -21,13 +21,14 @@ repository(te::GitTreeEntry) = repository(te.owner)
 
 function filename(te::GitTreeEntry)
     str = ccall((:git_tree_entry_name, :libgit2), Cstring, (Ptr{Void},), te.ptr)
-    str != C_NULL && return unsafe_string(str)
-    return nothing
+    if str != C_NULL
+        return unsafe_string(str)
+    else
+        return nothing
+    end
 end
 
-function filemode(te::GitTreeEntry)
-    return ccall((:git_tree_entry_filemode, :libgit2), Cint, (Ptr{Void},), te.ptr)
-end
+filemode(te::GitTreeEntry) = ccall((:git_tree_entry_filemode, :libgit2), Cint, (Ptr{Void},), te.ptr)
 
 function entrytype(te::GitTreeEntry)
     otype = ccall((:git_tree_entry_type, :libgit2), Cint, (Ptr{Void},), te.ptr)

@@ -3,7 +3,7 @@
 module Dir
 
 import ..Pkg: DEFAULT_META, META_BRANCH, PkgError
-import ...LibGit2, ...LibGit2.with
+import ...LibGit2
 
 const DIR_NAME = ".julia"
 
@@ -46,9 +46,7 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
         temp_dir = mktempdir(dir)
         Base.cd(temp_dir) do
             info("Cloning METADATA from $meta")
-            with(LibGit2.clone(meta, "METADATA", branch = branch)) do metadata_repo
-                LibGit2.set_remote_url(metadata_repo, meta)
-            end
+            LibGit2.set_remote_url(LibGit2.clone(meta, "METADATA", branch = branch), meta)
             touch("REQUIRE")
             touch("META_BRANCH")
             write("META_BRANCH", branch)

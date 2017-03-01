@@ -26,7 +26,9 @@ end
 
 function repository(idx::GitIndex)
     if isnull(idx.owner)
-        throw(GitError(Error.Index, Error.ENOTFOUND, "Index does not have an owning repository."))
+        throw(GitError(Error.Index,
+                       Error.ENOTFOUND,
+                       "Index does not have an owning repository."))
     else
         return Base.get(idx.owner)
     end
@@ -51,55 +53,51 @@ function add!(idx::GitIndex, files::AbstractString...;
     @check ccall((:git_index_add_all, :libgit2), Cint,
                  (Ptr{Void}, Ptr{StrArrayStruct}, Cuint, Ptr{Void}, Ptr{Void}),
                  idx.ptr, collect(files), flags, C_NULL, C_NULL)
+    return idx
 end
 
 function update!(idx::GitIndex, files::AbstractString...)
     @check ccall((:git_index_update_all, :libgit2), Cint,
                  (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
                  idx.ptr, collect(files), C_NULL, C_NULL)
+    return idx
 end
 
 function remove!(idx::GitIndex, files::AbstractString...)
     @check ccall((:git_index_remove_all, :libgit2), Cint,
                  (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
                  idx.ptr, collect(files), C_NULL, C_NULL)
+    return idx
 end
 
 function add!(repo::GitRepo, files::AbstractString...;
               flags::Cuint = Consts.INDEX_ADD_DEFAULT)
-    with(GitIndex, repo) do idx
-        add!(idx, files..., flags = flags)
-        write!(idx)
-    end
-    return
+    idx = GitIndex(repo)
+    add!(idx, files..., flags = flags)
+    write!(idx)
+    return repo
 end
 
 function update!(repo::GitRepo, files::AbstractString...)
-    with(GitIndex, repo) do idx
-        update!(idx, files...)
-        write!(idx)
-    end
-    return
+    idx = GitIndex(repo)
+    update!(idx, files...)
+    write!(idx)
+    return repo
 end
 
 function remove!(repo::GitRepo, files::AbstractString...)
-    with(GitIndex, repo) do idx
-        remove!(idx, files...)
-        write!(idx)
-    end
-    return
+    idx = GitIndex(repo)
+    remove!(idx, files...)
+    write!(idx)
+    return repo
 end
 
 function read!(repo::GitRepo, force::Bool = false)
-    with(GitIndex, repo) do idx
-        read!(idx, force)
-    end
-    return
+    read!(GitIndex(repo), force)
+    return repo
 end
 
-function Base.count(idx::GitIndex)
-    return ccall((:git_index_entrycount, :libgit2), Csize_t, (Ptr{Void},), idx.ptr)
-end
+Base.count(idx::GitIndex) = ccall((:git_index_entrycount, :libgit2), Csize_t, (Ptr{Void},), idx.ptr)
 
 function Base.getindex(idx::GitIndex, i::Integer)
     ie_ptr = ccall((:git_index_get_byindex, :libgit2),

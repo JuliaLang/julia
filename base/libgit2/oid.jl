@@ -12,8 +12,9 @@ end
 function GitHash(id::Array{UInt8,1})
     if length(id) != OID_RAWSZ
         throw(ArgumentError("invalid raw buffer size"))
+    else
+        return GitHash(pointer(id))
     end
-    return GitHash(pointer(id))
 end
 
 function GitHash(id::AbstractString)
@@ -27,6 +28,7 @@ function GitHash(id::AbstractString)
               (Ptr{GitHash}, Ptr{UInt8}, Csize_t), oid_ptr, bstr, len)
     return oid_ptr[]
 end
+
 function GitShortHash(id::AbstractString)
     bstr = String(id)
     len = sizeof(bstr)
@@ -45,11 +47,15 @@ macro githash_str(id)
     end
 end
 function GitHash(ref::GitReference)
-    isempty(ref) && return GitHash()
-    reftype(ref) != Consts.REF_OID && return GitHash()
+    if isempty(ref) || reftype(ref) != Consts.REF_OID
+        return GitHash()
+    end
     oid_ptr = ccall((:git_reference_target, :libgit2), Ptr{UInt8}, (Ptr{Void},), ref.ptr)
-    oid_ptr == C_NULL && return GitHash()
-    return GitHash(oid_ptr)
+    if oid_ptr == C_NULL
+        return GitHash()
+    else
+        return GitHash(oid_ptr)
+    end
 end
 
 function GitHash(repo::GitRepo, ref_name::AbstractString)
@@ -96,11 +102,6 @@ Base.cmp(id1::GitShortHash, id2::GitHash) = cmp(id1, GitShortHash(id2, OID_HEXSZ
 ==(id1::GitHash, id2::GitHash) = cmp(id1, id2) == 0
 Base.isless(id1::AbstractGitHash, id2::AbstractGitHash)  = cmp(id1, id2) < 0
 
-function iszero(id::GitHash)
-    for i in 1:OID_RAWSZ
-        id.val[i] != zero(UInt8) && return false
-    end
-    return true
-end
+iszero(id::GitHash) = !any(id.val[i] != zero(UInt8) for i in 1:OID_RAWSZ)
 
 Base.zero(::Type{GitHash}) = GitHash()

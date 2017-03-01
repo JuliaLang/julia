@@ -35,10 +35,10 @@ function GitHash(ann::GitAnnotated)
 end
 
 function merge_analysis(repo::GitRepo, anns::Vector{GitAnnotated})
-    analysis = Ref{Cint}(0)
+    analysis   = Ref{Cint}(0)
     preference = Ref{Cint}(0)
-    anns_ref = Ref(map(a->a.ptr, anns))
-    anns_size = Csize_t(length(anns))
+    anns_ref   = Ref(map(a->a.ptr, anns))
+    anns_size  = Csize_t(length(anns))
     @check ccall((:git_merge_analysis, :libgit2), Cint,
                   (Ptr{Cint}, Ptr{Cint}, Ptr{Void}, Ptr{Ptr{Void}}, Csize_t),
                    analysis, preference, repo.ptr, anns_ref, anns_size)
@@ -48,17 +48,15 @@ end
 """Fastforward merge changes into current head """
 function ffmerge!(repo::GitRepo, ann::GitAnnotated)
     cmt = GitCommit(repo, GitHash(ann))
-
     checkout_tree(repo, cmt)
-    with(head(repo)) do head_ref
-        cmt_oid = GitHash(cmt)
-        msg = "libgit2.merge: fastforward $(string(cmt_oid)) into $(name(head_ref))"
-        new_head_ref = if reftype(head_ref) == Consts.REF_OID
-            target!(head_ref, cmt_oid, msg=msg)
-        else
-            GitReference(repo, cmt_oid, fullname(head_ref), msg=msg)
-        end
-        close(new_head_ref)
+    head_ref = head(repo)
+    cmt_oid  = GitHash(cmt)
+    msg      = "libgit2.merge: fastforward $(string(cmt_oid)) into $(name(head_ref))"
+    new_head_ref = nothing
+    if reftype(head_ref) == Consts.REF_OID
+        new_head_ref = target!(head_ref, cmt_oid, msg=msg)
+    else
+        new_head_ref = GitReference(repo, cmt_oid, fullname(head_ref), msg=msg)
     end
     return true
 end
@@ -77,6 +75,17 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated};
     return true
 end
 
+function ffmerge!(repo::GitRepo, anns::Vector{GitAnnotated})
+    merge_result = false
+    if length(anns) > 1
+        warn("Unable to perform Fast-Forward merge with mith multiple merge heads.")
+        merge_result = false
+    else
+        merge_result = ffmerge!(repo, anns[1])
+    end
+    return merge_result
+end
+
 """Internal implementation of merge.
 Returns `true` if merge was successful, otherwise `false`
 """
@@ -88,64 +97,49 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool;
         return true # no merge - everything is up to date
     end
 
-    ffpref = if fastforward
-        Consts.MERGE_PREFERENCE_FASTFORWARD_ONLY
+    ff_only = false
+    no_pref = false
+    no_ff   = false
+    if fastforward || isset(mp, Cint(Consts.MERGE_PREFERENCE_FASTFORWARD_ONLY))
+        ff_only = true
     elseif isset(mp, Cint(Consts.MERGE_PREFERENCE_NONE))
-        Consts.MERGE_PREFERENCE_NONE
+        no_pref = true
     elseif isset(mp, Cint(Consts.MERGE_PREFERENCE_NO_FASTFORWARD))
-        Consts.MERGE_PREFERENCE_NO_FASTFORWARD
-    elseif isset(mp, Cint(Consts.MERGE_PREFERENCE_FASTFORWARD_ONLY))
-        Consts.MERGE_PREFERENCE_FASTFORWARD_ONLY
+        no_ff  = true
     else
         throw(ArgumentError("unknown merge preference: $(mp)."))
     end
 
-    merge_result = if ffpref == Consts.MERGE_PREFERENCE_NONE
-        if isset(ma, Cint(Consts.MERGE_ANALYSIS_FASTFORWARD))
-            if length(anns) > 1
-                warn("Unable to perform Fast-Forward merge with mith multiple merge heads.")
-                false
-            else
-                ffmerge!(repo, anns[1])
-            end
-        elseif isset(ma, Cint(Consts.MERGE_ANALYSIS_NORMAL))
-            merge!(repo, anns,
-                   merge_opts=merge_opts,
-                   checkout_opts=checkout_opts)
-        end
-    elseif ffpref == Consts.MERGE_PREFERENCE_FASTFORWARD_ONLY
-        if isset(ma, Cint(Consts.MERGE_ANALYSIS_FASTFORWARD))
-            if length(anns) > 1
-                warn("Unable to perform Fast-Forward merge with mith multiple merge heads.")
-                false
-            else
-                ffmerge!(repo, anns[1])
-            end
-        else
-            warn("Cannot perform fast-forward merge.")
-            false
-        end
-    elseif ffpref == Consts.MERGE_PREFERENCE_NO_FASTFORWARD
-        if isset(ma, Cint(Consts.MERGE_ANALYSIS_NORMAL))
-            merge!(repo, anns,
-                   merge_opts=merge_opts,
-                   checkout_opts=checkout_opts)
-        end
+    merge_result = false
+    ma_fastfwd = isset(ma, Cint(Consts.MERGE_ANALYSIS_FASTFORWARD))
+    ma_normal  = isset(ma, Cint(Consts.MERGE_ANALYSIS_NORMAL))
+    if ma_fastfwd && (no_pref || ff_only)
+        merge_result = ffmerge!(repo, anns)
+        return merge_result
+    elseif ma_normal && (no_pref || no_ff)
+        merge_result = merge!(repo, anns,
+               merge_opts=merge_opts,
+               checkout_opts=checkout_opts)
+        return merge_result
+    elseif ff_only
+        warn("Cannot perform fast-forward merge.")
+        merge_result = false
+        return merge_result
     else
         throw(ArgumentError("unknown merge analysis result: $(ma)"))
     end
-    return merge_result
 end
 
 function merge_base(repo::GitRepo, one::AbstractString, two::AbstractString)
     oid1_ptr = Ref(GitHash(one))
     oid2_ptr = Ref(GitHash(two))
     moid_ptr = Ref(GitHash())
-    moid = try
+    moid     = GitHash()
+    try
         @check ccall((:git_merge_base, :libgit2), Cint,
                 (Ptr{GitHash}, Ptr{Void}, Ptr{GitHash}, Ptr{GitHash}),
                 moid_ptr, repo.ptr, oid1_ptr, oid2_ptr)
-        moid_ptr[]
+        moid = moid_ptr[]
     catch e
         #warn("Pkg:",path(repo),"=>",e.msg)
         GitHash()

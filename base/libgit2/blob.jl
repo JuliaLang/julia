@@ -1,8 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-function Base.length(blob::GitBlob)
-    return ccall((:git_blob_rawsize, :libgit2), Int64, (Ptr{Void},), blob.ptr)
-end
+Base.length(blob::GitBlob) = ccall((:git_blob_rawsize, :libgit2), Int64, (Ptr{Void},), blob.ptr)
 
 function rawcontent(blob::GitBlob)
     ptr = ccall((:git_blob_rawcontent, :libgit2), Ptr{UInt8}, (Ptr{Void},), blob.ptr)

@@ -56,18 +56,14 @@ function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
             throw(PkgError(errmsg))
         end
     end
-    try
-        LibGit2.set_remote_url(repo, normalized_url)
+    LibGit2.set_remote_url(repo, normalized_url)
+    in_cache = BitArray(map(sha1->LibGit2.iscommit(sha1, repo), sha1s))
+    if !all(in_cache)
+        info("Updating cache of $pkg...")
+        LibGit2.fetch(repo)
         in_cache = BitArray(map(sha1->LibGit2.iscommit(sha1, repo), sha1s))
-        if !all(in_cache)
-            info("Updating cache of $pkg...")
-            LibGit2.fetch(repo)
-            in_cache = BitArray(map(sha1->LibGit2.iscommit(sha1, repo), sha1s))
-        end
-        sha1s[.!in_cache]
-    finally
-        close(repo) # closing repo opened/created above
     end
+    sha1s[.!in_cache]
 end
 prefetch(pkg::AbstractString, url::AbstractString, sha1::AbstractString...) =
     prefetch(pkg, url, AbstractString[sha1...])
