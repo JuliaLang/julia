@@ -229,7 +229,7 @@ end
 Returns a `Token` of kind `kind` with contents `str` and starts a new `Token`.
 """
 function emit(l::Lexer, kind::Kind,
-              str::String=extract_tokenstring(l), err::TokenError=Tokens.NO_ERR)
+              str::String = extract_tokenstring(l), err::TokenError = Tokens.NO_ERR)
     tok = Token(kind, (l.token_start_row, l.token_start_col),
                 (l.current_row, l.current_col - 1),
                 startpos(l), position(l) - 1,
@@ -245,7 +245,7 @@ end
 
 Returns an `ERROR` token with error `err` and starts a new `Token`.
 """
-function emit_error(l::Lexer, err::TokenError=Tokens.UNKNOWN)
+function emit_error(l::Lexer, err::TokenError = Tokens.UNKNOWN)
     return emit(l, Tokens.ERROR, extract_tokenstring(l), err)
 end
 
@@ -317,7 +317,7 @@ function next_token(l::Lexer)
     elseif c == '`'; return lex_cmd(l);
     elseif isdigit(c); return lex_digit(l)
     elseif is_identifier_start_char(c); return lex_identifier(l, c)
-    elseif (k = get(UNICODE_OPS, c, Tokens.ERROR)) != Tokens.ERROR return emit(l, k)
+    elseif (k = get(UNICODE_OPS, c, Tokens.ERROR)) != Tokens.ERROR; return emit(l, k)
     else emit_error(l)
     end
 end
@@ -574,7 +574,7 @@ function lex_digit(l::Lexer)
     seek2startpos!(l)
 
     # 0x[0-9A-Fa-f]+
-    if accept(l, '0') 
+    if accept(l, '0')
         if accept(l, 'x')
             accept(l, "o")
             if accept_batch(l, ishex) && position(l) > longest
@@ -600,7 +600,7 @@ function lex_prime(l)
         l.last_token ==  Tokens.RSQUARE || l.last_token == Tokens.PRIME
         return emit(l, Tokens.PRIME)
     else
-        if peekchar(l)=='\''
+        if peekchar(l) == '\''
             return emit(l, Tokens.PRIME)
         end
         while true
@@ -729,18 +729,18 @@ end
 function tryread(l, str, k)
     for s in str
         c = readchar(l)
-        if c!=s
+        if c != s
             if !is_identifier_char(c)
                 backup!(l)
                 return emit(l, IDENTIFIER)
             end
             accept_batch(l, is_identifier_char)
-            return emit(l, IDENTIFIER) 
+            return emit(l, IDENTIFIER)
         end
     end
     if is_identifier_char(peekchar(l))
         accept_batch(l, is_identifier_char)
-        return emit(l, IDENTIFIER) 
+        return emit(l, IDENTIFIER)
     end
     return emit(l, k)
 end
