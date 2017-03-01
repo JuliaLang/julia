@@ -481,7 +481,7 @@ endif
 	rm -fr $(BUILDROOT)/julia-$(JULIA_COMMIT)
 
 # this target does not accept BUILDROOT
-light-source-dist.tmp: $(JULIAHOME)/doc/_build/html
+light-source-dist.tmp: $(BUILDROOT)/doc/_build/html/en/index.html
 	# Save git information
 	-@$(MAKE) -C $(JULIAHOME)/base version_git.jl.phony
 
