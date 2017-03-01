@@ -4505,6 +4505,37 @@ function is_known_call_p(e::Expr, pred::ANY, src::CodeInfo, mod::Module)
     return (isa(f, Const) && pred(f.val)) || (isType(f) && pred(f.parameters[1]))
 end
 
+function record_used(e::ANY, T::ANY, used::Vector{Bool})
+    if isa(e,T)
+        used[e.id+1] = true
+    elseif isa(e,Expr)
+        i0 = e.head === :(=) ? 2 : 1
+        for i = i0:length(e.args)
+            record_used(e.args[i], T, used)
+        end
+    end
+end
+
+function remove_unused_vars!(src::CodeInfo)
+    used = fill(false, length(src.slotnames)+1)
+    used_ssa = fill(false, length(src.ssavaluetypes)+1)
+    for i = 1:length(src.code)
+        record_used(src.code[i], Slot, used)
+        record_used(src.code[i], SSAValue, used_ssa)
+    end
+    for i = 1:length(src.code)
+        e = src.code[i]
+        if isa(e,NewvarNode) && !used[e.slot.id+1]
+            src.code[i] = nothing
+        elseif isa(e,Expr) && e.head === :(=)
+            if (isa(e.args[1],Slot) && !used[e.args[1].id+1]) ||
+                (isa(e.args[1],SSAValue) && !used_ssa[e.args[1].id+1])
+                src.code[i] = e.args[2]
+            end
+        end
+    end
+end
+
 function delete_var!(src::CodeInfo, id, T)
     filter!(x->!(isa(x,Expr) && (x.head === :(=) || x.head === :const) &&
                  isa(x.args[1],T) && x.args[1].id == id),
@@ -5038,6 +5069,7 @@ function alloc_elim_pass!(sv::InferenceState)
     vs, gs = find_sa_vars(sv.src, sv.nargs)
     remove_redundant_temp_vars(sv.src, sv.nargs, vs, Slot)
     remove_redundant_temp_vars(sv.src, sv.nargs, gs, SSAValue)
+    remove_unused_vars!(sv.src)
     i = 1
     while i < length(body)
         e = body[i]
