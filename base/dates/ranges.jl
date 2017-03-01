@@ -25,7 +25,7 @@ function len(a, b, c)
     end
     return i - 1
 end
-Base.length(r::StepRange{<:TimeType}) = isempty(r) ? 0 : len(r.start, r.stop, r.step) + 1
+Base.length(r::StepRange{<:TimeType}) = isempty(r) ? Int64(0) : len(r.start, r.stop, r.step) + 1
 # Period ranges hook into Int64 overflow detection
 Base.length(r::StepRange{<:Period}) = length(StepRange(value(r.start), value(r.step), value(r.stop)))
 
