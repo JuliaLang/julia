@@ -2114,7 +2114,7 @@ issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)
 # in a dead branch but can be ignored when analyzing uses/liveness.
 is_meta_expr_head(head::Symbol) =
     (head === :inbounds || head === :boundscheck || head === :meta ||
-     head === :line)
+     head === :line || head === :simdloop)
 is_meta_expr(ex::Expr) = is_meta_expr_head(ex.head)
 
 function tmerge(typea::ANY, typeb::ANY)
@@ -3359,7 +3359,8 @@ function is_pure_builtin(f::ANY)
              f === Intrinsics.checked_srem_int ||
              f === Intrinsics.checked_urem_int ||
              f === Intrinsics.check_top_bit ||
-             f === Intrinsics.sqrt_llvm)
+             f === Intrinsics.sqrt_llvm ||
+             f === Intrinsics.cglobal)  # cglobal throws an error for symbol-not-found
             return true
         end
     end
@@ -3390,11 +3391,16 @@ function effect_free(e::ANY, src::CodeInfo, mod::Module, allow_volatile::Bool)
         return (isdefined(e.mod, e.name) && (allow_volatile || isconst(e.mod, e.name)))
     elseif isa(e, Symbol)
         return allow_volatile
+    elseif isa(e, Slot)
+        return src.slotflags[slot_id(e)] & Slot_UsedUndef == 0
     elseif isa(e, Expr)
         e = e::Expr
         head = e.head
         if head === :static_parameter || is_meta_expr_head(head)
             return true
+        end
+        if e.typ === Bottom
+            return false
         end
         ea = e.args
         if head === :call
@@ -4646,7 +4652,13 @@ function void_use_elim_pass!(sv::InferenceState)
         elseif isa(ex, GlobalRef)
             ex = ex::GlobalRef
             return !isdefined(ex.mod, ex.name)
-        elseif (isa(ex, Expr) || isa(ex, GotoNode) || isa(ex, LineNumberNode) ||
+        elseif isa(ex, Expr)
+            h = ex.head
+            if h === :return || h === :(=) || h === :gotoifnot || is_meta_expr_head(h)
+                return true
+            end
+            return !effect_free(ex, sv.src, sv.mod, false)
+        elseif (isa(ex, GotoNode) || isa(ex, LineNumberNode) ||
                 isa(ex, NewvarNode) || isa(ex, Symbol) || isa(ex, LabelNode))
             # This is a list of special type handled by the compiler
             return true
