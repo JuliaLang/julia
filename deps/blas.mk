@@ -86,7 +86,12 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-freebsd.patch-applied: $(BUILDDIR)/$(OP
 	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && patch -p0 -f < $(SRCDIR)/patches/openblas-freebsd.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-freebsd.patch-applied
+# Clang assembler bug workaround from https://github.com/xianyi/OpenBLAS/pull/982
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-clangasmbug.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-freebsd.patch-applied
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/openblas-clangasmbug.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-clangasmbug.patch-applied
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $(dir $<)/Makefile.system
 	echo 1 > $@
 
