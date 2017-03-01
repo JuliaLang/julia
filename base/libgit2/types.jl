@@ -482,13 +482,13 @@ abstract type GitObject <: AbstractGitObject end
 
 for (typ, owntyp, sup, cname) in [
     (:GitRepo,          nothing,               :AbstractGitObject, :git_repository),
-    (:GitDiffStats,     nothing,               :AbstractGitObject, :git_diff_stats),
     (:GitConfig,        :(Nullable{GitRepo}),  :AbstractGitObject, :git_config),
     (:GitIndex,         :(Nullable{GitRepo}),  :AbstractGitObject, :git_index),
     (:GitRemote,        :GitRepo,              :AbstractGitObject, :git_remote),
     (:GitRevWalker,     :GitRepo,              :AbstractGitObject, :git_revwalk),
     (:GitReference,     :GitRepo,              :AbstractGitObject, :git_reference),
     (:GitDiff,          :GitRepo,              :AbstractGitObject, :git_diff),
+    (:GitDiffStats,     :GitRepo,              :AbstractGitObject, :git_diff_stats),
     (:GitAnnotated,     :GitRepo,              :AbstractGitObject, :git_annotated_commit),
     (:GitRebase,        :GitRepo,              :AbstractGitObject, :git_rebase),
     (:GitStatus,        :GitRepo,              :AbstractGitObject, :git_status_list),
