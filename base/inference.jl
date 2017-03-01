@@ -4536,62 +4536,90 @@ function remove_unused_vars!(src::CodeInfo)
     end
 end
 
-function delete_var!(src::CodeInfo, id, T)
+var_matches(a::ANY,      b::ANY)      = false
+var_matches(a::SSAValue, b::SSAValue) = a.id == b.id
+var_matches(a::Slot,     b::Slot)     = a.id == b.id
+
+function delete_var!(src::CodeInfo, v::Union{Slot,SSAValue})
     filter!(x->!(isa(x,Expr) && (x.head === :(=) || x.head === :const) &&
-                 isa(x.args[1],T) && x.args[1].id == id),
+                 var_matches(x.args[1], v)),
             src.code)
     return src
 end
 
-function slot_replace!(src::CodeInfo, id::Int, rhs::ANY, T::ANY)
+function slot_replace!(src::CodeInfo, v::Union{Slot,SSAValue}, rhs::ANY)
     for i = 1:length(src.code)
-        src.code[i] = _slot_replace!(src.code[i], id, rhs, T)
+        src.code[i] = _slot_replace!(src.code[i], v, rhs)
     end
     return src
 end
 
-function _slot_replace!(e, id::Int, rhs::ANY, T::ANY)
-    if isa(e,T) && e.id == id
+function _slot_replace!(e::ANY, v::Union{Slot,SSAValue}, rhs::ANY)
+    if var_matches(e, v)
         return rhs
     end
     if isa(e,Expr)
         for i = 1:length(e.args)
-            e.args[i] = _slot_replace!(e.args[i], id, rhs, T)
+            e.args[i] = _slot_replace!(e.args[i], v, rhs)
         end
     end
     return e
 end
 
-occurs_undef(var::Int, expr, flags) =
-    flags[var] & Slot_UsedUndef != 0 && occurs_more(expr, e -> (isa(e, Slot) && slot_id(e) == var), 0) > 0
-
 is_argument(nargs::Int, v::Slot) = slot_id(v) <= nargs
+
+normslot(s::SlotNumber) = s
+normslot(s::TypedSlot) = SlotNumber(slot_id(s))
+
+# given a single-assigned var and its initializer `init`, return what we can
+# replace `var` with, or `var` itself if we shouldn't replace it
+function get_replacement(table, var::Union{SlotNumber, SSAValue}, init::ANY, nargs, slottypes, ssavaluetypes)
+    #if isa(init, QuoteNode)  # this can cause slight code size increases
+    #    return init
+    if isa(init, Expr) && init.head === :static_parameter
+        return init
+    elseif isa(init, Slot) && is_argument(nargs, init::Slot)
+        # the transformation is not ideal if the assignment
+        # is present for the auto-unbox functionality
+        # (from inlining improved type inference information)
+        # and this transformation would worsen the type information
+        # everywhere later in the function
+        ityp = isa(init, TypedSlot) ? init.typ : slottypes[(init::SlotNumber).id]
+        if ityp ⊑ (isa(var,SSAValue) ? ssavaluetypes[var.id + 1] : slottypes[var.id])
+            return init
+        end
+    elseif isa(init, SSAValue)
+        if haskey(table, init)
+            return get_replacement(table, init, table[init], nargs, slottypes, ssavaluetypes)
+        end
+        return init
+    elseif isa(init, SlotNumber) && haskey(table, init)
+        return get_replacement(table, init, table[init], nargs, slottypes, ssavaluetypes)
+    elseif isa(init, TypedSlot)
+        sl = normslot(init)
+        if haskey(table, sl)
+            rep = get_replacement(table, sl, table[sl], nargs, slottypes, ssavaluetypes)
+            if isa(rep, SlotNumber)
+                rep = TypedSlot(rep.id, init.typ)
+            end
+            return rep
+        end
+    end
+    return var
+end
 
 # remove all single-assigned vars v in "v = x" where x is an argument.
 # "sa" is the result of find_sa_vars
-# T: Slot or SSAValue
-function remove_redundant_temp_vars(src::CodeInfo, nargs::Int, sa, T)
+function remove_redundant_temp_vars!(src::CodeInfo, nargs::Int, sa)
     flags = src.slotflags
-    ssavalue_types = src.ssavaluetypes
-    bexpr = Expr(:block)
-    bexpr.args = src.code
+    slottypes = src.slottypes
+    ssavaluetypes = src.ssavaluetypes
     for (v, init) in sa
-        if isa(init, Slot) && is_argument(nargs, init::Slot)
-            # this transformation is not valid for vars used before def.
-            # we need to preserve the point of assignment to know where to
-            # throw errors (issue #4645).
-            if T === SSAValue || !occurs_undef(v, bexpr, flags)
-                # the transformation is not ideal if the assignment
-                # is present for the auto-unbox functionality
-                # (from inlining improved type inference information)
-                # and this transformation would worsen the type information
-                # everywhere later in the function
-                ityp = isa(init, TypedSlot) ? init.typ : src.slottypes[(init::SlotNumber).id]
-                if ityp ⊑ (T === SSAValue ? ssavalue_types[v + 1] : src.slottypes[v])
-                    delete_var!(src, v, T)
-                    slot_replace!(src, v, init, T)
-                end
-            end
+        repl = get_replacement(sa, v, init, nargs, slottypes, ssavaluetypes)
+        compare = isa(repl,TypedSlot) ? normslot(repl) : repl
+        if compare !== v
+            delete_var!(src, v)
+            slot_replace!(src, v, repl)
         end
     end
     return src
@@ -4602,27 +4630,31 @@ function find_sa_vars(src::CodeInfo, nargs::Int)
     body = src.code
     av = ObjectIdDict()
     av2 = ObjectIdDict()
-    gss = ObjectIdDict()
     for i = 1:length(body)
         e = body[i]
         if isa(e,Expr) && e.head === :(=)
             lhs = e.args[1]
             if isa(lhs, SSAValue)
-                gss[lhs.id] = e.args[2]
+                av[lhs] = e.args[2]
             elseif isa(lhs, Slot)
-                id = slot_id(lhs)
-                if id > nargs  # exclude args
-                    if !haskey(av, id)
-                        av[id] = e.args[2]
+                lhs = normslot(lhs)
+                id = lhs.id
+                # exclude args and used undef vars
+                # this transformation is not valid for vars used before def.
+                # we need to preserve the point of assignment to know where to
+                # throw errors (issue #4645).
+                if id > nargs && (src.slotflags[id] & Slot_UsedUndef == 0)
+                    if !haskey(av, lhs)
+                        av[lhs] = e.args[2]
                     else
-                        av2[id] = true
+                        av2[lhs] = true
                     end
                 end
             end
         end
     end
-    filter!((id, _) -> !haskey(av2, id), av)
-    return (av, gss)
+    filter!((v, _) -> !haskey(av2, v), av)
+    return av
 end
 
 symequal(x::SSAValue, y::SSAValue) = x.id === y.id
@@ -5066,9 +5098,8 @@ function alloc_elim_pass!(sv::InferenceState)
     body = sv.src.code
     bexpr = Expr(:block)
     bexpr.args = body
-    vs, gs = find_sa_vars(sv.src, sv.nargs)
-    remove_redundant_temp_vars(sv.src, sv.nargs, vs, Slot)
-    remove_redundant_temp_vars(sv.src, sv.nargs, gs, SSAValue)
+    vs = find_sa_vars(sv.src, sv.nargs)
+    remove_redundant_temp_vars!(sv.src, sv.nargs, vs)
     remove_unused_vars!(sv.src)
     i = 1
     while i < length(body)
@@ -5079,7 +5110,7 @@ function alloc_elim_pass!(sv::InferenceState)
         end
         e = e::Expr
         if e.head === :(=) && (isa(e.args[1], SSAValue) ||
-                               (isa(e.args[1], Slot) && haskey(vs, slot_id(e.args[1]))))
+                               (isa(e.args[1], Slot) && haskey(vs, normslot(e.args[1]))))
             var = e.args[1]
             rhs = e.args[2]
             # Need to make sure LLVM can recognize this as LLVM ssa value too
