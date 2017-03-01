@@ -136,7 +136,7 @@ Returns only the *names* of the files which have changed, *not* their contents.
 Equivalent to `git diff --name-only --diff-filter=<filter> <branch1> <branch2>`.
 """
 function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractString;
-                    filter::Set{Cint}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED]))
+                    filter::Set{Consts.DELTA_STATUS}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED]))
     b1_id = revparseid(repo, branch1*"^{tree}")
     b2_id = revparseid(repo, branch2*"^{tree}")
     tree1 = GitTree(repo, b1_id)
@@ -147,7 +147,7 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
         for i in 1:count(diff)
             delta = diff[i]
             delta === nothing && break
-            if delta.status in filter
+            if Consts.DELTA_STATUS(delta.status) in filter
                 push!(files, unsafe_string(delta.new_file.path))
             end
         end
