@@ -144,8 +144,8 @@ function authenticate_userpass(creds::UserPasswordCredentials, libgit2credptr::P
     isusedcreds = checkused!(creds)
 
     if creds.prompt_if_incorrect
-        username = creds.user
-        userpass = creds.pass
+        username = Base.get(ENV, "AUTH_USER", creds.user)
+        userpass = Base.get(ENV, "AUTH_PASS", creds.pass)
         (username === nothing) && (username = "")
         (userpass === nothing) && (userpass = "")
         if is_windows()
@@ -156,7 +156,7 @@ function authenticate_userpass(creds::UserPasswordCredentials, libgit2credptr::P
                 isnull(res) && return Cint(Error.EAUTH)
                 username, userpass = Base.get(res)
             end
-        elseif isusedcreds
+        elseif isempty(username) || isempty(userpass) || isusedcreds
             username = prompt("Username for '$schema$host'", default = isempty(username) ?
                 urlusername : username)
             userpass = prompt("Password for '$schema$username@$host'", password=true)
@@ -229,7 +229,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
     end
 
     if isset(allowed_types, Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT))
-        defaultcreds = reset!(UserPasswordCredentials(true), -1)
+        defaultcreds = reset!(UserPasswordCredentials(true), 1)
         credid = "$schema$host"
         upcreds = get_creds!(creds, credid, defaultcreds)
         # If there were stored SSH credentials, but we ended up here that must
