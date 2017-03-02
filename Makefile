@@ -480,8 +480,10 @@ else
 endif
 	rm -fr $(BUILDROOT)/julia-$(JULIA_COMMIT)
 
-# this target does not accept BUILDROOT
 light-source-dist.tmp: $(BUILDROOT)/doc/_build/html/en/index.html
+ifneq ($(BUILDROOT),$(JULIAHOME))
+	$(error make light-source-dist does not work in out-of-tree builds)
+endif
 	# Save git information
 	-@$(MAKE) -C $(JULIAHOME)/base version_git.jl.phony
 
@@ -491,7 +493,6 @@ light-source-dist.tmp: $(BUILDROOT)/doc/_build/html/en/index.html
 	find doc/_build/html >> light-source-dist.tmp
 
 # Make tarball with only Julia code
-# this target does not accept BUILDROOT
 light-source-dist: light-source-dist.tmp
 	# Prefix everything with the current directory name (usually "julia"), then create tarball
 	DIRNAME=$$(basename $$(pwd)); \
@@ -502,7 +503,6 @@ source-dist:
 	@echo \'source-dist\' target is deprecated: use \'full-source-dist\' instead.
 
 # Make tarball with Julia code plus all dependencies
-# this target does not accept BUILDROOT
 full-source-dist: light-source-dist.tmp
 	# Get all the dependencies downloaded
 	@$(MAKE) -C deps getall NO_GIT=1
