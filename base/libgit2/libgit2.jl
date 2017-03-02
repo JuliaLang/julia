@@ -128,7 +128,7 @@ Show which files have changed in the git repository `repo` between branches `bra
 and `branch2`.
 
 The keyword argument is:
-  * `filter::Set{Cint}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED]))`,
+  * `filter::Set{Consts.DELTA_STATUS}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED]))`,
     and it sets options for the diff. The default is to show files added, modified, or deleted.
 
 Returns only the *names* of the files which have changed, *not* their contents.
