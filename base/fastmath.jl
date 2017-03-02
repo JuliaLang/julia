@@ -42,7 +42,6 @@ const fast_op =
          :cmp => :cmp_fast,
          :conj => :conj_fast,
          :inv => :inv_fast,
-         :mod => :mod_fast,
          :rem => :rem_fast,
          :sign => :sign_fast,
          :isfinite => :isfinite_fast,
@@ -148,10 +147,6 @@ mul_fast{T<:FloatTypes}(x::T, y::T, zs::T...) =
 
 @fastmath begin
     cmp_fast{T<:FloatTypes}(x::T, y::T) = ifelse(x==y, 0, ifelse(x<y, -1, +1))
-    function mod_fast{T<:FloatTypes}(x::T, y::T)
-        r = rem(x,y)
-        ifelse((r > 0) ⊻ (y > 0), r+y, r)
-    end
 end
 
 eq_fast{T<:FloatTypes}(x::T, y::T) = eq_float_fast(x, y)
@@ -225,7 +220,7 @@ for op in (:abs, :abs2, :conj, :inv, :sign)
     end
 end
 
-for op in (:+, :-, :*, :/, :(==), :!=, :<, :<=, :cmp, :mod, :rem)
+for op in (:+, :-, :*, :/, :(==), :!=, :<, :<=, :cmp, :rem)
     op_fast = fast_op[op]
     @eval begin
         # fall-back implementation for non-numeric types
