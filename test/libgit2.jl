@@ -716,7 +716,10 @@ mktempdir() do dir
             LibGit2.with(LibGit2.GitIndex(repo)) do idx
                 i = find(test_file, idx)
                 @test !isnull(i)
-                @test idx[get(i)] !== nothing
+                idx_entry = idx[get(i)]
+                @test idx_entry !== nothing
+                idx_entry_str = sprint(show, idx_entry)
+                @test idx_entry_str == "IndexEntry($(string(idx_entry.id)))"
 
                 i = find("zzz", idx)
                 @test isnull(i)
