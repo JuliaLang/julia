@@ -1,19 +1,31 @@
-@test mktemp() do _, file
-    skipchars(file, isspace)
-    true
-end
-
-@test eof(skipchars(IOBuffer("    "), isspace))
-@test eof(skipchars(IOBuffer("#    \n   "), isspace, linecomment='#'))
-
-macro test_skipchars(str, expected_char, lnc=Char(0xffffffff))
-    quote
-        io = skipchars(IOBuffer($str), isspace, linecomment=$lnc)
-        @test !eof(io) && read(io, Char) == $expected_char
+# Test skipchars for IOStreams
+mktemp() do path, file
+    function append_to_file(str)
+        mark(file)
+        println(file, str)
+        flush(file)
+        reset(file)
     end
-end
 
-@test_skipchars("abc", 'a')
-@test_skipchars("   bac", 'b')
-@test_skipchars("  #cm \n   cab", 'c', '#')
+    # test it doesn't error on eof
+    @test skipchars(file, isspace) == file
+
+    # test it does it correctly skips
+    append_to_file("    ")
+    @test eof(skipchars(file, isspace))
+
+    # test it correctly detects comment lines
+    append_to_file("#    \n   ")
+    @test eof(skipchars(file, isspace, linecomment='#'))
+    
+    # test it stops at the appropriate time
+    append_to_file("   not a space")
+    @test skipchars(file, isspace) == file
+    @test !eof(file) && read(file, Char) == 'n'
+
+    # test it correctly ignores the contents of comment lines
+    append_to_file("  #not a space \n   not a space")
+    @test skipchars(file, isspace, linecomment='#') == file
+    @test !eof(file) && read(file, Char) == 'n'  
+end
 
