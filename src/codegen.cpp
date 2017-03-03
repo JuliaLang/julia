@@ -33,6 +33,7 @@
 #include <cstdio>
 #include <cassert>
 #include <iostream>
+#include <functional>
 
 // target machine computation
 #include <llvm/Target/TargetSubtargetInfo.h>
@@ -1212,11 +1213,11 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
             bool toplevel = li->def == NULL;
             if (!toplevel) {
                 const DataLayout &DL =
-    #if JL_LLVM_VERSION >= 30500
+#if JL_LLVM_VERSION >= 30500
                     m->getDataLayout();
-    #else
+#else
                     *jl_data_layout;
-    #endif
+#endif
                 // but don't remember toplevel thunks because
                 // they may not be rooted in the gc for the life of the program,
                 // and the runtime doesn't notify us when the code becomes unreachable :(
