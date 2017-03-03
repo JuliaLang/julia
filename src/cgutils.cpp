@@ -528,7 +528,7 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
                     jst->struct_decl = StructType::get(jl_LLVMContext, ArrayRef<Type*>(&latypes[0], ntypes));
                 }
             }
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
             // If LLVM and Julia disagree about alignment, much trouble ensues, so check it!
             if (jst->layout) {
                 const DataLayout &DL =
@@ -2001,7 +2001,7 @@ static void emit_unionmove(Value *dest, const jl_cgval_t &src, Value *skip, bool
             else
                 copy_bytes = builder.CreateSelect(skip, ConstantInt::get(copy_bytes->getType(), 0), copy_bytes);
         }
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
         // try to catch codegen errors early, before it uses this to memcpy over the entire stack
         CreateConditionalAbort(builder, builder.CreateICmpEQ(copy_bytes, ConstantInt::get(T_int32, -1)));
 #endif
