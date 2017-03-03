@@ -725,6 +725,13 @@ mktempdir() do dir
                 @test isnull(i)
                 idx_str = sprint(show, idx)
                 @test idx_str == "GitIndex:\nRepository: $(LibGit2.repository(idx))\nNumber of elements: 1\n"
+
+                LibGit2.remove!(repo, test_file)
+                LibGit2.read!(repo)
+                @test count(idx) == 0
+                LibGit2.add!(repo, test_file)
+                LibGit2.update!(repo, test_file)
+                @test count(idx) == 1
             end
 
             # check non-existent file status
