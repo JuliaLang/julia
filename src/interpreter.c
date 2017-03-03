@@ -191,14 +191,14 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
     jl_code_info_t *src = s==NULL ? NULL : s->src;
     if (jl_is_ssavalue(e)) {
         ssize_t id = ((jl_ssavalue_t*)e)->id;
-        if (id >= jl_source_nssavalues(src) || id < 0 || s->locals == NULL)
+        if (src == NULL || id >= jl_source_nssavalues(src) || id < 0 || s->locals == NULL)
             jl_error("access to invalid SSAValue");
         else
             return s->locals[jl_source_nslots(src) + id];
     }
     if (jl_is_slot(e)) {
         ssize_t n = jl_slot_number(e);
-        if (n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
+        if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
             jl_error("access to invalid slot number");
         jl_value_t *v = s->locals[n-1];
         if (v == NULL)
