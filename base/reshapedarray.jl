@@ -115,18 +115,19 @@ _throw_reshape_colon_dimmismatch(A, pre, post) =
 
 reshape{T,N}(parent::AbstractArray{T,N}, ndims::Type{Val{N}}) = parent
 function reshape{N}(parent::AbstractArray, ndims::Type{Val{N}})
-    reshape(parent, rdims((), indices(parent), Val{N}))
+    reshape(parent, rdims((), indices(parent), Val{N}()))
 end
 # Move elements from inds to out until out reaches the desired
 # dimensionality N, either filling with OneTo(1) or collapsing the
 # product of trailing dims into the last element
-@pure rdims{N}(out::NTuple{N,Any}, inds::Tuple{}, ::Type{Val{N}}) = out
-@pure function rdims{N}(out::NTuple{N,Any}, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}})
+@pure rdims{N}(out::NTuple{N,Any}, inds::Tuple{}, ::Val{N}) = out
+@pure function rdims{N}(out::NTuple{N,Any}, inds::Tuple{Any, Vararg{Any}}, ::Val{N})
     l = length(last(out)) * prod(map(length, inds))
     (front(out)..., OneTo(l))
 end
-@pure rdims{N}(out::Tuple, inds::Tuple{}, ::Type{Val{N}}) = rdims((out..., OneTo(1)), (), Val{N})
-@pure rdims{N}(out::Tuple, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}}) = rdims((out..., first(inds)), tail(inds), Val{N})
+@pure rdims{N}(out::Tuple, inds::Tuple{}, ::Val{N}) = rdims((out..., OneTo(1)), (), Val{N}())
+@pure rdims{N}(out::Tuple, inds::Tuple{Any, Vararg{Any}}, ::Val{N}) = rdims((out..., first(inds)), tail(inds), Val{N}())
+@pure rdims{N}(out::Tuple{}, inds::Tuple{Vararg{OneTo}}, ::Val{N}) = rdims((out..., first(inds)), tail(inds), Val{N}())::NTuple{N,OneTo}
 
 # _reshape on Array returns an Array
 _reshape(parent::Vector, dims::Dims{1}) = parent
