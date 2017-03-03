@@ -316,9 +316,13 @@ JULIACODEGEN := LLVM
 
 # flag for disabling assertions
 ifeq ($(FORCE_ASSERTIONS), 1)
+# C++ code needs to include LLVM header with the same assertion flag as LLVM
+# Use this flag to re-enable assertion in our code after all the LLVM headers are included
+CXX_DISABLE_ASSERTION :=
 DISABLE_ASSERTIONS :=
 else
-DISABLE_ASSERTIONS := -DNDEBUG
+CXX_DISABLE_ASSERTION := -DJL_NDEBUG
+DISABLE_ASSERTIONS := -DNDEBUG -DJL_NDEBUG
 endif
 
 # Compiler specific stuff

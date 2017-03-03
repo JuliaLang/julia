@@ -103,6 +103,7 @@
 #include <polly/RegisterPasses.h>
 #include <polly/ScopDetection.h>
 #endif
+#include "fix_llvm_assert.h"
 
 using namespace llvm;
 namespace llvm {
@@ -827,7 +828,7 @@ static void CreateTrap(IRBuilder<> &builder)
     builder.SetInsertPoint(newBB);
 }
 
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
 static void CreateConditionalAbort(IRBuilder<> &builder, Value *test)
 {
     Function *f = builder.GetInsertBlock()->getParent();
@@ -5714,7 +5715,7 @@ static std::unique_ptr<Module> emit_function(
         cur_prop.is_poploc = false;
         jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
         jl_expr_t *expr = jl_is_expr(stmt) ? (jl_expr_t*)stmt : nullptr;
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
         if (jl_is_labelnode(stmt)) {
             size_t lname = jl_labelnode_label(stmt);
             if (lname != i + 1) {

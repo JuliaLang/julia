@@ -34,10 +34,7 @@
 #if JL_LLVM_VERSION >= 30700
 #  include <llvm/Object/ELFObjectFile.h>
 #endif
-
-#if defined(USE_MCJIT) && JL_LLVM_VERSION < 30600 && defined(_OS_DARWIN_)
-#include "../deps/llvm-3.5.0/lib/ExecutionEngine/MCJIT/MCJIT.h"
-#endif
+#include "fix_llvm_assert.h"
 
 using namespace llvm;
 
@@ -1040,6 +1037,7 @@ template<typename T>
 static inline void ignoreError(T &err)
 {
 #if JL_LLVM_VERSION >= 30900 && !defined(NDEBUG)
+    // Needed only with LLVM assertion build
     consumeError(err.takeError());
 #endif
 }
