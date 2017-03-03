@@ -64,6 +64,15 @@ end
 function GitHash(obj::GitObject)
     GitHash(ccall((:git_object_id, :libgit2), Ptr{UInt8}, (Ptr{Void},), obj.ptr))
 end
+function GitShortHash(obj::GitObject)
+    buf_ref = Ref(Buffer())
+    @check ccall((:git_object_short_id, :libgit2), Cint,
+                 (Ptr{Buffer},Ptr{Void}), buf_ref, obj.ptr)
+    buf = buf_ref[]
+    sid = GitShortHash(unsafe_string(buf.ptr, buf.size))
+    free(buf_ref)
+    return sid
+end
 
 Base.hex(id::GitHash) = join([hex(i,2) for i in id.val])
 Base.hex(id::GitShortHash) = hex(id.hash)[1:id.len]
