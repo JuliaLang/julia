@@ -227,6 +227,16 @@ function peel(::Type{T}, obj::GitObject) where T<:GitObject
 end
 peel(obj::GitObject) = peel(GitObject, obj)
 
+"""
+    LibGit2.GitDescribeResult(commitish::GitObject; kwarg...)
+
+Produce a `GitDescribeResult` of the `commitish` `GitObject`, which
+contains detailed information about it based on the keyword argument:
+
+  * `options::DescribeOptions=DescribeOptions()`
+
+Equivalent to `git-describe <commitish>`.
+"""
 function GitDescribeResult(commitish::GitObject;
                            options::DescribeOptions=DescribeOptions())
     result_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -236,6 +246,18 @@ function GitDescribeResult(commitish::GitObject;
     return GitDescribeResult(commitish.owner, result_ptr_ptr[])
 end
 
+"""
+    LibGit2.GitDescribeResult(repo::GitRepo; kwarg...)
+
+Produce a `GitDescribeResult` of the repository `repo`'s working directory,
+which can include all the commits and tags (or, for instance, HEAD only).
+The `GitDescribeResult` contains detailed information about the workdir based
+on the keyword argument:
+
+  * `options::DescribeOptions=DescribeOptions()`
+
+Equivalent to `git-describe`.
+"""
 function GitDescribeResult(repo::GitRepo; options::DescribeOptions=DescribeOptions())
     result_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_describe_workdir, :libgit2), Cint,
@@ -244,6 +266,14 @@ function GitDescribeResult(repo::GitRepo; options::DescribeOptions=DescribeOptio
     return GitDescribeResult(repo, result_ptr_ptr[])
 end
 
+"""
+    LibGit2.format(result::GitDescribeResult; kwarg...) -> String
+
+Produce a formatted string based on a `GitDescribeResult`.
+Formatting options are controlled by the keyword argument:
+
+  * `options::DescribeFormatOptions=DescribeFormatOptions()`
+"""
 function format(result::GitDescribeResult; options::DescribeFormatOptions=DescribeFormatOptions())
     buf_ref = Ref(Buffer())
     @check ccall((:git_describe_format, :libgit2), Cint,
