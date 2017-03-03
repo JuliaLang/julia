@@ -200,3 +200,58 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
     @label error
     throw(ArgumentError("Invalid DateTime string"))
 end
+
+@generated function tryparse_internal{S, F}(::Type{Array{Period}}, str::AbstractString, df::DateFormat{S, F}, raise::Bool=false)
+    token_types = Type[dp <: DatePart ? SLOT_RULE[first(dp.parameters)] : Void for dp in F.parameters]
+    N = length(token_types)
+
+    field_order = sizehint!(Int[], N)
+    field_types = sizehint!(Type[], N)
+    for (i, typ) in enumerate(token_types)
+        if typ <: Period
+            push!(field_order, i)
+            push!(field_types, typ)
+        end
+    end
+    field_parsers = collect(zip(field_order, field_types))
+
+    quote
+        periods = sizehint!(Period[], $(length(field_parsers)))
+        t = df.tokens
+        l = df.locale
+        pos, len = start(str), endof(str)
+
+        err_idx = 1
+        Base.@nexprs $N i->val_i = 0
+        Base.@nexprs $N i->(begin
+            pos > len && @goto done
+            nv, next_pos = tryparsenext(t[i], str, pos, len, l)
+            isnull(nv) && @goto error
+            val_i, pos = unsafe_get(nv), next_pos
+            err_idx += 1
+        end)
+        pos <= len && @goto error
+
+        @label done
+        parts = Base.@ntuple $N val
+        for (i, P) in $field_parsers
+            if i < err_idx
+                push!(periods, P(parts[i]))
+            end
+        end
+        return periods
+
+        @label error
+        # Note: Keeping exception generation in separate function helps with performance
+        raise && throw(gen_exception(t, err_idx, pos))
+        return periods
+    end
+end
+
+function Base.tryparse{T<:Array{Period}}(::Type{T}, str::AbstractString, df::DateFormat)
+    tryparse_internal(T, str, df, false)
+end
+
+function Base.parse{T<:Array{Period}}(::Type{T}, str::AbstractString, df::DateFormat)
+    tryparse_internal(T, str, df, true)
+end

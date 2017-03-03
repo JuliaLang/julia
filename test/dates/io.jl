@@ -29,10 +29,18 @@
 # DateTime parsing
 # Useful reference for different locales: http://library.princeton.edu/departments/tsd/katmandu/reference/months.html
 
-let str = "1996/02/15 24:00", format = "yyyy/mm/dd HH:MM"
-    expected = (1996, 2, 15, 24, 0, 0, 0)
-    @test get(Dates.tryparse_internal(DateTime, str, Dates.DateFormat(format))) == expected
+# Using parse(::Array{Period}, ...) allows for more flexibility.
+let str = "02/15/1996 24:00", format = Dates.DateFormat("mm/dd/yyyy HH:MM"), T = Array{Dates.Period}
     @test_throws ArgumentError Dates.DateTime(str, Dates.DateFormat(format))
+
+    expected = [Dates.Month(2), Dates.Day(15), Dates.Year(1996), Dates.Hour(24), Dates.Minute(0)]
+    @test Dates.parse(T, str, Dates.DateFormat(format)) == expected
+end
+
+let T = Array{Dates.Period}
+    expected = Dates.Period[Dates.Year(2017), Dates.Month(3)]
+    @test Dates.parse(T, "2017-03", DateFormat("yyyy-mm-dd")) == expected
+    @test_throws ArgumentError Dates.parse(T, "2017-03-03", DateFormat("yyyy-mm"))
 end
 
 # DateFormat printing
