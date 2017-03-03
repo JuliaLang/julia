@@ -352,6 +352,6 @@ min(x::Real) = x
 max(x::Real) = x
 minmax(x::Real) = (x, x)
 
-max{T<:Real}(x::T, y::T) = ifelse(y < x, x, y)
-min{T<:Real}(x::T, y::T) = ifelse(y < x, y, x)
+max{T<:Real}(x::T, y::T) = select_value(y < x, x, y)
+min{T<:Real}(x::T, y::T) = select_value(y < x, y, x)
 minmax{T<:Real}(x::T, y::T) = y < x ? (y, x) : (x, y)

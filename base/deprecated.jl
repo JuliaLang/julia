@@ -826,6 +826,7 @@ end
 # Deprecate vectorized !
 @deprecate(!(A::AbstractArray{Bool}), .!A) # parens for #20541
 @deprecate(!(B::BitArray), .!B) # parens for #20541
+!(::typeof(()->())) = () # make sure ! has at least 4 methods so that for-loops don't end up getting a back-edge to depwarn
 
 # Deprecate vectorized ~
 @deprecate ~(A::AbstractArray) .~A
