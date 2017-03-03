@@ -4755,3 +4755,8 @@ end
     x::Vector{S}
     y::Vector{T}
 end
+
+let a = Array{Core.BottomType, 1}(2)
+    @test a[1] == Union{}
+    @test a == [Union{}, Union{}]
+end
