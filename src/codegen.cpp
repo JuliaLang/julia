@@ -677,12 +677,40 @@ static inline jl_cgval_t ghostValue(jl_value_t *typ)
 {
     if (typ == jl_bottom_type)
         return jl_cgval_t(); // Undef{}
+    if (typ == (jl_value_t*)jl_bottomtype_type) {
+        // normalize BottomType to Type{Union{}}
+        typ = (jl_value_t*)jl_wrap_Type(jl_bottom_type);
+    }
+    if (jl_is_type_type(typ)) {
+        // replace T::Type{T} with T, by assuming that T must be a leaftype of some sort
+        jl_cgval_t constant(NULL, NULL, true, typ, NULL);
+        constant.constant = jl_tparam0(typ);
+        return constant;
+    }
     return jl_cgval_t(typ);
 }
 static inline jl_cgval_t ghostValue(jl_datatype_t *typ)
 {
     return ghostValue((jl_value_t*)typ);
 }
+
+static inline jl_cgval_t mark_julia_const(jl_value_t *jv)
+{
+    jl_value_t *typ;
+    if (jl_is_type(jv)) {
+        typ = (jl_value_t*)jl_wrap_Type(jv); // TODO: gc-root this?
+    }
+    else {
+        typ = jl_typeof(jv);
+        if (type_is_ghost(julia_type_to_llvm(typ))) {
+            return ghostValue(typ);
+        }
+    }
+    jl_cgval_t constant(NULL, NULL, true, typ, NULL);
+    constant.constant = jv;
+    return constant;
+}
+
 
 static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ, Value *tindex, MDNode *tbaa)
 {
@@ -700,11 +728,12 @@ static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_value_t *typ
         // no need to explicitly load/store a constant/ghost value
         return ghostValue(typ);
     }
-    if (jl_is_type_type(typ) && jl_is_leaf_type(jl_tparam0(typ))) {
-        // replace T::Type{T} with T
-        jl_cgval_t constant(NULL, NULL, true, typ, NULL);
-        constant.constant = jl_tparam0(typ);
-        return constant;
+    if (jl_is_type_type(typ)) {
+        jl_value_t *tp0 = jl_tparam0(typ);
+        if (jl_is_leaf_type(tp0) || tp0 == jl_bottom_type) {
+            // replace T::Type{T} with T
+            return ghostValue(typ);
+        }
     }
     Type *T = julia_type_to_llvm(typ);
     if (type_is_ghost(T)) {
@@ -733,7 +762,7 @@ static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_datatype_t *
 // see if it might be profitable (and cheap) to change the type of v to typ
 static inline jl_cgval_t update_julia_type(const jl_cgval_t &v, jl_value_t *typ, jl_codectx_t *ctx)
 {
-    if (v.typ == typ || v.typ == jl_bottom_type || jl_egal(v.typ, typ) || typ == (jl_value_t*)jl_any_type)
+    if (v.typ == typ || v.typ == jl_bottom_type || v.constant || typ == (jl_value_t*)jl_any_type || jl_egal(v.typ, typ))
         return v; // fast-path
     if (jl_is_leaf_type(v.typ) && !jl_is_kind(v.typ)) {
         if (jl_is_leaf_type(typ) && !jl_is_kind(typ) && !((jl_datatype_t*)typ)->abstract && !((jl_datatype_t*)v.typ)->abstract) {
@@ -762,21 +791,6 @@ static inline jl_cgval_t update_julia_type(const jl_cgval_t &v, jl_value_t *typ,
     if (type_is_ghost(T))
         return ghostValue(typ);
     return jl_cgval_t(v, typ, NULL);
-}
-
-static inline jl_cgval_t mark_julia_const(jl_value_t *jv)
-{
-    jl_value_t *typ;
-    if (jl_is_type(jv))
-        typ = (jl_value_t*)jl_wrap_Type(jv); // TODO: gc-root this?
-    else
-        typ = jl_typeof(jv);
-    if (type_is_ghost(julia_type_to_llvm(typ))) {
-        return ghostValue(typ);
-    }
-    jl_cgval_t constant(NULL, NULL, true, typ, NULL);
-    constant.constant = jv;
-    return constant;
 }
 
 // --- allocating local variables ---
@@ -859,6 +873,8 @@ static void jl_rethrow_with_add(const char *fmt, ...)
 // given a value marked with type `v.typ`, compute the mapping and/or boxing to return a value of type `typ`
 static jl_cgval_t convert_julia_type(const jl_cgval_t &v, jl_value_t *typ, jl_codectx_t *ctx, bool needsroot = true)
 {
+    if (typ == (jl_value_t*)jl_bottomtype_type)
+        return ghostValue(typ); // normalize BottomType to Type{Union{}}
     if (v.typ == typ || v.typ == jl_bottom_type || jl_egal(v.typ, typ))
         return v; // fast-path
     Type *T = julia_type_to_llvm(typ);
