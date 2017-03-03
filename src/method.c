@@ -72,13 +72,18 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t 
                 JL_NARGSV(ccall method definition, 3); // (fptr, rt, at)
                 jl_value_t *rt = jl_exprarg(e, 1);
                 jl_value_t *at = jl_exprarg(e, 2);
-                if (!jl_is_type(rt)) {
-                    rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
-                    jl_exprargset(e, 1, rt);
+                JL_TRY {
+                    if (!jl_is_type(rt)) {
+                        rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
+                        jl_exprargset(e, 1, rt);
+                    }
+                    if (!jl_is_svec(at)) {
+                        at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
+                        jl_exprargset(e, 2, at);
+                    }
                 }
-                if (!jl_is_svec(at)) {
-                    at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
-                    jl_exprargset(e, 2, at);
+                JL_CATCH {
+                    jl_error("invalid return type or argument type in ccall");
                 }
                 if (jl_is_svec(rt))
                     jl_error("ccall: missing return type");
@@ -91,7 +96,7 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t 
                 if ((!isVa && nargt    != (nargs - 2) / 2) ||
                     ( isVa && nargt - 1 > (nargs - 2) / 2)) {
                     jl_printf(JL_STDERR, "WARNING: ccall: wrong number of arguments to C function in %s\n",
-                            jl_symbol_name(module->name)); // TODO: make this an error
+                              jl_symbol_name(module->name)); // TODO: make this an error
                 }
             }
             if (e->head == method_sym || e->head == abstracttype_sym || e->head == compositetype_sym ||
