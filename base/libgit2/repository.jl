@@ -227,6 +227,39 @@ function peel(::Type{T}, obj::GitObject) where T<:GitObject
 end
 peel(obj::GitObject) = peel(GitObject, obj)
 
+function GitDescribeResult(commitish::GitObject;
+                           options::DescribeOptions=DescribeOptions())
+    result_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    @check ccall((:git_describe_commit, :libgit2), Cint,
+                 (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{DescribeOptions}),
+                 result_ptr_ptr, commitish.ptr, Ref(options))
+    return GitDescribeResult(commitish.owner, result_ptr_ptr[])
+end
+
+function GitDescribeResult(repo::GitRepo; options::DescribeOptions=DescribeOptions())
+    result_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    @check ccall((:git_describe_workdir, :libgit2), Cint,
+                 (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{DescribeOptions}),
+                 result_ptr_ptr, repo.ptr, Ref(options))
+    return GitDescribeResult(repo, result_ptr_ptr[])
+end
+
+function format(result::GitDescribeResult; options::DescribeFormatOptions=DescribeFormatOptions())
+    buf_ref = Ref(Buffer())
+    @check ccall((:git_describe_format, :libgit2), Cint,
+                 (Ptr{Buffer}, Ptr{Void}, Ptr{DescribeFormatOptions}),
+                 buf_ref, result.ptr, Ref(options))
+    buf = buf_ref[]
+    str = unsafe_string(buf.ptr, buf.size)
+    free(buf_ref)
+    return str
+end
+
+function Base.show(io::IO, result::GitDescribeResult)
+    fmt_desc = format(result)
+    println(io, "GitDescribeResult:")
+    println(io, fmt_desc)
+end
 
 function checkout_tree(repo::GitRepo, obj::GitObject;
                        options::CheckoutOptions = CheckoutOptions())
