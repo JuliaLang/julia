@@ -419,7 +419,10 @@ struct RebaseOperation
     id::GitHash
     exec::Cstring
 end
-Base.show(io::IO, rbo::RebaseOperation) = print(io, "RebaseOperation($(string(rbo.id)))")
+function Base.show(io::IO, rbo::RebaseOperation)
+    println(io, "RebaseOperation($(string(rbo.id)))")
+    println(io, "Operation type: $(Consts.GIT_REBASE_OPERATION(rbo.optype))")
+end
 
 """
     LibGit2.StatusOptions
