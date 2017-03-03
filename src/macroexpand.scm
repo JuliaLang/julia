@@ -418,7 +418,7 @@
          ;; expand macro
          (let ((form (if (eq? (cadr e) '@__LOCATION__)
                          `(,lineno)
-                         (apply invoke-julia-macro (cadr e) (cddr e)))))
+                         (apply invoke-julia-macro lineno (cadr e) (cddr e)))))
            (if (not form)
                (error (string "macro \"" (cadr e) "\" not defined")))
            (if (and (pair? form) (eq? (car form) 'error))

@@ -103,6 +103,7 @@ typedef struct _jl_tls_states_t {
     int8_t disable_gc;
     volatile sig_atomic_t defer_signal;
     struct _jl_module_t *current_module;
+    int current_lineno;
     struct _jl_task_t *volatile current_task;
     struct _jl_task_t *root_task;
     struct _jl_value_t *volatile task_arg_in_transit;

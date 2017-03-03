@@ -172,33 +172,45 @@ value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t 
         return fixnum(jl_module_next_counter(ptls->current_module));
 }
 
+JL_DLLEXPORT int jl_current_lineno(void)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    return ptls->current_lineno;
+}
+
 value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     JL_TIMING(MACRO_INVOCATION);
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (nargs < 1)
-        argcount(fl_ctx, "invoke-julia-macro", nargs, 1);
+    if (nargs < 2)
+        argcount(fl_ctx, "invoke-julia-macro", nargs, 2);
+    if (!isfixnum(args[0]))
+        lerror(fl_ctx, fl_ctx->ArgError, "invoke-julia-macro: expected lineno");
+    int last_lineno = ptls->current_lineno;
+    ptls->current_lineno = numval(args[0]);
     jl_method_instance_t *mfunc = NULL;
+    uint32_t mnargs = nargs - 1;
     jl_value_t **margs;
     // Reserve one more slot for the result
-    JL_GC_PUSHARGS(margs, nargs + 1);
+    JL_GC_PUSHARGS(margs, mnargs + 1);
     int i;
-    for(i=1; i < nargs; i++) margs[i] = scm_to_julia(fl_ctx, args[i], 1);
+    for(i=2; i < nargs; i++) margs[i-1] = scm_to_julia(fl_ctx, args[i], 1);
     jl_value_t *result = NULL;
-    size_t world = jl_get_ptls_states()->world_age;
+    size_t world = ptls->world_age;
 
     JL_TRY {
-        margs[0] = scm_to_julia(fl_ctx, args[0], 1);
+        margs[0] = scm_to_julia(fl_ctx, args[1], 1);
         margs[0] = jl_toplevel_eval(margs[0]);
-        mfunc = jl_method_lookup(jl_gf_mtable(margs[0]), margs, nargs, 1, world);
+        mfunc = jl_method_lookup(jl_gf_mtable(margs[0]), margs, mnargs, 1, world);
         if (mfunc == NULL) {
-            jl_method_error((jl_function_t*)margs[0], margs, nargs, world);
+            jl_method_error((jl_function_t*)margs[0], margs, mnargs, world);
             // unreachable
         }
-        margs[nargs] = result = jl_call_method_internal(mfunc, margs, nargs);
+        margs[mnargs] = result = jl_call_method_internal(mfunc, margs, mnargs);
     }
     JL_CATCH {
         JL_GC_POP();
+        ptls->current_lineno = last_lineno;
         value_t opaque = cvalue(fl_ctx, jl_ast_ctx(fl_ctx)->jvtype, sizeof(void*));
         *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = ptls->exception_in_transit;
         return fl_list2(fl_ctx, jl_ast_ctx(fl_ctx)->error_sym, opaque);
@@ -225,6 +237,7 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     fl_free_gc_handles(fl_ctx, 1);
 
     JL_GC_POP();
+    ptls->current_lineno = last_lineno;
     return scmresult;
 }
 
