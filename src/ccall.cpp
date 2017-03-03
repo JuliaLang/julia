@@ -851,10 +851,10 @@ public:
             VMap[&*I] = &*(DestI++);        // Add mapping to VMap
         }
 
-    #if JL_LLVM_VERSION >= 30600
+#if JL_LLVM_VERSION >= 30600
         // Clone debug info - Not yet public API
         // llvm::CloneDebugInfoMetadata(NewF,F,VMap);
-    #endif
+#endif
 
         SmallVector<ReturnInst*, 8> Returns;
         llvm::CloneFunctionInto(NewF,F,VMap,true,Returns,"",NULL,NULL,this);
@@ -912,10 +912,10 @@ public:
                     if (oldF)
                         return oldF;
 
-                    #ifdef USE_ORCJIT
+#ifdef USE_ORCJIT
                     if (jl_ExecutionEngine->findSymbol(F->getName(), false))
                         return InjectFunctionProto(F);
-                    #endif
+#endif
 
                     return CloneFunctionProto(shadow);
                 }

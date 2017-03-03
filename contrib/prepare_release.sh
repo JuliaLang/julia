@@ -69,7 +69,30 @@ gpg -u julia --armor --detach-sig julia-$version-linux-i686.tar.gz
 gpg -u julia --armor --detach-sig julia-$version-linux-arm.tar.gz
 gpg -u julia --armor --detach-sig julia-$version-linux-ppc64le.tar.gz
 
-echo "All files prepared. Attach julia-$version.tar.gz and julia-$version-full.tar.gz"
-echo "to github releases, upload all binaries and checksums to julialang S3. Be sure"
-echo "to set all S3 uploads to publicly readable, and replace $majmin-latest binaries."
-# TODO: also automate uploads via aws cli and github api?
+aws configure
+aws s3 cp --acl public-read julia-$version.sha256 s3://julialang/bin/checksums/
+aws s3 cp --acl public-read julia-$version.md5 s3://julialang/bin/checksums/
+for plat in x86_64 i686 arm ppc64le; do
+  platshort=$(echo $plat | sed -e 's/x86_64/x64/' -e 's/i686/x86/')
+  aws s3 cp --acl public-read julia-$version-linux-$plat.tar.gz \
+    s3://julialang/bin/linux/$platshort/$majmin/
+  aws s3 cp --acl public-read julia-$version-linux-$plat.tar.gz.asc \
+    s3://julialang/bin/linux/$platshort/$majmin/
+  aws s3 cp --acl public-read julia-$majmin-latest-linux-$plat.tar.gz \
+    s3://julialang/bin/linux/$platshort/$majmin/
+done
+aws s3 cp --acl public-read "julia-$version-osx10.7 .dmg" \
+  s3://julialang/bin/osx/x64/$majmin/
+aws s3 cp --acl public-read "julia-$majmin-latest-osx10.7 .dmg" \
+  s3://julialang/bin/osx/x64/$majmin/
+aws s3 cp --acl public-read "julia-$version-win64.exe" \
+  s3://julialang/bin/winnt/x64/$majmin/
+aws s3 cp --acl public-read "julia-$majmin-latest-win64.exe" \
+  s3://julialang/bin/winnt/x64/$majmin/
+aws s3 cp --acl public-read "julia-$version-win32.exe" \
+  s3://julialang/bin/winnt/x86/$majmin/
+aws s3 cp --acl public-read "julia-$majmin-latest-win32.exe" \
+  s3://julialang/bin/winnt/x86/$majmin/
+
+echo "All files prepared. Attach julia-$version.tar.gz"
+echo "and julia-$version-full.tar.gz to github releases."
