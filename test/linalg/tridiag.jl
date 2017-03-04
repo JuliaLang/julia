@@ -459,12 +459,13 @@ let n = 12 #Size of matrix problem to test
         @test_throws BoundsError A[1,n+1]
 
         debug && println("setindex!")
-        @test_throws ArgumentError A[n,1] = 1
-        @test_throws ArgumentError A[1,n] = 1
-        A[3,3] = A[3,3]
-        A[2,3] = A[2,3]
-        A[3,2] = A[3,2]
-        @test A == fA
+        @test_throws BoundsError A[n + 1, 1] = 0 # test bounds check
+        @test_throws BoundsError A[1, n + 1] = 0 # test bounds check
+        @test (A[3, 3] = A[3, 3]; A == fA) # test assignment on the main diagonal
+        @test (A[3, 2] = A[3, 2]; A == fA) # test assignment on the subdiagonal
+        @test (A[2, 3] = A[2, 3]; A == fA) # test assignment on the superdiagonal
+        @test ((A[1, 3] = 0) == 0; A == fA) # test zero assignment off the main/sub/super diagonal
+        @test_throws ArgumentError A[1, 3] = 1 # test non-zero assignment off the main/sub/super diagonal
     end
 end
 
