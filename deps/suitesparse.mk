@@ -37,12 +37,17 @@ $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-winclang.patch-applied: $
 	cd $(dir $@) && patch -p0 < $(SRCDIR)/patches/SuiteSparse-winclang.patch
 	echo 1 > $@
 
+$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-O2.patch-applied: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-winclang.patch-applied
+	cd $(dir $@) && patch -p0 < $(SRCDIR)/patches/SuiteSparse-O2.patch
+	echo 1 > $@
+
+
 ifeq ($(USE_SYSTEM_BLAS), 0)
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: | $(build_prefix)/manifest/openblas
 else ifeq ($(USE_SYSTEM_LAPACK), 0)
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: | $(build_prefix)/manifest/lapack
 endif
-$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-winclang.patch-applied
+$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse-O2.patch-applied
 	$(MAKE) -C $(dir $<) library $(SUITESPARSE_MFLAGS)
 	echo 1 > $@
 
