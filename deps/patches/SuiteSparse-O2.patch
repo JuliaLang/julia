@@ -1,0 +1,11 @@
+--- SuiteSparse_config/SuiteSparse_config.mk    2014-12-22 14:21:00.000000000 -0800
++++ SuiteSparse_config/SuiteSparse_config.mk    2017-01-20 15:17:43.000000000 -0800
+@@ -69,7 +69,7 @@
+ # C and C++ compiler flags.  The first three are standard for *.c and *.cpp
+ # Add -DNTIMER if you do use any timing routines (otherwise -lrt is required).
+ # CF = $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -O3 -fexceptions -fPIC -DNTIMER
+-  CF = $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -O3 -fexceptions -fPIC
++  CF = $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -O2 -fexceptions -fPIC
+ # for the MKL BLAS:
+ # CF = $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -O3 -fexceptions -fPIC -I$(MKLROOT)/include -D_GNU_SOURCE
+ # with no optimization:
