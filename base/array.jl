@@ -87,9 +87,10 @@ elsize{T}(a::Array{T}) = isbits(T) ? sizeof(T) : sizeof(Ptr)
 sizeof(a::Array) = elsize(a) * length(a)
 
 function isassigned(a::Array, i::Int...)
-    ii = sub2ind(size(a), i...)
-    1 <= ii <= length(a) || return false
-    ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii-1) == 1
+    @_inline_meta
+    ii = (sub2ind(size(a), i...) % UInt) - 1
+    ii < length(a) % UInt || return false
+    ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
 end
 
 ## copy ##

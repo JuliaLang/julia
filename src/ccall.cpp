@@ -1783,6 +1783,35 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
         JL_GC_POP();
     }
+    if ((fptr == (void(*)(void))&jl_array_isassigned ||
+         ((f_lib==NULL || (intptr_t)f_lib==2)
+          && f_name && !strcmp(f_name, "jl_array_isassigned"))) &&
+        expr_type(args[6], ctx) == (jl_value_t*)jl_ulong_type) {
+        assert(nargt == 2);
+        jl_value_t *aryex = args[4];
+        jl_value_t *idxex = args[6];
+        jl_value_t *aryty = expr_type(aryex, ctx);
+        if (jl_is_array_type(aryty)) {
+            jl_value_t *ety = jl_tparam0(aryty);
+            if (jl_isbits(ety)) {
+                emit_expr(aryex, ctx);
+                emit_expr(idxex, ctx);
+                JL_GC_POP();
+                return mark_or_box_ccall_result(ConstantInt::get(T_int32, 1),
+                                                false, rt, unionall, static_rt, ctx);
+            }
+            else if (!jl_has_free_typevars(ety)) { // TODO: jn/foreigncall branch has a better predicate
+                jl_cgval_t aryv = emit_expr(aryex, ctx);
+                Value *idx = emit_unbox(T_size, emit_expr(idxex, ctx), (jl_value_t*)jl_ulong_type);
+                Value *arrayptr = emit_bitcast(emit_arrayptr(aryv, aryex, ctx), T_ppjlvalue);
+                Value *slot_addr = builder.CreateGEP(arrayptr, idx);
+                Value *load = tbaa_decorate(tbaa_arraybuf, builder.CreateLoad(slot_addr));
+                Value *res = builder.CreateZExt(builder.CreateICmpNE(load, V_null), T_int32);
+                JL_GC_POP();
+                return mark_or_box_ccall_result(res, retboxed, rt, unionall, static_rt, ctx);
+            }
+        }
+    }
 
     // emit arguments
     jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * (nargs - 3) / 2);
