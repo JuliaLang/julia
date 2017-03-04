@@ -265,14 +265,24 @@ end
     end
 end
 
-
 @testset "sparse map/broadcast with result eltype not a concrete subtype of Number (#19561/#19589)" begin
-    intoneorfloatzero(x) = x != 0.0 ? Int(1) : Float64(x)
-    stringorfloatzero(x) = x != 0.0 ? "Hello" : Float64(x)
-    @test map(intoneorfloatzero, speye(4)) == sparse(map(intoneorfloatzero, eye(4)))
-    @test map(stringorfloatzero, speye(4)) == sparse(map(stringorfloatzero, eye(4)))
-    @test broadcast(intoneorfloatzero, speye(4)) == sparse(broadcast(intoneorfloatzero, eye(4)))
-    @test broadcast(stringorfloatzero, speye(4)) == sparse(broadcast(stringorfloatzero, eye(4)))
+    N = 4
+    A, fA = speye(N), eye(N)
+    B, fB = spzeros(1, N), zeros(1, N)
+    intorfloat_zeropres(xs...) = all(iszero, xs) ? zero(Float64) : Int(1)
+    stringorfloat_zeropres(xs...) = all(iszero, xs) ? zero(Float64) : "hello"
+    intorfloat_notzeropres(xs...) = all(iszero, xs) ? Int(1) : zero(Float64)
+    stringorfloat_notzeropres(xs...) = all(iszero, xs) ? "hello" : zero(Float64)
+    for fn in (intorfloat_zeropres, intorfloat_notzeropres,
+                stringorfloat_zeropres, stringorfloat_notzeropres)
+        @test map(fn, A) == sparse(map(fn, fA))
+        @test broadcast(fn, A) == sparse(broadcast(fn, fA))
+        @test broadcast(fn, A, B) == sparse(broadcast(fn, fA, fB))
+        @test broadcast(fn, B, A) == sparse(broadcast(fn, fB, fA))
+    end
+    for fn in (intorfloat_zeropres, stringorfloat_zeropres)
+        @test broadcast(fn, A, B, A) == sparse(broadcast(fn, fA, fB, fA))
+    end
 end
 
 @testset "broadcast[!] over combinations of scalars and sparse vectors/matrices" begin
