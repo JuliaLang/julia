@@ -203,8 +203,7 @@ end
 # We mark these @inline since if the target is marked @inline,
 # we want to make sure that gets propagated,
 # even if it is over the inlining threshold.
-@inline ^(x, p) = internal_pow(x, p)
-@inline internal_pow{p}(x, ::Type{Val{p}}) = x^p
+@inline internal_pow{p}(x, ::Type{Val{p}}, z) = z(x,p)
 
 # Restrict inlining to hardware-supported arithmetic types, which
 # are fast enough to benefit from inlining.  This also makes it
@@ -214,10 +213,10 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 
 # inference.jl has complicated logic to inline x^2 and x^3 for
 # numeric types.  In terms of Val we can do it much more simply:
-@inline internal_pow(x::HWNumber, ::Type{Val{0}}) = one(x)
-@inline internal_pow(x::HWNumber, ::Type{Val{1}}) = x
-@inline internal_pow(x::HWNumber, ::Type{Val{2}}) = x*x
-@inline internal_pow(x::HWNumber, ::Type{Val{3}}) = x*x*x
+@inline internal_pow(x::HWNumber, ::Type{Val{0}}, z::typeof(^)) = one(x)
+@inline internal_pow(x::HWNumber, ::Type{Val{1}}, z::typeof(^)) = x
+@inline internal_pow(x::HWNumber, ::Type{Val{2}}, z::typeof(^)) = x*x
+@inline internal_pow(x::HWNumber, ::Type{Val{3}}, z::typeof(^)) = x*x*x
 
 # b^p mod m
 
