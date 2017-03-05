@@ -903,7 +903,7 @@ INFO: To create a pull-request open:
     is to delete the "Julia Package Manager" personal access token [from your Github account](https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2Fsettings%2Ftokens)
     and try again.
 
-    Other failures may require you to circumvent `PkgDev.publish()` by [creating a pull request on GitHub](https://help.github.com/articles/creating-a-pull-request).
+    Other failures may require you to circumvent `PkgDev.publish()` by [creating a pull request on GitHub](https://help.github.com/articles/creating-a-pull-request/).
     See: [Publishing METADATA manually](@ref) below.
 
 Once the package URL for `FooBar` is registered in the official `METADATA` repo, people know where

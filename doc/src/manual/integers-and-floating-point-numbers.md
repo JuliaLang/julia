@@ -492,8 +492,8 @@ most books on scientific computation, and also in the following references:
   * The definitive guide to floating point arithmetic is the [IEEE 754-2008 Standard](http://standards.ieee.org/findstds/standard/754-2008.html);
     however, it is not available for free online.
   * For a brief but lucid presentation of how floating-point numbers are represented, see John D.
-    Cook's [article](http://www.johndcook.com/blog/2009/04/06/anatomy-of-a-floating-point-number/)
-    on the subject as well as his [introduction](http://www.johndcook.com/blog/2009/04/06/numbers-are-a-leaky-abstraction/)
+    Cook's [article](https://www.johndcook.com/blog/2009/04/06/anatomy-of-a-floating-point-number/)
+    on the subject as well as his [introduction](https://www.johndcook.com/blog/2009/04/06/numbers-are-a-leaky-abstraction/)
     to some of the issues arising from how this representation differs in behavior from the idealized
     abstraction of real numbers.
   * Also recommended is Bruce Dawson's [series of blog posts on floating-point numbers](https://randomascii.wordpress.com/2012/05/20/thats-not-normalthe-performance-of-odd-floats/).
