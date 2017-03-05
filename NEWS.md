@@ -74,7 +74,7 @@ Language changes
     `Vector{T} = Array{T,1}` or a `const` assignment.
 
   * Experimental feature: `x^n` for integer literals `n` (e.g. `x^3`
-    or `x^-3`) is now lowered to `Base.literal_pow(x, Val{n}, ^)`, to enable
+    or `x^-3`) is now lowered to `Base.literal_pow(^, x, Val{n})`, to enable
     compile-time specialization for literal integer exponents ([#20530], [#20889]).
 
 Breaking changes
