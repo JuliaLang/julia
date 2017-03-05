@@ -396,7 +396,8 @@
          (relabel (pair-with-gensyms labels)))
     (rename-symbolic-labels- e relabel)))
 
-(define (expand-with-lineno exs lineno)
+;; Map julia-expand-macros across `exs`, tracking line number
+(define (map-expand-with-lineno exs lineno)
   (let loop ((exs exs) (lineno lineno) (out '()))
     (if (not (pair? exs))
         (reverse! out)
@@ -429,10 +430,7 @@
               (julia-expand-macros
                (with-bindings ((current-lineno lineno)) (resolve-expansion-vars form m))
                lineno)))))
-        ((eq? (car e) 'block)
-         ;; track line number of enclosing scope when in a block
-         `(block ,@(expand-with-lineno (cdr e) lineno)))
         ((eq? (car e) 'module) e)
         (else
-         (map (lambda (e) (julia-expand-macros e lineno)) e))))
+         (map-expand-with-lineno e lineno))))
 
