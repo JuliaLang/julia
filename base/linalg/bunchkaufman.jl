@@ -66,7 +66,7 @@ If `symmetric` is `true`, `A` is assumed to be symmetric. If `symmetric` is `fal
 The following functions are available for
 `BunchKaufman` objects: [`size`](@ref), `\\`, [`inv`](@ref), [`issymmetric`](@ref), [`ishermitian`](@ref).
 
-[^Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. [url](http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0).
+[^Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. [url](http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0/).
 
 """
 bkfact(A::StridedMatrix{<:BlasFloat}, uplo::Symbol=:U, symmetric::Bool=issymmetric(A),

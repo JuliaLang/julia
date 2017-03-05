@@ -1413,5 +1413,5 @@ It is very important that the called function does not call back into Julia.
     In this context, MPI refers to the MPI-1 standard. Beginning with MPI-2, the MPI standards committee
     introduced a new set of communication mechanisms, collectively referred to as Remote Memory Access
     (RMA). The motivation for adding RMA to the MPI standard was to facilitate one-sided communication
-    patterns. For additional information on the latest MPI standard, see [http://mpi-forum.org/docs](http://mpi-forum.org/docs).
+    patterns. For additional information on the latest MPI standard, see [http://mpi-forum.org/docs](http://mpi-forum.org/docs/).
 

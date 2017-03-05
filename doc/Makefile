@@ -47,7 +47,7 @@ pdf: deps
 
 linkcheck: deps
 	@echo "Checking external documentation links."
-	$(JULIA_EXECUTABLE) $(call cygpath_w,$(SRCDIR)/make.jl) -- linkcheck
+	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- linkcheck
 	@echo "Checks finished."
 
 doctest: deps
