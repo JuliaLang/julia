@@ -2584,12 +2584,13 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
         // add it to the results.
         if (return_this_match && meth->ambig != jl_nothing && (!closure->include_ambiguous || done)) {
             jl_svec_t *env = NULL;
-            JL_GC_PUSH1(&env);
+            jl_value_t *mti = NULL;
+            JL_GC_PUSH2(&env, &mti);
             for (size_t j = 0; j < jl_array_len(meth->ambig); j++) {
                 jl_method_t *mambig = (jl_method_t*)jl_array_ptr_ref(meth->ambig, j);
                 env = jl_emptysvec;
-                jl_value_t *mti = jl_type_intersection_env((jl_value_t*)closure->match.type,
-                                                           (jl_value_t*)mambig->sig, &env);
+                mti = jl_type_intersection_env((jl_value_t*)closure->match.type,
+                                               (jl_value_t*)mambig->sig, &env);
                 if (mti != (jl_value_t*)jl_bottom_type) {
                     if (closure->include_ambiguous) {
                         assert(done);
@@ -2602,8 +2603,8 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
                             if (len == 0) {
                                 closure->t = (jl_value_t*)jl_alloc_vec_any(0);
                             }
-                            jl_array_ptr_1d_push((jl_array_t*)closure->t,
-                                                 (jl_value_t*)jl_svec(3, mti, env, mambig));
+                            mti = (jl_value_t*)jl_svec(3, mti, env, mambig);
+                            jl_array_ptr_1d_push((jl_array_t*)closure->t, mti);
                             len++;
                         }
                     }
