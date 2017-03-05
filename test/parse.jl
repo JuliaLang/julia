@@ -514,8 +514,8 @@ let b = IOBuffer("""
                  end
                  f()
                  """)
-    @test Base.parse_input_line(b) == Expr(:let, Expr(:block, Expr(:line, 2, :none), :x), Expr(:(=), :x, :x))
-    @test Base.parse_input_line(b) == Expr(:call, :f)
+    @test Base.parse_input_line(b) == Expr(:toplevel, Expr(:line, 1, :none), Expr(:let, Expr(:block, Expr(:line, 2, :none), :x), Expr(:(=), :x, :x)))
+    @test Base.parse_input_line(b) == Expr(:toplevel, Expr(:line, 1, :none), Expr(:call, :f))
     @test Base.parse_input_line(b) === nothing
 end
 

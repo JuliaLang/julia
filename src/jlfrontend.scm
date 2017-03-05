@@ -152,7 +152,7 @@
     (parser-wrap (lambda ()
                  (let ((inp  (make-token-stream (open-input-string s))))
                    ;; parse all exprs into a (toplevel ...) form
-                   (let loop ((exprs `((line 1 ,filename))))
+                   (let loop ((exprs `((line 1 ,current-filename))))
                      ;; delay expansion so macros run in the Task executing
                      ;; the input, not the task parsing it (issue #2378)
                      ;; used to be (expand-toplevel-expr expr)
