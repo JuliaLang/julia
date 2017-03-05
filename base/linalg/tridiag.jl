@@ -375,13 +375,13 @@ function getindex{T}(A::SymTridiagonal{T}, i::Integer, j::Integer)
 end
 
 function setindex!(A::SymTridiagonal, x, i::Integer, j::Integer)
+    @boundscheck checkbounds(A, i, j)
     if i == j
-        A.dv[i] = x
-    elseif abs(i - j) == 1
-        A.ev[min(i,j)] = x
+        @inbounds A.dv[i] = x
     else
-        throw(ArgumentError("cannot set elements outside the sub, main, or super diagonals"))
+        throw(ArgumentError("cannot set off-diagonal entry ($i, $j)"))
     end
+    return x
 end
 
 ## Tridiagonal matrices ##
