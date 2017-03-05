@@ -26,6 +26,20 @@
 #endif
 #endif
 
+// Remove when C11 is required for C code.
+#ifndef static_assert
+#  ifndef __cplusplus
+// C11 should already have `static_assert` from `<assert.h>` so there's no need
+// to check C version.
+#    ifdef __GNUC__
+#      define static_assert _Static_assert
+#    else
+#      define static_assert(...)
+#    endif
+#  endif
+// For C++, C++11 or MSVC is required. Both provide `static_assert`.
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
