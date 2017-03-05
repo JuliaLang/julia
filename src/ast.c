@@ -945,7 +945,7 @@ jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, int linen
 JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr)
 {
     JL_TIMING(LOWERING);
-    return jl_call_scm_on_ast("jl-expand-to-thunk", expr, jl_lineno); // FIXME?
+    return jl_call_scm_on_ast("jl-expand-to-thunk", expr, jl_lineno);
 }
 
 JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr)
