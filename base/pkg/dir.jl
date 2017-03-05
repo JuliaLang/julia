@@ -29,12 +29,8 @@ function cd(f::Function, args...; kws...)
             throw(PkgError("Package metadata directory $metadata_dir doesn't exist; run Pkg.init() to initialize it."))
     end
     if haskey(ENV,"JULIA_PKGDIR")
-        olddir = ENV["JULIA_PKGDIR"]
-        ENV["JULIA_PKGDIR"] = dir # use absolute path
-        try
+        withenv("JULIA_PKGDIR" => _pkgroot()) do
             Base.cd(()->f(args...; kws...), dir)
-        finally
-            ENV["JULIA_PKGDIR"] = olddir
         end
     else
         Base.cd(()->f(args...; kws...), dir)
