@@ -137,10 +137,6 @@ PassManager *jl_globalPM;
 #define AddrSpaceCastInst BitCastInst
 #endif
 
-#if !defined(_COMPILER_MICROSOFT_) && __cplusplus < 201103L && !defined(static_assert)
-#  define static_assert(...)
-#endif
-
 extern "C" {
 
 #include "builtin_proto.h"
