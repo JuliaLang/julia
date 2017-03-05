@@ -2057,7 +2057,7 @@
 
                  ((and (eq? f '^) (length= e 4) (integer? (cadddr e)))
                   (expand-forms
-                   `(call (|.| Base (quote literal_pow)) ,(caddr e) (call (core apply_type) (top Val) ,(cadddr e)) ^)))
+                   `(call (top literal_pow) ,(caddr e) (call (core apply_type) (top Val) ,(cadddr e)) ^)))
 
                  ((and (eq? f '*) (length= e 4))
                   (expand-transposed-op
