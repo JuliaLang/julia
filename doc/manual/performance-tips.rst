@@ -630,7 +630,7 @@ reuse.
 
 This pattern is used in several places in the standard library. For
 example, see ``hvcat_fill`` in
-`abstractarray.jl <https://github.com/JuliaLang/julia/blob/master/base/abstractarray.jl>`_,
+`abstractarray.jl <https://github.com/JuliaLang/julia/blob/release-0.5/base/abstractarray.jl>`_,
 or the ``fill!`` function, which we could have used instead of writing
 our own ``fill_twos!``.
 

@@ -126,7 +126,7 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 ```
 
 5. Setup Package Development Environment
-  1. The `Pkg` module in Base provides many convenient tools for [developing and publishing packages](http://docs.julialang.org/en/latest/manual/packages/).
+  1. The `Pkg` module in Base provides many convenient tools for [developing and publishing packages](http://docs.julialang.org/en/release-0.5/manual/packages/).
   One of the packages added through pacman above was `openssh`, which will allow secure access to GitHub APIs.
   Follow GitHub's [guide](https://help.github.com/articles/generating-ssh-keys) to setting up SSH keys to ensure your local machine can communicate with GitHub effectively.
 

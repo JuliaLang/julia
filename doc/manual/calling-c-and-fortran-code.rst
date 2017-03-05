@@ -109,7 +109,7 @@ especially important since C and Fortran APIs are notoriously
 inconsistent about how they indicate error conditions. For example, the
 ``getenv`` C library function is wrapped in the following Julia function,
 which is a simplified version of the actual definition from
-`env.jl <https://github.com/JuliaLang/julia/blob/master/base/env.jl>`_::
+`env.jl <https://github.com/JuliaLang/julia/blob/release-0.5/base/env.jl>`_::
 
     function getenv(var::AbstractString)
       val = ccall((:getenv, "libc"),

@@ -911,9 +911,9 @@ specific continuation bytes — do not form valid UTF-8 data, whereas the
 latter escapes all represent Unicode code points with two-byte
 encodings.
 
-If this is all extremely confusing, try reading `"The Absolute Minimum
-Every Software Developer Absolutely, Positively Must Know About Unicode
-and Character Sets" <http://www.joelonsoftware.com/articles/Unicode.html>`_.
+If this is all extremely confusing, try reading `"The Absolute Minimum Every
+Software Developer Absolutely, Positively Must Know About Unicode and Character Sets"
+<https://www.joelonsoftware.com/2003/10/08/the-absolute-minimum-every-software-developer-absolutely-positively-must-know-about-unicode-and-character-sets-no-excuses/>`_.
 It's an excellent introduction to Unicode and UTF-8, and may help alleviate
 some confusion regarding the matter.
 
