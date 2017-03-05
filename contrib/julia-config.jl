@@ -52,7 +52,7 @@ function ldlibs()
     if is_unix()
         return replace("""-Wl,-rpath,$(libDir()) -ljulia""","\\","\\\\")
     else
-        return replace("""-ljulia""","\\","\\\\")
+        return "-ljulia -lopenlibm"
     end
 end
 

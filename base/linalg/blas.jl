@@ -896,7 +896,7 @@ for (fname, elty, lib) in ((:dsyr_,:Float64,libblas),
                 (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &uplo, &n, &α, x,
-                 &1, A, &max(1,stride(A,2)))
+                 &stride(x, 1), A, &max(1,stride(A, 2)))
             A
         end
     end
@@ -925,7 +925,7 @@ for (fname, elty, relty) in ((:zher_,:Complex128, :Float64),
                 (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &uplo, &n, &α, x,
-                 &1, A, &max(1,stride(A,2)))
+                 &stride(x, 1), A, &max(1,stride(A,2)))
             A
         end
     end

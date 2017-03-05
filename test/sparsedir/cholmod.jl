@@ -107,6 +107,10 @@ chma = ldltfact(A)                      # LDL' form
 x = chma\B
 @test x ≈ ones(size(x))
 @test nnz(ldltfact(A, perm=1:size(A,1))) > nnz(chma)
+@test size(chma) == size(A)
+chmal = CHOLMOD.FactorComponent(chma, :L)
+@test size(chmal) == size(A)
+@test size(chmal, 1) == size(A, 1)
 
 chma = cholfact(A)                      # LL' form
 @test CHOLMOD.isvalid(chma)
@@ -115,6 +119,10 @@ x = chma\B
 @test x ≈ ones(size(x))
 @test nnz(chma) == 489
 @test nnz(cholfact(A, perm=1:size(A,1))) > nnz(chma)
+@test size(chma) == size(A)
+chmal = CHOLMOD.FactorComponent(chma, :L)
+@test size(chmal) == size(A)
+@test size(chmal, 1) == size(A, 1)
 
 #lp_afiro example
 afiro = CHOLMOD.Sparse(27, 51,
@@ -374,6 +382,7 @@ for elty in (Float64, Complex{Float64})
     @test_throws DimensionMismatch F\CHOLMOD.Sparse(sparse(ones(elty, 4)))
     @test F'\ones(elty, 5) ≈ full(A1pd)'\ones(5)
     @test F'\sparse(ones(elty, 5)) ≈ full(A1pd)'\ones(5)
+    @test F.'\ones(elty, 5) ≈ conj(A1pd)'\ones(elty, 5)
     @test logdet(F) ≈ logdet(full(A1pd))
     @test det(F) == exp(logdet(F))
     let # to test supernodal, we must use a larger matrix
@@ -652,3 +661,38 @@ end
 A = sprandn(5,5,0.4) |> t -> t't + I
 B = complex(randn(5,2), randn(5,2))
 @test cholfact(A)\B ≈ A\B
+
+# Make sure that ldltfact performs an LDLt (Issue #19032)
+let m = 400, n = 500
+    A = sprandn(m, n, .2)
+    M = [speye(n) A'; A -speye(m)]
+    b = M*ones(m + n)
+    F = ldltfact(M)
+    s = unsafe_load(get(F.p))
+    @test s.is_super == 0
+    @test F\b ≈ ones(m + n)
+end
+
+# Test that \ and '\ and .'\ work for Symmetric and Hermitian. This is just
+# a dispatch exercise so it doesn't matter that the complex matrix has
+# zero imaginary parts
+let Apre = sprandn(10, 10, 0.2) - I
+    for A in (Symmetric(Apre), Hermitian(Apre),
+              Symmetric(Apre + 10I), Hermitian(Apre + 10I),
+              Hermitian(complex(Apre)), Hermitian(complex(Apre) + 10I))
+
+        x = ones(10)
+        b = A*x
+        @test x ≈ A\b
+        @test A.'\b ≈ A'\b
+    end
+end
+
+# Check inputs to Sparse. Related to #20024
+for A in (SparseMatrixCSC(2, 2, [1, 2], CHOLMOD.SuiteSparse_long[], Float64[]),
+          SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[]),
+          SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[], Float64[1.0]),
+          SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[1.0]))
+    @test_throws ArgumentError CHOLMOD.Sparse(size(A)..., A.colptr - 1, A.rowval - 1, A.nzval)
+    @test_throws ArgumentError CHOLMOD.Sparse(A)
+end

@@ -660,7 +660,7 @@ ambiguous or can be confused with something other than what it is. During this
 bike-shedding, it's not uncommon to get a range of *different* name suggestions.
 These are only suggestions though, with the intent being to keep a tidy namespace in
 the curated METADATA repository. Since this repository belongs to the entire
-community, there will likely be a few collaborators who care your package name.
+community, there will likely be a few collaborators who care about your package name.
 Here are some guidelines to follow in naming your package:
 
 1. Avoid jargon. In particular, avoid acronyms unless there is minimal

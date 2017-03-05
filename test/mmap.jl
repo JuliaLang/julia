@@ -20,27 +20,27 @@ m = Mmap.mmap(file, Array{UInt8,3}, (1,2,1))
 finalize(m); m=nothing; gc()
 
 # constructors
-@test length(Mmap.mmap(file)) == 12
-@test length(Mmap.mmap(file, Vector{Int8})) == 12
-@test length(Mmap.mmap(file, Matrix{Int8}, (12,1))) == 12
-@test length(Mmap.mmap(file, Matrix{Int8}, (12,1), 0)) == 12
-@test length(Mmap.mmap(file, Matrix{Int8}, (12,1), 0; grow=false)) == 12
-@test length(Mmap.mmap(file, Matrix{Int8}, (12,1), 0; shared=false)) == 12
-@test length(Mmap.mmap(file, Vector{Int8}, 12)) == 12
-@test length(Mmap.mmap(file, Vector{Int8}, 12, 0)) == 12
-@test length(Mmap.mmap(file, Vector{Int8}, 12, 0; grow=false)) == 12
-@test length(Mmap.mmap(file, Vector{Int8}, 12, 0; shared=false)) == 12
+@test length(@inferred Mmap.mmap(file)) == 12
+@test length(@inferred Mmap.mmap(file, Vector{Int8})) == 12
+@test length(@inferred Mmap.mmap(file, Matrix{Int8}, (12,1))) == 12
+@test length(@inferred Mmap.mmap(file, Matrix{Int8}, (12,1), 0)) == 12
+@test length(@inferred Mmap.mmap(file, Matrix{Int8}, (12,1), 0; grow=false)) == 12
+@test length(@inferred Mmap.mmap(file, Matrix{Int8}, (12,1), 0; shared=false)) == 12
+@test length(@inferred Mmap.mmap(file, Vector{Int8}, 12)) == 12
+@test length(@inferred Mmap.mmap(file, Vector{Int8}, 12, 0)) == 12
+@test length(@inferred Mmap.mmap(file, Vector{Int8}, 12, 0; grow=false)) == 12
+@test length(@inferred Mmap.mmap(file, Vector{Int8}, 12, 0; shared=false)) == 12
 s = open(file)
-@test length(Mmap.mmap(s)) == 12
-@test length(Mmap.mmap(s, Vector{Int8})) == 12
-@test length(Mmap.mmap(s, Matrix{Int8}, (12,1))) == 12
-@test length(Mmap.mmap(s, Matrix{Int8}, (12,1), 0)) == 12
-@test length(Mmap.mmap(s, Matrix{Int8}, (12,1), 0; grow=false)) == 12
-@test length(Mmap.mmap(s, Matrix{Int8}, (12,1), 0; shared=false)) == 12
-@test length(Mmap.mmap(s, Vector{Int8}, 12)) == 12
-@test length(Mmap.mmap(s, Vector{Int8}, 12, 0)) == 12
-@test length(Mmap.mmap(s, Vector{Int8}, 12, 0; grow=false)) == 12
-@test length(Mmap.mmap(s, Vector{Int8}, 12, 0; shared=false)) == 12
+@test length(@inferred Mmap.mmap(s)) == 12
+@test length(@inferred Mmap.mmap(s, Vector{Int8})) == 12
+@test length(@inferred Mmap.mmap(s, Matrix{Int8}, (12,1))) == 12
+@test length(@inferred Mmap.mmap(s, Matrix{Int8}, (12,1), 0)) == 12
+@test length(@inferred Mmap.mmap(s, Matrix{Int8}, (12,1), 0; grow=false)) == 12
+@test length(@inferred Mmap.mmap(s, Matrix{Int8}, (12,1), 0; shared=false)) == 12
+@test length(@inferred Mmap.mmap(s, Vector{Int8}, 12)) == 12
+@test length(@inferred Mmap.mmap(s, Vector{Int8}, 12, 0)) == 12
+@test length(@inferred Mmap.mmap(s, Vector{Int8}, 12, 0; grow=false)) == 12
+@test length(@inferred Mmap.mmap(s, Vector{Int8}, 12, 0; shared=false)) == 12
 close(s)
 @test_throws ErrorException Mmap.mmap(file, Vector{Ref}) # must be bit-type
 gc(); gc()
@@ -187,19 +187,23 @@ write(s, [0xffffffffffffffff,
 close(s)
 s = open(file, "r")
 @test isreadonly(s)
-b = Mmap.mmap(s, BitArray, (17,13))
+b = @inferred Mmap.mmap(s, BitArray, (17,13))
+@test Base._check_bitarray_consistency(b)
 @test b == trues(17,13)
 @test_throws ArgumentError Mmap.mmap(s, BitArray, (7,3))
 close(s)
 s = open(file, "r+")
 b = Mmap.mmap(s, BitArray, (17,19))
+@test Base._check_bitarray_consistency(b)
 rand!(b)
 Mmap.sync!(b)
 b0 = copy(b)
+@test Base._check_bitarray_consistency(b0)
 close(s)
 s = open(file, "r")
 @test isreadonly(s)
 b = Mmap.mmap(s, BitArray, (17,19))
+@test Base._check_bitarray_consistency(b)
 @test b == b0
 close(s)
 finalize(b); finalize(b0)
@@ -212,6 +216,7 @@ open(file,"w") do f
 end
 @test filesize(file) == 9
 m = Mmap.mmap(file, BitArray, (72,))
+@test Base._check_bitarray_consistency(m)
 @test length(m) == 72
 finalize(m); m = nothing; gc()
 rm(file)

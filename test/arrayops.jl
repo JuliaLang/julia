@@ -68,6 +68,8 @@ a[1,1,2,2,1] = 30
 @test a[1,2,1,1,2] == 20
 @test a[1,1,2,2,1] == 30
 
+@test_throws ArgumentError reinterpret(Int8, a)
+
 b = reshape(a, (32,))
 @test b[1]  == 10
 @test b[19] == 20
@@ -476,6 +478,12 @@ end
 @test_throws ArgumentError permutedims(s, (1,1,1))
 @test_throws ArgumentError Base.PermutedDimsArrays.PermutedDimsArray(a, (1,1,1))
 @test_throws ArgumentError Base.PermutedDimsArrays.PermutedDimsArray(s, (1,1,1))
+cptr = Base.PermutedDimsArrays.PermutedDimsArray(c, (3,2,1))
+@test pointer(cptr) == pointer(c)
+@test_throws ArgumentError pointer(cptr, 2)
+@test strides(cptr) == (9,3,1)
+ap = Base.PermutedDimsArrays.PermutedDimsArray(collect(a), (2,1,3))
+@test strides(ap) == (3,1,12)
 
 ## ipermutedims ##
 

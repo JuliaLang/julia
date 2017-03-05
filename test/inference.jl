@@ -363,3 +363,16 @@ function test18399(C)
     return hvcat18399(((2, 3),))
 end
 @test test18399(C18399) == (2, 3)
+
+test_fast_eq(a, b) = @fastmath a == b
+test_fast_ne(a, b) = @fastmath a != b
+test_fast_lt(a, b) = @fastmath a < b
+test_fast_le(a, b) = @fastmath a <= b
+@inferred test_fast_eq(1f0, 1f0)
+@inferred test_fast_ne(1f0, 1f0)
+@inferred test_fast_lt(1f0, 1f0)
+@inferred test_fast_le(1f0, 1f0)
+@inferred test_fast_eq(1.0, 1.0)
+@inferred test_fast_ne(1.0, 1.0)
+@inferred test_fast_lt(1.0, 1.0)
+@inferred test_fast_le(1.0, 1.0)

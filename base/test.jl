@@ -411,12 +411,15 @@ along with a summary of the test results.
 type DefaultTestSet <: AbstractTestSet
     description::AbstractString
     results::Vector
+    n_passed::Int
     anynonpass::Bool
 end
-DefaultTestSet(desc) = DefaultTestSet(desc, [], false)
+DefaultTestSet(desc) = DefaultTestSet(desc, [], 0, false)
 
-# For a passing or broken result, simply store the result
-record(ts::DefaultTestSet, t::Union{Pass,Broken}) = (push!(ts.results, t); t)
+# For a broken result, simply store the result
+record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
+# For a passed result, do not store the result since it uses a lot of memory
+record(ts::DefaultTestSet, t::Pass) = (ts.n_passed += 1; t)
 
 # For the other result types, immediately print the error message
 # but do not terminate. Print a backtrace.
@@ -520,10 +523,9 @@ get_alignment(ts, depth::Int) = 0
 # Recursive function that counts the number of test results of each
 # type directly in the testset, and totals across the child testsets
 function get_test_counts(ts::DefaultTestSet)
-    passes, fails, errors, broken = 0, 0, 0, 0
+    passes, fails, errors, broken = ts.n_passed, 0, 0, 0
     c_passes, c_fails, c_errors, c_broken = 0, 0, 0, 0
     for t in ts.results
-        isa(t, Pass)   && (passes += 1)
         isa(t, Fail)   && (fails  += 1)
         isa(t, Error)  && (errors += 1)
         isa(t, Broken) && (broken += 1)
@@ -939,26 +941,28 @@ macro inferred(ex)
     Meta.isexpr(ex, :call)|| error("@inferred requires a call expression")
 
     Base.remove_linenums!(quote
-        $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
-            # Has keywords
-            args = gensym()
-            kwargs = gensym()
-            quote
-                $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
-                inftypes = $(Base.gen_call_with_extracted_types(Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
-            end
-        else
-            # No keywords
-            quote
-                args = ($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)
-                result = $(esc(ex.args[1]))(args...)
-                inftypes = Base.return_types($(esc(ex.args[1])), Base.typesof(args...))
-            end
-        end)
-        @assert length(inftypes) == 1
-        rettype = isa(result, Type) ? Type{result} : typeof(result)
-        rettype == inftypes[1] || error("return type $rettype does not match inferred return type $(inftypes[1])")
-        result
+        let
+            $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
+                # Has keywords
+                args = gensym()
+                kwargs = gensym()
+                quote
+                    $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
+                    inftypes = $(Base.gen_call_with_extracted_types(Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
+                end
+            else
+                # No keywords
+                quote
+                    args = ($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)
+                    result = $(esc(ex.args[1]))(args...)
+                    inftypes = Base.return_types($(esc(ex.args[1])), Base.typesof(args...))
+                end
+            end)
+            @assert length(inftypes) == 1
+            rettype = isa(result, Type) ? Type{result} : typeof(result)
+            rettype == inftypes[1] || error("return type $rettype does not match inferred return type $(inftypes[1])")
+            result
+        end
     end)
 end
 

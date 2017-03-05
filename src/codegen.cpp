@@ -3349,8 +3349,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         return mark_julia_type(builder.CreateCall(prepare_call(jlcopyast_func), boxed(ast, ctx)), true, ast.typ, ctx);
     }
     else if (head == simdloop_sym) {
-        if (!llvm::annotateSimdLoop(builder.GetInsertBlock()))
-            jl_printf(JL_STDERR, "WARNING: could not attach metadata for @simd loop.\n");
+        llvm::annotateSimdLoop(builder.GetInsertBlock());
         return jl_cgval_t();
     }
     else {
@@ -3701,6 +3700,9 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         builder.CreateRetVoid();
     else
         builder.CreateRet(r);
+
+    builder.SetCurrentDebugLocation(noDbg);
+    builder.ClearInsertionPoint();
 
     jl_finalize_module(M, true);
 

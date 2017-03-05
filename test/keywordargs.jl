@@ -99,6 +99,12 @@ extravagant_args(x,y=0,rest...;color="blue",kw...) =
 
 # passing empty kw container to function with no kwargs
 @test sin(1.0) == sin(1.0; Dict()...)
+# issue #18845
+@test (@eval sin(1.0; $([]...))) == sin(1.0)
+f18845() = 2
+@test f18845(;) == 2
+@test f18845(; []...) == 2
+@test (@eval f18845(; $([]...))) == 2
 
 # passing junk kw container
 @test_throws BoundsError extravagant_args(1; Any[[]]...)
@@ -218,3 +224,10 @@ end
 @test f9948(x=5) == 5
 @test_throws UndefVarError f9948()
 @test getx9948() == 3
+
+# pr #18396, kwargs before Base is defined
+eval(Core.Inference, quote
+    f18396(;kwargs...) = g18396(;kwargs...)
+    g18396(;x=1,y=2) = x+y
+end)
+@test Core.Inference.f18396() == 3

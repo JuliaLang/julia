@@ -112,33 +112,34 @@ U+002DC           ˜            \\texttildelow                                 S
 U+002E1           ˡ            \\^l                                           MODIFIER LETTER SMALL L
 U+002E2           ˢ            \\^s                                           MODIFIER LETTER SMALL S
 U+002E3           ˣ            \\^x                                           MODIFIER LETTER SMALL X
-U+00300           ̀             \\grave                                        COMBINING GRAVE ACCENT / NON-SPACING GRAVE
-U+00301           ́             \\acute                                        COMBINING ACUTE ACCENT / NON-SPACING ACUTE
-U+00302           ̂             \\hat                                          COMBINING CIRCUMFLEX ACCENT / NON-SPACING CIRCUMFLEX
-U+00303           ̃             \\tilde                                        COMBINING TILDE / NON-SPACING TILDE
-U+00304           ̄             \\bar                                          COMBINING MACRON / NON-SPACING MACRON
-U+00305           ̅             \\overbar                                      COMBINING OVERLINE / NON-SPACING OVERSCORE
-U+00306           ̆             \\breve                                        COMBINING BREVE / NON-SPACING BREVE
-U+00307           ̇             \\dot                                          COMBINING DOT ABOVE / NON-SPACING DOT ABOVE
-U+00308           ̈             \\ddot                                         COMBINING DIAERESIS / NON-SPACING DIAERESIS
-U+00309           ̉             \\ovhook                                       COMBINING HOOK ABOVE / NON-SPACING HOOK ABOVE
-U+0030A           ̊             \\ocirc                                        COMBINING RING ABOVE / NON-SPACING RING ABOVE
-U+0030B           ̋             \\H                                            COMBINING DOUBLE ACUTE ACCENT / NON-SPACING DOUBLE ACUTE
-U+0030C           ̌             \\check                                        COMBINING CARON / NON-SPACING HACEK
-U+00310           ̐             \\candra                                       COMBINING CANDRABINDU / NON-SPACING CANDRABINDU
-U+00312           ̒             \\oturnedcomma                                 COMBINING TURNED COMMA ABOVE / NON-SPACING TURNED COMMA ABOVE
-U+00315           ̕             \\ocommatopright                               COMBINING COMMA ABOVE RIGHT / NON-SPACING COMMA ABOVE RIGHT
-U+0031A           ̚             \\droang                                       COMBINING LEFT ANGLE ABOVE / NON-SPACING LEFT ANGLE ABOVE
-U+00321           ̡             \\Elzpalh                                      COMBINING PALATALIZED HOOK BELOW / NON-SPACING PALATALIZED HOOK BELOW
-U+00322           ̢             \\Elzrh                                        COMBINING RETROFLEX HOOK BELOW / NON-SPACING RETROFLEX HOOK BELOW
-U+00327           ̧             \\c                                            COMBINING CEDILLA / NON-SPACING CEDILLA
-U+00328           ̨             \\k                                            COMBINING OGONEK / NON-SPACING OGONEK
-U+0032A           ̪             \\Elzsbbrg                                     COMBINING BRIDGE BELOW / NON-SPACING BRIDGE BELOW
-U+00330           ̰             \\wideutilde                                   COMBINING TILDE BELOW / NON-SPACING TILDE BELOW
-U+00331           ̱             \\underbar                                     COMBINING MACRON BELOW / NON-SPACING MACRON BELOW
-U+00335           ̵             \\Elzxl                                        COMBINING SHORT STROKE OVERLAY / NON-SPACING SHORT BAR OVERLAY
-U+00336           ̶             \\Elzbar, \\sout                               COMBINING LONG STROKE OVERLAY / NON-SPACING LONG BAR OVERLAY
-U+00338           ̸             \\not                                          COMBINING LONG SOLIDUS OVERLAY / NON-SPACING LONG SLASH OVERLAY
+U+00300            ̀            \\grave                                        COMBINING GRAVE ACCENT / NON-SPACING GRAVE
+U+00301            ́            \\acute                                        COMBINING ACUTE ACCENT / NON-SPACING ACUTE
+U+00302            ̂            \\hat                                          COMBINING CIRCUMFLEX ACCENT / NON-SPACING CIRCUMFLEX
+U+00303            ̃            \\tilde                                        COMBINING TILDE / NON-SPACING TILDE
+U+00304            ̄            \\bar                                          COMBINING MACRON / NON-SPACING MACRON
+U+00305            ̅            \\overbar                                      COMBINING OVERLINE / NON-SPACING OVERSCORE
+U+00306            ̆            \\breve                                        COMBINING BREVE / NON-SPACING BREVE
+U+00307            ̇            \\dot                                          COMBINING DOT ABOVE / NON-SPACING DOT ABOVE
+U+00308            ̈            \\ddot                                         COMBINING DIAERESIS / NON-SPACING DIAERESIS
+U+00309            ̉            \\ovhook                                       COMBINING HOOK ABOVE / NON-SPACING HOOK ABOVE
+U+0030A            ̊            \\ocirc                                        COMBINING RING ABOVE / NON-SPACING RING ABOVE
+U+0030B            ̋            \\H                                            COMBINING DOUBLE ACUTE ACCENT / NON-SPACING DOUBLE ACUTE
+U+0030C            ̌            \\check                                        COMBINING CARON / NON-SPACING HACEK
+U+00310            ̐            \\candra                                       COMBINING CANDRABINDU / NON-SPACING CANDRABINDU
+U+00312            ̒            \\oturnedcomma                                 COMBINING TURNED COMMA ABOVE / NON-SPACING TURNED COMMA ABOVE
+U+00315            ̕            \\ocommatopright                               COMBINING COMMA ABOVE RIGHT / NON-SPACING COMMA ABOVE RIGHT
+U+0031A            ̚            \\droang                                       COMBINING LEFT ANGLE ABOVE / NON-SPACING LEFT ANGLE ABOVE
+U+00321            ̡            \\Elzpalh                                      COMBINING PALATALIZED HOOK BELOW / NON-SPACING PALATALIZED HOOK BELOW
+U+00322            ̢            \\Elzrh                                        COMBINING RETROFLEX HOOK BELOW / NON-SPACING RETROFLEX HOOK BELOW
+U+00327            ̧            \\c                                            COMBINING CEDILLA / NON-SPACING CEDILLA
+U+00328            ̨            \\k                                            COMBINING OGONEK / NON-SPACING OGONEK
+U+0032A            ̪            \\Elzsbbrg                                     COMBINING BRIDGE BELOW / NON-SPACING BRIDGE BELOW
+U+00330            ̰            \\wideutilde                                   COMBINING TILDE BELOW / NON-SPACING TILDE BELOW
+U+00332            ̲            \\underbar                                     COMBINING LOW LINE / NON-SPACING UNDERSCORE
+U+00335            ̵            \\Elzxl                                        COMBINING SHORT STROKE OVERLAY / NON-SPACING SHORT BAR OVERLAY
+U+00336            ̶            \\Elzbar, \\sout                               COMBINING LONG STROKE OVERLAY / NON-SPACING LONG BAR OVERLAY
+U+00338            ̸            \\not                                          COMBINING LONG SOLIDUS OVERLAY / NON-SPACING LONG SLASH OVERLAY
+U+0034D            ͍            \\underleftrightarrow                          COMBINING LEFT RIGHT ARROW BELOW
 U+00391           Α            \\Alpha                                        GREEK CAPITAL LETTER ALPHA
 U+00392           Β            \\Beta                                         GREEK CAPITAL LETTER BETA
 U+00393           Γ            \\Gamma                                        GREEK CAPITAL LETTER GAMMA
@@ -275,7 +276,7 @@ U+0201D           ”            \\textquotedblright                            
 U+02020           †            \\dagger                                       DAGGER
 U+02021           ‡            \\ddagger                                      DOUBLE DAGGER
 U+02022           •            \\bullet                                       BULLET
-U+02026           …            \\dots                                         HORIZONTAL ELLIPSIS
+U+02026           …            \\dots, \\ldots                                HORIZONTAL ELLIPSIS
 U+02030           ‰            \\textperthousand                              PER MILLE SIGN
 U+02031           ‱            \\textpertenthousand                           PER TEN THOUSAND SIGN
 U+02032           ′            \\prime                                        PRIME
@@ -335,26 +336,26 @@ U+0209B           ₛ            \\_s                                           
 U+0209C           ₜ            \\_t                                           LATIN SUBSCRIPT SMALL LETTER T
 U+020A7           ₧            \\Elzpes                                       PESETA SIGN
 U+020AC           €            \\euro                                         EURO SIGN
-U+020D0           ⃐             \\leftharpoonaccent                            COMBINING LEFT HARPOON ABOVE / NON-SPACING LEFT HARPOON ABOVE
-U+020D1           ⃑             \\rightharpoonaccent                           COMBINING RIGHT HARPOON ABOVE / NON-SPACING RIGHT HARPOON ABOVE
-U+020D2           ⃒             \\vertoverlay                                  COMBINING LONG VERTICAL LINE OVERLAY / NON-SPACING LONG VERTICAL BAR OVERLAY
-U+020D6           ⃖             \\overleftarrow                                COMBINING LEFT ARROW ABOVE / NON-SPACING LEFT ARROW ABOVE
-U+020D7           ⃗             \\vec                                          COMBINING RIGHT ARROW ABOVE / NON-SPACING RIGHT ARROW ABOVE
-U+020DB           ⃛             \\dddot                                        COMBINING THREE DOTS ABOVE / NON-SPACING THREE DOTS ABOVE
-U+020DC           ⃜             \\ddddot                                       COMBINING FOUR DOTS ABOVE / NON-SPACING FOUR DOTS ABOVE
-U+020DD           ⃝             \\enclosecircle                                COMBINING ENCLOSING CIRCLE / ENCLOSING CIRCLE
-U+020DE           ⃞             \\enclosesquare                                COMBINING ENCLOSING SQUARE / ENCLOSING SQUARE
-U+020DF           ⃟             \\enclosediamond                               COMBINING ENCLOSING DIAMOND / ENCLOSING DIAMOND
-U+020E1           ⃡             \\overleftrightarrow                           COMBINING LEFT RIGHT ARROW ABOVE / NON-SPACING LEFT RIGHT ARROW ABOVE
-U+020E4           ⃤             \\enclosetriangle                              COMBINING ENCLOSING UPWARD POINTING TRIANGLE
-U+020E7           ⃧             \\annuity                                      COMBINING ANNUITY SYMBOL
-U+020E8           ⃨             \\threeunderdot                                COMBINING TRIPLE UNDERDOT
-U+020E9           ⃩             \\widebridgeabove                              COMBINING WIDE BRIDGE ABOVE
-U+020EC           ⃬             \\underrightharpoondown                        COMBINING RIGHTWARDS HARPOON WITH BARB DOWNWARDS
-U+020ED           ⃭             \\underleftharpoondown                         COMBINING LEFTWARDS HARPOON WITH BARB DOWNWARDS
-U+020EE           ⃮             \\underleftarrow                               COMBINING LEFT ARROW BELOW
-U+020EF           ⃯             \\underrightarrow                              COMBINING RIGHT ARROW BELOW
-U+020F0           ⃰             \\asteraccent                                  COMBINING ASTERISK ABOVE
+U+020D0            ⃐            \\leftharpoonaccent                            COMBINING LEFT HARPOON ABOVE / NON-SPACING LEFT HARPOON ABOVE
+U+020D1            ⃑            \\rightharpoonaccent                           COMBINING RIGHT HARPOON ABOVE / NON-SPACING RIGHT HARPOON ABOVE
+U+020D2            ⃒            \\vertoverlay                                  COMBINING LONG VERTICAL LINE OVERLAY / NON-SPACING LONG VERTICAL BAR OVERLAY
+U+020D6            ⃖            \\overleftarrow                                COMBINING LEFT ARROW ABOVE / NON-SPACING LEFT ARROW ABOVE
+U+020D7            ⃗            \\vec                                          COMBINING RIGHT ARROW ABOVE / NON-SPACING RIGHT ARROW ABOVE
+U+020DB            ⃛            \\dddot                                        COMBINING THREE DOTS ABOVE / NON-SPACING THREE DOTS ABOVE
+U+020DC            ⃜            \\ddddot                                       COMBINING FOUR DOTS ABOVE / NON-SPACING FOUR DOTS ABOVE
+U+020DD            ⃝            \\enclosecircle                                COMBINING ENCLOSING CIRCLE / ENCLOSING CIRCLE
+U+020DE            ⃞            \\enclosesquare                                COMBINING ENCLOSING SQUARE / ENCLOSING SQUARE
+U+020DF            ⃟            \\enclosediamond                               COMBINING ENCLOSING DIAMOND / ENCLOSING DIAMOND
+U+020E1            ⃡            \\overleftrightarrow                           COMBINING LEFT RIGHT ARROW ABOVE / NON-SPACING LEFT RIGHT ARROW ABOVE
+U+020E4            ⃤            \\enclosetriangle                              COMBINING ENCLOSING UPWARD POINTING TRIANGLE
+U+020E7            ⃧            \\annuity                                      COMBINING ANNUITY SYMBOL
+U+020E8            ⃨            \\threeunderdot                                COMBINING TRIPLE UNDERDOT
+U+020E9            ⃩            \\widebridgeabove                              COMBINING WIDE BRIDGE ABOVE
+U+020EC            ⃬            \\underrightharpoondown                        COMBINING RIGHTWARDS HARPOON WITH BARB DOWNWARDS
+U+020ED            ⃭            \\underleftharpoondown                         COMBINING LEFTWARDS HARPOON WITH BARB DOWNWARDS
+U+020EE            ⃮            \\underleftarrow                               COMBINING LEFT ARROW BELOW
+U+020EF            ⃯            \\underrightarrow                              COMBINING RIGHT ARROW BELOW
+U+020F0            ⃰            \\asteraccent                                  COMBINING ASTERISK ABOVE
 U+02102           ℂ            \\BbbC                                         DOUBLE-STRUCK CAPITAL C / DOUBLE-STRUCK C
 U+02107           ℇ            \\Eulerconst                                   EULER CONSTANT / EULERS
 U+0210A           ℊ            \\mscrg                                        SCRIPT SMALL G
@@ -423,6 +424,8 @@ U+02198           ↘            \\searrow, \\:arrow_lower_right:               
 U+02199           ↙            \\swarrow, \\:arrow_lower_left:                SOUTH WEST ARROW / LOWER LEFT ARROW
 U+0219A           ↚            \\nleftarrow                                   LEFTWARDS ARROW WITH STROKE / LEFT ARROW WITH STROKE
 U+0219B           ↛            \\nrightarrow                                  RIGHTWARDS ARROW WITH STROKE / RIGHT ARROW WITH STROKE
+U+0219C           ↜            \\leftwavearrow                                LEFTWARDS WAVE ARROW / LEFT WAVE ARROW
+U+0219D           ↝            \\rightwavearrow                               RIGHTWARDS WAVE ARROW / RIGHT WAVE ARROW
 U+0219E           ↞            \\twoheadleftarrow                             LEFTWARDS TWO HEADED ARROW / LEFT TWO HEADED ARROW
 U+0219F           ↟            \\twoheaduparrow                               UPWARDS TWO HEADED ARROW / UP TWO HEADED ARROW
 U+021A0           ↠            \\twoheadrightarrow                            RIGHTWARDS TWO HEADED ARROW / RIGHT TWO HEADED ARROW
@@ -778,6 +781,7 @@ U+022FE           ⋾            \\niobar                                       
 U+022FF           ⋿            \\bagmember                                    Z NOTATION BAG MEMBERSHIP
 U+02300           ⌀            \\diameter                                     DIAMETER SIGN
 U+02302           ⌂            \\house                                        HOUSE
+U+02305           ⌅            \\varbarwedge                                  PROJECTIVE
 U+02306           ⌆            \\vardoublebarwedge                            PERSPECTIVE
 U+02308           ⌈            \\lceil                                        LEFT CEILING
 U+02309           ⌉            \\rceil                                        RIGHT CEILING
@@ -870,7 +874,9 @@ U+025B3           △            \\bigtriangleup                                
 U+025B4           ▴            \\blacktriangle                                BLACK UP-POINTING SMALL TRIANGLE / BLACK UP POINTING SMALL TRIANGLE
 U+025B5           ▵            \\vartriangle                                  WHITE UP-POINTING SMALL TRIANGLE / WHITE UP POINTING SMALL TRIANGLE
 U+025B6           ▶            \\blacktriangleright, \\:arrow_forward:        BLACK RIGHT-POINTING TRIANGLE / BLACK RIGHT POINTING TRIANGLE
-U+025B9           ▹            \\triangleright                                WHITE RIGHT-POINTING SMALL TRIANGLE / WHITE RIGHT POINTING SMALL TRIANGLE
+U+025B7           ▷            \\triangleright                                WHITE RIGHT-POINTING TRIANGLE / WHITE RIGHT POINTING TRIANGLE
+U+025B8           ▸            \\smallblacktriangleright                      BLACK RIGHT-POINTING SMALL TRIANGLE / BLACK RIGHT POINTING SMALL TRIANGLE
+U+025B9           ▹            \\smalltriangleright                           WHITE RIGHT-POINTING SMALL TRIANGLE / WHITE RIGHT POINTING SMALL TRIANGLE
 U+025BA           ►            \\blackpointerright                            BLACK RIGHT-POINTING POINTER / BLACK RIGHT POINTING POINTER
 U+025BB           ▻            \\whitepointerright                            WHITE RIGHT-POINTING POINTER / WHITE RIGHT POINTING POINTER
 U+025BC           ▼            \\bigblacktriangledown                         BLACK DOWN-POINTING TRIANGLE / BLACK DOWN POINTING TRIANGLE
@@ -878,7 +884,9 @@ U+025BD           ▽            \\bigtriangledown                              
 U+025BE           ▾            \\blacktriangledown                            BLACK DOWN-POINTING SMALL TRIANGLE / BLACK DOWN POINTING SMALL TRIANGLE
 U+025BF           ▿            \\triangledown                                 WHITE DOWN-POINTING SMALL TRIANGLE / WHITE DOWN POINTING SMALL TRIANGLE
 U+025C0           ◀            \\blacktriangleleft, \\:arrow_backward:        BLACK LEFT-POINTING TRIANGLE / BLACK LEFT POINTING TRIANGLE
-U+025C3           ◃            \\triangleleft                                 WHITE LEFT-POINTING SMALL TRIANGLE / WHITE LEFT POINTING SMALL TRIANGLE
+U+025C1           ◁            \\triangleleft                                 WHITE LEFT-POINTING TRIANGLE / WHITE LEFT POINTING TRIANGLE
+U+025C2           ◂            \\smallblacktriangleleft                       BLACK LEFT-POINTING SMALL TRIANGLE / BLACK LEFT POINTING SMALL TRIANGLE
+U+025C3           ◃            \\smalltriangleleft                            WHITE LEFT-POINTING SMALL TRIANGLE / WHITE LEFT POINTING SMALL TRIANGLE
 U+025C4           ◄            \\blackpointerleft                             BLACK LEFT-POINTING POINTER / BLACK LEFT POINTING POINTER
 U+025C5           ◅            \\whitepointerleft                             WHITE LEFT-POINTING POINTER / WHITE LEFT POINTING POINTER
 U+025C6           ◆            \\mdlgblkdiamond                               BLACK DIAMOND
@@ -954,6 +962,7 @@ U+0263A           ☺            \\:relaxed:                                    
 U+0263B           ☻            \\blacksmiley                                  BLACK SMILING FACE
 U+0263C           ☼            \\sun                                          WHITE SUN WITH RAYS
 U+0263D           ☽            \\rightmoon                                    FIRST QUARTER MOON
+U+0263E           ☾            \\leftmoon                                     LAST QUARTER MOON
 U+0263F           ☿            \\mercury                                      MERCURY
 U+02640           ♀            \\venus, \\female                              FEMALE SIGN
 U+02642           ♂            \\male, \\mars                                 MALE SIGN
@@ -1064,6 +1073,9 @@ U+027C8           ⟈            \\bsolhsub                                     
 U+027C9           ⟉            \\suphsol                                      SUPERSET PRECEDING SOLIDUS
 U+027D1           ⟑            \\wedgedot                                     AND WITH DOT
 U+027D2           ⟒            \\upin                                         ELEMENT OF OPENING UPWARDS
+U+027D5           ⟕            \\leftouterjoin                                LEFT OUTER JOIN
+U+027D6           ⟖            \\rightouterjoin                               RIGHT OUTER JOIN
+U+027D7           ⟗            \\fullouterjoin                                FULL OUTER JOIN
 U+027D8           ⟘            \\bigbot                                       LARGE UP TACK
 U+027D9           ⟙            \\bigtop                                       LARGE DOWN TACK
 U+027E6           ⟦            \\llbracket, \\openbracketleft                 MATHEMATICAL LEFT WHITE SQUARE BRACKET
@@ -1260,6 +1272,7 @@ U+02A19           ⨙            \\intcap                                       
 U+02A1A           ⨚            \\intcup                                       INTEGRAL WITH UNION
 U+02A1B           ⨛            \\upint                                        INTEGRAL WITH OVERBAR
 U+02A1C           ⨜            \\lowint                                       INTEGRAL WITH UNDERBAR
+U+02A1D           ⨝            \\Join                                         JOIN
 U+02A22           ⨢            \\ringplus                                     PLUS SIGN WITH SMALL CIRCLE ABOVE
 U+02A23           ⨣            \\plushat                                      PLUS SIGN WITH CIRCUMFLEX ACCENT ABOVE
 U+02A24           ⨤            \\simplus                                      PLUS SIGN WITH TILDE ABOVE

@@ -22,7 +22,9 @@ global CPU_CORES
 """
     Sys.CPU_CORES
 
-The number of CPU cores in the system.
+The number of logical CPU cores available in the system.
+
+See the Hwloc.jl package for extended information, including number of physical cores.
 """
 :CPU_CORES
 

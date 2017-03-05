@@ -165,6 +165,9 @@ for n = 0:4
     show(IOContext(io, limit=true), MIME("text/plain"), (a,a))
     @test takebuf_string(io) == targets2[n+1]
 end
+P = OffsetArray(rand(8,8), (1,1))
+PV = view(P, 2:3, :)
+@test endswith(summary(PV), "with indices Base.OneTo(2)×2:9")
 
 # Similar
 B = similar(A, Float32)
@@ -317,6 +320,7 @@ I,J,N = findnz(z)
 @test var(A_3_3) == 7.5
 @test std(A_3_3, 1) == OffsetArray([1 1 1], (0,A_3_3.offsets[2]))
 @test std(A_3_3, 2) == OffsetArray([3,3,3]'', (A_3_3.offsets[1],0))
+@test sum(OffsetArray(ones(Int,3000), -1000)) == 3000
 
 @test_approx_eq vecnorm(v) vecnorm(parent(v))
 @test_approx_eq vecnorm(A) vecnorm(parent(A))
@@ -381,14 +385,16 @@ for s = -5:5
     for i = 1:5
         thisa = OffsetArray(a[i], (s,))
         thisc = c[mod1(i+s+5,5)]
-        @test_approx_eq fft(thisa) thisc
-        @test_approx_eq fft(thisa, 1) thisc
-        @test_approx_eq ifft(fft(thisa)) Base.circcopy!(a1, thisa)
-        @test_approx_eq ifft(fft(thisa, 1), 1) Base.circcopy!(a1, thisa)
-        @test_approx_eq rfft(thisa) thisc[1:3]
-        @test_approx_eq rfft(thisa, 1) thisc[1:3]
-        @test_approx_eq irfft(rfft(thisa, 1), 5, 1) a1
-        @test_approx_eq irfft(rfft(thisa, 1), 5, 1) a1
+        if Base.USE_GPL_LIBS
+            @test_approx_eq fft(thisa) thisc
+            @test_approx_eq fft(thisa, 1) thisc
+            @test_approx_eq ifft(fft(thisa)) Base.circcopy!(a1, thisa)
+            @test_approx_eq ifft(fft(thisa, 1), 1) Base.circcopy!(a1, thisa)
+            @test_approx_eq rfft(thisa) thisc[1:3]
+            @test_approx_eq rfft(thisa, 1) thisc[1:3]
+            @test_approx_eq irfft(rfft(thisa, 1), 5, 1) a1
+            @test_approx_eq irfft(rfft(thisa, 1), 5, 1) a1
+        end
     end
 end
 

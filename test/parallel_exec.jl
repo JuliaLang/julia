@@ -1105,3 +1105,12 @@ let
     ref = remotecall(bad_thunk, 2)
     @test_throws RemoteException fetch(ref)
 end
+
+# Test calling @everywhere from a module not defined on the workers
+module LocalBar
+    bar() = @everywhere new_bar()=myid()
+end
+LocalBar.bar()
+for p in procs()
+    @test p == remotecall_fetch(new_bar, p)
+end

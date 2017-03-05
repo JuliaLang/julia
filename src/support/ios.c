@@ -99,13 +99,19 @@ static int _os_read(long fd, void *buf, size_t n, size_t *nread)
 {
     ssize_t r;
 
+    n = LIMIT_IO_SIZE(n);
     while (1) {
         set_io_wait_begin(1);
-        r = read((int)fd, buf, LIMIT_IO_SIZE(n));
+        r = read((int)fd, buf, n);
         set_io_wait_begin(0);
         if (r > -1) {
             *nread = (size_t)r;
             return 0;
+        }
+        // This test is a hack to fix #11481 for Windows 7. Unnecessary for Windows 10.
+        if (errno == ENOMEM && n > 80) {
+            n >>= 3;
+            continue;
         }
         if (!_enonfatal(errno)) {
             *nread = 0;

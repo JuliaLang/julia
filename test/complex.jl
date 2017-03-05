@@ -913,4 +913,6 @@ end
 let x = 1+im
     @inferred sin(x)
     @inferred cos(x)
+    @inferred norm(x)
+    @inferred vecnorm(x)
 end

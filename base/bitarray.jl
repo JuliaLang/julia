@@ -57,6 +57,20 @@ const _msk64 = ~UInt64(0)
 @inline _msk_end(B::BitArray) = _msk_end(length(B))
 num_bit_chunks(n::Int) = _div64(n+63)
 
+function _check_bitarray_consistency{N}(B::BitArray{N})
+    n = length(B)
+    if N ≠ 1
+        all(d ≥ 0 for d in B.dims) || (warn("negative d in dims: $(B.dims)"); return false)
+        prod(B.dims) ≠ n && (warn("inconsistent dims/len: prod(dims)=$(prod(B.dims)) len=$n"); return false)
+    end
+    Bc = B.chunks
+    nc = length(Bc)
+    nc == num_bit_chunks(n) || (warn("incorrect chunks length for length $n: expected=$(num_bit_chunks(n)) actual=$nc"); return false)
+    n == 0 && return true
+    Bc[end] & _msk_end(n) == Bc[end] || (warn("nonzero bits in chunk after BitArray end"); return false)
+    return true
+end
+
 @inline get_chunks_id(i::Integer) = _div64(Int(i)-1)+1, _mod64(Int(i)-1)
 
 function glue_src_bitchunks(src::Vector{UInt64}, k::Int, ks1::Int, msk_s0::UInt64, ls0::Int)
@@ -1832,32 +1846,34 @@ maximum(B::BitArray) = isempty(B) ? throw(ArgumentError("argument must be non-em
 # arrays since there can be a 64x speedup by working at the level of Int64
 # instead of looping bit-by-bit.
 
-map(f::Function, A::BitArray) = map!(f, similar(A), A)
-map(f::Function, A::BitArray, B::BitArray) = map!(f, similar(A), A, B)
+map(::Union{typeof(~), typeof(!)}, A::BitArray) = bit_map!(~, similar(A), A)
+map(::typeof(zero), A::BitArray) = fill!(similar(A), false)
+map(::typeof(one), A::BitArray) = fill!(similar(A), true)
+map(::typeof(identity), A::BitArray) = copy(A)
 
 map!(f, A::BitArray) = map!(f, A, A)
-map!(f::typeof(!), dest::BitArray, A::BitArray) = map!(~, dest, A)
-map!(f::typeof(zero), dest::BitArray, A::BitArray) = fill!(dest, false)
-map!(f::typeof(one), dest::BitArray, A::BitArray) = fill!(dest, true)
+map!(::typeof(identity), A::BitArray) = A
+map!(::Union{typeof(~), typeof(!)}, dest::BitArray, A::BitArray) = bit_map!(~, dest, A)
+map!(::typeof(zero), dest::BitArray, A::BitArray) = fill!(dest, false)
+map!(::typeof(one), dest::BitArray, A::BitArray) = fill!(dest, true)
+map!(::typeof(identity), dest::BitArray, A::BitArray) = copy!(dest, A)
 
-immutable BitChunkFunctor{F<:Function}
-    f::F
+for (T, f) in ((:(Union{typeof(&), typeof(*), typeof(min)}), :(&)),
+               (:(Union{typeof(|), typeof(max)}),            :(|)),
+               (:(Union{typeof($), typeof(!=)}),             :($)),
+               (:(Union{typeof(>=), typeof(^)}),             :((p, q) -> p | ~q)),
+               (:(typeof(<=)),                               :((p, q) -> ~p | q)),
+               (:(typeof(==)),                               :((p, q) -> ~(p $ q))),
+               (:(typeof(<)),                                :((p, q) -> ~p & q)),
+               (:(typeof(>)),                                :((p, q) -> p & ~q)))
+    @eval map(::$T, A::BitArray, B::BitArray) = bit_map!($f, similar(A), A, B)
+    @eval map!(::$T, dest::BitArray, A::BitArray, B::BitArray) = bit_map!($f, dest, A, B)
 end
-(f::BitChunkFunctor)(x, y) = f.f(x,y)
-
-map!(f::Union{typeof(*), typeof(min)}, dest::BitArray, A::BitArray, B::BitArray) = map!(&, dest, A, B)
-map!(f::typeof(max), dest::BitArray, A::BitArray, B::BitArray) = map!(|, dest, A, B)
-map!(f::typeof(!=), dest::BitArray, A::BitArray, B::BitArray) = map!($, dest, A, B)
-map!(f::Union{typeof(>=), typeof(^)}, dest::BitArray, A::BitArray, B::BitArray) = map!(BitChunkFunctor((p, q) -> p | ~q), dest, A, B)
-map!(f::typeof(<=), dest::BitArray, A::BitArray, B::BitArray) = map!(BitChunkFunctor((p, q) -> ~p | q), dest, A, B)
-map!(f::typeof(==), dest::BitArray, A::BitArray, B::BitArray) = map!(BitChunkFunctor((p, q) -> ~(p $ q)), dest, A, B)
-map!(f::typeof(<), dest::BitArray, A::BitArray, B::BitArray) = map!(BitChunkFunctor((p, q) -> ~p & q), dest, A, B)
-map!(f::typeof(>), dest::BitArray, A::BitArray, B::BitArray) = map!(BitChunkFunctor((p, q) -> p & ~q), dest, A, B)
 
 # If we were able to specialize the function to a known bitwise operation,
 # map across the chunks. Otherwise, fall-back to the AbstractArray method that
 # iterates bit-by-bit.
-function map!(f::Union{typeof(identity), typeof(~)}, dest::BitArray, A::BitArray)
+function bit_map!{F}(f::F, dest::BitArray, A::BitArray)
     size(A) == size(dest) || throw(DimensionMismatch("sizes of dest and A must match"))
     isempty(A) && return dest
     for i=1:length(A.chunks)-1
@@ -1866,7 +1882,7 @@ function map!(f::Union{typeof(identity), typeof(~)}, dest::BitArray, A::BitArray
     dest.chunks[end] = f(A.chunks[end]) & _msk_end(A)
     dest
 end
-function map!(f::Union{BitChunkFunctor, typeof(&), typeof(|), typeof($)}, dest::BitArray, A::BitArray, B::BitArray)
+function bit_map!{F}(f::F, dest::BitArray, A::BitArray, B::BitArray)
     size(A) == size(B) == size(dest) || throw(DimensionMismatch("sizes of dest, A, and B must all match"))
     isempty(A) && return dest
     for i=1:length(A.chunks)-1
@@ -2127,6 +2143,15 @@ end
 # BitArray I/O
 
 write(s::IO, B::BitArray) = write(s, B.chunks)
-read!(s::IO, B::BitArray) = read!(s, B.chunks)
+function read!(s::IO, B::BitArray)
+    n = length(B)
+    Bc = B.chunks
+    nc = length(read!(s, Bc))
+    if length(Bc) > 0 && Bc[end] & _msk_end(n) ≠ Bc[end]
+        Bc[end] &= _msk_end(n) # ensure that the BitArray is not broken
+        throw(DimensionMismatch("read mismatch, found non-zero bits after BitArray length"))
+    end
+    return B
+end
 
 sizeof(B::BitArray) = sizeof(B.chunks)

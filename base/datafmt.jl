@@ -115,7 +115,9 @@ function readdlm_auto(input::AbstractString, dlm::Char, T::Type, eol::Char, auto
     use_mmap = get(optsd, :use_mmap, is_windows() ? false : true)
     fsz = filesize(input)
     if use_mmap && fsz > 0 && fsz < typemax(Int)
-        a = Mmap.mmap(input, Vector{UInt8}, (Int(fsz),))
+        a = open(input, "r") do f
+            Mmap.mmap(f, Vector{UInt8}, (Int(fsz),))
+        end
         # TODO: It would be nicer to use String(a) without making a copy,
         # but because the mmap'ed array is not NUL-terminated this causes
         # jl_try_substrtod to segfault below.

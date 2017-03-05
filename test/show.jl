@@ -572,3 +572,6 @@ end
 @test repr(:(f.(X,Y))) == ":(f.(X,Y))"
 @test repr(:(f.(X))) == ":(f.(X))"
 @test repr(:(f.())) == ":(f.())"
+
+# Test that REPL/mime display of invalid UTF-8 data doesn't throw an exception:
+@test isa(stringmime("text/plain", String(UInt8[0x00:0xff;])), String)

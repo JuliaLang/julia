@@ -185,8 +185,8 @@
                                                                 val))))
                          `(,(car body) ,@meta
                            ,(if (return? val)
-                                `(return (call (top convert) ,rett ,(cadr val)))
-                                `(call (top convert) ,rett ,val)))
+                                `(return ,(convert-for-type-decl (cadr val) rett))
+                                (convert-for-type-decl val rett)))
                          (let ((R (make-ssavalue)))
                            `(,(car body) ,@meta
                              (= ,R ,rett)
@@ -715,12 +715,12 @@
 (define (ctor-signature name params bounds method-params sig)
   (if (null? params)
       (if (null? method-params)
-          (cons `(call (|::| (curly Type ,name)) ,@sig)
+          (cons `(call (|::| (curly (core Type) ,name)) ,@sig)
                 params)
-          (cons `(call (curly (|::| (curly Type ,name)) ,@method-params) ,@sig)
+          (cons `(call (curly (|::| (curly (core Type) ,name)) ,@method-params) ,@sig)
                 params))
       (if (null? method-params)
-          (cons `(call (curly (|::| (curly Type (curly ,name ,@params)))
+          (cons `(call (curly (|::| (curly (core Type) (curly ,name ,@params)))
                               ,@(map (lambda (p b) `(<: ,p ,b)) params bounds))
                        ,@sig)
                 params)
@@ -729,7 +729,7 @@
                                                  (gensy)
                                                  p))
                                  params)))
-            (cons `(call (curly (|::| (curly Type (curly ,name ,@new-params)))
+            (cons `(call (curly (|::| (curly (core Type) (curly ,name ,@new-params)))
                                 ,@(map (lambda (p b) `(<: ,p ,b)) new-params bounds)
                                 ,@method-params)
                          ,@sig)
@@ -1914,7 +1914,11 @@
                   (expand-forms
                    (receive
                     (kws args) (separate kwarg? (cdddr e))
-                    (lower-kw-call f (append kws (cdr (caddr e))) args))))
+                    (let ((kws (append kws (cdr (caddr e)))))
+                      (if (null? kws)
+                          ;; empty parameters block; issue #18845
+                          `(call ,f ,@args)
+                          (lower-kw-call f kws args))))))
                  ((any kwarg? (cddr e))
                   ;; (call f ... (kw a b) ...)
                   (expand-forms
@@ -2347,7 +2351,9 @@
                 (renamed (map named-gensy need-rename))
                 (new-ren (append (map cons need-rename renamed)
                                  (filter (lambda (ren)
-                                           (not (memq (car ren) vars)))
+                                           (not (or (memq (car ren) vars)
+                                                    (memq (car ren) iglo)
+                                                    (memq (car ren) glob))))
                                          renames)))
                 (new-env (append vars glob env))
                 (new-iglo (append iglo implicitglobals))
@@ -3359,7 +3365,7 @@ f(x) = yt(x)
                           ;; strip filenames out of non-initial line nodes
                           (emit `(line ,(cadr e)))))
                      ((and (eq? (car e) 'meta) (length> e 2) (eq? (cadr e) 'ret-type))
-                      (assert (not value))
+                      (assert (or (not value) tail))
                       (assert (not rett))
                       (set! rett (caddr e)))
                      (else

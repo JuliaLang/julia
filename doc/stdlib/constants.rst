@@ -55,7 +55,9 @@ Constants
 
    .. Docstring generated from Julia source
 
-   The number of CPU cores in the system.
+   The number of logical CPU cores available in the system.
+
+   See the Hwloc.jl package for extended information, including number of physical cores.
 
 .. data:: Sys.WORD_SIZE
 

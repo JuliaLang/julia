@@ -640,7 +640,7 @@ So now instead of getting a plain string in ``msg_body``, the macro is
 receiving a full expression that will need to be evaluated in order to
 display as expected. This can be spliced directly into the returned expression
 as an argument to the :func:`string` call; see `error.jl
-<https://github.com/JuliaLang/julia/blob/master/base/error.jl>`_ for
+<https://github.com/JuliaLang/julia/blob/release-0.5/base/error.jl>`_ for
 the complete implementation.
 
 The :obj:`@assert` macro makes great use of splicing into quoted expressions

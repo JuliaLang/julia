@@ -120,6 +120,8 @@ for i = 1:5
     @test (maximum(abs(a*b - full(a)*b)) < 100*eps())
     @test (maximum(abs(A_mul_B!(similar(b), a, b) - full(a)*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
     @test (maximum(abs(A_mul_B!(similar(c), a, c) - full(a)*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
+    @test (maximum(abs(At_mul_B!(similar(b), a, b) - full(a).'*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
+    @test (maximum(abs(At_mul_B!(similar(c), a, c) - full(a).'*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
     @test (maximum(abs(a'b - full(a)'b)) < 100*eps())
     @test (maximum(abs(a.'b - full(a).'b)) < 100*eps())
     @test (maximum(abs(a\b - full(a)\b)) < 1000*eps())
@@ -287,6 +289,7 @@ end
 # conj
 cA = sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
 @test full(conj(cA)) == conj(full(cA))
+@test full(conj!(copy(cA))) == conj(full(cA))
 
 # Test SparseMatrixCSC [c]transpose[!] and permute[!] methods
 let smalldim = 5, largedim = 10, nzprob = 0.4
@@ -401,6 +404,7 @@ end
 # spdiagm
 @test full(spdiagm((ones(2), ones(2)), (0, -1), 3, 3)) ==
                        [1.0  0.0  0.0; 1.0  1.0  0.0;  0.0  1.0  0.0]
+@test full(spdiagm(ones(2), -1, 3, 3)) == diagm(ones(2), -1)
 
 # issue #4986, reinterpret
 sfe22 = speye(Float64, 2)
@@ -1260,6 +1264,13 @@ end
 @test diagm(sparse(ones(1,5))) == speye(5)
 @test diagm(sparse(ones(5,1))) == speye(5)
 
+#expandptr
+A = speye(5)
+@test Base.SparseArrays.expandptr(A.colptr) == collect(1:5)
+A[1,2] = 1
+@test Base.SparseArrays.expandptr(A.colptr) == [1; 2; 2; 3; 4; 5]
+@test_throws ArgumentError Base.SparseArrays.expandptr([2; 3])
+
 # triu/tril
 A = sprand(5,5,0.2)
 AF = full(A)
@@ -1411,6 +1422,14 @@ Ai = ceil(Int,Ar*100)
 @test norm(Ar,1) ≈ norm(full(Ar),1)
 @test norm(Ar,Inf) ≈ norm(full(Ar),Inf)
 @test vecnorm(Ar) ≈ vecnorm(full(Ar))
+@test norm(Ai,1) ≈ norm(full(Ai),1)
+@test norm(Ai,Inf) ≈ norm(full(Ai),Inf)
+@test vecnorm(Ai) ≈ vecnorm(full(Ai))
+Ai = trunc(Int,Ar*100)
+@test norm(Ai,1) ≈ norm(full(Ai),1)
+@test norm(Ai,Inf) ≈ norm(full(Ai),Inf)
+@test vecnorm(Ai) ≈ vecnorm(full(Ai))
+Ai = round(Int,Ar*100)
 @test norm(Ai,1) ≈ norm(full(Ai),1)
 @test norm(Ai,Inf) ≈ norm(full(Ai),Inf)
 @test vecnorm(Ai) ≈ vecnorm(full(Ai))
@@ -1592,4 +1611,34 @@ end
 # Row indexing a SparseMatrixCSC with non-Int integer type
 let A = sparse(UInt32[1,2,3], UInt32[1,2,3], [1.0,2.0,3.0])
     @test A[1,1:3] == A[1,:] == [1,0,0]
+end
+
+# dropstored issue #20513
+let x = sparse(rand(3,3))
+    Base.SparseArrays.dropstored!(x, 1, 1)
+    @test x[1, 1] == 0.0
+    @test x.colptr == [1, 3, 6, 9]
+    Base.SparseArrays.dropstored!(x, 2, 1)
+    @test x.colptr == [1, 2, 5, 8]
+    @test x[2, 1] == 0.0
+    Base.SparseArrays.dropstored!(x, 2, 2)
+    @test x.colptr == [1, 2, 4, 7]
+    @test x[2, 2] == 0.0
+    Base.SparseArrays.dropstored!(x, 2, 3)
+    @test x.colptr == [1, 2, 4, 6]
+    @test x[2, 3] == 0.0
+end
+
+# check buffers
+for n in 1:3
+    colptr = [1,2,3,4]
+    rowval = [1,2,3]
+    nzval1  = ones(0)
+    nzval2  = ones(3)
+    A = SparseMatrixCSC(n, n, colptr, rowval, nzval1)
+    @test nnz(A) == n
+    @test_throws BoundsError A[n,n]
+    A = SparseMatrixCSC(n, n, colptr, rowval, nzval2)
+    @test nnz(A) == n
+    @test A      == eye(n)
 end

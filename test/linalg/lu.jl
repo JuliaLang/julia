@@ -44,7 +44,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
 
-debug && println("(Automatic) Square LU decomposition")
+debug && println("(Automatic) Square LU decomposition. eltya: $eltya, eltyb: $eltyb")
         κ     = cond(a,1)
         lua   = factorize(a)
         @test_throws KeyError lua[:Z]

@@ -220,6 +220,11 @@ end
 
 # with bound varargs
 
+_bound_vararg_specificity_1{T,N}(::Type{Array{T,N}}, d::Vararg{Int, N}) = 0
+_bound_vararg_specificity_1{T}(::Type{Array{T,1}}, d::Int) = 1
+@test _bound_vararg_specificity_1(Array{Int,1}, 1) == 1
+@test _bound_vararg_specificity_1(Array{Int,2}, 1, 1) == 0
+
 # issue #11840
 typealias TT11840{T} Tuple{T,T}
 f11840(::Type) = "Type"
@@ -527,6 +532,18 @@ let
     f7234_2()
 end
 @test glob_x3 == 12
+
+# interaction between local variable renaming and nested globals (#19333)
+x19333 = 1
+function f19333(x19333)
+    return let x19333 = x19333
+        g19333() = (global x19333 += 2)
+        g19333() + (x19333 += 1)
+    end + (x19333 += 1)
+end
+@test f19333(0) == 5
+@test f19333(0) == 7
+@test x19333 == 5
 
 # let - new variables, including undefinedness
 function let_undef()
@@ -3604,6 +3621,17 @@ end
 @test TestMacroGlobalFunction.ff(1) == 2
 @test TestMacroGlobalFunction.gg(1) == 3
 
+# issue #18672
+macro x18672()
+    quote
+        function f
+        end
+    end
+end
+let
+    @test isa(@x18672, Function)
+end
+
 # issue #14564
 @test isa(object_id(Tuple.name.cache), Integer)
 
@@ -4373,6 +4401,15 @@ function f17613_2(x)::Float64
 end
 @test isa(f17613_2(1), Float64)
 
+type A1090 end
+Base.convert(::Type{Int}, ::A1090) = "hey"
+f1090()::Int = A1090()
+@test_throws TypeError f1090()
+
+# issue #19106
+function f19106()::Void end
+@test f19106() === nothing
+
 # issue #16783
 function f16783()
     T = UInt32
@@ -4477,6 +4514,14 @@ function f18054()
 end
 cfunction(f18054, Cint, ())
 
+# issue #18986: the ccall optimization of cfunction leaves JL_TRY stack in bad state
+dummy18996() = return nothing
+function main18986()
+    cfunction(dummy18986, Void, ())
+    ccall((:dummy2, "this_is_a_nonexisting_library"), Void, ())
+end
+@test_throws ErrorException main18986()
+
 # issue #18085
 f18085(a,x...) = (0,)
 for (f,g) in ((:asin,:sin), (:acos,:cos))
@@ -4542,3 +4587,44 @@ function f18173()
     successflag = false
 end
 @test f18173() == false
+
+# issue #10981, long argument lists
+let a = fill(["sdf"], 2*10^6), temp_vcat(x...) = vcat(x...)
+    # we introduce a new function `temp_vcat` to make sure there is no existing
+    # method cache match, leading to a path that allocates a large tuple type.
+    b = temp_vcat(a...)
+    @test isa(b, Vector{String})
+    @test length(b) == 2*10^6
+    @test b[1] == b[end] == "sdf"
+end
+
+# issue #17255, take `deferred_alloc` into account
+# when calculating total allocation size.
+@noinline function f17255(n)
+    gc_enable(false)
+    b0 = Base.gc_bytes()
+    local a
+    for i in 1:n
+        a, t, allocd = @timed [Ref(1) for i in 1:1000]
+        @test allocd > 0
+        b1 = Base.gc_bytes()
+        if b1 < b0
+            return false, a
+        end
+    end
+    return true, a
+end
+@test f17255(10000)[1]
+gc_enable(true)
+
+# issue #18710
+bad_tvars{T}() = 1
+@test isa(@which(bad_tvars()), Method)
+@test_throws MethodError bad_tvars()
+
+# issue #15240
+p15240 = ccall(:jl_realloc, Ptr{Void}, (Ptr{Void}, Csize_t), C_NULL, 10)
+ccall(:jl_free, Void, (Ptr{Void}, ), p15240)
+
+# issue #19963
+ccall(:jl_free, Void, (Ptr{Void}, ), C_NULL)

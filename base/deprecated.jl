@@ -381,7 +381,7 @@ end
 # expressions like f.(3) should still call broadcast for f::Function,
 # and in general broadcast should work for scalar arguments, while
 # getfield is certainly not intended for the case of f::Function.
-broadcast(f::Function, i::Integer) = invoke(broadcast, (Function, Number), f, i)
+broadcast(f::Function, i::Integer) = f(i)
 
 #16167
 macro ccallable(def)
@@ -723,11 +723,11 @@ function checkbounds{N,T}(::Type{Bool}, sz::NTuple{N,Integer}, I1::T, I...)
 end
 
 function first(::Colon)
-    depwarn("first(:) is deprecated, see http://docs.julialang.org/en/latest/devdocs/offset-arrays/", :first)
+    depwarn("first(:) is deprecated, see http://docs.julialang.org/en/release-0.5/devdocs/offset-arrays/", :first)
     1
 end
 function _first(i, A, d)
-    depwarn("_first is deprecated, see http://docs.julialang.org/en/latest/devdocs/offset-arrays/", :_first)
+    depwarn("_first is deprecated, see http://docs.julialang.org/en/release-0.5/devdocs/offset-arrays/", :_first)
     __first(i, A, d)
 end
 __first(::Colon, P, ::Colon) = first(linearindices(P))
@@ -768,9 +768,10 @@ end
 
 # Deprecate no-op transpose fallback. Please see #13171 and #17075.
 function transpose(x)
-    depwarn(string("the no-op `transpose` fallback is deprecated, and no more specific ",
-        "`transpose` method for $(typeof(x)) exists. Consider `permutedims(x, [2, 1])` ",
-        "or writing a specific `transpose(x::$(typeof(x)))` method if appropriate."),
+    depwarn(string("the no-op `transpose` for non-numeric arrays is deprecated, ",
+        "and no specific `transpose` method for $(typeof(x)) exists. Use ",
+        "`permutedims(x, (2, 1))` for matrices and `reshape(x, 1, length(x))` for vectors, ",
+        "or write a specific `transpose(x::$(typeof(x)))` method if appropriate."),
         :transpose)
     return x
 end

@@ -44,30 +44,41 @@ __attribute__((constructor)) void jl_register_ptls_states_getter(void)
 static int exec_program(char *program)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    int err = 0;
-  again: ;
     JL_TRY {
-        if (err) {
-            jl_value_t *errs = jl_stderr_obj();
-            jl_value_t *e = ptls->exception_in_transit;
-            if (errs != NULL) {
-                jl_show(errs, e);
-            }
-            else {
-                jl_printf(JL_STDERR, "error during bootstrap:\n");
-                jl_static_show(JL_STDERR, e);
-                jl_printf(JL_STDERR, "\n");
-                jlbacktrace();
-            }
-            jl_printf(JL_STDERR, "\n");
-            JL_EH_POP();
-            return 1;
-        }
         jl_load(program);
     }
     JL_CATCH {
-        err = 1;
-        goto again;
+        jl_value_t *errs = jl_stderr_obj();
+        jl_value_t *e = ptls->exception_in_transit;
+        // Manually save and restore the backtrace so that we print the original
+        // one instead of the one caused by `jl_show`.
+        // We can't use safe_restore since that will cause any error
+        // (including the ones that would have been caught) to abort.
+        uintptr_t *volatile bt_data = NULL;
+        size_t bt_size = ptls->bt_size;
+        JL_TRY {
+            if (errs) {
+                bt_data = (uintptr_t*)malloc(bt_size * sizeof(void*));
+                memcpy(bt_data, ptls->bt_data, bt_size * sizeof(void*));
+                jl_show(errs, e);
+                jl_printf(JL_STDERR, "\n");
+                free(bt_data);
+            }
+        }
+        JL_CATCH {
+            ptls->bt_size = bt_size;
+            memcpy(ptls->bt_data, bt_data, bt_size * sizeof(void*));
+            free(bt_data);
+            errs = NULL;
+        }
+        if (!errs) {
+            jl_printf(JL_STDERR, "error during bootstrap:\n");
+            jl_static_show(JL_STDERR, e);
+            jl_printf(JL_STDERR, "\n");
+            jlbacktrace();
+            jl_printf(JL_STDERR, "\n");
+        }
+        return 1;
     }
     return 0;
 }

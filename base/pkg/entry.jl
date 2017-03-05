@@ -523,6 +523,7 @@ function resolve(
 
     # try applying changes, roll back everything if anything fails
     changed = []
+    imported = String[]
     try
         for (pkg,(ver1,ver2)) in changes
             if ver1 === nothing
@@ -535,6 +536,10 @@ function resolve(
                 up = ver1 <= ver2 ? "Up" : "Down"
                 info("$(up)grading $pkg: v$ver1 => v$ver2")
                 Write.update(pkg, Read.sha1(pkg,ver2))
+                pkgsym = Symbol(pkg)
+                if isdefined(Main, pkgsym) && isa(getfield(Main, pkgsym), Module)
+                    push!(imported, "- $pkg")
+                end
             end
             push!(changed,(pkg,(ver1,ver2)))
         end
@@ -552,6 +557,10 @@ function resolve(
             end
         end
         rethrow(err)
+    end
+    if !isempty(imported)
+        warn(join(["The following packages have been updated but were already imported:",
+            imported..., "Restart Julia to use the updated versions."], "\n"))
     end
     # re/build all updated/installed packages
     build(map(x->x[1], filter(x -> x[2][2] !== nothing, changes)))

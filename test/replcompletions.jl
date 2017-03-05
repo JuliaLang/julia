@@ -20,6 +20,14 @@ module CompletionFoo
         :()
     end
 
+    # Support non-Dict Associatives, #19441
+    type CustomDict{K, V} <: Associative{K, V}
+        mydict::Dict{K, V}
+    end
+
+    Base.keys(d::CustomDict) = collect(keys(d.mydict))
+    Base.length(d::CustomDict) = length(d.mydict)
+
     test{T<:Real}(x::T, y::T) = pass
     test(x::Real, y::Real) = pass
     test{T<:Real}(x::AbstractArray{T}, y) = pass
@@ -54,8 +62,10 @@ module CompletionFoo
     test_dict = Dict("abc"=>1, "abcd"=>10, :bar=>2, :bar2=>9, Base=>3,
                      contains=>4, `ls`=>5, 66=>7, 67=>8, ("q",3)=>11,
                      "α"=>12, :α=>13)
+    test_customdict = CustomDict(test_dict)
 end
 test_repl_comp_dict = CompletionFoo.test_dict
+test_repl_comp_customdict = CompletionFoo.test_customdict
 
 function temp_pkg_dir_noinit(fn::Function)
     # Used in tests below to set up and tear down a sandboxed package directory
@@ -728,4 +738,6 @@ function test_dict_completion(dict_name)
     @test c == Any[":α]"]
 end
 test_dict_completion("CompletionFoo.test_dict")
+test_dict_completion("CompletionFoo.test_customdict")
 test_dict_completion("test_repl_comp_dict")
+test_dict_completion("test_repl_comp_customdict")

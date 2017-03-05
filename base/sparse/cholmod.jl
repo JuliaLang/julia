@@ -825,31 +825,45 @@ convert(::Type{Dense}, A::Sparse) = sparse_to_dense(A)
 
 # This constructior assumes zero based colptr and rowval
 function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer,
-        colptr::Vector{SuiteSparse_long}, rowval::Vector{SuiteSparse_long},
+        colptr0::Vector{SuiteSparse_long}, rowval0::Vector{SuiteSparse_long},
         nzval::Vector{Tv}, stype)
-    # check if columns are sorted
+    # checks
+    ## length of input
+    if length(colptr0) <= n
+        throw(ArgumentError("length of colptr0 must be at least n + 1 = $(n + 1) but was $(length(colptr0))"))
+    end
+    if colptr0[n + 1] > length(rowval0)
+        throw(ArgumentError("length of rowval0 is $(length(rowval0)) but value of colptr0 requires length to be at least $(colptr0[n + 1])"))
+    end
+    if colptr0[n + 1] > length(nzval)
+        throw(ArgumentError("length of nzval is $(length(nzval)) but value of colptr0 requires length to be at least $(colptr0[n + 1])"))
+    end
+    ## columns are sorted
     iss = true
-    for i = 2:length(colptr)
-        if !issorted(view(rowval, colptr[i - 1] + 1:colptr[i]))
+    for i = 2:length(colptr0)
+        if !issorted(view(rowval0, colptr0[i - 1] + 1:colptr0[i]))
             iss = false
             break
         end
     end
 
-    o = allocate_sparse(m, n, length(nzval), iss, true, stype, Tv)
+    o = allocate_sparse(m, n, colptr0[n + 1], iss, true, stype, Tv)
     s = unsafe_load(o.p)
 
-    unsafe_copy!(s.p, pointer(colptr), length(colptr))
-    unsafe_copy!(s.i, pointer(rowval), length(rowval))
-    unsafe_copy!(s.x, pointer(nzval), length(nzval))
+    unsafe_copy!(s.p, pointer(colptr0), n + 1)
+    unsafe_copy!(s.i, pointer(rowval0), colptr0[n + 1])
+    unsafe_copy!(s.x, pointer(nzval) , colptr0[n + 1])
 
     @isok check_sparse(o)
 
     return o
 end
 
-function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer, colptr::Vector{SuiteSparse_long}, rowval::Vector{SuiteSparse_long}, nzval::Vector{Tv})
-    o = Sparse(m, n, colptr, rowval, nzval, 0)
+function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer,
+        colptr0::Vector{SuiteSparse_long},
+        rowval0::Vector{SuiteSparse_long},
+        nzval::Vector{Tv})
+    o = Sparse(m, n, colptr0, rowval0, nzval, 0)
 
     # check if array is symmetric and change stype if it is
     if ishermitian(o)
@@ -859,15 +873,26 @@ function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer, colptr::Vector{Sui
 end
 
 function (::Type{Sparse}){Tv<:VTypes}(A::SparseMatrixCSC{Tv,SuiteSparse_long}, stype::Integer)
-    o = allocate_sparse(A.m, A.n, length(A.nzval), true, true, stype, Tv)
+    ## Check length of input. This should never fail but see #20024
+    if length(A.colptr) <= A.n
+        throw(ArgumentError("length of colptr must be at least size(A,2) + 1 = $(A.n + 1) but was $(length(A.colptr))"))
+    end
+    if nnz(A) > length(A.rowval)
+        throw(ArgumentError("length of rowval is $(length(A.rowval)) but value of colptr requires length to be at least $(nnz(A))"))
+    end
+    if nnz(A) > length(A.nzval)
+        throw(ArgumentError("length of nzval is $(length(A.nzval)) but value of colptr requires length to be at least $(nnz(A))"))
+    end
+
+    o = allocate_sparse(A.m, A.n, nnz(A), true, true, stype, Tv)
     s = unsafe_load(o.p)
-    for i = 1:length(A.colptr)
+    for i = 1:(A.n + 1)
         unsafe_store!(s.p, A.colptr[i] - 1, i)
     end
-    for i = 1:length(A.rowval)
+    for i = 1:nnz(A)
         unsafe_store!(s.i, A.rowval[i] - 1, i)
     end
-    unsafe_copy!(s.x, pointer(A.nzval), length(A.nzval))
+    unsafe_copy!(s.x, pointer(A.nzval), nnz(A))
 
     @isok check_sparse(o)
 
@@ -1165,7 +1190,7 @@ function getLd!(S::SparseMatrixCSC)
     d = Array{eltype(S)}(size(S, 1))
     fill!(d, 0)
     col = 1
-    for k = 1:length(S.nzval)
+    for k = 1:nnz(S)
         while k >= S.colptr[col+1]
             col += 1
         end
@@ -1337,14 +1362,8 @@ cholfact{T<:Real}(A::Union{SparseMatrixCSC{T}, SparseMatrixCSC{Complex{T}},
 function ldltfact!{Tv}(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0)
     cm = common()
 
-    # Makes it an LDLt
-    unsafe_store!(common_final_ll, 0)
-
     # Compute the numerical factorization
     factorize_p!(A, shift, F, cm)
-
-    # Really make sure it's an LDLt by avoiding supernodal factorisation
-    unsafe_store!(common_supernodal, 0)
 
     s = unsafe_load(get(F.p))
     s.minor < size(A, 1) && throw(Base.LinAlg.ArgumentError("matrix has one or more zero pivots"))
@@ -1378,6 +1397,11 @@ function ldltfact(A::Sparse; shift::Real=0.0,
 
     cm = defaults(common())
     set_print_level(cm, 0)
+
+    # Makes it an LDLt
+    unsafe_store!(common_final_ll, 0)
+    # Really make sure it's an LDLt by avoiding supernodal factorisation
+    unsafe_store!(common_supernodal, 0)
 
     # Compute the symbolic factorization
     F = fact_(A, cm; perm = perm)
@@ -1498,6 +1522,19 @@ Ac_ldiv_B(L::Factor, B::Dense) = solve(CHOLMOD_A, L, B)
 Ac_ldiv_B(L::Factor, B::VecOrMat) = convert(Matrix, solve(CHOLMOD_A, L, Dense(B)))
 Ac_ldiv_B(L::Factor, B::Sparse) = spsolve(CHOLMOD_A, L, B)
 Ac_ldiv_B(L::Factor, B::SparseVecOrMat) = Ac_ldiv_B(L, Sparse(B))
+
+for f in (:\, :Ac_ldiv_B)
+    @eval function ($f)(A::Union{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
+                          Hermitian{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
+                          Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}, B::StridedVecOrMat)
+        try
+            return ($f)(cholfact(A), B)
+        catch e
+            isa(e, LinAlg.PosDefException) || rethrow(e)
+            return ($f)(ldltfact(A) , B)
+        end
+    end
+end
 
 ## Other convenience methods
 function diag{Tv}(F::Factor{Tv})
