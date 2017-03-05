@@ -263,6 +263,12 @@ STATIC_INLINE void *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz)
     return jl_gc_alloc(ptls, sz, (void*)jl_buff_tag);
 }
 
+// Returns a int32 where the high 16 bits are a lower bound of the number of non-pointer fields
+// at the beginning of the type and the low 16 bits are a lower bound on the number of non-pointer
+// fields at the end of the type. This field only exists for a layout that has at least one
+// pointer fields.
+#define jl_datatype_layout_n_nonptr(layout) ((uint32_t*)(layout))[-1]
+
 jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz);
 
 jl_code_info_t *jl_type_infer(jl_method_instance_t **li, size_t world, int force);
