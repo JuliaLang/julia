@@ -105,8 +105,24 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         write(stdin_write, "echo hello >/dev/null\n")
-        readuntil(stdout_read, "\n")
-        readuntil(stdout_read, "\n")
+        let s = readuntil(stdout_read, "\n")
+            @test contains(s, "shell> ") # make sure we echoed the prompt
+            @test contains(s, "echo hello >/dev/null") # make sure we echoed the input
+        end
+        @test readuntil(stdout_read, "\n") == "\e[0m\n"
+    end
+
+    # issue #20771
+    let s
+        write(stdin_write, ";")
+        readuntil(stdout_read, "shell> ")
+        write(stdin_write, "'\n") # invalid input
+        s = readuntil(stdout_read, "\n")
+        @test contains(s, "shell> ") # check for the echo of the prompt
+        @test contains(s, "'") # check for the echo of the input
+        s = readuntil(stdout_read, "\n\n")
+        @test startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n [1] ") ||
+              startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n [1] ")
     end
 
     # Test that accepting a REPL result immediately shows up, not
