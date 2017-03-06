@@ -65,7 +65,7 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
                 backend.in_eval = true
                 value = eval(Main, ast)
                 backend.in_eval = false
-                # note: value wrapped in a closure to ensure it doesn't get passed through expand
+                # note: value wrapped carefully here to ensure it doesn't get passed through expand
                 eval(Main, Expr(:body, Expr(:(=), :ans, QuoteNode(value)), Expr(:return, nothing)))
                 put!(backend.response_channel, (value, nothing))
             end
@@ -622,18 +622,25 @@ backend(r::AbstractREPL) = r.backendref
 send_to_backend(ast, backend::REPLBackendRef) = send_to_backend(ast, backend.repl_channel, backend.response_channel)
 function send_to_backend(ast, req, rep)
     put!(req, (ast, 1))
-    val, bt = take!(rep)
+    return take!(rep) # (val, bt)
 end
 
 function respond(f, repl, main; pass_empty = false)
-    (s,buf,ok)->begin
+    return function do_respond(s, buf, ok)
         if !ok
             return transition(s, :abort)
         end
         line = String(take!(buf))
         if !isempty(line) || pass_empty
             reset(repl)
-            val, bt = send_to_backend(eval(:(($f)($line))), backend(repl))
+            try
+                # note: value wrapped carefully here to ensure it doesn't get passed through expand
+                response = eval(Main, Expr(:body, Expr(:return, Expr(:call, QuoteNode(f), QuoteNode(line)))))
+                val, bt = send_to_backend(response, backend(repl))
+            catch err
+                val = err
+                bt = catch_backtrace()
+            end
             if !ends_with_semicolon(line) || bt !== nothing
                 print_response(repl, val, bt, true, Base.have_color)
             end
