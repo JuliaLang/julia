@@ -158,13 +158,18 @@ function getindex{T}(A::Bidiagonal{T}, i::Integer, j::Integer)
 end
 
 function setindex!(A::Bidiagonal, x, i::Integer, j::Integer)
+    @boundscheck checkbounds(A, i, j)
     if i == j
-        A.dv[i] = x
-    elseif (istriu(A) && (i == j - 1)) || (istril(A) && (i == j + 1))
-        return A.ev[min(i,j)] = x
-    else
-        throw(ArgumentError("cannot set elements outside main and $(istriu(A) ? "super": "sub") diagonals."))
+        @inbounds A.dv[i] = x
+    elseif istriu(A) && (i == j - 1)
+        @inbounds A.ev[i] = x
+    elseif istril(A) && (i == j + 1)
+        @inbounds A.ev[j] = x
+    elseif !iszero(x)
+        throw(ArgumentError(string("cannot set entry ($i, $j) off the ",
+            "$(istriu(A) ? "upper" : "lower") bidiagonal band to a nonzero value ($x)")))
     end
+    return x
 end
 
 ## structured matrix methods ##
