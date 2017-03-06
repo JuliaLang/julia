@@ -427,18 +427,14 @@ end
     S = SymTridiagonal(rand(N), rand(N - 1))
     # why some of the tests below are broken:
     #   Diagonal setindex! allows setting off-diagonal entries to zero. Subtypes of
-    #   AbstractTriangular allow analogs. But Bidiagonal, Tridiagonal, and SymTridiagonal
-    #   do not, which seems like a bug. setindex! behavior like that for Diagonal and
-    #   subtypes of AbstractTriangular is necessary for Bidiagonal, Tridiagonal, and
-    #   SymTridiagonal to be targets of the AbstractArray broadcast! methods, hence
-    #   the test failures below.
+    #   AbstractTriangular allow analogs.
     @test broadcast!(sin, copy(D), D) == Diagonal(sin.(D))
-    @test_broken broadcast!(sin, copy(B), B) == Bidiagonal(sin.(B), true)
-    @test_broken broadcast!(sin, copy(T), T) == Tridiagonal(sin.(T))
+    @test broadcast!(sin, copy(B), B) == Bidiagonal(sin.(B), true)
+    @test broadcast!(sin, copy(T), T) == Tridiagonal(sin.(T))
     @test_broken broadcast!(sin, copy(S), S) == SymTridiagonal(sin.(S))
     @test broadcast!(*, copy(D), D, A) == Diagonal(broadcast(*, D, A))
-    @test_broken broadcast!(*, copy(B), B, A) == Bidiagonal(broadcast(*, B, A), true)
-    @test_broken broadcast!(*, copy(T), T, A) == Tridiagonal(broadcast(*, T, A))
+    @test broadcast!(*, copy(B), B, A) == Bidiagonal(broadcast(*, B, A), true)
+    @test broadcast!(*, copy(T), T, A) == Tridiagonal(broadcast(*, T, A))
     @test_broken broadcast!(*, copy(S), T, sA) == SymTridiagonal(broadcast(*, T, sA))
 end
 
