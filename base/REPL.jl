@@ -551,8 +551,8 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     response_str = String(response_buffer)
 
     # Alright, first try to see if the current match still works
-    a = position(response_buffer) + 1
-    b = min(endof(response_str), prevind(response_str, a + sizeof(searchdata)))
+    a = position(response_buffer) + 1 # position is zero-indexed
+    b = min(endof(response_str), prevind(response_str, a + sizeof(searchdata))) # ensure that b is valid
 
     !skip_current && searchdata == response_str[a:b] && return true
 
@@ -565,7 +565,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     if 1 <= searchstart <= endof(response_str)
         match = searchfunc(response_str, searchdata, searchstart)
         if match != 0:-1
-            seek(response_buffer, prevind(response_str, first(match)))
+            seek(response_buffer, first(match) - 1)
             return true
         end
     end
@@ -578,7 +578,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
         if match != 0:-1 && h != response_str && haskey(hist.mode_mapping, hist.modes[idx])
             truncate(response_buffer, 0)
             write(response_buffer, h)
-            seek(response_buffer, prevind(h, first(match)))
+            seek(response_buffer, first(match) - 1)
             hist.cur_idx = idx
             return true
         end
