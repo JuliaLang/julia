@@ -117,7 +117,11 @@ function repl_cmd(cmd, out)
             if shell_name == ""
                 run(ignorestatus(cmd))
             elseif shell_name == "cmd"
-                run(ignorestatus(`$shell /c $(cmd)`))
+                run(ignorestatus(`$shell /c $cmd`))
+            elseif shell_name == "powershell"
+                run(ignorestatus(`$shell -Command $(shell_escape(cmd))`))
+            elseif shell_name == "busybox"
+                run(ignorestatus(`$shell $cmd`))
             else
                 run(ignorestatus(`$shell /c $(shell_escape(cmd))`))
             end
