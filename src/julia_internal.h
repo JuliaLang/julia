@@ -283,7 +283,7 @@ STATIC_INLINE jl_value_t *jl_compile_method_internal(jl_generic_fptr_t *fptr,
                                                      jl_method_instance_t *meth)
 {
     if (meth->jlcall_api == 2)
-        return jl_assume(meth->inferred);
+        return jl_assume(meth->inferred_const);
     fptr->fptr = meth->fptr;
     fptr->jlcall_api = meth->jlcall_api;
     if (__unlikely(fptr->fptr == NULL || fptr->jlcall_api == 0)) {
@@ -293,7 +293,7 @@ STATIC_INLINE jl_value_t *jl_compile_method_internal(jl_generic_fptr_t *fptr,
         if (!F) // ask codegen to try to turn it into llvm code
             F = jl_compile_for_dispatch(&meth, world).functionObject;
         if (meth->jlcall_api == 2)
-            return jl_assume(meth->inferred);
+            return jl_assume(meth->inferred_const);
         // if it hasn't been inferred, try using the unspecialized meth cache instead
         if (!meth->inferred) {
             fptr->fptr = meth->unspecialized_ducttape;
@@ -303,7 +303,7 @@ STATIC_INLINE jl_value_t *jl_compile_method_internal(jl_generic_fptr_t *fptr,
                     fptr->fptr = meth->def->unspecialized->fptr;
                     fptr->jlcall_api = meth->def->unspecialized->jlcall_api;
                     if (fptr->jlcall_api == 2) {
-                        return jl_assume(meth->def->unspecialized->inferred);
+                        return jl_assume(meth->def->unspecialized->inferred_const);
                     }
                 }
             }
@@ -312,7 +312,7 @@ STATIC_INLINE jl_value_t *jl_compile_method_internal(jl_generic_fptr_t *fptr,
             // ask codegen to make the fptr
             *fptr = jl_generate_fptr(meth, F, world);
             if (fptr->jlcall_api == 2)
-                return jl_assume(meth->inferred);
+                return jl_assume(meth->inferred_const);
         }
     }
     return NULL;
@@ -641,7 +641,6 @@ void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_
 JL_DLLEXPORT void jl_raise_debugger(void);
 int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline);
 JL_DLLEXPORT void jl_gdblookup(uintptr_t ip);
-jl_value_t *jl_uncompress_ast_(jl_method_instance_t*, jl_value_t*, int);
 // *to is NULL or malloc'd pointer, from is allowed to be NULL
 STATIC_INLINE char *jl_copy_str(char **to, const char *from)
 {

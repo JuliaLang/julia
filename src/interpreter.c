@@ -635,24 +635,28 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
 jl_value_t *jl_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs)
 {
     if (lam->jlcall_api == 2)
-        return lam->inferred;
+        return lam->inferred_const;
     jl_code_info_t *src = (jl_code_info_t*)lam->inferred;
-    if (src == NULL || !jl_is_code_info(src)) {
+    if (!src || (jl_value_t*)src == jl_nothing) {
         if (lam->def->isstaged) {
             src = jl_code_for_staged(lam);
             lam->inferred = (jl_value_t*)src;
             jl_gc_wb(lam, src);
         }
         else {
-            src = lam->def->source;
+            src = (jl_code_info_t*)lam->def->source;
         }
     }
-    jl_array_t *stmts = src->code;
-    if (!jl_typeis(stmts, jl_array_any_type)) {
-        stmts = jl_uncompress_ast(lam->def, stmts);
-        src->code = stmts;
-        jl_gc_wb(src, stmts);
+    if (src && (jl_value_t*)src != jl_nothing) {
+        src = jl_uncompress_ast(lam->def, (jl_array_t*)src);
+        lam->inferred = (jl_value_t*)src;
+        jl_gc_wb(lam, src);
     }
+    if (!src || !jl_is_code_info(src)) {
+        jl_error("source missing for method called in interpreter");
+    }
+
+    jl_array_t *stmts = src->code;
     assert(jl_typeis(stmts, jl_array_any_type));
     jl_value_t **locals;
     JL_GC_PUSHARGS(locals, jl_source_nslots(src) + jl_source_nssavalues(src) + 2);

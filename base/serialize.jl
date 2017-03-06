@@ -650,6 +650,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.isva = isva
         # TODO: compress template
         meth.source = template
+        meth.pure = template.pure
         if isstaged
             linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ())
             linfo.specTypes = Tuple

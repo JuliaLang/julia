@@ -208,11 +208,11 @@ typedef struct _jl_llvm_functions_t {
 
 // This type describes a single function body
 typedef struct _jl_code_info_t {
-    jl_array_t *code;  // compressed uint8 array, or Any array of statements
+    jl_array_t *code;  // Any array of statements
     jl_value_t *slottypes; // types of variable slots (or `nothing`)
     jl_value_t *ssavaluetypes;  // types of ssa values (or count of them)
-    jl_array_t *slotnames; // names of local variables
     jl_array_t *slotflags;  // local var bit flags
+    jl_array_t *slotnames; // names of local variables
     uint8_t inferred;
     uint8_t inlineable;
     uint8_t propagate_inbounds;
@@ -240,7 +240,7 @@ typedef struct _jl_method_t {
     union jl_typemap_t specializations;
 
     jl_svec_t *sparam_syms;  // symbols giving static parameter names
-    jl_code_info_t *source;  // original code template, null for builtins
+    jl_value_t *source;  // original code template (jl_code_info_t, but may be compressed), null for builtins
     struct _jl_method_instance_t *unspecialized;  // unspecialized executable method instance, or null
     struct _jl_method_instance_t *generator;  // executable code-generating function if isstaged
     jl_array_t *roots;  // pointers in generated code (shared to reduce memory), or null
@@ -254,6 +254,7 @@ typedef struct _jl_method_t {
     int32_t called;  // bit flags: whether each of the first 8 arguments is called
     uint8_t isva;
     uint8_t isstaged;
+    uint8_t pure;
 
 // hidden fields:
     uint8_t traced;
@@ -1383,8 +1384,12 @@ JL_DLLEXPORT void jl_register_newmeth_tracer(void (*callback)(jl_method_t *trace
 // AST access
 JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr);
 
-JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_array_t *ast);
-JL_DLLEXPORT jl_array_t *jl_uncompress_ast(jl_method_t *m, jl_array_t *data);
+JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code);
+JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_array_t *data);
+JL_DLLEXPORT uint8_t jl_ast_flag_inferred(jl_array_t *data);
+JL_DLLEXPORT uint8_t jl_ast_flag_inlineable(jl_array_t *data);
+JL_DLLEXPORT uint8_t jl_ast_flag_pure(jl_array_t *data);
+JL_DLLEXPORT void jl_fill_argnames(jl_array_t *data, jl_array_t *names);
 
 JL_DLLEXPORT int jl_is_operator(char *sym);
 JL_DLLEXPORT int jl_operator_precedence(char *sym);

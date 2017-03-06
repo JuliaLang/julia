@@ -323,17 +323,13 @@ end
 function show(io::IO, src::CodeInfo)
     # Fix slot names and types in function body
     print(io, "CodeInfo(")
-    if isa(src.code, Array{Any,1})
-        lambda_io = IOContext(io, :SOURCEINFO => src)
-        if src.slotnames !== nothing
-            lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => sourceinfo_slotnames(src))
-        end
-        body = Expr(:body)
-        body.args = src.code
-        show(lambda_io, body)
-    else
-        print(io, "<compressed>")
+    lambda_io = IOContext(io, :SOURCEINFO => src)
+    if src.slotnames !== nothing
+        lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => sourceinfo_slotnames(src))
     end
+    body = Expr(:body)
+    body.args = src.code
+    show(lambda_io, body)
     print(io, ")")
 end
 
