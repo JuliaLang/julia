@@ -172,10 +172,10 @@ value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t 
         return fixnum(jl_module_next_counter(ptls->current_module));
 }
 
-JL_DLLEXPORT int jl_current_lineno(void)
+JL_DLLEXPORT int jl_macro_caller_lineno(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    return ptls->current_lineno;
+    return ptls->macro_caller_lineno;
 }
 
 value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
@@ -186,8 +186,8 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
         argcount(fl_ctx, "invoke-julia-macro", nargs, 2);
     if (!isfixnum(args[0]))
         lerror(fl_ctx, fl_ctx->ArgError, "invoke-julia-macro: expected lineno");
-    int last_lineno = ptls->current_lineno;
-    ptls->current_lineno = numval(args[0]);
+    int last_caller_lineno = ptls->macro_caller_lineno;
+    ptls->macro_caller_lineno = numval(args[0]);
     jl_method_instance_t *mfunc = NULL;
     uint32_t mnargs = nargs - 1;
     jl_value_t **margs;
@@ -210,7 +210,7 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     }
     JL_CATCH {
         JL_GC_POP();
-        ptls->current_lineno = last_lineno;
+        ptls->macro_caller_lineno = last_caller_lineno;
         value_t opaque = cvalue(fl_ctx, jl_ast_ctx(fl_ctx)->jvtype, sizeof(void*));
         *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = ptls->exception_in_transit;
         return fl_list2(fl_ctx, jl_ast_ctx(fl_ctx)->error_sym, opaque);
@@ -237,7 +237,7 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     fl_free_gc_handles(fl_ctx, 1);
 
     JL_GC_POP();
-    ptls->current_lineno = last_lineno;
+    ptls->macro_caller_lineno = last_caller_lineno;
     return scmresult;
 }
 

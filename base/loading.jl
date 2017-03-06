@@ -532,7 +532,7 @@ macro __DIR__() source_dir() end
 Return the line number where the current macro expansion was invoked.
 """
 function current_location()
-    convert(Int, ccall(:jl_current_lineno, Cint, ()))
+    convert(Int, ccall(:jl_macro_caller_lineno, Cint, ()))
 end
 
 include_from_node1(path::AbstractString) = include_from_node1(String(path))
