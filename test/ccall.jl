@@ -1239,3 +1239,10 @@ end
 
 # issue #20835
 @test_throws ErrorException eval(:(f20835(x) = ccall(:fn, Void, (Ptr{typeof(x)},), x)))
+
+# cfunction on non-function singleton
+struct CallableSingleton
+end
+(::CallableSingleton)(x, y) = x + y
+@test ccall(cfunction(CallableSingleton(), Int, Tuple{Int,Int}),
+            Int, (Int, Int), 1, 2) === 3
