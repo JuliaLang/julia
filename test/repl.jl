@@ -598,3 +598,18 @@ function test_replinit()
     copy!(Base.repl_hooks, saved_replinit)
 end
 test_replinit()
+
+let ends_with_semicolon = Base.REPL.ends_with_semicolon
+    @test !ends_with_semicolon("")
+    @test ends_with_semicolon(";")
+    @test !ends_with_semicolon("a")
+    @test ends_with_semicolon("1;")
+    @test ends_with_semicolon("1;\n")
+    @test ends_with_semicolon("1;\r")
+    @test ends_with_semicolon("1;\r\n   \t\f")
+    @test ends_with_semicolon("1;#text\n")
+    @test ends_with_semicolon("a; #=#=# =# =#\n")
+    @test !ends_with_semicolon("begin\na;\nb;\nend")
+    @test !ends_with_semicolon("begin\na; #=#=#\n=#b=#\nend")
+    @test ends_with_semicolon("\na; #=#=#\n=#b=#\n# test\n#=\nfoobar\n=##bazbax\n")
+end
