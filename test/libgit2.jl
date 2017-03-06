@@ -902,6 +902,26 @@ mktempdir() do dir
         end
     end
 
+
+    if is_unix()
+        @testset "checkout/proptest" begin
+            repo = LibGit2.GitRepo(test_repo)
+            try
+                cp(joinpath(test_repo, test_file), joinpath(test_repo, "proptest"))
+                LibGit2.add!(repo, "proptest")
+                id1 = LibGit2.commit(repo, "test property change 1")
+                chmod(joinpath(test_repo, "proptest"),0o744)
+                LibGit2.add!(repo, "proptest")
+                id2 = LibGit2.commit(repo, "test property change 2")
+                LibGit2.checkout!(repo, string(id1))
+                @test !LibGit2.isdirty(repo)
+            finally
+                close(repo)
+            end
+        end
+    end
+
+
     @testset "Credentials" begin
         creds_user = "USER"
         creds_pass = "PASS"
