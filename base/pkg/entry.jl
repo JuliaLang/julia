@@ -207,18 +207,20 @@ function clone(url::AbstractString, pkg::AbstractString)
 end
 
 function clone(url_or_pkg::AbstractString)
-    urlpath = joinpath("METADATA",url_or_pkg,"url")
-    if !(':' in url_or_pkg) && isfile(urlpath)
-        pkg = url_or_pkg
-        url = readchomp(urlpath)
-        # TODO: Cache.prefetch(pkg,url)
-    else
-        url = url_or_pkg
-        m = match(r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$", url)
-        m !== nothing || throw(PkgError("can't determine package name from URL: $url"))
-        pkg = m.captures[1]
+    if !(':' in url_or_pkg)
+        urlpath = joinpath("METADATA",url_or_pkg,"url")
+        if isfile(urlpath)
+            pkg = url_or_pkg
+            url = readchomp(urlpath)
+            # TODO: Cache.prefetch(pkg,url)
+            return clone(url,pkg)
+        end
     end
-    clone(url,pkg)
+    url = url_or_pkg
+    m = match(r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$", url)
+    m !== nothing || throw(PkgError("can't determine package name from URL: $url"))
+    pkg = m.captures[1]
+    return clone(url,pkg)
 end
 
 function checkout(pkg::AbstractString, branch::AbstractString, do_merge::Bool, do_pull::Bool)
