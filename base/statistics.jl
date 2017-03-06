@@ -630,19 +630,10 @@ function quantile!(q::AbstractArray, v::AbstractVector, p::AbstractArray;
     if size(p) != size(q)
         throw(DimensionMismatch("size of p, $(size(p)), must equal size of q, $(size(q))"))
     end
+    isempty(q) && return q
 
-    isempty(v) && throw(ArgumentError("empty data vector"))
-
-    lv = length(v)
-    if !sorted
-        minp, maxp = extrema(p)
-        lo = floor(Int,1+minp*(lv-1))
-        hi = ceil(Int,1+maxp*(lv-1))
-
-        # only need to perform partial sort
-        sort!(v, 1, lv, PartialQuickSort(lo:hi), Base.Sort.Forward)
-    end
-    isnan(v[end]) && throw(ArgumentError("quantiles are undefined in presence of NaNs"))
+    minp, maxp = extrema(p)
+    _quantilesort!(v, sorted, minp, maxp)
 
     for (i, j) in zip(eachindex(p), eachindex(q))
         @inbounds q[j] = _quantile(v,p[i])
@@ -653,21 +644,30 @@ end
 quantile!(v::AbstractVector, p::AbstractArray; sorted::Bool=false) =
     quantile!(similar(p,float(eltype(v))), v, p; sorted=sorted)
 
-function quantile!(v::AbstractVector, p::Real;
-                   sorted::Bool=false)
+quantile!(v::AbstractVector, p::Real; sorted::Bool=false) =
+    _quantile(_quantilesort!(v, sorted, p, p), p)
+
+function quantile!(v::AbstractVector, p::Tuple{Vararg{Real}}; sorted::Bool=false)
+    isempty(p) && return ()
+    minp, maxp = extrema(p)
+    _quantilesort!(v, sorted, minp, maxp)
+    return map(x->_quantile(v, x), p)
+end
+
+# Function to perform partial sort of v for quantiles in given range
+function _quantilesort!(v::AbstractArray, sorted::Bool, minp::Real, maxp::Real)
     isempty(v) && throw(ArgumentError("empty data vector"))
 
-    lv = length(v)
     if !sorted
-        lo = floor(Int,1+p*(lv-1))
-        hi = ceil(Int,1+p*(lv-1))
+        lv = length(v)
+        lo = floor(Int,1+minp*(lv-1))
+        hi = ceil(Int,1+maxp*(lv-1))
 
         # only need to perform partial sort
         sort!(v, 1, lv, PartialQuickSort(lo:hi), Base.Sort.Forward)
     end
     isnan(v[end]) && throw(ArgumentError("quantiles are undefined in presence of NaNs"))
-
-    return _quantile(v,p)
+    return v
 end
 
 # Core quantile lookup function: assumes `v` sorted
