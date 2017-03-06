@@ -528,6 +528,7 @@ setindex!{T}(A::Array{T}, x, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arra
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})
+    @_propagate_inbounds_meta
     A === I && (I = copy(I))
     for i in I
         A[i] = x
@@ -535,7 +536,8 @@ function setindex!(A::Array, x, I::AbstractVector{Int})
     return A
 end
 function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
-    setindex_shape_check(X, length(I))
+    @_propagate_inbounds_meta
+    @boundscheck setindex_shape_check(X, length(I))
     count = 1
     if X === A
         X = copy(X)
@@ -544,7 +546,8 @@ function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
         I = copy(I)
     end
     for i in I
-        A[i] = X[count]
+        @inbounds x = X[count]
+        A[i] = x
         count += 1
     end
     return A
@@ -555,15 +558,16 @@ function setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int})
     @_inline_meta
     @boundscheck checkbounds(A, I)
     lI = length(I)
-    setindex_shape_check(X, lI)
+    @boundscheck setindex_shape_check(X, lI)
     if lI > 0
         unsafe_copy!(A, first(I), X, 1, lI)
     end
     return A
 end
 function setindex!{T}(A::Array{T}, X::Array{T}, c::Colon)
+    @_inline_meta
     lI = length(A)
-    setindex_shape_check(X, lI)
+    @boundscheck setindex_shape_check(X, lI)
     if lI > 0
         unsafe_copy!(A, 1, X, 1, lI)
     end
