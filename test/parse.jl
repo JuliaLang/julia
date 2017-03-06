@@ -584,9 +584,9 @@ end
 
 # issue #16736
 let
-    local lineoffset0 = @__LINE__ + 1
+    local lineoffset0 = @__LINE__() + 1
     local lineoffset1 = @__LINE__
-    local lineoffset2 = @__LINE__ - 1
+    local lineoffset2 = @__LINE__() - 1
     @test lineoffset0 == lineoffset1 == lineoffset2
 end
 

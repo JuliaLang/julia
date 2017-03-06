@@ -2,7 +2,7 @@
 
 using Base.Test
 
-@test @__LINE__ == 5
+@test @__LINE__() == 5
 
 include("test_sourcepath.jl")
 thefname = "the fname!//\\&\1*"
