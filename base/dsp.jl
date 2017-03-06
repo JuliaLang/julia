@@ -123,8 +123,8 @@ end
 """
     conv(u, v)
 
-Convolves two vectors. (If `u` and `v` describe the coefficients of two polynomials,
-`conv(u, v)` gives the coefficients of the product of those polynomials.)
+Convolve two vectors. If `u` and `v` describe the coefficients of two polynomials,
+`conv(u, v)` gives the coefficients of the product of those polynomials.
 Uses FFT algorithm.
 """
 function conv{T<:Base.LinAlg.BlasFloat}(u::StridedVector{T}, v::StridedVector{T})
