@@ -86,10 +86,10 @@ function setindex!(D::Diagonal, v, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
     if i == j
         @inbounds D.diag[i] = v
-    elseif v != 0
-        throw(ArgumentError("cannot set an off-diagonal index ($i, $j) to a nonzero value ($v)"))
+    elseif !iszero(v)
+        throw(ArgumentError("cannot set off-diagonal entry ($i, $j) to a nonzero value ($v)"))
     end
-    D
+    return v
 end
 
 
