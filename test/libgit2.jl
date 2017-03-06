@@ -915,6 +915,12 @@ mktempdir() do dir
                 id2 = LibGit2.commit(repo, "test property change 2")
                 LibGit2.checkout!(repo, string(id1))
                 @test !LibGit2.isdirty(repo)
+                mv(joinpath(test_repo, "proptest"), joinpath(test_repo, "proptest2"))
+                symlink(joinpath(test_repo, "proptest2"), joinpath(test_repo, "proptest"))
+                LibGit2.add!(repo, "proptest", "proptest2")
+                id3 = LibGit2.commit(repo, "test symlink change")
+                LibGit2.checkout!(repo, string(id1))
+                @test !LibGit2.isdirty(repo)
             finally
                 close(repo)
             end
