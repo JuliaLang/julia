@@ -242,6 +242,9 @@ fakehistory = """
 # time: 2014-06-30 17:32:59 EDT
 # mode: shell
 \tll
+# time: 2014-06-30 99:99:99 EDT
+# mode: julia
+\tx ΔxΔ
 # time: 2014-06-30 17:32:49 EDT
 # mode: julia
 \t1 + 1
@@ -363,6 +366,8 @@ begin
     LineEdit.enter_search(s, histp, true)
     write(ss.query_buffer, "l")
     LineEdit.update_display_buffer(ss, ss)
+    @test buffercontents(ss.response_buffer) == "ll"
+    @test position(ss.response_buffer) == 1
     write(ss.query_buffer, "l")
     LineEdit.update_display_buffer(ss, ss)
     LineEdit.accept_result(s, histp)
@@ -425,6 +430,20 @@ begin
     @test ps.parent == foobar_mode
     @test LineEdit.input_string(ps) == "ls"
     @test position(LineEdit.buffer(s)) == 1
+
+    # Some Unicode handling testing
+    LineEdit.history_prev(s, hp)
+    LineEdit.enter_search(s, histp, true)
+    write(ss.query_buffer, "x")
+    LineEdit.update_display_buffer(ss, ss)
+    @test buffercontents(ss.response_buffer) == "x ΔxΔ"
+    @test position(ss.response_buffer) == 4
+    write(ss.query_buffer, " ")
+    LineEdit.update_display_buffer(ss, ss)
+    LineEdit.accept_result(s, histp)
+    @test LineEdit.mode(s) == repl_mode
+    @test buffercontents(LineEdit.buffer(s)) == "x ΔxΔ"
+    @test position(LineEdit.buffer(s)) == 0
 
     # Try entering search mode while in custom repl mode
     LineEdit.enter_search(s, custom_histp, true)
