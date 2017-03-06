@@ -29,7 +29,7 @@ While the addresses of many variables, like singletons, can be be useful to prin
 there are a number of additional variables (see julia.h for a complete list) that are even more
 useful.
 
-  * (when in `jl_apply_generic`) `f->linfo` and `jl_uncompress_ast(f->linfo, f->linfo->ast)` :: for
+  * (when in `jl_apply_generic`) `mfunc` and `jl_uncompress_ast(mfunc->def, mfunc->code)` :: for
     figuring out a bit about the call-stack
   * `jl_lineno` and `jl_filename` :: for figuring out what line in a test to go start debugging from
     (or figure out how far into a file has been parsed)
