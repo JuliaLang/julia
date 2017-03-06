@@ -143,6 +143,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `Compat.isapprox` with `nans` keyword argument ([#20022])
 
+* `Compat.readline` with `chomp` keyword argument ([#20203])
+
 * `take!` method for `Task`s since some functions now return `Channel`s instead of `Task`s ([#19841])
 
 * The `isabstract`, `parameter_upper_bound`, `typename` reflection methods were added in Julia 0.6. This package re-exports these from the `Compat.TypeUtils` submodule. On earlier versions of julia, that module contains the same functions, but operating on the pre-0.6 type system representation.
@@ -336,6 +338,7 @@ includes this fix. Find the minimum version from there.
 [#19950]: https://github.com/JuliaLang/julia/issues/19950
 [#20022]: https://github.com/JuliaLang/julia/issues/20022
 [#20164]: https://github.com/JuliaLang/julia/issues/20164
+[#20203]: https://github.com/JuliaLang/julia/issues/20203
 [#20321]: https://github.com/JuliaLang/julia/issues/20321
 [#20414]: https://github.com/JuliaLang/julia/issues/20414
 [#20418]: https://github.com/JuliaLang/julia/issues/20418

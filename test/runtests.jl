@@ -1763,4 +1763,9 @@ let a = CompatArray.CartesianArray(rand(2,3)), b = CompatArray.LinearArray(rand(
     @test IndexStyle(b) === IndexLinear()
 end
 
+# PR 20203
+@test Compat.readline(IOBuffer("Hello, World!\n")) == "Hello, World!"
+@test Compat.readline(IOBuffer("x\n"), chomp=true) == "x"
+@test Compat.readline(IOBuffer("x\n"), chomp=false) == "x\n"
+
 include("to-be-deprecated.jl")
