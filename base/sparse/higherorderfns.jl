@@ -1009,6 +1009,7 @@ struct PromoteToSparse end
 # broadcast containertype definitions for structured matrices
 StructuredMatrix = Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}
 _containertype(::Type{<:StructuredMatrix}) = PromoteToSparse
+broadcast_indices(::Type{PromoteToSparse}, A) = indices(A)
 
 # combinations explicitly involving Tuples and PromoteToSparse collections
 # divert to the generic AbstractArray broadcast code

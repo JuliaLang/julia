@@ -415,6 +415,33 @@ end
     end
 end
 
+@testset "broadcast! where the destination is a structured matrix" begin
+    # Where broadcast!'s destination is a structured matrix, broadcast! should fall back
+    # to the generic AbstractArray broadcast! code (at least for now).
+    N, p = 5, 0.4
+    A = sprand(N, N, p)
+    sA = A + transpose(A)
+    D = Diagonal(rand(N))
+    B = Bidiagonal(rand(N), rand(N - 1), true)
+    T = Tridiagonal(rand(N - 1), rand(N), rand(N - 1))
+    S = SymTridiagonal(rand(N), rand(N - 1))
+    # why some of the tests below are broken:
+    #   Diagonal setindex! allows setting off-diagonal entries to zero. Subtypes of
+    #   AbstractTriangular allow analogs. But Bidiagonal, Tridiagonal, and SymTridiagonal
+    #   do not, which seems like a bug. setindex! behavior like that for Diagonal and
+    #   subtypes of AbstractTriangular is necessary for Bidiagonal, Tridiagonal, and
+    #   SymTridiagonal to be targets of the AbstractArray broadcast! methods, hence
+    #   the test failures below.
+    @test broadcast!(sin, copy(D), D) == Diagonal(sin.(D))
+    @test_broken broadcast!(sin, copy(B), B) == Bidiagonal(sin.(B), true)
+    @test_broken broadcast!(sin, copy(T), T) == Tridiagonal(sin.(T))
+    @test_broken broadcast!(sin, copy(S), S) == SymTridiagonal(sin.(S))
+    @test broadcast!(*, copy(D), D, A) == Diagonal(broadcast(*, D, A))
+    @test_broken broadcast!(*, copy(B), B, A) == Bidiagonal(broadcast(*, B, A), true)
+    @test_broken broadcast!(*, copy(T), T, A) == Tridiagonal(broadcast(*, T, A))
+    @test_broken broadcast!(*, copy(S), T, sA) == SymTridiagonal(broadcast(*, T, sA))
+end
+
 @testset "map[!] over combinations of sparse and structured matrices" begin
     N, p = 10, 0.4
     A = sprand(N, N, p)
