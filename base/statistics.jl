@@ -605,10 +605,11 @@ median{T}(v::AbstractArray{T}, region) = mapslices(median!, v, region)
 """
     quantile!([q, ] v, p; sorted=false)
 
-Compute the quantile(s) of a vector `v` at the probabilities `p`, with optional output into
-array `q` (if not provided, a new output array is created). The keyword argument `sorted`
-indicates whether `v` can be assumed to be sorted; if `false` (the default), then the
-elements of `v` may be partially sorted.
+Compute the quantile(s) of a vector `v` at the probability or vector or tuple of
+probabilities `p`. If `p` is a vector, an optional output array `q` may also be specified.
+(If not provided, a new output array is created.) The keyword argument `sorted` indicates
+whether `v` can be assumed to be sorted; if `false` (the default), then the elements of `v`
+may be partially sorted.
 
 The elements of `p` should be on the interval [0,1], and `v` should not have any `NaN`
 values.
@@ -699,8 +700,9 @@ end
 """
     quantile(v, p; sorted=false)
 
-Compute the quantile(s) of a vector `v` at a specified probability or vector `p`. The
-keyword argument `sorted` indicates whether `v` can be assumed to be sorted.
+Compute the quantile(s) of a vector `v` at a specified probability or vector or tuple of
+probabilities `p`. The keyword argument `sorted` indicates whether `v` can be assumed to
+be sorted.
 
 The `p` should be on the interval [0,1], and `v` should not have any `NaN` values.
 
