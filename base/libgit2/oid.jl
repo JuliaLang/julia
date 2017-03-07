@@ -72,9 +72,9 @@ end
 """
     GitHash(ref::GitReference)
 
-Gets the identifier (`GitHash`) of th object referred to by the direct reference
-`ref`. Note: this does not work for symbolic references, use `GitHash(repo::GitRepo,
-ref_name::AbstractString)` instead.
+Get the identifier (`GitHash`) of the object referred to by the direct reference
+`ref`. Note: this does not work for symbolic references; in such cases use
+`GitHash(repo::GitRepo, ref_name::AbstractString)` instead.
 """
 function GitHash(ref::GitReference)
     isempty(ref) && return GitHash()
@@ -88,7 +88,7 @@ end
 """
     GitHash(repo::GitRepo, ref_name::AbstractString)
 
-Gets the identifier (`GitHash`) of the object referred to by reference specified by
+Get the identifier (`GitHash`) of the object referred to by reference specified by
 `ref_name`.
 """
 function GitHash(repo::GitRepo, ref_name::AbstractString)
@@ -103,7 +103,7 @@ end
 """
     GitHash(obj::GitObject)
 
-Gets the identifier (`GitHash`) of `obj`.
+Get the identifier (`GitHash`) of `obj`.
 """
 function GitHash(obj::GitObject)
     GitHash(ccall((:git_object_id, :libgit2), Ptr{UInt8}, (Ptr{Void},), obj.ptr))
@@ -112,7 +112,7 @@ end
 """
     GitShortHash(obj::GitObject)
 
-Gets a shortened identifier (`GitShortHash`) of `obj`. The minimum length (in characters)
+Get a shortened identifier (`GitShortHash`) of `obj`. The minimum length (in characters)
 is determined by the `core.abbrev` config option, and will be of sufficient length to
 unambiuously identify the object in the repository.
 """
