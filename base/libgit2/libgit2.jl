@@ -144,7 +144,7 @@ LibGit2.isdiff(repo, "HEAD") # now true
 Equivalent to `git diff-index <treeish> [-- <pathspecs>]`.
 """
 function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""; cached::Bool=false)
-    tree = GitTree(repo, "$treeish^{tree}")
+    tree = peel(GitTree, repo, treeish)
     try
         diff = diff_tree(repo, tree, paths, cached=cached)
         result = count(diff) > 0
@@ -464,15 +464,13 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
     end
 
     # search for commit to get a commit object
-    obj = GitObject(repo, GitHash(commit))
-    peeled = peel(GitCommit, obj)
-    obj_oid = GitHash(peeled)
+    obj = peel(GitCommit, repo, commit)
 
-    # checkout commit
-    checkout_tree(repo, peeled, options = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) : CheckoutOptions())
+    checkout_tree(repo, obj, options = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) : CheckoutOptions())
 
-    GitReference(repo, obj_oid, force=force,
-                 msg="libgit2.checkout: moving from $head_name to $(obj_oid))")
+    hash = GitHash(obj)
+    GitReference(repo, hash, force=force,
+                 msg="libgit2.checkout: moving from $head_name to $(hash))")
 
     return nothing
 end
