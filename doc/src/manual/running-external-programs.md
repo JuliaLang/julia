@@ -61,6 +61,7 @@ julia> open(`less`, "w", STDOUT) do io
 ```
 
 ## Cmd Object
+
 Normally, to create a `Cmd` object in the first place, one uses backticks, e.g.
 
 ```jldoctest
@@ -68,30 +69,46 @@ julia> Cmd(`echo "Hello world"`, ignorestatus=true, detach=false)
 `echo 'Hello world'`
 ```
 
-There are some keyword arguments available to customize the `Cmd` object's usage. You can set the working directory for the command by using the `dir` kwarg, e.g.
+## Execution Environment
+
+You can control a `Cmd`'s execution environment by one of several means. First, constructing a `Cmd` by explicitly calling the `Cmd` type constructor (rather than implicitly using solely backticks as illustrated above) allows you to specify several aspects of the `Cmd`'s execution environment via keyword arguments. For example, the `dir` keyword provides control over the Cmd's working directory,
 
 ```jldoctest
-julia> Cmd(`pwd`, dir = "..")
-setenv(`pwd`; dir="..")
+julia> run(Cmd(`pwd`, dir = "/"))
+/
 ```
 
-You can use [`setenv`](@ref) function to set the environment variables to use while running the given command, e.g.
+and the `env` keyword allows you to set execution environment variables,
 
 ```jldoctest
-julia> setenv(`echo "home"`, "JL_DOC"=>"julia_docs")
-setenv(`echo home`,String["JL_DOC=julia_docs"])
+julia> run(Cmd(`bash -c "echo foo \$HOWLONG"`, env = ("HOWLONG" => "ever!",)))
+foo ever!
 ```
 
-To execute a command in an environment that is temporarily modified (not replaced as in `setenv`) by zero or more `"var" => val` arguments, you can use [`withenv`](@ref), e.g.
+See [`Cmd`](@ref) for additional keyword arguments. [`setenv`](@ref) provides another means for setting Cmd execution environment variables,
 
 ```jldoctest
-julia> withenv("FOO"=>"bar") do
-           run(`bash -c "echo FOO is \$FOO"`)
+julia> run(setenv(`bash -c "echo foo \$HOWLONG"`, ("HOWLONG" => "ever!",)))
+foo ever!
+```
+
+and similarly [`withenv`](@ref) for modifying rather than replacing the execution environment,
+
+```jldoctest
+julia> withenv(() -> run(`bash -c "echo foo \$HOWLONG"`), "HOWLONG" => "ever!")
+foo ever!
+```
+
+which commonly appears in do-block form,
+
+```jldoctest
+julia> withenv("HOWLONG" => "ever!") do
+           run(`bash -c "echo foo \$HOWLONG"`)
        end
-FOO is bar
+foo ever!
 ```
 
-For more information on `Cmd` objects and pipelining of commands see [`Cmd`](@ref) and [`pipeline`](@ref).
+For more information on pipelining of commands see [`pipeline`](@ref).
 
 ## [Interpolation](@id command-interpolation)
 
