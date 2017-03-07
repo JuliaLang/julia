@@ -179,7 +179,8 @@ julia> str[end]
 ```
 
 All indexing in Julia is 1-based: the first element of any integer-indexed object is found at
-index 1, and the last element is found at index `n`, when the string has a length of `n`.
+index 1. (As we will see below, this does not necessarily mean that the last element is found
+at index `n`, where `n` is the length of the string.)
 
 In any indexing expression, the keyword `end` can be used as a shorthand for the last index (computed
 by [`endof(str)`](@ref)). You can perform arithmetic and other operations with `end`, just like
