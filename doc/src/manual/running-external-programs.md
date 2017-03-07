@@ -71,7 +71,7 @@ julia> Cmd(`echo "Hello world"`, ignorestatus=true, detach=false)
 
 ## Execution Environment
 
-You can control a `Cmd`'s execution environment by one of several means. First, constructing a `Cmd` by explicitly calling the `Cmd` type constructor (rather than implicitly using solely backticks as illustrated above) allows you to specify several aspects of the `Cmd`'s execution environment via keyword arguments. For example, the `dir` keyword provides control over the Cmd's working directory,
+You can control a `Cmd`'s execution environment by one of several means. First, constructing a `Cmd` by explicitly calling the `Cmd` type constructor (rather than implicitly using solely backticks as illustrated above) allows you to specify several aspects of the `Cmd`'s execution environment via keyword arguments. For example, the `dir` keyword provides control over the `Cmd`'s working directory,
 
 ```jldoctest
 julia> run(Cmd(`pwd`, dir = "/"))
