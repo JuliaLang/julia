@@ -766,11 +766,17 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
                 if (jl_is_vararg_type(declt))
                     declt = jl_unwrap_vararg(declt);
                 jl_value_t *di = jl_type_intersection(declt, (jl_value_t*)jl_typetype_type);
+                JL_GC_PUSH1(&di);
                 assert(di != (jl_value_t*)jl_bottom_type);
-                if (jl_is_kind(di))
+                if (jl_is_kind(di)) {
+                    JL_GC_POP();
                     return 0;
-                else if (!jl_subtype(di, elt) || !jl_subtype(elt, di))
+                }
+                else if (!jl_subtype(di, elt) || !jl_subtype(elt, di)) {
+                    JL_GC_POP();
                     return 0;
+                }
+                JL_GC_POP();
             }
             else {
                 return 0;
