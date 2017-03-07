@@ -2076,17 +2076,6 @@ static jl_value_t *verify_type(jl_value_t *v)
     return v;
 }
 
-STATIC_INLINE uint32_t int32hash_fast(uint32_t a)
-{
-//    a = (a+0x7ed55d16) + (a<<12);
-//    a = (a^0xc761c23c) ^ (a>>19);
-//    a = (a+0x165667b1) + (a<<5);
-//    a = (a+0xd3a2646c) ^ (a<<9);
-//    a = (a+0xfd7046c5) + (a<<3);
-//    a = (a^0xb55a4f09) ^ (a>>16);
-    return a;  // identity hashing seems to work well enough here
-}
-
 STATIC_INLINE int sig_match_fast(jl_value_t **args, jl_value_t **sig, size_t i, size_t n)
 {
     // NOTE: This function is a huge performance hot spot!!
@@ -2124,11 +2113,8 @@ void call_cache_stats() {
 }
 #endif
 
-#ifdef _COMPILER_MICROSOFT_
-#define __builtin_return_address(n) _ReturnAddress()
-#endif
-
-JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
+STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t **args, uint32_t nargs,
+                                                       uint32_t callsite, size_t world)
 {
 #ifdef JL_GF_PROFILE
     ncalls++;
@@ -2138,7 +2124,6 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
     if (traceen)
         show_call(args[0], &args[1], nargs-1);
 #endif
-    size_t world = jl_get_ptls_states()->world_age;
 
     /*
       search order:
@@ -2150,7 +2135,6 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
       if no generic match, use the concrete one even if inexact
       otherwise instantiate the generic method and use it
     */
-    uint32_t callsite = int32hash_fast((uintptr_t)__builtin_return_address(0));
     // compute the entry hashes
     // use different parts of the value
     // so that a collision across all of
@@ -2218,6 +2202,20 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
     if (traceen)
         jl_printf(JL_STDOUT, " at %s:%d\n", jl_symbol_name(mfunc->def->file), mfunc->def->line);
 #endif
+    return mfunc;
+}
+
+jl_method_instance_t *jl_lookup_generic(jl_value_t **args, uint32_t nargs, uint32_t callsite,
+                                        size_t world)
+{
+    return jl_lookup_generic_(args, nargs, callsite, world);
+}
+
+JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
+{
+    jl_method_instance_t *mfunc = jl_lookup_generic_(args, nargs,
+                                                     jl_int32hash_fast(jl_return_address()),
+                                                     jl_get_ptls_states()->world_age);
     jl_value_t *res = jl_call_method_internal(mfunc, args, nargs);
     return verify_type(res);
 }
