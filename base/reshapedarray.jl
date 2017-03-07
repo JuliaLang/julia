@@ -95,23 +95,19 @@ reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)
 reshape(parent::AbstractArray, dims::Union{Int,Colon}...) = reshape(parent, dims)
 reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = _reshape(parent, _reshape_uncolon(parent, dims))
-# Recursively move dimensions to pre and post tuples, splitting on the Colon
-@inline _reshape_uncolon(A, dims) = _reshape_uncolon(A, (), nothing, (), dims)
-@inline _reshape_uncolon(A, pre, c::Void,  post, dims::Tuple{Any, Vararg{Any}}) =
-    _reshape_uncolon(A, (pre..., dims[1]), c, post, tail(dims))
-@inline _reshape_uncolon(A, pre, c::Void,  post, dims::Tuple{Colon, Vararg{Any}}) =
-    _reshape_uncolon(A, pre, dims[1], post, tail(dims))
-@inline _reshape_uncolon(A, pre, c::Colon, post, dims::Tuple{Any, Vararg{Any}}) =
-    _reshape_uncolon(A, pre, c, (post..., dims[1]), tail(dims))
-_reshape_uncolon(A, pre, c::Colon, post, dims::Tuple{Colon, Vararg{Any}}) =
-    throw(DimensionMismatch("new dimensions $((pre..., c, post..., dims...)) may only have at most one omitted dimension specified by Colon()"))
-@inline function _reshape_uncolon(A, pre, c::Colon, post, dims::Tuple{})
+@inline function _reshape_uncolon(A, dims)
+    pre, post = _split_at_colon((), dims...)
+    if any(d -> d isa Colon, post)
+        throw(DimensionMismatch("new dimensions $(dims) may have at most one omitted dimension specified by Colon()"))
+    end
     sz, remainder = divrem(length(A), prod(pre)*prod(post))
-    remainder == 0 || _throw_reshape_colon_dimmismatch(A, pre, post)
+    remainder == 0 || _throw_reshape_colon_dimmismatch(A, dims)
     (pre..., sz, post...)
 end
-_throw_reshape_colon_dimmismatch(A, pre, post) =
-    throw(DimensionMismatch("array size $(length(A)) must be divisible by the product of the new dimensions $((pre..., :, post...))"))
+@inline _split_at_colon(pre, dim::Any, tail...) =  _split_at_colon((pre..., dim), tail...)
+@inline _split_at_colon(pre, ::Colon, tail...) = (pre, tail)
+_throw_reshape_colon_dimmismatch(A, dims) =
+    throw(DimensionMismatch("array size $(length(A)) must be divisible by the product of the new dimensions $dims"))
 
 reshape{T,N}(parent::AbstractArray{T,N}, ndims::Type{Val{N}}) = parent
 function reshape{N}(parent::AbstractArray, ndims::Type{Val{N}})
