@@ -164,6 +164,7 @@ end
     mats = (sprand(N, M, p), sprand(N, 1, p), sprand(1, M, p), sprand(1, 1, 1.0), spzeros(1, 1))
     vecs = (sprand(N, p), sprand(1, 1.0), spzeros(1))
     tens = (mats..., vecs...)
+    fZ = Array(first(mats))
     for Xo in tens
         X = ndims(Xo) == 1 ? SparseVector{Float32,Int32}(Xo) : SparseMatrixCSC{Float32,Int32}(Xo)
         # use different types to check internal type stability via allocation tests below
@@ -182,20 +183,20 @@ end
                 @test_throws DimensionMismatch broadcast(+, spzeros((shapeX .- 1)...), Y)
             end
             # --> test broadcast! entry point / +-like zero-preserving op
-            fZ = broadcast(+, fX, fY); Z = sparse(fZ)
+            broadcast!(+, fZ, fX, fY); Z = sparse(fZ)
             broadcast!(+, Z, X, Y); Z = sparse(fZ) # warmup for @allocated
             @test (@allocated broadcast!(+, Z, X, Y)) == 0
             @test broadcast!(+, Z, X, Y) == sparse(broadcast!(+, fZ, fX, fY))
             # --> test broadcast! entry point / *-like zero-preserving op
-            fZ = broadcast(*, fX, fY); Z = sparse(fZ)
+            broadcast!(*, fZ, fX, fY); Z = sparse(fZ)
             broadcast!(*, Z, X, Y); Z = sparse(fZ) # warmup for @allocated
             @test (@allocated broadcast!(*, Z, X, Y)) == 0
             @test broadcast!(*, Z, X, Y) == sparse(broadcast!(*, fZ, fX, fY))
             # --> test broadcast! entry point / not zero-preserving op
-            fZ = broadcast(f, fX, fY); Z = sparse(fZ)
-            broadcast!(f, Z, X, Y); Z = sparse(fZ) # warmup for @allocated
+            fZo = broadcast(f, fX, fY); Z = sparse(fZo)
+            broadcast!(f, Z, X, Y); Z = sparse(fZo) # warmup for @allocated
             @test (@allocated broadcast!(f, Z, X, Y)) == 0
-            @test broadcast!(f, Z, X, Y) == sparse(broadcast!(f, fZ, fX, fY))
+            @test broadcast!(f, Z, X, Y) == sparse(broadcast!(f, fZo, fX, fY))
             # --> test shape checks for both broadcast and broadcast! entry points
             # TODO strengthen this test, avoiding dependence on checking whether
             # broadcast_indices throws to determine whether sparse broadcast should throw
