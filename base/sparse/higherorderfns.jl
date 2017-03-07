@@ -515,16 +515,15 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B
     spaceC::Int = min(length(storedinds(C)), length(storedvals(C)))
     rowsentinelA = convert(indtype(A), numrows(C) + 1)
     rowsentinelB = convert(indtype(B), numrows(C) + 1)
-    # A and B cannot have the same shape, as we directed that case to map in broadcast's
-    # entry point; here we need efficiently handle only heterogeneous combinations of matrices
-    # with no singleton dimensions ("matrices" hereafter), one singleton dimension ("columns"
-    # and "rows"), and two singleton dimensions ("scalars"). Cases involving scalars should
-    # be rare and optimizing that case complicates the code appreciably, so we largely
-    # ignore that case's performance below.
+    # C, A, and B cannot all have the same shape, as we directed that case to map in broadcast's
+    # entry point; here we need efficiently handle only heterogeneous combinations of mats/vecs
+    # with no singleton dimensions, one singleton dimension, and two singleton dimensions.
+    # Cases involving objects with two singleton dimensions should be rare and optimizing
+    # that case complicates the code appreciably, so we largely ignore that case's
+    # performance below.
     #
-    # We first divide the cases into two groups: those in which neither argument expands
-    # vertically (matrix-column combinations) and those in which an argument expands
-    # vertically (matrix-row and column-row combinations).
+    # We first divide the cases into two groups: those in which neither input argument
+    # expands vertically, and those in which at least one argument expands vertically.
     #
     # NOTE: Placing the loops over columns outside the conditional chain segregating
     # argument shape combinations eliminates some code replication but unfortunately
@@ -532,7 +531,7 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B
     #
     # Cases without vertical expansion
     Ck = 1
-    if numrows(A) == numrows(B)
+    if numrows(A) == numrows(B) == numrows(C)
         @inbounds for j in columns(C)
             setcolptr!(C, j, Ck)
             Ak, stopAk = numcols(A) == 1 ? (colstartind(A, 1), colboundind(A, 1)) : (colstartind(A, j), colboundind(A, j))
@@ -575,7 +574,24 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B
             end
         end
     # Cases with vertical expansion
-    elseif numrows(A) == 1 # && numrows(B) != 1, vertically expand first argument
+    elseif numrows(A) == numrows(B) == 1 # && numrows(C) != 1, vertically expand both A and B
+        @inbounds for j in columns(C)
+            setcolptr!(C, j, Ck)
+            Ak, stopAk = numcols(A) == 1 ? (colstartind(A, 1), colboundind(A, 1)) : (colstartind(A, j), colboundind(A, j))
+            Bk, stopBk = numcols(B) == 1 ? (colstartind(B, 1), colboundind(B, 1)) : (colstartind(B, j), colboundind(B, j))
+            Ax = Ak < stopAk ? storedvals(A)[Ak] : zero(eltype(A))
+            Bx = Bk < stopBk ? storedvals(B)[Bk] : zero(eltype(B))
+            Cx = f(Ax, Bx)
+            if !_iszero(Cx)
+                for Ci::indtype(C) in 1:numrows(C)
+                    Ck > spaceC && (spaceC = expandstorage!(C, _unchecked_maxnnzbcres(size(C), A, B)))
+                    storedinds(C)[Ck] = Ci
+                    storedvals(C)[Ck] = Cx
+                    Ck += 1
+                end
+            end
+        end
+    elseif numrows(A) == 1 # && numrows(B) == numrows(C) != 1 , vertically expand only A
         @inbounds for j in columns(C)
             setcolptr!(C, j, Ck)
             Ak, stopAk = numcols(A) == 1 ? (colstartind(A, 1), colboundind(A, 1)) : (colstartind(A, j), colboundind(A, j))
@@ -616,7 +632,7 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B
                 end
             end
         end
-    elseif numrows(B) == 1 # && numrows(A) != 1, vertically expand second argument
+    else # numrows(B) == 1 && numrows(A) == numrows(C) != 1, vertically expand only B
         @inbounds for j in columns(C)
             setcolptr!(C, j, Ck)
             Ak, stopAk = numcols(A) == 1 ? (colstartind(A, 1), colboundind(A, 1)) : (colstartind(A, j), colboundind(A, j))
