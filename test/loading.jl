@@ -2,7 +2,34 @@
 
 using Base.Test
 
-@test @__LINE__() == 5
+# Tests for @__LINE__ inside and outside of macros
+@test (@__LINE__) == 6
+
+macro macro_caller_lineno()
+    @test 9 == (@__LINE__) != __source__.line > 12
+    return __source__.line
+end
+
+@test @macro_caller_lineno() == (@__LINE__) > 12
+
+# @__LINE__ in a macro expands to the location of the macrocall in the source
+# while __source__.line is the location of the macro caller
+macro nested_LINE_expansion()
+    return quote
+        return (@emit_LINE, $(__source__.line))
+    end
+end
+macro nested_LINE_expansion2()
+    return :((@emit_LINE, $(__source__.line)))
+end
+macro emit_LINE()
+    return quote
+        (@__LINE__, $(__source__.line))
+    end
+end
+@test (@emit_LINE) == ((@__LINE__) - 3, @__LINE__)
+@test @nested_LINE_expansion() == ((@__LINE__() - 4, @__LINE__() - 12), @__LINE__())
+@test @nested_LINE_expansion2() == ((@__LINE__() - 5, @__LINE__() - 9), @__LINE__())
 
 include("test_sourcepath.jl")
 thefname = "the fname!//\\&\1*"
