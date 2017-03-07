@@ -687,7 +687,7 @@ function _broadcast_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseVecOrMat, A::Spa
     rowsentinelA = convert(indtype(A), numrows(C) + 1)
     rowsentinelB = convert(indtype(B), numrows(C) + 1)
     # Cases without vertical expansion
-    if numrows(A) == numrows(B)
+    if numrows(A) == numrows(B) == numrows(C)
         @inbounds for (j, jo) in zip(columns(C), _densecoloffsets(C))
             Ak, stopAk = numcols(A) == 1 ? (colstartind(A, 1), colboundind(A, 1)) : (colstartind(A, j), colboundind(A, j))
             Bk, stopBk = numcols(B) == 1 ? (colstartind(B, 1), colboundind(B, 1)) : (colstartind(B, j), colboundind(B, j))
@@ -711,7 +711,20 @@ function _broadcast_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseVecOrMat, A::Spa
             end
         end
     # Cases with vertical expansion
-    elseif numrows(A) == 1 # && numrows(B) != 1, vertically expand first argument
+    elseif numrows(A) == numrows(B) == 1 # && numrows(C) != 1, vertically expand both A and B
+        @inbounds for (j, jo) in zip(columns(C), _densecoloffsets(C))
+            Ak, stopAk = numcols(A) == 1 ? (colstartind(A, 1), colboundind(A, 1)) : (colstartind(A, j), colboundind(A, j))
+            Bk, stopBk = numcols(B) == 1 ? (colstartind(B, 1), colboundind(B, 1)) : (colstartind(B, j), colboundind(B, j))
+            Ax = Ak < stopAk ? storedvals(A)[Ak] : zero(eltype(A))
+            Bx = Bk < stopBk ? storedvals(B)[Bk] : zero(eltype(B))
+            Cx = f(Ax, Bx)
+            if Cx != fillvalue
+                for Ck::Int in (jo + 1):(jo + numrows(C))
+                    storedvals(C)[Ck] = Cx
+                end
+            end
+        end
+    elseif numrows(A) == 1 # && numrows(B) == numrows(C) != 1, vertically expand only A
         @inbounds for (j, jo) in zip(columns(C), _densecoloffsets(C))
             Ak, stopAk = numcols(A) == 1 ? (colstartind(A, 1), colboundind(A, 1)) : (colstartind(A, j), colboundind(A, j))
             Bk, stopBk = numcols(B) == 1 ? (colstartind(B, 1), colboundind(B, 1)) : (colstartind(B, j), colboundind(B, j))
@@ -736,7 +749,7 @@ function _broadcast_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseVecOrMat, A::Spa
                 end
             end
         end
-    elseif numrows(B) == 1 # && numrows(A) != 1, vertically expand second argument
+    else # numrows(B) == 1 && numrows(A) == numrows(C) != 1, vertically expand only B
         @inbounds for (j, jo) in zip(columns(C), _densecoloffsets(C))
             Ak, stopAk = numcols(A) == 1 ? (colstartind(A, 1), colboundind(A, 1)) : (colstartind(A, j), colboundind(A, j))
             Bk, stopBk = numcols(B) == 1 ? (colstartind(B, 1), colboundind(B, 1)) : (colstartind(B, j), colboundind(B, j))

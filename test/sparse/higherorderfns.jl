@@ -193,10 +193,10 @@ end
             @test (@allocated broadcast!(*, Z, X, Y)) == 0
             @test broadcast!(*, Z, X, Y) == sparse(broadcast!(*, fZ, fX, fY))
             # --> test broadcast! entry point / not zero-preserving op
-            fZo = broadcast(f, fX, fY); Z = sparse(fZo)
-            broadcast!(f, Z, X, Y); Z = sparse(fZo) # warmup for @allocated
+            broadcast!(f, fZ, fX, fY); Z = sparse(fZ)
+            broadcast!(f, Z, X, Y); Z = sparse(fZ) # warmup for @allocated
             @test (@allocated broadcast!(f, Z, X, Y)) == 0
-            @test broadcast!(f, Z, X, Y) == sparse(broadcast!(f, fZo, fX, fY))
+            @test broadcast!(f, Z, X, Y) == sparse(broadcast!(f, fZ, fX, fY))
             # --> test shape checks for both broadcast and broadcast! entry points
             # TODO strengthen this test, avoiding dependence on checking whether
             # broadcast_indices throws to determine whether sparse broadcast should throw
