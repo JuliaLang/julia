@@ -2,7 +2,23 @@
 
 using Base.Test
 
-@test @__LINE__() == 5
+# Tests for @__LINE__ inside and outside of macros
+@test @__LINE__() == 6
+
+macro macro_body_lineno()
+    line = current_location()::Int
+    quote
+        $line
+    end
+end
+
+macro macro_ast_lineno()
+    :(@__LINE__)
+end
+
+@test @macro_body_lineno() == @__LINE__
+@test @macro_ast_lineno() == @__LINE__
+
 
 include("test_sourcepath.jl")
 thefname = "the fname!//\\&\1*"
