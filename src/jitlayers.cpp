@@ -158,9 +158,6 @@ void addOptimizationPasses(PassManager *PM)
 #ifndef INSTCOMBINE_BUG
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
 #endif
-    // Let the InstCombine pass remove the unnecessary load of
-    // safepoint address first
-    PM->add(createLowerPTLSPass(imaging_mode));
     PM->add(createSROAPass());                 // Break up aggregate allocas
 #ifndef INSTCOMBINE_BUG
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
@@ -241,6 +238,10 @@ void addOptimizationPasses(PassManager *PM)
     PM->add(createLoopVectorizePass());         // Vectorize loops
     PM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
 #endif
+    // Let the InstCombine pass remove the unnecessary load of
+    // safepoint address first
+    PM->add(createAddSafepointPass());
+    PM->add(createLowerPTLSPass(imaging_mode));
     //PM->add(createCFGSimplificationPass());     // Merge & remove BBs
 }
 
