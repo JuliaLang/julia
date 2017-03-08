@@ -1278,6 +1278,18 @@ end
 @deprecate_binding LinearSlow IndexCartesian false
 @deprecate_binding linearindexing IndexStyle false
 
+# #20876
+@eval Base.Dates begin
+    function Base.Dates.parse(x::AbstractString, df::DateFormat)
+        Base.depwarn(string(
+            "`Dates.parse(x::AbstractString, df::DateFormat)` is deprecated, use ",
+            "`sort!(filter!(el -> isa(el, Dates.Period), parse(Vector, x, df), rev=true, lt=Dates.periodisless)` "
+            " instead.", :parse)
+        # sort!([el for el in parse(Vector, x, df) if isa(el, Period)], rev=true, lt=periodisless)
+        sort!(filter!(el -> isa(el, Period), parse(Vector, x, df)), rev=true, lt=periodisless)
+     end
+end
+
 # END 0.6 deprecations
 
 # BEGIN 1.0 deprecations
