@@ -209,6 +209,16 @@ module IteratorsMD
     @inline _split{N}(tN::NTuple{N,Any}, ::Tuple{}, ::Type{Val{N}}) = tN, ()  # ambig.
     @inline _split{N}(tN,                ::Tuple{}, ::Type{Val{N}}) = tN, ()
     @inline _split{N}(tN::NTuple{N,Any},  trest,    ::Type{Val{N}}) = tN, trest
+
+    @inline function split(I::CartesianIndex, V::Type{<:Val})
+        i, j = split(I.I, V)
+        CartesianIndex(i), CartesianIndex(j)
+    end
+    function split(R::CartesianRange, V::Type{<:Val})
+        istart, jstart = split(first(R), V)
+        istop,  jstop  = split(last(R), V)
+        CartesianRange(istart, istop), CartesianRange(jstart, jstop)
+    end
 end  # IteratorsMD
 
 
@@ -781,6 +791,13 @@ function fill!{T}(A::AbstractArray{T}, x)
     A
 end
 
+"""
+    copy!(dest, src) -> dest
+
+Copy all elements from collection `src` to array `dest`.
+"""
+copy!(dest, src)
+
 function copy!{T,N}(dest::AbstractArray{T,N}, src::AbstractArray{T,N})
     @boundscheck checkbounds(dest, indices(src)...)
     for I in eachindex(IndexStyle(src,dest), src)
@@ -804,6 +821,14 @@ function copy!(dest::AbstractArray, Rdest::CartesianRange, src::AbstractArray, R
     end
     dest
 end
+
+"""
+    copy!(dest, Rdest::CartesianRange, src, Rsrc::CartesianRange) -> dest
+
+Copy the block of `src` in the range of `Rsrc` to the block of `dest`
+in the range of `Rdest`. The sizes of the two regions must match.
+"""
+copy!(::AbstractArray, ::CartesianRange, ::AbstractArray, ::CartesianRange)
 
 # circshift!
 circshift!(dest::AbstractArray, src, ::Tuple{}) = copy!(dest, src)
