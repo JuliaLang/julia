@@ -38,40 +38,6 @@ for (pf, pfr, K, inplace) in ((:plan_dct, :plan_r2r, REDFT10, false),
     end
 end
 
-"""
-    plan_dct!(A [, dims [, flags [, timelimit]]])
-
-Same as [`plan_dct`](@ref), but operates in-place on `A`.
-"""
-plan_dct!
-
-"""
-    plan_idct(A [, dims [, flags [, timelimit]]])
-
-Pre-plan an optimized inverse discrete cosine transform (DCT), similar to
-[`plan_fft`](@ref) except producing a function that computes
-[`idct`](@ref). The first two arguments have the same meaning as for
-[`idct`](@ref).
-"""
-plan_idct
-
-"""
-    plan_dct(A [, dims [, flags [, timelimit]]])
-
-Pre-plan an optimized discrete cosine transform (DCT), similar to
-[`plan_fft`](@ref) except producing a function that computes
-[`dct`](@ref). The first two arguments have the same meaning as for
-[`dct`](@ref).
-"""
-plan_dct
-
-"""
-    plan_idct!(A [, dims [, flags [, timelimit]]])
-
-Same as [`plan_idct`](@ref), but operates in-place on `A`.
-"""
-plan_idct!
-
 function plan_inv{T,K,inplace}(p::DCTPlan{T,K,inplace})
     X = Array{T}(p.plan.sz)
     iK = inv_kind[K]
@@ -92,45 +58,6 @@ for f in (:dct, :dct!, :idct, :idct!)
         $pf(x::AbstractArray{<:Complex}, region; kws...) = $pf(fftwcomplex(x), region; kws...)
     end
 end
-
-"""
-    dct(A [, dims])
-
-Performs a multidimensional type-II discrete cosine transform (DCT) of the array `A`, using
-the unitary normalization of the DCT. The optional `dims` argument specifies an iterable
-subset of dimensions (e.g. an integer, range, tuple, or array) to transform along.  Most
-efficient if the size of `A` along the transformed dimensions is a product of small primes;
-see [`nextprod`](@ref). See also [`plan_dct`](@ref) for even greater
-efficiency.
-"""
-dct
-
-"""
-    idct(A [, dims])
-
-Computes the multidimensional inverse discrete cosine transform (DCT) of the array `A`
-(technically, a type-III DCT with the unitary normalization). The optional `dims` argument
-specifies an iterable subset of dimensions (e.g. an integer, range, tuple, or array) to
-transform along.  Most efficient if the size of `A` along the transformed dimensions is a
-product of small primes; see [`nextprod`](@ref).  See also
-[`plan_idct`](@ref) for even greater efficiency.
-"""
-idct
-
-"""
-    dct!(A [, dims])
-
-Same as [`dct!`](@ref), except that it operates in-place on `A`, which must be an
-array of real or complex floating-point values.
-"""
-dct!
-
-"""
-    idct!(A [, dims])
-
-Same as [`idct!`](@ref), but operates in-place on `A`.
-"""
-idct!
 
 const sqrthalf = sqrt(0.5)
 const sqrt2 = sqrt(2.0)
