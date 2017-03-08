@@ -2696,6 +2696,15 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     return 0;
 }
 
+#ifndef NDEBUG
+// skip the performance optimizations of jl_types_equal and just use subtyping directly
+// ones of these types is invalid - that's why we're doing the recache type operation
+static int jl_invalid_types_equal(jl_datatype_t *a, jl_datatype_t *b)
+{
+    return jl_subtype((jl_value_t*)a, (jl_value_t*)b) && jl_subtype((jl_value_t*)b, (jl_value_t*)a);
+}
+#endif
+
 static jl_datatype_t *jl_recache_type(jl_datatype_t *dt, size_t start, jl_value_t *v)
 {
     if (v == NULL)
@@ -2710,7 +2719,7 @@ static jl_datatype_t *jl_recache_type(jl_datatype_t *dt, size_t start, jl_value_
                 if (p->uid == -1 || p->uid == 0) {
                     jl_datatype_t *cachep = jl_recache_type(p, start, NULL);
                     if (p != cachep) {
-                        assert(jl_types_equal((jl_value_t*)p, (jl_value_t*)cachep));
+                        assert(jl_invalid_types_equal(p, cachep));
                         jl_svecset(tt, i, cachep);
                     }
                 }
@@ -2739,7 +2748,7 @@ static jl_datatype_t *jl_recache_type(jl_datatype_t *dt, size_t start, jl_value_
         else {
             dt->uid = 0;
             t = (jl_datatype_t*)jl_cache_type_(dt);
-            assert(jl_types_equal((jl_value_t*)t, (jl_value_t*)dt));
+            assert(jl_invalid_types_equal(t, dt));
         }
     }
     else {
