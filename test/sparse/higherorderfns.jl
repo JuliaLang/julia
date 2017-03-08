@@ -424,18 +424,14 @@ end
     D = Diagonal(rand(N))
     B = Bidiagonal(rand(N), rand(N - 1), true)
     T = Tridiagonal(rand(N - 1), rand(N), rand(N - 1))
-    S = SymTridiagonal(rand(N), rand(N - 1))
-    # why some of the tests below are broken:
-    #   Diagonal setindex! allows setting off-diagonal entries to zero. Subtypes of
-    #   AbstractTriangular allow analogs.
     @test broadcast!(sin, copy(D), D) == Diagonal(sin.(D))
     @test broadcast!(sin, copy(B), B) == Bidiagonal(sin.(B), true)
     @test broadcast!(sin, copy(T), T) == Tridiagonal(sin.(T))
-    @test_broken broadcast!(sin, copy(S), S) == SymTridiagonal(sin.(S))
     @test broadcast!(*, copy(D), D, A) == Diagonal(broadcast(*, D, A))
     @test broadcast!(*, copy(B), B, A) == Bidiagonal(broadcast(*, B, A), true)
     @test broadcast!(*, copy(T), T, A) == Tridiagonal(broadcast(*, T, A))
-    @test_broken broadcast!(*, copy(S), T, sA) == SymTridiagonal(broadcast(*, T, sA))
+    # SymTridiagonal (and similar symmetric matrix types) do not support setindex!
+    # off the diagonal, and so cannot serve as a destination for broadcast!
 end
 
 @testset "map[!] over combinations of sparse and structured matrices" begin
