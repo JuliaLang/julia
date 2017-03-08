@@ -412,8 +412,7 @@
         (let ((e (car exs)))
           (if (and (pair? e) (eq? (car e) 'line))
               (loop (cdr exs) (cadr e) (cons e out))
-              (loop (cdr exs) lineno
-              (cons (julia-expand-macros e lineno) out)))))))
+              (loop (cdr exs) lineno (cons (julia-expand-macros e lineno) out)))))))
 
 ;; macro expander entry point
 (define (julia-expand-macros e lineno)
