@@ -550,3 +550,29 @@ let io = IOBuffer()
     Base.showerror(io, Base.Pkg.Entry.PkgTestError("ppp"), backtrace())
     @test !contains(String(take!(io)), "backtrace()")
 end
+
+
+function temp_rel_pkg_dir(fn::Function, remove_tmp_dir::Bool=true)
+    # Used in tests below to set up and tear down a sandboxed package directory
+    cd(tempdir()) do
+        const tmpdir = randstring()
+        withenv("JULIA_PKGDIR" => tmpdir) do
+            @test !isdir(Pkg.dir())
+            try
+                Pkg.init()
+                @test isdir(Pkg.dir())
+                Pkg.resolve()
+                fn()
+            finally
+                remove_tmp_dir && rm(tmpdir, recursive=true)
+            end
+        end
+    end
+end
+
+@testset "Relative path operations" begin
+    temp_rel_pkg_dir() do
+        Pkg.add("Example")
+        @test [keys(Pkg.installed())...] == ["Example"]
+    end
+end
