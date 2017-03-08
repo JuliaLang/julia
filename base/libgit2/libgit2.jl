@@ -98,12 +98,12 @@ Checks if there have been any changes to tracked files in the working tree (if
 # Example
 ```julia
 repo = LibGit2.GitRepo(repo_path)
-LibGit2.isdirty(repo) #should be false
+LibGit2.isdirty(repo) # should be false
 open(joinpath(repo_path, new_file), "a") do f
     println(f, "here's my cool new file")
 end
-LibGit2.isdirty(repo) #now true
-LibGit2.isdirty(repo, new_file) #now true
+LibGit2.isdirty(repo) # now true
+LibGit2.isdirty(repo, new_file) # now true
 ```
 
 Equivalent to `git diff-index HEAD [-- <pathspecs>]`.
@@ -121,11 +121,11 @@ tracked files in the working tree (if `cached=false`) or the index (if `cached=t
 # Example
 ```julia
 repo = LibGit2.GitRepo(repo_path)
-LibGit2.isdiff(repo, "HEAD") #should be false
+LibGit2.isdiff(repo, "HEAD") # should be false
 open(joinpath(repo_path, new_file), "a") do f
     println(f, "here's my cool new file")
 end
-LibGit2.isdiff(repo, "HEAD") #now true
+LibGit2.isdiff(repo, "HEAD") # now true
 ```
 
 Equivalent to `git diff-index <treeish> [-- <pathspecs>]`.
