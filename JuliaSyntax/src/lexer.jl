@@ -7,7 +7,7 @@ using Compat
 import Compat.String
 
 import ..Tokens
-import ..Tokens: Token, Kind, TokenError, UNICODE_OPS
+import ..Tokens: Token, Kind, TokenError, UNICODE_OPS, EMPTY_TOKEN
 
 import ..Tokens: FUNCTION, ABSTRACT, IDENTIFIER, BAREMODULE, BEGIN, BITSTYPE, BREAK, CATCH, CONST, CONTINUE,
                  DO, ELSE, ELSEIF, END, EXPORT, FALSE, FINALLY, FOR, FUNCTION, GLOBAL, LET, LOCAL, IF, IMMUTABLE,
@@ -637,20 +637,20 @@ end
 
 # Parse a token starting with a quote.
 # A '"' has been consumed
-function lex_quote(l::Lexer)
+function lex_quote(l::Lexer, doemit=true)
     if accept(l, '"') # ""
         if accept(l, '"') # """
             if read_string(l, Tokens.TRIPLE_STRING)
-                emit(l, Tokens.TRIPLE_STRING)
+                return doemit ? emit(l, Tokens.TRIPLE_STRING) : EMPTY_TOKEN
             else
-                emit_error(l, Tokens.EOF_STRING)
+                return emit_error(l, Tokens.EOF_STRING)
             end
         else # empty string
-            return emit(l, Tokens.STRING)
+            return doemit ?  emit(l, Tokens.STRING) : EMPTY_TOKEN
         end
     else # "?, ? != '"'
         if read_string(l, Tokens.STRING)
-            emit(l, Tokens.STRING)
+            return doemit ?  emit(l, Tokens.STRING) : EMPTY_TOKEN
         else
             return emit_error(l, Tokens.EOF_STRING)
         end
@@ -674,6 +674,30 @@ function read_string(l::Lexer, kind::Tokens.Kind)
             end
         elseif eof(c)
             return false
+        end
+        if c == '$'
+            c = readchar(l)
+            if c == '"'
+                if kind == Tokens.STRING
+                    return true
+                else
+                    if accept(l, "\"") && accept(l, "\"")
+                        return true
+                    end
+                end
+            elseif c == '('
+                o = 1
+                while o > 0
+                    c = readchar(l)
+                    if c == '('
+                        o += 1
+                    elseif c == ')'
+                        o -= 1
+                    elseif c == '"'
+                        lex_quote(l, false)
+                    end
+                end
+            end
         end
     end
 end

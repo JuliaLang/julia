@@ -61,6 +61,8 @@ function Token(kind::Kind, startposition::Tuple{Int, Int}, endposition::Tuple{In
 end
 Token() = Token(ERROR, (0,0), (0,0), 0, 0, "", UNKNOWN)
 
+const EMPTY_TOKEN = Token()
+
 function kind(t::Token)
     isoperator(t.kind) && return OP
     iskeyword(t.kind) && return KEYWORD

@@ -298,7 +298,17 @@ end
     @test String(take!(io)) == "1,1-2,2          STRING         \"\\\"abc\\nd\\\"\""
 end
 
+
+@testset "interpolation" begin
+    ts = collect(tokenize(""""str: \$(g("str: \$(h("str"))"))" """))
+    @test length(ts)==3
+    @test ts[1].kind == Tokens.STRING
+    ts = collect(tokenize("""\"\$\""""))
+    @test ts[1].kind == Tokens.STRING 
+end
+
 @testset "inferred" begin
     l = tokenize("abc")
     Base.Test.@inferred Tokenize.Lexers.next_token(l)
 end
+
