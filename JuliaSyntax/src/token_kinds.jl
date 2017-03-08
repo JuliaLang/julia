@@ -73,6 +73,7 @@
 
     begin_ops,
         OP, # general
+        DDDOT, # ...
 
         # Level 1
         begin_assignments,
@@ -731,7 +732,6 @@
 
         NOT, # !
         PRIME, # '
-        DDDOT, # ...
         TRANSPOSE, # .'
         ANON_FUNC, # ->
         
