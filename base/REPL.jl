@@ -65,7 +65,7 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
                 backend.in_eval = true
                 value = eval(Main, ast)
                 backend.in_eval = false
-                # note: value wrapped in a closure to ensure it doesn't get passed through expand
+                # note: value wrapped carefully here to ensure it doesn't get passed through expand
                 eval(Main, Expr(:body, Expr(:(=), :ans, QuoteNode(value)), Expr(:return, nothing)))
                 put!(backend.response_channel, (value, nothing))
             end
@@ -551,8 +551,8 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     response_str = String(response_buffer)
 
     # Alright, first try to see if the current match still works
-    a = position(response_buffer) + 1
-    b = min(endof(response_str), prevind(response_str, a + sizeof(searchdata)))
+    a = position(response_buffer) + 1 # position is zero-indexed
+    b = min(endof(response_str), prevind(response_str, a + sizeof(searchdata))) # ensure that b is valid
 
     !skip_current && searchdata == response_str[a:b] && return true
 
@@ -565,7 +565,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     if 1 <= searchstart <= endof(response_str)
         match = searchfunc(response_str, searchdata, searchstart)
         if match != 0:-1
-            seek(response_buffer, prevind(response_str, first(match)))
+            seek(response_buffer, first(match) - 1)
             return true
         end
     end
@@ -578,7 +578,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
         if match != 0:-1 && h != response_str && haskey(hist.mode_mapping, hist.modes[idx])
             truncate(response_buffer, 0)
             write(response_buffer, h)
-            seek(response_buffer, prevind(h, first(match)))
+            seek(response_buffer, first(match) - 1)
             hist.cur_idx = idx
             return true
         end
@@ -622,18 +622,25 @@ backend(r::AbstractREPL) = r.backendref
 send_to_backend(ast, backend::REPLBackendRef) = send_to_backend(ast, backend.repl_channel, backend.response_channel)
 function send_to_backend(ast, req, rep)
     put!(req, (ast, 1))
-    val, bt = take!(rep)
+    return take!(rep) # (val, bt)
 end
 
 function respond(f, repl, main; pass_empty = false)
-    (s,buf,ok)->begin
+    return function do_respond(s, buf, ok)
         if !ok
             return transition(s, :abort)
         end
         line = String(take!(buf))
         if !isempty(line) || pass_empty
             reset(repl)
-            val, bt = send_to_backend(eval(:(($f)($line))), backend(repl))
+            try
+                # note: value wrapped carefully here to ensure it doesn't get passed through expand
+                response = eval(Main, Expr(:body, Expr(:return, Expr(:call, QuoteNode(f), QuoteNode(line)))))
+                val, bt = send_to_backend(response, backend(repl))
+            catch err
+                val = err
+                bt = catch_backtrace()
+            end
             if !ends_with_semicolon(line) || bt !== nothing
                 print_response(repl, val, bt, true, Base.have_color)
             end
@@ -963,11 +970,51 @@ answer_color(r::StreamREPL) = r.answer_color
 input_color(r::LineEditREPL) = r.envcolors ? Base.input_color() : r.input_color
 input_color(r::StreamREPL) = r.input_color
 
+# heuristic function to decide if the presence of a semicolon
+# at the end of the expression was intended for suppressing output
 function ends_with_semicolon(line)
     match = rsearch(line, ';')
     if match != 0
-        for c in line[(match+1):end]
-            isspace(c) || return c == '#'
+        # state for comment parser, assuming that the `;` isn't in a string or comment
+        # so input like ";#" will still thwart this to give the wrong (anti-conservative) answer
+        comment = false
+        comment_start = false
+        comment_close = false
+        comment_multi = 0
+        for c in line[(match + 1):end]
+            if comment_multi > 0
+                # handle nested multi-line comments
+                if comment_close && c == '#'
+                    comment_close = false
+                    comment_multi -= 1
+                elseif comment_start && c == '='
+                    comment_start = false
+                    comment_multi += 1
+                else
+                    comment_start = (c == '#')
+                    comment_close = (c == '=')
+                end
+            elseif comment
+                # handle line comments
+                if c == '\r' || c == '\n'
+                    comment = false
+                end
+            elseif comment_start
+                # see what kind of comment this is
+                comment_start = false
+                if c == '='
+                    comment_multi = 1
+                else
+                    comment = true
+                end
+            elseif c == '#'
+                # start handling for a comment
+                comment_start = true
+            else
+                # outside of a comment, encountering anything but whitespace
+                # means the semi-colon was internal to the expression
+                isspace(c) || return false
+            end
         end
         return true
     end
