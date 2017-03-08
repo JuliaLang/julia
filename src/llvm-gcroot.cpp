@@ -24,6 +24,8 @@
 #endif
 #include <llvm/IR/MDBuilder.h>
 
+#include "fix_llvm_assert.h"
+
 #include <vector>
 #include <queue>
 #include <set>
@@ -44,7 +46,7 @@ extern std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *pare
 
 namespace {
 
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
 static struct {
     unsigned count;
     unsigned locals;
@@ -778,7 +780,7 @@ void JuliaGCAllocator::allocate_frame()
                 if (CallInst *callInst = dyn_cast<CallInst>(user)) {
                     assert(bb == NULL);
                     bb = callInst->getParent();
-#ifdef NDEBUG
+#ifdef JL_NDEBUG
                     break;
 #endif
                 }
@@ -1130,7 +1132,7 @@ void JuliaGCAllocator::allocate_frame()
         }
     }
 
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
     jl_gc_frame_stats.count++;
     jl_gc_frame_stats.locals += argSpaceSize;
     jl_gc_frame_stats.temp += maxDepth;
@@ -1232,7 +1234,7 @@ static RegisterPass<LowerGCFrame> X("LowerGCFrame", "Lower GCFrame Pass",
                                     false /* Analysis Pass */);
 }
 
-#ifndef NDEBUG // llvm assertions build
+#ifndef JL_NDEBUG // llvm assertions build
 // gdb debugging code for inspecting the bb_uses map
 void jl_dump_bb_uses(std::map<BasicBlock*, std::map<frame_register, liveness::id> > &bb_uses)
 {

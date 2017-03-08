@@ -6,12 +6,14 @@
 
 #ifdef USE_MCJIT
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
+#include "fix_llvm_assert.h"
 #include "julia.h"
 #include "julia_internal.h"
 
 #if JL_LLVM_VERSION >= 30700
 #if JL_LLVM_VERSION < 30800
 #  include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
+#  include "fix_llvm_assert.h"
 #endif
 #ifdef _OS_LINUX_
 #  include <sys/syscall.h>
