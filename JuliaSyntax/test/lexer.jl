@@ -297,3 +297,8 @@ end
     show(io, collect(tokenize("\"abc\nd\"ef"))[1])
     @test String(take!(io)) == "1,1-2,2          STRING         \"\\\"abc\\nd\\\"\""
 end
+
+@testset "inferred" begin
+    l = tokenize("abc")
+    Base.Test.@inferred Tokenize.Lexers.next_token(l)
+end
