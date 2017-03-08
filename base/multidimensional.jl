@@ -806,20 +806,27 @@ function copy!{T,N}(dest::AbstractArray{T,N}, src::AbstractArray{T,N})
     dest
 end
 
-function copy!(dest::AbstractArray, Rdest::CartesianRange, src::AbstractArray, Rsrc::CartesianRange)
-    isempty(Rdest) && return dest
-    if size(Rdest) != size(Rsrc)
-        throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
+@generated function copy!{T1,T2,N}(dest::AbstractArray{T1,N},
+                                   Rdest::CartesianRange{CartesianIndex{N}},
+                                   src::AbstractArray{T2,N},
+                                   Rsrc::CartesianRange{CartesianIndex{N}})
+    quote
+        isempty(Rdest) && return dest
+        if size(Rdest) != size(Rsrc)
+            throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
+        end
+        @boundscheck checkbounds(dest, Rdest.start)
+        @boundscheck checkbounds(dest, Rdest.stop)
+        @boundscheck checkbounds(src, Rsrc.start)
+        @boundscheck checkbounds(src, Rsrc.stop)
+        ΔI = Rdest.start - Rsrc.start
+        # for I in Rsrc
+        #     @inbounds dest[I+ΔI] = src[I]
+        @nloops $N i (n->Rsrc.start[n]:Rsrc.stop[n]) begin
+            @inbounds @nref($N,dest,n->i_n+ΔI[n]) = @nref($N,src,i)
+        end
+        dest
     end
-    @boundscheck checkbounds(dest, Rdest.start)
-    @boundscheck checkbounds(dest, Rdest.stop)
-    @boundscheck checkbounds(src, Rsrc.start)
-    @boundscheck checkbounds(src, Rsrc.stop)
-    deltaI = Rdest.start - Rsrc.start
-    for I in Rsrc
-        @inbounds dest[I+deltaI] = src[I]
-    end
-    dest
 end
 
 """
