@@ -1,97 +1,132 @@
 ### Parsing utilities
 
-@generated function tryparse_internal{T<:TimeType, S, F}(::Type{T}, str::AbstractString, df::DateFormat{S, F}, raise::Bool=false)
-    token_types = Type[dp <: DatePart ? SLOT_RULE[first(dp.parameters)] : Void for dp in F.parameters]
-    N = length(F.parameters)
+function directives{S,F}(::Type{DateFormat{S,F}})
+    tokens = F.parameters
+    di = 1
+    directive_index = zeros(Int, length(tokens))
+    directive_letters = sizehint!(Char[], length(tokens))
+    for (i, token) in enumerate(tokens)
+        if token <: DatePart
+            directive_index[i] = di
 
-    types = slot_order(T)
-    num_types = length(types)
-    order = Vector{Int}(num_types)
-    for i = 1:num_types
-        order[i] = findfirst(token_types, types[i])
+            letter = first(token.parameters)
+            push!(directive_letters, letter)
+
+            di += 1
+        end
     end
+    return tokens, directive_index, directive_letters
+end
 
-    field_defaults = slot_defaults(T)
-    field_order = tuple(order...)
-    tuple_type = slot_types(T)
+genvar(t::DataType) = Symbol(lowercase(string(t.name.name)))
 
-    # `slot_order`, `slot_defaults`, and `slot_types` return tuples of the same length
-    assert(num_types == length(field_order) == length(field_defaults))
+
+@generated function tryparse_core(str::AbstractString, df::DateFormat, raise::Bool=false)
+    token_types, directive_index, directive_letters = directives(df)
+
+    directive_types = Type[FORMAT_SPECIFIERS[letter] for letter in directive_letters]
+    directive_names = Symbol[genvar(t) for t in directive_types]
+    directive_defaults = Tuple(FORMAT_DEFAULTS[t] for t in directive_types)
+    R = typeof(directive_defaults)
+
+    # Pre-assign output variables to default values. Allows us to use `@goto done` without
+    # worrying about unassigned variables.
+    assign_defaults = Expr[
+        quote
+            $name = $default
+        end
+        for (name, default) in zip(directive_names, directive_defaults)
+    ]
+
+    parsers = Expr[
+        begin
+            di = directive_index[i]
+            if di != 0
+                name = directive_names[di]
+                nullable = Symbol(:nullable_, name)
+                quote
+                    pos > len && @goto done
+                    $nullable, next_pos = tryparsenext(tokens[$i], str, pos, len, locale)
+                    isnull($nullable) && @goto error
+                    $name = unsafe_get($nullable)
+                    pos = next_pos
+                    directive_idx += 1
+                    token_idx += 1
+                end
+            else
+                quote
+                    pos > len && @goto done
+                    nullable_delim, next_pos = tryparsenext(tokens[$i], str, pos, len, locale)
+                    isnull(nullable_delim) && @goto error
+                    pos = next_pos
+                    token_idx += 1
+                end
+            end
+        end
+        for i in 1:length(token_types)
+    ]
 
     quote
-        R = Nullable{$tuple_type}
-        t = df.tokens
-        l = df.locale
+        tokens = df.tokens
+        locale::DateLocale = df.locale
         pos, len = start(str), endof(str)
+        directive_idx = 0
+        token_idx = 1
 
-        err_idx = 1
-        Base.@nexprs $N i->val_i = 0
-        Base.@nexprs $N i->(begin
-            pos > len && @goto done
-            nv, next_pos = tryparsenext(t[i], str, pos, len, l)
-            isnull(nv) && @goto error
-            val_i, pos = unsafe_get(nv), next_pos
-            err_idx += 1
-        end)
-        pos <= len && @goto error
+        $(assign_defaults...)
+        $(parsers...)
+
+        pos > len || @goto error
 
         @label done
-        parts = Base.@ntuple $N val
-        return R(reorder_args(parts, $field_order, $field_defaults, err_idx)::$tuple_type)
+        return Nullable{$R}($(Expr(:tuple, directive_names...))), directive_idx
 
         @label error
         # Note: Keeping exception generation in separate function helps with performance
-        raise && throw(gen_exception(t, err_idx, pos))
-        return R()
-    end
-end
-
-function gen_exception(tokens, err_idx, pos)
-    if err_idx > length(tokens)
-        ArgumentError("Found extra characters at the end of date time string")
-    else
-        ArgumentError("Unable to parse date time. Expected token $(tokens[err_idx]) at char $pos")
-    end
-end
-
-#    reorder_args(val, idx, default, default_from)
-#
-# reorder elements of `val` tuple according to `idx` tuple. Use `default[i]`
-# when `idx[i] == 0` or i >= default_from
-#
-# returns a tuple `xs` of the same length as `idx` where `xs[i]` is
-# `val[idx[i]]` if `idx[i]` is non zero, `default[i]` if `idx[i]` is zero.
-#
-# `xs[i]` is `default[i]` for all i >= `default_from`.
-#
-#
-function reorder_args{N}(val::Tuple, idx::NTuple{N}, default::Tuple, default_from::Integer)
-    ntuple(Val{N}) do i
-        if idx[i] == 0 || idx[i] >= default_from
-            default[i]
-        else
-            val[idx[i]]
+        if raise
+            if token_idx > length(tokens)
+                throw(ArgumentError("Found extra characters at the end of date time string"))
+            else
+                throw(ArgumentError("Unable to parse date time. Expected token $(tokens[token_idx]) at char $pos"))
+            end
         end
+        return Nullable{$R}(), 0
     end
 end
 
-function Base.tryparse{T<:TimeType}(::Type{T}, str::AbstractString, df::DateFormat)
-    nt = tryparse_internal(T, str, df, false)
-    if isnull(nt)
-        return Nullable{T}()
-    else
-        return Nullable{T}(T(unsafe_get(nt)...))
+
+@generated function tryparse_internal{T<:TimeType}(
+    ::Type{T}, str::AbstractString, df::DateFormat, raise::Bool=false,
+)
+    token_types, directive_index, directive_letters = directives(df)
+
+    directive_types = Type[FORMAT_SPECIFIERS[letter] for letter in directive_letters]
+    directive_names = Symbol[genvar(t) for t in directive_types]
+
+    output_types = FORMAT_TRANSLATIONS[T]
+    output_names = Symbol[genvar(t) for t in output_types]
+    output_defaults = Tuple(FORMAT_DEFAULTS[t] for t in output_types)
+    R = typeof(output_defaults)
+
+    # Pre-assign output variables to default values. Ensures that all output variables are
+    # assigned as the format directives may not include all of the required variables.
+    assign_defaults = Expr[
+        quote
+            $name = $default
+        end
+        for (name, default) in zip(output_names, output_defaults)
+    ]
+
+    # Unpacks the tuple into various directive variables.
+    directive_tuple = Expr(:tuple, directive_names...)
+
+    quote
+        values, index = tryparse_core(str, df, raise)
+        isnull(values) && return Nullable{$R}()
+        $(assign_defaults...)
+        $directive_tuple = unsafe_get(values)
+        Nullable{$R}($(Expr(:tuple, output_names...)))
     end
-end
-
-default_format(::Type{Date}) = ISODateFormat
-default_format(::Type{DateTime}) = ISODateTimeFormat
-
-function Base.parse{T<:TimeType}(::Type{T},
-                                 str::AbstractString,
-                                 df::DateFormat=default_format(T))
-    nt = tryparse_internal(T, str, df, true)
-    T(unsafe_get(nt)...)
 end
 
 @inline function tryparsenext_base10(str::AbstractString, i::Int, len::Int, min_width::Int=1, max_width::Int=0)
@@ -199,4 +234,39 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
 
     @label error
     throw(ArgumentError("Invalid DateTime string"))
+end
+
+function Base.parse{T<:TimeType}(
+    ::Type{T}, str::AbstractString, df::DateFormat=default_format(T),
+)
+    nt = tryparse_internal(T, str, df, true)
+    T(unsafe_get(nt)...)
+end
+
+function Base.tryparse{T<:TimeType}(
+    ::Type{T}, str::AbstractString, df::DateFormat=default_format(T),
+)
+    nt = tryparse_internal(T, str, df, false)
+    if isnull(nt)
+        Nullable{T}()
+    else
+        Nullable{T}(T(unsafe_get(nt)...))
+    end
+end
+
+@generated function Base.parse(::Type{Vector}, str::AbstractString, df::DateFormat)
+    token_types, directive_index, directive_letters = directives(df)
+    directive_types = Type[FORMAT_SPECIFIERS[letter] for letter in directive_letters]
+
+    quote
+        nt, num_parsed = tryparse_core(str, df, true)
+        t = unsafe_get(nt)
+        directive_types = $(Expr(:tuple, directive_types...))
+        result = Vector{Any}(num_parsed)
+        for (i, typ) in enumerate(directive_types)
+            i > num_parsed && break
+            result[i] = typ(t[i])  # Constructing types takes most of the time
+        end
+        return result
+    end
 end

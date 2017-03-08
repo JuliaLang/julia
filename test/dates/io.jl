@@ -76,18 +76,18 @@ b2 = "96/Feb/1"
 b3 = "96/2/15"
 @test_throws ArgumentError Dates.DateTime(b3, f)
 try
-    Dates.tryparse_internal(DateTime, "2012/02/20T09:09:31.25i90", dateformat"yyyy/mm/ddTHH:MM:SS.s", true)
+    Dates.tryparse_internal(DateTime, "2012/2/20T9:9:31.25i90", dateformat"yyyy/mm/ddTHH:MM:SS.s", true)
     @test false
 catch err
     @test isa(err, ArgumentError)
     @test err.msg == "Found extra characters at the end of date time string"
 end
 try
-    Dates.tryparse_internal(DateTime, "2012/02/20T09:09:3i90", dateformat"yyyy/mm/ddTHH:MM:SS.s", true)
+    Dates.tryparse_internal(DateTime, "2012/2/20T9:9:3i90", dateformat"yyyy/mm/ddTHH:MM:SS.s", true)
     @test false
 catch err
     @test isa(err, ArgumentError)
-    @test err.msg == "Unable to parse date time. Expected token Delim(.) at char 19"
+    @test err.msg == "Unable to parse date time. Expected token Delim(.) at char 16"
 end
 
 f = "yy:dd:mm"
@@ -375,29 +375,42 @@ let f = "YY"
 end
 
 # Issue: https://github.com/quinnj/TimeZones.jl/issues/19
-let ds = "2015-07-24T05:38:19.591Z",
-    dt = Dates.DateTime(2015, 7, 24, 5, 38, 19, 591),
+let
+    const Zulu = String
 
-    format = "yyyy-mm-ddTHH:MM:SS.sssZ",
+    function Dates.tryparsenext(d::Dates.DatePart{'Z'}, str, i, len)
+        Dates.tryparsenext_word(str, i, len, Dates.min_width(d), Dates.max_width(d))
+    end
+
+    ds = "2015-07-24T05:38:19.591Z"
+    dt = Dates.DateTime(2015, 7, 24, 5, 38, 19, 591)
+    parsed = Any[
+        Dates.Year(2015), Dates.Month(7), Dates.Day(24),
+        Dates.Hour(5), Dates.Minute(38), Dates.Second(19), Dates.Millisecond(591)
+    ]
+
+    format = "yyyy-mm-ddTHH:MM:SS.sssZ"
     escaped_format = "yyyy-mm-dd\\THH:MM:SS.sss\\Z"
 
-    # Typically 'Z' isn't treated as a slot so it doesn't have to be escaped
-    @test DateTime(ds, format) == dt
-    @test DateTime(ds, escaped_format) == dt
+    # Typically 'Z' isn't treated as a specifier so it doesn't have to be escaped
+    @test parse(Vector, ds, Dates.DateFormat(format)) == parsed
+    @test parse(Vector, ds, Dates.DateFormat(escaped_format)) == parsed
 
     try
-        # Make 'Z' into a slot
-        Dates.SLOT_RULE['Z'] = Dates.TimeZone
+        # Make 'Z' into a specifier
+        Dates.FORMAT_SPECIFIERS['Z'] = Zulu
+        Dates.FORMAT_DEFAULTS[Zulu] = ""
 
-        @test_throws MethodError DateTime(ds, format)
-        @test DateTime(ds, escaped_format) == dt
+        @test parse(Vector, ds, Dates.DateFormat(format)) == [parsed; Zulu("Z")]
+        @test parse(Vector, ds, Dates.DateFormat(escaped_format)) == parsed
     finally
-        delete!(Dates.SLOT_RULE, 'Z')
+        delete!(Dates.FORMAT_SPECIFIERS, 'Z')
+        delete!(Dates.FORMAT_DEFAULTS, Zulu)
     end
 
     # Ensure that the default behaviour has been restored
-    @test DateTime(ds, format) == dt
-    @test DateTime(ds, escaped_format) == dt
+    @test parse(Vector, ds, Dates.DateFormat(format)) == parsed
+    @test parse(Vector, ds, Dates.DateFormat(escaped_format)) == parsed
 end
 
 # Issue 10817
