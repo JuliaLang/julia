@@ -641,6 +641,7 @@ JCFLAGS += -fsigned-char
 LLVM_VER:=3.9.0
 OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=POWER8
+BINARY:=64
 # GCC doesn't do -march= on ppc64le
 MARCH=
 endif
