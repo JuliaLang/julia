@@ -653,6 +653,33 @@ mktempdir() do dir
         end
     #end
 
+
+    if is_unix()
+        #@testset "checkout/proptest" begin
+            repo = LibGit2.GitRepo(test_repo)
+            try
+                cp(joinpath(test_repo, test_file), joinpath(test_repo, "proptest"))
+                LibGit2.add!(repo, "proptest")
+                id1 = LibGit2.commit(repo, "test property change 1")
+                # change in file permissions (#17610)
+                chmod(joinpath(test_repo, "proptest"),0o744)
+                LibGit2.add!(repo, "proptest")
+                id2 = LibGit2.commit(repo, "test property change 2")
+                LibGit2.checkout!(repo, string(id1))
+                @test !LibGit2.isdirty(repo)
+                # change file to symlink (#18420)
+                mv(joinpath(test_repo, "proptest"), joinpath(test_repo, "proptest2"))
+                symlink(joinpath(test_repo, "proptest2"), joinpath(test_repo, "proptest"))
+                LibGit2.add!(repo, "proptest", "proptest2")
+                id3 = LibGit2.commit(repo, "test symlink change")
+                LibGit2.checkout!(repo, string(id1))
+                @test !LibGit2.isdirty(repo)
+            finally
+                finalize(repo)
+            end
+        #end
+    end
+
     #@testset "Credentials" begin
         creds_user = "USER"
         creds_pass = "PASS"
