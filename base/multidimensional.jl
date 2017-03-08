@@ -65,22 +65,23 @@ module IteratorsMD
     one{N}(::Type{CartesianIndex{N}}) = CartesianIndex(ntuple(x -> 1, Val{N}))
 
     # arithmetic, min/max
-    (-){N}(index::CartesianIndex{N}) = CartesianIndex{N}(map(-, index.I))
-    (+){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
+    @inline (-){N}(index::CartesianIndex{N}) =
+        CartesianIndex{N}(map(-, index.I))
+    @inline (+){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
         CartesianIndex{N}(map(+, index1.I, index2.I))
-    (-){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
+    @inline (-){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
         CartesianIndex{N}(map(-, index1.I, index2.I))
-    min{N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
+    @inline min{N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
         CartesianIndex{N}(map(min, index1.I, index2.I))
-    max{N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
+    @inline max{N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
         CartesianIndex{N}(map(max, index1.I, index2.I))
 
-    (+)(i::Integer, index::CartesianIndex) = index+i
-    (+){N}(index::CartesianIndex{N}, i::Integer) = CartesianIndex{N}(map(x->x+i, index.I))
-    (-){N}(index::CartesianIndex{N}, i::Integer) = CartesianIndex{N}(map(x->x-i, index.I))
-    (-){N}(i::Integer, index::CartesianIndex{N}) = CartesianIndex{N}(map(x->i-x, index.I))
-    (*){N}(a::Integer, index::CartesianIndex{N}) = CartesianIndex{N}(map(x->a*x, index.I))
-    (*)(index::CartesianIndex,a::Integer)=*(a,index)
+    @inline (+)(i::Integer, index::CartesianIndex) = index+i
+    @inline (+){N}(index::CartesianIndex{N}, i::Integer) = CartesianIndex{N}(map(x->x+i, index.I))
+    @inline (-){N}(index::CartesianIndex{N}, i::Integer) = CartesianIndex{N}(map(x->x-i, index.I))
+    @inline (-){N}(i::Integer, index::CartesianIndex{N}) = CartesianIndex{N}(map(x->i-x, index.I))
+    @inline (*){N}(a::Integer, index::CartesianIndex{N}) = CartesianIndex{N}(map(x->a*x, index.I))
+    @inline (*)(index::CartesianIndex,a::Integer)=*(a,index)
 
     # comparison
     @inline isless{N}(I1::CartesianIndex{N}, I2::CartesianIndex{N}) = _isless(0, I1.I, I2.I)
