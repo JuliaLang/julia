@@ -40,6 +40,7 @@ extern PassManager *jl_globalPM;
 #if JL_LLVM_VERSION >= 30500
 #include <llvm/Target/TargetMachine.h>
 #endif
+#include "fix_llvm_assert.h"
 
 extern "C" {
     extern int globalUnique;

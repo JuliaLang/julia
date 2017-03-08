@@ -6,6 +6,8 @@
 #include <llvm/ADT/APFloat.h>
 #include <llvm/Support/MathExtras.h>
 
+#include "fix_llvm_assert.h"
+
 #include "APInt-C.h"
 #include "julia.h"
 

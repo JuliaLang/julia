@@ -22,12 +22,13 @@
 #endif
 #include <llvm/IR/MDBuilder.h>
 
-#include "julia.h"
-#include "julia_internal.h"
-
 #if JL_LLVM_VERSION >= 30700 && defined(JULIA_ENABLE_THREADING)
 #  include <llvm/IR/InlineAsm.h>
 #endif
+#include "fix_llvm_assert.h"
+
+#include "julia.h"
+#include "julia_internal.h"
 
 using namespace llvm;
 
