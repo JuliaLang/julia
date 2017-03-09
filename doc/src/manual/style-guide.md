@@ -273,6 +273,30 @@ This would provide custom showing of vectors with a specific new element type. W
 this should be avoided. The trouble is that users will expect a well-known type like `Vector()`
 to behave in a certain way, and overly customizing its behavior can make it harder to work with.
 
+## Don’t engage in type piracy
+
+"Type piracy" refers to the practice of extending or redefining methods in Base
+or other packages on types that you have not defined. In some cases, you can get away with
+type piracy with little ill effect. In extreme cases, however, you can even crash Julia
+(e.g. if your method extension or redefinition causes invalid input to be passed to a
+`ccall`). Type piracy is rarely required to solve a problem, and is strongly discouraged. It
+complicates reasoning about code, and will likely introduce incompatibilities that are hard
+to predict and diagnose.
+
+As an example, suppose you wanted to define multiplication on symbols in a module:
+
+```julia
+module A
+import Base.*
+*(x::Symbol, y::Symbol) = Symbol(x,y)
+end
+```
+
+The problem is that now any other module that uses `Base.*` will also see this definition.
+Since `Symbol` is defined in Base and is used by other modules, this can change the
+behavior of unrelated code unexpectedly. There are several alternatives here, including
+using a different function name, or wrapping the `Symbol`s in another type that you define.
+
 ## Be careful with type equality
 
 You generally want to use [`isa()`](@ref) and `<:` ([`issubtype()`](@ref)) for testing types,
