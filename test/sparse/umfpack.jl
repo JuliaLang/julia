@@ -90,7 +90,7 @@ end
     end
 end
 
-@testset "issue #4523 complex sparse" begin
+@testset "issue #4523 complex sparse \\" begin
     x = speye(2) + im * speye(2)
     @test (x*(lufact(x) \ ones(2))) ≈ ones(2)
 end
