@@ -202,7 +202,7 @@ end
 # We mark these @inline since if the target is marked @inline,
 # we want to make sure that gets propagated,
 # even if it is over the inlining threshold.
-@inline literal_pow{p}(^, x, ::Type{Val{p}}) = ^(x,p)
+@inline literal_pow{p}(f, x, ::Type{Val{p}}) = f(x,p)
 
 # Restrict inlining to hardware-supported arithmetic types, which
 # are fast enough to benefit from inlining.
