@@ -211,7 +211,7 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 
 # inference.jl has complicated logic to inline x^2 and x^3 for
 # numeric types.  In terms of Val we can do it much more simply.
-# (The third argument prevents unexpected behavior if a function ^
+# (The first argument prevents unexpected behavior if a function ^
 # is defined that is not equal to Base.^)
 @inline literal_pow(::typeof(^), x::HWNumber, ::Type{Val{0}}) = one(x)
 @inline literal_pow(::typeof(^), x::HWNumber, ::Type{Val{1}}) = x
