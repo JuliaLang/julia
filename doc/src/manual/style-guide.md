@@ -273,15 +273,14 @@ This would provide custom showing of vectors with a specific new element type. W
 this should be avoided. The trouble is that users will expect a well-known type like `Vector()`
 to behave in a certain way, and overly customizing its behavior can make it harder to work with.
 
-## Don’t engage in type piracy
+## Avoid type piracy
 
 "Type piracy" refers to the practice of extending or redefining methods in Base
 or other packages on types that you have not defined. In some cases, you can get away with
 type piracy with little ill effect. In extreme cases, however, you can even crash Julia
 (e.g. if your method extension or redefinition causes invalid input to be passed to a
-`ccall`). Type piracy is rarely required to solve a problem, and is strongly discouraged. It
-complicates reasoning about code, and will likely introduce incompatibilities that are hard
-to predict and diagnose.
+`ccall`). Type piracy can complicate reasoning about code, and may introduce
+incompatibilities that are hard to predict and diagnose.
 
 As an example, suppose you wanted to define multiplication on symbols in a module:
 
@@ -296,6 +295,14 @@ The problem is that now any other module that uses `Base.*` will also see this d
 Since `Symbol` is defined in Base and is used by other modules, this can change the
 behavior of unrelated code unexpectedly. There are several alternatives here, including
 using a different function name, or wrapping the `Symbol`s in another type that you define.
+
+Sometimes, coupled packages may engage in type piracy to separate features from definitions,
+especially when the packages were designed by collaborating authors, and when the
+definitions are reusable. For example, one package might provide some types useful for
+working with colors; another package could define methods for those types that enable
+conversions between color spaces. Another example might be a package that acts as a thin
+wrapper for some C code, which another package might then pirate to implement a
+higher-level, Julia-friendly API.
 
 ## Be careful with type equality
 
