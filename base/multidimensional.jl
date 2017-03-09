@@ -821,6 +821,7 @@ end
         @boundscheck checkbounds(src, Rsrc.start)
         @boundscheck checkbounds(src, Rsrc.stop)
         ΔI = Rdest.start - Rsrc.start
+        # TODO: restore when #9080 is fixed
         # for I in Rsrc
         #     @inbounds dest[I+ΔI] = src[I]
         @nloops $N i (n->Rsrc.start[n]:Rsrc.stop[n]) begin
