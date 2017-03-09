@@ -156,7 +156,7 @@ end
     end
 end
 
-@testset "Test that A[c|t]_ldiv_B!{T<:Complex}(X::StridedMatrix{T}, lu::UmfpackLU{Float64}, # B::StridedMatrix{T}) works as expected." begin
+@testset "Test that A[c|t]_ldiv_B!{T<:Complex}(X::StridedMatrix{T}, lu::UmfpackLU{Float64}, B::StridedMatrix{T}) works as expected." begin
     let N = 10, p = 0.5
         A = N*speye(N) + sprand(N, N, p)
         X = zeros(Complex{Float64}, N, N)
