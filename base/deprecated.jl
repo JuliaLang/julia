@@ -478,7 +478,8 @@ function getindex(A::LogicalIndex, i::Int)
     first(Iterators.drop(A, i-1))
 end
 function to_indexes(I...)
-    depwarn("to_indexes is deprecated; pass both the source array `A` and indices as `to_indices(A, $(I...))` instead.", :to_indexes)
+    Istr = join(I, ", ")
+    depwarn("to_indexes is deprecated; pass both the source array `A` and indices as `to_indices(A, $Istr)` instead.", :to_indexes)
     map(_to_index, I)
 end
 _to_index(i) = to_index(I)
