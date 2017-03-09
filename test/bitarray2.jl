@@ -51,7 +51,7 @@ s1, s2, s3, s4 = 5, 8, 3, 7
 
 allsizes = [((), BitArray{0}), ((v1,), BitVector),
             ((n1,n2), BitMatrix), ((s1,s2,s3,s4), BitArray{4})]
-            
+
 @testset "Binary arithmetic operators" begin
     @testset "Matrix{Bool}/Matrix{Bool}" begin
         b1 = bitrand(n1, n2)
