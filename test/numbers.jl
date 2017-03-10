@@ -2903,9 +2903,12 @@ end
 end
 
 import Base.^
-immutable PR20530; end
+struct PR20530; end
+struct PR20889; x; end
 ^(::PR20530, p::Int) = 1
-^{p}(::PR20530, ::Type{Val{p}}) = 2
+^(t::PR20889, b) = t.x + b
+^(t::PR20889, b::Integer) = t.x + b
+Base.literal_pow{p}(::typeof(^), ::PR20530, ::Type{Val{p}}) = 2
 @testset "literal powers" begin
     x = PR20530()
     p = 2
@@ -2923,6 +2926,12 @@ immutable PR20530; end
             end
         end
     end
+    @test PR20889(2)^3 == 5
+end
+module M20889 # do we get the expected behavior without importing Base.^?
+    struct PR20889; x; end
+    ^(t::PR20889, b) = t.x + b
+    Base.Test.@test PR20889(2)^3 == 5
 end
 
 @testset "iszero" begin
