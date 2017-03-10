@@ -87,7 +87,7 @@ try
     @test false
 catch err
     @test isa(err, ArgumentError)
-    @test err.msg == "Unable to parse date time. Expected token Delim(.) at char 16"
+    @test err.msg == "Unable to parse date time. Expected directive Delim(.) at char 16"
 end
 
 f = "yy:dd:mm"
@@ -398,14 +398,14 @@ let
 
     try
         # Make 'Z' into a specifier
-        Dates.FORMAT_SPECIFIERS['Z'] = Zulu
-        Dates.FORMAT_DEFAULTS[Zulu] = ""
+        Dates.CONVERSION_SPECIFIERS['Z'] = Zulu
+        Dates.CONVERSION_DEFAULTS[Zulu] = ""
 
         @test parse(Vector, ds, Dates.DateFormat(format)) == [parsed; Zulu("Z")]
         @test parse(Vector, ds, Dates.DateFormat(escaped_format)) == parsed
     finally
-        delete!(Dates.FORMAT_SPECIFIERS, 'Z')
-        delete!(Dates.FORMAT_DEFAULTS, Zulu)
+        delete!(Dates.CONVERSION_SPECIFIERS, 'Z')
+        delete!(Dates.CONVERSION_DEFAULTS, Zulu)
     end
 
     # Ensure that the default behaviour has been restored

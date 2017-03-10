@@ -206,7 +206,7 @@ end
 end
 
 function _show_content{N}(io::IO, d::Delim{Char, N})
-    if d.d in keys(FORMAT_SPECIFIERS)
+    if d.d in keys(CONVERSION_SPECIFIERS)
         for i = 1:N
             write(io, '\\', d.d)
         end
@@ -219,7 +219,7 @@ end
 
 function _show_content(io::IO, d::Delim)
     for c in d.d
-        if c in keys(FORMAT_SPECIFIERS)
+        if c in keys(CONVERSION_SPECIFIERS)
             write(io, '\\')
         end
         write(io, c)
@@ -236,9 +236,9 @@ end
 
 abstract type DayOfWeekToken end # special addition to Period types
 
-# Map format specifiers to, typically period, types.
-# Note that Julia packages like TimeZones.jl can add additional specifiers.
-const FORMAT_SPECIFIERS = Dict{Char, Type}(
+# Map conversion specifiers or character codes to tokens.
+# Note: Allow addition of new character codes added by packages
+const CONVERSION_SPECIFIERS = Dict{Char, Type}(
     'y' => Year,
     'Y' => Year,
     'm' => Month,
@@ -253,7 +253,10 @@ const FORMAT_SPECIFIERS = Dict{Char, Type}(
     's' => Millisecond,
 )
 
-const FORMAT_DEFAULTS = Dict{Type, Any}(
+# Default values are needed when a conversion specifier is used in a DateFormat for parsing
+# and we have reached the end of the input string.
+# Note: Allow `Any` value as a default to support extensibility
+const CONVERSION_DEFAULTS = Dict{Type, Any}(
     Year => Int64(1),
     Month => Int64(1),
     DayOfWeekToken => Int64(0),
@@ -264,7 +267,9 @@ const FORMAT_DEFAULTS = Dict{Type, Any}(
     Millisecond => Int64(0),
 )
 
-const FORMAT_TRANSLATIONS = Dict{Type{<:TimeType}, Tuple}(
+# Specifies the required fields in order to parse a TimeType
+# Note: Allows for addition of new TimeTypes
+const CONVERSION_TRANSLATIONS = Dict{Type{<:TimeType}, Tuple}(
     Date => (Year, Month, Day),
     DateTime => (Year, Month, Day, Hour, Minute, Second, Millisecond),
 )
@@ -309,13 +314,13 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
     prev = ()
     prev_offset = 1
 
-    letters = String(collect(keys(FORMAT_SPECIFIERS)))
+    letters = String(collect(keys(CONVERSION_SPECIFIERS)))
     for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters\\E])\\1*"), f)
         tran = replace(f[prev_offset:m.offset - 1], r"\\(.)", s"\1")
 
         if !isempty(prev)
             letter, width = prev
-            typ = FORMAT_SPECIFIERS[letter]
+            typ = CONVERSION_SPECIFIERS[letter]
 
             push!(tokens, DatePart{letter}(width, isempty(tran)))
         end
@@ -335,7 +340,7 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
 
     if !isempty(prev)
         letter, width = prev
-        typ = FORMAT_SPECIFIERS[letter]
+        typ = CONVERSION_SPECIFIERS[letter]
 
         push!(tokens, DatePart{letter}(width, false))
     end
