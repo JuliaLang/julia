@@ -144,12 +144,12 @@ end
 @inline to_vec(x::Number) = x
 @inline to_vecs(rowvecs...) = (map(to_vec, rowvecs)...)
 
-# map
-@inline map(f, rowvecs::RowVector...) = RowVector(map(f, to_vecs(rowvecs...)...))
+# map: Preserve the RowVector, but note that `f` expects transposed elements
+@inline map(f, rowvecs::RowVector...) = RowVector(map(transpose∘f∘transpose, to_vecs(rowvecs...)...))
 
 # broacast (other combinations default to higher-dimensional array)
 @inline broadcast(f, rowvecs::Union{Number,RowVector}...) =
-    RowVector(broadcast(f, to_vecs(rowvecs...)...))
+    RowVector(broadcast(transpose∘f∘transpose, to_vecs(rowvecs...)...))
 
 # Horizontal concatenation #
 

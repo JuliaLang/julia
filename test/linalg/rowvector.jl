@@ -249,3 +249,13 @@ end
         @test A'*x' == A'*y == B*x' == B*y == C'
     end
 end
+
+@testset "issue #20979" begin
+    f20979(z::Complex) = [z.re -z.im; z.im z.re]
+    v = [1+2im]'
+    @test (f20979.(v))[1] == f20979(v[1])
+    @test f20979.(v) == f20979.(collect(v))
+
+    w = rand(Complex128, 3)
+    @test f20979.(v') == f20979.(collect(v')) == (f20979.(v))'
+end
