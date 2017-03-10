@@ -22,9 +22,9 @@ struct InferenceParams
     # reasonable defaults
     function InferenceParams(world::UInt;
                     inlining::Bool = inlining_enabled(),
-                    tupletype_len::Int = 15,
-                    tuple_depth::Int = 4,
-                    tuple_splat::Int = 16,
+                    tupletype_len::Int = 30,
+                    tuple_depth::Int = 6,
+                    tuple_splat::Int = 30,
                     union_splitting::Int = 4,
                     apply_union_enum::Int = 8)
         return new(world, inlining, tupletype_len,
