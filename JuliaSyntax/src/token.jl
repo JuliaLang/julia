@@ -95,6 +95,4 @@ end
 
 Base.print(io::IO, t::Token) = print(io, untokenize(t))
 
-eof(t::Token) = t.kind == Eof
-
 end # module
