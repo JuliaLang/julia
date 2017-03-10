@@ -79,14 +79,14 @@ b2 = "96/Feb/1"
 b3 = "96/2/15"
 @test_throws ArgumentError Dates.DateTime(b3, f)
 try
-    Dates.tryparse_internal(DateTime, "2012/2/20T9:9:31.25i90", dateformat"yyyy/mm/ddTHH:MM:SS.s", true)
+    Dates.parse(DateTime, "2012/2/20T9:9:31.25i90", dateformat"yyyy/mm/ddTHH:MM:SS.s")
     @test false
 catch err
     @test isa(err, ArgumentError)
     @test err.msg == "Found extra characters at the end of date time string"
 end
 try
-    Dates.tryparse_internal(DateTime, "2012/2/20T9:9:3i90", dateformat"yyyy/mm/ddTHH:MM:SS.s", true)
+    Dates.parse(DateTime, "2012/2/20T9:9:3i90", dateformat"yyyy/mm/ddTHH:MM:SS.s")
     @test false
 catch err
     @test isa(err, ArgumentError)

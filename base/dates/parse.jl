@@ -17,7 +17,9 @@ end
 genvar(t::DataType) = Symbol(lowercase(string(Base.datatype_name(t))))
 
 
-@generated function tryparse_core(str::AbstractString, df::DateFormat, raise::Bool=false)
+@generated function tryparsenext_core(
+    str::AbstractString, pos::Int, len::Int, df::DateFormat, raise::Bool=false,
+)
     directives = _directives(df)
     letters = character_codes(directives)
 
@@ -67,7 +69,7 @@ genvar(t::DataType) = Symbol(lowercase(string(Base.datatype_name(t))))
     quote
         directives = df.tokens
         locale::DateLocale = df.locale
-        pos, len = start(str), endof(str)
+
         num_parsed = 0
         directive_index = 1
 
@@ -77,7 +79,7 @@ genvar(t::DataType) = Symbol(lowercase(string(Base.datatype_name(t))))
         pos > len || @goto error
 
         @label done
-        return Nullable{$R}($(Expr(:tuple, value_names...))), num_parsed
+        return Nullable{$R}($(Expr(:tuple, value_names...))), pos, num_parsed
 
         @label error
         # Note: Keeping exception generation in separate function helps with performance
@@ -89,13 +91,13 @@ genvar(t::DataType) = Symbol(lowercase(string(Base.datatype_name(t))))
                 throw(ArgumentError("Unable to parse date time. Expected directive $d at char $pos"))
             end
         end
-        return Nullable{$R}(), 0
+        return Nullable{$R}(), pos, 0
     end
 end
 
 
-@generated function tryparse_internal{T<:TimeType}(
-    ::Type{T}, str::AbstractString, df::DateFormat, raise::Bool=false,
+@generated function tryparsenext_internal{T<:TimeType}(
+    ::Type{T}, str::AbstractString, pos::Int, len::Int, df::DateFormat, raise::Bool=false,
 )
     letters = character_codes(df)
 
@@ -108,8 +110,8 @@ end
     R = typeof(output_defaults)
 
     # Pre-assign output variables to defaults. Ensures that all output variables are
-    # assigned as the tuple returned from `tryparse_core` may not include all of the
-    # required variables.
+    # assigned as the value tuple returned from `tryparsenext_core` may not include all
+    # of the required variables.
     assign_defaults = Expr[
         quote
             $name = $default
@@ -117,15 +119,15 @@ end
         for (name, default) in zip(output_names, output_defaults)
     ]
 
-    # Unpacks the tuple returned by `tryparse_core` into separate variables.
+    # Unpacks the value tuple returned by `tryparsenext_core` into separate variables.
     value_tuple = Expr(:tuple, value_names...)
 
     quote
-        values, num_parsed = tryparse_core(str, df, raise)
-        isnull(values) && return Nullable{$R}()
+        values, pos, num_parsed = tryparsenext_core(str, pos, len, df, raise)
+        isnull(values) && return Nullable{$R}(), pos
         $(assign_defaults...)
         $value_tuple = unsafe_get(values)
-        Nullable{$R}($(Expr(:tuple, output_names...)))
+        return Nullable{$R}($(Expr(:tuple, output_names...))), pos
     end
 end
 
@@ -239,14 +241,16 @@ end
 function Base.parse{T<:TimeType}(
     ::Type{T}, str::AbstractString, df::DateFormat=default_format(T),
 )
-    values = tryparse_internal(T, str, df, true)
+    pos, len = start(str), endof(str)
+    values, pos = tryparsenext_internal(T, str, pos, len, df, true)
     T(unsafe_get(values)...)
 end
 
 function Base.tryparse{T<:TimeType}(
     ::Type{T}, str::AbstractString, df::DateFormat=default_format(T),
 )
-    values = tryparse_internal(T, str, df, false)
+    pos, len = start(str), endof(str)
+    values, pos = tryparsenext_internal(T, str, pos, len, df, false)
     if isnull(values)
         Nullable{T}()
     else
@@ -259,7 +263,8 @@ end
     tokens = Type[CONVERSION_SPECIFIERS[letter] for letter in letters]
 
     quote
-        values, num_parsed = tryparse_core(str, df, true)
+        pos, len = start(str), endof(str)
+        values, pos, num_parsed = tryparsenext_core(str, pos, len, df, true)
         t = unsafe_get(values)
         types = $(Expr(:tuple, tokens...))
         result = Vector{Any}(num_parsed)
