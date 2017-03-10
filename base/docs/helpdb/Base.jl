@@ -2028,13 +2028,6 @@ algorithms. See [`muladd`](@ref).
 fma
 
 """
-    copy!(dest, src)
-
-Copy all elements from collection `src` to array `dest`. Returns `dest`.
-"""
-copy!(dest,src)
-
-"""
     copy!(dest, do, src, so, N)
 
 Copy `N` elements from collection `src` starting at offset `so`, to array `dest` starting at

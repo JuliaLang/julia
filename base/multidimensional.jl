@@ -65,22 +65,23 @@ module IteratorsMD
     one{N}(::Type{CartesianIndex{N}}) = CartesianIndex(ntuple(x -> 1, Val{N}))
 
     # arithmetic, min/max
-    (-){N}(index::CartesianIndex{N}) = CartesianIndex{N}(map(-, index.I))
-    (+){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
+    @inline (-){N}(index::CartesianIndex{N}) =
+        CartesianIndex{N}(map(-, index.I))
+    @inline (+){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
         CartesianIndex{N}(map(+, index1.I, index2.I))
-    (-){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
+    @inline (-){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
         CartesianIndex{N}(map(-, index1.I, index2.I))
-    min{N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
+    @inline min{N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
         CartesianIndex{N}(map(min, index1.I, index2.I))
-    max{N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
+    @inline max{N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
         CartesianIndex{N}(map(max, index1.I, index2.I))
 
-    (+)(i::Integer, index::CartesianIndex) = index+i
-    (+){N}(index::CartesianIndex{N}, i::Integer) = CartesianIndex{N}(map(x->x+i, index.I))
-    (-){N}(index::CartesianIndex{N}, i::Integer) = CartesianIndex{N}(map(x->x-i, index.I))
-    (-){N}(i::Integer, index::CartesianIndex{N}) = CartesianIndex{N}(map(x->i-x, index.I))
-    (*){N}(a::Integer, index::CartesianIndex{N}) = CartesianIndex{N}(map(x->a*x, index.I))
-    (*)(index::CartesianIndex,a::Integer)=*(a,index)
+    @inline (+)(i::Integer, index::CartesianIndex) = index+i
+    @inline (+){N}(index::CartesianIndex{N}, i::Integer) = CartesianIndex{N}(map(x->x+i, index.I))
+    @inline (-){N}(index::CartesianIndex{N}, i::Integer) = CartesianIndex{N}(map(x->x-i, index.I))
+    @inline (-){N}(i::Integer, index::CartesianIndex{N}) = CartesianIndex{N}(map(x->i-x, index.I))
+    @inline (*){N}(a::Integer, index::CartesianIndex{N}) = CartesianIndex{N}(map(x->a*x, index.I))
+    @inline (*)(index::CartesianIndex,a::Integer)=*(a,index)
 
     # comparison
     @inline isless{N}(I1::CartesianIndex{N}, I2::CartesianIndex{N}) = _isless(0, I1.I, I2.I)
@@ -209,6 +210,16 @@ module IteratorsMD
     @inline _split{N}(tN::NTuple{N,Any}, ::Tuple{}, ::Type{Val{N}}) = tN, ()  # ambig.
     @inline _split{N}(tN,                ::Tuple{}, ::Type{Val{N}}) = tN, ()
     @inline _split{N}(tN::NTuple{N,Any},  trest,    ::Type{Val{N}}) = tN, trest
+
+    @inline function split(I::CartesianIndex, V::Type{<:Val})
+        i, j = split(I.I, V)
+        CartesianIndex(i), CartesianIndex(j)
+    end
+    function split(R::CartesianRange, V::Type{<:Val})
+        istart, jstart = split(first(R), V)
+        istop,  jstop  = split(last(R), V)
+        CartesianRange(istart, istop), CartesianRange(jstart, jstop)
+    end
 end  # IteratorsMD
 
 
@@ -781,6 +792,13 @@ function fill!{T}(A::AbstractArray{T}, x)
     A
 end
 
+"""
+    copy!(dest, src) -> dest
+
+Copy all elements from collection `src` to array `dest`.
+"""
+copy!(dest, src)
+
 function copy!{T,N}(dest::AbstractArray{T,N}, src::AbstractArray{T,N})
     @boundscheck checkbounds(dest, indices(src)...)
     for I in eachindex(IndexStyle(src,dest), src)
@@ -789,21 +807,37 @@ function copy!{T,N}(dest::AbstractArray{T,N}, src::AbstractArray{T,N})
     dest
 end
 
-function copy!(dest::AbstractArray, Rdest::CartesianRange, src::AbstractArray, Rsrc::CartesianRange)
-    isempty(Rdest) && return dest
-    if size(Rdest) != size(Rsrc)
-        throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
+@generated function copy!{T1,T2,N}(dest::AbstractArray{T1,N},
+                                   Rdest::CartesianRange{CartesianIndex{N}},
+                                   src::AbstractArray{T2,N},
+                                   Rsrc::CartesianRange{CartesianIndex{N}})
+    quote
+        isempty(Rdest) && return dest
+        if size(Rdest) != size(Rsrc)
+            throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
+        end
+        @boundscheck checkbounds(dest, Rdest.start)
+        @boundscheck checkbounds(dest, Rdest.stop)
+        @boundscheck checkbounds(src, Rsrc.start)
+        @boundscheck checkbounds(src, Rsrc.stop)
+        ΔI = Rdest.start - Rsrc.start
+        # TODO: restore when #9080 is fixed
+        # for I in Rsrc
+        #     @inbounds dest[I+ΔI] = src[I]
+        @nloops $N i (n->Rsrc.start[n]:Rsrc.stop[n]) begin
+            @inbounds @nref($N,dest,n->i_n+ΔI[n]) = @nref($N,src,i)
+        end
+        dest
     end
-    @boundscheck checkbounds(dest, Rdest.start)
-    @boundscheck checkbounds(dest, Rdest.stop)
-    @boundscheck checkbounds(src, Rsrc.start)
-    @boundscheck checkbounds(src, Rsrc.stop)
-    deltaI = Rdest.start - Rsrc.start
-    for I in Rsrc
-        @inbounds dest[I+deltaI] = src[I]
-    end
-    dest
 end
+
+"""
+    copy!(dest, Rdest::CartesianRange, src, Rsrc::CartesianRange) -> dest
+
+Copy the block of `src` in the range of `Rsrc` to the block of `dest`
+in the range of `Rdest`. The sizes of the two regions must match.
+"""
+copy!(::AbstractArray, ::CartesianRange, ::AbstractArray, ::CartesianRange)
 
 # circshift!
 circshift!(dest::AbstractArray, src, ::Tuple{}) = copy!(dest, src)
