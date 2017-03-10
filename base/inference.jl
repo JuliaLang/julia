@@ -4605,6 +4605,12 @@ function get_replacement(table, var::Union{SlotNumber, SSAValue}, init::ANY, nar
             return init
         end
     elseif isa(init, SSAValue)
+        if isa(var, SlotNumber) && slottypes[var.id] ⊑ Tuple
+            # Here we avoid replacing a Slot with an SSAValue when the type is an
+            # aggregate. That can cause LLVM to generate a bunch of extra memcpys
+            # if the data ever needs to be stack allocated later.
+            return var
+        end
         if haskey(table, init)
             return get_replacement(table, init, table[init], nargs, slottypes, ssavaluetypes)
         end
