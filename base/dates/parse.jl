@@ -18,7 +18,7 @@ function directives{S,F}(::Type{DateFormat{S,F}})
     return tokens, directive_index, directive_letters
 end
 
-genvar(t::DataType) = Symbol(lowercase(string(t.name.name)))
+genvar(t::DataType) = Symbol(lowercase(string(Base.datatype_name(t))))
 
 
 @generated function tryparse_core(str::AbstractString, df::DateFormat, raise::Bool=false)
