@@ -3850,7 +3850,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                     builder.CreateMemCpy(vi.value.V,
                                          data_pointer(rval_info, ctx, T_pint8),
                                          copy_bytes,
-                                         /*TODO: min_align*/1,
+                                         ((jl_datatype_t*)rval_info.typ)->layout->alignment,
                                          vi.isVolatile,
                                          tbaa);
                 }
