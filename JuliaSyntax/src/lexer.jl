@@ -71,12 +71,12 @@ function Base.start(l::Lexer)
     false
 end
 
-function Base.next(l::Lexer, isdone)
+function Base.next(l::Lexer, ::Any)
     t = next_token(l)
     return t, t.kind == Tokens.ENDMARKER
 end
 
-Base.done(l::Lexer, isdone) = isdone
+Base.done(::Lexer, isdone) = isdone
 
 function Base.show(io::IO, l::Lexer)
     print(io, typeof(l), " at position: ", position(l))
