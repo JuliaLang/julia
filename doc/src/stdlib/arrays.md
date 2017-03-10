@@ -61,6 +61,7 @@ Base.Broadcast.broadcast_setindex!
 ```@docs
 Base.getindex(::AbstractArray, ::Any...)
 Base.setindex!(::AbstractArray, ::Any, ::Any...)
+Base.copy!(::AbstractArray, ::CartesianRange, ::AbstractArray, ::CartesianRange)
 Base.isassigned
 Base.Colon
 Base.CartesianIndex
