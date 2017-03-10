@@ -29,10 +29,13 @@
 # DateTime parsing
 # Useful reference for different locales: http://library.princeton.edu/departments/tsd/katmandu/reference/months.html
 
-let str = "1996/02/15 24:00", format = "yyyy/mm/dd HH:MM"
-    expected = (1996, 2, 15, 24, 0, 0, 0)
-    @test get(Dates.tryparse_internal(DateTime, str, Dates.DateFormat(format))) == expected
-    @test_throws ArgumentError Dates.DateTime(str, Dates.DateFormat(format))
+# Allow parsing of strings which are not representable as a TimeType
+let str = "02/15/1996 24:00", df = Dates.DateFormat("mm/dd/yyyy HH:MM")
+    parsed = Any[
+        Dates.Month(2), Dates.Day(15), Dates.Year(1996), Dates.Hour(24), Dates.Minute(0)
+    ]
+    @test Dates.parse_components(str, df) == parsed
+    @test_throws ArgumentError Dates.parse(DateTime, str, df)
 end
 
 # DateFormat printing
@@ -382,7 +385,7 @@ let
         Dates.tryparsenext_word(str, i, len, Dates.min_width(d), Dates.max_width(d))
     end
 
-    ds = "2015-07-24T05:38:19.591Z"
+    str = "2015-07-24T05:38:19.591Z"
     dt = Dates.DateTime(2015, 7, 24, 5, 38, 19, 591)
     parsed = Any[
         Dates.Year(2015), Dates.Month(7), Dates.Day(24),
@@ -393,24 +396,24 @@ let
     escaped_format = "yyyy-mm-dd\\THH:MM:SS.sss\\Z"
 
     # Typically 'Z' isn't treated as a specifier so it doesn't have to be escaped
-    @test parse(Vector, ds, Dates.DateFormat(format)) == parsed
-    @test parse(Vector, ds, Dates.DateFormat(escaped_format)) == parsed
+    @test Dates.parse_components(str, Dates.DateFormat(format)) == parsed
+    @test Dates.parse_components(str, Dates.DateFormat(escaped_format)) == parsed
 
     try
         # Make 'Z' into a specifier
         Dates.CONVERSION_SPECIFIERS['Z'] = Zulu
         Dates.CONVERSION_DEFAULTS[Zulu] = ""
 
-        @test parse(Vector, ds, Dates.DateFormat(format)) == [parsed; Zulu("Z")]
-        @test parse(Vector, ds, Dates.DateFormat(escaped_format)) == parsed
+        @test Dates.parse_components(str, Dates.DateFormat(format)) == [parsed; Zulu("Z")]
+        @test Dates.parse_components(str, Dates.DateFormat(escaped_format)) == parsed
     finally
         delete!(Dates.CONVERSION_SPECIFIERS, 'Z')
         delete!(Dates.CONVERSION_DEFAULTS, Zulu)
     end
 
     # Ensure that the default behaviour has been restored
-    @test parse(Vector, ds, Dates.DateFormat(format)) == parsed
-    @test parse(Vector, ds, Dates.DateFormat(escaped_format)) == parsed
+    @test Dates.parse_components(str, Dates.DateFormat(format)) == parsed
+    @test Dates.parse_components(str, Dates.DateFormat(escaped_format)) == parsed
 end
 
 # Issue 10817

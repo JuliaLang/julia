@@ -254,9 +254,8 @@ function Base.tryparse{T<:TimeType}(
     end
 end
 
-@generated function Base.parse(::Type{Vector}, str::AbstractString, df::DateFormat)
+@generated function parse_components(str::AbstractString, df::DateFormat)
     letters = character_codes(df)
-
     tokens = Type[CONVERSION_SPECIFIERS[letter] for letter in letters]
 
     quote
