@@ -369,6 +369,9 @@ const ISODateFormat = DateFormat("yyyy-mm-dd")
 const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
 
 ### API
+
+const Locale = Union{DateLocale, String}
+
 """
     DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
 
@@ -379,8 +382,9 @@ This method creates a `DateFormat` object each time it is called. If you are par
 date strings of the same format, consider creating a [`DateFormat`](@ref) object once and using
 that as the second argument instead.
 """
-DateTime(dt::AbstractString, format::AbstractString;
-    locale::Union{DateLocale, String}=ENGLISH) = parse(DateTime, dt, DateFormat(format, locale))
+function DateTime(dt::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
+    parse(DateTime, dt, DateFormat(format, locale))
+end
 
 """
     DateTime(dt::AbstractString, df::DateFormat) -> DateTime
@@ -399,8 +403,9 @@ Construct a `Date` object by parsing a `dt` date string following the pattern gi
 `format` string. Follows the same conventions as
 `DateTime(::AbstractString, ::AbstractString)`.
 """
-Date(dt::AbstractString, format::AbstractString;
-    locale::Union{DateLocale, String}=ENGLISH) = parse(Date, dt, DateFormat(format, locale))
+function Date(dt::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
+    parse(Date, dt, DateFormat(format, locale))
+end
 
 """
     Date(dt::AbstractString, df::DateFormat) -> Date
@@ -459,8 +464,9 @@ generate the string "1996-01-15T00:00:00" you could use `format`: "yyyy-mm-ddTHH
 Note that if you need to use a code character as a literal you can use the escape character
 backslash. The string "1996y01m" can be produced with the format "yyyy\\ymm\\m".
 """
-format(dt::TimeType, f::AbstractString;
-    locale::Union{DateLocale, String}=ENGLISH) = format(dt, DateFormat(f, locale))
+function format(dt::TimeType, f::AbstractString; locale::Locale=ENGLISH)
+    format(dt, DateFormat(f, locale))
+end
 
 # show
 
@@ -495,22 +501,22 @@ function Base.string(dt::Date)
 end
 
 # vectorized
-DateTime(Y::AbstractArray{<:AbstractString}, format::AbstractString;
-    locale::Union{DateLocale, String}=ENGLISH) = DateTime(Y, DateFormat(format, locale))
+function DateTime(Y::AbstractArray{<:AbstractString}, f::AbstractString; locale::Locale=ENGLISH)
+    DateTime(Y, DateFormat(f, locale))
+end
 function DateTime(Y::AbstractArray{<:AbstractString}, df::DateFormat=ISODateTimeFormat)
     return reshape(DateTime[parse(DateTime, y, df) for y in Y], size(Y))
 end
-Date(Y::AbstractArray{<:AbstractString}, format::AbstractString;
-    locale::Union{DateLocale, String}=ENGLISH) = Date(Y, DateFormat(format, locale))
+function Date(Y::AbstractArray{<:AbstractString}, f::AbstractString; locale::Locale=ENGLISH)
+    Date(Y, DateFormat(f, locale))
+end
 function Date(Y::AbstractArray{<:AbstractString}, df::DateFormat=ISODateFormat)
     return reshape(Date[Date(parse(Date, y, df)) for y in Y], size(Y))
 end
 
-format(Y::AbstractArray{<:TimeType}, fmt::AbstractString;
-    locale::Union{DateLocale, String}=ENGLISH) = format(Y, DateFormat(fmt, locale))
-function format(Y::AbstractArray{Date}, df::DateFormat=ISODateFormat)
-    return reshape([format(y, df) for y in Y], size(Y))
+function format(Y::AbstractArray{<:TimeType}, f::AbstractString; locale::Locale=ENGLISH)
+    format(Y, DateFormat(f, locale))
 end
-function format(Y::AbstractArray{DateTime}, df::DateFormat=ISODateTimeFormat)
+function format{T<:TimeType}(Y::AbstractArray{T}, df::DateFormat=default_format(T))
     return reshape([format(y, df) for y in Y], size(Y))
 end
