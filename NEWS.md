@@ -239,7 +239,7 @@ Library improvements
     This can be disabled or enabled at will with `Base.REPL.enable_promptpaste(::Bool)`.
 
   * The function `print_with_color` can now take a color represented by an integer between 0 and 255 inclusive as its first argument ([#18473]).
-    For a number to color mapping please refer to [this chart](https://upload.wikimedia.org/wikipedia/en/1/15/Xterm_256color_chart.svg).
+    For a number to color mapping please refer to [this chart](https://upload.wikimedia.org/wikipedia/commons/1/15/Xterm_256color_chart.svg).
     It is also possible to use numbers as colors in environment variables that customizes colors in the REPL.
     For example, to get orange warning messages, simply set `ENV["JULIA_WARN_COLOR"] = 208`.
     Please note that not all terminals support 256 colors.
