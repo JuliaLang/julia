@@ -1,28 +1,21 @@
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.PrintStream;
-import java.util.List;
-import java.util.Random;
+package org.julialang;
 
 import org.jblas.DoubleMatrix;
+
+import java.util.List;
 
 /**
  * Benchmark tests that call BLAS. 
  */
 public class PerfBLAS extends PerfPure {
 
-    public static void main(String[] args) {
-        PerfBLAS p = new PerfBLAS();
-        p.runBenchmarks();
-    }
-
-    private double randmatmul(int i) {
+    public static double randMatMulBlas(int i) {
         DoubleMatrix a = DoubleMatrix.randn(i,i);
         DoubleMatrix b = DoubleMatrix.randn(i,i);
         return a.mmul(b).get(0);
     }
 
-    private double[] randmatstat(int t) {
+    public static double[] randmatstat(int t) {
         int n=5;
         DoubleMatrix p;
         DoubleMatrix q;
@@ -55,7 +48,7 @@ public class PerfBLAS extends PerfPure {
         return new double[]{stdev(vElements)/mean(vElements),stdev(wElements)/mean(wElements)};
     }
 
-    private static int mandel(double re, double im) {
+    public static int mandelBlas(double re, double im) {
         int n = 0;
         Complex z = new Complex(re, im);
         Complex c = new Complex(re, im);
