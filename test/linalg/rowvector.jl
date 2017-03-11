@@ -258,4 +258,9 @@ end
 
     w = rand(Complex128, 3)
     @test f20979.(v') == f20979.(collect(v')) == (f20979.(v))'
+
+    g20979(x, y) = [x[2,1] x[1,2]; y[1,2] y[2,1]]
+    v = [rand(2,2), rand(2,2), rand(2,2)]
+    @test g20979.(v', v') == g20979.(collect(v'), collect(v')) ==
+          map(g20979, v', v') == map(g20979, collect(v'), collect(v'))
 end
