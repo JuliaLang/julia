@@ -38,7 +38,11 @@ Range operator. `a:b` constructs a range from `a` to `b` with a step size of 1, 
 is similar but uses a step size of `s`. These syntaxes call the function `colon`. The colon
 is also used in indexing to select whole dimensions.
 """
-function colon{T}(start::T, step, stop::T)
+colon{T}(start::T, step, stop::T) = _colon(start, step, stop)
+colon{T<:Real}(start::T, step, stop::T) = _colon(start, step, stop)
+# without the second method above, the first method above is ambiguous with
+# colon{A<:Real,C<:Real}(start::A, step, stop::C)
+function _colon{T}(start::T, step, stop::T)
     T′ = typeof(start+step)
     StepRange(convert(T′,start), step, convert(T′,stop))
 end
