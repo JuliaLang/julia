@@ -2895,7 +2895,7 @@ f(x) = yt(x)
                          (lambda (e)
                            (or (atom? e)
                                (memq (car e) '(quote top core line inert local local-def unnecessary
-                                               meta inbounds boundscheck simdloop
+                                               meta inbounds boundscheck simdloop unrollloop
                                                implicit-global global globalref outerref
                                                aliasscope popaliasscope
                                                const = null method call))))
@@ -3541,7 +3541,7 @@ f(x) = yt(x)
              '(null))
 
             ;; other top level expressions and metadata
-            ((import importall using export line meta inbounds boundscheck simdloop aliasscope popaliasscope)
+            ((import importall using export line meta inbounds boundscheck simdloop unrollloop aliasscope popaliasscope)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
                (cond ((eq? (car e) 'line)
                       (if first-line

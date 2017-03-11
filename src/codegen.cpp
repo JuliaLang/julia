@@ -108,6 +108,7 @@
 using namespace llvm;
 namespace llvm {
     extern bool annotateSimdLoop(BasicBlock *latch);
+    extern bool annotateUnrollLoop(BasicBlock *latch);
 }
 
 #if defined(_OS_WINDOWS_) && !defined(NOMINMAX)
@@ -4141,6 +4142,10 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         llvm::annotateSimdLoop(builder.GetInsertBlock());
         return jl_cgval_t();
     }
+    else if (head == unrollloop_sym) {
+        llvm::annotateUnrollLoop(builder.GetInsertBlock());
+        return jl_cgval_t();
+    }
     else if (head == goto_ifnot_sym) {
         jl_error("Expr(:goto_ifnot) in value position");
     }
@@ -5855,11 +5860,7 @@ static std::unique_ptr<Module> emit_function(
             } else if (expr->head == aliasscope_sym) {
                 MDNode *scope = mbuilder->createAliasScope("aliasscope", alias_domain);
                 scope_stack.push_back(scope);
-                MDNode *scope_list = MDNode::get(jl_LLVMContext, ArrayRef<Metadata*>(scope_stack)
-#if JL_LLVM_VERSION >= 40000
-                    , MDNode::FL_Yes
-#endif
-                );
+                MDNode *scope_list = MDNode::get(jl_LLVMContext, ArrayRef<Metadata*>(scope_stack));
                 scope_list_stack.push_back(scope_list);
                 cur_prop.scope_list = scope_list;
             } else if (expr->head == popaliasscope_sym) {

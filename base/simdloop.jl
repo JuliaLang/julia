@@ -89,4 +89,8 @@ macro simd(forloop)
     esc(compile(forloop))
 end
 
+macro unroll_annotation()
+    Expr(:unrollloop)
+end
+
 end # module SimdLoop

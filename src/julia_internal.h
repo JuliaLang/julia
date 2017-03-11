@@ -947,6 +947,7 @@ extern jl_sym_t *inert_sym; extern jl_sym_t *static_parameter_sym;
 extern jl_sym_t *polly_sym; extern jl_sym_t *inline_sym;
 extern jl_sym_t *propagate_inbounds_sym;
 extern jl_sym_t *aliasscope_sym; extern jl_sym_t *popaliasscope_sym;
+extern jl_sym_t *unrollloop_sym;
 
 #ifdef __cplusplus
 }

@@ -207,6 +207,13 @@ void addOptimizationPasses(PassManager *PM)
     PM->add(createLoopDeletionPass());         // Delete dead loops
 #if JL_LLVM_VERSION >= 30500
     PM->add(createSimpleLoopUnrollPass());     // Unroll small loops
+    if (jl_options.opt_level >= 3) {
+#ifndef INSTCOMBINE_BUG
+      PM->add(createInstructionCombiningPass()); // Clean up after the unroller
+#endif
+      PM->add(createGVNPass());                  // Remove redundancies
+      PM->add(createSimpleLoopUnrollPass());     // Unroll small loops    
+    }
 #else
     PM->add(createLoopUnrollPass());           // Unroll small loops
 #endif
@@ -233,7 +240,21 @@ void addOptimizationPasses(PassManager *PM)
     PM->add(createDeadStoreEliminationPass());  // Delete dead stores
 #if JL_LLVM_VERSION >= 30500
     if (jl_options.opt_level >= 3) {
-        PM->add(createSLPVectorizerPass());     // Vectorize straight-line code
+        // Found by running on Celeste
+        PM->add(createEarlyCSEPass(true));
+        PM->add(createInstructionCombiningPass());
+        PM->add(createDeadStoreEliminationPass());  // Delete dead stores
+        PM->add(createNewGVNPass());       
+        PM->add(createDeadStoreEliminationPass());  // Delete dead stores
+        PM->add(createGVNPass());                  // Remove redundancies
+        PM->add(createDeadInstEliminationPass());
+        PM->add(createInstructionCombiningPass());
+        PM->add(createNewGVNPass());       
+        PM->add(createDeadStoreEliminationPass());  // Delete dead stores
+        PM->add(createInstructionCombiningPass());
+        PM->add(createNewGVNPass());       
+        PM->add(createDeadStoreEliminationPass());  // Delete dead stores        
+        // PM->add(createSLPVectorizerPass());     // Vectorize straight-line code
     }
 #endif
 

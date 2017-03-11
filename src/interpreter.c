@@ -501,7 +501,8 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         jl_throw(args[0]);
     }
     else if (ex->head == boundscheck_sym || ex->head == inbounds_sym || ex->head == fastmath_sym ||
-             ex->head == simdloop_sym || ex->head == meta_sym) {
+             ex->head == simdloop_sym || ex->head == meta_sym ||
+             ex->head == unrollloop_sym) {
         return jl_nothing;
     }
     jl_errorf("unsupported or misplaced expression %s", jl_symbol_name(ex->head));
