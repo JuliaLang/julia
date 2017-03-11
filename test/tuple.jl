@@ -236,3 +236,9 @@ end
     @test_throws MethodError (1,)[]
     @test_throws MethodError (1,1,1)[1,1]
 end
+
+@testset "ambiguity between tuple constructors #20990" begin
+    Tuple16Int = Tuple{Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int}
+    tuple16int = (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+    @test Tuple16Int(tuple16int) isa Tuple16Int
+end
