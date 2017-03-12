@@ -249,3 +249,7 @@ end
         @test A'*x' == A'*y == B*x' == B*y == C'
     end
 end
+
+@testset "ambiguity between * methods with RowVectors and ConjRowVectors (#20971)" begin
+    @test RowVector(ConjArray(ones(4))) * ones(4) == 4
+end
