@@ -941,13 +941,41 @@ function method_exists(f::ANY, t::ANY)
         typemax(UInt)) != 0
 end
 
+"""
+    isambiguous(m1, m2, [allow_bottom_tparams=true]) -> Bool
+
+Determine whether two methods `m1` and `m2` (typically of the same
+function) are ambiguous.  This test is performed in the context of
+other methods of the same function; in isolation, `m1` and `m2` might
+be ambiguous, but if a third method resolving the ambiguity has been
+defined, this returns `false`.
+
+For parametric types, `allow_bottom_tparams` controls whether
+`Union{}` is considered a valid intersection of type parameters. For example:
+```jldoctest
+julia> foo(x::Complex{<:Integer}) = 1
+foo (generic function with 1 method)
+
+julia> foo(x::Complex{<:Rational}) = 2
+foo (generic function with 2 methods)
+
+julia> m1, m2 = collect(methods(foo));
+
+julia> typeintersect(m1.sig, m2.sig)
+Tuple{#foo,Complex{Union{}}}
+
+julia> Base.isambiguous(m1, m2, true)
+true
+
+julia> Base.isambiguous(m1, m2, false)
+false
+```
+"""
 function isambiguous(m1::Method, m2::Method, allow_bottom_tparams::Bool=true)
     ti = typeintersect(m1.sig, m2.sig)
     ti === Bottom && return false
     if !allow_bottom_tparams
-        (_, env) = ccall(:jl_match_method, Ref{SimpleVector}, (Any, Any),
-                         ti, m1.sig)
-        any(x->x === Bottom, env) && return false
+        has_bottom_parameter(ti) && return false
     end
     ml = _methods_by_ftype(ti, -1, typemax(UInt))
     isempty(ml) && return true
@@ -958,6 +986,23 @@ function isambiguous(m1::Method, m2::Method, allow_bottom_tparams::Bool=true)
     end
     return true
 end
+
+"""
+    has_bottom_parameter(t) -> Bool
+
+Determine whether `t` is a Type for which one or more of its parameters is `Union{}`.
+"""
+function has_bottom_parameter(t::Type)
+    ret = false
+    for p in t.parameters
+        ret |= (p == Bottom) || has_bottom_parameter(p)
+    end
+    ret
+end
+has_bottom_parameter(t::UnionAll) = has_bottom_parameter(unwrap_unionall(t))
+has_bottom_parameter(t::Union) = has_bottom_parameter(t.a) & has_bottom_parameter(t.b)
+has_bottom_parameter(t::TypeVar) = has_bottom_parameter(t.ub)
+has_bottom_parameter(::Any) = false
 
 min_world(m::Method) = reinterpret(UInt, m.min_world)
 max_world(m::Method) = reinterpret(UInt, m.max_world)

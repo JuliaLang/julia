@@ -186,6 +186,9 @@ if isdefined(Main, :Base)
 
 (::Type{T}){T<:Tuple}(x::Tuple) = convert(T, x)  # still use `convert` for tuples
 
+# resolve ambiguity between preceding and following methods
+(::Type{All16{E,N}}){E,N}(x::Tuple) = convert(All16{E,N}, x)
+
 function (T::Type{All16{E,N}}){E,N}(itr)
     len = N+16
     elts = collect(E, Iterators.take(itr,len))

@@ -166,6 +166,7 @@ end
 
 # inner product -> dot product specializations
 @inline *{T<:Real}(rowvec::RowVector{T}, vec::AbstractVector{T}) = dot(parent(rowvec), vec)
+@inline *{T<:Real}(rowvec::ConjRowVector{T}, vec::AbstractVector{T}) = dot(rowvec', vec)
 @inline *(rowvec::ConjRowVector, vec::AbstractVector) = dot(rowvec', vec)
 
 # Generic behavior

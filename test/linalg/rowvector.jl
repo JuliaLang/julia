@@ -264,3 +264,7 @@ end
     @test g20979.(v', v') == g20979.(collect(v'), collect(v')) ==
           map(g20979, v', v') == map(g20979, collect(v'), collect(v'))
 end
+
+@testset "ambiguity between * methods with RowVectors and ConjRowVectors (#20971)" begin
+    @test RowVector(ConjArray(ones(4))) * ones(4) == 4
+end
