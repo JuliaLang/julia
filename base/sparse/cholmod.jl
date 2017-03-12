@@ -1598,9 +1598,10 @@ Ac_ldiv_B(L::FactorComponent, B) = ctranspose(L)\B
 Ac_ldiv_B(L::FactorComponent, B::RowVector) = ctranspose(L)\B # ambiguity
 
 (\){T<:VTypes}(L::Factor{T}, B::Dense{T}) = solve(CHOLMOD_A, L, B)
-(\)(L::Factor{Float64}, B::VecOrMat{Complex{Float64}}) = complex.(L\real(B), L\imag(B))
-# First explicit TypeVars are necessary to avoid ambiguity errors with definition in
-# linalg/factorizations.jl
+# Explicit typevars are necessary to avoid ambiguities with defs in linalg/factorizations.jl
+# Likewise the two following explicit Vector and Matrix defs (rather than a single VecOrMat)
+(\){T<:Float64}(L::Factor{T}, B::Vector{Complex{T}}) = complex.(L\real(B), L\imag(B))
+(\){T<:Float64}(L::Factor{T}, B::Matrix{Complex{T}}) = complex.(L\real(B), L\imag(B))
 (\){T<:VTypes}(L::Factor{T}, b::StridedVector) = Vector(L\convert(Dense{T}, b))
 (\){T<:VTypes}(L::Factor{T}, B::StridedMatrix) = Matrix(L\convert(Dense{T}, B))
 (\)(L::Factor, B::Sparse) = spsolve(CHOLMOD_A, L, B)
