@@ -894,6 +894,14 @@ let r = linspace(1.0, 3+im, 4)
     @test r[4] === 3.0+im
 end
 
+# ambiguity between colon methods (#20988)
+struct NotReal; val; end
+Base.:+(x, y::NotReal) = x + y.val
+Base.zero(y::NotReal) = zero(y.val)
+Base.rem(x, y::NotReal) = rem(x, y.val)
+Base.isless(x, y::NotReal) = isless(x, y.val)
+@test colon(1, NotReal(1), 5) isa StepRange{Int,NotReal}
+
 # dimensional correctness:
 isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
 using TestHelpers.Furlong
