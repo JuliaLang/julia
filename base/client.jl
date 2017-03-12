@@ -84,8 +84,15 @@ stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bol
 
 function repl_cmd(cmd, out)
     if is_windows()
-        shell = shell_split(get(ENV,"JULIA_SHELL",""))
-        shell_name = isempty(shell) ? "" : lowercase(splitext(basename(shell[1]))[1])
+	    default_shell = string("\"", joinpath(JULIA_HOME, "busybox"), "\"")
+	    shell = shell_split(get(ENV, "JULIA_SHELL", default_shell))
+	    shell_name = isempty(shell) ? "" : lowercase(splitext(basename(shell[1]))[1])
+        if shell_name == "cmd"
+            warn_once("Windows \"cmd\" is not a supported shell, defaulting to $default_shell\n",
+                "Set the JULIA_SHELL environment variable to suppress this warning")
+            shell = shell_split(default_shell)
+            shell_name = isempty(shell) ? "" : lowercase(splitext(basename(shell[1]))[1])
+        end
     else
         shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
         shell_name = basename(shell[1])
@@ -116,12 +123,10 @@ function repl_cmd(cmd, out)
         if is_windows()
             if shell_name == ""
                 run(ignorestatus(cmd))
-            elseif shell_name == "cmd"
-                run(ignorestatus(`$shell /c $cmd`))
             elseif shell_name == "powershell"
                 run(ignorestatus(`$shell -Command $(shell_escape(cmd))`))
             elseif shell_name == "busybox"
-                run(ignorestatus(`$shell $cmd`))
+                run(ignorestatus(`$shell sh -c $(shell_escape(cmd))`))
             else
                 run(ignorestatus(`$shell /c $(shell_escape(cmd))`))
             end
