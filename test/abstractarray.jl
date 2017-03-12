@@ -836,3 +836,7 @@ end
 @testset "dispatch loop introduced in #19305" begin
     @test [(1:2) zeros(2,2); ones(3,3)] == [[1,2] zeros(2,2); ones(3,3)] == [reshape([1,2],2,1) zeros(2,2); ones(3,3)]
 end
+
+@testset "checkbounds_indices method ambiguities #20989" begin
+    @test Base.checkbounds_indices(Bool, (1:1,), ([CartesianIndex(1)],))
+end

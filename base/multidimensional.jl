@@ -258,8 +258,8 @@ end
         I::Tuple{AbstractArray{CartesianIndex{0}},Vararg{Any}})
     checkbounds_indices(Bool, IA, tail(I))
 end
-@inline function checkbounds_indices(::Type{Bool}, IA::Tuple{Any},
-        I::Tuple{<:AbstractArray{<:CartesianIndex},Vararg{Any}})
+@inline function checkbounds_indices{N}(::Type{Bool}, IA::Tuple{Any},
+        I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
     checkindex(Bool, IA, I[1]) & checkbounds_indices(Bool, (), tail(I))
 end
 @inline function checkbounds_indices{N}(::Type{Bool}, IA::Tuple,
