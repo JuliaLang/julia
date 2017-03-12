@@ -419,6 +419,24 @@ temp_pkg_dir() do
         @test !contains(msg, "signal (15)")
     end
 
+    # issue #20695
+    Pkg.cd() do
+        @test Pkg.Entry.url_and_pkg("Example") == ("git://github.com/JuliaLang/Example.jl.git", "Example")
+        for url = [
+            "https://github.com/Org/Nonsense",
+            "git@github.com:Org/Nonsense",
+            "file:///home/user/Nonsense",
+            "/home/user/Nonsense",
+        ]
+            @test Pkg.Entry.url_and_pkg(url) == (url, "Nonsense")
+            @test Pkg.Entry.url_and_pkg("$url.jl") == ("$url.jl", "Nonsense")
+            @test Pkg.Entry.url_and_pkg("$url.git") == ("$url.git", "Nonsense")
+            @test Pkg.Entry.url_and_pkg("$url.jl.git") == ("$url.jl.git", "Nonsense")
+        end
+        pkg = randstring(20)
+        @test Pkg.Entry.url_and_pkg(pkg) == (pkg, pkg)
+    end
+
     # partial Pkg.update
     @test "" == capture_stdout() do
         nothingtodomsg = "INFO: No packages to install, update or remove"
