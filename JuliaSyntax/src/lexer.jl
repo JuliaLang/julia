@@ -543,7 +543,20 @@ function lex_digit(l::Lexer)
         if peekchar(l) == '.' # 43.. -> [43, ..]
             backup!(l)
             return emit(l, Tokens.INTEGER)
-        elseif !(isdigit(peekchar(l)) || iswhitespace(peekchar(l)) || is_identifier_start_char(peekchar(l)))
+        elseif !(isdigit(peekchar(l)) || 
+            iswhitespace(peekchar(l)) || 
+            is_identifier_start_char(peekchar(l)) 
+            || peekchar(l) == '(' 
+            || peekchar(l) == ')' 
+            || peekchar(l) == '[' 
+            || peekchar(l) == ']' 
+            || peekchar(l) == '{' 
+            || peekchar(l) == '}'
+            || peekchar(l) == ',' 
+            || peekchar(l) == ';' 
+            || peekchar(l) == '@' 
+            || peekchar(l) == '`'
+            || peekchar(l) == '"')
             backup!(l)
             return emit(l, Tokens.INTEGER)
         end

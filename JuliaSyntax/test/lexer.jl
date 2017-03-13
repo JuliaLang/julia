@@ -317,3 +317,23 @@ end
     @test collect(tokenize("a!!=b"))[2].kind == Tokens.NOT_EQ
     @test collect(tokenize("!=b"))[1].kind == Tokens.NOT_EQ
 end
+
+
+@testset "floats with trailing `.` " begin
+    @test collect(tokenize("1.0"))[1].kind == Tokens.FLOAT
+    @test collect(tokenize("1.a"))[1].kind == Tokens.FLOAT
+    @test collect(tokenize("1.("))[1].kind == Tokens.FLOAT
+    @test collect(tokenize("1.["))[1].kind == Tokens.FLOAT
+    @test collect(tokenize("1.{"))[1].kind == Tokens.FLOAT
+    @test collect(tokenize("1.)"))[1].kind == Tokens.FLOAT
+    @test collect(tokenize("1.]"))[1].kind == Tokens.FLOAT
+    @test collect(tokenize("1.{"))[1].kind == Tokens.FLOAT
+    @test collect(tokenize("1.,"))[1].kind == Tokens.FLOAT
+    @test collect(tokenize("1.;"))[1].kind == Tokens.FLOAT
+    @test collect(tokenize("1.@"))[1].kind == Tokens.FLOAT
+    @test collect(tokenize("1.\"text\" "))[1].kind == Tokens.FLOAT
+
+    @test collect(tokenize("1.+ "))[1].kind == Tokens.INTEGER
+    @test collect(tokenize("1.⤋"))[1].kind == Tokens.INTEGER
+    @test collect(tokenize("1.."))[1].kind == Tokens.INTEGER
+end
