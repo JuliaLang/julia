@@ -5,10 +5,10 @@ New language features
 ---------------------
 
   * New type system capabilities ([#8974], [#18457])
-  
+
     + Type parameter constraints can refer to previous parameters, e.g.
       `type Foo{R<:Real, A<:AbstractArray{R}}`. Can also be used in method definitions.
-  
+
     + New syntax `Array{T} where T<:Integer`, indicating a union of types over all
       specified values of `T` (represented by a `UnionAll` type). This provides behavior
       similar to parametric methods or `typealias`, but can be used anywhere a type is
@@ -16,10 +16,10 @@ New language features
       `function inv(M::Matrix{T}) where T<:AbstractFloat`.
       Anonymous functions can have type parameters via the syntax
       `((x::Array{T}) where T<:Real) -> 2x`.
-      
+
     + Implicit type parameters, e.g. `Vector{<:Real}` is equivalent to
       `Vector{T} where T<:Real`, and similarly for `Vector{>:Int}` ([#20414]).
-      
+
     + Much more accurate subtype and type intersection algorithms. Method sorting and
       identification of equivalent and ambiguous methods are improved as a result.
 
@@ -39,15 +39,15 @@ Language changes
     definition now must be written as `Foo{T,S}(x) where {T,S<:Real} = new(x)` ([#11310]).
 
   * The keywords used to define types have changed ([#19157], [#20418]).
-  
+
     + `immutable` changes to `struct`
-    
+
     + `type` changes to `mutable struct`
-    
+
     + `abstract` changes to `abstract type ... end`
-    
+
     + `bitstype 32 Char` changes to `primitive type Char 32 end`
-    
+
     In 0.6, `immutable` and `type` are still allowed as synonyms without a deprecation
     warning.
 
@@ -266,7 +266,7 @@ Library improvements
     They can be changed back to bold by setting the environment variables
     `JULIA_INPUT_COLOR` and `JULIA_ANSWER_COLOR` to `"bold"`.
     For example, one way of doing this is adding `ENV["JULIA_INPUT_COLOR"] = :bold`
-    and `ENV["JULIA_ANSWER_COLOR"] = :bold` to the `.juliarc.jl` file. See the 
+    and `ENV["JULIA_ANSWER_COLOR"] = :bold` to the `.juliarc.jl` file. See the
     [manual section on customizing colors](http://docs.julialang.org/en/latest/manual/interacting-with-julia#Customizing-Colors-1)
     for more information.
 
