@@ -530,3 +530,45 @@ let
         @test !startswith(method_string, "(::Type{T})(arg) where T in Base at sysimg.jl")
     end
 end
+
+@testset "show for manually thrown MethodError" begin
+    global f21006
+
+    f21006() = nothing
+    # Normal method error should not warn about world age.
+    ex1 = try
+        f21006(())
+    catch e
+        e
+    end::MethodError
+    str = sprint(Base.showerror, ex1)
+    @test startswith(str, "MethodError: no method matching f21006(::Tuple{})")
+    @test !contains(str, "The applicable method may be too new")
+
+    # If newer applicable methods are available, world age should be mentioned.
+    f21006(x) = x
+    @test f21006(()) === ()
+    str = sprint(Base.showerror, ex1)
+    @test startswith(str, "MethodError: no method matching f21006(::Tuple{})")
+    @test contains(str, "The applicable method may be too new: running in world age $(ex1.world)")
+
+    # This method error should be thrown in a world new enough for `f21006(())`.
+    # Also makes sure it's printed correctly.
+    ex2 = try
+        f21006((), ())
+    catch e
+        e
+    end::MethodError
+    str = sprint(Base.showerror, ex2)
+    @test startswith(str, "MethodError: no method matching f21006(::Tuple{}, ::Tuple{})")
+    @test !contains(str, "The applicable method may be too new")
+
+    # If the method is available in the exception world or if the exception world is invalid,
+    # don't warn about world age
+    for ex3 in (MethodError(ex1.f, ex1.args, ex2.world),
+                MethodError(ex1.f, ex1.args, typemax(UInt)))
+        str = sprint(Base.showerror, ex3)
+        @test startswith(str, "MethodError: no method matching f21006(::Tuple{})")
+        @test !contains(str, "The applicable method may be too new")
+    end
+end
