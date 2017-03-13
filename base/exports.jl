@@ -1274,6 +1274,7 @@ export
     @elapsed,
     @allocated,
     @profile,
+    timed_print,
 
     # reflection
     @which,

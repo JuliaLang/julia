@@ -65,6 +65,20 @@ function GC_Diff(new::GC_Num, old::GC_Num)
                    new.full_sweep         - old.full_sweep)
 end
 
+# We would like to add up GC_Diff()s:
+function +(x::GC_Diff, y::GC_Diff)
+	return GC_Diff(
+		x.allocd	+ y.allocd,	# Bytes allocated
+		x.malloc	+ y.malloc,	# Number of GC aware malloc()
+		x.realloc	+ y.realloc,	# Number of GC aware realloc()
+		x.poolalloc	+ y.poolalloc,	# Number of pool allocations
+		x.bigalloc	+ y.bigalloc,	# Number of big (non-pool) allocations
+		x.freecall	+ y.freecall,	# Number of GC aware free()
+		x.total_time	+ y.total_time,	# Time spent in garbage collection
+		x.pause		+ y.pause,	# Number of GC pauses
+		x.full_sweep	+ y.full_sweep)	# Number of GC full collection
+end
+
 function gc_alloc_count(diff::GC_Diff)
     diff.malloc + diff.realloc + diff.poolalloc + diff.bigalloc
 end
@@ -209,6 +223,11 @@ function timev_print(elapsedtime, diff::GC_Diff)
     padded_nonzero_print(diff.full_sweep,   "full collections")
 end
 
+function timed_print(stats::Tuple{Any, Float64, Int64, Float64, GC_Diff})
+    allocs = gc_alloc_count(stats[5])
+    time_print(stats[2]*1e9, stats[3], stats[4]*1e9, allocs)
+end
+
 """
     @time
 
@@ -340,6 +359,15 @@ A macro to execute an expression, and return the value of the expression, elapse
 total bytes allocated, garbage collection time, and an object with various memory allocation
 counters.
 
+The time and allocation statistics returned by [`@timed`](:func:`@timed`) can
+be added up, e.g.
+
+    stats = @timed nothing   # initialize 'stats'
+    stats += @timed x = 1+2
+
+When adding the statistics, the return value of the expression is discarded,
+and the first element of the tuple `stats[1]` is set to `nothing`.
+
 See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
 
@@ -380,6 +408,18 @@ macro timed(ex)
         local diff = GC_Diff(gc_num(), stats)
         val, elapsedtime/1e9, diff.allocd, diff.total_time/1e9, diff
     end
+end
+
+# We would like to add up the statistics returned by '@timed'. There is no
+# useful way of adding up the return values of the expressions (the first
+# element in the tuple), so we just return 'nothing' here.
+function +(x::Tuple{Any, Float64, Int64, Float64, GC_Diff},
+	   y::Tuple{Any, Float64, Int64, Float64, GC_Diff})
+	return (nothing,	# value of the expression
+		x[2] + y[2],	# elapsed time
+		x[3] + y[3],	# total bytes allocated
+		x[4] + y[4],	# garbage collection time
+		x[5] + y[5])	# GC_Diff object
 end
 
 function fftw_vendor()

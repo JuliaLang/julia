@@ -281,6 +281,15 @@ let
     @test isa(t, Real) && t >= 0
 end
 
+let
+    t = @timed nothing
+    t += @timed sin(1)
+    @test isa(t, Tuple{Any, Float64, Int64, Float64, Base.GC_Diff})
+    @test t[2] >= 0
+    @test t[3] >= 0
+    @test t[4] >= 0
+end
+
 # problem after #11801 - at global scope
 t11801 = @elapsed 1+1
 @test isa(t11801,Real) && t11801 >= 0
