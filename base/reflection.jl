@@ -924,21 +924,20 @@ function function_module(f::ANY, types::ANY)
 end
 
 """
-    method_exists(f, Tuple type) -> Bool
+    method_exists(f, Tuple type, world=typemax(UInt)) -> Bool
 
 Determine whether the given generic function has a method matching the given
-`Tuple` of argument types.
+`Tuple` of argument types with the upper bound of world age given by `world`.
 
 ```jldoctest
 julia> method_exists(length, Tuple{Array})
 true
 ```
 """
-function method_exists(f::ANY, t::ANY)
+function method_exists(f::ANY, t::ANY, world=typemax(UInt))
     t = to_tuple_type(t)
     t = Tuple{isa(f,Type) ? Type{f} : typeof(f), t.parameters...}
-    return ccall(:jl_method_exists, Cint, (Any, Any, UInt), typeof(f).name.mt, t,
-        typemax(UInt)) != 0
+    return ccall(:jl_method_exists, Cint, (Any, Any, UInt), typeof(f).name.mt, t, world) != 0
 end
 
 """
