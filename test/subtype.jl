@@ -941,3 +941,10 @@ ftwoparams(::TwoParams{<:Real,<:Real}) = 3
 
 # tolerate non-types in Tuples
 @test typeintersect(Tuple{0}, Tuple{T} where T) === Tuple{0}
+
+# TypeVars deduced as non-type constants (#20869)
+@testintersect(Tuple{Val{0}, Val{Val{N}}} where N, Tuple{Val{N}, Val{Val{N}}} where N, Tuple{Val{0},Val{Val{0}}})
+@testintersect(Tuple{Val{N}, Val{Val{0}}} where N, Tuple{Val{N}, Val{Val{N}}} where N, Tuple{Val{0},Val{Val{0}}})
+
+@testintersect(Tuple{Val{Val{0}}, Val{N}} where N, Tuple{Val{Val{N}}, Val{N}} where N, Tuple{Val{Val{0}},Val{0}})
+@testintersect(Tuple{Val{Val{N}}, Val{0}} where N, Tuple{Val{Val{N}}, Val{N}} where N, Tuple{Val{Val{0}},Val{0}})
