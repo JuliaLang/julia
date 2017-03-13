@@ -20,7 +20,7 @@ genvar(t::DataType) = Symbol(lowercase(string(Base.datatype_name(t))))
     tryparsenext_core(str::AbstractString, pos::Int, len::Int, df::DateFormat, raise=false)
 
 Parses the string according to the directives within the DateFormat. Parsing will start at
-character index `pos` and will stop when all directives are used or we have parsed up to,
+character index `pos` and will stop when all directives are used or we have parsed up to
 the end of the string, `len`. If the provided string cannot be parsed an exception will be
 thrown only if `raise` is true.
 
@@ -115,7 +115,8 @@ end
 
 Parses the string according to the directives within the DateFormat. The specified TimeType
 type determines the type of and order of tokens returned. If the given DateFormat or string
-does not provide a required token a default value will be used.
+does not provide a required token a default value will be used. If the provided string
+cannot be parsed an exception will be thrown only if `raise` is true.
 
 Returns a 2-element tuple `(values, pos)`:
 * `values::Nullable{Tuple}`: A tuple which contains a value for each token as specified by
