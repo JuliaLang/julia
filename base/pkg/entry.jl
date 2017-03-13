@@ -206,20 +206,19 @@ function clone(url::AbstractString, pkg::AbstractString)
     end
 end
 
-function clone(url_or_pkg::AbstractString)
-    urlpath = joinpath("METADATA",url_or_pkg,"url")
-    if !(':' in url_or_pkg) && isfile(urlpath)
-        pkg = url_or_pkg
-        url = readchomp(urlpath)
-        # TODO: Cache.prefetch(pkg,url)
-    else
-        url = url_or_pkg
-        m = match(r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$", url)
-        m !== nothing || throw(PkgError("can't determine package name from URL: $url"))
-        pkg = m.captures[1]
+function url_and_pkg(url_or_pkg::AbstractString)
+    if !(':' in url_or_pkg)
+        # no colon, could be a package name
+        url_file = joinpath("METADATA", url_or_pkg, "url")
+        isfile(url_file) && return readchomp(url_file), url_or_pkg
     end
-    clone(url,pkg)
+    # try to parse as URL or local path
+    m = match(r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$", url_or_pkg)
+    m === nothing && throw(PkgError("can't determine package name from URL: $url_or_pkg"))
+    return url_or_pkg, m.captures[1]
 end
+
+clone(url_or_pkg::AbstractString) = clone(url_and_pkg(url_or_pkg)...)
 
 function checkout(pkg::AbstractString, branch::AbstractString, do_merge::Bool, do_pull::Bool)
     ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
