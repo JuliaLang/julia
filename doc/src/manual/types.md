@@ -154,7 +154,7 @@ abstract type «name» end
 abstract type «name» <: «supertype» end
 ```
 
-The `abstract` keyword introduces a new abstract type, whose name is given by `«name»`. This
+The `abstract type` keyword introduces a new abstract type, whose name is given by `«name»`. This
 name can be optionally followed by `<:` and an already-existing type, indicating that the newly
 declared abstract type is a subtype of this "parent" type.
 
