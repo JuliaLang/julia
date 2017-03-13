@@ -387,6 +387,10 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
         return subtype_ufirst(a, bb->lb, e);
     if (!((bb->ub == (jl_value_t*)jl_any_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ufirst(a, bb->ub, e)))
         return 0;
+    if (jl_is_typevar(bb->lb) && !jl_is_type(a) && bb->lb == bb->ub && var_gt((jl_tvar_t *) bb->lb, a, e, param))
+        return 1;
+    if (jl_is_typevar(a) && !jl_is_type(bb->lb) && bb->lb == bb->ub && var_lt((jl_tvar_t *) a, bb->lb, e, param))
+        return 1;
     bb->lb = simple_join(bb->lb, a);
     assert(bb->lb != (jl_value_t*)b);
     return 1;
@@ -1109,8 +1113,12 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     jl_varbinding_t *bb = lookup(e, b);
     if (bb == NULL)
         return R ? intersect_ufirst(a, b->ub, e, 0) : intersect_ufirst(b->ub, a, e, 0);
-    if (!jl_is_type(a) && !jl_is_typevar(a))
-        return set_var_to_const(bb, a, NULL);
+    if (!jl_is_type(a) && !jl_is_typevar(a)) {
+        if (jl_is_typevar(bb->lb) && bb->lb == bb->ub)
+            return intersect_var((jl_tvar_t *) bb->lb, a, e, R, param);
+        else
+            return set_var_to_const(bb, a, NULL);
+    }
     int d = bb->depth0;
     jl_value_t *root=NULL; jl_savedenv_t se;
     if (param == 2) {
