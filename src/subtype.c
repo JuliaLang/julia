@@ -385,6 +385,12 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
     record_var_occurrence(bb, e, param);
     if (!bb->right)  // check ∀b . b>:a
         return subtype_ufirst(a, bb->lb, e);
+    if (bb->lb == bb->ub) {
+        if (jl_is_typevar(bb->lb) && !jl_is_type(a) && !jl_is_typevar(a))
+            return var_gt((jl_tvar_t*)bb->lb, a, e, param);
+        if (jl_is_typevar(a) && !jl_is_type(bb->lb) && !jl_is_typevar(bb->lb))
+            return var_lt((jl_tvar_t*)a, bb->lb, e, param);
+    }
     if (!((bb->ub == (jl_value_t*)jl_any_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ufirst(a, bb->ub, e)))
         return 0;
     bb->lb = simple_join(bb->lb, a);
@@ -1109,13 +1115,13 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     jl_varbinding_t *bb = lookup(e, b);
     if (bb == NULL)
         return R ? intersect_ufirst(a, b->ub, e, 0) : intersect_ufirst(b->ub, a, e, 0);
+    if (bb->lb == bb->ub && jl_is_typevar(bb->lb))
+        return intersect(a, bb->lb, e, param);
     if (!jl_is_type(a) && !jl_is_typevar(a))
         return set_var_to_const(bb, a, NULL);
     int d = bb->depth0;
     jl_value_t *root=NULL; jl_savedenv_t se;
     if (param == 2) {
-        if (bb->lb == bb->ub && jl_is_typevar(bb->lb))
-            return intersect(a, bb->ub, e, param);
         jl_value_t *ub = R ? intersect_ufirst(a, bb->ub, e, d) : intersect_ufirst(bb->ub, a, e, d);
         JL_GC_PUSH1(&ub);
         if (!subtype_in_env(bb->lb, a, e)) {
