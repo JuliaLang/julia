@@ -1292,9 +1292,9 @@ static jl_value_t *finish_unionall(jl_value_t *res, jl_varbinding_t *vb, jl_sten
 
     if (vb->right && e->envidx < e->envsz) {
         jl_value_t *oldval = e->envout[e->envidx];
-        if (!varval)
+        if (!varval || (!is_leaf_bound(varval) && !var_occurs_invariant(res, vb->var, 0)))
             e->envout[e->envidx] = (jl_value_t*)vb->var;
-        else if (!oldval || !jl_is_typevar(oldval) || !jl_is_long(varval))
+        else if (!(oldval && jl_is_typevar(oldval) && jl_is_long(varval)))
             e->envout[e->envidx] = varval;
     }
 
