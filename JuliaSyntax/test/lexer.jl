@@ -343,3 +343,15 @@ end
     @test collect(tokenize("1.⤋"))[1].kind == Tokens.INTEGER
     @test collect(tokenize("1.."))[1].kind == Tokens.INTEGER
 end
+
+
+
+@testset "lex octal" begin
+    @test collect(tokenize("0o0167"))[1].kind==T.INTEGER
+end
+
+@testset "lex bin/hex/oct w underscores" begin
+    @test collect(tokenize("0x0167_032"))[1].kind==T.INTEGER
+    @test collect(tokenize("0b0101001_0100_0101"))[1].kind==T.INTEGER
+    @test collect(tokenize("0o01054001_0100_0101"))[1].kind==T.INTEGER
+end

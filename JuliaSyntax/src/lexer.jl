@@ -16,8 +16,9 @@ import ..Tokens: FUNCTION, ABSTRACT, IDENTIFIER, BAREMODULE, BEGIN, BITSTYPE, BR
 
 export tokenize
 
-ishex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F')
-isbinary(c::Char) = c == '0' || c == '1'
+ishex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F') || c == '_'
+isbinary(c::Char) = c == '0' || c == '1' || c == '_'
+isoctal(c::Char) =  '0' ≤ c ≤ '7' || c == '_'
 iswhitespace(c::Char) = Base.UTF8proc.isspace(c)
 
 type Lexer{IO_t <: IO}
@@ -588,6 +589,11 @@ function lex_digit(l::Lexer)
         elseif accept(l, 'b')
             accept(l, "o")
             if accept_batch(l, isbinary) && position(l) > longest
+                longest, kind = position(l), Tokens.INTEGER
+            end
+        elseif accept(l, 'o')
+            accept(l, "o")
+            if accept_batch(l, isoctal) && position(l) > longest
                 longest, kind = position(l), Tokens.INTEGER
             end
         end
