@@ -35,6 +35,7 @@
         COMPARISON,
         COMPREHENSION,
         CURLY,
+        DICT_COMPREHENSION,
         GENERATOR,
         HCAT,
         KW,
