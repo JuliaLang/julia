@@ -776,7 +776,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             }
             return 0;
         }
-        if (jl_is_type_type(y) && !jl_is_type_type(x)) {
+        if (jl_is_type_type(y) && !jl_is_type_type(x) && x != (jl_value_t*)jl_typeofbottom_type) {
             jl_value_t *tp0 = jl_tparam0(yd);
             if (!jl_is_typevar(tp0))
                 return 0;
@@ -789,7 +789,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             }
             else {
                 e->invdepth++;
-                ans = forall_exists_equal(x, jl_tparam0(yd), e);
+                ans = forall_exists_equal(x, tp0, e);
                 e->invdepth--;
             }
             return ans;
@@ -2337,12 +2337,14 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
     if (jl_is_type_type(a) && !invariant) {
         jl_value_t *tp0a = jl_tparam0(a);
         if (jl_is_typevar(tp0a)) {
+            if (b == (jl_value_t*)jl_typeofbottom_type)
+                return 0;
             jl_value_t *ub = ((jl_tvar_t*)tp0a)->ub;
             if (jl_is_kind(b) && !jl_subtype((jl_value_t*)jl_any_type, ub))
                 return 1;
         }
         else {
-            if (jl_isa(tp0a, b))
+            if (jl_isa(tp0a, b) || (tp0a == jl_bottom_type && jl_subtype(b, (jl_value_t*)jl_type_type)))
                 return 1;
         }
     }
