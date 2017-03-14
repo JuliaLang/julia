@@ -4756,6 +4756,19 @@ end
     y::Vector{T}
 end
 
+# issue #20999, allow more type redefinitions
+struct T20999
+    x::Array{T} where T<:Real
+end
+
+struct T20999
+    x::Array{T} where T<:Real
+end
+
+@test_throws ErrorException struct T20999
+    x::Array{T} where T<:Integer
+end
+
 let a = Array{Core.BottomType, 1}(2)
     @test a[1] == Union{}
     @test a == [Union{}, Union{}]
