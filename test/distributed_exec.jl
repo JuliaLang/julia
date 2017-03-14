@@ -1269,17 +1269,77 @@ end
 if DoFullTest
     pids=addprocs(4);
     @test_throws ErrorException rmprocs(pids; waitfor=0.001);
-    rmprocs(pids)
+    # wait for workers to be removed
+    while any(x -> (x in procs()), pids)
+        sleep(0.1)
+    end
 end
 
 # Test addprocs/rmprocs from master node only
 for f in [ ()->addprocs(1), ()->rmprocs(workers()) ]
     try
         remotecall_fetch(f, id_other)
+        error("Unexpected")
     catch ex
         @test isa(ex, RemoteException)
         @test ex.captured.ex.msg == "Only process 1 can add and remove workers"
     end
+end
+
+# Test the following addprocs error conditions
+# - invalid host name - github issue #20372
+# - julia exe exiting with an error
+# - timeout reading host:port from worker STDOUT
+# - host:port not found in worker STDOUT in the first 1000 lines
+
+struct ErrorSimulator <: ClusterManager
+    mode
+end
+
+function Base.launch(manager::ErrorSimulator, params::Dict, launched::Array, c::Condition)
+    exename = params[:exename]
+
+    if manager.mode == :timeout
+        io, pobj = open(pipeline(detach(setenv(`$(Base.julia_cmd(exename)) -e "sleep(10)"`)); stderr=STDERR), "r")
+    elseif manager.mode == :ntries
+        io, pobj = open(pipeline(detach(setenv(`$(Base.julia_cmd(exename)) -e "[println(x) for x in 1:1001]"`)); stderr=STDERR), "r")
+    elseif manager.mode == :exit
+        io, pobj = open(pipeline(detach(setenv(`$(Base.julia_cmd(exename)) -e "exit(-1)"`)); stderr=STDERR), "r")
+    else
+        error("Unknown mode")
+    end
+
+    wconfig = WorkerConfig()
+    wconfig.process = pobj
+    wconfig.io = io
+    push!(launched, wconfig)
+    notify(c)
+end
+
+if DoFullTest
+    testruns = Any[(()->addprocs(["errorhost20372"]), "Unable to read host:port string from worker. Launch command exited with error?")]
+end
+append!(testruns, Any[
+            (()->addprocs(ErrorSimulator(:exit)), "Unable to read host:port string from worker. Launch command exited with error?"),
+            (()->addprocs(ErrorSimulator(:ntries)), "Unexpected output from worker launch command. Host:port string not found."),
+            (()->addprocs(ErrorSimulator(:timeout)), "Timed out waiting to read host:port string from worker.")
+        ])
+
+old_jwt = get(ENV, "JULIA_WORKER_TIMEOUT", :undefined)
+ENV["JULIA_WORKER_TIMEOUT"] = "1"
+for (addp_testf, expected_errstr) in testruns
+    try
+        addp_testf()
+        error("Unexpected")
+    catch ex
+        @test isa(ex, CompositeException)
+        @test ex.exceptions[1].ex.msg == expected_errstr
+    end
+end
+if old_jwt == :undefined
+    delete!(ENV, "JULIA_WORKER_TIMEOUT")
+else
+    ENV["JULIA_WORKER_TIMEOUT"] = old_jwt
 end
 
 # Auto serialization of globals from Main.
