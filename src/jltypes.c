@@ -1660,6 +1660,8 @@ void jl_init_types(void)
     jl_type_typename->wrapper = jl_new_struct(jl_unionall_type, tttvar, (jl_value_t*)jl_type_type);
     jl_type_type = (jl_unionall_t*)jl_type_typename->wrapper;
 
+    jl_typeofbottom_type->super = jl_wrap_Type(jl_bottom_type);
+
     jl_emptytuple_type = jl_apply_tuple_type(jl_emptysvec);
     jl_emptytuple_type->uid = jl_assign_type_uid();
     jl_emptytuple = jl_gc_alloc(ptls, 0, jl_emptytuple_type);
