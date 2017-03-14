@@ -16,13 +16,6 @@ import ..Tokens: FUNCTION, ABSTRACT, IDENTIFIER, BAREMODULE, BEGIN, BITSTYPE, BR
 
 export tokenize
 
-# using Logging
-# @Logging.configure(level=WARNING)
-
-macro debug(ex)
-    return :()
-end
-
 ishex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F')
 isbinary(c::Char) = c == '0' || c == '1'
 iswhitespace(c::Char) = Base.UTF8proc.isspace(c)
@@ -234,7 +227,6 @@ function emit(l::Lexer, kind::Kind,
                 (l.current_row, l.current_col - 1),
                 startpos(l), position(l) - 1,
                 str, err)
-    @debug "emitted token: $tok:"
     l.last_token = kind
     start_token!(l)
     return tok
@@ -649,16 +641,16 @@ function lex_quote(l::Lexer, doemit=true)
             if read_string(l, Tokens.TRIPLE_STRING)
                 return doemit ? emit(l, Tokens.TRIPLE_STRING) : EMPTY_TOKEN
             else
-                return emit_error(l, Tokens.EOF_STRING)
+                return doemit ? emit_error(l, Tokens.EOF_STRING) : EMPTY_TOKEN
             end
         else # empty string
-            return doemit ?  emit(l, Tokens.STRING) : EMPTY_TOKEN
+            return doemit ? emit(l, Tokens.STRING) : EMPTY_TOKEN
         end
     else # "?, ? != '"'
         if read_string(l, Tokens.STRING)
-            return doemit ?  emit(l, Tokens.STRING) : EMPTY_TOKEN
+            return doemit ? emit(l, Tokens.STRING) : EMPTY_TOKEN
         else
-            return emit_error(l, Tokens.EOF_STRING)
+            return doemit ? emit_error(l, Tokens.EOF_STRING) : EMPTY_TOKEN
         end
     end
 end
@@ -695,6 +687,7 @@ function read_string(l::Lexer, kind::Tokens.Kind)
                 o = 1
                 while o > 0
                     c = readchar(l)
+                    eof(c) && return false
                     if c == '('
                         o += 1
                     elseif c == ')'

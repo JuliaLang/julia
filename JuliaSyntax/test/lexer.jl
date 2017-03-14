@@ -304,7 +304,13 @@ end
     @test length(ts)==3
     @test ts[1].kind == Tokens.STRING
     ts = collect(tokenize("""\"\$\""""))
-    @test ts[1].kind == Tokens.STRING 
+    @test ts[1].kind == Tokens.STRING
+    # issue 73:
+    t_err = collect(tokenize("\"\$(fdsf\""))[1]
+    @test t_err.kind == Tokens.ERROR
+    @test t_err.token_error == Tokens.EOF_STRING
+    @test Tokenize.Tokens.startpos(t_err) == (1,1)
+    @test Tokenize.Tokens.endpos(t_err) == (1,8)
 end
 
 @testset "inferred" begin
