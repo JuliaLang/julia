@@ -567,11 +567,16 @@ function lex_digit(l::Lexer)
         elseif position(l) > longest # 323213.3232 candidate
             longest, kind = position(l), Tokens.FLOAT
         end
-        if accept(l, "eE") # 1313.[0-9]*e
+        if accept(l, "eEf") # 1313.[0-9]*e
             accept(l, "+-")
             if accept_batch(l, isdigit) && position(l) > longest
                 longest, kind = position(l), Tokens.FLOAT
             end
+        end
+    elseif accept(l, "eEf")
+        accept(l, "+-")
+        if accept_batch(l, isdigit) && position(l) > longest
+            longest, kind = position(l), Tokens.FLOAT
         end
     elseif position(l) > longest
         longest, kind = position(l), Tokens.INTEGER
@@ -582,17 +587,14 @@ function lex_digit(l::Lexer)
     # 0x[0-9A-Fa-f]+
     if accept(l, '0')
         if accept(l, 'x')
-            accept(l, "o")
             if accept_batch(l, ishex) && position(l) > longest
                 longest, kind = position(l), Tokens.INTEGER
             end
         elseif accept(l, 'b')
-            accept(l, "o")
             if accept_batch(l, isbinary) && position(l) > longest
                 longest, kind = position(l), Tokens.INTEGER
             end
         elseif accept(l, 'o')
-            accept(l, "o")
             if accept_batch(l, isoctal) && position(l) > longest
                 longest, kind = position(l), Tokens.INTEGER
             end
