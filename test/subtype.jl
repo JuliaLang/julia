@@ -853,6 +853,10 @@ function test_intersection()
     @testintersect(Tuple{Ref{Pair{p2,T2}}, Pair{p1,Pair}} where T2 where p2 where p1,
                    Tuple{Ref{Pair{p3,T3}}, Pair{p3}} where T3 where p3,
                    Tuple{Ref{Pair{p1,T2}}, Pair{p1,Pair}} where T2 where p1)
+
+    # issue #20998
+    _, E = intersection_env(Tuple{Int,Any,Any}, Tuple{T,T,S} where {T,S})
+    @test length(E) == 2 && E[1] == Int && isa(E[2], TypeVar)
 end
 
 function test_intersection_properties()
