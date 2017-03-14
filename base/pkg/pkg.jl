@@ -14,10 +14,15 @@ mutable struct PkgError <: Exception
     ex::Nullable{Exception}
 end
 PkgError(msg::AbstractString) = PkgError(msg, Nullable{Exception}())
+PkgTerseError(msg::AbstractString) = Base.TerseException(PkgError(msg))
+PkgTerseError(msg::AbstractString, ex) = Base.TerseException(PkgError(msg, ex))
 function Base.showerror(io::IO, pkgerr::PkgError)
     print(io, pkgerr.msg)
     if !isnull(pkgerr.ex)
         pkgex = get(pkgerr.ex)
+        if isa(pkgex, Base.TerseException)
+            pkgex = pkgex.ex
+        end
         if isa(pkgex, CompositeException)
             for cex in pkgex
                 print(io, "\n=> ")

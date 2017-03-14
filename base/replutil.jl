@@ -202,6 +202,18 @@ function showerror(io::IO, ex, bt; backtrace=true)
     end
 end
 
+"""
+    TerseException <: Exception
+
+Wraps another exception so that when throwed does not print a backtrace.
+"""
+struct TerseException <: Exception
+    ex
+end
+
+showerror(io::IO, ex::TerseException) = showerror(io, ex.ex)
+showerror(io::IO, ex::TerseException, bt; backtrace=false) = showerror(io, ex.ex, bt; backtrace = false)
+
 function showerror(io::IO, ex::LoadError, bt; backtrace=true)
     print(io, "LoadError: ")
     showerror(io, ex.error, bt, backtrace=backtrace)

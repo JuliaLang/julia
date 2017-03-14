@@ -6,8 +6,10 @@ import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
 import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..Dir
 import ...LibGit2
 importall ...LibGit2
-import ...Pkg.PkgError
+import ...Pkg: PkgError, PkgTerseError
 using ..Types
+
+import Base.TerseException
 
 macro recover(ex)
     quote
@@ -36,7 +38,7 @@ end
 function edit()
     editor = get(ENV,"VISUAL",get(ENV,"EDITOR",nothing))
     editor !== nothing ||
-        throw(PkgError("set the EDITOR environment variable to an edit command"))
+        throw(PkgTerseError("set the EDITOR environment variable to an edit command"))
     editor = Base.shell_split(editor)
     reqs = Reqs.parse("REQUIRE")
     run(`$editor REQUIRE`)
@@ -50,7 +52,7 @@ function add(pkg::AbstractString, vers::VersionSet)
     outdated = :maybe
     @sync begin
         @async if !edit(Reqs.add,pkg,vers)
-            ispath(pkg) || throw(PkgError("unknown package $pkg"))
+            ispath(pkg) || throw(PkgTerseError("unknown package $pkg"))
             info("Package $pkg is already installed")
         end
         branch = Dir.getmetabranch()
@@ -98,7 +100,7 @@ function available(pkg::AbstractString)
     if !isempty(avail) || Read.isinstalled(pkg)
         return sort!(collect(keys(avail)))
     end
-    throw(PkgError("$pkg is not a package (not registered or installed)"))
+    throw(PkgTerseError("$pkg is not a package (not registered or installed)"))
 end
 
 function installed()
@@ -120,7 +122,7 @@ function installed(pkg::AbstractString)
         end
         return res
     end
-    isempty(avail) && throw(PkgError("$pkg is not a package (not registered or installed)"))
+    isempty(avail) && throw(PkgTerseError("$pkg is not a package (not registered or installed)"))
     return nothing # registered but not installed
 end
 
@@ -190,7 +192,7 @@ end
 
 function clone(url::AbstractString, pkg::AbstractString)
     info("Cloning $pkg from $url")
-    ispath(pkg) && throw(PkgError("$pkg already exists"))
+    ispath(pkg) && throw(PkgTerseError("$pkg already exists"))
     try
         LibGit2.with(LibGit2.clone(url, pkg)) do repo
             LibGit2.set_remote_url(repo, url)
@@ -214,18 +216,18 @@ function url_and_pkg(url_or_pkg::AbstractString)
     end
     # try to parse as URL or local path
     m = match(r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$", url_or_pkg)
-    m === nothing && throw(PkgError("can't determine package name from URL: $url_or_pkg"))
+    m === nothing && throw(PkgTerseError("can't determine package name from URL: $url_or_pkg"))
     return url_or_pkg, m.captures[1]
 end
 
 clone(url_or_pkg::AbstractString) = clone(url_and_pkg(url_or_pkg)...)
 
 function checkout(pkg::AbstractString, branch::AbstractString, do_merge::Bool, do_pull::Bool)
-    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+    ispath(pkg,".git") || throw(PkgTerseError("$pkg is not a git repo"))
     info("Checking out $pkg $branch...")
     with(GitRepo, pkg) do r
         LibGit2.transact(r) do repo
-            LibGit2.isdirty(repo) && throw(PkgError("$pkg is dirty, bailing"))
+            LibGit2.isdirty(repo) && throw(PkgTerseError("$pkg is dirty, bailing"))
             LibGit2.branch!(repo, branch, track=LibGit2.Consts.REMOTE_ORIGIN)
             do_merge && LibGit2.merge!(repo, fastforward=true) # merge changes
             if do_pull
@@ -239,12 +241,12 @@ function checkout(pkg::AbstractString, branch::AbstractString, do_merge::Bool, d
 end
 
 function free(pkg::AbstractString)
-    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
-    Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be freed – not an installed package"))
+    ispath(pkg,".git") || throw(PkgTerseError("$pkg is not a git repo"))
+    Read.isinstalled(pkg) || throw(PkgTerseError("$pkg cannot be freed – not an installed package"))
     avail = Read.available(pkg)
-    isempty(avail) && throw(PkgError("$pkg cannot be freed – not a registered package"))
+    isempty(avail) && throw(PkgTerseError("$pkg cannot be freed – not a registered package"))
     with(GitRepo, pkg) do repo
-        LibGit2.isdirty(repo) && throw(PkgError("$pkg cannot be freed – repo is dirty"))
+        LibGit2.isdirty(repo) && throw(PkgTerseError("$pkg cannot be freed – repo is dirty"))
         info("Freeing $pkg")
         vers = sort!(collect(keys(avail)), rev=true)
         while true
@@ -252,7 +254,7 @@ function free(pkg::AbstractString)
                 sha1 = avail[ver].sha1
                 LibGit2.iscommit(sha1, repo) || continue
                 return LibGit2.transact(repo) do r
-                    LibGit2.isdirty(repo) && throw(PkgError("$pkg is dirty, bailing"))
+                    LibGit2.isdirty(repo) && throw(PkgTerseError("$pkg is dirty, bailing"))
                     LibGit2.checkout!(repo, sha1)
                     resolve()
                 end
@@ -266,12 +268,12 @@ end
 function free(pkgs)
     try
         for pkg in pkgs
-            ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
-            Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be freed – not an installed package"))
+            ispath(pkg,".git") || throw(PkgTerseError("$pkg is not a git repo"))
+            Read.isinstalled(pkg) || throw(PkgTerseError("$pkg cannot be freed – not an installed package"))
             avail = Read.available(pkg)
-            isempty(avail) && throw(PkgError("$pkg cannot be freed – not a registered package"))
+            isempty(avail) && throw(PkgTerseError("$pkg cannot be freed – not a registered package"))
             with(GitRepo, pkg) do repo
-                LibGit2.isdirty(repo) && throw(PkgError("$pkg cannot be freed – repo is dirty"))
+                LibGit2.isdirty(repo) && throw(PkgTerseError("$pkg cannot be freed – repo is dirty"))
                 info("Freeing $pkg")
                 vers = sort!(collect(keys(avail)), rev=true)
                 for ver in vers
@@ -282,7 +284,7 @@ function free(pkgs)
                 end
             end
             isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
-            throw(PkgError("Can't find any registered versions of $pkg to checkout"))
+            throw(PkgTerseError("Can't find any registered versions of $pkg to checkout"))
         end
     finally
         resolve()
@@ -290,7 +292,7 @@ function free(pkgs)
 end
 
 function pin(pkg::AbstractString, head::AbstractString)
-    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+    ispath(pkg,".git") || throw(PkgTerseError("$pkg is not a git repo"))
     should_resolve = true
     with(GitRepo, pkg) do repo
         id = if isempty(head) # get HEAD commit
@@ -313,7 +315,7 @@ function pin(pkg::AbstractString, head::AbstractString)
             try
                 if !isnull(ref)
                     if LibGit2.revparseid(repo, branch) != id
-                        throw(PkgError("Package $pkg: existing branch $branch has " *
+                        throw(PkgTerseError("Package $pkg: existing branch $branch has " *
                             "been edited and doesn't correspond to its original commit"))
                     end
                     info("Package $pkg: checking out existing branch $branch")
@@ -341,11 +343,11 @@ end
 pin(pkg::AbstractString) = pin(pkg, "")
 
 function pin(pkg::AbstractString, ver::VersionNumber)
-    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
-    Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be pinned – not an installed package"))
+    ispath(pkg,".git") || throw(PkgTerseError("$pkg is not a git repo"))
+    Read.isinstalled(pkg) || throw(PkgTerseError("$pkg cannot be pinned – not an installed package"))
     avail = Read.available(pkg)
-    isempty(avail) && throw(PkgError("$pkg cannot be pinned – not a registered package"))
-    haskey(avail,ver) || throw(PkgError("$pkg – $ver is not a registered version"))
+    isempty(avail) && throw(PkgTerseError("$pkg cannot be pinned – not a registered package"))
+    haskey(avail,ver) || throw(PkgTerseError("$pkg – $ver is not a registered version"))
     pin(pkg, avail[ver].sha1)
 end
 
@@ -356,10 +358,10 @@ function update(branch::AbstractString, upkgs::Set{String})
             with(LibGit2.head(repo)) do h
                 if LibGit2.branch(h) != branch
                     if LibGit2.isdirty(repo)
-                        throw(PkgError("METADATA is dirty and not on $branch, bailing"))
+                        throw(PkgTerseError("METADATA is dirty and not on $branch, bailing"))
                     end
                     if !LibGit2.isattached(repo)
-                        throw(PkgError("METADATA is detached not on $branch, bailing"))
+                        throw(PkgTerseError("METADATA is detached not on $branch, bailing"))
                     end
                     LibGit2.fetch(repo)
                     LibGit2.checkout_head(repo)
@@ -375,7 +377,7 @@ function update(branch::AbstractString, upkgs::Set{String})
             end
         catch err
             cex = CapturedException(err, catch_backtrace())
-            throw(PkgError("METADATA cannot be updated. Resolve problems manually in " *
+            throw(PkgTerseError("METADATA cannot be updated. Resolve problems manually in " *
                 Pkg.dir("METADATA") * ".", cex))
         end
     end
@@ -387,14 +389,14 @@ function update(branch::AbstractString, upkgs::Set{String})
             Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
         catch err
             cex = CapturedException(err, catch_backtrace())
-            push!(deferred_errors, PkgError("Package $pkg: unable to update cache.", cex))
+            push!(deferred_errors, PkgTerseError("Package $pkg: unable to update cache.", cex))
         end
     end
     instd = Read.installed(avail)
     reqs = Reqs.parse("REQUIRE")
     if !isempty(upkgs)
         for (pkg, (v,f)) in instd
-            satisfies(pkg, v, reqs) || throw(PkgError("Package $pkg: current " *
+            satisfies(pkg, v, reqs) || throw(PkgTerseError("Package $pkg: current " *
                 "package status does not satisfy the requirements, cannot do " *
                 "a partial update; use `Pkg.update()`"))
         end
@@ -406,7 +408,7 @@ function update(branch::AbstractString, upkgs::Set{String})
             Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
         catch err
             cex = CapturedException(err, catch_backtrace())
-            push!(deferred_errors, PkgError("Package $pkg: unable to update cache.", cex))
+            push!(deferred_errors, PkgTerseError("Package $pkg: unable to update cache.", cex))
         end
     end
     fixed = Read.fixed(avail,instd,dont_update)
@@ -431,7 +433,7 @@ function update(branch::AbstractString, upkgs::Set{String})
                             LibGit2.merge!(repo, fastforward=true)
                         catch err
                             cex = CapturedException(err, catch_backtrace())
-                            push!(deferred_errors, PkgError("Package $pkg cannot be updated.", cex))
+                            push!(deferred_errors, PkgTerseError("Package $pkg cannot be updated.", cex))
                             success = false
                             stopupdate = isa(err, InterruptException)
                         end
@@ -450,7 +452,7 @@ function update(branch::AbstractString, upkgs::Set{String})
                     Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
                 catch err
                     cex = CapturedException(err, catch_backtrace())
-                    push!(deferred_errors, PkgError("Package $pkg: unable to update cache.", cex))
+                    push!(deferred_errors, PkgTerseError("Package $pkg: unable to update cache.", cex))
                 end
             end
         end
@@ -463,7 +465,7 @@ function update(branch::AbstractString, upkgs::Set{String})
     updatehook(sort!(collect(keys(installed()))))
 
     # Print deferred errors
-    length(deferred_errors) > 0 && throw(PkgError("Update finished with errors.", deferred_errors))
+    length(deferred_errors) > 0 && throw(PkgTerseError("Update finished with errors.", TerseException(deferred_errors)))
     nothing
 end
 
@@ -483,11 +485,11 @@ function resolve(
     for pkg in keys(reqs)
         if !haskey(deps,pkg)
             if "julia" in conflicts[pkg]
-                throw(PkgError("$pkg can't be installed because it has no versions that support $VERSION " *
+                throw(PkgTerseError("$pkg can't be installed because it has no versions that support $VERSION " *
                    "of julia. You may need to update METADATA by running `Pkg.update()`"))
             else
                 sconflicts = join(conflicts[pkg], ", ", " and ")
-                throw(PkgError("$pkg's requirements can't be satisfied because " *
+                throw(PkgTerseError("$pkg's requirements can't be satisfied because " *
                     "of the following fixed packages: $sconflicts"))
             end
         end
@@ -583,7 +585,7 @@ function build!(pkgs::Vector, buildstream::IO, seen::Set)
     for pkg in pkgs
         pkg == "julia" && continue
         pkg in seen ? continue : push!(seen,pkg)
-        Read.isinstalled(pkg) || throw(PkgError("$pkg is not an installed package"))
+        Read.isinstalled(pkg) || throw(PkgTerseError("$pkg is not an installed package"))
         build!(Read.requires_list(pkg),buildstream,seen)
         path = abspath(pkg,"deps","build.jl")
         isfile(path) || continue
@@ -643,7 +645,7 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
         end
     catch err
         close(io)
-        isa(err, PkgError) ? wait(pobj) : kill(pobj)
+        isa(err, PkgError) || (isa(err, TerseException) && isa(err.ex, PkgError)) ? wait(pobj) : kill(pobj)
         rethrow(err)
     finally
         isfile(errfile) && Base.rm(errfile)
@@ -731,14 +733,6 @@ function test!(pkg::AbstractString,
     isfile(reqs_path) && resolve()
 end
 
-mutable struct PkgTestError <: Exception
-    msg::String
-end
-
-function Base.showerror(io::IO, ex::PkgTestError, bt; backtrace=true)
-    print_with_color(Base.error_color(), io, ex.msg)
-end
-
 function test(pkgs::Vector{AbstractString}; coverage::Bool=false)
     errs = AbstractString[]
     nopkgs = AbstractString[]
@@ -759,7 +753,7 @@ function test(pkgs::Vector{AbstractString}; coverage::Bool=false)
         if !isempty(notests)
             push!(messages, "$(join(notests,", "," and ")) did not provide a test/runtests.jl file")
         end
-        throw(PkgTestError(join(messages, "and")))
+        throw(PkgTerseError(oin(messages, "and")))
     end
 end
 

@@ -192,6 +192,6 @@ cd(dirname(@__FILE__)) do
     else
         println("    \033[31;1mFAILURE\033[0m")
         Base.Test.print_test_errors(o_ts)
-        throw(Test.FallbackTestSetException("Test run finished with errors"))
+        throw(Base.TerseException(ErrorException("Test run finished with errors")))
     end
 end

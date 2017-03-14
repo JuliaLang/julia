@@ -20,6 +20,8 @@ export @inferred
 export detect_ambiguities
 export GenericString
 
+import Base.TerseException
+
 #-----------------------------------------------------------------------
 
 # Backtrace utility functions
@@ -498,10 +500,6 @@ function Base.show(io::IO, ex::TestSetException)
     print(io, ex.broken, " broken.")
 end
 
-function Base.showerror(io::IO, ex::TestSetException, bt; backtrace=true)
-    print_with_color(Base.error_color(), io, string(ex))
-end
-
 #-----------------------------------------------------------------------
 
 """
@@ -513,20 +511,12 @@ struct FallbackTestSet <: AbstractTestSet
 end
 fallback_testset = FallbackTestSet()
 
-mutable struct FallbackTestSetException <: Exception
-    msg::String
-end
-
-function Base.showerror(io::IO, ex::FallbackTestSetException, bt; backtrace=true)
-    print_with_color(Base.error_color(), io, ex.msg)
-end
-
 # Records nothing, and throws an error immediately whenever a Fail or
 # Error occurs. Takes no action in the event of a Pass or Broken result
 record(ts::FallbackTestSet, t::Union{Pass,Broken}) = t
 function record(ts::FallbackTestSet, t::Union{Fail,Error})
     println(t)
-    throw(FallbackTestSetException("There was an error during testing"))
+    throw(TerseException(ErrorException("There was an error during testing")))
 end
 # We don't need to do anything as we don't record anything
 finish(ts::FallbackTestSet) = ts
@@ -661,7 +651,7 @@ function finish(ts::DefaultTestSet)
     if total != total_pass + total_broken
         # Get all the error/failures and bring them along for the ride
         efs = filter_errors(ts)
-        throw(TestSetException(total_pass,total_fail,total_error, total_broken, efs))
+        throw(TerseException(TestSetException(total_pass,total_fail,total_error, total_broken, efs)))
     end
 
     # return the testset so it is returned from the @testset macro
