@@ -304,3 +304,12 @@ end
     Q = qrfact(randn(5, 5))[:Q]
     @test D * Q' == Array(D) * Q'
 end
+
+@testset "block diagonal matrices" begin
+    D1 = Diagonal([[1 2; 3 4]])
+    D2 = Diagonal([[1 1+im; 1-im 1]])
+    @test D1.' == Diagonal([[1 3; 2 4]])
+    @test D2' == D2
+    @test issymmetric(D1) == false
+    @test ishermitian(D2) == true
+end

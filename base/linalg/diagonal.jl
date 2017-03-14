@@ -101,8 +101,10 @@ end
 parent(D::Diagonal) = D.diag
 
 ishermitian(D::Diagonal{<:Real}) = true
-ishermitian(D::Diagonal) = isreal(D.diag)
-issymmetric(D::Diagonal) = true
+ishermitian(D::Diagonal{<:Number}) = isreal(D.diag)
+ishermitian(D::Diagonal) = all(ishermitian, D.diag)
+issymmetric(D::Diagonal{<:Number}) = true
+issymmetric(D::Diagonal) = all(issymmetric, D.Diag)
 isposdef(D::Diagonal) = all(x -> x > 0, D.diag)
 
 factorize(D::Diagonal) = D
@@ -260,8 +262,10 @@ end
 @inline A_mul_Bc(D::Diagonal, rowvec::RowVector) = D*ctranspose(rowvec)
 
 conj(D::Diagonal) = Diagonal(conj(D.diag))
-transpose(D::Diagonal) = D
-ctranspose(D::Diagonal) = conj(D)
+transpose(D::Diagonal{<:Number}) = D
+transpose(D::Diagonal) = Diagonal(transpose.(D.diag))
+ctranspose(D::Diagonal{<:Number}) = conj(D)
+ctranspose(D::Diagonal) = Diagonal(ctranspose.(D.diag))
 
 diag(D::Diagonal) = D.diag
 trace(D::Diagonal) = sum(D.diag)
