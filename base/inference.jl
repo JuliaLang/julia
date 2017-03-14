@@ -1405,8 +1405,8 @@ end
 # Union of Tuples of the same length is converted to Tuple of Unions.
 # returns an array of types, or `nothing`.
 function precise_container_type(arg, typ, vtypes::VarTable, sv)
-    tti = widenconst(typ)
-    tti = unwrap_unionall(tti)
+    tti0 = widenconst(typ)
+    tti = unwrap_unionall(tti0)
     if isa(typ, Const) && (isa(typ.val, SimpleVector) || isa(typ.val, Tuple))
         return Any[ abstract_eval_constant(x) for x in typ.val ]
     elseif isa(arg, Expr) && arg.head === :call && (abstract_evals_to_constant(arg.args[1], svec, vtypes, sv) ||
@@ -1422,26 +1422,26 @@ function precise_container_type(arg, typ, vtypes::VarTable, sv)
         if _any(t -> !isa(t,DataType) || !(t <: Tuple) || !isknownlength(t), utis)
             return Any[Vararg{Any}]
         end
-        result = Any[utis[1].parameters...]
+        result = Any[rewrap_unionall(p, tti0) for p in utis[1].parameters]
         for t in utis[2:end]
             if length(t.parameters) != length(result)
                 return Any[Vararg{Any}]
             end
             for j in 1:length(t.parameters)
-                result[j] = tmerge(result[j], t.parameters[j])
+                result[j] = tmerge(result[j], rewrap_unionall(t.parameters[j], tti0))
             end
         end
         return result
-    elseif isa(tti,DataType) && tti <: Tuple
-        if isvatuple(tti) && length(tti.parameters) == 1
-            return Any[Vararg{unwrapva(tti.parameters[1])}]
+    elseif isa(tti0,DataType) && tti0 <: Tuple
+        if isvatuple(tti0) && length(tti0.parameters) == 1
+            return Any[Vararg{unwrapva(tti0.parameters[1])}]
         else
-            return tti.parameters
+            return tti0.parameters
         end
-    elseif tti <: Array
-        return Any[Vararg{eltype(tti)}]
+    elseif tti0 <: Array
+        return Any[Vararg{eltype(tti0)}]
     else
-        return Any[Vararg{abstract_iteration(tti, vtypes, sv)}]
+        return Any[Vararg{abstract_iteration(tti0, vtypes, sv)}]
     end
 end
 

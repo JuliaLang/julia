@@ -948,3 +948,12 @@ ftwoparams(::TwoParams{<:Real,<:Real}) = 3
 
 @testintersect(Tuple{Val{Val{0}}, Val{N}} where N, Tuple{Val{Val{N}}, Val{N}} where N, Tuple{Val{Val{0}},Val{0}})
 @testintersect(Tuple{Val{Val{N}}, Val{0}} where N, Tuple{Val{Val{N}}, Val{N}} where N, Tuple{Val{Val{0}},Val{0}})
+
+# issue #20992
+abstract type A20992{T,D,d} end
+abstract type B20992{SV,T,D,d} <: A20992{T,D,d} end
+struct C20992{S,n,T,D,d} <: B20992{NTuple{n,S},T,D,d}
+end
+@testintersect(Tuple{A20992{R, D, d} where d where D, Int} where R,
+               Tuple{C20992{S, n, T, D, d} where d where D where T where n where S, Any},
+               Tuple{C20992, Int})
