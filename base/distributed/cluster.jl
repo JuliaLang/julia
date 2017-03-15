@@ -278,6 +278,8 @@ master can be specified via variable `JULIA_WORKER_TIMEOUT` in the worker proces
 environment. Relevant only when using TCP/IP as transport.
 """
 function addprocs(manager::ClusterManager; kwargs...)
+    cluster_mgmt_from_master_check()
+
     lock(worker_lock)
     try
         addprocs_locked(manager::ClusterManager; kwargs...)
@@ -662,6 +664,12 @@ function workers()
     end
 end
 
+function cluster_mgmt_from_master_check()
+    if myid() != 1
+        throw(ErrorException("Only process 1 can add and remove workers"))
+    end
+end
+
 """
     rmprocs(pids...; waitfor=typemax(Int))
 
@@ -678,10 +686,7 @@ Argument `waitfor` specifies how long to wait for the workers to shut down:
       parallel calls.
 """
 function rmprocs(pids...; waitfor=typemax(Int))
-    # Only pid 1 can add and remove processes
-    if myid() != 1
-        throw(ErrorException("only process 1 can add and remove processes"))
-    end
+    cluster_mgmt_from_master_check()
 
     pids = vcat(pids...)
     if waitfor == 0
