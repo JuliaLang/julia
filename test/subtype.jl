@@ -857,6 +857,9 @@ function test_intersection()
     # issue #20998
     _, E = intersection_env(Tuple{Int,Any,Any}, Tuple{T,T,S} where {T,S})
     @test length(E) == 2 && E[1] == Int && isa(E[2], TypeVar)
+    _, E = intersection_env(Tuple{Dict{Int,Type}, Type, Any},
+                            Tuple{Dict{K,V}, Any, Int} where {K,V})
+    @test E[2] == Type
 end
 
 function test_intersection_properties()
