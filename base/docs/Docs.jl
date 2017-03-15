@@ -92,10 +92,10 @@ function signature!(tv, expr::Expr)
             append!(tv, tvar.(expr.args[1].args[2:end]))
         end
         for i = length(tv):-1:1
-            push!(sig.args, :(Tuple{$(tv[i][1])}))
+            push!(sig.args, :(Tuple{$(tv[i].args[1])}))
         end
         for i = length(tv):-1:1
-            sig = Expr(:where, sig, :($(tv[i][1]) <: $(tv[i][2])))
+            sig = Expr(:where, sig, tv[i])
         end
         sig
     elseif isexpr(expr, :where)
@@ -116,8 +116,8 @@ function argtype(expr::Expr)
 end
 argtype(other) = :Any
 
-tvar(x::Expr)   = (x.args[1], x.args[2])
-tvar(s::Symbol) = (s, Any)
+tvar(x::Expr)   = x
+tvar(s::Symbol) = :($s <: Any)
 
 # Docsystem types.
 # ================

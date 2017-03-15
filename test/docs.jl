@@ -974,6 +974,14 @@ end
 function Struct{T}(arg1) where T
 end
 
+"String 3"
+function Struct{T}(arg1) where Integer <: T <: Real
+end
+
+"String 4"
+function Struct{T}(arg1) where T >: Int
+end
+
 end
 
 @test docstrings_equal(
@@ -982,6 +990,10 @@ end
     String 1
 
     String 2
+
+    String 3
+
+    String 4
     """
 )
 
