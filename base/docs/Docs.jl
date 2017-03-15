@@ -92,6 +92,9 @@ function signature!(tv, expr::Expr)
             append!(tv, tvar.(expr.args[1].args[2:end]))
         end
         for i = length(tv):-1:1
+            push!(sig.args, :(Tuple{$(tv[i][1])}))
+        end
+        for i = length(tv):-1:1
             sig = Expr(:where, sig, :($(tv[i][1]) <: $(tv[i][2])))
         end
         sig
@@ -198,7 +201,7 @@ is stored as `Tuple{Any, Any}` in the `MultiDoc` while
 
     f{T}(x::T, y = ?) = ...
 
-is stored as `Tuple{Tuple{T}, Tuple{T, Any}} where T`.
+is stored as `Tuple{Tuple{T, Any}, Tuple{T}} where T`.
 
 Note: The `Function`/`DataType` object's signature is always `Tuple{}`.
 """
