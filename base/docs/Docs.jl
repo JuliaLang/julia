@@ -88,12 +88,15 @@ function signature!(tv, expr::Expr)
             end
             push!(sig.args[end].args, argtype(arg))
         end
-        for i = length(tv):-1:1
-            push!(sig.args, :(Tuple{$(tv[i].args[1])}))
+        if isexpr(expr.args[1], :curly) && isempty(tv)
+            append!(tv, tvar.(expr.args[1].args[2:end]))
         end
-        Expr(:let, Expr(:block, sig), tv...)
+        for i = length(tv):-1:1
+            sig = Expr(:where, sig, :($(tv[i][1]) <: $(tv[i][2])))
+        end
+        sig
     elseif isexpr(expr, :where)
-        push!(tv, tvar(expr.args[2]))
+        append!(tv, tvar.(expr.args[2:end]))
         signature!(tv, expr.args[1])
     else
         signature!(tv, expr.args[1])
@@ -109,8 +112,8 @@ function argtype(expr::Expr)
 end
 argtype(other) = :Any
 
-tvar(x::Expr)   = :($(x.args[1]) = TypeVar($(quot(x.args[1])), $(x.args[2]), true))
-tvar(s::Symbol) = :($(s) = TypeVar($(quot(s)), Any, true))
+tvar(x::Expr)   = (x.args[1], x.args[2])
+tvar(s::Symbol) = (s, Any)
 
 # Docsystem types.
 # ================
@@ -627,7 +630,7 @@ isquotedmacrocall(x) =
     isexpr(x.args[1].value, :macrocall, 1)
 # Simple expressions / atoms the may be documented.
 isbasicdoc(x) = isexpr(x, :.) || isa(x, Union{QuoteNode, Symbol})
-is_signature(x) = isexpr(x, :call) || (isexpr(x, :(::), 2) && isexpr(x.args[1], :call))# || isexpr(x, :where)
+is_signature(x) = isexpr(x, :call) || (isexpr(x, :(::), 2) && isexpr(x.args[1], :call)) || isexpr(x, :where)
 
 function docm(meta, ex, define = true)
     # Some documented expressions may be decorated with macro calls which obscure the actual
