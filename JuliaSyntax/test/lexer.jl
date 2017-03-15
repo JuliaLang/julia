@@ -4,6 +4,8 @@ using Base.Test
 
 const T = Tokenize.Tokens
 
+tok(str, i = 1) = collect(tokenize(str))[i]
+
 @testset "tokens" begin
     for s in ["a", IOBuffer("a")]
         l = tokenize(s)
@@ -142,58 +144,58 @@ end # testset
 end
 
 @testset "issue 17, >>" begin
-    @test collect(tokenize(">> "))[1].val==">>"
+    @test tok(">> ").val==">>"
 end
 
 
 @testset "test added operators" begin
-    @test collect(tokenize("1+=2"))[2].kind == T.PLUS_EQ
-    @test collect(tokenize("1-=2"))[2].kind == T.MINUS_EQ
-    @test collect(tokenize("1:=2"))[2].kind == T.COLON_EQ
-    @test collect(tokenize("1*=2"))[2].kind == T.STAR_EQ
-    @test collect(tokenize("1^=2"))[2].kind == T.CIRCUMFLEX_EQ
-    @test collect(tokenize("1÷=2"))[2].kind == T.DIVISION_EQ
-    @test collect(tokenize("1\\=2"))[2].kind == T.BACKSLASH_EQ
-    @test collect(tokenize("1\$=2"))[2].kind == T.EX_OR_EQ
-    @test collect(tokenize("1-->2"))[2].kind == T.RIGHT_ARROW
-    @test collect(tokenize("1>:2"))[2].kind == T.GREATER_COLON
+    @test tok("1+=2",  2).kind == T.PLUS_EQ
+    @test tok("1-=2",  2).kind == T.MINUS_EQ
+    @test tok("1:=2",  2).kind == T.COLON_EQ
+    @test tok("1*=2",  2).kind == T.STAR_EQ
+    @test tok("1^=2",  2).kind == T.CIRCUMFLEX_EQ
+    @test tok("1÷=2",  2).kind == T.DIVISION_EQ
+    @test tok("1\\=2", 2).kind == T.BACKSLASH_EQ
+    @test tok("1\$=2", 2).kind == T.EX_OR_EQ
+    @test tok("1-->2", 2).kind == T.RIGHT_ARROW
+    @test tok("1>:2",  2).kind == T.GREATER_COLON
 end
 
 @testset "infix" begin
-    @test collect(tokenize("1 in 2"))[3].kind == T.IN
-    @test collect(tokenize("1 in[1]"))[3].kind == T.IN
+    @test tok("1 in 2",  3).kind == T.IN
+    @test tok("1 in[1]", 3).kind == T.IN
 
     if VERSION >= v"0.6.0-dev.1471"
-        @test collect(tokenize("1 isa 2"))[3].kind == T.ISA
-        @test collect(tokenize("1 isa[2]"))[3].kind == T.ISA
+        @test tok("1 isa 2",  3).kind == T.ISA
+        @test tok("1 isa[2]", 3).kind == T.ISA
     else
-        @test collect(tokenize("1 isa 2"))[3].kind == T.IDENTIFIER
-        @test collect(tokenize("1 isa[2]"))[3].kind == T.IDENTIFIER
+        @test tok("1 isa 2",  3).kind == T.IDENTIFIER
+        @test tok("1 isa[2]", 3).kind == T.IDENTIFIER
     end
 end
 
 @testset "tokenizing true/false literals" begin
-    @test collect(tokenize("somtext true"))[3].kind == T.TRUE
-    @test collect(tokenize("somtext false"))[3].kind == T.FALSE
-    @test collect(tokenize("somtext tr"))[3].kind == T.IDENTIFIER
-    @test collect(tokenize("somtext falsething"))[3].kind == T.IDENTIFIER
+    @test tok("somtext true", 3).kind == T.TRUE
+    @test tok("somtext false", 3).kind == T.FALSE
+    @test tok("somtext tr", 3).kind == T.IDENTIFIER
+    @test tok("somtext falsething", 3).kind == T.IDENTIFIER
 end
 
 
 @testset "tokenizing juxtaposed numbers and dotted operators/identifiers" begin
-    @test (t->t.val=="1234" && t.kind == Tokens.INTEGER)(collect(tokenize("1234.+1"))[1])
-    @test (t->t.val=="1234" && t.kind == Tokens.INTEGER)(collect(tokenize("1234 .+1"))[1])
-    @test (t->t.val=="1234.0" && t.kind == Tokens.FLOAT)(collect(tokenize("1234.0.+1"))[1])
-    @test (t->t.val=="1234.0" && t.kind == Tokens.FLOAT)(collect(tokenize("1234.0 .+1"))[1])
-    @test (t->t.val=="1234." && t.kind == Tokens.FLOAT)(collect(tokenize("1234.f(a)"))[1])
-    @test (t->t.val=="1234" && t.kind == Tokens.INTEGER)(collect(tokenize("1234 .f(a)"))[1])
-    @test (t->t.val=="1234.0." && t.kind == Tokens.ERROR)(collect(tokenize("1234.0.f(a)"))[1])
-    @test (t->t.val=="1234.0" && t.kind == Tokens.FLOAT)(collect(tokenize("1234.0 .f(a)"))[1])
+    @test (t->t.val=="1234"    && t.kind == Tokens.INTEGER )(tok("1234.+1"))
+    @test (t->t.val=="1234"    && t.kind == Tokens.INTEGER )(tok("1234 .+1"))
+    @test (t->t.val=="1234.0"  && t.kind == Tokens.FLOAT   )(tok("1234.0.+1"))
+    @test (t->t.val=="1234.0"  && t.kind == Tokens.FLOAT   )(tok("1234.0 .+1"))
+    @test (t->t.val=="1234."   && t.kind == Tokens.FLOAT   )(tok("1234.f(a)"))
+    @test (t->t.val=="1234"    && t.kind == Tokens.INTEGER )(tok("1234 .f(a)"))
+    @test (t->t.val=="1234.0." && t.kind == Tokens.ERROR   )(tok("1234.0.f(a)"))
+    @test (t->t.val=="1234.0"  && t.kind == Tokens.FLOAT   )(tok("1234.0 .f(a)"))
 end
 
 
 @testset "lexing anon functions '->' " begin
-    @test collect(tokenize("a->b"))[2].kind==Tokens.ANON_FUNC
+    @test tok("a->b", 2).kind==Tokens.ANON_FUNC
 end
 
 @testset "comments" begin
@@ -220,13 +222,13 @@ end
     D = ImageMagick.load(fn)
     """))
     @test tokens[16].val==tokens[17].val=="'"
-    @test all(x->x.val=="'", collect(tokenize("''"))[1:2])
-    @test all(x->x.val=="'", collect(tokenize("'''"))[1:3])
-    @test all(x->x.val=="'", collect(tokenize("''''"))[1:4])
+    @test all(x->x.val=="'", tok("''",   1:2))
+    @test all(x->x.val=="'", tok("'''",  1:3))
+    @test all(x->x.val=="'", tok("''''", 1:4))
 end
 
 @testset "in/isa bytelength" begin
-    t = collect(tokenize("x in y"))[3]
+    t = tok("x in y", 3)
     @test t.endbyte - t.startbyte + 1 == 2
 end
 
@@ -267,29 +269,29 @@ end
                     "using",
                     "while"]
 
-        @test T.kind(collect(tokenize(kw))[1]) == T.KEYWORD
+        @test T.kind(tok(kw)) == T.KEYWORD
     end
 end
 
 @testset "issue in PR #45" begin
-    @test length(collect(tokenize("x)")))==3
+    @test length(collect(tokenize("x)"))) == 3
 end
 
 @testset "errors" begin
-    @test collect(tokenize("#=   #=   =#"))[1].kind == T.ERROR
-    @test collect(tokenize("'dsadsa"))[1].kind == T.ERROR
-    @test collect(tokenize("aa **"))[3].kind == T.ERROR
-    @test collect(tokenize("aa \"   "))[3].kind == T.ERROR
-    @test collect(tokenize("aa \"\"\" \"dsad\" \"\""))[3].kind == T.ERROR
+    @test tok("#=   #=   =#",           1).kind == T.ERROR
+    @test tok("'dsadsa",                1).kind == T.ERROR
+    @test tok("aa **",                  3).kind == T.ERROR
+    @test tok("aa \"   ",               3).kind == T.ERROR
+    @test tok("aa \"\"\" \"dsad\" \"\"",3).kind == T.ERROR
 
 end
 
 @testset "xor_eq" begin
-    @test collect(tokenize("1 ⊻= 2"))[3].kind==T.XOR_EQ
+    @test tok("1 ⊻= 2", 3).kind==T.XOR_EQ
 end
 
 @testset "lex binary" begin
-    @test collect(tokenize("0b0101"))[1].kind==T.INTEGER
+    @test tok("0b0101").kind==T.INTEGER
 end
 
 @testset "show" begin
@@ -306,7 +308,7 @@ end
     ts = collect(tokenize("""\"\$\""""))
     @test ts[1].kind == Tokens.STRING
     # issue 73:
-    t_err = collect(tokenize("\"\$(fdsf\""))[1]
+    t_err = tok("\"\$(fdsf\"")
     @test t_err.kind == Tokens.ERROR
     @test t_err.token_error == Tokens.EOF_STRING
     @test Tokenize.Tokens.startpos(t_err) == (1,1)
@@ -319,55 +321,55 @@ end
 end
 
 @testset "modifying function names (!) followed by operator" begin
-    @test collect(tokenize("a!=b"))[2].kind == Tokens.NOT_EQ
-    @test collect(tokenize("a!!=b"))[2].kind == Tokens.NOT_EQ
-    @test collect(tokenize("!=b"))[1].kind == Tokens.NOT_EQ
+    @test tok("a!=b",  2).kind == Tokens.NOT_EQ
+    @test tok("a!!=b", 2).kind == Tokens.NOT_EQ
+    @test tok("!=b",   1).kind == Tokens.NOT_EQ
 end
 
 
 @testset "floats with trailing `.` " begin
-    @test collect(tokenize("1.0"))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("1.a"))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("1.("))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("1.["))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("1.{"))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("1.)"))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("1.]"))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("1.{"))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("1.,"))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("1.;"))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("1.@"))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("1.\"text\" "))[1].kind == Tokens.FLOAT
+    @test tok("1.0").kind == Tokens.FLOAT
+    @test tok("1.a").kind == Tokens.FLOAT
+    @test tok("1.(").kind == Tokens.FLOAT
+    @test tok("1.[").kind == Tokens.FLOAT
+    @test tok("1.{").kind == Tokens.FLOAT
+    @test tok("1.)").kind == Tokens.FLOAT
+    @test tok("1.]").kind == Tokens.FLOAT
+    @test tok("1.{").kind == Tokens.FLOAT
+    @test tok("1.,").kind == Tokens.FLOAT
+    @test tok("1.;").kind == Tokens.FLOAT
+    @test tok("1.@").kind == Tokens.FLOAT
+    @test tok("1.\"text\" ").kind == Tokens.FLOAT
 
-    @test collect(tokenize("1.+ "))[1].kind == Tokens.INTEGER
-    @test collect(tokenize("1.⤋"))[1].kind == Tokens.INTEGER
-    @test collect(tokenize("1.."))[1].kind == Tokens.INTEGER
+    @test tok("1.+ ").kind == Tokens.INTEGER
+    @test tok("1.⤋").kind  == Tokens.INTEGER
+    @test tok("1..").kind  == Tokens.INTEGER
 end
 
 
 
 @testset "lex octal" begin
-    @test collect(tokenize("0o0167"))[1].kind==T.INTEGER
+    @test tok("0o0167").kind == T.INTEGER
 end
 
 @testset "lex bin/hex/oct w underscores" begin
-    @test collect(tokenize("0x0167_032"))[1].kind==T.INTEGER
-    @test collect(tokenize("0b0101001_0100_0101"))[1].kind==T.INTEGER
-    @test collect(tokenize("0o01054001_0100_0101"))[1].kind==T.INTEGER
+    @test tok("0x0167_032").kind           == T.INTEGER
+    @test tok("0b0101001_0100_0101").kind  == T.INTEGER
+    @test tok("0o01054001_0100_0101").kind == T.INTEGER
 end
 
 @testset "floating points" begin
-    @test collect(tokenize("1.0e0"))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("1.0e-0"))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("1.0E0"))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("1.0E-0"))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("1.0f0"))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("1.0f-0"))[1].kind == Tokens.FLOAT
+    @test tok("1.0e0").kind  == Tokens.FLOAT
+    @test tok("1.0e-0").kind == Tokens.FLOAT
+    @test tok("1.0E0").kind  == Tokens.FLOAT
+    @test tok("1.0E-0").kind == Tokens.FLOAT
+    @test tok("1.0f0").kind  == Tokens.FLOAT
+    @test tok("1.0f-0").kind == Tokens.FLOAT
 
-    @test collect(tokenize("0e0"))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("0e+0"))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("0E0"))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("201E+0"))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("2f+0"))[1].kind == Tokens.FLOAT
-    @test collect(tokenize("2048f0"))[1].kind == Tokens.FLOAT
+    @test tok("0e0").kind    == Tokens.FLOAT
+    @test tok("0e+0").kind   == Tokens.FLOAT
+    @test tok("0E0").kind    == Tokens.FLOAT
+    @test tok("201E+0").kind == Tokens.FLOAT
+    @test tok("2f+0").kind   == Tokens.FLOAT
+    @test tok("2048f0").kind == Tokens.FLOAT
 end
