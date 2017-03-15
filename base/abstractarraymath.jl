@@ -12,7 +12,9 @@ all(::typeof(isinteger), ::AbstractArray{<:Integer}) = true
 """
     vec(a::AbstractArray) -> Vector
 
-Reshape array `a` as a one-dimensional column vector.
+Reshape the array `a` as a one-dimensional column vector. The resulting array
+shares the same underlying data as `a`, so modifying one will also modify the
+other.
 
 ```jldoctest
 julia> a = [1 2 3; 4 5 6]
@@ -29,6 +31,8 @@ julia> vec(a)
  3
  6
 ```
+
+See also [`reshape`](@ref).
 """
 vec(a::AbstractArray) = reshape(a,_length(a))
 vec(a::AbstractVector) = a
