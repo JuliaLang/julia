@@ -80,7 +80,7 @@ end
 
 function signature!(tv, expr::Expr)
     if isexpr(expr, [:call, :macrocall])
-        sig = :(Tuple{Tuple{}})
+        sig = :(Union{Tuple{}})
         for arg in expr.args[2:end]
             isexpr(arg, :parameters) && continue
             if isexpr(arg, :kw) # optional arg
@@ -105,8 +105,9 @@ function signature!(tv, expr::Expr)
         signature!(tv, expr.args[1])
     end
 end
-signature!(tv, other) = :(Tuple{})
+signature!(tv, other) = :(Union{})
 signature(expr::Expr) = signature!([], expr)
+signature(other) = signature!([], other)
 
 function argtype(expr::Expr)
     isexpr(expr, :(::))  && return expr.args[end]
@@ -139,7 +140,7 @@ mutable struct DocStr
     data   :: Dict{Symbol, Any}
 end
 
-function docstr(binding::Binding, typesig::ANY = Tuple{})
+function docstr(binding::Binding, typesig::ANY = Union{})
     for m in modules
         dict = meta(m)
         if haskey(dict, binding)
@@ -193,7 +194,7 @@ Stores a collection of docstrings for related objects, ie. a `Function`/`DataTyp
 associated `Method` objects.
 
 Each documented object in a `MultiDoc` is referred to by it's signature which is represented
-by a `Tuple` of `Tuple` types. For example the following `Method` definition
+by a `Union` of `Tuple` types. For example the following `Method` definition
 
     f(x, y) = ...
 
@@ -201,9 +202,9 @@ is stored as `Tuple{Any, Any}` in the `MultiDoc` while
 
     f{T}(x::T, y = ?) = ...
 
-is stored as `Tuple{Tuple{T, Any}, Tuple{T}} where T`.
+is stored as `Union{Tuple{T, Any}, Tuple{T}} where T`.
 
-Note: The `Function`/`DataType` object's signature is always `Tuple{}`.
+Note: The `Function`/`DataType` object's signature is always `Union{}`.
 """
 mutable struct MultiDoc
     "Ordered (via definition order) vector of object signatures."
@@ -222,7 +223,7 @@ end
 
 Adds a new docstring `str` to the docsystem for `binding` and signature `sig`.
 """
-function doc!(b::Binding, str::DocStr, sig::ANY = Tuple{})
+function doc!(b::Binding, str::DocStr, sig::ANY = Union{})
     initmeta()
     m = get!(meta(), b, MultiDoc())
     if haskey(m.docs, sig)
@@ -271,7 +272,7 @@ Returns all documentation that matches both `binding` and `sig`.
 If `getdoc` returns a non-`nothing` result on the value of the binding, then a
 dynamic docstring is returned instead of one based on the binding itself.
 """
-function doc(binding::Binding, sig::Type = Tuple{})
+function doc(binding::Binding, sig::Type = Union{})
     if defined(binding)
         result = getdoc(resolve(binding), sig)
         result === nothing || return result
@@ -317,7 +318,7 @@ end
 
 # Some additional convenience `doc` methods that take objects rather than `Binding`s.
 doc(obj::UnionAll) = doc(Base.unwrap_unionall(obj))
-doc(object, sig::Type = Tuple{}) = doc(aliasof(object, typeof(object)), sig)
+doc(object, sig::Type = Union{}) = doc(aliasof(object, typeof(object)), sig)
 doc(object, sig...)              = doc(object, Tuple{sig...})
 
 """
@@ -330,8 +331,8 @@ function fielddoc(binding::Binding, field::Symbol)
         dict = meta(mod)
         if haskey(dict, binding)
             multidoc = dict[binding]
-            if haskey(multidoc.docs, Tuple{})
-                fields = multidoc.docs[Tuple{}].data[:fields]
+            if haskey(multidoc.docs, Union{})
+                fields = multidoc.docs[Union{}].data[:fields]
                 if haskey(fields, field)
                     doc = fields[field]
                     return isa(doc, Markdown.MD) ? doc : Markdown.parse(doc)
@@ -509,7 +510,7 @@ function keyworddoc(str, def)
     :($(keywords)[$(esc(quot(def.name)))] = $docstr)
 end
 
-function objectdoc(str, def, expr, sig = :(Tuple{}))
+function objectdoc(str, def, expr, sig = :(Union{}))
     binding = esc(bindingexpr(namify(expr)))
     docstr  = esc(docexpr(lazy_iterpolate(str), metadata(expr)))
     quote
