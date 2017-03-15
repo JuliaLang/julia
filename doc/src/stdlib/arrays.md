@@ -147,7 +147,7 @@ Base.sum_kbn
 Base.Random.randperm
 Base.invperm
 Base.isperm
-Base.permute!{T}(::Any, ::AbstractArray{T, 1})
+Base.permute!(::Any, ::AbstractVector)
 Base.ipermute!
 Base.Random.randcycle
 Base.Random.shuffle
