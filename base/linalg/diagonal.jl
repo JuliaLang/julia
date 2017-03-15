@@ -104,7 +104,7 @@ ishermitian(D::Diagonal{<:Real}) = true
 ishermitian(D::Diagonal{<:Number}) = isreal(D.diag)
 ishermitian(D::Diagonal) = all(ishermitian, D.diag)
 issymmetric(D::Diagonal{<:Number}) = true
-issymmetric(D::Diagonal) = all(issymmetric, D.Diag)
+issymmetric(D::Diagonal) = all(issymmetric, D.diag)
 isposdef(D::Diagonal) = all(x -> x > 0, D.diag)
 
 factorize(D::Diagonal) = D
@@ -279,8 +279,11 @@ end
 eye{T}(::Type{Diagonal{T}}, n::Int) = Diagonal(ones(T,n))
 
 expm(D::Diagonal) = Diagonal(exp.(D.diag))
+expm(D::Diagonal{<:AbstractMatrix}) = Diagonal(expm.(D.diag))
 logm(D::Diagonal) = Diagonal(log.(D.diag))
+logm(D::Diagonal{<:AbstractMatrix}) = Diagonal(logm.(D.diag))
 sqrtm(D::Diagonal) = Diagonal(sqrt.(D.diag))
+sqrtm(D::Diagonal{<:AbstractMatrix}) = Diagonal(sqrtm.(D.diag))
 
 #Linear solver
 function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)
