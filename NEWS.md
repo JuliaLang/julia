@@ -5,18 +5,22 @@ New language features
 ---------------------
 
   * New type system capabilities ([#8974], [#18457])
-    * Type parameter constraints can refer to previous parameters, e.g.
+
+    + Type parameter constraints can refer to previous parameters, e.g.
       `type Foo{R<:Real, A<:AbstractArray{R}}`. Can also be used in method definitions.
-    * New syntax `Array{T} where T<:Integer`, indicating a union of types over all
+
+    + New syntax `Array{T} where T<:Integer`, indicating a union of types over all
       specified values of `T` (represented by a `UnionAll` type). This provides behavior
       similar to parametric methods or `typealias`, but can be used anywhere a type is
       accepted. This syntax can also be used in method definitions, e.g.
       `function inv(M::Matrix{T}) where T<:AbstractFloat`.
       Anonymous functions can have type parameters via the syntax
       `((x::Array{T}) where T<:Real) -> 2x`.
-    * Implicit type parameters, e.g. `Vector{<:Real}` is equivalent to
+
+    + Implicit type parameters, e.g. `Vector{<:Real}` is equivalent to
       `Vector{T} where T<:Real`, and similarly for `Vector{>:Int}` ([#20414]).
-    * Much more accurate subtype and type intersection algorithms. Method sorting and
+
+    + Much more accurate subtype and type intersection algorithms. Method sorting and
       identification of equivalent and ambiguous methods are improved as a result.
 
 Language changes
@@ -32,13 +36,18 @@ Language changes
     ```
     the syntax `Foo(x) = new(x)` actually defined a constructor for `Foo{T,S}`,
     i.e. the case where the type parameters are specified. For clarity, this
-    definition now must be written as `Foo{T,S}(x) where {T,S<:Real} = new(x)`. ([#11310])
+    definition now must be written as `Foo{T,S}(x) where {T,S<:Real} = new(x)` ([#11310]).
 
   * The keywords used to define types have changed ([#19157], [#20418]).
+
     + `immutable` changes to `struct`
+
     + `type` changes to `mutable struct`
+
     + `abstract` changes to `abstract type ... end`
+
     + `bitstype 32 Char` changes to `primitive type Char 32 end`
+
     In 0.6, `immutable` and `type` are still allowed as synonyms without a deprecation
     warning.
 
@@ -46,16 +55,16 @@ Language changes
     nonstandard command literal is like a nonstandard string literal, but the
     syntax uses backquotes (``` ` ```) instead of double quotes, and the
     resulting macro called is suffixed with `_cmd`. For instance, the syntax
-    ``` q`xyz` ``` is equivalent to `@q_cmd "xyz"`. ([#18644])
+    ``` q`xyz` ``` is equivalent to `@q_cmd "xyz"` ([#18644]).
 
   * Nonstandard string and command literals can now be qualified with their
     module. For instance, `Base.r"x"` is now parsed as `Base.@r_str "x"`.
-    Previously, this syntax parsed as an implicit multiplication. ([#18690])
+    Previously, this syntax parsed as an implicit multiplication ([#18690]).
 
   * For every binary operator `⨳`, `a .⨳ b` is now automatically equivalent to
     the `broadcast` call `(⨳).(a, b)`.  Hence, one no longer defines methods
     for `.*` etcetera.  This also means that "dot operations" automatically
-    fuse into a single loop, along with other dot calls `f.(x)`. ([#17623])
+    fuse into a single loop, along with other dot calls `f.(x)` ([#17623]).
     Similarly for unary operators ([#20249]).
 
   * Newly defined methods are no longer callable from the same dynamic runtime
@@ -71,7 +80,7 @@ Language changes
     allowing this syntax to be used in the future for discarding values ([#9343], [#18251]).
 
   * The `typealias` keyword is deprecated, and should be replaced with
-    `Vector{T} = Array{T,1}` or a `const` assignment.
+    `Vector{T} = Array{T,1}` or a `const` assignment ([#20500]).
 
   * Experimental feature: `x^n` for integer literals `n` (e.g. `x^3`
     or `x^-3`) is now lowered to `Base.literal_pow(^, x, Val{n})`, to enable
@@ -84,16 +93,16 @@ This section lists changes that do not have deprecation warnings.
 
   * `readline`, `readlines` and `eachline` return lines without line endings by default.
     You *must* use `readline(s, chomp=false)`, etc. to get the old behavior where
-    returned lines include trailing end-of-line character(s). ([#19944])
+    returned lines include trailing end-of-line character(s) ([#19944]).
 
   * `String`s no longer have a `.data` field (as part of a significant performance
     improvement). Use `Vector{UInt8}(str)` to access a string as a byte array.
     However, allocating the `Vector` object has overhead. You can also use
     `codeunit(str, i)` to access the `i`th byte of a `String`.
     Use `sizeof(str)` instead of `length(str.data)`, and `pointer(str)` instead of
-    `pointer(str.data)`. ([#19449])
+    `pointer(str.data)` ([#19449]).
 
-  * Operations between `Float16` and `Integers` now return `Float16` instead of `Float32`. ([#17261])
+  * Operations between `Float16` and `Integers` now return `Float16` instead of `Float32` ([#17261]).
 
   * Keyword arguments are processed left-to-right: if the same keyword is specified more than
     once, the rightmost occurrence takes precedence ([#17785]).
@@ -110,15 +119,15 @@ This section lists changes that do not have deprecation warnings.
     `broadcast!` or `.=` ([#17623]).
 
   * Operations like `.+` and `.*` on `Range` objects are now generic
-    `broadcast` calls (see above) and produce an `Array`.  If you want
-    a `Range` result, use `+` and `*`, etcetera ([#17623]).
+    `broadcast` calls (see [above](#language-changes)) and produce an `Array`.
+    If you want a `Range` result, use `+` and `*`, etcetera ([#17623]).
 
   * `broadcast` now treats `Ref` (except for `Ptr`) arguments as 0-dimensional
     arrays ([#18965]).
 
   * `broadcast` now handles missing data (`Nullable`s) allowing operations to
     be lifted over mixtures of `Nullable`s and scalars, as if the `Nullable`
-    were like an array with zero or one element. ([#16961], [#19787]).
+    were like an array with zero or one element ([#16961], [#19787]).
 
   * The runtime now enforces when new method definitions can take effect ([#17057]).
     The flip-side of this is that new method definitions should now reliably actually
@@ -134,19 +143,19 @@ This section lists changes that do not have deprecation warnings.
     removed before `waitfor` seconds. With a `waitfor=0`, `rmprocs` returns immediately
     without waiting for worker exits.
 
-  * `quadgk` has been moved from Base into a separate package. ([#19741])
+  * `quadgk` has been moved from Base into a separate package ([#19741]).
 
   * The `Collections` module has been removed, and all functions defined therein have been
-    moved to the `DataStructures` package. ([#19800])
+    moved to the `DataStructures` package ([#19800]).
 
   * The `RepString` type has been moved to the
     [LegacyStrings.jl package](https://github.com/JuliaArchive/LegacyStrings.jl).
 
   * In macro calls with parentheses, e.g. `@m(a=1)`, assignments are now parsed as
-    `=` expressions, instead of as `kw` expressions. ([#7669])
+    `=` expressions, instead of as `kw` expressions ([#7669]).
 
   * When used as an infix operator, `~` is now parsed as a call to an ordinary operator
-    with assignment precedence, instead of as a macro call. ([#20406])
+    with assignment precedence, instead of as a macro call ([#20406]).
 
   * (µ "micro" and ɛ "latin epsilon") are considered equivalent to
     the corresponding Greek characters in identifiers.  `\varepsilon`
@@ -154,11 +163,11 @@ This section lists changes that do not have deprecation warnings.
 
   * `retry` now inputs the keyword arguments `delays` and `check` instead of
     `n` and `max_delay`.  The previous functionality can be achieved setting
-    `delays` to `ExponentialBackOff`. ([#19331])
+    `delays` to `ExponentialBackOff` ([#19331]).
 
   * `transpose(::AbstractVector)` now always returns a `RowVector` view of the input (which is a
      special 1×n-sized `AbstractMatrix`), not a `Matrix`, etc. In particular, for
-     `v::AbstractVector` we now have `(v.').' === v` and `v.' * v` is a scalar. ([#19670])
+     `v::AbstractVector` we now have `(v.').' === v` and `v.' * v` is a scalar ([#19670]).
 
   * Parametric types with "unspecified" parameters, such as `Array`, are now represented
     as `UnionAll` types instead of `DataType`s ([#18457]).
@@ -217,18 +226,18 @@ This section lists changes that do not have deprecation warnings.
 Library improvements
 --------------------
 
-  * `@views` macro to convert a whole expression or block of code to
+  * A new `@views` macro was added to convert a whole expression or block of code to
     use views for all slices ([#20164]).
 
-  * `max`, `min`, and related functions (`minmax`, `maximum`, `minimum`,
-    `extrema`) now return `NaN` for `NaN` arguments ([#12563]).
+  * `max`, `min`, and related functions (`minmax`, `maximum`, `minimum`, `extrema`)
+     now return `NaN` for `NaN` arguments ([#12563]).
 
-  * `oneunit(x)` function to return a dimensionful version of `one(x)` (which
-    is clarified to mean a dimensionless quantity if `x` is dimensionful) ([#20268]).
+  * `oneunit(x)` function to return a dimensionful version of `one(x)`
+    (which is clarified to mean a dimensionless quantity if `x` is dimensionful) ([#20268]).
 
   * The `chop` and `chomp` functions now return a `SubString` ([#18339]).
 
-  * Numbered stackframes printed in stacktraces can be opened in an editor by
+  * Numbered stackframes printed in stacktraces can now be opened in an editor by
     entering the corresponding number in the REPL and pressing `^Q` ([#19680]).
 
   * The REPL now supports something called *prompt pasting* ([#17599]).
@@ -238,22 +247,28 @@ Library improvements
     without having to scrub away prompts and outputs.
     This can be disabled or enabled at will with `Base.REPL.enable_promptpaste(::Bool)`.
 
-  * The function `print_with_color` can now take a color represented by an integer between 0 and 255 inclusive as its first argument ([#18473]).
-    For a number to color mapping please refer to [this chart](https://upload.wikimedia.org/wikipedia/commons/1/15/Xterm_256color_chart.svg).
+  * The function `print_with_color` can now take a color
+    represented by an integer between 0 and 255 inclusive
+    as its first argument ([#18473]). For a number-to-color mapping, please refer to
+    [this chart](https://upload.wikimedia.org/wikipedia/commons/1/15/Xterm_256color_chart.svg).
     It is also possible to use numbers as colors in environment variables that customizes colors in the REPL.
     For example, to get orange warning messages, simply set `ENV["JULIA_WARN_COLOR"] = 208`.
     Please note that not all terminals support 256 colors.
 
   * The function `print_with_color` no longer prints text in bold by default ([#18628]).
-    Instead, the function now take a keyword argument `bold::Bool` which determines whether to print in bold or not.
-    On some terminals, printing a color in non bold results in slightly darker colors being printed than when printing in bold.
+    Instead, the function now take a keyword argument `bold::Bool`
+    which determines whether to print in bold or not. On some terminals, printing a color in non bold
+    results in slightly darker colors being printed than when printing in bold.
     Therefore, light versions of the colors are now supported.
     For the available colors see the help entry on `print_with_color`.
 
   * The default text style for REPL input and answers has been changed from bold to normal ([#11250]).
-    They can be changed back to bold by setting the environment variables `JULIA_INPUT_COLOR` and `JULIA_ANSWER_COLOR` to `"bold"`.
-    For example, one way of doing this is adding `ENV["JULIA_INPUT_COLOR"] = :bold` and `ENV["JULIA_ANSWER_COLOR"] = :bold` to the `.juliarc.jl` file.
-    See the [manual section on customizing colors](http://docs.julialang.org/en/latest/manual/interacting-with-julia#Customizing-Colors-1) for more information.
+    They can be changed back to bold by setting the environment variables
+    `JULIA_INPUT_COLOR` and `JULIA_ANSWER_COLOR` to `"bold"`.
+    For example, one way of doing this is adding `ENV["JULIA_INPUT_COLOR"] = :bold`
+    and `ENV["JULIA_ANSWER_COLOR"] = :bold` to the `.juliarc.jl` file. See the
+    [manual section on customizing colors](http://docs.julialang.org/en/latest/manual/interacting-with-julia#Customizing-Colors-1)
+    for more information.
 
   * The default color for info messages has been changed from blue to cyan
     ([#18442]), and for warning messages from red to yellow ([#18453]).  This
@@ -271,57 +286,61 @@ Library improvements
     you can now do e.g. `[A I]` and it will concatenate an appropriately sized
     identity matrix ([#19305]).
 
-  * New `accumulate` and `accumulate!` functions, which generalize `cumsum` and
-  `cumprod`. Also known as a [scan](https://en.wikipedia.org/wiki/Prefix_sum)
-  operation ([#18931]).
+  * New `accumulate` and `accumulate!` functions were added, which generalize `cumsum` and `cumprod`.
+    Also known as a [scan](https://en.wikipedia.org/wiki/Prefix_sum) operation ([#18931]).
 
   * `reshape` now allows specifying one dimension with a `Colon()` (`:`) for the new shape, in which case
     that dimension's length will be computed such that its product with all the other dimensions is equal
     to the length of the original array ([#19919]).
 
-  * New `titlecase` function, which capitalizes the first character of each word within a string ([#19469]).
+  * A new `titlecase` function was added, to capitalize the first character of each word within a string ([#19469]).
 
   * `any` and `all` now always short-circuit, and `mapreduce` never short-circuits ([#19543]).
     That is, not every member of the input iterable will be visited if a `true` (in the case of `any`) or
     `false` (in the case of `all`) value is found, and `mapreduce` will visit all members of the iterable.
 
-  * Additional methods for `ones` and `zeros` functions to support the same signature as the `similar` function ([#19635]).
+  * Additional methods for `ones` and `zeros` functions were added
+    to support the same signature as the `similar` function ([#19635]).
 
   * `count` now has a `count(itr)` method equivalent to `count(identity, itr)` ([#20403]).
 
-  * Methods for `map` and `filter` with `Nullable` arguments have been
-    implemented; the semantics are as if the `Nullable` were a container with
-    zero or one elements ([#16961]).
+  * Methods for `map` and `filter` with `Nullable` arguments have been implemented;
+    the semantics are as if the `Nullable` were a container with zero or one elements ([#16961]).
 
-  * New `@test_warn` and `@test_nowarn` macros in the `Base.Test` module to
+  * New `@test_warn` and `@test_nowarn` macros were added in the `Base.Test` module to
     test for the presence or absence of warning messages ([#19903]).
 
-  * `logging` can be used to redirect `info`, `warn`, and `error` messages
+  * `logging` can now be used to redirect `info`, `warn`, and `error` messages
     either universally or on a per-module/function basis ([#16213]).
 
-  * New `iszero(x)` function to quickly check whether `x` is zero (or is all zeros, for an array) ([#19950]).
+  * A new `iszero(x)` function was added, to quickly check whether `x` is zero
+    (or is all zeros, for an array) ([#19950]).
 
   * `notify` now returns a count of tasks woken up ([#19841]).
 
-  * New nonstandard string literal `raw"..."` for creating strings
-    with no interpolation or unescaping ([#19900]).
+  * A new nonstandard string literal `raw"..."` was added,
+    for creating strings with no interpolation or unescaping ([#19900]).
 
-  * A new `Dates.Time` type was added that supports representing the time of day with up to nanosecond resolution ([#12274]).
+  * A new `Dates.Time` type was added that supports representing the time of day
+    with up to nanosecond resolution ([#12274]).
 
-  * New `@macroexpand` macro as a convenient alternative to the `macroexpand` function ([#18660]).
+  * A new `@macroexpand` macro was added as a convenient alternative to the `macroexpand` function ([#18660]).
 
-  * Introduced a wrapper type for lazy complex conjugation of arrays, `ConjArray`.
+  * A new `ConjArray` type was added, as a wrapper type for lazy complex conjugation of arrays.
     Currently, it is used by default for the new `RowVector` type only, and
     enforces that both `transpose(vec)` and `ctranspose(vec)` are views not copies ([#20047]).
 
 Compiler/Runtime improvements
 -----------------------------
 
-* `ccall` is now implemented as a macro, removing the need for special code-generator support for Intrinsics.
+  * `ccall` is now implemented as a macro,
+    removing the need for special code-generator support for Intrinsics.
 
-* `ccall` gained limited support for a `llvmcall` calling-convention. This can replace many uses of `llvmcall` with a simpler, shorter declaration.
+  * `ccall` gained limited support for a `llvmcall` calling-convention.
+    This can replace many uses of `llvmcall` with a simpler, shorter declaration.
 
-* All Intrinsics are now Builtin functions instead and have proper error checking and fall-back static compilation support.
+  * All Intrinsics are now Builtin functions instead and have proper error checking
+    and fall-back static compilation support.
 
 Deprecated or removed
 ---------------------
@@ -354,15 +373,15 @@ Deprecated or removed
 
   * `@test_approx_eq x y` has been deprecated in favor of `@test isapprox(x,y)` or `@test x ≈ y` ([#4615]).
 
-  * Vectorized functions have been deprecated in favor of dot syntax ([#17302],[#17265],
-    [#18558],[#19711],[#19712],[#19791],[#19802],[#19931],[#20543],[#20228]).
+  * Vectorized functions have been deprecated in favor of dot syntax ([#17302], [#17265],
+    [#18558], [#19711], [#19712], [#19791], [#19802], [#19931], [#20543], [#20228]).
 
   * The two-argument forms of `map` (`map!(f, A)`) and `asyncmap!` (`asyncmap!(f, A)`)
     have been deprecated in anticipation of future semantic changes ([#19721]).
 
   * `isimag` has been deprecated ([#19949]).
 
-  * `broadcast_zpreserving` has been deprecated ([#19533],[#19720]).
+  * `broadcast_zpreserving` has been deprecated ([#19533], [#19720]).
 
   * `convert` methods from `Diagonal` and `Bidiagonal` to subtypes of
     `AbstractTriangular` have been deprecated ([#17723]).
@@ -457,7 +476,9 @@ Deprecated or removed
 [#20414]: https://github.com/JuliaLang/julia/issues/20414
 [#20418]: https://github.com/JuliaLang/julia/issues/20418
 [#20427]: https://github.com/JuliaLang/julia/issues/20427
+[#20500]: https://github.com/JuliaLang/julia/issues/20500
 [#20530]: https://github.com/JuliaLang/julia/issues/20530
 [#20543]: https://github.com/JuliaLang/julia/issues/20543
 [#20609]: https://github.com/JuliaLang/julia/issues/20609
 [#20648]: https://github.com/JuliaLang/julia/issues/20648
+[#20889]: https://github.com/JuliaLang/julia/issues/20889
