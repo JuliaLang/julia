@@ -1616,7 +1616,7 @@ void jl_init_types(void)
     jl_void_type->instance = jl_nothing;
 
     jl_datatype_t *type_type = (jl_datatype_t*)jl_type_type;
-    jl_bottomtype_type = jl_new_datatype(jl_symbol("BottomType"), type_type, jl_emptysvec,
+    jl_bottomtype_type = jl_new_datatype(jl_symbol("TypeofBottom"), type_type, jl_emptysvec,
                                          jl_emptysvec, jl_emptysvec, 0, 0, 0);
     jl_bottom_type = jl_new_struct(jl_bottomtype_type);
     jl_bottomtype_type->instance = jl_bottom_type;

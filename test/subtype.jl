@@ -801,8 +801,8 @@ function test_intersection()
     @test typeintersect(Union{DataType,Int}, Type) === DataType
     @test typeintersect(Union{DataType,Int}, Type{T} where T) === DataType
 
-    # since BottomType is a singleton we can deduce its intersection with Type{...}
-    @testintersect(Core.BottomType, (Type{T} where T<:Tuple), Type{Union{}})
+    # since TypeofBottom is a singleton we can deduce its intersection with Type{...}
+    @testintersect(Core.TypeofBottom, (Type{T} where T<:Tuple), Type{Union{}})
 
     @testintersect((Type{Tuple{Vararg{T}}} where T), Type{Tuple}, Bottom)
     @testintersect(Tuple{Type{S}, Tuple{Any, Vararg{Any}}} where S<:Tuple{Any, Vararg{Any}},

@@ -32,7 +32,7 @@ const TAGS = Any[
     Module, #=UndefRefTag=#Symbol, Task, String, Float16,
     SimpleVector, #=BackrefTag=#Symbol, Method, GlobalRef, UnionAll,
 
-    (), Bool, Any, :Any, Bottom, Core.BottomType, :reserved22, Type,
+    (), Bool, Any, :Any, Bottom, Core.TypeofBottom, :reserved22, Type,
     :Array, :TypeVar, :Box,
     :lambda, :body, :return, :call, Symbol("::"),
     :(=), :null, :gotoifnot, :A, :B, :C, :M, :N, :T, :S, :X, :Y,

@@ -675,7 +675,7 @@ static inline jl_cgval_t ghostValue(jl_value_t *typ)
     if (typ == jl_bottom_type)
         return jl_cgval_t(); // Undef{}
     if (typ == (jl_value_t*)jl_bottomtype_type) {
-        // normalize BottomType to Type{Union{}}
+        // normalize TypeofBottom to Type{Union{}}
         typ = (jl_value_t*)jl_wrap_Type(jl_bottom_type);
     }
     if (jl_is_type_type(typ)) {
@@ -871,7 +871,7 @@ static void jl_rethrow_with_add(const char *fmt, ...)
 static jl_cgval_t convert_julia_type(const jl_cgval_t &v, jl_value_t *typ, jl_codectx_t *ctx, bool needsroot = true)
 {
     if (typ == (jl_value_t*)jl_bottomtype_type)
-        return ghostValue(typ); // normalize BottomType to Type{Union{}}
+        return ghostValue(typ); // normalize TypeofBottom to Type{Union{}}
     if (v.typ == typ || v.typ == jl_bottom_type || jl_egal(v.typ, typ))
         return v; // fast-path
     Type *T = julia_type_to_llvm(typ);
