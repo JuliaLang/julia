@@ -365,7 +365,8 @@ function showerror(io::IO, ex::MethodError)
             print(io, "You may have intended to import Base.", name)
         end
     end
-    if method_exists(ex.f, arg_types)
+    if (ex.world != typemax(UInt) && method_exists(ex.f, arg_types) &&
+        !method_exists(ex.f, arg_types, ex.world))
         curworld = ccall(:jl_get_world_counter, UInt, ())
         println(io)
         print(io, "The applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
