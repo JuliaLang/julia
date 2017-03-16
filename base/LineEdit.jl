@@ -1577,7 +1577,14 @@ function run_interface(terminal, m::ModalInterface)
             @static if is_unix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
             buf, ok, suspend = prompt!(terminal, m, s)
         end
-        eval(Expr(:call, mode(state(s, s.current_mode)).on_done, s, buf, ok))
+        eval(Main,
+            Expr(:body,
+                Expr(:return,
+                     Expr(:call,
+                          mode(state(s, s.current_mode)).on_done,
+                          QuoteNode(s),
+                          QuoteNode(buf),
+                          QuoteNode(ok)))))
     end
 end
 
