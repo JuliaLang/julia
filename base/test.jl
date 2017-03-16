@@ -1117,18 +1117,18 @@ function test_approx_eq_modphase{S<:Real,T<:Real}(
 end
 
 """
-    detect_ambiguities(mod1, mod2...; imported=false, allow_bottom=true)
+    detect_ambiguities(mod1, mod2...; imported=false, ambiguous_bottom=true)
 
 Returns a vector of `(Method,Method)` pairs of ambiguous methods
 defined in the specified modules. Use `imported=true` if you wish to
 also test functions that were imported into these modules from
 elsewhere.
 
-`allow_bottom` controls whether ambiguities triggered only by
+`ambiguous_bottom` controls whether ambiguities triggered only by
 `Union{}` type parameters are included; in most cases you probably
 want to set this to `false`. See [`Base.isambiguous`](@ref).
 """
-function detect_ambiguities(mods...; imported::Bool=false, allow_bottom::Bool=true)
+function detect_ambiguities(mods...; imported::Bool=false, ambiguous_bottom::Bool=true)
     function sortdefs(m1, m2)
         ord12 = m1.file < m2.file
         if !ord12 && (m1.file == m2.file)
@@ -1150,7 +1150,7 @@ function detect_ambiguities(mods...; imported::Bool=false, allow_bottom::Bool=tr
                 for m in mt
                     if m.ambig !== nothing
                         for m2 in m.ambig
-                            if Base.isambiguous(m, m2, allow_bottom)
+                            if Base.isambiguous(m, m2, ambiguous_bottom)
                                 push!(ambs, sortdefs(m, m2))
                             end
                         end

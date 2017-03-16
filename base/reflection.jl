@@ -943,7 +943,7 @@ function method_exists(f::ANY, t::ANY, world=typemax(UInt))
 end
 
 """
-    isambiguous(m1, m2, [allow_bottom_tparams=true]) -> Bool
+    isambiguous(m1, m2, [ambiguous_bottom=true]) -> Bool
 
 Determine whether two methods `m1` and `m2` (typically of the same
 function) are ambiguous.  This test is performed in the context of
@@ -951,7 +951,7 @@ other methods of the same function; in isolation, `m1` and `m2` might
 be ambiguous, but if a third method resolving the ambiguity has been
 defined, this returns `false`.
 
-For parametric types, `allow_bottom_tparams` controls whether
+For parametric types, `ambiguous_bottom` controls whether
 `Union{}` is considered a valid intersection of type parameters. For example:
 
 ```jldoctest
@@ -973,10 +973,10 @@ julia> Base.isambiguous(m1, m2, false)
 false
 ```
 """
-function isambiguous(m1::Method, m2::Method, allow_bottom_tparams::Bool=true)
+function isambiguous(m1::Method, m2::Method, ambiguous_bottom::Bool=true)
     ti = typeintersect(m1.sig, m2.sig)
     ti === Bottom && return false
-    if !allow_bottom_tparams
+    if !ambiguous_bottom
         has_bottom_parameter(ti) && return false
     end
     ml = _methods_by_ftype(ti, -1, typemax(UInt))
