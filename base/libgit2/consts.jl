@@ -345,4 +345,9 @@ These are used to select which global option to set or get and are used in `git_
                     SET_TEMPLATE_PATH        = 11,
                     SET_SSL_CERT_LOCATIONS   = 12)
 
+
+    @enum(GIT_PROXY, PROXY_NONE,
+                     PROXY_AUTO,
+                     PROXY_SPECIFIED)
+
 end

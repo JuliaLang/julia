@@ -196,8 +196,8 @@ Options for connecting through a proxy.
 Matches the [`git_proxy_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_proxy_options) struct.
 """
 @kwdef struct ProxyOptions
-    version::Cuint             = 1
-    proxytype::Cint
+    version::Cuint               = 1
+    proxytype::Consts.GIT_PROXY  = Consts.PROXY_AUTO
     url::Cstring
     credential_cb::Ptr{Void}
     certificate_cb::Ptr{Void}
@@ -611,7 +611,7 @@ function with_warn{T}(f::Function, ::Type{T}, args...)
 end
 
 """
-    LibGit2.Const.OBJECT{T<:GitObject}(::Type{T})
+    LibGit2.Consts.OBJECT{T<:GitObject}(::Type{T})
 
 The `OBJECT` enum value corresponding to type `T`.
 """
