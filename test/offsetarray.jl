@@ -84,6 +84,13 @@ for i = 1:9 @test A_3_3[i] == i end
 @test_throws BoundsError A[[true true;  false true]]
 
 # view
+x = OffsetArray(1:8, (-2,))
+S = view(x, :)
+@test indices(S) == (-1:6,)
+@test S[-1] == 1
+@test S[6] == 8
+@test_throws BoundsError S[-2]
+@test_throws BoundsError S[7]
 S = view(A, :, 3)
 @test S == OffsetArray([1,2], (A.offsets[1],))
 @test S[0] == 1
