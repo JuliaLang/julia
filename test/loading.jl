@@ -5,19 +5,37 @@ using Base.Test
 # Tests for @__LINE__ inside and outside of macros
 @test @__LINE__() == 6
 
-macro macro_body_lineno()
+macro macro_caller_lineno()
     line = current_location()::Int
+    :($line)
+end
+
+@test @macro_caller_lineno() == @__LINE__
+
+# @__LINE__ in a macro expands to the location of the macro caller
+macro emit_LINE()
     quote
-        $line
+        @__LINE__
     end
 end
+@test @emit_LINE() == @__LINE__
 
-macro macro_ast_lineno()
-    :(@__LINE__)
+# @__LINE__ expands to location of calling macro in a two-level macro expansion,
+# not the top level.
+macro nested_LINE_expansion()
+    quote
+        @emit_LINE()
+    end
 end
+@test @nested_LINE_expansion() == @__LINE__()-3
 
-@test @macro_body_lineno() == @__LINE__
-@test @macro_ast_lineno() == @__LINE__
+# @__LINE__ ignores any macro in a multi-level expansion if there's no line
+# nodes in the AST.
+macro nested_LINE_expansion2()
+    :(@emit_LINE())
+end
+@test @nested_LINE_expansion2() == @__LINE__()
+
 
 
 include("test_sourcepath.jl")
