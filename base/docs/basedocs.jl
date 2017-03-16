@@ -675,6 +675,13 @@ generation specialization for that field.
 ANY
 
 """
+    Core.TypeofBottom
+
+The singleton type containing only the value `Union{}`.
+"""
+Core.TypeofBottom
+
+"""
     DevNull
 
 Used in a stream redirect to discard all data written to it. Essentially equivalent to
