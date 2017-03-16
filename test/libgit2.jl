@@ -93,8 +93,8 @@ end
     @testset "scp-like syntax, no port" begin
         m = match(LibGit2.URL_REGEX, "server:1234/repo")
         @test m[:scheme] === nothing
-        @test m[:user] == nothing
-        @test m[:password] == nothing
+        @test m[:user] === nothing
+        @test m[:password] === nothing
         @test m[:host] == "server"
         @test m[:port] === nothing
         @test m[:path] == "1234/repo"
