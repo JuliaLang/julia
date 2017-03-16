@@ -223,6 +223,15 @@ This section lists changes that do not have deprecation warnings.
   * `write` on an `IOBuffer` now returns a signed integer in order to be
     consistent with other buffers ([#20609]).
 
+  * `@async`, `@spawn`, `@spawnat`, `@fetch` and `@fetchfrom` no longer implicitly
+    localize variables. Previously, the expression would be wrapped in an implicit
+    `let` block  ([#19594]).
+
+  * Closures shipped for remote execution via `@spawn` or `remotecall` now automatically
+    serialize globals defined under Main. For details, please refer to the paragraph
+    on "Global variables" under the "Parallel computing" chapter in the manual ([#19594]).
+
+
 Library improvements
 --------------------
 
