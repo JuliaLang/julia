@@ -1272,6 +1272,16 @@ if DoFullTest
     rmprocs(pids)
 end
 
+# Test addprocs/rmprocs from master node only
+for f in [ ()->addprocs(1), ()->rmprocs(workers()) ]
+    try
+        remotecall_fetch(f, id_other)
+    catch ex
+        @test isa(ex, RemoteException)
+        @test ex.captured.ex.msg == "Only process 1 can add and remove workers"
+    end
+end
+
 # Auto serialization of globals from Main.
 # bitstypes
 global v1 = 1
