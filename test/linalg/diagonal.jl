@@ -304,3 +304,27 @@ end
     Q = qrfact(randn(5, 5))[:Q]
     @test D * Q' == Array(D) * Q'
 end
+
+@testset "block diagonal matrices" begin
+    D = Diagonal([[1 2; 3 4], [1 2; 3 4]])
+    Dherm = Diagonal([[1 1+im; 1-im 1], [1 1+im; 1-im 1]])
+    Dsym = Diagonal([[1 1+im; 1+im 1], [1 1+im; 1+im 1]])
+    @test D' == Diagonal([[1 3; 2 4], [1 3; 2 4]])
+    @test D.' == Diagonal([[1 3; 2 4], [1 3; 2 4]])
+    @test Dherm' == Dherm
+    @test Dherm.' == Diagonal([[1 1-im; 1+im 1], [1 1-im; 1+im 1]])
+    @test Dsym' == Diagonal([[1 1-im; 1-im 1], [1 1-im; 1-im 1]])
+    @test Dsym.' == Dsym
+
+    @test issymmetric(D) == false
+    @test issymmetric(Dherm) == false
+    @test issymmetric(Dsym) == true
+
+    @test ishermitian(D) == false
+    @test ishermitian(Dherm) == true
+    @test ishermitian(Dsym) == false
+
+    @test expm(D) == Diagonal([expm([1 2; 3 4]), expm([1 2; 3 4])])
+    @test logm(D) == Diagonal([logm([1 2; 3 4]), logm([1 2; 3 4])])
+    @test sqrtm(D) == Diagonal([sqrtm([1 2; 3 4]), sqrtm([1 2; 3 4])])
+end

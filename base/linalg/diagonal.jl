@@ -101,8 +101,10 @@ end
 parent(D::Diagonal) = D.diag
 
 ishermitian(D::Diagonal{<:Real}) = true
-ishermitian(D::Diagonal) = isreal(D.diag)
-issymmetric(D::Diagonal) = true
+ishermitian(D::Diagonal{<:Number}) = isreal(D.diag)
+ishermitian(D::Diagonal) = all(ishermitian, D.diag)
+issymmetric(D::Diagonal{<:Number}) = true
+issymmetric(D::Diagonal) = all(issymmetric, D.diag)
 isposdef(D::Diagonal) = all(x -> x > 0, D.diag)
 
 factorize(D::Diagonal) = D
@@ -260,8 +262,10 @@ end
 @inline A_mul_Bc(D::Diagonal, rowvec::RowVector) = D*ctranspose(rowvec)
 
 conj(D::Diagonal) = Diagonal(conj(D.diag))
-transpose(D::Diagonal) = D
-ctranspose(D::Diagonal) = conj(D)
+transpose(D::Diagonal{<:Number}) = D
+transpose(D::Diagonal) = Diagonal(transpose.(D.diag))
+ctranspose(D::Diagonal{<:Number}) = conj(D)
+ctranspose(D::Diagonal) = Diagonal(ctranspose.(D.diag))
 
 diag(D::Diagonal) = D.diag
 trace(D::Diagonal) = sum(D.diag)
@@ -275,8 +279,11 @@ end
 eye{T}(::Type{Diagonal{T}}, n::Int) = Diagonal(ones(T,n))
 
 expm(D::Diagonal) = Diagonal(exp.(D.diag))
+expm(D::Diagonal{<:AbstractMatrix}) = Diagonal(expm.(D.diag))
 logm(D::Diagonal) = Diagonal(log.(D.diag))
+logm(D::Diagonal{<:AbstractMatrix}) = Diagonal(logm.(D.diag))
 sqrtm(D::Diagonal) = Diagonal(sqrt.(D.diag))
+sqrtm(D::Diagonal{<:AbstractMatrix}) = Diagonal(sqrtm.(D.diag))
 
 #Linear solver
 function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)
