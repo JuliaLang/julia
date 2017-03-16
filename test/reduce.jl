@@ -37,10 +37,14 @@
 @test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
 @test mapreduce((x)->x[1:3], (x,y)->"($x+$y)", ["abcd", "efgh", "01234"]) == "((abc+efg)+012)"
 
-# mapreduce_impl() correctly works with 1- and n-sized blocks (PR #19325)
+# mapreduce_impl()
+#   correctly works with 1- and n-sized blocks (PR #19325)
 @test Base.mapreduce_impl(-, +, [-10, -9, -3], 2, 2) == 9
 @test Base.mapreduce_impl(abs2, +, [-10, -9, -3], 2, 3) == 81 + 9
 @test Base.mapreduce_impl(-, +, [-10, -9, -3, -4, -8, -2, -7], 2, 6, 2) == (9 + 3 + 4 + 8 + 2)
+#   type stability
+@test typeof(Base.mapreduce_impl(*, +, Int8[10], 1, 1)) === typeof(Base.mapreduce_impl(*, +, Int8[10, 11], 1, 2)) === typeof(Base.mapreduce_impl(*, +, Int8[10, 11, 12, 13], 1, 4))
+@test typeof(Base.mapreduce_impl(*, +, Float32[10.0], 1, 1)) === typeof(Base.mapreduce_impl(*, +, Float32[10, 11], 1, 2)) === typeof(Base.mapreduce_impl(*, +, Float32[10, 11, 12, 13], 1, 4))
 
 # sum
 
