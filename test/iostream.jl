@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Test skipchars for IOStreams
 mktemp() do path, file
     function append_to_file(str)

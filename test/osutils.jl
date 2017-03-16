@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 @test !Base.is_unix(:Windows)
 @test !Base.is_linux(:Windows)
 @test Base.is_linux(:Linux)

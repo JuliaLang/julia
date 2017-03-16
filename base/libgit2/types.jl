@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
+
 import Base.@kwdef
 import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE
 

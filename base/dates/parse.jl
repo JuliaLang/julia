@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ### Parsing utilities
 
 @generated function tryparse_internal{T<:TimeType, S, F}(::Type{T}, str::AbstractString, df::DateFormat{S, F}, raise::Bool=false)
