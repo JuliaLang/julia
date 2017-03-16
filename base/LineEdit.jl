@@ -1581,7 +1581,7 @@ function run_interface(terminal, m::ModalInterface)
             Expr(:body,
                 Expr(:return,
                      Expr(:call,
-                          mode(state(s, s.current_mode)).on_done,
+                          QuoteNode(mode(state(s, s.current_mode)).on_done),
                           QuoteNode(s),
                           QuoteNode(buf),
                           QuoteNode(ok)))))
