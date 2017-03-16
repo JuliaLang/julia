@@ -1150,7 +1150,7 @@ function detect_ambiguities(mods...; imported::Bool=false, ambiguous_bottom::Boo
                 for m in mt
                     if m.ambig !== nothing
                         for m2 in m.ambig
-                            if Base.isambiguous(m, m2, ambiguous_bottom)
+                            if Base.isambiguous(m, m2, ambiguous_bottom=ambiguous_bottom)
                                 push!(ambs, sortdefs(m, m2))
                             end
                         end

@@ -943,7 +943,7 @@ function method_exists(f::ANY, t::ANY, world=typemax(UInt))
 end
 
 """
-    isambiguous(m1, m2, [ambiguous_bottom=true]) -> Bool
+    isambiguous(m1, m2; ambiguous_bottom=true) -> Bool
 
 Determine whether two methods `m1` and `m2` (typically of the same
 function) are ambiguous.  This test is performed in the context of
@@ -951,8 +951,9 @@ other methods of the same function; in isolation, `m1` and `m2` might
 be ambiguous, but if a third method resolving the ambiguity has been
 defined, this returns `false`.
 
-For parametric types, `ambiguous_bottom` controls whether
-`Union{}` is considered a valid intersection of type parameters. For example:
+For parametric types, the `ambiguous_bottom` keyword argument controls whether
+`Union{}` counts as an ambiguous intersection of type parameters – when `true`,
+it is considered ambiguous, when `false` it is not. For example:
 
 ```jldoctest
 julia> foo(x::Complex{<:Integer}) = 1
@@ -966,14 +967,14 @@ julia> m1, m2 = collect(methods(foo));
 julia> typeintersect(m1.sig, m2.sig)
 Tuple{#foo,Complex{Union{}}}
 
-julia> Base.isambiguous(m1, m2, true)
+julia> Base.isambiguous(m1, m2, ambiguous_bottom=true)
 true
 
-julia> Base.isambiguous(m1, m2, false)
+julia> Base.isambiguous(m1, m2, ambiguous_bottom=false)
 false
 ```
 """
-function isambiguous(m1::Method, m2::Method, ambiguous_bottom::Bool=true)
+function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=true)
     ti = typeintersect(m1.sig, m2.sig)
     ti === Bottom && return false
     if !ambiguous_bottom
