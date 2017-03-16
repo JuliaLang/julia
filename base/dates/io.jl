@@ -175,17 +175,17 @@ Delim(d::Char) = Delim{Char, 1}(d)
 Delim(d::String) = Delim{String, length(d)}(d)
 
 @inline function tryparsenext{N}(d::Delim{Char, N}, str, i::Int, len)
-    R = Nullable{Int64}
+    R = Nullable{Bool}
     for j=1:N
         i > len && return (R(), i)
         c, i = next(str, i)
         c != d.d && return (R(), i)
     end
-    return R(0), i
+    return R(true), i
 end
 
 @inline function tryparsenext{N}(d::Delim{String, N}, str, i::Int, len)
-    R = Nullable{Int64}
+    R = Nullable{Bool}
     i1 = i
     i2 = start(d.d)
     for j = 1:N
@@ -198,7 +198,7 @@ end
             return R(), i1
         end
     end
-    return R(0), i1
+    return R(true), i1
 end
 
 @inline function format(io, d::Delim, dt, locale)
@@ -206,7 +206,7 @@ end
 end
 
 function _show_content{N}(io::IO, d::Delim{Char, N})
-    if d.d in keys(SLOT_RULE)
+    if d.d in keys(CONVERSION_SPECIFIERS)
         for i = 1:N
             write(io, '\\', d.d)
         end
@@ -219,7 +219,7 @@ end
 
 function _show_content(io::IO, d::Delim)
     for c in d.d
-        if c in keys(SLOT_RULE)
+        if c in keys(CONVERSION_SPECIFIERS)
             write(io, '\\')
         end
         write(io, c)
@@ -236,8 +236,9 @@ end
 
 abstract type DayOfWeekToken end # special addition to Period types
 
-# mapping format specifiers to period types
-const SLOT_RULE = Dict{Char, Type}(
+# Map conversion specifiers or character codes to tokens.
+# Note: Allow addition of new character codes added by packages
+const CONVERSION_SPECIFIERS = Dict{Char, Type}(
     'y' => Year,
     'Y' => Year,
     'm' => Month,
@@ -252,13 +253,26 @@ const SLOT_RULE = Dict{Char, Type}(
     's' => Millisecond,
 )
 
-slot_order(::Type{Date}) = (Year, Month, Day)
-slot_order(::Type{DateTime}) = (Year, Month, Day, Hour, Minute, Second, Millisecond)
+# Default values are needed when a conversion specifier is used in a DateFormat for parsing
+# and we have reached the end of the input string.
+# Note: Allow `Any` value as a default to support extensibility
+const CONVERSION_DEFAULTS = Dict{Type, Any}(
+    Year => Int64(1),
+    Month => Int64(1),
+    DayOfWeekToken => Int64(0),
+    Day => Int64(1),
+    Hour => Int64(0),
+    Minute => Int64(0),
+    Second => Int64(0),
+    Millisecond => Int64(0),
+)
 
-slot_defaults(::Type{Date}) = map(Int64, (1, 1, 1))
-slot_defaults(::Type{DateTime}) = map(Int64, (1, 1, 1, 0, 0, 0, 0))
-
-slot_types{T<:TimeType}(::Type{T}) = typeof(slot_defaults(T))
+# Specifies the required fields in order to parse a TimeType
+# Note: Allows for addition of new TimeTypes
+const CONVERSION_TRANSLATIONS = Dict{Type{<:TimeType}, Tuple}(
+    Date => (Year, Month, Day),
+    DateTime => (Year, Month, Day, Hour, Minute, Second, Millisecond),
+)
 
 """
     DateFormat(format::AbstractString, locale="english") -> DateFormat
@@ -300,13 +314,13 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
     prev = ()
     prev_offset = 1
 
-    letters = String(collect(keys(Base.Dates.SLOT_RULE)))
+    letters = String(collect(keys(CONVERSION_SPECIFIERS)))
     for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters\\E])\\1*"), f)
         tran = replace(f[prev_offset:m.offset - 1], r"\\(.)", s"\1")
 
         if !isempty(prev)
             letter, width = prev
-            typ = SLOT_RULE[letter]
+            typ = CONVERSION_SPECIFIERS[letter]
 
             push!(tokens, DatePart{letter}(width, isempty(tran)))
         end
@@ -326,7 +340,7 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
 
     if !isempty(prev)
         letter, width = prev
-        typ = SLOT_RULE[letter]
+        typ = CONVERSION_SPECIFIERS[letter]
 
         push!(tokens, DatePart{letter}(width, false))
     end
@@ -367,6 +381,9 @@ end
 const ISODateTimeFormat = DateFormat("yyyy-mm-dd\\THH:MM:SS.s")
 const ISODateFormat = DateFormat("yyyy-mm-dd")
 const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
+
+default_format(::Type{DateTime}) = ISODateTimeFormat
+default_format(::Type{Date}) = ISODateFormat
 
 ### API
 """
