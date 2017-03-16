@@ -97,7 +97,6 @@ Returns a 3-element tuple `(values, pos, num_parsed)`:
         return Nullable{$R}($(Expr(:tuple, value_names...))), pos, num_parsed
 
         @label error
-        # Note: Keeping exception generation in separate function helps with performance
         if raise
             if directive_index > length(directives)
                 throw(ArgumentError("Found extra characters at the end of date time string"))
