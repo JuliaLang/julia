@@ -235,7 +235,7 @@ Defining a basic `AbstractTestSet` subtype might look like:
 import Base.Test: record, finish
 using Base.Test: AbstractTestSet, Result, Pass, Fail, Error
 using Base.Test: get_testset_depth, get_testset
-immutable CustomTestSet <: Base.Test.AbstractTestSet
+struct CustomTestSet <: Base.Test.AbstractTestSet
     description::AbstractString
     foo::Int
     results::Vector
