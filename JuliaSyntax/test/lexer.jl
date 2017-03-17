@@ -373,3 +373,8 @@ end
     @test tok("2f+0").kind   == Tokens.FLOAT
     @test tok("2048f0").kind == Tokens.FLOAT
 end
+
+@testset "1e1" begin
+    @test tok("1e", 1).kind == Tokens.INTEGER
+    @test tok("1e", 2).kind == Tokens.IDENTIFIER
+end
