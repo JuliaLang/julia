@@ -684,3 +684,12 @@ Base.@pure function a20704(x)
 end
 aa20704(x) = x(nothing)
 @test code_typed(aa20704, (typeof(a20704),))[1][1].pure
+
+# issue #20033
+# check return_type_tfunc for calls where no method matches
+bcast_eltype_20033(f, A) = Core.Inference.return_type(f, Tuple{eltype(A)})
+err20033(x::Float64...) = prod(x)
+@test bcast_eltype_20033(err20033, [1]) === Union{}
+@test Base.return_types(bcast_eltype_20033, (typeof(err20033), Vector{Int},)) == Any[Type{Union{}}]
+# return_type on builtins
+@test Core.Inference.return_type(tuple, Tuple{Int,Int8,Int}) === Tuple{Int,Int8,Int}
