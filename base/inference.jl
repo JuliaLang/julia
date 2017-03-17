@@ -1081,12 +1081,13 @@ function tuple_tfunc(argtype::ANY)
     return argtype
 end
 
-function builtin_tfunction(f::ANY, argtypes::Array{Any,1}, sv::InferenceState)
+function builtin_tfunction(f::ANY, argtypes::Array{Any,1},
+                           sv::Union{InferenceState,Void}, params::InferenceParams = sv.params)
     isva = !isempty(argtypes) && isvarargtype(argtypes[end])
     if f === tuple
         for a in argtypes
             if !isa(a, Const)
-                return tuple_tfunc(limit_tuple_depth(sv.params, argtypes_to_type(argtypes)))
+                return tuple_tfunc(limit_tuple_depth(params, argtypes_to_type(argtypes)))
             end
         end
         return Const(tuple(anymap(a->a.val, argtypes)...))
@@ -1135,7 +1136,7 @@ function builtin_tfunction(f::ANY, argtypes::Array{Any,1}, sv::InferenceState)
             else
                 sigty = nothing
             end
-            if isa(sigty, Type) && sigty <: Tuple
+            if isa(sigty, Type) && sigty <: Tuple && sv !== nothing
                 return invoke_tfunc(af, sigty, argtypes_to_type(argtypes[3:end]), sv)
             end
         end
@@ -1517,21 +1518,29 @@ function return_type_tfunc(argtypes::ANY, vtypes::VarTable, sv::InferenceState)
         if isa(tt, Const) || (isType(tt) && !has_free_typevars(tt))
             aft = argtypes[2]
             if isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
-                   (isleaftype(aft) && !(aft <: Builtin) && !(aft <: IntrinsicFunction))
+                   (isleaftype(aft) && !(aft <: Builtin))
                 af_argtype = isa(tt, Const) ? tt.val : tt.parameters[1]
                 if isa(af_argtype, DataType) && af_argtype <: Tuple
                     argtypes_vec = Any[aft, af_argtype.parameters...]
+                    astype = argtypes_to_type(argtypes_vec)
+                    if !(aft ⊑ Builtin) &&
+                        _methods_by_ftype(astype, 0, sv.params.world,
+                                          UInt[typemin(UInt)], UInt[typemax(UInt)]) !== false
+                        # return_type returns Bottom if no methods match, even though
+                        # inference doesn't necessarily.
+                        return Const(Bottom)
+                    end
                     if isa(aft, Const)
                         rt = abstract_call(aft.val, (), argtypes_vec, vtypes, sv)
                     elseif isconstType(aft)
                         rt = abstract_call(aft.parameters[1], (), argtypes_vec, vtypes, sv)
                     else
-                        rt = abstract_call_gf_by_type(nothing, argtypes_to_type(argtypes_vec), sv)
+                        rt = abstract_call_gf_by_type(nothing, astype, sv)
                     end
                     if isa(rt, Const)
                         # output was computed to be constant
                         return Const(typeof(rt.val))
-                    elseif isleaftype(rt)
+                    elseif isleaftype(rt) || rt === Bottom
                         # output type was known for certain
                         return Const(rt)
                     elseif (isa(tt, Const) || isconstType(tt)) &&
@@ -5345,11 +5354,18 @@ end
 function return_type(f::ANY, t::ANY)
     params = InferenceParams(ccall(:jl_get_tls_world_age, UInt, ()))
     rt = Union{}
-    for m in _methods(f, t, -1, params.world)
-        ty = typeinf_type(m[3], m[1], m[2], true, params)
-        ty === nothing && return Any
-        rt = tmerge(rt, ty)
-        rt === Any && break
+    if isa(f, Builtin)
+        rt = builtin_tfunction(f, Any[t.parameters...], nothing, params)
+        if isa(rt, TypeVar)
+            rt = rt.ub
+        end
+    else
+        for m in _methods(f, t, -1, params.world)
+            ty = typeinf_type(m[3], m[1], m[2], true, params)
+            ty === nothing && return Any
+            rt = tmerge(rt, ty)
+            rt === Any && break
+        end
     end
     return rt
 end
