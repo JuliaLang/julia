@@ -3348,15 +3348,8 @@ const _pure_builtins = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof,
 # known effect-free calls (might not be affect-free)
 const _pure_builtins_volatile = Any[getfield, arrayref]
 
-function is_pure_builtin(f::ANY)
-    if contains_is(_pure_builtins, f)
-        return true
-    end
-    if contains_is(_pure_builtins_volatile, f)
-        return true
-    end
-    if isa(f,IntrinsicFunction)
-        if !(f === Intrinsics.pointerref || # this one is volatile
+function is_pure_intrinsic(f::IntrinsicFunction)
+    return !(f === Intrinsics.pointerref || # this one is volatile
              f === Intrinsics.pointerset || # this one is never effect-free
              f === Intrinsics.llvmcall ||   # this one is never effect-free
              f === Intrinsics.checked_trunc_sint ||
@@ -3368,13 +3361,13 @@ function is_pure_builtin(f::ANY)
              f === Intrinsics.check_top_bit ||
              f === Intrinsics.sqrt_llvm ||
              f === Intrinsics.cglobal)  # cglobal throws an error for symbol-not-found
-            return true
-        end
-    end
-    if f === return_type
-        return true
-    end
-    return false
+end
+
+function is_pure_builtin(f::ANY)
+    return (contains_is(_pure_builtins, f) ||
+            contains_is(_pure_builtins_volatile, f) ||
+            (isa(f,IntrinsicFunction) && is_pure_intrinsic(f)) ||
+            f === return_type)
 end
 
 function statement_effect_free(e::ANY, src::CodeInfo, mod::Module)
@@ -3690,7 +3683,10 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
                 istopfunction(topmod, f, :typejoin) ||
                 istopfunction(topmod, f, :isbits) ||
                 istopfunction(topmod, f, :promote_type) ||
-                (f === Core.kwfunc && length(argexprs) == 2))
+                (f === Core.kwfunc && length(argexprs) == 2) ||
+                contains_is(_pure_builtins, f) ||
+                (f === getfield && effect_free(e, sv.src, sv.mod, false)) ||
+                (isa(f,IntrinsicFunction) && is_pure_intrinsic(f)))
                 return inline_as_constant(e.typ.val, argexprs, sv, nothing)
             end
         end
