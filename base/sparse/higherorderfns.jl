@@ -6,10 +6,11 @@ module HigherOrderFns
 # particularly map[!]/broadcast[!] for SparseVectors and SparseMatrixCSCs at present.
 import Base: map, map!, broadcast, broadcast!
 import Base.Broadcast: _containertype, promote_containertype,
-    broadcast_indices, broadcast_c, broadcast_c!
+                       broadcast_indices, broadcast_c, broadcast_c!
 
 using Base: front, tail, to_shape
-using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseArray, indtype
+using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseVector,
+                      AbstractSparseMatrix, AbstractSparseArray, indtype
 
 # This module is organized as follows:
 # (1) Define a common interface to SparseVectors and SparseMatrixCSCs sufficient for
@@ -1063,6 +1064,7 @@ promote_containertype(::Type{Array}, ::Type{AbstractSparseArray}) = PromoteToSpa
 _spcontainertype(x) = _containertype(x)
 _spcontainertype(::Type{<:Vector}) = Vector
 _spcontainertype(::Type{<:Matrix}) = Matrix
+_spcontainertype(::Type{<:RowVector}) = Matrix
 _spcontainertype(::Type{<:Ref}) = AbstractArray
 _spcontainertype(::Type{<:AbstractArray}) = AbstractArray
 # need the following two methods to override the immediately preceding method
@@ -1105,10 +1107,11 @@ promote_spcontainertype(::FunnelToSparseBC, ::FunnelToSparseBC) = PromoteToSpars
 @inline spbroadcast_c!{N}(f, ::Type{AbstractSparseArray}, ::Type{AbstractArray}, C, B, As::Vararg{Any,N}) =
     broadcast_c!(f, Array, Array, C, B, As...)
 
-@inline _sparsifystructured(A::AbstractSparseArray) = A
-@inline _sparsifystructured(M::StructuredMatrix) = SparseMatrixCSC(M)
-@inline _sparsifystructured(M::Matrix) = SparseMatrixCSC(M)
-@inline _sparsifystructured(V::Vector) = SparseVector(V)
+@inline _sparsifystructured(M::AbstractMatrix) = SparseMatrixCSC(M)
+@inline _sparsifystructured(V::AbstractVector) = SparseVector(V)
+@inline _sparsifystructured(M::AbstractSparseMatrix) = SparseMatrixCSC(M)
+@inline _sparsifystructured(V::AbstractSparseVector) = SparseVector(V)
+@inline _sparsifystructured(S::SparseVecOrMat) = S
 @inline _sparsifystructured(x) = x
 
 
