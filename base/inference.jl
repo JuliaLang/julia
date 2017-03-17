@@ -1385,10 +1385,6 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
         add_mt_backedge(ftname.mt, argtype, sv)
         update_valid_age!(min_valid[1], max_valid[1], sv)
     end
-    if isempty(x)
-        # TODO: this is needed because type intersection is wrong in some cases
-        return Any
-    end
     #print("=> ", rettype, "\n")
     return rettype
 end

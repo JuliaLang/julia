@@ -684,3 +684,6 @@ Base.@pure function a20704(x)
 end
 aa20704(x) = x(nothing)
 @test code_typed(aa20704, (typeof(a20704),))[1][1].pure
+
+# missing method should be inferred as Union{}, ref https://github.com/JuliaLang/julia/issues/20033#issuecomment-282228948
+@test Base.return_types(f -> f(1), (typeof((x::String) -> x),)) == Any[Union{}]
