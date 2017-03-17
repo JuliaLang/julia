@@ -3059,7 +3059,7 @@ function inlining_pass(e::Expr, sv, linfo)
                         tmpv = aarg
                     else
                         # apply(f,t::(x,y)) => tmp=t; f(tmp[1],tmp[2])
-                        tmpv = add_slot!(sv.src, t, false)
+                        tmpv = newvar!(sv, t)
                         push!(stmts, Expr(:(=), tmpv, aarg))
                     end
                     tp = t.parameters
