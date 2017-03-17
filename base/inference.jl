@@ -4462,10 +4462,18 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
                 elseif isa(aarg, Tuple)
                     newargs[i-2] = Any[ QuoteNode(x) for x in aarg ]
                 elseif isa(t, DataType) && t.name === Tuple.name && !isvatuple(t) &&
-                        effect_free(aarg, sv.src, sv.mod, true) && length(t.parameters) <= sv.params.MAX_TUPLE_SPLAT
-                    # apply(f,t::(x,y)) => f(t[1],t[2])
+                         length(t.parameters) <= sv.params.MAX_TUPLE_SPLAT
+                    if effect_free(aarg, sv.src, sv.mod, true)
+                        # apply(f,t::(x,y)) => f(t[1],t[2])
+                        tmpv = aarg
+                    else
+                        # apply(f,t::(x,y)) => tmp=t; f(tmp[1],tmp[2])
+                        tmpv = add_slot!(sv.src, t, false)
+                        insert!(stmts, ins, Expr(:(=), tmpv, aarg))
+                        ins += 1
+                    end
                     tp = t.parameters
-                    newargs[i-2] = Any[ mk_getfield(aarg,j,tp[j]) for j=1:length(tp) ]
+                    newargs[i-2] = Any[ mk_getfield(tmpv,j,tp[j]) for j=1:length(tp) ]
                 else
                     # not all args expandable
                     return e
