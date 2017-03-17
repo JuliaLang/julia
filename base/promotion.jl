@@ -243,10 +243,22 @@ function sametype_error(input...)
           " failed to change any input types")
 end
 
-+(x::Number, y::Number) = +(promote(x,y)...)
-*(x::Number, y::Number) = *(promote(x,y)...)
--(x::Number, y::Number) = -(promote(x,y)...)
-/(x::Number, y::Number) = /(promote(x,y)...)
+function +(x::Number, y::Number)
+    T = promote_type(typeof(x), typeof(y))
+    convert(T, x) + convert(T, y)
+end
+function *(x::Number, y::Number)
+    T = promote_type(typeof(x), typeof(y))
+    convert(T, x) * convert(T, y)
+end
+function -(x::Number, y::Number)
+    T = promote_type(typeof(x), typeof(y))
+    convert(T, x) - convert(T, y)
+end
+function /(x::Number, y::Number)
+    T = promote_type(typeof(x), typeof(y))
+    convert(T, x) / convert(T, y)
+end
 
 """
     ^(x, y)
