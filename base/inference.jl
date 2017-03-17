@@ -4468,7 +4468,7 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
                         tmpv = aarg
                     else
                         # apply(f,t::(x,y)) => tmp=t; f(tmp[1],tmp[2])
-                        tmpv = add_slot!(sv.src, t, false)
+                        tmpv = newvar!(sv, t)
                         insert!(stmts, ins, Expr(:(=), tmpv, aarg))
                         ins += 1
                     end
