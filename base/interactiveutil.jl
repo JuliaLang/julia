@@ -589,7 +589,7 @@ else
         if downloadcmd == :wget
             run(`wget -O $filename $url`)
         elseif downloadcmd == :curl
-            run(`curl -o $filename -L $url`)
+            run(`curl -L -f -o $filename $url`)
         elseif downloadcmd == :fetch
             run(`fetch -f $filename $url`)
         else
