@@ -254,7 +254,8 @@ void addOptimizationPasses(PassManager *PM)
         PM->add(createInstructionCombiningPass());
         PM->add(createNewGVNPass());       
         PM->add(createDeadStoreEliminationPass());  // Delete dead stores        
-        // PM->add(createSLPVectorizerPass());     // Vectorize straight-line code
+        PM->add(createSLPVectorizerPass());     // Vectorize straight-line code
+	      PM->add(createSLPVectorizerPass());     // Vectorize straight-line code - again
     }
 #endif
 

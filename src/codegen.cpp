@@ -3855,7 +3855,8 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                                          copy_bytes,
                                          ((jl_datatype_t*)rval_info.typ)->layout->alignment,
                                          vi.isVolatile,
-                                         tbaa);
+                                         rval_info.tbaa,
+                                         tbaa_stack);
                 }
                 else {
                     emit_unionmove(vi.value.V, rval_info, isboxed, vi.isVolatile, tbaa, ctx);
@@ -7057,11 +7058,6 @@ static inline SmallVector<std::string,10> getTargetFeatures(std::string &cpu)
 
     // Platform specific overides follow
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_)
-#ifndef USE_MCJIT
-    // Temporarily disable Haswell BMI2 features due to LLVM bug.
-    HostFeatures["bmi2"] = false;
-    HostFeatures["avx2"] = false;
-#endif
 #ifdef V128_BUG
     HostFeatures["avx"] = false;
 #endif
