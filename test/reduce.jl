@@ -43,8 +43,12 @@
 @test Base.mapreduce_impl(abs2, +, [-10, -9, -3], 2, 3) == 81 + 9
 @test Base.mapreduce_impl(-, +, [-10, -9, -3, -4, -8, -2, -7], 2, 6, 2) == (9 + 3 + 4 + 8 + 2)
 #   type stability
-@test typeof(Base.mapreduce_impl(*, +, Int8[10], 1, 1)) === typeof(Base.mapreduce_impl(*, +, Int8[10, 11], 1, 2)) === typeof(Base.mapreduce_impl(*, +, Int8[10, 11, 12, 13], 1, 4))
-@test typeof(Base.mapreduce_impl(*, +, Float32[10.0], 1, 1)) === typeof(Base.mapreduce_impl(*, +, Float32[10, 11], 1, 2)) === typeof(Base.mapreduce_impl(*, +, Float32[10, 11, 12, 13], 1, 4))
+@test typeof(Base.mapreduce_impl(*, +, Int8[10], 1, 1)) ===
+    typeof(Base.mapreduce_impl(*, +, Int8[10, 11], 1, 2)) ===
+    typeof(Base.mapreduce_impl(*, +, Int8[10, 11, 12, 13], 1, 4))
+@test typeof(Base.mapreduce_impl(*, +, Float32[10.0], 1, 1)) ===
+    typeof(Base.mapreduce_impl(*, +, Float32[10, 11], 1, 2)) ===
+    typeof(Base.mapreduce_impl(*, +, Float32[10, 11, 12, 13], 1, 4))
 
 # sum
 
