@@ -685,6 +685,21 @@ end
 aa20704(x) = x(nothing)
 @test code_typed(aa20704, (typeof(a20704),))[1][1].pure
 
+#issue #21065, elision of _apply when splatted expression is not effect_free
+function f21065(x,y)
+    println("x=$x, y=$y")
+    return x, y
+end
+g21065(x,y) = +(f21065(x,y)...)
+function test_no_apply(expr::Expr)
+    return all(test_no_apply, expr.args)
+end
+function test_no_apply(ref::GlobalRef)
+    return ref.mod != Core || ref.name !== :_apply
+end
+test_no_apply(::Any) = true
+@test all(test_no_apply, code_typed(g21065, Tuple{Int,Int})[1].first.code)
+
 # issue #20033
 # check return_type_tfunc for calls where no method matches
 bcast_eltype_20033(f, A) = Core.Inference.return_type(f, Tuple{eltype(A)})
