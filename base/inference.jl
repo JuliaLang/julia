@@ -5064,15 +5064,25 @@ function _getfield_elim_pass!(e::Expr, sv::InferenceState)
                     end
                 end
             end
-        elseif isa(e1,Tuple) && isa(j,Int) && (1 <= j <= length(e1))
-            e1j = e1[j]
-            if !(isa(e1j,Number) || isa(e1j,AbstractString) || isa(e1j,Tuple) ||
-                 isa(e1j,Type))
-                e1j = QuoteNode(e1j)
+        elseif isa(e1, GlobalRef) || isa(e1, Symbol) || isa(e1, Slot) || isa(e1, SSAValue)
+            # non-self-quoting value
+        else
+            if isa(e1, QuoteNode)
+                e1 = e1.value
             end
-            return e1j
-        elseif isa(e1,QuoteNode) && isa(e1.value,Tuple) && isa(j,Int) && (1 <= j <= length(e1.value))
-            return QuoteNode(e1.value[j])
+            if isimmutable(e1)
+                if isa(j, QuoteNode)
+                    j = j.value
+                end
+                if isdefined(e1, j)
+                    e1j = getfield(e1, j)
+                    if !(isa(e1j,Number) || isa(e1j,AbstractString) || isa(e1j,Tuple) ||
+                         isa(e1j,Type))
+                        e1j = QuoteNode(e1j)
+                    end
+                    return e1j
+                end
+            end
         end
     end
     return e
