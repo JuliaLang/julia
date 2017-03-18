@@ -173,7 +173,7 @@ end
 # n argument function
 heads(ts::Tuple...) = map(t -> t[1], ts)
 tails(ts::Tuple...) = map(tail, ts)
-map(f, ::Tuple{}, ts::Tuple...) = ()
+map(f, ::Tuple{}...) = ()
 function map(f, t1::Tuple, t2::Tuple, ts::Tuple...)
     @_inline_meta
     (f(heads(t1, t2, ts...)...), map(f, tails(t1, t2, ts...)...)...)
