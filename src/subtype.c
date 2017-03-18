@@ -1110,6 +1110,20 @@ static jl_value_t *set_var_to_const(jl_varbinding_t *bb, jl_value_t *v, jl_varbi
     return v;
 }
 
+static int try_subtype_in_env(jl_value_t *a, jl_value_t *b, jl_stenv_t *e)
+{
+    jl_value_t *root=NULL; jl_savedenv_t se; int ret=0;
+    JL_GC_PUSH1(&root);
+    save_env(e, &root, &se);
+    if (subtype_in_env(a, b, e))
+        ret = 1;
+    else
+        restore_env(e, root, &se);
+    free(se.buf);
+    JL_GC_POP();
+    return ret;
+}
+
 static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int8_t R, int param)
 {
     jl_varbinding_t *bb = lookup(e, b);
@@ -1137,16 +1151,8 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     }
     else if (bb->constraintkind == 0) {
         if (!jl_is_typevar(a)) {
-            jl_value_t *ret=NULL;
-            JL_GC_PUSH1(&root);
-            save_env(e, &root, &se);
-            if (subtype_in_env(bb->ub, a, e))
-                ret = (jl_value_t*)b;
-            else
-                restore_env(e, root, &se);
-            free(se.buf);
-            JL_GC_POP();
-            if (ret) return ret;
+            if (try_subtype_in_env(bb->ub, a, e))
+                return (jl_value_t*)b;
         }
         return R ? intersect_ufirst(a, bb->ub, e, d) : intersect_ufirst(bb->ub, a, e, d);
     }
@@ -1177,8 +1183,14 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     if (jl_is_typevar(a))
         return (jl_value_t*)b;
     if (ub == a) {
-        bb->ub = ub;
-        return (jl_value_t*)b;
+        if (bb->lb == jl_bottom_type ||
+            // if the var has an equality constraint then make sure bounds stay consistent.
+            // TODO: try to use this check in more cases
+            bb->ub != bb->lb || try_subtype_in_env(bb->lb, ub, e)) {
+            bb->ub = ub;
+            return (jl_value_t*)b;
+        }
+        return ub;
     }
     root = NULL;
     JL_GC_PUSH2(&root, &ub);

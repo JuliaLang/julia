@@ -860,6 +860,11 @@ function test_intersection()
     _, E = intersection_env(Tuple{Dict{Int,Type}, Type, Any},
                             Tuple{Dict{K,V}, Any, Int} where {K,V})
     @test E[2] == Type
+
+    # issue #20611
+    I, E = intersection_env(Tuple{Ref{Integer},Int,Any}, Tuple{Ref{Z},Z,Z} where Z)
+    @test isequal_type(I, Tuple{Ref{Integer},Int,Integer})
+    @test E[1] == Integer
 end
 
 function test_intersection_properties()
