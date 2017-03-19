@@ -1044,3 +1044,12 @@ end
 # issue #20000
 @test parse("@m(a; b=c)") == Expr(:macrocall, Symbol("@m"),
                                   Expr(:parameters, Expr(:kw, :b, :c)), :a)
+
+# issue #21054
+macro make_f21054(T)
+    quote
+        $(esc(:f21054))(X::Type{<:$T}) = 1
+    end
+end
+@eval @make_f21054 $Array
+@test isa(f21054, Function)
