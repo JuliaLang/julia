@@ -97,7 +97,13 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-cross-compile.patch-applied: $(BUILDDIR
 	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/openblas-cross-compile.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-cross-compile.patch-applied
+# Power inline assembly fixes from https://github.com/xianyi/OpenBLAS/pull/1098
+# Remove this when we upgrade beyond OpenBLAS v0.2.19
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-power-assembly-fixes.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-cross-compile.patch-applied
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/openblas-power-assembly-fixes.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-power-assembly-fixes.patch-applied
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $(dir $<)/Makefile.system
 	echo 1 > $@
 
