@@ -1320,24 +1320,26 @@ function Base.launch(manager::ErrorSimulator, params::Dict, launched::Array, c::
 end
 
 testruns = Any[]
-if DoFullTest
-    append!(testruns, [(()->addprocs(["errorhost20372"]), "Unable to read host:port string from worker. Launch command exited with error?")])
-end
-append!(testruns, [
-            (()->addprocs(ErrorSimulator(:exit)), "Unable to read host:port string from worker. Launch command exited with error?"),
-            (()->addprocs(ErrorSimulator(:ntries)), "Unexpected output from worker launch command. Host:port string not found."),
-            (()->addprocs(ErrorSimulator(:timeout)), "Timed out waiting to read host:port string from worker.")
-        ])
 
-withenv("JULIA_WORKER_TIMEOUT"=>"1") do
-    for (addp_testf, expected_errstr) in testruns
-        try
+if DoFullTest
+    append!(testruns, [(()->addprocs(["errorhost20372"]), "Unable to read host:port string from worker. Launch command exited with error?", ())])
+end
+
+append!(testruns, [
+    (()->addprocs(ErrorSimulator(:exit)), "Unable to read host:port string from worker. Launch command exited with error?", ()),
+    (()->addprocs(ErrorSimulator(:ntries)), "Unexpected output from worker launch command. Host:port string not found.", ()),
+    (()->addprocs(ErrorSimulator(:timeout)), "Timed out waiting to read host:port string from worker.", ("JULIA_WORKER_TIMEOUT"=>"1",))
+])
+
+for (addp_testf, expected_errstr, env) in testruns
+    try
+        withenv(env...) do
             addp_testf()
-            error("Unexpected")
-        catch ex
-            @test isa(ex, CompositeException)
-            @test ex.exceptions[1].ex.msg == expected_errstr
         end
+        error("Unexpected")
+    catch ex
+        @test isa(ex, CompositeException)
+        @test ex.exceptions[1].ex.msg == expected_errstr
     end
 end
 
