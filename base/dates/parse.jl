@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ### Parsing utilities
 
 _directives{S,T}(::Type{DateFormat{S,T}}) = T.parameters

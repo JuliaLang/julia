@@ -1,5 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
-#
+
 # These tests cover the higher order functions specialized for sparse arrays defined in
 # base/sparse/higherorderfns.jl, particularly map[!]/broadcast[!] for SparseVectors and
 # SparseMatrixCSCs at present.
