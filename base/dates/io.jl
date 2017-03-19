@@ -154,15 +154,15 @@ end
 
 function format(io, d::DatePart{'s'}, dt)
     ms = millisecond(dt)
-    if ms == 0
-        write(io, '0')
-    elseif ms % 100 == 0
-        write(io, dec(div(ms, 100), 1))
+    if ms % 100 == 0
+        str = dec(div(ms, 100), 1)
     elseif ms % 10 == 0
-        write(io, dec(div(ms, 10), 2))
+        str = dec(div(ms, 10), 2)
     else
-        write(io, dec(ms, 3))
+        str = dec(ms, 3)
     end
+
+    write(io, rpad(str, d.width, '0'))
 end
 
 ### Delimiters

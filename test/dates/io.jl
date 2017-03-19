@@ -420,3 +420,12 @@ end
 @test Dates.Date("Apr 01 2014", "uuu dd yyyy") == Dates.Date(2014, 4, 1)
 @test_throws ArgumentError Dates.Date("Apr 01 xx 2014", "uuu dd zz yyyy")
 @test_throws ArgumentError Dates.Date("Apr 01 xx 2014", "uuu dd    yyyy")
+
+# Issue 21001
+for (ms, str) in zip([0, 1, 20, 300, 450, 678], ["0", "001", "02", "3", "45", "678"])
+    dt = DateTime(2000, 1, 1, 0, 0, 0, ms)
+    @test Dates.format(dt, "s") == str
+    @test Dates.format(dt, "ss") == rpad(str, 2, '0')
+    @test Dates.format(dt, "sss") == rpad(str, 3, '0')
+    @test Dates.format(dt, "ssss") == rpad(str, 4, '0')
+end
