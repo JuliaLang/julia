@@ -4568,31 +4568,30 @@ function remove_unused_vars!(src::CodeInfo)
     end
 end
 
-var_matches(a::ANY,      b::ANY)      = false
-var_matches(a::SSAValue, b::SSAValue) = a.id == b.id
-var_matches(a::Slot,     b::Slot)     = a.id == b.id
-
-function delete_var!(src::CodeInfo, v::Union{Slot,SSAValue})
+function delete_vars!(src::CodeInfo, r::ObjectIdDict)
     filter!(x->!(isa(x,Expr) && (x.head === :(=) || x.head === :const) &&
-                 var_matches(x.args[1], v)),
+                 haskey(r, normvar(x.args[1]))),
             src.code)
     return src
 end
 
-function slot_replace!(src::CodeInfo, v::Union{Slot,SSAValue}, rhs::ANY)
+function replace_vars!(src::CodeInfo, r::ObjectIdDict)
     for i = 1:length(src.code)
-        src.code[i] = _slot_replace!(src.code[i], v, rhs)
+        src.code[i] = _replace_vars!(src.code[i], r)
     end
     return src
 end
 
-function _slot_replace!(e::ANY, v::Union{Slot,SSAValue}, rhs::ANY)
-    if var_matches(e, v)
-        return rhs
+function _replace_vars!(e::ANY, r::ObjectIdDict)
+    if isa(e,SSAValue) || isa(e,Slot)
+        v = normvar(e)
+        if haskey(r, v)
+            return r[v]
+        end
     end
     if isa(e,Expr)
         for i = 1:length(e.args)
-            e.args[i] = _slot_replace!(e.args[i], v, rhs)
+            e.args[i] = _replace_vars!(e.args[i], r)
         end
     end
     return e
@@ -4602,6 +4601,9 @@ is_argument(nargs::Int, v::Slot) = slot_id(v) <= nargs
 
 normslot(s::SlotNumber) = s
 normslot(s::TypedSlot) = SlotNumber(slot_id(s))
+normvar(s::Slot) = normslot(s)
+normvar(s::SSAValue) = s
+normvar(s::ANY) = s
 
 # given a single-assigned var and its initializer `init`, return what we can
 # replace `var` with, or `var` itself if we shouldn't replace it
@@ -4649,17 +4651,21 @@ end
 
 # remove all single-assigned vars v in "v = x" where x is an argument.
 # "sa" is the result of find_sa_vars
-function remove_redundant_temp_vars!(src::CodeInfo, nargs::Int, sa)
+function remove_redundant_temp_vars!(src::CodeInfo, nargs::Int, sa::ObjectIdDict)
     flags = src.slotflags
     slottypes = src.slottypes
     ssavaluetypes = src.ssavaluetypes
+    repls = ObjectIdDict()
     for (v, init) in sa
         repl = get_replacement(sa, v, init, nargs, slottypes, ssavaluetypes)
         compare = isa(repl,TypedSlot) ? normslot(repl) : repl
         if compare !== v
-            delete_var!(src, v)
-            slot_replace!(src, v, repl)
+            repls[v] = repl
         end
+    end
+    if !isempty(repls)
+        delete_vars!(src, repls)
+        replace_vars!(src, repls)
     end
     return src
 end
