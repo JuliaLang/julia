@@ -152,5 +152,4 @@ with Julia:
   * [Tutorial for Homer Reid's numerical analysis class](http://homerreid.dyndns.org/teaching/18.330/JuliaProgramming.shtml)
   * [An introductory presentation](https://raw.githubusercontent.com/ViralBShah/julia-presentations/master/Fifth-Elephant-2013/Fifth-Elephant-2013.pdf)
   * [Videos from the Julia tutorial at MIT](http://julialang.org/blog/2013/03/julia-tutorial-MIT)
-  * [Forio Julia Tutorials](http://forio.com/about/labs/julia-studio/tutorials/)
   * [YouTube videos from the JuliaCons](https://www.youtube.com/user/JuliaLanguage/playlists)
