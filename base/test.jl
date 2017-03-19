@@ -494,7 +494,7 @@ function finish(ts::DefaultTestSet)
     # Recursively print a summary at every level
     print_counts(ts, 0, align, pass_width, fail_width, error_width, broken_width, total_width)
     # Finally throw an error as we are the outermost test set
-    if total != total_pass
+    if total != total_pass + total_broken
         throw(TestSetException(total_pass,total_fail,total_error, total_broken))
     end
 
