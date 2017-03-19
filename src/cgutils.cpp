@@ -1910,6 +1910,10 @@ static Value *box_union(const jl_cgval_t &vinfo, jl_codectx_t *ctx, const SmallB
         builder.CreateUnreachable();
     }
     else {
+        if (vinfo.gcroot && vinfo.V != vinfo.gcroot) {
+            // if this is a derived pointer, make sure the root usage itself is also visible to the delete-root pass
+            mark_gc_use(vinfo);
+        }
         box_merge->addIncoming(emit_bitcast(vinfo.V, T_pjlvalue), defaultBB);
         builder.CreateBr(postBB);
     }
