@@ -6,12 +6,20 @@
     @test length((1,)) === 1
     @test length((1,2)) === 2
 
+    @test ndims(()) === 1
+    @test ndims((1,)) === 1
+    @test ndims((1,2)) === 1
+
     @test_throws ArgumentError Base.front(())
     @test_throws ArgumentError first(())
 
     @test endof(()) === 0
     @test endof((1,)) === 1
     @test endof((1,2)) === 2
+
+    @test size(()) === (0, )
+    @test size((1,)) === (1, )
+    @test size((1,2)) === (2, )
 
     @test size((), 1) === 0
     @test size((1,), 1) === 1
