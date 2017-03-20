@@ -720,3 +720,7 @@ err20033(x::Float64...) = prod(x)
 let f = ()->Val{nfields(DataType[Int][1])}
     @test f() == Val{0}
 end
+
+# inference on invalid getfield call
+@eval _getfield_with_string_() = getfield($(1=>2), "")
+@test Base.return_types(_getfield_with_string_, ()) == Any[Union{}]
