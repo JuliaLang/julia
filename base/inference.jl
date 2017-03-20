@@ -408,6 +408,13 @@ function fptosi_tfunc(x::ANY)
     return Any
 end
 
+function propagating_math_tfunc(op)
+    tfunc(x::ANY) = isa(x, Const) ? Const(op(x.val)) : widenconst(x)
+    tfunc(x::ANY, y::ANY) = isa(x, Const) && isa(y, Const) ? Const(op(x.val, y.val)) : widenconst(x)
+    tfunc(x::ANY, y::ANY, z::ANY) = isa(x, Const) && isa(y, Const) && isa(z, Const) ? Const(op(x.val, y.val, z.val)) : widenconst(x)
+    tfunc
+end
+
     ## conversion ##
 add_tfunc(bitcast, 2, 2, bitcast_tfunc)
 add_tfunc(sext_int, 2, 2, bitcast_tfunc)
@@ -424,10 +431,10 @@ add_tfunc(checked_trunc_sint, 2, 2, bitcast_tfunc)
 add_tfunc(checked_trunc_uint, 2, 2, bitcast_tfunc)
 add_tfunc(check_top_bit, 1, 1, math_tfunc)
     ## arithmetic ##
-add_tfunc(neg_int, 1, 1, math_tfunc)
-add_tfunc(add_int, 2, 2, math_tfunc)
-add_tfunc(sub_int, 2, 2, math_tfunc)
-add_tfunc(mul_int, 2, 2, math_tfunc)
+add_tfunc(neg_int, 1, 1, propagating_math_tfunc(neg_int))
+add_tfunc(add_int, 2, 2, propagating_math_tfunc(add_int))
+add_tfunc(sub_int, 2, 2, propagating_math_tfunc(sub_int))
+add_tfunc(mul_int, 2, 2, propagating_math_tfunc(mul_int))
 add_tfunc(sdiv_int, 2, 2, math_tfunc)
 add_tfunc(udiv_int, 2, 2, math_tfunc)
 add_tfunc(srem_int, 2, 2, math_tfunc)
