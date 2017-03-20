@@ -715,3 +715,8 @@ err20033(x::Float64...) = prod(x)
 # Inference of constant svecs
 @eval fsvecinf() = $(QuoteNode(Core.svec(Tuple{Int,Int}, Int)))[1]
 @test Core.Inference.return_type(fsvecinf, Tuple{}) == Type{Tuple{Int,Int}}
+
+# nfields tfunc on `DataType`
+let f = ()->Val{nfields(DataType[Int][1])}
+    @test f() == Val{0}
+end
