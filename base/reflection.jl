@@ -18,6 +18,7 @@ module_name(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
     module_parent(m::Module) -> Module
 
 Get a module's enclosing `Module`. `Main` is its own parent, as is `LastMain` after `workspace()`.
+
 ```jldoctest
 julia> module_parent(Main)
 Main
@@ -279,6 +280,7 @@ end
     Base.parameter_upper_bound(t::UnionAll, idx)
 
 Determine the upper bound of a type parameter in the underlying type. E.g.:
+
 ```jldoctest
 julia> struct Foo{T<:AbstractFloat, N}
            x::Tuple{T, N}
@@ -951,6 +953,7 @@ defined, this returns `false`.
 
 For parametric types, `allow_bottom_tparams` controls whether
 `Union{}` is considered a valid intersection of type parameters. For example:
+
 ```jldoctest
 julia> foo(x::Complex{<:Integer}) = 1
 foo (generic function with 1 method)
