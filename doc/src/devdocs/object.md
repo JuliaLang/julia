@@ -82,7 +82,7 @@ If the object being stored is a `jl_value_t`, the Julia garbage collector must b
 void jl_gc_wb(jl_value_t *parent, jl_value_t *ptr);
 ```
 
-However, the [Embedding Julia](@ref) section of the manual is also required reading at this point,
+However, the [Embedding Julia](http://docs.julialang.org/en/stable/manual/embedding/?highlight=embedding) section of the manual is also required reading at this point,
 
 for covering other details of boxing and unboxing various types, and understanding the gc interactions.
 
@@ -104,7 +104,7 @@ jl_value_t *jl_new_struct(jl_datatype_t *type, ...);
 jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na);
 ```
 
-Although, [`isbits`](@ref) objects can be also constructed directly from memory:
+Although, [`isbits`](http://docs.julialang.org/en/stable/stdlib/base/?highlight=isbits#Base.isbits) objects can be also constructed directly from memory:
 
 ```julia
 jl_value_t *jl_new_bits(jl_value_t *bt, void *data)
@@ -134,7 +134,7 @@ jl_tuple_t *jl_alloc_tuple(size_t n);
 ```
 
 The representation of tuples is highly unique in the Julia object representation ecosystem. In
-some cases, a [`Base.tuple()`](@ref) object may be an array of pointers to the objects contained
+some cases, a [`Base.tuple()`](http://docs.julialang.org/en/stable/manual/types/?highlight=tuples#tuple-types) object may be an array of pointers to the objects contained
 by the tuple equivalent to:
 
 ```
@@ -144,7 +144,7 @@ typedef struct {
 } jl_tuple_t;
 ```
 
-However, in other cases, the tuple may be converted to an anonymous [`isbits`](@ref) type and
+However, in other cases, the tuple may be converted to an anonymous [`isbits`](http://docs.julialang.org/en/stable/stdlib/base/?highlight=isbits#Base.isbits) type and
 stored unboxed, or it may not stored at all (if it is not being used in a generic context as a
 `jl_value_t*`).
 
@@ -200,5 +200,5 @@ objects.
     Singleton types have only one instance and no data fields. Singleton instances have a size of
     0 bytes, and consist only of their metadata. e.g. `nothing::Void`.
 
-    See [Singleton Types](@ref man-singleton-types) and [Nothingness and missing values](@ref)
+    See [Singleton Types](http://docs.julialang.org/en/stable/manual/types/?highlight=singleton#man-singleton-types) and [Nothingness and missing values](http://docs.julialang.org/en/stable/manual/faq/?highlight=nothingness#nothingness-and-missing-values)
 
