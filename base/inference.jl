@@ -548,7 +548,7 @@ add_tfunc(nfields, 1, 1,
         isa(x,Conditional) && return Const(nfields(Bool))
         if isType(x)
             isleaftype(x.parameters[1]) && return Const(nfields(x.parameters[1]))
-        elseif isa(x,DataType) && !x.abstract && !(x.name === Tuple.name && isvatuple(x))
+        elseif isa(x,DataType) && !x.abstract && !(x.name === Tuple.name && isvatuple(x)) && x !== DataType
             return Const(length(x.types))
         end
         return Int
