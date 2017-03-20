@@ -76,7 +76,7 @@ end
 
 ## scheduler and work queue
 
-global const Workqueue = Any[]
+global const Workqueue = Task[]
 
 function enq_work(t::Task)
     t.state == :runnable || error("schedule: Task not runnable")
