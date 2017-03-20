@@ -1607,7 +1607,7 @@ static jl_value_t *intersect_type_type(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     if (!jl_is_typevar(p0))
         return (jl_typeof(p0) == y) ? x : jl_bottom_type;
     if (!jl_is_kind(y)) return jl_bottom_type;
-    if (y == (jl_value_t*)jl_bottomtype_type && ((jl_tvar_t*)p0)->lb == jl_bottom_type)
+    if (y == (jl_value_t*)jl_typeofbottom_type && ((jl_tvar_t*)p0)->lb == jl_bottom_type)
         return (jl_value_t*)jl_wrap_Type(jl_bottom_type);
     if (((jl_tvar_t*)p0)->ub == (jl_value_t*)jl_any_type)
         return y;

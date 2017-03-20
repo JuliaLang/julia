@@ -45,7 +45,7 @@ jl_datatype_t *jl_datatype_type;
 jl_datatype_t *jl_function_type;
 jl_datatype_t *jl_builtin_type;
 
-jl_datatype_t *jl_bottomtype_type;
+jl_datatype_t *jl_typeofbottom_type;
 jl_value_t *jl_bottom_type;
 jl_unionall_t *jl_abstractarray_type;
 jl_unionall_t *jl_densearray_type;
@@ -1616,10 +1616,10 @@ void jl_init_types(void)
     jl_void_type->instance = jl_nothing;
 
     jl_datatype_t *type_type = (jl_datatype_t*)jl_type_type;
-    jl_bottomtype_type = jl_new_datatype(jl_symbol("TypeofBottom"), type_type, jl_emptysvec,
+    jl_typeofbottom_type = jl_new_datatype(jl_symbol("TypeofBottom"), type_type, jl_emptysvec,
                                          jl_emptysvec, jl_emptysvec, 0, 0, 0);
-    jl_bottom_type = jl_new_struct(jl_bottomtype_type);
-    jl_bottomtype_type->instance = jl_bottom_type;
+    jl_bottom_type = jl_new_struct(jl_typeofbottom_type);
+    jl_typeofbottom_type->instance = jl_bottom_type;
 
     jl_uniontype_type = jl_new_datatype(jl_symbol("Union"), type_type, jl_emptysvec,
                                         jl_svec(2, jl_symbol("a"), jl_symbol("b")),

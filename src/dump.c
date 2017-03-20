@@ -3099,7 +3099,7 @@ void jl_init_serializer(void)
                      jl_voidpointer_type, jl_newvarnode_type, jl_abstractstring_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
                      jl_emptytuple_type, jl_array_uint8_type, jl_symbol_type->name,
-                     jl_ssavalue_type->name, jl_tuple_typename, jl_code_info_type, jl_bottomtype_type,
+                     jl_ssavalue_type->name, jl_tuple_typename, jl_code_info_type, jl_typeofbottom_type,
                      ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_ref_type))->name,
                      jl_pointer_typename, jl_simplevector_type->name, jl_datatype_type->name,
                      jl_uniontype_type->name, jl_array_typename, jl_expr_type->name,
@@ -3112,7 +3112,7 @@ void jl_init_serializer(void)
                      jl_abstractslot_type->name, jl_slotnumber_type->name, jl_unionall_type->name,
                      jl_intrinsic_type->name, jl_task_type->name, jl_labelnode_type->name,
                      jl_linenumbernode_type->name, jl_builtin_type->name, jl_gotonode_type->name,
-                     jl_quotenode_type->name, jl_globalref_type->name, jl_bottomtype_type->name,
+                     jl_quotenode_type->name, jl_globalref_type->name, jl_typeofbottom_type->name,
                      jl_string_type->name, jl_abstractstring_type->name,
 
                      ptls->root_task,
