@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-@testset "libgit2-online" begin
-
 #########
 # TESTS #
 #########
@@ -33,6 +31,4 @@ mktempdir() do dir
             end
         end
     end
-end
-
 end

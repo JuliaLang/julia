@@ -93,8 +93,8 @@ end
     @testset "scp-like syntax, no port" begin
         m = match(LibGit2.URL_REGEX, "server:1234/repo")
         @test m[:scheme] === nothing
-        @test m[:user] == nothing
-        @test m[:password] == nothing
+        @test m[:user] === nothing
+        @test m[:password] === nothing
         @test m[:host] == "server"
         @test m[:port] === nothing
         @test m[:path] == "1234/repo"
@@ -481,7 +481,7 @@ mktempdir() do dir
                 @test length(status) != 0
                 @test_throws BoundsError status[0]
                 @test_throws BoundsError status[length(status)+1]
-                #we've added a file - show that it is new
+                # we've added a file - show that it is new
                 @test status[1].status == LibGit2.Consts.STATUS_WT_NEW
                 close(repo_file)
             finally
@@ -635,7 +635,7 @@ mktempdir() do dir
 
             fetch_heads = LibGit2.fetchheads(repo)
             @test fetch_heads[1].name == "refs/heads/master"
-            @test fetch_heads[1].ismerge == true #we just merged master
+            @test fetch_heads[1].ismerge == true # we just merged master
             @test fetch_heads[2].name == "refs/heads/test_branch"
             @test fetch_heads[2].ismerge == false
             @test fetch_heads[3].name == "refs/tags/tag2"
