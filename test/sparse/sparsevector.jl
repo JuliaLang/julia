@@ -1080,13 +1080,13 @@ s14046 = sprand(5, 1.0)
 @test 2*s14046 == s14046 + s14046
 
 # Issue 14589
-#test vectors with no zero elements
+# test vectors with no zero elements
 x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
 @test collect(sort(x)) == sort(collect(x))
-#test vectors with all zero elements
+# test vectors with all zero elements
 x = sparsevec(Int64[], Float64[], 7)
 @test collect(sort(x)) == sort(collect(x))
-#test vector with sparsity approx 1/2
+# test vector with sparsity approx 1/2
 x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
 @test collect(sort(x)) == sort(collect(x))
 # apply three distinct tranformations where zeros sort into start/middle/end
@@ -1094,7 +1094,7 @@ x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
 @test collect(sort(x, by=sign)) == sort(collect(x), by=sign)
 @test collect(sort(x, by=inv)) == sort(collect(x), by=inv)
 
-#fill!
+# fill!
 for Tv in [Float32, Float64, Int64, Int32, Complex128]
     for Ti in [Int16, Int32, Int64, BigInt]
         sptypes = (SparseMatrixCSC{Tv, Ti}, SparseVector{Tv, Ti})

@@ -1796,7 +1796,7 @@ function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vect
             if isa(argtypes[2], Const) && isa(argtypes[3], Const)
                 svecval = argtypes[2].val
                 idx = argtypes[3].val
-                if isa(idx, Int) && 1 <= idx <= length(svecval) &
+                if isa(idx, Int) && 1 <= idx <= length(svecval) &&
                       isassigned(svecval, idx)
                     return Const(getindex(svecval, idx))
                 end
@@ -4768,7 +4768,7 @@ function void_use_elim_pass!(sv::InferenceState)
             return !effect_free(ex, sv.src, sv.mod, false)
         elseif (isa(ex, GotoNode) || isa(ex, LineNumberNode) ||
                 isa(ex, NewvarNode) || isa(ex, Symbol) || isa(ex, LabelNode))
-            # This is a list of special type handled by the compiler
+            # This is a list of special types handled by the compiler
             return true
         end
         return false

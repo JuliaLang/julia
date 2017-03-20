@@ -928,7 +928,7 @@ Next, define the kernel:
 julia> @everywhere function advection_chunk!(q, u, irange, jrange, trange)
            @show (irange, jrange, trange)  # display so we can see what's happening
            for t in trange, j in jrange, i in irange
-               q[i,j,t+1] = q[i,j,t] +  u[i,j,t]
+               q[i,j,t+1] = q[i,j,t] + u[i,j,t]
            end
            q
        end

@@ -18,7 +18,7 @@ ensuring they are valid both for the current runtime and after deserialization.
 
 When emitted into the object file, these globals are stored as references
 in a large `gvals` table. This allows the deserializer to reference them by index,
-and implement a custom manual GOT-like mechanism to restore them.
+and implement a custom manual mechanism similar to a Global Offset Table (GOT) to restore them.
 
 Function pointers are handled similarly.
 They are stored as values in a large `fvals` table.
@@ -28,7 +28,7 @@ Note that extern functions are handled separately,
 with names, via the usual symbol resolution mechanism in the linker.
 
 Note too that ccall functions are also handled separately,
-via a manual GOT + PLT.
+via a manual GOT and Procedure Linkage Table (PLT).
 
 
 ## Representation of Intermediate Values

@@ -204,7 +204,7 @@ function V1()
 end
 
 if bc_opt == bc_default || bc_opt == bc_off
-    @test V1() == nothing
+    @test V1() === nothing
 else
     @test_throws BoundsError V1()
 end

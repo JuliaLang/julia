@@ -170,31 +170,29 @@ function givensAlgorithm{T<:AbstractFloat}(f::Complex{T}, g::Complex{T})
     f2 = abs2(fs)
     g2 = abs2(gs)
     if f2 <= max(g2, oneunit(T))*safmin
-
-     # This is a rare case: F is very small.
-
+        # This is a rare case: F is very small.
         if f == 0
             cs = zero(T)
             r = complex(hypot(real(g), imag(g)))
-        # do complex/real division explicitly with two real divisions
+            # do complex/real division explicitly with two real divisions
             d = hypot(real(gs), imag(gs))
             sn = complex(real(gs)/d, -imag(gs)/d)
             return cs, sn, r
         end
         f2s = hypot(real(fs), imag(fs))
-     # g2 and g2s are accurate
-     # g2 is at least safmin, and g2s is at least safmn2
+        # g2 and g2s are accurate
+        # g2 is at least safmin, and g2s is at least safmn2
         g2s = sqrt(g2)
-     # error in cs from underflow in f2s is at most
-     # unfl / safmn2 .lt. sqrt(unfl*eps) .lt. eps
-     # if max(g2,one)=g2, then f2 .lt. g2*safmin,
-     # and so cs .lt. sqrt(safmin)
-     # if max(g2,one)=one, then f2 .lt. safmin
-     # and so cs .lt. sqrt(safmin)/safmn2 = sqrt(eps)
-     # therefore, cs = f2s/g2s / sqrt( 1 + (f2s/g2s)**2 ) = f2s/g2s
+        # error in cs from underflow in f2s is at most
+        # unfl / safmn2 .lt. sqrt(unfl*eps) .lt. eps
+        # if max(g2,one)=g2, then f2 .lt. g2*safmin,
+        # and so cs .lt. sqrt(safmin)
+        # if max(g2,one)=one, then f2 .lt. safmin
+        # and so cs .lt. sqrt(safmin)/safmn2 = sqrt(eps)
+        # therefore, cs = f2s/g2s / sqrt( 1 + (f2s/g2s)**2 ) = f2s/g2s
         cs = f2s/g2s
-     # make sure abs(ff) = 1
-     # do complex/real division explicitly with 2 real divisions
+        # make sure abs(ff) = 1
+        # do complex/real division explicitly with 2 real divisions
         if abs1(f) > 1
             d = hypot(real(f), imag(f))
             ff = complex(real(f)/d, imag(f)/d)
@@ -207,17 +205,15 @@ function givensAlgorithm{T<:AbstractFloat}(f::Complex{T}, g::Complex{T})
         sn = ff*complex(real(gs)/g2s, -imag(gs)/g2s)
         r = cs*f + sn*g
     else
-
-     # This is the most common case.
-     # Neither F2 nor F2/G2 are less than SAFMIN
-     # F2S cannot overflow, and it is accurate
-
+        # This is the most common case.
+        # Neither F2 nor F2/G2 are less than SAFMIN
+        # F2S cannot overflow, and it is accurate
         f2s = sqrt(onepar + g2/f2)
-     # do the f2s(real)*fs(complex) multiply with two real multiplies
+        # do the f2s(real)*fs(complex) multiply with two real multiplies
         r = complex(f2s*real(fs), f2s*imag(fs))
         cs = onepar/f2s
         d = f2 + g2
-     # do complex/real division explicitly with two real divisions
+        # do complex/real division explicitly with two real divisions
         sn = complex(real(r)/d, imag(r)/d)
         sn *= conj(gs)
         if count != 0

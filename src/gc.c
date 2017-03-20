@@ -501,7 +501,7 @@ STATIC_INLINE void gc_queue_big_marked(jl_ptls_t ptls, bigval_t *hdr,
 }
 
 // `gc_setmark_tag` can be called concurrently on multiple threads.
-// In all cases, the functions atomically sets the mark bits and returns
+// In all cases, the function atomically sets the mark bits and returns
 // the GC bits set as well as if the tag was unchanged by this thread.
 // All concurrent calls on the same object are guaranteed to be setting the
 // bits to the same value.

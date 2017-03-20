@@ -827,7 +827,7 @@ end
 # other padding methods go here
 
 function myfilter(A, kernel, ::NoPad)
-     # Here's the "real" implementation of the core computation
+    # Here's the "real" implementation of the core computation
 end
 ```
 
