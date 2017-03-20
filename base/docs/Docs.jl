@@ -373,6 +373,13 @@ function summarize(io::IO, λ::Function, binding)
     println(io, "```\n", methods(λ), "\n```")
 end
 
+function summarize(io::IO, U::UnionAll, binding)
+    summarize(io, Base.unwrap_unionall(U), binding)
+    println(io, "Note, ```", Base.typename(U),
+            "``` is represented by a wrapping type ```UnionAll``` that " *
+            "describes the bounds of its type parameters.\n")
+end
+
 function summarize(io::IO, T::DataType, binding)
     println(io, "**Summary:**")
     println(io, "```")
