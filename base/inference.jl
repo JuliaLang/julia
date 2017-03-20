@@ -777,6 +777,9 @@ function getfield_tfunc(s00::ANY, name)
             if isa(sv, Module) && isa(nv, Symbol)
                 return abstract_eval_global(sv, nv)
             end
+            if !(isa(nv,Symbol) || isa(nv,Int))
+                return Bottom
+            end
             if (isa(sv, SimpleVector) || isimmutable(sv)) && isdefined(sv, nv)
                 return abstract_eval_constant(getfield(sv, nv))
             end
