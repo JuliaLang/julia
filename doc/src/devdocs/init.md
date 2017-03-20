@@ -27,7 +27,7 @@ by main() and calls [_julia_init() in init.c](https://github.com/JuliaLang/julia
 to zero the signal handler mask.
 
 [jl_resolve_sysimg_location()](https://github.com/JuliaLang/julia/blob/master/src/init.c) searches
-configured paths for the base system image. See [Building the Julia system image]().
+configured paths for the base system image. See [Building the Julia system image](https://docs.julialang.org/en/stable/devdocs/sysimg/).
 
 [jl_gc_init()](https://github.com/JuliaLang/julia/blob/master/src/gc.c) sets up allocation pools
 and lists for: weak refs, preserved values and finalization.
