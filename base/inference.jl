@@ -1818,6 +1818,10 @@ function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vect
                 return t1===Bottom ? Bottom : Tuple{t1, Int}
             end
         end
+    elseif la==2 && argtypes[2] ⊑ SimpleVector && istopfunction(tm, f, :length)
+        if isa(argtypes[2], Const)
+            return Const(length(argtypes[2].val))
+        end
     end
 
     atype = argtypes_to_type(argtypes)
@@ -3346,7 +3350,7 @@ function exprtype(x::ANY, src::CodeInfo, mod::Module)
 end
 
 # known affect-free calls (also effect-free)
-const _pure_builtins = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof, UnionAll]
+const _pure_builtins = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof, UnionAll, nfields]
 
 # known effect-free calls (might not be affect-free)
 const _pure_builtins_volatile = Any[getfield, arrayref]
@@ -3422,7 +3426,7 @@ function effect_free(e::ANY, src::CodeInfo, mod::Module, allow_volatile::Bool)
                                 if Const(:uid) ⊑ exprtype(ea[3], src, mod)
                                     return false    # DataType uid field can change
                                 end
-                            elseif !isa(typ, DataType) || typ.mutable || typ.abstract
+                            elseif typ !== SimpleVector && (!isa(typ, DataType) || typ.mutable || typ.abstract)
                                 return false
                             end
                         end
@@ -3860,6 +3864,8 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
                         force_infer = true
                     end
                 end
+            elseif la == 2 && method.name == :length && atypes[2] ⊑ SimpleVector
+                force_infer = true
             end
         end
     end
@@ -3879,7 +3885,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     # or existing inferred code info
     frame = nothing # Union{Void, InferenceState}
     src = nothing # Union{Void, CodeInfo}
-    if force_infer && isa(atypes[3], Const)
+    if force_infer && la>2 && isa(atypes[3], Const)
         # Since we inferred this with the information that atypes[3]::Const,
         # must inline with that same information.
         # We do that by overriding the argument type,
@@ -5073,9 +5079,13 @@ function _getfield_elim_pass!(e::Expr, sv::InferenceState)
             if isa(e1, QuoteNode)
                 e1 = e1.value
             end
-            if isimmutable(e1)
+            if isimmutable(e1) || isa(e1,SimpleVector)
+                # SimpleVector length field is immutable
                 if isa(j, QuoteNode)
                     j = j.value
+                    if !(isa(j,Int) || isa(j,Symbol))
+                        return e
+                    end
                 end
                 if isdefined(e1, j)
                     e1j = getfield(e1, j)
