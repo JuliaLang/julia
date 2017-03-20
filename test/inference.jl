@@ -708,3 +708,7 @@ err20033(x::Float64...) = prod(x)
 @test Base.return_types(bcast_eltype_20033, (typeof(err20033), Vector{Int},)) == Any[Type{Union{}}]
 # return_type on builtins
 @test Core.Inference.return_type(tuple, Tuple{Int,Int8,Int}) === Tuple{Int,Int8,Int}
+
+# Inference of constant svecs
+@eval fsvecinf() = $(QuoteNode(Core.svec(Tuple{Int,Int}, Int)))[1]
+@test Core.Inference.return_type(fsvecinf, Tuple{}) == Type{Tuple{Int,Int}}
