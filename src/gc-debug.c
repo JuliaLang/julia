@@ -14,15 +14,10 @@
 extern "C" {
 #endif
 
-// Useful function in debugger to find page/region metadata
+// Useful function in debugger to find page metadata
 jl_gc_pagemeta_t *jl_gc_page_metadata(void *data)
 {
     return page_metadata(data);
-}
-
-region_t *jl_gc_find_region(void *ptr)
-{
-    return find_region(ptr);
 }
 
 // Find the memory block in the pool that owns the byte pointed to by p.
@@ -32,21 +27,19 @@ region_t *jl_gc_find_region(void *ptr)
 // the end of the page.
 JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p, size_t *osize_p)
 {
-    region_t *r = find_region(p);
-    // Not in the pool
-    if (!r)
+    if (!page_metadata(p))
+        // Not in the pool
         return NULL;
+    struct jl_gc_metadata_ext info = page_metadata_ext(p);
     char *page_begin = gc_page_data(p) + GC_PAGE_OFFSET;
     // In the page header
     if (p < page_begin)
         return NULL;
     size_t ofs = p - page_begin;
-    int pg_idx = page_index(r, page_begin);
     // Check if this is a free page
-    if (!(r->allocmap[pg_idx / 32] & (uint32_t)(1 << (pg_idx % 32))))
+    if (!(info.pagetable0->allocmap[info.pagetable0_i32 / 32] & (uint32_t)(1 << info.pagetable0_i)))
         return NULL;
-    jl_gc_pagemeta_t *pagemeta = &r->meta[pg_idx];
-    int osize = pagemeta->osize;
+    int osize = info.meta->osize;
     // Shouldn't be needed, just in case
     if (osize == 0)
         return NULL;
@@ -104,6 +97,61 @@ void add_lostval_parent(jl_value_t *parent)
 // the error is caught at the first long collection
 static arraylist_t bits_save[4];
 
+static void gc_clear_mark_page(jl_gc_pagemeta_t *pg)
+{
+    jl_ptls_t ptls2 = jl_all_tls_states[pg->thread_n];
+    jl_gc_pool_t *pool = &ptls2->heap.norm_pools[pg->pool_n];
+    pv = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
+    char *lim = (char*)pv + GC_PAGE_SZ - GC_PAGE_OFFSET - pool->osize;
+    while ((char*)pv <= lim) {
+        if (!gc_verifying)
+            arraylist_push(&bits_save[pv->bits.gc], pv);
+        pv->bits.gc = bits;
+        pv = (jl_taggedvalue_t*)((char*)pv + pool->osize);
+    }
+}
+
+static void gc_clear_mark_pagetable0(pagetable0_t *pagetable0)
+{
+    for (int pg_i = 0; pg_i < REGION0_PG_COUNT / 32; pg_i++) {
+        uint32_t line = pagetable0->allocmap[pg_i];
+        if (line) {
+            for (int j = 0; j < 32; j++) {
+                if ((line >> j) & 1) {
+                    gc_clear_mark_page(pagetable0->meta[pg_i * 32 + j]);
+                }
+            }
+        }
+    }
+}
+
+static void gc_clear_mark_pagetable1(pagetable1_t *pagetable1)
+{
+    for (int pg_i = 0; pg_i < REGION1_PG_COUNT / 32; pg_i++) {
+        uint32_t line = pagetable1->allocmap0[pg_i];
+        if (line) {
+            for (int j = 0; j < 32; j++) {
+                if ((line >> j) & 1) {
+                    gc_clear_mark_pagetable0(pagetable1->meta0[pg_i * 32 + j]);
+                }
+            }
+        }
+    }
+}
+
+static void gc_clear_mark_pagetable(void)
+{
+    for (int pg_i = 0; pg_i < (REGION2_PG_COUNT + 31) / 32; pg_i++) {
+        uint32_t line = memory_map.allocmap1[pg_i];
+        if (line) {
+            for (int j = 0; j < 32; j++) {
+                if ((line >> j) & 1) {
+                    gc_clear_mark_pagetable1(memory_map.meta1[pg_i * 32 + j]);
+                }
+            }
+        }
+    }
+}
 // set all mark bits to bits
 // record the state of the region and can replay it in restore()
 // restore _must_ be called as this will overwrite parts of the
@@ -120,7 +168,8 @@ static void clear_mark(int bits)
         v = jl_all_tls_states[i]->heap.big_objects;
         while (v != NULL) {
             void *gcv = &v->header;
-            if (!gc_verifying) arraylist_push(&bits_save[v->bits.gc], gcv);
+            if (!gc_verifying)
+                arraylist_push(&bits_save[v->bits.gc], gcv);
             v->bits.gc = bits;
             v = v->next;
         }
@@ -129,42 +178,19 @@ static void clear_mark(int bits)
     v = big_objects_marked;
     while (v != NULL) {
         void *gcv = &v->header;
-        if (!gc_verifying) arraylist_push(&bits_save[v->bits.gc], gcv);
+        if (!gc_verifying)
+            arraylist_push(&bits_save[v->bits.gc], gcv);
         v->bits.gc = bits;
         v = v->next;
     }
 
-    jl_taggedvalue_t *pv;
-    for (int h = 0; h < REGION_COUNT; h++) {
-        region_t *region = &regions[h];
-        if (!region->pages)
-            break;
-        for (int pg_i = 0; pg_i < region->pg_cnt / 32; pg_i++) {
-            uint32_t line = region->allocmap[pg_i];
-            if (line) {
-                for (int j = 0; j < 32; j++) {
-                    if ((line >> j) & 1) {
-                        jl_gc_pagemeta_t *pg = page_metadata(region->pages[pg_i*32 + j].data + GC_PAGE_OFFSET);
-                        jl_ptls_t ptls2 = jl_all_tls_states[pg->thread_n];
-                        jl_gc_pool_t *pool = &ptls2->heap.norm_pools[pg->pool_n];
-                        pv = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
-                        char *lim = (char*)pv + GC_PAGE_SZ - GC_PAGE_OFFSET - pool->osize;
-                        while ((char*)pv <= lim) {
-                            if (!gc_verifying) arraylist_push(&bits_save[pv->bits.gc], pv);
-                            pv->bits.gc = bits;
-                            pv = (jl_taggedvalue_t*)((char*)pv + pool->osize);
-                        }
-                    }
-                }
-            }
-        }
-    }
+    gc_clear_mark_pagetable();
 }
 
 static void restore(void)
 {
-    for(int b = 0; b < 4; b++) {
-        for(int i = 0; i < bits_save[b].len; i++) {
+    for (int b = 0; b < 4; b++) {
+        for (int i = 0; i < bits_save[b].len; i++) {
             ((jl_taggedvalue_t*)bits_save[b].items[i])->bits.gc = b;
         }
     }
@@ -259,6 +285,115 @@ void gc_verify(jl_ptls_t ptls)
 #ifdef MEMFENCE
 static uint8_t freelist_map[GC_PAGE_SZ / sizeof(void*) / 8];
 static int freelist_zerod;
+
+static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
+{
+    // for all pages in use
+    int p_n = pg->pool_n;
+    int t_n = pg->thread_n;
+    jl_ptls_t ptls2 = jl_all_tls_states[t_n];
+    jl_gc_pool_t *p = &ptls2->heap.norm_pools[p_n];
+    int osize = pg->osize;
+    char *data = pg->data;
+    char *page_begin = data + GC_PAGE_OFFSET;
+    jl_taggedvalue_t *v = (jl_taggedvalue_t*)page_begin;
+    char *lim = data + GC_PAGE_SZ - osize;
+    // reset the freelist map to zero
+    if (!freelist_zerod) {
+        memset(freelist_map, 0, sizeof(freelist_map));
+        freelist_zerod = 1;
+    }
+    // check for p in new newpages list
+    jl_taggedvalue_t *halfpages = p->newpages;
+    while (halfpages) {
+        char *cur_page = gc_page_data((char*)halfpages - 1);
+        if (cur_page == data) {
+            lim = (char*)halfpages - 1;
+            break;
+        }
+        halfpages = *(jl_taggedvalue_t**)cur_page;
+    }
+    // compute the freelist_map
+    if (pg->nfree) {
+        jl_taggedvalue_t *next = NULL;
+        if (gc_page_data(p->freelist) == data) {
+            // currently allocating on this page
+            next = p->freelist;
+            assert(page_metadata(next)->osize == osize);
+            freelist_zerod = 0;
+        }
+        else if (pg->fl_begin_offset != (uint16_t)-1) {
+            // part of free list exists on this page
+            next = page_pfl_beg(pg);
+            freelist_zerod = 0;
+        }
+        assert(halfpages || next);
+        while (gc_page_data(next) == data) {
+            int obj_idx = (((char*)next) - page_begin) / sizeof(void*);
+            freelist_map[obj_idx / 8] |= 1 << (obj_idx % 7);
+            next = next->next;
+        }
+    }
+    // validate all of the tags on the page
+    while ((char*)v <= lim) {
+        int obj_idx = (((char*)v) - page_begin) / sizeof(void*);
+        int in_freelist = freelist_map[obj_idx / 8] & (1 << (obj_idx % 7));
+        if (!in_freelist) {
+            jl_value_t *dt = jl_typeof(jl_valueof(v));
+            if (dt != (jl_value_t*)jl_buff_tag &&
+                    // the following are used by the deserializer to invalidate objects
+                    v->header != 0x10 && v->header != 0x20 &&
+                    v->header != 0x30 && v->header != 0x40 &&
+                    v->header != 0x50) {
+                assert(jl_typeof(dt) == (jl_value_t*)jl_datatype_type);
+            }
+        }
+        v = (jl_taggedvalue_t*)((char*)v + osize);
+    }
+}
+
+static void gc_verify_tags_pagetable0(pagetable0_t *pagetable0)
+{
+    for (int pg_i = 0; pg_i < REGION0_PG_COUNT / 32; pg_i++) {
+        uint32_t line = pagetable0->allocmap[pg_i];
+        if (line) {
+            for (int j = 0; j < 32; j++) {
+                if ((line >> j) & 1) {
+                    gc_verify_tags_page(pagetable0->meta[pg_i * 32 + j]);
+                }
+            }
+        }
+    }
+}
+
+static void gc_verify_tags_pagetable1(pagetable1_t *pagetable1)
+{
+    for (int pg_i = 0; pg_i < REGION1_PG_COUNT / 32; pg_i++) {
+        uint32_t line = pagetable1->allocmap0[pg_i];
+        if (line) {
+            for (int j = 0; j < 32; j++) {
+                if ((line >> j) & 1) {
+                    gc_verify_tags_pagetable0(pagetable1->meta0[pg_i * 32 + j]);
+                }
+            }
+        }
+    }
+}
+
+static void gc_verify_tags_pagetable(void)
+{
+    for (int pg_i = 0; pg_i < (REGION2_PG_COUNT + 31) / 32; pg_i++) {
+        uint32_t line = memory_map.allocmap1[pg_i];
+        if (line) {
+            for (int j = 0; j < 32; j++) {
+                if ((line >> j) & 1) {
+                    gc_verify_tags_pagetable1(memory_map.meta1[pg_i * 32 + j]);
+                }
+            }
+        }
+    }
+}
+
 void gc_verify_tags(void)
 {
     // verify the freelist chains look valid
@@ -289,83 +424,9 @@ void gc_verify_tags(void)
         }
     }
 
-
     // verify that all the objects on every page are either valid julia objects
     // or are part of the freelist or are on the allocated half of a page
-    for (int region_i = 0; region_i < REGION_COUNT; region_i++) {
-        if (!regions[region_i].pages)
-            break;
-        region_t *region = &regions[region_i];
-        for (int pg_i = 0; pg_i <= region->ub; pg_i++) {
-            uint32_t line = region->allocmap[pg_i];
-            if (line) {
-                for (int j = 0; j < 32; j++) {
-                    if ((line >> j) & 1) {
-                        // for all pages in use
-                        jl_gc_pagemeta_t *pg = &region->meta[pg_i*32 + j];
-                        int p_n = pg->pool_n;
-                        int t_n = pg->thread_n;
-                        jl_ptls_t ptls2 = jl_all_tls_states[t_n];
-                        jl_gc_pool_t *p = &ptls2->heap.norm_pools[p_n];
-                        int osize = pg->osize;
-                        char *data = pg->data;
-                        char *page_begin = data + GC_PAGE_OFFSET;
-                        jl_taggedvalue_t *v = (jl_taggedvalue_t*)page_begin;
-                        char *lim = data + GC_PAGE_SZ - osize;
-                        // reset the freelist map to zero
-                        if (!freelist_zerod) {
-                            memset(freelist_map, 0, sizeof(freelist_map));
-                            freelist_zerod = 1;
-                        }
-                        // check for p in new newpages list
-                        jl_taggedvalue_t *halfpages = p->newpages;
-                        while (halfpages) {
-                            char *cur_page = gc_page_data((char*)halfpages - 1);
-                            if (cur_page == data) {
-                                lim = (char*)halfpages - 1;
-                                break;
-                            }
-                            halfpages = *(jl_taggedvalue_t**)cur_page;
-                        }
-                        // compute the freelist_map
-                        if (pg->nfree) {
-                            jl_taggedvalue_t *next = NULL;
-                            if (gc_page_data(p->freelist) == data) {
-                                // currently allocating on this page
-                                next = p->freelist;
-                                assert(page_metadata(next)->osize == osize);
-                                freelist_zerod = 0;
-                            }
-                            else if (pg->fl_begin_offset != (uint16_t)-1) {
-                                // part of free list exists on this page
-                                next = page_pfl_beg(pg);
-                                freelist_zerod = 0;
-                            }
-                            assert(halfpages || next);
-                            while (gc_page_data(next) == data) {
-                                int obj_idx = (((char*)next) - page_begin) / sizeof(void*);
-                                freelist_map[obj_idx / 8] |= 1 << (obj_idx % 7);
-                                next = next->next;
-                            }
-                        }
-                        // validate all of the tags on the page
-                        while ((char*)v <= lim) {
-                            int obj_idx = (((char*)v) - page_begin) / sizeof(void*);
-                            int in_freelist = freelist_map[obj_idx / 8] & (1 << (obj_idx % 7));
-                            if (!in_freelist) {
-                                jl_value_t *dt = jl_typeof(jl_valueof(v));
-                                // 0x10 (type) and 0x20 (singleton) are used by the incremental serializer to invalidate objects
-                                if (dt != (jl_value_t*)jl_buff_tag && v->header != 0x10 && v->header != 0x20) {
-                                    assert(jl_typeof(dt) == (jl_value_t*)jl_datatype_type);
-                                }
-                            }
-                            v = (jl_taggedvalue_t*)((char*)v + osize);
-                        }
-                    }
-                }
-            }
-        }
-    }
+    gc_verify_tags_pagetable();
 }
 #endif
 
@@ -666,7 +727,9 @@ void gc_settime_postmark_end(void)
 #endif
 
 #ifdef GC_FINAL_STATS
-#include <malloc.h>
+#ifdef _OS_LINUX_
+#include <malloc.h> // for mallinfo
+#endif
 static double process_t0;
 static size_t max_pg_count = 0;
 static size_t total_freed_bytes = 0;
@@ -694,10 +757,55 @@ void gc_final_pause_end(int64_t t0, int64_t tend)
     total_mark_time += gc_premark_end - t0;
 }
 
+static void gc_stats_pagetable0(pagetable0_t *pagetable0, unsigned *p0)
+{
+    for (int pg_i = 0; pg_i < REGION0_PG_COUNT / 32; pg_i++) {
+        uint32_t line = pagetable0->allocmap[pg_i] | pagetable0->freemap[pg_i];
+        if (line) {
+            for (int j = 0; j < 32; j++) {
+                if ((line >> j) & 1) {
+                    (*p0)++;
+                }
+            }
+        }
+    }
+}
+
+static void gc_stats_pagetable1(pagetable1_t *pagetable1, unsigned *p1, unsigned *p0)
+{
+    for (int pg_i = 0; pg_i < REGION1_PG_COUNT / 32; pg_i++) {
+        uint32_t line = pagetable1->allocmap0[pg_i] | pagetable1->freemap0[pg_i];
+        if (line) {
+            for (int j = 0; j < 32; j++) {
+                if ((line >> j) & 1) {
+                    (*p1)++;
+                    gc_stats_pagetable0(pagetable1->meta0[pg_i * 32 + j], p0);
+                }
+            }
+        }
+    }
+}
+
+static void gc_stats_pagetable(unsigned *p2, unsigned *p1, unsigned *p0)
+{
+    for (int pg_i = 0; pg_i < (REGION2_PG_COUNT + 31) / 32; pg_i++) {
+        uint32_t line = memory_map.allocmap1[pg_i] | memory_map.freemap1[pg_i];
+        if (line) {
+            for (int j = 0; j < 32; j++) {
+                if ((line >> j) & 1) {
+                    (*p2)++;
+                    gc_stats_pagetable1(memory_map.meta1[pg_i * 32 + j], p1, p0);
+                }
+            }
+        }
+    }
+}
+
 void jl_print_gc_stats(JL_STREAM *s)
 {
-    double gct = gc_num.total_time / 1e9;
+#ifdef _OS_LINUX_
     malloc_stats();
+#endif
     double ptime = jl_clock_now() - process_t0;
     jl_printf(s, "exec time\t%.5f sec\n", ptime);
     if (gc_num.pause > 0) {
@@ -713,14 +821,20 @@ void jl_print_gc_stats(JL_STREAM *s)
                   (int)(total_sweep_time * 100 / gc_num.total_time),
                   (int)(total_fin_time * 100 / gc_num.total_time));
     }
-    int i = 0;
-    while (i < REGION_COUNT && regions[i].pages) i++;
-    jl_printf(s, "max allocated regions : %d\n", i);
+    unsigned p2 = 0, p1 = 0, p0 = 0;
+    gc_stats_pagetable(&p2, &p1, &p0);
+    jl_printf(s, "page table max utilization : %u (%.1f%%) - %u (%.1f%%) - %u (%.1f%%)\n",
+              p2, p2 * 100.0 / REGION2_PG_COUNT,
+              p1, p1 * 100.0 / REGION1_PG_COUNT / p2,
+              p0, p0 * 100.0 / REGION0_PG_COUNT / p1);
+#ifdef _OS_LINUX_
+    double gct = gc_num.total_time / 1e9;
     struct mallinfo mi = mallinfo();
-    jl_printf(s, "malloc size\t%d MB\n", mi.uordblks/1024/1024);
-    jl_printf(s, "max page alloc\t%ld MB\n", max_pg_count*GC_PAGE_SZ/1024/1024);
+    jl_printf(s, "malloc size\t%d MB\n", mi.uordblks / 1024 / 1024);
+    jl_printf(s, "max page alloc\t%ld MB\n", max_pg_count * GC_PAGE_SZ / 1024 / 1024);
     jl_printf(s, "total freed\t%" PRIuPTR " b\n", total_freed_bytes);
-    jl_printf(s, "free rate\t%.1f MB/sec\n", (total_freed_bytes/gct)/1024/1024);
+    jl_printf(s, "free rate\t%.1f MB/sec\n", (total_freed_bytes / gct) / 1024 / 1024);
+#endif
 }
 #else
 void jl_print_gc_stats(JL_STREAM *s)
@@ -845,7 +959,7 @@ void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
     int pct = actual_allocd ? (gc_num.freed * 100) / actual_allocd : -1;
     jl_printf(JL_STDOUT, "GC sweep pause %.2f ms live %" PRId64 " kB "
               "(freed %" PRId64 " kB EST %" PRId64 " kB "
-              "[error %" PRId64 "] = %d%% of allocd b %ld) "
+              "[error %" PRId64 "] = %d%% of allocd b %" PRIu64 ") "
               "(%.2f ms in post_mark) %s | next in %" PRId64 " kB\n",
               jl_ns2ms(sweep_pause), live_bytes / 1024,
               gc_num.freed / 1024, estimate_freed / 1024,
@@ -1016,14 +1130,42 @@ static void gc_count_pool_page(jl_gc_pagemeta_t *pg)
     }
 }
 
-static void gc_count_pool_region(region_t *region)
+static void gc_count_pool_pagetable0(pagetable0_t *pagetable0)
 {
-    for (int pg_i = 0; pg_i < region->pg_cnt / 32; pg_i++) {
-        uint32_t line = region->allocmap[pg_i];
+    for (int pg_i = 0; pg_i < REGION0_PG_COUNT / 32; pg_i++) {
+        uint32_t line = pagetable0->allocmap[pg_i];
         if (line) {
             for (int j = 0; j < 32; j++) {
                 if ((line >> j) & 1) {
-                    gc_count_pool_page(&region->meta[pg_i*32 + j]);
+                    gc_count_pool_page(pagetable0->meta[pg_i * 32 + j]);
+                }
+            }
+        }
+    }
+}
+
+static void gc_count_pool_pagetable1(pagetable1_t *pagetable1)
+{
+    for (int pg_i = 0; pg_i < REGION1_PG_COUNT / 32; pg_i++) {
+        uint32_t line = pagetable1->allocmap0[pg_i];
+        if (line) {
+            for (int j = 0; j < 32; j++) {
+                if ((line >> j) & 1) {
+                    gc_count_pool_pagetable0(pagetable1->meta0[pg_i * 32 + j]);
+                }
+            }
+        }
+    }
+}
+
+static void gc_count_pool_pagetable(void)
+{
+    for (int pg_i = 0; pg_i < (REGION2_PG_COUNT + 31) / 32; pg_i++) {
+        uint32_t line = memory_map.allocmap1[pg_i];
+        if (line) {
+            for (int j = 0; j < 32; j++) {
+                if ((line >> j) & 1) {
+                    gc_count_pool_pagetable1(memory_map.meta1[pg_i * 32 + j]);
                 }
             }
         }
@@ -1034,11 +1176,7 @@ void gc_count_pool(void)
 {
     memset(&poolobj_sizes, 0, sizeof(poolobj_sizes));
     empty_pages = 0;
-    for (int i = 0; i < REGION_COUNT; i++) {
-        if (!regions[i].pages)
-            break;
-        gc_count_pool_region(&regions[i]);
-    }
+    gc_count_pool_pagetable();
     jl_safe_printf("****** Pool stat: ******\n");
     for (int i = 0;i < 4;i++)
         jl_safe_printf("bits(%d): %"  PRId64 "\n", i, poolobj_sizes[i]);
