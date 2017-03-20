@@ -142,9 +142,15 @@ using .Iterators: Flatten, product  # for generators
 
 # Definition of StridedArray
 StridedReshapedArray{T,N,A<:DenseArray} = ReshapedArray{T,N,A}
-StridedArray{T,N,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} = Union{DenseArray{T,N}, SubArray{T,N,A,I}, StridedReshapedArray{T,N}}
-StridedVector{T,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} = Union{DenseArray{T,1}, SubArray{T,1,A,I}, StridedReshapedArray{T,1}}
-StridedMatrix{T,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} = Union{DenseArray{T,2}, SubArray{T,2,A,I}, StridedReshapedArray{T,2}}
+StridedArray{T,N,A<:Union{DenseArray,StridedReshapedArray},
+    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
+    Union{DenseArray{T,N}, SubArray{T,N,A,I}, StridedReshapedArray{T,N}}
+StridedVector{T,A<:Union{DenseArray,StridedReshapedArray},
+    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
+    Union{DenseArray{T,1}, SubArray{T,1,A,I}, StridedReshapedArray{T,1}}
+StridedMatrix{T,A<:Union{DenseArray,StridedReshapedArray},
+    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
+    Union{DenseArray{T,2}, SubArray{T,2,A,I}, StridedReshapedArray{T,2}}
 StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
 
 # For OS specific stuff
