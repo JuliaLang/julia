@@ -46,7 +46,7 @@ end
 function Base.show(io::IO, rb::GitRebase)
     println(io, "GitRebase:")
     println(io, "Number: ", count(rb))
-    println(io, "Currently performing operation: ",current(rb)+1)
+    println(io, "Currently performing operation: ", current(rb)+1)
 end
 
 """

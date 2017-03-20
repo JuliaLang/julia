@@ -129,7 +129,7 @@ function shell_split(s::AbstractString)
     parsed = shell_parse(s, false)[1]
     args = String[]
     for arg in parsed
-       push!(args, string(arg...))
+        push!(args, string(arg...))
     end
     args
 end

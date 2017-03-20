@@ -269,7 +269,7 @@ First, a review of some relevant Julia type terminology:
 | `T{A}`                        | `Vector{Int}`                               | "Type Parameter" :: A specialization of a type (typically used for dispatch or storage optimization).                                                                                                                                                                          |
 |                               |                                             | "TypeVar" :: The `T` in the type parameter declaration is referred to as a TypeVar (short for type variable).                                                                                                                                                                  |
 | `primitive type`              | `Int`, `Float64`                            | "Primitive Type" :: A type with no fields, but a size. It is stored and defined by-value.                                                                                                                                                                                           |
-| `struct`                      | `Pair{Int, Int}`                            | "Struct" :: A type with all fields defined to be constant. It is defined by-value. And may be stored with a type-tag.                                                                                                                                                       |
+| `struct`                      | `Pair{Int, Int}`                            | "Struct" :: A type with all fields defined to be constant. It is defined by-value, and may be stored with a type-tag.                                                                                                                                                       |
 |                               | `Complex128` (`isbits`)                     | "Is-Bits"   :: A `primitive type`, or a `struct` type where all fields are other `isbits` types. It is defined by-value, and is stored without a type-tag.                                                                                                                       |
 | `struct ...; end`             | `nothing`                                   | "Singleton" :: a Leaf Type or Struct with no fields.                                                                                                                                                                                                                        |
 | `(...)` or `tuple(...)`       | `(1, 2, 3)`                                 | "Tuple" :: an immutable data-structure similar to an anonymous struct type, or a constant array. Represented as either an array or a struct.                                                                                                                                |
@@ -847,8 +847,8 @@ case, the expression must evaluate to a `Ptr`, which will be used as the address
 function to call. This behavior occurs when the first [`ccall`](@ref) argument contains references
 to non-constants, such as local variables, function arguments, or non-constant globals.
 
-For example, you might lookup the function via `dlsym`, then cache it in a global variable for
-that session. For example:
+For example, you might look up the function via `dlsym`, then cache it in a global
+variable for that session. For example:
 
 ```julia
 macro dlsym(func, lib)

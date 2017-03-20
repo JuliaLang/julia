@@ -26,7 +26,7 @@ function resolve(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}
         try
             sol = maxsum(graph, msgs)
         catch err
-            isa(err, UnsatError) || retrhow(err)
+            isa(err, UnsatError) || rethrow(err)
             p = interface.pkgs[err.info]
             # TODO: build tools to analyze the problem, and suggest to use them here.
             msg =
@@ -35,7 +35,7 @@ function resolve(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}
                   The problem was detected when trying to find a feasible version
                   for package $p.
                   However, this only means that package $p is involved in an
-                  unsatifiable or difficult dependency relation, and the root of
+                  unsatisfiable or difficult dependency relation, and the root of
                   the problem may be elsewhere.
                 """
             if msgs.num_nondecimated != graph.np
