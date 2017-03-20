@@ -68,9 +68,9 @@ function eltype(t::Type{<:Tuple})
     t´ = unwrap_unionall(t)
     r = Union{}
     for ti in t´.parameters
-        r = typejoin(r, unwrapva(ti))
+        r = typejoin(r, rewrap_unionall(unwrapva(ti), t))
     end
-    return rewrap_unionall(r, t)
+    return r
 end
 
 # version of tail that doesn't throw on empty tuples (used in array indexing)
