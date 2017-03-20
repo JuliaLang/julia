@@ -3702,6 +3702,16 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                 emit_unbox(vtype, slot, slot.typ, dest);
                 slot = mark_julia_slot(dest, slot.typ, NULL, tbaa_stack);
             }
+        } else if (slot.isboxed && slot.constant && slot.isimmutable &&
+          jl_array_store_unboxed(slot.typ)) {
+            // Stack allocate a copy of this constant so LLVM can do constant
+            // propagation.
+            bool isboxed;
+            Type *vtype = julia_type_to_llvm(slot.typ, &isboxed);
+            assert(!isboxed);
+            Value *dest = emit_static_alloca(vtype);
+            emit_unbox(vtype, slot, slot.typ, dest);
+            slot = mark_julia_slot(dest, slot.typ, NULL, tbaa_stack);            
         }
         ctx->SAvalues.at(idx) = slot; // now SAvalues[idx] contains the SAvalue
         ctx->ssavalue_assigned.at(idx) = true;
