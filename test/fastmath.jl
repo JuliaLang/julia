@@ -249,3 +249,10 @@ end
     @test (@fastmath "a" * "b") == "ab"
     @test (@fastmath "a" ^ 2) == "aa"
 end
+
+struct LitPowTest end
+Base.literal_pow(::typeof(Base.FastMath.pow_fast), ::LitPowTest, ::Val{p}) where {p} = 1
+Base.literal_pow(::typeof(^), ::LitPowTest, ::Val{p}) where {p} = 2
+LPT = LitPowTest()
+@test (@fastmath LPT^2) == 1
+@test LPT^2 == 2

@@ -118,6 +118,9 @@ function make_fastmath(expr::Expr)
                 $arrvar[$(indvars...)] = $op($arrvar[$(indvars...)], $rhs)
             end
         end
+    elseif is_literal_int_pow(expr)
+        expr = Expr(expr.head, :(Base.literal_pow),
+            expr.args[1], expr.args[2], Val(expr.args[3]))
     end
     Base.exprarray(make_fastmath(expr.head), Base.mapany(make_fastmath, expr.args))
 end
@@ -155,6 +158,10 @@ macro fastmath(expr)
     make_fastmath(esc(expr))
 end
 
+function is_literal_int_pow(ex::Expr)
+    return (ex.head === :call && length(ex.args) == 3 &&
+        ex.args[1] === :^ && isa(ex.args[3], Integer))
+end
 
 # Basic arithmetic
 
