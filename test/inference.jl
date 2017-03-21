@@ -709,6 +709,9 @@ err20033(x::Float64...) = prod(x)
 # return_type on builtins
 @test Core.Inference.return_type(tuple, Tuple{Int,Int8,Int}) === Tuple{Int,Int8,Int}
 
+# issue #21088
+@test Core.Inference.return_type(typeof, Tuple{Int}) == Type{Int}
+
 # Inference of constant svecs
 @eval fsvecinf() = $(QuoteNode(Core.svec(Tuple{Int,Int}, Int)))[1]
 @test Core.Inference.return_type(fsvecinf, Tuple{}) == Type{Tuple{Int,Int}}
