@@ -6,6 +6,8 @@ import Core: _apply, svec, apply_type, Builtin, IntrinsicFunction, MethodInstanc
 const MAX_TYPEUNION_LEN = 3
 const MAX_TYPE_DEPTH = 8
 
+const MAX_INLINE_CONST_SIZE = 256
+
 struct InferenceParams
     world::UInt
 
@@ -3500,7 +3502,14 @@ function inline_as_constant(val::ANY, argexprs, sv::InferenceState, invoke_data:
             push!(stmts, invoke_texpr)
         end
     end
-    return (QuoteNode(val), stmts)
+    if !is_self_quoting(val)
+        val = QuoteNode(val)
+    end
+    return (val, stmts)
+end
+
+function is_self_quoting(x::ANY)
+    return isa(x,Number) || isa(x,AbstractString) || isa(x,Tuple) || isa(x,Type)
 end
 
 function countunionsplit(atypes::Vector{Any})
@@ -3686,15 +3695,17 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     # special-case inliners for known pure functions that compute types
     if sv.params.inlining
         if isa(e.typ, Const) # || isconstType(e.typ)
+            val = e.typ.val
             if (f === apply_type || f === fieldtype || f === typeof || f === (===) ||
                 istopfunction(topmod, f, :typejoin) ||
                 istopfunction(topmod, f, :isbits) ||
                 istopfunction(topmod, f, :promote_type) ||
                 (f === Core.kwfunc && length(argexprs) == 2) ||
-                contains_is(_pure_builtins, f) ||
-                (f === getfield && effect_free(e, sv.src, sv.mod, false)) ||
-                (isa(f,IntrinsicFunction) && is_pure_intrinsic(f)))
-                return inline_as_constant(e.typ.val, argexprs, sv, nothing)
+                (isbits(val) && Core.sizeof(val) <= MAX_INLINE_CONST_SIZE &&
+                 (contains_is(_pure_builtins, f) ||
+                  (f === getfield && effect_free(e, sv.src, sv.mod, false)) ||
+                  (isa(f,IntrinsicFunction) && is_pure_intrinsic(f)))))
+                return inline_as_constant(val, argexprs, sv, nothing)
             end
         end
     end
@@ -4473,7 +4484,10 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
                 if isa(aarg,Expr) && (is_known_call(aarg, tuple, sv.src, sv.mod) || is_known_call(aarg, svec, sv.src, sv.mod))
                     # apply(f,tuple(x,y,...)) => f(x,y,...)
                     newargs[i-2] = aarg.args[2:end]
-                elseif isa(aarg, Tuple)
+                elseif isa(aarg, Tuple) || (isa(aarg, QuoteNode) && isa(aarg.value, Tuple))
+                    if isa(aarg, QuoteNode)
+                        aarg = aarg.value
+                    end
                     newargs[i-2] = Any[ QuoteNode(x) for x in aarg ]
                 elseif isa(t, DataType) && t.name === Tuple.name && !isvatuple(t) &&
                          length(t.parameters) <= sv.params.MAX_TUPLE_SPLAT
@@ -5089,8 +5103,7 @@ function _getfield_elim_pass!(e::Expr, sv::InferenceState)
                 end
                 if isdefined(e1, j)
                     e1j = getfield(e1, j)
-                    if !(isa(e1j,Number) || isa(e1j,AbstractString) || isa(e1j,Tuple) ||
-                         isa(e1j,Type))
+                    if !is_self_quoting(e1j)
                         e1j = QuoteNode(e1j)
                     end
                     return e1j
