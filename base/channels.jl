@@ -1,5 +1,4 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
-
 abstract type AbstractChannel end
 
 """
@@ -27,7 +26,9 @@ mutable struct Channel{T} <: AbstractChannel
     sz_max::Int            # maximum size of channel
 
     # Used when sz_max == 0, i.e., an unbuffered channel.
-    takers::Array{Condition}
+    takers::Array{Task}
+    putters::Array{Task}
+    waiters::Int
 
     function Channel{T}(sz::Float64) where T
         if sz == Inf
@@ -40,7 +41,7 @@ mutable struct Channel{T} <: AbstractChannel
         if sz < 0
             throw(ArgumentError("Channel size must be either 0, a positive integer or Inf"))
         end
-        new(Condition(), Condition(), :open, Nullable{Exception}(), Array{T}(0), sz, Array{Condition}(0))
+        new(Condition(), Condition(), :open, Nullable{Exception}(), Array{T}(0), sz, Array{Task}(0), Array{Task}(0), 0)
     end
 
     # deprecated empty constructor
@@ -269,12 +270,22 @@ function put_buffered(c::Channel, v)
 end
 
 function put_unbuffered(c::Channel, v)
-    while length(c.takers) == 0
-        notify(c.cond_take, nothing, true, false)  # Required to handle wait() on 0-sized channels
-        wait(c.cond_put)
+    if length(c.takers) == 0
+        push!(c.putters, current_task())
+        c.waiters > 0 && notify(c.cond_take, nothing, false, false)
+
+        try
+            wait()
+        catch ex
+            if isa(ex, InterruptException)
+                filter!(x->x!=current_task(), c.putters)
+            end
+            rethrow(ex)
+        end
     end
-    cond_taker = shift!(c.takers)
-    notify(cond_taker, v, false, false) > 0 && yield()
+    taker = shift!(c.takers)
+    schedule(current_task())
+    yieldto(taker, v)
     v
 end
 
@@ -313,20 +324,21 @@ end
 shift!(c::Channel) = take!(c)
 
 # 0-size channel
-function take_unbuffered(c::Channel)
+function take_unbuffered(c::Channel{T}) where T
     check_channel_state(c)
-    cond_taker = Condition()
-    push!(c.takers, cond_taker)
-    notify(c.cond_put, nothing, false, false)
+    push!(c.takers, current_task())
     try
-        return wait(cond_taker)
-    catch e
-        if isa(e, InterruptException)
-            # remove self from the list of takers
-            filter!(x -> x != cond_taker, c.takers)
+        if length(c.putters) > 0
+            putter = shift!(c.putters)
+            return yieldto(putter)::T
         else
-            rethrow(e)
+            return wait()::T
         end
+    catch ex
+        if isa(ex, InterruptException)
+            filter!(x->x!=current_task(), c.takers)
+        end
+        rethrow(ex)
     end
 end
 
@@ -340,9 +352,10 @@ For unbuffered channels returns `true` if there are tasks waiting
 on a [`put!`](@ref).
 """
 isready(c::Channel) = n_avail(c) > 0
-n_avail(c::Channel) = isbuffered(c) ? length(c.data) : n_waiters(c.cond_put)
+n_avail(c::Channel) = isbuffered(c) ? length(c.data) : length(c.putters)
 
-function wait(c::Channel)
+wait(c::Channel) = isbuffered(c) ? wait_impl(c) : wait_unbuffered(c)
+function wait_impl(c::Channel)
     while !isready(c)
         check_channel_state(c)
         wait(c.cond_take)
@@ -350,10 +363,22 @@ function wait(c::Channel)
     nothing
 end
 
+function wait_unbuffered(c::Channel)
+    try
+        c.waiters += 1
+        wait_impl(c)
+    finally
+        c.waiters -= 1
+    end
+    nothing
+end
+
 function notify_error(c::Channel, err)
     notify_error(c.cond_take, err)
     notify_error(c.cond_put, err)
-    foreach(x->notify_error(x, err), c.takers)
+
+    # release tasks on a `wait()` call (on 0-sized channels)
+    foreach(t->schedule(t, err; error=true), vcat(c.takers, c.putters))
 end
 notify_error(c::Channel) = notify_error(c, get(c.excp))
 
