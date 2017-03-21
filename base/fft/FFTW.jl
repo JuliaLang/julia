@@ -128,23 +128,21 @@ end
 
 # Threads
 
-let initialized = false
-    global set_num_threads
-    function set_num_threads(nthreads::Integer)
-        if !initialized
-            # must re-initialize FFTW if any FFTW routines have been called
-            ccall((:fftw_cleanup,libfftw), Void, ())
-            ccall((:fftwf_cleanup,libfftwf), Void, ())
-            stat = ccall((:fftw_init_threads,libfftw), Int32, ())
-            statf = ccall((:fftwf_init_threads,libfftwf), Int32, ())
-            if stat == 0 || statf == 0
-                error("could not initialize FFTW threads")
-            end
-            initialized = true
+const threads_initialized = Ref(false)
+function set_num_threads(nthreads::Integer)
+    if !threads_initialized[]
+        # must forget wisdom if any FFTW routines have been called
+        # (don't call fftw_cleanup, since that would invalidate existing plans)
+        forget_wisdom()
+        stat = ccall((:fftw_init_threads,libfftw), Int32, ())
+        statf = ccall((:fftwf_init_threads,libfftwf), Int32, ())
+        if stat == 0 || statf == 0
+            error("could not initialize FFTW threads")
         end
-        ccall((:fftw_plan_with_nthreads,libfftw), Void, (Int32,), nthreads)
-        ccall((:fftwf_plan_with_nthreads,libfftwf), Void, (Int32,), nthreads)
+        threads_initialized[] = true
     end
+    ccall((:fftw_plan_with_nthreads,libfftw), Void, (Int32,), nthreads)
+    ccall((:fftwf_plan_with_nthreads,libfftwf), Void, (Int32,), nthreads)
 end
 
 # pointer type for fftw_plan (opaque pointer)
