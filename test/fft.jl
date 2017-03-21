@@ -1,5 +1,13 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+# issue #19892
+# (test this first to make sure it happens before set_num_threads)
+let a = randn(10^5,1), p1 = plan_rfft(a)
+    FFTW.set_num_threads(2)
+    p2 = plan_rfft(a)
+    @test p1*a ≈ p2*a
+end
+
 # fft
 a = rand(8) + im*rand(8)
 @test norm(ifft(fft(a)) - a) < 1e-8
