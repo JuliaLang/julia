@@ -11,7 +11,8 @@ import ..Tokens: Token, Kind, TokenError, UNICODE_OPS, EMPTY_TOKEN
 
 import ..Tokens: FUNCTION, ABSTRACT, IDENTIFIER, BAREMODULE, BEGIN, BITSTYPE, BREAK, CATCH, CONST, CONTINUE,
                  DO, ELSE, ELSEIF, END, EXPORT, FALSE, FINALLY, FOR, FUNCTION, GLOBAL, LET, LOCAL, IF, IMMUTABLE,
-                 IMPORT, IMPORTALL, MACRO, MODULE, QUOTE, RETURN, TRUE, TRY, TYPE, TYPEALIAS, USING, WHILE, ISA, IN
+                 IMPORT, IMPORTALL, MACRO, MODULE, QUOTE, RETURN, TRUE, TRY, TYPE, TYPEALIAS, USING, WHILE, ISA, IN,
+                 MUTABLE, PRIMITIVE, STRUCT, WHERE
 
 
 export tokenize
@@ -954,13 +955,19 @@ function lex_identifier(l, c)
             return tryread(l, ('c', 'r', 'o'), MACRO, c)
         elseif c == 'o'
             return tryread(l, ('d', 'u', 'l', 'e'), MODULE, c)
+        elseif c == 'u'
+            return tryread(l, ('t', 'a', 'b', 'l', 'e'), MUTABLE, c)
         else
             return _doret(l, c)
         end
+    elseif c == 'p'
+        return tryread(l, ('r', 'i', 'm', 'i', 't', 'i', 'v', 'e'), PRIMITIVE, c)
     elseif c == 'q'
         return tryread(l, ('u', 'o', 't', 'e'), QUOTE, c)
     elseif c == 'r'
         return tryread(l, ('e', 't', 'u', 'r', 'n'), RETURN, c)
+    elseif c == 's'
+        return tryread(l, ('t', 'r', 'u', 'c', 't'), STRUCT, c)
     elseif c == 't'
         c = readchar(l)
         if c == 'r'
@@ -1004,7 +1011,19 @@ function lex_identifier(l, c)
     elseif c == 'u'
         return tryread(l, ('s', 'i', 'n', 'g'), USING, c)
     elseif c == 'w'
-        return tryread(l, ('h', 'i', 'l', 'e'), WHILE, c)
+        c = readchar(l)
+        if c == 'h'
+            c = readchar(l)
+            if c == 'e'
+                return tryread(l, ('r', 'e'), WHERE, c)
+            elseif c == 'i'
+                return tryread(l, ('l', 'e'), WHILE, c)
+            else
+                return _doret(l, c)
+            end
+        else
+            return _doret(l, c)
+        end
     else
         return _doret(l, c)
     end

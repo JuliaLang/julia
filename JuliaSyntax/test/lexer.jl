@@ -260,13 +260,17 @@ end
                     "importall",
                     "macro",
                     "module",
+                    "mutable",
+                    "primitive",
                     "quote",
                     "return",
+                    "struct",
                     #"true",
                     "try",
                     "type",
                     "typealias",
                     "using",
+                    "where",
                     "while"]
 
         @test T.kind(tok(kw)) == T.KEYWORD
@@ -378,3 +382,14 @@ end
     @test tok("1e", 1).kind == Tokens.INTEGER
     @test tok("1e", 2).kind == Tokens.IDENTIFIER
 end
+
+@testset "jl06types" begin
+    @test tok("mutable").kind   == Tokens.MUTABLE
+    @test tok("primitive").kind == Tokens.PRIMITIVE
+    @test tok("struct").kind    == Tokens.STRUCT
+    @test tok("where").kind     == Tokens.WHERE
+    @test tok("mutable struct s{T} where T",  1).kind == Tokens.MUTABLE
+    @test tok("mutable struct s{T} where T",  3).kind == Tokens.STRUCT
+    @test tok("mutable struct s{T} where T", 10).kind == Tokens.WHERE
+end
+
