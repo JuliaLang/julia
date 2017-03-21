@@ -229,9 +229,9 @@ f(x::Complex{<:Rational}) = 2
 end
 @test !Base.isambiguous(methods(Ambig9.f)..., ambiguous_bottom=false)
 @test Base.isambiguous(methods(Ambig9.f)..., ambiguous_bottom=true)
-@test Base.isambiguous(methods(Ambig9.f)...)
+@test !Base.isambiguous(methods(Ambig9.f)...)
 @test length(detect_ambiguities(Ambig9, ambiguous_bottom=false)) == 0
 @test length(detect_ambiguities(Ambig9, ambiguous_bottom=true)) == 1
-@test length(detect_ambiguities(Ambig9)) == 1
+@test length(detect_ambiguities(Ambig9)) == 0
 
 nothing # don't return a module from the remote include
