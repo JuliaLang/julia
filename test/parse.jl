@@ -1056,3 +1056,5 @@ macro make_f21054(T)
 end
 @eval @make_f21054 $Array
 @test isa(f21054, Function)
+g21054(>:) = >:2
+@test g21054(-) == -2
