@@ -327,7 +327,7 @@ function skipchars(io::IOStream, pred; linecomment=nothing)
         if c === linecomment
             readline(io)
         elseif !pred(c)
-            seek(io,position(io)-sizeof(string(c)))
+            skip(io, -codelen(c))
             break
         end
     end
