@@ -1755,9 +1755,15 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
         idx[d] = Slice(indices(A, d))
     end
 
+    # Apply the function to the first slice in order to determine the next steps
     Aslice = A[idx...]
     r1 = f(Aslice)
-    safe_for_reuse = isa(r1, Number) || (isa(r1, AbstractArray) && eltype(r1) <: Number)
+    # In some cases, we can re-use the first slice for a dramatic performance
+    # increase. The slice itself must be mutable and the result cannot contain
+    # any mutable containers. The following errs on the side of being overly
+    # strict (#18570 & #21123).
+    safe_for_reuse = isa(Aslice, StridedArray) &&
+                     (isa(r1, Number) || (isa(r1, AbstractArray) && eltype(r1) <: Number))
 
     # determine result size and allocate
     Rsize = copy(dimsA)
@@ -1780,33 +1786,24 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
 
     R[ridx...] = r1
 
-    isfirst = true
     nidx = length(otherdims)
     if safe_for_reuse
         # when f returns an array, R[ridx...] = f(Aslice) line copies elements,
         # so we can reuse Aslice
-        for I in CartesianRange(itershape)
-            if isfirst
-                isfirst = false  # skip the first element, we already handled it
-            else
-                for i in 1:nidx
-                    idx[otherdims[i]] = ridx[otherdims[i]] = I.I[i]
-                end
-                _unsafe_getindex!(Aslice, A, idx...)
-                R[ridx...] = f(Aslice)
+        for I in Iterators.drop(CartesianRange(itershape), 1) # skip the first element, we already handled it
+            for i in 1:nidx
+                idx[otherdims[i]] = ridx[otherdims[i]] = I.I[i]
             end
+            _unsafe_getindex!(Aslice, A, idx...)
+            R[ridx...] = f(Aslice)
         end
     else
         # we can't guarantee safety (#18524), so allocate new storage for each slice
-        for I in CartesianRange(itershape)
-            if isfirst
-                isfirst = false
-            else
-                for i in 1:nidx
-                    idx[otherdims[i]] = ridx[otherdims[i]] = I.I[i]
-                end
-                R[ridx...] = f(A[idx...])
+        for I in Iterators.drop(CartesianRange(itershape), 1)
+            for i in 1:nidx
+                idx[otherdims[i]] = ridx[otherdims[i]] = I.I[i]
             end
+            R[ridx...] = f(A[idx...])
         end
     end
 
