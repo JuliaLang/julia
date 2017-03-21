@@ -5372,6 +5372,8 @@ function return_type(f::ANY, t::ANY)
         rt = builtin_tfunction(f, Any[t.parameters...], nothing, params)
         if isa(rt, TypeVar)
             rt = rt.ub
+        else
+            rt = widenconst(rt)
         end
     else
         for m in _methods(f, t, -1, params.world)
