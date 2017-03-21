@@ -1586,7 +1586,7 @@
 
 ;; convert an operator parsed as (op a b) to (call op a b)
 (define (syntactic-op-to-call e)
-  `(call ,(car e) ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
+  `(call ,(car e) ,@(map expand-forms (cdr e))))
 
 ;; wrap `expr` in a function appropriate for consuming values from given ranges
 (define (func-for-generator-ranges expr range-exprs)
