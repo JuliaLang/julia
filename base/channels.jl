@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
+
 abstract type AbstractChannel end
 
 """
@@ -277,9 +278,7 @@ function put_unbuffered(c::Channel, v)
         try
             wait()
         catch ex
-            if isa(ex, InterruptException)
-                filter!(x->x!=current_task(), c.putters)
-            end
+            filter!(x->x!=current_task(), c.putters)
             rethrow(ex)
         end
     end
@@ -335,9 +334,7 @@ function take_unbuffered(c::Channel{T}) where T
             return wait()::T
         end
     catch ex
-        if isa(ex, InterruptException)
-            filter!(x->x!=current_task(), c.takers)
-        end
+        filter!(x->x!=current_task(), c.takers)
         rethrow(ex)
     end
 end
@@ -364,8 +361,8 @@ function wait_impl(c::Channel)
 end
 
 function wait_unbuffered(c::Channel)
+    c.waiters += 1
     try
-        c.waiters += 1
         wait_impl(c)
     finally
         c.waiters -= 1
@@ -377,8 +374,9 @@ function notify_error(c::Channel, err)
     notify_error(c.cond_take, err)
     notify_error(c.cond_put, err)
 
-    # release tasks on a `wait()` call (on 0-sized channels)
-    foreach(t->schedule(t, err; error=true), vcat(c.takers, c.putters))
+    # release tasks on a `wait()/yielto()` call (on unbuffered channels)
+    waiters = filter!(t->(t.state == :runnable), vcat(c.takers, c.putters))
+    foreach(t->schedule(t, err; error=true), waiters)
 end
 notify_error(c::Channel) = notify_error(c, get(c.excp))
 
