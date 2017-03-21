@@ -1117,7 +1117,7 @@ function test_approx_eq_modphase{S<:Real,T<:Real}(
 end
 
 """
-    detect_ambiguities(mod1, mod2...; imported=false, ambiguous_bottom=true)
+    detect_ambiguities(mod1, mod2...; imported=false, ambiguous_bottom=false)
 
 Returns a vector of `(Method,Method)` pairs of ambiguous methods
 defined in the specified modules. Use `imported=true` if you wish to
@@ -1130,7 +1130,7 @@ want to set this to `false`. See [`Base.isambiguous`](@ref).
 """
 function detect_ambiguities(mods...;
         imported::Bool = false,
-        ambiguous_bottom::Bool = true,
+        ambiguous_bottom::Bool = false,
         allow_bottom::Union{Bool,Void} = nothing
     )
     if allow_bottom != nothing

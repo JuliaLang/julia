@@ -943,7 +943,7 @@ function method_exists(f::ANY, t::ANY, world=typemax(UInt))
 end
 
 """
-    isambiguous(m1, m2; ambiguous_bottom=true) -> Bool
+    isambiguous(m1, m2; ambiguous_bottom=false) -> Bool
 
 Determine whether two methods `m1` and `m2` (typically of the same
 function) are ambiguous.  This test is performed in the context of
@@ -974,7 +974,7 @@ julia> Base.isambiguous(m1, m2, ambiguous_bottom=false)
 false
 ```
 """
-function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=true)
+function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
     ti = typeintersect(m1.sig, m2.sig)
     ti === Bottom && return false
     if !ambiguous_bottom
