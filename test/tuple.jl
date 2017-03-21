@@ -72,6 +72,7 @@ end
     typejoin(Int, AbstractFloat, Bool)
 @test eltype(Tuple{Int, Bool, Vararg{T}} where T <: AbstractFloat) ===
     typejoin(Int, AbstractFloat, Bool)
+@test eltype(Union{Tuple{Int, Float64}, Tuple{Vararg{Bool}}}) === typejoin(Int, Float64, Bool)
 
 begin
     local foo

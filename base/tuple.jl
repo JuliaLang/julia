@@ -65,6 +65,7 @@ eltype(::Type{Tuple{}}) = Bottom
 eltype(::Type{<:Tuple{Vararg{E}}}) where {E} = E
 function eltype(t::Type{<:Tuple})
     @_pure_meta
+    t isa Union && return typejoin(eltype(t.a), eltype(t.b))
     t´ = unwrap_unionall(t)
     r = Union{}
     for ti in t´.parameters
