@@ -1128,7 +1128,15 @@ elsewhere.
 `Union{}` type parameters are included; in most cases you probably
 want to set this to `false`. See [`Base.isambiguous`](@ref).
 """
-function detect_ambiguities(mods...; imported::Bool=false, ambiguous_bottom::Bool=true)
+function detect_ambiguities(mods...;
+        imported::Bool = false,
+        ambiguous_bottom::Bool = true,
+        allow_bottom::Union{Bool,Void} = nothing
+    )
+    if allow_bottom != nothing
+        Base.depwarn("the `allow_bottom` keyword to detect_ambiguities has been renamed to `ambiguous_bottom`", :detect_ambiguities)
+        ambiguous_bottom = allow_bottom
+    end
     function sortdefs(m1, m2)
         ord12 = m1.file < m2.file
         if !ord12 && (m1.file == m2.file)
