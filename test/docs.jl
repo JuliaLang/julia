@@ -707,6 +707,16 @@ struct D <: B
     three::Float64
 end
 
+abstract type AT{T} <: B end
+
+struct SU{N,T} <: AT{T}
+    one::NTuple{N,T}
+    two::String
+    three::Float64
+end
+
+primitive type PT{T} <: AT{T} 32 end
+
 f = () -> nothing
 
 undocumented() = 1
@@ -748,6 +758,7 @@ abstract type $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A
 
 **Subtypes:**
 ```
+$(curmod_prefix)Undocumented.AT
 $(curmod_prefix)Undocumented.D
 ```
 """)
@@ -779,6 +790,60 @@ three :: Float64
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.D), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+**Summary:**
+
+```
+abstract type $(curmod_prefix)Undocumented.AT{T} <: $(curmod_prefix)Undocumented.B
+```
+
+**Subtypes:**
+
+```
+$(curmod_prefix)Undocumented.PT{T}
+$(curmod_prefix)Undocumented.SU{N,T} where N
+```
+
+Note, `$(curmod_prefix)Undocumented.AT` is represented by a wrapping type `UnionAll` that describes the bounds of its type parameters.
+""")
+@test docstrings_equal(@doc(Undocumented.AT), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+**Summary:**
+
+```
+struct $(curmod_prefix)Undocumented.SU{N,T} <: $(curmod_prefix)Undocumented.AT{T}
+```
+
+**Fields:**
+
+```
+one   :: Tuple{Vararg{T,N}}
+two   :: String
+three :: Float64
+```
+
+Note, `$(curmod_prefix)Undocumented.SU` is represented by a wrapping type `UnionAll` that describes the bounds of its type parameters.
+""")
+@test docstrings_equal(@doc(Undocumented.SU), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+**Summary:**
+
+```
+primitive type $(curmod_prefix)Undocumented.PT{T} <: $(curmod_prefix)Undocumented.AT{T}
+```
+
+Note, `$(curmod_prefix)Undocumented.PT` is represented by a wrapping type `UnionAll` that describes the bounds of its type parameters.
+""")
+@test docstrings_equal(@doc(Undocumented.PT), doc"$doc_str")
 
 let d = @doc Undocumented.f
     io = IOBuffer()
