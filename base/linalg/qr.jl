@@ -496,8 +496,10 @@ end
 
 ## Multiplication by Q
 ### QB
-A_mul_B!(A::QRCompactWYQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = LAPACK.gemqrt!('L','N',A.factors,A.T,B)
-A_mul_B!(A::QRPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = LAPACK.ormqr!('L','N',A.factors,A.τ,B)
+A_mul_B!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
+    LAPACK.gemqrt!('L','N',A.factors,A.T,B)
+A_mul_B!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasFloat, S<:StridedMatrix} =
+    LAPACK.ormqr!('L','N',A.factors,A.τ,B)
 function A_mul_B!(A::QRPackedQ, B::AbstractVecOrMat)
     mA, nA = size(A.factors)
     mB, nB = size(B,1), size(B,2)
@@ -549,10 +551,14 @@ function (*)(A::Union{QRPackedQ,QRCompactWYQ}, B::StridedMatrix)
 end
 
 ### QcB
-Ac_mul_B!(A::QRCompactWYQ{T}, B::StridedVecOrMat{T}) where {T<:BlasReal} = LAPACK.gemqrt!('L','T',A.factors,A.T,B)
-Ac_mul_B!(A::QRCompactWYQ{T}, B::StridedVecOrMat{T}) where {T<:BlasComplex} = LAPACK.gemqrt!('L','C',A.factors,A.T,B)
-Ac_mul_B!(A::QRPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasReal} = LAPACK.ormqr!('L','T',A.factors,A.τ,B)
-Ac_mul_B!(A::QRPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasComplex} = LAPACK.ormqr!('L','C',A.factors,A.τ,B)
+Ac_mul_B!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix} =
+    LAPACK.gemqrt!('L','T',A.factors,A.T,B)
+Ac_mul_B!(A::QRCompactWYQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix} =
+    LAPACK.gemqrt!('L','C',A.factors,A.T,B)
+Ac_mul_B!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasReal,S<:StridedMatrix} =
+    LAPACK.ormqr!('L','T',A.factors,A.τ,B)
+Ac_mul_B!(A::QRPackedQ{T,S}, B::StridedVecOrMat{T}) where {T<:BlasComplex,S<:StridedMatrix} =
+    LAPACK.ormqr!('L','C',A.factors,A.τ,B)
 function Ac_mul_B!(A::QRPackedQ, B::AbstractVecOrMat)
     mA, nA = size(A.factors)
     mB, nB = size(B,1), size(B,2)
@@ -596,8 +602,10 @@ for (f1, f2) in ((:A_mul_Bc, :A_mul_B!),
 end
 
 ### AQ
-A_mul_B!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) where {T<:BlasFloat} = LAPACK.gemqrt!('R','N', B.factors, B.T, A)
-A_mul_B!(A::StridedVecOrMat{T}, B::QRPackedQ{T}) where {T<:BlasFloat} = LAPACK.ormqr!('R', 'N', B.factors, B.τ, A)
+A_mul_B!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T,S}) where {T<:BlasFloat,S<:StridedMatrix} =
+    LAPACK.gemqrt!('R','N', B.factors, B.T, A)
+A_mul_B!(A::StridedVecOrMat{T}, B::QRPackedQ{T,S}) where {T<:BlasFloat,S<:StridedMatrix} =
+    LAPACK.ormqr!('R', 'N', B.factors, B.τ, A)
 function A_mul_B!(A::StridedMatrix,Q::QRPackedQ)
     mQ, nQ = size(Q.factors)
     mA, nA = size(A,1), size(A,2)
