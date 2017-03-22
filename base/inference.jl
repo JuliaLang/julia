@@ -6,6 +6,8 @@ import Core: _apply, svec, apply_type, Builtin, IntrinsicFunction, MethodInstanc
 const MAX_TYPEUNION_LEN = 3
 const MAX_TYPE_DEPTH = 8
 
+const MAX_INLINE_CONST_SIZE = 256
+
 struct InferenceParams
     world::UInt
 
@@ -548,7 +550,7 @@ add_tfunc(nfields, 1, 1,
         isa(x,Conditional) && return Const(nfields(Bool))
         if isType(x)
             isleaftype(x.parameters[1]) && return Const(nfields(x.parameters[1]))
-        elseif isa(x,DataType) && !x.abstract && !(x.name === Tuple.name && isvatuple(x))
+        elseif isa(x,DataType) && !x.abstract && !(x.name === Tuple.name && isvatuple(x)) && x !== DataType
             return Const(length(x.types))
         end
         return Int
@@ -776,6 +778,9 @@ function getfield_tfunc(s00::ANY, name)
             end
             if isa(sv, Module) && isa(nv, Symbol)
                 return abstract_eval_global(sv, nv)
+            end
+            if !(isa(nv,Symbol) || isa(nv,Int))
+                return Bottom
             end
             if (isa(sv, SimpleVector) || isimmutable(sv)) && isdefined(sv, nv)
                 return abstract_eval_constant(getfield(sv, nv))
@@ -1814,6 +1819,10 @@ function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vect
                 t1 = widenconst(getfield_tfunc(argtypes[2], argtypes[3]))
                 return t1===Bottom ? Bottom : Tuple{t1, Int}
             end
+        end
+    elseif la==2 && argtypes[2] ⊑ SimpleVector && istopfunction(tm, f, :length)
+        if isa(argtypes[2], Const)
+            return Const(length(argtypes[2].val))
         end
     end
 
@@ -3343,20 +3352,13 @@ function exprtype(x::ANY, src::CodeInfo, mod::Module)
 end
 
 # known affect-free calls (also effect-free)
-const _pure_builtins = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof, UnionAll]
+const _pure_builtins = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof, UnionAll, nfields]
 
 # known effect-free calls (might not be affect-free)
 const _pure_builtins_volatile = Any[getfield, arrayref]
 
-function is_pure_builtin(f::ANY)
-    if contains_is(_pure_builtins, f)
-        return true
-    end
-    if contains_is(_pure_builtins_volatile, f)
-        return true
-    end
-    if isa(f,IntrinsicFunction)
-        if !(f === Intrinsics.pointerref || # this one is volatile
+function is_pure_intrinsic(f::IntrinsicFunction)
+    return !(f === Intrinsics.pointerref || # this one is volatile
              f === Intrinsics.pointerset || # this one is never effect-free
              f === Intrinsics.llvmcall ||   # this one is never effect-free
              f === Intrinsics.checked_trunc_sint ||
@@ -3368,13 +3370,13 @@ function is_pure_builtin(f::ANY)
              f === Intrinsics.check_top_bit ||
              f === Intrinsics.sqrt_llvm ||
              f === Intrinsics.cglobal)  # cglobal throws an error for symbol-not-found
-            return true
-        end
-    end
-    if f === return_type
-        return true
-    end
-    return false
+end
+
+function is_pure_builtin(f::ANY)
+    return (contains_is(_pure_builtins, f) ||
+            contains_is(_pure_builtins_volatile, f) ||
+            (isa(f,IntrinsicFunction) && is_pure_intrinsic(f)) ||
+            f === return_type)
 end
 
 function statement_effect_free(e::ANY, src::CodeInfo, mod::Module)
@@ -3426,7 +3428,7 @@ function effect_free(e::ANY, src::CodeInfo, mod::Module, allow_volatile::Bool)
                                 if Const(:uid) ⊑ exprtype(ea[3], src, mod)
                                     return false    # DataType uid field can change
                                 end
-                            elseif !isa(typ, DataType) || typ.mutable || typ.abstract
+                            elseif typ !== SimpleVector && (!isa(typ, DataType) || typ.mutable || typ.abstract)
                                 return false
                             end
                         end
@@ -3500,7 +3502,14 @@ function inline_as_constant(val::ANY, argexprs, sv::InferenceState, invoke_data:
             push!(stmts, invoke_texpr)
         end
     end
-    return (QuoteNode(val), stmts)
+    if !is_self_quoting(val)
+        val = QuoteNode(val)
+    end
+    return (val, stmts)
+end
+
+function is_self_quoting(x::ANY)
+    return isa(x,Number) || isa(x,AbstractString) || isa(x,Tuple) || isa(x,Type)
 end
 
 function countunionsplit(atypes::Vector{Any})
@@ -3686,12 +3695,17 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     # special-case inliners for known pure functions that compute types
     if sv.params.inlining
         if isa(e.typ, Const) # || isconstType(e.typ)
+            val = e.typ.val
             if (f === apply_type || f === fieldtype || f === typeof || f === (===) ||
                 istopfunction(topmod, f, :typejoin) ||
                 istopfunction(topmod, f, :isbits) ||
                 istopfunction(topmod, f, :promote_type) ||
-                (f === Core.kwfunc && length(argexprs) == 2))
-                return inline_as_constant(e.typ.val, argexprs, sv, nothing)
+                (f === Core.kwfunc && length(argexprs) == 2) ||
+                (isbits(val) && Core.sizeof(val) <= MAX_INLINE_CONST_SIZE &&
+                 (contains_is(_pure_builtins, f) ||
+                  (f === getfield && effect_free(e, sv.src, sv.mod, false)) ||
+                  (isa(f,IntrinsicFunction) && is_pure_intrinsic(f)))))
+                return inline_as_constant(val, argexprs, sv, nothing)
             end
         end
     end
@@ -3861,6 +3875,8 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
                         force_infer = true
                     end
                 end
+            elseif la == 2 && method.name == :length && atypes[2] ⊑ SimpleVector
+                force_infer = true
             end
         end
     end
@@ -3880,7 +3896,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     # or existing inferred code info
     frame = nothing # Union{Void, InferenceState}
     src = nothing # Union{Void, CodeInfo}
-    if force_infer && isa(atypes[3], Const)
+    if force_infer && la>2 && isa(atypes[3], Const)
         # Since we inferred this with the information that atypes[3]::Const,
         # must inline with that same information.
         # We do that by overriding the argument type,
@@ -4468,7 +4484,10 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
                 if isa(aarg,Expr) && (is_known_call(aarg, tuple, sv.src, sv.mod) || is_known_call(aarg, svec, sv.src, sv.mod))
                     # apply(f,tuple(x,y,...)) => f(x,y,...)
                     newargs[i-2] = aarg.args[2:end]
-                elseif isa(aarg, Tuple)
+                elseif isa(aarg, Tuple) || (isa(aarg, QuoteNode) && isa(aarg.value, Tuple))
+                    if isa(aarg, QuoteNode)
+                        aarg = aarg.value
+                    end
                     newargs[i-2] = Any[ QuoteNode(x) for x in aarg ]
                 elseif isa(t, DataType) && t.name === Tuple.name && !isvatuple(t) &&
                          length(t.parameters) <= sv.params.MAX_TUPLE_SPLAT
@@ -5068,15 +5087,28 @@ function _getfield_elim_pass!(e::Expr, sv::InferenceState)
                     end
                 end
             end
-        elseif isa(e1,Tuple) && isa(j,Int) && (1 <= j <= length(e1))
-            e1j = e1[j]
-            if !(isa(e1j,Number) || isa(e1j,AbstractString) || isa(e1j,Tuple) ||
-                 isa(e1j,Type))
-                e1j = QuoteNode(e1j)
+        elseif isa(e1, GlobalRef) || isa(e1, Symbol) || isa(e1, Slot) || isa(e1, SSAValue)
+            # non-self-quoting value
+        else
+            if isa(e1, QuoteNode)
+                e1 = e1.value
             end
-            return e1j
-        elseif isa(e1,QuoteNode) && isa(e1.value,Tuple) && isa(j,Int) && (1 <= j <= length(e1.value))
-            return QuoteNode(e1.value[j])
+            if isimmutable(e1) || isa(e1,SimpleVector)
+                # SimpleVector length field is immutable
+                if isa(j, QuoteNode)
+                    j = j.value
+                    if !(isa(j,Int) || isa(j,Symbol))
+                        return e
+                    end
+                end
+                if isdefined(e1, j)
+                    e1j = getfield(e1, j)
+                    if !is_self_quoting(e1j)
+                        e1j = QuoteNode(e1j)
+                    end
+                    return e1j
+                end
+            end
         end
     end
     return e
