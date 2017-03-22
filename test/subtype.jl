@@ -879,6 +879,11 @@ function test_intersection()
     @testintersect(Tuple{Int,Any,Vararg{A}} where A>:Integer,
                    Tuple{Any,Int,Vararg{A}} where A>:Integer,
                    Tuple{Int,Int,Vararg{A}} where A>:Integer)
+
+    # issue #21132
+    @testintersect(Pair{L,Tuple{L,Pair{L,HL}}} where {L,HL},
+                   Pair{R,Tuple{Pair{R,HR},R}} where {R,HR},
+                   Bottom)  # X == Pair{X,...} is not satisfiable
 end
 
 function test_intersection_properties()
