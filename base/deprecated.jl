@@ -107,6 +107,13 @@ macro deprecate_binding(old, new, export_old=true)
          Expr(:call, :deprecate, Expr(:quote, old)))
 end
 
+# BEGIN 0.6-alpha deprecations (delete when 0.6 is released)
+
+@deprecate isambiguous(m1::Method, m2::Method, b::Bool) isambiguous(m1, m2, ambiguous_bottom=b) false
+# TODO: delete allow_bottom keyword code in Base.Test.detect_ambiguities
+
+# END 0.6-alpha deprecations
+
 # BEGIN 0.6 deprecations
 
 const _oldstyle_array_vcat_ = false
