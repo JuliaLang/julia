@@ -29,6 +29,8 @@ JL_DLLEXPORT char * __cdecl dirname(char *);
 
 JL_DLLEXPORT int jl_is_initialized(void) { return jl_main_module!=NULL; }
 
+const char *jl_get_default_sysimg_path(void);
+
 // First argument is the usr/lib directory where libjulia is, or NULL to guess.
 // if that doesn't work, try the full path to the "lib" directory that
 // contains lib/julia/sys.ji
@@ -43,6 +45,8 @@ JL_DLLEXPORT void jl_init_with_image(const char *julia_home_dir,
     jl_options.julia_home = julia_home_dir;
     if (image_relative_path != NULL)
         jl_options.image_file = image_relative_path;
+    else
+        jl_options.image_file = jl_get_default_sysimg_path();
     julia_init(JL_IMAGE_JULIA_HOME);
     jl_exception_clear();
 }
