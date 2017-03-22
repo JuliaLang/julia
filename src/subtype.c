@@ -423,6 +423,13 @@ static int is_leaf_bound(jl_value_t *v)
     return !jl_is_type(v) && !jl_is_typevar(v);
 }
 
+static int is_leaf_typevar(jl_value_t *v)
+{
+    if (jl_is_typevar(v))
+        return is_leaf_typevar(((jl_tvar_t*)v)->lb);
+    return is_leaf_bound(v);
+}
+
 static jl_value_t *widen_Type(jl_value_t *t)
 {
     if (jl_is_type_type(t) && !jl_is_typevar(jl_tparam0(t)))
@@ -481,6 +488,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
             // multiple union members), consider the value unknown.
             if (!oldval || !jl_is_typevar(oldval) || !jl_is_long(val))
                 e->envout[e->envidx] = val;
+            // TODO: substitute the value (if any) of this variable into previous envout entries
         }
     }
     else {
@@ -492,7 +500,8 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     //  ( Tuple{Int, Int}    <: Tuple{T, T} where T) but
     // !( Tuple{Int, String} <: Tuple{T, T} where T)
     // Then check concreteness by checking that the lower bound is not an abstract type.
-    if (ans && (vb.concrete || (!vb.occurs_inv && vb.occurs_cov > 1))) {
+    if (ans && (vb.concrete || (!vb.occurs_inv && vb.occurs_cov > 1)) &&
+        is_leaf_typevar((jl_value_t*)u->var)) {
         if (jl_is_typevar(vb.lb)) {
             // TODO test case that demonstrates the need for this?
             /*
@@ -1340,14 +1349,14 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     else {
         res = intersect(u->body, t, e, param);
     }
-    vb->concrete |= (!vb->occurs_inv && vb->occurs_cov > 1);
+    vb->concrete |= (!vb->occurs_inv && vb->occurs_cov > 1 && is_leaf_typevar((jl_value_t*)u->var));
 
     // handle the "diagonal dispatch" rule, which says that a type var occurring more
     // than once, and only in covariant position, is constrained to concrete types. E.g.
     //  ( Tuple{Int, Int}    <: Tuple{T, T} where T) but
     // !( Tuple{Int, String} <: Tuple{T, T} where T)
     // Then check concreteness by checking that the lower bound is not an abstract type.
-    if (res != jl_bottom_type && (vb->concrete || (!vb->occurs_inv && vb->occurs_cov > 1))) {
+    if (res != jl_bottom_type && vb->concrete) {
         if (jl_is_typevar(vb->lb)) {
         }
         else if (!is_leaf_bound(vb->lb)) {
@@ -1725,8 +1734,6 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
         record_var_occurrence(lookup(e, (jl_tvar_t*)y), e, param);
         return intersect_var((jl_tvar_t*)y, x, e, 1, param);
     }
-    if (y == (jl_value_t*)jl_any_type) return x;
-    if (x == (jl_value_t*)jl_any_type) return y;
     if (!jl_has_free_typevars(x) && !jl_has_free_typevars(y)) {
         if (jl_subtype(x, y)) return x;
         if (jl_subtype(y, x)) return y;
@@ -1743,6 +1750,8 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
             return intersect_unionall(y, (jl_unionall_t*)x, e, 0, param);
         return intersect_union(x, (jl_uniontype_t*)y, e, 1, param);
     }
+    if (y == (jl_value_t*)jl_any_type) return x;
+    if (x == (jl_value_t*)jl_any_type) return y;
     if (jl_is_unionall(x)) {
         if (jl_is_unionall(y)) {
             jl_value_t *a=NULL, *b=jl_bottom_type, *res=NULL;
@@ -1802,11 +1811,11 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                 if (ii == jl_bottom_type) return jl_bottom_type;
                 if (jl_is_typevar(xp1)) {
                     jl_varbinding_t *xb = lookup(e, (jl_tvar_t*)xp1);
-                    if (xb) xb->concrete = 1;
+                    if (xb && is_leaf_typevar((jl_value_t*)xb->var)) xb->concrete = 1;
                 }
                 if (jl_is_typevar(yp1)) {
                     jl_varbinding_t *yb = lookup(e, (jl_tvar_t*)yp1);
-                    if (yb) yb->concrete = 1;
+                    if (yb && is_leaf_typevar((jl_value_t*)yb->var)) yb->concrete = 1;
                 }
                 JL_GC_PUSH2(&ii, &i2);
                 // Vararg{T,N} <: Vararg{T2,N2}; equate N and N2

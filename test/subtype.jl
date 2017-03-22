@@ -112,6 +112,10 @@ function test_diagonal()
 
     @test issub_strict(Tuple{Int, Int},
                        (@UnionAll T Tuple{Union{T,String}, T}))
+
+    # don't consider a diagonal variable concrete if it already has an abstract lower bound
+    @test isequal_type(Tuple{Vararg{A}} where A>:Integer,
+                       Tuple{Vararg{A}} where A>:Integer)
 end
 
 # level 3: UnionAll
@@ -867,6 +871,14 @@ function test_intersection()
     I, E = intersection_env(Tuple{Ref{Integer},Int,Any}, Tuple{Ref{Z},Z,Z} where Z)
     @test isequal_type(I, Tuple{Ref{Integer},Int,Integer})
     @test E[1] == Integer
+
+    # issue #21118
+    A = Tuple{Ref, Vararg{Any}}
+    B = Tuple{Vararg{Union{Z,Ref,Void}}} where Z<:Union{Ref,Void}
+    @test B <: _type_intersect(A, B)
+    @testintersect(Tuple{Int,Any,Vararg{A}} where A>:Integer,
+                   Tuple{Any,Int,Vararg{A}} where A>:Integer,
+                   Tuple{Int,Int,Vararg{A}} where A>:Integer)
 end
 
 function test_intersection_properties()
