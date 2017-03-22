@@ -401,12 +401,7 @@ function mapreduce_impl(f, op::Union{typeof(scalarmax),
     # locate the first non NaN number
     @inbounds v = f(A[first])
     i = first + 1
-    while v != v && i <= last
-        @inbounds Ai = A[i]
-        v = f(Ai)
-        i += 1
-    end
-    while i <= last
+    while (v == v) && (i <= last)
         @inbounds Ai = A[i]
         v = op(v, f(Ai))
         i += 1

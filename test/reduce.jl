@@ -169,6 +169,10 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test isnan(minimum([NaN]))
 @test isequal(extrema([NaN]), (NaN, NaN))
 
+@test isnan(maximum([NaN, 2.]))
+@test isnan(minimum([NaN, 2.]))
+@test isequal(extrema([NaN, 2.]), (NaN,NaN))
+
 @test isnan(maximum([NaN, 2., 3.]))
 @test isnan(minimum([NaN, 2., 3.]))
 @test isequal(extrema([NaN, 2., 3.]), (NaN,NaN))
@@ -176,6 +180,14 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test isnan(maximum([4., 3., NaN, 5., 2.]))
 @test isnan(minimum([4., 3., NaN, 5., 2.]))
 @test isequal(extrema([4., 3., NaN, 5., 2.]), (NaN,NaN))
+
+ # test long arrays
+@test isnan(maximum([NaN; 1.:10000.]))
+@test isnan(maximum([1.:10000.; NaN]))
+@test isnan(minimum([NaN; 1.:10000.]))
+@test isnan(minimum([1.:10000.; NaN]))
+@test isequal(extrema([1.:10000.; NaN]), (NaN,NaN))
+@test isequal(extrema([NaN; 1.:10000.]), (NaN,NaN))
 
 @test maximum(abs2, 3:7) == 49
 @test minimum(abs2, 3:7) == 9
