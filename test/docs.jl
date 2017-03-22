@@ -707,15 +707,37 @@ struct D <: B
     three::Float64
 end
 
-abstract type AT{T} <: B end
+abstract type at0{T<:Number,N} end
+abstract type at1{T>:Integer,N} <:at0{T,N} end
 
-struct SU{N,T} <: AT{T}
-    one::NTuple{N,T}
-    two::String
-    three::Float64
+const at_ = at0{Int64}
+
+primitive type pt2{T<:Number,N,A>:Integer} <:at0{T,N} 32 end
+
+struct st3{T<:Integer,N} <: at0{T,N}
+    a::NTuple{N,T}
+    b::Array{Int64,N}
+    c::Int64
 end
 
-primitive type PT{T} <: AT{T} 32 end
+struct st4{T,N} <: at0{T,N}
+    a::T
+    b::NTuple{N,T}
+end
+
+struct st5{T>:Int64,N} <:at1{T,N}
+    c::st3{T,N}
+end
+
+mutable struct mt6{T<:Integer,N} <:at1{T,N}
+    d::st5{T,N}
+end
+
+const ut7 = Union{st5, mt6}
+
+const ut8 = Union{at1, pt2, st3, st4}
+
+const ut9{T} = Union{at1{T}, pt2{T}, st3{T}, st4{T}}
 
 f = () -> nothing
 
@@ -758,7 +780,6 @@ abstract type $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A
 
 **Subtypes:**
 ```
-$(curmod_prefix)Undocumented.AT
 $(curmod_prefix)Undocumented.D
 ```
 """)
@@ -797,19 +818,19 @@ No documentation found.
 **Summary:**
 
 ```
-abstract type $(curmod_prefix)Undocumented.AT{T} <: $(curmod_prefix)Undocumented.B
+abstract type $(curmod_prefix)Undocumented.at0{T<:Number,N} <: Any
 ```
 
 **Subtypes:**
 
 ```
-$(curmod_prefix)Undocumented.PT{T}
-$(curmod_prefix)Undocumented.SU{N,T} where N
+$(curmod_prefix)Undocumented.at1{Integer<:T<:Number,N}
+$(curmod_prefix)Undocumented.pt2{T<:Number,N,A>:Integer}
+$(curmod_prefix)Undocumented.st3{T<:Integer,N}
+$(curmod_prefix)Undocumented.st4{T<:Number,N}
 ```
-
-Note, `$(curmod_prefix)Undocumented.AT` is represented by a wrapping type `UnionAll` that describes the bounds of its type parameters.
 """)
-@test docstrings_equal(@doc(Undocumented.AT), doc"$doc_str")
+@test docstrings_equal(@doc(Undocumented.at0), doc"$doc_str")
 
 doc_str = Markdown.parse("""
 No documentation found.
@@ -817,20 +838,64 @@ No documentation found.
 **Summary:**
 
 ```
-struct $(curmod_prefix)Undocumented.SU{N,T} <: $(curmod_prefix)Undocumented.AT{T}
+abstract type $(curmod_prefix)Undocumented.at1{T>:Integer,N} <: $(curmod_prefix)Undocumented.at0{T,N} where N where T>:Integer
+```
+
+**Subtypes:**
+
+```
+$(curmod_prefix)Undocumented.mt6{Integer,N}
+```
+""")
+@test docstrings_equal(@doc(Undocumented.at1), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+**Summary:**
+
+```
+abstract type $(curmod_prefix)Undocumented.at0{Int64,N} <: Any
+```
+
+**Subtypes:**
+
+```
+$(curmod_prefix)Undocumented.pt2{Int64,N,A>:Integer}
+$(curmod_prefix)Undocumented.st3{Int64,N}
+$(curmod_prefix)Undocumented.st4{Int64,N}
+```
+""")
+@test docstrings_equal(@doc(Undocumented.at_), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+**Summary:**
+
+```
+primitive type $(curmod_prefix)Undocumented.pt2{T<:Number,N,A>:Integer} <: $(curmod_prefix)Undocumented.at0{T,N} where N where T<:Number
+```
+""")
+@test docstrings_equal(@doc(Undocumented.pt2), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+**Summary:**
+
+```
+struct $(curmod_prefix)Undocumented.st3{T<:Integer,N} <: $(curmod_prefix)Undocumented.at0{T,N} where N where T<:Integer
 ```
 
 **Fields:**
-
 ```
-one   :: Tuple{Vararg{T,N}}
-two   :: String
-three :: Float64
+a :: Tuple{Vararg{T<:Integer,N}}
+b :: Array{Int64,N}
+c :: Int64
 ```
-
-Note, `$(curmod_prefix)Undocumented.SU` is represented by a wrapping type `UnionAll` that describes the bounds of its type parameters.
 """)
-@test docstrings_equal(@doc(Undocumented.SU), doc"$doc_str")
+@test docstrings_equal(@doc(Undocumented.st3), doc"$doc_str")
 
 doc_str = Markdown.parse("""
 No documentation found.
@@ -838,12 +903,88 @@ No documentation found.
 **Summary:**
 
 ```
-primitive type $(curmod_prefix)Undocumented.PT{T} <: $(curmod_prefix)Undocumented.AT{T}
+struct $(curmod_prefix)Undocumented.st4{T,N} <: $(curmod_prefix)Undocumented.at0{T,N} where N where T
 ```
 
-Note, `$(curmod_prefix)Undocumented.PT` is represented by a wrapping type `UnionAll` that describes the bounds of its type parameters.
+**Fields:**
+```
+a :: T
+b :: Tuple{Vararg{T,N}}
+```
 """)
-@test docstrings_equal(@doc(Undocumented.PT), doc"$doc_str")
+@test docstrings_equal(@doc(Undocumented.st4), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+**Summary:**
+
+```
+struct $(curmod_prefix)Undocumented.st5{T>:Int64,N} <: $(curmod_prefix)Undocumented.at1{T,N} where N where T>:Int64
+```
+
+**Fields:**
+```
+c :: $(curmod_prefix)Undocumented.st3{T>:Int64,N}
+```
+""")
+@test docstrings_equal(@doc(Undocumented.st5), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+**Summary:**
+
+```
+mutable struct $(curmod_prefix)Undocumented.mt6{T<:Integer,N} <: $(curmod_prefix)Undocumented.at1{T,N} where N where T<:Integer
+```
+
+**Fields:**
+```
+d :: $(curmod_prefix)Undocumented.st5{T<:Integer,N}
+```
+""")
+@test docstrings_equal(@doc(Undocumented.mt6), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+`$(curmod_prefix)Undocumented.ut7` is of type `Union`.
+
+**Types:**
+
+ - `$(curmod_prefix)Undocumented.st5{T>:Int64,N}`
+ - `$(curmod_prefix)Undocumented.mt6{T<:Integer,N}`
+""")
+@test docstrings_equal(@doc(Undocumented.ut7), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+`$(curmod_prefix)Undocumented.ut8` is of type `Union`.
+
+**Types:**
+
+ - `$(curmod_prefix)Undocumented.at1{T>:Integer,N}`
+ - `$(curmod_prefix)Undocumented.pt2{T<:Number,N,A>:Integer}`
+ - `$(curmod_prefix)Undocumented.st3{T<:Integer,N}`
+ - `$(curmod_prefix)Undocumented.st4{T,N}`
+""")
+@test docstrings_equal(@doc(Undocumented.ut8), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+`$(curmod_prefix)Undocumented.ut9` is of type `Union`.
+
+**Types:**
+
+ - `$(curmod_prefix)Undocumented.at1{T,N}`
+ - `$(curmod_prefix)Undocumented.pt2{T,N,A>:Integer}`
+ - `$(curmod_prefix)Undocumented.st3{T,N}`
+ - `$(curmod_prefix)Undocumented.st4{T,N}`
+""")
+@test docstrings_equal(@doc(Undocumented.ut9), doc"$doc_str")
 
 let d = @doc Undocumented.f
     io = IOBuffer()

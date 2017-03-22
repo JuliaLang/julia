@@ -373,28 +373,31 @@ function summarize(io::IO, λ::Function, binding)
     println(io, "```\n", methods(λ), "\n```")
 end
 
-function summarize(io::IO, U::UnionAll, binding)
-    summarize(io, Base.unwrap_unionall(U), binding)
-    println(io, "Note, ```", Base.typename(U),
-            "``` is represented by a wrapping type ```UnionAll``` that " *
-            "describes the bounds of its type parameters.\n")
+function summarize(io::IO, T::Type{Union}, binding)
+    println(io, "**Types:**")
+    t = getfield(binding.mod, binding.var)
+    for ut in Core.Inference.uniontypes(Base.unwrap_unionall(t))
+        print(io, " - `")
+        Base.show_datatype(io, isa(ut, UnionAll) ? Base.unwrap_unionall(ut) : ut)
+        println(io, "`")
+    end
 end
 
-function summarize(io::IO, T::DataType, binding)
+function summarize(io::IO, T::Union{DataType,UnionAll}, binding)
+    dt = isa(T,UnionAll) ? Base.unwrap_unionall(T) : T
+    isa(dt, Union) && return summarize(io, dt, binding)
     println(io, "**Summary:**")
     println(io, "```")
-    println(io,
-            T.abstract ? "abstract type" :
-            T.mutable  ? "mutable struct" :
-            Base.isstructtype(T) ? "struct" : "primitive type",
-            " ", T, " <: ", supertype(T)
-            )
+    println(io, Base.isabstract(T)    ? "abstract type" :
+                Base.isstructtype(dt) ? (dt.mutable ? "mutable struct" : "struct")
+                                      : "primitive type",
+                " ", dt, " <: ", supertype(T))
     println(io, "```")
-    if !isempty(fieldnames(T))
+    if !isempty(fieldnames(dt))
         println(io, "**Fields:**")
         println(io, "```")
-        pad = maximum(length(string(f)) for f in fieldnames(T))
-        for (f, t) in zip(fieldnames(T), T.types)
+        pad = maximum(length(string(f)) for f in fieldnames(dt))
+        for (f, t) in zip(fieldnames(dt), dt.types)
             println(io, rpad(f, pad), " :: ", t)
         end
         println(io, "```")
@@ -403,7 +406,8 @@ function summarize(io::IO, T::DataType, binding)
         println(io, "**Subtypes:**")
         println(io, "```")
         for t in subtypes(T)
-            println(io, t)
+            Base.show_datatype(io, isa(t, UnionAll) ? Base.unwrap_unionall(t) : t)
+            println(io)
         end
         println(io, "```")
     end
