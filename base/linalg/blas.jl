@@ -832,7 +832,7 @@ for (fname, elty) in ((:dtrsv_,:Float64),
                 (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &uplo, &trans, &diag, &n,
-                 A, &max(1,stride(A,2)), x, &1)
+                 A, &max(1,stride(A,2)), x, &stride(x, 1))
             x
         end
         function trsv(uplo::Char, trans::Char, diag::Char, A::StridedMatrix{$elty}, x::StridedVector{$elty})
@@ -865,7 +865,7 @@ for (fname, elty) in ((:dger_,:Float64),
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{BlasInt}),
                  &m, &n, &α, x,
-                 &1, y, &1, A,
+                 &stride(x, 1), y, &stride(y, 1), A,
                  &max(1,stride(A,2)))
             A
         end
