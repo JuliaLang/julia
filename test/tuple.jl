@@ -65,8 +65,14 @@ end
 @test eltype((1,2,3)) === Int
 @test eltype((1.0,2.0,3.0)) <: AbstractFloat
 @test eltype((true, false)) === Bool
-@test eltype((1,2.0, false)) === Any
+@test eltype((1, 2.0, false)) === typejoin(Int, Float64, Bool)
 @test eltype(()) === Union{}
+@test eltype(Tuple{Int, Float64, Vararg{Bool}}) === typejoin(Int, Float64, Bool)
+@test eltype(Tuple{Int, T, Vararg{Bool}} where T <: AbstractFloat) ===
+    typejoin(Int, AbstractFloat, Bool)
+@test eltype(Tuple{Int, Bool, Vararg{T}} where T <: AbstractFloat) ===
+    typejoin(Int, AbstractFloat, Bool)
+@test eltype(Union{Tuple{Int, Float64}, Tuple{Vararg{Bool}}}) === typejoin(Int, Float64, Bool)
 
 begin
     local foo
