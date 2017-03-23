@@ -384,7 +384,9 @@ function _compat(ex::Expr)
             return ex
         elseif VERSION < v"0.6.0-dev.2575" #20414
             ex = Expr(:curly, map(a -> isexpr(a, :call, 2) && a.args[1] == :(<:) ?
-                                  :($TypeVar($(QuoteNode(gensym(:T))), $(a.args[2]), false)) : a,
+                                  :($TypeVar($(QuoteNode(gensym(:T))), $(a.args[2]), false)) :
+                                  isexpr(a, :call, 2) && a.args[1] == :(>:) ?
+                                  :($TypeVar($(QuoteNode(gensym(:T))), $(a.args[2]), $Any, false)) : a,
                                   ex.args)...)
         end
     elseif ex.head === :macrocall
@@ -1153,6 +1155,14 @@ if !isdefined(Base, :iszero)
     iszero(x::Number) = x == 0
     iszero(x::AbstractArray) = all(iszero, x)
     export iszero
+end
+
+# julia　#20407
+if !isdefined(Base, :(>:))
+    const >: = let
+        _issupertype(a::ANY, b::ANY) = issubtype(b, a)
+    end
+    export >:
 end
 
 # julia#19088
