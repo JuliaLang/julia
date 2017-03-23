@@ -7159,10 +7159,11 @@ extern "C" void jl_init_codegen(void)
     initializeAnalysis(Registry);
 #endif
 
-    InitializeNativeTarget();
-    InitializeNativeTargetAsmPrinter();
-    InitializeNativeTargetAsmParser();
-    InitializeNativeTargetDisassembler();
+    InitializeAllTargets();
+    InitializeAllTargetMCs();
+    InitializeAllAsmPrinters();
+    InitializeAllAsmParsers();
+    InitializeAllDisassemblers();
 
     Module *m, *engine_module;
     engine_module = new Module("julia", jl_LLVMContext);
