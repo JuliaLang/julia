@@ -135,7 +135,7 @@ ambs = detect_ambiguities(Ambig5)
 # Test that Core and Base are free of ambiguities
 # TODO jb/subtype: we now detect a lot more
 @test !isempty(detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=true))
-@test_broken detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=false) == []
+@test detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=false) == []
 # not using isempty so this prints more information when it fails
 
 amb_1(::Int8, ::Int) = 1
