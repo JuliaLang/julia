@@ -63,6 +63,16 @@ first(t::Tuple) = t[1]
 
 eltype(::Type{Tuple{}}) = Bottom
 eltype(::Type{<:Tuple{Vararg{E}}}) where {E} = E
+function eltype(t::Type{<:Tuple})
+    @_pure_meta
+    t isa Union && return typejoin(eltype(t.a), eltype(t.b))
+    t´ = unwrap_unionall(t)
+    r = Union{}
+    for ti in t´.parameters
+        r = typejoin(r, rewrap_unionall(unwrapva(ti), t))
+    end
+    return r
+end
 
 # version of tail that doesn't throw on empty tuples (used in array indexing)
 safe_tail(t::Tuple) = tail(t)
