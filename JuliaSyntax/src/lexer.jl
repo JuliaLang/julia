@@ -17,7 +17,8 @@ import ..Tokens: FUNCTION, ABSTRACT, IDENTIFIER, BAREMODULE, BEGIN, BITSTYPE, BR
 
 export tokenize
 
-ishex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F') || c == '_'
+ishex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F') || c == 
+'_'
 isbinary(c::Char) = c == '0' || c == '1' || c == '_'
 isoctal(c::Char) =  '0' ≤ c ≤ '7' || c == '_'
 iswhitespace(c::Char) = Base.UTF8proc.isspace(c)
@@ -309,8 +310,8 @@ function next_token(l::Lexer)
     elseif c == '+'; return lex_plus(l);
     elseif c == '-'; return lex_minus(l);
     elseif c == '`'; return lex_cmd(l);
-    elseif isdigit(c); return lex_digit(l)
     elseif is_identifier_start_char(c); return lex_identifier(l, c)
+    elseif isdigit(c); return lex_digit(l)
     elseif (k = get(UNICODE_OPS, c, Tokens.ERROR)) != Tokens.ERROR; return emit(l, k)
     else emit_error(l)
     end
@@ -515,23 +516,29 @@ function lex_xor(l::Lexer)
     return emit(l, Tokens.XOR)
 end
 
+function accept_integer(l::Lexer)
+    !isdigit(peekchar(l)) && return false
+    while true
+        if !accept(l, isdigit)
+            if accept(l, '_')
+                if !isdigit(peekchar(l))
+                    backup!(l)
+                    return true
+                end
+            else
+                return true
+            end
+        end
+    end
+end
+
 # A digit has been consumed
 function lex_digit(l::Lexer)
     backup!(l)
     longest, kind = position(l), Tokens.ERROR
 
-    accept_batch(l, isdigit)
-
-    # Accept "_" in digits
-    while true
-        if !accept(l, '_')
-            break
-        end
-        if !accept_batch(l, isdigit)
-            backup!(l)
-            return emit(l, Tokens.INTEGER)
-        end
-    end
+    # accept_batch(l, isdigit)
+    accept_integer(l)
 
     if accept(l, '.')
         if peekchar(l) == '.' # 43.. -> [43, ..]
@@ -550,11 +557,13 @@ function lex_digit(l::Lexer)
             || peekchar(l) == ';'
             || peekchar(l) == '@'
             || peekchar(l) == '`'
-            || peekchar(l) == '"')
+            || peekchar(l) == '"'
+            || eof(l))
             backup!(l)
             return emit(l, Tokens.INTEGER)
         end
-        accept_batch(l, isdigit)
+        # accept_batch(l, isdigit)
+        accept_integer(l)
         if accept(l, '.')
             if peekchar(l) == '.' # 1.23..3.21 is valid
                 backup!(l)
@@ -570,13 +579,13 @@ function lex_digit(l::Lexer)
         end
         if accept(l, "eEf") # 1313.[0-9]*e
             accept(l, "+-")
-            if accept_batch(l, isdigit) && position(l) > longest
+            if accept_integer(l) && position(l) > longest
                 longest, kind = position(l), Tokens.FLOAT
             end
         end
     elseif accept(l, "eEf")
         accept(l, "+-")
-        if accept_batch(l, isdigit) && position(l) > longest
+        if accept_integer(l) && position(l) > longest
             longest, kind = position(l), Tokens.FLOAT
         else
             backup!(l)
@@ -744,6 +753,8 @@ function lex_dot(l::Lexer)
         else
             return emit(l, Tokens.DDOT)
         end
+    elseif Base.isdigit(peekchar(l))
+        return lex_digit(l)
     else
         return emit(l, Tokens.DOT)
     end

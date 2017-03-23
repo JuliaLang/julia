@@ -330,6 +330,15 @@ end
     @test tok("!=b",   1).kind == Tokens.NOT_EQ
 end
 
+@testset "lex integers" begin
+    @test tok("1234").kind            == T.INTEGER
+    @test tok("12_34").kind           == T.INTEGER
+    @test tok("_1234").kind           == T.IDENTIFIER
+    @test tok("1234_").kind           == T.INTEGER
+    @test tok("1234_", 2).kind        == T.IDENTIFIER
+    @test tok("1234x").kind           == T.INTEGER
+    @test tok("1234x", 2).kind        == T.IDENTIFIER
+end
 
 @testset "floats with trailing `.` " begin
     @test tok("1.0").kind == Tokens.FLOAT
@@ -343,6 +352,7 @@ end
     @test tok("1.,").kind == Tokens.FLOAT
     @test tok("1.;").kind == Tokens.FLOAT
     @test tok("1.@").kind == Tokens.FLOAT
+    @test tok("1.").kind == Tokens.FLOAT
     @test tok("1.\"text\" ").kind == Tokens.FLOAT
 
     @test tok("1.+ ").kind == Tokens.INTEGER
@@ -356,7 +366,12 @@ end
     @test tok("0o0167").kind == T.INTEGER
 end
 
-@testset "lex bin/hex/oct w underscores" begin
+@testset "lex float/bin/hex/oct w underscores" begin
+    @test tok("1_1.11").kind           == T.FLOAT
+    @test tok("11.1_1").kind           == T.FLOAT
+    @test tok("1_1.1_1").kind           == T.FLOAT
+    @test tok("_1.1_1", 1).kind           == T.IDENTIFIER
+    @test tok("_1.1_1", 2).kind           == T.FLOAT
     @test tok("0x0167_032").kind           == T.INTEGER
     @test tok("0b0101001_0100_0101").kind  == T.INTEGER
     @test tok("0o01054001_0100_0101").kind == T.INTEGER
