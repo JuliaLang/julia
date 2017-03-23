@@ -27,14 +27,14 @@ To use Compat in your Julia package, add a line `Compat` to the
 `REQUIRE` file in your package directory.  Then, in your package,
 shortly after the `module` statement include lines like these:
 
-```
+```julia
 using Compat
 import Compat.String
 ```
 
 and then as needed add
 
-```
+```julia
 @compat ...compat syntax...
 ```
 
