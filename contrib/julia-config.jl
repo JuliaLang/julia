@@ -70,9 +70,9 @@ function cflags()
     arg2 = replace(includeDir(),"\\","\\\\")
     threading_def = threadingOn() ? "-DJULIA_ENABLE_THREADING=1 " : ""
     if is_unix()
-        return """$(threading_def)-fPIC -DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2"""
+        return """-std=gnu99 $(threading_def)-fPIC -DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2"""
     else
-        return """$(threading_def)-DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2"""
+        return """-std=gnu99 $(threading_def)-DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2"""
     end
 end
 
