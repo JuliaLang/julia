@@ -146,8 +146,11 @@ for (name, f) in l
     verbose && println("$name readuntil...")
     for (t, s, m) in [
             ("aaabc", "aab", "aaab"),
+            ("αααβγ", "ααβ", "αααβ"),
             ("barbarbarians", "barbarian", "barbarbarian")]
         local t, s, m
+        !isascii(t) && name in ("File", "PipeEndpoint") && continue
+
         @test readuntil(io(t), s) == m
 
         s = SubString(s, start(s), endof(s))
