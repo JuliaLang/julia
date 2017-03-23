@@ -604,8 +604,10 @@ STATIC_INLINE void gc_setmark(jl_ptls_t ptls, jl_taggedvalue_t *o,
     }
 }
 
-inline void gc_setmark_buf(jl_ptls_t ptls, void *o,
-                           uint8_t mark_mode, size_t minsz)
+#ifndef __cplusplus
+inline
+#endif
+void gc_setmark_buf(jl_ptls_t ptls, void *o, uint8_t mark_mode, size_t minsz)
 {
     jl_taggedvalue_t *buf = jl_astaggedvalue(o);
     uintptr_t tag = buf->header;
