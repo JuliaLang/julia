@@ -928,11 +928,13 @@
                          ((not (memq op unary-ops))
                           (error (string "\"" op "\" is not a unary operator")))
                          (else
-                          (let ((arg (parse-unary s)))
-                            (if (and (pair? arg)
-                                     (eq? (car arg) 'tuple))
-                                (list* 'call op (cdr arg))
-                                (list  'call op arg)))))))))
+                          (let* ((arg  (parse-unary s))
+                                 (args (if (and (pair? arg) (eq? (car arg) 'tuple))
+                                           (cons op (cdr arg))
+                                           (list op arg))))
+                            (if (or (eq? op '|<:|) (eq? op '|>:|))
+                                args
+                                (cons 'call args)))))))))
           (else
            (parse-juxtapose (parse-factor s) s)))))
 

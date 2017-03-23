@@ -34,7 +34,7 @@ const skipfiles = [
     # files to check - already copyright
     # see: https://github.com/JuliaLang/julia/pull/11073#issuecomment-98099389
     "../base/special/trig.jl",
-    "../base/special/exp.jl"
+    "../base/special/exp.jl",
     "../base/linalg/givens.jl",
     #
     "../src/abi_llvm.cpp",
@@ -59,6 +59,7 @@ const skipfiles = [
     "../src/support/utf8.c",
     "../test/perf/micro/randmtzig.c",
     "../src/support/crc32c.c",
+    "../examples/quine.jl", # has license text in code
 ]
 
 const ext_prefix = Dict([

@@ -73,12 +73,12 @@ type, we could write `Array{T,2} where T`, which is the union of `Array{T,2}` fo
 Such a type is represented by a `UnionAll` object, which contains a variable (`T` in this example,
 of type `TypeVar`), and a wrapped type (`Array{T,2}` in this example).
 
-Consider the following methods::
+Consider the following methods:
 
 ```julia
 f1(A::Array) = 1
 f2(A::Array{Int}) = 2
-f3(A::Array{T}) where T<:Any = 3
+f3(A::Array{T}) where {T<:Any} = 3
 f4(A::Array{Any}) = 4
 ```
 
@@ -315,7 +315,143 @@ Ptr{Void} @0x00007f5998a04370
 
 so `Tuple == Tuple{Vararg{Any}}` is indeed the primary type.
 
-## Introduction to the internal machinery: `jltypes.c`
+## Diagonal types
+
+Consider the type `Tuple{T,T} where T`.
+A method with this signature would look like:
+
+```julia
+f(x::T, y::T) where {T} = ...
+```
+
+According to the usual interpretation of a `UnionAll` type, this `T` ranges over all
+types, including `Any`, so this type should be equivalent to `Tuple{Any,Any}`.
+However, this interpretation causes some practical problems.
+
+First, a value of `T` needs to be available inside the method definition.
+For a call like `f(1, 1.0)`, it's not clear what `T` should be.
+It could be `Union{Int,Float64}`, or perhaps `Real`.
+Intuitively, we expect the declaration `x::T` to mean `T === typeof(x)`.
+To make sure that invariant holds, we need `typeof(x) === typeof(y) === T` in this method.
+That implies the method should only be called for arguments of the exact same type.
+
+It turns out that being able to dispatch on whether two values have the same type
+is very useful (this is used by the promotion system for example), so we have
+multiple reasons to want a different interpretation of `Tuple{T,T} where T`.
+To make this work we add the following rule to subtyping: if a variable occurs
+more than once in covariant position, it is restricted to ranging over only concrete
+types.
+("Covariant position" means that only `Tuple` and `Union` types occur between an
+occurrence of a variable and the `UnionAll` type that introduces it.)
+Such variables are called "diagonal variables" or "concrete variables".
+
+So for example, `Tuple{T,T} where T` can be seen as
+`Union{Tuple{Int8,Int8}, Tuple{Int16,Int16}, ...}`, where `T` ranges over all
+concrete types.
+This gives rise to some interesting subtyping results.
+For example `Tuple{Real,Real}` is not a subtype of `Tuple{T,T} where T`, because
+it includes some types like `Tuple{Int8,Int16}` where the two elements have
+different types.
+`Tuple{Real,Real}` and `Tuple{T,T} where T` have the non-trivial intersection
+`Tuple{T,T} where T<:Real`.
+However, `Tuple{Real}` *is* a subtype of `Tuple{T} where T`, because in that case
+`T` occurs only once and so is not diagonal.
+
+Next consider a signature like the following:
+
+```julia
+f(a::Array{T}, x::T, y::T) where {T} = ...
+```
+
+In this case, `T` occurs in invariant position inside `Array{T}`.
+That means whatever type of array is passed unambiguously determines
+the value of `T` --- we say `T` has an *equality constraint* on it.
+Therefore in this case the diagonal rule is not really necessary, since
+the array determines `T` and we can then allow `x` and `y` to be of
+any subtypes of `T`.
+So variables that occur in invariant position are never considered diagonal.
+This choice of behavior is slightly controversial --- some feel this definition
+should be written as
+
+```julia
+f(a::Array{T}, x::S, y::S) where {T, S<:T} = ...
+```
+
+to clarify whether `x` and `y` need to have the same type.
+In this version of the signature they would, or we could introduce a third variable for
+the type of `y` if `x` and `y` can have different types.
+
+The next complication is the interaction of unions and diagonal variables, e.g.
+
+```julia
+f(x::Union{Void,T}, y::T) where {T} = ...
+```
+
+Consider what this declaration means.
+`y` has type `T`. `x` then can have either the same type `T`, or else be of type `Void`.
+So all of the following calls should match:
+
+```julia
+f(1, 1)
+f("", "")
+f(2.0, 2.0)
+f(nothing, 1)
+f(nothing, "")
+f(nothing, 2.0)
+```
+
+These examples are telling us something: when `x` is `nothing::Void`, there are no
+extra constraints on `y`.
+It is as if the method signature had `y::Any`.
+This means that whether a variable is diagonal is not a static property based on
+where it appears in a type.
+Rather, it depends on where a variable appears when the subtyping algorithm *uses* it.
+When `x` has type `Void`, we don't need to use the `T` in `Union{Void,T}`, so `T`
+does not "occur".
+Indeed, we have the following type equivalence:
+
+```julia
+(Tuple{Union{Void,T},T} where T) == Union{Tuple{Void,Any}, Tuple{T,T} where T}
+```
+
+## Subtyping diagonal variables
+
+The subtyping algorithm for diagonal variables has two components:
+(1) identifying variable occurrences, and (2) ensuring that diagonal
+variables range over concrete types only.
+
+The first task is accomplished by keeping counters `occurs_inv` and `occurs_cov`
+(in `src/subtype.c`) for each variable in the environment, tracking the number
+of invariant and covariant occurrences, respectively.
+A variable is diagonal when `occurs_inv == 0 && occurs_cov > 1`.
+
+The second task is accomplished by imposing a condition on a variable's lower bound.
+As the subtyping algorithm runs, it narrows the bounds of each variable
+(raising lower bounds and lowering upper bounds) to keep track of the
+range of variable values for which the subtype relation would hold.
+When we are done evaluating the body of a `UnionAll` type whose variable is diagonal,
+we look at the final values of the bounds.
+Since the variable must be concrete, a contradiction occurs if its lower bound
+could not be a subtype of a concrete type.
+For example, an abstract type like `AbstractArray` cannot be a subtype of a concrete
+type, but a concrete type like `Int` can be, and the empty type `Bottom` can be as well.
+If a lower bound fails this test the algorithm stops with the answer `false`.
+
+For example, in the problem `Tuple{Int,String} <: Tuple{T,T} where T`, we derive that
+this would be true if `T` were a supertype of `Union{Int,String}`.
+However, `Union{Int,String}` is an abstract type, so the relation does not hold.
+
+This concreteness test is done by the function `is_leaf_bound`.
+Note that this test is slightly different from `jl_is_leaf_type`, since it also returns
+`true` for `Bottom`.
+Currently this function is heuristic, and does not catch all possible concrete types.
+The difficulty is that whether a lower bound is concrete might depend on the values
+of other type variable bounds.
+For example, `Vector{T}` is equivalent to the concrete type `Vector{Int}` only if
+both the upper and lower bounds of `T` equal `Int`.
+We have not yet worked out a complete algorithm for this.
+
+## Introduction to the internal machinery
 
 Most operations for dealing with types are found in the files `jltypes.c` and `subtype.c`.
 A good way to start is to watch subtyping in action.

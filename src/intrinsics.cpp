@@ -309,6 +309,10 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *d
         return NULL;
     }
 
+    // if this is a derived pointer, make sure the root usage itself is also visible to the delete-root pass
+    if (x.gcroot && x.V != x.gcroot)
+        mark_gc_use(x);
+
     // bools stored as int8, so an extra Trunc is needed to get an int1
     Value *p = x.constant ? literal_pointer_val(x.constant) : x.V;
     Type *ptype = (to == T_int1 ? T_pint8 : to->getPointerTo());

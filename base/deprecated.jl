@@ -107,6 +107,13 @@ macro deprecate_binding(old, new, export_old=true)
          Expr(:call, :deprecate, Expr(:quote, old)))
 end
 
+# BEGIN 0.6-alpha deprecations (delete when 0.6 is released)
+
+@deprecate isambiguous(m1::Method, m2::Method, b::Bool) isambiguous(m1, m2, ambiguous_bottom=b) false
+# TODO: delete allow_bottom keyword code in Base.Test.detect_ambiguities
+
+# END 0.6-alpha deprecations
+
 # BEGIN 0.6 deprecations
 
 const _oldstyle_array_vcat_ = false
@@ -1279,6 +1286,17 @@ end
 @deprecate_binding LinearFast IndexLinear false
 @deprecate_binding LinearSlow IndexCartesian false
 @deprecate_binding linearindexing IndexStyle false
+
+# #20876
+@eval Base.Dates begin
+    function Base.Dates.parse(x::AbstractString, df::DateFormat)
+        Base.depwarn(string(
+            "`Dates.parse(x::AbstractString, df::DateFormat)` is deprecated, use ",
+            "`sort!(filter!(el -> isa(el, Dates.Period), Dates.parse_components(x, df), rev=true, lt=Dates.periodisless)` ",
+            " instead."), :parse)
+        sort!(filter!(el -> isa(el, Period), parse_components(x, df)), rev=true, lt=periodisless)
+     end
+end
 
 # END 0.6 deprecations
 

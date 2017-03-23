@@ -130,8 +130,6 @@ static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
     }
     if (!ok) goto no;
     assert(jl_is_datatype(a));
-    if (!jl_egal((jl_value_t*)((jl_datatype_t*)a)->types, (jl_value_t*)dta->types))
-        goto no;
     a = dta->name->wrapper;
     b = dtb->name->wrapper;
     while (jl_is_unionall(a)) {
@@ -142,6 +140,20 @@ static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
             goto no;
         a = jl_instantiate_unionall(ua, (jl_value_t*)ub->var);
         b = ub->body;
+    }
+    assert(jl_is_datatype(a) && jl_is_datatype(b));
+    size_t i, nf = jl_field_count(dta);
+    for (i=0; i < nf; i++) {
+        jl_value_t *ta = jl_svecref(((jl_datatype_t*)a)->types, i);
+        jl_value_t *tb = jl_svecref(((jl_datatype_t*)b)->types, i);
+        if (jl_has_free_typevars(ta)) {
+            if (!jl_has_free_typevars(tb) || !jl_egal(ta, tb))
+                goto no;
+        }
+        else if (jl_has_free_typevars(tb) || jl_typeof(ta) != jl_typeof(tb) ||
+                 !jl_types_equal(ta, tb)) {
+            goto no;
+        }
     }
     JL_GC_POP();
     return 1;

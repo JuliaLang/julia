@@ -18,6 +18,7 @@ module_name(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
     module_parent(m::Module) -> Module
 
 Get a module's enclosing `Module`. `Main` is its own parent, as is `LastMain` after `workspace()`.
+
 ```jldoctest
 julia> module_parent(Main)
 Main
@@ -279,6 +280,7 @@ end
     Base.parameter_upper_bound(t::UnionAll, idx)
 
 Determine the upper bound of a type parameter in the underlying type. E.g.:
+
 ```jldoctest
 julia> struct Foo{T<:AbstractFloat, N}
            x::Tuple{T, N}
@@ -924,25 +926,24 @@ function function_module(f::ANY, types::ANY)
 end
 
 """
-    method_exists(f, Tuple type) -> Bool
+    method_exists(f, Tuple type, world=typemax(UInt)) -> Bool
 
 Determine whether the given generic function has a method matching the given
-`Tuple` of argument types.
+`Tuple` of argument types with the upper bound of world age given by `world`.
 
 ```jldoctest
 julia> method_exists(length, Tuple{Array})
 true
 ```
 """
-function method_exists(f::ANY, t::ANY)
+function method_exists(f::ANY, t::ANY, world=typemax(UInt))
     t = to_tuple_type(t)
     t = Tuple{isa(f,Type) ? Type{f} : typeof(f), t.parameters...}
-    return ccall(:jl_method_exists, Cint, (Any, Any, UInt), typeof(f).name.mt, t,
-        typemax(UInt)) != 0
+    return ccall(:jl_method_exists, Cint, (Any, Any, UInt), typeof(f).name.mt, t, world) != 0
 end
 
 """
-    isambiguous(m1, m2, [allow_bottom_tparams=true]) -> Bool
+    isambiguous(m1, m2; ambiguous_bottom=false) -> Bool
 
 Determine whether two methods `m1` and `m2` (typically of the same
 function) are ambiguous.  This test is performed in the context of
@@ -950,8 +951,10 @@ other methods of the same function; in isolation, `m1` and `m2` might
 be ambiguous, but if a third method resolving the ambiguity has been
 defined, this returns `false`.
 
-For parametric types, `allow_bottom_tparams` controls whether
-`Union{}` is considered a valid intersection of type parameters. For example:
+For parametric types, the `ambiguous_bottom` keyword argument controls whether
+`Union{}` counts as an ambiguous intersection of type parameters – when `true`,
+it is considered ambiguous, when `false` it is not. For example:
+
 ```jldoctest
 julia> foo(x::Complex{<:Integer}) = 1
 foo (generic function with 1 method)
@@ -964,17 +967,17 @@ julia> m1, m2 = collect(methods(foo));
 julia> typeintersect(m1.sig, m2.sig)
 Tuple{#foo,Complex{Union{}}}
 
-julia> Base.isambiguous(m1, m2, true)
+julia> Base.isambiguous(m1, m2, ambiguous_bottom=true)
 true
 
-julia> Base.isambiguous(m1, m2, false)
+julia> Base.isambiguous(m1, m2, ambiguous_bottom=false)
 false
 ```
 """
-function isambiguous(m1::Method, m2::Method, allow_bottom_tparams::Bool=true)
+function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
     ti = typeintersect(m1.sig, m2.sig)
     ti === Bottom && return false
-    if !allow_bottom_tparams
+    if !ambiguous_bottom
         has_bottom_parameter(ti) && return false
     end
     ml = _methods_by_ftype(ti, -1, typemax(UInt))

@@ -503,30 +503,62 @@ let
     method_error = MethodError(EnclosingModule.AbstractTypeNoConstructors, ())
 
     # Test that it shows a special message when no constructors have been defined by the user.
-    @test sprint(
-        showerror,
-        method_error
-    ) == "MethodError: no constructors have been defined for $(EnclosingModule.AbstractTypeNoConstructors)"
+    @test sprint(showerror, method_error) ==
+        "MethodError: no constructors have been defined for $(EnclosingModule.AbstractTypeNoConstructors)"
 
     # Does it go back to previous behaviour when there *is* at least
     # one constructor defined?
     EnclosingModule.AbstractTypeNoConstructors(x, y) = x + y
-    @test startswith(sprint(
-            showerror,
-            method_error
-        ), "MethodError: no method matching $(EnclosingModule.AbstractTypeNoConstructors)()"
-    )
+    @test startswith(sprint(showerror, method_error),
+        "MethodError: no method matching $(EnclosingModule.AbstractTypeNoConstructors)()")
 
     # Test that the 'default' sysimg.jl method is not displayed.
-    @test !contains(sprint(
-            showerror,
-            method_error
-        ),
-        "where T at sysimg.jl"
-    )
+    @test !contains(sprint(showerror, method_error), "where T at sysimg.jl")
 
     # Test that tab-completion will not show the 'default' sysimg.jl method.
     for method_string in Base.REPLCompletions.complete_methods(:(EnclosingModule.AbstractTypeNoConstructors()))
         @test !startswith(method_string, "(::Type{T})(arg) where T in Base at sysimg.jl")
+    end
+end
+
+@testset "show for manually thrown MethodError" begin
+    global f21006
+
+    f21006() = nothing
+    # Normal method error should not warn about world age.
+    ex1 = try
+        f21006(())
+    catch e
+        e
+    end::MethodError
+    str = sprint(Base.showerror, ex1)
+    @test startswith(str, "MethodError: no method matching f21006(::Tuple{})")
+    @test !contains(str, "The applicable method may be too new")
+
+    # If newer applicable methods are available, world age should be mentioned.
+    f21006(x) = x
+    @test f21006(()) === ()
+    str = sprint(Base.showerror, ex1)
+    @test startswith(str, "MethodError: no method matching f21006(::Tuple{})")
+    @test contains(str, "The applicable method may be too new: running in world age $(ex1.world)")
+
+    # This method error should be thrown in a world new enough for `f21006(())`.
+    # Also makes sure it's printed correctly.
+    ex2 = try
+        f21006((), ())
+    catch e
+        e
+    end::MethodError
+    str = sprint(Base.showerror, ex2)
+    @test startswith(str, "MethodError: no method matching f21006(::Tuple{}, ::Tuple{})")
+    @test !contains(str, "The applicable method may be too new")
+
+    # If the method is available in the exception world or if the exception world is invalid,
+    # don't warn about world age
+    for ex3 in (MethodError(ex1.f, ex1.args, ex2.world),
+                MethodError(ex1.f, ex1.args, typemax(UInt)))
+        str = sprint(Base.showerror, ex3)
+        @test startswith(str, "MethodError: no method matching f21006(::Tuple{})")
+        @test !contains(str, "The applicable method may be too new")
     end
 end

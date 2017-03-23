@@ -684,3 +684,43 @@ Base.@pure function a20704(x)
 end
 aa20704(x) = x(nothing)
 @test code_typed(aa20704, (typeof(a20704),))[1][1].pure
+
+#issue #21065, elision of _apply when splatted expression is not effect_free
+function f21065(x,y)
+    println("x=$x, y=$y")
+    return x, y
+end
+g21065(x,y) = +(f21065(x,y)...)
+function test_no_apply(expr::Expr)
+    return all(test_no_apply, expr.args)
+end
+function test_no_apply(ref::GlobalRef)
+    return ref.mod != Core || ref.name !== :_apply
+end
+test_no_apply(::Any) = true
+@test all(test_no_apply, code_typed(g21065, Tuple{Int,Int})[1].first.code)
+
+# issue #20033
+# check return_type_tfunc for calls where no method matches
+bcast_eltype_20033(f, A) = Core.Inference.return_type(f, Tuple{eltype(A)})
+err20033(x::Float64...) = prod(x)
+@test bcast_eltype_20033(err20033, [1]) === Union{}
+@test Base.return_types(bcast_eltype_20033, (typeof(err20033), Vector{Int},)) == Any[Type{Union{}}]
+# return_type on builtins
+@test Core.Inference.return_type(tuple, Tuple{Int,Int8,Int}) === Tuple{Int,Int8,Int}
+
+# issue #21088
+@test Core.Inference.return_type(typeof, Tuple{Int}) == Type{Int}
+
+# Inference of constant svecs
+@eval fsvecinf() = $(QuoteNode(Core.svec(Tuple{Int,Int}, Int)))[1]
+@test Core.Inference.return_type(fsvecinf, Tuple{}) == Type{Tuple{Int,Int}}
+
+# nfields tfunc on `DataType`
+let f = ()->Val{nfields(DataType[Int][1])}
+    @test f() == Val{0}
+end
+
+# inference on invalid getfield call
+@eval _getfield_with_string_() = getfield($(1=>2), "")
+@test Base.return_types(_getfield_with_string_, ()) == Any[Union{}]

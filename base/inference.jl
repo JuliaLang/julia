@@ -6,6 +6,8 @@ import Core: _apply, svec, apply_type, Builtin, IntrinsicFunction, MethodInstanc
 const MAX_TYPEUNION_LEN = 3
 const MAX_TYPE_DEPTH = 8
 
+const MAX_INLINE_CONST_SIZE = 256
+
 struct InferenceParams
     world::UInt
 
@@ -548,7 +550,7 @@ add_tfunc(nfields, 1, 1,
         isa(x,Conditional) && return Const(nfields(Bool))
         if isType(x)
             isleaftype(x.parameters[1]) && return Const(nfields(x.parameters[1]))
-        elseif isa(x,DataType) && !x.abstract && !(x.name === Tuple.name && isvatuple(x))
+        elseif isa(x,DataType) && !x.abstract && !(x.name === Tuple.name && isvatuple(x)) && x !== DataType
             return Const(length(x.types))
         end
         return Int
@@ -776,6 +778,9 @@ function getfield_tfunc(s00::ANY, name)
             end
             if isa(sv, Module) && isa(nv, Symbol)
                 return abstract_eval_global(sv, nv)
+            end
+            if !(isa(nv,Symbol) || isa(nv,Int))
+                return Bottom
             end
             if (isa(sv, SimpleVector) || isimmutable(sv)) && isdefined(sv, nv)
                 return abstract_eval_constant(getfield(sv, nv))
@@ -1081,12 +1086,13 @@ function tuple_tfunc(argtype::ANY)
     return argtype
 end
 
-function builtin_tfunction(f::ANY, argtypes::Array{Any,1}, sv::InferenceState)
+function builtin_tfunction(f::ANY, argtypes::Array{Any,1},
+                           sv::Union{InferenceState,Void}, params::InferenceParams = sv.params)
     isva = !isempty(argtypes) && isvarargtype(argtypes[end])
     if f === tuple
         for a in argtypes
             if !isa(a, Const)
-                return tuple_tfunc(limit_tuple_depth(sv.params, argtypes_to_type(argtypes)))
+                return tuple_tfunc(limit_tuple_depth(params, argtypes_to_type(argtypes)))
             end
         end
         return Const(tuple(anymap(a->a.val, argtypes)...))
@@ -1135,7 +1141,7 @@ function builtin_tfunction(f::ANY, argtypes::Array{Any,1}, sv::InferenceState)
             else
                 sigty = nothing
             end
-            if isa(sigty, Type) && sigty <: Tuple
+            if isa(sigty, Type) && sigty <: Tuple && sv !== nothing
                 return invoke_tfunc(af, sigty, argtypes_to_type(argtypes[3:end]), sv)
             end
         end
@@ -1405,8 +1411,8 @@ end
 # Union of Tuples of the same length is converted to Tuple of Unions.
 # returns an array of types, or `nothing`.
 function precise_container_type(arg, typ, vtypes::VarTable, sv)
-    tti = widenconst(typ)
-    tti = unwrap_unionall(tti)
+    tti0 = widenconst(typ)
+    tti = unwrap_unionall(tti0)
     if isa(typ, Const) && (isa(typ.val, SimpleVector) || isa(typ.val, Tuple))
         return Any[ abstract_eval_constant(x) for x in typ.val ]
     elseif isa(arg, Expr) && arg.head === :call && (abstract_evals_to_constant(arg.args[1], svec, vtypes, sv) ||
@@ -1422,26 +1428,26 @@ function precise_container_type(arg, typ, vtypes::VarTable, sv)
         if _any(t -> !isa(t,DataType) || !(t <: Tuple) || !isknownlength(t), utis)
             return Any[Vararg{Any}]
         end
-        result = Any[utis[1].parameters...]
+        result = Any[rewrap_unionall(p, tti0) for p in utis[1].parameters]
         for t in utis[2:end]
             if length(t.parameters) != length(result)
                 return Any[Vararg{Any}]
             end
             for j in 1:length(t.parameters)
-                result[j] = tmerge(result[j], t.parameters[j])
+                result[j] = tmerge(result[j], rewrap_unionall(t.parameters[j], tti0))
             end
         end
         return result
-    elseif isa(tti,DataType) && tti <: Tuple
-        if isvatuple(tti) && length(tti.parameters) == 1
-            return Any[Vararg{unwrapva(tti.parameters[1])}]
+    elseif isa(tti0,DataType) && tti0 <: Tuple
+        if isvatuple(tti0) && length(tti0.parameters) == 1
+            return Any[Vararg{unwrapva(tti0.parameters[1])}]
         else
-            return tti.parameters
+            return tti0.parameters
         end
-    elseif tti <: Array
-        return Any[Vararg{eltype(tti)}]
+    elseif tti0 <: Array
+        return Any[Vararg{eltype(tti0)}]
     else
-        return Any[Vararg{abstract_iteration(tti, vtypes, sv)}]
+        return Any[Vararg{abstract_iteration(tti0, vtypes, sv)}]
     end
 end
 
@@ -1517,21 +1523,29 @@ function return_type_tfunc(argtypes::ANY, vtypes::VarTable, sv::InferenceState)
         if isa(tt, Const) || (isType(tt) && !has_free_typevars(tt))
             aft = argtypes[2]
             if isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
-                   (isleaftype(aft) && !(aft <: Builtin) && !(aft <: IntrinsicFunction))
+                   (isleaftype(aft) && !(aft <: Builtin))
                 af_argtype = isa(tt, Const) ? tt.val : tt.parameters[1]
                 if isa(af_argtype, DataType) && af_argtype <: Tuple
                     argtypes_vec = Any[aft, af_argtype.parameters...]
+                    astype = argtypes_to_type(argtypes_vec)
+                    if !(aft ⊑ Builtin) &&
+                        _methods_by_ftype(astype, 0, sv.params.world,
+                                          UInt[typemin(UInt)], UInt[typemax(UInt)]) !== false
+                        # return_type returns Bottom if no methods match, even though
+                        # inference doesn't necessarily.
+                        return Const(Bottom)
+                    end
                     if isa(aft, Const)
                         rt = abstract_call(aft.val, (), argtypes_vec, vtypes, sv)
                     elseif isconstType(aft)
                         rt = abstract_call(aft.parameters[1], (), argtypes_vec, vtypes, sv)
                     else
-                        rt = abstract_call_gf_by_type(nothing, argtypes_to_type(argtypes_vec), sv)
+                        rt = abstract_call_gf_by_type(nothing, astype, sv)
                     end
                     if isa(rt, Const)
                         # output was computed to be constant
                         return Const(typeof(rt.val))
-                    elseif isleaftype(rt)
+                    elseif isleaftype(rt) || rt === Bottom
                         # output type was known for certain
                         return Const(rt)
                     elseif (isa(tt, Const) || isconstType(tt)) &&
@@ -1787,7 +1801,7 @@ function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vect
             if isa(argtypes[2], Const) && isa(argtypes[3], Const)
                 svecval = argtypes[2].val
                 idx = argtypes[3].val
-                if isa(idx, Int) && 1 <= idx <= length(svecval) &
+                if isa(idx, Int) && 1 <= idx <= length(svecval) &&
                       isassigned(svecval, idx)
                     return Const(getindex(svecval, idx))
                 end
@@ -1805,6 +1819,10 @@ function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vect
                 t1 = widenconst(getfield_tfunc(argtypes[2], argtypes[3]))
                 return t1===Bottom ? Bottom : Tuple{t1, Int}
             end
+        end
+    elseif la==2 && argtypes[2] ⊑ SimpleVector && istopfunction(tm, f, :length)
+        if isa(argtypes[2], Const)
+            return Const(length(argtypes[2].val))
         end
     end
 
@@ -3334,20 +3352,13 @@ function exprtype(x::ANY, src::CodeInfo, mod::Module)
 end
 
 # known affect-free calls (also effect-free)
-const _pure_builtins = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof, UnionAll]
+const _pure_builtins = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof, UnionAll, nfields]
 
 # known effect-free calls (might not be affect-free)
 const _pure_builtins_volatile = Any[getfield, arrayref]
 
-function is_pure_builtin(f::ANY)
-    if contains_is(_pure_builtins, f)
-        return true
-    end
-    if contains_is(_pure_builtins_volatile, f)
-        return true
-    end
-    if isa(f,IntrinsicFunction)
-        if !(f === Intrinsics.pointerref || # this one is volatile
+function is_pure_intrinsic(f::IntrinsicFunction)
+    return !(f === Intrinsics.pointerref || # this one is volatile
              f === Intrinsics.pointerset || # this one is never effect-free
              f === Intrinsics.llvmcall ||   # this one is never effect-free
              f === Intrinsics.checked_trunc_sint ||
@@ -3359,13 +3370,13 @@ function is_pure_builtin(f::ANY)
              f === Intrinsics.check_top_bit ||
              f === Intrinsics.sqrt_llvm ||
              f === Intrinsics.cglobal)  # cglobal throws an error for symbol-not-found
-            return true
-        end
-    end
-    if f === return_type
-        return true
-    end
-    return false
+end
+
+function is_pure_builtin(f::ANY)
+    return (contains_is(_pure_builtins, f) ||
+            contains_is(_pure_builtins_volatile, f) ||
+            (isa(f,IntrinsicFunction) && is_pure_intrinsic(f)) ||
+            f === return_type)
 end
 
 function statement_effect_free(e::ANY, src::CodeInfo, mod::Module)
@@ -3417,7 +3428,7 @@ function effect_free(e::ANY, src::CodeInfo, mod::Module, allow_volatile::Bool)
                                 if Const(:uid) ⊑ exprtype(ea[3], src, mod)
                                     return false    # DataType uid field can change
                                 end
-                            elseif !isa(typ, DataType) || typ.mutable || typ.abstract
+                            elseif typ !== SimpleVector && (!isa(typ, DataType) || typ.mutable || typ.abstract)
                                 return false
                             end
                         end
@@ -3491,7 +3502,14 @@ function inline_as_constant(val::ANY, argexprs, sv::InferenceState, invoke_data:
             push!(stmts, invoke_texpr)
         end
     end
-    return (QuoteNode(val), stmts)
+    if !is_self_quoting(val)
+        val = QuoteNode(val)
+    end
+    return (val, stmts)
+end
+
+function is_self_quoting(x::ANY)
+    return isa(x,Number) || isa(x,AbstractString) || isa(x,Tuple) || isa(x,Type)
 end
 
 function countunionsplit(atypes::Vector{Any})
@@ -3677,12 +3695,17 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     # special-case inliners for known pure functions that compute types
     if sv.params.inlining
         if isa(e.typ, Const) # || isconstType(e.typ)
+            val = e.typ.val
             if (f === apply_type || f === fieldtype || f === typeof || f === (===) ||
                 istopfunction(topmod, f, :typejoin) ||
                 istopfunction(topmod, f, :isbits) ||
                 istopfunction(topmod, f, :promote_type) ||
-                (f === Core.kwfunc && length(argexprs) == 2))
-                return inline_as_constant(e.typ.val, argexprs, sv, nothing)
+                (f === Core.kwfunc && length(argexprs) == 2) ||
+                (isbits(val) && Core.sizeof(val) <= MAX_INLINE_CONST_SIZE &&
+                 (contains_is(_pure_builtins, f) ||
+                  (f === getfield && effect_free(e, sv.src, sv.mod, false)) ||
+                  (isa(f,IntrinsicFunction) && is_pure_intrinsic(f)))))
+                return inline_as_constant(val, argexprs, sv, nothing)
             end
         end
     end
@@ -3852,6 +3875,8 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
                         force_infer = true
                     end
                 end
+            elseif la == 2 && method.name == :length && atypes[2] ⊑ SimpleVector
+                force_infer = true
             end
         end
     end
@@ -3871,7 +3896,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     # or existing inferred code info
     frame = nothing # Union{Void, InferenceState}
     src = nothing # Union{Void, CodeInfo}
-    if force_infer && isa(atypes[3], Const)
+    if force_infer && la>2 && isa(atypes[3], Const)
         # Since we inferred this with the information that atypes[3]::Const,
         # must inline with that same information.
         # We do that by overriding the argument type,
@@ -4459,13 +4484,24 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
                 if isa(aarg,Expr) && (is_known_call(aarg, tuple, sv.src, sv.mod) || is_known_call(aarg, svec, sv.src, sv.mod))
                     # apply(f,tuple(x,y,...)) => f(x,y,...)
                     newargs[i-2] = aarg.args[2:end]
-                elseif isa(aarg, Tuple)
+                elseif isa(aarg, Tuple) || (isa(aarg, QuoteNode) && isa(aarg.value, Tuple))
+                    if isa(aarg, QuoteNode)
+                        aarg = aarg.value
+                    end
                     newargs[i-2] = Any[ QuoteNode(x) for x in aarg ]
                 elseif isa(t, DataType) && t.name === Tuple.name && !isvatuple(t) &&
-                        effect_free(aarg, sv.src, sv.mod, true) && length(t.parameters) <= sv.params.MAX_TUPLE_SPLAT
-                    # apply(f,t::(x,y)) => f(t[1],t[2])
+                         length(t.parameters) <= sv.params.MAX_TUPLE_SPLAT
+                    if effect_free(aarg, sv.src, sv.mod, true)
+                        # apply(f,t::(x,y)) => f(t[1],t[2])
+                        tmpv = aarg
+                    else
+                        # apply(f,t::(x,y)) => tmp=t; f(tmp[1],tmp[2])
+                        tmpv = newvar!(sv, t)
+                        insert!(stmts, ins, Expr(:(=), tmpv, aarg))
+                        ins += 1
+                    end
                     tp = t.parameters
-                    newargs[i-2] = Any[ mk_getfield(aarg,j,tp[j]) for j=1:length(tp) ]
+                    newargs[i-2] = Any[ mk_getfield(tmpv,j,tp[j]) for j=1:length(tp) ]
                 else
                     # not all args expandable
                     return e
@@ -4551,31 +4587,30 @@ function remove_unused_vars!(src::CodeInfo)
     end
 end
 
-var_matches(a::ANY,      b::ANY)      = false
-var_matches(a::SSAValue, b::SSAValue) = a.id == b.id
-var_matches(a::Slot,     b::Slot)     = a.id == b.id
-
-function delete_var!(src::CodeInfo, v::Union{Slot,SSAValue})
+function delete_vars!(src::CodeInfo, r::ObjectIdDict)
     filter!(x->!(isa(x,Expr) && (x.head === :(=) || x.head === :const) &&
-                 var_matches(x.args[1], v)),
+                 haskey(r, normvar(x.args[1]))),
             src.code)
     return src
 end
 
-function slot_replace!(src::CodeInfo, v::Union{Slot,SSAValue}, rhs::ANY)
+function replace_vars!(src::CodeInfo, r::ObjectIdDict)
     for i = 1:length(src.code)
-        src.code[i] = _slot_replace!(src.code[i], v, rhs)
+        src.code[i] = _replace_vars!(src.code[i], r)
     end
     return src
 end
 
-function _slot_replace!(e::ANY, v::Union{Slot,SSAValue}, rhs::ANY)
-    if var_matches(e, v)
-        return rhs
+function _replace_vars!(e::ANY, r::ObjectIdDict)
+    if isa(e,SSAValue) || isa(e,Slot)
+        v = normvar(e)
+        if haskey(r, v)
+            return r[v]
+        end
     end
     if isa(e,Expr)
         for i = 1:length(e.args)
-            e.args[i] = _slot_replace!(e.args[i], v, rhs)
+            e.args[i] = _replace_vars!(e.args[i], r)
         end
     end
     return e
@@ -4585,6 +4620,9 @@ is_argument(nargs::Int, v::Slot) = slot_id(v) <= nargs
 
 normslot(s::SlotNumber) = s
 normslot(s::TypedSlot) = SlotNumber(slot_id(s))
+normvar(s::Slot) = normslot(s)
+normvar(s::SSAValue) = s
+normvar(s::ANY) = s
 
 # given a single-assigned var and its initializer `init`, return what we can
 # replace `var` with, or `var` itself if we shouldn't replace it
@@ -4632,17 +4670,21 @@ end
 
 # remove all single-assigned vars v in "v = x" where x is an argument.
 # "sa" is the result of find_sa_vars
-function remove_redundant_temp_vars!(src::CodeInfo, nargs::Int, sa)
+function remove_redundant_temp_vars!(src::CodeInfo, nargs::Int, sa::ObjectIdDict)
     flags = src.slotflags
     slottypes = src.slottypes
     ssavaluetypes = src.ssavaluetypes
+    repls = ObjectIdDict()
     for (v, init) in sa
         repl = get_replacement(sa, v, init, nargs, slottypes, ssavaluetypes)
         compare = isa(repl,TypedSlot) ? normslot(repl) : repl
         if compare !== v
-            delete_var!(src, v)
-            slot_replace!(src, v, repl)
+            repls[v] = repl
         end
+    end
+    if !isempty(repls)
+        delete_vars!(src, repls)
+        replace_vars!(src, repls)
     end
     return src
 end
@@ -4745,7 +4787,7 @@ function void_use_elim_pass!(sv::InferenceState)
             return !effect_free(ex, sv.src, sv.mod, false)
         elseif (isa(ex, GotoNode) || isa(ex, LineNumberNode) ||
                 isa(ex, NewvarNode) || isa(ex, Symbol) || isa(ex, LabelNode))
-            # This is a list of special type handled by the compiler
+            # This is a list of special types handled by the compiler
             return true
         end
         return false
@@ -5045,15 +5087,28 @@ function _getfield_elim_pass!(e::Expr, sv::InferenceState)
                     end
                 end
             end
-        elseif isa(e1,Tuple) && isa(j,Int) && (1 <= j <= length(e1))
-            e1j = e1[j]
-            if !(isa(e1j,Number) || isa(e1j,AbstractString) || isa(e1j,Tuple) ||
-                 isa(e1j,Type))
-                e1j = QuoteNode(e1j)
+        elseif isa(e1, GlobalRef) || isa(e1, Symbol) || isa(e1, Slot) || isa(e1, SSAValue)
+            # non-self-quoting value
+        else
+            if isa(e1, QuoteNode)
+                e1 = e1.value
             end
-            return e1j
-        elseif isa(e1,QuoteNode) && isa(e1.value,Tuple) && isa(j,Int) && (1 <= j <= length(e1.value))
-            return QuoteNode(e1.value[j])
+            if isimmutable(e1) || isa(e1,SimpleVector)
+                # SimpleVector length field is immutable
+                if isa(j, QuoteNode)
+                    j = j.value
+                    if !(isa(j,Int) || isa(j,Symbol))
+                        return e
+                    end
+                end
+                if isdefined(e1, j)
+                    e1j = getfield(e1, j)
+                    if !is_self_quoting(e1j)
+                        e1j = QuoteNode(e1j)
+                    end
+                    return e1j
+                end
+            end
         end
     end
     return e
@@ -5345,11 +5400,20 @@ end
 function return_type(f::ANY, t::ANY)
     params = InferenceParams(ccall(:jl_get_tls_world_age, UInt, ()))
     rt = Union{}
-    for m in _methods(f, t, -1, params.world)
-        ty = typeinf_type(m[3], m[1], m[2], true, params)
-        ty === nothing && return Any
-        rt = tmerge(rt, ty)
-        rt === Any && break
+    if isa(f, Builtin)
+        rt = builtin_tfunction(f, Any[t.parameters...], nothing, params)
+        if isa(rt, TypeVar)
+            rt = rt.ub
+        else
+            rt = widenconst(rt)
+        end
+    else
+        for m in _methods(f, t, -1, params.world)
+            ty = typeinf_type(m[3], m[1], m[2], true, params)
+            ty === nothing && return Any
+            rt = tmerge(rt, ty)
+            rt === Any && break
+        end
     end
     return rt
 end

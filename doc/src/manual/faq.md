@@ -227,7 +227,7 @@ julia> sqrt(-2.0)
 ERROR: DomainError:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
 Stacktrace:
- [1] sqrt(::Float64) at ./math.jl:412
+ [1] sqrt(::Float64) at ./math.jl:422
 
 julia> 2^-5
 ERROR: DomainError:
@@ -235,7 +235,7 @@ Cannot raise an integer x to a negative power -n.
 Make x a float by adding a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.
 Stacktrace:
  [1] power_by_squaring(::Int64, ::Int64) at ./intfuncs.jl:170
- [2] ^(::Int64, ::Type{Val{-5}}) at ./intfuncs.jl:201
+ [2] literal_pow(::Base.#^, ::Int64, ::Type{Val{-5}}) at ./intfuncs.jl:205
 ```
 
 This behavior is an inconvenient consequence of the requirement for type-stability.  In the case
@@ -474,7 +474,7 @@ the loop, but it cannot algebraically reduce multiple operations into fewer equi
 
 The most reasonable alternative to having integer arithmetic silently overflow is to do checked
 arithmetic everywhere, raising errors when adds, subtracts, and multiplies overflow, producing
-values that are not value-correct. In this [blog post](http://danluu.com/integer-overflow), Dan
+values that are not value-correct. In this [blog post](http://danluu.com/integer-overflow/), Dan
 Luu analyzes this and finds that rather than the trivial cost that this approach should in theory
 have, it ends up having a substantial cost due to compilers (LLVM and GCC) not gracefully optimizing
 around the added overflow checks. If this improves in the future, we could consider defaulting

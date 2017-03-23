@@ -778,7 +778,7 @@ static inline jl_cgval_t update_julia_type(const jl_cgval_t &v, jl_value_t *typ,
                 return jl_cgval_t(v.V, v.gcroot, true, typ, NULL);
             }
             else {
-                // type mismatch (there wasn't any boxed values in the union)
+                // type mismatch (there weren't any boxed values in the union)
                 CreateTrap(builder);
                 return jl_cgval_t();
             }
@@ -885,7 +885,7 @@ static jl_cgval_t convert_julia_type(const jl_cgval_t &v, jl_value_t *typ, jl_co
                 return jl_cgval_t(v.V, v.gcroot, true, typ, NULL);
             }
             else {
-                // type mismatch: there wasn't any boxed values in the union
+                // type mismatch: there weren't any boxed values in the union
                 CreateTrap(builder);
                 return jl_cgval_t();
             }
@@ -3515,7 +3515,7 @@ static jl_cgval_t emit_local(jl_value_t *slotload, jl_codectx_t *ctx)
         if (!vi.isVolatile || vi.value.constant || !vi.value.V) {
             v = vi.value;
             if (vi.pTIndex)
-                 v.TIndex = builder.CreateLoad(vi.pTIndex);
+                v.TIndex = builder.CreateLoad(vi.pTIndex);
         }
         else {
             // copy value to a non-volatile location
@@ -3528,7 +3528,7 @@ static jl_cgval_t emit_local(jl_value_t *slotload, jl_codectx_t *ctx)
             builder.CreateStore(unbox, slot);
             Value *tindex = NULL;
             if (vi.pTIndex)
-                 tindex = builder.CreateLoad(vi.pTIndex, /*volatile*/true);
+                tindex = builder.CreateLoad(vi.pTIndex, /*volatile*/true);
             v = mark_julia_slot(slot, vi.value.typ, tindex, tbaa_stack);
         }
         if (vi.boxroot == NULL)
@@ -3542,7 +3542,7 @@ static jl_cgval_t emit_local(jl_value_t *slotload, jl_codectx_t *ctx)
         Value *boxed = builder.CreateLoad(vi.boxroot, vi.isVolatile);
         Value *box_isnull;
         if (vi.usedUndef)
-             box_isnull = builder.CreateICmpNE(boxed, V_null);
+            box_isnull = builder.CreateICmpNE(boxed, V_null);
         if (vi.pTIndex) {
             // value is either boxed in the stack slot, or unboxed in value
             // as indicated by testing (pTIndex & 0x80)
@@ -3850,7 +3850,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                     builder.CreateMemCpy(vi.value.V,
                                          data_pointer(rval_info, ctx, T_pint8),
                                          copy_bytes,
-                                         /*TODO: min_align*/1,
+                                         ((jl_datatype_t*)rval_info.typ)->layout->alignment,
                                          vi.isVolatile,
                                          tbaa);
                 }

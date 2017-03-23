@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 using Base.Bottom
 using Base.Test
 
@@ -110,6 +112,10 @@ function test_diagonal()
 
     @test issub_strict(Tuple{Int, Int},
                        (@UnionAll T Tuple{Union{T,String}, T}))
+
+    # don't consider a diagonal variable concrete if it already has an abstract lower bound
+    @test isequal_type(Tuple{Vararg{A}} where A>:Integer,
+                       Tuple{Vararg{A}} where A>:Integer)
 end
 
 # level 3: UnionAll
@@ -853,6 +859,31 @@ function test_intersection()
     @testintersect(Tuple{Ref{Pair{p2,T2}}, Pair{p1,Pair}} where T2 where p2 where p1,
                    Tuple{Ref{Pair{p3,T3}}, Pair{p3}} where T3 where p3,
                    Tuple{Ref{Pair{p1,T2}}, Pair{p1,Pair}} where T2 where p1)
+
+    # issue #20998
+    _, E = intersection_env(Tuple{Int,Any,Any}, Tuple{T,T,S} where {T,S})
+    @test length(E) == 2 && E[1] == Int && isa(E[2], TypeVar)
+    _, E = intersection_env(Tuple{Dict{Int,Type}, Type, Any},
+                            Tuple{Dict{K,V}, Any, Int} where {K,V})
+    @test E[2] == Type
+
+    # issue #20611
+    I, E = intersection_env(Tuple{Ref{Integer},Int,Any}, Tuple{Ref{Z},Z,Z} where Z)
+    @test isequal_type(I, Tuple{Ref{Integer},Int,Integer})
+    @test E[1] == Integer
+
+    # issue #21118
+    A = Tuple{Ref, Vararg{Any}}
+    B = Tuple{Vararg{Union{Z,Ref,Void}}} where Z<:Union{Ref,Void}
+    @test B <: _type_intersect(A, B)
+    @testintersect(Tuple{Int,Any,Vararg{A}} where A>:Integer,
+                   Tuple{Any,Int,Vararg{A}} where A>:Integer,
+                   Tuple{Int,Int,Vararg{A}} where A>:Integer)
+
+    # issue #21132
+    @testintersect(Pair{L,Tuple{L,Pair{L,HL}}} where {L,HL},
+                   Pair{R,Tuple{Pair{R,HR},R}} where {R,HR},
+                   Bottom)  # X == Pair{X,...} is not satisfiable
 end
 
 function test_intersection_properties()
@@ -941,3 +972,19 @@ ftwoparams(::TwoParams{<:Real,<:Real}) = 3
 
 # tolerate non-types in Tuples
 @test typeintersect(Tuple{0}, Tuple{T} where T) === Tuple{0}
+
+# TypeVars deduced as non-type constants (#20869)
+@testintersect(Tuple{Val{0}, Val{Val{N}}} where N, Tuple{Val{N}, Val{Val{N}}} where N, Tuple{Val{0},Val{Val{0}}})
+@testintersect(Tuple{Val{N}, Val{Val{0}}} where N, Tuple{Val{N}, Val{Val{N}}} where N, Tuple{Val{0},Val{Val{0}}})
+
+@testintersect(Tuple{Val{Val{0}}, Val{N}} where N, Tuple{Val{Val{N}}, Val{N}} where N, Tuple{Val{Val{0}},Val{0}})
+@testintersect(Tuple{Val{Val{N}}, Val{0}} where N, Tuple{Val{Val{N}}, Val{N}} where N, Tuple{Val{Val{0}},Val{0}})
+
+# issue #20992
+abstract type A20992{T,D,d} end
+abstract type B20992{SV,T,D,d} <: A20992{T,D,d} end
+struct C20992{S,n,T,D,d} <: B20992{NTuple{n,S},T,D,d}
+end
+@testintersect(Tuple{A20992{R, D, d} where d where D, Int} where R,
+               Tuple{C20992{S, n, T, D, d} where d where D where T where n where S, Any},
+               Tuple{C20992, Int})

@@ -1,5 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
-#
+
 # These tests cover the higher order functions specialized for sparse arrays defined in
 # base/sparse/higherorderfns.jl, particularly map[!]/broadcast[!] for SparseVectors and
 # SparseMatrixCSCs at present.
@@ -403,16 +403,19 @@ end
     densearrays = (C, M)
     fD, fB = Array(D), Array(B)
     for X in densearrays
-        @test (Q = broadcast(+, D, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(+, fD, X)))
+        @test broadcast(+, D, X)::SparseMatrixCSC == sparse(broadcast(+, fD, X))
         @test broadcast!(+, Z, D, X) == sparse(broadcast(+, fD, X))
-        @test (Q = broadcast(*, s, B, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(*, s, fB, X)))
+        @test broadcast(*, s, B, X)::SparseMatrixCSC == sparse(broadcast(*, s, fB, X))
         @test broadcast!(*, Z, s, B, X) == sparse(broadcast(*, s, fB, X))
-        @test (Q = broadcast(+, V, B, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(+, fV, fB, X)))
+        @test broadcast(+, V, B, X)::SparseMatrixCSC == sparse(broadcast(+, fV, fB, X))
         @test broadcast!(+, Z, V, B, X) == sparse(broadcast(+, fV, fB, X))
-        @test (Q = broadcast(+, V, A, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(+, fV, fA, X)))
+        @test broadcast(+, V, A, X)::SparseMatrixCSC == sparse(broadcast(+, fV, fA, X))
         @test broadcast!(+, Z, V, A, X) == sparse(broadcast(+, fV, fA, X))
-        @test (Q = broadcast(*, s, V, A, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(*, s, fV, fA, X)))
+        @test broadcast(*, s, V, A, X)::SparseMatrixCSC == sparse(broadcast(*, s, fV, fA, X))
         @test broadcast!(*, Z, s, V, A, X) == sparse(broadcast(*, s, fV, fA, X))
+        # Issue #20954 combinations of sparse arrays and RowVectors
+        @test broadcast(+, A, X')::SparseMatrixCSC == sparse(broadcast(+, fA, X'))
+        @test broadcast(*, V, X')::SparseMatrixCSC == sparse(broadcast(*, fV, X'))
     end
 end
 

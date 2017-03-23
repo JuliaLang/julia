@@ -246,7 +246,8 @@ for T in vcat(subtypes(Signed), subtypes(Unsigned))
 
     # Test that the entire input string appears in error messages
     let s = "     false    true     "
-        result = @test_throws ArgumentError get(Base.tryparse_internal(Bool, s, start(s), endof(s), 0, true))
+        result = @test_throws(ArgumentError,
+            get(Base.tryparse_internal(Bool, s, start(s), endof(s), 0, true)))
         @test result.value.msg == "invalid Bool representation: $(repr(s))"
     end
 
@@ -418,7 +419,9 @@ end
                                  Expr(Symbol("&&"), :c, :d))
 
 # issue #11988 -- normalize \r and \r\n in literal strings to \n
-@test "foo\nbar" == parse("\"\"\"\r\nfoo\r\nbar\"\"\"") == parse("\"\"\"\nfoo\nbar\"\"\"") == parse("\"\"\"\rfoo\rbar\"\"\"") == parse("\"foo\r\nbar\"") == parse("\"foo\rbar\"") == parse("\"foo\nbar\"")
+@test "foo\nbar" == parse("\"\"\"\r\nfoo\r\nbar\"\"\"") ==
+    parse("\"\"\"\nfoo\nbar\"\"\"") == parse("\"\"\"\rfoo\rbar\"\"\"") ==
+    parse("\"foo\r\nbar\"") == parse("\"foo\rbar\"") == parse("\"foo\nbar\"")
 @test '\r' == first("\r") == first("\r\n") # still allow explicit \r
 
 # issue #14561 - generating 0-method generic function def
@@ -1044,3 +1047,14 @@ end
 # issue #20000
 @test parse("@m(a; b=c)") == Expr(:macrocall, Symbol("@m"),
                                   Expr(:parameters, Expr(:kw, :b, :c)), :a)
+
+# issue #21054
+macro make_f21054(T)
+    quote
+        $(esc(:f21054))(X::Type{<:$T}) = 1
+    end
+end
+@eval @make_f21054 $Array
+@test isa(f21054, Function)
+g21054(>:) = >:2
+@test g21054(-) == -2

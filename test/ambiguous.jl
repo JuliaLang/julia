@@ -134,7 +134,8 @@ ambs = detect_ambiguities(Ambig5)
 
 # Test that Core and Base are free of ambiguities
 # TODO jb/subtype: we now detect a lot more
-@test detect_ambiguities(Core, Base; imported=true, allow_bottom=false) == []
+@test !isempty(detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=true))
+@test detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=false) == []
 # not using isempty so this prints more information when it fails
 
 amb_1(::Int8, ::Int) = 1
@@ -221,5 +222,16 @@ catch err
         rethrow(err)
     end
 end
+
+module Ambig9
+f(x::Complex{<:Integer}) = 1
+f(x::Complex{<:Rational}) = 2
+end
+@test !Base.isambiguous(methods(Ambig9.f)..., ambiguous_bottom=false)
+@test Base.isambiguous(methods(Ambig9.f)..., ambiguous_bottom=true)
+@test !Base.isambiguous(methods(Ambig9.f)...)
+@test length(detect_ambiguities(Ambig9, ambiguous_bottom=false)) == 0
+@test length(detect_ambiguities(Ambig9, ambiguous_bottom=true)) == 1
+@test length(detect_ambiguities(Ambig9)) == 0
 
 nothing # don't return a module from the remote include

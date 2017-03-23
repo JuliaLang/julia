@@ -1269,8 +1269,80 @@ end
 if DoFullTest
     pids=addprocs(4);
     @test_throws ErrorException rmprocs(pids; waitfor=0.001);
-    rmprocs(pids)
+    # wait for workers to be removed
+    while any(x -> (x in procs()), pids)
+        sleep(0.1)
+    end
 end
+
+# Test addprocs/rmprocs from master node only
+for f in [ ()->addprocs(1), ()->rmprocs(workers()) ]
+    try
+        remotecall_fetch(f, id_other)
+        error("Unexpected")
+    catch ex
+        @test isa(ex, RemoteException)
+        @test ex.captured.ex.msg == "Only process 1 can add and remove workers"
+    end
+end
+
+# Test the following addprocs error conditions
+# - invalid host name - github issue #20372
+# - julia exe exiting with an error
+# - timeout reading host:port from worker STDOUT
+# - host:port not found in worker STDOUT in the first 1000 lines
+
+struct ErrorSimulator <: ClusterManager
+    mode
+end
+
+function Base.launch(manager::ErrorSimulator, params::Dict, launched::Array, c::Condition)
+    exename = params[:exename]
+    dir = params[:dir]
+
+    cmd = `$(Base.julia_cmd(exename)) --startup-file=no`
+    if manager.mode == :timeout
+        cmd = `$cmd -e "sleep(10)"`
+    elseif manager.mode == :ntries
+        cmd = `$cmd -e "[println(x) for x in 1:1001]"`
+    elseif manager.mode == :exit
+        cmd = `$cmd -e "exit(-1)"`
+    else
+        error("Unknown mode")
+    end
+    io, pobj = open(pipeline(detach(setenv(cmd, dir=dir)); stderr=STDERR), "r")
+
+    wconfig = WorkerConfig()
+    wconfig.process = pobj
+    wconfig.io = io
+    push!(launched, wconfig)
+    notify(c)
+end
+
+testruns = Any[]
+
+if DoFullTest
+    append!(testruns, [(()->addprocs(["errorhost20372"]), "Unable to read host:port string from worker. Launch command exited with error?", ())])
+end
+
+append!(testruns, [
+    (()->addprocs(ErrorSimulator(:exit)), "Unable to read host:port string from worker. Launch command exited with error?", ()),
+    (()->addprocs(ErrorSimulator(:ntries)), "Unexpected output from worker launch command. Host:port string not found.", ()),
+    (()->addprocs(ErrorSimulator(:timeout)), "Timed out waiting to read host:port string from worker.", ("JULIA_WORKER_TIMEOUT"=>"1",))
+])
+
+for (addp_testf, expected_errstr, env) in testruns
+    try
+        withenv(env...) do
+            addp_testf()
+        end
+        error("Unexpected")
+    catch ex
+        @test isa(ex, CompositeException)
+        @test ex.exceptions[1].ex.msg == expected_errstr
+    end
+end
+
 
 # Auto serialization of globals from Main.
 # bitstypes

@@ -88,7 +88,6 @@ let A6965 = [
         -1.0   0.0   0.0   0.0   0.0   0.0   7.0  1.0
         -1.0  -1.0  -1.0  -1.0  -1.0  -1.0  -1.0  8.0
        ]
-
     d, = eigs(A6965,which=:SM,nev=2,ncv=4,tol=eps())
     @test d[1] ≈ 2.5346936860350002
     @test real(d[2]) ≈ 2.6159972444834976
@@ -105,48 +104,48 @@ end
 # Example from Quantum Information Theory
 import Base: size, issymmetric, ishermitian
 
-mutable struct CPM{T<:Base.LinAlg.BlasFloat}<:AbstractMatrix{T} # completely positive map
+mutable struct CPM{T<:Base.LinAlg.BlasFloat} <: AbstractMatrix{T} # completely positive map
     kraus::Array{T,3} # kraus operator representation
 end
-size(Phi::CPM)=(size(Phi.kraus,1)^2,size(Phi.kraus,3)^2)
-issymmetric(Phi::CPM)=false
-ishermitian(Phi::CPM)=false
+size(Phi::CPM) = (size(Phi.kraus,1)^2,size(Phi.kraus,3)^2)
+issymmetric(Phi::CPM) = false
+ishermitian(Phi::CPM) = false
 import Base: A_mul_B!
 function A_mul_B!{T<:Base.LinAlg.BlasFloat}(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T})
-    rho=reshape(rho,(size(Phi.kraus,3),size(Phi.kraus,3)))
-    rho1=zeros(T,(size(Phi.kraus,1),size(Phi.kraus,1)))
-    for s=1:size(Phi.kraus,2)
-        As=view(Phi.kraus,:,s,:)
-        rho1+=As*rho*As'
+    rho = reshape(rho,(size(Phi.kraus,3),size(Phi.kraus,3)))
+    rho1 = zeros(T,(size(Phi.kraus,1),size(Phi.kraus,1)))
+    for s = 1:size(Phi.kraus,2)
+        As = view(Phi.kraus,:,s,:)
+        rho1 += As*rho*As'
     end
     return copy!(rho2,rho1)
 end
 
 let
     # Generate random isometry
-    (Q,R)=qr(randn(100,50))
-    Q=reshape(Q,(50,2,50))
+    (Q,R) = qr(randn(100,50))
+    Q = reshape(Q,(50,2,50))
     # Construct trace-preserving completely positive map from this
-    Phi=CPM(copy(Q))
+    Phi = CPM(copy(Q))
     (d,v,nconv,numiter,numop,resid) = eigs(Phi,nev=1,which=:LM)
     # Properties: largest eigenvalue should be 1, largest eigenvector, when reshaped as matrix
     # should be a Hermitian positive definite matrix (up to an arbitrary phase)
 
     @test d[1] ≈ 1. # largest eigenvalue should be 1.
-    v=reshape(v,(50,50)) # reshape to matrix
-    v/=trace(v) # factor out arbitrary phase
+    v = reshape(v,(50,50)) # reshape to matrix
+    v /= trace(v) # factor out arbitrary phase
     @test vecnorm(imag(v)) ≈ 0. # it should be real
-    v=real(v)
+    v = real(v)
     # @test vecnorm(v-v')/2 ≈ 0. # it should be Hermitian
     # Since this fails sometimes (numerical precision error),this test is commented out
-    v=(v+v')/2
+    v = (v+v')/2
     @test isposdef(v)
 
     # Repeat with starting vector
     (d2,v2,nconv2,numiter2,numop2,resid2) = eigs(Phi,nev=1,which=:LM,v0=reshape(v,(2500,)))
-    v2=reshape(v2,(50,50))
-    v2/=trace(v2)
-    @test numiter2<numiter
+    v2 = reshape(v2,(50,50))
+    v2 /= trace(v2)
+    @test numiter2 < numiter
     @test v ≈ v2
 
     @test eigs(speye(50), nev=10)[1] ≈ ones(10) #Issue 4246

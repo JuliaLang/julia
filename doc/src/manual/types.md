@@ -154,7 +154,7 @@ abstract type «name» end
 abstract type «name» <: «supertype» end
 ```
 
-The `abstract` keyword introduces a new abstract type, whose name is given by `«name»`. This
+The `abstract type` keyword introduces a new abstract type, whose name is given by `«name»`. This
 name can be optionally followed by `<:` and an already-existing type, indicating that the newly
 declared abstract type is a subtype of this "parent" type.
 
@@ -972,7 +972,7 @@ The slightly odd feature of these declarations as compared to typical parametric
 is that the type parameter `T` is not used in the definition of the type itself -- it is just
 an abstract tag, essentially defining an entire family of types with identical structure, differentiated
 only by their type parameter. Thus, `Ptr{Float64}` and `Ptr{Int64}` are distinct types, even though
-they have identical representations. And of course, all specific pointer types are subtype of
+they have identical representations. And of course, all specific pointer types are subtypes of
 the umbrella `Ptr` type:
 
 ```jldoctest
@@ -988,7 +988,7 @@ true
 We have said that a parametric type like `Ptr` acts as a supertype of all its instances
 (`Ptr{Int64}` etc.). How does this work? `Ptr` itself cannot be a normal data type, since without
 knowing the type of the referenced data the type clearly cannot be used for memory operations.
-The answer is that `Ptr` (or other parametric type like `Array`) is a different kind of type called a
+The answer is that `Ptr` (or other parametric types like `Array`) is a different kind of type called a
 `UnionAll` type. Such a type expresses the *iterated union* of types for all values of some parameter.
 
 `UnionAll` types are usually written using the keyword `where`. For example `Ptr` could be more
@@ -1056,8 +1056,8 @@ element type.
 
 Sometimes it is convenient to introduce a new name for an already expressible type.
 This can be done with a simple assignment statement.
-For example, UInt is aliased to either UInt32 or UInt64 as is appropriate for the size of pointers
-on the system:
+For example, `UInt` is aliased to either `UInt32` or `UInt64` as is appropriate
+for the size of pointers on the system:
 
 ```julia
 # 32-bit system:

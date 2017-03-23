@@ -1586,7 +1586,7 @@
 
 ;; convert an operator parsed as (op a b) to (call op a b)
 (define (syntactic-op-to-call e)
-  `(call ,(car e) ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
+  `(call ,(car e) ,@(map expand-forms (cdr e))))
 
 ;; wrap `expr` in a function appropriate for consuming values from given ranges
 (define (func-for-generator-ranges expr range-exprs)
@@ -1763,9 +1763,9 @@
     (if (null? params)
         (cons (reverse newparams) (reverse whereparams))
         (let ((p (car params)))
-          (if (and (list? p) (= (length p) 3) (eq? (car p) 'call) (or (eq? (cadr p) '|<:|) (eq? (cadr p) '|>:|)))
+          (if (and (length= p 2) (or (eq? (car p) '|<:|) (eq? (car p) '|>:|)))
               (let ((T (gensy)))
-                (extract (cdr params) (cons T newparams) (cons (list (cadr p) T (caddr p)) whereparams)))
+                (extract (cdr params) (cons T newparams) (cons (list (car p) T (cadr p)) whereparams)))
               (extract (cdr params) (cons p newparams) whereparams)))))
   (extract (cddr e) '() '()))
 
