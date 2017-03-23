@@ -2895,21 +2895,21 @@ f(x) = yt(x)
                          (lambda (e)
                            (or (atom? e)
                                (memq (car e) '(quote top core line inert local local-def unnecessary
-                                               meta inbounds boundscheck simdloop
+                                               meta inbounds boundscheck simdloop decl
                                                implicit-global global globalref outerref
-                                               const = null method call))))
+                                               const = null method call ssavalue))))
                          (lam:body lam))))
                (unused (map cadr (filter (lambda (x) (memq (car x) '(method =)))
                                          leading))))
-              ;; TODO: reorder leading statements to put assignments where the RHS is
-              ;; `simple-atom?` at the top.
-              (for-each (lambda (e)
-                          (set! unused (filter (lambda (v) (not (expr-uses-var e v)))
-                                               unused))
-                          (if (and (memq (car e) '(method =)) (memq (cadr e) unused))
-                              (let ((v (assq (cadr e) vi)))
-                                   (if v (vinfo:set-never-undef! v #t)))))
-                        leading)))
+          ;; TODO: reorder leading statements to put assignments where the RHS is
+          ;; `simple-atom?` at the top.
+          (for-each (lambda (e)
+                      (set! unused (filter (lambda (v) (not (expr-uses-var e v)))
+                                           unused))
+                      (if (and (memq (car e) '(method =)) (memq (cadr e) unused))
+                          (let ((v (assq (cadr e) vi)))
+                            (if v (vinfo:set-never-undef! v #t)))))
+                    leading)))
     (for-each (lambda (v)
                 (if (and (vinfo:sa v) (vinfo:never-undef v))
                     (set-car! (cddr v) (logand (caddr v) (lognot 5)))))
