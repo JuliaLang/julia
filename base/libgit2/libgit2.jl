@@ -496,7 +496,7 @@ reset!(repo::GitRepo, id::GitHash, mode::Cint = Consts.RESET_MIXED) =
     reset!(repo, GitObject(repo, id), mode)
 
 """ git cat-file <commit> """
-function cat(repo::GitRepo, spec)
+function cat(repo::GitRepo, spec::Union{AbstractString,AbstractGitHash})
     obj = GitObject(repo, spec)
     if isa(obj, GitBlob)
         content(obj)
