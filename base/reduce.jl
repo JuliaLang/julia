@@ -169,15 +169,16 @@ foldr(op, itr) = mapfoldr(identity, op, itr)
 
 function mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer, blksize::Int=pairwise_blocksize(f, op))
     if ifirst == ilast
-        @inbounds return r_promote(op, f(A[ifirst]))
+        @inbounds a1 = A[ifirst]
+        return r_promote(op, f(a1))
     elseif ifirst + blksize > ilast
         # sequential portion
-        @inbounds fx1 = r_promote(op, f(A[ifirst]))
-        @inbounds fx2 = r_promote(op, f(A[ifirst + 1]))
-        v = op(fx1, fx2)
+        @inbounds a1 = A[ifirst]
+        @inbounds a2 = A[ifirst+1]
+        v = op(r_promote(op, f(a1)), r_promote(op, f(a2)))
         @simd for i = ifirst + 2 : ilast
-            @inbounds Ai = A[i]
-            v = op(v, f(Ai))
+            @inbounds ai = A[i]
+            v = op(v, f(ai))
         end
         return v
     else
@@ -399,11 +400,12 @@ function mapreduce_impl(f, op::Union{typeof(scalarmax),
                                      typeof(min)},
                         A::AbstractArray, first::Int, last::Int)
     # locate the first non NaN number
-    @inbounds v = f(A[first])
+    @inbounds a1 = A[first]
+    v = f(a1)
     i = first + 1
     while (v == v) && (i <= last)
-        @inbounds Ai = A[i]
-        v = op(v, f(Ai))
+        @inbounds ai = A[i]
+        v = op(v, f(ai))
         i += 1
     end
     v
