@@ -468,9 +468,17 @@
         ;; call with unsorted keyword args. this sorts and re-dispatches.
         ,(method-def-expr-
           name
-          (filter ;; remove sparams that don't occur, to avoid printing the warning twice
-           (lambda (s) (expr-contains-eq (car s) (cons 'list argl)))
-           positional-sparams)
+          ;; remove sparams that don't occur, to avoid printing the warning twice
+          (let loop ((filtered '())
+                     (params   positional-sparams))
+            (cond ((null? params)
+                   (reverse! filtered))
+                  ((or (expr-contains-eq (caar params) (cons 'list argl))
+                       (any (lambda (v) (expr-contains-eq (caar params) v))
+                            (cdr params)))
+                   (loop (cons (car params) filtered) (cdr params)))
+                  (else
+                   (loop filtered (cdr params)))))
           `((|::|
              ;; if there are optional positional args, we need to be able to reference the function name
              ,(if (any kwarg? pargl) (gensy) UNUSED)
