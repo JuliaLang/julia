@@ -267,7 +267,7 @@ ts = try
 catch
     nothing # Shouldn't get here
 end
-@test typeof(ts) == Base.Test.DefaultTestSet
+@test ts isa Base.Test.DefaultTestSet
 
 # now we're done running tests with DefaultTestSet so we can go back to STDOUT
 redirect_stdout(OLD_STDOUT)
