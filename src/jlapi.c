@@ -49,9 +49,19 @@ JL_DLLEXPORT void jl_init_with_image(const char *julia_home_dir,
     jl_exception_clear();
 }
 
-JL_DLLEXPORT void jl_init(const char *julia_home_dir)
+JL_DLLEXPORT void jl_init(void)
 {
-    jl_init_with_image(julia_home_dir, NULL);
+    char *libjldir = NULL;
+
+    void *hdl = (void*)jl_load_dynamic_library_e(NULL, JL_RTLD_DEFAULT);
+    if (hdl)
+        libjldir = dirname((char*)jl_pathname_for_handle(hdl));
+    if (libjldir)
+        jl_init_with_image(libjldir, jl_get_default_sysimg_path());
+    else {
+        printf("jl_init unable to find libjulia!\n");
+        abort();
+    }
 }
 
 JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
