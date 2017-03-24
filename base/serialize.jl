@@ -87,6 +87,7 @@ const DATATYPE_TAG = sertag(DataType)
 const TYPENAME_TAG = sertag(TypeName)
 const INT_TAG = sertag(Int)
 const GLOBALREF_TAG = sertag(GlobalRef)
+const BOTTOM_TAG = sertag(Bottom)
 
 writetag(s::IO, tag) = write(s, UInt8(tag))
 
@@ -514,6 +515,8 @@ function serialize(s::AbstractSerializer, n::Int)
     writetag(s.io, INT_TAG)
     write(s.io, n)
 end
+
+serialize(s::AbstractSerializer, ::Type{Bottom}) = write_as_tag(s.io, BOTTOM_TAG)
 
 serialize(s::AbstractSerializer, x::ANY) = serialize_any(s, x)
 
