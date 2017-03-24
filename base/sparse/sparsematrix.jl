@@ -33,6 +33,21 @@ end
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
 
+const SparseMatrixCSCUnion{Tv,Ti} =
+    Union{SparseMatrixCSC{Tv,Ti},
+        SubArray{Tv,2,SparseMatrixCSC{Tv,Ti},Tuple{Base.Slice{Base.OneTo{Int64}},I}}} where {I<:AbstractUnitRange}
+
+getcolptr(S::SparseMatrixCSC) = S.colptr
+getcolptr(S::SubArray{T,2,<:SparseMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int64}},I}} where {T,I<:AbstractUnitRange}) =
+    view(S.parent.colptr, first(indices(S, 2)):(last(indices(S, 2)) + 1))
+getrowval(S::SparseMatrixCSC) = S.rowval
+getrowval(S::SubArray{T,2,<:SparseMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int64}},I}} where {T,I<:AbstractUnitRange}) =
+    S.parent.rowval
+getnzval(S::SparseMatrixCSC) = S.nzval
+getnzval(S::SubArray{T,2,<:SparseMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int64}},I}} where {T,I<:AbstractUnitRange}) =
+    S.parent.nzval
+
+
 """
     nnz(A)
 
