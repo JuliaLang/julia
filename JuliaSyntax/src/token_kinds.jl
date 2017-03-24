@@ -56,6 +56,8 @@
         COMPREHENSION,
         CURLY,
         DICT_COMPREHENSION,
+        FILTER,
+        FLATTEN,
         GENERATOR,
         HCAT,
         KW,
