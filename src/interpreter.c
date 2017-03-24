@@ -116,12 +116,13 @@ static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
           jl_field_count(dta) == jl_field_count(dtb)))
         return 0;
     jl_value_t *a=NULL, *b=NULL;
+    int ok = 1;
+    size_t i, nf = jl_field_count(dta);
     JL_GC_PUSH2(&a, &b);
     a = jl_rewrap_unionall((jl_value_t*)dta->super, dta->name->wrapper);
     b = jl_rewrap_unionall((jl_value_t*)dtb->super, dtb->name->wrapper);
     if (!jl_types_equal(a, b))
         goto no;
-    int ok = 1;
     JL_TRY {
         a = jl_apply_type(dtb->name->wrapper, jl_svec_data(dta->parameters), jl_nparams(dta));
     }
@@ -142,7 +143,6 @@ static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
         b = ub->body;
     }
     assert(jl_is_datatype(a) && jl_is_datatype(b));
-    size_t i, nf = jl_field_count(dta);
     for (i=0; i < nf; i++) {
         jl_value_t *ta = jl_svecref(((jl_datatype_t*)a)->types, i);
         jl_value_t *tb = jl_svecref(((jl_datatype_t*)b)->types, i);
