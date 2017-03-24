@@ -411,10 +411,10 @@ Base.@pure function fpure(a=rand(); b=rand())
 end
 gpure() = fpure()
 gpure(x::Irrational) = fpure(x)
-@test which(fpure, ()).source.pure
-@test which(fpure, (typeof(pi),)).source.pure
-@test !which(gpure, ()).source.pure
-@test !which(gpure, (typeof(pi),)).source.pure
+@test which(fpure, ()).pure
+@test which(fpure, (typeof(pi),)).pure
+@test !which(gpure, ()).pure
+@test !which(gpure, (typeof(pi),)).pure
 @test @code_typed(gpure())[1].pure
 @test @code_typed(gpure(π))[1].pure
 @test gpure() == gpure() == gpure()
@@ -422,7 +422,7 @@ gpure(x::Irrational) = fpure(x)
 
 # Make sure @pure works for functions using the new syntax
 Base.@pure (fpure2(x::T) where T) = T
-@test which(fpure2, (Int64,)).source.pure
+@test which(fpure2, (Int64,)).pure
 
 # issue #10880
 function cat10880(a, b)
