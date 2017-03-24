@@ -332,7 +332,7 @@ passed to ``bar``.
 
 On the flip side, it is often handy to "splice" the values contained in
 an iterable collection into a function call as individual arguments. To
-do this, one also uses ``...`` but in the function call instead:
+do this, one also use ``...`` but in the function call instead:
 
 .. doctest::
 
