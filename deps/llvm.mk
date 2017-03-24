@@ -124,7 +124,7 @@ ifeq ($(USE_LLVM_SHLIB),1)
 # NOTE: we could also --disable-static here (on the condition we link tools
 #       against libLLVM) but there doesn't seem to be a CMake counterpart option
 LLVM_FLAGS += --enable-shared
-LLVM_CMAKE += -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON
+LLVM_CMAKE += -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON -DLLVM_LINK_LLVM_DYLIB:BOOL=ON
 # NOTE: starting with LLVM 3.8, all symbols are exported
 ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7))
 LLVM_CMAKE += -DLLVM_DYLIB_EXPORT_ALL:BOOL=ON
