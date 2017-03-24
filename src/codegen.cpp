@@ -1145,6 +1145,8 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
         // we waited at the lock).
         if (li->def == NULL) {
             src = (jl_code_info_t*)li->inferred;
+            if (src && (jl_value_t*)src != jl_nothing)
+                src = jl_uncompress_ast(li->def, (jl_array_t*)src);
             if (decls.functionObject != NULL || !src || !jl_is_code_info(src) || li->jlcall_api == 2) {
                 goto locked_out;
             }
@@ -1159,6 +1161,8 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
             // see if it is inferred
             src = (jl_code_info_t*)li->inferred;
             if (src) {
+                if ((jl_value_t*)src != jl_nothing)
+                    src = jl_uncompress_ast(li->def, (jl_array_t*)src);
                 if (!jl_is_code_info(src)) {
                     src = jl_type_infer(pli, world, 0);
                     li = *pli;
@@ -1175,6 +1179,10 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
             // similar to above, but never returns a NULL
             // decl (unless compile fails), even if jlcall_api == 2
             goto locked_out;
+        }
+        else {
+            if ((jl_value_t*)src != jl_nothing)
+                src = jl_uncompress_ast(li->def, (jl_array_t*)src);
         }
         assert(jl_is_code_info(src));
 
@@ -1241,14 +1249,25 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
             jl_finalize_module(m.release(), !toplevel);
         }
 
-        if (world && li->jlcall_api != 2) {
-            // if not inlineable, code won't be needed again
-            if (JL_DELETE_NON_INLINEABLE && jl_options.debug_level <= 1 &&
-                li->def && li->inferred && jl_is_code_info(li->inferred) &&
-                !((jl_code_info_t*)li->inferred)->inlineable &&
-                li != li->def->unspecialized && !imaging_mode) {
-                li->inferred = jl_nothing;
-            }
+        // if not inlineable, code won't be needed again
+        if (JL_DELETE_NON_INLINEABLE &&
+                // don't delete code when debugging level >= 2
+                jl_options.debug_level <= 1 &&
+                // don't delete toplevel code
+                li->def &&
+                // don't change inferred state
+                li->inferred &&
+                // and there is something to delete (test this before calling jl_ast_flag_inlineable)
+                li->inferred != jl_nothing &&
+                // don't delete the code for the generator
+                li != li->def->generator &&
+                // don't delete inlineable code, unless it is constant
+                (li->jlcall_api == 2 || !jl_ast_flag_inlineable((jl_array_t*)li->inferred)) &&
+                // don't delete code when generating a precompile file
+                !imaging_mode &&
+                // don't delete code when it's not actually directly being used
+                world) {
+            li->inferred = jl_nothing;
         }
 
         // Step 6: Done compiling: Restore global state
@@ -1413,7 +1432,7 @@ jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, void *_F, size_t wo
             // and return its fptr instead
             if (!unspec)
                 unspec = jl_get_unspecialized(li); // get-or-create the unspecialized version to cache the result
-            jl_code_info_t *src = unspec->def->isstaged ? jl_code_for_staged(unspec) : unspec->def->source;
+            jl_code_info_t *src = unspec->def->isstaged ? jl_code_for_staged(unspec) : (jl_code_info_t*)unspec->def->source;
             fptr.fptr = unspec->fptr;
             fptr.jlcall_api = unspec->jlcall_api;
             if (fptr.fptr && fptr.jlcall_api) {
@@ -1547,11 +1566,14 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapp
 
     jl_code_info_t *src = (jl_code_info_t*)linfo->inferred;
     JL_GC_PUSH1(&src);
-    if (!src || !jl_is_code_info(src)) {
+    if (!src || (jl_value_t*)src == jl_nothing) {
         src = jl_type_infer(&linfo, world, 0);
         if (!src)
-            src = linfo->def->isstaged ? jl_code_for_staged(linfo) : linfo->def->source;
+            src = linfo->def->isstaged ? jl_code_for_staged(linfo) : (jl_code_info_t*)linfo->def->source;
     }
+    if (!src || (jl_value_t*)src == jl_nothing)
+        jl_error("source not found for function");
+    src = jl_uncompress_ast(linfo->def, (jl_array_t*)src);
 
     // Backup the info for the nested compile
     JL_LOCK(&codegen_lock);
@@ -1634,7 +1656,7 @@ void *jl_get_llvmf_decl(jl_method_instance_t *linfo, size_t world, bool getwrapp
             jl_code_info_t *src = NULL;
             src = jl_type_infer(&linfo, world, 0);
             if (!src) {
-                src = linfo->def->isstaged ? jl_code_for_staged(linfo) : linfo->def->source;
+                src = linfo->def->isstaged ? jl_code_for_staged(linfo) : (jl_code_info_t*)linfo->def->source;
             }
             decls = jl_compile_linfo(&linfo, src, world, &params);
             linfo->functionObjectsDecls = decls;
@@ -3287,8 +3309,8 @@ static jl_cgval_t emit_invoke(jl_expr_t *ex, jl_codectx_t *ctx)
         assert(jl_is_method_instance(li));
         jl_llvm_functions_t decls = jl_compile_linfo(&li, NULL, ctx->world, ctx->params);
         if (li->jlcall_api == 2) {
-            assert(li->inferred);
-            return mark_julia_const(li->inferred);
+            assert(li->inferred_const);
+            return mark_julia_const(li->inferred_const);
         }
         if (decls.functionObject) {
             int jlcall_api = jl_jlcall_api(decls.functionObject);
@@ -4468,7 +4490,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     Function *gf_thunk = NULL;
     if (specsig) {
         if (lam->jlcall_api == 2) {
-            retval = mark_julia_const(lam->inferred);
+            retval = mark_julia_const(lam->inferred_const);
         }
         else {
             assert(theFptr);
@@ -5032,8 +5054,6 @@ static std::unique_ptr<Module> emit_function(
     jl_codectx_t ctx = {};
     JL_GC_PUSH2(&ctx.code, &ctx.roots);
     ctx.code = (jl_array_t*)src->code;
-    if (!jl_typeis(ctx.code, jl_array_any_type))
-        ctx.code = jl_uncompress_ast(lam->def, ctx.code);
 
     //jl_static_show(JL_STDOUT, (jl_value_t*)ast);
     //jl_printf(JL_STDOUT, "\n");
