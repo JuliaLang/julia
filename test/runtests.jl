@@ -1773,9 +1773,22 @@ let a = CompatArray.CartesianArray(rand(2,3)), b = CompatArray.LinearArray(rand(
     @test IndexStyle(b) === IndexLinear()
 end
 
+for (A,val) in ((zeros(1:5, Float32, 3, 2), 0),
+                (ones(1:5, Float32, 3, 2), 1),
+                (zeros(1:5, Float32, (3, 2)), 0),
+                (ones(1:5, Float32, (3, 2)), 1))
+    @test isa(A, Matrix{Float32}) && size(A) == (3,2) && all(x->x==val, A)
+end
+for (A,val) in ((zeros(1:5, Float32), 0),
+                (ones(1:5, Float32), 1))
+    @test isa(A, Vector{Float32}) && size(A) == (5,) && all(x->x==val, A)
+end
+
 # PR 20203
 @test Compat.readline(IOBuffer("Hello, World!\n")) == "Hello, World!"
 @test Compat.readline(IOBuffer("x\n"), chomp=true) == "x"
 @test Compat.readline(IOBuffer("x\n"), chomp=false) == "x\n"
 
 include("to-be-deprecated.jl")
+
+nothing

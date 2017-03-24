@@ -153,6 +153,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `broadcast` is supported on tuples of the same lengths on 0.5. ([#16986])
 
+* `zeros` and `ones` support an interface the same as `similar` ([#19635])
+
 ## Renamed functions
 
 * `pointer_to_array` and `pointer_to_string` have been replaced with `unsafe_wrap(Array, ...)` and `unsafe_wrap(String, ...)` respectively
@@ -346,3 +348,4 @@ includes this fix. Find the minimum version from there.
 [#20414]: https://github.com/JuliaLang/julia/issues/20414
 [#20418]: https://github.com/JuliaLang/julia/issues/20418
 [#20500]: https://github.com/JuliaLang/julia/issues/20500
+[#19635]: https://github.com/JuliaLang/julia/issues/19635

@@ -1421,6 +1421,17 @@ if VERSION < v"0.6.0-dev.2840"
     IndexStyle(args...) = Base.linearindexing(args...)
 end
 
+if VERSION < v"0.6.0-dev.1653"
+    for (fname, felt) in ((:zeros,:zero), (:ones,:one))
+        @eval begin
+            # allow signature of similar
+            Base.$fname(a::AbstractArray, T::Type, dims::Tuple) = fill!(similar(a, T, dims), $felt(T))
+            Base.$fname(a::AbstractArray, T::Type, dims...) = fill!(similar(a,T,dims...), $felt(T))
+            Base.$fname(a::AbstractArray, T::Type=eltype(a)) = fill!(similar(a,T), $felt(T))
+        end
+    end
+end
+
 # https://github.com/JuliaLang/julia/pull/20203
 if VERSION < v"0.6.0-dev.2283"
     # not exported
