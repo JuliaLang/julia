@@ -457,6 +457,9 @@ function test_Type()
 
     # issue #20476
     @test issub(Tuple{Type{Union{Type{UInt32}, Type{UInt64}}}, Type{UInt32}}, Tuple{Type{T},T} where T)
+
+    @test isequal_type(Core.TypeofBottom, Type{Union{}})
+    @test issub(Core.TypeofBottom, Type{T} where T<:Real)
 end
 
 # old subtyping tests from test/core.jl

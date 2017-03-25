@@ -21,7 +21,13 @@ f47{T}(x::Vector{Vector{T}}) = 0
 @test_throws TypeError (Array{T} where T<:Vararg{Int,2})
 
 # issue #8652
-args_morespecific(a, b) = ccall(:jl_type_morespecific, Cint, (Any,Any), a, b) != 0
+function args_morespecific(a, b)
+    sp = (ccall(:jl_type_morespecific, Cint, (Any,Any), a, b) != 0)
+    if sp  # make sure morespecific(a,b) implies !morespecific(b,a)
+        @test ccall(:jl_type_morespecific, Cint, (Any,Any), b, a) == 0
+    end
+    return sp
+end
 let
     a  = Tuple{Type{T1}, T1} where T1<:Integer
     b2 = Tuple{Type{T2}, Integer} where T2<:Integer
@@ -64,6 +70,9 @@ _z_z_z_(::Int, c...) = 3
                         Tuple{Array{T} where T<:Real, Any})
 
 @test args_morespecific(Tuple{1,T} where T, Tuple{Any})
+
+# issue #21016
+@test args_morespecific(Tuple{IO, Core.TypeofBottom}, Tuple{IO, Type{T}} where T<:Number)
 
 # with bound varargs
 
