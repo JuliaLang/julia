@@ -258,3 +258,10 @@ let x = T20804(4)
     @test x() == 14
     @test x(x=8) == 12
 end
+
+# issue #21147
+function f21147(f::Tuple{A}; kwargs...) where {B,A<:Tuple{B}}
+    return B
+end
+@test f21147(((1,),)) === Int
+@test f21147(((1,),), k = 2) === Int
