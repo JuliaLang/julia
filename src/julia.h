@@ -467,7 +467,7 @@ typedef struct {
 // constants and type objects -------------------------------------------------
 
 // kinds
-extern JL_DLLEXPORT jl_datatype_t *jl_bottomtype_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_typeofbottom_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_datatype_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_uniontype_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_unionall_type;
@@ -874,7 +874,7 @@ JL_DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b);
 STATIC_INLINE int jl_is_kind(jl_value_t *v)
 {
     return (v==(jl_value_t*)jl_uniontype_type || v==(jl_value_t*)jl_datatype_type ||
-            v==(jl_value_t*)jl_unionall_type || v==(jl_value_t*)jl_bottomtype_type);
+            v==(jl_value_t*)jl_unionall_type || v==(jl_value_t*)jl_typeofbottom_type);
 }
 
 STATIC_INLINE int jl_is_type(jl_value_t *v)

@@ -173,7 +173,7 @@ This section lists changes that do not have deprecation warnings.
     as `UnionAll` types instead of `DataType`s ([#18457]).
 
   * `Union` types have two fields, `a` and `b`, instead of a single `types` field.
-    The empty type `Union{}` is represented by a singleton of type `BottomType` ([#18457]).
+    The empty type `Union{}` is represented by a singleton of type `TypeofBottom` ([#18457]).
 
   * The type `NTuple{N}` now refers to tuples where every element has the same type
     (since it is shorthand for `NTuple{N,T} where T`). To get the old behavior of matching
