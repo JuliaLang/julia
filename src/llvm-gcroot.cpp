@@ -179,6 +179,31 @@ private:
     Function *const except_enter_func;
     Function *const jlleave_func;
     MDNode *const tbaa_gcframe;
+    
+    struct BBInfo {
+      BitVector Active;
+      
+      // Whether we have gotten to this block in primary processing yet.
+      bool PrimaryCompleted;
+     
+      // The number of successors for which primary processing has completed
+      unsigned IncomingProcessed;
+     
+      // The value of `IncomingProcessed` at the start of primary processing
+      unsigned PrimaryIncoming;
+     
+      // The number of successors for which all processing steps are done.
+      unsigned IncomingCompleted;
+      
+      // Cache of the numer of NumSuccessors
+      unsigned NumSuccessors;
+      
+      BBInfo(unsigned NRoots, unsigned NumSuccessors) : Active(NRoots, false), PrimaryCompleted(false),
+          IncomingProcessed(0), PrimaryIncoming(0), IncomingCompleted(0), NumSuccessors(NumSuccessors) {}
+      BBInfo() : Active(0, true), PrimaryCompleted(false),
+          IncomingProcessed(0), PrimaryIncoming(0), IncomingCompleted(0), NumSuccessors(0) {}
+    };
+    DenseMap<llvm::BasicBlock *, BBInfo> BBInfos;
 
     Instruction *get_pgcstack(Instruction *ptlsStates);
     frame_register get_gcroot(Value *ptr);
@@ -194,10 +219,18 @@ private:
     void lowerHandlers();
 
     bool isGCRootDecl(llvm::Value *V);
+    bool isBlockDone(BasicBlock *BB);
+    void processBasicBlock(unsigned NRoots, BasicBlock *BB,
+    std::map<llvm::Instruction *, int> &RootNumbering,
+    std::map<llvm::Instruction *, llvm::AllocaInst *> &ShadowMap,
+    bool MayModify);
+
+    void updatePredecessors(
+          std::vector<llvm::BasicBlock *> &SecondaryInspection,
+          BasicBlock *BB, bool Primary);
     void demoteRootAndDeleteStore(
         std::vector<llvm::StoreInst *> &ToDelete, llvm::StoreInst *TheStore,
         std::map<llvm::Instruction *, llvm::AllocaInst *> &ShadowMap);
-
   public:
     void allocate_frame();
     void deleteUnneededRoots();
@@ -541,9 +574,80 @@ void JuliaGCAllocator::demoteRootAndDeleteStore(
   ToDelete.push_back(TheStore);
 }
 
-struct BBInfo {
-  BitVector Active;
-};
+bool JuliaGCAllocator::isBlockDone(BasicBlock *BB) {
+  return BBInfos[BB].PrimaryCompleted &&
+         BBInfos[BB].IncomingCompleted == BBInfos[BB].PrimaryIncoming &&
+         BBInfos[BB].IncomingProcessed == BBInfos[BB].NumSuccessors;
+}
+
+void JuliaGCAllocator::updatePredecessors(
+      std::vector<llvm::BasicBlock *> &SecondaryInspection,
+      BasicBlock *BB, bool Primary) {
+   bool Done = isBlockDone(BB);
+   for (auto *Pred : predecessors(BB)) {
+     if (!isBlockDone(Pred)) {
+       if (Primary) {
+         BBInfos[Pred].IncomingProcessed++;
+       }
+       if (Done) {
+         BBInfos[Pred].IncomingCompleted++;
+       }
+       if (isBlockDone(Pred)) {
+         SecondaryInspection.push_back(Pred);
+       }
+     }
+   }
+}
+
+void JuliaGCAllocator::processBasicBlock(unsigned NRoots, BasicBlock *BB,
+  std::map<llvm::Instruction *, int> &RootNumbering,
+  std::map<llvm::Instruction *, llvm::AllocaInst *> &ShadowMap,
+  bool MayModify) {
+  BitVector Active(NRoots);
+  for (auto *Succ : successors(BB)) {
+    Active |= BBInfos[Succ].Active;
+  }
+  std::vector<llvm::StoreInst *> ToDelete;
+  for (auto I = BB->rbegin(), E = BB->rend(); I != E; ++I) {
+    // Enact state transitions
+    if (llvm::StoreInst *Store = dyn_cast<llvm::StoreInst>(&*I)) {
+      if (!isGCRootDecl(Store->getPointerOperand()))
+        continue;
+      int Root = RootNumbering
+                     .find(cast<llvm::CallInst>(Store->getPointerOperand()))
+                     ->second;
+      if (MayModify && !Active[Root])
+        demoteRootAndDeleteStore(ToDelete, Store, ShadowMap);
+      Active[Root] = 0;
+    } else if (isa<llvm::ReturnInst>(&*I) ||
+               isa<llvm::UnreachableInst>(&*I)) {
+      // Hard kill all, but since this is the default state, we don't
+      // need to do anything
+    } else if (llvm::CallInst *CI = dyn_cast<llvm::CallInst>(&*I)) {
+      // Most call insts are safe points. Check for a few special cases
+      // we know are not.
+      Function *Callee = CI->getCalledFunction();
+      if (Callee) {
+        // Intrinsics are not safe points
+        if (Callee->isIntrinsic())
+          continue;
+        // Special case: Don't consider jl_throw a safe point
+        if (Callee->getName() == "jl_throw" &&
+            isa<llvm::Constant>(CI->getArgOperand(0))) {
+          continue;
+        }
+      }
+      // llvm::errs() << "Soft kill";
+      // CI->dump();
+      // Soft kill all
+      Active.set();
+    }
+  }
+  for (StoreInst *S : ToDelete)
+    S->eraseFromParent();
+  ToDelete.clear();
+  BBInfos[BB].Active = Active;
+}
 
 extern "C" void jl_dump_llvm_to_file(char *fname, llvm::Function *F);
 void JuliaGCAllocator::deleteUnneededRoots() {
@@ -558,59 +662,36 @@ void JuliaGCAllocator::deleteUnneededRoots() {
     }
   }
 
-  DenseMap<llvm::BasicBlock *, BBInfo> BBInfos;
-  // Avoid invalidating iterators - delete everything after we're done with a BB
-  std::vector<llvm::StoreInst *> ToDelete;
+  // Initialize BBInfos
+  for (auto &BB : F) {
+    unsigned NumSuccessors = 0;
+    for (auto *SBB : successors(&BB)) {
+      (void)SBB;
+      NumSuccessors++;
+    }
+    BBInfos[&BB] = BBInfo(RootNo, NumSuccessors);
+  }
+
+  std::vector<llvm::BasicBlock *> SecondaryInspection;
   for (auto *BB : llvm::post_order(&F.getEntryBlock())) {
-    BitVector Active(RootNo);
-    for (auto *Succ : successors(BB)) {
-      Active |= BBInfos[Succ].Active;
+    BBInfos[BB].PrimaryCompleted = true;
+    BBInfos[BB].PrimaryIncoming = BBInfos[BB].IncomingProcessed;
+    processBasicBlock(RootNo, BB, RootNumbering, ShadowMap, isBlockDone(BB));
+    updatePredecessors(SecondaryInspection, BB, true);
+    while (!SecondaryInspection.empty()) {
+      BasicBlock *SecondaryBB = &*SecondaryInspection.back();
+      SecondaryInspection.pop_back();
+      processBasicBlock(RootNo, SecondaryBB, RootNumbering, ShadowMap, true);
+      updatePredecessors(SecondaryInspection, SecondaryBB, false);
     }
-    for (auto I = BB->rbegin(), E = BB->rend(); I != E; ++I) {
-      // Enact state transitions
-      if (llvm::StoreInst *Store = dyn_cast<llvm::StoreInst>(&*I)) {
-        if (!isGCRootDecl(Store->getPointerOperand()))
-          continue;
-        int Root = RootNumbering
-                       .find(cast<llvm::CallInst>(Store->getPointerOperand()))
-                       ->second;
-        if (!Active[Root])
-          demoteRootAndDeleteStore(ToDelete, Store, ShadowMap);
-        Active[Root] = 0;
-      } else if (isa<llvm::ReturnInst>(&*I) ||
-                 isa<llvm::UnreachableInst>(&*I)) {
-        // Hard kill all, but since this is the default state, we don't
-        // need to do anything
-      } else if (llvm::CallInst *CI = dyn_cast<llvm::CallInst>(&*I)) {
-        // Most call insts are safe points. Check for a few special cases
-        // we know are not.
-        Function *Callee = CI->getCalledFunction();
-        if (Callee) {
-          // Intrinsics are not safe points
-          if (Callee->isIntrinsic())
-            continue;
-          // Special case: Don't consider jl_throw a safe point
-          if (Callee->getName() == "jl_throw" &&
-              isa<llvm::Constant>(CI->getArgOperand(0))) {
-            continue;
-          }
-        }
-        // llvm::errs() << "Soft kill";
-        // CI->dump();
-        // Soft kill all
-        Active.set();
-      }
-    }
-    for (StoreInst *S : ToDelete)
-      S->eraseFromParent();
-    ToDelete.clear();
-    BBInfos[BB] = BBInfo{Active};
   }
   for (auto x : RootNumbering) {
     llvm::Instruction *Inst = x.first;
     if (Inst->getNumUses() == 0)
       Inst->eraseFromParent();
   }
+  
+  BBInfos.clear();
 }
 
 void JuliaGCAllocator::collapseRedundantRoots()
