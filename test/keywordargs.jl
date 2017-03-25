@@ -265,3 +265,8 @@ function f21147(f::Tuple{A}; kwargs...) where {B,A<:Tuple{B}}
 end
 @test f21147(((1,),)) === Int
 @test f21147(((1,),), k = 2) === Int
+function g21147(f::Tuple{A}, k = 2) where {B,A<:Tuple{B}}
+    return B
+end
+@test g21147(((1,),)) === Int
+@test g21147(((1,),), 2) === Int
