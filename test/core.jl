@@ -4769,7 +4769,7 @@ end
     x::Array{T} where T<:Integer
 end
 
-let a = Array{Core.BottomType, 1}(2)
+let a = Array{Core.TypeofBottom, 1}(2)
     @test a[1] == Union{}
     @test a == [Union{}, Union{}]
 end
