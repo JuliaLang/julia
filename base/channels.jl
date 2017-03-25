@@ -374,7 +374,7 @@ function notify_error(c::Channel, err)
     notify_error(c.cond_take, err)
     notify_error(c.cond_put, err)
 
-    # release tasks on a `wait()/yielto()` call (on unbuffered channels)
+    # release tasks on a `wait()/yieldto()` call (on unbuffered channels)
     waiters = filter!(t->(t.state == :runnable), vcat(c.takers, c.putters))
     foreach(t->schedule(t, err; error=true), waiters)
 end
