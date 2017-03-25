@@ -133,10 +133,10 @@ ambs = detect_ambiguities(Ambig5)
 @test length(ambs) == 2
 
 # Test that Core and Base are free of ambiguities
-# TODO jb/subtype: we now detect a lot more
-@test !isempty(detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=true))
-@test detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=false) == []
 # not using isempty so this prints more information when it fails
+@test detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=false) == []
+# some ambiguities involving Union{} type parameters are expected, but not required
+@test !isempty(detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=true))
 
 amb_1(::Int8, ::Int) = 1
 amb_1(::Integer, x) = 2
