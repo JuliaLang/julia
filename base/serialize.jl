@@ -88,6 +88,7 @@ const TYPENAME_TAG = sertag(TypeName)
 const INT_TAG = sertag(Int)
 const GLOBALREF_TAG = sertag(GlobalRef)
 const BOTTOM_TAG = sertag(Bottom)
+const UNIONALL_TAG = sertag(UnionAll)
 
 writetag(s::IO, tag) = write(s, UInt8(tag))
 
@@ -518,6 +519,24 @@ end
 
 serialize(s::AbstractSerializer, ::Type{Bottom}) = write_as_tag(s.io, BOTTOM_TAG)
 
+function serialize(s::AbstractSerializer, u::UnionAll)
+    writetag(s.io, UNIONALL_TAG)
+    n = 0; t = u
+    while isa(t, UnionAll)
+        t = t.body
+        n += 1
+    end
+    if isa(t, DataType) && t === unwrap_unionall(t.name.wrapper)
+        write(s.io, UInt8(1))
+        write(s.io, Int16(n))
+        serialize(s, t)
+    else
+        write(s.io, UInt8(0))
+        serialize(s, u.var)
+        serialize(s, u.body)
+    end
+end
+
 serialize(s::AbstractSerializer, x::ANY) = serialize_any(s, x)
 
 function serialize_any(s::AbstractSerializer, x::ANY)
@@ -855,6 +874,31 @@ function deserialize_datatype(s::AbstractSerializer)
         return t
     end
     deserialize(s, t)
+end
+
+function deserialize(s::AbstractSerializer, ::Type{UnionAll})
+    form = read(s.io, UInt8)
+    if form == 0
+        var = deserialize(s)
+        body = deserialize(s)
+        return UnionAll(var, body)
+    else
+        n = read(s.io, Int16)
+        t = deserialize(s)::DataType
+        w = t.name.wrapper
+        k = 0
+        while isa(w, UnionAll)
+            w = w.body
+            k += 1
+        end
+        w = t.name.wrapper
+        k -= n
+        while k > 0
+            w = w.body
+            k -= 1
+        end
+        return w
+    end
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Task})

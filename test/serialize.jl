@@ -444,3 +444,16 @@ let a = ['T', 'e', 's', 't']
     seek(f,0)
     @test deserialize(f) === :β
 end
+
+# issue #20324
+struct T20324{T}
+    x::T
+end
+let x = T20324[T20324(1) for i = 1:2]
+    b = IOBuffer()
+    serialize(b, x)
+    seekstart(b)
+    y = deserialize(b)
+    @test isa(y,Vector{T20324})
+    @test y == x
+end
