@@ -59,7 +59,7 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
                         return 0;
                 }
                 else {
-                    if (!jl_types_equal(jl_tparam0(a), tp0))
+                    if (!(jl_typeof(jl_tparam0(a)) == jl_typeof(tp0) && jl_types_equal(jl_tparam0(a), tp0)))
                         return 0;
                 }
             }
@@ -142,7 +142,7 @@ static inline int sig_match_simple(jl_value_t **args, size_t n, jl_value_t **sig
                     return 0;
             }
             else {
-                if (a!=tp0 && !jl_types_equal(a,tp0))
+                if (a!=tp0 && !(jl_typeof(a) == jl_typeof(tp0) && jl_types_equal(a,tp0)))
                     return 0;
             }
         }
