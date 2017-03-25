@@ -469,16 +469,7 @@
         ,(method-def-expr-
           name
           ;; remove sparams that don't occur, to avoid printing the warning twice
-          (let loop ((filtered '())
-                     (params   positional-sparams))
-            (cond ((null? params)
-                   (reverse! filtered))
-                  ((or (expr-contains-eq (caar params) (cons 'list argl))
-                       (any (lambda (v) (expr-contains-eq (caar params) v))
-                            (cdr params)))
-                   (loop (cons (car params) filtered) (cdr params)))
-                  (else
-                   (loop filtered (cdr params)))))
+          (filter-sparams (cons 'list argl) positional-sparams)
           `((|::|
              ;; if there are optional positional args, we need to be able to reference the function name
              ,(if (any kwarg? pargl) (gensy) UNUSED)
@@ -564,16 +555,26 @@
                   (cdr body))
       '()))
 
+;; keep only sparams used by `expr` or other sparams
+(define (filter-sparams expr sparams)
+  (let loop ((filtered '())
+             (params   sparams))
+    (cond ((null? params)
+           (reverse! filtered))
+          ((or (expr-contains-eq (caar params) expr)
+               (any (lambda (v) (expr-contains-eq (caar params) v))
+                    (cdr params)))
+           (loop (cons (car params) filtered) (cdr params)))
+          (else
+           (loop filtered (cdr params))))))
+
 (define (optional-positional-defs name sparams req opt dfl body isstaged overall-argl rett)
   (let ((prologue (extract-method-prologue body)))
     `(block
       ,@(map (lambda (n)
                (let* ((passed (append req (list-head opt n)))
                       ;; only keep static parameters used by these arguments
-                      (sp     (filter (lambda (sp)
-                                        (contains (lambda (e) (eq? e (car sp)))
-                                                  passed))
-                                      sparams))
+                      (sp     (filter-sparams (cons 'list passed) sparams))
                       (vals   (list-tail dfl n))
                       (absent (list-tail opt n)) ;; absent arguments
                       (body
