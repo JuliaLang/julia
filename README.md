@@ -11,15 +11,15 @@ Windows: [![Build status](https://ci.appveyor.com/api/projects/status/dvial98s5v
 
 Code Coverage: [![Coverage Status](https://coveralls.io/repos/JuliaLang/julia/badge.svg?branch=master)](https://coveralls.io/r/JuliaLang/julia?branch=master) [![codecov.io](http://codecov.io/github/JuliaLang/julia/coverage.svg?branch=master)](http://codecov.io/github/JuliaLang/julia?branch=master)
 
-<a name="The-Julia-Language"/>
 ## The Julia Language
+<a name="The-Julia-Language"/>
 
 Julia is a high-level, high-performance dynamic language for technical computing.
 The main homepage for Julia can be found at [julialang.org](http://julialang.org/).
 This is the GitHub repository of Julia source code, including instructions for compiling and installing Julia, below.
 
-<a name="Resources"/>
 ## Resources
+<a name="Resources"/>
 
 - **Homepage:** <http://julialang.org>
 - **Binaries:** <http://julialang.org/downloads/>
@@ -43,8 +43,8 @@ New developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang
 - [**Twitter**](https://twitter.com/JuliaLanguage)
 - [**Meetup**](http://julia.meetup.com/)
 
-<a name="Currently-Supported-Platforms"/>
 ## Currently Supported Platforms
+<a name="Currently-Supported-Platforms"/>
 
 - **Linux**
 - **MacOS**
@@ -53,8 +53,8 @@ New developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang
 
 All systems are supported with both x86/64 (64-bit) and x86 (32-bit, except MacOS) architectures. Support for [ARM](https://github.com/JuliaLang/julia/blob/master/README.arm.md), AARCH64, and POWER8 (little-endian) has been added recently.
 
-<a name="Source-Download-and-Compilation"/>
 ## Source Download and Compilation
+<a name="Source-Download-and-Compilation"/>
 
 First, make sure you have all the [required dependencies](#Required-Build-Tools-External-Libraries) installed.
 Then, acquire the source code by cloning the git repository:
@@ -171,13 +171,13 @@ latest version.
 
 
 
-<a name="Uninstalling-Julia"/>
 ## Uninstalling Julia
+<a name="Uninstalling-Julia"/>
 
 Julia does not install anything outside the directory it was cloned into. Julia can be completely uninstalled by deleting this directory. Julia packages are installed in `~/.julia` by default, and can be uninstalled by deleting `~/.julia`.
 
-<a name="Platform-Specific-Notes"/>
 ## Platform-Specific Build Notes
+<a name="Platform-Specific-Notes"/>
 
 ### Linux
 
@@ -255,8 +255,8 @@ In order to build Julia on Windows, see [README.windows](https://github.com/Juli
 
 Julia can be developed in an isolated Vagrant environment. See [the Vagrant README](https://github.com/JuliaLang/julia/blob/master/contrib/vagrant/README.md) for details.
 
-<a name="Required-Build-Tools-External-Libraries"/>
 ## Required Build Tools and External Libraries
+<a name="Required-Build-Tools-External-Libraries"/>
 
 Building Julia requires that the following software be installed:
 
@@ -333,8 +333,8 @@ Julia uses the following external libraries, which are automatically downloaded 
 [mbedtls]:      https://tls.mbed.org/
 [pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
 
-<a name="System-Provided-Libraries">
 ### System Provided Libraries
+<a name="System-Provided-Libraries">
 
 If you already have one or more of these packages installed on your system, you can prevent Julia from compiling duplicates of these libraries by passing `USE_SYSTEM_...=1` to `make` or adding the line to `Make.user`. The complete list of possible flags can be found in `Make.inc`.
 
@@ -365,8 +365,8 @@ Add the following to the `Make.user` file:
 
 It is highly recommended to start with a fresh clone of the Julia repository.
 
-<a name="Source-Code-Organization"/>
 ## Source Code Organization
+<a name="Source-Code-Organization"/>
 
 The Julia source code is organized as follows:
 
@@ -382,8 +382,8 @@ The Julia source code is organized as follows:
     ui/            source for various front ends
     usr/           binaries and shared libraries loaded by Julia's standard libraries
 
-<a name="Binary-Installation"/>
 ## Binary Installation
+<a name="Binary-Installation"/>
 
 If you would rather not compile the latest Julia from source, platform-specific tarballs with pre-compiled binaries are also [available for download](http://julialang.org/downloads/).
 
@@ -420,8 +420,8 @@ The following distributions include julia, but the versions may be out of date d
 * [MacPorts](https://trac.macports.org/browser/trunk/dports/lang/julia/Portfile)
 * [OS X Homebrew Tap](https://github.com/staticfloat/homebrew-julia/)
 
-<a name="Editor-Terminal-Setup"/>
 ## Editor and Terminal Setup
+<a name="Editor-Terminal-Setup"/>
 
 Currently, Julia editing mode support is available for a number of
 editors. While Julia modes for
