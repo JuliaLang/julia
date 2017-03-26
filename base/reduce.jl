@@ -260,8 +260,25 @@ _mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
 
 function _mapreduce{T}(f, op, ::IndexLinear, A::AbstractArray{T})
     inds = linearindices(A)
-    length(inds) > 0 ? mapreduce_impl(f, op, A, first(inds), last(inds)) :
-                       mr_empty(f, op, T)
+    n = length(inds)
+    if n == 0
+        return mr_empty(f, op, T)
+    elseif n == 1
+        @inbounds a1 = A[inds[1]]
+        return r_promote(op, f(a1))
+    elseif n < 16 # process short array here, avoid mapreduce_impl() compilation
+        @inbounds i = inds[1]
+        @inbounds a1 = A[i]
+        @inbounds a2 = A[i+=1]
+        s = op(r_promote(op, f(a1)), r_promote(op, f(a2)))
+        while i < last(inds)
+            @inbounds Ai = A[i+=1]
+            s = op(s, f(Ai))
+        end
+        return s
+    else
+        return mapreduce_impl(f, op, A, first(inds), last(inds))
+    end
 end
 
 _mapreduce(f, op, ::IndexCartesian, A::AbstractArray) = mapfoldl(f, op, A)
