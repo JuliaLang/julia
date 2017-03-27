@@ -324,53 +324,66 @@ kron(a::AbstractMatrix, b::AbstractVector)=kron(a,reshape(b,length(b),1))
 kron(a::AbstractVector, b::AbstractMatrix)=kron(reshape(a,length(a),1),b)
 
 # Matrix power
-^(A::AbstractMatrix, p::Integer) = p < 0 ? Base.power_by_squaring(inv(A),-p) : Base.power_by_squaring(A,p)
+^{T}(A::AbstractMatrix{T}, p::Integer) = p < 0 ? Base.power_by_squaring(inv(A), -p) : Base.power_by_squaring(A, p)
 function ^{T}(A::AbstractMatrix{T}, p::Real)
     # For integer powers, use repeated squaring
     if isinteger(p)
-        return A^Integer(real(p))
+        TT = Base.promote_op(^, eltype(A), typeof(p))
+        return (TT == eltype(A) ? A : copy!(similar(A, TT), A))^Integer(p)
     end
 
     # If possible, use diagonalization
-    if issymmetric(A) && T <: Real
-        return full(Symmetric(A)^p)
+    if T <: Real && issymmetric(A)
+        return (Symmetric(A)^p)
     end
     if ishermitian(A)
-        return full(Hermitian(A)^p)
+        return (Hermitian(A)^p)
+    end
+
+    n = checksquare(A)
+
+    # Quicker return if A is diagonal
+    if isdiag(A)
+        retmat = copy(A)
+        for i in 1:n
+            retmat[i, i] = retmat[i, i] ^ p
+        end
+        return retmat
     end
 
     # Otherwise, use Schur decomposition
-    n = checksquare(A)
     if istriu(A)
         #Integer part
-        retmat = full(A) ^ floor(p)
+        retmat = A ^ floor(p)
         #Real part
-        retmat = retmat * full(powm(UpperTriangular(A), real(p - floor(p))))
-        d = diag(A)
+        if p - floor(p) == 0.5
+            # special case: A^0.5 === sqrtm(A)
+            retmat = retmat * sqrtm(A)
+        else
+            retmat = retmat * powm!(UpperTriangular(float.(A)), real(p - floor(p)))
+        end
     else
         S,Q,d = schur(complex(A))
-        R = UpperTriangular(S)^p
+        #Integer part
+        R = S ^ floor(p)
+        #Real part
+        if p - floor(p) == 0.5
+            # special case: A^0.5 === sqrtm(A)
+            R = R * sqrtm(S)
+        else
+            R = R * powm!(UpperTriangular(float.(S)), real(p - floor(p)))
+        end
         retmat = Q * R * Q'
     end
 
-    # Check whether the matrix has nonpositive real eigs
-    np_real_eigs = false
-    for i = 1:n
-        if imag(d[i]) < eps() && real(d[i]) <= 0
-            np_real_eigs = true
-            break
-        end
-    end
-    if np_real_eigs
-        warn("Matrix with nonpositive real eigenvalues, a nonprincipal matrix power will be returned.")
-    end
-
-    if isreal(A) && !np_real_eigs
+    # if A has nonpositive real eigenvalues, retmat is a nonprincipal matrix power.
+    if isreal(retmat)
         return real(retmat)
     else
         return retmat
     end
 end
+^(A::AbstractMatrix, p::Number) = expm(p*logm(A))
 
 # Matrix exponential
 
