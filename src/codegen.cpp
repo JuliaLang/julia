@@ -2959,10 +2959,17 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
     else if (f==jl_builtin_setfield && nargs==3) {
         jl_datatype_t *sty = (jl_datatype_t*)expr_type(args[1], ctx);
         rt1 = (jl_value_t*)sty;
-        if (jl_is_structtype(sty) && sty != jl_module_type &&
-            jl_is_quotenode(args[2]) && jl_is_symbol(jl_fieldref(args[2],0))) {
-            size_t idx = jl_field_index(sty,
-                                        (jl_sym_t*)jl_fieldref(args[2],0), 0);
+        if (jl_is_structtype(sty) && sty != jl_module_type) {
+            size_t idx = (size_t)-1;
+            if (jl_is_quotenode(args[2]) && jl_is_symbol(jl_fieldref(args[2],0))) {
+                size_t idx = jl_field_index(sty,
+                                            (jl_sym_t*)jl_fieldref(args[2],0), 0);
+            } else if (jl_is_long(args[2])) {
+                ssize_t unchecked_idx = jl_unbox_long(args[2]);
+                if (1 <= unchecked_idx && unchecked_idx <= jl_datatype_nfields(sty)) {
+                    idx = unchecked_idx-1;
+                }
+            }
             if (idx != (size_t)-1) {
                 jl_value_t *ft = jl_svecref(sty->types, idx);
                 jl_value_t *rhst = expr_type(args[3], ctx);
