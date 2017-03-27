@@ -228,15 +228,16 @@
 
 ;; extract static parameter names from a (method ...) expression
 (define (method-expr-static-parameters m)
-  (if (eq? (car (caddr m)) 'block)
-      (let ((lst '()))
-        (pattern-replace
-         (pattern-set
-          (pattern-lambda (= v (call (core (-/ TypeVar)) (quote T) ...))
-                          (begin (set! lst (cons T lst)) __)))
-         (butlast (cdr (caddr m))))
-        (reverse! lst))
-      '()))
+  (let ((type-ex (caddr m)))
+    (if (eq? (car type-ex) 'block)
+        ;; extract ssavalue labels of sparams from the svec-of-sparams argument to `method`
+        (let ((sp-ssavals (cddr (last (last type-ex)))))
+          (map (lambda (a)  ;; extract T from (= v (call (core TypeVar) (quote T) ...))
+                 (cadr (caddr (caddr a))))
+               (filter (lambda (e)
+                         (and (pair? e) (eq? (car e) '=) (member (cadr e) sp-ssavals)))
+                       (cdr type-ex))))
+        '())))
 
 ;; expressions of the form a.b.c... where everything is a symbol
 (define (sym-ref? e)
