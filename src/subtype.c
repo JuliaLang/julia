@@ -1148,8 +1148,12 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     jl_value_t *root=NULL; jl_savedenv_t se;
     if (param == 2) {
         jl_value_t *ub = R ? intersect_ufirst(a, bb->ub, e, d) : intersect_ufirst(bb->ub, a, e, d);
-        JL_GC_PUSH1(&ub);
-        if (!subtype_in_env(bb->lb, a, e)) {
+        JL_GC_PUSH2(&ub, &root);
+        save_env(e, &root, &se);
+        int issub = subtype_in_env(bb->lb, ub, e);
+        restore_env(e, root, &se);
+        free(se.buf);
+        if (!issub) {
             JL_GC_POP();
             return jl_bottom_type;
         }
@@ -1217,6 +1221,9 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
             bb->ub = ub;
             return (jl_value_t*)b;
         }
+        return ub;
+    }
+    else if (bb->ub == bb->lb) {
         return ub;
     }
     root = NULL;
@@ -1326,9 +1333,14 @@ static jl_value_t *finish_unionall(jl_value_t *res, jl_varbinding_t *vb, jl_sten
             }
         }
         else {
-            varval = root = (jl_value_t*)jl_new_typevar(vb->var->name, vb->lb, vb->ub);
-            res = jl_instantiate_unionall((jl_unionall_t*)res, root);
-            res = jl_new_struct(jl_unionall_type, (jl_tvar_t*)root, res);
+            if (vb->lb != vb->var->lb || vb->ub != vb->var->ub) {
+                varval = root = (jl_value_t*)jl_new_typevar(vb->var->name, vb->lb, vb->ub);
+                res = jl_instantiate_unionall((jl_unionall_t*)res, root);
+                res = jl_new_struct(jl_unionall_type, (jl_tvar_t*)root, res);
+            }
+            else {
+                varval = (jl_value_t*)vb->var;
+            }
         }
     }
 
