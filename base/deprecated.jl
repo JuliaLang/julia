@@ -1138,8 +1138,17 @@ end
      @deprecate revparse(repo::GitRepo, objname::AbstractString) GitObject(repo, objname) false
      @deprecate object(repo::GitRepo, te::GitTreeEntry) GitObject(repo, te) false
      @deprecate commit(ann::GitAnnotated) GitHash(ann) false
-     @deprecate cat{T<:GitObject}(repo::GitRepo, ::Type{T}, object::AbstractString) cat(repo, object)
      @deprecate lookup(repo::GitRepo, oid::GitHash) GitBlob(repo, oid) false
+    function Base.cat{T<:GitObject}(repo::GitRepo, ::Type{T}, object::AbstractString)
+        Base.depwarn("cat(repo::GitRepo, T, spec) is deprecated, use content(T(repo, spec))", :cat)
+        try
+            return content(GitBlob(repo, spec))
+        catch e
+            isa(e, LibGit2.GitError) && return nothing
+            rethrow(e)
+        end
+    end
+    Base.cat(repo::GitRepo, object::AbstractString) = cat(repo, GitBlob, object)
 end
 
 # when this deprecation is deleted, remove all calls to it, and all
