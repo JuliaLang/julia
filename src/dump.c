@@ -2123,6 +2123,18 @@ static void jl_insert_methods(linkedlist_t *list)
     }
 }
 
+static void linkedlist_to_array(jl_array_t *a, linkedlist_t *list)
+{
+    while (list) {
+        size_t i;
+        for (i = 0; i < list->count; i++) {
+            jl_array_ptr_1d_push(a, (jl_value_t*)list->def[i].meth);
+            jl_array_ptr_1d_push(a, (jl_value_t*)list->def[i].simpletype);
+        }
+        list = list->next;
+    }
+}
+
 static void jl_insert_backedges(linkedlist_t *list)
 {
     while (list) {
@@ -3047,6 +3059,20 @@ static int trace_method(jl_typemap_entry_t *entry, void *closure)
     return 1;
 }
 
+void jl_gc_mark_deserializer_state(jl_ptls_t ptls)
+{
+    size_t i;
+    for (i=0; i < flagref_list.len; ) {
+        jl_value_t **loc = (jl_value_t**)flagref_list.items[i];
+        if (loc)
+            jl_gc_push_root(ptls, *loc);
+        i += 2;
+    }
+    for (i=0; i < backref_list.len; i++) {
+        jl_gc_push_root(ptls, (jl_value_t*)backref_list.items[i]);
+    }
+}
+
 static jl_value_t *_jl_restore_incremental(ios_t *f)
 {
     if (ios_eof(f) || !jl_read_verify_header(f)) {
@@ -3100,14 +3126,19 @@ static jl_value_t *_jl_restore_incremental(ios_t *f)
     // now all of the interconnects will be created
     jl_recache_types(); // make all of the types identities correct
     init_order = jl_finalize_deserializer(&s, tracee_list); // done with f and s (needs to be after recache types)
+
+    jl_array_t *extmeths = jl_alloc_vec_any(0);  // make array of references for GC
+    linkedlist_to_array(extmeths, &external_methods);
+
+    JL_GC_PUSH3(&init_order, &restored, &extmeths);
+    jl_gc_enable(en);
+
     jl_insert_methods(&external_methods); // hook up methods of external generic functions (needs to be after recache types)
     jl_recache_other(); // make all of the other objects identities correct (needs to be after insert methods)
     jl_insert_backedges(&external_methods); // restore external backedges (needs to be after recache other)
     free_linkedlist(external_methods.next);
     serializer_worklist = NULL;
 
-    JL_GC_PUSH2(&init_order, &restored);
-    jl_gc_enable(en);
     arraylist_free(&flagref_list);
     arraylist_free(&backref_list);
     ios_close(f);

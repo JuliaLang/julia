@@ -1321,6 +1321,11 @@ NOINLINE static int gc_mark_module(jl_ptls_t ptls, jl_module_t *m,
     return refyoung;
 }
 
+void jl_gc_push_root(jl_ptls_t ptls, jl_value_t *v)
+{
+    gc_push_root(ptls, v, 0);
+}
+
 // Handle the case where the stack is only partially copied.
 STATIC_INLINE uintptr_t gc_get_stack_addr(void *_addr, uintptr_t offset,
                                           uintptr_t lb, uintptr_t ub)
@@ -1674,6 +1679,9 @@ static void mark_roots(jl_ptls_t ptls)
     // constants
     gc_push_root(ptls, jl_typetype_type, 0);
     gc_push_root(ptls, jl_emptytuple_type, 0);
+
+    // deserializer state during module reload
+    jl_gc_mark_deserializer_state(ptls);
 }
 
 // find unmarked objects that need to be finalized from the finalizer list "list".
