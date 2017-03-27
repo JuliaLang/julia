@@ -1668,22 +1668,25 @@ Ac_ldiv_B(::Union{UnitUpperTriangular,UnitLowerTriangular}, ::RowVector) = throw
 #   Higham and Lin, "An improved Schur-Padé algorithm for fractional powers of
 #     a matrix and their Fréchet derivatives", SIAM. J. Matrix Anal. & Appl.,
 #     34(3), (2013) 1341–1360.
-function powm(A0::UpperTriangular{T}, p::Real) where T<:BlasFloat
+function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
 
     if abs(p) >= 1
         ArgumentError("p must be a real number in (-1,1), got $p")
     end
 
+    normA0 = norm(A0, 1)
+    scale!(A0, 1/normA0)
+
     theta = [1.53e-5, 2.25e-3, 1.92e-2, 6.08e-2, 1.25e-1, 2.03e-1, 2.84e-1]
     n = checksquare(A0)
 
-    A, m, s = invsquaring(A0,theta)
+    A, m, s = invsquaring(A0, theta)
     A = I - A
 
     # Compute accurate diagonal of I - T
-    sqrt_diag!(A0,A,s)
+    sqrt_diag!(A0, A, s)
     for i = 1:n
-        A[i,i] = -A[i,i]
+        A[i, i] = -A[i, i]
     end
     # Compute the Padé approximant
     c = 0.5 * (p - m) / (2 * m - 1)
@@ -1694,39 +1697,39 @@ function powm(A0::UpperTriangular{T}, p::Real) where T<:BlasFloat
         j4 = 4 * j
         c = (-p - j) / (j4 + 2)
         for i = 1:n
-            @inbounds S[i,i] = S[i,i] + 1
+            @inbounds S[i, i] = S[i, i] + 1
         end
-        copy!(Stmp,S)
-        scale!(S,A,c)
-        A_ldiv_B!(Stmp,S.data)
+        copy!(Stmp, S)
+        scale!(S, A, c)
+        A_ldiv_B!(Stmp, S.data)
 
         c = (p - j) / (j4 - 2)
         for i = 1:n
-            @inbounds S[i,i] = S[i,i] + 1
+            @inbounds S[i, i] = S[i, i] + 1
         end
-        copy!(Stmp,S)
-        scale!(S,A,c)
-        A_ldiv_B!(Stmp,S.data)
+        copy!(Stmp, S)
+        scale!(S, A, c)
+        A_ldiv_B!(Stmp, S.data)
     end
     for i = 1:n
-        S[i,i] = S[i,i] + 1
+        S[i, i] = S[i, i] + 1
     end
-    copy!(Stmp,S)
-    scale!(S,A,-p)
-    A_ldiv_B!(Stmp,S.data)
+    copy!(Stmp, S)
+    scale!(S, A, -p)
+    A_ldiv_B!(Stmp, S.data)
     for i = 1:n
-        @inbounds S[i,i] = S[i,i] + 1
+        @inbounds S[i, i] = S[i, i] + 1
     end
 
-    blockpower!(A0,S,p/(2^s))
+    blockpower!(A0, S, p/(2^s))
     for m = 1:s
-        A_mul_B!(Stmp.data,S,S)
-        copy!(S,Stmp)
-        blockpower!(A0,S,p/(2^(s-m)))
+        A_mul_B!(Stmp.data, S, S)
+        copy!(S, Stmp)
+        blockpower!(A0, S, p/(2^(s-m)))
     end
+    scale!(S, normA0^p)
     return S
 end
-^(A::LowerTriangular, p::Integer) = ^(A.', p::Integer).'
 powm(A::LowerTriangular, p::Real) = powm(A.', p::Real).'
 
 # Complex matrix logarithm for the upper triangular factor, see:
@@ -1949,9 +1952,11 @@ function sqrt_diag!(A0::UpperTriangular, A::UpperTriangular, s)
     end
 end
 
+# Used only by powm at the moment
 # Repeatedly compute the square roots of A so that in the end its
 # eigenvalues are close enough to the positive real line
 function invsquaring(A0::UpperTriangular, theta)
+    # assumes theta is in ascending order
     maxsqrt = 100
     tmax = size(theta, 1)
     n = checksquare(A0)
@@ -1964,13 +1969,11 @@ function invsquaring(A0::UpperTriangular, theta)
     dm1 = similar(d, n)
     s = 0
     for i = 1:n
-        dm1[i] = d[i] - 1.
+        dm1[i] = d[i] - 1
     end
     while norm(dm1, Inf) > theta[tmax]
         for i = 1:n
             d[i] = sqrt(d[i])
-        end
-        for i = 1:n
             dm1[i] = d[i] - 1
         end
         s = s + 1
@@ -1986,7 +1989,7 @@ function invsquaring(A0::UpperTriangular, theta)
     alpha2 = max(d2, d3)
     foundm = false
     if alpha2 <= theta[2]
-        m = alpha2<=theta[1]?1:2
+        m = alpha2 <= theta[1] ? 1 : 2
         foundm = true
     end
 

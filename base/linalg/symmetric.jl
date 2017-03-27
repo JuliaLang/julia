@@ -412,8 +412,8 @@ function ^{T<:Real}(A::Symmetric{T}, p::Integer)
     end
 end
 function ^{T<:Real}(A::Symmetric{T}, p::Real)
-    F = eigfact(full(A))
-    if isposdef(F)
+    F = eigfact(A)
+    if all(λ -> λ ≥ 0, F.values)
         retmat = (F.vectors * Diagonal((F.values).^p)) * F.vectors'
     else
         retmat = (F.vectors * Diagonal((complex(F.values)).^p)) * F.vectors'
@@ -435,7 +435,7 @@ end
 function ^{T}(A::Hermitian{T}, p::Real)
     n = checksquare(A)
     F = eigfact(A)
-    if isposdef(F)
+    if all(λ -> λ ≥ 0, F.values)
         retmat = (F.vectors * Diagonal((F.values).^p)) * F.vectors'
         if T <: Real
             return Hermitian(retmat)
@@ -451,7 +451,7 @@ function ^{T}(A::Hermitian{T}, p::Real)
     end
 end
 
-function expm{T<:Real}(A::Symmetric{T})
+function expm(A::Symmetric)
     F = eigfact(A)
     return Symmetric((F.vectors * Diagonal(exp.(F.values))) * F.vectors')
 end

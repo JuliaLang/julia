@@ -113,7 +113,6 @@ export
     ordschur,
     peakflops,
     pinv,
-    powm,
     qr,
     qrfact!,
     qrfact,
@@ -263,7 +262,6 @@ include("hessenberg.jl")
 include("lq.jl")
 include("eigen.jl")
 include("svd.jl")
-include("schur.jl")
 include("symmetric.jl")
 include("cholesky.jl")
 include("lu.jl")
@@ -275,6 +273,8 @@ include("givens.jl")
 include("special.jl")
 include("bitarray.jl")
 include("ldlt.jl")
+include("schur.jl")
+
 
 include("arpack.jl")
 include("arnoldi.jl")
