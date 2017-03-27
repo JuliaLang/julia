@@ -1298,6 +1298,10 @@ end
      end
 end
 
+# #19635
+@deprecate zeros{T <: Number}(::Type{T}, arr::Range)  zeros(T, length(arr))
+@deprecate ones{T <: Number}(::Type{T}, arr::Range)  ones(T, length(arr))
+
 # END 0.6 deprecations
 
 # BEGIN 1.0 deprecations
