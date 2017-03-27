@@ -117,7 +117,7 @@ Base.Dates.toprev(::Function, ::Base.Dates.TimeType)
 
 ```@docs
 Base.Dates.Period(::Any)
-Base.Dates.CompoundPeriod{P <: Base.Dates.Period}(::Array{P,1})
+Base.Dates.CompoundPeriod(::Vector{<:Base.Dates.Period})
 Base.Dates.default
 ```
 
