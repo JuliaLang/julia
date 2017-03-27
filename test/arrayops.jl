@@ -958,7 +958,7 @@ end
     @test m[1,2] == ([2,4],)
 
     # issue #21123
-    mapslices(nnz, speye(3), 1) == [1, 1, 1]
+    @test mapslices(nnz, speye(3), 1) == [1, 1, 1]
 end
 
 @testset "single multidimensional index" begin
