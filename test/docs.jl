@@ -602,7 +602,7 @@ Base.collect{T}(::Type{EmptyType{T}}) = "borked"
 end
 
 let fd = meta(I12515)[@var(Base.collect)]
-    @test fd.order[1] == (Tuple{Type{I12515.EmptyType{T}}} where T)
+    @test fd.order[1] == (Union{Tuple{Type{I12515.EmptyType{T}}}, Tuple{T}} where T)
 end
 
 # PR #12593
@@ -959,3 +959,41 @@ dynamic_test.x = "test 2"
 @test Text("docstring1") ≠ Text("docstring2")
 @test hash(Text("docstring1")) ≠ hash(Text("docstring2"))
 @test hash(Text("docstring")) ≠ hash(HTML("docstring"))
+
+# issue 21016
+module I21016
+
+struct Struct{T}
+end
+
+"String 1"
+function Struct{T}(arg1) where T<:Float64
+end
+
+"String 2"
+function Struct{T}(arg1) where T
+end
+
+"String 3"
+function Struct{T}(arg1) where Integer <: T <: Real
+end
+
+"String 4"
+function Struct{T}(arg1) where T >: Int
+end
+
+end
+
+@test docstrings_equal(
+    @doc(I21016.Struct),
+    doc"""
+    String 1
+
+    String 2
+
+    String 3
+
+    String 4
+    """
+)
+
