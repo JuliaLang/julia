@@ -206,13 +206,22 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib,
 // all the arguments without writing assembly directly.
 // This doesn't matter too much in reality since a single function is usually
 // not called with multiple signatures.
+#if JL_LLVM_VERSION >= 50000
+static DenseMap<AttributeList,
+#else
 static DenseMap<AttributeSet,
+#endif
                 std::map<std::tuple<GlobalVariable*,FunctionType*,
                                     CallingConv::ID>,GlobalVariable*>> allPltMap;
 
 // Emit a "PLT" entry that will be lazily initialized
 // when being called the first time.
-static GlobalVariable *emit_plt_thunk(Module *M, FunctionType *functype, const AttributeSet &attrs,
+static GlobalVariable *emit_plt_thunk(Module *M, FunctionType *functype,
+#if JL_LLVM_VERSION >= 50000
+    const AttributeList &attrs,
+#else
+    const AttributeSet &attrs,
+#endif
                                       CallingConv::ID cc, const char *f_lib, const char *f_name,
                                       GlobalVariable *libptrgv, GlobalVariable *llvmgv,
                                       void *symaddr, bool runtime_lib)
@@ -260,7 +269,11 @@ static GlobalVariable *emit_plt_thunk(Module *M, FunctionType *functype, const A
     // NoReturn function can trigger LLVM verifier error when declared as
     // MustTail since other passes might replace the `ret` with
     // `unreachable` (LLVM should probably accept `unreachable`).
+#if JL_LLVM_VERSION >= 50000
+    if (attrs.hasAttribute(AttributeList::FunctionIndex,
+#else
     if (attrs.hasAttribute(AttributeSet::FunctionIndex,
+#endif
                            Attribute::NoReturn)) {
         builder.CreateUnreachable();
     }
@@ -291,7 +304,12 @@ static GlobalVariable *emit_plt_thunk(Module *M, FunctionType *functype, const A
     return got;
 }
 
-static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
+static Value *emit_plt(FunctionType *functype,
+#if JL_LLVM_VERSION >= 50000
+    const AttributeList &attrs,
+#else
+    const AttributeSet &attrs,
+#endif
                        CallingConv::ID cc, const char *f_lib, const char *f_name)
 {
     assert(imaging_mode);
@@ -1211,7 +1229,11 @@ public:
     std::vector<bool> fargt_isboxed; // vector of whether the llvm output type is a Julia-box for each argument (vararg is the last item, if applicable)
     Type *fargt_vasig = NULL; // ABI coercion type for vararg list
     std::vector<bool> byRefList; // vector of "byref" parameters (vararg is the last item, if applicable)
+#if JL_LLVM_VERSION >= 50000
+    AttributeList attributes; // vector of function call site attributes (vararg is the last item, if applicable)
+#else
     AttributeSet attributes; // vector of function call site attributes (vararg is the last item, if applicable)
+#endif
     Type *lrt; // input parameter of the llvm return type (from julia_struct_to_llvm)
     bool retboxed; // input parameter indicating whether lrt is jl_value_t*
     Type *prt; // out parameter of the llvm return type for the function signature
@@ -1252,7 +1274,11 @@ std::string generate_func_sig()
     size_t nargt = jl_svec_len(at);
     assert(rt && !jl_is_abstract_ref_type(rt));
 
+#if JL_LLVM_VERSION >= 50000
+    std::vector<AttributeList> paramattrs;
+#else
     std::vector<AttributeSet> paramattrs;
+#endif
     std::unique_ptr<AbiLayout> abi;
     if (llvmcall)
         abi.reset(new ABI_LLVMLayout());
@@ -1275,7 +1301,11 @@ std::string generate_func_sig()
             retattrs.addAttribute(Attribute::StructRet);
 #endif
             retattrs.addAttribute(Attribute::NoAlias);
+#if JL_LLVM_VERSION >= 50000
+            paramattrs.push_back(AttributeList::get(jl_LLVMContext, 1, retattrs));
+#else
             paramattrs.push_back(AttributeSet::get(jl_LLVMContext, 1, retattrs));
+#endif
             fargt_sig.push_back(PointerType::get(lrt, 0));
             sret = 1;
             prt = lrt;
@@ -1357,7 +1387,11 @@ std::string generate_func_sig()
 
         do { // for each arg for which this type applies, add the appropriate LLVM parameter attributes
             if (i < nargs) { // if vararg, the last declared arg type may not have a corresponding arg value
+#if JL_LLVM_VERSION >= 50000
+                AttributeList params = AttributeList::get(jl_LLVMContext, i + sret + 1, ab);
+#else
                 AttributeSet params = AttributeSet::get(jl_LLVMContext, i + sret + 1, ab);
+#endif
                 paramattrs.push_back(params);
             }
             i++;
@@ -1365,13 +1399,21 @@ std::string generate_func_sig()
     }
 
     for (i = 0; i < nargs + sret; ++i) {
+#if JL_LLVM_VERSION >= 50000
+        const AttributeList &as = paramattrs.at(i);
+#else
         const AttributeSet &as = paramattrs.at(i);
+#endif
         if (!as.isEmpty())
             attributes = attributes.addAttributes(jl_LLVMContext, i + 1, as);
     }
     if (rt == jl_bottom_type) {
         attributes = attributes.addAttribute(jl_LLVMContext,
+#if JL_LLVM_VERSION >= 50000
+                                             AttributeList::FunctionIndex,
+#else
                                              AttributeSet::FunctionIndex,
+#endif
                                              Attribute::NoReturn);
     }
     return "";

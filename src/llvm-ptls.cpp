@@ -102,10 +102,17 @@ void LowerPTLS::runOnFunction(LLVMContext &ctx, Module &M, Function *F,
         LoadInst *getter = new LoadInst(GV, "", ptlsStates);
         getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
         ptlsStates->setCalledFunction(getter);
+#if JL_LLVM_VERSION >= 50000
+        ptlsStates->addAttribute(AttributeList::FunctionIndex,
+                                 Attribute::ReadNone);
+        ptlsStates->addAttribute(AttributeList::FunctionIndex,
+                                 Attribute::NoUnwind);
+#else
         ptlsStates->addAttribute(AttributeSet::FunctionIndex,
                                  Attribute::ReadNone);
         ptlsStates->addAttribute(AttributeSet::FunctionIndex,
                                  Attribute::NoUnwind);
+#endif
     }
 #if JL_LLVM_VERSION >= 30700
     else if (jl_tls_offset != -1) {
@@ -160,10 +167,17 @@ void LowerPTLS::runOnFunction(LLVMContext &ctx, Module &M, Function *F,
     }
 #endif
     else {
+#if JL_LLVM_VERSION >= 50000
+        ptlsStates->addAttribute(AttributeList::FunctionIndex,
+                                 Attribute::ReadNone);
+        ptlsStates->addAttribute(AttributeList::FunctionIndex,
+                                 Attribute::NoUnwind);
+#else
         ptlsStates->addAttribute(AttributeSet::FunctionIndex,
                                  Attribute::ReadNone);
         ptlsStates->addAttribute(AttributeSet::FunctionIndex,
                                  Attribute::NoUnwind);
+#endif
     }
 #else
     ptlsStates->replaceAllUsesWith(M.getNamedValue("jl_tls_states"));

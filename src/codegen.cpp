@@ -5260,9 +5260,15 @@ static std::unique_ptr<Module> emit_function(
     // i686 Windows (which uses a 4-byte-aligned stack)
     AttrBuilder *attr = new AttrBuilder();
     attr->addStackAlignmentAttr(16);
+#if JL_LLVM_VERSION >= 50000
+    f->addAttributes(AttributeList::FunctionIndex,
+        AttributeList::get(f->getContext(),
+            AttributeList::FunctionIndex, *attr));
+#else
     f->addAttributes(AttributeSet::FunctionIndex,
         AttributeSet::get(f->getContext(),
             AttributeSet::FunctionIndex, *attr));
+#endif
 #endif
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_) && JL_LLVM_VERSION >= 30500
     f->setHasUWTable(); // force NeedsWinEH
@@ -6928,10 +6934,17 @@ static void init_julia_llvm_env(Module *m)
                          "jl_array_data_owner", m);
     jlarray_data_owner_func->setAttributes(
         jlarray_data_owner_func->getAttributes()
+#if JL_LLVM_VERSION >= 50000
+        .addAttribute(jlarray_data_owner_func->getContext(),
+                      AttributeList::FunctionIndex, Attribute::ReadOnly)
+        .addAttribute(jlarray_data_owner_func->getContext(),
+                      AttributeList::FunctionIndex, Attribute::NoUnwind));
+#else
         .addAttribute(jlarray_data_owner_func->getContext(),
                       AttributeSet::FunctionIndex, Attribute::ReadOnly)
         .addAttribute(jlarray_data_owner_func->getContext(),
                       AttributeSet::FunctionIndex, Attribute::NoUnwind));
+#endif
     add_named_global(jlarray_data_owner_func, jl_array_data_owner);
 
     gcroot_func =
