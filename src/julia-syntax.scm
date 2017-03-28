@@ -1830,20 +1830,23 @@
    '=
    (lambda (e)
      (define lhs (cadr e))
-     (cond
-      ((and (pair? lhs)
-            (or (eq? (car lhs) 'call)
+     (define (function-lhs? lhs)
+       (and (pair? lhs)
+            (or (and (eq? (car lhs) 'comparison) (length= lhs 4))
+                (eq? (car lhs) 'call)
                 (eq? (car lhs) 'where)
                 (and (eq? (car lhs) '|::|)
                      (pair? (cadr lhs))
-                     (eq? (car (cadr lhs)) 'call))))
-       (expand-forms (cons 'function (cdr e))))
-      ((and (pair? lhs)
-            (eq? (car lhs) 'comparison)
-            (length= lhs 4))
-       ;; allow defining functions that use comparison syntax
-       (expand-forms (list* 'function
-                            `(call ,(caddr lhs) ,(cadr lhs) ,(cadddr lhs)) (cddr e))))
+                     (eq? (car (cadr lhs)) 'call)))))
+     (define (assignment-to-function lhs e)  ;; convert '= expr to 'function expr
+       (if (eq? (car lhs) 'comparison)
+           ;; allow defining functions that use comparison syntax
+           (list* 'function
+                  `(call ,(caddr lhs) ,(cadr lhs) ,(cadddr lhs)) (cddr e))
+           (cons 'function (cdr e))))
+     (cond
+      ((function-lhs? lhs)
+       (expand-forms (assignment-to-function lhs e)))
       ((and (pair? lhs)
             (eq? (car lhs) 'curly))
        (expand-typealias (cadr e) (caddr e)))
@@ -1851,11 +1854,13 @@
        ;; chain of assignments - convert a=b=c to `b=c; a=c`
        (let loop ((lhss (list lhs))
                   (rhs  (caddr e)))
-         (if (assignment? rhs)
+         (if (and (assignment? rhs) (not (function-lhs? (cadr rhs))))
              (loop (cons (cadr rhs) lhss) (caddr rhs))
              (let ((rr (if (symbol-like? rhs) rhs (make-ssavalue))))
                (expand-forms
-                `(block ,.(if (eq? rr rhs) '() `((= ,rr ,rhs)))
+                `(block ,.(if (eq? rr rhs) '() `((= ,rr ,(if (assignment? rhs)
+                                                             (assignment-to-function (cadr rhs) rhs)
+                                                             rhs))))
                         ,@(map (lambda (l) `(= ,l ,rr))
                                lhss)
                         (unnecessary ,rr)))))))
