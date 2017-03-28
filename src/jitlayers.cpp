@@ -112,6 +112,7 @@ void addOptimizationPasses(legacy::PassManager *PM)
 void addOptimizationPasses(PassManager *PM)
 #endif
 {
+    PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
     PM->add(createLowerGCFramePass());
 #ifdef JL_DEBUG_BUILD
     PM->add(createVerifierPass());
@@ -244,6 +245,7 @@ void addOptimizationPasses(PassManager *PM)
         PM->add(createEarlyCSEPass(true));
         PM->add(createInstructionCombiningPass());
         PM->add(createDeadStoreEliminationPass());  // Delete dead stores
+        PM->add(createSimpleLoopUnrollPass());     // Unroll small loops
         PM->add(createNewGVNPass());       
         PM->add(createDeadStoreEliminationPass());  // Delete dead stores
         PM->add(createGVNPass());                  // Remove redundancies
@@ -254,8 +256,8 @@ void addOptimizationPasses(PassManager *PM)
         PM->add(createInstructionCombiningPass());
         PM->add(createNewGVNPass());       
         PM->add(createDeadStoreEliminationPass());  // Delete dead stores        
-        PM->add(createSLPVectorizerPass());     // Vectorize straight-line code
-	      PM->add(createSLPVectorizerPass());     // Vectorize straight-line code - again
+        //PM->add(createSLPVectorizerPass());     // Vectorize straight-line code
+	      //PM->add(createSLPVectorizerPass());     // Vectorize straight-line code - again
     }
 #endif
 

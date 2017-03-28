@@ -636,9 +636,15 @@ void JuliaGCAllocator::processBasicBlock(unsigned NRoots, BasicBlock *BB,
             isa<llvm::Constant>(CI->getArgOperand(0))) {
           continue;
         }
+        // Total hack:
+        if (Callee->getName().startswith("julia_throw_setindex_mismatch")) {
+          continue;
+        }
       }
-      // llvm::errs() << "Soft kill";
-      // CI->dump();
+      /*
+      llvm::errs() << "Soft kill";
+      CI->dump();
+      */
       // Soft kill all
       Active.set();
     }
@@ -674,16 +680,11 @@ void JuliaGCAllocator::deleteUnneededRoots() {
 
   std::vector<llvm::BasicBlock *> SecondaryInspection;
   for (auto *BB : llvm::post_order(&F.getEntryBlock())) {
-    BB->dump();
     BBInfos[BB].PrimaryCompleted = true;
     BBInfos[BB].PrimaryIncoming = BBInfos[BB].IncomingProcessed;
     processBasicBlock(RootNo, BB, RootNumbering, ShadowMap, isBlockDone(BB));
     updatePredecessors(SecondaryInspection, BB, true);
-    if (isBlockDone(BB)) {
-      llvm::errs() << "Done\n";
-    }
     while (!SecondaryInspection.empty()) {
-      llvm::errs() << "Secondary processing";
       BasicBlock *SecondaryBB = &*SecondaryInspection.back();
       SecondaryInspection.pop_back();
       processBasicBlock(RootNo, SecondaryBB, RootNumbering, ShadowMap, true);
@@ -1061,6 +1062,8 @@ void JuliaGCAllocator::allocate_frame()
 #endif
                 }
             }
+            if (bb == NULL)
+                continue;
             assert(bb != NULL);
             std::map<frame_register, liveness::id> &inuse_list = bb_uses[bb];
             for (unsigned arg_offset = 0; arg_offset < arg_n; ++arg_offset) {
@@ -1108,6 +1111,8 @@ void JuliaGCAllocator::allocate_frame()
             }
         }
         if (live_out == 0)
+            continue;
+        if (&*bb == &F.getEntryBlock())
             continue;
         assert(&*bb != &F.getEntryBlock()); // only undef variables should live-out from the entry bb
         for (pred_iterator PI = pred_begin(bb), PE = pred_end(bb); PI != PE; ++PI) {
@@ -1184,6 +1189,8 @@ void JuliaGCAllocator::allocate_frame()
             }
         }
         if (!changes)
+            continue;
+        if (&*bb == &F.getEntryBlock())
             continue;
         assert(bb != &F.getEntryBlock()); // only undef variables should live-out from the entry bb
         for (pred_iterator PI = pred_begin(bb), PE = pred_end(bb); PI != PE; ++PI) {
