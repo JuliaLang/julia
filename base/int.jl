@@ -376,7 +376,7 @@ julia> 129 % Int8
 -127
 ```
 """
-rem(::Integer, ::Type), mod(::Integer, ::Type)
+rem(x::Integer, T::Type), mod(x::Integer, T::Type)
 
 unsafe_trunc{T<:Integer}(::Type{T}, x::Integer) = rem(x, T)
 for (Ts, Tu) in ((Int8, UInt8), (Int16, UInt16), (Int32, UInt32), (Int64, UInt64), (Int128, UInt128))
