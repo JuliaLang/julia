@@ -24,7 +24,7 @@ end
 
 # unzip
 let z = zip(1:2)
-    @test unzip(z) == [1:2]
+    @test unzip(z) == 1:2
     @test eltype(unzip(z)) == UnitRange{Int64}
 end
 
