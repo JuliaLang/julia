@@ -200,7 +200,7 @@ end
 For a set of iterable objects, returns an iterable of tuples, where the `i`th tuple contains
 the `i`th component of each input iterable.
 
-Note that [`zip`](@ref) is its own inverse: `collect(zip(zip(a...)...)) == collect(a)`.
+Note that the inverse of [`zip`](@ref) is [`unzip`](@ref).
 
 ```jldoctest
 julia> a = 1:5
@@ -245,6 +245,8 @@ iteratoreltype{I1,I2}(::Type{Zip{I1,I2}}) = and_iteratoreltype(iteratoreltype(I1
 
 For iterable objects of the same length, returns iterable sets, where the ith set contains
 the ith component of each input iterable object.
+
+Note that the inverse of [`unzip`](@ref) is [`zip`](@ref).
 
 julia>  z = [[1,"a",:meow], [2,"b",:woof], [3,"c",:doh!]]
 3-element Array{Array{Any,1},1}:
