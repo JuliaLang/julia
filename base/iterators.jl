@@ -244,24 +244,26 @@ iteratoreltype{I1,I2}(::Type{Zip{I1,I2}}) = and_iteratoreltype(iteratoreltype(I1
 ```jldoctest
 
 For iterable objects of the same length, returns iterable sets, where the ith set contains
-the ith component of each input iterable object. 
+the ith component of each input iterable object.
 
 julia>  z = [[1,"a",:meow], [2,"b",:woof], [3,"c",:doh!]]
 3-element Array{Array{Any,1},1}:
 Any[1, "a", :meow]
 Any[2, "b", :woof]
-Any[3, "c", :doh!]                                                                                         
+Any[3, "c", :doh!]
 
 julia> unzip(z)
 Array{Int64,1}:[1,2,3]
 Array{String,1}["a","b","c"]
 Array{Symbol,1}[:meow,:woof,:doh!]
 ```
-function unzip(z)
-    [z[j][i] for i=1:length(z), j=length(z)]
-end
-    
-    
+unzip(iter::AbstractZipIterator) = _unzip(iter)
+# This avoids exporting the method that isn't for AbstractZipIterators
+_unzip(iter::Zip1) = (iter.a,)
+_unzip(iter::Zip2) = (iter.a, iter.b)
+_unzip(iter::Zip) = (iter.a, unzip(iter.z)...)
+_unzip(iter) = (iter,)
+
 # filter
 
 struct Filter{F,I}
