@@ -1,8 +1,17 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 using Base.LineEdit
-isdefined(:TestHelpers) || include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
+isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using TestHelpers
+
+function run_test(d,buf)
+    global a_foo, b_foo, a_bar, b_bar
+    a_foo = b_foo = a_bar = b_bar = 0
+    while !eof(buf)
+        LineEdit.match_input(d, nothing, buf)(nothing,nothing)
+    end
+end
+
 
 a_foo = 0
 
@@ -25,14 +34,6 @@ const bar_keymap = Dict(
 )
 
 test1_dict = LineEdit.keymap([foo_keymap])
-
-function run_test(d,buf)
-    global a_foo, a_bar, b_bar
-    a_foo = a_bar = b_bar = 0
-    while !eof(buf)
-        LineEdit.match_input(d, nothing, buf)(nothing,nothing)
-    end
-end
 
 run_test(test1_dict,IOBuffer("aa"))
 @test a_foo == 2

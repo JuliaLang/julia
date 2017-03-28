@@ -39,6 +39,8 @@ let
         @test Ac_mul_Bc(Ai, Bi) == [-28.25-66im 9.75-58im; -26-89im 21-73im]
         @test_throws DimensionMismatch [1 2; 0 0; 0 0] * [1 2]
     end
+    CC = ones(3, 3)
+    @test_throws DimensionMismatch A_mul_B!(CC, AA, BB)
 end
 # 3x3
 let
@@ -62,12 +64,14 @@ let
         @test Ac_mul_Bc(Ai, Bi) == [1+2im 20.75+9im -44.75+42im; 19.5+17.5im -54-36.5im 51-14.5im; 13+7.5im 11.25+31.5im -43.25-14.5im]
         @test_throws DimensionMismatch [1 2 3; 0 0 0; 0 0 0] * [1 2 3]
     end
+    CC = ones(4, 4)
+    @test_throws DimensionMismatch A_mul_B!(CC, AA, BB)
 end
 # Generic integer matrix multiplication
 # Generic AbstractArrays
 module MyArray15367
     using Base.Test
-    immutable MyArray{T,N} <: AbstractArray{T,N}
+    struct MyArray{T,N} <: AbstractArray{T,N}
         data::Array{T,N}
     end
 
@@ -252,10 +256,10 @@ for elty in (Float32,Float64,Complex64,Complex128)
     @test_throws BoundsError dot(x, 1:4, y, 1:4)
     @test_throws BoundsError dot(x, 1:3, y, 2:4)
     @test dot(x,1:2,y,1:2) == convert(elty,12.5)
-    @test x.'*y == convert(Vector{elty},[29.0])
+    @test x.'*y == convert(elty,29.0)
 end
 
-vecdot_(x,y) = invoke(vecdot, (Any,Any), x,y) # generic vecdot
+vecdot_(x,y) = invoke(vecdot, Tuple{Any,Any}, x,y) # generic vecdot
 let AA = [1+2im 3+4im; 5+6im 7+8im], BB = [2+7im 4+1im; 3+8im 6+5im]
     for Atype = ["Array", "SubArray"],  Btype = ["Array", "SubArray"]
         A = Atype == "Array" ? AA : view(AA, 1:2, 1:2)
@@ -317,7 +321,7 @@ let
 end
 
 # Number types that lack conversion to the destination type (#14293)
-immutable RootInt
+struct RootInt
     i::Int
 end
 import Base: *, transpose
@@ -336,7 +340,7 @@ A = [RootInt(3) RootInt(5)]
 
 function test_mul(C, A, B)
     A_mul_B!(C, A, B)
-    @test full(A) * full(B) ≈ C
+    @test Array(A) * Array(B) ≈ C
     @test A*B ≈ C
 end
 
@@ -388,4 +392,31 @@ let
         @test_throws DimensionMismatch A_mul_B!(full43, tri33, full43)
         @test_throws DimensionMismatch A_mul_B!(full43, full43, tri44)
     end
+end
+
+# #18218
+module TestPR18218
+    using Base.Test
+    import Base.*, Base.+, Base.zero
+    struct TypeA
+        x::Int
+    end
+    Base.convert(::Type{TypeA}, x::Int) = TypeA(x)
+    struct TypeB
+        x::Int
+    end
+    struct TypeC
+        x::Int
+    end
+    Base.convert(::Type{TypeC}, x::Int) = TypeC(x)
+    zero(c::TypeC) = TypeC(0)
+    zero(::Type{TypeC}) = TypeC(0)
+    (*)(x::Int, a::TypeA) = TypeB(x*a.x)
+    (*)(a::TypeA, x::Int) = TypeB(a.x*x)
+    (+)(a::Union{TypeB,TypeC}, b::Union{TypeB,TypeC}) = TypeC(a.x+b.x)
+    A = TypeA[1 2; 3 4]
+    b = [1, 2]
+    d = A * b
+    @test typeof(d) == Vector{TypeC}
+    @test d == TypeC[5, 11]
 end

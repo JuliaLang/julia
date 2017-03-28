@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-debug = false
-
+module TridiagTest
 using Base.Test
+debug = false
 
 # basic tridiagonal operations
 n = 5
@@ -42,7 +42,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         F[i,i+1] = du[i]
         F[i+1,i] = dl[i]
     end
-    @test full(T) == F
+    @test Array(T) == F
 
     # elementary operations on tridiagonals
     @test conj(T) == Tridiagonal(conj(dl), conj(d), conj(du))
@@ -50,9 +50,29 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     @test ctranspose(T) == Tridiagonal(conj(du), conj(d), conj(dl))
 
     @test abs.(T) == Tridiagonal(abs.(dl),abs.(d),abs.(du))
+    if elty <: Real
+        @test round.(T) == Tridiagonal(round.(dl),round.(d),round.(du))
+        @test isa(round.(T), Tridiagonal)
+        @test trunc.(T) == Tridiagonal(trunc.(dl),trunc.(d),trunc.(du))
+        @test isa(trunc.(T), Tridiagonal)
+        @test floor.(T) == Tridiagonal(floor.(dl),floor.(d),floor.(du))
+        @test isa(floor.(T), Tridiagonal)
+        @test ceil.(T) == Tridiagonal(ceil.(dl),ceil.(d),ceil.(du))
+        @test isa(ceil.(T), Tridiagonal)
+    end
     @test real(T) == Tridiagonal(real(dl),real(d),real(du))
     @test imag(T) == Tridiagonal(imag(dl),imag(d),imag(du))
     @test abs.(Ts) == SymTridiagonal(abs.(d),abs.(dl))
+    if elty <: Real
+        @test round.(Ts) == SymTridiagonal(round.(d),round.(dl))
+        @test isa(round.(Ts), SymTridiagonal)
+        @test trunc.(Ts) == SymTridiagonal(trunc.(d),trunc.(dl))
+        @test isa(trunc.(Ts), SymTridiagonal)
+        @test floor.(Ts) == SymTridiagonal(floor.(d),floor.(dl))
+        @test isa(floor.(Ts), SymTridiagonal)
+        @test ceil.(Ts) == SymTridiagonal(ceil.(d),ceil.(dl))
+        @test isa(ceil.(Ts), SymTridiagonal)
+    end
     @test real(Ts) == SymTridiagonal(real(d),real(dl))
     @test imag(Ts) == SymTridiagonal(imag(d),imag(dl))
 
@@ -62,7 +82,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     @test Tridiagonal(dl, d, du) + Tridiagonal(du, d, dl) == SymTridiagonal(2d, dl+du)
     @test SymTridiagonal(d, dl) + Tridiagonal(dl, d, du) == Tridiagonal(dl + dl, d+d, dl+du)
     @test convert(SymTridiagonal,Tridiagonal(Ts)) == Ts
-    @test full(convert(SymTridiagonal{Complex64},Tridiagonal(Ts))) == convert(Matrix{Complex64},full(Ts))
+    @test Array(convert(SymTridiagonal{Complex64},Tridiagonal(Ts))) == convert(Matrix{Complex64}, Ts)
     if elty == Int
         vv = rand(1:100, n)
         BB = rand(1:100, n, 2)
@@ -101,7 +121,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     # symmetric tridiagonal
     if elty <: Real
         Ts = SymTridiagonal(d, dl)
-        Fs = full(Ts)
+        Fs = Array(Ts)
         Tldlt = factorize(Ts)
         @test_throws DimensionMismatch Tldlt\rand(elty,n+1)
         @test size(Tldlt) == size(Ts)
@@ -119,7 +139,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
             invFsv = Fs\vv
             x = Ts\vv
             @test x ≈ invFsv
-            @test full(full(Tldlt)) ≈ Fs
+            @test Array(AbstractArray(Tldlt)) ≈ Fs
         end
 
         # similar
@@ -173,7 +193,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         end
 
     # issue #1490
-    @test_approx_eq_eps det(ones(elty, 3,3)) zero(elty) 3*eps(real(one(elty)))
+    @test det(ones(elty,3,3)) ≈ zero(elty) atol=3*eps(real(one(elty)))
 
     @test det(SymTridiagonal(elty[],elty[])) == one(elty)
 
@@ -216,7 +236,7 @@ function test_approx_eq_vecs{S<:Real,T<:Real}(a::StridedVecOrMat{S}, b::StridedV
         ev1, ev2 = a[:,i], b[:,i]
         deviation = min(abs(norm(ev1-ev2)),abs(norm(ev1+ev2)))
         if !isnan(deviation)
-            @test_approx_eq_eps deviation 0.0 error
+            @test deviation ≈ 0.0 atol=error
         end
     end
 end
@@ -237,7 +257,7 @@ let n = 12 #Size of matrix problem to test
         @test_throws ArgumentError SymTridiagonal(rand(n,n))
 
         A = SymTridiagonal(a, b)
-        fA = map(elty <: Complex ? Complex128 : Float64, full(A))
+        fA = map(elty <: Complex ? Complex128 : Float64, Array(A))
 
         debug && println("getindex")
         @test_throws BoundsError A[n+1,1]
@@ -246,12 +266,12 @@ let n = 12 #Size of matrix problem to test
         @test A[1,1] == a[1]
 
         debug && println("setindex!")
-        @test_throws ArgumentError A[n,1] = 1
-        @test_throws ArgumentError A[1,n] = 1
-        A[3,3] = A[3,3]
-        A[2,3] = A[2,3]
-        A[3,2] = A[3,2]
-        @test A == fA
+        @test_throws BoundsError A[n + 1, 1] = 0 # test bounds check
+        @test_throws BoundsError A[1, n + 1] = 0 # test bounds check
+        @test ((A[3, 3] = A[3, 3]) == A[3, 3]; A == fA) # test assignment on the main diagonal
+        @test_throws ArgumentError A[3, 2] = 1 # test assignment on the subdiagonal
+        @test_throws ArgumentError A[2, 3] = 1 # test assignment on the superdiagonal
+        @test_throws ArgumentError A[1, 3] = 1 # test assignment off the main/sub/super diagonal
 
         debug && println("Diagonal extraction")
         @test diag(A,1) == b
@@ -267,19 +287,19 @@ let n = 12 #Size of matrix problem to test
 
         debug && println("Simple unary functions")
         for func in (det, inv)
-            @test_approx_eq_eps func(A) func(fA) n^2*sqrt(eps(relty))
+            @test func(A) ≈ func(fA) atol=n^2*sqrt(eps(relty))
         end
 
         debug && println("Rounding to Ints")
         if elty <: Real
-            @test round(Int,A) == round(Int,fA)
-            @test isa(round(Int,A), SymTridiagonal)
-            @test trunc(Int,A) == trunc(Int,fA)
-            @test isa(trunc(Int,A), SymTridiagonal)
-            @test ceil(Int,A) == ceil(Int,fA)
-            @test isa(ceil(Int,A), SymTridiagonal)
-            @test floor(Int,A) == floor(Int,fA)
-            @test isa(floor(Int,A), SymTridiagonal)
+            @test round.(Int,A) == round.(Int,fA)
+            @test isa(round.(Int,A), SymTridiagonal)
+            @test trunc.(Int,A) == trunc.(Int,fA)
+            @test isa(trunc.(Int,A), SymTridiagonal)
+            @test ceil.(Int,A) == ceil.(Int,fA)
+            @test isa(ceil.(Int,A), SymTridiagonal)
+            @test floor.(Int,A) == floor.(Int,fA)
+            @test isa(floor.(Int,A), SymTridiagonal)
         end
 
         debug && println("Tridiagonal/SymTridiagonal mixing ops")
@@ -289,10 +309,10 @@ let n = 12 #Size of matrix problem to test
         @test B - A == A - B
 
         debug && println("Multiplication with strided vector")
-        @test A*ones(n) ≈ full(A)*ones(n)
+        @test A*ones(n) ≈ Array(A)*ones(n)
 
         debug && println("Multiplication with strided matrix")
-        @test A*ones(n, 2) ≈ full(A)*ones(n, 2)
+        @test A*ones(n, 2) ≈ Array(A)*ones(n, 2)
 
         debug && println("Eigensystems")
         if elty <: Real
@@ -312,13 +332,13 @@ let n = 12 #Size of matrix problem to test
 
             debug && println("stegr! call with index range")
             F = eigfact(SymTridiagonal(a, b),1:2)
-            fF = eigfact(Symmetric(full(SymTridiagonal(a, b))),1:2)
+            fF = eigfact(Symmetric(Array(SymTridiagonal(a, b))),1:2)
             Test.test_approx_eq_modphase(F[:vectors], fF[:vectors])
             @test F[:values] ≈ fF[:values]
 
             debug && println("stegr! call with value range")
             F = eigfact(SymTridiagonal(a, b),0.0,1.0)
-            fF = eigfact(Symmetric(full(SymTridiagonal(a, b))),0.0,1.0)
+            fF = eigfact(Symmetric(Array(SymTridiagonal(a, b))),0.0,1.0)
             Test.test_approx_eq_modphase(F[:vectors], fF[:vectors])
             @test F[:values] ≈ fF[:values]
         end
@@ -332,15 +352,15 @@ let n = 12 #Size of matrix problem to test
         end
 
         B = SymTridiagonal(a, b)
-        fB = map(elty <: Complex ? Complex128 : Float64, full(B))
+        fB = map(elty <: Complex ? Complex128 : Float64, Array(B))
 
         for op in (+, -, *)
-            @test full(op(A, B)) ≈ op(fA, fB)
+            @test Array(op(A, B)) ≈ op(fA, fB)
         end
         α = rand(elty)
-        @test full(α*A) ≈ α*full(A)
-        @test full(A*α) ≈ full(A)*α
-        @test full(A/α) ≈ full(A)/α
+        @test Array(α*A) ≈ α*Array(A)
+        @test Array(A*α) ≈ Array(A)*α
+        @test Array(A/α) ≈ Array(A)/α
 
         debug && println("A_mul_B!")
         @test_throws DimensionMismatch A_mul_B!(zeros(elty,n,n),B,ones(elty,n+1,n))
@@ -363,7 +383,7 @@ let n = 12 #Size of matrix problem to test
 
         @test_throws ArgumentError Tridiagonal(a,a,a)
         A = Tridiagonal(a, b, c)
-        fA = map(elty <: Complex ? Complex128 : Float64, full(A))
+        fA = map(elty <: Complex ? Complex128 : Float64, Array(A))
 
         debug && println("Similar, size, and copy!")
         B = similar(A)
@@ -385,19 +405,19 @@ let n = 12 #Size of matrix problem to test
 
         debug && println("Simple unary functions")
         for func in (det, inv)
-            @test_approx_eq_eps func(A) func(fA) n^2*sqrt(eps(relty))
+            @test func(A) ≈ func(fA) atol=n^2*sqrt(eps(relty))
         end
 
         debug && println("Rounding to Ints")
         if elty <: Real
-            @test round(Int,A) == round(Int,fA)
-            @test isa(round(Int,A), Tridiagonal)
-            @test trunc(Int,A) == trunc(Int,fA)
-            @test isa(trunc(Int,A), Tridiagonal)
-            @test ceil(Int,A) == ceil(Int,fA)
-            @test isa(ceil(Int,A), Tridiagonal)
-            @test floor(Int,A) == floor(Int,fA)
-            @test isa(floor(Int,A), Tridiagonal)
+            @test round.(Int,A) == round.(Int,fA)
+            @test isa(round.(Int,A), Tridiagonal)
+            @test trunc.(Int,A) == trunc.(Int,fA)
+            @test isa(trunc.(Int,A), Tridiagonal)
+            @test ceil.(Int,A) == ceil.(Int,fA)
+            @test isa(ceil.(Int,A), Tridiagonal)
+            @test floor.(Int,A) == floor.(Int,fA)
+            @test isa(floor.(Int,A), Tridiagonal)
         end
 
         debug && println("Binary operations")
@@ -411,22 +431,22 @@ let n = 12 #Size of matrix problem to test
         end
 
         debug && println("Multiplication with strided vector")
-        @test A*ones(n) ≈ full(A)*ones(n)
+        @test A*ones(n) ≈ Array(A)*ones(n)
 
         debug && println("Multiplication with strided matrix")
-        @test A*ones(n, 2) ≈ full(A)*ones(n, 2)
+        @test A*ones(n, 2) ≈ Array(A)*ones(n, 2)
 
 
         B = Tridiagonal(a, b, c)
-        fB = map(elty <: Complex ? Complex128 : Float64, full(B))
+        fB = map(elty <: Complex ? Complex128 : Float64, Array(B))
 
         for op in (+, -, *)
-            @test full(op(A, B)) ≈ op(fA, fB)
+            @test Array(op(A, B)) ≈ op(fA, fB)
         end
         α = rand(elty)
-        @test full(α*A) ≈ α*full(A)
-        @test full(A*α) ≈ full(A)*α
-        @test full(A/α) ≈ full(A)/α
+        @test Array(α*A) ≈ α*Array(A)
+        @test Array(A*α) ≈ Array(A)*α
+        @test Array(A/α) ≈ Array(A)/α
 
         @test_throws ArgumentError convert(SymTridiagonal{elty},A)
 
@@ -439,12 +459,13 @@ let n = 12 #Size of matrix problem to test
         @test_throws BoundsError A[1,n+1]
 
         debug && println("setindex!")
-        @test_throws ArgumentError A[n,1] = 1
-        @test_throws ArgumentError A[1,n] = 1
-        A[3,3] = A[3,3]
-        A[2,3] = A[2,3]
-        A[3,2] = A[3,2]
-        @test A == fA
+        @test_throws BoundsError A[n + 1, 1] = 0 # test bounds check
+        @test_throws BoundsError A[1, n + 1] = 0 # test bounds check
+        @test (A[3, 3] = A[3, 3]; A == fA) # test assignment on the main diagonal
+        @test (A[3, 2] = A[3, 2]; A == fA) # test assignment on the subdiagonal
+        @test (A[2, 3] = A[2, 3]; A == fA) # test assignment on the superdiagonal
+        @test ((A[1, 3] = 0) == 0; A == fA) # test zero assignment off the main/sub/super diagonal
+        @test_throws ArgumentError A[1, 3] = 1 # test non-zero assignment off the main/sub/super diagonal
     end
 end
 
@@ -462,3 +483,4 @@ SymTridiagonal([1, 2], [0])^3 == [1 0; 0 8]
 # Test constructors with range and other abstract vectors
 @test SymTridiagonal(1:3, 1:2) == [1 1 0; 1 2 2; 0 2 3]
 @test Tridiagonal(4:5, 1:3, 1:2) == [1 1 0; 4 2 2; 0 5 3]
+end

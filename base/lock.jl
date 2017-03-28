@@ -10,7 +10,7 @@ Each `lock` must be matched with an `unlock`.
 
 This lock is NOT threadsafe. See `Threads.Mutex` for a threadsafe lock.
 """
-type ReentrantLock
+mutable struct ReentrantLock
     locked_by::Nullable{Task}
     cond_wait::Condition
     reentrancy_cnt::Int
@@ -124,7 +124,7 @@ Each acquire must be mached with a release.
 
 This construct is NOT threadsafe.
 """
-type Semaphore
+mutable struct Semaphore
     sem_size::Int
     curr_cnt::Int
     cond_wait::Condition

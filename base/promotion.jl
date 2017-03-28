@@ -7,27 +7,23 @@ typejoin(t::ANY) = (@_pure_meta; t)
 typejoin(t::ANY, ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
 function typejoin(a::ANY, b::ANY)
     @_pure_meta
-    if isa(a,TypeConstructor); a = a.body; end
-    if isa(b,TypeConstructor); b = b.body; end
     if a <: b
         return b
     elseif b <: a
         return a
-    end
-    if isa(a,TypeVar)
+    elseif isa(a,UnionAll)
+        return UnionAll(a.var, typejoin(a.body, b))
+    elseif isa(b,UnionAll)
+        return UnionAll(b.var, typejoin(a, b.body))
+    elseif isa(a,TypeVar)
         return typejoin(a.ub, b)
-    end
-    if isa(b,TypeVar)
+    elseif isa(b,TypeVar)
         return typejoin(a, b.ub)
-    end
-    if isa(a,Union) || isa(b,Union)
-        u = Union{a, b}
-        if !isa(u,Union)
-            return u
-        end
-        return reduce(typejoin, Bottom, u.types)
-    end
-    if a <: Tuple
+    elseif isa(a,Union)
+        return typejoin(typejoin(a.a,a.b), b)
+    elseif isa(b,Union)
+        return typejoin(a, typejoin(b.a,b.b))
+    elseif a <: Tuple
         if !(b <: Tuple)
             return Any
         end
@@ -41,7 +37,7 @@ function typejoin(a::ANY, b::ANY)
         if laf < lbf
             if isvarargtype(ap[lar]) && !afixed
                 c = Vector{Any}(laf)
-                c[laf] = Vararg{typejoin(ap[lar].parameters[1], tailjoin(bp,laf))}
+                c[laf] = Vararg{typejoin(unwrapva(ap[lar]), tailjoin(bp,laf))}
                 n = laf-1
             else
                 c = Vector{Any}(laf+1)
@@ -51,7 +47,7 @@ function typejoin(a::ANY, b::ANY)
         elseif lbf < laf
             if isvarargtype(bp[lbr]) && !bfixed
                 c = Vector{Any}(lbf)
-                c[lbf] = Vararg{typejoin(bp[lbr].parameters[1], tailjoin(ap,lbf))}
+                c[lbf] = Vararg{typejoin(unwrapva(bp[lbr]), tailjoin(ap,lbf))}
                 n = lbf-1
             else
                 c = Vector{Any}(lbf+1)
@@ -71,23 +67,27 @@ function typejoin(a::ANY, b::ANY)
     elseif b <: Tuple
         return Any
     end
-    while !is(b,Any)
-        if a <: b.name.primary
+    while b !== Any
+        if a <: b.name.wrapper
             while a.name !== b.name
                 a = supertype(a)
             end
+            aprimary = unwrap_unionall(a.name.wrapper)
             # join on parameters
             n = length(a.parameters)
+            if n == 0
+                return aprimary
+            end
             p = Vector{Any}(n)
             for i = 1:n
                 ai, bi = a.parameters[i], b.parameters[i]
                 if ai === bi || (isa(ai,Type) && isa(bi,Type) && typeseq(ai,bi))
                     p[i] = ai
                 else
-                    p[i] = a.name.primary.parameters[i]
+                    p[i] = aprimary.parameters[i]
                 end
             end
-            return a.name.primary{p...}
+            return rewrap_unionall(a.name.wrapper{p...}, a.name.wrapper)
         end
         b = supertype(b)
     end
@@ -97,8 +97,9 @@ end
 # Returns length, isfixed
 function full_va_len(p)
     isempty(p) && return 0, true
-    if isvarargtype(p[end])
-        N = p[end].parameters[2]
+    last = p[end]
+    if isvarargtype(last)
+        N = unwrap_unionall(last).parameters[2]
         if isa(N, Integer)
             return (length(p) + N - 1)::Int, true
         end
@@ -130,13 +131,33 @@ promote_type{T}(::Type{T}, ::Type{T}) = (@_pure_meta; T)
 promote_type{T}(::Type{T}, ::Type{Bottom}) = (@_pure_meta; T)
 promote_type{T}(::Type{Bottom}, ::Type{T}) = (@_pure_meta; T)
 
-# Try promote_rule in both orders. Typically only one is defined,
-# and there is a fallback returning Bottom below, so the common case is
-#   promote_type(T, S) =>
-#   promote_result(T, S, result, Bottom) =>
-#   typejoin(result, Bottom) => result
+"""
+    promote_type(type1, type2)
+
+Determine a type big enough to hold values of each argument type without loss, whenever
+possible. In some cases, where no type exists to which both types can be promoted
+losslessly, some loss is tolerated; for example, `promote_type(Int64, Float64)` returns
+`Float64` even though strictly, not all `Int64` values can be represented exactly as
+`Float64` values.
+
+```jldoctest
+julia> promote_type(Int64, Float64)
+Float64
+
+julia> promote_type(Int32, Int64)
+Int64
+
+julia> promote_type(Float32, BigInt)
+BigFloat
+```
+"""
 function promote_type{T,S}(::Type{T}, ::Type{S})
     @_pure_meta
+    # Try promote_rule in both orders. Typically only one is defined,
+    # and there is a fallback returning Bottom below, so the common case is
+    #   promote_type(T, S) =>
+    #   promote_result(T, S, result, Bottom) =>
+    #   typejoin(result, Bottom) => result
     promote_result(T, S, promote_rule(T,S), promote_rule(S,T))
 end
 
@@ -187,10 +208,73 @@ promote_to_supertype{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type{S}) = (@_
 promote_to_supertype{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type) =
     error("no promotion exists for ", T, " and ", S)
 
+# promotion with a check for circularity. Can be used to catch what
+# would otherwise become StackOverflowErrors.
+function promote_noncircular(x, y)
+    @_inline_meta
+    px, py = promote(x, y)
+    not_all_sametype((x,px), (y,py))
+    px, py
+end
+function promote_noncircular(x, y, z)
+    @_inline_meta
+    px, py, pz = promote(x, y, z)
+    not_all_sametype((x,px), (y,py), (z,pz))
+    px, py, pz
+end
+function promote_noncircular(x, y, z, a...)
+    p = promote(x, y, z, a...)
+    not_all_sametype(map(identity, (x, y, z, a...), p))
+    p
+end
+not_all_sametype(x, y) = nothing
+not_all_sametype(x, y, z) = nothing
+not_all_sametype{S,T}(x::Tuple{S,S}, y::Tuple{T,T}) = sametype_error(x[1], y[1])
+not_all_sametype{R,S,T}(x::Tuple{R,R}, y::Tuple{S,S}, z::Tuple{T,T}) = sametype_error(x[1], y[1], z[1])
+function not_all_sametype{R,S,T}(::Tuple{R,R}, y::Tuple{S,S}, z::Tuple{T,T}, args...)
+    @_inline_meta
+    not_all_sametype(y, z, args...)
+end
+not_all_sametype() = error("promotion failed to change any input types")
+function sametype_error(input...)
+    @_noinline_meta
+    error("circular method definition: promotion of types ",
+          join(map(x->string(typeof(x)), input), ", ", " and "),
+          " failed to change any input types")
+end
+
 +(x::Number, y::Number) = +(promote(x,y)...)
 *(x::Number, y::Number) = *(promote(x,y)...)
 -(x::Number, y::Number) = -(promote(x,y)...)
 /(x::Number, y::Number) = /(promote(x,y)...)
+
+"""
+    ^(x, y)
+
+Exponentiation operator. If `x` is a matrix, computes matrix exponentiation.
+
+If `y` is an `Int` literal (e.g. `2` in `x^2` or `-3` in `x^-3`), the Julia code
+`x^y` is transformed by the compiler to `Base.literal_pow(^, x, Val{y})`, to
+enable compile-time specialization on the value of the exponent.
+(As a default fallback we have `Base.literal_pow(^, x, Val{y}) = ^(x,y)`,
+where usually `^ == Base.^` unless `^` has been defined in the calling
+namespace.)
+
+```jldoctest
+julia> 3^5
+243
+
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> A^3
+2×2 Array{Int64,2}:
+ 37   54
+ 81  118
+```
+"""
 ^(x::Number, y::Number) = ^(promote(x,y)...)
 
 fma(x::Number, y::Number, z::Number) = fma(promote(x,y,z)...)
@@ -198,7 +282,7 @@ muladd(x::Number, y::Number, z::Number) = muladd(promote(x,y,z)...)
 
 (&)(x::Integer, y::Integer) = (&)(promote(x,y)...)
 (|)(x::Integer, y::Integer) = (|)(promote(x,y)...)
-($)(x::Integer, y::Integer) = ($)(promote(x,y)...)
+xor(x::Integer, y::Integer) = xor(promote(x,y)...)
 
 ==(x::Number, y::Number) = (==)(promote(x,y)...)
 <( x::Real, y::Real)     = (< )(promote(x,y)...)
@@ -217,34 +301,27 @@ max(x::Real, y::Real) = max(promote(x,y)...)
 min(x::Real, y::Real) = min(promote(x,y)...)
 minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 
-# "Promotion" that takes a function into account. These are meant to be
-# used mainly by broadcast methods, so it is advised against overriding them
-if isdefined(Core, :Inference)
-    function _promote_op(op, T::ANY)
-        G = Tuple{Generator{Tuple{T},typeof(op)}}
-        return Core.Inference.return_type(first, G)
-    end
-    function _promote_op(op, R::ANY, S::ANY)
-        F = typeof(a -> op(a...))
-        G = Tuple{Generator{Zip2{Tuple{R},Tuple{S}},F}}
-        return Core.Inference.return_type(first, G)
-    end
-else
-    _promote_op(::ANY...) = (@_pure_meta; Any)
-end
+# "Promotion" that takes a function into account and tries to preserve
+# non-concrete types. These are meant to be used mainly by elementwise
+# operations, so it is advised against overriding them
 _default_type(T::Type) = (@_pure_meta; T)
 
+if isdefined(Core, :Inference)
+    const _return_type = Core.Inference.return_type
+else
+    _return_type(f::ANY, t::ANY) = Any
+end
+
 promote_op(::Any...) = (@_pure_meta; Any)
-promote_op(T::Type, ::Any) = (@_pure_meta; T)
-promote_op(T::Type, ::Type) = (@_pure_meta; T) # To handle ambiguities
-# Promotion that tries to preserve non-concrete types
 function promote_op{S}(f, ::Type{S})
-    T = _promote_op(f, _default_type(S))
+    @_inline_meta
+    T = _return_type(f, Tuple{_default_type(S)})
     isleaftype(S) && return isleaftype(T) ? T : Any
     return typejoin(S, T)
 end
 function promote_op{R,S}(f, ::Type{R}, ::Type{S})
-    T = _promote_op(f, _default_type(R), _default_type(S))
+    @_inline_meta
+    T = _return_type(f, Tuple{_default_type(R), _default_type(S)})
     isleaftype(R) && isleaftype(S) && return isleaftype(T) ? T : Any
     return typejoin(R, S, T)
 end
@@ -264,7 +341,7 @@ muladd{T<:Number}(x::T, y::T, z::T) = x*y+z
 
 (&){T<:Integer}(x::T, y::T) = no_op_err("&", T)
 (|){T<:Integer}(x::T, y::T) = no_op_err("|", T)
-($){T<:Integer}(x::T, y::T) = no_op_err("\$", T)
+xor{T<:Integer}(x::T, y::T) = no_op_err("xor", T)
 
 =={T<:Number}(x::T, y::T) = x === y
  <{T<:Real}(x::T, y::T) = no_op_err("<" , T)
@@ -277,6 +354,6 @@ min(x::Real) = x
 max(x::Real) = x
 minmax(x::Real) = (x, x)
 
-max{T<:Real}(x::T, y::T) = ifelse(y < x, x, y)
-min{T<:Real}(x::T, y::T) = ifelse(y < x, y, x)
+max{T<:Real}(x::T, y::T) = select_value(y < x, x, y)
+min{T<:Real}(x::T, y::T) = select_value(y < x, y, x)
 minmax{T<:Real}(x::T, y::T) = y < x ? (y, x) : (x, y)

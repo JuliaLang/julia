@@ -27,7 +27,7 @@ case $bits in
     ;;
 esac
 echo "Downloading $host toolchain, check $PWD/get_toolchain.log for full output"
-contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win$bits/openSUSE_13.2 \
+contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win$bits/openSUSE_42.2 \
   "mingw$bits-gcc mingw$bits-gcc-c++ mingw$bits-gcc-fortran \
    mingw$bits-libssp0 mingw$bits-libstdc++6 mingw$bits-libgfortran3" > get_toolchain.log
 

@@ -9,7 +9,7 @@ export dir, init, rm, add, available, installed, status, clone, checkout,
 const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "metadata-v2"
 
-type PkgError <: Exception
+mutable struct PkgError <: Exception
     msg::AbstractString
     ex::Nullable{Exception}
 end
@@ -36,6 +36,10 @@ end
 const cd = Dir.cd
 
 dir(path...) = Dir.path(path...)
+
+# remove extension .jl
+const PKGEXT = ".jl"
+splitjl(pkg::AbstractString) = endswith(pkg, PKGEXT) ? pkg[1:(end-length(PKGEXT))] : pkg
 
 """
     dir() -> AbstractString
@@ -71,6 +75,8 @@ init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH) = Di
 
 function __init__()
     vers = "v$(VERSION.major).$(VERSION.minor)"
+    vers = ccall(:jl_uses_cpuid_tag, Cint, ()) == 0 ? vers :
+        joinpath(vers,hex(ccall(:jl_cpuid_tag, UInt64, ()), 2*sizeof(UInt64)))
     unshift!(Base.LOAD_CACHE_PATH, abspath(Dir._pkgroot(), "lib", vers))
 end
 
@@ -88,7 +94,7 @@ edit() = cd(Entry.edit)
 
 Remove all requirement entries for `pkg` from `Pkg.dir("REQUIRE")` and call `Pkg.resolve()`.
 """
-rm(pkg::AbstractString) = cd(Entry.rm,pkg)
+rm(pkg::AbstractString) = cd(Entry.rm,splitjl(pkg))
 
 """
     add(pkg, vers...)
@@ -97,7 +103,7 @@ Add a requirement entry for `pkg` to `Pkg.dir("REQUIRE")` and call `Pkg.resolve(
 `vers` are given, they must be `VersionNumber` objects and they specify acceptable version
 intervals for `pkg`.
 """
-add(pkg::AbstractString, vers::VersionNumber...) = cd(Entry.add,pkg,vers...)
+add(pkg::AbstractString, vers::VersionNumber...) = cd(Entry.add,splitjl(pkg),vers...)
 
 """
     available() -> Vector{String}
@@ -111,7 +117,7 @@ available() = cd(Entry.available)
 
 Returns the version numbers available for package `pkg`.
 """
-available(pkg::AbstractString) = cd(Entry.available,pkg)
+available(pkg::AbstractString) = cd(Entry.available,splitjl(pkg))
 
 """
     installed() -> Dict{String,VersionNumber}
@@ -124,9 +130,10 @@ installed() = cd(Entry.installed)
 """
     installed(pkg) -> Void | VersionNumber
 
-If `pkg` is installed, return the installed version number, otherwise return `nothing`.
+If `pkg` is installed, return the installed version number. If `pkg` is registered,
+but not installed, return `nothing`.
 """
-installed(pkg::AbstractString) = cd(Entry.installed,pkg)
+installed(pkg::AbstractString) = cd(Entry.installed,splitjl(pkg))
 
 """
     status()
@@ -140,7 +147,7 @@ status(io::IO=STDOUT) = cd(Entry.status,io)
 
 Prints out a summary of what version and state `pkg`, specifically, is in.
 """
-status(pkg::AbstractString, io::IO=STDOUT) = cd(Entry.status,io,pkg)
+status(pkg::AbstractString, io::IO=STDOUT) = cd(Entry.status,io,splitjl(pkg))
 
 """
     clone(pkg)
@@ -157,7 +164,7 @@ Clone a package directly from the git URL `url`. The package does not need to be
 in `Pkg.dir("METADATA")`. The package repo is cloned by the name `pkg` if provided; if not
 provided, `pkg` is determined automatically from `url`.
 """
-clone(url::AbstractString, pkg::AbstractString) = cd(Entry.clone,url,pkg)
+clone(url::AbstractString, pkg::AbstractString) = cd(Entry.clone,url,splitjl(pkg))
 
 """
     checkout(pkg, [branch="master"]; merge=true, pull=true)
@@ -168,7 +175,7 @@ Checkout the `Pkg.dir(pkg)` repo to the branch `branch`. Defaults to checking ou
 true`, and the latest version is pulled from the upstream repo if `pull == true`.
 """
 checkout(pkg::AbstractString, branch::AbstractString="master"; merge::Bool=true, pull::Bool=true) =
-    cd(Entry.checkout,pkg,branch,merge,pull)
+    cd(Entry.checkout,splitjl(pkg),branch,merge,pull)
 
 """
     free(pkg)
@@ -180,7 +187,7 @@ to determine optimal package versions after. This is an inverse for both `Pkg.ch
 You can also supply an iterable collection of package names, e.g., `Pkg.free(("Pkg1",
 "Pkg2"))` to free multiple packages at once.
 """
-free(pkg) = cd(Entry.free,pkg)
+free(pkg) = cd(Entry.free,splitjl.(pkg))
 
 """
     pin(pkg)
@@ -188,14 +195,14 @@ free(pkg) = cd(Entry.free,pkg)
 Pin `pkg` at the current version. To go back to using the newest compatible released
 version, use `Pkg.free(pkg)`
 """
-pin(pkg::AbstractString) = cd(Entry.pin,pkg)
+pin(pkg::AbstractString) = cd(Entry.pin,splitjl(pkg))
 
 """
     pin(pkg, version)
 
 Pin `pkg` at registered version `version`.
 """
-pin(pkg::AbstractString, ver::VersionNumber) = cd(Entry.pin,pkg,ver)
+pin(pkg::AbstractString, ver::VersionNumber) = cd(Entry.pin,splitjl(pkg),ver)
 
 """
     update(pkgs...)
@@ -233,7 +240,7 @@ Run the build script in `deps/build.jl` for each package in `pkgs` and all of th
 dependencies in depth-first recursive order. This is called automatically by `Pkg.resolve()`
 on all installed or updated packages.
 """
-build(pkgs::AbstractString...) = cd(Entry.build,[pkgs...])
+build(pkgs::AbstractString...) = cd(Entry.build,[splitjl.(pkgs)...])
 
 """
     test(; coverage=false)
@@ -255,14 +262,14 @@ installed for the duration of the test. A package is tested by running its
 Coverage statistics for the packages may be generated by passing `coverage=true`.
 The default behavior is not to run coverage.
 """
-test(pkgs::AbstractString...; coverage::Bool=false) = cd(Entry.test,AbstractString[pkgs...]; coverage=coverage)
+test(pkgs::AbstractString...; coverage::Bool=false) = cd(Entry.test,AbstractString[splitjl.(pkgs)...]; coverage=coverage)
 
 """
-    dependents(packagename)
+    dependents(pkg)
 
-List the packages that have `packagename` as a dependency.
+List the packages that have `pkg` as a dependency.
 """
-dependents(packagename::AbstractString) = Reqs.dependents(packagename)
+dependents(pkg::AbstractString) = Reqs.dependents(splitjl(pkg))
 
 """
     setprotocol!(proto)

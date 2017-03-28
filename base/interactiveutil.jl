@@ -6,8 +6,8 @@
     editor()
 
 Determines the editor to use when running functions like `edit`. Returns an Array compatible
-for use within backticks. You can change the editor by setting JULIA_EDITOR, VISUAL, or
-EDITOR as an environmental variable.
+for use within backticks. You can change the editor by setting `JULIA_EDITOR`, `VISUAL` or
+`EDITOR` as an environment variable.
 """
 function editor()
     if is_windows() || is_apple()
@@ -27,7 +27,8 @@ end
     edit(path::AbstractString, line::Integer=0)
 
 Edit a file or directory optionally providing a line number to edit the file at.
-Returns to the `julia` prompt when you quit the editor.
+Returns to the `julia` prompt when you quit the editor. The editor can be changed
+by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 """
 function edit(path::AbstractString, line::Integer=0)
     command = editor()
@@ -48,10 +49,9 @@ function edit(path::AbstractString, line::Integer=0)
         cmd = line != 0 ? `$command $path -l $line` : `$command $path`
     elseif startswith(name, "subl") || startswith(name, "atom")
         cmd = line != 0 ? `$command $path:$line` : `$command $path`
-    elseif is_windows() && (name == "start" || name == "open")
-        cmd = `cmd /c start /b $path`
-        line_unsupported = true
-    elseif is_apple() && (name == "start" || name == "open")
+    elseif startswith(name, "notepad++")
+        cmd = line != 0 ? `$command $path -n$line` : `$command $path`
+    elseif is_apple() && name == "open"
         cmd = `open -t $path`
         line_unsupported = true
     else
@@ -60,7 +60,11 @@ function edit(path::AbstractString, line::Integer=0)
         line_unsupported = true
     end
 
-    if background
+    if is_windows() && name == "open"
+        systemerror(:edit, ccall((:ShellExecuteW,"shell32"), stdcall, Int,
+                                 (Ptr{Void}, Cwstring, Cwstring, Ptr{Void}, Ptr{Void}, Cint),
+                                 C_NULL, "open", path, C_NULL, C_NULL, 10) ≤ 32)
+    elseif background
         spawn(pipeline(cmd, stderr=STDERR))
     else
         run(cmd)
@@ -74,7 +78,8 @@ end
     edit(function, [types])
 
 Edit the definition of a function, optionally specifying a tuple of types to
-indicate which method to edit.
+indicate which method to edit. The editor can be changed by setting `JULIA_EDITOR`,
+`VISUAL` or `EDITOR` as an environment variable.
 """
 edit(f)          = edit(functionloc(f)...)
 edit(f, t::ANY)  = edit(functionloc(f,t)...)
@@ -170,7 +175,7 @@ elseif is_windows()
         systemerror(:SetClipboardData, pdata!=p)
         ccall((:CloseClipboard, "user32"), stdcall, Void, ())
     end
-    clipboard(x) = clipboard(sprint(io->print(io,x))::String)
+    clipboard(x) = clipboard(sprint(print, x)::String)
     function clipboard()
         systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Void},), C_NULL))
         pdata = ccall((:GetClipboardData, "user32"), stdcall, Ptr{UInt16}, (UInt32,), 13)
@@ -245,7 +250,7 @@ detailed system information is shown as well.
 function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     println(io,             "Julia Version $VERSION")
     if !isempty(GIT_VERSION_INFO.commit_short)
-      println(io,             "Commit $(GIT_VERSION_INFO.commit_short) ($(GIT_VERSION_INFO.date_string))")
+        println(io,         "Commit $(GIT_VERSION_INFO.commit_short) ($(GIT_VERSION_INFO.date_string))")
     end
     if ccall(:jl_is_debugbuild, Cint, ())!=0
         println(io, "DEBUG build")
@@ -255,7 +260,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         "macOS" : Sys.KERNEL, " (", Sys.MACHINE, ")")
 
     cpu = Sys.cpu_info()
-    println(io,         "  CPU: ", cpu[1].model)
+    println(io,             "  CPU: ", cpu[1].model)
     println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)
     if verbose
         lsb = ""
@@ -291,7 +296,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     if verbose
         println(io,         "Environment:")
         for (k,v) in ENV
-            if !is(match(r"JULIA|PATH|FLAG|^TERM$|HOME", String(k)), nothing)
+            if match(r"JULIA|PATH|FLAG|^TERM$|HOME", String(k)) !== nothing
                 println(io, "  $(k) = $(v)")
             end
         end
@@ -313,7 +318,7 @@ and type signature to `io` which defaults to `STDOUT`. The ASTs are annotated in
 as to cause "non-leaf" types to be emphasized (if color is available, displayed in red).
 This serves as a warning of potential type instability. Not all non-leaf types are particularly
 problematic for performance, so the results need to be used judiciously.
-See [Manual](:ref:`man-code-warntype`) for more information.
+See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
 function code_warntype(io::IO, f, t::ANY)
     emph_io = IOContext(io, :TYPEEMPHASIZE => true)
@@ -458,7 +463,7 @@ It calls out to the `functionloc` function.
     @code_typed
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
-[`code_typed`](:func:`code_typed`) on the resulting expression.
+[`code_typed`](@ref) on the resulting expression.
 """
 :@code_typed
 
@@ -466,7 +471,7 @@ Evaluates the arguments to the function or macro call, determines their types, a
     @code_warntype
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
-[`code_warntype`](:func:`code_warntype`) on the resulting expression.
+[`code_warntype`](@ref) on the resulting expression.
 """
 :@code_warntype
 
@@ -474,7 +479,7 @@ Evaluates the arguments to the function or macro call, determines their types, a
     @code_lowered
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
-[`code_lowered`](:func:`code_lowered`) on the resulting expression.
+[`code_lowered`](@ref) on the resulting expression.
 """
 :@code_lowered
 
@@ -482,7 +487,7 @@ Evaluates the arguments to the function or macro call, determines their types, a
     @code_llvm
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
-[`code_llvm`](:func:`code_llvm`) on the resulting expression.
+[`code_llvm`](@ref) on the resulting expression.
 """
 :@code_llvm
 
@@ -490,7 +495,7 @@ Evaluates the arguments to the function or macro call, determines their types, a
     @code_native
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
-[`code_native`](:func:`code_native`) on the resulting expression.
+[`code_native`](@ref) on the resulting expression.
 """
 :@code_native
 
@@ -498,7 +503,7 @@ function type_close_enough(x::ANY, t::ANY)
     x == t && return true
     return (isa(x,DataType) && isa(t,DataType) && x.name === t.name &&
             !isleaftype(t) && x <: t) ||
-           (isa(x,Union) && isa(t,DataType) && any(u -> is(u,t), x.types))
+           (isa(x,Union) && isa(t,DataType) && (type_close_enough(x.a, t) || type_close_enough(x.b, t)))
 end
 
 # `methodswith` -- shows a list of methods using the type given
@@ -515,11 +520,15 @@ excluding type `Any`.
 """
 function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Method[])
     for d in methods(f)
-        if any(x -> (type_close_enough(x, t) ||
-                     (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
-                      (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
-                     x != Any && x != ANY),
-               d.sig.parameters)
+        if any(function (x)
+                   let x = rewrap_unionall(x, d.sig)
+                       (type_close_enough(x, t) ||
+                        (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
+                         (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
+                        x != Any && x != ANY)
+                   end
+               end,
+               unwrap_unionall(d.sig).parameters)
             push!(meths, d)
         end
     end
@@ -675,17 +684,20 @@ function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
             value = getfield(m, v)
             @printf head "%30s " s
             try
-                bytes = summarysize(value)
-                if bytes < 10_000
-                    @printf(head, "%6d bytes  ", bytes)
+                if value ∈ (Base, Main, Core)
+                    print(head, "              ")
                 else
-                    @printf(head, "%6d KB     ", bytes ÷ (1024))
+                    bytes = summarysize(value)
+                    if bytes < 10_000
+                        @printf(head, "%6d bytes  ", bytes)
+                    else
+                        @printf(head, "%6d KB     ", bytes ÷ (1024))
+                    end
                 end
                 print(head, summary(value))
             catch e
                 print(head, "#=ERROR: unable to show value=#")
             end
-
             newline = search(head, UInt8('\n')) - 1
             if newline < 0
                 newline = nb_available(head)
@@ -707,145 +719,3 @@ function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
 end
 whos(m::Module, pat::Regex=r"") = whos(STDOUT, m, pat)
 whos(pat::Regex) = whos(STDOUT, current_module(), pat)
-
-#################################################################################
-
-"""
-    Base.summarysize(obj; exclude=Union{Module,DataType,TypeName}) -> Int
-
-Compute the amount of memory used by all unique objects reachable from the argument.
-Keyword argument `exclude` specifies a type of objects to exclude from the traversal.
-"""
-summarysize(obj; exclude = Union{Module,DataType,TypeName}) =
-    summarysize(obj, ObjectIdDict(), exclude)
-
-summarysize(obj::Symbol, seen, excl) = 0
-
-function summarysize(obj::DataType, seen, excl)
-    key = pointer_from_objref(obj)
-    haskey(seen, key) ? (return 0) : (seen[key] = true)
-    size = 7*sizeof(Int) + 6*sizeof(Int32) + 4*nfields(obj) + ifelse(Sys.WORD_SIZE == 64, 4, 0)
-    size += summarysize(obj.parameters, seen, excl)::Int
-    size += summarysize(obj.types, seen, excl)::Int
-    return size
-end
-
-function summarysize(obj::TypeName, seen, excl)
-    key = pointer_from_objref(obj)
-    haskey(seen, key) ? (return 0) : (seen[key] = true)
-    return Core.sizeof(obj) + (isdefined(obj,:mt) ? summarysize(obj.mt, seen, excl) : 0)
-end
-
-summarysize(obj::ANY, seen, excl) = _summarysize(obj, seen, excl)
-# define the general case separately to make sure it is not specialized for every type
-function _summarysize(obj::ANY, seen, excl)
-    key = pointer_from_objref(obj)
-    haskey(seen, key) ? (return 0) : (seen[key] = true)
-    size = Core.sizeof(obj)
-    ft = typeof(obj).types
-    for i in 1:nfields(obj)
-        if !isbits(ft[i]) && isdefined(obj,i)
-            val = getfield(obj, i)
-            if !isa(val,excl)
-                size += summarysize(val, seen, excl)::Int
-            end
-        end
-    end
-    return size
-end
-
-function summarysize(obj::Array, seen, excl)
-    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
-    size = Core.sizeof(obj)
-    # TODO: add size of jl_array_t
-    if !isbits(eltype(obj))
-        for i in 1:length(obj)
-            if ccall(:jl_array_isassigned, Cint, (Any, UInt), obj, i-1) == 1
-                val = obj[i]
-                if !isa(val, excl)
-                    size += summarysize(val, seen, excl)::Int
-                end
-            end
-        end
-    end
-    return size
-end
-
-function summarysize(obj::SimpleVector, seen, excl)
-    key = pointer_from_objref(obj)
-    haskey(seen, key) ? (return 0) : (seen[key] = true)
-    size = Core.sizeof(obj)
-    for i in 1:length(obj)
-        if isassigned(obj, i)
-            val = obj[i]
-            if !isa(val, excl)
-                size += summarysize(val, seen, excl)::Int
-            end
-        end
-    end
-    return size
-end
-
-function summarysize(obj::Module, seen, excl)
-    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
-    size::Int = Core.sizeof(obj)
-    for binding in names(obj, true)
-        if isdefined(obj, binding) && !isdeprecated(obj, binding)
-            value = getfield(obj, binding)
-            if !isa(value, Module) || module_parent(value) === obj
-                size += summarysize(value, seen, excl)::Int
-                vt = isa(value,DataType) ? value : typeof(value)
-                if vt.name.module === obj
-                    if vt !== value
-                        size += summarysize(vt, seen, excl)::Int
-                    end
-                    # charge a TypeName to its module
-                    size += summarysize(vt.name, seen, excl)::Int
-                end
-            end
-        end
-    end
-    return size
-end
-
-function summarysize(obj::Task, seen, excl)
-    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
-    size::Int = Core.sizeof(obj)
-    if isdefined(obj, :code)
-        size += summarysize(obj.code, seen, excl)::Int
-    end
-    size += summarysize(obj.storage, seen, excl)::Int
-    size += summarysize(obj.backtrace, seen, excl)::Int
-    size += summarysize(obj.donenotify, seen, excl)::Int
-    size += summarysize(obj.exception, seen, excl)::Int
-    size += summarysize(obj.result, seen, excl)::Int
-    # TODO: add stack size, and possibly traverse stack roots
-    return size
-end
-
-function summarysize(obj::MethodTable, seen, excl)
-    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
-    size::Int = Core.sizeof(obj)
-    size += summarysize(obj.defs, seen, excl)::Int
-    size += summarysize(obj.cache, seen, excl)::Int
-    if isdefined(obj, :kwsorter)
-        size += summarysize(obj.kwsorter, seen, excl)::Int
-    end
-    return size
-end
-
-function summarysize(m::TypeMapEntry, seen, excl)
-    size::Int = 0
-    while true # specialized to prevent stack overflow while following this linked list
-        haskey(seen, m) ? (return size) : (seen[m] = true)
-        size += Core.sizeof(m)
-        if isdefined(m, :func)
-            size += summarysize(m.func, seen, excl)::Int
-        end
-        size += summarysize(m.sig, seen, excl)::Int
-        size += summarysize(m.tvars, seen, excl)::Int
-        m.next === nothing && break
-        m = m.next::TypeMapEntry
-    end
-    return size
-end

@@ -8,6 +8,8 @@
 Returns `true` if `s` starts with `prefix`. If `prefix` is a vector or set
 of characters, tests whether the first character of `s` belongs to that set.
 
+See also [`endswith`](@ref).
+
 ```jldoctest
 julia> startswith("JuliaLang", "Julia")
 true
@@ -19,7 +21,7 @@ function startswith(a::AbstractString, b::AbstractString)
     while !done(a,i) && !done(b,i)
         c, i = next(a,i)
         d, j = next(b,j)
-        if c != d return false end
+        (c != d) && (return false)
     end
     done(b,i)
 end
@@ -30,6 +32,8 @@ startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str) in c
 
 Returns `true` if `s` ends with `suffix`. If `suffix` is a vector or set of
 characters, tests whether the last character of `s` belongs to that set.
+
+See also [`startswith`](@ref).
 
 ```jldoctest
 julia> endswith("Sunday", "day")
@@ -44,7 +48,7 @@ function endswith(a::AbstractString, b::AbstractString)
     while a1 <= i && b1 <= j
         c = a[i]
         d = b[j]
-        if c != d return false end
+        (c != d) && (return false)
         i = prevind(a,i)
         j = prevind(b,j)
     end
@@ -52,12 +56,12 @@ function endswith(a::AbstractString, b::AbstractString)
 end
 endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
-startswith(a::String, b::String) = startswith(a.data, b.data)
+startswith(a::String, b::String) =
+    (a.len >= b.len && ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, b.len) == 0)
 startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
     (length(a) >= length(b) && ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0)
 
 # TODO: fast endswith
-
 
 """
     chop(s::AbstractString)
@@ -65,39 +69,52 @@ startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
 Remove the last character from `s`.
 
 ```jldoctest
-julia> a = string("March")
+julia> a = "March"
 "March"
 
 julia> chop(a)
 "Marc"
 ```
 """
-chop(s::AbstractString) = s[1:end-1]
+chop(s::AbstractString) = SubString(s, 1, endof(s)-1)
 
 """
     chomp(s::AbstractString)
 
 Remove a single trailing newline from a string.
+
+```jldoctest
+julia> chomp("Hello\\n")
+"Hello"
+```
 """
 function chomp(s::AbstractString)
     i = endof(s)
-    if (i < 1 || s[i] != '\n') return s end
+    (i < 1 || s[i] != '\n') && (return SubString(s, 1, i))
     j = prevind(s,i)
-    if (j < 1 || s[j] != '\r') return s[1:i-1] end
-    return s[1:j-1]
+    (j < 1 || s[j] != '\r') && (return SubString(s, 1, i-1))
+    return SubString(s, 1, j-1)
 end
-chomp(s::String) =
-    (endof(s) < 1 || s.data[end]   != 0x0a) ? s :
-    (endof(s) < 2 || s.data[end-1] != 0x0d) ? s[1:end-1] : s[1:end-2]
+function chomp(s::String)
+    i = endof(s)
+    if i < 1 || codeunit(s,i) != 0x0a
+        SubString(s, 1, i)
+    elseif i < 2 || codeunit(s,i-1) != 0x0d
+        SubString(s, 1, i-1)
+    else
+        SubString(s, 1, i-2)
+    end
+end
 
 # NOTE: use with caution -- breaks the immutable string convention!
-function chomp!(s::String)
-    if !isempty(s) && s.data[end] == 0x0a
-        n = (endof(s) < 2 || s.data[end-1] != 0x0d) ? 1 : 2
-        ccall(:jl_array_del_end, Void, (Any, UInt), s.data, n)
-    end
-    return s
-end
+# TODO: this is hard to provide with the new representation
+#function chomp!(s::String)
+#    if !isempty(s) && codeunit(s,s.len) == 0x0a
+#        n = (endof(s) < 2 || s.data[end-1] != 0x0d) ? 1 : 2
+#        ccall(:jl_array_del_end, Void, (Any, UInt), s.data, n)
+#    end
+#    return s
+#end
 chomp!(s::AbstractString) = chomp(s) # copying fallback for other string types
 
 const _default_delims = [' ','\t','\n','\v','\f','\r']
@@ -110,6 +127,14 @@ The default delimiters to remove are `' '`, `\\t`, `\\n`, `\\v`,
 `\\f`, and `\\r`.
 If `chars` (a character, or vector or set of characters) is provided,
 instead remove characters contained in it.
+
+```jldoctest
+julia> a = lpad("March", 20)
+"               March"
+
+julia> lstrip(a)
+"March"
+```
 """
 function lstrip(s::AbstractString, chars::Chars=_default_delims)
     i = start(s)
@@ -133,7 +158,7 @@ If `chars` (a character, or vector or set of characters) is provided,
 instead remove characters contained in it.
 
 ```jldoctest
-julia> a = rpad("March",20)
+julia> a = rpad("March", 20)
 "March               "
 
 julia> rstrip(a)
@@ -159,6 +184,11 @@ end
 Return `s` with any leading and trailing whitespace removed.
 If `chars` (a character, or vector or set of characters) is provided,
 instead remove characters contained in it.
+
+```jldoctest
+julia> strip("{3, 5}\\n", ['{', '}', '\\n'])
+"3, 5"
+```
 """
 strip(s::AbstractString) = lstrip(rstrip(s))
 strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
@@ -167,7 +197,7 @@ strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
 
 function lpad(s::AbstractString, n::Integer, p::AbstractString=" ")
     m = n - strwidth(s)
-    if m <= 0; return s; end
+    (m <= 0) && (return s)
     l = strwidth(p)
     if l==1
         return string(p^m, s)
@@ -180,7 +210,7 @@ end
 
 function rpad(s::AbstractString, n::Integer, p::AbstractString=" ")
     m = n - strwidth(s)
-    if m <= 0; return s; end
+    (m <= 0) && (return s)
     l = strwidth(p)
     if l==1
         return string(s, p^m)
@@ -244,7 +274,7 @@ julia> split(a,".")
 ```
 """
 split{T<:AbstractString}(str::T, splitter; limit::Integer=0, keep::Bool=true) = _split(str, splitter, limit, keep, SubString{T}[])
-function _split{T<:AbstractString,U<:Array}(str::T, splitter, limit::Integer, keep_empty::Bool, strs::U)
+function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     i = start(str)
     n = endof(str)
     r = search(str,splitter,i)
@@ -256,7 +286,7 @@ function _split{T<:AbstractString,U<:Array}(str::T, splitter, limit::Integer, ke
             end
             i = k
         end
-        if k <= j; k = nextind(str,j) end
+        (k <= j) && (k = nextind(str,j))
         r = search(str,splitter,k)
         j, k = first(r), nextind(str,last(r))
     end
@@ -274,7 +304,7 @@ rsplit{T<:SubString}(str::T, splitter; limit::Integer=0, keep::Bool=true) = _rsp
 """
     rsplit(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
 
-Similar to [`split`](:func:`split`), but starting from the end of the string.
+Similar to [`split`](@ref), but starting from the end of the string.
 
 ```jldoctest
 julia> a = "M.a.r.c.h"
@@ -299,7 +329,7 @@ julia> rsplit(a,".";limit=2)
 ```
 """
 rsplit{T<:AbstractString}(str::T, splitter   ; limit::Integer=0, keep::Bool=true) = _rsplit(str, splitter, limit, keep, SubString{T}[])
-function _rsplit{T<:AbstractString,U<:Array}(str::T, splitter, limit::Integer, keep_empty::Bool, strs::U)
+function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     i = start(str)
     n = endof(str)
     r = rsearch(str,splitter)
@@ -330,11 +360,12 @@ function replace(str::String, pattern, repl, limit::Integer)
     i = a = start(str)
     r = search(str,pattern,i)
     j, k = first(r), last(r)
-    out = IOBuffer()
-    ensureroom(out, floor(Int, 1.2sizeof(str)))
+    out = IOBuffer(StringVector(floor(Int, 1.2sizeof(str))), true, true)
+    out.size = 0
+    out.ptr = 1
     while j != 0
         if i == a || i <= k
-            write_sub(out, str.data, i, j-i)
+            unsafe_write(out, pointer(str, i), UInt(j-i))
             _replace(out, repl, str, r, pattern)
         end
         if k<j
@@ -352,7 +383,7 @@ function replace(str::String, pattern, repl, limit::Integer)
         n += 1
     end
     write(out, SubString(str,i))
-    takebuf_string(out)
+    String(take!(out))
 end
 
 """
@@ -440,7 +471,7 @@ end
 # check for pure ASCII-ness
 
 function ascii(s::String)
-    for (i, b) in enumerate(s.data)
+    for (i, b) in enumerate(Vector{UInt8}(s))
         b < 0x80 || throw(ArgumentError("invalid ASCII at index $i in $(repr(s))"))
     end
     return s
@@ -451,5 +482,15 @@ end
 
 Convert a string to `String` type and check that it contains only ASCII data, otherwise
 throwing an `ArgumentError` indicating the position of the first non-ASCII byte.
+
+```jldoctest
+julia> ascii("abcdeγfgh")
+ERROR: ArgumentError: invalid ASCII at index 6 in "abcdeγfgh"
+Stacktrace:
+ [1] ascii(::String) at ./strings/util.jl:475
+
+julia> ascii("abcdefgh")
+"abcdefgh"
+```
 """
 ascii(x::AbstractString) = ascii(convert(String, x))

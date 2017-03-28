@@ -3,11 +3,11 @@
 ## basic task functions and TLS
 
 # Container for a captured exception and its backtrace. Can be serialized.
-type CapturedException <: Exception
+mutable struct CapturedException <: Exception
     ex::Any
     processed_bt::Vector{Any}
 
-    function CapturedException(ex, bt_raw)
+    function CapturedException(ex, bt_raw::Vector{Ptr{Void}})
         # bt_raw MUST be an Array of code pointers than can be processed by jl_lookup_code_address
         # Typically the result of a catch_backtrace()
 
@@ -16,13 +16,17 @@ type CapturedException <: Exception
         process_func(args...) = push!(bt_lines, args)
         process_backtrace(process_func, bt_raw, 100) # Limiting this to 100 lines.
 
-        new(ex, bt_lines)
+        CapturedException(ex, bt_lines)
     end
+
+    CapturedException(ex, processed_bt::Vector{Any}) = new(ex, processed_bt)
 end
 
-showerror(io::IO, ce::CapturedException) = showerror(io, ce.ex, ce.processed_bt, backtrace=true)
+function showerror(io::IO, ce::CapturedException)
+    showerror(io, ce.ex, ce.processed_bt, backtrace=true)
+end
 
-type CompositeException <: Exception
+mutable struct CompositeException <: Exception
     exceptions::Vector{Any}
     CompositeException() = new(Any[])
     CompositeException(exceptions) = new(exceptions)
@@ -39,7 +43,7 @@ function showerror(io::IO, ex::CompositeException)
         showerror(io, ex.exceptions[1])
         remaining = length(ex) - 1
         if remaining > 0
-            print(io, "\n\n...and $remaining other exceptions.\n")
+            print(io, string("\n\n...and ", remaining, " more exception(s).\n"))
         end
     else
         print(io, "CompositeException()\n")
@@ -53,8 +57,24 @@ end
 """
     @task
 
-Wrap an expression in a [`Task`](:class:`Task`) without executing it, and return the [`Task`](:class:`Task`). This only
+Wrap an expression in a [`Task`](@ref) without executing it, and return the [`Task`](@ref). This only
 creates a task, and does not run it.
+
+```jldoctest
+julia> a1() = det(rand(1000, 1000));
+
+julia> b = @task a1();
+
+julia> istaskstarted(b)
+false
+
+julia> schedule(b);
+
+julia> yield();
+
+julia> istaskdone(b)
+true
+```
 """
 macro task(ex)
     :(Task(()->$(esc(ex))))
@@ -63,27 +83,56 @@ end
 """
     current_task()
 
-Get the currently running [`Task`](:class:`Task`).
+Get the currently running [`Task`](@ref).
 """
 current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
 
 """
-    istaskdone(task) -> Bool
+    istaskdone(t::Task) -> Bool
 
 Determine whether a task has exited.
+
+```jldoctest
+julia> a2() = det(rand(1000, 1000));
+
+julia> b = Task(a2);
+
+julia> istaskdone(b)
+false
+
+julia> schedule(b);
+
+julia> yield();
+
+julia> istaskdone(b)
+true
+```
 """
-istaskdone(t::Task) = ((t.state == :done) | (t.state == :failed))
+istaskdone(t::Task) = ((t.state == :done) | istaskfailed(t))
 
 """
-    istaskstarted(task) -> Bool
+    istaskstarted(t::Task) -> Bool
 
 Determine whether a task has started executing.
+
+```jldoctest
+julia> a3() = det(rand(1000, 1000));
+
+julia> b = Task(a3);
+
+julia> istaskstarted(b)
+false
+```
 """
 istaskstarted(t::Task) = ccall(:jl_is_task_started, Cint, (Any,), t) != 0
 
+istaskfailed(t::Task) = (t.state == :failed)
+
+task_result(t::Task) = t.result
+
 task_local_storage() = get_task_tls(current_task())
 function get_task_tls(t::Task)
-    if is(t.storage, nothing)
+    if t.storage === nothing
         t.storage = ObjectIdDict()
     end
     (t.storage)::ObjectIdDict
@@ -124,26 +173,32 @@ end
 # NOTE: you can only wait for scheduled tasks
 function wait(t::Task)
     if !istaskdone(t)
-        if is(t.donenotify, nothing)
+        if t.donenotify === nothing
             t.donenotify = Condition()
         end
     end
     while !istaskdone(t)
         wait(t.donenotify)
     end
-    if t.state == :failed
+    if istaskfailed(t)
         throw(t.exception)
     end
-    return t.result
+    return task_result(t)
 end
 
 suppress_excp_printing(t::Task) = isa(t.storage, ObjectIdDict) ? get(get_task_tls(t), :SUPPRESS_EXCEPTION_PRINTING, false) : false
 
+function register_taskdone_hook(t::Task, hook)
+    tls = get_task_tls(t)
+    push!(get!(tls, :TASKDONE_HOOKS, []), hook)
+    t
+end
+
 # runtime system hook called when a task finishes
 function task_done_hook(t::Task)
     # `finish_task` sets `sigatomic` before entering this function
-    err = (t.state == :failed)
-    result = t.result
+    err = istaskfailed(t)
+    result = task_result(t)
     handled = false
     if err
         t.backtrace = catch_backtrace()
@@ -155,6 +210,13 @@ function task_done_hook(t::Task)
     if isa(t.donenotify, Condition) && !isempty(t.donenotify.waitq)
         handled = true
         notify(t.donenotify, result, error=err)
+    end
+
+    # Execute any other hooks registered in the TLS
+    if isa(t.storage, ObjectIdDict) && haskey(t.storage, :TASKDONE_HOOKS)
+        foreach(hook -> hook(t), t.storage[:TASKDONE_HOOKS])
+        delete!(t.storage, :TASKDONE_HOOKS)
+        handled = true
     end
 
     #### un-optimized version
@@ -181,7 +243,7 @@ function task_done_hook(t::Task)
         if !suppress_excp_printing(t)
             let bt = t.backtrace
                 # run a new task to print the error for us
-                @schedule with_output_color(:red, STDERR) do io
+                @schedule with_output_color(Base.error_color(), STDERR) do io
                     print(io, "ERROR (unhandled task failure): ")
                     showerror(io, result, bt)
                     println(io)
@@ -195,101 +257,12 @@ function task_done_hook(t::Task)
 end
 
 
-## produce, consume, and task iteration
-
-function produce(v)
-    #### un-optimized version
-    #q = current_task().consumers
-    #t = shift!(q.waitq)
-    #empty = isempty(q.waitq)
-    ct = current_task()
-    local empty, t, q
-    while true
-        q = ct.consumers
-        if isa(q,Task)
-            t = q
-            ct.consumers = nothing
-            empty = true
-            break
-        elseif isa(q,Condition) && !isempty(q.waitq)
-            t = shift!(q.waitq)
-            empty = isempty(q.waitq)
-            break
-        end
-        wait()
-    end
-
-    t.state == :runnable || throw(AssertionError("producer.consumer.state == :runnable"))
-    if empty
-        schedule_and_wait(t, v)
-        while true
-            # wait until there are more consumers
-            q = ct.consumers
-            if isa(q,Task)
-                return q.result
-            elseif isa(q,Condition) && !isempty(q.waitq)
-                return q.waitq[1].result
-            end
-            wait()
-        end
-    else
-        schedule(t, v)
-        # make sure `t` runs before us. otherwise, the producer might
-        # finish before `t` runs again, causing it to see the producer
-        # as done, causing done(::Task, _) to miss the value `v`.
-        # see issue #7727
-        yield()
-        return q.waitq[1].result
-    end
-end
-produce(v...) = produce(v)
-
-function consume(P::Task, values...)
-    if istaskdone(P)
-        return wait(P)
-    end
-
-    ct = current_task()
-    ct.result = length(values)==1 ? values[1] : values
-
-    #### un-optimized version
-    #if P.consumers === nothing
-    #    P.consumers = Condition()
-    #end
-    #push!(P.consumers.waitq, ct)
-    # optimized version that avoids the queue for 1 consumer
-    if P.consumers === nothing || (isa(P.consumers,Condition)&&isempty(P.consumers.waitq))
-        P.consumers = ct
-    else
-        if isa(P.consumers, Task)
-            t = P.consumers
-            P.consumers = Condition()
-            push!(P.consumers.waitq, t)
-        end
-        push!(P.consumers.waitq, ct)
-    end
-
-    P.state == :runnable ? schedule_and_wait(P) : wait() # don't attempt to queue it twice
-end
-
-start(t::Task) = nothing
-function done(t::Task, val)
-    t.result = consume(t)
-    istaskdone(t)
-end
-next(t::Task, val) = (t.result, nothing)
-iteratorsize(::Type{Task}) = SizeUnknown()
-iteratoreltype(::Type{Task}) = EltypeUnknown()
-
-isempty(::Task) = error("isempty not defined for Tasks")
-
-
 ## dynamically-scoped waiting for multiple items
 sync_begin() = task_local_storage(:SPAWNS, ([], get(task_local_storage(), :SPAWNS, ())))
 
 function sync_end()
     spawns = get(task_local_storage(), :SPAWNS, ())
-    if is(spawns,())
+    if spawns === ()
         error("sync_end() without sync_begin()")
     end
     refs = spawns[1]
@@ -300,12 +273,12 @@ function sync_end()
         try
             wait(r)
         catch ex
-            if !isa(r, Task) || (isa(r, Task) && !(r.state == :failed))
+            if !isa(r, Task) || (isa(r, Task) && !istaskfailed(r))
                 rethrow(ex)
             end
         finally
-            if isa(r, Task) && (r.state == :failed)
-                push!(c_ex, CapturedException(r.result, r.backtrace))
+            if isa(r, Task) && istaskfailed(r)
+                push!(c_ex, CapturedException(task_result(r), r.backtrace))
             end
         end
     end
@@ -334,7 +307,7 @@ end
 
 function sync_add(r)
     spawns = get(task_local_storage(), :SPAWNS, ())
-    if !is(spawns,())
+    if spawns !== ()
         push!(spawns[1], r)
         if isa(r, Task)
             tls_r = get_task_tls(r)
@@ -356,10 +329,44 @@ end
 
 Like `@schedule`, `@async` wraps an expression in a `Task` and adds it to the local
 machine's scheduler queue. Additionally it adds the task to the set of items that the
-nearest enclosing `@sync` waits for. `@async` also wraps the expression in a `let x=x, y=y, ...`
-block to create a new scope with copies of all variables referenced in the expression.
+nearest enclosing `@sync` waits for.
 """
 macro async(expr)
-    expr = localize_vars(esc(:(()->($expr))), false)
-    :(async_run_thunk($expr))
+    thunk = esc(:(()->($expr)))
+    :(async_run_thunk($thunk))
+end
+
+
+"""
+    timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
+
+Waits until `testcb` returns `true` or for `secs` seconds, whichever is earlier.
+`testcb` is polled every `pollint` seconds.
+"""
+function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
+    pollint > 0 || throw(ArgumentError("cannot set pollint to $pollint seconds"))
+    start = time()
+    done = Channel(1)
+    timercb(aw) = begin
+        try
+            if testcb()
+                put!(done, :ok)
+            elseif (time() - start) > secs
+                put!(done, :timed_out)
+            end
+        catch e
+            put!(done, :error)
+        finally
+            isready(done) && close(aw)
+        end
+    end
+
+    if !testcb()
+        t = Timer(timercb, pollint, pollint)
+        ret = fetch(done)
+        close(t)
+    else
+        ret = :ok
+    end
+    ret
 end

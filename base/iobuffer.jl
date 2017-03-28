@@ -3,7 +3,7 @@
 ## work with AbstractVector{UInt8} via I/O primitives ##
 
 # Stateful string
-type AbstractIOBuffer{T<:AbstractVector{UInt8}} <: IO
+mutable struct AbstractIOBuffer{T<:AbstractVector{UInt8}} <: IO
     data::T # T should support: getindex, setindex!, length, copy!, resize!, and T()
     readable::Bool
     writable::Bool
@@ -14,13 +14,20 @@ type AbstractIOBuffer{T<:AbstractVector{UInt8}} <: IO
     ptr::Int # read (and maybe write) pointer
     mark::Int # reset mark location for ptr (or <0 for no mark)
 
-    AbstractIOBuffer(data::T,readable::Bool,writable::Bool,seekable::Bool,append::Bool,maxsize::Int) =
+    function AbstractIOBuffer{T}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
+                                 maxsize::Int) where T<:AbstractVector{UInt8}
         new(data,readable,writable,seekable,append,length(data),maxsize,1,-1)
+    end
 end
-typealias IOBuffer AbstractIOBuffer{Vector{UInt8}}
+const IOBuffer = AbstractIOBuffer{Vector{UInt8}}
 
-AbstractIOBuffer{T<:AbstractVector{UInt8}}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool, maxsize::Int) =
+function AbstractIOBuffer(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
+                          maxsize::Int) where T<:AbstractVector{UInt8}
     AbstractIOBuffer{T}(data, readable, writable, seekable, append, maxsize)
+end
+
+# allocate Vector{UInt8}s for IOBuffer storage that can efficiently become Strings
+StringVector(n::Integer) = Vector{UInt8}(_string_n(n))
 
 # IOBuffers behave like Files. They are typically readable and writable. They are seekable. (They can be appendable).
 
@@ -34,7 +41,12 @@ last argument optionally specifies a size beyond which the buffer may not be gro
 """
 IOBuffer(data::AbstractVector{UInt8}, readable::Bool=true, writable::Bool=false, maxsize::Int=typemax(Int)) =
     AbstractIOBuffer(data, readable, writable, true, false, maxsize)
-IOBuffer(readable::Bool, writable::Bool) = IOBuffer(UInt8[], readable, writable)
+function IOBuffer(readable::Bool, writable::Bool)
+    b = IOBuffer(StringVector(32), readable, writable)
+    b.data[:] = 0
+    b.size = 0
+    return b
+end
 
 """
     IOBuffer() -> IOBuffer
@@ -48,22 +60,22 @@ IOBuffer() = IOBuffer(true, true)
 
 Create a fixed size IOBuffer. The buffer will not grow dynamically.
 """
-IOBuffer(maxsize::Int) = (x=IOBuffer(Array{UInt8}(maxsize), true, true, maxsize); x.size=0; x)
+IOBuffer(maxsize::Int) = (x=IOBuffer(StringVector(maxsize), true, true, maxsize); x.size=0; x)
 
 # PipeBuffers behave like Unix Pipes. They are typically readable and writable, they act appendable, and are not seekable.
 
 """
     PipeBuffer(data::Vector{UInt8}=UInt8[],[maxsize::Int=typemax(Int)])
 
-An [`IOBuffer`](:obj:`IOBuffer`) that allows reading and performs writes by appending.
+An [`IOBuffer`](@ref) that allows reading and performs writes by appending.
 Seeking and truncating are not supported.
-See [`IOBuffer`](:obj:`IOBuffer`) for the available constructors.
+See [`IOBuffer`](@ref) for the available constructors.
 If `data` is given, creates a `PipeBuffer` to operate on a data vector,
 optionally specifying a size beyond which the underlying `Array` may not be grown.
 """
 PipeBuffer(data::Vector{UInt8}=UInt8[], maxsize::Int=typemax(Int)) =
     AbstractIOBuffer(data,true,true,false,true,maxsize)
-PipeBuffer(maxsize::Int) = (x = PipeBuffer(Array{UInt8}(maxsize),maxsize); x.size=0; x)
+PipeBuffer(maxsize::Int) = (x = PipeBuffer(Vector{UInt8}(maxsize),maxsize); x.size=0; x)
 
 function copy(b::AbstractIOBuffer)
     ret = typeof(b)(b.writable ? copy(b.data) : b.data,
@@ -250,17 +262,23 @@ isopen(io::AbstractIOBuffer) = io.readable || io.writable || io.seekable || nb_a
 function String(io::AbstractIOBuffer)
     io.readable || throw(ArgumentError("IOBuffer is not readable"))
     io.seekable || throw(ArgumentError("IOBuffer is not seekable"))
-    return String(copy!(Array{UInt8}(io.size), 1, io.data, 1, io.size))
+    return unsafe_string(pointer(io.data), io.size)
 end
 
-function takebuf_array(io::AbstractIOBuffer)
+"""
+    take!(b::IOBuffer)
+
+Obtain the contents of an `IOBuffer` as an array, without copying. Afterwards, the
+`IOBuffer` is reset to its initial state.
+"""
+function take!(io::AbstractIOBuffer)
     ismarked(io) && unmark(io)
     if io.seekable
         nbytes = io.size
-        data = copy!(Array{UInt8}(nbytes), 1, io.data, 1, nbytes)
+        data = copy!(StringVector(nbytes), 1, io.data, 1, nbytes)
     else
         nbytes = nb_available(io)
-        data = read!(io,Array{UInt8}(nbytes))
+        data = read!(io,StringVector(nbytes))
     end
     if io.writable
         io.ptr = 1
@@ -268,20 +286,20 @@ function takebuf_array(io::AbstractIOBuffer)
     end
     return data
 end
-function takebuf_array(io::IOBuffer)
+function take!(io::IOBuffer)
     ismarked(io) && unmark(io)
     if io.seekable
         data = io.data
         if io.writable
             maxsize = (io.maxsize == typemax(Int) ? 0 : min(length(io.data),io.maxsize))
-            io.data = Array{UInt8}(maxsize)
+            io.data = StringVector(maxsize)
         else
             data = copy(data)
         end
         resize!(data,io.size)
     else
         nbytes = nb_available(io)
-        a = Array{UInt8}(nbytes)
+        a = StringVector(nbytes)
         data = read!(io, a)
     end
     if io.writable
@@ -290,14 +308,6 @@ function takebuf_array(io::IOBuffer)
     end
     return data
 end
-
-"""
-    takebuf_string(b::IOBuffer)
-
-Obtain the contents of an `IOBuffer` as a string, without copying.
-Afterwards, the `IOBuffer` is reset to its initial state.
-"""
-takebuf_string(io::AbstractIOBuffer) = String(takebuf_array(io))
 
 function write(to::AbstractIOBuffer, from::AbstractIOBuffer)
     if to === from
@@ -312,7 +322,7 @@ end
 function unsafe_write(to::AbstractIOBuffer, p::Ptr{UInt8}, nb::UInt)
     ensureroom(to, nb)
     ptr = (to.append ? to.size+1 : to.ptr)
-    written = min(nb, length(to.data) - ptr + 1)
+    written = Int(min(nb, length(to.data) - ptr + 1))
     towrite = written
     d = to.data
     while towrite > 0
@@ -328,22 +338,11 @@ function unsafe_write(to::AbstractIOBuffer, p::Ptr{UInt8}, nb::UInt)
     return written
 end
 
-function write_sub{T}(to::AbstractIOBuffer, a::AbstractArray{T}, offs, nel)
+function write_sub(to::AbstractIOBuffer, a::AbstractArray{UInt8}, offs, nel)
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
-    local written::Int
-    if isbits(T) && isa(a,Array)
-        nb = UInt(nel * sizeof(T))
-        written = unsafe_write(to, pointer(a, offs), nb)
-    else
-        written = 0
-        ensureroom(to, UInt(sizeof(a)))
-        for i = offs:offs+nel-1
-            written += write(to, a[i])
-        end
-    end
-    return written
+    unsafe_write(to, pointer(a, offs), UInt(nel))
 end
 
 @inline function write(to::AbstractIOBuffer, a::UInt8)
@@ -370,9 +369,9 @@ function readbytes!(io::AbstractIOBuffer, b::Array{UInt8}, nb::Int)
     read_sub(io, b, 1, nr)
     return nr
 end
-read(io::AbstractIOBuffer) = read!(io,Array{UInt8}(nb_available(io)))
+read(io::AbstractIOBuffer) = read!(io,StringVector(nb_available(io)))
 readavailable(io::AbstractIOBuffer) = read(io)
-read(io::AbstractIOBuffer, nb::Integer) = read!(io,Array{UInt8}(min(nb, nb_available(io))))
+read(io::AbstractIOBuffer, nb::Integer) = read!(io,StringVector(min(nb, nb_available(io))))
 
 function search(buf::IOBuffer, delim::UInt8)
     p = pointer(buf.data, buf.ptr)
@@ -394,7 +393,7 @@ end
 
 function readuntil(io::AbstractIOBuffer, delim::UInt8)
     lb = 70
-    A = Array{UInt8}(lb)
+    A = StringVector(lb)
     n = 0
     data = io.data
     for i = io.ptr : io.size

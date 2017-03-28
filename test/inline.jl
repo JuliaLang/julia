@@ -73,3 +73,23 @@ end
 @inline f16165(x) = (x = UInt(x) + 1)
 g16165(x) = f16165(x)
 @test g16165(1) === (UInt(1) + 1)
+
+# issue #18948
+f18948() = (local bar::Int64; bar=1.5)
+g18948() = (local bar::Int32; bar=0x80000000)
+@test_throws InexactError f18948()
+@test_throws InexactError g18948()
+
+# issue #21074
+struct s21074
+    x::Tuple{Int, Int}
+end
+@inline Base.getindex(v::s21074, i::Integer) = v.x[i]
+@eval f21074() = $(s21074((1,2))).x[1]
+let (src, _) = code_typed(f21074, ())[1]
+    @test src.code[1] == Expr(:return, 1)
+end
+@eval g21074() = $(s21074((1,2)))[1]
+let (src, _) = code_typed(g21074, ())[1]
+    @test src.code[1] == Expr(:return, 1)
+end

@@ -626,12 +626,18 @@ function gen_c(flags::String, width::Int, precision::Int, c::Char)
     :(($x)::Integer), blk
 end
 
+function _limit(s, prec)
+    prec >= sizeof(s) && return s
+    p = prevind(s, prec+1)
+    n = nextind(s, p)-1
+    s[1:(prec>=n?n:prevind(s,p))]
+end
+
 function gen_s(flags::String, width::Int, precision::Int, c::Char)
     # print a string:
     #  [sS]: both the same for us (Unicode)
     #
     # flags:
-    #  (0): pad left with zeros
     #  (-): left justify
     #
     @gensym x
@@ -642,6 +648,9 @@ function gen_s(flags::String, width::Int, precision::Int, c::Char)
         else
             push!(blk.args, :($x = repr($x)))
         end
+        if precision!=-1
+            push!(blk.args, :($x = _limit($x, $precision)))
+        end
         if !('-' in flags)
             push!(blk.args, pad(width, :($width-strwidth($x)), ' '))
         end
@@ -650,10 +659,18 @@ function gen_s(flags::String, width::Int, precision::Int, c::Char)
             push!(blk.args, pad(width, :($width-strwidth($x)), ' '))
         end
     else
-        if !('#' in flags)
-            push!(blk.args, :(print(out, $x)))
+        if precision!=-1
+            push!(blk.args, :(io = IOBuffer()))
         else
-            push!(blk.args, :(show(out, $x)))
+            push!(blk.args, :(io = out))
+        end
+        if !('#' in flags)
+            push!(blk.args, :(print(io, $x)))
+        else
+            push!(blk.args, :(show(io, $x)))
+        end
+        if precision!=-1
+            push!(blk.args, :(write(out, _limit(String(take!(io)), $precision))))
         end
     end
     :(($x)::Any), blk
@@ -723,7 +740,7 @@ function gen_g(flags::String, width::Int, precision::Int, c::Char)
     # need to compute value before left-padding since trailing zeros are elided
     push!(blk.args, :(tmpout = IOBuffer()))
     push!(blk.args, :(print_fixed(tmpout,fprec,pt,len,$('#' in flags))))
-    push!(blk.args, :(tmpstr = takebuf_string(tmpout)))
+    push!(blk.args, :(tmpstr = String(take!(tmpout))))
     push!(blk.args, :(width -= length(tmpstr)))
     if '+' in flags || ' ' in flags
         push!(blk.args, :(width -= 1))
@@ -853,8 +870,8 @@ function decode_hex(d::Integer, symbols::Array{UInt8,1})
     return Int32(pt), Int32(pt), neg
 end
 
-const hex_symbols = "0123456789abcdef".data
-const HEX_symbols = "0123456789ABCDEF".data
+const hex_symbols = b"0123456789abcdef"
+const HEX_symbols = b"0123456789ABCDEF"
 
 decode_hex(x::Integer) = decode_hex(x,hex_symbols)
 decode_HEX(x::Integer) = decode_hex(x,HEX_symbols)
@@ -1111,7 +1128,7 @@ function bigfloat_printf(out, d, flags::String, width::Int, precision::Int, c::C
     write(fmt, 'R')
     write(fmt, c)
     write(fmt, UInt8(0))
-    printf_fmt = takebuf_array(fmt)
+    printf_fmt = take!(fmt)
     @assert length(printf_fmt) == fmt_len
     bufsiz = length(DIGITS) - 1
     lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), DIGITS, bufsiz, printf_fmt, &d)
@@ -1174,6 +1191,28 @@ function _printf(macroname, io, fmt, args)
     Expr(:let, blk)
 end
 
+"""
+    @printf([io::IOStream], "%Fmt", args...)
+
+Print `args` using C `printf()` style format specification string, with some caveats:
+`Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,
+`%e`, `%E`, `%f`, `%F`, `%g`, and `%G`. Furthermore, if a floating point number is
+equally close to the numeric values of two possible output strings, the output
+string further away from zero is chosen.
+
+Optionally, an `IOStream`
+may be passed as the first argument to redirect output.
+
+# Examples
+
+```jldoctest
+julia> @printf("%f %F %f %F\\n", Inf, Inf, NaN, NaN)
+Inf Inf NaN NaN\n
+
+julia> @printf "%.0f %.1f %f\\n" 0.5 0.025 -0.0078125
+1 0.0 -0.007813
+```
+"""
 macro printf(args...)
     isempty(args) && throw(ArgumentError("@printf: called with no arguments"))
     if isa(args[1], AbstractString) || is_str_expr(args[1])
@@ -1185,12 +1224,26 @@ macro printf(args...)
     end
 end
 
+"""
+    @sprintf("%Fmt", args...)
+
+Return `@printf` formatted output as string.
+
+# Examples
+
+```jldoctest
+julia> s = @sprintf "this is a %s %15.1f" "test" 34.567;
+
+julia> println(s)
+this is a test            34.6
+```
+"""
 macro sprintf(args...)
     isempty(args) && throw(ArgumentError("@sprintf: called with zero arguments"))
     isa(args[1], AbstractString) || is_str_expr(args[1]) ||
         throw(ArgumentError("@sprintf: first argument must be a format string"))
     letexpr = _printf("@sprintf", :(IOBuffer()), args[1], args[2:end])
-    push!(letexpr.args[1].args, :(takebuf_string(out)))
+    push!(letexpr.args[1].args, :(String(take!(out))))
     letexpr
 end
 

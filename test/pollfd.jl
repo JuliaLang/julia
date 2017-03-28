@@ -26,11 +26,15 @@ function pfd_tst_reads(idx, intvl)
     global ready += 1
     wait(ready_c)
     tic()
-    evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=true)
+    start_evt2 = Condition()
+    evt2 = @async (notify(start_evt2); poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false))
+    wait(start_evt2); yield() # make sure the async poll_fd is pumping events
+    evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
     t_elapsed = toq()
     @test !evt.timedout
     @test evt.readable
-    @test is_windows() ? evt.writable : !evt.writable
+    @test !evt.writable
+    @test evt === wait(evt2)
 
     # println("Expected ", intvl, ", actual ", t_elapsed, ", diff ", t_elapsed - intvl)
     # Disabled since this assertion fails randomly, notably on build VMs (issue #12824)
@@ -50,10 +54,14 @@ function pfd_tst_timeout(idx, intvl)
     global ready += 1
     wait(ready_c)
     tic()
+    start_evt2 = Condition()
+    evt2 = @async (notify(start_evt2); poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false))
+    wait(start_evt2); yield() # make sure the async poll_fd is pumping events
     evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
     @test evt.timedout
     @test !evt.readable
     @test !evt.writable
+    @test evt === wait(evt2)
     t_elapsed = toq()
 
     # Disabled since these assertions fail randomly, notably on build VMs (issue #12824)
@@ -67,11 +75,12 @@ for (i, intvl) in enumerate(intvls)
     @sync begin
         global ready = 0
         global ready_c = Condition()
+        t = Vector{Task}(n)
         for idx in 1:n
             if isodd(idx)
-                @async pfd_tst_reads(idx, intvl)
+                t[idx] = @async pfd_tst_reads(idx, intvl)
             else
-                @async pfd_tst_timeout(idx, intvl)
+                t[idx] = @async pfd_tst_timeout(idx, intvl)
             end
         end
 
@@ -95,6 +104,9 @@ for (i, intvl) in enumerate(intvls)
             end
         end
         notify(ready_c, all=true)
+        for idx in 1:n
+            wait(t[idx])
+        end
     end
 end
 
@@ -111,7 +123,7 @@ end
 # issue #12473
 # make sure 1-shot timers work
 let a = []
-    Timer(t->push!(a,1), 0.01, 0)
+    Timer(t->push!(a, 1), 0.01, 0)
     sleep(0.2)
     @test a == [1]
 end

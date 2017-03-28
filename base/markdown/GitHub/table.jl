@@ -1,17 +1,17 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-type Table
+mutable struct Table
     rows::Vector{Vector{Any}}
     align::Vector{Symbol}
 end
 
 function parserow(stream::IO)
     withstream(stream) do
-        line = readline(stream) |> chomp
+        line = readline(stream)
         row = split(line, r"(?<!\\)\|")
         length(row) == 1 && return
         row[1] == "" && shift!(row)
-        map!(x -> strip(replace(x, "\\|", "|")), row)
+        map!(x -> strip(replace(x, "\\|", "|")), row, row)
         row[end] == "" && pop!(row)
         return row
     end

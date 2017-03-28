@@ -17,7 +17,7 @@ const REQUEST_ACK = "R"
 const ACK_MSG = "A"
 const KILL_MSG = "K"
 
-type ZMQCMan <: ClusterManager
+mutable struct ZMQCMan <: ClusterManager
     map_zmq_julia::Dict{Int, Tuple}
     c::Condition
     isfree::Bool
@@ -271,7 +271,7 @@ end
 function print_worker_stdout(io, pid)
     @schedule while !eof(io)
         line = readline(io)
-        print("\tFrom worker $(pid):\t$line")
+        println("\tFrom worker $(pid):\t$line")
     end
 end
 

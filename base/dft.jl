@@ -3,7 +3,7 @@
 module DFT
 
 # DFT plan where the inputs are an array of eltype T
-abstract Plan{T}
+abstract type Plan{T} end
 
 import Base: show, summary, size, ndims, length, eltype,
              *, A_mul_B!, inv, \, A_ldiv_B!
@@ -20,7 +20,7 @@ export fft, ifft, bfft, fft!, ifft!, bfft!,
        plan_fft, plan_ifft, plan_bfft, plan_fft!, plan_ifft!, plan_bfft!,
        rfft, irfft, brfft, plan_rfft, plan_irfft, plan_brfft
 
-typealias FFTWFloat Union{Float32,Float64}
+const FFTWFloat = Union{Float32,Float64}
 fftwfloat(x) = _fftwfloat(float(x))
 _fftwfloat{T<:FFTWFloat}(::Type{T}) = T
 _fftwfloat(::Type{Float16}) = Float32
@@ -28,15 +28,15 @@ _fftwfloat{T}(::Type{Complex{T}}) = Complex{_fftwfloat(T)}
 _fftwfloat{T}(::Type{T}) = error("type $T not supported")
 _fftwfloat{T}(x::T) = _fftwfloat(T)(x)
 
-complexfloat{T<:FFTWFloat}(x::StridedArray{Complex{T}}) = x
-realfloat{T<:FFTWFloat}(x::StridedArray{T}) = x
+complexfloat(x::StridedArray{Complex{<:FFTWFloat}}) = x
+realfloat(x::StridedArray{<:FFTWFloat}) = x
 
 # return an Array, rather than similar(x), to avoid an extra copy for FFTW
 # (which only works on StridedArray types).
-complexfloat{T<:Complex}(x::AbstractArray{T}) = copy1(typeof(fftwfloat(one(T))), x)
-complexfloat{T<:Real}(x::AbstractArray{T}) = copy1(typeof(complex(fftwfloat(one(T)))), x)
+complexfloat{T<:Complex}(x::AbstractArray{T}) = copy1(typeof(fftwfloat(zero(T))), x)
+complexfloat{T<:Real}(x::AbstractArray{T}) = copy1(typeof(complex(fftwfloat(zero(T)))), x)
 
-realfloat{T<:Real}(x::AbstractArray{T}) = copy1(typeof(fftwfloat(one(T))), x)
+realfloat{T<:Real}(x::AbstractArray{T}) = copy1(typeof(fftwfloat(zero(T))), x)
 
 # copy to a 1-based array, using circular permutation
 function copy1{T}(::Type{T}, x)
@@ -62,30 +62,30 @@ end
 """
     plan_ifft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
-Same as [`plan_fft`](:func:`plan_fft`), but produces a plan that performs inverse transforms
-[`ifft`](:func:`ifft`).
+Same as [`plan_fft`](@ref), but produces a plan that performs inverse transforms
+[`ifft`](@ref).
 """
 plan_ifft
 
 """
     plan_ifft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
-Same as [`plan_ifft`](:func:`plan_ifft`), but operates in-place on `A`.
+Same as [`plan_ifft`](@ref), but operates in-place on `A`.
 """
 plan_ifft!
 
 """
     plan_bfft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
-Same as [`plan_bfft`](:func:`plan_bfft`), but operates in-place on `A`.
+Same as [`plan_bfft`](@ref), but operates in-place on `A`.
 """
 plan_bfft!
 
 """
     plan_bfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
-Same as [`plan_fft`](:func:`plan_fft`), but produces a plan that performs an unnormalized
-backwards transform [`bfft`](:func:`bfft`).
+Same as [`plan_fft`](@ref), but produces a plan that performs an unnormalized
+backwards transform [`bfft`](@ref).
 """
 plan_bfft
 
@@ -93,7 +93,7 @@ plan_bfft
     plan_fft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
 Pre-plan an optimized FFT along given dimensions (`dims`) of arrays matching the shape and
-type of `A`.  (The first two arguments have the same meaning as for [`fft`](:func:`fft`).)
+type of `A`.  (The first two arguments have the same meaning as for [`fft`](@ref).)
 Returns an object `P` which represents the linear operator computed by the FFT, and which
 contains all of the information needed to compute `fft(A, dims)` quickly.
 
@@ -114,17 +114,17 @@ rough upper bound on the allowed planning time, in seconds. Passing `FFTW.MEASUR
 `FFTW.PATIENT` may cause the input array `A` to be overwritten with zeros during plan
 creation.
 
-[`plan_fft!`](:func:`plan_fft!`) is the same as [`plan_fft`](:func:`plan_fft`) but creates a
+[`plan_fft!`](@ref) is the same as [`plan_fft`](@ref) but creates a
 plan that operates in-place on its argument (which must be an array of complex
-floating-point numbers). [`plan_ifft`](:func:`plan_ifft`) and so on are similar but produce
-plans that perform the equivalent of the inverse transforms [`ifft`](:func:`ifft`) and so on.
+floating-point numbers). [`plan_ifft`](@ref) and so on are similar but produce
+plans that perform the equivalent of the inverse transforms [`ifft`](@ref) and so on.
 """
 plan_fft
 
 """
     plan_fft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
-Same as [`plan_fft`](:func:`plan_fft`), but operates in-place on `A`.
+Same as [`plan_fft`](@ref), but operates in-place on `A`.
 """
 plan_fft!
 
@@ -133,11 +133,11 @@ plan_fft!
 
 Multidimensional FFT of a real array `A`, exploiting the fact that the transform has
 conjugate symmetry in order to save roughly half the computational time and storage costs
-compared with [`fft`](:func:`fft`). If `A` has size `(n_1, ..., n_d)`, the result has size
+compared with [`fft`](@ref). If `A` has size `(n_1, ..., n_d)`, the result has size
 `(div(n_1,2)+1, ..., n_d)`.
 
 The optional `dims` argument specifies an iterable subset of one or more dimensions of `A`
-to transform, similar to [`fft`](:func:`fft`). Instead of (roughly) halving the first
+to transform, similar to [`fft`](@ref). Instead of (roughly) halving the first
 dimension of `A` in the result, the `dims[1]` dimension is (roughly) halved in the same way.
 """
 rfft
@@ -145,7 +145,7 @@ rfft
 """
     ifft!(A [, dims])
 
-Same as [`ifft`](:func:`ifft`), but operates in-place on `A`.
+Same as [`ifft`](@ref), but operates in-place on `A`.
 """
 ifft!
 
@@ -169,7 +169,7 @@ ifft
 """
     fft!(A [, dims])
 
-Same as [`fft`](:func:`fft`), but operates in-place on `A`, which must be an array of
+Same as [`fft`](@ref), but operates in-place on `A`, which must be an array of
 complex floating-point numbers.
 """
 fft!
@@ -177,9 +177,9 @@ fft!
 """
     bfft(A [, dims])
 
-Similar to [`ifft`](:func:`ifft`), but computes an unnormalized inverse (backward)
+Similar to [`ifft`](@ref), but computes an unnormalized inverse (backward)
 transform, which must be divided by the product of the sizes of the transformed dimensions
-in order to obtain the inverse. (This is slightly more efficient than [`ifft`](:func:`ifft`)
+in order to obtain the inverse. (This is slightly more efficient than [`ifft`](@ref)
 because it omits a scaling step, which in some applications can be combined with other
 computational steps elsewhere.)
 
@@ -192,7 +192,7 @@ bfft
 """
     bfft!(A [, dims])
 
-Same as [`bfft`](:func:`bfft`), but operates in-place on `A`.
+Same as [`bfft`](@ref), but operates in-place on `A`.
 """
 bfft!
 
@@ -201,13 +201,13 @@ bfft!
 for f in (:fft, :bfft, :ifft)
     pf = Symbol("plan_", f)
     @eval begin
-        $f{T<:Real}(x::AbstractArray{T}, region=1:ndims(x)) = $f(complexfloat(x), region)
-        $pf{T<:Real}(x::AbstractArray{T}, region; kws...) = $pf(complexfloat(x), region; kws...)
-        $f{T<:Union{Integer,Rational}}(x::AbstractArray{Complex{T}}, region=1:ndims(x)) = $f(complexfloat(x), region)
-        $pf{T<:Union{Integer,Rational}}(x::AbstractArray{Complex{T}}, region; kws...) = $pf(complexfloat(x), region; kws...)
+        $f(x::AbstractArray{<:Real}, region=1:ndims(x)) = $f(complexfloat(x), region)
+        $pf(x::AbstractArray{<:Real}, region; kws...) = $pf(complexfloat(x), region; kws...)
+        $f(x::AbstractArray{<:Complex{<:Union{Integer,Rational}}}, region=1:ndims(x)) = $f(complexfloat(x), region)
+        $pf(x::AbstractArray{<:Complex{<:Union{Integer,Rational}}}, region; kws...) = $pf(complexfloat(x), region; kws...)
     end
 end
-rfft{T<:Union{Integer,Rational}}(x::AbstractArray{T}, region=1:ndims(x)) = rfft(realfloat(x), region)
+rfft(x::AbstractArray{<:Union{Integer,Rational}}, region=1:ndims(x)) = rfft(realfloat(x), region)
 plan_rfft(x::AbstractArray, region; kws...) = plan_rfft(realfloat(x), region; kws...)
 
 # only require implementation to provide *(::Plan{T}, ::Array{T})
@@ -237,14 +237,14 @@ A_ldiv_B!(y::AbstractArray, p::Plan, x::AbstractArray) = A_mul_B!(y, inv(p), x)
 # implementations only need to provide the unnormalized backwards FFT,
 # similar to FFTW, and we do the scaling generically to get the ifft:
 
-type ScaledPlan{T,P,N} <: Plan{T}
+mutable struct ScaledPlan{T,P,N} <: Plan{T}
     p::P
     scale::N # not T, to avoid unnecessary promotion to Complex
     pinv::Plan
-    ScaledPlan(p, scale) = new(p, scale)
+    ScaledPlan{T,P,N}(p, scale) where {T,P,N} = new(p, scale)
 end
-(::Type{ScaledPlan{T}}){T,P,N}(p::P, scale::N) = ScaledPlan{T,P,N}(p, scale)
-ScaledPlan{T}(p::Plan{T}, scale::Number) = ScaledPlan{T}(p, scale)
+ScaledPlan{T}(p::P, scale::N) where {T,P,N} = ScaledPlan{T,P,N}(p, scale)
+ScaledPlan(p::Plan{T}, scale::Number) where {T} = ScaledPlan{T}(p, scale)
 ScaledPlan(p::ScaledPlan, α::Number) = ScaledPlan(p.p, p.scale * α)
 
 size(p::ScaledPlan) = size(p.p)
@@ -262,7 +262,7 @@ summary(p::ScaledPlan) = string(p.scale, " * ", summary(p.p))
 *(p::Plan, I::UniformScaling) = ScaledPlan(p, I.λ)
 
 # Normalization for ifft, given unscaled bfft, is 1/prod(dimensions)
-normalization(T, sz, region) = (one(T) / prod([sz...][[region...]]))::T
+normalization(T, sz, region) = one(T) / Int(prod([sz...][[region...]]))
 normalization(X, region) = normalization(real(eltype(X)), size(X), region)
 
 plan_ifft(x::AbstractArray, region; kws...) =
@@ -294,16 +294,16 @@ end
 
 for f in (:brfft, :irfft)
     @eval begin
-        $f{T<:Real}(x::AbstractArray{T}, d::Integer, region=1:ndims(x)) = $f(complexfloat(x), d, region)
-        $f{T<:Union{Integer,Rational}}(x::AbstractArray{Complex{T}}, d::Integer, region=1:ndims(x)) = $f(complexfloat(x), d, region)
+        $f(x::AbstractArray{<:Real}, d::Integer, region=1:ndims(x)) = $f(complexfloat(x), d, region)
+        $f(x::AbstractArray{<:Complex{<:Union{Integer,Rational}}}, d::Integer, region=1:ndims(x)) = $f(complexfloat(x), d, region)
     end
 end
 
 """
     irfft(A, d [, dims])
 
-Inverse of [`rfft`](:func:`rfft`): for a complex array `A`, gives the corresponding real
-array whose FFT yields `A` in the first half. As for [`rfft`](:func:`rfft`), `dims` is an
+Inverse of [`rfft`](@ref): for a complex array `A`, gives the corresponding real
+array whose FFT yields `A` in the first half. As for [`rfft`](@ref), `dims` is an
 optional subset of dimensions to transform, defaulting to `1:ndims(A)`.
 
 `d` is the length of the transformed real array along the `dims[1]` dimension, which must
@@ -316,8 +316,8 @@ irfft
 """
     brfft(A, d [, dims])
 
-Similar to [`irfft`](:func:`irfft`) but computes an unnormalized inverse transform (similar
-to [`bfft`](:func:`bfft`)), which must be divided by the product of the sizes of the
+Similar to [`irfft`](@ref) but computes an unnormalized inverse transform (similar
+to [`bfft`](@ref)), which must be divided by the product of the sizes of the
 transformed dimensions (of the real output array) in order to obtain the inverse transform.
 """
 brfft
@@ -344,9 +344,9 @@ plan_irfft{T}(x::AbstractArray{Complex{T}}, d::Integer, region; kws...) =
 """
     plan_irfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
-Pre-plan an optimized inverse real-input FFT, similar to [`plan_rfft`](:func:`plan_rfft`)
-except for [`irfft`](:func:`irfft`) and [`brfft`](:func:`brfft`), respectively. The first
-three arguments have the same meaning as for [`irfft`](:func:`irfft`).
+Pre-plan an optimized inverse real-input FFT, similar to [`plan_rfft`](@ref)
+except for [`irfft`](@ref) and [`brfft`](@ref), respectively. The first
+three arguments have the same meaning as for [`irfft`](@ref).
 """
 plan_irfft
 
@@ -354,7 +354,7 @@ plan_irfft
 
 export fftshift, ifftshift
 
-fftshift(x) = circshift(x, div([size(x)...],2))
+fftshift(x) = circshift(x, div.([size(x)...],2))
 
 """
     fftshift(x)
@@ -365,18 +365,20 @@ fftshift(x)
 
 function fftshift(x,dim)
     s = zeros(Int,ndims(x))
-    s[dim] = div(size(x,dim),2)
+    for i in dim
+        s[i] = div(size(x,i),2)
+    end
     circshift(x, s)
 end
 
 """
     fftshift(x,dim)
 
-Swap the first and second halves of the given dimension of array `x`.
+Swap the first and second halves of the given dimension or iterable of dimensions of array `x`.
 """
 fftshift(x,dim)
 
-ifftshift(x) = circshift(x, div([size(x)...],-2))
+ifftshift(x) = circshift(x, div.([size(x)...],-2))
 
 """
     ifftshift(x, [dim])
@@ -387,51 +389,202 @@ ifftshift
 
 function ifftshift(x,dim)
     s = zeros(Int,ndims(x))
-    s[dim] = -div(size(x,dim),2)
+    for i in dim
+        s[i] = -div(size(x,i),2)
+    end
     circshift(x, s)
 end
 
 ##############################################################################
 
 # FFTW module (may move to an external package at some point):
-if Base.USE_GPL_LIBS
-    @doc """
-        fft(A [, dims])
+"""
+    fft(A [, dims])
 
-    Performs a multidimensional FFT of the array `A`. The optional `dims` argument specifies an
-    iterable subset of dimensions (e.g. an integer, range, tuple, or array) to transform along.
-    Most efficient if the size of `A` along the transformed dimensions is a product of small
-    primes; see `nextprod()`. See also `plan_fft()` for even greater efficiency.
+Performs a multidimensional FFT of the array `A`. The optional `dims` argument specifies an
+iterable subset of dimensions (e.g. an integer, range, tuple, or array) to transform along.
+Most efficient if the size of `A` along the transformed dimensions is a product of small
+primes; see `nextprod()`. See also `plan_fft()` for even greater efficiency.
 
-    A one-dimensional FFT computes the one-dimensional discrete Fourier transform (DFT) as
-    defined by
+A one-dimensional FFT computes the one-dimensional discrete Fourier transform (DFT) as
+defined by
 
-    ```math
-    \\operatorname{DFT}(A)[k] =
-      \\sum_{n=1}^{\\operatorname{length}(A)}
-      \\exp\\left(-i\\frac{2\\pi
-      (n-1)(k-1)}{\\operatorname{length}(A)} \\right) A[n].
-    ```
+```math
+\\operatorname{DFT}(A)[k] =
+  \\sum_{n=1}^{\\operatorname{length}(A)}
+  \\exp\\left(-i\\frac{2\\pi
+  (n-1)(k-1)}{\\operatorname{length}(A)} \\right) A[n].
+```
 
-    A multidimensional FFT simply performs this operation along each transformed dimension of `A`.
+A multidimensional FFT simply performs this operation along each transformed dimension of `A`.
 
-    !!! note
-        * Julia starts FFTW up with 1 thread by default. Higher performance is usually possible by
-          increasing number of threads. Use `FFTW.set_num_threads(Sys.CPU_CORES)` to use as many
-          threads as cores on your system.
+!!! note
+    * Julia starts FFTW up with 1 thread by default. Higher performance is usually possible by
+      increasing number of threads. Use `FFTW.set_num_threads(Sys.CPU_CORES)` to use as many
+      threads as cores on your system.
 
-        * This performs a multidimensional FFT by default. FFT libraries in other languages such as
-          Python and Octave perform a one-dimensional FFT along the first non-singleton dimension
-          of the array. This is worth noting while performing comparisons. For more details,
-          refer to the ["Noteworthy Differences from other Languages"](:ref:`man-noteworthy-differences`)
-          section of the manual.
-    """ ->
-    fft
+    * This performs a multidimensional FFT by default. FFT libraries in other languages such as
+      Python and Octave perform a one-dimensional FFT along the first non-singleton dimension
+      of the array. This is worth noting while performing comparisons. For more details,
+      refer to the [Noteworthy Differences from other Languages](@ref)
+      section of the manual.
+"""
+fft
 
-    include("fft/FFTW.jl")
-    importall .FFTW
-    export FFTW, dct, idct, dct!, idct!, plan_dct, plan_idct, plan_dct!, plan_idct!
+"""
+    plan_rfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+
+Pre-plan an optimized real-input FFT, similar to [`plan_fft`](@ref) except for
+[`rfft`](@ref) instead of [`fft`](@ref). The first two arguments, and the
+size of the transformed result, are the same as for [`rfft`](@ref).
+"""
+plan_rfft
+
+"""
+    plan_brfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+
+Pre-plan an optimized real-input unnormalized transform, similar to
+[`plan_rfft`](@ref) except for [`brfft`](@ref) instead of
+[`rfft`](@ref). The first two arguments and the size of the transformed result, are
+the same as for [`brfft`](@ref).
+"""
+plan_brfft
+
+module FFTW
+    import ..DFT: fft, bfft, ifft, rfft, brfft, irfft, plan_fft, plan_bfft, plan_ifft,
+        plan_rfft, plan_brfft, plan_irfft, fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!,
+        Plan, rfft_output_size, brfft_output_size, plan_inv, normalization, ScaledPlan
+
+    export r2r, r2r!, plan_r2r, plan_r2r!
+
+    """
+        plan_dct!(A [, dims [, flags [, timelimit]]])
+
+    Same as [`plan_dct`](@ref), but operates in-place on `A`.
+    """
+    function plan_dct! end
+
+    """
+        plan_idct(A [, dims [, flags [, timelimit]]])
+
+    Pre-plan an optimized inverse discrete cosine transform (DCT), similar to
+    [`plan_fft`](@ref) except producing a function that computes
+    [`idct`](@ref). The first two arguments have the same meaning as for
+    [`idct`](@ref).
+    """
+    function plan_idct end
+
+    """
+        plan_dct(A [, dims [, flags [, timelimit]]])
+
+    Pre-plan an optimized discrete cosine transform (DCT), similar to
+    [`plan_fft`](@ref) except producing a function that computes
+    [`dct`](@ref). The first two arguments have the same meaning as for
+    [`dct`](@ref).
+    """
+    function plan_dct end
+
+    """
+        plan_idct!(A [, dims [, flags [, timelimit]]])
+
+    Same as [`plan_idct`](@ref), but operates in-place on `A`.
+    """
+    function plan_idct! end
+
+    """
+        dct(A [, dims])
+
+    Performs a multidimensional type-II discrete cosine transform (DCT) of the array `A`, using
+    the unitary normalization of the DCT. The optional `dims` argument specifies an iterable
+    subset of dimensions (e.g. an integer, range, tuple, or array) to transform along.  Most
+    efficient if the size of `A` along the transformed dimensions is a product of small primes;
+    see [`nextprod`](@ref). See also [`plan_dct`](@ref) for even greater
+    efficiency.
+    """
+    function dct end
+
+    """
+        idct(A [, dims])
+
+    Computes the multidimensional inverse discrete cosine transform (DCT) of the array `A`
+    (technically, a type-III DCT with the unitary normalization). The optional `dims` argument
+    specifies an iterable subset of dimensions (e.g. an integer, range, tuple, or array) to
+    transform along.  Most efficient if the size of `A` along the transformed dimensions is a
+    product of small primes; see [`nextprod`](@ref).  See also
+    [`plan_idct`](@ref) for even greater efficiency.
+    """
+    function idct end
+
+    """
+        dct!(A [, dims])
+
+    Same as [`dct!`](@ref), except that it operates in-place on `A`, which must be an
+    array of real or complex floating-point values.
+    """
+    function dct! end
+
+    """
+        idct!(A [, dims])
+
+    Same as [`idct!`](@ref), but operates in-place on `A`.
+    """
+    function idct! end
+
+    """
+        r2r(A, kind [, dims])
+
+    Performs a multidimensional real-input/real-output (r2r) transform
+    of type `kind` of the array `A`, as defined in the FFTW manual.
+    `kind` specifies either a discrete cosine transform of various types
+    (`FFTW.REDFT00`, `FFTW.REDFT01`, `FFTW.REDFT10`, or
+    `FFTW.REDFT11`), a discrete sine transform of various types
+    (`FFTW.RODFT00`, `FFTW.RODFT01`, `FFTW.RODFT10`, or
+    `FFTW.RODFT11`), a real-input DFT with halfcomplex-format output
+    (`FFTW.R2HC` and its inverse `FFTW.HC2R`), or a discrete
+    Hartley transform (`FFTW.DHT`).  The `kind` argument may be
+    an array or tuple in order to specify different transform types
+    along the different dimensions of `A`; `kind[end]` is used
+    for any unspecified dimensions.  See the FFTW manual for precise
+    definitions of these transform types, at http://www.fftw.org/doc.
+
+    The optional `dims` argument specifies an iterable subset of
+    dimensions (e.g. an integer, range, tuple, or array) to transform
+    along. `kind[i]` is then the transform type for `dims[i]`,
+    with `kind[end]` being used for `i > length(kind)`.
+
+    See also [`plan_r2r`](@ref) to pre-plan optimized r2r transforms.
+    """
+    function r2r end
+
+    """
+        r2r!(A, kind [, dims])
+
+    Same as [`r2r`](@ref), but operates in-place on `A`, which must be
+    an array of real or complex floating-point numbers.
+    """
+    function r2r! end
+
+    """
+        plan_r2r!(A, kind [, dims [, flags [, timelimit]]])
+
+    Similar to [`plan_fft`](@ref), but corresponds to [`r2r!`](@ref).
+    """
+    function plan_r2r! end
+
+    """
+        plan_r2r(A, kind [, dims [, flags [, timelimit]]])
+
+    Pre-plan an optimized r2r transform, similar to [`plan_fft`](@ref)
+    except that the transforms (and the first three arguments)
+    correspond to [`r2r`](@ref) and [`r2r!`](@ref), respectively.
+    """
+    function plan_r2r end
+
+    Base.USE_GPL_LIBS && include("fft/FFTW.jl")
 end
+
+importall .FFTW
+export FFTW, dct, idct, dct!, idct!, plan_dct, plan_idct, plan_dct!, plan_idct!
 
 ##############################################################################
 

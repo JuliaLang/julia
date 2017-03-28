@@ -1,10 +1,12 @@
 (load "./flisp/aliases.scm")
+(load "./flisp/profile.scm")
 (load "utils.scm")
 (load "ast.scm")
 (load "match.scm")
 (load "macroexpand.scm")
 (load "julia-parser.scm")
 (load "julia-syntax.scm")
+
 
 ;; exception handler for parser. turns known errors into special expressions,
 ;; and prevents throwing an exception past a C caller.
@@ -99,6 +101,8 @@
                   (or (memq (car e) '(toplevel line module import importall using export
                                                error incomplete))
                       (and (eq? (car e) 'global) (every symbol? (cdr e))))))
+         (if (eq? e '_)
+             (syntax-deprecation #f "_ as an rvalue" ""))
          e)
         (else
          (let ((last *in-expand*))
@@ -221,3 +225,10 @@
 ; run whole frontend on a string. useful for testing.
 (define (fe str)
   (expand-toplevel-expr (julia-parse str)))
+
+(define (profile-e s)
+  (with-exception-catcher
+   (lambda (e)
+           (newline)
+           (prn e))
+   (lambda () (profile s))))

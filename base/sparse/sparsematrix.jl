@@ -5,14 +5,15 @@
 # Assumes that row values in rowval for each column are sorted
 #      issorted(rowval[colptr[i]:(colptr[i+1]-1)]) == true
 
-immutable SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
+struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     m::Int                  # Number of rows
     n::Int                  # Number of columns
     colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)
     rowval::Vector{Ti}      # Row values of nonzeros
     nzval::Vector{Tv}       # Nonzero values
 
-    function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector{Ti}, rowval::Vector{Ti}, nzval::Vector{Tv})
+    function SparseMatrixCSC{Tv,Ti}(m::Integer, n::Integer, colptr::Vector{Ti}, rowval::Vector{Ti},
+                                    nzval::Vector{Tv}) where {Tv,Ti<:Integer}
         m < 0 && throw(ArgumentError("number of rows (m) must be ≥ 0, got $m"))
         n < 0 && throw(ArgumentError("number of columns (n) must be ≥ 0, got $n"))
         new(Int(m), Int(n), colptr, rowval, nzval)
@@ -33,17 +34,18 @@ Returns the number of stored (filled) elements in a sparse array.
 
 ```jldoctest
 julia> A = speye(3)
-3×3 sparse matrix with 3 Float64 nonzero entries:
-        [1, 1]  =  1.0
-        [2, 2]  =  1.0
-        [3, 3]  =  1.0
+3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
+  [1, 1]  =  1.0
+  [2, 2]  =  1.0
+  [3, 3]  =  1.0
 
 julia> nnz(A)
 3
 ```
 """
-nnz(S::SparseMatrixCSC) = Int(S.colptr[end]-1)
+nnz(S::SparseMatrixCSC) = Int(S.colptr[S.n + 1]-1)
 countnz(S::SparseMatrixCSC) = countnz(S.nzval)
+count(S::SparseMatrixCSC) = count(S.nzval)
 
 """
     nonzeros(A)
@@ -52,14 +54,14 @@ Return a vector of the structural nonzero values in sparse array `A`. This
 includes zeros that are explicitly stored in the sparse array. The returned
 vector points directly to the internal nonzero storage of `A`, and any
 modifications to the returned vector will mutate `A` as well. See
-[`rowvals`](:func:`rowvals`) and [`nzrange`](:func:`nzrange`).
+[`rowvals`](@ref) and [`nzrange`](@ref).
 
 ```jldoctest
 julia> A = speye(3)
-3×3 sparse matrix with 3 Float64 nonzero entries:
-        [1, 1]  =  1.0
-        [2, 2]  =  1.0
-        [3, 3]  =  1.0
+3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
+  [1, 1]  =  1.0
+  [2, 2]  =  1.0
+  [3, 3]  =  1.0
 
 julia> nonzeros(A)
 3-element Array{Float64,1}:
@@ -76,14 +78,14 @@ nonzeros(S::SparseMatrixCSC) = S.nzval
 Return a vector of the row indices of `A`. Any modifications to the returned
 vector will mutate `A` as well. Providing access to how the row indices are
 stored internally can be useful in conjunction with iterating over structural
-nonzero values. See also [`nonzeros`](:func:`nonzeros`) and [`nzrange`](:func:`nzrange`).
+nonzero values. See also [`nonzeros`](@ref) and [`nzrange`](@ref).
 
 ```jldoctest
 julia> A = speye(3)
-3×3 sparse matrix with 3 Float64 nonzero entries:
-        [1, 1]  =  1.0
-        [2, 2]  =  1.0
-        [3, 3]  =  1.0
+3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
+  [1, 1]  =  1.0
+  [2, 2]  =  1.0
+  [3, 3]  =  1.0
 
 julia> rowvals(A)
 3-element Array{Int64,1}:
@@ -98,8 +100,8 @@ rowvals(S::SparseMatrixCSC) = S.rowval
     nzrange(A::SparseMatrixCSC, col::Integer)
 
 Return the range of indices to the structural nonzero values of a sparse matrix
-column. In conjunction with [`nonzeros`](:func:`nonzeros`) and
-[`rowvals`](:func:`rowvals`), this allows for convenient iterating over a sparse matrix :
+column. In conjunction with [`nonzeros`](@ref) and
+[`rowvals`](@ref), this allows for convenient iterating over a sparse matrix :
 
     A = sparse(I,J,V)
     rows = rowvals(A)
@@ -116,14 +118,17 @@ column. In conjunction with [`nonzeros`](:func:`nonzeros`) and
 nzrange(S::SparseMatrixCSC, col::Integer) = S.colptr[col]:(S.colptr[col+1]-1)
 
 function Base.show(io::IO, ::MIME"text/plain", S::SparseMatrixCSC)
-    print(io, S.m, "×", S.n, " sparse matrix with ", nnz(S), " ", eltype(S), " nonzero entries")
-    if nnz(S) != 0
+    xnnz = nnz(S)
+    print(io, S.m, "×", S.n, " ", typeof(S), " with ", xnnz, " stored ",
+              xnnz == 1 ? "entry" : "entries")
+    if xnnz != 0
         print(io, ":")
         show(io, S)
     end
 end
 
-function Base.show(io::IO, S::SparseMatrixCSC)
+Base.show(io::IO, S::SparseMatrixCSC) = Base.show(convert(IOContext, io), S::SparseMatrixCSC)
+function Base.show(io::IOContext, S::SparseMatrixCSC)
     if nnz(S) == 0
         return show(io, MIME("text/plain"), S)
     end
@@ -137,16 +142,15 @@ function Base.show(io::IO, S::SparseMatrixCSC)
     end
     pad = ndigits(max(S.m,S.n))
     k = 0
-    sep = "\n\t"
-    io = IOContext(io)
+    sep = "\n  "
     if !haskey(io, :compact)
         io = IOContext(io, :compact => true)
     end
     for col = 1:S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
         if k < half_screen_rows || k > nnz(S)-half_screen_rows
             print(io, sep, '[', rpad(S.rowval[k], pad), ", ", lpad(col, pad), "]  =  ")
-            if isassigned(S.nzval, k)
-                Base.show(io, S.nzval[k])
+            if isassigned(S.nzval, Int(k))
+                show(io, S.nzval[k])
             else
                 print(io, Base.undef_ref_str)
             end
@@ -159,7 +163,7 @@ end
 
 ## Reinterpret and Reshape
 
-function reinterpret{T,Tv,Ti}(::Type{T}, a::SparseMatrixCSC{Tv,Ti})
+function reinterpret{T,Tv}(::Type{T}, a::SparseMatrixCSC{Tv})
     if sizeof(T) != sizeof(Tv)
         throw(ArgumentError("SparseMatrixCSC reinterpret is only supported for element types of the same size"))
     end
@@ -221,7 +225,7 @@ function reinterpret{T,Tv,Ti,N}(::Type{T}, a::SparseMatrixCSC{Tv,Ti}, dims::NTup
     return SparseMatrixCSC(mS, nS, colptr, rowval, nzval)
 end
 
-function copy{T,P<:SparseMatrixCSC}(ra::ReshapedArray{T,2,P})
+function copy(ra::ReshapedArray{<:Any,2,<:SparseMatrixCSC})
     mS,nS = size(ra)
     a = parent(ra)
     mA,nA = size(a)
@@ -289,11 +293,18 @@ function copy!(A::SparseMatrixCSC, B::SparseMatrixCSC)
 end
 
 similar(S::SparseMatrixCSC, Tv::Type=eltype(S)) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), Array{Tv}(length(S.nzval)))
-similar{Tv,Ti,TvNew,TiNew}(S::SparseMatrixCSC{Tv,Ti}, ::Type{TvNew}, ::Type{TiNew}) = SparseMatrixCSC(S.m, S.n, convert(Array{TiNew},S.colptr), convert(Array{TiNew}, S.rowval), Array{TvNew}(length(S.nzval)))
+function similar{Tv,Ti}(S::SparseMatrixCSC, ::Type{Tv}, ::Type{Ti})
+    new_colptr = copy!(similar(S.colptr, Ti), S.colptr)
+    new_rowval = copy!(similar(S.rowval, Ti), S.rowval)
+    new_nzval =  copy!(similar(S.nzval,  Tv), S.nzval)
+    SparseMatrixCSC(S.m, S.n, new_colptr, new_rowval, new_nzval)
+end
 @inline similar{Tv}(S::SparseMatrixCSC, ::Type{Tv}, d::Dims) = spzeros(Tv, d...)
 
 # convert'ing between SparseMatrixCSC types
+convert{Tv}(::Type{AbstractMatrix{Tv}}, A::SparseMatrixCSC{Tv}) = A
 convert{Tv}(::Type{AbstractMatrix{Tv}}, A::SparseMatrixCSC) = convert(SparseMatrixCSC{Tv}, A)
+convert{Tv}(::Type{SparseMatrixCSC{Tv}}, S::SparseMatrixCSC{Tv}) = S
 convert{Tv}(::Type{SparseMatrixCSC{Tv}}, S::SparseMatrixCSC) = convert(SparseMatrixCSC{Tv,eltype(S.colptr)}, S)
 convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, S::SparseMatrixCSC{Tv,Ti}) = S
 function convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, S::SparseMatrixCSC)
@@ -336,10 +347,10 @@ Convert a sparse matrix or vector `S` into a dense matrix or vector.
 
 ```jldoctest
 julia> A = speye(3)
-3×3 sparse matrix with 3 Float64 nonzero entries:
-        [1, 1]  =  1.0
-        [2, 2]  =  1.0
-        [3, 3]  =  1.0
+3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
+  [1, 1]  =  1.0
+  [2, 2]  =  1.0
+  [3, 3]  =  1.0
 
 julia> full(A)
 3×3 Array{Float64,2}:
@@ -353,8 +364,6 @@ full
 float(S::SparseMatrixCSC) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), float.(S.nzval))
 
 complex(S::SparseMatrixCSC) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), complex(copy(S.nzval)))
-
-complex(A::SparseMatrixCSC, B::SparseMatrixCSC) = A + im*B
 
 # Construct a sparse vector
 
@@ -374,10 +383,10 @@ julia> A = eye(3)
  0.0  0.0  1.0
 
 julia> sparse(A)
-3×3 sparse matrix with 3 Float64 nonzero entries:
-        [1, 1]  =  1.0
-        [2, 2]  =  1.0
-        [3, 3]  =  1.0
+3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
+  [1, 1]  =  1.0
+  [2, 2]  =  1.0
+  [3, 3]  =  1.0
 ```
 """
 sparse{Tv}(A::AbstractMatrix{Tv}) = convert(SparseMatrixCSC{Tv,Int}, A)
@@ -443,7 +452,7 @@ are set to `maximum(I)` and `maximum(J)` respectively. If the `combine` function
 supplied, `combine` defaults to `+` unless the elements of `V` are Booleans in which case
 `combine` defaults to `|`. All elements of `I` must satisfy `1 <= I[k] <= m`, and all
 elements of `J` must satisfy `1 <= J[k] <= n`. Numerical zeros in (`I`, `J`, `V`) are
-retained as structural nonzeros; to drop numerical zeros, use [`dropzeros!`](:func:`dropzeros!`).
+retained as structural nonzeros; to drop numerical zeros, use [`dropzeros!`](@ref).
 
 For additional documentation and an expert driver, see `Base.SparseArrays.sparse!`.
 
@@ -455,10 +464,10 @@ julia> Js = [1; 2; 3];
 julia> Vs = [1; 2; 3];
 
 julia> sparse(Is, Js, Vs)
-3×3 sparse matrix with 3 Int64 nonzero entries:
-        [1, 1]  =  1
-        [2, 2]  =  2
-        [3, 3]  =  3
+3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
+  [1, 1]  =  1
+  [2, 2]  =  2
+  [3, 3]  =  3
 ```
 """
 function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{Tv}, m::Integer, n::Integer, combine)
@@ -499,6 +508,9 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V:
     end
 end
 
+sparse(I::AbstractVector, J::AbstractVector, V::AbstractVector, m::Integer, n::Integer, combine) =
+    sparse(AbstractVector{Int}(I), AbstractVector{Int}(J), V, m, n, combine)
+
 """
     sparse!{Tv,Ti<:Integer}(
         I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{Tv},
@@ -506,8 +518,8 @@ end
         csrrowptr::Vector{Ti}, csrcolval::Vector{Ti}, csrnzval::Vector{Tv},
         [csccolptr::Vector{Ti}], [cscrowval::Vector{Ti}, cscnzval::Vector{Tv}] )
 
-Parent of and expert driver for [`sparse`](:func:`sparse`);
-see [`sparse`](:func:`sparse`) for basic usage. This method
+Parent of and expert driver for [`sparse`](@ref);
+see [`sparse`](@ref) for basic usage. This method
 allows the user to provide preallocated storage for `sparse`'s intermediate objects and
 result as described below. This capability enables more efficient successive construction
 of `SparseMatrixCSC`s from coordinate representations, and also enables extraction of an
@@ -699,8 +711,8 @@ end
 ## Transposition and permutation methods
 
 """
-    halfperm!{Tv,Ti,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
-        q::AbstractVector{Tq}, f::Function = identity)
+    halfperm!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
+        q::AbstractVector{<:Integer}, f::Function = identity)
 
 Column-permute and transpose `A`, simultaneously applying `f` to each entry of `A`, storing
 the result `(f(A)Q)^T` (`map(f, transpose(A[:,q]))`) in `X`.
@@ -719,8 +731,8 @@ algorithms for sparse matrices: multiplication and permuted transposition," ACM 
 250-269 (1978). The algorithm runs in `O(A.m, A.n, nnz(A))` time and requires no space
 beyond that passed in.
 """
-function halfperm!{Tv,Ti,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
-        q::AbstractVector{Tq}, f::Function = identity)
+function halfperm!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
+        q::AbstractVector{<:Integer}, f::Function = identity)
     _computecolptrs_halfperm!(X, A)
     _distributevals_halfperm!(X, A, q, f)
     return X
@@ -750,8 +762,8 @@ position forward in `X.colptr`, computes `map(f, transpose(A[:,q]))` by appropri
 distributing `A.rowval` and `f`-transformed `A.nzval` into `X.rowval` and `X.nzval`
 respectively. Simultaneously fixes the one-position-forward shift in `X.colptr`.
 """
-function _distributevals_halfperm!{Tv,Ti,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti},
-        A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector{Tq}, f::Function)
+function _distributevals_halfperm!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti},
+        A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector{<:Integer}, f::Function)
     @inbounds for Xi in 1:A.n
         Aj = q[Xi]
         for Ak in nzrange(A, Aj)
@@ -791,15 +803,15 @@ function ftranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f::Function)
     X = SparseMatrixCSC(A.n, A.m, Vector{Ti}(A.m+1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
     halfperm!(X, A, 1:A.n, f)
 end
-transpose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = ftranspose(A, identity)
-ctranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = ftranspose(A, conj)
+transpose(A::SparseMatrixCSC) = ftranspose(A, identity)
+ctranspose(A::SparseMatrixCSC) = ftranspose(A, conj)
 
 """
-    unchecked_noalias_permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti},
-        A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp}, q::AbstractVector{Tq},
-        C::SparseMatrixCSC{Tv,Ti})
+    unchecked_noalias_permute!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti},
+        A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
+        q::AbstractVector{<:Integer}, C::SparseMatrixCSC{Tv,Ti})
 
-See [`permute!`](:func:`Base.SparseArrays.permute!`) for basic usage. Parent of `permute[!]`
+See [`permute!`](@ref) for basic usage. Parent of `permute[!]`
 methods operating on `SparseMatrixCSC`s that assume none of `X`, `A`, and `C` alias each
 other. As this method performs no argument checking, prefer the safer child methods
 (`permute[!]`) to direct use.
@@ -814,30 +826,30 @@ avoids an unnecessary length-`nnz(A)` array-sweep and associated recomputation o
 pointers. See [`halfperm!`](:func:Base.SparseArrays.halfperm!) for additional algorithmic
 information.
 
-See also: [`unchecked_aliasing_permute!`](:func:`Base.SparseArrays.unchecked_aliasing_permute!`)
+See also: `unchecked_aliasing_permute!`
 """
-function unchecked_noalias_permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti},
-        A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp}, q::AbstractVector{Tq},
-        C::SparseMatrixCSC{Tv,Ti})
+function unchecked_noalias_permute!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti},
+        A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
+        q::AbstractVector{<:Integer}, C::SparseMatrixCSC{Tv,Ti})
     halfperm!(C, A, q)
     _computecolptrs_permute!(X, A, q, X.colptr)
     _distributevals_halfperm!(X, C, p, identity)
     return X
 end
 """
-    unchecked_aliasing_permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(
-        A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp}, q::AbstractVector{Tq},
+    unchecked_aliasing_permute!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti},
+        p::AbstractVector{<:Integer}, q::AbstractVector{<:Integer},
         C::SparseMatrixCSC{Tv,Ti}, workcolptr::Vector{Ti})
 
-See [`permute!`](:func:`Base.SparseArrays.permute!`) for basic usage. Parent of `permute!`
+See [`permute!`](@ref) for basic usage. Parent of `permute!`
 methods operating on `SparseMatrixCSC`s where the source and destination matrices are the
-same. See [`unchecked_noalias_permute!`](:func:`Base.SparseArrays.unchecked_noalias_permute`)
+same. See `unchecked_noalias_permute!`
 for additional information; these methods are identical but for this method's requirement of
 the additional `workcolptr`, `length(workcolptr) >= A.n + 1`, which enables efficient
 handling of the source-destination aliasing.
 """
-function unchecked_aliasing_permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(
-        A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp}, q::AbstractVector{Tq},
+function unchecked_aliasing_permute!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti},
+        p::AbstractVector{<:Integer}, q::AbstractVector{<:Integer},
         C::SparseMatrixCSC{Tv,Ti}, workcolptr::Vector{Ti})
     halfperm!(C, A, q)
     _computecolptrs_permute!(A, A, q, workcolptr)
@@ -850,8 +862,8 @@ Computes `PAQ`'s column pointers, storing them shifted one position forward in `
 `_distributevals_halfperm!` fixes this shift. Saves some work relative to
 `_computecolptrs_halfperm!` as described in `uncheckednoalias_permute!`'s documentation.
 """
-function _computecolptrs_permute!{Tv,Ti,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti},
-        A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector{Tq}, workcolptr::Vector{Ti})
+function _computecolptrs_permute!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti},
+        A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector{<:Integer}, workcolptr::Vector{Ti})
     # Compute `A[p,q]`'s column counts. Store shifted forward one position in workcolptr.
     @inbounds for k in 1:A.n
         workcolptr[k+1] = A.colptr[q[k] + 1] - A.colptr[q[k]]
@@ -871,8 +883,8 @@ Helper method for `permute` and `permute!` methods operating on `SparseMatrixCSC
 Checks compatibility of source argument `A`, row-permutation argument `p`, and
 column-permutation argument `q`.
 """
-function _checkargs_sourcecompatperms_permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(
-        A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp}, q::AbstractVector{Tq})
+function _checkargs_sourcecompatperms_permute!(A::SparseMatrixCSC,
+        p::AbstractVector{<:Integer}, q::AbstractVector{<:Integer})
      if length(q) != A.n
          throw(DimensionMismatch(string("the length of column-permutation argument `q`, ",
              "`length(q) (= $(length(q)))`, must match source argument `A`'s column ",
@@ -887,21 +899,21 @@ end
 Helper method for `permute` and `permute!` methods operating on `SparseMatrixCSC`s.
 Checks whether row- and column- permutation arguments `p` and `q` are valid permutations.
 """
-function _checkargs_permutationsvalid_permute!{Ti<:Integer,Tp<:Integer,Tq<:Integer}(
-        p::AbstractVector{Tp}, pcheckspace::Vector{Ti},
-        q::AbstractVector{Tq}, qcheckspace::Vector{Ti})
+function _checkargs_permutationsvalid_permute!{Ti<:Integer}(
+        p::AbstractVector{<:Integer}, pcheckspace::Vector{Ti},
+        q::AbstractVector{<:Integer}, qcheckspace::Vector{Ti})
     if !_ispermutationvalid_permute!(p, pcheckspace)
         throw(ArgumentError("row-permutation argument `p` must be a valid permutation"))
     elseif !_ispermutationvalid_permute!(q, qcheckspace)
         throw(ArgumentError("column-permutation argument `q` must be a valid permutation"))
     end
 end
-function _ispermutationvalid_permute!{Ti<:Integer,Tp<:Integer}(perm::AbstractVector{Tp},
-        checkspace::Vector{Ti})
+function _ispermutationvalid_permute!(perm::AbstractVector{<:Integer},
+        checkspace::Vector{<:Integer})
     n = length(perm)
     checkspace[1:n] = 0
     for k in perm
-        (0 < k <= n) && ((checkspace[k] $= 1) == 1) || return false
+        (0 < k ≤ n) && ((checkspace[k] ⊻= 1) == 1) || return false
     end
     return true
 end
@@ -962,16 +974,16 @@ function _checkargs_sourcecompatworkcolptr_permute!{Tv,Ti}(A::SparseMatrixCSC{Tv
     end
 end
 """
-    permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
-        p::AbstractVector{Tp}, q::AbstractVector{Tq}[, C::SparseMatrixCSC{Tv,Ti}])
+    permute!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
+        p::AbstractVector{<:Integer}, q::AbstractVector{<:Integer}[, C::SparseMatrixCSC{Tv,Ti}])
 
 Bilaterally permute `A`, storing result `PAQ` (`A[p,q]`) in `X`. Stores intermediate result
 `(AQ)^T` (`transpose(A[:,q])`) in optional argument `C` if present. Requires that none of
 `X`, `A`, and, if present, `C` alias each other; to store result `PAQ` back into `A`, use
 the following method lacking `X`:
 
-    permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp},
-        q::AbstractVector{Tq}[, C::SparseMatrixCSC{Tv,Ti}[, workcolptr::Vector{Ti}]])
+    permute!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
+        q::AbstractVector{<:Integer}[, C::SparseMatrixCSC{Tv,Ti}[, workcolptr::Vector{Ti}]])
 
 `X`'s dimensions must match those of `A` (`X.m == A.m` and `X.n == A.n`), and `X` must
 have enough storage to accommodate all allocated entries in `A` (`length(X.rowval) >= nnz(A)`
@@ -980,25 +992,25 @@ count (`length(q) == A.n`). Row-permutation `p`'s length must match `A`'s row co
 (`length(p) == A.m`).
 
 `C`'s dimensions must match those of `transpose(A)` (`C.m == A.n` and `C.n == A.m`), and `C`
-must have enough storage to accommodate all allocated entries in `A` (`length(C.rowval)` >= nnz(A)`
+must have enough storage to accommodate all allocated entries in `A` (`length(C.rowval) >= nnz(A)`
 and `length(C.nzval) >= nnz(A)`).
 
 For additional (algorithmic) information, and for versions of these methods that forgo
-argument checking, see (unexported) parent methods [`unchecked_noalias_permute!`](:func:`Base.SparseArrays.unchecked_noalias_permute!`)
-and [`unchecked_aliasing_permute!`](:func:`Base.SparseArrays.unchecked_aliasing_permute!`).
+argument checking, see (unexported) parent methods `unchecked_noalias_permute!`
+and `unchecked_aliasing_permute!`.
 
-See also: [`permute`](:func:`Base.SparseArrays.permute`)
+See also: [`permute`](@ref)
 """
-function permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti},
-        A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp}, q::AbstractVector{Tq})
+function permute!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
+        p::AbstractVector{<:Integer}, q::AbstractVector{<:Integer})
     _checkargs_sourcecompatdest_permute!(A, X)
     _checkargs_sourcecompatperms_permute!(A, p, q)
     C = SparseMatrixCSC(A.n, A.m, Vector{Ti}(A.m + 1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
     _checkargs_permutationsvalid_permute!(p, C.colptr, q, X.colptr)
     unchecked_noalias_permute!(X, A, p, q, C)
 end
-function permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti},
-        A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp}, q::AbstractVector{Tq},
+function permute!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
+        p::AbstractVector{<:Integer}, q::AbstractVector{<:Integer},
         C::SparseMatrixCSC{Tv,Ti})
     _checkargs_sourcecompatdest_permute!(A, X)
     _checkargs_sourcecompatperms_permute!(A, p, q)
@@ -1006,24 +1018,24 @@ function permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti},
     _checkargs_permutationsvalid_permute!(p, C.colptr, q, X.colptr)
     unchecked_noalias_permute!(X, A, p, q, C)
 end
-function permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(A::SparseMatrixCSC{Tv,Ti},
-        p::AbstractVector{Tp}, q::AbstractVector{Tq})
+function permute!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
+        q::AbstractVector{<:Integer})
     _checkargs_sourcecompatperms_permute!(A, p, q)
     C = SparseMatrixCSC(A.n, A.m, Vector{Ti}(A.m + 1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
     workcolptr = Vector{Ti}(A.n + 1)
     _checkargs_permutationsvalid_permute!(p, C.colptr, q, workcolptr)
     unchecked_aliasing_permute!(A, p, q, C, workcolptr)
 end
-function permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(A::SparseMatrixCSC{Tv,Ti},
-        p::AbstractVector{Tp}, q::AbstractVector{Tq}, C::SparseMatrixCSC{Tv,Ti})
+function permute!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
+        q::AbstractVector{<:Integer}, C::SparseMatrixCSC{Tv,Ti})
     _checkargs_sourcecompatperms_permute!(A, p, q)
     _checkargs_sourcecompatworkmat_permute!(A, C)
     workcolptr = Vector{Ti}(A.n + 1)
     _checkargs_permutationsvalid_permute!(p, C.colptr, q, workcolptr)
     unchecked_aliasing_permute!(A, p, q, C, workcolptr)
 end
-function permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(A::SparseMatrixCSC{Tv,Ti},
-        p::AbstractVector{Tp}, q::AbstractVector{Tq}, C::SparseMatrixCSC{Tv,Ti},
+function permute!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
+        q::AbstractVector{<:Integer}, C::SparseMatrixCSC{Tv,Ti},
         workcolptr::Vector{Ti})
     _checkargs_sourcecompatperms_permute!(A, p, q)
     _checkargs_sourcecompatworkmat_permute!(A, C)
@@ -1032,17 +1044,17 @@ function permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(A::SparseMatrixCSC{Tv,Ti},
     unchecked_aliasing_permute!(A, p, q, C, workcolptr)
 end
 """
-    permute{Tv,Ti,Tp<:Integer,Tq<:Integer}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp},
-        q::AbstractVector{Tq})
+    permute{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
+        q::AbstractVector{<:Integer})
 
 Bilaterally permute `A`, returning `PAQ` (`A[p,q]`). Column-permutation `q`'s length must
 match `A`'s column count (`length(q) == A.n`). Row-permutation `p`'s length must match `A`'s
 row count (`length(p) == A.m`).
 
-For expert drivers and additional information, see [`permute!`](:func:`Base.SparseArrays.permute!`).
+For expert drivers and additional information, see [`permute!`](@ref).
 """
-function permute{Tv,Ti,Tp<:Integer,Tq<:Integer}(A::SparseMatrixCSC{Tv,Ti},
-        p::AbstractVector{Tp}, q::AbstractVector{Tq})
+function permute{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
+        q::AbstractVector{<:Integer})
     _checkargs_sourcecompatperms_permute!(A, p, q)
     X = SparseMatrixCSC(A.m, A.n, Vector{Ti}(A.n + 1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
     C = SparseMatrixCSC(A.n, A.m, Vector{Ti}(A.m + 1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
@@ -1128,8 +1140,8 @@ droptol!(A::SparseMatrixCSC, tol, trim::Bool = true) =
 Removes stored numerical zeros from `A`, optionally trimming resulting excess space from
 `A.rowval` and `A.nzval` when `trim` is `true`.
 
-For an out-of-place version, see [`dropzeros`](:func:`dropzeros`). For
-algorithmic information, see [`Base.SparseArrays.fkeep!`](:func:`Base.SparseArrays.fkeep!`).
+For an out-of-place version, see [`dropzeros`](@ref). For
+algorithmic information, see `fkeep!`.
 """
 dropzeros!(A::SparseMatrixCSC, trim::Bool = true) = fkeep!(A, (i, j, x) -> x != 0, trim)
 """
@@ -1138,7 +1150,7 @@ dropzeros!(A::SparseMatrixCSC, trim::Bool = true) = fkeep!(A, (i, j, x) -> x != 
 Generates a copy of `A` and removes stored numerical zeros from that copy, optionally
 trimming excess space from the result's `rowval` and `nzval` arrays when `trim` is `true`.
 
-For an in-place version and algorithmic information, see [`dropzeros!`](:func:`dropzeros!`).
+For an in-place version and algorithmic information, see [`dropzeros!`](@ref).
 """
 dropzeros(A::SparseMatrixCSC, trim::Bool = true) = dropzeros!(copy(A), trim)
 
@@ -1247,7 +1259,20 @@ which the probability of any element being nonzero is independently given by
 `p` (and hence the mean density of nonzeros is also exactly `p`). Nonzero
 values are sampled from the distribution specified by `rfn` and have the type `type`. The uniform
 distribution is used in case `rfn` is not specified. The optional `rng`
-argument specifies a random number generator, see [Random Numbers](:ref:`Random Numbers <random-numbers>`).
+argument specifies a random number generator, see [Random Numbers](@ref).
+
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> sprand(rng, Bool, 2, 2, 0.5)
+2×2 SparseMatrixCSC{Bool,Int64} with 2 stored entries:
+  [1, 1]  =  true
+  [2, 1]  =  true
+
+julia> sprand(rng, Float64, 3, 0.75)
+3-element SparseVector{Float64,Int64} with 1 stored entry:
+  [3]  =  0.298614
+```
 """
 function sprand{T}(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat,
                 rfn::Function, ::Type{T}=eltype(rfn(r,1)))
@@ -1285,7 +1310,17 @@ sprand{T}(::Type{T}, m::Integer, n::Integer, density::AbstractFloat) = sprand(GL
 Create a random sparse vector of length `m` or sparse matrix of size `m` by `n`
 with the specified (independent) probability `p` of any entry being nonzero,
 where nonzero values are sampled from the normal distribution. The optional `rng`
-argument specifies a random number generator, see [Random Numbers](:ref:`Random Numbers <random-numbers>`).
+argument specifies a random number generator, see [Random Numbers](@ref).
+
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> sprandn(rng, 2, 2, 0.75)
+2×2 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
+  [1, 1]  =  0.532813
+  [2, 1]  =  -0.271735
+  [2, 2]  =  0.502334
+```
 """
 sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,randn,Float64)
 sprandn(m::Integer, n::Integer, density::AbstractFloat) = sprandn(GLOBAL_RNG,m,n,density)
@@ -1299,21 +1334,21 @@ element having the value `1.0`.
 
 ```jldoctest
 julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])
-4×4 sparse matrix with 4 Float64 nonzero entries:
-        [4, 1]  =  2.0
-        [1, 2]  =  5.0
-        [3, 3]  =  3.0
-        [2, 4]  =  4.0
+4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
+  [4, 1]  =  2.0
+  [1, 2]  =  5.0
+  [3, 3]  =  3.0
+  [2, 4]  =  4.0
 
 julia> spones(A)
-4×4 sparse matrix with 4 Float64 nonzero entries:
-        [4, 1]  =  1.0
-        [1, 2]  =  1.0
-        [3, 3]  =  1.0
-        [2, 4]  =  1.0
+4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
+  [4, 1]  =  1.0
+  [1, 2]  =  1.0
+  [3, 3]  =  1.0
+  [2, 4]  =  1.0
 ```
 
-Note the difference from [`speye`](:func:`speye`).
+Note the difference from [`speye`](@ref).
 """
 spones{T}(S::SparseMatrixCSC{T}) =
      SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), ones(T, S.colptr[end]-1))
@@ -1325,6 +1360,14 @@ Create a sparse vector of length `m` or sparse matrix of size `m x n`. This
 sparse array will not contain any nonzero values. No storage will be allocated
 for nonzero values during construction. The type defaults to `Float64` if not
 specified.
+
+```jldoctest
+julia> spzeros(3, 3)
+3×3 SparseMatrixCSC{Float64,Int64} with 0 stored entries
+
+julia> spzeros(Float32, 4)
+4-element SparseVector{Float32,Int64} with 0 stored entries
+```
 """
 spzeros(m::Integer, n::Integer) = spzeros(Float64, m, n)
 spzeros(Tv::Type, m::Integer, n::Integer) = spzeros(Tv, Int, m, n)
@@ -1346,21 +1389,21 @@ Create a sparse identity matrix with the same size as `S`.
 
 ```jldoctest
 julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])
-4×4 sparse matrix with 4 Float64 nonzero entries:
-        [4, 1]  =  2.0
-        [1, 2]  =  5.0
-        [3, 3]  =  3.0
-        [2, 4]  =  4.0
+4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
+  [4, 1]  =  2.0
+  [1, 2]  =  5.0
+  [3, 3]  =  3.0
+  [2, 4]  =  4.0
 
 julia> speye(A)
-4×4 sparse matrix with 4 Float64 nonzero entries:
-        [1, 1]  =  1.0
-        [2, 2]  =  1.0
-        [3, 3]  =  1.0
-        [4, 4]  =  1.0
+4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
+  [1, 1]  =  1.0
+  [2, 2]  =  1.0
+  [3, 3]  =  1.0
+  [4, 4]  =  1.0
 ```
 
-Note the difference from [`spones`](:func:`spones`).
+Note the difference from [`spones`](@ref).
 """
 speye{T}(S::SparseMatrixCSC{T}) = speye(T, size(S, 1), size(S, 2))
 eye(S::SparseMatrixCSC) = speye(S)
@@ -1371,15 +1414,12 @@ eye(S::SparseMatrixCSC) = speye(S)
 Create a sparse identity matrix of size `m x m`. When `n` is supplied,
 create a sparse identity matrix of size `m x n`. The type defaults to `Float64`
 if not specified.
+
+`sparse(I, m, n)` is equivalent to `speye(Int, m, n)`, and
+`sparse(α*I, m, n)` can be used to efficiently create a sparse
+multiple `α` of the identity matrix.
 """
-function speye(T::Type, m::Integer, n::Integer)
-    ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
-    x = min(m,n)
-    rowval = [1:x;]
-    colptr = [rowval; fill(Int(x+1), n+1-x)]
-    nzval  = ones(T, x)
-    return SparseMatrixCSC(m, n, colptr, rowval, nzval)
-end
+speye(T::Type, m::Integer, n::Integer) = speye_scaled(T, oneunit(T), m, n)
 
 function one{T}(S::SparseMatrixCSC{T})
     m,n = size(S)
@@ -1387,436 +1427,33 @@ function one{T}(S::SparseMatrixCSC{T})
     speye(T, m)
 end
 
-## Unary arithmetic and boolean operators
+speye_scaled(diag, m::Integer, n::Integer) = speye_scaled(typeof(diag), diag, m, n)
 
-"""
-Helper macro for the unary broadcast definitions below. Takes parent method `fp` and a set
-of desired child methods `fcs`, and builds an expression defining each of the child methods
-such that `broadcast(::typeof(fc), A::SparseMatrixCSC) = fp(fc, A)`.
-"""
-macro _enumerate_childmethods(fp, fcs...)
-    fcexps = Expr(:block)
-    for fc in fcs
-        push!(fcexps.args, :( broadcast(::typeof($(esc(fc))), A::SparseMatrixCSC) = $(esc(fp))($(esc(fc)), A) ) )
-    end
-    return fcexps
+function speye_scaled(T, diag, m::Integer, n::Integer)
+    ((m < 0) || (n < 0)) && throw(ArgumentError("invalid array dimensions"))
+    nnz = min(m,n)
+    colptr = Array{Int,1}(1+n)
+    colptr[1:nnz+1] = 1:nnz+1
+    colptr[nnz+2:end] = nnz+1
+    SparseMatrixCSC(Int(m), Int(n), colptr, Vector{Int}(1:nnz), fill!(Vector{T}(nnz), diag))
 end
 
-# Operations that map zeros to zeros and may map nonzeros to zeros, yielding a sparse matrix
-"""
-Takes unary function `f` that maps zeros to zeros and may map nonzeros to zeros, and returns
-a new `SparseMatrixCSC{TiA,TvB}` `B` generated by applying `f` to each nonzero entry in
-`A` and retaining only the resulting nonzeros.
-"""
-function _broadcast_unary_nz2z_z2z_T{TvA,TiA,TvB}(f::Function, A::SparseMatrixCSC{TvA,TiA}, ::Type{TvB})
-    Bcolptr = Array{TiA}(A.n + 1)
-    Browval = Array{TiA}(nnz(A))
-    Bnzval = Array{TvB}(nnz(A))
-    Bk = 1
-    @inbounds for j in 1:A.n
-        Bcolptr[j] = Bk
-        for Ak in nzrange(A, j)
-            x = f(A.nzval[Ak])
-            if x != 0
-                Browval[Bk] = A.rowval[Ak]
-                Bnzval[Bk] = x
-                Bk += 1
-            end
-        end
-    end
-    Bcolptr[A.n + 1] = Bk
-    resize!(Browval, Bk - 1)
-    resize!(Bnzval, Bk - 1)
-    return SparseMatrixCSC(A.m, A.n, Bcolptr, Browval, Bnzval)
-end
-function _broadcast_unary_nz2z_z2z{Tv}(f::Function, A::SparseMatrixCSC{Tv})
-    _broadcast_unary_nz2z_z2z_T(f, A, Tv)
-end
-@_enumerate_childmethods(_broadcast_unary_nz2z_z2z,
-    sin, sinh, sind, asin, asinh, asind,
-    tan, tanh, tand, atan, atanh, atand,
-    sinpi, cosc, ceil, floor, trunc, round)
-broadcast(::typeof(real), A::SparseMatrixCSC) = copy(A)
-broadcast{Tv,Ti}(::typeof(imag), A::SparseMatrixCSC{Tv,Ti}) = spzeros(Tv, Ti, A.m, A.n)
-broadcast{TTv}(::typeof(real), A::SparseMatrixCSC{Complex{TTv}}) = _broadcast_unary_nz2z_z2z_T(real, A, TTv)
-broadcast{TTv}(::typeof(imag), A::SparseMatrixCSC{Complex{TTv}}) = _broadcast_unary_nz2z_z2z_T(imag, A, TTv)
-ceil{To}(::Type{To}, A::SparseMatrixCSC) = _broadcast_unary_nz2z_z2z_T(ceil, A, To)
-floor{To}(::Type{To}, A::SparseMatrixCSC) = _broadcast_unary_nz2z_z2z_T(floor, A, To)
-trunc{To}(::Type{To}, A::SparseMatrixCSC) = _broadcast_unary_nz2z_z2z_T(trunc, A, To)
-round{To}(::Type{To}, A::SparseMatrixCSC) = _broadcast_unary_nz2z_z2z_T(round, A, To)
-
-# Operations that map zeros to zeros and map nonzeros to nonzeros, yielding a sparse matrix
-"""
-Takes unary function `f` that maps zeros to zeros and nonzeros to nonzeros, and returns a
-new `SparseMatrixCSC{TiA,TvB}` `B` generated by applying `f` to each nonzero entry in `A`.
-"""
-function _broadcast_unary_nz2nz_z2z_T{TvA,TiA,TvB}(f::Function, A::SparseMatrixCSC{TvA,TiA}, ::Type{TvB})
-    Bcolptr = Vector{TiA}(A.n + 1)
-    Browval = Vector{TiA}(nnz(A))
-    Bnzval = Vector{TvB}(nnz(A))
-    copy!(Bcolptr, 1, A.colptr, 1, A.n + 1)
-    copy!(Browval, 1, A.rowval, 1, nnz(A))
-    @inbounds @simd for k in 1:nnz(A)
-        Bnzval[k] = f(A.nzval[k])
-    end
-    return SparseMatrixCSC(A.m, A.n, Bcolptr, Browval, Bnzval)
-end
-function _broadcast_unary_nz2nz_z2z{Tv}(f::Function, A::SparseMatrixCSC{Tv})
-    _broadcast_unary_nz2nz_z2z_T(f, A, Tv)
-end
-@_enumerate_childmethods(_broadcast_unary_nz2nz_z2z,
-    log1p, expm1, abs, abs2, conj)
-broadcast{TTv}(::typeof(abs2), A::SparseMatrixCSC{Complex{TTv}}) = _broadcast_unary_nz2nz_z2z_T(abs2, A, TTv)
-broadcast{TTv}(::typeof(abs), A::SparseMatrixCSC{Complex{TTv}}) = _broadcast_unary_nz2nz_z2z_T(abs, A, TTv)
-broadcast{TTv<:Integer}(::typeof(abs), A::SparseMatrixCSC{Complex{TTv}}) = _broadcast_unary_nz2nz_z2z_T(abs, A, Float64)
-broadcast{TTv<:BigInt}(::typeof(abs), A::SparseMatrixCSC{Complex{TTv}}) = _broadcast_unary_nz2nz_z2z_T(abs, A, BigFloat)
-function conj!(A::SparseMatrixCSC)
-    @inbounds @simd for k in 1:nnz(A)
-        A.nzval[k] = conj(A.nzval[k])
-    end
-    return A
-end
-
-# Operations that map both zeros and nonzeros to zeros, yielding a dense matrix
-"""
-Takes unary function `f` that maps both zeros and nonzeros to nonzeros, constructs a new
-`Matrix{TvB}` `B`, populates all entries of `B` with the result of a single `f(one(zero(Tv)))`
-call, and then, for each stored entry in `A`, calls `f` on the entry's value and stores the
-result in the corresponding location in `B`.
-"""
-function _broadcast_unary_nz2nz_z2nz{Tv}(f::Function, A::SparseMatrixCSC{Tv})
-    B = fill(f(zero(Tv)), size(A))
-    @inbounds for j in 1:A.n
-        for k in nzrange(A, j)
-            i = A.rowval[k]
-            x = A.nzval[k]
-            B[i,j] = f(x)
-        end
-    end
-    return B
-end
-@_enumerate_childmethods(_broadcast_unary_nz2nz_z2nz,
-    log, log2, log10, exp, exp2, exp10, sinc, cospi,
-    cos, cosh, cosd, acos, acosd,
-    cot, coth, cotd, acot, acotd,
-    sec, sech, secd, asech,
-    csc, csch, cscd, acsch)
+sparse(S::UniformScaling, m::Integer, n::Integer=m) = speye_scaled(S.λ, m, n)
 
 
-## Broadcasting kernels specialized for returning a SparseMatrixCSC
-
-# Operations with zero result if both operands are zero
-function gen_broadcast_body_sparse(f::Function, is_first_sparse::Bool)
-    F = Expr(:quote, f)
-    quote
-        Base.Broadcast.check_broadcast_indices(indices(B), A_1)
-        Base.Broadcast.check_broadcast_indices(indices(B), A_2)
-
-        colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
-        colptr1 = A_1.colptr; rowval1 = A_1.rowval; nzval1 = A_1.nzval
-        colptr2 = A_2.colptr; rowval2 = A_2.rowval; nzval2 = A_2.nzval
-
-        nnzB = isempty(B) ? 0 : (nnz(A_1) * div(B.n, A_1.n) * div(B.m, A_1.m)  +
-                                 nnz(A_2) * div(B.n, A_2.n) * div(B.m, A_2.m))
-        if length(rowvalB) < nnzB
-            resize!(rowvalB, nnzB)
-        end
-        if length(nzvalB) < nnzB
-            resize!(nzvalB, nnzB)
-        end
-        z = zero(Tv)
-
-        ptrB = 1
-        colptrB[1] = 1
-
-        Tr1 = eltype(rowval1)
-        Tr2 = eltype(rowval2)
-
-        @inbounds for col = 1:B.n
-            ptr1::Int  = A_1.n == 1 ? colptr1[1] : colptr1[col]
-            stop1::Int = A_1.n == 1 ? colptr1[2] : colptr1[col+1]
-            ptr2::Int  = A_2.n == 1 ? colptr2[1] : colptr2[col]
-            stop2::Int = A_2.n == 1 ? colptr2[2] : colptr2[col+1]
-
-            if  A_1.m ==  A_2.m || (A_1.m == 1 && ptr1 == stop1) || (A_2.m == 1 && ptr2 == stop2)
-                while ptr1 < stop1 && ptr2 < stop2
-                    row1 = rowval1[ptr1]
-                    row2 = rowval2[ptr2]
-                    if row1 < row2
-                        res = ($F)(nzval1[ptr1], z)
-                        if res != z
-                            rowvalB[ptrB] = row1
-                            nzvalB[ptrB] = res
-                            ptrB += 1
-                        end
-                        ptr1 += 1
-                    elseif row2 < row1
-                        res = ($F)(z, nzval2[ptr2])
-                        if res != z
-                            rowvalB[ptrB] = row2
-                            nzvalB[ptrB] = res
-                            ptrB += 1
-                        end
-                        ptr2 += 1
-                    else
-                        res = ($F)(nzval1[ptr1], nzval2[ptr2])
-                        if res != z
-                            rowvalB[ptrB] = row1
-                            nzvalB[ptrB] = res
-                            ptrB += 1
-                        end
-                        ptr1 += 1
-                        ptr2 += 1
-                    end
-                end
-
-                while ptr1 < stop1
-                    res = ($F)(nzval1[ptr1], z)
-                    if res != z
-                        row1 = rowval1[ptr1]
-                        rowvalB[ptrB] = row1
-                        nzvalB[ptrB] = res
-                        ptrB += 1
-                    end
-                    ptr1 += 1
-                end
-
-                while ptr2 < stop2
-                    res = ($F)(z, nzval2[ptr2])
-                    if res != z
-                        row2 = rowval2[ptr2]
-                        rowvalB[ptrB] = row2
-                        nzvalB[ptrB] = res
-                        ptrB += 1
-                    end
-                    ptr2 += 1
-                end
-            elseif  A_1.m != 1  # A_1.m != 1 && A_2.m == 1
-                scalar2 = A_2.nzval[ptr2]
-                row1 = ptr1 < stop1 ? rowval1[ptr1] : -one(Tr1)
-                for row2 = one(Tr2):Tr2(B.m)
-                    if ptr1 >= stop1 || row1 != row2
-                        res = ($F)(z, scalar2)
-                        if res != z
-                            rowvalB[ptrB] = row2
-                            nzvalB[ptrB] = res
-                            ptrB += 1
-                        end
-                    else
-                        res = ($F)(nzval1[ptr1], scalar2)
-                        if res != z
-                            rowvalB[ptrB] = row1
-                            nzvalB[ptrB] = res
-                            ptrB += 1
-                        end
-                        ptr1 += 1
-                        row1 = ptr1 < stop1 ? rowval1[ptr1] :  -one(Tr1)
-                    end
-                end
-            else  # A_1.m == 1 && A_2.m != 1
-                scalar1 = nzval1[ptr1]
-                row2 = ptr2 < stop2 ? rowval2[ptr2] :  -one(Tr2)
-                for row1 = one(Tr1):Tr1(B.m)
-                    if ptr2 >= stop2 || row1 != row2
-                        res = ($F)(scalar1, z)
-                        if res != z
-                            rowvalB[ptrB] = row1
-                            nzvalB[ptrB] = res
-                            ptrB += 1
-                        end
-                    else
-                        res = ($F)(scalar1, nzval2[ptr2])
-                        if res != z
-                            rowvalB[ptrB] = row2
-                            nzvalB[ptrB] = res
-                            ptrB += 1
-                        end
-                        ptr2 += 1
-                        row2 = ptr2 < stop2 ? rowval2[ptr2] :  -one(Tr2)
-                    end
-                end
-            end
-            colptrB[col+1] = ptrB
-        end
-        deleteat!(rowvalB, colptrB[end]:length(rowvalB))
-        deleteat!(nzvalB, colptrB[end]:length(nzvalB))
-        nothing
-    end
-end
-
-function gen_broadcast_function_sparse(genbody::Function, f::Function, is_first_sparse::Bool)
-    body = genbody(f, is_first_sparse)
-    @eval let
-        local _F_
-        function _F_{Tv,Ti}(B::SparseMatrixCSC{Tv,Ti}, A_1, A_2)
-            $body
-        end
-        _F_
-    end
-end
-
-# Operations with zero result if any operand is zero
-# A_1 or A_2 (or both) are sparse.
-# is_first_sparse == true => A_1 is sparse
-# is_first_sparse == false => A_2 is sparse
-function gen_broadcast_body_zpreserving(f::Function, is_first_sparse::Bool)
-    F = Expr(:quote, f)
-    if is_first_sparse
-        A1 = :(A_1)
-        A2 = :(A_2)
-        op1 = :(val1)
-        op2 = :(val2)
-    else
-        A1 = :(A_2)
-        A2 = :(A_1)
-        op1 = :(val2)
-        op2 = :(val1)
-    end
-    quote
-        Base.Broadcast.check_broadcast_indices(indices(B), $A1)
-        Base.Broadcast.check_broadcast_indices(indices(B), $A2)
-
-        nnzB = isempty(B) ? 0 :
-               nnz($A1) * div(B.n, ($A1).n) * div(B.m, ($A1).m)
-        if length(B.rowval) < nnzB
-            resize!(B.rowval, nnzB)
-        end
-        if length(B.nzval) < nnzB
-            resize!(B.nzval, nnzB)
-        end
-        z = zero(Tv)
-
-        ptrB = 1
-        B.colptr[1] = 1
-
-        @inbounds for col = 1:B.n
-            ptr1::Int  = ($A1).n == 1 ? ($A1).colptr[1] : ($A1).colptr[col]
-            stop1::Int = ($A1).n == 1 ? ($A1).colptr[2] : ($A1).colptr[col+1]
-            col2 = size($A2, 2) == 1 ? 1 : col
-            row = 1
-            while ptr1 < stop1 && row <= B.m
-                if ($A1).m != 1
-                    row = ($A1).rowval[ptr1]
-                end
-                row2 = size($A2, 1) == 1 ? 1 : row
-                val1 = ($A1).nzval[ptr1]
-                val2 = ($A2)[row2,col2]
-                res = ($F)($op1, $op2)
-                if res != z
-                    B.rowval[ptrB] = row
-                    B.nzval[ptrB] = res
-                    ptrB += 1
-                end
-                if ($A1).m != 1
-                    ptr1 += 1
-                else
-                    row += 1
-                end
-            end
-            B.colptr[col+1] = ptrB
-        end
-        deleteat!(B.rowval, B.colptr[end]:length(B.rowval))
-        deleteat!(B.nzval, B.colptr[end]:length(B.nzval))
-        nothing
-    end
-end
-
-for (Bsig, A1sig, A2sig, gbb, funcname) in
-    (
-     (SparseMatrixCSC   , SparseMatrixCSC  ,  SparseMatrixCSC,  :gen_broadcast_body_sparse, :broadcast!),
-     (SparseMatrixCSC   , SparseMatrixCSC  ,  Array,  :gen_broadcast_body_zpreserving, :broadcast_zpreserving!),
-     (SparseMatrixCSC   , Array  ,  SparseMatrixCSC,  :gen_broadcast_body_zpreserving, :broadcast_zpreserving!),
-     (SparseMatrixCSC   , Number  ,  SparseMatrixCSC,  :gen_broadcast_body_zpreserving, :broadcast_zpreserving!),
-     (SparseMatrixCSC   , SparseMatrixCSC  ,  Number,  :gen_broadcast_body_zpreserving, :broadcast_zpreserving!),
-     (SparseMatrixCSC   , BitArray  ,  SparseMatrixCSC,  :gen_broadcast_body_zpreserving, :broadcast_zpreserving!),
-     (SparseMatrixCSC   , SparseMatrixCSC  ,  BitArray,  :gen_broadcast_body_zpreserving, :broadcast_zpreserving!),
-     )
-    @eval let cache = Dict{Function,Function}()
-        global $funcname
-        function $funcname(f::Function, B::$Bsig, A1::$A1sig, A2::$A2sig)
-            func       = @get! cache  f  gen_broadcast_function_sparse($gbb, f, ($A1sig) <: SparseMatrixCSC)
-            func(B, A1, A2)
-            B
-        end
-    end  # let broadcast_cache
-end
-
-
-broadcast{Tv1,Ti1,Tv2,Ti2}(f::Function, A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) =
-                 broadcast!(f, spzeros(promote_type(Tv1, Tv2), promote_type(Ti1, Ti2), to_shape(broadcast_indices(A_1, A_2))), A_1, A_2)
-
-@inline broadcast_zpreserving!(args...) = broadcast!(args...)
-@inline broadcast_zpreserving(args...) = broadcast(args...)
-broadcast_zpreserving{Tv1,Ti1,Tv2,Ti2}(f::Function, A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) =
-                 broadcast_zpreserving!(f, spzeros(promote_type(Tv1, Tv2), promote_type(Ti1, Ti2), to_shape(broadcast_indices(A_1, A_2))), A_1, A_2)
-broadcast_zpreserving{Tv,Ti}(f::Function, A_1::SparseMatrixCSC{Tv,Ti}, A_2::Union{Array,BitArray,Number}) =
-                 broadcast_zpreserving!(f, spzeros(promote_eltype(A_1, A_2), Ti, to_shape(broadcast_indices(A_1, A_2))), A_1, A_2)
-broadcast_zpreserving{Tv,Ti}(f::Function, A_1::Union{Array,BitArray,Number}, A_2::SparseMatrixCSC{Tv,Ti}) =
-                 broadcast_zpreserving!(f, spzeros(promote_eltype(A_1, A_2), Ti, to_shape(broadcast_indices(A_1, A_2))), A_1, A_2)
+# TODO: More appropriate location?
+conj!(A::SparseMatrixCSC) = (@inbounds broadcast!(conj, A.nzval, A.nzval); A)
+(-)(A::SparseMatrixCSC) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), map(-, A.nzval))
 
 
 ## Binary arithmetic and boolean operators
+(+)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(+, A, B)
+(-)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(-, A, B)
 
-for op in (+, -, min, max, &, |, $)
-    body = gen_broadcast_body_sparse(op, true)
-    OP = Symbol(string(op))
-    @eval begin
-        function ($OP){Tv1,Ti1,Tv2,Ti2}(A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2})
-            if size(A_1,1) != size(A_2,1) || size(A_1,2) != size(A_2,2)
-                throw(DimensionMismatch(""))
-            end
-            Tv = promote_op($op, Tv1, Tv2)
-            B =  spzeros(Tv, promote_type(Ti1, Ti2), to_shape(broadcast_indices(A_1, A_2)))
-            $body
-            B
-        end
-    end
-end # macro
-
-(.+)(A::SparseMatrixCSC, B::Number) = full(A) .+ B
-( +)(A::SparseMatrixCSC, B::Array ) = full(A)  + B
-(.+)(A::Number, B::SparseMatrixCSC) = A .+ full(B)
-( +)(A::Array , B::SparseMatrixCSC) = A  + full(B)
-
-(.-)(A::SparseMatrixCSC, B::Number) = full(A) .- B
-( -)(A::SparseMatrixCSC, B::Array ) = full(A)  - B
-(.-)(A::Number, B::SparseMatrixCSC) = A .- full(B)
-( -)(A::Array , B::SparseMatrixCSC) = A  - full(B)
-
-(.*)(A::AbstractArray, B::AbstractArray) = broadcast_zpreserving(*, A, B)
-(.*)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .* B)
-(.*)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .* B.nzval)
-
-(./)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval ./ B)
-(./)(A::Number, B::SparseMatrixCSC) = (./)(A, full(B))
-(./)(A::SparseMatrixCSC, B::Array) = (./)(full(A), B)
-(./)(A::Array, B::SparseMatrixCSC) = (./)(A, full(B))
-(./)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (./)(full(A), full(B))
-
-(.\)(A::SparseMatrixCSC, B::Number) = (.\)(full(A), B)
-(.\)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .\ B.nzval )
-(.\)(A::SparseMatrixCSC, B::Array) = (.\)(full(A), B)
-(.\)(A::Array, B::SparseMatrixCSC) = (.\)(A, full(B))
-(.\)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (.\)(full(A), full(B))
-
-(.^)(A::SparseMatrixCSC, B::Number) =
-    B==0 ? sparse(ones(typeof(one(eltype(A)).^B), A.m, A.n)) :
-           SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .^ B)
-(.^)(::Irrational{:e}, B::SparseMatrixCSC) = exp.(B)
-(.^)(A::Number, B::SparseMatrixCSC) = (.^)(A, full(B))
-(.^)(A::SparseMatrixCSC, B::Array) = (.^)(full(A), B)
-(.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, full(B))
-
-.+{Tv1,Ti1,Tv2,Ti2}(A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) =
-    broadcast!(+, spzeros(promote_op(+, Tv1, Tv2), promote_type(Ti1, Ti2), to_shape(broadcast_indices(A_1, A_2))), A_1, A_2)
-
-function .-{Tva,Tia,Tvb,Tib}(A::SparseMatrixCSC{Tva,Tia}, B::SparseMatrixCSC{Tvb,Tib})
-    broadcast!(-, spzeros(promote_op(-, Tva, Tvb), promote_type(Tia, Tib), to_shape(broadcast_indices(A, B))), A, B)
-end
-
-## element-wise comparison operators returning SparseMatrixCSC ##
-.<{Tv1,Ti1,Tv2,Ti2}(A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) = broadcast!(<, spzeros( Bool, promote_type(Ti1, Ti2), to_shape(broadcast_indices(A_1, A_2))), A_1, A_2)
-.!={Tv1,Ti1,Tv2,Ti2}(A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) = broadcast!(!=, spzeros( Bool, promote_type(Ti1, Ti2), to_shape(broadcast_indices(A_1, A_2))), A_1, A_2)
+( +)(A::SparseMatrixCSC, B::Array ) = Array(A)  + B
+( +)(A::Array , B::SparseMatrixCSC) = A  + Array(B)
+( -)(A::SparseMatrixCSC, B::Array ) = Array(A)  - B
+( -)(A::Array , B::SparseMatrixCSC) = A  - Array(B)
 
 ## full equality
 function ==(A1::SparseMatrixCSC, A2::SparseMatrixCSC)
@@ -1861,9 +1498,9 @@ end
 # and computing reductions along columns into SparseMatrixCSC is
 # non-trivial, so use Arrays for output
 Base.reducedim_initarray{R}(A::SparseMatrixCSC, region, v0, ::Type{R}) =
-    fill!(Array{R}(Base.reduced_dims(A,region)), v0)
+    fill!(similar(dims->Array{R}(dims), Base.reduced_indices(A,region)), v0)
 Base.reducedim_initarray0{R}(A::SparseMatrixCSC, region, v0, ::Type{R}) =
-    fill!(Array{R}(Base.reduced_dims0(A,region)), v0)
+    fill!(similar(dims->Array{R}(dims), Base.reduced_indices0(A,region)), v0)
 
 # General mapreduce
 function _mapreducezeros(f, op, T::Type, nzeros::Int, v0)
@@ -1885,7 +1522,7 @@ function _mapreducezeros(f, op, T::Type, nzeros::Int, v0)
     v
 end
 
-function Base._mapreduce{T}(f, op, ::Base.LinearSlow, A::SparseMatrixCSC{T})
+function Base._mapreduce{T}(f, op, ::Base.IndexCartesian, A::SparseMatrixCSC{T})
     z = nnz(A)
     n = length(A)
     if z == 0
@@ -2134,8 +1771,8 @@ end
 
 findmin{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, region) = @_findr(<, A, region, Tv, Ti)
 findmax{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, region) = @_findr(>, A, region, Tv, Ti)
-findmin{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = (r=findmin(A,(1,2)); (r[1][1], r[2][1]))
-findmax{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = (r=findmax(A,(1,2)); (r[1][1], r[2][1]))
+findmin(A::SparseMatrixCSC) = (r=findmin(A,(1,2)); (r[1][1], r[2][1]))
+findmax(A::SparseMatrixCSC) = (r=findmax(A,(1,2)); (r[1][1], r[2][1]))
 
 indmin(A::SparseMatrixCSC) = findmin(A)[2]
 indmax(A::SparseMatrixCSC) = findmax(A)[2]
@@ -2486,7 +2123,7 @@ function permute_rows!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, pI::Vector{Int})
     S
 end
 
-function getindex_general{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
+function getindex_general(A::SparseMatrixCSC, I::AbstractVector, J::AbstractVector)
     pI = sortperm(I)
     @inbounds Is = I[pI]
     permute_rows!(getindex_I_sorted(A, Is, J), pI)
@@ -2560,15 +2197,15 @@ function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractArray)
 end
 
 # logical getindex
-getindex{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv,Ti}, I::Range{Bool}, J::AbstractVector{Bool}) = error("Cannot index with Range{Bool}")
-getindex{Tv,Ti<:Integer,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, I::Range{Bool}, J::AbstractVector{T}) = error("Cannot index with Range{Bool}")
+getindex(A::SparseMatrixCSC{<:Any,<:Integer}, I::Range{Bool}, J::AbstractVector{Bool}) = error("Cannot index with Range{Bool}")
+getindex(A::SparseMatrixCSC{<:Any,<:Integer}, I::Range{Bool}, J::AbstractVector{<:Integer}) = error("Cannot index with Range{Bool}")
 
-getindex{T<:Integer}(A::SparseMatrixCSC, I::Range{T}, J::AbstractVector{Bool}) = A[I,find(J)]
+getindex(A::SparseMatrixCSC, I::Range{<:Integer}, J::AbstractVector{Bool}) = A[I,find(J)]
 getindex(A::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = A[I,find(J)]
 getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = A[find(I),J]
 getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = A[find(I),find(J)]
-getindex{T<:Integer}(A::SparseMatrixCSC, I::AbstractVector{T}, J::AbstractVector{Bool}) = A[I,find(J)]
-getindex{T<:Integer}(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{T}) = A[find(I),J]
+getindex(A::SparseMatrixCSC, I::AbstractVector{<:Integer}, J::AbstractVector{Bool}) = A[I,find(J)]
+getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = A[find(I),J]
 
 ## setindex!
 function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, v, i::Integer, j::Integer)
@@ -2598,11 +2235,11 @@ function setindex!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv,Ti}, v::Tv, i::Ti, j::T
     return A
 end
 
-setindex!{T<:Integer}(A::SparseMatrixCSC, v::AbstractMatrix, i::Integer, J::AbstractVector{T}) = setindex!(A, v, [i], J)
-setindex!{T<:Integer}(A::SparseMatrixCSC, v::AbstractMatrix, I::AbstractVector{T}, j::Integer) = setindex!(A, v, I, [j])
+setindex!(A::SparseMatrixCSC, v::AbstractMatrix, i::Integer, J::AbstractVector{<:Integer}) = setindex!(A, v, [i], J)
+setindex!(A::SparseMatrixCSC, v::AbstractMatrix, I::AbstractVector{<:Integer}, j::Integer) = setindex!(A, v, I, [j])
 
-setindex!{T<:Integer}(A::SparseMatrixCSC, x::Number, i::Integer, J::AbstractVector{T}) = setindex!(A, x, [i], J)
-setindex!{T<:Integer}(A::SparseMatrixCSC, x::Number, I::AbstractVector{T}, j::Integer) = setindex!(A, x, I, [j])
+setindex!(A::SparseMatrixCSC, x::Number, i::Integer, J::AbstractVector{<:Integer}) = setindex!(A, x, [i], J)
+setindex!(A::SparseMatrixCSC, x::Number, I::AbstractVector{<:Integer}, j::Integer) = setindex!(A, x, I, [j])
 
 # Colon translation
 setindex!(A::SparseMatrixCSC, x, ::Colon)          = setindex!(A, x, 1:length(A))
@@ -2610,26 +2247,27 @@ setindex!(A::SparseMatrixCSC, x, ::Colon, ::Colon) = setindex!(A, x, 1:size(A, 1
 setindex!(A::SparseMatrixCSC, x, ::Colon, j::Union{Integer, AbstractVector}) = setindex!(A, x, 1:size(A, 1), j)
 setindex!(A::SparseMatrixCSC, x, i::Union{Integer, AbstractVector}, ::Colon) = setindex!(A, x, i, 1:size(A, 2))
 
-function setindex!{TvA,TiI<:Integer,TiJ<:Integer}(A::SparseMatrixCSC{TvA}, x::Number,
-        I::AbstractVector{TiI}, J::AbstractVector{TiJ})
+function setindex!{Tv}(A::SparseMatrixCSC{Tv}, x::Number,
+        I::AbstractVector{<:Integer}, J::AbstractVector{<:Integer})
     if isempty(I) || isempty(J); return A; end
-    if !issorted(I); I = sort(I); end
-    if !issorted(J); J = sort(J); end
+    # lt=≤ to check for strict sorting
+    if !issorted(I, lt=≤); I = sort!(unique(I)); end
+    if !issorted(J, lt=≤); J = sort!(unique(J)); end
     if (I[1] < 1 || I[end] > A.m) || (J[1] < 1 || J[end] > A.n)
         throw(BoundsError(A, (I, J)))
     end
     if x == 0
         _spsetz_setindex!(A, I, J)
     else
-        _spsetnz_setindex!(A, convert(TvA, x), I, J)
+        _spsetnz_setindex!(A, convert(Tv, x), I, J)
     end
 end
 """
 Helper method for immediately preceding setindex! method. For all (i,j) such that i in I and
 j in J, assigns zero to A[i,j] if A[i,j] is a presently-stored entry, and otherwise does nothing.
 """
-function _spsetz_setindex!{TvA,TiI<:Integer,TiJ<:Integer}(A::SparseMatrixCSC{TvA},
-        I::AbstractVector{TiI}, J::AbstractVector{TiJ})
+function _spsetz_setindex!(A::SparseMatrixCSC,
+        I::AbstractVector{<:Integer}, J::AbstractVector{<:Integer})
     lengthI = length(I)
     for j in J
         coljAfirstk = A.colptr[j]
@@ -2664,8 +2302,8 @@ Helper method for immediately preceding setindex! method. For all (i,j) such tha
 and j in J, assigns x to A[i,j] if A[i,j] is a presently-stored entry, and allocates and
 assigns x to A[i,j] if A[i,j] is not presently stored.
 """
-function _spsetnz_setindex!{Tv,TiI<:Integer,TiJ<:Integer}(A::SparseMatrixCSC{Tv}, x::Tv,
-        I::AbstractVector{TiI}, J::AbstractVector{TiJ})
+function _spsetnz_setindex!{Tv}(A::SparseMatrixCSC{Tv}, x::Tv,
+        I::AbstractVector{<:Integer}, J::AbstractVector{<:Integer})
     m, n = size(A)
     lenI = length(I)
 
@@ -2773,9 +2411,9 @@ end
 setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, S::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) =
       setindex!(A, convert(SparseMatrixCSC{Tv,Ti}, S), I, J)
 
-setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, v::AbstractVector, I::AbstractVector{T}, j::Integer) = setindex!(A, v, I, [j])
-setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, v::AbstractVector, i::Integer, J::AbstractVector{T}) = setindex!(A, v, [i], J)
-setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, v::AbstractVector, I::AbstractVector{T}, J::AbstractVector{T}) =
+setindex!(A::SparseMatrixCSC, v::AbstractVector, I::AbstractVector{<:Integer}, j::Integer) = setindex!(A, v, I, [j])
+setindex!(A::SparseMatrixCSC, v::AbstractVector, i::Integer, J::AbstractVector{<:Integer}) = setindex!(A, v, [i], J)
+setindex!{T<:Integer}(A::SparseMatrixCSC, v::AbstractVector, I::AbstractVector{T}, J::AbstractVector{T}) =
       setindex!(A, reshape(v, length(I), length(J)), I, J)
 
 
@@ -2910,17 +2548,17 @@ end
 setindex!(A::SparseMatrixCSC, x::Matrix, I::Integer, J::AbstractVector{Bool}) = setindex!(A, sparse(x), I, find(J))
 setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::Integer) = setindex!(A, sparse(x), find(I), J)
 setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = setindex!(A, sparse(x), find(I), find(J))
-setindex!{T<:Integer}(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{T}, J::AbstractVector{Bool}) = setindex!(A, sparse(x), I, find(J))
-setindex!{T<:Integer}(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::AbstractVector{T}) = setindex!(A, sparse(x), find(I),J)
+setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{<:Integer}, J::AbstractVector{Bool}) = setindex!(A, sparse(x), I, find(J))
+setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = setindex!(A, sparse(x), find(I),J)
 
-setindex!(A::Matrix, x::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = setindex!(A, full(x), I, find(J))
-setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = setindex!(A, full(x), find(I), J)
-setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = setindex!(A, full(x), find(I), find(J))
-setindex!{T<:Integer}(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{T}, J::AbstractVector{Bool}) = setindex!(A, full(x), I, find(J))
-setindex!{T<:Integer}(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{T}) = setindex!(A, full(x), find(I), J)
+setindex!(A::Matrix, x::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = setindex!(A, Array(x), I, find(J))
+setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = setindex!(A, Array(x), find(I), J)
+setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = setindex!(A, Array(x), find(I), find(J))
+setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{<:Integer}, J::AbstractVector{Bool}) = setindex!(A, Array(x), I, find(J))
+setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = setindex!(A, Array(x), find(I), J)
 
-setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractVector{Bool}) = throw(BoundsError())
-function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractMatrix{Bool})
+setindex!(A::SparseMatrixCSC, x, I::AbstractVector{Bool}) = throw(BoundsError())
+function setindex!(A::SparseMatrixCSC, x, I::AbstractMatrix{Bool})
     checkbounds(A, I)
     n = sum(I)
     (n == 0) && (return A)
@@ -3021,7 +2659,7 @@ function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractMatrix{Bool})
 end
 
 
-function setindex!{Tv,Ti,T<:Real}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractVector{T})
+function setindex!(A::SparseMatrixCSC, x, I::AbstractVector{<:Real})
     n = length(I)
     (n == 0) && (return A)
 
@@ -3134,6 +2772,17 @@ end
     dropstored!(A::SparseMatrixCSC, i::Integer, j::Integer)
 
 Drop entry `A[i,j]` from `A` if `A[i,j]` is stored, and otherwise do nothing.
+
+```jldoctest
+julia> A = sparse([1 2; 0 0])
+2×2 SparseMatrixCSC{Int64,Int64} with 2 stored entries:
+  [1, 1]  =  1
+  [1, 2]  =  2
+
+julia> Base.SparseArrays.dropstored!(A, 1, 2); A
+2×2 SparseMatrixCSC{Int64,Int64} with 1 stored entry:
+  [1, 1]  =  1
+```
 """
 function dropstored!(A::SparseMatrixCSC, i::Integer, j::Integer)
     if !((1 <= i <= A.m) & (1 <= j <= A.n))
@@ -3146,14 +2795,14 @@ function dropstored!(A::SparseMatrixCSC, i::Integer, j::Integer)
         # Entry A[i,j] is stored. Drop and return.
         deleteat!(A.rowval, searchk)
         deleteat!(A.nzval, searchk)
-        @simd for m in j:(A.n + 1)
+        @simd for m in (j+1):(A.n + 1)
             @inbounds A.colptr[m] -= 1
         end
     end
     return A
 end
 """
-    dropstored!(A::SparseMatrix, I::AbstractVector{<:Integer}, J::AbstractVector{<:Integer})
+    dropstored!(A::SparseMatrixCSC, I::AbstractVector{<:Integer}, J::AbstractVector{<:Integer})
 
 For each `(i,j)` where `i in I` and `j in J`, drop entry `A[i,j]` from `A` if `A[i,j]` is
 stored and otherwise do nothing. Derivative forms:
@@ -3161,8 +2810,8 @@ stored and otherwise do nothing. Derivative forms:
     dropstored!(A::SparseMatrixCSC, i::Integer, J::AbstractVector{<:Integer})
     dropstored!(A::SparseMatrixCSC, I::AbstractVector{<:Integer}, j::Integer)
 """
-function dropstored!{TiI<:Integer,TiJ<:Integer}(A::SparseMatrixCSC,
-        I::AbstractVector{TiI}, J::AbstractVector{TiJ})
+function dropstored!(A::SparseMatrixCSC,
+        I::AbstractVector{<:Integer}, J::AbstractVector{<:Integer})
     m, n = size(A)
     nnzA = nnz(A)
     (nnzA == 0) && (return A)
@@ -3221,8 +2870,8 @@ function dropstored!{TiI<:Integer,TiJ<:Integer}(A::SparseMatrixCSC,
     end
     return A
 end
-dropstored!{T<:Integer}(A::SparseMatrixCSC, i::Integer, J::AbstractVector{T}) = dropstored!(A, [i], J)
-dropstored!{T<:Integer}(A::SparseMatrixCSC, I::AbstractVector{T}, j::Integer) = dropstored!(A, I, [j])
+dropstored!(A::SparseMatrixCSC, i::Integer, J::AbstractVector{<:Integer}) = dropstored!(A, [i], J)
+dropstored!(A::SparseMatrixCSC, I::AbstractVector{<:Integer}, j::Integer) = dropstored!(A, I, [j])
 dropstored!(A::SparseMatrixCSC, ::Colon, j::Union{Integer,AbstractVector}) = dropstored!(A, 1:size(A,1), j)
 dropstored!(A::SparseMatrixCSC, i::Union{Integer,AbstractVector}, ::Colon) = dropstored!(A, i, 1:size(A,2))
 dropstored!(A::SparseMatrixCSC, ::Colon, ::Colon) = dropstored!(A, 1:size(A,1), 1:size(A,2))
@@ -3247,12 +2896,8 @@ function vcat(X::SparseMatrixCSC...)
         end
     end
 
-    Tv = eltype(X[1].nzval)
-    Ti = eltype(X[1].rowval)
-    for i = 2:length(X)
-        Tv = promote_type(Tv, eltype(X[i].nzval))
-        Ti = promote_type(Ti, eltype(X[i].rowval))
-    end
+    Tv = promote_eltype(X...)
+    Ti = promote_eltype(map(x->x.rowval, X)...)
 
     nnzX = Int[ nnz(x) for x in X ]
     nnz_res = sum(nnzX)
@@ -3304,8 +2949,8 @@ function hcat(X::SparseMatrixCSC...)
     end
     n = sum(nX)
 
-    Tv = promote_type(map(x->eltype(x.nzval), X)...)
-    Ti = promote_type(map(x->eltype(x.rowval), X)...)
+    Tv = promote_eltype(X...)
+    Ti = promote_eltype(map(x->x.rowval, X)...)
 
     colptr = Array{Ti}(n + 1)
     nnzX = Int[ nnz(x) for x in X ]
@@ -3336,6 +2981,17 @@ end
     blkdiag(A...)
 
 Concatenate matrices block-diagonally. Currently only implemented for sparse matrices.
+
+# Example
+```jldoctest
+julia> blkdiag(speye(3), 2*speye(2))
+5×5 SparseMatrixCSC{Float64,Int64} with 5 stored entries:
+  [1, 1]  =  1.0
+  [2, 2]  =  1.0
+  [3, 3]  =  1.0
+  [4, 4]  =  2.0
+  [5, 5]  =  2.0
+```
 """
 function blkdiag(X::SparseMatrixCSC...)
     num = length(X)
@@ -3448,7 +3104,7 @@ function is_hermsym(A::SparseMatrixCSC, check::Function)
     return true
 end
 
-function istriu{Tv}(A::SparseMatrixCSC{Tv})
+function istriu(A::SparseMatrixCSC)
     m, n = size(A)
     colptr = A.colptr
     rowval = A.rowval
@@ -3468,7 +3124,7 @@ function istriu{Tv}(A::SparseMatrixCSC{Tv})
     return true
 end
 
-function istril{Tv}(A::SparseMatrixCSC{Tv})
+function istril(A::SparseMatrixCSC)
     m, n = size(A)
     colptr = A.colptr
     rowval = A.rowval
@@ -3537,15 +3193,15 @@ of the resulting sparse matrix.
 
 ```jldoctest
 julia> spdiagm(([1,2,3,4],[4,3,2,1]),(-1,1))
-5×5 sparse matrix with 8 Int64 nonzero entries:
-        [2, 1]  =  1
-        [1, 2]  =  4
-        [3, 2]  =  2
-        [2, 3]  =  3
-        [4, 3]  =  3
-        [3, 4]  =  2
-        [5, 4]  =  4
-        [4, 5]  =  1
+5×5 SparseMatrixCSC{Int64,Int64} with 8 stored entries:
+  [2, 1]  =  1
+  [1, 2]  =  4
+  [3, 2]  =  2
+  [2, 3]  =  3
+  [4, 3]  =  3
+  [3, 4]  =  2
+  [5, 4]  =  4
+  [4, 5]  =  1
 ```
 """
 function spdiagm(B, d, m::Integer, n::Integer)
@@ -3563,7 +3219,7 @@ spdiagm(B::AbstractVector, d::Number, m::Integer, n::Integer) = spdiagm((B,), (d
 spdiagm(B::AbstractVector, d::Number=0) = spdiagm((B,), (d,))
 
 ## expand a colptr or rowptr into a dense index vector
-function expandptr{T<:Integer}(V::Vector{T})
+function expandptr(V::Vector{<:Integer})
     if V[1] != 1 throw(ArgumentError("first index must be one")) end
     res = similar(V, (Int64(V[end]-1),))
     for i in 1:(length(V)-1), j in V[i]:(V[i+1] - 1); res[j] = i end
@@ -3572,7 +3228,7 @@ end
 
 ## diag and related using an iterator
 
-type SpDiagIterator{Tv,Ti}
+mutable struct SpDiagIterator{Tv,Ti}
     A::SparseMatrixCSC{Tv,Ti}
     n::Int
 end

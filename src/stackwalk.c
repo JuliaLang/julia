@@ -88,13 +88,11 @@ size_t rec_backtrace(uintptr_t *data, size_t maxsize)
 static jl_value_t *array_ptr_void_type = NULL;
 JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp)
 {
-    jl_svec_t *tp = NULL;
     jl_array_t *ip = NULL;
     jl_array_t *sp = NULL;
-    JL_GC_PUSH3(&tp, &ip, &sp);
+    JL_GC_PUSH2(&ip, &sp);
     if (array_ptr_void_type == NULL) {
-        tp = jl_svec2(jl_voidpointer_type, jl_box_long(1));
-        array_ptr_void_type = jl_apply_type((jl_value_t*)jl_array_type, tp);
+        array_ptr_void_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_voidpointer_type, jl_box_long(1));
     }
     ip = jl_alloc_array_1d(array_ptr_void_type, 0);
     sp = returnsp ? jl_alloc_array_1d(array_ptr_void_type, 0) : NULL;
@@ -123,12 +121,10 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp)
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_svec_t *tp = NULL;
     jl_array_t *bt = NULL;
-    JL_GC_PUSH2(&tp, &bt);
+    JL_GC_PUSH1(&bt);
     if (array_ptr_void_type == NULL) {
-        tp = jl_svec2(jl_voidpointer_type, jl_box_long(1));
-        array_ptr_void_type = jl_apply_type((jl_value_t*)jl_array_type, tp);
+        array_ptr_void_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_voidpointer_type, jl_box_long(1));
     }
     bt = jl_alloc_array_1d(array_ptr_void_type, ptls->bt_size);
     memcpy(bt->data, ptls->bt_data, ptls->bt_size * sizeof(void*));
@@ -278,7 +274,8 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
     if (!ImageBase)
         return 0;
 
-    PRUNTIME_FUNCTION FunctionEntry = (PRUNTIME_FUNCTION)JuliaFunctionTableAccess64(GetCurrentProcess(), cursor->Rip);
+    PRUNTIME_FUNCTION FunctionEntry = (PRUNTIME_FUNCTION)JuliaFunctionTableAccess64(
+        GetCurrentProcess(), cursor->Rip);
     if (!FunctionEntry) { // assume this is a NO_FPO RBP-based function
         cursor->Rsp = cursor->Rbp;                 // MOV RSP, RBP
         if (!readable_pointer((LPCVOID)cursor->Rsp))
@@ -304,12 +301,6 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
     return cursor->Rip != 0;
 #endif
 }
-
-#elif defined(_CPU_ARM_)
-// platforms on which libunwind may be broken
-
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context) { return 0; }
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp) { return 0; }
 
 #else
 // stacktrace using libunwind
@@ -401,10 +392,12 @@ JL_DLLEXPORT void jl_gdblookup(uintptr_t ip)
         else {
             const char *inlined = frame.inlined ? " [inlined]" : "";
             if (frame.line != -1) {
-                jl_safe_printf("%s at %s:%" PRIuPTR "%s\n", frame.func_name, frame.file_name, (uintptr_t)frame.line, inlined);
+                jl_safe_printf("%s at %s:%" PRIuPTR "%s\n", frame.func_name,
+                    frame.file_name, (uintptr_t)frame.line, inlined);
             }
             else {
-                jl_safe_printf("%s at %s (unknown line)%s\n", frame.func_name, frame.file_name, inlined);
+                jl_safe_printf("%s at %s (unknown line)%s\n", frame.func_name,
+                    frame.file_name, inlined);
             }
             free(frame.func_name);
             free(frame.file_name);

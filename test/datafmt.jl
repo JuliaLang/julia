@@ -117,10 +117,10 @@ end
 
 let x = ["\"hello\"", "world\""], io = IOBuffer()
     writedlm(io, x, quotes=false)
-    @test takebuf_string(io) == "\"hello\"\nworld\"\n"
+    @test String(take!(io)) == "\"hello\"\nworld\"\n"
 
     writedlm(io, x)
-    @test takebuf_string(io) == "\"\"\"hello\"\"\"\n\"world\"\"\"\n"
+    @test String(take!(io)) == "\"\"\"hello\"\"\"\n\"world\"\"\"\n"
 end
 
 # test comments
@@ -245,10 +245,10 @@ let data = "1 2 3"
 end
 
 # test show with MIME types
-@test sprint(io -> show(io, "text/csv", [1 2; 3 4])) == "1,2\n3,4\n"
+@test sprint(show, "text/csv", [1 2; 3 4]) == "1,2\n3,4\n"
 
 for writefunc in ((io,x) -> show(io, "text/csv", x),
-                  (io,x) -> invoke(writedlm, (IO, Any, Any), io, x, ","))
+                  (io,x) -> invoke(writedlm, Tuple{IO,Any,Any}, io, x, ","))
     # iterable collections of iterable rows:
     let x = [(1,2), (3,4)], io = IOBuffer()
         writefunc(io, x)
@@ -261,4 +261,14 @@ for writefunc in ((io,x) -> show(io, "text/csv", x),
         seek(io, 0)
         @test vec(readcsv(io)) == x
     end
+end
+
+# Test that we can read a write protected file
+let fn = tempname()
+    open(fn, "w") do f
+        write(f, "Julia")
+    end
+    chmod(fn, 0o444)
+    readdlm(fn)[] == "Julia"
+    rm(fn)
 end

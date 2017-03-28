@@ -63,7 +63,7 @@ end # os test
 
 A singleton of this type provides a hash table interface to environment variables.
 """
-type EnvHash <: Associative{String,String}; end
+mutable struct EnvHash <: Associative{String,String}; end
 
 """
     ENV

@@ -11,7 +11,7 @@ importall ..SparseArrays
 import ..SparseArrays: increment, increment!, decrement, decrement!, nnz
 
 include("umfpack_h.jl")
-type MatrixIllConditionedException <: Exception
+mutable struct MatrixIllConditionedException <: Exception
     message::AbstractString
 end
 
@@ -54,19 +54,19 @@ function umferror(status::Integer)
 end
 
 macro isok(A)
-    :(umferror($A))
+    :(umferror($(esc(A))))
 end
 
 # check the size of SuiteSparse_long
 if Int(ccall((:jl_cholmod_sizeof_long,:libsuitesparse_wrapper),Csize_t,())) == 4
     const UmfpackIndexTypes = (:Int32,)
-    typealias UMFITypes Int32
+    const UMFITypes = Int32
 else
     const UmfpackIndexTypes = (:Int32, :Int64)
-    typealias UMFITypes Union{Int32, Int64}
+    const UMFITypes = Union{Int32, Int64}
 end
 
-typealias UMFVTypes Union{Float64,Complex128}
+const UMFVTypes = Union{Float64,Complex128}
 
 ## UMFPACK
 
@@ -91,7 +91,7 @@ function show_umf_info(level::Real = 2.0)
 end
 
 ## Should this type be immutable?
-type UmfpackLU{Tv<:UMFVTypes,Ti<:UMFITypes} <: Factorization{Tv}
+mutable struct UmfpackLU{Tv<:UMFVTypes,Ti<:UMFITypes} <: Factorization{Tv}
     symbolic::Ptr{Void}
     numeric::Ptr{Void}
     m::Int
@@ -127,18 +127,17 @@ The relation between `F` and `A` is
 
 `F` further supports the following functions:
 
-- [`\\`](:func:`\\`)
-- [`cond`](:func:`cond`)
-- [`det`](:func:`det`)
+- [`\\`](@ref)
+- [`cond`](@ref)
+- [`det`](@ref)
 
-** Implementation note **
-
-`lufact(A::SparseMatrixCSC)` uses the UMFPACK library that is part of
-SuiteSparse. As this library only supports sparse matrices with `Float64` or
-`Complex128` elements, `lufact` converts `A` into a copy that is of type
-`SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as appropriate.
+!!! note
+    `lufact(A::SparseMatrixCSC)` uses the UMFPACK library that is part of
+    SuiteSparse. As this library only supports sparse matrices with `Float64` or
+    `Complex128` elements, `lufact` converts `A` into a copy that is of type
+    `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as appropriate.
 """
-function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
+function lufact(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes})
     zerobased = S.colptr[1] == 0
     res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
                     zerobased ? copy(S.colptr) : decrement(S.colptr),
@@ -147,14 +146,14 @@ function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
     finalizer(res, umfpack_free_symbolic)
     umfpack_numeric!(res)
 end
-lufact{Tv<:Union{Float16,Float32}, Ti<:UMFITypes}(A::SparseMatrixCSC{Tv,Ti}) =
+lufact{Ti<:UMFITypes}(A::SparseMatrixCSC{<:Union{Float16,Float32},Ti}) =
     lufact(convert(SparseMatrixCSC{Float64,Ti}, A))
-lufact{Tv<:Union{Complex32,Complex64}, Ti<:UMFITypes}(A::SparseMatrixCSC{Tv,Ti}) =
+lufact{Ti<:UMFITypes}(A::SparseMatrixCSC{<:Union{Complex32,Complex64},Ti}) =
     lufact(convert(SparseMatrixCSC{Complex128,Ti}, A))
 lufact{T<:AbstractFloat}(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}}) =
     throw(ArgumentError(string("matrix type ", typeof(A), "not supported. ",
     "Try lufact(convert(SparseMatrixCSC{Float64/Complex128,Int}, A)) for ",
-    "sparse floating point LU using UMFPACK or lufact(full(A)) for generic ",
+    "sparse floating point LU using UMFPACK or lufact(Array(A)) for generic ",
     "dense LU.")))
 lufact(A::SparseMatrixCSC) = lufact(float(A))
 
@@ -248,41 +247,42 @@ for itype in UmfpackIndexTypes
             U.numeric = tmp[1]
             return U
         end
-        function solve!(x::VecOrMat{Float64}, lu::UmfpackLU{Float64,$itype}, b::VecOrMat{Float64}, typ::Integer)
+        function solve!(x::StridedVector{Float64}, lu::UmfpackLU{Float64,$itype}, b::StridedVector{Float64}, typ::Integer)
             if x === b
                 throw(ArgumentError("output array must not be aliased with input array"))
             end
+            if stride(x, 1) != 1 || stride(b, 1) != 1
+                throw(ArgumentError("in and output vectors must have unit strides"))
+            end
             umfpack_numeric!(lu)
             (size(b,1) == lu.m) && (size(b) == size(x)) || throw(DimensionMismatch())
-            joff = 1
-            for k = 1:size(b,2)
-                @isok ccall(($sol_r, :libumfpack), $itype,
-                            ($itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64},
-                             Ptr{Float64}, Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
-                            typ, lu.colptr, lu.rowval, lu.nzval, pointer(x,joff), pointer(b,joff), lu.numeric, umf_ctrl, umf_info)
-                joff += size(b,1)
-            end
-            x
+            @isok ccall(($sol_r, :libumfpack), $itype,
+                ($itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64},
+                 Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Float64},
+                 Ptr{Float64}),
+                typ, lu.colptr, lu.rowval, lu.nzval,
+                x, b, lu.numeric, umf_ctrl,
+                umf_info)
+            return x
         end
-        function solve!(x::VecOrMat{Complex128}, lu::UmfpackLU{Complex128,$itype}, b::VecOrMat{Complex128}, typ::Integer)
+        function solve!(x::StridedVector{Complex128}, lu::UmfpackLU{Complex128,$itype}, b::StridedVector{Complex128}, typ::Integer)
             if x === b
                 throw(ArgumentError("output array must not be aliased with input array"))
             end
-            umfpack_numeric!(lu)
-            (size(b,1) == lu.m) && (size(b) == size(x)) || throw(DimensionMismatch())
-            n = size(b,1)
-            joff = 1
-            for k = 1:size(b,2)
-                @isok ccall(($sol_c, :libumfpack), $itype,
-                            ($itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64},
-                             Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64},
-                             Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
-                            typ, lu.colptr, lu.rowval, lu.nzval, C_NULL,
-                            pointer(x, joff), C_NULL, pointer(b, joff), C_NULL,
-                            lu.numeric, umf_ctrl, umf_info)
-                joff += n
+            if stride(x, 1) != 1 || stride(b, 1) != 1
+                throw(ArgumentError("in and output vectors must have unit strides"))
             end
-            x
+            umfpack_numeric!(lu)
+            (size(b, 1) == lu.m) && (size(b) == size(x)) || throw(DimensionMismatch())
+            n = size(b, 1)
+            @isok ccall(($sol_c, :libumfpack), $itype,
+                        ($itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64},
+                         Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64},
+                         Ptr{Float64}, Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
+                        typ, lu.colptr, lu.rowval, lu.nzval,
+                        C_NULL, x, C_NULL, b,
+                        C_NULL, lu.numeric, umf_ctrl, umf_info)
+            return x
         end
         function det(lu::UmfpackLU{Float64,$itype})
             mx = Array{Float64}(1)
@@ -369,8 +369,8 @@ for itype in UmfpackIndexTypes
                         Up,Ui,Ux,Uz,
                         P, Q, C_NULL, C_NULL,
                         &0, Rs, lu.numeric)
-            (transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), complex(Lx, Lz))),
-             SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), complex(Ux, Uz)),
+            (transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), complex.(Lx, Lz))),
+             SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), complex.(Ux, Uz)),
              increment!(P), increment!(Q), Rs)
         end
     end
@@ -382,30 +382,61 @@ function nnz(lu::UmfpackLU)
 end
 
 ### Solve with Factorization
-for (f!, umfpack) in ((:A_ldiv_B!, :UMFPACK_A),
-                      (:Ac_ldiv_B!, :UMFPACK_At),
-                      (:At_ldiv_B!, :UMFPACK_Aat))
-    @eval begin
-        $f!{T<:UMFVTypes}(x::VecOrMat{T}, lu::UmfpackLU{T}, b::VecOrMat{T}) = solve!(x, lu, b, $umfpack)
-        $f!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Vector{T}) = $f!(b, lu, copy(b))
-        $f!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Matrix{T}) = $f!(b, lu, copy(b))
+A_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) = A_ldiv_B!(B, lu, copy(B))
+At_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) = At_ldiv_B!(B, lu, copy(B))
+Ac_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, B::StridedVecOrMat{T}) = Ac_ldiv_B!(B, lu, copy(B))
+A_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = A_ldiv_B!(B, lu, copy(B))
+At_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = At_ldiv_B!(B, lu, copy(B))
+Ac_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = Ac_ldiv_B!(B, lu, copy(B))
 
-        function $f!{Tb<:Complex}(x::Vector{Tb}, lu::UmfpackLU{Float64}, b::Vector{Tb})
-            n = size(b, 1)
-            # TODO: Optionally let user allocate these and pass in somehow
-            r = similar(b, Float64)
-            i = similar(b, Float64)
-            solve!(r, lu, convert(Vector{Float64}, real(b)), $umfpack)
-            solve!(i, lu, convert(Vector{Float64}, imag(b)), $umfpack)
-            # We have checked size in solve!
-            @inbounds for k in eachindex(x)
-                x[k] = Tb(r[k] + im*i[k])
-            end
-            return x
-        end
-        $f!{Tb<:Complex}(lu::UmfpackLU{Float64}, b::Vector{Tb}) = $f!(b, lu, copy(b))
+A_ldiv_B!{T<:UMFVTypes}(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) =
+    _Aq_ldiv_B!(X, lu, B, UMFPACK_A)
+At_ldiv_B!{T<:UMFVTypes}(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) =
+    _Aq_ldiv_B!(X, lu, B, UMFPACK_At)
+Ac_ldiv_B!{T<:UMFVTypes}(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) =
+    _Aq_ldiv_B!(X, lu, B, UMFPACK_Aat)
+A_ldiv_B!{Tb<:Complex}(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) =
+    _Aq_ldiv_B!(X, lu, B, UMFPACK_A)
+At_ldiv_B!{Tb<:Complex}(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) =
+    _Aq_ldiv_B!(X, lu, B, UMFPACK_At)
+Ac_ldiv_B!{Tb<:Complex}(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) =
+    _Aq_ldiv_B!(X, lu, B, UMFPACK_Aat)
+
+function _Aq_ldiv_B!(X::StridedVecOrMat, lu::UmfpackLU, B::StridedVecOrMat, transposeoptype)
+    if size(X, 2) != size(B, 2)
+        throw(DimensionMismatch("input and output arrays must have same number of columns"))
+    end
+    _AqldivB_kernel!(X, lu, B, transposeoptype)
+    return X
+end
+function _AqldivB_kernel!{T<:UMFVTypes}(x::StridedVector{T}, lu::UmfpackLU{T},
+                                        b::StridedVector{T}, transposeoptype)
+    solve!(x, lu, b, transposeoptype)
+end
+function _AqldivB_kernel!{T<:UMFVTypes}(X::StridedMatrix{T}, lu::UmfpackLU{T},
+                                        B::StridedMatrix{T}, transposeoptype)
+    for col in 1:size(X, 2)
+        solve!(view(X, :, col), lu, view(B, :, col), transposeoptype)
     end
 end
+function _AqldivB_kernel!{Tb<:Complex}(x::StridedVector{Tb}, lu::UmfpackLU{Float64},
+                                        b::StridedVector{Tb}, transposeoptype)
+    r, i = similar(b, Float64), similar(b, Float64)
+    solve!(r, lu, Vector{Float64}(real(b)), transposeoptype)
+    solve!(i, lu, Vector{Float64}(imag(b)), transposeoptype)
+    map!(complex, x, r, i)
+end
+function _AqldivB_kernel!{Tb<:Complex}(X::StridedMatrix{Tb}, lu::UmfpackLU{Float64},
+                                        B::StridedMatrix{Tb}, transposeoptype)
+    r = similar(B, Float64, size(B, 1))
+    i = similar(B, Float64, size(B, 1))
+    for j in 1:size(B, 2)
+        solve!(r, lu, Vector{Float64}(real(view(B, :, j))), transposeoptype)
+        solve!(i, lu, Vector{Float64}(imag(view(B, :, j))), transposeoptype)
+        map!(complex, view(X, :, j), r, i)
+    end
+end
+
 
 function getindex(lu::UmfpackLU, d::Symbol)
     L,U,p,q,Rs = umf_extract(lu)

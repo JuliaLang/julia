@@ -54,7 +54,7 @@ function _threadsfor(iter,lbody)
                 $(esc(lbody))
             end
         end
-        ccall(:jl_threading_run, Void, (Any,), Core.svec($fun))
+        ccall(:jl_threading_run, Ref{Void}, (Any,), $fun)
     end
 end
 """
@@ -74,7 +74,7 @@ macro threads(args...)
     if !isa(ex, Expr)
         throw(ArgumentError("need an expression argument to @threads"))
     end
-    if is(ex.head, :for)
+    if ex.head === :for
         return _threadsfor(ex.args[1],ex.args[2])
     else
         throw(ArgumentError("unrecognized argument to @threads"))

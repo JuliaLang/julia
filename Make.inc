@@ -83,6 +83,11 @@ HAVE_SSP := 0
 WITH_GC_VERIFY := 0
 WITH_GC_DEBUG_ENV := 0
 
+# When set, give julia binaries CPUID specific names. This is useful in cluster environments
+# with heterogeneous architectures. N.B.: will not be automatically rebuilt for all
+# architectures if julia is updated.
+CPUID_SPECIFIC_BINARIES ?= 0
+
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
 
@@ -232,6 +237,7 @@ BUILD_LLVM_CLANG := 0
 # see http://lldb.llvm.org/build.html for dependencies
 BUILD_LLDB := 0
 USE_POLLY := 0
+USE_POLLY_OPENMP := 0
 
 # Cross-compile
 #XC_HOST := i686-w64-mingw32
@@ -257,7 +263,7 @@ CROSS_COMPILE:=
 HOSTCC = $(CC)
 else
 HOSTCC := gcc
-override OPENBLAS_DYNAMIC_ARCH := 1
+OPENBLAS_DYNAMIC_ARCH := 1
 override CROSS_COMPILE:=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
 override OS := WINNT
@@ -310,9 +316,13 @@ JULIACODEGEN := LLVM
 
 # flag for disabling assertions
 ifeq ($(FORCE_ASSERTIONS), 1)
+# C++ code needs to include LLVM header with the same assertion flag as LLVM
+# Use this flag to re-enable assertion in our code after all the LLVM headers are included
+CXX_DISABLE_ASSERTION :=
 DISABLE_ASSERTIONS :=
 else
-DISABLE_ASSERTIONS := -DNDEBUG
+CXX_DISABLE_ASSERTION := -DJL_NDEBUG
+DISABLE_ASSERTIONS := -DNDEBUG -DJL_NDEBUG
 endif
 
 # Compiler specific stuff
@@ -403,12 +413,14 @@ DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS := -O3 -g
 ifeq ($(OS), Darwin)
 ifeq ($(USE_LIBCPP), 1)
-CC += -stdlib=libc++ -mmacosx-version-min=10.7
-CXX += -stdlib=libc++ -mmacosx-version-min=10.7
-FC += -mmacosx-version-min=10.7
+MACOSX_VERSION_MIN := 10.8
+CC += -stdlib=libc++ -mmacosx-version-min=$(MACOSX_VERSION_MIN)
+CXX += -stdlib=libc++ -mmacosx-version-min=$(MACOSX_VERSION_MIN)
+FC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 else
-CC += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
-CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
+MACOSX_VERSION_MIN := 10.6
+CC += $(STDLIBCPP_FLAG) -mmacosx-version-min=$(MACOSX_VERSION_MIN)
+CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 endif
 JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
@@ -492,6 +504,12 @@ ifeq ($(OS),WINNT)
 build_shlibdir := $(build_bindir)
 else
 build_shlibdir := $(build_libdir)
+endif
+
+ifeq ($(OS), FreeBSD)
+LOCALBASE ?= /usr/local
+else
+LOCALBASE ?= /usr
 endif
 
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
@@ -640,11 +658,11 @@ endif
 # If we are running on powerpc64le or ppc64le, set certain options automatically
 ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 JCFLAGS += -fsigned-char
-override LLVM_VER:=3.9.0
-override OPENBLAS_DYNAMIC_ARCH:=0
-override OPENBLAS_TARGET_ARCH:=POWER8
+OPENBLAS_DYNAMIC_ARCH:=0
+OPENBLAS_TARGET_ARCH:=POWER8
+BINARY:=64
 # GCC doesn't do -march= on ppc64le
-override MARCH=
+MARCH=
 endif
 
 # If we are running on powerpc64 or ppc64, fail out dramatically
@@ -655,12 +673,16 @@ endif
 # If we are running on ARM, set certain options automatically
 ifneq (,$(findstring arm,$(ARCH)))
 JCFLAGS += -fsigned-char
+USE_BLAS64:=0
+OPENBLAS_DYNAMIC_ARCH:=0
+OPENBLAS_TARGET_ARCH:=ARMV7
+USE_SYSTEM_LIBM:=1
+endif
 
-override LLVM_VER:=3.8.1
-override USE_BLAS64:=0
-override OPENBLAS_DYNAMIC_ARCH:=0
-override OPENBLAS_TARGET_ARCH:=ARMV7
-override USE_SYSTEM_LIBM:=1
+# If we are running on aarch64 (e.g. ARMv8 or ARM64), set certain options automatically
+ifneq (,$(findstring aarch64,$(ARCH)))
+OPENBLAS_DYNAMIC_ARCH:=0
+OPENBLAS_TARGET_ARCH:=ARMV8
 endif
 
 # Set MARCH-specific flags
@@ -827,8 +849,8 @@ LIBMNAME := libopenlibm
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV), 1)
-  LIBUV := /usr/lib/libuv-julia.a
-  LIBUV_INC := /usr/include
+  LIBUV := $(LOCALBASE)/lib/libuv-julia.a
+  LIBUV_INC := $(LOCALBASE)/include
 else
   LIBUV := $(build_libdir)/libuv.a
   LIBUV_INC := $(build_includedir)
@@ -836,7 +858,7 @@ endif
 
 ifeq ($(USE_SYSTEM_UTF8PROC), 1)
   LIBUTF8PROC := -lutf8proc
-  UTF8PROC_INC := /usr/include
+  UTF8PROC_INC := $(LOCALBASE)/include
 else
   LIBUTF8PROC := $(build_libdir)/libutf8proc.a
   UTF8PROC_INC := $(build_includedir)
@@ -893,6 +915,11 @@ endif
 
 ifeq ($(OS), Linux)
 OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -Wl,--export-dynamic,--as-needed,--no-whole-archive $(LIBUNWIND)
+# Detect if ifunc is supported
+IFUNC_DETECT_SRC := 'void (*f0(void))(void) { return (void(*)(void))0L; }; void f(void) __attribute__((ifunc("f0")));'
+ifeq (supported, $(shell echo $(IFUNC_DETECT_SRC) | $(CC) -Werror -x c - -S -o /dev/null > /dev/null 2>&1 && echo supported))
+JCPPFLAGS += -DJULIA_HAS_IFUNC_SUPPORT=1
+endif
 ifneq ($(SANITIZE),1)
 ifneq ($(SANITIZE_MEMORY),1)
 ifneq ($(LLVM_SANITIZE),1)

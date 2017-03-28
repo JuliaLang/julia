@@ -120,7 +120,8 @@ end
 ziggurat_table_size = 256
 nmantissa           = Int64(2)^51 # one bit for the sign
 ziggurat_nor_r      = parse(BigFloat,"3.65415288536100879635194725185604664812733315920964488827246397029393565706474")
-nor_section_area    = ziggurat_nor_r*exp(-ziggurat_nor_r^2/2) + erfc(ziggurat_nor_r/sqrt(BigFloat(2)))*sqrt(big(π)/2)
+erfc_zigg_root2     = parse(BigFloat,"2.580324876539008898343885504487203185398584536409033046076029509351995983934371e-04")
+nor_section_area    = ziggurat_nor_r*exp(-ziggurat_nor_r^2/2) + erfc_zigg_root2*sqrt(big(π)/2)
 emantissa           = Int64(2)^52
 ziggurat_exp_r      = parse(BigFloat,"7.69711747013104971404462804811408952334296818528283253278834867283241051210533")
 exp_section_area    = (ziggurat_exp_r + 1)*exp(-ziggurat_exp_r)
@@ -133,10 +134,10 @@ ke = Array{UInt64}(ziggurat_table_size)
 we = Array{Float64}(ziggurat_table_size)
 fe = Array{Float64}(ziggurat_table_size)
 function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
-    wib = big(wi)
-    fib = big(fi)
-    web = big(we)
-    feb = big(fe)
+    wib = big.(wi)
+    fib = big.(fi)
+    web = big.(we)
+    feb = big.(fe)
     # Ziggurat tables for the normal distribution
     x1 = ziggurat_nor_r
     wib[256] = x1/nmantissa

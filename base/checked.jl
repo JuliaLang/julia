@@ -5,14 +5,15 @@
 module Checked
 
 export checked_neg, checked_abs, checked_add, checked_sub, checked_mul,
-       checked_div, checked_rem, checked_fld, checked_mod, checked_cld
+       checked_div, checked_rem, checked_fld, checked_mod, checked_cld,
+       add_with_overflow, sub_with_overflow, mul_with_overflow
 
-import Core.Intrinsics: box, unbox,
+import Core.Intrinsics:
        checked_sadd_int, checked_ssub_int, checked_smul_int, checked_sdiv_int,
        checked_srem_int,
        checked_uadd_int, checked_usub_int, checked_umul_int, checked_udiv_int,
        checked_urem_int
-import Base: no_op_err
+import Base: no_op_err, @_inline_meta
 
 # define promotion behavior for checked operations
 checked_add(x::Integer, y::Integer) = checked_add(promote(x,y)...)
@@ -26,19 +27,10 @@ checked_cld(x::Integer, y::Integer) = checked_cld(promote(x,y)...)
 
 # fallback catchall rules to prevent infinite recursion if promotion succeeds,
 # but no method exists to handle those types
-checked_neg{T<:Integer}(x::T) = no_op_err("checked_neg", T)
 checked_abs{T<:Integer}(x::T) = no_op_err("checked_abs", T)
-checked_add{T<:Integer}(x::T, y::T) = no_op_err("checked_add", T)
-checked_sub{T<:Integer}(x::T, y::T) = no_op_err("checked_sub", T)
-checked_mul{T<:Integer}(x::T, y::T) = no_op_err("checked_mul", T)
-checked_div{T<:Integer}(x::T, y::T) = no_op_err("checked_div", T)
-checked_rem{T<:Integer}(x::T, y::T) = no_op_err("checked_rem", T)
-checked_fld{T<:Integer}(x::T, y::T) = no_op_err("checked_fld", T)
-checked_mod{T<:Integer}(x::T, y::T) = no_op_err("checked_mod", T)
-checked_cld{T<:Integer}(x::T, y::T) = no_op_err("checked_cld", T)
 
-typealias SignedInt Union{Int8,Int16,Int32,Int64,Int128}
-typealias UnsignedInt Union{UInt8,UInt16,UInt32,UInt64,UInt128,Bool}
+const SignedInt = Union{Int8,Int16,Int32,Int64,Int128}
+const UnsignedInt = Union{UInt8,UInt16,UInt32,UInt64,UInt128}
 
 # LLVM has several code generation bugs for checked integer arithmetic (see e.g.
 # #4905). We thus distinguish between operations that can be implemented via
@@ -76,15 +68,15 @@ if llvm_version < 30500
     brokenSignedIntMul = Union{brokenSignedIntMul, Int8}
     brokenUnsignedIntMul = Union{brokenUnsignedIntMul, UInt8}
 end
-typealias BrokenSignedInt brokenSignedInt
-typealias BrokenUnsignedInt brokenUnsignedInt
-typealias BrokenSignedIntMul brokenSignedIntMul
-typealias BrokenUnsignedIntMul brokenUnsignedIntMul
+const BrokenSignedInt = brokenSignedInt
+const BrokenUnsignedInt = brokenUnsignedInt
+const BrokenSignedIntMul = brokenSignedIntMul
+const BrokenUnsignedIntMul = brokenUnsignedIntMul
 # Use these definitions to test the non-LLVM implementations
-# typealias BrokenSignedInt SignedInt
-# typealias BrokenUnsignedInt UnsignedInt
-# typealias BrokenSignedIntMul SignedInt
-# typealias BrokenUnsignedIntMul UnsignedInt
+# const BrokenSignedInt = SignedInt
+# const BrokenUnsignedInt = UnsignedInt
+# const BrokenSignedIntMul = SignedInt
+# const BrokenUnsignedIntMul = UnsignedInt
 
 """
     Base.checked_neg(x)
@@ -95,16 +87,11 @@ represent `-typemin(Int)`, thus leading to an overflow.
 
 The overflow protection may impose a perceptible performance penalty.
 """
-function checked_neg end
-
-function checked_neg{T<:SignedInt}(x::T)
-    checked_sub(T(0), x)
-end
-function checked_neg{T<:UnsignedInt}(x::T)
+function checked_neg{T<:Integer}(x::T)
     checked_sub(T(0), x)
 end
 if BrokenSignedInt != Union{}
-function checked_neg{T<:BrokenSignedInt}(x::T)
+function checked_neg(x::BrokenSignedInt)
     r = -x
     (x<0) & (r<0) && throw(OverflowError())
     r
@@ -134,6 +121,36 @@ function checked_abs(x::SignedInt)
     r
  end
 checked_abs(x::UnsignedInt) = x
+checked_abs(x::Bool) = x
+
+
+
+"""
+    Base.add_with_overflow(x, y) -> (r, f)
+
+Calculates `r = x+y`, with the flag `f` indicating whether overflow has occurred.
+"""
+function add_with_overflow end
+add_with_overflow{T<:SignedInt}(x::T, y::T)   = checked_sadd_int(x, y)
+add_with_overflow{T<:UnsignedInt}(x::T, y::T) = checked_uadd_int(x, y)
+add_with_overflow(x::Bool, y::Bool)           = x+y, false
+
+if BrokenSignedInt != Union{}
+function add_with_overflow{T<:BrokenSignedInt}(x::T, y::T)
+    r = x + y
+    # x and y have the same sign, and the result has a different sign
+    f = (x<0) == (y<0) != (r<0)
+    r, f
+end
+end
+if BrokenUnsignedInt != Union{}
+function add_with_overflow{T<:BrokenUnsignedInt}(x::T, y::T)
+    # x + y > typemax(T)
+    # Note: ~y == -y-1
+    x + y, x > ~y
+end
+end
+
 
 """
     Base.checked_add(x, y)
@@ -142,35 +159,17 @@ Calculates `x+y`, checking for overflow errors where applicable.
 
 The overflow protection may impose a perceptible performance penalty.
 """
-function checked_add end
-
-function checked_add{T<:SignedInt}(x::T, y::T)
-    box(T, checked_sadd_int(unbox(T,x), unbox(T,y)))
+function checked_add{T<:Integer}(x::T, y::T)
+    @_inline_meta
+    z, b = add_with_overflow(x, y)
+    b && throw(OverflowError())
+    z
 end
-function checked_add{T<:UnsignedInt}(x::T, y::T)
-    box(T, checked_uadd_int(unbox(T,x), unbox(T,y)))
-end
-if BrokenSignedInt != Union{}
-function checked_add{T<:BrokenSignedInt}(x::T, y::T)
-    r = x + y
-    # x and y have the same sign, and the result has a different sign
-    (x<0) == (y<0) != (r<0) && throw(OverflowError())
-    r
-end
-end
-if BrokenUnsignedInt != Union{}
-function checked_add{T<:BrokenUnsignedInt}(x::T, y::T)
-    # x + y > typemax(T)
-    # Note: ~y == -y-1
-    x > ~y && throw(OverflowError())
-    x + y
-end
-end
-checked_add(x::Bool, y::Bool) = x + y
-checked_add(x::Bool) = +x
 
 # Handle multiple arguments
 checked_add(x) = x
+checked_add(x::Bool) = +x
+
 checked_add{T}(x1::T, x2::T, x3::T) =
     checked_add(checked_add(x1, x2), x3)
 checked_add{T}(x1::T, x2::T, x3::T, x4::T) =
@@ -184,6 +183,32 @@ checked_add{T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T) =
 checked_add{T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) =
     checked_add(checked_add(x1, x2), x3, x4, x5, x6, x7, x8)
 
+
+"""
+    Base.sub_with_overflow(x, y) -> (r, f)
+
+Calculates `r = x-y`, with the flag `f` indicating whether overflow has occurred.
+"""
+function sub_with_overflow end
+sub_with_overflow{T<:SignedInt}(x::T, y::T)   = checked_ssub_int(x, y)
+sub_with_overflow{T<:UnsignedInt}(x::T, y::T) = checked_usub_int(x, y)
+sub_with_overflow(x::Bool, y::Bool)           = x-y, false
+
+if BrokenSignedInt != Union{}
+function sub_with_overflow{T<:BrokenSignedInt}(x::T, y::T)
+    r = x - y
+    # x and y have different signs, and the result has a different sign than x
+    f = (x<0) != (y<0) == (r<0)
+    r, f
+end
+end
+if BrokenUnsignedInt != Union{}
+function sub_with_overflow{T<:BrokenUnsignedInt}(x::T, y::T)
+    # x - y < 0
+    x - y, x < y
+end
+end
+
 """
     Base.checked_sub(x, y)
 
@@ -191,31 +216,63 @@ Calculates `x-y`, checking for overflow errors where applicable.
 
 The overflow protection may impose a perceptible performance penalty.
 """
-function checked_sub end
+function checked_sub{T<:Integer}(x::T, y::T)
+    @_inline_meta
+    z, b = sub_with_overflow(x, y)
+    b && throw(OverflowError())
+    z
+end
 
-function checked_sub{T<:SignedInt}(x::T, y::T)
-    box(T, checked_ssub_int(unbox(T,x), unbox(T,y)))
-end
-function checked_sub{T<:UnsignedInt}(x::T, y::T)
-    box(T, checked_usub_int(unbox(T,x), unbox(T,y)))
-end
-if BrokenSignedInt != Union{}
-function checked_sub{T<:BrokenSignedInt}(x::T, y::T)
-    r = x - y
-    # x and y have different signs, and the result has a different sign than x
-    (x<0) != (y<0) == (r<0) && throw(OverflowError())
-    r
-end
-end
-if BrokenUnsignedInt != Union{}
-function checked_sub{T<:BrokenUnsignedInt}(x::T, y::T)
-    # x - y < 0
-    x < y && throw(OverflowError())
-    x - y
+
+"""
+    Base.mul_with_overflow(x, y) -> (r, f)
+
+Calculates `r = x*y`, with the flag `f` indicating whether overflow has occurred.
+"""
+function mul_with_overflow end
+mul_with_overflow{T<:SignedInt}(x::T, y::T)   = checked_smul_int(x, y)
+mul_with_overflow{T<:UnsignedInt}(x::T, y::T) = checked_umul_int(x, y)
+mul_with_overflow(x::Bool, y::Bool)           = x*y, false
+
+if BrokenSignedIntMul != Union{} && BrokenSignedIntMul != Int128
+function mul_with_overflow{T<:BrokenSignedIntMul}(x::T, y::T)
+    r = widemul(x, y)
+    f = r % T != r
+    r % T, f
 end
 end
-checked_sub(x::Bool, y::Bool) = x - y
-checked_sub(x::Bool) = -x
+if BrokenUnsignedIntMul != Union{} && BrokenUnsignedIntMul != UInt128
+function mul_with_overflow{T<:BrokenUnsignedIntMul}(x::T, y::T)
+    r = widemul(x, y)
+    f = r % T != r
+    r % T, f
+end
+end
+if Int128 <: BrokenSignedIntMul
+    # Avoid BigInt
+    function mul_with_overflow{T<:Int128}(x::T, y::T)
+        f = if y > 0
+            # x * y > typemax(T)
+            # x * y < typemin(T)
+            x > fld(typemax(T), y) || x < cld(typemin(T), y)
+        elseif y < 0
+            # x * y > typemax(T)
+            # x * y < typemin(T)
+            # y == -1 can overflow fld
+            x < cld(typemax(T), y) || y != -1 && x > fld(typemin(T), y)
+        else
+            false
+        end
+        x*y, f
+    end
+end
+if UInt128 <: BrokenUnsignedIntMul
+    # Avoid BigInt
+    function mul_with_overflow{T<:UInt128}(x::T, y::T)
+        # x * y > typemax(T)
+        x * y, y > 0 && x > fld(typemax(T), y)
+    end
+end
 
 """
     Base.checked_mul(x, y)
@@ -224,53 +281,11 @@ Calculates `x*y`, checking for overflow errors where applicable.
 
 The overflow protection may impose a perceptible performance penalty.
 """
-function checked_mul end
-
-function checked_mul{T<:SignedInt}(x::T, y::T)
-    box(T, checked_smul_int(unbox(T,x), unbox(T,y)))
-end
-function checked_mul{T<:UnsignedInt}(x::T, y::T)
-    box(T, checked_umul_int(unbox(T,x), unbox(T,y)))
-end
-if BrokenSignedIntMul != Union{} && BrokenSignedIntMul != Int128
-function checked_mul{T<:BrokenSignedIntMul}(x::T, y::T)
-    r = widemul(x, y)
-    r % T != r && throw(OverflowError())
-    r % T
-end
-end
-if BrokenUnsignedIntMul != Union{} && BrokenUnsignedIntMul != UInt128
-function checked_mul{T<:BrokenUnsignedIntMul}(x::T, y::T)
-    r = widemul(x, y)
-    r % T != r && throw(OverflowError())
-    r % T
-end
-end
-if Int128 <: BrokenSignedIntMul
-    # Avoid BigInt
-    function checked_mul{T<:Int128}(x::T, y::T)
-        if y > 0
-            # x * y > typemax(T)
-            # x * y < typemin(T)
-            x > fld(typemax(T), y) && throw(OverflowError())
-            x < cld(typemin(T), y) && throw(OverflowError())
-        elseif y < 0
-            # x * y > typemax(T)
-            # x * y < typemin(T)
-            x < cld(typemax(T), y) && throw(OverflowError())
-            # y == -1 can overflow fld
-            y != -1 && x > fld(typemin(T), y) && throw(OverflowError())
-        end
-        x * y
-    end
-end
-if UInt128 <: BrokenUnsignedIntMul
-    # Avoid BigInt
-    function checked_mul{T<:UInt128}(x::T, y::T)
-        # x * y > typemax(T)
-        y > 0 && x > fld(typemax(T), y) && throw(OverflowError())
-        x * y
-    end
+function checked_mul{T<:Integer}(x::T, y::T)
+    @_inline_meta
+    z, b = mul_with_overflow(x, y)
+    b && throw(OverflowError())
+    z
 end
 
 # Handle multiple arguments
@@ -295,11 +310,7 @@ Calculates `div(x,y)`, checking for overflow errors where applicable.
 
 The overflow protection may impose a perceptible performance penalty.
 """
-function checked_div end
-
-# Base.div already checks; nothing to do here
-checked_div{T<:SignedInt}(x::T, y::T) = div(x, y)
-checked_div{T<:UnsignedInt}(x::T, y::T) = div(x, y)
+checked_div{T<:Integer}(x::T, y::T) = div(x, y) # Base.div already checks
 
 """
     Base.checked_rem(x, y)
@@ -308,11 +319,7 @@ Calculates `x%y`, checking for overflow errors where applicable.
 
 The overflow protection may impose a perceptible performance penalty.
 """
-function checked_rem end
-
-# Base.rem already checks; nothing to do here
-checked_rem{T<:SignedInt}(x::T, y::T) = rem(x, y)
-checked_rem{T<:UnsignedInt}(x::T, y::T) = rem(x, y)
+checked_rem{T<:Integer}(x::T, y::T) = rem(x, y) # Base.rem already checks
 
 """
     Base.checked_fld(x, y)
@@ -321,11 +328,7 @@ Calculates `fld(x,y)`, checking for overflow errors where applicable.
 
 The overflow protection may impose a perceptible performance penalty.
 """
-function checked_fld end
-
-# Base.fld already checks; nothing to do here
-checked_fld{T<:SignedInt}(x::T, y::T) = fld(x, y)
-checked_fld{T<:UnsignedInt}(x::T, y::T) = fld(x, y)
+checked_fld{T<:Integer}(x::T, y::T) = fld(x, y) # Base.fld already checks
 
 """
     Base.checked_mod(x, y)
@@ -334,11 +337,7 @@ Calculates `mod(x,y)`, checking for overflow errors where applicable.
 
 The overflow protection may impose a perceptible performance penalty.
 """
-function checked_mod end
-
-# Base.mod already checks; nothing to do here
-checked_mod{T<:SignedInt}(x::T, y::T) = mod(x, y)
-checked_mod{T<:UnsignedInt}(x::T, y::T) = mod(x, y)
+checked_mod{T<:Integer}(x::T, y::T) = mod(x, y) # Base.mod already checks
 
 """
     Base.checked_cld(x, y)
@@ -347,10 +346,6 @@ Calculates `cld(x,y)`, checking for overflow errors where applicable.
 
 The overflow protection may impose a perceptible performance penalty.
 """
-function checked_cld end
-
-# Base.cld already checks; nothing to do here
-checked_cld{T<:SignedInt}(x::T, y::T) = cld(x, y)
-checked_cld{T<:UnsignedInt}(x::T, y::T) = cld(x, y)
+checked_cld{T<:Integer}(x::T, y::T) = cld(x, y) # Base.cld already checks
 
 end

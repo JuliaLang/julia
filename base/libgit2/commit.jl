@@ -4,7 +4,7 @@ function message(c::GitCommit, raw::Bool=false)
     local msg_ptr::Cstring
     msg_ptr = raw? ccall((:git_commit_message_raw, :libgit2), Cstring, (Ptr{Void},), c.ptr) :
                    ccall((:git_commit_message, :libgit2), Cstring, (Ptr{Void},), c.ptr)
-    if msg_ptr == Cstring_NULL
+    if msg_ptr == C_NULL
         return nothing
     end
     return unsafe_string(msg_ptr)
@@ -22,6 +22,12 @@ function committer(c::GitCommit)
     return Signature(ptr)
 end
 
+function Base.show(io::IO, c::GitCommit)
+    authstr = sprint(show, author(c))
+    cmtrstr = sprint(show, committer(c))
+    print(io, "Git Commit:\nCommit Author: $authstr\nCommitter: $cmtrstr\nSHA: $(GitHash(c))\nMessage:\n$(message(c))")
+end
+
 """ Wrapper around `git_commit_create` """
 function commit(repo::GitRepo,
                 refname::AbstractString,
@@ -30,11 +36,11 @@ function commit(repo::GitRepo,
                 committer::GitSignature,
                 tree::GitTree,
                 parents::GitCommit...)
-    commit_id_ptr = Ref(Oid())
+    commit_id_ptr = Ref(GitHash())
     nparents = length(parents)
     parentptrs = Ptr{Void}[c.ptr for c in parents]
     @check ccall((:git_commit_create, :libgit2), Cint,
-                 (Ptr{Oid}, Ptr{Void}, Ptr{UInt8},
+                 (Ptr{GitHash}, Ptr{Void}, Ptr{UInt8},
                   Ptr{SignatureStruct}, Ptr{SignatureStruct},
                   Ptr{UInt8}, Ptr{UInt8}, Ptr{Void},
                   Csize_t, Ptr{Ptr{Void}}),
@@ -50,8 +56,8 @@ function commit(repo::GitRepo, msg::AbstractString;
                 refname::AbstractString=Consts.HEAD_FILE,
                 author::Signature = Signature(repo),
                 committer::Signature = Signature(repo),
-                tree_id::Oid = Oid(),
-                parent_ids::Vector{Oid}=Oid[])
+                tree_id::GitHash = GitHash(),
+                parent_ids::Vector{GitHash}=GitHash[])
     # Retrieve tree identifier
     if iszero(tree_id)
         tree_id = with(GitIndex, repo) do idx; write_tree!(idx) end
@@ -60,30 +66,30 @@ function commit(repo::GitRepo, msg::AbstractString;
     # Retrieve parents from HEAD
     if isempty(parent_ids)
         try # if throws then HEAD not found -> empty repo
-            push!(parent_ids, Oid(repo, refname))
+            push!(parent_ids, GitHash(repo, refname))
         end
     end
 
     # return commit id
-    commit_id  = Oid()
+    commit_id  = GitHash()
 
     # get necessary objects
-    tree = get(GitTree, repo, tree_id)
+    tree = GitTree(repo, tree_id)
     auth_sig = convert(GitSignature, author)
     comm_sig = convert(GitSignature, committer)
     parents = GitCommit[]
     try
-        for parent in parent_ids
-            push!(parents, get(GitCommit, repo, parent))
+        for id in parent_ids
+            push!(parents, GitCommit(repo, id))
         end
         commit_id = commit(repo, refname, msg, auth_sig, comm_sig, tree, parents...)
     finally
         for parent in parents
-            finalize(parent)
+            close(parent)
         end
-        finalize(tree)
-        finalize(auth_sig)
-        finalize(comm_sig)
+        close(tree)
+        close(auth_sig)
+        close(comm_sig)
     end
     return commit_id
 end

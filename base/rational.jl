@@ -1,16 +1,16 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-immutable Rational{T<:Integer} <: Real
+struct Rational{T<:Integer} <: Real
     num::T
     den::T
 
-    function Rational(num::Integer, den::Integer)
+    function Rational{T}(num::Integer, den::Integer) where T<:Integer
         num == den == zero(T) && throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
         g = den < 0 ? -gcd(den, num) : gcd(den, num)
         new(div(num, g), div(den, g))
     end
 end
-Rational{T<:Integer}(n::T, d::T) = Rational{T}(n,d)
+Rational(n::T, d::T) where T<:Integer = Rational{T}(n,d)
 Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
 Rational(n::Integer) = Rational(n,one(n))
 
@@ -19,6 +19,19 @@ function divgcd(x::Integer,y::Integer)
     div(x,g), div(y,g)
 end
 
+"""
+    //(num, den)
+
+Divide two integers or rational numbers, giving a `Rational` result.
+
+```jldoctest
+julia> 3 // 5
+3//5
+
+julia> (3 // 5) // (2 // 1)
+3//10
+```
+"""
 //(n::Integer,  d::Integer ) = Rational(n,d)
 
 function //(x::Rational, y::Integer )
@@ -40,13 +53,11 @@ end
 
 
 //(X::AbstractArray, y::Number) = X .// y
-.//(X::AbstractArray, y::Number) = reshape([ x // y for x in X ], size(X))
-.//(y::Number, X::AbstractArray) = reshape([ y // x for x in X ], size(X))
 
 function show(io::IO, x::Rational)
-    show(io, num(x))
+    show(io, numerator(x))
     print(io, "//")
-    show(io, den(x))
+    show(io, denominator(x))
 end
 
 function read{T<:Integer}(s::IO, ::Type{Rational{T}})
@@ -55,7 +66,7 @@ function read{T<:Integer}(s::IO, ::Type{Rational{T}})
     r//i
 end
 function write(s::IO, z::Rational)
-    write(s,num(z),den(z))
+    write(s,numerator(z),denominator(z))
 end
 
 convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational{T}(convert(T,x.num),convert(T,x.den))
@@ -65,6 +76,7 @@ convert(::Type{Rational}, x::Rational) = x
 convert(::Type{Rational}, x::Integer) = convert(Rational{typeof(x)},x)
 
 convert(::Type{Bool}, x::Rational) = x==0 ? false : x==1 ? true : throw(InexactError()) # to resolve ambiguity
+convert(::Type{Integer}, x::Rational) = (isinteger(x) ? convert(Integer, x.num) : throw(InexactError()))
 convert{T<:Integer}(::Type{T}, x::Rational) = (isinteger(x) ? convert(T, x.num) : throw(InexactError()))
 
 convert(::Type{AbstractFloat}, x::Rational) = float(x.num)/float(x.den)
@@ -81,8 +93,7 @@ end
 convert(::Type{Rational}, x::Float64) = convert(Rational{Int64}, x)
 convert(::Type{Rational}, x::Float32) = convert(Rational{Int}, x)
 
-big{T<:Integer}(z::Complex{Rational{T}}) = Complex{Rational{BigInt}}(z)
-big{T<:Integer,N}(x::AbstractArray{Complex{Rational{T}},N}) = convert(AbstractArray{Complex{Rational{BigInt}},N}, x)
+big(z::Complex{<:Rational{<:Integer}}) = Complex{Rational{BigInt}}(z)
 
 promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
 promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
@@ -104,7 +115,7 @@ julia> rationalize(5.6)
 julia> a = rationalize(BigInt, 10.3)
 103//10
 
-julia> typeof(num(a))
+julia> typeof(numerator(a))
 BigInt
 ```
 """
@@ -170,10 +181,37 @@ end
 rationalize{T<:Integer}(::Type{T}, x::AbstractFloat; tol::Real=eps(x)) = rationalize(T, x, tol)::Rational{T}
 rationalize(x::AbstractFloat; kvs...) = rationalize(Int, x; kvs...)
 
-num(x::Integer) = x
-den(x::Integer) = one(x)
-num(x::Rational) = x.num
-den(x::Rational) = x.den
+"""
+    numerator(x)
+
+Numerator of the rational representation of `x`.
+
+```jldoctest
+julia> numerator(2//3)
+2
+
+julia> numerator(4)
+4
+```
+"""
+numerator(x::Integer) = x
+numerator(x::Rational) = x.num
+
+"""
+    denominator(x)
+
+Denominator of the rational representation of `x`.
+
+```jldoctest
+julia> denominator(2//3)
+3
+
+julia> denominator(4)
+1
+```
+"""
+denominator(x::Integer) = one(x)
+denominator(x::Rational) = x.den
 
 sign(x::Rational) = oftype(x, sign(x.num))
 signbit(x::Rational) = signbit(x.num)
@@ -211,7 +249,7 @@ function *(x::Rational, y::Rational)
     checked_mul(xn,yn) // checked_mul(xd,yd)
 end
 /(x::Rational, y::Rational) = x//y
-/{T<:Union{Integer,Rational}}(x::Rational, y::Complex{T}) = x//y
+/(x::Rational, y::Complex{<:Union{Integer,Rational}}) = x//y
 
 fma(x::Rational, y::Rational, z::Rational) = x*y+z
 
@@ -313,15 +351,15 @@ ceil{ T}(::Type{T}, x::Rational) = convert(T,cld(x.num,x.den))
 
 
 function round{T, Tr}(::Type{T}, x::Rational{Tr}, ::RoundingMode{:Nearest})
-    if den(x) == zero(Tr) && T <: Integer
+    if denominator(x) == zero(Tr) && T <: Integer
         throw(DivideError())
-    elseif den(x) == zero(Tr)
-        return convert(T, copysign(one(Tr)//zero(Tr), num(x)))
+    elseif denominator(x) == zero(Tr)
+        return convert(T, copysign(one(Tr)//zero(Tr), numerator(x)))
     end
-    q,r = divrem(num(x), den(x))
+    q,r = divrem(numerator(x), denominator(x))
     s = q
-    if abs(r) >= abs((den(x)-copysign(Tr(4), num(x))+one(Tr)+iseven(q))>>1 + copysign(Tr(2), num(x)))
-        s += copysign(one(Tr),num(x))
+    if abs(r) >= abs((denominator(x)-copysign(Tr(4), numerator(x))+one(Tr)+iseven(q))>>1 + copysign(Tr(2), numerator(x)))
+        s += copysign(one(Tr),numerator(x))
     end
     convert(T, s)
 end
@@ -329,35 +367,35 @@ end
 round{T}(::Type{T}, x::Rational) = round(T, x, RoundNearest)
 
 function round{T, Tr}(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesAway})
-    if den(x) == zero(Tr) && T <: Integer
+    if denominator(x) == zero(Tr) && T <: Integer
         throw(DivideError())
-    elseif den(x) == zero(Tr)
-        return convert(T, copysign(one(Tr)//zero(Tr), num(x)))
+    elseif denominator(x) == zero(Tr)
+        return convert(T, copysign(one(Tr)//zero(Tr), numerator(x)))
     end
-    q,r = divrem(num(x), den(x))
+    q,r = divrem(numerator(x), denominator(x))
     s = q
-    if abs(r) >= abs((den(x)-copysign(Tr(4), num(x))+one(Tr))>>1 + copysign(Tr(2), num(x)))
-        s += copysign(one(Tr),num(x))
+    if abs(r) >= abs((denominator(x)-copysign(Tr(4), numerator(x))+one(Tr))>>1 + copysign(Tr(2), numerator(x)))
+        s += copysign(one(Tr),numerator(x))
     end
     convert(T, s)
 end
 
 function round{T, Tr}(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesUp})
-    if den(x) == zero(Tr) && T <: Integer
+    if denominator(x) == zero(Tr) && T <: Integer
         throw(DivideError())
-    elseif den(x) == zero(Tr)
-        return convert(T, copysign(one(Tr)//zero(Tr), num(x)))
+    elseif denominator(x) == zero(Tr)
+        return convert(T, copysign(one(Tr)//zero(Tr), numerator(x)))
     end
-    q,r = divrem(num(x), den(x))
+    q,r = divrem(numerator(x), denominator(x))
     s = q
-    if abs(r) >= abs((den(x)-copysign(Tr(4), num(x))+one(Tr)+(num(x)<0))>>1 + copysign(Tr(2), num(x)))
-        s += copysign(one(Tr),num(x))
+    if abs(r) >= abs((denominator(x)-copysign(Tr(4), numerator(x))+one(Tr)+(numerator(x)<0))>>1 + copysign(Tr(2), numerator(x)))
+        s += copysign(one(Tr),numerator(x))
     end
     convert(T, s)
 end
 
 function round{T}(::Type{T}, x::Rational{Bool})
-    if den(x) == false && issubtype(T, Union{Integer, Bool})
+    if denominator(x) == false && issubtype(T, Union{Integer, Bool})
         throw(DivideError())
     end
     convert(T, x)
@@ -381,7 +419,13 @@ end
 ^{T<:AbstractFloat}(x::T, y::Rational) = x^convert(T,y)
 ^{T<:AbstractFloat}(x::Complex{T}, y::Rational) = x^convert(T,y)
 
-^{T<:Rational}(z::Complex{T}, n::Bool) = n ? z : one(z) # to resolve ambiguity
-function ^{T<:Rational}(z::Complex{T}, n::Integer)
+^(z::Complex{<:Rational}, n::Bool) = n ? z : one(z) # to resolve ambiguity
+function ^(z::Complex{<:Rational}, n::Integer)
     n >= 0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
+end
+
+iszero(x::Rational) = iszero(numerator(x))
+
+function lerpi(j::Integer, d::Integer, a::Rational, b::Rational)
+    ((d-j)*a)/d + (j*b)/d
 end

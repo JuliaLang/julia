@@ -123,7 +123,7 @@ if [ -z "$USEMSVC" ]; then
   fi
   export AR=${CROSS_COMPILE}ar
 
-  f=llvm-3.7.1-$ARCH-w64-mingw32-juliadeps-r09.7z
+  f=llvm-3.9.1-$ARCH-w64-mingw32-juliadeps-r04.7z
 else
   echo "override USEMSVC = 1" >> Make.user
   echo "override ARCH = $ARCH" >> Make.user
@@ -143,8 +143,6 @@ checksum_download \
     "$f" "https://bintray.com/artifact/download/tkelman/generic/$f"
 echo "Extracting $f"
 $SEVENZIP x -y $f >> get-deps.log
-echo 'override LLVM_CONFIG := $(JULIAHOME)/usr/bin/llvm-config.exe' >> Make.user
-echo 'override LLVM_SIZE := $(JULIAHOME)/usr/bin/llvm-size.exe' >> Make.user
 
 if [ -z "`which make 2>/dev/null`" ]; then
   if [ -n "`uname | grep CYGWIN`" ]; then
@@ -162,7 +160,7 @@ if [ -z "`which make 2>/dev/null`" ]; then
 fi
 
 if ! [ -e usr/bin/busybox.exe ]; then
-  f=busybox-w32-FRP-483-g31277ab.exe
+  f=busybox-w32-FRP-875-gc6ec14a.exe
   echo "Downloading $f"
   $curlflags -o usr/bin/busybox.exe http://frippery.org/files/busybox/$f
 fi

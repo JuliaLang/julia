@@ -1,5 +1,16 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+# "is a null with type T", curried on 2nd argument
+isnull_oftype(x::Nullable, T::Type) = eltype(x) == T && isnull(x)
+isnull_oftype(T::Type) = x -> isnull_oftype(x, T)
+
+# return true if nullables (or arrays of nullables) have the same type,
+# nullity, and value (if they are non-null)
+istypeequal(x::Nullable, y::Nullable) =
+    typeof(x) == typeof(y) && isnull(filter(!, x .== y))
+istypeequal(x::AbstractArray, y::AbstractArray) =
+    length(x) == length(y) && all(xy -> istypeequal(xy...), zip(x, y))
+
 types = [
     Bool,
     Float16,
@@ -19,7 +30,7 @@ types = [
 # Nullable{T}() = new(true)
 for T in types
     x = Nullable{T}()
-    @test x.isnull === true
+    @test x.hasvalue === false
     @test isa(x.value, T)
     @test eltype(Nullable{T}) === T
     @test eltype(x) === T
@@ -28,35 +39,35 @@ end
 # Nullable{T}(value::T) = new(false, value)
 for T in types
     x = Nullable{T}(zero(T))
-    @test x.isnull === false
+    @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === zero(T)
     @test eltype(x) === T
 
     x = Nullable{T}(one(T))
-    @test x.isnull === false
+    @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === one(T)
     @test eltype(x) === T
 end
 
-# Nullable{T}(value::T, isnull::Bool) = new(isnull, value)
+# Nullable{T}(value::T, hasvalue::Bool) = new(hasvalue, value)
 for T in types
-    x = Nullable{T}(zero(T),false)
-    @test x.isnull === false
+    x = Nullable{T}(zero(T), true)
+    @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === zero(T)
     @test eltype(x) === T
 
-    x = Nullable{T}(zero(T),true)
-    @test x.isnull === true
+    x = Nullable{T}(zero(T), false)
+    @test x.hasvalue === false
     @test isa(x.value, T)
     @test eltype(Nullable{T}) === T
     @test eltype(x) === T
 end
 
 
-# immutable NullException <: Exception
+# struct NullException <: Exception
 @test isa(NullException(), NullException)
 @test_throws NullException throw(NullException())
 
@@ -64,13 +75,13 @@ end
 for T in types
     v = zero(T)
     x = Nullable(v)
-    @test x.isnull === false
+    @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === v
 
     v = one(T)
     x = Nullable(v)
-    @test x.isnull === false
+    @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === v
 end
@@ -83,31 +94,34 @@ for (i, T) in enumerate(types)
     x2 = Nullable(zero(T))
     x3 = Nullable(one(T))
     show(io1, x1)
-    @test takebuf_string(io1) == @sprintf("Nullable{%s}()", T)
+    @test String(take!(io1)) == @sprintf("Nullable{%s}()", T)
     show(io1, x2)
     showcompact(io2, get(x2))
-    @test takebuf_string(io1) == @sprintf("Nullable{%s}(%s)", T, takebuf_string(io2))
+    @test String(take!(io1)) == @sprintf("Nullable{%s}(%s)", T, String(take!(io2)))
     show(io1, x3)
     showcompact(io2, get(x3))
-    @test takebuf_string(io1) == @sprintf("Nullable{%s}(%s)", T, takebuf_string(io2))
+    @test String(take!(io1)) == @sprintf("Nullable{%s}(%s)", T, String(take!(io2)))
 
     a1 = [x2]
-    show(IOContext(io1, compact=false), a1)
-    show(IOContext(io2, compact=false), x2)
-    @test takebuf_string(io1) ==
-        @sprintf("Nullable{%s}[%s]", string(T), takebuf_string(io2))
+    show(IOContext(io1, :compact => false), a1)
+    show(IOContext(io2, :compact => false), x2)
+    @test String(take!(io1)) ==
+        @sprintf("Nullable{%s}[%s]", string(T), String(take!(io2)))
 
     show(io1, a1)
-    show(IOContext(io2, compact=true), x2)
-    @test takebuf_string(io1) ==
-        @sprintf("Nullable{%s}[%s]", string(T), takebuf_string(io2))
+    show(IOContext(io2, :compact => true), x2)
+    @test String(take!(io1)) ==
+        @sprintf("Nullable{%s}[%s]", string(T), String(take!(io2)))
 end
 
 module NullableTestEnum
-    io = IOBuffer()
-    @enum TestEnum a b
-    show(io, Nullable(a))
-    Base.Test.@test takebuf_string(io) == "Nullable{NullableTestEnum.TestEnum}(a)"
+const curmod = current_module()
+const curmod_name = fullname(curmod)
+const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+io = IOBuffer()
+@enum TestEnum a b
+show(io, Nullable(a))
+Base.Test.@test String(take!(io)) == "Nullable{$(curmod_prefix)TestEnum}(a)"
 end
 
 # showcompact(io::IO, x::Nullable)
@@ -118,19 +132,19 @@ for (i, T) in enumerate(types)
     x2 = Nullable(zero(T))
     x3 = Nullable(one(T))
     showcompact(io1, x1)
-    @test takebuf_string(io1) == "#NULL"
+    @test String(take!(io1)) == "#NULL"
     showcompact(io1, x2)
     showcompact(io2, get(x2))
-    @test takebuf_string(io1) == takebuf_string(io2)
+    @test String(take!(io1)) == String(take!(io2))
     showcompact(io1, x3)
     showcompact(io2, get(x3))
-    @test takebuf_string(io1) == takebuf_string(io2)
+    @test String(take!(io1)) == String(take!(io2))
 
     a1 = [x2]
     showcompact(io1, a1)
     showcompact(io2, x2)
-    @test takebuf_string(io1) ==
-        @sprintf("Nullable{%s}[%s]", string(T), takebuf_string(io2))
+    @test String(take!(io1)) ==
+        @sprintf("Nullable{%s}[%s]", string(T), String(take!(io2)))
 end
 
 # get(x::Nullable)
@@ -161,13 +175,49 @@ for T in types
     @test get(x3, zero(T)) === one(T)
 end
 
-# isnull(x::Nullable)
 for T in types
+    # unsafe_get(x::Nullable)
+    x1 = Nullable{T}()
+    x2 = Nullable(zero(T))
+    x3 = Nullable(one(T))
+    a = rand(T)
+    x4 = Nullable(a)
+
+    @test isa(unsafe_get(x1), T)
+    @test unsafe_get(x2) === zero(T)
+    @test unsafe_get(x3) === one(T)
+    @test unsafe_get(x4) === a
+
+    # unsafe_get(x)
+    x2 = zero(T)
+    x3 = one(T)
+    x4 = rand(T)
+
+    @test unsafe_get(x2) === zero(T)
+    @test unsafe_get(x3) === one(T)
+    @test unsafe_get(x4) === x4
+end
+
+@test_throws UndefRefError unsafe_get(Nullable())
+@test_throws UndefRefError unsafe_get(Nullable{String}())
+@test_throws UndefRefError unsafe_get(Nullable{Array}())
+
+for T in types
+    # isnull(x::Nullable)
     x1 = Nullable{T}()
     x2 = Nullable(zero(T))
     x3 = Nullable(one(T))
 
     @test isnull(x1) === true
+    @test isnull(x2) === false
+    @test isnull(x3) === false
+
+    # isnull(x)
+    x1 = zero(T)
+    x2 = one(T)
+    x3 = rand(T)
+
+    @test isnull(x1) === false
     @test isnull(x2) === false
     @test isnull(x3) === false
 end
@@ -233,7 +283,7 @@ for T in types
     @test hash(x3) != hash(x4)
 end
 
-type TestNType{T}
+mutable struct TestNType{T}
     v::Nullable{T}
 end
 
@@ -246,9 +296,10 @@ for T in types
 end
 
 # Operators
-TestTypes = Union{Base.NullSafeTypes, BigInt, BigFloat,
-                  Complex{Int}, Complex{Float64}, Complex{BigFloat},
-                  Rational{Int}, Rational{BigInt}}.types
+TestTypes = [[T.parameters[1] for T in Base.uniontypes(Base.NullSafeTypes)];
+             [BigInt, BigFloat,
+              Complex{Int}, Complex{Float64}, Complex{BigFloat},
+              Rational{Int}, Rational{BigInt}]]
 for S in TestTypes, T in TestTypes
     u0 = zero(S)
     u1 = one(S)
@@ -276,9 +327,9 @@ for S in TestTypes, T in TestTypes
         @test isequal(Nullable(u), Nullable(u)) === true
         @test isequal(Nullable(v), Nullable(v)) === true
 
-        @test isequal(Nullable(u), Nullable(v, true)) === false
-        @test isequal(Nullable(u, true), Nullable(v)) === false
-        @test isequal(Nullable(u, true), Nullable(v, true)) === true
+        @test isequal(Nullable(u), Nullable(v, false)) === false
+        @test isequal(Nullable(u, false), Nullable(v)) === false
+        @test isequal(Nullable(u, false), Nullable(v, false)) === true
 
         @test isequal(Nullable(u), Nullable{T}()) === false
         @test isequal(Nullable{S}(), Nullable(v)) === false
@@ -296,9 +347,9 @@ for S in TestTypes, T in TestTypes
             @test isless(Nullable(u), Nullable(u)) === false
             @test isless(Nullable(v), Nullable(v)) === false
 
-            @test isless(Nullable(u), Nullable(v, true)) === true
-            @test isless(Nullable(u, true), Nullable(v)) === false
-            @test isless(Nullable(u, true), Nullable(v, true)) === false
+            @test isless(Nullable(u), Nullable(v, false)) === true
+            @test isless(Nullable(u, false), Nullable(v)) === false
+            @test isless(Nullable(u, false), Nullable(v, false)) === false
 
             @test isless(Nullable(u), Nullable{T}()) === true
             @test isless(Nullable{S}(), Nullable(v)) === false
@@ -349,5 +400,128 @@ end
 @test Base.promote_op(-, Nullable{Float64}, Nullable{Int}) == Nullable{Float64}
 @test Base.promote_op(-, Nullable{DateTime}, Nullable{DateTime}) == Nullable{Base.Dates.Millisecond}
 
+# tests for istypeequal (which uses filter, broadcast)
+@test istypeequal(Nullable(0), Nullable(0))
+@test !istypeequal(Nullable(0), Nullable(0.0))
+@test !istypeequal(Nullable(0), Nullable(1))
+@test !istypeequal(Nullable(0), Nullable(1.0))
+@test istypeequal([Nullable(0), Nullable(1)], [Nullable(0), Nullable(1)])
+@test istypeequal([Nullable(0), Nullable(1)], Any[Nullable(0), Nullable(1)])
+@test !istypeequal([Nullable(0), Nullable(1)], Any[Nullable(0.0), Nullable(1)])
+@test !istypeequal([Nullable(0), Nullable(1)], [Nullable(0), Nullable(2)])
+@test !istypeequal([Nullable(0), Nullable(1)],
+                   [Nullable(0), Nullable(1), Nullable(2)])
+
+# filter
+for p in (_ -> true, _ -> false)
+    @test @inferred(filter(p, Nullable()))      |> isnull_oftype(Union{})
+    @test @inferred(filter(p, Nullable{Int}())) |> isnull_oftype(Int)
+end
+@test @inferred(filter(_ -> true, Nullable(85)))  === Nullable(85)
+@test @inferred(filter(_ -> false, Nullable(85))) |> isnull_oftype(Int)
+@test @inferred(filter(x -> x > 0, Nullable(85))) === Nullable(85)
+@test @inferred(filter(x -> x < 0, Nullable(85))) |> isnull_oftype(Int)
+@test get(@inferred(filter(x -> length(x) > 2, Nullable("test")))) == "test"
+@test @inferred(filter(x -> length(x) > 5, Nullable("test"))) |>
+    isnull_oftype(String)
+
+# map
+sqr(x) = x^2
+@test @inferred(map(sqr, Nullable()))        |> isnull_oftype(Union{})
+@test @inferred(map(sqr, Nullable{Int}()))   |> isnull_oftype(Int)
+@test @inferred(map(sqr, Nullable(2)))       === Nullable(4)
+@test @inferred(map(+, Nullable(0.0)))       === Nullable(0.0)
+@test @inferred(map(+, Nullable(3.0, false)))=== Nullable(3.0, false)
+@test @inferred(map(-, Nullable(1.0)))       === Nullable(-1.0)
+@test @inferred(map(-, Nullable{Float64}())) |> isnull_oftype(Float64)
+@test @inferred(map(sin, Nullable(1)))       === Nullable(sin(1))
+@test @inferred(map(sin, Nullable{Int}()))   |> isnull_oftype(Float64)
+
+# should not throw if function wouldn't be called
+@test map(x -> x ? 0 : 0.0, Nullable())       |> isnull_oftype(Union{})
+@test map(x -> x ? 0 : 0.0, Nullable(true))   === Nullable(0)
+@test map(x -> x ? 0 : 0.0, Nullable(false))  === Nullable(0.0)
+@test map(x -> x ? 0 : 0.0, Nullable{Bool}()) |> isnull_oftype(Union{})
+
+# broadcast and elementwise
+@test sin.(Nullable(0.0))            === Nullable(0.0)
+@test sin.(Nullable{Float64}())      |> isnull_oftype(Float64)
+@test @inferred(broadcast(sin, Nullable(0.0)))       === Nullable(0.0)
+@test @inferred(broadcast(sin, Nullable{Float64}())) |> isnull_oftype(Float64)
+
+@test Nullable(8) .+ Nullable(10)     === Nullable(18)
+@test Nullable(8) .- Nullable(10)     === Nullable(-2)
+@test Nullable(8) .+ Nullable{Int}()  |> isnull_oftype(Int)
+@test Nullable{Int}() .- Nullable(10) |> isnull_oftype(Int)
+
+@test @inferred(broadcast(log, 10, Nullable(1.0))) ===
+      Nullable(0.0)
+@test @inferred(broadcast(log, 10, Nullable{Float64}())) |>
+      isnull_oftype(Float64)
+@test @inferred(broadcast(log, Nullable(10), Nullable(1.0))) ===
+      Nullable(0.0)
+@test @inferred(broadcast(log, Nullable(10), Nullable{Float64}())) |>
+      isnull_oftype(Float64)
+
+@test Nullable(2) .^ Nullable(4)      === Nullable(16)
+@test Nullable(2) .^ Nullable{Int}()  |> isnull_oftype(Int)
+
+# multi-arg broadcast
+@test (Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable(1) .+
+       Nullable(1) === Nullable(6))
+@test (Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable{Int}() .+
+       Nullable(1) .+ Nullable(1) |> isnull_oftype(Int))
+
+# these are not inferrable because there are too many arguments
+us = map(Nullable, 1:20)
+@test broadcast(max, us...) === Nullable(20)
+@test isnull(broadcast(max, us..., Nullable{Int}()))
+
+# test all elementwise operations
+# note that elementwise operations are the same as broadcast
+for op in (+, -, *, /, \, //, ==, <, !=, <=, ÷, %, <<, >>, ^)
+    # op(1, 1) chosen because it works for all operations
+    res = op(1, 1)
+    @test @inferred(broadcast(op, Nullable(1), Nullable(1)))         ===
+          Nullable(res)
+    @test @inferred(broadcast(op, Nullable{Int}(), Nullable(1)))     |>
+          isnull_oftype(typeof(res))
+    @test @inferred(broadcast(op, Nullable(1), Nullable{Int}()))     |>
+          isnull_oftype(typeof(res))
+    @test @inferred(broadcast(op, Nullable{Int}(), Nullable{Int}())) |>
+          isnull_oftype(typeof(res))
+    @test @inferred(broadcast(op, Nullable(1), 1))                   ===
+          Nullable(res)
+    @test @inferred(broadcast(op, 1, Nullable(1)))                   ===
+          Nullable(res)
+end
+
+# test reasonable results for Union{}
+# the exact types of these is finnicky and depends on implementation details
+# but is guaranteed to be at worst concrete and possibly Union{} on a good day
+@test isnull(@inferred(Nullable() .+ Nullable()))
+@test isnull(@inferred(Nullable() .+ 1))
+@test isnull(@inferred(Nullable() .+ Nullable(1)))
+
+# test that things don't pessimize because of non-homogenous types
+@test Nullable(10.5) ===
+    @inferred(broadcast(+, 1, 2, Nullable(3), Nullable(4.0), Nullable(1//2)))
+
+# test fast path taken
+for op in (+, *, -)
+    for b1 in (false, true)
+        for b2 in (false, true)
+            @test Nullable{Int}(op(1, 2), b1 & b2) ===
+                @inferred(broadcast(op, Nullable{Int}(1, b1),
+                                        Nullable{Int}(2, b2)))
+        end
+    end
+end
+
 # issue #11675
 @test repr(Nullable()) == "Nullable{Union{}}()"
+
+# issue #19270
+let f19270{S,T}(x::S, y::T) = Base.promote_op(^, S, T)
+    @test f19270(Nullable(0.0f0), Nullable(BigInt(0))) == Nullable{Float32}
+end

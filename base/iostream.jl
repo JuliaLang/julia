@@ -4,7 +4,7 @@
 
 const sizeof_ios_t = Int(ccall(:jl_sizeof_ios_t, Cint, ()))
 
-type IOStream <: IO
+mutable struct IOStream <: IO
     handle::Ptr{Void}
     ios::Array{UInt8,1}
     name::AbstractString
@@ -13,7 +13,7 @@ type IOStream <: IO
     IOStream(name::AbstractString, buf::Array{UInt8,1}) = new(pointer(buf), buf, name, -1)
 end
 # TODO: delay adding finalizer, e.g. for memio with a small buffer, or
-# in the case where we takebuf it.
+# in the case where we take! it.
 function IOStream(name::AbstractString, finalize::Bool)
     buf = zeros(UInt8,sizeof_ios_t)
     x = IOStream(name, buf)
@@ -166,7 +166,7 @@ function unsafe_write(s::IOStream, p::Ptr{UInt8}, nb::UInt)
     return Int(ccall(:ios_write, Csize_t, (Ptr{Void}, Ptr{Void}, Csize_t), s.ios, p, nb))
 end
 
-function write{T,N,A<:Array}(s::IOStream, a::SubArray{T,N,A})
+function write{T,N}(s::IOStream, a::SubArray{T,N,<:Array})
     if !isbits(T) || stride(a,1)!=1
         return invoke(write, Tuple{Any, AbstractArray}, s, a)
     end
@@ -218,20 +218,20 @@ function write(s::IOStream, c::Char)
 end
 read(s::IOStream, ::Type{Char}) = Char(ccall(:jl_getutf8, UInt32, (Ptr{Void},), s.ios))
 
-takebuf_string(s::IOStream) =
-    ccall(:jl_takebuf_string, Ref{String}, (Ptr{Void},), s.ios)
-
-takebuf_array(s::IOStream) =
-    ccall(:jl_takebuf_array, Vector{UInt8}, (Ptr{Void},), s.ios)
-
-function takebuf_raw(s::IOStream)
-    sz = position(s)
-    buf = ccall(:jl_takebuf_raw, Ptr{UInt8}, (Ptr{Void},), s.ios)
-    return buf, sz
-end
+take!(s::IOStream) =
+    ccall(:jl_take_buffer, Vector{UInt8}, (Ptr{Void},), s.ios)
 
 function readuntil(s::IOStream, delim::UInt8)
-    ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Void}, UInt8), s.ios, delim)
+    ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Void}, UInt8, UInt8, UInt8), s.ios, delim, 0, 0)
+end
+
+# like readuntil, above, but returns a String without requiring a copy
+function readuntil_string(s::IOStream, delim::UInt8)
+    ccall(:jl_readuntil, Ref{String}, (Ptr{Void}, UInt8, UInt8, UInt8), s.ios, delim, 1, false)
+end
+
+function readline(s::IOStream; chomp::Bool=true)
+    ccall(:jl_readuntil, Ref{String}, (Ptr{Void}, UInt8, UInt8, UInt8), s.ios, '\n', 1, chomp)
 end
 
 function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
@@ -272,7 +272,7 @@ Read at most `nb` bytes from `stream` into `b`, returning the number of bytes re
 The size of `b` will be increased if needed (i.e. if `nb` is greater than `length(b)`
 and enough bytes could be read), but it will never be decreased.
 
-See [`read`](:func:`read`) for a description of the `all` option.
+See [`read`](@ref) for a description of the `all` option.
 """
 function readbytes!(s::IOStream, b::Array{UInt8}, nb=length(b); all::Bool=true)
     return all ? readbytes_all!(s, b, nb) : readbytes_some!(s, b, nb)
@@ -287,7 +287,7 @@ function read(s::IOStream)
             sz -= pos
         end
     end
-    b = Array{UInt8}(sz<=0 ? 1024 : sz)
+    b = Array{UInt8,1}(sz<=0 ? 1024 : sz)
     nr = readbytes_all!(s, b, typemax(Int))
     resize!(b, nr)
 end
@@ -303,7 +303,7 @@ requested bytes, until an error or end-of-file occurs. If `all` is `false`, at m
 all stream types support the `all` option.
 """
 function read(s::IOStream, nb::Integer; all::Bool=true)
-    b = Array{UInt8}(nb)
+    b = Array{UInt8,1}(nb)
     nr = readbytes!(s, b, nb, all=all)
     resize!(b, nr)
 end
@@ -312,7 +312,7 @@ end
 const _chtmp = Array{Char}(1)
 function peekchar(s::IOStream)
     if ccall(:ios_peekutf8, Cint, (Ptr{Void}, Ptr{Char}), s, _chtmp) < 0
-        return Char(-1)
+        return typemax(Char)
     end
     return _chtmp[1]
 end
@@ -321,15 +321,16 @@ function peek(s::IOStream)
     ccall(:ios_peekc, Cint, (Ptr{Void},), s)
 end
 
-function skipchars(s::IOStream, pred; linecomment::Char=Char(0xffffffff))
-    ch = peekchar(s); status = Int(ch)
-    while status >= 0 && (pred(ch) || ch == linecomment)
-        if ch == linecomment
-            readline(s)
-        else
-            read(s, Char)  # advance one character
+function skipchars(io::IOStream, pred; linecomment=nothing)
+    while !eof(io)
+        c = read(io, Char)
+        if c === linecomment
+            readline(io)
+        elseif !pred(c)
+            skip(io, -codelen(c))
+            break
         end
-        ch = peekchar(s); status = Int(ch)
     end
-    return s
+    return io
 end
+

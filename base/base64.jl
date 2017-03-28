@@ -18,10 +18,28 @@ export Base64EncodePipe, Base64DecodePipe, base64encode, base64decode
     Base64EncodePipe(ostream)
 
 Returns a new write-only I/O stream, which converts any bytes written to it into
-base64-encoded ASCII bytes written to `ostream`. Calling `close` on the `Base64EncodePipe` stream
+base64-encoded ASCII bytes written to `ostream`.
+Calling [`close`](@ref) on the `Base64EncodePipe` stream
 is necessary to complete the encoding (but does not close `ostream`).
+
+```jldoctest
+julia> io = IOBuffer();
+
+julia> iob64_encode = Base64EncodePipe(io);
+
+julia> write(iob64_encode, "Hello!")
+6
+
+julia> close(iob64_encode);
+
+julia> str = String(take!(io))
+"SGVsbG8h"
+
+julia> String(base64decode(str))
+"Hello!"
+```
 """
-type Base64EncodePipe <: IO
+mutable struct Base64EncodePipe <: IO
     io::IO
     # writing works in groups of 3, so we need to cache last two bytes written
     b0::UInt8
@@ -165,18 +183,20 @@ end
     base64encode(writefunc, args...)
     base64encode(args...)
 
-Given a `write`-like function `writefunc`, which takes an I/O stream as its first argument,
+Given a [`write`](@ref)-like function `writefunc`, which takes an I/O stream as its first argument,
 `base64encode(writefunc, args...)` calls `writefunc` to write `args...` to a base64-encoded
 string, and returns the string. `base64encode(args...)` is equivalent to `base64encode(write, args...)`:
-it converts its arguments into bytes using the standard `write` functions and returns the
+it converts its arguments into bytes using the standard [`write`](@ref) functions and returns the
 base64-encoded string.
+
+See also [`base64decode`](@ref).
 """
 function base64encode(f::Function, args...)
     s = IOBuffer()
     b = Base64EncodePipe(s)
     f(b, args...)
     close(b)
-    takebuf_string(s)
+    String(take!(s))
 end
 base64encode(x...) = base64encode(write, x...)
 
@@ -186,8 +206,22 @@ base64encode(x...) = base64encode(write, x...)
     Base64DecodePipe(istream)
 
 Returns a new read-only I/O stream, which decodes base64-encoded data read from `istream`.
+
+```jldoctest
+julia> io = IOBuffer();
+
+julia> iob64_decode = Base64DecodePipe(io);
+
+julia> write(io, "SGVsbG8h")
+8
+
+julia> seekstart(io);
+
+julia> String(read(iob64_decode))
+"Hello!"
+```
 """
-type Base64DecodePipe <: IO
+mutable struct Base64DecodePipe <: IO
     io::IO
     # reading works in blocks of 4 characters that are decoded into 3 bytes and 2 of them cached
     cache::Vector{UInt8}
@@ -224,6 +258,22 @@ close(b::Base64DecodePipe) = nothing
     base64decode(string)
 
 Decodes the base64-encoded `string` and returns a `Vector{UInt8}` of the decoded bytes.
+
+See also [`base64encode`](@ref)
+
+```jldoctest
+julia> b = base64decode("SGVsbG8h")
+6-element Array{UInt8,1}:
+ 0x48
+ 0x65
+ 0x6c
+ 0x6c
+ 0x6f
+ 0x21
+
+julia> String(b)
+"Hello!"
+```
 """
 function base64decode(s)
     b = IOBuffer(s)

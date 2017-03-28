@@ -20,7 +20,7 @@ Alternatively, you may prefer the features of a more full-function IDE, such as 
 
 # Binary distribution
 
-Julia runs on Windows XP-SP2 and later (including Windows Vista, Windows 7, and Windows 8).
+Julia runs on Windows 7 and later.
 Both the 32-bit and 64-bit versions are supported.
 The 32-bit (i686) binary will run on either a 32-bit and 64-bit operating system.
 The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise refuse to launch.

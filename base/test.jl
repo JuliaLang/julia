@@ -13,14 +13,38 @@ and summarize them at the end of the test set with `@testset`.
 """
 module Test
 
-export @test, @test_throws, @test_broken, @test_skip
+export @test, @test_throws, @test_broken, @test_skip, @test_warn, @test_nowarn
 export @testset
 # Legacy approximate testing functions, yet to be included
-export @test_approx_eq, @test_approx_eq_eps, @inferred
+export @inferred
 export detect_ambiguities
 export GenericString
 
 #-----------------------------------------------------------------------
+
+# Backtrace utility functions
+function ip_matches_func_and_name(ip, func::Symbol, dir::String, file::String)
+    for fr in StackTraces.lookup(ip)
+        if fr === StackTraces.UNKNOWN || fr.from_c
+            return false
+        end
+        path = string(fr.file)
+        fr.func == func && dirname(path) == dir && basename(path) == file && return true
+    end
+    return false
+end
+
+function scrub_backtrace(bt)
+    do_test_ind = findfirst(addr->ip_matches_func_and_name(addr, :do_test, ".", "test.jl"), bt)
+    if do_test_ind != 0 && length(bt) > do_test_ind
+        bt = bt[do_test_ind + 1:end]
+    end
+    name_ind = findfirst(addr->ip_matches_func_and_name(addr, Symbol("macro expansion"), ".", "test.jl"), bt)
+    if name_ind != 0 && length(bt) != 0
+        bt = bt[1:name_ind]
+    end
+    return bt
+end
 
 """
     Result
@@ -28,7 +52,7 @@ export GenericString
 All tests produce a result object. This object may or may not be
 stored, depending on whether the test is part of a test set.
 """
-abstract Result
+abstract type Result end
 
 """
     Pass
@@ -36,15 +60,17 @@ abstract Result
 The test condition was true, i.e. the expression evaluated to true or
 the correct exception was thrown.
 """
-immutable Pass <: Result
+struct Pass <: Result
     test_type::Symbol
     orig_expr
     data
     value
 end
 function Base.show(io::IO, t::Pass)
-    print_with_color(:green, io, "Test Passed\n")
-    print(io, "  Expression: ", t.orig_expr)
+    print_with_color(:green, io, "Test Passed\n"; bold = true)
+    if !(t.orig_expr === nothing)
+        print(io, "  Expression: ", t.orig_expr)
+    end
     if t.test_type == :test_throws
         # The correct type of exception was thrown
         print(io, "\n      Thrown: ", typeof(t.value))
@@ -61,14 +87,14 @@ end
 The test condition was false, i.e. the expression evaluated to false or
 the correct exception was not thrown.
 """
-type Fail <: Result
+mutable struct Fail <: Result
     test_type::Symbol
     orig_expr
     data
     value
 end
 function Base.show(io::IO, t::Fail)
-    print_with_color(:red, io, "Test Failed\n")
+    print_with_color(Base.error_color(), io, "Test Failed\n"; bold = true)
     print(io, "  Expression: ", t.orig_expr)
     if t.test_type == :test_throws_wrong
         # An exception was thrown, but it was of the wrong type
@@ -93,14 +119,14 @@ it evaluated to something other than a `Bool`.
 In the case of `@test_broken` it is used to indicate that an
 unexpected `Pass` `Result` occurred.
 """
-type Error <: Result
+mutable struct Error <: Result
     test_type::Symbol
     orig_expr
     value
     backtrace
 end
 function Base.show(io::IO, t::Error)
-    print_with_color(:red, io, "Error During Test\n")
+    print_with_color(Base.error_color(), io, "Error During Test\n"; bold = true)
     if t.test_type == :test_nonbool
         println(io, "  Expression evaluated to non-Boolean")
         println(io, "  Expression: ", t.orig_expr)
@@ -109,7 +135,7 @@ function Base.show(io::IO, t::Error)
         println(io, "  Test threw an exception of type ", typeof(t.value))
         println(io, "  Expression: ", t.orig_expr)
         # Capture error message and indent to match
-        errmsg = sprint(showerror, t.value, t.backtrace)
+        errmsg = sprint(showerror, t.value, scrub_backtrace(t.backtrace))
         print(io, join(map(line->string("  ",line),
                             split(errmsg, "\n")), "\n"))
     elseif t.test_type == :test_unbroken
@@ -133,29 +159,29 @@ end
 The test condition is the expected (failed) result of a broken test,
 or was explicitly skipped with `@test_skip`.
 """
-type Broken <: Result
+mutable struct Broken <: Result
     test_type::Symbol
     orig_expr
 end
 function Base.show(io::IO, t::Broken)
-    print_with_color(:yellow, io, "Test Broken\n")
-    if t.test_type == :skipped
+    print_with_color(Base.warn_color(), io, "Test Broken\n"; bold = true)
+    if t.test_type == :skipped && !(t.orig_expr === nothing)
         println(io, "  Skipped: ", t.orig_expr)
-    else
+    elseif !(t.orig_expr === nothing)
         println(io, "Expression: ", t.orig_expr)
     end
 end
 
 #-----------------------------------------------------------------------
 
-abstract ExecutionResult
+abstract type ExecutionResult end
 
-immutable Returned <: ExecutionResult
+struct Returned <: ExecutionResult
     value
     data
 end
 
-immutable Threw <: ExecutionResult
+struct Threw <: ExecutionResult
     exception
     backtrace
 end
@@ -177,15 +203,47 @@ end
 
 const comparison_prec = Base.operator_precedence(:(==))
 
+"""
+    test_expr!(ex, kws...)
+
+Preprocess test expressions of function calls with trailing keyword arguments
+so that e.g. `@test a ≈ b atol=ε` means `@test ≈(a, b, atol=ε)`.
+"""
+test_expr!(m, ex) = ex
+
+function test_expr!(m, ex, kws...)
+    ex isa Expr && ex.head == :call || @goto fail
+    for kw in kws
+        kw isa Expr && kw.head == :(=) || @goto fail
+        kw.head = :kw
+        push!(ex.args, kw)
+    end
+    return ex
+@label fail
+    error("invalid test macro call: $m $ex $(join(kws," "))")
+end
+
 # @test - check if the expression evaluates to true
 """
     @test ex
+    @test f(args...) key=val ...
 
 Tests that the expression `ex` evaluates to `true`.
 Returns a `Pass` `Result` if it does, a `Fail` `Result` if it is
 `false`, and an `Error` `Result` if it could not be evaluated.
+
+The `@test f(args...) key=val...` form is equivalent to writing
+`@test f(args..., key=val...)` which can be useful when the expression
+is a call using infix syntax such as approximate comparisons:
+
+    @test a ≈ b atol=ε
+
+This is equivalent to the uglier test `@test ≈(a, b, atol=ε)`.
+It is an error to supply more than one expression unless the first
+is a call expression and the rest are assignments (`k=v`).
 """
-macro test(ex)
+macro test(ex, kws...)
+    test_expr!("@test", ex, kws...)
     orig_ex = Expr(:inert, ex)
     result = get_test_result(ex)
     :(do_test($result, $orig_ex))
@@ -193,13 +251,17 @@ end
 
 """
     @test_broken ex
+    @test_broken f(args...) key=val ...
 
 Indicates a test that should pass but currently consistently fails.
 Tests that the expression `ex` evaluates to `false` or causes an
 exception. Returns a `Broken` `Result` if it does, or an `Error` `Result`
 if the expression evaluates to `true`.
+
+The `@test_broken f(args...) key=val...` form works as for the `@test` macro.
 """
-macro test_broken(ex)
+macro test_broken(ex, kws...)
+    test_expr!("@test_broken", ex, kws...)
     orig_ex = Expr(:inert, ex)
     result = get_test_result(ex)
     # code to call do_test with execution result and original expr
@@ -208,12 +270,16 @@ end
 
 """
     @test_skip ex
+    @test_skip f(args...) key=val ...
 
 Marks a test that should not be executed but should be included in test
 summary reporting as `Broken`. This can be useful for tests that intermittently
 fail, or tests of not-yet-implemented functionality.
+
+The `@test_skip f(args...) key=val...` form works as for the `@test` macro.
 """
-macro test_skip(ex)
+macro test_skip(ex, kws...)
+    test_expr!("@test_skip", ex, kws...)
     orig_ex = Expr(:inert, ex)
     testres = :(Broken(:skipped, $orig_ex))
     :(record(get_testset(), $testres))
@@ -226,8 +292,9 @@ end
 # can be displayed nicely.
 function get_test_result(ex)
     orig_ex = Expr(:inert, ex)
-    # Normalize comparison operator calls to :comparison expressions
+    # Normalize non-dot comparison operator calls to :comparison expressions
     if isa(ex, Expr) && ex.head == :call && length(ex.args)==3 &&
+        first(string(ex.args[1])) != '.' &&
         (ex.args[1] === :(==) || Base.operator_precedence(ex.args[1]) == comparison_prec)
         testret = :(eval_comparison(Expr(:comparison,
                                          $(esc(ex.args[2])), $(esc(ex.args[1])), $(esc(ex.args[3])))))
@@ -266,7 +333,7 @@ function do_test(result::ExecutionResult, orig_expr)
         value = result.value
         testres = if isa(value, Bool)
             # a true value Passes
-            value ? Pass(:test, orig_expr, result.data, value) :
+            value ? Pass(:test, nothing, nothing, value) :
                     Fail(:test, orig_expr, result.data, value)
         else
             # If the result is non-Boolean, this counts as an Error
@@ -299,6 +366,7 @@ end
     @test_throws extype ex
 
 Tests that the expression `ex` throws an exception of type `extype`.
+Note that `@test_throws` does not support a trailing keyword form.
 """
 macro test_throws(extype, ex)
     orig_ex = Expr(:inert, ex)
@@ -319,7 +387,7 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
     if isa(result, Threw)
         # Check that the right type of exception was thrown
         if isa(result.exception, extype)
-            testres = Pass(:test_throws, orig_expr, extype, result.exception)
+            testres = Pass(:test_throws, nothing, nothing, result.exception)
         else
             testres = Fail(:test_throws_wrong, orig_expr, extype, result.exception)
         end
@@ -330,13 +398,64 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
 end
 
 #-----------------------------------------------------------------------
+# Test for warning messages
+
+ismatch_warn(s::AbstractString, output) = contains(output, s)
+ismatch_warn(s::Regex, output) = ismatch(s, output)
+ismatch_warn(s::Function, output) = s(output)
+ismatch_warn(S::Union{AbstractArray,Tuple}, output) = all(s -> ismatch_warn(s, output), S)
+
+"""
+    @test_warn msg expr
+
+Test whether evaluating `expr` results in [`STDERR`](@ref) output that contains
+the `msg` string or matches the `msg` regular expression.  If `msg` is
+a boolean function, tests whether `msg(output)` returns `true`.  If `msg` is a
+tuple or array, checks that the error output contains/matches each item in `msg`.
+Returns the result of evaluating `expr`.
+
+See also [`@test_nowarn`](@ref) to check for the absence of error output.
+"""
+macro test_warn(msg, expr)
+    quote
+        let fname = tempname(), have_color = Base.have_color
+            try
+                @eval Base have_color = false
+                ret = open(fname, "w") do f
+                    redirect_stderr(f) do
+                        $(esc(expr))
+                    end
+                end
+                @test ismatch_warn($(esc(msg)), readstring(fname))
+                ret
+            finally
+                eval(Base, Expr(:(=), :have_color, have_color))
+                rm(fname, force=true)
+            end
+        end
+    end
+end
+
+"""
+    @test_nowarn expr
+
+Test whether evaluating `expr` results in empty [`STDERR`](@ref) output
+(no warnings or other messages).  Returns the result of evaluating `expr`.
+"""
+macro test_nowarn(expr)
+    quote
+        @test_warn r"^(?!.)"s $(esc(expr))
+    end
+end
+
+#-----------------------------------------------------------------------
 
 # The AbstractTestSet interface is defined by two methods:
 # record(AbstractTestSet, Result)
 #   Called by do_test after a test is evaluated
 # finish(AbstractTestSet)
 #   Called after the test set has been popped from the test set stack
-abstract AbstractTestSet
+abstract type AbstractTestSet end
 
 """
     record(ts::AbstractTestSet, res::Result)
@@ -363,11 +482,12 @@ function finish end
 
 Thrown when a test set finishes and not all tests passed.
 """
-type TestSetException <: Exception
+mutable struct TestSetException <: Exception
     pass::Int
     fail::Int
     error::Int
     broken::Int
+    errors_and_fails::Vector{Union{Fail, Error}}
 end
 
 function Base.show(io::IO, ex::TestSetException)
@@ -378,6 +498,10 @@ function Base.show(io::IO, ex::TestSetException)
     print(io, ex.broken, " broken.")
 end
 
+function Base.showerror(io::IO, ex::TestSetException, bt; backtrace=true)
+    print_with_color(Base.error_color(), io, string(ex))
+end
+
 #-----------------------------------------------------------------------
 
 """
@@ -385,16 +509,24 @@ end
 
 A simple fallback test set that throws immediately on a failure.
 """
-immutable FallbackTestSet <: AbstractTestSet
+struct FallbackTestSet <: AbstractTestSet
 end
 fallback_testset = FallbackTestSet()
+
+mutable struct FallbackTestSetException <: Exception
+    msg::String
+end
+
+function Base.showerror(io::IO, ex::FallbackTestSetException, bt; backtrace=true)
+    print_with_color(Base.error_color(), io, ex.msg)
+end
 
 # Records nothing, and throws an error immediately whenever a Fail or
 # Error occurs. Takes no action in the event of a Pass or Broken result
 record(ts::FallbackTestSet, t::Union{Pass,Broken}) = t
 function record(ts::FallbackTestSet, t::Union{Fail,Error})
     println(t)
-    error("There was an error during testing")
+    throw(FallbackTestSetException("There was an error during testing"))
 end
 # We don't need to do anything as we don't record anything
 finish(ts::FallbackTestSet) = ts
@@ -408,27 +540,32 @@ If using the DefaultTestSet, the test results will be recorded. If there
 are any `Fail`s or `Error`s, an exception will be thrown only at the end,
 along with a summary of the test results.
 """
-type DefaultTestSet <: AbstractTestSet
+mutable struct DefaultTestSet <: AbstractTestSet
     description::AbstractString
     results::Vector
+    n_passed::Int
     anynonpass::Bool
 end
-DefaultTestSet(desc) = DefaultTestSet(desc, [], false)
+DefaultTestSet(desc) = DefaultTestSet(desc, [], 0, false)
 
-# For a passing or broken result, simply store the result
-record(ts::DefaultTestSet, t::Union{Pass,Broken}) = (push!(ts.results, t); t)
+# For a broken result, simply store the result
+record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
+# For a passed result, do not store the result since it uses a lot of memory
+record(ts::DefaultTestSet, t::Pass) = (ts.n_passed += 1; t)
 
 # For the other result types, immediately print the error message
 # but do not terminate. Print a backtrace.
 function record(ts::DefaultTestSet, t::Union{Fail, Error})
-    print_with_color(:white, ts.description, ": ")
-    print(t)
-    # don't print the backtrace for Errors because it gets printed in the show
-    # method
-    isa(t, Error) || Base.show_backtrace(STDOUT, backtrace())
-    println()
+    if myid() == 1
+        print_with_color(:white, ts.description, ": ")
+        print(t)
+        # don't print the backtrace for Errors because it gets printed in the show
+        # method
+        isa(t, Error) || Base.show_backtrace(STDOUT, scrub_backtrace(backtrace()))
+        println()
+    end
     push!(ts.results, t)
-    t
+    t, isa(t, Error) || backtrace()
 end
 
 # When a DefaultTestSet finishes, it records itself to its parent
@@ -436,17 +573,19 @@ end
 # the results at the end of the tests
 record(ts::DefaultTestSet, t::AbstractTestSet) = push!(ts.results, t)
 
-# Called at the end of a @testset, behaviour depends on whether
-# this is a child of another testset, or the "root" testset
-function finish(ts::DefaultTestSet)
-    # If we are a nested test set, do not print a full summary
-    # now - let the parent test set do the printing
-    if get_testset_depth() != 0
-        # Attach this test set to the parent test set
-        parent_ts = get_testset()
-        record(parent_ts, ts)
-        return
+function print_test_errors(ts::DefaultTestSet)
+    for t in ts.results
+        if (isa(t, Error) || isa(t, Fail)) && myid() == 1
+            println("Error in testset $(ts.description):")
+            Base.show(STDOUT,t)
+            println()
+        elseif isa(t, DefaultTestSet)
+            print_test_errors(t)
+        end
     end
+end
+
+function print_test_results(ts::DefaultTestSet, depth_pad=0)
     # Calculate the overall number for each type so each of
     # the test result types are aligned
     passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = get_test_counts(ts)
@@ -471,28 +610,58 @@ function finish(ts::DefaultTestSet)
     # recursively walking the tree of test sets
     align = max(get_alignment(ts, 0), length("Test Summary:"))
     # Print the outer test set header once
-    print_with_color(:white, rpad("Test Summary:",align," "), " | ")
+    pad = total == 0 ? "" : " "
+    print_with_color(:white, rpad("Test Summary:",align," "), " |", pad; bold = true)
     if pass_width > 0
-        print_with_color(:green, lpad("Pass",pass_width," "), "  ")
+        print_with_color(:green, lpad("Pass",pass_width," "), "  "; bold = true)
     end
     if fail_width > 0
-        print_with_color(:red, lpad("Fail",fail_width," "), "  ")
+        print_with_color(Base.error_color(), lpad("Fail",fail_width," "), "  "; bold = true)
     end
     if error_width > 0
-        print_with_color(:red, lpad("Error",error_width," "), "  ")
+        print_with_color(Base.error_color(), lpad("Error",error_width," "), "  "; bold = true)
     end
     if broken_width > 0
-        print_with_color(:yellow, lpad("Broken",broken_width," "), "  ")
+        print_with_color(Base.warn_color(), lpad("Broken",broken_width," "), "  "; bold = true)
     end
     if total_width > 0
-        print_with_color(:blue, lpad("Total",total_width, " "))
+        print_with_color(Base.info_color(), lpad("Total",total_width, " "); bold = true)
     end
     println()
     # Recursively print a summary at every level
-    print_counts(ts, 0, align, pass_width, fail_width, error_width, broken_width, total_width)
+    print_counts(ts, depth_pad, align, pass_width, fail_width, error_width, broken_width, total_width)
+end
+
+
+const TESTSET_PRINT_ENABLE = Ref(true)
+
+# Called at the end of a @testset, behaviour depends on whether
+# this is a child of another testset, or the "root" testset
+function finish(ts::DefaultTestSet)
+    # If we are a nested test set, do not print a full summary
+    # now - let the parent test set do the printing
+    if get_testset_depth() != 0
+        # Attach this test set to the parent test set
+        parent_ts = get_testset()
+        record(parent_ts, ts)
+        return ts
+    end
+    passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = get_test_counts(ts)
+    total_pass   = passes + c_passes
+    total_fail   = fails  + c_fails
+    total_error  = errors + c_errors
+    total_broken = broken + c_broken
+    total = total_pass + total_fail + total_error + total_broken
+
+    if TESTSET_PRINT_ENABLE[]
+        print_test_results(ts)
+    end
+
     # Finally throw an error as we are the outermost test set
-    if total != total_pass
-        throw(TestSetException(total_pass,total_fail,total_error, total_broken))
+    if total != total_pass + total_broken
+        # Get all the error/failures and bring them along for the ride
+        efs = filter_errors(ts)
+        throw(TestSetException(total_pass,total_fail,total_error, total_broken, efs))
     end
 
     # return the testset so it is returned from the @testset macro
@@ -517,13 +686,26 @@ function get_alignment(ts::DefaultTestSet, depth::Int)
 end
 get_alignment(ts, depth::Int) = 0
 
+# Recursive function that fetches backtraces for any and all errors
+# or failures the testset and its children encountered
+function filter_errors(ts::DefaultTestSet)
+    efs = []
+    for t in ts.results
+        if isa(t, DefaultTestSet)
+            append!(efs, filter_errors(t))
+        elseif isa(t, Union{Fail, Error})
+            append!(efs, [t])
+        end
+    end
+    efs
+end
+
 # Recursive function that counts the number of test results of each
 # type directly in the testset, and totals across the child testsets
 function get_test_counts(ts::DefaultTestSet)
-    passes, fails, errors, broken = 0, 0, 0, 0
+    passes, fails, errors, broken = ts.n_passed, 0, 0, 0
     c_passes, c_fails, c_errors, c_broken = 0, 0, 0, 0
     for t in ts.results
-        isa(t, Pass)   && (passes += 1)
         isa(t, Fail)   && (fails  += 1)
         isa(t, Error)  && (errors += 1)
         isa(t, Broken) && (broken += 1)
@@ -547,10 +729,9 @@ function print_counts(ts::DefaultTestSet, depth, align,
     # through any child test sets
     passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = get_test_counts(ts)
     subtotal = passes + fails + errors + broken + c_passes + c_fails + c_errors + c_broken
-
     # Print test set header, with an alignment that ensures all
     # the test results appear above each other
-    print(rpad(string(lpad("  ",depth), ts.description), align, " "), " | ")
+    print(rpad(string("  "^depth, ts.description), align, " "), " | ")
 
     np = passes + c_passes
     if np > 0
@@ -562,7 +743,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     nf = fails + c_fails
     if nf > 0
-        print_with_color(:red, lpad(string(nf), fail_width, " "), "  ")
+        print_with_color(Base.error_color(), lpad(string(nf), fail_width, " "), "  ")
     elseif fail_width > 0
         # No fails at this level, but some at another level
         print(lpad(" ", fail_width), "  ")
@@ -570,7 +751,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     ne = errors + c_errors
     if ne > 0
-        print_with_color(:red, lpad(string(ne), error_width, " "), "  ")
+        print_with_color(Base.error_color(), lpad(string(ne), error_width, " "), "  ")
     elseif error_width > 0
         # No errors at this level, but some at another level
         print(lpad(" ", error_width), "  ")
@@ -578,16 +759,16 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     nb = broken + c_broken
     if nb > 0
-        print_with_color(:yellow, lpad(string(nb), broken_width, " "), "  ")
+        print_with_color(Base.warn_color(), lpad(string(nb), broken_width, " "), "  ")
     elseif broken_width > 0
         # None broken at this level, but some at another level
         print(lpad(" ", broken_width), "  ")
     end
 
     if np == 0 && nf == 0 && ne == 0 && nb == 0
-        print_with_color(:blue, "No tests")
+        print_with_color(Base.info_color(), "No tests")
     else
-        print_with_color(:blue, lpad(string(subtotal), total_width, " "))
+        print_with_color(Base.info_color(), lpad(string(subtotal), total_width, " "))
     end
     println()
 
@@ -726,9 +907,9 @@ function testset_forloop(args, testloop)
             pop_testset()
             push!(arr, finish(ts))
         end
-        first_iteration = false
         ts = $(testsettype)($desc; $options...)
         push_testset(ts)
+        first_iteration = false
         try
             $(esc(tests))
         catch err
@@ -774,7 +955,7 @@ function parse_testset_args(args)
         elseif isa(arg, Expr) && arg.head == :(=)
             # we're building up a Dict literal here
             key = Expr(:quote, arg.args[1])
-            push!(options.args, Expr(:(=>), key, arg.args[2]))
+            push!(options.args, Expr(:call, :(=>), key, arg.args[2]))
         else
             error("Unexpected argument $arg to @testset")
         end
@@ -831,68 +1012,6 @@ function get_testset_depth()
     return length(testsets)
 end
 
-#-----------------------------------------------------------------------
-# Legacy approximate testing functions, yet to be included
-
-approx_full(x::AbstractArray) = x
-approx_full(x::Number) = x
-approx_full(x) = full(x)
-
-function test_approx_eq(va, vb, Eps, astr, bstr)
-    va = approx_full(va)
-    vb = approx_full(vb)
-    la, lb = length(linearindices(va)), length(linearindices(vb))
-    if la != lb
-        error("lengths of ", astr, " and ", bstr, " do not match: ",
-              "\n  ", astr, " (length $la) = ", va,
-              "\n  ", bstr, " (length $lb) = ", vb)
-    end
-    diff = real(zero(eltype(va)))
-    for (xa, xb) = zip(va, vb)
-        if isfinite(xa) && isfinite(xb)
-            diff = max(diff, abs(xa-xb))
-        elseif !isequal(xa,xb)
-            error("mismatch of non-finite elements: ",
-                  "\n  ", astr, " = ", va,
-                  "\n  ", bstr, " = ", vb)
-        end
-    end
-
-    if !isnan(Eps) && !(diff <= Eps)
-        sdiff = string("|", astr, " - ", bstr, "| <= ", Eps)
-        error("assertion failed: ", sdiff,
-              "\n  ", astr, " = ", va,
-              "\n  ", bstr, " = ", vb,
-              "\n  difference = ", diff, " > ", Eps)
-    end
-end
-
-array_eps{T}(a::AbstractArray{Complex{T}}) = eps(float(maximum(x->(isfinite(x) ? abs(x) : T(NaN)), a)))
-array_eps(a) = eps(float(maximum(x->(isfinite(x) ? abs(x) : oftype(x,NaN)), a)))
-
-test_approx_eq(va, vb, astr, bstr) =
-    test_approx_eq(va, vb, 1E4*length(linearindices(va))*max(array_eps(va), array_eps(vb)), astr, bstr)
-
-"""
-    @test_approx_eq_eps(a, b, tol)
-
-Test two floating point numbers `a` and `b` for equality taking into account
-a margin of tolerance given by `tol`.
-"""
-macro test_approx_eq_eps(a, b, c)
-    :(test_approx_eq($(esc(a)), $(esc(b)), $(esc(c)), $(string(a)), $(string(b))))
-end
-
-"""
-    @test_approx_eq(a, b)
-
-Test two floating point numbers `a` and `b` for equality taking into account
-small numerical errors.
-"""
-macro test_approx_eq(a, b)
-    :(test_approx_eq($(esc(a)), $(esc(b)), $(string(a)), $(string(b))))
-end
-
 _args_and_call(args...; kwargs...) = (args[1:end-1], kwargs, args[end](args[1:end-1]...; kwargs...))
 """
     @inferred f(x)
@@ -914,19 +1033,24 @@ julia> typeof(f(1,2,3))
 Int64
 
 julia> @code_warntype f(1,2,3)
-...
+Variables:
+  #self#::#f
+  a::Int64
+  b::Int64
+  c::Int64
+
 Body:
   begin
-      unless (Base.slt_int)(1,b::Int64)::Bool goto 3
+      unless (Base.slt_int)(1, b::Int64)::Bool goto 3
       return 1
       3:
       return 1.0
-  end::UNION{FLOAT64,INT64}
+  end::UNION{FLOAT64, INT64}
 
 julia> @inferred f(1,2,3)
-ERROR: return type Int64 does not match inferred return type Union{Float64,Int64}
- in error(::String) at ./error.jl:21
- ...
+ERROR: return type Int64 does not match inferred return type Union{Float64, Int64}
+Stacktrace:
+ [1] error(::String) at ./error.jl:21
 
 julia> @inferred max(1,2)
 2
@@ -939,26 +1063,28 @@ macro inferred(ex)
     Meta.isexpr(ex, :call)|| error("@inferred requires a call expression")
 
     Base.remove_linenums!(quote
-        $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
-            # Has keywords
-            args = gensym()
-            kwargs = gensym()
-            quote
-                $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
-                inftypes = $(Base.gen_call_with_extracted_types(Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
-            end
-        else
-            # No keywords
-            quote
-                args = ($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)
-                result = $(esc(ex.args[1]))(args...)
-                inftypes = Base.return_types($(esc(ex.args[1])), Base.typesof(args...))
-            end
-        end)
-        @assert length(inftypes) == 1
-        rettype = isa(result, Type) ? Type{result} : typeof(result)
-        rettype == inftypes[1] || error("return type $rettype does not match inferred return type $(inftypes[1])")
-        result
+        let
+            $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
+                # Has keywords
+                args = gensym()
+                kwargs = gensym()
+                quote
+                    $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
+                    inftypes = $(Base.gen_call_with_extracted_types(Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
+                end
+            else
+                # No keywords
+                quote
+                    args = ($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)
+                    result = $(esc(ex.args[1]))(args...)
+                    inftypes = Base.return_types($(esc(ex.args[1])), Base.typesof(args...))
+                end
+            end)
+            @assert length(inftypes) == 1
+            rettype = isa(result, Type) ? Type{result} : typeof(result)
+            rettype == inftypes[1] || error("return type $rettype does not match inferred return type $(inftypes[1])")
+            result
+        end
     end)
 end
 
@@ -980,25 +1106,37 @@ end
 # Raises an error if any columnwise vector norm exceeds err. Otherwise, returns
 # nothing.
 function test_approx_eq_modphase{S<:Real,T<:Real}(
-        a::StridedVecOrMat{S}, b::StridedVecOrMat{T}, err=nothing)
+        a::StridedVecOrMat{S}, b::StridedVecOrMat{T},
+        err = length(indices(a,1))^3*(eps(S)+eps(T))
+    )
     @test indices(a,1) == indices(b,1) && indices(a,2) == indices(b,2)
-    m = length(indices(a,1))
-    err === nothing && (err=m^3*(eps(S)+eps(T)))
     for i in indices(a,2)
         v1, v2 = a[:, i], b[:, i]
-        @test_approx_eq_eps min(abs(norm(v1-v2)), abs(norm(v1+v2))) 0.0 err
+        @test min(abs(norm(v1-v2)),abs(norm(v1+v2))) ≈ 0.0 atol=err
     end
 end
 
 """
-    detect_ambiguities(mod1, mod2...; imported=false)
+    detect_ambiguities(mod1, mod2...; imported=false, ambiguous_bottom=false)
 
 Returns a vector of `(Method,Method)` pairs of ambiguous methods
 defined in the specified modules. Use `imported=true` if you wish to
 also test functions that were imported into these modules from
 elsewhere.
+
+`ambiguous_bottom` controls whether ambiguities triggered only by
+`Union{}` type parameters are included; in most cases you probably
+want to set this to `false`. See [`Base.isambiguous`](@ref).
 """
-function detect_ambiguities(mods...; imported::Bool=false)
+function detect_ambiguities(mods...;
+        imported::Bool = false,
+        ambiguous_bottom::Bool = false,
+        allow_bottom::Union{Bool,Void} = nothing
+    )
+    if allow_bottom != nothing
+        Base.depwarn("the `allow_bottom` keyword to detect_ambiguities has been renamed to `ambiguous_bottom`", :detect_ambiguities)
+        ambiguous_bottom = allow_bottom
+    end
     function sortdefs(m1, m2)
         ord12 = m1.file < m2.file
         if !ord12 && (m1.file == m2.file)
@@ -1020,7 +1158,7 @@ function detect_ambiguities(mods...; imported::Bool=false)
                 for m in mt
                     if m.ambig !== nothing
                         for m2 in m.ambig
-                            if Base.isambiguous(m, m2)
+                            if Base.isambiguous(m, m2, ambiguous_bottom=ambiguous_bottom)
                                 push!(ambs, sortdefs(m, m2))
                             end
                         end
@@ -1037,7 +1175,7 @@ The `GenericString` can be used to test generic string APIs that program to
 the `AbstractString` interface, in order to ensure that functions can work
 with string types besides the standard `String` type.
 """
-immutable GenericString <: AbstractString
+struct GenericString <: AbstractString
     string::AbstractString
 end
 Base.convert(::Type{GenericString}, s::AbstractString) = GenericString(s)

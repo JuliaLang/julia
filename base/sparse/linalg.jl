@@ -6,17 +6,17 @@ import Base.LinAlg: checksquare
 
 # Convert from 1-based to 0-based indices
 function decrement!{T<:Integer}(A::AbstractArray{T})
-    for i in 1:length(A); A[i] -= one(T) end
+    for i in 1:length(A); A[i] -= oneunit(T) end
     A
 end
-decrement{T<:Integer}(A::AbstractArray{T}) = decrement!(copy(A))
+decrement(A::AbstractArray{<:Integer}) = decrement!(copy(A))
 
 # Convert from 0-based to 1-based indices
 function increment!{T<:Integer}(A::AbstractArray{T})
-    for i in 1:length(A); A[i] += one(T) end
+    for i in 1:length(A); A[i] += oneunit(T) end
     A
 end
-increment{T<:Integer}(A::AbstractArray{T}) = increment!(copy(A))
+increment(A::AbstractArray{<:Integer}) = increment!(copy(A))
 
 ## sparse matrix multiplication
 
@@ -284,11 +284,11 @@ function bwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
     B
 end
 
-A_ldiv_B!{T,Ti}(L::LowerTriangular{T,SparseMatrixCSC{T,Ti}}, B::StridedVecOrMat) = fwdTriSolve!(L.data, B)
-A_ldiv_B!{T,Ti}(U::UpperTriangular{T,SparseMatrixCSC{T,Ti}}, B::StridedVecOrMat) = bwdTriSolve!(U.data, B)
+A_ldiv_B!{T}(L::LowerTriangular{T,<:SparseMatrixCSC{T}}, B::StridedVecOrMat) = fwdTriSolve!(L.data, B)
+A_ldiv_B!{T}(U::UpperTriangular{T,<:SparseMatrixCSC{T}}, B::StridedVecOrMat) = bwdTriSolve!(U.data, B)
 
-(\){T,Ti}(L::LowerTriangular{T,SparseMatrixCSC{T,Ti}}, B::SparseMatrixCSC) = A_ldiv_B!(L, full(B))
-(\){T,Ti}(U::UpperTriangular{T,SparseMatrixCSC{T,Ti}}, B::SparseMatrixCSC) = A_ldiv_B!(U, full(B))
+(\){T}(L::LowerTriangular{T,<:SparseMatrixCSC{T}}, B::SparseMatrixCSC) = A_ldiv_B!(L, Array(B))
+(\){T}(U::UpperTriangular{T,<:SparseMatrixCSC{T}}, B::SparseMatrixCSC) = A_ldiv_B!(U, Array(B))
 
 ## triu, tril
 
@@ -499,7 +499,7 @@ function norm(A::SparseMatrixCSC,p::Real=2)
         return float(real(zero(eltype(A))))
     elseif m == 1 || n == 1
         # TODO: compute more efficiently using A.nzval directly
-        return norm(full(A), p)
+        return norm(Array(A), p)
     else
         Tnorm = typeof(float(real(zero(eltype(A)))))
         Tsum = promote_type(Float64,Tnorm)
@@ -514,7 +514,7 @@ function norm(A::SparseMatrixCSC,p::Real=2)
             end
             return convert(Tnorm, nA)
         elseif p==2
-            throw(ArgumentError("2-norm not yet implemented for sparse matrices. Try norm(full(A)) or norm(A, p) where p=1 or Inf."))
+            throw(ArgumentError("2-norm not yet implemented for sparse matrices. Try norm(Array(A)) or norm(A, p) where p=1 or Inf."))
         elseif p==Inf
             rowSum = zeros(Tsum,m)
             for i=1:length(A.nzval)
@@ -539,7 +539,7 @@ function cond(A::SparseMatrixCSC, p::Real=2)
         normA = norm(A, Inf)
         return normA * normAinv
     elseif p == 2
-        throw(ArgumentError("2-norm condition number is not implemented for sparse matrices, try cond(full(A), 2) instead"))
+        throw(ArgumentError("2-norm condition number is not implemented for sparse matrices, try cond(Array(A), 2) instead"))
     else
         throw(ArgumentError("second argument must be either 1 or Inf, got $p"))
     end
@@ -864,18 +864,15 @@ function (\)(A::SparseMatrixCSC, B::AbstractVecOrMat)
             return UpperTriangular(A) \ B
         end
         if ishermitian(A)
-            try
-                return cholfact(Hermitian(A)) \ B
-            catch e
-                isa(e, PosDefException) || rethrow(e)
-                return ldltfact(Hermitian(A)) \ B
-            end
+            Hermitian(A) \ B
         end
         return lufact(A) \ B
     else
         return qrfact(A) \ B
     end
 end
+
+(\)(::SparseMatrixCSC, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
 
 function factorize(A::SparseMatrixCSC)
     m, n = size(A)

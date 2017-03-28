@@ -1,12 +1,12 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 ## IP ADDRESS HANDLING ##
-abstract IPAddr
+abstract type IPAddr end
 
 Base.isless{T<:IPAddr}(a::T, b::T) = isless(a.host, b.host)
-Base.convert{T<:Integer}(dt::Type{T}, ip::IPAddr) = dt(ip.host)
+Base.convert(dt::Type{<:Integer}, ip::IPAddr) = dt(ip.host)
 
-immutable IPv4 <: IPAddr
+struct IPv4 <: IPAddr
     host::UInt32
     IPv4(host::UInt32) = new(host)
     IPv4(a::UInt8,b::UInt8,c::UInt8,d::UInt8) = new(UInt32(a)<<24|
@@ -25,6 +25,11 @@ end
     IPv4(host::Integer) -> IPv4
 
 Returns an IPv4 object from ip address `host` formatted as an `Integer`.
+
+```jldoctest
+julia> IPv4(3223256218)
+ip"192.30.252.154"
+```
 """
 function IPv4(host::Integer)
     if host < 0
@@ -45,7 +50,7 @@ print(io::IO,ip::IPv4) = print(io,dec((ip.host&(0xFF000000))>>24),".",
                                   dec((ip.host&(0xFF00))>>8),".",
                                   dec(ip.host&0xFF))
 
-immutable IPv6 <: IPAddr
+struct IPv6 <: IPAddr
     host::UInt128
     IPv6(host::UInt128) = new(host)
     IPv6(a::UInt16,b::UInt16,c::UInt16,d::UInt16,
@@ -72,6 +77,11 @@ end
     IPv6(host::Integer) -> IPv6
 
 Returns an IPv6 object from ip address `host` formatted as an `Integer`.
+
+```jldoctest
+julia> IPv6(3223256218)
+ip"::c01e:fc9a"
+```
 """
 function IPv6(host::Integer)
     if host < 0
@@ -148,6 +158,11 @@ end
 
 # Parsing
 
+const ipv4_leading_zero_error = """
+Leading zeros in IPv4 addresses are disallowed due to ambiguity.
+If the address is in octal or hexadecimal, convert it to decimal, otherwise remove the leading zero.
+"""
+
 function parse(::Type{IPv4}, str::AbstractString)
     fields = split(str,'.')
     i = 1
@@ -156,18 +171,8 @@ function parse(::Type{IPv4}, str::AbstractString)
         if isempty(f)
             throw(ArgumentError("empty field in IPv4 address"))
         end
-        if f[1] == '0'
-            if length(f) >= 2 && f[2] == 'x'
-                if length(f) > 8 # 2+(3*2) - prevent parseint from overflowing on 32bit
-                    throw(ArgumentError("IPv4 field too large"))
-                end
-                r = parse(Int,f[3:end],16)
-            else
-                if length(f) > 9 # 1+8 - prevent parseint from overflowing on 32bit
-                    throw(ArgumentError("IPv4 field too large"))
-                end
-                r = parse(Int,f,8)
-            end
+        if length(f) > 1 && f[1] == '0'
+            throw(ArgumentError(ipv4_leading_zero_error))
         else
             r = parse(Int,f,10)
         end
@@ -241,7 +246,7 @@ macro ip_str(str)
     return parse(IPAddr, str)
 end
 
-immutable InetAddr{T<:IPAddr}
+struct InetAddr{T<:IPAddr}
     host::T
     port::UInt16
 end
@@ -250,7 +255,7 @@ InetAddr(ip::IPAddr, port) = InetAddr{typeof(ip)}(ip, port)
 
 ## SOCKETS ##
 
-type TCPSocket <: LibuvStream
+mutable struct TCPSocket <: LibuvStream
     handle::Ptr{Void}
     status::Int
     buffer::IOBuffer
@@ -286,7 +291,7 @@ function TCPSocket()
     return tcp
 end
 
-type TCPServer <: LibuvServer
+mutable struct TCPServer <: LibuvServer
     handle::Ptr{Void}
     status::Int
     connectnotify::Condition
@@ -334,7 +339,7 @@ accept(server::PipeServer) = accept(server, init_pipe!(PipeEndpoint();
 
 # UDP
 
-type UDPSocket <: LibuvStream
+mutable struct UDPSocket <: LibuvStream
     handle::Ptr{Void}
     status::Int
     recvnotify::Condition
@@ -468,17 +473,6 @@ function setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing
     end
 end
 
-alloc_buf_hook(sock::UDPSocket,size::UInt) = (Libc.malloc(size),size)
-
-function _recv_start(sock::UDPSocket)
-    if ccall(:uv_is_active, Cint, (Ptr{Void}, ), sock.handle) == 0
-        uv_error("recv_start", ccall(:uv_udp_recv_start, Cint, (Ptr{Void}, Ptr{Void}, Ptr{Void}),
-                                    sock.handle, uv_jl_alloc_buf::Ptr{Void}, uv_jl_recvcb::Ptr{Void}))
-    end
-end
-
-_recv_stop(sock::UDPSocket) = uv_error("recv_stop", ccall(:uv_udp_recv_stop, Cint, (Ptr{Void}, ), sock.handle))
-
 """
     recv(socket::UDPSocket)
 
@@ -486,47 +480,57 @@ Read a UDP packet from the specified socket, and return the bytes received. This
 """
 function recv(sock::UDPSocket)
     addr, data = recvfrom(sock)
-    data
+    return data
 end
 
 """
     recvfrom(socket::UDPSocket) -> (address, data)
 
-Read a UDP packet from the specified socket, returning a tuple of (address, data), where
-address will be either IPv4 or IPv6 as appropriate.
+Read a UDP packet from the specified socket, returning a tuple of `(address, data)`, where
+`address` will be either IPv4 or IPv6 as appropriate.
 """
 function recvfrom(sock::UDPSocket)
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
-    if sock.status != StatusInit && sock.status != StatusOpen
+    if sock.status != StatusInit && sock.status != StatusOpen && sock.status != StatusActive
         error("UDPSocket is not initialized and open")
     end
-    _recv_start(sock)
-    return stream_wait(sock, sock.recvnotify)::Tuple{Union{IPv4,  IPv6},  Vector{UInt8}}
+    if ccall(:uv_is_active, Cint, (Ptr{Void},), sock.handle) == 0
+        uv_error("recv_start", ccall(:uv_udp_recv_start, Cint, (Ptr{Void}, Ptr{Void}, Ptr{Void}),
+                                    sock.handle, uv_jl_alloc_buf::Ptr{Void}, uv_jl_recvcb::Ptr{Void}))
+    end
+    sock.status = StatusActive
+    return stream_wait(sock, sock.recvnotify)::Tuple{Union{IPv4, IPv6}, Vector{UInt8}}
 end
 
+alloc_buf_hook(sock::UDPSocket, size::UInt) = (Libc.malloc(size), size)
 
 function uv_recvcb(handle::Ptr{Void}, nread::Cssize_t, buf::Ptr{Void}, addr::Ptr{Void}, flags::Cuint)
-    sock = @handle_as handle UDPSocket
-    buf_addr = ccall(:jl_uv_buf_base, Ptr{Void}, (Ptr{Void},), buf)
-    buf_size = ccall(:jl_uv_buf_len, Csize_t, (Ptr{Void},), buf)
     # C signature documented as (*uv_udp_recv_cb)(...)
-    if flags & UV_UDP_PARTIAL > 0
+    sock = @handle_as handle UDPSocket
+    if nread < 0
         Libc.free(buf_addr)
-        notify_error(sock.recvnotify,"Partial message received")
+        notify_error(sock.recvnotify, UVError("recv", nread))
+    elseif flags & UV_UDP_PARTIAL > 0
+        Libc.free(buf_addr)
+        notify_error(sock.recvnotify, "Partial message received")
+    else
+        buf_addr = ccall(:jl_uv_buf_base, Ptr{Void}, (Ptr{Void},), buf)
+        buf_size = ccall(:jl_uv_buf_len, Csize_t, (Ptr{Void},), buf)
+        # need to check the address type in order to convert to a Julia IPAddr
+        addrout = if addr == C_NULL
+                      IPv4(0)
+                  elseif ccall(:jl_sockaddr_in_is_ip4, Cint, (Ptr{Void},), addr) == 1
+                      IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Void},), addr)))
+                  else
+                      tmp = [UInt128(0)]
+                      ccall(:jl_sockaddr_host6, UInt32, (Ptr{Void}, Ptr{UInt8}), addr, pointer(tmp))
+                      IPv6(ntoh(tmp[1]))
+                  end
+        buf = unsafe_wrap(Array, convert(Ptr{UInt8}, buf_addr), Int(nread), true)
+        notify(sock.recvnotify, (addrout, buf))
     end
-
-    # need to check the address type in order to convert to a Julia IPAddr
-    addrout = if (addr == C_NULL)
-                  IPv4(0)
-              elseif ccall(:jl_sockaddr_in_is_ip4, Cint, (Ptr{Void},), addr) == 1
-                  IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Void},), addr)))
-              else
-                  tmp = [UInt128(0)]
-                  ccall(:jl_sockaddr_host6, UInt32, (Ptr{Void}, Ptr{UInt8}), addr, pointer(tmp))
-                  IPv6(ntoh(tmp[1]))
-              end
-    buf = unsafe_wrap(Array, convert(Ptr{UInt8},buf_addr),Int(buf_size),true)
-    notify(sock.recvnotify,(addrout,buf[1:nread]))
+    ccall(:uv_udp_recv_stop, Cint, (Ptr{Void},), sock.handle)
+    sock.status = StatusOpen
     nothing
 end
 
@@ -547,7 +551,7 @@ Send `msg` over `socket` to `host:port`.
 """
 function send(sock::UDPSocket,ipaddr,port,msg)
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
-    if sock.status != StatusInit && sock.status != StatusOpen
+    if sock.status != StatusInit && sock.status != StatusOpen && sock.status != StatusActive
         error("UDPSocket is not initialized and open")
     end
     uv_error("send", _send(sock, ipaddr, UInt16(port), msg))
@@ -558,7 +562,7 @@ end
 function uv_sendcb(handle::Ptr{Void}, status::Cint)
     sock = @handle_as handle UDPSocket
     if status < 0
-        notify_error(sock.sendnotify,UVError("UDP send failed",status))
+        notify_error(sock.sendnotify, UVError("UDP send failed", status))
     end
     notify(sock.sendnotify)
     Libc.free(handle)
@@ -567,7 +571,7 @@ end
 
 ##
 
-type DNSError <: Exception
+mutable struct DNSError <: Exception
     host::AbstractString
     code::Int32
 end
@@ -634,15 +638,19 @@ function getaddrinfo(host::String)
         notify(c,IP)
     end
     r = wait(c)
-    if isa(r,UVError)
-        if r.code in [UV_EAI_NONAME, UV_EAI_AGAIN, UV_EAI_FAIL, UV_EAI_NODATA]
-            throw(DNSError(host, r.code))
-        elseif r.code == UV_EAI_SYSTEM
-            throw(SystemError("uv_getaddrinfocb"))
-        elseif r.code == UV_EAI_MEMORY
+    if isa(r, UVError)
+        r = r::UVError
+        code = r.code
+        if code in (UV_EAI_ADDRFAMILY, UV_EAI_AGAIN, UV_EAI_BADFLAGS,
+                    UV_EAI_BADHINTS, UV_EAI_CANCELED, UV_EAI_FAIL,
+                    UV_EAI_FAMILY, UV_EAI_NODATA, UV_EAI_NONAME,
+                    UV_EAI_OVERFLOW, UV_EAI_PROTOCOL, UV_EAI_SERVICE,
+                    UV_EAI_SOCKTYPE)
+            throw(DNSError(host, code))
+        elseif code == UV_EAI_MEMORY
             throw(OutOfMemoryError())
         else
-            throw(r)
+            throw(SystemError("uv_getaddrinfocb", -code))
         end
     end
     return r::IPAddr
@@ -657,16 +665,12 @@ const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32
 Get the IP address of the local machine.
 """
 function getipaddr()
-    addr = Array{Ptr{UInt8}}(1)
-    addr[1] = C_NULL
-    count = zeros(Int32,1)
+    addr_ref = Ref{Ptr{UInt8}}(C_NULL)
+    count_ref = Ref{Int32}(1)
     lo_present = false
-    err = ccall(:jl_uv_interface_addresses, Int32, (Ptr{Ptr{UInt8}}, Ptr{Int32}), addr, count)
-    addr,  count = addr[1], count[1]
-    if err != 0
-        ccall(:uv_free_interface_addresses, Void, (Ptr{UInt8}, Int32), addr, count)
-        throw(UVError("getlocalip", err))
-    end
+    err = ccall(:jl_uv_interface_addresses, Int32, (Ref{Ptr{UInt8}}, Ref{Int32}), addr_ref, count_ref)
+    uv_error("getlocalip", err)
+    addr, count = addr_ref[], count_ref[]
     for i = 0:(count-1)
         current_addr = addr + i*_sizeof_uv_interface_address
         if 1 == ccall(:jl_uv_interface_address_is_internal, Int32, (Ptr{UInt8},), current_addr)
@@ -756,7 +760,7 @@ Listen on port on the address specified by `addr`.
 By default this listens on `localhost` only.
 To listen on all interfaces pass `IPv4(0)` or `IPv6(0)` as appropriate.
 `backlog` determines how many connections can be pending (not having
-called [`accept`](:func:`accept`)) before the server will begin to
+called [`accept`](@ref)) before the server will begin to
 reject them. The default value of `backlog` is 511.
 """
 function listen(addr; backlog::Integer=BACKLOG_DEFAULT)

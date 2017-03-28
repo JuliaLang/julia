@@ -19,18 +19,18 @@ export srand,
        GLOBAL_RNG, randjump
 
 
-abstract AbstractRNG
+abstract type AbstractRNG end
 
-abstract FloatInterval
-type CloseOpen <: FloatInterval end
-type Close1Open2 <: FloatInterval end
+abstract type FloatInterval end
+mutable struct CloseOpen <: FloatInterval end
+mutable struct Close1Open2 <: FloatInterval end
 
 
 ## RandomDevice
 
 if is_windows()
 
-    immutable RandomDevice <: AbstractRNG
+    struct RandomDevice <: AbstractRNG
         buffer::Vector{UInt128}
 
         RandomDevice() = new(Array{UInt128}(1))
@@ -41,17 +41,17 @@ if is_windows()
         @inbounds return rd.buffer[1] % T
     end
 
-    rand!{T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice, A::Array{T}) = (win32_SystemFunction036!(A); A)
+    rand!(rd::RandomDevice, A::Array{<:Union{Bool, Base.BitInteger}}) = (win32_SystemFunction036!(A); A)
 else # !windows
-    immutable RandomDevice <: AbstractRNG
+    struct RandomDevice <: AbstractRNG
         file::IOStream
         unlimited::Bool
 
         RandomDevice(unlimited::Bool=true) = new(open(unlimited ? "/dev/urandom" : "/dev/random"), unlimited)
     end
 
-    rand{ T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice,  ::Type{T})  = read( rd.file, T)
-    rand!{T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice, A::Array{T}) = read!(rd.file, A)
+    rand{T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice, ::Type{T}) = read( rd.file, T)
+    rand!(rd::RandomDevice, A::Array{<:Union{Bool, Base.BitInteger}})  = read!(rd.file, A)
 end # os-test
 
 
@@ -73,7 +73,7 @@ rand(rng::RandomDevice, ::Type{CloseOpen}) = rand(rng, Close1Open2) - 1.0
 
 const MTCacheLength = dsfmt_get_min_array_size()
 
-type MersenneTwister <: AbstractRNG
+mutable struct MersenneTwister <: AbstractRNG
     seed::Vector{UInt32}
     state::DSFMT_state
     vals::Vector{Float64}
@@ -324,14 +324,14 @@ rand(r::Union{RandomDevice,MersenneTwister}, ::Type{Float32}) =
 
 function rand(r::MersenneTwister, ::Type{UInt64})
     reserve(r, 2)
-    rand_ui52_raw_inbounds(r) << 32 $ rand_ui52_raw_inbounds(r)
+    rand_ui52_raw_inbounds(r) << 32 ⊻ rand_ui52_raw_inbounds(r)
 end
 
 function rand(r::MersenneTwister, ::Type{UInt128})
     reserve(r, 3)
-    rand_ui52_raw_inbounds(r) % UInt128 << 96 $
-    rand_ui52_raw_inbounds(r) % UInt128 << 48 $
-    rand_ui52_raw_inbounds(r)
+    xor(rand_ui52_raw_inbounds(r) % UInt128 << 96,
+        rand_ui52_raw_inbounds(r) % UInt128 << 48,
+        rand_ui52_raw_inbounds(r))
 end
 
 rand(r::MersenneTwister, ::Type{Int64})   = reinterpret(Int64,  rand(r, UInt64))
@@ -447,7 +447,7 @@ function rand!{T<:Union{Float16, Float32}}(r::MersenneTwister, A::Array{T}, ::Ty
     A128 = unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128)
     @inbounds for i in 1:n128
         u = A128[i]
-        u $= u << 26
+        u ⊻= u << 26
         # at this point, the 64 low bits of u, "k" being the k-th bit of A128[i] and "+" the bit xor, are:
         # [..., 58+32,..., 53+27, 52+26, ..., 33+7, 32+6, ..., 27+1, 26, ..., 1]
         # the bits needing to be random are
@@ -459,7 +459,7 @@ function rand!{T<:Union{Float16, Float32}}(r::MersenneTwister, A::Array{T}, ::Ty
         A128[i] = mask128(u, T)
     end
     for i in 16*n128÷sizeof(T)+1:n
-        @inbounds A[i] = rand(r, T) + one(T)
+        @inbounds A[i] = rand(r, T) + oneunit(T)
     end
     A
 end
@@ -473,7 +473,7 @@ function rand!{T<:Union{Float16, Float32}}(r::MersenneTwister, A::Array{T}, ::Ty
     A
 end
 
-rand!{T<:Union{Float16, Float32}}(r::MersenneTwister, A::Array{T}) = rand!(r, A, CloseOpen)
+rand!(r::MersenneTwister, A::Array{<:Union{Float16, Float32}}) = rand!(r, A, CloseOpen)
 
 
 function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
@@ -488,17 +488,17 @@ function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
         i = 0
         @inbounds while n-i >= 5
             u = A[i+=1]
-            A[n]    $= u << 48
-            A[n-=1] $= u << 36
-            A[n-=1] $= u << 24
-            A[n-=1] $= u << 12
+            A[n]    ⊻= u << 48
+            A[n-=1] ⊻= u << 36
+            A[n-=1] ⊻= u << 24
+            A[n-=1] ⊻= u << 12
             n-=1
         end
     end
     if n > 0
         u = rand_ui2x52_raw(r)
         for i = 1:n
-            @inbounds A[i] $= u << 12*i
+            @inbounds A[i] ⊻= u << 12*i
         end
     end
     A
@@ -523,14 +523,14 @@ rem_knuth{T<:Unsigned}(a::T, b::T) = b != 0 ? a % b : a
 # maximum multiple of k <= 2^bits(T) decremented by one,
 # that is 0xFFFF...FFFF if k = typemax(T) - typemin(T) with intentional underflow
 # see http://stackoverflow.com/questions/29182036/integer-arithmetic-add-1-to-uint-max-and-divide-by-n-without-overflow
-maxmultiple{T<:Unsigned}(k::T) = (div(typemax(T) - k + one(k), k + (k == 0))*k + k - one(k))::T
+maxmultiple{T<:Unsigned}(k::T) = (div(typemax(T) - k + oneunit(k), k + (k == 0))*k + k - oneunit(k))::T
 
 # maximum multiple of k within 1:2^32 or 1:2^64 decremented by one, depending on size
-maxmultiplemix(k::UInt64) = if k >> 32 != 0; maxmultiple(k); else (div(0x0000000100000000, k + (k == 0))*k - one(k))::UInt64; end
+maxmultiplemix(k::UInt64) = if k >> 32 != 0; maxmultiple(k); else (div(0x0000000100000000, k + (k == 0))*k - oneunit(k))::UInt64; end
 
-abstract RangeGenerator
+abstract type RangeGenerator end
 
-immutable RangeGeneratorInt{T<:Integer, U<:Unsigned} <: RangeGenerator
+struct RangeGeneratorInt{T<:Integer, U<:Unsigned} <: RangeGenerator
     a::T   # first element of the range
     k::U   # range length or zero for full range
     u::U   # rejection threshold
@@ -544,7 +544,7 @@ RangeGenerator{T<:Unsigned}(r::UnitRange{T}) = begin
     if isempty(r)
         throw(ArgumentError("range must be non-empty"))
     end
-    RangeGeneratorInt(first(r), last(r) - first(r) + one(T))
+    RangeGeneratorInt(first(r), last(r) - first(r) + oneunit(T))
 end
 
 # specialized versions
@@ -561,7 +561,7 @@ for (T, U) in [(UInt8, UInt32), (UInt16, UInt32),
 end
 
 if GMP_VERSION.major >= 6
-    immutable RangeGeneratorBigInt <: RangeGenerator
+    struct RangeGeneratorBigInt <: RangeGenerator
         a::BigInt             # first
         m::BigInt             # range length - 1
         nlimbs::Int           # number of limbs in generated BigInt's
@@ -569,7 +569,7 @@ if GMP_VERSION.major >= 6
     end
 
 else
-    immutable RangeGeneratorBigInt <: RangeGenerator
+    struct RangeGeneratorBigInt <: RangeGenerator
         a::BigInt             # first
         m::BigInt             # range length - 1
         limbs::Vector{Limb}   # buffer to be copied into generated BigInt's
@@ -649,7 +649,7 @@ else
     end
 end
 
-rand{T<:Union{Signed,Unsigned,BigInt,Bool}}(rng::AbstractRNG, r::UnitRange{T}) = rand(rng, RangeGenerator(r))
+rand(rng::AbstractRNG, r::UnitRange{<:Union{Signed,Unsigned,BigInt,Bool}}) = rand(rng, RangeGenerator(r))
 
 
 # Randomly draw a sample from an AbstractArray r
@@ -663,7 +663,7 @@ function rand!(rng::AbstractRNG, A::AbstractArray, g::RangeGenerator)
     return A
 end
 
-rand!{T<:Union{Signed,Unsigned,BigInt,Bool,Char}}(rng::AbstractRNG, A::AbstractArray, r::UnitRange{T}) = rand!(rng, A, RangeGenerator(r))
+rand!(rng::AbstractRNG, A::AbstractArray, r::UnitRange{<:Union{Signed,Unsigned,BigInt,Bool,Char}}) = rand!(rng, A, RangeGenerator(r))
 
 function rand!(rng::AbstractRNG, A::AbstractArray, r::AbstractArray)
     g = RangeGenerator(1:(length(r)))
@@ -1257,7 +1257,7 @@ end
     randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A
 
 Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers.
-Also see the [`rand`](:func:`rand`) function.
+Also see the [`rand`](@ref) function.
 """
 function randn! end
 
@@ -1302,7 +1302,7 @@ end
 
 ## random UUID generation
 
-immutable UUID
+struct UUID
     value::UInt128
 
     UUID(u::UInt128) = new(u)
@@ -1468,7 +1468,7 @@ end
 """
     shuffle!([rng=GLOBAL_RNG,] v)
 
-In-place version of [`shuffle`](:func:`shuffle`): randomly permute the array `v` in-place,
+In-place version of [`shuffle`](@ref): randomly permute the array `v` in-place,
 optionally supplying the random-number generator `rng`.
 """
 function shuffle!(r::AbstractRNG, a::AbstractVector)
@@ -1489,9 +1489,9 @@ shuffle!(a::AbstractVector) = shuffle!(GLOBAL_RNG, a)
     shuffle([rng=GLOBAL_RNG,] v)
 
 Return a randomly permuted copy of `v`. The optional `rng` argument specifies a random
-number generator (see [Random Numbers](:ref:`Random Numbers <random-numbers>`)).
-To permute `v` in-place, see [`shuffle!`](:func:`shuffle!`).  To obtain randomly permuted
-indices, see [`randperm`](:func:`randperm`).
+number generator (see [Random Numbers](@ref)).
+To permute `v` in-place, see [`shuffle!`](@ref).  To obtain randomly permuted
+indices, see [`randperm`](@ref).
 """
 shuffle(r::AbstractRNG, a::AbstractVector) = shuffle!(r, copymutable(a))
 shuffle(a::AbstractVector) = shuffle(GLOBAL_RNG, a)
@@ -1500,9 +1500,9 @@ shuffle(a::AbstractVector) = shuffle(GLOBAL_RNG, a)
     randperm([rng=GLOBAL_RNG,] n::Integer)
 
 Construct a random permutation of length `n`. The optional `rng` argument specifies a random
-number generator (see [Random Numbers](:ref:`Random Numbers <random-numbers>`)).
-To randomly permute a arbitrary vector, see [`shuffle`](:func:`shuffle`)
-or [`shuffle!`](:func:`shuffle!`).
+number generator (see [Random Numbers](@ref)).
+To randomly permute a arbitrary vector, see [`shuffle`](@ref)
+or [`shuffle!`](@ref).
 """
 function randperm(r::AbstractRNG, n::Integer)
     a = Array{typeof(n)}(n)
@@ -1528,7 +1528,7 @@ randperm(n::Integer) = randperm(GLOBAL_RNG, n)
     randcycle([rng=GLOBAL_RNG,] n::Integer)
 
 Construct a random cyclic permutation of length `n`. The optional `rng`
-argument specifies a random number generator, see [Random Numbers](:ref:`Random Numbers <random-numbers>`).
+argument specifies a random number generator, see [Random Numbers](@ref).
 """
 function randcycle(r::AbstractRNG, n::Integer)
     a = Array{typeof(n)}(n)

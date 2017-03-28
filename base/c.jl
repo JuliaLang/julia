@@ -2,36 +2,14 @@
 
 # definitions related to C interface
 
-import Core.Intrinsics: cglobal, box
+import Core.Intrinsics: cglobal, bitcast
 
-cfunction(f::Function, r, a) = ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
-
-"""
-    Ptr{T}
-
-A memory address referring to data of type `T`.  However, there is no guarantee that the
-memory is actually valid, or that it actually represents data of the specified type.
-"""
-Ptr
-
-"""
-    Ref{T}
-
-An object that safely references data of type `T`. This type is guaranteed to point to
-valid, Julia-allocated memory of the correct type. The underlying data is protected from
-freeing by the garbage collector as long as the `Ref` itself is referenced.
-
-When passed as a `ccall` argument (either as a `Ptr` or `Ref` type), a `Ref` object will be
-converted to a native pointer to the data it references.
-
-There is no invalid (NULL) `Ref`.
-"""
-Ref
+cfunction(f, r, a) = ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
 
 if ccall(:jl_is_char_signed, Ref{Bool}, ())
-    typealias Cchar Int8
+    const Cchar = Int8
 else
-    typealias Cchar UInt8
+    const Cchar = UInt8
 end
 """
     Cchar
@@ -40,57 +18,30 @@ Equivalent to the native `char` c-type.
 """
 Cchar
 
-"""
-    Cuchar
-
-Equivalent to the native `unsigned char` c-type (`UInt8`).
-"""
-typealias Cuchar UInt8
-"""
-    Cshort
-
-Equivalent to the native `signed short` c-type (`Int16`).
-"""
-typealias Cshort Int16
-"""
-    Cushort
-
-Equivalent to the native `unsigned short` c-type (`UInt16`).
-"""
-typealias Cushort UInt16
-"""
-    Cint
-
-Equivalent to the native `signed int` c-type (`Int32`).
-"""
-typealias Cint Int32
-"""
-    Cuint
-
-Equivalent to the native `unsigned int` c-type (`UInt32`).
-"""
-typealias Cuint UInt32
 if is_windows()
-    typealias Clong Int32
-    typealias Culong UInt32
-    typealias Cwchar_t UInt16
+    const Clong = Int32
+    const Culong = UInt32
+    const Cwchar_t = UInt16
 else
-    typealias Clong Int
-    typealias Culong UInt
-    typealias Cwchar_t Int32
+    const Clong = Int
+    const Culong = UInt
+    const Cwchar_t = Int32
 end
+
 """
     Clong
 
 Equivalent to the native `signed long` c-type.
 """
 Clong
+
 """
     Culong
 
 Equivalent to the native `unsigned long` c-type.
 """
 Culong
+
 """
     Cwchar_t
 
@@ -98,80 +49,25 @@ Equivalent to the native `wchar_t` c-type (`Int32`).
 """
 Cwchar_t
 
-"""
-    Cptrdiff_t
-
-Equivalent to the native `ptrdiff_t` c-type (`Int`).
-"""
-typealias Cptrdiff_t Int
-"""
-    Csize_t
-
-Equivalent to the native `size_t` c-type (`UInt`).
-"""
-typealias Csize_t UInt
-"""
-    Cssize_t
-
-Equivalent to the native `ssize_t` c-type.
-"""
-typealias Cssize_t Int
-"""
-    Cintmax_t
-
-Equivalent to the native `intmax_t` c-type (`Int64`).
-"""
-typealias Cintmax_t Int64
-"""
-    Cuintmax_t
-
-Equivalent to the native `uintmax_t` c-type (`UInt64`).
-"""
-typealias Cuintmax_t UInt64
-"""
-    Clonglong
-
-Equivalent to the native `signed long long` c-type (`Int64`).
-"""
-typealias Clonglong Int64
-"""
-    Culonglong
-
-Equivalent to the native `unsigned long long` c-type (`UInt64`).
-"""
-typealias Culonglong UInt64
-"""
-    Cfloat
-
-Equivalent to the native `float` c-type (`Float32`).
-"""
-typealias Cfloat Float32
-"""
-    Cdouble
-
-Equivalent to the native `double` c-type (`Float64`).
-"""
-typealias Cdouble Float64
-
 if !is_windows()
     const sizeof_mode_t = ccall(:jl_sizeof_mode_t, Cint, ())
     if sizeof_mode_t == 2
-        typealias Cmode_t Int16
+        const Cmode_t = Int16
     elseif sizeof_mode_t == 4
-        typealias Cmode_t Int32
+        const Cmode_t = Int32
     elseif sizeof_mode_t == 8
-        typealias Cmode_t Int64
+        const Cmode_t = Int64
     end
 end
 
 # construction from typed pointers
-convert{T<:Union{Int8,UInt8}}(::Type{Cstring}, p::Ptr{T}) = box(Cstring, p)
-convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = box(Cwstring, p)
-convert{T<:Union{Int8,UInt8}}(::Type{Ptr{T}}, p::Cstring) = box(Ptr{T}, p)
-convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = box(Ptr{Cwchar_t}, p)
+convert(::Type{Cstring}, p::Ptr{<:Union{Int8,UInt8}}) = bitcast(Cstring, p)
+convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = bitcast(Cwstring, p)
+convert{T<:Union{Int8,UInt8}}(::Type{Ptr{T}}, p::Cstring) = bitcast(Ptr{T}, p)
+convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = bitcast(Ptr{Cwchar_t}, p)
 
 # construction from untyped pointers
-convert{T<:Union{Cstring,Cwstring}}(::Type{T}, p::Ptr{Void}) = box(T, p)
+convert{T<:Union{Cstring,Cwstring}}(::Type{T}, p::Ptr{Void}) = bitcast(T, p)
 
 pointer(p::Cstring) = convert(Ptr{UInt8}, p)
 pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)
@@ -180,21 +76,15 @@ pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)
 ==(x::Union{Cstring,Cwstring}, y::Ptr) = pointer(x) == y
 ==(x::Ptr, y::Union{Cstring,Cwstring}) = x == pointer(y)
 
-# here, not in pointer.jl, to avoid bootstrapping problems in coreimg.jl
-unsafe_wrap(::Type{String}, p::Cstring, own::Bool=false) = unsafe_wrap(String, convert(Ptr{UInt8}, p), own)
-unsafe_wrap(::Type{String}, p::Cstring, len::Integer, own::Bool=false) =
-    unsafe_wrap(String, convert(Ptr{UInt8}, p), len, own)
 unsafe_string(s::Cstring) = unsafe_string(convert(Ptr{UInt8}, s))
 
 # convert strings to String etc. to pass as pointers
-cconvert(::Type{Cstring}, s::String) =
-    ccall(:jl_array_cconvert_cstring, Ref{Vector{UInt8}},
-          (Vector{UInt8},), s.data)
+cconvert(::Type{Cstring}, s::String) = s
 cconvert(::Type{Cstring}, s::AbstractString) =
     cconvert(Cstring, String(s)::String)
 
 function cconvert(::Type{Cwstring}, s::AbstractString)
-    v = transcode(Cwchar_t, String(s).data)
+    v = transcode(Cwchar_t, Vector{UInt8}(String(s)))
     !isempty(v) && v[end] == 0 || push!(v, 0)
     return v
 end
@@ -207,7 +97,7 @@ containsnul(p::Ptr, len) =
 containsnul(s::String) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
 containsnul(s::AbstractString) = '\0' in s
 
-function unsafe_convert(::Type{Cstring}, s::Vector{UInt8})
+function unsafe_convert(::Type{Cstring}, s::Union{String,Vector{UInt8}})
     p = unsafe_convert(Ptr{Cchar}, s)
     containsnul(p, sizeof(s)) &&
         throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
@@ -240,7 +130,7 @@ same argument.
 This is only available on Windows.
 """
 function cwstring(s::AbstractString)
-    bytes = String(s).data
+    bytes = Vector{UInt8}(String(s))
     0 in bytes && throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
     return push!(transcode(UInt16, bytes), 0)
 end
@@ -271,13 +161,13 @@ function transcode end
 transcode{T<:Union{UInt8,UInt16,UInt32,Int32}}(::Type{T}, src::Vector{T}) = src
 transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::String) = T[T(c) for c in src]
 transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::Vector{UInt8}) = transcode(T, String(src))
-function transcode{S<:Union{Int32,UInt32}}(::Type{UInt8}, src::Vector{S})
+function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
     buf = IOBuffer()
     for c in src; print(buf, Char(c)); end
-    takebuf_array(buf)
+    take!(buf)
 end
 transcode(::Type{String}, src::String) = src
-transcode(T, src::String) = transcode(T, src.data)
+transcode(T, src::String) = transcode(T, Vector{UInt8}(src))
 transcode(::Type{String}, src) = String(transcode(UInt8, src))
 
 function transcode(::Type{UInt16}, src::Vector{UInt8})
@@ -294,24 +184,24 @@ function transcode(::Type{UInt16}, src::Vector{UInt8})
                 push!(dst, a)
                 a = b; continue
             elseif a < 0xe0 # 2-byte UTF-8
-                push!(dst, 0x3080 $ (UInt16(a) << 6) $ b)
+                push!(dst, xor(0x3080, UInt16(a) << 6, b))
             elseif i < n # 3/4-byte character
                 c = src[i += 1]
                 if -64 <= (c % Int8) # invalid UTF-8 (non-continuation)
                     push!(dst, a, b)
                     a = c; continue
                 elseif a < 0xf0 # 3-byte UTF-8
-                    push!(dst, 0x2080 $ (UInt16(a) << 12) $ (UInt16(b) << 6) $ c)
+                    push!(dst, xor(0x2080, UInt16(a) << 12, UInt16(b) << 6, c))
                 elseif i < n
                     d = src[i += 1]
                     if -64 <= (d % Int8) # invalid UTF-8 (non-continuation)
                         push!(dst, a, b, c)
                         a = d; continue
                     elseif a == 0xf0 && b < 0x90 # overlong encoding
-                        push!(dst, 0x2080 $ (UInt16(b) << 12) $ (UInt16(c) << 6) $ d)
+                        push!(dst, xor(0x2080, UInt16(b) << 12, UInt16(c) << 6, d))
                     else # 4-byte UTF-8
                         push!(dst, 0xe5b8 + (UInt16(a) << 8) + (UInt16(b) << 2) + (c >> 4),
-                                   0xdc80 $ (UInt16(c & 0xf) << 6) $ d)
+                                   xor(0xdc80, UInt16(c & 0xf) << 6, d))
                     end
                 else # too short
                     push!(dst, a, b, c)
@@ -364,7 +254,7 @@ function transcode(::Type{UInt8}, src::Vector{UInt16})
         a = src[i += 1]
     end
 
-    dst = Array{UInt8}(m)
+    dst = StringVector(m)
     a = src[1]
     i, j = 1, 0
     while true
@@ -380,7 +270,7 @@ function transcode(::Type{UInt8}, src::Vector{UInt16})
                 a += 0x2840
                 dst[j += 1] = 0xf0 | ((a >> 8) % UInt8)
                 dst[j += 1] = 0x80 | ((a % UInt8) >> 2)
-                dst[j += 1] = 0xf0 $ ((((a % UInt8) << 4) & 0x3f) $ (b >> 6) % UInt8)
+                dst[j += 1] = xor(0xf0, ((a % UInt8) << 4) & 0x3f, (b >> 6) % UInt8)
                 dst[j += 1] = 0x80 | ((b % UInt8) & 0x3f)
             else
                 dst[j += 1] = 0xe0 | ((a >> 12) % UInt8)

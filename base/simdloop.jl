@@ -7,7 +7,7 @@ module SimdLoop
 export @simd, simd_outer_range, simd_inner_length, simd_index
 
 # Error thrown from ill-formed uses of @simd
-type SimdError <: Exception
+mutable struct SimdError <: Exception
     msg::String
 end
 
@@ -44,7 +44,7 @@ check_body!(x) = true
 simd_outer_range(r) = 0:0
 
 # Get trip count for inner loop.
-simd_inner_length(r,j::Int) = length(r)
+@inline simd_inner_length(r,j::Int) = length(r)
 
 # Construct user-level element from original range, outer loop index j, and inner loop index i.
 @inline simd_index(r,j::Int,i) = (@inbounds ret = r[i+1]; ret)

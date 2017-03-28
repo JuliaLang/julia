@@ -1,6 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-debug = false
 using Base.Test
 
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
@@ -16,11 +15,11 @@ srand(1234321)
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
 
-for eltya in (Float32, Float64, Complex64, Complex128, Int)
-    aa = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
+@testset for eltya in (Float32, Float64, Complex64, Complex128, Int)
+    aa = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     asym = aa'+aa                  # symmetric indefinite
     apd  = aa'*aa                 # symmetric positive-definite
-    for atype in ("Array", "SubArray")
+    @testset for atype in ("Array", "SubArray")
         if atype == "Array"
             a = aa
         else
@@ -36,73 +35,76 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
         @test eab[1] == eigvals(fill(α,1,1),fill(β,1,1))
         @test eab[2] == eigvecs(fill(α,1,1),fill(β,1,1))
 
-    debug && println("\ntype of a: ", eltya,"\n")
-    debug && println("non-symmetric eigen decomposition")
         d,v   = eig(a)
-        for i in 1:size(a,2) @test a*v[:,i] ≈ d[i]*v[:,i] end
-        f = eigfact(a)
-        @test det(a) ≈ det(f)
-        @test inv(a) ≈ inv(f)
-        @test eigvals(f) === f[:values]
-        @test eigvecs(f) === f[:vectors]
+        @testset "non-symmetric eigen decomposition" begin
+            for i in 1:size(a,2)
+                @test a*v[:,i] ≈ d[i]*v[:,i]
+            end
+            f = eigfact(a)
+            @test det(a) ≈ det(f)
+            @test inv(a) ≈ inv(f)
+            @test eigvals(f) === f[:values]
+            @test eigvecs(f) === f[:vectors]
 
-        num_fact = eigfact(one(eltya))
-        @test num_fact.values[1] == one(eltya)
-        h = asym
-        @test minimum(eigvals(h)) ≈ eigmin(h)
-        @test maximum(eigvals(h)) ≈ eigmax(h)
-        @test_throws DomainError eigmin(a - a')
-        @test_throws DomainError eigmax(a - a')
-
-    debug && println("symmetric generalized eigenproblem")
-        if atype == "Array"
-            asym_sg = asym[1:n1, 1:n1]
-            a_sg = a[:,n1+1:n2]
-        else
-            asym_sg = view(asym, 1:n1, 1:n1)
-            a_sg = view(a, 1:n, n1+1:n2)
+            num_fact = eigfact(one(eltya))
+            @test num_fact.values[1] == one(eltya)
+            h = asym
+            @test minimum(eigvals(h)) ≈ eigmin(h)
+            @test maximum(eigvals(h)) ≈ eigmax(h)
+            @test_throws DomainError eigmin(a - a')
+            @test_throws DomainError eigmax(a - a')
         end
-        f = eigfact(asym_sg, a_sg'a_sg)
-        @test asym_sg*f[:vectors] ≈ (a_sg'a_sg*f[:vectors]) * Diagonal(f[:values])
-        @test f[:values] ≈ eigvals(asym_sg, a_sg'a_sg)
-        @test_approx_eq_eps prod(f[:values]) prod(eigvals(asym_sg/(a_sg'a_sg))) 200ε
-        @test eigvecs(asym_sg, a_sg'a_sg) == f[:vectors]
-        @test eigvals(f) === f[:values]
-        @test eigvecs(f) === f[:vectors]
-        @test_throws KeyError f[:Z]
+        @testset "symmetric generalized eigenproblem" begin
+            if atype == "Array"
+                asym_sg = asym[1:n1, 1:n1]
+                a_sg = a[:,n1+1:n2]
+            else
+                asym_sg = view(asym, 1:n1, 1:n1)
+                a_sg = view(a, 1:n, n1+1:n2)
+            end
+            f = eigfact(asym_sg, a_sg'a_sg)
+            @test asym_sg*f[:vectors] ≈ (a_sg'a_sg*f[:vectors]) * Diagonal(f[:values])
+            @test f[:values] ≈ eigvals(asym_sg, a_sg'a_sg)
+            @test prod(f[:values]) ≈ prod(eigvals(asym_sg/(a_sg'a_sg))) atol=200ε
+            @test eigvecs(asym_sg, a_sg'a_sg) == f[:vectors]
+            @test eigvals(f) === f[:values]
+            @test eigvecs(f) === f[:vectors]
+            @test_throws KeyError f[:Z]
 
-        d,v = eig(asym_sg, a_sg'a_sg)
-        @test d == f[:values]
-        @test v == f[:vectors]
-
-    debug && println("Non-symmetric generalized eigenproblem")
-        if atype == "Array"
-            a1_nsg = a[1:n1, 1:n1]
-            a2_nsg = a[n1+1:n2, n1+1:n2]
-        else
-            a1_nsg = view(a, 1:n1, 1:n1)
-            a2_nsg = view(a, n1+1:n2, n1+1:n2)
+            d,v = eig(asym_sg, a_sg'a_sg)
+            @test d == f[:values]
+            @test v == f[:vectors]
         end
-        f = eigfact(a1_nsg, a2_nsg)
-        @test a1_nsg*f[:vectors] ≈ (a2_nsg*f[:vectors]) * Diagonal(f[:values])
-        @test f[:values] ≈ eigvals(a1_nsg, a2_nsg)
-        @test_approx_eq_eps prod(f[:values]) prod(eigvals(a1_nsg/a2_nsg)) 50000ε
-        @test eigvecs(a1_nsg, a2_nsg) == f[:vectors]
-        @test_throws KeyError f[:Z]
+        @testset "Non-symmetric generalized eigenproblem" begin
+            if atype == "Array"
+                a1_nsg = a[1:n1, 1:n1]
+                a2_nsg = a[n1+1:n2, n1+1:n2]
+            else
+                a1_nsg = view(a, 1:n1, 1:n1)
+                a2_nsg = view(a, n1+1:n2, n1+1:n2)
+            end
+            f = eigfact(a1_nsg, a2_nsg)
+            @test a1_nsg*f[:vectors] ≈ (a2_nsg*f[:vectors]) * Diagonal(f[:values])
+            @test f[:values] ≈ eigvals(a1_nsg, a2_nsg)
+            @test prod(f[:values]) ≈ prod(eigvals(a1_nsg/a2_nsg)) atol=50000ε
+            @test eigvecs(a1_nsg, a2_nsg) == f[:vectors]
+            @test_throws KeyError f[:Z]
 
-        d,v = eig(a1_nsg, a2_nsg)
-        @test d == f[:values]
-        @test v == f[:vectors]
+            d,v = eig(a1_nsg, a2_nsg)
+            @test d == f[:values]
+            @test v == f[:vectors]
+        end
     end
 end
 
-#test eigenvalue computations with NaNs
-for eltya in (NaN16, NaN32, NaN)
-    @test_throws(ArgumentError, eig(fill(eltya, 1, 1)))
-    @test_throws(ArgumentError, eig(fill(eltya, 2, 2)))
-    test_matrix = rand(typeof(eltya),3,3)
-    test_matrix[2,2] = eltya
-    @test_throws(ArgumentError, eig(test_matrix))
+@testset "eigenvalue computations with NaNs" begin
+    for eltya in (NaN16, NaN32, NaN)
+        @test_throws(ArgumentError, eig(fill(eltya, 1, 1)))
+        @test_throws(ArgumentError, eig(fill(eltya, 2, 2)))
+        test_matrix = rand(typeof(eltya),3,3)
+        test_matrix[2,2] = eltya
+        @test_throws(ArgumentError, eig(test_matrix))
+    end
 end
 
 # test a matrix larger than 140-by-140 for #14174

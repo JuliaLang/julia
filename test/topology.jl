@@ -2,6 +2,8 @@
 
 include("testdefs.jl")
 addprocs(4; topology="master_slave")
+using Base.Test
+
 @test_throws RemoteException remotecall_fetch(()->remotecall_fetch(myid, 3), 2)
 
 function test_worker_counts()
@@ -19,7 +21,7 @@ end
 
 function remove_workers_and_test()
     while nworkers() > 0
-        @test :ok == rmprocs(workers()[1]; waitfor=2.0)
+        rmprocs(workers()[1]; waitfor=2.0)
         test_worker_counts()
         if nworkers() == nprocs()
             break
@@ -30,7 +32,7 @@ end
 remove_workers_and_test()
 
 # connect even pids to other even pids, odd to odd.
-type TopoTestManager <: ClusterManager
+mutable struct TopoTestManager <: ClusterManager
     np::Integer
 end
 
@@ -41,7 +43,7 @@ function Base.launch(manager::TopoTestManager, params::Dict, launched::Array, c:
 
     for i in 1:manager.np
         io, pobj = open(pipeline(detach(
-            setenv(`$(Base.julia_cmd(exename)) $exeflags --bind-to $(Base.LPROC.bind_addr) --worker $(Base.cluster_cookie())`, dir=dir)); stderr=STDERR), "r")
+            setenv(`$(Base.julia_cmd(exename)) $exeflags --bind-to $(Base.Distributed.LPROC.bind_addr) --worker $(Base.cluster_cookie())`, dir=dir)); stderr=STDERR), "r")
         wconfig = WorkerConfig()
         wconfig.process = pobj
         wconfig.io = io

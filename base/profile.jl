@@ -3,6 +3,7 @@
 module Profile
 
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo
+using Base: iszero
 
 export @profile
 
@@ -72,10 +73,10 @@ Clear any existing backtraces from the internal buffer.
 """
 clear() = ccall(:jl_profile_clear_data, Void, ())
 
-typealias LineInfoDict Dict{UInt64, Vector{StackFrame}}
-typealias LineInfoFlatDict Dict{UInt64, StackFrame}
+const LineInfoDict = Dict{UInt64, Vector{StackFrame}}
+const LineInfoFlatDict = Dict{UInt64, StackFrame}
 
-immutable ProfileFormat
+struct ProfileFormat
     maxdepth::Int
     mincount::Int
     noisefloor::Float64
@@ -102,25 +103,25 @@ will be used.
 
 The keyword arguments can be any combination of:
 
- - `format` can be `:tree` (default) or `:flat`.
+ - `format` -- Determines whether backtraces are printed with (default, `:tree`) or without (`:flat`)
+   indentation indicating tree structure.
 
- - If `C` is `true`, backtraces from C and Fortran code are shown (normally they are excluded).
+ - `C` -- If `true`, backtraces from C and Fortran code are shown (normally they are excluded).
 
- - If `combine` is `true` (default), instruction pointers are merged that correspond to the same line of code.
+ - `combine` -- If `true` (default), instruction pointers are merged that correspond to the same line of code.
 
- - `maxdepth` can be used to limit the depth of printing in `:tree` format,
-   while `sortedby` can be used to control the order in `:flat` format
-   `:filefuncline` (default) sorts by the source line, whereas `:count`
-   sorts in order of number of collected samples.
+ - `maxdepth` -- Limits the depth higher than `maxdepth` in the `:tree` format.
 
- - `noisefloor` only shows frames that exceed the heuristic noise floor of the sample (only applies to format `:tree`).
-   A suggested value to try for this is 2.0 (the default is 0). This parameters hides samples for which `n <= noisefloor * √N`,
-   where `n` is the number of samples on this line, and `N` is the number of samples for the callee.
+ - `sortedby` -- Controls the order in `:flat` format. `:filefuncline` (default) sorts by the source
+    line, whereas `:count` sorts in order of number of collected samples.
 
- - `mincount` can also be used to limit the printout to only those
-   lines with at least mincount occurrences.
+ - `noisefloor` -- Limits frames that exceed the heuristic noise floor of the sample (only applies to format `:tree`).
+    A suggested value to try for this is 2.0 (the default is 0). This parameter hides samples for which `n <= noisefloor * √N`,
+    where `n` is the number of samples on this line, and `N` is the number of samples for the callee.
+
+ - `mincount` -- Limits the printout to only those lines with at least `mincount` occurrences.
 """
-function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::LineInfoDict = getdict(data);
+function print(io::IO, data::Vector{<:Unsigned} = fetch(), lidict::LineInfoDict = getdict(data);
         format = :tree,
         C = false,
         combine = true,
@@ -137,7 +138,7 @@ function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::LineInfoD
         format)
 end
 
-function print{T<:Unsigned}(io::IO, data::Vector{T}, lidict::LineInfoDict, fmt::ProfileFormat, format::Symbol)
+function print(io::IO, data::Vector{<:Unsigned}, lidict::LineInfoDict, fmt::ProfileFormat, format::Symbol)
     cols::Int = Base.displaysize(io)[2]
     if format == :tree
         tree(io, data, lidict, cols, fmt)
@@ -152,12 +153,13 @@ end
     print([io::IO = STDOUT,] data::Vector, lidict::LineInfoDict; kwargs...)
 
 Prints profiling results to `io`. This variant is used to examine results exported by a
-previous call to [`retrieve`](:func:`retrieve`). Supply the vector `data` of backtraces and
+previous call to [`retrieve`](@ref). Supply the vector `data` of backtraces and
 a dictionary `lidict` of line information.
 
 See `Profile.print([io], data)` for an explanation of the valid keyword arguments.
 """
-print{T<:Unsigned}(data::Vector{T} = fetch(), lidict::LineInfoDict = getdict(data); kwargs...) = print(STDOUT, data, lidict; kwargs...)
+print(data::Vector{<:Unsigned} = fetch(), lidict::LineInfoDict = getdict(data); kwargs...) =
+    print(STDOUT, data, lidict; kwargs...)
 
 """
     retrieve() -> data, lidict
@@ -228,7 +230,7 @@ Given a previous profiling run, determine who called a particular function. Supp
 filename (and optionally, range of line numbers over which the function is defined) allows
 you to disambiguate an overloaded method. The returned value is a vector containing a count
 of the number of calls and line information about the caller. One can optionally supply
-backtrace `data` obtained from [`retrieve`](:func:`retrieve`); otherwise, the current internal
+backtrace `data` obtained from [`retrieve`](@ref); otherwise, the current internal
 profile buffer is used.
 """
 function callers end
@@ -241,12 +243,14 @@ function callers(funcname::String, bt::Vector, lidict::LineInfoDict; filename = 
     if linerange === nothing
         return callersf(li -> li.func == funcname && li.file == filename, bt, lidict)
     else
-        return callersf(li -> li.func == funcname && li.file == filename && in(li.line, linerange), bt, lidict)
+        return callersf(li -> li.func == funcname && li.file == filename &&
+            in(li.line, linerange), bt, lidict)
     end
 end
 
 callers(funcname::String; kwargs...) = callers(funcname, retrieve()...; kwargs...)
-callers(func::Function, bt::Vector, lidict::LineInfoDict; kwargs...) = callers(string(func), bt, lidict; kwargs...)
+callers(func::Function, bt::Vector, lidict::LineInfoDict; kwargs...) =
+    callers(string(func), bt, lidict; kwargs...)
 callers(func::Function; kwargs...) = callers(string(func), retrieve()...; kwargs...)
 
 ##
@@ -260,7 +264,7 @@ callers(func::Function; kwargs...) = callers(string(func), retrieve()...; kwargs
 
 Clears any stored memory allocation data when running julia with `--track-allocation`.
 Execute the command(s) you want to test (to force JIT-compilation), then call
-[`clear_malloc_data`](:func:`clear_malloc_data`). Then execute your command(s) again, quit
+[`clear_malloc_data`](@ref). Then execute your command(s) again, quit
 Julia, and examine the resulting `*.mem` files.
 """
 clear_malloc_data() = ccall(:jl_clear_malloc_data, Void, ())
@@ -289,10 +293,10 @@ error_codes = Dict(
     fetch() -> data
 
 Returns a reference to the internal buffer of backtraces. Note that subsequent operations,
-like [`clear`](:func:`clear`), can affect `data` unless you first make a copy. Note that the
+like [`clear`](@ref), can affect `data` unless you first make a copy. Note that the
 values in `data` have meaning only on this machine in the current session, because it
 depends on the exact memory addresses used in JIT-compiling. This function is primarily for
-internal use; [`retrieve`](:func:`retrieve`) may be a better choice for most users.
+internal use; [`retrieve`](@ref) may be a better choice for most users.
 """
 function fetch()
     len = len_data()
@@ -342,7 +346,7 @@ function parse_flat(iplist, n, lidict::LineInfoFlatDict, C::Bool)
     # The ones with no line number might appear multiple times in a single
     # backtrace, giving the wrong impression about the total number of backtraces.
     # Delete them too.
-    keep = !Bool[x == UNKNOWN || x.line == 0 || (x.from_c && !C) for x in lilist]
+    keep = .!Bool[x == UNKNOWN || x.line == 0 || (x.from_c && !C) for x in lilist]
     n = n[keep]
     lilist = lilist[keep]
     return (lilist, n)
@@ -368,7 +372,8 @@ function flat(io::IO, data::Vector, lidict::LineInfoDict, cols::Int, fmt::Profil
     nothing
 end
 
-function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int}, cols::Int, fmt::ProfileFormat)
+function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int},
+        cols::Int, fmt::ProfileFormat)
     p = liperm(lilist)
     lilist = lilist[p]
     n = n[p]
@@ -410,7 +415,8 @@ function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int}, cols::In
         wfile = floor(Integer, 2*ntext/5)
         wfunc = floor(Integer, 3*ntext/5)
     end
-    println(io, lpad("Count", wcounts, " "), " ", rpad("File", wfile, " "), " ", lpad("Line", wline, " "), " ", rpad("Function", wfunc, " "))
+    println(io, lpad("Count", wcounts, " "), " ", rpad("File", wfile, " "), " ",
+        lpad("Line", wline, " "), " ", rpad("Function", wfunc, " "))
     for i = 1:length(n)
         n[i] < fmt.mincount && continue
         li = lilist[i]
@@ -430,7 +436,7 @@ end
 ## A tree representation
 # Identify and counts repetitions of all unique backtraces
 function tree_aggregate(data::Vector{UInt64})
-    iz = find(data .== 0)  # find the breaks between backtraces
+    iz = find(iszero, data)  # find the breaks between backtraces
     treecount = Dict{Vector{UInt64},Int}()
     istart = 1 + btskip
     for iend in iz
@@ -474,24 +480,24 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
             end
             if li.line == li.pointer
                 strs[i] = string(base,
-                          rpad(string(counts[i]), ndigcounts, " "),
-                          " ",
-                          "unknown function (pointer: 0x",
-                          hex(li.pointer,2*sizeof(Ptr{Void})),
-                          ")")
+                    rpad(string(counts[i]), ndigcounts, " "),
+                    " ",
+                    "unknown function (pointer: 0x",
+                    hex(li.pointer,2*sizeof(Ptr{Void})),
+                    ")")
             else
                 fname = string(li.func)
                 if !li.from_c && !isnull(li.linfo)
                     fname = sprint(show_spec_linfo, li)
                 end
                 strs[i] = string(base,
-                              rpad(string(counts[i]), ndigcounts, " "),
-                              " ",
-                              rtruncto(string(li.file), widthfile),
-                              ":",
-                              li.line == -1 ? "?" : string(li.line),
-                              "; ",
-                              ltruncto(fname, widthfunc))
+                    rpad(string(counts[i]), ndigcounts, " "),
+                    " ",
+                    rtruncto(string(li.file), widthfile),
+                    ":",
+                    li.line == -1 ? "?" : string(li.line),
+                    "; ",
+                    ltruncto(fname, widthfunc))
             end
         else
             strs[i] = ""
@@ -501,7 +507,8 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
 end
 
 # Print a "branch" starting at a particular level. This gets called recursively.
-function tree(io::IO, bt::Vector{Vector{UInt64}}, counts::Vector{Int}, lidict::LineInfoFlatDict, level::Int, cols::Int, fmt::ProfileFormat, noisefloor::Int)
+function tree(io::IO, bt::Vector{Vector{UInt64}}, counts::Vector{Int},
+        lidict::LineInfoFlatDict, level::Int, cols::Int, fmt::ProfileFormat, noisefloor::Int)
     if level > fmt.maxdepth
         return
     end

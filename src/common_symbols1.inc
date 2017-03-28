@@ -1,5 +1,5 @@
 jl_symbol("getfield"),
-jl_symbol("box"),
+jl_symbol("bitcast"),
 jl_symbol("apply_type"),
 jl_symbol("meta"),
 jl_symbol("Ptr"),

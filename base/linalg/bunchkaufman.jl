@@ -4,7 +4,7 @@
 ## LD for BunchKaufman, UL for CholeskyDense, LU for LUDense and
 ## define size methods for Factorization types using it.
 
-immutable BunchKaufman{T,S<:AbstractMatrix} <: Factorization{T}
+struct BunchKaufman{T,S<:AbstractMatrix} <: Factorization{T}
     LD::S
     ipiv::Vector{BlasInt}
     uplo::Char
@@ -19,10 +19,10 @@ BunchKaufman{T}(A::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetr
 """
     bkfact!(A, uplo::Symbol=:U, symmetric::Bool=issymmetric(A), rook::Bool=false) -> BunchKaufman
 
-`bkfact!` is the same as [`bkfact`](:func:`bkfact`), but saves space by overwriting the
+`bkfact!` is the same as [`bkfact`](@ref), but saves space by overwriting the
 input `A`, instead of creating a copy.
 """
-function bkfact!{T<:BlasReal}(A::StridedMatrix{T}, uplo::Symbol = :U,
+function bkfact!(A::StridedMatrix{<:BlasReal}, uplo::Symbol = :U,
     symmetric::Bool = issymmetric(A), rook::Bool = false)
 
     if !symmetric
@@ -35,7 +35,7 @@ function bkfact!{T<:BlasReal}(A::StridedMatrix{T}, uplo::Symbol = :U,
     end
     BunchKaufman(LD, ipiv, char_uplo(uplo), symmetric, rook, info)
 end
-function bkfact!{T<:BlasComplex}(A::StridedMatrix{T}, uplo::Symbol=:U,
+function bkfact!(A::StridedMatrix{<:BlasComplex}, uplo::Symbol=:U,
     symmetric::Bool=issymmetric(A), rook::Bool=false)
 
     if rook
@@ -64,12 +64,12 @@ If `symmetric` is `true`, `A` is assumed to be symmetric. If `symmetric` is `fal
 `A` is assumed to be Hermitian. If `rook` is `true`, rook pivoting is used. If
 `rook` is false, rook pivoting is not used.
 The following functions are available for
-`BunchKaufman` objects: [`size`](:func:`size`), `\\`, [`inv`](:func:`inv`), [`issymmetric`](:func:`issymmetric`), [`ishermitian`](:func:`ishermitian`).
+`BunchKaufman` objects: [`size`](@ref), `\\`, [`inv`](@ref), [`issymmetric`](@ref), [`ishermitian`](@ref).
 
-[^Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. [url](http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0).
+[^Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. [url](http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0/).
 
 """
-bkfact{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issymmetric(A),
+bkfact(A::StridedMatrix{<:BlasFloat}, uplo::Symbol=:U, symmetric::Bool=issymmetric(A),
     rook::Bool=false) =
         bkfact!(copy(A), uplo, symmetric, rook)
 bkfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issymmetric(A),
@@ -80,6 +80,7 @@ bkfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issymmetric(A),
 convert{T}(::Type{BunchKaufman{T}}, B::BunchKaufman{T}) = B
 convert{T}(::Type{BunchKaufman{T}}, B::BunchKaufman) =
     BunchKaufman(convert(Matrix{T}, B.LD), B.ipiv, B.uplo, B.symmetric, B.rook, B.info)
+convert{T}(::Type{Factorization{T}}, B::BunchKaufman{T}) = B
 convert{T}(::Type{Factorization{T}}, B::BunchKaufman) = convert(BunchKaufman{T}, B)
 
 size(B::BunchKaufman) = size(B.LD)
@@ -87,7 +88,7 @@ size(B::BunchKaufman, d::Integer) = size(B.LD, d)
 issymmetric(B::BunchKaufman) = B.symmetric
 ishermitian(B::BunchKaufman) = !B.symmetric
 
-function inv{T<:BlasReal}(B::BunchKaufman{T})
+function inv(B::BunchKaufman{<:BlasReal})
     if B.info > 0
         throw(SingularException(B.info))
     end
@@ -99,7 +100,7 @@ function inv{T<:BlasReal}(B::BunchKaufman{T})
     end
 end
 
-function inv{T<:BlasComplex}(B::BunchKaufman{T})
+function inv(B::BunchKaufman{<:BlasComplex})
     if B.info > 0
         throw(SingularException(B.info))
     end
@@ -150,37 +151,42 @@ function A_ldiv_B!{T<:BlasComplex}(B::BunchKaufman{T}, R::StridedVecOrMat{T})
     end
 end
 
-function det(F::BunchKaufman)
-    if F.info > 0
-        return zero(eltype(F))
-    end
-
+function logabsdet(F::BunchKaufman)
     M = F.LD
     p = F.ipiv
     n = size(F.LD, 1)
 
+    if F.info > 0
+        return eltype(F)(-Inf), zero(eltype(F))
+    end
+    s = one(real(eltype(F)))
     i = 1
-    d = one(eltype(F))
+    abs_det = zero(real(eltype(F)))
     while i <= n
         if p[i] > 0
-            # 1x1 pivot case
-            d *= M[i,i]
+            elm = M[i,i]
+            s *= sign(elm)
+            abs_det += log(abs(elm))
             i += 1
         else
             # 2x2 pivot case. Make sure not to square before the subtraction by scaling
             # with the off-diagonal element. This is safe because the off diagonal is
             # always large for 2x2 pivots.
             if F.uplo == 'U'
-                d *= M[i, i + 1]*(M[i,i]/M[i, i + 1]*M[i + 1, i + 1] -
+                elm = M[i, i + 1]*(M[i,i]/M[i, i + 1]*M[i + 1, i + 1] -
                     (issymmetric(F) ? M[i, i + 1] : conj(M[i, i + 1])))
+                s *= sign(elm)
+                abs_det += log(abs(elm))
             else
-                d *= M[i + 1,i]*(M[i, i]/M[i + 1, i]*M[i + 1, i + 1] -
+                elm = M[i + 1,i]*(M[i, i]/M[i + 1, i]*M[i + 1, i + 1] -
                     (issymmetric(F) ? M[i + 1, i] : conj(M[i + 1, i])))
+                s *= sign(elm)
+                abs_det += log(abs(elm))
             end
             i += 2
         end
     end
-    return d
+    return abs_det, s
 end
 
 ## reconstruct the original matrix
