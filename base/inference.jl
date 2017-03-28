@@ -2097,7 +2097,7 @@ function ⊑(a::ANY, b::ANY)
         if isa(b, Const)
             return a.val === b.val
         end
-        return isa(a.val, b)
+        return isa(a.val, widenconst(b))
     elseif isa(b, Const)
         return a === Bottom
     elseif !(isa(a, Type) || isa(a, TypeVar)) ||
