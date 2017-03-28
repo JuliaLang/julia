@@ -884,6 +884,25 @@ mktempdir() do dir
         end
     end
 
+    @testset "merge" begin
+        repo = LibGit2.GitRepo(test_repo)
+        try
+            LibGit2.branch!(repo, "branch/merge_a")
+
+            a_head = LibGit2.head_oid(repo)
+            open(joinpath(LibGit2.path(repo),"merge_file1"),"w") do f
+                write(f, "111\n")
+            end
+            LibGit2.add!(repo, "merge_file1")
+            LibGit2.commit(repo, "add merge_file1")
+
+            a_head_ann = LibGit2.GitAnnotated(repo, "branch/a")
+            @test LibGit2.merge!(repo, [a_head_ann]) #merge returns true if successful
+        finally
+            close(repo)
+        end
+    end
+
     @testset "Transact test repository" begin
         repo = LibGit2.GitRepo(test_repo)
         try
