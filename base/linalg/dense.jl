@@ -165,6 +165,7 @@ tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
 """
     gradient(F::AbstractVector, x::Vector)
+
 Compute finite differences along vector `F` at points `x`, using central differences for midpoints
 and forward/backward differences for the first and last points.
 
