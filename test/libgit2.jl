@@ -199,12 +199,20 @@ mktempdir() do dir
                 @test isa(remote, LibGit2.GitRemote)
                 @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: $repo_url"
                 @test LibGit2.isattached(repo)
+                LibGit2.set_remote_url(repo, "", remote="upstream")
+                remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
+                @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: "
+                close(remote)
+                LibGit2.set_remote_url(cache_repo, repo_url, remote="upstream")
+                remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
+                @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: $repo_url"
                 close(remote)
 
                 remote = LibGit2.GitRemoteAnon(repo, repo_url)
                 @test LibGit2.url(remote) == repo_url
                 @test LibGit2.name(remote) == ""
                 @test isa(remote, LibGit2.GitRemote)
+                close(remote)
             finally
                 close(repo)
             end
@@ -318,11 +326,13 @@ mktempdir() do dir
                 end
                 @test LibGit2.is_ancestor_of(string(commit_oid1), string(commit_oid2), repo)
                 @test LibGit2.iscommit(string(commit_oid1), repo)
+                @test !LibGit2.iscommit(string(commit_oid1)*"fake", repo)
                 @test LibGit2.iscommit(string(commit_oid2), repo)
 
                 # lookup commits
                 cmt = LibGit2.GitCommit(repo, commit_oid1)
                 try
+                    @test LibGit2.Consts.OBJECT(typeof(cmt)) == LibGit2.Consts.OBJ_COMMIT
                     @test commit_oid1 == LibGit2.GitHash(cmt)
                     short_oid1 = LibGit2.GitShortHash(string(commit_oid1))
                     @test hex(commit_oid1) == hex(short_oid1)
@@ -520,12 +530,14 @@ mktempdir() do dir
                 tree = LibGit2.GitTree(repo, "HEAD^{tree}")
                 @test isa(tree, LibGit2.GitTree)
                 @test isa(LibGit2.GitObject(repo, "HEAD^{tree}"), LibGit2.GitTree)
+                @test LibGit2.Consts.OBJECT(typeof(tree)) == LibGit2.Consts.OBJ_TREE
                 @test count(tree) == 1
                 tree_str = sprint(show, tree)
                 @test tree_str == "GitTree:\nOwner: $(LibGit2.repository(tree))\nNumber of entries: 1\n"
                 @test_throws BoundsError tree[0]
                 @test_throws BoundsError tree[2]
                 tree_entry = tree[1]
+                @test LibGit2.filemode(tree_entry) == 33188
                 te_str = sprint(show, tree_entry)
                 @test te_str == "GitTreeEntry:\nEntry name: testfile\nEntry type: Base.LibGit2.GitBlob\nEntry OID: $(LibGit2.entryid(tree_entry))\n"
                 blob = LibGit2.GitBlob(tree_entry)
@@ -720,6 +732,7 @@ mktempdir() do dir
                 @test idx_entry !== nothing
                 idx_entry_str = sprint(show, idx_entry)
                 @test idx_entry_str == "IndexEntry($(string(idx_entry.id)))"
+                @test LibGit2.stage(idx_entry) == 0
 
                 i = find("zzz", idx)
                 @test isnull(i)
