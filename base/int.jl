@@ -360,9 +360,9 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
 end
 
 """
-    rem(x::Integer, T<:Integer)
-    mod(x::Integer, T<:Integer)
-    %(x::Integer, T<:Integer)
+    rem(x::Integer, T::Type{<:Integer})
+    mod(x::Integer, T::Type{<:Integer})
+    %(x::Integer, T::Type{<:Integer})
 
 Find `y::T` such that `x` ≡ `y` (mod n), where n is the number of integers representable
 in `T`, and `y` is an integer in `[typemin(T),typemax(T)]`.
@@ -372,7 +372,7 @@ julia> 129 % Int8
 -127
 ```
 """
-rem, mod
+function rem(x::Integer, T::Type) end, function mod(x::Integer, T::Type) end
 
 rem{T<:Integer}(x::T, ::Type{T}) = x
 rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
