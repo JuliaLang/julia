@@ -670,7 +670,13 @@ end
 function limit_type_depth(t::ANY, d::Int, cov::Bool, vars::Vector{TypeVar}=TypeVar[])
     if isa(t,Union)
         if d > MAX_TYPE_DEPTH
-            return Any
+            if cov
+                return Any
+            else
+                var = TypeVar(:_)
+                push!(vars, var)
+                return var
+            end
         end
         return Union{limit_type_depth(t.a, d+1, cov, vars),
                      limit_type_depth(t.b, d+1, cov, vars)}
