@@ -655,6 +655,11 @@ let A = 1:2, z = zip(A, A, A, A, A, A, A, A, A, A, A, A)
     @test z isa Core.Inference.limit_type_depth(typeof(z), 0)
     @test start(z) == (1, (1, (1, (1, (1, (1, (1, (1, (1, (1, (1, 1)))))))))))
 end
+# introduce TypeVars in Unions in invariant position
+let T = Val{Val{Val{Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64}}}}
+    #TODO: this test hits an assertion (see #21191)
+    #@test T <: Core.Inference.limit_type_depth(T, 0)
+end
 
 # issue #20704
 f20704(::Int) = 1
