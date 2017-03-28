@@ -169,7 +169,7 @@ foldr(op, itr) = mapfoldr(identity, op, itr)
 
 # `mapreduce_impl()` is called by `mapreduce()` (via `_mapreduce()`, when `A`
 # supports linear indexing) and does actual calculations (for `A[ifirst:ilast]` subset).
-# For efficiency, no parameter validity checks are done, it's the caller responsibility.
+# For efficiency, no parameter validity checks are done, it's the caller's responsibility.
 # `ifirst:ilast` range is assumed to be a valid non-empty subset of `A` indices.
 
 # This is a generic implementation of `mapreduce_impl()`,

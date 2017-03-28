@@ -515,7 +515,7 @@ false
 julia> contains("Xylophon", 'o')
 ERROR: MethodError: no method matching contains(::String, ::Char)
 Closest candidates are:
-  contains(!Matched::Function, ::Any, !Matched::Any) at reduce.jl:660
+  contains(!Matched::Function, ::Any, !Matched::Any) at reduce.jl:664
   contains(::AbstractString, !Matched::AbstractString) at strings/search.jl:378
 ```
 
