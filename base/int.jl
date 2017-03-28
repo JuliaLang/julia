@@ -359,6 +359,10 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
     end
 end
 
+rem{T<:Integer}(x::T, ::Type{T}) = x
+rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
+mod{T<:Integer}(x::Integer, ::Type{T}) = rem(x, T)
+
 """
     rem(x::Integer, T::Type{<:Integer})
     mod(x::Integer, T::Type{<:Integer})
@@ -372,9 +376,7 @@ julia> 129 % Int8
 -127
 ```
 """
-rem{T<:Integer}(x::T, ::Type{T}) = x
-rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
-mod{T<:Integer}(x::Integer, ::Type{T}) = rem(x, T)
+rem(::Integer, ::Type), mod(::Integer, ::Type)
 
 unsafe_trunc{T<:Integer}(::Type{T}, x::Integer) = rem(x, T)
 for (Ts, Tu) in ((Int8, UInt8), (Int16, UInt16), (Int32, UInt32), (Int64, UInt64), (Int128, UInt128))
