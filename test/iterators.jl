@@ -22,6 +22,22 @@ let z = zip(1:2, 3:4, 5:6)
     @test eltype(z) == Tuple{Int,Int,Int}
 end
 
+# unzip
+let z = zip(1:2)
+    @test unzip(z) == [1:2]
+    @test eltype(unzip(z)) == UnitRange{Int64}
+end
+
+let z = zip(1:2, 3:4)
+    @test collect(unzip(z)) == [(1,2), (3,4)]
+    @test eltype(unzip(z)) == UnitRange{Int64}
+end
+
+let z = zip(1:2, 3:4, 5:6)
+    @test collect(unzip(z)) == [(1,2), (3,4), (5,6)]
+    @test eltype(unzip(z)) == UnitRange{Int64}
+end
+
 @test eltype(Iterators.filter(isodd, 1:5)) == Int
 
 # typed `collect`
