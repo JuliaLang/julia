@@ -1,8 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-
-
-
 """
     LibGit2.GitRepo(path::AbstractString)
 
@@ -11,7 +8,7 @@ Opens a git repository at `path`.
 function GitRepo(path::AbstractString)
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_repository_open, :libgit2), Cint,
-                (Ptr{Ptr{Void}}, Cstring), repo_ptr_ptr, path)
+                 (Ptr{Ptr{Void}}, Cstring), repo_ptr_ptr, path)
     return GitRepo(repo_ptr_ptr[])
 end
 
@@ -25,7 +22,7 @@ function GitRepoExt(path::AbstractString, flags::Cuint = Cuint(Consts.REPOSITORY
     separator = @static is_windows() ? ";" : ":"
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_repository_open_ext, :libgit2), Cint,
-                (Ptr{Ptr{Void}}, Cstring, Cuint, Cstring),
+                 (Ptr{Ptr{Void}}, Cstring, Cuint, Cstring),
                  repo_ptr_ptr, path, flags, separator)
     return GitRepo(repo_ptr_ptr[])
 end
