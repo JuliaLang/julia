@@ -315,7 +315,6 @@ Julia uses the following external libraries, which are automatically downloaded 
 [FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
 [GMP]:          http://gmplib.org
 [MPFR]:         http://www.mpfr.org
-[double-conversion]: http://double-conversion.googlecode.com
 [libuv]:        https://github.com/JuliaLang/libuv
 [libgit2]:      https://libgit2.github.com/
 [utf8proc]:     http://julialang.org/utf8proc/
