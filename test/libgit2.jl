@@ -57,6 +57,14 @@ end
     @test sig3.email == sig.email
 end
 
+@testset "Default config" begin
+    #for now just see that this works
+    cfg = LibGit2.GitConfig()
+    @test isa(cfg, LibGit2.GitConfig)
+    LibGit2.set!(cfg, "fake.property", "AAAA")
+    LibGit2.getconfig("fake.property", "") == "AAAA"
+end
+
 @testset "Git URL parsing" begin
     @testset "HTTPS URL" begin
         m = match(LibGit2.URL_REGEX, "https://user:pass@server.com:80/org/project.git")
@@ -430,6 +438,8 @@ mktempdir() do dir
                     sig = LibGit2.Signature(repo)
                     @test sig.name == "AAAA"
                     @test sig.email == "BBBB@BBBB.COM"
+                    @test LibGit2.getconfig(repo, "user.name", "") == "AAAA"
+                    @test LibGit2.getconfig(cache_repo, "user.name", "") == "AAAA"
                 end
             finally
                 close(repo)
