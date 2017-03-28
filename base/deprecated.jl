@@ -1299,8 +1299,17 @@ end
 end
 
 # #19635
-@deprecate zeros{T <: Number}(::Type{T}, arr::Range)  zeros(T, length(arr))
-@deprecate ones{T <: Number}(::Type{T}, arr::Range)  ones(T, length(arr))
+for f in (:ones, :zeros)
+    @eval @deprecate ($f)(T::Type, arr) ($f)(T, size(arr))
+    @eval ($f)(T::Type, i::Integer) = ($f)(T, (i,))
+    @eval function ($f){T}(::Type{T}, arr::Array{T})
+        msg = string("`", $f , "{T}(::Type{T}, arr::Array{T})` is deprecated, use ",
+                            "`", $f , "(T, size(arr))` instead.",
+                            "A `MethodError` will be thrown."
+                           )
+        error(msg)
+    end
+end
 
 # END 0.6 deprecations
 

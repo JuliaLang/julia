@@ -2054,12 +2054,11 @@ end
     zs = zeros(SparseMatrixCSC([1 2; 3 4]), Complex{Float64}, (2,3))
     test_zeros(zs, SparseMatrixCSC{Complex{Float64}}, (2, 3))
 
-    @testset "#19265" begin
-        @test_throws MethodError zeros(Float64, [1.])
-        x = [1.]
-        test_zeros(zeros(x, Float64), Vector{Float64}, (1,))
-        @test x == [1.]
-    end
+    # #19265"
+    @test_throws Exception zeros(Float64, [1.])
+    x = [1.]
+    test_zeros(zeros(x, Float64), Vector{Float64}, (1,))
+    @test x == [1.]
 
     # exotic indexing
     oarr = zeros(randn(3), UInt16, 1:3, -1:0)
