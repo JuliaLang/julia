@@ -261,9 +261,8 @@ static int eq_bindings(jl_binding_t *a, jl_binding_t *b)
 // does module m explicitly import s?
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s)
 {
-    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, s);
-    jl_binding_t *bto = *bp;
-    return (bto != HT_NOTFOUND && bto->imported);
+    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, s);
+    return (b != HT_NOTFOUND && b->imported);
 }
 
 // NOTE: we use explici since explicit is a C++ keyword
@@ -411,23 +410,20 @@ JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var)
 
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
-    if (*bp == HT_NOTFOUND) return 0;
-    return (*bp)->exportp || (*bp)->owner==m;
+    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
+    return b != HT_NOTFOUND && (b->exportp || b->owner==m);
 }
 
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
-    if (*bp == HT_NOTFOUND) return 0;
-    return (*bp)->exportp;
+    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
+    return b != HT_NOTFOUND && b->exportp;
 }
 
 JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
-    if (*bp == HT_NOTFOUND) return 0;
-    return (*bp)->owner != NULL;
+    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
+    return b != HT_NOTFOUND && b->owner != NULL;
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
