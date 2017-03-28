@@ -372,8 +372,6 @@ julia> 129 % Int8
 -127
 ```
 """
-rem, mod
-
 rem{T<:Integer}(x::T, ::Type{T}) = x
 rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
 mod{T<:Integer}(x::Integer, ::Type{T}) = rem(x, T)
