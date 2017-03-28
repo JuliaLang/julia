@@ -2,10 +2,14 @@
 
 # issue #19892
 # (test this first to make sure it happens before set_num_threads)
-let a = randn(10^5,1), p1 = plan_rfft(a)
+let a = randn(10^5,1), p1 = plan_rfft(a, flags=FFTW.ESTIMATE)
     FFTW.set_num_threads(2)
-    p2 = plan_rfft(a)
+    p2 = plan_rfft(a, flags=FFTW.ESTIMATE)
     @test p1*a ≈ p2*a
+    # make sure threads are actually being used for p2
+    # (tests #21163).
+    @test !contains(string(p1), "dft-thr")
+    @test contains(string(p2), "dft-thr")
 end
 
 # fft
