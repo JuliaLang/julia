@@ -131,6 +131,7 @@ macro irrational(sym, val, def)
 end
 
 big(x::Irrational) = convert(BigFloat,x)
+big(::Type{<:Irrational}) = BigFloat
 
 ## specific irrational mathematical constants
 

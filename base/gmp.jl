@@ -9,7 +9,7 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0z, widen, signed, unsafe_trunc, trunc,
-             iszero
+             iszero, big
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -247,6 +247,9 @@ convert(::Type{Float32}, n::BigInt) = Float32(n,RoundNearest)
 convert(::Type{Float16}, n::BigInt) = Float16(n,RoundNearest)
 
 promote_rule(::Type{BigInt}, ::Type{<:Integer}) = BigInt
+
+big(::Type{<:Integer})  = BigInt
+big(::Type{<:Rational}) = Rational{BigInt}
 
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),

@@ -880,8 +880,8 @@ end
 float(z::Complex{<:AbstractFloat}) = z
 float(z::Complex) = Complex(float(real(z)), float(imag(z)))
 
-big(z::Complex{<:AbstractFloat}) = Complex{BigFloat}(z)
-big(z::Complex{<:Integer}) = Complex{BigInt}(z)
+big(::Type{Complex{T}}) where {T<:Real} = Complex{big(T)}
+big(z::Complex{T}) where {T<:Real} = Complex{big(T)}(z)
 
 ## Array operations on complex numbers ##
 
