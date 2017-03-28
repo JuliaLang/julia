@@ -1139,7 +1139,7 @@ end
      @deprecate object(repo::GitRepo, te::GitTreeEntry) GitObject(repo, te) false
      @deprecate commit(ann::GitAnnotated) GitHash(ann) false
      @deprecate lookup(repo::GitRepo, oid::GitHash) GitBlob(repo, oid) false
-    function Base.cat{T<:GitObject}(repo::GitRepo, ::Type{T}, object::AbstractString)
+    function Base.cat{T<:GitObject}(repo::GitRepo, ::Type{T}, object::Union{AbstractString,AbstractGitHash})
         Base.depwarn("cat(repo::GitRepo, T, spec) is deprecated, use content(T(repo, spec))", :cat)
         try
             return content(GitBlob(repo, spec))
@@ -1148,7 +1148,7 @@ end
             rethrow(e)
         end
     end
-    Base.cat(repo::GitRepo, object::AbstractString) = cat(repo, GitBlob, object)
+    Base.cat(repo::GitRepo, object::Union{AbstractString,AbstractGitHash}) = cat(repo, GitBlob, object)
 end
 
 # when this deprecation is deleted, remove all calls to it, and all
