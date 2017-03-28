@@ -65,7 +65,7 @@ and iterated over as if the command were an array of strings:
 ```jldoctest
 julia> collect(`echo "foo bar"`)
 2-element Array{String,1}:
- "echo"   
+ "echo"
  "foo bar"
 
 julia> `echo "foo bar"`[2]
