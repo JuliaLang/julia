@@ -622,6 +622,10 @@ abstract type AbstractTriangular{T,S<:AbstractMatrix} <: AbstractMatrix{T} end
 struct UpperTriangular{T,S<:AbstractMatrix} <: AbstractTriangular{T,S} end
 struct UnitUpperTriangular{T,S<:AbstractMatrix} <: AbstractTriangular{T,S} end
 
+immutable SIQ20671{T<:Number,m,kg,s,A,K,mol,cd,rad,sr} <: Number
+    val::T
+end
+
 function test_intersection()
     @testintersect(Vector{Float64}, Vector{Union{Float64,Float32}}, Bottom)
 
@@ -887,6 +891,14 @@ function test_intersection()
     @testintersect(Pair{L,Tuple{L,Pair{L,HL}}} where {L,HL},
                    Pair{R,Tuple{Pair{R,HR},R}} where {R,HR},
                    Bottom)  # X == Pair{X,...} is not satisfiable
+
+    # issue #20671 --- this just took too long
+    @testintersect(Tuple{Type{SIQ20671{T, mT, kgT, sT, AT, KT, molT, cdT, radT, srT}},
+                         SIQ20671{S, mS, kgS, sS, AS, KS, molS, cdS, radS, srS}} where {T, mT, kgT, sT, AT, KT, molT, cdT, radT, srT,
+                                                                                        S, mS, kgS, sS, AS, KS, molS, cdS, radS, srS},
+                   Tuple{Type{T}, T} where T,
+                   Tuple{Type{SIQ20671{T,mS,kgS,sS,AS,KS,molS,cdS,radS,srS}},
+                         SIQ20671{T,mS,kgS,sS,AS,KS,molS,cdS,radS,srS}} where {T,mS,kgS,sS,AS,KS,molS,cdS,radS,srS})
 end
 
 function test_intersection_properties()
