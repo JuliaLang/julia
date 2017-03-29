@@ -4,8 +4,7 @@ module MPFR
 
 export
     BigFloat,
-    setprecision,
-    big_str
+    setprecision
 
 import
     Base: (*), +, -, /, <, <=, ==, >, >=, ^, ceil, cmp, convert, copysign, div,
