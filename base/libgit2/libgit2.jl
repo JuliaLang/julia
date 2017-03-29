@@ -2,7 +2,7 @@
 
 module LibGit2
 
-import Base: merge!, cat, ==
+import Base: merge!, ==
 
 export with, GitRepo, GitConfig
 
@@ -494,16 +494,6 @@ Equivalent to `git reset [--soft | --mixed | --hard] <id>`.
 """
 reset!(repo::GitRepo, id::GitHash, mode::Cint = Consts.RESET_MIXED) =
     reset!(repo, GitObject(repo, id), mode)
-
-""" git cat-file <commit> """
-function cat(repo::GitRepo, spec::Union{AbstractString,AbstractGitHash})
-    obj = GitObject(repo, spec)
-    if isa(obj, GitBlob)
-        content(obj)
-    else
-        nothing
-    end
-end
 
 """ git rev-list --count <commit1> <commit2> """
 function revcount(repo::GitRepo, fst::AbstractString, snd::AbstractString)
