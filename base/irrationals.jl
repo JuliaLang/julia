@@ -37,6 +37,8 @@ convert(::Type{Rational{BigInt}}, x::Irrational) = throw(ArgumentError("Cannot c
     end
 end
 
+float(::Type{<:Irrational}) = Float64
+
 ==(::Irrational{s}, ::Irrational{s}) where {s} = true
 ==(::Irrational, ::Irrational) = false
 

@@ -10,7 +10,7 @@ import
     Base: (*), +, -, /, <, <=, ==, >, >=, ^, ceil, cmp, convert, copysign, div,
         exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
-        nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show,
+        nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show, float,
         sum, sqrt, string, print, trunc, precision, exp10, expm1,
         gamma, lgamma, log1p,
         eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
@@ -117,6 +117,8 @@ end
 
 convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)
 convert(::Type{AbstractFloat}, x::BigInt) = BigFloat(x)
+
+float(::Type{BigInt}) = BigFloat
 
 # generic constructor with arbitrary precision:
 """
