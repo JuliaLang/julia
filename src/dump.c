@@ -694,9 +694,10 @@ static int is_ast_node(jl_value_t *v)
 {
     // TODO: this accidentally copies QuoteNode(Expr(...)) and QuoteNode(svec(...))
     return jl_is_symbol(v) || jl_is_slot(v) || jl_is_ssavalue(v) ||
-        jl_is_expr(v) || jl_is_newvarnode(v) || jl_is_svec(v) || jl_is_tuple(v) ||
-        jl_is_uniontype(v) || jl_is_int32(v) || jl_is_int64(v) ||
-        jl_is_bool(v) || jl_is_quotenode(v) || jl_is_gotonode(v) ||
+        jl_is_uniontype(v) || jl_is_expr(v) || jl_is_newvarnode(v) ||
+        jl_is_svec(v) || jl_is_tuple(v) || ((jl_datatype_t*)jl_typeof(v))->instance ||
+        jl_is_int32(v) || jl_is_int64(v) || jl_is_bool(v) ||
+        jl_is_quotenode(v) || jl_is_gotonode(v) ||
         jl_is_labelnode(v) || jl_is_linenode(v) || jl_is_globalref(v);
 }
 
@@ -1057,6 +1058,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 jl_serialize_value(s, t);
                 return;
             }
+            assert(!t->instance && "detected singleton construction corruption");
             if (t->size <= 255) {
                 writetag(s->s, (jl_value_t*)SmallDataType_tag);
                 write_uint8(s->s, t->size);
@@ -1853,18 +1855,19 @@ static jl_value_t *jl_deserialize_value_globalref(jl_serializer_state *s)
 
 static jl_value_t *jl_deserialize_value_singleton(jl_serializer_state *s, jl_value_t **loc)
 {
-    int usetable = (s->mode != MODE_AST);
+    if (s->mode == MODE_AST) {
+        jl_datatype_t *dt = (jl_datatype_t*)jl_deserialize_value(s, NULL);
+        return dt->instance;
+    }
     jl_value_t *v = (jl_value_t*)jl_gc_alloc(s->ptls, 0, NULL);
-    if (usetable) {
-        uintptr_t pos = backref_list.len;
-        arraylist_push(&backref_list, (void*)v);
-        if (s->mode == MODE_MODULE) {
-            // TODO: optimize the case where the value can easily be obtained
-            // from an external module (tag == 6) as dt->instance
-            assert(loc != NULL && loc != HT_NOTFOUND);
-            arraylist_push(&flagref_list, loc);
-            arraylist_push(&flagref_list, (void*)pos);
-        }
+    uintptr_t pos = backref_list.len;
+    arraylist_push(&backref_list, (void*)v);
+    if (s->mode == MODE_MODULE) {
+        // TODO: optimize the case where the value can easily be obtained
+        // from an external module (tag == 6) as dt->instance
+        assert(loc != NULL && loc != HT_NOTFOUND);
+        arraylist_push(&flagref_list, loc);
+        arraylist_push(&flagref_list, (void*)pos);
     }
     jl_datatype_t *dt = (jl_datatype_t*)jl_deserialize_value(s, (jl_value_t**)HT_NOTFOUND); // no loc, since if dt is replaced, then dt->instance would be also
     jl_set_typeof(v, dt);
@@ -2346,14 +2349,21 @@ static void jl_init_restored_modules(jl_array_t *init_order)
 static void jl_prune_type_cache(jl_svec_t *cache)
 {
     size_t l = jl_svec_len(cache), ins = 0, i;
-    for(i=0; i < l; i++) {
+    for (i = 0; i < l; i++) {
         jl_value_t *ti = jl_svecref(cache, i);
-        if (ti == NULL) break;
+        if (ti == NULL)
+            break;
         if (ptrhash_get(&backref_table, ti) != HT_NOTFOUND || jl_get_llvm_gv(ti) != 0)
             jl_svecset(cache, ins++, ti);
+        else if (jl_is_datatype(ti)) {
+            jl_value_t *singleton = ((jl_datatype_t*)ti)->instance;
+            if (singleton && (ptrhash_get(&backref_table, singleton) != HT_NOTFOUND || jl_get_llvm_gv(singleton) != 0))
+                jl_svecset(cache, ins++, ti);
+        }
     }
-    if (i > ins)
-        memset(&jl_svec_data(cache)[ins], 0, (i-ins)*sizeof(jl_value_t*));
+    if (i > ins) {
+        memset(&jl_svec_data(cache)[ins], 0, (i - ins) * sizeof(jl_value_t*));
+    }
 }
 
 static void jl_save_system_image_to_stream(ios_t *f)
