@@ -238,7 +238,7 @@ function store_cell{T}(dlmstore::DLMStore{T}, row::Int, col::Int,
     end
     if quoted
         startpos += 1
-        endpos -= 1
+        endpos = prevind(sbuff, endpos)
     end
 
     if drow > 0
