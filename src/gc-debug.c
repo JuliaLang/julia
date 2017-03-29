@@ -350,7 +350,7 @@ static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
                     // the following are used by the deserializer to invalidate objects
                     v->header != 0x10 && v->header != 0x20 &&
                     v->header != 0x30 && v->header != 0x40 &&
-                    v->header != 0x50) {
+                    v->header != 0x50 && v->header != 0x60) {
                 assert(jl_typeof(dt) == (jl_value_t*)jl_datatype_type);
             }
         }
@@ -652,7 +652,7 @@ void objprofile_count(void *ty, int old, int sz)
 
 void objprofile_reset(void)
 {
-    for(int g=0; g < 3; g++) {
+    for (int g = 0; g < 3; g++) {
         htable_reset(&obj_counts[g], 0);
         htable_reset(&obj_sizes[g], 0);
     }
@@ -885,6 +885,14 @@ void gc_time_pool_end(int sweep_full)
               sweep_full ? "full" : "quick");
 }
 
+void gc_time_sysimg_end(uint64_t t0)
+{
+    double sweep_pool_sec = (jl_hrtime() - t0) / 1e9;
+    jl_printf(JL_STDOUT,
+              "GC sweep sysimg end %.2f ms\n",
+              sweep_pool_sec * 1000);
+}
+
 static int64_t big_total;
 static int64_t big_freed;
 static int64_t big_reset;
@@ -908,7 +916,7 @@ void gc_time_count_big(int old_bits, int bits)
 void gc_time_big_end(void)
 {
     double t_ms = jl_ns2ms(jl_hrtime() - big_sweep_start);
-    jl_printf(JL_STDOUT, "GC sweep big %.2f "
+    jl_printf(JL_STDOUT, "GC sweep big %.2f ms "
               "(freed %" PRId64 " / %" PRId64 " with %" PRId64 " rst)\n",
               t_ms, big_freed, big_total, big_reset);
 }
@@ -932,8 +940,8 @@ void gc_time_count_mallocd_array(int bits)
 
 void gc_time_mallocd_array_end(void)
 {
-    double t_ms = jl_ns2ms(jl_hrtime() - big_sweep_start);
-    jl_printf(JL_STDOUT, "GC sweep arrays %.2f "
+    double t_ms = jl_ns2ms(jl_hrtime() - mallocd_array_sweep_start);
+    jl_printf(JL_STDOUT, "GC sweep arrays %.2f ms "
               "(freed %" PRId64 " / %" PRId64 ")\n",
               t_ms, mallocd_array_freed, mallocd_array_total);
 }
