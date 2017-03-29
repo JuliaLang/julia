@@ -422,7 +422,15 @@ static void jl_update_all_fptrs(void)
 {
     //jl_printf(JL_STDOUT, "delayed_fptrs_n: %d\n", delayed_fptrs_n);
     void **fvars = sysimg_fvars;
-    if (fvars == 0) return;
+    if (fvars == NULL) {
+        size_t i;
+        for (i = 0; i < delayed_fptrs_n; i++) {
+            jl_method_instance_t *li = delayed_fptrs[i].li;
+            assert(li->jlcall_api && li->jlcall_api != 2);
+            li->jlcall_api = 0;
+        }
+        return;
+    }
     // jl_fptr_to_llvm needs to decompress some ASTs, therefore this needs to be NULL
     // to skip trying to restore GlobalVariable pointers in jl_deserialize_gv
     sysimg_gvars = NULL;
@@ -431,7 +439,7 @@ static void jl_update_all_fptrs(void)
     jl_method_instance_t **linfos = (jl_method_instance_t**)malloc(sizeof(jl_method_instance_t*) * sysimg_fvars_max);
     for (i = 0; i < delayed_fptrs_n; i++) {
         jl_method_instance_t *li = delayed_fptrs[i].li;
-        assert(li->def);
+        assert(li->def && li->jlcall_api && li->jlcall_api != 2);
         int32_t cfunc = delayed_fptrs[i].cfunc - 1;
         if (cfunc >= 0) {
             jl_fptr_to_llvm((jl_fptr_t)fvars[cfunc], li, 1);
