@@ -272,3 +272,8 @@ let fn = tempname()
     readdlm(fn)[] == "Julia"
     rm(fn)
 end
+
+# issue #21207
+let data = "\"1\",\"灣\"\"灣灣灣灣\",\"3\""
+    @test readcsv(IOBuffer(data)) == Any[1 "灣\"灣灣灣灣" 3]
+end
