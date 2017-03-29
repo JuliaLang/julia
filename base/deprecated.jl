@@ -1304,10 +1304,11 @@ for f in (:ones, :zeros)
     @eval ($f)(T::Type, i::Integer) = ($f)(T, (i,))
     @eval function ($f){T}(::Type{T}, arr::Array{T})
         msg = string("`", $f , "{T}(::Type{T}, arr::Array{T})` is deprecated, use ",
-                            "`", $f , "(T, size(arr))` instead.",
+                            "`", $f , "(T, size(arr))` instead. ",
                             "A `MethodError` will be thrown."
                            )
-        error(msg)
+        Base.depwarn(msg, Symbol($f))
+        throw(MethodError($f, (T, arr)))
     end
 end
 
