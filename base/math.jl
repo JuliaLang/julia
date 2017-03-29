@@ -291,7 +291,7 @@ end
 # TODO: GNU libc has exp10 as an extension; should openlibm?
 exp10(x::Float64) = 10.0^x
 exp10(x::Float32) = 10.0f0^x
-exp10(x::Integer) = exp10(float(x))
+exp10(x::Real) = exp10(float(x))
 
 # utility for converting NaN return to DomainError
 # the branch in nan_dom_err prevents its callers from inlining, so be sure to force it
