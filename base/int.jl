@@ -359,20 +359,24 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
     end
 end
 
-"""
-    rem(x::Integer, T::Type{<:Integer})
-    mod(x::Integer, T::Type{<:Integer})
-    %(x::Integer, T::Type{<:Integer})
+# @doc isn't available when running in Core at this point.
+# Tuple syntax for documention two function signatures at the same time
+# doesn't work either at this point.
+isdefined(Main, :Base) && for fname in (:mod, :rem)
+    @eval @doc """
+        rem(x::Integer, T::Type{<:Integer})
+        mod(x::Integer, T::Type{<:Integer})
+        %(x::Integer, T::Type{<:Integer})
 
-Find `y::T` such that `x` ≡ `y` (mod n), where n is the number of integers representable
-in `T`, and `y` is an integer in `[typemin(T),typemax(T)]`.
+    Find `y::T` such that `x` ≡ `y` (mod n), where n is the number of integers representable
+    in `T`, and `y` is an integer in `[typemin(T),typemax(T)]`.
 
-```jldoctest
-julia> 129 % Int8
--127
-```
-"""
-function rem(x::Integer, T::Type) end, function mod(x::Integer, T::Type) end
+    ```jldoctest
+    julia> 129 % Int8
+    -127
+    ```
+    """ -> $fname(x::Integer, T::Type{<:Integer})
+end
 
 rem{T<:Integer}(x::T, ::Type{T}) = x
 rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
