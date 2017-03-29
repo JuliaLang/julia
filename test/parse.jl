@@ -276,6 +276,9 @@ for T in vcat(subtypes(Signed), subtypes(Unsigned))
     @test parse(Float64, ".5    "    ) == 0.5
 end
 
+@test parse(Bool, "\u202f true") === true
+@test parse(Bool, "\u202f false") === false
+
 parsebin(s) = parse(Int,s,2)
 parseoct(s) = parse(Int,s,8)
 parsehex(s) = parse(Int,s,16)
