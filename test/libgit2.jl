@@ -868,7 +868,6 @@ mktempdir() do dir
             LibGit2.add!(repo, "file6")
             LibGit2.commit(repo, "add file6")
 
-            pre_abort_head = LibGit2.head_oid(repo)
             # Rebase type
             head_ann = LibGit2.GitAnnotated(repo, "branch/a")
             upst_ann = LibGit2.GitAnnotated(repo, "master")
@@ -880,10 +879,6 @@ mktempdir() do dir
             @test rbo_str == "RebaseOperation($(string(rbo.id)))\nOperation type: REBASE_OPERATION_PICK\n"
             rb_str = sprint(show, rb)
             @test rb_str == "GitRebase:\nNumber: 2\nCurrently performing operation: 1\n"
-
-            # test rebase abort
-            LibGit2.abort(rb)
-            @test LibGit2.head_oid(repo) == pre_abort_head
         finally
             close(repo)
         end
