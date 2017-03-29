@@ -139,7 +139,7 @@ static void jl_find_stack_bottom(void)
 
     // When using the sanitizers, increase stack size because they bloat
     // stack usage
-    const rlim_t kStackSize = 32 * 1024 * 1024;   // 32MB stack
+    const rlim_t kStackSize = 64 * 1024 * 1024;   // 64MiB stack
     int result;
 
     result = getrlimit(RLIMIT_STACK, &rl);
@@ -172,8 +172,7 @@ static void jl_uv_exitcleanup_add(uv_handle_t *handle, struct uv_shutdown_queue 
 
 static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
 {
-    if (handle != (uv_handle_t*)JL_STDOUT && handle != (uv_handle_t*)JL_STDERR)
-        jl_uv_exitcleanup_add(handle, (struct uv_shutdown_queue*)arg);
+    jl_uv_exitcleanup_add(handle, (struct uv_shutdown_queue*)arg);
 }
 
 void jl_write_coverage_data(void);
@@ -204,7 +203,10 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f != NULL) {
             JL_TRY {
+                size_t last_age = jl_get_ptls_states()->world_age;
+                jl_get_ptls_states()->world_age = jl_get_world_counter();
                 jl_apply(&f, 1);
+                jl_get_ptls_states()->world_age = last_age;
             }
             JL_CATCH {
                 jl_printf(JL_STDERR, "\natexit hook threw an error: ");
@@ -212,6 +214,11 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
             }
         }
     }
+
+    // replace standard output streams with something that we can still print to
+    // after the finalizers from base/stream.jl close the TTY
+    JL_STDOUT = (uv_stream_t*) STDOUT_FILENO;
+    JL_STDERR = (uv_stream_t*) STDERR_FILENO;
 
     jl_gc_run_all_finalizers(ptls);
 
@@ -223,16 +230,6 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 
     struct uv_shutdown_queue queue = {NULL, NULL};
     uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
-    // close stdout and stderr last, since we like being
-    // able to show stuff (incl. printf's)
-    if (JL_STDOUT != (void*) STDOUT_FILENO &&
-        ((uv_handle_t*)JL_STDOUT)->type < UV_HANDLE_TYPE_MAX)
-        jl_uv_exitcleanup_add((uv_handle_t*)JL_STDOUT, &queue);
-    if (JL_STDERR != (void*) STDERR_FILENO &&
-        ((uv_handle_t*)JL_STDERR)->type < UV_HANDLE_TYPE_MAX)
-        jl_uv_exitcleanup_add((uv_handle_t*)JL_STDERR, &queue);
-    //uv_unref((uv_handle_t*)JL_STDOUT);
-    //uv_unref((uv_handle_t*)JL_STDERR);
     struct uv_shutdown_queue_item *item = queue.first;
     while (item) {
         JL_TRY {
@@ -600,8 +597,8 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     jl_gc_init();
     jl_gc_enable(0);
-    jl_init_frontend();
     jl_init_types();
+    jl_init_frontend();
     jl_init_tasks();
     jl_init_root_task(ptls->stack_lo, ptls->stack_hi-ptls->stack_lo);
 
@@ -627,7 +624,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     if (!jl_options.image_file) {
         jl_core_module = jl_new_module(jl_symbol("Core"));
-        jl_type_type->name->mt->module = jl_core_module;
+        jl_type_typename->mt->module = jl_core_module;
         jl_top_module = jl_core_module;
         ptls->current_module = jl_core_module;
         jl_init_intrinsic_functions();
@@ -666,11 +663,16 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     for(i=1; i < jl_core_module->bindings.size; i+=2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            if (b->value && jl_is_datatype(b->value)) {
-                jl_datatype_t *tt = (jl_datatype_t*)b->value;
-                tt->name->module = jl_core_module;
-                if (tt->name->mt)
-                    tt->name->mt->module = jl_core_module;
+            jl_value_t *v = b->value;
+            if (v) {
+                if (jl_is_unionall(v))
+                    v = jl_unwrap_unionall(v);
+                if (jl_is_datatype(v)) {
+                    jl_datatype_t *tt = (jl_datatype_t*)v;
+                    tt->name->module = jl_core_module;
+                    if (tt->name->mt)
+                        tt->name->mt->module = jl_core_module;
+                }
             }
         }
     }
@@ -831,9 +833,8 @@ void jl_get_builtin_hooks(void)
     jl_segv_exception      = jl_new_struct_uninit((jl_datatype_t*)core("SegmentationFault"));
 #endif
 
-    jl_string_type = (jl_datatype_t*)core("String");
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
-    jl_vecelement_typename = ((jl_datatype_t*)core("VecElement"))->name;
+    jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
 }
 
 JL_DLLEXPORT void jl_get_system_hooks(void)
@@ -844,7 +845,7 @@ JL_DLLEXPORT void jl_get_system_hooks(void)
     jl_methoderror_type = (jl_datatype_t*)basemod("MethodError");
     jl_loaderror_type = (jl_datatype_t*)basemod("LoadError");
     jl_initerror_type = (jl_datatype_t*)basemod("InitError");
-    jl_complex_type = (jl_datatype_t*)basemod("Complex");
+    jl_complex_type = (jl_unionall_t*)basemod("Complex");
 }
 
 void jl_get_builtins(void)

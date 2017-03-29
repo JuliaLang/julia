@@ -7,12 +7,13 @@ module Consts
     const REMOTE_ORIGIN = "origin"
 
     # objs
-    const OBJ_ANY    = Cint(-2)
-    const OBJ_BAD    = Cint(-1)
-    const OBJ_COMMIT = Cint(1)
-    const OBJ_TREE   = Cint(2)
-    const OBJ_BLOB   = Cint(3)
-    const OBJ_TAG    = Cint(4)
+    @enum(OBJECT,
+          OBJ_ANY    = -2,
+          OBJ_BAD    = -1,
+          OBJ_COMMIT = 1,
+          OBJ_TREE   = 2,
+          OBJ_BLOB   = 3,
+          OBJ_TAG    = 4)
 
     #revwalk
     const SORT_NONE        = Cint(0)
@@ -97,15 +98,15 @@ module Consts
     const DIFF_FORMAT_NAME_ONLY    = Cuint(4)
     const DIFF_FORMAT_NAME_STATUS  = Cuint(5)
 
-    const DELTA_UNMODIFIED = Cint(0)
-    const DELTA_ADDED      = Cint(1)
-    const DELTA_DELETED    = Cint(2)
-    const DELTA_MODIFIED   = Cint(3)
-    const DELTA_RENAMED    = Cint(4)
-    const DELTA_COPIED     = Cint(5)
-    const DELTA_IGNORED    = Cint(6)
-    const DELTA_UNTRACKED  = Cint(7)
-    const DELTA_TYPECHANGE = Cint(8)
+    @enum(DELTA_STATUS, DELTA_UNMODIFIED = Cint(0),
+                        DELTA_ADDED      = Cint(1),
+                        DELTA_DELETED    = Cint(2),
+                        DELTA_MODIFIED   = Cint(3),
+                        DELTA_RENAMED    = Cint(4),
+                        DELTA_COPIED     = Cint(5),
+                        DELTA_IGNORED    = Cint(6),
+                        DELTA_UNTRACKED  = Cint(7),
+                        DELTA_TYPECHANGE = Cint(8))
 
     # index
     const IDXENTRY_NAMEMASK   = (0x0fff)
@@ -176,12 +177,12 @@ module Consts
     const RESET_HARD  = Cint(3) # MIXED plus changes in working tree discarded
 
     #rebase
-    const REBASE_OPERATION_PICK   = Cint(0)
-    const REBASE_OPERATION_REWORD = Cint(1)
-    const REBASE_OPERATION_EDIT   = Cint(2)
-    const REBASE_OPERATION_SQUASH = Cint(3)
-    const REBASE_OPERATION_FIXUP  = Cint(4)
-    const REBASE_OPERATION_EXEC   = Cint(5)
+    @enum(GIT_REBASE_OPERATION, REBASE_OPERATION_PICK   = Cint(0),
+                                REBASE_OPERATION_REWORD = Cint(1),
+                                REBASE_OPERATION_EDIT   = Cint(2),
+                                REBASE_OPERATION_SQUASH = Cint(3),
+                                REBASE_OPERATION_FIXUP  = Cint(4),
+                                REBASE_OPERATION_EXEC   = Cint(5))
 
     # fetch_prune
     const FETCH_PRUNE_UNSPECIFIED = Cint(0)
@@ -343,5 +344,10 @@ These are used to select which global option to set or get and are used in `git_
                     GET_TEMPLATE_PATH        = 10,
                     SET_TEMPLATE_PATH        = 11,
                     SET_SSL_CERT_LOCATIONS   = 12)
+
+
+    @enum(GIT_PROXY, PROXY_NONE,
+                     PROXY_AUTO,
+                     PROXY_SPECIFIED)
 
 end

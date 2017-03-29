@@ -7,7 +7,7 @@ import ..esc, ..push!, ..getindex, ..current_module, ..unsafe_load, ..Csize_t
 function doc!(str, ex)
     ptr  = unsafe_load(Core.Intrinsics.cglobal(:jl_filename, Ptr{UInt8}))
     len  = ccall(:strlen, Csize_t, (Ptr{UInt8},), ptr)
-    file = ccall(:jl_symbol_n, Any, (Ptr{UInt8}, Int32), ptr, len)
+    file = ccall(:jl_symbol_n, Any, (Ptr{UInt8}, Csize_t), ptr, len)
     line = unsafe_load(Core.Intrinsics.cglobal(:jl_lineno, Int32)) # Cint
     push!(DOCS, (current_module(), ex, str, file, line))
 end

@@ -11,12 +11,20 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Intrinsics.h>
+#if JL_LLVM_VERSION >= 30700
+#include <llvm/IR/LegacyPassManager.h>
+#else
+#include <llvm/PassManager.h>
+#endif
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #if JL_LLVM_VERSION >= 30600
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 #endif
+#include <llvm/IR/MDBuilder.h>
+
+#include "fix_llvm_assert.h"
 
 #include <vector>
 #include <queue>
@@ -34,9 +42,11 @@
 
 using namespace llvm;
 
+extern std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr, bool isConstant=false);
+
 namespace {
 
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
 static struct {
     unsigned count;
     unsigned locals;
@@ -240,8 +250,8 @@ void JuliaGCAllocator::lowerHandlers()
     typedef std::map<CallInst*,HandlerData>::iterator hdlr_iter_t;
     // For each exception enter, compute the life time of the enter, find
     // the corresponding leaves and collect a list of nested exception frames.
-    // This assumes the exception frames has simple structure. E.g.
-    // there's no recursion and different frames do no share the same leave.
+    // This assumes the exception frames have simple structure. E.g.
+    // there's no recursion and different frames do not share the same leave.
     std::function<void(hdlr_iter_t)> process_handler = [&] (hdlr_iter_t hdlr) {
         auto enter = hdlr->first;
         auto &data = hdlr->second;
@@ -330,7 +340,7 @@ void JuliaGCAllocator::lowerHandlers()
     Value *handler_sz = ConstantInt::get(T_int32, sizeof(jl_handler_t));
     // Now allocate the stack slots.
     // At each iteration, we allocate a new handler and assign all the remaining
-    // frames that doesn't have a non-processed child to this handler.
+    // frames that don't have a non-processed child to this handler.
     Instruction *firstInst = &F.getEntryBlock().front();
     while (!handlers.empty()) {
         processing.clear();
@@ -770,7 +780,7 @@ void JuliaGCAllocator::allocate_frame()
                 if (CallInst *callInst = dyn_cast<CallInst>(user)) {
                     assert(bb == NULL);
                     bb = callInst->getParent();
-#ifdef NDEBUG
+#ifdef JL_NDEBUG
                     break;
 #endif
                 }
@@ -1001,7 +1011,7 @@ void JuliaGCAllocator::allocate_frame()
     DIBuilder dbuilder(M, false);
 #endif
     unsigned argSpaceSize = 0;
-    for(BasicBlock::iterator I = gcframe->getParent()->begin(), E(gcframe); I != E; ) {
+    for (BasicBlock::iterator I = gcframe->getParent()->begin(), E(gcframe); I != E; ) {
         Instruction* inst = &*I;
         ++I;
         if (CallInst* callInst = dyn_cast<CallInst>(inst)) {
@@ -1051,6 +1061,7 @@ void JuliaGCAllocator::allocate_frame()
         }
         else if (AllocaInst *allocaInst = dyn_cast<AllocaInst>(inst)) {
             if (allocaInst->getAllocatedType() == V_null->getType()) {
+                // TODO: this is overly aggressive at zeroing allocas that may not actually need to be zeroed
                 StoreInst *store = new StoreInst(V_null, allocaInst);
                 store->insertAfter(allocaInst);
             }
@@ -1121,7 +1132,7 @@ void JuliaGCAllocator::allocate_frame()
         }
     }
 
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
     jl_gc_frame_stats.count++;
     jl_gc_frame_stats.locals += argSpaceSize;
     jl_gc_frame_stats.temp += maxDepth;
@@ -1130,15 +1141,12 @@ void JuliaGCAllocator::allocate_frame()
 
 struct LowerGCFrame: public ModulePass {
     static char ID;
-    LowerGCFrame(MDNode *_tbaa_gcframe=nullptr)
-        : ModulePass(ID),
-          tbaa_gcframe(_tbaa_gcframe)
+    LowerGCFrame() : ModulePass(ID)
     {}
 
 private:
-    MDNode *tbaa_gcframe; // One `LLVMContext` only
     void runOnFunction(Module *M, Function &F, Function *ptls_getter,
-                       Type *T_pjlvalue);
+                       Type *T_pjlvalue, MDNode *tbaa_gcframe);
     bool runOnModule(Module &M) override;
 };
 
@@ -1175,6 +1183,8 @@ static void ensure_enter_function(Module &M)
 
 bool LowerGCFrame::runOnModule(Module &M)
 {
+    MDNode *tbaa_gcframe = tbaa_make_child("jtbaa_gcframe").first;
+
     Function *ptls_getter = M.getFunction("jl_get_ptls_states");
     ensure_enter_function(M);
     FunctionType *functype = nullptr;
@@ -1188,7 +1198,7 @@ bool LowerGCFrame::runOnModule(Module &M)
     for (auto F = M.begin(), E = M.end(); F != E; ++F) {
         if (F->isDeclaration())
             continue;
-        runOnFunction(&M, *F, ptls_getter, T_pjlvalue);
+        runOnFunction(&M, *F, ptls_getter, T_pjlvalue, tbaa_gcframe);
     }
 
     // Cleanup for GC frame lowering.
@@ -1201,7 +1211,7 @@ bool LowerGCFrame::runOnModule(Module &M)
 }
 
 void LowerGCFrame::runOnFunction(Module *M, Function &F, Function *ptls_getter,
-                                 Type *T_pjlvalue)
+                                 Type *T_pjlvalue, MDNode *tbaa_gcframe)
 {
     CallInst *ptlsStates = nullptr;
     for (auto I = F.getEntryBlock().begin(), E = F.getEntryBlock().end();
@@ -1224,7 +1234,7 @@ static RegisterPass<LowerGCFrame> X("LowerGCFrame", "Lower GCFrame Pass",
                                     false /* Analysis Pass */);
 }
 
-#ifndef NDEBUG // llvm assertions build
+#ifndef JL_NDEBUG // llvm assertions build
 // gdb debugging code for inspecting the bb_uses map
 void jl_dump_bb_uses(std::map<BasicBlock*, std::map<frame_register, liveness::id> > &bb_uses)
 {
@@ -1240,8 +1250,12 @@ void jl_dump_bb_uses(std::map<BasicBlock*, std::map<frame_register, liveness::id
 }
 #endif
 
-Pass *createLowerGCFramePass(MDNode *tbaa_gcframe)
+Pass *createLowerGCFramePass()
 {
-    assert(tbaa_gcframe);
-    return new LowerGCFrame(tbaa_gcframe);
+    return new LowerGCFrame();
+}
+
+extern "C" JL_DLLEXPORT
+void LLVMAddLowerGCFramePass(LLVMPassManagerRef PM) {
+    unwrap(PM)->add(createLowerGCFramePass());
 }

@@ -17,6 +17,7 @@ for T in (Int32, Int64)
     @test gcd(typemin(T), T(1)) === T(1)
     @test_throws OverflowError gcd(typemin(T), typemin(T))
 
+    @test lcm(T(0)) === T(0)
     @test lcm(T(2)) === T(2)
     @test lcm(T(2), T(3)) === T(6)
     @test lcm(T(4), T(6)) === T(12)
@@ -88,6 +89,9 @@ let n = rand(Int)
     @test ndigits(n) == ndigits(big(n)) == ndigits(n, 10)
 end
 @test ndigits(Int8(5)) == ndigits(5)
+
+# issue #19367
+@test ndigits(Int128(2)^64, 256) == 9
 
 @test bin('3') == "110011"
 @test bin('3',7) == "0110011"

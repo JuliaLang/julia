@@ -24,7 +24,7 @@ function term(io::IO, md::Paragraph, columns)
 end
 
 function term(io::IO, md::BlockQuote, columns)
-    s = sprint(io->term(io, md.content, columns - 10))
+    s = sprint(term, md.content, columns - 10)
     for line in split(rstrip(s), "\n")
         println(io, " "^margin, "|", line)
     end
@@ -34,7 +34,7 @@ function term(io::IO, md::Admonition, columns)
     print(io, " "^margin, "| ")
     with_output_format(:bold, print, io, isempty(md.title) ? md.category : md.title)
     println(io, "\n", " "^margin, "|")
-    s = sprint(io -> term(io, md.content, columns - 10))
+    s = sprint(term, md.content, columns - 10)
     for line in split(rstrip(s), "\n")
         println(io, " "^margin, "|", line)
     end
@@ -44,7 +44,7 @@ function term(io::IO, f::Footnote, columns)
     print(io, " "^margin, "| ")
     with_output_format(:bold, print, io, "[^$(f.id)]")
     println(io, "\n", " "^margin, "|")
-    s = sprint(io -> term(io, f.text, columns - 10))
+    s = sprint(term, f.text, columns - 10)
     for line in split(rstrip(s), "\n")
         println(io, " "^margin, "|", line)
     end

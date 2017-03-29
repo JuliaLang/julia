@@ -7,13 +7,12 @@ debug = false
 
 # Test givens rotations
 for elty in (Float32, Float64, Complex64, Complex128)
-
     debug && println("elty is $elty")
 
     if elty <: Real
         A = convert(Matrix{elty}, randn(10,10))
     else
-        A = convert(Matrix{elty}, complex(randn(10,10),randn(10,10)))
+        A = convert(Matrix{elty}, complex.(randn(10,10),randn(10,10)))
     end
     for Atype in ("Array", "SubArray")
         if Atype == "Array"

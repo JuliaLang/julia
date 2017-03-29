@@ -38,11 +38,11 @@
       <item> for </item>
       <item> function </item>
       <item> if </item>
-      <item> immutable </item>
+      <item> struct </item>
       <item> let </item>
       <item> quote </item>
       <item> try </item>
-      <item> type </item>
+      <item> mutable struct </item>
       <item> while </item>
     </list>
     <list name="block_eb">
@@ -55,8 +55,8 @@
       <item> end </item>
     </list>
     <list name="keywords">
-      <item> abstract </item>
-      <item> bitstype </item>
+      <item> abstract type </item>
+      <item> primitive type </item>
       <item> break </item>
       <item> ccall </item>
       <item> const </item>

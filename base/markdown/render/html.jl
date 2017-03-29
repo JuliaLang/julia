@@ -26,7 +26,7 @@ const _htmlescape_chars = Dict('<'=>"&lt;",   '>'=>"&gt;",
                                '"'=>"&quot;", '&'=>"&amp;",
                                # ' '=>"&nbsp;",
                                )
-for ch in "'`!@\$\%()=+{}[]"
+for ch in "'`!\$\%()=+{}[]"
     _htmlescape_chars[ch] = "&#$(Int(ch));"
 end
 

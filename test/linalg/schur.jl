@@ -16,7 +16,7 @@ areal = randn(n,n)/2
 aimg  = randn(n,n)/2
 
 @testset for eltya in (Float32, Float64, Complex64, Complex128, Int)
-    a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
+    a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     asym = a'+a                  # symmetric indefinite
     apd  = a'*a                 # symmetric positive-definite
     @testset for atype in ("Array", "SubArray")
@@ -35,9 +35,13 @@ aimg  = randn(n,n)/2
         @test sort(real(f[:values])) ≈ sort(real(d))
         @test sort(imag(f[:values])) ≈ sort(imag(d))
         @test istriu(f[:Schur]) || eltype(a)<:Real
-        @test full(f) ≈ a
+        @test AbstractArray(f) ≈ a
         @test_throws KeyError f[:A]
 
+        tstring = sprint(show,f[:T])
+        zstring = sprint(show,f[:Z])
+        vstring = sprint(show,f[:values])
+        @test sprint(show,f) == "$(typeof(f)) with factors T and Z:\n$tstring\n$(zstring)\nand values:\n$vstring"
         @testset "Reorder Schur" begin
             # use asym for real schur to enforce tridiag structure
             # avoiding partly selection of conj. eigenvalues

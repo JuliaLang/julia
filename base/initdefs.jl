@@ -7,7 +7,7 @@
 
 A string containing the script name passed to Julia from the command line. Note that the
 script name remains unchanged from within included files. Alternatively see
-[`@__FILE__`](:data:`@__FILE__`).
+[`@__FILE__`](@ref).
 """
 PROGRAM_FILE = ""
 
@@ -30,11 +30,23 @@ isinteractive() = (is_interactive::Bool)
 """
     LOAD_PATH
 
-An array of paths (as strings) where the `require` function looks for code.
-"""
-const LOAD_PATH = String[]
+An array of paths as strings or custom loader objects for the `require`
+function and `using` and `import` statements to consider when loading
+code. To create a custom loader type, define the type and then add
+appropriate methods to the `Base.load_hook` function with the following
+signature:
 
+    Base.load_hook(loader::Loader, name::String, found::Any)
+
+The `loader` argument is the current value in `LOAD_PATH`, `name` is the
+name of the module to load, and `found` is the path of any previously
+found code to provide `name`. If no provider has been found earlier in
+`LOAD_PATH` then the value of `found` will be `nothing`. Custom loader
+functionality is experimental and may break or change in Julia 1.0.
+"""
+const LOAD_PATH = Any[]
 const LOAD_CACHE_PATH = String[]
+
 function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"
     if haskey(ENV, "JULIA_LOAD_PATH")
@@ -43,32 +55,6 @@ function init_load_path()
     push!(LOAD_PATH, abspath(JULIA_HOME, "..", "local", "share", "julia", "site", vers))
     push!(LOAD_PATH, abspath(JULIA_HOME, "..", "share", "julia", "site", vers))
     #push!(LOAD_CACHE_PATH, abspath(JULIA_HOME, "..", "lib", "julia")) #TODO: add a builtin location?
-end
-
-# initialize the local proc network address / port
-function init_bind_addr()
-    opts = JLOptions()
-    if opts.bindto != C_NULL
-        bind_to = split(unsafe_string(opts.bindto), ":")
-        bind_addr = string(parse(IPAddr, bind_to[1]))
-        if length(bind_to) > 1
-            bind_port = parse(Int,bind_to[2])
-        else
-            bind_port = 0
-        end
-    else
-        bind_port = 0
-        try
-            bind_addr = string(getipaddr())
-        catch
-            # All networking is unavailable, initialize bind_addr to the loopback address
-            # Will cause an exception to be raised only when used.
-            bind_addr = "127.0.0.1"
-        end
-    end
-    global LPROC
-    LPROC.bind_addr = bind_addr
-    LPROC.bind_port = UInt16(bind_port)
 end
 
 function early_init()
@@ -88,21 +74,6 @@ end
 A string containing the full path to the directory containing the `julia` executable.
 """
 :JULIA_HOME
-
-function init_parallel()
-    start_gc_msgs_task()
-    atexit(terminate_all_workers)
-
-    init_bind_addr()
-
-    # start in "head node" mode, if worker, will override later.
-    global PGRP
-    global LPROC
-    LPROC.id = 1
-    cluster_cookie(randstring(HDR_COOKIE_LEN))
-    assert(isempty(PGRP.workers))
-    register_worker(LPROC)
-end
 
 const atexit_hooks = []
 

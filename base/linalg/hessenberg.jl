@@ -1,11 +1,12 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-immutable Hessenberg{T,S<:AbstractMatrix} <: Factorization{T}
+struct Hessenberg{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     τ::Vector{T}
-    Hessenberg(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
+    Hessenberg{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} =
+        new(factors, τ)
 end
-Hessenberg{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = Hessenberg{T,typeof(factors)}(factors, τ)
+Hessenberg(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = Hessenberg{T,typeof(factors)}(factors, τ)
 
 Hessenberg(A::StridedMatrix) = Hessenberg(LAPACK.gehrd!(A)...)
 
@@ -13,12 +14,12 @@ Hessenberg(A::StridedMatrix) = Hessenberg(LAPACK.gehrd!(A)...)
 """
     hessfact!(A) -> Hessenberg
 
-`hessfact!` is the same as [`hessfact`](:func:`hessfact`), but saves space by overwriting
+`hessfact!` is the same as [`hessfact`](@ref), but saves space by overwriting
 the input `A`, instead of creating a copy.
 """
-hessfact!{T<:BlasFloat}(A::StridedMatrix{T}) = Hessenberg(A)
+hessfact!(A::StridedMatrix{<:BlasFloat}) = Hessenberg(A)
 
-hessfact{T<:BlasFloat}(A::StridedMatrix{T}) = hessfact!(copy(A))
+hessfact(A::StridedMatrix{<:BlasFloat}) = hessfact!(copy(A))
 
 """
     hessfact(A) -> Hessenberg
@@ -26,17 +27,36 @@ hessfact{T<:BlasFloat}(A::StridedMatrix{T}) = hessfact!(copy(A))
 Compute the Hessenberg decomposition of `A` and return a `Hessenberg` object. If `F` is the
 factorization object, the unitary matrix can be accessed with `F[:Q]` and the Hessenberg
 matrix with `F[:H]`. When `Q` is extracted, the resulting type is the `HessenbergQ` object,
-and may be converted to a regular matrix with [`full`](:func:`full`).
+and may be converted to a regular matrix with [`convert(Array, _)`](@ref)
+ (or `Array(_)` for short).
+
+# Example
+
+```jldoctest
+julia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]
+3×3 Array{Float64,2}:
+ 4.0  9.0  7.0
+ 4.0  4.0  1.0
+ 4.0  3.0  2.0
+
+julia> F = hessfact(A);
+
+julia> F[:Q] * F[:H] * F[:Q]'
+3×3 Array{Float64,2}:
+ 4.0  9.0  7.0
+ 4.0  4.0  1.0
+ 4.0  3.0  2.0
+```
 """
 function hessfact{T}(A::StridedMatrix{T})
-    S = promote_type(Float32, typeof(one(T)/norm(one(T))))
+    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
     return hessfact!(copy_oftype(A, S))
 end
 
-immutable HessenbergQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
+struct HessenbergQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     factors::S
     τ::Vector{T}
-    HessenbergQ(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
+    HessenbergQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
 HessenbergQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = HessenbergQ{T,typeof(factors)}(factors, τ)
 HessenbergQ(A::Hessenberg) = HessenbergQ(A.factors, A.τ)
@@ -58,14 +78,14 @@ function getindex(A::HessenbergQ, i::Integer, j::Integer)
 end
 
 ## reconstruct the original matrix
-convert{T<:BlasFloat}(::Type{Matrix}, A::HessenbergQ{T}) = LAPACK.orghr!(1, size(A.factors, 1), copy(A.factors), A.τ)
+convert(::Type{Matrix}, A::HessenbergQ{<:BlasFloat}) = LAPACK.orghr!(1, size(A.factors, 1), copy(A.factors), A.τ)
 convert(::Type{Array}, A::HessenbergQ) = convert(Matrix, A)
 full(A::HessenbergQ) = convert(Array, A)
-convert(::Type{AbstractMatrix}, F::Hessenberg) = (fq = full(F[:Q]); (fq * F[:H]) * fq')
+convert(::Type{AbstractMatrix}, F::Hessenberg) = (fq = Array(F[:Q]); (fq * F[:H]) * fq')
 convert(::Type{AbstractArray}, F::Hessenberg) = convert(AbstractMatrix, F)
 convert(::Type{Matrix}, F::Hessenberg) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::Hessenberg) = convert(Matrix, F)
-full(F::Hessenberg) = convert(Array, F)
+full(F::Hessenberg) = convert(AbstractArray, F)
 
 A_mul_B!{T<:BlasFloat}(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) =
     LAPACK.ormhr!('L', 'N', 1, size(Q.factors, 1), Q.factors, Q.τ, X)

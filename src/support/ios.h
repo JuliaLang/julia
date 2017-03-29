@@ -85,7 +85,7 @@ JL_DLLEXPORT int ios_eof_blocking(ios_t *s);
 JL_DLLEXPORT int ios_flush(ios_t *s);
 JL_DLLEXPORT void ios_close(ios_t *s);
 JL_DLLEXPORT int ios_isopen(ios_t *s);
-JL_DLLEXPORT char *ios_takebuf(ios_t *s, size_t *psize);  // release buffer to caller
+JL_DLLEXPORT char *ios_take_buffer(ios_t *s, size_t *psize);  // release buffer to caller
 // set buffer space to use
 JL_DLLEXPORT int ios_setbuf(ios_t *s, char *buf, size_t size, int own);
 JL_DLLEXPORT int ios_bufmode(ios_t *s, bufmode_t mode);
@@ -94,7 +94,8 @@ JL_DLLEXPORT int ios_get_writable(ios_t *s);
 JL_DLLEXPORT void ios_set_readonly(ios_t *s);
 JL_DLLEXPORT size_t ios_copy(ios_t *to, ios_t *from, size_t nbytes);
 JL_DLLEXPORT size_t ios_copyall(ios_t *to, ios_t *from);
-JL_DLLEXPORT size_t ios_copyuntil(ios_t *to, ios_t *from, char delim);
+JL_DLLEXPORT size_t ios_copyuntil(ios_t *to, ios_t *from, char delim, uint8_t chomp);
+JL_DLLEXPORT size_t ios_nchomp(ios_t *from, size_t ntowrite);
 // ensure at least n bytes are buffered if possible. returns # available.
 JL_DLLEXPORT size_t ios_readprep(ios_t *from, size_t n);
 

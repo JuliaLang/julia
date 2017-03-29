@@ -9,7 +9,7 @@ a = rand(1:100,100)
 include(joinpath(dir, "lru.jl"))
 include(joinpath(dir, "lru_test.jl"))
 
-include(joinpath(dir, "modint.jl"))
+include(joinpath(dir, "ModInts.jl"))
 b = ModInts.ModInt{10}(2)
 c = ModInts.ModInt{10}(4)
 @test b + c == ModInts.ModInt{10}(6)
@@ -30,8 +30,9 @@ r3, r4 = meshgrid(1:10,1:10)
 @test r4 == r
 
 include(joinpath(dir, "queens.jl"))
-@test solve(8, 8, 1) == Array{Int,1}[[1,1]]
-@test solve(8, 8, 7) == Array{Int,1}[[1,1],[2,3],[3,5],[4,2],[5,8],[7,4],[8,7]]
+@test trysolve(8, 8, 1) == (Queen(1,1),)
+@test trysolve(8, 8, 7) ==
+    (Queen(1,1), Queen(2,3), Queen(3,5), Queen(4,2), Queen(5,8), Queen(7,4), Queen(8,7))
 
 # Different cluster managers do not play well together. Since
 # the test infrastructure already uses LocalManager, we will test the simple
@@ -45,16 +46,18 @@ if is_unix()
 end
 
 dc_path = joinpath(dir, "dictchannel.jl")
-myid() == 1 || include(dc_path)
-
 # Run the remote on pid 1, since runtests may terminate workers
 # at any time depending on memory usage
-remotecall_fetch(1, dc_path) do f
-    include(f)
-    nothing
+main_ex = quote
+    myid() == 1 || include($dc_path)
+    remotecall_fetch(1, $dc_path) do f
+        include(f)
+        nothing
+    end
+    RemoteChannel(()->DictChannel(), 1)
 end
-dc=RemoteChannel(()->DictChannel(), 1)
-@test typeof(dc) == RemoteChannel{DictChannel}
+dc = eval(Main, main_ex)
+@test typeof(dc) == RemoteChannel{Main.DictChannel}
 
 @test isready(dc) == false
 put!(dc, 1, 2)
@@ -82,8 +85,7 @@ catch
 end
 
 if !zmq_found
-    eval(parse("module ZMQ end"))
+    eval(Main, parse("module ZMQ end"))
 end
 
 include(joinpath(dir, "clustermanager/0mq/ZMQCM.jl"))
-

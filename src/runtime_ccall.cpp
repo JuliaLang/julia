@@ -1,12 +1,13 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
+#include "llvm-version.h"
 #include <map>
 #include <string>
 #include <cstdio>
 #include <llvm/Support/Host.h>
+#include "fix_llvm_assert.h"
 #include "julia.h"
 #include "julia_internal.h"
-#include "llvm-version.h"
 using namespace llvm;
 
 // --- library symbol lookup ---

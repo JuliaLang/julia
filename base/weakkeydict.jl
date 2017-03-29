@@ -1,13 +1,25 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # weak key dictionaries
 
-type WeakKeyDict{K,V} <: Associative{K,V}
-    ht::Dict{Any,V}
+"""
+    WeakKeyDict([itr])
+
+`WeakKeyDict()` constructs a hash table where the keys are weak
+references to objects, and thus may be garbage collected even when
+referenced in a hash table.
+
+See [`Dict`](@ref) for further help.
+"""
+mutable struct WeakKeyDict{K,V} <: Associative{K,V}
+    ht::Dict{WeakRef,V}
     lock::Threads.RecursiveSpinLock
     finalizer::Function
 
-    function WeakKeyDict()
+    # Constructors mirror Dict's
+    function WeakKeyDict{K,V}() where V where K
         t = new(Dict{Any,V}(), Threads.RecursiveSpinLock(), identity)
-        t.finalizer = function(k)
+        t.finalizer = function (k)
             # when a weak key is finalized, remove from dictionary if it is still there
             islocked(t) && return finalizer(k, t.finalizer)
             delete!(t, k)
@@ -15,7 +27,61 @@ type WeakKeyDict{K,V} <: Associative{K,V}
         return t
     end
 end
+function WeakKeyDict{K,V}(kv) where V where K
+    h = WeakKeyDict{K,V}()
+    for (k,v) in kv
+        h[k] = v
+    end
+    return h
+end
+WeakKeyDict{K,V}(p::Pair) where V where K = setindex!(WeakKeyDict{K,V}(), p.second, p.first)
+function WeakKeyDict{K,V}(ps::Pair...) where V where K
+    h = WeakKeyDict{K,V}()
+    sizehint!(h, length(ps))
+    for p in ps
+        h[p.first] = p.second
+    end
+    return h
+end
 WeakKeyDict() = WeakKeyDict{Any,Any}()
+
+WeakKeyDict(kv::Tuple{}) = WeakKeyDict()
+copy(d::WeakKeyDict) = WeakKeyDict(d)
+
+WeakKeyDict{K,V}(ps::Pair{K,V}...)            = WeakKeyDict{K,V}(ps)
+WeakKeyDict{K  }(ps::Pair{K}...,)             = WeakKeyDict{K,Any}(ps)
+WeakKeyDict{V  }(ps::(Pair{K,V} where K)...,) = WeakKeyDict{Any,V}(ps)
+WeakKeyDict(     ps::Pair...)                 = WeakKeyDict{Any,Any}(ps)
+
+function WeakKeyDict(kv)
+    try
+        Base.associative_with_eltype((K, V) -> WeakKeyDict{K, V}, kv, eltype(kv))
+    catch e
+        if !applicable(start, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
+            throw(ArgumentError("WeakKeyDict(kv): kv needs to be an iterator of tuples or pairs"))
+        else
+            rethrow(e)
+        end
+    end
+end
+
+similar{K,V}(d::WeakKeyDict{K,V}) = WeakKeyDict{K,V}()
+similar{K,V}(d::WeakKeyDict, ::Type{Pair{K,V}}) = WeakKeyDict{K,V}()
+
+# conversion between Dict types
+function convert{K,V}(::Type{WeakKeyDict{K,V}},d::Associative)
+    h = WeakKeyDict{K,V}()
+    for (k,v) in d
+        ck = convert(K,k)
+        if !haskey(h,ck)
+            h[ck] = convert(V,v)
+        else
+            error("key collision during dictionary conversion")
+        end
+    end
+    return h
+end
+convert{K,V}(::Type{WeakKeyDict{K,V}},d::WeakKeyDict{K,V}) = d
 
 islocked(wkh::WeakKeyDict) = islocked(wkh.lock)
 lock(f, wkh::WeakKeyDict) = lock(f, wkh.lock)
@@ -45,7 +111,7 @@ get!{K}(default::Callable, wkh::WeakKeyDict{K}, key) = lock(() -> get!(default, 
 pop!{K}(wkh::WeakKeyDict{K}, key) = lock(() -> pop!(wkh.ht, key), wkh)
 pop!{K}(wkh::WeakKeyDict{K}, key, default) = lock(() -> pop!(wkh.ht, key, default), wkh)
 delete!{K}(wkh::WeakKeyDict{K}, key) = lock(() -> delete!(wkh.ht, key), wkh)
-empty!(wkh::WeakKeyDict) = (lock(() -> empty!(wkh.ht)); wkh)
+empty!(wkh::WeakKeyDict) = (lock(() -> empty!(wkh.ht), wkh); wkh)
 haskey{K}(wkh::WeakKeyDict{K}, key) = lock(() -> haskey(wkh.ht, key), wkh)
 getindex{K}(wkh::WeakKeyDict{K}, key) = lock(() -> getindex(wkh.ht, key), wkh)
 isempty(wkh::WeakKeyDict) = isempty(wkh.ht)

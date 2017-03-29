@@ -28,7 +28,13 @@ function cd(f::Function, args...; kws...)
         !haskey(ENV,"JULIA_PKGDIR") ? init() :
             throw(PkgError("Package metadata directory $metadata_dir doesn't exist; run Pkg.init() to initialize it."))
     end
-    Base.cd(()->f(args...; kws...), dir)
+    if haskey(ENV,"JULIA_PKGDIR")
+        withenv("JULIA_PKGDIR" => abspath(ENV["JULIA_PKGDIR"])) do
+            Base.cd(()->f(args...; kws...), dir)
+        end
+    else
+        Base.cd(()->f(args...; kws...), dir)
+    end
 end
 
 function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH)
@@ -57,7 +63,7 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
         Base.mv(joinpath(temp_dir,"METADATA"), metadata_dir)
         Base.mv(joinpath(temp_dir,"REQUIRE"), joinpath(dir,"REQUIRE"))
         Base.mv(joinpath(temp_dir,"META_BRANCH"), joinpath(dir,"META_BRANCH"))
-        rm(temp_dir)
+        rm(temp_dir, recursive=true)
     catch err
         ispath(metadata_dir) && rm(metadata_dir, recursive=true)
         ispath(temp_dir) && rm(temp_dir, recursive=true)
@@ -67,7 +73,7 @@ end
 
 function getmetabranch()
     try
-        chomp(readline(joinpath(path(),"META_BRANCH")))
+        readline(joinpath(path(),"META_BRANCH"))
     catch err
         META_BRANCH
     end

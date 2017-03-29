@@ -1,9 +1,9 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index c79b263..ee37d05 100644
+index 4e1104f..8110489 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -112,6 +112,10 @@ IF (HAVE_STRUCT_STAT_NSEC OR WIN32)
- 	OPTION( USE_NSEC		"Care about sub-second file mtimes and ctimes"	OFF )
+@@ -113,6 +113,10 @@ IF (HAVE_STRUCT_STAT_NSEC OR WIN32)
+ 	OPTION( USE_NSEC		"Care about sub-second file mtimes and ctimes"	ON  )
  ENDIF()
  
 +IF (NOT USE_OPENSSL)
@@ -13,7 +13,7 @@ index c79b263..ee37d05 100644
  # This variable will contain the libraries we need to put into
  # libgit2.pc's Requires.private. That is, what we're linking to or
  # what someone who's statically linking us needs to link to.
-@@ -277,6 +281,10 @@ ELSE ()
+@@ -283,6 +287,10 @@ ELSE ()
  		FIND_PACKAGE(OpenSSL)
  	ENDIF ()
  
@@ -24,7 +24,7 @@ index c79b263..ee37d05 100644
  	IF (CURL_FOUND)
  		ADD_DEFINITIONS(-DGIT_CURL)
  		INCLUDE_DIRECTORIES(${CURL_INCLUDE_DIRS})
-@@ -309,6 +317,9 @@ ELSEIF (OPENSSL_FOUND AND NOT SHA1_TYPE STREQUAL "builtin")
+@@ -316,6 +324,9 @@ ELSEIF (OPENSSL_FOUND AND NOT SHA1_TYPE STREQUAL "builtin")
  	ELSE()
  		SET(LIBGIT2_PC_REQUIRES "${LIBGIT2_PC_REQUIRES} openssl")
  	ENDIF ()
@@ -34,7 +34,7 @@ index c79b263..ee37d05 100644
  ELSE()
  	FILE(GLOB SRC_SHA1 src/hash/hash_generic.c)
  ENDIF()
-@@ -534,6 +545,11 @@ IF (OPENSSL_FOUND)
+@@ -543,6 +554,11 @@ IF (OPENSSL_FOUND)
    SET(SSL_LIBRARIES ${OPENSSL_LIBRARIES})
  ENDIF()
  
@@ -46,7 +46,7 @@ index c79b263..ee37d05 100644
  
  
  IF (THREADSAFE)
-@@ -679,7 +695,7 @@ IF (BUILD_CLAR)
+@@ -688,7 +704,7 @@ IF (BUILD_CLAR)
  	ENDIF ()
  
  	ENABLE_TESTING()
@@ -126,13 +126,13 @@ index 0000000..2f4adbc
 +    MBEDCRYPTO_LIBRARY
 +)
 diff --git a/src/global.c b/src/global.c
-index adf353d..bdad772 100644
+index e2ad8fe..c5b4269 100644
 --- a/src/global.c
 +++ b/src/global.c
-@@ -9,7 +9,11 @@
- #include "hash.h"
+@@ -10,7 +10,11 @@
  #include "sysdir.h"
  #include "filter.h"
+ #include "merge_driver.h"
 +#ifdef GIT_OPENSSL
  #include "openssl_stream.h"
 +#elif GIT_MBEDTLS
@@ -141,18 +141,22 @@ index adf353d..bdad772 100644
  #include "thread-utils.h"
  #include "git2/global.h"
  #include "transports/ssh.h"
-@@ -60,7 +64,11 @@ static int init_common(void)
+@@ -61,8 +65,13 @@ static int init_common(void)
  		(ret = git_sysdir_global_init()) == 0 &&
  		(ret = git_filter_global_init()) == 0 &&
- 		(ret = git_transport_ssh_global_init()) == 0)
+ 		(ret = git_merge_driver_global_init()) == 0 &&
+-		(ret = git_transport_ssh_global_init()) == 0 &&
+-		(ret = git_openssl_stream_global_init()) == 0)
++		(ret = git_transport_ssh_global_init()) == 0
 +#ifdef GIT_OPENSSL
- 		ret = git_openssl_stream_global_init();
++		&& (ret = git_openssl_stream_global_init()) == 0
 +#elif GIT_MBEDTLS
-+		ret = git_mbedtls_stream_global_init();
++		&& (ret = git_mbedtls_stream_global_init()) == 0
 +#endif
++		)
+ 		ret = git_mwindow_global_init();
  
  	GIT_MEMORY_BARRIER;
- 
 diff --git a/src/global.h b/src/global.h
 index 2199515..adadcd9 100644
 --- a/src/global.h
@@ -846,32 +850,6 @@ index 83e2d06..6fb538f 100644
  #else
  	GIT_UNUSED(out);
  	GIT_UNUSED(host);
-diff --git a/src/transport.c b/src/transport.c
-index 327052f..a438459 100644
---- a/src/transport.c
-+++ b/src/transport.c
-@@ -29,7 +29,7 @@ static transport_definition local_transport_definition = { "file://", git_transp
- static transport_definition transports[] = {
- 	{ "git://",   git_transport_smart, &git_subtransport_definition },
- 	{ "http://",  git_transport_smart, &http_subtransport_definition },
--#if defined(GIT_OPENSSL) || defined(GIT_WINHTTP) || defined(GIT_SECURE_TRANSPORT)
-+#if defined(GIT_OPENSSL) || defined(GIT_WINHTTP) || defined(GIT_SECURE_TRANSPORT) || defined(GIT_MBEDTLS)
- 	{ "https://", git_transport_smart, &http_subtransport_definition },
- #endif
- 	{ "file://",  git_transport_local, NULL },
-diff --git a/src/transports/http.c b/src/transports/http.c
-index 88b124b..f4474ef 100644
---- a/src/transports/http.c
-+++ b/src/transports/http.c
-@@ -597,7 +597,7 @@ static int http_connect(http_subtransport *t)
- 
- 	error = git_stream_connect(t->io);
- 
--#if defined(GIT_OPENSSL) || defined(GIT_SECURE_TRANSPORT) || defined(GIT_CURL)
-+#if defined(GIT_OPENSSL) || defined(GIT_SECURE_TRANSPORT) || defined(GIT_CURL) || defined(GIT_MBEDTLS)
- 	if ((!error || error == GIT_ECERTIFICATE) && t->owner->certificate_check_cb != NULL &&
- 	    git_stream_is_encrypted(t->io)) {
- 		git_cert *cert;
 diff --git a/tests/core/stream.c b/tests/core/stream.c
 index 0cbf442..a4fa2b4 100644
 --- a/tests/core/stream.c

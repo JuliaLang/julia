@@ -5,12 +5,12 @@ mainres = ([4, 5, 3],
 bitres = ([true, true, false],
           [false, true, false])
 
-tskprod(x) = @task for i in x; produce(i); end
+chnlprod(x) = Channel(c->for i in x; put!(c,i); end)
 
 for (dest, src, bigsrc, emptysrc, res) in [
     ([1, 2, 3], () -> [4, 5], () -> [1, 2, 3, 4, 5], () -> Int[], mainres),
     ([1, 2, 3], () -> 4:5, () -> 1:5, () -> 1:0, mainres),
-    ([1, 2, 3], () -> tskprod(4:5), () -> tskprod(1:5), () -> tskprod(1:0), mainres),
+    ([1, 2, 3], () -> chnlprod(4:5), () -> chnlprod(1:5), () -> chnlprod(1:0), mainres),
     (falses(3), () -> trues(2), () -> trues(5), () -> trues(0), bitres)]
 
     @test copy!(copy(dest), src()) == res[1]
@@ -47,6 +47,20 @@ for (dest, src, bigsrc, emptysrc, res) in [
 
     @test_throws BoundsError copy!(dest, 1, src(), 2, 2)
 end
+
+let A = reshape(1:6, 3, 2), B = similar(A)
+    RA = CartesianRange(indices(A))
+    copy!(B, RA, A, RA)
+    @test B == A
+end
+let A = reshape(1:6, 3, 2), B = zeros(8,8)
+    RA = CartesianRange(indices(A))
+    copy!(B, CartesianRange((5:7,2:3)), A, RA)
+    @test B[5:7,2:3] == A
+    B[5:7,2:3] = 0
+    @test all(x->x==0, B)
+end
+
 
 # test behavior of shallow and deep copying
 let a = Any[[1]], q = QuoteNode([1])
@@ -107,4 +121,24 @@ let x = BigFloat[1:1000;], y, z, v
     @test y == x
     # Check that the setprecision indeed does something
     @test z != x
+end
+
+# issue #19921
+mutable struct Foo19921
+    a::String
+end
+
+mutable struct Bar19921
+    foo::Foo19921
+    fooDict::Dict{Foo19921, Int64}
+end
+
+@testset "issue 19921" begin
+    for i = 1 : 100
+        foo = Foo19921("foo")
+        bar = Bar19921(foo, Dict(foo => 3))
+        bar2 = deepcopy(bar)
+        @test bar2.foo ∈ keys(bar2.fooDict)
+        @test bar2.fooDict[bar2.foo] != nothing
+    end
 end

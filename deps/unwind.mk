@@ -28,7 +28,11 @@ $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/libunwind-arm-pc-offset.patch-applied
 	cd $(SRCDIR)/srccache/libunwind-$(UNWIND_VER) && patch -p1 -f < $(SRCDIR)/patches/libunwind-arm-pc-offset.patch
 	echo 1 > $@
 
-$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/source-extracted $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/libunwind-arm-pc-offset.patch-applied
+$(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/libunwind-freebsd-mapper.patch-applied: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/libunwind-arm-pc-offset.patch-applied
+	cd $(SRCDIR)/srccache/libunwind-$(UNWIND_VER) && patch -p0 -f < $(SRCDIR)/patches/libunwind-freebsd-mapper.patch
+	echo 1 > $@
+
+$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/source-extracted $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/libunwind-freebsd-mapper.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" --disable-shared --disable-minidebuginfo

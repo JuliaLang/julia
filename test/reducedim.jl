@@ -20,15 +20,15 @@ for region in Any[
     1, 2, 3, 4, 5, (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4),
     (1, 2, 3), (1, 3, 4), (2, 3, 4), (1, 2, 3, 4)]
     # println("region = $region")
-    r = fill(NaN, Base.reduced_dims(size(Areduc), region))
+    r = fill(NaN, map(length, Base.reduced_indices(indices(Areduc), region)))
     @test sum!(r, Areduc) ≈ safe_sum(Areduc, region)
     @test prod!(r, Areduc) ≈ safe_prod(Areduc, region)
     @test maximum!(r, Areduc) ≈ safe_maximum(Areduc, region)
     @test minimum!(r, Areduc) ≈ safe_minimum(Areduc, region)
-    @test sumabs!(r, Areduc) ≈ safe_sumabs(Areduc, region)
-    @test sumabs2!(r, Areduc) ≈ safe_sumabs2(Areduc, region)
-    @test maxabs!(r, Areduc) ≈ safe_maxabs(Areduc, region)
-    @test minabs!(r, Areduc) ≈ safe_minabs(Areduc, region)
+    @test sum!(abs, r, Areduc) ≈ safe_sumabs(Areduc, region)
+    @test sum!(abs2, r, Areduc) ≈ safe_sumabs2(Areduc, region)
+    @test maximum!(abs, r, Areduc) ≈ safe_maxabs(Areduc, region)
+    @test minimum!(abs, r, Areduc) ≈ safe_minabs(Areduc, region)
 
     # With init=false
     r2 = similar(r)
@@ -41,41 +41,41 @@ for region in Any[
     fill!(r, -0.2)
     @test minimum!(r, Areduc, init=false) ≈ fill!(r2, -0.2)
     fill!(r, 8.1)
-    @test sumabs!(r, Areduc, init=false) ≈ safe_sumabs(Areduc, region)+8.1
+    @test sum!(abs, r, Areduc, init=false) ≈ safe_sumabs(Areduc, region)+8.1
     fill!(r, 8.1)
-    @test sumabs2!(r, Areduc, init=false) ≈ safe_sumabs2(Areduc, region)+8.1
+    @test sum!(abs2, r, Areduc, init=false) ≈ safe_sumabs2(Areduc, region)+8.1
     fill!(r, 1.5)
-    @test maxabs!(r, Areduc, init=false) ≈ fill!(r2, 1.5)
+    @test maximum!(abs, r, Areduc, init=false) ≈ fill!(r2, 1.5)
     fill!(r, -1.5)
-    @test minabs!(r, Areduc, init=false) ≈ fill!(r2, -1.5)
+    @test minimum!(abs, r, Areduc, init=false) ≈ fill!(r2, -1.5)
 
     @test sum(Areduc, region) ≈ safe_sum(Areduc, region)
     @test prod(Areduc, region) ≈ safe_prod(Areduc, region)
     @test maximum(Areduc, region) ≈ safe_maximum(Areduc, region)
     @test minimum(Areduc, region) ≈ safe_minimum(Areduc, region)
-    @test sumabs(Areduc, region) ≈ safe_sumabs(Areduc, region)
-    @test sumabs2(Areduc, region) ≈ safe_sumabs2(Areduc, region)
-    @test maxabs(Areduc, region) ≈ safe_maxabs(Areduc, region)
-    @test minabs(Areduc, region) ≈ safe_minabs(Areduc, region)
+    @test sum(abs, Areduc, region) ≈ safe_sumabs(Areduc, region)
+    @test sum(abs2, Areduc, region) ≈ safe_sumabs2(Areduc, region)
+    @test maximum(abs, Areduc, region) ≈ safe_maxabs(Areduc, region)
+    @test minimum(abs, Areduc, region) ≈ safe_minabs(Areduc, region)
 end
 
 # Test reduction along first dimension; this is special-cased for
 # size(A, 1) >= 16
 Breduc = rand(64, 3)
-r = fill(NaN, Base.reduced_dims(size(Breduc), 1))
+r = fill(NaN, map(length, Base.reduced_indices(indices(Breduc), 1)))
 @test sum!(r, Breduc) ≈ safe_sum(Breduc, 1)
-@test sumabs!(r, Breduc) ≈ safe_sumabs(Breduc, 1)
-@test sumabs2!(r, Breduc) ≈ safe_sumabs2(Breduc, 1)
+@test sum!(abs, r, Breduc) ≈ safe_sumabs(Breduc, 1)
+@test sum!(abs2, r, Breduc) ≈ safe_sumabs2(Breduc, 1)
 @test sum(Breduc, 1) ≈ safe_sum(Breduc, 1)
-@test sumabs(Breduc, 1) ≈ safe_sumabs(Breduc, 1)
-@test sumabs2(Breduc, 1) ≈ safe_sumabs2(Breduc, 1)
+@test sum(abs, Breduc, 1) ≈ safe_sumabs(Breduc, 1)
+@test sum(abs2, Breduc, 1) ≈ safe_sumabs2(Breduc, 1)
 
 fill!(r, 4.2)
 @test sum!(r, Breduc, init=false) ≈ safe_sum(Breduc, 1)+4.2
 fill!(r, -6.3)
-@test sumabs!(r, Breduc, init=false) ≈ safe_sumabs(Breduc, 1)-6.3
+@test sum!(abs, r, Breduc, init=false) ≈ safe_sumabs(Breduc, 1)-6.3
 fill!(r, -1.1)
-@test sumabs2!(r, Breduc, init=false) ≈ safe_sumabs2(Breduc, 1)-1.1
+@test sum!(abs2, r, Breduc, init=false) ≈ safe_sumabs2(Breduc, 1)-1.1
 
 # Small arrays with init=false
 A = reshape(1:15, 3, 5)
@@ -93,8 +93,8 @@ A = reshape(1:6, 3, 2)
 
 # Complex types
 @test typeof(@inferred(sum([1.0+1.0im], 1))) == Vector{Complex128}
-@test typeof(@inferred(Base.sumabs([1.0+1.0im], 1))) == Vector{Float64}
-@test typeof(@inferred(Base.sumabs2([1.0+1.0im], 1))) == Vector{Float64}
+@test typeof(@inferred(Base.sum(abs, [1.0+1.0im], 1))) == Vector{Float64}
+@test typeof(@inferred(Base.sum(abs2, [1.0+1.0im], 1))) == Vector{Float64}
 @test typeof(@inferred(prod([1.0+1.0im], 1))) == Vector{Complex128}
 @test typeof(@inferred(Base.prod(abs, [1.0+1.0im], 1))) == Vector{Float64}
 @test typeof(@inferred(Base.prod(abs2, [1.0+1.0im], 1))) == Vector{Float64}
@@ -149,8 +149,8 @@ for region in Any[-1, 0, (-1, 2), [0, 1], (1,-2,3), [0 1;
     @test_throws ArgumentError prod(Areduc, region)
     @test_throws ArgumentError maximum(Areduc, region)
     @test_throws ArgumentError minimum(Areduc, region)
-    @test_throws ArgumentError sumabs(Areduc, region)
-    @test_throws ArgumentError sumabs2(Areduc, region)
-    @test_throws ArgumentError maxabs(Areduc, region)
-    @test_throws ArgumentError minabs(Areduc, region)
+    @test_throws ArgumentError sum(abs, Areduc, region)
+    @test_throws ArgumentError sum(abs2, Areduc, region)
+    @test_throws ArgumentError maximum(abs, Areduc, region)
+    @test_throws ArgumentError minimum(abs, Areduc, region)
 end

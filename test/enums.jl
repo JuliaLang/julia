@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-module TestEnums
+const curmod = current_module()
+const curmod_name = fullname(curmod)
+const curmod_prefix = "$(["$m." for m in curmod_name]...)"
 
 using Base.Test
 
@@ -81,59 +83,25 @@ end
 @test_throws ArgumentError eval(:(@enum Test22 1=2))
 
 # other Integer types of enum members
-# TODO - not yet supported
-#=
-@enum Test3 _one_Test3=0x01 _two_Test3=0x02 _three_Test3=0x03
-@test typeof(_one_Test3.val) <: UInt8
-@test _one_Test3.val === 0x01
+@enum Test3::UInt8 _one_Test3=0x01 _two_Test3=0x02 _three_Test3=0x03
+@test Test3.size == 1
+@test convert(UInt8, _one_Test3) === 0x01
 @test length(instances(Test3)) == 3
 
-@enum Test4 _one_Test4=0x01 _two_Test4=0x0002 _three_Test4=0x03
-@test _one_Test4.val === 0x0001
-@test _two_Test4.val === 0x0002
-@test _three_Test4.val === 0x0003
-@test typeof(_one_Test4.val) <: UInt16
+@enum Test4::UInt16 _one_Test4=0x01 _two_Test4=0x0002 _three_Test4=0x03
+@test Test4.size == 2
 
-@enum Test5 _one_Test5=0x01 _two_Test5=0x00000002 _three_Test5=0x00000003
-@test _one_Test5.val === 0x00000001
-@test _two_Test5.val === 0x00000002
-@test _three_Test5.val === 0x00000003
-@test typeof(_one_Test5.val) <: UInt32
+@enum Test5::UInt32 _one_Test5=0x01 _two_Test5=0x00000002 _three_Test5=0x00000003
+@test Test5.size == 4
 
-@enum Test6 _one_Test6=0x00000000000000000000000000000001 _two_Test6=0x00000000000000000000000000000002
-@test _one_Test6.val === 0x00000000000000000000000000000001
-@test _two_Test6.val === 0x00000000000000000000000000000002
-@test typeof(_one_Test6.val) <: UInt128
+@enum Test6::UInt128 _one_Test6=0x00000000000000000000000000000001 _two_Test6=0x00000000000000000000000000000002
+@test Test6.size == 16
+@test typeof(convert(Integer, _one_Test6)) == UInt128
 
-@enum Test7 _zero_Test7=0b0 _one_Test7=0b1 _two_Test7=0b10
-@test _zero_Test7.val === 0x00
-@test _one_Test7.val === 0x01
-@test _two_Test7.val === 0x02
-@test typeof(_zero_Test7.val) <: UInt8
-
-@test_throws ArgumentError eval(:(@enum Test8 _zero="zero"))
-@test_throws ArgumentError eval(:(@enum Test9 _zero='0'))
-
-@enum Test8 _zero_Test8=zero(Int64)
-@test typeof(_zero_Test8.val) <: Int64
-@test _zero_Test8.val === Int64(0)
-
-@enum Test9 _zero_Test9 _one_Test9=0x01 _two_Test9
-@test typeof(_zero_Test9.val) <: Int
-@test _zero_Test9.val === 0
-@test typeof(_one_Test9.val) <: Int
-@test _one_Test9.val === 1
-@test typeof(_two_Test9.val) <: Int
-@test _two_Test9.val === 2
-
-@enum Test10 _zero_Test10=0x00 _one_Test10 _two_Test10
-@test typeof(_zero_Test10.val) <: UInt8
-@test _zero_Test10.val === 0x00
-@test typeof(_one_Test10.val) <: UInt8
-@test _one_Test10.val === 0x01
-@test typeof(_two_Test10.val) <: UInt8
-@test _two_Test10.val === 0x02
-=#
+# enum values must be integers
+@test_throws ArgumentError eval(:(@enum Test7 _zero="zero"))
+@test_throws ArgumentError eval(:(@enum Test8 _zero='0'))
+@test_throws ArgumentError eval(:(@enum Test9 _zero=0.5))
 
 # test macro handles keyword arguments
 @enum(Test11, _zero_Test11=2,
@@ -156,7 +124,7 @@ end
 @test string(apple) == "apple"
 
 @test reprmime("text/plain", Fruit) == "Enum $(string(Fruit)):\napple = 0\norange = 1\nkiwi = 2"
-@test reprmime("text/plain", orange) == "orange::TestEnums.Fruit = 1"
+@test reprmime("text/plain", orange) == "orange::$(curmod_prefix)Fruit = 1"
 
 @enum LogLevel DEBUG INFO WARN ERROR CRITICAL
 @test DEBUG < CRITICAL
@@ -167,5 +135,3 @@ let b = IOBuffer()
     seekstart(b)
     @test deserialize(b) === apple
 end
-
-end # module

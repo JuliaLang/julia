@@ -15,7 +15,7 @@ end
 function test_bin_reflection(freflect, f, types)
     iob = IOBuffer()
     freflect(iob, f, types)
-    str = takebuf_string(iob)
+    str = String(take!(iob))
     @test !isempty(str)
     nothing
 end
@@ -60,47 +60,46 @@ using Base.Test
 function warntype_hastag(f, types, tag)
     iob = IOBuffer()
     code_warntype(iob, f, types)
-    str = takebuf_string(iob)
+    str = String(take!(iob))
     return !isempty(search(str, tag))
 end
 
 pos_stable(x) = x > 0 ? x : zero(x)
 pos_unstable(x) = x > 0 ? x : 0
 
-tag = Base.have_color ? Base.text_colors[:red] : "UNION"
+tag = Base.have_color ? Base.error_color() : "UNION"
 @test warntype_hastag(pos_unstable, Tuple{Float64}, tag)
 @test !warntype_hastag(pos_stable, Tuple{Float64}, tag)
 
-type Stable{T,N}
+mutable struct Stable{T,N}
     A::Array{T,N}
 end
-type Unstable{T}
+mutable struct Unstable{T}
     A::Array{T}
 end
 Base.getindex(A::Stable, i) = A.A[i]
 Base.getindex(A::Unstable, i) = A.A[i]
 
-tag = Base.have_color ? Base.text_colors[:red] : "ARRAY{FLOAT64,N}"
+tag = Base.have_color ? Base.error_color() : "ARRAY{FLOAT64,N}"
 @test warntype_hastag(getindex, Tuple{Unstable{Float64},Int}, tag)
 @test !warntype_hastag(getindex, Tuple{Stable{Float64,2},Int}, tag)
 @test warntype_hastag(getindex, Tuple{Stable{Float64},Int}, tag)
 
 # Make sure emphasis is not used for other functions
-tag = Base.have_color ? Base.text_colors[:red] : "ANY"
+tag = Base.have_color ? Base.error_color() : "ANY"
 iob = IOBuffer()
 show(iob, expand(:(x->x^2)))
-str = takebuf_string(iob)
+str = String(take!(iob))
 @test isempty(search(str, tag))
 
 module ImportIntrinsics15819
 # Make sure changing the lookup path of an intrinsic doesn't break
 # the heuristic for type instability warning.
-# This can be any intrinsic that needs boxing
-import Core.Intrinsics: sqrt_llvm, box, unbox
+import Core.Intrinsics: sqrt_llvm, bitcast
 # Use import
-sqrt15819(x::Float64) = box(Float64, sqrt_llvm(unbox(Float64, x)))
+sqrt15819(x::Float64) = bitcast(Float64, sqrt_llvm(x))
 # Use fully qualified name
-sqrt15819(x::Float32) = box(Float32, Core.Intrinsics.sqrt_llvm(unbox(Float32, x)))
+sqrt15819(x::Float32) = bitcast(Float32, Core.Intrinsics.sqrt_llvm(x))
 end
 foo11122(x) = @fastmath x - 1.0
 
@@ -141,10 +140,10 @@ end
 @test isleaftype(Type{Vector})
 
 # issue #10165
-i10165(::DataType) = 0
+i10165(::Type) = 0
 i10165{T,n}(::Type{AbstractArray{T,n}}) = 1
-@test i10165(AbstractArray{Int}) == 0
-@test which(i10165, Tuple{Type{AbstractArray{Int}},}).sig == Tuple{typeof(i10165),DataType}
+@test i10165(AbstractArray{Int,n} where n) == 0
+@test which(i10165, Tuple{Type{AbstractArray{Int,n} where n},}).sig == Tuple{typeof(i10165),Type}
 
 # fullname
 @test fullname(Base) == (:Base,)
@@ -160,14 +159,17 @@ not_const = 1
 
 @test isimmutable(1) == true
 @test isimmutable([]) == false
-@test isimmutable("abc") == true
 
 ## find bindings tests
 @test ccall(:jl_get_module_of_binding, Any, (Any, Any), Base, :sin)==Base
 
+const curmod = current_module()
+const curmod_name = fullname(curmod)
+
 module TestMod7648
 using Base.Test
 import Base.convert
+import ..curmod_name, ..curmod
 export a9475, foo9475, c7648, foo7648, foo7648_nomethods, Foo7648
 
 const c7648 = 8
@@ -175,11 +177,12 @@ d7648 = 9
 const f7648 = 10
 foo7648(x) = x
 function foo7648_nomethods end
-type Foo7648 end
+mutable struct Foo7648 end
 
-    module TestModSub9475
+module TestModSub9475
     using Base.Test
     using ..TestMod7648
+    import ..curmod_name
     export a9475, foo9475
     a9475 = 5
     b9475 = 7
@@ -188,10 +191,11 @@ type Foo7648 end
         @test Base.binding_module(:a9475) == current_module()
         @test Base.binding_module(:c7648) == TestMod7648
         @test Base.module_name(current_module()) == :TestModSub9475
-        @test Base.fullname(current_module()) == (:TestMod7648, :TestModSub9475)
+        @test Base.fullname(current_module()) == (curmod_name..., :TestMod7648,
+                                                  :TestModSub9475)
         @test Base.module_parent(current_module()) == TestMod7648
     end
-    end # module TestModSub9475
+end # module TestModSub9475
 
 using .TestModSub9475
 
@@ -199,7 +203,7 @@ let
     @test Base.binding_module(:d7648) == current_module()
     @test Base.binding_module(:a9475) == TestModSub9475
     @test Base.module_name(current_module()) == :TestMod7648
-    @test Base.module_parent(current_module()) == Main
+    @test Base.module_parent(current_module()) == curmod
 end
 end # module TestMod7648
 
@@ -213,13 +217,13 @@ let
                                                 :Foo7648, :eval, Symbol("#eval")])
     @test Set(names(TestMod7648, true, true)) == Set([:TestMod7648, :TestModSub9475, :a9475, :foo9475, :c7648, :d7648, :f7648,
                                                       :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
-                                                      :Foo7648, :eval, Symbol("#eval"), :convert])
+                                                      :Foo7648, :eval, Symbol("#eval"), :convert, :curmod_name, :curmod])
     @test isconst(TestMod7648, :c7648)
     @test !isconst(TestMod7648, :d7648)
 end
 
 let
-    using TestMod7648
+    using .TestMod7648
     @test Base.binding_module(:a9475) == TestMod7648.TestModSub9475
     @test Base.binding_module(:c7648) == TestMod7648
     @test Base.function_name(foo7648) == :foo7648
@@ -276,11 +280,11 @@ let ex = :(a + b)
     ex.typ = Integer
     @test string(ex) == "(a + b)::Integer"
 end
-foo13825{T,N}(::Array{T,N}, ::Array, ::Vector) = nothing
+foo13825{T, N}(::Array{T,N}, ::Array, ::Vector) = nothing
 @test startswith(string(first(methods(foo13825))),
-                 "foo13825{T,N}(::Array{T,N}, ::Array, ::Array{T<:Any,1})")
+                 "foo13825(::Array{T,N}, ::Array, ::Array{T,1} where T)")
 
-type TLayout
+mutable struct TLayout
     x::Int8
     y::Int16
     z::Int32
@@ -295,6 +299,10 @@ tlayout = TLayout(5,7,11)
 @test_throws BoundsError fieldtype(TLayout, 4)
 @test_throws BoundsError fieldname(TLayout, 4)
 @test_throws BoundsError fieldoffset(TLayout, 4)
+
+@test fieldtype(Tuple{Vararg{Int8}}, 1) === Int8
+@test fieldtype(Tuple{Vararg{Int8}}, 10) === Int8
+@test_throws BoundsError fieldtype(Tuple{Vararg{Int8}}, 0)
 
 @test fieldnames((1,2,3)) == fieldnames(NTuple{3, Int}) == [fieldname(NTuple{3, Int}, i) for i = 1:3] == [1, 2, 3]
 @test_throws BoundsError fieldname(NTuple{3, Int}, 0)
@@ -333,10 +341,15 @@ end
 
 # test jl_get_llvm_fptr. We test functions both in and definitely not in the system image
 definitely_not_in_sysimg() = nothing
-for (f,t) in ((definitely_not_in_sysimg,Tuple{}),
-        (Base.throw_boundserror,Tuple{UnitRange{Int64},Int64}))
-    t = Base.tt_cons(Core.Typeof(f), Base.to_tuple_type(t))
-    llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Bool, Bool), t, false, true)
+for (f, t) in Any[(definitely_not_in_sysimg, Tuple{}),
+                  (Base.:+, Tuple{Int, Int})]
+    meth = which(f, t)
+    tt = Tuple{typeof(f), t.parameters...}
+    env = (ccall(:jl_match_method, Any, (Any, Any), tt, meth.sig))[2]
+    world = typemax(UInt)
+    linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, tt, env, world)
+    params = Base.CodegenParams()
+    llvmf = ccall(:jl_get_llvmf_decl, Ptr{Void}, (Any, UInt, Bool, Base.CodegenParams), linfo::Core.MethodInstance, world, true, params)
     @test llvmf != C_NULL
     @test ccall(:jl_get_llvm_fptr, Ptr{Void}, (Ptr{Void},), llvmf) != C_NULL
 end
@@ -350,7 +363,7 @@ end
 end
 
 let
-    using MacroTest
+    using .MacroTest
     a = 1
     m = getfield(current_module(), Symbol("@macrotest"))
     @test which(m, Tuple{Int,Symbol})==@which @macrotest 1 a
@@ -442,7 +455,7 @@ let li = typeof(getfield).name.mt.cache.func::Core.MethodInstance,
     mmime = stringmime("text/plain", li.def)
 
     @test lrepr == lmime == "MethodInstance for getfield(...)"
-    @test mrepr == mmime == "getfield(...)"
+    @test mrepr == mmime == "getfield(...) in Core"
 end
 
 
@@ -542,8 +555,7 @@ else
 end
 
 # Adds test for PR #17636
-let
-    a = @code_typed 1 + 1
+let a = @code_typed 1 + 1
     b = @code_lowered 1 + 1
     @test isa(a, Pair{CodeInfo, DataType})
     @test isa(b, CodeInfo)
@@ -563,7 +575,7 @@ let
     @test length(b) == 0
 end
 
-type A18434
+mutable struct A18434
 end
 (::Type{A18434})(x; y=1) = 1
 
@@ -580,22 +592,57 @@ end
 
 # PR #18888: code_typed shouldn't cache if not optimizing
 let
+    world = typemax(UInt)
     f18888() = return nothing
     m = first(methods(f18888, Tuple{}))
-    @test m.specializations == nothing
+    @test m.specializations === nothing
     ft = typeof(f18888)
 
     code_typed(f18888, Tuple{}; optimize=false)
-    @test m.specializations != nothing  # uncached, but creates the specializations entry
-    code = Core.Inference.code_for_method(m, Tuple{ft}, Core.svec(), true)
+    @test m.specializations !== nothing  # uncached, but creates the specializations entry
+    code = Core.Inference.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
     @test !isdefined(code, :inferred)
 
     code_typed(f18888, Tuple{}; optimize=true)
-    code = Core.Inference.code_for_method(m, Tuple{ft}, Core.svec(), true)
+    code = Core.Inference.code_for_method(m, Tuple{ft}, Core.svec(), world, true)
     @test isdefined(code, :inferred)
 end
 
 # Issue #18883, code_llvm/code_native for generated functions
 @generated f18883() = nothing
-@test !isempty(sprint(io->code_llvm(io, f18883, Tuple{})))
-@test !isempty(sprint(io->code_native(io, f18883, Tuple{})))
+@test !isempty(sprint(code_llvm, f18883, Tuple{}))
+@test !isempty(sprint(code_native, f18883, Tuple{}))
+
+# PR #19964
+@test isempty(subtypes(Float64))
+
+# New reflection methods in 0.6
+struct ReflectionExample{T<:AbstractFloat, N}
+    x::Tuple{T, N}
+end
+
+@test Base.isabstract(AbstractArray)
+@test !Base.isabstract(ReflectionExample)
+@test !Base.isabstract(Int)
+
+@test Base.parameter_upper_bound(ReflectionExample, 1) === AbstractFloat
+@test Base.parameter_upper_bound(ReflectionExample, 2) === Any
+@test Base.parameter_upper_bound(ReflectionExample{T, N} where T where N <: Real, 2) === Real
+
+let
+    wrapperT(T) = Base.typename(T).wrapper
+    @test @inferred wrapperT(ReflectionExample{Float64, Int64}) == ReflectionExample
+    @test @inferred wrapperT(ReflectionExample{Float64, N} where N) == ReflectionExample
+    @test @inferred wrapperT(ReflectionExample{T, Int64} where T) == ReflectionExample
+    @test @inferred wrapperT(ReflectionExample) == ReflectionExample
+    @test @inferred wrapperT(Union{ReflectionExample{Union{},1},ReflectionExample{Float64,1}}) == ReflectionExample
+    @test_throws ErrorException Base.typename(Union{Int, Float64})
+end
+
+# Issue #20086
+abstract type A20086{T,N} end
+struct B20086{T,N} <: A20086{T,N} end
+@test subtypes(A20086) == [B20086]
+@test subtypes(A20086{Int}) == [B20086{Int}]
+@test subtypes(A20086{T,3} where T) == [B20086{T,3} where T]
+@test subtypes(A20086{Int,3}) == [B20086{Int,3}]

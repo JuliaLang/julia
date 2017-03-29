@@ -28,20 +28,6 @@
 #define write _write
 #endif
 
-#ifndef static_assert
-#  ifndef __cplusplus
-#    define static_assert(...)
-// Remove the following gcc special handling when we officially requires
-// gcc 4.7 (for c++11) and -std=gnu11
-#    ifdef __GNUC__
-#      if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)
-#        undef static_assert
-#        define static_assert _Static_assert
-#      endif
-#    endif
-#  endif
-#endif
-
 #ifdef __cplusplus
 #include <cstring>
 extern "C" {
@@ -100,8 +86,12 @@ static void jl_uv_closeHandle(uv_handle_t *handle)
     if (handle == (uv_handle_t*)JL_STDERR)
         JL_STDERR = (JL_STREAM*)STDERR_FILENO;
     // also let the client app do its own cleanup
-    if (handle->type != UV_FILE && handle->data)
+    if (handle->type != UV_FILE && handle->data) {
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_world_counter;
         jl_uv_call_close_callback((jl_value_t*)handle->data);
+        jl_get_ptls_states()->world_age = last_age;
+    }
     if (handle == (uv_handle_t*)&signal_async)
         return;
     free(handle);

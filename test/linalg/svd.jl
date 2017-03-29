@@ -18,8 +18,8 @@ a2real = randn(n,n)/2
 a2img  = randn(n,n)/2
 
 @testset for eltya in (Float32, Float64, Complex64, Complex128, Int)
-    aa = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
-    aa2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(a2real, a2img) : a2real)
+    aa = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
+    aa2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     asym = aa'+aa                  # symmetric indefinite
     apd  = aa'*aa                 # symmetric positive-definite
     @testset for atype in ("Array", "SubArray")
@@ -36,7 +36,7 @@ a2img  = randn(n,n)/2
         @testset "singular value decomposition" begin
             @test usv[:S] === svdvals(usv)
             @test usv[:U] * (Diagonal(usv[:S]) * usv[:Vt]) ≈ a
-            @test full(usv) ≈ a
+            @test AbstractArray(usv) ≈ a
             @test usv[:Vt]' ≈ usv[:V]
             @test_throws KeyError usv[:Z]
             b = rand(eltya,n)

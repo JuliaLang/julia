@@ -75,8 +75,8 @@ lcm(a::Integer, b::Integer) = lcm(promote(a,b)...)
 gcd(a::Integer, b::Integer...) = gcd(a, gcd(b...))
 lcm(a::Integer, b::Integer...) = lcm(a, lcm(b...))
 
-gcd{T<:Integer}(abc::AbstractArray{T}) = reduce(gcd,abc)
-lcm{T<:Integer}(abc::AbstractArray{T}) = reduce(lcm,abc)
+gcd(abc::AbstractArray{<:Integer}) = reduce(gcd,abc)
+lcm(abc::AbstractArray{<:Integer}) = reduce(lcm,abc)
 
 # return (gcd(a,b),x,y) such that ax+by == gcd(a,b)
 """
@@ -88,12 +88,12 @@ coefficients, i.e. the integer coefficients `u` and `v` that satisfy
 
 ```jldoctest
 julia> gcdx(12, 42)
-(6,-3,1)
+(6, -3, 1)
 ```
 
 ```jldoctest
 julia> gcdx(240, 46)
-(2,-9,47)
+(2, -9, 47)
 ```
 
 !!! note
@@ -109,7 +109,7 @@ julia> gcdx(240, 46)
 """
 function gcdx{T<:Integer}(a::T, b::T)
     # a0, b0 = a, b
-    s0, s1 = one(T), zero(T)
+    s0, s1 = oneunit(T), zero(T)
     t0, t1 = s1, s0
     # The loop invariant is: s0*a0 + t0*b0 == a
     while b != 0
@@ -195,6 +195,29 @@ end
 ^(x::Number, p::Integer)  = power_by_squaring(x,p)
 ^(x, p::Integer)          = power_by_squaring(x,p)
 
+# x^p for any literal integer p is lowered to Base.literal_pow(^, x, Val{p})
+# to enable compile-time optimizations specialized to p.
+# However, we still need a fallback that calls the function ^ which may either
+# mean Base.^ or something else, depending on context.
+# We mark these @inline since if the target is marked @inline,
+# we want to make sure that gets propagated,
+# even if it is over the inlining threshold.
+@inline literal_pow{p}(f, x, ::Type{Val{p}}) = f(x,p)
+
+# Restrict inlining to hardware-supported arithmetic types, which
+# are fast enough to benefit from inlining.
+const HWReal = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64,Float32,Float64}
+const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
+
+# inference.jl has complicated logic to inline x^2 and x^3 for
+# numeric types.  In terms of Val we can do it much more simply.
+# (The first argument prevents unexpected behavior if a function ^
+# is defined that is not equal to Base.^)
+@inline literal_pow(::typeof(^), x::HWNumber, ::Type{Val{0}}) = one(x)
+@inline literal_pow(::typeof(^), x::HWNumber, ::Type{Val{1}}) = x
+@inline literal_pow(::typeof(^), x::HWNumber, ::Type{Val{2}}) = x*x
+@inline literal_pow(::typeof(^), x::HWNumber, ::Type{Val{3}}) = x*x*x
+
 # b^p mod m
 
 """
@@ -242,7 +265,7 @@ julia> nextpow2(17)
 32
 ```
 """
-nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-one(x)))
+nextpow2(x::Unsigned) = oneunit(x)<<((sizeof(x)<<3)-leading_zeros(x-oneunit(x)))
 nextpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
 
 """
@@ -274,7 +297,12 @@ false
 """
 ispow2(x::Integer) = x > 0 && count_ones(x) == 1
 
-# smallest a^n >= x, with integer n
+"""
+    nextpow(a, x)
+
+The smallest `a^n` not less than `x`, where `n` is a non-negative integer. `a` must be
+greater than 1, and `x` must be greater than 0.
+"""
 function nextpow(a::Real, x::Real)
     (a <= 1 || x <= 0) && throw(DomainError())
     x <= 1 && return one(a)
@@ -283,7 +311,13 @@ function nextpow(a::Real, x::Real)
     # guard against roundoff error, e.g., with a=5 and x=125
     p >= x ? p : a^n
 end
-# largest a^n <= x, with integer n
+
+"""
+    prevpow(a, x)
+
+The largest `a^n` not greater than `x`, where `n` is a non-negative integer.
+`a` must be greater than 1, and `x` must not be less than 1.
+"""
 function prevpow(a::Real, x::Real)
     (a <= 1 || x < 1) && throw(DomainError())
     n = floor(Integer,log(a, x))
@@ -314,8 +348,6 @@ function ndigits0z(x::UInt128)
 end
 ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
-const ndigits_max_mul = Core.sizeof(Int) == 4 ? 69000000 : 290000000000000000
-
 function ndigits0znb(n::Signed, b::Int)
     d = 0
     while n != 0
@@ -326,23 +358,24 @@ function ndigits0znb(n::Signed, b::Int)
 end
 
 function ndigits0z(n::Unsigned, b::Int)
+    b < 0   && return ndigits0znb(signed(n), b)
+    b == 2  && return sizeof(n)<<3 - leading_zeros(n)
+    b == 8  && return (sizeof(n)<<3 - leading_zeros(n) + 2) ÷ 3
+    b == 16 && return sizeof(n)<<1 - leading_zeros(n)>>2
+    b == 10 && return ndigits0z(n)
+
     d = 0
-    if b < 0
-        d = ndigits0znb(signed(n), b)
-    else
-        b == 2  && return (sizeof(n)<<3-leading_zeros(n))
-        b == 8  && return div((sizeof(n)<<3)-leading_zeros(n)+2,3)
-        b == 16 && return (sizeof(n)<<1)-(leading_zeros(n)>>2)
-        b == 10 && return ndigits0z(n)
-        while ndigits_max_mul < n
-            n = div(n,b)
-            d += 1
-        end
-        m = 1
-        while m <= n
-            m *= b
-            d += 1
-        end
+    while n > typemax(Int)
+        n = div(n,b)
+        d += 1
+    end
+    n = div(n,b)
+    d += 1
+
+    m = 1
+    while m <= n
+        m *= b
+        d += 1
     end
     return d
 end
@@ -367,7 +400,7 @@ string(x::Union{Int8,Int16,Int32,Int64,Int128}) = dec(x)
 
 function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
-    a = Array{UInt8}(i)
+    a = StringVector(i)
     while i > neg
         a[i] = '0'+(x&0x1)
         x >>= 1
@@ -379,7 +412,7 @@ end
 
 function oct(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,div((sizeof(x)<<3)-leading_zeros(x)+2,3))
-    a = Array{UInt8}(i)
+    a = StringVector(i)
     while i > neg
         a[i] = '0'+(x&0x7)
         x >>= 3
@@ -391,7 +424,7 @@ end
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,ndigits0z(x))
-    a = Array{UInt8}(i)
+    a = StringVector(i)
     while i > neg
         a[i] = '0'+rem(x,10)
         x = oftype(x,div(x,10))
@@ -403,7 +436,7 @@ end
 
 function hex(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
-    a = Array{UInt8}(i)
+    a = StringVector(i)
     while i > neg
         d = x & 0xf
         a[i] = '0'+d+39*(d>9)
@@ -423,7 +456,7 @@ function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
     digits = b <= 36 ? base36digits : base62digits
     i = neg + max(pad,ndigits0z(x,b))
-    a = Array{UInt8}(i)
+    a = StringVector(i)
     while i > neg
         a[i] = digits[1+rem(x,b)]
         x = div(x,b)

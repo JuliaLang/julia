@@ -27,6 +27,11 @@
 // delete julia IR for non-inlineable functions after they're codegen'd
 #define JL_DELETE_NON_INLINEABLE 1
 
+// fill in the jl_all_methods in world-counter order
+// so that it is possible to map (in a debugger) from
+// an inferred world validity range back to the offending definition
+// #define RECORD_METHOD_ORDER
+
 // GC options -----------------------------------------------------------------
 
 // debugging options
@@ -84,6 +89,7 @@
 
 // print all signatures type inference is invoked on
 //#define TRACE_INFERENCE
+//#define TRACE_COMPILE
 
 // print all generic method dispatches (excludes inlined and specialized call
 // sites). this generally prints too much output to be useful.

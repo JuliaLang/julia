@@ -5,7 +5,7 @@ module Mmap
 const PAGESIZE = Int(is_unix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
 
 # for mmaps not backed by files
-type Anonymous <: IO
+mutable struct Anonymous <: IO
     name::AbstractString
     readonly::Bool
     create::Bool
@@ -27,7 +27,7 @@ const PROT_READ     = Cint(1)
 const PROT_WRITE    = Cint(2)
 const MAP_SHARED    = Cint(1)
 const MAP_PRIVATE   = Cint(2)
-const MAP_ANONYMOUS = Cint(is_apple() ? 0x1000 : 0x20)
+const MAP_ANONYMOUS = Cint(is_bsd() ? 0x1000 : 0x20)
 const F_GETFL       = Cint(3)
 
 gethandle(io::IO) = fd(io)
@@ -67,7 +67,7 @@ end
 
 elseif is_windows()
 
-typealias DWORD Culong
+const DWORD = Culong
 
 const PAGE_READONLY          = DWORD(0x02)
 const PAGE_READWRITE         = DWORD(0x04)
@@ -93,7 +93,7 @@ else
     error("mmap not defined for this OS")
 end # os-test
 
-# core impelementation of mmap
+# core implementation of mmap
 function mmap{T,N}(io::IO,
                    ::Type{Array{T,N}}=Vector{UInt8},
                    dims::NTuple{N,Integer}=(div(filesize(io)-position(io),sizeof(T)),),
@@ -104,7 +104,7 @@ function mmap{T,N}(io::IO,
 
     len = prod(dims) * sizeof(T)
     len >= 0 || throw(ArgumentError("requested size must be ≥ 0, got $len"))
-    len == 0 && return Array{T}(ntuple(x->0,N))
+    len == 0 && return Array{T}(ntuple(x->0,Val{N}))
     len < typemax(Int) - PAGESIZE || throw(ArgumentError("requested size must be < $(typemax(Int)-PAGESIZE), got $len"))
 
     offset >= 0 || throw(ArgumentError("requested offset must be ≥ 0, got $offset"))
@@ -165,10 +165,8 @@ mmap{T<:Array}(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=In
 mmap{T<:Array,N}(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) = mmap(Anonymous(), T, dims, Int64(0); shared=shared)
 mmap{T<:Array}(::Type{T}, i::Integer...; shared::Bool=true) = mmap(Anonymous(), T, convert(Tuple{Vararg{Int}},i), Int64(0); shared=shared)
 
-function mmap{T<:BitArray,N}(io::IOStream,
-                             ::Type{T},
-                             dims::NTuple{N,Integer},
-                             offset::Int64=position(io); grow::Bool=true, shared::Bool=true)
+function mmap{N}(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
+                 offset::Int64=position(io); grow::Bool=true, shared::Bool=true)
     n = prod(dims)
     nc = Base.num_bit_chunks(n)
     chunks = mmap(io, Vector{UInt64}, (nc,), offset; grow=grow, shared=shared)
@@ -179,7 +177,7 @@ function mmap{T<:BitArray,N}(io::IOStream,
             throw(ArgumentError("the given file does not contain a valid BitArray of size $(join(dims, 'x')) (open with \"r+\" mode to override)"))
         end
     end
-    B = BitArray{N}(ntuple(i->0,N)...)
+    B = BitArray{N}(ntuple(i->0,Val{N})...)
     B.chunks = chunks
     B.len = n
     if N != 1

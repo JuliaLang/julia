@@ -2,20 +2,29 @@
 
 ## Matrix factorizations and decompositions
 
-abstract Factorization{T}
+abstract type Factorization{T} end
 
 eltype{T}(::Type{Factorization{T}}) = T
 transpose(F::Factorization) = error("transpose not implemented for $(typeof(F))")
 ctranspose(F::Factorization) = error("ctranspose not implemented for $(typeof(F))")
 
 macro assertposdef(A, info)
-   :(($info)==0 ? $A : throw(PosDefException($info)))
+   :($(esc(info)) == 0 ? $(esc(A)) : throw(PosDefException($(esc(info)))))
 end
 
 macro assertnonsingular(A, info)
-   :(($info)==0 ? $A : throw(SingularException($info)))
+   :($(esc(info)) == 0 ? $(esc(A)) : throw(SingularException($(esc(info)))))
 end
 
+function logdet(F::Factorization)
+    d, s = logabsdet(F)
+    return d + log(s)
+end
+
+function det(F::Factorization)
+    d, s = logabsdet(F)
+    return exp(d)*s
+end
 
 ### General promotion rules
 convert{T}(::Type{Factorization{T}}, F::Factorization{T}) = F
@@ -30,11 +39,10 @@ function (\){T<:BlasReal}(F::Factorization{T}, B::VecOrMat{Complex{T}})
 end
 
 for (f1, f2) in ((:\, :A_ldiv_B!),
-                 (:Ac_ldiv_B, :Ac_ldiv_B!),
-                 (:At_ldiv_B, :At_ldiv_B!))
+                 (:Ac_ldiv_B, :Ac_ldiv_B!))
     @eval begin
         function $f1(F::Factorization, B::AbstractVecOrMat)
-            TFB = typeof(one(eltype(F)) / one(eltype(B)))
+            TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
             BB = similar(B, TFB, size(B))
             copy!(BB, B)
             $f2(convert(Factorization{TFB}, F), BB)
@@ -48,6 +56,10 @@ for f in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!)
         $f(A, copy!(Y, B))
 end
 
+# fallback methods for transposed solves
+At_ldiv_B(F::Factorization{<:Real}, B::AbstractVecOrMat) = Ac_ldiv_B(F, B)
+At_ldiv_B(F::Factorization, B) = conj.(Ac_ldiv_B(F, conj.(B)))
+
 """
     A_ldiv_B!([Y,] A, B) -> Y
 
@@ -56,9 +68,9 @@ If only two arguments are passed, then `A_ldiv_B!(A, B)` overwrites `B` with
 the result.
 
 The argument `A` should *not* be a matrix.  Rather, instead of matrices it should be a
-factorization object (e.g. produced by [`factorize`](:func:`factorize`) or [`cholfact`](:func:`cholfact`)).
+factorization object (e.g. produced by [`factorize`](@ref) or [`cholfact`](@ref)).
 The reason for this is that factorization itself is both expensive and typically allocates memory
-(although it can also be done in-place via, e.g., [`lufact!`](:func:`lufact!`)),
+(although it can also be done in-place via, e.g., [`lufact!`](@ref)),
 and performance-critical situations requiring `A_ldiv_B!` usually also require fine-grained
 control over the factorization of `A`.
 """
@@ -67,7 +79,7 @@ A_ldiv_B!
 """
     Ac_ldiv_B!([Y,] A, B) -> Y
 
-Similar to [`A_ldiv_B!`](:func:`A_ldiv_B!`), but return ``Aᴴ`` \\ ``B``,
+Similar to [`A_ldiv_B!`](@ref), but return ``Aᴴ`` \\ ``B``,
 computing the result in-place in `Y` (or overwriting `B` if `Y` is not supplied).
 """
 Ac_ldiv_B!
@@ -75,7 +87,7 @@ Ac_ldiv_B!
 """
     At_ldiv_B!([Y,] A, B) -> Y
 
-Similar to [`A_ldiv_B!`](:func:`A_ldiv_B!`), but return ``Aᵀ`` \\ ``B``,
+Similar to [`A_ldiv_B!`](@ref), but return ``Aᵀ`` \\ ``B``,
 computing the result in-place in `Y` (or overwriting `B` if `Y` is not supplied).
 """
 At_ldiv_B!

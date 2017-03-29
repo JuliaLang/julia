@@ -101,7 +101,7 @@ install-suitesparse: $(build_prefix)/manifest/suitesparse install-suitesparse-wr
 # SUITESPARSE WRAPPER
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 1)
-SUITESPARSE_INC := -I /usr/include/suitesparse
+SUITESPARSE_INC := -I $(LOCALBASE)/include/suitesparse
 SUITESPARSE_LIB := -lumfpack -lcholmod -lamd -lcamd -lcolamd -lspqr
 else
 SUITESPARSE_INC := -I $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse_config -I $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/SPQR/Include
