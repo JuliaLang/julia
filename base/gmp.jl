@@ -9,7 +9,7 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0z, widen, signed, unsafe_trunc, trunc,
-             iszero
+             iszero, flipsign, signbit
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -50,6 +50,10 @@ mutable struct BigInt <: Integer
     end
 end
 
+const ZERO = BigInt()
+const ONE  = BigInt()
+const _ONE = Limb[1]
+
 function __init__()
     try
         if gmp_version().major != GMP_VERSION.major || gmp_bits_per_limb() != GMP_BITS_PER_LIMB
@@ -63,6 +67,9 @@ function __init__()
               cglobal(:jl_gc_counted_malloc),
               cglobal(:jl_gc_counted_realloc_with_old_size),
               cglobal(:jl_gc_counted_free))
+
+        ZERO.alloc, ZERO.size, ZERO.d = 0, 0, C_NULL
+        ONE.alloc, ONE.size, ONE.d = 1, 1, pointer(_ONE)
     catch ex
         Base.showerror_nostdio(ex,
             "WARNING: Error during initialization of module GMP")
@@ -104,7 +111,7 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
         raise && throw(ArgumentError("invalid BigInt: $(repr(bstr))"))
         return _n
     end
-    Nullable(sgn < 0 ? -z : z)
+    Nullable(flipsign!(z, sgn))
 end
 
 function convert(::Type{BigInt}, x::Union{Clong,Int32})
@@ -175,7 +182,7 @@ function rem{T<:Union{Unsigned,Signed}}(x::BigInt, ::Type{T})
     for l = 1:min(abs(x.size), cld(sizeof(T),sizeof(Limb)))
         u += (unsafe_load(x.d,l)%T) << ((sizeof(Limb)<<3)*(l-1))
     end
-    x.size < 0 ? -u : u
+    flipsign(u, x)
 end
 
 rem(x::Integer, ::Type{BigInt}) = convert(BigInt, x)
@@ -197,7 +204,7 @@ function convert(::Type{T}, x::BigInt) where T<:Signed
     else
         0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError())
         y = x % T
-        (x.size > 0) ⊻ (y > 0) && throw(InexactError()) # catch overflow
+        ispos(x) ⊻ (y > 0) && throw(InexactError()) # catch overflow
         y
     end
 end
@@ -382,6 +389,13 @@ trailing_ones(x::BigInt) = Int(ccall((:__gmpz_scan0, :libgmp), Culong, (Ptr{BigI
 
 count_ones(x::BigInt) = Int(ccall((:__gmpz_popcount, :libgmp), Culong, (Ptr{BigInt},), &x))
 
+"""
+    count_ones_abs(x::BigInt)
+
+Number of ones in the binary representation of abs(x).
+"""
+count_ones_abs(x::BigInt) = iszero(x) ? 0 : ccall((:__gmpn_popcount, :libgmp), Culong, (Ptr{Limb}, Csize_t), x.d, abs(x.size)) % Int
+
 function divrem(x::BigInt, y::BigInt)
     z1 = BigInt()
     z2 = BigInt()
@@ -456,8 +470,10 @@ end
 powermod(x::Integer, p::Integer, m::BigInt) = powermod(big(x), big(p), m)
 
 function gcdx(a::BigInt, b::BigInt)
-    if b == 0 # shortcut this to ensure consistent results with gcdx(a,b)
-        return a < 0 ? (-a,-one(BigInt),zero(BigInt)) : (a,one(BigInt),zero(BigInt))
+    if iszero(b) # shortcut this to ensure consistent results with gcdx(a,b)
+        return a < 0 ? (-a,-ONE,b) : (a,one(BigInt),b)
+        # we don't return the globals ONE and ZERO in case the user wants to
+        # mutate the result
     end
     g = BigInt()
     s = BigInt()
@@ -487,7 +503,7 @@ function sum(arr::AbstractArray{BigInt})
 end
 
 function factorial(x::BigInt)
-    x.size < 0 && return BigInt(0)
+    isneg(x) && return BigInt(0)
     z = BigInt()
     ccall((:__gmpz_fac_ui, :libgmp), Void, (Ptr{BigInt}, Culong), &z, x)
     return z
@@ -505,7 +521,7 @@ binomial(n::BigInt, k::Integer) = k < 0 ? BigInt(0) : binomial(n, UInt(k))
 ==(i::Integer, x::BigInt) = cmp(x,i) == 0
 ==(x::BigInt, f::CdoubleMax) = isnan(f) ? false : cmp(x,f) == 0
 ==(f::CdoubleMax, x::BigInt) = isnan(f) ? false : cmp(x,f) == 0
-iszero(x::BigInt) = x == Clong(0)
+iszero(x::BigInt) = x.size == 0
 
 <=(x::BigInt, y::BigInt) = cmp(x,y) <= 0
 <=(x::BigInt, i::Integer) = cmp(x,i) <= 0
@@ -518,6 +534,12 @@ iszero(x::BigInt) = x == Clong(0)
 <(i::Integer, x::BigInt) = cmp(x,i) > 0
 <(x::BigInt, f::CdoubleMax) = isnan(f) ? false : cmp(x,f) < 0
 <(f::CdoubleMax, x::BigInt) = isnan(f) ? false : cmp(x,f) > 0
+isneg(x::BigInt) = x.size < 0
+ispos(x::BigInt) = x.size > 0
+
+signbit(x::BigInt) = isneg(x)
+flipsign!(x::BigInt, y::Integer) = (signbit(y) && (x.size = -x.size); x)
+flipsign( x::BigInt, y::Integer) = signbit(y) ? -x : x
 
 string(x::BigInt) = dec(x)
 show(io::IO, x::BigInt) = print(io, string(x))
@@ -575,10 +597,12 @@ function ndigits0z(x::BigInt, b::Integer=10)
         end
     end
 end
-ndigits(x::BigInt, b::Integer=10) = x.size == 0 ? 1 : ndigits0z(x,b)
+ndigits(x::BigInt, b::Integer=10) = iszero(x) ? 1 : ndigits0z(x,b)
 
-prevpow2(x::BigInt) = x.size < 0 ? -prevpow2(-x) : (x <= 2 ? x : one(BigInt) << (ndigits(x, 2)-1))
-nextpow2(x::BigInt) = x.size < 0 ? -nextpow2(-x) : (x <= 2 ? x : one(BigInt) << ndigits(x-1, 2))
+# below, ONE is always left-shifted by at least one digit, so a new BigInt is
+# allocated, which can be safely mutated
+prevpow2(x::BigInt) = -2 <= x <= 2 ? x : flipsign!(ONE << (ndigits(x, 2) - 1), x)
+nextpow2(x::BigInt) = count_ones_abs(x) <= 1 ? x : flipsign!(ONE << ndigits(x, 2), x)
 
 Base.checked_abs(x::BigInt) = abs(x)
 Base.checked_neg(x::BigInt) = -x
