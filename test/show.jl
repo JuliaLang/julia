@@ -544,6 +544,11 @@ let io = IOBuffer()
     @test String(take!(io)) == "[1, 2]"
 end
 
+let io = IOBuffer()
+    ioc = IOContext(io, :limit => true)
+    @test sprint(show, ioc) == "IOContext($(sprint(show, ioc.io)))"
+end
+
 # PR 17117
 # test show array
 let s = IOBuffer(Array{UInt8}(0), true, true)
@@ -663,3 +668,5 @@ let m = which(T20332{Int}(), (Int,)),
     # test that this doesn't throw an error
     @test contains(repr(mi), "MethodInstance for")
 end
+
+@test sprint(show, Main) == "Main"
