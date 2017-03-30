@@ -699,7 +699,15 @@ function compilecache(name::String)
             info("Precompiling module $name.")
         end
     end
-    if !success(create_expr_cache(path, cachefile, concrete_deps))
+    if success(create_expr_cache(path, cachefile, concrete_deps))
+        # append checksum to the end of the .ji file:
+        open(cachefile, "a+") do f
+            data = Mmap.mmap(f, Vector{UInt8}, filesize(f), 0)
+            checksum = crc32c(data)
+            finalize(data)
+            write(f, hton(checksum))
+        end
+    else
         error("Failed to precompile $name to $cachefile.")
     end
     return cachefile
@@ -818,6 +826,17 @@ function stale_cachefile(modpath::String, cachefile::String)
                 return true
             end
         end
+
+        # finally, verify that the cache file has a valid checksum
+        data = Mmap.mmap(io, Vector{UInt8}, filesize(io), 0)
+        checksum = ntoh(reinterpret(UInt32, data[end-3:end])[1])
+        crc = crc32c(@view(data[1:end-4]))
+        finalize(data)
+        if checksum != crc
+            DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because it has an invalid checksum.")
+            return true
+        end
+
         return false # fresh cachefile
     finally
         close(io)
