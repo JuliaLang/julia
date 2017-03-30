@@ -619,6 +619,40 @@ mktempdir() do dir
         end
     end
 
+    # TO DO: add more tests for various merge
+    # preference options
+    @testset "Fastforward merges" begin
+        path = joinpath(dir, "Example.FF")
+        repo = LibGit2.clone(cache_repo, path)
+        try
+            oldhead = LibGit2.head_oid(repo)
+            LibGit2.branch!(repo, "branch/ff_a")
+            open(joinpath(LibGit2.path(repo),"ff_file1"),"w") do f
+                write(f, "111\n")
+            end
+            LibGit2.add!(repo, "ff_file1")
+            LibGit2.commit(repo, "add ff_file1")
+
+            open(joinpath(LibGit2.path(repo),"ff_file2"),"w") do f
+                write(f, "222\n")
+            end
+            LibGit2.add!(repo, "ff_file2")
+            LibGit2.commit(repo, "add ff_file2")
+            LibGit2.branch!(repo, "master")
+            # switch back, now try to ff-merge the changes
+            # from branch/a
+
+            upst_ann = LibGit2.GitAnnotated(repo, "branch/ff_a")
+            head_ann = LibGit2.GitAnnotated(repo, "master")
+
+            # ff merge them
+            @test LibGit2.merge!(repo, [upst_ann], true)
+            @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
+        finally
+            close(repo)
+        end
+    end
+
     @testset "Fetch from cache repository" begin
         repo = LibGit2.GitRepo(test_repo)
         try
