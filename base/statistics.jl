@@ -307,7 +307,7 @@ _vmean(x::AbstractMatrix, vardim::Int) = mean(x, vardim)
 unscaled_covzm(x::AbstractVector) = sum(abs2, x)
 unscaled_covzm(x::AbstractMatrix, vardim::Int) = (vardim == 1 ? _conj(x'x) : x * x')
 
-unscaled_covzm(x::AbstractVector, y::AbstractVector) = dot(x, y)
+unscaled_covzm(x::AbstractVector, y::AbstractVector) = dot(y, x)
 unscaled_covzm(x::AbstractVector, y::AbstractMatrix, vardim::Int) =
     (vardim == 1 ? At_mul_B(x, _conj(y)) : At_mul_Bt(x, _conj(y)))
 unscaled_covzm(x::AbstractMatrix, y::AbstractVector, vardim::Int) =
@@ -362,9 +362,10 @@ cov(X::AbstractMatrix) = cov(X, 1, true)
 """
     cov(x, y[, corrected=true])
 
-Compute the covariance between the vectors `x` and `y`. If `corrected` is `true` (the default)
-then the sum is scaled with `n-1`, whereas the sum is scaled with `n` if `corrected` is `false`
-where `n = length(x) = length(y)`.
+Compute the covariance between the vectors `x` and `y`. If `corrected` is `true` (the
+default), computes ``\\frac{1}{n-1}\\sum_{i=1}^n (x_i-\\bar x) (y_i-\\bar y)^*`` where
+``*`` denotes the complex conjugate and `n = length(x) = length(y)`. If `corrected` is
+`false`, computes ``\frac{1}{n}\sum_{i=1}^n (x_i-\\bar x) (y_i-\\bar y)^*``.
 """
 cov(x::AbstractVector, y::AbstractVector, corrected::Bool) =
     covm(x, Base.mean(x), y, Base.mean(y), corrected)
@@ -388,6 +389,14 @@ cov(X::AbstractMatrix, Y::AbstractMatrix) = cov(X, Y, 1, true)
 
 ##### correlation #####
 
+"""
+    clampcor(x)
+
+Clamp a real correlation to between -1 and 1, leaving complex correlations unchanged
+"""
+clampcor(x::Real) = clamp(x, -1, 1)
+clampcor(x) = x
+
 # cov2cor!
 
 function cov2cor!{T}(C::AbstractMatrix{T}, xsd::AbstractArray)
@@ -395,11 +404,11 @@ function cov2cor!{T}(C::AbstractMatrix{T}, xsd::AbstractArray)
     size(C) == (nx, nx) || throw(DimensionMismatch("inconsistent dimensions"))
     for j = 1:nx
         for i = 1:j-1
-            C[i,j] = C[j,i]
+            C[i,j] = C[j,i]'
         end
         C[j,j] = oneunit(T)
         for i = j+1:nx
-            C[i,j] = clamp(C[i,j] / (xsd[i] * xsd[j]), -1, 1)
+            C[i,j] = clampcor(C[i,j] / (xsd[i] * xsd[j]))
         end
     end
     return C
@@ -409,7 +418,7 @@ function cov2cor!(C::AbstractMatrix, xsd::Number, ysd::AbstractArray)
     length(ysd) == ny || throw(DimensionMismatch("inconsistent dimensions"))
     for (j, y) in enumerate(ysd)   # fixme (iter): here and in all `cov2cor!` we assume that `C` is efficiently indexed by integers
         for i in 1:nx
-            C[i,j] = clamp(C[i, j] / (xsd * y), -1, 1)
+            C[i,j] = clampcor(C[i, j] / (xsd * y))
         end
     end
     return C
@@ -419,7 +428,7 @@ function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::Number)
     length(xsd) == nx || throw(DimensionMismatch("inconsistent dimensions"))
     for j in 1:ny
         for (i, x) in enumerate(xsd)
-            C[i,j] = clamp(C[i,j] / (x * ysd), -1, 1)
+            C[i,j] = clampcor(C[i,j] / (x * ysd))
         end
     end
     return C
@@ -430,7 +439,7 @@ function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::AbstractArray)
         throw(DimensionMismatch("inconsistent dimensions"))
     for (i, x) in enumerate(xsd)
         for (j, y) in enumerate(ysd)
-            C[i,j] = clamp(C[i,j] / (x * y), -1, 1)
+            C[i,j] = clampcor(C[i,j] / (x * y))
         end
     end
     return C
@@ -461,11 +470,11 @@ function corm(x::AbstractVector, mx::Number, y::AbstractVector, my::Number)
 
     @inbounds begin
         # Initialize the accumulators
-        xx = zero(sqrt(x[1] * x[1]))
-        yy = zero(sqrt(y[1] * y[1]))
-        xy = zero(xx * yy)
+        xx = zero(sqrt(abs2(x[1])))
+        yy = zero(sqrt(abs2(y[1])))
+        xy = zero(x[1] * y[1]')
 
-        @simd for i = 1:n
+        @simd for i in eachindex(x, y)
             xi = x[i] - mx
             yi = y[i] - my
             xx += abs2(xi)
@@ -473,8 +482,9 @@ function corm(x::AbstractVector, mx::Number, y::AbstractVector, my::Number)
             xy += xi * yi'
         end
     end
-    return clamp(xy / max(xx, yy) / sqrt(min(xx, yy) / max(xx, yy)), -1, 1)
+    return clampcor(xy / max(xx, yy) / sqrt(min(xx, yy) / max(xx, yy)))
 end
+
 corm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean, vardim::Int=1) =
     corzm(x .- xmean, y .- ymean, vardim)
 
