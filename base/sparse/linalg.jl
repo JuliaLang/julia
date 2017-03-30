@@ -864,7 +864,7 @@ function (\)(A::SparseMatrixCSC, B::AbstractVecOrMat)
             return UpperTriangular(A) \ B
         end
         if ishermitian(A)
-            Hermitian(A) \ B
+            return Hermitian(A) \ B
         end
         return lufact(A) \ B
     else
