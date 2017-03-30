@@ -202,7 +202,7 @@ the `i`th component of each input iterable.
 
 Note that the inverse of [`zip`](@ref) is [`unzip`](@ref).
 
-```jldoctest
+"""jldoctest
 julia> a = 1:5
 1:5
 
@@ -222,7 +222,8 @@ julia> length(c)
 
 julia> first(c)
 (1, "e")
-```
+"""
+
 """
 zip(a, b, c...) = Zip(a, zip(b, c...))
 length(z::Zip) = _min_length(z.a, z.z, iteratorsize(z.a), iteratorsize(z.z))
@@ -241,13 +242,14 @@ iteratorsize{I1,I2}(::Type{Zip{I1,I2}}) = zip_iteratorsize(iteratorsize(I1),iter
 iteratoreltype{I1,I2}(::Type{Zip{I1,I2}}) = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
 
 # unzip
-```jldoctest
+"""
 
 For iterable objects of the same length, returns iterable sets, where the ith set contains
 the ith component of each input iterable object.
 
 Note that the inverse of [`unzip`](@ref) is [`zip`](@ref).
 
+```jldoctest
 julia>  z = [[1,"a",:meow], [2,"b",:woof], [3,"c",:doh!]]
 3-element Array{Array{Any,1},1}:
 Any[1, "a", :meow]
@@ -255,15 +257,16 @@ Any[2, "b", :woof]
 Any[3, "c", :doh!]
 
 julia> unzip(z)
-Array{Int64,1}:[1,2,3]
-Array{String,1}["a","b","c"]
-Array{Symbol,1}[:meow,:woof,:doh!]
+Base.Iterators.Zip2{UnitRange{Int64},Array{Int64,1}}(1:3, [1, 2, 3])
+Base.Iterators.Zip2{UnitRange{Int64},Array{String,1}}(1:3, String["a", "b", "c"])
+Base.Iterators.Zip2{UnitRange{Int64},Array{Symbol,1}}(1:3, [:meow, :woof, :doh!])
 ```
+"""
 unzip(iter::AbstractZipIterator) = _unzip(iter)
 # This avoids exporting the method that isn't for AbstractZipIterators
 _unzip(iter::Zip1) = (iter.a,)
 _unzip(iter::Zip2) = (iter.a, iter.b)
-_unzip(iter::Zip) = (iter.a, unzip(iter.z)...)
+_unzip(iter::Zip) = (iter.a, _unzip(iter.z)...)
 _unzip(iter) = (iter,)
 
 # filter
