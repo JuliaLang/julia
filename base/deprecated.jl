@@ -1302,14 +1302,6 @@ end
 for f in (:ones, :zeros)
     @eval @deprecate ($f)(T::Type, arr) ($f)(T, size(arr))
     @eval ($f)(T::Type, i::Integer) = ($f)(T, (i,))
-    @eval function ($f){T}(::Type{T}, arr::Array{T})
-        msg = string("`", $f , "{T}(::Type{T}, arr::Array{T})` is deprecated, use ",
-                            "`", $f , "(T, size(arr))` instead. ",
-                            "A `MethodError` will be thrown."
-                           )
-        Base.depwarn(msg, Symbol($f))
-        throw(MethodError($f, (T, arr)))
-    end
 end
 
 # END 0.6 deprecations
