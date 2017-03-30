@@ -181,8 +181,8 @@ The keyword arguments are:
 !!! note
     You can add information about the push refspecs in two other ways: by setting
     an option in the repository's `GitConfig` (with `push.default` as the key) or
-    by calling [`add_push!`](@ref). Otherwise you will need to explicity specify
-    a push refspec in the call to `push` for any effect, like so:
+    by calling [`add_push!`](@ref). Otherwise you will need to explicitly specify
+    a push refspec in the call to `push` for it to have any effect, like so:
     `LibGit2.push(repo, refspecs=["refs/heads/master"])`.
 """
 function push(rmt::GitRemote, refspecs::Vector{<:AbstractString};
