@@ -50,6 +50,10 @@ mutable struct BigInt <: Integer
     end
 end
 
+const ZERO = BigInt()
+const ONE  = BigInt()
+const _ONE = Limb[1]
+
 function __init__()
     try
         if gmp_version().major != GMP_VERSION.major || gmp_bits_per_limb() != GMP_BITS_PER_LIMB
@@ -63,6 +67,9 @@ function __init__()
               cglobal(:jl_gc_counted_malloc),
               cglobal(:jl_gc_counted_realloc_with_old_size),
               cglobal(:jl_gc_counted_free))
+
+        ZERO.alloc, ZERO.size, ZERO.d = 0, 0, C_NULL
+        ONE.alloc, ONE.size, ONE.d = 1, 1, pointer(_ONE)
     catch ex
         Base.showerror_nostdio(ex,
             "WARNING: Error during initialization of module GMP")
@@ -466,8 +473,10 @@ end
 powermod(x::Integer, p::Integer, m::BigInt) = powermod(big(x), big(p), m)
 
 function gcdx(a::BigInt, b::BigInt)
-    if b == 0 # shortcut this to ensure consistent results with gcdx(a,b)
-        return a < 0 ? (-a,-one(BigInt),zero(BigInt)) : (a,one(BigInt),zero(BigInt))
+    if iszero(b) # shortcut this to ensure consistent results with gcdx(a,b)
+        return a < 0 ? (-a,-ONE,b) : (a,one(BigInt),b)
+        # we don't return the globals ONE and ZERO in case the user wants to
+        # mutate the result
     end
     g = BigInt()
     s = BigInt()
@@ -593,8 +602,10 @@ function ndigits0z(x::BigInt, b::Integer=10)
 end
 ndigits(x::BigInt, b::Integer=10) = iszero(x) ? 1 : ndigits0z(x,b)
 
-prevpow2(x::BigInt) = -2 <= x <= 2 ? x : flipsign!(one(x) << (ndigits(x, 2)-1), x)
-nextpow2(x::BigInt) = count_ones_abs(x) <= 1 ? x : flipsign!(one(x) << ndigits(x, 2), x)
+# below, ONE is always left-shifted by at least one digit, so a new BigInt is
+# allocated, which can be safely mutated
+prevpow2(x::BigInt) = -2 <= x <= 2 ? x : flipsign!(ONE << (ndigits(x, 2) - 1), x)
+nextpow2(x::BigInt) = count_ones_abs(x) <= 1 ? x : flipsign!(ONE << ndigits(x, 2), x)
 
 Base.checked_abs(x::BigInt) = abs(x)
 Base.checked_neg(x::BigInt) = -x
