@@ -9,7 +9,7 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0z, widen, signed, unsafe_trunc, trunc,
-             iszero, big
+             iszero, big, flipsign, signbit
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -104,7 +104,7 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
         raise && throw(ArgumentError("invalid BigInt: $(repr(bstr))"))
         return _n
     end
-    Nullable(sgn < 0 ? -z : z)
+    Nullable(flipsign!(z, sgn))
 end
 
 function convert(::Type{BigInt}, x::Union{Clong,Int32})
@@ -175,7 +175,7 @@ function rem{T<:Union{Unsigned,Signed}}(x::BigInt, ::Type{T})
     for l = 1:min(abs(x.size), cld(sizeof(T),sizeof(Limb)))
         u += (unsafe_load(x.d,l)%T) << ((sizeof(Limb)<<3)*(l-1))
     end
-    x.size < 0 ? -u : u
+    flipsign(u, x)
 end
 
 rem(x::Integer, ::Type{BigInt}) = convert(BigInt, x)
@@ -197,7 +197,7 @@ function convert(::Type{T}, x::BigInt) where T<:Signed
     else
         0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError())
         y = x % T
-        (x.size > 0) ⊻ (y > 0) && throw(InexactError()) # catch overflow
+        ispos(x) ⊻ (y > 0) && throw(InexactError()) # catch overflow
         y
     end
 end
@@ -497,7 +497,7 @@ function sum(arr::AbstractArray{BigInt})
 end
 
 function factorial(x::BigInt)
-    x.size < 0 && return BigInt(0)
+    isneg(x) && return BigInt(0)
     z = BigInt()
     ccall((:__gmpz_fac_ui, :libgmp), Void, (Ptr{BigInt}, Culong), &z, x)
     return z
@@ -530,6 +530,10 @@ iszero(x::BigInt) = x.size == 0
 <(f::CdoubleMax, x::BigInt) = isnan(f) ? false : cmp(x,f) > 0
 isneg(x::BigInt) = x.size < 0
 ispos(x::BigInt) = x.size > 0
+
+signbit(x::BigInt) = isneg(x)
+flipsign!(x::BigInt, y::Integer) = (signbit(y) && (x.size = -x.size); x)
+flipsign( x::BigInt, y::Integer) = signbit(y) ? -x : x
 
 string(x::BigInt) = dec(x)
 show(io::IO, x::BigInt) = print(io, string(x))
@@ -587,21 +591,10 @@ function ndigits0z(x::BigInt, b::Integer=10)
         end
     end
 end
-ndigits(x::BigInt, b::Integer=10) = x.size == 0 ? 1 : ndigits0z(x,b)
+ndigits(x::BigInt, b::Integer=10) = iszero(x) ? 1 : ndigits0z(x,b)
 
-function prevpow2(x::BigInt)
-    -2 <= x <= 2 && return x
-    r = one(BigInt) << (ndigits(x, 2)-1)
-    isneg(x) && (r.size = -r.size)
-    return r
-end
-
-function nextpow2(x::BigInt)
-    count_ones_abs(x) <= 1 && return x
-    r = one(BigInt) << ndigits(x, 2)
-    isneg(x) && (r.size = -r.size)
-    return r
-end
+prevpow2(x::BigInt) = -2 <= x <= 2 ? x : flipsign!(one(x) << (ndigits(x, 2)-1), x)
+nextpow2(x::BigInt) = count_ones_abs(x) <= 1 ? x : flipsign!(one(x) << ndigits(x, 2), x)
 
 Base.checked_abs(x::BigInt) = abs(x)
 Base.checked_neg(x::BigInt) = -x
