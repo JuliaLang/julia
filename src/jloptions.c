@@ -69,6 +69,7 @@ jl_options_t jl_options = { 0,    // quiet
                             NULL, // output-bc
                             NULL, // output-o
                             NULL, // output-ji
+                            NULL, // mcpu
                             0, // incremental
                             0 // image_file_specified
 };
@@ -127,6 +128,7 @@ static const char opts[]  =
     " --output-ji name          Generate a system image data file (.ji)\n"
     " --output-bc name          Generate LLVM bitcode (.bc)\n"
     " --output-incremental=no   Generate an incremental output file (rather than complete)\n\n"
+    " --mcpu arch               Set the CPU architecture to generate code for (with output-o)\n\n"
 
     // instrumentation options
     " --code-coverage={none|user|all}, --code-coverage\n"
@@ -155,6 +157,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_handle_signals,
            opt_output_o,
            opt_output_ji,
+           opt_mcpu,
            opt_use_precompiled,
            opt_use_compilecache,
            opt_incremental
@@ -188,6 +191,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "output-bc",       required_argument, 0, opt_output_bc },
         { "output-o",        required_argument, 0, opt_output_o },
         { "output-ji",       required_argument, 0, opt_output_ji },
+        { "mcpu",            required_argument, 0, opt_mcpu },
         { "output-incremental",required_argument, 0, opt_incremental },
         { "depwarn",         required_argument, 0, opt_depwarn },
         { "inline",          required_argument, 0, opt_inline },
@@ -441,6 +445,9 @@ restart_switch:
         case opt_output_ji:
             jl_options.outputji = optarg;
             if (!jl_options.image_file_specified) jl_options.image_file = NULL;
+            break;
+        case opt_mcpu:
+            jl_options.mcpu = optarg;
             break;
         case opt_incremental:
             if (!strcmp(optarg,"yes"))

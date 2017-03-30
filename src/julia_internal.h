@@ -569,7 +569,7 @@ static inline void jl_set_gc_and_wait(void)
 }
 #endif
 
-void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len);
+void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sysimg_target_cpu, const char *sysimg_data, size_t sysimg_len);
 int32_t jl_get_llvm_gv(jl_value_t *p);
 int32_t jl_assign_functionID(/*llvm::Function*/void *function);
 int32_t jl_jlcall_api(/*llvm::Function*/const void *function);

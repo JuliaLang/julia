@@ -772,7 +772,7 @@ static void julia_save(void)
 
         if (jl_options.outputo || jl_options.outputbc)
             jl_dump_native(jl_options.outputbc,
-                           jl_options.outputo,
+                           jl_options.outputo, jl_options.mcpu,
                            (const char*)s->buf, (size_t)s->size);
     }
     JL_GC_POP();

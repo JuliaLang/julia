@@ -1164,7 +1164,8 @@ static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap,
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
 extern "C"
-void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len)
+void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sysimg_target_cpu,
+                    const char *sysimg_data, size_t sysimg_len)
 {
     JL_TIMING(NATIVE_DUMP);
     assert(imaging_mode);
@@ -1186,6 +1187,8 @@ void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sys
     TheTriple.setEnvironment(Triple::MachO);
 #endif
 #endif
+     StringRef target_cpu = sysimg_target_cpu ? sysimg_target_cpu : jl_TargetMachine->getTargetCPU();
+     StringRef target_feature = sysimg_target_cpu ? "" : jl_TargetMachine->getTargetFeatureString();
 #if JL_LLVM_VERSION >= 30500
     std::unique_ptr<TargetMachine>
 #else
@@ -1193,8 +1196,7 @@ void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sys
 #endif
     TM(jl_TargetMachine->getTarget().createTargetMachine(
         TheTriple.getTriple(),
-        jl_TargetMachine->getTargetCPU(),
-        jl_TargetMachine->getTargetFeatureString(),
+        target_cpu, target_feature,
         jl_TargetMachine->Options,
 #if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
         Reloc::PIC_,

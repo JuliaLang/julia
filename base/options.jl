@@ -34,6 +34,7 @@ struct JLOptions
     outputbc::Ptr{UInt8}
     outputo::Ptr{UInt8}
     outputji::Ptr{UInt8}
+    mcpu::Ptr{UInt8}
     incremental::Int8
 end
 
