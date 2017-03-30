@@ -385,6 +385,13 @@ trailing_ones(x::BigInt) = Int(ccall((:__gmpz_scan0, :libgmp), Culong, (Ptr{BigI
 
 count_ones(x::BigInt) = Int(ccall((:__gmpz_popcount, :libgmp), Culong, (Ptr{BigInt},), &x))
 
+"""
+    count_ones_abs(x::BigInt)
+
+Number of ones in the binary representation of abs(x).
+"""
+count_ones_abs(x::BigInt) = iszero(x) ? 0 : ccall((:__gmpn_popcount, :libgmp), Culong, (Ptr{Limb}, Csize_t), x.d, abs(x.size)) % Int
+
 function divrem(x::BigInt, y::BigInt)
     z1 = BigInt()
     z2 = BigInt()
@@ -521,6 +528,8 @@ iszero(x::BigInt) = x.size == 0
 <(i::Integer, x::BigInt) = cmp(x,i) > 0
 <(x::BigInt, f::CdoubleMax) = isnan(f) ? false : cmp(x,f) < 0
 <(f::CdoubleMax, x::BigInt) = isnan(f) ? false : cmp(x,f) > 0
+isneg(x::BigInt) = x.size < 0
+ispos(x::BigInt) = x.size > 0
 
 string(x::BigInt) = dec(x)
 show(io::IO, x::BigInt) = print(io, string(x))
@@ -580,8 +589,19 @@ function ndigits0z(x::BigInt, b::Integer=10)
 end
 ndigits(x::BigInt, b::Integer=10) = x.size == 0 ? 1 : ndigits0z(x,b)
 
-prevpow2(x::BigInt) = x.size < 0 ? -prevpow2(-x) : (x <= 2 ? x : one(BigInt) << (ndigits(x, 2)-1))
-nextpow2(x::BigInt) = x.size < 0 ? -nextpow2(-x) : (x <= 2 ? x : one(BigInt) << ndigits(x-1, 2))
+function prevpow2(x::BigInt)
+    -2 <= x <= 2 && return x
+    r = one(BigInt) << (ndigits(x, 2)-1)
+    isneg(x) && (r.size = -r.size)
+    return r
+end
+
+function nextpow2(x::BigInt)
+    count_ones_abs(x) <= 1 && return x
+    r = one(BigInt) << ndigits(x, 2)
+    isneg(x) && (r.size = -r.size)
+    return r
+end
 
 Base.checked_abs(x::BigInt) = abs(x)
 Base.checked_neg(x::BigInt) = -x
