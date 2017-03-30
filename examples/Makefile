@@ -1,41 +1,23 @@
-JULIAHOME := $(abspath ..)
+SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+BUILDDIR := .
+JULIAHOME := $(abspath $(SRCDIR)/..)
 include $(JULIAHOME)/Make.inc
 
-FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
-	-I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir) $(CFLAGS)
+embedding_binary := $(abspath $(build_libexecdir)/embedding$(JULIA_LIBSUFFIX)$(EXE))
 
-DEBUGFLAGS += $(FLAGS)
-SHIPFLAGS += $(FLAGS)
-JLDFLAGS += $(LDFLAGS) $(NO_WHOLE_ARCHIVE) $(call exec,$(LLVM_CONFIG) --ldflags) $(OSLIBS) $(RPATH)
+release: embedding
+debug: embedding-debug
 
-ifeq ($(USE_SYSTEM_LIBM),0)
-ifneq ($(UNTRUSTED_SYSTEM_LIBM),0)
-JLDFLAGS += $(WHOLE_ARCHIVE) $(build_libdir)/libopenlibm.a $(NO_WHOLE_ARCHIVE)
-endif
-endif
+embedding: $(embedding_binary)
+embedding-debug: $(embedding_binary)
 
-embedding-release: embedding
+$(embedding_binary): $(wildcard embedding/*)
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/examples/embedding $(JULIA_BUILD_MODE) \
+                                JULIA="$(JULIA_EXECUTABLE)" BIN="$(build_libexecdir)" \
+                                SPAWN="$(spawn)" CC="$(CC)"
 
-release debug:
-	$(MAKE) embedding-$@
+clean:
+	-rm -f $(embedding_binary) $(embedding_binary)-debug
 
-%.o: %.c
-	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@)
-%.do: %.c
-	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
-
-embedding: $(build_bindir)/embedding$(EXE)
-embedding-debug: $(build_bindir)/embedding-debug$(EXE)
-
-$(build_bindir)/embedding$(EXE): embedding.o
-	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ -L$(build_private_libdir) -L$(build_shlibdir) -ljulia $(JLDFLAGS))
-$(build_bindir)/embedding-debug$(EXE): embedding.do
-	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ -L$(build_private_libdir) -L$(build_shlibdir) -ljulia-debug $(JLDFLAGS))
-
-
-clean: | $(CLEAN_TARGETS)
-	rm -f *.o *.do
-	rm -f $(build_bindir)/embedding-debug $(build_bindir)/embedding
-
-.PHONY: clean release debug
+.PHONY: all embedding clean
 

@@ -453,7 +453,10 @@ JL_DLLEXPORT void jl_show(jl_value_t *stream, jl_value_t *v)
             return;
         }
         jl_value_t *args[3] = {jl_show_gf,stream,v};
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_get_world_counter();
         jl_apply(args, 3);
+        jl_get_ptls_states()->world_age = last_age;
     }
 }
 
