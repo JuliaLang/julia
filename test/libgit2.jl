@@ -221,6 +221,11 @@ mktempdir() do dir
                 remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
                 @test LibGit2.push_refspecs(remote) == String["refs/heads/master"]
                 close(remote)
+                # constructor with a refspec
+                remote = LibGit2.GitRemote(repo, "upstream2", repo_url, "upstream")
+                @test sprint(show, remote) == "GitRemote:\nRemote name: upstream2 url: $repo_url"
+                @test LibGit2.fetch_refspecs(remote) == String["upstream"]
+                close(remote)
 
                 remote = LibGit2.GitRemoteAnon(repo, repo_url)
                 @test LibGit2.url(remote) == repo_url
