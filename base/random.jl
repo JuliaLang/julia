@@ -256,7 +256,7 @@ end
 
 ## Global RNG
 
-const GLOBAL_RNG = MersenneTwister()
+const GLOBAL_RNG = MersenneTwister(0)
 globalRNG() = GLOBAL_RNG
 
 # rand: a non-specified RNG defaults to GLOBAL_RNG

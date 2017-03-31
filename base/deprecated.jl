@@ -1307,6 +1307,9 @@ end
      end
 end
 
+# PR #16984
+@deprecate MersenneTwister() MersenneTwister(0)
+
 # END 0.6 deprecations
 
 # BEGIN 1.0 deprecations

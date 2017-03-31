@@ -15,7 +15,6 @@ srand(0); rand(); x = rand(384)
 @test length(randn(4, 5)) == 20
 @test length(bitrand(4, 5)) == 20
 
-@test rand(MersenneTwister()) != rand(MersenneTwister())
 @test rand(MersenneTwister(0)) == 0.8236475079774124
 @test rand(MersenneTwister(42)) == 0.5331830160438613
 # Try a seed larger than 2^32
@@ -38,7 +37,8 @@ A = zeros(UInt128, 2, 2)
 @test_throws BoundsError rand!(MersenneTwister(0), A, 5)
 
 # rand from AbstractArray
-let mt = MersenneTwister()
+let mt = MersenneTwister(0)
+    srand(mt)
     @test rand(mt, 0:3:1000) in 0:3:1000
     @test issubset(rand!(mt, Array{Int}(100), 0:3:1000), 0:3:1000)
     coll = Any[2, UInt128(128), big(619), "string"]
@@ -305,7 +305,7 @@ let a = [rand(RandomDevice(), UInt128) for i=1:10]
 end
 
 # test all rand APIs
-for rng in ([], [MersenneTwister()], [RandomDevice()])
+for rng in ([], [MersenneTwister(0)], [RandomDevice()])
     types = [Base.BitInteger_types..., Bool, Float16, Float32, Float64, Char]
     ftypes = [Float16, Float32, Float64]
     b2 = big(2)
@@ -377,7 +377,7 @@ function hist(X,n)
 end
 
 # test uniform distribution of floats
-for rng in [MersenneTwister(), RandomDevice()]
+for rng in [srand(MersenneTwister(0)), RandomDevice()]
     for T in [Float16,Float32,Float64]
         # array version
         counts = hist(rand(rng, T, 2000), 4)
