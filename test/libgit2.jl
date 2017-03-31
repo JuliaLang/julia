@@ -162,6 +162,7 @@ mktempdir() do dir
     commit_oid3 = LibGit2.GitHash()
     master_branch = "master"
     test_branch = "test_branch"
+    test_branch2 = "test_branch_two"
     tag1 = "tag1"
     tag2 = "tag2"
 
@@ -251,6 +252,14 @@ mktempdir() do dir
             catch e
                 @test typeof(e) == LibGit2.GitError
                 @test startswith(sprint(show,e),"GitError(Code:ENOTFOUND, Class:OS, Failed to resolve path")
+            end
+            path = joinpath(dir, "Example.BareTwo")
+            repo = LibGit2.init(path, true)
+            try
+                #just to see if this works
+                LibGit2.cleanup(repo)
+            finally
+                close(repo)
             end
         end
     end
@@ -413,6 +422,16 @@ mktempdir() do dir
                     try
                         @test LibGit2.shortname(tbref) == test_branch
                         @test isnull(LibGit2.upstream(tbref))
+                    finally
+                        close(tbref)
+                    end
+                    @test isnull(LibGit2.lookup_branch(repo, test_branch2, true))
+                    LibGit2.branch!(repo, test_branch2; set_head=false)
+                    tbref = Base.get(LibGit2.lookup_branch(repo, test_branch2, false))
+                    try
+                        @test LibGit2.shortname(tbref) == test_branch2
+                        LibGit2.delete_branch(tbref)
+                        @test isnull(LibGit2.lookup_branch(repo, test_branch2, true))
                     finally
                         close(tbref)
                     end
