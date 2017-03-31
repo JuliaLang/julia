@@ -1065,3 +1065,17 @@ g21054(>:) = >:2
 # issue #21168
 @test expand(:(a.[1])) == Expr(:error, "invalid syntax a.[1]")
 @test expand(:(a.{1})) == Expr(:error, "invalid syntax a.{1}")
+
+# Issue #21225
+let abstr = parse("abstract type X end")
+    @test parse("abstract type X; end") == abstr
+    @test parse(string("abstract type X", ";"^5, " end")) == abstr
+    @test parse("abstract type X\nend") == abstr
+    @test parse(string("abstract type X", "\n"^5, "end")) == abstr
+end
+let prim = parse("primitive type X 8 end")
+    @test parse("primitive type X 8; end") == prim
+    @test parse(string("primitive type X 8", ";"^5, " end")) == prim
+    @test parse("primitive type X 8\nend") == prim
+    @test parse(string("primitive type X 8", "\n"^5, "end")) == prim
+end
