@@ -268,9 +268,19 @@ am = map(identity, a)
 
 # other functions
 v = OffsetArray(v0, (-3,))
+@test endof(v) == 1
 @test_approx_eq v v
 @test parent(v') == v0'
 @test indices(v') === (1:1,-2:1)
+rv = reverse(v)
+@test indices(rv) == indices(v)
+@test rv[1] == v[-2]
+@test rv[0] == v[-1]
+@test rv[-1] == v[0]
+@test rv[-2] == v[1]
+cv = copy(v)
+@test reverse!(cv) == rv
+
 A = OffsetArray(rand(4,4), (-3,5))
 @test_approx_eq A A
 @test maximum(A) == maximum(parent(A))

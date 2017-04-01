@@ -690,26 +690,30 @@ function lexcmp(a::Array{UInt8,1}, b::Array{UInt8,1})
     return c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
-function reverse(A::AbstractVector, s=1, n=length(A))
+function reverse(A::AbstractVector, s=first(linearindices(A)), n=last(linearindices(A)))
     B = similar(A)
-    for i = 1:s-1
+    for i = first(linearindices(A)):s-1
         B[i] = A[i]
     end
     for i = s:n
         B[i] = A[n+s-i]
     end
-    for i = n+1:length(A)
+    for i = n+1:last(linearindices(A))
         B[i] = A[i]
     end
     return B
 end
-reverseind(a::AbstractVector, i::Integer) = length(a) + 1 - i
+function reverseind(a::AbstractVector, i::Integer)
+    li = linearindices(a)
+    first(li) + last(li) - i
+end
 
-function reverse!(v::AbstractVector, s=1, n=length(v))
+function reverse!(v::AbstractVector, s=first(linearindices(v)), n=last(linearindices(v)))
+    liv = linearindices(v)
     if n <= s  # empty case; ok
-    elseif !(1 ≤ s ≤ endof(v))
+    elseif !(first(liv) ≤ s ≤ last(liv))
         throw(BoundsError(v, s))
-    elseif !(1 ≤ n ≤ endof(v))
+    elseif !(first(liv) ≤ n ≤ last(liv))
         throw(BoundsError(v, n))
     end
     r = n
