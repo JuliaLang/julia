@@ -1,20 +1,24 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Eigendecomposition
-immutable Eigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
+struct Eigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
     values::U
     vectors::S
-    Eigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = new(values, vectors)
+    Eigen{T,V,S,U}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V,S,U} =
+        new(values, vectors)
 end
-Eigen{T,V}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = Eigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
+Eigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V} =
+    Eigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
 
 # Generalized eigenvalue problem.
-immutable GeneralizedEigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
+struct GeneralizedEigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
     values::U
     vectors::S
-    GeneralizedEigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = new(values, vectors)
+    GeneralizedEigen{T,V,S,U}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V,S,U} =
+        new(values, vectors)
 end
-GeneralizedEigen{T,V}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = GeneralizedEigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
+GeneralizedEigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V} =
+    GeneralizedEigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
 
 
 function getindex(A::Union{Eigen,GeneralizedEigen}, d::Symbol)
@@ -25,6 +29,12 @@ end
 
 isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(x -> x > 0, A.values)
 
+"""
+    eigfact!(A, [B])
+
+Same as [`eigfact`](@ref), but saves space by overwriting the input `A` (and
+`B`), instead of creating a copy.
+"""
 function eigfact!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
@@ -73,7 +83,7 @@ make rows and columns more equal in norm. The default is `true` for both options
 
 ```jldoctest
 julia> F = eigfact([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-Base.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([1.0,3.0,18.0],[1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])
+Base.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([1.0, 3.0, 18.0], [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])
 
 julia> F[:values]
 3-element Array{Float64,1}:
@@ -116,8 +126,7 @@ The eigenvectors are returned columnwise.
 
 ```jldoctest
 julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-([1.0,3.0,18.0],
-[1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])
+([1.0, 3.0, 18.0], [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])
 ```
 
 `eig` is a wrapper around [`eigfact`](@ref), extracting all parts of the
@@ -159,12 +168,12 @@ The option `permute=true` permutes the matrix to become
 closer to upper triangular, and `scale=true` scales the matrix by its diagonal elements to
 make rows and columns more equal in norm.
 """
-function eigvals!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
+function eigvals!(A::StridedMatrix{<:BlasReal}; permute::Bool=true, scale::Bool=true)
     issymmetric(A) && return eigvals!(Symmetric(A))
     _, valsre, valsim, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)
     return iszero(valsim) ? valsre : complex.(valsre, valsim)
 end
-function eigvals!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
+function eigvals!(A::StridedMatrix{<:BlasComplex}; permute::Bool=true, scale::Bool=true)
     ishermitian(A) && return eigvals(Hermitian(A))
     return LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)[2]
 end
@@ -219,8 +228,8 @@ julia> A = [0 im; -1 0]
 julia> eigmax(A)
 ERROR: DomainError:
 Stacktrace:
- [1] #eigmax#36(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:234
- [2] eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:232
+ [1] #eigmax#40(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:238
+ [2] eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:236
 ```
 """
 function eigmax(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
@@ -261,8 +270,8 @@ julia> A = [0 im; -1 0]
 julia> eigmin(A)
 ERROR: DomainError:
 Stacktrace:
- [1] #eigmin#37(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:275
- [2] eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:273
+ [1] #eigmin#41(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:280
+ [2] eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:278
 ```
 """
 function eigmin(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
@@ -343,8 +352,7 @@ julia> B = [0 1; 1 0]
  1  0
 
 julia> eig(A, B)
-(Complex{Float64}[0.0+1.0im,0.0-1.0im],
-Complex{Float64}[0.0-1.0im 0.0+1.0im; -1.0-0.0im -1.0+0.0im])
+(Complex{Float64}[0.0+1.0im, 0.0-1.0im], Complex{Float64}[0.0-1.0im 0.0+1.0im; -1.0-0.0im -1.0+0.0im])
 ```
 """
 function eig(A::AbstractMatrix, B::AbstractMatrix)

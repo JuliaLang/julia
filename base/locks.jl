@@ -17,7 +17,7 @@ Abstract supertype describing types that
 implement the thread-safe synchronization primitives:
 `lock`, `trylock`, `unlock`, and `islocked`
 """
-abstract AbstractLock
+abstract type AbstractLock end
 
 # Test-and-test-and-set spin locks are quickest up to about 30ish
 # contending threads. If you have more contention than that, perhaps
@@ -27,7 +27,7 @@ abstract AbstractLock
 
 See SpinLock.
 """
-immutable TatasLock <: AbstractLock
+struct TatasLock <: AbstractLock
     handle::Atomic{Int}
     TatasLock() = new(Atomic{Int}(0))
 end
@@ -47,7 +47,7 @@ See also RecursiveSpinLock for a version that permits recursion.
 
 See also Mutex for a more efficient version on one core or if the lock may be held for a considerable length of time.
 """
-typealias SpinLock TatasLock
+const SpinLock = TatasLock
 
 function lock(l::TatasLock)
     while true
@@ -86,7 +86,7 @@ end
 
 See RecursiveSpinLock.
 """
-immutable RecursiveTatasLock <: AbstractLock
+struct RecursiveTatasLock <: AbstractLock
     ownertid::Atomic{Int16}
     handle::Atomic{Int}
     RecursiveTatasLock() = new(Atomic{Int16}(0), Atomic{Int}(0))
@@ -103,7 +103,7 @@ See also SpinLock for a slightly faster version.
 
 See also Mutex for a more efficient version on one core or if the lock may be held for a considerable length of time.
 """
-typealias RecursiveSpinLock RecursiveTatasLock
+const RecursiveSpinLock = RecursiveTatasLock
 
 function lock(l::RecursiveTatasLock)
     if l.ownertid[] == threadid()
@@ -179,7 +179,7 @@ on pthreads, this is a `pthread_mutex_t`.
 
 See also SpinLock for a lighter-weight lock.
 """
-type Mutex <: AbstractLock
+mutable struct Mutex <: AbstractLock
     ownertid::Int16
     handle::Ptr{Void}
     function Mutex()

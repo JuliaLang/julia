@@ -12,7 +12,7 @@ called can be woken up. For level-triggered notifications, you must keep extra s
 track of whether a notification has happened. The [`Channel`](@ref) type does
 this, and so can be used for level-triggered events.
 """
-type Condition
+mutable struct Condition
     waitq::Vector{Any}
 
     Condition() = new([])
@@ -37,19 +37,24 @@ end
 Wake up tasks waiting for a condition, passing them `val`. If `all` is `true` (the default),
 all waiting tasks are woken, otherwise only one is. If `error` is `true`, the passed value
 is raised as an exception in the woken tasks.
+
+Returns the count of tasks woken up. Returns 0 if no tasks are waiting on `condition`.
 """
 notify(c::Condition, arg::ANY=nothing; all=true, error=false) = notify(c, arg, all, error)
 function notify(c::Condition, arg, all, error)
+    cnt = 0
     if all
+        cnt = length(c.waitq)
         for t in c.waitq
             error ? schedule(t, arg, error=error) : schedule(t, arg)
         end
         empty!(c.waitq)
     elseif !isempty(c.waitq)
+        cnt = 1
         t = shift!(c.waitq)
         error ? schedule(t, arg, error=error) : schedule(t, arg)
     end
-    nothing
+    cnt
 end
 
 notify_error(c::Condition, err) = notify(c, err, true, true)
@@ -61,15 +66,17 @@ n_waiters(c::Condition) = length(c.waitq)
     @schedule
 
 Wrap an expression in a [`Task`](@ref) and add it to the local machine's scheduler queue.
+Similar to [`@async`](@ref) except that an enclosing `@sync` does NOT wait for tasks
+started with an `@schedule`.
 """
 macro schedule(expr)
-    expr = :(()->($expr))
-    :(enq_work(Task($(esc(expr)))))
+    thunk = esc(:(()->($expr)))
+    :(enq_work(Task($thunk)))
 end
 
 ## scheduler and work queue
 
-global const Workqueue = Any[]
+global const Workqueue = Task[]
 
 function enq_work(t::Task)
     t.state == :runnable || error("schedule: Task not runnable")
@@ -228,7 +235,7 @@ when notified from C by a call to `uv_async_send`.
 Waiting tasks are woken with an error when the object is closed (by [`close`](@ref).
 Use [`isopen`](@ref) to check whether it is still active.
 """
-type AsyncCondition
+mutable struct AsyncCondition
     handle::Ptr{Void}
     cond::Condition
 
@@ -301,7 +308,7 @@ Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on 
 a specified interval.  Times are in seconds.  Waiting tasks are woken with an error when the
 timer is closed (by [`close`](@ref). Use [`isopen`](@ref) to check whether a timer is still active.
 """
-type Timer
+mutable struct Timer
     handle::Ptr{Void}
     cond::Condition
     isopen::Bool

@@ -13,14 +13,14 @@ is such a popular index variable name. Since Julia allows numeric literals to be
 this binding suffices to provide convenient syntax for complex numbers, similar to the traditional
 mathematical notation:
 
-```julia
+```jldoctest
 julia> 1 + 2im
 1 + 2im
 ```
 
 You can perform all the standard arithmetic operations with complex numbers:
 
-```julia
+```jldoctest
 julia> (1 + 2im)*(2 - 3im)
 8 + 1im
 
@@ -54,7 +54,7 @@ julia> 3(2 - 5im)^-1.0
 
 The promotion mechanism ensures that combinations of operands of different types just work:
 
-```julia
+```jldoctest
 julia> 2(1 - 1im)
 2 - 2im
 
@@ -88,23 +88,26 @@ division.
 
 Standard functions to manipulate complex values are provided:
 
-```julia
-julia> real(1 + 2im)
+```jldoctest
+julia> z = 1 + 2im
+1 + 2im
+
+julia> real(1 + 2im) # real part of z
 1
 
-julia> imag(1 + 2im)
+julia> imag(1 + 2im) # imaginary part of z
 2
 
-julia> conj(1 + 2im)
+julia> conj(1 + 2im) # complex conjugate of z
 1 - 2im
 
-julia> abs(1 + 2im)
+julia> abs(1 + 2im) # absolute value of z
 2.23606797749979
 
-julia> abs2(1 + 2im)
+julia> abs2(1 + 2im) # squared absolute value
 5
 
-julia> angle(1 + 2im)
+julia> angle(1 + 2im) # phase angle in radians
 1.1071487177940904
 ```
 
@@ -114,7 +117,7 @@ numbers where it avoids taking a square root. [`angle()`](@ref) returns the phas
 (also known as the *argument* or *arg* function). The full gamut of other [Elementary Functions](@ref)
 is also defined for complex numbers:
 
-```julia
+```jldoctest
 julia> sqrt(1im)
 0.7071067811865476 + 0.7071067811865475im
 
@@ -135,30 +138,30 @@ Note that mathematical functions typically return real values when applied to re
 complex values when applied to complex numbers. For example, [`sqrt()`](@ref) behaves differently
 when applied to `-1` versus `-1 + 0im` even though `-1 == -1 + 0im`:
 
-```julia
+```jldoctest
 julia> sqrt(-1)
 ERROR: DomainError:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
- in sqrt(::Int64) at ./math.jl:278
- ...
+Stacktrace:
+ [1] sqrt(::Int64) at ./math.jl:431
 
 julia> sqrt(-1 + 0im)
 0.0 + 1.0im
 ```
 
-The [literal numeric coefficient notation](@ref man-numeric-literal-coefficients) does not work when constructing complex number
+The [literal numeric coefficient notation](@ref man-numeric-literal-coefficients) does not work when constructing a complex number
 from variables. Instead, the multiplication must be explicitly written out:
 
-```julia
+```jldoctest
 julia> a = 1; b = 2; a + b*im
 1 + 2im
 ```
 
 However, this is *not* recommended; Use the [`complex()`](@ref) function instead to construct
-a complex value directly from its real and imaginary parts.:
+a complex value directly from its real and imaginary parts:
 
-```julia
-julia> complex(a,b)
+```jldoctest
+julia> a = 1; b = 2; complex(a, b)
 1 + 2im
 ```
 
@@ -167,7 +170,7 @@ This construction avoids the multiplication and addition operations.
 [`Inf`](@ref) and [`NaN`](@ref) propagate through complex numbers in the real and imaginary parts
 of a complex number as described in the [Special floating-point values](@ref) section:
 
-```julia
+```jldoctest
 julia> 1 + Inf*im
 1.0 + Inf*im
 
@@ -180,7 +183,7 @@ julia> 1 + NaN*im
 Julia has a rational number type to represent exact ratios of integers. Rationals are constructed
 using the [`//`](@ref) operator:
 
-```julia
+```jldoctest
 julia> 2//3
 2//3
 ```
@@ -188,7 +191,7 @@ julia> 2//3
 If the numerator and denominator of a rational have common factors, they are reduced to lowest
 terms such that the denominator is non-negative:
 
-```julia
+```jldoctest
 julia> 6//9
 2//3
 
@@ -207,7 +210,7 @@ tested by checking for equality of the numerator and denominator. The standardiz
 denominator of a rational value can be extracted using the [`numerator()`](@ref) and [`denominator()`](@ref)
 functions:
 
-```julia
+```jldoctest
 julia> numerator(2//3)
 2
 
@@ -218,7 +221,7 @@ julia> denominator(2//3)
 Direct comparison of the numerator and denominator is generally not necessary, since the standard
 arithmetic and comparison operations are defined for rational values:
 
-```julia
+```jldoctest
 julia> 2//3 == 6//9
 true
 
@@ -246,7 +249,7 @@ julia> 6//5 / 10//7
 
 Rationals can be easily converted to floating-point numbers:
 
-```julia
+```jldoctest
 julia> float(3//4)
 0.75
 ```
@@ -254,14 +257,16 @@ julia> float(3//4)
 Conversion from rational to floating-point respects the following identity for any integral values
 of `a` and `b`, with the exception of the case `a == 0` and `b == 0`:
 
-```julia
+```jldoctest
+julia> a = 1; b = 2;
+
 julia> isequal(float(a//b), a/b)
 true
 ```
 
 Constructing infinite rational values is acceptable:
 
-```julia
+```jldoctest
 julia> 5//0
 1//0
 
@@ -274,17 +279,17 @@ Rational{Int64}
 
 Trying to construct a [`NaN`](@ref) rational value, however, is not:
 
-```julia
+```jldoctest
 julia> 0//0
 ERROR: ArgumentError: invalid rational: zero(Int64)//zero(Int64)
- in Rational{Int64}(::Int64, ::Int64) at ./rational.jl:8
- in //(::Int64, ::Int64) at ./rational.jl:22
- ...
+Stacktrace:
+ [1] Rational{Int64}(::Int64, ::Int64) at ./rational.jl:8
+ [2] //(::Int64, ::Int64) at ./rational.jl:35
 ```
 
 As usual, the promotion system makes interactions with other numeric types effortless:
 
-```julia
+```jldoctest
 julia> 3//5 + 1
 8//5
 

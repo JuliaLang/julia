@@ -1,13 +1,14 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Singular Value Decomposition
-immutable SVD{T,Tr,M<:AbstractArray} <: Factorization{T}
+struct SVD{T,Tr,M<:AbstractArray} <: Factorization{T}
     U::M
     S::Vector{Tr}
     Vt::M
-    SVD(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) = new(U, S, Vt)
+    SVD{T,Tr,M}(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) where {T,Tr,M} =
+        new(U, S, Vt)
 end
-SVD{T,Tr}(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) = SVD{T,Tr,typeof(U)}(U, S, Vt)
+SVD(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) where {T,Tr} = SVD{T,Tr,typeof(U)}(U, S, Vt)
 
 """
     svdfact!(A, thin::Bool=true) -> SVD
@@ -52,7 +53,7 @@ julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
  0.0  2.0  0.0  0.0  0.0
 
 julia> F = svdfact(A)
-Base.LinAlg.SVD{Float64,Float64,Array{Float64,2}}([0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0],[3.0,2.23607,2.0,0.0],[-0.0 0.0 … -0.0 0.0; 0.447214 0.0 … 0.0 0.894427; -0.0 1.0 … -0.0 0.0; 0.0 0.0 … 1.0 0.0])
+Base.LinAlg.SVD{Float64,Float64,Array{Float64,2}}([0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0], [3.0, 2.23607, 2.0, 0.0], [-0.0 0.0 … -0.0 0.0; 0.447214 0.0 … 0.0 0.894427; -0.0 1.0 … -0.0 0.0; 0.0 0.0 … 1.0 0.0])
 
 julia> F[:U] * diagm(F[:S]) * F[:Vt]
 4×5 Array{Float64,2}:
@@ -94,11 +95,7 @@ julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
  0.0  2.0  0.0  0.0  0.0
 
 julia> U, S, V = svd(A)
-(
-[0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0],
-
-[3.0,2.23607,2.0,0.0],
-[-0.0 0.447214 -0.0 0.0; 0.0 0.0 1.0 0.0; … ; -0.0 0.0 -0.0 1.0; 0.0 0.894427 0.0 0.0])
+([0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0], [3.0, 2.23607, 2.0, 0.0], [-0.0 0.447214 -0.0 0.0; 0.0 0.0 1.0 0.0; … ; -0.0 0.0 -0.0 1.0; 0.0 0.894427 0.0 0.0])
 
 julia> U*diagm(S)*V'
 4×5 Array{Float64,2}:
@@ -134,7 +131,7 @@ Returns the singular values of `A`, saving space by overwriting the input.
 See also [`svdvals`](@ref).
 """
 svdvals!{T<:BlasFloat}(A::StridedMatrix{T}) = findfirst(size(A), 0) > 0 ? zeros(T, 0) : LAPACK.gesdd!('N', A)[2]
-svdvals{T<:BlasFloat}(A::AbstractMatrix{T}) = svdvals!(copy(A))
+svdvals(A::AbstractMatrix{<:BlasFloat}) = svdvals!(copy(A))
 
 """
     svdvals(A)
@@ -164,16 +161,16 @@ function svdvals{T}(A::AbstractMatrix{T})
     svdvals!(copy_oftype(A, S))
 end
 svdvals(x::Number) = abs(x)
-svdvals{T, Tr}(S::SVD{T, Tr}) = (S[:S])::Vector{Tr}
+svdvals{T}(S::SVD{<:Any,T}) = (S[:S])::Vector{T}
 
 # SVD least squares
-function A_ldiv_B!{Ta,Tb}(A::SVD{Ta}, B::StridedVecOrMat{Tb})
-    k = searchsortedlast(A.S, eps(real(Ta))*A.S[1], rev=true)
+function A_ldiv_B!{T}(A::SVD{T}, B::StridedVecOrMat)
+    k = searchsortedlast(A.S, eps(real(T))*A.S[1], rev=true)
     view(A.Vt,1:k,:)' * (view(A.S,1:k) .\ (view(A.U,:,1:k)' * B))
 end
 
 # Generalized svd
-immutable GeneralizedSVD{T,S} <: Factorization{T}
+struct GeneralizedSVD{T,S} <: Factorization{T}
     U::S
     V::S
     Q::S
@@ -182,9 +179,15 @@ immutable GeneralizedSVD{T,S} <: Factorization{T}
     k::Int
     l::Int
     R::S
-    GeneralizedSVD(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T}, a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) = new(U, V, Q, a, b, k, l, R)
+    function GeneralizedSVD{T,S}(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T},
+                                 a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) where {T,S}
+        new(U, V, Q, a, b, k, l, R)
+    end
 end
-GeneralizedSVD{T}(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T}, a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) = GeneralizedSVD{T,typeof(U)}(U, V, Q, a, b, k, l, R)
+function GeneralizedSVD(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T},
+                        a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) where T
+    GeneralizedSVD{T,typeof(U)}(U, V, Q, a, b, k, l, R)
+end
 
 """
     svdfact!(A, B) -> GeneralizedSVD

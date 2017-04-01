@@ -65,7 +65,7 @@ aimg  = randn(n,n)/2
             f = eigfact(asym_sg, a_sg'a_sg)
             @test asym_sg*f[:vectors] ≈ (a_sg'a_sg*f[:vectors]) * Diagonal(f[:values])
             @test f[:values] ≈ eigvals(asym_sg, a_sg'a_sg)
-            @test_approx_eq_eps prod(f[:values]) prod(eigvals(asym_sg/(a_sg'a_sg))) 200ε
+            @test prod(f[:values]) ≈ prod(eigvals(asym_sg/(a_sg'a_sg))) atol=200ε
             @test eigvecs(asym_sg, a_sg'a_sg) == f[:vectors]
             @test eigvals(f) === f[:values]
             @test eigvecs(f) === f[:vectors]
@@ -86,7 +86,7 @@ aimg  = randn(n,n)/2
             f = eigfact(a1_nsg, a2_nsg)
             @test a1_nsg*f[:vectors] ≈ (a2_nsg*f[:vectors]) * Diagonal(f[:values])
             @test f[:values] ≈ eigvals(a1_nsg, a2_nsg)
-            @test_approx_eq_eps prod(f[:values]) prod(eigvals(a1_nsg/a2_nsg)) 50000ε
+            @test prod(f[:values]) ≈ prod(eigvals(a1_nsg/a2_nsg)) atol=50000ε
             @test eigvecs(a1_nsg, a2_nsg) == f[:vectors]
             @test_throws KeyError f[:Z]
 

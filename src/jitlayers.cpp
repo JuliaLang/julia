@@ -70,6 +70,7 @@ namespace llvm {
 #include <llvm/ADT/StringMap.h>
 #include <llvm/ADT/StringSet.h>
 #include <llvm/ADT/SmallSet.h>
+#include "fix_llvm_assert.h"
 
 using namespace llvm;
 
@@ -228,18 +229,16 @@ void addOptimizationPasses(PassManager *PM)
 #endif
     PM->add(createJumpThreadingPass());         // Thread jumps
     PM->add(createDeadStoreEliminationPass());  // Delete dead stores
-#if !defined(INSTCOMBINE_BUG)
+#if JL_LLVM_VERSION >= 30500
     if (jl_options.opt_level >= 3) {
         PM->add(createSLPVectorizerPass());     // Vectorize straight-line code
     }
 #endif
 
     PM->add(createAggressiveDCEPass());         // Delete dead instructions
-#if !defined(INSTCOMBINE_BUG)
+#if JL_LLVM_VERSION >= 30500
     if (jl_options.opt_level >= 3)
         PM->add(createInstructionCombiningPass());   // Clean up after SLP loop vectorizer
-#endif
-#if JL_LLVM_VERSION >= 30500
     PM->add(createLoopVectorizePass());         // Vectorize loops
     PM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
 #endif
@@ -289,6 +288,13 @@ extern "C" {
 
 namespace {
 
+// Use a local variable to hold the addresses to avoid generating a PLT
+// on the function call.
+// It messes up the GDB lookup logic with dynamically linked LLVM.
+// (Ref https://sourceware.org/bugzilla/show_bug.cgi?id=20633)
+// Use `volatile` to make sure the call always loads this slot.
+void (*volatile jit_debug_register_code)() = __jit_debug_register_code;
+
 using namespace llvm;
 using namespace llvm::object;
 using namespace llvm::orc;
@@ -307,7 +313,7 @@ void NotifyDebugger(jit_code_entry *JITCodeEntry)
     }
     __jit_debug_descriptor.first_entry = JITCodeEntry;
     __jit_debug_descriptor.relevant_entry = JITCodeEntry;
-    __jit_debug_register_code();
+    jit_debug_register_code();
 }
 }
 // ------------------------ END OF TEMPORARY COPY FROM LLVM -----------------
@@ -342,7 +348,7 @@ JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
 
 // TODO: hook up RegisterJITEventListener, instead of hard-coding the GDB and JuliaListener targets
 template <typename ObjSetT, typename LoadResult>
-void JuliaOJIT::DebugObjectRegistrar::operator()(ObjectLinkingLayerBase::ObjSetHandleT H,
+void JuliaOJIT::DebugObjectRegistrar::operator()(RTDyldObjectLinkingLayerBase::ObjSetHandleT H,
                 const ObjSetT &Objects, const LoadResult &LOS)
 {
 #if JL_LLVM_VERSION < 30800
@@ -439,7 +445,11 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
                 auto Obj = object::ObjectFile::createObjectFile(ObjBuffer->getMemBufferRef());
 
                 if (!Obj) {
+#if JL_LLVM_VERSION >= 50000
+                    M.print(llvm::dbgs(), nullptr, false, true);
+#else
                     M.dump();
+#endif
 #if JL_LLVM_VERSION >= 30900
                     std::string Buf;
                     raw_string_ostream OS(Buf);
@@ -503,7 +513,7 @@ void *JuliaOJIT::getPointerToGlobalIfAvailable(const GlobalValue *GV)
 
 void JuliaOJIT::addModule(std::unique_ptr<Module> M)
 {
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
     // validate the relocations for M
     for (Module::iterator I = M->begin(), E = M->end(); I != E; ) {
         Function *F = &*I;

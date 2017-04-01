@@ -80,8 +80,6 @@ static char *jl_gc_try_alloc_region(int pg_cnt)
 static void jl_gc_alloc_region(region_t *region)
 {
     int pg_cnt = region_pg_cnt;
-    const size_t pages_sz = sizeof(jl_gc_page_t) * pg_cnt;
-    const size_t allocmap_sz = sizeof(uint32_t) * pg_cnt / 32;
     char *mem = NULL;
     while (1) {
         if (__likely((mem = jl_gc_try_alloc_region(pg_cnt))))
@@ -98,6 +96,8 @@ static void jl_gc_alloc_region(region_t *region)
             jl_throw(jl_memory_exception);
         }
     }
+    const size_t pages_sz = sizeof(jl_gc_page_t) * pg_cnt;
+    const size_t allocmap_sz = sizeof(uint32_t) * pg_cnt / 32;
     region->pages = (jl_gc_page_t*)mem;
     region->allocmap = (uint32_t*)(mem + pages_sz);
     region->meta = (jl_gc_pagemeta_t*)(mem + pages_sz +allocmap_sz);

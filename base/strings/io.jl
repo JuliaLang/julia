@@ -11,6 +11,17 @@ if `io` is not given) a canonical (un-decorated) text representation
 of a value if there is one, otherwise call [`show`](@ref).
 The representation used by `print` includes minimal formatting and tries to
 avoid Julia-specific details.
+
+```jldoctest
+julia> print("Hello World!")
+Hello World!
+julia> io = IOBuffer();
+
+julia> print(io, "Hello World!")
+
+julia> String(take!(io))
+"Hello World!"
+```
 """
 function print(io::IO, x)
     lock(io)
@@ -45,8 +56,10 @@ println(io::IO, xs...) = print(io, xs..., '\n')
 ## conversion of general objects to strings ##
 
 function sprint(size::Integer, f::Function, args...; env=nothing)
-    s = IOBuffer(Array{UInt8}(size), true, true)
-    truncate(s,0)
+    s = IOBuffer(StringVector(size), true, true)
+    # specialized version of truncate(s,0)
+    s.size = 0
+    s.ptr = 1
     if env !== nothing
         f(IOContext(s, env), args...)
     else
@@ -75,7 +88,7 @@ tostr_sizehint(x::Float32) = 12
 
 function print_to_string(xs...; env=nothing)
     # specialized for performance reasons
-    s = IOBuffer(Array{UInt8}(tostr_sizehint(xs[1])), true, true)
+    s = IOBuffer(StringVector(tostr_sizehint(xs[1])), true, true)
     # specialized version of truncate(s,0)
     s.size = 0
     s.ptr = 1
@@ -98,6 +111,11 @@ string_with_env(env, xs...) = print_to_string(xs...; env=env)
     string(xs...)
 
 Create a string from any values using the [`print`](@ref) function.
+
+```jldoctest
+julia> string("a", 1, true)
+"a1true"
+```
 """
 string(xs...) = print_to_string(xs...)
 
@@ -106,7 +124,7 @@ write(io::IO, s::AbstractString) = (len = 0; for c in s; len += write(io, c); en
 show(io::IO, s::AbstractString) = print_quoted(io, s)
 
 write(to::AbstractIOBuffer, s::SubString{String}) =
-    s.endof==0 ? 0 : write_sub(to, s.string.data, s.offset + 1, nextind(s, s.endof) - 1)
+    s.endof==0 ? 0 : unsafe_write(to, pointer(s.string, s.offset + 1), UInt(nextind(s, s.endof) - 1))
 
 ## printing literal quoted string data ##
 
@@ -135,9 +153,19 @@ end
     IOBuffer(string::String)
 
 Create a read-only `IOBuffer` on the data underlying the given string.
+
+```jldoctest
+julia> io = IOBuffer("Haho");
+
+julia> String(take!(io))
+"Haho"
+
+julia> String(take!(io))
+"Haho"
+```
 """
-IOBuffer(str::String) = IOBuffer(str.data)
-IOBuffer(s::SubString{String}) = IOBuffer(view(s.string.data, s.offset + 1 : s.offset + sizeof(s)))
+IOBuffer(str::String) = IOBuffer(Vector{UInt8}(str))
+IOBuffer(s::SubString{String}) = IOBuffer(view(Vector{UInt8}(s.string), s.offset + 1 : s.offset + sizeof(s)))
 
 # join is implemented using IO
 
@@ -308,7 +336,9 @@ end
 
 unescape_string(s::AbstractString) = sprint(endof(s), unescape_string, s)
 
-macro b_str(s); :($(unescape_string(s)).data); end
+macro b_str(s); :(Vector{UInt8}($(unescape_string(s)))); end
+
+macro raw_str(s); s; end
 
 ## multiline strings ##
 
@@ -345,7 +375,7 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
     pos = start(str)
     endpos = endof(str)
     # Note: this loses the type of the original string
-    buf = IOBuffer(Array{UInt8}(endpos), true, true)
+    buf = IOBuffer(StringVector(endpos), true, true)
     truncate(buf,0)
     cutting = true
     col = 0     # current column (0 based)

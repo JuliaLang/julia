@@ -4,7 +4,7 @@ import Base: copy, ctranspose, getindex, show, transpose, one, zero, inv,
              @_pure_meta, hcat, vcat, hvcat
 import Base.LinAlg: SingularException
 
-immutable UniformScaling{T<:Number}
+struct UniformScaling{T<:Number}
     λ::T
 end
 
@@ -39,6 +39,8 @@ ctranspose(J::UniformScaling) = UniformScaling(conj(J.λ))
 
 one{T}(::Type{UniformScaling{T}}) = UniformScaling(one(T))
 one{T}(J::UniformScaling{T}) = one(UniformScaling{T})
+oneunit{T}(::Type{UniformScaling{T}}) = UniformScaling(oneunit(T))
+oneunit{T}(J::UniformScaling{T}) = oneunit(UniformScaling{T})
 zero{T}(::Type{UniformScaling{T}}) = UniformScaling(zero(T))
 zero{T}(J::UniformScaling{T}) = zero(UniformScaling{T})
 
@@ -48,7 +50,7 @@ issymmetric(::UniformScaling) = true
 ishermitian(J::UniformScaling) = isreal(J.λ)
 
 (+)(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ+J2.λ)
-(+){T}(B::BitArray{2},J::UniformScaling{T}) = Array(B) + J
+(+)(B::BitArray{2}, J::UniformScaling)      = Array(B) + J
 (+)(J::UniformScaling, B::BitArray{2})      = J + Array(B)
 (+)(J::UniformScaling, A::AbstractMatrix)   = A + J
 
@@ -165,8 +167,10 @@ broadcast(::typeof(/), J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
 
 ==(J1::UniformScaling,J2::UniformScaling) = (J1.λ == J2.λ)
 
-isapprox{T<:Number,S<:Number}(J1::UniformScaling{T}, J2::UniformScaling{S};
-                              rtol::Real=Base.rtoldefault(T,S), atol::Real=0) = isapprox(J1.λ, J2.λ, rtol=rtol, atol=atol)
+function isapprox{T<:Number,S<:Number}(J1::UniformScaling{T}, J2::UniformScaling{S};
+                              rtol::Real=Base.rtoldefault(T,S), atol::Real=0, nans::Bool=false)
+    isapprox(J1.λ, J2.λ, rtol=rtol, atol=atol, nans=nans)
+end
 
 function copy!(A::AbstractMatrix, J::UniformScaling)
     size(A,1)==size(A,2) || throw(DimensionMismatch("a UniformScaling can only be copied to a square matrix"))
@@ -176,6 +180,11 @@ function copy!(A::AbstractMatrix, J::UniformScaling)
         @inbounds A[i,i] = λ
     end
     return A
+end
+
+function cond{T}(J::UniformScaling{T})
+    onereal = inv(one(real(J.λ)))
+    return J.λ ≠ zero(T) ? onereal : oftype(onereal, Inf)
 end
 
 # promote_to_arrays(n,k, T, A...) promotes any UniformScaling matrices

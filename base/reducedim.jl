@@ -18,7 +18,7 @@ function reduced_indices{N}(inds::Indices{N}, d::Int, rd::AbstractUnitRange)
         return inds
     end
 end
-reduced_indices{N}(inds::Indices{N}, d::Int) = reduced_indices(inds, d, OneTo(1))
+reduced_indices(inds::Indices, d::Int) = reduced_indices(inds, d, OneTo(1))
 
 function reduced_indices0{N}(inds::Indices{N}, d::Int)
     d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
@@ -80,13 +80,13 @@ reducedim_initarray0{T}(A::AbstractArray, region, v0::T) = reducedim_initarray0(
 #
 # The current scheme is basically following Steven G. Johnson's original implementation
 #
-promote_union(T::Union) = promote_type(T.types...)
+promote_union(T::Union) = promote_type(promote_union(T.a), promote_union(T.b))
 promote_union(T) = T
 
-function reducedim_init{S}(f, op::typeof(+), A::AbstractArray{S}, region)
+function reducedim_init(f, op::typeof(+), A::AbstractArray, region)
     _reducedim_init(f, op, zero, sum, A, region)
 end
-function reducedim_init{S}(f, op::typeof(*), A::AbstractArray{S}, region)
+function reducedim_init(f, op::typeof(*), A::AbstractArray, region)
     _reducedim_init(f, op, one, prod, A, region)
 end
 function _reducedim_init(f, op, fv, fop, A, region)
@@ -102,9 +102,9 @@ function _reducedim_init(f, op, fv, fop, A, region)
     return reducedim_initarray(A, region, z, Tr)
 end
 
-reducedim_init{T}(f, op::typeof(max), A::AbstractArray{T}, region) = reducedim_init(f, scalarmax, A, region)
-reducedim_init{T}(f, op::typeof(min), A::AbstractArray{T}, region) = reducedim_init(f, scalarmin, A, region)
-reducedim_init{T}(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray{T}, region) = reducedim_init(f, scalarmax, A, region)
+reducedim_init(f, op::typeof(max), A::AbstractArray, region) = reducedim_init(f, scalarmax, A, region)
+reducedim_init(f, op::typeof(min), A::AbstractArray, region) = reducedim_init(f, scalarmin, A, region)
+reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray, region) = reducedim_init(f, scalarmax, A, region)
 
 reducedim_init{T}(f, op::typeof(scalarmax), A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemin(f(zero(T))))
 reducedim_init{T}(f, op::typeof(scalarmin), A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemax(f(zero(T))))
@@ -117,7 +117,7 @@ reducedim_init(f, op::typeof(|), A::AbstractArray, region) = reducedim_initarray
 # specialize to make initialization more efficient for common cases
 
 for (IT, RT) in ((CommonReduceResult, :(eltype(A))), (SmallSigned, :Int), (SmallUnsigned, :UInt))
-    T = Union{[AbstractArray{t} for t in IT.types]..., [AbstractArray{Complex{t}} for t in IT.types]...}
+    T = Union{[AbstractArray{t} for t in uniontypes(IT)]..., [AbstractArray{Complex{t}} for t in uniontypes(IT)]...}
     @eval begin
         reducedim_init(f::typeof(identity), op::typeof(+), A::$T, region) =
             reducedim_initarray(A, region, zero($RT))
@@ -169,7 +169,7 @@ function check_reducedims(R, A)
     return lsiz
 end
 
-function _mapreducedim!{T,N}(f, op, R::AbstractArray, A::AbstractArray{T,N})
+function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
     lsiz = check_reducedims(R,A)
     isempty(A) && return R
 
@@ -238,7 +238,7 @@ julia> mapreducedim(isodd, |, a, 1, true)
 """
 mapreducedim(f, op, A::AbstractArray, region, v0) =
     mapreducedim!(f, op, reducedim_initarray(A, region, v0), A)
-mapreducedim{T}(f, op, A::AbstractArray{T}, region) =
+mapreducedim(f, op, A::AbstractArray, region) =
     mapreducedim!(f, op, reducedim_init(f, op, A, region), A)
 
 """
@@ -277,11 +277,290 @@ reducedim(op, A::AbstractArray, region) = mapreducedim(identity, op, A, region)
 
 
 ##### Specific reduction functions #####
+"""
+    sum(A, dims)
+
+Sum elements of an array over the given dimensions.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> sum(A, 1)
+1×2 Array{Int64,2}:
+ 4  6
+
+julia> sum(A, 2)
+2×1 Array{Int64,2}:
+ 3
+ 7
+```
+"""
+sum(A, dims)
+
+"""
+    sum!(r, A)
+
+Sum elements of `A` over the singleton dimensions of `r`, and write results to `r`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> sum!([1; 1], A)
+2-element Array{Int64,1}:
+ 3
+ 7
+
+julia> sum!([1 1], A)
+1×2 Array{Int64,2}:
+ 4  6
+```
+"""
+sum!(r, A)
+
+"""
+    prod(A, dims)
+
+Multiply elements of an array over the given dimensions.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> prod(A, 1)
+1×2 Array{Int64,2}:
+ 3  8
+
+julia> prod(A, 2)
+2×1 Array{Int64,2}:
+  2
+ 12
+```
+"""
+prod(A, dims)
+
+"""
+    prod!(r, A)
+
+Multiply elements of `A` over the singleton dimensions of `r`, and write results to `r`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> prod!([1; 1], A)
+2-element Array{Int64,1}:
+  2
+ 12
+
+julia> prod!([1 1], A)
+1×2 Array{Int64,2}:
+ 3  8
+```
+"""
+prod!(r, A)
+
+"""
+    maximum(A, dims)
+
+Compute the maximum value of an array over the given dimensions. See also the
+[`max(a,b)`](@ref) function to take the maximum of two or more arguments,
+which can be applied elementwise to arrays via `max.(a,b)`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> maximum(A, 1)
+1×2 Array{Int64,2}:
+ 3  4
+
+julia> maximum(A, 2)
+2×1 Array{Int64,2}:
+ 2
+ 4
+```
+"""
+maximum(A, dims)
+
+"""
+    maximum!(r, A)
+
+Compute the maximum value of `A` over the singleton dimensions of `r`, and write results to `r`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> maximum!([1; 1], A)
+2-element Array{Int64,1}:
+ 2
+ 4
+
+julia> maximum!([1 1], A)
+1×2 Array{Int64,2}:
+ 3  4
+```
+"""
+maximum!(r, A)
+
+"""
+    minimum(A, dims)
+
+Compute the minimum value of an array over the given dimensions. See also the
+[`min(a,b)`](@ref) function to take the minimum of two or more arguments,
+which can be applied elementwise to arrays via `min.(a,b)`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> minimum(A, 1)
+1×2 Array{Int64,2}:
+ 1  2
+
+julia> minimum(A, 2)
+2×1 Array{Int64,2}:
+ 1
+ 3
+```
+"""
+minimum(A, dims)
+
+"""
+    minimum!(r, A)
+
+Compute the minimum value of `A` over the singleton dimensions of `r`, and write results to `r`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> minimum!([1; 1], A)
+2-element Array{Int64,1}:
+ 1
+ 3
+
+julia> minimum!([1 1], A)
+1×2 Array{Int64,2}:
+ 1  2
+```
+"""
+minimum!(r, A)
+
+"""
+    all(A, dims)
+
+Test whether all values along the given dimensions of an array are `true`.
+
+```jldoctest
+julia> A = [true false; true true]
+2×2 Array{Bool,2}:
+ true  false
+ true   true
+
+julia> all(A, 1)
+1×2 Array{Bool,2}:
+ true  false
+
+julia> all(A, 2)
+2×1 Array{Bool,2}:
+ false
+  true
+```
+"""
+all(A::AbstractArray, dims)
+
+"""
+    all!(r, A)
+
+Test whether all values in `A` along the singleton dimensions of `r` are `true`, and write results to `r`.
+
+```jldoctest
+julia> A = [true false; true false]
+2×2 Array{Bool,2}:
+ true  false
+ true  false
+
+julia> all!([1; 1], A)
+2-element Array{Int64,1}:
+ 0
+ 0
+
+julia> all!([1 1], A)
+1×2 Array{Int64,2}:
+ 1  0
+```
+"""
+all!(r, A)
+
+"""
+    any(A, dims)
+
+Test whether any values along the given dimensions of an array are `true`.
+
+```jldoctest
+julia> A = [true false; true false]
+2×2 Array{Bool,2}:
+ true  false
+ true  false
+
+julia> any(A, 1)
+1×2 Array{Bool,2}:
+ true  false
+
+julia> any(A, 2)
+2×1 Array{Bool,2}:
+ true
+ true
+```
+"""
+any(::AbstractArray,dims)
+
+"""
+    any!(r, A)
+
+Test whether any values in `A` along the singleton dimensions of `r` are `true`, and write
+results to `r`.
+
+```jldoctest
+julia> A = [true false; true false]
+2×2 Array{Bool,2}:
+ true  false
+ true  false
+
+julia> any!([1; 1], A)
+2-element Array{Int64,1}:
+ 1
+ 1
+
+julia> any!([1 1], A)
+1×2 Array{Int64,2}:
+ 1  0
+```
+"""
+any!(r, A)
 
 for (fname, op) in [(:sum, :+), (:prod, :*),
                     (:maximum, :scalarmax), (:minimum, :scalarmin),
                     (:all, :&), (:any, :|)]
-
     fname! = Symbol(fname, '!')
     @eval begin
         $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
@@ -348,10 +627,8 @@ end
 Find the minimum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 """
-function findmin!{R}(rval::AbstractArray{R},
-                     rind::AbstractArray,
-                     A::AbstractArray;
-                     init::Bool=true)
+function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
+                  init::Bool=true)
     findminmax!(<, initarray!(rval, scalarmin, init), rind, A)
 end
 
@@ -359,6 +636,19 @@ end
     findmin(A, region) -> (minval, index)
 
 For an array input, returns the value and index of the minimum over the given region.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> findmin(A, 1)
+([1 2], [1 3])
+
+julia> findmin(A, 2)
+([1; 3], [1; 2])
+```
 """
 function findmin{T}(A::AbstractArray{T}, region)
     if isempty(A)
@@ -375,10 +665,8 @@ end
 Find the maximum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 """
-function findmax!{R}(rval::AbstractArray{R},
-                     rind::AbstractArray,
-                     A::AbstractArray;
-                     init::Bool=true)
+function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
+                  init::Bool=true)
     findminmax!(>, initarray!(rval, scalarmax, init), rind, A)
 end
 
@@ -386,6 +674,19 @@ end
     findmax(A, region) -> (maxval, index)
 
 For an array input, returns the value and index of the maximum over the given region.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> findmax(A,1)
+([3 4], [2 4])
+
+julia> findmax(A,2)
+([2; 4], [3; 4])
+```
 """
 function findmax{T}(A::AbstractArray{T}, region)
     if isempty(A)

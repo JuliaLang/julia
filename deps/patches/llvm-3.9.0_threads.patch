@@ -317,7 +317,7 @@ index e5773bd..40122bd 100644
            llvm-as
            llvm-bcanalyzer
 diff --git a/tools/lli/CMakeLists.txt b/tools/lli/CMakeLists.txt
-index 2bdd066..2570d9b 100644
+index 2bdd066..8a4c9d0 100644
 --- a/tools/lli/CMakeLists.txt
 +++ b/tools/lli/CMakeLists.txt
 @@ -1,7 +1,3 @@
@@ -328,13 +328,6 @@ index 2bdd066..2570d9b 100644
  set(LLVM_LINK_COMPONENTS
    CodeGen
    Core
-@@ -39,6 +35,5 @@ endif( LLVM_USE_INTEL_JITEVENTS )
- 
- add_llvm_tool(lli
-   lli.cpp
--  OrcLazyJIT.cpp
-   )
- export_executable_symbols(lli)
 diff --git a/tools/lli/ChildTarget/CMakeLists.txt b/tools/lli/ChildTarget/CMakeLists.txt
 deleted file mode 100644
 index e4fe0c7..0000000
@@ -477,11 +470,10 @@ index 9d889bf..4738504 100644
  type = Tool
  name = lli
 diff --git a/tools/lli/OrcLazyJIT.cpp b/tools/lli/OrcLazyJIT.cpp
-deleted file mode 100644
-index b13e769..0000000
+index b13e769..8b13789 100644
 --- a/tools/lli/OrcLazyJIT.cpp
-+++ /dev/null
-@@ -1,158 +0,0 @@
++++ b/tools/lli/OrcLazyJIT.cpp
+@@ -1,158 +1 @@
 -//===------ OrcLazyJIT.cpp - Basic Orc-based JIT for lazy execution -------===//
 -//
 -//                     The LLVM Compiler Infrastructure
@@ -639,7 +631,7 @@ index b13e769..0000000
 -  auto Main = fromTargetAddress<MainFnPtr>(MainSym.getAddress());
 -  return Main(ArgC, ArgV);
 -}
--
+ 
 diff --git a/tools/lli/OrcLazyJIT.h b/tools/lli/OrcLazyJIT.h
 deleted file mode 100644
 index 733bdd8..0000000
@@ -989,39 +981,11 @@ index 92de5da..7203af2 100644
 +int main(int argc, char **argv, char * const *envp) {
 +  return 0;
 +}
-diff --git a/tools/llvm-cov/CMakeLists.txt b/tools/llvm-cov/CMakeLists.txt
-index e22828e..df668c2 100644
---- a/tools/llvm-cov/CMakeLists.txt
-+++ b/tools/llvm-cov/CMakeLists.txt
-@@ -2,13 +2,13 @@ set(LLVM_LINK_COMPONENTS core support object coverage profiledata)
- 
- add_llvm_tool(llvm-cov
-   llvm-cov.cpp
--  gcov.cpp
--  CodeCoverage.cpp
--  CoverageFilters.cpp
--  CoverageReport.cpp
--  CoverageSummaryInfo.cpp
--  SourceCoverageView.cpp
--  SourceCoverageViewHTML.cpp
--  SourceCoverageViewText.cpp
--  TestingSupport.cpp
-+  # gcov.cpp
-+  # CodeCoverage.cpp
-+  # CoverageFilters.cpp
-+  # CoverageReport.cpp
-+  # CoverageSummaryInfo.cpp
-+  # SourceCoverageView.cpp
-+  # SourceCoverageViewHTML.cpp
-+  # SourceCoverageViewText.cpp
-+  # TestingSupport.cpp
-   )
 diff --git a/tools/llvm-cov/CodeCoverage.cpp b/tools/llvm-cov/CodeCoverage.cpp
-deleted file mode 100644
-index 0a4d1a6..0000000
+index 0a4d1a6..8b13789 100644
 --- a/tools/llvm-cov/CodeCoverage.cpp
-+++ /dev/null
-@@ -1,727 +0,0 @@
++++ b/tools/llvm-cov/CodeCoverage.cpp
+@@ -1,727 +1 @@
 -//===- CodeCoverage.cpp - Coverage tool based on profiling instrumentation-===//
 -//
 -//                     The LLVM Compiler Infrastructure
@@ -1036,7 +1000,7 @@ index 0a4d1a6..0000000
 -// coverage mapping.
 -//
 -//===----------------------------------------------------------------------===//
--
+ 
 -#include "CoverageFilters.h"
 -#include "CoverageReport.h"
 -#include "CoverageViewOptions.h"
@@ -1750,11 +1714,10 @@ index 0a4d1a6..0000000
 -  return Tool.run(CodeCoverageTool::Report, argc, argv);
 -}
 diff --git a/tools/llvm-cov/CoverageFilters.cpp b/tools/llvm-cov/CoverageFilters.cpp
-deleted file mode 100644
-index 325dd72..0000000
+index 325dd72..8b13789 100644
 --- a/tools/llvm-cov/CoverageFilters.cpp
-+++ /dev/null
-@@ -1,59 +0,0 @@
++++ b/tools/llvm-cov/CoverageFilters.cpp
+@@ -1,59 +1 @@
 -//===- CoverageFilters.cpp - Function coverage mapping filters ------------===//
 -//
 -//                     The LLVM Compiler Infrastructure
@@ -1767,7 +1730,7 @@ index 325dd72..0000000
 -// These classes provide filtering for function coverage mapping records.
 -//
 -//===----------------------------------------------------------------------===//
--
+ 
 -#include "CoverageFilters.h"
 -#include "CoverageSummaryInfo.h"
 -#include "llvm/Support/Regex.h"
@@ -1948,11 +1911,10 @@ index 756c4b4..0000000
 -
 -#endif // LLVM_COV_COVERAGEFILTERS_H
 diff --git a/tools/llvm-cov/CoverageReport.cpp b/tools/llvm-cov/CoverageReport.cpp
-deleted file mode 100644
-index 10e53b3..0000000
+index 10e53b3..8b13789 100644
 --- a/tools/llvm-cov/CoverageReport.cpp
-+++ /dev/null
-@@ -1,235 +0,0 @@
++++ b/tools/llvm-cov/CoverageReport.cpp
+@@ -1,235 +1 @@
 -//===- CoverageReport.cpp - Code coverage report -------------------------===//
 -//
 -//                     The LLVM Compiler Infrastructure
@@ -1965,7 +1927,7 @@ index 10e53b3..0000000
 -// This class implements rendering of a code coverage report.
 -//
 -//===----------------------------------------------------------------------===//
--
+ 
 -#include "CoverageReport.h"
 -#include "RenderingSupport.h"
 -#include "llvm/Support/FileSystem.h"
@@ -2236,11 +2198,10 @@ index bb3d734..0000000
 -
 -#endif // LLVM_COV_COVERAGEREPORT_H
 diff --git a/tools/llvm-cov/CoverageSummaryInfo.cpp b/tools/llvm-cov/CoverageSummaryInfo.cpp
-deleted file mode 100644
-index de89750..0000000
+index de89750..8b13789 100644
 --- a/tools/llvm-cov/CoverageSummaryInfo.cpp
-+++ /dev/null
-@@ -1,71 +0,0 @@
++++ b/tools/llvm-cov/CoverageSummaryInfo.cpp
+@@ -1,71 +1 @@
 -//===- CoverageSummaryInfo.cpp - Coverage summary for function/file -------===//
 -//
 -//                     The LLVM Compiler Infrastructure
@@ -2254,7 +2215,7 @@ index de89750..0000000
 -// for functions/files.
 -//
 -//===----------------------------------------------------------------------===//
--
+ 
 -#include "CoverageSummaryInfo.h"
 -
 -using namespace llvm;
@@ -2606,11 +2567,10 @@ index aa70fbc..0000000
 -
 -#endif // LLVM_COV_RENDERINGSUPPORT_H
 diff --git a/tools/llvm-cov/SourceCoverageView.cpp b/tools/llvm-cov/SourceCoverageView.cpp
-deleted file mode 100644
-index baf7c14..0000000
+index baf7c14..8b13789 100644
 --- a/tools/llvm-cov/SourceCoverageView.cpp
-+++ /dev/null
-@@ -1,233 +0,0 @@
++++ b/tools/llvm-cov/SourceCoverageView.cpp
+@@ -1,233 +1 @@
 -//===- SourceCoverageView.cpp - Code coverage view for source code --------===//
 -//
 -//                     The LLVM Compiler Infrastructure
@@ -2623,7 +2583,7 @@ index baf7c14..0000000
 -/// \file This class implements rendering for code coverage of source code.
 -///
 -//===----------------------------------------------------------------------===//
--
+ 
 -#include "SourceCoverageView.h"
 -#include "SourceCoverageViewHTML.h"
 -#include "SourceCoverageViewText.h"
@@ -3136,11 +3096,10 @@ index feef959..0000000
 -
 -#endif // LLVM_COV_SOURCECOVERAGEVIEW_H
 diff --git a/tools/llvm-cov/SourceCoverageViewHTML.cpp b/tools/llvm-cov/SourceCoverageViewHTML.cpp
-deleted file mode 100644
-index 81963e5..0000000
+index 81963e5..8b13789 100644
 --- a/tools/llvm-cov/SourceCoverageViewHTML.cpp
-+++ /dev/null
-@@ -1,436 +0,0 @@
++++ b/tools/llvm-cov/SourceCoverageViewHTML.cpp
+@@ -1,436 +1 @@
 -//===- SourceCoverageViewHTML.cpp - A html code coverage view -------------===//
 -//
 -//                     The LLVM Compiler Infrastructure
@@ -3153,7 +3112,7 @@ index 81963e5..0000000
 -/// \file This file implements the html coverage renderer.
 -///
 -//===----------------------------------------------------------------------===//
--
+ 
 -#include "SourceCoverageViewHTML.h"
 -#include "llvm/ADT/Optional.h"
 -#include "llvm/ADT/SmallString.h"
@@ -3667,11 +3626,10 @@ index 50ecf2b..0000000
 -
 -#endif // LLVM_COV_SOURCECOVERAGEVIEWHTML_H
 diff --git a/tools/llvm-cov/SourceCoverageViewText.cpp b/tools/llvm-cov/SourceCoverageViewText.cpp
-deleted file mode 100644
-index ae9d6da..0000000
+index ae9d6da..8b13789 100644
 --- a/tools/llvm-cov/SourceCoverageViewText.cpp
-+++ /dev/null
-@@ -1,213 +0,0 @@
++++ b/tools/llvm-cov/SourceCoverageViewText.cpp
+@@ -1,213 +1 @@
 -//===- SourceCoverageViewText.cpp - A text-based code coverage view -------===//
 -//
 -//                     The LLVM Compiler Infrastructure
@@ -3684,7 +3642,7 @@ index ae9d6da..0000000
 -/// \file This file implements the text-based coverage renderer.
 -///
 -//===----------------------------------------------------------------------===//
--
+ 
 -#include "SourceCoverageViewText.h"
 -#include "llvm/ADT/Optional.h"
 -#include "llvm/ADT/SmallString.h"
@@ -3975,11 +3933,10 @@ index b233124..0000000
 -
 -#endif // LLVM_COV_SOURCECOVERAGEVIEWTEXT_H
 diff --git a/tools/llvm-cov/TestingSupport.cpp b/tools/llvm-cov/TestingSupport.cpp
-deleted file mode 100644
-index 72768f4..0000000
+index 72768f4..8b13789 100644
 --- a/tools/llvm-cov/TestingSupport.cpp
-+++ /dev/null
-@@ -1,92 +0,0 @@
++++ b/tools/llvm-cov/TestingSupport.cpp
+@@ -1,92 +1 @@
 -//===- TestingSupport.cpp - Convert objects files into test files --------===//
 -//
 -//                     The LLVM Compiler Infrastructure
@@ -3988,7 +3945,7 @@ index 72768f4..0000000
 -// License. See LICENSE.TXT for details.
 -//
 -//===----------------------------------------------------------------------===//
--
+ 
 -#include "llvm/Object/ObjectFile.h"
 -#include "llvm/ProfileData/InstrProf.h"
 -#include "llvm/Support/CommandLine.h"
@@ -4073,11 +4030,10 @@ index 72768f4..0000000
 -  return 0;
 -}
 diff --git a/tools/llvm-cov/gcov.cpp b/tools/llvm-cov/gcov.cpp
-deleted file mode 100644
-index 4652fed..0000000
+index 4652fed..8b13789 100644
 --- a/tools/llvm-cov/gcov.cpp
-+++ /dev/null
-@@ -1,145 +0,0 @@
++++ b/tools/llvm-cov/gcov.cpp
+@@ -1,145 +1 @@
 -//===- gcov.cpp - GCOV compatible LLVM coverage tool ----------------------===//
 -//
 -//                     The LLVM Compiler Infrastructure
@@ -4090,7 +4046,7 @@ index 4652fed..0000000
 -// llvm-cov is a command line tools to analyze and report coverage information.
 -//
 -//===----------------------------------------------------------------------===//
--
+ 
 -#include "llvm/ADT/SmallString.h"
 -#include "llvm/Support/CommandLine.h"
 -#include "llvm/Support/Errc.h"
@@ -5568,3 +5524,22 @@ index 55b0370..c869a73 100644
 -  }
 +  return 0;
  }
+diff --git a/unittests/Support/ThreadPool.cpp b/unittests/Support/ThreadPool.cpp
+index 69a24bc..b185859 100644
+--- a/unittests/Support/ThreadPool.cpp
++++ b/unittests/Support/ThreadPool.cpp
+@@ -7,6 +7,8 @@
+ //
+ //===----------------------------------------------------------------------===//
+ 
++#if 0
++
+ #include "llvm/Support/ThreadPool.h"
+ 
+ #include "llvm/ADT/STLExtras.h"
+@@ -166,3 +168,5 @@ TEST_F(ThreadPoolTest, PoolDestruction) {
+   }
+   ASSERT_EQ(5, checked_in);
+ }
++
++#endif

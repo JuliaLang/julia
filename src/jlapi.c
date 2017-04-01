@@ -12,6 +12,7 @@
 #include <string.h>
 #include <assert.h>
 #include "julia.h"
+#include "options.h"
 
 #ifdef __cplusplus
 #include <cfenv>
@@ -261,6 +262,14 @@ JL_DLLEXPORT void jl_sigatomic_end(void)
 JL_DLLEXPORT int jl_is_debugbuild(void)
 {
 #ifdef JL_DEBUG_BUILD
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+JL_DLLEXPORT int8_t jl_is_memdebug(void) {
+#ifdef MEMDEBUG
     return 1;
 #else
     return 0;

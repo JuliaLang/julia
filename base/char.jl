@@ -77,3 +77,10 @@ function show(io::IO, c::Char)
     end
     return
 end
+
+function show(io::IO, ::MIME"text/plain", c::Char)
+    show(io, c)
+    u = UInt32(c)
+    print(io, ": ", isascii(c) ? "ASCII/" : "", "Unicode U+", hex(u, u > 0xffff ? 6 : 4))
+    print(io, " (category ", UTF8proc.category_abbrev(c), ": ", UTF8proc.category_string(c), ")")
+end

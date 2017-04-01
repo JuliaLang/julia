@@ -3,35 +3,33 @@
 module Broadcast
 
 using Base.Cartesian
-using Base: promote_eltype_op, linearindices, tail, OneTo, to_shape,
+using Base: linearindices, tail, OneTo, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
-            nullable_returntype, null_safe_eltype_op, hasvalue
+            nullable_returntype, null_safe_eltype_op, hasvalue, isoperator
 import Base: broadcast, broadcast!
-export broadcast_getindex, broadcast_setindex!, dotview
+export broadcast_getindex, broadcast_setindex!, dotview, @__dot__
 
-typealias ScalarType Union{Type{Any}, Type{Nullable}}
+const ScalarType = Union{Type{Any}, Type{Nullable}}
 
 ## Broadcasting utilities ##
 # fallbacks for some special cases
 @inline broadcast(f, x::Number...) = f(x...)
-@inline broadcast{N}(f, t::NTuple{N}, ts::Vararg{NTuple{N}}) = map(f, t, ts...)
+@inline broadcast{N}(f, t::NTuple{N,Any}, ts::Vararg{NTuple{N,Any}}) = map(f, t, ts...)
+broadcast!{T,S,N}(::typeof(identity), x::Array{T,N}, y::Array{S,N}) =
+    size(x) == size(y) ? copy!(x, y) : broadcast_c!(identity, Array, Array, x, y)
 
 # special cases for "X .= ..." (broadcast!) assignments
 broadcast!(::typeof(identity), X::AbstractArray, x::Number) = fill!(X, x)
 broadcast!(f, X::AbstractArray, x::Number...) = (@inbounds for I in eachindex(X); X[I] = f(x...); end; X)
-function broadcast!{T,S,N}(::typeof(identity), x::AbstractArray{T,N}, y::AbstractArray{S,N})
-    check_broadcast_shape(broadcast_indices(x), broadcast_indices(y))
-    copy!(x, y)
-end
 
 # logic for deciding the resulting container type
-containertype(x) = containertype(typeof(x))
-containertype(::Type) = Any
-containertype{T<:Ptr}(::Type{T}) = Any
-containertype{T<:Tuple}(::Type{T}) = Tuple
-containertype{T<:Ref}(::Type{T}) = Array
-containertype{T<:AbstractArray}(::Type{T}) = Array
-containertype{T<:Nullable}(::Type{T}) = Nullable
+_containertype(::Type) = Any
+_containertype(::Type{<:Ptr}) = Any
+_containertype(::Type{<:Tuple}) = Tuple
+_containertype(::Type{<:Ref}) = Array
+_containertype(::Type{<:AbstractArray}) = Array
+_containertype(::Type{<:Nullable}) = Nullable
+containertype(x) = _containertype(typeof(x))
 containertype(ct1, ct2) = promote_containertype(containertype(ct1), containertype(ct2))
 @inline containertype(ct1, ct2, cts...) = promote_containertype(containertype(ct1), containertype(ct2, cts...))
 
@@ -122,6 +120,11 @@ map_newindexer(shape, ::Tuple{}) = (), ()
     keep, Idefault = newindexer(shape, A1)
     (keep, keeps...), (Idefault, Idefaults...)
 end
+@inline function map_newindexer(shape, A, Bs)
+    keeps, Idefaults = map_newindexer(shape, Bs)
+    keep, Idefault = newindexer(shape, A)
+    (keep, keeps...), (Idefault, Idefaults...)
+end
 
 Base.@propagate_inbounds _broadcast_getindex(A, I) = _broadcast_getindex(containertype(A), A, I)
 Base.@propagate_inbounds _broadcast_getindex(::Type{Array}, A::Ref, I) = A[]
@@ -131,11 +134,13 @@ Base.@propagate_inbounds _broadcast_getindex(::Any, A, I) = A[I]
 ## Broadcasting core
 # nargs encodes the number of As arguments (which matches the number
 # of keeps). The first two type parameters are to ensure specialization.
-@generated function _broadcast!{K,ID,AT,nargs}(f, B::AbstractArray, keeps::K, Idefaults::ID, As::AT, ::Type{Val{nargs}}, iter)
+@generated function _broadcast!{K,ID,AT,BT,N}(f, B::AbstractArray, keeps::K, Idefaults::ID, A::AT, Bs::BT, ::Type{Val{N}}, iter)
+    nargs = N + 1
     quote
         $(Expr(:meta, :inline))
         # destructure the keeps and As tuples
-        @nexprs $nargs i->(A_i = As[i])
+        A_1 = A
+        @nexprs $N i->(A_{i+1} = Bs[i])
         @nexprs $nargs i->(keep_i = keeps[i])
         @nexprs $nargs i->(Idefault_i = Idefaults[i])
         @simd for I in iter
@@ -152,11 +157,13 @@ end
 
 # For BitArray outputs, we cache the result in a "small" Vector{Bool},
 # and then copy in chunks into the output
-@generated function _broadcast!{K,ID,AT,nargs}(f, B::BitArray, keeps::K, Idefaults::ID, As::AT, ::Type{Val{nargs}}, iter)
+@generated function _broadcast!{K,ID,AT,BT,N}(f, B::BitArray, keeps::K, Idefaults::ID, A::AT, Bs::BT, ::Type{Val{N}}, iter)
+    nargs = N + 1
     quote
         $(Expr(:meta, :inline))
         # destructure the keeps and As tuples
-        @nexprs $nargs i->(A_i = As[i])
+        A_1 = A
+        @nexprs $N i->(A_{i+1} = Bs[i])
         @nexprs $nargs i->(keep_i = keeps[i])
         @nexprs $nargs i->(Idefault_i = Idefaults[i])
         C = Vector{Bool}(bitcache_size)
@@ -193,13 +200,15 @@ Note that `dest` is only used to store the result, and does not supply
 arguments to `f` unless it is also listed in the `As`,
 as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
 """
-@inline function broadcast!{nargs}(f, B::AbstractArray, As::Vararg{Any,nargs})
-    shape = indices(B)
-    check_broadcast_indices(shape, As...)
-    keeps, Idefaults = map_newindexer(shape, As)
+@inline broadcast!{N}(f, C::AbstractArray, A, Bs::Vararg{Any,N}) =
+    broadcast_c!(f, containertype(C), containertype(A, Bs...), C, A, Bs...)
+@inline function broadcast_c!{N}(f, ::Type, ::Type, C, A, Bs::Vararg{Any,N})
+    shape = indices(C)
+    @boundscheck check_broadcast_indices(shape, A, Bs...)
+    keeps, Idefaults = map_newindexer(shape, A, Bs)
     iter = CartesianRange(shape)
-    _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter)
-    return B
+    _broadcast!(f, C, keeps, Idefaults, A, Bs, Val{N}, iter)
+    return C
 end
 
 # broadcast with computed element type
@@ -244,33 +253,31 @@ function broadcast_t(f, ::Type{Any}, shape, iter, As...)
     st = start(iter)
     I, st = next(iter, st)
     val = f([ _broadcast_getindex(As[i], newindex(I, keeps[i], Idefaults[i])) for i=1:nargs ]...)
-    B = similar(Array{typeof(val)}, shape)
+    if val isa Bool
+        B = similar(BitArray, shape)
+    else
+        B = similar(Array{typeof(val)}, shape)
+    end
     B[I] = val
     return _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter, st, 1)
 end
-@inline function broadcast_t{nargs}(f, T, shape, iter, As::Vararg{Any,nargs})
-    B = similar(Array{T}, shape)
-    keeps, Idefaults = map_newindexer(shape, As)
-    _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter)
-    return B
+@inline function broadcast_t{N}(f, T, shape, iter, A, Bs::Vararg{Any,N})
+    C = similar(Array{T}, shape)
+    keeps, Idefaults = map_newindexer(shape, A, Bs)
+    _broadcast!(f, C, keeps, Idefaults, A, Bs, Val{N}, iter)
+    return C
 end
 
 # default to BitArray for broadcast operations producing Bool, to save 8x space
 # in the common case where this is used for logical array indexing; in
 # performance-critical cases where Array{Bool} is desired, one can always
 # use broadcast! instead.
-function broadcast_t(f, ::Type{Bool}, shape, iter, As...)
-    B = similar(BitArray, shape)
-    nargs = length(As)
-    keeps, Idefaults = map_newindexer(shape, As)
-    _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter)
-    return B
+@inline function broadcast_t{N}(f, ::Type{Bool}, shape, iter, A, Bs::Vararg{Any,N})
+    C = similar(BitArray, shape)
+    keeps, Idefaults = map_newindexer(shape, A, Bs)
+    _broadcast!(f, C, keeps, Idefaults, A, Bs, Val{N}, iter)
+    return C
 end
-
-# broadcast method that uses inference to find the type, but preserves abstract
-# container types when possible (used by binary elementwise operators)
-@inline broadcast_elwise_op(f, As...) =
-    broadcast!(f, similar(Array{promote_eltype_op(f, As...)}, broadcast_indices(As...)), As...)
 
 eltypestuple(a) = (Base.@_pure_meta; Tuple{eltype(a)})
 eltypestuple(T::Type) = (Base.@_pure_meta; Tuple{Type{T}})
@@ -290,11 +297,6 @@ _broadcast_eltype(f, A, Bs...) = Base._return_type(f, eltypestuple(A, Bs...))
     end
     return broadcast_t(f, Any, shape, iter, A, Bs...)
 end
-function broadcast_c(f, ::Type{Tuple}, As...)
-    shape = broadcast_indices(As...)
-    n = length(shape[1])
-    return ntuple(k->f((_broadcast_getindex(A, k) for A in As)...), n)
-end
 @inline function broadcast_c(f, ::Type{Nullable}, a...)
     nonnull = all(hasvalue, a)
     S = _broadcast_eltype(f, a...)
@@ -309,6 +311,20 @@ end
     end
 end
 @inline broadcast_c(f, ::Type{Any}, a...) = f(a...)
+broadcast_c(f, ::Type{Tuple}, As...) =
+    ntuple(k -> f(_tuplebroadcast_getargs(As, k)...), _tuplebroadcast_reslength(As))
+broadcast_c{T}(f, ::Type{Tuple}, ::Type{T}, As...) =
+    ntuple(k -> f(T, _tuplebroadcast_getargs(As, k)...), _tuplebroadcast_reslength(As))
+@inline _tuplebroadcast_getargs(::Tuple{}, k) = ()
+@inline _tuplebroadcast_getargs(As, k) =
+    (_broadcast_getindex(first(As), k), _tuplebroadcast_getargs(tail(As), k)...)
+@noinline _tuplebroadcast_reslength(As) =
+    _tuplebroadcast_maxlength(_tuplebroadcast_length(first(As)), tail(As))
+@inline _tuplebroadcast_maxlength(l, As) =
+    _tuplebroadcast_maxlength(max(l, _tuplebroadcast_length(first(As))), tail(As))
+@inline _tuplebroadcast_maxlength(l, ::Tuple{}) = l
+@inline _tuplebroadcast_length(t::Tuple) = length(t)
+@inline _tuplebroadcast_length(s) = 1
 
 """
     broadcast(f, As...)
@@ -323,7 +339,7 @@ the following rules:
  - If the arguments are tuples and zero or more scalars, it returns a tuple.
  - If the arguments contain at least one array or `Ref`, it returns an array
    (expanding singleton dimensions), and treats `Ref`s as 0-dimensional arrays,
-   and tuples as a 1-dimensional arrays.
+   and tuples as 1-dimensional arrays.
 
 The following additional rule applies to `Nullable` arguments: If there is at
 least one `Nullable`, and all the arguments are scalars or `Nullable`, it
@@ -364,10 +380,10 @@ julia> parse.(Int, ["1", "2"])
  2
 
 julia> abs.((1, -2))
-(1,2)
+(1, 2)
 
 julia> broadcast(+, 1.0, (0, -2.0))
-(1.0,-1.0)
+(1.0, -1.0)
 
 julia> broadcast(+, 1.0, (0, -2.0), Ref(1))
 2-element Array{Float64,1}:
@@ -376,8 +392,8 @@ julia> broadcast(+, 1.0, (0, -2.0), Ref(1))
 
 julia> (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1]))
 2-element Array{Array{Int64,1},1}:
- [1,1]
- [2,2]
+ [1, 1]
+ [2, 2]
 
 julia> string.(("one","two","three","four"), ": ", 1:4)
 4-element Array{String,1}:
@@ -498,16 +514,68 @@ end
 # explicit calls to view.   (All of this can go away if slices
 # are changed to generate views by default.)
 
-dotview(args...) = getindex(args...)
-dotview(A::AbstractArray, args...) = view(A, args...)
-dotview{T<:AbstractArray}(A::AbstractArray{T}, args...) = getindex(A, args...)
-# avoid splatting penalty in common cases:
-for nargs = 0:5
-    args = Symbol[Symbol("x",i) for i = 1:nargs]
-    eval(Expr(:(=), Expr(:call, :dotview, args...),
-                    Expr(:call, :getindex, args...)))
-    eval(Expr(:(=), Expr(:call, :dotview, :(A::AbstractArray), args...),
-                    Expr(:call, :view, :A, args...)))
+Base.@propagate_inbounds dotview(args...) = getindex(args...)
+Base.@propagate_inbounds dotview(A::AbstractArray, args...) = view(A, args...)
+Base.@propagate_inbounds dotview(A::AbstractArray{<:AbstractArray}, args::Integer...) = getindex(A, args...)
+
+
+############################################################
+# The parser turns @. into a call to the __dot__ macro,
+# which converts all function calls and assignments into
+# broadcasting "dot" calls/assignments:
+
+dottable(x) = false # avoid dotting spliced objects (e.g. view calls inserted by @view)
+dottable(x::Symbol) = !isoperator(x) || first(string(x)) != '.' || x == :.. # don't add dots to dot operators
+dottable(x::Expr) = x.head != :$
+undot(x) = x
+function undot(x::Expr)
+    if x.head == :.=
+        Expr(:(=), x.args...)
+    elseif x.head == :block # occurs in for x=..., y=...
+        Expr(:block, map(undot, x.args)...)
+    else
+        x
+    end
+end
+__dot__(x) = x
+function __dot__(x::Expr)
+    dotargs = map(__dot__, x.args)
+    if x.head == :call && dottable(x.args[1])
+        Expr(:., dotargs[1], Expr(:tuple, dotargs[2:end]...))
+    elseif x.head == :$
+        x.args[1]
+    elseif x.head == :let # don't add dots to "let x=... assignments
+        Expr(:let, dotargs[1], map(undot, dotargs[2:end])...)
+    elseif x.head == :for # don't add dots to for x=... assignments
+        Expr(:for, undot(dotargs[1]), dotargs[2])
+    elseif (x.head == :(=) || x.head == :function || x.head == :macro) &&
+           Meta.isexpr(x.args[1], :call) # function or macro definition
+        Expr(x.head, x.args[1], dotargs[2])
+    else
+        head = string(x.head)
+        if last(head) == '=' && first(head) != '.'
+            Expr(Symbol('.',head), dotargs...)
+        else
+            Expr(x.head, dotargs...)
+        end
+    end
+end
+"""
+    @. expr
+
+Convert every function call or operator in `expr` into a "dot call"
+(e.g. convert `f(x)` to `f.(x)`), and convert every assignment in `expr`
+to a "dot assignment" (e.g. convert `+=` to `.+=`).
+
+If you want to *avoid* adding dots for selected function calls in
+`expr`, splice those function calls in with `\$`.  For example,
+`@. sqrt(abs(\$sort(x)))` is equivalent to `sqrt.(abs.(sort(x)))`
+(no dot for `sort`).
+
+(`@.` is equivalent to a call to `@__dot__`.)
+"""
+macro __dot__(x)
+    esc(__dot__(x))
 end
 
 end # module

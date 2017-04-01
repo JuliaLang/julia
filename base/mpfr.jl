@@ -8,13 +8,12 @@ export
     big_str
 
 import
-    Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1, bessely,
-        bessely0, bessely1, ceil, cmp, convert, copysign, div,
+    Base: (*), +, -, /, <, <=, ==, >, >=, ^, ceil, cmp, convert, copysign, div,
         exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
-        nextfloat, prevfloat, promote_rule, rem, round, show,
+        nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show,
         sum, sqrt, string, print, trunc, precision, exp10, expm1,
-        gamma, lgamma, digamma, erf, erfc, zeta, eta, log1p, airyai,
+        gamma, lgamma, log1p,
         eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, rounding,
@@ -61,19 +60,21 @@ julia> big"2.1"
 2.099999999999999999999999999999999999999999999999999999999999999999999999999986
 ```
 """
-type BigFloat <: AbstractFloat
+mutable struct BigFloat <: AbstractFloat
     prec::Clong
     sign::Cint
     exp::Clong
     d::Ptr{Limb}
+
     function BigFloat()
-        N = precision(BigFloat)
+        prec = precision(BigFloat)
         z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)
-        ccall((:mpfr_init2,:libmpfr), Void, (Ptr{BigFloat}, Clong), &z, N)
+        ccall((:mpfr_init2,:libmpfr), Void, (Ptr{BigFloat}, Clong), &z, prec)
         finalizer(z, cglobal((:mpfr_clear, :libmpfr)))
         return z
     end
-    # Not recommended for general use
+
+    # Not recommended for general use:
     function BigFloat(prec::Clong, sign::Cint, exp::Clong, d::Ptr{Void})
         new(prec, sign, exp, d)
     end
@@ -117,6 +118,46 @@ end
 
 convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)
 convert(::Type{AbstractFloat}, x::BigInt) = BigFloat(x)
+
+# generic constructor with arbitrary precision:
+"""
+    BigFloat(x, prec::Int)
+
+Create a representation of `x` as a `BigFloat` with precision `prec`.
+"""
+function BigFloat(x, prec::Int)
+    setprecision(BigFloat, prec) do
+        BigFloat(x)
+    end
+end
+
+"""
+    BigFloat(x, prec::Int, rounding::RoundingMode)
+
+Create a representation of `x` as a `BigFloat` with precision `prec` and rounding mode `rounding`.
+"""
+function BigFloat(x, prec::Int, rounding::RoundingMode)
+    setrounding(BigFloat, rounding) do
+        BigFloat(x, prec)
+    end
+end
+
+"""
+    BigFloat(x, rounding::RoundingMode)
+
+Create a representation of `x` as a `BigFloat` with the current global precision and rounding mode `rounding`.
+"""
+function BigFloat(x::Union{Integer, AbstractFloat, String}, rounding::RoundingMode)
+    BigFloat(x, precision(BigFloat), rounding)
+end
+
+"""
+    BigFloat(x::String)
+
+Create a representation of the string `x` as a `BigFloat`.
+"""
+BigFloat(x::String) = parse(BigFloat, x)
+
 
 ## BigFloat -> Integer
 function unsafe_cast(::Type{Int64}, x::BigFloat, ri::Cint)
@@ -183,6 +224,10 @@ function convert(::Type{BigInt},x::BigFloat)
     trunc(BigInt,x)
 end
 
+function convert(::Type{Integer},x::BigFloat)
+    isinteger(x) || throw(InexactError())
+    trunc(Integer,x)
+end
 function convert{T<:Integer}(::Type{T},x::BigFloat)
     isinteger(x) || throw(InexactError())
     trunc(T,x)
@@ -204,9 +249,9 @@ convert(::Type{Float16}, x::BigFloat) = convert(Float16, convert(Float32, x))
 (::Type{Float16})(x::BigFloat, r::RoundingMode) =
     convert(Float16, Float32(x, r))
 
-promote_rule{T<:Real}(::Type{BigFloat}, ::Type{T}) = BigFloat
-promote_rule{T<:AbstractFloat}(::Type{BigInt},::Type{T}) = BigFloat
-promote_rule{T<:AbstractFloat}(::Type{BigFloat},::Type{T}) = BigFloat
+promote_rule(::Type{BigFloat}, ::Type{<:Real}) = BigFloat
+promote_rule(::Type{BigInt},::Type{<:AbstractFloat}) = BigFloat
+promote_rule(::Type{BigFloat},::Type{<:AbstractFloat}) = BigFloat
 
 function convert(::Type{Rational{BigInt}}, x::AbstractFloat)
     if isnan(x); return zero(BigInt)//zero(BigInt); end
@@ -459,8 +504,10 @@ end
 ^(x::BigFloat, y::Integer)  = typemin(Clong)  <= y <= typemax(Clong)  ? x^Clong(y)  : x^BigInt(y)
 ^(x::BigFloat, y::Unsigned) = typemin(Culong) <= y <= typemax(Culong) ? x^Culong(y) : x^BigInt(y)
 
-for f in (:exp, :exp2, :exp10, :expm1, :digamma, :erf, :erfc, :zeta,
-          :cosh,:sinh,:tanh,:sech,:csch,:coth, :cbrt)
+# override default inlining of x^2 etc.
+^{p}(x::BigFloat, ::Type{Val{p}}) = x^p
+
+for f in (:exp, :exp2, :exp10, :expm1, :cosh, :sinh, :tanh, :sech, :csch, :coth, :cbrt)
     @eval function $f(x::BigFloat)
         z = BigFloat()
         ccall(($(string(:mpfr_,f)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
@@ -476,17 +523,6 @@ function big_ln2()
     return c
 end
 
-function eta(x::BigFloat)
-    x == 1 && return big_ln2()
-    return -zeta(x) * expm1(big_ln2()*(1-x))
-end
-
-function airyai(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_ai, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
-    return z
-end
-
 function ldexp(x::BigFloat, n::Clong)
     z = BigFloat()
     ccall((:mpfr_mul_2si, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Clong, Int32), &z, &x, n, ROUNDING_MODE[])
@@ -500,51 +536,6 @@ end
 ldexp(x::BigFloat, n::ClongMax) = ldexp(x, convert(Clong, n))
 ldexp(x::BigFloat, n::CulongMax) = ldexp(x, convert(Culong, n))
 ldexp(x::BigFloat, n::Integer) = x*exp2(BigFloat(n))
-
-function besselj0(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_j0, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
-    return z
-end
-
-function besselj1(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_j1, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
-    return z
-end
-
-function besselj(n::Integer, x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_jn, :libmpfr), Int32, (Ptr{BigFloat}, Clong, Ptr{BigFloat}, Int32), &z, n, &x, ROUNDING_MODE[])
-    return z
-end
-
-function bessely0(x::BigFloat)
-    if x < 0
-        throw(DomainError())
-    end
-    z = BigFloat()
-    ccall((:mpfr_y0, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
-    return z
-end
-
-function bessely1(x::BigFloat)
-    if x < 0
-        throw(DomainError())
-    end
-    z = BigFloat()
-    ccall((:mpfr_y1, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
-    return z
-end
-
-function bessely(n::Integer, x::BigFloat)
-    if x < 0
-        throw(DomainError())
-    end
-    z = BigFloat()
-    ccall((:mpfr_yn, :libmpfr), Int32, (Ptr{BigFloat}, Clong, Ptr{BigFloat}, Int32), &z, n, &x, ROUNDING_MODE[])
-    return z
-end
 
 function factorial(x::BigFloat)
     if x < 0 || !isinteger(x)
@@ -613,6 +604,15 @@ function rem(x::BigFloat, y::BigFloat)
     ccall((:mpfr_fmod, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, &y, ROUNDING_MODE[])
     return z
 end
+
+function rem(x::BigFloat, y::BigFloat, ::RoundingMode{:Nearest})
+    z = BigFloat()
+    ccall((:mpfr_remainder, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, &y, ROUNDING_MODE[])
+    return z
+end
+
+# TODO: use a higher-precision BigFloat(pi) here?
+rem2pi(x::BigFloat, r::RoundingMode) = rem(x, 2*BigFloat(pi), r)
 
 function sum(arr::AbstractArray{BigFloat})
     z = BigFloat(0)
@@ -877,21 +877,25 @@ end
 setprecision(f::Function, precision::Integer) = setprecision(f, BigFloat, precision)
 
 function string(x::BigFloat)
+    if isnan(x) || isinf(x)
+        return string("BigFloat(", Float64(x), ", ", precision(x), ")")
+    end
+
     # In general, the number of decimal places needed to read back the number exactly
     # is, excluding the most significant, ceil(log(10, 2^precision(x)))
     k = ceil(Int32, precision(x) * 0.3010299956639812)
     lng = k + Int32(8) # Add space for the sign, the most significand digit, the dot and the exponent
-    buf = Array{UInt8}(lng + 1)
+    buf = Base.StringVector(lng + 1)
     # format strings are guaranteed to contain no NUL, so we don't use Cstring
     lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
     if lng < k + 5 # print at least k decimal places
         lng = ccall((:mpfr_sprintf,:libmpfr), Int32, (Ptr{UInt8}, Ptr{UInt8}, Ptr{BigFloat}...), buf, "%.$(k)Re", &x)
     elseif lng > k + 8
-        buf = Array{UInt8}(lng + 1)
+        buf = Base.StringVector(lng + 1)
         lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
     end
     n = (1 <= x < 10 || -10 < x <= -1 || x == 0) ? lng - 4 : lng
-    return String(buf[1:n])
+    return String(resize!(buf,n))
 end
 
 print(io::IO, b::BigFloat) = print(io, string(b))
@@ -921,6 +925,11 @@ function Base.deepcopy_internal(x::BigFloat, stackdict::ObjectIdDict)
           &y, &x, ROUNDING_MODE[])
     stackdict[x] = y
     return y
+end
+
+function Base.lerpi(j::Integer, d::Integer, a::BigFloat, b::BigFloat)
+    t = BigFloat(j)/d
+    fma(t, b, fma(-t, a, a))
 end
 
 end #module

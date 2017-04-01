@@ -15,13 +15,6 @@ size_t bitvector_nwords(uint64_t nbits);
 JL_DLLEXPORT void bitvector_set(uint32_t *b, uint64_t n, uint32_t c);
 JL_DLLEXPORT uint32_t bitvector_get(uint32_t *b, uint64_t n);
 
-JL_DLLEXPORT uint64_t bitvector_next(uint32_t *b, uint64_t n0, uint64_t n);
-
-JL_DLLEXPORT
-uint64_t bitvector_count(uint32_t *b, uint64_t offs, uint64_t nbits);
-JL_DLLEXPORT
-uint32_t bitvector_any1(uint32_t *b, uint64_t offs, uint64_t nbits);
-
 #ifdef __cplusplus
 }
 #endif

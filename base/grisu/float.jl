@@ -1,5 +1,5 @@
 # This file is a part of Julia, but is derived from
-# https://github.com/floitsch/double-conversion which has the following license
+# https://github.com/google/double-conversion which has the following license
 #
 # Copyright 2006-2014, the V8 project authors. All rights reserved.
 # Redistribution and use in source and binary forms, with or without
@@ -28,7 +28,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-immutable Float
+struct Float
     s::UInt64
     e::Int32
     de::Int32

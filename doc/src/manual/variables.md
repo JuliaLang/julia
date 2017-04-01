@@ -25,7 +25,7 @@ Julia provides an extremely flexible system for naming variables. Variable names
 and have no semantic meaning (that is, the language will not treat variables differently based
 on their names).
 
-```julia
+```jldoctest
 julia> x = 1.0
 1.0
 
@@ -44,7 +44,7 @@ julia> UniversalDeclarationOfHumanRightsStart = "人人生而自由，在尊严�
 
 Unicode names (in UTF-8 encoding) are allowed:
 
-```julia
+```jldoctest
 julia> δ = 0.00001
 1.0e-5
 
@@ -53,13 +53,15 @@ julia> 안녕하세요 = "Hello"
 ```
 
 In the Julia REPL and several other Julia editing environments, you can type many Unicode math
-symbols by typing the backslashed LaTeX symbol name followed by tab.  For example, the variable
+symbols by typing the backslashed LaTeX symbol name followed by tab. For example, the variable
 name `δ` can be entered by typing `\delta`-*tab*, or even `α̂₂` by `\alpha`-*tab*-`\hat`-
-*tab*-`\_2`-*tab*.
+*tab*-`\_2`-*tab*. (If you find a symbol somewhere, e.g. in someone else's code,
+that you don't know how to type, the REPL help will tell you: just type `?` and
+then paste the symbol.)
 
 Julia will even let you redefine built-in constants and functions if needed:
 
-```julia
+```jldoctest
 julia> pi
 π = 3.1415926535897...
 
@@ -92,7 +94,7 @@ primes, and a few other characters.
 
 Operators like `+` are also valid identifiers, but are parsed specially. In some contexts, operators
 can be used just like variables; for example `(+)` refers to the addition function, and `(+) = f`
-will reassign it.  Most of the Unicode infix operators (in category Sm), such as `⊕`, are parsed
+will reassign it. Most of the Unicode infix operators (in category Sm), such as `⊕`, are parsed
 as infix operators and are available for user-defined methods (e.g. you can use `const ⊗ = kron`
 to define `⊗` as an infix Kronecker product).
 
@@ -101,12 +103,17 @@ The only explicitly disallowed names for variables are the names of built-in sta
 ```julia
 julia> else = false
 ERROR: syntax: unexpected "else"
- ...
 
 julia> try = "No"
 ERROR: syntax: unexpected "="
- ...
 ```
+
+Some Unicode characters are considered to be equivalent in identifiers.
+Different ways of entering Unicode combining characters (e.g., accents)
+are treated as equivalent (specifically, Julia identifiers are NFC-normalized).
+The Unicode characters `ɛ` (U+025B: Latin small letter open e)
+and `µ` (U+00B5: micro sign) are treated as equivalent to the corresponding
+Greek letters, because the former are easily accessible via some input methods.
 
 ## Stylistic Conventions
 

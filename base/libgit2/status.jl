@@ -1,11 +1,20 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+"""
+    LibGit2.GitStatus(repo::GitRepo; status_opts=StatusOptions())
+
+Collect information about the status of each file in the git
+repository `repo` (e.g. is the file modified, staged, etc.).
+`status_opts` can be used to set various options, for instance
+whether or not to look at untracked files or whether to include
+submodules or not.
+"""
 function GitStatus(repo::GitRepo; status_opts=StatusOptions())
     stat_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_status_list_new, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{StatusOptions}),
                   stat_ptr_ptr, repo.ptr, Ref(status_opts))
-    return GitStatus(stat_ptr_ptr[])
+    return GitStatus(repo, stat_ptr_ptr[])
 end
 
 function Base.length(status::GitStatus)
@@ -23,6 +32,14 @@ function Base.getindex(status::GitStatus, i::Integer)
     return unsafe_load(entry_ptr)
 end
 
+"""
+    LibGit2.status(repo::GitRepo, path::String)
+
+Lookup the status of the file at `path` in the git
+repository `repo`. For instance, this can be used
+to check if the file at `path` has been modified
+and needs to be staged and committed.
+"""
 function status(repo::GitRepo, path::String)
     status_ptr = Ref{Cuint}(0)
     ret =  ccall((:git_status_file, :libgit2), Cint,

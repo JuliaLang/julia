@@ -13,7 +13,7 @@ A0 = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),
            [2.,1.,3.,4.,-1.,-3.,3.,6.,2.,1.,4.,2.], 5, 5)
 
 for Tv in (Float64, Complex128)
-    for Ti in Base.SparseArrays.UMFPACK.UMFITypes.types
+    for Ti in Base.uniontypes(Base.SparseArrays.UMFPACK.UMFITypes)
         A = convert(SparseMatrixCSC{Tv,Ti}, A0)
         lua = lufact(A)
         @test nnz(lua) == 18
@@ -70,7 +70,7 @@ for Tv in (Float64, Complex128)
 end
 
 Ac0 = complex.(A0,A0)
-for Ti in Base.SparseArrays.UMFPACK.UMFITypes.types
+for Ti in Base.uniontypes(Base.SparseArrays.UMFPACK.UMFITypes)
     Ac = convert(SparseMatrixCSC{Complex128,Ti}, Ac0)
     lua = lufact(Ac)
     L,U,p,q,Rs = lua[:(:)]
@@ -137,9 +137,20 @@ let
 end
 
 #18246,18244-lufact sparse pivot
-let
-    A = speye(4)
+let A = speye(4)
     A[1:2,1:2] = [-.01 -200; 200 .001]
     F = lufact(A)
     @test F[:p] == [3 ; 4 ; 2 ; 1]
+end
+
+# Test that A[c|t]_ldiv_B!{T<:Complex}(X::StridedMatrix{T}, lu::UmfpackLU{Float64},
+# B::StridedMatrix{T}) works as expected.
+let N = 10, p = 0.5
+    A = N*speye(N) + sprand(N, N, p)
+    X = zeros(Complex{Float64}, N, N)
+    B = complex.(rand(N, N), rand(N, N))
+    luA, lufA = lufact(A), lufact(Array(A))
+    @test A_ldiv_B!(copy(X), luA, B) ≈ A_ldiv_B!(copy(X), lufA, B)
+    @test At_ldiv_B!(copy(X), luA, B) ≈ At_ldiv_B!(copy(X), lufA, B)
+    @test Ac_ldiv_B!(copy(X), luA, B) ≈ Ac_ldiv_B!(copy(X), lufA, B)
 end

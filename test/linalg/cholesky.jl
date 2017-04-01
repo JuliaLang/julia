@@ -71,6 +71,8 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
             @test inv(capds)*apds ≈ eye(n)
             @test abs((det(capds) - det(apd))/det(capds)) <= ε*κ*n
         end
+        ulstring = sprint(show,capds[:UL])
+        @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring"
     else
         capdh = cholfact(apdh)
         @test inv(capdh)*apdh ≈ eye(n)
@@ -84,6 +86,8 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         capdh = cholfact!(copy(apd), :L)
         @test inv(capdh)*apdh ≈ eye(n)
         @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
+        ulstring = sprint(show,capdh[:UL])
+        @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring"
     end
 
     # test chol of 2x2 Strang matrix
@@ -169,6 +173,7 @@ debug && println("\ntype of a: ", eltya, " type of b: ", eltyb, "\n")
                     @test norm(apd * (lapd\b) - b)/norm(b) <= ε*κ*n
                     @test norm(apd * (lapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
                 end
+                @test_throws DimensionMismatch lapd\RowVector(ones(n))
 
 debug && println("pivoted Cholesky decomposition")
                 if eltya != BigFloat && eltyb != BigFloat # Note! Need to implement pivoted Cholesky decomposition in julia
@@ -179,6 +184,8 @@ debug && println("pivoted Cholesky decomposition")
                     lpapd = cholfact(apd, :L, Val{true})
                     @test norm(apd * (lpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
                     @test norm(apd * (lpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
+
+                    @test_throws BoundsError lpapd\RowVector(ones(n))
                 end
             end
         end

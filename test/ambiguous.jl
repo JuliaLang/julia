@@ -133,8 +133,10 @@ ambs = detect_ambiguities(Ambig5)
 @test length(ambs) == 2
 
 # Test that Core and Base are free of ambiguities
-@test detect_ambiguities(Core, Base; imported=true) == []
 # not using isempty so this prints more information when it fails
+@test detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=false) == []
+# some ambiguities involving Union{} type parameters are expected, but not required
+@test !isempty(detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=true))
 
 amb_1(::Int8, ::Int) = 1
 amb_1(::Integer, x) = 2
@@ -172,12 +174,12 @@ g16493{T<:Number}(x::T, y::Integer) = 0
 g16493{T}(x::Complex{T}, y) = 1
 let ms = methods(g16493, (Complex, Any))
     @test length(ms) == 1
-    @test first(ms).sig == Tuple{typeof(g16493), Complex{TypeVar(:T, Any, true)}, Any}
+    @test first(ms).sig == (Tuple{typeof(g16493), Complex{T}, Any} where T)
 end
 
 # issue #17350
 module Ambig6
-immutable ScaleMinMax{To,From} end
+struct ScaleMinMax{To,From} end
 map1{To<:Union{Float32,Float64},From<:Real}(mapi::ScaleMinMax{To,From}, val::From) = 1
 map1{To<:Union{Float32,Float64},From<:Real}(mapi::ScaleMinMax{To,From}, val::Union{Real,Complex}) = 2
 end
@@ -185,14 +187,14 @@ end
 @test isempty(detect_ambiguities(Ambig6))
 
 module Ambig7
-immutable T end
+struct T end
 (::T)(x::Int8, y) = 1
 (::T)(x, y::Int8) = 2
 end
 @test length(detect_ambiguities(Ambig7)) == 1
 
 module Ambig17648
-immutable MyArray{T,N} <: AbstractArray{T,N}
+struct MyArray{T,N} <: AbstractArray{T,N}
     data::Array{T,N}
 end
 
@@ -220,5 +222,16 @@ catch err
         rethrow(err)
     end
 end
+
+module Ambig9
+f(x::Complex{<:Integer}) = 1
+f(x::Complex{<:Rational}) = 2
+end
+@test !Base.isambiguous(methods(Ambig9.f)..., ambiguous_bottom=false)
+@test Base.isambiguous(methods(Ambig9.f)..., ambiguous_bottom=true)
+@test !Base.isambiguous(methods(Ambig9.f)...)
+@test length(detect_ambiguities(Ambig9, ambiguous_bottom=false)) == 0
+@test length(detect_ambiguities(Ambig9, ambiguous_bottom=true)) == 1
+@test length(detect_ambiguities(Ambig9)) == 0
 
 nothing # don't return a module from the remote include

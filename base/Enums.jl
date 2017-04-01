@@ -2,15 +2,15 @@
 
 module Enums
 
-import Core.Intrinsics.box
+import Core.Intrinsics.bitcast
 export Enum, @enum
 
 function basetype end
 
-abstract Enum{T<:Integer}
+abstract type Enum{T<:Integer} end
 
-Base.convert{T<:Integer}(::Type{Integer}, x::Enum{T}) = box(T, x)
-Base.convert{T<:Integer,T2<:Integer}(::Type{T}, x::Enum{T2}) = convert(T, box(T2, x))
+Base.convert{T<:Integer}(::Type{Integer}, x::Enum{T}) = bitcast(T, x)
+Base.convert{T<:Integer,T2<:Integer}(::Type{T}, x::Enum{T2}) = convert(T, bitcast(T2, x))
 Base.write{T<:Integer}(io::IO, x::Enum{T}) = write(io, T(x))
 Base.read{T<:Enum}(io::IO, ::Type{T}) = T(read(io, Enums.basetype(T)))
 
@@ -36,16 +36,16 @@ Create an `Enum{BaseType}` subtype with name `EnumName` and enum member values o
 `EnumName` can be used just like other types and enum member values as regular values, such as
 
 ```jldoctest
-julia> @enum FRUIT apple=1 orange=2 kiwi=3
+julia> @enum Fruit apple=1 orange=2 kiwi=3
 
-julia> f(x::FRUIT) = "I'm a FRUIT with value: \$(Int(x))"
+julia> f(x::Fruit) = "I'm a Fruit with value: \$(Int(x))"
 f (generic function with 1 method)
 
 julia> f(apple)
-"I'm a FRUIT with value: 1"
+"I'm a Fruit with value: 1"
 ```
 
-`BaseType`, which defaults to `Int32`, must be a bitstype subtype of Integer. Member values can be converted between
+`BaseType`, which defaults to `Int32`, must be a primitive subtype of Integer. Member values can be converted between
 the enum type and `BaseType`. `read` and `write` perform these conversions automatically.
 """
 macro enum(T,syms...)
@@ -58,7 +58,7 @@ macro enum(T,syms...)
         typename = T.args[1]
         basetype = eval(current_module(),T.args[2])
         if !isa(basetype, DataType) || !(basetype <: Integer) || !isbits(basetype)
-            throw(ArgumentError("invalid base type for Enum $typename, $T=::$basetype; base type must be an integer bitstype"))
+            throw(ArgumentError("invalid base type for Enum $typename, $T=::$basetype; base type must be an integer primitive type"))
         end
     elseif !isa(T,Symbol)
         throw(ArgumentError("invalid type expression for enum $T"))
@@ -95,7 +95,7 @@ macro enum(T,syms...)
             lo = min(lo, i)
             hi = max(hi, i)
         end
-        i += one(i)
+        i += oneunit(i)
     end
     values = basetype[i[2] for i in vals]
     if hasexpr && values != unique(values)
@@ -103,10 +103,10 @@ macro enum(T,syms...)
     end
     blk = quote
         # enum definition
-        Base.@__doc__(bitstype $(sizeof(basetype) * 8) $(esc(typename)) <: Enum{$(basetype)})
+        Base.@__doc__(primitive type $(esc(typename)) <: Enum{$(basetype)} $(sizeof(basetype) * 8) end)
         function Base.convert(::Type{$(esc(typename))}, x::Integer)
             $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x)
-            box($(esc(typename)), convert($(basetype), x))
+            return bitcast($(esc(typename)), convert($(basetype), x))
         end
         Enums.basetype(::Type{$(esc(typename))}) = $(esc(basetype))
         Base.typemin(x::Type{$(esc(typename))}) = $(esc(typename))($lo)

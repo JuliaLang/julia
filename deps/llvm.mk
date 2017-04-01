@@ -488,18 +488,31 @@ $(eval $(call LLVM_PATCH,llvm-r282182)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-3.9.0_cygwin)) # R283427, Remove for 4.0
 endif
 $(eval $(call LLVM_PATCH,llvm-PR22923)) # Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-arm-fix-prel31))
-$(eval $(call LLVM_PATCH,llvm-D25865-cmakeshlib))
+$(eval $(call LLVM_PATCH,llvm-arm-fix-prel31)) # Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-D25865-cmakeshlib)) # Remove for 4.0
 # Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
 $(eval $(call LLVM_PATCH,llvm-3.9.0_threads))
-$(eval $(call LLVM_PATCH,llvm-3.9.0_win64-reloc-dwarf))
+$(eval $(call LLVM_PATCH,llvm-3.9.0_win64-reloc-dwarf)) # modified version applied as R290809, Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-3.9.0_D27296-libssp))
-$(eval $(call LLVM_PATCH,llvm-D27609-AArch64-UABS_G3))
+$(eval $(call LLVM_PATCH,llvm-D27609-AArch64-UABS_G3)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model))
 # patches for NVPTX
 $(eval $(call LLVM_PATCH,llvm-D9168_argument_alignment)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D23597_sdag_names)) # Dep for D24300, remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D24300_ptx_intrinsics)) # Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-D27389)) # Julia issue #19792, Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-D27397)) # Julia issue #19792, Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-D28009)) # Julia issue #19792, Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-D28215_FreeBSD_shlib))
+$(eval $(call LLVM_PATCH,llvm-D28221-avx512)) # mentioned in issue #19797
+$(eval $(call LLVM_PATCH,llvm-PR276266)) # Issue #19976, Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-PR278088)) # Issue #19976, Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-PR277939)) # Issue #19976, Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-PR278321)) # Issue #19976, Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-PR278923)) # Issue #19976, Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-D28759-loopclearance))
+$(eval $(call LLVM_PATCH,llvm-D28786-callclearance))
+$(eval $(call LLVM_PATCH,llvm-rL293230-icc17-cmake)) # Remove for 4.0
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
@@ -552,7 +565,7 @@ ifeq ($(OS),$(BUILD_OS))
 	cd $(LLVM_BUILDDIR_withtype) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
 		$(if $(filter $(LLVM_USE_CMAKE),1), \
-		  $(CMAKE) --build . check, \
+		  $(CMAKE) --build . --target check, \
 		  $(MAKE) $(LLVM_MFLAGS) check)
 endif
 	echo 1 > $@

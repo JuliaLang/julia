@@ -32,28 +32,28 @@ end
 const intstr = @sprintf("%s", Int)
 splat2(1)
 @test String(take!(stagediobuf)) == "($intstr,)"
-splat2(1,3)
-@test String(take!(stagediobuf)) == "($intstr,$intstr)"
-splat2(5,2)
+splat2(1, 3)
+@test String(take!(stagediobuf)) == "($intstr, $intstr)"
+splat2(5, 2)
 @test String(take!(stagediobuf)) == ""
-splat2(1:3,5.2)
-@test String(take!(stagediobuf)) == "(UnitRange{$intstr},Float64)"
-splat2(3,5:2:7)
-@test String(take!(stagediobuf)) == "($intstr,StepRange{$intstr,$intstr})"
-splat2(1,2,3,4)
-@test String(take!(stagediobuf)) == "($intstr,$intstr,$intstr,$intstr)"
-splat2(1,2,3)
-@test String(take!(stagediobuf)) == "($intstr,$intstr,$intstr)"
+splat2(1:3, 5.2)
+@test String(take!(stagediobuf)) == "(UnitRange{$intstr}, Float64)"
+splat2(3, 5:2:7)
+@test String(take!(stagediobuf)) == "($intstr, StepRange{$intstr,$intstr})"
+splat2(1, 2, 3, 4)
+@test String(take!(stagediobuf)) == "($intstr, $intstr, $intstr, $intstr)"
+splat2(1, 2, 3)
+@test String(take!(stagediobuf)) == "($intstr, $intstr, $intstr)"
 splat2(1:5, 3, 3:3)
-@test String(take!(stagediobuf)) == "(UnitRange{$intstr},$intstr,UnitRange{$intstr})"
+@test String(take!(stagediobuf)) == "(UnitRange{$intstr}, $intstr, UnitRange{$intstr})"
 splat2(1:5, 3, 3:3)
 @test String(take!(stagediobuf)) == ""
 splat2(1:5, 3:3, 3)
-@test String(take!(stagediobuf)) == "(UnitRange{$intstr},UnitRange{$intstr},$intstr)"
+@test String(take!(stagediobuf)) == "(UnitRange{$intstr}, UnitRange{$intstr}, $intstr)"
 splat2(1:5, 3:3)
-@test String(take!(stagediobuf)) == "(UnitRange{$intstr},UnitRange{$intstr})"
+@test String(take!(stagediobuf)) == "(UnitRange{$intstr}, UnitRange{$intstr})"
 splat2(3, 3:5)
-@test String(take!(stagediobuf)) == "($intstr,UnitRange{$intstr})"
+@test String(take!(stagediobuf)) == "($intstr, UnitRange{$intstr})"
 
 # varargs specialization with parametric @generated functions (issue #8944)
 @generated function splat3{T,N}(A::AbstractArray{T,N}, indx::RangeIndex...)
@@ -62,9 +62,9 @@ splat2(3, 3:5)
 end
 A = rand(5,5,3)
 splat3(A, 1:2, 1:2, 1)
-@test String(take!(stagediobuf)) == "(UnitRange{$intstr},UnitRange{$intstr},$intstr)"
+@test String(take!(stagediobuf)) == "(UnitRange{$intstr}, UnitRange{$intstr}, $intstr)"
 splat3(A, 1:2, 1, 1:2)
-@test String(take!(stagediobuf)) == "(UnitRange{$intstr},$intstr,UnitRange{$intstr})"
+@test String(take!(stagediobuf)) == "(UnitRange{$intstr}, $intstr, UnitRange{$intstr})"
 
 B = view(A, 1:3, 2, 1:3)
 @generated function mygetindex(S::SubArray, indexes::Real...)
@@ -210,3 +210,6 @@ let
     decorate(bar)
     @test in(typeof(bar), decorated)
 end
+
+# issue #19897
+@test code_lowered(staged_t1, (Int,Int)) isa Array  # check no error thrown

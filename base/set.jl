@@ -1,10 +1,10 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-type Set{T} <: AbstractSet{T}
+mutable struct Set{T} <: AbstractSet{T}
     dict::Dict{T,Void}
 
-    Set() = new(Dict{T,Void}())
-    Set(itr) = union!(new(Dict{T,Void}()), itr)
+    Set{T}() where {T} = new(Dict{T,Void}())
+    Set{T}(itr) where {T} = union!(new(Dict{T,Void}()), itr)
 end
 Set() = Set{Any}()
 Set(itr) = Set{eltype(itr)}(itr)
@@ -41,7 +41,7 @@ delete!(s::Set, x) = (delete!(s.dict, x); s)
 copy(s::Set) = union!(similar(s), s)
 
 sizehint!(s::Set, newsz) = (sizehint!(s.dict, newsz); s)
-empty!{T}(s::Set{T}) = (empty!(s.dict); s)
+empty!(s::Set) = (empty!(s.dict); s)
 rehash!(s::Set) = (rehash!(s.dict); s)
 
 start(s::Set)       = start(s.dict)
@@ -113,18 +113,55 @@ const ⊆ = issubset
     unique(itr)
 
 Returns an array containing one value from `itr` for each unique value,
-as determined by `isequal`.
+as determined by [`isequal`](@ref).
+
+```jldoctest
+julia> unique([1; 2; 2; 6])
+3-element Array{Int64,1}:
+ 1
+ 2
+ 6
+```
 """
-function unique(C)
-    out = Vector{eltype(C)}()
-    seen = Set{eltype(C)}()
-    for x in C
+function unique(itr)
+    T = _default_eltype(typeof(itr))
+    out = Vector{T}()
+    seen = Set{T}()
+    i = start(itr)
+    if done(itr, i)
+        return out
+    end
+    x, i = next(itr, i)
+    if !isleaftype(T)
+        S = typeof(x)
+        return _unique_from(itr, S[x], Set{S}((x,)), i)
+    end
+    push!(seen, x)
+    push!(out, x)
+    return unique_from(itr, out, seen, i)
+end
+
+_unique_from(itr, out, seen, i) = unique_from(itr, out, seen, i)
+@inline function unique_from{T}(itr, out::Vector{T}, seen, i)
+    while !done(itr, i)
+        x, i = next(itr, i)
+        S = typeof(x)
+        if !(S === T || S <: T)
+            R = typejoin(S, T)
+            seenR = convert(Set{R}, seen)
+            outR = convert(Vector{R}, out)
+            if !in(x, seenR)
+                push!(seenR, x)
+                push!(outR, x)
+            end
+            return _unique_from(itr, outR, seenR, i)
+        end
         if !in(x, seen)
             push!(seen, x)
             push!(out, x)
         end
     end
-    out
+    return out
 end
 
 """
@@ -132,6 +169,13 @@ end
 
 Returns an array containing one value from `itr` for each unique value produced by `f`
 applied to elements of `itr`.
+
+```jldoctest
+julia> unique(isodd, [1; 2; 2; 6])
+2-element Array{Int64,1}:
+ 1
+ 2
+```
 """
 function unique(f::Callable, C)
     out = Vector{eltype(C)}()
@@ -147,9 +191,20 @@ function unique(f::Callable, C)
 end
 
 """
-    allunique(itr)
+    allunique(itr) -> Bool
 
-Return `true` if all values from `itr` are distinct when compared with `isequal`.
+Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).
+
+```jldoctest
+julia> a = [1; 2; 3]
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> allunique([a, a])
+false
+```
 """
 function allunique(C)
     seen = Set{eltype(C)}()
@@ -165,7 +220,7 @@ end
 
 allunique(::Set) = true
 
-allunique{T}(r::Range{T}) = (step(r) != zero(T)) || (length(r) <= one(T))
+allunique{T}(r::Range{T}) = (step(r) != zero(T)) || (length(r) <= 1)
 
 function filter(f, s::Set)
     u = similar(s)
@@ -195,4 +250,4 @@ function hash(s::Set, h::UInt)
 end
 
 convert{T}(::Type{Set{T}}, s::Set{T}) = s
-convert{T,S}(::Type{Set{T}}, x::Set{S}) = Set{T}(x)
+convert{T}(::Type{Set{T}}, x::Set) = Set{T}(x)

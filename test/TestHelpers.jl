@@ -2,7 +2,10 @@
 
 module TestHelpers
 
-type FakeTerminal <: Base.Terminals.UnixTerminal
+include("dimensionful.jl")
+export Furlong
+
+mutable struct FakeTerminal <: Base.Terminals.UnixTerminal
     in_stream::Base.IO
     out_stream::Base.IO
     err_stream::Base.IO
@@ -50,15 +53,15 @@ end
 
 module OAs
 
-using Base: Indices, LinearSlow, LinearFast, tail
+using Base: Indices, IndexCartesian, IndexLinear, tail
 
 export OffsetArray
 
-immutable OffsetArray{T,N,AA<:AbstractArray} <: AbstractArray{T,N}
+struct OffsetArray{T,N,AA<:AbstractArray} <: AbstractArray{T,N}
     parent::AA
     offsets::NTuple{N,Int}
 end
-typealias OffsetVector{T,AA<:AbstractArray} OffsetArray{T,1,AA}
+OffsetVector{T,AA<:AbstractArray} = OffsetArray{T,1,AA}
 
 OffsetArray{T,N}(A::AbstractArray{T,N}, offsets::NTuple{N,Int}) = OffsetArray{T,N,typeof(A)}(A, offsets)
 OffsetArray{T,N}(A::AbstractArray{T,N}, offsets::Vararg{Int,N}) = OffsetArray(A, offsets)
@@ -66,7 +69,7 @@ OffsetArray{T,N}(A::AbstractArray{T,N}, offsets::Vararg{Int,N}) = OffsetArray(A,
 (::Type{OffsetArray{T,N}}){T,N}(inds::Indices{N}) = OffsetArray{T,N,Array{T,N}}(Array{T,N}(map(length, inds)), map(indsoffset, inds))
 (::Type{OffsetArray{T}}){T,N}(inds::Indices{N}) = OffsetArray{T,N}(inds)
 
-Base.linearindexing{T<:OffsetArray}(::Type{T}) = Base.linearindexing(parenttype(T))
+Base.IndexStyle{T<:OffsetArray}(::Type{T}) = Base.IndexStyle(parenttype(T))
 parenttype{T,N,AA}(::Type{OffsetArray{T,N,AA}}) = AA
 parenttype(A::OffsetArray) = parenttype(typeof(A))
 
@@ -75,8 +78,8 @@ Base.parent(A::OffsetArray) = A.parent
 errmsg(A) = error("size not supported for arrays with indices $(indices(A)); see http://docs.julialang.org/en/latest/devdocs/offset-arrays/")
 Base.size(A::OffsetArray) = errmsg(A)
 Base.size(A::OffsetArray, d) = errmsg(A)
-Base.eachindex(::LinearSlow, A::OffsetArray) = CartesianRange(indices(A))
-Base.eachindex(::LinearFast, A::OffsetVector) = indices(A, 1)
+Base.eachindex(::IndexCartesian, A::OffsetArray) = CartesianRange(indices(A))
+Base.eachindex(::IndexLinear, A::OffsetVector) = indices(A, 1)
 
 # Implementations of indices and indices1. Since bounds-checking is
 # performance-critical and relies on indices, these are usually worth
@@ -95,7 +98,7 @@ function Base.similar(A::AbstractArray, T::Type, inds::Tuple{UnitRange,Vararg{Un
     OffsetArray(B, map(indsoffset, inds))
 end
 
-Base.similar(f::Union{Function,DataType}, shape::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(f(map(length, shape)), map(indsoffset, shape))
+Base.similar(f::Union{Function,Type}, shape::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(f(map(length, shape)), map(indsoffset, shape))
 
 Base.reshape(A::AbstractArray, inds::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(reshape(A, map(length, inds)), map(indsoffset, inds))
 
@@ -104,12 +107,14 @@ Base.reshape(A::AbstractArray, inds::Tuple{UnitRange,Vararg{UnitRange}}) = Offse
     @inbounds ret = parent(A)[offset(A.offsets, I)...]
     ret
 end
-@inline function Base._getindex(::LinearFast, A::OffsetVector, i::Int)
+# Vectors don't support one-based linear indexing; they always use the offsets
+@inline function Base.getindex(A::OffsetVector, i::Int)
     checkbounds(A, i)
     @inbounds ret = parent(A)[offset(A.offsets, (i,))[1]]
     ret
 end
-@inline function Base._getindex(::LinearFast, A::OffsetArray, i::Int)
+# But multidimensional arrays allow one-based linear indexing
+@inline function Base.getindex(A::OffsetArray, i::Int)
     checkbounds(A, i)
     @inbounds ret = parent(A)[i]
     ret
@@ -119,12 +124,12 @@ end
     @inbounds parent(A)[offset(A.offsets, I)...] = val
     val
 end
-@inline function Base._setindex!(::LinearFast, A::OffsetVector, val, i::Int)
+@inline function Base.setindex!(A::OffsetVector, val, i::Int)
     checkbounds(A, i)
     @inbounds parent(A)[offset(A.offsets, (i,))[1]] = val
     val
 end
-@inline function Base._setindex!(::LinearFast, A::OffsetArray, val, i::Int)
+@inline function Base.setindex!(A::OffsetArray, val, i::Int)
     checkbounds(A, i)
     @inbounds parent(A)[i] = val
     val

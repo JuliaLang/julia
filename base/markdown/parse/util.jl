@@ -31,6 +31,7 @@ function skipblank(io::IO)
     while !eof(io)
         c = read(io, Char)
         c == '\n' && (start = position(io); i+=1; continue)
+        c == '\r' && (start = position(io); i+=1; continue)
         c in whitespace || break
     end
     seek(io, start)
@@ -45,7 +46,7 @@ function linecontains(io::IO, chars; allow_whitespace = true,
                                      eat = true,
                                      allowempty = false)
     start = position(io)
-    l = readline(io) |> chomp
+    l = readline(io)
     length(l) == 0 && return allowempty
 
     result = allowempty
@@ -90,7 +91,7 @@ function startswith(stream::IO, c::Char; eat = true)
     end
 end
 
-function startswith{T<:AbstractString}(stream::IO, ss::Vector{T}; kws...)
+function startswith(stream::IO, ss::Vector{<:AbstractString}; kws...)
     any(s->startswith(stream, s; kws...), ss)
 end
 
@@ -98,7 +99,7 @@ function startswith(stream::IO, r::Regex; eat = true, padding = false)
     @assert Base.startswith(r.pattern, "^")
     start = position(stream)
     padding && skipwhitespace(stream)
-    line = chomp(readline(stream))
+    line = readline(stream)
     seek(stream, start)
     m = match(r, line)
     m === nothing && return ""

@@ -34,7 +34,7 @@ elseif is_windows()
     const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
 
     function splitdrive(path::String)
-        m = match(r"^(\w+:|\\\\\w+\\\w+|\\\\\?\\UNC\\\w+\\\w+|\\\\\?\\\w+:|)(.*)$", path)
+        m = match(r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$", path)
         String(m.captures[1]), String(m.captures[2])
     end
 else
@@ -110,7 +110,7 @@ Split a path into a tuple of the directory name and file name.
 
 ```jldoctest
 julia> splitdir("/home/myuser")
-("/home","myuser")
+("/home", "myuser")
 ```
 """
 function splitdir(path::String)
@@ -154,10 +154,10 @@ unmodified and the empty string.
 
 ```jldoctest
 julia> splitext("/home/myuser/example.jl")
-("/home/myuser/example",".jl")
+("/home/myuser/example", ".jl")
 
 julia> splitext("/home/myuser/example")
-("/home/myuser/example","")
+("/home/myuser/example", "")
 ```
 """
 function splitext(path::String)
@@ -288,7 +288,9 @@ else # !windows
 function realpath(path::AbstractString)
     p = ccall(:realpath, Ptr{UInt8}, (Cstring, Ptr{UInt8}), path, C_NULL)
     systemerror(:realpath, p == C_NULL)
-    return unsafe_wrap(String, p, true)
+    str = unsafe_string(p)
+    Libc.free(p)
+    return str
 end
 end # os-test
 

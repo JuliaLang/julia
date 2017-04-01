@@ -41,13 +41,12 @@ Fully implemented by:
   * `Number`
   * `AbstractArray`
   * [`IntSet`](@ref)
-  * `ObjectIdDict`
+  * [`ObjectIdDict`](@ref)
   * [`Dict`](@ref)
-  * `WeakKeyDict`
+  * [`WeakKeyDict`](@ref)
   * `EachLine`
   * `AbstractString`
   * [`Set`](@ref)
-  * [`Task`](@ref)
 
 ## General Collections
 
@@ -66,8 +65,9 @@ Fully implemented by:
   * `Number`
   * `AbstractArray`
   * [`IntSet`](@ref)
+  * [`ObjectIdDict`](@ref)
   * [`Dict`](@ref)
-  * `WeakKeyDict`
+  * [`WeakKeyDict`](@ref)
   * `AbstractString`
   * [`Set`](@ref)
 
@@ -147,9 +147,9 @@ Fully implemented by:
   * [`BitArray`](@ref)
   * `AbstractArray`
   * `SubArray`
-  * `ObjectIdDict`
+  * [`ObjectIdDict`](@ref)
   * [`Dict`](@ref)
-  * `WeakKeyDict`
+  * [`WeakKeyDict`](@ref)
   * `AbstractString`
 
 Partially implemented by:
@@ -164,9 +164,9 @@ Partially implemented by:
 as the hashing function for the key, and [`isequal()`](@ref) to determine equality. Define these
 two functions for custom types to override how they are stored in a hash table.
 
-`ObjectIdDict` is a special hash table where the keys are always object identities.
+[`ObjectIdDict`](@ref) is a special hash table where the keys are always object identities.
 
-`WeakKeyDict` is a hash table implementation where the keys are weak references to objects, and
+[`WeakKeyDict`](@ref) is a hash table implementation where the keys are weak references to objects, and
 thus may be garbage collected even when referenced in a hash table.
 
 [`Dict`](@ref)s can be created by passing pair objects constructed with `=>()` to a [`Dict`](@ref)
@@ -174,7 +174,7 @@ constructor: `Dict("A"=>1, "B"=>2)`. This call will attempt to infer type inform
 keys and values (i.e. this example creates a `Dict{String, Int64}`). To explicitly specify types
 use the syntax `Dict{KeyType,ValueType}(...)`. For example, `Dict{String,Int32}("A"=>1, "B"=>2)`.
 
-[`Dict`](@ref)s may also be created with generators. For example, `Dict(i => f(i) for i = 1:10)`.
+Associative collections may also be created with generators. For example, `Dict(i => f(i) for i = 1:10)`.
 
 Given a dictionary `D`, the syntax `D[x]` returns the value of key `x` (if it exists) or throws
 an error, and `D[x] = y` stores the key-value pair `x => y` in `D` (replacing any existing value
@@ -183,6 +183,8 @@ for the key `x`).  Multiple arguments to `D[...]` are converted to tuples; for e
 
 ```@docs
 Base.Dict
+Base.ObjectIdDict
+Base.WeakKeyDict
 Base.haskey
 Base.get(::Any, ::Any, ::Any)
 Base.get
@@ -202,9 +204,9 @@ Base.valtype
 
 Fully implemented by:
 
-  * `ObjectIdDict`
+  * [`ObjectIdDict`](@ref)
   * [`Dict`](@ref)
-  * `WeakKeyDict`
+  * [`WeakKeyDict`](@ref)
 
 Partially implemented by:
 
@@ -260,53 +262,3 @@ Fully implemented by:
 
   * `Vector` (a.k.a. 1-dimensional [`Array`](@ref))
   * `BitVector` (a.k.a. 1-dimensional [`BitArray`](@ref))
-
-## PriorityQueue
-
-The [`PriorityQueue`](@ref Base.Collections.PriorityQueue) type is available from the `Collections` module. It provides a basic
-priority queue implementation allowing for arbitrary key and priority types. Multiple identical
-keys are not permitted, but the priority of existing keys can be changed efficiently.
-
-```@docs
-Base.Collections.PriorityQueue
-Base.Collections.enqueue!
-Base.Collections.dequeue!
-Base.Collections.peek
-```
-
-[`PriorityQueue`](@ref Base.Collections.PriorityQueue) also behaves similarly to a `Dict` in that keys can be inserted and priorities
-accessed or changed using indexing notation.
-
-```julia
-julia> # Julia code
-       pq = Collections.PriorityQueue();
-
-julia> # Insert keys with associated priorities
-       pq["a"] = 10; pq["b"] = 5; pq["c"] = 15; pq
-Base.Collections.PriorityQueue{Any,Any,Base.Order.ForwardOrdering} with 3 entries:
-  "c" => 15
-  "b" => 5
-  "a" => 10
-
-julia> # Change the priority of an existing key
-       pq["a"] = 0; pq
-Base.Collections.PriorityQueue{Any,Any,Base.Order.ForwardOrdering} with 3 entries:
-  "c" => 15
-  "b" => 5
-  "a" => 0
-```
-
-## Heap Functions
-
-Along with the [`PriorityQueue`](@ref Base.Collections.PriorityQueue) type, the `Collections` module provides lower level functions
-for performing binary heap operations on arrays. Each function takes an optional ordering argument.
-If not given, default ordering is used, so that elements popped from the heap are given in ascending
-order.
-
-```@docs
-Base.Collections.heapify
-Base.Collections.heapify!
-Base.Collections.isheap
-Base.Collections.heappush!
-Base.Collections.heappop!
-```

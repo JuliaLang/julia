@@ -1,13 +1,13 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-type Node
+mutable struct Node
     name::String
     n::Set{Node}
 
     Node(name) = new(name, Set{Node}())
 end
 
-typealias Graph Dict{String, Node}
+const Graph = Dict{String, Node}
 
 function get(G::Graph, name)
     if haskey(G, name)

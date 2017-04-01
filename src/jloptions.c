@@ -19,15 +19,17 @@ char *shlib_ext = ".dylib";
 char *shlib_ext = ".so";
 #endif
 
-static char default_sysimg_path[512];
-static const char *get_default_sysimg_path()
+static char system_image_path[256] = "\0" JL_SYSTEM_IMAGE_PATH;
+static const char *get_default_sysimg_path(void)
 {
-#ifndef CPUID_SPECIFIC_BINARIES
-    snprintf(default_sysimg_path, 512, "%s%s", JL_SYSTEM_IMAGE_PATH, shlib_ext);
-#else
-    snprintf(default_sysimg_path, 512, "%s_%llx%s", JL_SYSTEM_IMAGE_PATH, jl_cpuid_tag(), shlib_ext);
+#ifdef CPUID_SPECIFIC_BINARIES
+    char *path = &system_image_path[1];
+    size_t existing_length = strlen(path) - strlen(shlib_ext);
+    path += existing_length;
+    snprintf(path, sizeof(system_image_path) - existing_length,
+        "_%" PRIx64 "%s", jl_cpuid_tag(), shlib_ext);
 #endif
-    return default_sysimg_path;
+    return &system_image_path[1];
 }
 
 
@@ -36,7 +38,6 @@ jl_options_t jl_options = { 0,    // quiet
                             NULL, // julia_bin
                             NULL, // eval
                             NULL, // print
-                            NULL, // post-boot
                             NULL, // load
                             NULL, // image_file (will be filled in below)
                             NULL, // cpu_target ("native", "core2", etc...)
@@ -132,19 +133,13 @@ static const char opts[]  =
     "                           Count executions of source lines (omitting setting is equivalent to \"user\")\n"
     " --track-allocation={none|user|all}, --track-allocation\n"
     "                           Count bytes allocated by each source line\n\n"
-
-    "Deprecated options:\n"
-    " -F                        Load ~/.juliarc (deprecated, use --startup-file=yes)\n"
-    " -f, --no-startup          Don't load ~/.juliarc (deprecated, use --startup-file=no)\n"
-    " -P, --post-boot <expr>    Evaluate <expr>, but don't disable interactive mode (deprecated, use -i -e instead)\n"
-    " --no-history-file         Don't load history file (deprecated, use --history-file=no)\n";
+;
 
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
 {
     enum { opt_machinefile = 300,
            opt_color,
            opt_history_file,
-           opt_no_history_file,
            opt_startup_file,
            opt_compile,
            opt_code_coverage,
@@ -164,7 +159,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_use_compilecache,
            opt_incremental
     };
-    static const char* const shortopts = "+vhqFfH:e:E:P:L:J:C:ip:O:g:";
+    static const char* const shortopts = "+vhqH:e:E:L:J:C:ip:O:g:";
     static const struct option longopts[] = {
         // exposed command line options
         // NOTE: This set of required arguments need to be kept in sync
@@ -203,10 +198,6 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "worker",          required_argument, 0, opt_worker },
         { "bind-to",         required_argument, 0, opt_bind_to },
         { "lisp",            no_argument,       0, 1 },
-        // deprecated options
-        { "post-boot",       required_argument, 0, 'P' },
-        { "no-history-file", no_argument,       0, opt_no_history_file }, // deprecated
-        { "no-startup",      no_argument,       0, 'f' },                 // deprecated
         { 0, 0, 0, 0 }
     };
 
@@ -301,10 +292,6 @@ restart_switch:
         case 'E': // print
             jl_options.print = strdup(optarg);
             break;
-        case 'P': // post-boot
-            jl_printf(JL_STDOUT, "WARNING: julia -P/--post-boot option is deprecated, use -i -e instead.\n");
-            jl_options.postboot = strdup(optarg);
-            break;
         case 'L': // load
             jl_options.load = strdup(optarg);
             break;
@@ -362,10 +349,6 @@ restart_switch:
             else
                 jl_errorf("julia: invalid argument to --history-file={yes|no} (%s)", optarg);
             break;
-        case opt_no_history_file:
-            jl_printf(JL_STDOUT, "WARNING: julia --no-history-file option is deprecated, use --history-file=no instead.\n");
-            jl_options.historyfile = JL_OPTIONS_HISTORYFILE_OFF;
-            break;
         case opt_startup_file:
             if (!strcmp(optarg,"yes"))
                 jl_options.startupfile = JL_OPTIONS_STARTUPFILE_ON;
@@ -373,14 +356,6 @@ restart_switch:
                 jl_options.startupfile = JL_OPTIONS_STARTUPFILE_OFF;
             else
                 jl_errorf("julia: invalid argument to --startup-file={yes|no} (%s)", optarg);
-            break;
-        case 'f':
-            jl_printf(JL_STDOUT, "WARNING: julia -f/--no-startup option is deprecated, use --startup-file=no instead.\n");
-            jl_options.startupfile = JL_OPTIONS_STARTUPFILE_OFF;
-            break;
-        case 'F':
-            jl_printf(JL_STDOUT, "WARNING: julia -F option is deprecated, use --startup-file=yes instead.\n");
-            jl_options.startupfile = JL_OPTIONS_STARTUPFILE_ON;
             break;
         case opt_compile:
             if (!strcmp(optarg,"yes"))

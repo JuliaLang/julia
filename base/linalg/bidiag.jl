@@ -1,11 +1,11 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Bidiagonal matrices
-type Bidiagonal{T} <: AbstractMatrix{T}
+mutable struct Bidiagonal{T} <: AbstractMatrix{T}
     dv::Vector{T} # diagonal
     ev::Vector{T} # sub/super diagonal
     isupper::Bool # is upper bidiagonal (true) or lower (false)
-    function Bidiagonal(dv::Vector{T}, ev::Vector{T}, isupper::Bool)
+    function Bidiagonal{T}(dv::Vector{T}, ev::Vector{T}, isupper::Bool) where T
         if length(ev) != length(dv)-1
             throw(DimensionMismatch("length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
         end
@@ -52,7 +52,7 @@ julia> Bl = Bidiagonal(dv, ev, false) # ev is on the first subdiagonal
  ⋅  ⋅  9  4
 ```
 """
-Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}, isupper::Bool) = Bidiagonal{T}(collect(dv), collect(ev), isupper)
+Bidiagonal(dv::AbstractVector{T}, ev::AbstractVector{T}, isupper::Bool) where {T} = Bidiagonal{T}(collect(dv), collect(ev), isupper)
 Bidiagonal(dv::AbstractVector, ev::AbstractVector) = throw(ArgumentError("did you want an upper or lower Bidiagonal? Try again with an additional true (upper) or false (lower) argument."))
 
 """
@@ -106,7 +106,7 @@ Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::Char) = begin
     end
     Bidiagonal(collect(dv), collect(ev), isupper)
 end
-function Bidiagonal{Td,Te}(dv::AbstractVector{Td}, ev::AbstractVector{Te}, isupper::Bool)
+function Bidiagonal(dv::AbstractVector{Td}, ev::AbstractVector{Te}, isupper::Bool) where {Td,Te}
     T = promote_type(Td,Te)
     Bidiagonal(convert(Vector{T}, dv), convert(Vector{T}, ev), isupper)
 end
@@ -158,13 +158,18 @@ function getindex{T}(A::Bidiagonal{T}, i::Integer, j::Integer)
 end
 
 function setindex!(A::Bidiagonal, x, i::Integer, j::Integer)
+    @boundscheck checkbounds(A, i, j)
     if i == j
-        A.dv[i] = x
-    elseif (istriu(A) && (i == j - 1)) || (istril(A) && (i == j + 1))
-        return A.ev[min(i,j)] = x
-    else
-        throw(ArgumentError("cannot set elements outside main and $(istriu(A) ? "super": "sub") diagonals."))
+        @inbounds A.dv[i] = x
+    elseif istriu(A) && (i == j - 1)
+        @inbounds A.ev[i] = x
+    elseif istril(A) && (i == j + 1)
+        @inbounds A.ev[j] = x
+    elseif !iszero(x)
+        throw(ArgumentError(string("cannot set entry ($i, $j) off the ",
+            "$(istriu(A) ? "upper" : "lower") bidiagonal band to a nonzero value ($x)")))
     end
+    return x
 end
 
 ## structured matrix methods ##
@@ -197,7 +202,7 @@ full(A::Bidiagonal) = convert(Array, A)
 promote_rule{T,S}(::Type{Matrix{T}}, ::Type{Bidiagonal{S}})=Matrix{promote_type(T,S)}
 
 #Converting from Bidiagonal to Tridiagonal
-Tridiagonal{T}(M::Bidiagonal{T}) = convert(Tridiagonal{T}, M)
+Tridiagonal(M::Bidiagonal{T}) where {T} = convert(Tridiagonal{T}, M)
 function convert{T}(::Type{Tridiagonal{T}}, A::Bidiagonal)
     z = zeros(T, size(A)[1]-1)
     A.isupper ? Tridiagonal(z, convert(Vector{T},A.dv), convert(Vector{T},A.ev)) : Tridiagonal(convert(Vector{T},A.ev), convert(Vector{T},A.dv), z)
@@ -206,10 +211,10 @@ promote_rule{T,S}(::Type{Tridiagonal{T}}, ::Type{Bidiagonal{S}})=Tridiagonal{pro
 
 # No-op for trivial conversion Bidiagonal{T} -> Bidiagonal{T}
 convert{T}(::Type{Bidiagonal{T}}, A::Bidiagonal{T}) = A
-# Convert Bidiagonal{Told} to Bidiagonal{Tnew} by constructing a new instance with converted elements
-convert{Tnew,Told}(::Type{Bidiagonal{Tnew}}, A::Bidiagonal{Told}) = Bidiagonal(convert(Vector{Tnew}, A.dv), convert(Vector{Tnew}, A.ev), A.isupper)
-# When asked to convert Bidiagonal{Told} to AbstractMatrix{Tnew}, preserve structure by converting to Bidiagonal{Tnew} <: AbstractMatrix{Tnew}
-convert{Tnew,Told}(::Type{AbstractMatrix{Tnew}}, A::Bidiagonal{Told}) = convert(Bidiagonal{Tnew}, A)
+# Convert Bidiagonal to Bidiagonal{T} by constructing a new instance with converted elements
+convert{T}(::Type{Bidiagonal{T}}, A::Bidiagonal) = Bidiagonal(convert(Vector{T}, A.dv), convert(Vector{T}, A.ev), A.isupper)
+# When asked to convert Bidiagonal to AbstractMatrix{T}, preserve structure by converting to Bidiagonal{T} <: AbstractMatrix{T}
+convert{T}(::Type{AbstractMatrix{T}}, A::Bidiagonal) = convert(Bidiagonal{T}, A)
 
 broadcast(::typeof(big), B::Bidiagonal) = Bidiagonal(big.(B.dv), big.(B.ev), B.isupper)
 
@@ -220,8 +225,8 @@ similar{T}(B::Bidiagonal, ::Type{T}) = Bidiagonal{T}(similar(B.dv, T), similar(B
 ###################
 
 #Singular values
-svdvals!{T<:BlasReal}(M::Bidiagonal{T}) = LAPACK.bdsdc!(M.isupper ? 'U' : 'L', 'N', M.dv, M.ev)[1]
-function svdfact!{T<:BlasReal}(M::Bidiagonal{T}; thin::Bool=true)
+svdvals!(M::Bidiagonal{<:BlasReal}) = LAPACK.bdsdc!(M.isupper ? 'U' : 'L', 'N', M.dv, M.ev)[1]
+function svdfact!(M::Bidiagonal{<:BlasReal}; thin::Bool=true)
     d, e, U, Vt, Q, iQ = LAPACK.bdsdc!(M.isupper ? 'U' : 'L', 'I', M.dv, M.ev)
     SVD(U, d, Vt)
 end
@@ -354,6 +359,15 @@ A_mul_B!(C::AbstractVector, A::BiTri, B::AbstractVector) = A_mul_B_td!(C, A, B)
 A_mul_B!(C::AbstractMatrix, A::BiTri, B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
 A_mul_B!(C::AbstractVecOrMat, A::BiTri, B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
 
+\(::Diagonal, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+\(::Bidiagonal, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+\(::Bidiagonal{<:Number}, ::RowVector{<:Number}) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+
+At_ldiv_B(::Bidiagonal, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+At_ldiv_B(::Bidiagonal{<:Number}, ::RowVector{<:Number}) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+
+Ac_ldiv_B(::Bidiagonal, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
+Ac_ldiv_B(::Bidiagonal{<:Number}, ::RowVector{<:Number}) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
 
 function check_A_mul_B!_sizes(C, A, B)
     nA, mA = size(A)
@@ -595,11 +609,11 @@ end
 eigfact(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))
 
 # fill! methods
-_valuefields{T <: Diagonal}(S::Type{T}) = [:diag]
-_valuefields{T <: Bidiagonal}(S::Type{T}) = [:dv, :ev]
-_valuefields{T <: Tridiagonal}(S::Type{T}) = [:dl, :d, :du]
-_valuefields{T <: SymTridiagonal}(S::Type{T}) = [:dv, :ev]
-_valuefields{T <: AbstractTriangular}(S::Type{T}) = [:data]
+_valuefields(::Type{<:Diagonal}) = [:diag]
+_valuefields(::Type{<:Bidiagonal}) = [:dv, :ev]
+_valuefields(::Type{<:Tridiagonal}) = [:dl, :d, :du]
+_valuefields(::Type{<:SymTridiagonal}) = [:dv, :ev]
+_valuefields(::Type{<:AbstractTriangular}) = [:data]
 
 SpecialArrays = Union{Diagonal,
     Bidiagonal,

@@ -99,6 +99,8 @@ Base.LinAlg.istril
 Base.LinAlg.istriu
 Base.LinAlg.isdiag
 Base.LinAlg.ishermitian
+Base.LinAlg.RowVector
+Base.LinAlg.ConjArray
 Base.transpose
 Base.transpose!
 Base.ctranspose
@@ -112,13 +114,13 @@ Base.LinAlg.peakflops
 ## Low-level matrix operations
 
 Matrix operations involving transpositions operations like `A' \ B` are converted by the Julia
-parser into calls to specially named functions like `Ac_ldiv_B`. If you want to overload these
+parser into calls to specially named functions like [`Ac_ldiv_B`](@ref). If you want to overload these
 operations for your own types, then it is useful to know the names of these functions.
 
 Also, in many cases there are in-place versions of matrix operations that allow you to supply
 a pre-allocated output vector or matrix.  This is useful when optimizing critical code in order
 to avoid the overhead of repeated allocations. These in-place operations are suffixed with `!`
-below (e.g. `A_mul_B!`) according to the usual Julia convention.
+below (e.g. [`A_mul_B!`](@ref)) according to the usual Julia convention.
 
 ```@docs
 Base.LinAlg.A_ldiv_B!

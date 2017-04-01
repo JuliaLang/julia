@@ -7,7 +7,7 @@ include("pcre.jl")
 const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.NO_UTF_CHECK | PCRE.ALT_BSUX
 const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 
-type Regex
+mutable struct Regex
     pattern::String
     compile_options::UInt32
     match_options::UInt32
@@ -104,7 +104,7 @@ end
 # TODO: map offsets into strings in other encodings back to original indices.
 # or maybe it's better to just fail since that would be quite slow
 
-immutable RegexMatch
+struct RegexMatch
     match::SubString{String}
     captures::Vector{Union{Void,SubString{String}}}
     offset::Int
@@ -177,7 +177,7 @@ match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
 
 function matchall(re::Regex, str::String, overlap::Bool=false)
     regex = compile(re).regex
-    n = length(str.data)
+    n = sizeof(str)
     matches = SubString{String}[]
     offset = UInt32(0)
     opts = re.match_options
@@ -226,7 +226,7 @@ search(s::AbstractString, r::Regex, idx::Integer) = throw(ArgumentError(
 ))
 search(s::AbstractString, r::Regex) = search(s,r,start(s))
 
-immutable SubstitutionString{T<:AbstractString} <: AbstractString
+struct SubstitutionString{T<:AbstractString} <: AbstractString
     string::T
 end
 
@@ -291,7 +291,7 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
                 end
                 #  TODO: avoid this allocation
                 groupname = SubString(repl, groupstart, prevind(repl, i))
-                if isnumber(groupname)
+                if all(isnumber,groupname)
                     _write_capture(io, re, parse(Int, groupname))
                 else
                     group = PCRE.substring_number_from_name(re.regex, groupname)
@@ -309,7 +309,7 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
     end
 end
 
-immutable RegexMatchIterator
+struct RegexMatchIterator
     regex::Regex
     string::String
     overlap::Bool
@@ -344,7 +344,7 @@ function next(itr::RegexMatchIterator, prev_match)
                     prevempty ? opts_nonempty : UInt32(0))
 
         if mat === nothing
-            if prevempty && offset <= length(itr.string.data)
+            if prevempty && offset <= sizeof(itr.string)
                 offset = nextind(itr.string, offset)
                 prevempty = false
                 continue

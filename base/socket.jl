@@ -1,12 +1,12 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 ## IP ADDRESS HANDLING ##
-abstract IPAddr
+abstract type IPAddr end
 
 Base.isless{T<:IPAddr}(a::T, b::T) = isless(a.host, b.host)
-Base.convert{T<:Integer}(dt::Type{T}, ip::IPAddr) = dt(ip.host)
+Base.convert(dt::Type{<:Integer}, ip::IPAddr) = dt(ip.host)
 
-immutable IPv4 <: IPAddr
+struct IPv4 <: IPAddr
     host::UInt32
     IPv4(host::UInt32) = new(host)
     IPv4(a::UInt8,b::UInt8,c::UInt8,d::UInt8) = new(UInt32(a)<<24|
@@ -25,6 +25,11 @@ end
     IPv4(host::Integer) -> IPv4
 
 Returns an IPv4 object from ip address `host` formatted as an `Integer`.
+
+```jldoctest
+julia> IPv4(3223256218)
+ip"192.30.252.154"
+```
 """
 function IPv4(host::Integer)
     if host < 0
@@ -45,7 +50,7 @@ print(io::IO,ip::IPv4) = print(io,dec((ip.host&(0xFF000000))>>24),".",
                                   dec((ip.host&(0xFF00))>>8),".",
                                   dec(ip.host&0xFF))
 
-immutable IPv6 <: IPAddr
+struct IPv6 <: IPAddr
     host::UInt128
     IPv6(host::UInt128) = new(host)
     IPv6(a::UInt16,b::UInt16,c::UInt16,d::UInt16,
@@ -72,6 +77,11 @@ end
     IPv6(host::Integer) -> IPv6
 
 Returns an IPv6 object from ip address `host` formatted as an `Integer`.
+
+```jldoctest
+julia> IPv6(3223256218)
+ip"::c01e:fc9a"
+```
 """
 function IPv6(host::Integer)
     if host < 0
@@ -148,6 +158,11 @@ end
 
 # Parsing
 
+const ipv4_leading_zero_error = """
+Leading zeros in IPv4 addresses are disallowed due to ambiguity.
+If the address is in octal or hexadecimal, convert it to decimal, otherwise remove the leading zero.
+"""
+
 function parse(::Type{IPv4}, str::AbstractString)
     fields = split(str,'.')
     i = 1
@@ -156,18 +171,8 @@ function parse(::Type{IPv4}, str::AbstractString)
         if isempty(f)
             throw(ArgumentError("empty field in IPv4 address"))
         end
-        if f[1] == '0'
-            if length(f) >= 2 && f[2] == 'x'
-                if length(f) > 8 # 2+(3*2) - prevent parseint from overflowing on 32bit
-                    throw(ArgumentError("IPv4 field too large"))
-                end
-                r = parse(Int,f[3:end],16)
-            else
-                if length(f) > 9 # 1+8 - prevent parseint from overflowing on 32bit
-                    throw(ArgumentError("IPv4 field too large"))
-                end
-                r = parse(Int,f,8)
-            end
+        if length(f) > 1 && f[1] == '0'
+            throw(ArgumentError(ipv4_leading_zero_error))
         else
             r = parse(Int,f,10)
         end
@@ -241,7 +246,7 @@ macro ip_str(str)
     return parse(IPAddr, str)
 end
 
-immutable InetAddr{T<:IPAddr}
+struct InetAddr{T<:IPAddr}
     host::T
     port::UInt16
 end
@@ -250,7 +255,7 @@ InetAddr(ip::IPAddr, port) = InetAddr{typeof(ip)}(ip, port)
 
 ## SOCKETS ##
 
-type TCPSocket <: LibuvStream
+mutable struct TCPSocket <: LibuvStream
     handle::Ptr{Void}
     status::Int
     buffer::IOBuffer
@@ -286,7 +291,7 @@ function TCPSocket()
     return tcp
 end
 
-type TCPServer <: LibuvServer
+mutable struct TCPServer <: LibuvServer
     handle::Ptr{Void}
     status::Int
     connectnotify::Condition
@@ -334,7 +339,7 @@ accept(server::PipeServer) = accept(server, init_pipe!(PipeEndpoint();
 
 # UDP
 
-type UDPSocket <: LibuvStream
+mutable struct UDPSocket <: LibuvStream
     handle::Ptr{Void}
     status::Int
     recvnotify::Condition
@@ -566,7 +571,7 @@ end
 
 ##
 
-type DNSError <: Exception
+mutable struct DNSError <: Exception
     host::AbstractString
     code::Int32
 end
@@ -664,11 +669,8 @@ function getipaddr()
     count_ref = Ref{Int32}(1)
     lo_present = false
     err = ccall(:jl_uv_interface_addresses, Int32, (Ref{Ptr{UInt8}}, Ref{Int32}), addr_ref, count_ref)
+    uv_error("getlocalip", err)
     addr, count = addr_ref[], count_ref[]
-    if err != 0
-        ccall(:uv_free_interface_addresses, Void, (Ptr{UInt8}, Int32), addr, count)
-        throw(UVError("getlocalip", err))
-    end
     for i = 0:(count-1)
         current_addr = addr + i*_sizeof_uv_interface_address
         if 1 == ccall(:jl_uv_interface_address_is_internal, Int32, (Ptr{UInt8},), current_addr)
@@ -854,11 +856,23 @@ function getsockname(sock::Union{TCPServer,TCPSocket})
     uv_error("cannot obtain socket name", r)
     if r == 0
         port = ntoh(rport[])
+        af_inet6 = @static if is_windows() # AF_INET6 in <sys/socket.h>
+            23
+        elseif is_apple()
+            30
+        elseif Sys.KERNEL ∈ (:FreeBSD, :DragonFly)
+            28
+        elseif Sys.KERNEL ∈ (:NetBSD, :OpenBSD)
+            24
+        else
+            10
+        end
+
         if rfamily[] == 2 # AF_INET
             addrv4 = raddress[1:4]
             naddr = ntoh(unsafe_load(Ptr{Cuint}(pointer(addrv4)), 1))
             addr = IPv4(naddr)
-        elseif rfamily[] == @static is_windows() ? 23 : (@static is_apple() ? 30 : 10) # AF_INET6
+        elseif rfamily[] == af_inet6
             naddr = ntoh(unsafe_load(Ptr{UInt128}(pointer(raddress)), 1))
             addr = IPv6(naddr)
         else

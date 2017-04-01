@@ -6,7 +6,7 @@ importall ....Base.Operators
 
 export VersionWeight
 
-immutable HierarchicalValue{T}
+struct HierarchicalValue{T}
     v::Vector{T}
     rest::T
 end
@@ -42,7 +42,7 @@ for f in (:-, :+)
     end
 end
 
-Base.:-{T}(a::HierarchicalValue{T}) = HierarchicalValue(-a.v, -a.rest)
+Base.:-(a::HierarchicalValue) = HierarchicalValue(-a.v, -a.rest)
 
 function Base.cmp{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T})
     av = a.v
@@ -64,11 +64,11 @@ function Base.cmp{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T})
     return cmp(a.rest, b.rest)
 end
 Base.isless{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T}) = cmp(a,b) < 0
-=={T}(a::HierarchicalValue{T}, b::HierarchicalValue{T}) = cmp(a,b) == 0
+Base.:(==){T}(a::HierarchicalValue{T}, b::HierarchicalValue{T}) = cmp(a,b) == 0
 
 Base.abs{T}(a::HierarchicalValue{T}) = HierarchicalValue(T[abs(x) for x in a.v], abs(a.rest))
 
-immutable VWPreBuildItem
+struct VWPreBuildItem
     nonempty::Int
     s::HierarchicalValue{Int}
     i::Int
@@ -92,11 +92,11 @@ function Base.cmp(a::VWPreBuildItem, b::VWPreBuildItem)
     return cmp(a.i, b.i)
 end
 Base.isless(a::VWPreBuildItem, b::VWPreBuildItem) = cmp(a,b) < 0
-==(a::VWPreBuildItem, b::VWPreBuildItem) = cmp(a,b) == 0
+Base.:(==)(a::VWPreBuildItem, b::VWPreBuildItem) = cmp(a,b) == 0
 
 Base.abs(a::VWPreBuildItem) = VWPreBuildItem(abs(a.nonempty), abs(a.s), abs(a.i))
 
-immutable VWPreBuild
+struct VWPreBuild
     nonempty::Int
     w::HierarchicalValue{VWPreBuildItem}
 end
@@ -144,7 +144,7 @@ end
     return cmp(a.w, b.w)
 end
 Base.isless(a::VWPreBuild, b::VWPreBuild) = cmp(a,b) < 0
-==(a::VWPreBuild, b::VWPreBuild) = cmp(a,b) == 0
+Base.:(==)(a::VWPreBuild, b::VWPreBuild) = cmp(a,b) == 0
 
 function Base.abs(a::VWPreBuild)
     a === _vwprebuild_zero && return a
@@ -153,59 +153,51 @@ end
 
 # The numeric type used to determine how the different
 # versions of a package should be weighed
-immutable VersionWeight
+struct VersionWeight
     major::Int
     minor::Int
     patch::Int
     prerelease::VWPreBuild
     build::VWPreBuild
-    uninstall::Int
 end
-VersionWeight(major::Int,minor::Int,patch::Int,prerelease::VWPreBuild,build::VWPreBuild) = VersionWeight(major, minor, patch, prerelease, build, 0)
-VersionWeight(major::Int,minor::Int,patch::Int,prerelease::VWPreBuild) = VersionWeight(major, minor, patch, prerelease, zero(VWPreBuild))
-VersionWeight(major::Int,minor::Int,patch::Int) = VersionWeight(major, minor, patch, zero(VWPreBuild))
-VersionWeight(major::Int,minor::Int) = VersionWeight(major, minor, 0)
+VersionWeight(major::Int, minor::Int, patch::Int, prerelease::VWPreBuild) = VersionWeight(major, minor, patch, prerelease, zero(VWPreBuild))
+VersionWeight(major::Int, minor::Int, patch::Int) = VersionWeight(major, minor, patch, zero(VWPreBuild))
+VersionWeight(major::Int, minor::Int) = VersionWeight(major, minor, 0)
 VersionWeight(major::Int) = VersionWeight(major, 0)
 VersionWeight() = VersionWeight(0)
 
-VersionWeight(vn::VersionNumber, uninstall=false) =
+VersionWeight(vn::VersionNumber) =
     VersionWeight(vn.major, vn.minor, vn.patch,
-                  VWPreBuild(true, vn.prerelease), VWPreBuild(false, vn.build),
-                  Int(uninstall))
+                  VWPreBuild(true, vn.prerelease), VWPreBuild(false, vn.build))
 
 Base.zero(::Type{VersionWeight}) = VersionWeight()
 
-Base.typemin(::Type{VersionWeight}) = (x=typemin(Int); y=typemin(VWPreBuild); VersionWeight(x,x,x,y,y,x))
+Base.typemin(::Type{VersionWeight}) = (x=typemin(Int); y=typemin(VWPreBuild); VersionWeight(x, x, x, y, y))
 
 Base.:-(a::VersionWeight, b::VersionWeight) =
     VersionWeight(a.major-b.major, a.minor-b.minor, a.patch-b.patch,
-                  a.prerelease-b.prerelease, a.build-b.build,
-                  a.uninstall-b.uninstall)
+                  a.prerelease-b.prerelease, a.build-b.build)
 
 Base.:+(a::VersionWeight, b::VersionWeight) =
     VersionWeight(a.major+b.major, a.minor+b.minor, a.patch+b.patch,
-                  a.prerelease+b.prerelease, a.build+b.build,
-                  a.uninstall+b.uninstall)
+                  a.prerelease+b.prerelease, a.build+b.build)
 
 Base.:-(a::VersionWeight) =
     VersionWeight(-a.major, -a.minor, -a.patch,
-                  -a.prerelease, -a.build,
-                  -a.uninstall)
+                  -a.prerelease, -a.build)
 
 function Base.cmp(a::VersionWeight, b::VersionWeight)
     c = cmp(a.major, b.major); c != 0 && return c
     c = cmp(a.minor, b.minor); c != 0 && return c
     c = cmp(a.patch, b.patch); c != 0 && return c
     c = cmp(a.prerelease, b.prerelease); c != 0 && return c
-    c = cmp(a.build, b.build); c != 0 && return c
-    return cmp(a.uninstall, b.uninstall)
+    return cmp(a.build, b.build)
 end
 Base.isless(a::VersionWeight, b::VersionWeight) = cmp(a,b) < 0
-==(a::VersionWeight, b::VersionWeight) = cmp(a,b) == 0
+Base.:(==)(a::VersionWeight, b::VersionWeight) = cmp(a,b) == 0
 
 Base.abs(a::VersionWeight) =
     VersionWeight(abs(a.major), abs(a.minor), abs(a.patch),
-                  abs(a.prerelease), abs(a.build),
-                  abs(a.uninstall))
+                  abs(a.prerelease), abs(a.build))
 
 end

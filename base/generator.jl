@@ -5,11 +5,30 @@
 
 Given a function `f` and an iterator `iter`, construct an iterator that yields
 the values of `f` applied to the elements of `iter`.
-The syntax `f(x) [if cond(x)::Bool] for x in iter` is syntax for constructing an instance of this
+The syntax `f(x) for x in iter [if cond(x)::Bool]` is syntax for constructing an instance of this
 type. The `[if cond(x)::Bool]` expression is optional and acts as a "guard", effectively
 filtering out values where the condition is false.
+
+```jldoctest
+julia> g = (abs2(x) for x in 1:5 if x != 3);
+
+julia> for x in g
+           println(x)
+       end
+1
+4
+16
+25
+
+julia> collect(g)
+4-element Array{Int64,1}:
+  1
+  4
+ 16
+ 25
+```
 """
-immutable Generator{I,F}
+struct Generator{I,F}
     f::F
     iter::I
 end
@@ -29,11 +48,11 @@ end
 
 ## iterator traits
 
-abstract IteratorSize
-immutable SizeUnknown <: IteratorSize end
-immutable HasLength <: IteratorSize end
-immutable HasShape <: IteratorSize end
-immutable IsInfinite <: IteratorSize end
+abstract type IteratorSize end
+struct SizeUnknown <: IteratorSize end
+struct HasLength <: IteratorSize end
+struct HasShape <: IteratorSize end
+struct IsInfinite <: IteratorSize end
 
 """
     iteratorsize(itertype::Type) -> IteratorSize
@@ -43,21 +62,29 @@ Given the type of an iterator, returns one of the following values:
 * `SizeUnknown()` if the length (number of elements) cannot be determined in advance.
 * `HasLength()` if there is a fixed, finite length.
 * `HasShape()` if there is a known length plus a notion of multidimensional shape (as for an array).
-  In this case the `size` function is valid for the iterator.
+   In this case the [`size`](@ref) function is valid for the iterator.
 * `IsInfinite()` if the iterator yields values forever.
 
 The default value (for iterators that do not define this function) is `HasLength()`.
-This means that most iterators are assumed to implement `length`.
+This means that most iterators are assumed to implement [`length`](@ref).
 
 This trait is generally used to select between algorithms that pre-allocate space for their
 result, and algorithms that resize their result incrementally.
+
+```jldoctest
+julia> Base.iteratorsize(1:5)
+Base.HasShape()
+
+julia> Base.iteratorsize((2,3))
+Base.HasLength()
+```
 """
 iteratorsize(x) = iteratorsize(typeof(x))
 iteratorsize(::Type) = HasLength()  # HasLength is the default
 
-abstract IteratorEltype
-immutable EltypeUnknown <: IteratorEltype end
-immutable HasEltype <: IteratorEltype end
+abstract type IteratorEltype end
+struct EltypeUnknown <: IteratorEltype end
+struct HasEltype <: IteratorEltype end
 
 """
     iteratoreltype(itertype::Type) -> IteratorEltype
@@ -65,18 +92,23 @@ immutable HasEltype <: IteratorEltype end
 Given the type of an iterator, returns one of the following values:
 
 * `EltypeUnknown()` if the type of elements yielded by the iterator is not known in advance.
-* `HasEltype()` if the element type is known, and `eltype` would return a meaningful value.
+* `HasEltype()` if the element type is known, and [`eltype`](@ref) would return a meaningful value.
 
-`HasEltype()` is the default, since iterators are assumed to implement `eltype`.
+`HasEltype()` is the default, since iterators are assumed to implement [`eltype`](@ref).
 
 This trait is generally used to select between algorithms that pre-allocate a specific
 type of result, and algorithms that pick a result type based on the types of yielded
 values.
+
+```jldoctest
+julia> Base.iteratoreltype(1:5)
+Base.HasEltype()
+```
 """
 iteratoreltype(x) = iteratoreltype(typeof(x))
 iteratoreltype(::Type) = HasEltype()  # HasEltype is the default
 
-iteratorsize{T<:AbstractArray}(::Type{T}) = HasShape()
+iteratorsize(::Type{<:AbstractArray}) = HasShape()
 iteratorsize{I,F}(::Type{Generator{I,F}}) = iteratorsize(I)
 length(g::Generator) = length(g.iter)
 size(g::Generator) = size(g.iter)

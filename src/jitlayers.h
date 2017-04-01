@@ -11,7 +11,11 @@
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
 #include "llvm/ExecutionEngine/Orc/LambdaResolver.h"
 #include "llvm/ExecutionEngine/Orc/LazyEmittingLayer.h"
-#include "llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h"
+#if JL_LLVM_VERSION >= 50000
+#  include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
+#else
+#  include "llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h"
+#endif
 #include "llvm/ExecutionEngine/ObjectMemoryBuffer.h"
 #elif defined(USE_MCJIT)
 #include <llvm/ExecutionEngine/MCJIT.h>
@@ -36,6 +40,7 @@ extern PassManager *jl_globalPM;
 #if JL_LLVM_VERSION >= 30500
 #include <llvm/Target/TargetMachine.h>
 #endif
+#include "fix_llvm_assert.h"
 
 extern "C" {
     extern int globalUnique;
@@ -164,6 +169,14 @@ typedef JITSymbol JL_SymbolInfo;
 typedef orc::JITSymbol JL_JITSymbol;
 typedef RuntimeDyld::SymbolInfo JL_SymbolInfo;
 #endif
+#if JL_LLVM_VERSION >= 50000
+using orc::RTDyldObjectLinkingLayerBase;
+using orc::RTDyldObjectLinkingLayer;
+#else
+using RTDyldObjectLinkingLayerBase = orc::ObjectLinkingLayerBase;
+template <typename NotifyLoadedFtor>
+using RTDyldObjectLinkingLayer = orc::ObjectLinkingLayer<NotifyLoadedFtor>;
+#endif
 
 class JuliaOJIT {
     // Custom object emission notification handler for the JuliaOJIT
@@ -172,7 +185,7 @@ class JuliaOJIT {
     public:
         DebugObjectRegistrar(JuliaOJIT &JIT);
         template <typename ObjSetT, typename LoadResult>
-        void operator()(orc::ObjectLinkingLayerBase::ObjSetHandleT H, const ObjSetT &Objects,
+        void operator()(RTDyldObjectLinkingLayerBase::ObjSetHandleT H, const ObjSetT &Objects,
                         const LoadResult &LOS);
     private:
         void NotifyGDB(object::OwningBinary<object::ObjectFile> &DebugObj);
@@ -182,7 +195,7 @@ class JuliaOJIT {
     };
 
 public:
-    typedef orc::ObjectLinkingLayer<DebugObjectRegistrar> ObjLayerT;
+    typedef RTDyldObjectLinkingLayer<DebugObjectRegistrar> ObjLayerT;
     typedef orc::IRCompileLayer<ObjLayerT> CompileLayerT;
     typedef CompileLayerT::ModuleSetHandleT ModuleHandleT;
     typedef StringMap<void*> SymbolTableT;

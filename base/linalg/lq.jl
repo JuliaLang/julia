@@ -2,20 +2,20 @@
 
 # LQ Factorizations
 
-immutable LQ{T,S<:AbstractMatrix} <: Factorization{T}
+struct LQ{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     τ::Vector{T}
-    LQ(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
+    LQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
 
-immutable LQPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
+struct LQPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     factors::Matrix{T}
     τ::Vector{T}
-    LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
+    LQPackedQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
 
-LQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = LQ{T,typeof(factors)}(factors, τ)
-LQPackedQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = LQPackedQ{T,typeof(factors)}(factors, τ)
+LQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQ{T,typeof(factors)}(factors, τ)
+LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQPackedQ{T,typeof(factors)}(factors, τ)
 
 """
     lqfact!(A) -> LQ
@@ -23,13 +23,13 @@ LQPackedQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = LQPackedQ{T,typeof(fac
 Compute the LQ factorization of `A`, using the input
 matrix as a workspace. See also [`lq`](@ref).
 """
-lqfact!{T<:BlasFloat}(A::StridedMatrix{T}) = LQ(LAPACK.gelqf!(A)...)
+lqfact!(A::StridedMatrix{<:BlasFloat}) = LQ(LAPACK.gelqf!(A)...)
 """
     lqfact(A) -> LQ
 
 Compute the LQ factorization of `A`. See also [`lq`](@ref).
 """
-lqfact{T<:BlasFloat}(A::StridedMatrix{T})  = lqfact!(copy(A))
+lqfact(A::StridedMatrix{<:BlasFloat})  = lqfact!(copy(A))
 lqfact(x::Number) = lqfact(fill(x,1,1))
 
 """
@@ -48,6 +48,7 @@ end
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
 
 convert{T}(::Type{LQ{T}},A::LQ) = LQ(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
+convert{T}(::Type{Factorization{T}}, A::LQ{T}) = A
 convert{T}(::Type{Factorization{T}}, A::LQ) = convert(LQ{T}, A)
 convert(::Type{AbstractMatrix}, A::LQ) = A[:L]*A[:Q]
 convert(::Type{AbstractArray}, A::LQ) = convert(AbstractMatrix, A)
@@ -77,6 +78,13 @@ function getindex(A::LQPackedQ, i::Integer, j::Integer)
 end
 
 getq(A::LQ) = LQPackedQ(A.factors, A.τ)
+
+function show(io::IO, C::LQ)
+    println(io, "$(typeof(C)) with factors L and Q:")
+    show(io, C[:L])
+    println(io)
+    show(io, C[:Q])
+end
 
 convert{T}(::Type{LQPackedQ{T}}, Q::LQPackedQ) = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
 convert{T}(::Type{AbstractMatrix{T}}, Q::LQPackedQ) = convert(LQPackedQ{T}, Q)

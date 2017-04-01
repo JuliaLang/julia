@@ -2,12 +2,12 @@
 
 include("../perfutil.jl")
 
-abstract List{T}
+abstract type List{T} end
 
-type Nil{T} <: List{T}
+mutable struct Nil{T} <: List{T}
 end
 
-type Cons{T} <: List{T}
+mutable struct Cons{T} <: List{T}
     head::T
     tail::List{T}
 end
@@ -105,7 +105,7 @@ d = randn(len)
 writecsv("random.csv", rand(100000,4))
 
 function parsecsv()
-    for line in EachLine(open("random.csv"))
+    for line in eachline("random.csv")
         split(line, ',')
     end
 end

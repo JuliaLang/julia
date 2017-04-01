@@ -447,7 +447,7 @@ function vecnorm(itr, p::Real=2)
         vecnormp(itr,p)
     end
 end
-@inline vecnorm(x::Number, p::Real=2) = p == 0 ? (x==0 ? zero(abs(x)) : one(abs(x))) : abs(x)
+@inline vecnorm(x::Number, p::Real=2) = p == 0 ? (x==0 ? zero(abs(x)) : oneunit(abs(x))) : abs(x)
 
 norm(x::AbstractVector, p::Real=2) = vecnorm(x, p)
 
@@ -531,7 +531,7 @@ julia> norm(A, Inf)
 6.0
 ```
 """
-function norm{T}(A::AbstractMatrix{T}, p::Real=2)
+function norm(A::AbstractMatrix, p::Real=2)
     if p == 2
         return norm2(A)
     elseif p == 1
@@ -544,6 +544,20 @@ function norm{T}(A::AbstractMatrix{T}, p::Real=2)
 end
 
 @inline norm(x::Number, p::Real=2) = vecnorm(x, p)
+
+@inline norm(tv::RowVector) = norm(transpose(tv))
+
+"""
+    norm(rowvector, [q = 2])
+
+Takes the q-norm of a `RowVector`, which is equivalent to the p-norm with
+value `p = q/(q-1)`. They coincide at `p = q = 2`.
+
+The difference in norm between a vector space and its dual arises to preserve
+the relationship between duality and the inner product, and the result is
+consistent with the p-norm of `1 × n` matrix.
+"""
+@inline norm(tv::RowVector, q::Real) = q == Inf ? norm(transpose(tv), 1) : norm(transpose(tv), q/(q-1))
 
 function vecdot(x::AbstractArray, y::AbstractArray)
     lx = _length(x)
@@ -679,8 +693,6 @@ trace(x::Number) = x
 
 #det(a::AbstractMatrix)
 
-inv(a::StridedMatrix) = throw(ArgumentError("argument must be a square matrix"))
-
 """
     inv(M)
 
@@ -707,8 +719,9 @@ true
 ```
 """
 function inv{T}(A::AbstractMatrix{T})
-    S = typeof(zero(T)/one(T))
-    A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S, checksquare(A)))
+    S = typeof(zero(T)/one(T))      # dimensionful
+    S0 = typeof(zero(T)/oneunit(T)) # dimensionless
+    A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S0, checksquare(A)))
 end
 
 """
@@ -1059,7 +1072,7 @@ function axpy!(α, x::AbstractArray, y::AbstractArray)
     y
 end
 
-function axpy!{Ti<:Integer,Tj<:Integer}(α, x::AbstractArray, rx::AbstractArray{Ti}, y::AbstractArray, ry::AbstractArray{Tj})
+function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractArray, ry::AbstractArray{<:Integer})
     if _length(rx) != _length(ry)
         throw(DimensionMismatch("rx has length $(_length(rx)), but ry has length $(_length(ry))"))
     elseif !checkindex(Bool, linearindices(x), rx)
@@ -1184,15 +1197,45 @@ function logdet(A::AbstractMatrix)
     return d + log(s)
 end
 
+NumberArray{T<:Number} = AbstractArray{T}
+
+"""
+    promote_leaf_eltypes(itr)
+
+For an (possibly nested) iterable object `itr`, promote the types of leaf
+elements.  Equivalent to `promote_type(typeof(leaf1), typeof(leaf2), ...)`.
+Currently supports only numeric leaf elements.
+
+# Example
+
+```jldoctest
+julia> a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
+3-element Array{Any,1}:
+  Any[1,2,[3,4]]
+ 5.0
+  Any[0+6im,[7.0,8.0]]
+
+julia> promote_leaf_eltypes(a)
+Complex{Float64}
+```
+"""
+promote_leaf_eltypes{T<:Number}(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) = T
+promote_leaf_eltypes{T<:NumberArray}(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) = eltype(T)
+promote_leaf_eltypes{T}(x::T) = T
+promote_leaf_eltypes(x::Union{AbstractArray,Tuple}) = mapreduce(promote_leaf_eltypes, promote_type, Bool, x)
+
 # isapprox: approximate equality of arrays [like isapprox(Number,Number)]
-function isapprox{T<:Number,S<:Number}(x::AbstractArray{T}, y::AbstractArray{S};
-        rtol::Real=Base.rtoldefault(T,S), atol::Real=0, norm::Function=vecnorm)
+# Supports nested arrays; e.g., for `a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]`
+# `a ≈ a` is `true`.
+function isapprox(x::AbstractArray, y::AbstractArray;
+    rtol::Real=Base.rtoldefault(promote_leaf_eltypes(x),promote_leaf_eltypes(y)),
+    atol::Real=0, nans::Bool=false, norm::Function=vecnorm)
     d = norm(x - y)
     if isfinite(d)
         return d <= atol + rtol*max(norm(x), norm(y))
     else
         # Fall back to a component-wise approximate comparison
-        return all(ab -> isapprox(ab[1], ab[2]; rtol=rtol, atol=atol), zip(x, y))
+        return all(ab -> isapprox(ab[1], ab[2]; rtol=rtol, atol=atol, nans=nans), zip(x, y))
     end
 end
 

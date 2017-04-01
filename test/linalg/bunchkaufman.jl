@@ -57,7 +57,7 @@ bimg  = randn(n,2)/2
                         @test logabsdet(bc1)[2] ≈ sign(det(bc1))
                     end
                     @test inv(bc1)*asym ≈ eye(n)
-                    @test_approx_eq_eps asym*(bc1\b) b 1000ε
+                    @test asym*(bc1\b) ≈ b atol=1000ε
                     @testset for rook in (false, true)
                         @test inv(bkfact(a.'+a, :U, true, rook))*(a.'+a) ≈ eye(n)
                         @test size(bc1) == size(bc1.LD)
@@ -72,11 +72,11 @@ bimg  = randn(n,2)/2
                 @testset "Bunch-Kaufman factors of a pos-def matrix" begin
                     @testset for rook in (false, true)
                         bc2 = bkfact(apd, :U, issymmetric(apd), rook)
-                        @test_approx_eq logdet(bc2) log(det(bc2))
-                        @test_approx_eq logabsdet(bc2)[1] log(abs(det(bc2)))
+                        @test logdet(bc2) ≈ log(det(bc2))
+                        @test logabsdet(bc2)[1] ≈ log(abs(det(bc2)))
                         @test logabsdet(bc2)[2] == sign(det(bc2))
                         @test inv(bc2)*apd ≈ eye(n)
-                        @test_approx_eq_eps apd * (bc2\b) b 150000ε
+                        @test apd*(bc2\b) ≈ b atol=150000ε
                         @test ishermitian(bc2) == !issymmetric(bc2)
                     end
                 end
@@ -87,8 +87,7 @@ end
 
 
 @testset "Bunch-Kaufman factors of a singular matrix" begin
-    let
-        As1 = ones(n, n)
+    let As1 = ones(n, n)
         As2 = complex(ones(n, n))
         As3 = complex(ones(n, n))
         As3[end, 1] += im

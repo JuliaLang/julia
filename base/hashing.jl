@@ -7,7 +7,7 @@ hash(w::WeakRef, h::UInt) = hash(w.value, h)
 
 ## hashing general objects ##
 
-hash(x::ANY, h::UInt) = 3*object_id(x) - h
+hash(x::ANY, h::UInt) = hash_uint(3h - object_id(x))
 
 ## core data hashing functions ##
 
@@ -55,7 +55,6 @@ end
 
 ## symbol & expression hashing ##
 
-hash(x::Symbol, h::UInt) = 3*object_id(x) - h
 if UInt === UInt64
     hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h + 0x83c7900696d26dc6))
 else

@@ -3,55 +3,63 @@
 # Convert # of Rata Die days to proleptic Gregorian calendar y,m,d,w
 # Reference: http://mysite.verizon.net/aesir_research/date/date0.htm
 function yearmonthday(days)
-    z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4)
-    y = fld(100b+h,36525); c = b + z - 365y - fld(y,4); m = div(5c+456,153)
-    d = c - div(153m-457,5); return m > 12 ? (y+1,m-12,d) : (y,m,d)
+    z = days + 306; h = 100z - 25; a = fld(h, 3652425); b = a - fld(a, 4)
+    y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
+    d = c - div(153m - 457, 5); return m > 12 ? (y + 1, m - 12, d) : (y, m, d)
 end
 function year(days)
-   z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4)
-   y = fld(100b+h,36525); c = b + z - 365y - fld(y,4); m = div(5c+456,153)
-   return m > 12 ? y+1 : y
+   z = days + 306; h = 100z - 25; a = fld(h, 3652425); b = a - fld(a, 4)
+   y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
+   return m > 12 ? y + 1 : y
 end
 function yearmonth(days)
     z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4)
-    y = fld(100b+h,36525); c = b + z - 365y - fld(y,4); m = div(5c+456,153)
-    return m > 12 ? (y+1,m-12) : (y,m)
+    y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
+    return m > 12 ? (y + 1, m - 12) : (y, m)
 end
 function month(days)
     z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4)
-    y = fld(100b+h,36525); c = b + z - 365y - fld(y,4); m = div(5c+456,153)
-    return m > 12 ? m-12 : m
+    y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
+    return m > 12 ? m - 12 : m
 end
 function monthday(days)
     z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4)
-    y = fld(100b+h,36525); c = b + z - 365y - fld(y,4); m = div(5c+456,153)
-    d = c - div(153m-457,5); return m > 12 ? (m-12,d) : (m,d)
+    y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
+    d = c - div(153m - 457, 5); return m > 12 ? (m - 12, d) : (m, d)
 end
 function day(days)
     z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4)
-    y = fld(100b+h,36525); c = b + z - 365y - fld(y,4); m = div(5c+456,153)
-    return c - div(153m-457,5)
+    y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
+    return c - div(153m - 457, 5)
 end
 # https://en.wikipedia.org/wiki/Talk:ISO_week_date#Algorithms
+const WEEK_INDEX = (15, 23, 3, 11)
 function week(days)
-    w = div(abs(days-1),7) % 20871
-    c,w = divrem((w + (w >= 10435)),5218)
-    w = (w*28+[15,23,3,11][c+1]) % 1461
-    return div(w,28) + 1
+    w = div(abs(days - 1), 7) % 20871
+    c, w = divrem((w + (w >= 10435)), 5218)
+    w = (w * 28 + WEEK_INDEX[c + 1]) % 1461
+    return div(w, 28) + 1
 end
 
 # Accessor functions
 value(dt::TimeType) = dt.instant.periods.value
+value(t::Time) = t.instant.value
 days(dt::Date) = value(dt)
-days(dt::DateTime) = fld(value(dt),86400000)
+days(dt::DateTime) = fld(value(dt), 86400000)
 year(dt::TimeType) = year(days(dt))
 month(dt::TimeType) = month(days(dt))
 week(dt::TimeType) = week(days(dt))
 day(dt::TimeType) = day(days(dt))
-hour(dt::DateTime)   = mod(fld(value(dt),3600000),24)
-minute(dt::DateTime) = mod(fld(value(dt),60000),60)
-second(dt::DateTime) = mod(fld(value(dt),1000),60)
-millisecond(dt::DateTime) = mod(value(dt),1000)
+hour(dt::DateTime)   = mod(fld(value(dt), 3600000), 24)
+minute(dt::DateTime) = mod(fld(value(dt), 60000), 60)
+second(dt::DateTime) = mod(fld(value(dt), 1000), 60)
+millisecond(dt::DateTime) = mod(value(dt), 1000)
+hour(t::Time)   = mod(fld(value(t), 3600000000000), Int64(24))
+minute(t::Time) = mod(fld(value(t), 60000000000), Int64(60))
+second(t::Time) = mod(fld(value(t), 1000000000), Int64(60))
+millisecond(t::Time) = mod(fld(value(t), Int64(1000000)), Int64(1000))
+microsecond(t::Time) = mod(fld(value(t), Int64(1000)), Int64(1000))
+nanosecond(t::Time) = mod(value(t), Int64(1000))
 
 dayofmonth(dt::TimeType) = day(dt)
 
@@ -120,5 +128,16 @@ for parts in (["year", "month"], ["month", "day"], ["year", "month", "day"])
         Simultaneously return the $(join($parts, ", ", " and ")) parts of a `Date` or
         `DateTime`.
         """ $func(dt::TimeType)
+    end
+end
+
+for func in (:hour, :minute, :second, :millisecond, :microsecond, :nanosecond)
+    name = string(func)
+    @eval begin
+        @doc """
+            $($name)(t::Time) -> Int64
+
+        The $($name) of a `Time` as an `Int64`.
+        """ $func(t::Time)
     end
 end
