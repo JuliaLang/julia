@@ -220,7 +220,7 @@ end
 ## srand()
 
 """
-    srand([rng=GLOBAL_RNG], [seed])
+    srand([rng=GLOBAL_RNG], [seed]) -> rng
 
 Reseed the random number generator. If a `seed` is provided, the RNG will give a
 reproducible sequence of numbers, otherwise Julia will get entropy from the system. For
