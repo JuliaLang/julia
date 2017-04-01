@@ -201,3 +201,9 @@ end
 @test unsafe_trunc(Int8, -127) === Int8(-127)
 @test unsafe_trunc(Int8, -128) === Int8(-128)
 @test unsafe_trunc(Int8, -129) === Int8(127)
+
+# Test x % T returns a T
+for T in [Base.BitInteger_types..., BigInt],
+    U in [Base.BitInteger_types..., BigInt]
+    @test typeof(rand(U(0):U(127)) % T) === T
+end
