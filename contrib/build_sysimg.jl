@@ -1,9 +1,17 @@
 #!/usr/bin/env julia
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# Build a system image binary at sysimg_path.dlext. Allow insertion of a userimg via
-# userimg_path.  If sysimg_path.dlext is currently loaded into memory, don't continue
-# unless force is set to true.  Allow targeting of a CPU architecture via cpu_target.
+"""
+    BuildSysImg
+
+Build a system image binary at sysimg_path.dlext. Allow insertion of a userimg via
+userimg_path.  If sysimg_path.dlext is currently loaded into memory, don't continue
+unless force is set to true.  Allow targeting of a CPU architecture via cpu_target.
+"""
+module BuildSysImg
+
+export build_sysimg
+
 function default_sysimg_path(debug=false)
     if is_unix()
         splitext(Libdl.dlpath(debug ? "sys-debug" : "sys"))[1]
@@ -196,3 +204,5 @@ if !isdefined(Main, :GenStdLib) && !isinteractive()
     filter!(x -> x != "--force", ARGS)
     build_sysimg(ARGS...; force=force_flag, debug=debug_flag)
 end
+
+end # module
