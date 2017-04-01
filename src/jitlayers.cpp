@@ -245,7 +245,6 @@ void addOptimizationPasses(PassManager *PM)
         PM->add(createEarlyCSEPass(true));
         PM->add(createInstructionCombiningPass());
         PM->add(createDeadStoreEliminationPass());  // Delete dead stores
-        PM->add(createSimpleLoopUnrollPass());     // Unroll small loops
         PM->add(createNewGVNPass());       
         PM->add(createDeadStoreEliminationPass());  // Delete dead stores
         PM->add(createGVNPass());                  // Remove redundancies
@@ -256,8 +255,13 @@ void addOptimizationPasses(PassManager *PM)
         PM->add(createInstructionCombiningPass());
         PM->add(createNewGVNPass());       
         PM->add(createDeadStoreEliminationPass());  // Delete dead stores        
-        //PM->add(createSLPVectorizerPass());     // Vectorize straight-line code
-	      //PM->add(createSLPVectorizerPass());     // Vectorize straight-line code - again
+        PM->add(createSLPVectorizerPass());     // Vectorize straight-line code
+	      PM->add(createSLPVectorizerPass());     // Vectorize straight-line code - again
+        PM->add(createInstructionCombiningPass());   // Clean up after SLP loop vectorizer
+        PM->add(createLoadStoreVectorizerPass());
+        // This pass is EXTREMELY expensive. Even with -O3, only run it if requested
+        PM->add(createHotSpotBBVectorizePass());
+        PM->add(createInstructionCombiningPass()); // Clean up after BB Vectorize        
     }
 #endif
 

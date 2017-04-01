@@ -155,6 +155,10 @@ macro pure(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
 end
 
+macro hotspot(ex)
+    esc(isa(ex, Expr) ? pushmeta!(ex, :hotspot) : ex)
+end
+
 """
     @propagate_inbounds
 

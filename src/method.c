@@ -134,6 +134,8 @@ static void jl_code_info_set_ast(jl_code_info_t *li, jl_expr_t *ast)
                 jl_value_t *ma = jl_array_ptr_ref(meta, k);
                 if (ma == (jl_value_t*)pure_sym)
                     li->pure = 1;
+                else if (ma == (jl_value_t*)hotspot_sym)
+                    li->hotspot = 1;
                 else if (ma == (jl_value_t*)inline_sym)
                     li->inlineable = 1;
                 else if (ma == (jl_value_t*)propagate_inbounds_sym)
@@ -219,6 +221,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->ssavaluetypes = NULL;
     src->inferred = 0;
     src->pure = 0;
+    src->hotspot = 0;
     src->inlineable = 0;
     src->propagate_inbounds = 0;
     return src;

@@ -5253,6 +5253,9 @@ static std::unique_ptr<Module> emit_function(
 #if JL_LLVM_VERSION >= 30700
     f->addFnAttr("no-frame-pointer-elim", "true");
 #endif
+    if (src->hotspot) {
+        f->addFnAttr("hotspot", "true");
+    }
     if (jlrettype == (jl_value_t*)jl_bottom_type)
         f->setDoesNotReturn();
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
@@ -7257,6 +7260,7 @@ extern "C" void jl_init_codegen(void)
     // turn on JIT support for libunwind to walk the stack
     options.JITExceptionHandling = 1;
 #endif
+    options.AllowFPOpFusion = FPOpFusion::Fast;
 
 #if JL_LLVM_VERSION >= 30600
     EngineBuilder eb((std::unique_ptr<Module>(engine_module)));

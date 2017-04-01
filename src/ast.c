@@ -57,7 +57,7 @@ jl_sym_t *unused_sym; jl_sym_t *static_parameter_sym;
 jl_sym_t *polly_sym; jl_sym_t *inline_sym;
 jl_sym_t *propagate_inbounds_sym;
 jl_sym_t *aliasscope_sym; jl_sym_t *popaliasscope_sym;
-jl_sym_t *unrollloop_sym;
+jl_sym_t *unrollloop_sym; jl_sym_t *hotspot_sym;
 
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -405,6 +405,7 @@ void jl_init_frontend(void)
     simdloop_sym = jl_symbol("simdloop");
     unrollloop_sym = jl_symbol("unrollloop");
     pure_sym = jl_symbol("pure");
+    hotspot_sym = jl_symbol("hotspot");
     meta_sym = jl_symbol("meta");
     dots_sym = jl_symbol("...");
     list_sym = jl_symbol("list");
