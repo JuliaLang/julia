@@ -479,3 +479,18 @@ let seed = rand(UInt32, 10)
     resize!(seed, 4)
     @test r.seed != seed
 end
+
+# srand(rng, ...) returns rng (#21248)
+let g = Base.Random.GLOBAL_RNG,
+    m = MersenneTwister(0)
+    @test srand() === g
+    @test srand(rand(UInt)) === g
+    @test srand(rand(UInt32, rand(1:10))) === g
+    @test srand(@__FILE__) === g
+    @test srand(@__FILE__, rand(1:10)) === g
+    @test srand(m) === m
+    @test srand(m, rand(UInt)) === m
+    @test srand(m, rand(UInt32, rand(1:10))) === m
+    @test srand(m, rand(1:10)) === m
+    @test srand(m, @__FILE__, rand(1:10)) === m
+end
