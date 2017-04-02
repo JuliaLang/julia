@@ -383,6 +383,8 @@ julia> collect(1:2:13)
 """
 collect(itr) = _collect(1:1 #= Array =#, itr, iteratoreltype(itr), iteratorsize(itr))
 
+collect(A::AbstractArray) = _collect_indices(indices(A), A)
+
 collect_similar(cont, itr) = _collect(cont, itr, iteratoreltype(itr), iteratorsize(itr))
 
 _collect(cont, itr, ::HasEltype, isz::Union{HasLength,HasShape}) =
@@ -394,6 +396,14 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
         push!(a,x)
     end
     return a
+end
+
+_collect_indices(::Tuple{}, A) = copy!(Array{eltype(A)}(), A)
+_collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
+    copy!(Array{eltype(A)}(length.(indsA)), A)
+function _collect_indices(indsA, A)
+    B = Array{eltype(A)}(length.(indsA))
+    copy!(B, CartesianRange(indices(B)), A, CartesianRange(indsA))
 end
 
 if isdefined(Core, :Inference)
