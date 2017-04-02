@@ -10,6 +10,7 @@ using Documenter
 # Include the `build_sysimg` file.
 
 baremodule GenStdLib end
+isdefined(:build_sysimg) || include(joinpath(@__DIR__, "..", "contrib", "build_sysimg.jl"))
 
 # Documenter Setup.
 
