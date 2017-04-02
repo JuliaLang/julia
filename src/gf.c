@@ -259,9 +259,11 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t **pli, size_t world, int forc
         fargs[1] = (jl_value_t*)li;
         fargs[2] = jl_box_ulong(world);
 #ifdef TRACE_INFERENCE
-        jl_printf(JL_STDERR,"inference on ");
-        jl_static_show_func_sig(JL_STDERR, (jl_value_t*)li->specTypes);
-        jl_printf(JL_STDERR, "\n");
+        if (li->specTypes != (jl_value_t*)jl_emptytuple_type) {
+            jl_printf(JL_STDERR,"inference on ");
+            jl_static_show_func_sig(JL_STDERR, (jl_value_t*)li->specTypes);
+            jl_printf(JL_STDERR, "\n");
+        }
 #endif
         jl_get_ptls_states()->world_age = jl_typeinf_world;
         jl_svec_t *linfo_src_rettype = (jl_svec_t*)jl_apply(fargs, 3);
@@ -1041,6 +1043,13 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype
         JL_GC_POP();
         return NULL;
     }
+#ifdef TRACE_COMPILE
+    if (!jl_has_free_typevars((jl_value_t*)tt)) {
+        jl_printf(JL_STDERR, "precompile(");
+        jl_static_show(JL_STDERR, (jl_value_t*)tt);
+        jl_printf(JL_STDERR, ")\n");
+    }
+#endif
     sig = join_tsig(tt, entry->sig);
     jl_method_instance_t *nf;
     if (!cache) {

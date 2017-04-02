@@ -57,6 +57,14 @@ end
     @test sig3.email == sig.email
 end
 
+@testset "Default config" begin
+    #for now just see that this works
+    cfg = LibGit2.GitConfig()
+    @test isa(cfg, LibGit2.GitConfig)
+    LibGit2.set!(cfg, "fake.property", "AAAA")
+    LibGit2.getconfig("fake.property", "") == "AAAA"
+end
+
 @testset "Git URL parsing" begin
     @testset "HTTPS URL" begin
         m = match(LibGit2.URL_REGEX, "https://user:pass@server.com:80/org/project.git")
@@ -199,12 +207,31 @@ mktempdir() do dir
                 @test isa(remote, LibGit2.GitRemote)
                 @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: $repo_url"
                 @test LibGit2.isattached(repo)
+                LibGit2.set_remote_url(repo, "", remote="upstream")
+                remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
+                @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: "
+                close(remote)
+                LibGit2.set_remote_url(cache_repo, repo_url, remote="upstream")
+                remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
+                @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: $repo_url"
+                LibGit2.add_fetch!(repo, remote, "upstream")
+                @test LibGit2.fetch_refspecs(remote) == String["+refs/heads/*:refs/remotes/upstream/*"]
+                LibGit2.add_push!(repo, remote, "refs/heads/master")
+                close(remote)
+                remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
+                @test LibGit2.push_refspecs(remote) == String["refs/heads/master"]
+                close(remote)
+                # constructor with a refspec
+                remote = LibGit2.GitRemote(repo, "upstream2", repo_url, "upstream")
+                @test sprint(show, remote) == "GitRemote:\nRemote name: upstream2 url: $repo_url"
+                @test LibGit2.fetch_refspecs(remote) == String["upstream"]
                 close(remote)
 
                 remote = LibGit2.GitRemoteAnon(repo, repo_url)
                 @test LibGit2.url(remote) == repo_url
                 @test LibGit2.name(remote) == ""
                 @test isa(remote, LibGit2.GitRemote)
+                close(remote)
             finally
                 close(repo)
             end
@@ -318,11 +345,13 @@ mktempdir() do dir
                 end
                 @test LibGit2.is_ancestor_of(string(commit_oid1), string(commit_oid2), repo)
                 @test LibGit2.iscommit(string(commit_oid1), repo)
+                @test !LibGit2.iscommit(string(commit_oid1)*"fake", repo)
                 @test LibGit2.iscommit(string(commit_oid2), repo)
 
                 # lookup commits
                 cmt = LibGit2.GitCommit(repo, commit_oid1)
                 try
+                    @test LibGit2.Consts.OBJECT(typeof(cmt)) == LibGit2.Consts.OBJ_COMMIT
                     @test commit_oid1 == LibGit2.GitHash(cmt)
                     short_oid1 = LibGit2.GitShortHash(string(commit_oid1))
                     @test hex(commit_oid1) == hex(short_oid1)
@@ -420,6 +449,8 @@ mktempdir() do dir
                     sig = LibGit2.Signature(repo)
                     @test sig.name == "AAAA"
                     @test sig.email == "BBBB@BBBB.COM"
+                    @test LibGit2.getconfig(repo, "user.name", "") == "AAAA"
+                    @test LibGit2.getconfig(cache_repo, "user.name", "") == "AAAA"
                 end
             finally
                 close(repo)
@@ -520,12 +551,14 @@ mktempdir() do dir
                 tree = LibGit2.GitTree(repo, "HEAD^{tree}")
                 @test isa(tree, LibGit2.GitTree)
                 @test isa(LibGit2.GitObject(repo, "HEAD^{tree}"), LibGit2.GitTree)
+                @test LibGit2.Consts.OBJECT(typeof(tree)) == LibGit2.Consts.OBJ_TREE
                 @test count(tree) == 1
                 tree_str = sprint(show, tree)
                 @test tree_str == "GitTree:\nOwner: $(LibGit2.repository(tree))\nNumber of entries: 1\n"
                 @test_throws BoundsError tree[0]
                 @test_throws BoundsError tree[2]
                 tree_entry = tree[1]
+                @test LibGit2.filemode(tree_entry) == 33188
                 te_str = sprint(show, tree_entry)
                 @test te_str == "GitTreeEntry:\nEntry name: testfile\nEntry type: Base.LibGit2.GitBlob\nEntry OID: $(LibGit2.entryid(tree_entry))\n"
                 blob = LibGit2.GitBlob(tree_entry)
@@ -594,6 +627,83 @@ mktempdir() do dir
             finally
                 close(repo)
             end
+        end
+    end
+
+    # TO DO: add more tests for various merge
+    # preference options
+    @testset "Fastforward merges" begin
+        path = joinpath(dir, "Example.FF")
+        repo = LibGit2.clone(cache_repo, path)
+        # need to set this for merges to succeed
+        cfg = LibGit2.GitConfig(repo)
+        LibGit2.set!(cfg, "user.name", "AAAA")
+        LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
+        try
+            oldhead = LibGit2.head_oid(repo)
+            LibGit2.branch!(repo, "branch/ff_a")
+            open(joinpath(LibGit2.path(repo),"ff_file1"),"w") do f
+                write(f, "111\n")
+            end
+            LibGit2.add!(repo, "ff_file1")
+            LibGit2.commit(repo, "add ff_file1")
+
+            open(joinpath(LibGit2.path(repo),"ff_file2"),"w") do f
+                write(f, "222\n")
+            end
+            LibGit2.add!(repo, "ff_file2")
+            LibGit2.commit(repo, "add ff_file2")
+            LibGit2.branch!(repo, "master")
+            # switch back, now try to ff-merge the changes
+            # from branch/a
+
+            upst_ann = LibGit2.GitAnnotated(repo, "branch/ff_a")
+            head_ann = LibGit2.GitAnnotated(repo, "master")
+
+            # ff merge them
+            @test LibGit2.merge!(repo, [upst_ann], true)
+            @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
+        finally
+            close(repo)
+        end
+    end
+
+    @testset "Merges" begin
+        path = joinpath(dir, "Example.Merge")
+        repo = LibGit2.clone(cache_repo, path)
+        # need to set this for merges to succeed
+        cfg = LibGit2.GitConfig(repo)
+        LibGit2.set!(cfg, "user.name", "AAAA")
+        LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
+        try
+            oldhead = LibGit2.head_oid(repo)
+            LibGit2.branch!(repo, "branch/merge_a")
+            open(joinpath(LibGit2.path(repo),"file1"),"w") do f
+                write(f, "111\n")
+            end
+            LibGit2.add!(repo, "file1")
+            LibGit2.commit(repo, "add file1")
+
+            # switch back, add a commit, try to merge
+            # from branch/merge_a
+            LibGit2.branch!(repo, "master")
+
+            open(joinpath(LibGit2.path(repo), "file2"), "w") do f
+                write(f, "222\n")
+            end
+            LibGit2.add!(repo, "file2")
+            LibGit2.commit(repo, "add file2")
+
+            upst_ann = LibGit2.GitAnnotated(repo, "branch/merge_a")
+            head_ann = LibGit2.GitAnnotated(repo, "master")
+
+            # (fail to) merge them because we can't fastforward
+            @test !LibGit2.merge!(repo, [upst_ann], true)
+            # merge them now that we allow non-ff
+            @test LibGit2.merge!(repo, [upst_ann], false)
+            @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
+        finally
+            close(repo)
         end
     end
 
@@ -720,6 +830,7 @@ mktempdir() do dir
                 @test idx_entry !== nothing
                 idx_entry_str = sprint(show, idx_entry)
                 @test idx_entry_str == "IndexEntry($(string(idx_entry.id)))"
+                @test LibGit2.stage(idx_entry) == 0
 
                 i = find("zzz", idx)
                 @test isnull(i)
@@ -866,6 +977,25 @@ mktempdir() do dir
             @test rbo_str == "RebaseOperation($(string(rbo.id)))\nOperation type: REBASE_OPERATION_PICK\n"
             rb_str = sprint(show, rb)
             @test rb_str == "GitRebase:\nNumber: 2\nCurrently performing operation: 1\n"
+        finally
+            close(repo)
+        end
+    end
+
+    @testset "merge" begin
+        repo = LibGit2.GitRepo(test_repo)
+        try
+            LibGit2.branch!(repo, "branch/merge_a")
+
+            a_head = LibGit2.head_oid(repo)
+            open(joinpath(LibGit2.path(repo),"merge_file1"),"w") do f
+                write(f, "111\n")
+            end
+            LibGit2.add!(repo, "merge_file1")
+            LibGit2.commit(repo, "add merge_file1")
+
+            a_head_ann = LibGit2.GitAnnotated(repo, "branch/a")
+            @test LibGit2.merge!(repo, [a_head_ann]) #merge returns true if successful
         finally
             close(repo)
         end

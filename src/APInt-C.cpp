@@ -352,7 +352,11 @@ void LLVMFPtoInt(unsigned numbits, integerPart *pa, unsigned onumbits, integerPa
         APFloat::roundingMode rounding_mode = APFloat::rmNearestTiesToEven;
         unsigned nbytes = RoundUpToAlignment(onumbits, integerPartWidth) / host_char_bit;
         integerPart *parts = (integerPart*)alloca(nbytes);
+#if JL_LLVM_VERSION >= 50000
+        APFloat::opStatus status = a.convertToInteger(MutableArrayRef<integerPart>(parts, nbytes), onumbits, isSigned, rounding_mode, &isVeryExact);
+#else
         APFloat::opStatus status = a.convertToInteger(parts, onumbits, isSigned, rounding_mode, &isVeryExact);
+#endif
         memcpy(pr, parts, onumbytes);
         if (isExact)
             *isExact = (status == APFloat::opOK);

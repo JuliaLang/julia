@@ -246,6 +246,8 @@ end
     end
 end
 @test exp10(5) ≈ exp10(5.0)
+@test exp10(50//10) ≈ exp10(5.0)
+@test log10(exp10(e)) ≈ e
 @test exp2(Float16(2.)) ≈ exp2(2.)
 @test log(e) == 1
 
