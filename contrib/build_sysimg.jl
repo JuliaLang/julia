@@ -178,9 +178,9 @@ end
 # When running this file as a script, try to do so with default values.  If arguments are passed
 # in, use them as the arguments to build_sysimg above.
 #
-# Also check whether we are running `genstdlib.jl`, in which case we don't want to build a
+# Also check whether we are running `make.jl`, in which case we don't want to build a
 # system image and instead only need `build_sysimg`'s docstring to be available.
-if !isinteractive()
+if !isdefined(Main, :GenStdLib) && !isinteractive()
     if length(ARGS) > 5 || ("--help" in ARGS || "-h" in ARGS)
         println("Usage: build_sysimg.jl <sysimg_path> <cpu_target> <usrimg_path.jl> [--force] [--debug] [--help]")
         println("   <sysimg_path>    is an absolute, extensionless path to store the system image at")
