@@ -7011,7 +7011,7 @@ static void init_julia_llvm_env(Module *m)
 #if JL_LLVM_VERSION < 30700
     jl_globalPM->add(jl_data_layout);
 #endif
-    addOptimizationPasses(jl_globalPM);
+    addOptimizationPasses(jl_globalPM, jl_TargetMachine);
 }
 
 static inline std::string getNativeTarget()

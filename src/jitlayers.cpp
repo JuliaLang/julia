@@ -107,9 +107,9 @@ void jl_init_jit(Type *T_pjlvalue_)
 
 // this defines the set of optimization passes defined for Julia at various optimization levels
 #if JL_LLVM_VERSION >= 30700
-void addOptimizationPasses(legacy::PassManager *PM)
+void addOptimizationPasses(legacy::PassManager *PM, llvm::TargetMachine *TM)
 #else
-void addOptimizationPasses(PassManager *PM)
+void addOptimizationPasses(PassManager *PM, llvm::TargetMachine *TM)
 #endif
 {
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
@@ -133,9 +133,9 @@ void addOptimizationPasses(PassManager *PM)
         return;
     }
 #if JL_LLVM_VERSION >= 30700
-    PM->add(createTargetTransformInfoWrapperPass(jl_TargetMachine->getTargetIRAnalysis()));
+    PM->add(createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
 #else
-    jl_TargetMachine->addAnalysisPasses(*PM);
+    TM->addAnalysisPasses(*PM);
 #endif
     PM->add(createScopedNoAliasAAWrapperPass());
 #if JL_LLVM_VERSION >= 30800
@@ -498,7 +498,7 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
         )
 {
     if (!jl_generating_output()) {
-        addOptimizationPasses(&PM);
+        addOptimizationPasses(&PM, jl_TargetMachine);
     }
     else {
         PM.add(createLowerGCFramePass());
@@ -1232,7 +1232,7 @@ void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sys
     PM.add(new DataLayout(*jl_ExecutionEngine->getDataLayout()));
 #endif
 
-    addOptimizationPasses(&PM);
+    addOptimizationPasses(&PM, TM.get());
 
     std::unique_ptr<raw_fd_ostream> bc_OS;
     std::unique_ptr<raw_fd_ostream> obj_OS;

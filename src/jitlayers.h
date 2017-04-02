@@ -60,9 +60,9 @@ extern size_t jltls_states_func_idx;
 typedef struct {Value *gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
 
 #if JL_LLVM_VERSION >= 30700
-void addOptimizationPasses(legacy::PassManager *PM);
+void addOptimizationPasses(legacy::PassManager *PM, llvm::TargetMachine *TM);
 #else
-void addOptimizationPasses(PassManager *PM);
+void addOptimizationPasses(PassManager *PM, llvm::TargetMachine *TM);
 #endif
 void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit = NULL);
 GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *name,
