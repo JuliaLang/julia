@@ -251,14 +251,6 @@ for (fname, felt) in ((:zeros,:zero), (:ones,:one))
         $fname(dims::Tuple) = ($fname)(Float64, dims)
         $fname(T::Type, dims...) = $fname(T, dims)
         $fname(dims...) = $fname(dims)
-
-        # #19635
-        function ($fname){T}(::Type{T}, arr::Array{T})
-            msg = string("`", $fname, "{T}(::Type{T}, arr::Array{T})` is deprecated, use ",
-                                "`", $fname , "(T, size(arr))` instead. ",
-                               )
-            error(msg)
-        end
     end
 end
 

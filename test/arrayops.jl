@@ -2055,7 +2055,7 @@ end
     test_zeros(zs, SparseMatrixCSC{Complex{Float64}}, (2, 3))
 
     # #19265"
-    @test_throws ErrorException zeros(Float64, [1.])
+    @test_throws ErrorException zeros(Float64, [1.]) # TODO change to MethodError, when v0.6 deprecations are done
     x = [1.]
     test_zeros(zeros(x, Float64), Vector{Float64}, (1,))
     @test x == [1.]
