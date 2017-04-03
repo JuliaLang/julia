@@ -1587,8 +1587,33 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapp
     builder.SetCurrentDebugLocation(olddl);
     nested_compile = last_n_c;
 
-    if (optimize)
-        jl_globalPM->run(*m.get());
+    if (optimize) {
+        if (params.target != NULL) {
+          Triple TheTriple = Triple(jl_TargetMachine->getTargetTriple());
+          std::unique_ptr<TargetMachine> 
+          TM(jl_TargetMachine->getTarget().createTargetMachine(
+              TheTriple.getTriple(),
+              StringRef(params.target), "",
+              jl_TargetMachine->Options,
+          #if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+              Reloc::PIC_,
+          #elif JL_LLVM_VERSION >= 30900
+              Optional<Reloc::Model>(),
+          #else
+              Reloc::Default,
+          #endif
+              CodeModel::Default,
+              CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
+              ));
+            // Generate LLVM IR for a different target
+            legacy::PassManager PM;
+            PM.add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
+            addOptimizationPasses(&PM, TM.get());
+            PM.run(*m.get());
+        } else {
+            jl_globalPM->run(*m.get());
+        }
+    }
     Function *f = (llvm::Function*)declarations.functionObject;
     Function *specf = (llvm::Function*)declarations.specFunctionObject;
     // swap declarations for definitions and destroy declarations
@@ -2954,6 +2979,33 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                         JL_GC_POP();
                         return true;
                     }
+                }
+            }
+        } else {
+            jl_value_t *utt = jl_unwrap_unionall((jl_value_t*)stt);
+            if (jl_is_tuple_type(utt) && is_tupletype_homogeneous(((jl_datatype_t*)utt)->types, true)) {
+                // For tuples, we can emit code even if we don't know the exact
+                // type (e.g. because we don't know the length). So long as all
+                // elements are the same and a leaf type.
+                jl_cgval_t strct = emit_expr(args[1], ctx);
+                if (strct.ispointer()) {
+                    // Determine which was the type that was homogenous
+                    jl_value_t *jt = jl_tparam0(utt);
+                    if (jl_is_vararg_type(jt))
+                        jt = jl_unwrap_vararg(jt);
+                    Value *vidx = emit_unbox(T_size, emit_expr(args[2], ctx), (jl_value_t*)jl_long_type);
+                    // This is not necessary for correctness, but allows to omit
+                    // the extra code for getting the length of the tuple
+                    if (!bounds_check_enabled(ctx)) {
+                        vidx = builder.CreateSub(vidx, ConstantInt::get(T_size, 1));
+                    } else {
+                        vidx = emit_bounds_check(strct, (jl_value_t*)stt, vidx,
+                            emit_datatype_nfields(emit_typeof(strct, ctx).V), ctx);
+                    }
+                    Value *ptr = data_pointer(strct, ctx);
+                    *ret = typed_load(ptr, vidx, jt, ctx, strct.tbaa, nullptr, nullptr, false);
+                    JL_GC_POP();
+                    return true;
                 }
             }
         }

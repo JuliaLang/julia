@@ -404,7 +404,7 @@ function gen_call_with_extracted_types(fcn, ex0)
 end
 
 for fname in [:which, :less, :edit, :functionloc, :code_warntype,
-              :code_llvm, :code_llvm_raw, :code_native]
+              :code_llvm, :code_llvm_raw, :code_native, :code_llvm_knl]
     @eval begin
         macro ($fname)(ex0)
             gen_call_with_extracted_types($(Expr(:quote,fname)), ex0)

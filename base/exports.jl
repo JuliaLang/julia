@@ -1007,6 +1007,7 @@ export
     code_warntype,
     code_lowered,
     code_llvm,
+    code_llvm_knl,
     code_native,
     fullname,
     functionloc,
@@ -1284,6 +1285,7 @@ export
     @code_warntype,
     @code_lowered,
     @code_llvm,
+    @code_llvm_knl,
     @code_native,
 
     # platform-conditional code

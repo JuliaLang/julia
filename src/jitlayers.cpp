@@ -213,7 +213,11 @@ void addOptimizationPasses(PassManager *PM, llvm::TargetMachine *TM)
       PM->add(createInstructionCombiningPass()); // Clean up after the unroller
 #endif
       PM->add(createGVNPass());                  // Remove redundancies
-      PM->add(createSimpleLoopUnrollPass());     // Unroll small loops    
+      PM->add(createSimpleLoopUnrollPass());     // Unroll small loops
+      // Try to LICM anything that is now loop invariant (e.g. because we unrollted
+      // an unner loop)
+      PM->add(createLICMPass());                 // Hoist loop invariants      
+      PM->add(createInstructionCombiningPass()); // Clean up after the unroller      
     }
 #else
     PM->add(createLoopUnrollPass());           // Unroll small loops

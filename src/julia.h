@@ -1823,6 +1823,9 @@ typedef struct {
     int static_alloc;       // is the compiler allowed to allocate statically?
     int dynamic_alloc;      // is the compiler allowed to allocate dynamically (requires runtime)?
 
+    // Compiler options
+    char *target;           // NULL is native
+
     jl_cghooks_t hooks;
 } jl_cgparams_t;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;

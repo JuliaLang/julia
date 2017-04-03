@@ -670,18 +670,21 @@ struct CodegenParams
     static_alloc::Cint
     dynamic_alloc::Cint
 
-    hooks::CodegenHooks
+    target::Ptr{UInt8}
+
+    hooks::CodegenHooks    
 
     CodegenParams(;cached::Bool=true,
                    runtime::Bool=true, exceptions::Bool=true,
                    track_allocations::Bool=true, code_coverage::Bool=true,
                    static_alloc::Bool=true, dynamic_alloc::Bool=true,
+                   target::Ptr{UInt8}=C_NULL,
                    hooks::CodegenHooks=CodegenHooks()) =
         new(Cint(cached),
             Cint(runtime), Cint(exceptions),
             Cint(track_allocations), Cint(code_coverage),
             Cint(static_alloc), Cint(dynamic_alloc),
-            hooks)
+            target, hooks)
 end
 
 # Printing code representations in IR and assembly
@@ -745,6 +748,10 @@ code_llvm(io::IO, f::ANY, types::ANY=Tuple, strip_ir_metadata=true, dump_module=
     print(io, _dump_function(f, types, false, false, strip_ir_metadata, dump_module))
 code_llvm(f::ANY, types::ANY=Tuple) = code_llvm(STDOUT, f, types)
 code_llvm_raw(f::ANY, types::ANY=Tuple) = code_llvm(STDOUT, f, types, false)
+
+code_llvm_knl(io::IO, f::ANY, types::ANY=Tuple, strip_ir_metadata=true, dump_module=false) =
+    print(io, _dump_function(f, types, false, false, strip_ir_metadata, dump_module, :att, true, CodegenParams(target = pointer("knl"))))
+code_llvm_knl(f::ANY, types::ANY=Tuple) = code_llvm_knl(STDOUT, f, types)
 
 """
     code_native([io], f, types, [syntax])
