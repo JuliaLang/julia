@@ -265,7 +265,9 @@ void addOptimizationPasses(PassManager *PM, llvm::TargetMachine *TM)
         PM->add(createLoadStoreVectorizerPass());
         // This pass is EXTREMELY expensive. Even with -O3, only run it if requested
         PM->add(createHotSpotBBVectorizePass());
-        PM->add(createInstructionCombiningPass()); // Clean up after BB Vectorize        
+        PM->add(createInstructionCombiningPass()); // Clean up after BB Vectorize
+        PM->add(createLICMPass());
+        PM->add(createGVNPass());
     }
 #endif
 
