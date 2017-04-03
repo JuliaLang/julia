@@ -1061,3 +1061,7 @@ end
 @test isa(f21054, Function)
 g21054(>:) = >:2
 @test g21054(-) == -2
+
+# issue #21168
+@test expand(:(a.[1])) == Expr(:error, "invalid syntax a.[1]")
+@test expand(:(a.{1})) == Expr(:error, "invalid syntax a.{1}")
