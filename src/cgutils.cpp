@@ -912,6 +912,56 @@ static void raise_exception_if(Value *cond, Value *exc, jl_codectx_t *ctx)
                            exc, ctx);
 }
 
+static size_t dereferenceable_size(jl_value_t *jt) {
+    size_t size = 0;
+    if (jl_is_array_type(jt)) {
+        // Array has at least this much data
+        size = sizeof(jl_array_t);
+    } else {
+        size = jl_datatype_size(jt);
+    }
+    return size;
+}
+
+static inline void maybe_mark_argument_dereferenceable(Argument *A, jl_value_t *jt) {
+    if (!jl_is_leaf_type(jt)) {
+        return;
+    }
+    size_t size = dereferenceable_size(jt);
+    if (!size) {
+        return;
+    }
+    llvm::AttrBuilder Attrs;
+    Attrs.addDereferenceableAttr(size);
+#if JL_LLVM_VERSION >= 50000
+    A->addAttr(llvm::AttributeList::get(jl_LLVMContext,
+                                        A->getArgNo() + 1, Attrs));
+#else
+    A->addAttr(llvm::AttributeSet::get(jl_LLVMContext,
+                                        A->getArgNo() + 1, Attrs));
+#endif
+}
+
+static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool can_be_null, size_t size) {
+    if (!size) {
+        return LI;
+    }
+    llvm::SmallVector<Metadata *, 1> OPs;
+    OPs.push_back(ConstantAsMetadata::get(ConstantInt::get(T_int64, size)));
+    LI->setMetadata(can_be_null ? "dereferenceable_or_null" :
+                                  "dereferenceable",
+                    MDNode::get(jl_LLVMContext, OPs));
+    return LI;
+}
+
+static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool can_be_null, jl_value_t *jt) {
+    if (!jl_is_leaf_type(jt)) {
+        return LI;
+    }
+    size_t size = dereferenceable_size(jt);
+    return maybe_mark_load_dereferenceable(LI, can_be_null, size);
+}
+
 static void null_pointer_check(Value *v, jl_codectx_t *ctx)
 {
     raise_exception_unless(builder.CreateICmpNE(v,Constant::getNullValue(v->getType())),
@@ -1142,6 +1192,8 @@ static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
     //else {
         Instruction *load = builder.CreateAlignedLoad(data, isboxed ?
             alignment : julia_alignment(data, jltype, alignment), false);
+        if (isboxed)
+            load = maybe_mark_load_dereferenceable(load, true, jltype);
         if (tbaa) {
             elt = tbaa_decorate(tbaa, load);
         }
@@ -1290,9 +1342,20 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct,
     if (strct.ispointer()) { // boxed or stack
         if (is_datatype_all_pointers(stt)) {
             idx = emit_bounds_check(strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields), ctx);
-            Value *fld = tbaa_decorate(strct.tbaa, builder.CreateLoad(
-                        builder.CreateGEP(data_pointer(strct, ctx), idx)));
-            if ((unsigned)stt->ninitialized != nfields)
+            bool maybe_null = (unsigned)stt->ninitialized != nfields;
+            size_t minimum_field_size = (size_t)-1;
+            for (size_t i = 0; i < nfields; ++i) {
+                minimum_field_size = std::min(minimum_field_size,
+                    dereferenceable_size(jl_field_type(stt, i)));
+                if (minimum_field_size == 0)
+                    break;
+            }
+            Value *fld = tbaa_decorate(strct.tbaa,
+                maybe_mark_load_dereferenceable(
+                    builder.CreateLoad(
+                        builder.CreateGEP(data_pointer(strct, ctx), idx)),
+                    maybe_null,  minimum_field_size));
+            if (maybe_null)
                 null_pointer_check(fld, ctx);
             *ret = mark_julia_type(fld, true, jl_any_type, ctx, strct.gcroot || !strct.isimmutable);
             return true;
@@ -1388,8 +1451,13 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
             }
         }
         if (jl_field_isptr(jt, idx)) {
-            Value *fldv = tbaa_decorate(strct.tbaa, builder.CreateLoad(emit_bitcast(addr, T_ppjlvalue)));
-            if (idx >= (unsigned)jt->ninitialized)
+            bool maybe_null = idx >= (unsigned)jt->ninitialized;
+            Instruction *Load = maybe_mark_load_dereferenceable(
+                builder.CreateLoad(emit_bitcast(addr, T_ppjlvalue)),
+                maybe_null, jl_field_type(jt, idx)
+            );
+            Value *fldv = tbaa_decorate(strct.tbaa, Load);
+            if (maybe_null)
                 null_pointer_check(fldv, ctx);
             return mark_julia_type(fldv, true, jfty, ctx, strct.gcroot || !strct.isimmutable);
         }
