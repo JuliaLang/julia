@@ -1310,13 +1310,6 @@ end
 # #19635
 for fname in (:ones, :zeros)
     @eval @deprecate ($fname)(T::Type, arr) ($fname)(T, size(arr))
-    @eval ($fname)(T::Type, i::Integer) = ($fname)(T, (i,))
-    @eval function ($fname){T}(::Type{T}, arr::Array{T})
-        msg = string("`", $fname, "{T}(::Type{T}, arr::Array{T})` is deprecated, use ",
-                            "`", $fname , "(T, size(arr))` instead. ",
-                           )
-        error(msg)
-    end
 end
 
 # END 0.6 deprecations
