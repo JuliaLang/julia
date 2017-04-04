@@ -1141,6 +1141,14 @@
     (begin0 (list 'type (if mut? 'true 'false) sig (parse-block s))
             (expect-end s word))))
 
+;; consume any number of line endings from a token stream
+(define (take-lineendings s)
+  (let ((nt (peek-token s)))
+    (if (or (newline? nt) (eqv? nt #\;))
+        (begin (take-token s)
+               (take-lineendings s))
+        s)))
+
 ;; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
   (with-bindings
@@ -1271,7 +1279,7 @@
                 (syntax-deprecation s (string "abstract " (deparse spec))
                                     (string "abstract type " (deparse spec) " end")))
             (begin0 (list 'abstract spec)
-                    (if ty (expect-end s "abstract type"))))))
+                    (if ty (expect-end (take-lineendings s) "abstract type"))))))
        ((struct)
         (begin (take-token s)
                (parse-struct-def s #f word)))
@@ -1287,7 +1295,7 @@
                    (let* ((spec (with-space-sensitive (parse-subtype-spec s)))
                           (nb   (with-space-sensitive (parse-cond s))))
                      (begin0 (list 'bitstype nb spec)
-                             (expect-end s "primitive type"))))))
+                             (expect-end (take-lineendings s) "primitive type"))))))
        ;; deprecated type keywords
        ((type)
         ;; TODO fully deprecate post-0.6
