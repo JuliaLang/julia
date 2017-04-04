@@ -668,6 +668,12 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                               jl_symbol_name(m->file),
                               m->line);
         }
+        if (jl_is_vararg_type(elt) && i < na-1)
+            jl_exceptionf(jl_argumenterror_type,
+                          "Vararg on non-final argument in method definition for %s at %s:%d",
+                          jl_symbol_name(name),
+                          jl_symbol_name(m->file),
+                          m->line);
     }
 
     int ishidden = !!strchr(jl_symbol_name(name), '#');
