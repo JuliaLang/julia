@@ -1023,7 +1023,7 @@ static void emit_typecheck(const jl_cgval_t &x, jl_value_t *type, const std::str
     //     return;
     // }
     Value *istype = emit_isa(x, type, &msg, ctx);
-    if (!isa<Constant>(istype)) {
+    if (!isa<ConstantInt>(istype)) {
         BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext, "fail", ctx->f);
         BasicBlock *passBB = BasicBlock::Create(jl_LLVMContext, "pass");
         builder.CreateCondBr(istype, passBB, failBB);
