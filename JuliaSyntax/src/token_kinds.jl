@@ -83,6 +83,7 @@
         TRIPLE_STRING, # """ foo \n """
         CHAR, # 'a'
         CMD, # `cmd ...`
+        TRIPLE_CMD, # ```cmd ...```
         TRUE, FALSE, 
     end_literal,
 

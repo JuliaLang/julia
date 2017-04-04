@@ -408,3 +408,10 @@ end
     @test tok("mutable struct s{T} where T", 10).kind == Tokens.WHERE
 end
 
+@testset "CMDs" begin
+    @test tok("`cmd`").kind == T.CMD
+    @test tok("```cmd```", 1).kind == T.TRIPLE_CMD
+    @test tok("```cmd```", 2).kind == T.ENDMARKER
+    @test tok("```cmd````cmd`", 1).kind == T.TRIPLE_CMD
+    @test tok("```cmd````cmd`", 2).kind == T.CMD
+end

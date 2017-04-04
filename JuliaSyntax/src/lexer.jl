@@ -760,17 +760,40 @@ function lex_dot(l::Lexer)
     end
 end
 
-# A ` has been consumed, find the next one
+# A ` has been consumed
 function lex_cmd(l::Lexer)
-    while true
-        c = readchar(l)
-        if c == '`'
-            return emit(l, Tokens.CMD)
-        elseif eof(c)
-            return emit_error(l, Tokens.EOF_CMD)
+    if accept(l, '`')
+        if accept(l, '`') # TRIPLE_CMD
+            while true
+                c = readchar(l)
+                if c == '`'
+                    c = readchar(l)
+                    if c == '`'
+                        c = readchar(l)
+                        if c == '`'
+                            return emit(l, Tokens.TRIPLE_CMD)
+                        end
+                    end
+                end
+                if eof(c)
+                    return emit_error(l, Tokens.EOF_CMD)
+                end
+            end
+        else # empty CMD
+            return emit(l, Tokens.CMD) 
+        end
+    else # CMD
+        while true
+            c = readchar(l)
+            if c == '`'
+                return emit(l, Tokens.CMD)
+            elseif eof(c)
+                return emit_error(l, Tokens.EOF_CMD)
+            end
         end
     end
 end
+
 
 function tryread(l, str, k, c)
     for s in str
