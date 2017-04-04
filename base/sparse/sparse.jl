@@ -27,7 +27,7 @@ import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
     triu, vec, permute!, map, map!
 
 export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector,
-    SparseMatrixCSC, SparseVector, blkdiag, dense, droptol!, dropzeros!, dropzeros,
+    SparseMatrixCSC, SparseVector, blkdiag, droptol!, dropzeros!, dropzeros,
     issparse, nonzeros, nzrange, rowvals, sparse, sparsevec, spdiagm, speye, spones,
     sprand, sprandn, spzeros, nnz, permute
 
