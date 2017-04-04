@@ -695,6 +695,11 @@ let m_error, error_out, filename = Base.source_path()
     m_error = try @eval method_c6(A; B) = 3; catch e; e; end
     error_out = sprint(showerror, m_error)
     @test error_out == "syntax: keyword argument \"B\" needs a default value"
+
+    # issue #20614
+    m_error = try @eval foo{N}(types::NTuple{N}, values::Vararg{Any,N}, c) = nothing; catch e; e; end
+    error_out = sprint(showerror, m_error)
+    @test startswith(error_out, "ArgumentError: Vararg on non-final argument")
 end
 
 # issue #7272
