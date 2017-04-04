@@ -1307,6 +1307,11 @@ end
      end
 end
 
+# #19635
+for fname in (:ones, :zeros)
+    @eval @deprecate ($fname)(T::Type, arr) ($fname)(T, size(arr))
+end
+
 # END 0.6 deprecations
 
 # BEGIN 1.0 deprecations
