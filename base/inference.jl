@@ -2510,12 +2510,12 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
             # see if this code already exists in the cache
             # staged functions make this hard since they have two "inferred" conditions,
             # so need to check whether the code itself is also inferred
-            inf = linfo.inferred
             if min_world(linfo) <= params.world <= max_world(linfo)
+                inf = linfo.inferred
                 if linfo.jlcall_api == 2
                     method = linfo.def
                     tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
-                    tree.code = Any[ Expr(:return, QuoteNode(inf)) ]
+                    tree.code = Any[ Expr(:return, QuoteNode(linfo.inferred_const)) ]
                     tree.slotnames = Any[ compiler_temp_sym for i = 1:method.nargs ]
                     tree.slotflags = UInt8[ 0 for i = 1:method.nargs ]
                     tree.slottypes = nothing
@@ -2526,7 +2526,7 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
                     i == 2 && ccall(:jl_typeinf_end, Void, ())
                     return svec(linfo, tree, linfo.rettype)
                 elseif isa(inf, CodeInfo)
-                    if (inf::CodeInfo).inferred
+                    if inf.inferred
                         i == 2 && ccall(:jl_typeinf_end, Void, ())
                         return svec(linfo, inf, linfo.rettype)
                     end

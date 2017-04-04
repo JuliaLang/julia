@@ -440,7 +440,7 @@ static bool julia_struct_has_layout(jl_datatype_t *dt, jl_unionall_t *ua)
     if (dt->layout || dt->struct_decl || jl_is_primitivetype(dt) || jl_isbits(dt))
         return true;
     if (ua) {
-        size_t i, ntypes = jl_datatype_nfields(dt);
+        size_t i, ntypes = jl_svec_len(dt->types);
         for (i = 0; i < ntypes; i++) {
             jl_value_t *ty = jl_svecref(dt->types, i);
             if (jl_has_typevar_from_unionall(ty, ua))

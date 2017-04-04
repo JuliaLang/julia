@@ -278,9 +278,19 @@ am = map(identity, a)
 
 # other functions
 v = OffsetArray(v0, (-3,))
+@test endof(v) == 1
 @test v ≈ v
 @test indices(v') === (Base.OneTo(1),-2:1)
 @test parent(v) == collect(v)
+rv = reverse(v)
+@test indices(rv) == indices(v)
+@test rv[1] == v[-2]
+@test rv[0] == v[-1]
+@test rv[-1] == v[0]
+@test rv[-2] == v[1]
+cv = copy(v)
+@test reverse!(cv) == rv
+
 A = OffsetArray(rand(4,4), (-3,5))
 @test A ≈ A
 @test indices(A') === (6:9, -2:1)
