@@ -829,6 +829,7 @@ static void CreateTrap(IRBuilder<> &builder)
     builder.SetInsertPoint(newBB);
 }
 
+#if 0 // this code is likely useful, but currently unused
 #ifndef JL_NDEBUG
 static void CreateConditionalAbort(IRBuilder<> &builder, Value *test)
 {
@@ -844,6 +845,7 @@ static void CreateConditionalAbort(IRBuilder<> &builder, Value *test)
     builder.CreateUnreachable();
     builder.SetInsertPoint(postBB);
 }
+#endif
 #endif
 
 static void emit_write_barrier(jl_codectx_t*, Value*, Value*);
@@ -3629,7 +3631,8 @@ static Value *try_emit_union_alloca(jl_uniontype_t *ut, bool &allunbox, size_t &
     union_alloca_type(ut, allunbox, nbytes, align, min_align);
     if (nbytes > 0) {
         // at least some of the values can live on the stack
-        Type *AT = ArrayType::get(T_int8, nbytes);
+        // try to pick an Integer type size such that SROA will emit reasonable code
+        Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * min_align), (nbytes + min_align - 1) / min_align);
         AllocaInst *lv = emit_static_alloca(AT, ctx);
         if (align > 1)
             lv->setAlignment(align);
@@ -3853,6 +3856,8 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                     }
                     else {
                         Value *dest = vi.value.V;
+                        if (vi.pTIndex)
+                            builder.CreateStore(UndefValue::get(cast<AllocaInst>(vi.value.V)->getAllocatedType()), vi.value.V);
                         Type *store_ty = julia_type_to_llvm(rval_info.constant ? jl_typeof(rval_info.constant) : rval_info.typ);
                         Type *dest_ty = store_ty->getPointerTo();
                         if (dest_ty != dest->getType())
