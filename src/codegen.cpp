@@ -5005,26 +5005,35 @@ static jl_returninfo_t get_specsig_function(Module *M, const std::string &name, 
             }
         }
     }
+#if JL_LLVM_VERSION >= 50000
+    AttributeList attributes; // function declaration attributes
+#else
+    AttributeSet attributes; // function declaration attributes
+#endif
+    if (props.cc == jl_returninfo_t::SRet) {
+        attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::StructRet);
+        attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::NoAlias);
+        attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::NoCapture);
+    }
+    if (props.cc == jl_returninfo_t::Union) {
+        attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::NoAlias);
+        attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::NoCapture);
+    }
     for (size_t i = 0; i < jl_nparams(sig); i++) {
         jl_value_t *jt = jl_tparam(sig, i);
         Type *ty = julia_type_to_llvm(jt);
         if (type_is_ghost(ty))
             continue;
-        if (ty->isAggregateType()) // aggregate types are passed by pointer
+        if (ty->isAggregateType()) { // aggregate types are passed by pointer
+            attributes = attributes.addAttribute(jl_LLVMContext, fsig.size() + 1, Attribute::NoCapture);
+            attributes = attributes.addAttribute(jl_LLVMContext, fsig.size() + 1, Attribute::ReadOnly);
             ty = PointerType::get(ty, 0);
+        }
         fsig.push_back(ty);
     }
     FunctionType *ftype = FunctionType::get(rt, fsig, false);
     Function *f = Function::Create(ftype, GlobalVariable::ExternalLinkage, name, M);
-    if (props.cc == jl_returninfo_t::SRet) {
-        f->addAttribute(1, Attribute::StructRet);
-        f->addAttribute(1, Attribute::NoAlias);
-        f->addAttribute(1, Attribute::NoCapture);
-    }
-    if (props.cc == jl_returninfo_t::Union) {
-        f->addAttribute(1, Attribute::NoAlias);
-        f->addAttribute(1, Attribute::NoCapture);
-    }
+    f->setAttributes(attributes);
     props.decl = f;
     return props;
 }
