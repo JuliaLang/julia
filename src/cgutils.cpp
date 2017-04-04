@@ -1360,9 +1360,30 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
     Value *fldv = NULL;
     if (strct.ispointer()) {
         Value *addr;
-        Value *ptr = data_pointer(strct, ctx, T_pint8);
-        Value *llvm_idx = ConstantInt::get(T_size, jl_field_offset(jt, idx));
-        addr = builder.CreateGEP(ptr, llvm_idx);
+        bool isboxed;
+        Type *lt = julia_type_to_llvm((jl_value_t*)jt, &isboxed);
+        if (isboxed) {
+            Value *ptr = data_pointer(strct, ctx, T_pint8);
+            Value *llvm_idx = ConstantInt::get(T_size, jl_field_offset(jt, idx));
+            addr = builder.CreateGEP(ptr, llvm_idx);
+        }
+        else {
+            if (VectorType *vlt = dyn_cast<VectorType>(lt)) {
+                // doesn't have the struct wrapper, so this must have been a VecElement
+                // cast to the element type so that it can be addressed with GEP
+                lt = vlt->getElementType();
+                Value *ptr = data_pointer(strct, ctx, lt->getPointerTo());
+                Value *llvm_idx = ConstantInt::get(T_size, idx);
+                addr = builder.CreateGEP(LLVM37_param(lt) ptr, llvm_idx);
+            }
+            else if (lt->isSingleValueType()) {
+                addr = data_pointer(strct, ctx, lt->getPointerTo());
+            }
+            else {
+                Value *ptr = data_pointer(strct, ctx, lt->getPointerTo());
+                addr = builder.CreateStructGEP(LLVM37_param(lt) ptr, idx);
+            }
+        }
         if (jl_field_isptr(jt, idx)) {
             Value *fldv = tbaa_decorate(strct.tbaa, builder.CreateLoad(emit_bitcast(addr, T_ppjlvalue)));
             if (idx >= (unsigned)jt->ninitialized)
@@ -1966,6 +1987,8 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
 // copy src to dest, if src is isbits. if skip is true, the value of dest is undefined
 static void emit_unionmove(Value *dest, const jl_cgval_t &src, Value *skip, bool isVolatile, MDNode *tbaa, jl_codectx_t *ctx)
 {
+    if (AllocaInst *ai = dyn_cast<AllocaInst>(dest))
+        builder.CreateStore(UndefValue::get(ai->getAllocatedType()), ai);
     if (jl_is_leaf_type(src.typ) || src.constant) {
         jl_value_t *typ = src.constant ? jl_typeof(src.constant) : src.typ;
         Type *store_ty = julia_type_to_llvm(typ);
@@ -1982,38 +2005,50 @@ static void emit_unionmove(Value *dest, const jl_cgval_t &src, Value *skip, bool
                     src_ptr = builder.CreateSelect(skip, dest, src_ptr);
                 unsigned nb = jl_datatype_size(typ);
                 unsigned alignment = 0;
-                builder.CreateMemCpy(dest, src_ptr, nb, alignment, tbaa);
+                builder.CreateMemCpy(dest, src_ptr, nb, alignment, isVolatile, tbaa);
             }
         }
     }
     else if (src.TIndex) {
         Value *tindex = builder.CreateAnd(src.TIndex, ConstantInt::get(T_int8, 0x7f));
-        Value *copy_bytes = ConstantInt::get(T_int32, -1);
-        unsigned counter = 0;
-        bool allunboxed = for_each_uniontype_small(
-                [&](unsigned idx, jl_datatype_t *jt) {
-                    Value *cmp = builder.CreateICmpEQ(tindex, ConstantInt::get(T_int8, idx));
-                    copy_bytes = builder.CreateSelect(cmp, ConstantInt::get(T_int32, jl_datatype_size(jt)), copy_bytes);
-                },
-                src.typ,
-                counter);
+        if (skip)
+            tindex = builder.CreateSelect(skip, ConstantInt::get(T_int8, 0), tindex);
         Value *src_ptr = data_pointer(src, ctx, T_pint8);
         if (dest->getType() != T_pint8)
             dest = emit_bitcast(dest, T_pint8);
-        if (skip) {
-            if (allunboxed) // copy dest -> dest to simulate an undef value / conditional copy
-                src_ptr = builder.CreateSelect(skip, dest, src_ptr);
-            else
-                copy_bytes = builder.CreateSelect(skip, ConstantInt::get(copy_bytes->getType(), 0), copy_bytes);
+        BasicBlock *defaultBB = BasicBlock::Create(jl_LLVMContext, "union_move_skip", ctx->f);
+        SwitchInst *switchInst = builder.CreateSwitch(tindex, defaultBB);
+        BasicBlock *postBB = BasicBlock::Create(jl_LLVMContext, "post_union_move", ctx->f);
+        unsigned counter = 0;
+        bool allunboxed = for_each_uniontype_small(
+                [&](unsigned idx, jl_datatype_t *jt) {
+                    unsigned nb = jl_datatype_size(jt);
+                    unsigned alignment = 0;
+                    BasicBlock *tempBB = BasicBlock::Create(jl_LLVMContext, "union_move", ctx->f);
+                    builder.SetInsertPoint(tempBB);
+                    switchInst->addCase(ConstantInt::get(T_int8, idx), tempBB);
+                    if (nb > 0)
+                        builder.CreateMemCpy(dest, src_ptr, nb, alignment, isVolatile, tbaa);
+                    builder.CreateBr(postBB);
+                },
+                src.typ,
+                counter);
+        builder.SetInsertPoint(defaultBB);
+        if (!skip && allunboxed && (src.V == NULL || isa<AllocaInst>(src.V))) {
+            Function *trap_func = Intrinsic::getDeclaration(
+                    ctx->f->getParent(),
+                    Intrinsic::trap);
+            builder.CreateCall(trap_func);
+            builder.CreateUnreachable();
         }
-#ifndef JL_NDEBUG
-        // try to catch codegen errors early, before it uses this to memcpy over the entire stack
-        CreateConditionalAbort(builder, builder.CreateICmpEQ(copy_bytes, ConstantInt::get(T_int32, -1)));
-#endif
-        builder.CreateMemCpy(dest,
-                             src_ptr,
-                             copy_bytes,
-                             /*TODO: min-align*/1);
+        else {
+            builder.CreateBr(postBB);
+        }
+        builder.SetInsertPoint(postBB);
+        if (src.gcroot && src.V != src.gcroot) {
+            // if this is a derived pointer, make sure the root usage itself is also visible to the delete-root pass
+            mark_gc_use(src);
+        }
     }
     else {
         Value *datatype = emit_typeof_boxed(src, ctx);
