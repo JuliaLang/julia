@@ -181,6 +181,8 @@ nttest1{n}(x::NTuple{n,Int}) = n
 
 # #17198
 @test_throws MethodError convert(Tuple{Int}, (1.0, 2.0, 3.0))
+# #21238
+@test_throws MethodError convert(Tuple{Int,Int,Int}, (1, 2))
 
 # type declarations
 
