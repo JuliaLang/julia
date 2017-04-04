@@ -657,6 +657,23 @@ template<typename T> static void mark_gc_uses(T &&vec)
 
 // --- convenience functions for tagging llvm values with julia types ---
 
+static GlobalVariable *get_pointer_to_constant(Constant *val, StringRef name, Module &M)
+{
+    GlobalVariable *gv = new GlobalVariable(
+            M,
+            val->getType(),
+            true,
+            GlobalVariable::PrivateLinkage,
+            val,
+            name);
+#if JL_LLVM_VERSION >= 30900
+    gv->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+#else
+    gv->setUnnamedAddr(true);
+#endif
+    return gv;
+}
+
 static AllocaInst *emit_static_alloca(Type *lty, int arraysize, jl_codectx_t *ctx)
 {
     return new AllocaInst(lty, ConstantInt::get(T_int32, arraysize), "", /*InsertBefore=*/ctx->ptlsStates);
@@ -740,8 +757,14 @@ static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_value_t *typ
     if (v && T->isAggregateType() && !isboxed) {
         // eagerly put this back onto the stack
         // llvm mem2reg pass will remove this if unneeded
-        Value *loc = emit_static_alloca(T);
-        builder.CreateStore(v, loc);
+        Value *loc;
+        if (Constant *cv = dyn_cast<Constant>(v)) {
+            loc = get_pointer_to_constant(cv, "", *jl_Module);
+        }
+        else {
+            loc = emit_static_alloca(T);
+            builder.CreateStore(v, loc);
+        }
         return mark_julia_slot(loc, typ, NULL, tbaa_stack);
     }
     Value *froot = NULL;
