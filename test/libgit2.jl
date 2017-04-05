@@ -4,6 +4,7 @@ isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__),
 import TestHelpers: challenge_prompt
 
 const LIBGIT2_MIN_VER = v"0.23.0"
+const LIBGIT2_HELPER_PATH = joinpath(dirname(@__FILE__), "libgit2-helpers.jl")
 
 #########
 # TESTS #
@@ -1105,14 +1106,16 @@ mktempdir() do dir
             passphrase = "secret"
 
             ssh_cmd = """
+            include("$LIBGIT2_HELPER_PATH")
             valid_cred = LibGit2.SSHCredentials("git", "", "$valid_key", "$valid_key.pub")
-            err, auth_attempts = LibGit2.credential_loop(valid_cred, "$url", "git")
+            err, auth_attempts = credential_loop(valid_cred, "$url", "git")
             (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
             """
 
             ssh_p_cmd = """
+            include("$LIBGIT2_HELPER_PATH")
             valid_cred = LibGit2.SSHCredentials("git", "$passphrase", "$valid_p_key", "$valid_p_key.pub")
-            err, auth_attempts = LibGit2.credential_loop(valid_cred, "$url", "git")
+            err, auth_attempts = credential_loop(valid_cred, "$url", "git")
             (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
             """
 
@@ -1221,8 +1224,9 @@ mktempdir() do dir
             valid_password = randstring(16)
 
             https_cmd = """
+            include("$LIBGIT2_HELPER_PATH")
             valid_cred = LibGit2.UserPasswordCredentials("$valid_username", "$valid_password")
-            err, auth_attempts = LibGit2.credential_loop(valid_cred, "$url")
+            err, auth_attempts = credential_loop(valid_cred, "$url")
             (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
             """
 

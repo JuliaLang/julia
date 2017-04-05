@@ -56,8 +56,11 @@ end
 function challenge_prompt(code::AbstractString, challenges; timeout::Integer=10, debug::Bool=true)
     output_file = tempname()
     wrapped_code = """
+    result = let
+        $code
+    end
     open("$output_file", "w") do fp
-        serialize(fp, begin $code end)
+        serialize(fp, result)
     end
     """
     cmd = `$(Base.julia_cmd()) --startup-file=no -e $wrapped_code`
