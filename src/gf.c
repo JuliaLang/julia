@@ -1250,11 +1250,10 @@ static void invalidate_method_instance(jl_method_instance_t *replaced, size_t ma
         assert(replaced->min_world <= max_world && "attempting to set invalid world constraints");
         if (JL_DEBUG_METHOD_INVALIDATION) {
             int d0 = depth;
-            char space = ' ', nl = '\n';
             while (d0-- > 0)
-                jl_uv_puts(JL_STDOUT, &space, 1);
+                jl_uv_puts(JL_STDOUT, " ", 1);
             jl_static_show(JL_STDOUT, (jl_value_t*)replaced);
-            jl_uv_puts(JL_STDOUT, &nl, 1);
+            jl_uv_puts(JL_STDOUT, "\n", 1);
         }
         replaced->max_world = max_world;
         update_world_bound(replaced, set_max_world2, max_world);
@@ -1274,6 +1273,7 @@ static void invalidate_method_instance(jl_method_instance_t *replaced, size_t ma
 struct invalidate_conflicting_env {
     struct typemap_intersection_env match;
     size_t max_world;
+    int invalidated;
 };
 static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_intersection_env *closure0)
 {
@@ -1302,6 +1302,7 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
                 invalidate_method_instance(replaced[i], closure->max_world, 0);
             }
         }
+        closure->invalidated = 1;
         def.replaced->backedges = NULL;
         JL_UNLOCK_NOGC(&def.replaced->def->writelock);
     }
@@ -1368,6 +1369,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     jl_value_t *type = method->sig;
     jl_value_t *oldvalue = NULL;
     struct invalidate_conflicting_env env;
+    env.invalidated = 0;
     env.max_world = method->min_world - 1;
     JL_GC_PUSH1(&oldvalue);
     JL_LOCK(&mt->writelock);
@@ -1389,6 +1391,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                 if (jl_type_intersection(backedgetyp, (jl_value_t*)type) != (jl_value_t*)jl_bottom_type) {
                     jl_method_instance_t *backedge = (jl_method_instance_t*)backedges[i];
                     invalidate_method_instance(backedge, env.max_world, 0);
+                    env.invalidated = 1;
                 }
                 else {
                     backedges[ins++] = backedges[i - 1];
@@ -1427,6 +1430,13 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                 jl_typemap_intersection_visitor(d[i]->specializations, 0, &env.match);
             }
         }
+    }
+    if (env.invalidated && JL_DEBUG_METHOD_INVALIDATION) {
+        jl_uv_puts(JL_STDOUT, ">> ", 3);
+        jl_static_show(JL_STDOUT, (jl_value_t*)method);
+        jl_uv_puts(JL_STDOUT, " ", 1);
+        jl_static_show(JL_STDOUT, (jl_value_t*)type);
+        jl_uv_puts(JL_STDOUT, "\n", 1);
     }
     update_max_args(mt, type);
     JL_UNLOCK(&mt->writelock);
