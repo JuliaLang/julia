@@ -158,7 +158,7 @@ end
     @test tok("1\\=2", 2).kind == T.BACKSLASH_EQ
     @test tok("1\$=2", 2).kind == T.EX_OR_EQ
     @test tok("1-->2", 2).kind == T.RIGHT_ARROW
-    @test tok("1>:2",  2).kind == T.GREATER_COLON
+    @test tok("1>:2",  2).kind == T.ISSUPERTYPE
 end
 
 @testset "infix" begin

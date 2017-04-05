@@ -371,7 +371,7 @@ function lex_greater(l::Lexer)
     elseif accept(l, '=') # >=
         return emit(l, Tokens.GREATER_EQ)
     elseif accept(l, ':') # >:
-        return emit(l, Tokens.GREATER_COLON)
+        return emit(l, Tokens.ISSUPERTYPE)
     else  # '>'
         return emit(l, Tokens.GREATER)
     end

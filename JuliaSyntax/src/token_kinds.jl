@@ -262,7 +262,7 @@
         # Level 6
         begin_comparison,
             ISSUBTYPE, # <:
-            GREATER_COLON, # >:
+            ISSUPERTYPE, # >:
             GREATER, # >
             LESS, # <
             GREATER_EQ, # >=
