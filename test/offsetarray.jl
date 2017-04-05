@@ -281,6 +281,7 @@ v = OffsetArray(v0, (-3,))
 @test endof(v) == 1
 @test v ≈ v
 @test indices(v') === (Base.OneTo(1),-2:1)
+@test parent(v) == collect(v)
 rv = reverse(v)
 @test indices(rv) == indices(v)
 @test rv[1] == v[-2]
@@ -294,6 +295,7 @@ A = OffsetArray(rand(4,4), (-3,5))
 @test A ≈ A
 @test indices(A') === (6:9, -2:1)
 @test parent(A') == parent(A)'
+@test collect(A) == parent(A)
 @test maximum(A) == maximum(parent(A))
 @test minimum(A) == minimum(parent(A))
 @test extrema(A) == extrema(parent(A))
