@@ -249,13 +249,14 @@ static Value *julia_pgv(const char *prefix, jl_sym_t *name, jl_module_t *mod, vo
     }
     char *fullname = (char*)alloca(len);
     strcpy(fullname, prefix);
-    len -= strlen(jl_symbol_name(name))+1;
-    strcpy(fullname + len, jl_symbol_name(name));
+    int skipfirst = jl_symbol_name(name)[0] == '@';
+    len -= strlen(jl_symbol_name(name)) + 1 - skipfirst;
+    strcpy(fullname + len, jl_symbol_name(name) + skipfirst);
     parent = mod;
     prev = NULL;
     while (parent != NULL && parent != prev) {
-        size_t part = strlen(jl_symbol_name(parent->name))+1;
-        strcpy(fullname+len-part,jl_symbol_name(parent->name));
+        size_t part = strlen(jl_symbol_name(parent->name))+1-skipfirst;
+        strcpy(fullname+len-part,jl_symbol_name(parent->name)+skipfirst);
         fullname[len-1] = '.';
         len -= part;
         prev = parent;
