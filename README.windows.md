@@ -19,8 +19,7 @@ downloading the font and installing it is insufficient, since Windows keeps a
 list of approved fonts in the registry.
 
 Instructions for adding fonts to the terminal are available at
-[Microsoft KB-247815 (dead link)](
-http://support.microsoft.com/default.aspx?scid=kb;EN-US;Q247815)
+[this answer on superuser.com](https://superuser.com/a/5079)
 
 Additionally, rather than sticking with the default command prompt, you may want
 to use a different terminal emulator program, such as
@@ -28,7 +27,6 @@ to use a different terminal emulator program, such as
 https://code.google.com/p/mintty/) (note that running Julia on Mintty needs a
 copy of `stty.exe` in your `%PATH%` to work properly).  Alternatively, you may
 prefer the features of a more full-function IDE, such as [Juno](http://junolab.org),
-[LightTable](https://github.com/one-more-minute/Jupiter-LT),
 [Sublime-IJulia](https://github.com/quinnj/Sublime-IJulia), or
 [IJulia](https://github.com/JuliaLang/IJulia.jl).
 
@@ -75,9 +73,6 @@ The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise re
  -  Windows 10: supported (32 and 64 bits)
  -  Windows 8: supported (32 and 64 bits)
  -  Windows 7: supported (32 and 64 bits)
- -  Windows Vista: not officially supported (but probably works anyways)
- -  Windows XP: not supported (but may work anyways, if you can get around the
-    lack of junction points)
 
 
 ### Compiling with MinGW/MSYS2
