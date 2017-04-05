@@ -714,7 +714,6 @@ static inline jl_cgval_t mark_julia_const(jl_value_t *jv)
 static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ, Value *tindex, MDNode *tbaa)
 {
     // this enables lazy-copying of immutable values and stack or argument slots
-    assert(tbaa);
     jl_cgval_t tagval(v, NULL, false, typ, tindex);
     tagval.tbaa = tbaa;
     tagval.isimmutable = true;
@@ -4672,7 +4671,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
                     arg_box = arg_v;
                 }
                 else if (et->isAggregateType()) {
-                    arg_box = boxed(mark_julia_slot(arg_v, jt, NULL, tbaa_const), &ctx2, false);
+                    arg_box = boxed(mark_julia_slot(arg_v, jt, NULL, NULL), &ctx2, false);
                 }
                 else {
                     assert(at == et);
@@ -5596,7 +5595,7 @@ static std::unique_ptr<Module> emit_function(
                     theArg = ghostValue(argType);
                 }
                 else if (llvmArgType->isAggregateType()) {
-                    theArg = mark_julia_slot(&*AI++, argType, NULL, tbaa_const); // this argument is by-pointer
+                    theArg = mark_julia_slot(&*AI++, argType, NULL, NULL); // this argument is by-pointer
                     theArg.isimmutable = true;
                 }
                 else {
