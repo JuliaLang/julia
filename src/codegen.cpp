@@ -269,6 +269,7 @@ static MDNode *tbaa_arrayptr;       // The pointer inside a jl_array_t
 static MDNode *tbaa_arraysize;      // A size in a jl_array_t
 static MDNode *tbaa_arraylen;       // The len in a jl_array_t
 static MDNode *tbaa_arrayflags;     // The flags in a jl_array_t
+static MDNode *tbaa_array_owner_ptr;// The owner pointer in an nd array (1-d array owner ptrs are tbaa_const)
 static MDNode *tbaa_const;      // Memory that is immutable by the time LLVM can see it
 
 // Basic DITypes
@@ -2883,7 +2884,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                             // load owner pointer
                             Value *own_ptr;
                             if (jl_is_long(ndp)) {
-                                own_ptr = tbaa_decorate(tbaa_const, builder.CreateLoad(
+                                own_ptr = tbaa_decorate(nd == 1 ? tbaa_array_owner_ptr : tbaa_const, builder.CreateLoad(
                                     emit_bitcast(
                                         builder.CreateConstGEP1_32(
                                             emit_bitcast(aryv, T_pint8),
@@ -6318,6 +6319,7 @@ static void init_julia_llvm_meta(void)
     tbaa_arraysize = tbaa_make_child("jtbaa_arraysize", tbaa_array_scalar).first;
     tbaa_arraylen = tbaa_make_child("jtbaa_arraylen", tbaa_array_scalar).first;
     tbaa_arrayflags = tbaa_make_child("jtbaa_arrayflags", tbaa_array_scalar).first;
+    tbaa_array_owner_ptr = tbaa_make_child("jtbaa_array_owner_ptr", tbaa_array_scalar).first;
     tbaa_const = tbaa_make_child("jtbaa_const", nullptr, true).first;
 }
 
