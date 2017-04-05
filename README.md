@@ -155,6 +155,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `zeros` and `ones` support an interface the same as `similar` ([#19635])
 
+* `convert` can convert between different `Set` types on 0.5 and below. ([#18727])
+
 ## Renamed functions
 
 * `pointer_to_array` and `pointer_to_string` have been replaced with `unsafe_wrap(Array, ...)` and `unsafe_wrap(String, ...)` respectively
@@ -334,10 +336,12 @@ includes this fix. Find the minimum version from there.
 [#18380]: https://github.com/JuliaLang/julia/issues/18380
 [#18484]: https://github.com/JuliaLang/julia/issues/18484
 [#18510]: https://github.com/JuliaLang/julia/issues/18510
+[#18727]: https://github.com/JuliaLang/julia/issues/18727
 [#18839]: https://github.com/JuliaLang/julia/issues/18839
 [#18977]: https://github.com/JuliaLang/julia/issues/18977
 [#19088]: https://github.com/JuliaLang/julia/issues/19088
 [#19246]: https://github.com/JuliaLang/julia/issues/19246
+[#19635]: https://github.com/JuliaLang/julia/issues/19635
 [#19841]: https://github.com/JuliaLang/julia/issues/19841
 [#19950]: https://github.com/JuliaLang/julia/issues/19950
 [#20022]: https://github.com/JuliaLang/julia/issues/20022
@@ -348,4 +352,3 @@ includes this fix. Find the minimum version from there.
 [#20414]: https://github.com/JuliaLang/julia/issues/20414
 [#20418]: https://github.com/JuliaLang/julia/issues/20418
 [#20500]: https://github.com/JuliaLang/julia/issues/20500
-[#19635]: https://github.com/JuliaLang/julia/issues/19635

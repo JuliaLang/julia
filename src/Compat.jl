@@ -1444,6 +1444,12 @@ if VERSION < v"0.6.0-dev.2283"
     end
 end
 
+# https://github.com/JuliaLang/julia/pull/18727
+if VERSION < v"0.6.0-dev.838"
+    Base.convert{T}(::Type{Set{T}}, s::Set{T}) = s
+    Base.convert{T}(::Type{Set{T}}, s::Set) = Set{T}(s)
+end
+
 include("to-be-deprecated.jl")
 
 end # module Compat
