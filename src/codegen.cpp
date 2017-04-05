@@ -74,6 +74,7 @@
 
 // support
 #include <llvm/ADT/SmallBitVector.h>
+#include <llvm/ADT/Optional.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/SourceMgr.h> // for llvmcall
@@ -2525,9 +2526,9 @@ static Value *emit_f_is(const jl_cgval_t &arg1, const jl_cgval_t &arg2, jl_codec
     if (arg1.isghost || arg2.isghost) {
         // comparing to a singleton object
         if (arg1.TIndex)
-            return emit_isa(arg1, rt2, NULL, ctx); // rt2 is a singleton type
+            return emit_isa(arg1, rt2, NULL, ctx).first; // rt2 is a singleton type
         if (arg2.TIndex)
-            return emit_isa(arg2, rt1, NULL, ctx); // rt1 is a singleton type
+            return emit_isa(arg2, rt1, NULL, ctx).first; // rt1 is a singleton type
         // mark_gc_use isn't needed since we won't load this pointer
         // and we know at least one of them is a unique Singleton
         // which is already enough to ensure pointer uniqueness for this test
@@ -2543,7 +2544,7 @@ static Value *emit_f_is(const jl_cgval_t &arg1, const jl_cgval_t &arg2, jl_codec
         jl_value_t *typ = jl_isbits(rt1) ? rt1 : rt2;
         if (rt1 == rt2)
             return emit_bits_compare(arg1, arg2, ctx);
-        Value *same_type = (typ == rt2) ? emit_isa(arg1, typ, NULL, ctx) : emit_isa(arg2, typ, NULL, ctx);
+        Value *same_type = (typ == rt2) ? emit_isa(arg1, typ, NULL, ctx).first : emit_isa(arg2, typ, NULL, ctx).first;
         BasicBlock *currBB = builder.GetInsertBlock();
         BasicBlock *isaBB = BasicBlock::Create(jl_LLVMContext, "is", ctx->f);
         BasicBlock *postBB = BasicBlock::Create(jl_LLVMContext, "post_is", ctx->f);
@@ -2637,8 +2638,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             jl_value_t *tp0 = jl_tparam0(ty);
             *ret = emit_expr(args[1], ctx);
             emit_expr(args[2], ctx);
-            if (!jl_subtype(arg, tp0))
-                emit_typecheck(*ret, tp0, "typeassert", ctx);
+            emit_typecheck(*ret, tp0, "typeassert", ctx);
             ty = expr_type(expr, ctx); rt2 = ty;
             *ret = update_julia_type(*ret, ty, ctx);
             JL_GC_POP();
@@ -2672,13 +2672,10 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             jl_value_t *tp0 = jl_tparam0(ty);
             jl_cgval_t rt_arg = emit_expr(args[1], ctx);
             emit_expr(args[2], ctx);
-            if (jl_subtype(arg, tp0)) {
-                *ret = mark_julia_type(ConstantInt::get(T_int8, 1), false, jl_bool_type, ctx);
-            }
-            else {
-                Value *isa = emit_isa(rt_arg, tp0, NULL, ctx);
-                *ret = mark_julia_type(builder.CreateZExt(isa, T_int8), false, jl_bool_type, ctx);
-            }
+            Value *isa_result = emit_isa(rt_arg, tp0, NULL, ctx).first;
+            if (isa_result->getType() == T_int1)
+                isa_result = builder.CreateZExt(isa_result, T_int8);
+            *ret = mark_julia_type(isa_result, false, jl_bool_type, ctx);
             JL_GC_POP();
             return true;
         }
@@ -4587,10 +4584,8 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         retval = mark_julia_type(ret, true, astrt, &ctx);
     }
 
-    if (!jl_subtype(astrt, declrt)) {
-        // inline a call to typeassert here
-        emit_typecheck(retval, declrt, "cfunction", &ctx);
-    }
+    // inline a call to typeassert here
+    emit_typecheck(retval, declrt, "cfunction", &ctx);
 
     // Prepare the return value
     Value *r;
