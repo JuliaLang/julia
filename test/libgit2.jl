@@ -985,6 +985,7 @@ mktempdir() do dir
             LibGit2.add!(repo, "file6")
             LibGit2.commit(repo, "add file6")
 
+            pre_abort_head = LibGit2.head_oid(repo)
             # Rebase type
             head_ann = LibGit2.GitAnnotated(repo, "branch/a")
             upst_ann = LibGit2.GitAnnotated(repo, "master")
@@ -996,13 +997,21 @@ mktempdir() do dir
             @test rbo_str == "RebaseOperation($(string(rbo.id)))\nOperation type: REBASE_OPERATION_PICK\n"
             rb_str = sprint(show, rb)
             @test rb_str == "GitRebase:\nNumber: 2\nCurrently performing operation: 1\n"
+
+            # test rebase abort
+            LibGit2.abort(rb)
+            @test LibGit2.head_oid(repo) == pre_abort_head
         finally
             close(repo)
         end
     end
 
     @testset "merge" begin
-        repo = LibGit2.GitRepo(test_repo)
+        path = joinpath(dir, "Example.simple_merge")
+        repo = LibGit2.clone(cache_repo, path)
+        cfg = LibGit2.GitConfig(repo)
+        LibGit2.set!(cfg, "user.name", "AAAA")
+        LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
         try
             LibGit2.branch!(repo, "branch/merge_a")
 
@@ -1012,8 +1021,8 @@ mktempdir() do dir
             end
             LibGit2.add!(repo, "merge_file1")
             LibGit2.commit(repo, "add merge_file1")
-
-            a_head_ann = LibGit2.GitAnnotated(repo, "branch/a")
+            LibGit2.branch!(repo, "master")
+            a_head_ann = LibGit2.GitAnnotated(repo, "branch/merge_a")
             @test LibGit2.merge!(repo, [a_head_ann]) #merge returns true if successful
         finally
             close(repo)
@@ -1040,6 +1049,7 @@ mktempdir() do dir
             close(repo)
         end
     end
+
     @testset "checkout/headname" begin
         repo = LibGit2.GitRepo(cache_repo)
         try
