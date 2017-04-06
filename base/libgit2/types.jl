@@ -702,12 +702,7 @@ function securezero!(cred::SSHCredentials)
 end
 
 function Base.:(==)(a::SSHCredentials, b::SSHCredentials)
-    return (
-        a.user == b.user &&
-        a.pass == b.pass &&
-        a.prvkey == b.prvkey &&
-        a.pubkey == b.pubkey
-    )
+    a.user == b.user && a.pass == b.pass && a.prvkey == b.prvkey && a.pubkey == b.pubkey
 end
 
 "Credentials that support caching"
