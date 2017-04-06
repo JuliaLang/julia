@@ -142,7 +142,7 @@ static int8_t jl_cachearg_offset(jl_methtable_t *mt)
 // get or create the MethodInstance for a specialization
 JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m, jl_value_t *type, jl_svec_t *sparams, size_t world)
 {
-    assert(world >= m->min_world && world <= m->max_world && "typemap lookup is corrupted");
+    assert(world >= m->min_world && "typemap lookup is corrupted");
     JL_LOCK(&m->writelock);
     jl_typemap_entry_t *sf =
         jl_typemap_assoc_by_type(m->specializations, (jl_tupletype_t*)type, NULL, 1, /*subtype*/0, /*offs*/0, world);
@@ -163,8 +163,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m, 
         li->min_world = world;
     }
     if (world == jl_world_counter) {
-        assert(m->max_world == ~(size_t)0 && "method validity shouldn't be scheduled to terminate at a fixed future age");
-        li->max_world = m->max_world;
+        li->max_world = ~(size_t)0;
     }
     else {
         li->max_world = world;
@@ -350,7 +349,7 @@ JL_DLLEXPORT jl_method_instance_t* jl_set_method_inferred(
         }
         else {
             JL_LOCK(&li->def->writelock);
-            assert(min_world >= li->def->min_world && max_world <= li->def->max_world);
+            assert(min_world >= li->def->min_world);
             int isinferred =  jl_is_rettype_inferred(li);
             if (!isinferred && li->min_world >= min_world && li->max_world <= max_world) {
                 // expand the current (uninferred) entry to cover the full inferred range
@@ -917,7 +916,7 @@ static jl_method_instance_t *cache_method(jl_methtable_t *mt, union jl_typemap_t
     }
 
     size_t min_valid = definition->min_world;
-    size_t max_valid = definition->max_world;
+    size_t max_valid = ~(size_t)0;
     int cache_with_orig = 0;
     jl_svec_t* guardsigs = jl_emptysvec;
     jl_tupletype_t *origtype = type; // backup the prior value of `type`
@@ -1375,7 +1374,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     JL_LOCK(&mt->writelock);
     jl_typemap_entry_t *newentry = jl_typemap_insert(&mt->defs, (jl_value_t*)mt,
             (jl_tupletype_t*)type, simpletype, jl_emptysvec, (jl_value_t*)method, 0, &method_defs,
-            method->min_world, method->max_world, &oldvalue);
+            method->min_world, ~(size_t)0, &oldvalue);
     if (oldvalue) {
         method->ambig = ((jl_method_t*)oldvalue)->ambig;
         method_overwrite(newentry, (jl_method_t*)oldvalue);

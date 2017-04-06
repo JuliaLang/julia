@@ -924,10 +924,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         write_int32(s->s, m->line);
         if (s->mode != MODE_MODULE) {
             write_int32(s->s, m->min_world);
-            write_int32(s->s, m->max_world);
-        }
-        else {
-            assert(m->max_world == ~(size_t)0 && "method replacement cannot be handled by incremental serializer");
         }
         if (external_mt)
             jl_serialize_value(s, jl_nothing);
@@ -1667,11 +1663,9 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->line = read_int32(s->s);
     if (s->mode != MODE_MODULE) {
         m->min_world = read_int32(s->s);
-        m->max_world = read_int32(s->s);
     }
     else {
         m->min_world = jl_world_counter;
-        m->max_world = ~(size_t)0;
     }
     m->ambig = jl_deserialize_value(s, (jl_value_t**)&m->ambig);
     jl_gc_wb(m, m->ambig);
@@ -2204,7 +2198,6 @@ static jl_value_t *read_verify_mod_list(ios_t *s)
                     "Requiring \"%s\" did not define a corresponding module.", name);
         }
         if (!jl_is_module(m)) {
-            ios_close(s);
             return jl_get_exceptionf(jl_errorexception_type,
                 "Invalid module path (%s does not name a module).", name);
         }
