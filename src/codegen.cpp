@@ -657,6 +657,23 @@ template<typename T> static void mark_gc_uses(T &&vec)
 
 // --- convenience functions for tagging llvm values with julia types ---
 
+static GlobalVariable *get_pointer_to_constant(Constant *val, StringRef name, Module &M)
+{
+    GlobalVariable *gv = new GlobalVariable(
+            M,
+            val->getType(),
+            true,
+            GlobalVariable::PrivateLinkage,
+            val,
+            name);
+#if JL_LLVM_VERSION >= 30900
+    gv->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+#else
+    gv->setUnnamedAddr(true);
+#endif
+    return gv;
+}
+
 static AllocaInst *emit_static_alloca(Type *lty, int arraysize, jl_codectx_t *ctx)
 {
     return new AllocaInst(lty, ConstantInt::get(T_int32, arraysize), "", /*InsertBefore=*/ctx->ptlsStates);
@@ -740,8 +757,14 @@ static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_value_t *typ
     if (v && T->isAggregateType() && !isboxed) {
         // eagerly put this back onto the stack
         // llvm mem2reg pass will remove this if unneeded
-        Value *loc = emit_static_alloca(T);
-        builder.CreateStore(v, loc);
+        Value *loc;
+        if (Constant *cv = dyn_cast<Constant>(v)) {
+            loc = get_pointer_to_constant(cv, "", *jl_Module);
+        }
+        else {
+            loc = emit_static_alloca(T);
+            builder.CreateStore(v, loc);
+        }
         return mark_julia_slot(loc, typ, NULL, tbaa_stack);
     }
     Value *froot = NULL;
@@ -4982,26 +5005,35 @@ static jl_returninfo_t get_specsig_function(Module *M, const std::string &name, 
             }
         }
     }
+#if JL_LLVM_VERSION >= 50000
+    AttributeList attributes; // function declaration attributes
+#else
+    AttributeSet attributes; // function declaration attributes
+#endif
+    if (props.cc == jl_returninfo_t::SRet) {
+        attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::StructRet);
+        attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::NoAlias);
+        attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::NoCapture);
+    }
+    if (props.cc == jl_returninfo_t::Union) {
+        attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::NoAlias);
+        attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::NoCapture);
+    }
     for (size_t i = 0; i < jl_nparams(sig); i++) {
         jl_value_t *jt = jl_tparam(sig, i);
         Type *ty = julia_type_to_llvm(jt);
         if (type_is_ghost(ty))
             continue;
-        if (ty->isAggregateType()) // aggregate types are passed by pointer
+        if (ty->isAggregateType()) { // aggregate types are passed by pointer
+            attributes = attributes.addAttribute(jl_LLVMContext, fsig.size() + 1, Attribute::NoCapture);
+            attributes = attributes.addAttribute(jl_LLVMContext, fsig.size() + 1, Attribute::ReadOnly);
             ty = PointerType::get(ty, 0);
+        }
         fsig.push_back(ty);
     }
     FunctionType *ftype = FunctionType::get(rt, fsig, false);
     Function *f = Function::Create(ftype, GlobalVariable::ExternalLinkage, name, M);
-    if (props.cc == jl_returninfo_t::SRet) {
-        f->addAttribute(1, Attribute::StructRet);
-        f->addAttribute(1, Attribute::NoAlias);
-        f->addAttribute(1, Attribute::NoCapture);
-    }
-    if (props.cc == jl_returninfo_t::Union) {
-        f->addAttribute(1, Attribute::NoAlias);
-        f->addAttribute(1, Attribute::NoCapture);
-    }
+    f->setAttributes(attributes);
     props.decl = f;
     return props;
 }
