@@ -317,9 +317,9 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *d
 
     Value *unboxed = NULL;
     if (to == T_int1)
-        unboxed = builder.CreateTrunc(tbaa_decorate(x.tbaa, builder.CreateLoad(p)), T_int1);
+        unboxed = builder.CreateTrunc(aa_decorate(x.aa, builder.CreateLoad(p)), T_int1);
     else if (jt == (jl_value_t*)jl_bool_type)
-        unboxed = builder.CreateZExt(builder.CreateTrunc(tbaa_decorate(x.tbaa, builder.CreateLoad(p)), T_int1), to);
+        unboxed = builder.CreateZExt(builder.CreateTrunc(aa_decorate(x.aa, builder.CreateLoad(p)), T_int1), to);
     if (unboxed) {
         if (!dest)
             return unboxed;
@@ -342,7 +342,7 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *d
     if (dest) {
         // callers using the dest argument only use it for a stack slot for now
         alignment = 0;
-        builder.CreateMemCpy(dest, p, jl_datatype_size(jt), alignment, volatile_store, x.tbaa, tbaa_stack);
+        builder.CreateMemCpy(dest, p, jl_datatype_size(jt), alignment, volatile_store, x.aa.tbaa, tbaa_stack);
         return NULL;
     }
     else {
@@ -351,7 +351,7 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *d
             load = builder.CreateAlignedLoad(p, alignment);
         else
             load = builder.CreateLoad(p);
-        return tbaa_decorate(x.tbaa, load);
+        return aa_decorate(x.aa, load);
     }
 }
 
@@ -433,7 +433,7 @@ static jl_cgval_t generic_bitcast(const jl_cgval_t *argv, jl_codectx_t *ctx)
         // but if the v.typ is not well known, use llvmt
         if (isboxed)
             vxt = llvmt;
-        vx = tbaa_decorate(v.tbaa, builder.CreateLoad(data_pointer(v, ctx,
+        vx = aa_decorate(v.aa, builder.CreateLoad(data_pointer(v, ctx,
                                                                    vxt == T_int1 ? T_pint8 : vxt->getPointerTo())));
     }
 
@@ -618,7 +618,8 @@ static jl_cgval_t emit_pointerref(jl_cgval_t *argv, jl_codectx_t *ctx)
     Type *ptrty = julia_type_to_llvm(e.typ, &isboxed);
     assert(!isboxed);
     Value *thePtr = emit_unbox(ptrty, e, e.typ);
-    return typed_load(thePtr, im1, ety, ctx, tbaa_data, nullptr, nullptr, true, align_nb);
+    return typed_load(thePtr, im1, ety, ctx, aa_data{tbaa_data, nullptr},
+                      nullptr, nullptr, true, align_nb);
 }
 
 static jl_cgval_t emit_runtime_pointerset(jl_cgval_t *argv, jl_codectx_t *ctx)
@@ -675,7 +676,8 @@ static jl_cgval_t emit_pointerset(jl_cgval_t *argv, jl_codectx_t *ctx)
         Type *ptrty = julia_type_to_llvm(e.typ, &isboxed);
         assert(!isboxed);
         thePtr = emit_unbox(ptrty, e, e.typ);
-        typed_store(thePtr, im1, x, ety, ctx, tbaa_data, nullptr, NULL, align_nb);
+        typed_store(thePtr, im1, x, ety, ctx, aa_data{tbaa_data, nullptr},
+                    nullptr, NULL, align_nb);
     }
     return mark_julia_type(thePtr, false, aty, ctx);
 }
