@@ -177,7 +177,7 @@ static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
 
 void jl_write_coverage_data(void);
 void jl_write_malloc_log(void);
-static void julia_save(void);
+void jl_write_compiler_output(void);
 
 static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdown_queue_item *item)
 {
@@ -193,7 +193,7 @@ void jl_uv_call_close_callback(jl_value_t *val);
 JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (exitcode == 0) julia_save();
+    if (exitcode == 0) jl_write_compiler_output();
     jl_print_gc_stats(JL_STDERR);
     if (jl_options.code_coverage)
         jl_write_coverage_data();
@@ -708,74 +708,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_sigint_handler();
-}
-
-extern int asprintf(char **str, const char *fmt, ...);
-
-JL_DLLEXPORT int jl_generating_output(void)
-{
-    return jl_options.outputo || jl_options.outputbc || jl_options.outputji;
-}
-
-void jl_precompile(int all);
-
-static void julia_save(void)
-{
-    if (!jl_generating_output())
-        return;
-
-    if (!jl_options.incremental)
-        jl_precompile(jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL);
-
-    if (!jl_module_init_order) {
-        jl_printf(JL_STDERR, "WARNING: --output requested, but no modules defined during run\n");
-        return;
-    }
-
-    jl_array_t *worklist = jl_module_init_order;
-    JL_GC_PUSH1(&worklist);
-    jl_module_init_order = jl_alloc_vec_any(0);
-    int i, l = jl_array_len(worklist);
-    for (i = 0; i < l; i++) {
-        jl_value_t *m = jl_arrayref(worklist, i);
-        if (jl_get_global((jl_module_t*)m, jl_symbol("__init__"))) {
-            jl_array_ptr_1d_push(jl_module_init_order, m);
-        }
-    }
-
-    if (jl_options.incremental) {
-        if (jl_options.outputji)
-            if (jl_save_incremental(jl_options.outputji, worklist))
-                jl_exit(1);
-        if (jl_options.outputbc)
-            jl_printf(JL_STDERR, "WARNING: incremental output to a .bc file is not implemented\n");
-        if (jl_options.outputo)
-            jl_printf(JL_STDERR, "WARNING: incremental output to a .o file is not implemented\n");
-    }
-    else {
-        ios_t *s = NULL;
-        if (jl_options.outputo || jl_options.outputbc)
-            s = jl_create_system_image();
-
-        if (jl_options.outputji) {
-            if (s == NULL) {
-                jl_save_system_image(jl_options.outputji);
-            }
-            else {
-                ios_t f;
-                if (ios_file(&f, jl_options.outputji, 1, 1, 1, 1) == NULL)
-                    jl_errorf("cannot open system image file \"%s\" for writing", jl_options.outputji);
-                ios_write(&f, (const char*)s->buf, (size_t)s->size);
-                ios_close(&f);
-            }
-        }
-
-        if (jl_options.outputo || jl_options.outputbc)
-            jl_dump_native(jl_options.outputbc,
-                           jl_options.outputo,
-                           (const char*)s->buf, (size_t)s->size);
-    }
-    JL_GC_POP();
 }
 
 static jl_value_t *core(const char *name)
