@@ -931,14 +931,8 @@ static inline void maybe_mark_argument_dereferenceable(Argument *A, jl_value_t *
     if (!size) {
         return;
     }
-    llvm::AttrBuilder Attrs;
-    Attrs.addDereferenceableAttr(size);
-#if JL_LLVM_VERSION >= 50000
-    A->addAttr(llvm::AttributeList::get(jl_LLVMContext,
-                                        A->getArgNo() + 1, Attrs));
-#else
-    A->addAttr(llvm::AttributeSet::get(jl_LLVMContext,
-                                        A->getArgNo() + 1, Attrs));
+#if JL_LLVM_VERSION >= 30700
+    A->getParent()->addDereferenceableAttr(A->getArgNo() + 1, size);
 #endif
 }
 
@@ -946,11 +940,13 @@ static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool
     if (!size) {
         return LI;
     }
+#if JL_LLVM_VERSION >= 30700
     llvm::SmallVector<Metadata *, 1> OPs;
     OPs.push_back(ConstantAsMetadata::get(ConstantInt::get(T_int64, size)));
     LI->setMetadata(can_be_null ? "dereferenceable_or_null" :
                                   "dereferenceable",
                     MDNode::get(jl_LLVMContext, OPs));
+#endif
     return LI;
 }
 

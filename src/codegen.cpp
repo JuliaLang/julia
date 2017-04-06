@@ -5033,7 +5033,9 @@ static jl_returninfo_t get_specsig_function(Module *M, const std::string &name, 
             continue;
         if (ty->isAggregateType()) { // aggregate types are passed by pointer
             attributes = attributes.addAttribute(jl_LLVMContext, fsig.size() + 1, Attribute::NoCapture);
+#if JL_LLVM_VERSION >= 30500
             attributes = attributes.addAttribute(jl_LLVMContext, fsig.size() + 1, Attribute::ReadOnly);
+#endif
             ty = PointerType::get(ty, 0);
         }
         fsig.push_back(ty);
