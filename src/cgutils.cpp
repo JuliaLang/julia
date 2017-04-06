@@ -2,9 +2,21 @@
 
 // utility procedures used in code generation
 
+static Instruction *aa_decorate(MDNode *tbaa, MDNode *invariant_group, Instruction *load_or_store)
+{
+    if (tbaa)
+        load_or_store->setMetadata( llvm::LLVMContext::MD_tbaa, tbaa );
+    if (invariant_group)
+        load_or_store->setMetadata( llvm::LLVMContext::MD_invariant_group, tbaa );
+    return load_or_store;
+}
+static Instruction *aa_decorate(aa_data aa, Instruction *load_or_store) {
+    return aa_decorate(aa.tbaa, aa.invariant_group, load_or_store);
+}
+
 static Instruction *tbaa_decorate(MDNode *md, Instruction *load_or_store)
 {
-    load_or_store->setMetadata( llvm::LLVMContext::MD_tbaa, md );
+    aa_decorate(md, nullptr, load_or_store);
     return load_or_store;
 }
 
@@ -1126,7 +1138,7 @@ static unsigned julia_alignment(Value* /*ptr*/, jl_value_t *jltype, unsigned ali
 static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value* dest = NULL, bool volatile_store = false);
 
 static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
-                             jl_codectx_t *ctx, MDNode *tbaa, unsigned alignment = 0)
+                             jl_codectx_t *ctx, aa_data aa, unsigned alignment = 0)
 {
     bool isboxed;
     Type *elty = julia_type_to_llvm(jltype, &isboxed);
@@ -1148,12 +1160,7 @@ static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
     //else {
         Instruction *load = builder.CreateAlignedLoad(data, isboxed ?
             alignment : julia_alignment(data, jltype, alignment), false);
-        if (tbaa) {
-            elt = tbaa_decorate(tbaa, load);
-        }
-        else {
-            elt = load;
-        }
+        elt = aa_decorate(aa, load);
         if (isboxed) {
             null_pointer_check(elt, ctx);
         }
@@ -1162,7 +1169,7 @@ static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
 }
 
 static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
-                        jl_value_t *jltype, jl_codectx_t *ctx, MDNode *tbaa,
+                        jl_value_t *jltype, jl_codectx_t *ctx, aa_data aa,
                         Value *parent,  // for the write barrier, NULL if no barrier needed
                         unsigned alignment = 0, bool root_box = true) // if the value to store needs a box, should we root it ?
 {
@@ -1185,8 +1192,7 @@ static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
         data = ptr;
     Instruction *store = builder.CreateAlignedStore(r, builder.CreateGEP(data,
         idx_0based), isboxed ? alignment : julia_alignment(r, jltype, alignment));
-    if (tbaa)
-        tbaa_decorate(tbaa, store);
+    aa_decorate(aa, store);
 }
 
 // --- convert boolean value to julia ---
@@ -1286,7 +1292,7 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct,
     if (strct.ispointer()) { // boxed or stack
         if (is_datatype_all_pointers(stt)) {
             idx = emit_bounds_check(strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields), ctx);
-            Value *fld = tbaa_decorate(strct.tbaa, builder.CreateLoad(
+            Value *fld = aa_decorate(strct.aa, builder.CreateLoad(
                         builder.CreateGEP(data_pointer(strct, ctx), idx)));
             if ((unsigned)stt->ninitialized != nfields)
                 null_pointer_check(fld, ctx);
@@ -1302,12 +1308,12 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct,
                 // just compute the pointer and let user load it when necessary
                 Type *fty = julia_type_to_llvm(jt);
                 Value *addr = builder.CreateGEP(builder.CreatePointerCast(ptr, PointerType::get(fty,0)), idx);
-                *ret = mark_julia_slot(addr, jt, NULL, strct.tbaa);
+                *ret = mark_julia_slot(addr, jt, NULL, strct.aa);
                 ret->gcroot = strct.gcroot;
                 ret->isimmutable = strct.isimmutable;
                 return true;
             }
-            *ret = typed_load(ptr, idx, jt, ctx, strct.tbaa);
+            *ret = typed_load(ptr, idx, jt, ctx, strct.aa);
             return true;
         }
         else if (strct.isboxed) {
@@ -1363,14 +1369,14 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
         Value *llvm_idx = ConstantInt::get(T_size, jl_field_offset(jt, idx));
         addr = builder.CreateGEP(ptr, llvm_idx);
         if (jl_field_isptr(jt, idx)) {
-            Value *fldv = tbaa_decorate(strct.tbaa, builder.CreateLoad(emit_bitcast(addr, T_ppjlvalue)));
+            Value *fldv = aa_decorate(strct.aa, builder.CreateLoad(emit_bitcast(addr, T_ppjlvalue)));
             if (idx >= (unsigned)jt->ninitialized)
                 null_pointer_check(fldv, ctx);
             return mark_julia_type(fldv, true, jfty, ctx, strct.gcroot || !strct.isimmutable);
         }
         else if (!jt->mutabl) {
             // just compute the pointer and let user load it when necessary
-            jl_cgval_t fieldval = mark_julia_slot(addr, jfty, NULL, strct.tbaa);
+            jl_cgval_t fieldval = mark_julia_slot(addr, jfty, NULL, strct.aa);
             fieldval.isimmutable = strct.isimmutable;
             fieldval.gcroot = strct.gcroot;
             return fieldval;
@@ -1378,7 +1384,7 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
         int align = jl_field_offset(jt, idx);
         align |= 16;
         align &= -align;
-        return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx, strct.tbaa, align);
+        return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx, strct.aa, align);
     }
     else if (isa<UndefValue>(strct.V)) {
         return jl_cgval_t();
@@ -2125,7 +2131,7 @@ static void emit_setfield(jl_datatype_t *sty, const jl_cgval_t &strct, size_t id
         jl_value_t *jfty = jl_svecref(sty->types, idx0);
         if (jl_field_isptr(sty, idx0)) {
             Value *r = boxed(rhs, ctx, false); // don't need a temporary gcroot since it'll be rooted by strct (but should ensure strct is rooted via mark_gc_use)
-            tbaa_decorate(strct.tbaa, builder.CreateStore(r, emit_bitcast(addr, T_ppjlvalue)));
+            aa_decorate(strct.aa, builder.CreateStore(r, emit_bitcast(addr, T_ppjlvalue)));
             if (wb && strct.isboxed) emit_checked_write_barrier(ctx, boxed(strct, ctx), r);
             mark_gc_use(strct);
         }
@@ -2134,7 +2140,7 @@ static void emit_setfield(jl_datatype_t *sty, const jl_cgval_t &strct, size_t id
             align |= 16;
             align &= -align;
             typed_store(addr, ConstantInt::get(T_size, 0), rhs, jfty, ctx,
-                strct.tbaa, data_pointer(strct, ctx, T_pjlvalue), align);
+                strct.aa, data_pointer(strct, ctx, T_pjlvalue), align);
         }
     }
     else {
@@ -2231,7 +2237,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
         }
         for(size_t i=j; i < nf; i++) {
             if (jl_field_isptr(sty, i)) {
-                tbaa_decorate(strctinfo.tbaa, builder.CreateStore(
+                aa_decorate(strctinfo.aa, builder.CreateStore(
                         V_null,
                         builder.CreatePointerCast(
                             builder.CreateGEP(emit_bitcast(strct, T_pint8),

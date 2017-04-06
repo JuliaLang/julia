@@ -435,6 +435,13 @@ static bool isbits_spec(jl_value_t *jt, bool allow_singleton = true)
 }
 
 // metadata tracking for a llvm Value* during codegen
+struct aa_data {
+    MDNode *tbaa; // The related tbaa node. Non-NULL iff this holds an address.
+    MDNode *invariant_group; // The LLVM invariant group for this pointer if applicable  
+    aa_data() : tbaa(nullptr), invariant_group(nullptr) {}
+    aa_data(MDNode *tbaa, MDNode *invariant_group) : tbaa(tbaa), invariant_group(invariant_group) {}
+};
+
 struct jl_cgval_t {
     Value *V; // may be of type T* or T, or set to NULL if ghost (or if the value has not been initialized yet, for a variable definition)
     Value *TIndex; // if `V` is an unboxed (tagged) Union described by `typ`, this gives the DataType index (1-based, small int) as an i8
@@ -444,11 +451,11 @@ struct jl_cgval_t {
     bool isboxed; // whether this value is a jl_value_t* allocated on the heap with the right type tag
     bool isghost; // whether this value is "ghost"
     bool isimmutable; // V points to something that is definitely immutable (e.g. single-assignment, but including memory)
-    MDNode *tbaa; // The related tbaa node. Non-NULL iff this holds an address.
+    aa_data aa;
     bool ispointer() const
     {
         // whether this value is compatible with `data_pointer`
-        return tbaa != nullptr;
+        return aa.tbaa != nullptr || aa.invariant_group != nullptr;
     }
     //bool isvalue() const
     //{
@@ -464,9 +471,10 @@ struct jl_cgval_t {
         isboxed(isboxed),
         isghost(false),
         isimmutable(isboxed && jl_is_immutable_datatype(typ)),
-        tbaa(isboxed ? (jl_is_leaf_type(typ) ?
+        aa{isboxed ? (jl_is_leaf_type(typ) ?
                         (jl_is_mutable(typ) ? tbaa_mutab : tbaa_immut) :
-                        tbaa_value) : nullptr)
+                        tbaa_value) : nullptr,
+           nullptr}
     {
         assert(!(isboxed && TIndex != NULL));
         assert(TIndex == NULL || TIndex->getType() == T_int8);
@@ -480,7 +488,7 @@ struct jl_cgval_t {
         isboxed(false),
         isghost(true),
         isimmutable(true),
-        tbaa(nullptr)
+        aa{nullptr, nullptr}
     {
         assert(jl_is_datatype(typ));
         assert(constant);
@@ -494,7 +502,7 @@ struct jl_cgval_t {
         isboxed(v.isboxed),
         isghost(v.isghost),
         isimmutable(v.isimmutable),
-        tbaa(v.tbaa)
+        aa(v.aa)
     {
         // this constructor expects we had a badly or equivalently typed version
         // make sure we aren't discarding the actual type information
@@ -514,7 +522,7 @@ struct jl_cgval_t {
         isboxed(false),
         isghost(true),
         isimmutable(true),
-        tbaa(nullptr)
+        aa{nullptr, nullptr}
     {
     }
 };
@@ -710,14 +718,19 @@ static inline jl_cgval_t mark_julia_const(jl_value_t *jv)
     return constant;
 }
 
-
-static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ, Value *tindex, MDNode *tbaa)
+static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ, Value *tindex, aa_data aa)
 {
     // this enables lazy-copying of immutable values and stack or argument slots
+    assert(aa.tbaa || aa.invariant_group);
     jl_cgval_t tagval(v, NULL, false, typ, tindex);
-    tagval.tbaa = tbaa;
+    tagval.aa = aa;
     tagval.isimmutable = true;
     return tagval;
+}
+
+static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ, Value *tindex, MDNode *tbaa, MDNode *invariant_group = NULL)
+{
+    return mark_julia_slot(v, typ, tindex, aa_data{tbaa, invariant_group});
 }
 
 static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_value_t *typ, jl_codectx_t *ctx, bool needsroot = true)
@@ -1018,22 +1031,22 @@ static jl_cgval_t convert_julia_type(const jl_cgval_t &v, jl_value_t *typ, jl_co
                     else {
                         Value *isboxv = builder.CreateIsNotNull(boxv);
                         Value *slotv;
-                        MDNode *tbaa;
+                        aa_data aa;
                         bool isimmutable;
                         if (v.ispointer()) {
                             slotv = v.V;
-                            tbaa = v.tbaa;
+                            aa = v.aa;
                             isimmutable = v.isimmutable;
                         }
                         else {
                             slotv = emit_static_alloca(v.V->getType());
                             builder.CreateStore(v.V, slotv);
-                            tbaa = tbaa_stack;
+                            aa = aa_data{tbaa_stack, nullptr};
                             isimmutable = true;
                         }
                         slotv = builder.CreateSelect(isboxv, boxv, emit_bitcast(slotv, boxv->getType()));
                         jl_cgval_t newv = jl_cgval_t(slotv, froot, false, typ, new_tindex);
-                        newv.tbaa = tbaa;
+                        newv.aa = aa;
                         newv.isimmutable = isimmutable;
                         return newv;
                     }
@@ -1055,7 +1068,7 @@ static jl_cgval_t convert_julia_type(const jl_cgval_t &v, jl_value_t *typ, jl_co
                     Value *slotv = emit_static_alloca(v.V->getType());
                     builder.CreateStore(v.V, slotv);
                     jl_cgval_t newv = jl_cgval_t(slotv, NULL, false, typ, new_tindex);
-                    newv.tbaa = tbaa_stack;
+                    newv.aa = aa_data{tbaa_stack, nullptr};
                     newv.isimmutable = true;
                     return newv;
                 }
@@ -2502,8 +2515,8 @@ static Value *emit_bits_compare(const jl_cgval_t &arg1, const jl_cgval_t &arg2, 
                 if (type_is_ghost(fld1->getType()->getPointerElementType()))
                     continue;
                 subAns = emit_bits_compare(
-                        mark_julia_slot(fld1, fldty, NULL, arg1.tbaa),
-                        mark_julia_slot(fld2, fldty, NULL, arg2.tbaa),
+                        mark_julia_slot(fld1, fldty, NULL, arg1.aa),
+                        mark_julia_slot(fld2, fldty, NULL, arg2.aa),
                         ctx);
                 answer = builder.CreateAnd(answer, subAns);
             }
@@ -2829,7 +2842,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                     }
                     else {
                         *ret = typed_load(emit_arrayptr(ary, args[1], ctx), idx, ety, ctx,
-                            jl_array_store_unboxed(ety) ? tbaa_arraybuf : tbaa_ptrarraybuf);
+                            aa_data{jl_array_store_unboxed(ety) ? tbaa_arraybuf : tbaa_ptrarraybuf, nullptr});
                     }
                     JL_GC_POP();
                     return true;
@@ -2908,7 +2921,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                             data_owner->addIncoming(own_ptr, ownedBB);
                         }
                         typed_store(emit_arrayptr(ary,args[1],ctx), idx, v,
-                                    ety, ctx, !isboxed ? tbaa_arraybuf : tbaa_ptrarraybuf, data_owner, 0,
+                                    ety, ctx, aa_data{!isboxed ? tbaa_arraybuf : tbaa_ptrarraybuf, nullptr}, data_owner, 0,
                                     false); // don't need to root the box if we had to make one since it's being stored in the array immediatly
                     }
                     *ret = ary;
@@ -3142,7 +3155,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             Value *ptr = data_pointer(strct, ctx, T_pint8);
             Value *llvm_idx = ConstantInt::get(T_size, offs);
             Value *addr = builder.CreateGEP(ptr, llvm_idx);
-            Value *fldv = tbaa_decorate(strct.tbaa, builder.CreateLoad(emit_bitcast(addr, T_ppjlvalue)));
+            Value *fldv = aa_decorate(strct.aa, builder.CreateLoad(emit_bitcast(addr, T_ppjlvalue)));
             Value *isdef = builder.CreateICmpNE(fldv, V_null);
             *ret = mark_julia_type(isdef, false, jl_bool_type, ctx);
         }
@@ -3870,7 +3883,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                 }
             }
             else {
-                MDNode *tbaa = rval_info.tbaa;
+                MDNode *tbaa = rval_info.aa.tbaa;
                 // the memcpy intrinsic does not allow to specify different alias tags
                 // for the load part (x.tbaa) and the store part (tbaa_stack).
                 // since the tbaa lattice has to be a tree we have unfortunately
@@ -4653,6 +4666,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
             /*InsertBefore*/ctx2.ptlsStates);
         if (cc == jl_returninfo_t::SRet || cc == jl_returninfo_t::Union)
             ++AI;
+        MDNode *invariant_group = llvm::MDNode::getDistinct(jl_LLVMContext, {});
         for (size_t i = 0; i < nargs + 1; i++) {
             jl_value_t *jt = jl_nth_slot_type(lam->specTypes, i);
             bool isboxed;
@@ -4671,7 +4685,8 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
                     arg_box = arg_v;
                 }
                 else if (et->isAggregateType()) {
-                    arg_box = boxed(mark_julia_slot(arg_v, jt, NULL, NULL), &ctx2, false);
+                    arg_v = builder.CreateInvariantGroupBarrier(arg_v);
+                    arg_box = boxed(mark_julia_slot(arg_v, jt, NULL, NULL, invariant_group), &ctx2, false);
                 }
                 else {
                     assert(at == et);
@@ -5508,7 +5523,7 @@ static std::unique_ptr<Module> emit_function(
                 AllocaInst *lv = emit_static_alloca(T_int8, &ctx);
                 lv->setName(jl_symbol_name(s));
                 varinfo.pTIndex = lv;
-                varinfo.value.tbaa = NULL;
+                varinfo.value.aa = aa_data{nullptr, nullptr};
                 varinfo.value.isboxed = false;
                 varinfo.value.isimmutable = true;
             }
@@ -5569,6 +5584,7 @@ static std::unique_ptr<Module> emit_function(
     }
 
     // step 9. move args into local variables
+    MDNode *invariant_group = llvm::MDNode::getDistinct(jl_LLVMContext, {});
     Function::arg_iterator AI = f->arg_begin();
     if (ctx.has_sret)
         AI++; // skip sret slot
@@ -5595,7 +5611,9 @@ static std::unique_ptr<Module> emit_function(
                     theArg = ghostValue(argType);
                 }
                 else if (llvmArgType->isAggregateType()) {
-                    theArg = mark_julia_slot(&*AI++, argType, NULL, NULL); // this argument is by-pointer
+	            Argument *Arg = &*AI++;
+                    Value *Arg2 = builder.CreateInvariantGroupBarrier(Arg);
+                    theArg = mark_julia_slot(Arg2, argType, NULL, NULL, invariant_group); // this argument is by-pointer
                     theArg.isimmutable = true;
                 }
                 else {
