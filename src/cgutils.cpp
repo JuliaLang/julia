@@ -74,20 +74,13 @@ static Value *stringConstPtr(IRBuilder<> &builder, const std::string &txt)
             static int strno = 0;
             std::stringstream ssno;
             ssno << "_j_str" << strno++;
-            GlobalVariable *gv = new GlobalVariable(*shadow_output,
-                                    ArrayType::get(T_int8, pooledtxt.size()),
-                                    true,
-                                    GlobalVariable::PrivateLinkage,
+            GlobalVariable *gv = get_pointer_to_constant(
                                     ConstantDataArray::get(jl_LLVMContext,
                                                            ArrayRef<unsigned char>(
                                                            (const unsigned char*)pooledtxt.data(),
                                                            pooledtxt.size())),
-                                    ssno.str());
-#if JL_LLVM_VERSION >= 30900
-            gv->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
-#else
-            gv->setUnnamedAddr(true);
-#endif
+                                    ssno.str(),
+                                    *shadow_output);
             pooledval->second = gv;
             jl_ExecutionEngine->addGlobalMapping(gv, (void*)(uintptr_t)pooledtxt.data());
         }
@@ -1272,9 +1265,19 @@ type_of_constant:
 
 // --- accessing the representations of built-in data types ---
 
+static Constant *julia_const_to_llvm(jl_value_t *e);
 static Value *data_pointer(const jl_cgval_t &x, jl_codectx_t *ctx, Type *astype = T_ppjlvalue)
 {
-    Value *data = x.constant ? boxed(x, ctx) : x.V;
+    Value *data = x.V;
+    if (x.constant) {
+        Constant *val = julia_const_to_llvm(x.constant);
+        if (val) {
+            data = get_pointer_to_constant(val, "", *jl_Module);
+        }
+        else {
+            data = boxed(x, ctx);
+        }
+    }
     if (data->getType() != astype)
         data = emit_bitcast(data, astype);
     return data;
