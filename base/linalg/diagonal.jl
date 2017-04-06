@@ -225,6 +225,16 @@ A_mul_B!(A::AbstractMatrix,B::Diagonal)  = scale!(A,B.diag)
 A_mul_Bt!(A::AbstractMatrix,B::Diagonal) = scale!(A,B.diag)
 A_mul_Bc!(A::AbstractMatrix,B::Diagonal) = scale!(A,conj(B.diag))
 
+# Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
+A_mul_B!(out::AbstractVector, A::Diagonal, in::AbstractVector) = out .= A.diag .* in
+Ac_mul_B!(out::AbstractVector, A::Diagonal, in::AbstractVector) = out .= ctranspose.(A.diag) .* in
+At_mul_B!(out::AbstractVector, A::Diagonal, in::AbstractVector) = out .= transpose.(A.diag) .* in
+
+A_mul_B!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix) = out .= A.diag .* in
+Ac_mul_B!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix) = out .= ctranspose.(A.diag) .* in
+At_mul_B!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix) = out .= transpose.(A.diag) .* in
+
+
 /(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
 function A_ldiv_B!{T}(D::Diagonal{T}, v::AbstractVector{T})
     if length(v) != length(D.diag)
