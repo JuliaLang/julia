@@ -127,7 +127,14 @@ void addOptimizationPasses(PassManager *PM)
     PM->add(llvm::createMemorySanitizerPass(true));
 #endif
     if (jl_options.opt_level == 0) {
+        PM->add(createCFGSimplificationPass()); // Clean up disgusting code
+        PM->add(createMemCpyOptPass()); // Remove memcpy / form memset
         PM->add(createLowerPTLSPass(imaging_mode));
+#if JL_LLVM_VERSION >= 40000
+        PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
+#else
+        PM->add(createAlwaysInlinerPass()); // Respect always_inline
+#endif
         return;
     }
 #if JL_LLVM_VERSION >= 30700
@@ -149,7 +156,10 @@ void addOptimizationPasses(PassManager *PM)
     }
     // list of passes from vmkit
     PM->add(createCFGSimplificationPass()); // Clean up disgusting code
-    PM->add(createPromoteMemoryToRegisterPass());// Kill useless allocas
+    PM->add(createPromoteMemoryToRegisterPass()); // Kill useless allocas
+
+    // hopefully these functions (from llvmcall) don't try to interact with the Julia runtime
+    // or have anything that might corrupt the createLowerPTLSPass pass
 #if JL_LLVM_VERSION >= 40000
     PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
 #else
@@ -229,6 +239,15 @@ void addOptimizationPasses(PassManager *PM)
 #endif
     PM->add(createJumpThreadingPass());         // Thread jumps
     PM->add(createDeadStoreEliminationPass());  // Delete dead stores
+
+    // see if all of the constant folding has exposed more loops
+    // to simplification and deletion
+    // this helps significantly with cleaning up iteration
+    PM->add(createCFGSimplificationPass());     // Merge & remove BBs
+    PM->add(createLoopIdiomPass());
+    PM->add(createLoopDeletionPass());          // Delete dead loops
+    PM->add(createJumpThreadingPass());         // Thread jumps
+
 #if JL_LLVM_VERSION >= 30500
     if (jl_options.opt_level >= 3) {
         PM->add(createSLPVectorizerPass());     // Vectorize straight-line code
@@ -242,7 +261,6 @@ void addOptimizationPasses(PassManager *PM)
     PM->add(createLoopVectorizePass());         // Vectorize loops
     PM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
 #endif
-    //PM->add(createCFGSimplificationPass());     // Merge & remove BBs
 }
 
 #ifdef USE_ORCJIT
