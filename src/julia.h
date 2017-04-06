@@ -405,6 +405,7 @@ typedef struct _jl_module_t {
     arraylist_t usings;  // modules with all bindings potentially imported
     uint8_t istopmod;
     uint64_t uuid;
+    size_t primary_world;
     uint32_t counter;
 } jl_module_t;
 

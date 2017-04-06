@@ -1246,7 +1246,7 @@ static void invalidate_method_instance(jl_method_instance_t *replaced, size_t ma
     jl_array_t *backedges = replaced->backedges;
     if (replaced->max_world > max_world) {
         // recurse to all backedges to update their valid range also
-        assert(replaced->min_world <= max_world && "attempting to set invalid world constraints");
+        assert(replaced->min_world - 1 <= max_world && "attempting to set invalid world constraints");
         if (JL_DEBUG_METHOD_INVALIDATION) {
             int d0 = depth;
             while (d0-- > 0)
@@ -1359,6 +1359,13 @@ JL_DLLEXPORT void jl_method_table_add_backedge(jl_methtable_t *mt, jl_value_t *t
         jl_array_ptr_1d_push(mt->backedges, caller);
     }
     JL_UNLOCK(&mt->writelock);
+}
+
+void jl_method_instance_delete(jl_method_instance_t *mi)
+{
+    invalidate_method_instance(mi, mi->min_world - 1, 0);
+    if (JL_DEBUG_METHOD_INVALIDATION)
+        jl_uv_puts(JL_STDOUT, "<<<\n", 4);
 }
 
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype)
