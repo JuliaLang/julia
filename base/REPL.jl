@@ -746,10 +746,9 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         keymap_func_data = repl,
         complete = ShellCompletionProvider(),
         # Transform "foo bar baz" into `foo bar baz` (shell quoting)
-        # and pass into Base.repl_cmd for processing (handles `ls` and `cd`
-        # special)
+        # and pass into Base.repl_cmd for processing (handles `cd` special)
         on_done = respond(repl, julia_prompt) do line
-            Expr(:call, :(Base.repl_cmd), Cmd(Base.shell_split(line)), outstream(repl))
+            Expr(:call, :(Base.repl_cmd), line, outstream(repl))
         end)
 
 
