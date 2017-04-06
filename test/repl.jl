@@ -632,3 +632,10 @@ let ends_with_semicolon = Base.REPL.ends_with_semicolon
     @test !ends_with_semicolon("begin\na; #=#=#\n=#b=#\nend")
     @test ends_with_semicolon("\na; #=#=#\n=#b=#\n# test\n#=\nfoobar\n=##bazbax\n")
 end
+
+# PR #20794, TTYTerminal with other kinds of streams
+let term = Base.Terminals.TTYTerminal("dumb",IOBuffer("1+2\n"),IOBuffer(),IOBuffer())
+    r = Base.REPL.BasicREPL(term)
+    REPL.run_repl(r)
+    @test String(take!(term.out_stream)) == "julia> 3\n\njulia> \n"
+end

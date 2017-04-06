@@ -695,6 +695,11 @@ let m_error, error_out, filename = Base.source_path()
     m_error = try @eval method_c6(A; B) = 3; catch e; e; end
     error_out = sprint(showerror, m_error)
     @test error_out == "syntax: keyword argument \"B\" needs a default value"
+
+    # issue #20614
+    m_error = try @eval foo{N}(types::NTuple{N}, values::Vararg{Any,N}, c) = nothing; catch e; e; end
+    error_out = sprint(showerror, m_error)
+    @test startswith(error_out, "ArgumentError: Vararg on non-final argument")
 end
 
 # issue #7272
@@ -1061,3 +1066,21 @@ end
 @test isa(f21054, Function)
 g21054(>:) = >:2
 @test g21054(-) == -2
+
+# issue #21168
+@test expand(:(a.[1])) == Expr(:error, "invalid syntax a.[1]")
+@test expand(:(a.{1})) == Expr(:error, "invalid syntax a.{1}")
+
+# Issue #21225
+let abstr = parse("abstract type X end")
+    @test parse("abstract type X; end") == abstr
+    @test parse(string("abstract type X", ";"^5, " end")) == abstr
+    @test parse("abstract type X\nend") == abstr
+    @test parse(string("abstract type X", "\n"^5, "end")) == abstr
+end
+let prim = parse("primitive type X 8 end")
+    @test parse("primitive type X 8; end") == prim
+    @test parse(string("primitive type X 8", ";"^5, " end")) == prim
+    @test parse("primitive type X 8\nend") == prim
+    @test parse(string("primitive type X 8", "\n"^5, "end")) == prim
+end

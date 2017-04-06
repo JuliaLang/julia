@@ -74,6 +74,7 @@
 
 // support
 #include <llvm/ADT/SmallBitVector.h>
+#include <llvm/ADT/Optional.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/SourceMgr.h> // for llvmcall
@@ -656,6 +657,23 @@ template<typename T> static void mark_gc_uses(T &&vec)
 
 // --- convenience functions for tagging llvm values with julia types ---
 
+static GlobalVariable *get_pointer_to_constant(Constant *val, StringRef name, Module &M)
+{
+    GlobalVariable *gv = new GlobalVariable(
+            M,
+            val->getType(),
+            true,
+            GlobalVariable::PrivateLinkage,
+            val,
+            name);
+#if JL_LLVM_VERSION >= 30900
+    gv->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+#else
+    gv->setUnnamedAddr(true);
+#endif
+    return gv;
+}
+
 static AllocaInst *emit_static_alloca(Type *lty, int arraysize, jl_codectx_t *ctx)
 {
     return new AllocaInst(lty, ConstantInt::get(T_int32, arraysize), "", /*InsertBefore=*/ctx->ptlsStates);
@@ -739,8 +757,14 @@ static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_value_t *typ
     if (v && T->isAggregateType() && !isboxed) {
         // eagerly put this back onto the stack
         // llvm mem2reg pass will remove this if unneeded
-        Value *loc = emit_static_alloca(T);
-        builder.CreateStore(v, loc);
+        Value *loc;
+        if (Constant *cv = dyn_cast<Constant>(v)) {
+            loc = get_pointer_to_constant(cv, "", *jl_Module);
+        }
+        else {
+            loc = emit_static_alloca(T);
+            builder.CreateStore(v, loc);
+        }
         return mark_julia_slot(loc, typ, NULL, tbaa_stack);
     }
     Value *froot = NULL;
@@ -828,6 +852,7 @@ static void CreateTrap(IRBuilder<> &builder)
     builder.SetInsertPoint(newBB);
 }
 
+#if 0 // this code is likely useful, but currently unused
 #ifndef JL_NDEBUG
 static void CreateConditionalAbort(IRBuilder<> &builder, Value *test)
 {
@@ -843,6 +868,7 @@ static void CreateConditionalAbort(IRBuilder<> &builder, Value *test)
     builder.CreateUnreachable();
     builder.SetInsertPoint(postBB);
 }
+#endif
 #endif
 
 static void emit_write_barrier(jl_codectx_t*, Value*, Value*);
@@ -2525,9 +2551,9 @@ static Value *emit_f_is(const jl_cgval_t &arg1, const jl_cgval_t &arg2, jl_codec
     if (arg1.isghost || arg2.isghost) {
         // comparing to a singleton object
         if (arg1.TIndex)
-            return emit_isa(arg1, rt2, NULL, ctx); // rt2 is a singleton type
+            return emit_isa(arg1, rt2, NULL, ctx).first; // rt2 is a singleton type
         if (arg2.TIndex)
-            return emit_isa(arg2, rt1, NULL, ctx); // rt1 is a singleton type
+            return emit_isa(arg2, rt1, NULL, ctx).first; // rt1 is a singleton type
         // mark_gc_use isn't needed since we won't load this pointer
         // and we know at least one of them is a unique Singleton
         // which is already enough to ensure pointer uniqueness for this test
@@ -2543,7 +2569,7 @@ static Value *emit_f_is(const jl_cgval_t &arg1, const jl_cgval_t &arg2, jl_codec
         jl_value_t *typ = jl_isbits(rt1) ? rt1 : rt2;
         if (rt1 == rt2)
             return emit_bits_compare(arg1, arg2, ctx);
-        Value *same_type = (typ == rt2) ? emit_isa(arg1, typ, NULL, ctx) : emit_isa(arg2, typ, NULL, ctx);
+        Value *same_type = (typ == rt2) ? emit_isa(arg1, typ, NULL, ctx).first : emit_isa(arg2, typ, NULL, ctx).first;
         BasicBlock *currBB = builder.GetInsertBlock();
         BasicBlock *isaBB = BasicBlock::Create(jl_LLVMContext, "is", ctx->f);
         BasicBlock *postBB = BasicBlock::Create(jl_LLVMContext, "post_is", ctx->f);
@@ -2637,8 +2663,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             jl_value_t *tp0 = jl_tparam0(ty);
             *ret = emit_expr(args[1], ctx);
             emit_expr(args[2], ctx);
-            if (!jl_subtype(arg, tp0))
-                emit_typecheck(*ret, tp0, "typeassert", ctx);
+            emit_typecheck(*ret, tp0, "typeassert", ctx);
             ty = expr_type(expr, ctx); rt2 = ty;
             *ret = update_julia_type(*ret, ty, ctx);
             JL_GC_POP();
@@ -2672,13 +2697,10 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             jl_value_t *tp0 = jl_tparam0(ty);
             jl_cgval_t rt_arg = emit_expr(args[1], ctx);
             emit_expr(args[2], ctx);
-            if (jl_subtype(arg, tp0)) {
-                *ret = mark_julia_type(ConstantInt::get(T_int8, 1), false, jl_bool_type, ctx);
-            }
-            else {
-                Value *isa = emit_isa(rt_arg, tp0, NULL, ctx);
-                *ret = mark_julia_type(builder.CreateZExt(isa, T_int8), false, jl_bool_type, ctx);
-            }
+            Value *isa_result = emit_isa(rt_arg, tp0, NULL, ctx).first;
+            if (isa_result->getType() == T_int1)
+                isa_result = builder.CreateZExt(isa_result, T_int8);
+            *ret = mark_julia_type(isa_result, false, jl_bool_type, ctx);
             JL_GC_POP();
             return true;
         }
@@ -3632,7 +3654,8 @@ static Value *try_emit_union_alloca(jl_uniontype_t *ut, bool &allunbox, size_t &
     union_alloca_type(ut, allunbox, nbytes, align, min_align);
     if (nbytes > 0) {
         // at least some of the values can live on the stack
-        Type *AT = ArrayType::get(T_int8, nbytes);
+        // try to pick an Integer type size such that SROA will emit reasonable code
+        Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * min_align), (nbytes + min_align - 1) / min_align);
         AllocaInst *lv = emit_static_alloca(AT, ctx);
         if (align > 1)
             lv->setAlignment(align);
@@ -3856,6 +3879,8 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                     }
                     else {
                         Value *dest = vi.value.V;
+                        if (vi.pTIndex)
+                            builder.CreateStore(UndefValue::get(cast<AllocaInst>(vi.value.V)->getAllocatedType()), vi.value.V);
                         Type *store_ty = julia_type_to_llvm(rval_info.constant ? jl_typeof(rval_info.constant) : rval_info.typ);
                         Type *dest_ty = store_ty->getPointerTo();
                         if (dest_ty != dest->getType())
@@ -4587,10 +4612,8 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         retval = mark_julia_type(ret, true, astrt, &ctx);
     }
 
-    if (!jl_subtype(astrt, declrt)) {
-        // inline a call to typeassert here
-        emit_typecheck(retval, declrt, "cfunction", &ctx);
-    }
+    // inline a call to typeassert here
+    emit_typecheck(retval, declrt, "cfunction", &ctx);
 
     // Prepare the return value
     Value *r;
@@ -4987,26 +5010,35 @@ static jl_returninfo_t get_specsig_function(Module *M, const std::string &name, 
             }
         }
     }
+#if JL_LLVM_VERSION >= 50000
+    AttributeList attributes; // function declaration attributes
+#else
+    AttributeSet attributes; // function declaration attributes
+#endif
+    if (props.cc == jl_returninfo_t::SRet) {
+        attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::StructRet);
+        attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::NoAlias);
+        attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::NoCapture);
+    }
+    if (props.cc == jl_returninfo_t::Union) {
+        attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::NoAlias);
+        attributes = attributes.addAttribute(jl_LLVMContext, 1, Attribute::NoCapture);
+    }
     for (size_t i = 0; i < jl_nparams(sig); i++) {
         jl_value_t *jt = jl_tparam(sig, i);
         Type *ty = julia_type_to_llvm(jt);
         if (type_is_ghost(ty))
             continue;
-        if (ty->isAggregateType()) // aggregate types are passed by pointer
+        if (ty->isAggregateType()) { // aggregate types are passed by pointer
+            attributes = attributes.addAttribute(jl_LLVMContext, fsig.size() + 1, Attribute::NoCapture);
+            attributes = attributes.addAttribute(jl_LLVMContext, fsig.size() + 1, Attribute::ReadOnly);
             ty = PointerType::get(ty, 0);
+        }
         fsig.push_back(ty);
     }
     FunctionType *ftype = FunctionType::get(rt, fsig, false);
     Function *f = Function::Create(ftype, GlobalVariable::ExternalLinkage, name, M);
-    if (props.cc == jl_returninfo_t::SRet) {
-        f->addAttribute(1, Attribute::StructRet);
-        f->addAttribute(1, Attribute::NoAlias);
-        f->addAttribute(1, Attribute::NoCapture);
-    }
-    if (props.cc == jl_returninfo_t::Union) {
-        f->addAttribute(1, Attribute::NoAlias);
-        f->addAttribute(1, Attribute::NoCapture);
-    }
+    f->setAttributes(attributes);
     props.decl = f;
     return props;
 }

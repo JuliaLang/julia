@@ -383,6 +383,8 @@ julia> collect(1:2:13)
 """
 collect(itr) = _collect(1:1 #= Array =#, itr, iteratoreltype(itr), iteratorsize(itr))
 
+collect(A::AbstractArray) = _collect_indices(indices(A), A)
+
 collect_similar(cont, itr) = _collect(cont, itr, iteratoreltype(itr), iteratorsize(itr))
 
 _collect(cont, itr, ::HasEltype, isz::Union{HasLength,HasShape}) =
@@ -394,6 +396,14 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
         push!(a,x)
     end
     return a
+end
+
+_collect_indices(::Tuple{}, A) = copy!(Array{eltype(A)}(), A)
+_collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
+    copy!(Array{eltype(A)}(length.(indsA)), A)
+function _collect_indices(indsA, A)
+    B = Array{eltype(A)}(length.(indsA))
+    copy!(B, CartesianRange(indices(B)), A, CartesianRange(indsA))
 end
 
 if isdefined(Core, :Inference)
@@ -1040,26 +1050,30 @@ function =={T<:BitInteger}(a::Array{T,1}, b::Array{T,1})
         :memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * len)
 end
 
-function reverse(A::AbstractVector, s=1, n=length(A))
+function reverse(A::AbstractVector, s=first(linearindices(A)), n=last(linearindices(A)))
     B = similar(A)
-    for i = 1:s-1
+    for i = first(linearindices(A)):s-1
         B[i] = A[i]
     end
     for i = s:n
         B[i] = A[n+s-i]
     end
-    for i = n+1:length(A)
+    for i = n+1:last(linearindices(A))
         B[i] = A[i]
     end
     return B
 end
-reverseind(a::AbstractVector, i::Integer) = length(a) + 1 - i
+function reverseind(a::AbstractVector, i::Integer)
+    li = linearindices(a)
+    first(li) + last(li) - i
+end
 
-function reverse!(v::AbstractVector, s=1, n=length(v))
+function reverse!(v::AbstractVector, s=first(linearindices(v)), n=last(linearindices(v)))
+    liv = linearindices(v)
     if n <= s  # empty case; ok
-    elseif !(1 ≤ s ≤ endof(v))
+    elseif !(first(liv) ≤ s ≤ last(liv))
         throw(BoundsError(v, s))
-    elseif !(1 ≤ n ≤ endof(v))
+    elseif !(first(liv) ≤ n ≤ last(liv))
         throw(BoundsError(v, n))
     end
     r = n

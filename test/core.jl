@@ -181,6 +181,8 @@ nttest1{n}(x::NTuple{n,Int}) = n
 
 # #17198
 @test_throws MethodError convert(Tuple{Int}, (1.0, 2.0, 3.0))
+# #21238
+@test_throws MethodError convert(Tuple{Int,Int,Int}, (1, 2))
 
 # type declarations
 
@@ -4792,3 +4794,9 @@ b21178(::F1,::F2) where {B1,B2,F1<:F21178{B1,<:Any},F2<:F21178{B2}} = F1,F2,B1,B
 a21172 = f21172(x) = 2x
 @test f21172(8) == 16
 @test a21172 === f21172
+
+# issue #21271
+f21271() = convert(Tuple{Type{Int}, Type{Float64}}, (Int, Float64))::Tuple{Type{Int}, Type{Float64}}
+f21271(x) = x::Tuple{Type{Int}, Type{Float64}}
+@test_throws TypeError f21271()
+@test_throws TypeError f21271((Int, Float64))

@@ -729,3 +729,12 @@ end
 # inference on invalid getfield call
 @eval _getfield_with_string_() = getfield($(1=>2), "")
 @test Base.return_types(_getfield_with_string_, ()) == Any[Union{}]
+
+# inference AST of a constant return value
+f21175() = 902221
+@test code_typed(f21175, ())[1].second === Int
+# call again, so that the AST is built on-demand
+let e = code_typed(f21175, ())[1].first.code[1]::Expr
+    @test e.head === :return
+    @test e.args[1] == Core.QuoteNode(902221)
+end

@@ -1464,7 +1464,7 @@ static const std::string verify_ccall_sig(size_t nargs, jl_value_t *&rt, jl_valu
     }
     else {
         static_rt = retboxed || !jl_has_typevar_from_unionall(rt, unionall_env);
-        if (!static_rt && sparam_vals != NULL) {
+        if (!static_rt && sparam_vals != NULL && jl_svec_len(sparam_vals) > 0) {
             rt = jl_instantiate_type_in_env(rt, unionall_env, jl_svec_data(sparam_vals));
             // `rt` is gc-rooted by the caller
             static_rt = true;
@@ -1875,7 +1875,8 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         // if we know the function sparams, try to fill those in now
         // so that the julia_to_native type checks are more likely to be doable (e.g. leaf types) at compile-time
         jl_value_t *jargty_in_env = jargty;
-        if (ctx->spvals_ptr == NULL && !toboxed && unionall_env && jl_has_typevar_from_unionall(jargty, unionall_env)) {
+        if (ctx->spvals_ptr == NULL && !toboxed && unionall_env && jl_has_typevar_from_unionall(jargty, unionall_env) &&
+            jl_svec_len(ctx->linfo->sparam_vals) > 0) {
             jargty_in_env = jl_instantiate_type_in_env(jargty_in_env, unionall_env, jl_svec_data(ctx->linfo->sparam_vals));
             if (jargty_in_env != jargty)
                 jl_add_method_root(ctx, jargty_in_env);
@@ -1927,19 +1928,18 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     // argument, allocate the box and store that as the first argument type
     bool sretboxed = false;
     if (sret) {
-        jl_cgval_t sret_val = emit_new_struct(rt, 1, NULL, ctx); // TODO: is it valid to be creating an incomplete type this way?
-        assert(sret_val.typ != NULL && "Type was not concrete");
-        if (!sret_val.ispointer()) {
-            Value *mem = emit_static_alloca(lrt, ctx);
-            builder.CreateStore(sret_val.V, mem);
-            result = mem;
+        assert(!retboxed && jl_is_datatype(rt) && "sret return type invalid");
+        if (jl_isbits(rt)) {
+            result = emit_static_alloca(lrt, ctx);
         }
         else {
-            // XXX: result needs a GC root here if result->getType() == T_pjlvalue
-            result = sret_val.V;
+            // XXX: result needs to be zero'd and given a GC root here
+            assert(jl_datatype_size(rt) > 0 && "sret shouldn't be a singleton instance");
+            result = emit_allocobj(ctx, jl_datatype_size(rt),
+                                   literal_pointer_val((jl_value_t*)rt));
+            sretboxed = true;
         }
         argvals[0] = emit_bitcast(result, fargt_sig.at(0));
-        sretboxed = sret_val.isboxed;
     }
 
     Instruction *stacksave = NULL;
@@ -2062,8 +2062,12 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     }
     else if (sret) {
         jlretboxed = sretboxed;
-        if (!jlretboxed)
-            result = builder.CreateLoad(result); // something alloca'd above
+        if (!jlretboxed) {
+            // something alloca'd above is SSA
+            if (static_rt)
+                return mark_julia_slot(result, rt, NULL, tbaa_stack);
+            result = builder.CreateLoad(result);
+        }
     }
     else {
         Type *jlrt = julia_type_to_llvm(rt, &jlretboxed); // compute the real "julian" return type and compute whether it is boxed
