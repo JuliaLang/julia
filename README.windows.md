@@ -117,10 +117,24 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
   3. Specify the location where you installed CMake
 
      ```
-    echo 'override CMAKE=/C/path/to/CMake/bin/cmake.exe' > Make.user
+    echo 'override CMAKE="/C/Program Files/CMake/bin/cmake.exe"' >> Make.user
+```
+     *N.B.* The path to CMAKE may differ on your system. Adjust accordingly.
+     
+  4. Optionally install clang as your C/C++ compiler
+     1. Download and install the prebuilt clang binaries from http://llvm.org/releases/download.html.
+        The rest of these instructions will assume LLVM was installed to C:\LLVM.
+     2. Set clang as your default compiler:
+     ```
+    cat > Make.user <<EOF
+        override CC_ARG=--sysroot=$(HOME)/julia/usr/x86_64-w64-mingw32/sys-root/mingw -target x86_64-w64-mingw32
+        override CXX_ARG=$(CC_ARG)
+        override CC=/C/LLVM/bin/clang.exe $(CC_ARG)
+        override CXX=/C/LLVM/bin/clang++.exe $(CC_ARG)
+    EOF
 ```
 
-  4. Start the build
+  5. Start the build
      ```
     make -j 4   # Adjust the number of cores (4) to match your build environment.
 ```
