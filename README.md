@@ -11,14 +11,12 @@ Windows: [![Build status](https://ci.appveyor.com/api/projects/status/dvial98s5v
 
 Code Coverage: [![Coverage Status](https://coveralls.io/repos/JuliaLang/julia/badge.svg?branch=master)](https://coveralls.io/r/JuliaLang/julia?branch=master) [![codecov.io](http://codecov.io/github/JuliaLang/julia/coverage.svg?branch=master)](http://codecov.io/github/JuliaLang/julia?branch=master)
 
-<a name="The-Julia-Language"/>
 ## The Julia Language
 
 Julia is a high-level, high-performance dynamic language for technical computing.
 The main homepage for Julia can be found at [julialang.org](http://julialang.org/).
 This is the GitHub repository of Julia source code, including instructions for compiling and installing Julia, below.
 
-<a name="Resources"/>
 ## Resources
 
 - **Homepage:** <http://julialang.org>
@@ -36,14 +34,12 @@ This is the GitHub repository of Julia source code, including instructions for c
 New developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md) helpful to start contributing to the Julia codebase.
 
 ### External Resources
-<a name="External-Resources"/>
 
 - [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
 - [**Youtube**](https://www.youtube.com/channel/UC9IuUwwE2xdjQUT_LMLONoA)
 - [**Twitter**](https://twitter.com/JuliaLanguage)
 - [**Meetup**](http://julia.meetup.com/)
 
-<a name="Currently-Supported-Platforms"/>
 ## Currently Supported Platforms
 
 - **Linux**
@@ -53,10 +49,9 @@ New developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang
 
 All systems are supported with both x86/64 (64-bit) and x86 (32-bit, except MacOS) architectures. Support for [ARM](https://github.com/JuliaLang/julia/blob/master/README.arm.md), AARCH64, and POWER8 (little-endian) has been added recently.
 
-<a name="Source-Download-and-Compilation"/>
 ## Source Download and Compilation
 
-First, make sure you have all the [required dependencies](#Required-Build-Tools-External-Libraries) installed.
+First, make sure you have all the [required dependencies](#required-build-tools-and-external-libraries) installed.
 Then, acquire the source code by cloning the git repository:
 
     git clone git://github.com/JuliaLang/julia.git
@@ -72,7 +67,7 @@ By default you will be building the latest unstable version of Julia. However, m
     git checkout release-0.5
 
 Now run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes. (See [Platform Specific Build Notes](https://github.com/JuliaLang/julia#platform-specific-build-notes) for details.)
-When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
+When compiled the first time, it will automatically download and build its [external dependencies](#required-build-tools-and-external-libraries).
 This takes a while, but only has to be done once. If the defaults in the build do not work for you, and you need to set specific make parameters, you can save them in `Make.user`. The build will automatically check for the existence of `Make.user` and use it if it exists.
 Building Julia requires 1.5GiB of disk space and approximately 700MiB of virtual memory.
 
@@ -171,12 +166,10 @@ latest version.
 
 
 
-<a name="Uninstalling-Julia"/>
 ## Uninstalling Julia
 
 Julia does not install anything outside the directory it was cloned into. Julia can be completely uninstalled by deleting this directory. Julia packages are installed in `~/.julia` by default, and can be uninstalled by deleting `~/.julia`.
 
-<a name="Platform-Specific-Notes"/>
 ## Platform-Specific Build Notes
 
 ### Linux
@@ -186,7 +179,7 @@ Julia does not install anything outside the directory it was cloned into. Julia 
 * GCC version 4.7 or later is required to build Julia.
 * To use external shared libraries not in the system library search path, set `USE_SYSTEM_XXX=1` and `LDFLAGS=-Wl,-rpath,/path/to/dir/contains/libXXX.so` in `Make.user`.
   * Instead of setting `LDFLAGS`, putting the library directory into the environment variable `LD_LIBRARY_PATH` (at both compile and run time) also works.
-* See also the [external dependencies](#Required-Build-Tools-External-Libraries).
+* See also the [external dependencies](#required-build-tools-and-external-libraries).
 
 #### Architecture Customization
 
@@ -199,7 +192,7 @@ You can also set `MARCH=native` for a maximum-performance build customized for t
 
 #### Ubuntu
 
-The [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/) contains updated packages for Julia dependencies if you want to use system libraries instead of having them downloaded and built during the build process.  See [System Provided Libraries](#System-Provided-Libraries).
+The [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/) contains updated packages for Julia dependencies if you want to use system libraries instead of having them downloaded and built during the build process.  See [System Provided Libraries](#system-provided-libraries).
 
 #### RHEL/CentOS 6
 
@@ -255,7 +248,6 @@ In order to build Julia on Windows, see [README.windows](https://github.com/Juli
 
 Julia can be developed in an isolated Vagrant environment. See [the Vagrant README](https://github.com/JuliaLang/julia/blob/master/contrib/vagrant/README.md) for details.
 
-<a name="Required-Build-Tools-External-Libraries"/>
 ## Required Build Tools and External Libraries
 
 Building Julia requires that the following software be installed:
@@ -323,7 +315,6 @@ Julia uses the following external libraries, which are automatically downloaded 
 [FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
 [GMP]:          http://gmplib.org
 [MPFR]:         http://www.mpfr.org
-[double-conversion]: http://double-conversion.googlecode.com
 [libuv]:        https://github.com/JuliaLang/libuv
 [libgit2]:      https://libgit2.github.com/
 [utf8proc]:     http://julialang.org/utf8proc/
@@ -333,7 +324,6 @@ Julia uses the following external libraries, which are automatically downloaded 
 [mbedtls]:      https://tls.mbed.org/
 [pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
 
-<a name="System-Provided-Libraries">
 ### System Provided Libraries
 
 If you already have one or more of these packages installed on your system, you can prevent Julia from compiling duplicates of these libraries by passing `USE_SYSTEM_...=1` to `make` or adding the line to `Make.user`. The complete list of possible flags can be found in `Make.inc`.
@@ -365,7 +355,6 @@ Add the following to the `Make.user` file:
 
 It is highly recommended to start with a fresh clone of the Julia repository.
 
-<a name="Source-Code-Organization"/>
 ## Source Code Organization
 
 The Julia source code is organized as follows:
@@ -382,7 +371,6 @@ The Julia source code is organized as follows:
     ui/            source for various front ends
     usr/           binaries and shared libraries loaded by Julia's standard libraries
 
-<a name="Binary-Installation"/>
 ## Binary Installation
 
 If you would rather not compile the latest Julia from source, platform-specific tarballs with pre-compiled binaries are also [available for download](http://julialang.org/downloads/).
@@ -420,7 +408,6 @@ The following distributions include julia, but the versions may be out of date d
 * [MacPorts](https://trac.macports.org/browser/trunk/dports/lang/julia/Portfile)
 * [OS X Homebrew Tap](https://github.com/staticfloat/homebrew-julia/)
 
-<a name="Editor-Terminal-Setup"/>
 ## Editor and Terminal Setup
 
 Currently, Julia editing mode support is available for a number of

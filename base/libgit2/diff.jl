@@ -34,14 +34,49 @@ function diff_tree(repo::GitRepo, oldtree::GitTree, newtree::GitTree)
     return GitDiff(repo, diff_ptr_ptr[])
 end
 
+function GitDiffStats(diff::GitDiff)
+    diff_stat_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    @check ccall((:git_diff_get_stats, :libgit2), Cint,
+                  (Ptr{Ptr{Void}}, Ptr{Void}),
+                  diff_stat_ptr_ptr, diff.ptr)
+    return GitDiffStats(diff.owner, diff_stat_ptr_ptr[])
+end
+
+function files_changed(diff_stat::GitDiffStats)
+    return ccall((:git_diff_stats_files_changed, :libgit2), Csize_t, (Ptr{Void},), diff_stat.ptr)
+end
+
+function insertions(diff_stat::GitDiffStats)
+    return ccall((:git_diff_stats_insertions, :libgit2), Csize_t, (Ptr{Void},), diff_stat.ptr)
+end
+
+function deletions(diff_stat::GitDiffStats)
+    return ccall((:git_diff_stats_deletions, :libgit2), Csize_t, (Ptr{Void},), diff_stat.ptr)
+end
+
 function Base.count(diff::GitDiff)
     return ccall((:git_diff_num_deltas, :libgit2), Cint, (Ptr{Void},), diff.ptr)
 end
 
 function Base.getindex(diff::GitDiff, i::Integer)
+    if i < 1 || i > count(diff)
+        throw(BoundsError(diff, (i,)))
+    end
     delta_ptr = ccall((:git_diff_get_delta, :libgit2),
                       Ptr{DiffDelta},
                       (Ptr{Void}, Csize_t), diff.ptr, i-1)
-    delta_ptr == C_NULL && throw(BoundsError(diff, (i,)))
     return unsafe_load(delta_ptr)
+end
+
+function Base.show(io::IO, diff_stat::GitDiffStats)
+    println(io, "GitDiffStats:")
+    println(io, "Files changed: $(files_changed(diff_stat))")
+    println(io, "Insertions: $(insertions(diff_stat))")
+    println(io, "Deletions: $(deletions(diff_stat))")
+end
+
+function Base.show(io::IO, diff::GitDiff)
+    println(io, "GitDiff:")
+    println(io, "Number of deltas: $(count(diff))")
+    show(io, GitDiffStats(diff))
 end

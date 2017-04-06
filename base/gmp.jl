@@ -443,9 +443,6 @@ end
 ^(x::Integer, y::BigInt ) = bigint_pow(BigInt(x), y)
 ^(x::Bool   , y::BigInt ) = Base.power_by_squaring(x, y)
 
-# override default inlining of x^2 and x^3 etc.
-^{p}(x::BigInt, ::Type{Val{p}}) = x^Culong(p)
-
 function powermod(x::BigInt, p::BigInt, m::BigInt)
     r = BigInt()
     ccall((:__gmpz_powm, :libgmp), Void,

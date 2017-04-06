@@ -7,9 +7,6 @@ struct Keyword
 end
 macro kw_str(text) Keyword(Symbol(text)) end
 
-"Hello, Human."
-kw"hello", kw"hi"
-
 """
 **Welcome to Julia $(string(VERSION)).** The full manual is available at
 
@@ -676,6 +673,13 @@ Equivalent to `Any` for dispatch purposes, but signals the compiler to skip code
 generation specialization for that field.
 """
 ANY
+
+"""
+    Core.TypeofBottom
+
+The singleton type containing only the value `Union{}`.
+"""
+Core.TypeofBottom
 
 """
     DevNull

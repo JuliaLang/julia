@@ -246,7 +246,8 @@ for T in vcat(subtypes(Signed), subtypes(Unsigned))
 
     # Test that the entire input string appears in error messages
     let s = "     false    true     "
-        result = @test_throws ArgumentError get(Base.tryparse_internal(Bool, s, start(s), endof(s), 0, true))
+        result = @test_throws(ArgumentError,
+            get(Base.tryparse_internal(Bool, s, start(s), endof(s), 0, true)))
         @test result.value.msg == "invalid Bool representation: $(repr(s))"
     end
 
@@ -274,6 +275,9 @@ for T in vcat(subtypes(Signed), subtypes(Unsigned))
     @test parse(Float64, "    .5    ") == 0.5
     @test parse(Float64, ".5    "    ) == 0.5
 end
+
+@test parse(Bool, "\u202f true") === true
+@test parse(Bool, "\u202f false") === false
 
 parsebin(s) = parse(Int,s,2)
 parseoct(s) = parse(Int,s,8)
@@ -418,7 +422,9 @@ end
                                  Expr(Symbol("&&"), :c, :d))
 
 # issue #11988 -- normalize \r and \r\n in literal strings to \n
-@test "foo\nbar" == parse("\"\"\"\r\nfoo\r\nbar\"\"\"") == parse("\"\"\"\nfoo\nbar\"\"\"") == parse("\"\"\"\rfoo\rbar\"\"\"") == parse("\"foo\r\nbar\"") == parse("\"foo\rbar\"") == parse("\"foo\nbar\"")
+@test "foo\nbar" == parse("\"\"\"\r\nfoo\r\nbar\"\"\"") ==
+    parse("\"\"\"\nfoo\nbar\"\"\"") == parse("\"\"\"\rfoo\rbar\"\"\"") ==
+    parse("\"foo\r\nbar\"") == parse("\"foo\rbar\"") == parse("\"foo\nbar\"")
 @test '\r' == first("\r") == first("\r\n") # still allow explicit \r
 
 # issue #14561 - generating 0-method generic function def
@@ -689,6 +695,11 @@ let m_error, error_out, filename = Base.source_path()
     m_error = try @eval method_c6(A; B) = 3; catch e; e; end
     error_out = sprint(showerror, m_error)
     @test error_out == "syntax: keyword argument \"B\" needs a default value"
+
+    # issue #20614
+    m_error = try @eval foo{N}(types::NTuple{N}, values::Vararg{Any,N}, c) = nothing; catch e; e; end
+    error_out = sprint(showerror, m_error)
+    @test startswith(error_out, "ArgumentError: Vararg on non-final argument")
 end
 
 # issue #7272
@@ -1023,4 +1034,53 @@ call(::A) = 1
 const a = A()
 @test_throws MethodError a()
 @test call(a) === 1
+end
+
+# issue #20729
+macro m20729()
+    ex = Expr(:head)
+    resize!(ex.args, 1)
+    return ex
+end
+
+@test_throws ErrorException eval(:(@m20729))
+@test expand(:(@m20729)) == Expr(:error, "undefined reference in AST")
+
+macro err20000()
+    return Expr(:error, "oops!")
+end
+
+@test expand(:(@err20000)) == Expr(:error, "oops!")
+
+# issue #20000
+@test parse("@m(a; b=c)") == Expr(:macrocall, Symbol("@m"),
+                                  Expr(:parameters, Expr(:kw, :b, :c)), :a)
+
+# issue #21054
+macro make_f21054(T)
+    quote
+        $(esc(:f21054))(X::Type{<:$T}) = 1
+    end
+end
+@eval @make_f21054 $Array
+@test isa(f21054, Function)
+g21054(>:) = >:2
+@test g21054(-) == -2
+
+# issue #21168
+@test expand(:(a.[1])) == Expr(:error, "invalid syntax a.[1]")
+@test expand(:(a.{1})) == Expr(:error, "invalid syntax a.{1}")
+
+# Issue #21225
+let abstr = parse("abstract type X end")
+    @test parse("abstract type X; end") == abstr
+    @test parse(string("abstract type X", ";"^5, " end")) == abstr
+    @test parse("abstract type X\nend") == abstr
+    @test parse(string("abstract type X", "\n"^5, "end")) == abstr
+end
+let prim = parse("primitive type X 8 end")
+    @test parse("primitive type X 8; end") == prim
+    @test parse(string("primitive type X 8", ";"^5, " end")) == prim
+    @test parse("primitive type X 8\nend") == prim
+    @test parse(string("primitive type X 8", "\n"^5, "end")) == prim
 end

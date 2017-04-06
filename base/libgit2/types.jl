@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
+
 import Base.@kwdef
 import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE
 
@@ -196,8 +197,8 @@ Options for connecting through a proxy.
 Matches the [`git_proxy_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_proxy_options) struct.
 """
 @kwdef struct ProxyOptions
-    version::Cuint             = 1
-    proxytype::Cint
+    version::Cuint               = 1
+    proxytype::Consts.GIT_PROXY  = Consts.PROXY_AUTO
     url::Cstring
     credential_cb::Ptr{Void}
     certificate_cb::Ptr{Void}
@@ -286,6 +287,13 @@ struct DiffFile
     end
 end
 
+function Base.show(io::IO, df::DiffFile)
+    println(io, "DiffFile:")
+    println(io, "Oid: $(df.id))")
+    println(io, "Path: $(df.path)")
+    println(io, "Size: $(df.size)")
+end
+
 """
     LibGit2.DiffDelta
 
@@ -299,6 +307,14 @@ struct DiffDelta
     nfiles::UInt16
     old_file::DiffFile
     new_file::DiffFile
+end
+
+function Base.show(io::IO, dd::DiffDelta)
+    println(io, "DiffDelta:")
+    println(io, "Status: $(Consts.DELTA_STATUS(dd.status))")
+    println(io, "Number of files: $(dd.nfiles)")
+    println(io, "Old file:\n$(dd.old_file)")
+    println(io, "New file:\n$(dd.new_file)")
 end
 
 """
@@ -404,7 +420,10 @@ struct RebaseOperation
     id::GitHash
     exec::Cstring
 end
-Base.show(io::IO, rbo::RebaseOperation) = print(io, "RebaseOperation($(string(rbo.id)))")
+function Base.show(io::IO, rbo::RebaseOperation)
+    println(io, "RebaseOperation($(string(rbo.id)))")
+    println(io, "Operation type: $(Consts.GIT_REBASE_OPERATION(rbo.optype))")
+end
 
 """
     LibGit2.StatusOptions
@@ -449,35 +468,47 @@ struct FetchHead
     ismerge::Bool
 end
 
+function Base.show(io::IO, fh::FetchHead)
+    println(io, "FetchHead:")
+    println(io, "Name: $(fh.name)")
+    println(io, "URL: $(fh.url)")
+    print(io, "OID: ")
+    show(io, fh.oid)
+    println(io)
+    println(io, "Merged: $(fh.ismerge)")
+end
+
 # Abstract object types
 abstract type AbstractGitObject end
 Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
 
 abstract type GitObject <: AbstractGitObject end
 
-for (typ, reporef, sup, cname) in [
-    (:GitRepo,       nothing,   :AbstractGitObject, :git_repository),
-    (:GitTreeEntry,  nothing,   :AbstractGitObject, :git_tree_entry),
-    (:GitConfig,     :Nullable, :AbstractGitObject, :git_config),
-    (:GitIndex,      :Nullable, :AbstractGitObject, :git_index),
-    (:GitRemote,     :GitRepo,  :AbstractGitObject, :git_remote),
-    (:GitRevWalker,  :GitRepo,  :AbstractGitObject, :git_revwalk),
-    (:GitReference,  :GitRepo,  :AbstractGitObject, :git_reference),
-    (:GitDiff,       :GitRepo,  :AbstractGitObject, :git_diff),
-    (:GitAnnotated,  :GitRepo,  :AbstractGitObject, :git_annotated_commit),
-    (:GitRebase,     :GitRepo,  :AbstractGitObject, :git_rebase),
-    (:GitStatus,     :GitRepo,  :AbstractGitObject, :git_status_list),
-    (:GitBranchIter, :GitRepo,  :AbstractGitObject, :git_branch_iterator),
-    (:GitUnknownObject,  :GitRepo,  :GitObject,         :git_object),
-    (:GitCommit,     :GitRepo,  :GitObject,         :git_commit),
-    (:GitBlob,       :GitRepo,  :GitObject,         :git_blob),
-    (:GitTree,       :GitRepo,  :GitObject,         :git_tree),
-    (:GitTag,        :GitRepo,  :GitObject,         :git_tag)]
+for (typ, owntyp, sup, cname) in [
+    (:GitRepo,          nothing,               :AbstractGitObject, :git_repository),
+    (:GitConfig,        :(Nullable{GitRepo}),  :AbstractGitObject, :git_config),
+    (:GitIndex,         :(Nullable{GitRepo}),  :AbstractGitObject, :git_index),
+    (:GitRemote,        :GitRepo,              :AbstractGitObject, :git_remote),
+    (:GitRevWalker,     :GitRepo,              :AbstractGitObject, :git_revwalk),
+    (:GitReference,     :GitRepo,              :AbstractGitObject, :git_reference),
+    (:GitDiff,          :GitRepo,              :AbstractGitObject, :git_diff),
+    (:GitDiffStats,     :GitRepo,              :AbstractGitObject, :git_diff_stats),
+    (:GitAnnotated,     :GitRepo,              :AbstractGitObject, :git_annotated_commit),
+    (:GitRebase,        :GitRepo,              :AbstractGitObject, :git_rebase),
+    (:GitStatus,        :GitRepo,              :AbstractGitObject, :git_status_list),
+    (:GitBranchIter,    :GitRepo,              :AbstractGitObject, :git_branch_iterator),
+    (:GitUnknownObject, :GitRepo,              :GitObject,         :git_object),
+    (:GitCommit,        :GitRepo,              :GitObject,         :git_commit),
+    (:GitBlob,          :GitRepo,              :GitObject,         :git_blob),
+    (:GitTree,          :GitRepo,              :GitObject,         :git_tree),
+    (:GitTag,           :GitRepo,              :GitObject,         :git_tag),
+    (:GitTreeEntry,     :GitTree,              :AbstractGitObject, :git_tree_entry),
+    ]
 
-    if reporef === nothing
+    if owntyp === nothing
         @eval mutable struct $typ <: $sup
             ptr::Ptr{Void}
-            function $typ(ptr::Ptr{Void},fin=true)
+            function $typ(ptr::Ptr{Void}, fin::Bool=true)
                 # fin=false should only be used when the pointer should not be free'd
                 # e.g. from within callback functions which are passed a pointer
                 @assert ptr != C_NULL
@@ -489,35 +520,25 @@ for (typ, reporef, sup, cname) in [
                 return obj
             end
         end
-    elseif reporef == :Nullable
+    else
         @eval mutable struct $typ <: $sup
-            nrepo::Nullable{GitRepo}
+            owner::$owntyp
             ptr::Ptr{Void}
-            function $typ(repo::GitRepo, ptr::Ptr{Void})
+            function $typ(owner::$owntyp, ptr::Ptr{Void}, fin::Bool=true)
                 @assert ptr != C_NULL
-                obj = new(Nullable(repo), ptr)
-                Threads.atomic_add!(REFCOUNT, UInt(1))
-                finalizer(obj, Base.close)
-                return obj
-            end
-            function $typ(ptr::Ptr{Void})
-                @assert ptr != C_NULL
-                obj = new(Nullable{GitRepo}(), ptr)
-                Threads.atomic_add!(REFCOUNT, UInt(1))
-                finalizer(obj, Base.close)
+                obj = new(owner, ptr)
+                if fin
+                    Threads.atomic_add!(REFCOUNT, UInt(1))
+                    finalizer(obj, Base.close)
+                end
                 return obj
             end
         end
-    elseif reporef == :GitRepo
-        @eval mutable struct $typ <: $sup
-            repo::GitRepo
-            ptr::Ptr{Void}
-            function $typ(repo::GitRepo, ptr::Ptr{Void})
-                @assert ptr != C_NULL
-                obj = new(repo, ptr)
-                Threads.atomic_add!(REFCOUNT, UInt(1))
-                finalizer(obj, Base.close)
-                return obj
+        if isa(owntyp, Expr) && owntyp.args[1] == :Nullable
+            @eval begin
+                $typ(ptr::Ptr{Void}, fin::Bool=true) = $typ($owntyp(), ptr, fin)
+                $typ(owner::$(owntyp.args[2]), ptr::Ptr{Void}, fin::Bool=true) =
+                    $typ($owntyp(owner), ptr, fin)
             end
         end
     end
@@ -591,7 +612,7 @@ function with_warn{T}(f::Function, ::Type{T}, args...)
 end
 
 """
-    LibGit2.Const.OBJECT{T<:GitObject}(::Type{T})
+    LibGit2.Consts.OBJECT{T<:GitObject}(::Type{T})
 
 The `OBJECT` enum value corresponding to type `T`.
 """

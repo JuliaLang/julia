@@ -52,12 +52,12 @@ end
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
 
-logging(DevNull, TestMain_misc.Logging, :bar;  kind=:info)
+logging(DevNull, Logging, :bar;  kind=:info)
 @test all(contains.(sprint(Logging.bar), ["WARNING: barwarn", "ERROR: \"barerror\""]))
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
-logging(DevNull, TestMain_misc.Logging;  kind=:info)
+logging(DevNull, Logging;  kind=:info)
 @test all(contains.(sprint(Logging.bar), ["WARNING: barwarn", "ERROR: \"barerror\""]))
 @test all(contains.(sprint(Logging.pooh), ["WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
@@ -73,12 +73,12 @@ logging(kind=:info)
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
 
-logging(DevNull, TestMain_misc.Logging, :bar;  kind=:warn)
+logging(DevNull, Logging, :bar;  kind=:warn)
 @test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "ERROR: \"barerror\""]))
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
-logging(DevNull, TestMain_misc.Logging;  kind=:warn)
+logging(DevNull, Logging;  kind=:warn)
 @test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "ERROR: \"barerror\""]))
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
@@ -94,12 +94,12 @@ logging(kind=:warn)
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
 
-logging(DevNull, TestMain_misc.Logging, :bar;  kind=:error)
+logging(DevNull, Logging, :bar;  kind=:error)
 @test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "WARNING: barwarn"]))
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
-logging(DevNull, TestMain_misc.Logging;  kind=:error)
+logging(DevNull, Logging;  kind=:error)
 @test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "WARNING: barwarn"]))
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn"]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
@@ -115,12 +115,12 @@ logging(kind=:error)
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
 
-logging(DevNull, TestMain_misc.Logging, :bar)
+logging(DevNull, Logging, :bar)
 @test sprint(Logging.bar) == ""
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
-logging(DevNull, TestMain_misc.Logging)
+logging(DevNull, Logging)
 @test sprint(Logging.bar) == ""
 @test sprint(Logging.pooh) == ""
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
@@ -567,6 +567,25 @@ let
         buf = IOBuffer()
         print_with_color(:red, buf, "foo")
         @test startswith(String(take!(buf)), Base.text_colors[:red])
+    finally
+        @eval Base have_color = $(old_have_color)
+    end
+end
+
+# Test that `print_with_color` accepts non-string values, just as `print` does
+let
+    old_have_color = Base.have_color
+    try
+        @eval Base have_color = true
+        buf_color = IOBuffer()
+        args = (3.2, "foo", :testsym)
+        print_with_color(:red, buf_color, args...)
+        buf_plain = IOBuffer()
+        print(buf_plain, args...)
+        expected_str = string(Base.text_colors[:red],
+                              String(take!(buf_plain)),
+                              Base.text_colors[:default])
+        @test expected_str == String(take!(buf_color))
     finally
         @eval Base have_color = $(old_have_color)
     end

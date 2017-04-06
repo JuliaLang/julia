@@ -219,28 +219,29 @@ showerror(io::IO, ex::InitError) = showerror(io, ex, [])
 function showerror(io::IO, ex::DomainError, bt; backtrace=true)
     print(io, "DomainError:")
     for b in bt
-        code = StackTraces.lookup(b)[1]
-        if !code.from_c
-            if code.func == :nan_dom_err
+        for code in StackTraces.lookup(b)
+            if code.from_c
+                continue
+            elseif code.func === :nan_dom_err
                 continue
             elseif code.func in (:log, :log2, :log10, :sqrt)
                 print(io, "\n$(code.func) will only return a complex result if called ",
                     "with a complex argument. Try $(string(code.func))(complex(x)).")
-            elseif (code.func == :^ && code.file == Symbol("intfuncs.jl")) ||
-                    code.func == :power_by_squaring #3024
+            elseif (code.func === :^ &&
+                    (code.file === Symbol("intfuncs.jl") || code.file === Symbol(joinpath(".", "intfuncs.jl")))) ||
+                   code.func === :power_by_squaring #3024
                 print(io, "\nCannot raise an integer x to a negative power -n. ",
                     "\nMake x a float by adding a zero decimal (e.g. 2.0^-n instead ",
                     "of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.")
-            elseif code.func == :^ &&
-                    (code.file == Symbol("promotion.jl") || code.file == Symbol("math.jl") ||
-                    code.file == Symbol(joinpath(".","promotion.jl")) ||
-                    code.file == Symbol(joinpath(".","math.jl")))
+            elseif code.func === :^ &&
+                    (code.file === Symbol("math.jl") || code.file === Symbol(joinpath(".", "math.jl")))
                 print(io, "\nExponentiation yielding a complex result requires a complex ",
                     "argument.\nReplace x^y with (x+0im)^y, Complex(x)^y, or similar.")
             end
-            break
+            @goto showbacktrace
         end
     end
+    @label showbacktrace
     backtrace && show_backtrace(io, bt)
     nothing
 end
@@ -322,6 +323,18 @@ function showerror(io::IO, ex::MethodError)
             f_is_function = true
             print(io, "no method matching ", name)
         elseif isa(f, Type)
+            if isa(f, DataType) && f.abstract
+                # Print a more appropriate message if the only method
+                # on the type is the default one from sysimg.jl.
+                ms = methods(f)
+                if length(ms) == 1
+                    m = first(ms)
+                    if Base.is_default_method(m)
+                        print(io, "no constructors have been defined for $f")
+                        return
+                    end
+                end
+            end
             print(io, "no method matching ", f)
         else
             print(io, "no method matching (::", ft, ")")
@@ -352,7 +365,8 @@ function showerror(io::IO, ex::MethodError)
             print(io, "You may have intended to import Base.", name)
         end
     end
-    if method_exists(ex.f, arg_types)
+    if (ex.world != typemax(UInt) && method_exists(ex.f, arg_types) &&
+        !method_exists(ex.f, arg_types, ex.world))
         curworld = ccall(:jl_get_world_counter, UInt, ())
         println(io)
         print(io, "The applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
@@ -444,6 +458,9 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
             buf = IOBuffer()
             tv = Any[]
             sig0 = method.sig
+            if Base.is_default_method(method)
+                continue
+            end
             while isa(sig0, UnionAll)
                 push!(tv, sig0.var)
                 sig0 = sig0.body
@@ -649,4 +666,12 @@ function process_backtrace(process_func::Function, t::Vector, limit::Int=typemax
     if n > 0
         process_func(last_frame, n)
     end
+end
+
+"""
+Determines whether a method is the default method which is provided to all types from sysimg.jl.
+Such a method is usually undesirable to be displayed to the user in the REPL.
+"""
+function is_default_method(m::Method)
+    return m.module == Base && m.file == Symbol("sysimg.jl") && m.sig == Tuple{Type{T},Any} where T
 end

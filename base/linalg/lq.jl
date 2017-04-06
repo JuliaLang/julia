@@ -79,6 +79,13 @@ end
 
 getq(A::LQ) = LQPackedQ(A.factors, A.τ)
 
+function show(io::IO, C::LQ)
+    println(io, "$(typeof(C)) with factors L and Q:")
+    show(io, C[:L])
+    println(io)
+    show(io, C[:Q])
+end
+
 convert{T}(::Type{LQPackedQ{T}}, Q::LQPackedQ) = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
 convert{T}(::Type{AbstractMatrix{T}}, Q::LQPackedQ) = convert(LQPackedQ{T}, Q)
 convert(::Type{Matrix}, A::LQPackedQ) = LAPACK.orglq!(copy(A.factors),A.τ)

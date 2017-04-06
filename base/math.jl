@@ -20,13 +20,23 @@ import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              max, min, minmax, ^, exp2, muladd, rem,
              exp10, expm1, log1p
 
-using Base: sign_mask, exponent_mask, exponent_one, exponent_bias,
-            exponent_half, exponent_max, exponent_raw_max, fpinttype,
-            significand_mask, significand_bits, exponent_bits
+using Base: sign_mask, exponent_mask, exponent_one,
+            exponent_half, fpinttype, significand_mask
 
-using Core.Intrinsics: sqrt_llvm, powi_llvm
+using Core.Intrinsics: sqrt_llvm
 
-const IEEEFloat = Union{Float16,Float32,Float64}
+const IEEEFloat = Union{Float16, Float32, Float64}
+
+for T in (Float16, Float32, Float64)
+    @eval significand_bits(::Type{$T}) = $(trailing_ones(significand_mask(T)))
+    @eval exponent_bits(::Type{$T}) = $(sizeof(T)*8 - significand_bits(T) - 1)
+    @eval exponent_bias(::Type{$T}) = $(Int(exponent_one(T) >> significand_bits(T)))
+    # maximum float exponent
+    @eval exponent_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T))
+    # maximum float exponent without bias
+    @eval exponent_raw_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)))
+end
+
 # non-type specific math functions
 
 """
@@ -229,8 +239,6 @@ for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp2, :expm1)
         ($f)(x::Real) = ($f)(float(x))
     end
 end
-# pure julia exp function
-include("special/exp.jl")
 exp(x::Real) = exp(float(x))
 
 # fallback definitions to prevent infinite loop from $f(x::Real) def above
@@ -283,9 +291,11 @@ end
 # TODO: GNU libc has exp10 as an extension; should openlibm?
 exp10(x::Float64) = 10.0^x
 exp10(x::Float32) = 10.0f0^x
-exp10(x::Integer) = exp10(float(x))
+exp10(x::Real) = exp10(float(x))
 
 # utility for converting NaN return to DomainError
+# the branch in nan_dom_err prevents its callers from inlining, so be sure to force it
+# until the heuristics can be improved
 @inline nan_dom_err(f, x) = isnan(f) & !isnan(x) ? throw(DomainError()) : f
 
 # functions that return NaN on non-NaN argument for domain error
@@ -403,9 +413,9 @@ log1p(x)
 for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
           :lgamma, :log1p)
     @eval begin
-        ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)),libm), Float64, (Float64,), x), x)
-        ($f)(x::Float32) = nan_dom_err(ccall(($(string(f,"f")),libm), Float32, (Float32,), x), x)
-        ($f)(x::Real) = ($f)(float(x))
+        @inline ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), x)
+        @inline ($f)(x::Float32) = nan_dom_err(ccall(($(string(f, "f")), libm), Float32, (Float32,), x), x)
+        @inline ($f)(x::Real) = ($f)(float(x))
     end
 end
 
@@ -436,7 +446,7 @@ julia> √(a^2 + a^2) # a^2 overflows
 ERROR: DomainError:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
 Stacktrace:
- [1] sqrt(::Int64) at ./math.jl:421
+ [1] sqrt(::Int64) at ./math.jl:431
 ```
 """
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
@@ -683,15 +693,12 @@ function modf(x::Float64)
     f, _modf_temp[]
 end
 
-^(x::Float64, y::Float64) = nan_dom_err(ccall((:pow,libm),  Float64, (Float64,Float64), x, y), x+y)
-^(x::Float32, y::Float32) = nan_dom_err(ccall((:powf,libm), Float32, (Float32,Float32), x, y), x+y)
-
-^(x::Float64, y::Integer) = x^Int32(y)
-^(x::Float64, y::Int32) = powi_llvm(x, y)
-^(x::Float32, y::Integer) = x^Int32(y)
-^(x::Float32, y::Int32) = powi_llvm(x, y)
-^(x::Float16, y::Integer) = Float16(Float32(x)^y)
-^{p}(x::Float16, ::Type{Val{p}}) = Float16(Float32(x)^Val{p})
+@inline ^(x::Float64, y::Float64) = nan_dom_err(ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, y), x + y)
+@inline ^(x::Float32, y::Float32) = nan_dom_err(ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, y), x + y)
+@inline ^(x::Float64, y::Integer) = x ^ Float64(y)
+@inline ^(x::Float32, y::Integer) = x ^ Float32(y)
+@inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ Float32(y))
+@inline literal_pow{p}(::typeof(^), x::Float16, ::Type{Val{p}}) = Float16(literal_pow(^,Float32(x),Val{p}))
 
 function angle_restrict_symm(theta)
     const P1 = 4 * 7.8539812564849853515625e-01
@@ -951,6 +958,7 @@ end
 cbrt(a::Float16) = Float16(cbrt(Float32(a)))
 
 # More special functions
+include("special/exp.jl")
 include("special/trig.jl")
 include("special/gamma.jl")
 

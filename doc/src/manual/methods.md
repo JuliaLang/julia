@@ -221,7 +221,7 @@ Multiple dispatch together with the flexible parametric type system give Julia i
 abstractly express high-level algorithms decoupled from implementation details, yet generate efficient,
 specialized code to handle each case at run time.
 
-## Method Ambiguities
+## [Method Ambiguities](@id man-ambiguities)
 
 It is possible to define a set of function methods such that there is no unique most specific
 method applicable to some combinations of arguments:
@@ -265,6 +265,9 @@ julia> g(2.0, 3.0)
 
 It is recommended that the disambiguating method be defined first, since otherwise the ambiguity
 exists, if transiently, until the more specific method is defined.
+
+In more complex cases, resolving method ambiguities involves a certain
+element of design; this topic is explored further [below](@ref man-method-design-ambiguities).
 
 ## Parametric Methods
 
@@ -628,5 +631,210 @@ without a tuple of arguments:
 function emptyfunc
 end
 ```
+
+## [Method design and the avoidance of ambiguities](@id man-method-design-ambiguities)
+
+Julia's method polymorphism is one of its most powerful features, yet
+exploiting this power can pose design challenges.  In particular, in
+more complex method hierarchies it is not uncommon for
+[ambiguities](@ref man-ambiguities) to arise.
+
+Above, it was pointed out that one can resolve ambiguities like
+
+```julia
+f(x, y::Int) = 1
+f(x::Int, y) = 2
+```
+
+by defining a method
+
+```julia
+f(x::Int, y::Int) = 3
+```
+
+This is often the right strategy; however, there are circumstances
+where following this advice blindly can be counterproductive. In
+particular, the more methods a generic function has, the more
+possibilities there are for ambiguities. When your method hierarchies
+get more complicated than this simple example, it can be worth your
+while to think carefully about alternative strategies.
+
+Below we discuss particular challenges and some alternative ways to resolve such issues.
+
+### Tuple and NTuple arguments
+
+`Tuple` (and `NTuple`) arguments present special challenges. For example,
+
+```julia
+f{N}(x::NTuple{N,Int}) = 1
+f{N}(x::NTuple{N,Float64}) = 2
+```
+
+are ambiguous because of the possibility that `N == 0`: there are no
+elements to determine whether the `Int` or `Float64` variant should be
+called. To resolve the ambiguity, one approach is define a method for
+the empty tuple:
+
+```julia
+f(x::Tuple{}) = 3
+```
+
+Alternatively, for all methods but one you can insist that there is at
+least one element in the tuple:
+
+```julia
+f{N}(x::NTuple{N,Int}) = 1                  # this is the fallback
+f(x::Tuple{Float64, Vararg{Float64}}) = 2   # this requires at least one Float64
+```
+
+### [Orthogonalize your design](@id man-methods-orthogonalize)
+
+When you might be tempted to dispatch on two or more arguments,
+consider whether a "wrapper" function might make for a simpler
+design. For example, instead of writing multiple variants:
+
+```julia
+f(x::A, y::A) = ...
+f(x::A, y::B) = ...
+f(x::B, y::A) = ...
+f(x::B, y::B) = ...
+```
+
+you might consider defining
+
+```julia
+f(x::A, y::A) = ...
+f(x, y) = f(g(x), g(y))
+```
+
+where `g` converts the argument to type `A`. This is a very specific
+example of the more general principle of
+[orthogonal design](https://en.wikipedia.org/wiki/Orthogonality_(programming)),
+in which separate concepts are assigned to separate methods. Here, `g`
+will most likely need a fallback definition
+
+```julia
+g(x::A) = x
+```
+
+A related strategy exploits `promote` to bring `x` and `y` to a common
+type:
+
+```julia
+f{T}(x::T, y::T) = ...
+f(x, y) = f(promote(x, y)...)
+```
+
+One risk with this design is the possibility that if there is no
+suitable promotion method converting `x` and `y` to the same type, the
+second method will recurse on itself infinitely and trigger a stack
+overflow. The non-exported function `Base.promote_noncircular` can be
+used as an alternative; when promotion fails it will still throw an
+error, but one that fails faster with a more specific error message.
+
+### Dispatch on one argument at a time
+
+If you need to dispatch on multiple arguments, and there are many
+fallbacks with too many combinations to make it practical to define
+all possible variants, then consider introducing a "name cascade"
+where (for example) you dispatch on the first argument and then call
+an internal method:
+
+```julia
+f(x::A, y) = _fA(x, y)
+f(x::B, y) = _fB(x, y)
+```
+
+Then the internal methods `_fA` and `_fB` can dispatch on `y` without
+concern about ambiguities with each other with respect to `x`.
+
+Be aware that this strategy has at least one major disadvantage: in
+many cases, it is not possible for users to further customize the
+behavior of `f` by defining further specializations of your exported
+function `f`. Instead, they have to define specializations for your
+internal methods `_fA` and `_fB`, and this blurs the lines between
+exported and internal methods.
+
+### Abstract containers and element types
+
+Where possible, try to avoid defining methods that dispatch on
+specific element types of abstract containers. For example,
+
+```julia
+-{T<:Date}(A::AbstractArray{T}, b::Date)
+```
+
+generates ambiguities for anyone who defines a method
+
+```julia
+-{T}(A::MyArrayType{T}, b::T)
+```
+
+The best approach is to avoid defining *either* of these methods:
+instead, rely on a generic method `-(A::AbstractArray, b)` and make
+sure this method is implemented with generic calls (like `similar` and
+`-`) that do the right thing for each container type and element type
+*separately*. This is just a more complex variant of the advice to
+[orthogonalize](@ref man-methods-orthogonalize) your methods.
+
+When this approach is not possible, it may be worth starting a
+discussion with other developers about resolving the ambiguity; just
+because one method was defined first does not necessarily mean that it
+can't be modified or eliminated.  As a last resort, one developer can
+define the "band-aid" method
+
+```julia
+-{T<:Date}(A::MyArrayType{T}, b::Date) = ...
+```
+
+that resolves the ambiguity by brute force.
+
+### Complex method "cascades" with default arguments
+
+If you are defining a method "cascade" that supplies defaults, be
+careful about dropping any arguments that correspond to potential
+defaults. For example, suppose you're writing a digital filtering
+algorithm and you have a method that handles the edges of the signal
+by applying padding:
+
+```julia
+function myfilter(A, kernel, ::Replicate)
+    Apadded = replicate_edges(A, size(kernel))
+    myfilter(Apadded, kernel)  # now perform the "real" computation
+end
+```
+
+This will run afoul of a method that supplies default padding:
+
+```julia
+myfilter(A, kernel) = myfilter(A, kernel, Replicate()) # replicate the edge by default
+```
+
+Together, these two methods generate an infinite recursion with `A` constantly growing bigger.
+
+The better design would be to define your call hierarchy like this:
+
+```julia
+struct NoPad end  # indicate that no padding is desired, or that it's already applied
+
+myfilter(A, kernel) = myfilter(A, kernel, Replicate())  # default boundary conditions
+
+function myfilter(A, kernel, ::Replicate)
+    Apadded = replicate_edges(A, size(kernel))
+    myfilter(Apadded, kernel, NoPad())  # indicate the new boundary conditions
+end
+
+# other padding methods go here
+
+function myfilter(A, kernel, ::NoPad)
+    # Here's the "real" implementation of the core computation
+end
+```
+
+`NoPad` is supplied in the same argument position as any other kind of
+padding, so it keeps the dispatch hierarchy well organized and with
+reduced likelihood of ambiguities. Moreover, it extends the "public"
+`myfilter` interface: a user who wants to control the padding
+explicitly can call the `NoPad` variant directly.
 
 [^Clarke61]: Arthur C. Clarke, *Profiles of the Future* (1961): Clarke's Third Law.

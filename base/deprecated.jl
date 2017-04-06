@@ -107,6 +107,13 @@ macro deprecate_binding(old, new, export_old=true)
          Expr(:call, :deprecate, Expr(:quote, old)))
 end
 
+# BEGIN 0.6-alpha deprecations (delete when 0.6 is released)
+
+@deprecate isambiguous(m1::Method, m2::Method, b::Bool) isambiguous(m1, m2, ambiguous_bottom=b) false
+# TODO: delete allow_bottom keyword code in Base.Test.detect_ambiguities
+
+# END 0.6-alpha deprecations
+
 # BEGIN 0.6 deprecations
 
 const _oldstyle_array_vcat_ = false
@@ -478,7 +485,8 @@ function getindex(A::LogicalIndex, i::Int)
     first(Iterators.drop(A, i-1))
 end
 function to_indexes(I...)
-    depwarn("to_indexes is deprecated; pass both the source array `A` and indices as `to_indices(A, $(I...))` instead.", :to_indexes)
+    Istr = join(I, ", ")
+    depwarn("to_indexes is deprecated; pass both the source array `A` and indices as `to_indices(A, $Istr)` instead.", :to_indexes)
     map(_to_index, I)
 end
 _to_index(i) = to_index(I)
@@ -826,6 +834,7 @@ end
 # Deprecate vectorized !
 @deprecate(!(A::AbstractArray{Bool}), .!A) # parens for #20541
 @deprecate(!(B::BitArray), .!B) # parens for #20541
+!(::typeof(()->())) = () # make sure ! has at least 4 methods so that for-loops don't end up getting a back-edge to depwarn
 
 # Deprecate vectorized ~
 @deprecate ~(A::AbstractArray) .~A
@@ -1129,8 +1138,17 @@ end
      @deprecate revparse(repo::GitRepo, objname::AbstractString) GitObject(repo, objname) false
      @deprecate object(repo::GitRepo, te::GitTreeEntry) GitObject(repo, te) false
      @deprecate commit(ann::GitAnnotated) GitHash(ann) false
-     @deprecate cat{T<:GitObject}(repo::GitRepo, ::Type{T}, object::AbstractString) cat(repo, object)
      @deprecate lookup(repo::GitRepo, oid::GitHash) GitBlob(repo, oid) false
+    function Base.cat{T<:GitObject}(repo::GitRepo, ::Type{T}, object::Union{AbstractString,AbstractGitHash})
+        Base.depwarn("cat(repo::GitRepo, T, spec) is deprecated, use content(T(repo, spec))", :cat)
+        try
+            return content(GitBlob(repo, spec))
+        catch e
+            isa(e, LibGit2.GitError) && return nothing
+            rethrow(e)
+        end
+    end
+    Base.cat(repo::GitRepo, object::Union{AbstractString,AbstractGitHash}) = cat(repo, GitBlob, object)
 end
 
 # when this deprecation is deleted, remove all calls to it, and all
@@ -1277,6 +1295,29 @@ end
 @deprecate_binding LinearFast IndexLinear false
 @deprecate_binding LinearSlow IndexCartesian false
 @deprecate_binding linearindexing IndexStyle false
+
+# #20876
+@eval Base.Dates begin
+    function Base.Dates.parse(x::AbstractString, df::DateFormat)
+        Base.depwarn(string(
+            "`Dates.parse(x::AbstractString, df::DateFormat)` is deprecated, use ",
+            "`sort!(filter!(el -> isa(el, Dates.Period), Dates.parse_components(x, df), rev=true, lt=Dates.periodisless)` ",
+            " instead."), :parse)
+        sort!(filter!(el -> isa(el, Period), parse_components(x, df)), rev=true, lt=periodisless)
+     end
+end
+
+# #19635
+for fname in (:ones, :zeros)
+    @eval @deprecate ($fname)(T::Type, arr) ($fname)(T, size(arr))
+    @eval ($fname)(T::Type, i::Integer) = ($fname)(T, (i,))
+    @eval function ($fname){T}(::Type{T}, arr::Array{T})
+        msg = string("`", $fname, "{T}(::Type{T}, arr::Array{T})` is deprecated, use ",
+                            "`", $fname , "(T, size(arr))` instead. ",
+                           )
+        error(msg)
+    end
+end
 
 # END 0.6 deprecations
 

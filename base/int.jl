@@ -131,12 +131,39 @@ fld(x::Unsigned, y::Signed) = div(x, y) - (signbit(y) & (rem(x, y) != 0))
 
 """
     mod(x, y)
+    rem(x, y, RoundDown)
 
-Modulus after flooring division, returning in the range ``[0,y)``, if `y` is positive, or
-``(y,0]`` if `y` is negative.
-
+The reduction of `x` modulo `y`, or equivalently, the remainder of `x` after floored
+division by `y`, i.e.
 ```julia
-x == fld(x,y)*y + mod(x,y)
+x - y*fld(x,y)
+```
+if computed without intermediate rounding.
+
+The result will have the same sign as `y`, and magnitude less than `abs(y)` (with some
+exceptions, see note below).
+
+!!! note
+
+    When used with floating point values, the exact result may not be representable by the
+    type, and so rounding error may occur. In particular, if the exact result is very
+    close to `y`, then it may be rounded to `y`.
+
+```jldoctest
+julia> mod(8, 3)
+2
+
+julia> mod(9, 3)
+0
+
+julia> mod(8.9, 3)
+2.9000000000000004
+
+julia> mod(eps(), 3)
+2.220446049250313e-16
+
+julia> mod(-eps(), 3)
+3.0
 ```
 """
 function mod{T<:Integer}(x::T, y::T)
@@ -330,6 +357,25 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
             @eval rem(x::($from), ::Type{$to}) = bitcast($to, x)
         end
     end
+end
+
+# @doc isn't available when running in Core at this point.
+# Tuple syntax for documention two function signatures at the same time
+# doesn't work either at this point.
+isdefined(Main, :Base) && for fname in (:mod, :rem)
+    @eval @doc """
+        rem(x::Integer, T::Type{<:Integer})
+        mod(x::Integer, T::Type{<:Integer})
+        %(x::Integer, T::Type{<:Integer})
+
+    Find `y::T` such that `x` ≡ `y` (mod n), where n is the number of integers representable
+    in `T`, and `y` is an integer in `[typemin(T),typemax(T)]`.
+
+    ```jldoctest
+    julia> 129 % Int8
+    -127
+    ```
+    """ -> $fname(x::Integer, T::Type{<:Integer})
 end
 
 rem{T<:Integer}(x::T, ::Type{T}) = x

@@ -1,12 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-module FFTW
-
-import ..DFT: fft, bfft, ifft, rfft, brfft, irfft, plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft, fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!, Plan, rfft_output_size, brfft_output_size, plan_inv, normalization, ScaledPlan
-
 import Base: show, *, convert, unsafe_convert, size, strides, ndims, pointer, A_mul_B!
-
-export r2r, r2r!, plan_r2r, plan_r2r!
 
 export export_wisdom, import_wisdom, import_system_wisdom, forget_wisdom,
        MEASURE, DESTROY_INPUT, UNALIGNED, CONSERVE_MEMORY, EXHAUSTIVE,
@@ -20,7 +14,8 @@ export export_wisdom, import_wisdom, import_system_wisdom, forget_wisdom,
 const libfftw = Base.libfftw_name
 const libfftwf = Base.libfftwf_name
 
-const version = convert(VersionNumber, split(unsafe_string(cglobal((:fftw_version,Base.DFT.FFTW.libfftw), UInt8)), ['-', ' '])[2])
+const version = convert(VersionNumber, split(unsafe_string(cglobal(
+    (:fftw_version,Base.DFT.FFTW.libfftw), UInt8)), ['-', ' '])[2])
 
 ## Direction of FFT
 
@@ -89,6 +84,27 @@ alignment_of(A::FakeArray) = Int32(0)
 
 ## Julia wrappers around FFTW functions
 
+# _init_() must be called before any FFTW planning routine.
+#   -- Once FFTW is split into its own module, this can be called
+#      in the module __init__(), but for now we must call it lazily
+#      in every routine that might initialize the FFTW planner.
+#   -- This initializes FFTW's threads support (defaulting to 1 thread).
+#      If this isn't called before the FFTW planner is created, then
+#      FFTW's threads algorithms won't be registered or used at all.
+#      (Previously, we called fftw_cleanup, but this invalidated existing
+#       plans, causing issue #19892.)
+const threads_initialized = Ref(false)
+function _init_()
+    if !threads_initialized[]
+        stat = ccall((:fftw_init_threads,libfftw), Int32, ())
+        statf = ccall((:fftwf_init_threads,libfftwf), Int32, ())
+        if stat == 0 || statf == 0
+            error("could not initialize FFTW threads")
+        end
+        threads_initialized[] = true
+    end
+end
+
 # Wisdom
 
 # Import and export wisdom to/from a single file for all precisions,
@@ -101,6 +117,7 @@ alignment_of(A::FakeArray) = Int32(0)
 # FFTW's api/import-wisdom-from-file.c file].
 
 function export_wisdom(fname::AbstractString)
+    _init_()
     f = ccall(:fopen, Ptr{Void}, (Cstring,Cstring), fname, :w)
     systemerror("could not open wisdom file $fname for writing", f == C_NULL)
     ccall((:fftw_export_wisdom_to_file,libfftw), Void, (Ptr{Void},), f)
@@ -110,6 +127,7 @@ function export_wisdom(fname::AbstractString)
 end
 
 function import_wisdom(fname::AbstractString)
+    _init_()
     f = ccall(:fopen, Ptr{Void}, (Cstring,Cstring), fname, :r)
     systemerror("could not open wisdom file $fname for reading", f == C_NULL)
     if ccall((:fftw_import_wisdom_from_file,libfftw),Int32,(Ptr{Void},),f)==0||
@@ -120,6 +138,7 @@ function import_wisdom(fname::AbstractString)
 end
 
 function import_system_wisdom()
+    _init_()
     if ccall((:fftw_import_system_wisdom,libfftw), Int32, ()) == 0 ||
        ccall((:fftwf_import_system_wisdom,libfftwf), Int32, ()) == 0
         error("failed to import system wisdom")
@@ -127,29 +146,17 @@ function import_system_wisdom()
 end
 
 function forget_wisdom()
+    _init_()
     ccall((:fftw_forget_wisdom,libfftw), Void, ())
     ccall((:fftwf_forget_wisdom,libfftwf), Void, ())
 end
 
 # Threads
 
-let initialized = false
-    global set_num_threads
-    function set_num_threads(nthreads::Integer)
-        if !initialized
-            # must re-initialize FFTW if any FFTW routines have been called
-            ccall((:fftw_cleanup,libfftw), Void, ())
-            ccall((:fftwf_cleanup,libfftwf), Void, ())
-            stat = ccall((:fftw_init_threads,libfftw), Int32, ())
-            statf = ccall((:fftwf_init_threads,libfftwf), Int32, ())
-            if stat == 0 || statf == 0
-                error("could not initialize FFTW threads")
-            end
-            initialized = true
-        end
-        ccall((:fftw_plan_with_nthreads,libfftw), Void, (Int32,), nthreads)
-        ccall((:fftwf_plan_with_nthreads,libfftwf), Void, (Int32,), nthreads)
-    end
+function set_num_threads(nthreads::Integer)
+    _init_()
+    ccall((:fftw_plan_with_nthreads,libfftw), Void, (Int32,), nthreads)
+    ccall((:fftwf_plan_with_nthreads,libfftwf), Void, (Int32,), nthreads)
 end
 
 # pointer type for fftw_plan (opaque pointer)
@@ -161,11 +168,15 @@ const PlanPtr = Ptr{fftw_plan_struct}
 
 const NO_TIMELIMIT = -1.0 # from fftw3.h
 
-set_timelimit(precision::fftwTypeDouble,seconds) =
+function set_timelimit(precision::fftwTypeDouble,seconds)
+    _init_()
     ccall((:fftw_set_timelimit,libfftw), Void, (Float64,), seconds)
+end
 
-set_timelimit(precision::fftwTypeSingle,seconds) =
+function set_timelimit(precision::fftwTypeSingle,seconds)
+    _init_()
     ccall((:fftwf_set_timelimit,libfftwf), Void, (Float64,), seconds)
+end
 
 # Array alignment mod 16:
 #   FFTW plans may depend on the alignment of the array mod 16 bytes,
@@ -713,25 +724,6 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
     end
 end
 
-"""
-    plan_rfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Pre-plan an optimized real-input FFT, similar to [`plan_fft`](@ref) except for
-[`rfft`](@ref) instead of [`fft`](@ref). The first two arguments, and the
-size of the transformed result, are the same as for [`rfft`](@ref).
-"""
-plan_rfft
-
-"""
-    plan_brfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Pre-plan an optimized real-input unnormalized transform, similar to
-[`plan_rfft`](@ref) except for [`brfft`](@ref) instead of
-[`rfft`](@ref). The first two arguments and the size of the transformed result, are
-the same as for [`brfft`](@ref).
-"""
-plan_brfft
-
 # FFTW r2r transforms (low-level interface)
 
 for f in (:r2r, :r2r!)
@@ -759,56 +751,6 @@ function plan_r2r!{T<:fftwNumber,N}(X::StridedArray{T,N}, kinds, region;
                                     timelimit::Real=NO_TIMELIMIT)
     r2rFFTWPlan{T,ANY,true,N}(X, X, region, kinds, flags, timelimit)
 end
-
-"""
-    r2r(A, kind [, dims])
-
-Performs a multidimensional real-input/real-output (r2r) transform
-of type `kind` of the array `A`, as defined in the FFTW manual.
-`kind` specifies either a discrete cosine transform of various types
-(`FFTW.REDFT00`, `FFTW.REDFT01`, `FFTW.REDFT10`, or
-`FFTW.REDFT11`), a discrete sine transform of various types
-(`FFTW.RODFT00`, `FFTW.RODFT01`, `FFTW.RODFT10`, or
-`FFTW.RODFT11`), a real-input DFT with halfcomplex-format output
-(`FFTW.R2HC` and its inverse `FFTW.HC2R`), or a discrete
-Hartley transform (`FFTW.DHT`).  The `kind` argument may be
-an array or tuple in order to specify different transform types
-along the different dimensions of `A`; `kind[end]` is used
-for any unspecified dimensions.  See the FFTW manual for precise
-definitions of these transform types, at http://www.fftw.org/doc.
-
-The optional `dims` argument specifies an iterable subset of
-dimensions (e.g. an integer, range, tuple, or array) to transform
-along. `kind[i]` is then the transform type for `dims[i]`,
-with `kind[end]` being used for `i > length(kind)`.
-
-See also [`plan_r2r`](@ref) to pre-plan optimized r2r transforms.
-"""
-FFTW.r2r
-
-"""
-    r2r!(A, kind [, dims])
-
-Same as [`r2r`](@ref), but operates in-place on `A`, which must be
-an array of real or complex floating-point numbers.
-"""
-FFTW.r2r!
-
-"""
-    plan_r2r!(A, kind [, dims [, flags [, timelimit]]])
-
-Similar to [`plan_fft`](@ref), but corresponds to [`r2r!`](@ref).
-"""
-FFTW.plan_r2r!
-
-"""
-    plan_r2r(A, kind [, dims [, flags [, timelimit]]])
-
-Pre-plan an optimized r2r transform, similar to [`plan_fft`](@ref)
-except that the transforms (and the first three arguments)
-correspond to [`r2r`](@ref) and [`r2r!`](@ref), respectively.
-"""
-FFTW.plan_r2r
 
 # mapping from r2r kind to the corresponding inverse transform
 const inv_kind = Dict{Int,Int}(R2HC => HC2R, HC2R => R2HC, DHT => DHT,
@@ -859,5 +801,3 @@ function *{T,K}(p::r2rFFTWPlan{T,K,true}, x::StridedArray{T})
 end
 
 include("dct.jl")
-
-end # module

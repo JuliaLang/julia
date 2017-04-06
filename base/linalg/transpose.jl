@@ -126,7 +126,8 @@ function ctranspose(A::AbstractMatrix)
     ctranspose!(B, A)
 end
 
-@inline ctranspose(A::AbstractVecOrMat{<:Real}) = transpose(A)
+@inline ctranspose(A::AbstractVector{<:Real}) = transpose(A)
+@inline ctranspose(A::AbstractMatrix{<:Real}) = transpose(A)
 
 function copy_transpose!(B::AbstractVecOrMat, ir_dest::Range{Int}, jr_dest::Range{Int},
                          A::AbstractVecOrMat, ir_src::Range{Int}, jr_src::Range{Int})

@@ -146,6 +146,44 @@ function merge!(d::Associative, others::Associative...)
     return d
 end
 
+"""
+    merge!(combine, d::Associative, others::Associative...)
+
+Update collection with pairs from the other collections.
+Values with the same key will be combined using the
+combiner function.
+
+```jldoctest
+julia> d1 = Dict(1 => 2, 3 => 4);
+
+julia> d2 = Dict(1 => 4, 4 => 5);
+
+julia> merge!(+, d1, d2);
+
+julia> d1
+Dict{Int64,Int64} with 3 entries:
+  4 => 5
+  3 => 4
+  1 => 6
+
+julia> merge!(-, d1, d1);
+
+julia> d1
+Dict{Int64,Int64} with 3 entries:
+  4 => 0
+  3 => 0
+  1 => 0
+```
+"""
+function merge!(combine::Function, d::Associative, others::Associative...)
+    for other in others
+        for (k,v) in other
+            d[k] = haskey(d, k) ? combine(d[k], v) : v
+        end
+    end
+    return d
+end
+
 # very similar to `merge!`, but accepts any iterable and extends code
 # that would otherwise only use `copy!` with arrays.
 function copy!(dest::Union{Associative,AbstractSet}, src)
@@ -215,13 +253,46 @@ Dict{String,Float64} with 3 entries:
   "foo" => 0.0
 ```
 """
-function merge(d::Associative, others::Associative...)
-    K, V = keytype(d), valtype(d)
-    for other in others
-        K = promote_type(K, keytype(other))
-        V = promote_type(V, valtype(other))
-    end
-    merge!(Dict{K,V}(), d, others...)
+merge(d::Associative, others::Associative...) =
+    merge!(emptymergedict(d, others...), d, others...)
+
+"""
+    merge(combine, d::Associative, others::Associative...)
+
+Construct a merged collection from the given collections. If necessary, the
+types of the resulting collection will be promoted to accommodate the types of
+the merged collections. Values with the same key will be combined using the
+combiner function.
+
+```jldoctest
+julia> a = Dict("foo" => 0.0, "bar" => 42.0)
+Dict{String,Float64} with 2 entries:
+  "bar" => 42.0
+  "foo" => 0.0
+
+julia> b = Dict("baz" => 17, "bar" => 4711)
+Dict{String,Int64} with 2 entries:
+  "bar" => 4711
+  "baz" => 17
+
+julia> merge(+, a, b)
+Dict{String,Float64} with 3 entries:
+  "bar" => 4753.0
+  "baz" => 17.0
+  "foo" => 0.0
+```
+"""
+merge(combine::Function, d::Associative, others::Associative...) =
+    merge!(combine, emptymergedict(d, others...), d, others...)
+
+promoteK(K) = K
+promoteV(V) = V
+promoteK(K, d, ds...) = promoteK(promote_type(K, keytype(d)), ds...)
+promoteV(V, d, ds...) = promoteV(promote_type(V, valtype(d)), ds...)
+function emptymergedict(d::Associative, others::Associative...)
+    K = promoteK(keytype(d), others...)
+    V = promoteV(valtype(d), others...)
+    Dict{K,V}()
 end
 
 function filter!(f, d::Associative)

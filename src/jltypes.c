@@ -45,7 +45,7 @@ jl_datatype_t *jl_datatype_type;
 jl_datatype_t *jl_function_type;
 jl_datatype_t *jl_builtin_type;
 
-jl_datatype_t *jl_bottomtype_type;
+jl_datatype_t *jl_typeofbottom_type;
 jl_value_t *jl_bottom_type;
 jl_unionall_t *jl_abstractarray_type;
 jl_unionall_t *jl_densearray_type;
@@ -1616,10 +1616,10 @@ void jl_init_types(void)
     jl_void_type->instance = jl_nothing;
 
     jl_datatype_t *type_type = (jl_datatype_t*)jl_type_type;
-    jl_bottomtype_type = jl_new_datatype(jl_symbol("BottomType"), type_type, jl_emptysvec,
+    jl_typeofbottom_type = jl_new_datatype(jl_symbol("TypeofBottom"), type_type, jl_emptysvec,
                                          jl_emptysvec, jl_emptysvec, 0, 0, 0);
-    jl_bottom_type = jl_new_struct(jl_bottomtype_type);
-    jl_bottomtype_type->instance = jl_bottom_type;
+    jl_bottom_type = jl_new_struct(jl_typeofbottom_type);
+    jl_typeofbottom_type->instance = jl_bottom_type;
 
     jl_uniontype_type = jl_new_datatype(jl_symbol("Union"), type_type, jl_emptysvec,
                                         jl_svec(2, jl_symbol("a"), jl_symbol("b")),
@@ -1659,6 +1659,8 @@ void jl_init_types(void)
     ((jl_datatype_t*)jl_type_type)->hasfreetypevars = 1;
     jl_type_typename->wrapper = jl_new_struct(jl_unionall_type, tttvar, (jl_value_t*)jl_type_type);
     jl_type_type = (jl_unionall_t*)jl_type_typename->wrapper;
+
+    jl_typeofbottom_type->super = jl_wrap_Type(jl_bottom_type);
 
     jl_emptytuple_type = jl_apply_tuple_type(jl_emptysvec);
     jl_emptytuple_type->uid = jl_assign_type_uid();
@@ -1828,18 +1830,18 @@ void jl_init_types(void)
                                 jl_symbol("code"),
                                 jl_symbol("slottypes"),
                                 jl_symbol("ssavaluetypes"),
-                                jl_symbol("slotnames"),
                                 jl_symbol("slotflags"),
+                                jl_symbol("slotnames"),
                                 jl_symbol("inferred"),
                                 jl_symbol("inlineable"),
                                 jl_symbol("propagate_inbounds"),
                                 jl_symbol("pure")),
                         jl_svec(9,
-                                jl_any_type,
-                                jl_any_type,
-                                jl_any_type,
                                 jl_array_any_type,
+                                jl_any_type,
+                                jl_any_type,
                                 jl_array_uint8_type,
+                                jl_array_any_type,
                                 jl_bool_type,
                                 jl_bool_type,
                                 jl_bool_type,
@@ -1869,7 +1871,7 @@ void jl_init_types(void)
                                 jl_symbol("called"),
                                 jl_symbol("isva"),
                                 jl_symbol("isstaged"),
-                                jl_symbol("needs_sparam_vals_ducttape")),
+                                jl_symbol("pure")),
                         jl_svec(20,
                                 jl_sym_type,
                                 jl_module_type,
@@ -1881,7 +1883,7 @@ void jl_init_types(void)
                                 jl_any_type, // Union{Array, Void}
                                 jl_any_type, // TypeMap
                                 jl_simplevector_type,
-                                jl_code_info_type,
+                                jl_any_type,
                                 jl_any_type, // jl_method_instance_type
                                 jl_any_type, // jl_method_instance_type
                                 jl_array_any_type,

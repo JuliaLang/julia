@@ -192,7 +192,6 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
         margs[0] = jl_toplevel_eval(margs[0]);
         mfunc = jl_method_lookup(jl_gf_mtable(margs[0]), margs, nargs, 1, world);
         if (mfunc == NULL) {
-            JL_GC_POP();
             jl_method_error((jl_function_t*)margs[0], margs, nargs, world);
             // unreachable
         }
@@ -429,6 +428,31 @@ JL_DLLEXPORT void jl_lisp_prompt(void)
     jl_ast_ctx_leave(ctx);
 }
 
+JL_DLLEXPORT void fl_show_profile(void)
+{
+    jl_ast_context_t *ctx = jl_ast_ctx_enter();
+    fl_context_t *fl_ctx = &ctx->fl;
+    fl_applyn(fl_ctx, 0, symbol_value(symbol(fl_ctx, "show-profiles")));
+    jl_ast_ctx_leave(ctx);
+}
+
+JL_DLLEXPORT void fl_clear_profile(void)
+{
+    jl_ast_context_t *ctx = jl_ast_ctx_enter();
+    fl_context_t *fl_ctx = &ctx->fl;
+    fl_applyn(fl_ctx, 0, symbol_value(symbol(fl_ctx, "clear-profiles")));
+    jl_ast_ctx_leave(ctx);
+}
+
+JL_DLLEXPORT void fl_profile(const char *fname)
+{
+    jl_ast_context_t *ctx = jl_ast_ctx_enter();
+    fl_context_t *fl_ctx = &ctx->fl;
+    fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "profile-e")), symbol(fl_ctx, fname));
+    jl_ast_ctx_leave(ctx);
+}
+
+
 static jl_sym_t *scmsym_to_julia(fl_context_t *fl_ctx, value_t s)
 {
     assert(issymbol(s));
@@ -638,7 +662,7 @@ static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v)
         temp = julia_to_scm_(fl_ctx, v);
     }
     FL_CATCH_EXTERN(fl_ctx) {
-        temp = fl_list2(fl_ctx, jl_ast_ctx(fl_ctx)->error_sym, cvalue_static_cstring(fl_ctx, "expression too large"));
+        temp = fl_ctx->lasterror;
     }
     return temp;
 }
@@ -646,7 +670,7 @@ static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v)
 static void array_to_list(fl_context_t *fl_ctx, jl_array_t *a, value_t *pv)
 {
     if (jl_array_len(a) > 300000)
-        lerror(fl_ctx, fl_ctx->OutOfMemoryError, "expression too large");
+        lerror(fl_ctx, symbol(fl_ctx, "error"), "expression too large");
     value_t temp;
     for(long i=jl_array_len(a)-1; i >= 0; i--) {
         *pv = fl_cons(fl_ctx, fl_ctx->NIL, *pv);
@@ -668,6 +692,8 @@ static value_t julia_to_list2(fl_context_t *fl_ctx, jl_value_t *a, jl_value_t *b
 
 static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
 {
+    if (v == NULL)
+        lerror(fl_ctx, symbol(fl_ctx, "error"), "undefined reference in AST");
     if (jl_is_symbol(v))
         return symbol(fl_ctx, jl_symbol_name((jl_sym_t*)v));
     if (v == jl_true)
@@ -722,9 +748,9 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
     if (jl_is_long(v) && fits_fixnum(jl_unbox_long(v)))
         return fixnum(jl_unbox_long(v));
     if (jl_is_ssavalue(v))
-        jl_error("SSAValue objects should not occur in an AST");
+        lerror(fl_ctx, symbol(fl_ctx, "error"), "SSAValue objects should not occur in an AST");
     if (jl_is_slot(v))
-        jl_error("Slot objects should not occur in an AST");
+        lerror(fl_ctx, symbol(fl_ctx, "error"), "Slot objects should not occur in an AST");
     value_t opaque = cvalue(fl_ctx, jl_ast_ctx(fl_ctx)->jvtype, sizeof(void*));
     *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = v;
     return opaque;

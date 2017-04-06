@@ -236,7 +236,11 @@ function test_monitor_wait(tval)
     end
     fname, events = wait(fm)
     close(fm)
-    @test fname == basename(file)
+    if is_linux() || is_windows() || is_apple()
+        @test fname == basename(file)
+    else
+        @test fname == ""  # platforms where F_GETPATH is not available
+    end
     @test events.changed
 end
 
@@ -425,6 +429,8 @@ c_stat = stat(cfile)
 @test a_stat.mode == b_stat.mode
 @test a_stat.size == b_stat.size
 @test a_stat.size == c_stat.size
+
+@test parse(Int,match(r"mode=(.*),",sprint(show,a_stat)).captures[1]) == a_stat.mode
 
 close(af)
 rm(afile)

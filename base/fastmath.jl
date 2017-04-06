@@ -23,7 +23,7 @@ module FastMath
 
 export @fastmath
 
-import Core.Intrinsics: powi_llvm, sqrt_llvm_fast, neg_float_fast,
+import Core.Intrinsics: sqrt_llvm_fast, neg_float_fast,
     add_float_fast, sub_float_fast, mul_float_fast, div_float_fast, rem_float_fast,
     eq_float_fast, ne_float_fast, lt_float_fast, le_float_fast
 
@@ -42,7 +42,6 @@ const fast_op =
          :cmp => :cmp_fast,
          :conj => :conj_fast,
          :inv => :inv_fast,
-         :mod => :mod_fast,
          :rem => :rem_fast,
          :sign => :sign_fast,
          :isfinite => :isfinite_fast,
@@ -148,10 +147,6 @@ mul_fast{T<:FloatTypes}(x::T, y::T, zs::T...) =
 
 @fastmath begin
     cmp_fast{T<:FloatTypes}(x::T, y::T) = ifelse(x==y, 0, ifelse(x<y, -1, +1))
-    function mod_fast{T<:FloatTypes}(x::T, y::T)
-        r = rem(x,y)
-        ifelse((r > 0) ⊻ (y > 0), r+y, r)
-    end
 end
 
 eq_fast{T<:FloatTypes}(x::T, y::T) = eq_float_fast(x, y)
@@ -225,7 +220,7 @@ for op in (:abs, :abs2, :conj, :inv, :sign)
     end
 end
 
-for op in (:+, :-, :*, :/, :(==), :!=, :<, :<=, :cmp, :mod, :rem)
+for op in (:+, :-, :*, :/, :(==), :!=, :<, :<=, :cmp, :rem)
     op_fast = fast_op[op]
     @eval begin
         # fall-back implementation for non-numeric types
@@ -243,8 +238,8 @@ end
 
 # builtins
 
-pow_fast(x::FloatTypes, y::Integer) = pow_fast(x, Int32(y))
-pow_fast(x::FloatTypes, y::Int32) = Base.powi_llvm(x, y)
+pow_fast(x::Float32, y::Integer) = ccall("llvm.powi.f32", llvmcall, Float32, (Float32, Int32), x, y)
+pow_fast(x::Float64, y::Integer) = ccall("llvm.powi.f64", llvmcall, Float64, (Float64, Int32), x, y)
 
 # TODO: Change sqrt_llvm intrinsic to avoid nan checking; add nan
 # checking to sqrt in math.jl; remove sqrt_llvm_fast intrinsic

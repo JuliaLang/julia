@@ -925,31 +925,6 @@ un_fintrinsic(trunc_float,trunc_llvm)
 un_fintrinsic(rint_float,rint_llvm)
 un_fintrinsic(sqrt_float,sqrt_llvm)
 
-JL_DLLEXPORT jl_value_t *jl_powi_llvm(jl_value_t *a, jl_value_t *b)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_value_t *ty = jl_typeof(a);
-    if (!jl_is_primitivetype(ty))
-        jl_error("powi_llvm: a is not a primitive type");
-    if (!jl_is_primitivetype(jl_typeof(b)) || jl_datatype_size(jl_typeof(b)) != 4)
-        jl_error("powi_llvm: b is not a 32-bit primitive type");
-    int sz = jl_datatype_size(ty);
-    jl_value_t *newv = jl_gc_alloc(ptls, sz, ty);
-    void *pa = jl_data_ptr(a), *pr = jl_data_ptr(newv);
-    switch (sz) {
-    /* choose the right size c-type operation */
-    case 4:
-        *(float*)pr = powf(*(float*)pa, (float)jl_unbox_int32(b));
-        break;
-    case 8:
-        *(double*)pr = pow(*(double*)pa, (double)jl_unbox_int32(b));
-        break;
-    default:
-        jl_error("powi_llvm: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
-    }
-    return newv;
-}
-
 JL_DLLEXPORT jl_value_t *jl_select_value(jl_value_t *isfalse, jl_value_t *a, jl_value_t *b)
 {
     JL_TYPECHK(isfalse, bool, isfalse);

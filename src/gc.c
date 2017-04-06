@@ -501,7 +501,7 @@ STATIC_INLINE void gc_queue_big_marked(jl_ptls_t ptls, bigval_t *hdr,
 }
 
 // `gc_setmark_tag` can be called concurrently on multiple threads.
-// In all cases, the functions atomically sets the mark bits and returns
+// In all cases, the function atomically sets the mark bits and returns
 // the GC bits set as well as if the tag was unchanged by this thread.
 // All concurrent calls on the same object are guaranteed to be setting the
 // bits to the same value.
@@ -604,8 +604,10 @@ STATIC_INLINE void gc_setmark(jl_ptls_t ptls, jl_taggedvalue_t *o,
     }
 }
 
-inline void gc_setmark_buf(jl_ptls_t ptls, void *o,
-                           uint8_t mark_mode, size_t minsz)
+#ifndef __cplusplus
+inline
+#endif
+void gc_setmark_buf(jl_ptls_t ptls, void *o, uint8_t mark_mode, size_t minsz)
 {
     jl_taggedvalue_t *buf = jl_astaggedvalue(o);
     uintptr_t tag = buf->header;
@@ -2099,8 +2101,8 @@ void jl_gc_init(void)
     gc_num.allocd = -default_collect_interval;
 
 #ifdef _P64
-    // on a big memory machine, set max_collect_interval to totalmem/ncores/2
-    size_t maxmem = (uv_get_total_memory()/jl_cpu_cores())/2;
+    // on a big memory machine, set max_collect_interval to totalmem * nthreads / ncores / 2
+    size_t maxmem = (uv_get_total_memory() * jl_n_threads) / jl_cpu_cores() / 2;
     if (maxmem > max_collect_interval)
         max_collect_interval = maxmem;
 #endif

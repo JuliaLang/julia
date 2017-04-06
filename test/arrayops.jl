@@ -834,6 +834,8 @@ end
     @test isequal(c[1,:], cv2)
     @test isequal(c[3,:], cv)
     @test isequal(c[:,4], [2.0,2.0,2.0,2.0]*1000)
+
+    @test repeat(BitMatrix(eye(2)), inner = (2,1), outer = (1,2)) == repeat(eye(2), inner = (2,1), outer = (1,2))
 end
 
 @testset "indexing with bools" begin
@@ -949,6 +951,14 @@ end
     m = mapslices(x->fill!(x, 0), o, 2)
     @test m == zeros(3, 4)
     @test o == ones(3, 4)
+
+    # issue #18524
+    m = mapslices(x->tuple(x), [1 2; 3 4], 1)
+    @test m[1,1] == ([1,3],)
+    @test m[1,2] == ([2,4],)
+
+    # issue #21123
+    @test mapslices(nnz, speye(3), 1) == [1 1 1]
 end
 
 @testset "single multidimensional index" begin
@@ -1003,11 +1013,6 @@ end
     m = mapslices(x->fill!(x, 0), o, 2)
     @test m == zeros(3, 4)
     @test o == ones(3, 4)
-
-    # issue #18524
-    m = mapslices(x->tuple(x), [1 2; 3 4], 1)
-    @test m[1,1] == ([1,3],)
-    @test m[1,2] == ([2,4],)
 
     asr = sortrows(a, rev=true)
     @test lexless(asr[2,:],asr[1,:])
@@ -2049,12 +2054,11 @@ end
     zs = zeros(SparseMatrixCSC([1 2; 3 4]), Complex{Float64}, (2,3))
     test_zeros(zs, SparseMatrixCSC{Complex{Float64}}, (2, 3))
 
-    @testset "#19265" begin
-        @test_throws MethodError zeros(Float64, [1.])
-        x = [1.]
-        test_zeros(zeros(x, Float64), Vector{Float64}, (1,))
-        @test x == [1.]
-    end
+    # #19265"
+    @test_throws ErrorException zeros(Float64, [1.]) # TODO change to MethodError, when v0.6 deprecations are done
+    x = [1.]
+    test_zeros(zeros(x, Float64), Vector{Float64}, (1,))
+    @test x == [1.]
 
     # exotic indexing
     oarr = zeros(randn(3), UInt16, 1:3, -1:0)

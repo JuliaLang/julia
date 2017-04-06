@@ -293,7 +293,6 @@ Point{Float64}(1.0, 2.5)
 julia> Point(1,2.5) ## implicit T ##
 ERROR: MethodError: no method matching Point(::Int64, ::Float64)
 Closest candidates are:
-  Point(::Any) where T at sysimg.jl:24
   Point(::T<:Real, !Matched::T<:Real) where T<:Real at none:2
 
 julia> Point{Int64}(1, 2) ## explicit T ##
@@ -374,7 +373,6 @@ However, other similar calls still don't work:
 julia> Point(1.5,2)
 ERROR: MethodError: no method matching Point(::Float64, ::Int64)
 Closest candidates are:
-  Point(::Any) where T at sysimg.jl:24
   Point(::T<:Real, !Matched::T<:Real) where T<:Real at none:1
 ```
 
@@ -572,7 +570,6 @@ julia> SummedArray(Int32[1; 2; 3], Int32(6))
 ERROR: MethodError: no method matching SummedArray(::Array{Int32,1}, ::Int32)
 Closest candidates are:
   SummedArray(::Array{T,1}) where T at none:5
-  SummedArray(::Any) where T at sysimg.jl:24
 ```
 
 This constructor will be invoked by the syntax `SummedArray(a)`. The syntax `new{T,S}` allows

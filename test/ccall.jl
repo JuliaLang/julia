@@ -1236,3 +1236,30 @@ for i in 1:100
     @test_spill_n 9 int32args float32args
     @test_spill_n 10 int32args float32args
 end
+
+# issue #20835
+@test_throws ErrorException eval(:(f20835(x) = ccall(:fn, Void, (Ptr{typeof(x)},), x)))
+@noinline f21104at(::Type{T}) where {T} = ccall(:fn, Void, (Nullable{T},), 0)
+@noinline f21104rt(::Type{T}) where {T} = ccall(:fn, Nullable{T}, ())
+@test code_llvm(f21104at, (Type{Float64},)) === nothing
+@test code_llvm(f21104rt, (Type{Float64},)) === nothing
+@test try
+          f21104at(Float64)
+          "unreachable"
+      catch ex
+          (ex::ErrorException).msg
+      end == "ccall: the type of argument 1 doesn't correspond to a C type"
+@test try
+          f21104rt(Float64)
+          "unreachable"
+      catch ex
+          (ex::ErrorException).msg
+      end == "ccall: return type doesn't correspond to a C type"
+
+
+# cfunction on non-function singleton
+struct CallableSingleton
+end
+(::CallableSingleton)(x, y) = x + y
+@test ccall(cfunction(CallableSingleton(), Int, Tuple{Int,Int}),
+            Int, (Int, Int), 1, 2) === 3
