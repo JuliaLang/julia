@@ -898,6 +898,11 @@ function test_intersection()
                    Tuple{Type{T}, T} where T,
                    Tuple{Type{SIQ20671{T,mS,kgS,sS,AS,KS,molS,cdS,radS,srS}},
                          SIQ20671{T,mS,kgS,sS,AS,KS,molS,cdS,radS,srS}} where {T,mS,kgS,sS,AS,KS,molS,cdS,radS,srS})
+
+    # issue #21243
+    @testintersect(Tuple{Ref{Ref{T}} where T, Ref},
+                   Tuple{Ref{T}, Ref{T}} where T,
+                   Tuple{Ref{Ref{T}}, Ref{Ref{T}}} where T)
 end
 
 function test_intersection_properties()
