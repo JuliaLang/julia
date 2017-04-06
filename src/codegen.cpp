@@ -5627,11 +5627,16 @@ static std::unique_ptr<Module> emit_function(
                     theArg = ghostValue(argType);
                 }
                 else if (llvmArgType->isAggregateType()) {
-                    theArg = mark_julia_slot(&*AI++, argType, NULL, tbaa_const); // this argument is by-pointer
+                    Argument *Arg = &*AI++;
+                    maybe_mark_argument_dereferenceable(Arg, argType);
+                    theArg = mark_julia_slot(Arg, argType, NULL, tbaa_const); // this argument is by-pointer
                     theArg.isimmutable = true;
                 }
                 else {
-                    theArg = mark_julia_type(&*AI++, isboxed, argType, &ctx, /*needsgcroot*/false);
+                    Argument *Arg = &*AI++;
+                    if (isboxed)
+                        maybe_mark_argument_dereferenceable(Arg, argType);
+                    theArg = mark_julia_type(Arg, isboxed, argType, &ctx, /*needsgcroot*/false);
                 }
             }
             else {
