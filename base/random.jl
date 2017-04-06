@@ -89,12 +89,12 @@ MersenneTwister(seed::Vector{UInt32}, state::DSFMT_state) =
     MersenneTwister(seed, state, zeros(Float64, MTCacheLength), MTCacheLength)
 
 """
-    MersenneTwister(seed=0)
+    MersenneTwister(seed)
 
 Create a `MersenneTwister` RNG object. Different RNG objects can have their own seeds, which
 may be useful for generating different streams of random numbers.
 """
-MersenneTwister(seed=0) = srand(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
+MersenneTwister(seed) = srand(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
 
 function copy!(dst::MersenneTwister, src::MersenneTwister)
     copy!(resize!(dst.seed, length(src.seed)), src.seed)
@@ -256,7 +256,7 @@ end
 
 ## Global RNG
 
-const GLOBAL_RNG = MersenneTwister()
+const GLOBAL_RNG = MersenneTwister(0)
 globalRNG() = GLOBAL_RNG
 
 # rand: a non-specified RNG defaults to GLOBAL_RNG
