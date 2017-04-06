@@ -192,9 +192,9 @@ versions of the MinGW-w64 compilers available through Cygwin's package manager.
     2.  From the *Net* category: `curl`
     3.  From *Interpreters* (or *Python*) category: `m4`, `python`
     4.  From the *Archive* category: `p7zip`
-    5.  For 32 bit Julia, only, and also from the *Devel* category:
+    5.  For 32 bit Julia, and also from the *Devel* category:
         `mingw64-i686-gcc-g++` and `mingw64-i686-gcc-fortran`
-    6.  For 64 bit Julia, only, and also from the *Devel* category:
+    6.  For 64 bit Julia, and also from the *Devel* category:
         `mingw64-x86_64-gcc-g++` and `mingw64-x86_64-gcc-fortran`
 
  4. At the *'Resolving Dependencies'* step, be sure to leave *'Select required
