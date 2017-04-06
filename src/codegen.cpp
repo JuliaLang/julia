@@ -437,7 +437,7 @@ static bool isbits_spec(jl_value_t *jt, bool allow_singleton = true)
 // metadata tracking for a llvm Value* during codegen
 struct aa_data {
     MDNode *tbaa; // The related tbaa node. Non-NULL iff this holds an address.
-    MDNode *invariant_group; // The LLVM invariant group for this pointer if applicable  
+    MDNode *invariant_group; // The LLVM invariant group for this pointer if applicable
     aa_data() : tbaa(nullptr), invariant_group(nullptr) {}
     aa_data(MDNode *tbaa, MDNode *invariant_group) : tbaa(tbaa), invariant_group(invariant_group) {}
 };
