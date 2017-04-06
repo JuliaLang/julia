@@ -827,14 +827,13 @@ function test_intersection()
                    Tuple{Array{Ref{T}, 1}, Array{Pair{M, T}, 1}, SS} where T where M where SS,
                    Union{})
 
-    # TODO: these test cases currently hang
-    @test_skip typeintersect(Tuple{Array{Ref{T}, 1}, Array{Pair{M, V}, 1}, Int} where V where T where M,
-                             Tuple{Array{Ref{T}, 1}, Array{Pair{M, T}, 1}, Any} where T where M) ==
-                                 Tuple{Array{Ref{T}, 1}, Array{Pair{M, T}, 1}, Int}
+    @testintersect(Tuple{Array{Ref{T}, 1}, Array{Pair{M, V}, 1}, Int} where V where T where M,
+                   Tuple{Array{Ref{T}, 1}, Array{Pair{M, T}, 1}, Any} where T where M,
+                   Tuple{Array{Ref{T}, 1}, Array{Pair{M, T}, 1}, Int} where T where M)
 
-    @test_skip typeintersect(Tuple{Int, Ref{Pair{K,V}}} where V where K,
-                             Tuple{Any, Ref{Pair{T,T}} where T }) ==
-                                 Tuple{Int, Ref{Pair{T,T}} where T }
+    @testintersect(Tuple{Int, Ref{Pair{K,V}}} where V where K,
+                   Tuple{Any, Ref{Pair{T,T}} where T },
+                   Tuple{Int, Ref{Pair{T,T}} where T })
 
     @test_broken isequal_type(_type_intersect(Tuple{T,T} where T,
                                               Union{Tuple{S,Array{Int64,1}},Tuple{S,Array{S,1}}} where S),
@@ -899,6 +898,11 @@ function test_intersection()
                    Tuple{Type{T}, T} where T,
                    Tuple{Type{SIQ20671{T,mS,kgS,sS,AS,KS,molS,cdS,radS,srS}},
                          SIQ20671{T,mS,kgS,sS,AS,KS,molS,cdS,radS,srS}} where {T,mS,kgS,sS,AS,KS,molS,cdS,radS,srS})
+
+    # issue #21243
+    @testintersect(Tuple{Ref{Ref{T}} where T, Ref},
+                   Tuple{Ref{T}, Ref{T}} where T,
+                   Tuple{Ref{Ref{T}}, Ref{Ref{T}}} where T)
 end
 
 function test_intersection_properties()
