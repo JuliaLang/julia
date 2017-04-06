@@ -51,10 +51,6 @@ function submit_to_codespeed(vals,name,desc,unit,test_group,lessisbetter=true)
 end
 
 macro output_timings(t,name,desc,group)
-    t = esc(t)
-    name = esc(name)
-    desc = esc(desc)
-    group = esc(group)
     quote
         # If we weren't given anything for the test group, infer off of file path!
         test_group = length($group) == 0 ? basename(dirname(Base.source_path())) : $group[1]
@@ -81,7 +77,7 @@ macro timeit(ex,name,desc,group...)
             end
             i += 1
         end
-        @output_timings t $(esc(name)) $(esc(desc)) $(esc(group))
+        @output_timings t $name $desc $group
     end
 end
 

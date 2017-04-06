@@ -36,19 +36,19 @@ $(SRCDIR)/srccache/$(MBEDTLS_SRC)/source-extracted: $(SRCDIR)/srccache/$(MBEDTLS
 $(SRCDIR)/srccache/$(MBEDTLS_SRC)/mbedtls-ssl.h.patch-applied: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/source-extracted
 	cd $(SRCDIR)/srccache/$(MBEDTLS_SRC)/include/mbedtls && patch -p0 -f < $(SRCDIR)/patches/mbedtls-ssl.h.patch
 	echo 1 > $@
-$(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/mbedtls-ssl.h.patch-applied
+$(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/build-configured: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/mbedtls-ssl.h.patch-applied
 
-$(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/source-extracted
+$(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/build-configured: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(MBEDTLS_OPTS)
 	echo 1 > $@
 
-$(BUILDDIR)/$(MBEDTLS_SRC)/build-compiled: $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured
+$(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/build-compiled: $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/build-configured
 	$(MAKE) -C $(dir $<)
 	echo 1 > $@
 
-$(BUILDDIR)/$(MBEDTLS_SRC)/build-checked: $(BUILDDIR)/$(MBEDTLS_SRC)/build-compiled
+$(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/build-checked: $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) test
 endif
@@ -67,7 +67,7 @@ define MBEDTLS_INSTALL
 endef
 endif
 $(eval $(call staged-install, \
-	mbedtls,$(MBEDTLS_SRC), \
+	mbedtls,mbedtls-$(MBEDTLS_VER), \
 	MBEDTLS_INSTALL,,, \
 	$$(INSTALL_NAME_CMD)libmbedx509.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedx509.$$(SHLIB_EXT) && \
 	$$(INSTALL_NAME_CMD)libmbedtls.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedtls.$$(SHLIB_EXT) && \
@@ -78,20 +78,20 @@ $(eval $(call staged-install, \
 
 
 clean-mbedtls:
-	-rm $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured \
-		$(BUILDDIR)/$(MBEDTLS_SRC)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/$(MBEDTLS_SRC) clean
+	-rm $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/build-configured \
+		$(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/build-compiled
+	-$(MAKE) -C $(BUILDDIR)/mbedtls-$(MBEDTLS_VER) clean
 
 distclean-mbedtls:
 	-rm -rf $(SRCDIR)/srccache/$(MBEDTLS_SRC).tgz \
 		$(SRCDIR)/srccache/$(MBEDTLS_SRC) \
-		$(BUILDDIR)/$(MBEDTLS_SRC)
+		$(BUILDDIR)/mbedtls-$(MBEDTLS_VER)
 
 
 get-mbedtls: $(SRCDIR)/srccache/$(MBEDTLS_SRC).tgz
 extract-mbedtls: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/source-extracted
-configure-mbedtls: $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured
-compile-mbedtls: $(BUILDDIR)/$(MBEDTLS_SRC)/build-compiled
+configure-mbedtls: $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/build-configured
+compile-mbedtls: $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/build-compiled
 # tests disabled since they are known to fail
 fastcheck-mbedtls: #check-mbedtls
-check-mbedtls: $(BUILDDIR)/$(MBEDTLS_SRC)/build-checked
+check-mbedtls: $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/build-checked

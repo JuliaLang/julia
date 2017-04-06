@@ -63,16 +63,6 @@ first(t::Tuple) = t[1]
 
 eltype(::Type{Tuple{}}) = Bottom
 eltype(::Type{<:Tuple{Vararg{E}}}) where {E} = E
-function eltype(t::Type{<:Tuple})
-    @_pure_meta
-    t isa Union && return typejoin(eltype(t.a), eltype(t.b))
-    t´ = unwrap_unionall(t)
-    r = Union{}
-    for ti in t´.parameters
-        r = typejoin(r, rewrap_unionall(unwrapva(ti), t))
-    end
-    return r
-end
 
 # version of tail that doesn't throw on empty tuples (used in array indexing)
 safe_tail(t::Tuple) = tail(t)
@@ -124,7 +114,7 @@ end
 
 # Build up the output until it has length N
 _ntuple{F,N}(out::NTuple{N,Any}, f::F, ::Type{Val{N}}) = out
-function _ntuple{F,N,M}(out::NTuple{M,Any}, f::F, ::Type{Val{N}})
+function _ntuple{F,N,M}(out::NTuple{M}, f::F, ::Type{Val{N}})
     @_inline_meta
     _ntuple((out..., f(M+1)), f, Val{N})
 end
@@ -195,9 +185,6 @@ end
 if isdefined(Main, :Base)
 
 (::Type{T}){T<:Tuple}(x::Tuple) = convert(T, x)  # still use `convert` for tuples
-
-# resolve ambiguity between preceding and following methods
-(::Type{All16{E,N}}){E,N}(x::Tuple) = convert(All16{E,N}, x)
 
 function (T::Type{All16{E,N}}){E,N}(itr)
     len = N+16

@@ -21,7 +21,7 @@ function startswith(a::AbstractString, b::AbstractString)
     while !done(a,i) && !done(b,i)
         c, i = next(a,i)
         d, j = next(b,j)
-        (c != d) && (return false)
+        if c != d return false end
     end
     done(b,i)
 end
@@ -48,7 +48,7 @@ function endswith(a::AbstractString, b::AbstractString)
     while a1 <= i && b1 <= j
         c = a[i]
         d = b[j]
-        (c != d) && (return false)
+        if c != d return false end
         i = prevind(a,i)
         j = prevind(b,j)
     end
@@ -90,9 +90,9 @@ julia> chomp("Hello\\n")
 """
 function chomp(s::AbstractString)
     i = endof(s)
-    (i < 1 || s[i] != '\n') && (return SubString(s, 1, i))
+    if (i < 1 || s[i] != '\n') return SubString(s, 1, i) end
     j = prevind(s,i)
-    (j < 1 || s[j] != '\r') && (return SubString(s, 1, i-1))
+    if (j < 1 || s[j] != '\r') return SubString(s, 1, i-1) end
     return SubString(s, 1, j-1)
 end
 function chomp(s::String)
@@ -197,7 +197,7 @@ strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
 
 function lpad(s::AbstractString, n::Integer, p::AbstractString=" ")
     m = n - strwidth(s)
-    (m <= 0) && (return s)
+    if m <= 0; return s; end
     l = strwidth(p)
     if l==1
         return string(p^m, s)
@@ -210,7 +210,7 @@ end
 
 function rpad(s::AbstractString, n::Integer, p::AbstractString=" ")
     m = n - strwidth(s)
-    (m <= 0) && (return s)
+    if m <= 0; return s; end
     l = strwidth(p)
     if l==1
         return string(s, p^m)
@@ -286,7 +286,7 @@ function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool,
             end
             i = k
         end
-        (k <= j) && (k = nextind(str,j))
+        if k <= j; k = nextind(str,j) end
         r = search(str,splitter,k)
         j, k = first(r), nextind(str,last(r))
     end

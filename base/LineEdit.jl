@@ -1572,19 +1572,13 @@ end
 function run_interface(terminal, m::ModalInterface)
     s::MIState = init_state(terminal, m)
     while !s.aborted
+        p = s.current_mode
         buf, ok, suspend = prompt!(terminal, m, s)
         while suspend
             @static if is_unix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
             buf, ok, suspend = prompt!(terminal, m, s)
         end
-        eval(Main,
-            Expr(:body,
-                Expr(:return,
-                     Expr(:call,
-                          QuoteNode(mode(state(s, s.current_mode)).on_done),
-                          QuoteNode(s),
-                          QuoteNode(buf),
-                          QuoteNode(ok)))))
+        mode(state(s, s.current_mode)).on_done(s, buf, ok)
     end
 end
 
@@ -1603,22 +1597,17 @@ function prompt!(term, prompt, s = init_state(term, prompt))
     enable_bracketed_paste(term)
     try
         activate(prompt, s, term, term)
-        old_state = mode(s)
         while true
-            kmap = keymap(s, prompt)
-            fcn = match_input(kmap, s)
-            kdata = keymap_data(s, prompt)
+            map = keymap(s, prompt)
+            fcn = match_input(map, s)
             # errors in keymaps shouldn't cause the REPL to fail, so wrap in a
             # try/catch block
             local state
             try
-                state = fcn(s, kdata)
+                state = fcn(s, keymap_data(s, prompt))
             catch e
-                bt = catch_backtrace()
-                warn(e, bt = bt, prefix = "ERROR (in the keymap): ")
-                # try to cleanup and get `s` back to its original state before returning
-                transition(s, :reset)
-                transition(s, old_state)
+                warn("Caught an exception in the keymap:")
+                warn(e)
                 state = :done
             end
             if state === :abort

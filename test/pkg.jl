@@ -124,6 +124,7 @@ temp_pkg_dir() do
     Pkg.status("Example", iob)
     str = chomp(String(take!(iob)))
     @test endswith(str, string(Pkg.installed("Example")))
+    @test isempty(Pkg.dependents("Example"))
 
     # 17364 - a, Pkg.checkout with specific local branch
     let branch_name = "test-branch-1",
@@ -419,24 +420,6 @@ temp_pkg_dir() do
         @test !contains(msg, "signal (15)")
     end
 
-    # issue #20695
-    Pkg.cd() do
-        @test Pkg.Entry.url_and_pkg("Example") == ("git://github.com/JuliaLang/Example.jl.git", "Example")
-        for url = [
-            "https://github.com/Org/Nonsense",
-            "git@github.com:Org/Nonsense",
-            "file:///home/user/Nonsense",
-            "/home/user/Nonsense",
-        ]
-            @test Pkg.Entry.url_and_pkg(url) == (url, "Nonsense")
-            @test Pkg.Entry.url_and_pkg("$url.jl") == ("$url.jl", "Nonsense")
-            @test Pkg.Entry.url_and_pkg("$url.git") == ("$url.git", "Nonsense")
-            @test Pkg.Entry.url_and_pkg("$url.jl.git") == ("$url.jl.git", "Nonsense")
-        end
-        pkg = randstring(20)
-        @test Pkg.Entry.url_and_pkg(pkg) == (pkg, pkg)
-    end
-
     # partial Pkg.update
     @test "" == capture_stdout() do
         nothingtodomsg = "INFO: No packages to install, update or remove"
@@ -479,11 +462,6 @@ temp_pkg_dir() do
             LibGit2.reset!(repo, LibGit2.GitHash(old_commit), LibGit2.Consts.RESET_HARD)
         end
 
-        # run these at an old metadata commit where it's guaranteed no
-        # packages depend on Example.jl
-        @test isempty(Pkg.dependents("Example"))
-        @test isempty(Pkg.dependents("Example.jl"))
-
         @test_warn ("INFO: Installing Colors v0.6.4",
                     "INFO: Installing ColorTypes v0.2.2",
                     "INFO: Installing FixedPointNumbers v0.1.3",
@@ -518,79 +496,7 @@ temp_pkg_dir() do
     end
 end
 
-@testset "Pkg functions with .jl extension" begin
-    temp_pkg_dir() do
-        @test Pkg.installed("Example.jl") === nothing
-        Pkg.add("Example.jl")
-        @test [keys(Pkg.installed())...] == ["Example"]
-        iob = IOBuffer()
-        Pkg.checkout("Example.jl")
-        Pkg.status("Example.jl", iob)
-        str = chomp(String(take!(iob)))
-        @test startswith(str, " - Example")
-        @test endswith(str, "master")
-        Pkg.free("Example.jl")
-        Pkg.status("Example.jl", iob)
-        str = chomp(String(take!(iob)))
-        @test endswith(str, string(Pkg.installed("Example.jl")))
-        Pkg.checkout("Example.jl")
-        Pkg.free(("Example.jl",))
-        Pkg.status("Example.jl", iob)
-        str = chomp(String(take!(iob)))
-        @test endswith(str, string(Pkg.installed("Example.jl")))
-        Pkg.rm("Example.jl")
-        @test isempty(Pkg.installed())
-        @test !isempty(Pkg.available("Example.jl"))
-        @test !in("Example", keys(Pkg.installed()))
-        Pkg.rm("Example.jl")
-        @test isempty(Pkg.installed())
-        @test !isempty(Pkg.available("Example.jl"))
-        @test !in("Example", keys(Pkg.installed()))
-        Pkg.clone("https://github.com/JuliaLang/Example.jl.git")
-        @test [keys(Pkg.installed())...] == ["Example"]
-        Pkg.status("Example.jl", iob)
-        str = chomp(String(take!(iob)))
-        @test startswith(str, " - Example")
-        @test endswith(str, "master")
-        Pkg.free("Example.jl")
-        Pkg.status("Example.jl", iob)
-        str = chomp(String(take!(iob)))
-        @test endswith(str, string(Pkg.installed("Example.jl")))
-        Pkg.checkout("Example.jl")
-        Pkg.free(("Example.jl",))
-        Pkg.status("Example.jl", iob)
-        str = chomp(String(take!(iob)))
-        @test endswith(str, string(Pkg.installed("Example.jl")))
-    end
-end
-
 let io = IOBuffer()
     Base.showerror(io, Base.Pkg.Entry.PkgTestError("ppp"), backtrace())
     @test !contains(String(take!(io)), "backtrace()")
-end
-
-
-function temp_rel_pkg_dir(fn::Function, remove_tmp_dir::Bool=true)
-    # Used in tests below to set up and tear down a sandboxed package directory
-    cd(tempdir()) do
-        const tmpdir = randstring()
-        withenv("JULIA_PKGDIR" => tmpdir) do
-            @test !isdir(Pkg.dir())
-            try
-                Pkg.init()
-                @test isdir(Pkg.dir())
-                Pkg.resolve()
-                fn()
-            finally
-                remove_tmp_dir && rm(tmpdir, recursive=true)
-            end
-        end
-    end
-end
-
-@testset "Relative path operations" begin
-    temp_rel_pkg_dir() do
-        Pkg.add("Example")
-        @test [keys(Pkg.installed())...] == ["Example"]
-    end
 end

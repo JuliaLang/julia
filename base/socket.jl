@@ -856,23 +856,11 @@ function getsockname(sock::Union{TCPServer,TCPSocket})
     uv_error("cannot obtain socket name", r)
     if r == 0
         port = ntoh(rport[])
-        af_inet6 = @static if is_windows() # AF_INET6 in <sys/socket.h>
-            23
-        elseif is_apple()
-            30
-        elseif Sys.KERNEL ∈ (:FreeBSD, :DragonFly)
-            28
-        elseif Sys.KERNEL ∈ (:NetBSD, :OpenBSD)
-            24
-        else
-            10
-        end
-
         if rfamily[] == 2 # AF_INET
             addrv4 = raddress[1:4]
             naddr = ntoh(unsafe_load(Ptr{Cuint}(pointer(addrv4)), 1))
             addr = IPv4(naddr)
-        elseif rfamily[] == af_inet6
+        elseif rfamily[] == @static is_windows() ? 23 : (@static is_apple() ? 30 : 10) # AF_INET6
             naddr = ntoh(unsafe_load(Ptr{UInt128}(pointer(raddress)), 1))
             addr = IPv6(naddr)
         else

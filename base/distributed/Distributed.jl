@@ -4,13 +4,13 @@ module Distributed
 
 # imports for extension
 import Base: getindex, wait, put!, take!, fetch, isready, push!, length,
-             hash, ==, connect, kill, serialize, deserialize, close, showerror
+             hash, ==, connect, kill, serialize, deserialize, close
 
 # imports for use
 using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, wait_connected,
             VERSION_STRING, sync_begin, sync_add, sync_end, async_run_thunk,
             binding_module, notify_error, atexit, julia_exename, julia_cmd,
-            AsyncGenerator, display_error, acquire, release
+            AsyncGenerator, display_error
 
 # NOTE: clusterserialize.jl imports additional symbols from Base.Serializer for use
 

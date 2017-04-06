@@ -214,14 +214,14 @@ A unique'd container describing the shared metadata for a single method.
 
   * `source`
 
-    The original source code (usually compressed).
+    The original source code (compressed).
 
   * `roots`
 
     Pointers to non-AST things that have been interpolated into the AST, required by
     compression of the AST, type-inference, or the generation of native code.
 
-  * `nargs`, `isva`, `called`, `isstaged`, `pure`
+  * `nargs`, `isva`, `called`, `isstaged`
 
     Descriptive bit-fields for the source code of this Method.
 
@@ -288,7 +288,7 @@ A temporary container for holding lowered source code.
 
   * `code`
 
-    An `Any` array of statements
+    An `Any` array of statements, or a `UInt8` array with a compressed representation of the code.
 
   * `slotnames`
 

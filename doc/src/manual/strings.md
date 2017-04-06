@@ -179,8 +179,7 @@ julia> str[end]
 ```
 
 All indexing in Julia is 1-based: the first element of any integer-indexed object is found at
-index 1. (As we will see below, this does not necessarily mean that the last element is found
-at index `n`, where `n` is the length of the string.)
+index 1, and the last element is found at index `n`, when the string has a length of `n`.
 
 In any indexing expression, the keyword `end` can be used as a shorthand for the last index (computed
 by [`endof(str)`](@ref)). You can perform arithmetic and other operations with `end`, just like
@@ -515,7 +514,7 @@ false
 julia> contains("Xylophon", 'o')
 ERROR: MethodError: no method matching contains(::String, ::Char)
 Closest candidates are:
-  contains(!Matched::Function, ::Any, !Matched::Any) at reduce.jl:664
+  contains(!Matched::Function, ::Any, !Matched::Any) at reduce.jl:660
   contains(::AbstractString, !Matched::AbstractString) at strings/search.jl:378
 ```
 
@@ -838,11 +837,9 @@ so the distinction can safely be ignored. For the escapes `\x80` through `\xff` 
 bytes, which -- unless followed by very specific continuation bytes -- do not form valid UTF-8
 data, whereas the latter escapes all represent Unicode code points with two-byte encodings.
 
-If this is all extremely confusing, try reading ["The Absolute Minimum Every
-Software Developer Absolutely, Positively Must Know About Unicode and Character
-Sets"](https://www.joelonsoftware.com/2003/10/08/the-absolute-minimum-every-software-developer-absolutely-positively-must-know-about-unicode-and-character-sets-no-excuses/).
-It's an excellent introduction to Unicode and UTF-8, and may help alleviate
-some confusion regarding the matter.
+If this is all extremely confusing, try reading ["The Absolute Minimum Every Software Developer Absolutely, Positively Must Know About Unicode
+and Character Sets"](http://www.joelonsoftware.com/articles/Unicode.html). It's an excellent introduction
+to Unicode and UTF-8, and may help alleviate some confusion regarding the matter.
 
 ## [Version Number Literals](@id man-version-number-literals)
 

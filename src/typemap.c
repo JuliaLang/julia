@@ -59,7 +59,7 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
                         return 0;
                 }
                 else {
-                    if (!(jl_typeof(jl_tparam0(a)) == jl_typeof(tp0) && jl_types_equal(jl_tparam0(a), tp0)))
+                    if (!jl_types_equal(jl_tparam0(a), tp0))
                         return 0;
                 }
             }
@@ -142,7 +142,7 @@ static inline int sig_match_simple(jl_value_t **args, size_t n, jl_value_t **sig
                     return 0;
             }
             else {
-                if (a!=tp0 && !(jl_typeof(a) == jl_typeof(tp0) && jl_types_equal(a,tp0)))
+                if (a!=tp0 && !jl_types_equal(a,tp0))
                     return 0;
             }
         }
@@ -1006,7 +1006,7 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
     newrec->max_world = max_world;
     // compute the complexity of this type signature
     newrec->va = jl_is_va_tuple((jl_datatype_t*)ttype);
-    newrec->issimplesig = !jl_is_unionall(type); // a TypeVar environment needs a complex matching test
+    newrec->issimplesig = !jl_is_unionall(type); // a TypeVar environment needs an complex matching test
     newrec->isleafsig = newrec->issimplesig && !newrec->va; // entirely leaf types don't need to be sorted
     JL_GC_PUSH1(&newrec);
     assert(jl_is_tuple_type(ttype));

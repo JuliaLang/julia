@@ -7,8 +7,14 @@ Opens a git repository at `path`.
 """
 function GitRepo(path::AbstractString)
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    @check ccall((:git_repository_open, :libgit2), Cint,
-                 (Ptr{Ptr{Void}}, Cstring), repo_ptr_ptr, path)
+    err = ccall((:git_repository_open, :libgit2), Cint,
+                (Ptr{Ptr{Void}}, Cstring), repo_ptr_ptr, path)
+    if err != Int(Error.GIT_OK)
+        if repo_ptr_ptr[] != C_NULL
+            close(GitRepo(repo_ptr_ptr[]))
+        end
+        throw(Error.GitError(err))
+    end
     return GitRepo(repo_ptr_ptr[])
 end
 
@@ -21,9 +27,15 @@ user must be a member of a special access group to read `path`).
 function GitRepoExt(path::AbstractString, flags::Cuint = Cuint(Consts.REPOSITORY_OPEN_DEFAULT))
     separator = @static is_windows() ? ";" : ":"
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    @check ccall((:git_repository_open_ext, :libgit2), Cint,
-                 (Ptr{Ptr{Void}}, Cstring, Cuint, Cstring),
+    err = ccall((:git_repository_open_ext, :libgit2), Cint,
+                (Ptr{Ptr{Void}}, Cstring, Cuint, Cstring),
                  repo_ptr_ptr, path, flags, separator)
+    if err != Int(Error.GIT_OK)
+        if repo_ptr_ptr[] != C_NULL
+            close(GitRepo(repo_ptr_ptr[]))
+        end
+        throw(Error.GitError(err))
+    end
     return GitRepo(repo_ptr_ptr[])
 end
 
@@ -223,7 +235,7 @@ function peel{T<:GitObject}(::Type{T}, obj::GitObject)
     @check ccall((:git_object_peel, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{Void}, Cint), new_ptr_ptr, obj.ptr, Consts.OBJECT(T))
 
-    return T(obj.owner, new_ptr_ptr[])
+    return T(obj.repo, new_ptr_ptr[])
 end
 peel(obj::GitObject) = peel(GitObject, obj)
 

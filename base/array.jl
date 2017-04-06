@@ -383,8 +383,6 @@ julia> collect(1:2:13)
 """
 collect(itr) = _collect(1:1 #= Array =#, itr, iteratoreltype(itr), iteratorsize(itr))
 
-collect(A::AbstractArray) = _collect_indices(indices(A), A)
-
 collect_similar(cont, itr) = _collect(cont, itr, iteratoreltype(itr), iteratorsize(itr))
 
 _collect(cont, itr, ::HasEltype, isz::Union{HasLength,HasShape}) =
@@ -396,14 +394,6 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
         push!(a,x)
     end
     return a
-end
-
-_collect_indices(::Tuple{}, A) = copy!(Array{eltype(A)}(), A)
-_collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
-    copy!(Array{eltype(A)}(length.(indsA)), A)
-function _collect_indices(indsA, A)
-    B = Array{eltype(A)}(length.(indsA))
-    copy!(B, CartesianRange(indices(B)), A, CartesianRange(indsA))
 end
 
 if isdefined(Core, :Inference)
@@ -538,7 +528,6 @@ setindex!{T}(A::Array{T}, x, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arra
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})
-    @_propagate_inbounds_meta
     A === I && (I = copy(I))
     for i in I
         A[i] = x
@@ -546,8 +535,7 @@ function setindex!(A::Array, x, I::AbstractVector{Int})
     return A
 end
 function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
-    @_propagate_inbounds_meta
-    @boundscheck setindex_shape_check(X, length(I))
+    setindex_shape_check(X, length(I))
     count = 1
     if X === A
         X = copy(X)
@@ -556,8 +544,7 @@ function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
         I = copy(I)
     end
     for i in I
-        @inbounds x = X[count]
-        A[i] = x
+        A[i] = X[count]
         count += 1
     end
     return A
@@ -568,16 +555,15 @@ function setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int})
     @_inline_meta
     @boundscheck checkbounds(A, I)
     lI = length(I)
-    @boundscheck setindex_shape_check(X, lI)
+    setindex_shape_check(X, lI)
     if lI > 0
         unsafe_copy!(A, first(I), X, 1, lI)
     end
     return A
 end
 function setindex!{T}(A::Array{T}, X::Array{T}, c::Colon)
-    @_inline_meta
     lI = length(A)
-    @boundscheck setindex_shape_check(X, lI)
+    setindex_shape_check(X, lI)
     if lI > 0
         unsafe_copy!(A, 1, X, 1, lI)
     end
@@ -852,8 +838,8 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], [true, false, true, false, true, false])
 julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
 Stacktrace:
- [1] _deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:862
- [2] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:849
+ [1] _deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:858
+ [2] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:845
 ```
 """
 deleteat!(a::Vector, inds) = _deleteat!(a, inds)
@@ -1050,30 +1036,26 @@ function =={T<:BitInteger}(a::Array{T,1}, b::Array{T,1})
         :memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * len)
 end
 
-function reverse(A::AbstractVector, s=first(linearindices(A)), n=last(linearindices(A)))
+function reverse(A::AbstractVector, s=1, n=length(A))
     B = similar(A)
-    for i = first(linearindices(A)):s-1
+    for i = 1:s-1
         B[i] = A[i]
     end
     for i = s:n
         B[i] = A[n+s-i]
     end
-    for i = n+1:last(linearindices(A))
+    for i = n+1:length(A)
         B[i] = A[i]
     end
     return B
 end
-function reverseind(a::AbstractVector, i::Integer)
-    li = linearindices(a)
-    first(li) + last(li) - i
-end
+reverseind(a::AbstractVector, i::Integer) = length(a) + 1 - i
 
-function reverse!(v::AbstractVector, s=first(linearindices(v)), n=last(linearindices(v)))
-    liv = linearindices(v)
+function reverse!(v::AbstractVector, s=1, n=length(v))
     if n <= s  # empty case; ok
-    elseif !(first(liv) ≤ s ≤ last(liv))
+    elseif !(1 ≤ s ≤ endof(v))
         throw(BoundsError(v, s))
-    elseif !(first(liv) ≤ n ≤ last(liv))
+    elseif !(1 ≤ n ≤ endof(v))
         throw(BoundsError(v, n))
     end
     r = n

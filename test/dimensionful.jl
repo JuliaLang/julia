@@ -1,5 +1,3 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
-
 # Here we implement a minimal dimensionful type Furlong, which is used
 # to test dimensional correctness of various functions in Base.  Furlong
 # is exported by the TestHelpers module.

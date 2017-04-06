@@ -35,7 +35,7 @@ function choosetests(choices = [])
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
         "checked", "intset", "floatfuncs", "compile", "distributed", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "asmvariant", "osutils",
-        "channels", "iostream"
+        "channels"
     ]
     profile_skipped = false
     if startswith(string(Sys.ARCH), "arm")
@@ -46,7 +46,7 @@ function choosetests(choices = [])
     end
 
     if Base.USE_GPL_LIBS
-        append!(testnames, ["fft", "dsp"])
+        testnames = [testnames, "fft", "dsp"; ]
     end
 
     if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))
@@ -115,7 +115,7 @@ function choosetests(choices = [])
         prepend!(tests, sparsetests)
     end
 
-    # do subarray before sparse but after linalg
+    #do subarray before sparse but after linalg
     if "subarray" in skip_tests
         filter!(x -> x != "subarray", tests)
     elseif "subarray" in tests
@@ -141,14 +141,6 @@ function choosetests(choices = [])
         # specifically selected case
         filter!(x -> x != "linalg", tests)
         prepend!(tests, linalgtests)
-    end
-
-    # do ambiguous first to avoid failing if ambiguities are introduced by other tests
-    if "ambiguous" in skip_tests
-        filter!(x -> x != "ambiguous", tests)
-    elseif "ambiguous" in tests
-        filter!(x -> x != "ambiguous", tests)
-        prepend!(tests, ["ambiguous"])
     end
 
     net_required_for = ["socket", "distributed", "libgit2"]

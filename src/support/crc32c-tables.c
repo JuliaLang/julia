@@ -1,5 +1,3 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
-
 /* Pregenerated tables for crc32c.c, produced by compiling with -DGEN_CRC32C_TABLES. */
 #if POLY != 0x82f63b78
 #  error "tables generated for different polynomial"

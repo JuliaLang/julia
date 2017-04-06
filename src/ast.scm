@@ -28,12 +28,9 @@
         ((atom? e) (string e))
         ((eq? (car e) '|.|)
          (string (deparse (cadr e)) '|.|
-                 (cond ((and (pair? (caddr e)) (memq (caaddr e) '(quote inert)))
-                        (deparse (cadr (caddr e))))
-                       ((and (pair? (caddr e)) (eq? (caaddr e) 'copyast))
-                        (deparse (cadr (cadr (caddr e)))))
-                       (else
-                        (string #\( (deparse (caddr e)) #\))))))
+                 (if (and (pair? (caddr e)) (memq (caaddr e) '(quote inert)))
+                     (deparse (cadr (caddr e)))
+                     (string #\( (deparse (caddr e)) #\)))))
         ((memq (car e) '(... |'| |.'|))
          (string (deparse (cadr e)) (car e)))
         ((or (syntactic-op? (car e)) (eq? (car e) '|<:|) (eq? (car e) '|>:|))
@@ -53,7 +50,6 @@
                 ((call)   (string (deparse (cadr e)) #\( (deparse-arglist (cddr e)) #\)))
                 ((ref)    (string (deparse (cadr e)) #\[ (deparse-arglist (cddr e)) #\]))
                 ((curly)  (string (deparse (cadr e)) #\{ (deparse-arglist (cddr e)) #\}))
-                ((macrocall) (string (cadr e) " " (deparse-arglist (cddr e) " ")))
                 ((quote inert)
                  (if (and (symbol? (cadr e))
                           (not (= (string.char (string (cadr e)) 0) #\=)))
@@ -94,7 +90,6 @@
                 ((function for while)
                  (deparse-block (string (car e) " " (deparse (cadr e)))
                                 (block-stmts (caddr e))))
-                ((copyast) (deparse (cadr e)))
                 (else
                  (string e))))))
 

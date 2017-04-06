@@ -812,6 +812,14 @@ fpinttype(::Type{Float64}) = UInt64
 fpinttype(::Type{Float32}) = UInt32
 fpinttype(::Type{Float16}) = UInt16
 
+@pure significand_bits{T<:AbstractFloat}(::Type{T}) = trailing_ones(significand_mask(T))
+@pure exponent_bits{T<:AbstractFloat}(::Type{T}) = sizeof(T)*8 - significand_bits(T) - 1
+@pure exponent_bias{T<:AbstractFloat}(::Type{T}) = Int(exponent_one(T) >> significand_bits(T))
+# maximum float exponent
+@pure exponent_max{T<:AbstractFloat}(::Type{T}) = Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T)
+# maximum float exponent without bias
+@pure exponent_raw_max{T<:AbstractFloat}(::Type{T}) = Int(exponent_mask(T) >> significand_bits(T))
+
 ## TwicePrecision utilities
 # The numeric constants are half the number of bits in the mantissa
 for (F, T, n) in ((Float16, UInt16, 5), (Float32, UInt32, 12), (Float64, UInt64, 26))

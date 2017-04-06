@@ -1,5 +1,3 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
-
 """
     RowVector(vector)
 
@@ -77,6 +75,7 @@ julia> transpose(v)
 """
 @inline transpose(vec::AbstractVector) = RowVector(vec)
 @inline ctranspose(vec::AbstractVector) = RowVector(_conj(vec))
+@inline ctranspose(vec::AbstractVector{<:Real}) = RowVector(vec)
 
 @inline transpose(rowvec::RowVector) = rowvec.vec
 @inline transpose(rowvec::ConjRowVector) = copy(rowvec.vec) # remove the ConjArray wrapper from any raw vector
@@ -142,17 +141,16 @@ end
 @inline check_tail_indices(i1, i2, i3, is...) = i3 == 1 ? check_tail_indices(i1, i2, is...) : false
 
 # helper function for below
-@inline to_vec(rowvec::RowVector) = map(transpose, transpose(rowvec))
+@inline to_vec(rowvec::RowVector) = transpose(rowvec)
 @inline to_vec(x::Number) = x
 @inline to_vecs(rowvecs...) = (map(to_vec, rowvecs)...)
 
-# map: Preserve the RowVector by un-wrapping and re-wrapping, but note that `f`
-# expects to operate within the transposed domain, so to_vec transposes the elements
-@inline map(f, rowvecs::RowVector...) = RowVector(map(transpose∘f, to_vecs(rowvecs...)...))
+# map
+@inline map(f, rowvecs::RowVector...) = RowVector(map(f, to_vecs(rowvecs...)...))
 
 # broacast (other combinations default to higher-dimensional array)
 @inline broadcast(f, rowvecs::Union{Number,RowVector}...) =
-    RowVector(broadcast(transpose∘f, to_vecs(rowvecs...)...))
+    RowVector(broadcast(f, to_vecs(rowvecs...)...))
 
 # Horizontal concatenation #
 
@@ -168,7 +166,6 @@ end
 
 # inner product -> dot product specializations
 @inline *{T<:Real}(rowvec::RowVector{T}, vec::AbstractVector{T}) = dot(parent(rowvec), vec)
-@inline *{T<:Real}(rowvec::ConjRowVector{T}, vec::AbstractVector{T}) = dot(rowvec', vec)
 @inline *(rowvec::ConjRowVector, vec::AbstractVector) = dot(rowvec', vec)
 
 # Generic behavior

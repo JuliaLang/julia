@@ -553,12 +553,7 @@ function print_shmem_limits(slen)
             pfx = "kernel"
         elseif is_apple()
             pfx = "kern.sysv"
-        elseif Sys.KERNEL == :FreeBSD || Sys.KERNEL == :DragonFly
-            pfx = "kern.ipc"
-        elseif Sys.KERNEL == :OpenBSD
-            pfx = "kern.shminfo"
         else
-            # seems NetBSD does not have *.shmall
             return
         end
 

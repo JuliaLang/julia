@@ -682,27 +682,3 @@ let
         @test pair[1] == tupl[1] && pair[2] == tupl[2]
     end
 end
-
-@testset "Dict merge" begin
-    d1 = Dict("A" => 1, "B" => 2)
-    d2 = Dict("B" => 3.0, "C" => 4.0)
-    @test @inferred merge(d1, d2) == Dict("A" => 1, "B" => 3, "C" => 4)
-    # merge with combiner function
-    @test @inferred merge(+, d1, d2) == Dict("A" => 1, "B" => 5, "C" => 4)
-    @test @inferred merge(*, d1, d2) == Dict("A" => 1, "B" => 6, "C" => 4)
-    @test @inferred merge(-, d1, d2) == Dict("A" => 1, "B" => -1, "C" => 4)
-end
-
-@testset "Dict merge!" begin
-    d1 = Dict("A" => 1, "B" => 2)
-    d2 = Dict("B" => 3, "C" => 4)
-    @inferred merge!(d1, d2)
-    @test d1 == Dict("A" => 1, "B" => 3, "C" => 4)
-    # merge! with combiner function
-    @inferred merge!(+, d1, d2)
-    @test d1 == Dict("A" => 1, "B" => 6, "C" => 8)
-    @inferred merge!(*, d1, d2)
-    @test d1 == Dict("A" => 1, "B" => 18, "C" => 32)
-    @inferred merge!(-, d1, d2)
-    @test d1 == Dict("A" => 1, "B" => 15, "C" => 28)
-end

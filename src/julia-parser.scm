@@ -928,13 +928,11 @@
                          ((not (memq op unary-ops))
                           (error (string "\"" op "\" is not a unary operator")))
                          (else
-                          (let* ((arg  (parse-unary s))
-                                 (args (if (and (pair? arg) (eq? (car arg) 'tuple))
-                                           (cons op (cdr arg))
-                                           (list op arg))))
-                            (if (or (eq? op '|<:|) (eq? op '|>:|))
-                                args
-                                (cons 'call args)))))))))
+                          (let ((arg (parse-unary s)))
+                            (if (and (pair? arg)
+                                     (eq? (car arg) 'tuple))
+                                (list* 'call op (cdr arg))
+                                (list  'call op arg)))))))))
           (else
            (parse-juxtapose (parse-factor s) s)))))
 
@@ -1022,24 +1020,27 @@
             ((#\( )
              (if (ts:space? s) (disallowed-space ex t))
              (take-token s)
-             (let ((c (let ((al (parse-arglist s #\) )))
-                        (receive
-                         (params args) (separate (lambda (x)
-                                                   (and (pair? x)
-                                                        (eq? (car x) 'parameters)))
-                                                 al)
-                         (if (eq? (peek-token s) 'do)
-                             (begin
-                               (take-token s)
-                               `(call ,ex ,@params ,(parse-do s) ,@args))
-                             `(call ,ex ,@al))))))
-               (if macrocall?
-                   (map (lambda (x)  ;; parse `a=b` as `=` instead of `kw` in macrocall
-                          (if (and (pair? x) (eq? (car x) 'kw))
-                              `(= ,@(cdr x))
-                              x))
-                        c)
-                   (loop c))))
+             (if macrocall?
+                 (let ((args (if (eqv? (require-token s) #\) )
+                                 (begin (take-token s) '())
+                                 (begin0 (with-normal-ops
+                                          (with-whitespace-newline
+                                           (parse-comma-separated s parse-eq* #t)))
+                                         (if (not (eqv? (require-token s) #\) ))
+                                             (error "missing ) in argument list"))
+                                         (take-token s)))))
+                   `(call ,ex ,@args))
+                 (loop (let ((al (parse-arglist s #\) )))
+                         (receive
+                          (params args) (separate (lambda (x)
+                                                    (and (pair? x)
+                                                         (eq? (car x) 'parameters)))
+                                                  al)
+                          (if (eq? (peek-token s) 'do)
+                              (begin
+                                (take-token s)
+                                `(call ,ex ,@params ,(parse-do s) ,@args))
+                              `(call ,ex ,@al)))))))
             ((#\[ )
              (if (ts:space? s) (disallowed-space ex t))
              (take-token s)
@@ -1140,14 +1141,6 @@
   (let ((sig (parse-subtype-spec s)))
     (begin0 (list 'type (if mut? 'true 'false) sig (parse-block s))
             (expect-end s word))))
-
-;; consume any number of line endings from a token stream
-(define (take-lineendings s)
-  (let ((nt (peek-token s)))
-    (if (or (newline? nt) (eqv? nt #\;))
-        (begin (take-token s)
-               (take-lineendings s))
-        s)))
 
 ;; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
@@ -1279,7 +1272,7 @@
                 (syntax-deprecation s (string "abstract " (deparse spec))
                                     (string "abstract type " (deparse spec) " end")))
             (begin0 (list 'abstract spec)
-                    (if ty (expect-end (take-lineendings s) "abstract type"))))))
+                    (if ty (expect-end s "abstract type"))))))
        ((struct)
         (begin (take-token s)
                (parse-struct-def s #f word)))
@@ -1295,7 +1288,7 @@
                    (let* ((spec (with-space-sensitive (parse-subtype-spec s)))
                           (nb   (with-space-sensitive (parse-cond s))))
                      (begin0 (list 'bitstype nb spec)
-                             (expect-end (take-lineendings s) "primitive type"))))))
+                             (expect-end s "primitive type"))))))
        ;; deprecated type keywords
        ((type)
         ;; TODO fully deprecate post-0.6
@@ -1480,13 +1473,15 @@
         `(,word ,@(reverse path)))))))
 
 ;; parse comma-separated assignments, like "i=1:n,j=1:m,..."
-(define (parse-comma-separated s what)
+(define (parse-comma-separated s what (in-parens #f))
   (let loop ((exprs '()))
     (let ((r (what s)))
       (case (peek-token s)
         ((#\,)
          (take-token s)
-         (loop (cons r exprs)))
+         (if (and in-parens (eqv? (require-token s) #\) ))
+             (reverse! (cons r exprs))
+             (loop (cons r exprs))))
         (else   (reverse! (cons r exprs)))))))
 
 (define (parse-comma-separated-assignments s)

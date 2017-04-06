@@ -375,13 +375,13 @@ function getindex{T}(A::SymTridiagonal{T}, i::Integer, j::Integer)
 end
 
 function setindex!(A::SymTridiagonal, x, i::Integer, j::Integer)
-    @boundscheck checkbounds(A, i, j)
     if i == j
-        @inbounds A.dv[i] = x
+        A.dv[i] = x
+    elseif abs(i - j) == 1
+        A.ev[min(i,j)] = x
     else
-        throw(ArgumentError("cannot set off-diagonal entry ($i, $j)"))
+        throw(ArgumentError("cannot set elements outside the sub, main, or super diagonals"))
     end
-    return x
 end
 
 ## Tridiagonal matrices ##
@@ -559,18 +559,15 @@ function getindex{T}(A::Tridiagonal{T}, i::Integer, j::Integer)
 end
 
 function setindex!(A::Tridiagonal, x, i::Integer, j::Integer)
-    @boundscheck checkbounds(A, i, j)
     if i == j
-        @inbounds A.d[i] = x
+        A.d[i] = x
     elseif i - j == 1
-        @inbounds A.dl[j] = x
+        A.dl[j] = x
     elseif j - i == 1
-        @inbounds A.du[i] = x
-    elseif !iszero(x)
-        throw(ArgumentError(string("cannot set entry ($i, $j) off ",
-            "the tridiagonal band to a nonzero value ($x)")))
+        A.du[i] = x
+    else
+        throw(ArgumentError("cannot set elements outside the sub, main, or super diagonals"))
     end
-    return x
 end
 
 ## structured matrix methods ##

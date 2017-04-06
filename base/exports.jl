@@ -23,7 +23,7 @@ export
     Markdown,
     Threads,
     Iterators,
-    Distributed,
+    Parallel,
 
 # Types
     AbstractChannel,
@@ -1344,7 +1344,7 @@ export
     nzrange,
     nnz,
 
-# Distributed module re-exports
+# Parallel module re-exports
     @spawn,
     @spawnat,
     @fetch,

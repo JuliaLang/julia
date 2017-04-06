@@ -1,5 +1,3 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
-
 struct SummarySize
     seen::ObjectIdDict
     frontier_x::Vector{Any}

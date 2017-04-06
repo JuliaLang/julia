@@ -116,16 +116,15 @@ srand(100)
 
         @testset "trsv" begin
             A = triu(rand(elty,n,n))
-            @testset "Vector and SubVector" for x in (rand(elty, n), view(rand(elty,2n),1:2:2n))
-                @test A\x ≈ BLAS.trsv('U','N','N',A,x)
-                @test_throws DimensionMismatch BLAS.trsv('U','N','N',A,ones(elty,n+1))
-            end
+            x = rand(elty,n)
+            @test A\x ≈ BLAS.trsv('U','N','N',A,x)
+            @test_throws DimensionMismatch BLAS.trsv('U','N','N',A,ones(elty,n+1))
         end
-        @testset "ger, her, syr" for x in (rand(elty, n), view(rand(elty,2n), 1:2:2n)),
-            y in (rand(elty,n), view(rand(elty,3n), 1:3:3n))
-
+        @testset "ger, her, syr" begin
             A = rand(elty,n,n)
             α = rand(elty)
+            x = rand(elty,n)
+            y = rand(elty,n)
 
             @test BLAS.ger!(α,x,y,copy(A)) ≈ A + α*x*y'
             @test_throws DimensionMismatch BLAS.ger!(α,ones(elty,n+1),y,copy(A))

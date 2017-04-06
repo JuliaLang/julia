@@ -208,11 +208,11 @@ typedef struct _jl_llvm_functions_t {
 
 // This type describes a single function body
 typedef struct _jl_code_info_t {
-    jl_array_t *code;  // Any array of statements
+    jl_array_t *code;  // compressed uint8 array, or Any array of statements
     jl_value_t *slottypes; // types of variable slots (or `nothing`)
     jl_value_t *ssavaluetypes;  // types of ssa values (or count of them)
-    jl_array_t *slotflags;  // local var bit flags
     jl_array_t *slotnames; // names of local variables
+    jl_array_t *slotflags;  // local var bit flags
     uint8_t inferred;
     uint8_t inlineable;
     uint8_t propagate_inbounds;
@@ -240,7 +240,7 @@ typedef struct _jl_method_t {
     union jl_typemap_t specializations;
 
     jl_svec_t *sparam_syms;  // symbols giving static parameter names
-    jl_value_t *source;  // original code template (jl_code_info_t, but may be compressed), null for builtins
+    jl_code_info_t *source;  // original code template, null for builtins
     struct _jl_method_instance_t *unspecialized;  // unspecialized executable method instance, or null
     struct _jl_method_instance_t *generator;  // executable code-generating function if isstaged
     jl_array_t *roots;  // pointers in generated code (shared to reduce memory), or null
@@ -254,7 +254,6 @@ typedef struct _jl_method_t {
     int32_t called;  // bit flags: whether each of the first 8 arguments is called
     uint8_t isva;
     uint8_t isstaged;
-    uint8_t pure;
 
 // hidden fields:
     uint8_t traced;
@@ -467,7 +466,7 @@ typedef struct {
 // constants and type objects -------------------------------------------------
 
 // kinds
-extern JL_DLLEXPORT jl_datatype_t *jl_typeofbottom_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_bottomtype_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_datatype_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_uniontype_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_unionall_type;
@@ -874,7 +873,7 @@ JL_DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b);
 STATIC_INLINE int jl_is_kind(jl_value_t *v)
 {
     return (v==(jl_value_t*)jl_uniontype_type || v==(jl_value_t*)jl_datatype_type ||
-            v==(jl_value_t*)jl_unionall_type || v==(jl_value_t*)jl_typeofbottom_type);
+            v==(jl_value_t*)jl_unionall_type || v==(jl_value_t*)jl_bottomtype_type);
 }
 
 STATIC_INLINE int jl_is_type(jl_value_t *v)
@@ -985,7 +984,7 @@ JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_unwrap_unionall(jl_value_t *v);
 jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u);
 
-#if defined(NDEBUG) && defined(JL_NDEBUG)
+#ifdef NDEBUG
 STATIC_INLINE int jl_is_leaf_type_(jl_value_t *v)
 {
     return jl_is_datatype(v) && ((jl_datatype_t*)v)->isleaftype;
@@ -1039,7 +1038,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_code_info_t *f, jl_value_
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo);
 JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src);
 JL_DLLEXPORT size_t jl_get_world_counter(void);
-JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_value_t *ty);
+JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_typename_t *tn);
 JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x);
 JL_DLLEXPORT jl_value_t *jl_box_int8(int8_t x);
 JL_DLLEXPORT jl_value_t *jl_box_uint8(uint8_t x);
@@ -1232,7 +1231,6 @@ JL_DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from,
 JL_DLLEXPORT void jl_module_importall(jl_module_t *to, jl_module_t *from);
 JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
-JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_module_t *jl_new_main_module(void);
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m);
 STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
@@ -1385,12 +1383,8 @@ JL_DLLEXPORT void jl_register_newmeth_tracer(void (*callback)(jl_method_t *trace
 // AST access
 JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr);
 
-JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code);
-JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_array_t *data);
-JL_DLLEXPORT uint8_t jl_ast_flag_inferred(jl_array_t *data);
-JL_DLLEXPORT uint8_t jl_ast_flag_inlineable(jl_array_t *data);
-JL_DLLEXPORT uint8_t jl_ast_flag_pure(jl_array_t *data);
-JL_DLLEXPORT void jl_fill_argnames(jl_array_t *data, jl_array_t *names);
+JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_array_t *ast);
+JL_DLLEXPORT jl_array_t *jl_uncompress_ast(jl_method_t *m, jl_array_t *data);
 
 JL_DLLEXPORT int jl_is_operator(char *sym);
 JL_DLLEXPORT int jl_operator_precedence(char *sym);

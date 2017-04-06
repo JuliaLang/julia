@@ -21,12 +21,10 @@ function current(rb::GitRebase)
 end
 
 function Base.getindex(rb::GitRebase, i::Integer)
-    if !(1 <= i <= count(rb))
-        throw(BoundsError(rb, (i,)))
-    end
     rb_op_ptr = ccall((:git_rebase_operation_byindex, :libgit2),
                       Ptr{RebaseOperation},
                       (Ptr{Void}, Csize_t), rb.ptr, i-1)
+    rb_op_ptr == C_NULL && return nothing
     return unsafe_load(rb_op_ptr)
 end
 
@@ -43,11 +41,6 @@ function Base.next(rb::GitRebase)
     return unsafe_load(rb_op_ptr_ptr[])
 end
 
-function Base.show(io::IO, rb::GitRebase)
-    println(io, "GitRebase:")
-    println(io, "Number: ", count(rb))
-    println(io, "Currently performing operation: ", current(rb)+1)
-end
 
 """
     LibGit2.commit(rb::GitRebase, sig::GitSignature)

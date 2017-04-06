@@ -128,7 +128,6 @@ end
         yi = 4
         @testset "Random values" begin
             @test x^y ≈ big(x)^big(y)
-            @test x^1 === x
             @test x^yi ≈ big(x)^yi
             @test acos(x) ≈ acos(big(x))
             @test acosh(1+x) ≈ acosh(big(1+x))
@@ -247,8 +246,6 @@ end
     end
 end
 @test exp10(5) ≈ exp10(5.0)
-@test exp10(50//10) ≈ exp10(5.0)
-@test log10(exp10(e)) ≈ e
 @test exp2(Float16(2.)) ≈ exp2(2.)
 @test log(e) == 1
 
@@ -591,18 +588,6 @@ end
     let A = [1 2; 3 4]; B = [5 6; 7 8]; C = [9 10; 11 12]
         @test muladd(A,B,C) == A*B + C
     end
-end
-
-@testset "issue #19872" begin
-    f19872a(x) = x ^ 5
-    f19872b(x) = x ^ (-1024)
-    @test 0 < f19872b(2.0) < 1e-300
-    @test issubnormal(2.0 ^ (-1024))
-    @test issubnormal(f19872b(2.0))
-    @test !issubnormal(f19872b(0.0))
-    @test f19872a(2.0) === 32.0
-    @test !issubnormal(f19872a(2.0))
-    @test !issubnormal(0.0)
 end
 
 # no domain error is thrown for negative values

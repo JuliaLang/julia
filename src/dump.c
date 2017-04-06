@@ -199,8 +199,8 @@ static void write_float64(ios_t *s, double x)
 
 // --- Static Compile ---
 
-#define jl_serialize_value(s, v) jl_serialize_value_((s), (jl_value_t*)(v), 0)
-static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_literal);
+#define jl_serialize_value(s, v) jl_serialize_value_(s,(jl_value_t*)(v))
+static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v);
 static jl_value_t *jl_deserialize_value(jl_serializer_state *s, jl_value_t **loc);
 static jl_value_t ***sysimg_gvars = NULL;
 static void **sysimg_fvars = NULL;
@@ -422,15 +422,7 @@ static void jl_update_all_fptrs(void)
 {
     //jl_printf(JL_STDOUT, "delayed_fptrs_n: %d\n", delayed_fptrs_n);
     void **fvars = sysimg_fvars;
-    if (fvars == NULL) {
-        size_t i;
-        for (i = 0; i < delayed_fptrs_n; i++) {
-            jl_method_instance_t *li = delayed_fptrs[i].li;
-            assert(li->jlcall_api && li->jlcall_api != 2);
-            li->jlcall_api = 0;
-        }
-        return;
-    }
+    if (fvars == 0) return;
     // jl_fptr_to_llvm needs to decompress some ASTs, therefore this needs to be NULL
     // to skip trying to restore GlobalVariable pointers in jl_deserialize_gv
     sysimg_gvars = NULL;
@@ -439,7 +431,7 @@ static void jl_update_all_fptrs(void)
     jl_method_instance_t **linfos = (jl_method_instance_t**)malloc(sizeof(jl_method_instance_t*) * sysimg_fvars_max);
     for (i = 0; i < delayed_fptrs_n; i++) {
         jl_method_instance_t *li = delayed_fptrs[i].li;
-        assert(li->def && li->jlcall_api && li->jlcall_api != 2);
+        assert(li->def);
         int32_t cfunc = delayed_fptrs[i].cfunc - 1;
         if (cfunc >= 0) {
             jl_fptr_to_llvm((jl_fptr_t)fvars[cfunc], li, 1);
@@ -702,10 +694,9 @@ static int is_ast_node(jl_value_t *v)
 {
     // TODO: this accidentally copies QuoteNode(Expr(...)) and QuoteNode(svec(...))
     return jl_is_symbol(v) || jl_is_slot(v) || jl_is_ssavalue(v) ||
-        jl_is_uniontype(v) || jl_is_expr(v) || jl_is_newvarnode(v) ||
-        jl_is_svec(v) || jl_is_tuple(v) || ((jl_datatype_t*)jl_typeof(v))->instance ||
-        jl_is_int32(v) || jl_is_int64(v) || jl_is_bool(v) ||
-        jl_is_quotenode(v) || jl_is_gotonode(v) ||
+        jl_is_expr(v) || jl_is_newvarnode(v) || jl_is_svec(v) || jl_is_tuple(v) ||
+        jl_is_uniontype(v) || jl_is_int32(v) || jl_is_int64(v) ||
+        jl_is_bool(v) || jl_is_quotenode(v) || jl_is_gotonode(v) ||
         jl_is_labelnode(v) || jl_is_linenode(v) || jl_is_globalref(v);
 }
 
@@ -720,7 +711,7 @@ static int literal_val_id(jl_serializer_state *s, jl_value_t *v)
     return jl_array_len(s->tree_literal_values) - 1;
 }
 
-static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_literal)
+static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
 {
     if (v == NULL) {
         write_uint8(s->s, Null_tag);
@@ -743,7 +734,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
 
     if (s->mode == MODE_AST) {
         // compressing tree
-        if (!as_literal && !is_ast_node(v)) {
+        if (!is_ast_node(v)) {
             writetag(s->s, (jl_value_t*)LiteralVal_tag);
             int id = literal_val_id(s, v);
             assert(id >= 0 && id < UINT16_MAX);
@@ -936,7 +927,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         write_int8(s->s, m->called);
         write_int32(s->s, m->nargs);
         write_int8(s->s, m->isva);
-        write_int8(s->s, m->pure);
         jl_serialize_value(s, (jl_value_t*)m->module);
         jl_serialize_value(s, (jl_value_t*)m->sparam_syms);
         jl_serialize_value(s, (jl_value_t*)m->roots);
@@ -1066,7 +1056,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 jl_serialize_value(s, t);
                 return;
             }
-            assert(!t->instance && "detected singleton construction corruption");
             if (t->size <= 255) {
                 writetag(s->s, (jl_value_t*)SmallDataType_tag);
                 write_uint8(s->s, t->size);
@@ -1377,7 +1366,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     }
     if (tag == 9) {
         jl_datatype_t *primarydt = (jl_datatype_t*)jl_deserialize_value(s, NULL);
-        jl_value_t *dtv = jl_typeof(jl_get_kwsorter((jl_value_t*)primarydt));
+        jl_value_t *dtv = jl_typeof(jl_get_kwsorter(primarydt->name));
         backref_list.items[pos] = dtv;
         return dtv;
     }
@@ -1678,7 +1667,6 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->called = read_int8(s->s);
     m->nargs = read_int32(s->s);
     m->isva = read_int8(s->s);
-    m->pure = read_int8(s->s);
     m->module = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&m->module);
     jl_gc_wb(m, m->module);
     m->sparam_syms = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&m->sparam_syms);
@@ -1686,7 +1674,7 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->roots = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->roots);
     if (m->roots)
         jl_gc_wb(m, m->roots);
-    m->source = jl_deserialize_value(s, &m->source);
+    m->source = (jl_code_info_t*)jl_deserialize_value(s, (jl_value_t**)&m->source);
     if (m->source)
         jl_gc_wb(m, m->source);
     m->unspecialized = (jl_method_instance_t*)jl_deserialize_value(s, (jl_value_t**)&m->unspecialized);
@@ -1863,19 +1851,18 @@ static jl_value_t *jl_deserialize_value_globalref(jl_serializer_state *s)
 
 static jl_value_t *jl_deserialize_value_singleton(jl_serializer_state *s, jl_value_t **loc)
 {
-    if (s->mode == MODE_AST) {
-        jl_datatype_t *dt = (jl_datatype_t*)jl_deserialize_value(s, NULL);
-        return dt->instance;
-    }
+    int usetable = (s->mode != MODE_AST);
     jl_value_t *v = (jl_value_t*)jl_gc_alloc(s->ptls, 0, NULL);
-    uintptr_t pos = backref_list.len;
-    arraylist_push(&backref_list, (void*)v);
-    if (s->mode == MODE_MODULE) {
-        // TODO: optimize the case where the value can easily be obtained
-        // from an external module (tag == 6) as dt->instance
-        assert(loc != NULL && loc != HT_NOTFOUND);
-        arraylist_push(&flagref_list, loc);
-        arraylist_push(&flagref_list, (void*)pos);
+    if (usetable) {
+        uintptr_t pos = backref_list.len;
+        arraylist_push(&backref_list, (void*)v);
+        if (s->mode == MODE_MODULE) {
+            // TODO: optimize the case where the value can easily be obtained
+            // from an external module (tag == 6) as dt->instance
+            assert(loc != NULL && loc != HT_NOTFOUND);
+            arraylist_push(&flagref_list, loc);
+            arraylist_push(&flagref_list, (void*)pos);
+        }
     }
     jl_datatype_t *dt = (jl_datatype_t*)jl_deserialize_value(s, (jl_value_t**)HT_NOTFOUND); // no loc, since if dt is replaced, then dt->instance would be also
     jl_set_typeof(v, dt);
@@ -2357,21 +2344,14 @@ static void jl_init_restored_modules(jl_array_t *init_order)
 static void jl_prune_type_cache(jl_svec_t *cache)
 {
     size_t l = jl_svec_len(cache), ins = 0, i;
-    for (i = 0; i < l; i++) {
+    for(i=0; i < l; i++) {
         jl_value_t *ti = jl_svecref(cache, i);
-        if (ti == NULL)
-            break;
+        if (ti == NULL) break;
         if (ptrhash_get(&backref_table, ti) != HT_NOTFOUND || jl_get_llvm_gv(ti) != 0)
             jl_svecset(cache, ins++, ti);
-        else if (jl_is_datatype(ti)) {
-            jl_value_t *singleton = ((jl_datatype_t*)ti)->instance;
-            if (singleton && (ptrhash_get(&backref_table, singleton) != HT_NOTFOUND || jl_get_llvm_gv(singleton) != 0))
-                jl_svecset(cache, ins++, ti);
-        }
     }
-    if (i > ins) {
-        memset(&jl_svec_data(cache)[ins], 0, (i - ins) * sizeof(jl_value_t*));
-    }
+    if (i > ins)
+        memset(&jl_svec_data(cache)[ins], 0, (i-ins)*sizeof(jl_value_t*));
 }
 
 static void jl_save_system_image_to_stream(ios_t *f)
@@ -2601,16 +2581,15 @@ JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
     JL_SIGATOMIC_END();
 }
 
-JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
+JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_array_t *ast)
 {
     JL_TIMING(AST_COMPRESS);
     JL_LOCK(&m->writelock); // protect the roots array (Might GC)
     assert(jl_is_method(m));
-    assert(jl_is_code_info(code));
+    assert(jl_is_array(ast));
     ios_t dest;
     ios_mem(&dest, 0);
     int en = jl_gc_enable(0); // Might GC
-    size_t i;
 
     if (m->roots == NULL) {
         m->roots = jl_alloc_vec_any(0);
@@ -2621,33 +2600,16 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
         m->roots, m->module,
         jl_get_ptls_states()
     };
-
-    uint8_t flags = (code->inferred << 3)
-                  | (code->inlineable << 2)
-                  | (code->propagate_inbounds << 1)
-                  | (code->pure << 0);
-    write_uint8(s.s, flags);
-
-    size_t nsyms = jl_array_len(code->slotnames);
-    assert(nsyms >= m->nargs && nsyms < INT32_MAX); // required by generated functions
-    write_int32(s.s, nsyms);
-    for (i = 0; i < nsyms; i++) {
-        jl_sym_t *name = (jl_sym_t*)jl_array_ptr_ref(code->slotnames, i);
-        assert(jl_is_symbol(name));
-        char *namestr = jl_symbol_name(name);
-        size_t namelen = strlen(namestr);
-        ios_write(s.s, namestr, namelen + 1); // include nul-byte
+    size_t i, nstmts = jl_array_len(ast);
+    assert(nstmts < INT32_MAX);
+    write_int32(&dest, nstmts);
+    for (i = 0; i < nstmts; i++) {
+        jl_serialize_value(&s, jl_array_ptr_ref(ast, i));
     }
 
-    size_t nf = jl_datatype_nfields(jl_code_info_type);
-    for (i = 0; i < nf - 5; i++) {
-        jl_serialize_value_(&s, jl_get_nth_field((jl_value_t*)code, i), 1);
-    }
+    //jl_printf(JL_STDERR, "%d bytes, %d values\n", dest.size, vals->length);
 
-    ios_putc('\0', s.s);
-    ios_flush(s.s);
     jl_array_t *v = jl_take_buffer(&dest);
-    ios_close(s.s);
     if (jl_array_len(m->roots) == 0) {
         m->roots = NULL;
     }
@@ -2658,21 +2620,17 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
     return v;
 }
 
-JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_array_t *data)
+JL_DLLEXPORT jl_array_t *jl_uncompress_ast(jl_method_t *m, jl_array_t *data)
 {
-    if (jl_is_code_info(data))
-        return (jl_code_info_t*)data;
     JL_TIMING(AST_UNCOMPRESS);
-    jl_ptls_t ptls = jl_get_ptls_states();
     JL_LOCK(&m->writelock); // protect the roots array (Might GC)
     assert(jl_is_method(m));
-    assert(jl_typeis(data, jl_array_uint8_type));
-    assert(jl_array_len(data) > 2 && ((uint8_t*)data->data)[jl_array_len(data) - 1] == 0);
-    size_t i;
+    assert(jl_is_array(data));
+    jl_array_t *bytes = (jl_array_t*)data;
     ios_t src;
     ios_mem(&src, 0);
-    ios_setbuf(&src, (char*)data->data, jl_array_len(data), 0);
-    src.size = jl_array_len(data);
+    ios_setbuf(&src, (char*)bytes->data, jl_array_len(bytes), 0);
+    src.size = jl_array_len(bytes);
     int en = jl_gc_enable(0); // Might GC
     jl_serializer_state s = {
         &src, MODE_AST,
@@ -2680,102 +2638,16 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_array_t *data)
         jl_get_ptls_states()
     };
 
-    jl_code_info_t *code =
-        (jl_code_info_t*)jl_gc_alloc(ptls, sizeof(jl_code_info_t),
-                                       jl_code_info_type);
-    uint8_t flags = read_uint8(s.s);
-    code->inferred = !!(flags & (1 << 3));
-    code->inlineable = !!(flags & (1 << 2));
-    code->propagate_inbounds = !!(flags & (1 << 1));
-    code->pure = !!(flags & (1 << 0));
-
-    size_t nslots = read_int32(&src);
-    jl_array_t *syms = jl_alloc_vec_any(nslots);
-    code->slotnames = syms;
-    for (i = 0; i < nslots; i++) {
-        char *namestr = s.s->buf + s.s->bpos;
-        size_t namelen = strlen(namestr);
-        jl_sym_t *name = jl_symbol_n(namestr, namelen);
-        jl_array_ptr_set(syms, i, name);
-        ios_skip(s.s, namelen + 1);
+    size_t i, nstmts = read_int32(&src);
+    jl_array_t *ast = jl_alloc_vec_any(nstmts);
+    JL_GC_PUSH1(&ast);
+    for (i = 0; i < nstmts; i++) {
+        jl_array_ptr_set(ast, i, jl_deserialize_value(&s, NULL));
     }
-
-    size_t nf = jl_datatype_nfields(jl_code_info_type);
-    for (i = 0; i < nf - 5; i++) {
-        assert(jl_field_isptr(jl_code_info_type, i));
-        jl_value_t **fld = (jl_value_t**)((char*)jl_data_ptr(code) + jl_field_offset(jl_code_info_type, i));
-        *fld = jl_deserialize_value(&s, fld);
-    }
-
-    assert(ios_getc(s.s) == '\0' && ios_getc(s.s) == -1);
-    ios_close(s.s);
-    JL_GC_PUSH1(&code);
     jl_gc_enable(en);
     JL_UNLOCK(&m->writelock); // Might GC
     JL_GC_POP();
-    return code;
-}
-
-JL_DLLEXPORT uint8_t jl_ast_flag_inferred(jl_array_t *data)
-{
-    if (jl_is_code_info(data))
-        return ((jl_code_info_t*)data)->inferred;
-    assert(jl_typeis(data, jl_array_uint8_type));
-    assert(jl_array_len(data) > 2 && ((uint8_t*)data->data)[jl_array_len(data) - 1] == 0);
-    uint8_t flags = ((uint8_t*)data->data)[0];
-    return !!(flags & (1 << 3));
-}
-
-JL_DLLEXPORT uint8_t jl_ast_flag_inlineable(jl_array_t *data)
-{
-    if (jl_is_code_info(data))
-        return ((jl_code_info_t*)data)->inlineable;
-    assert(jl_typeis(data, jl_array_uint8_type));
-    assert(jl_array_len(data) > 2 && ((uint8_t*)data->data)[jl_array_len(data) - 1] == 0);
-    uint8_t flags = ((uint8_t*)data->data)[0];
-    return !!(flags & (1 << 2));
-}
-
-JL_DLLEXPORT uint8_t jl_ast_flag_pure(jl_array_t *data)
-{
-    if (jl_is_code_info(data))
-        return ((jl_code_info_t*)data)->pure;
-    assert(jl_typeis(data, jl_array_uint8_type));
-    assert(jl_array_len(data) > 2 && ((uint8_t*)data->data)[jl_array_len(data) - 1] == 0);
-    uint8_t flags = ((uint8_t*)data->data)[0];
-    return !!(flags & (1 << 0));
-}
-
-JL_DLLEXPORT void jl_fill_argnames(jl_array_t *data, jl_array_t *names)
-{
-    size_t i, nargs = jl_array_len(names);
-    if (jl_is_code_info(data)) {
-        jl_code_info_t *func = (jl_code_info_t*)data;
-        assert(jl_array_len(func->slotnames) >= nargs);
-        for (i = 0; i < nargs; i++) {
-            jl_value_t *name = jl_array_ptr_ref(func->slotnames, i);
-            jl_array_ptr_set(names, i, name);
-        }
-    }
-    else {
-        uint8_t *d = (uint8_t*)data->data;
-#ifndef NDEBUG
-        assert(jl_typeis(data, jl_array_uint8_type));
-        int b3 = d[1];
-        int b2 = d[2];
-        int b1 = d[3];
-        int b0 = d[4];
-        int nslots = b0 | (b1<<8) | (b2<<16) | (b3<<24);
-        assert(nslots >= nargs);
-#endif
-        char *namestr = (char*)d + 5;
-        for (i = 0; i < nargs; i++) {
-            size_t namelen = strlen(namestr);
-            jl_sym_t *name = jl_symbol_n(namestr, namelen);
-            jl_array_ptr_set(names, i, name);
-            namestr += namelen + 1;
-        }
-    }
+    return ast;
 }
 
 JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
@@ -2824,15 +2696,6 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     return 0;
 }
 
-#ifndef NDEBUG
-// skip the performance optimizations of jl_types_equal and just use subtyping directly
-// one of these types is invalid - that's why we're doing the recache type operation
-static int jl_invalid_types_equal(jl_datatype_t *a, jl_datatype_t *b)
-{
-    return jl_subtype((jl_value_t*)a, (jl_value_t*)b) && jl_subtype((jl_value_t*)b, (jl_value_t*)a);
-}
-#endif
-
 static jl_datatype_t *jl_recache_type(jl_datatype_t *dt, size_t start, jl_value_t *v)
 {
     if (v == NULL)
@@ -2847,7 +2710,7 @@ static jl_datatype_t *jl_recache_type(jl_datatype_t *dt, size_t start, jl_value_
                 if (p->uid == -1 || p->uid == 0) {
                     jl_datatype_t *cachep = jl_recache_type(p, start, NULL);
                     if (p != cachep) {
-                        assert(jl_invalid_types_equal(p, cachep));
+                        assert(jl_types_equal((jl_value_t*)p, (jl_value_t*)cachep));
                         jl_svecset(tt, i, cachep);
                     }
                 }
@@ -2876,7 +2739,7 @@ static jl_datatype_t *jl_recache_type(jl_datatype_t *dt, size_t start, jl_value_
         else {
             dt->uid = 0;
             t = (jl_datatype_t*)jl_cache_type_(dt);
-            assert(jl_invalid_types_equal(t, dt));
+            assert(jl_types_equal((jl_value_t*)t, (jl_value_t*)dt));
         }
     }
     else {
@@ -3227,7 +3090,7 @@ void jl_init_serializer(void)
                      jl_voidpointer_type, jl_newvarnode_type, jl_abstractstring_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
                      jl_emptytuple_type, jl_array_uint8_type, jl_symbol_type->name,
-                     jl_ssavalue_type->name, jl_tuple_typename, jl_code_info_type, jl_typeofbottom_type,
+                     jl_ssavalue_type->name, jl_tuple_typename, jl_code_info_type, jl_bottomtype_type,
                      ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_ref_type))->name,
                      jl_pointer_typename, jl_simplevector_type->name, jl_datatype_type->name,
                      jl_uniontype_type->name, jl_array_typename, jl_expr_type->name,
@@ -3240,7 +3103,7 @@ void jl_init_serializer(void)
                      jl_abstractslot_type->name, jl_slotnumber_type->name, jl_unionall_type->name,
                      jl_intrinsic_type->name, jl_task_type->name, jl_labelnode_type->name,
                      jl_linenumbernode_type->name, jl_builtin_type->name, jl_gotonode_type->name,
-                     jl_quotenode_type->name, jl_globalref_type->name, jl_typeofbottom_type->name,
+                     jl_quotenode_type->name, jl_globalref_type->name, jl_bottomtype_type->name,
                      jl_string_type->name, jl_abstractstring_type->name,
 
                      ptls->root_task,

@@ -21,19 +21,13 @@ f47{T}(x::Vector{Vector{T}}) = 0
 @test_throws TypeError (Array{T} where T<:Vararg{Int,2})
 
 # issue #8652
-function args_morespecific(a, b)
-    sp = (ccall(:jl_type_morespecific, Cint, (Any,Any), a, b) != 0)
-    if sp  # make sure morespecific(a,b) implies !morespecific(b,a)
-        @test ccall(:jl_type_morespecific, Cint, (Any,Any), b, a) == 0
-    end
-    return sp
-end
+args_morespecific(a, b) = ccall(:jl_type_morespecific, Cint, (Any,Any), a, b) != 0
 let
-    a  = Tuple{Type{T1}, T1} where T1<:Integer
+    a = Tuple{Type{T1}, T1} where T1<:Integer
     b2 = Tuple{Type{T2}, Integer} where T2<:Integer
     @test args_morespecific(a, b2)
     @test !args_morespecific(b2, a)
-    a  = Tuple{Type{T1}, Ptr{T1}} where T1<:Integer
+    a = Tuple{Type{T1}, Ptr{T1}} where T1<:Integer
     b2 = Tuple{Type{T2}, Ptr{Integer}} where T2<:Integer
     @test args_morespecific(a, b2)
     @test !args_morespecific(b2, a)
@@ -56,23 +50,6 @@ let
     @test !args_morespecific(a, b)
     @test  args_morespecific(b, a)
 end
-
-# another specificity issue
-_z_z_z_(x, y) = 1
-_z_z_z_(::Int, ::Int, ::Vector) = 2
-_z_z_z_(::Int, c...) = 3
-@test _z_z_z_(1, 1, []) == 2
-
-@test  args_morespecific(Tuple{T,Vararg{T}} where T<:Number,  Tuple{Number,Number,Vararg{Number}})
-@test !args_morespecific(Tuple{Number,Number,Vararg{Number}}, Tuple{T,Vararg{T}} where T<:Number)
-
-@test args_morespecific(Tuple{Array{T} where T<:Union{Float32,Float64,Complex64,Complex128}, Any},
-                        Tuple{Array{T} where T<:Real, Any})
-
-@test args_morespecific(Tuple{1,T} where T, Tuple{Any})
-
-# issue #21016
-@test args_morespecific(Tuple{IO, Core.TypeofBottom}, Tuple{IO, Type{T}} where T<:Number)
 
 # with bound varargs
 
@@ -181,8 +158,6 @@ nttest1{n}(x::NTuple{n,Int}) = n
 
 # #17198
 @test_throws MethodError convert(Tuple{Int}, (1.0, 2.0, 3.0))
-# #21238
-@test_throws MethodError convert(Tuple{Int,Int,Int}, (1, 2))
 
 # type declarations
 
@@ -4766,37 +4741,3 @@ end
     x::Vector{S}
     y::Vector{T}
 end
-
-# issue #20999, allow more type redefinitions
-struct T20999
-    x::Array{T} where T<:Real
-end
-
-struct T20999
-    x::Array{T} where T<:Real
-end
-
-@test_throws ErrorException struct T20999
-    x::Array{T} where T<:Integer
-end
-
-let a = Array{Core.TypeofBottom, 1}(2)
-    @test a[1] == Union{}
-    @test a == [Union{}, Union{}]
-end
-
-# issue #21178
-struct F21178{A,B} end
-b21178(::F1,::F2) where {B1,B2,F1<:F21178{B1,<:Any},F2<:F21178{B2}} = F1,F2,B1,B2
-@test b21178(F21178{1,2}(),F21178{1,2}()) == (F21178{1,2}, F21178{1,2}, 1, 1)
-
-# issue #21172
-a21172 = f21172(x) = 2x
-@test f21172(8) == 16
-@test a21172 === f21172
-
-# issue #21271
-f21271() = convert(Tuple{Type{Int}, Type{Float64}}, (Int, Float64))::Tuple{Type{Int}, Type{Float64}}
-f21271(x) = x::Tuple{Type{Int}, Type{Float64}}
-@test_throws TypeError f21271()
-@test_throws TypeError f21271((Int, Float64))

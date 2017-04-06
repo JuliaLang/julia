@@ -519,36 +519,35 @@ Base.IndexStyle{T<:MyArray}(::Type{T}) = IndexLinear()
 This setting will cause `eachindex` iteration over a `MyArray` to use integers. If you don't
 specify this trait, the default value `IndexCartesian()` is used.
 
-### Array and Vectorized Operators and Functions
+### Vectorized Operators and Functions
 
-The following operators are supported for arrays:
+The following operators are supported for arrays. Also, *every* binary
+operator supports a [dot version](@ref man-dot-operators) that can be
+applied to arrays (and combinations of arrays and scalars) as a
+[fused broadcasting operation](@ref man-vectorized). (For comparison
+operations like `<`, *only* the `.<` version is applicable to arrays.)
 
-1. Unary arithmetic -- `-`, `+`
-2. Binary arithmetic -- `-`, `+`, `*`, `/`, `\`, `^`
+1. Unary arithmetic -- `-`, `+`, `!`
+2. Binary arithmetic -- `+`, `-`, `*`, `/`, `\`, `^`, `.^`, `div`, `mod`
 3. Comparison -- `==`, `!=`, `≈` ([`isapprox`](@ref)), `≉`
+4. Unary Boolean or bitwise -- `~`
+5. Binary Boolean or bitwise -- `&`, `|`, `⊻` ([`xor`](@ref))
 
-Most of the binary arithmetic operators listed above also operate elementwise
-when one argument is scalar: `-`, `+`, and `*` when either argument is scalar,
-and `/` and `\` when the denominator is scalar. For example, `[1, 2] + 3 == [4, 5]`
-and `[6, 4] / 2 == [3, 2]`.
+Some operators without dots operate elementwise anyway when one argument is a scalar:
+`*`, `+`, `-`, and the bitwise operators. The operators `/` and `\` operate elementwise when
+the denominator is a scalar.
 
-Additionally, to enable convenient vectorization of mathematical and other operations,
-Julia [provides the dot syntax](@ref man-vectorized) `f.(args...)`, e.g. `sin.(x)`
-or `min.(x,y)`, for elementwise operations over arrays or mixtures of arrays and
-scalars (a [Broadcasting](@ref) operation); these have the additional advantage of
-"fusing" into a single loop when combined with other dot calls, e.g. `sin.(cos.(x))`.
+Note that comparisons such as `==` operate on whole arrays, giving a single boolean answer. Use
+dot operators like `.==` for elementwise comparisons.
 
-Also, *every* binary operator supports a [dot version](@ref man-dot-operators)
-that can be applied to arrays (and combinations of arrays and scalars) in such
-[fused broadcasting operations](@ref man-vectorized), e.g. `z .== sin.(x .* y)`.
+To enable convenient vectorization of mathematical and other operations, Julia [provides the compact
+syntax](@ref man-vectorized) `f.(args...)`, e.g. `sin.(x)` or `min.(x,y)`, for elementwise operations over arrays or mixtures of arrays and scalars (a [Broadcasting](@ref) operation); these
+have the additional advantage of "fusing" into a single loop when combined with
+dot operators and other dot calls.
 
-Note that comparisons such as `==` operate on whole arrays, giving a single boolean
-answer. Use dot operators like `.==` for elementwise comparisons. (For comparison
-operations like `<`, *only* the elementwise `.<` version is applicable to arrays.)
-
-Also notice the difference between `max.(a,b)`, which `broadcast`s [`max()`](@ref)
-elementwise over `a` and `b`, and `maximum(a)`, which finds the largest value within
-`a`. The same relationship holds for `min.(a,b)` and `minimum(a)`.
+Note that there is a difference between `max.(a,b)`, which `broadcast`s [`max()`](@ref) elementwise
+over `a` and `b`, and `maximum(a)`, which finds the largest value within `a`. The same relationship
+holds for `min.(a,b)` and `minimum(a)`.
 
 ### Broadcasting
 

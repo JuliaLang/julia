@@ -14,8 +14,6 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Metadata.h>
 #include <llvm/Support/Debug.h>
-#include "fix_llvm_assert.h"
-
 #include <cstdio>
 
 namespace llvm {

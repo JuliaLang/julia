@@ -61,10 +61,9 @@ function edit(path::AbstractString, line::Integer=0)
     end
 
     if is_windows() && name == "open"
-        @static is_windows() && # don't emit this ccall on other platforms
-            systemerror(:edit, ccall((:ShellExecuteW, "shell32"), stdcall, Int,
-                                     (Ptr{Void}, Cwstring, Cwstring, Ptr{Void}, Ptr{Void}, Cint),
-                                     C_NULL, "open", path, C_NULL, C_NULL, 10) ≤ 32)
+        systemerror(:edit, ccall((:ShellExecuteW,"shell32"), stdcall, Int,
+                                 (Ptr{Void}, Cwstring, Cwstring, Ptr{Void}, Ptr{Void}, Cint),
+                                 C_NULL, "open", path, C_NULL, C_NULL, 10) ≤ 32)
     elseif background
         spawn(pipeline(cmd, stderr=STDERR))
     else
@@ -588,14 +587,9 @@ else
             end
         end
         if downloadcmd == :wget
-            try
-                run(`wget -O $filename $url`)
-            catch
-                rm(filename)  # wget always creates a file
-                rethrow()
-            end
+            run(`wget -O $filename $url`)
         elseif downloadcmd == :curl
-            run(`curl -L -f -o $filename $url`)
+            run(`curl -o $filename -L $url`)
         elseif downloadcmd == :fetch
             run(`fetch -f $filename $url`)
         else

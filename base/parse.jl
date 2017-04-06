@@ -140,10 +140,10 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString},
 
     # Ignore leading and trailing whitespace
     while isspace(sbuff[startpos]) && startpos <= endpos
-        startpos = nextind(sbuff, startpos)
+        startpos += 1
     end
     while isspace(sbuff[endpos]) && endpos >= startpos
-        endpos = prevind(sbuff, endpos)
+        endpos -= 1
     end
 
     len = endpos - startpos + 1

@@ -32,13 +32,13 @@ Base.trues
 Base.falses
 Base.fill
 Base.fill!
+Base.reshape
 Base.similar(::AbstractArray)
 Base.similar(::Any, ::Tuple)
+Base.reinterpret
 Base.eye
 Base.linspace
 Base.logspace
-Base.Random.randsubseq
-Base.Random.randsubseq!
 ```
 
 ## Broadcast and vectorization
@@ -56,39 +56,20 @@ Base.Broadcast.broadcast_getindex
 Base.Broadcast.broadcast_setindex!
 ```
 
-## Indexing and assignment
+## Indexing, Assignment, and Concatenation
 
 ```@docs
 Base.getindex(::AbstractArray, ::Any...)
-Base.setindex!(::AbstractArray, ::Any, ::Any...)
-Base.copy!(::AbstractArray, ::CartesianRange, ::AbstractArray, ::CartesianRange)
-Base.isassigned
-Base.Colon
-Base.CartesianIndex
-Base.CartesianRange
-Base.to_indices
-Base.checkbounds
-Base.checkindex
-```
-
-## Views (SubArrays and other view types)
-
-```@docs
 Base.view
 Base.@view
 Base.@views
+Base.to_indices
+Base.Colon
 Base.parent
 Base.parentindexes
 Base.slicedim
-Base.reinterpret
-Base.reshape
-Base.squeeze
-Base.vec
-```
-
-## Concatenation and permutation
-
-```@docs
+Base.setindex!(::AbstractArray, ::Any, ::Any...)
+Base.isassigned
 Base.cat
 Base.vcat
 Base.hcat
@@ -117,7 +98,13 @@ Base.findprev(::Any, ::Any, ::Integer)
 Base.permutedims
 Base.permutedims!
 Base.PermutedDimsArray
+Base.squeeze
+Base.vec
 Base.promote_shape
+Base.checkbounds
+Base.checkindex
+Base.Random.randsubseq
+Base.Random.randsubseq!
 ```
 
 ## Array functions
@@ -147,7 +134,7 @@ Base.sum_kbn
 Base.Random.randperm
 Base.invperm
 Base.isperm
-Base.permute!(::Any, ::AbstractVector)
+Base.permute!{T}(::Any, ::AbstractArray{T, 1})
 Base.ipermute!
 Base.Random.randcycle
 Base.Random.shuffle

@@ -259,11 +259,9 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t **pli, size_t world, int forc
         fargs[1] = (jl_value_t*)li;
         fargs[2] = jl_box_ulong(world);
 #ifdef TRACE_INFERENCE
-        if (li->specTypes != (jl_value_t*)jl_emptytuple_type) {
-            jl_printf(JL_STDERR,"inference on ");
-            jl_static_show_func_sig(JL_STDERR, (jl_value_t*)li->specTypes);
-            jl_printf(JL_STDERR, "\n");
-        }
+        jl_printf(JL_STDERR,"inference on ");
+        jl_static_show_func_sig(JL_STDERR, (jl_value_t*)li->specTypes);
+        jl_printf(JL_STDERR, "\n");
 #endif
         jl_get_ptls_states()->world_age = jl_typeinf_world;
         jl_svec_t *linfo_src_rettype = (jl_svec_t*)jl_apply(fargs, 3);
@@ -768,17 +766,11 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
                 if (jl_is_vararg_type(declt))
                     declt = jl_unwrap_vararg(declt);
                 jl_value_t *di = jl_type_intersection(declt, (jl_value_t*)jl_typetype_type);
-                JL_GC_PUSH1(&di);
                 assert(di != (jl_value_t*)jl_bottom_type);
-                if (jl_is_kind(di)) {
-                    JL_GC_POP();
+                if (jl_is_kind(di))
                     return 0;
-                }
-                else if (!jl_subtype(di, elt) || !jl_subtype(elt, di)) {
-                    JL_GC_POP();
+                else if (!jl_subtype(di, elt) || !jl_subtype(elt, di))
                     return 0;
-                }
-                JL_GC_POP();
             }
             else {
                 return 0;
@@ -1043,13 +1035,6 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype
         JL_GC_POP();
         return NULL;
     }
-#ifdef TRACE_COMPILE
-    if (!jl_has_free_typevars((jl_value_t*)tt)) {
-        jl_printf(JL_STDERR, "precompile(");
-        jl_static_show(JL_STDERR, (jl_value_t*)tt);
-        jl_printf(JL_STDERR, ")\n");
-    }
-#endif
     sig = join_tsig(tt, entry->sig);
     jl_method_instance_t *nf;
     if (!cache) {
@@ -1231,31 +1216,22 @@ static void update_max_args(jl_methtable_t *mt, jl_value_t *type)
         mt->max_args = na;
 }
 
-static int JL_DEBUG_METHOD_INVALIDATION = 0;
 
 // invalidate cached methods that had an edge to a replaced method
-static void invalidate_method_instance(jl_method_instance_t *replaced, size_t max_world, int depth)
+static void invalidate_method_instance(jl_method_instance_t *replaced, size_t max_world)
 {
     JL_LOCK_NOGC(&replaced->def->writelock);
     jl_array_t *backedges = replaced->backedges;
     if (replaced->max_world > max_world) {
         // recurse to all backedges to update their valid range also
         assert(replaced->min_world <= max_world && "attempting to set invalid world constraints");
-        if (JL_DEBUG_METHOD_INVALIDATION) {
-            int d0 = depth;
-            char space = ' ', nl = '\n';
-            while (d0-- > 0)
-                jl_uv_puts(JL_STDOUT, &space, 1);
-            jl_static_show(JL_STDOUT, (jl_value_t*)replaced);
-            jl_uv_puts(JL_STDOUT, &nl, 1);
-        }
         replaced->max_world = max_world;
         update_world_bound(replaced, set_max_world2, max_world);
         if (backedges) {
             size_t i, l = jl_array_len(backedges);
             for (i = 0; i < l; i++) {
                 jl_method_instance_t *replaced = (jl_method_instance_t*)jl_array_ptr_ref(backedges, i);
-                invalidate_method_instance(replaced, max_world, depth + 1);
+                invalidate_method_instance(replaced, max_world);
             }
         }
     }
@@ -1292,7 +1268,7 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
             size_t i, l = jl_array_len(backedges);
             jl_method_instance_t **replaced = (jl_method_instance_t**)jl_array_data(backedges);
             for (i = 0; i < l; i++) {
-                invalidate_method_instance(replaced[i], closure->max_world, 0);
+                invalidate_method_instance(replaced[i], closure->max_world);
             }
         }
         def.replaced->backedges = NULL;
@@ -1381,7 +1357,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                 jl_value_t *backedgetyp = backedges[i - 1];
                 if (jl_type_intersection(backedgetyp, (jl_value_t*)type) != (jl_value_t*)jl_bottom_type) {
                     jl_method_instance_t *backedge = (jl_method_instance_t*)backedges[i];
-                    invalidate_method_instance(backedge, env.max_world, 0);
+                    invalidate_method_instance(backedge, env.max_world);
                 }
                 else {
                     backedges[ins++] = backedges[i - 1];
@@ -2091,6 +2067,17 @@ static jl_value_t *verify_type(jl_value_t *v)
     return v;
 }
 
+STATIC_INLINE uint32_t int32hash_fast(uint32_t a)
+{
+//    a = (a+0x7ed55d16) + (a<<12);
+//    a = (a^0xc761c23c) ^ (a>>19);
+//    a = (a+0x165667b1) + (a<<5);
+//    a = (a+0xd3a2646c) ^ (a<<9);
+//    a = (a+0xfd7046c5) + (a<<3);
+//    a = (a^0xb55a4f09) ^ (a>>16);
+    return a;  // identity hashing seems to work well enough here
+}
+
 STATIC_INLINE int sig_match_fast(jl_value_t **args, jl_value_t **sig, size_t i, size_t n)
 {
     // NOTE: This function is a huge performance hot spot!!
@@ -2128,8 +2115,11 @@ void call_cache_stats() {
 }
 #endif
 
-STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t **args, uint32_t nargs,
-                                                       uint32_t callsite, size_t world)
+#ifdef _COMPILER_MICROSOFT_
+#define __builtin_return_address(n) _ReturnAddress()
+#endif
+
+JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
 {
 #ifdef JL_GF_PROFILE
     ncalls++;
@@ -2139,6 +2129,7 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t **args, uint32
     if (traceen)
         show_call(args[0], &args[1], nargs-1);
 #endif
+    size_t world = jl_get_ptls_states()->world_age;
 
     /*
       search order:
@@ -2150,6 +2141,7 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t **args, uint32
       if no generic match, use the concrete one even if inexact
       otherwise instantiate the generic method and use it
     */
+    uint32_t callsite = int32hash_fast((uintptr_t)__builtin_return_address(0));
     // compute the entry hashes
     // use different parts of the value
     // so that a collision across all of
@@ -2217,20 +2209,6 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t **args, uint32
     if (traceen)
         jl_printf(JL_STDOUT, " at %s:%d\n", jl_symbol_name(mfunc->def->file), mfunc->def->line);
 #endif
-    return mfunc;
-}
-
-jl_method_instance_t *jl_lookup_generic(jl_value_t **args, uint32_t nargs, uint32_t callsite,
-                                        size_t world)
-{
-    return jl_lookup_generic_(args, nargs, callsite, world);
-}
-
-JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
-{
-    jl_method_instance_t *mfunc = jl_lookup_generic_(args, nargs,
-                                                     jl_int32hash_fast(jl_return_address()),
-                                                     jl_get_ptls_states()->world_age);
     jl_value_t *res = jl_call_method_internal(mfunc, args, nargs);
     return verify_type(res);
 }
@@ -2424,12 +2402,8 @@ jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_
     return (jl_function_t*)f;
 }
 
-JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_value_t *ty)
+JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_typename_t *tn)
 {
-    jl_datatype_t *dt = jl_argument_datatype(ty);
-    if (dt == NULL)
-        jl_error("cannot get keyword sorter for abstract type");
-    jl_typename_t *tn = dt->name;
     jl_methtable_t *mt = tn->mt;
     if (!mt->kwsorter) {
         JL_LOCK(&mt->writelock);
@@ -2597,13 +2571,12 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
         // add it to the results.
         if (return_this_match && meth->ambig != jl_nothing && (!closure->include_ambiguous || done)) {
             jl_svec_t *env = NULL;
-            jl_value_t *mti = NULL;
-            JL_GC_PUSH2(&env, &mti);
+            JL_GC_PUSH1(&env);
             for (size_t j = 0; j < jl_array_len(meth->ambig); j++) {
                 jl_method_t *mambig = (jl_method_t*)jl_array_ptr_ref(meth->ambig, j);
                 env = jl_emptysvec;
-                mti = jl_type_intersection_env((jl_value_t*)closure->match.type,
-                                               (jl_value_t*)mambig->sig, &env);
+                jl_value_t *mti = jl_type_intersection_env((jl_value_t*)closure->match.type,
+                                                           (jl_value_t*)mambig->sig, &env);
                 if (mti != (jl_value_t*)jl_bottom_type) {
                     if (closure->include_ambiguous) {
                         assert(done);
@@ -2616,8 +2589,8 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
                             if (len == 0) {
                                 closure->t = (jl_value_t*)jl_alloc_vec_any(0);
                             }
-                            mti = (jl_value_t*)jl_svec(3, mti, env, mambig);
-                            jl_array_ptr_1d_push((jl_array_t*)closure->t, mti);
+                            jl_array_ptr_1d_push((jl_array_t*)closure->t,
+                                                 (jl_value_t*)jl_svec(3, mti, env, mambig));
                             len++;
                         }
                     }

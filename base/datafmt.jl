@@ -238,7 +238,7 @@ function store_cell{T}(dlmstore::DLMStore{T}, row::Int, col::Int,
     end
     if quoted
         startpos += 1
-        endpos = prevind(sbuff, endpos)
+        endpos -= 1
     end
 
     if drow > 0
@@ -263,7 +263,7 @@ function store_cell{T}(dlmstore::DLMStore{T}, row::Int, col::Int,
         # fill data
         if quoted && _chrinstr(sbuff, UInt8('"'), startpos, endpos)
             unescaped = replace(SubString(sbuff, startpos, endpos), r"\"\"", "\"")
-            fail = colval(unescaped, 1, endof(unescaped), cells, drow, col)
+            fail = colval(unescaped, 1, length(unescaped), cells, drow, col)
         else
             fail = colval(sbuff, startpos, endpos, cells, drow, col)
         end
@@ -282,7 +282,7 @@ function store_cell{T}(dlmstore::DLMStore{T}, row::Int, col::Int,
         # fill header
         if quoted && _chrinstr(sbuff, UInt8('"'), startpos, endpos)
             unescaped = replace(SubString(sbuff, startpos, endpos), r"\"\"", "\"")
-            colval(unescaped, 1, endof(unescaped), dlmstore.hdr, 1, col)
+            colval(unescaped, 1, length(unescaped), dlmstore.hdr, 1, col)
         else
             colval(sbuff, startpos, endpos, dlmstore.hdr, 1, col)
         end

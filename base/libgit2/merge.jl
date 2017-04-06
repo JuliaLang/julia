@@ -71,7 +71,7 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated};
     @check ccall((:git_merge, :libgit2), Cint,
                   (Ptr{Void}, Ptr{Ptr{Void}}, Csize_t,
                    Ptr{MergeOptions}, Ptr{CheckoutOptions}),
-                   repo.ptr, map(x->x.ptr, anns), anns_size,
+                   repo.ptr, anns, anns_size,
                    Ref(merge_opts), Ref(checkout_opts))
     info("Review and commit merged changes.")
     return true

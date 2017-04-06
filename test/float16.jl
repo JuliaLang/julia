@@ -61,7 +61,6 @@ g = Float16(1.)
 @test f*g === Float16(2f0)
 @test f/g === Float16(2f0)
 @test f^g === Float16(2f0)
-@test f^1 === Float16(2f0)
 @test f^-g === Float16(0.5f0)
 
 @test f + 2 === Float16(4f0)
