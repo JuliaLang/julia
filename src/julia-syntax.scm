@@ -730,6 +730,11 @@
       `(,(car sig) ,item ,@(cdr sig))
       `(,item ,@sig)))
 
+(define (linenode-string lno)
+  (cond ((length= lno 2) (string " around line " (cadr lno)))
+        ((length= lno 3) (string " around " (caddr lno) ":" (cadr lno)))
+        (else "")))
+
 (define (ctor-signature name params bounds method-params sig)
   (if (null? params)
       (if (null? method-params)
@@ -774,10 +779,7 @@
                                       body))
                         (lno (if (null? lnos) '() (car lnos))))
                    (syntax-deprecation #f
-                                       (string "inner constructor " name "(...)"
-                                               (cond ((length= lno 2) (string " around line " (cadr lno)))
-                                                     ((length= lno 3) (string " around " (caddr lno) ":" (cadr lno)))
-                                                     (else "")))
+                                       (string "inner constructor " name "(...)" (linenode-string lno))
                                        (deparse `(where (call (curly ,name ,@params) ...) ,@params)))))
              `(,keyword ,sig ,(ctor-body body params)))))))
 
@@ -3228,6 +3230,7 @@ f(x) = yt(x)
   (let ((code '())
         (filename 'none)
         (first-line #t)
+        (current-loc #f)
         (rett #f)
         (arg-map #f)          ;; map arguments to new names if they are assigned
         (label-counter 0)     ;; counter for generating label addresses
@@ -3320,7 +3323,8 @@ f(x) = yt(x)
                                (and (pair? e) (or (eq? (car e) 'outerref)
                                                   (eq? (car e) 'globalref))
                                     (eq? (cadr e) '_))))
-                (syntax-deprecation #f "_ as an rvalue" ""))
+                (syntax-deprecation #f (string "_ as an rvalue" (linenode-string current-loc))
+                                    ""))
             (cond (tail  (emit-return e1))
                   (value e1)
                   ((or (eq? e1 'true) (eq? e1 'false)) #f)
@@ -3561,6 +3565,7 @@ f(x) = yt(x)
             ((import importall using export line meta inbounds boundscheck simdloop)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
                (cond ((eq? (car e) 'line)
+                      (set! current-loc e)
                       (if first-line
                           (begin (set! first-line #f)
                                  (emit e))
