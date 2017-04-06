@@ -139,7 +139,10 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
             jl_error("could not load base module");
         }
 #else
-        handle = dlopen(NULL, RTLD_NOW);
+        Dl_info info;
+        if (!dladdr(&jl_load_dynamic_library, &info) || !info.dli_fname)
+            jl_error("could not load base module");
+        handle = dlopen(info.dli_fname, RTLD_NOW);
 #endif
         goto done;
     }
