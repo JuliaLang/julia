@@ -745,19 +745,21 @@ function getfield_tfunc(s00::ANY, name)
         s00 = s00.ub
     end
     s = unwrap_unionall(s00)
-    if isType(s)
-        p1 = s.parameters[1]
-        if !isleaftype(p1)
-            return Any
-        end
-        s = DataType # typeof(p1)
-    elseif isa(s, Union)
+    if isa(s, Union)
         return tmerge(rewrap(getfield_tfunc(s.a, name),s00),
                       rewrap(getfield_tfunc(s.b, name),s00))
     elseif isa(s, Conditional)
         return Bottom # Bool has no fields
-    elseif isa(s, Const)
-        sv = s.val
+    elseif isa(s, Const) || isType(s)
+        if !isa(s, Const)
+            p1 = s.parameters[1]
+            if !isleaftype(p1)
+                return Any
+            end
+            sv = p1
+        else
+            sv = s.val
+        end
         if isa(name, Const)
             nv = name.val
             if isa(sv, UnionAll)
@@ -4491,11 +4493,14 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
             newargs = Vector{Any}(na-2)
             for i = 3:na
                 aarg = e.args[i]
-                t = widenconst(exprtype(aarg, sv.src, sv.mod))
+                argt = exprtype(aarg, sv.src, sv.mod)
+                t = widenconst(argt)
                 if isa(aarg,Expr) && (is_known_call(aarg, tuple, sv.src, sv.mod) || is_known_call(aarg, svec, sv.src, sv.mod))
                     # apply(f,tuple(x,y,...)) => f(x,y,...)
                     newargs[i-2] = aarg.args[2:end]
-                elseif isa(aarg, Tuple) || (isa(aarg, QuoteNode) && isa(aarg.value, Tuple))
+                elseif isa(argt,Const) && (isa(argt.val, Tuple) || isa(argt.val, SimpleVector))
+                    newargs[i-2] = Any[ QuoteNode(x) for x in argt.val ]
+                elseif isa(aarg, Tuple) || (isa(aarg, QuoteNode) && (isa(aarg.value, Tuple) || isa(aarg.value, SimpleVector)))
                     if isa(aarg, QuoteNode)
                         aarg = aarg.value
                     end
