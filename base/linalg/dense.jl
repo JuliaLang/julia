@@ -36,6 +36,20 @@ isposdef!(A::StridedMatrix{<:BlasFloat}, UL::Symbol) = LAPACK.potrf!(char_uplo(U
     isposdef!(A) -> Bool
 
 Test whether a matrix is positive definite, overwriting `A` in the process.
+
+# Example
+
+```jldoctest
+julia> A = [1. 2.; 2. 50.];
+
+julia> isposdef!(A)
+true
+
+julia> A
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 2.0  6.78233
+```
 """
 isposdef!(A::StridedMatrix) = ishermitian(A) && isposdef!(A, :U)
 
