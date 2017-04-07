@@ -745,19 +745,21 @@ function getfield_tfunc(s00::ANY, name)
         s00 = s00.ub
     end
     s = unwrap_unionall(s00)
-    if isType(s)
-        p1 = s.parameters[1]
-        if !isleaftype(p1)
-            return Any
-        end
-        s = DataType # typeof(p1)
-    elseif isa(s, Union)
+    if isa(s, Union)
         return tmerge(rewrap(getfield_tfunc(s.a, name),s00),
                       rewrap(getfield_tfunc(s.b, name),s00))
     elseif isa(s, Conditional)
         return Bottom # Bool has no fields
-    elseif isa(s, Const)
-        sv = s.val
+    elseif isa(s, Const) || isType(s)
+        if !isa(s, Const)
+            p1 = s.parameters[1]
+            if !isleaftype(p1)
+                return Any
+            end
+            sv = p1
+        else
+            sv = s.val
+        end
         if isa(name, Const)
             nv = name.val
             if isa(sv, UnionAll)
