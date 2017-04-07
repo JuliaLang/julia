@@ -494,3 +494,9 @@ end
     A[1:3,1:3] .= [ones(2,2)]
     @test all(A[1:3,1:3] .== [ones(2,2)])
 end
+
+# Issue #21291
+let t = (0, 1, 2)
+    o = 1
+    @test @inferred(broadcast(+, t, o)) == (1, 2, 3)
+end
