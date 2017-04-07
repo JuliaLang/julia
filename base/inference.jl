@@ -4491,11 +4491,14 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
             newargs = Vector{Any}(na-2)
             for i = 3:na
                 aarg = e.args[i]
-                t = widenconst(exprtype(aarg, sv.src, sv.mod))
+                argt = exprtype(aarg, sv.src, sv.mod)
+                t = widenconst(argt)
                 if isa(aarg,Expr) && (is_known_call(aarg, tuple, sv.src, sv.mod) || is_known_call(aarg, svec, sv.src, sv.mod))
                     # apply(f,tuple(x,y,...)) => f(x,y,...)
                     newargs[i-2] = aarg.args[2:end]
-                elseif isa(aarg, Tuple) || (isa(aarg, QuoteNode) && isa(aarg.value, Tuple))
+                elseif isa(argt,Const) && (isa(argt.val, Tuple) || isa(argt.val, SimpleVector))
+                    newargs[i-2] = Any[ QuoteNode(x) for x in argt.val ]
+                elseif isa(aarg, Tuple) || (isa(aarg, QuoteNode) && (isa(aarg.value, Tuple) || isa(aarg.value, SimpleVector)))
                     if isa(aarg, QuoteNode)
                         aarg = aarg.value
                     end
