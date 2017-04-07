@@ -178,6 +178,8 @@ function rem{T<:Union{Unsigned,Signed}}(x::BigInt, ::Type{T})
     x.size < 0 ? -u : u
 end
 
+rem(x::Integer, ::Type{BigInt}) = convert(BigInt, x)
+
 function convert{T<:Unsigned}(::Type{T}, x::BigInt)
     if sizeof(T) < sizeof(Limb)
         convert(T, convert(Limb,x))
