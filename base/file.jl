@@ -24,6 +24,7 @@ export
     tempdir,
     tempname,
     touch,
+    unlink,
     walkdir
 
 # get and set current directory
