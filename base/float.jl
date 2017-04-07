@@ -275,12 +275,14 @@ float{T<:Number}(::Type{T}) = typeof(float(zero(T)))
 
 for Ti in (Int8, Int16, Int32, Int64)
     @eval begin
+        unsafe_trunc(::Type{$Ti}, x::Float16) = unsafe_trunc($Ti, Float32(x))
         unsafe_trunc(::Type{$Ti}, x::Float32) = fptosi($Ti, x)
         unsafe_trunc(::Type{$Ti}, x::Float64) = fptosi($Ti, x)
     end
 end
 for Ti in (UInt8, UInt16, UInt32, UInt64)
     @eval begin
+        unsafe_trunc(::Type{$Ti}, x::Float16) = unsafe_trunc($Ti, Float32(x))
         unsafe_trunc(::Type{$Ti}, x::Float32) = fptoui($Ti, x)
         unsafe_trunc(::Type{$Ti}, x::Float64) = fptoui($Ti, x)
     end
@@ -314,6 +316,8 @@ function unsafe_trunc(::Type{Int128}, x::Float32)
     copysign(unsafe_trunc(UInt128,x) % Int128, x)
 end
 
+unsafe_trunc(::Type{UInt128}, x::Float16) = unsafe_trunc(UInt128, Float32(x))
+unsafe_trunc(::Type{Int128}, x::Float16) = unsafe_trunc(Int128, Float32(x))
 
 # matches convert methods
 # also determines floor, ceil, round
