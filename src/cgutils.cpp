@@ -1202,7 +1202,7 @@ static unsigned julia_alignment(Value* /*ptr*/, jl_value_t *jltype, unsigned ali
     return alignment;
 }
 
-static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, jl_codectx_t *ctx, Value* dest = NULL, bool volatile_store = false);
+static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value* dest = NULL, bool volatile_store = false);
 
 static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
                              jl_codectx_t *ctx, struct aa_data aa, MDNode *aliasscope, MDNode *noalias, bool maybe_null_if_boxed = true, unsigned alignment = 0)
@@ -1256,7 +1256,7 @@ static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
         return;
     Value *r;
     if (!isboxed) {
-        r = emit_unbox(elty, rhs, jltype, ctx);
+        r = emit_unbox(elty, rhs, jltype);
     }
     else {
         r = boxed(rhs, ctx, root_box);
@@ -1464,8 +1464,6 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
               builder.CreateLoad(emit_bitcast(addr, T_ppjlvalue)),
               maybe_null, jl_field_type(jt, idx)
             );
-            if (strct.isimmutable && ctx->aliasscope)
-                Load->setMetadata("alias.scope", ctx->aliasscope);
             Value *fldv = aa_decorate(strct.aa, Load);
             if (maybe_null)
                 null_pointer_check(fldv, ctx);
@@ -1481,7 +1479,7 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
         int align = jl_field_offset(jt, idx);
         align |= 16;
         align &= -align;
-        return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx, strct.aa, strct.isimmutable ? ctx->aliasscope : nullptr, nullptr, true, align);
+        return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx, strct.aa, nullptr, nullptr, true, align);
     }
     else if (isa<UndefValue>(strct.V)) {
         return jl_cgval_t();
@@ -1695,7 +1693,7 @@ static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, ssize
 #endif
     Value **idxs = (Value**)alloca(sizeof(Value*)*nidxs);
     for(size_t k=0; k < nidxs; k++) {
-        idxs[k] = emit_unbox(T_size, emit_expr(args[k], ctx), NULL, ctx);
+        idxs[k] = emit_unbox(T_size, emit_expr(args[k], ctx), NULL);
     }
     Value *ii;
     for(size_t k=0; k < nidxs; k++) {
@@ -1881,10 +1879,10 @@ static Value *call_with_unsigned(Function *ufunc, Value *v)
 
 static void jl_add_method_root(jl_codectx_t *ctx, jl_value_t *val);
 
-static Value *as_value(Type *to, const jl_cgval_t &v, jl_codectx_t *ctx)
+static Value *as_value(Type *to, const jl_cgval_t &v)
 {
     assert(!v.isboxed);
-    return emit_unbox(to, v, v.typ, ctx);
+    return emit_unbox(to, v, v.typ);
 }
 
 // some types have special boxing functions with small-value caches
@@ -1892,9 +1890,9 @@ static Value *_boxed_special(const jl_cgval_t &vinfo, Type *t, jl_codectx_t *ctx
 {
     jl_value_t *jt = vinfo.typ;
     if (jt == (jl_value_t*)jl_bool_type)
-        return julia_bool(builder.CreateTrunc(as_value(t, vinfo, ctx), T_int1));
+        return julia_bool(builder.CreateTrunc(as_value(t, vinfo), T_int1));
     if (t == T_int1)
-        return julia_bool(as_value(t, vinfo, ctx));
+        return julia_bool(as_value(t, vinfo));
 
     if (ctx->linfo && ctx->linfo->def && !vinfo.ispointer()) { // don't bother codegen pre-boxing for toplevel
         if (Constant *c = dyn_cast<Constant>(vinfo.V)) {
@@ -1910,31 +1908,31 @@ static Value *_boxed_special(const jl_cgval_t &vinfo, Type *t, jl_codectx_t *ctx
     assert(jl_is_datatype(jb));
     Value *box = NULL;
     if (jb == jl_int8_type)
-        box = call_with_signed(box_int8_func, as_value(t, vinfo, ctx));
+        box = call_with_signed(box_int8_func, as_value(t, vinfo));
     else if (jb == jl_int16_type)
-        box = call_with_signed(box_int16_func, as_value(t, vinfo, ctx));
+        box = call_with_signed(box_int16_func, as_value(t, vinfo));
     else if (jb == jl_int32_type)
-        box = call_with_signed(box_int32_func, as_value(t, vinfo, ctx));
+        box = call_with_signed(box_int32_func, as_value(t, vinfo));
     else if (jb == jl_int64_type)
-        box = call_with_signed(box_int64_func, as_value(t, vinfo, ctx));
+        box = call_with_signed(box_int64_func, as_value(t, vinfo));
     else if (jb == jl_float32_type)
-        box = builder.CreateCall(prepare_call(box_float32_func), as_value(t, vinfo, ctx));
+        box = builder.CreateCall(prepare_call(box_float32_func), as_value(t, vinfo));
     //if (jb == jl_float64_type)
     //  box = builder.CreateCall(box_float64_func, as_value(t, vinfo);
     // for Float64, fall through to generic case below, to inline alloc & init of Float64 box. cheap, I know.
     else if (jb == jl_uint8_type)
-        box = call_with_unsigned(box_uint8_func, as_value(t, vinfo, ctx));
+        box = call_with_unsigned(box_uint8_func, as_value(t, vinfo));
     else if (jb == jl_uint16_type)
-        box = call_with_unsigned(box_uint16_func, as_value(t, vinfo, ctx));
+        box = call_with_unsigned(box_uint16_func, as_value(t, vinfo));
     else if (jb == jl_uint32_type)
-        box = call_with_unsigned(box_uint32_func, as_value(t, vinfo, ctx));
+        box = call_with_unsigned(box_uint32_func, as_value(t, vinfo));
     else if (jb == jl_uint64_type)
-        box = call_with_unsigned(box_uint64_func, as_value(t, vinfo, ctx));
+        box = call_with_unsigned(box_uint64_func, as_value(t, vinfo));
     else if (jb == jl_char_type)
-        box = call_with_unsigned(box_char_func, as_value(t, vinfo, ctx));
+        box = call_with_unsigned(box_char_func, as_value(t, vinfo));
     else if (jb == jl_ssavalue_type) {
         unsigned zero = 0;
-        Value *v = as_value(t, vinfo, ctx);
+        Value *v = as_value(t, vinfo);
         assert(v->getType() == jl_ssavalue_type->struct_decl);
         v = builder.CreateExtractValue(v, makeArrayRef(&zero, 1));
         box = call_with_unsigned(box_ssavalue_func, v);
@@ -2070,7 +2068,7 @@ static void emit_unionmove(Value *dest, const jl_cgval_t &src, Value *skip, bool
         assert(skip || jl_isbits(typ));
         if (jl_isbits(typ)) {
             if (!src.ispointer() || src.constant) {
-                emit_unbox(store_ty, src, typ, ctx, dest, isVolatile);
+                emit_unbox(store_ty, src, typ, dest, isVolatile);
             }
             else {
                 Value *src_ptr = data_pointer(src, ctx, T_pint8);
@@ -2288,7 +2286,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
                         // and use memcpy instead
                         dest = builder.CreateConstInBoundsGEP2_32(LLVM37_param(lt) strct, 0, i);
                     }
-                    fval = emit_unbox(fty, fval_info, jtype, ctx, dest);
+                    fval = emit_unbox(fty, fval_info, jtype, dest);
 
                     if (init_as_value) {
                         if (lt->isVectorTy())
