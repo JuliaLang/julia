@@ -82,17 +82,22 @@ answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answ
 stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bold)
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
-function repl_cmd(cmd, out)
-    shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
-    shell_name = Base.basename(shell[1])
+function repl_cmd(line::AbstractString, out)
+    if is_windows()
+        shell = shell_split(get(ENV, "JULIA_SHELL", "cmd"))
+        shell_name = isempty(shell) ? "" : lowercase(splitext(basename(shell[1]))[1])
+    else
+        shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV,"SHELL","/bin/sh")))
+        shell_name = basename(shell[1])
+    end
+
+    cmd = Cmd(shell_split(line))
 
     if isempty(cmd.exec)
         throw(ArgumentError("no cmd to execute"))
-    elseif cmd.exec[1] == "cd"
+    elseif cmd.exec[1] == "cd" && length(cmd.exec) <= 2
         new_oldpwd = pwd()
-        if length(cmd.exec) > 2
-            throw(ArgumentError("cd method only takes one argument"))
-        elseif length(cmd.exec) == 2
+        if length(cmd.exec) == 2
             dir = cmd.exec[2]
             if dir == "-"
                 if !haskey(ENV, "OLDPWD")
@@ -108,7 +113,23 @@ function repl_cmd(cmd, out)
         ENV["OLDPWD"] = new_oldpwd
         println(out, pwd())
     else
-        run(ignorestatus(@static is_windows() ? cmd : (isa(STDIN, TTY) ? `$shell -i -c "$(shell_wrap_true(shell_name, cmd))"` : `$shell -c "$(shell_wrap_true(shell_name, cmd))"`)))
+        if is_windows()
+            interpolated_line = eval(parse(string('"', escape_string(line), '"')))
+            if shell_name == ""
+                command = cmd
+            elseif shell_name == "cmd"
+                command = Cmd(`$shell /s /c $(string('"',interpolated_line,'"'))`, windows_verbatim=true)
+            elseif shell_name == "powershell"
+                command = `$shell -Command $interpolated_line`
+            elseif shell_name == "busybox"
+                command = `$shell sh -c $interpolated_line`
+            else
+                command = `$shell $interpolated_line`
+            end
+            run(ignorestatus(command))
+        else
+            run(ignorestatus(isa(STDIN, TTY) ? `$shell -i -c "$(shell_wrap_true(shell_name, cmd))"` : `$shell -c "$(shell_wrap_true(shell_name, cmd))"`))
+        end
     end
     nothing
 end
