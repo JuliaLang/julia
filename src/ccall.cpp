@@ -612,7 +612,7 @@ static Value *julia_to_address(Type *to, jl_value_t *jlto, jl_unionall_t *jlto_e
     // since those are immutable.
     Value *slot = emit_static_alloca(slottype, ctx);
     if (!jvinfo.ispointer()) {
-        builder.CreateStore(emit_unbox(slottype, jvinfo, ety), slot);
+        builder.CreateStore(emit_unbox(slottype, jvinfo, ety, ctx), slot);
     }
     else {
         builder.CreateMemCpy(slot,
@@ -645,13 +645,13 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, jl_union
 
     typeassert_input(jvinfo, jlto, jlto_env, argn, false, ctx);
     if (!byRef)
-        return emit_unbox(to, jvinfo, jlto);
+        return emit_unbox(to, jvinfo, jlto, ctx);
 
     // pass the address of an alloca'd thing, not a box
     // since those are immutable.
     Value *slot = emit_static_alloca(to, ctx);
     if (!jvinfo.ispointer()) {
-        builder.CreateStore(emit_unbox(to, jvinfo, jlto), slot);
+        builder.CreateStore(emit_unbox(to, jvinfo, jlto, ctx), slot);
     }
     else {
         builder.CreateMemCpy(slot,
@@ -691,7 +691,7 @@ static void interpret_symbol_arg(native_sym_arg_t &out, jl_value_t *arg, jl_code
                                ctx);
         }
         arg1 = update_julia_type(arg1, (jl_value_t*)jl_voidpointer_type, ctx);
-        jl_ptr = emit_unbox(T_size, arg1, (jl_value_t*)jl_voidpointer_type);
+        jl_ptr = emit_unbox(T_size, arg1, (jl_value_t*)jl_voidpointer_type, ctx);
     }
     else {
         out.gcroot = ptr;
@@ -1629,7 +1629,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
         else {
             assert(!addressOf);
-            ary = emit_unbox(largty, emit_expr(argi, ctx), tti);
+            ary = emit_unbox(largty, emit_expr(argi, ctx), tti, ctx);
         }
         JL_GC_POP();
         return mark_or_box_ccall_result(emit_bitcast(ary, lrt),

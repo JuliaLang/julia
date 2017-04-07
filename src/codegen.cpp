@@ -2469,16 +2469,16 @@ static Value *emit_bits_compare(const jl_cgval_t &arg1, const jl_cgval_t &arg2, 
 
     if (at->isIntegerTy() || at->isPointerTy() || at->isFloatingPointTy()) {
         Type *at_int = INTT(at);
-        Value *varg1 = emit_unbox(at_int, arg1, arg1.typ);
-        Value *varg2 = emit_unbox(at_int, arg2, arg2.typ);
+        Value *varg1 = emit_unbox(at_int, arg1, arg1.typ, ctx);
+        Value *varg2 = emit_unbox(at_int, arg2, arg2.typ, ctx);
         return builder.CreateICmpEQ(varg1, varg2);
     }
 
     if (at->isVectorTy()) {
         jl_svec_t *types = ((jl_datatype_t*)arg1.typ)->types;
         Value *answer = ConstantInt::get(T_int1, 1);
-        Value *varg1 = emit_unbox(at, arg1, arg1.typ);
-        Value *varg2 = emit_unbox(at, arg2, arg2.typ);
+        Value *varg1 = emit_unbox(at, arg1, arg1.typ, ctx);
+        Value *varg2 = emit_unbox(at, arg2, arg2.typ, ctx);
         size_t l = jl_svec_len(types);
         for (unsigned i = 0; i < l; i++) {
             jl_value_t *fldty = jl_svecref(types, i);
@@ -2794,7 +2794,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                     }
                 }
                 else {
-                    Value *idx = emit_unbox(T_size, emit_expr(args[2], ctx), ity);
+                    Value *idx = emit_unbox(T_size, emit_expr(args[2], ctx), ity, ctx);
                     error_unless(builder.CreateICmpSGT(idx,
                                                       ConstantInt::get(T_size,0)),
                                  "arraysize: dimension out of range", ctx);
@@ -2959,7 +2959,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         // VA tuple
         if (ctx->vaStack && slot_eq(args[1], ctx->vaSlot)) {
             Value *valen = emit_n_varargs(ctx);
-            Value *idx = emit_unbox(T_size, emit_expr(args[2], ctx), fldt);
+            Value *idx = emit_unbox(T_size, emit_expr(args[2], ctx), fldt, ctx);
             idx = emit_bounds_check(
                     jl_cgval_t(builder.CreateGEP(ctx->argArray, ConstantInt::get(T_size, ctx->nReqArgs)), NULL, false, NULL, NULL),
                     NULL, idx, valen, ctx);
@@ -2985,7 +2985,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                 }
                 else {
                     // unknown index
-                    Value *vidx = emit_unbox(T_size, emit_expr(args[2], ctx), (jl_value_t*)jl_long_type);
+                    Value *vidx = emit_unbox(T_size, emit_expr(args[2], ctx), (jl_value_t*)jl_long_type, ctx);
                     if (emit_getfield_unknownidx(ret, strct, vidx, stt, ctx)) {
                         if (ret->typ == (jl_value_t*)jl_any_type) // improve the type, if known from the expr
                             ret->typ = expr_type(expr, ctx);
@@ -3006,7 +3006,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                     jl_value_t *jt = jl_tparam0(utt);
                     if (jl_is_vararg_type(jt))
                         jt = jl_unwrap_vararg(jt);
-                    Value *vidx = emit_unbox(T_size, emit_expr(args[2], ctx), (jl_value_t*)jl_long_type);
+                    Value *vidx = emit_unbox(T_size, emit_expr(args[2], ctx), (jl_value_t*)jl_long_type, ctx);
                     // This is not necessary for correctness, but allows to omit
                     // the extra code for getting the length of the tuple
                     if (!bounds_check_enabled(ctx)) {
@@ -3016,7 +3016,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                             emit_datatype_nfields(emit_typeof(strct, ctx).V), ctx);
                     }
                     Value *ptr = data_pointer(strct, ctx);
-                    *ret = typed_load(ptr, vidx, jt, ctx, strct.aa, nullptr, nullptr, false);
+                    *ret = typed_load(ptr, vidx, jt, ctx, strct.aa, ctx->aliasscope, nullptr, false);
                     JL_GC_POP();
                     return true;
                 }
@@ -3105,7 +3105,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                 Value *tyv = boxed(ty, ctx);
                 Value *types_svec = emit_datatype_types(tyv);
                 Value *types_len = emit_datatype_nfields(tyv);
-                Value *idx = emit_unbox(T_size, emit_expr(args[2], ctx), (jl_value_t*)jl_long_type);
+                Value *idx = emit_unbox(T_size, emit_expr(args[2], ctx), (jl_value_t*)jl_long_type, ctx);
                 emit_bounds_check(ty, (jl_value_t*)jl_datatype_type, idx, types_len, ctx);
                 Value *fieldtyp = tbaa_decorate(tbaa_const, builder.CreateLoad(builder.CreateGEP(emit_bitcast(types_svec, T_ppjlvalue), idx)));
                 *ret = mark_julia_type(fieldtyp, true, expr_type(expr, ctx), ctx);
@@ -3307,9 +3307,9 @@ static jl_cgval_t emit_call_function_object(jl_method_instance_t *li, const jl_c
             else {
                 assert(at == et);
                 if (i == 0)
-                    argvals[idx] = emit_unbox(et, theF, jt);
+                    argvals[idx] = emit_unbox(et, theF, jt, ctx);
                 else
-                    argvals[idx] = emit_unbox(et, emit_expr(args[i], ctx), jt);
+                    argvals[idx] = emit_unbox(et, emit_expr(args[i], ctx), jt, ctx);
             }
             idx++;
         }
@@ -3781,7 +3781,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                 Type *vtype = julia_type_to_llvm(slot.typ, &isboxed);
                 assert(!isboxed);
                 dest = emit_static_alloca(vtype);
-                emit_unbox(vtype, slot, slot.typ, dest);
+                emit_unbox(vtype, slot, slot.typ, ctx, dest);
                 slot = mark_julia_slot(dest, slot.typ, NULL, tbaa_stack);
             }
         } else if (slot.isboxed && slot.constant && slot.isimmutable &&
@@ -3792,7 +3792,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             Type *vtype = julia_type_to_llvm(slot.typ, &isboxed);
             assert(!isboxed);
             Value *dest = emit_static_alloca(vtype);
-            emit_unbox(vtype, slot, slot.typ, dest);
+            emit_unbox(vtype, slot, slot.typ, ctx, dest);
             slot = mark_julia_slot(dest, slot.typ, NULL, tbaa_stack);            
         }
         ctx->SAvalues.at(idx) = slot; // now SAvalues[idx] contains the SAvalue
@@ -3925,7 +3925,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                         if (dest_ty != dest->getType())
                             dest = emit_bitcast(dest, dest_ty);
                         tbaa_decorate(tbaa_stack, builder.CreateStore(
-                                          emit_unbox(store_ty, rval_info, rval_info.typ),
+                                          emit_unbox(store_ty, rval_info, rval_info.typ, ctx),
                                           dest,
                                           vi.isVolatile));
                     }
@@ -3975,7 +3975,7 @@ static Value *emit_condition(const jl_cgval_t &condV, const std::string &msg,
         emit_typecheck(condV, (jl_value_t*)jl_bool_type, msg, ctx);
     }
     if (isbool) {
-        Value *cond = emit_unbox(T_int8, condV, (jl_value_t*)jl_bool_type);
+        Value *cond = emit_unbox(T_int8, condV, (jl_value_t*)jl_bool_type, ctx);
         assert(cond->getType() == T_int8);
         return builder.CreateXor(builder.CreateTrunc(cond, T_int1), ConstantInt::get(T_int1, 1));
     }
@@ -4559,7 +4559,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
                 arg = data_pointer(inputarg, &ctx, T->getPointerTo());
             }
             else {
-                arg = emit_unbox(T, inputarg, spect);
+                arg = emit_unbox(T, inputarg, spect, &ctx);
                 assert(!isa<UndefValue>(arg));
             }
 
@@ -6120,7 +6120,7 @@ static std::unique_ptr<Module> emit_function(
                 if (type_is_ghost(retty))
                     retval = NULL;
                 else
-                    retval = emit_unbox(retty, retvalinfo, jlrettype);
+                    retval = emit_unbox(retty, retvalinfo, jlrettype, &ctx);
                 break;
             case jl_returninfo_t::SRet:
                 retval = NULL;
@@ -6182,7 +6182,7 @@ static std::unique_ptr<Module> emit_function(
                     Type *dest_ty = store_ty->getPointerTo();
                     if (dest_ty != sret->getType())
                         sret = emit_bitcast(sret, dest_ty);
-                    builder.CreateStore(emit_unbox(store_ty, retvalinfo, retvalinfo.typ), sret);
+                    builder.CreateStore(emit_unbox(store_ty, retvalinfo, retvalinfo.typ, &ctx), sret);
                 }
             }
 
