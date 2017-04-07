@@ -35,6 +35,7 @@ Base.contains(::AbstractString, ::AbstractString)
 Base.reverse(::AbstractString)
 Base.replace
 Base.split
+Base.splitlines
 Base.rsplit
 Base.strip
 Base.lstrip

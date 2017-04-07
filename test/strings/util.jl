@@ -113,6 +113,10 @@ end
 @test isequal(split("abcd", r"d+"), ["abc",""])
 @test isequal(split("abcd", r"[ad]?"), ["","b","c",""])
 
+@test isequal(splitlines("α\nβ\nγ\nδ"), String["α", "β", "γ", "δ"])
+@test isequal(splitlines("α\r\nβ\r\nγ\r\nδ"), String["α", "β", "γ", "δ"])
+@test isequal(splitlines("α\nβ\nγ\nδ", chomp=false), String["α\n","β\n","γ\n","δ"])
+
 # replace
 @test replace("\u2202", '*', '\0') == "\u2202"
 
