@@ -4491,6 +4491,8 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
         if f === _apply
             na = length(e.args)
             newargs = Vector{Any}(na-2)
+            newstmts = Any[]
+            effect_free_upto = 0
             for i = 3:na
                 aarg = e.args[i]
                 argt = exprtype(aarg, sv.src, sv.mod)
@@ -4507,14 +4509,25 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
                     newargs[i-2] = Any[ QuoteNode(x) for x in aarg ]
                 elseif isa(t, DataType) && t.name === Tuple.name && !isvatuple(t) &&
                          length(t.parameters) <= sv.params.MAX_TUPLE_SPLAT
+                    for k = (effect_free_upto+1):(i-3)
+                        as = newargs[k]
+                        for kk = 1:length(as)
+                            ak = as[kk]
+                            if !effect_free(ak, sv.src, sv.mod, true)
+                                tmpv = newvar!(sv, widenconst(exprtype(ak, sv.src, sv.mod)))
+                                push!(newstmts, Expr(:(=), tmpv, ak))
+                                as[kk] = tmpv
+                            end
+                        end
+                    end
+                    effect_free_upto = i-3
                     if effect_free(aarg, sv.src, sv.mod, true)
                         # apply(f,t::(x,y)) => f(t[1],t[2])
                         tmpv = aarg
                     else
                         # apply(f,t::(x,y)) => tmp=t; f(tmp[1],tmp[2])
                         tmpv = newvar!(sv, t)
-                        insert!(stmts, ins, Expr(:(=), tmpv, aarg))
-                        ins += 1
+                        push!(newstmts, Expr(:(=), tmpv, aarg))
                     end
                     tp = t.parameters
                     newargs[i-2] = Any[ mk_getfield(tmpv,j,tp[j]) for j=1:length(tp) ]
@@ -4523,6 +4536,8 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
                     return e
                 end
             end
+            splice!(stmts, ins:ins-1, newstmts)
+            ins += length(newstmts)
             e.args = [Any[e.args[2]]; newargs...]
 
             # now try to inline the simplified call
