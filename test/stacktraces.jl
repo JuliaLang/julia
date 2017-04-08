@@ -130,3 +130,15 @@ let st = stacktrace(empty!(backtrace()))
     @test isempty(st)
     @test isa(st, StackTrace)
 end
+
+module StackTracesTestMod
+    unfiltered_stacktrace() = stacktrace()
+    filtered_stacktrace() = StackTraces.remove_frames!(stacktrace(), StackTracesTestMod)
+end
+
+# Test that `removes_frames!` can correctly remove frames from withing the module
+trace = StackTracesTestMod.unfiltered_stacktrace()
+@test contains(string(trace), "unfiltered_stacktrace")
+
+trace = StackTracesTestMod.filtered_stacktrace()
+@test !contains(string(trace), "filtered_stacktrace")
