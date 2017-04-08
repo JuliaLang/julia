@@ -494,3 +494,18 @@ end
     A[1:3,1:3] .= [ones(2,2)]
     @test all(A[1:3,1:3] .== [ones(2,2)])
 end
+
+# Test that broadcast does not confuse eltypes. See also
+# https://github.com/JuliaLang/julia/issues/21325
+@testset "eltype confusion (#21325)" begin
+    foo(x::Char, y::Int) = 0
+    foo(x::String, y::Int) = "hello"
+    @test broadcast(foo, "x", [1, 2, 3]) == ["hello", "hello", "hello"]
+
+    @test isequal(
+        [Set([1]), Set([2])] .∪ Set([3]),
+        [Set([1, 3]), Set([2, 3])])
+
+    @test isequal(@inferred(broadcast(foo, "world", Nullable(1))),
+                  Nullable("hello"))
+end
