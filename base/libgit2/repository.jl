@@ -55,11 +55,7 @@ repository `repo`.
 """
 function head_oid(repo::GitRepo)
     head_ref = head(repo)
-    try
-        return GitHash(head_ref)
-    finally
-        close(head_ref)
-    end
+    return GitHash(head_ref)
 end
 
 """
@@ -71,12 +67,11 @@ detached, returns the name of the HEAD it's
 detached from.
 """
 function headname(repo::GitRepo)
-    with(head(repo)) do href
-        if isattached(repo)
-            shortname(href)
-        else
-            "(detached from $(string(GitHash(href))[1:7]))"
-        end
+    href = head(repo)
+    if isattached(repo)
+        shortname(href)
+    else
+        "(detached from $(string(GitHash(href))[1:7]))"
     end
 end
 

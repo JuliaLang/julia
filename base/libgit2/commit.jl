@@ -60,7 +60,7 @@ function commit(repo::GitRepo, msg::AbstractString;
                 parent_ids::Vector{GitHash}=GitHash[])
     # Retrieve tree identifier
     if iszero(tree_id)
-        tree_id = with(GitIndex, repo) do idx; write_tree!(idx) end
+        tree_id = write_tree!(GitIndex(repo))
     end
 
     # Retrieve parents from HEAD
@@ -78,18 +78,9 @@ function commit(repo::GitRepo, msg::AbstractString;
     auth_sig = convert(GitSignature, author)
     comm_sig = convert(GitSignature, committer)
     parents = GitCommit[]
-    try
-        for id in parent_ids
-            push!(parents, GitCommit(repo, id))
-        end
-        commit_id = commit(repo, refname, msg, auth_sig, comm_sig, tree, parents...)
-    finally
-        for parent in parents
-            close(parent)
-        end
-        close(tree)
-        close(auth_sig)
-        close(comm_sig)
+    for id in parent_ids
+        push!(parents, GitCommit(repo, id))
     end
+    commit_id = commit(repo, refname, msg, auth_sig, comm_sig, tree, parents...)
     return commit_id
 end

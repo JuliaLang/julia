@@ -50,15 +50,13 @@ function ffmerge!(repo::GitRepo, ann::GitAnnotated)
     cmt = GitCommit(repo, GitHash(ann))
 
     checkout_tree(repo, cmt)
-    with(head(repo)) do head_ref
-        cmt_oid = GitHash(cmt)
-        msg = "libgit2.merge: fastforward $(string(cmt_oid)) into $(name(head_ref))"
-        new_head_ref = if reftype(head_ref) == Consts.REF_OID
-            target!(head_ref, cmt_oid, msg=msg)
-        else
-            GitReference(repo, cmt_oid, fullname(head_ref), msg=msg)
-        end
-        close(new_head_ref)
+    head_ref = head(repo)
+    cmt_oid = GitHash(cmt)
+    msg = "libgit2.merge: fastforward $(string(cmt_oid)) into $(name(head_ref))"
+    new_head_ref = if reftype(head_ref) == Consts.REF_OID
+        target!(head_ref, cmt_oid, msg=msg)
+    else
+        GitReference(repo, cmt_oid, fullname(head_ref), msg=msg)
     end
     return true
 end
