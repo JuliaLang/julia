@@ -514,16 +514,26 @@ Equivalent to `git reset [--soft | --mixed | --hard] <id>`.
 reset!(repo::GitRepo, id::GitHash, mode::Cint = Consts.RESET_MIXED) =
     reset!(repo, GitObject(repo, id), mode)
 
-""" git rev-list --count <commit1> <commit2> """
-function revcount(repo::GitRepo, fst::AbstractString, snd::AbstractString)
-    fst_id = revparseid(repo, fst)
-    snd_id = revparseid(repo, snd)
-    base_id = merge_base(repo, string(fst_id), string(snd_id))
+"""
+    LibGit2.revcount(repo::GitRepo, commit1::AbstractString, commit2::AbstractString)
+
+List the number of revisions between `commit1` and `commit2` (committish OIDs in string form).
+Since `commit1` and `commit2` may be on different branches, `revcount` performs a "left-right"
+revision list (and count), returning a tuple of `Int`s - the number of left and right
+commits, respectively. A left (or right) commit refers to which side of a symmetric
+difference in a tree the commit is reachable from.
+
+Equivalent to `git rev-list --left-right --count <commit1> <commit2>`.
+"""
+function revcount(repo::GitRepo, commit1::AbstractString, commit2::AbstractString)
+    commit1_id = revparseid(repo, commit1)
+    commit2_id = revparseid(repo, commit2)
+    base_id = merge_base(repo, string(commit1_id), string(commit2_id))
     fc = with(GitRevWalker(repo)) do walker
-        count((i,r)->i!=base_id, walker, oid=fst_id, by=Consts.SORT_TOPOLOGICAL)
+        count((i,r)->i!=base_id, walker, oid=commit1_id, by=Consts.SORT_TOPOLOGICAL)
     end
     sc = with(GitRevWalker(repo)) do walker
-        count((i,r)->i!=base_id, walker, oid=snd_id, by=Consts.SORT_TOPOLOGICAL)
+        count((i,r)->i!=base_id, walker, oid=commit2_id, by=Consts.SORT_TOPOLOGICAL)
     end
     return (fc-1, sc-1)
 end
@@ -827,3 +837,4 @@ end
 
 
 end # module
+
