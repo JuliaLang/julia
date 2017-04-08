@@ -4,7 +4,7 @@ module LibGit2
 
 import Base: merge!, ==
 
-export with, GitRepo, GitConfig
+export GitRepo, GitConfig
 
 const GITHUB_REGEX =
     r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
@@ -48,11 +48,7 @@ end
 Return current HEAD [`GitHash`](@ref) of
 the `pkg` repo as a string.
 """
-function head(pkg::AbstractString)
-    with(GitRepo, pkg) do repo
-        string(head_oid(repo))
-    end
-end
+head(pkg::AbstractString) = string(head_oid(GitRepo(pkg)))
 
 """
     need_update(repo::GitRepo)
@@ -79,8 +75,6 @@ function iscommit(id::AbstractString, repo::GitRepo)
         c = GitCommit(repo, id)
         if c === nothing
             res = false
-        else
-            close(c)
         end
     catch
         res = false
@@ -132,14 +126,8 @@ Equivalent to `git diff-index <treeish> [-- <pathspecs>]`.
 """
 function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""; cached::Bool=false)
     tree = GitTree(repo, "$treeish^{tree}")
-    try
-        diff = diff_tree(repo, tree, paths, cached=cached)
-        result = count(diff) > 0
-        close(diff)
-    finally
-        close(tree)
-    end
-    return result
+    diff = diff_tree(repo, tree, paths, cached=cached)
+    return count(diff) > 0
 end
 
 """
@@ -182,19 +170,13 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
     tree1 = GitTree(repo, b1_id)
     tree2 = GitTree(repo, b2_id)
     files = AbstractString[]
-    try
-        diff = diff_tree(repo, tree1, tree2)
-        for i in 1:count(diff)
-            delta = diff[i]
-            delta === nothing && break
-            if Consts.DELTA_STATUS(delta.status) in filter
-                push!(files, unsafe_string(delta.new_file.path))
-            end
+    diff = diff_tree(repo, tree1, tree2)
+    for i in 1:count(diff)
+        delta = diff[i]
+        delta === nothing && break
+        if Consts.DELTA_STATUS(delta.status) in filter
+            push!(files, unsafe_string(delta.new_file.path))
         end
-        close(diff)
-    finally
-        close(tree1)
-        close(tree2)
     end
     return files
 end
@@ -217,15 +199,14 @@ Set the `url` for `remote` for the git repository `repo`.
 The default name of the remote is `"origin"`.
 """
 function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractString="origin")
-    with(GitConfig, repo) do cfg
-        set!(cfg, "remote.$remote.url", url)
+    cfg = GitConfig(repo)
+    set!(cfg, "remote.$remote.url", url)
 
-        m = match(GITHUB_REGEX,url)
-        if m !== nothing
-            push = "git@github.com:$(m.captures[1]).git"
-            if push != url
-                set!(cfg, "remote.$remote.pushurl", push)
-            end
+    m = match(GITHUB_REGEX,url)
+    if m !== nothing
+        push = "git@github.com:$(m.captures[1]).git"
+        if push != url
+            set!(cfg, "remote.$remote.pushurl", push)
         end
     end
 end
@@ -237,9 +218,7 @@ Set the `url` for `remote` for the git repository located at `path`.
 The default name of the remote is `"origin"`.
 """
 function set_remote_url(path::AbstractString, url::AbstractString; remote::AbstractString="origin")
-    with(GitRepo, path) do repo
-        set_remote_url(repo, url, remote=remote)
-    end
+    set_remote_url(GitRepo(path), url, remote=remote)
 end
 
 function make_payload(payload::Nullable{<:AbstractCredentials})
@@ -272,13 +251,9 @@ function fetch(repo::GitRepo; remote::AbstractString="origin",
     else
         GitRemoteAnon(repo, remoteurl)
     end
-    try
-        payload = make_payload(payload)
-        fo = FetchOptions(callbacks=RemoteCallbacks(credentials_cb(), payload))
-        fetch(rmt, refspecs, msg="from $(url(rmt))", options = fo)
-    finally
-        close(rmt)
-    end
+    payload = make_payload(payload)
+    fo = FetchOptions(callbacks=RemoteCallbacks(credentials_cb(), payload))
+    fetch(rmt, refspecs, msg="from $(url(rmt))", options = fo)
 end
 
 """
@@ -307,13 +282,9 @@ function push(repo::GitRepo; remote::AbstractString="origin",
     else
         GitRemoteAnon(repo, remoteurl)
     end
-    try
-        payload = make_payload(payload)
-        push_opts=PushOptions(callbacks=RemoteCallbacks(credentials_cb(), payload))
-        push(rmt, refspecs, force=force, options=push_opts)
-    finally
-        close(rmt)
-    end
+    payload = make_payload(payload)
+    push_opts=PushOptions(callbacks=RemoteCallbacks(credentials_cb(), payload))
+    push(rmt, refspecs, force=force, options=push_opts)
 end
 
 """
@@ -324,11 +295,7 @@ Create a new branch from the current HEAD.
 """
 function branch(repo::GitRepo)
     head_ref = head(repo)
-    try
-        branch(head_ref)
-    finally
-        close(head_ref)
-    end
+    branch(head_ref)
 end
 
 """
@@ -361,58 +328,42 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
         # if commit is empty get head commit oid
         commit_id = if isempty(commit)
             if isnull(branch_rmt_ref)
-                with(head(repo)) do head_ref
-                    with(peel(GitCommit, head_ref)) do hrc
-                        GitHash(hrc)
-                    end
-                end
+                GitHash(peel(GitCommit, head(repo)))
             else
-                tmpcmt = with(peel(GitCommit, Base.get(branch_rmt_ref))) do hrc
-                    GitHash(hrc)
-                end
-                close(Base.get(branch_rmt_ref))
+                tmpcmt = GitHash(peel(GitCommit, Base.get(branch_rmt_ref)))
                 tmpcmt
             end
         else
             GitHash(commit)
         end
         iszero(commit_id) && return
-        cmt =  GitCommit(repo, commit_id)
+        cmt = GitCommit(repo, commit_id)
         new_branch_ref = nothing
         try
             new_branch_ref = Nullable(create_branch(repo, branch_name, cmt, force=force))
         finally
-            close(cmt)
             isnull(new_branch_ref) && throw(GitError(Error.Object, Error.ERROR, "cannot create branch `$branch_name` with `$commit_id`"))
             branch_ref = new_branch_ref
         end
     end
-    try
-        #TODO: what if branch tracks other then "origin" remote
-        if !isempty(track) # setup tracking
-            try
-                with(GitConfig, repo) do cfg
-                    set!(cfg, "branch.$branch_name.remote", Consts.REMOTE_ORIGIN)
-                    set!(cfg, "branch.$branch_name.merge", name(Base.get(branch_ref)))
-                end
-            catch
-                warn("Please provide remote tracking for branch '$branch_name' in '$(path(repo))'")
-            end
+    #TODO: what if branch tracks other then "origin" remote
+    if !isempty(track) # setup tracking
+        try
+            cfg = GitConfig(repo)
+            set!(cfg, "branch.$branch_name.remote", Consts.REMOTE_ORIGIN)
+            set!(cfg, "branch.$branch_name.merge", name(Base.get(branch_ref)))
+        catch
+            warn("Please provide remote tracking for branch '$branch_name' in '$(path(repo))'")
         end
-
-        if set_head
-            # checkout selected branch
-            with(peel(GitTree, Base.get(branch_ref))) do btree
-                checkout_tree(repo, btree)
-            end
-
-            # switch head to the branch
-            head!(repo, Base.get(branch_ref))
-        end
-    finally
-        close(Base.get(branch_ref))
     end
-    return
+
+    if set_head
+        # checkout selected branch
+        checkout_tree(repo, peel(GitTree, Base.get(branch_ref)))
+        # switch head to the branch
+        head!(repo, Base.get(branch_ref))
+    end
+    return nothing
 end
 
 """
@@ -431,12 +382,11 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
     # grab head name
     head_name = Consts.HEAD_FILE
     try
-        with(head(repo)) do head_ref
-            head_name = shortname(head_ref)
-            # if it is HEAD use short OID instead
-            if head_name == Consts.HEAD_FILE
-                head_name = string(GitHash(head_ref))
-            end
+        head_ref = head(repo)
+        head_name = shortname(head_ref)
+        # if it is HEAD use short OID instead
+        if head_name == Consts.HEAD_FILE
+            head_name = string(GitHash(head_ref))
         end
     end
 
@@ -446,11 +396,10 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
     obj_oid = GitHash(peeled)
 
     # checkout commit
-    checkout_tree(repo, peeled, options = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) : CheckoutOptions())
-
-    GitReference(repo, obj_oid, force=force,
-                 msg="libgit2.checkout: moving from $head_name to $(obj_oid))")
-
+    opts = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) : CheckoutOptions()
+    checkout_tree(repo, peeled, options = opts)
+    msg = "libgit2.checkout: moving from $head_name to $(obj_oid))"
+    GitReference(repo, obj_oid, force=force, msg=msg)
     return nothing
 end
 
@@ -519,12 +468,8 @@ function revcount(repo::GitRepo, fst::AbstractString, snd::AbstractString)
     fst_id = revparseid(repo, fst)
     snd_id = revparseid(repo, snd)
     base_id = merge_base(repo, string(fst_id), string(snd_id))
-    fc = with(GitRevWalker(repo)) do walker
-        count((i,r)->i!=base_id, walker, oid=fst_id, by=Consts.SORT_TOPOLOGICAL)
-    end
-    sc = with(GitRevWalker(repo)) do walker
-        count((i,r)->i!=base_id, walker, oid=snd_id, by=Consts.SORT_TOPOLOGICAL)
-    end
+    fc = count((i,r)->i!=base_id, GitRevWalker(repo), oid=fst_id, by=Consts.SORT_TOPOLOGICAL)
+    sc = count((i,r)->i!=base_id, GitRevWalker(repo), oid=snd_id, by=Consts.SORT_TOPOLOGICAL)
     return (fc-1, sc-1)
 end
 
@@ -571,9 +516,7 @@ function merge!(repo::GitRepo;
         end
     else
         if !isempty(branch) # merge provided branch into HEAD
-            with(GitReference(repo, branch)) do brn_ref
-                [GitAnnotated(repo, brn_ref)]
-            end
+            [GitAnnotated(repo, GitReference(repo, branch))]
         else # try to get tracking remote branch for the head
             if !isattached(repo)
                 throw(GitError(Error.Merge, Error.ERROR,
@@ -584,47 +527,29 @@ function merge!(repo::GitRepo;
                 # https://github.com/libgit2/libgit2/issues/2135#issuecomment-35997764
                 # try to figure out remote tracking of orphan head
 
-                m = with(GitReference(repo, Consts.HEAD_FILE)) do head_sym_ref
-                    match(r"refs/heads/(.*)", fullname(head_sym_ref))
-                end
+                m = match(r"refs/heads/(.*)", fullname(GitReference(repo, Consts.HEAD_FILE)))
                 if m === nothing
                     throw(GitError(Error.Merge, Error.ERROR,
                                    "Unable to determine name of orphan branch."))
                 end
                 branchname = m.captures[1]
-                remotename = with(GitConfig, repo) do cfg
-                    LibGit2.get(String, cfg, "branch.$branchname.remote")
-                end
-                oid = with(GitReference(repo, "refs/remotes/$remotename/$branchname")) do ref
-                    LibGit2.GitHash(ref)
-                end
-                with(GitCommit(repo, oid)) do cmt
-                    LibGit2.create_branch(repo, branchname, cmt)
-                end
+                remotename = LibGit2.get(String, GitConfig(repo), "branch.$branchname.remote")
+                oid = LibGit2.GitHash(GitReference(repo, "refs/remotes/$remotename/$branchname"))
+                LibGit2.create_branch(repo, branchname, GitCommit(repo, oid))
                 return true
             else
-                with(head(repo)) do head_ref
-                    tr_brn_ref = upstream(head_ref)
-                    if isnull(tr_brn_ref)
-                        throw(GitError(Error.Merge, Error.ERROR,
-                                       "There is no tracking information for the current branch."))
-                    end
-                    try
-                        [GitAnnotated(repo, Base.get(tr_brn_ref))]
-                    finally
-                        close(Base.get(tr_brn_ref))
-                    end
+                tr_brn_ref = upstream(head(repo))
+                if isnull(tr_brn_ref)
+                    throw(GitError(Error.Merge, Error.ERROR,
+                                   "There is no tracking information for the current branch."))
                 end
+                [GitAnnotated(repo, Base.get(tr_brn_ref))]
             end
         end
     end
-    try
-        merge!(repo, upst_anns, fastforward,
-               merge_opts=merge_opts,
-               checkout_opts=checkout_opts)
-    finally
-        map(close, upst_anns)
-    end
+    merge!(repo, upst_anns, fastforward,
+           merge_opts=merge_opts,
+           checkout_opts=checkout_opts)
 end
 
 """
@@ -645,49 +570,29 @@ a `GitError`. This is roughly equivalent to the following command line statement
 
 """
 function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractString="")
-    with(head(repo)) do head_ref
-        head_ann = GitAnnotated(repo, head_ref)
-        upst_ann = if isempty(upstream)
-            brn_ref = LibGit2.upstream(head_ref)
-            if isnull(brn_ref)
-                throw(GitError(Error.Rebase, Error.ERROR,
-                               "There is no tracking information for the current branch."))
-            end
-            try
-                GitAnnotated(repo, Base.get(brn_ref))
-            finally
-                close(brn_ref)
-            end
-        else
-            GitAnnotated(repo, upstream)
+    head_ref = head(repo)
+    head_ann = GitAnnotated(repo, head_ref)
+    upst_ann = if isempty(upstream)
+        brn_ref = LibGit2.upstream(head_ref)
+        if isnull(brn_ref)
+            throw(GitError(Error.Rebase, Error.ERROR,
+                           "There is no tracking information for the current branch."))
         end
-        onto_ann  = Nullable{GitAnnotated}(isempty(newbase) ? nothing : GitAnnotated(repo, newbase))
-        try
-            sig = default_signature(repo)
-            try
-                rbs = GitRebase(repo, head_ann, upst_ann, onto=onto_ann)
-                try
-                    while (rbs_op = next(rbs)) !== nothing
-                        commit(rbs, sig)
-                    end
-                    finish(rbs, sig)
-                catch err
-                    abort(rbs)
-                    rethrow(err)
-                finally
-                    close(rbs)
-                end
-            finally
-                #!isnull(onto_ann) && close(get(onto_ann))
-                close(sig)
-            end
-        finally
-            if !isempty(newbase)
-                close(Base.get(onto_ann))
-            end
-            close(upst_ann)
-            close(head_ann)
+        GitAnnotated(repo, Base.get(brn_ref))
+    else
+        GitAnnotated(repo, upstream)
+    end
+    onto_ann  = Nullable{GitAnnotated}(isempty(newbase) ? nothing : GitAnnotated(repo, newbase))
+    sig = default_signature(repo)
+    rbs = GitRebase(repo, head_ann, upst_ann, onto=onto_ann)
+    try
+        while (rbs_op = next(rbs)) !== nothing
+            commit(rbs, sig)
         end
+        finish(rbs, sig)
+    catch err
+        abort(rbs)
+        rethrow(err)
     end
     return head_oid(repo)
 end
@@ -699,12 +604,8 @@ end
 Returns all authors of commits to the `repo` repository.
 """
 function authors(repo::GitRepo)
-    return with(GitRevWalker(repo)) do walker
-        map((oid,repo)->with(GitCommit(repo, oid)) do cmt
-                            author(cmt)::Signature
-                        end,
-            walker) #, by = Consts.SORT_TIME)
-    end
+    return map((oid,repo)->author(GitCommit(repo, oid))::Signature,
+            GitRevWalker(repo)) #, by = Consts.SORT_TIME)
 end
 
 """
@@ -717,23 +618,20 @@ to return the repository to the snapshotted state.
 """
 function snapshot(repo::GitRepo)
     head = GitHash(repo, Consts.HEAD_FILE)
-    index = with(GitIndex, repo) do idx; write_tree!(idx) end
+    idx = GitIndex(repo)
+    index = write_tree!(idx)
     work = try
-        with(GitIndex, repo) do idx
-            if length(readdir(path(repo))) > 1
-                add!(idx, ".")
-                write!(idx)
-            end
-            write_tree!(idx)
-        end
-    finally
-        # restore index
-        with(GitIndex, repo) do idx
-            read_tree!(idx, index)
+        if length(readdir(path(repo))) > 1
+            add!(idx, ".")
             write!(idx)
         end
+        write_tree!(idx)
+    finally
+        # restore index
+        read_tree!(idx, index)
+        write!(idx)
     end
-    State(head, index, work)
+    return State(head, index, work)
 end
 
 """
@@ -745,25 +643,24 @@ can be generated using the [`snapshot`](@ref) function.
 """
 function restore(s::State, repo::GitRepo)
     head = reset!(repo, Consts.HEAD_FILE, "*")  # unstage everything
-    with(GitIndex, repo) do idx
-        read_tree!(idx, s.work)            # move work tree to index
-        opts = CheckoutOptions(
-                checkout_strategy = Consts.CHECKOUT_FORCE |     # check the index out to work
-                                    Consts.CHECKOUT_REMOVE_UNTRACKED) # remove everything else
-        checkout_index(repo, Nullable(idx), options = opts)
+    idx = GitIndex(repo)
+    read_tree!(idx, s.work)            # move work tree to index
+    opts = CheckoutOptions(
+            checkout_strategy = Consts.CHECKOUT_FORCE |     # check the index out to work
+                                Consts.CHECKOUT_REMOVE_UNTRACKED) # remove everything else
+    checkout_index(repo, Nullable(idx), options = opts)
 
-        read_tree!(idx, s.index)  # restore index
-    end
+    read_tree!(idx, s.index)  # restore index
     reset!(repo, s.head, Consts.RESET_SOFT) # restore head
 end
 
 function transact(f::Function, repo::GitRepo)
     state = snapshot(repo)
-    try f(repo) catch
+    try
+        f(repo)
+    catch
         restore(state, repo)
         rethrow()
-    finally
-        close(repo)
     end
 end
 

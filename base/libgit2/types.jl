@@ -590,27 +590,6 @@ mutable struct Signature
     time_offset::Cint
 end
 
-""" Resource management helper function
-"""
-function with(f::Function, obj)
-    try
-        f(obj)
-    finally
-        close(obj)
-    end
-end
-
-with{T}(f::Function, ::Type{T}, args...) = with(f, T(args...))
-
-function with_warn{T}(f::Function, ::Type{T}, args...)
-    obj = T(args...)
-    try
-        with(f, obj)
-    catch err
-        warn("$(string(T)) thrown exception: $err")
-    end
-end
-
 """
     LibGit2.Consts.OBJECT{T<:GitObject}(::Type{T})
 

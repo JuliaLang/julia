@@ -48,7 +48,6 @@ end
     sig = LibGit2.Signature("AAA", "AAA@BBB.COM", round(time(), 0), 0)
     git_sig = convert(LibGit2.GitSignature, sig)
     sig2 = LibGit2.Signature(git_sig)
-    close(git_sig)
     @test sig.name == sig2.name
     @test sig.email == sig2.email
     @test sig.time == sig2.time
@@ -168,87 +167,70 @@ mktempdir() do dir
 
     @testset "Configuration" begin
         cfg = LibGit2.GitConfig(joinpath(dir, config_file), LibGit2.Consts.CONFIG_LEVEL_APP)
-        try
-            @test_throws LibGit2.Error.GitError LibGit2.get(AbstractString, cfg, "tmp.str")
-            @test isempty(LibGit2.get(cfg, "tmp.str", "")) == true
+        @test_throws LibGit2.Error.GitError LibGit2.get(AbstractString, cfg, "tmp.str")
+        @test isempty(LibGit2.get(cfg, "tmp.str", "")) == true
 
-            LibGit2.set!(cfg, "tmp.str", "AAAA")
-            LibGit2.set!(cfg, "tmp.int32", Int32(1))
-            LibGit2.set!(cfg, "tmp.int64", Int64(1))
-            LibGit2.set!(cfg, "tmp.bool", true)
+        LibGit2.set!(cfg, "tmp.str", "AAAA")
+        LibGit2.set!(cfg, "tmp.int32", Int32(1))
+        LibGit2.set!(cfg, "tmp.int64", Int64(1))
+        LibGit2.set!(cfg, "tmp.bool", true)
 
-            @test LibGit2.get(cfg, "tmp.str", "") == "AAAA"
-            @test LibGit2.get(cfg, "tmp.int32", Int32(0)) == Int32(1)
-            @test LibGit2.get(cfg, "tmp.int64", Int64(0)) == Int64(1)
-            @test LibGit2.get(cfg, "tmp.bool", false) == true
-        finally
-            close(cfg)
-        end
+        @test LibGit2.get(cfg, "tmp.str", "") == "AAAA"
+        @test LibGit2.get(cfg, "tmp.int32", Int32(0)) == Int32(1)
+        @test LibGit2.get(cfg, "tmp.int64", Int64(0)) == Int64(1)
+        @test LibGit2.get(cfg, "tmp.bool", false) == true
     end
 
     @testset "Initializing repository" begin
         @testset "with remote branch" begin
             repo = LibGit2.init(cache_repo)
-            try
-                @test isdir(cache_repo)
-                @test LibGit2.path(repo) == LibGit2.posixpath(realpath(cache_repo))
-                @test isdir(joinpath(cache_repo, ".git"))
+            @test isdir(cache_repo)
+            @test LibGit2.path(repo) == LibGit2.posixpath(realpath(cache_repo))
+            @test isdir(joinpath(cache_repo, ".git"))
 
-                # set a remote branch
-                branch = "upstream"
-                LibGit2.GitRemote(repo, branch, repo_url) |> close
+            # set a remote branch
+            branch = "upstream"
+            LibGit2.GitRemote(repo, branch, repo_url) |> close
 
-                config = joinpath(cache_repo, ".git", "config")
-                lines = split(open(readstring, config, "r"), "\n")
-                @test any(map(x->x == "[remote \"upstream\"]", lines))
+            config = joinpath(cache_repo, ".git", "config")
+            lines = split(open(readstring, config, "r"), "\n")
+            @test any(map(x->x == "[remote \"upstream\"]", lines))
 
-                remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
-                @test LibGit2.url(remote) == repo_url
-                @test LibGit2.name(remote) == "upstream"
-                @test isa(remote, LibGit2.GitRemote)
-                @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: $repo_url"
-                @test LibGit2.isattached(repo)
-                LibGit2.set_remote_url(repo, "", remote="upstream")
-                remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
-                @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: "
-                close(remote)
-                LibGit2.set_remote_url(cache_repo, repo_url, remote="upstream")
-                remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
-                @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: $repo_url"
-                LibGit2.add_fetch!(repo, remote, "upstream")
-                @test LibGit2.fetch_refspecs(remote) == String["+refs/heads/*:refs/remotes/upstream/*"]
-                LibGit2.add_push!(repo, remote, "refs/heads/master")
-                close(remote)
-                remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
-                @test LibGit2.push_refspecs(remote) == String["refs/heads/master"]
-                close(remote)
-                # constructor with a refspec
-                remote = LibGit2.GitRemote(repo, "upstream2", repo_url, "upstream")
-                @test sprint(show, remote) == "GitRemote:\nRemote name: upstream2 url: $repo_url"
-                @test LibGit2.fetch_refspecs(remote) == String["upstream"]
-                close(remote)
+            remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
+            @test LibGit2.url(remote) == repo_url
+            @test LibGit2.name(remote) == "upstream"
+            @test isa(remote, LibGit2.GitRemote)
+            @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: $repo_url"
+            @test LibGit2.isattached(repo)
+            LibGit2.set_remote_url(repo, "", remote="upstream")
+            remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
+            @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: "
+            LibGit2.set_remote_url(cache_repo, repo_url, remote="upstream")
+            remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
+            @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: $repo_url"
+            LibGit2.add_fetch!(repo, remote, "upstream")
+            @test LibGit2.fetch_refspecs(remote) == String["+refs/heads/*:refs/remotes/upstream/*"]
+            LibGit2.add_push!(repo, remote, "refs/heads/master")
+            remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
+            @test LibGit2.push_refspecs(remote) == String["refs/heads/master"]
+            # constructor with a refspec
+            remote = LibGit2.GitRemote(repo, "upstream2", repo_url, "upstream")
+            @test sprint(show, remote) == "GitRemote:\nRemote name: upstream2 url: $repo_url"
+            @test LibGit2.fetch_refspecs(remote) == String["upstream"]
 
-                remote = LibGit2.GitRemoteAnon(repo, repo_url)
-                @test LibGit2.url(remote) == repo_url
-                @test LibGit2.name(remote) == ""
-                @test isa(remote, LibGit2.GitRemote)
-                close(remote)
-            finally
-                close(repo)
-            end
+            remote = LibGit2.GitRemoteAnon(repo, repo_url)
+            @test LibGit2.url(remote) == repo_url
+            @test LibGit2.name(remote) == ""
+            @test isa(remote, LibGit2.GitRemote)
         end
 
         @testset "bare" begin
             path = joinpath(dir, "Example.Bare")
             repo = LibGit2.init(path, true)
-            try
-                @test isdir(path)
-                @test LibGit2.path(repo) == LibGit2.posixpath(realpath(path))
-                @test isfile(joinpath(path, LibGit2.Consts.HEAD_FILE))
-                @test LibGit2.isattached(repo)
-            finally
-                close(repo)
-            end
+            @test isdir(path)
+            @test LibGit2.path(repo) == LibGit2.posixpath(realpath(path))
+            @test isfile(joinpath(path, LibGit2.Consts.HEAD_FILE))
+            @test LibGit2.isattached(repo)
 
             path = joinpath("garbagefakery", "Example.Bare")
             try
@@ -260,12 +242,8 @@ mktempdir() do dir
             end
             path = joinpath(dir, "Example.BareTwo")
             repo = LibGit2.init(path, true)
-            try
-                #just to see if this works
-                LibGit2.cleanup(repo)
-            finally
-                close(repo)
-            end
+            #just to see if this works
+            LibGit2.cleanup(repo)
         end
     end
 
@@ -274,49 +252,33 @@ mktempdir() do dir
         @testset "bare" begin
             repo_path = joinpath(dir, "Example.Bare1")
             repo = LibGit2.clone(cache_repo, repo_path, isbare = true)
-            try
-                @test isdir(repo_path)
-                @test LibGit2.path(repo) == LibGit2.posixpath(realpath(repo_path))
-                @test isfile(joinpath(repo_path, LibGit2.Consts.HEAD_FILE))
-                @test LibGit2.isattached(repo)
-                @test LibGit2.remotes(repo) == ["origin"]
-            finally
-                close(repo)
-            end
+            @test isdir(repo_path)
+            @test LibGit2.path(repo) == LibGit2.posixpath(realpath(repo_path))
+            @test isfile(joinpath(repo_path, LibGit2.Consts.HEAD_FILE))
+            @test LibGit2.isattached(repo)
+            @test LibGit2.remotes(repo) == ["origin"]
         end
         @testset "bare with remote callback" begin
             repo_path = joinpath(dir, "Example.Bare2")
             repo = LibGit2.clone(cache_repo, repo_path, isbare = true, remote_cb = LibGit2.mirror_cb())
-            try
-                @test isdir(repo_path)
-                @test LibGit2.path(repo) == LibGit2.posixpath(realpath(repo_path))
-                @test isfile(joinpath(repo_path, LibGit2.Consts.HEAD_FILE))
-                rmt = LibGit2.get(LibGit2.GitRemote, repo, "origin")
-                try
-                    @test LibGit2.fetch_refspecs(rmt)[1] == "+refs/*:refs/*"
-                    @test LibGit2.isattached(repo)
-                    @test LibGit2.remotes(repo) == ["origin"]
-                finally
-                    close(rmt)
-                end
-            finally
-                close(repo)
-            end
+            @test isdir(repo_path)
+            @test LibGit2.path(repo) == LibGit2.posixpath(realpath(repo_path))
+            @test isfile(joinpath(repo_path, LibGit2.Consts.HEAD_FILE))
+            rmt = LibGit2.get(LibGit2.GitRemote, repo, "origin")
+            @test LibGit2.fetch_refspecs(rmt)[1] == "+refs/*:refs/*"
+            @test LibGit2.isattached(repo)
+            @test LibGit2.remotes(repo) == ["origin"]
         end
         @testset "normal" begin
             repo = LibGit2.clone(cache_repo, test_repo)
-            try
-                @test isdir(test_repo)
-                @test LibGit2.path(repo) == LibGit2.posixpath(realpath(test_repo))
-                @test isdir(joinpath(test_repo, ".git"))
-                @test LibGit2.workdir(repo) == LibGit2.path(repo)*"/"
-                @test LibGit2.isattached(repo)
-                @test LibGit2.isorphan(repo)
-                repo_str = sprint(show, repo)
-                @test repo_str == "LibGit2.GitRepo($(sprint(show,LibGit2.path(repo))))"
-            finally
-                close(repo)
-            end
+            @test isdir(test_repo)
+            @test LibGit2.path(repo) == LibGit2.posixpath(realpath(test_repo))
+            @test isdir(joinpath(test_repo, ".git"))
+            @test LibGit2.workdir(repo) == LibGit2.path(repo)*"/"
+            @test LibGit2.isattached(repo)
+            @test LibGit2.isorphan(repo)
+            repo_str = sprint(show, repo)
+            @test repo_str == "LibGit2.GitRepo($(sprint(show,LibGit2.path(repo))))"
         end
     end
 
@@ -325,327 +287,278 @@ mktempdir() do dir
         @testset "with commits" begin
             repo = LibGit2.GitRepo(cache_repo)
             repo_file = open(joinpath(cache_repo,test_file), "a")
-            try
-                # create commits
-                println(repo_file, commit_msg1)
-                flush(repo_file)
-                LibGit2.add!(repo, test_file)
-                @test LibGit2.iszero(commit_oid1)
-                commit_oid1 = LibGit2.commit(repo, commit_msg1; author=test_sig, committer=test_sig)
-                @test !LibGit2.iszero(commit_oid1)
+            # create commits
+            println(repo_file, commit_msg1)
+            flush(repo_file)
+            LibGit2.add!(repo, test_file)
+            @test LibGit2.iszero(commit_oid1)
+            commit_oid1 = LibGit2.commit(repo, commit_msg1; author=test_sig, committer=test_sig)
+            @test !LibGit2.iszero(commit_oid1)
 
-                println(repo_file, randstring(10))
-                flush(repo_file)
-                LibGit2.add!(repo, test_file)
-                commit_oid3 = LibGit2.commit(repo, randstring(10); author=test_sig, committer=test_sig)
+            println(repo_file, randstring(10))
+            flush(repo_file)
+            LibGit2.add!(repo, test_file)
+            commit_oid3 = LibGit2.commit(repo, randstring(10); author=test_sig, committer=test_sig)
 
-                println(repo_file, commit_msg2)
-                flush(repo_file)
-                LibGit2.add!(repo, test_file)
-                @test LibGit2.iszero(commit_oid2)
-                commit_oid2 = LibGit2.commit(repo, commit_msg2; author=test_sig, committer=test_sig)
-                @test !LibGit2.iszero(commit_oid2)
-                auths = LibGit2.authors(repo)
-                @test length(auths) == 3
-                for auth in auths
-                    @test auth.name == test_sig.name
-                    @test auth.time == test_sig.time
-                    @test auth.email == test_sig.email
-                end
-                @test LibGit2.is_ancestor_of(string(commit_oid1), string(commit_oid2), repo)
-                @test LibGit2.iscommit(string(commit_oid1), repo)
-                @test !LibGit2.iscommit(string(commit_oid1)*"fake", repo)
-                @test LibGit2.iscommit(string(commit_oid2), repo)
-
-                # lookup commits
-                cmt = LibGit2.GitCommit(repo, commit_oid1)
-                try
-                    @test LibGit2.Consts.OBJECT(typeof(cmt)) == LibGit2.Consts.OBJ_COMMIT
-                    @test commit_oid1 == LibGit2.GitHash(cmt)
-                    short_oid1 = LibGit2.GitShortHash(string(commit_oid1))
-                    @test hex(commit_oid1) == hex(short_oid1)
-                    @test cmp(commit_oid1, short_oid1) == 0
-                    @test cmp(short_oid1, commit_oid1) == 0
-                    @test !(short_oid1 < commit_oid1)
-                    short_str = sprint(show, short_oid1)
-                    @test short_str == "GitShortHash(\"$(string(short_oid1))\")"
-                    auth = LibGit2.author(cmt)
-                    @test isa(auth, LibGit2.Signature)
-                    @test auth.name == test_sig.name
-                    @test auth.time == test_sig.time
-                    @test auth.email == test_sig.email
-                    short_auth = LibGit2.author(LibGit2.GitCommit(repo, short_oid1))
-                    @test short_auth.name == test_sig.name
-                    @test short_auth.time == test_sig.time
-                    @test short_auth.email == test_sig.email
-                    cmtr = LibGit2.committer(cmt)
-                    @test isa(cmtr, LibGit2.Signature)
-                    @test cmtr.name == test_sig.name
-                    @test cmtr.time == test_sig.time
-                    @test cmtr.email == test_sig.email
-                    @test LibGit2.message(cmt) == commit_msg1
-                    showstr = split(sprint(show, cmt), "\n")
-                    # the time of the commit will vary so just test the first two parts
-                    @test contains(showstr[1], "Git Commit:")
-                    @test contains(showstr[2], "Commit Author: Name: TEST, Email: TEST@TEST.COM, Time:")
-                    @test contains(showstr[3], "Committer: Name: TEST, Email: TEST@TEST.COM, Time:")
-                    @test contains(showstr[4], "SHA:")
-                    @test showstr[5] == "Message:"
-                    @test showstr[6] == commit_msg1
-                finally
-                    close(cmt)
-                end
-            finally
-                close(repo)
-                close(repo_file)
+            println(repo_file, commit_msg2)
+            flush(repo_file)
+            LibGit2.add!(repo, test_file)
+            @test LibGit2.iszero(commit_oid2)
+            commit_oid2 = LibGit2.commit(repo, commit_msg2; author=test_sig, committer=test_sig)
+            @test !LibGit2.iszero(commit_oid2)
+            auths = LibGit2.authors(repo)
+            @test length(auths) == 3
+            for auth in auths
+                @test auth.name == test_sig.name
+                @test auth.time == test_sig.time
+                @test auth.email == test_sig.email
             end
+            @test LibGit2.is_ancestor_of(string(commit_oid1), string(commit_oid2), repo)
+            @test LibGit2.iscommit(string(commit_oid1), repo)
+            @test !LibGit2.iscommit(string(commit_oid1)*"fake", repo)
+            @test LibGit2.iscommit(string(commit_oid2), repo)
+
+            # lookup commits
+            cmt = LibGit2.GitCommit(repo, commit_oid1)
+            @test LibGit2.Consts.OBJECT(typeof(cmt)) == LibGit2.Consts.OBJ_COMMIT
+            @test commit_oid1 == LibGit2.GitHash(cmt)
+            short_oid1 = LibGit2.GitShortHash(string(commit_oid1))
+            @test hex(commit_oid1) == hex(short_oid1)
+            @test cmp(commit_oid1, short_oid1) == 0
+            @test cmp(short_oid1, commit_oid1) == 0
+            @test !(short_oid1 < commit_oid1)
+            short_str = sprint(show, short_oid1)
+            @test short_str == "GitShortHash(\"$(string(short_oid1))\")"
+            auth = LibGit2.author(cmt)
+            @test isa(auth, LibGit2.Signature)
+            @test auth.name == test_sig.name
+            @test auth.time == test_sig.time
+            @test auth.email == test_sig.email
+            short_auth = LibGit2.author(LibGit2.GitCommit(repo, short_oid1))
+            @test short_auth.name == test_sig.name
+            @test short_auth.time == test_sig.time
+            @test short_auth.email == test_sig.email
+            cmtr = LibGit2.committer(cmt)
+            @test isa(cmtr, LibGit2.Signature)
+            @test cmtr.name == test_sig.name
+            @test cmtr.time == test_sig.time
+            @test cmtr.email == test_sig.email
+            @test LibGit2.message(cmt) == commit_msg1
+            showstr = split(sprint(show, cmt), "\n")
+            # the time of the commit will vary so just test the first two parts
+            @test contains(showstr[1], "Git Commit:")
+            @test contains(showstr[2], "Commit Author: Name: TEST, Email: TEST@TEST.COM, Time:")
+            @test contains(showstr[3], "Committer: Name: TEST, Email: TEST@TEST.COM, Time:")
+            @test contains(showstr[4], "SHA:")
+            @test showstr[5] == "Message:"
+            @test showstr[6] == commit_msg1
         end
 
         @testset "with branch" begin
             repo = LibGit2.GitRepo(cache_repo)
-            try
-                brnch = LibGit2.branch(repo)
-                brref = LibGit2.head(repo)
-                try
-                    @test LibGit2.isbranch(brref)
-                    @test !LibGit2.isremote(brref)
-                    @test LibGit2.name(brref) == "refs/heads/master"
-                    @test LibGit2.shortname(brref) == master_branch
-                    @test LibGit2.ishead(brref)
-                    @test isnull(LibGit2.upstream(brref))
-                    show_strs = split(sprint(show, brref), "\n")
-                    @test show_strs[1] == "GitReference:"
-                    @test show_strs[2] == "Branch with name refs/heads/master"
-                    @test show_strs[3] == "Branch is HEAD."
-                    @test repo.ptr == LibGit2.repository(brref).ptr
-                    @test brnch == master_branch
-                    @test LibGit2.headname(repo) == master_branch
-                    LibGit2.branch!(repo, test_branch, string(commit_oid1), set_head=false)
+            brnch = LibGit2.branch(repo)
+            brref = LibGit2.head(repo)
+            @test LibGit2.isbranch(brref)
+            @test !LibGit2.isremote(brref)
+            @test LibGit2.name(brref) == "refs/heads/master"
+            @test LibGit2.shortname(brref) == master_branch
+            @test LibGit2.ishead(brref)
+            @test isnull(LibGit2.upstream(brref))
+            show_strs = split(sprint(show, brref), "\n")
+            @test show_strs[1] == "GitReference:"
+            @test show_strs[2] == "Branch with name refs/heads/master"
+            @test show_strs[3] == "Branch is HEAD."
+            @test repo.ptr == LibGit2.repository(brref).ptr
+            @test brnch == master_branch
+            @test LibGit2.headname(repo) == master_branch
+            LibGit2.branch!(repo, test_branch, string(commit_oid1), set_head=false)
 
-                    @test isnull(LibGit2.lookup_branch(repo, test_branch, true))
-                    tbref = Base.get(LibGit2.lookup_branch(repo, test_branch, false))
-                    try
-                        @test LibGit2.shortname(tbref) == test_branch
-                        @test isnull(LibGit2.upstream(tbref))
-                    finally
-                        close(tbref)
-                    end
-                    @test isnull(LibGit2.lookup_branch(repo, test_branch2, true))
-                    LibGit2.branch!(repo, test_branch2; set_head=false)
-                    tbref = Base.get(LibGit2.lookup_branch(repo, test_branch2, false))
-                    try
-                        @test LibGit2.shortname(tbref) == test_branch2
-                        LibGit2.delete_branch(tbref)
-                        @test isnull(LibGit2.lookup_branch(repo, test_branch2, true))
-                    finally
-                        close(tbref)
-                    end
-                finally
-                    close(brref)
-                end
+            @test isnull(LibGit2.lookup_branch(repo, test_branch, true))
+            tbref = Base.get(LibGit2.lookup_branch(repo, test_branch, false))
+            @test LibGit2.shortname(tbref) == test_branch
+            @test isnull(LibGit2.upstream(tbref))
+            @test isnull(LibGit2.lookup_branch(repo, test_branch2, true))
+            LibGit2.branch!(repo, test_branch2; set_head=false)
+            tbref = Base.get(LibGit2.lookup_branch(repo, test_branch2, false))
+            @test LibGit2.shortname(tbref) == test_branch2
+            LibGit2.delete_branch(tbref)
+            @test isnull(LibGit2.lookup_branch(repo, test_branch2, true))
 
-                branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
-                @test master_branch in branches
-                @test test_branch in branches
-            finally
-                close(repo)
-            end
+            branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
+            @test master_branch in branches
+            @test test_branch in branches
         end
 
         @testset "with default configuration" begin
             repo = LibGit2.GitRepo(cache_repo)
             try
-                try
-                    LibGit2.Signature(repo)
-                catch ex
-                    # these test configure repo with new signature
-                    # in case when global one does not exsist
-                    @test isa(ex, LibGit2.Error.GitError) == true
+                LibGit2.Signature(repo)
+            catch ex
+                # these test configure repo with new signature
+                # in case when global one does not exsist
+                @test isa(ex, LibGit2.Error.GitError) == true
 
-                    cfg = LibGit2.GitConfig(repo)
-                    LibGit2.set!(cfg, "user.name", "AAAA")
-                    LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
-                    sig = LibGit2.Signature(repo)
-                    @test sig.name == "AAAA"
-                    @test sig.email == "BBBB@BBBB.COM"
-                    @test LibGit2.getconfig(repo, "user.name", "") == "AAAA"
-                    @test LibGit2.getconfig(cache_repo, "user.name", "") == "AAAA"
-                end
-            finally
-                close(repo)
+                cfg = LibGit2.GitConfig(repo)
+                LibGit2.set!(cfg, "user.name", "AAAA")
+                LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
+                sig = LibGit2.Signature(repo)
+                @test sig.name == "AAAA"
+                @test sig.email == "BBBB@BBBB.COM"
+                @test LibGit2.getconfig(repo, "user.name", "") == "AAAA"
+                @test LibGit2.getconfig(cache_repo, "user.name", "") == "AAAA"
             end
         end
 
         @testset "with tags" begin
             repo = LibGit2.GitRepo(cache_repo)
-            try
-                tags = LibGit2.tag_list(repo)
-                @test length(tags) == 0
+            tags = LibGit2.tag_list(repo)
+            @test length(tags) == 0
 
-                tag_oid1 = LibGit2.tag_create(repo, tag1, commit_oid1, sig=test_sig)
-                @test !LibGit2.iszero(tag_oid1)
-                tags = LibGit2.tag_list(repo)
-                @test length(tags) == 1
-                @test tag1 in tags
-                tag1ref = LibGit2.GitReference(repo, "refs/tags/$tag1")
-                @test isempty(LibGit2.fullname(tag1ref)) #because this is a reference to an OID
-                show_strs = split(sprint(show, tag1ref), "\n")
-                @test show_strs[1] == "GitReference:"
-                @test show_strs[2] == "Tag with name refs/tags/$tag1"
-                tag1tag = LibGit2.peel(LibGit2.GitTag,tag1ref)
-                @test LibGit2.name(tag1tag) == tag1
-                @test LibGit2.target(tag1tag) == commit_oid1
-                @test sprint(show, tag1tag) == "GitTag:\nTag name: $tag1 target: $commit_oid1"
-                tag_oid2 = LibGit2.tag_create(repo, tag2, commit_oid2)
-                @test !LibGit2.iszero(tag_oid2)
-                tags = LibGit2.tag_list(repo)
-                @test length(tags) == 2
-                @test tag2 in tags
+            tag_oid1 = LibGit2.tag_create(repo, tag1, commit_oid1, sig=test_sig)
+            @test !LibGit2.iszero(tag_oid1)
+            tags = LibGit2.tag_list(repo)
+            @test length(tags) == 1
+            @test tag1 in tags
+            tag1ref = LibGit2.GitReference(repo, "refs/tags/$tag1")
+            @test isempty(LibGit2.fullname(tag1ref)) #because this is a reference to an OID
+            show_strs = split(sprint(show, tag1ref), "\n")
+            @test show_strs[1] == "GitReference:"
+            @test show_strs[2] == "Tag with name refs/tags/$tag1"
+            tag1tag = LibGit2.peel(LibGit2.GitTag,tag1ref)
+            @test LibGit2.name(tag1tag) == tag1
+            @test LibGit2.target(tag1tag) == commit_oid1
+            @test sprint(show, tag1tag) == "GitTag:\nTag name: $tag1 target: $commit_oid1"
+            tag_oid2 = LibGit2.tag_create(repo, tag2, commit_oid2)
+            @test !LibGit2.iszero(tag_oid2)
+            tags = LibGit2.tag_list(repo)
+            @test length(tags) == 2
+            @test tag2 in tags
 
-                refs = LibGit2.ref_list(repo)
-                @test refs == ["refs/heads/master","refs/heads/test_branch","refs/tags/tag1","refs/tags/tag2"]
+            refs = LibGit2.ref_list(repo)
+            @test refs == ["refs/heads/master","refs/heads/test_branch","refs/tags/tag1","refs/tags/tag2"]
 
-                LibGit2.tag_delete(repo, tag1)
-                tags = LibGit2.tag_list(repo)
-                @test length(tags) == 1
-                @test tag2 ∈ tags
-                @test tag1 ∉ tags
-            finally
-                close(repo)
-            end
+            LibGit2.tag_delete(repo, tag1)
+            tags = LibGit2.tag_list(repo)
+            @test length(tags) == 1
+            @test tag2 ∈ tags
+            @test tag1 ∉ tags
         end
 
         @testset "status" begin
             repo = LibGit2.GitRepo(cache_repo)
-            try
-                status = LibGit2.GitStatus(repo)
-                @test length(status) == 0
-                @test_throws BoundsError status[1]
-                repo_file = open(joinpath(cache_repo,"statusfile"), "a")
+            status = LibGit2.GitStatus(repo)
+            @test length(status) == 0
+            @test_throws BoundsError status[1]
+            repo_file = open(joinpath(cache_repo,"statusfile"), "a")
 
-                # create commits
-                println(repo_file, commit_msg1)
-                flush(repo_file)
-                LibGit2.add!(repo, test_file)
-                status = LibGit2.GitStatus(repo)
-                @test length(status) != 0
-                @test_throws BoundsError status[0]
-                @test_throws BoundsError status[length(status)+1]
-                # we've added a file - show that it is new
-                @test status[1].status == LibGit2.Consts.STATUS_WT_NEW
-                close(repo_file)
-            finally
-                close(repo)
-            end
+            # create commits
+            println(repo_file, commit_msg1)
+            flush(repo_file)
+            LibGit2.add!(repo, test_file)
+            status = LibGit2.GitStatus(repo)
+            @test length(status) != 0
+            @test_throws BoundsError status[0]
+            @test_throws BoundsError status[length(status)+1]
+            # we've added a file - show that it is new
+            @test status[1].status == LibGit2.Consts.STATUS_WT_NEW
+            close(repo_file)
         end
 
         @testset "blobs" begin
             repo = LibGit2.GitRepo(cache_repo)
-            try
-                # this is slightly dubious, as it assumes the object has not been packed
-                # could be replaced by another binary format
-                hash_string = hex(commit_oid1)
-                blob_file   = joinpath(cache_repo,".git/objects", hash_string[1:2], hash_string[3:end])
+            # this is slightly dubious, as it assumes the object has not been packed
+            # could be replaced by another binary format
+            hash_string = hex(commit_oid1)
+            blob_file   = joinpath(cache_repo,".git/objects", hash_string[1:2], hash_string[3:end])
 
-                id = LibGit2.addblob!(repo, blob_file)
-                blob = LibGit2.GitBlob(repo, id)
-                @test LibGit2.isbinary(blob)
-                len1 = length(blob)
-                blob_show_strs = split(sprint(show, blob), "\n")
-                @test blob_show_strs[1] == "GitBlob:"
-                @test contains(blob_show_strs[2], "Blob id:")
-                @test blob_show_strs[3] == "Contents are binary."
+            id = LibGit2.addblob!(repo, blob_file)
+            blob = LibGit2.GitBlob(repo, id)
+            @test LibGit2.isbinary(blob)
+            len1 = length(blob)
+            blob_show_strs = split(sprint(show, blob), "\n")
+            @test blob_show_strs[1] == "GitBlob:"
+            @test contains(blob_show_strs[2], "Blob id:")
+            @test blob_show_strs[3] == "Contents are binary."
 
-                blob2 = LibGit2.GitBlob(repo, LibGit2.GitHash(blob))
-                @test LibGit2.isbinary(blob2)
-                @test length(blob2) == len1
-            finally
-                close(repo)
-            end
+            blob2 = LibGit2.GitBlob(repo, LibGit2.GitHash(blob))
+            @test LibGit2.isbinary(blob2)
+            @test length(blob2) == len1
         end
         @testset "trees" begin
             repo = LibGit2.GitRepo(cache_repo)
-            try
-                @test_throws LibGit2.Error.GitError LibGit2.GitTree(repo, "HEAD")
-                tree = LibGit2.GitTree(repo, "HEAD^{tree}")
-                @test isa(tree, LibGit2.GitTree)
-                @test isa(LibGit2.GitObject(repo, "HEAD^{tree}"), LibGit2.GitTree)
-                @test LibGit2.Consts.OBJECT(typeof(tree)) == LibGit2.Consts.OBJ_TREE
-                @test count(tree) == 1
-                tree_str = sprint(show, tree)
-                @test tree_str == "GitTree:\nOwner: $(LibGit2.repository(tree))\nNumber of entries: 1\n"
-                @test_throws BoundsError tree[0]
-                @test_throws BoundsError tree[2]
-                tree_entry = tree[1]
-                @test LibGit2.filemode(tree_entry) == 33188
-                te_str = sprint(show, tree_entry)
-                @test te_str == "GitTreeEntry:\nEntry name: testfile\nEntry type: Base.LibGit2.GitBlob\nEntry OID: $(LibGit2.entryid(tree_entry))\n"
-                blob = LibGit2.GitBlob(tree_entry)
-                blob_str = sprint(show, blob)
-                @test blob_str == "GitBlob:\nBlob id: $(LibGit2.GitHash(blob))\nContents:\n$(LibGit2.content(blob))\n"
-            finally
-                close(repo)
-            end
+            @test_throws LibGit2.Error.GitError LibGit2.GitTree(repo, "HEAD")
+            tree = LibGit2.GitTree(repo, "HEAD^{tree}")
+            @test isa(tree, LibGit2.GitTree)
+            @test isa(LibGit2.GitObject(repo, "HEAD^{tree}"), LibGit2.GitTree)
+            @test LibGit2.Consts.OBJECT(typeof(tree)) == LibGit2.Consts.OBJ_TREE
+            @test count(tree) == 1
+            tree_str = sprint(show, tree)
+            @test tree_str == "GitTree:\nOwner: $(LibGit2.repository(tree))\nNumber of entries: 1\n"
+            @test_throws BoundsError tree[0]
+            @test_throws BoundsError tree[2]
+            tree_entry = tree[1]
+            @test LibGit2.filemode(tree_entry) == 33188
+            te_str = sprint(show, tree_entry)
+            @test te_str == "GitTreeEntry:\nEntry name: testfile\nEntry type: Base.LibGit2.GitBlob\nEntry OID: $(LibGit2.entryid(tree_entry))\n"
+            blob = LibGit2.GitBlob(tree_entry)
+            blob_str = sprint(show, blob)
+            @test blob_str == "GitBlob:\nBlob id: $(LibGit2.GitHash(blob))\nContents:\n$(LibGit2.content(blob))\n"
         end
 
         @testset "diff" begin
             repo = LibGit2.GitRepo(cache_repo)
-            try
-                @test !LibGit2.isdirty(repo)
-                @test !LibGit2.isdirty(repo, test_file)
-                @test !LibGit2.isdirty(repo, "nonexistent")
-                @test !LibGit2.isdiff(repo, "HEAD")
-                @test !LibGit2.isdirty(repo, cached=true)
-                @test !LibGit2.isdirty(repo, test_file, cached=true)
-                @test !LibGit2.isdirty(repo, "nonexistent", cached=true)
-                @test !LibGit2.isdiff(repo, "HEAD", cached=true)
-                open(joinpath(cache_repo,test_file), "a") do f
-                    println(f, "zzzz")
-                end
-                @test LibGit2.isdirty(repo)
-                @test LibGit2.isdirty(repo, test_file)
-                @test !LibGit2.isdirty(repo, "nonexistent")
-                @test LibGit2.isdiff(repo, "HEAD")
-                @test !LibGit2.isdirty(repo, cached=true)
-                @test !LibGit2.isdiff(repo, "HEAD", cached=true)
-                LibGit2.add!(repo, test_file)
-                @test LibGit2.isdirty(repo)
-                @test LibGit2.isdiff(repo, "HEAD")
-                @test LibGit2.isdirty(repo, cached=true)
-                @test LibGit2.isdiff(repo, "HEAD", cached=true)
-                tree = LibGit2.GitTree(repo, "HEAD^{tree}")
-                diff = LibGit2.diff_tree(repo, tree, "", cached=true)
-                @test count(diff) == 1
-                @test_throws BoundsError diff[0]
-                @test_throws BoundsError diff[2]
-                @test LibGit2.Consts.DELTA_STATUS(diff[1].status) == LibGit2.Consts.DELTA_MODIFIED
-                @test diff[1].nfiles == 2
-                diff_strs = split(sprint(show, diff[1]), '\n')
-                @test diff_strs[1] == "DiffDelta:"
-                @test diff_strs[2] == "Status: DELTA_MODIFIED"
-                @test diff_strs[3] == "Number of files: 2"
-                @test diff_strs[4] == "Old file:"
-                @test diff_strs[5] == "DiffFile:"
-                @test contains(diff_strs[6], "Oid:")
-                @test contains(diff_strs[7], "Path:")
-                @test contains(diff_strs[8], "Size:")
-                @test isempty(diff_strs[9])
-                @test diff_strs[10] == "New file:"
-                diff_strs = split(sprint(show, diff), '\n')
-                @test diff_strs[1] == "GitDiff:"
-                @test diff_strs[2] == "Number of deltas: 1"
-                @test diff_strs[3] == "GitDiffStats:"
-                @test diff_strs[4] == "Files changed: 1"
-                @test diff_strs[5] == "Insertions: 1"
-                @test diff_strs[6] == "Deletions: 0"
-                LibGit2.commit(repo, "zzz")
-                @test !LibGit2.isdirty(repo)
-                @test !LibGit2.isdiff(repo, "HEAD")
-                @test !LibGit2.isdirty(repo, cached=true)
-                @test !LibGit2.isdiff(repo, "HEAD", cached=true)
-            finally
-                close(repo)
+            @test !LibGit2.isdirty(repo)
+            @test !LibGit2.isdirty(repo, test_file)
+            @test !LibGit2.isdirty(repo, "nonexistent")
+            @test !LibGit2.isdiff(repo, "HEAD")
+            @test !LibGit2.isdirty(repo, cached=true)
+            @test !LibGit2.isdirty(repo, test_file, cached=true)
+            @test !LibGit2.isdirty(repo, "nonexistent", cached=true)
+            @test !LibGit2.isdiff(repo, "HEAD", cached=true)
+            open(joinpath(cache_repo,test_file), "a") do f
+                println(f, "zzzz")
             end
+            @test LibGit2.isdirty(repo)
+            @test LibGit2.isdirty(repo, test_file)
+            @test !LibGit2.isdirty(repo, "nonexistent")
+            @test LibGit2.isdiff(repo, "HEAD")
+            @test !LibGit2.isdirty(repo, cached=true)
+            @test !LibGit2.isdiff(repo, "HEAD", cached=true)
+            LibGit2.add!(repo, test_file)
+            @test LibGit2.isdirty(repo)
+            @test LibGit2.isdiff(repo, "HEAD")
+            @test LibGit2.isdirty(repo, cached=true)
+            @test LibGit2.isdiff(repo, "HEAD", cached=true)
+            tree = LibGit2.GitTree(repo, "HEAD^{tree}")
+            diff = LibGit2.diff_tree(repo, tree, "", cached=true)
+            @test count(diff) == 1
+            @test_throws BoundsError diff[0]
+            @test_throws BoundsError diff[2]
+            @test LibGit2.Consts.DELTA_STATUS(diff[1].status) == LibGit2.Consts.DELTA_MODIFIED
+            @test diff[1].nfiles == 2
+            diff_strs = split(sprint(show, diff[1]), '\n')
+            @test diff_strs[1] == "DiffDelta:"
+            @test diff_strs[2] == "Status: DELTA_MODIFIED"
+            @test diff_strs[3] == "Number of files: 2"
+            @test diff_strs[4] == "Old file:"
+            @test diff_strs[5] == "DiffFile:"
+            @test contains(diff_strs[6], "Oid:")
+            @test contains(diff_strs[7], "Path:")
+            @test contains(diff_strs[8], "Size:")
+            @test isempty(diff_strs[9])
+            @test diff_strs[10] == "New file:"
+            diff_strs = split(sprint(show, diff), '\n')
+            @test diff_strs[1] == "GitDiff:"
+            @test diff_strs[2] == "Number of deltas: 1"
+            @test diff_strs[3] == "GitDiffStats:"
+            @test diff_strs[4] == "Files changed: 1"
+            @test diff_strs[5] == "Insertions: 1"
+            @test diff_strs[6] == "Deletions: 0"
+            LibGit2.commit(repo, "zzz")
+            @test !LibGit2.isdirty(repo)
+            @test !LibGit2.isdiff(repo, "HEAD")
+            @test !LibGit2.isdirty(repo, cached=true)
+            @test !LibGit2.isdiff(repo, "HEAD", cached=true)
         end
     end
 
@@ -658,33 +571,29 @@ mktempdir() do dir
         cfg = LibGit2.GitConfig(repo)
         LibGit2.set!(cfg, "user.name", "AAAA")
         LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
-        try
-            oldhead = LibGit2.head_oid(repo)
-            LibGit2.branch!(repo, "branch/ff_a")
-            open(joinpath(LibGit2.path(repo),"ff_file1"),"w") do f
-                write(f, "111\n")
-            end
-            LibGit2.add!(repo, "ff_file1")
-            LibGit2.commit(repo, "add ff_file1")
-
-            open(joinpath(LibGit2.path(repo),"ff_file2"),"w") do f
-                write(f, "222\n")
-            end
-            LibGit2.add!(repo, "ff_file2")
-            LibGit2.commit(repo, "add ff_file2")
-            LibGit2.branch!(repo, "master")
-            # switch back, now try to ff-merge the changes
-            # from branch/a
-
-            upst_ann = LibGit2.GitAnnotated(repo, "branch/ff_a")
-            head_ann = LibGit2.GitAnnotated(repo, "master")
-
-            # ff merge them
-            @test LibGit2.merge!(repo, [upst_ann], true)
-            @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
-        finally
-            close(repo)
+        oldhead = LibGit2.head_oid(repo)
+        LibGit2.branch!(repo, "branch/ff_a")
+        open(joinpath(LibGit2.path(repo),"ff_file1"),"w") do f
+            write(f, "111\n")
         end
+        LibGit2.add!(repo, "ff_file1")
+        LibGit2.commit(repo, "add ff_file1")
+
+        open(joinpath(LibGit2.path(repo),"ff_file2"),"w") do f
+            write(f, "222\n")
+        end
+        LibGit2.add!(repo, "ff_file2")
+        LibGit2.commit(repo, "add ff_file2")
+        LibGit2.branch!(repo, "master")
+        # switch back, now try to ff-merge the changes
+        # from branch/a
+
+        upst_ann = LibGit2.GitAnnotated(repo, "branch/ff_a")
+        head_ann = LibGit2.GitAnnotated(repo, "master")
+
+        # ff merge them
+        @test LibGit2.merge!(repo, [upst_ann], true)
+        @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
     end
 
     @testset "Merges" begin
@@ -694,91 +603,83 @@ mktempdir() do dir
         cfg = LibGit2.GitConfig(repo)
         LibGit2.set!(cfg, "user.name", "AAAA")
         LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
-        try
-            oldhead = LibGit2.head_oid(repo)
-            LibGit2.branch!(repo, "branch/merge_a")
-            open(joinpath(LibGit2.path(repo),"file1"),"w") do f
-                write(f, "111\n")
-            end
-            LibGit2.add!(repo, "file1")
-            LibGit2.commit(repo, "add file1")
-
-            # switch back, add a commit, try to merge
-            # from branch/merge_a
-            LibGit2.branch!(repo, "master")
-
-            open(joinpath(LibGit2.path(repo), "file2"), "w") do f
-                write(f, "222\n")
-            end
-            LibGit2.add!(repo, "file2")
-            LibGit2.commit(repo, "add file2")
-
-            upst_ann = LibGit2.GitAnnotated(repo, "branch/merge_a")
-            head_ann = LibGit2.GitAnnotated(repo, "master")
-
-            # (fail to) merge them because we can't fastforward
-            @test !LibGit2.merge!(repo, [upst_ann], true)
-            # merge them now that we allow non-ff
-            @test LibGit2.merge!(repo, [upst_ann], false)
-            @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
-        finally
-            close(repo)
+        oldhead = LibGit2.head_oid(repo)
+        LibGit2.branch!(repo, "branch/merge_a")
+        open(joinpath(LibGit2.path(repo),"file1"),"w") do f
+            write(f, "111\n")
         end
+        LibGit2.add!(repo, "file1")
+        LibGit2.commit(repo, "add file1")
+
+        # switch back, add a commit, try to merge
+        # from branch/merge_a
+        LibGit2.branch!(repo, "master")
+
+        open(joinpath(LibGit2.path(repo), "file2"), "w") do f
+            write(f, "222\n")
+        end
+        LibGit2.add!(repo, "file2")
+        LibGit2.commit(repo, "add file2")
+
+        upst_ann = LibGit2.GitAnnotated(repo, "branch/merge_a")
+        head_ann = LibGit2.GitAnnotated(repo, "master")
+
+        # (fail to) merge them because we can't fastforward
+        @test !LibGit2.merge!(repo, [upst_ann], true)
+        # merge them now that we allow non-ff
+        @test LibGit2.merge!(repo, [upst_ann], false)
+        @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
     end
 
     @testset "Fetch from cache repository" begin
         repo = LibGit2.GitRepo(test_repo)
-        try
-            # fetch changes
-            @test LibGit2.fetch(repo) == 0
-            @test !isfile(joinpath(test_repo, test_file))
+        # fetch changes
+        @test LibGit2.fetch(repo) == 0
+        @test !isfile(joinpath(test_repo, test_file))
 
-            # ff merge them
-            @test LibGit2.merge!(repo, fastforward=true)
+        # ff merge them
+        @test LibGit2.merge!(repo, fastforward=true)
 
-            # because there was not any file we need to reset branch
-            head_oid = LibGit2.head_oid(repo)
-            new_head = LibGit2.reset!(repo, head_oid, LibGit2.Consts.RESET_HARD)
-            @test isfile(joinpath(test_repo, test_file))
-            @test new_head == head_oid
+        # because there was not any file we need to reset branch
+        head_oid = LibGit2.head_oid(repo)
+        new_head = LibGit2.reset!(repo, head_oid, LibGit2.Consts.RESET_HARD)
+        @test isfile(joinpath(test_repo, test_file))
+        @test new_head == head_oid
 
-            # Detach HEAD - no merge
-            LibGit2.checkout!(repo, string(commit_oid3))
-            @test_throws LibGit2.Error.GitError LibGit2.merge!(repo, fastforward=true)
+        # Detach HEAD - no merge
+        LibGit2.checkout!(repo, string(commit_oid3))
+        @test_throws LibGit2.Error.GitError LibGit2.merge!(repo, fastforward=true)
 
-            # Switch to a branch without remote - no merge
-            LibGit2.branch!(repo, test_branch)
-            @test_throws LibGit2.Error.GitError LibGit2.merge!(repo, fastforward=true)
+        # Switch to a branch without remote - no merge
+        LibGit2.branch!(repo, test_branch)
+        @test_throws LibGit2.Error.GitError LibGit2.merge!(repo, fastforward=true)
 
-            # Set the username and email for the test_repo (needed for rebase)
-            cfg = LibGit2.GitConfig(repo)
-            LibGit2.set!(cfg, "user.name", "AAAA")
-            LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
+        # Set the username and email for the test_repo (needed for rebase)
+        cfg = LibGit2.GitConfig(repo)
+        LibGit2.set!(cfg, "user.name", "AAAA")
+        LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
 
-            # Try rebasing on master instead
-            newhead = LibGit2.rebase!(repo, master_branch)
-            @test newhead == head_oid
+        # Try rebasing on master instead
+        newhead = LibGit2.rebase!(repo, master_branch)
+        @test newhead == head_oid
 
-            # Switch to the master branch
-            LibGit2.branch!(repo, master_branch)
+        # Switch to the master branch
+        LibGit2.branch!(repo, master_branch)
 
-            fetch_heads = LibGit2.fetchheads(repo)
-            @test fetch_heads[1].name == "refs/heads/master"
-            @test fetch_heads[1].ismerge == true # we just merged master
-            @test fetch_heads[2].name == "refs/heads/test_branch"
-            @test fetch_heads[2].ismerge == false
-            @test fetch_heads[3].name == "refs/tags/tag2"
-            @test fetch_heads[3].ismerge == false
-            for fh in fetch_heads
-                @test fh.url == cache_repo
-                fh_strs = split(sprint(show, fh), '\n')
-                @test fh_strs[1] == "FetchHead:"
-                @test fh_strs[2] == "Name: $(fh.name)"
-                @test fh_strs[3] == "URL: $(fh.url)"
-                @test fh_strs[5] == "Merged: $(fh.ismerge)"
-            end
-        finally
-            close(repo)
+        fetch_heads = LibGit2.fetchheads(repo)
+        @test fetch_heads[1].name == "refs/heads/master"
+        @test fetch_heads[1].ismerge == true # we just merged master
+        @test fetch_heads[2].name == "refs/heads/test_branch"
+        @test fetch_heads[2].ismerge == false
+        @test fetch_heads[3].name == "refs/tags/tag2"
+        @test fetch_heads[3].ismerge == false
+        for fh in fetch_heads
+            @test fh.url == cache_repo
+            fh_strs = split(sprint(show, fh), '\n')
+            @test fh_strs[1] == "FetchHead:"
+            @test fh_strs[2] == "Name: $(fh.name)"
+            @test fh_strs[3] == "URL: $(fh.url)"
+            @test fh_strs[5] == "Merged: $(fh.ismerge)"
         end
     end
 
@@ -789,224 +690,194 @@ mktempdir() do dir
 
         @testset "tags & branches" begin
             repo = LibGit2.GitRepo(test_repo)
-            try
-                # all tag in place
-                tags = LibGit2.tag_list(repo)
-                @test length(tags) == 1
-                @test tag2 in tags
+            # all tag in place
+            tags = LibGit2.tag_list(repo)
+            @test length(tags) == 1
+            @test tag2 in tags
 
-                # all tag in place
-                branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
-                @test master_branch in branches
-                @test test_branch in branches
+            # all tag in place
+            branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
+            @test master_branch in branches
+            @test test_branch in branches
 
-                # issue #16337
-                tag2ref = LibGit2.GitReference(repo, "refs/tags/$tag2")
-                try
-                    @test_throws LibGit2.Error.GitError LibGit2.upstream(tag2ref)
-                finally
-                    close(tag2ref)
-                end
-
-            finally
-                close(repo)
-            end
+            # issue #16337
+            tag2ref = LibGit2.GitReference(repo, "refs/tags/$tag2")
+            @test_throws LibGit2.Error.GitError LibGit2.upstream(tag2ref)
         end
 
         @testset "commits with revwalk" begin
             repo = LibGit2.GitRepo(test_repo)
             cache = LibGit2.GitRepo(cache_repo)
-            try
-                oids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
-                    LibGit2.map((oid,repo)->(oid,repo), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)
-                end
-                @test length(oids) == 1
+            oids = LibGit2.map((oid,repo)->(oid,repo), LibGit2.GitRevWalker(repo), oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)
+            @test length(oids) == 1
 
-                test_oids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
-                    LibGit2.map((oid,repo)->string(oid), walker, by = LibGit2.Consts.SORT_TIME)
-                end
-                cache_oids = LibGit2.with(LibGit2.GitRevWalker(cache)) do walker
-                    LibGit2.map((oid,repo)->string(oid), walker, by = LibGit2.Consts.SORT_TIME)
-                end
-                for i in eachindex(oids)
-                    @test cache_oids[i] == test_oids[i]
-                end
-                LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
-                    @test count((oid,repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME) == 1
-                end
-            finally
-                close(repo)
-                close(cache)
+            test_oids = LibGit2.map((oid,repo)->string(oid), LibGit2.GitRevWalker(repo), by = LibGit2.Consts.SORT_TIME)
+            cache_oids = LibGit2.map((oid,repo)->string(oid), LibGit2.GitRevWalker(cache), by = LibGit2.Consts.SORT_TIME)
+            for i in eachindex(oids)
+                @test cache_oids[i] == test_oids[i]
             end
+            @test count((oid,repo)->(oid == commit_oid1), LibGit2.GitRevWalker(repo), oid=commit_oid1, by=LibGit2.Consts.SORT_TIME) == 1
         end
     end
 
     @testset "Modify and reset repository" begin
         repo = LibGit2.GitRepo(test_repo)
-        try
-            # check index for file
-            LibGit2.with(LibGit2.GitIndex(repo)) do idx
-                i = find(test_file, idx)
-                @test !isnull(i)
-                idx_entry = idx[get(i)]
-                @test idx_entry !== nothing
-                idx_entry_str = sprint(show, idx_entry)
-                @test idx_entry_str == "IndexEntry($(string(idx_entry.id)))"
-                @test LibGit2.stage(idx_entry) == 0
+        # check index for file
+        idx = LibGit2.GitIndex(repo)
+        i = find(test_file, idx)
+        @test !isnull(i)
+        idx_entry = idx[get(i)]
+        @test idx_entry !== nothing
+        idx_entry_str = sprint(show, idx_entry)
+        @test idx_entry_str == "IndexEntry($(string(idx_entry.id)))"
+        @test LibGit2.stage(idx_entry) == 0
 
-                i = find("zzz", idx)
-                @test isnull(i)
-                idx_str = sprint(show, idx)
-                @test idx_str == "GitIndex:\nRepository: $(LibGit2.repository(idx))\nNumber of elements: 1\n"
+        i = find("zzz", idx)
+        @test isnull(i)
+        idx_str = sprint(show, idx)
+        @test idx_str == "GitIndex:\nRepository: $(LibGit2.repository(idx))\nNumber of elements: 1\n"
 
-                LibGit2.remove!(repo, test_file)
-                LibGit2.read!(repo)
-                @test count(idx) == 0
-                LibGit2.add!(repo, test_file)
-                LibGit2.update!(repo, test_file)
-                @test count(idx) == 1
-            end
+        LibGit2.remove!(repo, test_file)
+        LibGit2.read!(repo)
+        @test count(idx) == 0
+        LibGit2.add!(repo, test_file)
+        LibGit2.update!(repo, test_file)
+        @test count(idx) == 1
+        close(idx)
 
-            # check non-existent file status
-            st = LibGit2.status(repo, "XYZ")
-            @test isnull(st)
+        # check non-existent file status
+        st = LibGit2.status(repo, "XYZ")
+        @test isnull(st)
 
-            # check file status
-            st = LibGit2.status(repo, test_file)
-            @test !isnull(st)
-            @test LibGit2.isset(get(st), LibGit2.Consts.STATUS_CURRENT)
+        # check file status
+        st = LibGit2.status(repo, test_file)
+        @test !isnull(st)
+        @test LibGit2.isset(get(st), LibGit2.Consts.STATUS_CURRENT)
 
-            # modify file
-            open(joinpath(test_repo, test_file), "a") do io
-                write(io, 0x41)
-            end
+        # modify file
+        open(joinpath(test_repo, test_file), "a") do io
+            write(io, 0x41)
+        end
 
-            # file modified but not staged
-            st_mod = LibGit2.status(repo, test_file)
-            @test !LibGit2.isset(get(st_mod), LibGit2.Consts.STATUS_INDEX_MODIFIED)
-            @test LibGit2.isset(get(st_mod), LibGit2.Consts.STATUS_WT_MODIFIED)
+        # file modified but not staged
+        st_mod = LibGit2.status(repo, test_file)
+        @test !LibGit2.isset(get(st_mod), LibGit2.Consts.STATUS_INDEX_MODIFIED)
+        @test LibGit2.isset(get(st_mod), LibGit2.Consts.STATUS_WT_MODIFIED)
 
-            # stage file
-            LibGit2.add!(repo, test_file)
+        # stage file
+        LibGit2.add!(repo, test_file)
 
-            # modified file staged
-            st_stg = LibGit2.status(repo, test_file)
-            @test LibGit2.isset(get(st_stg), LibGit2.Consts.STATUS_INDEX_MODIFIED)
-            @test !LibGit2.isset(get(st_stg), LibGit2.Consts.STATUS_WT_MODIFIED)
+        # modified file staged
+        st_stg = LibGit2.status(repo, test_file)
+        @test LibGit2.isset(get(st_stg), LibGit2.Consts.STATUS_INDEX_MODIFIED)
+        @test !LibGit2.isset(get(st_stg), LibGit2.Consts.STATUS_WT_MODIFIED)
 
-            # try to unstage to unknown commit
-            @test_throws LibGit2.Error.GitError LibGit2.reset!(repo, "XYZ", test_file)
+        # try to unstage to unknown commit
+        @test_throws LibGit2.Error.GitError LibGit2.reset!(repo, "XYZ", test_file)
 
-            # status should not change
-            st_new = LibGit2.status(repo, test_file)
-            @test get(st_new) == get(st_stg)
+        # status should not change
+        st_new = LibGit2.status(repo, test_file)
+        @test get(st_new) == get(st_stg)
 
-            # try to unstage to HEAD
-            new_head = LibGit2.reset!(repo, LibGit2.Consts.HEAD_FILE, test_file)
-            st_uns = LibGit2.status(repo, test_file)
-            @test get(st_uns) == get(st_mod)
+        # try to unstage to HEAD
+        new_head = LibGit2.reset!(repo, LibGit2.Consts.HEAD_FILE, test_file)
+        st_uns = LibGit2.status(repo, test_file)
+        @test get(st_uns) == get(st_mod)
 
-            # reset repo
-            @test_throws LibGit2.Error.GitError LibGit2.reset!(repo, LibGit2.GitHash(), LibGit2.Consts.RESET_HARD)
+        # reset repo
+        @test_throws LibGit2.Error.GitError LibGit2.reset!(repo, LibGit2.GitHash(), LibGit2.Consts.RESET_HARD)
 
-            new_head = LibGit2.reset!(repo, LibGit2.head_oid(repo), LibGit2.Consts.RESET_HARD)
-            open(joinpath(test_repo, test_file), "r") do io
-                @test read(io)[end] != 0x41
-            end
-        finally
-            close(repo)
+        new_head = LibGit2.reset!(repo, LibGit2.head_oid(repo), LibGit2.Consts.RESET_HARD)
+        open(joinpath(test_repo, test_file), "r") do io
+            @test read(io)[end] != 0x41
         end
     end
 
     @testset "rebase" begin
         repo = LibGit2.GitRepo(test_repo)
-        try
-            LibGit2.branch!(repo, "branch/a")
+        LibGit2.branch!(repo, "branch/a")
 
-            oldhead = LibGit2.head_oid(repo)
-            open(joinpath(LibGit2.path(repo),"file1"),"w") do f
-                write(f, "111\n")
-            end
-            LibGit2.add!(repo, "file1")
-            LibGit2.commit(repo, "add file1")
-
-            open(joinpath(LibGit2.path(repo),"file2"),"w") do f
-                write(f, "222\n")
-            end
-            LibGit2.add!(repo, "file2")
-            LibGit2.commit(repo, "add file2")
-
-            LibGit2.branch!(repo, "branch/b")
-
-            # squash last 2 commits
-            new_head = LibGit2.reset!(repo, oldhead, LibGit2.Consts.RESET_SOFT)
-            @test new_head == oldhead
-            LibGit2.commit(repo, "squash file1 and file2")
-
-            # add another file
-            open(joinpath(LibGit2.path(repo),"file3"),"w") do f
-                write(f, "333\n")
-            end
-            LibGit2.add!(repo, "file3")
-            LibGit2.commit(repo, "add file3")
-
-            newhead = LibGit2.head_oid(repo)
-
-            files = LibGit2.diff_files(repo, "branch/a", "branch/b", filter=Set([LibGit2.Consts.DELTA_ADDED]))
-            @test files == ["file3"]
-            files = LibGit2.diff_files(repo, "branch/a", "branch/b", filter=Set([LibGit2.Consts.DELTA_MODIFIED]))
-            @test files == []
-            # switch back and rebase
-            LibGit2.branch!(repo, "branch/a")
-            newnewhead = LibGit2.rebase!(repo, "branch/b")
-
-            # issue #19624
-            @test newnewhead == newhead
-
-            # add yet another file
-            open(joinpath(LibGit2.path(repo),"file4"),"w") do f
-                write(f, "444\n")
-            end
-            LibGit2.add!(repo, "file4")
-            LibGit2.commit(repo, "add file4")
-
-            # rebase with onto
-            newhead = LibGit2.rebase!(repo, "branch/a", "master")
-
-            newerhead = LibGit2.head_oid(repo)
-            @test newerhead == newhead
-
-            # add yet more files
-            open(joinpath(LibGit2.path(repo),"file5"),"w") do f
-                write(f, "555\n")
-            end
-            LibGit2.add!(repo, "file5")
-            LibGit2.commit(repo, "add file5")
-            open(joinpath(LibGit2.path(repo),"file6"),"w") do f
-                write(f, "666\n")
-            end
-            LibGit2.add!(repo, "file6")
-            LibGit2.commit(repo, "add file6")
-
-            pre_abort_head = LibGit2.head_oid(repo)
-            # Rebase type
-            head_ann = LibGit2.GitAnnotated(repo, "branch/a")
-            upst_ann = LibGit2.GitAnnotated(repo, "master")
-            rb = LibGit2.GitRebase(repo, head_ann, upst_ann)
-            @test_throws BoundsError rb[3]
-            @test_throws BoundsError rb[0]
-            rbo = next(rb)
-            rbo_str = sprint(show, rbo)
-            @test rbo_str == "RebaseOperation($(string(rbo.id)))\nOperation type: REBASE_OPERATION_PICK\n"
-            rb_str = sprint(show, rb)
-            @test rb_str == "GitRebase:\nNumber: 2\nCurrently performing operation: 1\n"
-
-            # test rebase abort
-            LibGit2.abort(rb)
-            @test LibGit2.head_oid(repo) == pre_abort_head
-        finally
-            close(repo)
+        oldhead = LibGit2.head_oid(repo)
+        open(joinpath(LibGit2.path(repo),"file1"),"w") do f
+            write(f, "111\n")
         end
+        LibGit2.add!(repo, "file1")
+        LibGit2.commit(repo, "add file1")
+
+        open(joinpath(LibGit2.path(repo),"file2"),"w") do f
+            write(f, "222\n")
+        end
+        LibGit2.add!(repo, "file2")
+        LibGit2.commit(repo, "add file2")
+
+        LibGit2.branch!(repo, "branch/b")
+
+        # squash last 2 commits
+        new_head = LibGit2.reset!(repo, oldhead, LibGit2.Consts.RESET_SOFT)
+        @test new_head == oldhead
+        LibGit2.commit(repo, "squash file1 and file2")
+
+        # add another file
+        open(joinpath(LibGit2.path(repo),"file3"),"w") do f
+            write(f, "333\n")
+        end
+        LibGit2.add!(repo, "file3")
+        LibGit2.commit(repo, "add file3")
+
+        newhead = LibGit2.head_oid(repo)
+
+        files = LibGit2.diff_files(repo, "branch/a", "branch/b", filter=Set([LibGit2.Consts.DELTA_ADDED]))
+        @test files == ["file3"]
+        files = LibGit2.diff_files(repo, "branch/a", "branch/b", filter=Set([LibGit2.Consts.DELTA_MODIFIED]))
+        @test files == []
+        # switch back and rebase
+        LibGit2.branch!(repo, "branch/a")
+        newnewhead = LibGit2.rebase!(repo, "branch/b")
+
+        # issue #19624
+        @test newnewhead == newhead
+
+        # add yet another file
+        open(joinpath(LibGit2.path(repo),"file4"),"w") do f
+            write(f, "444\n")
+        end
+        LibGit2.add!(repo, "file4")
+        LibGit2.commit(repo, "add file4")
+
+        # rebase with onto
+        newhead = LibGit2.rebase!(repo, "branch/a", "master")
+
+        newerhead = LibGit2.head_oid(repo)
+        @test newerhead == newhead
+
+        # add yet more files
+        open(joinpath(LibGit2.path(repo),"file5"),"w") do f
+            write(f, "555\n")
+        end
+        LibGit2.add!(repo, "file5")
+        LibGit2.commit(repo, "add file5")
+        open(joinpath(LibGit2.path(repo),"file6"),"w") do f
+            write(f, "666\n")
+        end
+        LibGit2.add!(repo, "file6")
+        LibGit2.commit(repo, "add file6")
+
+        pre_abort_head = LibGit2.head_oid(repo)
+        # Rebase type
+        head_ann = LibGit2.GitAnnotated(repo, "branch/a")
+        upst_ann = LibGit2.GitAnnotated(repo, "master")
+        rb = LibGit2.GitRebase(repo, head_ann, upst_ann)
+        @test_throws BoundsError rb[3]
+        @test_throws BoundsError rb[0]
+        rbo = next(rb)
+        rbo_str = sprint(show, rbo)
+        @test rbo_str == "RebaseOperation($(string(rbo.id)))\nOperation type: REBASE_OPERATION_PICK\n"
+        rb_str = sprint(show, rb)
+        @test rb_str == "GitRebase:\nNumber: 2\nCurrently performing operation: 1\n"
+
+        # test rebase abort
+        LibGit2.abort(rb)
+        @test LibGit2.head_oid(repo) == pre_abort_head
     end
 
     @testset "merge" begin
@@ -1015,79 +886,63 @@ mktempdir() do dir
         cfg = LibGit2.GitConfig(repo)
         LibGit2.set!(cfg, "user.name", "AAAA")
         LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
-        try
-            LibGit2.branch!(repo, "branch/merge_a")
+        LibGit2.branch!(repo, "branch/merge_a")
 
-            a_head = LibGit2.head_oid(repo)
-            open(joinpath(LibGit2.path(repo),"merge_file1"),"w") do f
-                write(f, "111\n")
-            end
-            LibGit2.add!(repo, "merge_file1")
-            LibGit2.commit(repo, "add merge_file1")
-            LibGit2.branch!(repo, "master")
-            a_head_ann = LibGit2.GitAnnotated(repo, "branch/merge_a")
-            @test LibGit2.merge!(repo, [a_head_ann]) #merge returns true if successful
-        finally
-            close(repo)
+        a_head = LibGit2.head_oid(repo)
+        open(joinpath(LibGit2.path(repo),"merge_file1"),"w") do f
+            write(f, "111\n")
         end
+        LibGit2.add!(repo, "merge_file1")
+        LibGit2.commit(repo, "add merge_file1")
+        LibGit2.branch!(repo, "master")
+        a_head_ann = LibGit2.GitAnnotated(repo, "branch/merge_a")
+        @test LibGit2.merge!(repo, [a_head_ann]) #merge returns true if successful
     end
 
     @testset "Transact test repository" begin
         repo = LibGit2.GitRepo(test_repo)
-        try
-            cp(joinpath(test_repo, test_file), joinpath(test_repo, "CCC"))
-            cp(joinpath(test_repo, test_file), joinpath(test_repo, "AAA"))
-            LibGit2.add!(repo, "AAA")
-            @test_throws ErrorException LibGit2.transact(repo) do trepo
-                mv(joinpath(test_repo, test_file), joinpath(test_repo, "BBB"))
-                LibGit2.add!(trepo, "BBB")
-                oid = LibGit2.commit(trepo, "test commit"; author=test_sig, committer=test_sig)
-                error("Force recovery")
-            end
-            @test isfile(joinpath(test_repo, "AAA"))
-            @test isfile(joinpath(test_repo, "CCC"))
-            @test !isfile(joinpath(test_repo, "BBB"))
-            @test isfile(joinpath(test_repo, test_file))
-        finally
-            close(repo)
+        cp(joinpath(test_repo, test_file), joinpath(test_repo, "CCC"))
+        cp(joinpath(test_repo, test_file), joinpath(test_repo, "AAA"))
+        LibGit2.add!(repo, "AAA")
+        @test_throws ErrorException LibGit2.transact(repo) do trepo
+            mv(joinpath(test_repo, test_file), joinpath(test_repo, "BBB"))
+            LibGit2.add!(trepo, "BBB")
+            oid = LibGit2.commit(trepo, "test commit"; author=test_sig, committer=test_sig)
+            error("Force recovery")
         end
+        @test isfile(joinpath(test_repo, "AAA"))
+        @test isfile(joinpath(test_repo, "CCC"))
+        @test !isfile(joinpath(test_repo, "BBB"))
+        @test isfile(joinpath(test_repo, test_file))
     end
 
     @testset "checkout/headname" begin
         repo = LibGit2.GitRepo(cache_repo)
-        try
-            LibGit2.checkout!(repo, string(commit_oid1))
-            @test !LibGit2.isattached(repo)
-            @test LibGit2.headname(repo) == "(detached from $(string(commit_oid1)[1:7]))"
-        finally
-            close(repo)
-        end
+        LibGit2.checkout!(repo, string(commit_oid1))
+        @test !LibGit2.isattached(repo)
+        @test LibGit2.headname(repo) == "(detached from $(string(commit_oid1)[1:7]))"
     end
 
 
     if is_unix()
         @testset "checkout/proptest" begin
             repo = LibGit2.GitRepo(test_repo)
-            try
-                cp(joinpath(test_repo, test_file), joinpath(test_repo, "proptest"))
-                LibGit2.add!(repo, "proptest")
-                id1 = LibGit2.commit(repo, "test property change 1")
-                # change in file permissions (#17610)
-                chmod(joinpath(test_repo, "proptest"),0o744)
-                LibGit2.add!(repo, "proptest")
-                id2 = LibGit2.commit(repo, "test property change 2")
-                LibGit2.checkout!(repo, string(id1))
-                @test !LibGit2.isdirty(repo)
-                # change file to symlink (#18420)
-                mv(joinpath(test_repo, "proptest"), joinpath(test_repo, "proptest2"))
-                symlink(joinpath(test_repo, "proptest2"), joinpath(test_repo, "proptest"))
-                LibGit2.add!(repo, "proptest", "proptest2")
-                id3 = LibGit2.commit(repo, "test symlink change")
-                LibGit2.checkout!(repo, string(id1))
-                @test !LibGit2.isdirty(repo)
-            finally
-                close(repo)
-            end
+            cp(joinpath(test_repo, test_file), joinpath(test_repo, "proptest"))
+            LibGit2.add!(repo, "proptest")
+            id1 = LibGit2.commit(repo, "test property change 1")
+            # change in file permissions (#17610)
+            chmod(joinpath(test_repo, "proptest"),0o744)
+            LibGit2.add!(repo, "proptest")
+            id2 = LibGit2.commit(repo, "test property change 2")
+            LibGit2.checkout!(repo, string(id1))
+            @test !LibGit2.isdirty(repo)
+            # change file to symlink (#18420)
+            mv(joinpath(test_repo, "proptest"), joinpath(test_repo, "proptest2"))
+            symlink(joinpath(test_repo, "proptest2"), joinpath(test_repo, "proptest"))
+            LibGit2.add!(repo, "proptest", "proptest2")
+            id3 = LibGit2.commit(repo, "test symlink change")
+            LibGit2.checkout!(repo, string(id1))
+            @test !LibGit2.isdirty(repo)
         end
     end
 

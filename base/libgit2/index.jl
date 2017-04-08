@@ -67,34 +67,30 @@ end
 
 function add!(repo::GitRepo, files::AbstractString...;
               flags::Cuint = Consts.INDEX_ADD_DEFAULT)
-    with(GitIndex, repo) do idx
-        add!(idx, files..., flags = flags)
-        write!(idx)
-    end
-    return
+    idx = GitIndex(repo)
+    add!(idx, files..., flags = flags)
+    write!(idx)
+    return nothing
 end
 
 function update!(repo::GitRepo, files::AbstractString...)
-    with(GitIndex, repo) do idx
-        update!(idx, files...)
-        write!(idx)
-    end
-    return
+    idx = GitIndex(repo)
+    update!(idx, files...)
+    write!(idx)
+    return nothing
 end
 
 function remove!(repo::GitRepo, files::AbstractString...)
-    with(GitIndex, repo) do idx
-        remove!(idx, files...)
-        write!(idx)
-    end
-    return
+    idx = GitIndex(repo)
+    remove!(idx, files...)
+    write!(idx)
+    return nothing
 end
 
 function read!(repo::GitRepo, force::Bool = false)
-    with(GitIndex, repo) do idx
-        read!(idx, force)
-    end
-    return
+    idx = GitIndex(repo)
+    read!(idx, force)
+    return nothing
 end
 
 function Base.count(idx::GitIndex)

@@ -40,14 +40,12 @@ function tag_create(repo::GitRepo, tag::AbstractString, commit::Union{AbstractSt
                     force::Bool = false,
                     sig::Signature = Signature(repo))
     oid_ptr = Ref(GitHash())
-    with(GitCommit(repo, commit)) do commit_obj
-        commit_obj === nothing && return oid_ptr[] # return empty oid
-        with(convert(GitSignature, sig)) do git_sig
-            @check ccall((:git_tag_create, :libgit2), Cint,
-                 (Ptr{GitHash}, Ptr{Void}, Cstring, Ptr{Void}, Ptr{SignatureStruct}, Cstring, Cint),
-                  oid_ptr, repo.ptr, tag, commit_obj.ptr, git_sig.ptr, msg, Cint(force))
-        end
-    end
+    commit_obj = GitCommit(repo, commit)
+    commit_obj === nothing && return oid_ptr[] # return empty oid
+    git_sig = convert(GitSignature, sig)
+    @check ccall((:git_tag_create, :libgit2), Cint,
+         (Ptr{GitHash}, Ptr{Void}, Cstring, Ptr{Void}, Ptr{SignatureStruct}, Cstring, Cint),
+          oid_ptr, repo.ptr, tag, commit_obj.ptr, git_sig.ptr, msg, Cint(force))
     return oid_ptr[]
 end
 

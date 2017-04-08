@@ -253,9 +253,6 @@ function lookup_branch(repo::GitRepo,
         if err == Int(Error.ENOTFOUND)
             return Nullable{GitReference}()
         end
-        if ref_ptr_ptr[] != C_NULL
-            close(GitReference(repo, ref_ptr_ptr[]))
-        end
         throw(Error.GitError(err))
     end
     return Nullable{GitReference}(GitReference(repo, ref_ptr_ptr[]))
@@ -278,9 +275,6 @@ function upstream(ref::GitReference)
     if err != Int(Error.GIT_OK)
         if err == Int(Error.ENOTFOUND)
             return Nullable{GitReference}()
-        end
-        if ref_ptr_ptr[] != C_NULL
-            close(GitReference(ref.owner, ref_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
