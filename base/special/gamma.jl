@@ -28,7 +28,8 @@ lgamma_r(x::Number) = lgamma(x), 1 # lgamma does not take abs for non-real x
     lfact(x)
 
 Compute the logarithmic factorial of a nonnegative integer `x`.
-Equivalent to [`lgamma`](@ref) of `x + 1`.
+Equivalent to [`lgamma`](@ref) of `x + 1`, but `lgamma` extends this function
+to non-integer `x`.
 """
 lfact(x::Integer) = x < 0 ? throw(DomainError()) : lgamma(x + oneunit(x))
 
