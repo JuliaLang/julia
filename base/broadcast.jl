@@ -280,8 +280,8 @@ end
     return C
 end
 
-maptuple(f) = Tuple{}
-maptuple(f, a, b...) = Tuple{f(a), maptuple(f, b...).types...}
+maptoTuple(f) = Tuple{}
+maptoTuple(f, a, b...) = Tuple{f(a), maptoTuple(f, b...).types...}
 
 # An element type satisfying for all A:
 # broadcast_getindex(
@@ -301,9 +301,9 @@ _unsafe_get_eltype(x) = typeof(x)
 
 # Inferred eltype of result of broadcast(f, xs...)
 _broadcast_eltype(f, A, As...) =
-    Base._return_type(f, maptuple(_broadcast_getindex_eltype, A, As...))
+    Base._return_type(f, maptoTuple(_broadcast_getindex_eltype, A, As...))
 _nullable_eltype(f, A, As...) =
-    Base._return_type(f, maptuple(_unsafe_get_eltype, A, As...))
+    Base._return_type(f, maptoTuple(_unsafe_get_eltype, A, As...))
 
 # broadcast methods that dispatch on the type of the final container
 @inline function broadcast_c(f, ::Type{Array}, A, Bs...)
@@ -321,8 +321,8 @@ end
 @inline function broadcast_c(f, ::Type{Nullable}, a...)
     nonnull = all(hasvalue, a)
     S = _nullable_eltype(f, a...)
-    if isleaftype(S) && null_safe_op(f, maptuple(_unsafe_get_eltype,
-                                                 a...).types...)
+    if isleaftype(S) && null_safe_op(f, maptoTuple(_unsafe_get_eltype,
+                                                   a...).types...)
         Nullable{S}(f(map(unsafe_get, a)...), nonnull)
     else
         if nonnull
