@@ -469,6 +469,24 @@ end
 isidentifier(s::Symbol) = isidentifier(string(s))
 
 isoperator(s::Symbol) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
+
+"""
+    operator_precedence(s::Symbol)
+
+Return an integer representing the precedence of operator `s`, relative to
+other operators. Higher-numbered operators take precedence over lower-numbered
+operators. Return `0` if `s` is not a valid operator.
+
+# Examples
+
+```jldoctest
+julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
+(9,11,15)
+
+julia> Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
+(1,1)
+```
+"""
 operator_precedence(s::Symbol) = Int(ccall(:jl_operator_precedence, Cint, (Cstring,), s))
 operator_precedence(x::Any) = 0 # fallback for generic expression nodes
 const prec_power = operator_precedence(:(^))
