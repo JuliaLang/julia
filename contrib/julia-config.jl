@@ -23,7 +23,7 @@ function libDir()
     end
 end
 
-private_libDir() = joinpath(libDir(), "julia")
+private_libDir() = joinpath(JULIA_HOME, Base.PRIVATE_LIBDIR)
 
 function includeDir()
     joinpath(match(r"(.*)(bin)",JULIA_HOME).captures[1],"include","julia")
