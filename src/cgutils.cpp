@@ -2315,26 +2315,10 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             else
                 return mark_julia_slot(strct, ty, NULL, tbaa_stack);
         }
-        Value *f1 = NULL;
-        size_t j = 0;
-        if (nf > 0 && jl_field_isptr(sty, 0) && nargs>1) {
-            // emit first field before allocating struct to save
-            // a couple store instructions. avoids initializing
-            // the first field to NULL, and sometimes the GC root
-            // for the new struct.
-            jl_cgval_t fval_info = emit_expr(args[1],ctx);
-            f1 = boxed(fval_info, ctx);
-            j++;
-        }
         Value *strct = emit_allocobj(ctx, jl_datatype_size(sty),
                                      literal_pointer_val((jl_value_t*)ty));
         jl_cgval_t strctinfo = mark_julia_type(strct, true, ty, ctx);
-        if (f1) {
-            jl_cgval_t f1info = mark_julia_type(f1, true, jl_any_type, ctx);
-            emit_typecheck(f1info, jl_field_type(sty, 0), "new", ctx);
-            emit_setfield(sty, strctinfo, 0, f1info, ctx, false, false);
-        }
-        for (size_t i = j; i < nf; i++) {
+        for (size_t i = 0; i < nf; i++) {
             if (jl_field_isptr(sty, i)) {
                 tbaa_decorate(strctinfo.tbaa, builder.CreateStore(
                         V_null,
@@ -2346,7 +2330,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
         }
         bool need_wb = false;
         // TODO: verify that nargs <= nf (currently handled by front-end)
-        for (size_t i = j + 1; i < nargs; i++) {
+        for (size_t i = 1; i < nargs; i++) {
             jl_cgval_t rhs = emit_expr(args[i], ctx);
             if (jl_field_isptr(sty, i - 1) && !rhs.isboxed) {
                 need_wb = true;
