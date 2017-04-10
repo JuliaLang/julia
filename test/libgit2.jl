@@ -392,6 +392,8 @@ mktempdir() do dir
                     @test contains(showstr[4], "SHA:")
                     @test showstr[5] == "Message:"
                     @test showstr[6] == commit_msg1
+
+                    @test LibGit2.revcount(repo, string(commit_oid1), string(commit_oid3)) == (-1,0)
                 finally
                     close(cmt)
                 end

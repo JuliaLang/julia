@@ -333,20 +333,17 @@ end
     end
 end
 @inline broadcast_c(f, ::Type{Any}, a...) = f(a...)
-broadcast_c(f, ::Type{Tuple}, As...) =
-    ntuple(k -> f(_tuplebroadcast_getargs(As, k)...), _tuplebroadcast_reslength(As))
-broadcast_c{T}(f, ::Type{Tuple}, ::Type{T}, As...) =
-    ntuple(k -> f(T, _tuplebroadcast_getargs(As, k)...), _tuplebroadcast_reslength(As))
-@inline _tuplebroadcast_getargs(::Tuple{}, k) = ()
-@inline _tuplebroadcast_getargs(As, k) =
-    (_broadcast_getindex(first(As), k), _tuplebroadcast_getargs(tail(As), k)...)
-@noinline _tuplebroadcast_reslength(As) =
-    _tuplebroadcast_maxlength(_tuplebroadcast_length(first(As)), tail(As))
-@inline _tuplebroadcast_maxlength(l, As) =
-    _tuplebroadcast_maxlength(max(l, _tuplebroadcast_length(first(As))), tail(As))
-@inline _tuplebroadcast_maxlength(l, ::Tuple{}) = l
-@inline _tuplebroadcast_length(t::Tuple) = length(t)
-@inline _tuplebroadcast_length(s) = 1
+@inline broadcast_c(f, ::Type{Tuple}, A, Bs...) =
+    tuplebroadcast(f, first_tuple(A, Bs...), A, Bs...)
+@inline tuplebroadcast{N}(f, ::NTuple{N,Any}, As...) =
+    ntuple(k -> f(tuplebroadcast_getargs(As, k)...), Val{N})
+@inline tuplebroadcast{N,T}(f, ::NTuple{N,Any}, ::Type{T}, As...) =
+    ntuple(k -> f(T, tuplebroadcast_getargs(As, k)...), Val{N})
+first_tuple(A::Tuple, Bs...) = A
+@inline first_tuple(A, Bs...) = first_tuple(Bs...)
+tuplebroadcast_getargs(::Tuple{}, k) = ()
+@inline tuplebroadcast_getargs(As, k) =
+    (_broadcast_getindex(first(As), k), tuplebroadcast_getargs(tail(As), k)...)
 
 """
     broadcast(f, As...)

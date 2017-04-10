@@ -509,3 +509,9 @@ end
     @test isequal(@inferred(broadcast(foo, "world", Nullable(1))),
                   Nullable("hello"))
 end
+
+# Issue #21291
+let t = (0, 1, 2)
+    o = 1
+    @test @inferred(broadcast(+, t, o)) == (1, 2, 3)
+end

@@ -999,6 +999,69 @@ ftwoparams(::TwoParams{<:Real,<:Real}) = 3
 @testintersect(Tuple{Val{Val{0}}, Val{N}} where N, Tuple{Val{Val{N}}, Val{N}} where N, Tuple{Val{Val{0}},Val{0}})
 @testintersect(Tuple{Val{Val{N}}, Val{0}} where N, Tuple{Val{Val{N}}, Val{N}} where N, Tuple{Val{Val{0}},Val{0}})
 
+# a bunch of cases found by fuzzing
+let a = Tuple{Float64,T7} where T7,
+    b = Tuple{S5,Tuple{S5}} where S5
+    @test_broken typeintersect(a, b) <: b
+end
+let a = Tuple{T1,T1} where T1,
+    b = Tuple{Val{S2},S6} where S2 where S6
+    @test_broken typeintersect(a, b) == typeintersect(b, a)
+end
+let a = Val{Tuple{T1,T1}} where T1,
+    b = Val{Tuple{Val{S2},S6}} where S2 where S6
+    @testintersect(a, b, Val{Tuple{Val{T},Val{T}}} where T)
+end
+let a = Tuple{Float64,T3,T4} where T4 where T3,
+    b = Tuple{S2,Tuple{S3},S3} where S2 where S3
+    @test_broken typeintersect(a, b) == typeintersect(b, a)
+end
+let a = Tuple{T1,Tuple{T1}} where T1,
+    b = Tuple{Float64,S3} where S3
+    @test_broken typeintersect(a, b) <: a
+end
+let a = Tuple{5,T4,T5} where T4 where T5,
+    b = Tuple{S2,S3,Tuple{S3}} where S2 where S3
+    @test_broken typeintersect(a, b) == typeintersect(b, a)
+end
+let a = Tuple{T2,Tuple{T4,T2}} where T4 where T2,
+    b = Tuple{Float64,Tuple{Tuple{S3},S3}} where S3
+    @test_broken typeintersect(a, b) <: b
+end
+let a = Tuple{Tuple{T2,4},T6} where T2 where T6,
+    b = Tuple{Tuple{S2,S3},Tuple{S2}} where S2 where S3
+    @test_broken typeintersect(a, b) == typeintersect(b, a)
+end
+let a = Tuple{T3,Int64,Tuple{T3}} where T3,
+    b = Tuple{S3,S3,S4} where S4 where S3
+    @test_broken typeintersect(a, b) <: a
+end
+let a = Tuple{T1,Val{T2},T2} where T2 where T1,
+    b = Tuple{Float64,S1,S2} where S2 where S1
+    @test_broken typeintersect(a, b) == typeintersect(b, a)
+end
+let a = Tuple{T1,Val{T2},T2} where T2 where T1,
+    b = Tuple{Float64,S1,S2} where S2 where S1
+    @test_broken typeintersect(a, b) <: a
+end
+let a = Tuple{Float64,T1} where T1,
+    b = Tuple{S1,Tuple{S1}} where S1
+    @test_broken typeintersect(a, b) <: b
+end
+let a = Tuple{Val{T1},T2,T2} where T2 where T1,
+    b = Tuple{Val{Tuple{S2}},S3,Float64} where S2 where S3
+    @testintersect(a, b, Tuple{Val{Tuple{S2}},Float64,Float64} where S2)
+end
+let a = Tuple{T1,T2,T2} where T1 where T2,
+    b = Tuple{Val{S2},S2,Float64} where S2,
+    x = Tuple{Val{Float64},Float64,Float64}
+    @test_broken x <: typeintersect(a, b)
+end
+let a = Val{Tuple{T1,Val{T2},Val{Int64},Tuple{Tuple{T3,5,Float64},T4,T2,T5}}} where T1 where T5 where T4 where T3 where T2,
+    b = Val{Tuple{Tuple{S1,5,Float64},Val{S2},S3,Tuple{Tuple{Val{Float64},5,Float64},2,Float64,S4}}} where S2 where S3 where S1 where S4
+    @test_skip typeintersect(b, a)
+end
+
 # issue #20992
 abstract type A20992{T,D,d} end
 abstract type B20992{SV,T,D,d} <: A20992{T,D,d} end
