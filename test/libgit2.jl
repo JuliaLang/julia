@@ -1127,7 +1127,7 @@ mktempdir() do dir
             withenv("SSH_KEY_PATH" => valid_key) do
                 err, auth_attempts = challenge_prompt(ssh_cmd, [])
                 @test err == 0
-                @test auth_attempts == 2
+                @test auth_attempts == 1
             end
 
             # Default credentials are valid but requires a passphrase
@@ -1137,7 +1137,7 @@ mktempdir() do dir
                 ]
                 err, auth_attempts = challenge_prompt(ssh_p_cmd, challenges)
                 @test err == 0
-                @test auth_attempts == 2
+                @test auth_attempts == 1
 
                 # User mistypes passphrase.
                 # Note: In reality LibGit2 will raise an error upon using the invalid SSH
@@ -1150,13 +1150,13 @@ mktempdir() do dir
                 ]
                 err, auth_attempts = challenge_prompt(ssh_p_cmd, challenges)
                 @test err == 0
-                @test auth_attempts == 6
+                @test auth_attempts == 5
             end
 
             withenv("SSH_KEY_PATH" => valid_p_key, "SSH_KEY_PASS" => passphrase) do
                 err, auth_attempts = challenge_prompt(ssh_p_cmd, [])
                 @test err == 0
-                @test auth_attempts == 2
+                @test auth_attempts == 1
             end
 
             # TODO: Tests are currently broken. Credential callback prompts for:
