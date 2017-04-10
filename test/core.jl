@@ -81,6 +81,22 @@ _bound_vararg_specificity_1{T}(::Type{Array{T,1}}, d::Int) = 1
 @test _bound_vararg_specificity_1(Array{Int,1}, 1) == 1
 @test _bound_vararg_specificity_1(Array{Int,2}, 1, 1) == 0
 
+# issue #12939
+module Issue12939
+abstract type Abs; end
+struct Foo <: Abs; end
+struct Bar; val::Int64; end
+struct Baz; val::Int64; end
+f{T}(::Type{T}, x::T) = T(3)
+f{T <: Abs}(::Type{Bar}, x::T) = Bar(2)
+f(::Type{Bar}, x) = Bar(1)
+f(::Type{Baz}, x) = Baz(1)
+f{T <: Abs}(::Type{Baz}, x::T) = Baz(2)
+end
+
+@test Issue12939.f(Issue12939.Baz,Issue12939.Foo()) === Issue12939.Baz(2)
+@test Issue12939.f(Issue12939.Bar,Issue12939.Foo()) === Issue12939.Bar(2)
+
 # issue #11840
 TT11840{T} = Tuple{T,T}
 f11840(::Type) = "Type"
