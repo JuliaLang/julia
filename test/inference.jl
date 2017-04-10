@@ -738,3 +738,10 @@ let e = code_typed(f21175, ())[1].first.code[1]::Expr
     @test e.head === :return
     @test e.args[1] == Core.QuoteNode(902221)
 end
+
+# issue #10207
+type T10207{A, B}
+    a::A
+    b::B
+end
+@test code_typed(T10207, (Int,Any))[1].second == T10207{Int,T} where T
