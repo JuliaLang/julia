@@ -83,7 +83,7 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
             if cc !== nothing
                 link_sysimg(sysimg_path, cc, debug)
             else
-                info("System image successfully built at `$sysimg_path.ji`.")
+                info("System image successfully built at $sysimg_path.ji.")
             end
 
             if !Base.samefile("$(default_sysimg_path(debug)).ji", "$sysimg_path.ji")
