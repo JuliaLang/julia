@@ -1040,10 +1040,15 @@ void JuliaGCAllocator::allocate_frame()
  */
     std::map<BasicBlock*, std::map<frame_register, liveness::id> > bb_uses;
     std::priority_queue< std::pair<unsigned, CallInst*> > frames;
+    std::vector<llvm::Instruction*> ToDelete;
     for (BasicBlock::iterator I = gcframe->getParent()->begin(), E(gcframe); I != E; ) {
         CallInst* callInst = dyn_cast<CallInst>(&*I);
         ++I;
         if (callInst && callInst->getCalledValue() == jlcall_frame_func) {
+            if (callInst->use_empty()) {
+              ToDelete.push_back(callInst);
+              continue;
+            }
             BasicBlock *bb = NULL;
             unsigned arg_n = cast<ConstantInt>(callInst->getArgOperand(0))->getZExtValue();
             frames.push(std::make_pair(arg_n, callInst));
@@ -1071,6 +1076,8 @@ void JuliaGCAllocator::allocate_frame()
             }
         }
     }
+    for (Instruction *I : ToDelete)
+      I->eraseFromParent();
 
 /* # initialize the dataflow queue for tracking liveness
  * bb-queue : queue<BB>
