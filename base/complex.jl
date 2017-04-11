@@ -167,6 +167,9 @@ function write(s::IO, z::Complex)
     write(s,real(z),imag(z))
 end
 
+## byte order swaps: real and imaginary part are swapped individually
+bswap(z::Complex) = Complex(bswap(real(z)), bswap(imag(z)))
+
 ## equality and hashing of complex numbers ##
 
 ==(z::Complex, w::Complex) = (real(z) == real(w)) & (imag(z) == imag(w))
