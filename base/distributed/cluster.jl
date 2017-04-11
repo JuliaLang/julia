@@ -651,7 +651,15 @@ myid() = LPROC.id
 
 Get the number of available processes.
 """
-nprocs() = length(PGRP.workers)
+function nprocs()
+    n = length(PGRP.workers)
+    for jw in PGRP.workers
+        if !isa(jw, LocalProcess) && (jw.state != W_CONNECTED)
+            n = n - 1
+        end
+    end
+    n
+end
 
 """
     nworkers()
