@@ -1,9 +1,10 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
-using TestHelpers
+import TestHelpers: challenge_prompt
 
 const LIBGIT2_MIN_VER = v"0.23.0"
+const LIBGIT2_HELPER_PATH = joinpath(dirname(@__FILE__), "libgit2-helpers.jl")
 
 #########
 # TESTS #
@@ -1104,6 +1105,167 @@ mktempdir() do dir
         @test LibGit2.checkused!(creds)
         @test creds.user == creds_user
         @test creds.pass == creds_pass
+    end
+
+    # The following tests require that we can fake a TTY so that we can provide passwords
+    # which use the `getpass` function. At the moment we can only fake this on UNIX based
+    # systems.
+    if is_unix()
+        @testset "SSH credential prompt" begin
+            url = "git@github.com/test/package.jl"
+
+            key_dir = joinpath(dirname(@__FILE__), "libgit2")
+            valid_key = joinpath(key_dir, "valid")
+            invalid_key = joinpath(key_dir, "invalid")
+            valid_p_key = joinpath(key_dir, "valid-passphrase")
+            passphrase = "secret"
+
+            ssh_cmd = """
+            include("$LIBGIT2_HELPER_PATH")
+            valid_cred = LibGit2.SSHCredentials("git", "", "$valid_key", "$valid_key.pub")
+            err, auth_attempts = credential_loop(valid_cred, "$url", "git")
+            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
+            """
+
+            ssh_p_cmd = """
+            include("$LIBGIT2_HELPER_PATH")
+            valid_cred = LibGit2.SSHCredentials("git", "$passphrase", "$valid_p_key", "$valid_p_key.pub")
+            err, auth_attempts = credential_loop(valid_cred, "$url", "git")
+            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
+            """
+
+            # Note: We cannot use the default ~/.ssh/id_rsa for tests since we cannot be
+            # sure a users will actually have these files. Instead we will use the ENV
+            # variables to set the default values.
+
+            # Default credentials are valid
+            withenv("SSH_KEY_PATH" => valid_key) do
+                err, auth_attempts = challenge_prompt(ssh_cmd, [])
+                @test err == 0
+                @test auth_attempts == 1
+            end
+
+            # Default credentials are valid but requires a passphrase
+            withenv("SSH_KEY_PATH" => valid_p_key) do
+                challenges = [
+                    "Passphrase for $valid_p_key:" => "$passphrase\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_p_cmd, challenges)
+                @test err == 0
+                @test auth_attempts == 1
+
+                # User mistypes passphrase.
+                # Note: In reality LibGit2 will raise an error upon using the invalid SSH
+                # credentials. Since we don't control the internals of LibGit2 though they
+                # could also just re-call the credential callback like they do for HTTP.
+                challenges = [
+                    "Passphrase for $valid_p_key:" => "foo\n",
+                    # "Private key location for 'git@github.com' [$valid_p_key]:" => "\n",
+                    "Passphrase for $valid_p_key:" => "$passphrase\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_p_cmd, challenges)
+                @test err == 0
+                @test auth_attempts == 5
+            end
+
+            withenv("SSH_KEY_PATH" => valid_p_key, "SSH_KEY_PASS" => passphrase) do
+                err, auth_attempts = challenge_prompt(ssh_p_cmd, [])
+                @test err == 0
+                @test auth_attempts == 1
+            end
+
+            # TODO: Tests are currently broken. Credential callback prompts for:
+            # "Passphrase for :"
+            #=
+            # Explicitly setting these env variables to be empty means the user will be
+            # given a prompt with no defaults set.
+            withenv("SSH_KEY_PATH" => "", "SSH_PUB_KEY_PATH" => "") do
+                # User provides valid credentials
+                challenges = [
+                    "Private key location for 'git@github.com':" => "$valid_key\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_cmd, challenges)
+                @test err == 0
+                @test auth_attempts == 2
+
+                # User provides valid credentials that requires a passphrase
+                challenges = [
+                    "Private key location for 'git@github.com':" => "$valid_p_key\n",
+                    "Passphrase for $valid_p_key:" => "$passphrase\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_p_cmd, challenges)
+                @test err == 0
+                @test auth_attempts == 2
+            end
+            =#
+
+            # TODO: Tests are currently broken. Credential callback currently infinite loops
+            # and never prompts user to change private keys.
+            #=
+            # Explicitly setting these env variables to an existing but invalid key pair
+            # means the user will be given a prompt with that defaults to the given values.
+            withenv("SSH_KEY_PATH" => invalid_key, "SSH_PUB_KEY_PATH" => invalid_key * ".pub") do
+                challenges = [
+                    "Private key location for 'git@github.com' [$invalid_key]:" => "$valid_key\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_cmd, challenges)
+                @test err == 0
+                @test auth_attempts == 2
+            end
+            =#
+
+            # TODO: Tests are currently broken. Credential callback currently infinite loops
+            # and never prompts user to change private keys.
+            #=
+            withenv("SSH_KEY_PATH" => valid_key, "SSH_PUB_KEY_PATH" => valid_key * ".public") do
+                @test !isfile(ENV["SSH_PUB_KEY_PATH"])
+
+                # User explicitly sets the SSH_PUB_KEY_PATH incorrectly.
+                challenges = [
+                    "Private key location for 'git@github.com' [$valid_key]:" => "\n"
+                    "Public key location for 'git@github.com':" => "$valid_key.pub\n"
+                ]
+                err, auth_attempts = challenge_prompt(ssh_cmd, challenges)
+                @test err == 0
+                @test auth_attempts == 2
+            end
+            =#
+        end
+
+        @testset "HTTPS credential prompt" begin
+            url = "https://github.com/test/package.jl"
+
+            valid_username = "julia"
+            valid_password = randstring(16)
+
+            https_cmd = """
+            include("$LIBGIT2_HELPER_PATH")
+            valid_cred = LibGit2.UserPasswordCredentials("$valid_username", "$valid_password")
+            err, auth_attempts = credential_loop(valid_cred, "$url")
+            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
+            """
+
+            # User provides a valid username and password
+            challenges = [
+                "Username for 'https://github.com':" => "$valid_username\n",
+                "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
+            ]
+            err, auth_attempts = challenge_prompt(https_cmd, challenges)
+            @test err == 0
+            @test auth_attempts == 1
+
+            # User repeatedly chooses invalid username/password until the prompt limit is
+            # reached
+            challenges = [
+                "Username for 'https://github.com':" => "foo\n",
+                "Password for 'https://foo@github.com':" => "bar\n",
+                "Username for 'https://github.com' [foo]:" => "$valid_username\n",
+                "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
+            ]
+            err, auth_attempts = challenge_prompt(https_cmd, challenges)
+            @test err == 0
+            @test auth_attempts == 5
+        end
     end
 
     #= temporarily disabled until working on the buildbots, ref https://github.com/JuliaLang/julia/pull/17651#issuecomment-238211150
