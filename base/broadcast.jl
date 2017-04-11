@@ -5,7 +5,7 @@ module Broadcast
 using Base.Cartesian
 using Base: linearindices, tail, OneTo, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
-            nullable_returntype, null_safe_eltype_op, hasvalue, isoperator
+            nullable_returntype, hasvalue, isoperator, null_safe_op
 import Base: broadcast, broadcast!
 export broadcast_getindex, broadcast_setindex!, dotview, @__dot__
 
@@ -279,10 +279,17 @@ end
     return C
 end
 
-eltypestuple(a) = (Base.@_pure_meta; Tuple{eltype(a)})
-eltypestuple(T::Type) = (Base.@_pure_meta; Tuple{Type{T}})
-eltypestuple(a, b...) = (Base.@_pure_meta; Tuple{eltypestuple(a).types..., eltypestuple(b...).types...})
+eltypestuple(a) = Tuple{eltype(a)}
+eltypestuple(T::Type) = Tuple{Type{T}}
+eltypestuple(a, b...) = Tuple{eltypestuple(a).types..., eltypestuple(b...).types...}
 _broadcast_eltype(f, A, Bs...) = Base._return_type(f, eltypestuple(A, Bs...))
+
+typeeltypestuple(a) = Tuple{Type{eltype(a)}}
+typeeltypestuple(T::Type) = Tuple{Type{Type{T}}}
+typeeltypestuple(a, b...) = Tuple{typeeltypestuple(a).types..., typeeltypestuple(b...).types...}
+function null_safe_eltype_op(op, xs...)
+    null_safe_op(op, typeeltypestuple(xs...))
+end
 
 # broadcast methods that dispatch on the type of the final container
 @inline function broadcast_c(f, ::Type{Array}, A, Bs...)

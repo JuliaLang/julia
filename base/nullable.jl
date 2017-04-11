@@ -159,7 +159,7 @@ isnull(x) = false
 ## Operators
 
 """
-    null_safe_op(f::Any, ::Type, ::Type...)::Bool
+    null_safe_op(f::Any, Tuple{Type, Type...})::Bool
 
 Returns whether an operation `f` can safely be applied to any value of the passed type(s).
 Returns `false` by default.
@@ -175,7 +175,7 @@ Types declared as safe can benefit from higher performance for operations on nul
 always computing the result even for null values, a branch is avoided, which helps
 vectorization.
 """
-null_safe_op(f::Any, ::Type, ::Type...) = false
+null_safe_op(f::Any, ::Type) = false
 
 const NullSafeSignedInts = Union{Type{Int128}, Type{Int16}, Type{Int32},
                                  Type{Int64}, Type{Int8}}
@@ -186,20 +186,22 @@ const NullSafeFloats = Union{Type{Float16}, Type{Float32}, Type{Float64}}
 const NullSafeTypes = Union{NullSafeInts, NullSafeFloats}
 const EqualOrLess = Union{typeof(isequal), typeof(isless)}
 
-null_safe_op{T}(::typeof(identity), ::Type{T}) = isbits(T)
+null_safe_op(::typeof(identity),
+             ::Type{Tuple{Type{T}}}) where {T} = isbits(T)
 
-eltypes() = Tuple{}
-eltypes(x, xs...) = Tuple{eltype(x), eltypes(xs...).parameters...}
+null_safe_op(f::EqualOrLess,
+              ::(Type{Tuple{T, U}}
+                 where T<:NullSafeTypes
+                 where U<:NullSafeTypes)) = true
 
-@pure null_safe_eltype_op(op, xs...) =
-    null_safe_op(op, eltypes(xs...).parameters...)
-
-null_safe_op(f::EqualOrLess, ::NullSafeTypes, ::NullSafeTypes) = true
-null_safe_op{S,T}(f::EqualOrLess, ::Type{Rational{S}}, ::Type{T}) =
-    null_safe_op(f, T, S)
+(null_safe_op(f::EqualOrLess, ::Type{Tuple{Type{Rational{S}}, Type{T}}})
+ where {S,T}
+ = null_safe_op(f, Tuple{Type{T}, Type{S}}))
 # complex numbers can be compared for equality but not in general ordered
-null_safe_op{S,T}(::typeof(isequal), ::Type{Complex{S}}, ::Type{T}) =
-    null_safe_op(isequal, T, S)
+(null_safe_op(::typeof(isequal),
+              ::Type{Tuple{Type{Complex{S}}, Type{T}}})
+ where {S,T}
+ = null_safe_op(isequal, Tuple{Type{T}, Type{S}}))
 
 """
     isequal(x::Nullable, y::Nullable)
@@ -209,7 +211,7 @@ If neither `x` nor `y` is null, compare them according to their values
 and `false` if one is null but not the other: nulls are considered equal.
 """
 @inline function isequal{S,T}(x::Nullable{S}, y::Nullable{T})
-    if null_safe_op(isequal, S, T)
+    if null_safe_op(isequal, Tuple{Type{S}, Type{T}})
         (isnull(x) & isnull(y)) | (!isnull(x) & !isnull(y) & isequal(x.value, y.value))
     else
         (isnull(x) & isnull(y)) || (!isnull(x) & !isnull(y) && isequal(x.value, y.value))
@@ -230,7 +232,7 @@ another null.
 """
 @inline function isless{S,T}(x::Nullable{S}, y::Nullable{T})
     # NULL values are sorted last
-    if null_safe_op(isless, S, T)
+    if null_safe_op(isless, Tuple{Type{S}, Type{T}})
         (!isnull(x) & isnull(y)) | (!isnull(x) & !isnull(y) & isless(x.value, y.value))
     else
         (!isnull(x) & isnull(y)) || (!isnull(x) & !isnull(y) && isless(x.value, y.value))
@@ -285,7 +287,7 @@ type `Nullable{typeof(f(x))}`.
 """
 function map{T}(f, x::Nullable{T})
     S = promote_op(f, T)
-    if isleaftype(S) && null_safe_op(f, T)
+    if isleaftype(S) && null_safe_op(f, Tuple{Type{T}})
         Nullable(f(unsafe_get(x)), !isnull(x))
     else
         if isnull(x)
@@ -308,13 +310,19 @@ all(f::typeof(hasvalue), t::Tuple{}) = true
 
 # Note this list does not include sqrt since it can raise a DomainError
 for op in (+, -, abs, abs2)
-    null_safe_op(::typeof(op), ::NullSafeTypes) = true
-    null_safe_op{S}(::typeof(op), ::Type{Complex{S}}) = null_safe_op(op, S)
-    null_safe_op{S}(::typeof(op), ::Type{Rational{S}}) = null_safe_op(op, S)
+    null_safe_op(::typeof(op),
+                 ::(Type{Tuple{T}} where T<:NullSafeTypes)) = true
+    null_safe_op(::typeof(op),
+                 ::Type{Tuple{Type{Complex{S}}}}) where {S} =
+        null_safe_op(op, Tuple{Type{S}})
+    null_safe_op(::typeof(op),
+                 ::Type{Tuple{Type{Rational{S}}}}) where {S} =
+        null_safe_op(op, Tuple{Type{S}})
 end
 
-null_safe_op(::typeof(~), ::NullSafeInts) = true
-null_safe_op(::typeof(!), ::Type{Bool}) = true
+null_safe_op(::typeof(~),
+             ::(Type{Tuple{T}} where T<:NullSafeInts)) = true
+null_safe_op(::typeof(!), ::Type{Tuple{Bool}}) = true
 
 # Binary operators
 
@@ -324,13 +332,25 @@ null_safe_op(::typeof(!), ::Type{Bool}) = true
 for op in (+, -, *, /, &, |, <<, >>, >>>,
            scalarmin, scalarmax)
     # to fix ambiguities
-    null_safe_op(::typeof(op), ::NullSafeFloats, ::NullSafeFloats) = true
-    null_safe_op(::typeof(op), ::NullSafeSignedInts, ::NullSafeSignedInts) = true
-    null_safe_op(::typeof(op), ::NullSafeUnsignedInts, ::NullSafeUnsignedInts) = true
+    null_safe_op(::typeof(op),
+                 ::(Type{Tuple{T, U}}
+                    where T<:NullSafeFloats
+                    where U<:NullSafeFloats)) = true
+    null_safe_op(::typeof(op),
+                 ::(Type{Tuple{T, U}}
+                    where T<:NullSafeSignedInts
+                    where U<:NullSafeSignedInts)) = true
+    null_safe_op(::typeof(op),
+                 ::(Type{Tuple{T, U}}
+                    where T<:NullSafeUnsignedInts
+                    where U<:NullSafeUnsignedInts)) = true
 end
 for op in (+, -, *, /)
-    null_safe_op{S,T}(::typeof(op), ::Type{Complex{S}}, ::Type{T}) =
-        null_safe_op(op, T, S)
-    null_safe_op{S,T}(::typeof(op), ::Type{Rational{S}}, ::Type{T}) =
-        null_safe_op(op, T, S)
+    null_safe_op(::typeof(op),
+                 ::Type{Tuple{Type{Complex{S}}, Type{T}}}) where {S,T} =
+        null_safe_op(op, Tuple{Type{T}, Type{S}})
+
+    null_safe_op(::typeof(op),
+                 ::Type{Tuple{Type{Rational{S}}, Type{T}}}) where {S,T} =
+        null_safe_op(op, Tuple{Type{T}, Type{S}})
 end
