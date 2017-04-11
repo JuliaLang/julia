@@ -238,6 +238,84 @@ static int obviously_unequal(jl_value_t *a, jl_value_t *b)
     return 0;
 }
 
+static int obviously_disjoint(jl_value_t *a, jl_value_t *b)
+{
+    if (a == b || a == (jl_value_t*)jl_any_type || b == (jl_value_t*)jl_any_type)
+        return 0;
+    if (jl_is_leaf_type(a) && !((jl_datatype_t*)a)->abstract &&
+        jl_is_leaf_type(b) && !((jl_datatype_t*)b)->abstract &&
+        // TODO: remove these 2 lines if and when Tuple{Union{}} === Union{}
+        (((jl_datatype_t*)a)->name != jl_tuple_typename ||
+         ((jl_datatype_t*)b)->name != jl_tuple_typename))
+        return 1;
+    if (jl_is_unionall(a)) a = jl_unwrap_unionall(a);
+    if (jl_is_unionall(b)) b = jl_unwrap_unionall(b);
+    if (jl_is_datatype(a) && jl_is_datatype(b)) {
+        jl_datatype_t *ad = (jl_datatype_t*)a, *bd = (jl_datatype_t*)b;
+        if (ad->name != bd->name) {
+            jl_datatype_t *temp = ad;
+            while (temp != jl_any_type && temp->name != bd->name)
+                temp = temp->super;
+            if (temp == jl_any_type) {
+                temp = bd;
+                while (temp != jl_any_type && temp->name != ad->name)
+                    temp = temp->super;
+                if (temp == jl_any_type)
+                    return 1;
+                bd = temp;
+            }
+            else {
+                ad = temp;
+            }
+        }
+        int istuple = (ad->name == jl_tuple_typename);
+        size_t np;
+        if (istuple) {
+            size_t na = jl_nparams(ad), nb = jl_nparams(bd);
+            if (jl_is_va_tuple(ad)) {
+                na -= 1;
+                if (jl_is_va_tuple(bd))
+                    nb -= 1;
+            }
+            else if (jl_is_va_tuple(bd)) {
+                nb -= 1;
+            }
+            else if (na != nb) {
+                return 1;
+            }
+            np = na < nb ? na : nb;
+        }
+        else {
+            np = jl_nparams(ad);
+        }
+        size_t i;
+        for(i=0; i < np; i++) {
+            jl_value_t *ai = jl_tparam(ad,i);
+            jl_value_t *bi = jl_tparam(bd,i);
+            if (jl_is_typevar(ai) || jl_is_typevar(bi))
+                continue;
+            if (jl_is_type(ai)) {
+                if (jl_is_type(bi)) {
+                    if (istuple && (ai == jl_bottom_type || bi == jl_bottom_type))
+                        ; // TODO: this can return 1 if and when Tuple{Union{}} === Union{}
+                    else if (obviously_disjoint(ai, bi))
+                        return 1;
+                }
+                else {
+                    return 1;
+                }
+            }
+            else if (!jl_egal(ai, bi)) {
+                return 1;
+            }
+        }
+    }
+    else if (a == jl_bottom_type || b == jl_bottom_type) {
+        return 1;
+    }
+    return 0;
+}
+
 static int in_union(jl_value_t *u, jl_value_t *x)
 {
     if (u == x) return 1;
@@ -1967,6 +2045,8 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 JL_DLLEXPORT jl_value_t *jl_intersect_types(jl_value_t *x, jl_value_t *y)
 {
     jl_stenv_t e;
+    if (obviously_disjoint(x, y))
+        return jl_bottom_type;
     init_stenv(&e, NULL, 0);
     e.intersection = 1;
     return intersect_all(x, y, &e);
@@ -1992,12 +2072,16 @@ jl_svec_t *jl_outer_unionall_vars(jl_value_t *u)
 // sets *issubty to 1 iff `a` is a subtype of `b`
 jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t **penv, int *issubty)
 {
+    if (issubty) *issubty = 0;
+    if (obviously_disjoint(a, b)) {
+        if (issubty && a == jl_bottom_type) *issubty = 1;
+        return jl_bottom_type;
+    }
     int szb = jl_subtype_env_size(b);
     int sz = 0, i = 0;
     jl_value_t **env, **ans;
     JL_GC_PUSHARGS(env, szb+1);
     ans = &env[szb]; *ans = jl_bottom_type;
-    if (issubty) *issubty = 0;
     if (jl_subtype_env(a, b, env, szb)) {
         *ans = a; sz = szb;
         if (issubty) *issubty = 1;
@@ -2488,6 +2572,11 @@ JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b)
 {
     if (jl_subtype(b, a)) return 0;
     if (jl_subtype(a, b)) return 1;
+    return type_morespecific_(a, b, 0, NULL);
+}
+
+JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b)
+{
     return type_morespecific_(a, b, 0, NULL);
 }
 

@@ -1090,12 +1090,6 @@ void print_func_loc(JL_STREAM *s, jl_method_t *m)
   however, (AbstractArray, AbstractMatrix, Foo) and (AbstractMatrix, AbstractArray, Bar) are fine
   since Foo and Bar are disjoint, so there would be no confusion over
   which one to call.
-
-  There is also this kind of ambiguity: foo{T,S}(T, S) vs. foo(Any,Any)
-  In this case jl_types_equal() is true, but one is jl_type_morespecific
-  or jl_type_match_morespecific than the other.
-  To check this, jl_types_equal_generic needs to be more sophisticated
-  so (T,T) is not equivalent to (Any,Any). (TODO)
 */
 struct ambiguous_matches_env {
     struct typemap_intersection_env match;
@@ -1124,8 +1118,23 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
     //     or !jl_type_morespecific(sig, type) [after]
     // based on their sort order in the typemap
     // now we are checking that the reverse is true
-    if (!jl_type_morespecific((jl_value_t*)(closure->after ? type : sig),
-                              (jl_value_t*)(closure->after ? sig : type))) {
+    int msp;
+    if (closure->match.issubty) {
+        assert(closure->after);
+        msp = 1;
+    }
+    else if (closure->after) {
+        assert(!jl_subtype((jl_value_t*)sig, (jl_value_t*)type));
+        msp = jl_type_morespecific_no_subtype((jl_value_t*)type, (jl_value_t*)sig);
+    }
+    else {
+        if (jl_subtype((jl_value_t*)sig, (jl_value_t*)type))
+            msp = 1;
+        else
+            msp = jl_type_morespecific_no_subtype((jl_value_t*)sig, (jl_value_t*)type);
+    }
+
+    if (!msp) {
         // see if the intersection is covered by another existing method
         // that will resolve the ambiguity (by being more specific than either)
         // (if type-morespecific made a mistake, this also might end up finding
@@ -1196,7 +1205,7 @@ static jl_value_t *check_ambiguous_matches(union jl_typemap_t defs, jl_typemap_e
     env.match.type = (jl_value_t*)type;
     env.match.va = va;
     env.match.ti = NULL;
-    env.match.env = NULL;
+    env.match.env = jl_emptysvec;
     env.defs = defs;
     env.newentry = newentry;
     env.shadowed = NULL;
@@ -1418,6 +1427,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
         env.match.va = va;
         env.match.type = (jl_value_t*)type;
         env.match.fptr = invalidate_backedges;
+        env.match.env = NULL;
 
         if (jl_is_method(oldvalue)) {
             jl_typemap_intersection_visitor(((jl_method_t*)oldvalue)->specializations, 0, &env.match);
