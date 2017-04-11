@@ -83,9 +83,12 @@ function last_error()
     return (err_class, err_msg)
 end
 
-function GitError(code::Integer)
+function GitError(code::Integer; path = "")
     err_code = Code[code][]
     err_class, err_msg = last_error()
+
+    length(path) > 0 && (err_msg = err_msg * "\n               in path: $path")
+
     return GitError(err_class, err_code, err_msg)
 end
 
@@ -96,7 +99,7 @@ macro check(git_func)
         local err::Cint
         err = $(esc(git_func::Expr))
         if err < 0
-            throw(Error.GitError(err))
+            throw(Error.GitError(err; path = gitdir($(esc(:repo)))))
         end
         err
     end
