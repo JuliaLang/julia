@@ -188,12 +188,6 @@ const EqualOrLess = Union{typeof(isequal), typeof(isless)}
 
 null_safe_op{T}(::typeof(identity), ::Type{T}) = isbits(T)
 
-eltypes() = Tuple{}
-eltypes(x, xs...) = Tuple{eltype(x), eltypes(xs...).parameters...}
-
-@pure null_safe_eltype_op(op, xs...) =
-    null_safe_op(op, eltypes(xs...).parameters...)
-
 null_safe_op(f::EqualOrLess, ::NullSafeTypes, ::NullSafeTypes) = true
 null_safe_op{S,T}(f::EqualOrLess, ::Type{Rational{S}}, ::Type{T}) =
     null_safe_op(f, T, S)
