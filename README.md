@@ -157,6 +157,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `convert` can convert between different `Set` types on 0.5 and below. ([#18727])
 
+* `isassigned(::RefValue)` is supported on 0.5 and below. ([#18082])
+
 * `unsafe_trunc(::Type{<:Integer}, ::Integer)` is supported on 0.5. ([#18629])
 
 ## Renamed functions
@@ -335,6 +337,7 @@ includes this fix. Find the minimum version from there.
 [#17323]: https://github.com/JuliaLang/julia/issues/17323
 [#17510]: https://github.com/JuliaLang/julia/issues/17510
 [#17623]: https://github.com/JuliaLang/julia/issues/17623
+[#18086]: https://github.com/JuliaLang/julia/issues/18086
 [#18380]: https://github.com/JuliaLang/julia/issues/18380
 [#18484]: https://github.com/JuliaLang/julia/issues/18484
 [#18510]: https://github.com/JuliaLang/julia/issues/18510
