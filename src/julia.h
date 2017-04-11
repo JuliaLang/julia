@@ -376,6 +376,8 @@ typedef struct _jl_datatype_t {
     // memoized properties
     void *struct_decl;  //llvm::Type*
     void *ditype; // llvm::MDNode* to be used as llvm::DIType(ditype)
+    void *arreltbaa; // llvm::MDNode* for when this type is used as an array
+                     // element type (strict aliasing mode only)
     int32_t depth;
     int8_t hasfreetypevars;
     int8_t isleaftype;

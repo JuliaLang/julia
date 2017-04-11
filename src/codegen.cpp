@@ -270,6 +270,8 @@ static MDNode *tbaa_mutab;              // mutable type
 static MDNode *tbaa_immut;              // immutable type
 static MDNode *tbaa_ptrarraybuf;    // Data in an array of boxed values
 static MDNode *tbaa_arraybuf;       // Data in an array of POD
+static MDNode *tbaa_arraybuf_scalar;    // In strict aliasing mode, for each element
+                                        // type tbaa nodes are nested under here
 static MDNode *tbaa_array;      // jl_array_t
 static MDNode *tbaa_arrayptr;       // The pointer inside a jl_array_t
 static MDNode *tbaa_arraysize;      // A size in a jl_array_t
@@ -2853,8 +2855,14 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                     else {
                         MDNode *aliasscope = (f == jl_builtin_const_arrayref) ? ctx->aliasscope : nullptr;
                         MDNode *noalias = (f == jl_builtin_const_arrayref) ? nullptr : ctx->aliasscope;
+                        MDNode *tbaa = tbaa_ptrarraybuf;
+                        if (jl_array_store_unboxed(ety)) {
+                            tbaa = julia_type_to_elttbaa(ety);
+                            if (!tbaa)
+                                tbaa = tbaa_arraybuf;
+                        }
                         *ret = typed_load(emit_arrayptr(ary, args[1], ctx), idx, ety, ctx,
-                            aa_data{jl_array_store_unboxed(ety) ? tbaa_arraybuf : tbaa_ptrarraybuf, nullptr}, aliasscope, noalias);
+                            aa_data{tbaa, nullptr}, aliasscope, noalias);
                     }
                     JL_GC_POP();
                     return true;
@@ -2932,8 +2940,14 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                             data_owner->addIncoming(aryv, curBB);
                             data_owner->addIncoming(own_ptr, ownedBB);
                         }
+                        MDNode *tbaa = tbaa_ptrarraybuf;
+                        if (!isboxed) {
+                            tbaa = julia_type_to_elttbaa(ety);
+                            if (!tbaa)
+                                tbaa = tbaa_arraybuf;
+                        }
                         typed_store(emit_arrayptr(ary,args[1],ctx), idx, v,
-                                    ety, ctx, aa_data{!isboxed ? tbaa_arraybuf : tbaa_ptrarraybuf, nullptr}, ctx->aliasscope, data_owner, 0,
+                                    ety, ctx, aa_data{tbaa, nullptr}, ctx->aliasscope, data_owner, 0,
                                     false); // don't need to root the box if we had to make one since it's being stored in the array immediatly
                     }
                     *ret = ary;
@@ -6413,7 +6427,7 @@ static void init_julia_llvm_meta(void)
         tbaa_make_child("jtbaa_value", tbaa_data_scalar);
     tbaa_mutab = tbaa_make_child("jtbaa_mutab", tbaa_value_scalar).first;
     tbaa_immut = tbaa_make_child("jtbaa_immut", tbaa_value_scalar).first;
-    tbaa_arraybuf = tbaa_make_child("jtbaa_arraybuf", tbaa_data_scalar).first;
+    std::tie(tbaa_arraybuf, tbaa_arraybuf_scalar) = tbaa_make_child("jtbaa_arraybuf", tbaa_data_scalar);
     tbaa_ptrarraybuf = tbaa_make_child("jtbaa_ptrarraybuf", tbaa_data_scalar).first;
     MDNode *tbaa_array_scalar;
     std::tie(tbaa_array, tbaa_array_scalar) = tbaa_make_child("jtbaa_array");

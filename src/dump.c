@@ -1397,6 +1397,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     dt->struct_decl = NULL;
     dt->instance = NULL;
     dt->ditype = NULL;
+    dt->arreltbaa = NULL;
     dt->abstract = flags&1;
     dt->mutabl = (flags>>1)&1;
     int has_layout = (flags>>2)&1;

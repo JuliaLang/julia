@@ -321,6 +321,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
     t->instance = NULL;
     t->struct_decl = NULL;
     t->ditype = NULL;
+    t->arreltbaa = NULL;
     t->size = 0;
 
     if (tn == NULL) {

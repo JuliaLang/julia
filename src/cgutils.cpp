@@ -127,21 +127,43 @@ static Value *stringConstPtr(const std::string &txt)
 
 // --- Debug info ---
 
+// always return the boxed representation for types with hidden content
+static bool has_hidden_content(jl_value_t *jt) {
+  return (jl_is_abstracttype(jt) || !jl_is_datatype(jt) || jl_is_array_type(jt) ||
+      jt == (jl_value_t*)jl_sym_type || jt == (jl_value_t*)jl_module_type ||
+      jt == (jl_value_t*)jl_simplevector_type || jt == (jl_value_t*)jl_datatype_type ||
+      jt == (jl_value_t*)jl_method_instance_type || jl_is_unionall(jt) || jl_is_typevar(jt));
+}
+
+static MDNode *julia_type_to_elttbaa(jl_value_t *jt) {
+  if (has_hidden_content(jt) || !jl_is_leaf_type(jt))
+    return nullptr;
+  assert(jl_is_datatype(jt));
+  jl_datatype_t *jdt = (jl_datatype_t*)jt;
+  if (jdt->arreltbaa != nullptr)
+    return (MDNode*)jdt->arreltbaa;
+  MDNode *scalar = llvm::MDNode::getDistinct(jl_LLVMContext, {
+      MDString::get(jl_LLVMContext, ""),
+      tbaa_arraybuf_scalar,
+      ConstantAsMetadata::get(
+          ConstantInt::get(Type::getInt64Ty(jl_LLVMContext), 0))
+  });
+  jdt->arreltbaa = llvm::MDNode::getDistinct(jl_LLVMContext, {
+      scalar,
+      scalar,
+      ConstantAsMetadata::get(
+          ConstantInt::get(Type::getInt64Ty(jl_LLVMContext), 0))
+  });
+  return (MDNode*)jdt->arreltbaa;
+}
+
 #if JL_LLVM_VERSION >= 30700
 static DIType *julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed = false)
 #else
 static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed = false)
 #endif
 {
-    if (isboxed)
-        return jl_pvalue_dillvmt;
-    // always return the boxed representation for types with hidden content
-    if (jl_is_abstracttype(jt) || !jl_is_datatype(jt) || jl_is_array_type(jt) ||
-        jt == (jl_value_t*)jl_sym_type || jt == (jl_value_t*)jl_module_type ||
-        jt == (jl_value_t*)jl_simplevector_type || jt == (jl_value_t*)jl_datatype_type ||
-        jt == (jl_value_t*)jl_method_instance_type)
-        return jl_pvalue_dillvmt;
-    if (jl_is_unionall(jt) || jl_is_typevar(jt))
+    if (isboxed || has_hidden_content(jt))
         return jl_pvalue_dillvmt;
     assert(jl_is_datatype(jt));
     jl_datatype_t *jdt = (jl_datatype_t*)jt;
