@@ -677,7 +677,11 @@ static GlobalVariable *get_pointer_to_constant(Constant *val, StringRef name, Mo
 
 static AllocaInst *emit_static_alloca(Type *lty, int arraysize, jl_codectx_t *ctx)
 {
+#if JL_LLVM_VERSION >= 50000
+    return new AllocaInst(lty, 0, ConstantInt::get(T_int32, arraysize), "", /*InsertBefore=*/ctx->ptlsStates);
+#else
     return new AllocaInst(lty, ConstantInt::get(T_int32, arraysize), "", /*InsertBefore=*/ctx->ptlsStates);
+#endif
 }
 static AllocaInst *emit_static_alloca(Type *lty, jl_codectx_t *ctx)
 {
@@ -685,8 +689,13 @@ static AllocaInst *emit_static_alloca(Type *lty, jl_codectx_t *ctx)
 }
 static AllocaInst *emit_static_alloca(Type *lty)
 {
+#if JL_LLVM_VERSION >= 50000
+    return new AllocaInst(lty, 0, "",
+            /*InsertBefore=*/&*builder.GetInsertBlock()->getParent()->getEntryBlock().getFirstInsertionPt());
+#else
     return new AllocaInst(lty, "",
             /*InsertBefore=*/&*builder.GetInsertBlock()->getParent()->getEntryBlock().getFirstInsertionPt());
+#endif
 }
 
 static inline jl_cgval_t ghostValue(jl_value_t *typ)
@@ -5578,7 +5587,12 @@ static std::unique_ptr<Module> emit_function(
             specsig || // for arguments, give them stack slots if they aren't in `argArray` (otherwise, will use that pointer)
             (va && (int)i == ctx.vaSlot && varinfo.escapes) || // or it's the va arg tuple
             (s != unused_sym && i == 0)) { // or it is the first argument (which isn't in `argArray`)
-            AllocaInst *av = new AllocaInst(T_pjlvalue, jl_symbol_name(s), /*InsertBefore*/ctx.ptlsStates);
+#if JL_LLVM_VERSION >= 50000
+            AllocaInst *av = new AllocaInst(T_pjlvalue, 0,
+#else
+            AllocaInst *av = new AllocaInst(T_pjlvalue,
+#endif
+                jl_symbol_name(s), /*InsertBefore*/ctx.ptlsStates);
             varinfo.boxroot = av;
 #if JL_LLVM_VERSION >= 30600
             if (ctx.debug_enabled && varinfo.dinfo) {
