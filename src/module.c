@@ -29,7 +29,9 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     m->istopmod = 0;
     static unsigned int mcounter; // simple counter backup, in case hrtime is not incrementing
     m->uuid = jl_hrtime() + (++mcounter);
-    if (!m->uuid) m->uuid++; // uuid 0 is invalid
+    if (!m->uuid)
+        m->uuid++; // uuid 0 is invalid
+    m->primary_world = 0;
     m->counter = 0;
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);

@@ -1002,6 +1002,6 @@ has_bottom_parameter(t::TypeVar) = has_bottom_parameter(t.ub)
 has_bottom_parameter(::Any) = false
 
 min_world(m::Method) = reinterpret(UInt, m.min_world)
-max_world(m::Method) = reinterpret(UInt, m.max_world)
+max_world(m::Method) = typemax(UInt)
 min_world(m::Core.MethodInstance) = reinterpret(UInt, m.min_world)
 max_world(m::Core.MethodInstance) = reinterpret(UInt, m.max_world)
