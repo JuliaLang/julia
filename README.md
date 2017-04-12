@@ -161,6 +161,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `unsafe_trunc(::Type{<:Integer}, ::Integer)` is supported on 0.5. ([#18629])
 
+* `bswap` is supported for `Complex` arguments. ([#21346])
+
 ## Renamed functions
 
 * `pointer_to_array` and `pointer_to_string` have been replaced with `unsafe_wrap(Array, ...)` and `unsafe_wrap(String, ...)` respectively
@@ -358,3 +360,4 @@ includes this fix. Find the minimum version from there.
 [#20418]: https://github.com/JuliaLang/julia/issues/20418
 [#20500]: https://github.com/JuliaLang/julia/issues/20500
 [#18629]: https://github.com/JuliaLang/julia/pull/18629
+[#21346]: https://github.com/JuliaLang/julia/pull/21346

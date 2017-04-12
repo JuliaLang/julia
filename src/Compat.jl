@@ -1459,6 +1459,11 @@ if VERSION < v"0.6.0-dev.735"
     Base.unsafe_trunc{T<:Integer}(::Type{T}, x::Integer) = rem(x, T)
 end
 
+# https://github.com/JuliaLang/julia/pull/21346
+if VERSION < v"0.6.0-pre.beta.102"
+    Base.bswap(z::Complex) = Complex(bswap(real(z)), bswap(imag(z)))
+end
+
 include("to-be-deprecated.jl")
 
 end # module Compat

@@ -1812,6 +1812,16 @@ end
 @test unsafe_trunc(Int8, 128) === Int8(-128)
 @test_throws InexactError trunc(Int8, 128)
 
+# PR 21346
+let zbuf = IOBuffer([0xbf, 0xc0, 0x00, 0x00, 0x40, 0x20, 0x00, 0x00,
+                     0x40, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                     0xc0, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+    z1 = read(zbuf, Complex64)
+    z2 = read(zbuf, Complex128)
+    @test bswap(z1) === -1.5f0 + 2.5f0im
+    @test bswap(z2) ===  3.5 - 4.5im
+end
+
 include("to-be-deprecated.jl")
 
 nothing
