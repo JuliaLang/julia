@@ -281,6 +281,7 @@ void gc_mark_object_list(jl_ptls_t ptls, arraylist_t *list, size_t start);
 void visit_mark_stack(jl_ptls_t ptls);
 void gc_debug_init(void);
 void jl_mark_box_caches(jl_ptls_t ptls);
+void jl_gc_mark_deserializer_state(jl_ptls_t ptls);
 
 // GC pages
 
