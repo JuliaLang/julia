@@ -1397,7 +1397,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
             size_t ins = 0;
             for (i = 1; i < na; i += 2) {
                 jl_value_t *backedgetyp = backedges[i - 1];
-                if (jl_type_intersection(backedgetyp, (jl_value_t*)type) != (jl_value_t*)jl_bottom_type) {
+                if (!jl_has_empty_intersection(backedgetyp, (jl_value_t*)type)) {
                     jl_method_instance_t *backedge = (jl_method_instance_t*)backedges[i];
                     invalidate_method_instance(backedge, env.max_world, 0);
                     env.invalidated = 1;
@@ -1731,10 +1731,8 @@ JL_DLLEXPORT int jl_has_call_ambiguities(jl_tupletype_t *types, jl_method_t *m)
     if (m->ambig == jl_nothing) return 0;
     for (size_t i = 0; i < jl_array_len(m->ambig); i++) {
         jl_method_t *mambig = (jl_method_t*)jl_array_ptr_ref(m->ambig, i);
-        if (jl_type_intersection((jl_value_t*)mambig->sig,
-                                 (jl_value_t*)types) != (jl_value_t*)jl_bottom_type) {
+        if (!jl_has_empty_intersection((jl_value_t*)mambig->sig, (jl_value_t*)types))
             return 1;
-        }
     }
     return 0;
 }
