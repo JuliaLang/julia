@@ -876,8 +876,8 @@ When defining generated functions, there are four main differences to ordinary f
    function.
 3. Instead of calculating something or performing some action, you return a *quoted expression* which,
    when evaluated, does what you want.
-4. Generated functions must not have any side-effects or examine any non-constant global state (including,
-   for example, IO, locks, or non-local dictionaries). In other words, they must be completely pure.
+4. Generated functions must not **mutate** or **observe** any global state (including,
+   for example, IO, locks, non-local dictionaries, or using `method_exists`). This means they can only read global constants, and can not have any side-effects. In other words, they must be completely pure.
    Due to an implementation limitation, this also means that they currently cannot define a closure
    or untyped generator.
 
