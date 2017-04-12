@@ -515,7 +515,7 @@ int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
                 else {
                     // else an array scan is required to check subtypes
                     // first, fast-path: optimized pre-intersection test to see if `ty` could intersect with any Type
-                    if (typetype || jl_type_intersection((jl_value_t*)jl_type_type, ty) != jl_bottom_type)
+                    if (typetype || !jl_has_empty_intersection((jl_value_t*)jl_type_type, ty))
                         if (!jl_typemap_intersection_array_visitor(&cache->targ, ty, 1, offs, closure)) return 0;
                 }
             }
