@@ -7,7 +7,7 @@ static Instruction *aa_decorate(MDNode *tbaa, MDNode *invariant_group, Instructi
     if (tbaa)
         load_or_store->setMetadata( llvm::LLVMContext::MD_tbaa, tbaa );
     if (invariant_group)
-        load_or_store->setMetadata( llvm::LLVMContext::MD_invariant_group, tbaa );
+        load_or_store->setMetadata( llvm::LLVMContext::MD_invariant_group, invariant_group );
     return load_or_store;
 }
 static Instruction *aa_decorate(aa_data aa, Instruction *load_or_store) {

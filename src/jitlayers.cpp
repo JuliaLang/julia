@@ -259,11 +259,15 @@ void addOptimizationPasses(PassManager *PM, llvm::TargetMachine *TM)
         PM->add(createInstructionCombiningPass());
         PM->add(createNewGVNPass());       
         PM->add(createDeadStoreEliminationPass());  // Delete dead stores        
+        // This pass is EXTREMELY expensive. Even with -O3, only run it if requested
+        PM->add(createHotSpotBBVectorizePass());
+        PM->add(createInstructionCombiningPass()); // Clean up after BB Vectorize
         PM->add(createSLPVectorizerPass());     // Vectorize straight-line code
 	      PM->add(createSLPVectorizerPass());     // Vectorize straight-line code - again
         PM->add(createInstructionCombiningPass());   // Clean up after SLP loop vectorizer
         PM->add(createLoadStoreVectorizerPass());
-        // This pass is EXTREMELY expensive. Even with -O3, only run it if requested
+        // The BB vectorizer's cost model is relatively naive - instcombining
+        // will expose some more opportunities.
         PM->add(createHotSpotBBVectorizePass());
         PM->add(createInstructionCombiningPass()); // Clean up after BB Vectorize
         PM->add(createLICMPass());
@@ -278,6 +282,7 @@ void addOptimizationPasses(PassManager *PM, llvm::TargetMachine *TM)
     PM->add(createLoopVectorizePass());         // Vectorize loops
     PM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
 #endif
+
     //PM->add(createCFGSimplificationPass());     // Merge & remove BBs
 }
 

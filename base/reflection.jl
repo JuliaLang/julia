@@ -678,7 +678,7 @@ struct CodegenParams
                    runtime::Bool=true, exceptions::Bool=true,
                    track_allocations::Bool=true, code_coverage::Bool=true,
                    static_alloc::Bool=true, dynamic_alloc::Bool=true,
-                   target::Ptr{UInt8}=C_NULL,
+                   target::Ptr{UInt8}=Ptr{UInt8}(C_NULL),
                    hooks::CodegenHooks=CodegenHooks()) =
         new(Cint(cached),
             Cint(runtime), Cint(exceptions),

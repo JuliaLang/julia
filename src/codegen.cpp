@@ -450,6 +450,17 @@ struct aa_data {
     aa_data(MDNode *tbaa, MDNode *invariant_group) : tbaa(tbaa), invariant_group(invariant_group) {}
 };
 
+static MDNode *best_tbaa(jl_value_t *jt) {
+    jt = jl_unwrap_unionall(jt);
+    if (!jl_is_datatype(jt))
+        return tbaa_value;
+    if (jl_is_abstracttype(jt))
+        return tbaa_value;
+    // If we're here, we know all subtypes are (im)mutable, even if we
+    // don't know what the exact type is
+    return jl_is_mutable(jt) ? tbaa_mutab : tbaa_immut;
+}
+
 struct jl_cgval_t {
     Value *V; // may be of type T* or T, or set to NULL if ghost (or if the value has not been initialized yet, for a variable definition)
     Value *TIndex; // if `V` is an unboxed (tagged) Union described by `typ`, this gives the DataType index (1-based, small int) as an i8
@@ -479,10 +490,7 @@ struct jl_cgval_t {
         isboxed(isboxed),
         isghost(false),
         isimmutable(isboxed && jl_is_immutable_datatype(typ)),
-        aa{isboxed ? (jl_is_leaf_type(typ) ?
-                        (jl_is_mutable(typ) ? tbaa_mutab : tbaa_immut) :
-                        tbaa_value) : nullptr,
-           nullptr}
+        aa{isboxed ? best_tbaa(typ) : nullptr, nullptr}
     {
         assert(!(isboxed && TIndex != NULL));
         assert(TIndex == NULL || TIndex->getType() == T_int8);
@@ -764,7 +772,7 @@ static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_value_t *typ
         // llvm mem2reg pass will remove this if unneeded
         Value *loc = emit_static_alloca(T);
         builder.CreateStore(v, loc);
-        return mark_julia_slot(loc, typ, NULL, tbaa_stack);
+        return mark_julia_slot(loc, typ, NULL, best_tbaa(typ));
     }
     Value *froot = NULL;
     if (needsroot && isboxed) {
@@ -4392,6 +4400,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     ctx.world = world;
     ctx.has_sret = false;
     ctx.spvals_ptr = NULL;
+    ctx.aliasscope = NULL;
     ctx.params = &jl_default_cgparams;
     allocate_gc_frame(b0, &ctx);
     emit_last_age_field(&ctx);
@@ -4740,7 +4749,6 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
             /*InsertBefore*/ctx2.ptlsStates);
         if (cc == jl_returninfo_t::SRet || cc == jl_returninfo_t::Union)
             ++AI;
-        MDNode *invariant_group = llvm::MDNode::getDistinct(jl_LLVMContext, {});
         for (size_t i = 0; i < nargs + 1; i++) {
             jl_value_t *jt = jl_nth_slot_type(lam->specTypes, i);
             bool isboxed;
@@ -4759,8 +4767,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
                     arg_box = arg_v;
                 }
                 else if (et->isAggregateType()) {
-                    arg_v = builder.CreateInvariantGroupBarrier(arg_v);
-                    arg_box = boxed(mark_julia_slot(arg_v, jt, NULL, NULL, invariant_group), &ctx2, false);
+                    arg_box = boxed(mark_julia_slot(arg_v, jt, NULL, tbaa_stack, NULL), &ctx2, false);
                 }
                 else {
                     assert(at == et);
@@ -5663,7 +5670,6 @@ static std::unique_ptr<Module> emit_function(
     }
 
     // step 9. move args into local variables
-    MDNode *invariant_group = llvm::MDNode::getDistinct(jl_LLVMContext, {});
     Function::arg_iterator AI = f->arg_begin();
     if (ctx.has_sret)
         AI++; // skip sret slot
@@ -5692,8 +5698,7 @@ static std::unique_ptr<Module> emit_function(
                 else if (llvmArgType->isAggregateType()) {
                     Argument *Arg = &*AI++;
                     maybe_mark_argument_dereferenceable(Arg, argType);
-                    Value *Arg2 = builder.CreateInvariantGroupBarrier(Arg);
-                    theArg = mark_julia_slot(Arg2, argType, NULL, NULL, invariant_group); // this argument is by-pointer
+                    theArg = mark_julia_slot(Arg, argType, NULL, tbaa_stack, NULL); // this argument is by-pointer
                     theArg.isimmutable = true;
                 }
                 else {
