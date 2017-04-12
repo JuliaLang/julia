@@ -677,7 +677,7 @@ end
 
 Returns a list of all process identifiers.
 """
-procs() = Int[x.id for x in PGRP.workers]
+procs() = Int[x.id for x in PGRP.workers if isa(x, LocalProcess) || (x.state == W_CONNECTED)]
 
 """
     procs(pid::Integer)
@@ -687,11 +687,12 @@ Specifically all workers bound to the same ip-address as `pid` are returned.
 """
 function procs(pid::Integer)
     if myid() == 1
+        all_workers = [x for x in PGRP.workers if isa(x, LocalProcess) || (x.state == W_CONNECTED)]
         if (pid == 1) || (isa(map_pid_wrkr[pid].manager, LocalManager))
-            Int[x.id for x in filter(w -> (w.id==1) || (isa(w.manager, LocalManager)), PGRP.workers)]
+            Int[x.id for x in filter(w -> (w.id==1) || (isa(w.manager, LocalManager)), all_workers)]
         else
             ipatpid = get_bind_addr(pid)
-            Int[x.id for x in filter(w -> get_bind_addr(w) == ipatpid, PGRP.workers)]
+            Int[x.id for x in filter(w -> get_bind_addr(w) == ipatpid, all_workers)]
         end
     else
         remotecall_fetch(procs, 1, pid)
@@ -705,7 +706,7 @@ Returns a list of all worker process identifiers.
 """
 function workers()
     allp = procs()
-    if nprocs() == 1
+    if length(allp) == 1
        allp
     else
        filter(x -> x != 1, allp)
