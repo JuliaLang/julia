@@ -2391,7 +2391,7 @@ function finalize_backedges(frame::InferenceState)
 end
 
 function code_for_method(method::Method, atypes::ANY, sparams::SimpleVector, world::UInt, preexisting::Bool=false)
-    if world < min_world(method) || world > max_world(method)
+    if world < min_world(method)
         return nothing
     end
     if method.isstaged && !isleaftype(atypes)

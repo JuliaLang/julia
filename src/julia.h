@@ -231,7 +231,6 @@ typedef struct _jl_method_t {
     // method's type signature. redundant with TypeMapEntry->specTypes
     jl_value_t *sig;
     size_t min_world;
-    size_t max_world;
 
     // list of potentially-ambiguous methods (nothing = none, Vector{Any} of Methods otherwise)
     jl_value_t *ambig;
@@ -406,6 +405,7 @@ typedef struct _jl_module_t {
     arraylist_t usings;  // modules with all bindings potentially imported
     uint8_t istopmod;
     uint64_t uuid;
+    size_t primary_world;
     uint32_t counter;
 } jl_module_t;
 
