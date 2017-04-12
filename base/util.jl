@@ -619,7 +619,13 @@ function julia_cmd(julia=joinpath(JULIA_HOME, julia_exename()))
     `$julia -C$cpu_target -J$image_file --compile=$compile --depwarn=$depwarn`
 end
 
-julia_exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "julia" : "julia-debug"
+function julia_exename()
+    if ccall(:jl_is_debugbuild, Cint, ()) == 0
+        return @static is_windows() ? "julia.exe" : "julia"
+    else
+        return @static is_windows() ? "julia-debug.exe" : "julia-debug"
+    end
+end
 
 """
     securezero!(o)

@@ -222,15 +222,11 @@ JL_DLLEXPORT int jl_running_on_valgrind(void)
     return RUNNING_ON_VALGRIND;
 }
 
-static int jl_load_sysimg_so(void)
+static void jl_load_sysimg_so(void)
 {
 #ifndef _OS_WINDOWS_
     Dl_info dlinfo;
 #endif
-    // attempt to load the pre-compiled sysimage from jl_sysimg_handle
-    if (jl_sysimg_handle == 0)
-        return -1;
-
     int imaging_mode = jl_generating_output() && !jl_options.incremental;
     // in --build mode only use sysimg data, not precompiled native code
     if (!imaging_mode && jl_options.use_precompiled==JL_OPTIONS_USE_PRECOMPILED_YES) {
@@ -276,13 +272,9 @@ static int jl_load_sysimg_so(void)
         }
 #endif
     }
-    const char *sysimg_data = (const char*)jl_dlsym_e(jl_sysimg_handle, "jl_system_image_data");
-    if (sysimg_data) {
-        size_t len = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_system_image_size");
-        jl_restore_system_image_data(sysimg_data, len);
-        return 0;
-    }
-    return -1;
+    const char *sysimg_data = (const char*)jl_dlsym(jl_sysimg_handle, "jl_system_image_data");
+    size_t len = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_system_image_size");
+    jl_restore_system_image_data(sysimg_data, len);
 }
 
 static jl_value_t *jl_deserialize_gv(jl_serializer_state *s, jl_value_t *v)
@@ -2552,30 +2544,31 @@ extern void jl_get_builtins(void);
 extern void jl_get_builtin_hooks(void);
 extern void jl_get_system_hooks(void);
 
-// Takes in a path of the form "usr/lib/julia/sys.{ji,so}", as passed to jl_restore_system_image()
+// Takes in a path of the form "usr/lib/julia/sys.so" (jl_restore_system_image should be passed the same string)
 JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 {
-    // If passed NULL, don't even bother
-    if (!fname)
-        return;
+    if (jl_sysimg_handle)
+        return; // embedded target already called jl_set_sysimg_so
 
-    // First, get "sys" from "sys.ji"
-    char *fname_shlib = (char*)alloca(strlen(fname)+1);
-    strcpy(fname_shlib, fname);
-    char *fname_shlib_dot = strrchr(fname_shlib, '.');
-    if (fname_shlib_dot != NULL) {
-        if (!strcmp(fname_shlib_dot, ".ji"))
-            return;  // .ji extension => load .ji file only
-        *fname_shlib_dot = 0;
-    }
+    char *dot = (char*) strrchr(fname, '.');
+    int is_ji = (dot && !strcmp(dot, ".ji"));
 
     // Get handle to sys.so
-    jl_sysimg_handle = jl_load_dynamic_library_e(fname_shlib, JL_RTLD_LOCAL | JL_RTLD_NOW);
+    if (!is_ji) // .ji extension => load .ji file only
+        jl_set_sysimg_so(jl_load_dynamic_library(fname, JL_RTLD_LOCAL | JL_RTLD_NOW));
+}
 
+// Allow passing in a module handle directly, rather than a path
+JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
+{
     // set cpu target if unspecified by user and available from sysimg
     // otherwise default to native.
-    if (jl_sysimg_handle && jl_options.cpu_target == NULL)
-        jl_options.cpu_target = (const char *)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
+    void* *jl_RTLD_DEFAULT_handle_pointer = (void**)jl_dlsym_e(handle, "jl_RTLD_DEFAULT_handle_pointer");
+    if (!jl_RTLD_DEFAULT_handle_pointer || (void*)&jl_RTLD_DEFAULT_handle != *jl_RTLD_DEFAULT_handle_pointer)
+        jl_error("System image file failed consistency check: maybe opened the wrong version?");
+    if (jl_options.cpu_target == NULL)
+        jl_options.cpu_target = (const char *)jl_dlsym(handle, "jl_sysimg_cpu_target");
+    jl_sysimg_handle = handle;
 }
 
 static void jl_restore_system_image_from_stream(ios_t *f)
@@ -2653,16 +2646,15 @@ static void jl_restore_system_image_from_stream(ios_t *f)
 
 JL_DLLEXPORT void jl_restore_system_image(const char *fname)
 {
-    char *dot = (char*) strrchr(fname, '.');
+#ifndef NDEBUG
+    char *dot = fname ? (char*)strrchr(fname, '.') : NULL;
     int is_ji = (dot && !strcmp(dot, ".ji"));
+    assert((is_ji || jl_sysimg_handle) && "System image file not preloaded");
+#endif
 
-    if (!is_ji) {
-        int err = jl_load_sysimg_so();
-        if (err != 0) {
-            if (jl_sysimg_handle == 0)
-                jl_errorf("System image file \"%s\" not found.", fname);
-            jl_errorf("Library \"%s\" does not contain a valid system image.", fname);
-        }
+    if (jl_sysimg_handle) {
+        // load the pre-compiled sysimage from jl_sysimg_handle
+        jl_load_sysimg_so();
     }
     else {
         ios_t f;
