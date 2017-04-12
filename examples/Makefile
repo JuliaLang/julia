@@ -20,9 +20,9 @@ release debug:
 	$(MAKE) embedding-$@
 
 %.o: %.c
-	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(JCPPFLAGS) $(CFLAGS) $(JCFLAGS) $(SHIPFLAGS) -c $< -o $@)
 %.do: %.c
-	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(JCPPFLAGS) $(CFLAGS) $(JCFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 embedding: $(build_bindir)/embedding$(EXE)
 embedding-debug: $(build_bindir)/embedding-debug$(EXE)
