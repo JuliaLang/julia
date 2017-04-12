@@ -514,9 +514,19 @@ if is_windows()
     end
 end
 
-optstring = sprint(show, Base.JLOptions())
-@test startswith(optstring, "JLOptions(")
-@test endswith(optstring, ")")
+let optstring = stringmime(MIME("text/plain"), Base.JLOptions())
+    @test startswith(optstring, "JLOptions(\n")
+    @test !contains(optstring, "Ptr")
+    @test endswith(optstring, "\n)")
+    @test contains(optstring, " = \"")
+end
+let optstring = repr(Base.JLOptions())
+    @test startswith(optstring, "JLOptions(")
+    @test endswith(optstring, ")")
+    @test !contains(optstring, "\n")
+    @test !contains(optstring, "Ptr")
+    @test contains(optstring, " = \"")
+end
 
 # Base.securezero! functions (#17579)
 import Base: securezero!, unsafe_securezero!

@@ -40,15 +40,15 @@ end
 JLOptions() = unsafe_load(cglobal(:jl_options, JLOptions))
 
 function show(io::IO, opt::JLOptions)
-    println(io, "JLOptions(")
+    print(io, "JLOptions(")
     fields = fieldnames(opt)
     nfields = length(fields)
-    for (i,f) in enumerate(fieldnames(opt))
-        v = getfield(opt,f)
+    for (i, f) in enumerate(fields)
+        v = getfield(opt, i)
         if isa(v, Ptr{UInt8})
-            v = v != C_NULL ? unsafe_string(v) : ""
+            v = (v != C_NULL) ? unsafe_string(v) : ""
         end
-        println(io, "  ", f, " = ", repr(v), i < nfields ? "," : "")
+        print(io, f, " = ", repr(v), i < nfields ? ", " : "")
     end
-    print(io,")")
+    print(io, ")")
 end
