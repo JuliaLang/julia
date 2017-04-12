@@ -161,7 +161,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `unsafe_trunc(::Type{<:Integer}, ::Integer)` is supported on 0.5. ([#18629])
 
-* `bswap` is supported for `Complex` arguments. ([#21346])
+* `bswap` is supported for `Complex` arguments on 0.5 and below. ([#21346])
 
 ## Renamed functions
 
