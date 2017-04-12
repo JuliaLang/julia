@@ -18,9 +18,26 @@ An array of the command line arguments passed to Julia, as strings.
 """
 const ARGS = String[]
 
+"""
+    exit([code])
+
+Quit (or control-D at the prompt). The default exit code is zero, indicating that the
+processes completed successfully.
+"""
 exit(n) = ccall(:jl_exit, Void, (Int32,), n)
 exit() = exit(0)
+
+"""
+    quit()
+
+Quit the program indicating that the processes completed successfully. This function calls
+`exit(0)` (see [`exit`](@ref)).
+"""
 quit() = exit()
+
+# hint for people who forget parentheses
+show(io::IO, ::MIME"text/plain", ::typeof(quit)) = print(io, "Use exit(), quit() or Ctrl-D to exit")
+show(io::IO, ::MIME"text/plain", ::typeof(exit)) = print(io, "Use exit(), quit() or Ctrl-D to exit")
 
 const roottask = current_task()
 

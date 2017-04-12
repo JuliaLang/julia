@@ -1145,14 +1145,6 @@ See [`BigFloat`](@ref) for information about some pitfalls with floating-point n
 big
 
 """
-    quit()
-
-Quit the program indicating that the processes completed successfully. This function calls
-`exit(0)` (see [`exit`](@ref)).
-"""
-quit
-
-"""
     typejoin(T, S)
 
 Compute a type that contains both `T` and `S`.
@@ -2217,14 +2209,6 @@ Like [`parse`](@ref), but returns a [`Nullable`](@ref) of the requested type. Th
 string does not contain a valid number.
 """
 tryparse
-
-"""
-    exit([code])
-
-Quit (or control-D at the prompt). The default exit code is zero, indicating that the
-processes completed successfully.
-"""
-exit
 
 """
     skipchars(stream, predicate; linecomment::Char)
