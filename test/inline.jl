@@ -87,11 +87,11 @@ end
 @inline Base.getindex(v::s21074, i::Integer) = v.x[i]
 @eval f21074() = $(s21074((1,2))).x[1]
 let (src, _) = code_typed(f21074, ())[1]
-    @test src.code[1] == Expr(:return, 1)
+    @test src.code[end] == Expr(:return, 1)
 end
 @eval g21074() = $(s21074((1,2)))[1]
 let (src, _) = code_typed(g21074, ())[1]
-    @test src.code[1] == Expr(:return, 1)
+    @test src.code[end] == Expr(:return, 1)
 end
 
 # issue #21311
