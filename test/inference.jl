@@ -736,7 +736,7 @@ f21175() = 902221
 # call again, so that the AST is built on-demand
 let e = code_typed(f21175, ())[1].first.code[1]::Expr
     @test e.head === :return
-    @test e.args[1] == Core.QuoteNode(902221)
+    @test e.args[1] ∈ (902221, Core.QuoteNode(902221))
 end
 
 # issue #10207
