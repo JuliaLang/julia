@@ -247,6 +247,24 @@ another null.
     end
 end
 
+@inline function isless{S,T}(x::Nullable{S}, y::T)
+    # NULL values are sorted last
+    if null_safe_op(isless, S, T)
+        !isnull(x) & isless(x.value, y)
+    else
+        !isnull(x) && isless(x.value, y)
+    end
+end
+
+@inline function isless{S,T}(x::S, y::Nullable{T})
+    # NULL values are sorted last
+    if null_safe_op(isless, S, T)
+        !isnull(y) & isless(x, y.value)
+    else
+        !isnull(y) && isless(x, y.value)
+    end
+end
+
 isless(x::Nullable{Union{}}, y::Nullable{Union{}}) = false
 isless(x::Nullable{Union{}}, y::Nullable) = false
 isless(x::Nullable, y::Nullable{Union{}}) = !isnull(x)
