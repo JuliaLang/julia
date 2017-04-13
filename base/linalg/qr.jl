@@ -10,9 +10,9 @@ Represents a QR factorization of an `m`×`n` matrix `A`,
 A = Q R
 ```
 
-where ``P`` is a permutation matrix, ``Q`` is an orthogonal matrix and ``R`` is upper
-triangular. The matrix `Q` is stored as a sequence of Householder reflectors ``v_i`` and
-coefficients ``\\tau_i`` where:
+where ``P`` is a permutation matrix, ``Q`` is an orthogonal/unitary matrix and ``R`` is
+upper triangular. The matrix `Q` is stored as a sequence of Householder reflectors ``v_i``
+and coefficients ``\\tau_i`` where:
 
 ```math
 Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T).
@@ -48,9 +48,9 @@ Represents a QR factorization of an `m`×`n` matrix `A`,
 A = Q R
 ```
 
-where ``P`` is a permutation matrix, ``Q`` is an orthogonal matrix and ``R`` is upper
-triangular. The matrix ``Q`` is stored in *Compact WY* format [^Schreiber1989], as a lower
-trapezoidal matrix ``V`` and an upper triangular matrix ``T`` where
+where ``P`` is a permutation matrix, ``Q`` is an orthogonal/unitary matrix and ``R`` is
+upper triangular. The matrix ``Q`` is stored in *Compact WY* format [^Schreiber1989], as a
+lower trapezoidal matrix ``V`` and an upper triangular matrix ``T`` where
 
 ```math
 Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T) = I - V T V^T
@@ -100,8 +100,8 @@ Represents a QR factorization with column pivoting of an `m`×`n` matrix `A`,
 A P = Q R
 ```
 
-where ``P`` is a permutation matrix, ``Q`` is an orthogonal matrix and ``R`` is upper
-triangular. The matrix `Q` is stored as a sequence of Householder reflectors:
+where ``P`` is a permutation matrix, ``Q`` is an orthogonal/unitary matrix and ``R`` is
+upper triangular. The matrix `Q` is stored as a sequence of Householder reflectors:
 
 ```math
 Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T).
@@ -214,25 +214,28 @@ qrfact!(A::StridedMatrix) = qrfact!(A, Val{false})
 """
     qrfact(A, pivot=Val{false}) -> F
 
-Computes the QR factorization of `A`. The return type of `F` depends on the element type of
-`A` and whether pivoting is specified (with `pivot==Val{true}`).
+Computes the QR factorization of the matrix `A`: an orthogonal (or unitary if `A` is
+complex-valued) matrix `Q`, and an upper triangular matrix `R` such that
 
-| Return type   | `eltype(A)`     | `pivot`      | Relationship between `F` and `A` |
-|:--------------|:----------------|:-------------|:---------------------------------|
-| `QR`          | not `BlasFloat` | either       | `A==F[:Q]*F[:R]`                 |
-| `QRCompactWY` | `BlasFloat`     | `Val{false}` | `A==F[:Q]*F[:R]`                 |
-| `QRPivoted`   | `BlasFloat`     | `Val{true}`  | `A[:,F[:p]]==F[:Q]*F[:R]`        |
+```math
+A = Q R
+```
 
-`BlasFloat` refers to any of: `Float32`, `Float64`, `Complex64` or `Complex128`.
+This returns an object `F` that represents the factorization in a packed format:
 
-The individual components of the factorization `F` can be accessed by indexing:
+ - if `pivot == Val{true}` then `F` is a [`QRPivoted`](@ref) object,
 
-| Component | Description                               | `QR`            | `QRCompactWY`      | `QRPivoted`     |
-|:----------|:------------------------------------------|:----------------|:-------------------|:----------------|
-| `F[:Q]`   | `Q` (orthogonal/unitary) part of `QR`     | ✓ (`QRPackedQ`) | ✓ (`QRCompactWYQ`) | ✓ (`QRPackedQ`) |
-| `F[:R]`   | `R` (upper right triangular) part of `QR` | ✓               | ✓                  | ✓               |
-| `F[:p]`   | pivot `Vector`                            |                 |                    | ✓               |
-| `F[:P]`   | (pivot) permutation `Matrix`              |                 |                    | ✓               |
+ - otherwise if the element type of `A` is a BLAS type (`Float32`, `Float64`, `Complex64`
+   or `Complex128`), then `F` is a [`QRCompactWY`](@ref),
+
+ - otherwise it returns a [`QR`](@ref) object.
+
+The individual components of the factorization `F` can be accessed by indexing via a symbol:
+
+ - `F[:Q]`: the orthogonal/unitary matrix `Q`
+ - `F[:R]`: the upper triangular matrix `R`
+ - `F[:p]`: the permutation vector of the pivot ([`QRPivoted`](@ref) only)
+ - `F[:P]`: the permutation matrix of the pivot ([`QRPivoted`](@ref) only)
 
 The following functions are available for the `QR` objects: [`size`](@ref)
 and [`\\`](@ref). When `A` is rectangular, `\\` will return a least squares
@@ -266,32 +269,6 @@ true
     elementary reflectors, so that the `Q` and `R` matrices can be stored
     compactly rather as two separate dense matrices.
 
-    The data contained in `QR` or `QRPivoted` can be used to construct the
-    `QRPackedQ` type, which is a compact representation of the rotation matrix:
-
-    ```math
-    Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T)
-    ```
-
-    where ``\\tau_i`` is the scale factor and ``v_i`` is the projection vector
-    associated with the ``i^{th}`` Householder elementary reflector.
-
-    The data contained in `QRCompactWY` can be used to construct the
-    `QRCompactWYQ` type, which is a compact representation of the rotation
-    matrix
-
-    ```math
-    Q = I - Y T Y^T
-    ```
-
-    where `Y` is ``m \\times r`` lower trapezoidal and `T` is ``r \\times r``
-    upper triangular. The *compact WY* representation [^Schreiber1989] is not
-    to be confused with the older, *WY* representation [^Bischof1987]. (The
-    LAPACK documentation uses `V` in lieu of `Y`.)
-
-    [^Bischof1987]: C Bischof and C Van Loan, "The WY representation for products of Householder matrices", SIAM J Sci Stat Comput 8 (1987), s2-s13. [doi:10.1137/0908009](http://dx.doi.org/10.1137/0908009)
-
-    [^Schreiber1989]: R Schreiber and C Van Loan, "A storage-efficient WY representation for products of Householder transformations", SIAM J Sci Stat Comput 10 (1989), 53-57. [doi:10.1137/0910005](http://dx.doi.org/10.1137/0910005)
 """
 function qrfact{T}(A::AbstractMatrix{T}, arg)
     AA = similar(A, typeof(zero(T)/norm(one(T))), size(A))
