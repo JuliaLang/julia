@@ -210,6 +210,22 @@ and `false` if one is null but not the other: nulls are considered equal.
     end
 end
 
+@inline function isequal{S,T}(x::Nullable{S}, y::T)
+    if null_safe_op(isequal, S, T)
+        !isnull(x) & isequal(x.value, y)
+    else
+        !isnull(x) && isequal(x.value, y)
+    end
+end
+
+@inline function isequal{S,T}(x::S, y::Nullable{T})
+    if null_safe_op(isequal, S, T)
+        !isnull(y) & isequal(x, y.value)
+    else
+        !isnull(y) && isequal(x, y.value)
+    end
+end
+
 isequal(x::Nullable{Union{}}, y::Nullable{Union{}}) = true
 isequal(x::Nullable{Union{}}, y::Nullable) = isnull(y)
 isequal(x::Nullable, y::Nullable{Union{}}) = isnull(x)
