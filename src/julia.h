@@ -378,6 +378,8 @@ typedef struct _jl_datatype_t {
     void *ditype; // llvm::MDNode* to be used as llvm::DIType(ditype)
     void *arreltbaa; // llvm::MDNode* for when this type is used as an array
                      // element type (strict aliasing mode only)
+    void *boxedtbaa; // llvm::MDNode* for when this type is used as a boxed
+                     // type
     int32_t depth;
     int8_t hasfreetypevars;
     int8_t isleaftype;

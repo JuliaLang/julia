@@ -1069,6 +1069,7 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
     ndt->struct_decl = NULL;
     ndt->ditype = NULL;
     ndt->arreltbaa = NULL;
+    ndt->boxedtbaa = NULL;
     ndt->size = 0;
     jl_precompute_memoized_dt(ndt);
 
@@ -1503,7 +1504,7 @@ void jl_init_types(void)
     jl_datatype_type->name->wrapper = (jl_value_t*)jl_datatype_type;
     jl_datatype_type->super = (jl_datatype_t*)jl_type_type;
     jl_datatype_type->parameters = jl_emptysvec;
-    jl_datatype_type->name->names = jl_svec(17,
+    jl_datatype_type->name->names = jl_svec(18,
                                             jl_symbol("name"),
                                             jl_symbol("super"),
                                             jl_symbol("parameters"),
@@ -1518,10 +1519,11 @@ void jl_init_types(void)
                                             jl_symbol("llvm::StructType"),
                                             jl_symbol("llvm::DIType"),
                                             jl_symbol("llvm::MDNode"),
+                                            jl_symbol("llvm::MDNode"),
                                             jl_symbol("depth"),
                                             jl_symbol("hasfreetypevars"),
                                             jl_symbol("isleaftype"));
-    jl_datatype_type->types = jl_svec(17,
+    jl_datatype_type->types = jl_svec(18,
                                       jl_typename_type,
                                       jl_datatype_type,
                                       jl_simplevector_type,
@@ -1529,7 +1531,8 @@ void jl_init_types(void)
                                       jl_any_type, // instance
                                       jl_any_type, jl_any_type, jl_any_type, jl_any_type,
                                       jl_any_type, jl_any_type, jl_any_type, jl_any_type,
-                                      jl_any_type, jl_any_type, jl_any_type, jl_any_type);
+                                      jl_any_type, jl_any_type, jl_any_type, jl_any_type,
+                                      jl_any_type);
     jl_datatype_type->instance = NULL;
     jl_datatype_type->uid = jl_assign_type_uid();
     jl_datatype_type->struct_decl = NULL;
@@ -1557,6 +1560,7 @@ void jl_init_types(void)
     jl_typename_type->struct_decl = NULL;
     jl_typename_type->ditype = NULL;
     jl_typename_type->arreltbaa = NULL;
+    jl_typename_type->boxedtbaa = NULL;    
     jl_typename_type->abstract = 0;
     jl_typename_type->mutabl = 1;
     jl_typename_type->ninitialized = 2;
@@ -1578,6 +1582,7 @@ void jl_init_types(void)
     jl_methtable_type->struct_decl = NULL;
     jl_methtable_type->ditype = NULL;
     jl_methtable_type->arreltbaa = NULL;
+    jl_methtable_type->boxedtbaa = NULL;    
     jl_methtable_type->abstract = 0;
     jl_methtable_type->mutabl = 1;
     jl_methtable_type->ninitialized = 4;
@@ -1594,6 +1599,7 @@ void jl_init_types(void)
     jl_sym_type->struct_decl = NULL;
     jl_sym_type->ditype = NULL;
     jl_sym_type->arreltbaa = NULL;
+    jl_sym_type->boxedtbaa = NULL;
     jl_sym_type->size = 0;
     jl_sym_type->abstract = 0;
     jl_sym_type->mutabl = 1;
@@ -1611,6 +1617,7 @@ void jl_init_types(void)
     jl_simplevector_type->struct_decl = NULL;
     jl_simplevector_type->ditype = NULL;
     jl_simplevector_type->arreltbaa = NULL;
+    jl_simplevector_type->boxedtbaa = NULL;
     jl_simplevector_type->abstract = 0;
     jl_simplevector_type->mutabl = 1;
     jl_simplevector_type->ninitialized = 1;
@@ -1988,9 +1995,10 @@ void jl_init_types(void)
     jl_svecset(jl_datatype_type->types, 11, jl_voidpointer_type);
     jl_svecset(jl_datatype_type->types, 12, jl_voidpointer_type);
     jl_svecset(jl_datatype_type->types, 13, jl_voidpointer_type);
-    jl_svecset(jl_datatype_type->types, 14, jl_int32_type);
-    jl_svecset(jl_datatype_type->types, 15, jl_bool_type);
+    jl_svecset(jl_datatype_type->types, 14, jl_voidpointer_type);
+    jl_svecset(jl_datatype_type->types, 15, jl_int32_type);
     jl_svecset(jl_datatype_type->types, 16, jl_bool_type);
+    jl_svecset(jl_datatype_type->types, 17, jl_bool_type);
     jl_svecset(jl_simplevector_type->types, 0, jl_long_type);
     jl_svecset(jl_typename_type->types, 1, jl_module_type);
     jl_svecset(jl_typename_type->types, 6, jl_long_type);

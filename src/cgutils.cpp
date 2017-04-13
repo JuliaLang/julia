@@ -157,6 +157,28 @@ static MDNode *julia_type_to_elttbaa(jl_value_t *jt) {
   return (MDNode*)jdt->arreltbaa;
 }
 
+static MDNode *julia_type_to_boxedtbaa(jl_value_t *jt) {
+  if (has_hidden_content(jt) || !jl_is_leaf_type(jt))
+    return nullptr;
+  assert(jl_is_datatype(jt));
+  jl_datatype_t *jdt = (jl_datatype_t*)jt;
+  if (jdt->boxedtbaa != nullptr)
+    return (MDNode*)jdt->boxedtbaa;
+  MDNode *scalar = llvm::MDNode::getDistinct(jl_LLVMContext, {
+      MDString::get(jl_LLVMContext, ""),
+      jl_is_mutable(jdt) ? tbaa_mutab_scalar : tbaa_immut_scalar,
+      ConstantAsMetadata::get(
+          ConstantInt::get(Type::getInt64Ty(jl_LLVMContext), 0))
+  });
+  jdt->boxedtbaa = llvm::MDNode::getDistinct(jl_LLVMContext, {
+      scalar,
+      scalar,
+      ConstantAsMetadata::get(
+          ConstantInt::get(Type::getInt64Ty(jl_LLVMContext), 0))
+  });
+  return (MDNode*)jdt->boxedtbaa;
+}
+
 #if JL_LLVM_VERSION >= 30700
 static DIType *julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed = false)
 #else

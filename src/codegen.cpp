@@ -267,7 +267,11 @@ static MDNode *tbaa_tag;            // Type tag
 static MDNode *tbaa_binding;        // jl_binding_t::value
 static MDNode *tbaa_value;          // jl_value_t, that is not jl_array_t
 static MDNode *tbaa_mutab;              // mutable type
+static MDNode *tbaa_mutab_scalar;           // In strict aliasing mode, 
+                                            // type tbaa nodes are nested under here
 static MDNode *tbaa_immut;              // immutable type
+static MDNode *tbaa_immut_scalar;           // In strict aliasing mode, 
+                                            // type tbaa nodes are nested under here
 static MDNode *tbaa_ptrarraybuf;    // Data in an array of boxed values
 static MDNode *tbaa_arraybuf;       // Data in an array of POD
 static MDNode *tbaa_arraybuf_scalar;    // In strict aliasing mode, for each element
@@ -450,6 +454,7 @@ struct aa_data {
     aa_data(MDNode *tbaa, MDNode *invariant_group) : tbaa(tbaa), invariant_group(invariant_group) {}
 };
 
+static MDNode *julia_type_to_boxedtbaa(jl_value_t *jt);
 static MDNode *best_tbaa(jl_value_t *jt) {
     jt = jl_unwrap_unionall(jt);
     if (!jl_is_datatype(jt))
@@ -458,6 +463,9 @@ static MDNode *best_tbaa(jl_value_t *jt) {
         return tbaa_value;
     // If we're here, we know all subtypes are (im)mutable, even if we
     // don't know what the exact type is
+    MDNode *type_specific_tbaa = julia_type_to_boxedtbaa(jt);
+    if (type_specific_tbaa)
+        return type_specific_tbaa;
     return jl_is_mutable(jt) ? tbaa_mutab : tbaa_immut;
 }
 
@@ -6430,8 +6438,8 @@ static void init_julia_llvm_meta(void)
     MDNode *tbaa_value_scalar;
     std::tie(tbaa_value, tbaa_value_scalar) =
         tbaa_make_child("jtbaa_value", tbaa_data_scalar);
-    tbaa_mutab = tbaa_make_child("jtbaa_mutab", tbaa_value_scalar).first;
-    tbaa_immut = tbaa_make_child("jtbaa_immut", tbaa_value_scalar).first;
+    std::tie(tbaa_mutab, tbaa_mutab_scalar) = tbaa_make_child("jtbaa_mutab", tbaa_value_scalar);
+    std::tie(tbaa_immut, tbaa_immut_scalar) = tbaa_make_child("jtbaa_immut", tbaa_value_scalar);
     std::tie(tbaa_arraybuf, tbaa_arraybuf_scalar) = tbaa_make_child("jtbaa_arraybuf", tbaa_data_scalar);
     tbaa_ptrarraybuf = tbaa_make_child("jtbaa_ptrarraybuf", tbaa_data_scalar).first;
     MDNode *tbaa_array_scalar;
