@@ -2379,7 +2379,8 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
             case 3: { // rehash MethodTable
                 jl_methtable_t *mt = (jl_methtable_t*)v;
                 jl_typemap_rehash(mt->defs, 0);
-                jl_typemap_rehash(mt->cache, (mt == jl_type_typename->mt) ? 0 : 1);
+                // TODO: consider reverting this when we can split on Type{...} better
+                jl_typemap_rehash(mt->cache, 1); //(mt == jl_type_typename->mt) ? 0 : 1);
                 if (tracee_list)
                     arraylist_push(tracee_list, mt);
                 break;
