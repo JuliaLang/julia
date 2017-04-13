@@ -80,7 +80,7 @@ end
 is lowered to (roughly):
 
 ```julia
-immutable ##1{T}
+struct ##1{T}
     x::T
 end
 
