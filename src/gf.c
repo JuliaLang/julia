@@ -134,7 +134,8 @@ const struct jl_typemap_info tfunc_cache = {
 
 static int8_t jl_cachearg_offset(jl_methtable_t *mt)
 {
-    return (mt == jl_type_type_mt) ? 0 : 1;
+    // TODO: consider reverting this when we can split on Type{...} better
+    return 1; //(mt == jl_type_type_mt) ? 0 : 1;
 }
 
 /// ----- Insertion logic for special entries ----- ///
