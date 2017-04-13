@@ -55,7 +55,7 @@ any runtime overhead.
 The strategy adopted is first and foremost expressed in the definition of the type:
 
 ```
-immutable SubArray{T,N,P,I,L} <: AbstractArray{T,N}
+struct SubArray{T,N,P,I,L} <: AbstractArray{T,N}
     parent::P
     indexes::I
     offset1::Int       # for linear indexing and pointer, only valid when L==true

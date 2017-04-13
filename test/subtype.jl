@@ -622,7 +622,7 @@ abstract type AbstractTriangular{T,S<:AbstractMatrix} <: AbstractMatrix{T} end
 struct UpperTriangular{T,S<:AbstractMatrix} <: AbstractTriangular{T,S} end
 struct UnitUpperTriangular{T,S<:AbstractMatrix} <: AbstractTriangular{T,S} end
 
-immutable SIQ20671{T<:Number,m,kg,s,A,K,mol,cd,rad,sr} <: Number
+struct SIQ20671{T<:Number,m,kg,s,A,K,mol,cd,rad,sr} <: Number
     val::T
 end
 
