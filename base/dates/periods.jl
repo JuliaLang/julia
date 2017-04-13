@@ -59,8 +59,10 @@ default(p::Union{T,Type{T}}) where {T<:DatePeriod} = T(1)
 default(p::Union{T,Type{T}}) where {T<:TimePeriod} = T(0)
 
 (-)(x::P) where {P<:Period} = P(-value(x))
+==(x::P, y::P) where {P<:Period} = value(x) == value(y)
+==(x::Period, y::Period) = (==)(promote(x, y)...)
 Base.isless(x::P, y::P) where {P<:Period} = isless(value(x), value(y))
-(==)(x::P, y::P) where {P<:Period} = value(x) == value(y)
+Base.isless(x::Period, y::Period) = isless(promote(x, y)...)
 
 # Period Arithmetic, grouped by dimensionality:
 import Base: div, fld, mod, rem, gcd, lcm, +, -, *, /, %
@@ -425,9 +427,6 @@ for i = 1:length(fixedperiod_conversions)
         N *= nc
     end
 end
-# have to declare thusly so that diagonal dispatch above takes precedence:
-(==)(x::T, y::S) where {T<:FixedPeriod,S<:FixedPeriod} = (==)(promote(x, y)...)
-Base.isless(x::T, y::S) where {T<:FixedPeriod,S<:FixedPeriod} = isless(promote(x, y)...)
 
 # other periods with fixed conversions but which aren't fixed time periods
 const OtherPeriod = Union{Month, Year}
@@ -439,8 +438,13 @@ let vmax = typemax(Int64) ÷ 12, vmin = typemin(Int64) ÷ 12
 end
 Base.convert(::Type{Year}, x::Month) = Year(divexact(value(x), 12))
 Base.promote_rule(::Type{Year}, ::Type{Month}) = Month
-(==)(x::T, y::S) where {T<:OtherPeriod,S<:OtherPeriod} = (==)(promote(x, y)...)
-Base.isless(x::T, y::S) where {T<:OtherPeriod,S<:OtherPeriod} = isless(promote(x, y)...)
+
+# disallow comparing fixed to other periods
+(==)(x::FixedPeriod, y::OtherPeriod) = throw(MethodError(==, (x, y)))
+(==)(x::OtherPeriod, y::FixedPeriod) = throw(MethodError(==, (x, y)))
+
+Base.isless(x::FixedPeriod, y::OtherPeriod) = throw(MethodError(isless, (x, y)))
+Base.isless(x::OtherPeriod, y::FixedPeriod) = throw(MethodError(isless, (x, y)))
 
 # truncating conversions to milliseconds and days:
 toms(c::Nanosecond)  = div(value(c), 1000000)
