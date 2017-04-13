@@ -1806,7 +1806,7 @@ julia> filter(isodd, a)
 """
 filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
 
-function filter!(f, a::Vector)
+function filter!(f, a::AbstractVector)
     insrt = 1
     for acurr in a
         if f(acurr)
