@@ -3440,6 +3440,10 @@ function effect_free(e::ANY, src::CodeInfo, mod::Module, allow_volatile::Bool)
                     return false
                 end
                 # fall-through
+            elseif length(ea) == 3 && isa(exprtype(e, src, mod), Const) &&
+                is_known_call_p(e, f->istopfunction(_topmod(mod), f, :getindex), src, mod) &&
+                exprtype(ea[2], src, mod) ⊑ SimpleVector
+                # fall-through
             else
                 return false
             end
@@ -3693,7 +3697,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
                 istopfunction(topmod, f, :promote_type) ||
                 (f === Core.kwfunc && length(argexprs) == 2) ||
                 contains_is(_pure_builtins, f) ||
-                (f === getfield && effect_free(e, sv.src, sv.mod, false)) ||
+                ((f === getfield || istopfunction(topmod, f, :getindex)) && effect_free(e, sv.src, sv.mod, false)) ||
                 (isa(f,IntrinsicFunction) && is_pure_intrinsic(f)))
                 return inline_as_constant(e.typ.val, argexprs, sv, nothing)
             end
