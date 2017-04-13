@@ -724,6 +724,18 @@ mktempdir() do dir
             # merge them now that we allow non-ff
             @test LibGit2.merge!(repo, [upst_ann], false)
             @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
+
+            # go back to merge_a and rename a file
+            LibGit2.branch!(repo, "branch/merge_b")
+            mv(joinpath(LibGit2.path(repo),"file1"),joinpath(LibGit2.path(repo),"mvfile1"))
+            LibGit2.add!(repo, "mvfile1")
+            LibGit2.commit(repo, "move file1")
+            LibGit2.branch!(repo, "master")
+            upst_ann = LibGit2.GitAnnotated(repo, "branch/merge_b")
+            rename_flag = 0
+            rename_flag = LibGit2.toggle(rename_flag, 0) # turns on the find renames opt
+            mos = LibGit2.MergeOptions(flags=rename_flag)
+            @test LibGit2.merge!(repo, [upst_ann], merge_opts=mos)
         finally
             close(repo)
         end
