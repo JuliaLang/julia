@@ -231,6 +231,42 @@ isequal(x::Nullable{Union{}}, y::Nullable) = isnull(y)
 isequal(x::Nullable, y::Nullable{Union{}}) = isnull(x)
 
 """
+    ==(x::Nullable, y::Nullable)
+
+If neither `x` nor `y` is null, compare them according to their values
+(i.e. `==(get(x), get(y))`). Else, return `true` if both arguments are null,
+and `false` if one is null but not the other: nulls are considered equal.
+"""
+@inline function =={S,T}(x::Nullable{S}, y::Nullable{T})
+    if null_safe_op(isequal, S, T)
+        (isnull(x) & isnull(y)) | (!isnull(x) & !isnull(y) & (x.value==y.value))
+    else
+        (isnull(x) & isnull(y)) || (!isnull(x) & !isnull(y) && x.value==y.value)
+    end
+end
+
+@inline function =={S,T}(x::Nullable{S}, y::T)
+    if null_safe_op(isequal, S, T)
+        !isnull(x) & (x.value == y)
+    else
+        !isnull(x) && x.value == y
+    end
+end
+
+@inline function =={S,T}(x::S, y::Nullable{T})
+    if null_safe_op(isequal, S, T)
+        !isnull(y) & (x == y.value)
+    else
+        !isnull(y) && x == y.value
+    end
+end
+
+==(x::Nullable{Union{}}, y::Nullable{Union{}}) = true
+==(x::Nullable{Union{}}, y::Nullable) = isnull(y)
+==(x::Nullable, y::Nullable{Union{}}) = isnull(x)
+
+
+"""
     isless(x::Nullable, y::Nullable)
 
 If neither `x` nor `y` is null, compare them according to their values
@@ -269,7 +305,6 @@ isless(x::Nullable{Union{}}, y::Nullable{Union{}}) = false
 isless(x::Nullable{Union{}}, y::Nullable) = false
 isless(x::Nullable, y::Nullable{Union{}}) = !isnull(x)
 
-==(x::Nullable, y::Nullable) = throw(NullException())
 
 const nullablehash_seed = UInt === UInt64 ? 0x932e0143e51d0171 : 0xe51d0171
 
