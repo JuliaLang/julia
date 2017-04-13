@@ -1,14 +1,50 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # QR and Hessenberg Factorizations
+"""
+    QR <: Factorization
 
+Represents a QR factorization of an `m`×`n`  matrix `A`, with the `Q` matrix stored as a sequence of Householder reflectors:
+
+```math
+Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T).
+```
+
+The object has two fields:
+
+* `factors`: an `m`×`n` matrix of the same dimension as `A`.
+  - The upper triangular part contains ``R``, that is `triu(F.factors)` for a `QR` object `F`.
+  - The subdiagonal part contains the reflectors ``v_i`` stored in a packed format where ``v_i`` is the ``i``th column of the matrix `V = eye(m,n) + tril(F.factors,-1)`.
+
+* `τ` is a vector  of length `min(m,n)` containing the coefficients ``\tau_i``.
+
+"""
 struct QR{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     τ::Vector{T}
     QR{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
 QR(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QR{T,typeof(factors)}(factors, τ)
+
 # Note. For QRCompactWY factorization without pivoting, the WY representation based method introduced in LAPACK 3.4
+"""
+    QRCompactWY <: Factorization
+
+Represents a QR factorization of an `m`×`n`  matrix `A`, with the `Q` matrix stored as a sequence of Householder reflectors in a compact format amenable to matrix multiplication operations:
+
+```math
+Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T) = I - V T V^T
+```
+
+The object has two fields:
+
+* `factors`: same as the [`QR`](@ref) struct; an `m`×`n` matrix of the same dimension as `A`
+  - The upper triangular part contains ``R``, that is `triu(F.factors)` for a `QR` object `F`.
+  - The subdiagonal part contains the reflectors ``v_i`` stored in a packed format where ``v_i`` is the ``i``th column of the matrix `V = eye(m,n) + tril(F.factors,-1)`.
+
+* `T` is a square matrix with `min(m,n)` columns, whose upper-triangular part gives the matrix ``T`` above (the subdiagonal elements are ignored).
+
+"""
 struct QRCompactWY{S,M<:AbstractMatrix} <: Factorization{S}
     factors::M
     T::Matrix{S}
@@ -175,7 +211,7 @@ true
     matrix
 
     ```math
-    Q = I + Y T Y^T
+    Q = I - Y T Y^T
     ```
 
     where `Y` is ``m \\times r`` lower trapezoidal and `T` is ``r \\times r``
