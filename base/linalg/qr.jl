@@ -4,7 +4,15 @@
 """
     QR <: Factorization
 
-Represents a QR factorization of an `m`×`n`  matrix `A`, with the `Q` matrix stored as a sequence of Householder reflectors:
+Represents a QR factorization of an `m`×`n` matrix `A`,
+
+```math
+A = Q R
+```
+
+where ``P`` is a permutation matrix, ``Q`` is an orthogonal matrix and ``R`` is upper
+triangular. The matrix `Q` is stored as a sequence of Householder reflectors ``v_i`` and
+coefficients ``\\tau_i`` where:
 
 ```math
 Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T).
@@ -12,9 +20,13 @@ Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T).
 
 The object has two fields:
 
-* `factors`: an `m`×`n` matrix of the same dimension as `A`.
-  - The upper triangular part contains ``R``, that is `triu(F.factors)` for a `QR` object `F`.
-  - The subdiagonal part contains the reflectors ``v_i`` stored in a packed format where ``v_i`` is the ``i``th column of the matrix `V = eye(m,n) + tril(F.factors,-1)`.
+* `factors` is an `m`×`n` matrix of the same dimension as `A`.
+
+  - The upper triangular part contains the elements of ``R``, that is `R =
+    triu(F.factors)` for a `QR` object `F`.
+
+  - The subdiagonal part contains the reflectors ``v_i`` stored in a packed format where
+    ``v_i`` is the ``i``th column of the matrix `V = eye(m,n) + tril(F.factors,-1)`.
 
 * `τ` is a vector  of length `min(m,n)` containing the coefficients ``\tau_i``.
 
@@ -30,19 +42,46 @@ QR(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QR{T,typeof(factors)}(
 """
     QRCompactWY <: Factorization
 
-Represents a QR factorization of an `m`×`n`  matrix `A`, with the `Q` matrix stored as a sequence of Householder reflectors in a compact format amenable to matrix multiplication operations:
+Represents a QR factorization of an `m`×`n` matrix `A`,
+
+```math
+A = Q R
+```
+
+where ``P`` is a permutation matrix, ``Q`` is an orthogonal matrix and ``R`` is upper
+triangular. The matrix ``Q`` is stored in *Compact WY* format [^Schreiber1989], as a lower
+trapezoidal matrix ``V`` and an upper triangular matrix ``T`` where
 
 ```math
 Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T) = I - V T V^T
 ```
 
+such that ``v_i`` is the ``i``th column of ``V``, and ``\tau_i`` is the ``i``th diagonal
+element of ``T``.
+
 The object has two fields:
 
-* `factors`: same as the [`QR`](@ref) struct; an `m`×`n` matrix of the same dimension as `A`
-  - The upper triangular part contains ``R``, that is `triu(F.factors)` for a `QR` object `F`.
-  - The subdiagonal part contains the reflectors ``v_i`` stored in a packed format where ``v_i`` is the ``i``th column of the matrix `V = eye(m,n) + tril(F.factors,-1)`.
+* `factors`, as in the [`QR`](@ref) type, is an `m`×`n` matrix of the same
+  dimension as `A`.
 
-* `T` is a square matrix with `min(m,n)` columns, whose upper-triangular part gives the matrix ``T`` above (the subdiagonal elements are ignored).
+  - The upper triangular part contains the elements of ``R``, that is `R =
+    triu(F.factors)` for a `QR` object `F`.
+
+  - The subdiagonal part contains the reflectors ``v_i`` stored in a packed format such
+    that `V = eye(m,n) + tril(F.factors,-1)`.
+
+* `T` is a square matrix with `min(m,n)` columns, whose upper triangular part gives the
+  matrix ``T`` above (the subdiagonal elements are ignored).
+
+!!! note
+
+    This format should not to be confused with the older *WY* representation
+    [^Bischof1987].
+
+
+[^Bischof1987]: C Bischof and C Van Loan, "The WY representation for products of Householder matrices", SIAM J Sci Stat Comput 8 (1987), s2-s13. [doi:10.1137/0908009](http://dx.doi.org/10.1137/0908009)
+
+[^Schreiber1989]: R Schreiber and C Van Loan, "A storage-efficient WY representation for products of Householder transformations", SIAM J Sci Stat Comput 10 (1989), 53-57. [doi:10.1137/0910005](http://dx.doi.org/10.1137/0910005)
 
 """
 struct QRCompactWY{S,M<:AbstractMatrix} <: Factorization{S}
@@ -52,6 +91,37 @@ struct QRCompactWY{S,M<:AbstractMatrix} <: Factorization{S}
 end
 QRCompactWY(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) where {S} = QRCompactWY{S,typeof(factors)}(factors, T)
 
+"""
+    QRPivoted <: Factorization
+
+Represents a QR factorization with column pivoting of an `m`×`n` matrix `A`,
+
+```math
+A P = Q R
+```
+
+where ``P`` is a permutation matrix, ``Q`` is an orthogonal matrix and ``R`` is upper
+triangular. The matrix `Q` is stored as a sequence of Householder reflectors:
+
+```math
+Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T).
+```
+
+The object has three fields:
+
+* `factors` is an `m`×`n` matrix of the same dimension as `A`.
+
+  - The upper triangular part contains the elements of ``R``, that is `R =
+    triu(F.factors)` for a `QR` object `F`.
+
+  - The subdiagonal part contains the reflectors ``v_i`` stored in a packed format where
+    ``v_i`` is the ``i``th column of the matrix `V = eye(m,n) + tril(F.factors,-1)`.
+
+* `τ` is a vector  of length `min(m,n)` containing the coefficients ``\tau_i``.
+
+* `jpvt` is an integer vector of length `n` corresponding to the permutation ``P``.
+
+"""
 struct QRPivoted{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     τ::Vector{T}
@@ -379,6 +449,12 @@ end
 getq(A::QRCompactWY) = QRCompactWYQ(A.factors,A.T)
 getq(A::Union{QR, QRPivoted}) = QRPackedQ(A.factors,A.τ)
 
+"""
+    QRPackedQ <: AbstractMatrix
+
+Represents the orthogonal ``Q`` matrix of a QR factorization stored in [`QR`](@ref) or
+[`QRPivoted`](@ref) format.
+"""
 struct QRPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     factors::S
     τ::Vector{T}
@@ -386,6 +462,12 @@ struct QRPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
 end
 QRPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QRPackedQ{T,typeof(factors)}(factors, τ)
 
+"""
+    QRPackedQ <: AbstractMatrix
+
+Represents the orthogonal ``Q`` matrix of a QR factorization stored in
+[`QRCompactWY`](@ref) format.
+"""
 struct QRCompactWYQ{S, M<:AbstractMatrix} <: AbstractMatrix{S}
     factors::M
     T::Matrix{S}
