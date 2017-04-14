@@ -4,7 +4,8 @@
 """
     QR <: Factorization
 
-Represents a QR factorization of an `m`×`n` matrix `A`,
+A QR matrix factorization stored in a packed format, typically obtained from
+[`qrfact`](@ref). If `A` is an `m`×`n` matrix, then
 
 ```math
 A = Q R
@@ -29,6 +30,7 @@ The object has two fields:
     ``v_i`` is the ``i``th column of the matrix `V = eye(m,n) + tril(F.factors,-1)`.
 
 * `τ` is a vector  of length `min(m,n)` containing the coefficients ``\tau_i``.
+
 """
 struct QR{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
@@ -41,14 +43,9 @@ QR(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QR{T,typeof(factors)}(
 """
     QRCompactWY <: Factorization
 
-Represents a QR factorization of an `m`×`n` matrix `A`,
-
-```math
-A = Q R
-```
-
-where ``Q`` is an orthogonal/unitary matrix and ``R`` is upper triangular.
-The matrix ``Q`` is stored in *Compact WY* format [^Schreiber1989], as a
+A QR matrix factorization stored in a compact blocked format, typically obtained from
+[`qrfact`](@ref). It is similar to a [`QR`](@ref) object except that the
+orthogonal/unitary matrix `Q` is stored in *Compact WY* format [^Schreiber1989], as a
 lower trapezoidal matrix ``V`` and an upper triangular matrix ``T`` where
 
 ```math
@@ -92,7 +89,8 @@ QRCompactWY(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) where {S} = QRComp
 """
     QRPivoted <: Factorization
 
-Represents a QR factorization with column pivoting of an `m`×`n` matrix `A`,
+A QR matrix factorization with column pivoting in a packed format, typically obtained from
+[`qrfact`](@ref). If `A` is an `m`×`n` matrix, then
 
 ```math
 A P = Q R
@@ -211,21 +209,21 @@ qrfact!(A::StridedMatrix) = qrfact!(A, Val{false})
 """
     qrfact(A, pivot=Val{false}) -> F
 
-Computes the QR factorization of the matrix `A`: an orthogonal (or unitary if `A` is
+Compute the QR factorization of the matrix `A`: an orthogonal (or unitary if `A` is
 complex-valued) matrix `Q`, and an upper triangular matrix `R` such that
 
 ```math
 A = Q R
 ```
 
-This returns an object `F` that represents the factorization in a packed format:
+The returned object `F` stores the factorization in a packed format:
 
  - if `pivot == Val{true}` then `F` is a [`QRPivoted`](@ref) object,
 
  - otherwise if the element type of `A` is a BLAS type (`Float32`, `Float64`, `Complex64`
-   or `Complex128`), then `F` is a [`QRCompactWY`](@ref),
+   or `Complex128`), then `F` is a [`QRCompactWY`](@ref) object,
 
- - otherwise it returns a [`QR`](@ref) object.
+ - otherwise `F` is a [`QR`](@ref) object.
 
 The individual components of the factorization `F` can be accessed by indexing with a symbol:
 
