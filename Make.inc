@@ -177,7 +177,7 @@ endif
 USE_GPL_LIBS ?= 1
 
 # Directories where said libraries get installed to
-prefix ?= $(abspath julia-$(JULIA_COMMIT))
+prefix ?= $(BUILDROOT)/julia-$(JULIA_COMMIT)
 bindir := $(prefix)/bin
 libdir := $(prefix)/lib
 libexecdir := $(prefix)/libexec
