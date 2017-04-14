@@ -12,7 +12,7 @@ A = Q R
 ```
 
 where ``Q`` is an orthogonal/unitary matrix and ``R`` is upper triangular.
-The matrix `Q` is stored as a sequence of Householder reflectors ``v_i``
+The matrix ``Q`` is stored as a sequence of Householder reflectors ``v_i``
 and coefficients ``\\tau_i`` where:
 
 ```math
@@ -21,7 +21,7 @@ Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T).
 
 The object has two fields:
 
-* `factors` is an `m`×`n` matrix of the same dimension as `A`.
+* `factors` is an `m`×`n` matrix.
 
   - The upper triangular part contains the elements of ``R``, that is `R =
     triu(F.factors)` for a `QR` object `F`.
@@ -45,7 +45,7 @@ QR(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QR{T,typeof(factors)}(
 
 A QR matrix factorization stored in a compact blocked format, typically obtained from
 [`qrfact`](@ref). It is similar to a [`QR`](@ref) object except that the
-orthogonal/unitary matrix `Q` is stored in *Compact WY* format [^Schreiber1989], as a
+orthogonal/unitary matrix ``Q`` is stored in *Compact WY* format [^Schreiber1989], as a
 lower trapezoidal matrix ``V`` and an upper triangular matrix ``T`` where
 
 ```math
@@ -57,8 +57,7 @@ element of ``T``.
 
 The object has two fields:
 
-* `factors`, as in the [`QR`](@ref) type, is an `m`×`n` matrix of the same
-  dimension as `A`.
+* `factors`, as in the [`QR`](@ref) type, is an `m`×`n` matrix.
 
   - The upper triangular part contains the elements of ``R``, that is `R =
     triu(F.factors)` for a `QR` object `F`.
@@ -97,7 +96,7 @@ A P = Q R
 ```
 
 where ``P`` is a permutation matrix, ``Q`` is an orthogonal/unitary matrix and ``R`` is
-upper triangular. The matrix `Q` is stored as a sequence of Householder reflectors:
+upper triangular. The matrix ``Q`` is stored as a sequence of Householder reflectors:
 
 ```math
 Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T).
@@ -105,7 +104,7 @@ Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T).
 
 The object has three fields:
 
-* `factors` is an `m`×`n` matrix of the same dimension as `A`.
+* `factors` is an `m`×`n` matrix.
 
   - The upper triangular part contains the elements of ``R``, that is `R =
     triu(F.factors)` for a `QR` object `F`.
