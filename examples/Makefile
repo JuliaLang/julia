@@ -1,7 +1,6 @@
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BUILDDIR := .
 JULIAHOME := $(abspath $(SRCDIR)/..)
-prefix := $(JULIAHOME)/usr
 include $(JULIAHOME)/Make.inc
 
 outdir := $(libexecdir)

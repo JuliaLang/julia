@@ -11,6 +11,9 @@ ifndef BIN
 endif
 
 #=============================================================================
+# this source directory where embedding.c is located
+SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+
 # get the executable suffix, if any
 EXE := $(suffix $(abspath $(JULIA)))
 
@@ -26,10 +29,10 @@ DEBUGFLAGS += -g
 release: $(BIN)/embedding$(EXE)
 debug:   $(BIN)/embedding-debug$(EXE)
 
-$(BIN)/embedding$(EXE): embedding.c
+$(BIN)/embedding$(EXE): $(SRCDIR)/embedding.c
 	$(CC) $^ -o $@ $(CFLAGS)
 
-$(BIN)/embedding-debug$(EXE): embedding.c
+$(BIN)/embedding-debug$(EXE): $(SRCDIR)/embedding.c
 	$(CC) $^ -o $@ $(CFLAGS) $(DEBUGFLAGS)
 
 clean:
