@@ -330,7 +330,7 @@ This automatic provision of constructors is equivalent to the following explicit
 julia> struct Point{T<:Real}
            x::T
            y::T
-           Point{T}(x,y) where T<:Real = new(x,y)
+           Point{T}(x,y) where T<:Real = new{T}(x,y)
        end
 
 julia> Point(x::T, y::T) where T<:Real = Point{T}(x,y);
@@ -338,7 +338,9 @@ julia> Point(x::T, y::T) where T<:Real = Point{T}(x,y);
 
 Notice that each definition looks like the form of constructor call that it handles.
 The call `Point{Int64}(1,2)` will invoke the definition `Point{T}(x,y)` inside the
-`type` block.
+`type` block. The syntax `new{T}` allows specifying parameters for the type to be constructed, i.e.
+this call will return a `Point{T}`. For convenience, the parameters to new{} are
+automatically derived from the type being constructed when possible.
 The outer constructor declaration, on the other hand, defines a
 method for the general `Point` constructor which only applies to pairs of values of the same real
 type. This declaration makes constructor calls without explicit type parameters, like `Point(1,2)`
@@ -421,7 +423,7 @@ julia> struct OurRational{T<:Integer} <: Real
                g = gcd(den, num)
                num = div(num, g)
                den = div(den, g)
-               new(num, den)
+               new{T}(num, den)
            end
        end
 
@@ -573,6 +575,6 @@ Closest candidates are:
 ```
 
 This constructor will be invoked by the syntax `SummedArray(a)`. The syntax `new{T,S}` allows
-specifying parameters for the type to be constructed, i.e. this call will return a `SummedArray{T,S}`.
-`new{T,S}` can be used in any constructor definition, but for convenience the parameters
-to `new{}` are automatically derived from the type being constructed when possible.
+specifying parameters for the type to be constructed and this call will return a `SummedArray{T,S}`.
+`new{T,S}` can be used in any constructor definition (but recall, for convenience the parameters
+to `new{}` are automatically derived from the type being constructed when possible).
