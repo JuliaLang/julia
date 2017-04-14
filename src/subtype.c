@@ -2485,16 +2485,21 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
     }
 
     if (jl_is_type_type(a) && !invariant) {
+        if (b == (jl_value_t*)jl_typeofbottom_type)
+            return 0;
         jl_value_t *tp0a = jl_tparam0(a);
         if (jl_is_typevar(tp0a)) {
-            if (b == (jl_value_t*)jl_typeofbottom_type)
-                return 0;
             jl_value_t *ub = ((jl_tvar_t*)tp0a)->ub;
             if (jl_is_kind(b) && !jl_subtype((jl_value_t*)jl_any_type, ub))
                 return 1;
         }
+        else if (tp0a == jl_bottom_type) {
+            if (jl_subtype(b, (jl_value_t*)jl_type_type))
+                return 1;
+        }
         else {
-            if (jl_isa(tp0a, b) || (tp0a == jl_bottom_type && jl_subtype(b, (jl_value_t*)jl_type_type)))
+            if (b == (jl_value_t*)jl_datatype_type || b == (jl_value_t*)jl_unionall_type ||
+                b == (jl_value_t*)jl_uniontype_type || jl_isa(tp0a, b))
                 return 1;
         }
     }
