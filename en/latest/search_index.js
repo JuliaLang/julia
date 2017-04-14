@@ -13413,7 +13413,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.BLAS.gbmv",
     "category": "Function",
-    "text": "gbmv(trans, m, kl, ku, alpha, A, x, beta, y)\n\nReturns alpha*A*x or alpha*A'*x according to trans. The matrix A is a general band matrix of dimension m by size(A,2) with kl sub-diagonals and ku super-diagonals. alpha and beta are scalars.\n\n\n\n"
+    "text": "gbmv(trans, m, kl, ku, alpha, A, x)\n\nReturns alpha*A*x or alpha*A'*x according to trans. The matrix A is a general band matrix of dimension m by size(A,2) with kl sub-diagonals and ku super-diagonals, and alpha is a scalar.\n\n\n\n"
 },
 
 {
