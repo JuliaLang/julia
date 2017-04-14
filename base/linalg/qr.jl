@@ -100,7 +100,7 @@ representable by the element type of `A`, e.g. for integer types.
 """
 qrfact!(A::StridedMatrix,              ::Type{Val{false}}) = qrfact!(QR, A)
 qrfact!(A::StridedMatrix{<:BlasFloat}, ::Type{Val{false}}) = qrfact!(QRCompactWY, A)
-qrfact!(A::StridedMatrix,              ::Type{Val{true}})  = qrfact!(QRPivtoted, A)
+qrfact!(A::StridedMatrix,              ::Type{Val{true}})  = qrfact!(QRPivoted, A)
 
 qrfact!(A::StridedMatrix) = qrfact!(A, Val{false})
 
