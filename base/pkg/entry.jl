@@ -605,11 +605,13 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
             end
         end
     """
-    cmd = `$(Base.julia_cmd()) -O0
-            --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
-            --history-file=no
-            --color=$(Base.have_color ? "yes" : "no")
-            --eval $code`
+    cmd = ```
+        $(Base.julia_cmd()) -O0
+        --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
+        --history-file=no
+        --color=$(Base.have_color ? "yes" : "no")
+        --eval $code
+    ```
 
     success(pipeline(cmd, stderr=STDERR))
 end
