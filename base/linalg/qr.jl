@@ -10,8 +10,8 @@ Represents a QR factorization of an `m`×`n` matrix `A`,
 A = Q R
 ```
 
-where ``P`` is a permutation matrix, ``Q`` is an orthogonal/unitary matrix and ``R`` is
-upper triangular. The matrix `Q` is stored as a sequence of Householder reflectors ``v_i``
+where ``Q`` is an orthogonal/unitary matrix and ``R`` is upper triangular.
+The matrix `Q` is stored as a sequence of Householder reflectors ``v_i``
 and coefficients ``\\tau_i`` where:
 
 ```math
@@ -29,7 +29,6 @@ The object has two fields:
     ``v_i`` is the ``i``th column of the matrix `V = eye(m,n) + tril(F.factors,-1)`.
 
 * `τ` is a vector  of length `min(m,n)` containing the coefficients ``\tau_i``.
-
 """
 struct QR{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
@@ -48,8 +47,8 @@ Represents a QR factorization of an `m`×`n` matrix `A`,
 A = Q R
 ```
 
-where ``P`` is a permutation matrix, ``Q`` is an orthogonal/unitary matrix and ``R`` is
-upper triangular. The matrix ``Q`` is stored in *Compact WY* format [^Schreiber1989], as a
+where ``Q`` is an orthogonal/unitary matrix and ``R`` is upper triangular.
+The matrix ``Q`` is stored in *Compact WY* format [^Schreiber1989], as a
 lower trapezoidal matrix ``V`` and an upper triangular matrix ``T`` where
 
 ```math
@@ -82,7 +81,6 @@ The object has two fields:
 [^Bischof1987]: C Bischof and C Van Loan, "The WY representation for products of Householder matrices", SIAM J Sci Stat Comput 8 (1987), s2-s13. [doi:10.1137/0908009](http://dx.doi.org/10.1137/0908009)
 
 [^Schreiber1989]: R Schreiber and C Van Loan, "A storage-efficient WY representation for products of Householder transformations", SIAM J Sci Stat Comput 10 (1989), 53-57. [doi:10.1137/0910005](http://dx.doi.org/10.1137/0910005)
-
 """
 struct QRCompactWY{S,M<:AbstractMatrix} <: Factorization{S}
     factors::M
@@ -117,10 +115,9 @@ The object has three fields:
   - The subdiagonal part contains the reflectors ``v_i`` stored in a packed format where
     ``v_i`` is the ``i``th column of the matrix `V = eye(m,n) + tril(F.factors,-1)`.
 
-* `τ` is a vector  of length `min(m,n)` containing the coefficients ``\tau_i``.
+* `τ` is a vector of length `min(m,n)` containing the coefficients ``\tau_i``.
 
 * `jpvt` is an integer vector of length `n` corresponding to the permutation ``P``.
-
 """
 struct QRPivoted{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
@@ -230,7 +227,7 @@ This returns an object `F` that represents the factorization in a packed format:
 
  - otherwise it returns a [`QR`](@ref) object.
 
-The individual components of the factorization `F` can be accessed by indexing via a symbol:
+The individual components of the factorization `F` can be accessed by indexing with a symbol:
 
  - `F[:Q]`: the orthogonal/unitary matrix `Q`
  - `F[:R]`: the upper triangular matrix `R`
@@ -268,7 +265,6 @@ true
     that minimize the memory storage requirements of products of Householder
     elementary reflectors, so that the `Q` and `R` matrices can be stored
     compactly rather as two separate dense matrices.
-
 """
 function qrfact{T}(A::AbstractMatrix{T}, arg)
     AA = similar(A, typeof(zero(T)/norm(one(T))), size(A))
