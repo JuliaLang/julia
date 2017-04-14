@@ -26,7 +26,7 @@ end
 QRPivoted(factors::AbstractMatrix{T}, τ::Vector{T}, jpvt::Vector{BlasInt}) where {T} =
     QRPivoted{T,typeof(factors)}(factors, τ, jpvt)
 
-function qrfactUnblocked!{T}(A::AbstractMatrix{T})
+function qrfact!{T}(::Type{QR}, A::AbstractMatrix{T})
     m, n = size(A)
     τ = zeros(T, min(m,n))
     for k = 1:min(m - 1 + !(T<:Real), n)
@@ -52,7 +52,7 @@ function indmaxcolumn(A::StridedMatrix)
     return ii
 end
 
-function qrfactPivotedUnblocked!(A::StridedMatrix)
+function qrfact!(::Type{QRPivoted}, A::StridedMatrix)
     m, n = size(A)
     piv = collect(UnitRange{BlasInt}(1,n))
     τ = Array{eltype(A)}(min(m,n))
@@ -87,11 +87,8 @@ function qrfactPivotedUnblocked!(A::StridedMatrix)
 end
 
 # LAPACK version
-qrfact!(A::StridedMatrix{<:BlasFloat}, ::Type{Val{false}}) = QRCompactWY(LAPACK.geqrt!(A, min(minimum(size(A)), 36))...)
-qrfact!(A::StridedMatrix{<:BlasFloat}, ::Type{Val{true}}) = QRPivoted(LAPACK.geqp3!(A)...)
-qrfact!(A::StridedMatrix{<:BlasFloat}) = qrfact!(A, Val{false})
-
-# Generic fallbacks
+qrfact!(::Type{QRCompactWY}, A::StridedMatrix{<:BlasFloat}) = QRCompactWY(LAPACK.geqrt!(A, min(minimum(size(A)), 36))...)
+qrfact!(::Type{QRPivoted},   A::StridedMatrix{<:BlasFloat}) = QRPivoted(LAPACK.geqp3!(A)...)
 
 """
     qrfact!(A, pivot=Val{false})
@@ -101,8 +98,10 @@ qrfact!(A::StridedMatrix{<:BlasFloat}) = qrfact!(A, Val{false})
 An [`InexactError`](@ref) exception is thrown if the factorization produces a number not
 representable by the element type of `A`, e.g. for integer types.
 """
-qrfact!(A::StridedMatrix, ::Type{Val{false}}) = qrfactUnblocked!(A)
-qrfact!(A::StridedMatrix, ::Type{Val{true}}) = qrfactPivotedUnblocked!(A)
+qrfact!(A::StridedMatrix,              ::Type{Val{false}}) = qrfact!(QR, A)
+qrfact!(A::StridedMatrix{<:BlasFloat}, ::Type{Val{false}}) = qrfact!(QRCompactWY, A)
+qrfact!(A::StridedMatrix,              ::Type{Val{true}})  = qrfact!(QRPivtoted, A)
+
 qrfact!(A::StridedMatrix) = qrfact!(A, Val{false})
 
 """
