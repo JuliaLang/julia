@@ -265,6 +265,9 @@ end
 ==(x::Nullable{Union{}}, y::Nullable) = isnull(y)
 ==(x::Nullable, y::Nullable{Union{}}) = isnull(x)
 
+=={T}(x::Nullable{T}, y::WeakRef) = !isnull(x) && x.value == y
+=={T}(x::WeakRef, y::Nullable{T}) = !isnull(y) && y.value == x
+
 
 """
     isless(x::Nullable, y::Nullable)
