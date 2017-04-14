@@ -555,11 +555,11 @@ sub-diagonals and `ku` super-diagonals. `alpha` and `beta` are scalars. Returns 
 function gbmv! end
 
 """
-    gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
+    gbmv(trans, m, kl, ku, alpha, A, x)
 
 Returns `alpha*A*x` or `alpha*A'*x` according to [`trans`](@ref stdlib-blas-trans).
 The matrix `A` is a general band matrix of dimension `m` by `size(A,2)` with `kl` sub-diagonals and `ku`
-super-diagonals. `alpha` and `beta` are scalars.
+super-diagonals, and `alpha` is a scalar.
 """
 function gbmv end
 
