@@ -330,10 +330,10 @@ This automatic provision of constructors is equivalent to the following explicit
 julia> struct Point{T<:Real}
            x::T
            y::T
-           Point{T}(x,y) where T<:Real = new{T}(x,y)
+           Point{T}(x,y) where {T<:Real} = new{T}(x,y)
        end
 
-julia> Point(x::T, y::T) where T<:Real = Point{T}(x,y);
+julia> Point(x::T, y::T) where {T<:Real} = Point{T}(x,y);
 ```
 
 Notice that each definition looks like the form of constructor call that it handles.
