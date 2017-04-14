@@ -339,7 +339,7 @@ julia> Point(x::T, y::T) where {T<:Real} = Point{T}(x,y);
 Notice that each definition looks like the form of constructor call that it handles.
 The call `Point{Int64}(1,2)` will invoke the definition `Point{T}(x,y)` inside the
 `type` block. The syntax `new{T}` allows specifying parameters for the type to be constructed, i.e.
-this call will return a `Point{T}`. For convenience, the parameters to new{} are
+this call will return a `Point{T}`. For convenience, the parameters to `new{}` are
 automatically derived from the type being constructed when possible.
 The outer constructor declaration, on the other hand, defines a
 method for the general `Point` constructor which only applies to pairs of values of the same real
