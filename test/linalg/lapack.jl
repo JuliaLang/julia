@@ -601,7 +601,7 @@ end
             end
 
             ## QR
-            FJulia  = LinAlg.qrfactUnblocked!(copy(A))
+            FJulia  = LinAlg.qrfact!(LinAlg.QR, copy(A))
             FLAPACK = Base.LinAlg.LAPACK.geqrf!(copy(A))
             @test FJulia.factors ≈ FLAPACK[1]
             @test FJulia.τ ≈ FLAPACK[2]
