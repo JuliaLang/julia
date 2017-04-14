@@ -423,7 +423,7 @@ getq(A::Union{QR, QRPivoted}) = QRPackedQ(A.factors,A.τ)
 """
     QRPackedQ <: AbstractMatrix
 
-Represents the orthogonal ``Q`` matrix of a QR factorization stored in [`QR`](@ref) or
+The orthogonal/unitary ``Q`` matrix of a QR factorization stored in [`QR`](@ref) or
 [`QRPivoted`](@ref) format.
 """
 struct QRPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
@@ -436,8 +436,8 @@ QRPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QRPackedQ{T,typ
 """
     QRPackedQ <: AbstractMatrix
 
-Represents the orthogonal ``Q`` matrix of a QR factorization stored in
-[`QRCompactWY`](@ref) format.
+The orthogonal/unitary ``Q`` matrix of a QR factorization stored in [`QRCompactWY`](@ref)
+format.
 """
 struct QRCompactWYQ{S, M<:AbstractMatrix} <: AbstractMatrix{S}
     factors::M
