@@ -480,12 +480,13 @@ julia> bits(Int8(12))
 See also [`>>`](@ref), [`>>>`](@ref).
 """
 function <<(x::Integer, c::Integer)
+    @_inline_meta
     typemin(Int) <= c <= typemax(Int) && return x << (c % Int)
     (x >= 0 || c >= 0) && return zero(x)
     oftype(x, -1)
 end
-<<(x::Integer, c::Unsigned) = c <= typemax(UInt) ? x << (c % UInt) : zero(x)
-<<(x::Integer, c::Int) = c >= 0 ? x << unsigned(c) : x >> unsigned(-c)
+<<(x::Integer, c::Unsigned) = (@_inline_meta; c <= typemax(UInt) ? x << (c % UInt) : zero(x))
+<<(x::Integer, c::Int) = (@_inline_meta; c >= 0 ? x << unsigned(c) : x >> unsigned(-c))
 
 """
     >>(x, n)
@@ -518,12 +519,13 @@ julia> bits(Int8(-4))
 See also [`>>>`](@ref), [`<<`](@ref).
 """
 function >>(x::Integer, c::Integer)
+    @_inline_meta
     typemin(Int) <= c <= typemax(Int) && return x >> (c % Int)
     (x >= 0 || c < 0) && return zero(x)
     oftype(x, -1)
 end
->>(x::Integer, c::Unsigned) = c <= typemax(UInt) ? x >> (c % UInt) : zero(x)
->>(x::Integer, c::Int) = c >= 0 ? x >> unsigned(c) : x << unsigned(-c)
+>>(x::Integer, c::Unsigned) = (@_inline_meta; c <= typemax(UInt) ? x >> (c % UInt) : zero(x))
+>>(x::Integer, c::Int) = (@_inline_meta; c >= 0 ? x >> unsigned(c) : x << unsigned(-c))
 
 """
     >>>(x, n)
@@ -551,9 +553,9 @@ is equivalent to [`>>`](@ref).
 See also [`>>`](@ref), [`<<`](@ref).
 """
 >>>(x::Integer, c::Integer) =
-    typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x)
->>>(x::Integer, c::Unsigned) = c <= typemax(UInt) ? x >>> (c % UInt) : zero(x)
->>>(x::Integer, c::Int) = c >= 0 ? x >>> unsigned(c) : x << unsigned(-c)
+    (@_inline_meta; typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x))
+>>>(x::Integer, c::Unsigned) = (@_inline_meta; c <= typemax(UInt) ? x >>> (c % UInt) : zero(x))
+>>>(x::Integer, c::Int) = (@_inline_meta; c >= 0 ? x >>> unsigned(c) : x << unsigned(-c))
 
 # fallback div, fld, and cld implementations
 # NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
@@ -570,7 +572,7 @@ julia> fld(7.3,5.5)
 1.0
 ```
 """
-fld{T<:Real}(x::T, y::T) = convert(T,round((x-mod(x,y))/y))
+fld{T<:Real}(x::T, y::T) = (@_inline_meta; convert(T,round((x-mod(x,y))/y)))
 
 """
     cld(x, y)
@@ -581,10 +583,10 @@ julia> cld(5.5,2.2)
 3.0
 ```
 """
-cld{T<:Real}(x::T, y::T) = convert(T,round((x-modCeil(x,y))/y))
+cld{T<:Real}(x::T, y::T) = (@_inline_meta; convert(T,round((x-modCeil(x,y))/y)))
 #rem{T<:Real}(x::T, y::T) = convert(T,x-y*trunc(x/y))
 #mod{T<:Real}(x::T, y::T) = convert(T,x-y*floor(x/y))
-modCeil{T<:Real}(x::T, y::T) = convert(T,x-y*ceil(x/y))
+modCeil{T<:Real}(x::T, y::T) = (@_inline_meta; convert(T,x-y*ceil(x/y)))
 
 # operator alias
 
@@ -639,9 +641,9 @@ julia> mod1(4, 3)
 1
 ```
 """
-mod1{T<:Real}(x::T, y::T) = (m = mod(x, y); ifelse(m == 0, y, m))
+mod1{T<:Real}(x::T, y::T) = (@_inline_meta; (m = mod(x, y); ifelse(m == 0, y, m)))
 # efficient version for integers
-mod1{T<:Integer}(x::T, y::T) = mod(x + y - T(1), y) + T(1)
+mod1{T<:Integer}(x::T, y::T) = (@_inline_meta; mod(x + y - T(1), y) + T(1))
 
 
 """
@@ -664,9 +666,9 @@ julia> x == (fld1(x, y) - 1) * y + mod1(x, y)
 true
 ```
 """
-fld1{T<:Real}(x::T, y::T) = (m=mod(x,y); fld(x-m,y))
+fld1{T<:Real}(x::T, y::T) = (@_inline_meta; (m=mod(x,y); fld(x-m,y)))
 # efficient version for integers
-fld1{T<:Integer}(x::T, y::T) = fld(x+y-T(1),y)
+fld1{T<:Integer}(x::T, y::T) = (@_inline_meta; fld(x+y-T(1),y))
 
 """
     fldmod1(x, y)
@@ -675,9 +677,9 @@ Return `(fld1(x,y), mod1(x,y))`.
 
 See also: [`fld1`](@ref), [`mod1`](@ref).
 """
-fldmod1{T<:Real}(x::T, y::T) = (fld1(x,y), mod1(x,y))
+fldmod1{T<:Real}(x::T, y::T) = (@_inline_meta; (fld1(x,y), mod1(x,y)))
 # efficient version for integers
-fldmod1{T<:Integer}(x::T, y::T) = (fld1(x,y), mod1(x,y))
+fldmod1{T<:Integer}(x::T, y::T) = (@_inline_meta; (fld1(x,y), mod1(x,y)))
 
 # transpose
 
@@ -700,7 +702,7 @@ julia> ctranspose(A)
  9-2im  4-6im
 ```
 """
-ctranspose(x) = conj(transpose(x))
+ctranspose(x) = (@_inline_meta; conj(transpose(x)))
 conj(x) = x
 
 # transposed multiply
