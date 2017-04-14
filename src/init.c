@@ -317,9 +317,15 @@ static void *init_stdio_handle(uv_file fd,int readable)
 #ifndef _OS_WINDOWS_
     // Duplicate the file descriptor so we can later dup it over if we want to redirect
     // STDIO without having to worry about closing the associated libuv object.
+    // This also helps limit the impact other libraries can cause on our file handle.
     // On windows however, libuv objects remember streams by their HANDLE, so this is
     // unnecessary.
     fd = dup(fd);
+#else
+    if (type == UV_FILE) {
+        fd = _dup(fd);
+        _setmode(fd, _O_BINARY);
+    }
 #endif
     //jl_printf(JL_STDOUT, "%d: %d -- %d\n", fd, type, 0);
     switch(type) {
@@ -334,9 +340,14 @@ static void *init_stdio_handle(uv_file fd,int readable)
         case UV_UNKNOWN_HANDLE:
             // dup the descriptor with a new one pointing at the bit bucket ...
 #if defined(_OS_WINDOWS_)
-            _dup2(_open("NUL", O_RDWR | O_BINARY, _S_IREAD | _S_IWRITE), fd);
+            fd = _open("NUL", O_RDWR | O_BINARY, _S_IREAD | _S_IWRITE);
 #else
-            dup2(open("/dev/null", O_RDWR, S_IRUSR | S_IWUSR /* 0600 */ | S_IRGRP | S_IROTH /* 0644 */), fd);
+            {
+                int nullfd;
+                nullfd = open("/dev/null", O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH /* 0666 */);
+                dup2(nullfd, fd);
+                close(nullfd);
+            }
 #endif
             // ...and continue on as in the UV_FILE case
         case UV_FILE:
