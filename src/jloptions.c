@@ -20,7 +20,7 @@ char *shlib_ext = ".so";
 #endif
 
 static char system_image_path[256] = "\0" JL_SYSTEM_IMAGE_PATH;
-static const char *get_default_sysimg_path(void)
+JL_DLLEXPORT const char *jl_get_default_sysimg_path(void)
 {
 #ifdef CPUID_SPECIFIC_BINARIES
     char *path = &system_image_path[1];
@@ -203,7 +203,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
 
     // If CPUID specific binaries are enabled, this varies between runs, so initialize
     // it here, rather than as part of the static initialization above.
-    jl_options.image_file = get_default_sysimg_path();
+    jl_options.image_file = jl_get_default_sysimg_path();
 
     int codecov  = JL_LOG_NONE;
     int malloclog= JL_LOG_NONE;

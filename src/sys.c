@@ -668,7 +668,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 
 #ifdef __APPLE__
     // Iterate through all images currently in memory
-    for (int32_t i = _dyld_image_count(); i >= 0 ; i--) {
+    for (int32_t i = _dyld_image_count() - 1; i >= 0 ; i--) {
         // dlopen() each image, check handle
         const char *image_name = _dyld_get_image_name(i);
         void *probe_lib = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT);

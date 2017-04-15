@@ -439,24 +439,6 @@ JL_DLLEXPORT jl_value_t *jl_stderr_obj(void)
     return stderr_obj;
 }
 
-static jl_function_t *jl_show_gf=NULL;
-
-JL_DLLEXPORT void jl_show(jl_value_t *stream, jl_value_t *v)
-{
-    if (jl_base_module) {
-        if (jl_show_gf == NULL) {
-            jl_show_gf = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("show"));
-        }
-        if (jl_show_gf==NULL || stream==NULL) {
-            jl_printf(JL_STDERR, " could not show value of type %s",
-                      jl_symbol_name(((jl_datatype_t*)jl_typeof(v))->name->name));
-            return;
-        }
-        jl_value_t *args[3] = {jl_show_gf,stream,v};
-        jl_apply(args, 3);
-    }
-}
-
 // toys for debugging ---------------------------------------------------------
 
 static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, const char *head, const char *opn, const char *cls)
@@ -868,8 +850,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
 
 static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth)
 {
-    // mimic jl_show, but never calling a julia method and
-    // never allocate through julia gc
+    // show values without calling a julia method or allocating through the GC
     if (v == NULL) {
         return jl_printf(out, "#<null>");
     }
