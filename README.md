@@ -88,7 +88,7 @@ Once it is built, you can run the `julia` executable using its full path in the 
 
 - write `prefix=/path/to/install/folder` into `Make.user` and then run `make install`. If there is a version of Julia already installed in this folder, you should delete it before running `make install`.
 
-Now you should be able to run Julia like this:
+On some systems, julia is not built with executable permissions by default. Make sure to enable those.  Now you should be able to run Julia like this:
 
     julia
 
