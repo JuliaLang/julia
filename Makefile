@@ -578,6 +578,11 @@ perf: release
 perf-%: release
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test/perf $* JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
+install-graphics-libs-mac:
+	-cp -r ~/.julia/Cairo/deps/usr/* $(BUILD)/
+	-cp -r ~/.julia/Tk/deps/usr/* $(BUILD)/
+	-chmod a+rw $(JULIAHOME)/usr/lib/*
+
 # download target for some hardcoded windows dependencies
 .PHONY: win-extras wine_path
 win-extras:
