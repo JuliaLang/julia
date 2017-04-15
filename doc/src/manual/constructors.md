@@ -336,17 +336,16 @@ julia> struct Point{T<:Real}
 julia> Point(x::T, y::T) where {T<:Real} = Point{T}(x,y);
 ```
 
-Notice that each definition looks like the form of constructor call that it handles.
-The call `Point{Int64}(1,2)` will invoke the definition `Point{T}(x,y)` inside the
-`type` block. The syntax `new{T}` allows specifying parameters for the type to be constructed, i.e.
-this call will return a `Point{T}`. For convenience, the parameters to `new{}` are
-automatically derived from the type being constructed when possible.
-The outer constructor declaration, on the other hand, defines a
-method for the general `Point` constructor which only applies to pairs of values of the same real
-type. This declaration makes constructor calls without explicit type parameters, like `Point(1,2)`
-and `Point(1.0,2.5)`, work. Since the method declaration restricts the arguments to being of the
-same type, calls like `Point(1,2.5)`, with arguments of different types, result in "no method"
-errors.
+Notice that each definition looks like the form of constructor call that it handles. The call
+`Point{Int64}(1,2)` will invoke the definition `Point{T}(x,y)` inside the `type` block. The syntax
+`new{T}` allows specifying parameters for the type to be constructed, i.e. this call will return a
+`Point{T}`. For convenience, the type parameters to `new{}` are automatically derived from the type
+being constructed when possible; in the example above, the parameter to `new` may be left out
+for convenience. The outer constructor declaration, on the other hand, defines a method for the
+general `Point` constructor which only applies to pairs of values of the same real type. This
+declaration makes constructor calls without explicit type parameters, like `Point(1,2)` and
+`Point(1.0,2.5)`, work. Since the method declaration restricts the arguments to being of the same
+type, calls like `Point(1,2.5)`, with arguments of different types, result in "no method" errors.
 
 Suppose we wanted to make the constructor call `Point(1,2.5)` work by "promoting" the integer
 value `1` to the floating-point value `1.0`. The simplest way to achieve this is to define the
@@ -575,6 +574,7 @@ Closest candidates are:
 ```
 
 This constructor will be invoked by the syntax `SummedArray(a)`. The syntax `new{T,S}` allows
-specifying parameters for the type to be constructed and this call will return a `SummedArray{T,S}`.
-`new{T,S}` can be used in any constructor definition (but recall, for convenience the parameters
-to `new{}` are automatically derived from the type being constructed when possible).
+specifying parameters for the type to be constructed and this call will return a
+`SummedArray{T,S}`. `new{T,S}` can be used in any constructor definition (recall, the parameters to
+`new{}` are automatically derived from the type being constructed when possible, but in this
+example they need to be explicitly specified).
