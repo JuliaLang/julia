@@ -210,7 +210,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
     else
         linfo = get(frame.linfo)
         if isdefined(linfo, :def)
-            Base.show_lambda_types(io, linfo)
+            Base.show_tuple_as_call(io, linfo.def.name, linfo.specTypes)
         else
             Base.show(io, linfo)
         end
