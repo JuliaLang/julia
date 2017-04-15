@@ -710,6 +710,15 @@ mktempdir() do dir
             # from branch/merge_a
             LibGit2.branch!(repo, "master")
 
+            # test for showing a Reference to a non-HEAD branch
+            brref = LibGit2.GitReference(repo, "refs/heads/branch/merge_a")
+            @test LibGit2.name(brref) == "refs/heads/branch/merge_a"
+            @test !LibGit2.ishead(brref)
+            show_strs = split(sprint(show, brref), "\n")
+            @test show_strs[1] == "GitReference:"
+            @test show_strs[2] == "Branch with name refs/heads/branch/merge_a"
+            @test show_strs[3] == "Branch is not HEAD."
+
             open(joinpath(LibGit2.path(repo), "file2"), "w") do f
                 write(f, "222\n")
             end
@@ -1015,6 +1024,9 @@ mktempdir() do dir
             @test rbo_str == "RebaseOperation($(string(rbo.id)))\nOperation type: REBASE_OPERATION_PICK\n"
             rb_str = sprint(show, rb)
             @test rb_str == "GitRebase:\nNumber: 2\nCurrently performing operation: 1\n"
+            rbo = rb[2]
+            rbo_str = sprint(show, rbo)
+            @test rbo_str == "RebaseOperation($(string(rbo.id)))\nOperation type: REBASE_OPERATION_PICK\n"
 
             # test rebase abort
             LibGit2.abort(rb)
