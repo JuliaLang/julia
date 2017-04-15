@@ -23,7 +23,7 @@ mutable struct Channel{T} <: AbstractChannel
     state::Symbol
     excp::Nullable{Exception} # Exception to be thrown when state != :open
 
-    data::Array{T,1}
+    data::Vector{T}
     sz_max::Int            # maximum size of channel
 
     # Used when sz_max == 0, i.e., an unbuffered channel.

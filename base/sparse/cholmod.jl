@@ -1024,7 +1024,7 @@ end
 ## convertion back to base Julia types
 function convert{T}(::Type{Matrix{T}}, D::Dense{T})
     s = unsafe_load(D.p)
-    a = Array{T}(s.nrow, s.ncol)
+    a = Matrix{T}(s.nrow, s.ncol)
     copy!(a, D)
 end
 
