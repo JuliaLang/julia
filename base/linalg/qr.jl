@@ -440,7 +440,7 @@ end
 QRPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QRPackedQ{T,typeof(factors)}(factors, τ)
 
 """
-    QRPackedQ <: AbstractMatrix
+    QRCompactWYQ <: AbstractMatrix
 
 The orthogonal/unitary ``Q`` matrix of a QR factorization stored in [`QRCompactWY`](@ref)
 format.
