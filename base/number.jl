@@ -87,6 +87,7 @@ abs(x::Real) = ifelse(signbit(x), -x, x)
 Squared absolute value of `x`.
 """
 abs2(x::Real) = x*x
+copysign(x::Real, y::Real) = y >= 0 ? abs(x) : -abs(x)
 
 """
     flipsign(x, y)
