@@ -5,7 +5,7 @@
     QR <: Factorization
 
 A QR matrix factorization stored in a packed format, typically obtained from
-[`qrfact`](@ref). If `A` is an `m`×`n` matrix, then
+[`qrfact`](@ref). If ``A`` is an `m`×`n` matrix, then
 
 ```math
 A = Q R
@@ -44,9 +44,16 @@ QR(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QR{T,typeof(factors)}(
     QRCompactWY <: Factorization
 
 A QR matrix factorization stored in a compact blocked format, typically obtained from
-[`qrfact`](@ref). It is similar to a [`QR`](@ref) object except that the
-orthogonal/unitary matrix ``Q`` is stored in *Compact WY* format [^Schreiber1989], as a
-lower trapezoidal matrix ``V`` and an upper triangular matrix ``T`` where
+[`qrfact`](@ref). If ``A`` is an `m`×`n` matrix, then
+
+```math
+A = Q R
+```
+
+where ``Q`` is an orthogonal/unitary matrix and ``R`` is upper triangular. It is similar
+to the [`QR`](@ref) format except that the orthogonal/unitary matrix ``Q`` is stored in
+*Compact WY* format [^Schreiber1989], as a lower trapezoidal matrix ``V`` and an upper
+triangular matrix ``T`` where
 
 ```math
 Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T) = I - V T V^T
@@ -89,7 +96,7 @@ QRCompactWY(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) where {S} = QRComp
     QRPivoted <: Factorization
 
 A QR matrix factorization with column pivoting in a packed format, typically obtained from
-[`qrfact`](@ref). If `A` is an `m`×`n` matrix, then
+[`qrfact`](@ref). If ``A`` is an `m`×`n` matrix, then
 
 ```math
 A P = Q R
