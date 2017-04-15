@@ -239,6 +239,11 @@ static int obviously_unequal(jl_value_t *a, jl_value_t *b)
     return 0;
 }
 
+int jl_obviously_unequal(jl_value_t *a, jl_value_t *b)
+{
+    return obviously_unequal(a, b);
+}
+
 static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
 {
     if (a == b || a == (jl_value_t*)jl_any_type || b == (jl_value_t*)jl_any_type)
@@ -542,8 +547,9 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     // in the environment, rename to get a fresh var.
     while (btemp != NULL) {
         if (btemp->var == u->var ||
-            (btemp->lb != jl_bottom_type && jl_has_typevar(btemp->lb, u->var)) ||
-            (btemp->ub != (jl_value_t*)jl_any_type && jl_has_typevar(btemp->ub, u->var))) {
+            // outer var can only refer to inner var if bounds changed
+            (btemp->lb != btemp->var->lb && jl_has_typevar(btemp->lb, u->var)) ||
+            (btemp->ub != btemp->var->ub && jl_has_typevar(btemp->ub, u->var))) {
             u = rename_unionall(u);
             break;
         }
@@ -627,7 +633,8 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     btemp = e->vars;
     while (btemp != NULL) {
         jl_value_t *vi = btemp->ub;
-        if (vi != (jl_value_t*)vb.var && vi != (jl_value_t*)jl_any_type && jl_has_typevar(vi, vb.var)) {
+        // TODO: this takes a significant amount of time
+        if (vi != (jl_value_t*)vb.var && btemp->var->ub != vi && jl_has_typevar(vi, vb.var)) {
             btemp->ub = jl_new_struct(jl_unionall_type, vb.var, vi);
             btemp->lb = jl_bottom_type;
         }
@@ -692,11 +699,11 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
     jl_value_t *lastx=NULL, *lasty=NULL;
     while (i < lx) {
         jl_value_t *xi = jl_tparam(xd, i);
-        if (jl_is_vararg_type(xi)) vx = 1;
+        if (i == lx-1 && vvx) vx = 1;
         jl_value_t *yi = NULL;
         if (j < ly) {
             yi = jl_tparam(yd, j);
-            if (jl_is_vararg_type(yi)) vy = 1;
+            if (j == ly-1 && vvy) vy = 1;
         }
         if (vx && !vy) {
             if (!check_vararg_length(xi, ly+1-lx, e))
@@ -892,9 +899,9 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             xd = xd->super;
         }
         if (xd == jl_any_type) return 0;
-        if (jl_is_tuple_type(xd))
+        if (xd->name == jl_tuple_typename)
             return subtype_tuple(xd, yd, e, param);
-        if (jl_is_vararg_type((jl_value_t*)xd)) {
+        if (xd->name == jl_vararg_typename) {
             // Vararg: covariant in first parameter, invariant in second
             jl_value_t *xp1=jl_tparam0(xd), *xp2=jl_tparam1(xd), *yp1=jl_tparam0(yd), *yp2=jl_tparam1(yd);
             // in Vararg{T1} <: Vararg{T2}, need to check subtype twice to
