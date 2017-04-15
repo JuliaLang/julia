@@ -641,15 +641,34 @@ static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_
     return NULL;
 }
 
+int jl_obviously_unequal(jl_value_t *a, jl_value_t *b);
+
 static jl_typemap_entry_t *jl_typemap_lookup_by_type_(jl_typemap_entry_t *ml, jl_tupletype_t *types, size_t world)
 {
     for (; ml != (void*)jl_nothing; ml = ml->next) {
         if (world < ml->min_world || world > ml->max_world)
             continue;
         // TODO: more efficient
-        if (jl_types_equal((jl_value_t*)types, (jl_value_t*)ml->sig)) {
-            return ml;
+        jl_value_t *a = (jl_value_t*)types;
+        jl_value_t *b = (jl_value_t*)ml->sig;
+        while (jl_is_unionall(a)) a = ((jl_unionall_t*)a)->body;
+        while (jl_is_unionall(b)) b = ((jl_unionall_t*)b)->body;
+        size_t na = jl_nparams(a), nb = jl_nparams(b);
+        assert(na > 0 && nb > 0);
+        if (!jl_is_vararg_type(jl_tparam(a,na-1)) && !jl_is_vararg_type(jl_tparam(b,nb-1))) {
+            if (na != nb)
+                continue;
         }
+        if (na > 1 && nb > 1) {
+            if (jl_obviously_unequal(jl_tparam(a,1), jl_tparam(b,1)))
+                continue;
+            if (na > 2 && nb > 2) {
+                if (jl_obviously_unequal(jl_tparam(a,2), jl_tparam(b,2)))
+                    continue;
+            }
+        }
+        if (jl_types_equal((jl_value_t*)types, (jl_value_t*)ml->sig))
+            return ml;
     }
     return NULL;
 }
