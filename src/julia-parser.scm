@@ -464,7 +464,7 @@
 		  (if (and allow-empty (memv (require-token s) ops))
 		      '()
 		      (if (memv #\newline ops)
-			  (let ((loc (line-number-node s)))
+			  (let ((loc (line-number-filename-node s)))
 			    ;; note: line-number must happen before (down s)
 			    (list (down s) loc))
 			  (list (down s)))))
@@ -490,7 +490,7 @@
 				  (memv (peek-token s) ops)))
 			 (loop ex #f)
 			 (if (memv #\newline ops)
-			     (let ((loc (line-number-node s)))
+			     (let ((loc (line-number-filename-node s)))
 			       (loop (list* (down s) loc ex) #f))
 			     (loop (cons (down s) ex) #f)))))))))
 
@@ -865,7 +865,7 @@
 	 ((elseif)
 	  `(if ,test ,then
 	       ;; line number for elseif condition
-	       (block ,(line-number-node s)
+	       (block ,(line-number-filename-node s)
 		      ,(parse-resword s 'if))))
 	 ((else)    (list 'if test then (parse-resword s 'begin)))
 	 (else      (error (string "unexpected " nxt))))))
