@@ -340,7 +340,7 @@ Notice that each definition looks like the form of constructor call that it hand
 `Point{Int64}(1,2)` will invoke the definition `Point{T}(x,y)` inside the `type` block. The syntax
 `new{T}` allows specifying parameters for the type to be constructed, i.e. this call will return a
 `Point{T}`. For convenience, the type parameters to `new{}` are automatically derived from the type
-being constructed when possible; in the example above, the parameter to `new` may be left out. 
+being constructed when possible; in the example above, the parameter to `new` may be left out.
 The outer constructor declaration, on the other hand, defines a method for the
 general `Point` constructor which only applies to pairs of values of the same real type. This
 declaration makes constructor calls without explicit type parameters, like `Point(1,2)` and
