@@ -64,7 +64,7 @@ MINEXP(::Type{Float32}) = -103.97207708f0            # log 2^-150
 
 Compute the natural base exponential of `x`, in other words ``e^x``.
 """
-function exp{T<:Union{Float32,Float64}}(x::T)
+function exp(x::T) where T<:Union{Float32,Float64}
     xa = reinterpret(Unsigned, x) & ~sign_mask(T)
     xsb = signbit(x)
 
