@@ -17,7 +17,7 @@ mutable struct BitArray{N} <: DenseArray{Bool, N}
             i += 1
         end
         nc = num_bit_chunks(n)
-        chunks = Array{UInt64}(nc)
+        chunks = Vector{UInt64}(nc)
         nc > 0 && (chunks[end] = UInt64(0))
         b = new(chunks, n)
         N != 1 && (b.dims = dims)
@@ -1684,7 +1684,7 @@ end
 function find(B::BitArray)
     l = length(B)
     nnzB = countnz(B)
-    I = Array{Int}(nnzB)
+    I = Vector{Int}(nnzB)
     nnzB == 0 && return I
     Bc = B.chunks
     Bcount = 1
@@ -1718,8 +1718,8 @@ findn(B::BitVector) = find(B)
 
 function findn(B::BitMatrix)
     nnzB = countnz(B)
-    I = Array{Int}(nnzB)
-    J = Array{Int}(nnzB)
+    I = Vector{Int}(nnzB)
+    J = Vector{Int}(nnzB)
     count = 1
     for j = 1:size(B,2), i = 1:size(B,1)
         if B[i,j]

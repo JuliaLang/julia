@@ -146,9 +146,9 @@ function spmatmul{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
     colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
     # TODO: Need better estimation of result space
     nnzC = min(mA*nB, length(nzvalA) + length(nzvalB))
-    colptrC = Array{Ti}(nB+1)
-    rowvalC = Array{Ti}(nnzC)
-    nzvalC = Array{Tv}(nnzC)
+    colptrC = Vector{Ti}(nB+1)
+    rowvalC = Vector{Ti}(nnzC)
+    nzvalC = Vector{Tv}(nnzC)
 
     @inbounds begin
         ip = 1
