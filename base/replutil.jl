@@ -414,8 +414,14 @@ function showerror_ambiguous(io::IO, meth, f, args)
         i < length(p) && print(io, ", ")
     end
     print(io, ") is ambiguous. Candidates:")
+    sigfix = Any
     for m in meth
         print(io, "\n  ", m)
+        sigfix = typeintersect(m.sig, sigfix)
+    end
+    if isa(unwrap_unionall(sigfix), DataType) && sigfix <: Tuple
+        print(io, "\nPossible fix, define\n  ")
+        Base.show_tuple_as_call(io, :function,  sigfix)
     end
     nothing
 end
