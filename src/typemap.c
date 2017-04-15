@@ -65,8 +65,7 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
             }
             else if (!jl_is_kind(a) || !jl_is_typevar(tp0) || ((jl_tvar_t*)tp0)->ub != (jl_value_t*)jl_any_type) {
                 // manually unroll jl_subtype(a, decl)
-                // where `a` can be a subtype like TypeConstructor
-                // and decl is Type{T}
+                // where `a` can be a subtype and decl is Type{T}
                 return 0;
             }
         }
@@ -142,8 +141,18 @@ static inline int sig_match_simple(jl_value_t **args, size_t n, jl_value_t **sig
                     return 0;
             }
             else {
-                if (a!=tp0 && !(jl_typeof(a) == jl_typeof(tp0) && jl_types_equal(a,tp0)))
-                    return 0;
+                if (a != tp0) {
+                    if (jl_typeof(a) != jl_typeof(tp0))
+                        return 0;
+                    jl_datatype_t *da = (jl_datatype_t*)a;
+                    jl_datatype_t *dt = (jl_datatype_t*)tp0;
+                    while (jl_is_unionall(da)) da = (jl_datatype_t*)((jl_unionall_t*)da)->body;
+                    while (jl_is_unionall(dt)) dt = (jl_datatype_t*)((jl_unionall_t*)dt)->body;
+                    if (jl_is_datatype(da) && jl_is_datatype(dt) && da->name != dt->name)
+                        return 0;
+                    if (!jl_types_equal(a, tp0))
+                        return 0;
+                }
             }
         }
         else {
@@ -326,7 +335,7 @@ static union jl_typemap_t *mtcache_hash_bp(struct jl_ordereddict_t *pa, jl_value
     if (jl_is_datatype(ty)) {
         uintptr_t uid = ((jl_datatype_t*)ty)->uid;
         if (!uid || jl_is_kind(ty) || jl_has_free_typevars(ty))
-            // be careful not to put non-leaf types or DataType/TypeConstructor in the cache here,
+            // be careful not to put non-leaf types or DataType/UnionAll in the cache here,
             // since they should have a lower priority and need to go into the sorted list
             return NULL;
         if (pa->values == (void*)jl_nothing) {
