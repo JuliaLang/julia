@@ -4820,3 +4820,8 @@ f21271() = convert(Tuple{Type{Int}, Type{Float64}}, (Int, Float64))::Tuple{Type{
 f21271(x) = x::Tuple{Type{Int}, Type{Float64}}
 @test_throws TypeError f21271()
 @test_throws TypeError f21271((Int, Float64))
+
+# issue #21397
+bar21397(x::T) where {T} = T
+foo21397(x) = bar21397(x)
+@test foo21397(Tuple) == DataType
