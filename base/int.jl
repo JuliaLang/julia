@@ -167,8 +167,8 @@ julia> mod(-eps(), 3)
 ```
 """
 function mod{T<:Integer}(x::T, y::T)
-    y == -1 && return T(0)   # avoid potential overflow in fld
-    return x - fld(x, y) * y
+    # avoid potential overflow in fld by checking y == -1
+    ifelse(y == -1, T(0), x - fld(x, y) * y)
 end
 mod(x::Signed, y::Unsigned) = rem(y + unsigned(rem(x, y)), y)
 mod(x::Unsigned, y::Signed) = rem(y + signed(rem(x, y)), y)
