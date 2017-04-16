@@ -810,7 +810,7 @@ function vcat{T}(rs::Range{T}...)
     for ra in rs
         n += length(ra)
     end
-    a = Array{T}(n)
+    a = Vector{T}(n)
     i = 1
     for ra in rs, x in ra
         @inbounds a[i] = x

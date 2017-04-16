@@ -513,7 +513,7 @@ end
 @generated function findn{T,N}(A::AbstractArray{T,N})
     quote
         nnzA = countnz(A)
-        @nexprs $N d->(I_d = Array{Int}(nnzA))
+        @nexprs $N d->(I_d = Vector{Int}(nnzA))
         k = 1
         @nloops $N i A begin
             @inbounds if (@nref $N A i) != zero(T)
@@ -1198,7 +1198,7 @@ end
 @generated function findn{N}(B::BitArray{N})
     quote
         nnzB = countnz(B)
-        I = ntuple(x->Array{Int}(nnzB), Val{$N})
+        I = ntuple(x->Vector{Int}(nnzB), Val{$N})
         if nnzB > 0
             count = 1
             @nloops $N i B begin
