@@ -857,9 +857,9 @@ end
 convert(::Type{Dense}, A::Sparse) = sparse_to_dense(A)
 
 # This constructior assumes zero based colptr and rowval
-function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer,
+function (::Type{Sparse})(m::Integer, n::Integer,
         colptr0::Vector{SuiteSparse_long}, rowval0::Vector{SuiteSparse_long},
-        nzval::Vector{Tv}, stype)
+        nzval::Vector{Tv}, stype) where Tv<:VTypes
     # checks
     ## length of input
     if length(colptr0) <= n
@@ -908,7 +908,7 @@ function (::Type{Sparse})(m::Integer, n::Integer,
     o
 end
 
-function (::Type{Sparse}){Tv<:VTypes}(A::SparseMatrixCSC{Tv,SuiteSparse_long}, stype::Integer)
+function (::Type{Sparse})(A::SparseMatrixCSC{Tv,SuiteSparse_long}, stype::Integer) where Tv<:VTypes
     ## Check length of input. This should never fail but see #20024
     if length(A.colptr) <= A.n
         throw(ArgumentError("length of colptr must be at least size(A,2) + 1 = $(A.n + 1) but was $(length(A.colptr))"))
