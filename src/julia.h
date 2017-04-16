@@ -16,6 +16,11 @@
 #include "htable.h"
 #include "arraylist.h"
 
+#define JULIA_VERSION_MAJOR 0
+#define JULIA_VERSION_MINOR 4
+#define JULIA_VERSION_PATCH 0
+#define JULIA_VERSION_IS_RELEASE 0
+
 #include <setjmp.h>
 #ifndef _OS_WINDOWS_
 #  define jl_jmp_buf sigjmp_buf
