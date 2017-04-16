@@ -537,30 +537,44 @@ setindex!{T}(A::Array{T}, x, i1::Int) = arrayset(A, convert(T,x)::T, i1)
 setindex!{T}(A::Array{T}, x, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayset(A, convert(T,x)::T, i1, i2, I...)) # TODO: REMOVE FOR #14770
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
-function setindex!(A::Array, x, I::AbstractVector{Int})
-    @_propagate_inbounds_meta
-    A === I && (I = copy(I))
-    for i in I
-        A[i] = x
+for (f, inbounds, inbounds_pop) in
+    ((:_unsafe_setindex!, :($(Expr(:inbounds, true))), :($(Expr(:inbounds, :pop)))),
+     (:_safe_setindex!, :nothing, :nothing))
+    @eval begin
+        function $f(A::Array, x, I::AbstractVector{Int})
+            $inbounds
+            A === I && (I = copy(I))
+            for i in I
+                A[i] = x
+            end
+            return A
+            $inbounds_pop
+        end
+        function $f(A::Array, X::AbstractArray, I::AbstractVector{Int})
+            $inbounds
+            @boundscheck setindex_shape_check(X, length(I))
+            count = 1
+            if X === A
+                X = copy(X)
+                I===A && (I = X::typeof(I))
+            elseif I === A
+                I = copy(I)
+            end
+            for i in I
+                @inbounds x = X[count]
+                A[i] = x
+                count += 1
+            end
+            return A
+            $inbounds_pop
+        end
     end
-    return A
 end
-function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
-    @_propagate_inbounds_meta
-    @boundscheck setindex_shape_check(X, length(I))
-    count = 1
-    if X === A
-        X = copy(X)
-        I===A && (I = X::typeof(I))
-    elseif I === A
-        I = copy(I)
-    end
-    for i in I
-        @inbounds x = X[count]
-        A[i] = x
-        count += 1
-    end
-    return A
+# Wrapper needed to propagate @inbounds without necessarily inlining full definition
+function setindex!(A::Array, X, I::AbstractVector{Int})
+    @_inline_meta
+    @boundscheck return _safe_setindex!(A, X, I)
+    return _unsafe_setindex!(A, X, I)
 end
 
 # Faster contiguous setindex! with copy!
