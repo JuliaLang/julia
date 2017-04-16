@@ -159,3 +159,11 @@ scale!{T<:Base.LinAlg.BlasReal}(X::Array{T}, s::Complex) = error("scale!: Cannot
 
 @deprecate which(f::Callable, args...) @which f(args...)
 @deprecate rmdir rm
+
+
+# 0.4 compatibility utilities (to simplify 0.4/0.3.1 compatibility)
+
+export TCPSocket, UDPSocket, IPAddr
+const TCPSocket = TcpSocket
+const UCPSocket = UdpSocket
+const IPAddr = IpAddr
