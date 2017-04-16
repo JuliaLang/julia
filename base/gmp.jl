@@ -207,20 +207,20 @@ function (::Type{Float64})(n::BigInt, ::RoundingMode{:ToZero})
     ccall((:__gmpz_get_d, :libgmp), Float64, (Ptr{BigInt},), &n)
 end
 
-function (::Type{T}){T<:Union{Float16,Float32}}(n::BigInt, ::RoundingMode{:ToZero})
+function (::Type{T})(n::BigInt, ::RoundingMode{:ToZero}) where T<:Union{Float16,Float32}
     T(Float64(n,RoundToZero),RoundToZero)
 end
 
-function (::Type{T}){T<:CdoubleMax}(n::BigInt, ::RoundingMode{:Down})
+function (::Type{T})(n::BigInt, ::RoundingMode{:Down}) where T<:CdoubleMax
     x = T(n,RoundToZero)
     x > n ? prevfloat(x) : x
 end
-function (::Type{T}){T<:CdoubleMax}(n::BigInt, ::RoundingMode{:Up})
+function (::Type{T})(n::BigInt, ::RoundingMode{:Up}) where T<:CdoubleMax
     x = T(n,RoundToZero)
     x < n ? nextfloat(x) : x
 end
 
-function (::Type{T}){T<:CdoubleMax}(n::BigInt, ::RoundingMode{:Nearest})
+function (::Type{T})(n::BigInt, ::RoundingMode{:Nearest}) where T<:CdoubleMax
     x = T(n,RoundToZero)
     if maxintfloat(T) <= abs(x) < T(Inf)
         r = n-BigInt(x)
