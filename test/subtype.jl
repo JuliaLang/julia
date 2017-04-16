@@ -1070,3 +1070,9 @@ end
 @testintersect(Tuple{A20992{R, D, d} where d where D, Int} where R,
                Tuple{C20992{S, n, T, D, d} where d where D where T where n where S, Any},
                Tuple{C20992, Int})
+
+# issue #20103, OP and comments
+struct TT20103{X,Y} end
+f20103{X,Y}(::Type{TT20103{X,Y}},x::X,y::Y) = 1
+f20103{X}(::Type{TT20103{X,X}},x::X) = 100
+@test_broken typeintersect(Type{NTuple{N,E}} where E where N, Type{NTuple{N,E} where N} where E) == Union{} # use @testintersect once fixed
