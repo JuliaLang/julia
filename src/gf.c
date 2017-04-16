@@ -606,6 +606,7 @@ static void jl_cacheable_sig(
         // avoid specializing on an argument of type Tuple
         // unless matching a declared type of `::Type`
         if (jl_is_type_type(elt) && jl_is_tuple_type(jl_tparam0(elt)) &&
+            !jl_has_free_typevars(decl_i) &&
             (!jl_subtype(decl_i, (jl_value_t*)jl_type_type) || jl_is_kind(decl_i))) { // Type{Tuple{...}}
             elt = (jl_value_t*)jl_anytuple_type_type; // Type{T} where T<:Tuple
             if (!*newparams) *newparams = jl_svec_copy(type->parameters);
@@ -738,6 +739,7 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
         // avoid specializing on an argument of type Tuple
         // unless matching a declared type of `::Type`
         if (jl_is_type_type(elt) && jl_is_tuple_type(jl_tparam0(elt)) &&
+            !jl_has_free_typevars(decl_i) &&
             (!jl_subtype(decl_i, (jl_value_t*)jl_type_type) || jl_is_kind(decl_i))) { // Type{Tuple{...}}
             if (!jl_types_equal(elt, (jl_value_t*)jl_anytuple_type_type))
                 return 0;
