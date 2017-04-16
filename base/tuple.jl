@@ -209,10 +209,10 @@ end
 # only define these in Base, to avoid overwriting the constructors
 if isdefined(Main, :Base)
 
-(::Type{T}){T<:Tuple}(x::Tuple) = convert(T, x)  # still use `convert` for tuples
+(::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples
 
 # resolve ambiguity between preceding and following methods
-(::Type{All16{E,N}}){E,N}(x::Tuple) = convert(All16{E,N}, x)
+(::Type{All16{E,N}})(x::Tuple) where {E,N} = convert(All16{E,N}, x)
 
 function (T::Type{All16{E,N}}){E,N}(itr)
     len = N+16
@@ -223,7 +223,7 @@ function (T::Type{All16{E,N}}){E,N}(itr)
     (elts...,)
 end
 
-(::Type{T}){T<:Tuple}(itr) = _totuple(T, itr, start(itr))
+(::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr, start(itr))
 
 _totuple(::Type{Tuple{}}, itr, s) = ()
 
@@ -239,7 +239,7 @@ function _totuple(T, itr, s)
     (convert(tuple_type_head(T), v), _totuple(tuple_type_tail(T), itr, s)...)
 end
 
-_totuple{E}(::Type{Tuple{Vararg{E}}}, itr, s) = (collect(E, Iterators.rest(itr,s))...,)
+_totuple(::Type{Tuple{Vararg{E}}}, itr, s) where {E} = (collect(E, Iterators.rest(itr,s))...,)
 
 _totuple(::Type{Tuple}, itr, s) = (collect(Iterators.rest(itr,s))...,)
 
