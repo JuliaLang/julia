@@ -133,6 +133,9 @@ typedef struct {
 static jl_value_t *jl_idtable_type = NULL;
 static arraylist_t builtin_typenames;
 
+// mark symbols for gen_sysimg_symtab.jl
+//#define GEN_SYMTAB_MODE
+
 #define write_uint8(s, n) ios_putc((n), (s))
 #define read_uint8(s) ((uint8_t)ios_getc(s))
 #define write_int8(s, n) write_uint8(s, n)
@@ -826,7 +829,14 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             writetag(s->s, (jl_value_t*)LongSymbol_tag);
             write_int32(s->s, l);
         }
+#ifdef GEN_SYMTAB_MODE
+        write_uint8(s->s, 0);
+        ios_write(s->s, "JJJ", 3);
+#endif
         ios_write(s->s, jl_symbol_name((jl_sym_t*)v), l);
+#ifdef GEN_SYMTAB_MODE
+        write_uint8(s->s, 0);
+#endif
     }
     else if (jl_is_globalref(v)) {
         if (s->mode == MODE_AST && jl_globalref_mod(v) == s->tree_enclosing_module) {
@@ -1601,7 +1611,13 @@ static jl_value_t *jl_deserialize_value_symbol(jl_serializer_state *s, jl_value_
     else
         len = read_int32(s->s);
     char *name = (char*)(len >= 256 ? malloc(len + 1) : alloca(len + 1));
+#ifdef GEN_SYMTAB_MODE
+    (void)read_uint8(s->s); (void)read_uint8(s->s); (void)read_uint8(s->s); (void)read_uint8(s->s);
+#endif
     ios_read(s->s, name, len);
+#ifdef GEN_SYMTAB_MODE
+    (void)read_uint8(s->s);
+#endif
     name[len] = '\0';
     jl_value_t *sym = (jl_value_t*)jl_symbol(name);
     if (len >= 256)
