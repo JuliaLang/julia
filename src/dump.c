@@ -1279,7 +1279,7 @@ static void jl_serialize_backedges(jl_serializer_state *s)
         if (callee != HT_NOTFOUND) {
             jl_serialize_value(s, caller);
             jl_serialize_value(s, callee);
-            *pcallee = HT_NOTFOUND;
+            *pcallee = (jl_array_t*) HT_NOTFOUND;
             for (i = 0; i < jl_array_len(callee); i++) {
                 jl_value_t *c = jl_array_ptr_ref(callee, i);
                 if (jl_is_method_instance(c))
