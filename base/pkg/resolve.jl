@@ -2,9 +2,9 @@
 
 module Resolve
 
-include("resolve/versionweight.jl")
-include("resolve/interface.jl")
-include("resolve/maxsum.jl")
+include(joinpath("resolve", "versionweight.jl"))
+include(joinpath("resolve", "interface.jl"))
+include(joinpath("resolve", "maxsum.jl"))
 
 using ..Types, ..Query, .PkgToMaxSumInterface, .MaxSum
 import ...Pkg.PkgError
