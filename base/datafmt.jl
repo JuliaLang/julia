@@ -27,7 +27,7 @@ passing them as the second argument.
 function countlines(io::IO, eol::Char='\n')
     isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
     aeol = UInt8(eol)
-    a = Array{UInt8}(8192)
+    a = Vector{UInt8}(8192)
     nl = 0
     while !eof(io)
         nb = readbytes!(io, a)
