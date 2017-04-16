@@ -27,8 +27,8 @@ mutable struct Channel{T} <: AbstractChannel
     sz_max::Int            # maximum size of channel
 
     # Used when sz_max == 0, i.e., an unbuffered channel.
-    takers::Array{Task}
-    putters::Array{Task}
+    takers::Vector{Task}
+    putters::Vector{Task}
     waiters::Int
 
     function Channel{T}(sz::Float64) where T
@@ -42,7 +42,7 @@ mutable struct Channel{T} <: AbstractChannel
         if sz < 0
             throw(ArgumentError("Channel size must be either 0, a positive integer or Inf"))
         end
-        new(Condition(), Condition(), :open, Nullable{Exception}(), Array{T}(0), sz, Array{Task}(0), Array{Task}(0), 0)
+        new(Condition(), Condition(), :open, Nullable{Exception}(), Vector{T}(0), sz, Vector{Task}(0), Vector{Task}(0), 0)
     end
 
     # deprecated empty constructor
