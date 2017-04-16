@@ -1381,7 +1381,7 @@ end
 
 function Base.repr(u::UUID)
     u = u.value
-    a = Array{UInt8}(36)
+    a = Vector{UInt8}(36)
     for i = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
         d = u & 0xf
         a[i] = '0'+d+39*(d>9)
