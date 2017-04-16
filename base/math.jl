@@ -958,12 +958,12 @@ end
 cbrt(a::Float16) = Float16(cbrt(Float32(a)))
 
 # More special functions
-include("special/exp.jl")
-include("special/trig.jl")
-include("special/gamma.jl")
+include(joinpath("special", "exp.jl"))
+include(joinpath("special", "trig.jl"))
+include(joinpath("special", "gamma.jl"))
 
 module JuliaLibm
-include("special/log.jl")
+include(joinpath("special", "log.jl"))
 end
 
 end # module
