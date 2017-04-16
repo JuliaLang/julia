@@ -153,7 +153,7 @@ library.
 strftime(t) = strftime("%c", t)
 strftime(fmt::AbstractString, t::Real) = strftime(fmt, TmStruct(t))
 function strftime(fmt::AbstractString, tm::TmStruct)
-    timestr = Array{UInt8}(128)
+    timestr = Vector{UInt8}(128)
     n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Cstring, Ptr{TmStruct}),
               timestr, length(timestr), fmt, &tm)
     if n == 0
@@ -222,7 +222,7 @@ getpid() = ccall(:jl_getpid, Int32, ())
 Get the local machine's host name.
 """
 function gethostname()
-    hn = Array{UInt8}(256)
+    hn = Vector{UInt8}(256)
     err = @static if is_windows()
         ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
     else
