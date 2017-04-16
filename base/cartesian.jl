@@ -88,6 +88,7 @@ function _nref(N::Int, A::Symbol, ex)
     vars = [ inlineanonymous(ex,i) for i = 1:N ]
     Expr(:escape, Expr(:ref, A, vars...))
 end
+_nref(::TypeVar, A::Symbol, ex) = Expr(:escape, Expr(:ref, A, 0))
 
 """
     @ncall N f sym...
