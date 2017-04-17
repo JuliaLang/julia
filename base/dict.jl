@@ -193,7 +193,7 @@ similar{K,V}(d::Dict{K,V}) = Dict{K,V}()
 similar{K,V}(d::Dict, ::Type{Pair{K,V}}) = Dict{K,V}()
 
 # conversion between Dict types
-function convert{K,V}(::Type{Dict{K,V}},d::Associative)
+function convert(::Type{Dict{K,V}},d::Associative) where V where K
     h = Dict{K,V}()
     for (k,v) in d
         ck = convert(K,k)
@@ -205,7 +205,7 @@ function convert{K,V}(::Type{Dict{K,V}},d::Associative)
     end
     return h
 end
-convert{K,V}(::Type{Dict{K,V}},d::Dict{K,V}) = d
+convert(::Type{Dict{K,V}},d::Dict{K,V}) where {K,V} = d
 
 hashindex(key, sz) = (((hash(key)%Int) & (sz-1)) + 1)::Int
 

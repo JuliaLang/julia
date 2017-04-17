@@ -26,11 +26,11 @@ macro _propagate_inbounds_meta()
 end
 
 convert(::Type{Any}, x::ANY) = x
-convert{T}(::Type{T}, x::T) = x
+convert(::Type{T}, x::T) where {T} = x
 
 convert(::Type{Tuple{}}, ::Tuple{}) = ()
 convert(::Type{Tuple}, x::Tuple) = x
-convert{T}(::Type{Tuple{Vararg{T}}}, x::Tuple) = cnvt_all(T, x...)
+convert(::Type{Tuple{Vararg{T}}}, x::Tuple) where {T} = cnvt_all(T, x...)
 cnvt_all(T) = ()
 cnvt_all(T, x, rest...) = tuple(convert(T,x), cnvt_all(T, rest...)...)
 

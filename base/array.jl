@@ -317,14 +317,14 @@ oneunit{T}(x::AbstractMatrix{T}) = _one(oneunit(T), x)
 
 ## Conversions ##
 
-convert{T}(::Type{Vector}, x::AbstractVector{T}) = convert(Vector{T}, x)
-convert{T}(::Type{Matrix}, x::AbstractMatrix{T}) = convert(Matrix{T}, x)
+convert(::Type{Vector}, x::AbstractVector{T}) where {T} = convert(Vector{T}, x)
+convert(::Type{Matrix}, x::AbstractMatrix{T}) where {T} = convert(Matrix{T}, x)
 
-convert{T,n}(::Type{Array{T}}, x::Array{T,n}) = x
-convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
+convert(::Type{Array{T}}, x::Array{T,n}) where {T,n} = x
+convert(::Type{Array{T,n}}, x::Array{T,n}) where {T,n} = x
 
-convert{T,n,S}(::Type{Array{T}}, x::AbstractArray{S, n}) = convert(Array{T, n}, x)
-convert{T,n,S}(::Type{Array{T,n}}, x::AbstractArray{S,n}) = copy!(Array{T,n}(size(x)), x)
+convert(::Type{Array{T}}, x::AbstractArray{S,n}) where {T,n,S} = convert(Array{T,n}, x)
+convert(::Type{Array{T,n}}, x::AbstractArray{S,n}) where {T,n,S} = copy!(Array{T,n}(size(x)), x)
 
 promote_rule{T,n,S}(::Type{Array{T,n}}, ::Type{Array{S,n}}) = Array{promote_type(T,S),n}
 

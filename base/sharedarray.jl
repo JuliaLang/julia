@@ -321,11 +321,11 @@ function convert(::Type{SharedArray}, A::Array)
     S = SharedArray{eltype(A),ndims(A)}(size(A))
     copy!(S, A)
 end
-function convert{T}(::Type{SharedArray{T}}, A::Array)
+function convert(::Type{SharedArray{T}}, A::Array) where T
     S = SharedArray{T,ndims(A)}(size(A))
     copy!(S, A)
 end
-function convert{TS,TA,N}(::Type{SharedArray{TS,N}}, A::Array{TA,N})
+function convert(::Type{SharedArray{TS,N}}, A::Array{TA,N}) where TS where TA where N
     S = SharedArray{TS,ndims(A)}(size(A))
     copy!(S, A)
 end

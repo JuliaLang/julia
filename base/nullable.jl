@@ -36,21 +36,21 @@ Nullable() = Nullable{Union{}}()
 
 eltype{T}(::Type{Nullable{T}}) = T
 
-convert{T}(::Type{Nullable{T}}, x::Nullable{T}) = x
-convert(   ::Type{Nullable   }, x::Nullable   ) = x
+convert(::Type{Nullable{T}}, x::Nullable{T}) where {T} = x
+convert(::Type{Nullable   }, x::Nullable   ) = x
 
 convert{T}(t::Type{Nullable{T}}, x::Any) = convert(t, convert(T, x))
 
-function convert{T}(::Type{Nullable{T}}, x::Nullable)
+function convert(::Type{Nullable{T}}, x::Nullable) where T
     return isnull(x) ? Nullable{T}() : Nullable{T}(convert(T, get(x)))
 end
 
-convert{T<:Nullable}(::Type{Nullable{T}}, x::T) = Nullable{T}(x)
-convert{T}(::Type{Nullable{T}}, x::T) = Nullable{T}(x)
-convert{T}(::Type{Nullable   }, x::T) = Nullable{T}(x)
+convert(::Type{Nullable{T}}, x::T) where {T<:Nullable} = Nullable{T}(x)
+convert(::Type{Nullable{T}}, x::T) where {T} = Nullable{T}(x)
+convert(::Type{Nullable   }, x::T) where {T} = Nullable{T}(x)
 
-convert{T}(::Type{Nullable{T}}, ::Void) = Nullable{T}()
-convert(   ::Type{Nullable   }, ::Void) = Nullable{Union{}}()
+convert(::Type{Nullable{T}}, ::Void) where {T} = Nullable{T}()
+convert(::Type{Nullable   }, ::Void) = Nullable{Union{}}()
 
 promote_rule{S,T}(::Type{Nullable{S}}, ::Type{T}) = Nullable{promote_type(S, T)}
 promote_rule{S,T}(::Type{Nullable{S}}, ::Type{Nullable{T}}) = Nullable{promote_type(S, T)}
