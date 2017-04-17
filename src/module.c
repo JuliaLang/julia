@@ -507,6 +507,7 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
             else
                 jl_errorf("deprecated binding: %s", jl_symbol_name(b->name));
         }
+        b->deprecated = 0;
     }
 }
 
