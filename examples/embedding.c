@@ -26,11 +26,8 @@ int main()
         // Accessing the return value
 
         jl_value_t *ret = jl_eval_string("sqrt(2.0)");
-
-        if (jl_is_float64(ret)) {
-            double retDouble = jl_unbox_float64(ret);
-            printf("sqrt(2.0) in C: %e\n", retDouble);
-        }
+        double retDouble = jl_unbox_float64(ret);
+        printf("sqrt(2.0) in C: %e\n", retDouble);
     }
 
     {
@@ -39,11 +36,8 @@ int main()
         jl_function_t *func = jl_get_function(jl_base_module, "sqrt");
         jl_value_t* argument = jl_box_float64(2.0);
         jl_value_t* ret = jl_call1(func, argument);
-
-        if (jl_is_float64(ret)) {
-            double retDouble = jl_unbox_float64(ret);
-            printf("sqrt(2.0) in C: %e\n", retDouble);
-        }
+        double retDouble = jl_unbox_float64(ret);
+        printf("sqrt(2.0) in C: %e\n", retDouble);
     }
 
     {

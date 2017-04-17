@@ -4628,3 +4628,35 @@ ccall(:jl_free, Void, (Ptr{Void}, ), p15240)
 
 # issue #19963
 ccall(:jl_free, Void, (Ptr{Void}, ), C_NULL)
+
+# issue 21216
+bitstype 128 FP128test <: AbstractFloat
+immutable FP128align <: AbstractFloat
+    i::Int # cause forced misalignment
+    fp::FP128test
+end
+FP128align(x::Real, r::RoundingMode) = nothing # for ambiguity test
+let ni128 = sizeof(FP128test) ÷ sizeof(Int),
+    ns128 = sizeof(FP128align) ÷ sizeof(Int),
+    nbit = sizeof(Int) * 8,
+    arr = reinterpret(FP128align, collect(Int, 1:(2 * ns128))),
+    offset = Base.datatype_alignment(FP128test) ÷ sizeof(Int),
+    little,
+    expected
+    @test sizeof(FP128test) == 16
+    @test length(arr) == 2
+    @test arr[1].i == 1
+    @test arr[2].i == 1 + ns128
+    expected = UInt128(0)
+    for little in ni128:-1:1
+        little += offset
+        expected = (expected << nbit) + little
+    end
+    @test arr[1].fp == reinterpret(FP128test, expected)
+    expected = UInt128(0)
+    for little in ni128:-1:1
+        little += offset + ns128
+        expected = (expected << nbit) + little
+    end
+    @test reinterpret(UInt128, arr[2].fp) == expected
+end

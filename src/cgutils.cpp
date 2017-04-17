@@ -331,20 +331,11 @@ JL_DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt, bool *isboxed)
     if (jl_is_bitstype(jt)) {
         if (jt == (jl_value_t*)jl_long_type)
             return T_size;
+        if (jt == (jl_value_t*)jl_float32_type)
+            return T_float32;
+        if (jt == (jl_value_t*)jl_float64_type)
+            return T_float64;
         int nb = jl_datatype_size(jt);
-        if (jl_is_floattype(jt)) {
-#ifndef DISABLE_FLOAT16
-            if (nb == 2)
-                return T_float16;
-            else
-#endif
-            if (nb == 4)
-                return T_float32;
-            else if (nb == 8)
-                return T_float64;
-            else if (nb == 16)
-                return T_float128;
-        }
         return Type::getIntNTy(jl_LLVMContext, nb*8);
     }
     if (jl_isbits(jt)) {
