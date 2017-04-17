@@ -129,6 +129,16 @@ not_const = 1
 @test isimmutable([]) == false
 @test isimmutable("abc") == true
 
+type Foo0 end
+immutable Bar1{A} end
+abstract Baz2{A,B}
+@test nparams(Foo0) == 0
+@test nparams(Bar1) == 1
+@test nparams(Baz2) == 2
+@test getparam(Bar1,1) === TypeVar(:A)
+@test getparam(Bar1{Int},1) === Int
+@test getparam(Baz2{Int,Char},2) === Char
+
 ## find bindings tests
 @test ccall(:jl_get_module_of_binding, Any, (Any, Any), Base, :sin)==Base
 
