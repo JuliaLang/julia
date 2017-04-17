@@ -132,11 +132,11 @@ retry(read, check=(s,e)->isa(e, UVError))(io)
 ```
 """
 function retry(f::Function;  delays=ExponentialBackOff(), check=nothing)
-    (args...) -> begin
+    (args...; kwargs...) -> begin
         state = start(delays)
         while true
             try
-                return f(args...)
+                return f(args...; kwargs...)
             catch e
                 done(delays, state) && rethrow(e)
                 if check !== nothing
