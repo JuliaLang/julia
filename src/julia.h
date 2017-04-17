@@ -1327,6 +1327,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle);
 
 JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s);
 JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname);
+JL_DLLEXPORT void jl_set_sysimg_so(void *handle);
 JL_DLLEXPORT ios_t *jl_create_system_image(void);
 JL_DLLEXPORT void jl_save_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image(const char *fname);
