@@ -94,7 +94,7 @@ end
 
 ## copy ##
 
-function unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, n)
+function unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, n) where T
     # Do not use this to copy data between pointer arrays.
     # It can't be made safe no matter how carefully you checked.
     ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
@@ -102,7 +102,7 @@ function unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, n)
     return dest
 end
 
-function unsafe_copy!{T}(dest::Array{T}, doffs, src::Array{T}, soffs, n)
+function unsafe_copy!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     if isbits(T)
         unsafe_copy!(pointer(dest, doffs), pointer(src, soffs), n)
     else
@@ -121,9 +121,9 @@ function copy!{T}(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer,
     unsafe_copy!(dest, doffs, src, soffs, n)
 end
 
-copy!{T}(dest::Array{T}, src::Array{T}) = copy!(dest, 1, src, 1, length(src))
+copy!(dest::Array{T}, src::Array{T}) where {T} = copy!(dest, 1, src, 1, length(src))
 
-copy{T<:Array}(a::T) = ccall(:jl_array_copy, Ref{T}, (Any,), a)
+copy(a::T) where {T<:Array} = ccall(:jl_array_copy, Ref{T}, (Any,), a)
 
 function reinterpret{T,S}(::Type{T}, a::Array{S,1})
     nel = Int(div(length(a)*sizeof(S),sizeof(T)))
