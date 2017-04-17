@@ -1803,7 +1803,7 @@ julia> filter(isodd, a)
  9
 ```
 """
-filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
+filter(f, As::AbstractArray) = As[Bool[f(x) for x in As]]
 
 function filter!(f, a::Vector)
     insrt = 1
