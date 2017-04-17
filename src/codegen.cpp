@@ -434,6 +434,17 @@ static bool isbits_spec(jl_value_t *jt, bool allow_singleton = true)
         (allow_singleton || (jl_datatype_size(jt) > 0) || (jl_datatype_nfields(jt) > 0));
 }
 
+static MDNode *best_tbaa(jl_value_t *jt) {
+    jt = jl_unwrap_unionall(jt);
+    if (!jl_is_datatype(jt))
+        return tbaa_value;
+    if (jl_is_abstracttype(jt))
+        return tbaa_value;
+    // If we're here, we know all subtypes are (im)mutable, even if we
+    // don't know what the exact type is
+    return jl_is_mutable(jt) ? tbaa_mutab : tbaa_immut;
+}
+
 // metadata tracking for a llvm Value* during codegen
 struct jl_cgval_t {
     Value *V; // may be of type T* or T, or set to NULL if ghost (or if the value has not been initialized yet, for a variable definition)
@@ -464,9 +475,7 @@ struct jl_cgval_t {
         isboxed(isboxed),
         isghost(false),
         isimmutable(isboxed && jl_is_immutable_datatype(typ)),
-        tbaa(isboxed ? (jl_is_leaf_type(typ) ?
-                        (jl_is_mutable(typ) ? tbaa_mutab : tbaa_immut) :
-                        tbaa_value) : nullptr)
+        tbaa(isboxed ? best_tbaa(typ) : nullptr)
     {
         assert(!(isboxed && TIndex != NULL));
         assert(TIndex == NULL || TIndex->getType() == T_int8);
