@@ -74,8 +74,8 @@ size(a::Array, d) = arraysize(a, d)
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
 size(a::Array) = (@_inline_meta; _size((), a))
-_size{_,N}(out::NTuple{N}, A::Array{_,N}) = out
-function _size{_,M,N}(out::NTuple{M}, A::Array{_,N})
+_size(out::NTuple{N}, A::Array{_,N}) where {_,N} = out
+function _size(out::NTuple{M}, A::Array{_,N}) where _ where M where N
     @_inline_meta
     _size((out..., size(A,M+1)), A)
 end
@@ -83,7 +83,7 @@ end
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
 length(a::Array) = arraylen(a)
-elsize{T}(a::Array{T}) = isbits(T) ? sizeof(T) : sizeof(Ptr)
+elsize(a::Array{T}) where {T} = isbits(T) ? sizeof(T) : sizeof(Ptr)
 sizeof(a::Array) = elsize(a) * length(a)
 
 function isassigned(a::Array, i::Int...)

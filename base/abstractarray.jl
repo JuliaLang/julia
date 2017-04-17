@@ -19,8 +19,8 @@ julia> size(A,3,2)
 (4, 3)
 ```
 """
-size{T,N}(t::AbstractArray{T,N}, d) = d <= N ? size(t)[d] : 1
-size{N}(x, d1::Integer, d2::Integer, dx::Vararg{Integer, N}) =
+size(t::AbstractArray{T,N}, d) where {T,N} = d <= N ? size(t)[d] : 1
+size(x, d1::Integer, d2::Integer, dx::Vararg{Integer, N}) where {N} =
     (size(x, d1), size(x, d2), ntuple(k->size(x, dx[k]), Val{N})...)
 
 """
@@ -91,7 +91,7 @@ julia> extrema(b)
 linearindices(A)                 = (@_inline_meta; OneTo(_length(A)))
 linearindices(A::AbstractVector) = (@_inline_meta; indices1(A))
 eltype(::Type{<:AbstractArray{E}}) where {E} = E
-elsize{T}(::AbstractArray{T}) = sizeof(T)
+elsize(::AbstractArray{T}) where {T} = sizeof(T)
 
 """
     ndims(A::AbstractArray) -> Integer
