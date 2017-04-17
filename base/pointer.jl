@@ -115,7 +115,7 @@ remains referenced for the whole time that the `Ptr` will be used.
 pointer_from_objref(x::ANY) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
 data_pointer_from_objref(x::ANY) = pointer_from_objref(x)::Ptr{Void}
 
-eltype{T}(::Type{Ptr{T}}) = T
+eltype(::Type{Ptr{T}}) where {T} = T
 
 ## limited pointer arithmetic & comparison ##
 

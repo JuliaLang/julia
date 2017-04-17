@@ -14,7 +14,7 @@ function Set(g::Generator)
     return Set{T}(g)
 end
 
-eltype{T}(::Type{Set{T}}) = T
+eltype(::Type{Set{T}}) where {T} = T
 similar{T}(s::Set{T}) = Set{T}()
 similar(s::Set, T::Type) = Set{T}()
 

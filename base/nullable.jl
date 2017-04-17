@@ -34,7 +34,7 @@ Nullable{Int64}
 Nullable{T}(value::T, hasvalue::Bool=true) = Nullable{T}(value, hasvalue)
 Nullable() = Nullable{Union{}}()
 
-eltype{T}(::Type{Nullable{T}}) = T
+eltype(::Type{Nullable{T}}) where {T} = T
 
 convert{T}(::Type{Nullable{T}}, x::Nullable{T}) = x
 convert(   ::Type{Nullable   }, x::Nullable   ) = x

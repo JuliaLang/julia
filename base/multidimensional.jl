@@ -146,7 +146,7 @@ module IteratorsMD
     @inline maxt(a::Tuple,   b::Tuple{}) = a
     @inline maxt(a::Tuple,   b::Tuple)   = (max(a[1], b[1]), maxt(tail(a), tail(b))...)
 
-    eltype{I}(::Type{CartesianRange{I}}) = I
+    eltype(::Type{CartesianRange{I}}) where {I} = I
     iteratorsize(::Type{<:CartesianRange}) = Base.HasShape()
 
     @inline function start(iter::CartesianRange{<:CartesianIndex})
