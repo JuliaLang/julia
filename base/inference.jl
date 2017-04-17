@@ -1969,12 +1969,15 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
         t = Any
         if n <= length(sv.sp)
             val = sv.sp[n]
-            if isa(val, TypeVar)
+            if isa(val, TypeVar) && Any <: val.ub
                 # static param bound to typevar
                 # if the tvar does not refer to anything more specific than Any,
                 # the static param might actually be an integer, symbol, etc.
-                if !(Any <: val.ub)
-                    t = UnionAll(val, Type{val})
+            elseif has_free_typevars(val)
+                vs = ccall(:jl_find_free_typevars, Any, (Any,), val)
+                t = Type{val}
+                for v in vs
+                    t = UnionAll(v, t)
                 end
             else
                 t = abstract_eval_constant(val)

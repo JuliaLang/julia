@@ -178,6 +178,42 @@ JL_DLLEXPORT int jl_has_free_typevars(jl_value_t *v)
     return has_free_typevars(v, NULL);
 }
 
+static void find_free_typevars(jl_value_t *v, jl_typeenv_t *env, jl_array_t *out)
+{
+    if (jl_typeis(v, jl_tvar_type)) {
+        if (v == jl_ANY_flag) return;
+        if (!typeenv_has(env, (jl_tvar_t*)v))
+            jl_array_ptr_1d_push(out, v);
+    }
+    else if (jl_is_uniontype(v)) {
+        find_free_typevars(((jl_uniontype_t*)v)->a, env, out);
+        find_free_typevars(((jl_uniontype_t*)v)->b, env, out);
+    }
+    else if (jl_is_unionall(v)) {
+        jl_unionall_t *ua = (jl_unionall_t*)v;
+        jl_typeenv_t newenv = { ua->var, NULL, env };
+        find_free_typevars(ua->var->lb, env, out);
+        find_free_typevars(ua->var->ub, env, out);
+        find_free_typevars(ua->body, &newenv, out);
+    }
+    else if (jl_is_datatype(v)) {
+        if (!((jl_datatype_t*)v)->hasfreetypevars)
+            return;
+        size_t i;
+        for (i=0; i < jl_nparams(v); i++)
+            find_free_typevars(jl_tparam(v,i), env, out);
+    }
+}
+
+JL_DLLEXPORT jl_array_t *jl_find_free_typevars(jl_value_t *v)
+{
+    jl_array_t *out = jl_alloc_vec_any(0);
+    JL_GC_PUSH1(&out);
+    find_free_typevars(v, NULL, out);
+    JL_GC_POP();
+    return out;
+}
+
 // test whether a type has vars bound by the given environment
 static int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env)
 {
