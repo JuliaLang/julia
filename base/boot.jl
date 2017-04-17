@@ -294,7 +294,7 @@ Task(f::ANY) = ccall(:jl_new_task, Ref{Task}, (Any, Int), f, 0)
 # note that there is no actual conversion defined here,
 # so the methods and ccall's in Core aren't permitted to use convert
 convert(::Type{Any}, x::ANY) = x
-convert{T}(::Type{T}, x::T) = x
+convert(::Type{T}, x::T) where {T} = x
 cconvert{T}(::Type{T}, x) = convert(T, x)
 unsafe_convert{T}(::Type{T}, x::T) = x
 

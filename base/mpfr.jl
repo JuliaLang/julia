@@ -227,7 +227,7 @@ function convert(::Type{Integer},x::BigFloat)
     isinteger(x) || throw(InexactError())
     trunc(Integer,x)
 end
-function convert{T<:Integer}(::Type{T},x::BigFloat)
+function convert(::Type{T},x::BigFloat) where T<:Integer
     isinteger(x) || throw(InexactError())
     trunc(T,x)
 end

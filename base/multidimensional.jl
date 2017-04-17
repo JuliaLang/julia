@@ -123,11 +123,11 @@ module IteratorsMD
     CartesianRange{N}(rngs::NTuple{N,Union{Integer,AbstractUnitRange}}) =
         CartesianRange(CartesianIndex(map(first, rngs)), CartesianIndex(map(last, rngs)))
 
-    convert{N}(::Type{NTuple{N,UnitRange{Int}}}, R::CartesianRange{CartesianIndex{N}}) =
+    convert(::Type{NTuple{N,UnitRange{Int}}}, R::CartesianRange{CartesianIndex{N}}) where {N} =
         map((f,l)->f:l, first(R).I, last(R).I)
-    convert{N}(::Type{NTuple{N,UnitRange}}, R::CartesianRange) =
+    convert(::Type{NTuple{N,UnitRange}}, R::CartesianRange) where {N} =
         convert(NTuple{N,UnitRange{Int}}, R)
-    convert{N}(::Type{Tuple{Vararg{UnitRange{Int}}}}, R::CartesianRange{CartesianIndex{N}}) =
+    convert(::Type{Tuple{Vararg{UnitRange{Int}}}}, R::CartesianRange{CartesianIndex{N}}) where {N} =
         convert(NTuple{N,UnitRange{Int}}, R)
     convert(::Type{Tuple{Vararg{UnitRange}}}, R::CartesianRange) =
         convert(Tuple{Vararg{UnitRange{Int}}}, R)

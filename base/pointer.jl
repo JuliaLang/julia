@@ -21,15 +21,15 @@ const C_NULL = bitcast(Ptr{Void}, 0)
 
 # pointer to integer
 convert{T<:Union{Int,UInt}}(::Type{T}, x::Ptr) = bitcast(T, x)
-convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T, convert(UInt, x))
+convert(::Type{T}, x::Ptr) where {T<:Integer} = convert(T, convert(UInt, x))
 
 # integer to pointer
-convert{T}(::Type{Ptr{T}}, x::UInt) = bitcast(Ptr{T}, x)
-convert{T}(::Type{Ptr{T}}, x::Int) = bitcast(Ptr{T}, x)
+convert(::Type{Ptr{T}}, x::UInt) where {T} = bitcast(Ptr{T}, x)
+convert(::Type{Ptr{T}}, x::Int) where {T} = bitcast(Ptr{T}, x)
 
 # pointer to pointer
-convert{T}(::Type{Ptr{T}}, p::Ptr{T}) = p
-convert{T}(::Type{Ptr{T}}, p::Ptr) = bitcast(Ptr{T}, p)
+convert(::Type{Ptr{T}}, p::Ptr{T}) where {T} = p
+convert(::Type{Ptr{T}}, p::Ptr) where {T} = bitcast(Ptr{T}, p)
 
 # object to pointer (when used with ccall)
 unsafe_convert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), x)
