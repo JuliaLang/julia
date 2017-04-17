@@ -296,7 +296,7 @@ Task(f::ANY) = ccall(:jl_new_task, Ref{Task}, (Any, Int), f, 0)
 convert(::Type{Any}, x::ANY) = x
 convert(::Type{T}, x::T) where {T} = x
 cconvert{T}(::Type{T}, x) = convert(T, x)
-unsafe_convert{T}(::Type{T}, x::T) = x
+unsafe_convert(::Type{T}, x::T) where {T} = x
 
 NTuple{N,T} = Tuple{Vararg{T,N}}
 
