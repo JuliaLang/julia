@@ -146,13 +146,17 @@ square root of 2 in Julia and reads back the result in C looks as follows:
 ```
 jl_value_t *ret = jl_eval_string("sqrt(2.0)");
 
-if (jl_is_float64(ret)) {
+if (jl_typeis(ret, jl_float64_type)) {
     double ret_unboxed = jl_unbox_float64(ret);
     printf("sqrt(2.0) in C: %e \n", ret_unboxed);
 }
+else {
+    printf("ERROR: unexpected return type from sqrt(::Float64)\n");
+}
 ```
 
-In order to check whether `ret` is of a specific Julia type, we can use the `jl_is_...` functions.
+In order to check whether `ret` is of a specific Julia type, we can use the
+`jl_isa`, `jl_typeis`, or `jl_is_...` functions.
 By typing `typeof(sqrt(2.0))` into the Julia shell we can see that the return type is `Float64`
 (`double` in C). To convert the boxed Julia value into a C double the `jl_unbox_float64` function
 is used in the above code snippet.
@@ -387,7 +391,7 @@ When writing Julia callable functions, it might be necessary to validate argumen
 to indicate errors. A typical type check looks like:
 
 ```
-if (!jl_is_float64(val)) {
+if (!jl_typeis(val, jl_float64_type)) {
     jl_type_error(function_name, (jl_value_t*)jl_float64_type, val);
 }
 ```
