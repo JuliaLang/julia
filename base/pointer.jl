@@ -40,9 +40,9 @@ unsafe_convert(::Type{Ptr{Int8}}, s::String) = convert(Ptr{Int8}, pointer_from_o
 cconvert(::Type{Ptr{UInt8}}, s::AbstractString) = String(s)
 cconvert(::Type{Ptr{Int8}}, s::AbstractString) = String(s)
 
-unsafe_convert{T}(::Type{Ptr{T}}, a::Array{T}) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
-unsafe_convert{S,T}(::Type{Ptr{S}}, a::AbstractArray{T}) = convert(Ptr{S}, unsafe_convert(Ptr{T}, a))
-unsafe_convert{T}(::Type{Ptr{T}}, a::AbstractArray{T}) = error("conversion to pointer not defined for $(typeof(a))")
+unsafe_convert(::Type{Ptr{T}}, a::Array{T}) where {T} = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
+unsafe_convert(::Type{Ptr{S}}, a::AbstractArray{T}) where {S,T} = convert(Ptr{S}, unsafe_convert(Ptr{T}, a))
+unsafe_convert(::Type{Ptr{T}}, a::AbstractArray{T}) where {T} = error("conversion to pointer not defined for $(typeof(a))")
 
 # unsafe pointer to array conversions
 """

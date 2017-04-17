@@ -149,9 +149,9 @@ ptr_arg_unsafe_convert(::Type{Ptr{Void}}, x) = x
 
 cconvert(T::Type, x) = convert(T, x) # do the conversion eagerly in most cases
 cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_convert
-unsafe_convert{T}(::Type{T}, x::T) = x # unsafe_convert (like convert) defaults to assuming the convert occurred
-unsafe_convert{T<:Ptr}(::Type{T}, x::T) = x  # to resolve ambiguity with the next method
-unsafe_convert{P<:Ptr}(::Type{P}, x::Ptr) = convert(P, x)
+unsafe_convert(::Type{T}, x::T) where {T} = x # unsafe_convert (like convert) defaults to assuming the convert occurred
+unsafe_convert(::Type{T}, x::T) where {T<:Ptr} = x  # to resolve ambiguity with the next method
+unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
 
 reinterpret{T}(::Type{T}, x) = bitcast(T, x)
 reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16,x)
