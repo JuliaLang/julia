@@ -74,8 +74,8 @@ size(a::Array, d) = arraysize(a, d)
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
 size(a::Array) = (@_inline_meta; _size((), a))
-_size{_,N}(out::NTuple{N}, A::Array{_,N}) = out
-function _size{_,M,N}(out::NTuple{M}, A::Array{_,N})
+_size(out::NTuple{N}, A::Array{_,N}) where {_,N} = out
+function _size(out::NTuple{M}, A::Array{_,N}) where _ where M where N
     @_inline_meta
     _size((out..., size(A,M+1)), A)
 end
@@ -83,7 +83,7 @@ end
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
 length(a::Array) = arraylen(a)
-elsize{T}(a::Array{T}) = isbits(T) ? sizeof(T) : sizeof(Ptr)
+elsize(a::Array{T}) where {T} = isbits(T) ? sizeof(T) : sizeof(Ptr)
 sizeof(a::Array) = elsize(a) * length(a)
 
 function isassigned(a::Array, i::Int...)
@@ -94,7 +94,7 @@ end
 
 ## copy ##
 
-function unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, n)
+function unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, n) where T
     # Do not use this to copy data between pointer arrays.
     # It can't be made safe no matter how carefully you checked.
     ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
@@ -102,7 +102,7 @@ function unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, n)
     return dest
 end
 
-function unsafe_copy!{T}(dest::Array{T}, doffs, src::Array{T}, soffs, n)
+function unsafe_copy!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     if isbits(T)
         unsafe_copy!(pointer(dest, doffs), pointer(src, soffs), n)
     else
@@ -121,9 +121,9 @@ function copy!{T}(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer,
     unsafe_copy!(dest, doffs, src, soffs, n)
 end
 
-copy!{T}(dest::Array{T}, src::Array{T}) = copy!(dest, 1, src, 1, length(src))
+copy!(dest::Array{T}, src::Array{T}) where {T} = copy!(dest, 1, src, 1, length(src))
 
-copy{T<:Array}(a::T) = ccall(:jl_array_copy, Ref{T}, (Any,), a)
+copy(a::T) where {T<:Array} = ccall(:jl_array_copy, Ref{T}, (Any,), a)
 
 function reinterpret{T,S}(::Type{T}, a::Array{S,1})
     nel = Int(div(length(a)*sizeof(S),sizeof(T)))

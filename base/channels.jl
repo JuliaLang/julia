@@ -380,7 +380,7 @@ function notify_error(c::Channel, err)
 end
 notify_error(c::Channel) = notify_error(c, get(c.excp))
 
-eltype{T}(::Type{Channel{T}}) = T
+eltype(::Type{Channel{T}}) where {T} = T
 
 show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(c.sz_max),sz_curr:$(n_avail(c)))")
 
