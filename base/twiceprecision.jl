@@ -60,7 +60,7 @@ nbitslen(::Type{Float32}, len, offset) = min(12, nbitslen(len, offset))
 nbitslen(::Type{Float16}, len, offset) = min(5,  nbitslen(len, offset))
 nbitslen(len, offset) = len < 2 ? 0 : ceil(Int, log2(max(offset-1, len-offset)))
 
-eltype{T}(::Type{TwicePrecision{T}}) = T
+eltype(::Type{TwicePrecision{T}}) where {T} = T
 
 promote_rule{R,S}(::Type{TwicePrecision{R}}, ::Type{TwicePrecision{S}}) =
     TwicePrecision{promote_type(R,S)}
