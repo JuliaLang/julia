@@ -163,7 +163,7 @@ end
 
 ## Reinterpret and Reshape
 
-function reinterpret(::Type{T}, a::SparseMatrixCSC{Tv}) where {T, Tv}
+function reinterpret(::Type{T}, a::SparseMatrixCSC{Tv}) where {T,Tv}
     if sizeof(T) != sizeof(Tv)
         throw(ArgumentError("SparseMatrixCSC reinterpret is only supported for element types of the same size"))
     end
@@ -293,7 +293,7 @@ function copy!(A::SparseMatrixCSC, B::SparseMatrixCSC)
 end
 
 similar(S::SparseMatrixCSC, Tv::Type=eltype(S)) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), Array{Tv}(length(S.nzval)))
-function similar(S::SparseMatrixCSC, ::Type{Tv}, ::Type{Ti}) where {Tv, Ti}
+function similar(S::SparseMatrixCSC, ::Type{Tv}, ::Type{Ti}) where {Tv,Ti}
     new_colptr = copy!(similar(S.colptr, Ti), S.colptr)
     new_rowval = copy!(similar(S.rowval, Ti), S.rowval)
     new_nzval =  copy!(similar(S.nzval,  Tv), S.nzval)

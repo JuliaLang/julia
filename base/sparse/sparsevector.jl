@@ -620,7 +620,7 @@ function getindex(A::SparseMatrixCSC{Tv}, I::AbstractVector) where Tv
     SparseVector(n, rowvalB, nzvalB)
 end
 
-function find{Ti}(x::SparseVector{<:Any,Ti})
+function find(x::SparseVector{<:Any,Ti}) where Ti
     numnz = nnz(x)
     I = Vector{Ti}(numnz)
 
@@ -643,7 +643,7 @@ function find{Ti}(x::SparseVector{<:Any,Ti})
     return I
 end
 
-function findnz{Tv,Ti}(x::SparseVector{Tv,Ti})
+function findnz(x::SparseVector{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(x)
 
     I = Vector{Ti}(numnz)

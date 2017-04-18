@@ -345,11 +345,11 @@ julia> collect(Float64, 1:2:5)
  5.0
 ```
 """
-collect{T}(::Type{T}, itr) = _collect(T, itr, iteratorsize(itr))
+collect(::Type{T}, itr) where {T} = _collect(T, itr, iteratorsize(itr))
 
-_collect{T}(::Type{T}, itr, isz::HasLength) = copy!(Array{T,1}(Int(length(itr)::Integer)), itr)
-_collect{T}(::Type{T}, itr, isz::HasShape)  = copy!(similar(Array{T}, indices(itr)), itr)
-function _collect{T}(::Type{T}, itr, isz::SizeUnknown)
+_collect(::Type{T}, itr, isz::HasLength) where {T} = copy!(Array{T,1}(Int(length(itr)::Integer)), itr)
+_collect(::Type{T}, itr, isz::HasShape) where {T}  = copy!(similar(Array{T}, indices(itr)), itr)
+function _collect(::Type{T}, itr, isz::SizeUnknown) where T
     a = Array{T,1}(0)
     for x in itr
         push!(a,x)
@@ -413,8 +413,8 @@ else
     _default_eltype(itr::ANY) = Any
 end
 
-_array_for{T}(::Type{T}, itr, ::HasLength) = Array{T,1}(Int(length(itr)::Integer))
-_array_for{T}(::Type{T}, itr, ::HasShape) = similar(Array{T}, indices(itr))
+_array_for(::Type{T}, itr, ::HasLength) where {T} = Array{T,1}(Int(length(itr)::Integer))
+_array_for(::Type{T}, itr, ::HasShape) where {T} = similar(Array{T}, indices(itr))
 
 function collect(itr::Generator)
     isz = iteratorsize(itr.iter)
@@ -454,7 +454,7 @@ function collect_to_with_first!(dest, v1, itr, st)
     return grow_to!(dest, itr, st)
 end
 
-function collect_to!{T}(dest::AbstractArray{T}, itr, offs, st)
+function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
     # collect to dest array, checking the type of each result. if a result does not
     # match, widen the result type and re-dispatch.
     i = offs
@@ -600,7 +600,7 @@ _deleteat!(a::Vector, i::Integer, delta::Integer) =
 
 ## Dequeue functionality ##
 
-function push!{T}(a::Array{T,1}, item)
+function push!(a::Array{T,1}, item) where T
     # convert first so we don't grow the array if the assignment won't work
     itemT = convert(T, item)
     ccall(:jl_array_grow_end, Void, (Any, UInt), a, 1)
@@ -762,7 +762,7 @@ julia> unshift!([1, 2, 3, 4], 5, 6)
  4
 ```
 """
-function unshift!{T}(a::Array{T,1}, item)
+function unshift!(a::Array{T,1}, item) where T
     item = convert(T, item)
     ccall(:jl_array_grow_beg, Void, (Any, UInt), a, 1)
     a[1] = item
@@ -795,7 +795,7 @@ julia> insert!([6, 5, 4, 2, 1], 4, 3)
  1
 ```
 """
-function insert!{T}(a::Array{T,1}, i::Integer, item)
+function insert!(a::Array{T,1}, i::Integer, item) where T
     # Throw convert error before changing the shape of the array
     _item = convert(T, item)
     _growat!(a, i, 1)
@@ -1551,7 +1551,7 @@ julia> findnz(A)
 ([1, 1, 3, 2], [1, 2, 2, 3], [1, 2, 4, 3])
 ```
 """
-function findnz{T}(A::AbstractMatrix{T})
+function findnz(A::AbstractMatrix{T}) where T
     nnzA = countnz(A)
     I = zeros(Int, nnzA)
     J = zeros(Int, nnzA)
