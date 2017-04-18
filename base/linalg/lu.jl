@@ -383,7 +383,7 @@ end
 
 factorize(A::Tridiagonal) = lufact(A)
 
-function getindex{T}(F::Base.LinAlg.LU{T,Tridiagonal{T}}, d::Symbol)
+function getindex(F::Base.LinAlg.LU{T,Tridiagonal{T}}, d::Symbol) where T
     m, n = size(F)
     if d == :L
         L = Array(Bidiagonal(ones(T, n), F.factors.dl, false))

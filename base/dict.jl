@@ -469,7 +469,7 @@ macro get!(h, key0, default)
 end
 
 
-function getindex{K,V}(h::Dict{K,V}, key)
+function getindex(h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)
     return (index < 0) ? throw(KeyError(key)) : h.vals[index]::V
 end

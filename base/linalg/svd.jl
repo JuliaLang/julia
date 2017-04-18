@@ -249,7 +249,7 @@ function svd(A::AbstractMatrix, B::AbstractMatrix)
     F[:U], F[:V], F[:Q], F[:D1], F[:D2], F[:R0]
 end
 
-function getindex{T}(obj::GeneralizedSVD{T}, d::Symbol)
+function getindex(obj::GeneralizedSVD{T}, d::Symbol) where T
     if d == :U
         return obj.U
     elseif d == :V

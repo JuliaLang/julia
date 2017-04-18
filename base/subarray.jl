@@ -179,7 +179,7 @@ end
 
 # In general, we simply re-index the parent indices by the provided ones
 SlowSubArray{T,N,P,I} = SubArray{T,N,P,I,false}
-function getindex{T,N}(V::SlowSubArray{T,N}, I::Vararg{Int,N})
+function getindex(V::SlowSubArray{T,N}, I::Vararg{Int,N}) where {T,N}
     @_inline_meta
     @boundscheck checkbounds(V, I...)
     @inbounds r = V.parent[reindex(V, V.indexes, I)...]

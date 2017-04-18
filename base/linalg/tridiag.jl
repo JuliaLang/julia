@@ -359,7 +359,7 @@ end
 inv(A::SymTridiagonal) = inv_usmani(A.ev, A.dv, A.ev)
 det(A::SymTridiagonal) = det_usmani(A.ev, A.dv, A.ev)
 
-function getindex{T}(A::SymTridiagonal{T}, i::Integer, j::Integer)
+function getindex(A::SymTridiagonal{T}, i::Integer, j::Integer) where T
     if !(1 <= i <= size(A,2) && 1 <= j <= size(A,2))
         throw(BoundsError(A, (i,j)))
     end
@@ -543,7 +543,7 @@ function diag{T}(M::Tridiagonal{T}, n::Integer=0)
     end
 end
 
-function getindex{T}(A::Tridiagonal{T}, i::Integer, j::Integer)
+function getindex(A::Tridiagonal{T}, i::Integer, j::Integer) where T
     if !(1 <= i <= size(A,2) && 1 <= j <= size(A,2))
         throw(BoundsError(A, (i,j)))
     end

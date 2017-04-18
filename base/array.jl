@@ -183,7 +183,7 @@ similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(dims)
 similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(dims)
 
 # T[x...] constructs Array{T,1}
-function getindex{T}(::Type{T}, vals...)
+function getindex(::Type{T}, vals...) where T
     a = Array{T,1}(length(vals))
     @inbounds for i = 1:length(vals)
         a[i] = vals[i]
@@ -191,10 +191,10 @@ function getindex{T}(::Type{T}, vals...)
     return a
 end
 
-getindex{T}(::Type{T}) = (@_inline_meta; Array{T,1}(0))
-getindex{T}(::Type{T}, x) = (@_inline_meta; a = Array{T,1}(1); @inbounds a[1] = x; a)
-getindex{T}(::Type{T}, x, y) = (@_inline_meta; a = Array{T,1}(2); @inbounds (a[1] = x; a[2] = y); a)
-getindex{T}(::Type{T}, x, y, z) = (@_inline_meta; a = Array{T,1}(3); @inbounds (a[1] = x; a[2] = y; a[3] = z); a)
+getindex(::Type{T}) where {T} = (@_inline_meta; Array{T,1}(0))
+getindex(::Type{T}, x) where {T} = (@_inline_meta; a = Array{T,1}(1); @inbounds a[1] = x; a)
+getindex(::Type{T}, x, y) where {T} = (@_inline_meta; a = Array{T,1}(2); @inbounds (a[1] = x; a[2] = y); a)
+getindex(::Type{T}, x, y, z) where {T} = (@_inline_meta; a = Array{T,1}(3); @inbounds (a[1] = x; a[2] = y; a[3] = z); a)
 
 function getindex(::Type{Any}, vals::ANY...)
     a = Array{Any,1}(length(vals))
@@ -529,7 +529,7 @@ function getindex(A::Array, c::Colon)
 end
 
 # This is redundant with the abstract fallbacks, but needed for bootstrap
-function getindex{S}(A::Array{S}, I::Range{Int})
+function getindex(A::Array{S}, I::Range{Int}) where S
     return S[ A[i] for i in I ]
 end
 

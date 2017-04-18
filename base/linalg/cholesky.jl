@@ -425,7 +425,7 @@ function getindex(C::Cholesky, d::Symbol)
     d == :UL && return Symbol(C.uplo) == :U ? UpperTriangular(C.factors) : LowerTriangular(C.factors)
     throw(KeyError(d))
 end
-function getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, d::Symbol)
+function getindex(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
     d == :U && return UpperTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
     d == :L && return LowerTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
     d == :p && return C.piv

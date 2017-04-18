@@ -1199,7 +1199,7 @@ done(r::Use_StepRangeLen_Instead, i::Int) = length(r) <= i
 next(r::Use_StepRangeLen_Instead{T}, i::Int) where {T} =
     (convert(T, (r.start + i*r.step)/r.divisor), i+1)
 
-function getindex{T}(r::Use_StepRangeLen_Instead{T}, i::Integer)
+function getindex(r::Use_StepRangeLen_Instead{T}, i::Integer) where T
     @_inline_meta
     @boundscheck checkbounds(r, i)
     convert(T, (r.start + (i-1)*r.step)/r.divisor)

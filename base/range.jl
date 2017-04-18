@@ -463,20 +463,20 @@ end
 
 ## indexing
 
-function getindex{T}(v::UnitRange{T}, i::Integer)
+function getindex(v::UnitRange{T}, i::Integer) where T
     @_inline_meta
     ret = convert(T, first(v) + i - 1)
     @boundscheck ((i > 0) & (ret <= v.stop) & (ret >= v.start)) || throw_boundserror(v, i)
     ret
 end
 
-function getindex{T}(v::OneTo{T}, i::Integer)
+function getindex(v::OneTo{T}, i::Integer) where T
     @_inline_meta
     @boundscheck ((i > 0) & (i <= v.stop)) || throw_boundserror(v, i)
     convert(T, i)
 end
 
-function getindex{T}(v::Range{T}, i::Integer)
+function getindex(v::Range{T}, i::Integer) where T
     @_inline_meta
     ret = convert(T, first(v) + (i - 1)*step(v))
     ok = ifelse(step(v) > zero(step(v)),
@@ -518,7 +518,7 @@ function getindex(r::AbstractUnitRange, s::AbstractUnitRange{<:Integer})
     range(st, length(s))
 end
 
-function getindex{T}(r::OneTo{T}, s::OneTo)
+function getindex(r::OneTo{T}, s::OneTo) where T
     @_inline_meta
     @boundscheck checkbounds(r, s)
     OneTo(T(s.stop))

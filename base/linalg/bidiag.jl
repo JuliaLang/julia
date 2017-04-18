@@ -144,7 +144,7 @@ julia> Bidiagonal(A, false) #contains the main diagonal and first subdiagonal of
 """
 Bidiagonal(A::AbstractMatrix, isupper::Bool)=Bidiagonal(diag(A), diag(A, isupper?1:-1), isupper)
 
-function getindex{T}(A::Bidiagonal{T}, i::Integer, j::Integer)
+function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
     if !((1 <= i <= size(A,2)) && (1 <= j <= size(A,2)))
         throw(BoundsError(A,(i,j)))
     end

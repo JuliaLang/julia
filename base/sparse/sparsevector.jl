@@ -547,7 +547,7 @@ end
 # TODO: further optimizations are available for ::Colon and other types of Range
 getindex(A::SparseMatrixCSC, ::Colon) = A[1:end]
 
-function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::UnitRange)
+function getindex(A::SparseMatrixCSC{Tv}, I::UnitRange) where Tv
     checkbounds(A, I)
     szA = size(A)
     nA = szA[1]*szA[2]
@@ -583,7 +583,7 @@ function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::UnitRange)
     SparseVector(n, rowvalB, nzvalB)
 end
 
-function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractVector)
+function getindex(A::SparseMatrixCSC{Tv}, I::AbstractVector) where Tv
     szA = size(A)
     nA = szA[1]*szA[2]
     colptrA = A.colptr
@@ -684,7 +684,7 @@ function getindex(x::AbstractSparseVector, i::Integer)
     _spgetindex(nnz(x), nonzeroinds(x), nonzeros(x), i)
 end
 
-function getindex{Tv,Ti}(x::AbstractSparseVector{Tv,Ti}, I::UnitRange)
+function getindex(x::AbstractSparseVector{Tv,Ti}, I::UnitRange) where {Tv,Ti}
     checkbounds(x, I)
     xlen = length(x)
     i0 = first(I)

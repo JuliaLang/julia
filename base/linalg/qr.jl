@@ -318,7 +318,7 @@ function getindex(A::QRCompactWY, d::Symbol)
         throw(KeyError(d))
     end
 end
-function getindex{T}(A::QRPivoted{T}, d::Symbol)
+function getindex(A::QRPivoted{T}, d::Symbol) where T
     m, n = size(A)
     if d == :R
         return triu!(A.factors[1:min(m,n), 1:n])

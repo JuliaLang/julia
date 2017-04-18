@@ -163,7 +163,7 @@ end
 
 ## Reinterpret and Reshape
 
-function reinterpret(::Type{T}, a::SparseMatrixCSC{Tv}) where T where Tv
+function reinterpret(::Type{T}, a::SparseMatrixCSC{Tv}) where {T, Tv}
     if sizeof(T) != sizeof(Tv)
         throw(ArgumentError("SparseMatrixCSC reinterpret is only supported for element types of the same size"))
     end
@@ -293,7 +293,7 @@ function copy!(A::SparseMatrixCSC, B::SparseMatrixCSC)
 end
 
 similar(S::SparseMatrixCSC, Tv::Type=eltype(S)) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), Array{Tv}(length(S.nzval)))
-function similar(S::SparseMatrixCSC, ::Type{Tv}, ::Type{Ti}) where Tv where Ti
+function similar(S::SparseMatrixCSC, ::Type{Tv}, ::Type{Ti}) where {Tv, Ti}
     new_colptr = copy!(similar(S.colptr, Ti), S.colptr)
     new_rowval = copy!(similar(S.rowval, Ti), S.rowval)
     new_nzval =  copy!(similar(S.nzval,  Tv), S.nzval)
@@ -1790,7 +1790,7 @@ end
 
 getindex(A::SparseMatrixCSC, I::Tuple{Integer,Integer}) = getindex(A, I[1], I[2])
 
-function getindex{T}(A::SparseMatrixCSC{T}, i0::Integer, i1::Integer)
+function getindex(A::SparseMatrixCSC{T}, i0::Integer, i1::Integer) where T
     if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); throw(BoundsError()); end
     r1 = Int(A.colptr[i1])
     r2 = Int(A.colptr[i1+1]-1)
@@ -1837,7 +1837,7 @@ function getindex_cols{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector)
     return SparseMatrixCSC(m, nJ, colptrS, rowvalS, nzvalS)
 end
 
-function getindex{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv,Ti}, I::Range, J::AbstractVector)
+function getindex(A::SparseMatrixCSC{Tv,Ti}, I::Range, J::AbstractVector) where {Tv,Ti<:Integer}
     # Ranges for indexing rows
     (m, n) = size(A)
     # whole columns:
@@ -2130,7 +2130,7 @@ function getindex_general(A::SparseMatrixCSC, I::AbstractVector, J::AbstractVect
 end
 
 # the general case:
-function getindex{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
+function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector) where {Tv,Ti}
     (m, n) = size(A)
 
     if !isempty(J)
@@ -2154,7 +2154,7 @@ function getindex{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::Abstra
     end
 end
 
-function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractArray)
+function getindex(A::SparseMatrixCSC{Tv}, I::AbstractArray) where Tv
     szA = size(A)
     nA = szA[1]*szA[2]
     colptrA = A.colptr

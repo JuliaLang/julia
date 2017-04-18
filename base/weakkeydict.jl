@@ -113,7 +113,7 @@ pop!{K}(wkh::WeakKeyDict{K}, key, default) = lock(() -> pop!(wkh.ht, key, defaul
 delete!{K}(wkh::WeakKeyDict{K}, key) = lock(() -> delete!(wkh.ht, key), wkh)
 empty!(wkh::WeakKeyDict) = (lock(() -> empty!(wkh.ht), wkh); wkh)
 haskey{K}(wkh::WeakKeyDict{K}, key) = lock(() -> haskey(wkh.ht, key), wkh)
-getindex{K}(wkh::WeakKeyDict{K}, key) = lock(() -> getindex(wkh.ht, key), wkh)
+getindex(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> getindex(wkh.ht, key), wkh)
 isempty(wkh::WeakKeyDict) = isempty(wkh.ht)
 length(t::WeakKeyDict) = length(t.ht)
 

@@ -119,11 +119,11 @@ function full!(A::UnitUpperTriangular)
     B
 end
 
-getindex{T}(A::UnitLowerTriangular{T}, i::Integer, j::Integer) =
+getindex(A::UnitLowerTriangular{T}, i::Integer, j::Integer) where {T} =
     i > j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
 getindex(A::LowerTriangular, i::Integer, j::Integer) =
     i >= j ? A.data[i,j] : zero(A.data[j,i])
-getindex{T}(A::UnitUpperTriangular{T}, i::Integer, j::Integer) =
+getindex(A::UnitUpperTriangular{T}, i::Integer, j::Integer) where {T} =
     i < j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
 getindex(A::UpperTriangular, i::Integer, j::Integer) =
     i <= j ? A.data[i,j] : zero(A.data[j,i])

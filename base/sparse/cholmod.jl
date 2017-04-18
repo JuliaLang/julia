@@ -1247,7 +1247,7 @@ function getindex(A::Dense, i::Integer)
 end
 
 IndexStyle(::Sparse) = IndexCartesian()
-function getindex{T}(A::Sparse{T}, i0::Integer, i1::Integer)
+function getindex(A::Sparse{T}, i0::Integer, i1::Integer) where T
     s = unsafe_load(get(A.p))
     !(1 <= i0 <= s.nrow && 1 <= i1 <= s.ncol) && throw(BoundsError())
     s.stype < 0 && i0 < i1 && return conj(A[i1,i0])
