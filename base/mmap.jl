@@ -68,7 +68,7 @@ end # @unix_only
 
 @windows_only begin
 
-typealias DWORD Culong
+typealias DWORD Culonglong
 
 const PAGE_READONLY          = DWORD(0x02)
 const PAGE_READWRITE         = DWORD(0x04)
