@@ -26,9 +26,9 @@ convert(::Type{T}, z::Complex) where {T<:Real} =
 convert(::Type{Complex}, z::Complex) = z
 convert(::Type{Complex}, x::Real) = Complex(x)
 
-promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{S}) =
+promote_rule(::Type{Complex{T}}, ::Type{S}) where {T<:Real,S<:Real} =
     Complex{promote_type(T,S)}
-promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{Complex{S}}) =
+promote_rule(::Type{Complex{T}}, ::Type{Complex{S}}) where {T<:Real,S<:Real} =
     Complex{promote_type(T,S)}
 
 widen{T}(::Type{Complex{T}}) = Complex{widen(T)}

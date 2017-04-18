@@ -62,9 +62,9 @@ nbitslen(len, offset) = len < 2 ? 0 : ceil(Int, log2(max(offset-1, len-offset)))
 
 eltype(::Type{TwicePrecision{T}}) where {T} = T
 
-promote_rule{R,S}(::Type{TwicePrecision{R}}, ::Type{TwicePrecision{S}}) =
+promote_rule(::Type{TwicePrecision{R}}, ::Type{TwicePrecision{S}}) where {R,S} =
     TwicePrecision{promote_type(R,S)}
-promote_rule{R,S}(::Type{TwicePrecision{R}}, ::Type{S}) =
+promote_rule(::Type{TwicePrecision{R}}, ::Type{S}) where {R,S} =
     TwicePrecision{promote_type(R,S)}
 
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision{T}) where {T} = x

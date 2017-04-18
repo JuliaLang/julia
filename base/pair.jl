@@ -35,5 +35,5 @@ function convert(::Type{Pair{A,B}}, x::Pair) where A where B
     Pair{A, B}(convert(A, x[1]), convert(B, x[2]))
 end
 
-promote_rule{A1, B1, A2, B2}(::Type{Pair{A1, B1}}, ::Type{Pair{A2, B2}}) =
+promote_rule(::Type{Pair{A1, B1}}, ::Type{Pair{A2, B2}}) where {A1, B1, A2, B2} =
     Pair{promote_type(A1, A2), promote_type(B1, B2)}

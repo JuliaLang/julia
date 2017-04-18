@@ -7,7 +7,7 @@ convert(::Type{Bool}, x::Float16) = x==0 ? false : x==1 ? true : throw(InexactEr
 convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError())
 
 # promote Bool to any other numeric type
-promote_rule{T<:Number}(::Type{Bool}, ::Type{T}) = T
+promote_rule(::Type{Bool}, ::Type{T}) where {T<:Number} = T
 
 typemin(::Type{Bool}) = false
 typemax(::Type{Bool}) = true

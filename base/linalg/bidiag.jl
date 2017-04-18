@@ -199,7 +199,7 @@ end
 convert{T}(::Type{Matrix}, A::Bidiagonal{T}) = convert(Matrix{T}, A)
 convert(::Type{Array}, A::Bidiagonal) = convert(Matrix, A)
 full(A::Bidiagonal) = convert(Array, A)
-promote_rule{T,S}(::Type{Matrix{T}}, ::Type{Bidiagonal{S}})=Matrix{promote_type(T,S)}
+promote_rule(::Type{Matrix{T}}, ::Type{Bidiagonal{S}}) where {T,S}=Matrix{promote_type(T,S)}
 
 #Converting from Bidiagonal to Tridiagonal
 Tridiagonal(M::Bidiagonal{T}) where {T} = convert(Tridiagonal{T}, M)
@@ -207,7 +207,7 @@ function convert{T}(::Type{Tridiagonal{T}}, A::Bidiagonal)
     z = zeros(T, size(A)[1]-1)
     A.isupper ? Tridiagonal(z, convert(Vector{T},A.dv), convert(Vector{T},A.ev)) : Tridiagonal(convert(Vector{T},A.ev), convert(Vector{T},A.dv), z)
 end
-promote_rule{T,S}(::Type{Tridiagonal{T}}, ::Type{Bidiagonal{S}})=Tridiagonal{promote_type(T,S)}
+promote_rule(::Type{Tridiagonal{T}}, ::Type{Bidiagonal{S}}) where {T,S}=Tridiagonal{promote_type(T,S)}
 
 # No-op for trivial conversion Bidiagonal{T} -> Bidiagonal{T}
 convert{T}(::Type{Bidiagonal{T}}, A::Bidiagonal{T}) = A

@@ -745,33 +745,33 @@ end
 
 /(x::Number, r::Range) = [ x/y for y=r ]
 
-promote_rule{T1,T2}(::Type{UnitRange{T1}},::Type{UnitRange{T2}}) =
+promote_rule(::Type{UnitRange{T1}},::Type{UnitRange{T2}}) where {T1,T2} =
     UnitRange{promote_type(T1,T2)}
 convert(::Type{UnitRange{T}}, r::UnitRange{T}) where {T<:Real} = r
 convert(::Type{UnitRange{T}}, r::UnitRange) where {T<:Real} = UnitRange{T}(r.start, r.stop)
 
-promote_rule{T1,T2}(::Type{OneTo{T1}},::Type{OneTo{T2}}) =
+promote_rule(::Type{OneTo{T1}},::Type{OneTo{T2}}) where {T1,T2} =
     OneTo{promote_type(T1,T2)}
 convert(::Type{OneTo{T}}, r::OneTo{T}) where {T<:Real} = r
 convert(::Type{OneTo{T}}, r::OneTo) where {T<:Real} = OneTo{T}(r.stop)
 
-promote_rule{T1,UR<:AbstractUnitRange}(::Type{UnitRange{T1}}, ::Type{UR}) =
+promote_rule(::Type{UnitRange{T1}}, ::Type{UR}) where {T1,UR<:AbstractUnitRange} =
     UnitRange{promote_type(T1,eltype(UR))}
 convert(::Type{UnitRange{T}}, r::AbstractUnitRange) where {T<:Real} = UnitRange{T}(first(r), last(r))
 convert(::Type{UnitRange}, r::AbstractUnitRange) = UnitRange(first(r), last(r))
 
-promote_rule{T1a,T1b,T2a,T2b}(::Type{StepRange{T1a,T1b}},::Type{StepRange{T2a,T2b}}) =
+promote_rule(::Type{StepRange{T1a,T1b}},::Type{StepRange{T2a,T2b}}) where {T1a,T1b,T2a,T2b} =
     StepRange{promote_type(T1a,T2a),promote_type(T1b,T2b)}
 convert(::Type{StepRange{T1,T2}}, r::StepRange{T1,T2}) where {T1,T2} = r
 
-promote_rule{T1a,T1b,UR<:AbstractUnitRange}(::Type{StepRange{T1a,T1b}},::Type{UR}) =
+promote_rule(::Type{StepRange{T1a,T1b}},::Type{UR}) where {T1a,T1b,UR<:AbstractUnitRange} =
     StepRange{promote_type(T1a,eltype(UR)),promote_type(T1b,eltype(UR))}
 convert(::Type{StepRange{T1,T2}}, r::Range) where {T1,T2} =
     StepRange{T1,T2}(convert(T1, first(r)), convert(T2, step(r)), convert(T1, last(r)))
 convert(::Type{StepRange}, r::AbstractUnitRange{T}) where {T} =
     StepRange{T,T}(first(r), step(r), last(r))
 
-promote_rule{T1,T2,R1,R2,S1,S2}(::Type{StepRangeLen{T1,R1,S1}},::Type{StepRangeLen{T2,R2,S2}}) =
+promote_rule(::Type{StepRangeLen{T1,R1,S1}},::Type{StepRangeLen{T2,R2,S2}}) where {T1,T2,R1,R2,S1,S2} =
     StepRangeLen{promote_type(T1,T2), promote_type(R1,R2), promote_type(S1,S2)}
 convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{T,R,S}) where {T,R,S} = r
 convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen) where {T,R,S} =
@@ -779,7 +779,7 @@ convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen) where {T,R,S} =
 convert(::Type{StepRangeLen{T}}, r::StepRangeLen) where {T} =
     StepRangeLen(convert(T, r.ref), convert(T, r.step), length(r), r.offset)
 
-promote_rule{T,R,S,OR<:Range}(::Type{StepRangeLen{T,R,S}}, ::Type{OR}) =
+promote_rule(::Type{StepRangeLen{T,R,S}}, ::Type{OR}) where {T,R,S,OR<:Range} =
     StepRangeLen{promote_type(T,eltype(OR)),promote_type(R,eltype(OR)),promote_type(S,eltype(OR))}
 convert(::Type{StepRangeLen{T,R,S}}, r::Range) where {T,R,S} =
     StepRangeLen{T,R,S}(R(first(r)), S(step(r)), length(r))
@@ -787,7 +787,7 @@ convert(::Type{StepRangeLen{T}}, r::Range) where {T} =
     StepRangeLen(T(first(r)), T(step(r)), length(r))
 convert(::Type{StepRangeLen}, r::Range) = convert(StepRangeLen{eltype(r)}, r)
 
-promote_rule{T1,T2}(::Type{LinSpace{T1}},::Type{LinSpace{T2}}) =
+promote_rule(::Type{LinSpace{T1}},::Type{LinSpace{T2}}) where {T1,T2} =
     LinSpace{promote_type(T1,T2)}
 convert(::Type{LinSpace{T}}, r::LinSpace{T}) where {T} = r
 convert(::Type{LinSpace{T}}, r::Range) where {T} =
@@ -795,10 +795,10 @@ convert(::Type{LinSpace{T}}, r::Range) where {T} =
 convert(::Type{LinSpace}, r::Range{T}) where {T} =
     convert(LinSpace{T}, r)
 
-promote_rule{T,OR<:OrdinalRange}(::Type{LinSpace{T}}, ::Type{OR}) =
+promote_rule(::Type{LinSpace{T}}, ::Type{OR}) where {T,OR<:OrdinalRange} =
     LinSpace{promote_type(T,eltype(OR))}
 
-promote_rule{L,T,R,S}(::Type{LinSpace{L}}, ::Type{StepRangeLen{T,R,S}}) =
+promote_rule(::Type{LinSpace{L}}, ::Type{StepRangeLen{T,R,S}}) where {L,T,R,S} =
     StepRangeLen{promote_type(L,T),promote_type(L,R),promote_type(L,S)}
 
 # +/- of ranges is defined in operators.jl (to be able to use @eval etc.)
