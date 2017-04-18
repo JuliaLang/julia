@@ -234,4 +234,4 @@ setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
 
 _rs_setindex!_err() = error("indexed assignment fails for a reshaped range; consider calling collect")
 
-unsafe_convert{T}(::Type{Ptr{T}}, a::ReshapedArray{T}) = unsafe_convert(Ptr{T}, parent(a))
+unsafe_convert(::Type{Ptr{T}}, a::ReshapedArray{T}) where {T} = unsafe_convert(Ptr{T}, parent(a))

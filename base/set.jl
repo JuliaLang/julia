@@ -249,5 +249,5 @@ function hash(s::Set, h::UInt)
     return h
 end
 
-convert{T}(::Type{Set{T}}, s::Set{T}) = s
-convert{T}(::Type{Set{T}}, x::Set) = Set{T}(x)
+convert(::Type{Set{T}}, s::Set{T}) where {T} = s
+convert(::Type{Set{T}}, x::Set) where {T} = Set{T}(x)

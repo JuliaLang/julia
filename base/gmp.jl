@@ -180,7 +180,7 @@ end
 
 rem(x::Integer, ::Type{BigInt}) = convert(BigInt, x)
 
-function convert{T<:Unsigned}(::Type{T}, x::BigInt)
+function convert(::Type{T}, x::BigInt) where T<:Unsigned
     if sizeof(T) < sizeof(Limb)
         convert(T, convert(Limb,x))
     else
@@ -189,7 +189,7 @@ function convert{T<:Unsigned}(::Type{T}, x::BigInt)
     end
 end
 
-function convert{T<:Signed}(::Type{T}, x::BigInt)
+function convert(::Type{T}, x::BigInt) where T<:Signed
     n = abs(x.size)
     if sizeof(T) < sizeof(Limb)
         SLimb = typeof(Signed(one(Limb)))
