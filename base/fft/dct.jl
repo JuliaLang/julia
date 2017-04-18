@@ -20,7 +20,7 @@ end
 
 size(p::DCTPlan) = size(p.plan)
 
-function show{T,K,inplace}(io::IO, p::DCTPlan{T,K,inplace})
+function show(io::IO, p::DCTPlan{T,K,inplace}) where {T,K,inplace}
     print(io, inplace ? "FFTW in-place " : "FFTW ",
           K == REDFT10 ? "DCT (DCT-II)" : "IDCT (DCT-III)", " plan for ")
     showfftdims(io, p.plan.sz, p.plan.istride, eltype(p))

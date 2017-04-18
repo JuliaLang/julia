@@ -299,14 +299,14 @@ function sprint_plan(plan::FFTWPlan)
     return str
 end
 
-function show{T,K,inplace}(io::IO, p::cFFTWPlan{T,K,inplace})
+function show(io::IO, p::cFFTWPlan{T,K,inplace}) where {T,K,inplace}
     print(io, inplace ? "FFTW in-place " : "FFTW ",
           K < 0 ? "forward" : "backward", " plan for ")
     showfftdims(io, p.sz, p.istride, T)
     version >= v"3.3.4" && print(io, "\n", sprint_plan(p))
 end
 
-function show{T,K,inplace}(io::IO, p::rFFTWPlan{T,K,inplace})
+function show(io::IO, p::rFFTWPlan{T,K,inplace}) where {T,K,inplace}
     print(io, inplace ? "FFTW in-place " : "FFTW ",
           K < 0 ? "real-to-complex" : "complex-to-real",
           " plan for ")
@@ -314,7 +314,7 @@ function show{T,K,inplace}(io::IO, p::rFFTWPlan{T,K,inplace})
     version >= v"3.3.4" && print(io, "\n", sprint_plan(p))
 end
 
-function show{T,K,inplace}(io::IO, p::r2rFFTWPlan{T,K,inplace})
+function show(io::IO, p::r2rFFTWPlan{T,K,inplace}) where {T,K,inplace}
     print(io, inplace ? "FFTW in-place r2r " : "FFTW r2r ")
     if isempty(K)
         print(io, "0-dimensional")

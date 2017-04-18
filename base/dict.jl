@@ -23,7 +23,7 @@ function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
     end
 end
 
-function show{K,V}(io::IO, t::Associative{K,V})
+function show(io::IO, t::Associative{K,V}) where V where K
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit::Bool = get(io, :limit, false)
     if !haskey(io, :compact)

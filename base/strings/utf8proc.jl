@@ -389,7 +389,7 @@ isless(g1::GraphemeIterator, g2::GraphemeIterator) = isless(g1.s, g2.s)
 
 convert{S<:AbstractString}(::Type{S}, g::GraphemeIterator) = convert(S, g.s)
 
-show{S}(io::IO, g::GraphemeIterator{S}) = print(io, "length-$(length(g)) GraphemeIterator{$S} for \"$(g.s)\"")
+show(io::IO, g::GraphemeIterator{S}) where {S} = print(io, "length-$(length(g)) GraphemeIterator{$S} for \"$(g.s)\"")
 
 ############################################################################
 

@@ -4,7 +4,7 @@
 
 struct Irrational{sym} <: Real end
 
-show{sym}(io::IO, x::Irrational{sym}) = print(io, "$sym = $(string(float(x))[1:15])...")
+show(io::IO, x::Irrational{sym}) where {sym} = print(io, "$sym = $(string(float(x))[1:15])...")
 
 promote_rule(::Type{<:Irrational}, ::Type{Float16}) = Float16
 promote_rule(::Type{<:Irrational}, ::Type{Float32}) = Float32
