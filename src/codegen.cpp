@@ -2013,11 +2013,6 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, int sparams=tr
     return ex;
 }
 
-static bool is_constant(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true)
-{
-    return static_eval(ex, ctx, sparams) != NULL;
-}
-
 static bool slot_eq(jl_value_t *e, int sl)
 {
     return jl_is_slot(e) && jl_slot_number(e)-1 == sl;
@@ -2950,27 +2945,21 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
     }
 
     else if (f==jl_builtin_apply_type && nargs > 0) {
-        size_t i;
-        if (jl_is_method(ctx->linfo->def.method)) {
-            // don't bother codegen constant-folding for toplevel
+        if (!jl_is_method(ctx->linfo->def.method) || ctx->source->inferred) {
+            // don't bother codegen constant-folding for toplevel.
+            // or if inference has run, assume it has already constant-folded these where possible.
             JL_GC_POP();
             return false;
         }
-        for (i=1; i <= nargs; i++) {
-            if (!is_constant(args[i], ctx))
-                break;
-        }
-        if (i > nargs) {
-            jl_value_t *ty = static_eval(expr, ctx, true, true);
-            if (ty!=NULL && jl_is_leaf_type(ty)) {
-                if (jl_has_free_typevars(ty)) {
-                    // add root for types not cached. issue #7065
-                    jl_add_method_root(ctx, ty);
-                }
-                *ret = mark_julia_const(ty);
-                JL_GC_POP();
-                return true;
+        jl_value_t *ty = static_eval(expr, ctx, true, true);
+        if (ty != NULL && jl_is_leaf_type(ty)) {
+            if (jl_has_free_typevars(ty)) {
+                // add root for types not cached. issue #7065
+                jl_add_method_root(ctx, ty);
             }
+            *ret = mark_julia_const(ty);
+            JL_GC_POP();
+            return true;
         }
     }
 
@@ -3981,13 +3970,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         return emit_invoke(ex, ctx);
     }
     else if (head == call_sym) {
-        if (jl_is_method(ctx->linfo->def.method)) { // don't bother codegen constant-folding for toplevel
-            jl_value_t *c = static_eval(expr, ctx, true, true);
-            if (c) {
-                jl_add_method_root(ctx, c);
-                return mark_julia_const(c);
-            }
-        }
         jl_cgval_t res = emit_call(ex, ctx);
         // some intrinsics (e.g. typeassert) can return a wider type
         // than what's actually possible
