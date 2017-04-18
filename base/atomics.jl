@@ -447,7 +447,7 @@ end
 const opnames = Dict{Symbol, Symbol}(:+ => :add, :- => :sub)
 for op in [:+, :-, :max, :min]
     opname = get(opnames, op, op)
-    @eval function $(Symbol("atomic_", opname, "!")){T<:FloatTypes}(var::Atomic{T}, val::T)
+    @eval function $(Symbol("atomic_", opname, "!"))(var::Atomic{T}, val::T) where T<:FloatTypes
         IT = inttype(T)
         old = var[]
         while true
