@@ -354,6 +354,7 @@ function reload(name::AbstractString)
         require(Symbol(require_modname(name)))
     end
 end
+reload(name::Module) = reload(string(name))
 
 # require always works in Main scope and loads files from node 1
 toplevel_load = true
