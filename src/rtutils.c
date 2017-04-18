@@ -236,6 +236,35 @@ JL_DLLEXPORT void jl_pop_handler(int n)
     jl_eh_restore_state(eh);
 }
 
+JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, uint32_t nargs, int catch_exceptions)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_value_t *exc = ptls->exception_in_transit;
+    jl_array_t *bt = NULL;
+    JL_GC_PUSH2(&exc, &bt);
+    if (ptls->bt_size > 0)
+        bt = (jl_array_t*)jl_get_backtrace();
+    jl_value_t *v;
+    if (catch_exceptions) {
+        JL_TRY {
+            v = jl_apply(args, nargs);
+        }
+        JL_CATCH {
+            v = NULL;
+        }
+    }
+    else {
+        v = jl_apply(args, nargs);
+    }
+    ptls->exception_in_transit = exc;
+    if (bt != NULL) {
+        ptls->bt_size = jl_array_len(bt);
+        memcpy(ptls->bt_data, bt->data, ptls->bt_size * sizeof(void*));
+    }
+    JL_GC_POP();
+    return v;
+}
+
 // misc -----------------------------------------------------------------------
 
 // perform f(args...) on stack
