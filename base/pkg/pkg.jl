@@ -1,5 +1,14 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+"""
+The Pkg module provides package management for Julia.
+Try
+`Pkg.status()` for a list of installed pkgs,
+`Pkg.add("<pkg name>")` to add a package,
+`Pkg.update()` to update your packages.
+
+Please see the docs for package management for more information.
+"""
 module Pkg
 
 export Dir, Types, Reqs, Cache, Read, Query, Resolve, Write, Entry
