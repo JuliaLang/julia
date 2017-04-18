@@ -805,7 +805,7 @@ promote_rule{L,T,R,S}(::Type{LinSpace{L}}, ::Type{StepRangeLen{T,R,S}}) =
 
 ## concatenation ##
 
-function vcat{T}(rs::Range{T}...)
+function vcat(rs::Range{T}...) where T
     n::Int = 0
     for ra in rs
         n += length(ra)

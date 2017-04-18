@@ -1055,8 +1055,8 @@ typed_vcat{T}(::Type{T}) = Array{T,1}(0)
 typed_hcat{T}(::Type{T}) = Array{T,1}(0)
 
 ## cat: special cases
-vcat{T}(X::T...)         = T[ X[i] for i=1:length(X) ]
-vcat{T<:Number}(X::T...) = T[ X[i] for i=1:length(X) ]
+vcat(X::T...) where {T}         = T[ X[i] for i=1:length(X) ]
+vcat(X::T...) where {T<:Number} = T[ X[i] for i=1:length(X) ]
 hcat(X::T...) where {T}         = T[ X[j] for i=1:1, j=1:length(X) ]
 hcat(X::T...) where {T<:Number} = T[ X[j] for i=1:1, j=1:length(X) ]
 
@@ -1066,7 +1066,7 @@ typed_vcat{T}(::Type{T}, X::Number...) = hvcat_fill(Array{T,1}(length(X)), X)
 typed_hcat{T}(::Type{T}, X::Number...) = hvcat_fill(Array{T,2}(1,length(X)), X)
 
 vcat(V::AbstractVector...) = typed_vcat(promote_eltype(V...), V...)
-vcat{T}(V::AbstractVector{T}...) = typed_vcat(T, V...)
+vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
 
 function typed_vcat{T}(::Type{T}, V::AbstractVector...)
     n::Int = 0
@@ -1122,7 +1122,7 @@ function typed_hcat{T}(::Type{T}, A::AbstractVecOrMat...)
 end
 
 vcat(A::AbstractMatrix...) = typed_vcat(promote_eltype(A...), A...)
-vcat{T}(A::AbstractMatrix{T}...) = typed_vcat(T, A...)
+vcat(A::AbstractMatrix{T}...) where {T} = typed_vcat(T, A...)
 
 function typed_vcat{T}(::Type{T}, A::AbstractMatrix...)
     nargs = length(A)

@@ -1101,7 +1101,7 @@ function hcat(V::Vector{T}...) where T
     return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
 
-function vcat{T}(arrays::Vector{T}...)
+function vcat(arrays::Vector{T}...) where T
     n = 0
     for a in arrays
         n += length(a)
