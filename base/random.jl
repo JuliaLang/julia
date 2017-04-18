@@ -33,7 +33,7 @@ if is_windows()
     struct RandomDevice <: AbstractRNG
         buffer::Vector{UInt128}
 
-        RandomDevice() = new(Array{UInt128}(1))
+        RandomDevice() = new(Vector{UInt128}(1))
     end
 
     function rand{T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice, ::Type{T})
@@ -214,7 +214,7 @@ function make_seed(n::Integer)
 end
 
 function make_seed(filename::AbstractString, n::Integer)
-    read!(filename, Array{UInt32}(Int(n)))
+    read!(filename, Vector{UInt32}(Int(n)))
 end
 
 ## srand()

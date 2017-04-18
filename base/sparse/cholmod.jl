@@ -246,7 +246,7 @@ mutable struct Sparse{Tv<:VTypes} <: AbstractSparseMatrix{Tv,SuiteSparse_long}
         new(p)
     end
 end
-Sparse(p::Ptr{C_Sparse{Tv}}) where Tv<:VTypes = Sparse{Tv}(p)
+Sparse(p::Ptr{C_Sparse{Tv}}) where {Tv<:VTypes} = Sparse{Tv}(p)
 
 # Factor
 
@@ -325,7 +325,7 @@ mutable struct Factor{Tv} <: Factorization{Tv}
         new(p)
     end
 end
-Factor(p::Ptr{C_Factor{Tv}}) where Tv<:VTypes = Factor{Tv}(p)
+Factor(p::Ptr{C_Factor{Tv}}) where {Tv<:VTypes} = Factor{Tv}(p)
 
 # Define get similar to get(Nullable) to check pointers. All pointer loads
 # should be wrapped in get to make sure that SuiteSparse is not called with
@@ -734,16 +734,16 @@ function vertcat{Tv<:VRealTypes}(A::Sparse{Tv}, B::Sparse{Tv}, values::Bool)
 end
 
 function symmetry{Tv<:VTypes}(A::Sparse{Tv}, option::Integer)
-    xmatched = Array{SuiteSparse_long}(1)
-    pmatched = Array{SuiteSparse_long}(1)
-    nzoffdiag = Array{SuiteSparse_long}(1)
-    nzdiag = Array{SuiteSparse_long}(1)
+    xmatched = Ref{SuiteSparse_long}()
+    pmatched = Ref{SuiteSparse_long}()
+    nzoffdiag = Ref{SuiteSparse_long}()
+    nzdiag = Ref{SuiteSparse_long}()
     rv = ccall((@cholmod_name("symmetry", SuiteSparse_long), :libcholmod), Cint,
             (Ptr{C_Sparse{Tv}}, Cint, Ptr{SuiteSparse_long}, Ptr{SuiteSparse_long},
                 Ptr{SuiteSparse_long}, Ptr{SuiteSparse_long}, Ptr{UInt8}),
                     get(A.p), option, xmatched, pmatched,
                         nzoffdiag, nzdiag, common())
-    rv, xmatched[1], pmatched[1], nzoffdiag[1], nzdiag[1]
+    rv, xmatched[], pmatched[], nzoffdiag[], nzdiag[]
 end
 
 # cholmod_cholesky.h
