@@ -1091,7 +1091,7 @@ end
 vcat() = Array{Any,1}(0)
 hcat() = Array{Any,1}(0)
 
-function hcat{T}(V::Vector{T}...)
+function hcat(V::Vector{T}...) where T
     height = length(V[1])
     for j = 2:length(V)
         if length(V[j]) != height

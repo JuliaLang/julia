@@ -838,8 +838,8 @@ complex(x::AbstractSparseVector) =
 # back to the horizontal concatenation method that ensures that combinations of
 # sparse/special/dense matrix/vector types concatenate to SparseMatrixCSCs, instead
 # of _absspvec_hcat below. The <:Integer qualifications are necessary for correct dispatch.
-hcat{Tv,Ti<:Integer}(X::SparseVector{Tv,Ti}...) = _absspvec_hcat(X...)
-hcat{Tv,Ti<:Integer}(X::AbstractSparseVector{Tv,Ti}...) = _absspvec_hcat(X...)
+hcat(X::SparseVector{Tv,Ti}...) where {Tv,Ti<:Integer} = _absspvec_hcat(X...)
+hcat(X::AbstractSparseVector{Tv,Ti}...) where {Tv,Ti<:Integer} = _absspvec_hcat(X...)
 function _absspvec_hcat{Tv,Ti}(X::AbstractSparseVector{Tv,Ti}...)
     # check sizes
     n = length(X)
@@ -975,7 +975,7 @@ hvcat(rows::Tuple{Vararg{Int}}, xs::_DenseConcatGroup...) = Base.typed_hvcat(pro
 # For performance, specially handle the case where the matrices/vectors have homogeneous eltype
 cat{T}(catdims, xs::_TypedDenseConcatGroup{T}...) = Base.cat_t(catdims, T, xs...)
 vcat{T}(A::_TypedDenseConcatGroup{T}...) = Base.typed_vcat(T, A...)
-hcat{T}(A::_TypedDenseConcatGroup{T}...) = Base.typed_hcat(T, A...)
+hcat(A::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_hcat(T, A...)
 hvcat{T}(rows::Tuple{Vararg{Int}}, xs::_TypedDenseConcatGroup{T}...) = Base.typed_hvcat(T, rows, xs...)
 
 

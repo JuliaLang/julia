@@ -1057,8 +1057,8 @@ typed_hcat{T}(::Type{T}) = Array{T,1}(0)
 ## cat: special cases
 vcat{T}(X::T...)         = T[ X[i] for i=1:length(X) ]
 vcat{T<:Number}(X::T...) = T[ X[i] for i=1:length(X) ]
-hcat{T}(X::T...)         = T[ X[j] for i=1:1, j=1:length(X) ]
-hcat{T<:Number}(X::T...) = T[ X[j] for i=1:1, j=1:length(X) ]
+hcat(X::T...) where {T}         = T[ X[j] for i=1:1, j=1:length(X) ]
+hcat(X::T...) where {T<:Number} = T[ X[j] for i=1:1, j=1:length(X) ]
 
 vcat(X::Number...) = hvcat_fill(Array{promote_typeof(X...)}(length(X)), X)
 hcat(X::Number...) = hvcat_fill(Array{promote_typeof(X...)}(1,length(X)), X)
@@ -1085,7 +1085,7 @@ function typed_vcat{T}(::Type{T}, V::AbstractVector...)
 end
 
 hcat(A::AbstractVecOrMat...) = typed_hcat(promote_eltype(A...), A...)
-hcat{T}(A::AbstractVecOrMat{T}...) = typed_hcat(T, A...)
+hcat(A::AbstractVecOrMat{T}...) where {T} = typed_hcat(T, A...)
 
 function typed_hcat{T}(::Type{T}, A::AbstractVecOrMat...)
     nargs = length(A)
