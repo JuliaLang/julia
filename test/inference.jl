@@ -744,3 +744,7 @@ type T10207{A, B}
     b::B
 end
 @test code_typed(T10207, (Int,Any))[1].second == T10207{Int,T} where T
+
+# issue #21410
+f21410(::V, ::Pair{V,E}) where {V, E} = E
+@test code_typed(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})[1].second == Type{Ref{T}} where T<:Number
