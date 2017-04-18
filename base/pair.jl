@@ -30,8 +30,8 @@ length(p::Pair) = 2
 first(p::Pair) = p.first
 last(p::Pair) = p.second
 
-convert{A,B}(::Type{Pair{A,B}}, x::Pair{A,B}) = x
-function convert{A,B}(::Type{Pair{A,B}}, x::Pair)
+convert(::Type{Pair{A,B}}, x::Pair{A,B}) where {A,B} = x
+function convert(::Type{Pair{A,B}}, x::Pair) where A where B
     Pair{A, B}(convert(A, x[1]), convert(B, x[2]))
 end
 

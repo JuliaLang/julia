@@ -824,11 +824,11 @@ isempty(a::AbstractArray) = (_length(a) == 0)
 
 ## Conversions ##
 
-convert{T,N  }(::Type{AbstractArray{T,N}}, A::AbstractArray{T,N}) = A
-convert{T,S,N}(::Type{AbstractArray{T,N}}, A::AbstractArray{S,N}) = copy!(similar(A,T), A)
-convert{T,S,N}(::Type{AbstractArray{T  }}, A::AbstractArray{S,N}) = convert(AbstractArray{T,N}, A)
+convert(::Type{AbstractArray{T,N}}, A::AbstractArray{T,N}) where {T,N  } = A
+convert(::Type{AbstractArray{T,N}}, A::AbstractArray{S,N}) where {T,S,N} = copy!(similar(A,T), A)
+convert(::Type{AbstractArray{T  }}, A::AbstractArray{S,N}) where {T,S,N} = convert(AbstractArray{T,N}, A)
 
-convert{T,N}(::Type{Array}, A::AbstractArray{T,N}) = convert(Array{T,N}, A)
+convert(::Type{Array}, A::AbstractArray{T,N}) where {T,N} = convert(Array{T,N}, A)
 
 """
    of_indices(x, y)

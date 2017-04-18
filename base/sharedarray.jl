@@ -314,18 +314,18 @@ for each worker process.
 """
 localindexes(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
 
-unsafe_convert{T}(::Type{Ptr{T}}, S::SharedArray{T}) = unsafe_convert(Ptr{T}, sdata(S))
-unsafe_convert{T}(::Type{Ptr{T}}, S::SharedArray   ) = unsafe_convert(Ptr{T}, sdata(S))
+unsafe_convert(::Type{Ptr{T}}, S::SharedArray{T}) where {T} = unsafe_convert(Ptr{T}, sdata(S))
+unsafe_convert(::Type{Ptr{T}}, S::SharedArray   ) where {T} = unsafe_convert(Ptr{T}, sdata(S))
 
 function convert(::Type{SharedArray}, A::Array)
     S = SharedArray{eltype(A),ndims(A)}(size(A))
     copy!(S, A)
 end
-function convert{T}(::Type{SharedArray{T}}, A::Array)
+function convert(::Type{SharedArray{T}}, A::Array) where T
     S = SharedArray{T,ndims(A)}(size(A))
     copy!(S, A)
 end
-function convert{TS,TA,N}(::Type{SharedArray{TS,N}}, A::Array{TA,N})
+function convert(::Type{SharedArray{TS,N}}, A::Array{TA,N}) where TS where TA where N
     S = SharedArray{TS,ndims(A)}(size(A))
     copy!(S, A)
 end
