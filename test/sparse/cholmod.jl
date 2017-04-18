@@ -702,3 +702,11 @@ end
     @test_throws ArgumentError CHOLMOD.Sparse(A)
 end
 
+@testset "sparse right multiplication of Symmetric and Hermitian matrices #21431" begin
+    @test issparse(speye(2)*speye(2)*speye(2))
+    for T in (Symmetric, Hermitian)
+        @test issparse(speye(2)*T(speye(2))*speye(2))
+        @test issparse(speye(2)*(T(speye(2))*speye(2)))
+        @test issparse((speye(2)*T(speye(2)))*speye(2))
+    end
+end

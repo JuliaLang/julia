@@ -1715,4 +1715,11 @@ end
 (*){Ti}(A::Hermitian{Float64,SparseMatrixCSC{Float64,Ti}},
     B::SparseVecOrMat{Float64,Ti}) = sparse(Sparse(A)*Sparse(B))
 
+(*){Ti}(A::SparseVecOrMat{Float64,Ti},
+    B::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}) = sparse(Sparse(A)*Sparse(B))
+(*){Ti}(A::SparseVecOrMat{Complex{Float64},Ti},
+    B::Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Ti}}) = sparse(Sparse(A)*Sparse(B))
+(*){Ti}(A::SparseVecOrMat{Float64,Ti},
+    B::Hermitian{Float64,SparseMatrixCSC{Float64,Ti}}) = sparse(Sparse(A)*Sparse(B))
+
 end #module
