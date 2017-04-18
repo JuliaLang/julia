@@ -703,7 +703,7 @@ end
 end
 
 #Test sparse low rank update for cholesky decomposion
-A = SparseMatrixCSC{Float64,Int64}(10, 5, [1,3,6,8,10,13], [6,7,1,2,9,3,5,1,7,6,7,9],
+A = SparseMatrixCSC{Float64,CHOLMOD.SuiteSparse_long}(10, 5, [1,3,6,8,10,13], [6,7,1,2,9,3,5,1,7,6,7,9],
     [-0.138843, 2.99571, -0.556814, 0.669704, -1.39252, 1.33814,
     1.02371, -0.502384, 1.10686, 0.262229, -1.6935, 0.525239])
 AtA = A'*A;
