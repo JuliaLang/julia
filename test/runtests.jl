@@ -1831,6 +1831,15 @@ let x = fill!(StringVector(5), 0x61)
     @test pointer(x) == pointer(Compat.UTF8String(x))
 end
 
+# collect
+if VERSION >= v"0.5.0"
+    using OffsetArrays
+    a = OffsetArray(1:3, -1:1)
+    b = Compat.collect(a)
+    @test indices(b) === (Base.OneTo(3),)
+    @test b == [1,2,3]
+end
+
 include("to-be-deprecated.jl")
 
 nothing
