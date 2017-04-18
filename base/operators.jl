@@ -641,7 +641,7 @@ julia> mod1(4, 3)
 """
 mod1{T<:Real}(x::T, y::T) = (m = mod(x, y); ifelse(m == 0, y, m))
 # efficient version for integers
-mod1{T<:Integer}(x::T, y::T) = mod(x + y - T(1), y) + T(1)
+mod1{T<:Integer}(x::T, y::T) = (@_inline_meta; mod(x + y - T(1), y) + T(1))
 
 
 """
