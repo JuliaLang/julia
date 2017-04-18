@@ -415,7 +415,7 @@ function copy!(A::SparseVector, B::SparseMatrixCSC)
     return A
 end
 
-copy!{TvB, TiB}(A::SparseMatrixCSC, B::SparseVector{TvB,TiB}) =
+copy!(A::SparseMatrixCSC, B::SparseVector{TvB,TiB}) where {TvB, TiB} =
     copy!(A, SparseMatrixCSC{TvB,TiB}(B.n, 1, TiB[1, length(B.nzind)+1], B.nzind, B.nzval))
 
 

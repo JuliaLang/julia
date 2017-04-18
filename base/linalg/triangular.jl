@@ -324,7 +324,7 @@ function -(A::UnitUpperTriangular)
 end
 
 # copy and scale
-function copy!{T<:Union{UpperTriangular, UnitUpperTriangular}}(A::T, B::T)
+function copy!(A::T, B::T) where T<:Union{UpperTriangular, UnitUpperTriangular}
     n = size(B,1)
     for j = 1:n
         for i = 1:(isa(B, UnitUpperTriangular)?j-1:j)
@@ -333,7 +333,7 @@ function copy!{T<:Union{UpperTriangular, UnitUpperTriangular}}(A::T, B::T)
     end
     return A
 end
-function copy!{T<:Union{LowerTriangular, UnitLowerTriangular}}(A::T, B::T)
+function copy!(A::T, B::T) where T<:Union{LowerTriangular, UnitLowerTriangular}
     n = size(B,1)
     for j = 1:n
         for i = (isa(B, UnitLowerTriangular)?j+1:j):n

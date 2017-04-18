@@ -799,7 +799,7 @@ Copy all elements from collection `src` to array `dest`.
 """
 copy!(dest, src)
 
-function copy!{T,N}(dest::AbstractArray{T,N}, src::AbstractArray{T,N})
+function copy!(dest::AbstractArray{T,N}, src::AbstractArray{T,N}) where {T,N}
     @boundscheck checkbounds(dest, indices(src)...)
     for I in eachindex(IndexStyle(src,dest), src)
         @inbounds dest[I] = src[I]
