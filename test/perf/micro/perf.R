@@ -1,4 +1,5 @@
 require(compiler)
+require(microbenchmark)
 
 assert = function(bool) {
     if (!bool) stop('Assertion failed')
@@ -8,7 +9,7 @@ timeit = function(name, f, ..., times=5) {
     tmin = Inf
     f = cmpfun(f)
     for (t in 1:times) {
-        t = system.time(f(...))["elapsed"]
+        t = microbenchmark(f(...), times = 1)$time/1e9  # divided by 1e9 since the unit derived from microbenchmark is nanosecond
         if (t < tmin) tmin = t
     }
     cat(sprintf("r,%s,%.8f\n", name, tmin*1000))
