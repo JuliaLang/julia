@@ -37,10 +37,10 @@ copy(J::UniformScaling) = UniformScaling(J.λ)
 transpose(J::UniformScaling) = J
 ctranspose(J::UniformScaling) = UniformScaling(conj(J.λ))
 
-one{T}(::Type{UniformScaling{T}}) = UniformScaling(one(T))
-one{T}(J::UniformScaling{T}) = one(UniformScaling{T})
-oneunit{T}(::Type{UniformScaling{T}}) = UniformScaling(oneunit(T))
-oneunit{T}(J::UniformScaling{T}) = oneunit(UniformScaling{T})
+one(::Type{UniformScaling{T}}) where {T} = UniformScaling(one(T))
+one(J::UniformScaling{T}) where {T} = one(UniformScaling{T})
+oneunit(::Type{UniformScaling{T}}) where {T} = UniformScaling(oneunit(T))
+oneunit(J::UniformScaling{T}) where {T} = oneunit(UniformScaling{T})
 zero{T}(::Type{UniformScaling{T}}) = UniformScaling(zero(T))
 zero{T}(J::UniformScaling{T}) = zero(UniformScaling{T})
 

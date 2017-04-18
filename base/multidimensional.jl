@@ -61,8 +61,8 @@ module IteratorsMD
     # zeros and ones
     zero{N}(::CartesianIndex{N}) = zero(CartesianIndex{N})
     zero{N}(::Type{CartesianIndex{N}}) = CartesianIndex(ntuple(x -> 0, Val{N}))
-    one{N}(::CartesianIndex{N}) = one(CartesianIndex{N})
-    one{N}(::Type{CartesianIndex{N}}) = CartesianIndex(ntuple(x -> 1, Val{N}))
+    one(::CartesianIndex{N}) where {N} = one(CartesianIndex{N})
+    one(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val{N}))
 
     # arithmetic, min/max
     @inline (-){N}(index::CartesianIndex{N}) =

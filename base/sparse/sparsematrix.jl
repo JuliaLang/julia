@@ -1421,7 +1421,7 @@ multiple `α` of the identity matrix.
 """
 speye(T::Type, m::Integer, n::Integer) = speye_scaled(T, oneunit(T), m, n)
 
-function one{T}(S::SparseMatrixCSC{T})
+function one(S::SparseMatrixCSC{T}) where T
     m,n = size(S)
     if m != n; throw(DimensionMismatch("multiplicative identity only defined for square matrices")); end
     speye(T, m)

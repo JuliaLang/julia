@@ -307,14 +307,14 @@ Note the difference from [`ones`](@ref).
 """
 eye(x::AbstractMatrix{T}) where {T} = eye(typeof(one(T)), size(x, 1), size(x, 2))
 
-function _one{T}(unit::T, x::AbstractMatrix)
+function _one(unit::T, x::AbstractMatrix) where T
     m,n = size(x)
     m==n || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
     eye(T, m)
 end
 
-one{T}(x::AbstractMatrix{T}) = _one(one(T), x)
-oneunit{T}(x::AbstractMatrix{T}) = _one(oneunit(T), x)
+one(x::AbstractMatrix{T}) where {T} = _one(one(T), x)
+oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## Conversions ##
 

@@ -160,8 +160,8 @@ julia> one(Dates.Day(1))
 1
 ```
 """
-one{T<:Number}(::Type{T}) = convert(T,1)
-one{T<:Number}(x::T) = one(T)
+one(::Type{T}) where {T<:Number} = convert(T,1)
+one(x::T) where {T<:Number} = one(T)
 # note that convert(T, 1) should throw an error if T is dimensionful,
 # so this fallback definition should be okay.
 
@@ -182,8 +182,8 @@ julia> oneunit(Dates.Day)
 1 day
 ```
 """
-oneunit{T}(x::T) = T(one(x))
-oneunit{T}(::Type{T}) = T(one(T))
+oneunit(x::T) where {T} = T(one(x))
+oneunit(::Type{T}) where {T} = T(one(T))
 
 _default_type(::Type{Number}) = Int
 
