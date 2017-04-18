@@ -73,6 +73,8 @@
         TYPED_VCAT,
         VCAT,
         VECT,
+        x_STR,
+        x_CMD,
     end_invisble_keywords,
 
     begin_literal,
