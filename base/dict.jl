@@ -174,7 +174,7 @@ function grow_to!(dest::Associative, itr)
     return isempty(out) ? dest : out
 end
 
-function grow_to!{K,V}(dest::Associative{K,V}, itr, st)
+function grow_to!(dest::Associative{K,V}, itr, st) where V where K
     while !done(itr, st)
         (k,v), st = next(itr, st)
         if isa(k,K) && isa(v,V)
@@ -300,7 +300,7 @@ julia> A
 Dict{String,Int64} with 0 entries
 ```
 """
-function empty!{K,V}(h::Dict{K,V})
+function empty!(h::Dict{K,V}) where V where K
     fill!(h.slots, 0x0)
     sz = length(h.slots)
     empty!(h.keys)
@@ -315,7 +315,7 @@ function empty!{K,V}(h::Dict{K,V})
 end
 
 # get the index where a key is stored, or -1 if not present
-function ht_keyindex{K,V}(h::Dict{K,V}, key)
+function ht_keyindex(h::Dict{K,V}, key) where V where K
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
@@ -340,7 +340,7 @@ end
 # get the index where a key is stored, or -pos if not present
 # and the key would be inserted at pos
 # This version is for use by setindex! and get!
-function ht_keyindex2{K,V}(h::Dict{K,V}, key)
+function ht_keyindex2(h::Dict{K,V}, key) where V where K
     age0 = h.age
     sz = length(h.keys)
     iter = 0
@@ -523,7 +523,7 @@ julia> getkey(a,'d','a')
 'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 ```
 """
-function getkey{K,V}(h::Dict{K,V}, key, default)
+function getkey(h::Dict{K,V}, key, default) where V where K
     index = ht_keyindex(h, key)
     return (index<0) ? default : h.keys[index]::K
 end
@@ -595,8 +595,8 @@ function filter!(f, d::Union{ObjectIdDict,Dict})
     return d
 end
 
-struct ImmutableDict{K, V} <: Associative{K,V}
-    parent::ImmutableDict{K, V}
+struct ImmutableDict{K,V} <: Associative{K,V}
+    parent::ImmutableDict{K,V}
     key::K
     value::V
     ImmutableDict{K,V}() where {K,V} = new() # represents an empty dictionary

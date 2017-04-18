@@ -96,7 +96,7 @@ function setindex!(wkh::WeakKeyDict{K}, v, key) where K
     return wkh
 end
 
-function getkey{K}(wkh::WeakKeyDict{K}, kk, default)
+function getkey(wkh::WeakKeyDict{K}, kk, default) where K
     return lock(wkh) do
         k = getkey(wkh.ht, kk, secret_table_token)
         k === secret_table_token && return default
