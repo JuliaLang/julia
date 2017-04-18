@@ -258,7 +258,7 @@ size(S::SharedArray) = S.dims
 ndims(S::SharedArray) = length(S.dims)
 IndexStyle(::Type{<:SharedArray}) = IndexLinear()
 
-function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
+function reshape(a::SharedArray{T}, dims::NTuple{N,Int}) where T where N
     if length(a) != prod(dims)
         throw(DimensionMismatch("dimensions must be consistent with array size"))
     end

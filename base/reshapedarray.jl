@@ -109,8 +109,8 @@ end
 _throw_reshape_colon_dimmismatch(A, dims) =
     throw(DimensionMismatch("array size $(length(A)) must be divisible by the product of the new dimensions $dims"))
 
-reshape{T,N}(parent::AbstractArray{T,N}, ndims::Type{Val{N}}) = parent
-function reshape{N}(parent::AbstractArray, ndims::Type{Val{N}})
+reshape(parent::AbstractArray{T,N}, ndims::Type{Val{N}}) where {T,N} = parent
+function reshape(parent::AbstractArray, ndims::Type{Val{N}}) where N
     reshape(parent, rdims((), indices(parent), Val{N}))
 end
 # Move elements from inds to out until out reaches the desired

@@ -154,7 +154,7 @@ function reinterpret(::Type{T}, a::Array{S}, dims::NTuple{N,Int}) where T where 
 end
 
 # reshaping to same # of dimensions
-function reshape{T,N}(a::Array{T,N}, dims::NTuple{N,Int})
+function reshape(a::Array{T,N}, dims::NTuple{N,Int}) where T where N
     if prod(dims) != length(a)
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
     end
@@ -165,7 +165,7 @@ function reshape{T,N}(a::Array{T,N}, dims::NTuple{N,Int})
 end
 
 # reshaping to different # of dimensions
-function reshape{T,N}(a::Array{T}, dims::NTuple{N,Int})
+function reshape(a::Array{T}, dims::NTuple{N,Int}) where T where N
     if prod(dims) != length(a)
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
     end
