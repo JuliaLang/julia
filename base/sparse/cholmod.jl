@@ -331,7 +331,7 @@ Factor(p::Ptr{C_Factor{Tv}}) where {Tv<:VTypes} = Factor{Tv}(p)
 # should be wrapped in get to make sure that SuiteSparse is not called with
 # a C_NULL pointer which could cause a segfault. Pointers are set to null
 # when serialized so this can happen when mutiple processes are in use.
-function get{T<:SuiteSparseStruct}(p::Ptr{T})
+function get(p::Ptr{T}) where T<:SuiteSparseStruct
     if p == C_NULL
         throw(ArgumentError("pointer to the $T object is null. This can " *
             "happen if the object has been serialized."))

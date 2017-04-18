@@ -104,10 +104,10 @@ function getkey{K}(wkh::WeakKeyDict{K}, kk, default)
     end
 end
 
-get{K}(wkh::WeakKeyDict{K}, key, default) = lock(() -> get(wkh.ht, key, default), wkh)
-get{K}(default::Callable, wkh::WeakKeyDict{K}, key) = lock(() -> get(default, wkh.ht, key), wkh)
-get!{K}(wkh::WeakKeyDict{K}, key, default) = lock(() -> get!(wkh.ht, key, default), wkh)
-get!{K}(default::Callable, wkh::WeakKeyDict{K}, key) = lock(() -> get!(default, wkh.ht, key), wkh)
+get(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> get(wkh.ht, key, default), wkh)
+get(default::Callable, wkh::WeakKeyDict{K}, key) where {K} = lock(() -> get(default, wkh.ht, key), wkh)
+get!(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> get!(wkh.ht, key, default), wkh)
+get!(default::Callable, wkh::WeakKeyDict{K}, key) where {K} = lock(() -> get!(default, wkh.ht, key), wkh)
 pop!{K}(wkh::WeakKeyDict{K}, key) = lock(() -> pop!(wkh.ht, key), wkh)
 pop!{K}(wkh::WeakKeyDict{K}, key, default) = lock(() -> pop!(wkh.ht, key, default), wkh)
 delete!{K}(wkh::WeakKeyDict{K}, key) = lock(() -> delete!(wkh.ht, key), wkh)

@@ -431,8 +431,8 @@ function setindex!(h::Dict{K,V}, v0, key::K) where V where K
     return h
 end
 
-get!{K,V}(h::Dict{K,V}, key0, default) = get!(()->default, h, key0)
-function get!{K,V}(default::Callable, h::Dict{K,V}, key0)
+get!(h::Dict{K,V}, key0, default) where {K,V} = get!(()->default, h, key0)
+function get!(default::Callable, h::Dict{K,V}, key0) where V where K
     key = convert(K, key0)
     if !isequal(key, key0)
         throw(ArgumentError("$key0 is not a valid key for type $K"))
@@ -440,7 +440,7 @@ function get!{K,V}(default::Callable, h::Dict{K,V}, key0)
     return get!(default, h, key)
 end
 
-function get!{K,V}(default::Callable, h::Dict{K,V}, key::K)
+function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
     index = ht_keyindex2(h, key)
 
     index > 0 && return h.vals[index]
@@ -474,12 +474,12 @@ function getindex(h::Dict{K,V}, key) where V where K
     return (index < 0) ? throw(KeyError(key)) : h.vals[index]::V
 end
 
-function get{K,V}(h::Dict{K,V}, key, default)
+function get(h::Dict{K,V}, key, default) where V where K
     index = ht_keyindex(h, key)
     return (index < 0) ? default : h.vals[index]::V
 end
 
-function get{K,V}(default::Callable, h::Dict{K,V}, key)
+function get(default::Callable, h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)
     return (index < 0) ? default() : h.vals[index]::V
 end
