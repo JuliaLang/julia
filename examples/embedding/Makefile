@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # This Makefile template requires the following variables to be set
 # in the environment or on the command-line:
 #   JULIA: path to julia[.exe] executable
@@ -18,9 +20,10 @@ SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 EXE := $(suffix $(abspath $(JULIA)))
 
 # get compiler and linker flags. (see: `contrib/julia-config.jl`)
-CFLAGS += -lm $(shell $(SPAWN) $(JULIA) -e \
-                           'include(joinpath(JULIA_HOME,Base.DATAROOTDIR,"julia","julia-config.jl"))' \
-                           -- --cflags --ldflags --ldlibs)
+JULIA_CONFIG := $(JULIA) -e 'include(joinpath(JULIA_HOME, Base.DATAROOTDIR, "julia", "julia-config.jl"))' --
+CPPFLAGS_ADD :=
+CFLAGS_ADD = $(shell $(JULIA_CONFIG) --cflags)
+LDFLAGS_ADD = -lm $(shell $(JULIA_CONFIG) --ldflags --ldlibs)
 
 DEBUGFLAGS += -g
 
@@ -30,13 +33,21 @@ release: $(BIN)/embedding$(EXE)
 debug:   $(BIN)/embedding-debug$(EXE)
 
 $(BIN)/embedding$(EXE): $(SRCDIR)/embedding.c
-	$(CC) $^ -o $@ $(CFLAGS)
+	$(CC) $^ -o $@ $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
 
 $(BIN)/embedding-debug$(EXE): $(SRCDIR)/embedding.c
-	$(CC) $^ -o $@ $(CFLAGS) $(DEBUGFLAGS)
+	$(CC) $^ -o $@ $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS) $(DEBUGFLAGS)
+
+check: $(BIN)/embedding$(EXE)
+	$(JULIA) $(SRCDIR)/embedding-test.jl $<
+	@echo SUCCESS
 
 clean:
-	@rm -f $(BIN)/embedding-debug$(EXE) $(BIN)/embedding$(EXE)
+	-rm -f $(BIN)/embedding-debug$(EXE) $(BIN)/embedding$(EXE)
 
-.PHONY: release debug clean
+.PHONY: release debug clean check
 
+# Makefile debugging trick:
+# call print-VARIABLE to see the runtime value of any variable
+print-%:
+	@echo '$*=$($*)'
