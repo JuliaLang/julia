@@ -39,10 +39,12 @@ extern "C" {
 // Union type decision points are discovered while the algorithm works.
 // If a new Union decision is encountered, the `more` flag is set to tell
 // the forall/exists loop to grow the stack.
+// TODO: the stack probably needs to be artifically large because of some
+// deeper problem (see #21191) and could be shrunk once that is fixed
 typedef struct {
     int depth;
     int more;
-    uint32_t stack[10];  // stack of bits represented as a bit vector
+    uint32_t stack[100];  // stack of bits represented as a bit vector
 } jl_unionstate_t;
 
 // Linked list storing the type variable environment. A new jl_varbinding_t

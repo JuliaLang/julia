@@ -1076,3 +1076,21 @@ struct TT20103{X,Y} end
 f20103{X,Y}(::Type{TT20103{X,Y}},x::X,y::Y) = 1
 f20103{X}(::Type{TT20103{X,X}},x::X) = 100
 @test_broken typeintersect(Type{NTuple{N,E}} where E where N, Type{NTuple{N,E} where N} where E) == Union{} # use @testintersect once fixed
+let ints = (Int, Int32, UInt, UInt32)
+    const Ints = Union{ints...}
+    vecs = []
+    for i = 2:4, t in ints
+        push!(vecs, NTuple{i, t})
+    end
+    const Vecs = Union{vecs...}
+    T = Type{Tuple{V, I}} where V <: Vecs where I <: Ints
+    @testintersect(T, T, T)
+    test{V <: Vecs, I <: Ints}(a::Type{Tuple{V, I}}) = I
+    test{V <: Vecs, I <: Ints}(a::Type{Tuple{V, I}}) = I
+end
+
+# issue #21191
+let T1 = Val{Val{Val{Union{Int8,Int16,Int32,Int64,UInt8,UInt16}}}},
+    T2 = Val{Val{Val{Union{Int8,Int16,Int32,Int64,UInt8, S}}}} where S
+    @test T1 <: T2
+end
