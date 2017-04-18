@@ -410,7 +410,7 @@ function ones{T<:VTypes}(m::Integer, n::Integer, ::Type{T})
 end
 ones(m::Integer, n::Integer) = ones(m, n, Float64)
 
-function eye{T<:VTypes}(m::Integer, n::Integer, ::Type{T})
+function eye(m::Integer, n::Integer, ::Type{T}) where T<:VTypes
     d = Dense(ccall((:cholmod_l_eye, :libcholmod), Ptr{C_Dense{T}},
         (Csize_t, Csize_t, Cint, Ptr{UInt8}),
          m, n, xtyp(T), common()))
@@ -571,7 +571,7 @@ function nnz{Tv<:VTypes}(A::Sparse{Tv})
                 get(A.p), common())
 end
 
-function speye{Tv<:VTypes}(m::Integer, n::Integer, ::Type{Tv})
+function speye(m::Integer, n::Integer, ::Type{Tv}) where Tv<:VTypes
     s = Sparse(ccall((@cholmod_name("speye", SuiteSparse_long), :libcholmod),
         Ptr{C_Sparse{Tv}},
             (Csize_t, Csize_t, Cint, Ptr{UInt8}),

@@ -286,7 +286,7 @@ function logdet(D::Diagonal{<:Complex}) # make sure branch cut is correct
     complex(real(z), rem2pi(imag(z), RoundNearest))
 end
 # identity matrices via eye(Diagonal{type},n)
-eye{T}(::Type{Diagonal{T}}, n::Int) = Diagonal(ones(T,n))
+eye(::Type{Diagonal{T}}, n::Int) where {T} = Diagonal(ones(T,n))
 
 expm(D::Diagonal) = Diagonal(exp.(D.diag))
 expm(D::Diagonal{<:AbstractMatrix}) = Diagonal(expm.(D.diag))
