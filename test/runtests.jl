@@ -1832,7 +1832,7 @@ let x = fill!(StringVector(5), 0x61)
 end
 
 # collect
-if VERSION >= v"0.5.0"
+if VERSION >= v"0.5.0-rc1+46"
     using OffsetArrays
     a = OffsetArray(1:3, -1:1)
     b = Compat.collect(a)

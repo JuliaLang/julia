@@ -80,7 +80,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@compat Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()` and `@compat Base.IndexStyle(::Type{<:MyArray}) = IndexCartesian()` to define traits for abstract arrays, replacing the former `Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearFast()` and `Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearSlow()`, respectively.
 
-* `Compat.collect(A)` returns an Array even on 0.5, no matter what indices the array `A` has. [#21257]
+* `Compat.collect(A)` returns an `Array`, no matter what indices the array `A` has (Julia 0.5 and higher). [#21257]
 
 ## Module Aliases
 
