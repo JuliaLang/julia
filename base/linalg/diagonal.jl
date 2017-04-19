@@ -79,8 +79,8 @@ end
     end
     r
 end
-diagzero{T}(::Diagonal{T},i,j) = zero(T)
-diagzero{T}(D::Diagonal{Matrix{T}},i,j) = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
+diagzero(::Diagonal{T},i,j) where {T} = zero(T)
+diagzero(D::Diagonal{Matrix{T}},i,j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
 
 function setindex!(D::Diagonal, v, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)

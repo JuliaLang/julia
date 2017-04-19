@@ -81,7 +81,7 @@ big(x::TwicePrecision) = big(x.hi) + big(x.lo)
 
 -(x::TwicePrecision) = TwicePrecision(-x.hi, -x.lo)
 
-zero{T}(::Type{TwicePrecision{T}}) = TwicePrecision{T}(0, 0)
+zero(::Type{TwicePrecision{T}}) where {T} = TwicePrecision{T}(0, 0)
 
 ## StepRangeLen
 

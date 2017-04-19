@@ -128,7 +128,7 @@ map(f, x::Number, ys::Number...) = f(x, ys...)
 Get the additive identity element for the type of `x` (`x` can also specify the type itself).
 """
 zero(x::Number) = oftype(x,0)
-zero{T<:Number}(::Type{T}) = convert(T,0)
+zero(::Type{T}) where {T<:Number} = convert(T,0)
 
 """
     one(x)

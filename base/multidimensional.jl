@@ -59,8 +59,8 @@ module IteratorsMD
     getindex(index::CartesianIndex, i::Integer) = index.I[i]
 
     # zeros and ones
-    zero{N}(::CartesianIndex{N}) = zero(CartesianIndex{N})
-    zero{N}(::Type{CartesianIndex{N}}) = CartesianIndex(ntuple(x -> 0, Val{N}))
+    zero(::CartesianIndex{N}) where {N} = zero(CartesianIndex{N})
+    zero(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 0, Val{N}))
     one(::CartesianIndex{N}) where {N} = one(CartesianIndex{N})
     one(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val{N}))
 

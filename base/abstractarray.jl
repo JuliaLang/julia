@@ -740,7 +740,7 @@ function copymutable(a::AbstractArray)
 end
 copymutable(itr) = collect(itr)
 
-zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
+zero(x::AbstractArray{T}) where {T} = fill!(similar(x), zero(T))
 
 ## iteration support for arrays by iterating over `eachindex` in the array ##
 # Allows fast iteration by default for both IndexLinear and IndexCartesian arrays

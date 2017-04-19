@@ -1921,7 +1921,7 @@ For an in-place version and algorithmic information, see [`dropzeros!`](@ref).
 dropzeros(x::SparseVector, trim::Bool = true) = dropzeros!(copy(x), trim)
 
 
-function _fillnonzero!{Tv,Ti}(arr::SparseMatrixCSC{Tv, Ti}, val)
+function _fillnonzero!(arr::SparseMatrixCSC{Tv, Ti}, val) where {Tv,Ti}
     m, n = size(arr)
     resize!(arr.colptr, n+1)
     resize!(arr.rowval, m*n)
@@ -1938,7 +1938,7 @@ function _fillnonzero!{Tv,Ti}(arr::SparseMatrixCSC{Tv, Ti}, val)
     arr
 end
 
-function _fillnonzero!{Tv,Ti}(arr::SparseVector{Tv,Ti}, val)
+function _fillnonzero!(arr::SparseVector{Tv,Ti}, val) where {Tv,Ti}
     n = arr.n
     resize!(arr.nzind, n)
     resize!(arr.nzval, n)

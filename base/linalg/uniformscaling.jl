@@ -41,8 +41,8 @@ one(::Type{UniformScaling{T}}) where {T} = UniformScaling(one(T))
 one(J::UniformScaling{T}) where {T} = one(UniformScaling{T})
 oneunit(::Type{UniformScaling{T}}) where {T} = UniformScaling(oneunit(T))
 oneunit(J::UniformScaling{T}) where {T} = oneunit(UniformScaling{T})
-zero{T}(::Type{UniformScaling{T}}) = UniformScaling(zero(T))
-zero{T}(J::UniformScaling{T}) = zero(UniformScaling{T})
+zero(::Type{UniformScaling{T}}) where {T} = UniformScaling(zero(T))
+zero(J::UniformScaling{T}) where {T} = zero(UniformScaling{T})
 
 istriu(::UniformScaling) = true
 istril(::UniformScaling) = true
