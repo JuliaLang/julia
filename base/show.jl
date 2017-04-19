@@ -236,6 +236,16 @@ function show_datatype(io::IO, x::DataType)
     end
 end
 
+function show_supertypes(io::IO, typ::DataType)
+    print(io, typ)
+    while typ != Any
+        typ = supertype(typ)
+        print(io, " <: ", typ)
+    end
+end
+
+show_supertypes(typ::DataType) = show_supertypes(STDOUT, typ)
+
 macro show(exs...)
     blk = Expr(:block)
     for ex in exs
