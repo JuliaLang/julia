@@ -330,7 +330,7 @@ end
 
 no_op_err(name, T) = error(name," not defined for ",T)
 +(x::T, y::T) where {T<:Number} = no_op_err("+", T)
-*{T<:Number}(x::T, y::T) = no_op_err("*", T)
+*(x::T, y::T) where {T<:Number} = no_op_err("*", T)
 -(x::T, y::T) where {T<:Number} = no_op_err("-", T)
 /{T<:Number}(x::T, y::T) = no_op_err("/", T)
 ^{T<:Number}(x::T, y::T) = no_op_err("^", T)

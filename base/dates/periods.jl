@@ -82,7 +82,7 @@ for op in (:rem, :mod)
     end
 end
 
-*{P<:Period}(x::P, y::Real) = P(value(x) * Int64(y))
+*(x::P, y::Real) where {P<:Period} = P(value(x) * Int64(y))
 *(y::Real, x::Period) = x * y
 for (op, Ty, Tz) in ((:*, Real, :P),
                    (:/, :P, Float64), (:/, Real, :P))

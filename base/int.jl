@@ -30,7 +30,7 @@ const BitUnsigned64T = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt6
 -(x::BitInteger)             = neg_int(x)
 -(x::T, y::T) where {T<:BitInteger} = sub_int(x, y)
 +(x::T, y::T) where {T<:BitInteger} = add_int(x, y)
-*{T<:BitInteger}(x::T, y::T) = mul_int(x, y)
+*(x::T, y::T) where {T<:BitInteger} = mul_int(x, y)
 
 inv(x::Integer) = float(one(x)) / float(x)
 /{T<:Integer}(x::T, y::T) = float(x) / float(y)
@@ -564,7 +564,7 @@ if Core.sizeof(Int) == 4
         return Int128(mod(BigInt(x), BigInt(y)))
     end
 else
-    *{T<:Union{Int128,UInt128}}(x::T, y::T)  = mul_int(x, y)
+    *(x::T, y::T) where {T<:Union{Int128,UInt128}}  = mul_int(x, y)
 
     div(x::Int128,  y::Int128)  = checked_sdiv_int(x, y)
     div(x::UInt128, y::UInt128) = checked_udiv_int(x, y)

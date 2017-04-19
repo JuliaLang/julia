@@ -624,14 +624,14 @@ function A_mul_B!{T}(y::StridedArray{T}, p::cFFTWPlan{T}, x::StridedArray{T})
     return y
 end
 
-function *{T,K,N}(p::cFFTWPlan{T,K,false}, x::StridedArray{T,N})
+function *(p::cFFTWPlan{T,K,false}, x::StridedArray{T,N}) where {T,K,N}
     assert_applicable(p, x)
     y = Array{T}(p.osz)::Array{T,N}
     unsafe_execute!(p, x, y)
     return y
 end
 
-function *{T,K}(p::cFFTWPlan{T,K,true}, x::StridedArray{T})
+function *(p::cFFTWPlan{T,K,true}, x::StridedArray{T}) where {T,K}
     assert_applicable(p, x)
     unsafe_execute!(p, x, x)
     return x
@@ -787,14 +787,14 @@ function A_mul_B!{T}(y::StridedArray{T}, p::r2rFFTWPlan{T}, x::StridedArray{T})
     return y
 end
 
-function *{T,K,N}(p::r2rFFTWPlan{T,K,false}, x::StridedArray{T,N})
+function *(p::r2rFFTWPlan{T,K,false}, x::StridedArray{T,N}) where {T,K,N}
     assert_applicable(p, x)
     y = Array{T}(p.osz)::Array{T,N}
     unsafe_execute!(p, x, y)
     return y
 end
 
-function *{T,K}(p::r2rFFTWPlan{T,K,true}, x::StridedArray{T})
+function *(p::r2rFFTWPlan{T,K,true}, x::StridedArray{T}) where {T,K}
     assert_applicable(p, x)
     unsafe_execute!(p, x, x)
     return x

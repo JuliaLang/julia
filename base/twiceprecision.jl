@@ -483,7 +483,7 @@ end
 
 _mul2(x::TwicePrecision, v::Number) = TwicePrecision(x.hi*v, x.lo*v)
 
-function *{R,S<:Number}(x::TwicePrecision{R}, v::S)
+function *(x::TwicePrecision{R}, v::S) where R where S<:Number
     T = promote_type(R, S)
     _mul2(convert(TwicePrecision{T}, x), convert(T, v))
 end

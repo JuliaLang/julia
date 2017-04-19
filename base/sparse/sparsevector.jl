@@ -1500,7 +1500,7 @@ end
 
 # A_mul_B
 
-function *{Ta,Tx}(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx})
+function *(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
     m, n = size(A)
     length(x) == n || throw(DimensionMismatch())
     Ty = promote_type(Ta, Tx)
