@@ -28,7 +28,7 @@ const BitUnsigned64T = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt6
 <{T<:BitSigned}(x::T, y::T)  = slt_int(x, y)
 
 -(x::BitInteger)             = neg_int(x)
--{T<:BitInteger}(x::T, y::T) = sub_int(x, y)
+-(x::T, y::T) where {T<:BitInteger} = sub_int(x, y)
 +{T<:BitInteger}(x::T, y::T) = add_int(x, y)
 *{T<:BitInteger}(x::T, y::T) = mul_int(x, y)
 

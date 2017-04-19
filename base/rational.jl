@@ -224,11 +224,11 @@ typemax{T<:Integer}(::Type{Rational{T}}) = one(T)//zero(T)
 isinteger(x::Rational) = x.den == 1
 
 -(x::Rational) = (-x.num) // x.den
-function -{T<:Signed}(x::Rational{T})
+function -(x::Rational{T}) where T<:Signed
     x.num == typemin(T) && throw(OverflowError())
     (-x.num) // x.den
 end
-function -{T<:Unsigned}(x::Rational{T})
+function -(x::Rational{T}) where T<:Unsigned
     x.num != zero(T) && throw(OverflowError())
     x
 end
