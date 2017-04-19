@@ -1085,10 +1085,11 @@ end
     # base case w/ Vector
     a = collect(1:10)
     filter!(x -> x > 5, a)
+    @test a == collect(6:10)
 
     # different subtype of AbstractVector
-    @test a == collect(6:10)
     ba = rand(10) .> 0.5
+    @test isa(ba, BitArray)
     filter!(x -> x, ba)
     @test all(ba)
 
