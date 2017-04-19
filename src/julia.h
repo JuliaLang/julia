@@ -1085,12 +1085,14 @@ JL_DLLEXPORT int jl_get_size(jl_value_t *val, size_t *pnt);
 #define jl_unbox_long(x) jl_unbox_int64(x)
 #define jl_is_long(x)    jl_is_int64(x)
 #define jl_long_type     jl_int64_type
+#define jl_ulong_type    jl_uint64_type
 #else
 #define jl_box_long(x)   jl_box_int32(x)
 #define jl_box_ulong(x)  jl_box_uint32(x)
 #define jl_unbox_long(x) jl_unbox_int32(x)
 #define jl_is_long(x)    jl_is_int32(x)
 #define jl_long_type     jl_int32_type
+#define jl_ulong_type    jl_uint32_type
 #endif
 
 // Each tuple can exist in one of 4 Vararg states:
