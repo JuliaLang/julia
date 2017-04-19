@@ -33,7 +33,7 @@ const BitUnsigned64T = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt6
 *(x::T, y::T) where {T<:BitInteger} = mul_int(x, y)
 
 inv(x::Integer) = float(one(x)) / float(x)
-/{T<:Integer}(x::T, y::T) = float(x) / float(y)
+/(x::T, y::T) where {T<:Integer} = float(x) / float(y)
 # skip promotion for system integer types
 /(x::BitInteger, y::BitInteger) = float(x) / float(y)
 
