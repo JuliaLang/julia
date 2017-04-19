@@ -329,7 +329,7 @@ end
 ## catch-alls to prevent infinite recursion when definitions are missing ##
 
 no_op_err(name, T) = error(name," not defined for ",T)
-+{T<:Number}(x::T, y::T) = no_op_err("+", T)
++(x::T, y::T) where {T<:Number} = no_op_err("+", T)
 *{T<:Number}(x::T, y::T) = no_op_err("*", T)
 -(x::T, y::T) where {T<:Number} = no_op_err("-", T)
 /{T<:Number}(x::T, y::T) = no_op_err("/", T)

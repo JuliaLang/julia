@@ -140,9 +140,9 @@ StepRange(start::T, step::S, stop::T) where {T,S} = StepRange{T,S}(start, step, 
 struct UnitRange{T<:Real} <: AbstractUnitRange{T}
     start::T
     stop::T
-    UnitRange{T}(start, stop) where T<:Real = new(start, unitrange_last(start,stop))
+    UnitRange{T}(start, stop) where {T<:Real} = new(start, unitrange_last(start,stop))
 end
-UnitRange(start::T, stop::T) where T<:Real = UnitRange{T}(start, stop)
+UnitRange(start::T, stop::T) where {T<:Real} = UnitRange{T}(start, stop)
 
 unitrange_last(::Bool, stop::Bool) = stop
 unitrange_last{T<:Integer}(start::T, stop::T) =
@@ -165,9 +165,9 @@ be 1.
 """
 struct OneTo{T<:Integer} <: AbstractUnitRange{T}
     stop::T
-    OneTo{T}(stop) where T<:Integer = new(max(zero(T), stop))
+    OneTo{T}(stop) where {T<:Integer} = new(max(zero(T), stop))
 end
-OneTo(stop::T) where T<:Integer = OneTo{T}(stop)
+OneTo(stop::T) where {T<:Integer} = OneTo{T}(stop)
 
 ## Step ranges parametrized by length
 
@@ -889,7 +889,7 @@ end
 _define_range_op(:+)
 _define_range_op(:-)
 
-function +{T,S}(r1::StepRangeLen{T,S}, r2::StepRangeLen{T,S})
+function +(r1::StepRangeLen{T,S}, r2::StepRangeLen{T,S}) where {T,S}
     len = length(r1)
     (len == length(r2) ||
         throw(DimensionMismatch("argument dimensions must match")))

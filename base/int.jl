@@ -29,7 +29,7 @@ const BitUnsigned64T = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt6
 
 -(x::BitInteger)             = neg_int(x)
 -(x::T, y::T) where {T<:BitInteger} = sub_int(x, y)
-+{T<:BitInteger}(x::T, y::T) = add_int(x, y)
++(x::T, y::T) where {T<:BitInteger} = add_int(x, y)
 *{T<:BitInteger}(x::T, y::T) = mul_int(x, y)
 
 inv(x::Integer) = float(one(x)) / float(x)

@@ -296,7 +296,7 @@ end
 # sum(1:n) as a product of two integers
 sumpair(n::Integer) = iseven(n) ? (n+1, n>>1) : (n, (n+1)>>1)
 
-function +{T,R<:TwicePrecision}(r1::StepRangeLen{T,R}, r2::StepRangeLen{T,R})
+function +(r1::StepRangeLen{T,R}, r2::StepRangeLen{T,R}) where T where R<:TwicePrecision
     len = length(r1)
     (len == length(r2) ||
         throw(DimensionMismatch("argument dimensions must match")))
@@ -456,7 +456,7 @@ function +(x::TwicePrecision, y::Number)
 end
 +(x::Number, y::TwicePrecision) = y+x
 
-function +{T}(x::TwicePrecision{T}, y::TwicePrecision{T})
+function +(x::TwicePrecision{T}, y::TwicePrecision{T}) where T
     r = x.hi + y.hi
     s = abs(x.hi) > abs(y.hi) ? (((x.hi - r) + y.hi) + y.lo) + x.lo : (((y.hi - r) + x.hi) + x.lo) + y.lo
     TwicePrecision(r, s)
