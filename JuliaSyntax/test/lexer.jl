@@ -391,6 +391,8 @@ end
     @test tok("201E+0").kind == Tokens.FLOAT
     @test tok("2f+0").kind   == Tokens.FLOAT
     @test tok("2048f0").kind == Tokens.FLOAT
+    @test tok("1.:0").kind == Tokens.FLOAT
+    @test tok("1.?").kind == Tokens.FLOAT
 end
 
 @testset "1e1" begin

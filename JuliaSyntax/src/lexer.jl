@@ -558,6 +558,8 @@ function lex_digit(l::Lexer)
             || peekchar(l) == '@'
             || peekchar(l) == '`'
             || peekchar(l) == '"'
+            || peekchar(l) == ':'
+            || peekchar(l) == '?'
             || eof(l))
             backup!(l)
             return emit(l, Tokens.INTEGER)
