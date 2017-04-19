@@ -85,7 +85,7 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
     for frame in bt
         lkups = StackTraces.lookup(frame)
         for lkup in lkups
-            if lkup === StackTraces.UNKNOWN
+            if lkup == StackTraces.UNKNOWN
                 continue
             end
             found && @goto found
@@ -1061,7 +1061,7 @@ function partial_linear_indexing_warning_lookup(nidxs_remaining)
         for frame in bt
             lkups = StackTraces.lookup(frame)
             for caller in lkups
-                if caller === StackTraces.UNKNOWN
+                if caller == StackTraces.UNKNOWN
                     continue
                 end
                 found && @goto found
@@ -1174,7 +1174,7 @@ end
 ## the replacement StepRangeLen also has 4 real-valued fields, which
 ## makes deprecation tricky. See #20506.
 
-immutable Use_StepRangeLen_Instead{T<:AbstractFloat} <: Range{T}
+struct Use_StepRangeLen_Instead{T<:AbstractFloat} <: Range{T}
     start::T
     step::T
     len::T
@@ -1220,22 +1220,22 @@ end
 /(r::Use_StepRangeLen_Instead, x::Real)   = Use_StepRangeLen_Instead(r.start/x, r.step/x, r.len, r.divisor)
 promote_rule{T1,T2}(::Type{Use_StepRangeLen_Instead{T1}},::Type{Use_StepRangeLen_Instead{T2}}) =
     Use_StepRangeLen_Instead{promote_type(T1,T2)}
-convert{T<:AbstractFloat}(::Type{Use_StepRangeLen_Instead{T}}, r::Use_StepRangeLen_Instead{T}) = r
-convert{T<:AbstractFloat}(::Type{Use_StepRangeLen_Instead{T}}, r::Use_StepRangeLen_Instead) =
+convert(::Type{Use_StepRangeLen_Instead{T}}, r::Use_StepRangeLen_Instead{T}) where {T<:AbstractFloat} = r
+convert(::Type{Use_StepRangeLen_Instead{T}}, r::Use_StepRangeLen_Instead) where {T<:AbstractFloat} =
     Use_StepRangeLen_Instead{T}(r.start,r.step,r.len,r.divisor)
 
 promote_rule{F,OR<:OrdinalRange}(::Type{Use_StepRangeLen_Instead{F}}, ::Type{OR}) =
     Use_StepRangeLen_Instead{promote_type(F,eltype(OR))}
-convert{T<:AbstractFloat}(::Type{Use_StepRangeLen_Instead{T}}, r::OrdinalRange) =
+convert(::Type{Use_StepRangeLen_Instead{T}}, r::OrdinalRange) where {T<:AbstractFloat} =
     Use_StepRangeLen_Instead{T}(first(r), step(r), length(r), one(T))
-convert{T}(::Type{Use_StepRangeLen_Instead}, r::OrdinalRange{T}) =
+convert(::Type{Use_StepRangeLen_Instead}, r::OrdinalRange{T}) where {T} =
     Use_StepRangeLen_Instead{typeof(float(first(r)))}(first(r), step(r), length(r), one(T))
 
 promote_rule{F,OR<:Use_StepRangeLen_Instead}(::Type{LinSpace{F}}, ::Type{OR}) =
     LinSpace{promote_type(F,eltype(OR))}
-convert{T<:AbstractFloat}(::Type{LinSpace{T}}, r::Use_StepRangeLen_Instead) =
+convert(::Type{LinSpace{T}}, r::Use_StepRangeLen_Instead) where {T<:AbstractFloat} =
     linspace(convert(T, first(r)), convert(T, last(r)), convert(T, length(r)))
-convert{T<:AbstractFloat}(::Type{LinSpace}, r::Use_StepRangeLen_Instead{T}) =
+convert(::Type{LinSpace}, r::Use_StepRangeLen_Instead{T}) where {T<:AbstractFloat} =
     convert(LinSpace{T}, r)
 
 reverse(r::Use_StepRangeLen_Instead)   = Use_StepRangeLen_Instead(r.start + (r.len-1)*r.step, -r.step, r.len, r.divisor)

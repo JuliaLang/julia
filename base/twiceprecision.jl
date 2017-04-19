@@ -60,19 +60,19 @@ nbitslen(::Type{Float32}, len, offset) = min(12, nbitslen(len, offset))
 nbitslen(::Type{Float16}, len, offset) = min(5,  nbitslen(len, offset))
 nbitslen(len, offset) = len < 2 ? 0 : ceil(Int, log2(max(offset-1, len-offset)))
 
-eltype{T}(::Type{TwicePrecision{T}}) = T
+eltype(::Type{TwicePrecision{T}}) where {T} = T
 
 promote_rule{R,S}(::Type{TwicePrecision{R}}, ::Type{TwicePrecision{S}}) =
     TwicePrecision{promote_type(R,S)}
 promote_rule{R,S}(::Type{TwicePrecision{R}}, ::Type{S}) =
     TwicePrecision{promote_type(R,S)}
 
-convert{T}(::Type{TwicePrecision{T}}, x::TwicePrecision{T}) = x
-convert{T}(::Type{TwicePrecision{T}}, x::TwicePrecision) =
+convert(::Type{TwicePrecision{T}}, x::TwicePrecision{T}) where {T} = x
+convert(::Type{TwicePrecision{T}}, x::TwicePrecision) where {T} =
     TwicePrecision{T}(convert(T, x.hi), convert(T, x.lo))
 
-convert{T<:Number}(::Type{T}, x::TwicePrecision{T}) = convert(T, x.hi + x.lo)
-convert{T}(::Type{TwicePrecision{T}}, x::Number) = TwicePrecision{T}(convert(T, x), zero(T))
+convert(::Type{T}, x::TwicePrecision{T}) where {T<:Number} = convert(T, x.hi + x.lo)
+convert(::Type{TwicePrecision{T}}, x::Number) where {T} = TwicePrecision{T}(convert(T, x), zero(T))
 
 float(x::TwicePrecision{<:AbstractFloat}) = x
 float(x::TwicePrecision) = TwicePrecision(float(x.hi), float(x.lo))
@@ -229,9 +229,9 @@ end
 /(r::StepRangeLen{<:Real,<:TwicePrecision}, x::Real) =
     StepRangeLen(r.ref/x, twiceprecision(r.step/x, nbitslen(r)), length(r), r.offset)
 
-convert{T<:AbstractFloat,R<:TwicePrecision,S<:TwicePrecision}(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{T,R,S}) = r
+convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{T,R,S}) where {T<:AbstractFloat,R<:TwicePrecision,S<:TwicePrecision} = r
 
-convert{T<:AbstractFloat,R<:TwicePrecision,S<:TwicePrecision}(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen) =
+convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen) where {T<:AbstractFloat,R<:TwicePrecision,S<:TwicePrecision} =
     _convertSRL(StepRangeLen{T,R,S}, r)
 
 convert{T<:Union{Float16,Float32,Float64}}(::Type{StepRangeLen{T}}, r::StepRangeLen) =

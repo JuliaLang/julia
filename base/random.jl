@@ -33,7 +33,7 @@ if is_windows()
     struct RandomDevice <: AbstractRNG
         buffer::Vector{UInt128}
 
-        RandomDevice() = new(Array{UInt128}(1))
+        RandomDevice() = new(Vector{UInt128}(1))
     end
 
     function rand{T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice, ::Type{T})
@@ -214,7 +214,7 @@ function make_seed(n::Integer)
 end
 
 function make_seed(filename::AbstractString, n::Integer)
-    read!(filename, Array{UInt32}(Int(n)))
+    read!(filename, Vector{UInt32}(Int(n)))
 end
 
 ## srand()
@@ -1381,7 +1381,7 @@ end
 
 function Base.repr(u::UUID)
     u = u.value
-    a = Array{UInt8}(36)
+    a = Vector{UInt8}(36)
     for i = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
         d = u & 0xf
         a[i] = '0'+d+39*(d>9)

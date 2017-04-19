@@ -555,7 +555,7 @@ precompile(Tuple{typeof(Base.join), Base.IOContext{Base.Terminals.TTYTerminal}, 
 precompile(Tuple{typeof(Base.show_method_params), Base.IOContext{Base.Terminals.TTYTerminal}, Array{Any, 1}})
 precompile(Tuple{typeof(Base.print), Base.IOContext{Base.Terminals.TTYTerminal}, String, Module})
 precompile(Tuple{typeof(Base.print), Base.IOContext{Base.Terminals.TTYTerminal}, String, Symbol, String, Int32})
-precompile(Tuple{typeof(Base.show_lambda_types), Base.IOContext{Base.Terminals.TTYTerminal}, Core.MethodInstance})
+precompile(Tuple{typeof(Base.show_tuple_as_call), Base.IOContext{Base.Terminals.TTYTerminal}, Symbol, Type})
 precompile(Tuple{typeof(Base.print_with_color), Symbol, Base.IOContext{Base.Terminals.TTYTerminal}, String})
 precompile(Tuple{typeof(Base.print_with_color), Int64, Base.IOContext{Base.Terminals.TTYTerminal}, String})
 precompile(Tuple{typeof(Base.show), Base.IOContext{Base.Terminals.TTYTerminal}, Core.MethodInstance})

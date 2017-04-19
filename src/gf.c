@@ -134,7 +134,8 @@ const struct jl_typemap_info tfunc_cache = {
 
 static int8_t jl_cachearg_offset(jl_methtable_t *mt)
 {
-    return (mt == jl_type_type_mt) ? 0 : 1;
+    // TODO: consider reverting this when we can split on Type{...} better
+    return 1; //(mt == jl_type_type_mt) ? 0 : 1;
 }
 
 /// ----- Insertion logic for special entries ----- ///
@@ -605,6 +606,7 @@ static void jl_cacheable_sig(
         // avoid specializing on an argument of type Tuple
         // unless matching a declared type of `::Type`
         if (jl_is_type_type(elt) && jl_is_tuple_type(jl_tparam0(elt)) &&
+            !jl_has_free_typevars(decl_i) &&
             (!jl_subtype(decl_i, (jl_value_t*)jl_type_type) || jl_is_kind(decl_i))) { // Type{Tuple{...}}
             elt = (jl_value_t*)jl_anytuple_type_type; // Type{T} where T<:Tuple
             if (!*newparams) *newparams = jl_svec_copy(type->parameters);
@@ -737,6 +739,7 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
         // avoid specializing on an argument of type Tuple
         // unless matching a declared type of `::Type`
         if (jl_is_type_type(elt) && jl_is_tuple_type(jl_tparam0(elt)) &&
+            !jl_has_free_typevars(decl_i) &&
             (!jl_subtype(decl_i, (jl_value_t*)jl_type_type) || jl_is_kind(decl_i))) { // Type{Tuple{...}}
             if (!jl_types_equal(elt, (jl_value_t*)jl_anytuple_type_type))
                 return 0;
@@ -1089,12 +1092,6 @@ void print_func_loc(JL_STREAM *s, jl_method_t *m)
   however, (AbstractArray, AbstractMatrix, Foo) and (AbstractMatrix, AbstractArray, Bar) are fine
   since Foo and Bar are disjoint, so there would be no confusion over
   which one to call.
-
-  There is also this kind of ambiguity: foo{T,S}(T, S) vs. foo(Any,Any)
-  In this case jl_types_equal() is true, but one is jl_type_morespecific
-  or jl_type_match_morespecific than the other.
-  To check this, jl_types_equal_generic needs to be more sophisticated
-  so (T,T) is not equivalent to (Any,Any). (TODO)
 */
 struct ambiguous_matches_env {
     struct typemap_intersection_env match;
@@ -1123,8 +1120,23 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
     //     or !jl_type_morespecific(sig, type) [after]
     // based on their sort order in the typemap
     // now we are checking that the reverse is true
-    if (!jl_type_morespecific((jl_value_t*)(closure->after ? type : sig),
-                              (jl_value_t*)(closure->after ? sig : type))) {
+    int msp;
+    if (closure->match.issubty) {
+        assert(closure->after);
+        msp = 1;
+    }
+    else if (closure->after) {
+        assert(!jl_subtype((jl_value_t*)sig, (jl_value_t*)type));
+        msp = jl_type_morespecific_no_subtype((jl_value_t*)type, (jl_value_t*)sig);
+    }
+    else {
+        if (jl_subtype((jl_value_t*)sig, (jl_value_t*)type))
+            msp = 1;
+        else
+            msp = jl_type_morespecific_no_subtype((jl_value_t*)sig, (jl_value_t*)type);
+    }
+
+    if (!msp) {
         // see if the intersection is covered by another existing method
         // that will resolve the ambiguity (by being more specific than either)
         // (if type-morespecific made a mistake, this also might end up finding
@@ -1195,7 +1207,7 @@ static jl_value_t *check_ambiguous_matches(union jl_typemap_t defs, jl_typemap_e
     env.match.type = (jl_value_t*)type;
     env.match.va = va;
     env.match.ti = NULL;
-    env.match.env = NULL;
+    env.match.env = jl_emptysvec;
     env.defs = defs;
     env.newentry = newentry;
     env.shadowed = NULL;
@@ -1394,7 +1406,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
             size_t ins = 0;
             for (i = 1; i < na; i += 2) {
                 jl_value_t *backedgetyp = backedges[i - 1];
-                if (jl_type_intersection(backedgetyp, (jl_value_t*)type) != (jl_value_t*)jl_bottom_type) {
+                if (!jl_has_empty_intersection(backedgetyp, (jl_value_t*)type)) {
                     jl_method_instance_t *backedge = (jl_method_instance_t*)backedges[i];
                     invalidate_method_instance(backedge, env.max_world, 0);
                     env.invalidated = 1;
@@ -1424,6 +1436,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
         env.match.va = va;
         env.match.type = (jl_value_t*)type;
         env.match.fptr = invalidate_backedges;
+        env.match.env = NULL;
 
         if (jl_is_method(oldvalue)) {
             jl_typemap_intersection_visitor(((jl_method_t*)oldvalue)->specializations, 0, &env.match);
@@ -1727,10 +1740,8 @@ JL_DLLEXPORT int jl_has_call_ambiguities(jl_tupletype_t *types, jl_method_t *m)
     if (m->ambig == jl_nothing) return 0;
     for (size_t i = 0; i < jl_array_len(m->ambig); i++) {
         jl_method_t *mambig = (jl_method_t*)jl_array_ptr_ref(m->ambig, i);
-        if (jl_type_intersection((jl_value_t*)mambig->sig,
-                                 (jl_value_t*)types) != (jl_value_t*)jl_bottom_type) {
+        if (!jl_has_empty_intersection((jl_value_t*)mambig->sig, (jl_value_t*)types))
             return 1;
-        }
     }
     return 0;
 }

@@ -611,7 +611,7 @@ function i20343()
     f20343([1,2,3]..., 4)
 end
 @test Base.return_types(i20343, ()) == [Int8]
-immutable Foo20518 <: AbstractVector{Int}; end # issue #20518; inference assumed AbstractArrays
+struct Foo20518 <: AbstractVector{Int}; end # issue #20518; inference assumed AbstractArrays
 Base.getindex(::Foo20518, ::Int) = "oops"      # not to lie about their element type
 Base.indices(::Foo20518) = (Base.OneTo(4),)
 foo20518(xs::Any...) = -1
@@ -657,8 +657,7 @@ let A = 1:2, z = zip(A, A, A, A, A, A, A, A, A, A, A, A)
 end
 # introduce TypeVars in Unions in invariant position
 let T = Val{Val{Val{Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64}}}}
-    #TODO: this test hits an assertion (see #21191)
-    #@test T <: Core.Inference.limit_type_depth(T, 0)
+    @test T <: Core.Inference.limit_type_depth(T, 0)
 end
 
 # issue #20704
@@ -745,3 +744,7 @@ type T10207{A, B}
     b::B
 end
 @test code_typed(T10207, (Int,Any))[1].second == T10207{Int,T} where T
+
+# issue #21410
+f21410(::V, ::Pair{V,E}) where {V, E} = E
+@test code_typed(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})[1].second == Type{Ref{T}} where T<:Number

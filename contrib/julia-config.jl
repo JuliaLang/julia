@@ -23,6 +23,8 @@ function libDir()
     end
 end
 
+private_libDir() = joinpath(JULIA_HOME, Base.PRIVATE_LIBDIR)
+
 function includeDir()
     joinpath(match(r"(.*)(bin)",JULIA_HOME).captures[1],"include","julia")
 end
@@ -49,7 +51,13 @@ function initDir()
 end
 
 function ldflags()
-    replace("""-L$(libDir())""","\\","\\\\")
+    fl = replace("""-L$(libDir())""","\\","\\\\")
+    if is_windows()
+        fl = fl * " -Wl,--stack,8388608"
+    elseif is_linux()
+        fl = fl * " -Wl,--export-dynamic"
+    end
+    return fl
 end
 
 function ldlibs()
@@ -59,7 +67,7 @@ function ldlibs()
         "julia"
     end
     if is_unix()
-        return replace("""-Wl,-rpath,$(libDir()) -l$libname""","\\","\\\\")
+        return replace("""-Wl,-rpath,$(libDir()) -Wl,-rpath,$(private_libDir()) -l$libname""","\\","\\\\")
     else
         return "-l$libname -lopenlibm"
     end
@@ -70,9 +78,9 @@ function cflags()
     arg2 = replace(includeDir(),"\\","\\\\")
     threading_def = threadingOn() ? "-DJULIA_ENABLE_THREADING=1 " : ""
     if is_unix()
-        return """$(threading_def)-fPIC -DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2"""
+        return """-std=gnu99 $(threading_def)-fPIC -DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2"""
     else
-        return """$(threading_def)-DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2"""
+        return """-std=gnu99 $(threading_def)-DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2"""
     end
 end
 

@@ -177,7 +177,7 @@ endif
 USE_GPL_LIBS ?= 1
 
 # Directories where said libraries get installed to
-prefix ?= $(abspath julia-$(JULIA_COMMIT))
+prefix ?= $(BUILDROOT)/julia-$(JULIA_COMMIT)
 bindir := $(prefix)/bin
 libdir := $(prefix)/lib
 libexecdir := $(prefix)/libexec
@@ -219,6 +219,7 @@ libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(libdir))
 build_private_libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_private_libdir))
 private_libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(private_libdir))
 datarootdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(datarootdir))
+libexecdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(libexecdir))
 docdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(docdir))
 sysconfdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(sysconfdir))
 includedir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(includedir))

@@ -309,12 +309,12 @@ function read(s::IOStream, nb::Integer; all::Bool=true)
 end
 
 ## Character streams ##
-const _chtmp = Array{Char}(1)
+const _chtmp = Ref{Char}()
 function peekchar(s::IOStream)
     if ccall(:ios_peekutf8, Cint, (Ptr{Void}, Ptr{Char}), s, _chtmp) < 0
         return typemax(Char)
     end
-    return _chtmp[1]
+    return _chtmp[]
 end
 
 function peek(s::IOStream)
@@ -333,4 +333,3 @@ function skipchars(io::IOStream, pred; linecomment=nothing)
     end
     return io
 end
-

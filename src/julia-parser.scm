@@ -1443,7 +1443,7 @@
 
 (define (parse-import-dots s)
   (let loop ((l '())
-             (t (peek-token s)))
+             (t (require-token s)))  ;; skip newlines
     (cond ((eq? t '|.|)
            (begin (take-token s)
                   (loop (list* '|.| l) (peek-token s))))

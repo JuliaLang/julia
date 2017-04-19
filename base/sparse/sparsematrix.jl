@@ -1219,7 +1219,7 @@ function sprand_IJ(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloa
     0 <= density <= 1 || throw(ArgumentError("$density not in [0,1]"))
     N = n*m
 
-    I, J = Array{Int}(0), Array{Int}(0) # indices of nonzero elements
+    I, J = Vector{Int}(0), Vector{Int}(0) # indices of nonzero elements
     sizehint!(I, round(Int,N*density))
     sizehint!(J, round(Int,N*density))
 
@@ -1229,7 +1229,7 @@ function sprand_IJ(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloa
     colsparsity = exp(m*L) # = 1 - coldensity
     iL = 1/L
 
-    rows = Array{Int}(0)
+    rows = Vector{Int}(0)
     for j in randsubseq(r, 1:n, coldensity)
         # To get the right statistics, we *must* have a nonempty column j
         # even if p*m << 1.   To do this, we use an approach similar to
@@ -1373,7 +1373,7 @@ spzeros(m::Integer, n::Integer) = spzeros(Float64, m, n)
 spzeros(Tv::Type, m::Integer, n::Integer) = spzeros(Tv, Int, m, n)
 function spzeros(Tv::Type, Ti::Type, m::Integer, n::Integer)
     ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
-    SparseMatrixCSC(m, n, ones(Ti, n+1), Array{Ti}(0), Array{Tv}(0))
+    SparseMatrixCSC(m, n, ones(Ti, n+1), Vector{Ti}(0), Vector{Tv}(0))
 end
 # de-splatting variant
 spzeros(Tv::Type, Ti::Type, sz::Tuple{Integer,Integer}) = spzeros(Tv, Ti, sz[1], sz[2])

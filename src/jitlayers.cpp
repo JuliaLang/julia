@@ -1121,6 +1121,16 @@ static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap,
                                  feature_string,
                                  "jl_sysimg_cpu_target"));
 
+    // reflect the address of the jl_RTLD_DEFAULT_handle variable
+    // back to the caller, so that we can check for consistency issues
+    GlobalValue *jlRTLD_DEFAULT_var = mod->getNamedValue("jl_RTLD_DEFAULT_handle");
+    addComdat(new GlobalVariable(*mod,
+                                 jlRTLD_DEFAULT_var->getType(),
+                                 true,
+                                 GlobalVariable::ExternalLinkage,
+                                 jlRTLD_DEFAULT_var,
+                                 "jl_RTLD_DEFAULT_handle_pointer"));
+
 #ifdef HAVE_CPUID
     // For native also store the cpuid
     if (strcmp(jl_options.cpu_target,"native") == 0) {

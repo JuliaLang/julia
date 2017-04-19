@@ -710,6 +710,15 @@ mktempdir() do dir
             # from branch/merge_a
             LibGit2.branch!(repo, "master")
 
+            # test for showing a Reference to a non-HEAD branch
+            brref = LibGit2.GitReference(repo, "refs/heads/branch/merge_a")
+            @test LibGit2.name(brref) == "refs/heads/branch/merge_a"
+            @test !LibGit2.ishead(brref)
+            show_strs = split(sprint(show, brref), "\n")
+            @test show_strs[1] == "GitReference:"
+            @test show_strs[2] == "Branch with name refs/heads/branch/merge_a"
+            @test show_strs[3] == "Branch is not HEAD."
+
             open(joinpath(LibGit2.path(repo), "file2"), "w") do f
                 write(f, "222\n")
             end
@@ -724,6 +733,18 @@ mktempdir() do dir
             # merge them now that we allow non-ff
             @test LibGit2.merge!(repo, [upst_ann], false)
             @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
+
+            # go back to merge_a and rename a file
+            LibGit2.branch!(repo, "branch/merge_b")
+            mv(joinpath(LibGit2.path(repo),"file1"),joinpath(LibGit2.path(repo),"mvfile1"))
+            LibGit2.add!(repo, "mvfile1")
+            LibGit2.commit(repo, "move file1")
+            LibGit2.branch!(repo, "master")
+            upst_ann = LibGit2.GitAnnotated(repo, "branch/merge_b")
+            rename_flag = 0
+            rename_flag = LibGit2.toggle(rename_flag, 0) # turns on the find renames opt
+            mos = LibGit2.MergeOptions(flags=rename_flag)
+            @test LibGit2.merge!(repo, [upst_ann], merge_opts=mos)
         finally
             close(repo)
         end
@@ -1003,6 +1024,9 @@ mktempdir() do dir
             @test rbo_str == "RebaseOperation($(string(rbo.id)))\nOperation type: REBASE_OPERATION_PICK\n"
             rb_str = sprint(show, rb)
             @test rb_str == "GitRebase:\nNumber: 2\nCurrently performing operation: 1\n"
+            rbo = rb[2]
+            rbo_str = sprint(show, rbo)
+            @test rbo_str == "RebaseOperation($(string(rbo.id)))\nOperation type: REBASE_OPERATION_PICK\n"
 
             # test rebase abort
             LibGit2.abort(rb)

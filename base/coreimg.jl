@@ -11,7 +11,7 @@ eval(m, x) = Core.eval(m, x)
 
 const include = Core.include
 # conditional to allow redefining Core.Inference after base exists
-isdefined(Main, :Base) || ((::Type{T}){T}(arg) = convert(T, arg)::T)
+isdefined(Main, :Base) || ((::Type{T})(arg) where {T} = convert(T, arg)::T)
 
 function return_type end
 

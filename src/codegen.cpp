@@ -434,6 +434,17 @@ static bool isbits_spec(jl_value_t *jt, bool allow_singleton = true)
         (allow_singleton || (jl_datatype_size(jt) > 0) || (jl_datatype_nfields(jt) > 0));
 }
 
+static MDNode *best_tbaa(jl_value_t *jt) {
+    jt = jl_unwrap_unionall(jt);
+    if (!jl_is_datatype(jt))
+        return tbaa_value;
+    if (jl_is_abstracttype(jt))
+        return tbaa_value;
+    // If we're here, we know all subtypes are (im)mutable, even if we
+    // don't know what the exact type is
+    return jl_is_mutable(jt) ? tbaa_mutab : tbaa_immut;
+}
+
 // metadata tracking for a llvm Value* during codegen
 struct jl_cgval_t {
     Value *V; // may be of type T* or T, or set to NULL if ghost (or if the value has not been initialized yet, for a variable definition)
@@ -464,9 +475,7 @@ struct jl_cgval_t {
         isboxed(isboxed),
         isghost(false),
         isimmutable(isboxed && jl_is_immutable_datatype(typ)),
-        tbaa(isboxed ? (jl_is_leaf_type(typ) ?
-                        (jl_is_mutable(typ) ? tbaa_mutab : tbaa_immut) :
-                        tbaa_value) : nullptr)
+        tbaa(isboxed ? best_tbaa(typ) : nullptr)
     {
         assert(!(isboxed && TIndex != NULL));
         assert(TIndex == NULL || TIndex->getType() == T_int8);
@@ -677,7 +686,11 @@ static GlobalVariable *get_pointer_to_constant(Constant *val, StringRef name, Mo
 
 static AllocaInst *emit_static_alloca(Type *lty, int arraysize, jl_codectx_t *ctx)
 {
+#if JL_LLVM_VERSION >= 50000
+    return new AllocaInst(lty, 0, ConstantInt::get(T_int32, arraysize), "", /*InsertBefore=*/ctx->ptlsStates);
+#else
     return new AllocaInst(lty, ConstantInt::get(T_int32, arraysize), "", /*InsertBefore=*/ctx->ptlsStates);
+#endif
 }
 static AllocaInst *emit_static_alloca(Type *lty, jl_codectx_t *ctx)
 {
@@ -685,8 +698,13 @@ static AllocaInst *emit_static_alloca(Type *lty, jl_codectx_t *ctx)
 }
 static AllocaInst *emit_static_alloca(Type *lty)
 {
+#if JL_LLVM_VERSION >= 50000
+    return new AllocaInst(lty, 0, "",
+            /*InsertBefore=*/&*builder.GetInsertBlock()->getParent()->getEntryBlock().getFirstInsertionPt());
+#else
     return new AllocaInst(lty, "",
             /*InsertBefore=*/&*builder.GetInsertBlock()->getParent()->getEntryBlock().getFirstInsertionPt());
+#endif
 }
 
 static inline jl_cgval_t ghostValue(jl_value_t *typ)
@@ -5578,7 +5596,12 @@ static std::unique_ptr<Module> emit_function(
             specsig || // for arguments, give them stack slots if they aren't in `argArray` (otherwise, will use that pointer)
             (va && (int)i == ctx.vaSlot && varinfo.escapes) || // or it's the va arg tuple
             (s != unused_sym && i == 0)) { // or it is the first argument (which isn't in `argArray`)
-            AllocaInst *av = new AllocaInst(T_pjlvalue, jl_symbol_name(s), /*InsertBefore*/ctx.ptlsStates);
+#if JL_LLVM_VERSION >= 50000
+            AllocaInst *av = new AllocaInst(T_pjlvalue, 0,
+#else
+            AllocaInst *av = new AllocaInst(T_pjlvalue,
+#endif
+                jl_symbol_name(s), /*InsertBefore*/ctx.ptlsStates);
             varinfo.boxroot = av;
 #if JL_LLVM_VERSION >= 30600
             if (ctx.debug_enabled && varinfo.dinfo) {

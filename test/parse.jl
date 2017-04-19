@@ -574,13 +574,13 @@ f16517() = try error(); catch 0; end
 # issue #16671
 @test parse("1.") === 1.0
 
+isline(x) = isa(x,Expr) && x.head === :line
+
 # issue #16672
-let isline(x) = isa(x,Expr) && x.head === :line
-    @test count(isline, parse("begin end").args) == 1
-    @test count(isline, parse("begin; end").args) == 1
-    @test count(isline, parse("begin; x+2; end").args) == 1
-    @test count(isline, parse("begin; x+2; y+1; end").args) == 2
-end
+@test count(isline, parse("begin end").args) == 1
+@test count(isline, parse("begin; end").args) == 1
+@test count(isline, parse("begin; x+2; end").args) == 1
+@test count(isline, parse("begin; x+2; y+1; end").args) == 2
 
 # issue #16736
 let
@@ -1084,3 +1084,22 @@ let prim = parse("primitive type X 8 end")
     @test parse("primitive type X 8\nend") == prim
     @test parse(string("primitive type X 8", "\n"^5, "end")) == prim
 end
+
+# issue #21155
+@test filter(!isline,
+             parse("module B
+                        using ..x,
+                              ..y
+                    end").args[3].args)[1] ==
+      Expr(:toplevel,
+           Expr(:using, Symbol("."), Symbol("."), :x),
+           Expr(:using, Symbol("."), Symbol("."), :y))
+
+@test filter(!isline,
+             parse("module A
+                        using .B,
+                              .C
+                    end").args[3].args)[1] ==
+      Expr(:toplevel,
+           Expr(:using, Symbol("."), :B),
+           Expr(:using, Symbol("."), :C))

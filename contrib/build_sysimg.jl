@@ -8,7 +8,7 @@ function default_sysimg_path(debug=false)
     if is_unix()
         splitext(Libdl.dlpath(debug ? "sys-debug" : "sys"))[1]
     else
-        joinpath(JULIA_HOME, "..", "lib", "julia", debug ? "sys-debug" : "sys")
+        joinpath(dirname(JULIA_HOME), "lib", "julia", debug ? "sys-debug" : "sys")
     end
 end
 
