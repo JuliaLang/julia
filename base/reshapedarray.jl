@@ -18,7 +18,7 @@ struct ReshapedArrayIterator{I,M}
     mi::NTuple{M,SignedMultiplicativeInverse{Int}}
 end
 ReshapedArrayIterator(A::ReshapedArray) = _rs_iterator(parent(A), A.mi)
-function _rs_iterator{M}(P, mi::NTuple{M})
+function _rs_iterator(P, mi::NTuple{M}) where M
     iter = eachindex(P)
     ReshapedArrayIterator{typeof(iter),M}(iter, mi)
 end
@@ -116,13 +116,13 @@ end
 # Move elements from inds to out until out reaches the desired
 # dimensionality N, either filling with OneTo(1) or collapsing the
 # product of trailing dims into the last element
-@pure rdims{N}(out::NTuple{N,Any}, inds::Tuple{}, ::Type{Val{N}}) = out
-@pure function rdims{N}(out::NTuple{N,Any}, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}})
+@pure rdims(out::NTuple{N,Any}, inds::Tuple{}, ::Type{Val{N}}) where {N} = out
+@pure function rdims(out::NTuple{N,Any}, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}}) where N
     l = length(last(out)) * prod(map(length, inds))
     (front(out)..., OneTo(l))
 end
-@pure rdims{N}(out::Tuple, inds::Tuple{}, ::Type{Val{N}}) = rdims((out..., OneTo(1)), (), Val{N})
-@pure rdims{N}(out::Tuple, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}}) = rdims((out..., first(inds)), tail(inds), Val{N})
+@pure rdims(out::Tuple, inds::Tuple{}, ::Type{Val{N}}) where {N} = rdims((out..., OneTo(1)), (), Val{N})
+@pure rdims(out::Tuple, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}}) where {N} = rdims((out..., first(inds)), tail(inds), Val{N})
 
 # _reshape on Array returns an Array
 _reshape(parent::Vector, dims::Dims{1}) = parent

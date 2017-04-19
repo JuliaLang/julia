@@ -416,8 +416,8 @@ function ^(x::Rational, n::Integer)
 end
 
 ^(x::Number, y::Rational) = x^(y.num/y.den)
-^{T<:AbstractFloat}(x::T, y::Rational) = x^convert(T,y)
-^{T<:AbstractFloat}(x::Complex{T}, y::Rational) = x^convert(T,y)
+^(x::T, y::Rational) where {T<:AbstractFloat} = x^convert(T,y)
+^(x::Complex{T}, y::Rational) where {T<:AbstractFloat} = x^convert(T,y)
 
 ^(z::Complex{<:Rational}, n::Bool) = n ? z : one(z) # to resolve ambiguity
 function ^(z::Complex{<:Rational}, n::Integer)

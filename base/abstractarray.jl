@@ -105,9 +105,9 @@ julia> ndims(A)
 3
 ```
 """
-ndims{T,N}(::AbstractArray{T,N}) = N
-ndims{T,N}(::Type{AbstractArray{T,N}}) = N
-ndims{T<:AbstractArray}(::Type{T}) = ndims(supertype(T))
+ndims(::AbstractArray{T,N}) where {T,N} = N
+ndims(::Type{AbstractArray{T,N}}) where {T,N} = N
+ndims(::Type{T}) where {T<:AbstractArray} = ndims(supertype(T))
 
 """
     length(A::AbstractArray) -> Integer

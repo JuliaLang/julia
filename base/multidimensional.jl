@@ -133,7 +133,7 @@ module IteratorsMD
         convert(Tuple{Vararg{UnitRange{Int}}}, R)
 
     ndims(R::CartesianRange) = length(R.start)
-    ndims{I<:CartesianIndex}(::Type{CartesianRange{I}}) = length(I)
+    ndims(::Type{CartesianRange{I}}) where {I<:CartesianIndex} = length(I)
 
     eachindex(::IndexCartesian, A::AbstractArray) = CartesianRange(indices(A))
 
@@ -283,7 +283,7 @@ end
 @inline function index_ndims(i1::CartesianIndex, I...)
     (map(x->true, i1.I)..., index_ndims(I...)...)
 end
-@inline function index_ndims{N}(i1::AbstractArray{CartesianIndex{N}}, I...)
+@inline function index_ndims(i1::AbstractArray{CartesianIndex{N}}, I...) where N
     (ntuple(x->true, Val{N})..., index_ndims(I...)...)
 end
 index_ndims() = ()

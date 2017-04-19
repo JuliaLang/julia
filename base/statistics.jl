@@ -41,7 +41,7 @@ function mean!(R::AbstractArray, A::AbstractArray)
     return R
 end
 
-momenttype{T}(::Type{T}) = typeof((zero(T)*zero(T) + zero(T)*zero(T)) / 2)
+momenttype(::Type{T}) where {T} = typeof((zero(T)*zero(T) + zero(T)*zero(T)) / 2)
 momenttype(::Type{Float32}) = Float32
 momenttype(::Type{<:Union{Float64,Int32,Int64,UInt32,UInt64}}) = Float64
 
@@ -54,7 +54,7 @@ Compute the mean of whole array `v`, or optionally along the dimensions in `regi
     Julia does not ignore `NaN` values in the computation. For applications requiring the
     handling of missing data, the `DataArrays.jl` package is recommended.
 """
-mean{T}(A::AbstractArray{T}, region) =
+mean(A::AbstractArray{T}, region) where {T} =
     mean!(reducedim_initarray(A, region, 0, momenttype(T)), A)
 
 
@@ -108,7 +108,7 @@ centralize_sumabs2(A::AbstractArray, m::Number) =
 centralize_sumabs2(A::AbstractArray, m::Number, ifirst::Int, ilast::Int) =
     mapreduce_impl(centralizedabs2fun(m), +, A, ifirst, ilast)
 
-function centralize_sumabs2!{S}(R::AbstractArray{S}, A::AbstractArray, means::AbstractArray)
+function centralize_sumabs2!(R::AbstractArray{S}, A::AbstractArray, means::AbstractArray) where S
     # following the implementation of _mapreducedim! at base/reducedim.jl
     lsiz = check_reducedims(R,A)
     isempty(R) || fill!(R, zero(S))
@@ -147,14 +147,14 @@ function centralize_sumabs2!{S}(R::AbstractArray{S}, A::AbstractArray, means::Ab
     return R
 end
 
-function varm{T}(A::AbstractArray{T}, m::Number; corrected::Bool=true)
+function varm(A::AbstractArray{T}, m::Number; corrected::Bool=true) where T
     n = _length(A)
     n == 0 && return convert(real(momenttype(T)), NaN)
     n == 1 && return convert(real(momenttype(T)), abs2(A[1] - m)/(1 - Int(corrected)))
     return centralize_sumabs2(A, m) / (n - Int(corrected))
 end
 
-function varm!{S}(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; corrected::Bool=true)
+function varm!(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; corrected::Bool=true) where S
     if isempty(A)
         fill!(R, convert(S, NaN))
     else
@@ -177,11 +177,11 @@ whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x
     applications requiring the handling of missing data, the
     `DataArrays.jl` package is recommended.
 """
-varm{T}(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) =
+varm(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) where {T} =
     varm!(reducedim_initarray(A, region, 0, real(momenttype(T))), A, m; corrected=corrected)
 
 
-var{T}(A::AbstractArray{T}; corrected::Bool=true, mean=nothing) =
+var(A::AbstractArray{T}; corrected::Bool=true, mean=nothing) where {T} =
     convert(real(momenttype(T)),
             varm(A, mean === nothing ? Base.mean(A) : mean; corrected=corrected))
 
@@ -399,7 +399,7 @@ clampcor(x) = x
 
 # cov2cor!
 
-function cov2cor!{T}(C::AbstractMatrix{T}, xsd::AbstractArray)
+function cov2cor!(C::AbstractMatrix{T}, xsd::AbstractArray) where T
     nx = length(xsd)
     size(C) == (nx, nx) || throw(DimensionMismatch("inconsistent dimensions"))
     for j = 1:nx
@@ -447,7 +447,7 @@ end
 
 # corzm (non-exported, with centered data)
 
-corzm{T}(x::AbstractVector{T}) = one(real(T))
+corzm(x::AbstractVector{T}) where {T} = one(real(T))
 function corzm(x::AbstractMatrix, vardim::Int=1)
     c = unscaled_covzm(x, vardim)
     return cov2cor!(c, sqrt!(diag(c)))
@@ -461,7 +461,7 @@ corzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int=1) =
 
 # corm
 
-corm{T}(x::AbstractVector{T}, xmean) = one(real(T))
+corm(x::AbstractVector{T}, xmean) where {T} = one(real(T))
 corm(x::AbstractMatrix, xmean, vardim::Int=1) = corzm(x .- xmean, vardim)
 function corm(x::AbstractVector, mx::Number, y::AbstractVector, my::Number)
     n = length(x)

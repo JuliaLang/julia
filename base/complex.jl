@@ -554,7 +554,7 @@ function log1p{T}(z::Complex{T})
     end
 end
 
-function ^{T<:AbstractFloat}(z::Complex{T}, p::Complex{T})::Complex{T}
+function ^(z::Complex{T}, p::Complex{T})::Complex{T} where T<:AbstractFloat
     if p == 2 #square
         zr, zi = reim(z)
         x = (zr-zi)*(zr+zi)
@@ -601,7 +601,7 @@ function exp10{T}(z::Complex{T})
     Complex(er*cos(theta), er*sin(theta))
 end
 
-function ^{T<:Complex}(z::T, p::T)
+function ^(z::T, p::T) where T<:Complex
     if isinteger(p)
         rp = real(p)
         if rp < 0

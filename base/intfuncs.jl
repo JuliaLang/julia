@@ -191,7 +191,7 @@ function power_by_squaring(x::Bool, p::Integer)
     return (p==0) | x
 end
 
-^{T<:Integer}(x::T, p::T) = power_by_squaring(x,p)
+^(x::T, p::T) where {T<:Integer} = power_by_squaring(x,p)
 ^(x::Number, p::Integer)  = power_by_squaring(x,p)
 ^(x, p::Integer)          = power_by_squaring(x,p)
 

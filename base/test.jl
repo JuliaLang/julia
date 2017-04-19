@@ -1105,10 +1105,10 @@ end
 #
 # Raises an error if any columnwise vector norm exceeds err. Otherwise, returns
 # nothing.
-function test_approx_eq_modphase{S<:Real,T<:Real}(
+function test_approx_eq_modphase(
         a::StridedVecOrMat{S}, b::StridedVecOrMat{T},
         err = length(indices(a,1))^3*(eps(S)+eps(T))
-    )
+    ) where {S<:Real,T<:Real}
     @test indices(a,1) == indices(b,1) && indices(a,2) == indices(b,2)
     for i in indices(a,2)
         v1, v2 = a[:, i], b[:, i]

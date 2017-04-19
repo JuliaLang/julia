@@ -333,7 +333,7 @@ no_op_err(name, T) = error(name," not defined for ",T)
 *(x::T, y::T) where {T<:Number} = no_op_err("*", T)
 -(x::T, y::T) where {T<:Number} = no_op_err("-", T)
 /(x::T, y::T) where {T<:Number} = no_op_err("/", T)
-^{T<:Number}(x::T, y::T) = no_op_err("^", T)
+^(x::T, y::T) where {T<:Number} = no_op_err("^", T)
 
 fma{T<:Number}(x::T, y::T, z::T) = no_op_err("fma", T)
 fma(x::Integer, y::Integer, z::Integer) = x*y+z
