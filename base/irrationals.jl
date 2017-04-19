@@ -37,7 +37,7 @@ convert(::Type{Rational{BigInt}}, x::Irrational) = throw(ArgumentError("Cannot c
     end
 end
 
-=={s}(::Irrational{s}, ::Irrational{s}) = true
+==(::Irrational{s}, ::Irrational{s}) where {s} = true
 ==(::Irrational, ::Irrational) = false
 
 # Irrationals, by definition, can't have a finite representation equal them exactly

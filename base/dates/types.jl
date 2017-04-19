@@ -298,7 +298,7 @@ Base.eltype{T<:Period}(::Type{T}) = T
 Base.promote_rule(::Type{Date}, x::Type{DateTime}) = DateTime
 Base.isless{T<:TimeType}(x::T, y::T) = isless(value(x), value(y))
 Base.isless(x::TimeType, y::TimeType) = isless(Base.promote_noncircular(x, y)...)
-=={T<:TimeType}(x::T, y::T) = ==(value(x), value(y))
+==(x::T, y::T) where {T<:TimeType} = ==(value(x), value(y))
 function ==(a::Time, b::Time)
     return hour(a) == hour(b) && minute(a) == minute(b) &&
         second(a) == second(b) && millisecond(a) == millisecond(b) &&

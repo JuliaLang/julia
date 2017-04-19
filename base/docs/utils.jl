@@ -72,7 +72,7 @@ print(io::IO, t::Text) = print(io, t.content)
 print(io::IO, t::Text{<:Function}) = t.content(io)
 show(io::IO, t::Text) = print(io, t)
 
-=={T<:Union{HTML, Text}}(t1::T, t2::T) = t1.content == t2.content
+==(t1::T, t2::T) where {T<:Union{HTML, Text}} = t1.content == t2.content
 hash{T<:Union{HTML, Text}}(t::T, h::UInt) = hash(T, hash(t.content, h))
 
 """

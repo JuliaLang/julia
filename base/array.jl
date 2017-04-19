@@ -1039,13 +1039,13 @@ function lexcmp(a::Array{UInt8,1}, b::Array{UInt8,1})
 end
 
 # use memcmp for == on bit integer types
-function =={T<:BitInteger,N}(a::Array{T,N}, b::Array{T,N})
+function ==(a::Array{T,N}, b::Array{T,N}) where T<:BitInteger where N
     size(a) == size(b) && 0 == ccall(
         :memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * length(a))
 end
 
 # this is ~20% faster than the generic implementation above for very small arrays
-function =={T<:BitInteger}(a::Array{T,1}, b::Array{T,1})
+function ==(a::Array{T,1}, b::Array{T,1}) where T<:BitInteger
     len = length(a)
     len == length(b) && 0 == ccall(
         :memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * len)

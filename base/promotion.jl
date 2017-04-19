@@ -343,7 +343,7 @@ muladd{T<:Number}(x::T, y::T, z::T) = x*y+z
 (|){T<:Integer}(x::T, y::T) = no_op_err("|", T)
 xor{T<:Integer}(x::T, y::T) = no_op_err("xor", T)
 
-=={T<:Number}(x::T, y::T) = x === y
+==(x::T, y::T) where {T<:Number} = x === y
  <{T<:Real}(x::T, y::T) = no_op_err("<" , T)
 <={T<:Real}(x::T, y::T) = no_op_err("<=", T)
 
