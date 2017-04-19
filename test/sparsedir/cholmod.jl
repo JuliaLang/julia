@@ -696,3 +696,11 @@ for A in (SparseMatrixCSC(2, 2, [1, 2], CHOLMOD.SuiteSparse_long[], Float64[]),
     @test_throws ArgumentError CHOLMOD.Sparse(size(A)..., A.colptr - 1, A.rowval - 1, A.nzval)
     @test_throws ArgumentError CHOLMOD.Sparse(A)
 end
+
+# sparse right multiplication of Symmetric and Hermitian matrices #21431
+@test issparse(speye(2)*speye(2)*speye(2))
+for T in (Symmetric, Hermitian)
+    @test issparse(speye(2)*T(speye(2))*speye(2))
+    @test issparse(speye(2)*(T(speye(2))*speye(2)))
+    @test issparse((speye(2)*T(speye(2)))*speye(2))
+end
