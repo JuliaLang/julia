@@ -204,7 +204,7 @@ At_mul_B(::RowVector, ::AbstractVector) = throw(DimensionMismatch("Cannot multip
 @inline At_mul_B(rowvec1::RowVector, rowvec2::RowVector) = transpose(rowvec1) * rowvec2
 At_mul_B(vec::AbstractVector, rowvec::RowVector) = throw(DimensionMismatch(
     "Cannot multiply two transposed vectors"))
-@inline At_mul_B{T<:Real}(vec1::AbstractVector{T}, vec2::AbstractVector{T}) =
+@inline At_mul_B(vec1::AbstractVector{T}, vec2::AbstractVector{T}) where {T<:Real} =
     reduce(+, map(At_mul_B, vec1, vec2)) # Seems to be overloaded...
 @inline At_mul_B(vec1::AbstractVector, vec2::AbstractVector) = transpose(vec1) * vec2
 

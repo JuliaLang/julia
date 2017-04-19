@@ -618,7 +618,7 @@ for (f,direction) in ((:fft,FORWARD), (:bfft,BACKWARD))
     end
 end
 
-function A_mul_B!{T}(y::StridedArray{T}, p::cFFTWPlan{T}, x::StridedArray{T})
+function A_mul_B!(y::StridedArray{T}, p::cFFTWPlan{T}, x::StridedArray{T}) where T
     assert_applicable(p, x, y)
     unsafe_execute!(p, x, y)
     return y
@@ -781,7 +781,7 @@ function plan_inv{T<:fftwNumber,K,inplace,N}(p::r2rFFTWPlan{T,K,inplace,N})
                              1:length(iK)))
 end
 
-function A_mul_B!{T}(y::StridedArray{T}, p::r2rFFTWPlan{T}, x::StridedArray{T})
+function A_mul_B!(y::StridedArray{T}, p::r2rFFTWPlan{T}, x::StridedArray{T}) where T
     assert_applicable(p, x, y)
     unsafe_execute!(p, x, y)
     return y

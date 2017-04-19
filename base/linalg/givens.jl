@@ -9,7 +9,7 @@ function *(R::AbstractRotation{T}, A::AbstractVecOrMat{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     A_mul_B!(convert(AbstractRotation{TS}, R), TS == S ? copy(A) : convert(AbstractArray{TS}, A))
 end
-function A_mul_Bc{T,S}(A::AbstractVecOrMat{T}, R::AbstractRotation{S})
+function A_mul_Bc(A::AbstractVecOrMat{T}, R::AbstractRotation{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     A_mul_Bc!(TS == T ? copy(A) : convert(AbstractArray{TS}, A), convert(AbstractRotation{TS}, R))
 end

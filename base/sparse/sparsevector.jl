@@ -1508,7 +1508,7 @@ function *(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
     A_mul_B!(y, A, x)
 end
 
-A_mul_B!{Tx,Ty}(y::StridedVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) =
+A_mul_B!(y::StridedVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     A_mul_B!(one(Tx), A, x, zero(Ty), y)
 
 function A_mul_B!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number, y::StridedVector)
@@ -1537,7 +1537,7 @@ end
 
 # At_mul_B
 
-function At_mul_B{Ta,Tx}(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx})
+function At_mul_B(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx}) where {Ta,Tx}
     m, n = size(A)
     length(x) == m || throw(DimensionMismatch())
     Ty = promote_type(Ta, Tx)
@@ -1545,7 +1545,7 @@ function At_mul_B{Ta,Tx}(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx})
     At_mul_B!(y, A, x)
 end
 
-At_mul_B!{Tx,Ty}(y::StridedVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) =
+At_mul_B!(y::StridedVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     At_mul_B!(one(Tx), A, x, zero(Ty), y)
 
 function At_mul_B!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number, y::StridedVector)
@@ -1603,7 +1603,7 @@ end
 
 # A_mul_B
 
-A_mul_B!{Tx,Ty}(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) =
+A_mul_B!(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     A_mul_B!(one(Tx), A, x, zero(Ty), y)
 
 function A_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector)
@@ -1636,13 +1636,13 @@ end
 
 # At_mul_B
 
-At_mul_B!{Tx,Ty}(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) =
+At_mul_B!(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     At_mul_B!(one(Tx), A, x, zero(Ty), y)
 
 At_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector) =
     _At_or_Ac_mul_B!(*, α, A, x, β, y)
 
-Ac_mul_B!{Tx,Ty}(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) =
+Ac_mul_B!(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) where {Tx,Ty} =
     Ac_mul_B!(one(Tx), A, x, zero(Ty), y)
 
 Ac_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector) =
@@ -1690,7 +1690,7 @@ At_mul_B(A::SparseMatrixCSC, x::AbstractSparseVector) =
 Ac_mul_B(A::SparseMatrixCSC, x::AbstractSparseVector) =
     _At_or_Ac_mul_B(dot, A, x)
 
-function _At_or_Ac_mul_B{TvA,TiA,TvX,TiX}(tfun::Function, A::SparseMatrixCSC{TvA,TiA}, x::AbstractSparseVector{TvX,TiX})
+function _At_or_Ac_mul_B(tfun::Function, A::SparseMatrixCSC{TvA,TiA}, x::AbstractSparseVector{TvX,TiX}) where {TvA,TiA,TvX,TiX}
     m, n = size(A)
     length(x) == m || throw(DimensionMismatch())
     Tv = promote_type(TvA, TvX)

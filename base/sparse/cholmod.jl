@@ -1287,7 +1287,7 @@ end
 (*)(A::Sparse, B::Dense) = sdmult!(A, false, 1., 0., B, zeros(size(A, 1), size(B, 2)))
 (*)(A::Sparse, B::VecOrMat) = (*)(A, Dense(B))
 
-function A_mul_Bc{Tv<:VRealTypes}(A::Sparse{Tv}, B::Sparse{Tv})
+function A_mul_Bc(A::Sparse{Tv}, B::Sparse{Tv}) where Tv<:VRealTypes
     cm = common()
 
     if A !== B
