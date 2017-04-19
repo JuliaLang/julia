@@ -1822,6 +1822,15 @@ let zbuf = IOBuffer([0xbf, 0xc0, 0x00, 0x00, 0x40, 0x20, 0x00, 0x00,
     @test bswap(z2) ===  3.5 - 4.5im
 end
 
+# PR 19449
+using Compat: StringVector
+@test length(StringVector(5)) == 5
+@test String(fill!(StringVector(5), 0x61)) == "aaaaa"
+
+let x = fill!(StringVector(5), 0x61)
+    @test pointer(x) == pointer(Compat.UTF8String(x))
+end
+
 include("to-be-deprecated.jl")
 
 nothing

@@ -1464,6 +1464,13 @@ if VERSION < v"0.6.0-pre.beta.102"
     Base.bswap(z::Complex) = Complex(bswap(real(z)), bswap(imag(z)))
 end
 
+# https://github.com/JuliaLang/julia/pull/19449
+if VERSION < v"0.6.0-dev.1988"
+    StringVector(n::Integer) = Vector{UInt8}(n)
+else
+    using Base: StringVector
+end
+
 include("to-be-deprecated.jl")
 
 end # module Compat
