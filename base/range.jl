@@ -2,17 +2,17 @@
 
 colon(a::Real, b::Real) = colon(promote(a,b)...)
 
-colon{T<:Real}(start::T, stop::T) = UnitRange{T}(start, stop)
+colon(start::T, stop::T) where {T<:Real} = UnitRange{T}(start, stop)
 
 range(a::Real, len::Integer) = UnitRange{typeof(a)}(a, oftype(a, a+len-1))
 
-colon{T}(start::T, stop::T) = colon(start, oftype(stop-start, 1), stop)
+colon(start::T, stop::T) where {T} = colon(start, oftype(stop-start, 1), stop)
 
 range(a, len::Integer) = range(a, oftype(a-a, 1), len)
 
 # first promote start and stop, leaving step alone
-colon{A<:Real,C<:Real}(start::A, step, stop::C) = colon(convert(promote_type(A,C),start), step, convert(promote_type(A,C),stop))
-colon{T<:Real}(start::T, step::Real, stop::T) = colon(promote(start, step, stop)...)
+colon(start::A, step, stop::C) where {A<:Real,C<:Real} = colon(convert(promote_type(A,C),start), step, convert(promote_type(A,C),stop))
+colon(start::T, step::Real, stop::T) where {T<:Real} = colon(promote(start, step, stop)...)
 
 """
     colon(start, [step], stop)
@@ -24,8 +24,8 @@ julia> colon(1, 2, 5)
 1:2:5
 ```
 """
-colon{T<:AbstractFloat}(start::T, step::T, stop::T) = _colon(TypeOrder(T), TypeArithmetic(T), start, step, stop)
-colon{T<:Real}(start::T, step::T, stop::T) = _colon(TypeOrder(T), TypeArithmetic(T), start, step, stop)
+colon(start::T, step::T, stop::T) where {T<:AbstractFloat} = _colon(TypeOrder(T), TypeArithmetic(T), start, step, stop)
+colon(start::T, step::T, stop::T) where {T<:Real} = _colon(TypeOrder(T), TypeArithmetic(T), start, step, stop)
 _colon{T}(::HasOrder, ::Any, start::T, step, stop::T) = StepRange(start, step, stop)
 # for T<:Union{Float16,Float32,Float64} see twiceprecision.jl
 _colon{T}(::HasOrder, ::ArithmeticRounds, start::T, step, stop::T) = StepRangeLen(start, step, floor(Int, (stop-start)/step)+1)
@@ -38,8 +38,8 @@ Range operator. `a:b` constructs a range from `a` to `b` with a step size of 1, 
 is similar but uses a step size of `s`. These syntaxes call the function `colon`. The colon
 is also used in indexing to select whole dimensions.
 """
-colon{T}(start::T, step, stop::T) = _colon(start, step, stop)
-colon{T<:Real}(start::T, step, stop::T) = _colon(start, step, stop)
+colon(start::T, step, stop::T) where {T} = _colon(start, step, stop)
+colon(start::T, step, stop::T) where {T<:Real} = _colon(start, step, stop)
 # without the second method above, the first method above is ambiguous with
 # colon{A<:Real,C<:Real}(start::A, step, stop::C)
 function _colon{T}(start::T, step, stop::T)
@@ -57,12 +57,12 @@ _range{T,S}(::HasOrder, ::ArithmeticOverflows, a::T, step::S, len::Integer) = St
 _range{T,S}(::Any, ::Any, a::T, step::S, len::Integer) = StepRangeLen{typeof(a+0*step),T,S}(a, step, len)
 
 # AbstractFloat specializations
-colon{T<:AbstractFloat}(a::T, b::T) = colon(a, T(1), b)
+colon(a::T, b::T) where {T<:AbstractFloat} = colon(a, T(1), b)
 range(a::AbstractFloat, len::Integer) = range(a, oftype(a, 1), len)
 
-colon{T<:Real}(a::T, b::AbstractFloat, c::T) = colon(promote(a,b,c)...)
-colon{T<:AbstractFloat}(a::T, b::AbstractFloat, c::T) = colon(promote(a,b,c)...)
-colon{T<:AbstractFloat}(a::T, b::Real, c::T) = colon(promote(a,b,c)...)
+colon(a::T, b::AbstractFloat, c::T) where {T<:Real} = colon(promote(a,b,c)...)
+colon(a::T, b::AbstractFloat, c::T) where {T<:AbstractFloat} = colon(promote(a,b,c)...)
+colon(a::T, b::Real, c::T) where {T<:AbstractFloat} = colon(promote(a,b,c)...)
 
 range(a::AbstractFloat, st::AbstractFloat, len::Integer) = range(promote(a, st)..., len)
 range(a::Real, st::AbstractFloat, len::Integer) = range(float(a), st, len)

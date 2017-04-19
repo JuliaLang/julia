@@ -70,7 +70,7 @@ iseven(n::Integer) = !isodd(n)
 signbit(x::Integer) = x < 0
 signbit(x::Unsigned) = false
 
-flipsign{T<:BitSigned}(x::T, y::T) = flipsign_int(x, y)
+flipsign(x::T, y::T) where {T<:BitSigned} = flipsign_int(x, y)
 
 flipsign(x::Signed, y::Signed)  = convert(typeof(x), flipsign(promote_noncircular(x, y)...))
 flipsign(x::Signed, y::Float16) = flipsign(x, bitcast(Int16, y))
@@ -166,38 +166,38 @@ julia> mod(-eps(), 3)
 3.0
 ```
 """
-function mod{T<:Integer}(x::T, y::T)
+function mod(x::T, y::T) where T<:Integer
     y == -1 && return T(0)   # avoid potential overflow in fld
     return x - fld(x, y) * y
 end
 mod(x::Signed, y::Unsigned) = rem(y + unsigned(rem(x, y)), y)
 mod(x::Unsigned, y::Signed) = rem(y + signed(rem(x, y)), y)
-mod{T<:Unsigned}(x::T, y::T) = rem(x, y)
+mod(x::T, y::T) where {T<:Unsigned} = rem(x, y)
 
 cld(x::Signed, y::Unsigned) = div(x, y) + (!signbit(x) & (rem(x, y) != 0))
 cld(x::Unsigned, y::Signed) = div(x, y) + (!signbit(y) & (rem(x, y) != 0))
 
 # Don't promote integers for div/rem/mod since there is no danger of overflow,
 # while there is a substantial performance penalty to 64-bit promotion.
-div{T<:BitSigned64}(x::T, y::T) = checked_sdiv_int(x, y)
-rem{T<:BitSigned64}(x::T, y::T) = checked_srem_int(x, y)
-div{T<:BitUnsigned64}(x::T, y::T) = checked_udiv_int(x, y)
-rem{T<:BitUnsigned64}(x::T, y::T) = checked_urem_int(x, y)
+div(x::T, y::T) where {T<:BitSigned64} = checked_sdiv_int(x, y)
+rem(x::T, y::T) where {T<:BitSigned64} = checked_srem_int(x, y)
+div(x::T, y::T) where {T<:BitUnsigned64} = checked_udiv_int(x, y)
+rem(x::T, y::T) where {T<:BitUnsigned64} = checked_urem_int(x, y)
 
 
 # fld(x,y) == div(x,y) - ((x>=0) != (y>=0) && rem(x,y) != 0 ? 1 : 0)
-fld{T<:Unsigned}(x::T, y::T) = div(x,y)
-function fld{T<:Integer}(x::T, y::T)
+fld(x::T, y::T) where {T<:Unsigned} = div(x,y)
+function fld(x::T, y::T) where T<:Integer
     d = div(x, y)
     return d - (signbit(x ⊻ y) & (d * y != x))
 end
 
 # cld(x,y) = div(x,y) + ((x>0) == (y>0) && rem(x,y) != 0 ? 1 : 0)
-function cld{T<:Unsigned}(x::T, y::T)
+function cld(x::T, y::T) where T<:Unsigned
     d = div(x, y)
     return d + (d * y != x)
 end
-function cld{T<:Integer}(x::T, y::T)
+function cld(x::T, y::T) where T<:Integer
     d = div(x, y)
     return d + (((x > 0) == (y > 0)) & (d * y != x))
 end
@@ -205,9 +205,9 @@ end
 ## integer bitwise operations ##
 
 (~)(x::BitInteger)             = not_int(x)
-(&){T<:BitInteger}(x::T, y::T) = and_int(x, y)
-(|){T<:BitInteger}(x::T, y::T) = or_int(x, y)
-xor{T<:BitInteger}(x::T, y::T) = xor_int(x, y)
+(&)(x::T, y::T) where {T<:BitInteger} = and_int(x, y)
+(|)(x::T, y::T) where {T<:BitInteger} = or_int(x, y)
+xor(x::T, y::T) where {T<:BitInteger} = xor_int(x, y)
 
 bswap(x::Union{Int8, UInt8}) = x
 bswap(x::Union{Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}) =

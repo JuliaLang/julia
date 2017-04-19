@@ -65,27 +65,27 @@ module IteratorsMD
     one(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val{N}))
 
     # arithmetic, min/max
-    @inline (-){N}(index::CartesianIndex{N}) =
+    @inline (-)(index::CartesianIndex{N}) where {N} =
         CartesianIndex{N}(map(-, index.I))
-    @inline (+){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
+    @inline (+)(index1::CartesianIndex{N}, index2::CartesianIndex{N}) where {N} =
         CartesianIndex{N}(map(+, index1.I, index2.I))
-    @inline (-){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
+    @inline (-)(index1::CartesianIndex{N}, index2::CartesianIndex{N}) where {N} =
         CartesianIndex{N}(map(-, index1.I, index2.I))
-    @inline min{N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
+    @inline min(index1::CartesianIndex{N}, index2::CartesianIndex{N}) where {N} =
         CartesianIndex{N}(map(min, index1.I, index2.I))
-    @inline max{N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
+    @inline max(index1::CartesianIndex{N}, index2::CartesianIndex{N}) where {N} =
         CartesianIndex{N}(map(max, index1.I, index2.I))
 
     @inline (+)(i::Integer, index::CartesianIndex) = index+i
-    @inline (+){N}(index::CartesianIndex{N}, i::Integer) = CartesianIndex{N}(map(x->x+i, index.I))
-    @inline (-){N}(index::CartesianIndex{N}, i::Integer) = CartesianIndex{N}(map(x->x-i, index.I))
-    @inline (-){N}(i::Integer, index::CartesianIndex{N}) = CartesianIndex{N}(map(x->i-x, index.I))
-    @inline (*){N}(a::Integer, index::CartesianIndex{N}) = CartesianIndex{N}(map(x->a*x, index.I))
-    @inline (*)(index::CartesianIndex,a::Integer)=*(a,index)
+    @inline (+)(index::CartesianIndex{N}, i::Integer) where {N} = CartesianIndex{N}(map(x->x+i, index.I))
+    @inline (-)(index::CartesianIndex{N}, i::Integer) where {N} = CartesianIndex{N}(map(x->x-i, index.I))
+    @inline (-)(i::Integer, index::CartesianIndex{N}) where {N} = CartesianIndex{N}(map(x->i-x, index.I))
+    @inline (*)(a::Integer, index::CartesianIndex{N}) where {N} = CartesianIndex{N}(map(x->a*x, index.I))
+    @inline (*)(index::CartesianIndex, a::Integer) = *(a,index)
 
     # comparison
-    @inline isless{N}(I1::CartesianIndex{N}, I2::CartesianIndex{N}) = _isless(0, I1.I, I2.I)
-    @inline function _isless{N}(ret, I1::NTuple{N,Int}, I2::NTuple{N,Int})
+    @inline isless(I1::CartesianIndex{N}, I2::CartesianIndex{N}) where {N} = _isless(0, I1.I, I2.I)
+    @inline function _isless(ret, I1::NTuple{N,Int}, I2::NTuple{N,Int}) where N
         newret = ifelse(ret==0, icmp(I1[N], I2[N]), ret)
         _isless(newret, Base.front(I1), Base.front(I2))
     end
@@ -155,7 +155,7 @@ module IteratorsMD
         end
         iter.start
     end
-    @inline function next{I<:CartesianIndex}(iter::CartesianRange{I}, state)
+    @inline function next(iter::CartesianRange{I}, state) where I<:CartesianIndex
         state, I(inc(state.I, iter.start.I, iter.stop.I))
     end
     # increment & carry
@@ -1195,7 +1195,7 @@ end
 
 ## findn
 
-@generated function findn{N}(B::BitArray{N})
+@generated function findn(B::BitArray{N}) where N
     quote
         nnzB = countnz(B)
         I = ntuple(x->Vector{Int}(nnzB), Val{$N})
@@ -1255,7 +1255,7 @@ function checkdims_perm{TP,TB,N}(P::AbstractArray{TP,N}, B::AbstractArray{TB,N},
 end
 
 for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
-    @eval @generated function permutedims!{$(V...)}(P::$PT{$(V...)}, B::$BT{$(V...)}, perm)
+    @eval @generated function permutedims!(P::$PT{$(V...)}, B::$BT{$(V...)}, perm) where $(V...)
         quote
             checkdims_perm(P, B, perm)
 

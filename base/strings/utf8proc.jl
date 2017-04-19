@@ -352,7 +352,7 @@ letter combined with an accent mark is a single grapheme.)
 """
 graphemes(s::AbstractString) = GraphemeIterator{typeof(s)}(s)
 
-eltype{S}(::Type{GraphemeIterator{S}}) = SubString{S}
+eltype(::Type{GraphemeIterator{S}}) where {S} = SubString{S}
 
 function length(g::GraphemeIterator)
     c0 = Char(0x00ad) # soft hyphen (grapheme break always allowed after this)

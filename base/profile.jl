@@ -316,7 +316,7 @@ const btskip = 0
 
 ## Print as a flat list
 # Counts the number of times each line appears, at any nesting level
-function count_flat{T<:Unsigned}(data::Vector{T})
+function count_flat(data::Vector{T}) where T<:Unsigned
     linecount = Dict{T,Int}()
     toskip = btskip
     for ip in data

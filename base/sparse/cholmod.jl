@@ -1173,9 +1173,9 @@ free!(A::Dense) = free_dense!(A.p)
 free!(A::Sparse) = free_sparse!(A.p)
 free!(F::Factor) = free_factor!(F.p)
 
-eltype{T<:VTypes}(::Type{Dense{T}}) = T
-eltype{T<:VTypes}(::Type{Factor{T}}) = T
-eltype{T<:VTypes}(::Type{Sparse{T}}) = T
+eltype(::Type{Dense{T}}) where {T<:VTypes} = T
+eltype(::Type{Factor{T}}) where {T<:VTypes} = T
+eltype(::Type{Sparse{T}}) where {T<:VTypes} = T
 
 nnz(F::Factor) = nnz(Sparse(F))
 

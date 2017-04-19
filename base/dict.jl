@@ -154,12 +154,12 @@ end
 
 TP{K,V} = Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
 
-associative_with_eltype{K,V}(DT_apply, kv, ::TP{K,V}) = DT_apply(K, V)(kv)
-associative_with_eltype{K,V}(DT_apply, kv::Generator, ::TP{K,V}) = DT_apply(K, V)(kv)
-associative_with_eltype{K,V}(DT_apply, ::Type{Pair{K,V}}) = DT_apply(K, V)()
+associative_with_eltype(DT_apply, kv, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
+associative_with_eltype(DT_apply, kv::Generator, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
+associative_with_eltype(DT_apply, ::Type{Pair{K,V}}) where {K,V} = DT_apply(K, V)()
 associative_with_eltype(DT_apply, ::Type) = DT_apply(Any, Any)()
-associative_with_eltype{F}(DT_apply::F, kv, t) = grow_to!(associative_with_eltype(DT_apply, _default_eltype(typeof(kv))), kv)
-function associative_with_eltype{F}(DT_apply::F, kv::Generator, t)
+associative_with_eltype(DT_apply::F, kv, t) where {F} = grow_to!(associative_with_eltype(DT_apply, _default_eltype(typeof(kv))), kv)
+function associative_with_eltype(DT_apply::F, kv::Generator, t) where F
     T = _default_eltype(typeof(kv))
     if T <: Union{Pair, Tuple{Any, Any}} && isleaftype(T)
         return associative_with_eltype(DT_apply, kv, T)
