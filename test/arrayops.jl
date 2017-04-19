@@ -1081,6 +1081,24 @@ end
     end
 end
 
+@testset "filter!" begin
+    # base case w/ Vector
+    a = collect(1:10)
+    filter!(x -> x > 5, a)
+
+    # different subtype of AbstractVector
+    @test a == collect(6:10)
+    ba = rand(10) .> 0.5
+    filter!(x -> x, ba)
+    @test all(ba)
+
+    # empty array
+    ea = []
+    filter!(x -> x > 5, ea)
+    @test isempty(ea)
+end
+
+
 @testset "deleteat!" begin
     for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
                    8:9, 9:10, 6:9, 7:10]
