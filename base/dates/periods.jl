@@ -58,7 +58,7 @@ function default end
 default{T<:DatePeriod}(p::Union{T,Type{T}}) = T(1)
 default{T<:TimePeriod}(p::Union{T,Type{T}}) = T(0)
 
-(-){P<:Period}(x::P) = P(-value(x))
+(-)(x::P) where {P<:Period} = P(-value(x))
 Base.isless{P<:Period}(x::P, y::P) = isless(value(x), value(y))
 ==(x::P, y::P) where {P<:Period} = value(x) == value(y)
 

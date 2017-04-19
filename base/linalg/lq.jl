@@ -204,7 +204,7 @@ for (f1, f2) in ((:Ac_mul_B, :A_mul_B!),
     end
 end
 
-function \{TA,Tb}(A::LQ{TA}, b::StridedVector{Tb})
+function (\)(A::LQ{TA}, b::StridedVector{Tb}) where {TA,Tb}
     S = promote_type(TA,Tb)
     m = checksquare(A)
     m == length(b) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has length $(length(b))"))
@@ -212,7 +212,7 @@ function \{TA,Tb}(A::LQ{TA}, b::StridedVector{Tb})
     x = A_ldiv_B!(AA, copy_oftype(b, S))
     return x
 end
-function \{TA,TB}(A::LQ{TA},B::StridedMatrix{TB})
+function (\)(A::LQ{TA},B::StridedMatrix{TB}) where {TA,TB}
     S = promote_type(TA,TB)
     m = checksquare(A)
     m == size(B,1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(B,1)) rows"))
@@ -222,7 +222,7 @@ function \{TA,TB}(A::LQ{TA},B::StridedMatrix{TB})
 end
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
-function (\){T<:BlasReal}(F::LQ{T}, B::VecOrMat{Complex{T}})
+function (\)(F::LQ{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
     c2r = reshape(transpose(reinterpret(T, B, (2, length(B)))), size(B, 1), 2*size(B, 2))
     x = A_ldiv_B!(F, c2r)
     return reinterpret(Complex{T}, transpose(reshape(x, div(length(x), 2), 2)),

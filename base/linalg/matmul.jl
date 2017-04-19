@@ -72,11 +72,11 @@ end
 At_mul_B{T<:BlasComplex}(x::StridedVector{T}, y::StridedVector{T}) = BLAS.dotu(x, y)
 
 # Matrix-vector multiplication
-function (*){T<:BlasFloat,S}(A::StridedMatrix{T}, x::StridedVector{S})
+function (*)(A::StridedMatrix{T}, x::StridedVector{S}) where {T<:BlasFloat,S}
     TS = promote_op(matprod, T, S)
     A_mul_B!(similar(x, TS, size(A,1)), A, convert(AbstractVector{TS}, x))
 end
-function (*){T,S}(A::AbstractMatrix{T}, x::AbstractVector{S})
+function (*)(A::AbstractMatrix{T}, x::AbstractVector{S}) where {T,S}
     TS = promote_op(matprod, T, S)
     A_mul_B!(similar(x,TS,size(A,1)),A,x)
 end
@@ -143,7 +143,7 @@ julia> [1 1; 0 1] * [1 0; 1 1]
  1  1
 ```
 """
-function (*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
+function (*)(A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S}
     TS = promote_op(matprod, T, S)
     A_mul_B!(similar(B, TS, (size(A,1), size(B,2))), A, B)
 end

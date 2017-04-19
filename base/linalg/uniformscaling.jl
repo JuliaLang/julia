@@ -27,7 +27,7 @@ julia> [1 2im 3; 1im 2 3] * I
 """
 const I = UniformScaling(1)
 
-eltype{T}(::Type{UniformScaling{T}}) = T
+eltype(::Type{UniformScaling{T}}) where {T} = T
 ndims(J::UniformScaling) = 2
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
@@ -109,7 +109,7 @@ function (-)(J::UniformScaling, UL::Union{LowerTriangular,UnitLowerTriangular})
     return LowerTriangular(ULnew)
 end
 
-function (+){TA,TJ}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
+function (+)(A::AbstractMatrix{TA}, J::UniformScaling{TJ}) where {TA,TJ}
     n = checksquare(A)
     B = similar(A, promote_type(TA,TJ))
     copy!(B,A)
@@ -119,7 +119,7 @@ function (+){TA,TJ}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
     B
 end
 
-function (-){TA,TJ<:Number}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
+function (-)(A::AbstractMatrix{TA}, J::UniformScaling{TJ}) where {TA,TJ<:Number}
     n = checksquare(A)
     B = similar(A, promote_type(TA,TJ))
     copy!(B, A)
@@ -128,7 +128,7 @@ function (-){TA,TJ<:Number}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
     end
     B
 end
-function (-){TA,TJ<:Number}(J::UniformScaling{TJ}, A::AbstractMatrix{TA})
+function (-)(J::UniformScaling{TJ}, A::AbstractMatrix{TA}) where {TA,TJ<:Number}
     n = checksquare(A)
     B = convert(AbstractMatrix{promote_type(TJ,TA)}, -A)
     @inbounds for j = 1:n
@@ -154,7 +154,7 @@ inv(J::UniformScaling) = UniformScaling(inv(J.λ))
 /(J::UniformScaling, x::Number) = UniformScaling(J.λ/x)
 
 \(J1::UniformScaling, J2::UniformScaling) = J1.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ\J2.λ)
-\{T<:Number}(A::Union{Bidiagonal{T},AbstractTriangular{T}}, J::UniformScaling) = scale!(inv(A), J.λ)
+\(A::Union{Bidiagonal{T},AbstractTriangular{T}}, J::UniformScaling) where {T<:Number} = scale!(inv(A), J.λ)
 \(J::UniformScaling, A::AbstractVecOrMat) = J.λ == 0 ? throw(SingularException(1)) : J.λ\A
 \(A::AbstractMatrix, J::UniformScaling) = scale!(inv(A), J.λ)
 
@@ -167,8 +167,8 @@ broadcast(::typeof(/), J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
 
 ==(J1::UniformScaling,J2::UniformScaling) = (J1.λ == J2.λ)
 
-function isapprox{T<:Number,S<:Number}(J1::UniformScaling{T}, J2::UniformScaling{S};
-                              rtol::Real=Base.rtoldefault(T,S), atol::Real=0, nans::Bool=false)
+function isapprox(J1::UniformScaling{T}, J2::UniformScaling{S};
+            rtol::Real=Base.rtoldefault(T,S), atol::Real=0, nans::Bool=false) where {T<:Number,S<:Number}
     isapprox(J1.λ, J2.λ, rtol=rtol, atol=atol, nans=nans)
 end
 
@@ -182,7 +182,7 @@ function copy!(A::AbstractMatrix, J::UniformScaling)
     return A
 end
 
-function cond{T}(J::UniformScaling{T})
+function cond(J::UniformScaling{T}) where T
     onereal = inv(one(real(J.λ)))
     return J.λ ≠ zero(T) ? onereal : oftype(onereal, Inf)
 end
