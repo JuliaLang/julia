@@ -123,6 +123,17 @@ end
 _ntuple(f, n) = (@_noinline_meta; ([f(i) for i = 1:n]...))
 
 # inferrable ntuple
+ntuple{F}(f::F, ::Type{Val{1}}) = (@_inline_meta; (f(1),))
+ntuple{F}(f::F, ::Type{Val{2}}) = (@_inline_meta; (f(1), f(2)))
+ntuple{F}(f::F, ::Type{Val{3}}) = (@_inline_meta; (f(1), f(2), f(3)))
+ntuple{F}(f::F, ::Type{Val{4}}) = (@_inline_meta; (f(1), f(2), f(3), f(4)))
+ntuple{F}(f::F, ::Type{Val{5}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5)))
+ntuple{F}(f::F, ::Type{Val{6}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6)))
+ntuple{F}(f::F, ::Type{Val{7}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7)))
+ntuple{F}(f::F, ::Type{Val{8}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8)))
+ntuple{F}(f::F, ::Type{Val{9}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9)))
+ntuple{F}(f::F, ::Type{Val{10}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9), f(10)))
+
 function ntuple{F,N}(f::F, ::Type{Val{N}})
     Core.typeassert(N, Int)
     _ntuple((), f, Val{N})
