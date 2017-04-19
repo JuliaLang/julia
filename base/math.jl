@@ -240,6 +240,7 @@ for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp2, :expm1)
     end
 end
 exp(x::Real) = exp(float(x))
+exp10(x::Real) = exp10(float(x))
 
 # fallback definitions to prevent infinite loop from $f(x::Real) def above
 
@@ -287,11 +288,6 @@ end
         reinterpret(Float64, (exponent_bias(Float64) + (x % Int64)) << (significand_bits(Float64)) % UInt)
     end
 end
-
-# TODO: GNU libc has exp10 as an extension; should openlibm?
-exp10(x::Float64) = 10.0^x
-exp10(x::Float32) = 10.0f0^x
-exp10(x::Real) = exp10(float(x))
 
 # utility for converting NaN return to DomainError
 # the branch in nan_dom_err prevents its callers from inlining, so be sure to force it
@@ -959,6 +955,7 @@ cbrt(a::Float16) = Float16(cbrt(Float32(a)))
 
 # More special functions
 include(joinpath("special", "exp.jl"))
+include(joinpath("special", "exp10.jl"))
 include(joinpath("special", "trig.jl"))
 include(joinpath("special", "gamma.jl"))
 

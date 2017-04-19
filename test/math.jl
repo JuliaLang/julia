@@ -270,7 +270,32 @@ end
     end
 end
 
-@testset "test abstractarray trig fxns" begin
+@testset "exp10 function" begin
+    @testset "accuracy" begin
+        X = map(Float64, vcat(-10:0.00021:10, -35:0.0023:100, -300:0.001:300))
+        for x in X
+            y, yb = exp10(x), exp10(big(x))
+            @test abs(y-yb) <= 1.2*eps(Float64(yb))
+        end
+        X = map(Float32, vcat(-10:0.00021:10, -35:0.0023:35, -35:0.001:35))
+        for x in X
+            y, yb = exp10(x), exp10(big(x))
+            @test abs(y-yb) <= 1.2*eps(Float32(yb))
+        end
+    end
+    @testset "$T edge cases" for T in (Float64, Float32)
+        @test isnan(exp10(T(NaN)))
+        @test exp10(T(-Inf)) === T(0.0)
+        @test exp10(T(Inf)) === T(Inf)
+        @test exp10(T(0.0)) === T(1.0) # exact
+        @test exp10(T(1.0)) === T(10.0)
+        @test exp10(T(3.0)) === T(1000.0)
+        @test exp10(T(5000.0)) === T(Inf)
+        @test exp10(T(-5000.0)) === T(0.0)
+    end
+end
+
+@testset "test abstractarray trig functions" begin
     TAA = rand(2,2)
     TAA = (TAA + TAA.')/2.
     STAA = Symmetric(TAA)
