@@ -14,7 +14,7 @@ function Set(g::Generator)
     return Set{T}(g)
 end
 
-eltype{T}(::Type{Set{T}}) = T
+eltype(::Type{Set{T}}) where {T} = T
 similar{T}(s::Set{T}) = Set{T}()
 similar(s::Set, T::Type) = Set{T}()
 
@@ -249,5 +249,5 @@ function hash(s::Set, h::UInt)
     return h
 end
 
-convert{T}(::Type{Set{T}}, s::Set{T}) = s
-convert{T}(::Type{Set{T}}, x::Set) = Set{T}(x)
+convert(::Type{Set{T}}, s::Set{T}) where {T} = s
+convert(::Type{Set{T}}, x::Set) where {T} = Set{T}(x)

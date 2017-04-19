@@ -982,6 +982,7 @@ JL_DLLEXPORT int jl_isa(jl_value_t *a, jl_value_t *t);
 JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n);
 JL_DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b);
+JL_DLLEXPORT int jl_has_empty_intersection(jl_value_t *x, jl_value_t *y);
 JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body);
 JL_DLLEXPORT const char *jl_typename_str(jl_value_t *v);
 JL_DLLEXPORT const char *jl_typeof_str(jl_value_t *v);
@@ -1084,12 +1085,14 @@ JL_DLLEXPORT int jl_get_size(jl_value_t *val, size_t *pnt);
 #define jl_unbox_long(x) jl_unbox_int64(x)
 #define jl_is_long(x)    jl_is_int64(x)
 #define jl_long_type     jl_int64_type
+#define jl_ulong_type    jl_uint64_type
 #else
 #define jl_box_long(x)   jl_box_int32(x)
 #define jl_box_ulong(x)  jl_box_uint32(x)
 #define jl_unbox_long(x) jl_unbox_int32(x)
 #define jl_is_long(x)    jl_is_int32(x)
 #define jl_long_type     jl_int32_type
+#define jl_ulong_type    jl_uint32_type
 #endif
 
 // Each tuple can exist in one of 4 Vararg states:
@@ -1315,15 +1318,18 @@ typedef enum {
     //JL_IMAGE_LIBJULIA = 2,
 } JL_IMAGE_SEARCH;
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
-JL_DLLEXPORT void jl_init(const char *julia_home_dir);
+JL_DLLEXPORT void jl_init(void);
 JL_DLLEXPORT void jl_init_with_image(const char *julia_home_dir,
                                      const char *image_relative_path);
+JL_DLLEXPORT const char *jl_get_default_sysimg_path(void);
 JL_DLLEXPORT int jl_is_initialized(void);
 JL_DLLEXPORT void jl_atexit_hook(int status);
 JL_DLLEXPORT void JL_NORETURN jl_exit(int status);
+JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle);
 
 JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s);
 JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname);
+JL_DLLEXPORT void jl_set_sysimg_so(void *handle);
 JL_DLLEXPORT ios_t *jl_create_system_image(void);
 JL_DLLEXPORT void jl_save_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image(const char *fname);
@@ -1664,7 +1670,6 @@ JL_DLLEXPORT JL_STREAM *jl_stdin_stream(void);
 JL_DLLEXPORT JL_STREAM *jl_stderr_stream(void);
 
 // showing and std streams
-JL_DLLEXPORT void jl_show(jl_value_t *stream, jl_value_t *v);
 JL_DLLEXPORT void jl_flush_cstdio(void);
 JL_DLLEXPORT jl_value_t *jl_stdout_obj(void);
 JL_DLLEXPORT jl_value_t *jl_stderr_obj(void);

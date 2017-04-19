@@ -39,10 +39,12 @@ extern "C" {
 // Union type decision points are discovered while the algorithm works.
 // If a new Union decision is encountered, the `more` flag is set to tell
 // the forall/exists loop to grow the stack.
+// TODO: the stack probably needs to be artifically large because of some
+// deeper problem (see #21191) and could be shrunk once that is fixed
 typedef struct {
     int depth;
     int more;
-    uint32_t stack[10];  // stack of bits represented as a bit vector
+    uint32_t stack[100];  // stack of bits represented as a bit vector
 } jl_unionstate_t;
 
 // Linked list storing the type variable environment. A new jl_varbinding_t
@@ -91,6 +93,7 @@ typedef struct {
     int invdepth;             // current number of invariant constructors we're nested in
     int ignore_free;          // treat free vars as black boxes; used during intersection
     int intersection;         // true iff subtype is being called from intersection
+    int emptiness_only;       // true iff intersection only needs to test for emptiness
 } jl_stenv_t;
 
 // state manipulation utilities
@@ -235,6 +238,95 @@ static int obviously_unequal(jl_value_t *a, jl_value_t *b)
     else if (jl_is_long(b)) return 1;
     if ((jl_is_symbol(a) || jl_is_symbol(b)) && a != b)
         return 1;
+    return 0;
+}
+
+int jl_obviously_unequal(jl_value_t *a, jl_value_t *b)
+{
+    return obviously_unequal(a, b);
+}
+
+static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
+{
+    if (a == b || a == (jl_value_t*)jl_any_type || b == (jl_value_t*)jl_any_type)
+        return 0;
+    if (jl_is_leaf_type(a) && !((jl_datatype_t*)a)->abstract &&
+        jl_is_leaf_type(b) && !((jl_datatype_t*)b)->abstract &&
+        // TODO: remove these 2 lines if and when Tuple{Union{}} === Union{}
+        (((jl_datatype_t*)a)->name != jl_tuple_typename ||
+         ((jl_datatype_t*)b)->name != jl_tuple_typename))
+        return 1;
+    if (jl_is_unionall(a)) a = jl_unwrap_unionall(a);
+    if (jl_is_unionall(b)) b = jl_unwrap_unionall(b);
+    if (jl_is_datatype(a) && jl_is_datatype(b)) {
+        jl_datatype_t *ad = (jl_datatype_t*)a, *bd = (jl_datatype_t*)b;
+        if (ad->name != bd->name) {
+            jl_datatype_t *temp = ad;
+            while (temp != jl_any_type && temp->name != bd->name)
+                temp = temp->super;
+            if (temp == jl_any_type) {
+                temp = bd;
+                while (temp != jl_any_type && temp->name != ad->name)
+                    temp = temp->super;
+                if (temp == jl_any_type)
+                    return 1;
+                bd = temp;
+            }
+            else {
+                ad = temp;
+            }
+        }
+        int istuple = (ad->name == jl_tuple_typename);
+        size_t np;
+        if (istuple) {
+            size_t na = jl_nparams(ad), nb = jl_nparams(bd);
+            if (jl_is_va_tuple(ad)) {
+                na -= 1;
+                if (jl_is_va_tuple(bd))
+                    nb -= 1;
+            }
+            else if (jl_is_va_tuple(bd)) {
+                nb -= 1;
+            }
+            else if (!specificity && na != nb) {
+                // note: some disjoint types (e.g. tuples of different lengths) can be more specific
+                return 1;
+            }
+            np = na < nb ? na : nb;
+        }
+        else {
+            np = jl_nparams(ad);
+        }
+        size_t i;
+        for(i=0; i < np; i++) {
+            jl_value_t *ai = jl_tparam(ad,i);
+            jl_value_t *bi = jl_tparam(bd,i);
+            if (jl_is_typevar(ai) || jl_is_typevar(bi))
+                continue;
+            if (jl_is_type(ai)) {
+                if (jl_is_type(bi)) {
+                    if (istuple && (ai == jl_bottom_type || bi == jl_bottom_type))
+                        ; // TODO: this can return 1 if and when Tuple{Union{}} === Union{}
+                    else if (obviously_disjoint(ai, bi, specificity))
+                        return 1;
+                }
+                else if (!specificity) {
+                    // Tuple{1} is more specific than Tuple{Any}
+                    return 1;
+                }
+            }
+            else if (jl_is_type(bi)) {
+                if (!specificity)
+                    return 1;
+            }
+            else if (!jl_egal(ai, bi)) {
+                return 1;
+            }
+        }
+    }
+    else if (a == jl_bottom_type || b == jl_bottom_type) {
+        return 1;
+    }
     return 0;
 }
 
@@ -456,8 +548,10 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     // if the var for this unionall (based on identity) already appears somewhere
     // in the environment, rename to get a fresh var.
     while (btemp != NULL) {
-        if (btemp->var == u->var || jl_has_typevar(btemp->lb, u->var) ||
-            jl_has_typevar(btemp->ub, u->var)) {
+        if (btemp->var == u->var ||
+            // outer var can only refer to inner var if bounds changed
+            (btemp->lb != btemp->var->lb && jl_has_typevar(btemp->lb, u->var)) ||
+            (btemp->ub != btemp->var->ub && jl_has_typevar(btemp->ub, u->var))) {
             u = rename_unionall(u);
             break;
         }
@@ -541,7 +635,8 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     btemp = e->vars;
     while (btemp != NULL) {
         jl_value_t *vi = btemp->ub;
-        if (vi != (jl_value_t*)vb.var && jl_has_typevar(vi, vb.var)) {
+        // TODO: this takes a significant amount of time
+        if (vi != (jl_value_t*)vb.var && btemp->var->ub != vi && jl_has_typevar(vi, vb.var)) {
             btemp->ub = jl_new_struct(jl_unionall_type, vb.var, vi);
             btemp->lb = jl_bottom_type;
         }
@@ -606,11 +701,11 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
     jl_value_t *lastx=NULL, *lasty=NULL;
     while (i < lx) {
         jl_value_t *xi = jl_tparam(xd, i);
-        if (jl_is_vararg_type(xi)) vx = 1;
+        if (i == lx-1 && vvx) vx = 1;
         jl_value_t *yi = NULL;
         if (j < ly) {
             yi = jl_tparam(yd, j);
-            if (jl_is_vararg_type(yi)) vy = 1;
+            if (j == ly-1 && vvy) vy = 1;
         }
         if (vx && !vy) {
             if (!check_vararg_length(xi, ly+1-lx, e))
@@ -806,9 +901,9 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             xd = xd->super;
         }
         if (xd == jl_any_type) return 0;
-        if (jl_is_tuple_type(xd))
+        if (xd->name == jl_tuple_typename)
             return subtype_tuple(xd, yd, e, param);
-        if (jl_is_vararg_type((jl_value_t*)xd)) {
+        if (xd->name == jl_vararg_typename) {
             // Vararg: covariant in first parameter, invariant in second
             jl_value_t *xp1=jl_tparam0(xd), *xp2=jl_tparam1(xd), *yp1=jl_tparam0(yd), *yp2=jl_tparam1(yd);
             // in Vararg{T1} <: Vararg{T2}, need to check subtype twice to
@@ -925,6 +1020,7 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     e->invdepth = 0;
     e->ignore_free = 0;
     e->intersection = 0;
+    e->emptiness_only = 0;
     e->Lunions.depth = 0;      e->Runions.depth = 0;
     e->Lunions.more = 0;       e->Runions.more = 0;
 }
@@ -1934,6 +2030,8 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     int lastset = 0, niter = 0;
     jl_value_t *ii = intersect(x, y, e, 0);
     while (e->Runions.more) {
+        if (e->emptiness_only && ii != jl_bottom_type)
+            return ii;
         e->Runions.depth = 0;
         int set = e->Runions.more - 1;
         e->Runions.more = 0;
@@ -1964,12 +2062,26 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 
 // type intersection entry points
 
-JL_DLLEXPORT jl_value_t *jl_intersect_types(jl_value_t *x, jl_value_t *y)
+static jl_value_t *intersect_types(jl_value_t *x, jl_value_t *y, int emptiness_only)
 {
     jl_stenv_t e;
+    if (obviously_disjoint(x, y, 0))
+        return jl_bottom_type;
     init_stenv(&e, NULL, 0);
     e.intersection = 1;
+    e.emptiness_only = emptiness_only;
     return intersect_all(x, y, &e);
+}
+
+JL_DLLEXPORT jl_value_t *jl_intersect_types(jl_value_t *x, jl_value_t *y)
+{
+    return intersect_types(x, y, 0);
+}
+
+// TODO: this can probably be done more efficiently
+JL_DLLEXPORT int jl_has_empty_intersection(jl_value_t *x, jl_value_t *y)
+{
+    return intersect_types(x, y, 1) == jl_bottom_type;
 }
 
 // return a SimpleVector of all vars from UnionAlls wrapping a given type
@@ -1992,12 +2104,16 @@ jl_svec_t *jl_outer_unionall_vars(jl_value_t *u)
 // sets *issubty to 1 iff `a` is a subtype of `b`
 jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t **penv, int *issubty)
 {
+    if (issubty) *issubty = 0;
+    if (obviously_disjoint(a, b, 0)) {
+        if (issubty && a == jl_bottom_type) *issubty = 1;
+        return jl_bottom_type;
+    }
     int szb = jl_subtype_env_size(b);
     int sz = 0, i = 0;
     jl_value_t **env, **ans;
     JL_GC_PUSHARGS(env, szb+1);
     ans = &env[szb]; *ans = jl_bottom_type;
-    if (issubty) *issubty = 0;
     if (jl_subtype_env(a, b, env, szb)) {
         *ans = a; sz = szb;
         if (issubty) *issubty = 1;
@@ -2378,16 +2494,21 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
     }
 
     if (jl_is_type_type(a) && !invariant) {
+        if (b == (jl_value_t*)jl_typeofbottom_type)
+            return 0;
         jl_value_t *tp0a = jl_tparam0(a);
         if (jl_is_typevar(tp0a)) {
-            if (b == (jl_value_t*)jl_typeofbottom_type)
-                return 0;
             jl_value_t *ub = ((jl_tvar_t*)tp0a)->ub;
             if (jl_is_kind(b) && !jl_subtype((jl_value_t*)jl_any_type, ub))
                 return 1;
         }
+        else if (tp0a == jl_bottom_type) {
+            if (jl_subtype(b, (jl_value_t*)jl_type_type))
+                return 1;
+        }
         else {
-            if (jl_isa(tp0a, b) || (tp0a == jl_bottom_type && jl_subtype(b, (jl_value_t*)jl_type_type)))
+            if (b == (jl_value_t*)jl_datatype_type || b == (jl_value_t*)jl_unionall_type ||
+                b == (jl_value_t*)jl_uniontype_type || jl_isa(tp0a, b))
                 return 1;
         }
     }
@@ -2486,8 +2607,15 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
 
 JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b)
 {
+    if (obviously_disjoint(a, b, 1))
+        return 0;
     if (jl_subtype(b, a)) return 0;
     if (jl_subtype(a, b)) return 1;
+    return type_morespecific_(a, b, 0, NULL);
+}
+
+JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b)
+{
     return type_morespecific_(a, b, 0, NULL);
 }
 

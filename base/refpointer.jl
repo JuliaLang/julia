@@ -28,11 +28,11 @@ end
 ### General Methods for Ref{T} type
 
 eltype{T}(x::Type{Ref{T}}) = T
-convert{T}(::Type{Ref{T}}, x::Ref{T}) = x
+convert(::Type{Ref{T}}, x::Ref{T}) where {T} = x
 
 # create Ref objects for general object conversion
-unsafe_convert{T}(::Type{Ref{T}}, x::Ref{T}) = unsafe_convert(Ptr{T}, x)
-unsafe_convert{T}(::Type{Ref{T}}, x) = unsafe_convert(Ptr{T}, x)
+unsafe_convert(::Type{Ref{T}}, x::Ref{T}) where {T} = unsafe_convert(Ptr{T}, x)
+unsafe_convert(::Type{Ref{T}}, x) where {T} = unsafe_convert(Ptr{T}, x)
 
 ### Methods for a Ref object that can store a single value of any type
 
@@ -50,7 +50,7 @@ Ref{T}(x::Ptr{T}, i::Integer=1) = x + (i-1)*Core.sizeof(T)
 Ref(x, i::Integer) = (i != 1 && error("Object only has one element"); Ref(x))
 (::Type{Ref{T}}){T}() = RefValue{T}() # Ref{T}()
 (::Type{Ref{T}}){T}(x) = RefValue{T}(x) # Ref{T}(x)
-convert{T}(::Type{Ref{T}}, x) = RefValue{T}(x)
+convert(::Type{Ref{T}}, x) where {T} = RefValue{T}(x)
 
 function unsafe_convert{T}(P::Type{Ptr{T}}, b::RefValue{T})
     if isbits(T)
@@ -62,7 +62,7 @@ end
 function unsafe_convert(P::Type{Ptr{Any}}, b::RefValue{Any})
     return convert(P, data_pointer_from_objref(b))
 end
-unsafe_convert{T}(::Type{Ptr{Void}}, b::RefValue{T}) = convert(Ptr{Void}, unsafe_convert(Ptr{T}, b))
+unsafe_convert(::Type{Ptr{Void}}, b::RefValue{T}) where {T} = convert(Ptr{Void}, unsafe_convert(Ptr{T}, b))
 
 ### Methods for a Ref object that is backed by an array at index i
 struct RefArray{T, A<:AbstractArray{T}, R} <: Ref{T}
@@ -73,7 +73,7 @@ struct RefArray{T, A<:AbstractArray{T}, R} <: Ref{T}
 end
 RefArray{T}(x::AbstractArray{T},i::Int,roots::Any) = RefArray{T,typeof(x),Any}(x, i, roots)
 RefArray{T}(x::AbstractArray{T},i::Int=1,roots::Void=nothing) = RefArray{T,typeof(x),Void}(x, i, nothing)
-convert{T}(::Type{Ref{T}}, x::AbstractArray{T}) = RefArray(x, 1)
+convert(::Type{Ref{T}}, x::AbstractArray{T}) where {T} = RefArray(x, 1)
 Ref(x::AbstractArray, i::Integer=1) = RefArray(x, i)
 
 function unsafe_convert{T}(P::Type{Ptr{T}}, b::RefArray{T})
@@ -86,7 +86,7 @@ end
 function unsafe_convert(P::Type{Ptr{Any}}, b::RefArray{Any})
     return convert(P, pointer(b.x, b.i))
 end
-unsafe_convert{T}(::Type{Ptr{Void}}, b::RefArray{T}) = convert(Ptr{Void}, unsafe_convert(Ptr{T}, b))
+unsafe_convert(::Type{Ptr{Void}}, b::RefArray{T}) where {T} = convert(Ptr{Void}, unsafe_convert(Ptr{T}, b))
 
 # convert Arrays to pointer arrays for ccall
 function (::Type{Ref{<:Union{Ptr,Cwstring,Cstring}}})(a::Array{<:Union{Ptr,Cwstring,Cstring}}) # Ref{P<:Ptr}(a::Array{T<:Ptr})

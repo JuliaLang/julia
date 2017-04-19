@@ -123,11 +123,11 @@ module IteratorsMD
     CartesianRange{N}(rngs::NTuple{N,Union{Integer,AbstractUnitRange}}) =
         CartesianRange(CartesianIndex(map(first, rngs)), CartesianIndex(map(last, rngs)))
 
-    convert{N}(::Type{NTuple{N,UnitRange{Int}}}, R::CartesianRange{CartesianIndex{N}}) =
+    convert(::Type{NTuple{N,UnitRange{Int}}}, R::CartesianRange{CartesianIndex{N}}) where {N} =
         map((f,l)->f:l, first(R).I, last(R).I)
-    convert{N}(::Type{NTuple{N,UnitRange}}, R::CartesianRange) =
+    convert(::Type{NTuple{N,UnitRange}}, R::CartesianRange) where {N} =
         convert(NTuple{N,UnitRange{Int}}, R)
-    convert{N}(::Type{Tuple{Vararg{UnitRange{Int}}}}, R::CartesianRange{CartesianIndex{N}}) =
+    convert(::Type{Tuple{Vararg{UnitRange{Int}}}}, R::CartesianRange{CartesianIndex{N}}) where {N} =
         convert(NTuple{N,UnitRange{Int}}, R)
     convert(::Type{Tuple{Vararg{UnitRange}}}, R::CartesianRange) =
         convert(Tuple{Vararg{UnitRange{Int}}}, R)
@@ -146,7 +146,7 @@ module IteratorsMD
     @inline maxt(a::Tuple,   b::Tuple{}) = a
     @inline maxt(a::Tuple,   b::Tuple)   = (max(a[1], b[1]), maxt(tail(a), tail(b))...)
 
-    eltype{I}(::Type{CartesianRange{I}}) = I
+    eltype(::Type{CartesianRange{I}}) where {I} = I
     iteratorsize(::Type{<:CartesianRange}) = Base.HasShape()
 
     @inline function start(iter::CartesianRange{<:CartesianIndex})
@@ -513,7 +513,7 @@ end
 @generated function findn{T,N}(A::AbstractArray{T,N})
     quote
         nnzA = countnz(A)
-        @nexprs $N d->(I_d = Array{Int}(nnzA))
+        @nexprs $N d->(I_d = Vector{Int}(nnzA))
         k = 1
         @nloops $N i A begin
             @inbounds if (@nref $N A i) != zero(T)
@@ -1198,7 +1198,7 @@ end
 @generated function findn{N}(B::BitArray{N})
     quote
         nnzB = countnz(B)
-        I = ntuple(x->Array{Int}(nnzB), $N)
+        I = ntuple(x->Vector{Int}(nnzB), Val{$N})
         if nnzB > 0
             count = 1
             @nloops $N i B begin

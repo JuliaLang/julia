@@ -60,6 +60,8 @@ let err = try
                            startswith(str, "  ambig(x::Integer, y) in $curmod_str at")
     @test ambig_checkline(lines[2])
     @test ambig_checkline(lines[3])
+    @test lines[4] == "Possible fix, define"
+    @test lines[5] == "  ambig(::Integer, ::Integer)"
 end
 
 ## Other ways of accessing functions

@@ -268,7 +268,7 @@ terminal(r::LineEditREPL) = r.t
 
 LineEditREPL(t::TextTerminal, envcolors = false) =  LineEditREPL(t,
                                               true,
-                                              Base.text_colors[:light_green],
+                                              Base.text_colors[:green],
                                               Base.input_color(),
                                               Base.answer_color(),
                                               Base.text_colors[:red],
@@ -960,7 +960,7 @@ mutable struct StreamREPL <: AbstractREPL
     waserror::Bool
     StreamREPL(stream,pc,ic,ac) = new(stream,pc,ic,ac,false)
 end
-StreamREPL(stream::IO) = StreamREPL(stream, Base.text_colors[:light_green], Base.input_color(), Base.answer_color())
+StreamREPL(stream::IO) = StreamREPL(stream, Base.text_colors[:green], Base.input_color(), Base.answer_color())
 run_repl(stream::IO) = run_repl(StreamREPL(stream))
 
 outstream(s::StreamREPL) = s.stream

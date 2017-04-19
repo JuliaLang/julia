@@ -74,6 +74,10 @@ _z_z_z_(::Int, c...) = 3
 # issue #21016
 @test args_morespecific(Tuple{IO, Core.TypeofBottom}, Tuple{IO, Type{T}} where T<:Number)
 
+# issue #21382
+@test args_morespecific(Tuple{Type{Pair{A,B} where B}} where A, Tuple{DataType})
+@test args_morespecific(Tuple{Union{Int,String},Type{Pair{A,B} where B}} where A, Tuple{Integer,UnionAll})
+
 # with bound varargs
 
 _bound_vararg_specificity_1{T,N}(::Type{Array{T,N}}, d::Vararg{Int, N}) = 0
@@ -4816,3 +4820,8 @@ f21271() = convert(Tuple{Type{Int}, Type{Float64}}, (Int, Float64))::Tuple{Type{
 f21271(x) = x::Tuple{Type{Int}, Type{Float64}}
 @test_throws TypeError f21271()
 @test_throws TypeError f21271((Int, Float64))
+
+# issue #21397
+bar21397(x::T) where {T} = T
+foo21397(x) = bar21397(x)
+@test foo21397(Tuple) == DataType

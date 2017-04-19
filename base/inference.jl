@@ -1323,7 +1323,7 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
                             p1, p2 = sigtuple.parameters, unwrap_unionall(infstate.linfo.specTypes).parameters
                             if length(p2) == ls
                                 limitdepth = false
-                                newsig = Array{Any}(ls)
+                                newsig = Vector{Any}(ls)
                                 for i = 1:ls
                                     if p1[i] <: Function && type_depth(p1[i]) > type_depth(p2[i]) &&
                                         isa(p1[i],DataType)
@@ -1969,12 +1969,15 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
         t = Any
         if n <= length(sv.sp)
             val = sv.sp[n]
-            if isa(val, TypeVar)
+            if isa(val, TypeVar) && Any <: val.ub
                 # static param bound to typevar
                 # if the tvar does not refer to anything more specific than Any,
                 # the static param might actually be an integer, symbol, etc.
-                if !(Any <: val.ub)
-                    t = UnionAll(val, Type{val})
+            elseif has_free_typevars(val)
+                vs = ccall(:jl_find_free_typevars, Any, (Any,), val)
+                t = Type{val}
+                for v in vs
+                    t = UnionAll(v, t)
                 end
             else
                 t = abstract_eval_constant(val)

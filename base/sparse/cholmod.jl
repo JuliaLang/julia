@@ -246,7 +246,7 @@ mutable struct Sparse{Tv<:VTypes} <: AbstractSparseMatrix{Tv,SuiteSparse_long}
         new(p)
     end
 end
-Sparse(p::Ptr{C_Sparse{Tv}}) where Tv<:VTypes = Sparse{Tv}(p)
+Sparse(p::Ptr{C_Sparse{Tv}}) where {Tv<:VTypes} = Sparse{Tv}(p)
 
 # Factor
 
@@ -325,7 +325,7 @@ mutable struct Factor{Tv} <: Factorization{Tv}
         new(p)
     end
 end
-Factor(p::Ptr{C_Factor{Tv}}) where Tv<:VTypes = Factor{Tv}(p)
+Factor(p::Ptr{C_Factor{Tv}}) where {Tv<:VTypes} = Factor{Tv}(p)
 
 # Define get similar to get(Nullable) to check pointers. All pointer loads
 # should be wrapped in get to make sure that SuiteSparse is not called with
@@ -734,16 +734,16 @@ function vertcat{Tv<:VRealTypes}(A::Sparse{Tv}, B::Sparse{Tv}, values::Bool)
 end
 
 function symmetry{Tv<:VTypes}(A::Sparse{Tv}, option::Integer)
-    xmatched = Array{SuiteSparse_long}(1)
-    pmatched = Array{SuiteSparse_long}(1)
-    nzoffdiag = Array{SuiteSparse_long}(1)
-    nzdiag = Array{SuiteSparse_long}(1)
+    xmatched = Ref{SuiteSparse_long}()
+    pmatched = Ref{SuiteSparse_long}()
+    nzoffdiag = Ref{SuiteSparse_long}()
+    nzdiag = Ref{SuiteSparse_long}()
     rv = ccall((@cholmod_name("symmetry", SuiteSparse_long), :libcholmod), Cint,
             (Ptr{C_Sparse{Tv}}, Cint, Ptr{SuiteSparse_long}, Ptr{SuiteSparse_long},
                 Ptr{SuiteSparse_long}, Ptr{SuiteSparse_long}, Ptr{UInt8}),
                     get(A.p), option, xmatched, pmatched,
                         nzoffdiag, nzdiag, common())
-    rv, xmatched[1], pmatched[1], nzoffdiag[1], nzdiag[1]
+    rv, xmatched[], pmatched[], nzoffdiag[], nzdiag[]
 end
 
 # cholmod_cholesky.h
@@ -857,9 +857,9 @@ end
 convert(::Type{Dense}, A::Sparse) = sparse_to_dense(A)
 
 # This constructior assumes zero based colptr and rowval
-function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer,
+function (::Type{Sparse})(m::Integer, n::Integer,
         colptr0::Vector{SuiteSparse_long}, rowval0::Vector{SuiteSparse_long},
-        nzval::Vector{Tv}, stype)
+        nzval::Vector{Tv}, stype) where Tv<:VTypes
     # checks
     ## length of input
     if length(colptr0) <= n
@@ -908,7 +908,7 @@ function (::Type{Sparse})(m::Integer, n::Integer,
     o
 end
 
-function (::Type{Sparse}){Tv<:VTypes}(A::SparseMatrixCSC{Tv,SuiteSparse_long}, stype::Integer)
+function (::Type{Sparse})(A::SparseMatrixCSC{Tv,SuiteSparse_long}, stype::Integer) where Tv<:VTypes
     ## Check length of input. This should never fail but see #20024
     if length(A.colptr) <= A.n
         throw(ArgumentError("length of colptr must be at least size(A,2) + 1 = $(A.n + 1) but was $(length(A.colptr))"))
@@ -1024,7 +1024,7 @@ end
 ## convertion back to base Julia types
 function convert{T}(::Type{Matrix{T}}, D::Dense{T})
     s = unsafe_load(D.p)
-    a = Array{T}(s.nrow, s.ncol)
+    a = Matrix{T}(s.nrow, s.ncol)
     copy!(a, D)
 end
 

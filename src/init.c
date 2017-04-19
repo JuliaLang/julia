@@ -190,10 +190,52 @@ void jl_init_timing(void);
 void jl_destroy_timing(void);
 void jl_uv_call_close_callback(jl_value_t *val);
 
+static void jl_close_item_atexit(uv_handle_t *handle)
+{
+    if (handle->type != UV_FILE && uv_is_closing(handle))
+        return;
+    switch(handle->type) {
+    case UV_PROCESS:
+        // cause Julia to forget about the Process object
+        if (handle->data)
+            jl_uv_call_close_callback((jl_value_t*)handle->data);
+        // and make libuv think it is already dead
+        ((uv_process_t*)handle)->pid = 0;
+        // fall-through
+    case UV_TTY:
+    case UV_UDP:
+    case UV_TCP:
+    case UV_NAMED_PIPE:
+    case UV_POLL:
+    case UV_TIMER:
+    case UV_ASYNC:
+    case UV_FS_EVENT:
+    case UV_FS_POLL:
+    case UV_IDLE:
+    case UV_PREPARE:
+    case UV_CHECK:
+    case UV_SIGNAL:
+    case UV_FILE:
+        // These will be shutdown as appropriate by jl_close_uv
+        jl_close_uv(handle);
+        break;
+    case UV_HANDLE:
+    case UV_STREAM:
+    case UV_UNKNOWN_HANDLE:
+    case UV_HANDLE_TYPE_MAX:
+    case UV_RAW_FD:
+    case UV_RAW_HANDLE:
+    default:
+        assert(0);
+    }
+}
+
 JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (exitcode == 0) jl_write_compiler_output();
+
+    if (exitcode == 0)
+        jl_write_compiler_output();
     jl_print_gc_stats(JL_STDERR);
     if (jl_options.code_coverage)
         jl_write_coverage_data();
@@ -203,10 +245,10 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f != NULL) {
             JL_TRY {
-                size_t last_age = jl_get_ptls_states()->world_age;
-                jl_get_ptls_states()->world_age = jl_get_world_counter();
+                size_t last_age = ptls->world_age;
+                ptls->world_age = jl_get_world_counter();
                 jl_apply(&f, 1);
-                jl_get_ptls_states()->world_age = last_age;
+                ptls->world_age = last_age;
             }
             JL_CATCH {
                 jl_printf(JL_STDERR, "\natexit hook threw an error: ");
@@ -231,62 +273,33 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     struct uv_shutdown_queue queue = {NULL, NULL};
     uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
     struct uv_shutdown_queue_item *item = queue.first;
-    while (item) {
-        JL_TRY {
-            while (item) {
-                uv_handle_t *handle = item->h;
-                if (handle->type != UV_FILE && uv_is_closing(handle)) {
+    if (ptls->current_task != NULL) {
+        while (item) {
+            JL_TRY {
+                while (item) {
+                    jl_close_item_atexit(item->h);
                     item = next_shutdown_queue_item(item);
-                    continue;
                 }
-                switch(handle->type) {
-                case UV_PROCESS:
-                    // cause Julia to forget about the Process object
-                    if (handle->data)
-                        jl_uv_call_close_callback((jl_value_t*)handle->data);
-                    // and make libuv think it is already dead
-                    ((uv_process_t*)handle)->pid = 0;
-                    // fall-through
-                case UV_TTY:
-                case UV_UDP:
-                case UV_TCP:
-                case UV_NAMED_PIPE:
-                case UV_POLL:
-                case UV_TIMER:
-                case UV_ASYNC:
-                case UV_FS_EVENT:
-                case UV_FS_POLL:
-                case UV_IDLE:
-                case UV_PREPARE:
-                case UV_CHECK:
-                case UV_SIGNAL:
-                case UV_FILE:
-                    // These will be shutdown as appropriate by jl_close_uv
-                    jl_close_uv(handle);
-                    break;
-                case UV_HANDLE:
-                case UV_STREAM:
-                case UV_UNKNOWN_HANDLE:
-                case UV_HANDLE_TYPE_MAX:
-                case UV_RAW_FD:
-                case UV_RAW_HANDLE:
-                default:
-                    assert(0);
-                }
+            }
+            JL_CATCH {
+                //error handling -- continue cleanup, as much as possible
+                uv_unref(item->h);
+                jl_printf(JL_STDERR, "error during exit cleanup: close: ");
+                jl_static_show(JL_STDERR, ptls->exception_in_transit);
                 item = next_shutdown_queue_item(item);
             }
         }
-        JL_CATCH {
-            //error handling -- continue cleanup, as much as possible
-            uv_unref(item->h);
-            jl_printf(JL_STDERR, "error during exit cleanup: close: ");
-            jl_static_show(JL_STDERR, ptls->exception_in_transit);
+    }
+    else {
+        while (item) {
+            jl_close_item_atexit(item->h);
             item = next_shutdown_queue_item(item);
         }
     }
+
     // force libuv to spin until everything has finished closing
     loop->stop_flag = 0;
-    while (uv_run(loop,UV_RUN_DEFAULT)) {}
+    while (uv_run(loop, UV_RUN_DEFAULT)) { }
 
     jl_destroy_timing();
 #ifdef ENABLE_TIMINGS
@@ -299,8 +312,8 @@ void jl_get_builtins(void);
 
 JL_DLLEXPORT void *jl_dl_handle;
 void *jl_RTLD_DEFAULT_handle;
-#ifdef _OS_WINDOWS_
 JL_DLLEXPORT void *jl_exe_handle;
+#ifdef _OS_WINDOWS_
 void *jl_ntdll_handle;
 void *jl_kernel32_handle;
 void *jl_crtdll_handle;
@@ -317,9 +330,15 @@ static void *init_stdio_handle(uv_file fd,int readable)
 #ifndef _OS_WINDOWS_
     // Duplicate the file descriptor so we can later dup it over if we want to redirect
     // STDIO without having to worry about closing the associated libuv object.
+    // This also helps limit the impact other libraries can cause on our file handle.
     // On windows however, libuv objects remember streams by their HANDLE, so this is
     // unnecessary.
     fd = dup(fd);
+#else
+    if (type == UV_FILE) {
+        fd = _dup(fd);
+        _setmode(fd, _O_BINARY);
+    }
 #endif
     //jl_printf(JL_STDOUT, "%d: %d -- %d\n", fd, type, 0);
     switch(type) {
@@ -334,9 +353,14 @@ static void *init_stdio_handle(uv_file fd,int readable)
         case UV_UNKNOWN_HANDLE:
             // dup the descriptor with a new one pointing at the bit bucket ...
 #if defined(_OS_WINDOWS_)
-            _dup2(_open("NUL", O_RDWR | O_BINARY, _S_IREAD | _S_IWRITE), fd);
+            fd = _open("NUL", O_RDWR | O_BINARY, _S_IREAD | _S_IWRITE);
 #else
-            dup2(open("/dev/null", O_RDWR, S_IRUSR | S_IWUSR /* 0600 */ | S_IRGRP | S_IROTH /* 0644 */), fd);
+            {
+                int nullfd;
+                nullfd = open("/dev/null", O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH /* 0666 */);
+                dup2(nullfd, fd);
+                close(nullfd);
+            }
 #endif
             // ...and continue on as in the UV_FILE case
         case UV_FILE:
@@ -527,9 +551,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
                                     // best to call this first, since it also initializes libuv
     jl_init_signal_async();
     restore_signals();
+
     jl_resolve_sysimg_location(rel);
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
-    jl_preload_sysimg_so(jl_options.image_file);
+    if (jl_options.image_file)
+        jl_preload_sysimg_so(jl_options.image_file);
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
 
@@ -541,11 +567,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_arr_xtralloc_limit = total_mem / 100;  // Extra allocation limited to 1% of total RAM
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT);
-#ifdef RTLD_DEFAULT
-    jl_RTLD_DEFAULT_handle = RTLD_DEFAULT;
-#else
-    jl_RTLD_DEFAULT_handle = jl_dl_handle;
-#endif
 #ifdef _OS_WINDOWS_
     jl_ntdll_handle = jl_dlopen("ntdll.dll", 0); // bypass julia's pathchecking for system dlls
     jl_kernel32_handle = jl_dlopen("kernel32.dll", 0);
@@ -564,6 +585,13 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     HMODULE jl_dbghelp = (HMODULE) jl_dlopen("dbghelp.dll", 0);
     if (jl_dbghelp)
         hSymRefreshModuleList = (BOOL (WINAPI*)(HANDLE)) jl_dlsym(jl_dbghelp, "SymRefreshModuleList");
+#else
+    jl_exe_handle = jl_dlopen(NULL, JL_RTLD_NOW);
+#ifdef RTLD_DEFAULT
+    jl_RTLD_DEFAULT_handle = RTLD_DEFAULT;
+#else
+    jl_RTLD_DEFAULT_handle = jl_exe_handle;
+#endif
 #endif
 
 #if defined(JL_USE_INTEL_JITEVENTS)

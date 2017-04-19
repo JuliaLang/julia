@@ -26,11 +26,11 @@ macro _propagate_inbounds_meta()
 end
 
 convert(::Type{Any}, x::ANY) = x
-convert{T}(::Type{T}, x::T) = x
+convert(::Type{T}, x::T) where {T} = x
 
 convert(::Type{Tuple{}}, ::Tuple{}) = ()
 convert(::Type{Tuple}, x::Tuple) = x
-convert{T}(::Type{Tuple{Vararg{T}}}, x::Tuple) = cnvt_all(T, x...)
+convert(::Type{Tuple{Vararg{T}}}, x::Tuple) where {T} = cnvt_all(T, x...)
 cnvt_all(T) = ()
 cnvt_all(T, x, rest...) = tuple(convert(T,x), cnvt_all(T, rest...)...)
 
@@ -149,9 +149,9 @@ ptr_arg_unsafe_convert(::Type{Ptr{Void}}, x) = x
 
 cconvert(T::Type, x) = convert(T, x) # do the conversion eagerly in most cases
 cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_convert
-unsafe_convert{T}(::Type{T}, x::T) = x # unsafe_convert (like convert) defaults to assuming the convert occurred
-unsafe_convert{T<:Ptr}(::Type{T}, x::T) = x  # to resolve ambiguity with the next method
-unsafe_convert{P<:Ptr}(::Type{P}, x::Ptr) = convert(P, x)
+unsafe_convert(::Type{T}, x::T) where {T} = x # unsafe_convert (like convert) defaults to assuming the convert occurred
+unsafe_convert(::Type{T}, x::T) where {T<:Ptr} = x  # to resolve ambiguity with the next method
+unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
 
 reinterpret{T}(::Type{T}, x) = bitcast(T, x)
 reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16,x)
@@ -163,7 +163,7 @@ function append_any(xs...)
     # used by apply() and quote
     # must be a separate function from append(), since apply() needs this
     # exact function.
-    out = Array{Any}(4)
+    out = Vector{Any}(4)
     l = 4
     i = 1
     for x in xs
@@ -329,7 +329,7 @@ end
 # used by interpolating quote and some other things in the front end
 function vector_any(xs::ANY...)
     n = length(xs)
-    a = Array{Any}(n)
+    a = Vector{Any}(n)
     @inbounds for i = 1:n
         Core.arrayset(a,xs[i],i)
     end
