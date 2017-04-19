@@ -19,6 +19,11 @@ inline uint64_t RoundUpToAlignment(uint64_t Value, uint64_t Align, uint64_t Skew
 }
 #endif
 
+#if JL_LLVM_VERSION >= 50000
+const unsigned int integerPartWidth = llvm::APInt::APINT_BITS_PER_WORD;
+const unsigned int host_char_bit = 8;
+#endif
+
 /* create "APInt s" from "integerPart *ps" */
 #define CREATE(s) \
     APInt s; \
