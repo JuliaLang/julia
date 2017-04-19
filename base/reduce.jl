@@ -17,8 +17,8 @@ const WidenReduceResult = Union{SmallSigned, SmallUnsigned, Float16}
 
 # r_promote_type: promote T to the type of reduce(op, ::Array{T})
 # (some "extra" methods are required here to avoid ambiguity warnings)
-r_promote_type{T}(op, ::Type{T}) = T
-r_promote_type{T<:WidenReduceResult}(op, ::Type{T}) = widen(T)
+r_promote_type(op, ::Type{T}) where {T} = T
+r_promote_type(op, ::Type{T}) where {T<:WidenReduceResult} = widen(T)
 r_promote_type{T<:WidenReduceResult}(::typeof(+), ::Type{T}) = widen(T)
 r_promote_type{T<:WidenReduceResult}(::typeof(*), ::Type{T}) = widen(T)
 r_promote_type{T<:Number}(::typeof(+), ::Type{T}) = typeof(zero(T)+zero(T))

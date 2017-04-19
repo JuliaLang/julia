@@ -127,9 +127,9 @@ promote_type(T) = (@_pure_meta; T)
 promote_type(T, S, U, V...) = (@_pure_meta; promote_type(T, promote_type(S, U, V...)))
 
 promote_type(::Type{Bottom}, ::Type{Bottom}) = (@_pure_meta; Bottom)
-promote_type{T}(::Type{T}, ::Type{T}) = (@_pure_meta; T)
-promote_type{T}(::Type{T}, ::Type{Bottom}) = (@_pure_meta; T)
-promote_type{T}(::Type{Bottom}, ::Type{T}) = (@_pure_meta; T)
+promote_type(::Type{T}, ::Type{T}) where {T} = (@_pure_meta; T)
+promote_type(::Type{T}, ::Type{Bottom}) where {T} = (@_pure_meta; T)
+promote_type(::Type{Bottom}, ::Type{T}) where {T} = (@_pure_meta; T)
 
 """
     promote_type(type1, type2)
@@ -166,7 +166,7 @@ promote_rule(T, S) = (@_pure_meta; Bottom)
 promote_result(t,s,T,S) = (@_pure_meta; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that
 # case use typejoin on the original types instead.
-promote_result{T,S}(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) = (@_pure_meta; typejoin(T, S))
+promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@_pure_meta; typejoin(T, S))
 
 promote() = ()
 promote(x) = (x,)
@@ -194,7 +194,7 @@ end
 # Otherwise, typejoin(T,S) is called (returning Number) so no conversion
 # happens, and +(promote(x,y)...) is called again, causing a stack
 # overflow.
-function promote_result{T<:Number,S<:Number}(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom})
+function promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T<:Number,S<:Number}
     @_pure_meta
     promote_to_supertype(T, S, typejoin(T,S))
 end
@@ -202,10 +202,10 @@ end
 # promote numeric types T and S to typejoin(T,S) if T<:S or S<:T
 # for example this makes promote_type(Integer,Real) == Real without
 # promoting arbitrary pairs of numeric types to Number.
-promote_to_supertype{T<:Number          }(::Type{T}, ::Type{T}, ::Type{T}) = (@_pure_meta; T)
-promote_to_supertype{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type{T}) = (@_pure_meta; T)
-promote_to_supertype{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type{S}) = (@_pure_meta; S)
-promote_to_supertype{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type) =
+promote_to_supertype(::Type{T}, ::Type{T}, ::Type{T}) where {T<:Number          } = (@_pure_meta; T)
+promote_to_supertype(::Type{T}, ::Type{S}, ::Type{T}) where {T<:Number,S<:Number} = (@_pure_meta; T)
+promote_to_supertype(::Type{T}, ::Type{S}, ::Type{S}) where {T<:Number,S<:Number} = (@_pure_meta; S)
+promote_to_supertype(::Type{T}, ::Type{S}, ::Type) where {T<:Number,S<:Number} =
     error("no promotion exists for ", T, " and ", S)
 
 # promotion with a check for circularity. Can be used to catch what
@@ -229,9 +229,9 @@ function promote_noncircular(x, y, z, a...)
 end
 not_all_sametype(x, y) = nothing
 not_all_sametype(x, y, z) = nothing
-not_all_sametype{S,T}(x::Tuple{S,S}, y::Tuple{T,T}) = sametype_error(x[1], y[1])
-not_all_sametype{R,S,T}(x::Tuple{R,R}, y::Tuple{S,S}, z::Tuple{T,T}) = sametype_error(x[1], y[1], z[1])
-function not_all_sametype{R,S,T}(::Tuple{R,R}, y::Tuple{S,S}, z::Tuple{T,T}, args...)
+not_all_sametype(x::Tuple{S,S}, y::Tuple{T,T}) where {S,T} = sametype_error(x[1], y[1])
+not_all_sametype(x::Tuple{R,R}, y::Tuple{S,S}, z::Tuple{T,T}) where {R,S,T} = sametype_error(x[1], y[1], z[1])
+function not_all_sametype(::Tuple{R,R}, y::Tuple{S,S}, z::Tuple{T,T}, args...) where {R,S,T}
     @_inline_meta
     not_all_sametype(y, z, args...)
 end

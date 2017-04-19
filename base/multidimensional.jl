@@ -528,13 +528,13 @@ end
 
 # see discussion in #18364 ... we try not to widen type of the resulting array
 # from cumsum or cumprod, but in some cases (+, Bool) we may not have a choice.
-rcum_promote_type{T,S<:Number}(op, ::Type{T}, ::Type{S}) = promote_op(op, T, S)
-rcum_promote_type{T<:Number}(op, ::Type{T}) = rcum_promote_type(op, T,T)
-rcum_promote_type{T}(op, ::Type{T}) = T
+rcum_promote_type(op, ::Type{T}, ::Type{S}) where {T,S<:Number} = promote_op(op, T, S)
+rcum_promote_type(op, ::Type{T}) where {T<:Number} = rcum_promote_type(op, T,T)
+rcum_promote_type(op, ::Type{T}) where {T} = T
 
 # handle sums of Vector{Bool} and similar.   it would be nice to handle
 # any AbstractArray here, but it's not clear how that would be possible
-rcum_promote_type{T,N}(op, ::Type{Array{T,N}}) = Array{rcum_promote_type(op,T), N}
+rcum_promote_type(op, ::Type{Array{T,N}}) where {T,N} = Array{rcum_promote_type(op,T), N}
 
 # accumulate_pairwise slightly slower then accumulate, but more numerically
 # stable in certain situations (e.g. sums).
