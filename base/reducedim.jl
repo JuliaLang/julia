@@ -8,7 +8,7 @@ reduced_indices(a::AbstractArray, region) = reduced_indices(indices(a), region)
 # for reductions that keep 0 dims as 0
 reduced_indices0(a::AbstractArray, region) = reduced_indices0(indices(a), region)
 
-function reduced_indices{N}(inds::Indices{N}, d::Int, rd::AbstractUnitRange)
+function reduced_indices(inds::Indices{N}, d::Int, rd::AbstractUnitRange) where N
     d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
     if d == 1
         return (oftype(inds[1], rd), tail(inds)...)
@@ -29,7 +29,7 @@ function reduced_indices0{N}(inds::Indices{N}, d::Int)
     end
 end
 
-function reduced_indices{N}(inds::Indices{N}, region)
+function reduced_indices(inds::Indices{N}, region) where N
     rinds = [inds...]
     for i in region
         isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))

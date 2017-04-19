@@ -669,7 +669,7 @@ function norm_sparse{Tv<:VTypes}(A::Sparse{Tv}, norm::Integer)
                 get(A.p), norm, common())
 end
 
-function horzcat{Tv<:VRealTypes}(A::Sparse{Tv}, B::Sparse{Tv}, values::Bool)
+function horzcat(A::Sparse{Tv}, B::Sparse{Tv}, values::Bool) where Tv<:VRealTypes
     s = Sparse(ccall((@cholmod_name("horzcat", SuiteSparse_long), :libcholmod),
         Ptr{C_Sparse{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{C_Sparse{Tv}}, Cint, Ptr{UInt8}),
@@ -724,7 +724,7 @@ function sdmult!{Tv<:VTypes}(A::Sparse{Tv}, transpose::Bool,
     Y
 end
 
-function vertcat{Tv<:VRealTypes}(A::Sparse{Tv}, B::Sparse{Tv}, values::Bool)
+function vertcat(A::Sparse{Tv}, B::Sparse{Tv}, values::Bool) where Tv<:VRealTypes
     s = Sparse(ccall((@cholmod_name("vertcat", SuiteSparse_long), :libcholmod),
             Ptr{C_Sparse{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{C_Sparse{Tv}}, Cint, Ptr{UInt8}),

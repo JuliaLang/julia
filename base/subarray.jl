@@ -270,7 +270,7 @@ compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Slice}, 
 compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) =
     (@_inline_meta; compute_linindex(parent, I) - stride1)  # linear indexing starts with 1
 
-function compute_linindex{N}(parent, I::NTuple{N,Any})
+function compute_linindex(parent, I::NTuple{N,Any}) where N
     @_inline_meta
     IP = fill_to_length(indices(parent), OneTo(1), Val{N})
     compute_linindex(1, 1, IP, I)

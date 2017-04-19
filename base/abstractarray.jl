@@ -35,7 +35,7 @@ julia> indices(A,2)
 Base.OneTo(6)
 ```
 """
-function indices{T,N}(A::AbstractArray{T,N}, d)
+function indices(A::AbstractArray{T,N}, d) where {T,N}
     @_inline_meta
     d <= N ? indices(A)[d] : OneTo(1)
 end
@@ -901,7 +901,7 @@ function _getindex(::IndexLinear, A::AbstractArray, I::Int...)
 end
 _to_linear_index(A::AbstractArray, i::Int) = i
 _to_linear_index(A::AbstractVector, i::Int, I::Int...) = i # TODO: DEPRECATE FOR #14770
-_to_linear_index{T,N}(A::AbstractArray{T,N}, I::Vararg{Int,N}) = (@_inline_meta; sub2ind(A, I...))
+_to_linear_index(A::AbstractArray{T,N}, I::Vararg{Int,N}) where {T,N} = (@_inline_meta; sub2ind(A, I...))
 _to_linear_index(A::AbstractArray) = 1 # TODO: DEPRECATE FOR #14770
 _to_linear_index(A::AbstractArray, I::Int...) = (@_inline_meta; sub2ind(A, I...)) # TODO: DEPRECATE FOR #14770
 
@@ -916,16 +916,16 @@ function _getindex(::IndexCartesian, A::AbstractArray, I::Int...)
     @inbounds r = getindex(A, _to_subscript_indices(A, I...)...)
     r
 end
-function _getindex{T,N}(::IndexCartesian, A::AbstractArray{T,N}, I::Vararg{Int, N})
+function _getindex(::IndexCartesian, A::AbstractArray{T,N}, I::Vararg{Int, N}) where {T,N}
     @_propagate_inbounds_meta
     getindex(A, I...)
 end
 _to_subscript_indices(A::AbstractArray, i::Int) = (@_inline_meta; _unsafe_ind2sub(A, i))
-_to_subscript_indices{T,N}(A::AbstractArray{T,N}) = (@_inline_meta; fill_to_length((), 1, Val{N})) # TODO: DEPRECATE FOR #14770
-_to_subscript_indices{T}(A::AbstractArray{T,0}) = () # TODO: REMOVE FOR #14770
-_to_subscript_indices{T}(A::AbstractArray{T,0}, i::Int) = () # TODO: REMOVE FOR #14770
-_to_subscript_indices{T}(A::AbstractArray{T,0}, I::Int...) = () # TODO: DEPRECATE FOR #14770
-function _to_subscript_indices{T,N}(A::AbstractArray{T,N}, I::Int...) # TODO: DEPRECATE FOR #14770
+_to_subscript_indices(A::AbstractArray{T,N}) where {T,N} = (@_inline_meta; fill_to_length((), 1, Val{N})) # TODO: DEPRECATE FOR #14770
+_to_subscript_indices(A::AbstractArray{T,0}) where {T} = () # TODO: REMOVE FOR #14770
+_to_subscript_indices(A::AbstractArray{T,0}, i::Int) where {T} = () # TODO: REMOVE FOR #14770
+_to_subscript_indices(A::AbstractArray{T,0}, I::Int...) where {T} = () # TODO: DEPRECATE FOR #14770
+function _to_subscript_indices(A::AbstractArray{T,N}, I::Int...) where {T,N} # TODO: DEPRECATE FOR #14770
     @_inline_meta
     J, Jrem = IteratorsMD.split(I, Val{N})
     _to_subscript_indices(A, J, Jrem)
@@ -946,7 +946,7 @@ function __to_subscript_indices(A::AbstractArray,
     (J..., map(first, tail(_remaining_size(J, indices(A))))...)
 end
 _to_subscript_indices(A, J::Tuple, Jrem::Tuple) = J # already bounds-checked, safe to drop
-_to_subscript_indices{T,N}(A::AbstractArray{T,N}, I::Vararg{Int,N}) = I
+_to_subscript_indices(A::AbstractArray{T,N}, I::Vararg{Int,N}) where {T,N} = I
 _remaining_size(::Tuple{Any}, t::Tuple) = t
 _remaining_size(h::Tuple, t::Tuple) = (@_inline_meta; _remaining_size(tail(h), tail(t)))
 _unsafe_ind2sub(::Tuple{}, i) = () # ind2sub may throw(BoundsError()) in this case
@@ -979,7 +979,7 @@ function _setindex!(::IndexLinear, A::AbstractArray, v, I::Int...)
 end
 
 # IndexCartesian Scalar indexing
-function _setindex!{T,N}(::IndexCartesian, A::AbstractArray{T,N}, v, I::Vararg{Int, N})
+function _setindex!(::IndexCartesian, A::AbstractArray{T,N}, v, I::Vararg{Int, N}) where {T,N}
     @_propagate_inbounds_meta
     setindex!(A, v, I...)
 end
@@ -1051,8 +1051,8 @@ promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
 #TODO: ERROR CHECK
 cat(catdim::Integer) = Array{Any,1}(0)
 
-typed_vcat{T}(::Type{T}) = Array{T,1}(0)
-typed_hcat{T}(::Type{T}) = Array{T,1}(0)
+typed_vcat(::Type{T}) where {T} = Array{T,1}(0)
+typed_hcat(::Type{T}) where {T} = Array{T,1}(0)
 
 ## cat: special cases
 vcat(X::T...) where {T}         = T[ X[i] for i=1:length(X) ]
@@ -1062,13 +1062,13 @@ hcat(X::T...) where {T<:Number} = T[ X[j] for i=1:1, j=1:length(X) ]
 
 vcat(X::Number...) = hvcat_fill(Array{promote_typeof(X...)}(length(X)), X)
 hcat(X::Number...) = hvcat_fill(Array{promote_typeof(X...)}(1,length(X)), X)
-typed_vcat{T}(::Type{T}, X::Number...) = hvcat_fill(Array{T,1}(length(X)), X)
-typed_hcat{T}(::Type{T}, X::Number...) = hvcat_fill(Array{T,2}(1,length(X)), X)
+typed_vcat(::Type{T}, X::Number...) where {T} = hvcat_fill(Array{T,1}(length(X)), X)
+typed_hcat(::Type{T}, X::Number...) where {T} = hvcat_fill(Array{T,2}(1,length(X)), X)
 
 vcat(V::AbstractVector...) = typed_vcat(promote_eltype(V...), V...)
 vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
 
-function typed_vcat{T}(::Type{T}, V::AbstractVector...)
+function typed_vcat(::Type{T}, V::AbstractVector...) where T
     n::Int = 0
     for Vk in V
         n += length(Vk)
@@ -1087,7 +1087,7 @@ end
 hcat(A::AbstractVecOrMat...) = typed_hcat(promote_eltype(A...), A...)
 hcat(A::AbstractVecOrMat{T}...) where {T} = typed_hcat(T, A...)
 
-function typed_hcat{T}(::Type{T}, A::AbstractVecOrMat...)
+function typed_hcat(::Type{T}, A::AbstractVecOrMat...) where T
     nargs = length(A)
     nrows = size(A[1], 1)
     ncols = 0
@@ -1124,7 +1124,7 @@ end
 vcat(A::AbstractMatrix...) = typed_vcat(promote_eltype(A...), A...)
 vcat(A::AbstractMatrix{T}...) where {T} = typed_vcat(T, A...)
 
-function typed_vcat{T}(::Type{T}, A::AbstractMatrix...)
+function typed_vcat(::Type{T}, A::AbstractMatrix...) where T
     nargs = length(A)
     nrows = sum(a->size(a, 1), A)::Int
     ncols = size(A[1], 2)
@@ -1200,7 +1200,7 @@ function cat_t(dims, T::Type, X...)
     return _cat(A, shape, catdims, X...)
 end
 
-function _cat{N}(A, shape::NTuple{N}, catdims, X...)
+function _cat(A, shape::NTuple{N}, catdims, X...) where N
     offsets = zeros(Int, N)
     inds = Vector{UnitRange{Int}}(N)
     concat = copy!(zeros(Bool, N), catdims)
@@ -1295,7 +1295,7 @@ hcat(X...) = cat(Val{2}, X...)
 typed_vcat(T::Type, X...) = cat_t(Val{1}, T, X...)
 typed_hcat(T::Type, X...) = cat_t(Val{2}, T, X...)
 
-cat{T}(catdims, A::AbstractArray{T}...) = cat_t(catdims, T, A...)
+cat(catdims, A::AbstractArray{T}...) where {T} = cat_t(catdims, T, A...)
 
 # The specializations for 1 and 2 inputs are important
 # especially when running with --inline=no, see #11158
@@ -1362,9 +1362,9 @@ If the first argument is a single integer `n`, then all block rows are assumed t
 block columns.
 """
 hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
-hvcat{T}(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat{T}...) = typed_hvcat(T, rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat{T}...) where {T} = typed_hvcat(T, rows, xs...)
 
-function typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat...)
+function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat...) where T
     nbr = length(rows)  # number of block rows
 
     nc = 0
@@ -1408,9 +1408,9 @@ function typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMa
 end
 
 hvcat(rows::Tuple{Vararg{Int}}) = []
-typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}) = Array{T,1}(0)
+typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}) where {T} = Array{T,1}(0)
 
-function hvcat{T<:Number}(rows::Tuple{Vararg{Int}}, xs::T...)
+function hvcat(rows::Tuple{Vararg{Int}}, xs::T...) where T<:Number
     nr = length(rows)
     nc = rows[1]
 
@@ -1445,7 +1445,7 @@ end
 
 hvcat(rows::Tuple{Vararg{Int}}, xs::Number...) = typed_hvcat(promote_typeof(xs...), rows, xs...)
 
-function typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...)
+function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
     nr = length(rows)
     nc = rows[1]
     for i = 2:nr
@@ -1472,7 +1472,7 @@ function hvcat(rows::Tuple{Vararg{Int}}, as...)
     vcat(rs...)
 end
 
-function typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}, as...)
+function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T
     nbr = length(rows)  # number of block rows
     rs = Array{Any,1}(nbr)
     a = 1

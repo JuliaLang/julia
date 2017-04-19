@@ -506,7 +506,7 @@ end
 # Logical and linear indexing into SparseMatrices
 getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}) = _logical_index(A, I) # Ambiguities
 getindex(A::SparseMatrixCSC, I::AbstractArray{Bool}) = _logical_index(A, I)
-function _logical_index{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractArray{Bool})
+function _logical_index(A::SparseMatrixCSC{Tv}, I::AbstractArray{Bool}) where Tv
     checkbounds(A, I)
     n = sum(I)
     nnzB = min(n, nnz(A))
@@ -674,7 +674,7 @@ end
 
 ### getindex
 
-function _spgetindex{Tv,Ti}(m::Int, nzind::AbstractVector{Ti}, nzval::AbstractVector{Tv}, i::Integer)
+function _spgetindex(m::Int, nzind::AbstractVector{Ti}, nzval::AbstractVector{Tv}, i::Integer) where {Tv,Ti}
     ii = searchsortedfirst(nzind, convert(Ti, i))
     (ii <= m && nzind[ii] == i) ? nzval[ii] : zero(Tv)
 end
@@ -840,7 +840,7 @@ complex(x::AbstractSparseVector) =
 # of _absspvec_hcat below. The <:Integer qualifications are necessary for correct dispatch.
 hcat(X::SparseVector{Tv,Ti}...) where {Tv,Ti<:Integer} = _absspvec_hcat(X...)
 hcat(X::AbstractSparseVector{Tv,Ti}...) where {Tv,Ti<:Integer} = _absspvec_hcat(X...)
-function _absspvec_hcat{Tv,Ti}(X::AbstractSparseVector{Tv,Ti}...)
+function _absspvec_hcat(X::AbstractSparseVector{Tv,Ti}...) where {Tv,Ti}
     # check sizes
     n = length(X)
     m = length(X[1])
@@ -875,7 +875,7 @@ end
 # of _absspvec_vcat below. The <:Integer qualifications are necessary for correct dispatch.
 vcat(X::SparseVector{Tv,Ti}...) where {Tv,Ti<:Integer} = _absspvec_vcat(X...)
 vcat(X::AbstractSparseVector{Tv,Ti}...) where {Tv,Ti<:Integer} = _absspvec_vcat(X...)
-function _absspvec_vcat{Tv,Ti}(X::AbstractSparseVector{Tv,Ti}...)
+function _absspvec_vcat(X::AbstractSparseVector{Tv,Ti}...) where {Tv,Ti}
     # check sizes
     n = length(X)
     tnnz = 0
@@ -973,10 +973,10 @@ hcat(A::Vector...) = Base.typed_hcat(promote_eltype(A...), A...)
 hcat(A::_DenseConcatGroup...) = Base.typed_hcat(promote_eltype(A...), A...)
 hvcat(rows::Tuple{Vararg{Int}}, xs::_DenseConcatGroup...) = Base.typed_hvcat(promote_eltype(xs...), rows, xs...)
 # For performance, specially handle the case where the matrices/vectors have homogeneous eltype
-cat{T}(catdims, xs::_TypedDenseConcatGroup{T}...) = Base.cat_t(catdims, T, xs...)
+cat(catdims, xs::_TypedDenseConcatGroup{T}...) where {T} = Base.cat_t(catdims, T, xs...)
 vcat(A::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_vcat(T, A...)
 hcat(A::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_hcat(T, A...)
-hvcat{T}(rows::Tuple{Vararg{Int}}, xs::_TypedDenseConcatGroup{T}...) = Base.typed_hvcat(T, rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_hvcat(T, rows, xs...)
 
 
 ### math functions
@@ -993,7 +993,7 @@ conj(x::SparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), conj(nonze
 #
 macro unarymap_nz2z_z2z(op, TF)
     esc(quote
-        function $(op){Tv<:$(TF),Ti<:Integer}(x::AbstractSparseVector{Tv,Ti})
+        function $(op)(x::AbstractSparseVector{Tv,Ti}) where Tv<:$(TF) where Ti<:Integer
             R = typeof($(op)(zero(Tv)))
             xnzind = nonzeroinds(x)
             xnzval = nonzeros(x)
@@ -1039,7 +1039,7 @@ end
 
 macro unarymap_z2nz(op, TF)
     esc(quote
-        function $(op){Tv<:$(TF)}(x::AbstractSparseVector{Tv,<:Integer})
+        function $(op)(x::AbstractSparseVector{Tv,<:Integer}) where Tv<:$(TF)
             v0 = $(op)(zero(Tv))
             R = typeof(v0)
             xnzind = nonzeroinds(x)

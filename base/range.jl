@@ -493,7 +493,7 @@ function getindex(r::Union{StepRangeLen,LinSpace}, i::Integer)
 end
 
 # This is separate to make it useful even when running with --check-bounds=yes
-function unsafe_getindex{T}(r::StepRangeLen{T}, i::Integer)
+function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
     u = i - r.offset
     T(r.ref + u*r.step)
 end
