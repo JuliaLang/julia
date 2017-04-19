@@ -189,8 +189,8 @@ function grow_to!{K,V}(dest::Associative{K,V}, itr, st)
     return dest
 end
 
-similar{K,V}(d::Dict{K,V}) = Dict{K,V}()
-similar{K,V}(d::Dict, ::Type{Pair{K,V}}) = Dict{K,V}()
+similar(d::Dict{K,V}) where {K,V} = Dict{K,V}()
+similar(d::Dict, ::Type{Pair{K,V}}) where {K,V} = Dict{K,V}()
 
 # conversion between Dict types
 function convert(::Type{Dict{K,V}},d::Associative) where V where K
@@ -408,7 +408,7 @@ function _setindex!(h::Dict, v, key, index)
     end
 end
 
-function setindex!{K,V}(h::Dict{K,V}, v0, key0)
+function setindex!(h::Dict{K,V}, v0, key0) where V where K
     key = convert(K, key0)
     if !isequal(key, key0)
         throw(ArgumentError("$key0 is not a valid key for type $K"))
@@ -416,7 +416,7 @@ function setindex!{K,V}(h::Dict{K,V}, v0, key0)
     setindex!(h, v0, key)
 end
 
-function setindex!{K,V}(h::Dict{K,V}, v0, key::K)
+function setindex!(h::Dict{K,V}, v0, key::K) where V where K
     v = convert(V, v0)
     index = ht_keyindex2(h, key)
 
@@ -576,7 +576,7 @@ function start(t::Dict)
     return i
 end
 done(t::Dict, i) = i > length(t.vals)
-next{K,V}(t::Dict{K,V}, i) = (Pair{K,V}(t.keys[i],t.vals[i]), skip_deleted(t,i+1))
+next(t::Dict{K,V}, i) where {K,V} = (Pair{K,V}(t.keys[i],t.vals[i]), skip_deleted(t,i+1))
 
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
@@ -660,7 +660,7 @@ end
 
 # this actually defines reverse iteration (e.g. it should not be used for merge/copy/filter type operations)
 start(t::ImmutableDict) = t
-next{K,V}(::ImmutableDict{K,V}, t) = (Pair{K,V}(t.key, t.value), t.parent)
+next(::ImmutableDict{K,V}, t) where {K,V} = (Pair{K,V}(t.key, t.value), t.parent)
 done(::ImmutableDict, t) = !isdefined(t, :parent)
 length(t::ImmutableDict) = count(x->true, t)
 isempty(t::ImmutableDict) = done(t, start(t))

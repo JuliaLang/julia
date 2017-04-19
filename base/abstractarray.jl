@@ -509,14 +509,14 @@ julia> similar(falses(10), Float64, 2, 4)
 ```
 
 """
-similar{T}(a::AbstractArray{T})                             = similar(a, T)
-similar{T}(a::AbstractArray, ::Type{T})                     = similar(a, T, to_shape(indices(a)))
-similar{T}(a::AbstractArray{T}, dims::Tuple)                = similar(a, T, to_shape(dims))
-similar{T}(a::AbstractArray{T}, dims::DimOrInd...)          = similar(a, T, to_shape(dims))
-similar{T}(a::AbstractArray, ::Type{T}, dims::DimOrInd...)  = similar(a, T, to_shape(dims))
-similar{T}(a::AbstractArray, ::Type{T}, dims::NeedsShaping) = similar(a, T, to_shape(dims))
+similar(a::AbstractArray{T}) where {T}                             = similar(a, T)
+similar(a::AbstractArray, ::Type{T}) where {T}                     = similar(a, T, to_shape(indices(a)))
+similar(a::AbstractArray{T}, dims::Tuple) where {T}                = similar(a, T, to_shape(dims))
+similar(a::AbstractArray{T}, dims::DimOrInd...) where {T}          = similar(a, T, to_shape(dims))
+similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, T, to_shape(dims))
+similar(a::AbstractArray, ::Type{T}, dims::NeedsShaping) where {T} = similar(a, T, to_shape(dims))
 # similar creates an Array by default
-similar{T,N}(a::AbstractArray, ::Type{T}, dims::Dims{N})    = Array{T,N}(dims)
+similar(a::AbstractArray, ::Type{T}, dims::Dims{N}) where {T,N}    = Array{T,N}(dims)
 
 to_shape(::Tuple{}) = ()
 to_shape(dims::Dims) = dims
@@ -841,10 +841,10 @@ full(x::AbstractArray) = x
 
 ## range conversions ##
 
-map{T<:Real}(::Type{T}, r::StepRange) = T(r.start):T(r.step):T(last(r))
-map{T<:Real}(::Type{T}, r::UnitRange) = T(r.start):T(last(r))
-map{T<:AbstractFloat}(::Type{T}, r::StepRangeLen) = convert(StepRangeLen{T}, r)
-function map{T<:AbstractFloat}(::Type{T}, r::LinSpace)
+map(::Type{T}, r::StepRange) where {T<:Real} = T(r.start):T(r.step):T(last(r))
+map(::Type{T}, r::UnitRange) where {T<:Real} = T(r.start):T(last(r))
+map(::Type{T}, r::StepRangeLen) where {T<:AbstractFloat} = convert(StepRangeLen{T}, r)
+function map(::Type{T}, r::LinSpace) where T<:AbstractFloat
     LinSpace(T(r.start), T(r.stop), length(r))
 end
 
@@ -1847,7 +1847,7 @@ end
 
 ## 1 argument
 
-function map!{F}(f::F, dest::AbstractArray, A::AbstractArray)
+function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
     for (i,j) in zip(eachindex(dest),eachindex(A))
         dest[i] = f(A[j])
     end
@@ -1881,7 +1881,7 @@ julia> map(+, [1, 2, 3], [10, 20, 30])
 map(f, A) = collect(Generator(f,A))
 
 ## 2 argument
-function map!{F}(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
+function map!(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray) where F
     for (i, j, k) in zip(eachindex(dest), eachindex(A), eachindex(B))
         dest[i] = f(A[j], B[k])
     end
@@ -1918,7 +1918,7 @@ julia> x
  6.0
 ```
 """
-map!{F}(f::F, dest::AbstractArray, As::AbstractArray...) = map_n!(f, dest, As)
+map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F} = map_n!(f, dest, As)
 
 map(f) = f()
 map(f, iters...) = collect(Generator(f, iters...))

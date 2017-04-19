@@ -126,20 +126,20 @@ copy!(dest::Array{T}, src::Array{T}) where {T} = copy!(dest, 1, src, 1, length(s
 
 copy(a::T) where {T<:Array} = ccall(:jl_array_copy, Ref{T}, (Any,), a)
 
-function reinterpret{T,S}(::Type{T}, a::Array{S,1})
+function reinterpret(::Type{T}, a::Array{S,1}) where T where S
     nel = Int(div(length(a)*sizeof(S),sizeof(T)))
     # TODO: maybe check that remainder is zero?
     return reinterpret(T, a, (nel,))
 end
 
-function reinterpret{T,S}(::Type{T}, a::Array{S})
+function reinterpret(::Type{T}, a::Array{S}) where T where S
     if sizeof(S) != sizeof(T)
         throw(ArgumentError("result shape not specified"))
     end
     reinterpret(T, a, size(a))
 end
 
-function reinterpret{T,S,N}(::Type{T}, a::Array{S}, dims::NTuple{N,Int})
+function reinterpret(::Type{T}, a::Array{S}, dims::NTuple{N,Int}) where T where S where N
     if !isbits(T)
         throw(ArgumentError("cannot reinterpret Array{$(S)} to ::Type{Array{$(T)}}, type $(T) is not a bits type"))
     end
@@ -174,13 +174,13 @@ end
 
 ## Constructors ##
 
-similar{T}(a::Array{T,1})                    = Array{T,1}(size(a,1))
-similar{T}(a::Array{T,2})                    = Array{T,2}(size(a,1), size(a,2))
-similar{T}(a::Array{T,1}, S::Type)           = Array{S,1}(size(a,1))
-similar{T}(a::Array{T,2}, S::Type)           = Array{S,2}(size(a,1), size(a,2))
-similar{T}(a::Array{T}, m::Int)              = Array{T,1}(m)
-similar{N}(a::Array, T::Type, dims::Dims{N}) = Array{T,N}(dims)
-similar{T,N}(a::Array{T}, dims::Dims{N})     = Array{T,N}(dims)
+similar(a::Array{T,1}) where {T}                    = Array{T,1}(size(a,1))
+similar(a::Array{T,2}) where {T}                    = Array{T,2}(size(a,1), size(a,2))
+similar(a::Array{T,1}, S::Type) where {T}           = Array{S,1}(size(a,1))
+similar(a::Array{T,2}, S::Type) where {T}           = Array{S,2}(size(a,1), size(a,2))
+similar(a::Array{T}, m::Int) where {T}              = Array{T,1}(m)
+similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(dims)
+similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(dims)
 
 # T[x...] constructs Array{T,1}
 function getindex{T}(::Type{T}, vals...)
@@ -210,7 +210,7 @@ function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
     return a
 end
 
-function fill!{T<:Union{Integer,AbstractFloat}}(a::Array{T}, x)
+function fill!(a::Array{T}, x) where T<:Union{Integer,AbstractFloat}
     xT = convert(T, x)
     for i in eachindex(a)
         @inbounds a[i] = xT
@@ -534,8 +534,8 @@ function getindex{S}(A::Array{S}, I::Range{Int})
 end
 
 ## Indexing: setindex! ##
-setindex!{T}(A::Array{T}, x, i1::Int) = arrayset(A, convert(T,x)::T, i1)
-setindex!{T}(A::Array{T}, x, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayset(A, convert(T,x)::T, i1, i2, I...)) # TODO: REMOVE FOR #14770
+setindex!(A::Array{T}, x, i1::Int) where {T} = arrayset(A, convert(T,x)::T, i1)
+setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} = (@_inline_meta; arrayset(A, convert(T,x)::T, i1, i2, I...)) # TODO: REMOVE FOR #14770
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})
@@ -565,7 +565,7 @@ function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
 end
 
 # Faster contiguous setindex! with copy!
-function setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int})
+function setindex!(A::Array{T}, X::Array{T}, I::UnitRange{Int}) where T
     @_inline_meta
     @boundscheck checkbounds(A, I)
     lI = length(I)
@@ -575,7 +575,7 @@ function setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int})
     end
     return A
 end
-function setindex!{T}(A::Array{T}, X::Array{T}, c::Colon)
+function setindex!(A::Array{T}, X::Array{T}, c::Colon) where T
     @_inline_meta
     lI = length(A)
     @boundscheck setindex_shape_check(X, lI)
@@ -586,7 +586,7 @@ function setindex!{T}(A::Array{T}, X::Array{T}, c::Colon)
 end
 
 setindex!(A::Array, x::Number, ::Colon) = fill!(A, x)
-setindex!{T, N}(A::Array{T, N}, x::Number, ::Vararg{Colon, N}) = fill!(A, x)
+setindex!(A::Array{T, N}, x::Number, ::Vararg{Colon, N}) where {T, N} = fill!(A, x)
 
 # efficiently grow an array
 

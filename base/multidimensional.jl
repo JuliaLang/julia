@@ -784,7 +784,7 @@ end
 
 ### from abstractarray.jl
 
-function fill!{T}(A::AbstractArray{T}, x)
+function fill!(A::AbstractArray{T}, x) where T
     xT = convert(T, x)
     for I in eachindex(A)
         @inbounds A[I] = xT

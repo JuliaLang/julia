@@ -1196,7 +1196,7 @@ last{T}(r::Use_StepRangeLen_Instead{T}) = convert(T, (r.start + (r.len-1)*r.step
 
 start(r::Use_StepRangeLen_Instead) = 0
 done(r::Use_StepRangeLen_Instead, i::Int) = length(r) <= i
-next{T}(r::Use_StepRangeLen_Instead{T}, i::Int) =
+next(r::Use_StepRangeLen_Instead{T}, i::Int) where {T} =
     (convert(T, (r.start + i*r.step)/r.divisor), i+1)
 
 function getindex{T}(r::Use_StepRangeLen_Instead{T}, i::Integer)

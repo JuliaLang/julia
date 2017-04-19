@@ -277,7 +277,7 @@ implementation detail, but typically the choice that maximizes performance
 would be used. If `x` has a value, then the return type is guaranteed to be of
 type `Nullable{typeof(f(x))}`.
 """
-function map{T}(f, x::Nullable{T})
+function map(f, x::Nullable{T}) where T
     S = promote_op(f, T)
     if isleaftype(S) && null_safe_op(f, T)
         Nullable(f(unsafe_get(x)), !isnull(x))

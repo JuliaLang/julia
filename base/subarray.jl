@@ -202,7 +202,7 @@ function getindex(V::FastContiguousSubArray, i::Int)
     r
 end
 
-function setindex!{T,N}(V::SlowSubArray{T,N}, x, I::Vararg{Int,N})
+function setindex!(V::SlowSubArray{T,N}, x, I::Vararg{Int,N}) where {T,N}
     @_inline_meta
     @boundscheck checkbounds(V, I...)
     @inbounds V.parent[reindex(V, V.indexes, I)...] = x

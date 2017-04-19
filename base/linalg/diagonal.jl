@@ -55,7 +55,7 @@ convert(::Type{Matrix}, D::Diagonal) = diagm(D.diag)
 convert(::Type{Array}, D::Diagonal) = convert(Matrix, D)
 full(D::Diagonal) = convert(Array, D)
 
-function similar{T}(D::Diagonal, ::Type{T})
+function similar(D::Diagonal, ::Type{T}) where T
     return Diagonal{T}(similar(D.diag, T))
 end
 

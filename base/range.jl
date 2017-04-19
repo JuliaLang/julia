@@ -432,21 +432,21 @@ function next(r::LinSpace, i::Int)
 end
 
 start(r::StepRange) = oftype(r.start + r.step, r.start)
-next{T}(r::StepRange{T}, i) = (convert(T,i), i+r.step)
+next(r::StepRange{T}, i) where {T} = (convert(T,i), i+r.step)
 done(r::StepRange, i) = isempty(r) | (i < min(r.start, r.stop)) | (i > max(r.start, r.stop))
 done(r::StepRange, i::Integer) =
     isempty(r) | (i == oftype(i, r.stop) + r.step)
 
 # see also twiceprecision.jl
 start(r::StepRangeLen) = (unsafe_getindex(r, 1), 1)
-next{T}(r::StepRangeLen{T}, s) = s[1], (T(s[1]+r.step), s[2]+1)
+next(r::StepRangeLen{T}, s) where {T} = s[1], (T(s[1]+r.step), s[2]+1)
 done(r::StepRangeLen, s) = s[2] > length(r)
 
-start{T}(r::UnitRange{T}) = oftype(r.start + oneunit(T), r.start)
-next{T}(r::AbstractUnitRange{T}, i) = (convert(T, i), i + oneunit(T))
-done{T}(r::AbstractUnitRange{T}, i) = i == oftype(i, r.stop) + oneunit(T)
+start(r::UnitRange{T}) where {T} = oftype(r.start + oneunit(T), r.start)
+next(r::AbstractUnitRange{T}, i) where {T} = (convert(T, i), i + oneunit(T))
+done(r::AbstractUnitRange{T}, i) where {T} = i == oftype(i, r.stop) + oneunit(T)
 
-start{T}(r::OneTo{T}) = oneunit(T)
+start(r::OneTo{T}) where {T} = oneunit(T)
 
 # some special cases to favor default Int type to avoid overflow
 let smallint = (Int === Int64 ?
@@ -455,9 +455,9 @@ let smallint = (Int === Int64 ?
     global start
     global next
     start(r::StepRange{<:smallint}) = convert(Int, r.start)
-    next{T<:smallint}(r::StepRange{T}, i) = (i % T, i + r.step)
+    next(r::StepRange{T}, i) where {T<:smallint} = (i % T, i + r.step)
     start(r::UnitRange{<:smallint}) = convert(Int, r.start)
-    next{T<:smallint}(r::AbstractUnitRange{T}, i) = (i % T, i + 1)
+    next(r::AbstractUnitRange{T}, i) where {T<:smallint} = (i % T, i + 1)
     start(r::OneTo{<:smallint}) = 1
 end
 

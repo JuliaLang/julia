@@ -36,10 +36,10 @@ nonzeros(x::SparseVector) = x.nzval
 nonzeroinds(x::SparseVector) = x.nzind
 
 similar(x::SparseVector, Tv::Type=eltype(x)) = SparseVector(x.n, copy(x.nzind), Vector{Tv}(length(x.nzval)))
-function similar{Tv,Ti}(x::SparseVector, ::Type{Tv}, ::Type{Ti})
+function similar(x::SparseVector, ::Type{Tv}, ::Type{Ti}) where {Tv,Ti}
     return SparseVector(x.n, copy!(similar(x.nzind, Ti), x.nzind), copy!(similar(x.nzval, Tv), x.nzval))
 end
-similar{T}(x::SparseVector, ::Type{T}, D::Dims) = spzeros(T, D...)
+similar(x::SparseVector, ::Type{T}, D::Dims) where {T} = spzeros(T, D...)
 
 ### Construct empty sparse vector
 
@@ -225,7 +225,7 @@ end
 
 ### Element access
 
-function setindex!{Tv,Ti<:Integer}(x::SparseVector{Tv,Ti}, v::Tv, i::Ti)
+function setindex!(x::SparseVector{Tv,Ti}, v::Tv, i::Ti) where {Tv,Ti<:Integer}
     checkbounds(x, i)
     nzind = nonzeroinds(x)
     nzval = nonzeros(x)
@@ -243,7 +243,7 @@ function setindex!{Tv,Ti<:Integer}(x::SparseVector{Tv,Ti}, v::Tv, i::Ti)
     x
 end
 
-setindex!{Tv, Ti<:Integer}(x::SparseVector{Tv,Ti}, v, i::Integer) =
+setindex!(x::SparseVector{Tv,Ti}, v, i::Integer) where {Tv, Ti<:Integer} =
     setindex!(x, convert(Tv, v), convert(Ti, i))
 
 
@@ -817,7 +817,7 @@ vec(x::AbstractSparseVector) = x
 copy(x::AbstractSparseVector) =
     SparseVector(length(x), copy(nonzeroinds(x)), copy(nonzeros(x)))
 
-function reinterpret{T,Tv}(::Type{T}, x::AbstractSparseVector{Tv})
+function reinterpret(::Type{T}, x::AbstractSparseVector{Tv}) where {T,Tv}
     sizeof(T) == sizeof(Tv) ||
         throw(ArgumentError("reinterpret of sparse vectors only supports element types of the same size."))
     SparseVector(length(x), copy(nonzeroinds(x)), reinterpret(T, nonzeros(x)))

@@ -93,7 +93,7 @@ function size(A::SymTridiagonal, d::Integer)
     end
 end
 
-similar{T}(S::SymTridiagonal, ::Type{T}) = SymTridiagonal{T}(similar(S.dv, T), similar(S.ev, T))
+similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal{T}(similar(S.dv, T), similar(S.ev, T))
 
 #Elementary operations
 broadcast(::typeof(abs), M::SymTridiagonal) = SymTridiagonal(abs.(M.dv), abs.(M.ev))
@@ -499,7 +499,7 @@ end
 convert{T}(::Type{Matrix}, M::Tridiagonal{T}) = convert(Matrix{T}, M)
 convert(::Type{Array}, M::Tridiagonal) = convert(Matrix, M)
 full(M::Tridiagonal) = convert(Array, M)
-function similar{T}(M::Tridiagonal, ::Type{T})
+function similar(M::Tridiagonal, ::Type{T}) where T
     Tridiagonal{T}(similar(M.dl, T), similar(M.d, T), similar(M.du, T), similar(M.du2, T))
 end
 

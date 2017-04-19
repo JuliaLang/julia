@@ -390,7 +390,7 @@ mutable struct ChannelIterState{T}
     ChannelIterState{T}(has::Bool) where {T} = new(has)
 end
 
-start{T}(c::Channel{T}) = ChannelIterState{T}(false)
+start(c::Channel{T}) where {T} = ChannelIterState{T}(false)
 function done(c::Channel, state::ChannelIterState)
     try
         # we are waiting either for more data or channel to be closed

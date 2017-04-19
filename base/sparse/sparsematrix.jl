@@ -163,7 +163,7 @@ end
 
 ## Reinterpret and Reshape
 
-function reinterpret{T,Tv}(::Type{T}, a::SparseMatrixCSC{Tv})
+function reinterpret(::Type{T}, a::SparseMatrixCSC{Tv}) where T where Tv
     if sizeof(T) != sizeof(Tv)
         throw(ArgumentError("SparseMatrixCSC reinterpret is only supported for element types of the same size"))
     end
@@ -206,7 +206,7 @@ function sparse_compute_reshaped_colptr_and_rowval{Ti}(colptrS::Vector{Ti}, rowv
     end
 end
 
-function reinterpret{T,Tv,Ti,N}(::Type{T}, a::SparseMatrixCSC{Tv,Ti}, dims::NTuple{N,Int})
+function reinterpret(::Type{T}, a::SparseMatrixCSC{Tv,Ti}, dims::NTuple{N,Int}) where {T,Tv,Ti,N}
     if sizeof(T) != sizeof(Tv)
         throw(ArgumentError("SparseMatrixCSC reinterpret is only supported for element types of the same size"))
     end
@@ -293,7 +293,7 @@ function copy!(A::SparseMatrixCSC, B::SparseMatrixCSC)
 end
 
 similar(S::SparseMatrixCSC, Tv::Type=eltype(S)) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), Array{Tv}(length(S.nzval)))
-function similar{Tv,Ti}(S::SparseMatrixCSC, ::Type{Tv}, ::Type{Ti})
+function similar(S::SparseMatrixCSC, ::Type{Tv}, ::Type{Ti}) where Tv where Ti
     new_colptr = copy!(similar(S.colptr, Ti), S.colptr)
     new_rowval = copy!(similar(S.rowval, Ti), S.rowval)
     new_nzval =  copy!(similar(S.nzval,  Tv), S.nzval)
@@ -2208,10 +2208,10 @@ getindex(A::SparseMatrixCSC, I::AbstractVector{<:Integer}, J::AbstractVector{Boo
 getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{<:Integer}) = A[find(I),J]
 
 ## setindex!
-function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, v, i::Integer, j::Integer)
+function setindex!(A::SparseMatrixCSC{Tv,Ti}, v, i::Integer, j::Integer) where Tv where Ti
     setindex!(A, convert(Tv, v), convert(Ti, i), convert(Ti, j))
 end
-function setindex!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv,Ti}, v::Tv, i::Ti, j::Ti)
+function setindex!(A::SparseMatrixCSC{Tv,Ti}, v::Tv, i::Ti, j::Ti) where Tv where Ti<:Integer
     if !((1 <= i <= A.m) & (1 <= j <= A.n))
         throw(BoundsError(A, (i,j)))
     end
@@ -2408,17 +2408,17 @@ function _spsetnz_setindex!{Tv}(A::SparseMatrixCSC{Tv}, x::Tv,
     return A
 end
 
-setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, S::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) =
+setindex!(A::SparseMatrixCSC{Tv,Ti}, S::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) where {Tv,Ti,T<:Integer} =
       setindex!(A, convert(SparseMatrixCSC{Tv,Ti}, S), I, J)
 
 setindex!(A::SparseMatrixCSC, v::AbstractVector, I::AbstractVector{<:Integer}, j::Integer) = setindex!(A, v, I, [j])
 setindex!(A::SparseMatrixCSC, v::AbstractVector, i::Integer, J::AbstractVector{<:Integer}) = setindex!(A, v, [i], J)
-setindex!{T<:Integer}(A::SparseMatrixCSC, v::AbstractVector, I::AbstractVector{T}, J::AbstractVector{T}) =
+setindex!(A::SparseMatrixCSC, v::AbstractVector, I::AbstractVector{T}, J::AbstractVector{T}) where {T<:Integer} =
       setindex!(A, reshape(v, length(I), length(J)), I, J)
 
 
 # A[I,J] = B
-function setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, I::AbstractVector{T}, J::AbstractVector{T})
+function setindex!(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, I::AbstractVector{T}, J::AbstractVector{T}) where {Tv,Ti,T<:Integer}
     if size(B,1) != length(I) || size(B,2) != length(J)
         throw(DimensionMismatch(""))
     end
@@ -3238,7 +3238,7 @@ length(d::SpDiagIterator) = d.n
 start(d::SpDiagIterator) = 1
 done(d::SpDiagIterator, j) = j > d.n
 
-function next{Tv}(d::SpDiagIterator{Tv}, j)
+function next(d::SpDiagIterator{Tv}, j) where Tv
     A = d.A
     r1 = Int(A.colptr[j])
     r2 = Int(A.colptr[j+1]-1)

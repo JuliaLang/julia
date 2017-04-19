@@ -534,8 +534,8 @@ end
 convert(::Type{BitArray{N}}, B::BitArray{N}) where {N} = B
 convert(::Type{AbstractArray{T,N}}, B::BitArray{N}) where {T,N} = convert(Array{T,N}, B)
 
-reinterpret{N}(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) = reinterpret(B, dims)
-reinterpret{N}(B::BitArray, dims::NTuple{N,Int}) = reshape(B, dims)
+reinterpret(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) where {N} = reinterpret(B, dims)
+reinterpret(B::BitArray, dims::NTuple{N,Int}) where {N} = reshape(B, dims)
 
 ## Constructors from generic iterables ##
 

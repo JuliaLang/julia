@@ -153,7 +153,7 @@ unsafe_convert(::Type{T}, x::T) where {T} = x # unsafe_convert (like convert) de
 unsafe_convert(::Type{T}, x::T) where {T<:Ptr} = x  # to resolve ambiguity with the next method
 unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
 
-reinterpret{T}(::Type{T}, x) = bitcast(T, x)
+reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
 reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16,x)
 reinterpret(::Type{Signed}, x::Float16) = reinterpret(Int16,x)
 

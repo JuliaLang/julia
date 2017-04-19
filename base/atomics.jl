@@ -303,7 +303,7 @@ julia> x[]
 function atomic_min! end
 
 unsafe_convert(::Type{Ptr{T}}, x::Atomic{T}) where {T} = convert(Ptr{T}, pointer_from_objref(x))
-setindex!{T}(x::Atomic{T}, v) = setindex!(x, convert(T, v))
+setindex!(x::Atomic{T}, v) where {T} = setindex!(x, convert(T, v))
 
 const llvmtypes = Dict(
     Bool => "i1",
@@ -316,13 +316,13 @@ const llvmtypes = Dict(
     Float32 => "float",
     Float64 => "double",
 )
-inttype{T<:Integer}(::Type{T}) = T
+inttype(::Type{T}) where {T<:Integer} = T
 inttype(::Type{Float16}) = Int16
 inttype(::Type{Float32}) = Int32
 inttype(::Type{Float64}) = Int64
 
 
-alignment{T}(::Type{T}) = ccall(:jl_alignment, Cint, (Csize_t,), sizeof(T))
+alignment(::Type{T}) where {T} = ccall(:jl_alignment, Cint, (Csize_t,), sizeof(T))
 
 # All atomic operations have acquire and/or release semantics, depending on
 # whether the load or store values. Most of the time, this is what one wants

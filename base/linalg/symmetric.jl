@@ -114,10 +114,10 @@ function setindex!(A::Hermitian, v, i::Integer, j::Integer)
     end
 end
 
-similar{T}(A::Symmetric, ::Type{T}) = Symmetric(similar(A.data, T))
+similar(A::Symmetric, ::Type{T}) where {T} = Symmetric(similar(A.data, T))
 # Hermitian version can be simplified when check for imaginary part of
 # diagonal in Hermitian has been removed
-function similar{T}(A::Hermitian, ::Type{T})
+function similar(A::Hermitian, ::Type{T}) where T
     B = similar(A.data, T)
     for i = 1:size(A,1)
         B[i,i] = 0
