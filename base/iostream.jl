@@ -287,7 +287,7 @@ function read(s::IOStream)
             sz -= pos
         end
     end
-    b = Array{UInt8,1}(sz<=0 ? 1024 : sz)
+    b = StringVector(sz<=0 ? 1024 : sz)
     nr = readbytes_all!(s, b, typemax(Int))
     resize!(b, nr)
 end
