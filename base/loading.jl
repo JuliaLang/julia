@@ -246,6 +246,11 @@ const DEBUG_LOADING = Ref(false)
 # to synchronize multiple tasks trying to import/using something
 const package_locks = Dict{Symbol,Condition}()
 
+# to notify downstream consumers that a module was successfully loaded
+# Callbacks take the form (mod::Symbol) -> nothing.
+# WARNING: This is an experimental feature and might change later, without deprecation.
+const package_callbacks = Any[]
+
 # used to optionally track dependencies when requiring a module:
 const _concrete_dependencies = Any[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
 const _require_dependencies = Any[] # a list of (path, mtime) tuples that are the file dependencies of the module currently being precompiled
@@ -378,6 +383,14 @@ all platforms, including those with case-insensitive filesystems like macOS and
 Windows.
 """
 function require(mod::Symbol)
+    _require(mod::Symbol)
+    # After successfully loading notify downstream consumers
+    for callback in package_callbacks
+        invokelatest(callback, mod)
+    end
+end
+
+function _require(mod::Symbol)
     # dependency-tracking is only used for one top-level include(path),
     # and is not applied recursively to imported modules:
     old_track_dependencies = _track_dependencies[]
