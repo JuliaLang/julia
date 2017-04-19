@@ -151,7 +151,7 @@ julia> promote_type(Float32, BigInt)
 BigFloat
 ```
 """
-function promote_type{T,S}(::Type{T}, ::Type{S})
+function promote_type(::Type{T}, ::Type{S}) where {T,S}
     @_pure_meta
     # Try promote_rule in both orders. Typically only one is defined,
     # and there is a fallback returning Bottom below, so the common case is
@@ -329,31 +329,31 @@ end
 ## catch-alls to prevent infinite recursion when definitions are missing ##
 
 no_op_err(name, T) = error(name," not defined for ",T)
-+(x::T, y::T) where {T<:Number} = no_op_err("+", T)
-*(x::T, y::T) where {T<:Number} = no_op_err("*", T)
--(x::T, y::T) where {T<:Number} = no_op_err("-", T)
-/(x::T, y::T) where {T<:Number} = no_op_err("/", T)
-^(x::T, y::T) where {T<:Number} = no_op_err("^", T)
+(+)(x::T, y::T) where {T<:Number} = no_op_err("+", T)
+(*)(x::T, y::T) where {T<:Number} = no_op_err("*", T)
+(-)(x::T, y::T) where {T<:Number} = no_op_err("-", T)
+(/)(x::T, y::T) where {T<:Number} = no_op_err("/", T)
+(^)(x::T, y::T) where {T<:Number} = no_op_err("^", T)
 
-fma{T<:Number}(x::T, y::T, z::T) = no_op_err("fma", T)
+fma(x::T, y::T, z::T) where {T<:Number} = no_op_err("fma", T)
 fma(x::Integer, y::Integer, z::Integer) = x*y+z
-muladd{T<:Number}(x::T, y::T, z::T) = x*y+z
+muladd(x::T, y::T, z::T) where {T<:Number} = x*y+z
 
-(&){T<:Integer}(x::T, y::T) = no_op_err("&", T)
-(|){T<:Integer}(x::T, y::T) = no_op_err("|", T)
-xor{T<:Integer}(x::T, y::T) = no_op_err("xor", T)
+(&)(x::T, y::T) where {T<:Integer} = no_op_err("&", T)
+(|)(x::T, y::T) where {T<:Integer} = no_op_err("|", T)
+xor(x::T, y::T) where {T<:Integer} = no_op_err("xor", T)
 
-==(x::T, y::T) where {T<:Number} = x === y
- <{T<:Real}(x::T, y::T) = no_op_err("<" , T)
-<={T<:Real}(x::T, y::T) = no_op_err("<=", T)
+(==)(x::T, y::T) where {T<:Number} = x === y
+(< )(x::T, y::T) where {T<:Real} = no_op_err("<" , T)
+(<=)(x::T, y::T) where {T<:Real} = no_op_err("<=", T)
 
-rem{T<:Real}(x::T, y::T) = no_op_err("rem", T)
-mod{T<:Real}(x::T, y::T) = no_op_err("mod", T)
+rem(x::T, y::T) where {T<:Real} = no_op_err("rem", T)
+mod(x::T, y::T) where {T<:Real} = no_op_err("mod", T)
 
 min(x::Real) = x
 max(x::Real) = x
 minmax(x::Real) = (x, x)
 
-max{T<:Real}(x::T, y::T) = select_value(y < x, x, y)
-min{T<:Real}(x::T, y::T) = select_value(y < x, y, x)
-minmax{T<:Real}(x::T, y::T) = y < x ? (y, x) : (x, y)
+max(x::T, y::T) where {T<:Real} = select_value(y < x, x, y)
+min(x::T, y::T) where {T<:Real} = select_value(y < x, y, x)
+minmax(x::T, y::T) where {T<:Real} = y < x ? (y, x) : (x, y)

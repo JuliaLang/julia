@@ -25,17 +25,17 @@ const BitUnsigned64T = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt6
 
 ## integer comparisons ##
 
-<{T<:BitSigned}(x::T, y::T)  = slt_int(x, y)
+(<)(x::T, y::T) where {T<:BitSigned}  = slt_int(x, y)
 
--(x::BitInteger)             = neg_int(x)
--(x::T, y::T) where {T<:BitInteger} = sub_int(x, y)
-+(x::T, y::T) where {T<:BitInteger} = add_int(x, y)
-*(x::T, y::T) where {T<:BitInteger} = mul_int(x, y)
+(-)(x::BitInteger)             = neg_int(x)
+(-)(x::T, y::T) where {T<:BitInteger} = sub_int(x, y)
+(+)(x::T, y::T) where {T<:BitInteger} = add_int(x, y)
+(*)(x::T, y::T) where {T<:BitInteger} = mul_int(x, y)
 
 inv(x::Integer) = float(one(x)) / float(x)
-/(x::T, y::T) where {T<:Integer} = float(x) / float(y)
+(/)(x::T, y::T) where {T<:Integer} = float(x) / float(y)
 # skip promotion for system integer types
-/(x::BitInteger, y::BitInteger) = float(x) / float(y)
+(/)(x::BitInteger, y::BitInteger) = float(x) / float(y)
 
 """
     isodd(x::Integer) -> Bool
@@ -287,9 +287,9 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 
 ## integer comparisons ##
 
-<{T<:BitUnsigned}(x::T, y::T)  = ult_int(x, y)
-<={T<:BitSigned}(x::T, y::T)   = sle_int(x, y)
-<={T<:BitUnsigned}(x::T, y::T) = ule_int(x, y)
+(< )(x::T, y::T) where {T<:BitUnsigned} = ult_int(x, y)
+(<=)(x::T, y::T) where {T<:BitSigned}   = sle_int(x, y)
+(<=)(x::T, y::T) where {T<:BitUnsigned} = ule_int(x, y)
 
 ==(x::Signed,   y::Unsigned) = (x >= 0) & (unsigned(x) == y)
 ==(x::Unsigned, y::Signed  ) = (y >= 0) & (x == unsigned(y))
@@ -380,11 +380,11 @@ isdefined(Main, :Base) && for fname in (:mod, :rem)
     """ -> $fname(x::Integer, T::Type{<:Integer})
 end
 
-rem{T<:Integer}(x::T, ::Type{T}) = x
+rem(x::T, ::Type{T}) where {T<:Integer} = x
 rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
-mod{T<:Integer}(x::Integer, ::Type{T}) = rem(x, T)
+mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
 
-unsafe_trunc{T<:Integer}(::Type{T}, x::Integer) = rem(x, T)
+unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
 for (Ts, Tu) in ((Int8, UInt8), (Int16, UInt16), (Int32, UInt32), (Int64, UInt64), (Int128, UInt128))
     @eval convert(::Type{Signed}, x::$Tu) = convert($Ts, x)
     @eval convert(::Type{Unsigned}, x::$Ts) = convert($Tu, x)
@@ -401,10 +401,10 @@ trunc(x::Integer) = x
 floor(x::Integer) = x
  ceil(x::Integer) = x
 
-round{T<:Integer}(::Type{T}, x::Integer) = convert(T, x)
-trunc{T<:Integer}(::Type{T}, x::Integer) = convert(T, x)
-floor{T<:Integer}(::Type{T}, x::Integer) = convert(T, x)
- ceil{T<:Integer}(::Type{T}, x::Integer) = convert(T, x)
+round(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
+trunc(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
+floor(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
+ ceil(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
 
 ## integer construction ##
 
