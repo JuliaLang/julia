@@ -1,20 +1,32 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 """
-The Dates module provides `Date`, `DateTime`, `Time` types, and related funtions.
+The `Dates` module provides `Date`, `DateTime`, `Time` types, and related functions.
 
-The types are *timezone-unaware*, based on UT seconds (1/86400 of a day),
-and the proleptic Gregorian calendar, as specified in ISO 8601.
+The types are not aware of time zones, based on UT seconds
+(86400 seconds a day, avoiding leap seconds), and
+use the proleptic Gregorian calendar, as specified in ISO 8601.
 For time zone functionality, see the TimeZones.jl package.
 
-Try
-`dt = DateTime(2017,12,31,23,59,59,999)`,
-`d1 = Date(Dates.Month(12), Dates.Year(2017))`,
-`d2 = Date("2017-12-31", Dates.DateFormat("y-m-d"))`,
-`Dates.yearmonthday(d2)`,
-`d2-d1`.
+```jldoctest
+julia> dt = DateTime(2017,12,31,23,59,59,999)
+2017-12-31T23:59:59.999
 
-Please see the docs for Date and DateTime for more information.
+julia> d1 = Date(Dates.Month(12), Dates.Year(2017))
+2017-12-01
+
+julia> d2 = Date("2017-12-31", Dates.DateFormat("y-m-d"))
+2017-12-31
+
+julia> Dates.yearmonthday(d2)
+(2017,12,31)
+
+julia> d2-d1
+30 days
+```
+
+Please see the manual section on [`Date`](@ref) and [`DateTime`](@ref)
+for more information.
 """
 module Dates
 

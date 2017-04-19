@@ -1,8 +1,10 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 """
-The Docs module provides the `@doc` macro which can be used to set and retrieve
-documentation metadata for Julia objects. Please see docs for the `@doc` macro for more
+The `Docs` module provides the `@doc` macro which can be used to set and retrieve
+documentation metadata for Julia objects.
+
+Please see the manual section on documentation for more
 information.
 """
 module Docs
