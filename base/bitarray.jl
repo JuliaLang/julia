@@ -487,7 +487,7 @@ end
 
 convert(::Type{Array{T}}, B::BitArray{N}) where {T,N} = convert(Array{T,N}, B)
 convert(::Type{Array{T,N}}, B::BitArray{N}) where {T,N} = _convert(Array{T,N}, B) # see #15801
-function _convert{T,N}(::Type{Array{T,N}}, B::BitArray{N})
+function _convert(::Type{Array{T,N}}, B::BitArray{N}) where {T,N}
     A = Array{T}(size(B))
     Bc = B.chunks
     @inbounds for i = 1:length(A)

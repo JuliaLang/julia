@@ -39,7 +39,7 @@ eltype(::Type{Nullable{T}}) where {T} = T
 convert(::Type{Nullable{T}}, x::Nullable{T}) where {T} = x
 convert(::Type{Nullable   }, x::Nullable   ) = x
 
-convert{T}(t::Type{Nullable{T}}, x::Any) = convert(t, convert(T, x))
+convert(t::Type{Nullable{T}}, x::Any) where {T} = convert(t, convert(T, x))
 
 function convert(::Type{Nullable{T}}, x::Nullable) where T
     return isnull(x) ? Nullable{T}() : Nullable{T}(convert(T, get(x)))

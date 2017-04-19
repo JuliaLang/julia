@@ -45,7 +45,7 @@ ConjRowVector{T, CV <: ConjVector} = RowVector{T, CV}
     error("RowVector expects 1×N size, got $n")
 
 # Conversion of underlying storage
-convert{T,V<:AbstractVector}(::Type{RowVector{T,V}}, rowvec::RowVector) =
+convert(::Type{RowVector{T,V}}, rowvec::RowVector) where {T,V<:AbstractVector} =
     RowVector{T,V}(convert(V,rowvec.vec))
 
 # similar tries to maintain the RowVector wrapper and the parent type

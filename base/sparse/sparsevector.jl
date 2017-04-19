@@ -287,15 +287,15 @@ end
 ### Conversion
 
 # convert SparseMatrixCSC to SparseVector
-function convert{Tv,Ti<:Integer}(::Type{SparseVector{Tv,Ti}}, s::SparseMatrixCSC{Tv,Ti})
+function convert(::Type{SparseVector{Tv,Ti}}, s::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti<:Integer}
     size(s, 2) == 1 || throw(ArgumentError("The input argument must have a single-column."))
     SparseVector(s.m, s.rowval, s.nzval)
 end
 
-convert{Tv,Ti}(::Type{SparseVector{Tv}}, s::SparseMatrixCSC{Tv,Ti}) =
+convert(::Type{SparseVector{Tv}}, s::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} =
     convert(SparseVector{Tv,Ti}, s)
 
-convert{Tv,Ti}(::Type{SparseVector}, s::SparseMatrixCSC{Tv,Ti}) =
+convert(::Type{SparseVector}, s::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} =
     convert(SparseVector{Tv,Ti}, s)
 
 # convert Vector to SparseVector
@@ -345,20 +345,20 @@ function _dense2sparsevec{Tv,Ti}(s::AbstractArray{Tv}, initcap::Ti)
     SparseVector(n, nzind, nzval)
 end
 
-convert{Tv,Ti}(::Type{SparseVector{Tv,Ti}}, s::AbstractVector{Tv}) =
+convert(::Type{SparseVector{Tv,Ti}}, s::AbstractVector{Tv}) where {Tv,Ti} =
     _dense2sparsevec(s, convert(Ti, max(8, div(length(s), 8))))
 
-convert{Tv}(::Type{SparseVector{Tv}}, s::AbstractVector{Tv}) =
+convert(::Type{SparseVector{Tv}}, s::AbstractVector{Tv}) where {Tv} =
     convert(SparseVector{Tv,Int}, s)
 
-convert{Tv}(::Type{SparseVector}, s::AbstractVector{Tv}) =
+convert(::Type{SparseVector}, s::AbstractVector{Tv}) where {Tv} =
     convert(SparseVector{Tv,Int}, s)
 
 
 # convert between different types of SparseVector
-convert{Tv}(::Type{SparseVector{Tv}}, s::SparseVector{Tv}) = s
-convert{Tv,Ti}(::Type{SparseVector{Tv,Ti}}, s::SparseVector{Tv,Ti}) = s
-convert{Tv,Ti}(::Type{SparseVector{Tv,Ti}}, s::SparseVector) =
+convert(::Type{SparseVector{Tv}}, s::SparseVector{Tv}) where {Tv} = s
+convert(::Type{SparseVector{Tv,Ti}}, s::SparseVector{Tv,Ti}) where {Tv,Ti} = s
+convert(::Type{SparseVector{Tv,Ti}}, s::SparseVector) where {Tv,Ti} =
     SparseVector{Tv,Ti}(s.n, convert(Vector{Ti}, s.nzind), convert(Vector{Tv}, s.nzval))
 
 convert{Tv,Ti}(::Type{SparseVector{Tv}}, s::SparseVector{<:Any,Ti}) =
@@ -776,7 +776,7 @@ end
 
 ### Conversion to matrix
 
-function convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, x::AbstractSparseVector)
+function convert(::Type{SparseMatrixCSC{Tv,Ti}}, x::AbstractSparseVector) where {Tv,Ti}
     n = length(x)
     xnzind = nonzeroinds(x)
     xnzval = nonzeros(x)
@@ -792,10 +792,10 @@ end
 convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv}}, x::AbstractSparseVector{<:Any,Ti}) =
     convert(SparseMatrixCSC{Tv,Ti}, x)
 
-convert{Tv,Ti}(::Type{SparseMatrixCSC}, x::AbstractSparseVector{Tv,Ti}) =
+convert(::Type{SparseMatrixCSC}, x::AbstractSparseVector{Tv,Ti}) where {Tv,Ti} =
     convert(SparseMatrixCSC{Tv,Ti}, x)
 
-function convert{Tv}(::Type{Vector}, x::AbstractSparseVector{Tv})
+function convert(::Type{Vector}, x::AbstractSparseVector{Tv}) where Tv
     n = length(x)
     n == 0 && return Vector{Tv}(0)
     nzind = nonzeroinds(x)

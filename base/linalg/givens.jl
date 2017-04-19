@@ -34,12 +34,12 @@ mutable struct Rotation{T} <: AbstractRotation{T}
     rotations::Vector{Givens{T}}
 end
 
-convert{T}(::Type{Givens{T}}, G::Givens{T}) = G
-convert{T}(::Type{Givens{T}}, G::Givens) = Givens(G.i1, G.i2, convert(T, G.c), convert(T, G.s))
-convert{T}(::Type{Rotation{T}}, R::Rotation{T}) = R
-convert{T}(::Type{Rotation{T}}, R::Rotation) = Rotation{T}([convert(Givens{T}, g) for g in R.rotations])
-convert{T}(::Type{AbstractRotation{T}}, G::Givens) = convert(Givens{T}, G)
-convert{T}(::Type{AbstractRotation{T}}, R::Rotation) = convert(Rotation{T}, R)
+convert(::Type{Givens{T}}, G::Givens{T}) where {T} = G
+convert(::Type{Givens{T}}, G::Givens) where {T} = Givens(G.i1, G.i2, convert(T, G.c), convert(T, G.s))
+convert(::Type{Rotation{T}}, R::Rotation{T}) where {T} = R
+convert(::Type{Rotation{T}}, R::Rotation) where {T} = Rotation{T}([convert(Givens{T}, g) for g in R.rotations])
+convert(::Type{AbstractRotation{T}}, G::Givens) where {T} = convert(Givens{T}, G)
+convert(::Type{AbstractRotation{T}}, R::Rotation) where {T} = convert(Rotation{T}, R)
 
 ctranspose(G::Givens) = Givens(G.i1, G.i2, conj(G.c), -G.s)
 ctranspose{T}(R::Rotation{T}) = Rotation{T}(reverse!([ctranspose(r) for r in R.rotations]))

@@ -47,9 +47,9 @@ end
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
 
-convert{T}(::Type{LQ{T}},A::LQ) = LQ(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
-convert{T}(::Type{Factorization{T}}, A::LQ{T}) = A
-convert{T}(::Type{Factorization{T}}, A::LQ) = convert(LQ{T}, A)
+convert(::Type{LQ{T}},A::LQ) where {T} = LQ(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
+convert(::Type{Factorization{T}}, A::LQ{T}) where {T} = A
+convert(::Type{Factorization{T}}, A::LQ) where {T} = convert(LQ{T}, A)
 convert(::Type{AbstractMatrix}, A::LQ) = A[:L]*A[:Q]
 convert(::Type{AbstractArray}, A::LQ) = convert(AbstractMatrix, A)
 convert(::Type{Matrix}, A::LQ) = convert(Array, convert(AbstractArray, A))
@@ -86,8 +86,8 @@ function show(io::IO, C::LQ)
     show(io, C[:Q])
 end
 
-convert{T}(::Type{LQPackedQ{T}}, Q::LQPackedQ) = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
-convert{T}(::Type{AbstractMatrix{T}}, Q::LQPackedQ) = convert(LQPackedQ{T}, Q)
+convert(::Type{LQPackedQ{T}}, Q::LQPackedQ) where {T} = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
+convert(::Type{AbstractMatrix{T}}, Q::LQPackedQ) where {T} = convert(LQPackedQ{T}, Q)
 convert(::Type{Matrix}, A::LQPackedQ) = LAPACK.orglq!(copy(A.factors),A.τ)
 convert(::Type{Array}, A::LQPackedQ) = convert(Matrix, A)
 function full{T}(A::LQPackedQ{T}; thin::Bool = true)

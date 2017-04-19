@@ -842,7 +842,7 @@ get_perm(FC::FactorComponent) = get_perm(Factor(FC))
 #########################
 
 # Convertion/construction
-function convert{T<:VTypes}(::Type{Dense{T}}, A::StridedVecOrMat)
+function convert(::Type{Dense{T}}, A::StridedVecOrMat) where T<:VTypes
     d = allocate_dense(size(A, 1), size(A, 2), stride(A, 2), T)
     s = unsafe_load(d.p)
     for i in eachindex(A)
@@ -950,7 +950,7 @@ convert(::Type{Sparse}, A::SparseMatrixCSC{Complex{Float32},<:ITypes}) =
     convert(Sparse, convert(SparseMatrixCSC{Complex{Float64},SuiteSparse_long}, A))
 convert(::Type{Sparse}, A::Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}) =
     Sparse(A.data, A.uplo == 'L' ? -1 : 1)
-convert{Tv<:VTypes}(::Type{Sparse}, A::Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}) =
+convert(::Type{Sparse}, A::Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}) where {Tv<:VTypes} =
     Sparse(A.data, A.uplo == 'L' ? -1 : 1)
 function convert{Ti<:ITypes}(::Type{Sparse},
     A::Union{SparseMatrixCSC{BigFloat,Ti},
@@ -1022,7 +1022,7 @@ function (::Type{Sparse})(filename::String)
 end
 
 ## convertion back to base Julia types
-function convert{T}(::Type{Matrix{T}}, D::Dense{T})
+function convert(::Type{Matrix{T}}, D::Dense{T}) where T
     s = unsafe_load(D.p)
     a = Matrix{T}(s.nrow, s.ncol)
     copy!(a, D)
@@ -1050,16 +1050,16 @@ function _copy!(dest::AbstractArray, D::Dense)
     end
     dest
 end
-convert{T}(::Type{Matrix}, D::Dense{T}) = convert(Matrix{T}, D)
-function convert{T}(::Type{Vector{T}}, D::Dense{T})
+convert(::Type{Matrix}, D::Dense{T}) where {T} = convert(Matrix{T}, D)
+function convert(::Type{Vector{T}}, D::Dense{T}) where T
     if size(D, 2) > 1
         throw(DimensionMismatch("input must be a vector but had $(size(D, 2)) columns"))
     end
     copy!(Array{T}(size(D, 1)), D)
 end
-convert{T}(::Type{Vector}, D::Dense{T}) = convert(Vector{T}, D)
+convert(::Type{Vector}, D::Dense{T}) where {T} = convert(Vector{T}, D)
 
-function convert{Tv}(::Type{SparseMatrixCSC{Tv,SuiteSparse_long}}, A::Sparse{Tv})
+function convert(::Type{SparseMatrixCSC{Tv,SuiteSparse_long}}, A::Sparse{Tv}) where Tv
     s = unsafe_load(A.p)
     if s.stype != 0
         throw(ArgumentError("matrix has stype != 0. Convert to matrix " *
@@ -1094,7 +1094,7 @@ function convert(::Type{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_lo
         return B
     end
 end
-function convert{Tv<:VTypes}(::Type{Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}}, A::Sparse{Tv})
+function convert(::Type{Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}}, A::Sparse{Tv}) where Tv<:VTypes
     s = unsafe_load(A.p)
     if !ishermitian(A)
         throw(ArgumentError("matrix is not Hermitian"))

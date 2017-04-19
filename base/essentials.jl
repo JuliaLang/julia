@@ -133,9 +133,9 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-convert{T<:Tuple{Any,Vararg{Any}}}(::Type{T}, x::Tuple{Any, Vararg{Any}}) =
+convert(::Type{T}, x::Tuple{Any, Vararg{Any}}) where {T<:Tuple{Any,Vararg{Any}}} =
     tuple(convert(tuple_type_head(T),x[1]), convert(tuple_type_tail(T), tail(x))...)
-convert{T<:Tuple{Any,Vararg{Any}}}(::Type{T}, x::T) = x
+convert(::Type{T}, x::T) where {T<:Tuple{Any,Vararg{Any}}} = x
 
 oftype(x,c) = convert(typeof(x),c)
 
@@ -143,8 +143,8 @@ unsigned(x::Int) = reinterpret(UInt, x)
 signed(x::UInt) = reinterpret(Int, x)
 
 # conversions used by ccall
-ptr_arg_cconvert{T}(::Type{Ptr{T}}, x) = cconvert(T, x)
-ptr_arg_unsafe_convert{T}(::Type{Ptr{T}}, x) = unsafe_convert(T, x)
+ptr_arg_cconvert(::Type{Ptr{T}}, x) where {T} = cconvert(T, x)
+ptr_arg_unsafe_convert(::Type{Ptr{T}}, x) where {T} = unsafe_convert(T, x)
 ptr_arg_unsafe_convert(::Type{Ptr{Void}}, x) = x
 
 cconvert(T::Type, x) = convert(T, x) # do the conversion eagerly in most cases

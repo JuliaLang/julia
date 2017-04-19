@@ -48,9 +48,9 @@ julia> Diagonal(V)
 """
 Diagonal(V::AbstractVector) = Diagonal(collect(V))
 
-convert{T}(::Type{Diagonal{T}}, D::Diagonal{T}) = D
-convert{T}(::Type{Diagonal{T}}, D::Diagonal) = Diagonal{T}(convert(Vector{T}, D.diag))
-convert{T}(::Type{AbstractMatrix{T}}, D::Diagonal) = convert(Diagonal{T}, D)
+convert(::Type{Diagonal{T}}, D::Diagonal{T}) where {T} = D
+convert(::Type{Diagonal{T}}, D::Diagonal) where {T} = Diagonal{T}(convert(Vector{T}, D.diag))
+convert(::Type{AbstractMatrix{T}}, D::Diagonal) where {T} = convert(Diagonal{T}, D)
 convert(::Type{Matrix}, D::Diagonal) = diagm(D.diag)
 convert(::Type{Array}, D::Diagonal) = convert(Matrix, D)
 full(D::Diagonal) = convert(Array, D)

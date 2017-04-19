@@ -234,10 +234,10 @@ convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{T,R,S}) where {T<:AbstractF
 convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen) where {T<:AbstractFloat,R<:TwicePrecision,S<:TwicePrecision} =
     _convertSRL(StepRangeLen{T,R,S}, r)
 
-convert{T<:Union{Float16,Float32,Float64}}(::Type{StepRangeLen{T}}, r::StepRangeLen) =
+convert(::Type{StepRangeLen{T}}, r::StepRangeLen) where {T<:Union{Float16,Float32,Float64}} =
     _convertSRL(StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}, r)
 
-convert{T<:Union{Float16,Float32,Float64}}(::Type{StepRangeLen{T}}, r::Range) =
+convert(::Type{StepRangeLen{T}}, r::Range) where {T<:Union{Float16,Float32,Float64}} =
     _convertSRL(StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}, r)
 
 function _convertSRL{T,R,S}(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{<:Integer})

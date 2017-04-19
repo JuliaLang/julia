@@ -27,7 +27,7 @@ function det(F::Factorization)
 end
 
 ### General promotion rules
-convert{T}(::Type{Factorization{T}}, F::Factorization{T}) = F
+convert(::Type{Factorization{T}}, F::Factorization{T}) where {T} = F
 inv{T}(F::Factorization{T}) = A_ldiv_B!(F, eye(T, size(F,1)))
 
 # With a real lhs and complex rhs with the same precision, we can reinterpret

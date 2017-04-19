@@ -190,13 +190,13 @@ function lu(A::AbstractMatrix, pivot::Union{Type{Val{false}}, Type{Val{true}}} =
     F[:L], F[:U], F[:p]
 end
 
-function convert{T}(::Type{LU{T}}, F::LU)
+function convert(::Type{LU{T}}, F::LU) where T
     M = convert(AbstractMatrix{T}, F.factors)
     LU{T,typeof(M)}(M, F.ipiv, F.info)
 end
-convert{T,S}(::Type{LU{T,S}}, F::LU) = LU{T,S}(convert(S, F.factors), F.ipiv, F.info)
-convert{T}(::Type{Factorization{T}}, F::LU{T}) = F
-convert{T}(::Type{Factorization{T}}, F::LU) = convert(LU{T}, F)
+convert(::Type{LU{T,S}}, F::LU) where {T,S} = LU{T,S}(convert(S, F.factors), F.ipiv, F.info)
+convert(::Type{Factorization{T}}, F::LU{T}) where {T} = F
+convert(::Type{Factorization{T}}, F::LU) where {T} = convert(LU{T}, F)
 
 
 size(A::LU) = size(A.factors)
@@ -517,7 +517,7 @@ convert(::Type{Matrix}, F::LU) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::LU) = convert(Matrix, F)
 full(F::LU) = convert(AbstractArray, F)
 
-function convert{T}(::Type{Tridiagonal}, F::Base.LinAlg.LU{T,Tridiagonal{T}})
+function convert(::Type{Tridiagonal}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) where T
     n = size(F, 1)
 
     dl     = copy(F.factors.dl)
@@ -551,12 +551,12 @@ function convert{T}(::Type{Tridiagonal}, F::Base.LinAlg.LU{T,Tridiagonal{T}})
     end
     return Tridiagonal(dl, d, du)
 end
-convert{T}(::Type{AbstractMatrix}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) =
+convert(::Type{AbstractMatrix}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) where {T} =
     convert(Tridiagonal, F)
-convert{T}(::Type{AbstractArray}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) =
+convert(::Type{AbstractArray}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) where {T} =
     convert(AbstractMatrix, F)
-convert{T}(::Type{Matrix}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) =
+convert(::Type{Matrix}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) where {T} =
     convert(Array, convert(AbstractArray, F))
-convert{T}(::Type{Array}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) =
+convert(::Type{Array}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) where {T} =
     convert(Matrix, F)
 full{T}(F::Base.LinAlg.LU{T,Tridiagonal{T}}) = convert(AbstractArray, F)

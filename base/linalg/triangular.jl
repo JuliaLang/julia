@@ -61,13 +61,13 @@ parent(A::AbstractTriangular) = A.data
 
 # then handle all methods that requires specific handling of upper/lower and unit diagonal
 
-function convert{T}(::Type{Matrix{T}}, A::LowerTriangular)
+function convert(::Type{Matrix{T}}, A::LowerTriangular) where T
     B = Array{T}(size(A, 1), size(A, 1))
     copy!(B, A.data)
     tril!(B)
     B
 end
-function convert{T}(::Type{Matrix{T}}, A::UnitLowerTriangular)
+function convert(::Type{Matrix{T}}, A::UnitLowerTriangular) where T
     B = Array{T}(size(A, 1), size(A, 1))
     copy!(B, A.data)
     tril!(B)
@@ -76,13 +76,13 @@ function convert{T}(::Type{Matrix{T}}, A::UnitLowerTriangular)
     end
     B
 end
-function convert{T}(::Type{Matrix{T}}, A::UpperTriangular)
+function convert(::Type{Matrix{T}}, A::UpperTriangular) where T
     B = Array{T}(size(A, 1), size(A, 1))
     copy!(B, A.data)
     triu!(B)
     B
 end
-function convert{T}(::Type{Matrix{T}}, A::UnitUpperTriangular)
+function convert(::Type{Matrix{T}}, A::UnitUpperTriangular) where T
     B = Array{T}(size(A, 1), size(A, 1))
     copy!(B, A.data)
     triu!(B)
