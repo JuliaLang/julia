@@ -80,6 +80,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@compat Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()` and `@compat Base.IndexStyle(::Type{<:MyArray}) = IndexCartesian()` to define traits for abstract arrays, replacing the former `Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearFast()` and `Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearSlow()`, respectively.
 
+* `Compat.collect(A)` returns an Array even on 0.5, no matter what indices the array `A` has. [#21257]
+
 ## Module Aliases
 
 * In 0.6, some 0.5 iterator functions have been moved to the `Base.Iterators`
@@ -363,3 +365,4 @@ includes this fix. Find the minimum version from there.
 [#20500]: https://github.com/JuliaLang/julia/issues/20500
 [#18629]: https://github.com/JuliaLang/julia/pull/18629
 [#21346]: https://github.com/JuliaLang/julia/pull/21346
+[#21257]: https://github.com/JuliaLang/julia/pull/21257

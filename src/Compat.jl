@@ -1471,6 +1471,20 @@ else
     using Base: StringVector
 end
 
+# https://github.com/JuliaLang/julia/pull/21257
+if v"0.5.0" <= VERSION < v"0.6.0-pre.beta.28"
+    collect(A) = collect_indices(indices(A), A)
+    collect_indices(::Tuple{}, A) = copy!(Array{eltype(A)}(), A)
+    collect_indices(indsA::Tuple{Vararg{Base.OneTo}}, A) =
+        copy!(Array{eltype(A)}(map(length, indsA)), A)
+    function collect_indices(indsA, A)
+        B = Array{eltype(A)}(map(length, indsA))
+        copy!(B, CartesianRange(indices(B)), A, CartesianRange(indsA))
+    end
+else
+    const collect = Base.collect
+end
+
 include("to-be-deprecated.jl")
 
 end # module Compat
