@@ -15,7 +15,7 @@ convert(::Type{AbstractFloat}, x::Irrational) = Float64(x)
 convert(::Type{Float16}, x::Irrational) = Float16(Float32(x))
 convert(::Type{Complex{T}}, x::Irrational) where {T<:Real} = convert(Complex{T}, convert(T,x))
 
-@pure function convert{T<:Integer}(::Type{Rational{T}}, x::Irrational)
+@pure function convert(::Type{Rational{T}}, x::Irrational) where T<:Integer
     o = precision(BigFloat)
     p = 256
     while true

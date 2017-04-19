@@ -170,7 +170,7 @@ promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = 
 
 promote() = ()
 promote(x) = (x,)
-function promote{T,S}(x::T, y::S)
+function promote(x::T, y::S) where {T,S}
     (convert(promote_type(T,S),x), convert(promote_type(T,S),y))
 end
 promote_typeof(x) = (@_pure_meta; typeof(x))
