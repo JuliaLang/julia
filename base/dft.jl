@@ -580,7 +580,7 @@ module FFTW
     """
     function plan_r2r end
 
-    Base.USE_GPL_LIBS && include("fft/FFTW.jl")
+    Base.USE_GPL_LIBS && include(joinpath("fft", "FFTW.jl"))
 end
 
 importall .FFTW

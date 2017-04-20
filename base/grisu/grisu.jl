@@ -13,12 +13,12 @@ const PRECISION = 3
 
 const DIGITS = Vector{UInt8}(309+17)
 
-include("grisu/float.jl")
-include("grisu/fastshortest.jl")
-include("grisu/fastprecision.jl")
-include("grisu/fastfixed.jl")
-include("grisu/bignums.jl")
-include("grisu/bignum.jl")
+include(joinpath("grisu", "float.jl"))
+include(joinpath("grisu", "fastshortest.jl"))
+include(joinpath("grisu", "fastprecision.jl"))
+include(joinpath("grisu", "fastfixed.jl"))
+include(joinpath("grisu", "bignums.jl"))
+include(joinpath("grisu", "bignum.jl"))
 
 const BIGNUMS = [Bignums.Bignum(),Bignums.Bignum(),Bignums.Bignum(),Bignums.Bignum()]
 
