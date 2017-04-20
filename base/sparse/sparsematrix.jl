@@ -389,7 +389,7 @@ julia> sparse(A)
   [3, 3]  =  1.0
 ```
 """
-sparse{Tv}(A::AbstractMatrix{Tv}) = convert(SparseMatrixCSC{Tv,Int}, A)
+sparse(A::AbstractMatrix{Tv}) where {Tv} = convert(SparseMatrixCSC{Tv,Int}, A)
 
 sparse(S::SparseMatrixCSC) = copy(S)
 
@@ -470,7 +470,7 @@ julia> sparse(Is, Js, Vs)
   [3, 3]  =  3
 ```
 """
-function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{Tv}, m::Integer, n::Integer, combine)
+function sparse(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{Tv}, m::Integer, n::Integer, combine) where Tv where Ti<:Integer
     coolen = length(I)
     if length(J) != coolen || length(V) != coolen
         throw(ArgumentError(string("the first three arguments' lengths must match, ",
@@ -777,7 +777,7 @@ function _distributevals_halfperm!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti},
     return # kill potential type instability
 end
 
-function ftranspose!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}, f::Function)
+function ftranspose!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}, f::Function) where {Tv,Ti}
     # Check compatibility of source argument A and destination argument X
     if X.n != A.m
         throw(DimensionMismatch(string("destination argument `X`'s column count, ",
@@ -796,10 +796,10 @@ function ftranspose!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}
     end
     halfperm!(X, A, 1:A.n, f)
 end
-transpose!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) = ftranspose!(X, A, identity)
-ctranspose!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) = ftranspose!(X, A, conj)
+transpose!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = ftranspose!(X, A, identity)
+ctranspose!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = ftranspose!(X, A, conj)
 
-function ftranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f::Function)
+function ftranspose(A::SparseMatrixCSC{Tv,Ti}, f::Function) where {Tv,Ti}
     X = SparseMatrixCSC(A.n, A.m, Vector{Ti}(A.m+1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
     halfperm!(X, A, 1:A.n, f)
 end

@@ -44,8 +44,8 @@ similar(x::SparseVector, ::Type{T}, D::Dims) where {T} = spzeros(T, D...)
 ### Construct empty sparse vector
 
 spzeros(len::Integer) = spzeros(Float64, len)
-spzeros{T}(::Type{T}, len::Integer) = SparseVector(len, Int[], T[])
-spzeros{Tv, Ti <: Integer}(::Type{Tv}, ::Type{Ti}, len::Integer) = SparseVector(len, Ti[], Tv[])
+spzeros(::Type{T}, len::Integer) where {T} = SparseVector(len, Int[], T[])
+spzeros(::Type{Tv}, ::Type{Ti}, len::Integer) where {Tv,Ti<:Integer} = SparseVector(len, Ti[], Tv[])
 
 # Construction of same structure, but with all ones
 spones{T}(x::SparseVector{T}) = SparseVector(x.n, copy(x.nzind), ones(T, length(x.nzval)))
