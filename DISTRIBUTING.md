@@ -56,9 +56,7 @@ setting it to the baseline target you intend to support. This will determine
 the target CPU for both the Julia executable and libraries, and the system
 image (the latter can also be set using `JULIA_CPU_TARGET`). Typically useful
 values for x86 CPUs are `x86-64` and `core2` (for 64-bit builds) and
-`pentium4` (for 32-bit builds). Unfortunately, CPUs older than Pentium 4
-are currently not supported (see
-[this issue](https://github.com/JuliaLang/julia/issues/7185)).
+`pentium4` (for 32-bit builds), or `i386` (for 32-bit builds for olderst we support).
 
 The full list of CPU targets supported by LLVM can be obtained by running
 `llc -mattr=help`.
