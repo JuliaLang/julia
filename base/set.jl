@@ -108,6 +108,9 @@ end
 const ⊆ = issubset
 ⊊(l::Set, r::Set) = <(l, r)
 ⊈(l::Set, r::Set) = !⊆(l, r)
+⊇(l, r) = issubset(r, l)
+⊉(l::Set, r::Set) = !⊇(l, r)
+⊋(l::Set, r::Set) = <(r, l)
 
 """
     unique(itr)
