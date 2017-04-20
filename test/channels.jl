@@ -217,3 +217,34 @@ end
     end
     @test isready(rr1)
 end
+
+
+# test for yield/wait/event failures
+@noinline garbage_finalizer(f) = finalizer("gar" * "bage", f)
+let t, run = Ref(0)
+    gc_enable(false)
+    garbage_finalizer((x) -> (run[] += 1; sleep(1)))
+    garbage_finalizer((x) -> (run[] += 1; yield()))
+    garbage_finalizer((x) -> (run[] += 1; yieldto(@task () -> ())))
+    t = @task begin
+        gc_enable(true)
+        gc()
+    end
+    oldstderr = STDERR
+    local newstderr, errstream
+    try
+        newstderr = redirect_stderr()
+        errstream = @async readstring(newstderr[1])
+        yield(t)
+    finally
+        redirect_stderr(oldstderr)
+        close(newstderr[2])
+    end
+    wait(t)
+    @test run[] == 3
+    @test wait(errstream) == """
+        error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
+        error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
+        error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
+        """
+end
