@@ -43,19 +43,23 @@ end
 
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
 
+function _check_A_mul_B(A, B, C, transpose)
+    if transpose
+        A.n == size(C, 1) || throw(DimensionMismatch())
+        A.m == size(B, 1) || throw(DimensionMismatch())
+    else
+        A.n == size(B, 1) || throw(DimensionMismatch())
+        A.m == size(C, 1) || throw(DimensionMismatch())
+    end
+    size(B, 2) == size(C, 2) || throw(DimensionMismatch())
+end
+
 for (f, op, transp) in ((:A_mul_B, :identity, false),
                         (:Ac_mul_B, :ctranspose, true),
                         (:At_mul_B, :transpose, true))
     @eval begin
         function $(Symbol(f,:!))(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
-            if $transp
-                A.n == size(C, 1) || throw(DimensionMismatch())
-                A.m == size(B, 1) || throw(DimensionMismatch())
-            else
-                A.n == size(B, 1) || throw(DimensionMismatch())
-                A.m == size(C, 1) || throw(DimensionMismatch())
-            end
-            size(B, 2) == size(C, 2) || throw(DimensionMismatch())
+            _check_A_mul_B(A, B, C, $transp)
             nzv = A.nzval
             rv = A.rowval
             if β != 1
