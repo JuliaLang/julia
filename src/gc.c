@@ -1533,7 +1533,8 @@ static void gc_scan_obj_(jl_ptls_t ptls, jl_value_t *v, int d,
     if (vt == jl_weakref_type)
         return;
     // fast path
-    if (vt->layout->npointers == 0)
+    uint32_t npointers = vt->layout->npointers;
+    if (npointers == 0)
         return;
     d++;
     if (d >= MAX_MARK_DEPTH)
@@ -1602,12 +1603,12 @@ static void gc_scan_obj_(jl_ptls_t ptls, jl_value_t *v, int d,
     }
     else {
         int nf = (int)jl_datatype_nfields(vt);
-        uint32_t npointers = vt->layout->npointers;
         nptr += (npointers & 0xff) << (npointers & 0x300);
-        for(int i=0; i < nf; i++) {
+        uint32_t offsets = jl_datatype_layout_n_nonptr(vt->layout);
+        nf -= offsets & 0xffff;
+        for (int i = (offsets >> 16); i < nf; i++) {
             if (jl_field_isptr(vt, i)) {
-                jl_value_t **slot = (jl_value_t**)((char*)v +
-                                                   jl_field_offset(vt, i));
+                jl_value_t **slot = (jl_value_t**)((char*)v + jl_field_offset(vt, i));
                 jl_value_t *fld = *slot;
                 if (fld) {
                     verify_parent2("object", v, slot, "field(%d)", i);
