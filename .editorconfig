@@ -1,0 +1,18 @@
+# Define and maintain consistent coding styles between different
+# editors and IDEs. See editorconfig.org for more information.
+
+root = true
+
+[*]
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[{Makefile,*.mk,*.make,*.inc}]
+indent_style = tab
+
+[*.yml]
+indent_style = space
+indent_size = 2
