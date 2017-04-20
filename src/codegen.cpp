@@ -7111,7 +7111,11 @@ static inline void checkARMArchFeature(std::string &cpu,
         HostFeatures[cpu] = true;
     }
 #else
-    HostFeatures[cpu.substr(3)] = true;
+    // These two are allowed on 32bit. Allow them on 64bits too for consistency since
+    // they basically mean "generic" on aarch64.
+    // In particular, "armv8-a" is the generic value for the GCC `-march` option.
+    if (cpu != "armv8" && cpu != "armv8-a")
+        HostFeatures[cpu.substr(3)] = true;
 #endif
     cpu = "generic";
 }
