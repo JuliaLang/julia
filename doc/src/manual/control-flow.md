@@ -60,11 +60,11 @@ value of a boolean expression. Here is the anatomy of the `if`-`elseif`-`else` c
 
 ```julia
 if x < y
-  println("x is less than y")
+    println("x is less than y")
 elseif x > y
-  println("x is greater than y")
+    println("x is greater than y")
 else
-  println("x is equal to y")
+    println("x is equal to y")
 end
 ```
 
@@ -777,7 +777,7 @@ try bad() catch; x end
 
 try bad()
 catch
-  x
+    x
 end
 ```
 
