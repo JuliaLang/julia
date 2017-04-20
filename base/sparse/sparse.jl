@@ -22,9 +22,9 @@ import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
     broadcast, ceil, complex, cond, conj, convert, copy, copy!, ctranspose, diagm,
     exp, expm1, factorize, find, findmax, findmin, findnz, float, full, getindex,
     vcat, hcat, hvcat, cat, imag, indmax, ishermitian, kron, length, log, log1p, max, min,
-    maximum, minimum, norm, one, promote_eltype, real, reinterpret, reshape, rot180,
-    rotl90, rotr90, round, scale!, setindex!, similar, size, transpose, tril,
-    triu, vec, permute!, map, map!
+    maximum, minimum, norm, one, promote_eltype, promote_type_cat, promote_typeof_cat, real,
+    reinterpret, reshape, rot180, rotl90, rotr90, round, scale!, setindex!, similar, size,
+    transpose, tril, triu, vec, permute!, map, map!
 
 export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector,
     SparseMatrixCSC, SparseVector, blkdiag, droptol!, dropzeros!, dropzeros,

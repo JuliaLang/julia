@@ -390,9 +390,9 @@ call. Finally, chains of comparisons have their own special expression structure
 | Input                    | AST                                  |
 |:------------------------ |:------------------------------------ |
 | `a[i]`                   | `(ref a i)`                          |
-| `t[i;j]`                 | `(typed_vcat t i j)`                 |
-| `t[i j]`                 | `(typed_hcat t i j)`                 |
-| `t[a b; c d]`            | `(typed_vcat t (row a b) (row c d))` |
+| `t[i;j]`                 | `(eltyped_vcat t i j)`                 |
+| `t[i j]`                 | `(eltyped_hcat t i j)`                 |
+| `t[a b; c d]`            | `(eltyped_vcat t (row a b) (row c d))` |
 | `a{b}`                   | `(curly a b)`                        |
 | `a{b;c}`                 | `(curly a (parameters c) b)`         |
 | `[x]`                    | `(vect x)`                           |

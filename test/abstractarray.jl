@@ -231,8 +231,16 @@ Base.convert{T,N  }(::Type{TSlow{T,N}}, X::AbstractArray     ) = begin
     A
 end
 
+Base.promote_type_cat(::Type{S}, ::Type{T}) where {S<:TSlow, T<:AbstractArray} =
+    TSlow{promote_type(eltype(S), eltype(T))}
+Base.promote_type_cat(::Type{S}, ::Type{T}) where {S<:AbstractArray, T<:TSlow} =
+    TSlow{promote_type(eltype(S), eltype(T))}
+Base.promote_type_cat(::Type{S}, ::Type{T}) where {S<:TSlow, T<:TSlow} =
+    TSlow{promote_type(eltype(S), eltype(T))}
+
 Base.size(A::TSlow) = A.dims
 Base.similar{T}(A::TSlow, ::Type{T}, dims::Dims) = TSlow(T, dims)
+Base.similar{T, A<:TSlow{T}}(::Type{A}, dims::Dims) = TSlow(T, dims)
 import Base: IndexCartesian
 Base.IndexStyle{A<:TSlow}(::Type{A}) = IndexCartesian()
 # Until #11242 is merged, we need to define each dimension independently
@@ -560,9 +568,9 @@ function test_cat(::Type{TestAbstractArray})
 
     @test vcat(B) == B
     @test hcat(B) == B
-    @test Base.typed_hcat(Float64, B) == TSlow(b_float)
-    @test Base.typed_hcat(Float64, B, B) == TSlow(b2hcat)
-    @test Base.typed_hcat(Float64, B, B, B) == TSlow(b3hcat)
+    @test Base.eltyped_hcat(Float64, B) == TSlow(b_float)
+    @test Base.eltyped_hcat(Float64, B, B) == TSlow(b2hcat)
+    @test Base.eltyped_hcat(Float64, B, B, B) == TSlow(b3hcat)
 
     @test vcat(B1, B2) == TSlow(vcat([1:24...], [1:25...]))
     @test hcat(C1, C2) == TSlow([1 2 1 2 3; 3 4 4 5 6])
@@ -584,10 +592,10 @@ function test_cat(::Type{TestAbstractArray})
 
     # check for shape mismatch
     @test_throws ArgumentError hvcat((2, 2), 1, 2, 3, 4, 5)
-    @test_throws ArgumentError Base.typed_hvcat(Int, (2, 2), 1, 2, 3, 4, 5)
+    @test_throws ArgumentError Base.eltyped_hvcat(Int, (2, 2), 1, 2, 3, 4, 5)
     # check for # of columns mismatch b/w rows
     @test_throws ArgumentError hvcat((3, 2), 1, 2, 3, 4, 5, 6)
-    @test_throws ArgumentError Base.typed_hvcat(Int, (3, 2), 1, 2, 3, 4, 5, 6)
+    @test_throws ArgumentError Base.eltyped_hvcat(Int, (3, 2), 1, 2, 3, 4, 5, 6)
 
     # 18395
     @test isa(Any["a" 5; 2//3 1.0][2,1], Rational{Int})

@@ -300,6 +300,7 @@ function similar{Tv,Ti}(S::SparseMatrixCSC, ::Type{Tv}, ::Type{Ti})
     SparseMatrixCSC(S.m, S.n, new_colptr, new_rowval, new_nzval)
 end
 @inline similar{Tv}(S::SparseMatrixCSC, ::Type{Tv}, d::Dims) = spzeros(Tv, d...)
+@inline similar{Tv}(::Type{SparseMatrixCSC{Tv}}, d::Dims) = spzeros(Tv, d...)
 
 # convert'ing between SparseMatrixCSC types
 convert{Tv}(::Type{AbstractMatrix{Tv}}, A::SparseMatrixCSC{Tv}) = A
@@ -2937,7 +2938,6 @@ end
         ptr_Xi += 1
     end
 end
-
 
 function hcat(X::SparseMatrixCSC...)
     num = length(X)

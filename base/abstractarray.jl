@@ -1039,20 +1039,18 @@ replace_in_print_matrix(A::AbstractMatrix,i::Integer,j::Integer,s::AbstractStrin
 replace_in_print_matrix(A::AbstractVector,i::Integer,j::Integer,s::AbstractString) = s
 
 ## Concatenation ##
-eltypeof(x) = typeof(x)
-eltypeof(x::AbstractArray) = eltype(x)
-
-promote_eltypeof() = Bottom
-promote_eltypeof(v1, vs...) = promote_type(eltypeof(v1), promote_eltypeof(vs...))
-
 promote_eltype() = Bottom
 promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
+
+eltyped_vcat{T}(::Type{T}, args...) = typed_vcat(Array{T}, args...)
+eltyped_hcat{T}(::Type{T}, args...) = typed_hcat(Array{T}, args...)
+eltyped_hvcat{T}(::Type{T}, args...) = typed_hvcat(Array{T}, args...)
 
 #TODO: ERROR CHECK
 cat(catdim::Integer) = Array{Any,1}(0)
 
-typed_vcat{T}(::Type{T}) = Array{T,1}(0)
-typed_hcat{T}(::Type{T}) = Array{T,1}(0)
+typed_vcat{T}(::Type{T}) = similar(T, 0)
+typed_hcat{T}(::Type{T}) = similar(T, 0)
 
 ## cat: special cases
 vcat{T}(X::T...)         = T[ X[i] for i=1:length(X) ]
@@ -1062,18 +1060,17 @@ hcat{T<:Number}(X::T...) = T[ X[j] for i=1:1, j=1:length(X) ]
 
 vcat(X::Number...) = hvcat_fill(Array{promote_typeof(X...)}(length(X)), X)
 hcat(X::Number...) = hvcat_fill(Array{promote_typeof(X...)}(1,length(X)), X)
-typed_vcat{T}(::Type{T}, X::Number...) = hvcat_fill(Array{T,1}(length(X)), X)
-typed_hcat{T}(::Type{T}, X::Number...) = hvcat_fill(Array{T,2}(1,length(X)), X)
+typed_vcat{T}(::Type{T}, X::Number...) = hvcat_fill(similar(T, length(X)), X)
+typed_hcat{T}(::Type{T}, X::Number...) = hvcat_fill(similar(T, 1, length(X)), X)
 
-vcat(V::AbstractVector...) = typed_vcat(promote_eltype(V...), V...)
-vcat{T}(V::AbstractVector{T}...) = typed_vcat(T, V...)
+vcat(V::AbstractVector...) = typed_vcat(promote_typeof_cat(V...), V...)
 
 function typed_vcat{T}(::Type{T}, V::AbstractVector...)
     n::Int = 0
     for Vk in V
         n += length(Vk)
     end
-    a = similar(V[1], T, n)
+    a = similar(T, n)
     pos = 1
     for k=1:length(V)
         Vk = V[k]
@@ -1084,8 +1081,7 @@ function typed_vcat{T}(::Type{T}, V::AbstractVector...)
     a
 end
 
-hcat(A::AbstractVecOrMat...) = typed_hcat(promote_eltype(A...), A...)
-hcat{T}(A::AbstractVecOrMat{T}...) = typed_hcat(T, A...)
+hcat(A::AbstractVecOrMat...) = typed_hcat(promote_typeof_cat(A...), A...)
 
 function typed_hcat{T}(::Type{T}, A::AbstractVecOrMat...)
     nargs = length(A)
@@ -1101,7 +1097,7 @@ function typed_hcat{T}(::Type{T}, A::AbstractVecOrMat...)
         nd = ndims(Aj)
         ncols += (nd==2 ? size(Aj,2) : 1)
     end
-    B = similar(A[1], T, nrows, ncols)
+    B = similar(T, nrows, ncols)
     pos = 1
     if dense
         for k=1:nargs
@@ -1121,8 +1117,7 @@ function typed_hcat{T}(::Type{T}, A::AbstractVecOrMat...)
     return B
 end
 
-vcat(A::AbstractMatrix...) = typed_vcat(promote_eltype(A...), A...)
-vcat{T}(A::AbstractMatrix{T}...) = typed_vcat(T, A...)
+vcat(A::AbstractMatrix...) = typed_vcat(promote_typeof_cat(A...), A...)
 
 function typed_vcat{T}(::Type{T}, A::AbstractMatrix...)
     nargs = length(A)
@@ -1133,7 +1128,7 @@ function typed_vcat{T}(::Type{T}, A::AbstractMatrix...)
             throw(ArgumentError("number of columns of each array must match (got $(map(x->size(x,2), A)))"))
         end
     end
-    B = similar(A[1], T, nrows, ncols)
+    B = similar(T, nrows, ncols)
     pos = 1
     for k=1:nargs
         Ak = A[k]
@@ -1154,9 +1149,6 @@ cat_size(A::AbstractArray, d) = size(A, d)
 
 cat_indices(A, d) = OneTo(1)
 cat_indices(A::AbstractArray, d) = indices(A, d)
-
-cat_similar(A, T, shape) = Array{T}(shape)
-cat_similar(A::AbstractArray, T, shape) = similar(A, T, shape)
 
 cat_shape(dims, shape::Tuple) = shape
 @inline cat_shape(dims, shape::Tuple, nshape::Tuple, shapes::Tuple...) =
@@ -1188,14 +1180,24 @@ _cs(d, concat, a, b) = concat ? (a + b) : (a == b ? a : throw(DimensionMismatch(
 dims2cat{n}(::Type{Val{n}}) = ntuple(i -> (i == n), Val{n})
 dims2cat(dims) = ntuple(i -> (i in dims), maximum(dims))
 
-cat(dims, X...) = cat_t(dims, promote_eltypeof(X...), X...)
+promote_type_cat(::Type{S}, ::Type{T}) where {S<:AbstractArray, T<:AbstractArray} =
+    Array{promote_type(eltype(S), eltype(T))}
+promote_type_cat(::Type{T}, ::Type{Union{}}) where {T<:AbstractArray} =
+    Array{eltype(T)}
+
+promote_typeof_cat{T<:AbstractArray}(v1::T) = T
+promote_typeof_cat{T}(v1::T) = Array{T}
+promote_typeof_cat{T<:AbstractArray}(v1::T, vs...) = promote_type_cat(T, promote_typeof_cat(vs...))
+promote_typeof_cat{T}(v1::T, vs...) = promote_type_cat(Array{T}, promote_typeof_cat(vs...))
+
+cat(dims, X...) = cat_t(dims, promote_typeof_cat(X...), X...)
 
 function cat_t(dims, T::Type, X...)
     catdims = dims2cat(dims)
     shape = cat_shape(catdims, (), map(cat_size, X)...)
-    A = cat_similar(X[1], T, shape)
-    if T <: Number && countnz(catdims) > 1
-        fill!(A, zero(T))
+    A = similar(T, shape)
+    if eltype(T) <: Number && countnz(catdims) > 1
+        fill!(A, zero(eltype(T)))
     end
     return _cat(A, shape, catdims, X...)
 end
@@ -1295,8 +1297,6 @@ hcat(X...) = cat(Val{2}, X...)
 typed_vcat(T::Type, X...) = cat_t(Val{1}, T, X...)
 typed_hcat(T::Type, X...) = cat_t(Val{2}, T, X...)
 
-cat{T}(catdims, A::AbstractArray{T}...) = cat_t(catdims, T, A...)
-
 # The specializations for 1 and 2 inputs are important
 # especially when running with --inline=no, see #11158
 vcat(A::AbstractArray) = cat(Val{1}, A)
@@ -1361,8 +1361,7 @@ julia> hvcat((2,2,2), a,b,c,d,e,f)
 If the first argument is a single integer `n`, then all block rows are assumed to have `n`
 block columns.
 """
-hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
-hvcat{T}(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat{T}...) = typed_hvcat(T, rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat...) = typed_hvcat(promote_typeof_cat(xs...), rows, xs...)
 
 function typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat...)
     nbr = length(rows)  # number of block rows
@@ -1379,7 +1378,7 @@ function typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMa
         a += rows[i]
     end
 
-    out = similar(as[1], T, nr, nc)
+    out = similar(T, nr, nc)
 
     a = 1
     r = 1
@@ -1408,7 +1407,7 @@ function typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMa
 end
 
 hvcat(rows::Tuple{Vararg{Int}}) = []
-typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}) = Array{T,1}(0)
+typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}) = similar(T, 0)
 
 function hvcat{T<:Number}(rows::Tuple{Vararg{Int}}, xs::T...)
     nr = length(rows)
@@ -1443,7 +1442,7 @@ function hvcat_fill(a::Array, xs::Tuple)
     a
 end
 
-hvcat(rows::Tuple{Vararg{Int}}, xs::Number...) = typed_hvcat(promote_typeof(xs...), rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::Number...) = typed_hvcat(Matrix{promote_typeof(xs...)}, rows, xs...)
 
 function typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...)
     nr = length(rows)
@@ -1457,7 +1456,7 @@ function typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...)
     if nr*nc != len
         throw(ArgumentError("argument count $(len) does not match specified shape $((nr,nc))"))
     end
-    hvcat_fill(Array{T,2}(nr, nc), xs)
+    hvcat_fill(similar(T, nr, nc), xs)
 end
 
 # fallback definition of hvcat in terms of hcat and vcat
@@ -1480,7 +1479,7 @@ function typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}, as...)
         rs[i] = typed_hcat(T, as[a:a-1+rows[i]]...)
         a += rows[i]
     end
-    T[rs...;]
+    eltype(T)[rs...;]
 end
 
 ## Reductions and accumulates ##
