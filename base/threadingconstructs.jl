@@ -23,9 +23,10 @@ function _threadsfor(iter,lbody)
     lidx = iter.args[1]         # index
     range = iter.args[2]
     quote
+        range = $(esc(range))
         function $fun()
             tid = threadid()
-            r = $(esc(range))
+            r = range # Load into local variable
             # divide loop iterations among threads
             len, rem = divrem(length(r), nthreads())
             # not enough iterations for all the threads?
