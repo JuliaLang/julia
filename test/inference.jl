@@ -748,3 +748,31 @@ end
 # issue #21410
 f21410(::V, ::Pair{V,E}) where {V, E} = E
 @test code_typed(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})[1].second == Type{Ref{T}} where T<:Number
+
+# issue #21369
+function inf_error_21369(arg)
+    if arg
+        # invalid instantiation, causing throw during inference
+        Complex{String}
+    end
+end
+function break_21369()
+    try
+        error("uhoh")
+    catch
+        eval(:(inf_error_21369(false)))
+        bt = catch_backtrace()
+        i = 1
+        local fr
+        while true
+            fr = Base.StackTraces.lookup(bt[i])[end]
+            if !fr.from_c
+                break
+            end
+            i += 1
+        end
+        @test fr.func === :break_21369
+        rethrow()
+    end
+end
+@test_throws ErrorException break_21369()  # not TypeError

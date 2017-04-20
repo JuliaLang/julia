@@ -266,7 +266,7 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t **pli, size_t world, int forc
         }
 #endif
         jl_get_ptls_states()->world_age = jl_typeinf_world;
-        jl_svec_t *linfo_src_rettype = (jl_svec_t*)jl_apply(fargs, 3);
+        jl_svec_t *linfo_src_rettype = (jl_svec_t*)jl_apply_with_saved_exception_state(fargs, 3, 0);
         jl_get_ptls_states()->world_age = last_age;
         assert((li->def || li->inInference == 0) && "inference failed on a toplevel expr");
         if (jl_is_svec(linfo_src_rettype) && jl_svec_len(linfo_src_rettype) == 3 &&
