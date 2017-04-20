@@ -196,8 +196,8 @@ for (gebal, gebak, elty, relty) in
             chkstride1(A)
             n = checksquare(A)
             chkfinite(A) # balancing routines don't support NaNs and Infs
-            ihi = Array{BlasInt}(1)
-            ilo = Array{BlasInt}(1)
+            ihi = Ref{BlasInt}()
+            ilo = Ref{BlasInt}()
             scale = similar(A, $relty, n)
             info = Ref{BlasInt}()
             ccall((@blasfunc($gebal), liblapack), Void,
@@ -205,7 +205,7 @@ for (gebal, gebak, elty, relty) in
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
                   &job, &n, A, &max(1,stride(A,2)), ilo, ihi, scale, info)
             chklapackerror(info[])
-            ilo[1], ihi[1], scale
+            ilo[], ihi[], scale
         end
 
         #     SUBROUTINE DGEBAK( JOB, SIDE, N, ILO, IHI, SCALE, M, V, LDV, INFO )
@@ -1965,10 +1965,10 @@ for (geevx, ggev, elty) in
                 throw(ArgumentError("jobvr must be 'V' or 'N', but $jobvr was passed"))
             end
             VR = similar(A, $elty, ldvr, n)
-            ilo = Array{BlasInt}(1)
-            ihi = Array{BlasInt}(1)
+            ilo = Ref{BlasInt}()
+            ihi = Ref{BlasInt}()
             scale = similar(A, $elty, n)
-            abnrm = Array{$elty}(1)
+            abnrm = Ref{$elty}()
             rconde = similar(A, $elty, n)
             rcondv = similar(A, $elty, n)
             work = Array{$elty}(1)
@@ -2003,7 +2003,7 @@ for (geevx, ggev, elty) in
                     work = Array{$elty}(lwork)
                 end
             end
-            A, wr, wi, VL, VR, ilo[1], ihi[1], scale, abnrm[1], rconde, rcondv
+            A, wr, wi, VL, VR, ilo[], ihi[], scale, abnrm[], rconde, rcondv
         end
 
         #       SUBROUTINE DGGEV( JOBVL, JOBVR, N, A, LDA, B, LDB, ALPHAR, ALPHAI,
@@ -2118,10 +2118,10 @@ for (geevx, ggev, elty, relty) in
                 throw(ArgumentError("sense must be 'N', 'E', 'V' or 'B', but $sense was passed"))
             end
             VR = similar(A, $elty, ldvr, n)
-            ilo = Array{BlasInt}(1)
-            ihi = Array{BlasInt}(1)
+            ilo = Ref{BlasInt}()
+            ihi = Ref{BlasInt}()
             scale = similar(A, $relty, n)
-            abnrm = Array{$relty}(1)
+            abnrm = Ref{$relty}()
             rconde = similar(A, $relty, n)
             rcondv = similar(A, $relty, n)
             work = Array{$elty}(1)
@@ -2148,7 +2148,7 @@ for (geevx, ggev, elty, relty) in
                     work = Array{$elty}(lwork)
                 end
             end
-            A, w, VL, VR, ilo[1], ihi[1], scale, abnrm[1], rconde, rcondv
+            A, w, VL, VR, ilo[], ihi[], scale, abnrm[], rconde, rcondv
         end
 
         # SUBROUTINE ZGGEV( JOBVL, JOBVR, N, A, LDA, B, LDB, ALPHA, BETA,
@@ -3372,7 +3372,7 @@ for (trcon, trevc, trrfs, elty) in
             chkstride1(T, select)
 
             # Allocate
-            m = Array{BlasInt}(1)
+            m = Ref{BlasInt}()
             work = Array{$elty}(3n)
             info = Ref{BlasInt}()
 
@@ -3390,19 +3390,19 @@ for (trcon, trevc, trrfs, elty) in
             #Decide what exactly to return
             if howmny == 'S' #compute selected eigenvectors
                 if side == 'L' #left eigenvectors only
-                    return select, VL[:,1:m[1]]
+                    return select, VL[:,1:m[]]
                 elseif side == 'R' #right eigenvectors only
-                    return select, VR[:,1:m[1]]
+                    return select, VR[:,1:m[]]
                 else #side == 'B' #both eigenvectors
-                    return select, VL[:,1:m[1]], VR[:,1:m[1]]
+                    return select, VL[:,1:m[]], VR[:,1:m[]]
                 end
             else #compute all eigenvectors
                 if side == 'L' #left eigenvectors only
-                    return VL[:,1:m[1]]
+                    return VL[:,1:m[]]
                 elseif side == 'R' #right eigenvectors only
-                    return VR[:,1:m[1]]
+                    return VR[:,1:m[]]
                 else #side == 'B' #both eigenvectors
-                    return VL[:,1:m[1]], VR[:,1:m[1]]
+                    return VL[:,1:m[]], VR[:,1:m[]]
                 end
             end
         end
@@ -3501,7 +3501,7 @@ for (trcon, trevc, trrfs, elty, relty) in
             end
 
             # Allocate
-            m = Array{BlasInt}(1)
+            m = Ref{BlasInt}()
             work = Array{$elty}(2n)
             rwork = Array{$relty}(n)
             info = Ref{BlasInt}()
@@ -3519,19 +3519,19 @@ for (trcon, trevc, trrfs, elty, relty) in
             #Decide what exactly to return
             if howmny == 'S' #compute selected eigenvectors
                 if side == 'L' #left eigenvectors only
-                    return select, VL[:,1:m[1]]
+                    return select, VL[:,1:m[]]
                 elseif side == 'R' #right eigenvectors only
-                    return select, VR[:,1:m[1]]
+                    return select, VR[:,1:m[]]
                 else #side=='B' #both eigenvectors
-                    return select, VL[:,1:m[1]], VR[:,1:m[1]]
+                    return select, VL[:,1:m[]], VR[:,1:m[]]
                 end
             else #compute all eigenvectors
                 if side == 'L' #left eigenvectors only
-                    return VL[:,1:m[1]]
+                    return VL[:,1:m[]]
                 elseif side == 'R' #right eigenvectors only
-                    return VR[:,1:m[1]]
+                    return VR[:,1:m[]]
                 else #side=='B' #both eigenvectors
-                    return VL[:,1:m[1]], VR[:,1:m[1]]
+                    return VL[:,1:m[]], VR[:,1:m[]]
                 end
             end
         end
@@ -3648,7 +3648,7 @@ for (stev, stebz, stegr, stein, elty) in
             if length(ev) != n - 1
                 throw(DimensionMismatch("ev has length $(length(ev)) but needs one less than dv's length, $n)"))
             end
-            m = Array{BlasInt}(1)
+            m = Ref{BlasInt}()
             nsplit = Array{BlasInt}(1)
             w = similar(dv, $elty, n)
             tmp = 0.0
@@ -3669,7 +3669,7 @@ for (stev, stebz, stegr, stein, elty) in
                 w, iblock, isplit, work,
                 iwork, info)
             chklapackerror(info[])
-            w[1:m[1]], iblock[1:m[1]], isplit[1:nsplit[1]]
+            w[1:m[]], iblock[1:m[]], isplit[1:nsplit[1]]
         end
 
         function stegr!(jobz::Char, range::Char, dv::StridedVector{$elty}, ev::StridedVector{$elty}, vl::Real, vu::Real, il::Integer, iu::Integer)
@@ -3680,7 +3680,7 @@ for (stev, stebz, stegr, stein, elty) in
             end
             eev = [ev; zero($elty)]
             abstol = Array{$elty}(1)
-            m = Array{BlasInt}(1)
+            m = Ref{BlasInt}()
             w = similar(dv, $elty, n)
             ldz = jobz == 'N' ? 1 : n
             Z = similar(dv, $elty, ldz, range == 'I' ? iu-il+1 : n)
@@ -3710,7 +3710,7 @@ for (stev, stebz, stegr, stein, elty) in
                     iwork = Array{BlasInt}(liwork)
                 end
             end
-            m[1] == length(w) ? w : w[1:m[1]], m[1] == size(Z, 2) ? Z : Z[:,1:m[1]]
+            m[] == length(w) ? w : w[1:m[]], m[] == size(Z, 2) ? Z : Z[:,1:m[]]
         end
 
         function stein!(dv::StridedVector{$elty}, ev_in::StridedVector{$elty}, w_in::StridedVector{$elty}, iblock_in::StridedVector{BlasInt}, isplit_in::StridedVector{BlasInt})
@@ -4824,7 +4824,7 @@ for (syev, syevr, sygvd, elty) in
                 throw(ArgumentError("lower boundary, $vl, must be less than upper boundary, $vu"))
             end
             lda = stride(A,2)
-            m = Array{BlasInt}(1)
+            m = Ref{BlasInt}()
             w = similar(A, $elty, n)
             ldz = n
             if jobz == 'N'
@@ -4860,7 +4860,7 @@ for (syev, syevr, sygvd, elty) in
                     iwork = Array{BlasInt}(liwork)
                 end
             end
-            w[1:m[1]], Z[:,1:(jobz == 'V' ? m[1] : 0)]
+            w[1:m[]], Z[:,1:(jobz == 'V' ? m[] : 0)]
         end
         syevr!(jobz::Char, A::StridedMatrix{$elty}) =
             syevr!(jobz, 'A', 'U', A, 0.0, 0.0, 0, 0, -1.0)
@@ -4971,7 +4971,7 @@ for (syev, syevr, sygvd, elty, relty) in
                 throw(ArgumentError("lower boundary, $vl, must be less than upper boundary, $vu"))
             end
             lda = max(1,stride(A,2))
-            m = Array{BlasInt}(1)
+            m = Ref{BlasInt}()
             w = similar(A, $relty, n)
             if jobz == 'N'
                 ldz = 1
@@ -5012,7 +5012,7 @@ for (syev, syevr, sygvd, elty, relty) in
                     iwork = Array{BlasInt}(liwork)
                 end
             end
-            w[1:m[1]], Z[:,1:(jobz == 'V' ? m[1] : 0)]
+            w[1:m[]], Z[:,1:(jobz == 'V' ? m[] : 0)]
         end
         syevr!(jobz::Char, A::StridedMatrix{$elty}) =
             syevr!(jobz, 'A', 'U', A, 0.0, 0.0, 0, 0, -1.0)
