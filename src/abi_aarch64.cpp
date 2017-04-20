@@ -58,6 +58,7 @@ Type *get_llvm_vectype(jl_datatype_t *dt) const
     return lltype;
 }
 
+#define jl_is_floattype(v)   jl_subtype(v,(jl_value_t*)jl_floatingpoint_type)
 Type *get_llvm_fptype(jl_datatype_t *dt) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)

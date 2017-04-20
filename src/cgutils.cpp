@@ -402,6 +402,10 @@ static Type *bitstype_to_llvm(jl_value_t *bt)
         return T_int8;
     if (bt == (jl_value_t*)jl_long_type)
         return T_size;
+    if (bt == (jl_value_t*)jl_float32_type)
+        return T_float32;
+    if (bt == (jl_value_t*)jl_float64_type)
+        return T_float64;
     if (jl_is_cpointer_type(bt)) {
         Type *lt = julia_type_to_llvm(jl_tparam0(bt));
         if (lt == T_void)
@@ -409,19 +413,6 @@ static Type *bitstype_to_llvm(jl_value_t *bt)
         return PointerType::get(lt, 0);
     }
     int nb = jl_datatype_size(bt);
-    if (jl_is_floattype(bt)) {
-#ifndef DISABLE_FLOAT16
-        if (nb == 2)
-            return T_float16;
-        else
-#endif
-        if (nb == 4)
-            return T_float32;
-        else if (nb == 8)
-            return T_float64;
-        else if (nb == 16)
-            return T_float128;
-    }
     return Type::getIntNTy(jl_LLVMContext, nb * 8);
 }
 
