@@ -2436,57 +2436,58 @@ function add_backedge(frame::InferenceState, caller::InferenceState, currpc::Int
     end
 end
 
-merge_caller_cycle!(linfo::MethodInstance, caller::Void) = nothing
+function in_egal(item, collection)
+    for x in collection
+        x === item && return true
+    end
+    return false
+end
 
-# TODO: Every time a cycle is detected (i.e. `frame` is returned),
-# loop back through from `caller` to `frame` and at each intermediate
-# `state` do:
-#
-# - push!(state.backedges, (state.parent, state.parent.currpc))
-# - union_callers!(state, state.parent)
-#
-# The following might be wrong:
-# The difference between this and the old `merge_caller_cycle!` is that the
-# old one did all the work as it went, whereas this one has to loop back through
-# once it discovers the resulting frame.
-function merge_caller_cycle!(linfo::MethodInstance, caller::InferenceState)
-    parent = caller
-    while isa(parent, InferenceState)
-        if parent.linfo === linfo
-            # add union_callers + backedge here
+function union_callers!(a::InferenceState, b::InferenceState)
+    for caller in b.callers
+        in_egal(caller, a.callers) || push!(a.callers, caller)
+    end
+    b.callers = a.callers
+    return nothing
+end
 
-            return parent
+function merge_call_chain!(child::InferenceState, ancestor::InferenceState)
+    intermediate = child
+    while intermediate !=== ancestor
+        parent = intermediate.parent
+        # TODO: use `add_backedge` here instead of `push!`?
+        push!(intermediate.backedges, (parent, parent.currpc))
+        union_callers!(intermediate, parent)
+        intermediate = parent
+    end
+    return nothing
+end
+
+function resolve_call_cycle!(linfo::MethodInstance, parent::InferenceState)
+    frame = parent
+    while isa(frame, InferenceState)
+        if frame.linfo === linfo
+            merge_call_chain!(parent, frame)
+            return frame
         else
-            for c in parent.callers
-                if c.linfo === linfo
-                    # add union_callers + backedge here
-                    return c
+            for caller in frame.callers
+                if caller.linfo === linfo
+                    merge_call_chain!(parent, caller)
+                    return caller
                 end
             end
-            parent = parent.parent
+            frame = frame.parent
         end
     end
     return nothing
 end
 
-# function merge_caller_cycle!(child::InferenceState, parent::InferenceState)
-#     self_recurs = false
-#     if f === caller
-#         self_recurs = true
-#     else
-#         grandparent = parent.parent
-#         if !(isa(grandparent, Void)) && merge_caller_cycle!(child, grandparent)
-#             union_callers!(child, grandparent)
-#             self_recurs = true
-#         end
-#     end
-#     return self_recurs
-# end
+resolve_call_cycle!(linfo::MethodInstance, parent::Void) = nothing
 
 # build (and start inferring) the inference frame for the linfo
-function typeinf_frame(linfo::MethodInstance, caller::Union{Void,InferenceState},
+function typeinf_frame(linfo::MethodInstance, parent::Union{Void,InferenceState},
                        optimize::Bool, cached::Bool, params::InferenceParams)
-    frame = merge_caller_cycle!(linfo, caller)
+    frame = resolve_call_cycle!(linfo, parent)
     if isa(frame, Void)
         # inference not started yet, make a new frame for a new lambda
         if linfo.def.isstaged
@@ -2500,7 +2501,7 @@ function typeinf_frame(linfo::MethodInstance, caller::Union{Void,InferenceState}
             src = get_source(linfo)
         end
         cached && (linfo.inInference = true)
-        frame = InferenceState(linfo, src, optimize, cached, params, caller)
+        frame = InferenceState(linfo, src, optimize, cached, params, parent)
         typeinf(frame)
     end
     return frame
