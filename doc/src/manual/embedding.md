@@ -11,7 +11,7 @@ further language bridges (e.g. calling Julia from Python or C#).
 
 We start with a simple C program that initializes Julia and calls some Julia code:
 
-```
+```c
 #include <julia.h>
 
 int main(int argc, char *argv[])
@@ -83,15 +83,15 @@ shared data directory.
 
 #### Example
 
-```
+```c
 #include <julia.h>
 
 int main(int argc, char *argv[])
 {
-   jl_init();
-   (void)jl_eval_string("println(sqrt(2.0))");
-   jl_atexit_hook(0);
-   return 0;
+    jl_init();
+    (void)jl_eval_string("println(sqrt(2.0))");
+    jl_atexit_hook(0);
+    return 0;
 }
 ```
 
@@ -143,7 +143,7 @@ Julia object. Storing simple data types like `Float64` in this way is called `bo
 the stored primitive data is called `unboxing`. Our improved sample program that calculates the
 square root of 2 in Julia and reads back the result in C looks as follows:
 
-```
+```c
 jl_value_t *ret = jl_eval_string("sqrt(2.0)");
 
 if (jl_typeis(ret, jl_float64_type)) {
@@ -163,7 +163,7 @@ is used in the above code snippet.
 
 Corresponding `jl_box_...` functions are used to convert the other way:
 
-```julia
+```c
 jl_value_t *a = jl_box_float64(3.0);
 jl_value_t *b = jl_box_float32(3.0f);
 jl_value_t *c = jl_box_int32(3);
@@ -177,7 +177,7 @@ While `jl_eval_string` allows C to obtain the result of a Julia expression, it d
 passing arguments computed in C to Julia. For this you will need to invoke Julia functions directly,
 using `jl_call`:
 
-```julia
+```c
 jl_function_t *func = jl_get_function(jl_base_module, "sqrt");
 jl_value_t *argument = jl_box_float64(2.0);
 jl_value_t *ret = jl_call1(func, argument);
@@ -211,7 +211,7 @@ safe to use pointers in between `jl_...` calls. But in order to make sure that v
 `jl_...` calls, we have to tell Julia that we hold a reference to a Julia value. This can be done
 using the `JL_GC_PUSH` macros:
 
-```
+```c
 jl_value_t *ret = jl_eval_string("sqrt(2.0)");
 JL_GC_PUSH1(&ret);
 // Do something with ret
@@ -226,7 +226,7 @@ Several Julia values can be pushed at once using the `JL_GC_PUSH2` , `JL_GC_PUSH
 macros. To push an array of Julia values one can use the  `JL_GC_PUSHARGS` macro, which can be
 used as follows:
 
-```
+```c
 jl_value_t **args;
 JL_GC_PUSHARGS(args, 2); // args can now hold 2 `jl_value_t*` objects
 args[0] = some_value;
@@ -239,7 +239,7 @@ The garbage collector also operates under the assumption that it is aware of eve
 object pointing to a young-generation one. Any time a pointer is updated breaking that assumption,
 it must be signaled to the collector with the `jl_gc_wb` (write barrier) function like so:
 
-```
+```c
 jl_value_t *parent = some_old_value, *child = some_young_value;
 ((some_specific_type*)parent)->field = child;
 jl_gc_wb(parent, child);
@@ -253,7 +253,7 @@ can sometimes invoke garbage collection.
 The write barrier is also necessary for arrays of pointers when updating their data directly.
 For example:
 
-```
+```c
 jl_array_t *some_array = ...; // e.g. a Vector{Any}
 void **data = (void**)jl_array_data(some_array);
 jl_value_t *some_value = ...;
@@ -286,7 +286,7 @@ struct that contains:
 To keep things simple, we start with a 1D array. Creating an array containing Float64 elements
 of length 10 is done by:
 
-```julia
+```c
 jl_value_t* array_type = jl_apply_array_type(jl_float64_type, 1);
 jl_array_t* x          = jl_alloc_array_1d(array_type, 10);
 ```
@@ -294,7 +294,7 @@ jl_array_t* x          = jl_alloc_array_1d(array_type, 10);
 Alternatively, if you have already allocated the array you can generate a thin wrapper around
 its data:
 
-```
+```c
 double *existingArray = (double*)malloc(sizeof(double)*10);
 jl_array_t *x = jl_ptr_to_array_1d(array_type, existingArray, 10, 0);
 ```
@@ -305,21 +305,21 @@ referenced.
 
 In order to access the data of x, we can use `jl_array_data`:
 
-```
+```c
 double *xData = (double*)jl_array_data(x);
 ```
 
 Now we can fill the array:
 
-```
+```c
 for(size_t i=0; i<jl_array_len(x); i++)
     xData[i] = i;
 ```
 
 Now let us call a Julia function that performs an in-place operation on `x`:
 
-```
-jl_function_t *func  = jl_get_function(jl_base_module, "reverse!");
+```c
+jl_function_t *func = jl_get_function(jl_base_module, "reverse!");
 jl_call1(func, (jl_value_t*)x);
 ```
 
@@ -330,7 +330,7 @@ By printing the array, one can verify that the elements of `x` are now reversed.
 If a Julia function returns an array, the return value of `jl_eval_string` and `jl_call` can be
 cast to a `jl_array_t*`:
 
-```
+```c
 jl_function_t *func  = jl_get_function(jl_base_module, "reverse");
 jl_array_t *y = (jl_array_t*)jl_call1(func, (jl_value_t*)x);
 ```
@@ -343,7 +343,7 @@ keep a reference to the array while it is in use.
 Julia's multidimensional arrays are stored in memory in column-major order. Here is some code
 that creates a 2D array and accesses its properties:
 
-```
+```c
 // Create 2D array of float64 type
 jl_value_t *array_type = jl_apply_array_type(jl_float64_type, 2);
 jl_array_t *x  = jl_alloc_array_2d(array_type, 10, 5);
@@ -369,14 +369,14 @@ in calling `jl_array_dim`) in order to read as idiomatic C code.
 
 Julia code can throw exceptions. For example, consider:
 
-```julia
+```c
 jl_eval_string("this_function_does_not_exist()");
 ```
 
 This call will appear to do nothing. However, it is possible to check whether an exception was
 thrown:
 
-```julia
+```c
 if (jl_exception_occurred())
     printf("%s \n", jl_typeof_str(jl_exception_occurred()));
 ```
@@ -390,7 +390,7 @@ was thrown, and then rethrows the exception in the host language.
 When writing Julia callable functions, it might be necessary to validate arguments and throw exceptions
 to indicate errors. A typical type check looks like:
 
-```
+```c
 if (!jl_typeis(val, jl_float64_type)) {
     jl_type_error(function_name, (jl_value_t*)jl_float64_type, val);
 }
@@ -398,14 +398,14 @@ if (!jl_typeis(val, jl_float64_type)) {
 
 General exceptions can be raised using the functions:
 
-```
+```c
 void jl_error(const char *str);
 void jl_errorf(const char *fmt, ...);
 ```
 
 `jl_error` takes a C string, and `jl_errorf` is called like `printf`:
 
-```julia
+```c
 jl_errorf("argument x = %d is too large", x);
 ```
 

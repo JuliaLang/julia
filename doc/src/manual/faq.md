@@ -29,7 +29,7 @@ you can redefine types and constants.  You can't import the type names into `Mai
 to be able to redefine them there, but you can use the module name to resolve the scope.  In other
 words, while developing you might use a workflow something like this:
 
-```
+```julia
 include("mynewcode.jl")              # this defines a module MyModule
 obj1 = MyModule.ObjConstructor(a, b)
 obj2 = MyModule.somefunction(obj1)
@@ -108,10 +108,10 @@ have two options:
 
 1. Use `import`:
 
-   ```
+   ```julia
    import Foo
    function bar(...)
-       ... refer to Foo symbols via Foo.baz ...
+       # ... refer to Foo symbols via Foo.baz ...
    end
    ```
 
@@ -120,12 +120,12 @@ have two options:
    `Foo` symbols by their qualified names `Foo.bar` etc.
 2. Wrap your function in a module:
 
-   ```
+   ```julia
    module Bar
    export bar
    using Foo
    function bar(...)
-       ... refer to Foo.baz as simply baz ....
+       # ... refer to Foo.baz as simply baz ....
    end
    end
    using Bar
