@@ -1166,7 +1166,7 @@ det(x::Number) = x
 """
     logabsdet(M)
 
-Log of absolute value of determinant of real matrix. Equivalent to
+Log of absolute value of matrix determinant. Equivalent to
 `(log(abs(det(M))), sign(det(M)))`, but may provide increased accuracy and/or speed.
 """
 logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
