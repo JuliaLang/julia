@@ -794,7 +794,7 @@ uv_write(s::LibuvStream, p::Vector{UInt8}) = uv_write(s, pointer(p), UInt(sizeof
 function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     check_open(s)
     uvw = Libc.malloc(_sizeof_uv_write)
-    uv_req_set_data(uvw,C_NULL)
+    uv_req_set_data(uvw, C_NULL)
     err = ccall(:jl_uv_write,
                 Int32,
                 (Ptr{Void}, Ptr{Void}, UInt, Ptr{Void}, Ptr{Void}),
@@ -805,8 +805,14 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
         uv_error("write", err)
     end
     ct = current_task()
-    uv_req_set_data(uvw,ct)
-    stream_wait(ct)
+    preserve_handle(ct)
+    uv_req_set_data(uvw, ct)
+    try
+        wait()
+    finally
+        uv_req_set_data(uvw, C_NULL) # make sure we don't get spurious notifications later if the wait failed
+        unpreserve_handle(ct)
+    end
     return Int(n)
 end
 
@@ -948,7 +954,7 @@ end
 function connect!(sock::PipeEndpoint, path::AbstractString)
     @assert sock.status == StatusInit
     req = Libc.malloc(_sizeof_uv_connect)
-    uv_req_set_data(req,C_NULL)
+    uv_req_set_data(req, C_NULL)
     ccall(:uv_pipe_connect, Void, (Ptr{Void}, Ptr{Void}, Cstring, Ptr{Void}), req, sock.handle, path, uv_jl_connectcb::Ptr{Void})
     sock.status = StatusConnecting
     return sock
