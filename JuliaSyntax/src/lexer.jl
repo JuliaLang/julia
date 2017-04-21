@@ -7,7 +7,7 @@ using Compat
 import Compat.String
 
 import ..Tokens
-import ..Tokens: Token, Kind, TokenError, UNICODE_OPS, EMPTY_TOKEN
+import ..Tokens: Token, Kind, TokenError, UNICODE_OPS, EMPTY_TOKEN, isliteral
 
 import ..Tokens: FUNCTION, ABSTRACT, IDENTIFIER, BAREMODULE, BEGIN, BITSTYPE, BREAK, CATCH, CONST, CONTINUE,
                  DO, ELSE, ELSEIF, END, EXPORT, FALSE, FINALLY, FOR, FUNCTION, GLOBAL, LET, LOCAL, IF, IMMUTABLE,
@@ -625,11 +625,17 @@ function lex_prime(l)
     if l.last_token == Tokens.IDENTIFIER ||
         l.last_token == Tokens.DOT ||
         l.last_token ==  Tokens.RPAREN ||
-        l.last_token ==  Tokens.RSQUARE || l.last_token == Tokens.PRIME
+        l.last_token ==  Tokens.RSQUARE || 
+        l.last_token ==  Tokens.RBRACE || 
+        l.last_token == Tokens.PRIME || isliteral(l.last_token)
         return emit(l, Tokens.PRIME)
     else
-        if peekchar(l) == '\''
-            return emit(l, Tokens.PRIME)
+        if accept(l, '\'')
+            if accept(l, '\'')
+                return emit(l, Tokens.CHAR)
+            else
+                return emit_error(l, Tokens.EOF_CHAR)
+            end
         end
         while true
             c = readchar(l)

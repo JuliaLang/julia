@@ -222,14 +222,15 @@ end
     D = ImageMagick.load(fn)
     """))
     @test tokens[16].val==tokens[17].val=="'"
-    @test all(x->x.val=="'", tok("''",   1:2))
-    @test all(x->x.val=="'", tok("'''",  1:3))
-    @test all(x->x.val=="'", tok("''''", 1:4))
-end
-
-@testset "in/isa bytelength" begin
-    t = tok("x in y", 3)
-    @test t.endbyte - t.startbyte + 1 == 2
+    @test tok("'a'").val == "'a'"
+    @test tok("'a'").kind == Tokens.CHAR
+    @test tok("'''").val == "'''"
+    @test tok("'''").kind == Tokens.CHAR
+    @test tok("''''", 1).kind == Tokens.CHAR
+    @test tok("''''", 2).kind == Tokens.PRIME
+    @test tok("()'", 3).kind == Tokens.PRIME
+    @test tok("{}'", 3).kind == Tokens.PRIME
+    @test tok("[]'", 3).kind == Tokens.PRIME
 end
 
 @testset "keywords" begin
