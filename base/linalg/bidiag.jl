@@ -199,7 +199,7 @@ end
 convert(::Type{Matrix}, A::Bidiagonal{T}) where {T} = convert(Matrix{T}, A)
 convert(::Type{Array}, A::Bidiagonal) = convert(Matrix, A)
 full(A::Bidiagonal) = convert(Array, A)
-promote_rule(::Type{Matrix{T}}, ::Type{Bidiagonal{S}}) where {T,S}=Matrix{promote_type(T,S)}
+promote_rule(::Type{Matrix{T}}, ::Type{Bidiagonal{S}}) where {T,S} = Matrix{promote_type(T,S)}
 
 #Converting from Bidiagonal to Tridiagonal
 Tridiagonal(M::Bidiagonal{T}) where {T} = convert(Tridiagonal{T}, M)
@@ -207,7 +207,7 @@ function convert(::Type{Tridiagonal{T}}, A::Bidiagonal) where T
     z = zeros(T, size(A)[1]-1)
     A.isupper ? Tridiagonal(z, convert(Vector{T},A.dv), convert(Vector{T},A.ev)) : Tridiagonal(convert(Vector{T},A.ev), convert(Vector{T},A.dv), z)
 end
-promote_rule(::Type{Tridiagonal{T}}, ::Type{Bidiagonal{S}}) where {T,S}=Tridiagonal{promote_type(T,S)}
+promote_rule(::Type{Tridiagonal{T}}, ::Type{Bidiagonal{S}}) where {T,S} = Tridiagonal{promote_type(T,S)}
 
 # No-op for trivial conversion Bidiagonal{T} -> Bidiagonal{T}
 convert(::Type{Bidiagonal{T}}, A::Bidiagonal{T}) where {T} = A
@@ -327,7 +327,7 @@ function diag{T}(M::Bidiagonal{T}, n::Integer=0)
 end
 
 function +(A::Bidiagonal, B::Bidiagonal)
-    if A.isupper==B.isupper
+    if A.isupper == B.isupper
         Bidiagonal(A.dv+B.dv, A.ev+B.ev, A.isupper)
     else
         Tridiagonal((A.isupper ? (B.ev,A.dv+B.dv,A.ev) : (A.ev,A.dv+B.dv,B.ev))...)
@@ -335,7 +335,7 @@ function +(A::Bidiagonal, B::Bidiagonal)
 end
 
 function -(A::Bidiagonal, B::Bidiagonal)
-    if A.isupper==B.isupper
+    if A.isupper == B.isupper
         Bidiagonal(A.dv-B.dv, A.ev-B.ev, A.isupper)
     else
         Tridiagonal((A.isupper ? (-B.ev,A.dv-B.dv,A.ev) : (A.ev,A.dv-B.dv,-B.ev))...)
@@ -373,11 +373,11 @@ function check_A_mul_B!_sizes(C, A, B)
     nA, mA = size(A)
     nB, mB = size(B)
     nC, mC = size(C)
-    if !(nA == nC)
+    if nA != nC
         throw(DimensionMismatch("sizes size(A)=$(size(A)) and size(C) = $(size(C)) must match at first entry."))
-    elseif !(mA == nB)
+    elseif mA != nB
         throw(DimensionMismatch("second entry of size(A)=$(size(A)) and first entry of size(B) = $(size(B)) must match."))
-    elseif !(mB == mC)
+    elseif mB != mC
         throw(DimensionMismatch("sizes size(B)=$(size(B)) and size(C) = $(size(C)) must match at first second entry."))
     end
 end

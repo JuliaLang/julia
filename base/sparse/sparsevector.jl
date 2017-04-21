@@ -243,7 +243,7 @@ function setindex!(x::SparseVector{Tv,Ti}, v::Tv, i::Ti) where {Tv,Ti<:Integer}
     x
 end
 
-setindex!(x::SparseVector{Tv,Ti}, v, i::Integer) where {Tv, Ti<:Integer} =
+setindex!(x::SparseVector{Tv,Ti}, v, i::Integer) where {Tv,Ti<:Integer} =
     setindex!(x, convert(Tv, v), convert(Ti, i))
 
 
@@ -415,7 +415,7 @@ function copy!(A::SparseVector, B::SparseMatrixCSC)
     return A
 end
 
-copy!(A::SparseMatrixCSC, B::SparseVector{TvB,TiB}) where {TvB, TiB} =
+copy!(A::SparseMatrixCSC, B::SparseVector{TvB,TiB}) where {TvB,TiB} =
     copy!(A, SparseMatrixCSC{TvB,TiB}(B.n, 1, TiB[1, length(B.nzind)+1], B.nzind, B.nzval))
 
 

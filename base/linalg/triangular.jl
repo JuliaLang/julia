@@ -324,7 +324,7 @@ function -(A::UnitUpperTriangular)
 end
 
 # copy and scale
-function copy!(A::T, B::T) where T<:Union{UpperTriangular, UnitUpperTriangular}
+function copy!(A::T, B::T) where T<:Union{UpperTriangular,UnitUpperTriangular}
     n = size(B,1)
     for j = 1:n
         for i = 1:(isa(B, UnitUpperTriangular)?j-1:j)
@@ -333,7 +333,7 @@ function copy!(A::T, B::T) where T<:Union{UpperTriangular, UnitUpperTriangular}
     end
     return A
 end
-function copy!(A::T, B::T) where T<:Union{LowerTriangular, UnitLowerTriangular}
+function copy!(A::T, B::T) where T<:Union{LowerTriangular,UnitLowerTriangular}
     n = size(B,1)
     for j = 1:n
         for i = (isa(B, UnitLowerTriangular)?j+1:j):n
@@ -343,7 +343,7 @@ function copy!(A::T, B::T) where T<:Union{LowerTriangular, UnitLowerTriangular}
     return A
 end
 
-function scale!(A::UpperTriangular, B::Union{UpperTriangular, UnitUpperTriangular}, c::Number)
+function scale!(A::UpperTriangular, B::Union{UpperTriangular,UnitUpperTriangular}, c::Number)
     n = checksquare(B)
     for j = 1:n
         if isa(B, UnitUpperTriangular)
@@ -355,7 +355,7 @@ function scale!(A::UpperTriangular, B::Union{UpperTriangular, UnitUpperTriangula
     end
     return A
 end
-function scale!(A::LowerTriangular, B::Union{LowerTriangular, UnitLowerTriangular}, c::Number)
+function scale!(A::LowerTriangular, B::Union{LowerTriangular,UnitLowerTriangular}, c::Number)
     n = checksquare(B)
     for j = 1:n
         if isa(B, UnitLowerTriangular)

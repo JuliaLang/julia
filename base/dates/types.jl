@@ -294,9 +294,9 @@ Base.typemin(::Union{Date, Type{Date}}) = Date(-252522163911150, 1, 1)
 Base.typemax(::Union{Time, Type{Time}}) = Time(23, 59, 59, 999, 999, 999)
 Base.typemin(::Union{Time, Type{Time}}) = Time(0)
 # Date-DateTime promotion, isless, ==
-Base.eltype{T<:Period}(::Type{T}) = T
+Base.eltype(::Type{T}) where {T<:Period} = T
 Base.promote_rule(::Type{Date}, x::Type{DateTime}) = DateTime
-Base.isless{T<:TimeType}(x::T, y::T) = isless(value(x), value(y))
+Base.isless(x::T, y::T) where {T<:TimeType} = isless(value(x), value(y))
 Base.isless(x::TimeType, y::TimeType) = isless(Base.promote_noncircular(x, y)...)
 ==(x::T, y::T) where {T<:TimeType} = ==(value(x), value(y))
 function ==(a::Time, b::Time)
