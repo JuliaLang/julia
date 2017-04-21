@@ -1103,3 +1103,7 @@ end
       Expr(:toplevel,
            Expr(:using, Symbol("."), :B),
            Expr(:using, Symbol("."), :C))
+
+# issue #21440
+@test parse("+(x::T,y::T) where {T} = 0") == parse("(+)(x::T,y::T) where {T} = 0")
+@test parse("a::b::c") == Expr(:(::), Expr(:(::), :a, :b), :c)

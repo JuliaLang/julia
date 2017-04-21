@@ -25,9 +25,11 @@
 (define prec-bitshift    (add-dots '(<< >> >>>)))
 (define prec-times       (add-dots '(* / ÷ % & ⋅ ∘ × |\\| ∩ ∧ ⊗ ⊘ ⊙ ⊚ ⊛ ⊠ ⊡ ⊓ ∗ ∙ ∤ ⅋ ≀ ⊼ ⋄ ⋆ ⋇ ⋉ ⋊ ⋋ ⋌ ⋏ ⋒ ⟑ ⦸ ⦼ ⦾ ⦿ ⧶ ⧷ ⨇ ⨰ ⨱ ⨲ ⨳ ⨴ ⨵ ⨶ ⨷ ⨸ ⨻ ⨼ ⨽ ⩀ ⩃ ⩄ ⩋ ⩍ ⩎ ⩑ ⩓ ⩕ ⩘ ⩚ ⩜ ⩞ ⩟ ⩠ ⫛ ⊍ ▷ ⨝ ⟕ ⟖ ⟗)))
 (define prec-rational    (add-dots '(//)))
+;; `where`
+;; unary
 (define prec-power       (add-dots '(^ ↑ ↓ ⇵ ⟰ ⟱ ⤈ ⤉ ⤊ ⤋ ⤒ ⤓ ⥉ ⥌ ⥍ ⥏ ⥑ ⥔ ⥕ ⥘ ⥙ ⥜ ⥝ ⥠ ⥡ ⥣ ⥥ ⥮ ⥯ ￪ ￬)))
 (define prec-decl        '(|::|))
-;; `where`
+;; `where` occurring after `::`
 (define prec-dot         '(|.|))
 
 (define prec-names '(prec-assignment
@@ -593,8 +595,9 @@
                         (peek-token s))))
          ex))))
 
-(define (parse-where s)
-  (let ((ex (parse-call s)))
+(define (parse-where s down)
+  ;; `where` needs to be below unary for `+(x::T,y::T) where {T} = ...` to work
+  (let ((ex (down s)))
     (if (and where-enabled
              (eq? (peek-token s) 'where))
         (parse-where-chain s ex)
@@ -819,7 +822,7 @@
 
 (define (parse-term s) (parse-with-chains s parse-rational is-prec-times? '(*)))
 
-(define (parse-rational s) (parse-LtoR s parse-unary is-prec-rational?))
+(define (parse-rational s) (parse-LtoR s (lambda (s) (parse-where s parse-unary)) is-prec-rational?))
 
 (define (parse-pipes s)    (parse-LtoR s parse-range is-prec-pipe?))
 
@@ -954,11 +957,11 @@
   (parse-factor-h s parse-decl is-prec-power?))
 
 (define (parse-decl s)
-  (let loop ((ex (parse-where s)))
+  (let loop ((ex (parse-call s)))
     (let ((t (peek-token s)))
       (case t
         ((|::|) (take-token s)
-         (loop (list t ex (parse-where s))))
+         (loop (list t ex (parse-where s parse-call))))
         ((->)   (take-token s)
          ;; -> is unusual: it binds tightly on the left and
          ;; loosely on the right.
@@ -973,7 +976,7 @@
         (begin (take-token s)
                (cond ((let ((next (peek-token s)))
                         (or (closing-token? next) (newline? next))) op)
-                     ((memq op '(& |::|))  (list op (parse-where s)))
+                     ((memq op '(& |::|))  (list op (parse-where s parse-call)))
                      (else                 (list op (parse-unary-prefix s)))))
         (parse-atom s))))
 
@@ -1312,7 +1315,7 @@
           (list 'bitstype nb spec)))
        ((typealias)
         (let ((lhs (with-space-sensitive (parse-call s)))
-              (rhs (parse-where s)))
+              (rhs (parse-where s parse-call)))
           (syntax-deprecation s (string "typealias " (deparse lhs) " " (deparse rhs))
                               (string (if (symbol? lhs) "const " "")
                                       (deparse lhs) " = " (deparse rhs)))
