@@ -96,7 +96,7 @@ macro timeit_init(ex,init,name,desc,group...)
                 t[i] = e
             end
         end
-        @output_timings t $name $desc $group
+        @output_timings t $(esc(name)) $(esc(desc)) $(esc(group))
     end
 end
 
