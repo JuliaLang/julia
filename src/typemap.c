@@ -237,7 +237,7 @@ static jl_array_t *jl_alloc_int_1d(size_t np, size_t len)
             int32 = jl_apply_array_type((jl_value_t*)jl_uint32_type, 1);
         ty = int32;
     }
-    jl_array_t *a = jl_alloc_array_1d(ty, len);
+    jl_array_t *a = jl_alloc_array_1d(ty, len, 0);
     memset(a->data, 0, len * a->elsize);
     return a;
 }

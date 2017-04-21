@@ -266,12 +266,12 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
             s->bpos += n;
             return str;
         }
-        a = jl_alloc_array_1d(jl_array_uint8_type, n);
+        a = jl_alloc_array_1d(jl_array_uint8_type, n, 0);
         memcpy(jl_array_data(a), s->buf + s->bpos, n);
         s->bpos += n;
     }
     else {
-        a = jl_alloc_array_1d(jl_array_uint8_type, 80);
+        a = jl_alloc_array_1d(jl_array_uint8_type, 80, 0);
         ios_t dest;
         ios_mem(&dest, 0);
         ios_setbuf(&dest, (char*)a->data, 80, 0);

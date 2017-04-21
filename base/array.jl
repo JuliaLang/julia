@@ -255,6 +255,15 @@ for (fname, felt) in ((:zeros,:zero), (:ones,:one))
     end
 end
 
+zero_memory_array{T, N}(::Type{T}, dims::NTuple{N, Int}) = ccall(:jl_new_array, Array{T,N}, (Any, Any, Int32), Array{T,N}, dims, Int32(1))
+zero_memory_array{T}(::Type{T}, dims::NTuple{1, Int}) = ccall(:jl_alloc_array_1d, Array{T,1}, (Any, Int, Int32), Array{T,1}, getfield(dims, 1), Int32(1))
+zero_memory_array{T}(::Type{T}, dims::NTuple{2, Int}) = ccall(:jl_alloc_array_2d, Array{T,2}, (Any, Int, Int, Int32), Array{T,2}, getfield(dims, 1), getfield(dims, 2), Int32(1))
+zero_memory_array{T}(::Type{T}, dims::NTuple{3, Int}) = ccall(:jl_alloc_array_3d, Array{T,3}, (Any, Int, Int, Int, Int32), Array{T,3}, getfield(dims, 1), getfield(dims, 2), getfield(dims, 3), Int32(1))
+
+zero_memory_array{T}(::Type{T}, dims::Tuple) = zero_memory_array(T, map((x)->convert(Int, x), dims))
+
+zeros(::Type{Float64}, dims::Tuple) = zero_memory_array(Float64, dims)
+
 """
     eye([T::Type=Float64,] m::Integer, n::Integer)
 

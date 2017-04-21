@@ -357,7 +357,7 @@ JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t
 
 void jl_gc_setmark(jl_ptls_t ptls, jl_value_t *v);
 void jl_gc_sync_total_bytes(void);
-void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a);
+void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a, uint16_t how);
 void jl_gc_count_allocd(size_t sz);
 void jl_gc_run_all_finalizers(jl_ptls_t ptls);
 

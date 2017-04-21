@@ -303,17 +303,17 @@ NTuple{N,T} = Tuple{Vararg{T,N}}
 
 # primitive array constructors
 (::Type{Array{T,N}}){T,N}(d::NTuple{N,Int}) =
-    ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
+    ccall(:jl_new_array, Array{T,N}, (Any,Any,Int32), Array{T,N}, d, Int32(0))
 (::Type{Array{T,1}}){T}(d::NTuple{1,Int}) = Array{T,1}(getfield(d,1))
 (::Type{Array{T,2}}){T}(d::NTuple{2,Int}) = Array{T,2}(getfield(d,1), getfield(d,2))
 (::Type{Array{T,3}}){T}(d::NTuple{3,Int}) = Array{T,3}(getfield(d,1), getfield(d,2), getfield(d,3))
-(::Type{Array{T,N}}){T,N}(d::Vararg{Int, N}) = ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
+(::Type{Array{T,N}}){T,N}(d::Vararg{Int, N}) = ccall(:jl_new_array, Array{T,N}, (Any,Any,Int32), Array{T,N}, d, Int32(0))
 (::Type{Array{T,1}}){T}(m::Int) =
-    ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
+    ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int,Int32), Array{T,1}, m, Int32(0))
 (::Type{Array{T,2}}){T}(m::Int, n::Int) =
-    ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2}, m, n)
+    ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int,Int32), Array{T,2}, m, n, Int32(0))
 (::Type{Array{T,3}}){T}(m::Int, n::Int, o::Int) =
-    ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3}, m, n, o)
+    ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int,Int32), Array{T,3}, m, n, o, Int32(0))
 
 (::Type{Array{T}}){T,N}(d::NTuple{N,Int}) = Array{T,N}(d)
 (::Type{Array{T}}){T}(m::Int) = Array{T,1}(m)
