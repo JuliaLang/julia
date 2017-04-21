@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import .Serializer: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG
 

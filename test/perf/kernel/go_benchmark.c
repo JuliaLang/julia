@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /* Benchmark implementing the board logic for the game of go and
  * exercising it by playing random games. Derived from
