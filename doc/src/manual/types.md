@@ -341,7 +341,7 @@ must be convertible to `Int`:
 julia> Foo((), 23.5, 1)
 ERROR: InexactError()
 Stacktrace:
- [1] convert(::Type{Int64}, ::Float64) at ./float.jl:675
+ [1] convert(::Type{Int64}, ::Float64) at ./float.jl:679
  [2] Foo(::Tuple{}, ::Float64, ::Int64) at ./none:2
 ```
 

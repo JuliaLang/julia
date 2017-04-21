@@ -853,8 +853,8 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], [true, false, true, false, true, false])
 julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
 Stacktrace:
- [1] _deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:862
- [2] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:849
+ [1] _deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:873
+ [2] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:860
 ```
 """
 deleteat!(a::Vector, inds) = _deleteat!(a, inds)
