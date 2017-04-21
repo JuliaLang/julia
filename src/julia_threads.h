@@ -140,6 +140,7 @@ typedef struct _jl_tls_states_t {
 } jl_tls_states_t;
 typedef jl_tls_states_t *jl_ptls_t;
 
+// Update codegen version in `ccall.cpp` after changing either `pause` or `wake`
 #ifdef __MIC__
 #  define jl_cpu_pause() _mm_delay_64(100)
 #  define jl_cpu_wake() ((void)0)
