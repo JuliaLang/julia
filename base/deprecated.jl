@@ -1196,10 +1196,10 @@ last{T}(r::Use_StepRangeLen_Instead{T}) = convert(T, (r.start + (r.len-1)*r.step
 
 start(r::Use_StepRangeLen_Instead) = 0
 done(r::Use_StepRangeLen_Instead, i::Int) = length(r) <= i
-next{T}(r::Use_StepRangeLen_Instead{T}, i::Int) =
+next(r::Use_StepRangeLen_Instead{T}, i::Int) where {T} =
     (convert(T, (r.start + i*r.step)/r.divisor), i+1)
 
-function getindex{T}(r::Use_StepRangeLen_Instead{T}, i::Integer)
+function getindex(r::Use_StepRangeLen_Instead{T}, i::Integer) where T
     @_inline_meta
     @boundscheck checkbounds(r, i)
     convert(T, (r.start + (i-1)*r.step)/r.divisor)
@@ -1218,20 +1218,20 @@ end
 *(x::Real, r::Use_StepRangeLen_Instead)   = Use_StepRangeLen_Instead(x*r.start, x*r.step, r.len, r.divisor)
 *(r::Use_StepRangeLen_Instead, x::Real)   = x * r
 /(r::Use_StepRangeLen_Instead, x::Real)   = Use_StepRangeLen_Instead(r.start/x, r.step/x, r.len, r.divisor)
-promote_rule{T1,T2}(::Type{Use_StepRangeLen_Instead{T1}},::Type{Use_StepRangeLen_Instead{T2}}) =
+promote_rule(::Type{Use_StepRangeLen_Instead{T1}},::Type{Use_StepRangeLen_Instead{T2}}) where {T1,T2} =
     Use_StepRangeLen_Instead{promote_type(T1,T2)}
 convert(::Type{Use_StepRangeLen_Instead{T}}, r::Use_StepRangeLen_Instead{T}) where {T<:AbstractFloat} = r
 convert(::Type{Use_StepRangeLen_Instead{T}}, r::Use_StepRangeLen_Instead) where {T<:AbstractFloat} =
     Use_StepRangeLen_Instead{T}(r.start,r.step,r.len,r.divisor)
 
-promote_rule{F,OR<:OrdinalRange}(::Type{Use_StepRangeLen_Instead{F}}, ::Type{OR}) =
+promote_rule(::Type{Use_StepRangeLen_Instead{F}}, ::Type{OR}) where {F,OR<:OrdinalRange} =
     Use_StepRangeLen_Instead{promote_type(F,eltype(OR))}
 convert(::Type{Use_StepRangeLen_Instead{T}}, r::OrdinalRange) where {T<:AbstractFloat} =
     Use_StepRangeLen_Instead{T}(first(r), step(r), length(r), one(T))
 convert(::Type{Use_StepRangeLen_Instead}, r::OrdinalRange{T}) where {T} =
     Use_StepRangeLen_Instead{typeof(float(first(r)))}(first(r), step(r), length(r), one(T))
 
-promote_rule{F,OR<:Use_StepRangeLen_Instead}(::Type{LinSpace{F}}, ::Type{OR}) =
+promote_rule(::Type{LinSpace{F}}, ::Type{OR}) where {F,OR<:Use_StepRangeLen_Instead} =
     LinSpace{promote_type(F,eltype(OR))}
 convert(::Type{LinSpace{T}}, r::Use_StepRangeLen_Instead) where {T<:AbstractFloat} =
     linspace(convert(T, first(r)), convert(T, last(r)), convert(T, length(r)))

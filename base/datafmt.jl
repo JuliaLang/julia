@@ -222,8 +222,8 @@ _chrinstr(sbuff::String, chr::UInt8, startpos::Int, endpos::Int) =
     (endpos >= startpos) && (C_NULL != ccall(:memchr, Ptr{UInt8},
     (Ptr{UInt8}, Int32, Csize_t), pointer(sbuff)+startpos-1, chr, endpos-startpos+1))
 
-function store_cell{T}(dlmstore::DLMStore{T}, row::Int, col::Int,
-        quoted::Bool, startpos::Int, endpos::Int)
+function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
+        quoted::Bool, startpos::Int, endpos::Int) where T
     drow = row - dlmstore.hdr_offset
 
     ncols = dlmstore.ncols
@@ -291,7 +291,7 @@ function store_cell{T}(dlmstore::DLMStore{T}, row::Int, col::Int,
     nothing
 end
 
-function result{T}(dlmstore::DLMStore{T})
+function result(dlmstore::DLMStore{T}) where T
     nrows = dlmstore.nrows - dlmstore.hdr_offset
     ncols = dlmstore.ncols
     lastcol = dlmstore.lastcol
@@ -456,9 +456,9 @@ function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{<:Char,2
 end
 colval(sbuff::String, startpos::Int, endpos::Int, cells::Array, row::Int, col::Int) = true
 
-function dlm_parse{D}(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
+function dlm_parse(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
                       ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool,
-                      skipstart::Int, skipblanks::Bool, dh::DLMHandler)
+                      skipstart::Int, skipblanks::Bool, dh::DLMHandler) where D
     ncols = nrows = col = 0
     is_default_dlm = (dlm == invalid_dlm(D))
     error_str = ""

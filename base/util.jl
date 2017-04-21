@@ -844,10 +844,10 @@ The default value for a type for use with the `@kwdef` macro. Returns:
 """
 function kwdef_val end
 
-kwdef_val{T}(::Type{Ptr{T}}) = Ptr{T}(C_NULL)
+kwdef_val(::Type{Ptr{T}}) where {T} = Ptr{T}(C_NULL)
 kwdef_val(::Type{Cstring}) = Cstring(C_NULL)
 kwdef_val(::Type{Cwstring}) = Cwstring(C_NULL)
 
-kwdef_val{T<:Integer}(::Type{T}) = zero(T)
+kwdef_val(::Type{T}) where {T<:Integer} = zero(T)
 
-kwdef_val{T}(::Type{T}) = T()
+kwdef_val(::Type{T}) where {T} = T()

@@ -129,7 +129,7 @@ function finalizer(o::ANY, f::ANY)
     ccall(:jl_gc_add_finalizer_th, Void, (Ptr{Void}, Any, Any),
           Core.getptls(), o, f)
 end
-function finalizer{T}(o::T, f::Ptr{Void})
+function finalizer(o::T, f::Ptr{Void}) where T
     @_inline_meta
     if isimmutable(T)
         error("objects of type ", T, " cannot be finalized")

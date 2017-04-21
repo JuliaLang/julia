@@ -59,33 +59,33 @@ module IteratorsMD
     getindex(index::CartesianIndex, i::Integer) = index.I[i]
 
     # zeros and ones
-    zero{N}(::CartesianIndex{N}) = zero(CartesianIndex{N})
-    zero{N}(::Type{CartesianIndex{N}}) = CartesianIndex(ntuple(x -> 0, Val{N}))
-    one{N}(::CartesianIndex{N}) = one(CartesianIndex{N})
-    one{N}(::Type{CartesianIndex{N}}) = CartesianIndex(ntuple(x -> 1, Val{N}))
+    zero(::CartesianIndex{N}) where {N} = zero(CartesianIndex{N})
+    zero(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 0, Val{N}))
+    one(::CartesianIndex{N}) where {N} = one(CartesianIndex{N})
+    one(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val{N}))
 
     # arithmetic, min/max
-    @inline (-){N}(index::CartesianIndex{N}) =
+    @inline (-)(index::CartesianIndex{N}) where {N} =
         CartesianIndex{N}(map(-, index.I))
-    @inline (+){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
+    @inline (+)(index1::CartesianIndex{N}, index2::CartesianIndex{N}) where {N} =
         CartesianIndex{N}(map(+, index1.I, index2.I))
-    @inline (-){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
+    @inline (-)(index1::CartesianIndex{N}, index2::CartesianIndex{N}) where {N} =
         CartesianIndex{N}(map(-, index1.I, index2.I))
-    @inline min{N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
+    @inline min(index1::CartesianIndex{N}, index2::CartesianIndex{N}) where {N} =
         CartesianIndex{N}(map(min, index1.I, index2.I))
-    @inline max{N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) =
+    @inline max(index1::CartesianIndex{N}, index2::CartesianIndex{N}) where {N} =
         CartesianIndex{N}(map(max, index1.I, index2.I))
 
     @inline (+)(i::Integer, index::CartesianIndex) = index+i
-    @inline (+){N}(index::CartesianIndex{N}, i::Integer) = CartesianIndex{N}(map(x->x+i, index.I))
-    @inline (-){N}(index::CartesianIndex{N}, i::Integer) = CartesianIndex{N}(map(x->x-i, index.I))
-    @inline (-){N}(i::Integer, index::CartesianIndex{N}) = CartesianIndex{N}(map(x->i-x, index.I))
-    @inline (*){N}(a::Integer, index::CartesianIndex{N}) = CartesianIndex{N}(map(x->a*x, index.I))
-    @inline (*)(index::CartesianIndex,a::Integer)=*(a,index)
+    @inline (+)(index::CartesianIndex{N}, i::Integer) where {N} = CartesianIndex{N}(map(x->x+i, index.I))
+    @inline (-)(index::CartesianIndex{N}, i::Integer) where {N} = CartesianIndex{N}(map(x->x-i, index.I))
+    @inline (-)(i::Integer, index::CartesianIndex{N}) where {N} = CartesianIndex{N}(map(x->i-x, index.I))
+    @inline (*)(a::Integer, index::CartesianIndex{N}) where {N} = CartesianIndex{N}(map(x->a*x, index.I))
+    @inline (*)(index::CartesianIndex, a::Integer) = *(a,index)
 
     # comparison
-    @inline isless{N}(I1::CartesianIndex{N}, I2::CartesianIndex{N}) = _isless(0, I1.I, I2.I)
-    @inline function _isless{N}(ret, I1::NTuple{N,Int}, I2::NTuple{N,Int})
+    @inline isless(I1::CartesianIndex{N}, I2::CartesianIndex{N}) where {N} = _isless(0, I1.I, I2.I)
+    @inline function _isless(ret, I1::NTuple{N,Int}, I2::NTuple{N,Int}) where N
         newret = ifelse(ret==0, icmp(I1[N], I2[N]), ret)
         _isless(newret, Base.front(I1), Base.front(I2))
     end
@@ -133,7 +133,7 @@ module IteratorsMD
         convert(Tuple{Vararg{UnitRange{Int}}}, R)
 
     ndims(R::CartesianRange) = length(R.start)
-    ndims{I<:CartesianIndex}(::Type{CartesianRange{I}}) = length(I)
+    ndims(::Type{CartesianRange{I}}) where {I<:CartesianIndex} = length(I)
 
     eachindex(::IndexCartesian, A::AbstractArray) = CartesianRange(indices(A))
 
@@ -155,7 +155,7 @@ module IteratorsMD
         end
         iter.start
     end
-    @inline function next{I<:CartesianIndex}(iter::CartesianRange{I}, state)
+    @inline function next(iter::CartesianRange{I}, state) where I<:CartesianIndex
         state, I(inc(state.I, iter.start.I, iter.stop.I))
     end
     # increment & carry
@@ -283,7 +283,7 @@ end
 @inline function index_ndims(i1::CartesianIndex, I...)
     (map(x->true, i1.I)..., index_ndims(I...)...)
 end
-@inline function index_ndims{N}(i1::AbstractArray{CartesianIndex{N}}, I...)
+@inline function index_ndims(i1::AbstractArray{CartesianIndex{N}}, I...) where N
     (ntuple(x->true, Val{N})..., index_ndims(I...)...)
 end
 index_ndims() = ()
@@ -528,13 +528,13 @@ end
 
 # see discussion in #18364 ... we try not to widen type of the resulting array
 # from cumsum or cumprod, but in some cases (+, Bool) we may not have a choice.
-rcum_promote_type{T,S<:Number}(op, ::Type{T}, ::Type{S}) = promote_op(op, T, S)
-rcum_promote_type{T<:Number}(op, ::Type{T}) = rcum_promote_type(op, T,T)
-rcum_promote_type{T}(op, ::Type{T}) = T
+rcum_promote_type(op, ::Type{T}, ::Type{S}) where {T,S<:Number} = promote_op(op, T, S)
+rcum_promote_type(op, ::Type{T}) where {T<:Number} = rcum_promote_type(op, T,T)
+rcum_promote_type(op, ::Type{T}) where {T} = T
 
 # handle sums of Vector{Bool} and similar.   it would be nice to handle
 # any AbstractArray here, but it's not clear how that would be possible
-rcum_promote_type{T,N}(op, ::Type{Array{T,N}}) = Array{rcum_promote_type(op,T), N}
+rcum_promote_type(op, ::Type{Array{T,N}}) where {T,N} = Array{rcum_promote_type(op,T), N}
 
 # accumulate_pairwise slightly slower then accumulate, but more numerically
 # stable in certain situations (e.g. sums).
@@ -784,7 +784,7 @@ end
 
 ### from abstractarray.jl
 
-function fill!{T}(A::AbstractArray{T}, x)
+function fill!(A::AbstractArray{T}, x) where T
     xT = convert(T, x)
     for I in eachindex(A)
         @inbounds A[I] = xT
@@ -799,7 +799,7 @@ Copy all elements from collection `src` to array `dest`.
 """
 copy!(dest, src)
 
-function copy!{T,N}(dest::AbstractArray{T,N}, src::AbstractArray{T,N})
+function copy!(dest::AbstractArray{T,N}, src::AbstractArray{T,N}) where {T,N}
     @boundscheck checkbounds(dest, indices(src)...)
     for I in eachindex(IndexStyle(src,dest), src)
         @inbounds dest[I] = src[I]
@@ -1195,7 +1195,7 @@ end
 
 ## findn
 
-@generated function findn{N}(B::BitArray{N})
+@generated function findn(B::BitArray{N}) where N
     quote
         nnzB = countnz(B)
         I = ntuple(x->Vector{Int}(nnzB), Val{$N})
@@ -1255,7 +1255,7 @@ function checkdims_perm{TP,TB,N}(P::AbstractArray{TP,N}, B::AbstractArray{TB,N},
 end
 
 for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
-    @eval @generated function permutedims!{$(V...)}(P::$PT{$(V...)}, B::$BT{$(V...)}, perm)
+    @eval @generated function permutedims!(P::$PT{$(V...)}, B::$BT{$(V...)}, perm) where $(V...)
         quote
             checkdims_perm(P, B, perm)
 

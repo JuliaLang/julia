@@ -58,9 +58,9 @@ function default end
 default{T<:DatePeriod}(p::Union{T,Type{T}}) = T(1)
 default{T<:TimePeriod}(p::Union{T,Type{T}}) = T(0)
 
-(-){P<:Period}(x::P) = P(-value(x))
+(-)(x::P) where {P<:Period} = P(-value(x))
 Base.isless{P<:Period}(x::P, y::P) = isless(value(x), value(y))
-=={P<:Period}(x::P, y::P) = value(x) == value(y)
+==(x::P, y::P) where {P<:Period} = value(x) == value(y)
 
 # Period Arithmetic, grouped by dimensionality:
 import Base: div, fld, mod, rem, gcd, lcm, +, -, *, /, %
@@ -82,7 +82,7 @@ for op in (:rem, :mod)
     end
 end
 
-*{P<:Period}(x::P, y::Real) = P(value(x) * Int64(y))
+*(x::P, y::Real) where {P<:Period} = P(value(x) * Int64(y))
 *(y::Real, x::Period) = x * y
 for (op, Ty, Tz) in ((:*, Real, :P),
                    (:/, :P, Float64), (:/, Real, :P))

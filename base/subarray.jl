@@ -179,7 +179,7 @@ end
 
 # In general, we simply re-index the parent indices by the provided ones
 SlowSubArray{T,N,P,I} = SubArray{T,N,P,I,false}
-function getindex{T,N}(V::SlowSubArray{T,N}, I::Vararg{Int,N})
+function getindex(V::SlowSubArray{T,N}, I::Vararg{Int,N}) where {T,N}
     @_inline_meta
     @boundscheck checkbounds(V, I...)
     @inbounds r = V.parent[reindex(V, V.indexes, I)...]
@@ -202,7 +202,7 @@ function getindex(V::FastContiguousSubArray, i::Int)
     r
 end
 
-function setindex!{T,N}(V::SlowSubArray{T,N}, x, I::Vararg{Int,N})
+function setindex!(V::SlowSubArray{T,N}, x, I::Vararg{Int,N}) where {T,N}
     @_inline_meta
     @boundscheck checkbounds(V, I...)
     @inbounds V.parent[reindex(V, V.indexes, I)...] = x
@@ -270,7 +270,7 @@ compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Slice}, 
 compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) =
     (@_inline_meta; compute_linindex(parent, I) - stride1)  # linear indexing starts with 1
 
-function compute_linindex{N}(parent, I::NTuple{N,Any})
+function compute_linindex(parent, I::NTuple{N,Any}) where N
     @_inline_meta
     IP = fill_to_length(indices(parent), OneTo(1), Val{N})
     compute_linindex(1, 1, IP, I)

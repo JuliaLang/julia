@@ -39,7 +39,7 @@ eltype(::Type{Nullable{T}}) where {T} = T
 convert(::Type{Nullable{T}}, x::Nullable{T}) where {T} = x
 convert(::Type{Nullable   }, x::Nullable   ) = x
 
-convert{T}(t::Type{Nullable{T}}, x::Any) = convert(t, convert(T, x))
+convert(t::Type{Nullable{T}}, x::Any) where {T} = convert(t, convert(T, x))
 
 function convert(::Type{Nullable{T}}, x::Nullable) where T
     return isnull(x) ? Nullable{T}() : Nullable{T}(convert(T, get(x)))
@@ -52,8 +52,8 @@ convert(::Type{Nullable   }, x::T) where {T} = Nullable{T}(x)
 convert(::Type{Nullable{T}}, ::Void) where {T} = Nullable{T}()
 convert(::Type{Nullable   }, ::Void) = Nullable{Union{}}()
 
-promote_rule{S,T}(::Type{Nullable{S}}, ::Type{T}) = Nullable{promote_type(S, T)}
-promote_rule{S,T}(::Type{Nullable{S}}, ::Type{Nullable{T}}) = Nullable{promote_type(S, T)}
+promote_rule(::Type{Nullable{S}}, ::Type{T}) where {S,T} = Nullable{promote_type(S, T)}
+promote_rule(::Type{Nullable{S}}, ::Type{Nullable{T}}) where {S,T} = Nullable{promote_type(S, T)}
 promote_op{S,T}(op::Any, ::Type{Nullable{S}}, ::Type{Nullable{T}}) = Nullable{promote_op(op, S, T)}
 promote_op{S,T}(op::Type, ::Type{Nullable{S}}, ::Type{Nullable{T}}) = Nullable{promote_op(op, S, T)}
 
@@ -277,7 +277,7 @@ implementation detail, but typically the choice that maximizes performance
 would be used. If `x` has a value, then the return type is guaranteed to be of
 type `Nullable{typeof(f(x))}`.
 """
-function map{T}(f, x::Nullable{T})
+function map(f, x::Nullable{T}) where T
     S = promote_op(f, T)
     if isleaftype(S) && null_safe_op(f, T)
         Nullable(f(unsafe_get(x)), !isnull(x))

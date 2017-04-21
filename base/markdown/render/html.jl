@@ -39,12 +39,12 @@ end
 function htmlesc(io::IO, s::Symbol)
     htmlesc(io, string(s))
 end
-function htmlesc(io::IO, xs::Union{AbstractString, Symbol}...)
+function htmlesc(io::IO, xs::Union{AbstractString,Symbol}...)
     for s in xs
         htmlesc(io, s)
     end
 end
-function htmlesc(s::Union{AbstractString, Symbol})
+function htmlesc(s::Union{AbstractString,Symbol})
     sprint(htmlesc, s)
 end
 
@@ -139,7 +139,7 @@ function htmlinline(io::IO, code::Code)
     end
 end
 
-function htmlinline(io::IO, md::Union{Symbol, AbstractString})
+function htmlinline(io::IO, md::Union{Symbol,AbstractString})
     htmlesc(io, md)
 end
 

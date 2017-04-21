@@ -62,9 +62,9 @@ nbitslen(len, offset) = len < 2 ? 0 : ceil(Int, log2(max(offset-1, len-offset)))
 
 eltype(::Type{TwicePrecision{T}}) where {T} = T
 
-promote_rule{R,S}(::Type{TwicePrecision{R}}, ::Type{TwicePrecision{S}}) =
+promote_rule(::Type{TwicePrecision{R}}, ::Type{TwicePrecision{S}}) where {R,S} =
     TwicePrecision{promote_type(R,S)}
-promote_rule{R,S}(::Type{TwicePrecision{R}}, ::Type{S}) =
+promote_rule(::Type{TwicePrecision{R}}, ::Type{S}) where {R,S} =
     TwicePrecision{promote_type(R,S)}
 
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision{T}) where {T} = x
@@ -81,7 +81,7 @@ big(x::TwicePrecision) = big(x.hi) + big(x.lo)
 
 -(x::TwicePrecision) = TwicePrecision(-x.hi, -x.lo)
 
-zero{T}(::Type{TwicePrecision{T}}) = TwicePrecision{T}(0, 0)
+zero(::Type{TwicePrecision{T}}) where {T} = TwicePrecision{T}(0, 0)
 
 ## StepRangeLen
 
@@ -120,7 +120,7 @@ function floatrange(a::AbstractFloat, st::AbstractFloat, len::Real, divisor::Abs
                  TwicePrecision{T}((st,divisor), nbitslen(T, len, 1)), Int(len), 1)
 end
 
-function colon{T<:Union{Float16,Float32,Float64}}(start::T, step::T, stop::T)
+function colon(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float64}
     step == 0 && throw(ArgumentError("range step cannot be zero"))
     # see if the inputs have exact rational approximations (and if so,
     # perform all computations in terms of the rationals)
@@ -234,10 +234,10 @@ convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{T,R,S}) where {T<:AbstractF
 convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen) where {T<:AbstractFloat,R<:TwicePrecision,S<:TwicePrecision} =
     _convertSRL(StepRangeLen{T,R,S}, r)
 
-convert{T<:Union{Float16,Float32,Float64}}(::Type{StepRangeLen{T}}, r::StepRangeLen) =
+convert(::Type{StepRangeLen{T}}, r::StepRangeLen) where {T<:Union{Float16,Float32,Float64}} =
     _convertSRL(StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}, r)
 
-convert{T<:Union{Float16,Float32,Float64}}(::Type{StepRangeLen{T}}, r::Range) =
+convert(::Type{StepRangeLen{T}}, r::Range) where {T<:Union{Float16,Float32,Float64}} =
     _convertSRL(StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}, r)
 
 function _convertSRL{T,R,S}(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{<:Integer})
@@ -296,7 +296,7 @@ end
 # sum(1:n) as a product of two integers
 sumpair(n::Integer) = iseven(n) ? (n+1, n>>1) : (n, (n+1)>>1)
 
-function +{T,R<:TwicePrecision}(r1::StepRangeLen{T,R}, r2::StepRangeLen{T,R})
+function +(r1::StepRangeLen{T,R}, r2::StepRangeLen{T,R}) where T where R<:TwicePrecision
     len = length(r1)
     (len == length(r2) ||
         throw(DimensionMismatch("argument dimensions must match")))
@@ -456,7 +456,7 @@ function +(x::TwicePrecision, y::Number)
 end
 +(x::Number, y::TwicePrecision) = y+x
 
-function +{T}(x::TwicePrecision{T}, y::TwicePrecision{T})
+function +(x::TwicePrecision{T}, y::TwicePrecision{T}) where T
     r = x.hi + y.hi
     s = abs(x.hi) > abs(y.hi) ? (((x.hi - r) + y.hi) + y.lo) + x.lo : (((y.hi - r) + x.hi) + x.lo) + y.lo
     TwicePrecision(r, s)
@@ -483,7 +483,7 @@ end
 
 _mul2(x::TwicePrecision, v::Number) = TwicePrecision(x.hi*v, x.lo*v)
 
-function *{R,S<:Number}(x::TwicePrecision{R}, v::S)
+function *(x::TwicePrecision{R}, v::S) where R where S<:Number
     T = promote_type(R, S)
     _mul2(convert(TwicePrecision{T}, x), convert(T, v))
 end

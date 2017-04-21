@@ -331,7 +331,7 @@ Factor(p::Ptr{C_Factor{Tv}}) where {Tv<:VTypes} = Factor{Tv}(p)
 # should be wrapped in get to make sure that SuiteSparse is not called with
 # a C_NULL pointer which could cause a segfault. Pointers are set to null
 # when serialized so this can happen when mutiple processes are in use.
-function get{T<:SuiteSparseStruct}(p::Ptr{T})
+function get(p::Ptr{T}) where T<:SuiteSparseStruct
     if p == C_NULL
         throw(ArgumentError("pointer to the $T object is null. This can " *
             "happen if the object has been serialized."))
@@ -410,7 +410,7 @@ function ones{T<:VTypes}(m::Integer, n::Integer, ::Type{T})
 end
 ones(m::Integer, n::Integer) = ones(m, n, Float64)
 
-function eye{T<:VTypes}(m::Integer, n::Integer, ::Type{T})
+function eye(m::Integer, n::Integer, ::Type{T}) where T<:VTypes
     d = Dense(ccall((:cholmod_l_eye, :libcholmod), Ptr{C_Dense{T}},
         (Csize_t, Csize_t, Cint, Ptr{UInt8}),
          m, n, xtyp(T), common()))
@@ -571,7 +571,7 @@ function nnz{Tv<:VTypes}(A::Sparse{Tv})
                 get(A.p), common())
 end
 
-function speye{Tv<:VTypes}(m::Integer, n::Integer, ::Type{Tv})
+function speye(m::Integer, n::Integer, ::Type{Tv}) where Tv<:VTypes
     s = Sparse(ccall((@cholmod_name("speye", SuiteSparse_long), :libcholmod),
         Ptr{C_Sparse{Tv}},
             (Csize_t, Csize_t, Cint, Ptr{UInt8}),
@@ -669,7 +669,7 @@ function norm_sparse{Tv<:VTypes}(A::Sparse{Tv}, norm::Integer)
                 get(A.p), norm, common())
 end
 
-function horzcat{Tv<:VRealTypes}(A::Sparse{Tv}, B::Sparse{Tv}, values::Bool)
+function horzcat(A::Sparse{Tv}, B::Sparse{Tv}, values::Bool) where Tv<:VRealTypes
     s = Sparse(ccall((@cholmod_name("horzcat", SuiteSparse_long), :libcholmod),
         Ptr{C_Sparse{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{C_Sparse{Tv}}, Cint, Ptr{UInt8}),
@@ -724,7 +724,7 @@ function sdmult!{Tv<:VTypes}(A::Sparse{Tv}, transpose::Bool,
     Y
 end
 
-function vertcat{Tv<:VRealTypes}(A::Sparse{Tv}, B::Sparse{Tv}, values::Bool)
+function vertcat(A::Sparse{Tv}, B::Sparse{Tv}, values::Bool) where Tv<:VRealTypes
     s = Sparse(ccall((@cholmod_name("vertcat", SuiteSparse_long), :libcholmod),
             Ptr{C_Sparse{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{C_Sparse{Tv}}, Cint, Ptr{UInt8}),
@@ -842,7 +842,7 @@ get_perm(FC::FactorComponent) = get_perm(Factor(FC))
 #########################
 
 # Convertion/construction
-function convert{T<:VTypes}(::Type{Dense{T}}, A::StridedVecOrMat)
+function convert(::Type{Dense{T}}, A::StridedVecOrMat) where T<:VTypes
     d = allocate_dense(size(A, 1), size(A, 2), stride(A, 2), T)
     s = unsafe_load(d.p)
     for i in eachindex(A)
@@ -950,7 +950,7 @@ convert(::Type{Sparse}, A::SparseMatrixCSC{Complex{Float32},<:ITypes}) =
     convert(Sparse, convert(SparseMatrixCSC{Complex{Float64},SuiteSparse_long}, A))
 convert(::Type{Sparse}, A::Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}) =
     Sparse(A.data, A.uplo == 'L' ? -1 : 1)
-convert{Tv<:VTypes}(::Type{Sparse}, A::Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}) =
+convert(::Type{Sparse}, A::Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}) where {Tv<:VTypes} =
     Sparse(A.data, A.uplo == 'L' ? -1 : 1)
 function convert{Ti<:ITypes}(::Type{Sparse},
     A::Union{SparseMatrixCSC{BigFloat,Ti},
@@ -1022,7 +1022,7 @@ function (::Type{Sparse})(filename::String)
 end
 
 ## convertion back to base Julia types
-function convert{T}(::Type{Matrix{T}}, D::Dense{T})
+function convert(::Type{Matrix{T}}, D::Dense{T}) where T
     s = unsafe_load(D.p)
     a = Matrix{T}(s.nrow, s.ncol)
     copy!(a, D)
@@ -1050,16 +1050,16 @@ function _copy!(dest::AbstractArray, D::Dense)
     end
     dest
 end
-convert{T}(::Type{Matrix}, D::Dense{T}) = convert(Matrix{T}, D)
-function convert{T}(::Type{Vector{T}}, D::Dense{T})
+convert(::Type{Matrix}, D::Dense{T}) where {T} = convert(Matrix{T}, D)
+function convert(::Type{Vector{T}}, D::Dense{T}) where T
     if size(D, 2) > 1
         throw(DimensionMismatch("input must be a vector but had $(size(D, 2)) columns"))
     end
     copy!(Array{T}(size(D, 1)), D)
 end
-convert{T}(::Type{Vector}, D::Dense{T}) = convert(Vector{T}, D)
+convert(::Type{Vector}, D::Dense{T}) where {T} = convert(Vector{T}, D)
 
-function convert{Tv}(::Type{SparseMatrixCSC{Tv,SuiteSparse_long}}, A::Sparse{Tv})
+function convert(::Type{SparseMatrixCSC{Tv,SuiteSparse_long}}, A::Sparse{Tv}) where Tv
     s = unsafe_load(A.p)
     if s.stype != 0
         throw(ArgumentError("matrix has stype != 0. Convert to matrix " *
@@ -1094,7 +1094,7 @@ function convert(::Type{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_lo
         return B
     end
 end
-function convert{Tv<:VTypes}(::Type{Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}}, A::Sparse{Tv})
+function convert(::Type{Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}}, A::Sparse{Tv}) where Tv<:VTypes
     s = unsafe_load(A.p)
     if !ishermitian(A)
         throw(ArgumentError("matrix is not Hermitian"))
@@ -1173,9 +1173,9 @@ free!(A::Dense) = free_dense!(A.p)
 free!(A::Sparse) = free_sparse!(A.p)
 free!(F::Factor) = free_factor!(F.p)
 
-eltype{T<:VTypes}(::Type{Dense{T}}) = T
-eltype{T<:VTypes}(::Type{Factor{T}}) = T
-eltype{T<:VTypes}(::Type{Sparse{T}}) = T
+eltype(::Type{Dense{T}}) where {T<:VTypes} = T
+eltype(::Type{Factor{T}}) where {T<:VTypes} = T
+eltype(::Type{Sparse{T}}) where {T<:VTypes} = T
 
 nnz(F::Factor) = nnz(Sparse(F))
 
@@ -1247,7 +1247,7 @@ function getindex(A::Dense, i::Integer)
 end
 
 IndexStyle(::Sparse) = IndexCartesian()
-function getindex{T}(A::Sparse{T}, i0::Integer, i1::Integer)
+function getindex(A::Sparse{T}, i0::Integer, i1::Integer) where T
     s = unsafe_load(get(A.p))
     !(1 <= i0 <= s.nrow && 1 <= i1 <= s.ncol) && throw(BoundsError())
     s.stype < 0 && i0 < i1 && return conj(A[i1,i0])
@@ -1287,7 +1287,7 @@ end
 (*)(A::Sparse, B::Dense) = sdmult!(A, false, 1., 0., B, zeros(size(A, 1), size(B, 2)))
 (*)(A::Sparse, B::VecOrMat) = (*)(A, Dense(B))
 
-function A_mul_Bc{Tv<:VRealTypes}(A::Sparse{Tv}, B::Sparse{Tv})
+function A_mul_Bc(A::Sparse{Tv}, B::Sparse{Tv}) where Tv<:VRealTypes
     cm = common()
 
     if A !== B

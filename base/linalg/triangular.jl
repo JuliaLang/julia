@@ -61,13 +61,13 @@ parent(A::AbstractTriangular) = A.data
 
 # then handle all methods that requires specific handling of upper/lower and unit diagonal
 
-function convert{T}(::Type{Matrix{T}}, A::LowerTriangular)
+function convert(::Type{Matrix{T}}, A::LowerTriangular) where T
     B = Array{T}(size(A, 1), size(A, 1))
     copy!(B, A.data)
     tril!(B)
     B
 end
-function convert{T}(::Type{Matrix{T}}, A::UnitLowerTriangular)
+function convert(::Type{Matrix{T}}, A::UnitLowerTriangular) where T
     B = Array{T}(size(A, 1), size(A, 1))
     copy!(B, A.data)
     tril!(B)
@@ -76,13 +76,13 @@ function convert{T}(::Type{Matrix{T}}, A::UnitLowerTriangular)
     end
     B
 end
-function convert{T}(::Type{Matrix{T}}, A::UpperTriangular)
+function convert(::Type{Matrix{T}}, A::UpperTriangular) where T
     B = Array{T}(size(A, 1), size(A, 1))
     copy!(B, A.data)
     triu!(B)
     B
 end
-function convert{T}(::Type{Matrix{T}}, A::UnitUpperTriangular)
+function convert(::Type{Matrix{T}}, A::UnitUpperTriangular) where T
     B = Array{T}(size(A, 1), size(A, 1))
     copy!(B, A.data)
     triu!(B)
@@ -119,11 +119,11 @@ function full!(A::UnitUpperTriangular)
     B
 end
 
-getindex{T}(A::UnitLowerTriangular{T}, i::Integer, j::Integer) =
+getindex(A::UnitLowerTriangular{T}, i::Integer, j::Integer) where {T} =
     i > j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
 getindex(A::LowerTriangular, i::Integer, j::Integer) =
     i >= j ? A.data[i,j] : zero(A.data[j,i])
-getindex{T}(A::UnitUpperTriangular{T}, i::Integer, j::Integer) =
+getindex(A::UnitUpperTriangular{T}, i::Integer, j::Integer) where {T} =
     i < j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
 getindex(A::UpperTriangular, i::Integer, j::Integer) =
     i <= j ? A.data[i,j] : zero(A.data[j,i])
@@ -324,7 +324,7 @@ function -(A::UnitUpperTriangular)
 end
 
 # copy and scale
-function copy!{T<:Union{UpperTriangular, UnitUpperTriangular}}(A::T, B::T)
+function copy!(A::T, B::T) where T<:Union{UpperTriangular,UnitUpperTriangular}
     n = size(B,1)
     for j = 1:n
         for i = 1:(isa(B, UnitUpperTriangular)?j-1:j)
@@ -333,7 +333,7 @@ function copy!{T<:Union{UpperTriangular, UnitUpperTriangular}}(A::T, B::T)
     end
     return A
 end
-function copy!{T<:Union{LowerTriangular, UnitLowerTriangular}}(A::T, B::T)
+function copy!(A::T, B::T) where T<:Union{LowerTriangular,UnitLowerTriangular}
     n = size(B,1)
     for j = 1:n
         for i = (isa(B, UnitLowerTriangular)?j+1:j):n
@@ -343,7 +343,7 @@ function copy!{T<:Union{LowerTriangular, UnitLowerTriangular}}(A::T, B::T)
     return A
 end
 
-function scale!(A::UpperTriangular, B::Union{UpperTriangular, UnitUpperTriangular}, c::Number)
+function scale!(A::UpperTriangular, B::Union{UpperTriangular,UnitUpperTriangular}, c::Number)
     n = checksquare(B)
     for j = 1:n
         if isa(B, UnitUpperTriangular)
@@ -355,7 +355,7 @@ function scale!(A::UpperTriangular, B::Union{UpperTriangular, UnitUpperTriangula
     end
     return A
 end
-function scale!(A::LowerTriangular, B::Union{LowerTriangular, UnitLowerTriangular}, c::Number)
+function scale!(A::LowerTriangular, B::Union{LowerTriangular,UnitLowerTriangular}, c::Number)
     n = checksquare(B)
     for j = 1:n
         if isa(B, UnitLowerTriangular)

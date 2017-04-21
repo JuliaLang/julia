@@ -20,7 +20,7 @@ const C_NULL = bitcast(Ptr{Void}, 0)
 # TODO: deprecate these conversions. C doesn't even allow them.
 
 # pointer to integer
-convert{T<:Union{Int,UInt}}(::Type{T}, x::Ptr) = bitcast(T, x)
+convert(::Type{T}, x::Ptr) where {T<:Union{Int,UInt}} = bitcast(T, x)
 convert(::Type{T}, x::Ptr) where {T<:Integer} = convert(T, convert(UInt, x))
 
 # integer to pointer
