@@ -794,7 +794,7 @@ uv_write(s::LibuvStream, p::Vector{UInt8}) = uv_write(s, pointer(p), UInt(sizeof
 function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     check_open(s)
     uvw = Libc.malloc(_sizeof_uv_write)
-    uv_req_set_data(uvw, C_NULL)
+    uv_req_set_data(uvw, C_NULL) # in case we get interrupted before arriving at the wait call
     err = ccall(:jl_uv_write,
                 Int32,
                 (Ptr{Void}, Ptr{Void}, UInt, Ptr{Void}, Ptr{Void}),
@@ -806,11 +806,18 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     end
     ct = current_task()
     preserve_handle(ct)
-    uv_req_set_data(uvw, ct)
     try
+        uv_req_set_data(uvw, ct)
         wait()
     finally
-        uv_req_set_data(uvw, C_NULL) # make sure we don't get spurious notifications later if the wait failed
+        if uv_req_data(uvw) != C_NULL
+            # uvw is still alive,
+            # so make sure we don't get spurious notifications later
+            uv_req_set_data(uvw, C_NULL)
+        else
+            # done with uvw
+            Libc.free(uvw)
+        end
         unpreserve_handle(ct)
     end
     return Int(n)
@@ -861,14 +868,17 @@ write(s::LibuvStream, b::UInt8) = write(s, Ref{UInt8}(b))
 function uv_writecb_task(req::Ptr{Void}, status::Cint)
     d = uv_req_data(req)
     if d != C_NULL
+        uv_req_set_data(req, C_NULL)
         if status < 0
-            err = UVError("write",status)
-            schedule(unsafe_pointer_to_objref(d)::Task,err,error=true)
+            err = UVError("write", status)
+            schedule(unsafe_pointer_to_objref(d)::Task, err, error=true)
         else
             schedule(unsafe_pointer_to_objref(d)::Task)
         end
+    else
+        # no owner for this req, safe to just free it
+        Libc.free(req)
     end
-    Libc.free(req)
     nothing
 end
 
