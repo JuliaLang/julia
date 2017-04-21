@@ -4,6 +4,16 @@
   task.c
   lightweight processes (symmetric coroutines)
 */
+
+//// enable this for ifndef COPY_STACKS to work on linux
+//#ifdef _FORTIFY_SOURCE
+//// disable __longjmp_chk validation so that we can jump between stacks
+//#pragma push_macro("_FORTIFY_SOURCE")
+//#undef _FORTIFY_SOURCE
+//#include <setjmp.h>
+//#pragma pop_macro("_FORTIFY_SOURCE")
+//#endif
+
 #include "platform.h"
 
 #include <stdlib.h>
@@ -625,7 +635,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     stk += pagesz;
 
     init_task(t, stk);
-    //jl_gc_add_finalizer((jl_value_t*)t, jl_unprotect_stack_func);
+    jl_gc_add_finalizer((jl_value_t*)t, jl_unprotect_stack_func);
     JL_GC_POP();
 #endif
 
@@ -635,17 +645,15 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     return t;
 }
 
-JL_CALLABLE(jl_unprotect_stack)
-{
 #ifndef COPY_STACKS
-    jl_task_t *t = (jl_task_t*)args[0];
+static void jl_unprotect_stack(jl_task_t *t)
+{
     size_t pagesz = jl_page_size;
     char *stk = (char*)LLT_ALIGN((uintptr_t)t->stkbuf, pagesz);
     // unprotect stack so it can be reallocated for something else
     mprotect(stk, pagesz - 1, PROT_READ|PROT_WRITE);
-#endif
-    return jl_nothing;
 }
+#endif
 
 JL_DLLEXPORT jl_value_t *jl_get_current_task(void)
 {
@@ -690,7 +698,9 @@ void jl_init_tasks(void)
     failed_sym = jl_symbol("failed");
     runnable_sym = jl_symbol("runnable");
 
-    //jl_unprotect_stack_func = jl_new_closure(jl_unprotect_stack, (jl_value_t*)jl_emptysvec, NULL);
+#ifndef COPY_STACKS
+    jl_unprotect_stack_func = jl_box_voidpointer(&jl_unprotect_stack);
+#endif
 }
 
 // Initialize a root task using the given stack.

@@ -1734,7 +1734,9 @@ static void mark_roots(jl_ptls_t ptls)
     if (jl_all_methods != NULL)
         gc_push_root(ptls, jl_all_methods, 0);
 
-    // gc_push_root(ptls, jl_unprotect_stack_func, 0);
+#ifndef COPY_STACKS
+    gc_push_root(ptls, jl_unprotect_stack_func, 0);
+#endif
 
     // constants
     gc_push_root(ptls, jl_typetype_type, 0);
