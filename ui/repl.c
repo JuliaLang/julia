@@ -87,7 +87,7 @@ static int exec_program(char *program)
 void jl_lisp_prompt();
 
 #ifndef _WIN32
-int jl_repl_raise_sigtstp(void)
+JL_DLLEXPORT int jl_repl_raise_sigtstp(void)
 {
     return raise(SIGTSTP);
 }
