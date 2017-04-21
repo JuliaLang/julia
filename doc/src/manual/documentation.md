@@ -267,7 +267,7 @@ instance, rather than just on the type itself. In these cases, you can add a met
 for your custom type that returns the documentation on a per-instance basis. For instance,
 
 ```julia
-type MyType
+struct MyType
     value::String
 end
 

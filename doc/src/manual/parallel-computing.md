@@ -520,7 +520,7 @@ A channel can be visualized as a pipe, i.e., it has a write end and read end.
   * Multiple readers in different tasks can read data concurrently via [`take!()`](@ref) calls.
   * As an example:
 
-    ```
+    ```julia
     # Given Channels c1 and c2,
     c1 = Channel(32)
     c2 = Channel(32)
