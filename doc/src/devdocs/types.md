@@ -229,7 +229,7 @@ field, it's helpful to pick a type that is less heavily used than Array. Let's f
 own type:
 
 ```jldoctest
-julia> type MyType{T,N} end
+julia> struct MyType{T,N} end
 
 julia> MyType{Int,2}
 MyType{Int64,2}
