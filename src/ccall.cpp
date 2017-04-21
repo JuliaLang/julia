@@ -1676,6 +1676,20 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             emit_bitcast(ctx->ptlsStates, lrt),
             retboxed, rt, unionall, static_rt, ctx);
     }
+    if (fptr == (void(*)(void))&jl_threadid ||
+        ((!f_lib || (intptr_t)f_lib == 2) && f_name &&
+         strcmp(f_name, "jl_threadid") == 0)) {
+        assert(lrt == T_int16);
+        assert(!isVa && !llvmcall);
+        assert(nargt == 0);
+        JL_GC_POP();
+        Value *ptls_i16 = emit_bitcast(ctx->ptlsStates, T_pint16);
+        const int tid_offset = offsetof(jl_tls_states_t, tid);
+        Value *ptid = builder.CreateGEP(ptls_i16, ConstantInt::get(T_size, tid_offset / 2));
+        return mark_or_box_ccall_result(
+            tbaa_decorate(tbaa_const, builder.CreateLoad(ptid)),
+            retboxed, rt, unionall, static_rt, ctx);
+    }
     if (fptr == &jl_sigatomic_begin ||
         ((!f_lib || (intptr_t)f_lib == 2) && f_name &&
          strcmp(f_name, "jl_sigatomic_begin") == 0)) {
