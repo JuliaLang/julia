@@ -120,6 +120,7 @@ makedocs(
     clean     = false,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,
+    linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
     strict    = true,
     checkdocs = :none,
     format    = "pdf" in ARGS ? :latex : :html,
