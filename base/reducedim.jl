@@ -688,7 +688,7 @@ julia> findmax(A,2)
 ([2; 4], [3; 4])
 ```
 """
-function findmax{T}(A::AbstractArray{T}, region)
+function findmax(A::AbstractArray{T}, region) where {T}
     if isempty(A)
         return (similar(A, reduced_indices0(A,region)),
                 similar(dims->zeros(Int, dims), reduced_indices0(A,region)))
