@@ -21,7 +21,7 @@ julia> d2 = Date("2017-12-31", Dates.DateFormat("y-m-d"))
 2017-12-31
 
 julia> Dates.yearmonthday(d2)
-(2017,12,31)
+(2017, 12, 31)
 
 julia> d2-d1
 30 days
