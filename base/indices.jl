@@ -218,20 +218,40 @@ to_indices(A, inds, I::Tuple{Any, Vararg{Any}}) =
 _maybetail(::Tuple{}) = ()
 _maybetail(t::Tuple) = tail(t)
 
+# TODO: reparametrize in a manner consistent with other AbstractUnitRanges,
+# rename (IdempotentRange? IdentityRange?), and move to ranges.jl
 """
-   Slice(indices)
+    Slice(r::AbstractUnitRange) -> s
 
-Represent an AbstractUnitRange of indices as a vector of the indices themselves.
+Construct an `AbstractUnitRange` where `s[i] == i` for any valid `i`;
+equivalently, `indices(s, 1) == r` and `s[s] === s`.
+
+These are particularly useful for creating `view`s of arrays that
+preserve the supplied indices:
+```jldoctest
+julia> a = rand(8);
+
+julia> v1 = view(a, 3:5);
+
+julia> indices(v1, 1)
+Base.OneTo(3)
+
+julia> s = Base.Slice(3:5)
+Base.Slice(3:5)
+
+julia> v2 = view(a, s);
+
+julia> indices(v2, 1)
+3:5
+```
 
 Upon calling `to_indices()`, Colons are converted to Slice objects to represent
-the indices over which the Colon spans. Slice objects are themselves unit
-ranges with the same indices as those they wrap. This means that indexing into
-Slice objects with an integer always returns that exact integer, and they
-iterate over all the wrapped indices, even supporting offset indices.
+the indices over which the Colon spans.
 """
 struct Slice{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
     indices::T
 end
+Slice(S::Slice) = S  # idempotent
 indices(S::Slice) = (S.indices,)
 unsafe_indices(S::Slice) = (S.indices,)
 indices1(S::Slice) = S.indices
@@ -242,7 +262,28 @@ size(S::Slice) = first(S.indices) == 1 ? (length(S.indices),) : errmsg(S)
 length(S::Slice) = first(S.indices) == 1 ? length(S.indices) : errmsg(S)
 unsafe_length(S::Slice) = first(S.indices) == 1 ? unsafe_length(S.indices) : errmsg(S)
 getindex(S::Slice, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
+function getindex(r::Slice, s::AbstractUnitRange{<:Integer})
+    @_inline_meta
+    @boundscheck checkbounds(r, s)
+    s
+end
 show(io::IO, r::Slice) = print(io, "Base.Slice(", r.indices, ")")
 start(S::Slice) = start(S.indices)
 next(S::Slice, s) = next(S.indices, s)
 done(S::Slice, s) = done(S.indices, s)
+intersect{I<:AbstractUnitRange{Int}}(r::Slice{I}, s::Slice{I}) =
+    Slice(convert(I, max(first(r), first(s)):min(last(r), last(s))))
+intersect(r::Slice, s::Slice) =
+    Slice(max(first(r), first(s)):min(last(r), last(s)))
+reverse(r::Slice) = error("reverse is not supported for Base.Slice")
+sortperm(r::Slice) = r
+==(r::Slice, s::Slice) = (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
+==(r::Slice, s::OrdinalRange) = (first(r) == first(s) == 1) & (step(r) == step(s)) & (last(r) == last(s))
+==(s::OrdinalRange, r::Slice) = r == s
+promote_rule{R1,R2}(::Type{Slice{R1}},::Type{Slice{R2}}) =
+    Slice{promote_type(R1,R2)}
+convert{R<:AbstractUnitRange{Int}}(::Type{Slice{R}}, r::Slice{R}) = r
+convert{R<:AbstractUnitRange{Int}}(::Type{Slice{R}}, r::Slice) =
+    Slice(convert(R, r.indices))
+convert{R<:AbstractUnitRange{Int}}(::Type{Slice}, r::Slice{R}) =
+    convert(Slice{R}, r)

@@ -2073,3 +2073,103 @@ end
 Base.:*(a::T11053, b::Real) = T11053(a.a*b)
 Base.:(==)(a::T11053, b::T11053) = a.a == b.a
 @test [T11053(1)] * 5 == [T11053(1)] .* 5 == [T11053(5.0)]
+
+@testset "Slice" begin
+    r = Base.Slice(0:-5)
+    @test isempty(r)
+    r = Base.Slice(0:2)
+    @test Base.Slice(r) === r
+    @test !isempty(r)
+    @test indices(r) === (0:2,)
+    @test step(r) == 1
+    @test first(r) == 0
+    @test last(r) == 2
+    @test minimum(r) == 0
+    @test maximum(r) == 2
+    @test r[0] == 0
+    @test r[1] == 1
+    @test r[2] == 2
+    @test r != 0:2
+    @test r == Base.Slice(0:2)
+    @test r === Base.Slice(0:2)
+    @test_throws BoundsError r[3]
+    @test_throws BoundsError r[-1]
+    @test r[0:2] === 0:2
+    @test r[r] === r
+    @test r[Base.Slice(1:2)] === Base.Slice(1:2)
+    @test r[1:2] === 1:2
+    @test_throws BoundsError r[Base.Slice(1:3)]
+    @test_throws BoundsError r[1:3]
+    k = -1
+    for i in r
+        @test i == (k+=1)
+    end
+    @test k == 2
+    @test intersect(r, Base.Slice(-1:1)) === intersect(Base.Slice(-1:1), r) === Base.Slice(0:1)
+    @test intersect(r, -1:5) === intersect(-1:5, r) === 0:2
+    @test intersect(r, 2:5) === intersect(2:5, r) === 2:2
+    # Not ideal, but at least this isn't wrong...
+    @test_throws ErrorException r+1
+    @test_throws ErrorException r-1
+    @test_throws ErrorException 2*r
+    @test_throws ErrorException r/2
+    @test_throws ErrorException reverse(r)
+
+    r = Base.Slice(2:4)
+    @test r != 2:4
+    @test r == Base.Slice(2:4)
+    @test r === Base.Slice(2:4)
+    @test Base.Slice(1:4) == 1:4
+    @test checkindex(Bool, r, 4)
+    @test !checkindex(Bool, r, 5)
+    @test checkindex(Bool, r, :)
+    @test checkindex(Bool, r, 2:4)
+    @test !checkindex(Bool, r, 1:5)
+    @test !checkindex(Bool, r, trues(4))
+    @test !checkindex(Bool, r, trues(3))
+    @test checkindex(Bool, r, view(trues(5), r))
+    @test !in(1, r)
+    @test in(2, r)
+    @test in(4, r)
+    @test !in(5, r)
+    @test issorted(r)
+    @test maximum(r) == 4
+    @test minimum(r) == 2
+    @test sortperm(r) == r
+
+    r = Base.Slice(Int16(0):Int16(4))
+    @test start(r) === 0
+    k = -1
+    for i in r
+        @test i == (k+=1)
+    end
+    @test k == 4
+    x, y = promote(r, Base.Slice(2:4))
+    @test x === Base.Slice(0:4)
+    @test y === Base.Slice(2:4)
+    x, y = promote(Base.Slice(4:5), 0:7)
+    @test x === 4:5
+    @test y === 0:7
+    r = Base.Slice(Int128(1):Int128(10))
+    @test length(r) === Int128(10)
+end
+
+@testset "Slice with view" begin
+    a = rand(8)
+    idr = Base.Slice(2:4)
+    v = view(a, idr)
+    @test indices(v) == (2:4,)
+    @test v[2] == a[2]
+    @test v[3] == a[3]
+    @test v[4] == a[4]
+    @test_throws BoundsError v[1]
+    @test_throws BoundsError v[5]
+
+    a = rand(5, 5)
+    idr2 = Base.Slice(3:4)
+    v = view(a, idr, idr2)
+    @test indices(v) == (2:4, 3:4)
+    @test v[2,3] == a[2,3]
+end
+
+nothing
