@@ -12,7 +12,8 @@ mutable struct SerializationState{I<:IO} <: AbstractSerializer
     io::I
     counter::Int
     table::ObjectIdDict
-    SerializationState{I}(io::I) where I<:IO = new(io, 0, ObjectIdDict())
+    known_object_data::Dict{UInt64,Any}
+    SerializationState{I}(io::I) where I<:IO = new(io, 0, ObjectIdDict(), Dict{UInt64,Any}())
 end
 
 SerializationState(io::IO) = SerializationState{typeof(io)}(io)
@@ -326,7 +327,7 @@ end
 
 # TODO: make this bidirectional, so objects can be sent back via the same key
 const object_numbers = WeakKeyDict()
-obj_number_salt = 0
+const obj_number_salt = Ref(0)
 function object_number(l::ANY)
     global obj_number_salt, object_numbers
     if haskey(object_numbers, l)
@@ -334,10 +335,23 @@ function object_number(l::ANY)
     end
     # a hash function that always gives the same number to the same
     # object on the same machine, and is unique over all machines.
-    ln = obj_number_salt+(UInt64(myid())<<44)
-    obj_number_salt += 1
+    ln = obj_number_salt[]+(UInt64(myid())<<44)
+    obj_number_salt[] += 1
     object_numbers[l] = ln
     return ln::UInt64
+end
+
+lookup_object_number(s::AbstractSerializer, n::UInt64) = nothing
+
+remember_object(s::AbstractSerializer, o::ANY, n::UInt64) = nothing
+
+function lookup_object_number(s::SerializationState, n::UInt64)
+    return get(s.known_object_data, n, nothing)
+end
+
+function remember_object(s::SerializationState, o::ANY, n::UInt64)
+    s.known_object_data[n] = o
+    return nothing
 end
 
 function serialize(s::AbstractSerializer, meth::Method)
@@ -636,12 +650,11 @@ function deserialize(s::AbstractSerializer, ::Type{Module})
     m
 end
 
-const known_object_data = Dict()
-
 function deserialize(s::AbstractSerializer, ::Type{Method})
     lnumber = read(s.io, UInt64)
-    if haskey(known_object_data, lnumber)
-        meth = known_object_data[lnumber]::Method
+    meth = lookup_object_number(s, lnumber)
+    if meth !== nothing
+        meth = meth::Method
         makenew = false
     else
         meth = ccall(:jl_new_method_uninit, Ref{Method}, ())
@@ -683,7 +696,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         if isdefined(ftype.name, :mt) && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), ftype.name.mt, sig, typemax(UInt))
             ccall(:jl_method_table_insert, Void, (Any, Any, Ptr{Void}), ftype.name.mt, meth, C_NULL)
         end
-        known_object_data[lnumber] = meth
+        remember_object(s, meth, lnumber)
     end
     return meth
 end
@@ -781,7 +794,7 @@ end
 
 function deserialize_typename(s::AbstractSerializer, number)
     name = deserialize(s)::Symbol
-    tn = get(known_object_data, number, nothing)
+    tn = lookup_object_number(s, number)
     if tn !== nothing
         makenew = false
     else
@@ -790,12 +803,8 @@ function deserialize_typename(s::AbstractSerializer, number)
         tn = ccall(:jl_new_typename_in, Ref{TypeName}, (Any, Any),
                    tn_name, __deserialized_types__)
         makenew = true
-        known_object_data[number] = tn
     end
-    if !haskey(object_numbers, tn)
-        # set up reverse mapping for serialize
-        object_numbers[tn] = number
-    end
+    remember_object(s, tn, number)
     deserialize_cycle(s, tn)
 
     names = deserialize(s)::SimpleVector
