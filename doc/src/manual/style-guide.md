@@ -123,7 +123,7 @@ Types such as `Union{Function,AbstractString}` are often a sign that some design
 When creating a type such as:
 
 ```julia
-struct MyType
+mutable struct MyType
     ...
     x::Union{Void,T}
 end

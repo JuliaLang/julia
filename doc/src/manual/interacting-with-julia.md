@@ -189,14 +189,14 @@ history without prefix search, one could put the following code in `.juliarc.jl`
 import Base: LineEdit, REPL
 
 const mykeys = Dict{Any,Any}(
-  # Up Arrow
-  "\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, LineEdit.mode(s).hist)),
-  # Down Arrow
-  "\e[B" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
+    # Up Arrow
+    "\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, LineEdit.mode(s).hist)),
+    # Down Arrow
+    "\e[B" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
 )
 
 function customize_keys(repl)
-  repl.interface = REPL.setup_interface(repl; extra_repl_keymap = mykeys)
+    repl.interface = REPL.setup_interface(repl; extra_repl_keymap = mykeys)
 end
 
 atreplinit(customize_keys)
