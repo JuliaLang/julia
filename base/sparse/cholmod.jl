@@ -1138,7 +1138,7 @@ function sparse(F::Factor)
     SparseArrays.sortSparseMatrixCSC!(A)
     p = get_perm(F)
     if p != [1:s.n;]
-        pinv = Array{Int}(length(p))
+        pinv = Vector{Int}(length(p))
         for k = 1:length(p)
             pinv[p[k]] = k
         end
@@ -1267,7 +1267,7 @@ function getindex(F::Factor, sym::Symbol)
 end
 
 function getLd!(S::SparseMatrixCSC)
-    d = Array{eltype(S)}(size(S, 1))
+    d = Vector{eltype(S)}(size(S, 1))
     fill!(d, 0)
     col = 1
     for k = 1:nnz(S)
