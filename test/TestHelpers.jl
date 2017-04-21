@@ -198,6 +198,24 @@ end
     val
 end
 
+@inline function Base.deleteat!(A::OffsetArray, i::Int)
+    checkbounds(A, i)
+    @inbounds deleteat!(parent(A), offset(A.offsets, (i,))[1])
+end
+
+@inline function Base.deleteat!{T,N}(A::OffsetArray{T,N}, I::Vararg{Int, N})
+    checkbounds(A, I...)
+    @inbounds deleteat!(parent(A), offset(A.offsets, I)...)
+end
+
+@inline function Base.deleteat!(A::OffsetArray, i::UnitRange{Int})
+    checkbounds(A, first(i))
+    checkbounds(A, last(i))
+    first_idx = offset(A.offsets, (first(i),))[1]
+    last_idx = offset(A.offsets, (last(i),))[1]
+    @inbounds deleteat!(parent(A), first_idx:last_idx)
+end
+
 # Computing a shifted index (subtracting the offset)
 offset{N}(offsets::NTuple{N,Int}, inds::NTuple{N,Int}) = _offset((), offsets, inds)
 _offset(out, ::Tuple{}, ::Tuple{}) = out
