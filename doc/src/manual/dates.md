@@ -14,11 +14,12 @@ time, and leap seconds are unnecessary and avoided.
 
 Both [`Date`](@ref) and [`DateTime`](@ref) are basically immutable `Int64` wrappers. The single
 `instant` field of either type is actually a `UTInstant{P}` type, which represents a continuously
-increasing machine timeline based on the UT second [^1]. The [`DateTime`](@ref) type is *timezone-unaware*
-(in Python parlance) or is analogous to a *LocalDateTime* in Java 8. Additional time zone functionality
+increasing machine timeline based on the UT second [^1]. The [`DateTime`](@ref)
+type is not aware of time zones (*naive*, in Python parlance),
+analogous to a *LocalDateTime* in Java 8. Additional time zone functionality
 can be added through the [TimeZones.jl package](https://github.com/JuliaTime/TimeZones.jl/), which
 compiles the [IANA time zone database](http://www.iana.org/time-zones). Both [`Date`](@ref) and
-[`DateTime`](@ref) are based on the ISO 8601 standard, which follows the proleptic Gregorian calendar.
+[`DateTime`](@ref) are based on the [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) standard, which follows the proleptic Gregorian calendar.
 One note is that the ISO 8601 standard is particular about BC/BCE dates. In general, the last
 day of the BC/BCE era, 1-12-31 BC/BCE, was followed by 1-1-1 AD/CE, thus no year zero exists.
 The ISO standard, however, states that 1 BC/BCE is year zero, so `0000-12-31` is the day before

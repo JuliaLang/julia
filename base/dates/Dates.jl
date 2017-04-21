@@ -7,7 +7,7 @@ The `Dates` module provides `Date`, `DateTime`, `Time` types, and related functi
 
 The types are not aware of time zones, based on UT seconds
 (86400 seconds a day, avoiding leap seconds), and
-use the proleptic Gregorian calendar, as specified in ISO 8601.
+use the proleptic Gregorian calendar, as specified in [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601).
 For time zone functionality, see the TimeZones.jl package.
 
 ```jldoctest
