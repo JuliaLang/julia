@@ -95,9 +95,9 @@ convert(::Type{Rational}, x::Float32) = convert(Rational{Int}, x)
 
 big(z::Complex{<:Rational{<:Integer}}) = Complex{Rational{BigInt}}(z)
 
-promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
-promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
-promote_rule{T<:Integer,S<:AbstractFloat}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
+promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
+promote_rule(::Type{Rational{T}}, ::Type{Rational{S}}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
+promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:AbstractFloat} = promote_type(T,S)
 
 widen{T}(::Type{Rational{T}}) = Rational{widen(T)}
 
@@ -224,11 +224,11 @@ typemax{T<:Integer}(::Type{Rational{T}}) = one(T)//zero(T)
 isinteger(x::Rational) = x.den == 1
 
 -(x::Rational) = (-x.num) // x.den
-function -{T<:Signed}(x::Rational{T})
+function -(x::Rational{T}) where T<:Signed
     x.num == typemin(T) && throw(OverflowError())
     (-x.num) // x.den
 end
-function -{T<:Unsigned}(x::Rational{T})
+function -(x::Rational{T}) where T<:Unsigned
     x.num != zero(T) && throw(OverflowError())
     x
 end
@@ -416,8 +416,8 @@ function ^(x::Rational, n::Integer)
 end
 
 ^(x::Number, y::Rational) = x^(y.num/y.den)
-^{T<:AbstractFloat}(x::T, y::Rational) = x^convert(T,y)
-^{T<:AbstractFloat}(x::Complex{T}, y::Rational) = x^convert(T,y)
+^(x::T, y::Rational) where {T<:AbstractFloat} = x^convert(T,y)
+^(x::Complex{T}, y::Rational) where {T<:AbstractFloat} = x^convert(T,y)
 
 ^(z::Complex{<:Rational}, n::Bool) = n ? z : one(z) # to resolve ambiguity
 function ^(z::Complex{<:Rational}, n::Integer)

@@ -386,17 +386,17 @@ function cholfact(x::Number, uplo::Symbol=:U)
 end
 
 
-function convert{T}(::Type{Cholesky{T}}, C::Cholesky)
+function convert(::Type{Cholesky{T}}, C::Cholesky) where T
     Cnew = convert(AbstractMatrix{T}, C.factors)
     Cholesky{T, typeof(Cnew)}(Cnew, C.uplo)
 end
-convert{T}(::Type{Factorization{T}}, C::Cholesky{T}) = C
-convert{T}(::Type{Factorization{T}}, C::Cholesky) = convert(Cholesky{T}, C)
-convert{T}(::Type{CholeskyPivoted{T}},C::CholeskyPivoted{T}) = C
-convert{T}(::Type{CholeskyPivoted{T}},C::CholeskyPivoted) =
+convert(::Type{Factorization{T}}, C::Cholesky{T}) where {T} = C
+convert(::Type{Factorization{T}}, C::Cholesky) where {T} = convert(Cholesky{T}, C)
+convert(::Type{CholeskyPivoted{T}},C::CholeskyPivoted{T}) where {T} = C
+convert(::Type{CholeskyPivoted{T}},C::CholeskyPivoted) where {T} =
     CholeskyPivoted(AbstractMatrix{T}(C.factors),C.uplo,C.piv,C.rank,C.tol,C.info)
-convert{T}(::Type{Factorization{T}}, C::CholeskyPivoted{T}) = C
-convert{T}(::Type{Factorization{T}}, C::CholeskyPivoted) = convert(CholeskyPivoted{T}, C)
+convert(::Type{Factorization{T}}, C::CholeskyPivoted{T}) where {T} = C
+convert(::Type{Factorization{T}}, C::CholeskyPivoted) where {T} = convert(CholeskyPivoted{T}, C)
 
 convert(::Type{AbstractMatrix}, C::Cholesky) = C.uplo == 'U' ? C[:U]'C[:U] : C[:L]*C[:L]'
 convert(::Type{AbstractArray}, C::Cholesky) = convert(AbstractMatrix, C)
@@ -425,7 +425,7 @@ function getindex(C::Cholesky, d::Symbol)
     d == :UL && return Symbol(C.uplo) == :U ? UpperTriangular(C.factors) : LowerTriangular(C.factors)
     throw(KeyError(d))
 end
-function getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, d::Symbol)
+function getindex(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
     d == :U && return UpperTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
     d == :L && return LowerTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
     d == :p && return C.piv

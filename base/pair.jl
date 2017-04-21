@@ -10,7 +10,7 @@ const => = Pair
 start(p::Pair) = 1
 done(p::Pair, i) = i>2
 next(p::Pair, i) = (getfield(p,i), i+1)
-eltype{A,B}(p::Pair{A,B}) = Union{A,B}
+eltype(p::Pair{A,B}) where {A,B} = Union{A,B}
 
 indexed_next(p::Pair, i::Int, state) = (getfield(p,i), i+1)
 
@@ -31,9 +31,9 @@ first(p::Pair) = p.first
 last(p::Pair) = p.second
 
 convert(::Type{Pair{A,B}}, x::Pair{A,B}) where {A,B} = x
-function convert(::Type{Pair{A,B}}, x::Pair) where A where B
-    Pair{A, B}(convert(A, x[1]), convert(B, x[2]))
+function convert(::Type{Pair{A,B}}, x::Pair) where {A,B}
+    Pair{A,B}(convert(A, x[1]), convert(B, x[2]))
 end
 
-promote_rule{A1, B1, A2, B2}(::Type{Pair{A1, B1}}, ::Type{Pair{A2, B2}}) =
+promote_rule(::Type{Pair{A1,B1}}, ::Type{Pair{A2,B2}}) where {A1,B1,A2,B2} =
     Pair{promote_type(A1, A2), promote_type(B1, B2)}

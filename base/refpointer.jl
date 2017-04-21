@@ -27,7 +27,7 @@ end
 
 ### General Methods for Ref{T} type
 
-eltype{T}(x::Type{Ref{T}}) = T
+eltype(x::Type{Ref{T}}) where {T} = T
 convert(::Type{Ref{T}}, x::Ref{T}) where {T} = x
 
 # create Ref objects for general object conversion
@@ -48,11 +48,11 @@ Ref(x::Ref) = x
 Ref(x::Any) = RefValue(x)
 Ref{T}(x::Ptr{T}, i::Integer=1) = x + (i-1)*Core.sizeof(T)
 Ref(x, i::Integer) = (i != 1 && error("Object only has one element"); Ref(x))
-(::Type{Ref{T}}){T}() = RefValue{T}() # Ref{T}()
-(::Type{Ref{T}}){T}(x) = RefValue{T}(x) # Ref{T}(x)
+(::Type{Ref{T}})() where {T} = RefValue{T}() # Ref{T}()
+(::Type{Ref{T}})(x) where {T} = RefValue{T}(x) # Ref{T}(x)
 convert(::Type{Ref{T}}, x) where {T} = RefValue{T}(x)
 
-function unsafe_convert{T}(P::Type{Ptr{T}}, b::RefValue{T})
+function unsafe_convert(P::Type{Ptr{T}}, b::RefValue{T}) where T
     if isbits(T)
         return convert(P, data_pointer_from_objref(b))
     else
@@ -76,7 +76,7 @@ RefArray{T}(x::AbstractArray{T},i::Int=1,roots::Void=nothing) = RefArray{T,typeo
 convert(::Type{Ref{T}}, x::AbstractArray{T}) where {T} = RefArray(x, 1)
 Ref(x::AbstractArray, i::Integer=1) = RefArray(x, i)
 
-function unsafe_convert{T}(P::Type{Ptr{T}}, b::RefArray{T})
+function unsafe_convert(P::Type{Ptr{T}}, b::RefArray{T}) where T
     if isbits(T)
         convert(P, pointer(b.x, b.i))
     else
@@ -108,10 +108,10 @@ function (::Type{Ref{P}}){P<:Union{Ptr,Cwstring,Cstring},T}(a::Array{T}) # Ref{P
         return RefArray(ptrs,1,roots)
     end
 end
-cconvert{P<:Ptr}(::Type{Ptr{P}}, a::Array{<:Ptr}) = a
-cconvert{P<:Ptr}(::Type{Ref{P}}, a::Array{<:Ptr}) = a
-cconvert{P<:Union{Ptr,Cwstring,Cstring}}(::Type{Ptr{P}}, a::Array) = Ref{P}(a)
-cconvert{P<:Union{Ptr,Cwstring,Cstring}}(::Type{Ref{P}}, a::Array) = Ref{P}(a)
+cconvert(::Type{Ptr{P}}, a::Array{<:Ptr}) where {P<:Ptr} = a
+cconvert(::Type{Ref{P}}, a::Array{<:Ptr}) where {P<:Ptr} = a
+cconvert(::Type{Ptr{P}}, a::Array) where {P<:Union{Ptr,Cwstring,Cstring}} = Ref{P}(a)
+cconvert(::Type{Ref{P}}, a::Array) where {P<:Union{Ptr,Cwstring,Cstring}} = Ref{P}(a)
 
 ###
 

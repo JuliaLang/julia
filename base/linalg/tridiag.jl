@@ -61,11 +61,11 @@ function SymTridiagonal(A::AbstractMatrix)
     end
 end
 
-convert{T}(::Type{SymTridiagonal{T}}, S::SymTridiagonal) =
+convert(::Type{SymTridiagonal{T}}, S::SymTridiagonal) where {T} =
     SymTridiagonal(convert(Vector{T}, S.dv), convert(Vector{T}, S.ev))
-convert{T}(::Type{AbstractMatrix{T}}, S::SymTridiagonal) =
+convert(::Type{AbstractMatrix{T}}, S::SymTridiagonal) where {T} =
     SymTridiagonal(convert(Vector{T}, S.dv), convert(Vector{T}, S.ev))
-function convert{T}(::Type{Matrix{T}}, M::SymTridiagonal{T})
+function convert(::Type{Matrix{T}}, M::SymTridiagonal{T}) where T
     n = size(M, 1)
     Mf = zeros(T, n, n)
     @inbounds begin
@@ -78,7 +78,7 @@ function convert{T}(::Type{Matrix{T}}, M::SymTridiagonal{T})
     end
     return Mf
 end
-convert{T}(::Type{Matrix}, M::SymTridiagonal{T}) = convert(Matrix{T}, M)
+convert(::Type{Matrix}, M::SymTridiagonal{T}) where {T} = convert(Matrix{T}, M)
 convert(::Type{Array}, M::SymTridiagonal) = convert(Matrix, M)
 full(M::SymTridiagonal) = convert(Array, M)
 
@@ -93,7 +93,7 @@ function size(A::SymTridiagonal, d::Integer)
     end
 end
 
-similar{T}(S::SymTridiagonal, ::Type{T}) = SymTridiagonal{T}(similar(S.dv, T), similar(S.ev, T))
+similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal{T}(similar(S.dv, T), similar(S.ev, T))
 
 #Elementary operations
 broadcast(::typeof(abs), M::SymTridiagonal) = SymTridiagonal(abs.(M.dv), abs.(M.ev))
@@ -359,7 +359,7 @@ end
 inv(A::SymTridiagonal) = inv_usmani(A.ev, A.dv, A.ev)
 det(A::SymTridiagonal) = det_usmani(A.ev, A.dv, A.ev)
 
-function getindex{T}(A::SymTridiagonal{T}, i::Integer, j::Integer)
+function getindex(A::SymTridiagonal{T}, i::Integer, j::Integer) where T
     if !(1 <= i <= size(A,2) && 1 <= j <= size(A,2))
         throw(BoundsError(A, (i,j)))
     end
@@ -485,7 +485,7 @@ function size(M::Tridiagonal, d::Integer)
     end
 end
 
-function convert{T}(::Type{Matrix{T}}, M::Tridiagonal{T})
+function convert(::Type{Matrix{T}}, M::Tridiagonal{T}) where T
     A = zeros(T, size(M))
     for i = 1:length(M.d)
         A[i,i] = M.d[i]
@@ -496,10 +496,10 @@ function convert{T}(::Type{Matrix{T}}, M::Tridiagonal{T})
     end
     A
 end
-convert{T}(::Type{Matrix}, M::Tridiagonal{T}) = convert(Matrix{T}, M)
+convert(::Type{Matrix}, M::Tridiagonal{T}) where {T} = convert(Matrix{T}, M)
 convert(::Type{Array}, M::Tridiagonal) = convert(Matrix, M)
 full(M::Tridiagonal) = convert(Array, M)
-function similar{T}(M::Tridiagonal, ::Type{T})
+function similar(M::Tridiagonal, ::Type{T}) where T
     Tridiagonal{T}(similar(M.dl, T), similar(M.d, T), similar(M.du, T), similar(M.du2, T))
 end
 
@@ -543,7 +543,7 @@ function diag{T}(M::Tridiagonal{T}, n::Integer=0)
     end
 end
 
-function getindex{T}(A::Tridiagonal{T}, i::Integer, j::Integer)
+function getindex(A::Tridiagonal{T}, i::Integer, j::Integer) where T
     if !(1 <= i <= size(A,2) && 1 <= j <= size(A,2))
         throw(BoundsError(A, (i,j)))
     end
@@ -634,10 +634,10 @@ end
 inv(A::Tridiagonal) = inv_usmani(A.dl, A.d, A.du)
 det(A::Tridiagonal) = det_usmani(A.dl, A.d, A.du)
 
-convert{T}(::Type{Tridiagonal{T}},M::Tridiagonal) = Tridiagonal(convert(Vector{T}, M.dl), convert(Vector{T}, M.d), convert(Vector{T}, M.du), convert(Vector{T}, M.du2))
-convert{T}(::Type{AbstractMatrix{T}},M::Tridiagonal) = convert(Tridiagonal{T}, M)
-convert{T}(::Type{Tridiagonal{T}}, M::SymTridiagonal{T}) = Tridiagonal(M)
-function convert{T}(::Type{SymTridiagonal{T}}, M::Tridiagonal)
+convert(::Type{Tridiagonal{T}},M::Tridiagonal) where {T} = Tridiagonal(convert(Vector{T}, M.dl), convert(Vector{T}, M.d), convert(Vector{T}, M.du), convert(Vector{T}, M.du2))
+convert(::Type{AbstractMatrix{T}},M::Tridiagonal) where {T} = convert(Tridiagonal{T}, M)
+convert(::Type{Tridiagonal{T}}, M::SymTridiagonal{T}) where {T} = Tridiagonal(M)
+function convert(::Type{SymTridiagonal{T}}, M::Tridiagonal) where T
     if M.dl == M.du
         return SymTridiagonal(convert(Vector{T},M.d), convert(Vector{T},M.dl))
     else

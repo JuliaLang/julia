@@ -315,7 +315,7 @@ function SVDOperator(A::AbstractMatrix{T}) where T
     SVDOperator{Tnew,typeof(Anew)}(Anew)
 end
 
-function A_mul_B!{T}(u::StridedVector{T}, s::SVDOperator{T}, v::StridedVector{T})
+function A_mul_B!(u::StridedVector{T}, s::SVDOperator{T}, v::StridedVector{T}) where T
     a, b = s.m, length(v)
     A_mul_B!(view(u,1:a), s.X, view(v,a+1:b)) # left singular vector
     Ac_mul_B!(view(u,a+1:b), s.X, view(v,1:a)) # right singular vector

@@ -132,8 +132,8 @@ especially for parametric types. The example above is meant to be pedagogical, a
 actual Julia behaviour. This is the actual implementation in Julia:
 
 ```julia
-convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
-                                           throw(InexactError()))
+convert(::Type{T}, z::Complex) where {T<:Real} =
+    (imag(z) == 0 ? convert(T, real(z)) : throw(InexactError()))
 
 julia> convert(Bool, 1im)
 ERROR: InexactError()
@@ -147,10 +147,10 @@ To continue our case study of Julia's `Rational` type, here are the conversions 
 right after the declaration of the type and its constructors:
 
 ```julia
-convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
-convert{T<:Integer}(::Type{Rational{T}}, x::Integer) = Rational(convert(T,x), convert(T,1))
+convert(::Type{Rational{T}}, x::Rational) where {T<:Integer} = Rational(convert(T,x.num),convert(T,x.den))
+convert(::Type{Rational{T}}, x::Integer) where {T<:Integer} = Rational(convert(T,x), convert(T,1))
 
-function convert{T<:Integer}(::Type{Rational{T}}, x::AbstractFloat, tol::Real)
+function convert(::Type{Rational{T}}, x::AbstractFloat, tol::Real) where T<:Integer
     if isnan(x); return zero(T)//zero(T); end
     if isinf(x); return sign(x)//zero(T); end
     y = x
@@ -165,10 +165,10 @@ function convert{T<:Integer}(::Type{Rational{T}}, x::AbstractFloat, tol::Real)
         y = 1/y
     end
 end
-convert{T<:Integer}(rt::Type{Rational{T}}, x::AbstractFloat) = convert(rt,x,eps(x))
+convert(rt::Type{Rational{T}}, x::AbstractFloat) where {T<:Integer} = convert(rt,x,eps(x))
 
-convert{T<:AbstractFloat}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
-convert{T<:Integer}(::Type{T}, x::Rational) = div(convert(T,x.num),convert(T,x.den))
+convert(::Type{T}, x::Rational) where {T<:AbstractFloat} = convert(T,x.num)/convert(T,x.den)
+convert(::Type{T}, x::Rational) where {T<:Integer} = div(convert(T,x.num),convert(T,x.den))
 ```
 
 The initial four convert methods provide conversions to rational types. The first method converts
@@ -280,7 +280,7 @@ another type object, such that instances of the argument types will be promoted 
 type. Thus, by defining the rule:
 
 ```julia
-promote_rule(::Type{Float64}, ::Type{Float32} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
 ```
 
 one declares that when 64-bit and 32-bit floating-point values are promoted together, they should
@@ -318,9 +318,9 @@ Finally, we finish off our ongoing case study of Julia's rational number type, w
 sophisticated use of the promotion mechanism with the following promotion rules:
 
 ```julia
-promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
-promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
-promote_rule{T<:Integer,S<:AbstractFloat}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
+promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
+promote_rule(::Type{Rational{T}}, ::Type{Rational{S}}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
+promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:AbstractFloat} = promote_type(T,S)
 ```
 
 The first rule says that promoting a rational number with any other integer type promotes to a

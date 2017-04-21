@@ -47,9 +47,9 @@ end
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
 
-convert{T}(::Type{LQ{T}},A::LQ) = LQ(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
-convert{T}(::Type{Factorization{T}}, A::LQ{T}) = A
-convert{T}(::Type{Factorization{T}}, A::LQ) = convert(LQ{T}, A)
+convert(::Type{LQ{T}},A::LQ) where {T} = LQ(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
+convert(::Type{Factorization{T}}, A::LQ{T}) where {T} = A
+convert(::Type{Factorization{T}}, A::LQ) where {T} = convert(LQ{T}, A)
 convert(::Type{AbstractMatrix}, A::LQ) = A[:L]*A[:Q]
 convert(::Type{AbstractArray}, A::LQ) = convert(AbstractMatrix, A)
 convert(::Type{Matrix}, A::LQ) = convert(Array, convert(AbstractArray, A))
@@ -86,8 +86,8 @@ function show(io::IO, C::LQ)
     show(io, C[:Q])
 end
 
-convert{T}(::Type{LQPackedQ{T}}, Q::LQPackedQ) = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
-convert{T}(::Type{AbstractMatrix{T}}, Q::LQPackedQ) = convert(LQPackedQ{T}, Q)
+convert(::Type{LQPackedQ{T}}, Q::LQPackedQ) where {T} = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
+convert(::Type{AbstractMatrix{T}}, Q::LQPackedQ) where {T} = convert(LQPackedQ{T}, Q)
 convert(::Type{Matrix}, A::LQPackedQ) = LAPACK.orglq!(copy(A.factors),A.τ)
 convert(::Type{Array}, A::LQPackedQ) = convert(Matrix, A)
 function full{T}(A::LQPackedQ{T}; thin::Bool = true)
@@ -119,33 +119,33 @@ end
 size(A::LQPackedQ) = size(A.factors)
 
 ## Multiplication by LQ
-A_mul_B!{T<:BlasFloat}(A::LQ{T}, B::StridedVecOrMat{T}) = A[:L]*LAPACK.ormlq!('L','N',A.factors,A.τ,B)
-A_mul_B!{T<:BlasFloat}(A::LQ{T}, B::QR{T}) = A[:L]*LAPACK.ormlq!('L','N',A.factors,A.τ,full(B))
-A_mul_B!{T<:BlasFloat}(A::QR{T}, B::LQ{T}) = A_mul_B!(zeros(full(A)), full(A), full(B))
-function *{TA,TB}(A::LQ{TA},B::StridedVecOrMat{TB})
+A_mul_B!(A::LQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = A[:L]*LAPACK.ormlq!('L','N',A.factors,A.τ,B)
+A_mul_B!(A::LQ{T}, B::QR{T}) where {T<:BlasFloat} = A[:L]*LAPACK.ormlq!('L','N',A.factors,A.τ,full(B))
+A_mul_B!(A::QR{T}, B::LQ{T}) where {T<:BlasFloat} = A_mul_B!(zeros(full(A)), full(A), full(B))
+function *(A::LQ{TA},B::StridedVecOrMat{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
     A_mul_B!(convert(Factorization{TAB},A), copy_oftype(B, TAB))
 end
-function *{TA,TB}(A::LQ{TA},B::QR{TB})
+function *(A::LQ{TA},B::QR{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
     A_mul_B!(convert(Factorization{TAB},A), convert(Factorization{TAB},B))
 end
-function *{TA,TB}(A::QR{TA},B::LQ{TB})
+function *(A::QR{TA},B::LQ{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
     A_mul_B!(convert(Factorization{TAB},A), convert(Factorization{TAB},B))
 end
 
 ## Multiplication by Q
 ### QB
-A_mul_B!{T<:BlasFloat}(A::LQPackedQ{T}, B::StridedVecOrMat{T})   = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
+A_mul_B!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
 function (*)(A::LQPackedQ,B::StridedVecOrMat)
     TAB = promote_type(eltype(A), eltype(B))
     A_mul_B!(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB))
 end
 
 ### QcB
-Ac_mul_B!{T<:BlasReal}(A::LQPackedQ{T}, B::StridedVecOrMat{T})    = LAPACK.ormlq!('L','T',A.factors,A.τ,B)
-Ac_mul_B!{T<:BlasComplex}(A::LQPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormlq!('L','C',A.factors,A.τ,B)
+Ac_mul_B!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasReal} = LAPACK.ormlq!('L','T',A.factors,A.τ,B)
+Ac_mul_B!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasComplex} = LAPACK.ormlq!('L','C',A.factors,A.τ,B)
 function Ac_mul_B(A::LQPackedQ, B::StridedVecOrMat)
     TAB = promote_type(eltype(A), eltype(B))
     if size(B,1) == size(A.factors,2)
@@ -171,8 +171,8 @@ for (f1, f2) in ((:A_mul_Bc, :A_mul_B!),
 end
 
 ### AQ
-A_mul_B!{T<:BlasFloat}(A::StridedMatrix{T}, B::LQPackedQ{T}) = LAPACK.ormlq!('R', 'N', B.factors, B.τ, A)
-function *{TA,TB}(A::StridedMatrix{TA},B::LQPackedQ{TB})
+A_mul_B!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasFloat} = LAPACK.ormlq!('R', 'N', B.factors, B.τ, A)
+function *(A::StridedMatrix{TA},B::LQPackedQ{TB}) where {TA,TB}
     TAB = promote_type(TA,TB)
     if size(B.factors,2) == size(A,2)
         A_mul_B!(copy_oftype(A, TAB),convert(AbstractMatrix{TAB},B))
@@ -184,9 +184,9 @@ function *{TA,TB}(A::StridedMatrix{TA},B::LQPackedQ{TB})
 end
 
 ### AQc
-A_mul_Bc!{T<:BlasReal}(A::StridedMatrix{T}, B::LQPackedQ{T})    = LAPACK.ormlq!('R','T',B.factors,B.τ,A)
-A_mul_Bc!{T<:BlasComplex}(A::StridedMatrix{T}, B::LQPackedQ{T}) = LAPACK.ormlq!('R','C',B.factors,B.τ,A)
-function A_mul_Bc{TA<:Number,TB<:Number}( A::StridedVecOrMat{TA}, B::LQPackedQ{TB})
+A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasReal}    = LAPACK.ormlq!('R','T',B.factors,B.τ,A)
+A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasComplex} = LAPACK.ormlq!('R','C',B.factors,B.τ,A)
+function A_mul_Bc( A::StridedVecOrMat{TA}, B::LQPackedQ{TB}) where {TA<:Number,TB<:Number}
     TAB = promote_type(TA,TB)
     A_mul_Bc!(copy_oftype(A, TAB), convert(AbstractMatrix{TAB},(B)))
 end
@@ -204,7 +204,7 @@ for (f1, f2) in ((:Ac_mul_B, :A_mul_B!),
     end
 end
 
-function \{TA,Tb}(A::LQ{TA}, b::StridedVector{Tb})
+function (\)(A::LQ{TA}, b::StridedVector{Tb}) where {TA,Tb}
     S = promote_type(TA,Tb)
     m = checksquare(A)
     m == length(b) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has length $(length(b))"))
@@ -212,7 +212,7 @@ function \{TA,Tb}(A::LQ{TA}, b::StridedVector{Tb})
     x = A_ldiv_B!(AA, copy_oftype(b, S))
     return x
 end
-function \{TA,TB}(A::LQ{TA},B::StridedMatrix{TB})
+function (\)(A::LQ{TA},B::StridedMatrix{TB}) where {TA,TB}
     S = promote_type(TA,TB)
     m = checksquare(A)
     m == size(B,1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(B,1)) rows"))
@@ -222,7 +222,7 @@ function \{TA,TB}(A::LQ{TA},B::StridedMatrix{TB})
 end
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
-function (\){T<:BlasReal}(F::LQ{T}, B::VecOrMat{Complex{T}})
+function (\)(F::LQ{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
     c2r = reshape(transpose(reinterpret(T, B, (2, length(B)))), size(B, 1), 2*size(B, 2))
     x = A_ldiv_B!(F, c2r)
     return reinterpret(Complex{T}, transpose(reshape(x, div(length(x), 2), 2)),

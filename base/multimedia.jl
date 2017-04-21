@@ -18,7 +18,7 @@ import Base: MIME, @MIME_str
 
 import Base: show, print, string, convert
 MIME(s) = MIME{Symbol(s)}()
-show{mime}(io::IO, ::MIME{mime}) = print(io, "MIME type ", string(mime))
+show(io::IO, ::MIME{mime}) where {mime} = print(io, "MIME type ", string(mime))
 print{mime}(io::IO, ::MIME{mime}) = print(io, mime)
 
 ###########################################################################

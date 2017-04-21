@@ -201,9 +201,9 @@ Note that `dest` is only used to store the result, and does not supply
 arguments to `f` unless it is also listed in the `As`,
 as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
 """
-@inline broadcast!{N}(f, C::AbstractArray, A, Bs::Vararg{Any,N}) =
+@inline broadcast!(f, C::AbstractArray, A, Bs::Vararg{Any,N}) where {N} =
     broadcast_c!(f, containertype(C), containertype(A, Bs...), C, A, Bs...)
-@inline function broadcast_c!{N}(f, ::Type, ::Type, C, A, Bs::Vararg{Any,N})
+@inline function broadcast_c!(f, ::Type, ::Type, C, A, Bs::Vararg{Any,N}) where N
     shape = indices(C)
     @boundscheck check_broadcast_indices(shape, A, Bs...)
     keeps, Idefaults = map_newindexer(shape, A, Bs)
@@ -335,9 +335,9 @@ end
 @inline broadcast_c(f, ::Type{Any}, a...) = f(a...)
 @inline broadcast_c(f, ::Type{Tuple}, A, Bs...) =
     tuplebroadcast(f, first_tuple(A, Bs...), A, Bs...)
-@inline tuplebroadcast{N}(f, ::NTuple{N,Any}, As...) =
+@inline tuplebroadcast(f, ::NTuple{N,Any}, As...) where {N} =
     ntuple(k -> f(tuplebroadcast_getargs(As, k)...), Val{N})
-@inline tuplebroadcast{N,T}(f, ::NTuple{N,Any}, ::Type{T}, As...) =
+@inline tuplebroadcast(f, ::NTuple{N,Any}, ::Type{T}, As...) where {N,T} =
     ntuple(k -> f(T, tuplebroadcast_getargs(As, k)...), Val{N})
 first_tuple(A::Tuple, Bs...) = A
 @inline first_tuple(A, Bs...) = first_tuple(Bs...)

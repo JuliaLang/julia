@@ -50,7 +50,7 @@ end
 
 ## data movement ##
 
-function flipdim{T}(A::Array{T}, d::Integer)
+function flipdim(A::Array{T}, d::Integer) where T
     nd = ndims(A)
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     sd = size(A, d)

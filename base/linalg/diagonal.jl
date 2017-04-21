@@ -48,14 +48,14 @@ julia> Diagonal(V)
 """
 Diagonal(V::AbstractVector) = Diagonal(collect(V))
 
-convert{T}(::Type{Diagonal{T}}, D::Diagonal{T}) = D
-convert{T}(::Type{Diagonal{T}}, D::Diagonal) = Diagonal{T}(convert(Vector{T}, D.diag))
-convert{T}(::Type{AbstractMatrix{T}}, D::Diagonal) = convert(Diagonal{T}, D)
+convert(::Type{Diagonal{T}}, D::Diagonal{T}) where {T} = D
+convert(::Type{Diagonal{T}}, D::Diagonal) where {T} = Diagonal{T}(convert(Vector{T}, D.diag))
+convert(::Type{AbstractMatrix{T}}, D::Diagonal) where {T} = convert(Diagonal{T}, D)
 convert(::Type{Matrix}, D::Diagonal) = diagm(D.diag)
 convert(::Type{Array}, D::Diagonal) = convert(Matrix, D)
 full(D::Diagonal) = convert(Array, D)
 
-function similar{T}(D::Diagonal, ::Type{T})
+function similar(D::Diagonal, ::Type{T}) where T
     return Diagonal{T}(similar(D.diag, T))
 end
 
@@ -79,8 +79,8 @@ end
     end
     r
 end
-diagzero{T}(::Diagonal{T},i,j) = zero(T)
-diagzero{T}(D::Diagonal{Matrix{T}},i,j) = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
+diagzero(::Diagonal{T},i,j) where {T} = zero(T)
+diagzero(D::Diagonal{Matrix{T}},i,j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
 
 function setindex!(D::Diagonal, v, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
@@ -286,7 +286,7 @@ function logdet(D::Diagonal{<:Complex}) # make sure branch cut is correct
     complex(real(z), rem2pi(imag(z), RoundNearest))
 end
 # identity matrices via eye(Diagonal{type},n)
-eye{T}(::Type{Diagonal{T}}, n::Int) = Diagonal(ones(T,n))
+eye(::Type{Diagonal{T}}, n::Int) where {T} = Diagonal(ones(T,n))
 
 expm(D::Diagonal) = Diagonal(exp.(D.diag))
 expm(D::Diagonal{<:AbstractMatrix}) = Diagonal(expm.(D.diag))

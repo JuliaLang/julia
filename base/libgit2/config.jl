@@ -82,7 +82,7 @@ function get(::Type{Int64}, c::GitConfig, name::AbstractString)
     return val_ptr[]
 end
 
-function get{T}(c::GitConfig, name::AbstractString, default::T)
+function get(c::GitConfig, name::AbstractString, default::T) where T
     res = default
     try res = get(T,c,name) end
     return res

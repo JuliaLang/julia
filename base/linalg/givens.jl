@@ -5,11 +5,11 @@ abstract type AbstractRotation{T} end
 
 transpose(R::AbstractRotation) = error("transpose not implemented for $(typeof(R)). Consider using conjugate transpose (') instead of transpose (.').")
 
-function *{T,S}(R::AbstractRotation{T}, A::AbstractVecOrMat{S})
+function *(R::AbstractRotation{T}, A::AbstractVecOrMat{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     A_mul_B!(convert(AbstractRotation{TS}, R), TS == S ? copy(A) : convert(AbstractArray{TS}, A))
 end
-function A_mul_Bc{T,S}(A::AbstractVecOrMat{T}, R::AbstractRotation{S})
+function A_mul_Bc(A::AbstractVecOrMat{T}, R::AbstractRotation{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     A_mul_Bc!(TS == T ? copy(A) : convert(AbstractArray{TS}, A), convert(AbstractRotation{TS}, R))
 end
@@ -34,12 +34,12 @@ mutable struct Rotation{T} <: AbstractRotation{T}
     rotations::Vector{Givens{T}}
 end
 
-convert{T}(::Type{Givens{T}}, G::Givens{T}) = G
-convert{T}(::Type{Givens{T}}, G::Givens) = Givens(G.i1, G.i2, convert(T, G.c), convert(T, G.s))
-convert{T}(::Type{Rotation{T}}, R::Rotation{T}) = R
-convert{T}(::Type{Rotation{T}}, R::Rotation) = Rotation{T}([convert(Givens{T}, g) for g in R.rotations])
-convert{T}(::Type{AbstractRotation{T}}, G::Givens) = convert(Givens{T}, G)
-convert{T}(::Type{AbstractRotation{T}}, R::Rotation) = convert(Rotation{T}, R)
+convert(::Type{Givens{T}}, G::Givens{T}) where {T} = G
+convert(::Type{Givens{T}}, G::Givens) where {T} = Givens(G.i1, G.i2, convert(T, G.c), convert(T, G.s))
+convert(::Type{Rotation{T}}, R::Rotation{T}) where {T} = R
+convert(::Type{Rotation{T}}, R::Rotation) where {T} = Rotation{T}([convert(Givens{T}, g) for g in R.rotations])
+convert(::Type{AbstractRotation{T}}, G::Givens) where {T} = convert(Givens{T}, G)
+convert(::Type{AbstractRotation{T}}, R::Rotation) where {T} = convert(Rotation{T}, R)
 
 ctranspose(G::Givens) = Givens(G.i1, G.i2, conj(G.c), -G.s)
 ctranspose{T}(R::Rotation{T}) = Rotation{T}(reverse!([ctranspose(r) for r in R.rotations]))
@@ -360,4 +360,4 @@ function A_mul_Bc!(A::AbstractMatrix, R::Rotation)
     end
     return A
 end
-*{T}(G1::Givens{T}, G2::Givens{T}) = Rotation(push!(push!(Givens{T}[], G2), G1))
+*(G1::Givens{T}, G2::Givens{T}) where {T} = Rotation(push!(push!(Givens{T}[], G2), G1))
