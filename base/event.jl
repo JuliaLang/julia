@@ -238,39 +238,22 @@ Use [`isopen`](@ref) to check whether it is still active.
 mutable struct AsyncCondition
     handle::Ptr{Void}
     cond::Condition
+    isopen::Bool
 
     function AsyncCondition()
-        this = new(Libc.malloc(_sizeof_uv_async), Condition())
+        this = new(Libc.malloc(_sizeof_uv_async), Condition(), true)
         associate_julia_struct(this.handle, this)
-        preserve_handle_new(this)
+        finalizer(this, uvfinalize)
         err = ccall(:uv_async_init, Cint, (Ptr{Void}, Ptr{Void}, Ptr{Void}),
             eventloop(), this, uv_jl_asynccb::Ptr{Void})
-        this
+        if err != 0
+            #TODO: this codepath is currently not tested
+            Libc.free(this.handle)
+            this.handle = C_NULL
+            throw(UVError("uv_async_init", err))
+        end
+        return this
     end
-end
-
-unsafe_convert(::Type{Ptr{Void}}, async::AsyncCondition) = async.handle
-
-function wait(async::AsyncCondition)
-    isopen(async) || throw(EOFError())
-    wait(async.cond)
-end
-
-isopen(t::AsyncCondition) = (t.handle != C_NULL)
-
-close(t::AsyncCondition) = ccall(:jl_close_uv, Void, (Ptr{Void},), t)
-
-function _uv_hook_close(async::AsyncCondition)
-    async.handle = C_NULL
-    unpreserve_handle(async)
-    notify_error(async.cond, EOFError())
-    nothing
-end
-
-function uv_asynccb(handle::Ptr{Void})
-    async = @handle_as handle AsyncCondition
-    notify(async.cond)
-    nothing
 end
 
 """
@@ -286,8 +269,8 @@ function AsyncCondition(cb::Function)
             success = try
                 wait(async)
                 true
-            catch # ignore possible exception on close()
-                false
+            catch exc # ignore possible exception on close()
+                isa(exc, EOFError) || rethrow(exc)
             end
             success && cb(async)
         end
@@ -323,11 +306,11 @@ mutable struct Timer
             #TODO: this codepath is currently not tested
             Libc.free(this.handle)
             this.handle = C_NULL
-            throw(UVError("uv_make_timer",err))
+            throw(UVError("uv_timer_init", err))
         end
 
         associate_julia_struct(this.handle, this)
-        preserve_handle_new(this)
+        finalizer(this, uvfinalize)
 
         ccall(:uv_update_time, Void, (Ptr{Void},), eventloop())
         ccall(:uv_timer_start,  Cint,  (Ptr{Void}, Ptr{Void}, UInt64, UInt64),
@@ -338,29 +321,43 @@ mutable struct Timer
 end
 
 unsafe_convert(::Type{Ptr{Void}}, t::Timer) = t.handle
+unsafe_convert(::Type{Ptr{Void}}, async::AsyncCondition) = async.handle
 
-function wait(t::Timer)
+function wait(t::Union{Timer, AsyncCondition})
     isopen(t) || throw(EOFError())
-    wait(t.cond)
+    stream_wait(t, t.cond)
 end
 
-isopen(t::Timer) = t.isopen
+isopen(t::Union{Timer, AsyncCondition}) = t.isopen
 
-function close(t::Timer)
-    if t.handle != C_NULL
+function close(t::Union{Timer, AsyncCondition})
+    if t.handle != C_NULL && isopen(t)
         t.isopen = false
-        ccall(:uv_timer_stop, Cint, (Ptr{Void},), t)
+        isa(t, Timer) && ccall(:uv_timer_stop, Cint, (Ptr{Void},), t)
         ccall(:jl_close_uv, Void, (Ptr{Void},), t)
     end
     nothing
 end
 
-function _uv_hook_close(t::Timer)
-    unpreserve_handle(t)
-    disassociate_julia_struct(t)
-    t.handle = C_NULL
+function uvfinalize(t::Union{Timer, AsyncCondition})
+    if t.handle != C_NULL
+        disassociate_julia_struct(t.handle) # not going to call the usual close hooks
+        close(t)
+        t.handle = C_NULL
+    end
     t.isopen = false
+    nothing
+end
+
+function _uv_hook_close(t::Union{Timer, AsyncCondition})
+    uvfinalize(t)
     notify_error(t.cond, EOFError())
+    nothing
+end
+
+function uv_asynccb(handle::Ptr{Void})
+    async = @handle_as handle AsyncCondition
+    notify(async.cond)
     nothing
 end
 
@@ -403,7 +400,8 @@ function Timer(cb::Function, timeout::Real, repeat::Real=0.0)
             success = try
                 wait(t)
                 true
-            catch # ignore possible exception on close()
+            catch exc # ignore possible exception on close()
+                isa(exc, EOFError) || rethrow(exc)
                 false
             end
             success && cb(t)
