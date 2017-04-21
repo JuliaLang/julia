@@ -171,11 +171,13 @@ promote_result{T,S}(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) = (@_pure
 promote() = ()
 promote(x) = (x,)
 function promote{T,S}(x::T, y::S)
+    @_inline_meta
     (convert(promote_type(T,S),x), convert(promote_type(T,S),y))
 end
 promote_typeof(x) = (@_pure_meta; typeof(x))
 promote_typeof(x, xs...) = (@_pure_meta; promote_type(typeof(x), promote_typeof(xs...)))
 function promote(x, y, z)
+    @_inline_meta
     (convert(promote_typeof(x,y,z), x),
      convert(promote_typeof(x,y,z), y),
      convert(promote_typeof(x,y,z), z))
@@ -243,10 +245,22 @@ function sametype_error(input...)
           " failed to change any input types")
 end
 
-+(x::Number, y::Number) = +(promote(x,y)...)
-*(x::Number, y::Number) = *(promote(x,y)...)
--(x::Number, y::Number) = -(promote(x,y)...)
-/(x::Number, y::Number) = /(promote(x,y)...)
+function +(x::Number, y::Number)
+    xp, yp = promote(x, y)
+    xp + yp
+end
+function *(x::Number, y::Number)
+    xp, yp = promote(x, y)
+    xp * yp
+end
+function -(x::Number, y::Number)
+    xp, yp = promote(x, y)
+    xp - yp
+end
+function /(x::Number, y::Number)
+    xp, yp = promote(x, y)
+    xp / yp
+end
 
 """
     ^(x, y)
