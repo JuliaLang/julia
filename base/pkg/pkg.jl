@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 """
+    Pkg
+
 The `Pkg` module provides package management for Julia.
 Use
 `Pkg.status()` for a list of installed packages,

@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 """
+    Dates
+
 The `Dates` module provides `Date`, `DateTime`, `Time` types, and related functions.
 
 The types are not aware of time zones, based on UT seconds
