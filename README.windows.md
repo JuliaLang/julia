@@ -4,7 +4,7 @@ This file describes how to install, or build, and use Julia on Windows.
 
 For more general information about Julia, please see the
 [main README](https://github.com/JuliaLang/julia/blob/master/README.md)
-or the [documentation](http://docs.julialang.org/).
+or the [documentation](https://docs.julialang.org/).
 
 
 ## General Information for Windows
@@ -56,7 +56,7 @@ Both the 32-bit and 64-bit versions are supported.
 The 32-bit (i686) binary will run on either a 32-bit and 64-bit operating system.
 The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise refuse to launch.
 
- 1. [Download](http://julialang.org/downloads) the latest version of Julia.
+ 1. [Download](https://julialang.org/downloads) the latest version of Julia.
     Extract the binary to a reasonable destination folder, e.g. `C:\julia`.
 
  2. Double-click the `julia` shortcut to launch Julia.
@@ -161,7 +161,7 @@ The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise re
  5. Setup Package Development Environment
 
     1. The `Pkg` module in Base provides many convenient tools for [developing
-       and publishing packages](http://docs.julialang.org/en/latest/manual/packages/).
+       and publishing packages](https://docs.julialang.org/en/latest/manual/packages/).
        One of the packages added through pacman above was `openssh`, which will
        allow secure access to GitHub APIs.  Follow GitHub's [guide](
        https://help.github.com/articles/generating-ssh-keys) to setting up SSH

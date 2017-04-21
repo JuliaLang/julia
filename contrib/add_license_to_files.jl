@@ -70,7 +70,7 @@ const ext_prefix = Dict([
 (".cpp", "\/\/ "),
 ])
 
-const new_license = "This file is a part of Julia. License is MIT: http://julialang.org/license"
+const new_license = "This file is a part of Julia. License is MIT: https://julialang.org/license"
 
 # Old License text if such should be first removed - or empty string
 const old_license = ""

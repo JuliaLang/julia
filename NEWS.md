@@ -276,7 +276,7 @@ Library improvements
     `JULIA_INPUT_COLOR` and `JULIA_ANSWER_COLOR` to `"bold"`.
     For example, one way of doing this is adding `ENV["JULIA_INPUT_COLOR"] = :bold`
     and `ENV["JULIA_ANSWER_COLOR"] = :bold` to the `.juliarc.jl` file. See the
-    [manual section on customizing colors](http://docs.julialang.org/en/latest/manual/interacting-with-julia#Customizing-Colors-1)
+    [manual section on customizing colors](https://docs.julialang.org/en/latest/manual/interacting-with-julia#Customizing-Colors-1)
     for more information.
 
   * The default color for info messages has been changed from blue to cyan

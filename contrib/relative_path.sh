@@ -1,5 +1,5 @@
 #!/bin/sh
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # both $1 and $2 are absolute paths beginning with /
 # returns relative path to $2/$target from $1/$source

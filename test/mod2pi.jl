@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # NOTES on range reduction
 # [1] compute numbers near pi: http://www.cs.berkeley.edu/~wkahan/testpi/nearpi.c

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Convert # of Rata Die days to proleptic Gregorian calendar y,m,d,w
 # Reference: http://mysite.verizon.net/aesir_research/date/date0.htm

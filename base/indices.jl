@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 Dims{N} = NTuple{N,Int}
 DimsInteger{N} = NTuple{N,Integer}
@@ -237,7 +237,7 @@ unsafe_indices(S::Slice) = (S.indices,)
 indices1(S::Slice) = S.indices
 first(S::Slice) = first(S.indices)
 last(S::Slice) = last(S.indices)
-errmsg(A) = error("size not supported for arrays with indices $(indices(A)); see http://docs.julialang.org/en/latest/devdocs/offset-arrays/")
+errmsg(A) = error("size not supported for arrays with indices $(indices(A)); see https://docs.julialang.org/en/latest/devdocs/offset-arrays/")
 size(S::Slice) = first(S.indices) == 1 ? (length(S.indices),) : errmsg(S)
 length(S::Slice) = first(S.indices) == 1 ? length(S.indices) : errmsg(S)
 unsafe_length(S::Slice) = first(S.indices) == 1 ? unsafe_length(S.indices) : errmsg(S)
