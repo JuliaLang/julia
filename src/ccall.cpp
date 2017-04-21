@@ -815,7 +815,7 @@ static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ct
                 msg << sym.f_name;
                 if (sym.f_lib != NULL) {
 #ifdef _OS_WINDOWS_
-                    assert((intptr_t)sym.f_lib != 1 && (intptr_t)sym.f_lib != 2);
+                    assert(sym.f_lib != JL_EXE_LIBNAME && sym.f_lib != JL_DL_LIBNAME);
 #endif
                     msg << " in library ";
                     msg << sym.f_lib;
@@ -1584,10 +1584,24 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (rt != args[2] && rt != (jl_value_t*)jl_any_type)
         jl_add_method_root(ctx, rt);
 
+    auto _is_libjulia_func = [&] (uintptr_t ptr, const char *name) {
+        if ((uintptr_t)fptr == ptr)
+            return true;
+        return (!f_lib || f_lib == JL_DL_LIBNAME) && f_name && !strcmp(f_name, name);
+    };
+#define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), #name)
+
+#ifdef _OS_LINUX_
+    // directly accessing the address of an ifunc can cause linker issue on
+    // some configurations (e.g. AArch64 + -Bsymbolic-functions).
+    static const auto ptls_getter = jl_dlsym_e(jl_dlopen(nullptr, 0),
+                                               "jl_get_ptls_states");
+#else
+    static const auto ptls_getter = &jl_get_ptls_states;
+#endif
+
     // some special functions
-    if (fptr == (void(*)(void))&jl_array_ptr ||
-        ((f_lib==NULL || (intptr_t)f_lib==2)
-         && f_name && !strcmp(f_name,"jl_array_ptr"))) {
+    if (is_libjulia_func(jl_array_ptr)) {
         assert(lrt->isPointerTy());
         assert(!isVa && !llvmcall);
         assert(nargt==1);
@@ -1598,9 +1612,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         return mark_or_box_ccall_result(emit_bitcast(emit_arrayptr(ary, ctx), lrt),
                                         retboxed, rt, unionall, static_rt, ctx);
     }
-    if (fptr == (void(*)(void))&jl_value_ptr ||
-        ((f_lib==NULL || (intptr_t)f_lib==2)
-         && f_name && !strcmp(f_name,"jl_value_ptr"))) {
+    else if (is_libjulia_func(jl_value_ptr)) {
         assert(lrt->isPointerTy());
         assert(!isVa && !llvmcall);
         assert(nargt==1);
@@ -1635,18 +1647,14 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         return mark_or_box_ccall_result(emit_bitcast(ary, lrt),
                                         retboxed, rt, unionall, static_rt, ctx);
     }
-    if (JL_CPU_WAKE_NOOP &&
-        (fptr == &jl_cpu_wake || ((!f_lib || (intptr_t)f_lib == 2) &&
-                                  f_name && !strcmp(f_name, "jl_cpu_wake")))) {
+    else if (JL_CPU_WAKE_NOOP && is_libjulia_func(jl_cpu_wake)) {
         assert(lrt == T_void);
         assert(!isVa && !llvmcall);
         assert(nargt == 0);
         JL_GC_POP();
         return ghostValue(jl_void_type);
     }
-    if (fptr == &jl_gc_safepoint ||
-        ((!f_lib || (intptr_t)f_lib == 2) && f_name &&
-         strcmp(f_name, "jl_gc_safepoint") == 0)) {
+    else if (is_libjulia_func(jl_gc_safepoint)) {
         assert(lrt == T_void);
         assert(!isVa && !llvmcall);
         assert(nargt == 0);
@@ -1657,17 +1665,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         emit_signal_fence();
         return ghostValue(jl_void_type);
     }
-#ifdef _OS_LINUX_
-    // directly access the address of a ifunc can cause linker issue on
-    // some configurations (e.g. AArch64 + -Bsymbolic-functions).
-    static const auto ptls_getter = jl_dlsym_e(jl_dlopen(nullptr, 0),
-                                               "jl_get_ptls_states");
-#else
-    static const auto ptls_getter = &jl_get_ptls_states;
-#endif
-    if (fptr == (void(*)(void))(uintptr_t)ptls_getter ||
-        ((!f_lib || (intptr_t)f_lib == 2) && f_name &&
-         strcmp(f_name, "jl_get_ptls_states") == 0)) {
+    else if (_is_libjulia_func((uintptr_t)ptls_getter, "jl_get_ptls_states")) {
         assert(lrt == T_pint8);
         assert(!isVa && !llvmcall);
         assert(nargt == 0);
@@ -1676,9 +1674,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             emit_bitcast(ctx->ptlsStates, lrt),
             retboxed, rt, unionall, static_rt, ctx);
     }
-    if (fptr == (void(*)(void))&jl_threadid ||
-        ((!f_lib || (intptr_t)f_lib == 2) && f_name &&
-         strcmp(f_name, "jl_threadid") == 0)) {
+    else if (is_libjulia_func(jl_threadid)) {
         assert(lrt == T_int16);
         assert(!isVa && !llvmcall);
         assert(nargt == 0);
@@ -1690,9 +1686,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             tbaa_decorate(tbaa_const, builder.CreateLoad(ptid)),
             retboxed, rt, unionall, static_rt, ctx);
     }
-    if (fptr == &jl_sigatomic_begin ||
-        ((!f_lib || (intptr_t)f_lib == 2) && f_name &&
-         strcmp(f_name, "jl_sigatomic_begin") == 0)) {
+    else if (is_libjulia_func(jl_sigatomic_begin)) {
         assert(lrt == T_void);
         assert(!isVa && !llvmcall);
         assert(nargt == 0);
@@ -1706,9 +1700,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         emit_signal_fence();
         return ghostValue(jl_void_type);
     }
-    if (fptr == &jl_sigatomic_end ||
-        ((!f_lib || (intptr_t)f_lib == 2) && f_name &&
-         strcmp(f_name, "jl_sigatomic_end") == 0)) {
+    else if (is_libjulia_func(jl_sigatomic_end)) {
         assert(lrt == T_void);
         assert(!isVa && !llvmcall);
         assert(nargt == 0);
@@ -1737,9 +1729,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         builder.SetInsertPoint(contBB);
         return ghostValue(jl_void_type);
     }
-    if (fptr == (void(*)(void))&jl_is_leaf_type ||
-        ((f_lib==NULL || (intptr_t)f_lib==2)
-         && f_name && !strcmp(f_name, "jl_is_leaf_type"))) {
+    else if (is_libjulia_func(jl_is_leaf_type)) {
         assert(nargt == 1);
         assert(!isVa && !llvmcall);
         jl_value_t *arg = args[4];
@@ -1751,9 +1741,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                     false, rt, unionall, static_rt, ctx);
         }
     }
-    if (fptr == (void(*)(void))&jl_function_ptr ||
-        ((f_lib==NULL || (intptr_t)f_lib==2)
-         && f_name && !strcmp(f_name, "jl_function_ptr"))) {
+    else if (is_libjulia_func(jl_function_ptr)) {
         assert(nargt == 3);
         assert(!isVa && !llvmcall);
         jl_value_t *f = static_eval(args[4], ctx, false, false);
@@ -1797,10 +1785,8 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
         JL_GC_POP();
     }
-    if ((fptr == (void(*)(void))&jl_array_isassigned ||
-         ((f_lib==NULL || (intptr_t)f_lib==2)
-          && f_name && !strcmp(f_name, "jl_array_isassigned"))) &&
-        expr_type(args[6], ctx) == (jl_value_t*)jl_ulong_type) {
+    else if (is_libjulia_func(jl_array_isassigned) &&
+             expr_type(args[6], ctx) == (jl_value_t*)jl_ulong_type) {
         assert(nargt == 2);
         jl_value_t *aryex = args[4];
         jl_value_t *idxex = args[6];
@@ -2053,7 +2039,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 msg << symarg.f_name;
                 if (symarg.f_lib != NULL) {
 #ifdef _OS_WINDOWS_
-                    assert((intptr_t)symarg.f_lib != 1 && (intptr_t)symarg.f_lib != 2);
+                    assert(symarg.f_lib != JL_EXE_LIBNAME && symarg.f_lib != JL_DL_LIBNAME);
 #endif
                     msg << " in library ";
                     msg << symarg.f_lib;
