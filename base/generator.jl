@@ -109,10 +109,10 @@ iteratoreltype(x) = iteratoreltype(typeof(x))
 iteratoreltype(::Type) = HasEltype()  # HasEltype is the default
 
 iteratorsize(::Type{<:AbstractArray}) = HasShape()
-iteratorsize{I,F}(::Type{Generator{I,F}}) = iteratorsize(I)
+iteratorsize(::Type{Generator{I,F}}) where {I,F} = iteratorsize(I)
 length(g::Generator) = length(g.iter)
 size(g::Generator) = size(g.iter)
 indices(g::Generator) = indices(g.iter)
 ndims(g::Generator) = ndims(g.iter)
 
-iteratoreltype{I,T}(::Type{Generator{I,T}}) = EltypeUnknown()
+iteratoreltype(::Type{Generator{I,T}}) where {I,T} = EltypeUnknown()

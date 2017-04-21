@@ -22,24 +22,24 @@ export fft, ifft, bfft, fft!, ifft!, bfft!,
 
 const FFTWFloat = Union{Float32,Float64}
 fftwfloat(x) = _fftwfloat(float(x))
-_fftwfloat{T<:FFTWFloat}(::Type{T}) = T
+_fftwfloat(::Type{T}) where {T<:FFTWFloat} = T
 _fftwfloat(::Type{Float16}) = Float32
-_fftwfloat{T}(::Type{Complex{T}}) = Complex{_fftwfloat(T)}
-_fftwfloat{T}(::Type{T}) = error("type $T not supported")
-_fftwfloat{T}(x::T) = _fftwfloat(T)(x)
+_fftwfloat(::Type{Complex{T}}) where {T} = Complex{_fftwfloat(T)}
+_fftwfloat(::Type{T}) where {T} = error("type $T not supported")
+_fftwfloat(x::T) where {T} = _fftwfloat(T)(x)
 
 complexfloat(x::StridedArray{Complex{<:FFTWFloat}}) = x
 realfloat(x::StridedArray{<:FFTWFloat}) = x
 
 # return an Array, rather than similar(x), to avoid an extra copy for FFTW
 # (which only works on StridedArray types).
-complexfloat{T<:Complex}(x::AbstractArray{T}) = copy1(typeof(fftwfloat(zero(T))), x)
-complexfloat{T<:Real}(x::AbstractArray{T}) = copy1(typeof(complex(fftwfloat(zero(T)))), x)
+complexfloat(x::AbstractArray{T}) where {T<:Complex} = copy1(typeof(fftwfloat(zero(T))), x)
+complexfloat(x::AbstractArray{T}) where {T<:Real} = copy1(typeof(complex(fftwfloat(zero(T)))), x)
 
-realfloat{T<:Real}(x::AbstractArray{T}) = copy1(typeof(fftwfloat(zero(T))), x)
+realfloat(x::AbstractArray{T}) where {T<:Real} = copy1(typeof(fftwfloat(zero(T))), x)
 
 # copy to a 1-based array, using circular permutation
-function copy1{T}(::Type{T}, x)
+function copy1(::Type{T}, x) where T
     y = Array{T}(map(length, indices(x)))
     Base.circcopy!(y, x)
 end
@@ -211,7 +211,7 @@ rfft(x::AbstractArray{<:Union{Integer,Rational}}, region=1:ndims(x)) = rfft(real
 plan_rfft(x::AbstractArray, region; kws...) = plan_rfft(realfloat(x), region; kws...)
 
 # only require implementation to provide *(::Plan{T}, ::Array{T})
-*{T}(p::Plan{T}, x::AbstractArray) = p * copy1(T, x)
+*(p::Plan{T}, x::AbstractArray) where {T} = p * copy1(T, x)
 
 # Implementations should also implement A_mul_B!(Y, plan, X) so as to support
 # pre-allocated output arrays.  We don't define * in terms of A_mul_B!

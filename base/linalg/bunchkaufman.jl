@@ -77,11 +77,11 @@ bkfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issymmetric(A),
         bkfact!(convert(Matrix{promote_type(Float32, typeof(sqrt(one(T))))}, A),
                 uplo, symmetric, rook)
 
-convert{T}(::Type{BunchKaufman{T}}, B::BunchKaufman{T}) = B
-convert{T}(::Type{BunchKaufman{T}}, B::BunchKaufman) =
+convert(::Type{BunchKaufman{T}}, B::BunchKaufman{T}) where {T} = B
+convert(::Type{BunchKaufman{T}}, B::BunchKaufman) where {T} =
     BunchKaufman(convert(Matrix{T}, B.LD), B.ipiv, B.uplo, B.symmetric, B.rook, B.info)
-convert{T}(::Type{Factorization{T}}, B::BunchKaufman{T}) = B
-convert{T}(::Type{Factorization{T}}, B::BunchKaufman) = convert(BunchKaufman{T}, B)
+convert(::Type{Factorization{T}}, B::BunchKaufman{T}) where {T} = B
+convert(::Type{Factorization{T}}, B::BunchKaufman) where {T} = convert(BunchKaufman{T}, B)
 
 size(B::BunchKaufman) = size(B.LD)
 size(B::BunchKaufman, d::Integer) = size(B.LD, d)

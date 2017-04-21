@@ -144,7 +144,7 @@ julia> Bidiagonal(A, false) #contains the main diagonal and first subdiagonal of
 """
 Bidiagonal(A::AbstractMatrix, isupper::Bool)=Bidiagonal(diag(A), diag(A, isupper?1:-1), isupper)
 
-function getindex{T}(A::Bidiagonal{T}, i::Integer, j::Integer)
+function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
     if !((1 <= i <= size(A,2)) && (1 <= j <= size(A,2)))
         throw(BoundsError(A,(i,j)))
     end
@@ -182,7 +182,7 @@ function Base.replace_in_print_matrix(A::Bidiagonal,i::Integer,j::Integer,s::Abs
 end
 
 #Converting from Bidiagonal to dense Matrix
-function convert{T}(::Type{Matrix{T}}, A::Bidiagonal)
+function convert(::Type{Matrix{T}}, A::Bidiagonal) where T
     n = size(A, 1)
     B = zeros(T, n, n)
     for i = 1:n - 1
@@ -196,29 +196,29 @@ function convert{T}(::Type{Matrix{T}}, A::Bidiagonal)
     B[n,n] = A.dv[n]
     return B
 end
-convert{T}(::Type{Matrix}, A::Bidiagonal{T}) = convert(Matrix{T}, A)
+convert(::Type{Matrix}, A::Bidiagonal{T}) where {T} = convert(Matrix{T}, A)
 convert(::Type{Array}, A::Bidiagonal) = convert(Matrix, A)
 full(A::Bidiagonal) = convert(Array, A)
-promote_rule{T,S}(::Type{Matrix{T}}, ::Type{Bidiagonal{S}})=Matrix{promote_type(T,S)}
+promote_rule(::Type{Matrix{T}}, ::Type{Bidiagonal{S}}) where {T,S} = Matrix{promote_type(T,S)}
 
 #Converting from Bidiagonal to Tridiagonal
 Tridiagonal(M::Bidiagonal{T}) where {T} = convert(Tridiagonal{T}, M)
-function convert{T}(::Type{Tridiagonal{T}}, A::Bidiagonal)
+function convert(::Type{Tridiagonal{T}}, A::Bidiagonal) where T
     z = zeros(T, size(A)[1]-1)
     A.isupper ? Tridiagonal(z, convert(Vector{T},A.dv), convert(Vector{T},A.ev)) : Tridiagonal(convert(Vector{T},A.ev), convert(Vector{T},A.dv), z)
 end
-promote_rule{T,S}(::Type{Tridiagonal{T}}, ::Type{Bidiagonal{S}})=Tridiagonal{promote_type(T,S)}
+promote_rule(::Type{Tridiagonal{T}}, ::Type{Bidiagonal{S}}) where {T,S} = Tridiagonal{promote_type(T,S)}
 
 # No-op for trivial conversion Bidiagonal{T} -> Bidiagonal{T}
-convert{T}(::Type{Bidiagonal{T}}, A::Bidiagonal{T}) = A
+convert(::Type{Bidiagonal{T}}, A::Bidiagonal{T}) where {T} = A
 # Convert Bidiagonal to Bidiagonal{T} by constructing a new instance with converted elements
-convert{T}(::Type{Bidiagonal{T}}, A::Bidiagonal) = Bidiagonal(convert(Vector{T}, A.dv), convert(Vector{T}, A.ev), A.isupper)
+convert(::Type{Bidiagonal{T}}, A::Bidiagonal) where {T} = Bidiagonal(convert(Vector{T}, A.dv), convert(Vector{T}, A.ev), A.isupper)
 # When asked to convert Bidiagonal to AbstractMatrix{T}, preserve structure by converting to Bidiagonal{T} <: AbstractMatrix{T}
-convert{T}(::Type{AbstractMatrix{T}}, A::Bidiagonal) = convert(Bidiagonal{T}, A)
+convert(::Type{AbstractMatrix{T}}, A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
 
 broadcast(::typeof(big), B::Bidiagonal) = Bidiagonal(big.(B.dv), big.(B.ev), B.isupper)
 
-similar{T}(B::Bidiagonal, ::Type{T}) = Bidiagonal{T}(similar(B.dv, T), similar(B.ev, T), B.isupper)
+similar(B::Bidiagonal, ::Type{T}) where {T} = Bidiagonal{T}(similar(B.dv, T), similar(B.ev, T), B.isupper)
 
 ###################
 # LAPACK routines #
@@ -327,7 +327,7 @@ function diag{T}(M::Bidiagonal{T}, n::Integer=0)
 end
 
 function +(A::Bidiagonal, B::Bidiagonal)
-    if A.isupper==B.isupper
+    if A.isupper == B.isupper
         Bidiagonal(A.dv+B.dv, A.ev+B.ev, A.isupper)
     else
         Tridiagonal((A.isupper ? (B.ev,A.dv+B.dv,A.ev) : (A.ev,A.dv+B.dv,B.ev))...)
@@ -335,7 +335,7 @@ function +(A::Bidiagonal, B::Bidiagonal)
 end
 
 function -(A::Bidiagonal, B::Bidiagonal)
-    if A.isupper==B.isupper
+    if A.isupper == B.isupper
         Bidiagonal(A.dv-B.dv, A.ev-B.ev, A.isupper)
     else
         Tridiagonal((A.isupper ? (-B.ev,A.dv-B.dv,A.ev) : (A.ev,A.dv-B.dv,-B.ev))...)
@@ -373,11 +373,11 @@ function check_A_mul_B!_sizes(C, A, B)
     nA, mA = size(A)
     nB, mB = size(B)
     nC, mC = size(C)
-    if !(nA == nC)
+    if nA != nC
         throw(DimensionMismatch("sizes size(A)=$(size(A)) and size(C) = $(size(C)) must match at first entry."))
-    elseif !(mA == nB)
+    elseif mA != nB
         throw(DimensionMismatch("second entry of size(A)=$(size(A)) and first entry of size(B) = $(size(B)) must match."))
-    elseif !(mB == mC)
+    elseif mB != mC
         throw(DimensionMismatch("sizes size(B)=$(size(B)) and size(C) = $(size(C)) must match at first second entry."))
     end
 end

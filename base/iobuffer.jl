@@ -107,7 +107,7 @@ function unsafe_read(from::AbstractIOBuffer, p::Ptr{UInt8}, nb::UInt)
     nothing
 end
 
-function read_sub{T}(from::AbstractIOBuffer, a::AbstractArray{T}, offs, nel)
+function read_sub(from::AbstractIOBuffer, a::AbstractArray{T}, offs, nel) where T
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())

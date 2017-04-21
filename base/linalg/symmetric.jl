@@ -114,10 +114,10 @@ function setindex!(A::Hermitian, v, i::Integer, j::Integer)
     end
 end
 
-similar{T}(A::Symmetric, ::Type{T}) = Symmetric(similar(A.data, T))
+similar(A::Symmetric, ::Type{T}) where {T} = Symmetric(similar(A.data, T))
 # Hermitian version can be simplified when check for imaginary part of
 # diagonal in Hermitian has been removed
-function similar{T}(A::Hermitian, ::Type{T})
+function similar(A::Hermitian, ::Type{T}) where T
     B = similar(A.data, T)
     for i = 1:size(A,1)
         B[i,i] = 0
@@ -131,12 +131,12 @@ convert(::Type{Matrix}, A::Hermitian) = copytri!(convert(Matrix, copy(A.data)), 
 convert(::Type{Array}, A::Union{Symmetric,Hermitian}) = convert(Matrix, A)
 full(A::Union{Symmetric,Hermitian}) = convert(Array, A)
 parent(A::HermOrSym) = A.data
-convert{T,S<:AbstractMatrix}(::Type{Symmetric{T,S}},A::Symmetric{T,S}) = A
-convert{T,S<:AbstractMatrix}(::Type{Symmetric{T,S}},A::Symmetric) = Symmetric{T,S}(convert(S,A.data),A.uplo)
-convert{T}(::Type{AbstractMatrix{T}}, A::Symmetric) = Symmetric(convert(AbstractMatrix{T}, A.data), Symbol(A.uplo))
-convert{T,S<:AbstractMatrix}(::Type{Hermitian{T,S}},A::Hermitian{T,S}) = A
-convert{T,S<:AbstractMatrix}(::Type{Hermitian{T,S}},A::Hermitian) = Hermitian{T,S}(convert(S,A.data),A.uplo)
-convert{T}(::Type{AbstractMatrix{T}}, A::Hermitian) = Hermitian(convert(AbstractMatrix{T}, A.data), Symbol(A.uplo))
+convert(::Type{Symmetric{T,S}},A::Symmetric{T,S}) where {T,S<:AbstractMatrix} = A
+convert(::Type{Symmetric{T,S}},A::Symmetric) where {T,S<:AbstractMatrix} = Symmetric{T,S}(convert(S,A.data),A.uplo)
+convert(::Type{AbstractMatrix{T}}, A::Symmetric) where {T} = Symmetric(convert(AbstractMatrix{T}, A.data), Symbol(A.uplo))
+convert(::Type{Hermitian{T,S}},A::Hermitian{T,S}) where {T,S<:AbstractMatrix} = A
+convert(::Type{Hermitian{T,S}},A::Hermitian) where {T,S<:AbstractMatrix} = Hermitian{T,S}(convert(S,A.data),A.uplo)
+convert(::Type{AbstractMatrix{T}}, A::Hermitian) where {T} = Hermitian(convert(AbstractMatrix{T}, A.data), Symbol(A.uplo))
 
 copy{T,S}(A::Symmetric{T,S}) = (B = copy(A.data); Symmetric{T,typeof(B)}(B,A.uplo))
 copy{T,S}(A::Hermitian{T,S}) = (B = copy(A.data); Hermitian{T,typeof(B)}(B,A.uplo))
@@ -230,7 +230,7 @@ function triu(A::Symmetric, k::Integer=0)
     end
 end
 
--{Tv,S<:AbstractMatrix}(A::Symmetric{Tv,S}) = Symmetric{Tv,S}(-A.data, A.uplo)
+(-)(A::Symmetric{Tv,S}) where {Tv,S<:AbstractMatrix} = Symmetric{Tv,S}(-A.data, A.uplo)
 
 ## Matvec
 A_mul_B!{T<:BlasFloat}(y::StridedVector{T}, A::Symmetric{T,<:StridedMatrix}, x::StridedVector{T}) = BLAS.symv!(A.uplo, one(T), A.data, x, zero(T), y)

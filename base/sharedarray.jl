@@ -77,7 +77,7 @@ beginning of the file.
 """
 SharedArray
 
-function (::Type{SharedArray{T,N}}){T,N}(dims::Dims{N}; init=false, pids=Int[])
+function (::Type{SharedArray{T,N}})(dims::Dims{N}; init=false, pids=Int[]) where T where N
     isbits(T) || throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
 
     pids, onlocalhost = shared_pids(pids)
@@ -134,21 +134,21 @@ function (::Type{SharedArray{T,N}}){T,N}(dims::Dims{N}; init=false, pids=Int[])
     S
 end
 
-(::Type{SharedArray{T,N}}){T,N}(I::Integer...; kwargs...) =
+(::Type{SharedArray{T,N}})(I::Integer...; kwargs...) where {T,N} =
     SharedArray{T,N}(I; kwargs...)
-(::Type{SharedArray{T}}){T}(d::NTuple; kwargs...) =
+(::Type{SharedArray{T}})(d::NTuple; kwargs...) where {T} =
     SharedArray{T,length(d)}(d; kwargs...)
-(::Type{SharedArray{T}}){T}(I::Integer...; kwargs...) =
+(::Type{SharedArray{T}})(I::Integer...; kwargs...) where {T} =
     SharedArray{T,length(I)}(I; kwargs...)
-(::Type{SharedArray{T}}){T}(m::Integer; kwargs...) =
+(::Type{SharedArray{T}})(m::Integer; kwargs...) where {T} =
     SharedArray{T,1}(m; kwargs...)
-(::Type{SharedArray{T}}){T}(m::Integer, n::Integer; kwargs...) =
+(::Type{SharedArray{T}})(m::Integer, n::Integer; kwargs...) where {T} =
     SharedArray{T,2}(m, n; kwargs...)
-(::Type{SharedArray{T}}){T}(m::Integer, n::Integer, o::Integer; kwargs...) =
+(::Type{SharedArray{T}})(m::Integer, n::Integer, o::Integer; kwargs...) where {T} =
     SharedArray{T,3}(m, n, o; kwargs...)
 
-function (::Type{SharedArray{T,N}}){T,N}(filename::AbstractString, dims::NTuple{N,Int},
-        offset::Integer=0; mode=nothing, init=false, pids::Vector{Int}=Int[])
+function (::Type{SharedArray{T,N}})(filename::AbstractString, dims::NTuple{N,Int},
+        offset::Integer=0; mode=nothing, init=false, pids::Vector{Int}=Int[]) where T where N
     if !isabspath(filename)
         throw(ArgumentError("$filename is not an absolute path; try abspath(filename)?"))
     end
@@ -213,8 +213,8 @@ function (::Type{SharedArray{T,N}}){T,N}(filename::AbstractString, dims::NTuple{
     S
 end
 
-(::Type{SharedArray{T}}){T,N}(filename::AbstractString, dims::NTuple{N,Int}, offset::Integer=0;
-                              mode=nothing, init=false, pids::Vector{Int}=Int[]) =
+(::Type{SharedArray{T}})(filename::AbstractString, dims::NTuple{N,Int}, offset::Integer=0;
+                              mode=nothing, init=false, pids::Vector{Int}=Int[]) where {T,N} =
     SharedArray{T,N}(filename, dims, offset; mode=mode, init=init, pids=pids)
 
 function initialize_shared_array(S, onlocalhost, init, pids)
@@ -258,7 +258,7 @@ size(S::SharedArray) = S.dims
 ndims(S::SharedArray) = length(S.dims)
 IndexStyle(::Type{<:SharedArray}) = IndexLinear()
 
-function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
+function reshape(a::SharedArray{T}, dims::NTuple{N,Int}) where T where N
     if length(a) != prod(dims)
         throw(DimensionMismatch("dimensions must be consistent with array size"))
     end
@@ -460,7 +460,7 @@ function fill!(S::SharedArray, v)
     return S
 end
 
-function rand!{T}(S::SharedArray{T})
+function rand!(S::SharedArray{T}) where T
     f = S->map!(x -> rand(T), S.loc_subarr_1d, S.loc_subarr_1d)
     @sync for p in procs(S)
         @async remotecall_wait(f, p, S)

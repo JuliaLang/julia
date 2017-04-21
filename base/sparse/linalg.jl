@@ -20,7 +20,7 @@ increment(A::AbstractArray{<:Integer}) = increment!(copy(A))
 
 ## sparse matrix multiplication
 
-function (*){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})
+function (*)(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}
     (*)(sppromote(A, B)...)
 end
 for f in (:A_mul_Bt, :A_mul_Bc,
@@ -98,7 +98,7 @@ Ac_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = Ac_mul_B
 At_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = At_mul_B!(one(eltype(B)), A, B, zero(eltype(C)), C)
 
 
-function (*){TX,TvA,TiA}(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA})
+function (*)(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA}) where {TX,TvA,TiA}
     mX, nX = size(X)
     nX == A.m || throw(DimensionMismatch())
     Y = zeros(promote_type(TX,TvA), mX, A.n)
@@ -122,7 +122,7 @@ end
 # Sparse matrix multiplication as described in [Gustavson, 1978]:
 # http://dl.acm.org/citation.cfm?id=355796
 
-(*){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) = spmatmul(A,B)
+(*)(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = spmatmul(A,B)
 for (f, opA, opB) in ((:A_mul_Bt, :identity, :transpose),
                       (:A_mul_Bc, :identity, :ctranspose),
                       (:At_mul_B, :transpose, :identity),

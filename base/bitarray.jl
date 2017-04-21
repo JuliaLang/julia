@@ -472,7 +472,7 @@ function copy!(dest::BitArray, src::Array)
     return unsafe_copy!(dest, 1, src, 1, length(src))
 end
 
-function reshape{N}(B::BitArray, dims::NTuple{N,Int})
+function reshape(B::BitArray, dims::NTuple{N,Int}) where N
     prod(dims) == length(B) ||
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(B))"))
     dims == size(B) && return B
@@ -487,7 +487,7 @@ end
 
 convert(::Type{Array{T}}, B::BitArray{N}) where {T,N} = convert(Array{T,N}, B)
 convert(::Type{Array{T,N}}, B::BitArray{N}) where {T,N} = _convert(Array{T,N}, B) # see #15801
-function _convert{T,N}(::Type{Array{T,N}}, B::BitArray{N})
+function _convert(::Type{Array{T,N}}, B::BitArray{N}) where {T,N}
     A = Array{T}(size(B))
     Bc = B.chunks
     @inbounds for i = 1:length(A)
@@ -534,8 +534,8 @@ end
 convert(::Type{BitArray{N}}, B::BitArray{N}) where {N} = B
 convert(::Type{AbstractArray{T,N}}, B::BitArray{N}) where {T,N} = convert(Array{T,N}, B)
 
-reinterpret{N}(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) = reinterpret(B, dims)
-reinterpret{N}(B::BitArray, dims::NTuple{N,Int}) = reshape(B, dims)
+reinterpret(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) where {N} = reinterpret(B, dims)
+reinterpret(B::BitArray, dims::NTuple{N,Int}) where {N} = reshape(B, dims)
 
 ## Constructors from generic iterables ##
 

@@ -74,7 +74,7 @@ struct FakeArray{T, N} <: DenseArray{T, N}
 end
 size(a::FakeArray) = a.sz
 strides(a::FakeArray) = a.st
-unsafe_convert{T}(::Type{Ptr{T}}, a::FakeArray{T}) = convert(Ptr{T}, C_NULL)
+unsafe_convert(::Type{Ptr{T}}, a::FakeArray{T}) where {T} = convert(Ptr{T}, C_NULL)
 pointer{T}(a::FakeArray{T}) = convert(Ptr{T}, C_NULL)
 FakeArray{T, N}(::Type{T}, sz::NTuple{N, Int}) =
     FakeArray{T, N}(sz, colmajorstrides(sz))
@@ -299,14 +299,14 @@ function sprint_plan(plan::FFTWPlan)
     return str
 end
 
-function show{T,K,inplace}(io::IO, p::cFFTWPlan{T,K,inplace})
+function show(io::IO, p::cFFTWPlan{T,K,inplace}) where {T,K,inplace}
     print(io, inplace ? "FFTW in-place " : "FFTW ",
           K < 0 ? "forward" : "backward", " plan for ")
     showfftdims(io, p.sz, p.istride, T)
     version >= v"3.3.4" && print(io, "\n", sprint_plan(p))
 end
 
-function show{T,K,inplace}(io::IO, p::rFFTWPlan{T,K,inplace})
+function show(io::IO, p::rFFTWPlan{T,K,inplace}) where {T,K,inplace}
     print(io, inplace ? "FFTW in-place " : "FFTW ",
           K < 0 ? "real-to-complex" : "complex-to-real",
           " plan for ")
@@ -314,7 +314,7 @@ function show{T,K,inplace}(io::IO, p::rFFTWPlan{T,K,inplace})
     version >= v"3.3.4" && print(io, "\n", sprint_plan(p))
 end
 
-function show{T,K,inplace}(io::IO, p::r2rFFTWPlan{T,K,inplace})
+function show(io::IO, p::r2rFFTWPlan{T,K,inplace}) where {T,K,inplace}
     print(io, inplace ? "FFTW in-place r2r " : "FFTW r2r ")
     if isempty(K)
         print(io, "0-dimensional")
@@ -618,20 +618,20 @@ for (f,direction) in ((:fft,FORWARD), (:bfft,BACKWARD))
     end
 end
 
-function A_mul_B!{T}(y::StridedArray{T}, p::cFFTWPlan{T}, x::StridedArray{T})
+function A_mul_B!(y::StridedArray{T}, p::cFFTWPlan{T}, x::StridedArray{T}) where T
     assert_applicable(p, x, y)
     unsafe_execute!(p, x, y)
     return y
 end
 
-function *{T,K,N}(p::cFFTWPlan{T,K,false}, x::StridedArray{T,N})
+function *(p::cFFTWPlan{T,K,false}, x::StridedArray{T,N}) where {T,K,N}
     assert_applicable(p, x)
     y = Array{T}(p.osz)::Array{T,N}
     unsafe_execute!(p, x, y)
     return y
 end
 
-function *{T,K}(p::cFFTWPlan{T,K,true}, x::StridedArray{T})
+function *(p::cFFTWPlan{T,K,true}, x::StridedArray{T}) where {T,K}
     assert_applicable(p, x)
     unsafe_execute!(p, x, x)
     return x
@@ -781,20 +781,20 @@ function plan_inv{T<:fftwNumber,K,inplace,N}(p::r2rFFTWPlan{T,K,inplace,N})
                              1:length(iK)))
 end
 
-function A_mul_B!{T}(y::StridedArray{T}, p::r2rFFTWPlan{T}, x::StridedArray{T})
+function A_mul_B!(y::StridedArray{T}, p::r2rFFTWPlan{T}, x::StridedArray{T}) where T
     assert_applicable(p, x, y)
     unsafe_execute!(p, x, y)
     return y
 end
 
-function *{T,K,N}(p::r2rFFTWPlan{T,K,false}, x::StridedArray{T,N})
+function *(p::r2rFFTWPlan{T,K,false}, x::StridedArray{T,N}) where {T,K,N}
     assert_applicable(p, x)
     y = Array{T}(p.osz)::Array{T,N}
     unsafe_execute!(p, x, y)
     return y
 end
 
-function *{T,K}(p::r2rFFTWPlan{T,K,true}, x::StridedArray{T})
+function *(p::r2rFFTWPlan{T,K,true}, x::StridedArray{T}) where {T,K}
     assert_applicable(p, x)
     unsafe_execute!(p, x, x)
     return x

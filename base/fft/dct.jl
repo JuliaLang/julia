@@ -20,7 +20,7 @@ end
 
 size(p::DCTPlan) = size(p.plan)
 
-function show{T,K,inplace}(io::IO, p::DCTPlan{T,K,inplace})
+function show(io::IO, p::DCTPlan{T,K,inplace}) where {T,K,inplace}
     print(io, inplace ? "FFTW in-place " : "FFTW ",
           K == REDFT10 ? "DCT (DCT-II)" : "IDCT (DCT-III)", " plan for ")
     showfftdims(io, p.plan.sz, p.plan.istride, eltype(p))
@@ -94,10 +94,10 @@ function A_mul_B!{T}(y::StridedArray{T}, p::DCTPlan{T,REDFT01},
     return y
 end
 
-*{T}(p::DCTPlan{T,REDFT10,false}, x::StridedArray{T}) =
+*(p::DCTPlan{T,REDFT10,false}, x::StridedArray{T}) where {T} =
     A_mul_B!(Array{T}(p.plan.osz), p, x)
 
-*{T}(p::DCTPlan{T,REDFT01,false}, x::StridedArray{T}) =
+*(p::DCTPlan{T,REDFT01,false}, x::StridedArray{T}) where {T} =
     A_mul_B!(Array{T}(p.plan.osz), p, copy(x)) # need copy to preserve input
 
-*{T,K}(p::DCTPlan{T,K,true}, x::StridedArray{T}) = A_mul_B!(x, p, x)
+*(p::DCTPlan{T,K,true}, x::StridedArray{T}) where {T,K} = A_mul_B!(x, p, x)
