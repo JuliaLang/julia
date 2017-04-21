@@ -2110,7 +2110,7 @@ function permute_rows!(S::SparseMatrixCSC{Tv,Ti}, pI::Vector{Int}) where {Tv,Ti}
             nzvalTemp[k] = nzvalS[i]
             k += 1
         end
-        sortperm!(unsafe_wrap(Array, pointer(rowperm), nr), unsafe_wrap(Array, pointer(rowvalTemp), nr))
+        sortperm!(unsafe_wrap(Vector{Int}, pointer(rowperm), nr), unsafe_wrap(Vector{Ti}, pointer(rowvalTemp), nr))
         k = 1
         for i in rowrange
             kperm = rowperm[k]
@@ -3346,8 +3346,8 @@ function sortSparseMatrixCSC!(A::SparseMatrixCSC{Tv,Ti}; sortindices::Symbol = :
             jj += 1
         end
 
-        sortperm!(unsafe_wrap(Array, pointer(index), numrows),
-                  unsafe_wrap(Array, pointer(row), numrows))
+        sortperm!(unsafe_wrap(Vector{Ti}, pointer(index), numrows),
+                  unsafe_wrap(Vector{Ti}, pointer(row), numrows))
 
         jj = 1
         @simd for j = col_start:col_end
