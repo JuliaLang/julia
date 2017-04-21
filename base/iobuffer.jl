@@ -4,7 +4,7 @@
 
 # Stateful string
 mutable struct AbstractIOBuffer{T<:AbstractVector{UInt8}} <: IO
-    data::T # T should support: getindex, setindex!, length, copy!, resize!, and T()
+    data::T # T should support: getindex, setindex!, length, copy!, and resize!
     readable::Bool
     writable::Bool
     seekable::Bool # if not seekable, implementation is free to destroy (compact) past read data
@@ -75,7 +75,7 @@ optionally specifying a size beyond which the underlying `Array` may not be grow
 """
 PipeBuffer(data::Vector{UInt8}=UInt8[], maxsize::Int=typemax(Int)) =
     AbstractIOBuffer(data,true,true,false,true,maxsize)
-PipeBuffer(maxsize::Int) = (x = PipeBuffer(Vector{UInt8}(maxsize),maxsize); x.size=0; x)
+PipeBuffer(maxsize::Int) = (x = PipeBuffer(StringVector(maxsize),maxsize); x.size=0; x)
 
 function copy(b::AbstractIOBuffer)
     ret = typeof(b)(b.writable ? copy(b.data) : b.data,
@@ -251,8 +251,6 @@ eof(io::AbstractIOBuffer) = (io.ptr-1 == io.size)
     io.mark = -1
     if io.writable
         resize!(io.data, 0)
-    else
-        io.data = T()
     end
     nothing
 end

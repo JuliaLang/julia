@@ -1464,7 +1464,7 @@ static const std::string verify_ccall_sig(size_t nargs, jl_value_t *&rt, jl_valu
     }
     else {
         static_rt = retboxed || !jl_has_typevar_from_unionall(rt, unionall_env);
-        if (!static_rt && sparam_vals != NULL) {
+        if (!static_rt && sparam_vals != NULL && jl_svec_len(sparam_vals) > 0) {
             rt = jl_instantiate_type_in_env(rt, unionall_env, jl_svec_data(sparam_vals));
             // `rt` is gc-rooted by the caller
             static_rt = true;
@@ -1676,6 +1676,20 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             emit_bitcast(ctx->ptlsStates, lrt),
             retboxed, rt, unionall, static_rt, ctx);
     }
+    if (fptr == (void(*)(void))&jl_threadid ||
+        ((!f_lib || (intptr_t)f_lib == 2) && f_name &&
+         strcmp(f_name, "jl_threadid") == 0)) {
+        assert(lrt == T_int16);
+        assert(!isVa && !llvmcall);
+        assert(nargt == 0);
+        JL_GC_POP();
+        Value *ptls_i16 = emit_bitcast(ctx->ptlsStates, T_pint16);
+        const int tid_offset = offsetof(jl_tls_states_t, tid);
+        Value *ptid = builder.CreateGEP(ptls_i16, ConstantInt::get(T_size, tid_offset / 2));
+        return mark_or_box_ccall_result(
+            tbaa_decorate(tbaa_const, builder.CreateLoad(ptid)),
+            retboxed, rt, unionall, static_rt, ctx);
+    }
     if (fptr == &jl_sigatomic_begin ||
         ((!f_lib || (intptr_t)f_lib == 2) && f_name &&
          strcmp(f_name, "jl_sigatomic_begin") == 0)) {
@@ -1783,6 +1797,35 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
         JL_GC_POP();
     }
+    if ((fptr == (void(*)(void))&jl_array_isassigned ||
+         ((f_lib==NULL || (intptr_t)f_lib==2)
+          && f_name && !strcmp(f_name, "jl_array_isassigned"))) &&
+        expr_type(args[6], ctx) == (jl_value_t*)jl_ulong_type) {
+        assert(nargt == 2);
+        jl_value_t *aryex = args[4];
+        jl_value_t *idxex = args[6];
+        jl_value_t *aryty = expr_type(aryex, ctx);
+        if (jl_is_array_type(aryty)) {
+            jl_value_t *ety = jl_tparam0(aryty);
+            if (jl_isbits(ety)) {
+                emit_expr(aryex, ctx);
+                emit_expr(idxex, ctx);
+                JL_GC_POP();
+                return mark_or_box_ccall_result(ConstantInt::get(T_int32, 1),
+                                                false, rt, unionall, static_rt, ctx);
+            }
+            else if (!jl_has_free_typevars(ety)) { // TODO: jn/foreigncall branch has a better predicate
+                jl_cgval_t aryv = emit_expr(aryex, ctx);
+                Value *idx = emit_unbox(T_size, emit_expr(idxex, ctx), (jl_value_t*)jl_ulong_type);
+                Value *arrayptr = emit_bitcast(emit_arrayptr(aryv, aryex, ctx), T_ppjlvalue);
+                Value *slot_addr = builder.CreateGEP(arrayptr, idx);
+                Value *load = tbaa_decorate(tbaa_arraybuf, builder.CreateLoad(slot_addr));
+                Value *res = builder.CreateZExt(builder.CreateICmpNE(load, V_null), T_int32);
+                JL_GC_POP();
+                return mark_or_box_ccall_result(res, retboxed, rt, unionall, static_rt, ctx);
+            }
+        }
+    }
 
     // emit arguments
     jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * (nargs - 3) / 2);
@@ -1875,7 +1918,8 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         // if we know the function sparams, try to fill those in now
         // so that the julia_to_native type checks are more likely to be doable (e.g. leaf types) at compile-time
         jl_value_t *jargty_in_env = jargty;
-        if (ctx->spvals_ptr == NULL && !toboxed && unionall_env && jl_has_typevar_from_unionall(jargty, unionall_env)) {
+        if (ctx->spvals_ptr == NULL && !toboxed && unionall_env && jl_has_typevar_from_unionall(jargty, unionall_env) &&
+            jl_svec_len(ctx->linfo->sparam_vals) > 0) {
             jargty_in_env = jl_instantiate_type_in_env(jargty_in_env, unionall_env, jl_svec_data(ctx->linfo->sparam_vals));
             if (jargty_in_env != jargty)
                 jl_add_method_root(ctx, jargty_in_env);
@@ -1927,19 +1971,18 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     // argument, allocate the box and store that as the first argument type
     bool sretboxed = false;
     if (sret) {
-        jl_cgval_t sret_val = emit_new_struct(rt, 1, NULL, ctx); // TODO: is it valid to be creating an incomplete type this way?
-        assert(sret_val.typ != NULL && "Type was not concrete");
-        if (!sret_val.ispointer()) {
-            Value *mem = emit_static_alloca(lrt, ctx);
-            builder.CreateStore(sret_val.V, mem);
-            result = mem;
+        assert(!retboxed && jl_is_datatype(rt) && "sret return type invalid");
+        if (jl_isbits(rt)) {
+            result = emit_static_alloca(lrt, ctx);
         }
         else {
-            // XXX: result needs a GC root here if result->getType() == T_pjlvalue
-            result = sret_val.V;
+            // XXX: result needs to be zero'd and given a GC root here
+            assert(jl_datatype_size(rt) > 0 && "sret shouldn't be a singleton instance");
+            result = emit_allocobj(ctx, jl_datatype_size(rt),
+                                   literal_pointer_val((jl_value_t*)rt));
+            sretboxed = true;
         }
         argvals[0] = emit_bitcast(result, fargt_sig.at(0));
-        sretboxed = sret_val.isboxed;
     }
 
     Instruction *stacksave = NULL;
@@ -2062,8 +2105,12 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     }
     else if (sret) {
         jlretboxed = sretboxed;
-        if (!jlretboxed)
-            result = builder.CreateLoad(result); // something alloca'd above
+        if (!jlretboxed) {
+            // something alloca'd above is SSA
+            if (static_rt)
+                return mark_julia_slot(result, rt, NULL, tbaa_stack);
+            result = builder.CreateLoad(result);
+        }
     }
     else {
         Type *jlrt = julia_type_to_llvm(rt, &jlretboxed); // compute the real "julian" return type and compute whether it is boxed

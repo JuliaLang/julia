@@ -17,7 +17,7 @@ mutable struct BitArray{N} <: DenseArray{Bool, N}
             i += 1
         end
         nc = num_bit_chunks(n)
-        chunks = Array{UInt64}(nc)
+        chunks = Vector{UInt64}(nc)
         nc > 0 && (chunks[end] = UInt64(0))
         b = new(chunks, n)
         N != 1 && (b.dims = dims)
@@ -476,7 +476,7 @@ function reshape{N}(B::BitArray, dims::NTuple{N,Int})
     prod(dims) == length(B) ||
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(B))"))
     dims == size(B) && return B
-    Br = BitArray{N}(ntuple(i->0,N)...)
+    Br = BitArray{N}(ntuple(i->0,Val{N})...)
     Br.chunks = B.chunks
     Br.len = prod(dims)
     N != 1 && (Br.dims = dims)
@@ -485,8 +485,8 @@ end
 
 ## Conversions ##
 
-convert{T,N}(::Type{Array{T}}, B::BitArray{N}) = convert(Array{T,N}, B)
-convert{T,N}(::Type{Array{T,N}}, B::BitArray{N}) = _convert(Array{T,N}, B) # see #15801
+convert(::Type{Array{T}}, B::BitArray{N}) where {T,N} = convert(Array{T,N}, B)
+convert(::Type{Array{T,N}}, B::BitArray{N}) where {T,N} = _convert(Array{T,N}, B) # see #15801
 function _convert{T,N}(::Type{Array{T,N}}, B::BitArray{N})
     A = Array{T}(size(B))
     Bc = B.chunks
@@ -496,8 +496,8 @@ function _convert{T,N}(::Type{Array{T,N}}, B::BitArray{N})
     return A
 end
 
-convert{T,N}(::Type{BitArray}, A::AbstractArray{T,N}) = convert(BitArray{N}, A)
-function convert{T,N}(::Type{BitArray{N}}, A::AbstractArray{T,N})
+convert(::Type{BitArray}, A::AbstractArray{T,N}) where {T,N} = convert(BitArray{N}, A)
+function convert(::Type{BitArray{N}}, A::AbstractArray{T,N}) where N where T
     B = BitArray(size(A))
     Bc = B.chunks
     l = length(B)
@@ -522,7 +522,7 @@ function convert{T,N}(::Type{BitArray{N}}, A::AbstractArray{T,N})
     return B
 end
 
-function convert{N}(::Type{BitArray{N}}, A::Array{Bool,N})
+function convert(::Type{BitArray{N}}, A::Array{Bool,N}) where N
     B = BitArray(size(A))
     Bc = B.chunks
     l = length(B)
@@ -531,8 +531,8 @@ function convert{N}(::Type{BitArray{N}}, A::Array{Bool,N})
     return B
 end
 
-convert{N}(::Type{BitArray{N}}, B::BitArray{N}) = B
-convert{T,N}(::Type{AbstractArray{T,N}}, B::BitArray{N}) = convert(Array{T,N}, B)
+convert(::Type{BitArray{N}}, B::BitArray{N}) where {N} = B
+convert(::Type{AbstractArray{T,N}}, B::BitArray{N}) where {T,N} = convert(Array{T,N}, B)
 
 reinterpret{N}(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) = reinterpret(B, dims)
 reinterpret{N}(B::BitArray, dims::NTuple{N,Int}) = reshape(B, dims)
@@ -1684,7 +1684,7 @@ end
 function find(B::BitArray)
     l = length(B)
     nnzB = countnz(B)
-    I = Array{Int}(nnzB)
+    I = Vector{Int}(nnzB)
     nnzB == 0 && return I
     Bc = B.chunks
     Bcount = 1
@@ -1718,8 +1718,8 @@ findn(B::BitVector) = find(B)
 
 function findn(B::BitMatrix)
     nnzB = countnz(B)
-    I = Array{Int}(nnzB)
-    J = Array{Int}(nnzB)
+    I = Vector{Int}(nnzB)
+    J = Vector{Int}(nnzB)
     count = 1
     for j = 1:size(B,2), i = 1:size(B,1)
         if B[i,j]

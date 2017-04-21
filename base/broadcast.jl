@@ -5,7 +5,7 @@ module Broadcast
 using Base.Cartesian
 using Base: linearindices, tail, OneTo, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
-            nullable_returntype, null_safe_eltype_op, hasvalue, isoperator
+            nullable_returntype, null_safe_op, hasvalue, isoperator
 import Base: broadcast, broadcast!
 export broadcast_getindex, broadcast_setindex!, dotview, @__dot__
 
@@ -51,6 +51,7 @@ broadcast_indices(::Type{Tuple}, A) = (OneTo(length(A)),)
 broadcast_indices(::Type{Array}, A::Ref) = ()
 broadcast_indices(::Type{Array}, A) = indices(A)
 @inline broadcast_indices(A, B...) = broadcast_shape((), broadcast_indices(A), map(broadcast_indices, B)...)
+
 # shape (i.e., tuple-of-indices) inputs
 broadcast_shape(shape::Tuple) = shape
 @inline broadcast_shape(shape::Tuple, shape1::Tuple, shapes::Tuple...) = broadcast_shape(_bcs((), shape, shape1), shapes...)
@@ -279,10 +280,30 @@ end
     return C
 end
 
-eltypestuple(a) = (Base.@_pure_meta; Tuple{eltype(a)})
-eltypestuple(T::Type) = (Base.@_pure_meta; Tuple{Type{T}})
-eltypestuple(a, b...) = (Base.@_pure_meta; Tuple{eltypestuple(a).types..., eltypestuple(b...).types...})
-_broadcast_eltype(f, A, Bs...) = Base._return_type(f, eltypestuple(A, Bs...))
+maptoTuple(f) = Tuple{}
+maptoTuple(f, a, b...) = Tuple{f(a), maptoTuple(f, b...).types...}
+
+# An element type satisfying for all A:
+# broadcast_getindex(
+#     containertype(A),
+#     A, broadcast_indices(A)
+# )::_broadcast_getindex_eltype(A)
+_broadcast_getindex_eltype(A) = _broadcast_getindex_eltype(containertype(A), A)
+_broadcast_getindex_eltype(::ScalarType, T::Type) = Type{T}
+_broadcast_getindex_eltype(::ScalarType, A) = typeof(A)
+_broadcast_getindex_eltype(::Any, A) = eltype(A)  # Tuple, Array, etc.
+
+# An element type satisfying for all A:
+# unsafe_get(A)::unsafe_get_eltype(A)
+_unsafe_get_eltype(x::Nullable) = eltype(x)
+_unsafe_get_eltype(T::Type) = Type{T}
+_unsafe_get_eltype(x) = typeof(x)
+
+# Inferred eltype of result of broadcast(f, xs...)
+_broadcast_eltype(f, A, As...) =
+    Base._return_type(f, maptoTuple(_broadcast_getindex_eltype, A, As...))
+_nullable_eltype(f, A, As...) =
+    Base._return_type(f, maptoTuple(_unsafe_get_eltype, A, As...))
 
 # broadcast methods that dispatch on the type of the final container
 @inline function broadcast_c(f, ::Type{Array}, A, Bs...)
@@ -299,8 +320,9 @@ _broadcast_eltype(f, A, Bs...) = Base._return_type(f, eltypestuple(A, Bs...))
 end
 @inline function broadcast_c(f, ::Type{Nullable}, a...)
     nonnull = all(hasvalue, a)
-    S = _broadcast_eltype(f, a...)
-    if isleaftype(S) && null_safe_eltype_op(f, a...)
+    S = _nullable_eltype(f, a...)
+    if isleaftype(S) && null_safe_op(f, maptoTuple(_unsafe_get_eltype,
+                                                   a...).types...)
         Nullable{S}(f(map(unsafe_get, a)...), nonnull)
     else
         if nonnull
@@ -311,20 +333,17 @@ end
     end
 end
 @inline broadcast_c(f, ::Type{Any}, a...) = f(a...)
-broadcast_c(f, ::Type{Tuple}, As...) =
-    ntuple(k -> f(_tuplebroadcast_getargs(As, k)...), _tuplebroadcast_reslength(As))
-broadcast_c{T}(f, ::Type{Tuple}, ::Type{T}, As...) =
-    ntuple(k -> f(T, _tuplebroadcast_getargs(As, k)...), _tuplebroadcast_reslength(As))
-@inline _tuplebroadcast_getargs(::Tuple{}, k) = ()
-@inline _tuplebroadcast_getargs(As, k) =
-    (_broadcast_getindex(first(As), k), _tuplebroadcast_getargs(tail(As), k)...)
-@noinline _tuplebroadcast_reslength(As) =
-    _tuplebroadcast_maxlength(_tuplebroadcast_length(first(As)), tail(As))
-@inline _tuplebroadcast_maxlength(l, As) =
-    _tuplebroadcast_maxlength(max(l, _tuplebroadcast_length(first(As))), tail(As))
-@inline _tuplebroadcast_maxlength(l, ::Tuple{}) = l
-@inline _tuplebroadcast_length(t::Tuple) = length(t)
-@inline _tuplebroadcast_length(s) = 1
+@inline broadcast_c(f, ::Type{Tuple}, A, Bs...) =
+    tuplebroadcast(f, first_tuple(A, Bs...), A, Bs...)
+@inline tuplebroadcast{N}(f, ::NTuple{N,Any}, As...) =
+    ntuple(k -> f(tuplebroadcast_getargs(As, k)...), Val{N})
+@inline tuplebroadcast{N,T}(f, ::NTuple{N,Any}, ::Type{T}, As...) =
+    ntuple(k -> f(T, tuplebroadcast_getargs(As, k)...), Val{N})
+first_tuple(A::Tuple, Bs...) = A
+@inline first_tuple(A, Bs...) = first_tuple(Bs...)
+tuplebroadcast_getargs(::Tuple{}, k) = ()
+@inline tuplebroadcast_getargs(As, k) =
+    (_broadcast_getindex(first(As), k), tuplebroadcast_getargs(tail(As), k)...)
 
 """
     broadcast(f, As...)

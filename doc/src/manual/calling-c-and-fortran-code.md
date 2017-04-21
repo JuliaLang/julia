@@ -965,7 +965,7 @@ wait(cond)
 ```
 
 The callback you pass to C should only execute a [`ccall`](@ref) to `:uv_async_send`, passing
-`cb.handle` as the argument, taking care to avoid any allocations or other interactions with the
+`cond.handle` as the argument, taking care to avoid any allocations or other interactions with the
 Julia runtime.
 
 Note that events may be coalesced, so multiple calls to `uv_async_send` may result in a single wakeup

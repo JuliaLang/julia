@@ -21,7 +21,7 @@ julia> ConjArray([1+im 0; 0 1-im])
  0+0im  1+1im
 ```
 """
-immutable ConjArray{T, N, A <: AbstractArray} <: AbstractArray{T, N}
+struct ConjArray{T, N, A <: AbstractArray} <: AbstractArray{T, N}
     parent::A
 end
 

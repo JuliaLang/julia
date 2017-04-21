@@ -10,7 +10,7 @@ struct Rational{T<:Integer} <: Real
         new(div(num, g), div(den, g))
     end
 end
-Rational(n::T, d::T) where T<:Integer = Rational{T}(n,d)
+Rational(n::T, d::T) where {T<:Integer} = Rational{T}(n,d)
 Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
 Rational(n::Integer) = Rational(n,one(n))
 
@@ -69,23 +69,23 @@ function write(s::IO, z::Rational)
     write(s,numerator(z),denominator(z))
 end
 
-convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational{T}(convert(T,x.num),convert(T,x.den))
-convert{T<:Integer}(::Type{Rational{T}}, x::Integer) = Rational{T}(convert(T,x), convert(T,1))
+convert(::Type{Rational{T}}, x::Rational) where {T<:Integer} = Rational{T}(convert(T,x.num),convert(T,x.den))
+convert(::Type{Rational{T}}, x::Integer) where {T<:Integer} = Rational{T}(convert(T,x), convert(T,1))
 
 convert(::Type{Rational}, x::Rational) = x
 convert(::Type{Rational}, x::Integer) = convert(Rational{typeof(x)},x)
 
 convert(::Type{Bool}, x::Rational) = x==0 ? false : x==1 ? true : throw(InexactError()) # to resolve ambiguity
 convert(::Type{Integer}, x::Rational) = (isinteger(x) ? convert(Integer, x.num) : throw(InexactError()))
-convert{T<:Integer}(::Type{T}, x::Rational) = (isinteger(x) ? convert(T, x.num) : throw(InexactError()))
+convert(::Type{T}, x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num) : throw(InexactError()))
 
 convert(::Type{AbstractFloat}, x::Rational) = float(x.num)/float(x.den)
-function convert{T<:AbstractFloat,S}(::Type{T}, x::Rational{S})
+function convert(::Type{T}, x::Rational{S}) where T<:AbstractFloat where S
     P = promote_type(T,S)
     convert(T, convert(P,x.num)/convert(P,x.den))
 end
 
-function convert{T<:Integer}(::Type{Rational{T}}, x::AbstractFloat)
+function convert(::Type{Rational{T}}, x::AbstractFloat) where T<:Integer
     r = rationalize(T, x, tol=0)
     x == convert(typeof(x), r) || throw(InexactError())
     r

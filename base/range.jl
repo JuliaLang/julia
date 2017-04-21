@@ -151,6 +151,11 @@ unitrange_last{T}(start::T, stop::T) =
     ifelse(stop >= start, convert(T,start+floor(stop-start)),
                           convert(T,start-oneunit(stop-start)))
 
+if isdefined(Main, :Base)
+    getindex(t::Tuple, r::AbstractUnitRange{<:Real}) =
+        (o = first(r) - 1; ntuple(n -> t[o + n], length(r)))
+end
+
 """
     Base.OneTo(n)
 
@@ -742,52 +747,52 @@ end
 
 promote_rule{T1,T2}(::Type{UnitRange{T1}},::Type{UnitRange{T2}}) =
     UnitRange{promote_type(T1,T2)}
-convert{T<:Real}(::Type{UnitRange{T}}, r::UnitRange{T}) = r
-convert{T<:Real}(::Type{UnitRange{T}}, r::UnitRange) = UnitRange{T}(r.start, r.stop)
+convert(::Type{UnitRange{T}}, r::UnitRange{T}) where {T<:Real} = r
+convert(::Type{UnitRange{T}}, r::UnitRange) where {T<:Real} = UnitRange{T}(r.start, r.stop)
 
 promote_rule{T1,T2}(::Type{OneTo{T1}},::Type{OneTo{T2}}) =
     OneTo{promote_type(T1,T2)}
-convert{T<:Real}(::Type{OneTo{T}}, r::OneTo{T}) = r
-convert{T<:Real}(::Type{OneTo{T}}, r::OneTo) = OneTo{T}(r.stop)
+convert(::Type{OneTo{T}}, r::OneTo{T}) where {T<:Real} = r
+convert(::Type{OneTo{T}}, r::OneTo) where {T<:Real} = OneTo{T}(r.stop)
 
 promote_rule{T1,UR<:AbstractUnitRange}(::Type{UnitRange{T1}}, ::Type{UR}) =
     UnitRange{promote_type(T1,eltype(UR))}
-convert{T<:Real}(::Type{UnitRange{T}}, r::AbstractUnitRange) = UnitRange{T}(first(r), last(r))
+convert(::Type{UnitRange{T}}, r::AbstractUnitRange) where {T<:Real} = UnitRange{T}(first(r), last(r))
 convert(::Type{UnitRange}, r::AbstractUnitRange) = UnitRange(first(r), last(r))
 
 promote_rule{T1a,T1b,T2a,T2b}(::Type{StepRange{T1a,T1b}},::Type{StepRange{T2a,T2b}}) =
     StepRange{promote_type(T1a,T2a),promote_type(T1b,T2b)}
-convert{T1,T2}(::Type{StepRange{T1,T2}}, r::StepRange{T1,T2}) = r
+convert(::Type{StepRange{T1,T2}}, r::StepRange{T1,T2}) where {T1,T2} = r
 
 promote_rule{T1a,T1b,UR<:AbstractUnitRange}(::Type{StepRange{T1a,T1b}},::Type{UR}) =
     StepRange{promote_type(T1a,eltype(UR)),promote_type(T1b,eltype(UR))}
-convert{T1,T2}(::Type{StepRange{T1,T2}}, r::Range) =
+convert(::Type{StepRange{T1,T2}}, r::Range) where {T1,T2} =
     StepRange{T1,T2}(convert(T1, first(r)), convert(T2, step(r)), convert(T1, last(r)))
-convert{T}(::Type{StepRange}, r::AbstractUnitRange{T}) =
+convert(::Type{StepRange}, r::AbstractUnitRange{T}) where {T} =
     StepRange{T,T}(first(r), step(r), last(r))
 
 promote_rule{T1,T2,R1,R2,S1,S2}(::Type{StepRangeLen{T1,R1,S1}},::Type{StepRangeLen{T2,R2,S2}}) =
     StepRangeLen{promote_type(T1,T2), promote_type(R1,R2), promote_type(S1,S2)}
-convert{T,R,S}(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{T,R,S}) = r
-convert{T,R,S}(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen) =
+convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{T,R,S}) where {T,R,S} = r
+convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen) where {T,R,S} =
     StepRangeLen{T,R,S}(convert(R, r.ref), convert(S, r.step), length(r), r.offset)
-convert{T}(::Type{StepRangeLen{T}}, r::StepRangeLen) =
+convert(::Type{StepRangeLen{T}}, r::StepRangeLen) where {T} =
     StepRangeLen(convert(T, r.ref), convert(T, r.step), length(r), r.offset)
 
 promote_rule{T,R,S,OR<:Range}(::Type{StepRangeLen{T,R,S}}, ::Type{OR}) =
     StepRangeLen{promote_type(T,eltype(OR)),promote_type(R,eltype(OR)),promote_type(S,eltype(OR))}
-convert{T,R,S}(::Type{StepRangeLen{T,R,S}}, r::Range) =
+convert(::Type{StepRangeLen{T,R,S}}, r::Range) where {T,R,S} =
     StepRangeLen{T,R,S}(R(first(r)), S(step(r)), length(r))
-convert{T}(::Type{StepRangeLen{T}}, r::Range) =
+convert(::Type{StepRangeLen{T}}, r::Range) where {T} =
     StepRangeLen(T(first(r)), T(step(r)), length(r))
 convert(::Type{StepRangeLen}, r::Range) = convert(StepRangeLen{eltype(r)}, r)
 
 promote_rule{T1,T2}(::Type{LinSpace{T1}},::Type{LinSpace{T2}}) =
     LinSpace{promote_type(T1,T2)}
-convert{T}(::Type{LinSpace{T}}, r::LinSpace{T}) = r
-convert{T}(::Type{LinSpace{T}}, r::Range) =
+convert(::Type{LinSpace{T}}, r::LinSpace{T}) where {T} = r
+convert(::Type{LinSpace{T}}, r::Range) where {T} =
     LinSpace{T}(first(r), last(r), length(r))
-convert{T}(::Type{LinSpace}, r::Range{T}) =
+convert(::Type{LinSpace}, r::Range{T}) where {T} =
     convert(LinSpace{T}, r)
 
 promote_rule{T,OR<:OrdinalRange}(::Type{LinSpace{T}}, ::Type{OR}) =
@@ -805,7 +810,7 @@ function vcat{T}(rs::Range{T}...)
     for ra in rs
         n += length(ra)
     end
-    a = Array{T}(n)
+    a = Vector{T}(n)
     i = 1
     for ra in rs, x in ra
         @inbounds a[i] = x
@@ -814,7 +819,7 @@ function vcat{T}(rs::Range{T}...)
     return a
 end
 
-convert{T}(::Type{Array{T,1}}, r::Range{T}) = vcat(r)
+convert(::Type{Array{T,1}}, r::Range{T}) where {T} = vcat(r)
 collect(r::Range) = vcat(r)
 
 reverse(r::OrdinalRange) = colon(last(r), -step(r), first(r))

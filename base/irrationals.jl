@@ -13,7 +13,7 @@ promote_rule{T<:Number}(::Type{<:Irrational}, ::Type{T}) = promote_type(Float64,
 
 convert(::Type{AbstractFloat}, x::Irrational) = Float64(x)
 convert(::Type{Float16}, x::Irrational) = Float16(Float32(x))
-convert{T<:Real}(::Type{Complex{T}}, x::Irrational) = convert(Complex{T}, convert(T,x))
+convert(::Type{Complex{T}}, x::Irrational) where {T<:Real} = convert(Complex{T}, convert(T,x))
 
 @pure function convert{T<:Integer}(::Type{Rational{T}}, x::Irrational)
     o = precision(BigFloat)

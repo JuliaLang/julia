@@ -190,6 +190,16 @@ function remove_frames!(stack::StackTrace, names::Vector{Symbol})
     return stack
 end
 
+"""
+    remove_frames!(stack::StackTrace, m::Module)
+
+Returns the `StackTrace` with all `StackFrame`s from the provided `Module` removed.
+"""
+function remove_frames!(stack::StackTrace, m::Module)
+    filter!(f -> !from(f, m), stack)
+    return stack
+end
+
 function show_spec_linfo(io::IO, frame::StackFrame)
     if isnull(frame.linfo)
         if frame.func === empty_sym
@@ -200,7 +210,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
     else
         linfo = get(frame.linfo)
         if isdefined(linfo, :def)
-            Base.show_lambda_types(io, linfo)
+            Base.show_tuple_as_call(io, linfo.def.name, linfo.specTypes)
         else
             Base.show(io, linfo)
         end
@@ -224,6 +234,23 @@ function show(io::IO, frame::StackFrame; full_path::Bool=false)
     if frame.inlined
         print(io, " [inlined]")
     end
+end
+
+"""
+    from(frame::StackFrame, filter_mod::Module) -> Bool
+
+Returns whether the `frame` is from the provided `Module`
+"""
+function from(frame::StackFrame, m::Module)
+    finfo = frame.linfo
+    result = false
+
+    if !isnull(finfo)
+        frame_m = get(finfo).def.module
+        result = module_name(frame_m) === module_name(m)
+    end
+
+    return result
 end
 
 end

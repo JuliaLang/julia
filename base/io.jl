@@ -455,7 +455,7 @@ function readuntil(s::IO, t::AbstractString)
         warn("readuntil(IO,AbstractString) will perform poorly with a long string")
     end
     out = IOBuffer()
-    m = Array{Char}(l)  # last part of stream to match
+    m = Vector{Char}(l)  # last part of stream to match
     t = collect(t)
     i = 0
     while !eof(s)

@@ -23,12 +23,12 @@ mutable struct Channel{T} <: AbstractChannel
     state::Symbol
     excp::Nullable{Exception} # Exception to be thrown when state != :open
 
-    data::Array{T,1}
+    data::Vector{T}
     sz_max::Int            # maximum size of channel
 
     # Used when sz_max == 0, i.e., an unbuffered channel.
-    takers::Array{Task}
-    putters::Array{Task}
+    takers::Vector{Task}
+    putters::Vector{Task}
     waiters::Int
 
     function Channel{T}(sz::Float64) where T
@@ -42,7 +42,7 @@ mutable struct Channel{T} <: AbstractChannel
         if sz < 0
             throw(ArgumentError("Channel size must be either 0, a positive integer or Inf"))
         end
-        new(Condition(), Condition(), :open, Nullable{Exception}(), Array{T}(0), sz, Array{Task}(0), Array{Task}(0), 0)
+        new(Condition(), Condition(), :open, Nullable{Exception}(), Vector{T}(0), sz, Vector{Task}(0), Vector{Task}(0), 0)
     end
 
     # deprecated empty constructor
@@ -380,7 +380,7 @@ function notify_error(c::Channel, err)
 end
 notify_error(c::Channel) = notify_error(c, get(c.excp))
 
-eltype{T}(::Type{Channel{T}}) = T
+eltype(::Type{Channel{T}}) where {T} = T
 
 show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(c.sz_max),sz_curr:$(n_avail(c)))")
 

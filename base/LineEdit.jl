@@ -864,7 +864,7 @@ function keymap_merge(target,source)
     for key in setdiff(keys(source), keys(direct_keys))
         # We first resolve redirects in the source
         value = source[key]
-        visited = Array{Any}(0)
+        visited = Vector{Any}(0)
         while isa(value, Union{Char,AbstractString})
             value = normalize_key(value)
             if value in visited

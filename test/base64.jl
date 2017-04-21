@@ -41,3 +41,6 @@ ipipe = Base64DecodePipe(IOBuffer(string(encodedMaxLine76[1:end-2],"==")))
 # Test incorrect format
 ipipe = Base64DecodePipe(IOBuffer(encodedMaxLine76[1:end-3]))
 @test_throws ArgumentError readstring(ipipe)
+
+# issue #21314
+@test base64decode(chomp("test")) == base64decode("test")

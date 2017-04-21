@@ -69,7 +69,7 @@ similar{K,V}(d::WeakKeyDict{K,V}) = WeakKeyDict{K,V}()
 similar{K,V}(d::WeakKeyDict, ::Type{Pair{K,V}}) = WeakKeyDict{K,V}()
 
 # conversion between Dict types
-function convert{K,V}(::Type{WeakKeyDict{K,V}},d::Associative)
+function convert(::Type{WeakKeyDict{K,V}},d::Associative) where V where K
     h = WeakKeyDict{K,V}()
     for (k,v) in d
         ck = convert(K,k)
@@ -81,7 +81,7 @@ function convert{K,V}(::Type{WeakKeyDict{K,V}},d::Associative)
     end
     return h
 end
-convert{K,V}(::Type{WeakKeyDict{K,V}},d::WeakKeyDict{K,V}) = d
+convert(::Type{WeakKeyDict{K,V}},d::WeakKeyDict{K,V}) where {K,V} = d
 
 islocked(wkh::WeakKeyDict) = islocked(wkh.lock)
 lock(f, wkh::WeakKeyDict) = lock(f, wkh.lock)

@@ -8,7 +8,7 @@ abstract type Plan{T} end
 import Base: show, summary, size, ndims, length, eltype,
              *, A_mul_B!, inv, \, A_ldiv_B!
 
-eltype{T}(::Type{Plan{T}}) = T
+eltype(::Type{Plan{T}}) where {T} = T
 
 # size(p) should return the size of the input array for p
 size(p::Plan, d) = size(p)[d]
@@ -580,7 +580,7 @@ module FFTW
     """
     function plan_r2r end
 
-    Base.USE_GPL_LIBS && include("fft/FFTW.jl")
+    Base.USE_GPL_LIBS && include(joinpath("fft", "FFTW.jl"))
 end
 
 importall .FFTW

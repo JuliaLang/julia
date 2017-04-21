@@ -154,6 +154,25 @@ The keyword argument is:
 
 Returns only the *names* of the files which have changed, *not* their contents.
 
+# Example
+
+```julia
+LibGit2.branch!(repo, "branch/a")
+LibGit2.branch!(repo, "branch/b")
+# add a file to repo
+open(joinpath(LibGit2.path(repo),"file"),"w") do f
+    write(f, "hello repo\n")
+end
+LibGit2.add!(repo, "file")
+LibGit2.commit(repo, "add file")
+# returns ["file"]
+filt = Set([LibGit2.Consts.DELTA_ADDED])
+files = LibGit2.diff_files(repo, "branch/a", "branch/b", filter=filt)
+# returns [] because existing files weren't modified
+filt = Set([LibGit2.Consts.DELTA_MODIFIED])
+files = LibGit2.diff_files(repo, "branch/a", "branch/b", filter=filt)
+```
+
 Equivalent to `git diff --name-only --diff-filter=<filter> <branch1> <branch2>`.
 """
 function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractString;
@@ -495,16 +514,26 @@ Equivalent to `git reset [--soft | --mixed | --hard] <id>`.
 reset!(repo::GitRepo, id::GitHash, mode::Cint = Consts.RESET_MIXED) =
     reset!(repo, GitObject(repo, id), mode)
 
-""" git rev-list --count <commit1> <commit2> """
-function revcount(repo::GitRepo, fst::AbstractString, snd::AbstractString)
-    fst_id = revparseid(repo, fst)
-    snd_id = revparseid(repo, snd)
-    base_id = merge_base(repo, string(fst_id), string(snd_id))
+"""
+    LibGit2.revcount(repo::GitRepo, commit1::AbstractString, commit2::AbstractString)
+
+List the number of revisions between `commit1` and `commit2` (committish OIDs in string form).
+Since `commit1` and `commit2` may be on different branches, `revcount` performs a "left-right"
+revision list (and count), returning a tuple of `Int`s - the number of left and right
+commits, respectively. A left (or right) commit refers to which side of a symmetric
+difference in a tree the commit is reachable from.
+
+Equivalent to `git rev-list --left-right --count <commit1> <commit2>`.
+"""
+function revcount(repo::GitRepo, commit1::AbstractString, commit2::AbstractString)
+    commit1_id = revparseid(repo, commit1)
+    commit2_id = revparseid(repo, commit2)
+    base_id = merge_base(repo, string(commit1_id), string(commit2_id))
     fc = with(GitRevWalker(repo)) do walker
-        count((i,r)->i!=base_id, walker, oid=fst_id, by=Consts.SORT_TOPOLOGICAL)
+        count((i,r)->i!=base_id, walker, oid=commit1_id, by=Consts.SORT_TOPOLOGICAL)
     end
     sc = with(GitRevWalker(repo)) do walker
-        count((i,r)->i!=base_id, walker, oid=snd_id, by=Consts.SORT_TOPOLOGICAL)
+        count((i,r)->i!=base_id, walker, oid=commit2_id, by=Consts.SORT_TOPOLOGICAL)
     end
     return (fc-1, sc-1)
 end
@@ -808,3 +837,4 @@ end
 
 
 end # module
+

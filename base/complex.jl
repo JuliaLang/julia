@@ -18,9 +18,9 @@ const Complex128 = Complex{Float64}
 const Complex64  = Complex{Float32}
 const Complex32  = Complex{Float16}
 
-convert{T<:Real}(::Type{Complex{T}}, x::Real) = Complex{T}(x,0)
-convert{T<:Real}(::Type{Complex{T}}, z::Complex) = Complex{T}(real(z),imag(z))
-convert{T<:Real}(::Type{T}, z::Complex) =
+convert(::Type{Complex{T}}, x::Real) where {T<:Real} = Complex{T}(x,0)
+convert(::Type{Complex{T}}, z::Complex) where {T<:Real} = Complex{T}(real(z),imag(z))
+convert(::Type{T}, z::Complex) where {T<:Real} =
     isreal(z) ? convert(T,real(z)) : throw(InexactError())
 
 convert(::Type{Complex}, z::Complex) = z
@@ -166,6 +166,9 @@ end
 function write(s::IO, z::Complex)
     write(s,real(z),imag(z))
 end
+
+## byte order swaps: real and imaginary part are swapped individually
+bswap(z::Complex) = Complex(bswap(real(z)), bswap(imag(z)))
 
 ## equality and hashing of complex numbers ##
 

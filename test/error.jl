@@ -63,4 +63,9 @@ let
     @test typeof(ex) == ErrorException
     @test ex.msg == "foo"
     @test c[1] == 1
+
+    # Functions with keyword arguments
+    foo_kwargs(x; y=5) = x + y
+    @test retry(foo_kwargs)(3) == 8
+    @test retry(foo_kwargs)(3; y=4) == 7
 end

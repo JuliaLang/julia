@@ -28,6 +28,8 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
         username_ptr, schema, host)
     isusedcreds = checkused!(creds)
 
+    # Note: The same SSHCredentials can be used to authenticate separate requests using the
+    # same credential cache. e.g. using Pkg.update when there are two private packages.
     errcls, errmsg = Error.last_error()
     if errcls != Error.None
         # Check if we used ssh-agent

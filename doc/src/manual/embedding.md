@@ -17,7 +17,7 @@ We start with a simple C program that initializes Julia and calls some Julia cod
 int main(int argc, char *argv[])
 {
     /* required: setup the Julia context */
-    jl_init(NULL);
+    jl_init();
 
     /* run Julia commands */
     jl_eval_string("print(sqrt(2.0))");
@@ -48,9 +48,9 @@ The file `ui/repl.c` program is another simple example of how to set `jl_options
 linking against `libjulia`.
 
 The first thing that has to be done before calling any other Julia C function is to initialize
-Julia. This is done by calling `jl_init`, which takes as argument a C string (`const char*`) to
-the location where Julia is installed. When the argument is `NULL`, Julia tries to determine the
-install location automatically.
+Julia. This is done by calling `jl_init`, which tries to automatically determine Julia's install
+location. If you need to specify a custom location, or specify which system image to load,
+use `jl_init_with_image` instead.
 
 The second statement in the test program evaluates a Julia statement using a call to `jl_eval_string`.
 
@@ -63,8 +63,8 @@ example program calls this before returning from `main`.
 
     ```
     >>> julia=CDLL('./libjulia.dylib',RTLD_GLOBAL)
-    >>> julia.jl_init.argtypes = [c_char_p]
-    >>> julia.jl_init('.')
+    >>> julia.jl_init.argtypes = []
+    >>> julia.jl_init()
     250593296
     ```
 
@@ -83,15 +83,12 @@ shared data directory.
 
 #### Example
 
-Below is essentially the same as above with one small change; the argument to `jl_init` is now
-**JULIA_INIT_DIR** which is defined by *julia-config.jl*.:
-
 ```
 #include <julia.h>
 
 int main(int argc, char *argv[])
 {
-   jl_init(JULIA_INIT_DIR);
+   jl_init();
    (void)jl_eval_string("println(sqrt(2.0))");
    jl_atexit_hook(0);
    return 0;
@@ -149,13 +146,17 @@ square root of 2 in Julia and reads back the result in C looks as follows:
 ```
 jl_value_t *ret = jl_eval_string("sqrt(2.0)");
 
-if (jl_is_float64(ret)) {
+if (jl_typeis(ret, jl_float64_type)) {
     double ret_unboxed = jl_unbox_float64(ret);
     printf("sqrt(2.0) in C: %e \n", ret_unboxed);
 }
+else {
+    printf("ERROR: unexpected return type from sqrt(::Float64)\n");
+}
 ```
 
-In order to check whether `ret` is of a specific Julia type, we can use the `jl_is_...` functions.
+In order to check whether `ret` is of a specific Julia type, we can use the
+`jl_isa`, `jl_typeis`, or `jl_is_...` functions.
 By typing `typeof(sqrt(2.0))` into the Julia shell we can see that the return type is `Float64`
 (`double` in C). To convert the boxed Julia value into a C double the `jl_unbox_float64` function
 is used in the above code snippet.
@@ -390,7 +391,7 @@ When writing Julia callable functions, it might be necessary to validate argumen
 to indicate errors. A typical type check looks like:
 
 ```
-if (!jl_is_float64(val)) {
+if (!jl_typeis(val, jl_float64_type)) {
     jl_type_error(function_name, (jl_value_t*)jl_float64_type, val);
 }
 ```

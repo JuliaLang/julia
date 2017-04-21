@@ -313,7 +313,7 @@ function show(io::IO, l::Core.MethodInstance)
             show(io, l.def)
         else
             print(io, "MethodInstance for ")
-            show_lambda_types(io, l)
+            show_tuple_as_call(io, l.def.name, l.specTypes)
         end
     else
         print(io, "Toplevel MethodInstance thunk")
@@ -469,6 +469,24 @@ end
 isidentifier(s::Symbol) = isidentifier(string(s))
 
 isoperator(s::Symbol) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
+
+"""
+    operator_precedence(s::Symbol)
+
+Return an integer representing the precedence of operator `s`, relative to
+other operators. Higher-numbered operators take precedence over lower-numbered
+operators. Return `0` if `s` is not a valid operator.
+
+# Examples
+
+```jldoctest
+julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
+(9,11,15)
+
+julia> Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
+(1,1)
+```
+"""
 operator_precedence(s::Symbol) = Int(ccall(:jl_operator_precedence, Cint, (Cstring,), s))
 operator_precedence(x::Any) = 0 # fallback for generic expression nodes
 const prec_power = operator_precedence(:(^))
@@ -1025,18 +1043,17 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     nothing
 end
 
-function show_lambda_types(io::IO, li::Core.MethodInstance)
+function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
     # print a method signature tuple for a lambda definition
-    local sig
-    returned_from_do = false
-    Base.with_output_color(have_color && get(io, :backtrace, false) ? stackframe_function_color() : :nothing, io) do io
-        if li.specTypes === Tuple
-            print(io, li.def.name, "(...)")
-            returned_from_do = true
-            return
-        end
-        sig = unwrap_unionall(li.specTypes).parameters
-        ft = sig[1]; uw = unwrap_unionall(ft)
+    color = have_color && get(io, :backtrace, false) ? stackframe_function_color() : :nothing
+    if sig === Tuple
+        Base.print_with_color(color, io, name, "(...)")
+        return
+    end
+    sig = unwrap_unionall(sig).parameters
+    Base.with_output_color(color, io) do io
+        ft = sig[1]
+        uw = unwrap_unionall(ft)
         if ft <: Function && isa(uw,DataType) && isempty(uw.parameters) &&
                 isdefined(uw.name.module, uw.name.mt.name) &&
                 ft == typeof(getfield(uw.name.module, uw.name.mt.name))
@@ -1048,7 +1065,6 @@ function show_lambda_types(io::IO, li::Core.MethodInstance)
             print(io, "(::", ft, ")")
         end
     end
-    returned_from_do && return
     first = true
     print_style = have_color && get(io, :backtrace, false) ? :bold : :nothing
     print_with_color(print_style, io, "(")

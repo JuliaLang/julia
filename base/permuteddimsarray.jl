@@ -46,8 +46,8 @@ function PermutedDimsArray(data::AbstractArray{T,N}, perm) where {T,N}
 end
 
 Base.parent(A::PermutedDimsArray) = A.parent
-Base.size{T,N,perm}(A::PermutedDimsArray{T,N,perm})    = genperm(size(parent(A)),    perm)
-Base.indices{T,N,perm}(A::PermutedDimsArray{T,N,perm}) = genperm(indices(parent(A)), perm)
+Base.size(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}    = genperm(size(parent(A)),    perm)
+Base.indices(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(indices(parent(A)), perm)
 
 Base.unsafe_convert{T}(::Type{Ptr{T}}, A::PermutedDimsArray{T}) = Base.unsafe_convert(Ptr{T}, parent(A))
 

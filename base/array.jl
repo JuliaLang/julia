@@ -74,8 +74,8 @@ size(a::Array, d) = arraysize(a, d)
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
 size(a::Array) = (@_inline_meta; _size((), a))
-_size{_,N}(out::NTuple{N}, A::Array{_,N}) = out
-function _size{_,M,N}(out::NTuple{M}, A::Array{_,N})
+_size(out::NTuple{N}, A::Array{_,N}) where {_,N} = out
+function _size(out::NTuple{M}, A::Array{_,N}) where _ where M where N
     @_inline_meta
     _size((out..., size(A,M+1)), A)
 end
@@ -83,18 +83,19 @@ end
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
 length(a::Array) = arraylen(a)
-elsize{T}(a::Array{T}) = isbits(T) ? sizeof(T) : sizeof(Ptr)
+elsize(a::Array{T}) where {T} = isbits(T) ? sizeof(T) : sizeof(Ptr)
 sizeof(a::Array) = elsize(a) * length(a)
 
 function isassigned(a::Array, i::Int...)
-    ii = sub2ind(size(a), i...)
-    1 <= ii <= length(a) || return false
-    ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii-1) == 1
+    @_inline_meta
+    ii = (sub2ind(size(a), i...) % UInt) - 1
+    ii < length(a) % UInt || return false
+    ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
 end
 
 ## copy ##
 
-function unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, n)
+function unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, n) where T
     # Do not use this to copy data between pointer arrays.
     # It can't be made safe no matter how carefully you checked.
     ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
@@ -102,7 +103,7 @@ function unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, n)
     return dest
 end
 
-function unsafe_copy!{T}(dest::Array{T}, doffs, src::Array{T}, soffs, n)
+function unsafe_copy!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     if isbits(T)
         unsafe_copy!(pointer(dest, doffs), pointer(src, soffs), n)
     else
@@ -121,9 +122,9 @@ function copy!{T}(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer,
     unsafe_copy!(dest, doffs, src, soffs, n)
 end
 
-copy!{T}(dest::Array{T}, src::Array{T}) = copy!(dest, 1, src, 1, length(src))
+copy!(dest::Array{T}, src::Array{T}) where {T} = copy!(dest, 1, src, 1, length(src))
 
-copy{T<:Array}(a::T) = ccall(:jl_array_copy, Ref{T}, (Any,), a)
+copy(a::T) where {T<:Array} = ccall(:jl_array_copy, Ref{T}, (Any,), a)
 
 function reinterpret{T,S}(::Type{T}, a::Array{S,1})
     nel = Int(div(length(a)*sizeof(S),sizeof(T)))
@@ -317,14 +318,14 @@ oneunit{T}(x::AbstractMatrix{T}) = _one(oneunit(T), x)
 
 ## Conversions ##
 
-convert{T}(::Type{Vector}, x::AbstractVector{T}) = convert(Vector{T}, x)
-convert{T}(::Type{Matrix}, x::AbstractMatrix{T}) = convert(Matrix{T}, x)
+convert(::Type{Vector}, x::AbstractVector{T}) where {T} = convert(Vector{T}, x)
+convert(::Type{Matrix}, x::AbstractMatrix{T}) where {T} = convert(Matrix{T}, x)
 
-convert{T,n}(::Type{Array{T}}, x::Array{T,n}) = x
-convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
+convert(::Type{Array{T}}, x::Array{T,n}) where {T,n} = x
+convert(::Type{Array{T,n}}, x::Array{T,n}) where {T,n} = x
 
-convert{T,n,S}(::Type{Array{T}}, x::AbstractArray{S, n}) = convert(Array{T, n}, x)
-convert{T,n,S}(::Type{Array{T,n}}, x::AbstractArray{S,n}) = copy!(Array{T,n}(size(x)), x)
+convert(::Type{Array{T}}, x::AbstractArray{S,n}) where {T,n,S} = convert(Array{T,n}, x)
+convert(::Type{Array{T,n}}, x::AbstractArray{S,n}) where {T,n,S} = copy!(Array{T,n}(size(x)), x)
 
 promote_rule{T,n,S}(::Type{Array{T,n}}, ::Type{Array{S,n}}) = Array{promote_type(T,S),n}
 
