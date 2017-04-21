@@ -684,6 +684,9 @@ extern void *jl_winsock_handle;
 void *jl_get_library(const char *f_lib);
 JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name,
                                       void **hnd);
+// Windows only
+#define JL_EXE_LIBNAME ((const char*)1)
+#define JL_DL_LIBNAME ((const char*)2)
 const char *jl_dlfind_win32(const char *name);
 void *jl_dlopen_soname(const char *pfx, size_t n, unsigned flags);
 
