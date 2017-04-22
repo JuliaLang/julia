@@ -23,27 +23,7 @@ endif
 endif
 endif
 
-ifeq ($(LLVM_DEBUG),1)
-LLVM_BUILDTYPE := Debug
-else
-LLVM_BUILDTYPE := Release
-endif
-LLVM_CMAKE_BUILDTYPE := $(LLVM_BUILDTYPE)
-ifeq ($(LLVM_ASSERTIONS),1)
-LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+Asserts
-endif
-LLVM_FLAVOR := $(LLVM_BUILDTYPE)
-ifeq ($(LLVM_SANITIZE),1)
-ifeq ($(SANITIZE_MEMORY),1)
-LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+MSAN
-else
-LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+ASAN
-endif
-endif
-
-LLVM_SRC_DIR:=$(SRCDIR)/srccache/llvm-$(LLVM_VER)
-LLVM_BUILD_DIR:=$(BUILDDIR)/llvm-$(LLVM_VER)
-LLVM_BUILDDIR_withtype := $(LLVM_BUILD_DIR)/build_$(LLVM_BUILDTYPE)
+include $(SRCDIR)/llvm-options.mk
 LLVM_LIB_FILE := libLLVMCodeGen.a
 
 ifeq ($(LLVM_VER), 3.3)
@@ -124,7 +104,7 @@ ifeq ($(USE_LLVM_SHLIB),1)
 # NOTE: we could also --disable-static here (on the condition we link tools
 #       against libLLVM) but there doesn't seem to be a CMake counterpart option
 LLVM_FLAGS += --enable-shared
-LLVM_CMAKE += -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON
+LLVM_CMAKE += -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON -DLLVM_LINK_LLVM_DYLIB:BOOL=ON
 # NOTE: starting with LLVM 3.8, all symbols are exported
 ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7))
 LLVM_CMAKE += -DLLVM_DYLIB_EXPORT_ALL:BOOL=ON
