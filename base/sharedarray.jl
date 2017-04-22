@@ -103,7 +103,7 @@ function (::Type{SharedArray{T,N}})(dims::Dims{N}; init=false, pids=Int[]) where
 
         func_mapshmem = () -> shm_mmap_array(T, dims, shm_seg_name, JL_O_RDWR)
 
-        refs = Array{Future}(length(pids))
+        refs = Vector{Future}(length(pids))
         for (i, p) in enumerate(pids)
             refs[i] = remotecall(func_mapshmem, p)
         end
@@ -127,7 +127,7 @@ function (::Type{SharedArray{T,N}})(dims::Dims{N}; init=false, pids=Int[]) where
         shm_seg_name = ""
 
     finally
-        if shm_seg_name != ""
+        if !isempty(shm_seg_name)
             remotecall_fetch(shm_unlink, shmmem_create_pid, shm_seg_name)
         end
     end
@@ -147,8 +147,8 @@ end
 (::Type{SharedArray{T}})(m::Integer, n::Integer, o::Integer; kwargs...) where {T} =
     SharedArray{T,3}(m, n, o; kwargs...)
 
-function (::Type{SharedArray{T,N}})(filename::AbstractString, dims::NTuple{N,Int},
-                                    offset::Integer=0; mode=nothing, init=false, pids::Vector{Int}=Int[]) where {T,N}
+function (::Type{SharedArray{T,N}})(filename::AbstractString, dims::NTuple{N,Int}, offset::Integer=0;
+                                    mode=nothing, init=false, pids::Vector{Int}=Int[]) where T where N
     if !isabspath(filename)
         throw(ArgumentError("$filename is not an absolute path; try abspath(filename)?"))
     end
@@ -180,7 +180,7 @@ function (::Type{SharedArray{T,N}})(filename::AbstractString, dims::NTuple{N,Int
     end
 
     # Create the file if it doesn't exist, map it if it does
-    refs = Array{Future}(length(pids))
+    refs = Vector{Future}(length(pids))
     func_mmap = mode -> open(filename, mode) do io
         Mmap.mmap(io, Array{T,N}, dims, offset; shared=true)
     end
@@ -237,7 +237,7 @@ function initialize_shared_array(S, onlocalhost, init, pids)
     S
 end
 
-function finalize_refs(S::SharedArray{T,N}) where {T,N}
+function finalize_refs(S::SharedArray{T,N}) where T where N
     if length(S.pids) > 0
         for r in S.refs
             finalize(r)
@@ -377,7 +377,7 @@ end
 
 sub_1dim(S::SharedArray, pidx) = view(S.s, range_1dim(S, pidx))
 
-function init_loc_flds(S::SharedArray{T,N}, empty_local=false) where {T,N}
+function init_loc_flds(S::SharedArray{T,N}, empty_local=false) where T where N
     if myid() in S.pids
         S.pidx = findfirst(S.pids, myid())
         if isa(S.refs[1], Future)
@@ -507,12 +507,11 @@ similar(S::SharedArray, dims::Dims) = similar(S.s, eltype(S), dims)
 similar(S::SharedArray) = similar(S.s, eltype(S), size(S))
 
 reduce(f, S::SharedArray) =
-    mapreduce(fetch, f,
-              Any[ @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) ])
+    mapreduce(fetch, f, Any[ @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) ])
 
 
 function map!(f, S::SharedArray, Q::SharedArray)
-    if !(S === Q) && (procs(S) != procs(Q) || localindexes(S) != localindexes(Q))
+    if (S !== Q) && (procs(S) != procs(Q) || localindexes(S) != localindexes(Q))
         throw(ArgumentError("incompatible source and destination arguments"))
     end
     @sync for p in procs(S)
