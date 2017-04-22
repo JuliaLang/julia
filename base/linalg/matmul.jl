@@ -467,9 +467,9 @@ function generic_matmatmul(tA, tB, A::AbstractVecOrMat{T}, B::AbstractMatrix{S})
 end
 
 const tilebufsize = 10800  # Approximately 32k/3
-const Abuf = Array{UInt8}(tilebufsize)
-const Bbuf = Array{UInt8}(tilebufsize)
-const Cbuf = Array{UInt8}(tilebufsize)
+const Abuf = Vector{UInt8}(tilebufsize)
+const Bbuf = Vector{UInt8}(tilebufsize)
+const Cbuf = Vector{UInt8}(tilebufsize)
 
 function generic_matmatmul!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
     mA, nA = lapack_size(tA, A)
@@ -502,7 +502,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
 
     tile_size = 0
     if isbits(R) && isbits(T) && isbits(S) && (tA == 'N' || tB != 'N')
-        tile_size = floor(Int,sqrt(tilebufsize/max(sizeof(R),sizeof(S),sizeof(T))))
+        tile_size = floor(Int, sqrt(tilebufsize / max(sizeof(R), sizeof(S), sizeof(T))))
     end
     @inbounds begin
     if tile_size > 0

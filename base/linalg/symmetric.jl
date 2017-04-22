@@ -138,8 +138,8 @@ convert(::Type{Hermitian{T,S}},A::Hermitian{T,S}) where {T,S<:AbstractMatrix} = 
 convert(::Type{Hermitian{T,S}},A::Hermitian) where {T,S<:AbstractMatrix} = Hermitian{T,S}(convert(S,A.data),A.uplo)
 convert(::Type{AbstractMatrix{T}}, A::Hermitian) where {T} = Hermitian(convert(AbstractMatrix{T}, A.data), Symbol(A.uplo))
 
-copy{T,S}(A::Symmetric{T,S}) = (B = copy(A.data); Symmetric{T,typeof(B)}(B,A.uplo))
-copy{T,S}(A::Hermitian{T,S}) = (B = copy(A.data); Hermitian{T,typeof(B)}(B,A.uplo))
+copy(A::Symmetric{T,S}) where {T,S} = (B = copy(A.data); Symmetric{T,typeof(B)}(B,A.uplo))
+copy(A::Hermitian{T,S}) where {T,S} = (B = copy(A.data); Hermitian{T,typeof(B)}(B,A.uplo))
 
 function copy!(dest::Symmetric, src::Symmetric)
     if src.uplo == dest.uplo

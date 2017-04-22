@@ -576,7 +576,7 @@ end
 
 ##### findmin & findmax #####
 
-function findminmax!{T,N}(f, Rval, Rind, A::AbstractArray{T,N})
+function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     (isempty(Rval) || isempty(A)) && return Rval, Rind
     lsiz = check_reducedims(Rval, A)
     for i = 1:N
@@ -650,7 +650,7 @@ julia> findmin(A, 2)
 ([1; 3], [1; 2])
 ```
 """
-function findmin{T}(A::AbstractArray{T}, region)
+function findmin(A::AbstractArray{T}, region) where T
     if isempty(A)
         return (similar(A, reduced_indices0(A, region)),
                 similar(dims->zeros(Int, dims), reduced_indices0(A, region)))
@@ -688,7 +688,7 @@ julia> findmax(A,2)
 ([2; 4], [3; 4])
 ```
 """
-function findmax{T}(A::AbstractArray{T}, region)
+function findmax(A::AbstractArray{T}, region) where T
     if isempty(A)
         return (similar(A, reduced_indices0(A,region)),
                 similar(dims->zeros(Int, dims), reduced_indices0(A,region)))

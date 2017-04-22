@@ -132,13 +132,13 @@ function Base.permutedims!(dest, src::AbstractArray, perm)
     return dest
 end
 
-function Base.copy!{T,N}(dest::PermutedDimsArray{T,N}, src::AbstractArray{T,N})
+function Base.copy!(dest::PermutedDimsArray{T,N}, src::AbstractArray{T,N}) where {T,N}
     checkbounds(dest, indices(src)...)
     _copy!(dest, src)
 end
 Base.copy!(dest::PermutedDimsArray, src::AbstractArray) = _copy!(dest, src)
 
-function _copy!{T,N,perm}(P::PermutedDimsArray{T,N,perm}, src)
+function _copy!(P::PermutedDimsArray{T,N,perm}, src) where {T,N,perm}
     # If dest/src are "close to dense," then it pays to be cache-friendly.
     # Determine the first permuted dimension
     d = 0  # d+1 will hold the first permuted dimension of src
