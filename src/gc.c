@@ -616,10 +616,7 @@ STATIC_INLINE void gc_setmark(jl_ptls_t ptls, jl_taggedvalue_t *o,
     }
 }
 
-#ifndef __cplusplus
-inline
-#endif
-void gc_setmark_buf(jl_ptls_t ptls, void *o, uint8_t mark_mode, size_t minsz)
+STATIC_INLINE void gc_setmark_buf_(jl_ptls_t ptls, void *o, uint8_t mark_mode, size_t minsz)
 {
     jl_taggedvalue_t *buf = jl_astaggedvalue(o);
     uintptr_t tag = buf->header;
@@ -640,6 +637,11 @@ void gc_setmark_buf(jl_ptls_t ptls, void *o, uint8_t mark_mode, size_t minsz)
         }
         gc_setmark_big(ptls, buf, bits);
     }
+}
+
+void gc_setmark_buf(jl_ptls_t ptls, void *o, uint8_t mark_mode, size_t minsz)
+{
+    gc_setmark_buf_(ptls, o, mark_mode, minsz);
 }
 
 #define should_collect() (__unlikely(gc_num.allocd>0))
@@ -1357,7 +1359,7 @@ NOINLINE static int gc_mark_module(jl_ptls_t ptls, jl_module_t *m,
     for(i=1; i < m->bindings.size; i+=2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            gc_setmark_buf(ptls, b, bits, sizeof(jl_binding_t));
+            gc_setmark_buf_(ptls, b, bits, sizeof(jl_binding_t));
             void *vb = jl_astaggedvalue(b);
             verify_parent1("module", m, &vb, "binding_buff");
             (void)vb;
@@ -1438,11 +1440,11 @@ static void gc_mark_task_stack(jl_ptls_t ptls, jl_task_t *ta, int d, int8_t bits
     jl_ptls_t ptls2 = jl_all_tls_states[tid];
     if (stkbuf) {
 #ifdef COPY_STACKS
-        gc_setmark_buf(ptls, ta->stkbuf, bits, ta->bufsz);
+        gc_setmark_buf_(ptls, ta->stkbuf, bits, ta->bufsz);
 #else
         // stkbuf isn't owned by julia for the root task
         if (ta != ptls2->root_task) {
-            gc_setmark_buf(ptls, ta->stkbuf, bits, ta->ssize);
+            gc_setmark_buf_(ptls, ta->stkbuf, bits, ta->ssize);
         }
 #endif
     }
@@ -1493,10 +1495,8 @@ void gc_mark_object_list(jl_ptls_t ptls, arraylist_t *list, size_t start)
     }
 }
 
-STATIC_INLINE void gc_assert_datatype(jl_datatype_t *vt)
+JL_NORETURN NOINLINE void gc_assert_datatype_fail(jl_datatype_t *vt)
 {
-    if (__likely(jl_is_datatype(vt)))
-        return;
     jl_printf(JL_STDOUT, "GC error (probable corruption) :\n");
     gc_debug_print_status();
     jl_(vt);
@@ -1504,11 +1504,12 @@ STATIC_INLINE void gc_assert_datatype(jl_datatype_t *vt)
     abort();
 }
 
-// for chasing down unwanted references
-/*
-static jl_value_t *lookforme = NULL;
-JL_DLLEXPORT void jl_gc_lookfor(jl_value_t *v) { lookforme = v; }
-*/
+STATIC_INLINE void gc_assert_datatype(jl_datatype_t *vt)
+{
+    if (__likely(jl_is_datatype(vt)))
+        return;
+    gc_assert_datatype_fail(vt);
+}
 
 #define MAX_MARK_DEPTH 400
 // Scan a marked object `v` and recursively mark its children.
@@ -1567,8 +1568,8 @@ static void gc_scan_obj_(jl_ptls_t ptls, jl_value_t *v, int d,
             verify_parent1("array", v, &val_buf,
                            "buffer ('loc' addr is meaningless)");
             (void)val_buf;
-            gc_setmark_buf(ptls, (char*)a->data - a->offset * a->elsize,
-                           bits, array_nbytes(a));
+            gc_setmark_buf_(ptls, (char*)a->data - a->offset * a->elsize,
+                            bits, array_nbytes(a));
         }
         if (flags.ptrarray && a->data != NULL) {
             size_t l = jl_array_len(a);
@@ -2128,8 +2129,8 @@ JL_DLLEXPORT jl_value_t *(jl_gc_alloc)(jl_ptls_t ptls, size_t sz, void *ty)
     return jl_gc_alloc_(ptls, sz, ty);
 }
 
-// Per-thread initialization (when threading is fully implemented)
-void jl_mk_thread_heap(jl_ptls_t ptls)
+// Per-thread initialization
+void jl_init_thread_heap(jl_ptls_t ptls)
 {
     jl_thread_heap_t *heap = &ptls->heap;
     jl_gc_pool_t *p = heap->norm_pools;
@@ -2151,6 +2152,11 @@ void jl_mk_thread_heap(jl_ptls_t ptls)
     arraylist_new(heap->remset, 0);
     arraylist_new(heap->last_remset, 0);
     arraylist_new(&ptls->finalizers, 0);
+
+    jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
+    gc_cache->perm_scanned_bytes = 0;
+    gc_cache->scanned_bytes = 0;
+    gc_cache->nbig_obj = 0;
 }
 
 // System-wide initializations
