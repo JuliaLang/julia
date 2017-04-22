@@ -104,10 +104,10 @@ broadcast(::typeof(ceil), M::SymTridiagonal) = SymTridiagonal(ceil.(M.dv), ceil.
 for func in (:conj, :copy, :real, :imag)
     @eval ($func)(M::SymTridiagonal) = SymTridiagonal(($func)(M.dv), ($func)(M.ev))
 end
-broadcast{T<:Integer}(::typeof(round), ::Type{T}, M::SymTridiagonal) = SymTridiagonal(round.(T, M.dv), round.(T, M.ev))
-broadcast{T<:Integer}(::typeof(trunc), ::Type{T}, M::SymTridiagonal) = SymTridiagonal(trunc.(T, M.dv), trunc.(T, M.ev))
-broadcast{T<:Integer}(::typeof(floor), ::Type{T}, M::SymTridiagonal) = SymTridiagonal(floor.(T, M.dv), floor.(T, M.ev))
-broadcast{T<:Integer}(::typeof(ceil), ::Type{T}, M::SymTridiagonal) = SymTridiagonal(ceil.(T, M.dv), ceil.(T, M.ev))
+broadcast(::typeof(round), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = SymTridiagonal(round.(T, M.dv), round.(T, M.ev))
+broadcast(::typeof(trunc), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = SymTridiagonal(trunc.(T, M.dv), trunc.(T, M.ev))
+broadcast(::typeof(floor), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = SymTridiagonal(floor.(T, M.dv), floor.(T, M.ev))
+broadcast(::typeof(ceil), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = SymTridiagonal(ceil.(T, M.dv), ceil.(T, M.ev))
 
 transpose(M::SymTridiagonal) = M #Identity operation
 ctranspose(M::SymTridiagonal) = conj(M)
@@ -517,13 +517,13 @@ for func in (:conj, :copy, :real, :imag)
         Tridiagonal(($func)(M.dl), ($func)(M.d), ($func)(M.du), ($func)(M.du2))
     end
 end
-broadcast{T<:Integer}(::typeof(round), ::Type{T}, M::Tridiagonal) =
+broadcast(::typeof(round), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
     Tridiagonal(round.(T, M.dl), round.(T, M.d), round.(T, M.du), round.(T, M.du2))
-broadcast{T<:Integer}(::typeof(trunc), ::Type{T}, M::Tridiagonal) =
+broadcast(::typeof(trunc), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
     Tridiagonal(trunc.(T, M.dl), trunc.(T, M.d), trunc.(T, M.du), trunc.(T, M.du2))
-broadcast{T<:Integer}(::typeof(floor), ::Type{T}, M::Tridiagonal) =
+broadcast(::typeof(floor), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
     Tridiagonal(floor.(T, M.dl), floor.(T, M.d), floor.(T, M.du), floor.(T, M.du2))
-broadcast{T<:Integer}(::typeof(ceil), ::Type{T}, M::Tridiagonal) =
+broadcast(::typeof(ceil), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
     Tridiagonal(ceil.(T, M.dl), ceil.(T, M.d), ceil.(T, M.du), ceil.(T, M.du2))
 
 transpose(M::Tridiagonal) = Tridiagonal(M.du, M.d, M.dl)
