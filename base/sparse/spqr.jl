@@ -106,7 +106,7 @@ function factorize{Tv<:VTypes}(ordering::Integer, tol::Real, A::Sparse{Tv})
     f
 end
 
-function solve{Tv<:VTypes}(system::Integer, QR::Factorization{Tv}, B::Dense{Tv})
+function solve(system::Integer, QR::Factorization{Tv}, B::Dense{Tv}) where Tv<:VTypes
     m, n = size(QR)
     mB = size(B, 1)
     if (system == RX_EQUALS_B || system == RETX_EQUALS_B) && m != mB

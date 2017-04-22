@@ -9,7 +9,7 @@ const DOT_CUTOFF = 128
 const ASUM_CUTOFF = 32
 const NRM2_CUTOFF = 32
 
-function scale!{T<:BlasFloat}(X::Array{T}, s::T)
+function scale!(X::Array{T}, s::T) where T<:BlasFloat
     s == 0 && return fill!(X, zero(T))
     s == 1 && return X
     if length(X) < SCAL_CUTOFF
@@ -20,10 +20,10 @@ function scale!{T<:BlasFloat}(X::Array{T}, s::T)
     X
 end
 
-scale!{T<:BlasFloat}(s::T, X::Array{T}) = scale!(X, s)
+scale!(s::T, X::Array{T}) where {T<:BlasFloat} = scale!(X, s)
 
-scale!{T<:BlasFloat}(X::Array{T}, s::Number) = scale!(X, convert(T, s))
-function scale!{T<:BlasComplex}(X::Array{T}, s::Real)
+scale!(X::Array{T}, s::Number) where {T<:BlasFloat} = scale!(X, convert(T, s))
+function scale!(X::Array{T}, s::Real) where T<:BlasComplex
     R = typeof(real(zero(T)))
     BLAS.scal!(2*length(X), convert(R,s), convert(Ptr{R},pointer(X)), 1)
     X

@@ -56,7 +56,7 @@ convert(::Type{Matrix}, A::LQ) = convert(Array, convert(AbstractArray, A))
 convert(::Type{Array}, A::LQ) = convert(Matrix, A)
 full(A::LQ) = convert(AbstractArray, A)
 
-ctranspose{T}(A::LQ{T}) = QR{T,typeof(A.factors)}(A.factors', A.τ)
+ctranspose(A::LQ{T}) where {T} = QR{T,typeof(A.factors)}(A.factors', A.τ)
 
 function getindex(A::LQ, d::Symbol)
     m, n = size(A)
