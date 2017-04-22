@@ -381,6 +381,23 @@ for period in (0.06, Dates.Millisecond(60))
     end
 end
 
+complex_cfunction = function(a)
+    s = zero(eltype(a))
+    @inbounds @simd for i in a
+        s += muladd(a[i], a[i], -2)
+    end
+    return s
+end
+function test_thread_cfunction()
+    @threads for i in 1:1000
+        # Make sure this is not inferrable
+        # and a runtime call to `jl_function_ptr` will be created
+        ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any),
+              complex_cfunction, Float64, Tuple{Ref{Vector{Float64}}})
+    end
+end
+test_thread_cfunction()
+
 # Compare the two ways of checking if threading is enabled.
 # `jl_tls_states` should only be defined on non-threading build.
 if ccall(:jl_threading_enabled, Cint, ()) == 0

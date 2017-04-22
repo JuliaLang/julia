@@ -1544,9 +1544,12 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
         // TODO: maybe deprecation warning, better checking
         argt = (jl_value_t*)jl_apply_tuple_type_v((jl_value_t**)jl_data_ptr(argt), jl_nfields(argt));
     }
+    JL_LOCK(&codegen_lock);
     Function *llvmf = jl_cfunction_object(f, rt, (jl_tupletype_t*)argt);
     JL_GC_POP();
-    return (void*)getAddressForFunction(llvmf);
+    void *ptr = (void*)getAddressForFunction(llvmf);
+    JL_UNLOCK(&codegen_lock);
+    return ptr;
 }
 
 
@@ -1565,6 +1568,7 @@ extern "C" JL_DLLEXPORT
 void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 {
     assert(jl_is_tuple_type(argt));
+    JL_LOCK(&codegen_lock);
     Function *llvmf = jl_cfunction_object(f, rt, (jl_tupletype_t*)argt);
     // force eager emission of the function (llvm 3.3 gets confused otherwise and tries to do recursive compilation)
     uint64_t Addr = getAddressForFunction(llvmf);
@@ -1594,6 +1598,7 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 #else
     (void)GA; (void)Addr;
 #endif
+    JL_UNLOCK(&codegen_lock);
 }
 
 // --- native code info, and dump function to IR and ASM ---
@@ -4787,6 +4792,8 @@ const struct jl_typemap_info cfunction_cache = {
 // here argt does not include the leading function type argument
 static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_tupletype_t *argt)
 {
+    // Assumes the codegen lock is acquired. The caller is responsible for that.
+
     // validate and unpack the arguments
     JL_TYPECHK(cfunction, type, declrt);
     JL_TYPECHK(cfunction, type, (jl_value_t*)argt);
@@ -4856,7 +4863,6 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
     }
 
     // Backup the info for the nested compile
-    JL_LOCK(&codegen_lock);
     IRBuilderBase::InsertPoint old = builder.saveAndClearIP();
     DebugLoc olddl = builder.getCurrentDebugLocation();
     bool last_n_c = nested_compile;
@@ -4872,7 +4878,6 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
     builder.restoreIP(old);
     builder.SetCurrentDebugLocation(olddl);
     nested_compile = last_n_c;
-    JL_UNLOCK(&codegen_lock); // Might GC
     JL_GC_POP();
     if (f == NULL)
         jl_rethrow();
