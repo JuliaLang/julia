@@ -97,11 +97,11 @@ void add_lostval_parent(jl_value_t *parent)
 // the error is caught at the first long collection
 static arraylist_t bits_save[4];
 
-static void gc_clear_mark_page(jl_gc_pagemeta_t *pg)
+static void gc_clear_mark_page(jl_gc_pagemeta_t *pg, int bits)
 {
     jl_ptls_t ptls2 = jl_all_tls_states[pg->thread_n];
     jl_gc_pool_t *pool = &ptls2->heap.norm_pools[pg->pool_n];
-    pv = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
+    jl_taggedvalue_t *pv = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
     char *lim = (char*)pv + GC_PAGE_SZ - GC_PAGE_OFFSET - pool->osize;
     while ((char*)pv <= lim) {
         if (!gc_verifying)
@@ -111,42 +111,42 @@ static void gc_clear_mark_page(jl_gc_pagemeta_t *pg)
     }
 }
 
-static void gc_clear_mark_pagetable0(pagetable0_t *pagetable0)
+static void gc_clear_mark_pagetable0(pagetable0_t *pagetable0, int bits)
 {
     for (int pg_i = 0; pg_i < REGION0_PG_COUNT / 32; pg_i++) {
         uint32_t line = pagetable0->allocmap[pg_i];
         if (line) {
             for (int j = 0; j < 32; j++) {
                 if ((line >> j) & 1) {
-                    gc_clear_mark_page(pagetable0->meta[pg_i * 32 + j]);
+                    gc_clear_mark_page(pagetable0->meta[pg_i * 32 + j], bits);
                 }
             }
         }
     }
 }
 
-static void gc_clear_mark_pagetable1(pagetable1_t *pagetable1)
+static void gc_clear_mark_pagetable1(pagetable1_t *pagetable1, int bits)
 {
     for (int pg_i = 0; pg_i < REGION1_PG_COUNT / 32; pg_i++) {
         uint32_t line = pagetable1->allocmap0[pg_i];
         if (line) {
             for (int j = 0; j < 32; j++) {
                 if ((line >> j) & 1) {
-                    gc_clear_mark_pagetable0(pagetable1->meta0[pg_i * 32 + j]);
+                    gc_clear_mark_pagetable0(pagetable1->meta0[pg_i * 32 + j], bits);
                 }
             }
         }
     }
 }
 
-static void gc_clear_mark_pagetable(void)
+static void gc_clear_mark_pagetable(int bits)
 {
     for (int pg_i = 0; pg_i < (REGION2_PG_COUNT + 31) / 32; pg_i++) {
         uint32_t line = memory_map.allocmap1[pg_i];
         if (line) {
             for (int j = 0; j < 32; j++) {
                 if ((line >> j) & 1) {
-                    gc_clear_mark_pagetable1(memory_map.meta1[pg_i * 32 + j]);
+                    gc_clear_mark_pagetable1(memory_map.meta1[pg_i * 32 + j], bits);
                 }
             }
         }
@@ -184,7 +184,7 @@ static void clear_mark(int bits)
         v = v->next;
     }
 
-    gc_clear_mark_pagetable();
+    gc_clear_mark_pagetable(bits);
 }
 
 static void restore(void)
