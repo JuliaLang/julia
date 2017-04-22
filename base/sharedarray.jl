@@ -127,7 +127,7 @@ function (::Type{SharedArray{T,N}})(dims::Dims{N}; init=false, pids=Int[]) where
         shm_seg_name = ""
 
     finally
-        if shm_seg_name != ""
+        if !isempty(shm_seg_name)
             remotecall_fetch(shm_unlink, shmmem_create_pid, shm_seg_name)
         end
     end

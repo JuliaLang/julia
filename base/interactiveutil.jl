@@ -273,7 +273,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         if is_windows()
             try lsb = strip(readstring(`$(ENV["COMSPEC"]) /c ver`)) end
         end
-        if lsb != ""
+        if !isempty(lsb)
             println(io,     "           ", lsb)
         end
         if is_unix()

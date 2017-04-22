@@ -226,7 +226,7 @@ end
 function banner(io::IO = STDOUT)
     if GIT_VERSION_INFO.tagged_commit
         commit_string = TAGGED_RELEASE_BANNER
-    elseif GIT_VERSION_INFO.commit == ""
+    elseif isempty(GIT_VERSION_INFO.commit)
         commit_string = ""
     else
         days = Int(floor((ccall(:jl_clock_now, Float64, ()) - GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
@@ -242,7 +242,7 @@ function banner(io::IO = STDOUT)
             commit_string = "$(branch)/$(commit) (fork: $(distance) commits, $(days) $(unit))"
         end
     end
-    commit_date = GIT_VERSION_INFO.date_string != "" ? " ($(GIT_VERSION_INFO.date_string))": ""
+    commit_date = !isempty(GIT_VERSION_INFO.date_string) ? " ($(GIT_VERSION_INFO.date_string))": ""
 
     if have_color
         c = text_colors
