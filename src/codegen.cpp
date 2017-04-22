@@ -3014,8 +3014,8 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             jl_value_t *utt = jl_unwrap_unionall((jl_value_t*)stt);
             if (jl_is_tuple_type(utt) && is_tupletype_homogeneous(((jl_datatype_t*)utt)->types, true)) {
                 // For tuples, we can emit code even if we don't know the exact
-                // type (e.g. because we don't know the length). So long as all
-                // elements are the same and a leaf type.
+                // type (e.g. because we don't know the length). This is possible
+                // as long as we know that all elements are of the same (leaf) type.
                 jl_cgval_t strct = emit_expr(args[1], ctx);
                 if (strct.ispointer()) {
                     // Determine which was the type that was homogenous
