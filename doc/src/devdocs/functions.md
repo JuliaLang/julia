@@ -263,7 +263,7 @@ more than 25 exception handlers. If one ever does, I'm willing to raise the limi
 A minor issue occurs during the bootstrap process due to storing all constructors in a single
 method table. In the second bootstrap step, where inference.ji is compiled using inference0.ji,
 constructors for inference0's types remain in the table, so there are still references to the
-old inference module and inference.ji is 2x the size it should be. This was fixed in dump.c by
+old inference module and inference.ji is 2x the size it should be. This was fixed in `dump.c` by
 filtering definitions from "replaced modules" out of method tables and caches before saving a
 system image. A "replaced module" is one that satisfies the condition `m != jl_get_global(m->parent, m->name)`
 -- in other words, some newer module has taken its name and place.

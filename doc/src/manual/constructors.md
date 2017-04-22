@@ -407,7 +407,7 @@ defining sophisticated behavior is typically quite simple.
 ## Case Study: Rational
 
 Perhaps the best way to tie all these pieces together is to present a real world example of a
-parametric composite type and its constructor methods. To that end, here is the (slightly modified) beginning of [rational.jl](https://github.com/JuliaLang/julia/blob/master/base/rational.jl),
+parametric composite type and its constructor methods. To that end, here is the (slightly modified) beginning of [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl),
 which implements Julia's [Rational Numbers](@ref):
 
 ```jldoctest rational
@@ -502,7 +502,7 @@ false
 
 Thus, although the [`//`](@ref) operator usually returns an instance of `OurRational`, if either
 of its arguments are complex integers, it will return an instance of `Complex{OurRational}` instead.
-The interested reader should consider perusing the rest of [rational.jl](https://github.com/JuliaLang/julia/blob/master/base/rational.jl):
+The interested reader should consider perusing the rest of [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl):
 it is short, self-contained, and implements an entire basic Julia type.
 
 ## [Constructors and Conversion](@id constructors-and-conversion)

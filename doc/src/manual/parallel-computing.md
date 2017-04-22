@@ -131,7 +131,7 @@ ERROR: RemoteException(2, CapturedException(UndefVarError(Symbol("#rand2"))
 Process 1 knew about the function `rand2`, but process 2 did not.
 
 Most commonly you'll be loading code from files or packages, and you have a considerable amount
-of flexibility in controlling which processes load code. Consider a file, `"DummyModule.jl"`,
+of flexibility in controlling which processes load code. Consider a file, `DummyModule.jl`,
 containing the following code:
 
 ```julia
@@ -814,8 +814,8 @@ Once finalized, a reference becomes invalid and cannot be used in any further ca
 ## [Shared Arrays](@id man-shared-arrays)
 
 Shared Arrays use system shared memory to map the same array across many processes. While there
-are some similarities to a [DArray](https://github.com/JuliaParallel/DistributedArrays.jl), the
-behavior of a [`SharedArray`](@ref) is quite different. In a [DArray](https://github.com/JuliaParallel/DistributedArrays.jl),
+are some similarities to a [`DArray`](https://github.com/JuliaParallel/DistributedArrays.jl), the
+behavior of a [`SharedArray`](@ref) is quite different. In a [`DArray`](https://github.com/JuliaParallel/DistributedArrays.jl),
 each process has local access to just a chunk of the data, and no two processes share the same
 chunk; in contrast, in a [`SharedArray`](@ref) each "participating" process has access to the
 entire array.  A [`SharedArray`](@ref) is a good choice when you want to have a large amount of

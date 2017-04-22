@@ -81,7 +81,7 @@ problem with type-stability. Consequently, in addition to the allocation itself,
 that the code generated for your function is far from optimal. Take such indications seriously
 and follow the advice below.
 
-For more serious benchmarking, consider the [`BenchmarkTools.jl`](https://github.com/JuliaCI/BenchmarkTools.jl)
+For more serious benchmarking, consider the [BenchmarkTools.jl](https://github.com/JuliaCI/BenchmarkTools.jl)
 package which evaluates the function multiple times in order to reduce noise.
 
 As a teaser, an improved version of this function allocates no memory
@@ -629,7 +629,7 @@ of `fill_twos!` for different types of `a`.
 The second form is also often better style and can lead to more code reuse.
 
 This pattern is used in several places in the standard library. For example, see `hvcat_fill`
-in [abstractarray.jl](https://github.com/JuliaLang/julia/blob/master/base/abstractarray.jl), or
+in [`abstractarray.jl`](https://github.com/JuliaLang/julia/blob/master/base/abstractarray.jl), or
 the [`fill!`](@ref) function, which we could have used instead of writing our own `fill_twos!`.
 
 Functions like `strange_twos` occur when dealing with data of uncertain type, for example data
