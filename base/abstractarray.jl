@@ -60,8 +60,8 @@ end
 # Performance optimization: get rid of a branch on `d` in `indices(A,
 # d)` for d=1. 1d arrays are heavily used, and the first dimension
 # comes up in other applications.
-indices1(A::AbstractArray{T,0}) where {T} = OneTo(1)
-indices1(A::AbstractArray)         = (@_inline_meta; indices(A)[1])
+indices1(A::AbstractArray{<:Any,0}) = OneTo(1)
+indices1(A::AbstractArray) = (@_inline_meta; indices(A)[1])
 indices1(iter) = OneTo(length(iter))
 
 unsafe_indices(A) = indices(A)
@@ -340,7 +340,7 @@ function checkbounds(::Type{Bool}, A::AbstractArray, i)
     checkindex(Bool, linearindices(A), i)
 end
 # As a special extension, allow using logical arrays that match the source array exactly
-function checkbounds(::Type{Bool}, A::AbstractArray{_,N}, I::AbstractArray{Bool,N}) where {_,N}
+function checkbounds(::Type{Bool}, A::AbstractArray{<:Any,N}, I::AbstractArray{Bool,N}) where N
     @_inline_meta
     indices(A) == indices(I)
 end
