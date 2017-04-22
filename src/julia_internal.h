@@ -127,8 +127,8 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
 JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t allocsz);
 int jl_gc_classify_pools(size_t sz, int *osize);
 extern jl_mutex_t gc_perm_lock;
-void *jl_gc_perm_alloc_nolock(size_t sz);
-void *jl_gc_perm_alloc(size_t sz);
+void *jl_gc_perm_alloc_nolock(size_t sz, int zero);
+void *jl_gc_perm_alloc(size_t sz, int zero);
 
 // pools are 16376 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
 static const int jl_gc_sizeclasses[JL_GC_N_POOLS] = {
