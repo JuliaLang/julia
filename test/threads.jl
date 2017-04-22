@@ -432,3 +432,20 @@ function test_load_and_lookup_18020(n)
     end
 end
 test_load_and_lookup_18020(10000)
+
+# Nested threaded loops
+# This may not be efficient/fully supported but should work without crashing.....
+function test_nested_loops()
+    a = zeros(Int, 100, 100)
+    @threads for i in 1:100
+        @threads for j in 1:100
+            a[j, i] = i + j
+        end
+    end
+    for i in 1:100
+        for j in 1:100
+            @test a[j, i] == i + j
+        end
+    end
+end
+test_nested_loops()
