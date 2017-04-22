@@ -400,6 +400,13 @@ function summarize(io::IO, T::DataType, binding)
         end
         println(io, "```")
     end
+    if supertype(T) != Any
+        println(io, "**Supertype Hierarchy:**")
+        println(io, "```")
+        Base.show_supertypes(io, T)
+        println(io)
+        println(io, "```")
+    end
 end
 
 function summarize(io::IO, m::Module, binding)
