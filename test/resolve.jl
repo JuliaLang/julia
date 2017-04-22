@@ -532,3 +532,11 @@ reqs_data = Any[
 ]
 want_data = Dict("A"=>v"1", "B"=>v"2", "C"=>v"2", "D"=>v"2", "E"=>v"2")
 @test resolve_tst(deps_data, reqs_data, want_data)
+
+## DEPENDENCY SCHEME 12: A REALISTIC EXAMPLE
+## ref issue #21485
+
+include("resolvedata1.jl")
+
+@test sanity_tst(deps_data, problematic_data)
+@test resolve_tst(deps_data, reqs_data, want_data)
