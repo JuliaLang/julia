@@ -602,7 +602,7 @@ STATIC_INLINE void gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
 STATIC_INLINE void gc_setmark_pool(jl_ptls_t ptls, jl_taggedvalue_t *o,
                                    uint8_t mark_mode)
 {
-    gc_setmark_pool_(ptls, o, mark_mode, page_metadata_ext(o).meta);
+    gc_setmark_pool_(ptls, o, mark_mode, jl_assume(page_metadata(o)));
 }
 
 STATIC_INLINE void gc_setmark(jl_ptls_t ptls, jl_taggedvalue_t *o,
@@ -930,7 +930,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
         if (__unlikely(gc_page_data(v) != gc_page_data(next))) {
             // we only update pg's fields when the freelist changes page
             // since pg's metadata is likely not in cache
-            jl_gc_pagemeta_t *pg = page_metadata_ext(v).meta;
+            jl_gc_pagemeta_t *pg = jl_assume(page_metadata(v));
             assert(pg->osize == p->osize);
             pg->nfree = 0;
             pg->has_young = 1;
@@ -947,7 +947,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
         if (v) {
             // like the freelist case,
             // but only update the page metadata when it is full
-            jl_gc_pagemeta_t *pg = page_metadata_ext((char*)v - 1).meta;
+            jl_gc_pagemeta_t *pg = jl_assume(page_metadata((char*)v - 1));
             assert(pg->osize == p->osize);
             pg->nfree = 0;
             pg->has_young = 1;
@@ -1220,7 +1220,7 @@ static void gc_sweep_pool(int sweep_full)
             jl_gc_pool_t *p = &ptls2->heap.norm_pools[i];
             jl_taggedvalue_t *last = p->freelist;
             if (last) {
-                jl_gc_pagemeta_t *pg = page_metadata_ext(last).meta;
+                jl_gc_pagemeta_t *pg = jl_assume(page_metadata(last));
                 gc_pool_sync_nfree(pg, last);
                 pg->has_young = 1;
             }
@@ -1230,7 +1230,7 @@ static void gc_sweep_pool(int sweep_full)
             last = p->newpages;
             if (last) {
                 char *last_p = (char*)last;
-                jl_gc_pagemeta_t *pg = page_metadata_ext(last_p - 1).meta;
+                jl_gc_pagemeta_t *pg = jl_assume(page_metadata(last_p - 1));
                 assert(last_p - gc_page_data(last_p - 1) >= GC_PAGE_OFFSET);
                 pg->nfree = (GC_PAGE_SZ - (last_p - gc_page_data(last_p - 1))) / p->osize;
                 pg->has_young = 1;
@@ -2366,13 +2366,13 @@ static char *gc_perm_pool = NULL;
 static size_t gc_perm_size = 0;
 
 // **NOT** a safepoint
-void *jl_gc_perm_alloc_nolock(size_t sz)
+void *jl_gc_perm_alloc_nolock(size_t sz, int zero)
 {
     // The caller should have acquired `gc_perm_lock`
 #ifndef MEMDEBUG
     if (__unlikely(sz > GC_PERM_POOL_LIMIT))
 #endif
-        return malloc(sz);
+        return zero ? calloc(1, sz) : malloc(sz);
     sz = LLT_ALIGN(sz, JL_SMALL_BYTE_ALIGNMENT);
     if (__unlikely(sz > gc_perm_size)) {
 #ifdef _OS_WINDOWS_
@@ -2399,14 +2399,14 @@ void *jl_gc_perm_alloc_nolock(size_t sz)
 }
 
 // **NOT** a safepoint
-void *jl_gc_perm_alloc(size_t sz)
+void *jl_gc_perm_alloc(size_t sz, int zero)
 {
 #ifndef MEMDEBUG
     if (__unlikely(sz > GC_PERM_POOL_LIMIT))
 #endif
-        return malloc(sz);
+        return zero ? calloc(1, sz) : malloc(sz);
     JL_LOCK_NOGC(&gc_perm_lock);
-    void *p = jl_gc_perm_alloc_nolock(sz);
+    void *p = jl_gc_perm_alloc_nolock(sz, zero);
     JL_UNLOCK_NOGC(&gc_perm_lock);
     return p;
 }
