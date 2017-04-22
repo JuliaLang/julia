@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # The epochs used for date rounding are based ISO 8601's "year zero" notation
 const DATEEPOCH = value(Date(0))

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Name functions
 Jan = Dates.DateTime(2013, 1, 1) # Tuesday

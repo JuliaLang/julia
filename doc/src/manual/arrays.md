@@ -376,7 +376,7 @@ multidimensional index. When combined with other indexing forms and iterators
 that yield `CartesianIndex`es, however, this can lead directly to very elegant
 and efficient code. See [Iteration](@ref) below, and for some more advanced
 examples, see [this blog post on multidimensional algorithms and
-iteration](http://julialang.org/blog/2016/02/iteration).
+iteration](https://julialang.org/blog/2016/02/iteration).
 
 Arrays of `CartesianIndex{N}` are also supported. They represent a collection
 of scalar indices that each span `N` dimensions, enabling a form of indexing
