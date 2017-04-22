@@ -135,7 +135,7 @@ Base.@propagate_inbounds _broadcast_getindex(::Any, A, I) = A[I]
 ## Broadcasting core
 # nargs encodes the number of As arguments (which matches the number
 # of keeps). The first two type parameters are to ensure specialization.
-@generated function _broadcast!{K,ID,AT,BT,N}(f, B::AbstractArray, keeps::K, Idefaults::ID, A::AT, Bs::BT, ::Type{Val{N}}, iter)
+@generated function _broadcast!(f, B::AbstractArray, keeps::K, Idefaults::ID, A::AT, Bs::BT, ::Type{Val{N}}, iter) where {K,ID,AT,BT,N}
     nargs = N + 1
     quote
         $(Expr(:meta, :inline))
@@ -158,7 +158,7 @@ end
 
 # For BitArray outputs, we cache the result in a "small" Vector{Bool},
 # and then copy in chunks into the output
-@generated function _broadcast!{K,ID,AT,BT,N}(f, B::BitArray, keeps::K, Idefaults::ID, A::AT, Bs::BT, ::Type{Val{N}}, iter)
+@generated function _broadcast!(f, B::BitArray, keeps::K, Idefaults::ID, A::AT, Bs::BT, ::Type{Val{N}}, iter) where {K,ID,AT,BT,N}
     nargs = N + 1
     quote
         $(Expr(:meta, :inline))
@@ -213,7 +213,7 @@ as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
 end
 
 # broadcast with computed element type
-@generated function _broadcast!{K,ID,AT,nargs}(f, B::AbstractArray, keeps::K, Idefaults::ID, As::AT, ::Type{Val{nargs}}, iter, st, count)
+@generated function _broadcast!(f, B::AbstractArray, keeps::K, Idefaults::ID, As::AT, ::Type{Val{nargs}}, iter, st, count) where {K,ID,AT,nargs}
     quote
         $(Expr(:meta, :noinline))
         # destructure the keeps and As tuples
@@ -262,7 +262,7 @@ function broadcast_t(f, ::Type{Any}, shape, iter, As...)
     B[I] = val
     return _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter, st, 1)
 end
-@inline function broadcast_t{N}(f, T, shape, iter, A, Bs::Vararg{Any,N})
+@inline function broadcast_t(f, T, shape, iter, A, Bs::Vararg{Any,N}) where N
     C = similar(Array{T}, shape)
     keeps, Idefaults = map_newindexer(shape, A, Bs)
     _broadcast!(f, C, keeps, Idefaults, A, Bs, Val{N}, iter)
@@ -273,7 +273,7 @@ end
 # in the common case where this is used for logical array indexing; in
 # performance-critical cases where Array{Bool} is desired, one can always
 # use broadcast! instead.
-@inline function broadcast_t{N}(f, ::Type{Bool}, shape, iter, A, Bs::Vararg{Any,N})
+@inline function broadcast_t(f, ::Type{Bool}, shape, iter, A, Bs::Vararg{Any,N}) where N
     C = similar(BitArray, shape)
     keeps, Idefaults = map_newindexer(shape, A, Bs)
     _broadcast!(f, C, keeps, Idefaults, A, Bs, Val{N}, iter)
