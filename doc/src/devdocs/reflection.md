@@ -15,7 +15,7 @@ given the following type, `fieldnames(Point)` returns an arrays of [`Symbol`](@r
 the field names:
 
 ```julia
-julia> type Point
+julia> struct Point
            x::Int
            y
        end

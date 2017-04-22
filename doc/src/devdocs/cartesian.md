@@ -69,7 +69,7 @@ Starting in Julia 0.4-pre, the recommended approach is to use a `@generated func
 an example:
 
 ```julia
-@generated function mysum{T,N}(A::Array{T,N})
+@generated function mysum(A::Array{T,N}) where {T,N}
     quote
         s = zero(T)
         @nloops $N i A begin
