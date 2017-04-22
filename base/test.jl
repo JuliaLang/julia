@@ -793,7 +793,7 @@ end
 Starts a new test set, or multiple test sets if a `for` loop is provided.
 
 If no custom testset type is given it defaults to creating a `DefaultTestSet`.
-`DefaultTestSet` records all the results and, and if there are any `Fail`s or
+`DefaultTestSet` records all the results and, if there are any `Fail`s or
 `Error`s, throws an exception at the end of the top-level (non-nested) test set,
 along with a summary of the test results.
 
