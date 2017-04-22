@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ctranspose(a::AbstractArray) = error("ctranspose not defined for $(typeof(a)). Consider using `permutedims` for higher-dimensional arrays.")
 transpose(a::AbstractArray) = error("transpose not defined for $(typeof(a)). Consider using `permutedims` for higher-dimensional arrays.")

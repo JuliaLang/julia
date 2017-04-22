@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module BaseDocs
 
@@ -10,11 +10,11 @@ macro kw_str(text) Keyword(Symbol(text)) end
 """
 **Welcome to Julia $(string(VERSION)).** The full manual is available at
 
-    http://docs.julialang.org/
+    https://docs.julialang.org/
 
 as well many great tutorials and learning resources:
 
-    http://julialang.org/learning/
+    https://julialang.org/learning/
 
 For help on a specific function or macro, type `?` followed
 by its name, e.g. `?fft`, or `?@time`, and press enter.

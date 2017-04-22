@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 if is_windows()
     const ERROR_ENVVAR_NOT_FOUND = UInt32(203)

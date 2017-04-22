@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Implementation of
 #  "Table-driven Implementation of the Logarithm Function in IEEE Floating-point Arithmetic"

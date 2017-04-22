@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @test length(ExponentialBackOff(n=10)) == 10
 @test collect(ExponentialBackOff(n=10, first_delay=0.01))[1] == 0.01

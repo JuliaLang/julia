@@ -104,7 +104,7 @@
 
     <context id="special-constant" style-ref="special-constant">
       <keyword>nothing</keyword>
-      <!-- http://docs.julialang.org/en/latest/stdlib/constants/ -->
+      <!-- https://docs.julialang.org/en/latest/stdlib/constants/ -->
       <keyword>ARGS</keyword>
       <keyword>LOAD_PATH</keyword>
       <keyword>CPU_CORES</keyword>
@@ -121,7 +121,7 @@
       <keyword>ANY</keyword>
     </context>
 
-    <!-- http://docs.julialang.org/en/latest/manual/mathematical-operations.html -->
+    <!-- https://docs.julialang.org/en/latest/manual/mathematical-operations.html -->
     <context id="operator">
       <include>
         <context ref="octave:operator" />
@@ -135,7 +135,7 @@
       </include>
     </context>
 
-    <!-- http://docs.julialang.org/en/latest/stdlib/punctuation.html -->
+    <!-- https://docs.julialang.org/en/latest/stdlib/punctuation.html -->
     <context id="punctuation" style-ref="operator">
       <match extended="true">
         \(|\)        |
@@ -185,7 +185,7 @@
       <keyword>using</keyword>
     </context>
 
-    <!-- See http://docs.julialang.org/en/latest/manual/running-external-programs/ -->
+    <!-- See https://docs.julialang.org/en/latest/manual/running-external-programs/ -->
     <context id="external-command" style-ref="external-command" >
       <start>`</start>
       <end>`</end>
@@ -214,7 +214,7 @@
     </context>
 
     <context id="module" style-ref="module">
-      <!-- http://docs.julialang.org/en/latest/manual/modules/#standard-modules -->
+      <!-- https://docs.julialang.org/en/latest/manual/modules/#standard-modules -->
       <keyword>Base</keyword>
       <keyword>Core</keyword>
       <keyword>Main</keyword>

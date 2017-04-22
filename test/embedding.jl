@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # test that the embedding example runs without error
 let
     if is_windows()
