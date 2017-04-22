@@ -540,7 +540,7 @@ rcum_promote_type(op, ::Type{Array{T,N}}) where {T,N} = Array{rcum_promote_type(
 # stable in certain situations (e.g. sums).
 # it does double the number of operations compared to accumulate,
 # though for cheap operations like + this does not have much impact (20%)
-function _accumulate_pairwise!{T, Op}(op::Op, c::AbstractVector{T}, v::AbstractVector, s, i1, n)::T
+function _accumulate_pairwise!{T, Op}(op::Op, c::AbstractVector{T}, v::AbstractVector, s, i1, n)
     @inbounds if n < 128
         s_ = v[i1]
         c[i1] = op(s, s_)
