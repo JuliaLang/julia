@@ -303,7 +303,7 @@ pointer(V::SubArray, i::Int) = _pointer(V, i)
 _pointer(V::SubArray{<:Any,1}, i::Int) = pointer(V, (i,))
 _pointer(V::SubArray, i::Int) = pointer(V, ind2sub(indices(V), i))
 
-function pointer{T,N}(V::SubArray{T,N,<:Array,<:Tuple{Vararg{RangeIndex}}}, is::Tuple{Vararg{Int}})
+function pointer(V::SubArray{T,N,<:Array,<:Tuple{Vararg{RangeIndex}}}, is::Tuple{Vararg{Int}}) where {T,N}
     index = first_index(V)
     strds = strides(V)
     for d = 1:length(is)

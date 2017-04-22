@@ -148,7 +148,7 @@ end
     SharedArray{T,3}(m, n, o; kwargs...)
 
 function (::Type{SharedArray{T,N}})(filename::AbstractString, dims::NTuple{N,Int},
-        offset::Integer=0; mode=nothing, init=false, pids::Vector{Int}=Int[]) where T where N
+                                    offset::Integer=0; mode=nothing, init=false, pids::Vector{Int}=Int[]) where T where N
     if !isabspath(filename)
         throw(ArgumentError("$filename is not an absolute path; try abspath(filename)?"))
     end
@@ -214,7 +214,7 @@ function (::Type{SharedArray{T,N}})(filename::AbstractString, dims::NTuple{N,Int
 end
 
 (::Type{SharedArray{T}})(filename::AbstractString, dims::NTuple{N,Int}, offset::Integer=0;
-                              mode=nothing, init=false, pids::Vector{Int}=Int[]) where {T,N} =
+                         mode=nothing, init=false, pids::Vector{Int}=Int[]) where {T,N} =
     SharedArray{T,N}(filename, dims, offset; mode=mode, init=init, pids=pids)
 
 function initialize_shared_array(S, onlocalhost, init, pids)
@@ -237,7 +237,7 @@ function initialize_shared_array(S, onlocalhost, init, pids)
     S
 end
 
-function finalize_refs{T,N}(S::SharedArray{T,N})
+function finalize_refs(S::SharedArray{T,N}) where {T,N}
     if length(S.pids) > 0
         for r in S.refs
             finalize(r)
@@ -377,7 +377,7 @@ end
 
 sub_1dim(S::SharedArray, pidx) = view(S.s, range_1dim(S, pidx))
 
-function init_loc_flds{T,N}(S::SharedArray{T,N}, empty_local=false)
+function init_loc_flds(S::SharedArray{T,N}, empty_local=false) where {T,N}
     if myid() in S.pids
         S.pidx = findfirst(S.pids, myid())
         if isa(S.refs[1], Future)

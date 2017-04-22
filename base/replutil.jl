@@ -34,7 +34,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeyIterator,ValueIterator}
     end
 end
 
-function show{K,V}(io::IO, ::MIME"text/plain", t::Associative{K,V})
+function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
     # show more descriptively, with one line per key/value pair
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit::Bool = get(io, :limit, false)
@@ -418,7 +418,7 @@ function showerror(io::IO, ex::MethodError)
     end
 end
 
-striptype{T}(::Type{T}) = T
+striptype(::Type{T}) where {T} = T
 striptype(::Any) = nothing
 
 function showerror_ambiguous(io::IO, meth, f, args)

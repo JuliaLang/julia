@@ -522,7 +522,7 @@ function A_ldiv_B!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
     B
 end
 for func in (:Ac_ldiv_B!, :At_ldiv_B!)
-    @eval function ($func)(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix)
+    @eval function ($func)(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
         nA,mA = size(A)
         tmp = similar(B,size(B,1))
         n = size(B, 1)
@@ -615,11 +615,7 @@ _valuefields(::Type{<:Tridiagonal}) = [:dl, :d, :du]
 _valuefields(::Type{<:SymTridiagonal}) = [:dv, :ev]
 _valuefields(::Type{<:AbstractTriangular}) = [:data]
 
-SpecialArrays = Union{Diagonal,
-    Bidiagonal,
-    Tridiagonal,
-    SymTridiagonal,
-    AbstractTriangular}
+const SpecialArrays = Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal,AbstractTriangular}
 
 @generated function fillslots!(A::SpecialArrays, x)
     ex = :(xT = convert(eltype(A), x))
@@ -637,7 +633,7 @@ _small_enough(A::Bidiagonal) = size(A, 1) <= 1
 _small_enough(A::Tridiagonal) = size(A, 1) <= 2
 _small_enough(A::SymTridiagonal) = size(A, 1) <= 2
 
-function fill!(A::Union{Bidiagonal, Tridiagonal, SymTridiagonal}, x)
+function fill!(A::Union{Bidiagonal,Tridiagonal,SymTridiagonal}, x)
     xT = convert(eltype(A), x)
     (xT == zero(eltype(A)) || _small_enough(A)) && return fillslots!(A, xT)
     throw(ArgumentError("array A of type $(typeof(A)) and size $(size(A)) can

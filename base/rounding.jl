@@ -139,10 +139,10 @@ See [`RoundingMode`](@ref) for available modes.
 """
 :rounding
 
-setrounding_raw(::Type{<:Union{Float32,Float64}},i::Integer) = ccall(:fesetround, Int32, (Int32,), i)
+setrounding_raw(::Type{<:Union{Float32,Float64}}, i::Integer) = ccall(:fesetround, Int32, (Int32,), i)
 rounding_raw(::Type{<:Union{Float32,Float64}}) = ccall(:fegetround, Int32, ())
 
-setrounding(::Type{T},r::RoundingMode) where {T<:Union{Float32,Float64}} = setrounding_raw(T,to_fenv(r))
+setrounding(::Type{T}, r::RoundingMode) where {T<:Union{Float32,Float64}} = setrounding_raw(T,to_fenv(r))
 rounding(::Type{T}) where {T<:Union{Float32,Float64}} = from_fenv(rounding_raw(T))
 
 """
@@ -199,18 +199,18 @@ end
 # Assumes conversion is performed by rounding to nearest value.
 
 # To avoid ambiguous dispatch with methods in mpfr.jl:
-(::Type{T})(x::Real,r::RoundingMode) where {T<:AbstractFloat} = _convert_rounding(T,x,r)
+(::Type{T})(x::Real, r::RoundingMode) where {T<:AbstractFloat} = _convert_rounding(T,x,r)
 
-_convert_rounding(::Type{T},x::Real,r::RoundingMode{:Nearest}) where {T<:AbstractFloat} = convert(T,x)
-function _convert_rounding(::Type{T},x::Real,r::RoundingMode{:Down}) where T<:AbstractFloat
+_convert_rounding(::Type{T}, x::Real, r::RoundingMode{:Nearest}) where {T<:AbstractFloat} = convert(T,x)
+function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:Down}) where T<:AbstractFloat
     y = convert(T,x)
     y > x ? prevfloat(y) : y
 end
-function _convert_rounding(::Type{T},x::Real,r::RoundingMode{:Up}) where T<:AbstractFloat
+function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:Up}) where T<:AbstractFloat
     y = convert(T,x)
     y < x ? nextfloat(y) : y
 end
-function _convert_rounding(::Type{T},x::Real,r::RoundingMode{:ToZero}) where T<:AbstractFloat
+function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:ToZero}) where T<:AbstractFloat
     y = convert(T,x)
     if x > 0.0
         y > x ? prevfloat(y) : y
