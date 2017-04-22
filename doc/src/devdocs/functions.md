@@ -33,14 +33,14 @@ of the argument structure.
 For example, the following function for performing a call accepts just an `args` pointer, so the
 first element of the args array will be the function to call:
 
-```
+```c
 jl_value_t *jl_apply(jl_value_t **args, uint32_t nargs)
 ```
 
 This entry point for the same functionality accepts the function separately, so the `args` array
 does not contain the function:
 
-```
+```c
 jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs);
 ```
 
@@ -110,7 +110,7 @@ a method table via special arrangement.
 The "builtin" functions, defined in the `Core` module, are:
 
 ```
-is typeof sizeof issubtype isa typeassert throw tuple getfield setfield! fieldtype
+=== typeof sizeof issubtype isa typeassert throw tuple getfield setfield! fieldtype
 nfields isdefined arrayref arrayset arraysize applicable invoke apply_type _apply
 _expr svec
 ```
@@ -119,7 +119,7 @@ These are all singleton objects whose types are subtypes of `Builtin`, which is 
 `Function`. Their purpose is to expose entry points in the run time that use the "jlcall" calling
 convention:
 
-```
+```c
 jl_value_t *(jl_value_t*, jl_value_t**, uint32_t)
 ```
 
@@ -152,7 +152,7 @@ actually produces *three* method definitions. The first is a function that accep
 (including keywords) as positional arguments, and includes the code for the method body. It has
 an auto-generated name:
 
-```
+```julia
 function #circle#1(color, fill::Bool, options, circle, center, radius)
     # draw
 end
@@ -268,11 +268,11 @@ filtering definitions from "replaced modules" out of method tables and caches be
 system image. A "replaced module" is one that satisfies the condition `m != jl_get_global(m->parent, m->name)`
 -- in other words, some newer module has taken its name and place.
 
-Another type inference worst case was triggered by the following code from the QuadGK.jl package,
+Another type inference worst case was triggered by the following code from the [QuadGK.jl package](https://github.com/JuliaMath/QuadGK.jl),
 formerly part of Base:
 
 ```julia
-function do_quadgk{Tw}(f, s, n, ::Type{Tw}, abstol, reltol, maxevals, nrm)
+function do_quadgk(f, s, n, ::Type{Tw}, abstol, reltol, maxevals, nrm) where Tw
     if eltype(s) <: Real # check for infinite or semi-infinite intervals
         s1 = s[1]; s2 = s[end]; inf1 = isinf(s1); inf2 = isinf(s2)
         if inf1 || inf2
@@ -300,5 +300,5 @@ function do_quadgk{Tw}(f, s, n, ::Type{Tw}, abstol, reltol, maxevals, nrm)
 
 This code has a 3-way tail recursion, where each call wraps the current function argument `f`
 in a different new closure. Inference must consider 3^n (where n is the call depth) possible signatures.
-This blows up way too quickly, so logic was added to typeinf_uncached to immediately widen any
+This blows up way too quickly, so logic was added to `typeinf_uncached` to immediately widen any
 argument that is a subtype of `Function` and that grows in depth down the stack.
