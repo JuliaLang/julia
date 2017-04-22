@@ -2366,13 +2366,13 @@ static char *gc_perm_pool = NULL;
 static size_t gc_perm_size = 0;
 
 // **NOT** a safepoint
-void *jl_gc_perm_alloc_nolock(size_t sz)
+void *jl_gc_perm_alloc_nolock(size_t sz, int zero)
 {
     // The caller should have acquired `gc_perm_lock`
 #ifndef MEMDEBUG
     if (__unlikely(sz > GC_PERM_POOL_LIMIT))
 #endif
-        return malloc(sz);
+        return zero ? calloc(1, sz) : malloc(sz);
     sz = LLT_ALIGN(sz, JL_SMALL_BYTE_ALIGNMENT);
     if (__unlikely(sz > gc_perm_size)) {
 #ifdef _OS_WINDOWS_
@@ -2399,14 +2399,14 @@ void *jl_gc_perm_alloc_nolock(size_t sz)
 }
 
 // **NOT** a safepoint
-void *jl_gc_perm_alloc(size_t sz)
+void *jl_gc_perm_alloc(size_t sz, int zero)
 {
 #ifndef MEMDEBUG
     if (__unlikely(sz > GC_PERM_POOL_LIMIT))
 #endif
-        return malloc(sz);
+        return zero ? calloc(1, sz) : malloc(sz);
     JL_LOCK_NOGC(&gc_perm_lock);
-    void *p = jl_gc_perm_alloc_nolock(sz);
+    void *p = jl_gc_perm_alloc_nolock(sz, zero);
     JL_UNLOCK_NOGC(&gc_perm_lock);
     return p;
 }
