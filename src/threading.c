@@ -316,7 +316,20 @@ static jl_value_t *ti_run_fun(const jl_generic_fptr_t *fptr, jl_method_instance_
         jl_call_fptr_internal(fptr, mfunc, args, nargs);
     }
     JL_CATCH {
-        return ptls->exception_in_transit;
+        // Lock this output since we know it'll likely happen on multiple threads
+        static jl_mutex_t lock;
+        JL_LOCK_NOGC(&lock);
+        jl_jmp_buf *old_buf = ptls->safe_restore;
+        jl_jmp_buf buf;
+        if (!jl_setjmp(buf, 0)) {
+            // Set up the safe_restore context so that the printing uses the thread safe version
+            ptls->safe_restore = &buf;
+            jl_printf(JL_STDERR, "\nError thrown in threaded loop on thread %d: ",
+                      (int)ptls->tid);
+            jl_static_show(JL_STDERR, ptls->exception_in_transit);
+        }
+        ptls->safe_restore = old_buf;
+        JL_UNLOCK_NOGC(&lock);
     }
     return jl_nothing;
 }
