@@ -75,7 +75,7 @@ end
 size(a::FakeArray) = a.sz
 strides(a::FakeArray) = a.st
 unsafe_convert(::Type{Ptr{T}}, a::FakeArray{T}) where {T} = convert(Ptr{T}, C_NULL)
-pointer{T}(a::FakeArray{T}) = convert(Ptr{T}, C_NULL)
+pointer(a::FakeArray{T}) where {T} = convert(Ptr{T}, C_NULL)
 FakeArray{T, N}(::Type{T}, sz::NTuple{N, Int}) =
     FakeArray{T, N}(sz, colmajorstrides(sz))
 FakeArray{T}(::Type{T}, sz::Int...) = FakeArray(T, sz)

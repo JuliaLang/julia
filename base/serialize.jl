@@ -231,12 +231,12 @@ function serialize(s::AbstractSerializer, a::Array)
     end
 end
 
-function serialize{T,N,A<:Array}(s::AbstractSerializer, a::SubArray{T,N,A})
+function serialize(s::AbstractSerializer, a::SubArray{T,N,A}) where {T,N,A<:Array}
     b = trimmedsubarray(a)
     serialize_any(s, b)
 end
 
-function trimmedsubarray{T,N,A<:Array}(V::SubArray{T,N,A})
+function trimmedsubarray(V::SubArray{T,N,A}) where {T,N,A<:Array}
     dest = Array{eltype(V)}(trimmedsize(V))
     copy!(dest, V)
     _trimmedsubarray(dest, V, (), V.indexes...)
@@ -244,7 +244,7 @@ end
 
 trimmedsize(V) = index_lengths(V.indexes...)
 
-function _trimmedsubarray{T,N,P,I,LD}(A, V::SubArray{T,N,P,I,LD}, newindexes)
+function _trimmedsubarray(A, V::SubArray{T,N,P,I,LD}, newindexes) where {T,N,P,I,LD}
     LD && return SubArray{T,N,P,I,LD}(A, newindexes, Base.compute_offset1(A, 1, newindexes), 1)
     SubArray{T,N,P,I,LD}(A, newindexes, 0, 0)
 end
@@ -261,7 +261,7 @@ function serialize(s::AbstractSerializer, ss::String)
     write(s.io, ss)
 end
 
-function serialize{T<:AbstractString}(s::AbstractSerializer, ss::SubString{T})
+function serialize(s::AbstractSerializer, ss::SubString{T}) where T<:AbstractString
     # avoid saving a copy of the parent string, keeping the type of ss
     serialize_any(s, convert(SubString{T}, convert(T,ss)))
 end
@@ -755,7 +755,7 @@ function deserialize_expr(s::AbstractSerializer, len)
     e = Expr(hd)
     deserialize_cycle(s, e)
     ty = deserialize(s)
-    e.args = Any[ deserialize(s) for i=1:len ]
+    e.args = Any[ deserialize(s) for i = 1:len ]
     e.typ = ty
     e
 end
@@ -958,7 +958,7 @@ function deserialize(s::AbstractSerializer, t::DataType)
     end
 end
 
-function deserialize{K,V}(s::AbstractSerializer, T::Type{Dict{K,V}})
+function deserialize(s::AbstractSerializer, T::Type{Dict{K,V}}) where {K,V}
     n = read(s.io, Int32)
     t = T(); sizehint!(t, n)
     deserialize_cycle(s, t)
