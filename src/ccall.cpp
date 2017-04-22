@@ -1647,12 +1647,47 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         return mark_or_box_ccall_result(emit_bitcast(ary, lrt),
                                         retboxed, rt, unionall, static_rt, ctx);
     }
-    else if (JL_CPU_WAKE_NOOP && is_libjulia_func(jl_cpu_wake)) {
+    else if (is_libjulia_func(jl_cpu_pause)) {
+        // Keep in sync with the julia_threads.h version
         assert(lrt == T_void);
         assert(!isVa && !llvmcall);
         assert(nargt == 0);
+#ifdef __MIC__
+        // TODO
+#elif defined(_CPU_X86_64_) || defined(_CPU_X86_)  /* !__MIC__ */
+#if JL_LLVM_VERSION >= 30700
+        static auto pauseinst = InlineAsm::get(FunctionType::get(T_void, false), "pause",
+                                               "~{memory}", true);
+        builder.CreateCall(pauseinst);
         JL_GC_POP();
         return ghostValue(jl_void_type);
+#endif
+#elif defined(_CPU_AARCH64_) || (defined(_CPU_ARM_) && __ARM_ARCH >= 7)
+        static auto wfeinst = InlineAsm::get(FunctionType::get(T_void, false), "wfe",
+                                             "~{memory}", true);
+        builder.CreateCall(wfeinst);
+        JL_GC_POP();
+        return ghostValue(jl_void_type);
+#else
+        JL_GC_POP();
+        return ghostValue(jl_void_type);
+#endif
+    }
+    else if (is_libjulia_func(jl_cpu_wake)) {
+        // Keep in sync with the julia_threads.h version
+        assert(lrt == T_void);
+        assert(!isVa && !llvmcall);
+        assert(nargt == 0);
+#if JL_CPU_WAKE_NOOP == 1
+        JL_GC_POP();
+        return ghostValue(jl_void_type);
+#elif defined(_CPU_AARCH64_) || (defined(_CPU_ARM_) && __ARM_ARCH >= 7)
+        static auto sevinst = InlineAsm::get(FunctionType::get(T_void, false), "sev",
+                                             "~{memory}", true);
+        builder.CreateCall(sevinst);
+        JL_GC_POP();
+        return ghostValue(jl_void_type);
+#endif
     }
     else if (is_libjulia_func(jl_gc_safepoint)) {
         assert(lrt == T_void);

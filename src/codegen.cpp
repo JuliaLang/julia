@@ -96,8 +96,10 @@
 #include <llvm/Support/PrettyStackTrace.h>
 #include <llvm/Support/CommandLine.h>
 
-#if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
+#if JL_LLVM_VERSION >= 30700
 #  include <llvm/IR/InlineAsm.h>
+#endif
+#if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
 #  include <sys/utsname.h>
 #endif
 #if defined(USE_POLLY)
