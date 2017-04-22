@@ -15,7 +15,7 @@ const ScalarType = Union{Type{Any}, Type{Nullable}}
 # fallbacks for some special cases
 @inline broadcast(f, x::Number...) = f(x...)
 @inline broadcast(f, t::NTuple{N,Any}, ts::Vararg{NTuple{N,Any}}) where {N} = map(f, t, ts...)
-broadcast!{T,S,N}(::typeof(identity), x::Array{T,N}, y::Array{S,N}) =
+broadcast!(::typeof(identity), x::Array{T,N}, y::Array{S,N}) where {T,S,N} =
     size(x) == size(y) ? copy!(x, y) : broadcast_c!(identity, Array, Array, x, y)
 
 # special cases for "X .= ..." (broadcast!) assignments

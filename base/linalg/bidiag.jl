@@ -96,7 +96,7 @@ julia> Bl = Bidiagonal(dv, ev, 'L') #e is on the first subdiagonal
 ```
 """
 #Convert from BLAS uplo flag to boolean internal
-Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::Char) = begin
+function Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::Char)
     if uplo === 'U'
         isupper = true
     elseif uplo === 'L'
@@ -265,10 +265,10 @@ broadcast(::typeof(ceil), M::Bidiagonal) = Bidiagonal(ceil.(M.dv), ceil.(M.ev), 
 for func in (:conj, :copy, :real, :imag)
     @eval ($func)(M::Bidiagonal) = Bidiagonal(($func)(M.dv), ($func)(M.ev), M.isupper)
 end
-broadcast{T<:Integer}(::typeof(round), ::Type{T}, M::Bidiagonal) = Bidiagonal(round.(T, M.dv), round.(T, M.ev), M.isupper)
-broadcast{T<:Integer}(::typeof(trunc), ::Type{T}, M::Bidiagonal) = Bidiagonal(trunc.(T, M.dv), trunc.(T, M.ev), M.isupper)
-broadcast{T<:Integer}(::typeof(floor), ::Type{T}, M::Bidiagonal) = Bidiagonal(floor.(T, M.dv), floor.(T, M.ev), M.isupper)
-broadcast{T<:Integer}(::typeof(ceil), ::Type{T}, M::Bidiagonal) = Bidiagonal(ceil.(T, M.dv), ceil.(T, M.ev), M.isupper)
+broadcast(::typeof(round), ::Type{T}, M::Bidiagonal) where {T<:Integer} = Bidiagonal(round.(T, M.dv), round.(T, M.ev), M.isupper)
+broadcast(::typeof(trunc), ::Type{T}, M::Bidiagonal) where {T<:Integer} = Bidiagonal(trunc.(T, M.dv), trunc.(T, M.ev), M.isupper)
+broadcast(::typeof(floor), ::Type{T}, M::Bidiagonal) where {T<:Integer} = Bidiagonal(floor.(T, M.dv), floor.(T, M.ev), M.isupper)
+broadcast(::typeof(ceil), ::Type{T}, M::Bidiagonal) where {T<:Integer} = Bidiagonal(ceil.(T, M.dv), ceil.(T, M.ev), M.isupper)
 
 transpose(M::Bidiagonal) = Bidiagonal(M.dv, M.ev, !M.isupper)
 ctranspose(M::Bidiagonal) = Bidiagonal(conj(M.dv), conj(M.ev), !M.isupper)
@@ -312,7 +312,7 @@ function triu!(M::Bidiagonal, k::Integer=0)
     return M
 end
 
-function diag{T}(M::Bidiagonal{T}, n::Integer=0)
+function diag(M::Bidiagonal{T}, n::Integer=0) where T
     if n == 0
         return M.dv
     elseif n == 1
@@ -348,8 +348,8 @@ end
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.isupper)
 ==(A::Bidiagonal, B::Bidiagonal) = (A.dv==B.dv) && (A.ev==B.ev) && (A.isupper==B.isupper)
 
-BiTriSym = Union{Bidiagonal, Tridiagonal, SymTridiagonal}
-BiTri = Union{Bidiagonal, Tridiagonal}
+const BiTriSym = Union{Bidiagonal,Tridiagonal,SymTridiagonal}
+const BiTri = Union{Bidiagonal,Tridiagonal}
 A_mul_B!(C::AbstractMatrix, A::SymTridiagonal, B::BiTriSym) = A_mul_B_td!(C, A, B)
 A_mul_B!(C::AbstractMatrix, A::BiTri, B::BiTriSym) = A_mul_B_td!(C, A, B)
 A_mul_B!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym) = A_mul_B_td!(C, A, B)
@@ -493,21 +493,21 @@ function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym)
     C
 end
 
-SpecialMatrix = Union{Bidiagonal, SymTridiagonal, Tridiagonal}
+const SpecialMatrix = Union{Bidiagonal,SymTridiagonal,Tridiagonal}
 # to avoid ambiguity warning, but shouldn't be necessary
 *(A::AbstractTriangular, B::SpecialMatrix) = Array(A) * Array(B)
 *(A::SpecialMatrix, B::SpecialMatrix) = Array(A) * Array(B)
 
 #Generic multiplication
 for func in (:*, :Ac_mul_B, :A_mul_Bc, :/, :A_rdiv_Bc)
-    @eval ($func){T}(A::Bidiagonal{T}, B::AbstractVector{T}) = ($func)(Array(A), B)
+    @eval ($func)(A::Bidiagonal{T}, B::AbstractVector{T}) where {T} = ($func)(Array(A), B)
 end
 
 #Linear solvers
 A_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A, b)
 At_ldiv_B!(A::Bidiagonal, b::AbstractVector) = A_ldiv_B!(transpose(A), b)
 Ac_ldiv_B!(A::Bidiagonal, b::AbstractVector) = A_ldiv_B!(ctranspose(A), b)
-function A_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, B::AbstractMatrix)
+function A_ldiv_B!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
     nA,mA = size(A)
     tmp = similar(B,size(B,1))
     n = size(B, 1)
@@ -538,7 +538,7 @@ for func in (:Ac_ldiv_B!, :At_ldiv_B!)
     end
 end
 #Generic solver using naive substitution
-function naivesub!{T}(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b)
+function naivesub!(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b) where T
     N = size(A, 2)
     if N != length(b) || N != length(x)
         throw(DimensionMismatch("second dimension of A, $N, does not match one of the lengths of x, $(length(x)), or b, $(length(b))"))
@@ -562,7 +562,7 @@ end
 ### Generic promotion methods and fallbacks
 for (f,g) in ((:\, :A_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!))
     @eval begin
-        function ($f){TA<:Number,TB<:Number}(A::Bidiagonal{TA}, B::AbstractVecOrMat{TB})
+        function ($f)(A::Bidiagonal{TA}, B::AbstractVecOrMat{TB}) where {TA<:Number,TB<:Number}
             TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
             ($g)(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
         end
@@ -574,9 +574,9 @@ factorize(A::Bidiagonal) = A
 
 # Eigensystems
 eigvals(M::Bidiagonal) = M.dv
-function eigvecs{T}(M::Bidiagonal{T})
+function eigvecs(M::Bidiagonal{T}) where T
     n = length(M.dv)
-    Q = Array{T}(n, n)
+    Q = Matrix{T}(n,n)
     blks = [0; find(x -> x == 0, M.ev); n]
     v = zeros(T, n)
     if M.isupper
@@ -630,14 +630,14 @@ SpecialArrays = Union{Diagonal,
 end
 
 # for historical reasons:
-fill!(a::AbstractTriangular, x) = fillslots!(a, x);
-fill!(D::Diagonal, x) = fillslots!(D, x);
+fill!(a::AbstractTriangular, x) = fillslots!(a, x)
+fill!(D::Diagonal, x) = fillslots!(D, x)
 
 _small_enough(A::Bidiagonal) = size(A, 1) <= 1
 _small_enough(A::Tridiagonal) = size(A, 1) <= 2
 _small_enough(A::SymTridiagonal) = size(A, 1) <= 2
 
-function fill!(A::Union{Bidiagonal, Tridiagonal, SymTridiagonal} ,x)
+function fill!(A::Union{Bidiagonal, Tridiagonal, SymTridiagonal}, x)
     xT = convert(eltype(A), x)
     (xT == zero(eltype(A)) || _small_enough(A)) && return fillslots!(A, xT)
     throw(ArgumentError("array A of type $(typeof(A)) and size $(size(A)) can
