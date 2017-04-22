@@ -19,7 +19,6 @@ extern "C" {
 #define MIN_BLOCK_PG_ALLOC (1) // 16 KB
 
 static int block_pg_cnt = DEFAULT_BLOCK_PG_ALLOC;
-static jl_mutex_t pagealloc_lock;
 static size_t current_pg_count = 0;
 
 void jl_gc_init_page(void)
@@ -62,7 +61,7 @@ static char *jl_gc_try_alloc_pages(int pg_cnt)
 // more chunks (or other allocations). The final page count is recorded
 // and will be used as the starting count next time. If the page count is
 // smaller `MIN_BLOCK_PG_ALLOC` a `jl_memory_exception` is thrown.
-// Assumes `pagealloc_lock` is acquired, the lock is released before the
+// Assumes `gc_perm_lock` is acquired, the lock is released before the
 // exception is thrown.
 static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void)
 {
@@ -83,7 +82,7 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void)
             block_pg_cnt = pg_cnt = min_block_pg_alloc;
         }
         else {
-            JL_UNLOCK_NOGC(&pagealloc_lock);
+            JL_UNLOCK_NOGC(&gc_perm_lock);
             jl_throw(jl_memory_exception);
         }
     }
@@ -91,7 +90,8 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void)
     // now need to insert these pages into the pagetable metadata
     // if any allocation fails, this just stops recording more pages from that point
     // and will free (munmap) the remainder
-    jl_gc_pagemeta_t *page_meta = (jl_gc_pagemeta_t*)calloc(pg_cnt, sizeof(jl_gc_pagemeta_t));
+    jl_gc_pagemeta_t *page_meta =
+        (jl_gc_pagemeta_t*)jl_gc_perm_alloc_nolock(pg_cnt * sizeof(jl_gc_pagemeta_t), 1);
     pg = 0;
     if (page_meta) {
         for (; pg < pg_cnt; pg++) {
@@ -114,7 +114,8 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void)
                 memory_map.freemap1[info.pagetable_i32] |= msk; // has free
             info.pagetable1 = *(ppagetable1 = &memory_map.meta1[i]);
             if (!info.pagetable1) {
-                info.pagetable1 = (*ppagetable1 = (pagetable1_t*)calloc(1, sizeof(pagetable1_t)));
+                info.pagetable1 = (pagetable1_t*)jl_gc_perm_alloc_nolock(sizeof(pagetable1_t), 1);
+                *ppagetable1 = info.pagetable1;
                 if (!info.pagetable1)
                     break;
             }
@@ -128,7 +129,8 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void)
                 info.pagetable1->freemap0[info.pagetable1_i32] |= msk; // has free
             info.pagetable0 = *(ppagetable0 = &info.pagetable1->meta0[i]);
             if (!info.pagetable0) {
-                info.pagetable0 = (*ppagetable0 = (pagetable0_t*)calloc(1, sizeof(pagetable0_t)));
+                info.pagetable0 = (pagetable0_t*)jl_gc_perm_alloc_nolock(sizeof(pagetable0_t), 1);
+                *ppagetable0 = info.pagetable0;
                 if (!info.pagetable0)
                     break;
             }
@@ -154,7 +156,7 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void)
                GC_PAGE_SZ * pg_cnt - LLT_ALIGN(GC_PAGE_SZ * pg, jl_page_size));
 #endif
         if (pg == 0) {
-            JL_UNLOCK_NOGC(&pagealloc_lock);
+            JL_UNLOCK_NOGC(&gc_perm_lock);
             jl_throw(jl_memory_exception);
         }
     }
@@ -166,7 +168,7 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void)
 NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void)
 {
     struct jl_gc_metadata_ext info;
-    JL_LOCK_NOGC(&pagealloc_lock);
+    JL_LOCK_NOGC(&gc_perm_lock);
 
     // scan over memory_map page-table for existing allocated but unused pages
     for (info.pagetable_i32 = memory_map.lb; info.pagetable_i32 < (REGION2_PG_COUNT + 31) / 32; info.pagetable_i32++) {
@@ -242,7 +244,7 @@ have_free_page:
 #endif
     current_pg_count++;
     gc_final_count_page(current_pg_count);
-    JL_UNLOCK_NOGC(&pagealloc_lock);
+    JL_UNLOCK_NOGC(&gc_perm_lock);
     return info.meta;
 }
 
