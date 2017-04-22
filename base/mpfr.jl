@@ -201,7 +201,7 @@ function ceil{T<:Union{Signed,Unsigned}}(::Type{T}, x::BigFloat)
     unsafe_cast(T,x,RoundUp)
 end
 
-function round{T<:Union{Signed,Unsigned}}(::Type{T}, x::BigFloat)
+function round(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
     (typemin(T) <= x <= typemax(T)) || throw(InexactError())
     unsafe_cast(T,x,ROUNDING_MODE[])
 end

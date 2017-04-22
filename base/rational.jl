@@ -60,7 +60,7 @@ function show(io::IO, x::Rational)
     show(io, denominator(x))
 end
 
-function read{T<:Integer}(s::IO, ::Type{Rational{T}})
+function read(s::IO, ::Type{Rational{T}}) where T<:Integer
     r = read(s,T)
     i = read(s,T)
     r//i
@@ -99,7 +99,7 @@ promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:Integer} = Rat
 promote_rule(::Type{Rational{T}}, ::Type{Rational{S}}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
 promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:AbstractFloat} = promote_type(T,S)
 
-widen{T}(::Type{Rational{T}}) = Rational{widen(T)}
+widen(::Type{Rational{T}}) where {T} = Rational{widen(T)}
 
 """
     rationalize([T<:Integer=Int,] x; tol::Real=eps(x))
@@ -119,7 +119,7 @@ julia> typeof(numerator(a))
 BigInt
 ```
 """
-function rationalize{T<:Integer}(::Type{T}, x::AbstractFloat, tol::Real)
+function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
     if tol < 0
         throw(ArgumentError("negative tolerance $tol"))
     end
@@ -178,7 +178,7 @@ function rationalize{T<:Integer}(::Type{T}, x::AbstractFloat, tol::Real)
         return p // q
     end
 end
-rationalize{T<:Integer}(::Type{T}, x::AbstractFloat; tol::Real=eps(x)) = rationalize(T, x, tol)::Rational{T}
+rationalize(::Type{T}, x::AbstractFloat; tol::Real = eps(x)) where {T<:Integer} = rationalize(T, x, tol)::Rational{T}
 rationalize(x::AbstractFloat; kvs...) = rationalize(Int, x; kvs...)
 
 """
@@ -218,8 +218,8 @@ signbit(x::Rational) = signbit(x.num)
 copysign(x::Rational, y::Real) = copysign(x.num,y) // x.den
 copysign(x::Rational, y::Rational) = copysign(x.num,y.num) // x.den
 
-typemin{T<:Integer}(::Type{Rational{T}}) = -one(T)//zero(T)
-typemax{T<:Integer}(::Type{Rational{T}}) = one(T)//zero(T)
+typemin(::Type{Rational{T}}) where {T<:Integer} = -one(T)//zero(T)
+typemax(::Type{Rational{T}}) where {T<:Integer} = one(T)//zero(T)
 
 isinteger(x::Rational) = x.den == 1
 
@@ -345,12 +345,12 @@ for op in (:div, :fld, :cld)
     end
 end
 
-trunc{T}(::Type{T}, x::Rational) = convert(T,div(x.num,x.den))
-floor{T}(::Type{T}, x::Rational) = convert(T,fld(x.num,x.den))
-ceil{ T}(::Type{T}, x::Rational) = convert(T,cld(x.num,x.den))
+trunc(::Type{T}, x::Rational) where {T} = convert(T,div(x.num,x.den))
+floor(::Type{T}, x::Rational) where {T} = convert(T,fld(x.num,x.den))
+ceil(::Type{T}, x::Rational) where {T} = convert(T,cld(x.num,x.den))
 
 
-function round{T, Tr}(::Type{T}, x::Rational{Tr}, ::RoundingMode{:Nearest})
+function round(::Type{T}, x::Rational{Tr}, ::RoundingMode{:Nearest}) where {T,Tr}
     if denominator(x) == zero(Tr) && T <: Integer
         throw(DivideError())
     elseif denominator(x) == zero(Tr)
@@ -364,9 +364,9 @@ function round{T, Tr}(::Type{T}, x::Rational{Tr}, ::RoundingMode{:Nearest})
     convert(T, s)
 end
 
-round{T}(::Type{T}, x::Rational) = round(T, x, RoundNearest)
+round(::Type{T}, x::Rational) where {T} = round(T, x, RoundNearest)
 
-function round{T, Tr}(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesAway})
+function round(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesAway}) where {T,Tr}
     if denominator(x) == zero(Tr) && T <: Integer
         throw(DivideError())
     elseif denominator(x) == zero(Tr)
@@ -380,7 +380,7 @@ function round{T, Tr}(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesAwa
     convert(T, s)
 end
 
-function round{T, Tr}(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesUp})
+function round(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesUp}) where {T,Tr}
     if denominator(x) == zero(Tr) && T <: Integer
         throw(DivideError())
     elseif denominator(x) == zero(Tr)
@@ -394,22 +394,22 @@ function round{T, Tr}(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesUp}
     convert(T, s)
 end
 
-function round{T}(::Type{T}, x::Rational{Bool})
+function round(::Type{T}, x::Rational{Bool}) where T
     if denominator(x) == false && issubtype(T, Union{Integer, Bool})
         throw(DivideError())
     end
     convert(T, x)
 end
 
-round{T}(::Type{T}, x::Rational{Bool}, ::RoundingMode{:Nearest}) = round(T, x)
-round{T}(::Type{T}, x::Rational{Bool}, ::RoundingMode{:NearestTiesAway}) = round(T, x)
-round{T}(::Type{T}, x::Rational{Bool}, ::RoundingMode{:NearestTiesUp}) = round(T, x)
-round{T}(::Type{T}, x::Rational{Bool}, ::RoundingMode) = round(T, x)
+round(::Type{T}, x::Rational{Bool}, ::RoundingMode{:Nearest}) where {T} = round(T, x)
+round(::Type{T}, x::Rational{Bool}, ::RoundingMode{:NearestTiesAway}) where {T} = round(T, x)
+round(::Type{T}, x::Rational{Bool}, ::RoundingMode{:NearestTiesUp}) where {T} = round(T, x)
+round(::Type{T}, x::Rational{Bool}, ::RoundingMode) where {T} = round(T, x)
 
-trunc{T}(x::Rational{T}) = Rational(trunc(T,x))
-floor{T}(x::Rational{T}) = Rational(floor(T,x))
-ceil{ T}(x::Rational{T}) = Rational(ceil(T,x))
-round{T}(x::Rational{T}) = Rational(round(T,x))
+trunc(x::Rational{T}) where {T} = Rational(trunc(T,x))
+floor(x::Rational{T}) where {T} = Rational(floor(T,x))
+ceil(x::Rational{T}) where {T} = Rational(ceil(T,x))
+round(x::Rational{T}) where {T} = Rational(round(T,x))
 
 function ^(x::Rational, n::Integer)
     n >= 0 ? power_by_squaring(x,n) : power_by_squaring(inv(x),-n)
