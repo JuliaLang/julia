@@ -277,13 +277,14 @@ void jl_gc_free_page(void *p)
         // ensure so we don't release more memory than intended
         size_t n_pages = jl_page_size / GC_PAGE_SZ; // exact division
         decommit_size = jl_page_size;
-        p = (void*)((uintptr_t)p & ~(jl_page_size - 1)); // round down to the nearest physical page
+        void *otherp = (void*)((uintptr_t)p & ~(jl_page_size - 1)); // round down to the nearest physical page
+        p = otherp;
         while (n_pages--) {
-            struct jl_gc_metadata_ext info = page_metadata_ext(p);
+            struct jl_gc_metadata_ext info = page_metadata_ext(otherp);
             msk = (uint32_t)(1 << info.pagetable0_i);
             if (info.pagetable0->allocmap[info.pagetable0_i32] & msk)
                 goto no_decommit;
-            p = (void*)((char*)p + GC_PAGE_SZ);
+            otherp = (void*)((char*)otherp + GC_PAGE_SZ);
         }
     }
 #ifdef _OS_WINDOWS_
