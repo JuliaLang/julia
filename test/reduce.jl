@@ -22,6 +22,7 @@
 @test foldr(+, Int16[]) === Int32(0)
 @test foldr(-, 1:5) == 3
 @test foldr(-, 10, 1:5) == -7
+@test foldr(+, [1]) == 1 # Issue #21493
 
 @test Base.mapfoldr(abs2, -, 2:5) == -14
 @test Base.mapfoldr(abs2, -, 10, 2:5) == -4
