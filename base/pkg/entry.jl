@@ -125,7 +125,7 @@ function installed(pkg::AbstractString)
 end
 
 function status(io::IO; pkgname::AbstractString = "")
-    showpkg(pkg) = (pkgname == "") ? (true) : (pkg == pkgname)
+    showpkg(pkg) = isempty(pkgname) ? true : (pkg == pkgname)
     reqs = Reqs.parse("REQUIRE")
     instd = Read.installed()
     required = sort!(collect(keys(reqs)))

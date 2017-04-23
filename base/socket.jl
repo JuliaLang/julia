@@ -199,7 +199,7 @@ function parseipv6fields(fields,num_fields)
     cf = 7
     ret = UInt128(0)
     for f in fields
-        if f == ""
+        if isempty(f)
             # ::abc:... and ..:abc::
             if cf != 7 && cf != 0
                 cf -= num_fields-length(fields)

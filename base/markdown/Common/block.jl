@@ -77,7 +77,7 @@ function setextheader(stream::IO, md::MD)
     withstream(stream) do
         eatindent(stream) || return false
         header = strip(readline(stream))
-        header == "" && return false
+        isempty(header) && return false
 
         eatindent(stream) || return false
         underline = strip(readline(stream))
