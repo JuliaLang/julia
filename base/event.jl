@@ -127,8 +127,8 @@ function schedule(t::Task, arg; error=false)
     return enq_work(t)
 end
 
-# fast version of schedule(t,v);wait()
-function schedule_and_wait(t::Task, v=nothing)
+# fast version of `schedule(t, arg); wait()`
+function schedule_and_wait(t::Task, arg=nothing)
     t.state == :runnable || error("schedule: Task not runnable")
     if isempty(Workqueue)
         return yieldto(t, v)
@@ -150,6 +150,19 @@ tasks.
 yield() = (enq_work(current_task()); wait())
 
 """
+    yield(t::Task, arg = nothing)
+
+A fast, unfair-scheduling version of `schedule(t, arg); yield()` which
+immediately yields to `t` before calling the scheduler.
+"""
+function yield(t::Task, x::ANY = nothing)
+    t.state == :runnable || error("schedule: Task not runnable")
+    t.result = x
+    enq_work(current_task())
+    return try_yieldto(ensure_self_descheduled, t)
+end
+
+"""
     yieldto(t::Task, arg = nothing)
 
 Switch to the given task. The first time a task is switched to, the task's function is
@@ -157,12 +170,44 @@ called with no arguments. On subsequent switches, `arg` is returned from the tas
 call to `yieldto`. This is a low-level call that only switches tasks, not considering states
 or scheduling in any way. Its use is discouraged.
 """
-yieldto(t::Task, x::ANY = nothing) = ccall(:jl_switchto, Any, (Any, Any), t, x)
+function yieldto(t::Task, x::ANY = nothing)
+    t.result = x
+    return try_yieldto(Void, t)
+end
+
+function try_yieldto(undo::F, t::Task) where F
+    try
+        ccall(:jl_switchto, Void, (Any,), t)
+    catch e
+        undo()
+        rethrow(e)
+    end
+    ct = current_task()
+    exc = ct.exception
+    if exc !== nothing
+        ct.exception = nothing
+        throw(exc)
+    end
+    result = ct.result
+    ct.result = nothing
+    return result
+end
 
 # yield to a task, throwing an exception in it
-function throwto(t::Task, exc)
+function throwto(t::Task, exc::ANY)
     t.exception = exc
-    yieldto(t)
+    return yieldto(t)
+end
+
+function ensure_self_descheduled()
+    # return a queued task to the runnable state
+    ct = current_task()
+    if ct.state == :queued
+        i = findfirst(Workqueue, ct)
+        i == 0 || deleteat!(Workqueue, i)
+        ct.state = :runnable
+    end
+    nothing
 end
 
 function wait()
@@ -175,43 +220,28 @@ function wait()
                 pause()
             end
         else
-            t = shift!(Workqueue)
-            if t.state != :queued
-                # assume this somehow got queued twice,
-                # probably broken now, but try discarding this switch and keep going
-                # can't throw here, because it's probably not the fault of the caller to wait
-                # and don't want to use print() here, because that may try to incur a task switch
-                ccall(:jl_safe_printf, Void, (Ptr{UInt8}, Vararg{Int32}),
-                    "\nWARNING: Workqueue inconsistency detected: shift!(Workqueue).state != :queued\n")
-                continue
-            end
-            arg = t.result
-            t.result = nothing
-            t.state = :runnable
-            local result
-            try
-                result = yieldto(t, arg)
-                current_task().state == :runnable || throw(AssertionError("current_task().state == :runnable"))
-            catch e
-                ct = current_task()
-                if ct.state == :queued
-                    if t.state == :runnable
-                        # assume we failed to queue t
-                        # return it to the queue to be scheduled later
-                        t.result = arg
-                        t.state = :queued
-                        push!(Workqueue, t)
-                    end
-                    # return ourself to the runnable state
-                    i = findfirst(Workqueue, ct)
-                    i == 0 || deleteat!(Workqueue, i)
-                    ct.state = :runnable
+            let t = shift!(Workqueue)
+                if t.state != :queued
+                    # assume this somehow got queued twice,
+                    # probably broken now, but try discarding this switch and keep going
+                    # can't throw here, because it's probably not the fault of the caller to wait
+                    # and don't want to use print() here, because that may try to incur a task switch
+                    ccall(:jl_safe_printf, Void, (Ptr{UInt8}, Vararg{Int32}),
+                        "\nWARNING: Workqueue inconsistency detected: shift!(Workqueue).state != :queued\n")
+                    continue
                 end
-                rethrow(e)
+                t.state = :runnable
+                result = try_yieldto(t) do
+                    # we failed to yield to t
+                    # return it to the head of the queue to be scheduled later
+                    unshift!(Workqueue, t)
+                    t.state = :queued
+                    ensure_self_descheduled()
+                end
+                process_events(false)
+                # return when we come out of the queue
+                return result
             end
-            process_events(false)
-            # return when we come out of the queue
-            return result
         end
     end
     assert(false)
@@ -277,8 +307,7 @@ function AsyncCondition(cb::Function)
     end)
     # must start the task right away so that it can wait for the AsyncCondition before
     # we re-enter the event loop. this avoids a race condition. see issue #12719
-    enq_work(current_task())
-    yieldto(waiter)
+    yield(waiter)
     return async
 end
 
@@ -409,7 +438,6 @@ function Timer(cb::Function, timeout::Real, repeat::Real=0.0)
     end)
     # must start the task right away so that it can wait for the Timer before
     # we re-enter the event loop. this avoids a race condition. see issue #12719
-    enq_work(current_task())
-    yieldto(waiter)
+    yield(waiter)
     return t
 end

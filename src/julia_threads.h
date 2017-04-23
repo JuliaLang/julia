@@ -105,7 +105,6 @@ typedef struct _jl_tls_states_t {
     struct _jl_module_t *current_module;
     struct _jl_task_t *volatile current_task;
     struct _jl_task_t *root_task;
-    struct _jl_value_t *volatile task_arg_in_transit;
     void *stackbase;
     char *stack_lo;
     char *stack_hi;
