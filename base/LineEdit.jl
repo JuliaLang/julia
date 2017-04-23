@@ -725,6 +725,9 @@ function match_input(k::Dict, s, term=terminal(s), cs=Char[], keymap = k)
     # return an empty keymap function
     eof(term) && return keymap_fcn(nothing, "")
     c = read(term, Char)
+    # Ignore any '\0' (eg, CTRL-space in xterm), as this is used as a
+    # placeholder for the wildcard (see normalize_key("*"))
+    c != '\0' || return keymap_fcn(nothing, "")
     push!(cs, c)
     key = haskey(k, c) ? c : '\0'
     # if we don't match on the key, look for a default action then fallback on 'nothing' to ignore
