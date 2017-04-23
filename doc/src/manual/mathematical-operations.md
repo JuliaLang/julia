@@ -366,10 +366,10 @@ You can also find the numerical precedence for any given operator via the built-
 
 ```jldoctest
 julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
-(9,11,15)
+(9, 11, 15)
 
 julia> Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
-(1,1)
+(1, 1)
 ```
 
 ## Numerical Conversions
@@ -405,13 +405,13 @@ julia> Int8(127.0)
 julia> Int8(3.14)
 ERROR: InexactError()
 Stacktrace:
- [1] convert(::Type{Int8}, ::Float64) at ./float.jl:654
+ [1] convert(::Type{Int8}, ::Float64) at ./float.jl:658
  [2] Int8(::Float64) at ./sysimg.jl:24
 
 julia> Int8(128.0)
 ERROR: InexactError()
 Stacktrace:
- [1] convert(::Type{Int8}, ::Float64) at ./float.jl:654
+ [1] convert(::Type{Int8}, ::Float64) at ./float.jl:658
  [2] Int8(::Float64) at ./sysimg.jl:24
 
 julia> 127 % Int8
@@ -426,8 +426,8 @@ julia> round(Int8,127.4)
 julia> round(Int8,127.6)
 ERROR: InexactError()
 Stacktrace:
- [1] trunc(::Type{Int8}, ::Float64) at ./float.jl:647
- [2] round(::Type{Int8}, ::Float64) at ./float.jl:333
+ [1] trunc(::Type{Int8}, ::Float64) at ./float.jl:651
+ [2] round(::Type{Int8}, ::Float64) at ./float.jl:337
 ```
 
 See [Conversion and Promotion](@ref conversion-and-promotion) for how to define your own conversions and promotions.

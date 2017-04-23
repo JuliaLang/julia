@@ -410,6 +410,7 @@ Deprecated or removed
 [#12563]: https://github.com/JuliaLang/julia/issues/12563
 [#16213]: https://github.com/JuliaLang/julia/issues/16213
 [#16961]: https://github.com/JuliaLang/julia/issues/16961
+[#16984]: https://github.com/JuliaLang/julia/issues/16984
 [#16986]: https://github.com/JuliaLang/julia/issues/16986
 [#17057]: https://github.com/JuliaLang/julia/issues/17057
 [#17261]: https://github.com/JuliaLang/julia/issues/17261
@@ -450,6 +451,7 @@ Deprecated or removed
 [#19469]: https://github.com/JuliaLang/julia/issues/19469
 [#19533]: https://github.com/JuliaLang/julia/issues/19533
 [#19543]: https://github.com/JuliaLang/julia/issues/19543
+[#19594]: https://github.com/JuliaLang/julia/issues/19594
 [#19598]: https://github.com/JuliaLang/julia/issues/19598
 [#19635]: https://github.com/JuliaLang/julia/issues/19635
 [#19670]: https://github.com/JuliaLang/julia/issues/19670
@@ -492,5 +494,4 @@ Deprecated or removed
 [#20530]: https://github.com/JuliaLang/julia/issues/20530
 [#20543]: https://github.com/JuliaLang/julia/issues/20543
 [#20609]: https://github.com/JuliaLang/julia/issues/20609
-[#20648]: https://github.com/JuliaLang/julia/issues/20648
 [#20889]: https://github.com/JuliaLang/julia/issues/20889
