@@ -220,7 +220,7 @@ end
 
 allunique(::Set) = true
 
-allunique{T}(r::Range{T}) = (step(r) != zero(T)) || (length(r) <= 1)
+allunique(r::Range{T}) where {T} = (step(r) != zero(T)) || (length(r) <= 1)
 
 function filter(f, s::Set)
     u = similar(s)
