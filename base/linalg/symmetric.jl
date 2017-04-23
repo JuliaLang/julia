@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#Symmetric and Hermitian matrices
+# Symmetric and Hermitian matrices
 struct Symmetric{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     data::S
     uplo::Char
@@ -181,7 +181,7 @@ trace(A::Hermitian) = real(trace(A.data))
 Base.conj(A::HermOrSym) = typeof(A)(conj(A.data), A.uplo)
 Base.conj!(A::HermOrSym) = typeof(A)(conj!(A.data), A.uplo)
 
-#tril/triu
+# tril/triu
 function tril(A::Hermitian, k::Integer=0)
     if A.uplo == 'U' && k <= 0
         return tril!(A.data',k)
@@ -235,7 +235,7 @@ end
 ## Matvec
 A_mul_B!{T<:BlasFloat}(y::StridedVector{T}, A::Symmetric{T,<:StridedMatrix}, x::StridedVector{T}) = BLAS.symv!(A.uplo, one(T), A.data, x, zero(T), y)
 A_mul_B!{T<:BlasComplex}(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T}) = BLAS.hemv!(A.uplo, one(T), A.data, x, zero(T), y)
-##Matmat
+## Matmat
 A_mul_B!{T<:BlasFloat}(C::StridedMatrix{T}, A::Symmetric{T,<:StridedMatrix}, B::StridedMatrix{T}) = BLAS.symm!('L', A.uplo, one(T), A.data, B, zero(T), C)
 A_mul_B!{T<:BlasFloat}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Symmetric{T,<:StridedMatrix}) = BLAS.symm!('R', B.uplo, one(T), B.data, A, zero(T), C)
 A_mul_B!{T<:BlasComplex}(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T}) = BLAS.hemm!('L', A.uplo, one(T), A.data, B, zero(T), C)
@@ -403,7 +403,7 @@ function svdvals!{T<:Real,S}(A::Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{
     return sort!(vals, rev = true)
 end
 
-#Matrix functions
+# Matrix functions
 function ^{T<:Real}(A::Symmetric{T}, p::Integer)
     if p < 0
         return Symmetric(Base.power_by_squaring(inv(A), -p))

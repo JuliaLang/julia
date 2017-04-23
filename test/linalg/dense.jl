@@ -514,7 +514,6 @@ end
 
 @testset "Matrix to real power" for elty in (Float64, Complex{Float64})
 # Tests proposed at Higham, Deadman: Testing Matrix Function Algorithms Using Identities, March 2014
-
     #Aa : only positive real eigenvalues
     Aa = convert(Matrix{elty}, [5 4 2 1; 0 1 -1 -1; -1 -1 3 0; 1 1 -1 2])
 
