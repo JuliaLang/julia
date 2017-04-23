@@ -29,7 +29,7 @@ function scale!(X::Array{T}, s::Real) where T<:BlasComplex
     X
 end
 
-#Test whether a matrix is positive-definite
+# Test whether a matrix is positive-definite
 isposdef!(A::StridedMatrix{<:BlasFloat}, UL::Symbol) = LAPACK.potrf!(char_uplo(UL), A)[2] == 0
 
 """
@@ -353,9 +353,9 @@ function ^{T}(A::AbstractMatrix{T}, p::Real)
 
     # Otherwise, use Schur decomposition
     if istriu(A)
-        #Integer part
+        # Integer part
         retmat = A ^ floor(p)
-        #Real part
+        # Real part
         if p - floor(p) == 0.5
             # special case: A^0.5 === sqrtm(A)
             retmat = retmat * sqrtm(A)
@@ -364,9 +364,9 @@ function ^{T}(A::AbstractMatrix{T}, p::Real)
         end
     else
         S,Q,d = schur(complex(A))
-        #Integer part
+        # Integer part
         R = S ^ floor(p)
-        #Real part
+        # Real part
         if p - floor(p) == 0.5
             # special case: A^0.5 === sqrtm(A)
             R = R * sqrtm(S)

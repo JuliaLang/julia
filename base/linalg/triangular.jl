@@ -1669,7 +1669,6 @@ Ac_ldiv_B(::Union{UnitUpperTriangular,UnitLowerTriangular}, ::RowVector) = throw
 #     a matrix and their Fréchet derivatives", SIAM. J. Matrix Anal. & Appl.,
 #     34(3), (2013) 1341–1360.
 function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
-
     if abs(p) >= 1
         ArgumentError("p must be a real number in (-1,1), got $p")
     end
@@ -1919,7 +1918,6 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
     end
 
     return UpperTriangular(Y)
-
 end
 logm(A::LowerTriangular) = logm(A.').'
 
@@ -2048,14 +2046,12 @@ function invsquaring(A0::UpperTriangular, theta)
     A = complex(A)
     blockpower!(A, A0, p)
     return A,m,s
-
 end
 
 # Compute accurate diagonal and superdiagonal of A = A0^p
 function blockpower!(A::UpperTriangular, A0::UpperTriangular, p)
     n = checksquare(A0)
     @inbounds for k = 1:n-1
-
         Ak = complex(A0[k,k])
         Akp1 = complex(A0[k+1,k+1])
 
@@ -2138,7 +2134,7 @@ end
 sqrtm(A::LowerTriangular) = sqrtm(A.').'
 sqrtm(A::UnitLowerTriangular) = sqrtm(A.').'
 
-#Generic eigensystems
+# Generic eigensystems
 eigvals(A::AbstractTriangular) = diag(A)
 function eigvecs{T}(A::AbstractTriangular{T})
     TT = promote_type(T, Float32)
@@ -2169,7 +2165,7 @@ end
 
 eigfact(A::AbstractTriangular) = Eigen(eigvals(A), eigvecs(A))
 
-#Generic singular systems
+# Generic singular systems
 for func in (:svd, :svdfact, :svdfact!, :svdvals)
     @eval begin
         ($func)(A::AbstractTriangular) = ($func)(full(A))
