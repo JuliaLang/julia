@@ -104,7 +104,7 @@ foldl(op, itr) = mapfoldl(identity, op, itr)
 function mapfoldr_impl(f, op, v0, itr, i::Integer)
     # Unroll the while loop once; if v0 is known, the call to op may
     # be evaluated at compile time
-    if isempty(itr)
+    if isempty(itr) || i == 0
         return r_promote(op, v0)
     else
         x = itr[i]
