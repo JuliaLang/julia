@@ -232,13 +232,13 @@ function read_worker_host_port(io::IO)
         !istaskdone(readtask) && break
 
         conninfo = wait(readtask)
-        if conninfo == "" && !isopen(io)
+        if isempty(conninfo) && !isopen(io)
             error("Unable to read host:port string from worker. Launch command exited with error?")
         end
 
         ntries -= 1
         bind_addr, port = parse_connection_info(conninfo)
-        if bind_addr != ""
+        if !isempty(bind_addr)
             return bind_addr, port
         end
 
