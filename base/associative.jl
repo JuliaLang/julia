@@ -39,8 +39,8 @@ show(io::IO, iter::Union{KeyIterator,ValueIterator}) = show(io, collect(iter))
 
 length(v::Union{KeyIterator,ValueIterator}) = length(v.dict)
 isempty(v::Union{KeyIterator,ValueIterator}) = isempty(v.dict)
-_tt1{A,B}(::Type{Pair{A,B}}) = A
-_tt2{A,B}(::Type{Pair{A,B}}) = B
+_tt1(::Type{Pair{A,B}}) where {A,B} = A
+_tt2(::Type{Pair{A,B}}) where {A,B} = B
 eltype(::Type{KeyIterator{D}}) where {D} = _tt1(eltype(D))
 eltype(::Type{ValueIterator{D}}) where {D} = _tt2(eltype(D))
 
@@ -203,9 +203,9 @@ julia> keytype(Dict(Int32(1) => "foo"))
 Int32
 ```
 """
-keytype{K,V}(::Type{Associative{K,V}}) = K
+keytype(::Type{Associative{K,V}}) where {K,V} = K
 keytype(a::Associative) = keytype(typeof(a))
-keytype{A<:Associative}(::Type{A}) = keytype(supertype(A))
+keytype(::Type{A}) where {A<:Associative} = keytype(supertype(A))
 
 """
     valtype(type)
@@ -217,7 +217,7 @@ julia> valtype(Dict(Int32(1) => "foo"))
 String
 ```
 """
-valtype{K,V}(::Type{Associative{K,V}}) = V
+valtype(::Type{Associative{K,V}}) where {K,V} = V
 valtype{A<:Associative}(::Type{A}) = valtype(supertype(A))
 valtype(a::Associative) = valtype(typeof(a))
 
