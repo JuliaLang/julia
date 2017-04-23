@@ -213,7 +213,7 @@ isslotempty(h::Dict, i::Int) = h.slots[i] == 0x0
 isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
 isslotmissing(h::Dict, i::Int) = h.slots[i] == 0x2
 
-function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
+function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
     olds = h.slots
     oldk = h.keys
     oldv = h.vals

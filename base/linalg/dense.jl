@@ -372,7 +372,7 @@ expm(x::Number) = exp(x)
 
 ## Destructive matrix exponential using algorithm from Higham, 2008,
 ## "Functions of Matrices: Theory and Computation", SIAM
-function expm!{T<:BlasFloat}(A::StridedMatrix{T})
+function expm!(A::StridedMatrix{T}) where T<:BlasFloat
     n = checksquare(A)
     if ishermitian(A)
         return full(expm(Hermitian(A)))

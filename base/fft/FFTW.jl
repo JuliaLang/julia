@@ -578,7 +578,7 @@ end
 # Convert arrays of numeric types to FFTW-supported packed complex-float types
 # (FIXME: is there a way to use the Julia promotion rules more cleverly here?)
 fftwcomplex(X::StridedArray{<:fftwComplex}) = X
-fftwcomplex{T<:fftwReal}(X::AbstractArray{T}) =
+fftwcomplex(X::AbstractArray{T}) where {T<:fftwReal} =
     copy!(Array{typeof(complex(zero(T)))}(size(X)), X)
 fftwcomplex(X::AbstractArray{<:Real}) = copy!(Array{Complex128}(size(X)),X)
 fftwcomplex(X::AbstractArray{<:Complex}) = copy!(Array{Complex128}(size(X)), X)

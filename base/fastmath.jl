@@ -274,7 +274,7 @@ atan2_fast(x::Float64, y::Float64) =
 # explicit implementations
 
 @fastmath begin
-    exp10_fast{T<:FloatTypes}(x::T) = exp2(log2(T(10))*x)
+    exp10_fast(x::T) where {T<:FloatTypes} = exp2(log2(T(10))*x)
     exp10_fast(x::Integer) = exp10(float(x))
 
     hypot_fast{T<:FloatTypes}(x::T, y::T) = sqrt(x*x + y*y)
@@ -293,20 +293,20 @@ atan2_fast(x::Float64, y::Float64) =
     pow_fast{T<:ComplexTypes}(x::T, y::T) = exp(y*log(x))
     pow_fast{T<:FloatTypes}(x::T, y::Complex{T}) = exp(y*log(x))
     pow_fast{T<:FloatTypes}(x::Complex{T}, y::T) = exp(y*log(x))
-    acos_fast{T<:ComplexTypes}(x::T) =
+    acos_fast(x::T) where {T<:ComplexTypes} =
         convert(T,π)/2 + im*log(im*x + sqrt(1-x*x))
     acosh_fast(x::ComplexTypes) = log(x + sqrt(x+1) * sqrt(x-1))
     angle_fast(x::ComplexTypes) = atan2(imag(x), real(x))
     asin_fast(x::ComplexTypes) = -im*asinh(im*x)
     asinh_fast(x::ComplexTypes) = log(x + sqrt(1+x*x))
     atan_fast(x::ComplexTypes) = -im*atanh(im*x)
-    atanh_fast{T<:ComplexTypes}(x::T) = convert(T,1)/2*(log(1+x) - log(1-x))
+    atanh_fast(x::T) where {T<:ComplexTypes} = convert(T,1)/2*(log(1+x) - log(1-x))
     cis_fast(x::ComplexTypes) = exp(-imag(x)) * cis(real(x))
     cos_fast(x::ComplexTypes) = cosh(im*x)
-    cosh_fast{T<:ComplexTypes}(x::T) = convert(T,1)/2*(exp(x) + exp(-x))
-    exp10_fast{T<:ComplexTypes}(x::T) =
+    cosh_fast(x::T) where {T<:ComplexTypes} = convert(T,1)/2*(exp(x) + exp(-x))
+    exp10_fast(x::T) where {T<:ComplexTypes} =
         exp10(real(x)) * cis(imag(x)*log(convert(T,10)))
-    exp2_fast{T<:ComplexTypes}(x::T) =
+    exp2_fast(x::T) where {T<:ComplexTypes} =
         exp2(real(x)) * cis(imag(x)*log(convert(T,2)))
     exp_fast(x::ComplexTypes) = exp(real(x)) * cis(imag(x))
     expm1_fast(x::ComplexTypes) = exp(x)-1
@@ -315,7 +315,7 @@ atan2_fast(x::Float64, y::Float64) =
     log2_fast{T<:ComplexTypes}(x::T) = log(x) / log(convert(T,2))
     log_fast{T<:ComplexTypes}(x::T) = T(log(abs2(x))/2, angle(x))
     sin_fast(x::ComplexTypes) = -im*sinh(im*x)
-    sinh_fast{T<:ComplexTypes}(x::T) = convert(T,1)/2*(exp(x) - exp(-x))
+    sinh_fast(x::T) where {T<:ComplexTypes} = convert(T,1)/2*(exp(x) - exp(-x))
     sqrt_fast(x::ComplexTypes) = sqrt(abs(x)) * cis(angle(x)/2)
     tan_fast(x::ComplexTypes) = -im*tanh(im*x)
     tanh_fast(x::ComplexTypes) = (a=exp(x); b=exp(-x); (a-b)/(a+b))
