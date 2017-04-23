@@ -21,7 +21,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Home",
     "title": "Manual",
     "category": "section",
-    "text": "Introduction\nGetting Started\nVariables\nIntegers and Floating-Point Numbers\nMathematical Operations and Elementary Functions\nComplex and Rational Numbers\nStrings\nFunctions\nControl Flow\nScope of Variables\nTypes\nMethods\nConstructors\nConversion and Promotion\nInterfaces\nModules\nDocumentation\nMetaprogramming\nMulti-dimensional Arrays\nLinear Algebra\nNetworking and Streams\nParallel Computing\nDate and DateTime\nRunning External Programs\nCalling C and Fortran Code\nHandling Operating System Variation\nInteracting With Julia\nEmbedding Julia\nPackages\nProfiling\nStack Traces\nPerformance Tips\nWorkflow Tips\nStyle Guide\nFrequently Asked Questions\nNoteworthy Differences from other Languages\nUnicode Input"
+    "text": "Introduction\nGetting Started\nVariables\nIntegers and Floating-Point Numbers\nMathematical Operations and Elementary Functions\nComplex and Rational Numbers\nStrings\nFunctions\nControl Flow\nScope of Variables\nTypes\nMethods\nConstructors\nConversion and Promotion\nInterfaces\nModules\nDocumentation\nMetaprogramming\nMulti-dimensional Arrays\nLinear Algebra\nNetworking and Streams\nParallel Computing\nDate and DateTime\nRunning External Programs\nCalling C and Fortran Code\nHandling Operating System Variation\nEnvironment Variables\nInteracting With Julia\nEmbedding Julia\nPackages\nProfiling\nStack Traces\nPerformance Tips\nWorkflow Tips\nStyle Guide\nFrequently Asked Questions\nNoteworthy Differences from other Languages\nUnicode Input"
 },
 
 {
@@ -2838,6 +2838,262 @@ var documenterSearchIndex = {"docs": [
     "title": "Handling Operating System Variation",
     "category": "section",
     "text": "When dealing with platform libraries, it is often necessary to provide special cases for various platforms. The variable Sys.KERNEL can be used to write these special cases. There are several functions intended to make this easier: is_unix, is_linux, is_apple, is_bsd, and is_windows. These may be used as follows:if is_windows()\n    some_complicated_thing(a)\nendNote that is_linux and is_apple are mutually exclusive subsets of is_unix. Additionally, there is a macro @static which makes it possible to use these functions to conditionally hide invalid code, as demonstrated in the following examples.Simple blocks:ccall( (@static is_windows() ? :_fopen : :fopen), ...)Complex blocks:@static if is_linux()\n    some_complicated_thing(a)\nelse\n    some_different_thing(a)\nendWhen chaining conditionals (including if/elseif/end), the @static must be repeated for each level (parentheses optional, but recommended for readability):@static is_windows() ? :a : (@static is_apple() ? :b : :c)"
+},
+
+{
+    "location": "manual/environment-variables.html#",
+    "page": "Environment Variables",
+    "title": "Environment Variables",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "manual/environment-variables.html#Environment-Variables-1",
+    "page": "Environment Variables",
+    "title": "Environment Variables",
+    "category": "section",
+    "text": "Julia may be configured with a number of environment variables, either in the usual way of the operating system, or in a portable way from within Julia. Suppose you want to set the environment variable JULIA_EDITOR to vim, then either type ENV[\"JULIA_EDITOR\"] = \"vim\" for instance in the REPL to make this change on a case by case basis, or add the same to the user configuration file .juliarc.jl in the user's home directory to have a permanent effect. The current value of the same environment variable is determined by evaluating ENV[\"JULIA_EDITOR\"].The environment variables that Julia uses generally start with JULIA. If Base.versioninfo is called with verbose equal to true, then the output will list defined environment variables relevant for Julia, including those for which JULIA appears in the name."
+},
+
+{
+    "location": "manual/environment-variables.html#File-locations-1",
+    "page": "Environment Variables",
+    "title": "File locations",
+    "category": "section",
+    "text": ""
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_HOME-1",
+    "page": "Environment Variables",
+    "title": "JULIA_HOME",
+    "category": "section",
+    "text": "The absolute path of the directory containing the Julia executable, which sets the global variable Base.JULIA_HOME. If $JULIA_HOME is not set, then Julia determines the value Base.JULIA_HOME at run-time.The executable itself is one of$JULIA_HOME/julia\n$JULIA_HOME/julia-debugby default.The global variable Base.DATAROOTDIR determines a relative path from Base.JULIA_HOME to the data directory associated with Julia. Then the path$JULIA_HOME/$DATAROOTDIR/julia/basedetermines the directory in which Julia initially searches for source files (via Base.find_source_file()).Likewise, the global variable Base.SYSCONFDIR determines a relative path to the configuration file directory. Then Julia searches for a juliarc.jl file at$JULIA_HOME/$SYSCONFDIR/julia/juliarc.jl\n$JULIA_HOME/../etc/julia/juliarc.jlby default (via Base.load_juliarc()).For example, a Linux installation with a Julia executable located at /bin/julia, a DATAROOTDIR of ../share, and a SYSCONFDIR of ../etc will have JULIA_HOME set to /bin, a source-file search path of/share/julia/baseand a global configuration search path of/etc/julia/juliarc.jl"
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_LOAD_PATH-1",
+    "page": "Environment Variables",
+    "title": "JULIA_LOAD_PATH",
+    "category": "section",
+    "text": "A separated list of absolute paths that are to be appended to the variable LOAD_PATH. (In Unix-like systems, the path separator is :; in Windows systems, the path separator is ;.) The LOAD_PATH variable is where Base.require and Base.load_in_path() look for code; it defaults to the absolute paths$JULIA_HOME/../local/share/julia/site/v$(VERSION.major).$(VERSION.minor)\n$JULIA_HOME/../share/julia/site/v$(VERSION.major).$(VERSION.minor)so that, e.g., version 0.6 of Julia on a Linux system with a Julia executable at /bin/julia will have a default LOAD_PATH of/local/share/julia/site/v0.6\n/share/julia/site/v0.6"
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_PKGDIR-1",
+    "page": "Environment Variables",
+    "title": "JULIA_PKGDIR",
+    "category": "section",
+    "text": "The path of the parent directory Pkg.Dir._pkgroot() for the version-specific Julia package repositories. If the path is relative, then it is taken with respect to the working directory. If $JULIA_PKGDIR is not set, then Pkg.Dir._pkgroot() defaults to$HOME/.juliaThen the repository location Pkg.dir for a given Julia version is$JULIA_PKGDIR/v$(VERSION.major).$(VERSION.minor)For example, for a Linux user whose home directory is /home/alice, the directory containing the package repositories would by default be/home/alice/.juliaand the package repository for version 0.6 of Julia would be/home/alice/.julia/v0.6"
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_HISTORY-1",
+    "page": "Environment Variables",
+    "title": "JULIA_HISTORY",
+    "category": "section",
+    "text": "The absolute path Base.REPL.find_hist_file() of the REPL's history file. If $JULIA_HISTORY is not set, then Base.REPL.find_hist_file() defaults to$HOME/.julia_history"
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_PKGRESOLVE_ACCURACY-1",
+    "page": "Environment Variables",
+    "title": "JULIA_PKGRESOLVE_ACCURACY",
+    "category": "section",
+    "text": "A positive Int that determines how much time the max-sum subroutine MaxSum.maxsum() of the package dependency resolver Base.Pkg.resolve will devote to attempting satisfying constraints before giving up: this value is by default 1, and larger values correspond to larger amounts of time.Suppose the value of $JULIA_PKGRESOLVE_ACCURACY is n. Thenthe number of pre-decimation iterations is 20*n,\nthe number of iterations between decimation steps is 10*n, and\nat decimation steps, at most one in every 20*n packages is decimated."
+},
+
+{
+    "location": "manual/environment-variables.html#External-applications-1",
+    "page": "Environment Variables",
+    "title": "External applications",
+    "category": "section",
+    "text": ""
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_SHELL-1",
+    "page": "Environment Variables",
+    "title": "JULIA_SHELL",
+    "category": "section",
+    "text": "The absolute path of the shell with which Julia should execute external commands (via Base.repl_cmd()). Defaults to the environment variable $SHELL, and falls back to /bin/sh if $SHELL is unset.note: Note\nOn Windows, this environment variable is ignored, and external commands are executed directly."
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_EDITOR-1",
+    "page": "Environment Variables",
+    "title": "JULIA_EDITOR",
+    "category": "section",
+    "text": "The editor returned by Base.editor() and used in, e.g., Base.edit, referring to the command of the preferred editor, for instance vim.$JULIA_EDITOR takes precedence over $VISUAL, which in turn takes precedence over $EDITOR. If none of these environment variables is set, then the editor is taken to be open on Windows and OS X, or /etc/alternatives/editor if it exists, or emacs otherwise.note: Note\n$JULIA_EDITOR is not used in the determination of the editor for Base.Pkg.edit: this function checks $VISUAL and $EDITOR alone."
+},
+
+{
+    "location": "manual/environment-variables.html#Parallelization-1",
+    "page": "Environment Variables",
+    "title": "Parallelization",
+    "category": "section",
+    "text": ""
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_CPU_CORES-1",
+    "page": "Environment Variables",
+    "title": "JULIA_CPU_CORES",
+    "category": "section",
+    "text": "Overrides the global variable Base.Sys.CPU_CORES, the number of logical CPU cores available."
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_WORKER_TIMEOUT-1",
+    "page": "Environment Variables",
+    "title": "JULIA_WORKER_TIMEOUT",
+    "category": "section",
+    "text": "A Float64 that sets the value of Base.worker_timeout() (default: 60.0). This function gives the number of seconds a worker process will wait for a master process to establish a connection before dying."
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_NUM_THREADS-1",
+    "page": "Environment Variables",
+    "title": "JULIA_NUM_THREADS",
+    "category": "section",
+    "text": "An unsigned 64-bit integer (uint64_t) that sets the maximum number of threads available to Julia. If $JULIA_NUM_THREADS exceeds the number of available physical CPU cores, then the number of threads is set to the number of cores. If $JULIA_NUM_THREADS is not positive or is not set, or if the number of CPU cores cannot be determined through system calls, then the number of threads is set to 1."
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_THREAD_SLEEP_THRESHOLD-1",
+    "page": "Environment Variables",
+    "title": "JULIA_THREAD_SLEEP_THRESHOLD",
+    "category": "section",
+    "text": "If set to a string that starts with the case-insensitive substring \"infinite\", then spinning threads never sleep. Otherwise, $JULIA_THREAD_SLEEP_THRESHOLD is interpreted as an unsigned 64-bit integer (uint64_t) and gives, in nanoseconds, the amount of time after which spinning threads should sleep."
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_EXCLUSIVE-1",
+    "page": "Environment Variables",
+    "title": "JULIA_EXCLUSIVE",
+    "category": "section",
+    "text": "If set to anything besides 0, then Julia's thread policy is consistent with running on a dedicated machine: the master thread is on proc 0, and threads are affinitized. Otherwise, Julia lets the operating system handle thread policy."
+},
+
+{
+    "location": "manual/environment-variables.html#REPL-formatting-1",
+    "page": "Environment Variables",
+    "title": "REPL formatting",
+    "category": "section",
+    "text": "Environment variables that determine how REPL output should be formatted at the terminal. Generally, these variables should be set to ANSI terminal escape sequences. Julia provides a high-level interface with much of the same functionality: see the section on Interacting With Julia."
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_ERROR_COLOR-1",
+    "page": "Environment Variables",
+    "title": "JULIA_ERROR_COLOR",
+    "category": "section",
+    "text": "The formatting Base.error_color() (default: light red, \"\\033[91m\") that errors should have at the terminal."
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_WARN_COLOR-1",
+    "page": "Environment Variables",
+    "title": "JULIA_WARN_COLOR",
+    "category": "section",
+    "text": "The formatting Base.warn_color() (default: yellow, \"\\033[93m\") that warnings should have at the terminal."
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_INFO_COLOR-1",
+    "page": "Environment Variables",
+    "title": "JULIA_INFO_COLOR",
+    "category": "section",
+    "text": "The formatting Base.info_color() (default: cyan, \"\\033[36m\") that info should have at the terminal."
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_INPUT_COLOR-1",
+    "page": "Environment Variables",
+    "title": "JULIA_INPUT_COLOR",
+    "category": "section",
+    "text": "The formatting Base.input_color() (default: normal, \"\\033[0m\") that input should have at the terminal."
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_ANSWER_COLOR-1",
+    "page": "Environment Variables",
+    "title": "JULIA_ANSWER_COLOR",
+    "category": "section",
+    "text": "The formatting Base.answer_color() (default: normal, \"\\033[0m\") that output should have at the terminal."
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_STACKFRAME_LINEINFO_COLOR-1",
+    "page": "Environment Variables",
+    "title": "JULIA_STACKFRAME_LINEINFO_COLOR",
+    "category": "section",
+    "text": "The formatting Base.stackframe_lineinfo_color() (default: bold, \"\\033[1m\") that line info should have during a stack trace at the terminal."
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_STACKFRAME_FUNCTION_COLOR-1",
+    "page": "Environment Variables",
+    "title": "JULIA_STACKFRAME_FUNCTION_COLOR",
+    "category": "section",
+    "text": "The formatting Base.stackframe_function_color() (default: bold, \"\\033[1m\") that function calls should have during a stack trace at the terminal."
+},
+
+{
+    "location": "manual/environment-variables.html#Debugging-and-profiling-1",
+    "page": "Environment Variables",
+    "title": "Debugging and profiling",
+    "category": "section",
+    "text": ""
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_GC_ALLOC_POOL,-JULIA_GC_ALLOC_OTHER,-JULIA_GC_ALLOC_PRINT-1",
+    "page": "Environment Variables",
+    "title": "JULIA_GC_ALLOC_POOL, JULIA_GC_ALLOC_OTHER, JULIA_GC_ALLOC_PRINT",
+    "category": "section",
+    "text": "If set, these environment variables take strings that optionally start with the character 'r', followed by a string interpolation of a colon-separated list of three signed 64-bit integers (int64_t). This triple of integers a:b:c represents the arithmetic sequence a, a + b, a + 2*b, ... c.If it's the nth time that jl_gc_pool_alloc() has been called, and n   belongs to the arithmetic sequence represented by $JULIA_GC_ALLOC_POOL,   then garbage collection is forced.\nIf it's the nth time that maybe_collect() has been called, and n belongs   to the arithmetic sequence represented by $JULIA_GC_ALLOC_OTHER, then garbage   collection is forced.\nIf it's the nth time that jl_gc_collect() has been called, and n belongs   to the arithmetic sequence represented by $JULIA_GC_ALLOC_PRINT, then counts   for the number of calls to jl_gc_pool_alloc() and maybe_collect() are   printed.If the value of the environment variable begins with the character 'r', then the interval between garbage collection events is randomized.note: Note\nThese environment variables only have an effect if Julia was compiled with garbage-collection debugging (that is, if WITH_GC_DEBUG_ENV is set to 1 in the build configuration)."
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_GC_NO_GENERATIONAL-1",
+    "page": "Environment Variables",
+    "title": "JULIA_GC_NO_GENERATIONAL",
+    "category": "section",
+    "text": "If set to anything besides 0, then the Julia garbage collector never performs \"quick sweeps\" of memory.note: Note\nThis environment variable only has an effect if Julia was compiled with garbage-collection debugging (that is, if WITH_GC_DEBUG_ENV is set to 1 in the build configuration)."
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_GC_WAIT_FOR_DEBUGGER-1",
+    "page": "Environment Variables",
+    "title": "JULIA_GC_WAIT_FOR_DEBUGGER",
+    "category": "section",
+    "text": "If set to anything besides 0, then the Julia garbage collector will wait for a debugger to attach instead of aborting whenever there's a critical error.note: Note\nThis environment variable only has an effect if Julia was compiled with garbage-collection debugging (that is, if WITH_GC_DEBUG_ENV is set to 1 in the build configuration)."
+},
+
+{
+    "location": "manual/environment-variables.html#ENABLE_JITPROFILING-1",
+    "page": "Environment Variables",
+    "title": "ENABLE_JITPROFILING",
+    "category": "section",
+    "text": "If set to anything besides 0, then the compiler will create and register an event listener for just-in-time (JIT) profiling.note: Note\nThis environment variable only has an effect if Julia was compiled with JIT profiling support, using eitherIntel's VTune™ Amplifier   (USE_INTEL_JITEVENTS set to 1 in the build configuration), or\nOProfile (USE_OPROFILE_JITEVENTS set to 1   in the build configuration)."
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_LLVM_ARGS-1",
+    "page": "Environment Variables",
+    "title": "JULIA_LLVM_ARGS",
+    "category": "section",
+    "text": "Arguments to be passed to the LLVM backend.note: Note\nThis environment variable has an effect only if Julia was compiled with JL_DEBUG_BUILD set — in particular, the julia-debug executable is always compiled with this build variable."
+},
+
+{
+    "location": "manual/environment-variables.html#JULIA_DEBUG_LOADING-1",
+    "page": "Environment Variables",
+    "title": "JULIA_DEBUG_LOADING",
+    "category": "section",
+    "text": "If set, then Julia prints detailed information about the cache in the loading process of Base.require."
 },
 
 {
@@ -8117,7 +8373,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
+    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
 },
 
 {
@@ -12437,7 +12693,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.qrfact",
     "category": "Function",
-    "text": "qrfact(A, pivot=Val{false}) -> F\n\nComputes the QR factorization of A. The return type of F depends on the element type of A and whether pivoting is specified (with pivot==Val{true}).\n\nReturn type eltype(A) pivot Relationship between F and A\nQR not BlasFloat either A==F[:Q]*F[:R]\nQRCompactWY BlasFloat Val{false} A==F[:Q]*F[:R]\nQRPivoted BlasFloat Val{true} A[:,F[:p]]==F[:Q]*F[:R]\n\nBlasFloat refers to any of: Float32, Float64, Complex64 or Complex128.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description QR QRCompactWY QRPivoted\nF[:Q] Q (orthogonal/unitary) part of QR ✓ (QRPackedQ) ✓ (QRCompactWYQ) ✓ (QRPackedQ)\nF[:R] R (upper right triangular) part of QR ✓ ✓ ✓\nF[:p] pivot Vector   ✓\nF[:P] (pivot) permutation Matrix   ✓\n\nThe following functions are available for the QR objects: size and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nExample\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.The data contained in QR or QRPivoted can be used to construct the QRPackedQ type, which is a compact representation of the rotation matrix:Q = prod_i=1^min(mn) (I - tau_i v_i v_i^T)where tau_i is the scale factor and v_i is the projection vector associated with the i^th Householder elementary reflector.The data contained in QRCompactWY can be used to construct the QRCompactWYQ type, which is a compact representation of the rotation matrixQ = I + Y T Y^Twhere Y is m times r lower trapezoidal and T is r times r upper triangular. The compact WY representation [Schreiber1989] is not to be confused with the older, WY representation [Bischof1987]. (The LAPACK documentation uses V in lieu of Y.)[Bischof1987]: C Bischof and C Van Loan, \"The WY representation for products of Householder matrices\", SIAM J Sci Stat Comput 8 (1987), s2-s13. doi:10.1137/0908009[Schreiber1989]: R Schreiber and C Van Loan, \"A storage-efficient WY representation for products of Householder transformations\", SIAM J Sci Stat Comput 10 (1989), 53-57. doi:10.1137/0910005\n\n\n\nqrfact(A) -> SPQR.Factorization\n\nCompute the QR factorization of a sparse matrix A. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with \\. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.\n\n\n\n"
+    "text": "qrfact(A) -> SPQR.Factorization\n\nCompute the QR factorization of a sparse matrix A. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with \\. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.\n\n\n\nqrfact(A, pivot=Val{false}) -> F\n\nComputes the QR factorization of A. The return type of F depends on the element type of A and whether pivoting is specified (with pivot==Val{true}).\n\nReturn type eltype(A) pivot Relationship between F and A\nQR not BlasFloat either A==F[:Q]*F[:R]\nQRCompactWY BlasFloat Val{false} A==F[:Q]*F[:R]\nQRPivoted BlasFloat Val{true} A[:,F[:p]]==F[:Q]*F[:R]\n\nBlasFloat refers to any of: Float32, Float64, Complex64 or Complex128.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description QR QRCompactWY QRPivoted\nF[:Q] Q (orthogonal/unitary) part of QR ✓ (QRPackedQ) ✓ (QRCompactWYQ) ✓ (QRPackedQ)\nF[:R] R (upper right triangular) part of QR ✓ ✓ ✓\nF[:p] pivot Vector   ✓\nF[:P] (pivot) permutation Matrix   ✓\n\nThe following functions are available for the QR objects: size and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nExample\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.The data contained in QR or QRPivoted can be used to construct the QRPackedQ type, which is a compact representation of the rotation matrix:Q = prod_i=1^min(mn) (I - tau_i v_i v_i^T)where tau_i is the scale factor and v_i is the projection vector associated with the i^th Householder elementary reflector.The data contained in QRCompactWY can be used to construct the QRCompactWYQ type, which is a compact representation of the rotation matrixQ = I + Y T Y^Twhere Y is m times r lower trapezoidal and T is r times r upper triangular. The compact WY representation [Schreiber1989] is not to be confused with the older, WY representation [Bischof1987]. (The LAPACK documentation uses V in lieu of Y.)[Bischof1987]: C Bischof and C Van Loan, \"The WY representation for products of Householder matrices\", SIAM J Sci Stat Comput 8 (1987), s2-s13. doi:10.1137/0908009[Schreiber1989]: R Schreiber and C Van Loan, \"A storage-efficient WY representation for products of Householder transformations\", SIAM J Sci Stat Comput 10 (1989), 53-57. doi:10.1137/0910005\n\n\n\n"
 },
 
 {
