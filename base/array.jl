@@ -1807,20 +1807,20 @@ julia> filter(isodd, a)
 filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
 
 function filter!(f, a::AbstractVector)
-    if !isempty(a)
-        idx = eachindex(a)
-        state = start(idx)
-        i, state = next(idx, state)
+    isempty(a) && return a
 
-        for acurr in a
-            if f(acurr)
-                a[i] = acurr
-                i, state = next(idx, state)
-            end
+    idx = eachindex(a)
+    state = start(idx)
+    i, state = next(idx, state)
+
+    for acurr in a
+        if f(acurr)
+            a[i] = acurr
+            i, state = next(idx, state)
         end
-
-        deleteat!(a, i:last(idx))
     end
+
+    deleteat!(a, i:last(idx))
 
     return a
 end
