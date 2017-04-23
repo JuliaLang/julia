@@ -5291,7 +5291,7 @@ static std::unique_ptr<Module> emit_function(
     else
         funcName << "japi1_";
     const char* unadorned_name = ctx.name;
-#if (defined(_OS_LINUX_) && JL_LLVM_VERSION < 30400)
+#if defined(_OS_LINUX_)
     if (unadorned_name[0] == '@')
         unadorned_name++;
 #endif
