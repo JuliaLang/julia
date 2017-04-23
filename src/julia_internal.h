@@ -47,9 +47,14 @@
 #endif
 
 #if jl_has_builtin(__builtin_assume)
-#define jl_assume(cond) (__extension__ ({       \
-                __builtin_assume(!!(cond));     \
-                cond;                           \
+static inline void jl_assume_(int cond)
+{
+    __builtin_assume(cond);
+}
+#define jl_assume(cond) (__extension__ ({               \
+                __typeof__(cond) cond_ = (cond);        \
+                jl_assume_(!!(cond_));                  \
+                cond;                                   \
             }))
 #elif defined(_COMPILER_GCC_)
 static inline void jl_assume_(int cond)
