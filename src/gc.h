@@ -486,9 +486,7 @@ STATIC_INLINE void gc_mark_sp_init(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *s
     sp->pc_end = gc_cache->pc_stack_end;
 }
 
-void mark_all_roots(jl_ptls_t ptls);
-void gc_mark_object_list(jl_ptls_t ptls, arraylist_t *list, size_t start);
-void visit_mark_stack(jl_ptls_t ptls);
+void gc_mark_queue_all_roots(jl_ptls_t ptls, gc_mark_sp_t *sp);
 void gc_mark_queue_finlist(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp,
                            arraylist_t *list, size_t start);
 void gc_mark_loop(jl_ptls_t ptls, gc_mark_sp_t sp);

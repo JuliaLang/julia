@@ -198,18 +198,21 @@ static void restore(void)
 
 static void gc_verify_track(jl_ptls_t ptls)
 {
+    jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
     do {
+        gc_mark_sp_t sp;
+        gc_mark_sp_init(gc_cache, &sp);
         arraylist_push(&lostval_parents_done, lostval);
         jl_printf(JL_STDERR, "Now looking for %p =======\n", lostval);
         clear_mark(GC_CLEAN);
-        mark_all_roots(ptls);
-        gc_mark_object_list(ptls, &to_finalize, 0);
+        gc_mark_queue_all_roots(ptls, &sp);
+        gc_mark_queue_finlist(gc_cache, &sp, &to_finalize, 0);
         for (int i = 0;i < jl_n_threads;i++) {
             jl_ptls_t ptls2 = jl_all_tls_states[i];
-            gc_mark_object_list(ptls, &ptls2->finalizers, 0);
+            gc_mark_queue_finlist(gc_cache, &sp, &ptls2->finalizers, 0);
         }
-        gc_mark_object_list(ptls, &finalizer_list_marked, 0);
-        visit_mark_stack(ptls);
+        gc_mark_queue_finlist(gc_cache, &sp, &finalizer_list_marked, 0);
+        gc_mark_loop(ptls, sp);
         if (lostval_parents.len == 0) {
             jl_printf(JL_STDERR, "Could not find the missing link. We missed a toplevel root. This is odd.\n");
             break;
@@ -243,19 +246,22 @@ static void gc_verify_track(jl_ptls_t ptls)
 
 void gc_verify(jl_ptls_t ptls)
 {
+    jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
+    gc_mark_sp_t sp;
+    gc_mark_sp_init(gc_cache, &sp);
     lostval = NULL;
     lostval_parents.len = 0;
     lostval_parents_done.len = 0;
     clear_mark(GC_CLEAN);
     gc_verifying = 1;
-    mark_all_roots(ptls);
-    gc_mark_object_list(ptls, &to_finalize, 0);
+    gc_mark_queue_all_roots(ptls, &sp);
+    gc_mark_queue_finlist(gc_cache, &sp, &to_finalize, 0);
     for (int i = 0;i < jl_n_threads;i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
-        gc_mark_object_list(ptls, &ptls2->finalizers, 0);
+        gc_mark_queue_finlist(gc_cache, &sp, &ptls2->finalizers, 0);
     }
-    gc_mark_object_list(ptls, &finalizer_list_marked, 0);
-    visit_mark_stack(ptls);
+    gc_mark_queue_finlist(gc_cache, &sp, &finalizer_list_marked, 0);
+    gc_mark_loop(ptls, sp);
     int clean_len = bits_save[GC_CLEAN].len;
     for(int i = 0; i < clean_len + bits_save[GC_OLD].len; i++) {
         jl_taggedvalue_t *v = (jl_taggedvalue_t*)bits_save[i >= clean_len ? GC_OLD : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
