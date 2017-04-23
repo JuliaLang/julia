@@ -544,15 +544,24 @@ static bool is_datatype_all_pointers(jl_datatype_t *dt)
     return true;
 }
 
-static bool is_tupletype_homogeneous(jl_svec_t *t)
+static bool is_tupletype_homogeneous(jl_svec_t *t, bool allow_va = false)
 {
     size_t i, l = jl_svec_len(t);
     if (l > 0) {
         jl_value_t *t0 = jl_svecref(t, 0);
-        if (!jl_is_leaf_type(t0))
+        if (!jl_is_leaf_type(t0)) {
+            if (allow_va && jl_is_vararg_type(t0) &&
+                  jl_is_leaf_type(jl_unwrap_vararg(t0)))
+                return true;
             return false;
+        }
         for(i=1; i < l; i++) {
-            if (!jl_types_equal(t0, jl_svecref(t,i)))
+            if (allow_va && i == l - 1 && jl_is_vararg_type(jl_svecref(t,i))) {
+                if (t0 != jl_unwrap_vararg(jl_svecref(t,i)))
+                    return false;
+                continue;
+            }
+            if (t0 != jl_svecref(t,i))
                 return false;
         }
     }
@@ -1080,13 +1089,21 @@ static void emit_leafcheck(Value *typ, const std::string &msg, jl_codectx_t *ctx
 }
 
 #define CHECK_BOUNDS 1
+static bool bounds_check_enabled(jl_codectx_t *ctx) {
+#if CHECK_BOUNDS==1
+    return (!ctx->is_inbounds &&
+         jl_options.check_bounds != JL_OPTIONS_CHECK_BOUNDS_OFF) ||
+         jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_ON;
+#else
+    return 0;
+#endif
+}
+
 static Value *emit_bounds_check(const jl_cgval_t &ainfo, jl_value_t *ty, Value *i, Value *len, jl_codectx_t *ctx)
 {
     Value *im1 = builder.CreateSub(i, ConstantInt::get(T_size, 1));
 #if CHECK_BOUNDS==1
-    if ((!ctx->is_inbounds &&
-         jl_options.check_bounds != JL_OPTIONS_CHECK_BOUNDS_OFF) ||
-         jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_ON) {
+    if (bounds_check_enabled(ctx)) {
         Value *ok = builder.CreateICmpULT(im1, len);
         BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext,"fail",ctx->f);
         BasicBlock *passBB = BasicBlock::Create(jl_LLVMContext,"pass");
@@ -1157,7 +1174,7 @@ static unsigned julia_alignment(Value* /*ptr*/, jl_value_t *jltype, unsigned ali
 static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value* dest = NULL, bool volatile_store = false);
 
 static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
-                             jl_codectx_t *ctx, MDNode *tbaa, unsigned alignment = 0)
+                             jl_codectx_t *ctx, MDNode *tbaa, bool maybe_null_if_boxed = true, unsigned alignment = 0)
 {
     bool isboxed;
     Type *elty = julia_type_to_llvm(jltype, &isboxed);
@@ -1187,7 +1204,7 @@ static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
         else {
             elt = load;
         }
-        if (isboxed) {
+        if (maybe_null_if_boxed && isboxed) {
             null_pointer_check(elt, ctx);
         }
     //}
@@ -1361,7 +1378,7 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct,
                 ret->isimmutable = strct.isimmutable;
                 return true;
             }
-            *ret = typed_load(ptr, idx, jt, ctx, strct.tbaa);
+            *ret = typed_load(ptr, idx, jt, ctx, strct.tbaa, false);
             return true;
         }
         else if (strct.isboxed) {
@@ -1458,7 +1475,7 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
         int align = jl_field_offset(jt, idx);
         align |= 16;
         align &= -align;
-        return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx, strct.tbaa, align);
+        return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx, strct.tbaa, true, align);
     }
     else if (isa<UndefValue>(strct.V)) {
         return jl_cgval_t();

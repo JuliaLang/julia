@@ -3012,6 +3012,33 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                     }
                 }
             }
+        } else {
+            jl_value_t *utt = jl_unwrap_unionall((jl_value_t*)stt);
+            if (jl_is_tuple_type(utt) && is_tupletype_homogeneous(((jl_datatype_t*)utt)->types, true)) {
+                // For tuples, we can emit code even if we don't know the exact
+                // type (e.g. because we don't know the length). This is possible
+                // as long as we know that all elements are of the same (leaf) type.
+                jl_cgval_t strct = emit_expr(args[1], ctx);
+                if (strct.ispointer()) {
+                    // Determine which was the type that was homogenous
+                    jl_value_t *jt = jl_tparam0(utt);
+                    if (jl_is_vararg_type(jt))
+                        jt = jl_unwrap_vararg(jt);
+                    Value *vidx = emit_unbox(T_size, emit_expr(args[2], ctx), (jl_value_t*)jl_long_type);
+                    // This is not necessary for correctness, but allows to omit
+                    // the extra code for getting the length of the tuple
+                    if (!bounds_check_enabled(ctx)) {
+                        vidx = builder.CreateSub(vidx, ConstantInt::get(T_size, 1));
+                    } else {
+                        vidx = emit_bounds_check(strct, (jl_value_t*)stt, vidx,
+                            emit_datatype_nfields(emit_typeof_boxed(strct, ctx)), ctx);
+                    }
+                    Value *ptr = data_pointer(strct, ctx);
+                    *ret = typed_load(ptr, vidx, jt, ctx, strct.tbaa, false);
+                    JL_GC_POP();
+                    return true;
+                }
+            }
         }
     }
 
