@@ -31,7 +31,7 @@ promote_rule(::Type{Complex{T}}, ::Type{S}) where {T<:Real,S<:Real} =
 promote_rule(::Type{Complex{T}}, ::Type{Complex{S}}) where {T<:Real,S<:Real} =
     Complex{promote_type(T,S)}
 
-widen{T}(::Type{Complex{T}}) = Complex{widen(T)}
+widen(::Type{Complex{T}}) where {T} = Complex{widen(T)}
 
 """
     real(z)
@@ -134,8 +134,8 @@ julia> complex(Int)
 Complex{Int64}
 ```
 """
-complex{T<:Real}(::Type{T}) = Complex{T}
-complex{T<:Real}(::Type{Complex{T}}) = Complex{T}
+complex(::Type{T}) where {T<:Real} = Complex{T}
+complex(::Type{Complex{T}}) where {T<:Real} = Complex{T}
 
 flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
 
@@ -589,13 +589,13 @@ function ^(z::Complex{T}, p::Complex{T})::Complex{T} where T<:AbstractFloat
     end
 end
 
-function exp2{T}(z::Complex{T})
+function exp2(z::Complex{T}) where T
     er = exp2(real(z))
     theta = imag(z) * log(convert(T, 2))
     Complex(er*cos(theta), er*sin(theta))
 end
 
-function exp10{T}(z::Complex{T})
+function exp10(z::Complex{T}) where T
     er = exp10(real(z))
     theta = imag(z) * log(convert(T, 10))
     Complex(er*cos(theta), er*sin(theta))
@@ -669,7 +669,7 @@ end
     n>=0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
 ^(z::Complex{<:Integer}, n::Integer) = power_by_squaring(z,n) # DomainError for n<0
 
-function sin{T}(z::Complex{T})
+function sin(z::Complex{T}) where T
     F = float(T)
     zr, zi = reim(z)
     if zr == 0
@@ -686,7 +686,7 @@ function sin{T}(z::Complex{T})
 end
 
 
-function cos{T}(z::Complex{T})
+function cos(z::Complex{T}) where T
     F = float(T)
     zr, zi = reim(z)
     if zr == 0
@@ -764,7 +764,7 @@ function cosh(z::Complex)
     cos(Complex(zi,-zr))
 end
 
-function tanh{T<:AbstractFloat}(z::Complex{T})
+function tanh(z::Complex{T}) where T<:AbstractFloat
     const Ω = prevfloat(typemax(T))
     ξ, η = reim(z)
     if isnan(ξ) && η==0 return Complex(ξ, η) end
@@ -809,7 +809,7 @@ function acosh(z::Complex)
     Complex(ξ, η)
 end
 
-function atanh{T<:AbstractFloat}(z::Complex{T})
+function atanh(z::Complex{T}) where T<:AbstractFloat
     const Ω = prevfloat(typemax(T))
     const θ = sqrt(Ω)/4
     const ρ = 1/θ
@@ -866,7 +866,7 @@ breaking ties using the specified [`RoundingMode`](@ref)s. The first
 [`RoundingMode`](@ref) is used for rounding the real components while the
 second is used for rounding the imaginary components.
 """
-function round{MR, MI}(z::Complex{<:AbstractFloat}, ::RoundingMode{MR}, ::RoundingMode{MI})
+function round(z::Complex{<:AbstractFloat}, ::RoundingMode{MR}, ::RoundingMode{MI}) where {MR,MI}
     Complex(round(real(z), RoundingMode{MR}()),
             round(imag(z), RoundingMode{MI}()))
 end
@@ -887,7 +887,7 @@ big(z::Complex{<:Integer}) = Complex{BigInt}(z)
 
 complex(A::AbstractArray{<:Complex}) = A
 
-function complex{T}(A::AbstractArray{T})
+function complex(A::AbstractArray{T}) where T
     if !isleaftype(T)
         error("`complex` not defined on abstractly-typed arrays; please convert to a more specific type")
     end

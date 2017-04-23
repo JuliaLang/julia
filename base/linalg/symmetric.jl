@@ -408,7 +408,7 @@ function expm(A::Symmetric)
     F = eigfact(A)
     return Symmetric((F.vectors * Diagonal(exp.(F.values))) * F.vectors')
 end
-function expm{T}(A::Hermitian{T})
+function expm(A::Hermitian{T}) where T
     n = checksquare(A)
     F = eigfact(A)
     retmat = (F.vectors * Diagonal(exp.(F.values))) * F.vectors'

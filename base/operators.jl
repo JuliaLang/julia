@@ -840,7 +840,7 @@ For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᵀ``.
 """
 Ac_ldiv_Bt(a,b) = Ac_ldiv_B(a,transpose(b))
 
-widen{T<:Number}(x::T) = convert(widen(T), x)
+widen(x::T) where {T<:Number} = convert(widen(T), x)
 
 # function pipelining
 
