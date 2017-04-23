@@ -391,13 +391,16 @@ void ti_threadfun(void *arg)
     // free the thread argument here
     free(ta);
 
+    int init = 1;
+
     // work loop
     for (; ;) {
 #if PROFILE_JL_THREADING
         uint64_t tstart = uv_hrtime();
 #endif
 
-        ti_threadgroup_fork(tg, ptls->tid, (void **)&work);
+        ti_threadgroup_fork(tg, ptls->tid, (void **)&work, init);
+        init = 0;
 
 #if PROFILE_JL_THREADING
         uint64_t tfork = uv_hrtime();
@@ -645,7 +648,7 @@ void jl_shutdown_threading(void)
     ti_threadwork_t *work = &threadwork;
 
     work->command = TI_THREADWORK_DONE;
-    ti_threadgroup_fork(tgworld, ptls->tid, (void **)&work);
+    ti_threadgroup_fork(tgworld, ptls->tid, (void **)&work, 0);
 
     sleep(1);
 
@@ -704,7 +707,7 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_value_t *_args)
 
     // fork the world thread group
     ti_threadwork_t *tw = &threadwork;
-    ti_threadgroup_fork(tgworld, ptls->tid, (void **)&tw);
+    ti_threadgroup_fork(tgworld, ptls->tid, (void **)&tw, 0);
 
 #if PROFILE_JL_THREADING
     uint64_t tfork = uv_hrtime();
