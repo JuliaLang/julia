@@ -1495,7 +1495,7 @@ typedef struct _jl_task_t {
 } jl_task_t;
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
-JL_DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
+JL_DLLEXPORT void jl_switchto(jl_task_t *t);
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e);
@@ -1797,7 +1797,6 @@ typedef struct {
 #define jl_current_task (jl_get_ptls_states()->current_task)
 #define jl_root_task (jl_get_ptls_states()->root_task)
 #define jl_exception_in_transit (jl_get_ptls_states()->exception_in_transit)
-#define jl_task_arg_in_transit (jl_get_ptls_states()->task_arg_in_transit)
 
 
 // codegen interface ----------------------------------------------------------
