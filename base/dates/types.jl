@@ -270,7 +270,7 @@ Date(y, m=1, d=1) = Date(Int64(y), Int64(m), Int64(d))
 Time(h, mi=0, s=0, ms=0, us=0, ns=0) = Time(Int64(h), Int64(mi), Int64(s), Int64(ms), Int64(us), Int64(ns))
 
 # Traits, Equality
-Base.isfinite{T<:TimeType}(::Union{Type{T}, T}) = true
+Base.isfinite(::Union{Type{T}, T}) where {T<:TimeType} = true
 calendar(dt::DateTime) = ISOCalendar
 calendar(dt::Date) = ISOCalendar
 
@@ -298,13 +298,13 @@ Base.eltype(::Type{T}) where {T<:Period} = T
 Base.promote_rule(::Type{Date}, x::Type{DateTime}) = DateTime
 Base.isless(x::T, y::T) where {T<:TimeType} = isless(value(x), value(y))
 Base.isless(x::TimeType, y::TimeType) = isless(Base.promote_noncircular(x, y)...)
-==(x::T, y::T) where {T<:TimeType} = ==(value(x), value(y))
+(==)(x::T, y::T) where {T<:TimeType} = (==)(value(x), value(y))
 function ==(a::Time, b::Time)
     return hour(a) == hour(b) && minute(a) == minute(b) &&
         second(a) == second(b) && millisecond(a) == millisecond(b) &&
         microsecond(a) == microsecond(b) && nanosecond(a) == nanosecond(b)
 end
-==(x::TimeType, y::TimeType) = ===(promote(x, y)...)
+(==)(x::TimeType, y::TimeType) = (===)(promote(x, y)...)
 
 import Base: sleep, Timer, timedwait
 sleep(time::Period) = sleep(toms(time) / 1000)

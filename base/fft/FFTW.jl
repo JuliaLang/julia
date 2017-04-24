@@ -641,17 +641,17 @@ end
 for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
     # Note: use $FORWARD and $BACKWARD below because of issue #9775
     @eval begin
-        function plan_rfft{N}(X::StridedArray{$Tr,N}, region;
-                              flags::Integer=ESTIMATE,
-                              timelimit::Real=NO_TIMELIMIT)
+        function plan_rfft(X::StridedArray{$Tr,N}, region;
+                           flags::Integer=ESTIMATE,
+                           timelimit::Real=NO_TIMELIMIT) where N
             osize = rfft_output_size(X, region)
             Y = flags&ESTIMATE != 0 ? FakeArray($Tc,osize...) : Array{$Tc}(osize...)
             rFFTWPlan{$Tr,$FORWARD,false,N}(X, Y, region, flags, timelimit)
         end
 
-        function plan_brfft{N}(X::StridedArray{$Tc,N}, d::Integer, region;
-                               flags::Integer=ESTIMATE,
-                               timelimit::Real=NO_TIMELIMIT)
+        function plan_brfft(X::StridedArray{$Tc,N}, d::Integer, region;
+                            flags::Integer=ESTIMATE,
+                            timelimit::Real=NO_TIMELIMIT) where N
             osize = brfft_output_size(X, d, region)
             Y = flags&ESTIMATE != 0 ? FakeArray($Tr,osize...) : Array{$Tr}(osize...)
 

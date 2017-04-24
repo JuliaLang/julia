@@ -38,7 +38,7 @@ for (pf, pfr, K, inplace) in ((:plan_dct, :plan_r2r, REDFT10, false),
     end
 end
 
-function plan_inv{T,K,inplace}(p::DCTPlan{T,K,inplace})
+function plan_inv(p::DCTPlan{T,K,inplace}) where {T,K,inplace}
     X = Array{T}(p.plan.sz)
     iK = inv_kind[K]
     DCTPlan{T,iK,inplace}(inplace ?
