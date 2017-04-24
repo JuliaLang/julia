@@ -619,7 +619,16 @@ function parse_cache_header(f::IO)
         push!(files, (String(read(f, n)), ntoh(read(f, Float64))))
     end
     @assert totbytes == 4 "header of cache file appears to be corrupt"
-    return modules, files
+    # read the list of modules that are required to be present during loading
+    required_modules = Dict{Symbol,UInt64}()
+    while true
+        n = ntoh(read(f, Int32))
+        n == 0 && break
+        sym = Symbol(read(f, n)) # module symbol
+        uuid = ntoh(read(f, UInt64)) # module UUID
+        required_modules[sym] = uuid
+    end
+    return modules, files, required_modules
 end
 
 function parse_cache_header(cachefile::String)
@@ -633,15 +642,7 @@ function parse_cache_header(cachefile::String)
 end
 
 function cache_dependencies(f::IO)
-    defs, files = parse_cache_header(f)
-    modules = []
-    while true
-        n = ntoh(read(f, Int32))
-        n == 0 && break
-        sym = Symbol(read(f, n)) # module symbol
-        uuid = ntoh(read(f, UInt64)) # module UUID (mostly just a timestamp)
-        push!(modules, (sym, uuid))
-    end
+    defs, files, modules = parse_cache_header(f)
     return modules, files
 end
 
@@ -662,7 +663,22 @@ function stale_cachefile(modpath::String, cachefile::String)
             DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile due to it containing an invalid cache header.")
             return true # invalid cache file
         end
-        modules, files = parse_cache_header(io)
+        modules, files, required_modules = parse_cache_header(io)
+
+        # Check if transitive dependencies can be fullfilled
+        for mod in keys(required_modules)
+            if mod == :Main || mod == :Core || mod == :Base
+                continue
+            # Module is already loaded
+            elseif isdefined(Main, mod)
+                continue
+            end
+            name = string(mod)
+            path = find_in_node_path(name, nothing, 1)
+            if path === nothing
+                return true # Won't be able to fullfill dependency
+            end
+        end
 
         # check if this file is going to provide one of our concrete dependencies
         # or if it provides a version that conflicts with our concrete dependencies
