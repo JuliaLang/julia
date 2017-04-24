@@ -670,7 +670,7 @@ function stale_cachefile(modpath::String, cachefile::String)
             if mod == :Main || mod == :Core || mod == :Base
                 continue
             # Module is already loaded
-            elseif isdefined(Main, mod)
+            elseif isbindingresolved(Main, mod)
                 continue
             end
             name = string(mod)
