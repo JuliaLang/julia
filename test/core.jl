@@ -4856,3 +4856,12 @@ let ni128 = sizeof(FP128test) ÷ sizeof(Int),
     end
     @test reinterpret(UInt128, arr[2].fp) == expected
 end
+
+# issue #21516
+struct T21516
+    x::Vector{Float64}
+    y::Vector{Float64}
+    # check that this definition works
+    T21516(x::Vector{T}, y::Vector{T}) where {T<:Real} = new(float.(x), float.(y))
+end
+@test isa(T21516([1],[2]).x, Vector{Float64})
