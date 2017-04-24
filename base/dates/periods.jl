@@ -426,8 +426,8 @@ for i = 1:length(fixedperiod_conversions)
     end
 end
 # have to declare thusly so that diagonal dispatch above takes precedence:
-(==)(x::T, y::S) where {T<:FixedPeriod, S<:FixedPeriod} = (==)(promote(x, y)...)
-Base.isless(x::T, y::S) where {T<:FixedPeriod, S<:FixedPeriod} = isless(promote(x, y)...)
+(==)(x::T, y::S) where {T<:FixedPeriod,S<:FixedPeriod} = (==)(promote(x, y)...)
+Base.isless(x::T, y::S) where {T<:FixedPeriod,S<:FixedPeriod} = isless(promote(x, y)...)
 
 # other periods with fixed conversions but which aren't fixed time periods
 const OtherPeriod = Union{Month, Year}
@@ -439,8 +439,8 @@ let vmax = typemax(Int64) ÷ 12, vmin = typemin(Int64) ÷ 12
 end
 Base.convert(::Type{Year}, x::Month) = Year(divexact(value(x), 12))
 Base.promote_rule(::Type{Year}, ::Type{Month}) = Month
-(==)(x::T, y::S) where {T<:OtherPeriod, S<:OtherPeriod} = (==)(promote(x, y)...)
-Base.isless(x::T, y::S) where {T<:OtherPeriod, S<:OtherPeriod} = isless(promote(x, y)...)
+(==)(x::T, y::S) where {T<:OtherPeriod,S<:OtherPeriod} = (==)(promote(x, y)...)
+Base.isless(x::T, y::S) where {T<:OtherPeriod,S<:OtherPeriod} = isless(promote(x, y)...)
 
 # truncating conversions to milliseconds and days:
 toms(c::Nanosecond)  = div(value(c), 1000000)

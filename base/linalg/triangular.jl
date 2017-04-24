@@ -493,7 +493,7 @@ end
 inv(A::UnitUpperTriangular{T}) where {T} = UnitUpperTriangular(A_ldiv_B!(A, eye(T, size(A, 1))))
 inv(A::UnitLowerTriangular{T}) where {T} = UnitLowerTriangular(A_ldiv_B!(A, eye(T, size(A, 1))))
 
-errorbounds(A::AbstractTriangular{T,<:StridedMatrix}, X::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:Union{BigFloat, Complex{BigFloat}}} =
+errorbounds(A::AbstractTriangular{T,<:StridedMatrix}, X::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:Union{BigFloat,Complex{BigFloat}}} =
     error("not implemented yet! Please submit a pull request.")
 function errorbounds(A::AbstractTriangular{TA,<:StridedMatrix}, X::StridedVecOrMat{TX}, B::StridedVecOrMat{TB}) where {TA<:Number,TX<:Number,TB<:Number}
     TAXB = promote_type(TA, TB, TX, Float32)

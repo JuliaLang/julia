@@ -34,9 +34,8 @@ Returns a 3-element tuple `(values, pos, num_parsed)`:
 * `num_parsed::Int`: The number of values which were parsed and stored within `values`.
   Useful for distinguishing parsed values from default values.
 """
-@generated function tryparsenext_core(
-    str::AbstractString, pos::Int, len::Int, df::DateFormat, raise::Bool=false,
-)
+@generated function tryparsenext_core(str::AbstractString, pos::Int, len::Int,
+                                      df::DateFormat, raise::Bool=false)
     directives = _directives(df)
     letters = character_codes(directives)
 
@@ -125,9 +124,8 @@ Returns a 2-element tuple `(values, pos)`:
   the passed in type.
 * `pos::Int`: The character index at which parsing stopped.
 """
-@generated function tryparsenext_internal(
-    ::Type{T}, str::AbstractString, pos::Int, len::Int, df::DateFormat, raise::Bool=false,
-) where T<:TimeType
+@generated function tryparsenext_internal(::Type{T}, str::AbstractString, pos::Int, len::Int,
+                                          df::DateFormat, raise::Bool=false) where T<:TimeType
     letters = character_codes(df)
 
     tokens = Type[CONVERSION_SPECIFIERS[letter] for letter in letters]
@@ -267,13 +265,13 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
     throw(ArgumentError("Invalid DateTime string"))
 end
 
-function Base.parse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T),) where T<:TimeType
+function Base.parse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
     pos, len = start(str), endof(str)
     values, pos = tryparsenext_internal(T, str, pos, len, df, true)
     T(unsafe_get(values)...)
 end
 
-function Base.tryparse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T),) where T<:TimeType
+function Base.tryparse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
     pos, len = start(str), endof(str)
     values, pos = tryparsenext_internal(T, str, pos, len, df, false)
     if isnull(values)

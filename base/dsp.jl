@@ -141,7 +141,7 @@ function conv(u::StridedVector{T}, v::StridedVector{T}) where T<:Base.LinAlg.Bla
     end
     return y[1:n]
 end
-conv(u::StridedVector{T}, v::StridedVector{T}) where {T<:Integer} = round.(Int,conv(float(u), float(v)))
+conv(u::StridedVector{T}, v::StridedVector{T}) where {T<:Integer} = round.(Int, conv(float(u), float(v)))
 conv(u::StridedVector{<:Integer}, v::StridedVector{<:Base.LinAlg.BlasFloat}) = conv(float(u), v)
 conv(u::StridedVector{<:Base.LinAlg.BlasFloat}, v::StridedVector{<:Integer}) = conv(u, float(v))
 
@@ -185,9 +185,9 @@ function conv2(A::StridedMatrix{T}, B::StridedMatrix{T}) where T
     return C
 end
 conv2(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:Integer} =
-    round.(Int,conv2(float(A), float(B)))
+    round.(Int, conv2(float(A), float(B)))
 conv2(u::StridedVector{T}, v::StridedVector{T}, A::StridedMatrix{T}) where {T<:Integer} =
-    round.(Int,conv2(float(u), float(v), float(A)))
+    round.(Int, conv2(float(u), float(v), float(A)))
 
 """
     xcorr(u,v)
