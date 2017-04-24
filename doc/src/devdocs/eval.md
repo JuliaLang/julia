@@ -62,12 +62,12 @@ The 10,000 foot view of the whole process is as follows:
 The Julia parser is a small lisp program written in femtolisp, the source-code for which is distributed
 inside Julia in [src/flisp](https://github.com/JuliaLang/julia/tree/master/src/flisp).
 
-The interface functions for this are primarily defined in [jlfrontend.scm](https://github.com/JuliaLang/julia/blob/master/src/jlfrontend.scm).
+The interface functions for this are primarily defined in [`jlfrontend.scm`](https://github.com/JuliaLang/julia/blob/master/src/jlfrontend.scm).
 The code in [`ast.c`](https://github.com/JuliaLang/julia/blob/master/src/ast.c) handles this handoff
 on the Julia side.
 
-The other relevant files at this stage are [julia-parser.scm](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm),
-which handles tokenizing Julia code and turning it into an AST, and [julia-syntax.scm](https://github.com/JuliaLang/julia/blob/master/src/julia-syntax.scm),
+The other relevant files at this stage are [`julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm),
+which handles tokenizing Julia code and turning it into an AST, and [`julia-syntax.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-syntax.scm),
 which handles transforming complex AST representations into simpler, "lowered" AST representations
 which are more suitable for analysis and execution.
 
