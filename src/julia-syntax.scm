@@ -763,12 +763,20 @@
          (curlyargs  (if curly? (cddr name) '()))
          (name       (if curly? (cadr name) name)))
     (cond ((not (eq? name Tname))
-           `(,keyword ,(with-wheres `(call (curly ,name ,@curlyargs) ,@sig) wheres)
+           `(,keyword ,(with-wheres `(call ,(if curly?
+                                                `(curly ,name ,@curlyargs)
+                                                name)
+                                           ,@sig)
+                                    wheres)
                       ;; pass '() in order to require user-specified parameters with
                       ;; new{...} inside a non-ctor inner definition.
                       ,(ctor-body body '())))
           (wheres
-           `(,keyword (where (call (curly ,name ,@curlyargs) ,@sig) ,@wheres)
+           `(,keyword ,(with-wheres `(call ,(if curly?
+                                                `(curly ,name ,@curlyargs)
+                                                name)
+                                           ,@sig)
+                                    wheres)
                       ,(ctor-body body curlyargs)))
           (else
            (let* ((temp   (ctor-signature name params bounds curlyargs sig))
