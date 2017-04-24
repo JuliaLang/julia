@@ -157,7 +157,7 @@ function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false
 
     sysimg_file = "$sysimg_path.$(Libdl.dlext)"
     info("Linking sys.$(Libdl.dlext)")
-    info("$cc $FLAGS -o $sysimg_file $sysimg_path.o")
+    info("$cc $(join(FLAGS, ' ')) -o $sysimg_file $sysimg_path.o")
     # Windows has difficulties overwriting a file in use so we first link to a temp file
     if is_windows() && isfile(sysimg_file)
         if success(pipeline(`$cc $FLAGS -o $sysimg_path.tmp $sysimg_path.o`; stdout=STDOUT, stderr=STDERR))
