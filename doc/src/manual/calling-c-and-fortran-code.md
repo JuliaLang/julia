@@ -454,12 +454,12 @@ in Julia:
 struct B
     A::NTuple{3, CInt}
 end
-b_a_2 = B.A[2]
+b_a_2 = B.A[3]  # note the difference in indexing (1-based in Julia, 0-based in C)
 ```
 
 Arrays of unknown size (C99-compliant variable length structs specified by `[]` or `[0]`) are not directly supported.
 Often the best way to deal with these is to deal with the byte offsets directly.
-For example, if a c-library declared a proper string type and returned a pointer to it:
+For example, if a C library declared a proper string type and returned a pointer to it:
 
 ```c
 struct String {
