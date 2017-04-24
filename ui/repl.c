@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
   repl.c
@@ -52,7 +52,7 @@ static int exec_program(char *program)
         jl_value_t *errs = jl_stderr_obj();
         jl_value_t *e = ptls->exception_in_transit;
         // Manually save and restore the backtrace so that we print the original
-        // one instead of the one caused by `jl_show`.
+        // one instead of the one caused by `show`.
         // We can't use safe_restore since that will cause any error
         // (including the ones that would have been caught) to abort.
         uintptr_t *volatile bt_data = NULL;
@@ -61,7 +61,7 @@ static int exec_program(char *program)
             if (errs) {
                 bt_data = (uintptr_t*)malloc(bt_size * sizeof(void*));
                 memcpy(bt_data, ptls->bt_data, bt_size * sizeof(void*));
-                jl_show(errs, e);
+                jl_call2(jl_get_function(jl_base_module, "show"), errs, e);
                 jl_printf(JL_STDERR, "\n");
                 free(bt_data);
             }
@@ -87,7 +87,7 @@ static int exec_program(char *program)
 void jl_lisp_prompt();
 
 #ifndef _WIN32
-int jl_repl_raise_sigtstp(void)
+JL_DLLEXPORT int jl_repl_raise_sigtstp(void)
 {
     return raise(SIGTSTP);
 }

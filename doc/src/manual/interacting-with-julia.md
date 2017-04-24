@@ -10,7 +10,7 @@ on the executable:
 $ julia
                _
    _       _ _(_)_     |  A fresh approach to technical computing
-  (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
+  (_)     | (_) (_)    |  Documentation: https://docs.julialang.org
    _ _   _| |_  __ _   |  Type "?help" for help.
   | | | | | | |/ _` |  |
   | | |_| | | | (_| |  |  Version 0.6.0-dev.2493 (2017-01-31 18:53 UTC)
@@ -189,14 +189,14 @@ history without prefix search, one could put the following code in `.juliarc.jl`
 import Base: LineEdit, REPL
 
 const mykeys = Dict{Any,Any}(
-  # Up Arrow
-  "\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, LineEdit.mode(s).hist)),
-  # Down Arrow
-  "\e[B" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
+    # Up Arrow
+    "\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, LineEdit.mode(s).hist)),
+    # Down Arrow
+    "\e[B" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
 )
 
 function customize_keys(repl)
-  repl.interface = REPL.setup_interface(repl; extra_repl_keymap = mykeys)
+    repl.interface = REPL.setup_interface(repl; extra_repl_keymap = mykeys)
 end
 
 atreplinit(customize_keys)

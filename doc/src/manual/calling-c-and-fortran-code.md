@@ -82,7 +82,7 @@ Note that the argument type tuple must be written as `(Cstring,)`, rather than `
 is because `(Cstring)` is just the expression `Cstring` surrounded by parentheses, rather than
 a 1-tuple containing `Cstring`:
 
-```julia
+```jldoctest
 julia> (Cstring)
 Cstring
 
@@ -95,16 +95,16 @@ uses in Julia functions that set up arguments and then check for errors in whate
 C or Fortran function indicates them, propagating to the Julia caller as exceptions. This is especially
 important since C and Fortran APIs are notoriously inconsistent about how they indicate error
 conditions. For example, the `getenv` C library function is wrapped in the following Julia function,
-which is a simplified version of the actual definition from [env.jl](https://github.com/JuliaLang/julia/blob/master/base/env.jl):
+which is a simplified version of the actual definition from [`env.jl`](https://github.com/JuliaLang/julia/blob/master/base/env.jl):
 
 ```julia
 function getenv(var::AbstractString)
-  val = ccall((:getenv, "libc"),
-              Cstring, (Cstring,), var)
-  if val == C_NULL
-    error("getenv: undefined variable: ", var)
-  end
-  unsafe_string(val)
+    val = ccall((:getenv, "libc"),
+                Cstring, (Cstring,), var)
+    if val == C_NULL
+        error("getenv: undefined variable: ", var)
+    end
+    unsafe_string(val)
 end
 ```
 
@@ -149,7 +149,7 @@ throw a conversion error.
 It is possible to pass Julia functions to native C functions that accept function pointer arguments.
 For example, to match C prototypes of the form:
 
-```
+```c
 typedef returntype (*functiontype)(argumenttype,...)
 ```
 
@@ -162,7 +162,7 @@ Julia library function. Arguments to [`cfunction()`](@ref) are as follows:
 
 A classic example is the standard C library `qsort` function, declared as:
 
-```
+```c
 void qsort(void *base, size_t nmemb, size_t size,
            int(*compare)(const void *a, const void *b));
 ```
@@ -175,10 +175,11 @@ using the `qsort` function (rather than Julia's built-in `sort` function). Befor
 calling `qsort` and passing arguments, we need to write a comparison function that works for some
 arbitrary type T:
 
-```julia
-function mycompare{T}(a::T, b::T)
-    return convert(Cint, a < b ? -1 : a > b ? +1 : 0)::Cint
-end
+```jldoctest mycompare
+julia> function mycompare(a::T, b::T) where T
+           return convert(Cint, a < b ? -1 : a > b ? +1 : 0)::Cint
+       end
+mycompare (generic function with 1 method)
 ```
 
 Notice that we have to be careful about the return type: `qsort` expects a function returning
@@ -186,8 +187,8 @@ a C `int`, so we must be sure to return `Cint` via a call to `convert` and a `ty
 
 In order to pass this function to C, we obtain its address using the function `cfunction`:
 
-```julia
-const mycompare_c = cfunction(mycompare, Cint, (Ref{Cdouble}, Ref{Cdouble}))
+```jldoctest mycompare
+julia> const mycompare_c = cfunction(mycompare, Cint, (Ref{Cdouble}, Ref{Cdouble}));
 ```
 
 [`cfunction()`](@ref) accepts three arguments: the Julia function (`mycompare`), the return type
@@ -196,13 +197,26 @@ elements.
 
 The final call to `qsort` looks like this:
 
-```julia
-A = [1.3, -2.7, 4.4, 3.1]
-ccall(:qsort, Void, (Ptr{Cdouble}, Csize_t, Csize_t, Ptr{Void}),
-      A, length(A), sizeof(eltype(A)), mycompare_c)
+```jldoctest mycompare
+julia> A = [1.3, -2.7, 4.4, 3.1]
+4-element Array{Float64,1}:
+  1.3
+ -2.7
+  4.4
+  3.1
+
+julia> ccall(:qsort, Void, (Ptr{Cdouble}, Csize_t, Csize_t, Ptr{Void}),
+             A, length(A), sizeof(eltype(A)), mycompare_c)
+
+julia> A
+4-element Array{Float64,1}:
+ -2.7
+  1.3
+  3.1
+  4.4
 ```
 
-After this executes, `A` is changed to the sorted array `[-2.7, 1.3, 3.1, 4.4]`. Note that Julia
+As can be seen, `A` is changed to the sorted array `[-2.7, 1.3, 3.1, 4.4]`. Note that Julia
 knows how to convert an array into a `Ptr{Cdouble}`, how to compute the size of a type in bytes
 (identical to C's `sizeof` operator), and so on. For fun, try inserting a `println("mycompare($a,$b)")`
 line into `mycompare`, which will allow you to see the comparisons that `qsort` is performing
@@ -250,16 +264,15 @@ First, a review of some relevant Julia type terminology:
 
 | Syntax / Keyword              | Example                                     | Description                                                                                                                                                                                                                                                                    |
 |:----------------------------- |:------------------------------------------- |:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `type`                        | `String`                                    | "Leaf Type" :: A group of related data that includes a type-tag, is managed by the Julia GC, and is defined by object-identity. The type parameters of a leaf type must be fully defined (no `TypeVars` are allowed) in order for the instance to be constructed.              |
-| `abstract`                    | `Any`, `AbstractArray{T, N}`, `Complex{T}`  | "Super Type" :: A super-type (not a leaf-type) that cannot be instantiated, but can be used to describe a group of types.                                                                                                                                                      |
-| `{T}`                         | `Vector{Int}`                               | "Type Parameter" :: A specialization of a type (typically used for dispatch or storage optimization).                                                                                                                                                                          |
+| `mutable struct`              | `String`                                    | "Leaf Type" :: A group of related data that includes a type-tag, is managed by the Julia GC, and is defined by object-identity. The type parameters of a leaf type must be fully defined (no `TypeVars` are allowed) in order for the instance to be constructed.              |
+| `abstract type`               | `Any`, `AbstractArray{T, N}`, `Complex{T}`  | "Super Type" :: A super-type (not a leaf-type) that cannot be instantiated, but can be used to describe a group of types.                                                                                                                                                      |
+| `T{A}`                        | `Vector{Int}`                               | "Type Parameter" :: A specialization of a type (typically used for dispatch or storage optimization).                                                                                                                                                                          |
 |                               |                                             | "TypeVar" :: The `T` in the type parameter declaration is referred to as a TypeVar (short for type variable).                                                                                                                                                                  |
-| `bitstype`                    | `Int`, `Float64`                            | "Bits Type" :: A type with no fields, but a size. It is stored and defined by-value.                                                                                                                                                                                           |
-| `immutable`                   | `Pair{Int, Int}`                            | "Immutable" :: A type with all fields defined to be constant. It is defined by-value. And may be stored with a type-tag.                                                                                                                                                       |
-|                               | `Complex128` (`isbits`)                     | "Is-Bits"   :: A `bitstype`, or an `immutable` type where all fields are other `isbits` types. It is defined by-value, and is stored without a type-tag.                                                                                                                       |
-| `type ...; end`               | `nothing`                                   | "Singleton" :: a Leaf Type or Immutable with no fields.                                                                                                                                                                                                                        |
-| `(...)` or `tuple(...)`       | `(1, 2, 3)`                                 | "Tuple" :: an immutable data-structure similar to an anonymous immutable type, or a constant array. Represented as either an array or a struct.                                                                                                                                |
-| `typealias`                   | Not applicable here                         | Type aliases, and other similar mechanisms of doing type indirection, are resolved to their base type (this includes assigning a type to another name, or getting the type out of a function call).                                                                            |
+| `primitive type`              | `Int`, `Float64`                            | "Primitive Type" :: A type with no fields, but a size. It is stored and defined by-value.                                                                                                                                                                                           |
+| `struct`                      | `Pair{Int, Int}`                            | "Struct" :: A type with all fields defined to be constant. It is defined by-value, and may be stored with a type-tag.                                                                                                                                                       |
+|                               | `Complex128` (`isbits`)                     | "Is-Bits"   :: A `primitive type`, or a `struct` type where all fields are other `isbits` types. It is defined by-value, and is stored without a type-tag.                                                                                                                       |
+| `struct ...; end`             | `nothing`                                   | "Singleton" :: a Leaf Type or Struct with no fields.                                                                                                                                                                                                                        |
+| `(...)` or `tuple(...)`       | `(1, 2, 3)`                                 | "Tuple" :: an immutable data-structure similar to an anonymous struct type, or a constant array. Represented as either an array or a struct.                                                                                                                                |
 
 ### Bits Types:
 
@@ -396,7 +409,7 @@ checks and is only meant to improve readability of the call.
     C functions that take an argument of the type `char**` can be called by using a `Ptr{Ptr{UInt8}}`
     type within Julia. For example, C functions of the form:
 
-    ```
+    ```c
     int main(int argc, char **argv);
     ```
 
@@ -413,13 +426,13 @@ checks and is only meant to improve readability of the call.
 ### Struct Type correspondences
 
 Composite types, aka `struct` in C or `TYPE` in Fortran90 (or `STRUCTURE` / `RECORD` in some variants
-of F77), can be mirrored in Julia by creating a `type` or `immutable` definition with the same
+of F77), can be mirrored in Julia by creating a `struct` definition with the same
 field layout.
 
 When used recursively, `isbits` types are stored inline. All other types are stored as a pointer
 to the data. When mirroring a struct used by-value inside another struct in C, it is imperative
 that you do not attempt to manually copy the fields over, as this will not preserve the correct
-field alignment. Instead, declare an immutable `isbits` type and use that instead. Unnamed structs
+field alignment. Instead, declare an `isbits` struct type and use that instead. Unnamed structs
 are not possible in the translation to Julia.
 
 Packed structs and union declarations are not supported by Julia.
@@ -438,17 +451,17 @@ struct B {
 b_a_2 = B.A[2];
 
 in Julia:
-type B
+struct B
     A::NTuple{3, CInt}
 end
-b_a_2 = B.A[2]
+b_a_2 = B.A[3]  # note the difference in indexing (1-based in Julia, 0-based in C)
 ```
 
 Arrays of unknown size (C99-compliant variable length structs specified by `[]` or `[0]`) are not directly supported.
 Often the best way to deal with these is to deal with the byte offsets directly.
-For example, if a c-library declared a proper string type and returned a pointer to it:
+For example, if a C library declared a proper string type and returned a pointer to it:
 
-```
+```c
 struct String {
     int strlen;
     char data[];
@@ -457,7 +470,7 @@ struct String {
 
 In Julia, we can access the parts independently to make a copy of that string:
 
-```
+```julia
 str = from_c::Ptr{Void}
 len = unsafe_load(Ptr{Cint}(str))
 unsafe_string(str + Core.sizeof(Cint), len)
@@ -476,9 +489,9 @@ However, while the type layout must be known statically to compute the `ccall` A
 the static parameters of the function are considered to be part of this static environment.
 The static parameters of the function may be used as type parameters in the `ccall` signature,
 as long as they don't affect the layout of the type.
-For example, `f{T}(x::T) = ccall(:valid, Ptr{T}, (Ptr{T},), x)`
-is valid, since `Ptr` is always a word-size bitstype.
-But, `g{T}(x::T) = ccall(:notvalid, T, (T,), x)`
+For example, `f(x::T) where {T} = ccall(:valid, Ptr{T}, (Ptr{T},), x)`
+is valid, since `Ptr` is always a word-size primitive type.
+But, `g(x::T) where {T} = ccall(:notvalid, T, (T,), x)`
 is not valid, since the type layout of `T` is not known statically.
 
 ### SIMD Values
@@ -490,12 +503,12 @@ Julia type is a homogeneous tuple of `VecElement` that naturally maps to the SIM
 
 >   * The tuple must be the same size as the SIMD type. For example, a tuple representing an `__m128`
 >     on x86 must have a size of 16 bytes.
->   * The element type of the tuple must be an instance of `VecElement{T}` where `T` is a bitstype that
+>   * The element type of the tuple must be an instance of `VecElement{T}` where `T` is a primitive type that
 >     is 1, 2, 4 or 8 bytes.
 
 For instance, consider this C routine that uses AVX intrinsics:
 
-```
+```c
 #include <immintrin.h>
 
 __m256 dist( __m256 a, __m256 b ) {
@@ -507,7 +520,7 @@ __m256 dist( __m256 a, __m256 b ) {
 The following Julia code calls `dist` using `ccall`:
 
 ```julia
-typealias m256 NTuple{8, VecElement{Float32}}
+const m256 = NTuple{8, VecElement{Float32}}
 
 a = m256(ntuple(i -> VecElement(sin(Float32(i))), 8))
 b = m256(ntuple(i -> VecElement(cos(Float32(i))), 8))
@@ -540,7 +553,7 @@ pointers, `Ref{T}` should generally be used for the types of input arguments, al
 of pointers to memory managed by either Julia or C through the implicit call to [`Base.cconvert()`](@ref).
  In contrast, pointers returned by the C function called should be declared to be of output type
 `Ptr{T}`, reflecting that the memory pointed to is managed by C only. Pointers contained in C
-structs should be represented as fields of type `Ptr{T}` within the corresponding Julia immutable
+structs should be represented as fields of type `Ptr{T}` within the corresponding Julia struct
 types designed to mimic the internal structure of corresponding C structs.
 
 In Julia code wrapping calls to external Fortran routines, all input arguments should be declared
@@ -664,20 +677,20 @@ arguments, as noted above). The following example computes a dot product using a
 
 ```julia
 function compute_dot(DX::Vector{Float64}, DY::Vector{Float64})
-  assert(length(DX) == length(DY))
-  n = length(DX)
-  incx = incy = 1
-  product = ccall((:ddot_, "libLAPACK"),
-                  Float64,
-                  (Ptr{Int32}, Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32}),
-                  &n, DX, &incx, DY, &incy)
-  return product
+    @assert length(DX) == length(DY)
+    n = length(DX)
+    incx = incy = 1
+    product = ccall((:ddot_, "libLAPACK"),
+                    Float64,
+                    (Ptr{Int32}, Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32}),
+                    &n, DX, &incx, DY, &incy)
+    return product
 end
 ```
 
 The meaning of prefix `&` is not quite the same as in C. In particular, any changes to the referenced
 variables will not be visible in Julia unless the type is mutable (declared via `type`). However,
-even for immutable types it will not cause any harm for called functions to attempt such modifications
+even for immutable structs it will not cause any harm for called functions to attempt such modifications
 (that is, writing through the passed pointers). Moreover, `&` may be used with any expression,
 such as `&0` or `&f(x)`.
 
@@ -689,7 +702,7 @@ converted to type `T`.
 Here is a simple example of a C wrapper that returns a `Ptr` type:
 
 ```julia
-type gsl_permutation
+mutable struct gsl_permutation
 end
 
 # The corresponding C signature is
@@ -834,8 +847,8 @@ case, the expression must evaluate to a `Ptr`, which will be used as the address
 function to call. This behavior occurs when the first [`ccall`](@ref) argument contains references
 to non-constants, such as local variables, function arguments, or non-constant globals.
 
-For example, you might lookup the function via `dlsym`, then cache it in a global variable for
-that session. For example:
+For example, you might look up the function via `dlsym`, then cache it in a global
+variable for that session. For example:
 
 ```julia
 macro dlsym(func, lib)
@@ -845,15 +858,15 @@ macro dlsym(func, lib)
     quote
         let $zlocal::Ptr{Void} = $z::Ptr{Void}
             if $zlocal == C_NULL
-               $zlocal = dlsym($(esc(lib))::Ptr{Void}, $(esc(func)))
-               global $z = $zlocal
+                $zlocal = dlsym($(esc(lib))::Ptr{Void}, $(esc(func)))
+                global $z = $zlocal
             end
             $zlocal
         end
     end
 end
 
-mylibvar = dlopen("mylib")
+mylibvar = Libdl.dlopen("mylib")
 ccall(@dlsym("myfunc", mylibvar), Void, ())
 ```
 
@@ -923,12 +936,12 @@ back to a Julia object reference by [`unsafe_pointer_to_objref(ptr)`](@ref). (Ju
 can be converted to `jl_value_t*` pointers, as `Ptr{Void}`, by calling [`pointer_from_objref(v)`](@ref).)
 
 The reverse operation (writing data to a `Ptr{T}`), can be performed using [`unsafe_store!(ptr, value, [index])`](@ref).
- Currently, this is only supported for bitstypes or other pointer-free (`isbits`) immutable types.
+Currently, this is only supported for primitive types or other pointer-free (`isbits`) immutable struct types.
 
 Any operation that throws an error is probably currently unimplemented and should be posted as
 a bug so that it can be resolved.
 
-If the pointer of interest is a plain-data array (bitstype or immutable), the function [`unsafe_wrap(Array, ptr,dims,[own])`](@ref)
+If the pointer of interest is a plain-data array (primitive type or immutable struct), the function [`unsafe_wrap(Array, ptr,dims,[own])`](@ref)
 may be more useful. The final parameter should be true if Julia should "take ownership" of the
 underlying buffer and call `free(ptr)` when the returned `Array` object is finalized.  If the
 `own` parameter is omitted or false, the caller must ensure the buffer remains in existence until
@@ -952,7 +965,7 @@ wait(cond)
 ```
 
 The callback you pass to C should only execute a [`ccall`](@ref) to `:uv_async_send`, passing
-`cb.handle` as the argument, taking care to avoid any allocations or other interactions with the
+`cond.handle` as the argument, taking care to avoid any allocations or other interactions with the
 Julia runtime.
 
 Note that events may be coalesced, so multiple calls to `uv_async_send` may result in a single wakeup
@@ -960,8 +973,9 @@ notification to the condition.
 
 ## More About Callbacks
 
-For more details on how to pass callbacks to C libraries, see this [blog post](http://julialang.org/blog/2013/05/callback).
+For more details on how to pass callbacks to C libraries, see this [blog post](https://julialang.org/blog/2013/05/callback).
 
 ## C++
 
-For direct C++ interfacing, see the [Cxx](https://github.com/Keno/Cxx.jl) package. For tools to create C++ bindings, see the [CxxWrap](https://github.com/JuliaInterop/CxxWrap.jl) package.
+For direct C++ interfacing, see the [Cxx](https://github.com/Keno/Cxx.jl) package. For tools to create C++
+bindings, see the [CxxWrap](https://github.com/JuliaInterop/CxxWrap.jl) package.

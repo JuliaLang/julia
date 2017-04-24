@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
     Ptr{T}
@@ -20,16 +20,16 @@ const C_NULL = bitcast(Ptr{Void}, 0)
 # TODO: deprecate these conversions. C doesn't even allow them.
 
 # pointer to integer
-convert{T<:Union{Int,UInt}}(::Type{T}, x::Ptr) = bitcast(T, x)
-convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T, convert(UInt, x))
+convert(::Type{T}, x::Ptr) where {T<:Union{Int,UInt}} = bitcast(T, x)
+convert(::Type{T}, x::Ptr) where {T<:Integer} = convert(T, convert(UInt, x))
 
 # integer to pointer
-convert{T}(::Type{Ptr{T}}, x::UInt) = bitcast(Ptr{T}, x)
-convert{T}(::Type{Ptr{T}}, x::Int) = bitcast(Ptr{T}, x)
+convert(::Type{Ptr{T}}, x::UInt) where {T} = bitcast(Ptr{T}, x)
+convert(::Type{Ptr{T}}, x::Int) where {T} = bitcast(Ptr{T}, x)
 
 # pointer to pointer
-convert{T}(::Type{Ptr{T}}, p::Ptr{T}) = p
-convert{T}(::Type{Ptr{T}}, p::Ptr) = bitcast(Ptr{T}, p)
+convert(::Type{Ptr{T}}, p::Ptr{T}) where {T} = p
+convert(::Type{Ptr{T}}, p::Ptr) where {T} = bitcast(Ptr{T}, p)
 
 # object to pointer (when used with ccall)
 unsafe_convert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), x)
@@ -40,9 +40,9 @@ unsafe_convert(::Type{Ptr{Int8}}, s::String) = convert(Ptr{Int8}, pointer_from_o
 cconvert(::Type{Ptr{UInt8}}, s::AbstractString) = String(s)
 cconvert(::Type{Ptr{Int8}}, s::AbstractString) = String(s)
 
-unsafe_convert{T}(::Type{Ptr{T}}, a::Array{T}) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
-unsafe_convert{S,T}(::Type{Ptr{S}}, a::AbstractArray{T}) = convert(Ptr{S}, unsafe_convert(Ptr{T}, a))
-unsafe_convert{T}(::Type{Ptr{T}}, a::AbstractArray{T}) = error("conversion to pointer not defined for $(typeof(a))")
+unsafe_convert(::Type{Ptr{T}}, a::Array{T}) where {T} = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
+unsafe_convert(::Type{Ptr{S}}, a::AbstractArray{T}) where {S,T} = convert(Ptr{S}, unsafe_convert(Ptr{T}, a))
+unsafe_convert(::Type{Ptr{T}}, a::AbstractArray{T}) where {T} = error("conversion to pointer not defined for $(typeof(a))")
 
 # unsafe pointer to array conversions
 """
@@ -67,7 +67,7 @@ function unsafe_wrap{T}(::Union{Type{Array},Type{Array{T}},Type{Array{T,1}}},
     ccall(:jl_ptr_to_array_1d, Array{T,1},
           (Any, Ptr{Void}, Csize_t, Cint), Array{T,1}, p, d, own)
 end
-unsafe_wrap{N,I<:Integer}(Atype::Type, p::Ptr, dims::NTuple{N,I}, own::Bool=false) =
+unsafe_wrap{N}(Atype::Type, p::Ptr, dims::NTuple{N,<:Integer}, own::Bool=false) =
     unsafe_wrap(Atype, p, convert(Tuple{Vararg{Int}}, dims), own)
 
 """
@@ -115,7 +115,7 @@ remains referenced for the whole time that the `Ptr` will be used.
 pointer_from_objref(x::ANY) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
 data_pointer_from_objref(x::ANY) = pointer_from_objref(x)::Ptr{Void}
 
-eltype{T}(::Type{Ptr{T}}) = T
+eltype(::Type{Ptr{T}}) where {T} = T
 
 ## limited pointer arithmetic & comparison ##
 

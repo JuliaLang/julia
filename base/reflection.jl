@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # name and module reflection
 
@@ -18,6 +18,7 @@ module_name(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
     module_parent(m::Module) -> Module
 
 Get a module's enclosing `Module`. `Main` is its own parent, as is `LastMain` after `workspace()`.
+
 ```jldoctest
 julia> module_parent(Main)
 Main
@@ -118,7 +119,7 @@ julia> fieldname(SparseMatrixCSC,5)
 """
 fieldname(t::DataType, i::Integer) = t.name.names[i]::Symbol
 fieldname(t::UnionAll, i::Integer) = fieldname(unwrap_unionall(t), i)
-fieldname{T<:Tuple}(t::Type{T}, i::Integer) = i < 1 || i > nfields(t) ? throw(BoundsError(t, i)) : Int(i)
+fieldname(t::Type{<:Tuple}, i::Integer) = i < 1 || i > nfields(t) ? throw(BoundsError(t, i)) : Int(i)
 
 """
     fieldnames(x::DataType)
@@ -141,7 +142,7 @@ function fieldnames(v)
 end
 fieldnames(t::DataType) = Symbol[fieldname(t, n) for n in 1:nfields(t)]
 fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
-fieldnames{T<:Tuple}(t::Type{T}) = Int[n for n in 1:nfields(t)]
+fieldnames(t::Type{<:Tuple}) = Int[n for n in 1:nfields(t)]
 
 """
     Base.datatype_name(t) -> Symbol
@@ -172,7 +173,7 @@ isconst(m::Module, s::Symbol) =
 # return an integer such that object_id(x)==object_id(y) if x===y
 object_id(x::ANY) = ccall(:jl_object_id, UInt, (Any,), x)
 
-immutable DataTypeLayout
+struct DataTypeLayout
     nfields::UInt32
     alignment::UInt32
     # alignment : 28;
@@ -184,13 +185,13 @@ end
 
 # type predicates
 datatype_alignment(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
-    Int(unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment & 0x0FFFFFFF)
+    Int(unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment & 0x1FF)
 
 datatype_haspadding(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
-    (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 28) & 1 == 1
+    (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 9) & 1 == 1
 
 datatype_pointerfree(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
-    (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 29) & 1 == 1
+    (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 10) & 0xFFFFF == 0
 
 datatype_fielddesc_type(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
     (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 30) & 3
@@ -198,9 +199,17 @@ datatype_fielddesc_type(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefErro
 """
     isimmutable(v)
 
-Return `true` iff value `v` is immutable.  See [Immutable Composite Types](@ref)
+Return `true` iff value `v` is immutable.  See [Mutable Composite Types](@ref)
 for a discussion of immutability. Note that this function works on values, so if you give it
 a type, it will tell you that a value of `DataType` is mutable.
+
+```jldoctest
+julia> isimmutable(1)
+true
+
+julia> isimmutable([1,2])
+false
+```
 """
 isimmutable(x::ANY) = (@_pure_meta; (isa(x,Tuple) || !typeof(x).mutable))
 isstructtype(t::DataType) = (@_pure_meta; nfields(t) != 0 || (t.size==0 && !t.abstract))
@@ -230,6 +239,20 @@ isbits(x) = (@_pure_meta; isbits(typeof(x)))
 
 Determine whether `T`'s only subtypes are itself and `Union{}`. This means `T` is
 a concrete type that can have instances.
+
+```jldoctest
+julia> isleaftype(Complex)
+false
+
+julia> isleaftype(Complex{Float32})
+true
+
+julia> isleaftype(Vector{Complex})
+true
+
+julia> isleaftype(Vector{Complex{Float32}})
+true
+```
 """
 isleaftype(t::ANY) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
 
@@ -238,6 +261,14 @@ isleaftype(t::ANY) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
 
 Determine whether `T` was declared as an abstract type (i.e. using the
 `abstract` keyword).
+
+```jldoctest
+julia> Base.isabstract(AbstractArray)
+true
+
+julia> Base.isabstract(Vector)
+false
+```
 """
 function isabstract(t::ANY)
     @_pure_meta
@@ -249,8 +280,9 @@ end
     Base.parameter_upper_bound(t::UnionAll, idx)
 
 Determine the upper bound of a type parameter in the underlying type. E.g.:
+
 ```jldoctest
-julia> immutable Foo{T<:AbstractFloat, N}
+julia> struct Foo{T<:AbstractFloat, N}
            x::Tuple{T, N}
        end
 
@@ -279,7 +311,7 @@ typeseq(a::ANY,b::ANY) = (@_pure_meta; a<:b && b<:a)
     fieldoffset(type, i)
 
 The byte offset of field `i` of a type relative to the data start. For example, we could
-use it in the following manner to summarize information about a struct type:
+use it in the following manner to summarize information about a struct:
 
 ```jldoctest
 julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:nfields(T)];
@@ -306,6 +338,19 @@ fieldoffset(x::DataType, idx::Integer) = (@_pure_meta; ccall(:jl_get_field_offse
     fieldtype(T, name::Symbol | index::Int)
 
 Determine the declared type of a field (specified by name or index) in a composite DataType `T`.
+
+```jldoctest
+julia> immutable Foo
+           x::Int64
+           y::String
+       end
+
+julia> fieldtype(Foo, :x)
+Int64
+
+julia> fieldtype(Foo, 2)
+String
+```
 """
 fieldtype
 
@@ -314,6 +359,21 @@ fieldtype
 
 Get the index of a named field, throwing an error if the field does not exist (when err==true)
 or returning 0 (when err==false).
+
+```jldoctest
+julia> immutable Foo
+           x::Int64
+           y::String
+       end
+
+julia> Base.fieldindex(Foo, :z)
+ERROR: type Foo has no field z
+Stacktrace:
+ [1] fieldindex at ./reflection.jl:319 [inlined] (repeats 2 times)
+
+julia> Base.fieldindex(Foo, :z, false)
+0
+```
 """
 function fieldindex(T::DataType, name::Symbol, err::Bool=true)
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
@@ -328,6 +388,13 @@ type_alignment(x::DataType) = (@_pure_meta; ccall(:jl_get_alignment, Csize_t, (A
 
 Return a collection of all instances of the given type, if applicable. Mostly used for
 enumerated types (see `@enum`).
+
+```jldoctest
+julia> @enum Colors Red Blue Green
+
+julia> instances(Colors)
+(Red::Colors = 0, Blue::Colors = 1, Green::Colors = 2)
+```
 """
 function instances end
 
@@ -383,7 +450,7 @@ are included, including those not visible in the current module.
 
 ```jldoctest
 julia> subtypes(Integer)
-4-element Array{DataType,1}:
+4-element Array{Union{DataType, UnionAll},1}:
  BigInt
  Bool
  Signed
@@ -416,8 +483,7 @@ Returns an array of lowered ASTs for the methods matching the given generic func
 """
 function code_lowered(f::ANY, t::ANY=Tuple)
     asts = map(methods(f, t)) do m
-        m = m::Method
-        return uncompressed_ast(m, m.source)
+        return uncompressed_ast(m::Method)
     end
     return asts
 end
@@ -484,7 +550,7 @@ end
 # high-level, more convenient method lookup functions
 
 # type for reflecting and pretty-printing a subset of methods
-type MethodList
+mutable struct MethodList
     ms::Array{Method,1}
     mt::MethodTable
 end
@@ -574,16 +640,11 @@ end
 isempty(mt::MethodTable) = (mt.defs === nothing)
 
 uncompressed_ast(m::Method) = uncompressed_ast(m, m.source)
-function uncompressed_ast(m::Method, s::CodeInfo)
-    if isa(s.code, Array{UInt8,1})
-        s = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), s)
-        s.code = ccall(:jl_uncompress_ast, Array{Any,1}, (Any, Any), m, s.code)
-    end
-    return s
-end
+uncompressed_ast(m::Method, s::CodeInfo) = s
+uncompressed_ast(m::Method, s::Array{UInt8,1}) = ccall(:jl_uncompress_ast, Any, (Any, Any), m, s)::CodeInfo
 
 # this type mirrors jl_cghooks_t (documented in julia.h)
-immutable CodegenHooks
+struct CodegenHooks
     module_setup::Ptr{Void}
     module_activation::Ptr{Void}
     raise_exception::Ptr{Void}
@@ -595,7 +656,7 @@ immutable CodegenHooks
 end
 
 # this type mirrors jl_cgparams_t (documented in julia.h)
-immutable CodegenParams
+struct CodegenParams
     cached::Cint
 
     runtime::Cint
@@ -859,30 +920,59 @@ function function_module(f::ANY, types::ANY)
 end
 
 """
-    method_exists(f, Tuple type) -> Bool
+    method_exists(f, Tuple type, world=typemax(UInt)) -> Bool
 
 Determine whether the given generic function has a method matching the given
-`Tuple` of argument types.
+`Tuple` of argument types with the upper bound of world age given by `world`.
 
 ```jldoctest
 julia> method_exists(length, Tuple{Array})
 true
 ```
 """
-function method_exists(f::ANY, t::ANY)
+function method_exists(f::ANY, t::ANY, world=typemax(UInt))
     t = to_tuple_type(t)
     t = Tuple{isa(f,Type) ? Type{f} : typeof(f), t.parameters...}
-    return ccall(:jl_method_exists, Cint, (Any, Any, UInt), typeof(f).name.mt, t,
-        typemax(UInt)) != 0
+    return ccall(:jl_method_exists, Cint, (Any, Any, UInt), typeof(f).name.mt, t, world) != 0
 end
 
-function isambiguous(m1::Method, m2::Method, allow_bottom_tparams::Bool=true)
+"""
+    isambiguous(m1, m2; ambiguous_bottom=false) -> Bool
+
+Determine whether two methods `m1` and `m2` (typically of the same
+function) are ambiguous.  This test is performed in the context of
+other methods of the same function; in isolation, `m1` and `m2` might
+be ambiguous, but if a third method resolving the ambiguity has been
+defined, this returns `false`.
+
+For parametric types, the `ambiguous_bottom` keyword argument controls whether
+`Union{}` counts as an ambiguous intersection of type parameters – when `true`,
+it is considered ambiguous, when `false` it is not. For example:
+
+```jldoctest
+julia> foo(x::Complex{<:Integer}) = 1
+foo (generic function with 1 method)
+
+julia> foo(x::Complex{<:Rational}) = 2
+foo (generic function with 2 methods)
+
+julia> m1, m2 = collect(methods(foo));
+
+julia> typeintersect(m1.sig, m2.sig)
+Tuple{#foo,Complex{Union{}}}
+
+julia> Base.isambiguous(m1, m2, ambiguous_bottom=true)
+true
+
+julia> Base.isambiguous(m1, m2, ambiguous_bottom=false)
+false
+```
+"""
+function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
     ti = typeintersect(m1.sig, m2.sig)
     ti === Bottom && return false
-    if !allow_bottom_tparams
-        (_, env) = ccall(:jl_match_method, Ref{SimpleVector}, (Any, Any),
-                         ti, m1.sig)
-        any(x->x === Bottom, env) && return false
+    if !ambiguous_bottom
+        has_bottom_parameter(ti) && return false
     end
     ml = _methods_by_ftype(ti, -1, typemax(UInt))
     isempty(ml) && return true
@@ -894,7 +984,24 @@ function isambiguous(m1::Method, m2::Method, allow_bottom_tparams::Bool=true)
     return true
 end
 
+"""
+    has_bottom_parameter(t) -> Bool
+
+Determine whether `t` is a Type for which one or more of its parameters is `Union{}`.
+"""
+function has_bottom_parameter(t::Type)
+    ret = false
+    for p in t.parameters
+        ret |= (p == Bottom) || has_bottom_parameter(p)
+    end
+    ret
+end
+has_bottom_parameter(t::UnionAll) = has_bottom_parameter(unwrap_unionall(t))
+has_bottom_parameter(t::Union) = has_bottom_parameter(t.a) & has_bottom_parameter(t.b)
+has_bottom_parameter(t::TypeVar) = has_bottom_parameter(t.ub)
+has_bottom_parameter(::Any) = false
+
 min_world(m::Method) = reinterpret(UInt, m.min_world)
-max_world(m::Method) = reinterpret(UInt, m.max_world)
+max_world(m::Method) = typemax(UInt)
 min_world(m::Core.MethodInstance) = reinterpret(UInt, m.min_world)
 max_world(m::Core.MethodInstance) = reinterpret(UInt, m.max_world)

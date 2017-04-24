@@ -1,4 +1,5 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 import Base.@kwdef
 import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE
 
@@ -6,7 +7,7 @@ const OID_RAWSZ = 20
 const OID_HEXSZ = OID_RAWSZ * 2
 const OID_MINPREFIXLEN = 4
 
-abstract AbstractGitHash
+abstract type AbstractGitHash end
 
 """
     GitHash
@@ -14,7 +15,7 @@ abstract AbstractGitHash
 A git object identifier, based on the sha-1 hash. It is a $OID_RAWSZ byte string
 ($OID_HEXSZ hex digits) used to identify a `GitObject` in a repository.
 """
-immutable GitHash <: AbstractGitHash
+struct GitHash <: AbstractGitHash
     val::NTuple{OID_RAWSZ, UInt8}
     GitHash(val::NTuple{OID_RAWSZ, UInt8}) = new(val)
 end
@@ -29,7 +30,7 @@ is unique.
 Internally it is stored as two fields: a full-size `GitHash` (`hash`) and a length
 (`len`). Only the initial `len` hex digits of `hash` are used.
 """
-immutable GitShortHash <: AbstractGitHash
+struct GitShortHash <: AbstractGitHash
     hash::GitHash   # underlying hash: unused digits are ignored
     len::Csize_t    # length in hex digits
 end
@@ -41,7 +42,7 @@ end
 Time in a signature.
 Matches the [`git_time`](https://libgit2.github.com/libgit2/#HEAD/type/git_time) struct.
 """
-immutable TimeStruct
+struct TimeStruct
     time::Int64     # time in seconds from epoch
     offset::Cint    # timezone offset in minutes
 end
@@ -52,7 +53,7 @@ end
 An action signature (e.g. for committers, taggers, etc).
 Matches the [`git_signature`](https://libgit2.github.com/libgit2/#HEAD/type/git_signature) struct.
 """
-immutable SignatureStruct
+struct SignatureStruct
     name::Ptr{UInt8}  # full name of the author
     email::Ptr{UInt8} # email of the author
     when::TimeStruct  # time when the action happened
@@ -81,7 +82,7 @@ strs = String[...]
 ```
 Note that no call to `free` is required as the data is allocated by Julia.
 """
-immutable StrArrayStruct
+struct StrArrayStruct
    strings::Ptr{Cstring}
    count::Csize_t
 end
@@ -106,7 +107,7 @@ free(buf_ref)
 ```
 In particular, note that `LibGit2.free` should be called afterward on the `Ref` object.
 """
-immutable Buffer
+struct Buffer
     ptr::Ptr{Cchar}
     asize::Csize_t
     size::Csize_t
@@ -118,7 +119,7 @@ function free(buf_ref::Base.Ref{Buffer})
 end
 
 "Abstract credentials payload"
-abstract AbstractCredentials
+abstract type AbstractCredentials end
 
 "Checks if credentials were used"
 checkused!(p::AbstractCredentials) = true
@@ -131,7 +132,7 @@ reset!(p::AbstractCredentials, cnt::Int=3) = nothing
 
 Matches the [`git_checkout_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_checkout_options) struct.
 """
-@kwdef immutable CheckoutOptions
+@kwdef struct CheckoutOptions
     version::Cuint = 1
 
     checkout_strategy::Cuint    = Consts.CHECKOUT_SAFE
@@ -168,7 +169,7 @@ end
 Callback settings.
 Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/type/git_remote_callbacks) struct.
 """
-@kwdef immutable RemoteCallbacks
+@kwdef struct RemoteCallbacks
     version::Cuint                    = 1
     sideband_progress::Ptr{Void}
     completion::Ptr{Void}
@@ -195,9 +196,9 @@ Options for connecting through a proxy.
 
 Matches the [`git_proxy_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_proxy_options) struct.
 """
-@kwdef immutable ProxyOptions
-    version::Cuint             = 1
-    proxytype::Cint
+@kwdef struct ProxyOptions
+    version::Cuint               = 1
+    proxytype::Consts.GIT_PROXY  = Consts.PROXY_AUTO
     url::Cstring
     credential_cb::Ptr{Void}
     certificate_cb::Ptr{Void}
@@ -210,7 +211,7 @@ end
 
 Matches the [`git_fetch_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_fetch_options) struct.
 """
-@kwdef immutable FetchOptions
+@kwdef struct FetchOptions
     version::Cuint                  = 1
     callbacks::RemoteCallbacks
     prune::Cint                     = Consts.FETCH_PRUNE_UNSPECIFIED
@@ -229,7 +230,7 @@ end
 
 Matches the [`git_clone_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_clone_options) struct.
 """
-@kwdef immutable CloneOptions
+@kwdef struct CloneOptions
     version::Cuint                      = 1
     checkout_opts::CheckoutOptions
     fetch_opts::FetchOptions
@@ -247,7 +248,7 @@ end
 
 Matches the [`git_diff_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_options) struct.
 """
-@kwdef immutable DiffOptionsStruct
+@kwdef struct DiffOptionsStruct
     version::Cuint                           = Consts.DIFF_OPTIONS_VERSION
     flags::UInt32                            = Consts.DIFF_NORMAL
 
@@ -275,7 +276,7 @@ end
 Description of one side of a delta.
 Matches the [`git_diff_file`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_file) struct.
 """
-immutable DiffFile
+struct DiffFile
     id::GitHash
     path::Cstring
     size::Int64
@@ -286,13 +287,20 @@ immutable DiffFile
     end
 end
 
+function Base.show(io::IO, df::DiffFile)
+    println(io, "DiffFile:")
+    println(io, "Oid: $(df.id))")
+    println(io, "Path: $(df.path)")
+    println(io, "Size: $(df.size)")
+end
+
 """
     LibGit2.DiffDelta
 
 Description of changes to one entry.
 Matches the [`git_diff_file`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_file) struct.
 """
-immutable DiffDelta
+struct DiffDelta
     status::Cint
     flags::UInt32
     similarity::UInt16
@@ -301,12 +309,20 @@ immutable DiffDelta
     new_file::DiffFile
 end
 
+function Base.show(io::IO, dd::DiffDelta)
+    println(io, "DiffDelta:")
+    println(io, "Status: $(Consts.DELTA_STATUS(dd.status))")
+    println(io, "Number of files: $(dd.nfiles)")
+    println(io, "Old file:\n$(dd.old_file)")
+    println(io, "New file:\n$(dd.new_file)")
+end
+
 """
     LibGit2.MergeOptions
 
 Matches the [`git_merge_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_merge_options) struct.
 """
-@kwdef immutable MergeOptions
+@kwdef struct MergeOptions
     version::Cuint                    = 1
     flags::Cint
     rename_threshold::Cuint           = 50
@@ -327,7 +343,7 @@ end
 
 Matches the [`git_push_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_push_options) struct.
 """
-@kwdef immutable PushOptions
+@kwdef struct PushOptions
     version::Cuint                     = 1
     parallelism::Cint                  = 1
     callbacks::RemoteCallbacks
@@ -344,7 +360,7 @@ end
 
 Matches the [`git_index_time`](https://libgit2.github.com/libgit2/#HEAD/type/git_index_time) struct.
 """
-immutable IndexTime
+struct IndexTime
     seconds::Int64
     nanoseconds::Cuint
 end
@@ -355,7 +371,7 @@ end
 In-memory representation of a file entry in the index.
 Matches the [`git_index_entry`](https://libgit2.github.com/libgit2/#HEAD/type/git_index_entry) struct.
 """
-immutable IndexEntry
+struct IndexEntry
     ctime::IndexTime
     mtime::IndexTime
 
@@ -380,7 +396,7 @@ Base.show(io::IO, ie::IndexEntry) = print(io, "IndexEntry($(string(ie.id)))")
 
 Matches the `git_rebase_options` struct.
 """
-@kwdef immutable RebaseOptions
+@kwdef struct RebaseOptions
     version::Cuint                 = 1
     quiet::Cint                    = 1
     @static if LibGit2.VERSION >= v"0.24.0"
@@ -399,12 +415,15 @@ end
 Describes a single instruction/operation to be performed during the rebase.
 Matches the [`git_rebase_operation`](https://libgit2.github.com/libgit2/#HEAD/type/git_rebase_operation_t) struct.
 """
-immutable RebaseOperation
+struct RebaseOperation
     optype::Cint
     id::GitHash
     exec::Cstring
 end
-Base.show(io::IO, rbo::RebaseOperation) = print(io, "RebaseOperation($(string(rbo.id)))")
+function Base.show(io::IO, rbo::RebaseOperation)
+    println(io, "RebaseOperation($(string(rbo.id)))")
+    println(io, "Operation type: $(Consts.GIT_REBASE_OPERATION(rbo.optype))")
+end
 
 """
     LibGit2.StatusOptions
@@ -412,7 +431,7 @@ Base.show(io::IO, rbo::RebaseOperation) = print(io, "RebaseOperation($(string(rb
 Options to control how `git_status_foreach_ext()` will issue callbacks.
 Matches the [`git_status_opt_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_status_opt_t) struct.
 """
-@kwdef immutable StatusOptions
+@kwdef struct StatusOptions
     version::Cuint           = 1
     show::Cint               = Consts.STATUS_SHOW_INDEX_AND_WORKDIR
     flags::Cuint             = Consts.STATUS_OPT_INCLUDE_UNTRACKED |
@@ -429,7 +448,7 @@ Providing the differences between the file as it exists in HEAD and the index, a
 providing the differences between the index and the working directory.
 Matches the `git_status_entry` struct.
 """
-immutable StatusEntry
+struct StatusEntry
     status::Cuint
     head_to_index::Ptr{DiffDelta}
     index_to_workdir::Ptr{DiffDelta}
@@ -442,42 +461,54 @@ Contains the information about HEAD during a fetch, including the name and URL
 of the branch fetched from, the oid of the HEAD, and whether the fetched HEAD
 has been merged locally.
 """
-immutable FetchHead
+struct FetchHead
     name::String
     url::String
     oid::GitHash
     ismerge::Bool
 end
 
+function Base.show(io::IO, fh::FetchHead)
+    println(io, "FetchHead:")
+    println(io, "Name: $(fh.name)")
+    println(io, "URL: $(fh.url)")
+    print(io, "OID: ")
+    show(io, fh.oid)
+    println(io)
+    println(io, "Merged: $(fh.ismerge)")
+end
+
 # Abstract object types
-abstract AbstractGitObject
+abstract type AbstractGitObject end
 Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
 
-abstract GitObject <: AbstractGitObject
+abstract type GitObject <: AbstractGitObject end
 
-for (typ, reporef, sup, cname) in [
-    (:GitRepo,       nothing,   :AbstractGitObject, :git_repository),
-    (:GitTreeEntry,  nothing,   :AbstractGitObject, :git_tree_entry),
-    (:GitConfig,     :Nullable, :AbstractGitObject, :git_config),
-    (:GitIndex,      :Nullable, :AbstractGitObject, :git_index),
-    (:GitRemote,     :GitRepo,  :AbstractGitObject, :git_remote),
-    (:GitRevWalker,  :GitRepo,  :AbstractGitObject, :git_revwalk),
-    (:GitReference,  :GitRepo,  :AbstractGitObject, :git_reference),
-    (:GitDiff,       :GitRepo,  :AbstractGitObject, :git_diff),
-    (:GitAnnotated,  :GitRepo,  :AbstractGitObject, :git_annotated_commit),
-    (:GitRebase,     :GitRepo,  :AbstractGitObject, :git_rebase),
-    (:GitStatus,     :GitRepo,  :AbstractGitObject, :git_status_list),
-    (:GitBranchIter, :GitRepo,  :AbstractGitObject, :git_branch_iterator),
-    (:GitUnknownObject,  :GitRepo,  :GitObject,         :git_object),
-    (:GitCommit,     :GitRepo,  :GitObject,         :git_commit),
-    (:GitBlob,       :GitRepo,  :GitObject,         :git_blob),
-    (:GitTree,       :GitRepo,  :GitObject,         :git_tree),
-    (:GitTag,        :GitRepo,  :GitObject,         :git_tag)]
+for (typ, owntyp, sup, cname) in [
+    (:GitRepo,          nothing,               :AbstractGitObject, :git_repository),
+    (:GitConfig,        :(Nullable{GitRepo}),  :AbstractGitObject, :git_config),
+    (:GitIndex,         :(Nullable{GitRepo}),  :AbstractGitObject, :git_index),
+    (:GitRemote,        :GitRepo,              :AbstractGitObject, :git_remote),
+    (:GitRevWalker,     :GitRepo,              :AbstractGitObject, :git_revwalk),
+    (:GitReference,     :GitRepo,              :AbstractGitObject, :git_reference),
+    (:GitDiff,          :GitRepo,              :AbstractGitObject, :git_diff),
+    (:GitDiffStats,     :GitRepo,              :AbstractGitObject, :git_diff_stats),
+    (:GitAnnotated,     :GitRepo,              :AbstractGitObject, :git_annotated_commit),
+    (:GitRebase,        :GitRepo,              :AbstractGitObject, :git_rebase),
+    (:GitStatus,        :GitRepo,              :AbstractGitObject, :git_status_list),
+    (:GitBranchIter,    :GitRepo,              :AbstractGitObject, :git_branch_iterator),
+    (:GitUnknownObject, :GitRepo,              :GitObject,         :git_object),
+    (:GitCommit,        :GitRepo,              :GitObject,         :git_commit),
+    (:GitBlob,          :GitRepo,              :GitObject,         :git_blob),
+    (:GitTree,          :GitRepo,              :GitObject,         :git_tree),
+    (:GitTag,           :GitRepo,              :GitObject,         :git_tag),
+    (:GitTreeEntry,     :GitTree,              :AbstractGitObject, :git_tree_entry),
+    ]
 
-    if reporef === nothing
-        @eval type $typ <: $sup
+    if owntyp === nothing
+        @eval mutable struct $typ <: $sup
             ptr::Ptr{Void}
-            function $typ(ptr::Ptr{Void},fin=true)
+            function $typ(ptr::Ptr{Void}, fin::Bool=true)
                 # fin=false should only be used when the pointer should not be free'd
                 # e.g. from within callback functions which are passed a pointer
                 @assert ptr != C_NULL
@@ -489,35 +520,25 @@ for (typ, reporef, sup, cname) in [
                 return obj
             end
         end
-    elseif reporef == :Nullable
-        @eval type $typ <: $sup
-            nrepo::Nullable{GitRepo}
+    else
+        @eval mutable struct $typ <: $sup
+            owner::$owntyp
             ptr::Ptr{Void}
-            function $typ(repo::GitRepo, ptr::Ptr{Void})
+            function $typ(owner::$owntyp, ptr::Ptr{Void}, fin::Bool=true)
                 @assert ptr != C_NULL
-                obj = new(Nullable(repo), ptr)
-                Threads.atomic_add!(REFCOUNT, UInt(1))
-                finalizer(obj, Base.close)
-                return obj
-            end
-            function $typ(ptr::Ptr{Void})
-                @assert ptr != C_NULL
-                obj = new(Nullable{GitRepo}(), ptr)
-                Threads.atomic_add!(REFCOUNT, UInt(1))
-                finalizer(obj, Base.close)
+                obj = new(owner, ptr)
+                if fin
+                    Threads.atomic_add!(REFCOUNT, UInt(1))
+                    finalizer(obj, Base.close)
+                end
                 return obj
             end
         end
-    elseif reporef == :GitRepo
-        @eval type $typ <: $sup
-            repo::GitRepo
-            ptr::Ptr{Void}
-            function $typ(repo::GitRepo, ptr::Ptr{Void})
-                @assert ptr != C_NULL
-                obj = new(repo, ptr)
-                Threads.atomic_add!(REFCOUNT, UInt(1))
-                finalizer(obj, Base.close)
-                return obj
+        if isa(owntyp, Expr) && owntyp.args[1] == :Nullable
+            @eval begin
+                $typ(ptr::Ptr{Void}, fin::Bool=true) = $typ($owntyp(), ptr, fin)
+                $typ(owner::$(owntyp.args[2]), ptr::Ptr{Void}, fin::Bool=true) =
+                    $typ($owntyp(owner), ptr, fin)
             end
         end
     end
@@ -535,7 +556,7 @@ end
 
 ## Calling `GitObject(repo, ...)` will automatically resolve to the appropriate type.
 function GitObject(repo::GitRepo, ptr::Ptr{Void})
-    T = objtype(ccall((:git_object_type, :libgit2), Consts.OBJECT, (Ptr{Void},), ptr))
+    T = objtype(Consts.OBJECT(ptr))
     T(repo, ptr)
 end
 
@@ -545,7 +566,7 @@ end
 This is a Julia wrapper around a pointer to a
 [`git_signature`](https://libgit2.github.com/libgit2/#HEAD/type/git_signature) object.
 """
-type GitSignature <: AbstractGitObject
+mutable struct GitSignature <: AbstractGitObject
     ptr::Ptr{SignatureStruct}
     function GitSignature(ptr::Ptr{SignatureStruct})
         @assert ptr != C_NULL
@@ -562,7 +583,7 @@ function Base.close(obj::GitSignature)
 end
 
 # Structure has the same layout as SignatureStruct
-type Signature
+mutable struct Signature
     name::String
     email::String
     time::Int64
@@ -591,7 +612,7 @@ function with_warn{T}(f::Function, ::Type{T}, args...)
 end
 
 """
-    LibGit2.Const.OBJECT{T<:GitObject}(::Type{T})
+    LibGit2.Consts.OBJECT{T<:GitObject}(::Type{T})
 
 The `OBJECT` enum value corresponding to type `T`.
 """
@@ -601,6 +622,9 @@ Consts.OBJECT(::Type{GitBlob})          = Consts.OBJ_BLOB
 Consts.OBJECT(::Type{GitTag})           = Consts.OBJ_TAG
 Consts.OBJECT(::Type{GitUnknownObject}) = Consts.OBJ_ANY
 Consts.OBJECT(::Type{GitObject})        = Consts.OBJ_ANY
+
+Consts.OBJECT(ptr::Ptr{Void}) =
+    ccall((:git_object_type, :libgit2), Consts.OBJECT, (Ptr{Void},), ptr)
 
 """
     objtype(obj_type::Consts.OBJECT)
@@ -626,7 +650,7 @@ end
 import Base.securezero!
 
 "Credentials that support only `user` and `password` parameters"
-type UserPasswordCredentials <: AbstractCredentials
+mutable struct UserPasswordCredentials <: AbstractCredentials
     user::String
     pass::String
     prompt_if_incorrect::Bool    # Whether to allow interactive prompting if the credentials are incorrect
@@ -646,34 +670,43 @@ function securezero!(cred::UserPasswordCredentials)
     return cred
 end
 
+function Base.:(==)(a::UserPasswordCredentials, b::UserPasswordCredentials)
+    a.user == b.user && a.pass == b.pass
+end
+
 "SSH credentials type"
-type SSHCredentials <: AbstractCredentials
+mutable struct SSHCredentials <: AbstractCredentials
     user::String
     pass::String
-    pubkey::String
     prvkey::String
+    pubkey::String
     usesshagent::String  # used for ssh-agent authentication
     prompt_if_incorrect::Bool    # Whether to allow interactive prompting if the credentials are incorrect
     count::Int
-
-    function SSHCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool=false)
-        c = new(u,p,"","","Y",prompt_if_incorrect,3)
+    function SSHCredentials(u::AbstractString,p::AbstractString,prvkey::AbstractString,pubkey::AbstractString,prompt_if_incorrect::Bool=false)
+        c = new(u,p,prvkey,pubkey,"Y",prompt_if_incorrect,3)
         finalizer(c, securezero!)
         return c
     end
-    SSHCredentials(prompt_if_incorrect::Bool=false) = SSHCredentials("","",prompt_if_incorrect)
+    SSHCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool=false) = SSHCredentials(u,p,prompt_if_incorrect)
+    SSHCredentials(prompt_if_incorrect::Bool=false) = SSHCredentials("","","","",prompt_if_incorrect)
 end
+
 function securezero!(cred::SSHCredentials)
     securezero!(cred.user)
     securezero!(cred.pass)
-    securezero!(cred.pubkey)
     securezero!(cred.prvkey)
+    securezero!(cred.pubkey)
     cred.count = 0
     return cred
 end
 
+function Base.:(==)(a::SSHCredentials, b::SSHCredentials)
+    a.user == b.user && a.pass == b.pass && a.prvkey == b.prvkey && a.pubkey == b.pubkey
+end
+
 "Credentials that support caching"
-type CachedCredentials <: AbstractCredentials
+mutable struct CachedCredentials <: AbstractCredentials
     cred::Dict{String,AbstractCredentials}
     count::Int            # authentication failure protection count
     CachedCredentials() = new(Dict{String,AbstractCredentials}(),3)

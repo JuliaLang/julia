@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #define DEBUG_TYPE "lower_simd_loop"
 #undef DEBUG
@@ -14,6 +14,8 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Metadata.h>
 #include <llvm/Support/Debug.h>
+#include "fix_llvm_assert.h"
+
 #include <cstdio>
 
 namespace llvm {
@@ -142,8 +144,14 @@ void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const
 
 bool LowerSIMDLoop::runOnLoop(Loop *L, LPPassManager &LPM)
 {
-    if (!simd_loop_mdkind)
-        return false;           // Fast rejection test.
+    if (!simd_loop_mdkind) {
+        simd_loop_mdkind = L->getHeader()->getContext().getMDKindID("simd_loop");
+#if JL_LLVM_VERSION >= 30600
+        simd_loop_md = MDNode::get(L->getHeader()->getContext(), ArrayRef<Metadata*>());
+#else
+        simd_loop_md = MDNode::get(L->getHeader()->getContext(), ArrayRef<Value*>());
+#endif
+    }
 
     if (!hasSIMDLoopMetadata(L))
         return false;

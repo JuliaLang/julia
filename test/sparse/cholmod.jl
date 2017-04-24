@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 srand(123)
 
@@ -692,3 +692,21 @@ let A = sprandn(10, 10, 0.1)
     end
 end
 
+@testset "Check inputs to Sparse. Related to #20024" for A in (
+    SparseMatrixCSC(2, 2, [1, 2], CHOLMOD.SuiteSparse_long[], Float64[]),
+    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[]),
+    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[], Float64[1.0]),
+    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[1.0]))
+
+    @test_throws ArgumentError CHOLMOD.Sparse(size(A)..., A.colptr - 1, A.rowval - 1, A.nzval)
+    @test_throws ArgumentError CHOLMOD.Sparse(A)
+end
+
+@testset "sparse right multiplication of Symmetric and Hermitian matrices #21431" begin
+    @test issparse(speye(2)*speye(2)*speye(2))
+    for T in (Symmetric, Hermitian)
+        @test issparse(speye(2)*T(speye(2))*speye(2))
+        @test issparse(speye(2)*(T(speye(2))*speye(2)))
+        @test issparse((speye(2)*T(speye(2)))*speye(2))
+    end
+end

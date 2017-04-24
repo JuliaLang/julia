@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
   Symbol table
@@ -32,7 +32,7 @@ static jl_sym_t *mk_symbol(const char *str, size_t len)
     jl_sym_t *sym;
     size_t nb = symbol_nbytes(len);
 
-    jl_taggedvalue_t *tag = (jl_taggedvalue_t*)jl_gc_perm_alloc_nolock(nb);
+    jl_taggedvalue_t *tag = (jl_taggedvalue_t*)jl_gc_perm_alloc_nolock(nb, 0);
     sym = (jl_sym_t*)jl_valueof(tag);
     // set to old marked since we don't need write barrier on it.
     tag->header = ((uintptr_t)jl_sym_type) | GC_OLD_MARKED;

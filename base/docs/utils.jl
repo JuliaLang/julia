@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Text / HTML objects
 
@@ -19,7 +19,7 @@ You can also use a stream for large amounts of data:
       println(io, "<div>foo</div>")
     end
 """
-type HTML{T}
+mutable struct HTML{T}
     content::T
 end
 
@@ -32,7 +32,7 @@ function HTML(xs...)
 end
 
 show(io::IO, ::MIME"text/html", h::HTML) = print(io, h.content)
-show{F <: Function}(io::IO, ::MIME"text/html", h::HTML{F}) = h.content(io)
+show(io::IO, ::MIME"text/html", h::HTML{<:Function}) = h.content(io)
 
 """
     @html_str -> Docs.HTML
@@ -64,16 +64,16 @@ You can also use a stream for large amounts of data:
       println(io, "foo")
     end
 """
-type Text{T}
+mutable struct Text{T}
     content::T
 end
 
 print(io::IO, t::Text) = print(io, t.content)
-print{F <: Function}(io::IO, t::Text{F}) = t.content(io)
+print(io::IO, t::Text{<:Function}) = t.content(io)
 show(io::IO, t::Text) = print(io, t)
 
-=={T<:Union{HTML, Text}}(t1::T, t2::T) = t1.content == t2.content
-hash{T<:Union{HTML, Text}}(t::T, h::UInt) = hash(T, hash(t.content, h))
+==(t1::T, t2::T) where {T<:Union{HTML,Text}} = t1.content == t2.content
+hash(t::T, h::UInt) where {T<:Union{HTML,Text}} = hash(T, hash(t.content, h))
 
 """
     @text_str -> Docs.Text
@@ -348,12 +348,12 @@ print_correction(word) = print_correction(STDOUT, word)
 
 # Completion data
 
-const builtins = ["abstract", "baremodule", "begin", "bitstype", "break",
+const builtins = ["abstract type", "baremodule", "begin", "break",
                   "catch", "ccall", "const", "continue", "do", "else",
                   "elseif", "end", "export", "finally", "for", "function",
-                  "global", "if", "immutable", "import", "importall", "let",
-                  "local", "macro", "module", "quote", "return", "try", "type",
-                  "typealias", "using", "while"]
+                  "global", "if", "import", "importall", "let",
+                  "local", "macro", "module", "mutable struct", "primitive type",
+                  "quote", "return", "struct", "try", "using", "while"]
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
@@ -421,7 +421,7 @@ stripmd(x::Markdown.BlockQuote) = "$(stripmd(x.content))"
 stripmd(x::Markdown.Admonition) = "$(stripmd(x.content))"
 stripmd(x::Markdown.Bold) = "$(stripmd(x.text))"
 stripmd(x::Markdown.Code) = "$(stripmd(x.code))"
-stripmd{N}(x::Markdown.Header{N}) = stripmd(x.text)
+stripmd(x::Markdown.Header) = stripmd(x.text)
 stripmd(x::Markdown.HorizontalRule) = " "
 stripmd(x::Markdown.Image) = "$(stripmd(x.alt)) $(x.url)"
 stripmd(x::Markdown.Italic) = "$(stripmd(x.text))"

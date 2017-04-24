@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #ifndef APINT_C_H
 #define APINT_C_H
@@ -9,7 +9,11 @@ extern "C" {
 #include "dtypes.h"
 
 #ifdef LLVM_VERSION_MAJOR
+#  if JL_LLVM_VERSION >= 50000
+using integerPart = llvm::APInt::WordType;
+#  else
 using llvm::integerPart;
+#  endif
 #else
 typedef void integerPart;
 #endif

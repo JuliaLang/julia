@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## floating-point functions ##
 
@@ -19,7 +19,7 @@ signbit(x::Float16) = signbit(bitcast(Int16, x))
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = Float32(16777216.)
 maxintfloat(::Type{Float16}) = Float16(2048f0)
-maxintfloat{T<:AbstractFloat}(x::T)  = maxintfloat(T)
+maxintfloat(x::T) where {T<:AbstractFloat} = maxintfloat(T)
 maxintfloat() = maxintfloat(Float64)
 
 isinteger(x::AbstractFloat) = (x - trunc(x) == 0)
@@ -110,7 +110,7 @@ function round(x::AbstractFloat, ::RoundingMode{:NearestTiesUp})
     y = floor(x)
     ifelse(x==y,y,copysign(floor(2*x-y),x))
 end
-round{T<:Integer}(::Type{T}, x::AbstractFloat, r::RoundingMode) = trunc(T,round(x,r))
+round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer} = trunc(T,round(x,r))
 
 # adapted from Matlab File Exchange roundsd: http://www.mathworks.com/matlabcentral/fileexchange/26212
 # for round, og is the power of 10 relative to the decimal point
@@ -170,7 +170,7 @@ end
 
 # isapprox: approximate equality of numbers
 """
-    isapprox(x, y; rtol::Real=sqrt(eps), atol::Real=0, nans::Bool=false)
+    isapprox(x, y; rtol::Real=sqrt(eps), atol::Real=0, nans::Bool=false, norm::Function)
 
 Inexact equality comparison: `true` if `norm(x-y) <= atol + rtol*max(norm(x), norm(y))`. The
 default `atol` is zero and the default `rtol` depends on the types of `x` and `y`. The keyword
@@ -188,6 +188,17 @@ approximately equal component-wise.
 
 The binary operator `≈` is equivalent to `isapprox` with the default arguments, and `x ≉ y`
 is equivalent to `!isapprox(x,y)`.
+
+```jldoctest
+julia> 0.1 ≈ (0.1 - 1e-10)
+true
+
+julia> isapprox(10, 11; atol = 2)
+true
+
+julia> isapprox([10.0^9, 1.0], [10.0^9, 2.0])
+true
+```
 """
 function isapprox(x::Number, y::Number; rtol::Real=rtoldefault(x,y), atol::Real=0, nans::Bool=false)
     x == y || (isfinite(x) && isfinite(y) && abs(x-y) <= atol + rtol*max(abs(x), abs(y))) || (nans && isnan(x) && isnan(y))
@@ -197,9 +208,9 @@ const ≈ = isapprox
 ≉(args...; kws...) = !≈(args...; kws...)
 
 # default tolerance arguments
-rtoldefault{T<:AbstractFloat}(::Type{T}) = sqrt(eps(T))
-rtoldefault{T<:Real}(::Type{T}) = 0
-rtoldefault{T<:Number,S<:Number}(x::Union{T,Type{T}}, y::Union{S,Type{S}}) = max(rtoldefault(real(T)),rtoldefault(real(S)))
+rtoldefault(::Type{T}) where {T<:AbstractFloat} = sqrt(eps(T))
+rtoldefault(::Type{<:Real}) = 0
+rtoldefault(x::Union{T,Type{T}}, y::Union{S,Type{S}}) where {T<:Number,S<:Number} = max(rtoldefault(real(T)),rtoldefault(real(S)))
 
 # fused multiply-add
 fma_libm(x::Float32, y::Float32, z::Float32) =

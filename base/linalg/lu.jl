@@ -1,15 +1,15 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ####################
 # LU Factorization #
 ####################
-immutable LU{T,S<:AbstractMatrix} <: Factorization{T}
+struct LU{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     ipiv::Vector{BlasInt}
     info::BlasInt
-    LU(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) = new(factors, ipiv, info)
+    LU{T,S}(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) where {T,S} = new(factors, ipiv, info)
 end
-LU{T}(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) = LU{T,typeof(factors)}(factors, ipiv, info)
+LU(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) where {T} = LU{T,typeof(factors)}(factors, ipiv, info)
 
 # StridedMatrix
 function lufact!{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true})
@@ -78,7 +78,9 @@ function generic_lufact!{T,Pivot}(A::StridedMatrix{T}, ::Type{Val{Pivot}} = Val{
 end
 
 # floating point types doesn't have to be promoted for LU, but should default to pivoting
-lufact{T<:AbstractFloat}(A::Union{AbstractMatrix{T},AbstractMatrix{Complex{T}}}, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true}) = lufact!(copy(A), pivot)
+lufact{T<:AbstractFloat}(A::Union{AbstractMatrix{T}, AbstractMatrix{Complex{T}}},
+    pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true}) =
+    lufact!(copy(A), pivot)
 
 # for all other types we must promote to a type which is stable under division
 """
@@ -188,13 +190,13 @@ function lu(A::AbstractMatrix, pivot::Union{Type{Val{false}}, Type{Val{true}}} =
     F[:L], F[:U], F[:p]
 end
 
-function convert{T}(::Type{LU{T}}, F::LU)
+function convert(::Type{LU{T}}, F::LU) where T
     M = convert(AbstractMatrix{T}, F.factors)
     LU{T,typeof(M)}(M, F.ipiv, F.info)
 end
-convert{T,S}(::Type{LU{T,S}}, F::LU) = LU{T,S}(convert(S, F.factors), F.ipiv, F.info)
-convert{T}(::Type{Factorization{T}}, F::LU{T}) = F
-convert{T}(::Type{Factorization{T}}, F::LU) = convert(LU{T}, F)
+convert(::Type{LU{T,S}}, F::LU) where {T,S} = LU{T,S}(convert(S, F.factors), F.ipiv, F.info)
+convert(::Type{Factorization{T}}, F::LU{T}) where {T} = F
+convert(::Type{Factorization{T}}, F::LU) where {T} = convert(LU{T}, F)
 
 
 size(A::LU) = size(A.factors)
@@ -208,7 +210,7 @@ function ipiv2perm{T}(v::AbstractVector{T}, maxi::Integer)
     return p
 end
 
-function getindex{T,S<:StridedMatrix}(F::LU{T,S}, d::Symbol)
+function getindex{T}(F::LU{T,<:StridedMatrix}, d::Symbol)
     m, n = size(F)
     if d == :L
         L = tril!(F.factors[1:m, 1:min(m,n)])
@@ -232,23 +234,41 @@ function show(io::IO, C::LU)
     show(io, C[:U])
 end
 
-A_ldiv_B!{T<:BlasFloat, S<:StridedMatrix}(A::LU{T, S}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('N', A.factors, A.ipiv, B) A.info
-A_ldiv_B!{T,S<:StridedMatrix}(A::LU{T,S}, b::StridedVector) = A_ldiv_B!(UpperTriangular(A.factors), A_ldiv_B!(UnitLowerTriangular(A.factors), b[ipiv2perm(A.ipiv, length(b))]))
-A_ldiv_B!{T,S<:StridedMatrix}(A::LU{T,S}, B::StridedMatrix) = A_ldiv_B!(UpperTriangular(A.factors), A_ldiv_B!(UnitLowerTriangular(A.factors), B[ipiv2perm(A.ipiv, size(B, 1)),:]))
+A_ldiv_B!{T<:BlasFloat}(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) =
+    @assertnonsingular LAPACK.getrs!('N', A.factors, A.ipiv, B) A.info
+A_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, b::StridedVector) =
+    A_ldiv_B!(UpperTriangular(A.factors),
+    A_ldiv_B!(UnitLowerTriangular(A.factors), b[ipiv2perm(A.ipiv, length(b))]))
+A_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedMatrix) =
+    A_ldiv_B!(UpperTriangular(A.factors),
+    A_ldiv_B!(UnitLowerTriangular(A.factors), B[ipiv2perm(A.ipiv, size(B, 1)),:]))
 
-At_ldiv_B!{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, B) A.info
-At_ldiv_B!{T,S<:StridedMatrix}(A::LU{T,S}, b::StridedVector) = At_ldiv_B!(UnitLowerTriangular(A.factors), At_ldiv_B!(UpperTriangular(A.factors), b))[invperm(ipiv2perm(A.ipiv, length(b)))]
-At_ldiv_B!{T,S<:StridedMatrix}(A::LU{T,S}, B::StridedMatrix) = At_ldiv_B!(UnitLowerTriangular(A.factors), At_ldiv_B!(UpperTriangular(A.factors), B))[invperm(ipiv2perm(A.ipiv, size(B,1))),:]
+At_ldiv_B!{T<:BlasFloat}(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) =
+    @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, B) A.info
+At_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, b::StridedVector) =
+    At_ldiv_B!(UnitLowerTriangular(A.factors),
+    At_ldiv_B!(UpperTriangular(A.factors), b))[invperm(ipiv2perm(A.ipiv, length(b)))]
+At_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedMatrix) =
+    At_ldiv_B!(UnitLowerTriangular(A.factors),
+    At_ldiv_B!(UpperTriangular(A.factors), B))[invperm(ipiv2perm(A.ipiv, size(B,1))),:]
 
-Ac_ldiv_B!{T<:Real,S<:StridedMatrix}(F::LU{T,S}, B::StridedVecOrMat{T}) = At_ldiv_B!(F, B)
-Ac_ldiv_B!{T<:BlasComplex,S<:StridedMatrix}(A::LU{T,S}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('C', A.factors, A.ipiv, B) A.info
-Ac_ldiv_B!{T,S<:StridedMatrix}(A::LU{T,S}, b::StridedVector) = Ac_ldiv_B!(UnitLowerTriangular(A.factors), Ac_ldiv_B!(UpperTriangular(A.factors), b))[invperm(ipiv2perm(A.ipiv, length(b)))]
-Ac_ldiv_B!{T,S<:StridedMatrix}(A::LU{T,S}, B::StridedMatrix) = Ac_ldiv_B!(UnitLowerTriangular(A.factors), Ac_ldiv_B!(UpperTriangular(A.factors), B))[invperm(ipiv2perm(A.ipiv, size(B,1))),:]
+Ac_ldiv_B!{T<:Real}(F::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) =
+    At_ldiv_B!(F, B)
+Ac_ldiv_B!{T<:BlasComplex}(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) =
+    @assertnonsingular LAPACK.getrs!('C', A.factors, A.ipiv, B) A.info
+Ac_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, b::StridedVector) =
+    Ac_ldiv_B!(UnitLowerTriangular(A.factors),
+    Ac_ldiv_B!(UpperTriangular(A.factors), b))[invperm(ipiv2perm(A.ipiv, length(b)))]
+Ac_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedMatrix) =
+    Ac_ldiv_B!(UnitLowerTriangular(A.factors),
+    Ac_ldiv_B!(UpperTriangular(A.factors), B))[invperm(ipiv2perm(A.ipiv, size(B,1))),:]
 
-At_ldiv_Bt{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, transpose(B)) A.info
+At_ldiv_Bt{T<:BlasFloat}(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) =
+    @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, transpose(B)) A.info
 At_ldiv_Bt(A::LU, B::StridedVecOrMat) = At_ldiv_B(A, transpose(B))
 
-Ac_ldiv_Bc{T<:BlasComplex,S<:StridedMatrix}(A::LU{T,S}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('C', A.factors, A.ipiv, ctranspose(B)) A.info
+Ac_ldiv_Bc{T<:BlasComplex}(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) =
+    @assertnonsingular LAPACK.getrs!('C', A.factors, A.ipiv, ctranspose(B)) A.info
 Ac_ldiv_Bc(A::LU, B::StridedVecOrMat) = Ac_ldiv_B(A, ctranspose(B))
 
 function det{T}(A::LU{T})
@@ -284,10 +304,13 @@ function logabsdet{T}(A::LU{T})  # return log(abs(det)) and sign(det)
     abs_det, s
 end
 
-inv!{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}) = @assertnonsingular LAPACK.getri!(A.factors, A.ipiv) A.info
-inv{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}) = inv!(LU(copy(A.factors), copy(A.ipiv), copy(A.info)))
+inv!(A::LU{<:BlasFloat,<:StridedMatrix}) =
+    @assertnonsingular LAPACK.getri!(A.factors, A.ipiv) A.info
+inv(A::LU{<:BlasFloat,<:StridedMatrix}) =
+    inv!(LU(copy(A.factors), copy(A.ipiv), copy(A.info)))
 
-cond{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}, p::Number) = inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, norm((A[:L]*A[:U])[A[:p],:], p)))
+cond(A::LU{<:BlasFloat,<:StridedMatrix}, p::Number) =
+    inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, norm((A[:L]*A[:U])[A[:p],:], p)))
 cond(A::LU, p::Number) = norm(A[:L]*A[:U],p)*norm(inv(A),p)
 
 # Tridiagonal
@@ -360,7 +383,7 @@ end
 
 factorize(A::Tridiagonal) = lufact(A)
 
-function getindex{T}(F::Base.LinAlg.LU{T,Tridiagonal{T}}, d::Symbol)
+function getindex(F::Base.LinAlg.LU{T,Tridiagonal{T}}, d::Symbol) where T
     m, n = size(F)
     if d == :L
         L = Array(Bidiagonal(ones(T, n), F.factors.dl, false))
@@ -494,7 +517,7 @@ convert(::Type{Matrix}, F::LU) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::LU) = convert(Matrix, F)
 full(F::LU) = convert(AbstractArray, F)
 
-function convert{T}(::Type{Tridiagonal}, F::Base.LinAlg.LU{T,Tridiagonal{T}})
+function convert(::Type{Tridiagonal}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) where T
     n = size(F, 1)
 
     dl     = copy(F.factors.dl)
@@ -528,8 +551,12 @@ function convert{T}(::Type{Tridiagonal}, F::Base.LinAlg.LU{T,Tridiagonal{T}})
     end
     return Tridiagonal(dl, d, du)
 end
-convert{T}(::Type{AbstractMatrix}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) = convert(Tridiagonal, F)
-convert{T}(::Type{AbstractArray}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) = convert(AbstractMatrix, F)
-convert{T}(::Type{Matrix}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) = convert(Array, convert(AbstractArray, F))
-convert{T}(::Type{Array}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) = convert(Matrix, F)
+convert(::Type{AbstractMatrix}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) where {T} =
+    convert(Tridiagonal, F)
+convert(::Type{AbstractArray}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) where {T} =
+    convert(AbstractMatrix, F)
+convert(::Type{Matrix}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) where {T} =
+    convert(Array, convert(AbstractArray, F))
+convert(::Type{Array}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) where {T} =
+    convert(Matrix, F)
 full{T}(F::Base.LinAlg.LU{T,Tridiagonal{T}}) = convert(AbstractArray, F)

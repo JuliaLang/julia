@@ -1,13 +1,13 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 include("../perfutil.jl")
 
-abstract List{T}
+abstract type List{T} end
 
-type Nil{T} <: List{T}
+mutable struct Nil{T} <: List{T}
 end
 
-type Cons{T} <: List{T}
+mutable struct Cons{T} <: List{T}
     head::T
     tail::List{T}
 end

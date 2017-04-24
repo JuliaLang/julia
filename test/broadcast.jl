@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module TestBroadcastInternals
 
@@ -376,7 +376,7 @@ let s = "foo"
 end
 
 # Ensure that even strange constructors that break `T(x)::T` work with broadcast
-immutable StrangeType18623 end
+struct StrangeType18623 end
 StrangeType18623(x) = x
 StrangeType18623(x,y) = (x,y)
 @test @inferred(broadcast(StrangeType18623, 1:3)) == [1,2,3]
@@ -415,7 +415,7 @@ end
 @test let z = 1; A = broadcast!(x -> z += x, zeros(2), 1); A[1] != A[2]; end
 
 # broadcasting for custom AbstractArray
-immutable Array19745{T,N} <: AbstractArray{T,N}
+struct Array19745{T,N} <: AbstractArray{T,N}
     data::Array{T,N}
 end
 Base.getindex(A::Array19745, i::Integer...) = A.data[i...]
@@ -487,4 +487,31 @@ let N = 5
     @test iszero(ones(N, N) .= zeros(N, 1))
     @test iszero(ones(N, N) .= zeros(1, N))
     @test iszero(ones(N, N) .= zeros(1, 1))
+end
+
+@testset "test broadcast for matrix of matrices" begin
+    A = fill(zeros(2,2), 4, 4)
+    A[1:3,1:3] .= [ones(2,2)]
+    @test all(A[1:3,1:3] .== [ones(2,2)])
+end
+
+# Test that broadcast does not confuse eltypes. See also
+# https://github.com/JuliaLang/julia/issues/21325
+@testset "eltype confusion (#21325)" begin
+    foo(x::Char, y::Int) = 0
+    foo(x::String, y::Int) = "hello"
+    @test broadcast(foo, "x", [1, 2, 3]) == ["hello", "hello", "hello"]
+
+    @test isequal(
+        [Set([1]), Set([2])] .∪ Set([3]),
+        [Set([1, 3]), Set([2, 3])])
+
+    @test isequal(@inferred(broadcast(foo, "world", Nullable(1))),
+                  Nullable("hello"))
+end
+
+# Issue #21291
+let t = (0, 1, 2)
+    o = 1
+    @test @inferred(broadcast(+, t, o)) == (1, 2, 3)
 end

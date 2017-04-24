@@ -119,12 +119,12 @@ julia> dt2 = Date("2015-01-02",df)
 You can also use the `dateformat""` string macro. This macro creates the `DateFormat` object once when the macro is expanded and uses the same `DateFormat` object even if a code snippet is run multiple times.
 
 ```jldoctest
-julia> for i=1:10^5
-           Date("2015-01-01",dateformat"y-m-d")
+julia> for i = 1:10^5
+           Date("2015-01-01", dateformat"y-m-d")
        end
 ```
 
-A full suite of parsing and formatting tests and examples is available in [tests/dates/io.jl](https://github.com/JuliaLang/julia/blob/master/test/dates/io.jl).
+A full suite of parsing and formatting tests and examples is available in [`tests/dates/io.jl`](https://github.com/JuliaLang/julia/blob/master/test/dates/io.jl).
 
 ## Durations/Comparisons
 
@@ -503,7 +503,7 @@ julia> filter(dr) do x
  2014-11-11
 ```
 
-Additional examples and tests are available in [test/dates/adjusters.jl](https://github.com/JuliaLang/julia/blob/master/test/dates/adjusters.jl).
+Additional examples and tests are available in [`test/dates/adjusters.jl`](https://github.com/JuliaLang/julia/blob/master/test/dates/adjusters.jl).
 
 ## Period Types
 
@@ -559,7 +559,7 @@ julia> round(DateTime(2016, 8, 6, 20, 15), Dates.Day)
 Unlike the numeric [`round()`](@ref) method, which breaks ties toward the even number by default,
 the [`TimeType`](@ref)[`round()`](@ref) method uses the `RoundNearestTiesUp` rounding mode. (It's
 difficult to guess what breaking ties to nearest "even" [`TimeType`](@ref) would entail.) Further
-details on the available `RoundingMode` s can be found in the [API reference](http://docs.julialang.org/en/latest/stdlib/dates/).
+details on the available `RoundingMode` s can be found in the [API reference](https://docs.julialang.org/en/latest/stdlib/dates.html).
 
 Rounding should generally behave as expected, but there are a few cases in which the expected
 behaviour is not obvious.
@@ -624,5 +624,5 @@ will result in the months field having an odd value. Because both months and yea
 an irregular number of days, whether rounding to an even number of days will result in an even
 value in the days field is uncertain.
 
-See the [API reference](http://docs.julialang.org/en/latest/stdlib/dates/) for additional information
+See the [API reference](https://docs.julialang.org/en/latest/stdlib/dates.html) for additional information
 on methods exported from the `Dates` module.

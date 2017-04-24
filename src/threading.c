@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
   threading infrastructure
@@ -307,14 +307,29 @@ static void ti_init_master_thread(void)
 }
 
 // all threads call this function to run user code
-static jl_value_t *ti_run_fun(jl_svec_t *args)
+static jl_value_t *ti_run_fun(const jl_generic_fptr_t *fptr, jl_method_instance_t *mfunc,
+                              jl_value_t **args, uint32_t nargs)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_TRY {
-        jl_apply(jl_svec_data(args), jl_svec_len(args));
+        jl_assume(fptr->jlcall_api != 2);
+        jl_call_fptr_internal(fptr, mfunc, args, nargs);
     }
     JL_CATCH {
-        return ptls->exception_in_transit;
+        // Lock this output since we know it'll likely happen on multiple threads
+        static jl_mutex_t lock;
+        JL_LOCK_NOGC(&lock);
+        jl_jmp_buf *old_buf = ptls->safe_restore;
+        jl_jmp_buf buf;
+        if (!jl_setjmp(buf, 0)) {
+            // Set up the safe_restore context so that the printing uses the thread safe version
+            ptls->safe_restore = &buf;
+            jl_printf(JL_STDERR, "\nError thrown in threaded loop on thread %d: ",
+                      (int)ptls->tid);
+            jl_static_show(JL_STDERR, ptls->exception_in_transit);
+        }
+        ptls->safe_restore = old_buf;
+        JL_UNLOCK_NOGC(&lock);
     }
     return jl_nothing;
 }
@@ -376,13 +391,16 @@ void ti_threadfun(void *arg)
     // free the thread argument here
     free(ta);
 
+    int init = 1;
+
     // work loop
     for (; ;) {
 #if PROFILE_JL_THREADING
         uint64_t tstart = uv_hrtime();
 #endif
 
-        ti_threadgroup_fork(tg, ptls->tid, (void **)&work);
+        ti_threadgroup_fork(tg, ptls->tid, (void **)&work, init);
+        init = 0;
 
 #if PROFILE_JL_THREADING
         uint64_t tfork = uv_hrtime();
@@ -406,7 +424,7 @@ void ti_threadfun(void *arg)
                 JL_GC_PUSH1(&last_m);
                 ptls->current_module = work->current_module;
                 ptls->world_age = work->world_age;
-                ti_run_fun(work->args);
+                ti_run_fun(&work->fptr, work->mfunc, work->args, work->nargs);
                 ptls->current_module = last_m;
                 ptls->world_age = last_age;
                 JL_GC_POP();
@@ -630,7 +648,7 @@ void jl_shutdown_threading(void)
     ti_threadwork_t *work = &threadwork;
 
     work->command = TI_THREADWORK_DONE;
-    ti_threadgroup_fork(tgworld, ptls->tid, (void **)&work);
+    ti_threadgroup_fork(tgworld, ptls->tid, (void **)&work, 0);
 
     sleep(1);
 
@@ -650,26 +668,34 @@ JL_DLLEXPORT void *jl_threadgroup(void) { return (void *)tgworld; }
 
 // interface to user code: specialize and compile the user thread function
 // and run it in all threads
-JL_DLLEXPORT jl_value_t *jl_threading_run(jl_svec_t *args)
+JL_DLLEXPORT jl_value_t *jl_threading_run(jl_value_t *_args)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     // GC safe
 #if PROFILE_JL_THREADING
     uint64_t tstart = uv_hrtime();
 #endif
-
-    jl_tupletype_t *argtypes = NULL;
-    JL_TYPECHK(jl_threading_run, simplevector, (jl_value_t*)args);
+    uint32_t nargs;
+    jl_value_t **args;
+    if (!jl_is_svec(_args)) {
+        nargs = 1;
+        args = &_args;
+    }
+    else {
+        nargs = jl_svec_len(_args);
+        args = jl_svec_data(_args);
+    }
 
     int8_t gc_state = jl_gc_unsafe_enter(ptls);
-    JL_GC_PUSH1(&argtypes);
-    argtypes = arg_type_tuple(jl_svec_data(args), jl_svec_len(args));
-    jl_compile_hint(argtypes);
 
     threadwork.command = TI_THREADWORK_RUN;
-    // TODO jb/functions: lookup and store jlcall fptr here
-    threadwork.fun = NULL;
+    threadwork.mfunc = jl_lookup_generic(args, nargs,
+                                         jl_int32hash_fast(jl_return_address()), ptls->world_age);
+    // Ignore constant return value for now.
+    if (jl_compile_method_internal(&threadwork.fptr, threadwork.mfunc))
+        return jl_nothing;
     threadwork.args = args;
+    threadwork.nargs = nargs;
     threadwork.ret = jl_nothing;
     threadwork.current_module = ptls->current_module;
     threadwork.world_age = ptls->world_age;
@@ -681,7 +707,7 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_svec_t *args)
 
     // fork the world thread group
     ti_threadwork_t *tw = &threadwork;
-    ti_threadgroup_fork(tgworld, ptls->tid, (void **)&tw);
+    ti_threadgroup_fork(tgworld, ptls->tid, (void **)&tw, 0);
 
 #if PROFILE_JL_THREADING
     uint64_t tfork = uv_hrtime();
@@ -689,7 +715,7 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_svec_t *args)
 #endif
 
     // this thread must do work too (TODO: reduction?)
-    tw->ret = ti_run_fun(args);
+    tw->ret = ti_run_fun(&threadwork.fptr, threadwork.mfunc, args, nargs);
 
 #if PROFILE_JL_THREADING
     uint64_t trun = uv_hrtime();
@@ -704,7 +730,6 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_svec_t *args)
     join_ns[ptls->tid] += (tjoin - trun);
 #endif
 
-    JL_GC_POP();
     jl_gc_unsafe_leave(ptls, gc_state);
 
     return tw->ret;
@@ -766,10 +791,25 @@ JL_DLLEXPORT void jl_threading_profile(void)
 
 #else // !JULIA_ENABLE_THREADING
 
-JL_DLLEXPORT jl_value_t *jl_threading_run(jl_svec_t *args)
+JL_DLLEXPORT jl_value_t *jl_threading_run(jl_value_t *_args)
 {
-    JL_TYPECHK(jl_threading_run, simplevector, (jl_value_t*)args);
-    return ti_run_fun(args);
+    uint32_t nargs;
+    jl_value_t **args;
+    if (!jl_is_svec(_args)) {
+        nargs = 1;
+        args = &_args;
+    }
+    else {
+        nargs = jl_svec_len(_args);
+        args = jl_svec_data(_args);
+    }
+    jl_method_instance_t *mfunc = jl_lookup_generic(args, nargs,
+                                                    jl_int32hash_fast(jl_return_address()),
+                                                    jl_get_ptls_states()->world_age);
+    jl_generic_fptr_t fptr;
+    if (jl_compile_method_internal(&fptr, mfunc))
+        return jl_nothing;
+    return ti_run_fun(&fptr, mfunc, args, nargs);
 }
 
 void jl_init_threading(void)

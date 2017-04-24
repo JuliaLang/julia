@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @test convert(Tuple, (1,2)) == (1,2)
 @testset "indexing" begin
@@ -65,8 +65,14 @@ end
 @test eltype((1,2,3)) === Int
 @test eltype((1.0,2.0,3.0)) <: AbstractFloat
 @test eltype((true, false)) === Bool
-@test eltype((1,2.0, false)) === Any
+@test eltype((1, 2.0, false)) === typejoin(Int, Float64, Bool)
 @test eltype(()) === Union{}
+@test eltype(Tuple{Int, Float64, Vararg{Bool}}) === typejoin(Int, Float64, Bool)
+@test eltype(Tuple{Int, T, Vararg{Bool}} where T <: AbstractFloat) ===
+    typejoin(Int, AbstractFloat, Bool)
+@test eltype(Tuple{Int, Bool, Vararg{T}} where T <: AbstractFloat) ===
+    typejoin(Int, AbstractFloat, Bool)
+@test eltype(Union{Tuple{Int, Float64}, Tuple{Vararg{Bool}}}) === typejoin(Int, Float64, Bool)
 
 begin
     local foo
@@ -90,14 +96,17 @@ begin
     @test map(foo, (1,2), (1,2)) === (2,4)
     @test map(foo, (1,2,3,4), (1,2,3,4)) === (2,4,6,8)
     @test map(foo, longtuple, longtuple) === ntuple(i->2i,20)
+    @test_throws BoundsError map(foo, (), (1,))
+    @test_throws BoundsError map(foo, (1,), ())
 
     # n arguments
     @test map(foo, (), (), ()) === ()
-    @test map(foo, (), (1,2,3), (1,2,3)) === ()
     @test map(foo, (1,), (1,), (1,)) === (3,)
     @test map(foo, (1,2), (1,2), (1,2)) === (3,6)
     @test map(foo, (1,2,3,4), (1,2,3,4), (1,2,3,4)) === (3,6,9,12)
     @test map(foo, longtuple, longtuple, longtuple) === ntuple(i->3i,20)
+    @test_throws BoundsError map(foo, (), (1,), (1,))
+    @test_throws BoundsError map(foo, (1,), (1,), ())
 end
 
 ## comparison ##
@@ -179,7 +188,7 @@ end
 @test_throws BoundsError ()[[false]]
 @test_throws BoundsError ()[[true]]
 
-immutable BitPerm_19352
+struct BitPerm_19352
     p::NTuple{8,UInt8}
     function BitPerm(p::NTuple{8,UInt8})
         sort(collect(p)) != collect(0:7) && error("$p is not a permutation of 0:7")
@@ -195,11 +204,11 @@ end
 
 # issue #15703
 let
-    immutable A_15703{N}
+    struct A_15703{N}
         keys::NTuple{N, Int}
     end
 
-    immutable B_15703
+    struct B_15703
         x::A_15703
     end
 
@@ -231,3 +240,14 @@ end
 @test Tuple{Int,Vararg{Any}}(Float64[1,2,3]) === (1, 2.0, 3.0)
 @test Tuple(ones(5)) === (1.0,1.0,1.0,1.0,1.0)
 @test_throws MethodError convert(Tuple, ones(5))
+
+@testset "Multidimensional indexing (issue #20453)" begin
+    @test_throws MethodError (1,)[]
+    @test_throws MethodError (1,1,1)[1,1]
+end
+
+@testset "ambiguity between tuple constructors #20990" begin
+    Tuple16Int = Tuple{Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int}
+    tuple16int = (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+    @test Tuple16Int(tuple16int) isa Tuple16Int
+end

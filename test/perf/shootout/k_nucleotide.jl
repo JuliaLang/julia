@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # The Computer Language Benchmarks Game
 # http://shootout.alioth.debian.org/
@@ -26,7 +26,7 @@ function count_one(data::AbstractString, s::AbstractString)
     count(data, length(s))[s]
 end
 
-type KNuc
+mutable struct KNuc
     name::AbstractString
     count::Int
 end

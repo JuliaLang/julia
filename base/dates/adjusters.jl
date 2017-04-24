@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ### truncation
 Base.trunc(dt::Date, p::Type{Year}) = Date(UTD(totaldays(year(dt), 1, 1)))
@@ -124,7 +124,7 @@ end
 lastdayofquarter(dt::DateTime) = DateTime(lastdayofquarter(Date(dt)))
 
 # Temporal Adjusters
-immutable DateFunction
+struct DateFunction
     f::Function
     # validate boolean, single-arg inner constructor
     function DateFunction(f::ANY, dt::TimeType)

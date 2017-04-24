@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using ZMQ
 
@@ -17,7 +17,7 @@ const REQUEST_ACK = "R"
 const ACK_MSG = "A"
 const KILL_MSG = "K"
 
-type ZMQCMan <: ClusterManager
+mutable struct ZMQCMan <: ClusterManager
     map_zmq_julia::Dict{Int, Tuple}
     c::Condition
     isfree::Bool

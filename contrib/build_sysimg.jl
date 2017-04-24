@@ -1,5 +1,5 @@
 #!/usr/bin/env julia
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Build a system image binary at sysimg_path.dlext. Allow insertion of a userimg via
 # userimg_path.  If sysimg_path.dlext is currently loaded into memory, don't continue
@@ -8,7 +8,7 @@ function default_sysimg_path(debug=false)
     if is_unix()
         splitext(Libdl.dlpath(debug ? "sys-debug" : "sys"))[1]
     else
-        joinpath(JULIA_HOME, "..", "lib", "julia", debug ? "sys-debug" : "sys")
+        joinpath(dirname(JULIA_HOME), "lib", "julia", debug ? "sys-debug" : "sys")
     end
 end
 
@@ -33,8 +33,8 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
     sysimg = Libdl.dlopen_e("sys")
     if sysimg != C_NULL
         if !force && Base.samefile(Libdl.dlpath(sysimg), "$(sysimg_path).$(Libdl.dlext)")
-            info("System image already loaded at $(Libdl.dlpath(sysimg)), set force=true to override")
-            return
+            info("System image already loaded at $(Libdl.dlpath(sysimg)), set force=true to override.")
+            return nothing
         end
     end
 
@@ -54,14 +54,14 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
             touch("$sysimg_path.ji")
         catch
             err_msg =  "Unable to modify $sysimg_path.ji, ensure parent directory exists "
-            err_msg *= "and is writable. Absolute paths work best.)"
-            error( err_msg )
+            err_msg *= "and is writable; absolute paths work best.)"
+            error(err_msg)
         end
 
         # Copy in userimg.jl if it exists
         if userimg_path !== nothing
             if !isfile(userimg_path)
-                error("$userimg_path is not found, ensure it is an absolute path!")
+                error("$userimg_path is not found, ensure it is an absolute path.")
             end
             if isfile("userimg.jl")
                 error("$base_dir/userimg.jl already exists, delete manually to continue.")
@@ -72,28 +72,28 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
             # Start by building inference.{ji,o}
             inference_path = joinpath(dirname(sysimg_path), "inference")
             info("Building inference.o")
-            println("$julia -C $cpu_target --output-ji $inference_path.ji --output-o $inference_path.o coreimg.jl")
+            info("$julia -C $cpu_target --output-ji $inference_path.ji --output-o $inference_path.o coreimg.jl")
             run(`$julia -C $cpu_target --output-ji $inference_path.ji --output-o $inference_path.o coreimg.jl`)
 
             # Bootstrap off of that to create sys.{ji,o}
             info("Building sys.o")
-            println("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl")
+            info("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl")
             run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl`)
 
             if cc !== nothing
                 link_sysimg(sysimg_path, cc, debug)
             else
-                info("System image successfully built at $sysimg_path.ji")
+                info("System image successfully built at $sysimg_path.ji.")
             end
 
             if !Base.samefile("$(default_sysimg_path(debug)).ji", "$sysimg_path.ji")
                 if Base.isfile("$sysimg_path.$(Libdl.dlext)")
-                    info("To run Julia with this image loaded, run: julia -J $sysimg_path.$(Libdl.dlext)")
+                    info("To run Julia with this image loaded, run: `julia -J $sysimg_path.$(Libdl.dlext)`.")
                 else
-                    info("To run Julia with this image loaded, run: julia -J $sysimg_path.ji")
+                    info("To run Julia with this image loaded, run: `julia -J $sysimg_path.ji`.")
                 end
             else
-                info("Julia will automatically load this system image at next startup")
+                info("Julia will automatically load this system image at next startup.")
             end
         finally
             # Cleanup userimg.jl
@@ -106,9 +106,9 @@ end
 
 # Search for a compiler to link sys.o into sys.dl_ext.  Honor LD environment variable.
 function find_system_compiler()
-    if haskey( ENV, "CC" )
+    if haskey(ENV, "CC")
         if !success(`$(ENV["CC"]) -v`)
-            warn("Using compiler override $(ENV["CC"]), but unable to run `$(ENV["CC"]) -v`")
+            warn("Using compiler override $(ENV["CC"]), but unable to run `$(ENV["CC"]) -v`.")
         end
         return ENV["CC"]
     end
@@ -117,15 +117,15 @@ function find_system_compiler()
     if is_windows()
         try
             eval(Main, :(using WinRPM))
-            winrpmgcc = joinpath(WinRPM.installdir,"usr","$(Sys.ARCH)-w64-mingw32",
-                "sys-root","mingw","bin","gcc.exe")
+            winrpmgcc = joinpath(WinRPM.installdir, "usr", "$(Sys.ARCH)-w64-mingw32",
+                "sys-root", "mingw", "bin", "gcc.exe")
             if success(`$winrpmgcc --version`)
                 return winrpmgcc
             else
                 throw()
             end
         catch
-            warn("Install GCC via `Pkg.add(\"WinRPM\"); WinRPM.install(\"gcc\")` to generate sys.dll for faster startup times")
+            warn("Install GCC via `Pkg.add(\"WinRPM\"); WinRPM.install(\"gcc\")` to generate sys.dll for faster startup times.")
         end
     end
 
@@ -137,7 +137,7 @@ function find_system_compiler()
         end
     end
 
-    warn( "No supported compiler found; startup times will be longer" )
+    warn("No supported compiler found; startup times will be longer.")
 end
 
 # Link sys.o into sys.$(dlext)
@@ -157,10 +157,13 @@ function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false
 
     sysimg_file = "$sysimg_path.$(Libdl.dlext)"
     info("Linking sys.$(Libdl.dlext)")
-    # Windows has difficulties overwriting a file in use so we first rename it
+    info("$cc $(join(FLAGS, ' ')) -o $sysimg_file $sysimg_path.o")
+    # Windows has difficulties overwriting a file in use so we first link to a temp file
     if is_windows() && isfile(sysimg_file)
-        mv(sysimg_file, "$sysimg_file.old"; remove_destination=true)
-        run(`$cc $FLAGS -o $sysimg_file $sysimg_path.o`)
+        if success(pipeline(`$cc $FLAGS -o $sysimg_path.tmp $sysimg_path.o`; stdout=STDOUT, stderr=STDERR))
+            mv(sysimg_file, "$sysimg_file.old"; remove_destination=true)
+            mv("$sysimg_path.tmp", sysimg_file; remove_destination=true)
+        end
     else
         run(`$cc $FLAGS -o $sysimg_file $sysimg_path.o`)
     end

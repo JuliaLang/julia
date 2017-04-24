@@ -1,5 +1,5 @@
 # This file is a part of Julia, but is derived from
-# https://github.com/floitsch/double-conversion which has the following license
+# https://github.com/google/double-conversion which has the following license
 #
 # Copyright 2006-2014, the V8 project authors. All rights reserved.
 # Redistribution and use in source and binary forms, with or without
@@ -36,8 +36,8 @@ export Bignum
 
 const kMaxSignificantBits = 3584
 
-typealias Chunk UInt32
-typealias DoubleChunk UInt64
+const Chunk = UInt32
+const DoubleChunk = UInt64
 
 const kChunkSize = sizeof(Chunk) * 8
 const kDoubleChunkSize = sizeof(DoubleChunk) * 8
@@ -49,7 +49,7 @@ const kBigitMask = Chunk((1 << kBigitSize) - 1)
 # grow. There are no checks if the stack-allocated space is sufficient.
 const kBigitCapacity = div(kMaxSignificantBits,kBigitSize)
 
-type Bignum
+mutable struct Bignum
     bigits::Array{UInt32,1}
     used_digits::Int32
     exponent::Int32

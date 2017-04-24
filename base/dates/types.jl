@@ -1,6 +1,6 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-abstract AbstractTime
+abstract type AbstractTime end
 
 """
     Period
@@ -17,18 +17,18 @@ abstract AbstractTime
 
 `Period` types represent discrete, human representations of time.
 """
-abstract Period     <: AbstractTime
-abstract DatePeriod <: Period
-abstract TimePeriod <: Period
+abstract type Period     <: AbstractTime end
+abstract type DatePeriod <: Period end
+abstract type TimePeriod <: Period end
 
 for T in (:Year, :Month, :Week, :Day)
-    @eval immutable $T <: DatePeriod
+    @eval struct $T <: DatePeriod
         value::Int64
         $T(v::Number) = new(v)
     end
 end
 for T in (:Hour, :Minute, :Second, :Millisecond, :Microsecond, :Nanosecond)
-    @eval immutable $T <: TimePeriod
+    @eval struct $T <: TimePeriod
         value::Int64
         $T(v::Number) = new(v)
     end
@@ -57,7 +57,7 @@ Period(v)
 `Instant` types represent integer-based, machine representations of time as continuous
 timelines starting from an epoch.
 """
-abstract Instant <: AbstractTime
+abstract type Instant <: AbstractTime end
 
 """
     UTInstant{T}
@@ -66,7 +66,7 @@ The `UTInstant` represents a machine timeline based on UT time (1 day = one revo
 the earth). The `T` is a `Period` parameter that indicates the resolution or precision of
 the instant.
 """
-immutable UTInstant{P<:Period} <: Instant
+struct UTInstant{P<:Period} <: Instant
     periods::P
 end
 
@@ -76,23 +76,23 @@ UTD(x) = UTInstant(Day(x))
 
 # Calendar types provide rules for interpretating instant
 # timelines in human-readable form.
-abstract Calendar <: AbstractTime
+abstract type Calendar <: AbstractTime end
 
 # ISOCalendar implements the ISO 8601 standard (en.wikipedia.org/wiki/ISO_8601)
 # Notably based on the proleptic Gregorian calendar
 # ISOCalendar provides interpretation rules for UTInstants to civil date and time parts
-immutable ISOCalendar <: Calendar end
+struct ISOCalendar <: Calendar end
 
-abstract TimeZone
-immutable UTC <: TimeZone end
+abstract type TimeZone end
+struct UTC <: TimeZone end
 
 """
     TimeType
 
 `TimeType` types wrap `Instant` machine instances to provide human representations of the
-machine instant. Both `DateTime` and `Date` are subtypes of `TimeType`.
+machine instant. `Time`, `DateTime` and `Date` are subtypes of `TimeType`.
 """
-abstract TimeType <: AbstractTime
+abstract type TimeType <: AbstractTime end
 
 """
     DateTime
@@ -100,7 +100,7 @@ abstract TimeType <: AbstractTime
 `DateTime` wraps a `UTInstant{Millisecond}` and interprets it according to the proleptic
 Gregorian calendar.
 """
-immutable DateTime <: TimeType
+struct DateTime <: TimeType
     instant::UTInstant{Millisecond}
     DateTime(instant::UTInstant{Millisecond}) = new(instant)
 end
@@ -110,7 +110,7 @@ end
 
 `Date` wraps a `UTInstant{Day}` and interprets it according to the proleptic Gregorian calendar.
 """
-immutable Date <: TimeType
+struct Date <: TimeType
     instant::UTInstant{Day}
     Date(instant::UTInstant{Day}) = new(instant)
 end
@@ -120,7 +120,7 @@ end
 
 `Time` wraps a `Nanosecond` and represents a specific moment in a 24-hour day.
 """
-immutable Time <: TimeType
+struct Time <: TimeType
     instant::Nanosecond
     Time(instant::Nanosecond) = new(instant)
 end
@@ -294,11 +294,11 @@ Base.typemin(::Union{Date, Type{Date}}) = Date(-252522163911150, 1, 1)
 Base.typemax(::Union{Time, Type{Time}}) = Time(23, 59, 59, 999, 999, 999)
 Base.typemin(::Union{Time, Type{Time}}) = Time(0)
 # Date-DateTime promotion, isless, ==
-Base.eltype{T<:Period}(::Type{T}) = T
+Base.eltype(::Type{T}) where {T<:Period} = T
 Base.promote_rule(::Type{Date}, x::Type{DateTime}) = DateTime
-Base.isless{T<:TimeType}(x::T, y::T) = isless(value(x), value(y))
+Base.isless(x::T, y::T) where {T<:TimeType} = isless(value(x), value(y))
 Base.isless(x::TimeType, y::TimeType) = isless(Base.promote_noncircular(x, y)...)
-=={T<:TimeType}(x::T, y::T) = ==(value(x), value(y))
+==(x::T, y::T) where {T<:TimeType} = ==(value(x), value(y))
 function ==(a::Time, b::Time)
     return hour(a) == hour(b) && minute(a) == minute(b) &&
         second(a) == second(b) && millisecond(a) == millisecond(b) &&
@@ -311,5 +311,5 @@ sleep(time::Period) = sleep(toms(time) / 1000)
 Timer(time::Period, repeat::Period=Second(0)) = Timer(toms(time) / 1000, toms(repeat) / 1000)
 timedwait(testcb::Function, time::Period) = timedwait(testcb, toms(time) / 1000)
 
-(::Type{Base.TypeOrder}){T<:AbstractTime}(::Type{T}) = Base.HasOrder()
-(::Type{Base.TypeArithmetic}){T<:AbstractTime}(::Type{T}) = Base.ArithmeticOverflows()
+(::Type{Base.TypeOrder})(::Type{<:AbstractTime}) = Base.HasOrder()
+(::Type{Base.TypeArithmetic})(::Type{<:AbstractTime}) = Base.ArithmeticOverflows()

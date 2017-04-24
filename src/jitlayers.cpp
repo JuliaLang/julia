@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-version.h"
 #include "platform.h"
@@ -70,6 +70,7 @@ namespace llvm {
 #include <llvm/ADT/StringMap.h>
 #include <llvm/ADT/StringSet.h>
 #include <llvm/ADT/SmallSet.h>
+#include "fix_llvm_assert.h"
 
 using namespace llvm;
 
@@ -126,7 +127,14 @@ void addOptimizationPasses(PassManager *PM)
     PM->add(llvm::createMemorySanitizerPass(true));
 #endif
     if (jl_options.opt_level == 0) {
+        PM->add(createCFGSimplificationPass()); // Clean up disgusting code
+        PM->add(createMemCpyOptPass()); // Remove memcpy / form memset
         PM->add(createLowerPTLSPass(imaging_mode));
+#if JL_LLVM_VERSION >= 40000
+        PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
+#else
+        PM->add(createAlwaysInlinerPass()); // Respect always_inline
+#endif
         return;
     }
 #if JL_LLVM_VERSION >= 30700
@@ -148,7 +156,10 @@ void addOptimizationPasses(PassManager *PM)
     }
     // list of passes from vmkit
     PM->add(createCFGSimplificationPass()); // Clean up disgusting code
-    PM->add(createPromoteMemoryToRegisterPass());// Kill useless allocas
+    PM->add(createPromoteMemoryToRegisterPass()); // Kill useless allocas
+
+    // hopefully these functions (from llvmcall) don't try to interact with the Julia runtime
+    // or have anything that might corrupt the createLowerPTLSPass pass
 #if JL_LLVM_VERSION >= 40000
     PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
 #else
@@ -228,6 +239,15 @@ void addOptimizationPasses(PassManager *PM)
 #endif
     PM->add(createJumpThreadingPass());         // Thread jumps
     PM->add(createDeadStoreEliminationPass());  // Delete dead stores
+
+    // see if all of the constant folding has exposed more loops
+    // to simplification and deletion
+    // this helps significantly with cleaning up iteration
+    PM->add(createCFGSimplificationPass());     // Merge & remove BBs
+    PM->add(createLoopIdiomPass());
+    PM->add(createLoopDeletionPass());          // Delete dead loops
+    PM->add(createJumpThreadingPass());         // Thread jumps
+
 #if JL_LLVM_VERSION >= 30500
     if (jl_options.opt_level >= 3) {
         PM->add(createSLPVectorizerPass());     // Vectorize straight-line code
@@ -241,7 +261,6 @@ void addOptimizationPasses(PassManager *PM)
     PM->add(createLoopVectorizePass());         // Vectorize loops
     PM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
 #endif
-    //PM->add(createCFGSimplificationPass());     // Merge & remove BBs
 }
 
 #ifdef USE_ORCJIT
@@ -347,7 +366,7 @@ JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
 
 // TODO: hook up RegisterJITEventListener, instead of hard-coding the GDB and JuliaListener targets
 template <typename ObjSetT, typename LoadResult>
-void JuliaOJIT::DebugObjectRegistrar::operator()(ObjectLinkingLayerBase::ObjSetHandleT H,
+void JuliaOJIT::DebugObjectRegistrar::operator()(RTDyldObjectLinkingLayerBase::ObjSetHandleT H,
                 const ObjSetT &Objects, const LoadResult &LOS)
 {
 #if JL_LLVM_VERSION < 30800
@@ -512,7 +531,7 @@ void *JuliaOJIT::getPointerToGlobalIfAvailable(const GlobalValue *GV)
 
 void JuliaOJIT::addModule(std::unique_ptr<Module> M)
 {
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
     // validate the relocations for M
     for (Module::iterator I = M->begin(), E = M->end(); I != E; ) {
         Function *F = &*I;
@@ -1101,6 +1120,16 @@ static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap,
                                  GlobalVariable::ExternalLinkage,
                                  feature_string,
                                  "jl_sysimg_cpu_target"));
+
+    // reflect the address of the jl_RTLD_DEFAULT_handle variable
+    // back to the caller, so that we can check for consistency issues
+    GlobalValue *jlRTLD_DEFAULT_var = mod->getNamedValue("jl_RTLD_DEFAULT_handle");
+    addComdat(new GlobalVariable(*mod,
+                                 jlRTLD_DEFAULT_var->getType(),
+                                 true,
+                                 GlobalVariable::ExternalLinkage,
+                                 jlRTLD_DEFAULT_var,
+                                 "jl_RTLD_DEFAULT_handle_pointer"));
 
 #ifdef HAVE_CPUID
     // For native also store the cpuid

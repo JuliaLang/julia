@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Multimedia
 
@@ -12,13 +12,13 @@ export Display, display, pushdisplay, popdisplay, displayable, redisplay,
 # dispatch show and to add conversions for new types.
 
 # defined in sysimg.jl for bootstrapping:
-# immutable MIME{mime} end
+# struct MIME{mime} end
 # macro MIME_str(s)
 import Base: MIME, @MIME_str
 
 import Base: show, print, string, convert
 MIME(s) = MIME{Symbol(s)}()
-show{mime}(io::IO, ::MIME{mime}) = print(io, "MIME type ", string(mime))
+show(io::IO, ::MIME{mime}) where {mime} = print(io, "MIME type ", string(mime))
 print{mime}(io::IO, ::MIME{mime}) = print(io, mime)
 
 ###########################################################################
@@ -39,7 +39,7 @@ mimewritable{mime}(::MIME{mime}, x) =
 show(io::IO, m::AbstractString, x) = show(io, MIME(m), x)
 mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
 
-verbose_show(io, m, x) = show(IOContext(io,limit=false), m, x)
+verbose_show(io, m, x) = show(IOContext(io, :limit => false), m, x)
 
 """
     reprmime(mime, x)
@@ -119,7 +119,7 @@ end
 # cannot be displayed.  The return value of display(...) is up to the
 # Display type.
 
-abstract Display
+abstract type Display end
 
 # it is convenient to accept strings instead of ::MIME
 display(d::Display, mime::AbstractString, x) = display(d, MIME(mime), x)
@@ -145,7 +145,7 @@ Returns a `TextDisplay <: Display`, which displays any object as the text/plain 
 (by default), writing the text representation to the given I/O stream. (This is how
 objects are printed in the Julia REPL.)
 """
-immutable TextDisplay <: Display
+struct TextDisplay <: Display
     io::IO
 end
 display(d::TextDisplay, M::MIME"text/plain", x) = show(d.io, M, x)

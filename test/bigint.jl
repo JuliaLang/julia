@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 a = parse(BigInt,"123456789012345678901234567890")
 b = parse(BigInt,"123456789012345678901234567891")
@@ -345,8 +345,6 @@ end
 @test typeof(exp2(a)) == BigFloat
 @test typeof(exp10(a)) == BigFloat
 @test typeof(expm1(a)) == BigFloat
-@test typeof(erf(a)) == BigFloat
-@test typeof(erfc(a)) == BigFloat
 @test typeof(cosh(a)) == BigFloat
 @test typeof(sinh(a)) == BigFloat
 @test typeof(tanh(a)) == BigFloat

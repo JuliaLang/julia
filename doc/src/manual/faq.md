@@ -12,7 +12,7 @@ If memory usage is your concern, you can always replace objects with ones that c
 with `A = 0`.  The memory will be released the next time the garbage collector runs; you can force
 this to happen with [`gc()`](@ref).
 
-### How can I modify the declaration of a type/immutable in my session?
+### How can I modify the declaration of a type in my session?
 
 Perhaps you've defined a type and then realize you need to add a new field.  If you try this at
 the REPL, you get the error:
@@ -29,7 +29,7 @@ you can redefine types and constants.  You can't import the type names into `Mai
 to be able to redefine them there, but you can use the module name to resolve the scope.  In other
 words, while developing you might use a workflow something like this:
 
-```
+```julia
 include("mynewcode.jl")              # this defines a module MyModule
 obj1 = MyModule.ObjConstructor(a, b)
 obj2 = MyModule.somefunction(obj1)
@@ -108,10 +108,10 @@ have two options:
 
 1. Use `import`:
 
-   ```
+   ```julia
    import Foo
    function bar(...)
-       ... refer to Foo symbols via Foo.baz ...
+       # ... refer to Foo symbols via Foo.baz ...
    end
    ```
 
@@ -120,12 +120,12 @@ have two options:
    `Foo` symbols by their qualified names `Foo.bar` etc.
 2. Wrap your function in a module:
 
-   ```
+   ```julia
    module Bar
    export bar
    using Foo
    function bar(...)
-       ... refer to Foo.baz as simply baz ....
+       # ... refer to Foo.baz as simply baz ....
    end
    end
    using Bar
@@ -227,7 +227,7 @@ julia> sqrt(-2.0)
 ERROR: DomainError:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
 Stacktrace:
- [1] sqrt(::Float64) at ./math.jl:423
+ [1] sqrt(::Float64) at ./math.jl:422
 
 julia> 2^-5
 ERROR: DomainError:
@@ -235,7 +235,7 @@ Cannot raise an integer x to a negative power -n.
 Make x a float by adding a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.
 Stacktrace:
  [1] power_by_squaring(::Int64, ::Int64) at ./intfuncs.jl:170
- [2] ^(::Int64, ::Int64) at ./intfuncs.jl:194
+ [2] literal_pow(::Base.#^, ::Int64, ::Type{Val{-5}}) at ./intfuncs.jl:205
 ```
 
 This behavior is an inconvenient consequence of the requirement for type-stability.  In the case
@@ -474,7 +474,7 @@ the loop, but it cannot algebraically reduce multiple operations into fewer equi
 
 The most reasonable alternative to having integer arithmetic silently overflow is to do checked
 arithmetic everywhere, raising errors when adds, subtracts, and multiplies overflow, producing
-values that are not value-correct. In this [blog post](http://danluu.com/integer-overflow), Dan
+values that are not value-correct. In this [blog post](http://danluu.com/integer-overflow/), Dan
 Luu analyzes this and finds that rather than the trivial cost that this approach should in theory
 have, it ends up having a substantial cost due to compilers (LLVM and GCC) not gracefully optimizing
 around the added overflow checks. If this improves in the future, we could consider defaulting
@@ -610,7 +610,7 @@ that, rather than storing the result in the same location in memory as `x`, it a
 array to store the result.
 
 While this behavior might surprise some, the choice is deliberate. The main reason is the presence
-of `immutable` objects within Julia, which cannot change their value once created.  Indeed, a
+of immutable objects within Julia, which cannot change their value once created.  Indeed, a
 number is an immutable object; the statements `x = 5; x += 1` do not modify the meaning of `5`,
 they modify the value bound to `x`. For an immutable, the only way to change the value is to reassign
 it.
@@ -710,7 +710,7 @@ Finally, you may also consider building Julia from source for yourself. This opt
 for those individuals who are comfortable at the command line, or interested in learning. If this
 describes you, you may also be interested in reading our [guidelines for contributing](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md).
 
-Links to each of these download types can be found on the download page at [http://julialang.org/downloads/](http://julialang.org/downloads/).
+Links to each of these download types can be found on the download page at [https://julialang.org/downloads/](https://julialang.org/downloads/).
 Note that not all versions of Julia are available for all platforms.
 
 ### When are deprecated functions removed?

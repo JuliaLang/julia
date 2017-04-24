@@ -1,8 +1,8 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module LibGit2
 
-import Base: merge!, cat, ==
+import Base: merge!, ==
 
 export with, GitRepo, GitConfig
 
@@ -36,7 +36,7 @@ include("callbacks.jl")
 
 using .Error
 
-immutable State
+struct State
     head::GitHash
     index::GitHash
     work::GitHash
@@ -95,6 +95,17 @@ Checks if there have been any changes to tracked files in the working tree (if
 `cached=false`) or the index (if `cached=true`).
 `pathspecs` are the specifications for options for the diff.
 
+# Example
+```julia
+repo = LibGit2.GitRepo(repo_path)
+LibGit2.isdirty(repo) # should be false
+open(joinpath(repo_path, new_file), "a") do f
+    println(f, "here's my cool new file")
+end
+LibGit2.isdirty(repo) # now true
+LibGit2.isdirty(repo, new_file) # now true
+```
+
 Equivalent to `git diff-index HEAD [-- <pathspecs>]`.
 """
 isdirty(repo::GitRepo, paths::AbstractString=""; cached::Bool=false) =
@@ -107,12 +118,20 @@ Checks if there are any differences between the tree specified by `treeish` and 
 tracked files in the working tree (if `cached=false`) or the index (if `cached=true`).
 `pathspecs` are the specifications for options for the diff.
 
+# Example
+```julia
+repo = LibGit2.GitRepo(repo_path)
+LibGit2.isdiff(repo, "HEAD") # should be false
+open(joinpath(repo_path, new_file), "a") do f
+    println(f, "here's my cool new file")
+end
+LibGit2.isdiff(repo, "HEAD") # now true
+```
+
 Equivalent to `git diff-index <treeish> [-- <pathspecs>]`.
 """
 function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""; cached::Bool=false)
-    tree_oid = revparseid(repo, "$treeish^{tree}")
-    result = false
-    tree = GitTree(repo, tree_oid)
+    tree = GitTree(repo, "$treeish^{tree}")
     try
         diff = diff_tree(repo, tree, paths, cached=cached)
         result = count(diff) > 0
@@ -123,9 +142,41 @@ function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""
     return result
 end
 
-""" git diff --name-only --diff-filter=<filter> <branch1> <branch2> """
+"""
+    diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractString; kwarg...) -> Vector{AbstractString}
+
+Show which files have changed in the git repository `repo` between branches `branch1`
+and `branch2`.
+
+The keyword argument is:
+  * `filter::Set{Consts.DELTA_STATUS}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED]))`,
+    and it sets options for the diff. The default is to show files added, modified, or deleted.
+
+Returns only the *names* of the files which have changed, *not* their contents.
+
+# Example
+
+```julia
+LibGit2.branch!(repo, "branch/a")
+LibGit2.branch!(repo, "branch/b")
+# add a file to repo
+open(joinpath(LibGit2.path(repo),"file"),"w") do f
+    write(f, "hello repo\n")
+end
+LibGit2.add!(repo, "file")
+LibGit2.commit(repo, "add file")
+# returns ["file"]
+filt = Set([LibGit2.Consts.DELTA_ADDED])
+files = LibGit2.diff_files(repo, "branch/a", "branch/b", filter=filt)
+# returns [] because existing files weren't modified
+filt = Set([LibGit2.Consts.DELTA_MODIFIED])
+files = LibGit2.diff_files(repo, "branch/a", "branch/b", filter=filt)
+```
+
+Equivalent to `git diff --name-only --diff-filter=<filter> <branch1> <branch2>`.
+"""
 function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractString;
-                    filter::Set{Cint}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED]))
+                    filter::Set{Consts.DELTA_STATUS}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED]))
     b1_id = revparseid(repo, branch1*"^{tree}")
     b2_id = revparseid(repo, branch2*"^{tree}")
     tree1 = GitTree(repo, b1_id)
@@ -136,7 +187,7 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
         for i in 1:count(diff)
             delta = diff[i]
             delta === nothing && break
-            if delta.status in filter
+            if Consts.DELTA_STATUS(delta.status) in filter
                 push!(files, unsafe_string(delta.new_file.path))
             end
         end
@@ -191,24 +242,31 @@ function set_remote_url(path::AbstractString, url::AbstractString; remote::Abstr
     end
 end
 
-function make_payload{P<:AbstractCredentials}(payload::Nullable{P})
+function make_payload(payload::Nullable{<:AbstractCredentials})
     Ref{Nullable{AbstractCredentials}}(payload)
 end
 
 """
-    fetch(repo::GitRepo; remote::AbstractString="origin", remoteurl::AbstractString="", refspecs=AbstractString[], payload=Nullable{AbstractCredentials}())
+    fetch(repo::GitRepo; kwargs...)
+
+Fetches updates from an upstream of the repository `repo`.
+
+The keyword arguments are:
+  * `remote::AbstractString="origin"`: which remote, specified by name,
+    of `repo` to fetch from. If this is empty, the URL will be used to
+    construct an anonymous remote.
+  * `remoteurl::AbstractString=""`: the URL of `remote`. If not specified,
+    will be assumed based on the given name of `remote`.
+  * `refspecs=AbstractString[]`: determines properties of the fetch.
+  * `payload=Nullable{AbstractCredentials}()`: provides credentials, if necessary,
+    for instance if `remote` is a private repository.
 
 Equivalent to `git fetch [<remoteurl>|<repo>] [<refspecs>]`.
-Fetches updates from the upstream `remote` with URL `remoteurl` of the repository `repo`.
-Uses the provided fetch `refspecs` to determine properties of the fetch.
-`payload` provides credentials if necessary, for instance if `remote` is a private
-repository.
 """
-function fetch{T<:AbstractString, P<:AbstractCredentials}(repo::GitRepo;
-                                  remote::AbstractString="origin",
-                                  remoteurl::AbstractString="",
-                                  refspecs::Vector{T}=AbstractString[],
-                                  payload::Nullable{P}=Nullable{AbstractCredentials}())
+function fetch(repo::GitRepo; remote::AbstractString="origin",
+               remoteurl::AbstractString="",
+               refspecs::Vector{<:AbstractString}=AbstractString[],
+               payload::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}())
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
@@ -224,21 +282,26 @@ function fetch{T<:AbstractString, P<:AbstractCredentials}(repo::GitRepo;
 end
 
 """
-    push(repo::GitRepo; remote::AbstractString="origin", remoteurl::AbstractString="", refspecs=AbstractString[], force::Bool=false, payload=Nullable{AbstractCredentials}())
+    push(repo::GitRepo; kwargs...)
+
+Pushes updates to an upstream of `repo`.
+
+The keyword arguments are:
+  * `remote::AbstractString="origin"`: the name of the upstream remote to push to.
+  * `remoteurl::AbstractString=""`: the URL of `remote`.
+  * `refspecs=AbstractString[]`: determines properties of the push.
+  * `force::Bool=false`: determines if the push will be a force push,
+     overwriting the remote branch.
+  * `payload=Nullable{AbstractCredentials}()`: provides credentials, if necessary,
+    for instance if `remote` is a private repository.
 
 Equivalent to `git push [<remoteurl>|<repo>] [<refspecs>]`.
-Pushes updates to the `remote` upstream of `repo`, with URL `remoteurl`.
-Uses the provided push `refspecs` to determine properties of the push.
-`force` determines if the push will be a force push, overwriting the remote branch.
-`payload` provides credentials if necessary, for instance if `remote` is a private
-repository.
 """
-function push{T<:AbstractString, P<:AbstractCredentials}(repo::GitRepo;
-              remote::AbstractString="origin",
+function push(repo::GitRepo; remote::AbstractString="origin",
               remoteurl::AbstractString="",
-              refspecs::Vector{T}=AbstractString[],
+              refspecs::Vector{<:AbstractString}=AbstractString[],
               force::Bool=false,
-              payload::Nullable{P}=Nullable{AbstractCredentials}())
+              payload::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}())
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
@@ -269,14 +332,22 @@ function branch(repo::GitRepo)
 end
 
 """
-    branch!(repo::GitRepo, branch_name::AbstractString, commit::AbstractString=""; track::AbstractString="", force::Bool=false, set_head::Bool=true)
+    branch!(repo::GitRepo, branch_name::AbstractString, commit::AbstractString=""; kwargs...)
+
+Checkout a new git branch in the `repo` repository. `commit` is the [`GitHash`](@ref),
+in string form, which will be the start of the new branch.
+
+The keyword arguments are:
+  * `track::AbstractString=""`: the name of the
+    remote branch this new branch should track, if any.
+    If empty (the default), no remote branch
+    will be tracked.
+  * `force::Bool=false`: if `true`, branch creation will
+    be forced.
+  * `set_head::Bool=true`: if `true`, after the branch creation
+    finishes the branch head will be set as the HEAD of `repo`.
 
 Equivalent to `git checkout [-b|-B] <branch_name> [<commit>] [--track <track>]`.
-Checkout a new git branch in the `repo` repository. `commit` is the [`GitHash`](@ref),
-in string form, which will be the start of the new branch. `track` is the name of the
-remote branch this new branch should track, if any. If empty (the default), no remote branch
-will be tracked. If `force` is `true`, branch creation will be forced. If `set_head` is
-`true`, after the branch creation finishes the branch head will be set as the HEAD of `repo`.
 """
 function branch!(repo::GitRepo, branch_name::AbstractString,
                  commit::AbstractString = ""; # start point
@@ -372,23 +443,43 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
     # search for commit to get a commit object
     obj = GitObject(repo, GitHash(commit))
     peeled = peel(GitCommit, obj)
-
-    opts = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) : CheckoutOptions()
-    # detach commit
     obj_oid = GitHash(peeled)
-    ref = GitReference(repo, obj_oid, force=force,
-                       msg="libgit2.checkout: moving from $head_name to $(string(obj_oid))")
 
     # checkout commit
-    checkout_tree(repo, peeled, options = opts)
+    checkout_tree(repo, peeled, options = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) : CheckoutOptions())
+
+    GitReference(repo, obj_oid, force=force,
+                 msg="libgit2.checkout: moving from $head_name to $(obj_oid))")
+
+    return nothing
 end
 
-""" git clone [-b <branch>] [--bare] <url> <dir> """
-function clone{P<:AbstractCredentials}(repo_url::AbstractString, repo_path::AbstractString;
+"""
+    clone(repo_url::AbstractString, repo_path::AbstractString; kwargs...)
+
+Clone a remote repository located at `repo_url` to the local filesystem location `repo_path`.
+
+The keyword arguments are:
+  * `branch::AbstractString=""`: which branch of the remote to clone,
+    if not the default repository branch (usually `master`).
+  * `isbare::Bool=false`: if `true`, clone the remote as a bare repository,
+    which will make `repo_path` itself the git directory instead of `repo_path/.git`.
+    This means that a working tree cannot be checked out. Plays the role of the
+    git CLI argument `--bare`.
+  * `remote_cb::Ptr{Void}=C_NULL`: a callback which will be used to create the remote
+    before it is cloned. If `C_NULL` (the default), no attempt will be made to create
+    the remote - it will be assumed to already exist.
+  * `payload::Nullable{P<:AbstractCredentials}=Nullable{AbstractCredentials}()`:
+    provides credentials if necessary, for instance if the remote is a private
+    repository.
+
+Equivalent to `git clone [-b <branch>] [--bare] <repo_url> <repo_path>`.
+"""
+function clone(repo_url::AbstractString, repo_path::AbstractString;
                branch::AbstractString="",
                isbare::Bool = false,
                remote_cb::Ptr{Void} = C_NULL,
-               payload::Nullable{P}=Nullable{AbstractCredentials}())
+               payload::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}())
     # setup clone options
     lbranch = Base.cconvert(Cstring, branch)
     payload = make_payload(payload)
@@ -409,35 +500,66 @@ function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractSt
     reset!(repo, Nullable(obj), pathspecs...)
 end
 
-""" git reset [--soft | --mixed | --hard] <id> """
+"""
+    reset!(repo::GitRepo, id::GitHash, mode::Cint = Consts.RESET_MIXED)
+
+Reset the repository `repo` to its state at `id`, using one of three modes
+set by `mode`:
+  1. `Consts.RESET_SOFT` - move HEAD to `id`.
+  2. `Consts.RESET_MIXED` - default, move HEAD to `id` and reset the index to `id`.
+  3. `Consts.RESET_HARD` - move HEAD to `id`, reset the index to `id`, and discard all working changes.
+
+Equivalent to `git reset [--soft | --mixed | --hard] <id>`.
+"""
 reset!(repo::GitRepo, id::GitHash, mode::Cint = Consts.RESET_MIXED) =
     reset!(repo, GitObject(repo, id), mode)
 
-""" git cat-file <commit> """
-function cat(repo::GitRepo, spec)
-    obj = GitObject(repo, spec)
-    if isa(obj, GitBlob)
-        content(obj)
-    else
-        nothing
-    end
-end
+"""
+    LibGit2.revcount(repo::GitRepo, commit1::AbstractString, commit2::AbstractString)
 
-""" git rev-list --count <commit1> <commit2> """
-function revcount(repo::GitRepo, fst::AbstractString, snd::AbstractString)
-    fst_id = revparseid(repo, fst)
-    snd_id = revparseid(repo, snd)
-    base_id = merge_base(repo, string(fst_id), string(snd_id))
+List the number of revisions between `commit1` and `commit2` (committish OIDs in string form).
+Since `commit1` and `commit2` may be on different branches, `revcount` performs a "left-right"
+revision list (and count), returning a tuple of `Int`s - the number of left and right
+commits, respectively. A left (or right) commit refers to which side of a symmetric
+difference in a tree the commit is reachable from.
+
+Equivalent to `git rev-list --left-right --count <commit1> <commit2>`.
+"""
+function revcount(repo::GitRepo, commit1::AbstractString, commit2::AbstractString)
+    commit1_id = revparseid(repo, commit1)
+    commit2_id = revparseid(repo, commit2)
+    base_id = merge_base(repo, string(commit1_id), string(commit2_id))
     fc = with(GitRevWalker(repo)) do walker
-        count((i,r)->i!=base_id, walker, oid=fst_id, by=Consts.SORT_TOPOLOGICAL)
+        count((i,r)->i!=base_id, walker, oid=commit1_id, by=Consts.SORT_TOPOLOGICAL)
     end
     sc = with(GitRevWalker(repo)) do walker
-        count((i,r)->i!=base_id, walker, oid=snd_id, by=Consts.SORT_TOPOLOGICAL)
+        count((i,r)->i!=base_id, walker, oid=commit2_id, by=Consts.SORT_TOPOLOGICAL)
     end
     return (fc-1, sc-1)
 end
 
-""" git merge [--ff-only] [<committish> | FETCH_HEAD] """
+"""
+    merge!(repo::GitRepo; kwargs...) -> Bool
+
+Perform a git merge on the repository `repo`, merging commits
+with diverging history into the current branch. Returns `true`
+if the merge succeeded, `false` if not.
+
+The keyword arguments are:
+  * `committish::AbstractString=""`: Merge the named commit(s) in `committish`.
+  * `branch::AbstractString=""`: Merge the branch `branch` and all its commits
+    since it diverged from the current branch.
+  * `fastforward::Bool=false`: If `fastforward` is `true`, only merge if the
+    merge is a fast-forward (the current branch head is an ancestor of the
+    commits to be merged), otherwise refuse to merge and return `false`.
+    This is equivalent to the git CLI option `--ff-only`.
+  * `merge_opts::MergeOptions=MergeOptions()`: `merge_opts` specifies options
+    for the merge, such as merge strategy in case of conflicts.
+  * `checkout_opts::CheckoutOptions=CheckoutOptions()`: `checkout_opts` specifies
+    options for the checkout step.
+
+Equivalent to `git merge [--ff-only] [<committish> | <branch>]`.
+"""
 function merge!(repo::GitRepo;
                 committish::AbstractString = "",
                 branch::AbstractString = "",
@@ -581,7 +703,11 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
 end
 
 
-""" Returns all commit authors """
+"""
+    authors(repo::GitRepo) -> Vector{Signature}
+
+Returns all authors of commits to the `repo` repository.
+"""
 function authors(repo::GitRepo)
     return with(GitRevWalker(repo)) do walker
         map((oid,repo)->with(GitCommit(repo, oid)) do cmt
@@ -591,6 +717,14 @@ function authors(repo::GitRepo)
     end
 end
 
+"""
+    snapshot(repo::GitRepo) -> State
+
+Take a snapshot of the current state of the repository `repo`,
+storing the current HEAD, index, and any uncommitted work.
+The output `State` can be used later during a call to [`restore`](@ref)
+to return the repository to the snapshotted state.
+"""
 function snapshot(repo::GitRepo)
     head = GitHash(repo, Consts.HEAD_FILE)
     index = with(GitIndex, repo) do idx; write_tree!(idx) end
@@ -612,6 +746,13 @@ function snapshot(repo::GitRepo)
     State(head, index, work)
 end
 
+"""
+    restore(s::State, repo::GitRepo)
+
+Return a repository `repo` to a previous `State` `s`, for
+example the HEAD of a branch before a merge attempt. `s`
+can be generated using the [`snapshot`](@ref) function.
+"""
 function restore(s::State, repo::GitRepo)
     head = reset!(repo, Consts.HEAD_FILE, "*")  # unstage everything
     with(GitIndex, repo) do idx
@@ -696,3 +837,4 @@ end
 
 
 end # module
+

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Test integer conversion routines from int.jl
 
@@ -86,7 +86,7 @@ end
 @test round(UInt8, 123) == 123
 @test mod(123, UInt8) == 0x7b
 
-bitstype 8 MyBitsType <: Integer
+primitive type MyBitsType <: Integer 8 end
 @test_throws MethodError ~reinterpret(MyBitsType, 0x7b)
 
 UItypes = Base.BitUnsigned_types
@@ -201,3 +201,9 @@ end
 @test unsafe_trunc(Int8, -127) === Int8(-127)
 @test unsafe_trunc(Int8, -128) === Int8(-128)
 @test unsafe_trunc(Int8, -129) === Int8(127)
+
+# Test x % T returns a T
+for T in [Base.BitInteger_types..., BigInt],
+    U in [Base.BitInteger_types..., BigInt]
+    @test typeof(rand(U(0):U(127)) % T) === T
+end

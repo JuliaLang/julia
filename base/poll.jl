@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # filesystem operations
 
@@ -20,7 +20,7 @@ end
 # libuv file watching event flags
 const UV_RENAME = 1
 const UV_CHANGE = 2
-immutable FileEvent
+struct FileEvent
     renamed::Bool
     changed::Bool
     timedout::Bool
@@ -31,7 +31,7 @@ FileEvent(flags::Integer) = FileEvent((flags & UV_RENAME) != 0,
                                   (flags & FD_TIMEDOUT) != 0)
 fetimeout() = FileEvent(false, false, true)
 
-immutable FDEvent
+struct FDEvent
     readable::Bool
     writable::Bool
     disconnect::Bool
@@ -57,7 +57,7 @@ fdtimeout() = FDEvent(false, false, false, true)
             a.disconnect | b.disconnect,
             a.timedout | b.timedout)
 
-type FileMonitor
+mutable struct FileMonitor
     handle::Ptr{Void}
     file::String
     notify::Condition
@@ -76,7 +76,7 @@ type FileMonitor
     end
 end
 
-type PollingFileWatcher
+mutable struct PollingFileWatcher
     handle::Ptr{Void}
     file::String
     interval::UInt32
@@ -96,7 +96,7 @@ type PollingFileWatcher
     end
 end
 
-type _FDWatcher
+mutable struct _FDWatcher
     handle::Ptr{Void}
     fdnum::Int # this is NOT the file descriptor
     refcount::Tuple{Int, Int}
@@ -111,9 +111,6 @@ type _FDWatcher
                 if !readable && !writable
                     throw(ArgumentError("must specify at least one of readable or writable to create a FDWatcher"))
                 end
-                if ccall(:jl_uv_unix_fd_is_watched, Int32, (Int32, Ptr{Void}, Ptr{Void}), fd.fd, C_NULL, eventloop()) == 1
-                    throw(ArgumentError("file descriptor $(fd.fd) is already being watched by libuv"))
-                end
                 fdnum = fd.fd + 1
                 if fdnum > length(FDWatchers)
                     old_len = length(FDWatchers)
@@ -123,6 +120,9 @@ type _FDWatcher
                     this = FDWatchers[fdnum]::_FDWatcher
                     this.refcount = (this.refcount[1] + Int(readable), this.refcount[2] + Int(writable))
                     return this
+                end
+                if ccall(:jl_uv_unix_fd_is_watched, Int32, (Int32, Ptr{Void}, Ptr{Void}), fd.fd, C_NULL, eventloop()) == 1
+                    throw(ArgumentError("file descriptor $(fd.fd) is already being watched by libuv"))
                 end
 
                 handle = Libc.malloc(_sizeof_uv_poll)
@@ -195,7 +195,7 @@ type _FDWatcher
     end
 end
 
-type FDWatcher
+mutable struct FDWatcher
     watcher::_FDWatcher
     readable::Bool
     writable::Bool

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ###################################
 # Cross Platform tests for spawn. #
@@ -458,3 +458,11 @@ end
 
 # readlines(::Cmd), accidentally broken in #20203
 @test sort(readlines(`$lscmd -A`)) == sort(readdir())
+
+# issue #19864 (PR #20497)
+@test readchomp(pipeline(ignorestatus(
+        `$exename --startup-file=no -e '
+            struct Error19864 <: Exception; end
+            Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
+            throw(Error19864())'`),
+    stderr=catcmd)) == "ERROR: correct19864"

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -348,6 +348,24 @@ let v = varm([1.0+2.0im], 0; corrected = false)
     @test isa(v, Float64)
 end
 
+# cov and cor of complex arrays (issue #21093)
+x = [2.7 - 3.3im, 0.9 + 5.4im, 0.1 + 0.2im, -1.7 - 5.8im, 1.1 + 1.9im]
+y = [-1.7 - 1.6im, -0.2 + 6.5im, 0.8 - 10.0im, 9.1 - 3.4im, 2.7 - 5.5im]
+@test cov(x, y) ≈ 4.8365 - 12.119im
+@test cov(y, x) ≈ 4.8365 + 12.119im
+@test cov(x, reshape(y, :, 1)) ≈ reshape([4.8365 - 12.119im], 1, 1)
+@test cov(reshape(x, :, 1), y) ≈ reshape([4.8365 - 12.119im], 1, 1)
+@test cov(reshape(x, :, 1), reshape(y, :, 1)) ≈ reshape([4.8365 - 12.119im], 1, 1)
+@test cov([x y]) ≈ [21.779 4.8365-12.119im;
+                    4.8365+12.119im 54.548]
+@test cor(x, y) ≈ 0.14032104449218274 - 0.35160772008699703im
+@test cor(y, x) ≈ 0.14032104449218274 + 0.35160772008699703im
+@test cor(x, reshape(y, :, 1)) ≈ reshape([0.14032104449218274 - 0.35160772008699703im], 1, 1)
+@test cor(reshape(x, :, 1), y) ≈ reshape([0.14032104449218274 - 0.35160772008699703im], 1, 1)
+@test cor(reshape(x, :, 1), reshape(y, :, 1)) ≈ reshape([0.14032104449218274 - 0.35160772008699703im], 1, 1)
+@test cor([x y]) ≈ [1.0                                          0.14032104449218274-0.35160772008699703im
+                    0.14032104449218274+0.35160772008699703im  1.0]
+
 # Issue #17153 and PR #17154
 let a = rand(10,10)
     b = deepcopy(a)
@@ -367,4 +385,15 @@ let a = rand(10,10)
     @test b == a
     x = std(a, 2)
     @test b == a
+end
+
+# dimensional correctness
+isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
+using TestHelpers.Furlong
+let r = Furlong(1):Furlong(1):Furlong(2), a = collect(r)
+    @test sum(r) == sum(a) == Furlong(3)
+    @test cumsum(r) == Furlong.([1,3])
+    @test mean(r) == mean(a) == median(a) == median(r) == Furlong(1.5)
+    @test var(r) == var(a) == Furlong{2}(0.5)
+    @test std(r) == std(a) == Furlong{1}(sqrt(0.5))
 end

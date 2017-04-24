@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.LinAlg: checksquare
 
@@ -6,21 +6,21 @@ import Base.LinAlg: checksquare
 
 # Convert from 1-based to 0-based indices
 function decrement!{T<:Integer}(A::AbstractArray{T})
-    for i in 1:length(A); A[i] -= one(T) end
+    for i in 1:length(A); A[i] -= oneunit(T) end
     A
 end
-decrement{T<:Integer}(A::AbstractArray{T}) = decrement!(copy(A))
+decrement(A::AbstractArray{<:Integer}) = decrement!(copy(A))
 
 # Convert from 0-based to 1-based indices
 function increment!{T<:Integer}(A::AbstractArray{T})
-    for i in 1:length(A); A[i] += one(T) end
+    for i in 1:length(A); A[i] += oneunit(T) end
     A
 end
-increment{T<:Integer}(A::AbstractArray{T}) = increment!(copy(A))
+increment(A::AbstractArray{<:Integer}) = increment!(copy(A))
 
 ## sparse matrix multiplication
 
-function (*){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})
+function (*)(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}
     (*)(sppromote(A, B)...)
 end
 for f in (:A_mul_Bt, :A_mul_Bc,
@@ -98,7 +98,7 @@ Ac_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = Ac_mul_B
 At_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = At_mul_B!(one(eltype(B)), A, B, zero(eltype(C)), C)
 
 
-function (*){TX,TvA,TiA}(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA})
+function (*)(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA}) where {TX,TvA,TiA}
     mX, nX = size(X)
     nX == A.m || throw(DimensionMismatch())
     Y = zeros(promote_type(TX,TvA), mX, A.n)
@@ -122,7 +122,7 @@ end
 # Sparse matrix multiplication as described in [Gustavson, 1978]:
 # http://dl.acm.org/citation.cfm?id=355796
 
-(*){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) = spmatmul(A,B)
+(*)(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = spmatmul(A,B)
 for (f, opA, opB) in ((:A_mul_Bt, :identity, :transpose),
                       (:A_mul_Bc, :identity, :ctranspose),
                       (:At_mul_B, :transpose, :identity),
@@ -146,9 +146,9 @@ function spmatmul{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
     colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
     # TODO: Need better estimation of result space
     nnzC = min(mA*nB, length(nzvalA) + length(nzvalB))
-    colptrC = Array{Ti}(nB+1)
-    rowvalC = Array{Ti}(nnzC)
-    nzvalC = Array{Tv}(nnzC)
+    colptrC = Vector{Ti}(nB+1)
+    rowvalC = Vector{Ti}(nnzC)
+    nzvalC = Vector{Tv}(nnzC)
 
     @inbounds begin
         ip = 1
@@ -284,11 +284,11 @@ function bwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
     B
 end
 
-A_ldiv_B!{T,Ti}(L::LowerTriangular{T,SparseMatrixCSC{T,Ti}}, B::StridedVecOrMat) = fwdTriSolve!(L.data, B)
-A_ldiv_B!{T,Ti}(U::UpperTriangular{T,SparseMatrixCSC{T,Ti}}, B::StridedVecOrMat) = bwdTriSolve!(U.data, B)
+A_ldiv_B!{T}(L::LowerTriangular{T,<:SparseMatrixCSC{T}}, B::StridedVecOrMat) = fwdTriSolve!(L.data, B)
+A_ldiv_B!{T}(U::UpperTriangular{T,<:SparseMatrixCSC{T}}, B::StridedVecOrMat) = bwdTriSolve!(U.data, B)
 
-(\){T,Ti}(L::LowerTriangular{T,SparseMatrixCSC{T,Ti}}, B::SparseMatrixCSC) = A_ldiv_B!(L, Array(B))
-(\){T,Ti}(U::UpperTriangular{T,SparseMatrixCSC{T,Ti}}, B::SparseMatrixCSC) = A_ldiv_B!(U, Array(B))
+(\){T}(L::LowerTriangular{T,<:SparseMatrixCSC{T}}, B::SparseMatrixCSC) = A_ldiv_B!(L, Array(B))
+(\){T}(U::UpperTriangular{T,<:SparseMatrixCSC{T}}, B::SparseMatrixCSC) = A_ldiv_B!(U, Array(B))
 
 ## triu, tril
 
@@ -864,7 +864,7 @@ function (\)(A::SparseMatrixCSC, B::AbstractVecOrMat)
             return UpperTriangular(A) \ B
         end
         if ishermitian(A)
-            Hermitian(A) \ B
+            return Hermitian(A) \ B
         end
         return lufact(A) \ B
     else

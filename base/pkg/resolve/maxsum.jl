@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module MaxSum
 
@@ -10,12 +10,12 @@ export UnsatError, Graph, Messages, maxsum
 
 # An exception type used internally to signal that an unsatisfiable
 # constraint was detected
-type UnsatError <: Exception
+mutable struct UnsatError <: Exception
     info
 end
 
 # Some parameters to drive the decimation process
-type MaxSumParams
+mutable struct MaxSumParams
     nondec_iterations # number of initial iterations before starting
                       # decimation
     dec_interval # number of iterations between decimations
@@ -36,7 +36,7 @@ end
 
 # Graph holds the graph structure onto which max-sum is run, in
 # sparse format
-type Graph
+mutable struct Graph
     # adjacency matrix:
     #   for each package, has the list of neighbors
     #   indices (both dependencies and dependants)
@@ -158,7 +158,7 @@ end
 # Messages has the cavity messages and the total fields, and
 # gets updated iteratively (and occasionally decimated) until
 # convergence
-type Messages
+mutable struct Messages
     # cavity incoming messages: for each package p0,
     #                           for each neighbor p1 of p0,
     #                           msg[p0][p1] is a vector of length spp[p0]
@@ -169,6 +169,9 @@ type Messages
     #                 fld[p0] is a vector of length spp[p0]
     #                 fields are not normalized
     fld::Vector{Field}
+
+    # backup of the initial value of fld, to be used when resetting
+    initial_fld::Vector{Field}
 
     # keep track of which variables have been decimated
     decimated::BitVector
@@ -221,11 +224,13 @@ type Messages
             end
         end
 
+        initial_fld = deepcopy(fld)
+
         # initialize cavity messages to 0
         gadj = graph.gadj
         msg = [[zeros(FieldValue, spp[p0]) for p1 = 1:length(gadj[p0])] for p0 = 1:np]
 
-        return new(msg, fld, falses(np), np)
+        return new(msg, fld, initial_fld, falses(np), np)
     end
 end
 
@@ -380,12 +385,25 @@ function decimate1(p0::Int, graph::Graph, msgs::Messages)
     #println("DECIMATING $p0 ($(packages()[p0]) s0=$s0)")
     for v0 = 1:length(fld0)
         if v0 != s0
-            fld0[v0] -= FieldValue(1)
+            fld0[v0] = FieldValue(-1)
         end
     end
-    update(p0, graph, msgs)
     msgs.decimated[p0] = true
     msgs.num_nondecimated -= 1
+end
+
+function reset_messages!(msgs::Messages)
+    msg = msgs.msg
+    fld = msgs.fld
+    initial_fld = msgs.initial_fld
+    decimated = msgs.decimated
+    np = length(fld)
+    for p0 = 1:np
+        map(m->fill!(m, zero(FieldValue)), msg[p0])
+        decimated[p0] && continue
+        fld[p0] = copy(initial_fld[p0])
+    end
+    return msgs
 end
 
 # If normal convergence fails (or is too slow) fix the most
@@ -403,6 +421,7 @@ function decimate(n::Int, graph::Graph, msgs::Messages)
         n == 0 && break
     end
     @assert n == 0
+    reset_messages!(msgs)
     return
 end
 
@@ -449,7 +468,7 @@ function maxsum(graph::Graph, msgs::Messages)
         end
         if it >= params.nondec_iterations &&
            (it - params.nondec_iterations) % params.dec_interval == 0
-            numdec = clamp(floor(Int, params.dec_fraction * graph.np),  1, msgs.num_nondecimated)
+            numdec = clamp(floor(Int, params.dec_fraction * graph.np), 1, msgs.num_nondecimated)
             decimate(numdec, graph, msgs)
             msgs.num_nondecimated == 0 && break
         end

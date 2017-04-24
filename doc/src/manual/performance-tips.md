@@ -81,7 +81,7 @@ problem with type-stability. Consequently, in addition to the allocation itself,
 that the code generated for your function is far from optimal. Take such indications seriously
 and follow the advice below.
 
-For more serious benchmarking, consider the [`BenchmarkTools.jl`](https://github.com/JuliaCI/BenchmarkTools.jl)
+For more serious benchmarking, consider the [BenchmarkTools.jl](https://github.com/JuliaCI/BenchmarkTools.jl)
 package which evaluates the function multiple times in order to reduce noise.
 
 As a teaser, an improved version of this function allocates no memory
@@ -162,7 +162,7 @@ specific instances where declarations are helpful.
 Types can be declared without specifying the types of their fields:
 
 ```jldoctest myambig
-julia> type MyAmbiguousType
+julia> struct MyAmbiguousType
            a
        end
 ```
@@ -196,7 +196,7 @@ You can do better by declaring the type of `a`. Here, we are focused on the case
 be any one of several types, in which case the natural solution is to use parameters. For example:
 
 ```jldoctest myambig2
-julia> type MyType{T<:AbstractFloat}
+julia> mutable struct MyType{T<:AbstractFloat}
            a::T
        end
 ```
@@ -204,7 +204,7 @@ julia> type MyType{T<:AbstractFloat}
 This is a better choice than
 
 ```jldoctest myambig2
-julia> type MyStillAmbiguousType
+julia> mutable struct MyStillAmbiguousType
            a::AbstractFloat
        end
 ```
@@ -296,11 +296,11 @@ to resolve the type at run-time. This results in shorter and faster code.
 The same best practices also work for container types:
 
 ```jldoctest containers
-julia> type MySimpleContainer{A<:AbstractVector}
+julia> mutable struct MySimpleContainer{A<:AbstractVector}
            a::A
        end
 
-julia> type MyAmbiguousContainer{T}
+julia> mutable struct MyAmbiguousContainer{T}
            a::AbstractVector{T}
        end
 ```
@@ -359,10 +359,10 @@ However, there are cases where you may need to declare different versions of the
 for different element types of `a`. You could do it like this:
 
 ```
-function myfun{T<:AbstractFloat}(c::MySimpleContainer{Vector{T}})
+function myfun(c::MySimpleContainer{Vector{T}}) where T<:AbstractFloat
     ...
 end
-function myfun{T<:Integer}(c::MySimpleContainer{Vector{T}})
+function myfun(c::MySimpleContainer{Vector{T}}) where T<:Integer
     ...
 end
 ```
@@ -372,7 +372,7 @@ or other abstract types. To prevent such tedium, you can use two parameters in t
 of `MyContainer`:
 
 ```jldoctest containers2
-julia> type MyContainer{T, A<:AbstractVector}
+julia> mutable struct MyContainer{T, A<:AbstractVector}
            a::A
        end
 
@@ -389,17 +389,17 @@ Note the somewhat surprising fact that `T` doesn't appear in the declaration of 
 that we'll return to in a moment. With this approach, one can write functions such as:
 
 ```jldoctest containers2
-julia> function myfunc{T<:Integer, A<:AbstractArray}(c::MyContainer{T,A})
+julia> function myfunc(c::MyContainer{<:Integer, <:AbstractArray})
            return c.a[1]+1
        end
 myfunc (generic function with 1 method)
 
-julia> function myfunc{T<:AbstractFloat}(c::MyContainer{T})
+julia> function myfunc(c::MyContainer{<:AbstractFloat})
            return c.a[1]+2
        end
 myfunc (generic function with 2 methods)
 
-julia> function myfunc{T<:Integer}(c::MyContainer{T,Vector{T}})
+julia> function myfunc(c::MyContainer{T,Vector{T}}) where T<:Integer
            return c.a[1]+3
        end
 myfunc (generic function with 3 methods)
@@ -439,9 +439,9 @@ MyContainer{Int64,UnitRange{Float64}}
 To prevent this, we can add an inner constructor:
 
 ```jldoctest containers3
-julia> type MyBetterContainer{T<:Real, A<:AbstractVector}
+julia> mutable struct MyBetterContainer{T<:Real, A<:AbstractVector}
            a::A
-           MyBetterContainer(v::AbstractVector{T}) = new(v)
+           MyBetterContainer{T,A}(v::AbstractVector{T}) where {T,A} = new(v)
        end
 
 julia> MyBetterContainer(v::AbstractVector) = MyBetterContainer{eltype(v),typeof(v)}(v)
@@ -509,7 +509,7 @@ function norm(A)
     if isa(A, Vector)
         return sqrt(real(dot(A,A)))
     elseif isa(A, Matrix)
-        return max(svd(A)[2])
+        return maximum(svd(A)[2])
     else
         error("norm: invalid argument")
     end
@@ -520,7 +520,7 @@ This can be written more concisely and efficiently as:
 
 ```julia
 norm(x::Vector) = sqrt(real(dot(x,x)))
-norm(A::Matrix) = max(svd(A)[2])
+norm(A::Matrix) = maximum(svd(A)[2])
 ```
 
 ## Write "type-stable" functions
@@ -564,7 +564,8 @@ optimize the body of the loop. There are several possible fixes:
 
   * Initialize `x` with `x = 1.0`
   * Declare the type of `x`: `x::Float64 = 1`
-  * Use an explicit conversion: `x = one(T)`
+  * Use an explicit conversion: `x = oneunit(T)`
+  * Initialize with the first loop iteration, to `x = 1/bar()`, then loop `for i = 2:10`
 
 ## [Separate kernel functions (aka, function barriers)](@id kernal-functions)
 
@@ -628,7 +629,7 @@ of `fill_twos!` for different types of `a`.
 The second form is also often better style and can lead to more code reuse.
 
 This pattern is used in several places in the standard library. For example, see `hvcat_fill`
-in [abstractarray.jl](https://github.com/JuliaLang/julia/blob/master/base/abstractarray.jl), or
+in [`abstractarray.jl`](https://github.com/JuliaLang/julia/blob/master/base/abstractarray.jl), or
 the [`fill!`](@ref) function, which we could have used instead of writing our own `fill_twos!`.
 
 Functions like `strange_twos` occur when dealing with data of uncertain type, for example data
@@ -680,7 +681,7 @@ one approach is to pass the dimensionality as a parameter, for example through `
 ["Value types"](@ref)):
 
 ```jldoctest
-julia> function array3{N}(fillval, ::Type{Val{N}})
+julia> function array3(fillval, ::Type{Val{N}}) where N
            fill(fillval, ntuple(d->3, Val{N}))
        end
 array3 (generic function with 1 method)
@@ -714,7 +715,7 @@ code like the above be used.)
 An example of correct usage of `Val` would be:
 
 ```julia
-function filter3{T,N}(A::AbstractArray{T,N})
+function filter3(A::AbstractArray{T,N}) where {T,N}
     kernel = array3(1, Val{N})
     filter(A, kernel)
 end
@@ -730,7 +731,7 @@ and try to use it for everything. For example, you might imagine using it to sto
 e.g.
 
 ```
-immutable Car{Make,Model}
+struct Car{Make,Model}
     year::Int
     ...more fields...
 end
@@ -803,7 +804,7 @@ copies (perhaps the rest of the code can be easily adapted accordingly). We coul
 do this in at least four ways (in addition to the recommended call to the built-in [`repmat()`](@ref)):
 
 ```julia
-function copy_cols{T}(x::Vector{T})
+function copy_cols(x::Vector{T}) where T
     n = size(x, 1)
     out = Array{T}(n, n)
     for i = 1:n
@@ -812,7 +813,7 @@ function copy_cols{T}(x::Vector{T})
     out
 end
 
-function copy_rows{T}(x::Vector{T})
+function copy_rows(x::Vector{T}) where T
     n = size(x, 1)
     out = Array{T}(n, n)
     for i = 1:n
@@ -821,7 +822,7 @@ function copy_rows{T}(x::Vector{T})
     out
 end
 
-function copy_col_row{T}(x::Vector{T})
+function copy_col_row(x::Vector{T}) where T
     n = size(x, 1)
     out = Array{T}(n, n)
     for col = 1:n, row = 1:n
@@ -830,7 +831,7 @@ function copy_col_row{T}(x::Vector{T})
     out
 end
 
-function copy_row_col{T}(x::Vector{T})
+function copy_row_col(x::Vector{T}) where T
     n = size(x, 1)
     out = Array{T}(n, n)
     for row = 1:n, col = 1:n
@@ -885,7 +886,7 @@ end
 with
 
 ```julia
-function xinc!{T}(ret::AbstractVector{T}, x::T)
+function xinc!(ret::AbstractVector{T}, x::T) where T
     ret[1] = x
     ret[2] = x+1
     ret[3] = x+2
@@ -1260,7 +1261,7 @@ strict IEEE behavior for subnormal numbers.
 Below is an example where subnormals noticeably impact performance on some hardware:
 
 ```julia
-function timestep{T}( b::Vector{T}, a::Vector{T}, Δt::T )
+function timestep(b::Vector{T}, a::Vector{T}, Δt::T) where T
     @assert length(a)==length(b)
     n = length(b)
     b[1] = 1                            # Boundary condition
@@ -1270,7 +1271,7 @@ function timestep{T}( b::Vector{T}, a::Vector{T}, Δt::T )
     b[n] = 0                            # Boundary condition
 end
 
-function heatflow{T}( a::Vector{T}, nstep::Integer )
+function heatflow(a::Vector{T}, nstep::Integer) where T
     b = similar(a)
     for t=1:div(nstep,2)                # Assume nstep is even
         timestep(b,a,T(0.1))

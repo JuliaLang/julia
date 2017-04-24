@@ -1,5 +1,5 @@
 # This file is a part of Julia, but is derived from
-# https://github.com/floitsch/double-conversion which has the following license
+# https://github.com/google/double-conversion which has the following license
 #
 # Copyright 2006-2014, the V8 project authors. All rights reserved.
 # Redistribution and use in source and binary forms, with or without
@@ -28,7 +28,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-immutable Float
+struct Float
     s::UInt64
     e::Int32
     de::Int32
@@ -104,7 +104,7 @@ SignificandMask(::Type{Float16}) = 0x03ff
 HiddenBit(::Type{Float16}) = 0x0400
 uint_t(d::Float16) = reinterpret(UInt16,d)
 
-function _exponent{T<:AbstractFloat}(d::T)
+function _exponent(d::T) where T<:AbstractFloat
   isdenormal(d) && return DenormalExponent(T)
   biased_e::Int32 = Int32((uint_t(d) & ExponentMask(T)) >> PhysicalSignificandSize(T))
   return Int32(biased_e - ExponentBias(T))

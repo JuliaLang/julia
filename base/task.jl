@@ -1,9 +1,9 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## basic task functions and TLS
 
 # Container for a captured exception and its backtrace. Can be serialized.
-type CapturedException <: Exception
+mutable struct CapturedException <: Exception
     ex::Any
     processed_bt::Vector{Any}
 
@@ -26,7 +26,7 @@ function showerror(io::IO, ce::CapturedException)
     showerror(io, ce.ex, ce.processed_bt, backtrace=true)
 end
 
-type CompositeException <: Exception
+mutable struct CompositeException <: Exception
     exceptions::Vector{Any}
     CompositeException() = new(Any[])
     CompositeException(exceptions) = new(exceptions)
@@ -238,7 +238,7 @@ function task_done_hook(t::Task)
         if isa(result,InterruptException) && isdefined(Base,:active_repl_backend) &&
             active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
             active_repl_backend.in_eval
-            throwto(active_repl_backend.backend_task, result)
+            throwto(active_repl_backend.backend_task, result) # this terminates the task
         end
         if !suppress_excp_printing(t)
             let bt = t.backtrace
@@ -253,7 +253,7 @@ function task_done_hook(t::Task)
     end
     # Clear sigatomic before waiting
     sigatomic_end()
-    wait()
+    wait() # this will not return
 end
 
 
@@ -334,4 +334,39 @@ nearest enclosing `@sync` waits for.
 macro async(expr)
     thunk = esc(:(()->($expr)))
     :(async_run_thunk($thunk))
+end
+
+
+"""
+    timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
+
+Waits until `testcb` returns `true` or for `secs` seconds, whichever is earlier.
+`testcb` is polled every `pollint` seconds.
+"""
+function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
+    pollint > 0 || throw(ArgumentError("cannot set pollint to $pollint seconds"))
+    start = time()
+    done = Channel(1)
+    timercb(aw) = begin
+        try
+            if testcb()
+                put!(done, :ok)
+            elseif (time() - start) > secs
+                put!(done, :timed_out)
+            end
+        catch e
+            put!(done, :error)
+        finally
+            isready(done) && close(aw)
+        end
+    end
+
+    if !testcb()
+        t = Timer(timercb, pollint, pollint)
+        ret = fetch(done)
+        close(t)
+    else
+        ret = :ok
+    end
+    ret
 end

@@ -1,10 +1,10 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## IOStream
 
 const sizeof_ios_t = Int(ccall(:jl_sizeof_ios_t, Cint, ()))
 
-type IOStream <: IO
+mutable struct IOStream <: IO
     handle::Ptr{Void}
     ios::Array{UInt8,1}
     name::AbstractString
@@ -166,7 +166,7 @@ function unsafe_write(s::IOStream, p::Ptr{UInt8}, nb::UInt)
     return Int(ccall(:ios_write, Csize_t, (Ptr{Void}, Ptr{Void}, Csize_t), s.ios, p, nb))
 end
 
-function write{T,N,A<:Array}(s::IOStream, a::SubArray{T,N,A})
+function write{T,N}(s::IOStream, a::SubArray{T,N,<:Array})
     if !isbits(T) || stride(a,1)!=1
         return invoke(write, Tuple{Any, AbstractArray}, s, a)
     end
@@ -287,7 +287,7 @@ function read(s::IOStream)
             sz -= pos
         end
     end
-    b = Array{UInt8,1}(sz<=0 ? 1024 : sz)
+    b = StringVector(sz<=0 ? 1024 : sz)
     nr = readbytes_all!(s, b, typemax(Int))
     resize!(b, nr)
 end
@@ -309,27 +309,27 @@ function read(s::IOStream, nb::Integer; all::Bool=true)
 end
 
 ## Character streams ##
-const _chtmp = Array{Char}(1)
+const _chtmp = Ref{Char}()
 function peekchar(s::IOStream)
     if ccall(:ios_peekutf8, Cint, (Ptr{Void}, Ptr{Char}), s, _chtmp) < 0
-        return Char(-1)
+        return typemax(Char)
     end
-    return _chtmp[1]
+    return _chtmp[]
 end
 
 function peek(s::IOStream)
     ccall(:ios_peekc, Cint, (Ptr{Void},), s)
 end
 
-function skipchars(s::IOStream, pred; linecomment::Char=Char(0xffffffff))
-    ch = peekchar(s); status = Int(ch)
-    while status >= 0 && (pred(ch) || ch == linecomment)
-        if ch == linecomment
-            readline(s)
-        else
-            read(s, Char)  # advance one character
+function skipchars(io::IOStream, pred; linecomment=nothing)
+    while !eof(io)
+        c = read(io, Char)
+        if c === linecomment
+            readline(io)
+        elseif !pred(c)
+            skip(io, -codelen(c))
+            break
         end
-        ch = peekchar(s); status = Int(ch)
     end
-    return s
+    return io
 end

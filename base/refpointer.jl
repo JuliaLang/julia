@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
     Ref{T}
@@ -18,27 +18,28 @@ Ref
 # instead of Ptr{Cchar} and Ptr{Cwchar_t}, respectively, to enforce
 # a check for embedded NUL chars in the string (to avoid silent truncation).
 if Int === Int64
-    bitstype 64 Cstring
-    bitstype 64 Cwstring
+    primitive type Cstring  64 end
+    primitive type Cwstring 64 end
 else
-    bitstype 32 Cstring
-    bitstype 32 Cwstring
+    primitive type Cstring  32 end
+    primitive type Cwstring 32 end
 end
 
 ### General Methods for Ref{T} type
 
-eltype{T}(x::Type{Ref{T}}) = T
-convert{T}(::Type{Ref{T}}, x::Ref{T}) = x
+eltype(x::Type{Ref{T}}) where {T} = T
+convert(::Type{Ref{T}}, x::Ref{T}) where {T} = x
 
 # create Ref objects for general object conversion
-unsafe_convert{T}(::Type{Ref{T}}, x) = unsafe_convert(Ptr{T}, x)
+unsafe_convert(::Type{Ref{T}}, x::Ref{T}) where {T} = unsafe_convert(Ptr{T}, x)
+unsafe_convert(::Type{Ref{T}}, x) where {T} = unsafe_convert(Ptr{T}, x)
 
 ### Methods for a Ref object that can store a single value of any type
 
-type RefValue{T} <: Ref{T}
+mutable struct RefValue{T} <: Ref{T}
     x::T
-    RefValue() = new()
-    RefValue(x) = new(x)
+    RefValue{T}() where {T} = new()
+    RefValue{T}(x) where {T} = new(x)
 end
 RefValue{T}(x::T) = RefValue{T}(x)
 isassigned(x::RefValue) = isdefined(x, :x)
@@ -47,11 +48,11 @@ Ref(x::Ref) = x
 Ref(x::Any) = RefValue(x)
 Ref{T}(x::Ptr{T}, i::Integer=1) = x + (i-1)*Core.sizeof(T)
 Ref(x, i::Integer) = (i != 1 && error("Object only has one element"); Ref(x))
-(::Type{Ref{T}}){T}() = RefValue{T}() # Ref{T}()
-(::Type{Ref{T}}){T}(x) = RefValue{T}(x) # Ref{T}(x)
-convert{T}(::Type{Ref{T}}, x) = RefValue{T}(x)
+(::Type{Ref{T}})() where {T} = RefValue{T}() # Ref{T}()
+(::Type{Ref{T}})(x) where {T} = RefValue{T}(x) # Ref{T}(x)
+convert(::Type{Ref{T}}, x) where {T} = RefValue{T}(x)
 
-function unsafe_convert{T}(P::Type{Ptr{T}}, b::RefValue{T})
+function unsafe_convert(P::Type{Ptr{T}}, b::RefValue{T}) where T
     if isbits(T)
         return convert(P, data_pointer_from_objref(b))
     else
@@ -61,21 +62,21 @@ end
 function unsafe_convert(P::Type{Ptr{Any}}, b::RefValue{Any})
     return convert(P, data_pointer_from_objref(b))
 end
-unsafe_convert{T}(::Type{Ptr{Void}}, b::RefValue{T}) = convert(Ptr{Void}, unsafe_convert(Ptr{T}, b))
+unsafe_convert(::Type{Ptr{Void}}, b::RefValue{T}) where {T} = convert(Ptr{Void}, unsafe_convert(Ptr{T}, b))
 
 ### Methods for a Ref object that is backed by an array at index i
-immutable RefArray{T, A<:AbstractArray, R} <: Ref{T}
+struct RefArray{T, A<:AbstractArray{T}, R} <: Ref{T}
     x::A
     i::Int
     roots::R # should be either ::Void or ::Any
-    RefArray(x,i,roots=nothing) = (@assert(eltype(A) == T); new(x,i,roots))
+    RefArray{T,A,R}(x,i,roots=nothing) where {T,A<:AbstractArray{T},R} = new(x,i,roots)
 end
 RefArray{T}(x::AbstractArray{T},i::Int,roots::Any) = RefArray{T,typeof(x),Any}(x, i, roots)
 RefArray{T}(x::AbstractArray{T},i::Int=1,roots::Void=nothing) = RefArray{T,typeof(x),Void}(x, i, nothing)
-convert{T}(::Type{Ref{T}}, x::AbstractArray{T}) = RefArray(x, 1)
+convert(::Type{Ref{T}}, x::AbstractArray{T}) where {T} = RefArray(x, 1)
 Ref(x::AbstractArray, i::Integer=1) = RefArray(x, i)
 
-function unsafe_convert{T}(P::Type{Ptr{T}}, b::RefArray{T})
+function unsafe_convert(P::Type{Ptr{T}}, b::RefArray{T}) where T
     if isbits(T)
         convert(P, pointer(b.x, b.i))
     else
@@ -85,10 +86,10 @@ end
 function unsafe_convert(P::Type{Ptr{Any}}, b::RefArray{Any})
     return convert(P, pointer(b.x, b.i))
 end
-unsafe_convert{T}(::Type{Ptr{Void}}, b::RefArray{T}) = convert(Ptr{Void}, unsafe_convert(Ptr{T}, b))
+unsafe_convert(::Type{Ptr{Void}}, b::RefArray{T}) where {T} = convert(Ptr{Void}, unsafe_convert(Ptr{T}, b))
 
 # convert Arrays to pointer arrays for ccall
-function (::Type{Ref{P}}){P<:Union{Ptr,Cwstring,Cstring},T<:Union{Ptr,Cwstring,Cstring}}(a::Array{T}) # Ref{P<:Ptr}(a::Array{T<:Ptr})
+function (::Type{Ref{<:Union{Ptr,Cwstring,Cstring}}})(a::Array{<:Union{Ptr,Cwstring,Cstring}}) # Ref{P<:Ptr}(a::Array{T<:Ptr})
     return RefArray(a) # effectively a no-op
 end
 function (::Type{Ref{P}}){P<:Union{Ptr,Cwstring,Cstring},T}(a::Array{T}) # Ref{P<:Ptr}(a::Array)
@@ -107,8 +108,10 @@ function (::Type{Ref{P}}){P<:Union{Ptr,Cwstring,Cstring},T}(a::Array{T}) # Ref{P
         return RefArray(ptrs,1,roots)
     end
 end
-cconvert{P<:Ptr,T<:Ptr}(::Union{Type{Ptr{P}},Type{Ref{P}}}, a::Array{T}) = a
-cconvert{P<:Union{Ptr,Cwstring,Cstring}}(::Union{Type{Ptr{P}},Type{Ref{P}}}, a::Array) = Ref{P}(a)
+cconvert(::Type{Ptr{P}}, a::Array{<:Ptr}) where {P<:Ptr} = a
+cconvert(::Type{Ref{P}}, a::Array{<:Ptr}) where {P<:Ptr} = a
+cconvert(::Type{Ptr{P}}, a::Array) where {P<:Union{Ptr,Cwstring,Cstring}} = Ref{P}(a)
+cconvert(::Type{Ref{P}}, a::Array) where {P<:Union{Ptr,Cwstring,Cstring}} = Ref{P}(a)
 
 ###
 

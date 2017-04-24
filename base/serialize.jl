@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Serializer
 
@@ -8,11 +8,12 @@ using Base: ViewIndex, Slice, index_lengths, unwrap_unionall
 
 export serialize, deserialize, SerializationState
 
-type SerializationState{I<:IO} <: AbstractSerializer
+mutable struct SerializationState{I<:IO} <: AbstractSerializer
     io::I
     counter::Int
     table::ObjectIdDict
-    SerializationState(io::I) = new(io, 0, ObjectIdDict())
+    known_object_data::Dict{UInt64,Any}
+    SerializationState{I}(io::I) where I<:IO = new(io, 0, ObjectIdDict(), Dict{UInt64,Any}())
 end
 
 SerializationState(io::IO) = SerializationState{typeof(io)}(io)
@@ -32,7 +33,7 @@ const TAGS = Any[
     Module, #=UndefRefTag=#Symbol, Task, String, Float16,
     SimpleVector, #=BackrefTag=#Symbol, Method, GlobalRef, UnionAll,
 
-    (), Bool, Any, :Any, Bottom, Core.BottomType, :reserved22, Type,
+    (), Bool, Any, :Any, Bottom, Core.TypeofBottom, :reserved22, Type,
     :Array, :TypeVar, :Box,
     :lambda, :body, :return, :call, Symbol("::"),
     :(=), :null, :gotoifnot, :A, :B, :C, :M, :N, :T, :S, :X, :Y,
@@ -87,6 +88,8 @@ const DATATYPE_TAG = sertag(DataType)
 const TYPENAME_TAG = sertag(TypeName)
 const INT_TAG = sertag(Int)
 const GLOBALREF_TAG = sertag(GlobalRef)
+const BOTTOM_TAG = sertag(Bottom)
+const UNIONALL_TAG = sertag(UnionAll)
 
 writetag(s::IO, tag) = write(s, UInt8(tag))
 
@@ -324,7 +327,7 @@ end
 
 # TODO: make this bidirectional, so objects can be sent back via the same key
 const object_numbers = WeakKeyDict()
-obj_number_salt = 0
+const obj_number_salt = Ref(0)
 function object_number(l::ANY)
     global obj_number_salt, object_numbers
     if haskey(object_numbers, l)
@@ -332,10 +335,23 @@ function object_number(l::ANY)
     end
     # a hash function that always gives the same number to the same
     # object on the same machine, and is unique over all machines.
-    ln = obj_number_salt+(UInt64(myid())<<44)
-    obj_number_salt += 1
+    ln = obj_number_salt[]+(UInt64(myid())<<44)
+    obj_number_salt[] += 1
     object_numbers[l] = ln
     return ln::UInt64
+end
+
+lookup_object_number(s::AbstractSerializer, n::UInt64) = nothing
+
+remember_object(s::AbstractSerializer, o::ANY, n::UInt64) = nothing
+
+function lookup_object_number(s::SerializationState, n::UInt64)
+    return get(s.known_object_data, n, nothing)
+end
+
+function remember_object(s::SerializationState, o::ANY, n::UInt64)
+    s.known_object_data[n] = o
+    return nothing
 end
 
 function serialize(s::AbstractSerializer, meth::Method)
@@ -347,7 +363,6 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.file)
     serialize(s, meth.line)
     serialize(s, meth.sig)
-    serialize(s, meth.tvars)
     serialize(s, meth.sparam_syms)
     serialize(s, meth.ambig)
     serialize(s, meth.nargs)
@@ -516,6 +531,26 @@ function serialize(s::AbstractSerializer, n::Int)
     write(s.io, n)
 end
 
+serialize(s::AbstractSerializer, ::Type{Bottom}) = write_as_tag(s.io, BOTTOM_TAG)
+
+function serialize(s::AbstractSerializer, u::UnionAll)
+    writetag(s.io, UNIONALL_TAG)
+    n = 0; t = u
+    while isa(t, UnionAll)
+        t = t.body
+        n += 1
+    end
+    if isa(t, DataType) && t === unwrap_unionall(t.name.wrapper)
+        write(s.io, UInt8(1))
+        write(s.io, Int16(n))
+        serialize(s, t)
+    else
+        write(s.io, UInt8(0))
+        serialize(s, u.var)
+        serialize(s, u.body)
+    end
+end
+
 serialize(s::AbstractSerializer, x::ANY) = serialize_any(s, x)
 
 function serialize_any(s::AbstractSerializer, x::ANY)
@@ -615,12 +650,11 @@ function deserialize(s::AbstractSerializer, ::Type{Module})
     m
 end
 
-const known_object_data = Dict()
-
 function deserialize(s::AbstractSerializer, ::Type{Method})
     lnumber = read(s.io, UInt64)
-    if haskey(known_object_data, lnumber)
-        meth = known_object_data[lnumber]::Method
+    meth = lookup_object_number(s, lnumber)
+    if meth !== nothing
+        meth = meth::Method
         makenew = false
     else
         meth = ccall(:jl_new_method_uninit, Ref{Method}, ())
@@ -632,7 +666,6 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     file = deserialize(s)::Symbol
     line = deserialize(s)::Int32
     sig = deserialize(s)::DataType
-    tvars = deserialize(s)::Union{SimpleVector, TypeVar}
     sparam_syms = deserialize(s)::SimpleVector
     ambig = deserialize(s)::Union{Array{Any,1}, Void}
     nargs = deserialize(s)::Int32
@@ -645,7 +678,6 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.file = file
         meth.line = line
         meth.sig = sig
-        meth.tvars = tvars
         meth.sparam_syms = sparam_syms
         meth.ambig = ambig
         meth.isstaged = isstaged
@@ -653,6 +685,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.isva = isva
         # TODO: compress template
         meth.source = template
+        meth.pure = template.pure
         if isstaged
             linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ())
             linfo.specTypes = Tuple
@@ -663,7 +696,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         if isdefined(ftype.name, :mt) && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), ftype.name.mt, sig, typemax(UInt))
             ccall(:jl_method_table_insert, Void, (Any, Any, Ptr{Void}), ftype.name.mt, meth, C_NULL)
         end
-        known_object_data[lnumber] = meth
+        remember_object(s, meth, lnumber)
     end
     return meth
 end
@@ -761,7 +794,7 @@ end
 
 function deserialize_typename(s::AbstractSerializer, number)
     name = deserialize(s)::Symbol
-    tn = get(known_object_data, number, nothing)
+    tn = lookup_object_number(s, number)
     if tn !== nothing
         makenew = false
     else
@@ -770,12 +803,8 @@ function deserialize_typename(s::AbstractSerializer, number)
         tn = ccall(:jl_new_typename_in, Ref{TypeName}, (Any, Any),
                    tn_name, __deserialized_types__)
         makenew = true
-        known_object_data[number] = tn
     end
-    if !haskey(object_numbers, tn)
-        # set up reverse mapping for serialize
-        object_numbers[tn] = number
-    end
+    remember_object(s, tn, number)
     deserialize_cycle(s, tn)
 
     names = deserialize(s)::SimpleVector
@@ -784,7 +813,7 @@ function deserialize_typename(s::AbstractSerializer, number)
     types = deserialize(s)::SimpleVector
     has_instance = deserialize(s)::Bool
     abstr = deserialize(s)::Bool
-    mutable = deserialize(s)::Bool
+    mutabl = deserialize(s)::Bool
     ninitialized = deserialize(s)::Int32
 
     if makenew
@@ -794,7 +823,7 @@ function deserialize_typename(s::AbstractSerializer, number)
         # tn.wrapper and throw UndefRefException before we get to this point
         ndt = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Cint, Cint, Cint),
                     tn, super, parameters, names, types,
-                    abstr, mutable, ninitialized)
+                    abstr, mutabl, ninitialized)
         tn.wrapper = ndt.name.wrapper
         ccall(:jl_set_const, Void, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
         ty = tn.wrapper
@@ -854,6 +883,31 @@ function deserialize_datatype(s::AbstractSerializer)
         return t
     end
     deserialize(s, t)
+end
+
+function deserialize(s::AbstractSerializer, ::Type{UnionAll})
+    form = read(s.io, UInt8)
+    if form == 0
+        var = deserialize(s)
+        body = deserialize(s)
+        return UnionAll(var, body)
+    else
+        n = read(s.io, Int16)
+        t = deserialize(s)::DataType
+        w = t.name.wrapper
+        k = 0
+        while isa(w, UnionAll)
+            w = w.body
+            k += 1
+        end
+        w = t.name.wrapper
+        k -= n
+        while k > 0
+            w = w.body
+            k -= 1
+        end
+        return w
+    end
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Task})

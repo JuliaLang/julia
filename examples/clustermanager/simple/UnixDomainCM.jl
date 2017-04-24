@@ -1,8 +1,8 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base: launch, manage, connect, exit
 
-type UnixDomainCM <: ClusterManager
+mutable struct UnixDomainCM <: ClusterManager
     np::Integer
 end
 

@@ -1,4 +1,5 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Base.Test
 include("choosetests.jl")
 tests, net_on = choosetests(ARGS)
@@ -31,9 +32,9 @@ function move_to_node1(t)
 end
 # Base.compile only works from node 1, so compile test is handled specially
 move_to_node1("compile")
-# In a constrained memory environment, run the parallel test after all other tests
+# In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
-max_worker_rss != typemax(Csize_t) && move_to_node1("parallel")
+max_worker_rss != typemax(Csize_t) && move_to_node1("distributed")
 
 cd(dirname(@__FILE__)) do
     n = 1
@@ -192,6 +193,6 @@ cd(dirname(@__FILE__)) do
     else
         println("    \033[31;1mFAILURE\033[0m")
         Base.Test.print_test_errors(o_ts)
-        error()
+        throw(Test.FallbackTestSetException("Test run finished with errors"))
     end
 end

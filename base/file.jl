@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Operations with the file system (paths) ##
 
@@ -24,6 +24,7 @@ export
     tempdir,
     tempname,
     touch,
+    unlink,
     walkdir
 
 # get and set current directory
@@ -34,7 +35,7 @@ export
 Get the current working directory.
 """
 function pwd()
-    b = Array{UInt8}(1024)
+    b = Vector{UInt8}(1024)
     len = Ref{Csize_t}(length(b))
     uv_error(:getcwd, ccall(:uv_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), b, len))
     String(b[1:len[]])
@@ -84,7 +85,10 @@ cd(f::Function) = cd(f, homedir())
     mkdir(path::AbstractString, mode::Unsigned=0o777)
 
 Make a new directory with name `path` and permissions `mode`. `mode` defaults to `0o777`,
-modified by the current file creation mask.
+modified by the current file creation mask. This function never creates more than one
+directory. If the directory already exists, or some intermediate directories do not exist,
+this function throws an error. See [`mkpath`](@ref) for a function which creates all
+required intermediate directories.
 """
 function mkdir(path::AbstractString, mode::Unsigned=0o777)
     @static if is_windows()
@@ -253,7 +257,7 @@ end
 if is_windows()
 
 function tempdir()
-    temppath = Array{UInt16}(32767)
+    temppath = Vector{UInt16}(32767)
     lentemppath = ccall(:GetTempPathW,stdcall,UInt32,(UInt32,Ptr{UInt16}),length(temppath),temppath)
     if lentemppath >= length(temppath) || lentemppath == 0
         error("GetTempPath failed: $(Libc.FormatMessage())")
@@ -265,7 +269,7 @@ tempname(uunique::UInt32=UInt32(0)) = tempname(tempdir(), uunique)
 const temp_prefix = cwstring("jl_")
 function tempname(temppath::AbstractString,uunique::UInt32)
     tempp = cwstring(temppath)
-    tname = Array{UInt16}(32767)
+    tname = Vector{UInt16}(32767)
     uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32,Ptr{UInt16}), tempp,temp_prefix,uunique,tname)
     lentname = findfirst(tname,0)-1
     if uunique == 0 || lentname <= 0
@@ -389,7 +393,7 @@ function mktempdir(fn::Function, parent=tempdir())
     end
 end
 
-immutable uv_dirent_t
+struct uv_dirent_t
     name::Ptr{UInt8}
     typ::Cint
 end

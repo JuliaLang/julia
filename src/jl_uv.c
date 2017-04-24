@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "platform.h"
 
@@ -26,20 +26,6 @@
 #if defined(_COMPILER_MICROSOFT_) && !defined(write)
 #include <io.h>
 #define write _write
-#endif
-
-#ifndef static_assert
-#  ifndef __cplusplus
-#    define static_assert(...)
-// Remove the following gcc special handling when we officially requires
-// gcc 4.7 (for c++11) and -std=gnu11
-#    ifdef __GNUC__
-#      if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)
-#        undef static_assert
-#        define static_assert _Static_assert
-#      endif
-#    endif
-#  endif
 #endif
 
 #ifdef __cplusplus

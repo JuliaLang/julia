@@ -42,20 +42,20 @@ For example, consider the following definitions of a function `addone` that retu
 argument:
 
 ```julia
-addone(x::Int) = x + 1             # works only for Int
-addone(x::Integer) = x + one(x)    # any integer type
-addone(x::Number) = x + one(x)     # any numeric type
-addone(x) = x + one(x)             # any type supporting + and one
+addone(x::Int) = x + 1                 # works only for Int
+addone(x::Integer) = x + oneunit(x)    # any integer type
+addone(x::Number) = x + oneunit(x)     # any numeric type
+addone(x) = x + oneunit(x)             # any type supporting + and oneunit
 ```
 
-The last definition of `addone` handles any type supporting [`one()`](@ref) (which returns 1 in
+The last definition of `addone` handles any type supporting [`oneunit`](@ref) (which returns 1 in
 the same type as `x`, which avoids unwanted type promotion) and the [`+`](@ref) function with
 those arguments. The key thing to realize is that there is *no performance penalty* to defining
-*only* the general `addone(x) = x + one(x)`, because Julia will automatically compile specialized
+*only* the general `addone(x) = x + oneunit(x)`, because Julia will automatically compile specialized
 versions as needed. For example, the first time you call `addone(12)`, Julia will automatically
-compile a specialized `addone` function for `x::Int` arguments, with the call to [`one()`](@ref)
+compile a specialized `addone` function for `x::Int` arguments, with the call to `oneunit`
 replaced by its inlined value `1`. Therefore, the first three definitions of `addone` above are
-completely redundant.
+completely redundant with the fourth definition.
 
 ## Handle excess argument diversity in the caller
 
@@ -90,7 +90,7 @@ is that declaring more specific types leaves more "space" for future method defi
 Instead of:
 
 ```julia
-function double{T<:Number}(a::AbstractArray{T})
+function double(a::AbstractArray{<:Number})
     for i = 1:endof(a)
         a[i] *= 2
     end
@@ -101,7 +101,7 @@ end
 use:
 
 ```julia
-function double!{T<:Number}(a::AbstractArray{T})
+function double!(a::AbstractArray{<:Number})
     for i = 1:endof(a)
         a[i] *= 2
     end
@@ -123,7 +123,7 @@ Types such as `Union{Function,AbstractString}` are often a sign that some design
 When creating a type such as:
 
 ```julia
-type MyType
+mutable struct MyType
     ...
     x::Union{Void,T}
 end
@@ -154,7 +154,7 @@ uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
 
 ## Use naming conventions consistent with Julia's `base/`
 
-  * modules and type names use capitalization and camel case: `module SparseArrays`, `immutable UnitRange`.
+  * modules and type names use capitalization and camel case: `module SparseArrays`, `struct UnitRange`.
   * functions are lowercase ([`maximum()`](@ref), [`convert()`](@ref)) and, when readable, with multiple
     words squashed together ([`isequal()`](@ref), [`haskey()`](@ref)). When necessary, use underscores
     as word separators. Underscores are also used to indicate a combination of concepts ([`remotecall_fetch()`](@ref)
@@ -194,7 +194,7 @@ is already iterable it is often even better to leave it alone, and not convert i
 A function signature:
 
 ```julia
-foo{T<:Real}(x::T) = ...
+foo(x::T) where {T<:Real} = ...
 ```
 
 should be written as:
@@ -225,7 +225,7 @@ it.
 The preferred style is to use instances by default, and only add methods involving `Type{MyType}`
 later if they become necessary to solve some problem.
 
-If a type is effectively an enumeration, it should be defined as a single (ideally `immutable`)
+If a type is effectively an enumeration, it should be defined as a single (ideally immutable struct or primitive)
 type, with the enumeration values being instances of it. Constructors and conversions can check
 whether values are valid. This design is preferred over making the enumeration an abstract type,
 with the "values" as subtypes.
@@ -243,7 +243,7 @@ it will naturally have access to the run-time values it needs.
 If you have a type that uses a native pointer:
 
 ```julia
-type NativeType
+mutable struct NativeType
     p::Ptr{UInt8}
     ...
 end
@@ -272,6 +272,37 @@ show(io::IO, v::Vector{MyType}) = ...
 This would provide custom showing of vectors with a specific new element type. While tempting,
 this should be avoided. The trouble is that users will expect a well-known type like `Vector()`
 to behave in a certain way, and overly customizing its behavior can make it harder to work with.
+
+## Avoid type piracy
+
+"Type piracy" refers to the practice of extending or redefining methods in Base
+or other packages on types that you have not defined. In some cases, you can get away with
+type piracy with little ill effect. In extreme cases, however, you can even crash Julia
+(e.g. if your method extension or redefinition causes invalid input to be passed to a
+`ccall`). Type piracy can complicate reasoning about code, and may introduce
+incompatibilities that are hard to predict and diagnose.
+
+As an example, suppose you wanted to define multiplication on symbols in a module:
+
+```julia
+module A
+import Base.*
+*(x::Symbol, y::Symbol) = Symbol(x,y)
+end
+```
+
+The problem is that now any other module that uses `Base.*` will also see this definition.
+Since `Symbol` is defined in Base and is used by other modules, this can change the
+behavior of unrelated code unexpectedly. There are several alternatives here, including
+using a different function name, or wrapping the `Symbol`s in another type that you define.
+
+Sometimes, coupled packages may engage in type piracy to separate features from definitions,
+especially when the packages were designed by collaborating authors, and when the
+definitions are reusable. For example, one package might provide some types useful for
+working with colors; another package could define methods for those types that enable
+conversions between color spaces. Another example might be a package that acts as a thin
+wrapper for some C code, which another package might then pirate to implement a
+higher-level, Julia-friendly API.
 
 ## Be careful with type equality
 

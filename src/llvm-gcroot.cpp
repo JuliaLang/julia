@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #define DEBUG_TYPE "lower_gcroot"
 #undef DEBUG
@@ -24,6 +24,8 @@
 #endif
 #include <llvm/IR/MDBuilder.h>
 
+#include "fix_llvm_assert.h"
+
 #include <vector>
 #include <queue>
 #include <set>
@@ -44,7 +46,7 @@ extern std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *pare
 
 namespace {
 
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
 static struct {
     unsigned count;
     unsigned locals;
@@ -135,7 +137,11 @@ public:
         T_int64(Type::getInt64Ty(F.getContext())),
         V_null(T_pjlvalue ? Constant::getNullValue(T_pjlvalue) : nullptr),
         ptlsStates(ptlsStates),
+#if JL_LLVM_VERSION >= 50000
+        gcframe(ptlsStates ? new AllocaInst(T_pjlvalue, 0, ConstantInt::get(T_int32, 0)) : nullptr),
+#else
         gcframe(ptlsStates ? new AllocaInst(T_pjlvalue, ConstantInt::get(T_int32, 0)) : nullptr),
+#endif
         gcroot_func(M.getFunction("julia.gc_root_decl")),
         gckill_func(M.getFunction("julia.gc_root_kill")),
         jlcall_frame_func(M.getFunction("julia.jlcall_frame_decl")),
@@ -342,7 +348,11 @@ void JuliaGCAllocator::lowerHandlers()
     Instruction *firstInst = &F.getEntryBlock().front();
     while (!handlers.empty()) {
         processing.clear();
+#if JL_LLVM_VERSION >= 50000
+        auto buff = new AllocaInst(T_int8, 0, handler_sz, "", firstInst);
+#else
         auto buff = new AllocaInst(T_int8, handler_sz, "", firstInst);
+#endif
         buff->setAlignment(16);
         // Collect the list of frames to process.
         for (auto &hdlr: handlers) {
@@ -778,7 +788,7 @@ void JuliaGCAllocator::allocate_frame()
                 if (CallInst *callInst = dyn_cast<CallInst>(user)) {
                     assert(bb == NULL);
                     bb = callInst->getParent();
-#ifdef NDEBUG
+#ifdef JL_NDEBUG
                     break;
 #endif
                 }
@@ -1130,7 +1140,7 @@ void JuliaGCAllocator::allocate_frame()
         }
     }
 
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
     jl_gc_frame_stats.count++;
     jl_gc_frame_stats.locals += argSpaceSize;
     jl_gc_frame_stats.temp += maxDepth;
@@ -1232,7 +1242,7 @@ static RegisterPass<LowerGCFrame> X("LowerGCFrame", "Lower GCFrame Pass",
                                     false /* Analysis Pass */);
 }
 
-#ifndef NDEBUG // llvm assertions build
+#ifndef JL_NDEBUG // llvm assertions build
 // gdb debugging code for inspecting the bb_uses map
 void jl_dump_bb_uses(std::map<BasicBlock*, std::map<frame_register, liveness::id> > &bb_uses)
 {

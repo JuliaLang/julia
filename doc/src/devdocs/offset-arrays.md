@@ -169,8 +169,8 @@ is (perhaps counterintuitively) an advantage: `ModuleA.ZeroRange` indicates that
 create a `ModuleA.ZeroArray`, whereas `ModuleB.ZeroRange` indicates a `ModuleB.ZeroArray` type.
  This design allows peaceful coexistence among many different custom array types.
 
-Note that the Julia package `CustomUnitRanges.jl` can sometimes be used to avoid the need to write
-your own `ZeroRange` type.
+Note that the Julia package [CustomUnitRanges.jl](https://github.com/JuliaArrays/CustomUnitRanges.jl)
+can sometimes be used to avoid the need to write your own `ZeroRange` type.
 
 ### Specializing `indices`
 
@@ -186,7 +186,7 @@ implement this).
 In some cases, the fallback definition for `indices(A, d)`:
 
 ```julia
-indices{T,N}(A::AbstractArray{T,N}, d) = d <= N ? indices(A)[d] : OneTo(1)
+indices(A::AbstractArray{T,N}, d) where {T,N} = d <= N ? indices(A)[d] : OneTo(1)
 ```
 
 may not be what you want: you may need to specialize it to return something other than `OneTo(1)`
@@ -195,8 +195,8 @@ to `indices(A, 1)` but which avoids checking (at runtime) whether `ndims(A) > 0`
 a performance optimization.)  It is defined as:
 
 ```julia
-indices1{T}(A::AbstractArray{T,0}) = OneTo(1)
-indices1{T}(A::AbstractArray{T})   = indices(A)[1]
+indices1(A::AbstractArray{T,0}) where {T} = OneTo(1)
+indices1(A::AbstractArray) = indices(A)[1]
 ```
 
 If the first of these (the zero-dimensional case) is problematic for your custom array type, be

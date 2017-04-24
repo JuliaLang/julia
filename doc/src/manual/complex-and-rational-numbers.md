@@ -143,13 +143,13 @@ julia> sqrt(-1)
 ERROR: DomainError:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
 Stacktrace:
- [1] sqrt(::Int64) at ./math.jl:432
+ [1] sqrt(::Int64) at ./math.jl:431
 
 julia> sqrt(-1 + 0im)
 0.0 + 1.0im
 ```
 
-The [literal numeric coefficient notation](@ref man-numeric-literal-coefficients) does not work when constructing complex number
+The [literal numeric coefficient notation](@ref man-numeric-literal-coefficients) does not work when constructing a complex number
 from variables. Instead, the multiplication must be explicitly written out:
 
 ```jldoctest
@@ -158,7 +158,7 @@ julia> a = 1; b = 2; a + b*im
 ```
 
 However, this is *not* recommended; Use the [`complex()`](@ref) function instead to construct
-a complex value directly from its real and imaginary parts.:
+a complex value directly from its real and imaginary parts:
 
 ```jldoctest
 julia> a = 1; b = 2; complex(a, b)
@@ -284,7 +284,7 @@ julia> 0//0
 ERROR: ArgumentError: invalid rational: zero(Int64)//zero(Int64)
 Stacktrace:
  [1] Rational{Int64}(::Int64, ::Int64) at ./rational.jl:8
- [2] //(::Int64, ::Int64) at ./rational.jl:34
+ [2] //(::Int64, ::Int64) at ./rational.jl:35
 ```
 
 As usual, the promotion system makes interactions with other numeric types effortless:

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module PkgToMaxSumInterface
 
@@ -9,7 +9,7 @@ export Interface, compute_output_dict, greedysolver,
 
 # A collection of objects which allow interfacing external (Pkg) and
 # internal (MaxSum) representation
-type Interface
+mutable struct Interface
     # requirements and dependencies, in external representation
     reqs::Requires
     deps::Dict{String,Dict{VersionNumber,Available}}

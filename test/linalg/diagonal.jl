@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 import Base.LinAlg: BlasFloat, BlasComplex, SingularException
@@ -137,6 +137,17 @@ srand(1)
         #division of two Diagonals
         @test D/D2 ≈ Diagonal(D.diag./D2.diag)
         @test D\D2 ≈ Diagonal(D2.diag./D.diag)
+
+        # Performance specialisations for A*_mul_B!
+        vv = similar(v)
+        @test (r = full(D) * v   ; A_mul_B!(vv, D, v)  ≈ r ≈ vv)
+        @test (r = full(D)' * v  ; Ac_mul_B!(vv, D, v) ≈ r ≈ vv)
+        @test (r = full(D).' * v ; At_mul_B!(vv, D, v) ≈ r ≈ vv)
+
+        UU = similar(U)
+        @test (r = full(D) * U   ; A_mul_B!(UU, D, U) ≈ r ≈ UU)
+        @test (r = full(D)' * U  ; Ac_mul_B!(UU, D, U) ≈ r ≈ UU)
+        @test (r = full(D).' * U ; At_mul_B!(UU, D, U) ≈ r ≈ UU)
     end
     @testset "triu/tril" begin
         @test istriu(D)
@@ -177,6 +188,9 @@ srand(1)
             @test Array(conj(D)) ≈ conj(DM)
             @test ctranspose(D) == conj(D)
         end
+        # Translates to Ac/t_mul_B, which is specialized after issue 21286
+        @test(D' * v == conj(D) * v)
+        @test(D.' * v == D * v)
     end
 
     #logdet
@@ -206,7 +220,7 @@ srand(1)
         end
     end
 
-    @testset "svd" begin
+    @testset "svd (#11120/#11247)" begin
         U, s, V = svd(D)
         @test (U*Diagonal(s))*V' ≈ D
         @test svdvals(D) == s
@@ -214,45 +228,49 @@ srand(1)
     end
 end
 
-D = Diagonal(Matrix{Float64}[randn(3,3), randn(2,2)])
-@test sort([svdvals(D)...;], rev = true) ≈ svdvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
-@test [eigvals(D)...;] ≈ eigvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
-#isposdef
-@test !isposdef(Diagonal(-1.0 * rand(n)))
+@testset "svdvals and eigvals (#11120/#11247)" begin
+    D = Diagonal(Matrix{Float64}[randn(3,3), randn(2,2)])
+    @test sort([svdvals(D)...;], rev = true) ≈ svdvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
+    @test [eigvals(D)...;] ≈ eigvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
+end
 
-@testset "Indexing" begin
-    let d = randn(n), D = Diagonal(d)
-        for i=1:n
-            @test D[i,i] == d[i]
+@testset "isposdef" begin
+    @test !isposdef(Diagonal(-1.0 * rand(n)))
+end
+
+@testset "getindex" begin
+    d = randn(n)
+    D = Diagonal(d)
+    # getindex bounds checking
+    @test_throws BoundsError D[0, 0]
+    @test_throws BoundsError D[-1, -2]
+    @test_throws BoundsError D[n, n + 1]
+    @test_throws BoundsError D[n + 1, n]
+    @test_throws BoundsError D[n + 1, n + 1]
+    # getindex on and off the diagonal
+    for i in 1:n, j in 1:n
+        @test D[i, j] == (i == j ? d[i] : 0)
+    end
+end
+
+@testset "setindex!" begin
+    d = randn(n)
+    D = Diagonal(d)
+    # setindex! bounds checking
+    @test_throws BoundsError D[0, 0] = 0
+    @test_throws BoundsError D[-1 , -2] = 0
+    @test_throws BoundsError D[n, n + 1] = 0
+    @test_throws BoundsError D[n + 1, n] = 0
+    @test_throws BoundsError D[n + 1, n + 1] = 0
+    for i in 1:n, j in 1:n
+        if i == j
+            # setindex on! the diagonal
+            @test ((D[i, j] = i) == i; D[i, j] == i)
+        else
+            # setindex! off the diagonal
+            @test ((D[i, j] = 0) == 0; iszero(D[i, j]))
+            @test_throws ArgumentError D[i, j] = 1
         end
-        for i=1:n
-            for j=1:n
-                @test D[i,j] == (i==j ? d[i] : 0)
-            end
-        end
-        D2 = copy(D)
-        for i=1:n
-            D2[i,i] = i
-        end
-        for i=1:n
-            for j=1:n
-                if i == j
-                    @test D2[i,j] == i
-                else
-                    @test D2[i,j] == 0
-                    D2[i,j] = 0
-                    @test_throws ArgumentError (D2[i,j] = 1)
-                end
-            end
-        end
-        @test_throws BoundsError D[0, 0]
-        @test_throws BoundsError (D[0, 0] = 0)
-        @test_throws BoundsError D[-1,-2]
-        @test_throws BoundsError (D[-1,-2] = 0)
-        @test_throws BoundsError D[n+1,n+1]
-        @test_throws BoundsError (D[n+1,n+1] = 0)
-        @test_throws BoundsError D[n,n+1]
-        @test_throws BoundsError (D[n,n+1] = 0)
     end
 end
 
@@ -295,6 +313,36 @@ let D1 = Diagonal(rand(5)), D2 = Diagonal(rand(5))
     @test_throws MethodError Ac_mul_B!(D1,D2)
 end
 
-# Diagonal and Q
-Q = qrfact(randn(5,5))[:Q]
-@test D*Q' == Array(D)*Q'
+@testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin
+    D = Diagonal(randn(5))
+    Q = qrfact(randn(5, 5))[:Q]
+    @test D * Q' == Array(D) * Q'
+end
+
+@testset "block diagonal matrices" begin
+    D = Diagonal([[1 2; 3 4], [1 2; 3 4]])
+    Dherm = Diagonal([[1 1+im; 1-im 1], [1 1+im; 1-im 1]])
+    Dsym = Diagonal([[1 1+im; 1+im 1], [1 1+im; 1+im 1]])
+    @test D' == Diagonal([[1 3; 2 4], [1 3; 2 4]])
+    @test D.' == Diagonal([[1 3; 2 4], [1 3; 2 4]])
+    @test Dherm' == Dherm
+    @test Dherm.' == Diagonal([[1 1-im; 1+im 1], [1 1-im; 1+im 1]])
+    @test Dsym' == Diagonal([[1 1-im; 1-im 1], [1 1-im; 1-im 1]])
+    @test Dsym.' == Dsym
+
+    v = [[1, 2], [3, 4]]
+    @test Dherm' * v == Dherm * v
+    @test D.' * v == [[7, 10], [15, 22]]
+
+    @test issymmetric(D) == false
+    @test issymmetric(Dherm) == false
+    @test issymmetric(Dsym) == true
+
+    @test ishermitian(D) == false
+    @test ishermitian(Dherm) == true
+    @test ishermitian(Dsym) == false
+
+    @test expm(D) == Diagonal([expm([1 2; 3 4]), expm([1 2; 3 4])])
+    @test logm(D) == Diagonal([logm([1 2; 3 4]), logm([1 2; 3 4])])
+    @test sqrtm(D) == Diagonal([sqrtm([1 2; 3 4]), sqrtm([1 2; 3 4])])
+end

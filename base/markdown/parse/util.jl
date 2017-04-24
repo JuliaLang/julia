@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base: peek
 
@@ -91,7 +91,7 @@ function startswith(stream::IO, c::Char; eat = true)
     end
 end
 
-function startswith{T<:AbstractString}(stream::IO, ss::Vector{T}; kws...)
+function startswith(stream::IO, ss::Vector{<:AbstractString}; kws...)
     any(s->startswith(stream, s; kws...), ss)
 end
 

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Libc
 
@@ -15,7 +15,7 @@ include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","errno_h.jl"))  # include($B
 ## RawFD ##
 
 # Wrapper for an OS file descriptor (on both Unix and Windows)
-immutable RawFD
+struct RawFD
     fd::Int32
     RawFD(fd::Integer) = new(fd)
     RawFD(fd::RawFD) = fd
@@ -30,7 +30,7 @@ dup(src::RawFD, target::RawFD) = systemerror("dup", -1 ==
 
 # Wrapper for an OS file descriptor (for Windows)
 if is_windows()
-    immutable WindowsRawSocket
+    struct WindowsRawSocket
         handle::Ptr{Void}   # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows
     end
     Base.cconvert(::Type{Ptr{Void}}, fd::WindowsRawSocket) = fd.handle
@@ -42,7 +42,7 @@ end
 
 ## FILE (not auto-finalized) ##
 
-immutable FILE
+struct FILE
     ptr::Ptr{Void}
 end
 
@@ -96,7 +96,7 @@ else
     error("systemsleep undefined for this OS")
 end
 
-immutable TimeVal
+struct TimeVal
    sec::Int64
    usec::Int64
 end
@@ -114,7 +114,7 @@ end
 Convert a number of seconds since the epoch to broken-down format, with fields `sec`, `min`,
 `hour`, `mday`, `month`, `year`, `wday`, `yday`, and `isdst`.
 """
-type TmStruct
+mutable struct TmStruct
     sec::Int32
     min::Int32
     hour::Int32
@@ -153,7 +153,7 @@ library.
 strftime(t) = strftime("%c", t)
 strftime(fmt::AbstractString, t::Real) = strftime(fmt, TmStruct(t))
 function strftime(fmt::AbstractString, tm::TmStruct)
-    timestr = Array{UInt8}(128)
+    timestr = Vector{UInt8}(128)
     n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Cstring, Ptr{TmStruct}),
               timestr, length(timestr), fmt, &tm)
     if n == 0
@@ -222,7 +222,7 @@ getpid() = ccall(:jl_getpid, Int32, ())
 Get the local machine's host name.
 """
 function gethostname()
-    hn = Array{UInt8}(256)
+    hn = Vector{UInt8}(256)
     err = @static if is_windows()
         ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
     else

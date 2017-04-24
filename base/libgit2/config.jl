@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function GitConfig(path::AbstractString,
                    level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_APP,
@@ -51,7 +51,7 @@ function addfile(cfg::GitConfig, path::AbstractString,
                    cfg.ptr, path, Cint(level), Cint(force))
 end
 
-function get{T<:AbstractString}(::Type{T}, c::GitConfig, name::AbstractString)
+function get(::Type{<:AbstractString}, c::GitConfig, name::AbstractString)
     buf_ref = Ref(Buffer())
     @check ccall((:git_config_get_string_buf, :libgit2), Cint,
                  (Ptr{Buffer}, Ptr{Void}, Cstring), buf_ref, c.ptr, name)
@@ -82,19 +82,19 @@ function get(::Type{Int64}, c::GitConfig, name::AbstractString)
     return val_ptr[]
 end
 
-function get{T}(c::GitConfig, name::AbstractString, default::T)
+function get(c::GitConfig, name::AbstractString, default::T) where T
     res = default
     try res = get(T,c,name) end
     return res
 end
 
-function getconfig{T}(r::GitRepo, name::AbstractString, default::T)
+function getconfig(r::GitRepo, name::AbstractString, default)
     with(GitConfig, r) do cfg
         get(cfg, name, default)
     end
 end
 
-function getconfig{T}(rname::AbstractString, name::AbstractString, default::T)
+function getconfig(rname::AbstractString, name::AbstractString, default)
     with(GitRepo, rname) do r
         with(GitConfig, r) do cfg
             get(cfg, name, default)
@@ -102,13 +102,13 @@ function getconfig{T}(rname::AbstractString, name::AbstractString, default::T)
     end
 end
 
-function getconfig{T}(name::AbstractString, default::T)
+function getconfig(name::AbstractString, default)
     with(GitConfig) do cfg
         get(cfg, name, default)
     end
 end
 
-function set!{T <: AbstractString}(c::GitConfig, name::AbstractString, value::T)
+function set!(c::GitConfig, name::AbstractString, value::AbstractString)
     @check ccall((:git_config_set_string, :libgit2), Cint,
                   (Ptr{Void}, Cstring, Cstring), c.ptr, name, value)
 end

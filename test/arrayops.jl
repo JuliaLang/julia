@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Array test
 
@@ -189,7 +189,7 @@ end
     @test convert(Vector{Float64}, b) == b
 end
 
-@testset "operations with LinearFast ReshapedArray" begin
+@testset "operations with IndexLinear ReshapedArray" begin
     b = collect(1:12)
     a = Base.ReshapedArray(b, (4,3), ())
     @test a[3,2] == 7
@@ -558,7 +558,7 @@ D = cat(3, B, B)
 @test unique(D, 3) == cat(3, B)
 
 # With hash collisions
-immutable HashCollision
+struct HashCollision
     x::Float64
 end
 Base.hash(::HashCollision, h::UInt) = h
@@ -586,6 +586,11 @@ end
     A3 = reshape(repmat([1 2 3 4],UInt32(6),UInt32(1)),2,3,4)
     @test isequal(cumsum(A,3),A3)
     @test repmat([1,2,3,4], UInt32(1)) == [1,2,3,4]
+    @test repmat([1 2], UInt32(2)) == repmat([1 2], UInt32(2), UInt32(1))
+
+    # issue 20564
+    @test_throws MethodError repmat(1, 2, 3)
+    @test_throws MethodError repmat([1, 2], 1, 2, 3)
 
 
     R = repeat([1, 2])
@@ -785,6 +790,13 @@ end
     R = repeat(1:2, inner=(3,), outer=(2,))
     @test R == [1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2]
 
+    @test size(repeat([1], inner=(0,))) == (0,)
+    @test size(repeat([1], outer=(0,))) == (0,)
+    @test size(repeat([1 1], inner=(0, 1))) == (0, 2)
+    @test size(repeat([1 1], outer=(1, 0))) == (1, 0)
+    @test size(repeat([1 1], inner=(2, 0), outer=(2, 1))) == (4, 0)
+    @test size(repeat([1 1], inner=(2, 0), outer=(0, 1))) == (0, 0)
+
     A = rand(4,4)
     for s in Any[A[1:2:4, 1:2:4], view(A, 1:2:4, 1:2:4)]
         c = cumsum(s, 1)
@@ -822,6 +834,8 @@ end
     @test isequal(c[1,:], cv2)
     @test isequal(c[3,:], cv)
     @test isequal(c[:,4], [2.0,2.0,2.0,2.0]*1000)
+
+    @test repeat(BitMatrix(eye(2)), inner = (2,1), outer = (1,2)) == repeat(eye(2), inner = (2,1), outer = (1,2))
 end
 
 @testset "indexing with bools" begin
@@ -937,6 +951,14 @@ end
     m = mapslices(x->fill!(x, 0), o, 2)
     @test m == zeros(3, 4)
     @test o == ones(3, 4)
+
+    # issue #18524
+    m = mapslices(x->tuple(x), [1 2; 3 4], 1)
+    @test m[1,1] == ([1,3],)
+    @test m[1,2] == ([2,4],)
+
+    # issue #21123
+    @test mapslices(nnz, speye(3), 1) == [1 1 1]
 end
 
 @testset "single multidimensional index" begin
@@ -991,11 +1013,6 @@ end
     m = mapslices(x->fill!(x, 0), o, 2)
     @test m == zeros(3, 4)
     @test o == ones(3, 4)
-
-    # issue #18524
-    m = mapslices(x->tuple(x), [1 2; 3 4], 1)
-    @test m[1,1] == ([1,3],)
-    @test m[1,2] == ([2,4],)
 
     asr = sortrows(a, rev=true)
     @test lexless(asr[2,:],asr[1,:])
@@ -1067,8 +1084,17 @@ end
 @testset "deleteat!" begin
     for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
                    8:9, 9:10, 6:9, 7:10]
+        # integer indexing with AbstractArray
         a = [1:10;]; acopy = copy(a)
         @test deleteat!(a, idx) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
+
+        # integer indexing with non-AbstractArray iterable
+        a = [1:10;]; acopy = copy(a)
+        @test deleteat!(a, (i for i in idx)) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
+
+        # logical indexing
+        a = [1:10;]; acopy = copy(a)
+        @test deleteat!(a, map(i -> i in idx, 1:length(a))) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
     end
     a = [1:10;]
     @test deleteat!(a, 11:10) == [1:10;]
@@ -1077,6 +1103,9 @@ end
     @test_throws BoundsError deleteat!(a, [1,13])
     @test_throws ArgumentError deleteat!(a, [5,3])
     @test_throws BoundsError deleteat!(a, 5:20)
+    @test_throws BoundsError deleteat!(a, Bool[])
+    @test_throws BoundsError deleteat!(a, [true])
+    @test_throws BoundsError deleteat!(a, falses(11))
 end
 
 @testset "comprehensions" begin
@@ -1102,6 +1131,15 @@ end
         @test_throws DomainError (10.^[-1])[1] == 0.1
         @test (10.^[-1.])[1] == 0.1
     end
+end
+
+@testset "eachindexvalue" begin
+    A14 = [11 13; 12 14]
+    R = CartesianRange(indices(A14))
+    @test [a for (a,b) in enumerate(IndexLinear(),    A14)] == [1,2,3,4]
+    @test [a for (a,b) in enumerate(IndexCartesian(), A14)] == vec(collect(R))
+    @test [b for (a,b) in enumerate(IndexLinear(),    A14)] == [11,12,13,14]
+    @test [b for (a,b) in enumerate(IndexCartesian(), A14)] == [11,12,13,14]
 end
 
 @testset "reverse" begin
@@ -1316,11 +1354,11 @@ end
 
 @testset "linear indexing" begin
     a = [1:5;]
-    @test isa(Base.linearindexing(a), Base.LinearFast)
+    @test isa(Base.IndexStyle(a), Base.IndexLinear)
     b = view(a, :)
-    @test isa(Base.linearindexing(b), Base.LinearFast)
-    @test isa(Base.linearindexing(trues(2)), Base.LinearFast)
-    @test isa(Base.linearindexing(BitArray{2}), Base.LinearFast)
+    @test isa(Base.IndexStyle(b), Base.IndexLinear)
+    @test isa(Base.IndexStyle(trues(2)), Base.IndexLinear)
+    @test isa(Base.IndexStyle(BitArray{2}), Base.IndexLinear)
     aa = fill(99, 10)
     aa[1:2:9] = a
     shp = [5]
@@ -1330,7 +1368,7 @@ end
         @test mdsum2(A) == 15
         AA = reshape(aa, tuple(2, shp...))
         B = view(AA, 1:1, ntuple(i->Colon(), i)...)
-        @test isa(Base.linearindexing(B), Base.IteratorsMD.LinearSlow)
+        @test isa(Base.IndexStyle(B), Base.IteratorsMD.IndexCartesian)
         @test mdsum(B) == 15
         @test mdsum2(B) == 15
         unshift!(shp, 1)
@@ -1511,8 +1549,8 @@ R = CartesianRange((0,3))
 R = CartesianRange((3,0))
 @test done(R, start(R)) == true
 
-@test @inferred(eachindex(Base.LinearSlow(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == CartesianRange((3,2,2))
-@test @inferred(eachindex(Base.LinearFast(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == 1:8
+@test @inferred(eachindex(Base.IndexCartesian(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == CartesianRange((3,2,2))
+@test @inferred(eachindex(Base.IndexLinear(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == 1:8
 @test @inferred(eachindex(zeros(3),view(zeros(3,3),1:2,1:2),zeros(2,2,2),zeros(2,2))) == CartesianRange((3,2,2))
 @test @inferred(eachindex(zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == 1:8
 
@@ -1602,7 +1640,7 @@ module RetTypeDecl
     using Base.Test
     import Base: +, *, broadcast, convert
 
-    immutable MeterUnits{T,P} <: Number
+    struct MeterUnits{T,P} <: Number
         val::T
     end
     MeterUnits{T}(val::T, pow::Int) = MeterUnits{T,pow}(val)
@@ -1642,14 +1680,14 @@ B = 1.5:5.5
 end
 
 ###
-### LinearSlow workout
+### IndexCartesian workout
 ###
-immutable LinSlowMatrix{T} <: DenseArray{T,2}
+struct LinSlowMatrix{T} <: DenseArray{T,2}
     data::Matrix{T}
 end
 
 # This is the default, but just to be sure
-Base.linearindexing{A<:LinSlowMatrix}(::Type{A}) = Base.LinearSlow()
+Base.IndexStyle{A<:LinSlowMatrix}(::Type{A}) = Base.IndexCartesian()
 
 Base.size(A::LinSlowMatrix) = size(A.data)
 
@@ -1734,11 +1772,11 @@ x13250[UInt(1):UInt(2)] = 1.0
 @test x13250[2] == 1.0
 @test x13250[3] == 0.0
 
-immutable SquaresVector <: AbstractArray{Int, 1}
+struct SquaresVector <: AbstractArray{Int, 1}
     count::Int
 end
 Base.size(S::SquaresVector) = (S.count,)
-Base.linearindexing(::Type{SquaresVector}) = Base.LinearFast()
+Base.IndexStyle(::Type{SquaresVector}) = Base.IndexLinear()
 Base.getindex(S::SquaresVector, i::Int) = i*i
 foo_squares = SquaresVector(5)
 @test convert(Array{Int}, foo_squares) == [1,4,9,16,25]
@@ -1800,7 +1838,7 @@ end
 @inferred map(Int8, Int[0])
 
 # make sure @inbounds isn't used too much
-type OOB_Functor{T}; a::T; end
+mutable struct OOB_Functor{T}; a::T; end
 (f::OOB_Functor)(i::Int) = f.a[i]
 let f = OOB_Functor([1,2])
     @test_throws BoundsError map(f, [1,2,3,4,5])
@@ -1863,8 +1901,8 @@ end
     @test typeof(conj(B)) == Vector{Float64}
     @test typeof(conj(C)) == Vector{Complex{Int}}
 
-    @test ~A == [9,-1,-4]
-    @test typeof(~A) == Vector{Int}
+    @test .~A == [9,-1,-4]
+    @test typeof(.~A) == Vector{Int}
 end
 
 @testset "issue #16247" begin
@@ -1879,7 +1917,7 @@ module AutoRetType
 
 using Base.Test
 
-immutable Foo end
+struct Foo end
 for op in (:+, :*, :÷, :%, :<<, :>>, :-, :/, :\, ://, :^)
     @eval import Base.$(op)
     @eval $(op)(::Foo, ::Foo) = Foo()
@@ -2016,12 +2054,11 @@ end
     zs = zeros(SparseMatrixCSC([1 2; 3 4]), Complex{Float64}, (2,3))
     test_zeros(zs, SparseMatrixCSC{Complex{Float64}}, (2, 3))
 
-    @testset "#19265" begin
-        @test_throws MethodError zeros(Float64, [1.])
-        x = [1.]
-        test_zeros(zeros(x, Float64), Vector{Float64}, (1,))
-        @test x == [1.]
-    end
+    # #19265"
+    @test_throws ErrorException zeros(Float64, [1.]) # TODO change to MethodError, when v0.6 deprecations are done
+    x = [1.]
+    test_zeros(zeros(x, Float64), Vector{Float64}, (1,))
+    @test x == [1.]
 
     # exotic indexing
     oarr = zeros(randn(3), UInt16, 1:3, -1:0)
@@ -2030,7 +2067,7 @@ end
 end
 
 # issue #11053
-type T11053
+mutable struct T11053
     a::Float64
 end
 Base.:*(a::T11053, b::Real) = T11053(a.a*b)

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # simple keyword args case
 kwf1(ones; tens=0, hundreds=0) = ones + 10*tens + 100*hundreds
@@ -172,8 +172,8 @@ end
 @test (@TEST4538_3) == 3
 
 # issue #4801
-type T4801{X}
-    T4801(;k=0) = new()
+mutable struct T4801{X}
+    T4801{X}(;k=0) where X = new()
 end
 @test isa(T4801{Any}(k=0), T4801{Any})
 
@@ -248,3 +248,25 @@ f7045(x::Real; y=true) = y ? 2 : 3
 @test f7045(1.0) === 1
 @test f7045(1, y=false) === 3
 @test f7045(1.0, y=false) === 3
+
+# issue #20804
+struct T20804{T}
+    y::T
+end
+(f::T20804)(;x=10) = f.y + x
+let x = T20804(4)
+    @test x() == 14
+    @test x(x=8) == 12
+end
+
+# issue #21147
+function f21147(f::Tuple{A}; kwargs...) where {B,A<:Tuple{B}}
+    return B
+end
+@test f21147(((1,),)) === Int
+@test f21147(((1,),), k = 2) === Int
+function g21147(f::Tuple{A}, k = 2) where {B,A<:Tuple{B}}
+    return B
+end
+@test g21147(((1,),)) === Int
+@test g21147(((1,),), 2) === Int

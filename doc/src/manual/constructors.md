@@ -6,7 +6,7 @@ when applied to an argument tuple as a function. This much was already mentioned
 composite types were introduced. For example:
 
 ```jldoctest footype
-julia> type Foo
+julia> struct Foo
            bar
            baz
        end
@@ -88,7 +88,7 @@ the constraint that the first number is not greater than the second one. One cou
 like this:
 
 ```jldoctest pairtype
-julia> type OrderedPair
+julia> struct OrderedPair
            x::Real
            y::Real
            OrderedPair(x,y) = x > y ? error("out of order") : new(x,y)
@@ -108,17 +108,14 @@ Stacktrace:
  [1] OrderedPair(::Int64, ::Int64) at ./none:4
 ```
 
-You can still reach in and directly change the field values to violate this invariant, but messing
-around with an object's internals uninvited is considered poor form. You (or someone else) can
-also provide additional outer constructor methods at any later point, but once a type is declared,
-there is no way to add more inner constructor methods. Since outer constructor methods can only
-create objects by calling other constructor methods, ultimately, some inner constructor must be
-called to create an object. This guarantees that all objects of the declared type must come into
+If the type were declared `mutable`, you could reach in and directly change the field values to
+violate this invariant, but messing around with an object's internals uninvited is considered poor form.
+You (or someone else) can also provide additional outer constructor methods at any later point, but
+once a type is declared, there is no way to add more inner constructor methods. Since outer constructor
+methods can only create objects by calling other constructor methods, ultimately, some inner constructor
+must be called to create an object. This guarantees that all objects of the declared type must come into
 existence by a call to one of the inner constructor methods provided with the type, thereby giving
 some degree of enforcement of a type's invariants.
-
-Of course, if the type is declared as `immutable`, then its constructor-provided invariants are
-fully enforced. This is an important consideration when deciding whether a type should be immutable.
 
 If any inner constructor method is defined, no default constructor method is provided: it is presumed
 that you have supplied yourself with all the inner constructors you need. The default constructor
@@ -127,7 +124,7 @@ as parameters (constrained to be of the correct type, if the corresponding field
 and passes them to `new`, returning the resulting object:
 
 ```jldoctest
-julia> type Foo
+julia> struct Foo
            bar
            baz
            Foo(bar,baz) = new(bar,baz)
@@ -140,11 +137,11 @@ inner constructor method. The following two types are equivalent -- one with a d
 the other with an explicit constructor:
 
 ```jldoctest
-julia> type T1
+julia> struct T1
            x::Int64
        end
 
-julia> type T2
+julia> struct T2
            x::Int64
            T2(x) = new(x)
        end
@@ -175,7 +172,7 @@ or more generally, recursive data structures. Since the fundamental difficulty m
 obvious, let us briefly explain it. Consider the following recursive type declaration:
 
 ```jldoctest selfrefer
-julia> type SelfReferential
+julia> mutable struct SelfReferential
            obj::SelfReferential
        end
 
@@ -201,7 +198,7 @@ at defining the `SelfReferential` type, with a zero-argument inner constructor r
 having `obj` fields pointing to themselves:
 
 ```jldoctest selfrefer2
-julia> type SelfReferential
+julia> mutable struct SelfReferential
            obj::SelfReferential
            SelfReferential() = (x = new(); x.obj = x)
        end
@@ -227,7 +224,7 @@ Although it is generally a good idea to return a fully initialized object from a
 incompletely initialized objects can be returned:
 
 ```jldoctest incomplete
-julia> type Incomplete
+julia> mutable struct Incomplete
            xx
            Incomplete() = new()
        end
@@ -245,12 +242,12 @@ ERROR: UndefRefError: access to undefined reference
 
 This avoids the need to continually check for `null` values. However, not all object fields are
 references. Julia considers some types to be "plain data", meaning all of their data is self-contained
-and does not reference other objects. The plain data types consist of bits types (e.g. `Int`)
+and does not reference other objects. The plain data types consist of primitive types (e.g. `Int`)
 and immutable structs of other plain data types. The initial contents of a plain data type is
 undefined:
 
 ```julia
-julia> type HasPlain
+julia> struct HasPlain
            n::Int
            HasPlain() = new()
        end
@@ -264,7 +261,7 @@ Arrays of plain data types exhibit the same behavior.
 You can pass incomplete objects to other functions from inner constructors to delegate their completion:
 
 ```jldoctest
-julia> type Lazy
+julia> mutable struct Lazy
            xx
            Lazy(v) = complete_me(new(), v)
        end
@@ -282,7 +279,7 @@ given type parameters or with type parameters implied by the types of the argume
 constructor. Here are some examples:
 
 ```jldoctest parametric
-julia> type Point{T<:Real}
+julia> struct Point{T<:Real}
            x::T
            y::T
        end
@@ -296,8 +293,7 @@ Point{Float64}(1.0, 2.5)
 julia> Point(1,2.5) ## implicit T ##
 ERROR: MethodError: no method matching Point(::Int64, ::Float64)
 Closest candidates are:
-  Point{T}(::Any) at sysimg.jl:24
-  Point{T<:Real}(::T<:Real, !Matched::T<:Real) at none:2
+  Point(::T<:Real, !Matched::T<:Real) where T<:Real at none:2
 
 julia> Point{Int64}(1, 2) ## explicit T ##
 Point{Int64}(1, 2)
@@ -305,14 +301,14 @@ Point{Int64}(1, 2)
 julia> Point{Int64}(1.0,2.5) ## explicit T ##
 ERROR: InexactError()
 Stacktrace:
- [1] convert(::Type{Int64}, ::Float64) at ./float.jl:675
+ [1] convert(::Type{Int64}, ::Float64) at ./float.jl:679
  [2] Point{Int64}(::Float64, ::Float64) at ./none:2
 
-julia> Point{Float64}(1.0,2.5) ## explicit T ##
-Point{Float64}(1.0,2.5)
+julia> Point{Float64}(1.0, 2.5) ## explicit T ##
+Point{Float64}(1.0, 2.5)
 
 julia> Point{Float64}(1,2) ## explicit T ##
-Point{Float64}(1.0,2.0)
+Point{Float64}(1.0, 2.0)
 ```
 
 As you can see, for constructor calls with explicit type parameters, the arguments are converted
@@ -331,22 +327,19 @@ outer `Point` constructor that takes pairs of real arguments, which must be of t
 This automatic provision of constructors is equivalent to the following explicit declaration:
 
 ```jldoctest parametric2
-julia> type Point{T<:Real}
+julia> struct Point{T<:Real}
            x::T
            y::T
-           Point(x,y) = new(x,y)
+           Point{T}(x,y) where {T<:Real} = new(x,y)
        end
 
-julia> Point{T<:Real}(x::T, y::T) = Point{T}(x,y);
+julia> Point(x::T, y::T) where {T<:Real} = Point{T}(x,y);
 ```
 
-Some features of parametric constructor definitions at work here deserve comment. First, inner
-constructor declarations always define methods of `Point{T}` rather than methods of the general
-`Point` constructor function. Since `Point` is not a concrete type, it makes no sense for it to
-even have inner constructor methods at all. Thus, the inner method declaration `Point(x,y) = new(x,y)`
-provides an inner constructor method for each value of `T`. It is this method declaration that
-defines the behavior of constructor calls with explicit type parameters like `Point{Int64}(1,2)`
-and `Point{Float64}(1.0,2.0)`. The outer constructor declaration, on the other hand, defines a
+Notice that each definition looks like the form of constructor call that it handles.
+The call `Point{Int64}(1,2)` will invoke the definition `Point{T}(x,y)` inside the
+`type` block.
+The outer constructor declaration, on the other hand, defines a
 method for the general `Point` constructor which only applies to pairs of values of the same real
 type. This declaration makes constructor calls without explicit type parameters, like `Point(1,2)`
 and `Point(1.0,2.5)`, work. Since the method declaration restricts the arguments to being of the
@@ -380,11 +373,10 @@ However, other similar calls still don't work:
 julia> Point(1.5,2)
 ERROR: MethodError: no method matching Point(::Float64, ::Int64)
 Closest candidates are:
-  Point{T}(::Any) at sysimg.jl:24
-  Point{T<:Real}(::T<:Real, !Matched::T<:Real) at none:1
+  Point(::T<:Real, !Matched::T<:Real) where T<:Real at none:1
 ```
 
-For a much more general way of making all such calls work sensibly, see [Conversion and Promotion](@ref conversion-and-promotion).
+For a more general way to make all such calls work sensibly, see [Conversion and Promotion](@ref conversion-and-promotion).
 At the risk of spoiling the suspense, we can reveal here that all it takes is the following outer
 method definition to make all calls to the general `Point` constructor work as one would expect:
 
@@ -415,14 +407,14 @@ defining sophisticated behavior is typically quite simple.
 ## Case Study: Rational
 
 Perhaps the best way to tie all these pieces together is to present a real world example of a
-parametric composite type and its constructor methods. To that end, here is the (slightly modified) beginning of [rational.jl](https://github.com/JuliaLang/julia/blob/master/base/rational.jl),
+parametric composite type and its constructor methods. To that end, here is the (slightly modified) beginning of [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl),
 which implements Julia's [Rational Numbers](@ref):
 
 ```jldoctest rational
-julia> immutable OurRational{T<:Integer} <: Real
+julia> struct OurRational{T<:Integer} <: Real
            num::T
            den::T
-           function OurRational(num::T, den::T)
+           function OurRational{T}(num::T, den::T) where T<:Integer
                if num == 0 && den == 0
                     error("invalid rational: 0//0")
                end
@@ -433,7 +425,7 @@ julia> immutable OurRational{T<:Integer} <: Real
            end
        end
 
-julia> OurRational{T<:Integer}(n::T, d::T) = OurRational{T}(n,d)
+julia> OurRational(n::T, d::T) where {T<:Integer} = OurRational{T}(n,d)
 OurRational
 
 julia> OurRational(n::Integer, d::Integer) = OurRational(promote(n,d)...)
@@ -465,7 +457,7 @@ julia> function //(x::Complex, y::Complex)
 // (generic function with 6 methods)
 ```
 
-The first line -- `immutable OurRational{T<:Integer} <: Real` -- declares that `OurRational` takes one
+The first line -- `struct OurRational{T<:Integer} <: Real` -- declares that `OurRational` takes one
 type parameter of an integer type, and is itself a real type. The field declarations `num::T`
 and `den::T` indicate that the data held in a `OurRational{T}` object are a pair of integers of type
 `T`, one representing the rational value's numerator and the other representing its denominator.
@@ -510,7 +502,7 @@ false
 
 Thus, although the [`//`](@ref) operator usually returns an instance of `OurRational`, if either
 of its arguments are complex integers, it will return an instance of `Complex{OurRational}` instead.
-The interested reader should consider perusing the rest of [rational.jl](https://github.com/JuliaLang/julia/blob/master/base/rational.jl):
+The interested reader should consider perusing the rest of [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl):
 it is short, self-contained, and implements an entire basic Julia type.
 
 ## [Constructors and Conversion](@id constructors-and-conversion)
@@ -533,7 +525,7 @@ one type to another, you should probably define a `convert` method instead.
 
 On the other hand, if your constructor does not represent a lossless conversion, or doesn't represent
 "conversion" at all, it is better to leave it as a constructor rather than a `convert` method.
- For example, the `Array{Int}()` constructor creates a zero-dimensional `Array` of the type `Int`,
+For example, the `Array{Int}()` constructor creates a zero-dimensional `Array` of the type `Int`,
 but is not really a "conversion" from `Int` to an `Array`.
 
 ## Outer-only constructors
@@ -549,7 +541,7 @@ For example, say we define a type that stores a vector along with an accurate re
 its sum:
 
 ```jldoctest
-julia> type SummedArray{T<:Number,S<:Number}
+julia> struct SummedArray{T<:Number,S<:Number}
            data::Vector{T}
            sum::S
        end
@@ -561,14 +553,14 @@ SummedArray{Int32,Int32}(Int32[1, 2, 3], 6)
 The problem is that we want `S` to be a larger type than `T`, so that we can sum many elements
 with less information loss. For example, when `T` is `Int32`, we would like `S` to be `Int64`.
 Therefore we want to avoid an interface that allows the user to construct instances of the type
-`SummedArray{Int32,Int32}`. One way to do this is to provide only an outer constructor for `SummedArray`.
-This can be done using method definition by type:
+`SummedArray{Int32,Int32}`. One way to do this is to provide a constructor only for `SummedArray`,
+but inside the `type` definition block to suppress generation of default constructors:
 
 ```jldoctest
-julia> type SummedArray{T<:Number,S<:Number}
+julia> struct SummedArray{T<:Number,S<:Number}
            data::Vector{T}
            sum::S
-           function (::Type{SummedArray}){T}(a::Vector{T})
+           function SummedArray(a::Vector{T}) where T
                S = widen(T)
                new{T,S}(a, sum(S, a))
            end
@@ -577,10 +569,10 @@ julia> type SummedArray{T<:Number,S<:Number}
 julia> SummedArray(Int32[1; 2; 3], Int32(6))
 ERROR: MethodError: no method matching SummedArray(::Array{Int32,1}, ::Int32)
 Closest candidates are:
-  SummedArray{T}(::Array{T,1}) at none:5
-  SummedArray{T}(::Any) at sysimg.jl:24
+  SummedArray(::Array{T,1}) where T at none:5
 ```
 
 This constructor will be invoked by the syntax `SummedArray(a)`. The syntax `new{T,S}` allows
 specifying parameters for the type to be constructed, i.e. this call will return a `SummedArray{T,S}`.
-
+`new{T,S}` can be used in any constructor definition, but for convenience the parameters
+to `new{}` are automatically derived from the type being constructed when possible.

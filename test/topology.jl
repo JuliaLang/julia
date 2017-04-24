@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 include("testdefs.jl")
 addprocs(4; topology="master_slave")
@@ -32,7 +32,7 @@ end
 remove_workers_and_test()
 
 # connect even pids to other even pids, odd to odd.
-type TopoTestManager <: ClusterManager
+mutable struct TopoTestManager <: ClusterManager
     np::Integer
 end
 
@@ -43,7 +43,7 @@ function Base.launch(manager::TopoTestManager, params::Dict, launched::Array, c:
 
     for i in 1:manager.np
         io, pobj = open(pipeline(detach(
-            setenv(`$(Base.julia_cmd(exename)) $exeflags --bind-to $(Base.LPROC.bind_addr) --worker $(Base.cluster_cookie())`, dir=dir)); stderr=STDERR), "r")
+            setenv(`$(Base.julia_cmd(exename)) $exeflags --bind-to $(Base.Distributed.LPROC.bind_addr) --worker $(Base.cluster_cookie())`, dir=dir)); stderr=STDERR), "r")
         wconfig = WorkerConfig()
         wconfig.process = pobj
         wconfig.io = io

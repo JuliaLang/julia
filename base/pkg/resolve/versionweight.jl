@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module VersionWeights
 
@@ -6,7 +6,7 @@ importall ....Base.Operators
 
 export VersionWeight
 
-immutable HierarchicalValue{T}
+struct HierarchicalValue{T}
     v::Vector{T}
     rest::T
 end
@@ -42,7 +42,7 @@ for f in (:-, :+)
     end
 end
 
-Base.:-{T}(a::HierarchicalValue{T}) = HierarchicalValue(-a.v, -a.rest)
+Base.:-(a::HierarchicalValue) = HierarchicalValue(-a.v, -a.rest)
 
 function Base.cmp{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T})
     av = a.v
@@ -68,7 +68,9 @@ Base.:(==){T}(a::HierarchicalValue{T}, b::HierarchicalValue{T}) = cmp(a,b) == 0
 
 Base.abs{T}(a::HierarchicalValue{T}) = HierarchicalValue(T[abs(x) for x in a.v], abs(a.rest))
 
-immutable VWPreBuildItem
+Base.copy{T}(a::HierarchicalValue{T}) = HierarchicalValue(T[copy(x) for x in a.v], copy(a.rest))
+
+struct VWPreBuildItem
     nonempty::Int
     s::HierarchicalValue{Int}
     i::Int
@@ -96,7 +98,9 @@ Base.:(==)(a::VWPreBuildItem, b::VWPreBuildItem) = cmp(a,b) == 0
 
 Base.abs(a::VWPreBuildItem) = VWPreBuildItem(abs(a.nonempty), abs(a.s), abs(a.i))
 
-immutable VWPreBuild
+Base.copy(a::VWPreBuildItem) = VWPreBuildItem(a.nonempty, copy(a.s), a.i)
+
+struct VWPreBuild
     nonempty::Int
     w::HierarchicalValue{VWPreBuildItem}
 end
@@ -151,9 +155,21 @@ function Base.abs(a::VWPreBuild)
     VWPreBuild(abs(a.nonempty), abs(a.w))
 end
 
+function Base.copy(a::VWPreBuild)
+    a === _vwprebuild_zero && return a
+    VWPreBuild(a.nonempty, copy(a.w))
+end
+
+function Base.deepcopy_internal(a::VWPreBuild, dict::ObjectIdDict)
+    haskey(dict, a) && return dict[a]
+    b = (a === _vwprebuild_zero) ? _vwprebuild_zero : VWPreBuild(a.nonempty, Base.deepcopy_internal(a.w, dict))
+    dict[a] = b
+    return b
+end
+
 # The numeric type used to determine how the different
 # versions of a package should be weighed
-immutable VersionWeight
+struct VersionWeight
     major::Int
     minor::Int
     patch::Int
@@ -199,5 +215,9 @@ Base.:(==)(a::VersionWeight, b::VersionWeight) = cmp(a,b) == 0
 Base.abs(a::VersionWeight) =
     VersionWeight(abs(a.major), abs(a.minor), abs(a.patch),
                   abs(a.prerelease), abs(a.build))
+
+Base.copy(a::VersionWeight) =
+    VersionWeight(a.major, a.minor, a.patch,
+                  copy(a.prerelease), copy(a.build))
 
 end

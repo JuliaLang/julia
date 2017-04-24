@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
     LibGit2.GitRepo(path::AbstractString)
@@ -7,29 +7,23 @@ Opens a git repository at `path`.
 """
 function GitRepo(path::AbstractString)
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    err = ccall((:git_repository_open, :libgit2), Cint,
-                (Ptr{Ptr{Void}}, Cstring), repo_ptr_ptr, path)
-    if err != Int(Error.GIT_OK)
-        if repo_ptr_ptr[] != C_NULL
-            close(GitRepo(repo_ptr_ptr[]))
-        end
-        throw(Error.GitError(err))
-    end
+    @check ccall((:git_repository_open, :libgit2), Cint,
+                 (Ptr{Ptr{Void}}, Cstring), repo_ptr_ptr, path)
     return GitRepo(repo_ptr_ptr[])
 end
 
+"""
+    LibGit2.GitRepoExt(path::AbstractString, flags::Cuint = Cuint(Consts.REPOSITORY_OPEN_DEFAULT))
+
+Opens a git repository at `path` with extended controls (for instance, if the current
+user must be a member of a special access group to read `path`).
+"""
 function GitRepoExt(path::AbstractString, flags::Cuint = Cuint(Consts.REPOSITORY_OPEN_DEFAULT))
     separator = @static is_windows() ? ";" : ":"
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    err = ccall((:git_repository_open_ext, :libgit2), Cint,
-                (Ptr{Ptr{Void}}, Cstring, Cuint, Cstring),
+    @check ccall((:git_repository_open_ext, :libgit2), Cint,
+                 (Ptr{Ptr{Void}}, Cstring, Cuint, Cstring),
                  repo_ptr_ptr, path, flags, separator)
-    if err != Int(Error.GIT_OK)
-        if repo_ptr_ptr[] != C_NULL
-            close(GitRepo(repo_ptr_ptr[]))
-        end
-        throw(Error.GitError(err))
-    end
     return GitRepo(repo_ptr_ptr[])
 end
 
@@ -39,6 +33,13 @@ function cleanup(r::GitRepo)
     end
 end
 
+"""
+    LibGit2.init(path::AbstractString, bare::Bool=false) -> GitRepo
+
+Opens a new git repository at `path`. If `bare` is `false`,
+the working tree will be created in `path/.git`. If `bare`
+is `true`, no working directory will be created.
+"""
 function init(path::AbstractString, bare::Bool=false)
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_repository_init, :libgit2), Cint,
@@ -46,6 +47,12 @@ function init(path::AbstractString, bare::Bool=false)
     return GitRepo(repo_ptr_ptr[])
 end
 
+"""
+    LibGit2.head_oid(repo::GitRepo) -> GitHash
+
+Lookup the object id of the current HEAD of git
+repository `repo`.
+"""
 function head_oid(repo::GitRepo)
     head_ref = head(repo)
     try
@@ -55,6 +62,14 @@ function head_oid(repo::GitRepo)
     end
 end
 
+"""
+    LibGit2.headname(repo::GitRepo)
+
+Lookup the name of the current HEAD of git
+repository `repo`. If `repo` is currently
+detached, returns the name of the HEAD it's
+detached from.
+"""
 function headname(repo::GitRepo)
     with(head(repo)) do href
         if isattached(repo)
@@ -96,14 +111,19 @@ Return a `$T` object from `repo` specified by `hash`/`spec`.
 """ $T
 end
 
-function (::Type{T}){T<:GitObject}(repo::GitRepo, spec::AbstractString)
+function (::Type{T})(repo::GitRepo, spec::AbstractString) where T<:GitObject
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_revparse_single, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Ptr{Void}, Cstring), obj_ptr_ptr, repo.ptr, spec)
+    # check object is of correct type
+    if T != GitObject && T != GitUnknownObject
+        t = Consts.OBJECT(obj_ptr_ptr[])
+        t == Consts.OBJECT(T) || throw(GitError(Error.Object, Error.ERROR, "Expected object of type $T, received object of type $(objtype(t))"))
+    end
     return T(repo, obj_ptr_ptr[])
 end
 
-function (::Type{T}){T<:GitObject}(repo::GitRepo, oid::GitHash)
+function (::Type{T})(repo::GitRepo, oid::GitHash) where T<:GitObject
     oid_ptr  = Ref(oid)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
 
@@ -113,7 +133,7 @@ function (::Type{T}){T<:GitObject}(repo::GitRepo, oid::GitHash)
 
     return T(repo, obj_ptr_ptr[])
 end
-function (::Type{T}){T<:GitObject}(repo::GitRepo, oid::GitShortHash)
+function (::Type{T})(repo::GitRepo, oid::GitShortHash) where T<:GitObject
     oid_ptr  = Ref(oid.hash)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
 
@@ -203,7 +223,7 @@ function peel{T<:GitObject}(::Type{T}, obj::GitObject)
     @check ccall((:git_object_peel, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{Void}, Cint), new_ptr_ptr, obj.ptr, Consts.OBJECT(T))
 
-    return T(obj.repo, new_ptr_ptr[])
+    return T(obj.owner, new_ptr_ptr[])
 end
 peel(obj::GitObject) = peel(GitObject, obj)
 
@@ -231,7 +251,7 @@ function checkout_head(repo::GitRepo; options::CheckoutOptions = CheckoutOptions
 end
 
 """Updates some entries, determined by the `pathspecs`, in the index from the target commit tree."""
-function reset!{T<:AbstractString, S<:GitObject}(repo::GitRepo, obj::Nullable{S}, pathspecs::T...)
+function reset!(repo::GitRepo, obj::Nullable{<:GitObject}, pathspecs::AbstractString...)
     @check ccall((:git_reset_default, :libgit2), Cint,
                  (Ptr{Void}, Ptr{Void}, Ptr{StrArrayStruct}),
                  repo.ptr,

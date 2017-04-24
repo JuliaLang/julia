@@ -1,10 +1,10 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## work with AbstractVector{UInt8} via I/O primitives ##
 
 # Stateful string
-type AbstractIOBuffer{T<:AbstractVector{UInt8}} <: IO
-    data::T # T should support: getindex, setindex!, length, copy!, resize!, and T()
+mutable struct AbstractIOBuffer{T<:AbstractVector{UInt8}} <: IO
+    data::T # T should support: getindex, setindex!, length, copy!, and resize!
     readable::Bool
     writable::Bool
     seekable::Bool # if not seekable, implementation is free to destroy (compact) past read data
@@ -14,13 +14,17 @@ type AbstractIOBuffer{T<:AbstractVector{UInt8}} <: IO
     ptr::Int # read (and maybe write) pointer
     mark::Int # reset mark location for ptr (or <0 for no mark)
 
-    AbstractIOBuffer(data::T,readable::Bool,writable::Bool,seekable::Bool,append::Bool,maxsize::Int) =
+    function AbstractIOBuffer{T}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
+                                 maxsize::Int) where T<:AbstractVector{UInt8}
         new(data,readable,writable,seekable,append,length(data),maxsize,1,-1)
+    end
 end
-typealias IOBuffer AbstractIOBuffer{Vector{UInt8}}
+const IOBuffer = AbstractIOBuffer{Vector{UInt8}}
 
-AbstractIOBuffer{T<:AbstractVector{UInt8}}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool, maxsize::Int) =
+function AbstractIOBuffer(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
+                          maxsize::Int) where T<:AbstractVector{UInt8}
     AbstractIOBuffer{T}(data, readable, writable, seekable, append, maxsize)
+end
 
 # allocate Vector{UInt8}s for IOBuffer storage that can efficiently become Strings
 StringVector(n::Integer) = Vector{UInt8}(_string_n(n))
@@ -71,7 +75,7 @@ optionally specifying a size beyond which the underlying `Array` may not be grow
 """
 PipeBuffer(data::Vector{UInt8}=UInt8[], maxsize::Int=typemax(Int)) =
     AbstractIOBuffer(data,true,true,false,true,maxsize)
-PipeBuffer(maxsize::Int) = (x = PipeBuffer(Vector{UInt8}(maxsize),maxsize); x.size=0; x)
+PipeBuffer(maxsize::Int) = (x = PipeBuffer(StringVector(maxsize),maxsize); x.size=0; x)
 
 function copy(b::AbstractIOBuffer)
     ret = typeof(b)(b.writable ? copy(b.data) : b.data,
@@ -103,7 +107,7 @@ function unsafe_read(from::AbstractIOBuffer, p::Ptr{UInt8}, nb::UInt)
     nothing
 end
 
-function read_sub{T}(from::AbstractIOBuffer, a::AbstractArray{T}, offs, nel)
+function read_sub(from::AbstractIOBuffer, a::AbstractArray{T}, offs, nel) where T
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
@@ -247,8 +251,6 @@ eof(io::AbstractIOBuffer) = (io.ptr-1 == io.size)
     io.mark = -1
     if io.writable
         resize!(io.data, 0)
-    else
-        io.data = T()
     end
     nothing
 end
@@ -318,7 +320,7 @@ end
 function unsafe_write(to::AbstractIOBuffer, p::Ptr{UInt8}, nb::UInt)
     ensureroom(to, nb)
     ptr = (to.append ? to.size+1 : to.ptr)
-    written = min(nb, length(to.data) - ptr + 1)
+    written = Int(min(nb, length(to.data) - ptr + 1))
     towrite = written
     d = to.data
     while towrite > 0

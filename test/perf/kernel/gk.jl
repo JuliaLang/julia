@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Grigoriadis Khachiyan Matrix Games.
 #
@@ -95,7 +95,7 @@ function gk(n, myeps)
                 U[i] += A[i,k]
             end
 
-            s = sum(p[1:n] .* exp((eps/2)*A[1:n,k]))
+            s = sum(p[1:n] .* exp.((eps/2)*A[1:n,k]))
             for i=1:n
                 p[i]=(p[i]*exp((eps/2)*A[i,k])) / s
             end

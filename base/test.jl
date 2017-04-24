@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
 Simple unit testing functionality:
@@ -52,7 +52,7 @@ end
 All tests produce a result object. This object may or may not be
 stored, depending on whether the test is part of a test set.
 """
-abstract Result
+abstract type Result end
 
 """
     Pass
@@ -60,7 +60,7 @@ abstract Result
 The test condition was true, i.e. the expression evaluated to true or
 the correct exception was thrown.
 """
-immutable Pass <: Result
+struct Pass <: Result
     test_type::Symbol
     orig_expr
     data
@@ -87,7 +87,7 @@ end
 The test condition was false, i.e. the expression evaluated to false or
 the correct exception was not thrown.
 """
-type Fail <: Result
+mutable struct Fail <: Result
     test_type::Symbol
     orig_expr
     data
@@ -119,7 +119,7 @@ it evaluated to something other than a `Bool`.
 In the case of `@test_broken` it is used to indicate that an
 unexpected `Pass` `Result` occurred.
 """
-type Error <: Result
+mutable struct Error <: Result
     test_type::Symbol
     orig_expr
     value
@@ -159,7 +159,7 @@ end
 The test condition is the expected (failed) result of a broken test,
 or was explicitly skipped with `@test_skip`.
 """
-type Broken <: Result
+mutable struct Broken <: Result
     test_type::Symbol
     orig_expr
 end
@@ -174,14 +174,14 @@ end
 
 #-----------------------------------------------------------------------
 
-abstract ExecutionResult
+abstract type ExecutionResult end
 
-immutable Returned <: ExecutionResult
+struct Returned <: ExecutionResult
     value
     data
 end
 
-immutable Threw <: ExecutionResult
+struct Threw <: ExecutionResult
     exception
     backtrace
 end
@@ -455,7 +455,7 @@ end
 #   Called by do_test after a test is evaluated
 # finish(AbstractTestSet)
 #   Called after the test set has been popped from the test set stack
-abstract AbstractTestSet
+abstract type AbstractTestSet end
 
 """
     record(ts::AbstractTestSet, res::Result)
@@ -482,7 +482,7 @@ function finish end
 
 Thrown when a test set finishes and not all tests passed.
 """
-type TestSetException <: Exception
+mutable struct TestSetException <: Exception
     pass::Int
     fail::Int
     error::Int
@@ -509,11 +509,11 @@ end
 
 A simple fallback test set that throws immediately on a failure.
 """
-immutable FallbackTestSet <: AbstractTestSet
+struct FallbackTestSet <: AbstractTestSet
 end
 fallback_testset = FallbackTestSet()
 
-type FallbackTestSetException <: Exception
+mutable struct FallbackTestSetException <: Exception
     msg::String
 end
 
@@ -540,7 +540,7 @@ If using the DefaultTestSet, the test results will be recorded. If there
 are any `Fail`s or `Error`s, an exception will be thrown only at the end,
 along with a summary of the test results.
 """
-type DefaultTestSet <: AbstractTestSet
+mutable struct DefaultTestSet <: AbstractTestSet
     description::AbstractString
     results::Vector
     n_passed::Int
@@ -610,7 +610,8 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
     # recursively walking the tree of test sets
     align = max(get_alignment(ts, 0), length("Test Summary:"))
     # Print the outer test set header once
-    print_with_color(:white, rpad("Test Summary:",align," "), " | "; bold = true)
+    pad = total == 0 ? "" : " "
+    print_with_color(:white, rpad("Test Summary:",align," "), " |", pad; bold = true)
     if pass_width > 0
         print_with_color(:green, lpad("Pass",pass_width," "), "  "; bold = true)
     end
@@ -792,7 +793,7 @@ end
 Starts a new test set, or multiple test sets if a `for` loop is provided.
 
 If no custom testset type is given it defaults to creating a `DefaultTestSet`.
-`DefaultTestSet` records all the results and, and if there are any `Fail`s or
+`DefaultTestSet` records all the results and, if there are any `Fail`s or
 `Error`s, throws an exception at the end of the top-level (non-nested) test set,
 along with a summary of the test results.
 
@@ -954,7 +955,7 @@ function parse_testset_args(args)
         elseif isa(arg, Expr) && arg.head == :(=)
             # we're building up a Dict literal here
             key = Expr(:quote, arg.args[1])
-            push!(options.args, Expr(:(=>), key, arg.args[2]))
+            push!(options.args, Expr(:call, :(=>), key, arg.args[2]))
         else
             error("Unexpected argument $arg to @testset")
         end
@@ -1104,10 +1105,8 @@ end
 #
 # Raises an error if any columnwise vector norm exceeds err. Otherwise, returns
 # nothing.
-function test_approx_eq_modphase{S<:Real,T<:Real}(
-        a::StridedVecOrMat{S}, b::StridedVecOrMat{T},
-        err = length(indices(a,1))^3*(eps(S)+eps(T))
-    )
+function test_approx_eq_modphase(a::StridedVecOrMat{S}, b::StridedVecOrMat{T},
+                                 err = length(indices(a,1))^3*(eps(S)+eps(T))) where {S<:Real,T<:Real}
     @test indices(a,1) == indices(b,1) && indices(a,2) == indices(b,2)
     for i in indices(a,2)
         v1, v2 = a[:, i], b[:, i]
@@ -1116,14 +1115,25 @@ function test_approx_eq_modphase{S<:Real,T<:Real}(
 end
 
 """
-    detect_ambiguities(mod1, mod2...; imported=false)
+    detect_ambiguities(mod1, mod2...; imported=false, ambiguous_bottom=false)
 
 Returns a vector of `(Method,Method)` pairs of ambiguous methods
 defined in the specified modules. Use `imported=true` if you wish to
 also test functions that were imported into these modules from
 elsewhere.
+
+`ambiguous_bottom` controls whether ambiguities triggered only by
+`Union{}` type parameters are included; in most cases you probably
+want to set this to `false`. See [`Base.isambiguous`](@ref).
 """
-function detect_ambiguities(mods...; imported::Bool=false, allow_bottom::Bool=true)
+function detect_ambiguities(mods...;
+                            imported::Bool = false,
+                            ambiguous_bottom::Bool = false,
+                            allow_bottom::Union{Bool,Void} = nothing)
+    if allow_bottom !== nothing
+        Base.depwarn("the `allow_bottom` keyword to detect_ambiguities has been renamed to `ambiguous_bottom`", :detect_ambiguities)
+        ambiguous_bottom = allow_bottom
+    end
     function sortdefs(m1, m2)
         ord12 = m1.file < m2.file
         if !ord12 && (m1.file == m2.file)
@@ -1145,7 +1155,7 @@ function detect_ambiguities(mods...; imported::Bool=false, allow_bottom::Bool=tr
                 for m in mt
                     if m.ambig !== nothing
                         for m2 in m.ambig
-                            if Base.isambiguous(m, m2, allow_bottom)
+                            if Base.isambiguous(m, m2, ambiguous_bottom=ambiguous_bottom)
                                 push!(ambs, sortdefs(m, m2))
                             end
                         end
@@ -1162,7 +1172,7 @@ The `GenericString` can be used to test generic string APIs that program to
 the `AbstractString` interface, in order to ensure that functions can work
 with string types besides the standard `String` type.
 """
-immutable GenericString <: AbstractString
+struct GenericString <: AbstractString
     string::AbstractString
 end
 Base.convert(::Type{GenericString}, s::AbstractString) = GenericString(s)

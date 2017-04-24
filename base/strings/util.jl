@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # starts with and ends with predicates
 
@@ -21,7 +21,7 @@ function startswith(a::AbstractString, b::AbstractString)
     while !done(a,i) && !done(b,i)
         c, i = next(a,i)
         d, j = next(b,j)
-        if c != d return false end
+        (c != d) && (return false)
     end
     done(b,i)
 end
@@ -48,7 +48,7 @@ function endswith(a::AbstractString, b::AbstractString)
     while a1 <= i && b1 <= j
         c = a[i]
         d = b[j]
-        if c != d return false end
+        (c != d) && (return false)
         i = prevind(a,i)
         j = prevind(b,j)
     end
@@ -84,14 +84,15 @@ chop(s::AbstractString) = SubString(s, 1, endof(s)-1)
 Remove a single trailing newline from a string.
 
 ```jldoctest
-julia> chomp("Hello\n")
+julia> chomp("Hello\\n")
 "Hello"
+```
 """
 function chomp(s::AbstractString)
     i = endof(s)
-    if (i < 1 || s[i] != '\n') return SubString(s, 1, i) end
+    (i < 1 || s[i] != '\n') && (return SubString(s, 1, i))
     j = prevind(s,i)
-    if (j < 1 || s[j] != '\r') return SubString(s, 1, i-1) end
+    (j < 1 || s[j] != '\r') && (return SubString(s, 1, i-1))
     return SubString(s, 1, j-1)
 end
 function chomp(s::String)
@@ -185,8 +186,9 @@ If `chars` (a character, or vector or set of characters) is provided,
 instead remove characters contained in it.
 
 ```jldoctest
-julia> strip("{3, 5}\n", ['{', '}', '\n'])
+julia> strip("{3, 5}\\n", ['{', '}', '\\n'])
 "3, 5"
+```
 """
 strip(s::AbstractString) = lstrip(rstrip(s))
 strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
@@ -195,7 +197,7 @@ strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
 
 function lpad(s::AbstractString, n::Integer, p::AbstractString=" ")
     m = n - strwidth(s)
-    if m <= 0; return s; end
+    (m <= 0) && (return s)
     l = strwidth(p)
     if l==1
         return string(p^m, s)
@@ -208,7 +210,7 @@ end
 
 function rpad(s::AbstractString, n::Integer, p::AbstractString=" ")
     m = n - strwidth(s)
-    if m <= 0; return s; end
+    (m <= 0) && (return s)
     l = strwidth(p)
     if l==1
         return string(s, p^m)
@@ -272,7 +274,7 @@ julia> split(a,".")
 ```
 """
 split{T<:AbstractString}(str::T, splitter; limit::Integer=0, keep::Bool=true) = _split(str, splitter, limit, keep, SubString{T}[])
-function _split{T<:AbstractString,U<:Array}(str::T, splitter, limit::Integer, keep_empty::Bool, strs::U)
+function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     i = start(str)
     n = endof(str)
     r = search(str,splitter,i)
@@ -284,7 +286,7 @@ function _split{T<:AbstractString,U<:Array}(str::T, splitter, limit::Integer, ke
             end
             i = k
         end
-        if k <= j; k = nextind(str,j) end
+        (k <= j) && (k = nextind(str,j))
         r = search(str,splitter,k)
         j, k = first(r), nextind(str,last(r))
     end
@@ -327,7 +329,7 @@ julia> rsplit(a,".";limit=2)
 ```
 """
 rsplit{T<:AbstractString}(str::T, splitter   ; limit::Integer=0, keep::Bool=true) = _rsplit(str, splitter, limit, keep, SubString{T}[])
-function _rsplit{T<:AbstractString,U<:Array}(str::T, splitter, limit::Integer, keep_empty::Bool, strs::U)
+function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     i = start(str)
     n = endof(str)
     r = rsearch(str,splitter)
@@ -485,7 +487,7 @@ throwing an `ArgumentError` indicating the position of the first non-ASCII byte.
 julia> ascii("abcdeγfgh")
 ERROR: ArgumentError: invalid ASCII at index 6 in "abcdeγfgh"
 Stacktrace:
- [1] ascii(::String) at ./strings/util.jl:473
+ [1] ascii(::String) at ./strings/util.jl:475
 
 julia> ascii("abcdefgh")
 "abcdefgh"

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Pair
 p = Pair(10,20)
@@ -168,7 +168,7 @@ let
 end
 
 # issue #1438
-type I1438T
+mutable struct I1438T
     id
 end
 import Base.hash
@@ -268,7 +268,7 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
     for cols in (12, 40, 80), rows in (2, 10, 24)
         # Ensure output is limited as requested
         s = IOBuffer()
-        io = Base.IOContext(s, limit=true, displaysize=(rows, cols))
+        io = Base.IOContext(Base.IOContext(s, :limit => true), :displaysize => (rows, cols))
         Base.show(io, MIME("text/plain"), d)
         out = split(String(take!(s)),'\n')
         for line in out[2:end]
@@ -278,7 +278,7 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
 
         for f in (keys, values)
             s = IOBuffer()
-            io = Base.IOContext(s, limit=true, displaysize=(rows, cols))
+            io = Base.IOContext(Base.IOContext(s, :limit => true), :displaysize => (rows, cols))
             Base.show(io, MIME("text/plain"), f(d))
             out = split(String(take!(s)),'\n')
             for line in out[2:end]
@@ -308,10 +308,10 @@ let d = Dict((1=>2) => (3=>45), (3=>10) => (10=>11))
 end
 
 # issue #9463
-type Alpha end
+mutable struct Alpha end
 Base.show(io::IO, ::Alpha) = print(io,"α")
 let sbuff = IOBuffer(),
-    io = Base.IOContext(sbuff, limit=true, displaysize=(10, 20))
+    io = Base.IOContext(Base.IOContext(sbuff, :limit => true), :displaysize => (10, 20))
 
     Base.show(io, MIME("text/plain"), Dict(Alpha()=>1))
     @test !contains(String(sbuff), "…")
@@ -359,7 +359,7 @@ let d = Dict()
 end
 
 # issue #10647
-type T10647{T}; x::T; end
+mutable struct T10647{T}; x::T; end
 let a = ObjectIdDict()
     a[1] = a
     a[a] = 2
@@ -394,6 +394,9 @@ let
     ca = empty!(ca)
     @test length(ca) == 0
     @test length(a) == 2
+
+    d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
+    @test a != d
 end
 
 @test length(ObjectIdDict(1=>2, 1.0=>3)) == 2
@@ -514,7 +517,7 @@ let d = Dict(zip(1:1000,1:1000)), f = (k,v) -> iseven(k)
 end
 
 # issue #15077
-immutable MyString <: AbstractString
+struct MyString <: AbstractString
     str::String
 end
 import Base.==
@@ -565,7 +568,7 @@ let badKeys = [
     end
 end
 
-immutable MyInt <: Integer
+struct MyInt <: Integer
     val::UInt
 end
 
@@ -620,7 +623,7 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test isa(WeakKeyDict(A=>2, B=>3, C=>4), WeakKeyDict{Array{Int,1},Int})
     @test WeakKeyDict(a=>i+1 for (i,a) in enumerate([A,B,C]) ) == wkd
     @test WeakKeyDict([(A,2), (B,3), (C,4)]) == wkd
-
+    @test copy(wkd) == wkd
 
     @test length(wkd) == 3
     @test !isempty(wkd)
@@ -651,7 +654,7 @@ end
     @test hash(a) != hash(b)
 end
 
-type Foo_15776
+mutable struct Foo_15776
     x::Vector{Pair{Tuple{Function, Vararg{Int}}, Int}}
 end
 @testset "issue #15776, convert for pair" begin
@@ -667,7 +670,7 @@ end
     @test_throws UndefVarError Dict(x => y for x in 1:10)
 end
 
-type Error19179 <: Exception
+mutable struct Error19179 <: Exception
 end
 
 @testset "issue #19179 throwing error in dict constructor" begin
@@ -681,4 +684,37 @@ let
     for (pair, tupl) in zip(d, z)
         @test pair[1] == tupl[1] && pair[2] == tupl[2]
     end
+end
+
+@testset "Dict merge" begin
+    d1 = Dict("A" => 1, "B" => 2)
+    d2 = Dict("B" => 3.0, "C" => 4.0)
+    @test @inferred merge(d1, d2) == Dict("A" => 1, "B" => 3, "C" => 4)
+    # merge with combiner function
+    @test @inferred merge(+, d1, d2) == Dict("A" => 1, "B" => 5, "C" => 4)
+    @test @inferred merge(*, d1, d2) == Dict("A" => 1, "B" => 6, "C" => 4)
+    @test @inferred merge(-, d1, d2) == Dict("A" => 1, "B" => -1, "C" => 4)
+end
+
+@testset "Dict merge!" begin
+    d1 = Dict("A" => 1, "B" => 2)
+    d2 = Dict("B" => 3, "C" => 4)
+    @inferred merge!(d1, d2)
+    @test d1 == Dict("A" => 1, "B" => 3, "C" => 4)
+    # merge! with combiner function
+    @inferred merge!(+, d1, d2)
+    @test d1 == Dict("A" => 1, "B" => 6, "C" => 8)
+    @inferred merge!(*, d1, d2)
+    @test d1 == Dict("A" => 1, "B" => 18, "C" => 32)
+    @inferred merge!(-, d1, d2)
+    @test d1 == Dict("A" => 1, "B" => 15, "C" => 28)
+end
+
+@testset "misc error/io" begin
+    d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
+    @test_throws ErrorException 'a' in d
+    key_str = sprint(show, keys(d))
+    @test 'a' ∈ key_str
+    @test 'b' ∈ key_str
+    @test 'c' ∈ key_str
 end

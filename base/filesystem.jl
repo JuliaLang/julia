@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## File Operations (Libuv-based) ##
 
@@ -21,7 +21,6 @@ export File,
        StatStruct,
        # open,
        futime,
-       unlink,
        write,
        JL_O_WRONLY,
        JL_O_RDONLY,
@@ -57,9 +56,9 @@ include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","file_constants.jl"))  # inc
 
 ## Operations with File (fd) objects ##
 
-abstract AbstractFile <: IO
+abstract type AbstractFile <: IO end
 
-type File <: AbstractFile
+mutable struct File <: AbstractFile
     open::Bool
     handle::RawFD
     File(fd::RawFD) = new(true, fd)

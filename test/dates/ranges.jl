@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 let
     for T in (Dates.Date, Dates.DateTime)
@@ -11,7 +11,9 @@ let
             for pos_step in (P(1), P(2), P(50), P(2048), P(10000))
                 # empty range
                 dr = f1:pos_step:l1
-                @test length(dr) == 0
+                len = length(dr)
+                @test len == 0
+                @test isa(len, Int64)
                 @test isempty(dr)
                 @test first(dr) == f1
                 @test last(dr) < f1
@@ -36,7 +38,7 @@ let
                     dr = f:pos_step:l
                     len = length(dr)
                     @test len > 0
-                    @test typeof(len) <: Int64
+                    @test isa(len, Int64)
                     @test !isempty(dr)
                     @test first(dr) == f
                     @test last(dr) <= l
@@ -63,7 +65,9 @@ let
             for neg_step in (P(-1), P(-2), P(-50), P(-2048), P(-10000))
                 # empty range
                 dr = l1:neg_step:f1
-                @test length(dr) == 0
+                len = length(dr)
+                @test len == 0
+                @test isa(len, Int64)
                 @test isempty(dr)
                 @test first(dr) == l1
                 @test last(dr) > l1
@@ -88,7 +92,7 @@ let
                     dr = l:neg_step:f
                     len = length(dr)
                     @test len > 0
-                    @test typeof(len) <: Int64
+                    @test isa(len, Int64)
                     @test !isempty(dr)
                     @test first(dr) == l
                     @test last(dr) >= f
@@ -117,7 +121,9 @@ let
                 for pos_step in (P(1), P(2), P(50), P(2048), P(10000))
                     # empty range
                     dr = f1:pos_step:l1
-                    @test length(dr) == 0
+                    len = length(dr)
+                    @test len == 0
+                    @test isa(len, Int64)
                     @test isempty(dr)
                     @test first(dr) == f1
                     @test last(dr) < f1
@@ -142,7 +148,7 @@ let
                         dr = f:pos_step:l
                         len = length(dr)
                         @test len > 0
-                        @test typeof(len) <: Int64
+                        @test isa(len, Int64)
                         @test !isempty(dr)
                         @test first(dr) == f
                         @test last(dr) <= l
@@ -169,7 +175,9 @@ let
                 for neg_step in (P(-1), P(-2), P(-50), P(-2048), P(-10000))
                     # empty range
                     dr = l1:neg_step:f1
-                    @test length(dr) == 0
+                    len = length(dr)
+                    @test len == 0
+                    @test isa(len, Int64)
                     @test isempty(dr)
                     @test first(dr) == l1
                     @test last(dr) > l1
@@ -194,7 +202,7 @@ let
                         dr = l:neg_step:f
                         len = length(dr)
                         @test len > 0
-                        @test typeof(len) <: Int64
+                        @test isa(len, Int64)
                         @test !isempty(dr)
                         @test first(dr) == l
                         @test last(dr) >= f

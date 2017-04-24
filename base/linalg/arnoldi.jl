@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using .ARPACK
 
@@ -50,6 +50,19 @@ The following keyword arguments are supported:
 iterations `niter` and the number of matrix vector multiplications `nmult`, as well as the
 final residual vector `resid`.
 
+# Example
+
+```jldoctest
+julia> A = spdiagm(1:4);
+
+julia> λ, ϕ = eigs(A, nev = 2);
+
+julia> λ
+2-element Array{Float64,1}:
+ 4.0
+ 3.0
+```
+
 !!! note
     The `sigma` and `which` keywords interact: the description of eigenvalues
     searched for by `which` do *not* necessarily refer to the eigenvalues of
@@ -75,7 +88,7 @@ final residual vector `resid`.
       Applications (1996), 17(4), 789–821.  doi:10.1137/S0895479895281484
 """
 eigs(A; kwargs...) = eigs(A, I; kwargs...)
-eigs{T<:BlasFloat}(A::AbstractMatrix{T}, ::UniformScaling; kwargs...) = _eigs(A, I; kwargs...)
+eigs(A::AbstractMatrix{<:BlasFloat}, ::UniformScaling; kwargs...) = _eigs(A, I; kwargs...)
 
 eigs{T<:BlasFloat}(A::AbstractMatrix{T}, B::AbstractMatrix{T}; kwargs...) = _eigs(A, B; kwargs...)
 eigs(A::AbstractMatrix{BigFloat}, B::AbstractMatrix...; kwargs...) = throw(MethodError(eigs, Any[A,B,kwargs...]))
@@ -133,13 +146,18 @@ final residual vector `resid`.
 
 # Example
 
-```julia
-X = sprand(10, 5, 0.2)
-eigs(X, nsv = 2, tol = 1e-3)
+```jldoctest
+julia> A = speye(4, 4); B = spdiagm(1:4);
+
+julia> λ, ϕ = eigs(A, B, nev = 2);
+
+julia> λ
+2-element Array{Float64,1}:
+ 1.0
+ 0.5
 ```
 
 !!! note
-
     The `sigma` and `which` keywords interact: the description of eigenvalues searched for by
     `which` do *not* necessarily refer to the eigenvalue problem ``Av = Bv\\lambda``, but rather
     the linear operator constructed by the specification of the iteration mode implied by `sigma`.
@@ -284,20 +302,20 @@ end
 ## svds
 ### Restrict operator to BlasFloat because ARPACK only supports that. Loosen restriction
 ### when we switch to our own implementation
-type SVDOperator{T<:BlasFloat,S} <: AbstractArray{T, 2}
+mutable struct SVDOperator{T<:BlasFloat,S} <: AbstractArray{T, 2}
     X::S
     m::Int
     n::Int
-    SVDOperator(X::AbstractMatrix) = new(X, size(X, 1), size(X, 2))
+    SVDOperator{T,S}(X::AbstractMatrix) where {T<:BlasFloat,S} = new(X, size(X, 1), size(X, 2))
 end
 
-function SVDOperator{T}(A::AbstractMatrix{T})
+function SVDOperator(A::AbstractMatrix{T}) where T
     Tnew = typeof(zero(T)/sqrt(one(T)))
     Anew = convert(AbstractMatrix{Tnew}, A)
     SVDOperator{Tnew,typeof(Anew)}(Anew)
 end
 
-function A_mul_B!{T,S}(u::StridedVector{T}, s::SVDOperator{T,S}, v::StridedVector{T})
+function A_mul_B!(u::StridedVector{T}, s::SVDOperator{T}, v::StridedVector{T}) where T
     a, b = s.m, length(v)
     A_mul_B!(view(u,1:a), s.X, view(v,a+1:b)) # left singular vector
     Ac_mul_B!(view(u,a+1:b), s.X, view(v,1:a)) # right singular vector
@@ -306,7 +324,7 @@ end
 size(s::SVDOperator)  = s.m + s.n, s.m + s.n
 issymmetric(s::SVDOperator) = true
 
-svds{T<:BlasFloat}(A::AbstractMatrix{T}; kwargs...) = _svds(A; kwargs...)
+svds(A::AbstractMatrix{<:BlasFloat}; kwargs...) = _svds(A; kwargs...)
 svds(A::AbstractMatrix{BigFloat}; kwargs...) = throw(MethodError(svds, Any[A, kwargs...]))
 function svds{T}(A::AbstractMatrix{T}; kwargs...)
     Tnew = typeof(zero(T)/sqrt(one(T)))
@@ -344,17 +362,22 @@ iterations derived from [`eigs`](@ref).
 
 # Example
 
-```julia
-X = sprand(10, 5, 0.2)
-svds(X, nsv = 2)
+```jldoctest
+julia> A = spdiagm(1:4);
+
+julia> s = svds(A, nsv = 2)[1];
+
+julia> s[:S]
+2-element Array{Float64,1}:
+ 4.0
+ 3.0
 ```
 
 !!! note "Implementation"
-
-`svds(A)` is formally equivalent to calling [`eigs`](@ref) to perform implicitly restarted
-Lanczos tridiagonalization on the Hermitian matrix
-``\\begin{pmatrix} 0 & A^\\prime \\\\ A & 0 \\end{pmatrix}``, whose eigenvalues are
-plus and minus the singular values of ``A``.
+    `svds(A)` is formally equivalent to calling [`eigs`](@ref) to perform implicitly restarted
+    Lanczos tridiagonalization on the Hermitian matrix
+    ``\\begin{pmatrix} 0 & A^\\prime \\\\ A & 0 \\end{pmatrix}``, whose eigenvalues are
+    plus and minus the singular values of ``A``.
 """
 svds(A; kwargs...) = _svds(A; kwargs...)
 function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxiter::Int = 1000, ncv::Int = 2*nsv, u0::Vector=zeros(eltype(X),(0,)), v0::Vector=zeros(eltype(X),(0,)))

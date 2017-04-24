@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -174,6 +174,8 @@ let n=10
         @test inv(Hermitian(asym)) ≈ inv(asym)
         if eltya <: Real && eltya != Int
             @test inv(Symmetric(asym)) ≈ inv(asym)
+            @test inv(Hermitian(a)) ≈ inv(full(Hermitian(a)))
+            @test inv(Symmetric(a)) ≈ inv(full(Symmetric(a)))
         end
 
         # conversion

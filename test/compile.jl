@@ -1,8 +1,9 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
 Foo_module = :Foo4b3a94a1a081a8cb
+Foo2_module = :F2oo4b3a94a1a081a8cb
 FooBase_module = :FooBase4b3a94a1a081a8cb
 @eval module ConflictingBindings
     export $Foo_module, $FooBase_module
@@ -21,6 +22,7 @@ insert!(LOAD_PATH, 1, dir)
 insert!(Base.LOAD_CACHE_PATH, 1, dir)
 try
     Foo_file = joinpath(dir, "$Foo_module.jl")
+    Foo2_file = joinpath(dir, "$Foo2_module.jl")
     FooBase_file = joinpath(dir, "$FooBase_module.jl")
 
     write(FooBase_file,
@@ -30,12 +32,23 @@ try
           module $FooBase_module
           end
           """)
+    write(Foo2_file,
+          """
+          __precompile__(true)
+
+          module $Foo2_module
+              export override
+              override(x::Integer) = 2
+              override(x::AbstractFloat) = Float64(override(1))
+          end
+          """)
     write(Foo_file,
           """
           __precompile__(true)
 
           module $Foo_module
               using $FooBase_module
+              import $Foo2_module: $Foo2_module, override
 
               # test that docs get reconnected
               @doc "foo function" foo(x) = x + 1
@@ -47,7 +60,7 @@ try
               end
 
               # test for creation of some reasonably complicated type
-              immutable MyType{T} end
+              struct MyType{T} end
               const t17809s = Any[
                     Tuple{
                         Type{Ptr{MyType{i}}},
@@ -67,20 +80,20 @@ try
               const nothingkw = Core.kwfunc(Base.nothing)
 
               # issue 16908 (some complicated types and external method definitions)
-              abstract CategoricalPool{T, R <: Integer, V}
-              abstract CategoricalValue{T, R <: Integer}
-              immutable NominalPool{T, R <: Integer, V} <: CategoricalPool{T, R, V}
+              abstract type CategoricalPool{T, R <: Integer, V} end
+              abstract type CategoricalValue{T, R <: Integer} end
+              struct NominalPool{T, R <: Integer, V} <: CategoricalPool{T, R, V}
                   index::Vector{T}
                   invindex::Dict{T, R}
                   order::Vector{R}
                   ordered::Vector{T}
                   valindex::Vector{V}
               end
-              immutable NominalValue{T, R <: Integer} <: CategoricalValue{T, R}
+              struct NominalValue{T, R <: Integer} <: CategoricalValue{T, R}
                   level::R
                   pool::NominalPool{T, R, NominalValue{T, R}}
               end
-              immutable OrdinalValue{T, R <: Integer} <: CategoricalValue{T, R}
+              struct OrdinalValue{T, R <: Integer} <: CategoricalValue{T, R}
                   level::R
                   pool::NominalPool{T, R, NominalValue{T, R}}
               end
@@ -92,10 +105,10 @@ try
 
               # more tests for method signature involving a complicated type
               # issue 18343
-              immutable Pool18343{R, V}
+              struct Pool18343{R, V}
                   valindex::Vector{V}
               end
-              immutable Value18343{T, R}
+              struct Value18343{T, R}
                   pool::Pool18343{R, Value18343{T, R}}
               end
               Base.convert{S}(::Type{Nullable{S}}, ::Value18343{Nullable}) = 2
@@ -109,6 +122,9 @@ try
                       ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
                           some_method, Tuple{typeof(Base.include), String}, Core.svec(), typemax(UInt))
               end
+
+              g() = override(1.0)
+              Base.Test.@test g() === 2.0 # compile this
           end
           """)
     @test_throws ErrorException Core.kwfunc(Base.nothing) # make sure `nothing` didn't have a kwfunc (which would invalidate the attempted test)
@@ -116,9 +132,29 @@ try
     # Issue #12623
     @test __precompile__(true) === nothing
 
-    Base.require(Foo_module)
-    cachefile = joinpath(dir, "$Foo_module.ji")
+    # Issue #21307
+    Base.require(Foo2_module)
+    @eval let Foo2_module = $(QuoteNode(Foo2_module)), # use @eval to see the results of loading the compile
+              Foo = getfield(Main, Foo2_module)
+        Foo.override(::Int) = 'a'
+        Foo.override(::Float32) = 'b'
+    end
 
+    Base.require(Foo_module)
+
+    @eval let Foo_module = $(QuoteNode(Foo_module)), # use @eval to see the results of loading the compile
+              Foo = getfield(Main, Foo_module)
+        @test Foo.foo(17) == 18
+        @test Foo.Bar.bar(17) == 19
+
+        # Issue #21307
+        @test Foo.g() === 97.0
+        @test Foo.override(1.0e0) == Float64('a')
+        @test Foo.override(1.0f0) == 'b'
+        @test Foo.override(UInt(1)) == 2
+    end
+
+    cachefile = joinpath(dir, "$Foo_module.ji")
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
     @test_warn "WARNING: replacing module Foo4b3a94a1a081a8cb.\nWARNING: Method definition " begin
@@ -129,6 +165,7 @@ try
         @test_throws MethodError Foo.foo(17) # world shouldn't be visible yet
     end
     @eval let Foo_module = $(QuoteNode(Foo_module)), # use @eval to see the results of loading the compile
+              Foo2_module = $(QuoteNode(Foo2_module)),
               FooBase_module = $(QuoteNode(FooBase_module)),
               Foo = getfield(Main, Foo_module),
               dir = $(QuoteNode(dir)),
@@ -137,17 +174,23 @@ try
         @test Foo.foo(17) == 18
         @test Foo.Bar.bar(17) == 19
 
+        # Issue #21307
+        @test Foo.g() === 97.0
+        @test Foo.override(1.0e0) == Float64('a')
+        @test Foo.override(1.0f0) == 'b'
+        @test Foo.override(UInt(1)) == 2
+
         # issue #12284:
         @test stringmime("text/plain", Base.Docs.doc(Foo.foo)) == "foo function\n"
         @test stringmime("text/plain", Base.Docs.doc(Foo.Bar.bar)) == "bar function\n"
 
-        modules, deps = Base.parse_cache_header(cachefile)
+        modules, deps, required_modules = Base.parse_cache_header(cachefile)
         @test modules == Dict(Foo_module => Base.module_uuid(Foo))
         @test map(x -> x[1],  sort(deps)) == [Foo_file, joinpath(dir, "bar.jl"), joinpath(dir, "foo.jl")]
 
         modules, deps1 = Base.cache_dependencies(cachefile)
-        @test sort(modules) == Any[(s, Base.module_uuid(getfield(Foo, s))) for s in
-                                   [:Base, :Core, FooBase_module, :Main]]
+        @test modules == Dict(s => Base.module_uuid(getfield(Foo, s)) for s in
+                                    [:Base, :Core, Foo2_module, FooBase_module, :Main])
         @test deps == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
@@ -282,6 +325,41 @@ try
         isa(exc, ErrorException) || rethrow(exc)
         !isempty(search(exc.msg, "ERROR: LoadError: break me")) && rethrow(exc)
     end
+
+    # Test transitive dependency for #21266
+    FooBarT_file = joinpath(dir, "FooBarT.jl")
+    write(FooBarT_file,
+          """
+          __precompile__(true)
+          module FooBarT
+          end
+          """)
+    FooBarT1_file = joinpath(dir, "FooBarT1.jl")
+    write(FooBarT1_file,
+          """
+          __precompile__(true)
+          module FooBarT1
+              using FooBarT
+          end
+          """)
+    FooBarT2_file = joinpath(dir, "FooBarT2.jl")
+    write(FooBarT2_file,
+          """
+          __precompile__(true)
+          module FooBarT2
+              using FooBarT1
+          end
+          """)
+    Base.compilecache("FooBarT2")
+    write(FooBarT1_file,
+          """
+          __precompile__(true)
+          module FooBarT1
+          end
+          """)
+    rm(FooBarT_file)
+    @test Base.stale_cachefile(FooBarT2_file, joinpath(dir2, "FooBarT2.ji"))
+    @test Base.require(:FooBarT2) === nothing
 finally
     splice!(Base.LOAD_CACHE_PATH, 1:2)
     splice!(LOAD_PATH, 1)

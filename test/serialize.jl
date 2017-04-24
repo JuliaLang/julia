@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -129,7 +129,7 @@ end
 
 create_serialization_stream() do s # user-defined type
     usertype = "SerializeSomeType"
-    eval(parse("abstract $(usertype)"))
+    eval(parse("abstract type $(usertype) end"))
     utype = eval(parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
@@ -138,7 +138,7 @@ end
 
 create_serialization_stream() do s # user-defined type
     usertype = "SerializeSomeType1"
-    eval(parse("type $(usertype); end"))
+    eval(parse("mutable struct $(usertype); end"))
     utype = eval(parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
@@ -147,43 +147,43 @@ end
 
 create_serialization_stream() do s # user-defined type
     usertype = "SerializeSomeType2"
-    eval(parse("abstract $(usertype){T}"))
+    eval(parse("abstract type $(usertype){T} end"))
     utype = eval(parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
     @test deserialize(s) == utype
 end
 
-create_serialization_stream() do s # immutable type with 1 field
+create_serialization_stream() do s # immutable struct with 1 field
     usertype = "SerializeSomeType3"
-    eval(parse("immutable $(usertype){T}; a::T; end"))
+    eval(parse("struct $(usertype){T}; a::T; end"))
     utype = eval(parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
     @test deserialize(s) == utype
 end
 
-create_serialization_stream() do s # immutable type with 2 field
+create_serialization_stream() do s # immutable struct with 2 field
     usertype = "SerializeSomeType4"
-    eval(parse("immutable $(usertype){T}; a::T; b::T; end"))
+    eval(parse("struct $(usertype){T}; a::T; b::T; end"))
     utval = eval(parse("$(usertype)(1,2)"))
     serialize(s, utval)
     seek(s, 0)
     @test deserialize(s) === utval
 end
 
-create_serialization_stream() do s # immutable type with 3 field
+create_serialization_stream() do s # immutable struct with 3 field
     usertype = "SerializeSomeType5"
-    eval(parse("immutable $(usertype){T}; a::T; b::T; c::T; end"))
+    eval(parse("struct $(usertype){T}; a::T; b::T; c::T; end"))
     utval = eval(parse("$(usertype)(1,2,3)"))
     serialize(s, utval)
     seek(s, 0)
     @test deserialize(s) === utval
 end
 
-create_serialization_stream() do s # immutable type with 4 field
+create_serialization_stream() do s # immutable struct with 4 field
     usertype = "SerializeSomeType6"
-    eval(parse("immutable $(usertype){T}; a::T; b::T; c::T; d::T; end"))
+    eval(parse("struct $(usertype){T}; a::T; b::T; c::T; d::T; end"))
     utval = eval(parse("$(usertype)(1,2,3,4)"))
     serialize(s, utval)
     seek(s, 0)
@@ -204,7 +204,7 @@ create_serialization_stream() do s
 end
 
 # Array
-type TA1
+mutable struct TA1
     v::UInt8
 end
 create_serialization_stream() do s # small 1d array
@@ -248,7 +248,7 @@ end
 # Objects that have a SubArray as a type in a type-parameter list
 module ArrayWrappers
 
-immutable ArrayWrapper{T,N,A<:AbstractArray} <: AbstractArray{T,N}
+struct ArrayWrapper{T,N,A<:AbstractArray} <: AbstractArray{T,N}
     data::A
 end
 ArrayWrapper{T,N}(data::AbstractArray{T,N}) = ArrayWrapper{T,N,typeof(data)}(data)
@@ -294,11 +294,12 @@ main_ex = quote
         serialize(s, g)
 
         seekstart(s)
-        local g2 = deserialize(s)
+        ds = SerializationState(s)
+        local g2 = deserialize(ds)
         $Test.@test g2 !== g
         $Test.@test g2() == :magic_token_anon_fun_test
         $Test.@test g2() == :magic_token_anon_fun_test
-        $Test.@test deserialize(s) === g2
+        $Test.@test deserialize(ds) === g2
     end
 end
 # This needs to be run on `Main` since the serializer treats it differently.
@@ -317,7 +318,7 @@ create_serialization_stream() do s # user-defined type array
     @test r.exception === nothing
 end
 
-immutable MyErrorTypeTest <: Exception end
+struct MyErrorTypeTest <: Exception end
 create_serialization_stream() do s # user-defined type array
     t = Task(()->throw(MyErrorTypeTest()))
     @test_throws MyErrorTypeTest wait(schedule(t))
@@ -328,7 +329,7 @@ create_serialization_stream() do s # user-defined type array
     @test isa(t.exception, MyErrorTypeTest)
 end
 
-# corner case: undefined inside immutable type
+# corner case: undefined inside immutable struct
 create_serialization_stream() do s
     serialize(s, Nullable{Any}())
     seekstart(s)
@@ -402,7 +403,7 @@ str = String(take!(io))
 end  # module Test13452
 
 # issue #15163
-type B15163{T}
+mutable struct B15163{T}
     x::Array{T}
 end
 let b = IOBuffer()
@@ -443,4 +444,17 @@ let a = ['T', 'e', 's', 't']
     serialize(f, :β)
     seek(f,0)
     @test deserialize(f) === :β
+end
+
+# issue #20324
+struct T20324{T}
+    x::T
+end
+let x = T20324[T20324(1) for i = 1:2]
+    b = IOBuffer()
+    serialize(b, x)
+    seekstart(b)
+    y = deserialize(b)
+    @test isa(y,Vector{T20324})
+    @test y == x
 end

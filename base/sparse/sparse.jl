@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module SparseArrays
 
@@ -26,10 +26,8 @@ import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
     rotl90, rotr90, round, scale!, setindex!, similar, size, transpose, tril,
     triu, vec, permute!, map, map!
 
-import Base.Broadcast: broadcast_indices
-
 export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector,
-    SparseMatrixCSC, SparseVector, blkdiag, dense, droptol!, dropzeros!, dropzeros,
+    SparseMatrixCSC, SparseVector, blkdiag, droptol!, dropzeros!, dropzeros,
     issparse, nonzeros, nzrange, rowvals, sparse, sparsevec, spdiagm, speye, spones,
     sprand, sprandn, spzeros, nnz, permute
 

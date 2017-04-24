@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module FieldValues
 
@@ -19,7 +19,7 @@ export FieldValue, Field, validmax, secondmax
 #  l4 : for favoring dependants over dependencies
 #  l5 : for symmetry-breaking random noise
 #
-immutable FieldValue
+struct FieldValue
     l0::Int
     l1::VersionWeight
     l2::VersionWeight
@@ -34,7 +34,7 @@ FieldValue(l0::Integer, l1::VersionWeight) = FieldValue(l0, l1, zero(VersionWeig
 FieldValue(l0::Integer) = FieldValue(l0, zero(VersionWeight))
 FieldValue() = FieldValue(0)
 
-typealias Field Vector{FieldValue}
+const Field = Vector{FieldValue}
 
 Base.zero(::Type{FieldValue}) = FieldValue()
 
@@ -64,6 +64,15 @@ Base.:(==)(a::FieldValue, b::FieldValue) =
     a.l0 == b.l0 && a.l1 == b.l1 && a.l2 == b.l2 && a.l3 == b.l3 && a.l4 == b.l4 && a.l5 == b.l5
 
 Base.abs(a::FieldValue) = FieldValue(abs(a.l0), abs(a.l1), abs(a.l2), abs(a.l3), abs(a.l4), abs(a.l5))
+
+Base.copy(a::FieldValue) = FieldValue(a.l0, copy(a.l1), copy(a.l2), a.l3, a.l4, a.l5)
+
+function Base.unsafe_copy!(dest::Field, doffs, src::Field, soffs, n)
+    for i = 1:n
+        dest[doffs+i-1] = copy(src[soffs+i-1])
+    end
+    return dest
+end
 
 # if the maximum field has l0 < 0, it means that
 # some hard constraint is being violated

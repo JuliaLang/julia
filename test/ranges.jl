@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # ranges
 @test size(10:1:0) == (0,)
@@ -333,6 +333,37 @@ for T = (Float32, Float64,),# BigFloat),
     @test [r[n:-2:1];] == [r;][n:-2:1]
 end
 
+# issue #20373 (unliftable ranges with exact end points)
+@test [3*0.05:0.05:0.2;]    == [linspace(3*0.05,0.2,2);]   == [3*0.05,0.2]
+@test [0.2:-0.05:3*0.05;]   == [linspace(0.2,3*0.05,2);]   == [0.2,3*0.05]
+@test [-3*0.05:-0.05:-0.2;] == [linspace(-3*0.05,-0.2,2);] == [-3*0.05,-0.2]
+@test [-0.2:0.05:-3*0.05;]  == [linspace(-0.2,-3*0.05,2);] == [-0.2,-3*0.05]
+
+for T = (Float32, Float64,), i = 1:2^15, n = 1:5
+    start, step = randn(T), randn(T)
+    step == 0 && continue
+    stop = start + (n-1)*step
+    # `n` is not necessarily unique s.t. `start + (n-1)*step == stop`
+    # so test that `length(start:step:stop)` satisfies this identity
+    # and is the closest value to `(stop-start)/step` to do so
+    lo = hi = n
+    while start + (lo-1)*step == stop; lo -= 1; end
+    while start + (hi-1)*step == stop; hi += 1; end
+    m = clamp(round(Int, (stop-start)/step) + 1, lo+1, hi-1)
+    r = start:step:stop
+    @test m == length(r)
+    # FIXME: these fail some small portion of the time
+    @test_skip start == first(r)
+    @test_skip stop  == last(r)
+    # FIXME: linspace construction fails on 32-bit
+    Sys.WORD_SIZE == 64 || continue
+    l = linspace(start,stop,n)
+    @test n == length(l)
+    # FIXME: these fail some small portion of the time
+    @test_skip start == first(l)
+    @test_skip stop  == last(l)
+end
+
 # linspace & ranges with very small endpoints
 for T = (Float32, Float64)
     z = zero(T)
@@ -575,6 +606,15 @@ end
 @test convert(LinSpace, 0.0:0.1:0.3) === LinSpace{Float64}(0.0, 0.3, 4)
 @test convert(LinSpace, 0:3) === LinSpace{Int}(0, 3, 4)
 
+@test start(LinSpace(0,3,4)) == 1
+@test 2*LinSpace(0,3,4) == LinSpace(0,6,4)
+@test LinSpace(0,3,4)*2 == LinSpace(0,6,4)
+@test LinSpace(0,3,4)/3 == LinSpace(0,1,4)
+@test 2-LinSpace(0,3,4) == LinSpace(2,-1,4)
+@test 2+LinSpace(0,3,4) == LinSpace(2,5,4)
+@test -LinSpace(0,3,4) == LinSpace(0,-3,4)
+@test reverse(LinSpace(0,3,4)) == LinSpace(3,0,4)
+
 # Issue #11245
 let io = IOBuffer()
     show(io, linspace(1, 2, 3))
@@ -595,7 +635,7 @@ end
 
 # stringmime/show should display the range or linspace nicely
 # to test print_range in range.jl
-replstrmime(x) = sprint((io,x) -> show(IOContext(io, limit=true), MIME("text/plain"), x), x)
+replstrmime(x) = sprint((io,x) -> show(IOContext(io, :limit => true), MIME("text/plain"), x), x)
 @test replstrmime(1:4) == "1:4"
 @test stringmime("text/plain", 1:4) == "1:4"
 @test stringmime("text/plain", linspace(1,5,7)) == "1.0:0.6666666666666666:5.0"
@@ -609,8 +649,8 @@ replstrmime(x) = sprint((io,x) -> show(IOContext(io, limit=true), MIME("text/pla
 @test replstrmime(linspace(0,100, 10000)) == "0.0:0.010001000100010001:100.0"
 @test replstrmime(LinSpace{Float64}(0,100, 10000)) == "10000-element LinSpace{Float64}:\n 0.0,0.010001,0.020002,0.030003,0.040004,…,99.95,99.96,99.97,99.98,99.99,100.0"
 
-@test sprint(io -> show(io,UnitRange(1,2))) == "1:2"
-@test sprint(io -> show(io,StepRange(1,2,5))) == "1:2:5"
+@test sprint(show, UnitRange(1, 2)) == "1:2"
+@test sprint(show, StepRange(1, 2, 5)) == "1:2:5"
 
 
 # Issue 11049 and related
@@ -753,8 +793,8 @@ let A = -1:1, B = -1.0:1.0
     @test conj(A) === A
     @test conj(B) === B
 
-    @test ~A == [0,-1,-2]
-    @test typeof(~A) == Vector{Int}
+    @test .~A == [0,-1,-2]
+    @test typeof(.~A) == Vector{Int}
 end
 
 # conversion to Array
@@ -838,3 +878,35 @@ let r = linspace(-big(1.0),big(1.0),4)
     @test isa(@inferred(r[2]), BigFloat)
     @test r[2] ≈ big(-1.0)/3
 end
+
+# issue #20520
+let r = linspace(1.3173739f0, 1.3173739f0, 3)
+    @test length(r) == 3
+    @test first(r) === 1.3173739f0
+    @test last(r)  === 1.3173739f0
+    @test r[2]     === 1.3173739f0
+end
+
+let r = linspace(1.0, 3+im, 4)
+    @test r[1] === 1.0+0.0im
+    @test r[2] ≈ (5/3)+(1/3)im
+    @test r[3] ≈ (7/3)+(2/3)im
+    @test r[4] === 3.0+im
+end
+
+# ambiguity between colon methods (#20988)
+struct NotReal; val; end
+Base.:+(x, y::NotReal) = x + y.val
+Base.zero(y::NotReal) = zero(y.val)
+Base.rem(x, y::NotReal) = rem(x, y.val)
+Base.isless(x, y::NotReal) = isless(x, y.val)
+@test colon(1, NotReal(1), 5) isa StepRange{Int,NotReal}
+
+# dimensional correctness:
+isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
+using TestHelpers.Furlong
+@test_throws MethodError collect(Furlong(2):Furlong(10)) # step size is ambiguous
+@test_throws MethodError range(Furlong(2), 9) # step size is ambiguous
+@test collect(Furlong(2):Furlong(1):Furlong(10)) == collect(range(Furlong(2),Furlong(1),9)) == Furlong.(2:10)
+@test collect(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
+      collect(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong.(1:0.5:10)

@@ -1,10 +1,15 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Document NTuple here where we have everything needed for the doc system
 """
     NTuple{N, T}
 
 A compact way of representing the type for a tuple of length `N` where all elements are of type `T`.
+
+```jldoctest
+julia> isa((1, 2, 3, 4, 5, 6), NTuple{6, Int})
+true
+```
 """
 NTuple
 
@@ -15,7 +20,7 @@ endof(t::Tuple) = length(t)
 size(t::Tuple, d) = d==1 ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
 getindex(t::Tuple, i::Int) = getfield(t, i)
 getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i))
-getindex{T}(t::Tuple, r::AbstractArray{T,1}) = tuple([t[ri] for ri in r]...)
+getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...)
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t,find(b)) : throw(BoundsError(t, b))
 
 # returns new tuple; N.B.: becomes no-op if i is out-of-bounds
@@ -57,7 +62,17 @@ first(t::Tuple) = t[1]
 # eltype
 
 eltype(::Type{Tuple{}}) = Bottom
-eltype{E, T <: Tuple{Vararg{E}}}(::Type{T}) = E
+eltype(::Type{<:Tuple{Vararg{E}}}) where {E} = E
+function eltype(t::Type{<:Tuple})
+    @_pure_meta
+    t isa Union && return typejoin(eltype(t.a), eltype(t.b))
+    t´ = unwrap_unionall(t)
+    r = Union{}
+    for ti in t´.parameters
+        r = typejoin(r, rewrap_unionall(unwrapva(ti), t))
+    end
+    return r
+end
 
 # version of tail that doesn't throw on empty tuples (used in array indexing)
 safe_tail(t::Tuple) = tail(t)
@@ -83,18 +98,29 @@ end
 
 Create a tuple of length `n`, computing each element as `f(i)`,
 where `i` is the index of the element.
-"""
-ntuple(f::Function, n::Integer) =
-    n <= 0 ? () :
-    n == 1 ? (f(1),) :
-    n == 2 ? (f(1),f(2),) :
-    n == 3 ? (f(1),f(2),f(3),) :
-    n == 4 ? (f(1),f(2),f(3),f(4),) :
-    n == 5 ? (f(1),f(2),f(3),f(4),f(5),) :
-    n < 16 ? (ntuple(f,n-5)..., f(n-4), f(n-3), f(n-2), f(n-1), f(n)) :
-    _ntuple(f, n)
 
-_ntuple(f::Function, n::Integer) = (@_noinline_meta; ((f(i) for i = 1:n)...))
+```jldoctest
+julia> ntuple(i -> 2*i, 4)
+(2, 4, 6, 8)
+```
+"""
+function ntuple{F}(f::F, n::Integer)
+    t = n <= 0  ? () :
+        n == 1  ? (f(1),) :
+        n == 2  ? (f(1), f(2)) :
+        n == 3  ? (f(1), f(2), f(3)) :
+        n == 4  ? (f(1), f(2), f(3), f(4)) :
+        n == 5  ? (f(1), f(2), f(3), f(4), f(5)) :
+        n == 6  ? (f(1), f(2), f(3), f(4), f(5), f(6)) :
+        n == 7  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7)) :
+        n == 8  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8)) :
+        n == 9  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9)) :
+        n == 10 ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9), f(10)) :
+        _ntuple(f, n)
+    return t
+end
+
+_ntuple(f, n) = (@_noinline_meta; ([f(i) for i = 1:n]...))
 
 # inferrable ntuple
 function ntuple{F,N}(f::F, ::Type{Val{N}})
@@ -104,7 +130,7 @@ end
 
 # Build up the output until it has length N
 _ntuple{F,N}(out::NTuple{N,Any}, f::F, ::Type{Val{N}}) = out
-function _ntuple{F,N,M}(out::NTuple{M}, f::F, ::Type{Val{N}})
+function _ntuple{F,N,M}(out::NTuple{M,Any}, f::F, ::Type{Val{N}})
     @_inline_meta
     _ntuple((out..., f(M+1)), f, Val{N})
 end
@@ -116,17 +142,17 @@ map(f, t::Tuple{Any, Any})      = (f(t[1]), f(t[2]))
 map(f, t::Tuple{Any, Any, Any}) = (f(t[1]), f(t[2]), f(t[3]))
 map(f, t::Tuple)                = (@_inline_meta; (f(t[1]), map(f,tail(t))...))
 # stop inlining after some number of arguments to avoid code blowup
-typealias Any16{N}   Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
-                           Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
-typealias All16{T,N} Tuple{T,T,T,T,T,T,T,T,
-                           T,T,T,T,T,T,T,T,Vararg{T,N}}
+Any16{N}   = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
+                   Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
+All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
+                   T,T,T,T,T,T,T,T,Vararg{T,N}}
 function map(f, t::Any16)
     n = length(t)
-    A = Array{Any}(n)
+    A = Array{Any,1}(n)
     for i=1:n
         A[i] = f(t[i])
     end
-    (A...,)
+    (A...)
 end
 # 2 argument function
 map(f, t::Tuple{},        s::Tuple{})        = ()
@@ -138,19 +164,28 @@ function map(f, t::Tuple, s::Tuple)
 end
 function map(f, t::Any16, s::Any16)
     n = length(t)
-    A = Array{Any}(n)
+    A = Array{Any,1}(n)
     for i = 1:n
         A[i] = f(t[i], s[i])
     end
-    (A...,)
+    (A...)
 end
 # n argument function
-heads() = ()
-heads(t::Tuple, ts::Tuple...) = (t[1], heads(ts...)...)
-tails() = ()
-tails(t::Tuple, ts::Tuple...) = (tail(t), tails(ts...)...)
-map(f, ::Tuple{}, ts::Tuple...) = ()
-map(f, t1::Tuple, t2::Tuple, ts::Tuple...) = (f(heads(t1, t2, ts...)...), map(f, tails(t1, t2, ts...)...)...)
+heads(ts::Tuple...) = map(t -> t[1], ts)
+tails(ts::Tuple...) = map(tail, ts)
+map(f, ::Tuple{}...) = ()
+function map(f, t1::Tuple, t2::Tuple, ts::Tuple...)
+    @_inline_meta
+    (f(heads(t1, t2, ts...)...), map(f, tails(t1, t2, ts...)...)...)
+end
+function map(f, t1::Any16, t2::Any16, ts::Any16...)
+    n = length(t1)
+    A = Array{Any,1}(n)
+    for i = 1:n
+        A[i] = f(t1[i], t2[i], map(t -> t[i], ts)...)
+    end
+    (A...)
+end
 
 
 # type-stable padding
@@ -174,7 +209,10 @@ end
 # only define these in Base, to avoid overwriting the constructors
 if isdefined(Main, :Base)
 
-(::Type{T}){T<:Tuple}(x::Tuple) = convert(T, x)  # still use `convert` for tuples
+(::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples
+
+# resolve ambiguity between preceding and following methods
+(::Type{All16{E,N}})(x::Tuple) where {E,N} = convert(All16{E,N}, x)
 
 function (T::Type{All16{E,N}}){E,N}(itr)
     len = N+16
@@ -185,7 +223,7 @@ function (T::Type{All16{E,N}}){E,N}(itr)
     (elts...,)
 end
 
-(::Type{T}){T<:Tuple}(itr) = _totuple(T, itr, start(itr))
+(::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr, start(itr))
 
 _totuple(::Type{Tuple{}}, itr, s) = ()
 
@@ -201,7 +239,7 @@ function _totuple(T, itr, s)
     (convert(tuple_type_head(T), v), _totuple(tuple_type_tail(T), itr, s)...)
 end
 
-_totuple{E}(::Type{Tuple{Vararg{E}}}, itr, s) = (collect(E, Iterators.rest(itr,s))...,)
+_totuple(::Type{Tuple{Vararg{E}}}, itr, s) where {E} = (collect(E, Iterators.rest(itr,s))...,)
 
 _totuple(::Type{Tuple}, itr, s) = (collect(Iterators.rest(itr,s))...,)
 

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function GitAnnotated(repo::GitRepo, commit_id::GitHash)
     ann_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -71,7 +71,7 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated};
     @check ccall((:git_merge, :libgit2), Cint,
                   (Ptr{Void}, Ptr{Ptr{Void}}, Csize_t,
                    Ptr{MergeOptions}, Ptr{CheckoutOptions}),
-                   repo.ptr, anns, anns_size,
+                   repo.ptr, map(x->x.ptr, anns), anns_size,
                    Ref(merge_opts), Ref(checkout_opts))
     info("Review and commit merged changes.")
     return true

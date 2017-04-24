@@ -89,7 +89,7 @@ Test Passed
 
 ## Working with Test Sets
 
-Typically a large of number of tests are used to make sure functions work correctly over a range
+Typically a large number of tests are used to make sure functions work correctly over a range
 of inputs. In the event a test fails, the default behavior is to throw an exception immediately.
 However, it is normally preferable to run the rest of the tests first to get a better picture
 of how many errors there are in the code being tested.
@@ -235,7 +235,7 @@ Defining a basic `AbstractTestSet` subtype might look like:
 import Base.Test: record, finish
 using Base.Test: AbstractTestSet, Result, Pass, Fail, Error
 using Base.Test: get_testset_depth, get_testset
-immutable CustomTestSet <: Base.Test.AbstractTestSet
+struct CustomTestSet <: Base.Test.AbstractTestSet
     description::AbstractString
     foo::Int
     results::Vector

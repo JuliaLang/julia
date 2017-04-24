@@ -376,7 +376,7 @@ multidimensional index. When combined with other indexing forms and iterators
 that yield `CartesianIndex`es, however, this can lead directly to very elegant
 and efficient code. See [Iteration](@ref) below, and for some more advanced
 examples, see [this blog post on multidimensional algorithms and
-iteration](http://julialang.org/blog/2016/02/iteration).
+iteration](https://julialang.org/blog/2016/02/iteration).
 
 Arrays of `CartesianIndex{N}` are also supported. They represent a collection
 of scalar indices that each span `N` dimensions, enabling a form of indexing
@@ -513,41 +513,42 @@ iterate over any array type.
 If you write a custom `AbstractArray` type, you can specify that it has fast linear indexing using
 
 ```julia
-Base.linearindexing{T<:MyArray}(::Type{T}) = LinearFast()
+Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
 ```
 
 This setting will cause `eachindex` iteration over a `MyArray` to use integers. If you don't
-specify this trait, the default value `LinearSlow()` is used.
+specify this trait, the default value `IndexCartesian()` is used.
 
-### Vectorized Operators and Functions
+### Array and Vectorized Operators and Functions
 
-The following operators are supported for arrays. Also, *every* binary
-operator supports a [dot version](@ref man-dot-operators) that can be
-applied to arrays (and combinations of arrays and scalars) as a
-[fused broadcasting operation](@ref man-vectorized). (For comparison
-operations like `<`, *only* the `.<` version is applicable to arrays.)
+The following operators are supported for arrays:
 
-1. Unary arithmetic -- `-`, `+`, `!`
-2. Binary arithmetic -- `+`, `-`, `*`, `/`, `\`, `^`, `.^`, `div`, `mod`
+1. Unary arithmetic -- `-`, `+`
+2. Binary arithmetic -- `-`, `+`, `*`, `/`, `\`, `^`
 3. Comparison -- `==`, `!=`, `≈` ([`isapprox`](@ref)), `≉`
-4. Unary Boolean or bitwise -- `~`
-5. Binary Boolean or bitwise -- `&`, `|`, `⊻` ([`xor`](@ref))
 
-Some operators without dots operate elementwise anyway when one argument is a scalar:
-`*`, `+`, `-`, and the bitwise operators. The operators `/` and `\` operate elementwise when
-the denominator is a scalar.
+Most of the binary arithmetic operators listed above also operate elementwise
+when one argument is scalar: `-`, `+`, and `*` when either argument is scalar,
+and `/` and `\` when the denominator is scalar. For example, `[1, 2] + 3 == [4, 5]`
+and `[6, 4] / 2 == [3, 2]`.
 
-Note that comparisons such as `==` operate on whole arrays, giving a single boolean answer. Use
-dot operators like `.==` for elementwise comparisons.
+Additionally, to enable convenient vectorization of mathematical and other operations,
+Julia [provides the dot syntax](@ref man-vectorized) `f.(args...)`, e.g. `sin.(x)`
+or `min.(x,y)`, for elementwise operations over arrays or mixtures of arrays and
+scalars (a [Broadcasting](@ref) operation); these have the additional advantage of
+"fusing" into a single loop when combined with other dot calls, e.g. `sin.(cos.(x))`.
 
-To enable convenient vectorization of mathematical and other operations, Julia [provides the compact
-syntax](@ref man-vectorized) `f.(args...)`, e.g. `sin.(x)` or `min.(x,y)`, for elementwise operations over arrays or mixtures of arrays and scalars (a [Broadcasting](@ref) operation); these
-have the additional advantage of "fusing" into a single loop when combined with
-dot operators and other dot calls.
+Also, *every* binary operator supports a [dot version](@ref man-dot-operators)
+that can be applied to arrays (and combinations of arrays and scalars) in such
+[fused broadcasting operations](@ref man-vectorized), e.g. `z .== sin.(x .* y)`.
 
-Note that there is a difference between `max.(a,b)`, which `broadcast`s [`max()`](@ref) elementwise
-over `a` and `b`, and `maximum(a)`, which finds the largest value within `a`. The same relationship
-holds for `min.(a,b)` and `minimum(a)`.
+Note that comparisons such as `==` operate on whole arrays, giving a single boolean
+answer. Use dot operators like `.==` for elementwise comparisons. (For comparison
+operations like `<`, *only* the elementwise `.<` version is applicable to arrays.)
+
+Also notice the difference between `max.(a,b)`, which `broadcast`s [`max()`](@ref)
+elementwise over `a` and `b`, and `maximum(a)`, which finds the largest value within
+`a`. The same relationship holds for `min.(a,b)` and `minimum(a)`.
 
 ### Broadcasting
 
@@ -715,7 +716,7 @@ Julia sparse matrices have the type `SparseMatrixCSC{Tv,Ti}`, where `Tv` is the 
 values, and `Ti` is the integer type for storing column pointers and row indices.:
 
 ```julia
-type SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
+struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     m::Int                  # Number of rows
     n::Int                  # Number of columns
     colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)
@@ -754,10 +755,10 @@ sparse matrices instead, you can use the same names with an `sp` prefix:
 
 ```jldoctest
 julia> spzeros(3,5)
-3×5 sparse matrix with 0 Float64 stored entries
+3×5 SparseMatrixCSC{Float64,Int64} with 0 stored entries
 
 julia> speye(3,5)
-3×5 sparse matrix with 3 Float64 stored entries:
+3×5 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
   [1, 1]  =  1.0
   [2, 2]  =  1.0
   [3, 3]  =  1.0
@@ -771,7 +772,7 @@ values. `sparse(I,J,V)` constructs a sparse matrix such that `S[I[k], J[k]] = V[
 julia> I = [1, 4, 3, 5]; J = [4, 7, 18, 9]; V = [1, 2, -5, 3];
 
 julia> S = sparse(I,J,V)
-5×18 sparse matrix with 4 Int64 stored entries:
+5×18 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
   [1 ,  4]  =  1
   [4 ,  7]  =  2
   [5 ,  9]  =  3
@@ -794,7 +795,7 @@ the [`sparse()`](@ref) function:
 
 ```jldoctest
 julia> sparse(eye(5))
-5×5 sparse matrix with 5 Float64 stored entries:
+5×5 SparseMatrixCSC{Float64,Int64} with 5 stored entries:
   [1, 1]  =  1.0
   [2, 2]  =  1.0
   [3, 3]  =  1.0

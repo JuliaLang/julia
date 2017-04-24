@@ -1,27 +1,27 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Tests that do not really go anywhere else
 
 # Test info
-@test contains(sprint(io->info(io,"test")), "INFO:")
-@test contains(sprint(io->info(io,"test")), "INFO: test")
-@test contains(sprint(io->info(io,"test ",1,2,3)), "INFO: test 123")
+@test contains(sprint(info, "test"), "INFO:")
+@test contains(sprint(info, "test"), "INFO: test")
+@test contains(sprint(info, "test ", 1, 2, 3), "INFO: test 123")
 @test contains(sprint(io->info(io,"test", prefix="MYINFO: ")), "MYINFO: test")
 
 # Test warn
-@test contains(sprint(io->Base.warn_once(io,"test")), "WARNING: test")
-@test isempty(sprint(io->Base.warn_once(io,"test")))
+@test contains(sprint(Base.warn_once, "test"), "WARNING: test")
+@test isempty(sprint(Base.warn_once, "test"))
 
-@test contains(sprint(io->warn(io)), "WARNING:")
-@test contains(sprint(io->warn(io, "test")), "WARNING: test")
-@test contains(sprint(io->warn(io, "test ",1,2,3)), "WARNING: test 123")
+@test contains(sprint(warn), "WARNING:")
+@test contains(sprint(warn, "test"), "WARNING: test")
+@test contains(sprint(warn, "test ", 1, 2, 3), "WARNING: test 123")
 @test contains(sprint(io->warn(io, "test", prefix="MYWARNING: ")), "MYWARNING: test")
 @test contains(sprint(io->warn(io, "testonce", once=true)), "WARNING: testonce")
 @test isempty(sprint(io->warn(io, "testonce", once=true)))
 @test !isempty(sprint(io->warn(io, "testonce", once=true, key=hash("testonce",hash("testanother")))))
 let bt = backtrace()
-    ws = split(chomp(sprint(io->warn(io,"test", bt))), '\n')
-    bs = split(chomp(sprint(io->Base.show_backtrace(io,bt))), '\n')
+    ws = split(chomp(sprint(warn, "test", bt)), '\n')
+    bs = split(chomp(sprint(Base.show_backtrace, bt)), '\n')
     @test contains(ws[1],"WARNING: test")
     for (l,b) in zip(ws[2:end],bs)
         @test contains(l, b)
@@ -52,12 +52,12 @@ end
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
 
-logging(DevNull, TestMain_misc.Logging, :bar;  kind=:info)
+logging(DevNull, Logging, :bar;  kind=:info)
 @test all(contains.(sprint(Logging.bar), ["WARNING: barwarn", "ERROR: \"barerror\""]))
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
-logging(DevNull, TestMain_misc.Logging;  kind=:info)
+logging(DevNull, Logging;  kind=:info)
 @test all(contains.(sprint(Logging.bar), ["WARNING: barwarn", "ERROR: \"barerror\""]))
 @test all(contains.(sprint(Logging.pooh), ["WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
@@ -73,12 +73,12 @@ logging(kind=:info)
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
 
-logging(DevNull, TestMain_misc.Logging, :bar;  kind=:warn)
+logging(DevNull, Logging, :bar;  kind=:warn)
 @test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "ERROR: \"barerror\""]))
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
-logging(DevNull, TestMain_misc.Logging;  kind=:warn)
+logging(DevNull, Logging;  kind=:warn)
 @test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "ERROR: \"barerror\""]))
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
@@ -94,12 +94,12 @@ logging(kind=:warn)
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
 
-logging(DevNull, TestMain_misc.Logging, :bar;  kind=:error)
+logging(DevNull, Logging, :bar;  kind=:error)
 @test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "WARNING: barwarn"]))
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
-logging(DevNull, TestMain_misc.Logging;  kind=:error)
+logging(DevNull, Logging;  kind=:error)
 @test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "WARNING: barwarn"]))
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn"]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
@@ -115,12 +115,12 @@ logging(kind=:error)
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
 
-logging(DevNull, TestMain_misc.Logging, :bar)
+logging(DevNull, Logging, :bar)
 @test sprint(Logging.bar) == ""
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
-logging(DevNull, TestMain_misc.Logging)
+logging(DevNull, Logging)
 @test sprint(Logging.bar) == ""
 @test sprint(Logging.pooh) == ""
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
@@ -226,10 +226,10 @@ end
 # test methodswith
 # `methodswith` relies on exported symbols
 export func4union, Base
-immutable NoMethodHasThisType end
+struct NoMethodHasThisType end
 @test isempty(methodswith(NoMethodHasThisType))
 @test !isempty(methodswith(Int))
-immutable Type4Union end
+struct Type4Union end
 func4union(::Union{Type4Union,Int}) = ()
 @test !isempty(methodswith(Type4Union))
 
@@ -514,9 +514,19 @@ if is_windows()
     end
 end
 
-optstring = sprint(show, Base.JLOptions())
-@test startswith(optstring, "JLOptions(")
-@test endswith(optstring, ")")
+let optstring = stringmime(MIME("text/plain"), Base.JLOptions())
+    @test startswith(optstring, "JLOptions(\n")
+    @test !contains(optstring, "Ptr")
+    @test endswith(optstring, "\n)")
+    @test contains(optstring, " = \"")
+end
+let optstring = repr(Base.JLOptions())
+    @test startswith(optstring, "JLOptions(")
+    @test endswith(optstring, ")")
+    @test !contains(optstring, "\n")
+    @test !contains(optstring, "Ptr")
+    @test contains(optstring, " = \"")
+end
 
 # Base.securezero! functions (#17579)
 import Base: securezero!, unsafe_securezero!
@@ -572,6 +582,25 @@ let
     end
 end
 
+# Test that `print_with_color` accepts non-string values, just as `print` does
+let
+    old_have_color = Base.have_color
+    try
+        @eval Base have_color = true
+        buf_color = IOBuffer()
+        args = (3.2, "foo", :testsym)
+        print_with_color(:red, buf_color, args...)
+        buf_plain = IOBuffer()
+        print(buf_plain, args...)
+        expected_str = string(Base.text_colors[:red],
+                              String(take!(buf_plain)),
+                              Base.text_colors[:default])
+        @test expected_str == String(take!(buf_color))
+    finally
+        @eval Base have_color = $(old_have_color)
+    end
+end
+
 let
     global c_18711 = 0
     buf = IOContext(IOBuffer(), :hascontext => true)
@@ -599,10 +628,10 @@ let
     end
 end
 
-abstract DA_19281{T, N} <: AbstractArray{T, N}
+abstract type DA_19281{T, N} <: AbstractArray{T, N} end
 Base.convert{S,T,N}(::Type{Array{S, N}}, ::DA_19281{T, N}) = error()
 x_19281 = [(), (1,)]
-type Foo_19281
+mutable struct Foo_19281
     f::Vector{Tuple}
     Foo_19281() = new(x_19281)
 end
@@ -618,4 +647,25 @@ let
 
     x_defined = Ref{String}("Test")
     @test isassigned(x_defined)
+end
+
+mutable struct Demo_20254
+    arr::Array{String}
+end
+
+# these cause stack overflows and are a little flaky on CI, ref #20256
+if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+    function Demo_20254(arr::AbstractArray=Any[])
+        Demo_20254(string.(arr))
+    end
+
+    _unsafe_get_19433(x::NTuple{1}) = (unsafe_get(x[1]),)
+    _unsafe_get_19433(xs::Vararg) = (unsafe_get(xs[1]), _unsafe_get_19433(xs[2:end])...)
+
+    f_19433(f_19433, xs...) = f_19433(_unsafe_get_19433(xs)...)
+
+    @testset "test this does not crash, issue #19433 and #20254" begin
+        @test_throws StackOverflowError Demo_20254()
+        @test_throws StackOverflowError f_19433(+, 1, 2)
+    end
 end

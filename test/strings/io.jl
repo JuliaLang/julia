@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # string escaping & unescaping
 cx = Any[
@@ -144,7 +144,7 @@ end
 @test join(["apples", "bananas", "pineapples"], ", ", " and ") == "apples, bananas and pineapples"
 
 # issue #9178 `join` calls `done()` twice on the iterables
-type i9178
+mutable struct i9178
     nnext::Int64
     ndone::Int64
 end

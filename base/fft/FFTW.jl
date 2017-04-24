@@ -1,12 +1,6 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
-
-module FFTW
-
-import ..DFT: fft, bfft, ifft, rfft, brfft, irfft, plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft, fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!, Plan, rfft_output_size, brfft_output_size, plan_inv, normalization, ScaledPlan
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base: show, *, convert, unsafe_convert, size, strides, ndims, pointer, A_mul_B!
-
-export r2r, r2r!, plan_r2r, plan_r2r!
 
 export export_wisdom, import_wisdom, import_system_wisdom, forget_wisdom,
        MEASURE, DESTROY_INPUT, UNALIGNED, CONSERVE_MEMORY, EXHAUSTIVE,
@@ -20,7 +14,8 @@ export export_wisdom, import_wisdom, import_system_wisdom, forget_wisdom,
 const libfftw = Base.libfftw_name
 const libfftwf = Base.libfftwf_name
 
-const version = convert(VersionNumber, split(unsafe_string(cglobal((:fftw_version,Base.DFT.FFTW.libfftw), UInt8)), ['-', ' '])[2])
+const version = convert(VersionNumber, split(unsafe_string(cglobal(
+    (:fftw_version,Base.DFT.FFTW.libfftw), UInt8)), ['-', ' '])[2])
 
 ## Direction of FFT
 
@@ -61,25 +56,25 @@ end
 
 # FFTW floating-point types:
 
-typealias fftwNumber Union{Float64,Float32,Complex128,Complex64}
-typealias fftwReal Union{Float64,Float32}
-typealias fftwComplex Union{Complex128,Complex64}
-typealias fftwDouble Union{Float64,Complex128}
-typealias fftwSingle Union{Float32,Complex64}
-typealias fftwTypeDouble Union{Type{Float64},Type{Complex128}}
-typealias fftwTypeSingle Union{Type{Float32},Type{Complex64}}
+const fftwNumber = Union{Float64,Float32,Complex128,Complex64}
+const fftwReal = Union{Float64,Float32}
+const fftwComplex = Union{Complex128,Complex64}
+const fftwDouble = Union{Float64,Complex128}
+const fftwSingle = Union{Float32,Complex64}
+const fftwTypeDouble = Union{Type{Float64},Type{Complex128}}
+const fftwTypeSingle = Union{Type{Float32},Type{Complex64}}
 
 # For ESTIMATE plans, FFTW allows one to pass NULL for the array pointer,
 # since it is not written to.  Hence, it is convenient to create an
 # array-like type that carries a size and a stride like a "real" array
 # but which is converted to C_NULL as a pointer.
-immutable FakeArray{T, N} <: DenseArray{T, N}
+struct FakeArray{T, N} <: DenseArray{T, N}
     sz::NTuple{N, Int}
     st::NTuple{N, Int}
 end
 size(a::FakeArray) = a.sz
 strides(a::FakeArray) = a.st
-unsafe_convert{T}(::Type{Ptr{T}}, a::FakeArray{T}) = convert(Ptr{T}, C_NULL)
+unsafe_convert(::Type{Ptr{T}}, a::FakeArray{T}) where {T} = convert(Ptr{T}, C_NULL)
 pointer{T}(a::FakeArray{T}) = convert(Ptr{T}, C_NULL)
 FakeArray{T, N}(::Type{T}, sz::NTuple{N, Int}) =
     FakeArray{T, N}(sz, colmajorstrides(sz))
@@ -88,6 +83,27 @@ fakesimilar(flags, X, T) = flags & ESTIMATE != 0 ? FakeArray(T, size(X)) : Array
 alignment_of(A::FakeArray) = Int32(0)
 
 ## Julia wrappers around FFTW functions
+
+# _init_() must be called before any FFTW planning routine.
+#   -- Once FFTW is split into its own module, this can be called
+#      in the module __init__(), but for now we must call it lazily
+#      in every routine that might initialize the FFTW planner.
+#   -- This initializes FFTW's threads support (defaulting to 1 thread).
+#      If this isn't called before the FFTW planner is created, then
+#      FFTW's threads algorithms won't be registered or used at all.
+#      (Previously, we called fftw_cleanup, but this invalidated existing
+#       plans, causing issue #19892.)
+const threads_initialized = Ref(false)
+function _init_()
+    if !threads_initialized[]
+        stat = ccall((:fftw_init_threads,libfftw), Int32, ())
+        statf = ccall((:fftwf_init_threads,libfftwf), Int32, ())
+        if stat == 0 || statf == 0
+            error("could not initialize FFTW threads")
+        end
+        threads_initialized[] = true
+    end
+end
 
 # Wisdom
 
@@ -101,6 +117,7 @@ alignment_of(A::FakeArray) = Int32(0)
 # FFTW's api/import-wisdom-from-file.c file].
 
 function export_wisdom(fname::AbstractString)
+    _init_()
     f = ccall(:fopen, Ptr{Void}, (Cstring,Cstring), fname, :w)
     systemerror("could not open wisdom file $fname for writing", f == C_NULL)
     ccall((:fftw_export_wisdom_to_file,libfftw), Void, (Ptr{Void},), f)
@@ -110,6 +127,7 @@ function export_wisdom(fname::AbstractString)
 end
 
 function import_wisdom(fname::AbstractString)
+    _init_()
     f = ccall(:fopen, Ptr{Void}, (Cstring,Cstring), fname, :r)
     systemerror("could not open wisdom file $fname for reading", f == C_NULL)
     if ccall((:fftw_import_wisdom_from_file,libfftw),Int32,(Ptr{Void},),f)==0||
@@ -120,6 +138,7 @@ function import_wisdom(fname::AbstractString)
 end
 
 function import_system_wisdom()
+    _init_()
     if ccall((:fftw_import_system_wisdom,libfftw), Int32, ()) == 0 ||
        ccall((:fftwf_import_system_wisdom,libfftwf), Int32, ()) == 0
         error("failed to import system wisdom")
@@ -127,45 +146,37 @@ function import_system_wisdom()
 end
 
 function forget_wisdom()
+    _init_()
     ccall((:fftw_forget_wisdom,libfftw), Void, ())
     ccall((:fftwf_forget_wisdom,libfftwf), Void, ())
 end
 
 # Threads
 
-let initialized = false
-    global set_num_threads
-    function set_num_threads(nthreads::Integer)
-        if !initialized
-            # must re-initialize FFTW if any FFTW routines have been called
-            ccall((:fftw_cleanup,libfftw), Void, ())
-            ccall((:fftwf_cleanup,libfftwf), Void, ())
-            stat = ccall((:fftw_init_threads,libfftw), Int32, ())
-            statf = ccall((:fftwf_init_threads,libfftwf), Int32, ())
-            if stat == 0 || statf == 0
-                error("could not initialize FFTW threads")
-            end
-            initialized = true
-        end
-        ccall((:fftw_plan_with_nthreads,libfftw), Void, (Int32,), nthreads)
-        ccall((:fftwf_plan_with_nthreads,libfftwf), Void, (Int32,), nthreads)
-    end
+function set_num_threads(nthreads::Integer)
+    _init_()
+    ccall((:fftw_plan_with_nthreads,libfftw), Void, (Int32,), nthreads)
+    ccall((:fftwf_plan_with_nthreads,libfftwf), Void, (Int32,), nthreads)
 end
 
 # pointer type for fftw_plan (opaque pointer)
 
-immutable fftw_plan_struct end
-typealias PlanPtr Ptr{fftw_plan_struct}
+struct fftw_plan_struct end
+const PlanPtr = Ptr{fftw_plan_struct}
 
 # Planner timelimits
 
 const NO_TIMELIMIT = -1.0 # from fftw3.h
 
-set_timelimit(precision::fftwTypeDouble,seconds) =
+function set_timelimit(precision::fftwTypeDouble,seconds)
+    _init_()
     ccall((:fftw_set_timelimit,libfftw), Void, (Float64,), seconds)
+end
 
-set_timelimit(precision::fftwTypeSingle,seconds) =
+function set_timelimit(precision::fftwTypeSingle,seconds)
+    _init_()
     ccall((:fftwf_set_timelimit,libfftwf), Void, (Float64,), seconds)
+end
 
 # Array alignment mod 16:
 #   FFTW plans may depend on the alignment of the array mod 16 bytes,
@@ -179,9 +190,9 @@ set_timelimit(precision::fftwTypeSingle,seconds) =
 
 
 if Base.libfftw_name == "libmkl_rt"
-    alignment_of{T<:fftwDouble}(A::StridedArray{T}) =
+    alignment_of(A::StridedArray{<:fftwDouble}) =
         convert(Int32, convert(Int64, pointer(A)) % 16)
-    alignment_of{T<:fftwSingle}(A::StridedArray{T}) =
+    alignment_of(A::StridedArray{<:fftwSingle}) =
         convert(Int32, convert(Int64, pointer(A)) % 16)
 else
     alignment_of{T<:fftwDouble}(A::StridedArray{T}) =
@@ -197,10 +208,10 @@ end
 # this into a type to support a finalizer on the fftw_plan.
 # K is FORWARD/BACKWARD for forward/backward or r2c/c2r plans, respectively.
 # For r2r plans, K is a tuple of the transform kinds along each dimension.
-abstract FFTWPlan{T<:fftwNumber,K,inplace} <: Plan{T}
+abstract type FFTWPlan{T<:fftwNumber,K,inplace} <: Plan{T} end
 for P in (:cFFTWPlan, :rFFTWPlan, :r2rFFTWPlan) # complex, r2c/c2r, and r2r
     @eval begin
-        type $P{T<:fftwNumber,K,inplace,N} <: FFTWPlan{T,K,inplace}
+        mutable struct $P{T<:fftwNumber,K,inplace,N} <: FFTWPlan{T,K,inplace}
             plan::PlanPtr
             sz::NTuple{N, Int} # size of array on which plan operates (Int tuple)
             osz::NTuple{N, Int} # size of output array (Int tuple)
@@ -211,8 +222,8 @@ for P in (:cFFTWPlan, :rFFTWPlan, :r2rFFTWPlan) # complex, r2c/c2r, and r2r
             flags::UInt32 # planner flags
             region::Any # region (iterable) of dims that are transormed
             pinv::ScaledPlan
-            function $P(plan::PlanPtr, flags::Integer, R::Any,
-                        X::StridedArray{T, N}, Y::StridedArray)
+            function $P{T,K,inplace,N}(plan::PlanPtr, flags::Integer, R::Any,
+                                       X::StridedArray{T, N}, Y::StridedArray) where {T<:fftwNumber,K,inplace,N}
                 p = new(plan, size(X), size(Y), strides(X), strides(Y),
                         alignment_of(X), alignment_of(Y), flags, R)
                 finalizer(p, destroy_plan)
@@ -226,18 +237,18 @@ size(p::FFTWPlan) = p.sz
 
 unsafe_convert(::Type{PlanPtr}, p::FFTWPlan) = p.plan
 
-destroy_plan{T<:fftwDouble}(plan::FFTWPlan{T}) =
+destroy_plan(plan::FFTWPlan{<:fftwDouble}) =
     ccall((:fftw_destroy_plan,libfftw), Void, (PlanPtr,), plan)
 
-destroy_plan{T<:fftwSingle}(plan::FFTWPlan{T}) =
+destroy_plan(plan::FFTWPlan{<:fftwSingle}) =
     ccall((:fftwf_destroy_plan,libfftwf), Void, (PlanPtr,), plan)
 
-cost{T<:fftwDouble}(plan::FFTWPlan{T}) =
+cost(plan::FFTWPlan{<:fftwDouble}) =
     ccall((:fftw_cost,libfftw), Float64, (PlanPtr,), plan)
-cost{T<:fftwSingle}(plan::FFTWPlan{T}) =
+cost(plan::FFTWPlan{<:fftwSingle}) =
     ccall((:fftwf_cost,libfftwf), Float64, (PlanPtr,), plan)
 
-function arithmetic_ops{T<:fftwDouble}(plan::FFTWPlan{T})
+function arithmetic_ops(plan::FFTWPlan{<:fftwDouble})
     # Change to individual Ref after we can allocate them on stack
     ref = Ref{NTuple{3, Float64}}()
     ptr = Ptr{Float64}(Base.unsafe_convert(Ptr{NTuple{3, Float64}}, ref))
@@ -246,7 +257,7 @@ function arithmetic_ops{T<:fftwDouble}(plan::FFTWPlan{T})
           plan, ptr, ptr + 8, ptr + 16)
     (round(Int64, ref[][1]), round(Int64, ref[][2]), round(Int64, ref[][3]))
 end
-function arithmetic_ops{T<:fftwSingle}(plan::FFTWPlan{T})
+function arithmetic_ops(plan::FFTWPlan{<:fftwSingle})
     # Change to individual Ref after we can allocate them on stack
     ref = Ref{NTuple{3, Float64}}()
     ptr = Ptr{Float64}(Base.unsafe_convert(Ptr{NTuple{3, Float64}}, ref))
@@ -277,9 +288,9 @@ function showfftdims(io, sz::Dims, istride::Dims, T)
 end
 
 # The sprint_plan function was released in FFTW 3.3.4
-sprint_plan_{T<:fftwDouble}(plan::FFTWPlan{T}) =
+sprint_plan_(plan::FFTWPlan{<:fftwDouble}) =
     ccall((:fftw_sprint_plan,libfftw), Ptr{UInt8}, (PlanPtr,), plan)
-sprint_plan_{T<:fftwSingle}(plan::FFTWPlan{T}) =
+sprint_plan_(plan::FFTWPlan{<:fftwSingle}) =
     ccall((:fftwf_sprint_plan,libfftwf), Ptr{UInt8}, (PlanPtr,), plan)
 function sprint_plan(plan::FFTWPlan)
     p = sprint_plan_(plan)
@@ -288,14 +299,14 @@ function sprint_plan(plan::FFTWPlan)
     return str
 end
 
-function show{T,K,inplace}(io::IO, p::cFFTWPlan{T,K,inplace})
+function show(io::IO, p::cFFTWPlan{T,K,inplace}) where {T,K,inplace}
     print(io, inplace ? "FFTW in-place " : "FFTW ",
           K < 0 ? "forward" : "backward", " plan for ")
     showfftdims(io, p.sz, p.istride, T)
     version >= v"3.3.4" && print(io, "\n", sprint_plan(p))
 end
 
-function show{T,K,inplace}(io::IO, p::rFFTWPlan{T,K,inplace})
+function show(io::IO, p::rFFTWPlan{T,K,inplace}) where {T,K,inplace}
     print(io, inplace ? "FFTW in-place " : "FFTW ",
           K < 0 ? "real-to-complex" : "complex-to-real",
           " plan for ")
@@ -303,7 +314,7 @@ function show{T,K,inplace}(io::IO, p::rFFTWPlan{T,K,inplace})
     version >= v"3.3.4" && print(io, "\n", sprint_plan(p))
 end
 
-function show{T,K,inplace}(io::IO, p::r2rFFTWPlan{T,K,inplace})
+function show(io::IO, p::r2rFFTWPlan{T,K,inplace}) where {T,K,inplace}
     print(io, inplace ? "FFTW in-place r2r " : "FFTW r2r ")
     if isempty(K)
         print(io, "0-dimensional")
@@ -354,10 +365,10 @@ colmajorstrides(sz) = isempty(sz) ? () : (1,cumprod(Int[sz[1:end-1]...])...)
 
 # Execute
 
-unsafe_execute!{T<:fftwDouble}(plan::FFTWPlan{T}) =
+unsafe_execute!(plan::FFTWPlan{<:fftwDouble}) =
     ccall((:fftw_execute,libfftw), Void, (PlanPtr,), plan)
 
-unsafe_execute!{T<:fftwSingle}(plan::FFTWPlan{T}) =
+unsafe_execute!(plan::FFTWPlan{<:fftwSingle}) =
     ccall((:fftwf_execute,libfftwf), Void, (PlanPtr,), plan)
 
 unsafe_execute!{T<:fftwDouble}(plan::cFFTWPlan{T},
@@ -566,15 +577,14 @@ end
 
 # Convert arrays of numeric types to FFTW-supported packed complex-float types
 # (FIXME: is there a way to use the Julia promotion rules more cleverly here?)
-fftwcomplex{T<:fftwComplex}(X::StridedArray{T}) = X
-fftwcomplex{T<:fftwReal}(X::AbstractArray{T}) =
-    copy!(Array{typeof(complex(one(T)))}(size(X)), X)
-fftwcomplex{T<:Real}(X::AbstractArray{T}) = copy!(Array{Complex128}(size(X)),X)
-fftwcomplex{T<:Complex}(X::AbstractArray{T}) =
-    copy!(Array{Complex128}(size(X)), X)
-fftwfloat{T<:fftwReal}(X::StridedArray{T}) = X
-fftwfloat{T<:Real}(X::AbstractArray{T}) = copy!(Array{Float64}(size(X)), X)
-fftwfloat{T<:Complex}(X::AbstractArray{T}) = fftwcomplex(X)
+fftwcomplex(X::StridedArray{<:fftwComplex}) = X
+fftwcomplex(X::AbstractArray{T}) where {T<:fftwReal} =
+    copy!(Array{typeof(complex(zero(T)))}(size(X)), X)
+fftwcomplex(X::AbstractArray{<:Real}) = copy!(Array{Complex128}(size(X)),X)
+fftwcomplex(X::AbstractArray{<:Complex}) = copy!(Array{Complex128}(size(X)), X)
+fftwfloat(X::StridedArray{<:fftwReal}) = X
+fftwfloat(X::AbstractArray{<:Real}) = copy!(Array{Float64}(size(X)), X)
+fftwfloat(X::AbstractArray{<:Complex}) = fftwcomplex(X)
 
 for (f,direction) in ((:fft,FORWARD), (:bfft,BACKWARD))
     plan_f = Symbol("plan_",f)
@@ -593,9 +603,9 @@ for (f,direction) in ((:fft,FORWARD), (:bfft,BACKWARD))
                                             timelimit::Real=NO_TIMELIMIT)
             cFFTWPlan{T,$direction,true,N}(X, X, region, flags, timelimit)
         end
-        $plan_f{T<:fftwComplex}(X::StridedArray{T}; kws...) =
+        $plan_f(X::StridedArray{<:fftwComplex}; kws...) =
             $plan_f(X, 1:ndims(X); kws...)
-        $plan_f!{T<:fftwComplex}(X::StridedArray{T}; kws...) =
+        $plan_f!(X::StridedArray{<:fftwComplex}; kws...) =
             $plan_f!(X, 1:ndims(X); kws...)
 
         function plan_inv{T<:fftwComplex,N,inplace}(p::cFFTWPlan{T,$direction,inplace,N})
@@ -608,20 +618,20 @@ for (f,direction) in ((:fft,FORWARD), (:bfft,BACKWARD))
     end
 end
 
-function A_mul_B!{T}(y::StridedArray{T}, p::cFFTWPlan{T}, x::StridedArray{T})
+function A_mul_B!(y::StridedArray{T}, p::cFFTWPlan{T}, x::StridedArray{T}) where T
     assert_applicable(p, x, y)
     unsafe_execute!(p, x, y)
     return y
 end
 
-function *{T,K,N}(p::cFFTWPlan{T,K,false}, x::StridedArray{T,N})
+function *(p::cFFTWPlan{T,K,false}, x::StridedArray{T,N}) where {T,K,N}
     assert_applicable(p, x)
     y = Array{T}(p.osz)::Array{T,N}
     unsafe_execute!(p, x, y)
     return y
 end
 
-function *{T,K}(p::cFFTWPlan{T,K,true}, x::StridedArray{T})
+function *(p::cFFTWPlan{T,K,true}, x::StridedArray{T}) where {T,K}
     assert_applicable(p, x)
     unsafe_execute!(p, x, x)
     return x
@@ -714,37 +724,18 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
     end
 end
 
-"""
-    plan_rfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Pre-plan an optimized real-input FFT, similar to [`plan_fft`](@ref) except for
-[`rfft`](@ref) instead of [`fft`](@ref). The first two arguments, and the
-size of the transformed result, are the same as for [`rfft`](@ref).
-"""
-plan_rfft
-
-"""
-    plan_brfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
-
-Pre-plan an optimized real-input unnormalized transform, similar to
-[`plan_rfft`](@ref) except for [`brfft`](@ref) instead of
-[`rfft`](@ref). The first two arguments and the size of the transformed result, are
-the same as for [`brfft`](@ref).
-"""
-plan_brfft
-
 # FFTW r2r transforms (low-level interface)
 
 for f in (:r2r, :r2r!)
     pf = Symbol("plan_", f)
     @eval begin
-        $f{T<:fftwNumber}(x::AbstractArray{T}, kinds) = $pf(x, kinds) * x
-        $f{T<:fftwNumber}(x::AbstractArray{T}, kinds, region) = $pf(x, kinds, region) * x
+        $f(x::AbstractArray{<:fftwNumber}, kinds) = $pf(x, kinds) * x
+        $f(x::AbstractArray{<:fftwNumber}, kinds, region) = $pf(x, kinds, region) * x
         $pf(x::AbstractArray, kinds; kws...) = $pf(x, kinds, 1:ndims(x); kws...)
-        $f{T<:Real}(x::AbstractArray{T}, kinds, region=1:ndims(x)) = $f(fftwfloat(x), kinds, region)
-        $pf{T<:Real}(x::AbstractArray{T}, kinds, region; kws...) = $pf(fftwfloat(x), kinds, region; kws...)
-        $f{T<:Complex}(x::AbstractArray{T}, kinds, region=1:ndims(x)) = $f(fftwcomplex(x), kinds, region)
-        $pf{T<:Complex}(x::AbstractArray{T}, kinds, region; kws...) = $pf(fftwcomplex(x), kinds, region; kws...)
+        $f(x::AbstractArray{<:Real}, kinds, region=1:ndims(x)) = $f(fftwfloat(x), kinds, region)
+        $pf(x::AbstractArray{<:Real}, kinds, region; kws...) = $pf(fftwfloat(x), kinds, region; kws...)
+        $f(x::AbstractArray{<:Complex}, kinds, region=1:ndims(x)) = $f(fftwcomplex(x), kinds, region)
+        $pf(x::AbstractArray{<:Complex}, kinds, region; kws...) = $pf(fftwcomplex(x), kinds, region; kws...)
     end
 end
 
@@ -760,56 +751,6 @@ function plan_r2r!{T<:fftwNumber,N}(X::StridedArray{T,N}, kinds, region;
                                     timelimit::Real=NO_TIMELIMIT)
     r2rFFTWPlan{T,ANY,true,N}(X, X, region, kinds, flags, timelimit)
 end
-
-"""
-    r2r(A, kind [, dims])
-
-Performs a multidimensional real-input/real-output (r2r) transform
-of type `kind` of the array `A`, as defined in the FFTW manual.
-`kind` specifies either a discrete cosine transform of various types
-(`FFTW.REDFT00`, `FFTW.REDFT01`, `FFTW.REDFT10`, or
-`FFTW.REDFT11`), a discrete sine transform of various types
-(`FFTW.RODFT00`, `FFTW.RODFT01`, `FFTW.RODFT10`, or
-`FFTW.RODFT11`), a real-input DFT with halfcomplex-format output
-(`FFTW.R2HC` and its inverse `FFTW.HC2R`), or a discrete
-Hartley transform (`FFTW.DHT`).  The `kind` argument may be
-an array or tuple in order to specify different transform types
-along the different dimensions of `A`; `kind[end]` is used
-for any unspecified dimensions.  See the FFTW manual for precise
-definitions of these transform types, at http://www.fftw.org/doc.
-
-The optional `dims` argument specifies an iterable subset of
-dimensions (e.g. an integer, range, tuple, or array) to transform
-along. `kind[i]` is then the transform type for `dims[i]`,
-with `kind[end]` being used for `i > length(kind)`.
-
-See also [`plan_r2r`](@ref) to pre-plan optimized r2r transforms.
-"""
-FFTW.r2r
-
-"""
-    r2r!(A, kind [, dims])
-
-Same as [`r2r`](@ref), but operates in-place on `A`, which must be
-an array of real or complex floating-point numbers.
-"""
-FFTW.r2r!
-
-"""
-    plan_r2r!(A, kind [, dims [, flags [, timelimit]]])
-
-Similar to [`plan_fft`](@ref), but corresponds to [`r2r!`](@ref).
-"""
-FFTW.plan_r2r!
-
-"""
-    plan_r2r(A, kind [, dims [, flags [, timelimit]]])
-
-Pre-plan an optimized r2r transform, similar to [`plan_fft`](@ref)
-except that the transforms (and the first three arguments)
-correspond to [`r2r`](@ref) and [`r2r!`](@ref), respectively.
-"""
-FFTW.plan_r2r
 
 # mapping from r2r kind to the corresponding inverse transform
 const inv_kind = Dict{Int,Int}(R2HC => HC2R, HC2R => R2HC, DHT => DHT,
@@ -840,25 +781,23 @@ function plan_inv{T<:fftwNumber,K,inplace,N}(p::r2rFFTWPlan{T,K,inplace,N})
                              1:length(iK)))
 end
 
-function A_mul_B!{T}(y::StridedArray{T}, p::r2rFFTWPlan{T}, x::StridedArray{T})
+function A_mul_B!(y::StridedArray{T}, p::r2rFFTWPlan{T}, x::StridedArray{T}) where T
     assert_applicable(p, x, y)
     unsafe_execute!(p, x, y)
     return y
 end
 
-function *{T,K,N}(p::r2rFFTWPlan{T,K,false}, x::StridedArray{T,N})
+function *(p::r2rFFTWPlan{T,K,false}, x::StridedArray{T,N}) where {T,K,N}
     assert_applicable(p, x)
     y = Array{T}(p.osz)::Array{T,N}
     unsafe_execute!(p, x, y)
     return y
 end
 
-function *{T,K}(p::r2rFFTWPlan{T,K,true}, x::StridedArray{T})
+function *(p::r2rFFTWPlan{T,K,true}, x::StridedArray{T}) where {T,K}
     assert_applicable(p, x)
     unsafe_execute!(p, x, x)
     return x
 end
 
 include("dct.jl")
-
-end # module

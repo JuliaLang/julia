@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
   defining DataTypes
@@ -97,12 +97,23 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
 {
     // compute the smallest fielddesc type that can hold the layout description
     int fielddesc_type = 0;
+    uint32_t npointers = 0;
+    // First pointer field
+    uint32_t first_ptr = (uint32_t)-1;
+    // Last pointer field
+    uint32_t last_ptr = 0;
     if (nfields > 0) {
         uint32_t max_size = 0;
         uint32_t max_offset = desc[nfields - 1].offset;
         for (size_t i = 0; i < nfields; i++) {
             if (desc[i].size > max_size)
                 max_size = desc[i].size;
+            if (desc[i].isptr) {
+                npointers++;
+                if (first_ptr == (uint32_t)-1)
+                    first_ptr = i;
+                last_ptr = i;
+            }
         }
         jl_fielddesc8_t maxdesc8 = { 0, max_size, max_offset };
         jl_fielddesc16_t maxdesc16 = { 0, max_size, max_offset };
@@ -120,8 +131,20 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
 
     // allocate a new descriptor
     uint32_t fielddesc_size = jl_fielddesc_size(fielddesc_type);
+    int has_padding = nfields && npointers;
     jl_datatype_layout_t *flddesc =
-        (jl_datatype_layout_t*)jl_gc_perm_alloc(sizeof(jl_datatype_layout_t) + nfields * fielddesc_size);
+        (jl_datatype_layout_t*)jl_gc_perm_alloc(sizeof(jl_datatype_layout_t) +
+                                                nfields * fielddesc_size +
+                                                (has_padding ? sizeof(uint32_t) : 0), 0);
+    if (has_padding) {
+        if (first_ptr > UINT16_MAX)
+            first_ptr = UINT16_MAX;
+        last_ptr = nfields - last_ptr - 1;
+        if (last_ptr > UINT16_MAX)
+            last_ptr = UINT16_MAX;
+        flddesc = (jl_datatype_layout_t*)(((char*)flddesc) + sizeof(uint32_t));
+        jl_datatype_layout_n_nonptr(flddesc) = (first_ptr << 16) | last_ptr;
+    }
     flddesc->nfields = nfields;
     flddesc->alignment = alignment;
     flddesc->haspadding = haspadding;
@@ -131,7 +154,6 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
     jl_fielddesc8_t* desc8 = (jl_fielddesc8_t*)jl_dt_layout_fields(flddesc);
     jl_fielddesc16_t* desc16 = (jl_fielddesc16_t*)jl_dt_layout_fields(flddesc);
     jl_fielddesc32_t* desc32 = (jl_fielddesc32_t*)jl_dt_layout_fields(flddesc);
-    int ptrfree = 1;
     for (size_t i = 0; i < nfields; i++) {
         if (fielddesc_type == 0) {
             desc8[i].offset = desc[i].offset;
@@ -148,10 +170,13 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
             desc32[i].size = desc[i].size;
             desc32[i].isptr = desc[i].isptr;
         }
-        if (desc[i].isptr)
-            ptrfree = 0;
     }
-    flddesc->pointerfree = ptrfree;
+    uint32_t nexp = 0;
+    while (npointers >= 0x10000) {
+        nexp++;
+        npointers = npointers >> 1;
+    }
+    flddesc->npointers = npointers | (nexp << 16);
     return flddesc;
 }
 
@@ -179,7 +204,7 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
         return 0;               // nfields has more than two 1s
     assert(jl_datatype_nfields(t)==1);
     jl_value_t *ty = jl_field_type(t, 0);
-    if (!jl_is_bitstype(ty))
+    if (!jl_is_primitivetype(ty))
         // LLVM requires that a vector element be a primitive type.
         // LLVM allows pointer types as vector elements, but until a
         // motivating use case comes up for Julia, we reject pointers.
@@ -353,7 +378,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
     else {
         t->uid = jl_assign_type_uid();
         if (t->types != NULL && t->isleaftype) {
-            static const jl_datatype_layout_t singleton_layout = {0, 1, 0, 1, 0};
+            static const jl_datatype_layout_t singleton_layout = {0, 1, 0, 0, 0};
             if (fnames == jl_emptysvec)
                 t->layout = &singleton_layout;
             else
@@ -364,8 +389,8 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
     return t;
 }
 
-JL_DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *super,
-                                            jl_svec_t *parameters, size_t nbits)
+JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_datatype_t *super,
+                                                 jl_svec_t *parameters, size_t nbits)
 {
     jl_datatype_t *bt = jl_new_datatype((jl_sym_t*)name, super, parameters,
                                         jl_emptysvec, jl_emptysvec, 0, 0, 0);
@@ -457,7 +482,7 @@ BOXN_FUNC(64, 2)
 #define UNBOX_FUNC(j_type,c_type)                                       \
     JL_DLLEXPORT c_type jl_unbox_##j_type(jl_value_t *v)                \
     {                                                                   \
-        assert(jl_is_bitstype(jl_typeof(v)));                           \
+        assert(jl_is_primitivetype(jl_typeof(v)));                           \
         assert(jl_datatype_size(jl_typeof(v)) == sizeof(c_type));       \
         return *(c_type*)jl_data_ptr(v);                                \
     }

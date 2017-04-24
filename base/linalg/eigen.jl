@@ -1,20 +1,24 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Eigendecomposition
-immutable Eigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
+struct Eigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
     values::U
     vectors::S
-    Eigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = new(values, vectors)
+    Eigen{T,V,S,U}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V,S,U} =
+        new(values, vectors)
 end
-Eigen{T,V}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = Eigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
+Eigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V} =
+    Eigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
 
 # Generalized eigenvalue problem.
-immutable GeneralizedEigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
+struct GeneralizedEigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
     values::U
     vectors::S
-    GeneralizedEigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = new(values, vectors)
+    GeneralizedEigen{T,V,S,U}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V,S,U} =
+        new(values, vectors)
 end
-GeneralizedEigen{T,V}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = GeneralizedEigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
+GeneralizedEigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V} =
+    GeneralizedEigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
 
 
 function getindex(A::Union{Eigen,GeneralizedEigen}, d::Symbol)
@@ -164,12 +168,12 @@ The option `permute=true` permutes the matrix to become
 closer to upper triangular, and `scale=true` scales the matrix by its diagonal elements to
 make rows and columns more equal in norm.
 """
-function eigvals!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
+function eigvals!(A::StridedMatrix{<:BlasReal}; permute::Bool=true, scale::Bool=true)
     issymmetric(A) && return eigvals!(Symmetric(A))
     _, valsre, valsim, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)
     return iszero(valsim) ? valsre : complex.(valsre, valsim)
 end
-function eigvals!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
+function eigvals!(A::StridedMatrix{<:BlasComplex}; permute::Bool=true, scale::Bool=true)
     ishermitian(A) && return eigvals(Hermitian(A))
     return LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)[2]
 end
@@ -224,8 +228,8 @@ julia> A = [0 im; -1 0]
 julia> eigmax(A)
 ERROR: DomainError:
 Stacktrace:
- [1] #eigmax#38(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:234
- [2] eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:232
+ [1] #eigmax#40(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:238
+ [2] eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:236
 ```
 """
 function eigmax(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
@@ -266,8 +270,8 @@ julia> A = [0 im; -1 0]
 julia> eigmin(A)
 ERROR: DomainError:
 Stacktrace:
- [1] #eigmin#39(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:276
- [2] eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:274
+ [1] #eigmin#41(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:280
+ [2] eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:278
 ```
 """
 function eigmin(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)

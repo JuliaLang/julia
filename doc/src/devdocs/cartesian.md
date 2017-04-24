@@ -63,13 +63,13 @@ julia> macroexpand(:(@nref 2 A i))
 The first argument to both of these macros is the number of expressions, which must be an integer.
 When you're writing a function that you intend to work in multiple dimensions, this may not be
 something you want to hard-code. If you're writing code that you need to work with older Julia
-versions, currently you should use the `@ngenerate` macro described in [an older version of this documentation](http://docs.julialang.org/en/release-0.3/devdocs/cartesian/#supplying-the-number-of-expressions).
+versions, currently you should use the `@ngenerate` macro described in [an older version of this documentation](https://docs.julialang.org/en/release-0.3/devdocs/cartesian/#supplying-the-number-of-expressions).
 
 Starting in Julia 0.4-pre, the recommended approach is to use a `@generated function`.  Here's
 an example:
 
 ```julia
-@generated function mysum{T,N}(A::Array{T,N})
+@generated function mysum(A::Array{T,N}) where {T,N}
     quote
         s = zero(T)
         @nloops $N i A begin

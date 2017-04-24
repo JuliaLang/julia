@@ -1,13 +1,13 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module ModInts
 export ModInt
 
 import Base: +, -, *, /, inv
 
-immutable ModInt{n} <: Integer
+struct ModInt{n} <: Integer
     k::Int
-    ModInt(k) = new(mod(k,n))
+    ModInt{n}(k) where n = new(mod(k,n))
 end
 
 Base.show{n}(io::IO, k::ModInt{n}) =

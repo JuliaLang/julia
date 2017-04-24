@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Base.Iterators
 
 # zip and filter iterators
@@ -399,4 +401,8 @@ end
 
 @testset "collect finite iterators issue #12009" begin
     @test eltype(collect(enumerate(Iterators.Filter(x -> x>0, randn(10))))) == Tuple{Int, Float64}
+end
+
+@testset "product iterator infinite loop" begin
+    @test collect(product(1:1, (1, "2"))) == [(1, 1) (1, "2")]
 end

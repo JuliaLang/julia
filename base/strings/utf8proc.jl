@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Various Unicode functionality from the utf8proc library
 module UTF8proc
@@ -338,7 +338,7 @@ isgraphemebreak(c1::Char, c2::Char) =
 isgraphemebreak!(state::Ref{Int32}, c1::Char, c2::Char) =
     ccall(:utf8proc_grapheme_break_stateful, Bool, (UInt32, UInt32, Ref{Int32}), c1, c2, state)
 
-immutable GraphemeIterator{S<:AbstractString}
+struct GraphemeIterator{S<:AbstractString}
     s::S # original string (for generation of SubStrings)
 end
 
@@ -352,7 +352,7 @@ letter combined with an accent mark is a single grapheme.)
 """
 graphemes(s::AbstractString) = GraphemeIterator{typeof(s)}(s)
 
-eltype{S}(::Type{GraphemeIterator{S}}) = SubString{S}
+eltype(::Type{GraphemeIterator{S}}) where {S} = SubString{S}
 
 function length(g::GraphemeIterator)
     c0 = Char(0x00ad) # soft hyphen (grapheme break always allowed after this)
@@ -387,9 +387,9 @@ end
 hash(g::GraphemeIterator, h::UInt) = hash(g.s, h)
 isless(g1::GraphemeIterator, g2::GraphemeIterator) = isless(g1.s, g2.s)
 
-convert{S<:AbstractString}(::Type{S}, g::GraphemeIterator) = convert(S, g.s)
+convert(::Type{S}, g::GraphemeIterator) where {S<:AbstractString} = convert(S, g.s)
 
-show{S}(io::IO, g::GraphemeIterator{S}) = print(io, "length-$(length(g)) GraphemeIterator{$S} for \"$(g.s)\"")
+show(io::IO, g::GraphemeIterator{S}) where {S} = print(io, "length-$(length(g)) GraphemeIterator{$S} for \"$(g.s)\"")
 
 ############################################################################
 

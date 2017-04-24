@@ -1,10 +1,10 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # ––––––––
 # Emphasis
 # ––––––––
 
-type Italic
+mutable struct Italic
     text
 end
 
@@ -14,7 +14,7 @@ function asterisk_italic(stream::IO, md::MD)
     return result === nothing ? nothing : Italic(parseinline(result, md))
 end
 
-type Bold
+mutable struct Bold
     text
 end
 
@@ -54,7 +54,7 @@ end
 # Images & Links
 # ––––––––––––––
 
-type Image
+mutable struct Image
     url::String
     alt::String
 end
@@ -73,7 +73,7 @@ function image(stream::IO, md::MD)
     end
 end
 
-type Link
+mutable struct Link
     text
     url::String
 end
@@ -147,7 +147,7 @@ end
 # Punctuation
 # –––––––––––
 
-type LineBreak end
+mutable struct LineBreak end
 
 @trigger '\\' ->
 function linebreak(stream::IO, md::MD)

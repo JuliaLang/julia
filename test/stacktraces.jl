@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Tests for /base/stacktraces.jl
 
@@ -106,12 +106,12 @@ let src = expand(quote let x = 1 end end).args[1]::CodeInfo,
     li.specTypes = Tuple{}
     sf = StackFrame(:a, :b, 3, li, false, false, 0)
     repr = string(sf)
-    @test repr == " in Toplevel MethodInstance thunk at b:3"
+    @test repr == "Toplevel MethodInstance thunk at b:3"
 end
 let li = typeof(getfield).name.mt.cache.func::Core.MethodInstance,
     sf = StackFrame(:a, :b, 3, li, false, false, 0),
     repr = string(sf)
-    @test repr == " in getfield(...) at b:3"
+    @test repr == "getfield(...) at b:3"
 end
 
 let ctestptr = cglobal((:ctest, "libccalltest")),
@@ -130,3 +130,15 @@ let st = stacktrace(empty!(backtrace()))
     @test isempty(st)
     @test isa(st, StackTrace)
 end
+
+module StackTracesTestMod
+    unfiltered_stacktrace() = stacktrace()
+    filtered_stacktrace() = StackTraces.remove_frames!(stacktrace(), StackTracesTestMod)
+end
+
+# Test that `removes_frames!` can correctly remove frames from within the module
+trace = StackTracesTestMod.unfiltered_stacktrace()
+@test contains(string(trace), "unfiltered_stacktrace")
+
+trace = StackTracesTestMod.filtered_stacktrace()
+@test !contains(string(trace), "filtered_stacktrace")

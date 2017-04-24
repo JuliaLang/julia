@@ -331,7 +331,18 @@ comparison is undefined. It is strongly recommended not to use expressions with 
 as printing) in chained comparisons. If side effects are required, the short-circuit `&&` operator
 should be used explicitly (see [Short-Circuit Evaluation](@ref)).
 
-### Operator Precedence
+### Elementary Functions
+
+Julia provides a comprehensive collection of mathematical functions and operators. These mathematical
+operations are defined over as broad a class of numerical values as permit sensible definitions,
+including integers, floating-point numbers, rationals, and complex numbers,
+wherever such definitions make sense.
+
+Moreover, these functions (like any Julia function) can be applied in "vectorized" fashion to
+arrays and other collections with the [dot syntax](@ref man-vectorized) `f.(A)`,
+e.g. `sin.(A)` will compute the sine of each element of an array `A`.
+
+## Operator Precedence
 
 Julia applies the following order of operations, from highest precedence to lowest:
 
@@ -348,16 +359,18 @@ Julia applies the following order of operations, from highest precedence to lowe
 | Control flow   | `&&` followed by `\|\|` followed by `?`                                                           |
 | Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            |
 
-### Elementary Functions
+For a complete list of *every* Julia operator's precedence, see the top of this file:
+[`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm)
 
-Julia provides a comprehensive collection of mathematical functions and operators. These mathematical
-operations are defined over as broad a class of numerical values as permit sensible definitions,
-including integers, floating-point numbers, rationals, and complexes, wherever such definitions
-make sense.
+You can also find the numerical precedence for any given operator via the built-in function `Base.operator_precedence`, where higher numbers take precedence:
 
-Moreover, these functions (like any Julia function) can be applied in "vectorized" fashion to
-arrays and other collections with the [dot syntax](@ref man-vectorized) `f.(A)`,
-e.g. `sin.(A)` will compute the elementwise sine of each element of an array `A`.
+```jldoctest
+julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
+(9, 11, 15)
+
+julia> Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
+(1, 1)
+```
 
 ## Numerical Conversions
 
@@ -392,13 +405,13 @@ julia> Int8(127.0)
 julia> Int8(3.14)
 ERROR: InexactError()
 Stacktrace:
- [1] convert(::Type{Int8}, ::Float64) at ./float.jl:654
+ [1] convert(::Type{Int8}, ::Float64) at ./float.jl:658
  [2] Int8(::Float64) at ./sysimg.jl:24
 
 julia> Int8(128.0)
 ERROR: InexactError()
 Stacktrace:
- [1] convert(::Type{Int8}, ::Float64) at ./float.jl:654
+ [1] convert(::Type{Int8}, ::Float64) at ./float.jl:658
  [2] Int8(::Float64) at ./sysimg.jl:24
 
 julia> 127 % Int8
@@ -413,8 +426,8 @@ julia> round(Int8,127.4)
 julia> round(Int8,127.6)
 ERROR: InexactError()
 Stacktrace:
- [1] trunc(::Type{Int8}, ::Float64) at ./float.jl:647
- [2] round(::Type{Int8}, ::Float64) at ./float.jl:333
+ [1] trunc(::Type{Int8}, ::Float64) at ./float.jl:651
+ [2] round(::Type{Int8}, ::Float64) at ./float.jl:337
 ```
 
 See [Conversion and Promotion](@ref conversion-and-promotion) for how to define your own conversions and promotions.
@@ -478,8 +491,8 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 | [`significand(x)`](@ref) | binary significand (a.k.a. mantissa) of a floating-point number `x`        |
 
 For an overview of why functions like [`hypot()`](@ref), [`expm1()`](@ref), and [`log1p()`](@ref)
-are necessary and useful, see John D. Cook's excellent pair of blog posts on the subject: [expm1, log1p, erfc](http://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-unnecessary/),
-and [hypot](http://www.johndcook.com/blog/2010/06/02/whats-so-hard-about-finding-a-hypotenuse/).
+are necessary and useful, see John D. Cook's excellent pair of blog posts on the subject: [expm1, log1p, erfc](https://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-unnecessary/),
+and [hypot](https://www.johndcook.com/blog/2010/06/02/whats-so-hard-about-finding-a-hypotenuse/).
 
 ### Trigonometric and hyperbolic functions
 
@@ -513,40 +526,8 @@ asind  acosd  atand  acotd  asecd  acscd
 
 | Function                                                      | Description                                                                                                                                                     |
 |:------------------------------------------------------------- |:--------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`erf(x)`](@ref)                                              | [error function](https://en.wikipedia.org/wiki/Error_function) at `x`                                                                                           |
-| [`erfc(x)`](@ref)                                             | complementary error function, i.e. the accurate version of `1-erf(x)` for large `x`                                                                             |
-| [`erfinv(x)`](@ref)                                           | inverse function to [`erf()`](@ref)                                                                                                                             |
-| `erfcinv(x)`                                                  | inverse function to [`erfc()`](@ref)                                                                                                                            |
-| [`erfi(x)`](@ref)                                             | imaginary error function defined as `-im * erf(x * im)`, where [`im`](@ref) is the imaginary unit                                                               |
-| [`erfcx(x)`](@ref)                                            | scaled complementary error function, i.e. accurate `exp(x^2) * erfc(x)` for large `x`                                                                           |
-| [`dawson(x)`](@ref)                                           | scaled imaginary error function, a.k.a. Dawson function, i.e. accurate `exp(-x^2) * erfi(x) * sqrt(pi) / 2` for large `x`                                       |
 | [`gamma(x)`](@ref)                                            | [gamma function](https://en.wikipedia.org/wiki/Gamma_function) at `x`                                                                                           |
 | [`lgamma(x)`](@ref)                                           | accurate `log(gamma(x))` for large `x`                                                                                                                          |
 | [`lfact(x)`](@ref)                                            | accurate `log(factorial(x))` for large `x`; same as `lgamma(x+1)` for `x > 1`, zero otherwise                                                                   |
-| [`digamma(x)`](@ref)                                          | [digamma function](https://en.wikipedia.org/wiki/Digamma_function) (i.e. the derivative of [`lgamma()`](@ref)) at `x`                                           |
 | [`beta(x,y)`](@ref)                                           | [beta function](https://en.wikipedia.org/wiki/Beta_function) at `x,y`                                                                                           |
 | [`lbeta(x,y)`](@ref)                                          | accurate `log(beta(x,y))` for large `x` or `y`                                                                                                                  |
-| [`eta(x)`](@ref)                                              | [Dirichlet eta function](https://en.wikipedia.org/wiki/Dirichlet_eta_function) at `x`                                                                           |
-| [`zeta(x)`](@ref)                                             | [Riemann zeta function](https://en.wikipedia.org/wiki/Riemann_zeta_function) at `x`                                                                             |
-| [`airyai(z)`](@ref)                                           | [Airy Ai function](https://en.wikipedia.org/wiki/Airy_function) at `z`                                                                                          |
-| [`airyaiprime(z)`](@ref)                                      | derivative of the Airy Ai function at `z`                                                                                                                       |
-| [`airybi(z)`](@ref)                                           | [Airy Bi function](https://en.wikipedia.org/wiki/Airy_function) at `z`                                                                                          |
-| [`airybiprime(z)`](@ref)                                      | derivative of the Airy Bi function at `z`                                                                                                                       |
-| [`airyaix(z)`](@ref), [`airyaiprimex(z)`](@ref), [`airybix(z)`](@ref), [`airybiprimex(z)`](@ref) | scaled Airy AI function and `k` th derivatives at `z`                                                                                                           |
-| [`besselj(nu,z)`](@ref)                                       | [Bessel function](https://en.wikipedia.org/wiki/Bessel_function) of the first kind of order `nu` at `z`                                                         |
-| [`besselj0(z)`](@ref)                                         | `besselj(0,z)`                                                                                                                                                  |
-| [`besselj1(z)`](@ref)                                         | `besselj(1,z)`                                                                                                                                                  |
-| [`besseljx(nu,z)`](@ref)                                      | scaled Bessel function of the first kind of order `nu` at `z`                                                                                                   |
-| [`bessely(nu,z)`](@ref)                                       | [Bessel function](https://en.wikipedia.org/wiki/Bessel_function) of the second kind of order `nu` at `z`                                                        |
-| [`bessely0(z)`](@ref)                                         | `bessely(0,z)`                                                                                                                                                  |
-| [`bessely1(z)`](@ref)                                         | `bessely(1,z)`                                                                                                                                                  |
-| [`besselyx(nu,z)`](@ref)                                      | scaled Bessel function of the second kind of order `nu` at `z`                                                                                                  |
-| [`besselh(nu,k,z)`](@ref)                                     | [Bessel function](https://en.wikipedia.org/wiki/Bessel_function) of the third kind (a.k.a. Hankel function) of order `nu` at `z`; `k` must be either `1` or `2` |
-| [`hankelh1(nu,z)`](@ref)                                      | `besselh(nu, 1, z)`                                                                                                                                             |
-| [`hankelh1x(nu,z)`](@ref)                                     | scaled `besselh(nu, 1, z)`                                                                                                                                      |
-| [`hankelh2(nu,z)`](@ref)                                      | `besselh(nu, 2, z)`                                                                                                                                             |
-| [`hankelh2x(nu,z)`](@ref)                                     | scaled `besselh(nu, 2, z)`                                                                                                                                      |
-| [`besseli(nu,z)`](@ref)                                       | modified [Bessel function](https://en.wikipedia.org/wiki/Bessel_function) of the first kind of order `nu` at `z`                                                |
-| [`besselix(nu,z)`](@ref)                                      | scaled modified Bessel function of the first kind of order `nu` at `z`                                                                                          |
-| [`besselk(nu,z)`](@ref)                                       | modified [Bessel function](https://en.wikipedia.org/wiki/Bessel_function) of the second kind of order `nu` at `z`                                               |
-| [`besselkx(nu,z)`](@ref)                                      | scaled modified Bessel function of the second kind of order `nu` at `z`                                                                                         |

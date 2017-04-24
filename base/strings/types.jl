@@ -1,10 +1,10 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # SubString and RevString types
 
 ## substrings reference original strings ##
 
-immutable SubString{T<:AbstractString} <: AbstractString
+struct SubString{T<:AbstractString} <: AbstractString
     string::T
     offset::Int
     endof::Int
@@ -37,7 +37,7 @@ sizeof(s::SubString{String}) = s.endof == 0 ? 0 : nextind(s, s.endof) - 1
 # default implementation will work but it's slow
 # can this be delegated efficiently somehow?
 # that may require additional string interfaces
-length{T<:DirectIndexString}(s::SubString{T}) = endof(s)
+length(s::SubString{<:DirectIndexString}) = endof(s)
 
 function length(s::SubString{String})
     return s.endof==0 ? 0 : Int(ccall(:u8_charnum, Csize_t, (Ptr{UInt8}, Csize_t),
@@ -65,15 +65,15 @@ function isvalid(s::SubString, i::Integer)
     return (start(s) <= i <= endof(s)) && isvalid(s.string, s.offset+i)
 end
 
-isvalid{T<:DirectIndexString}(s::SubString{T}, i::Integer) = (start(s) <= i <= endof(s))
+isvalid(s::SubString{<:DirectIndexString}, i::Integer) = (start(s) <= i <= endof(s))
 
-ind2chr{T<:DirectIndexString}(s::SubString{T}, i::Integer) = begin checkbounds(s,i); i end
-chr2ind{T<:DirectIndexString}(s::SubString{T}, i::Integer) = begin checkbounds(s,i); i end
+ind2chr(s::SubString{<:DirectIndexString}, i::Integer) = begin checkbounds(s,i); i end
+chr2ind(s::SubString{<:DirectIndexString}, i::Integer) = begin checkbounds(s,i); i end
 
 nextind(s::SubString, i::Integer) = nextind(s.string, i+s.offset)-s.offset
 prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
 
-convert{T<:AbstractString}(::Type{SubString{T}}, s::T) = SubString(s, 1, endof(s))
+convert(::Type{SubString{T}}, s::T) where {T<:AbstractString} = SubString(s, 1, endof(s))
 
 String(p::SubString{String}) =
     unsafe_string(pointer(p.string, p.offset+1), nextind(p, p.endof)-1)
@@ -94,13 +94,13 @@ end
 # don't make unnecessary copies when passing substrings to C functions
 cconvert(::Type{Ptr{UInt8}}, s::SubString{String}) = s
 cconvert(::Type{Ptr{Int8}}, s::SubString{String}) = s
-function unsafe_convert{R<:Union{Int8, UInt8}}(::Type{Ptr{R}}, s::SubString{String})
+function unsafe_convert(::Type{Ptr{R}}, s::SubString{String}) where R<:Union{Int8, UInt8}
     convert(Ptr{R}, pointer(s.string)) + s.offset
 end
 
 ## reversed strings without data movement ##
 
-immutable RevString{T<:AbstractString} <: AbstractString
+struct RevString{T<:AbstractString} <: AbstractString
     string::T
 end
 

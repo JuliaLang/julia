@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Profile
 
@@ -73,10 +73,10 @@ Clear any existing backtraces from the internal buffer.
 """
 clear() = ccall(:jl_profile_clear_data, Void, ())
 
-typealias LineInfoDict Dict{UInt64, Vector{StackFrame}}
-typealias LineInfoFlatDict Dict{UInt64, StackFrame}
+const LineInfoDict = Dict{UInt64, Vector{StackFrame}}
+const LineInfoFlatDict = Dict{UInt64, StackFrame}
 
-immutable ProfileFormat
+struct ProfileFormat
     maxdepth::Int
     mincount::Int
     noisefloor::Float64
@@ -103,25 +103,25 @@ will be used.
 
 The keyword arguments can be any combination of:
 
- - `format` can be `:tree` (default) or `:flat`.
+ - `format` -- Determines whether backtraces are printed with (default, `:tree`) or without (`:flat`)
+   indentation indicating tree structure.
 
- - If `C` is `true`, backtraces from C and Fortran code are shown (normally they are excluded).
+ - `C` -- If `true`, backtraces from C and Fortran code are shown (normally they are excluded).
 
- - If `combine` is `true` (default), instruction pointers are merged that correspond to the same line of code.
+ - `combine` -- If `true` (default), instruction pointers are merged that correspond to the same line of code.
 
- - `maxdepth` can be used to limit the depth of printing in `:tree` format,
-   while `sortedby` can be used to control the order in `:flat` format
-   `:filefuncline` (default) sorts by the source line, whereas `:count`
-   sorts in order of number of collected samples.
+ - `maxdepth` -- Limits the depth higher than `maxdepth` in the `:tree` format.
 
- - `noisefloor` only shows frames that exceed the heuristic noise floor of the sample (only applies to format `:tree`).
-   A suggested value to try for this is 2.0 (the default is 0). This parameter hides samples for which `n <= noisefloor * √N`,
-   where `n` is the number of samples on this line, and `N` is the number of samples for the callee.
+ - `sortedby` -- Controls the order in `:flat` format. `:filefuncline` (default) sorts by the source
+    line, whereas `:count` sorts in order of number of collected samples.
 
- - `mincount` can also be used to limit the printout to only those
-   lines with at least mincount occurrences.
+ - `noisefloor` -- Limits frames that exceed the heuristic noise floor of the sample (only applies to format `:tree`).
+    A suggested value to try for this is 2.0 (the default is 0). This parameter hides samples for which `n <= noisefloor * √N`,
+    where `n` is the number of samples on this line, and `N` is the number of samples for the callee.
+
+ - `mincount` -- Limits the printout to only those lines with at least `mincount` occurrences.
 """
-function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::LineInfoDict = getdict(data);
+function print(io::IO, data::Vector{<:Unsigned} = fetch(), lidict::LineInfoDict = getdict(data);
         format = :tree,
         C = false,
         combine = true,
@@ -138,7 +138,7 @@ function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::LineInfoD
         format)
 end
 
-function print{T<:Unsigned}(io::IO, data::Vector{T}, lidict::LineInfoDict, fmt::ProfileFormat, format::Symbol)
+function print(io::IO, data::Vector{<:Unsigned}, lidict::LineInfoDict, fmt::ProfileFormat, format::Symbol)
     cols::Int = Base.displaysize(io)[2]
     if format == :tree
         tree(io, data, lidict, cols, fmt)
@@ -158,7 +158,7 @@ a dictionary `lidict` of line information.
 
 See `Profile.print([io], data)` for an explanation of the valid keyword arguments.
 """
-print{T<:Unsigned}(data::Vector{T} = fetch(), lidict::LineInfoDict = getdict(data); kwargs...) =
+print(data::Vector{<:Unsigned} = fetch(), lidict::LineInfoDict = getdict(data); kwargs...) =
     print(STDOUT, data, lidict; kwargs...)
 
 """
@@ -316,7 +316,7 @@ const btskip = 0
 
 ## Print as a flat list
 # Counts the number of times each line appears, at any nesting level
-function count_flat{T<:Unsigned}(data::Vector{T})
+function count_flat(data::Vector{T}) where T<:Unsigned
     linecount = Dict{T,Int}()
     toskip = btskip
     for ip in data
@@ -330,8 +330,8 @@ function count_flat{T<:Unsigned}(data::Vector{T})
         end
         linecount[ip] = get(linecount, ip, 0)+1
     end
-    iplist = Array{T}(0)
-    n = Array{Int}(0)
+    iplist = Vector{T}(0)
+    n = Vector{Int}(0)
     for (k,v) in linecount
         push!(iplist, k)
         push!(n, v)
@@ -346,7 +346,7 @@ function parse_flat(iplist, n, lidict::LineInfoFlatDict, C::Bool)
     # The ones with no line number might appear multiple times in a single
     # backtrace, giving the wrong impression about the total number of backtraces.
     # Delete them too.
-    keep = !Bool[x == UNKNOWN || x.line == 0 || (x.from_c && !C) for x in lilist]
+    keep = .!Bool[x == UNKNOWN || x.line == 0 || (x.from_c && !C) for x in lilist]
     n = n[keep]
     lilist = lilist[keep]
     return (lilist, n)
@@ -444,8 +444,8 @@ function tree_aggregate(data::Vector{UInt64})
         treecount[tmp] = get(treecount, tmp, 0) + 1
         istart = iend + 1 + btskip
     end
-    bt = Array{Vector{UInt64}}(0)
-    counts = Array{Int}(0)
+    bt = Vector{Vector{UInt64}}(0)
+    counts = Vector{Int}(0)
     for (k, v) in treecount
         if !isempty(k)
             push!(bt, k)
@@ -464,7 +464,7 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
     ntext = cols - nindent - ndigcounts - ndigline - 5
     widthfile = floor(Integer, 0.4ntext)
     widthfunc = floor(Integer, 0.6ntext)
-    strs = Array{String}(length(lilist))
+    strs = Vector{String}(length(lilist))
     showextra = false
     if level > nindent
         nextra = level - nindent
@@ -528,9 +528,9 @@ function tree(io::IO, bt::Vector{Vector{UInt64}}, counts::Vector{Int},
         end
         # Generate counts
         dlen = length(d)
-        lilist = Array{StackFrame}(dlen)
-        group = Array{Vector{Int}}(dlen)
-        n = Array{Int}(dlen)
+        lilist = Vector{StackFrame}(dlen)
+        group = Vector{Vector{Int}}(dlen)
+        n = Vector{Int}(dlen)
         i = 1
         for (key, v) in d
             lilist[i] = key
@@ -551,9 +551,9 @@ function tree(io::IO, bt::Vector{Vector{UInt64}}, counts::Vector{Int},
         end
         # Generate counts, and do the code lookup
         dlen = length(d)
-        lilist = Array{StackFrame}(dlen)
-        group = Array{Vector{Int}}(dlen)
-        n = Array{Int}(dlen)
+        lilist = Vector{StackFrame}(dlen)
+        group = Vector{Vector{Int}}(dlen)
+        n = Vector{Int}(dlen)
         i = 1
         for (key, v) in d
             lilist[i] = lidict[key]
@@ -656,7 +656,7 @@ truncto(str::Symbol, w::Int) = truncto(string(str), w)
 
 # Order alphabetically (file, function) and then by line number
 function liperm(lilist::Vector{StackFrame})
-    comb = Array{String}(length(lilist))
+    comb = Vector{String}(length(lilist))
     for i = 1:length(lilist)
         li = lilist[i]
         if li != UNKNOWN

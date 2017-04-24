@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Generic IO stubs -- all subtypes should implement these (if meaningful)
 
@@ -101,7 +101,7 @@ end
 
 
 # Generic wrappers around other IO objects
-abstract AbstractPipe <: IO
+abstract type AbstractPipe <: IO end
 function pipe_reader end
 function pipe_writer end
 
@@ -455,7 +455,7 @@ function readuntil(s::IO, t::AbstractString)
         warn("readuntil(IO,AbstractString) will perform poorly with a long string")
     end
     out = IOBuffer()
-    m = Array{Char}(l)  # last part of stream to match
+    m = Vector{Char}(l)  # last part of stream to match
     t = collect(t)
     i = 0
     while !eof(s)
@@ -538,7 +538,7 @@ readstring(filename::AbstractString) = open(readstring, filename)
 
 ## high-level iterator interfaces ##
 
-type EachLine
+mutable struct EachLine
     stream::IO
     ondone::Function
     chomp::Bool

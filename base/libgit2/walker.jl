@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function GitRevWalker(repo::GitRepo)
     w_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -48,7 +48,7 @@ function Base.sort!(w::GitRevWalker; by::Cint = Consts.SORT_NONE, rev::Bool=fals
     return w
 end
 
-repository(w::GitRevWalker) = w.repo
+repository(w::GitRevWalker) = w.owner
 
 function Base.map(f::Function, walker::GitRevWalker;
                   oid::GitHash=GitHash(),

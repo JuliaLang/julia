@@ -1,8 +1,8 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 export @var
 
-immutable Binding
+struct Binding
     mod::Module
     var::Symbol
 

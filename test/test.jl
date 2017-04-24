@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Test @test
 @test true
@@ -47,7 +47,7 @@ a[1,1,1,1,1] = 10
                 "Thrown: ErrorException")
 
 # Test printing of Fail results
-type NoThrowTestSet <: Base.Test.AbstractTestSet
+mutable struct NoThrowTestSet <: Base.Test.AbstractTestSet
     results::Vector
     NoThrowTestSet(desc) = new([])
 end
@@ -257,6 +257,18 @@ end
 @test counter_17462_pre == 3
 @test counter_17462_post == 1
 
+# Issue #21008
+ts = try
+    @testset "@test_broken and @test_skip should not give an exception" begin
+        @test_broken false
+        @test_skip true
+        @test_skip false
+    end
+catch
+    nothing # Shouldn't get here
+end
+@test ts isa Base.Test.DefaultTestSet
+
 # now we're done running tests with DefaultTestSet so we can go back to STDOUT
 redirect_stdout(OLD_STDOUT)
 redirect_stderr(OLD_STDERR)
@@ -265,7 +277,7 @@ redirect_stderr(OLD_STDERR)
 import Base.Test: record, finish
 using Base.Test: get_testset_depth, get_testset
 using Base.Test: AbstractTestSet, Result, Pass, Fail, Error
-immutable CustomTestSet <: Base.Test.AbstractTestSet
+struct CustomTestSet <: Base.Test.AbstractTestSet
     description::AbstractString
     foo::Int
     results::Vector
@@ -374,7 +386,7 @@ end
 
 # Test that @inferred works with A[i] expressions
 @test @inferred((1:3)[2]) == 2
-immutable SillyArray <: AbstractArray{Float64,1} end
+struct SillyArray <: AbstractArray{Float64,1} end
 Base.getindex(a::SillyArray, i) = rand() > 0.5 ? 0 : false
 test_result = @test_throws ErrorException @inferred(SillyArray()[2])
 @test contains(test_result.value.msg, "Bool")
@@ -455,3 +467,9 @@ Foo Tests     |    2     2      4
     Canines   |          1      1
   Arrays      |    1     1      2
 """)
+
+# 20489
+msg = split(readstring(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e '
+Test.print_test_results(Test.DefaultTestSet(""))'`), stderr=DevNull)), "\n")[1]
+
+@test msg == rstrip(msg)

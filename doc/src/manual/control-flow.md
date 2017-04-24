@@ -60,11 +60,11 @@ value of a boolean expression. Here is the anatomy of the `if`-`elseif`-`else` c
 
 ```julia
 if x < y
-  println("x is less than y")
+    println("x is less than y")
 elseif x > y
-  println("x is greater than y")
+    println("x is greater than y")
 else
-  println("x is equal to y")
+    println("x is equal to y")
 end
 ```
 
@@ -571,13 +571,13 @@ julia> sqrt(-1)
 ERROR: DomainError:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
 Stacktrace:
- [1] sqrt(::Int64) at ./math.jl:432
+ [1] sqrt(::Int64) at ./math.jl:431
 ```
 
 You may define your own exceptions in the following way:
 
 ```jldoctest
-julia> type MyCustomException <: Exception end
+julia> struct MyCustomException <: Exception end
 ```
 
 ### The [`throw()`](@ref) function
@@ -621,7 +621,7 @@ This mechanism can be implemented easily by custom exception types following the
 is written:
 
 ```jldoctest
-julia> type MyUndefVarError <: Exception
+julia> struct MyUndefVarError <: Exception
            var::Symbol
        end
 
@@ -777,7 +777,7 @@ try bad() catch; x end
 
 try bad()
 catch
-  x
+    x
 end
 ```
 

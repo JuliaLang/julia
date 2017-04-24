@@ -1,7 +1,7 @@
 # Getting Started
 
 Julia installation is straightforward, whether using precompiled binaries or compiling from source.
-Download and install Julia by following the instructions at [http://julialang.org/downloads/](http://julialang.org/downloads/).
+Download and install Julia by following the instructions at [https://julialang.org/downloads/](https://julialang.org/downloads/).
 
 The easiest way to learn and experiment with Julia is by starting an interactive session (also
 known as a read-eval-print loop or "repl") by double-clicking the Julia executable or running
@@ -11,7 +11,7 @@ known as a read-eval-print loop or "repl") by double-clicking the Julia executab
 $ julia
                _
    _       _ _(_)_     |  A fresh approach to technical computing
-  (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
+  (_)     | (_) (_)    |  Documentation: https://docs.julialang.org
    _ _   _| |_  __ _   |  Type "?help" for help.
   | | | | | | |/ _` |  |
   | | |_| | | | (_| |  |  Version 0.5.0-dev+2440 (2016-02-01 02:22 UTC)
@@ -151,6 +151,5 @@ with Julia:
   * [Hands-on Julia](https://github.com/dpsanders/hands_on_julia)
   * [Tutorial for Homer Reid's numerical analysis class](http://homerreid.dyndns.org/teaching/18.330/JuliaProgramming.shtml)
   * [An introductory presentation](https://raw.githubusercontent.com/ViralBShah/julia-presentations/master/Fifth-Elephant-2013/Fifth-Elephant-2013.pdf)
-  * [Videos from the Julia tutorial at MIT](http://julialang.org/blog/2013/03/julia-tutorial-MIT)
-  * [Forio Julia Tutorials](http://forio.com/about/labs/julia-studio/tutorials/)
+  * [Videos from the Julia tutorial at MIT](https://julialang.org/blog/2013/03/julia-tutorial-MIT)
   * [YouTube videos from the JuliaCons](https://www.youtube.com/user/JuliaLanguage/playlists)

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 types = Any[
     Bool,
@@ -117,3 +117,6 @@ for prec in [3, 11, 15, 16, 31, 32, 33, 63, 64, 65, 254, 255, 256, 257, 258, 102
         @test isequal(x, y)
     end
 end
+
+# issue #20744
+@test hash(:c, hash(:b, hash(:a))) != hash(:a, hash(:b, hash(:c)))

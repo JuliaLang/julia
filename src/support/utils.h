@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #ifndef UTILS_H
 #define UTILS_H
@@ -51,7 +51,7 @@ STATIC_INLINE uint64_t ByteSwap64(uint64_t x)
     uint32_t high = (uint32_t) (x >> 32);
     uint32_t low  = (uint32_t)  x;
     return  ((uint64_t) bswap_32 (high)) |
-           (((uint64_t) bswap_32 (low)) << 32)
+           (((uint64_t) bswap_32 (low)) << 32);
 }
 #define bswap_64(x) ByteSwap64(x)
 #endif

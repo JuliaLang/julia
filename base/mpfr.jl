@@ -1,20 +1,18 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module MPFR
 
 export
     BigFloat,
-    setprecision,
-    big_str
+    setprecision
 
 import
-    Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1, bessely,
-        bessely0, bessely1, ceil, cmp, convert, copysign, div,
+    Base: (*), +, -, /, <, <=, ==, >, >=, ^, ceil, cmp, convert, copysign, div,
         exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show,
         sum, sqrt, string, print, trunc, precision, exp10, expm1,
-        gamma, lgamma, digamma, erf, erfc, zeta, eta, log1p, airyai,
+        gamma, lgamma, log1p,
         eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, rounding,
@@ -61,7 +59,7 @@ julia> big"2.1"
 2.099999999999999999999999999999999999999999999999999999999999999999999999999986
 ```
 """
-type BigFloat <: AbstractFloat
+mutable struct BigFloat <: AbstractFloat
     prec::Clong
     sign::Cint
     exp::Clong
@@ -203,7 +201,7 @@ function ceil{T<:Union{Signed,Unsigned}}(::Type{T}, x::BigFloat)
     unsafe_cast(T,x,RoundUp)
 end
 
-function round{T<:Union{Signed,Unsigned}}(::Type{T}, x::BigFloat)
+function round(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
     (typemin(T) <= x <= typemax(T)) || throw(InexactError())
     unsafe_cast(T,x,ROUNDING_MODE[])
 end
@@ -229,7 +227,7 @@ function convert(::Type{Integer},x::BigFloat)
     isinteger(x) || throw(InexactError())
     trunc(Integer,x)
 end
-function convert{T<:Integer}(::Type{T},x::BigFloat)
+function convert(::Type{T},x::BigFloat) where T<:Integer
     isinteger(x) || throw(InexactError())
     trunc(T,x)
 end
@@ -250,9 +248,9 @@ convert(::Type{Float16}, x::BigFloat) = convert(Float16, convert(Float32, x))
 (::Type{Float16})(x::BigFloat, r::RoundingMode) =
     convert(Float16, Float32(x, r))
 
-promote_rule{T<:Real}(::Type{BigFloat}, ::Type{T}) = BigFloat
-promote_rule{T<:AbstractFloat}(::Type{BigInt},::Type{T}) = BigFloat
-promote_rule{T<:AbstractFloat}(::Type{BigFloat},::Type{T}) = BigFloat
+promote_rule(::Type{BigFloat}, ::Type{<:Real}) = BigFloat
+promote_rule(::Type{BigInt},::Type{<:AbstractFloat}) = BigFloat
+promote_rule(::Type{BigFloat},::Type{<:AbstractFloat}) = BigFloat
 
 function convert(::Type{Rational{BigInt}}, x::AbstractFloat)
     if isnan(x); return zero(BigInt)//zero(BigInt); end
@@ -505,8 +503,7 @@ end
 ^(x::BigFloat, y::Integer)  = typemin(Clong)  <= y <= typemax(Clong)  ? x^Clong(y)  : x^BigInt(y)
 ^(x::BigFloat, y::Unsigned) = typemin(Culong) <= y <= typemax(Culong) ? x^Culong(y) : x^BigInt(y)
 
-for f in (:exp, :exp2, :exp10, :expm1, :digamma, :erf, :erfc, :zeta,
-          :cosh,:sinh,:tanh,:sech,:csch,:coth, :cbrt)
+for f in (:exp, :exp2, :exp10, :expm1, :cosh, :sinh, :tanh, :sech, :csch, :coth, :cbrt)
     @eval function $f(x::BigFloat)
         z = BigFloat()
         ccall(($(string(:mpfr_,f)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
@@ -522,17 +519,6 @@ function big_ln2()
     return c
 end
 
-function eta(x::BigFloat)
-    x == 1 && return big_ln2()
-    return -zeta(x) * expm1(big_ln2()*(1-x))
-end
-
-function airyai(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_ai, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
-    return z
-end
-
 function ldexp(x::BigFloat, n::Clong)
     z = BigFloat()
     ccall((:mpfr_mul_2si, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Clong, Int32), &z, &x, n, ROUNDING_MODE[])
@@ -546,51 +532,6 @@ end
 ldexp(x::BigFloat, n::ClongMax) = ldexp(x, convert(Clong, n))
 ldexp(x::BigFloat, n::CulongMax) = ldexp(x, convert(Culong, n))
 ldexp(x::BigFloat, n::Integer) = x*exp2(BigFloat(n))
-
-function besselj0(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_j0, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
-    return z
-end
-
-function besselj1(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_j1, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
-    return z
-end
-
-function besselj(n::Integer, x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_jn, :libmpfr), Int32, (Ptr{BigFloat}, Clong, Ptr{BigFloat}, Int32), &z, n, &x, ROUNDING_MODE[])
-    return z
-end
-
-function bessely0(x::BigFloat)
-    if x < 0
-        throw(DomainError())
-    end
-    z = BigFloat()
-    ccall((:mpfr_y0, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
-    return z
-end
-
-function bessely1(x::BigFloat)
-    if x < 0
-        throw(DomainError())
-    end
-    z = BigFloat()
-    ccall((:mpfr_y1, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
-    return z
-end
-
-function bessely(n::Integer, x::BigFloat)
-    if x < 0
-        throw(DomainError())
-    end
-    z = BigFloat()
-    ccall((:mpfr_yn, :libmpfr), Int32, (Ptr{BigFloat}, Clong, Ptr{BigFloat}, Int32), &z, n, &x, ROUNDING_MODE[])
-    return z
-end
 
 function factorial(x::BigFloat)
     if x < 0 || !isinteger(x)
@@ -698,14 +639,14 @@ for f in (:sin,:cos,:tan,:sec,:csc,
 end
 
 # log of absolute value of gamma function
-const lgamma_signp = Array{Cint}(1)
+const lgamma_signp = Ref{Cint}()
 function lgamma(x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_lgamma,:libmpfr), Cint, (Ptr{BigFloat}, Ptr{Cint}, Ptr{BigFloat}, Int32), &z, lgamma_signp, &x, ROUNDING_MODE[])
     return z
 end
 
-lgamma_r(x::BigFloat) = (lgamma(x), lgamma_signp[1])
+lgamma_r(x::BigFloat) = (lgamma(x), lgamma_signp[])
 
 function atan2(y::BigFloat, x::BigFloat)
     z = BigFloat()
@@ -932,6 +873,10 @@ end
 setprecision(f::Function, precision::Integer) = setprecision(f, BigFloat, precision)
 
 function string(x::BigFloat)
+    if isnan(x) || isinf(x)
+        return string("BigFloat(", Float64(x), ", ", precision(x), ")")
+    end
+
     # In general, the number of decimal places needed to read back the number exactly
     # is, excluding the most significant, ceil(log(10, 2^precision(x)))
     k = ceil(Int32, precision(x) * 0.3010299956639812)

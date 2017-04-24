@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -50,7 +50,7 @@ push!(LOAD_PATH, dir)
 LOAD_PATH[end] = GenericString(LOAD_PATH[end])
 @test Base.find_in_path("test_sourcepath") == joinpath(dir, "test_sourcepath.jl")
 
-immutable CustomLoader
+struct CustomLoader
     path::String
 end
 push!(LOAD_PATH, CustomLoader("abc"))

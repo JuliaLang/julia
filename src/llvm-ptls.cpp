@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #define DEBUG_TYPE "lower_ptls"
 #undef DEBUG
@@ -22,12 +22,13 @@
 #endif
 #include <llvm/IR/MDBuilder.h>
 
-#include "julia.h"
-#include "julia_internal.h"
-
 #if JL_LLVM_VERSION >= 30700 && defined(JULIA_ENABLE_THREADING)
 #  include <llvm/IR/InlineAsm.h>
 #endif
+#include "fix_llvm_assert.h"
+
+#include "julia.h"
+#include "julia_internal.h"
 
 using namespace llvm;
 
@@ -101,10 +102,17 @@ void LowerPTLS::runOnFunction(LLVMContext &ctx, Module &M, Function *F,
         LoadInst *getter = new LoadInst(GV, "", ptlsStates);
         getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
         ptlsStates->setCalledFunction(getter);
+#if JL_LLVM_VERSION >= 50000
+        ptlsStates->addAttribute(AttributeList::FunctionIndex,
+                                 Attribute::ReadNone);
+        ptlsStates->addAttribute(AttributeList::FunctionIndex,
+                                 Attribute::NoUnwind);
+#else
         ptlsStates->addAttribute(AttributeSet::FunctionIndex,
                                  Attribute::ReadNone);
         ptlsStates->addAttribute(AttributeSet::FunctionIndex,
                                  Attribute::NoUnwind);
+#endif
     }
 #if JL_LLVM_VERSION >= 30700
     else if (jl_tls_offset != -1) {
@@ -159,10 +167,17 @@ void LowerPTLS::runOnFunction(LLVMContext &ctx, Module &M, Function *F,
     }
 #endif
     else {
+#if JL_LLVM_VERSION >= 50000
+        ptlsStates->addAttribute(AttributeList::FunctionIndex,
+                                 Attribute::ReadNone);
+        ptlsStates->addAttribute(AttributeList::FunctionIndex,
+                                 Attribute::NoUnwind);
+#else
         ptlsStates->addAttribute(AttributeSet::FunctionIndex,
                                  Attribute::ReadNone);
         ptlsStates->addAttribute(AttributeSet::FunctionIndex,
                                  Attribute::NoUnwind);
+#endif
     }
 #else
     ptlsStates->replaceAllUsesWith(M.getNamedValue("jl_tls_states"));

@@ -28,9 +28,12 @@
         ((atom? e) (string e))
         ((eq? (car e) '|.|)
          (string (deparse (cadr e)) '|.|
-                 (if (and (pair? (caddr e)) (memq (caaddr e) '(quote inert)))
-                     (deparse (cadr (caddr e)))
-                     (string #\( (deparse (caddr e)) #\)))))
+                 (cond ((and (pair? (caddr e)) (memq (caaddr e) '(quote inert)))
+                        (deparse (cadr (caddr e))))
+                       ((and (pair? (caddr e)) (eq? (caaddr e) 'copyast))
+                        (deparse (cadr (cadr (caddr e)))))
+                       (else
+                        (string #\( (deparse (caddr e)) #\))))))
         ((memq (car e) '(... |'| |.'|))
          (string (deparse (cadr e)) (car e)))
         ((or (syntactic-op? (car e)) (eq? (car e) '|<:|) (eq? (car e) '|>:|))
@@ -50,6 +53,7 @@
                 ((call)   (string (deparse (cadr e)) #\( (deparse-arglist (cddr e)) #\)))
                 ((ref)    (string (deparse (cadr e)) #\[ (deparse-arglist (cddr e)) #\]))
                 ((curly)  (string (deparse (cadr e)) #\{ (deparse-arglist (cddr e)) #\}))
+                ((macrocall) (string (cadr e) " " (deparse-arglist (cddr e) " ")))
                 ((quote inert)
                  (if (and (symbol? (cadr e))
                           (not (= (string.char (string (cadr e)) 0) #\=)))
@@ -83,10 +87,14 @@
                 ((generator)
                  (string "(" (deparse (cadr e)) " for " (deparse-arglist (cddr e) ", ") ")"))
                 ((where)
-                 (string (deparse (cadr e)) " where " (deparse (caddr e))))
+                 (string (deparse (cadr e)) " where "
+                         (if (length= e 3)
+                             (deparse (caddr e))
+                             (deparse (cons 'cell1d (cddr e))))))
                 ((function for while)
                  (deparse-block (string (car e) " " (deparse (cadr e)))
                                 (block-stmts (caddr e))))
+                ((copyast) (deparse (cadr e)))
                 (else
                  (string e))))))
 
@@ -183,6 +191,9 @@
 
 (define (ssavalue? e)
   (and (pair? e) (eq? (car e) 'ssavalue)))
+
+(define (globalref? e)
+  (and (pair? e) (eq? (car e) 'globalref)))
 
 (define (symbol-like? e)
   (or (and (symbol? e) (not (eq? e 'true)) (not (eq? e 'false)))

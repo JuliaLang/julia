@@ -29,7 +29,7 @@ There are a few noteworthy high-level features about Julia's strings:
     a string argument, you should declare the type as `AbstractString` in order to accept any string
     type.
   * Like C and Java, but unlike most dynamic languages, Julia has a first-class type representing
-    a single character, called `Char`. This is just a special kind of 32-bit bitstype whose numeric
+    a single character, called `Char`. This is just a special kind of 32-bit primitive type whose numeric
     value represents a Unicode code point.
   * As in Java, strings are immutable: the value of an `AbstractString` object cannot be changed.
     To construct a different string value, you construct a new string from parts of other strings.
@@ -41,7 +41,7 @@ There are a few noteworthy high-level features about Julia's strings:
 
 ## [Characters](@id man-characters)
 
-A `Char` value represents a single character: it is just a 32-bit bitstype with a special literal
+A `Char` value represents a single character: it is just a 32-bit primitive type with a special literal
 representation and appropriate arithmetic behaviors, whose numeric value is interpreted as a
 [Unicode code point](https://en.wikipedia.org/wiki/Code_point). Here is how `Char` values are
 input and shown:
@@ -179,7 +179,8 @@ julia> str[end]
 ```
 
 All indexing in Julia is 1-based: the first element of any integer-indexed object is found at
-index 1, and the last element is found at index `n`, when the string has a length of `n`.
+index 1. (As we will see below, this does not necessarily mean that the last element is found
+at index `n`, where `n` is the length of the string.)
 
 In any indexing expression, the keyword `end` can be used as a shorthand for the last index (computed
 by [`endof(str)`](@ref)). You can perform arithmetic and other operations with `end`, just like
@@ -514,7 +515,7 @@ false
 julia> contains("Xylophon", 'o')
 ERROR: MethodError: no method matching contains(::String, ::Char)
 Closest candidates are:
-  contains(!Matched::Function, ::Any, !Matched::Any) at reduce.jl:634
+  contains(!Matched::Function, ::Any, !Matched::Any) at reduce.jl:664
   contains(::AbstractString, !Matched::AbstractString) at strings/search.jl:378
 ```
 
@@ -837,9 +838,11 @@ so the distinction can safely be ignored. For the escapes `\x80` through `\xff` 
 bytes, which -- unless followed by very specific continuation bytes -- do not form valid UTF-8
 data, whereas the latter escapes all represent Unicode code points with two-byte encodings.
 
-If this is all extremely confusing, try reading ["The Absolute Minimum Every Software Developer Absolutely, Positively Must Know About Unicode
-and Character Sets"](http://www.joelonsoftware.com/articles/Unicode.html). It's an excellent introduction
-to Unicode and UTF-8, and may help alleviate some confusion regarding the matter.
+If this is all extremely confusing, try reading ["The Absolute Minimum Every
+Software Developer Absolutely, Positively Must Know About Unicode and Character
+Sets"](https://www.joelonsoftware.com/2003/10/08/the-absolute-minimum-every-software-developer-absolutely-positively-must-know-about-unicode-and-character-sets-no-excuses/).
+It's an excellent introduction to Unicode and UTF-8, and may help alleviate
+some confusion regarding the matter.
 
 ## [Version Number Literals](@id man-version-number-literals)
 
@@ -885,7 +888,9 @@ in the `Pkg` module, to specify packages versions and their dependencies.
 ## [Raw String Literals](@id man-raw-string-literals)
 
 Raw strings without interpolation or unescaping can be expressed with
-non-standard string literals of the form `raw"..."`. Raw string literals
-create ordinary `String` objects which contain the enclosed contents exactly
-as entered with no interpolation or unescaping. This is useful for strings which
-contain code or markup in other languages which use `$` or `\` as special characters.
+non-standard string literals of the form `raw"..."`. Raw string literals create
+ordinary `String` objects which contain the enclosed contents exactly as
+entered with no interpolation or unescaping. This is useful for strings which
+contain code or markup in other languages which use `$` or `\` as special
+characters. The exception is quotation marks that still must be
+escaped, e.g. `raw"\""` is equivalent to `"\""`.

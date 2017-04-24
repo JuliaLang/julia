@@ -1,13 +1,13 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Core: CodeInfo
 
-typealias Callable Union{Function,Type}
+const Callable = Union{Function,Type}
 
 const Bottom = Union{}
 
-abstract AbstractSet{T}
-abstract Associative{K,V}
+abstract type AbstractSet{T} end
+abstract type Associative{K,V} end
 
 # The real @inline macro is not available until after array.jl, so this
 # internal macro splices the meta Expr directly into the function body.
@@ -26,11 +26,11 @@ macro _propagate_inbounds_meta()
 end
 
 convert(::Type{Any}, x::ANY) = x
-convert{T}(::Type{T}, x::T) = x
+convert(::Type{T}, x::T) where {T} = x
 
 convert(::Type{Tuple{}}, ::Tuple{}) = ()
 convert(::Type{Tuple}, x::Tuple) = x
-convert{T}(::Type{Tuple{Vararg{T}}}, x::Tuple) = cnvt_all(T, x...)
+convert(::Type{Tuple{Vararg{T}}}, x::Tuple) where {T} = cnvt_all(T, x...)
 cnvt_all(T) = ()
 cnvt_all(T, x, rest...) = tuple(convert(T,x), cnvt_all(T, rest...)...)
 
@@ -42,6 +42,19 @@ macro generated(f)
     else
         error("invalid syntax; @generated must be used with a function definition")
     end
+end
+
+"""
+    @eval [mod,] ex
+
+Evaluate an expression with values interpolated into it using `eval`.
+If two arguments are provided, the first is the module to evaluate in.
+"""
+macro eval(ex)
+    :(eval($(current_module()), $(Expr(:quote,ex))))
+end
+macro eval(mod, ex)
+    :(eval($(esc(mod)), $(Expr(:quote,ex))))
 end
 
 argtail(x, rest...) = rest
@@ -63,7 +76,7 @@ function tuple_type_tail(T::DataType)
     return Tuple{argtail(T.parameters...)...}
 end
 
-tuple_type_cons{S}(::Type{S}, ::Type{Union{}}) = Union{}
+tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
 function tuple_type_cons{S,T<:Tuple}(::Type{S}, ::Type{T})
     @_pure_meta
     Tuple{S, T.parameters...}
@@ -120,9 +133,9 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-convert{T<:Tuple{Any,Vararg{Any}}}(::Type{T}, x::Tuple{Any, Vararg{Any}}) =
+convert(::Type{T}, x::Tuple{Any,Vararg{Any}}) where {T<:Tuple{Any,Vararg{Any}}} =
     tuple(convert(tuple_type_head(T),x[1]), convert(tuple_type_tail(T), tail(x))...)
-convert{T<:Tuple{Any,Vararg{Any}}}(::Type{T}, x::T) = x
+convert(::Type{T}, x::T) where {T<:Tuple{Any,Vararg{Any}}} = x
 
 oftype(x,c) = convert(typeof(x),c)
 
@@ -130,17 +143,17 @@ unsigned(x::Int) = reinterpret(UInt, x)
 signed(x::UInt) = reinterpret(Int, x)
 
 # conversions used by ccall
-ptr_arg_cconvert{T}(::Type{Ptr{T}}, x) = cconvert(T, x)
-ptr_arg_unsafe_convert{T}(::Type{Ptr{T}}, x) = unsafe_convert(T, x)
+ptr_arg_cconvert(::Type{Ptr{T}}, x) where {T} = cconvert(T, x)
+ptr_arg_unsafe_convert(::Type{Ptr{T}}, x) where {T} = unsafe_convert(T, x)
 ptr_arg_unsafe_convert(::Type{Ptr{Void}}, x) = x
 
 cconvert(T::Type, x) = convert(T, x) # do the conversion eagerly in most cases
-cconvert{P<:Ptr}(::Type{P}, x) = x # but defer the conversion to Ptr to unsafe_convert
-unsafe_convert{T}(::Type{T}, x::T) = x # unsafe_convert (like convert) defaults to assuming the convert occurred
-unsafe_convert{T<:Ptr}(::Type{T}, x::T) = x  # to resolve ambiguity with the next method
-unsafe_convert{P<:Ptr}(::Type{P}, x::Ptr) = convert(P, x)
+cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_convert
+unsafe_convert(::Type{T}, x::T) where {T} = x # unsafe_convert (like convert) defaults to assuming the convert occurred
+unsafe_convert(::Type{T}, x::T) where {T<:Ptr} = x  # to resolve ambiguity with the next method
+unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
 
-reinterpret{T}(::Type{T}, x) = bitcast(T, x)
+reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
 reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16,x)
 reinterpret(::Type{Signed}, x::Float16) = reinterpret(Int16,x)
 
@@ -150,7 +163,7 @@ function append_any(xs...)
     # used by apply() and quote
     # must be a separate function from append(), since apply() needs this
     # exact function.
-    out = Array{Any}(4)
+    out = Vector{Any}(4)
     l = 4
     i = 1
     for x in xs
@@ -169,8 +182,6 @@ end
 
 # simple Array{Any} operations needed for bootstrap
 setindex!(A::Array{Any}, x::ANY, i::Int) = Core.arrayset(A, x, i)
-
-map(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
 
 function precompile(f::ANY, args::Tuple)
     ccall(:jl_compile_hint, Int32, (Any,), Tuple{Core.Typeof(f), args...}) != 0
@@ -202,6 +213,7 @@ end
 Eliminates array bounds checking within expressions.
 
 In the example below the bound check of array A is skipped to improve performance.
+
 ```julia
 function sum(A::AbstractArray)
     r = zero(eltype(A))
@@ -211,7 +223,8 @@ function sum(A::AbstractArray)
     return r
 end
 ```
-!!! Warning
+
+!!! warning
 
     Using `@inbounds` may return incorrect results/crashes/corruption
     for out-of-bounds indices. The user is responsible for checking it manually.
@@ -268,6 +281,25 @@ getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]..
 
 Tests whether the given array has a value associated with index `i`. Returns `false`
 if the index is out of bounds, or has an undefined reference.
+
+```jldoctest
+julia> isassigned(rand(3, 3), 5)
+true
+
+julia> isassigned(rand(3, 3), 3 * 3 + 1)
+false
+
+julia> mutable struct Foo end
+
+julia> v = similar(rand(3), Foo)
+3-element Array{Foo,1}:
+ #undef
+ #undef
+ #undef
+
+julia> isassigned(v, 1)
+false
+```
 """
 function isassigned end
 
@@ -286,18 +318,18 @@ Very few operations are defined on Colons directly; instead they are converted
 by `to_indices` to an internal vector type (`Base.Slice`) to represent the
 collection of indices they span before being used.
 """
-immutable Colon
+struct Colon
 end
 const (:) = Colon()
 
 # For passing constants through type inference
-immutable Val{T}
+struct Val{T}
 end
 
 # used by interpolating quote and some other things in the front end
 function vector_any(xs::ANY...)
     n = length(xs)
-    a = Array{Any}(n)
+    a = Vector{Any}(n)
     @inbounds for i = 1:n
         Core.arrayset(a,xs[i],i)
     end

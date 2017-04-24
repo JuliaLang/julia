@@ -1,6 +1,6 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-immutable NullException <: Exception
+struct NullException <: Exception
 end
 
 """
@@ -34,30 +34,30 @@ Nullable{Int64}
 Nullable{T}(value::T, hasvalue::Bool=true) = Nullable{T}(value, hasvalue)
 Nullable() = Nullable{Union{}}()
 
-eltype{T}(::Type{Nullable{T}}) = T
+eltype(::Type{Nullable{T}}) where {T} = T
 
-convert{T}(::Type{Nullable{T}}, x::Nullable{T}) = x
-convert(   ::Type{Nullable   }, x::Nullable   ) = x
+convert(::Type{Nullable{T}}, x::Nullable{T}) where {T} = x
+convert(::Type{Nullable   }, x::Nullable   ) = x
 
-convert{T}(t::Type{Nullable{T}}, x::Any) = convert(t, convert(T, x))
+convert(t::Type{Nullable{T}}, x::Any) where {T} = convert(t, convert(T, x))
 
-function convert{T}(::Type{Nullable{T}}, x::Nullable)
+function convert(::Type{Nullable{T}}, x::Nullable) where T
     return isnull(x) ? Nullable{T}() : Nullable{T}(convert(T, get(x)))
 end
 
-convert{T<:Nullable}(::Type{Nullable{T}}, x::T) = Nullable{T}(x)
-convert{T}(::Type{Nullable{T}}, x::T) = Nullable{T}(x)
-convert{T}(::Type{Nullable   }, x::T) = Nullable{T}(x)
+convert(::Type{Nullable{T}}, x::T) where {T<:Nullable} = Nullable{T}(x)
+convert(::Type{Nullable{T}}, x::T) where {T} = Nullable{T}(x)
+convert(::Type{Nullable   }, x::T) where {T} = Nullable{T}(x)
 
-convert{T}(::Type{Nullable{T}}, ::Void) = Nullable{T}()
-convert(   ::Type{Nullable   }, ::Void) = Nullable{Union{}}()
+convert(::Type{Nullable{T}}, ::Void) where {T} = Nullable{T}()
+convert(::Type{Nullable   }, ::Void) = Nullable{Union{}}()
 
-promote_rule{S,T}(::Type{Nullable{S}}, ::Type{T}) = Nullable{promote_type(S, T)}
-promote_rule{S,T}(::Type{Nullable{S}}, ::Type{Nullable{T}}) = Nullable{promote_type(S, T)}
+promote_rule(::Type{Nullable{S}}, ::Type{T}) where {S,T} = Nullable{promote_type(S, T)}
+promote_rule(::Type{Nullable{S}}, ::Type{Nullable{T}}) where {S,T} = Nullable{promote_type(S, T)}
 promote_op{S,T}(op::Any, ::Type{Nullable{S}}, ::Type{Nullable{T}}) = Nullable{promote_op(op, S, T)}
 promote_op{S,T}(op::Type, ::Type{Nullable{S}}, ::Type{Nullable{T}}) = Nullable{promote_op(op, S, T)}
 
-function show{T}(io::IO, x::Nullable{T})
+function show(io::IO, x::Nullable)
     if get(io, :compact, false)
         if isnull(x)
             print(io, "#NULL")
@@ -81,8 +81,8 @@ end
 Attempt to access the value of `x`. Returns the value if it is present;
 otherwise, returns `y` if provided, or throws a `NullException` if not.
 """
-@inline function get{S,T}(x::Nullable{S}, y::T)
-    if isbits(S)
+@inline function get{T}(x::Nullable{T}, y)
+    if isbits(T)
         ifelse(isnull(x), y, x.value)
     else
         isnull(x) ? y : x.value
@@ -177,22 +177,16 @@ vectorization.
 """
 null_safe_op(f::Any, ::Type, ::Type...) = false
 
-typealias NullSafeSignedInts Union{Type{Int128}, Type{Int16}, Type{Int32},
-                                   Type{Int64}, Type{Int8}}
-typealias NullSafeUnsignedInts Union{Type{Bool}, Type{UInt128}, Type{UInt16},
-                                     Type{UInt32}, Type{UInt64}, Type{UInt8}}
-typealias NullSafeInts Union{NullSafeSignedInts, NullSafeUnsignedInts}
-typealias NullSafeFloats Union{Type{Float16}, Type{Float32}, Type{Float64}}
-typealias NullSafeTypes Union{NullSafeInts, NullSafeFloats}
-typealias EqualOrLess Union{typeof(isequal), typeof(isless)}
+const NullSafeSignedInts = Union{Type{Int128}, Type{Int16}, Type{Int32},
+                                 Type{Int64}, Type{Int8}}
+const NullSafeUnsignedInts = Union{Type{Bool}, Type{UInt128}, Type{UInt16},
+                                   Type{UInt32}, Type{UInt64}, Type{UInt8}}
+const NullSafeInts = Union{NullSafeSignedInts, NullSafeUnsignedInts}
+const NullSafeFloats = Union{Type{Float16}, Type{Float32}, Type{Float64}}
+const NullSafeTypes = Union{NullSafeInts, NullSafeFloats}
+const EqualOrLess = Union{typeof(isequal), typeof(isless)}
 
 null_safe_op{T}(::typeof(identity), ::Type{T}) = isbits(T)
-
-eltypes() = Tuple{}
-eltypes(x, xs...) = Tuple{eltype(x), eltypes(xs...).parameters...}
-
-@pure null_safe_eltype_op(op, xs...) =
-    null_safe_op(op, eltypes(xs...).parameters...)
 
 null_safe_op(f::EqualOrLess, ::NullSafeTypes, ::NullSafeTypes) = true
 null_safe_op{S,T}(f::EqualOrLess, ::Type{Rational{S}}, ::Type{T}) =
@@ -283,7 +277,7 @@ implementation detail, but typically the choice that maximizes performance
 would be used. If `x` has a value, then the return type is guaranteed to be of
 type `Nullable{typeof(f(x))}`.
 """
-function map{T}(f, x::Nullable{T})
+function map(f, x::Nullable{T}) where T
     S = promote_op(f, T)
     if isleaftype(S) && null_safe_op(f, T)
         Nullable(f(unsafe_get(x)), !isnull(x))
