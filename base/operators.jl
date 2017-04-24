@@ -664,9 +664,9 @@ julia> x == (fld1(x, y) - 1) * y + mod1(x, y)
 true
 ```
 """
-fld1{T<:Real}(x::T, y::T) = (m=mod(x,y); fld(x-m,y))
+fld1(x::T, y::T) where {T<:Real} = (m=mod(x,y); fld(x-m,y))
 # efficient version for integers
-fld1{T<:Integer}(x::T, y::T) = fld(x+y-T(1),y)
+fld1(x::T, y::T) where {T<:Integer} = fld(x+y-T(1),y)
 
 """
     fldmod1(x, y)
@@ -675,9 +675,9 @@ Return `(fld1(x,y), mod1(x,y))`.
 
 See also: [`fld1`](@ref), [`mod1`](@ref).
 """
-fldmod1{T<:Real}(x::T, y::T) = (fld1(x,y), mod1(x,y))
+fldmod1(x::T, y::T) where {T<:Real} = (fld1(x,y), mod1(x,y))
 # efficient version for integers
-fldmod1{T<:Integer}(x::T, y::T) = (fld1(x,y), mod1(x,y))
+fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
 
 # transpose
 

@@ -52,8 +52,8 @@ module IteratorsMD
     CartesianIndex(index::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = CartesianIndex(index...)
 
     # length
-    length{N}(::CartesianIndex{N})=N
-    length{N}(::Type{CartesianIndex{N}})=N
+    length(::CartesianIndex{N}) where {N} = N
+    length(::Type{CartesianIndex{N}}) where {N} = N
 
     # indexing
     getindex(index::CartesianIndex, i::Integer) = index.I[i]
@@ -182,7 +182,7 @@ module IteratorsMD
 
     last(iter::CartesianRange) = iter.stop
 
-    @inline function in{I<:CartesianIndex}(i::I, r::CartesianRange{I})
+    @inline function in(i::I, r::CartesianRange{I}) where I<:CartesianIndex
         _in(true, i.I, r.start.I, r.stop.I)
     end
     _in(b, ::Tuple{}, ::Tuple{}, ::Tuple{}) = b
@@ -207,9 +207,9 @@ module IteratorsMD
     @inline split(t, V::Type{<:Val}) = _split((), t, V)
     @inline _split(tN, trest, V) = _split((tN..., trest[1]), tail(trest), V)
     # exit either when we've exhausted the input tuple or when tN has length N
-    @inline _split{N}(tN::NTuple{N,Any}, ::Tuple{}, ::Type{Val{N}}) = tN, ()  # ambig.
-    @inline _split{N}(tN,                ::Tuple{}, ::Type{Val{N}}) = tN, ()
-    @inline _split{N}(tN::NTuple{N,Any},  trest,    ::Type{Val{N}}) = tN, trest
+    @inline _split(tN::NTuple{N,Any}, ::Tuple{}, ::Type{Val{N}}) where {N} = tN, ()  # ambig.
+    @inline _split(tN,                ::Tuple{}, ::Type{Val{N}}) where {N} = tN, ()
+    @inline _split(tN::NTuple{N,Any},  trest,    ::Type{Val{N}}) where {N} = tN, trest
 
     @inline function split(I::CartesianIndex, V::Type{<:Val})
         i, j = split(I.I, V)
@@ -250,20 +250,20 @@ end
 # Support indexing with an array of CartesianIndex{N}s
 # Here we try to consume N of the indices (if there are that many available)
 # The first two simply handle ambiguities
-@inline function checkbounds_indices{N}(::Type{Bool}, ::Tuple{},
-        I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
+@inline function checkbounds_indices(::Type{Bool}, ::Tuple{},
+        I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}}) where N
     checkindex(Bool, (), I[1]) & checkbounds_indices(Bool, (), tail(I))
 end
 @inline function checkbounds_indices(::Type{Bool}, IA::Tuple{Any},
         I::Tuple{AbstractArray{CartesianIndex{0}},Vararg{Any}})
     checkbounds_indices(Bool, IA, tail(I))
 end
-@inline function checkbounds_indices{N}(::Type{Bool}, IA::Tuple{Any},
-        I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
+@inline function checkbounds_indices(::Type{Bool}, IA::Tuple{Any},
+        I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}}) where N
     checkindex(Bool, IA, I[1]) & checkbounds_indices(Bool, (), tail(I))
 end
-@inline function checkbounds_indices{N}(::Type{Bool}, IA::Tuple,
-        I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
+@inline function checkbounds_indices(::Type{Bool}, IA::Tuple,
+        I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}}) where N
     IA1, IArest = IteratorsMD.split(IA, Val{N})
     checkindex(Bool, IA1, I[1]) & checkbounds_indices(Bool, IArest, tail(I))
 end
@@ -370,11 +370,11 @@ end
 @inline done(L::LogicalIndex{Int,<:BitArray}, s) = s[2] > length(L)
 
 # Checking bounds with LogicalIndex{Int} is tricky since we allow linear indexing over trailing dimensions
-@inline checkbounds_indices{N}(::Type{Bool},IA::Tuple{},I::Tuple{LogicalIndex{Int,AbstractArray{Bool,N}}}) =
+@inline checkbounds_indices(::Type{Bool},IA::Tuple{},I::Tuple{LogicalIndex{Int,AbstractArray{Bool,N}}}) where {N} =
     checkindex(Bool, IA, I[1])
-@inline checkbounds_indices{N}(::Type{Bool},IA::Tuple{Any},I::Tuple{LogicalIndex{Int,AbstractArray{Bool,N}}}) =
+@inline checkbounds_indices(::Type{Bool},IA::Tuple{Any},I::Tuple{LogicalIndex{Int,AbstractArray{Bool,N}}}) where {N} =
     checkindex(Bool, IA[1], I[1])
-@inline function checkbounds_indices{N}(::Type{Bool}, IA::Tuple, I::Tuple{LogicalIndex{Int,AbstractArray{Bool,N}}})
+@inline function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple{LogicalIndex{Int,AbstractArray{Bool,N}}}) where N
     IA1, IArest = IteratorsMD.split(IA, Val{N})
     checkindex(Bool, IA1, I[1])
 end
@@ -397,17 +397,17 @@ to_indices(A, I::Tuple{}) = ()
 @inline to_indices(A, inds, I::Tuple{CartesianIndex, Vararg{Any}}) =
     to_indices(A, inds, (I[1].I..., tail(I)...))
 # But for arrays of CartesianIndex, we just skip the appropriate number of inds
-@inline function to_indices{N}(A, inds, I::Tuple{AbstractArray{CartesianIndex{N}}, Vararg{Any}})
+@inline function to_indices(A, inds, I::Tuple{AbstractArray{CartesianIndex{N}}, Vararg{Any}}) where N
     _, indstail = IteratorsMD.split(inds, Val{N})
     (to_index(A, I[1]), to_indices(A, indstail, tail(I))...)
 end
 # And boolean arrays behave similarly; they also skip their number of dimensions
-@inline function to_indices{N}(A, inds, I::Tuple{AbstractArray{Bool, N}, Vararg{Any}})
+@inline function to_indices(A, inds, I::Tuple{AbstractArray{Bool, N}, Vararg{Any}}) where N
     _, indstail = IteratorsMD.split(inds, Val{N})
     (to_index(A, I[1]), to_indices(A, indstail, tail(I))...)
 end
 # As an optimization, we allow trailing Array{Bool} and BitArray to be linear over trailing dimensions
-@inline to_indices{N}(A, inds, I::Tuple{Union{Array{Bool,N}, BitArray{N}}}) =
+@inline to_indices(A, inds, I::Tuple{Union{Array{Bool,N}, BitArray{N}}}) where {N} =
     (_maybe_linear_logical_index(IndexStyle(A), A, I[1]),)
 _maybe_linear_logical_index(::IndexStyle, A, i) = to_index(A, i)
 _maybe_linear_logical_index(::IndexLinear, A, i) = LogicalIndex{Int}(i)
@@ -510,7 +510,7 @@ end
 
 ##
 
-@generated function findn{T,N}(A::AbstractArray{T,N})
+@generated function findn(A::AbstractArray{T,N}) where {T,N}
     quote
         nnzA = countnz(A)
         @nexprs $N d->(I_d = Vector{Int}(nnzA))
@@ -540,7 +540,7 @@ rcum_promote_type(op, ::Type{Array{T,N}}) where {T,N} = Array{rcum_promote_type(
 # stable in certain situations (e.g. sums).
 # it does double the number of operations compared to accumulate,
 # though for cheap operations like + this does not have much impact (20%)
-function _accumulate_pairwise!{T, Op}(op::Op, c::AbstractVector{T}, v::AbstractVector, s, i1, n)::T
+function _accumulate_pairwise!(op::Op, c::AbstractVector{T}, v::AbstractVector, s, i1, n)::T where {T,Op}
     @inbounds if n < 128
         s_ = v[i1]
         c[i1] = op(s, s_)
@@ -556,7 +556,7 @@ function _accumulate_pairwise!{T, Op}(op::Op, c::AbstractVector{T}, v::AbstractV
     return s_
 end
 
-function accumulate_pairwise!{Op}(op::Op, result::AbstractVector, v::AbstractVector)
+function accumulate_pairwise!(op::Op, result::AbstractVector, v::AbstractVector) where Op
     li = linearindices(v)
     li != linearindices(result) && throw(DimensionMismatch("input and output array sizes and indices must match"))
     n = length(li)
@@ -568,7 +568,7 @@ function accumulate_pairwise!{Op}(op::Op, result::AbstractVector, v::AbstractVec
     return result
 end
 
-function accumulate_pairwise{T}(op, v::AbstractVector{T})
+function accumulate_pairwise(op, v::AbstractVector{T}) where T
     out = similar(v, rcum_promote_type(op, T))
     return accumulate_pairwise!(op, out, v)
 end
@@ -607,7 +607,7 @@ julia> cumsum(a,2)
  4  9  15
 ```
 """
-function cumsum{T}(A::AbstractArray{T}, axis::Integer=1)
+function cumsum(A::AbstractArray{T}, axis::Integer=1) where T
     out = similar(A, rcum_promote_type(+, T))
     cumsum!(out, A, axis)
 end
@@ -709,7 +709,7 @@ function accumulate(op, v0, A, axis::Integer=1)
     accumulate!(op, out, v0, A, 1)
 end
 
-function accumulate!{Op}(op::Op, B, A::AbstractVector, axis::Integer=1)
+function accumulate!(op::Op, B, A::AbstractVector, axis::Integer=1) where Op
     isempty(A) && return B
     v1 = first(A)
     _accumulate1!(op, B, v1, A, axis)
@@ -852,7 +852,7 @@ alias each other).
 
 See also `circshift`.
 """
-@noinline function circshift!{T,N}(dest::AbstractArray{T,N}, src, shiftamt::DimsInteger)
+@noinline function circshift!(dest::AbstractArray{T,N}, src, shiftamt::DimsInteger) where {T,N}
     dest === src && throw(ArgumentError("dest and src must be separate arrays"))
     inds = indices(src)
     indices(dest) == inds || throw(ArgumentError("indices of src and dest must match (got $inds and $(indices(dest)))"))
@@ -1336,7 +1336,7 @@ julia> unique(A, 3)
  false  false
 ```
 """
-@generated function unique{T,N}(A::AbstractArray{T,N}, dim::Int)
+@generated function unique(A::AbstractArray{T,N}, dim::Int) where {T,N}
     inds = inds -> zeros(UInt, inds)
     quote
         1 <= dim <= $N || return copy(A)
@@ -1440,7 +1440,7 @@ function extrema(A::AbstractArray, dims)
     return extrema!(B, A)
 end
 
-@generated function extrema!{T,N}(B, A::AbstractArray{T,N})
+@generated function extrema!(B, A::AbstractArray{T,N}) where {T,N}
     return quote
         sA = size(A)
         sB = size(B)
