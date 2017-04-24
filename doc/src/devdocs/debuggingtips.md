@@ -26,7 +26,7 @@ Julia's flisp interpreter uses `value_t` objects; these can be displayed with `c
 ## Useful Julia variables for Inspecting
 
 While the addresses of many variables, like singletons, can be be useful to print for many failures,
-there are a number of additional variables (see julia.h for a complete list) that are even more
+there are a number of additional variables (see `julia.h` for a complete list) that are even more
 useful.
 
   * (when in `jl_apply_generic`) `mfunc` and `jl_uncompress_ast(mfunc->def, mfunc->code)` :: for

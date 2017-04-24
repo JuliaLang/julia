@@ -169,8 +169,8 @@ is (perhaps counterintuitively) an advantage: `ModuleA.ZeroRange` indicates that
 create a `ModuleA.ZeroArray`, whereas `ModuleB.ZeroRange` indicates a `ModuleB.ZeroArray` type.
  This design allows peaceful coexistence among many different custom array types.
 
-Note that the Julia package `CustomUnitRanges.jl` can sometimes be used to avoid the need to write
-your own `ZeroRange` type.
+Note that the Julia package [CustomUnitRanges.jl](https://github.com/JuliaArrays/CustomUnitRanges.jl)
+can sometimes be used to avoid the need to write your own `ZeroRange` type.
 
 ### Specializing `indices`
 
