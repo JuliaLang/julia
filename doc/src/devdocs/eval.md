@@ -25,7 +25,7 @@ The 10,000 foot view of the whole process is as follows:
 1. The user starts `julia`.
 2. The C function `main()` from `ui/repl.c` gets called. This function processes the command line
    arguments, filling in the `jl_options` struct and setting the variable `ARGS`. It then initializes
-   Julia (by calling [`julia_init` in task.c](https://github.com/JuliaLang/julia/blob/master/src/task.c),
+   Julia (by calling [`julia_init` in `task.c`](https://github.com/JuliaLang/julia/blob/master/src/task.c),
    which may load a previously compiled [sysimg](@ref dev-sysimg)). Finally, it passes off control to Julia
    by calling [`Base._start()`](https://github.com/JuliaLang/julia/blob/master/base/client.jl).
 3. When `_start()` takes over control, the subsequent sequence of commands depends on the command
@@ -45,7 +45,7 @@ The 10,000 foot view of the whole process is as follows:
    the AST to make it simpler to execute.
 10. `jl_toplevel_eval_flex()` then uses some simple heuristics to decide whether to JIT compiler the
     AST or to interpret it directly.
-11. The bulk of the work to interpret code is handled by [`eval` in interpreter.c](https://github.com/JuliaLang/julia/blob/master/src/interpreter.c).
+11. The bulk of the work to interpret code is handled by [`eval` in `interpreter.c`](https://github.com/JuliaLang/julia/blob/master/src/interpreter.c).
 12. If instead, the code is compiled, the bulk of the work is handled by `codegen.cpp`. Whenever a
     Julia function is called for the first time with a given set of argument types, [type inference](@ref dev-type-inference)
     will be run on that function. This information is used by the [codegen](@ref dev-codegen) step to generate
@@ -62,12 +62,12 @@ The 10,000 foot view of the whole process is as follows:
 The Julia parser is a small lisp program written in femtolisp, the source-code for which is distributed
 inside Julia in [src/flisp](https://github.com/JuliaLang/julia/tree/master/src/flisp).
 
-The interface functions for this are primarily defined in [jlfrontend.scm](https://github.com/JuliaLang/julia/blob/master/src/jlfrontend.scm).
-The code in [ast.c](https://github.com/JuliaLang/julia/blob/master/src/ast.c) handles this handoff
+The interface functions for this are primarily defined in [`jlfrontend.scm`](https://github.com/JuliaLang/julia/blob/master/src/jlfrontend.scm).
+The code in [`ast.c`](https://github.com/JuliaLang/julia/blob/master/src/ast.c) handles this handoff
 on the Julia side.
 
-The other relevant files at this stage are [julia-parser.scm](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm),
-which handles tokenizing Julia code and turning it into an AST, and [julia-syntax.scm](https://github.com/JuliaLang/julia/blob/master/src/julia-syntax.scm),
+The other relevant files at this stage are [`julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm),
+which handles tokenizing Julia code and turning it into an AST, and [`julia-syntax.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-syntax.scm),
 which handles transforming complex AST representations into simpler, "lowered" AST representations
 which are more suitable for analysis and execution.
 
@@ -83,7 +83,7 @@ although it can also be invoked directly by a call to [`macroexpand()`](@ref)/`j
 
 ## [Type Inference](@id dev-type-inference)
 
-Type inference is implemented in Julia by [typeinf() in inference.jl](https://github.com/JuliaLang/julia/blob/master/base/inference.jl).
+Type inference is implemented in Julia by [`typeinf()` in `inference.jl`](https://github.com/JuliaLang/julia/blob/master/base/inference.jl).
 Type inference is the process of examining a Julia function and determining bounds for the types
 of each of its variables, as well as bounds on the type of the return value from the function.
 This enables many future optimizations, such as unboxing of known immutable values, and compile-time
@@ -135,7 +135,7 @@ Type inference may also include other steps such as constant propagation and inl
 
 Codegen is the process of turning a Julia AST into native machine code.
 
-The JIT environment is initialized by an early call to [`jl_init_codegen` in codegen.cpp](https://github.com/JuliaLang/julia/blob/master/src/codegen.cpp).
+The JIT environment is initialized by an early call to [`jl_init_codegen` in `codegen.cpp`](https://github.com/JuliaLang/julia/blob/master/src/codegen.cpp).
 
 On demand, a Julia method is converted into a native function by the function `emit_function(jl_method_instance_t*)`.
 (note, when using the MCJIT (in LLVM v3.4+), each function must be JIT into a new module.) This
@@ -143,18 +143,18 @@ function recursively calls `emit_expr()` until the entire function has been emit
 
 Much of the remaining bulk of this file is devoted to various manual optimizations of specific
 code patterns. For example, `emit_known_call()` knows how to inline many of the primitive functions
-(defined in [builtins.c](https://github.com/JuliaLang/julia/blob/master/src/builtins.c)) for various
+(defined in [`builtins.c`](https://github.com/JuliaLang/julia/blob/master/src/builtins.c)) for various
 combinations of argument types.
 
 Other parts of codegen are handled by various helper files:
 
-  * [debuginfo.cpp](https://github.com/JuliaLang/julia/blob/master/src/debuginfo.cpp)
+  * [`debuginfo.cpp`](https://github.com/JuliaLang/julia/blob/master/src/debuginfo.cpp)
 
     Handles backtraces for JIT functions
-  * [ccall.cpp](https://github.com/JuliaLang/julia/blob/master/src/ccall.cpp)
+  * [`ccall.cpp`](https://github.com/JuliaLang/julia/blob/master/src/ccall.cpp)
 
     Handles the ccall and llvmcall FFI, along with various `abi_*.cpp` files
-  * [intrinsics.cpp](https://github.com/JuliaLang/julia/blob/master/src/intrinsics.cpp)
+  * [`intrinsics.cpp`](https://github.com/JuliaLang/julia/blob/master/src/intrinsics.cpp)
 
     Handles the emission of various low-level intrinsic functions
 
@@ -168,11 +168,11 @@ Other parts of codegen are handled by various helper files:
 ## [System Image](@id dev-sysimg)
 
 The system image is a precompiled archive of a set of Julia files. The `sys.ji` file distributed
-with Julia is one such system image, generated by executing the file [sysimg.jl](https://github.com/JuliaLang/julia/blob/master/base/sysimg.jl),
+with Julia is one such system image, generated by executing the file [`sysimg.jl`](https://github.com/JuliaLang/julia/blob/master/base/sysimg.jl),
 and serializing the resulting environment (including Types, Functions, Modules, and all other
 defined values) into a file. Therefore, it contains a frozen version of the `Main`, `Core`, and
 `Base` modules (and whatever else was in the environment at the end of bootstrapping). This serializer/deserializer
-is implemented by [`jl_save_system_image`/`jl_restore_system_image` in dump.c](https://github.com/JuliaLang/julia/blob/master/src/dump.c).
+is implemented by [`jl_save_system_image`/`jl_restore_system_image` in `dump.c`](https://github.com/JuliaLang/julia/blob/master/src/dump.c).
 
 If there is no sysimg file (`jl_options.image_file == NULL`), this also implies that `--build`
 was given on the command line, so the final result should be a new sysimg file. During Julia initialization,

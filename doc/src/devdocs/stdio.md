@@ -74,18 +74,18 @@ In `jl_uv.c` the `jl_uv_puts()` function checks its `uv_stream_t* stream` argume
 This allows for uniform use of `jl_printf()` throughout the runtime regardless of whether or not
 any particular piece of code is reachable before initialization is complete.
 
-## Legacy ios.c library
+## Legacy `ios.c` library
 
 The `src/support/ios.c` library is inherited from [femtolisp](https://github.com/JeffBezanson/femtolisp).
 It provides cross-platform buffered file IO and in-memory temporary buffers.
 
-ios.c is still used by:
+`ios.c` is still used by:
 
   * `src/flisp/*.c`
   * `src/dump.c` – for serialization file IO and for memory buffers.
   * `base/iostream.jl` – for file IO (see `base/fs.jl` for libuv equivalent).
 
-Use of ios.c in these modules is mostly self-contained and separated from the libuv I/O system.
+Use of `ios.c` in these modules is mostly self-contained and separated from the libuv I/O system.
 However, there is [one place](https://github.com/JuliaLang/julia/blob/master/src/flisp/print.c#L654)
 where femtolisp calls through to `jl_printf()` with a legacy `ios_t` stream.
 
