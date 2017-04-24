@@ -19,7 +19,6 @@ export
 if is_unix()
     const path_separator    = "/"
     const path_separator_re = r"/+"
-    const path_absolute_re  = r"^/"
     const path_directory_re = r"(?:^|/)\.{0,2}$"
     const path_dir_splitter = r"^(.*?)(/+)([^/]*)$"
     const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
@@ -73,6 +72,12 @@ function homedir()
 end
 
 
+if is_windows()
+    isabspath(path::String) = ismatch(path_absolute_re, path)
+else
+    isabspath(path::String) = startswith(path, '/')
+end
+
 """
     isabspath(path::AbstractString) -> Bool
 
@@ -86,7 +91,7 @@ julia> isabspath("home")
 false
 ```
 """
-isabspath(path::String) = ismatch(path_absolute_re, path)
+isabspath(path::AbstractString)
 
 """
     isdirpath(path::AbstractString) -> Bool
