@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#Symmetric and Hermitian matrices
+# Symmetric and Hermitian matrices
 struct Symmetric{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     data::S
     uplo::Char
@@ -181,7 +181,7 @@ trace(A::Hermitian) = real(trace(A.data))
 Base.conj(A::HermOrSym) = typeof(A)(conj(A.data), A.uplo)
 Base.conj!(A::HermOrSym) = typeof(A)(conj!(A.data), A.uplo)
 
-#tril/triu
+# tril/triu
 function tril(A::Hermitian, k::Integer=0)
     if A.uplo == 'U' && k <= 0
         return tril!(A.data',k)
@@ -235,7 +235,7 @@ end
 ## Matvec
 A_mul_B!{T<:BlasFloat}(y::StridedVector{T}, A::Symmetric{T,<:StridedMatrix}, x::StridedVector{T}) = BLAS.symv!(A.uplo, one(T), A.data, x, zero(T), y)
 A_mul_B!{T<:BlasComplex}(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T}) = BLAS.hemv!(A.uplo, one(T), A.data, x, zero(T), y)
-##Matmat
+## Matmat
 A_mul_B!{T<:BlasFloat}(C::StridedMatrix{T}, A::Symmetric{T,<:StridedMatrix}, B::StridedMatrix{T}) = BLAS.symm!('L', A.uplo, one(T), A.data, B, zero(T), C)
 A_mul_B!{T<:BlasFloat}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Symmetric{T,<:StridedMatrix}) = BLAS.symm!('R', B.uplo, one(T), B.data, A, zero(T), C)
 A_mul_B!{T<:BlasComplex}(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T}) = BLAS.hemm!('L', A.uplo, one(T), A.data, B, zero(T), C)
@@ -403,7 +403,54 @@ function svdvals!{T<:Real,S}(A::Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{
     return sort!(vals, rev = true)
 end
 
-#Matrix-valued functions
+# Matrix functions
+function ^{T<:Real}(A::Symmetric{T}, p::Integer)
+    if p < 0
+        return Symmetric(Base.power_by_squaring(inv(A), -p))
+    else
+        return Symmetric(Base.power_by_squaring(A, p))
+    end
+end
+function ^{T<:Real}(A::Symmetric{T}, p::Real)
+    F = eigfact(A)
+    if all(λ -> λ ≥ 0, F.values)
+        retmat = (F.vectors * Diagonal((F.values).^p)) * F.vectors'
+    else
+        retmat = (F.vectors * Diagonal((complex(F.values)).^p)) * F.vectors'
+    end
+    return Symmetric(retmat)
+end
+function ^(A::Hermitian, p::Integer)
+    n = checksquare(A)
+    if p < 0
+        retmat = Base.power_by_squaring(inv(A), -p)
+    else
+        retmat = Base.power_by_squaring(A, p)
+    end
+    for i = 1:n
+        retmat[i,i] = real(retmat[i,i])
+    end
+    return Hermitian(retmat)
+end
+function ^{T}(A::Hermitian{T}, p::Real)
+    n = checksquare(A)
+    F = eigfact(A)
+    if all(λ -> λ ≥ 0, F.values)
+        retmat = (F.vectors * Diagonal((F.values).^p)) * F.vectors'
+        if T <: Real
+            return Hermitian(retmat)
+        else
+            for i = 1:n
+                retmat[i,i] = real(retmat[i,i])
+            end
+            return Hermitian(retmat)
+        end
+    else
+        retmat = (F.vectors * Diagonal((complex(F.values).^p))) * F.vectors'
+        return retmat
+    end
+end
+
 function expm(A::Symmetric)
     F = eigfact(A)
     return Symmetric((F.vectors * Diagonal(exp.(F.values))) * F.vectors')
@@ -423,10 +470,8 @@ function expm(A::Hermitian{T}) where T
 end
 
 for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
-
     @eval begin
-
-        function ($funm)(A::Symmetric)
+        function ($funm){T<:Real}(A::Symmetric{T})
             F = eigfact(A)
             if isposdef(F)
                 retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
@@ -454,7 +499,5 @@ for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
                 return retmat
             end
         end
-
     end
-
 end
