@@ -71,19 +71,17 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
         try
             # Start by building inference.{ji,o}
             inference_path = joinpath(dirname(sysimg_path), "inference")
-            info("Building inference.o")
-            info("$julia -C $cpu_target --output-ji $inference_path.ji --output-o $inference_path.o coreimg.jl")
+            info("building inference.o")
             run(`$julia -C $cpu_target --output-ji $inference_path.ji --output-o $inference_path.o coreimg.jl`)
 
             # Bootstrap off of that to create sys.{ji,o}
-            info("Building sys.o")
-            info("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl")
+            info("building sys.o")
             run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl`)
 
             if cc !== nothing
                 link_sysimg(sysimg_path, cc, debug)
             else
-                info("System image successfully built at $sysimg_path.ji.")
+                info("system image successfully built at $sysimg_path.ji")
             end
 
             if !Base.samefile("$(default_sysimg_path(debug)).ji", "$sysimg_path.ji")
@@ -156,8 +154,7 @@ function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false
     end
 
     sysimg_file = "$sysimg_path.$(Libdl.dlext)"
-    info("Linking sys.$(Libdl.dlext)")
-    info("$cc $FLAGS -o $sysimg_file $sysimg_path.o")
+    info("linking sys.$(Libdl.dlext)")
     # Windows has difficulties overwriting a file in use so we first link to a temp file
     if is_windows() && isfile(sysimg_file)
         if success(pipeline(`$cc $FLAGS -o $sysimg_path.tmp $sysimg_path.o`; stdout=STDOUT, stderr=STDERR))
@@ -167,7 +164,7 @@ function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false
     else
         run(`$cc $FLAGS -o $sysimg_file $sysimg_path.o`)
     end
-    info("System image successfully built at $sysimg_path.$(Libdl.dlext)")
+    info("system image successfully built at $sysimg_path.$(Libdl.dlext)")
 end
 
 # When running this file as a script, try to do so with default values.  If arguments are passed
