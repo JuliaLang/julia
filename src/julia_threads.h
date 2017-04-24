@@ -88,6 +88,10 @@ typedef struct {
     // this makes sure that a single objects can only appear once in
     // the lists (the mark bit cannot be flipped to `0` without sweeping)
     void *big_obj[1024];
+    jl_mutex_t stack_lock;
+    void **pc_stack;
+    void **pc_stack_end;
+    char *data_stack;
 } jl_gc_mark_cache_t;
 
 // This includes all the thread local states we care about for a thread.
