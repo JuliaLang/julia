@@ -84,6 +84,10 @@ const latex_symbols = Dict(
     "\\backpprime" => "‶",
     "\\backppprime" => "‷",
     "\\xor" => "⊻",
+    "\\iff" => "⟺",
+    "\\implies" => "⟹",
+    "\\impliedby" => "⟸",
+    "\\to" => "→",
 
     # Superscripts
     "\\^0" => "⁰",
