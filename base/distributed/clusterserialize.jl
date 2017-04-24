@@ -1,8 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Serializer: known_object_data, object_number, serialize_cycle, deserialize_cycle, writetag,
+using Base.Serializer: object_number, serialize_cycle, deserialize_cycle, writetag,
                       __deserialized_types__, serialize_typename, deserialize_typename,
                       TYPENAME_TAG, object_numbers, reset_state, serialize_type
+
+import Base.Serializer: lookup_object_number, remember_object
 
 mutable struct ClusterSerializer{I<:IO} <: AbstractSerializer
     io::I
@@ -23,15 +25,27 @@ mutable struct ClusterSerializer{I<:IO} <: AbstractSerializer
 end
 ClusterSerializer(io::IO) = ClusterSerializer{typeof(io)}(io)
 
+const known_object_data = Dict{UInt64,Any}()
+
+function lookup_object_number(s::ClusterSerializer, n::UInt64)
+    return get(known_object_data, n, nothing)
+end
+
+function remember_object(s::ClusterSerializer, o::ANY, n::UInt64)
+    known_object_data[n] = o
+    if isa(o, TypeName) && !haskey(object_numbers, o)
+        # set up reverse mapping for serialize
+        object_numbers[o] = n
+    end
+    return nothing
+end
+
 function deserialize(s::ClusterSerializer, ::Type{TypeName})
     full_body_sent = deserialize(s)
     number = read(s.io, UInt64)
     if !full_body_sent
-        tn = get(known_object_data, number, nothing)::TypeName
-        if !haskey(object_numbers, tn)
-            # set up reverse mapping for serialize
-            object_numbers[tn] = number
-        end
+        tn = lookup_object_number(s, number)::TypeName
+        remember_object(s, tn, number)
         deserialize_cycle(s, tn)
     else
         tn = deserialize_typename(s, number)
