@@ -33,8 +33,8 @@ function SubArray(::IndexLinear, parent::P, indexes::I, ::NTuple{N,Any}) where {
 end
 
 check_parent_index_match(parent, indexes) = check_parent_index_match(parent, index_ndims(indexes...))
-check_parent_index_match{T,N}(parent::AbstractArray{T,N}, ::NTuple{N, Bool}) = nothing
-check_parent_index_match{N}(parent, ::NTuple{N, Bool}) =
+check_parent_index_match(parent::AbstractArray{T,N}, ::NTuple{N, Bool}) where {T,N} = nothing
+check_parent_index_match(parent, ::NTuple{N, Bool}) where {N} =
     throw(ArgumentError("number of indices ($N) must match the parent dimensionality ($(ndims(parent)))"))
 
 # This computes the linear indexing compatability for a given tuple of indices
@@ -74,9 +74,9 @@ parentindexes(a::AbstractArray) = ntuple(i->OneTo(size(a,i)), ndims(a))
 # ReshapedArray view if necessary. The trouble is that arrays of `CartesianIndex`
 # can make the number of effective indices not equal to length(I).
 _maybe_reshape_parent(A::AbstractArray, ::NTuple{1, Bool}) = reshape(A, Val{1})
-_maybe_reshape_parent{_}(A::AbstractArray{_,1}, ::NTuple{1, Bool}) = reshape(A, Val{1})
-_maybe_reshape_parent{_,N}(A::AbstractArray{_,N}, ::NTuple{N, Bool}) = A
-_maybe_reshape_parent{N}(A::AbstractArray, ::NTuple{N, Bool}) = reshape(A, Val{N}) # TODO: DEPRECATE FOR #14770
+_maybe_reshape_parent(A::AbstractArray{<:Any,1}, ::NTuple{1, Bool}) = reshape(A, Val{1})
+_maybe_reshape_parent(A::AbstractArray{<:Any,N}, ::NTuple{N, Bool}) where {N} = A
+_maybe_reshape_parent(A::AbstractArray, ::NTuple{N, Bool}) where {N} = reshape(A, Val{N}) # TODO: DEPRECATE FOR #14770
 """
     view(A, inds...)
 
@@ -237,7 +237,7 @@ substrides(s, parent, dim, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("st
 
 stride(V::SubArray, d::Integer) = d <= ndims(V) ? strides(V)[d] : strides(V)[end] * size(V)[end]
 
-compute_stride1{N}(parent::AbstractArray, I::NTuple{N,Any}) =
+compute_stride1(parent::AbstractArray, I::NTuple{N,Any}) where {N} =
     (@_inline_meta; compute_stride1(1, fill_to_length(indices(parent), OneTo(1), Val{N}), I))
 compute_stride1(s, inds, I::Tuple{}) = s
 compute_stride1(s, inds, I::Tuple{ScalarIndex, Vararg{Any}}) =
