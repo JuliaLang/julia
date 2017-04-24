@@ -107,6 +107,12 @@ function schur(A::StridedMatrix)
     SchurF = schurfact(A)
     SchurF[:T], SchurF[:Z], SchurF[:values]
 end
+schur(A::Symmetric) = schur(full(A))
+schur(A::Hermitian) = schur(full(A))
+schur(A::UpperTriangular) = schur(full(A))
+schur(A::LowerTriangular) = schur(full(A))
+schur(A::Tridiagonal) = schur(full(A))
+
 
 """
     ordschur!(F::Schur, select::Union{Vector{Bool},BitVector}) -> F::Schur

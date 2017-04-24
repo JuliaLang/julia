@@ -29,7 +29,7 @@ function scale!(X::Array{T}, s::Real) where T<:BlasComplex
     X
 end
 
-#Test whether a matrix is positive-definite
+# Test whether a matrix is positive-definite
 isposdef!(A::StridedMatrix{<:BlasFloat}, UL::Symbol) = LAPACK.potrf!(char_uplo(UL), A)[2] == 0
 
 """
@@ -323,18 +323,67 @@ kron(a::AbstractVector, b::AbstractVector)=vec(kron(reshape(a,length(a),1),resha
 kron(a::AbstractMatrix, b::AbstractVector)=kron(a,reshape(b,length(b),1))
 kron(a::AbstractVector, b::AbstractMatrix)=kron(reshape(a,length(a),1),b)
 
-^(A::AbstractMatrix, p::Integer) = p < 0 ? inv(A^-p) : Base.power_by_squaring(A,p)
-
-function ^(A::AbstractMatrix, p::Number)
+# Matrix power
+^{T}(A::AbstractMatrix{T}, p::Integer) = p < 0 ? Base.power_by_squaring(inv(A), -p) : Base.power_by_squaring(A, p)
+function ^{T}(A::AbstractMatrix{T}, p::Real)
+    # For integer powers, use repeated squaring
     if isinteger(p)
-        return A^Integer(real(p))
+        TT = Base.promote_op(^, eltype(A), typeof(p))
+        return (TT == eltype(A) ? A : copy!(similar(A, TT), A))^Integer(p)
     end
-    checksquare(A)
-    v, X = eig(A)
-    any(v.<0) && (v = complex(v))
-    Xinv = ishermitian(A) ? X' : inv(X)
-    (X * Diagonal(v.^p)) * Xinv
+
+    # If possible, use diagonalization
+    if T <: Real && issymmetric(A)
+        return (Symmetric(A)^p)
+    end
+    if ishermitian(A)
+        return (Hermitian(A)^p)
+    end
+
+    n = checksquare(A)
+
+    # Quicker return if A is diagonal
+    if isdiag(A)
+        retmat = copy(A)
+        for i in 1:n
+            retmat[i, i] = retmat[i, i] ^ p
+        end
+        return retmat
+    end
+
+    # Otherwise, use Schur decomposition
+    if istriu(A)
+        # Integer part
+        retmat = A ^ floor(p)
+        # Real part
+        if p - floor(p) == 0.5
+            # special case: A^0.5 === sqrtm(A)
+            retmat = retmat * sqrtm(A)
+        else
+            retmat = retmat * powm!(UpperTriangular(float.(A)), real(p - floor(p)))
+        end
+    else
+        S,Q,d = schur(complex(A))
+        # Integer part
+        R = S ^ floor(p)
+        # Real part
+        if p - floor(p) == 0.5
+            # special case: A^0.5 === sqrtm(A)
+            R = R * sqrtm(S)
+        else
+            R = R * powm!(UpperTriangular(float.(S)), real(p - floor(p)))
+        end
+        retmat = Q * R * Q'
+    end
+
+    # if A has nonpositive real eigenvalues, retmat is a nonprincipal matrix power.
+    if isreal(retmat)
+        return real(retmat)
+    else
+        return retmat
+    end
 end
+^(A::AbstractMatrix, p::Number) = expm(p*logm(A))
 
 # Matrix exponential
 
@@ -466,7 +515,7 @@ function rcswap!(i::Integer, j::Integer, X::StridedMatrix{<:Number})
 end
 
 """
-    logm(A::StridedMatrix)
+    logm(A{T}::StridedMatrix{T})
 
 If `A` has no negative real eigenvalue, compute the principal matrix logarithm of `A`, i.e.
 the unique matrix ``X`` such that ``e^X = A`` and ``-\\pi < Im(\\lambda) < \\pi`` for all
@@ -497,8 +546,11 @@ julia> logm(A)
  0.0  1.0
 ```
 """
-function logm(A::StridedMatrix)
+function logm{T}(A::StridedMatrix{T})
     # If possible, use diagonalization
+    if issymmetric(A) && T <: Real
+        return full(logm(Symmetric(A)))
+    end
     if ishermitian(A)
         return full(logm(Hermitian(A)))
     end
