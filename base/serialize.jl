@@ -157,7 +157,7 @@ end
 
 function reset_state(s::AbstractSerializer)
     s.counter = 0
-    s.table = ObjectIdDict()
+    empty!(s.table)
     empty!(s.pending_refs)
     s
 end
