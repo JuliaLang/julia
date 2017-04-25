@@ -270,3 +270,8 @@ function g21147(f::Tuple{A}, k = 2) where {B,A<:Tuple{B}}
 end
 @test g21147(((1,),)) === Int
 @test g21147(((1,),), 2) === Int
+
+# issue #21510
+f21510(; a::ANY = 2) = a
+@test f21510(a=:b) == :b
+@test f21510() == 2
