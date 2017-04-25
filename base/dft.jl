@@ -579,8 +579,7 @@ module FFTW
     correspond to [`r2r`](@ref) and [`r2r!`](@ref), respectively.
     """
     function plan_r2r end
-
-    Base.USE_GPL_LIBS && include(joinpath("fft", "FFTW.jl"))
+    (Base.USE_GPL_LIBS || Base.fftw_vendor() == :mkl) && include(joinpath("fft", "FFTW.jl"))
 end
 
 importall .FFTW
